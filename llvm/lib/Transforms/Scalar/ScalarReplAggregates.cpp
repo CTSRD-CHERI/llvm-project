@@ -468,6 +468,10 @@ bool ConvertToScalarInfo::CanConvertToScalar(Value *V, uint64_t Offset,
                                              Value* NonConstantIdx) {
   for (Value::use_iterator UI = V->use_begin(), E = V->use_end(); UI!=E; ++UI) {
     Instruction *User = cast<Instruction>(*UI);
+    // FIXME!
+    if (PointerType *PTy = dyn_cast<PointerType>(User->getType()))
+      if (PTy->getAddressSpace() == 200)
+        return false;
 
     if (LoadInst *LI = dyn_cast<LoadInst>(User)) {
       // Don't break volatile loads.
@@ -505,6 +509,11 @@ bool ConvertToScalarInfo::CanConvertToScalar(Value *V, uint64_t Offset,
       PointerType* PtrTy = dyn_cast<PointerType>(GEP->getPointerOperandType());
       if (!PtrTy)
         return false;
+      // FIXME!
+      if (PointerType *PTy = dyn_cast<PointerType>(cast<PointerType>(GEP->getType())->getElementType()))
+        if (PTy->getAddressSpace() == 200)
+          return false;
+
 
       // Compute the offset that this GEP adds to the pointer.
       SmallVector<Value*, 8> Indices(GEP->op_begin()+1, GEP->op_end());

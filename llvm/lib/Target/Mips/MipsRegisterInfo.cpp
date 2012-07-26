@@ -128,6 +128,10 @@ getReservedRegs(const MachineFunction &MF) const {
     Mips::ZERO_64, Mips::K0_64, Mips::K1_64, Mips::SP_64
   };
 
+  static const uint16_t ReservedCheriRegs[] = {
+    Mips::C0, Mips::C25, Mips::C26, Mips::C27, Mips::C28, Mips::C29, Mips::C30, Mips::C31
+  };
+
   BitVector Reserved(getNumRegs());
   typedef TargetRegisterClass::const_iterator RegIter;
 
@@ -148,6 +152,12 @@ getReservedRegs(const MachineFunction &MF) const {
          EReg = Mips::FGR64RegClass.end(); Reg != EReg; ++Reg)
       Reserved.set(*Reg);
   }
+
+  if (Subtarget.isCheri()) {
+    for (unsigned I = 0; I < array_lengthof(ReservedCheriRegs); ++I)
+      Reserved.set(ReservedCheriRegs[I]);
+  }
+
   // Reserve FP if this function should have a dedicated frame pointer register.
   if (MF.getTarget().getFrameLowering()->hasFP(MF)) {
     if (Subtarget.inMips16Mode())

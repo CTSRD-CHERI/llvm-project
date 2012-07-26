@@ -99,6 +99,10 @@ static DecodeStatus DecodeGPR64RegisterClass(MCInst &Inst,
                                              unsigned RegNo,
                                              uint64_t Address,
                                              const void *Decoder);
+static DecodeStatus DecodeCheriRegsRegisterClass(MCInst &Inst,
+                                                 unsigned RegNo,
+                                                 uint64_t Address,
+                                                 const void *Decoder);
 
 static DecodeStatus DecodeCPU16RegsRegisterClass(MCInst &Inst,
                                                  unsigned RegNo,
@@ -304,6 +308,8 @@ extern "C" void LLVMInitializeMipsDisassembler() {
                                          createMips64Disassembler);
   TargetRegistry::RegisterMCDisassembler(TheMips64elTarget,
                                          createMips64elDisassembler);
+  TargetRegistry::RegisterMCDisassembler(TheMipsCheriTarget,
+                                         createMips64Disassembler);
 }
 
 
@@ -444,6 +450,19 @@ static DecodeStatus DecodeGPR64RegisterClass(MCInst &Inst,
     return MCDisassembler::Fail;
 
   unsigned Reg = getReg(Decoder, Mips::GPR64RegClassID, RegNo);
+  Inst.addOperand(MCOperand::CreateReg(Reg));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus DecodeCheriRegsRegisterClass(MCInst &Inst,
+                                                 unsigned RegNo,
+                                                 uint64_t Address,
+                                                 const void *Decoder) {
+
+  if (RegNo > 31)
+    return MCDisassembler::Fail;
+
+  unsigned Reg = getReg(Decoder, Mips::CheriRegsRegClassID, RegNo);
   Inst.addOperand(MCOperand::CreateReg(Reg));
   return MCDisassembler::Success;
 }

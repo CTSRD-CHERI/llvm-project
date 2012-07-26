@@ -112,6 +112,7 @@ std::string llvm::getEnumName(MVT::SimpleValueType T) {
   case MVT::v8f64:    return "MVT::v8f64";
   case MVT::Metadata: return "MVT::Metadata";
   case MVT::iPTR:     return "MVT::iPTR";
+  case MVT::iFATPTR:  return "MVT::iFATPTR";
   case MVT::iPTRAny:  return "MVT::iPTRAny";
   case MVT::Untyped:  return "MVT::Untyped";
   default: llvm_unreachable("ILLEGAL VALUE TYPE!");

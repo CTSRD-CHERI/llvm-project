@@ -1,5 +1,6 @@
 add_llvm_library(LLVMScalarOpts
   ADCE.cpp
+  CheriRangeChecker.cpp
   CodeGenPrepare.cpp
   ConstantProp.cpp
   CorrelatedValuePropagation.cpp

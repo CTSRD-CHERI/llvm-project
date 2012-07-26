@@ -879,7 +879,7 @@ bool SDTypeConstraint::ApplyTypeConstraint(TreePatternNode *N,
     // Operand must be a particular type.
     return NodeToApply->UpdateNodeType(ResNo, x.SDTCisVT_Info.VT, TP);
   case SDTCisPtrTy:
-    // Operand must be same as target pointer type.
+    // Operand must be a pointer type.
     return NodeToApply->UpdateNodeType(ResNo, MVT::iPTR, TP);
   case SDTCisInt:
     // Require it to be one of the legal integer VTs.

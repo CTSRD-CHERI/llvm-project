@@ -762,3 +762,156 @@ class CMov_F_F_FM<bits<5> fmt, bit tf> : StdArch {
   let Inst{10-6} = fd;
   let Inst{5-0} = 0x11;
 }
+
+// CHERI instruction formats
+
+// BC2F
+class CheriFmtBC2F<dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, IIBranch, FrmOther>
+{
+  bits<5>  rd;
+  bits<16> offset;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = 0x8;
+  let Inst{20-16} = rd;
+  let Inst{15-0} = offset;
+
+  let isBranch = 1;
+  let isTerminator = 1;
+  let hasDelaySlot = 0;
+}
+
+// CGet*
+class CheriFmtGet<bits<3> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5>  rd;
+  bits<5>  cb;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = 0;
+  let Inst{20-16} = rd;
+  let Inst{15-11} = cb;
+  let Inst{10-3}  = 0; // Reserved
+  let Inst{2-0}   = op;
+}
+
+// CSet*
+class CheriFmtSet<bits<3> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5>  cd;
+  bits<5>  cb;
+  bits<5>  rt;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = 0x04;
+  let Inst{20-16} = cd;
+  let Inst{15-11} = cb;
+  let Inst{10-6}  = rt;
+  let Inst{5-3}   = 0; // Reserved
+  let Inst{2-0}   = op;
+}
+
+// 
+class CheriFmt2Caps<bits<5> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5>  cd;
+  bits<5>  cs;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = op;
+  let Inst{20-16} = cd;
+  let Inst{15-11} = cs;
+  let Inst{10-0}   = 0; // Reserved
+}
+// CSealData, CUnseal
+class CheriFmt3Caps<bits<5> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5>  cd;
+  bits<5>  cs;
+  bits<5>  ct;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = op;
+  let Inst{20-16} = cd;
+  let Inst{15-11} = cs;
+  let Inst{10-6}  = ct;
+  let Inst{5-0}   = 0; // Reserved
+}
+
+class CheriFmtClearTag<dag outs, dag ins, string asmstr,
+                       list<dag> pattern> :
+  CheriFmtSet<0x3, outs, ins, asmstr, pattern>
+{
+  let cb = 0;
+  let rt = 0;
+}
+
+
+// Load / Store capabilities
+class CheriFmtCLS<bits<6> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5>  cs;
+  bits<5>  cb;
+  bits<5>  rt;
+  bits<11> offset;
+
+  let Opcode = op;
+  let Inst{25-21} = cs;
+  let Inst{20-16} = cb;
+  let Inst{15-11} = rt;
+  let Inst{10-0}  = offset;
+}
+class CheriFmtCSCR<dag outs, dag ins, string asmstr,
+                   list<dag> pattern> :
+  CheriFmtCLS<0x3e, outs, ins, asmstr, pattern>;
+class CheriFmtCLCR<dag outs, dag ins, string asmstr,
+                   list<dag> pattern> :
+  CheriFmtCLS<0x36, outs, ins, asmstr, pattern>;
+
+class CheriFmtCLX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5>  rd;
+  bits<5>  cb;
+  bits<5>  rt;
+  bits<8>  offset;
+
+  let Opcode = 0x32;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = cb;
+  let Inst{15-11} = rt;
+  let Inst{10-3}  = offset;
+  let Inst{2}     = e;
+  let Inst{1-0}   = t;
+}
+
+class CheriFmtCSX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5>  rs;
+  bits<5>  cb;
+  bits<5>  rt;
+  bits<8>  offset;
+
+  let Opcode = 0x3a;
+  let Inst{25-21} = rs;
+  let Inst{20-16} = cb;
+  let Inst{15-11} = rt;
+  let Inst{10-3}  = offset;
+  let Inst{2}     = e;
+  let Inst{1-0}   = t;
+}

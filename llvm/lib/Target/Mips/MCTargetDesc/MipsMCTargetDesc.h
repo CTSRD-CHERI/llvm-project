@@ -33,6 +33,7 @@ extern Target TheMipselTarget;
 extern Target TheMips4Target;
 extern Target TheMips64Target;
 extern Target TheMips64elTarget;
+extern Target TheMipsCheriTarget;
 
 MCCodeEmitter *createMipsMCCodeEmitterEB(const MCInstrInfo &MCII,
                                          const MCRegisterInfo &MRI,

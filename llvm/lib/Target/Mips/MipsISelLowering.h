@@ -144,6 +144,9 @@ namespace llvm {
       MADDU_DSP,
       MSUB_DSP,
       MSUBU_DSP,
+      // CHERI extensions:
+      /// Branch on coprocessor 2 false (branch on invalid capability in CHERI)
+      BC2F,
 
       // DSP shift nodes.
       SHLL_DSP,

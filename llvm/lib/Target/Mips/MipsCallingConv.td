@@ -20,6 +20,7 @@ class CCIfSubtarget<string F, CCAction A>:
 // Only the return rules are defined here for O32. The rules for argument
 // passing are defined in MipsISelLowering.cpp.
 def RetCC_MipsO32 : CallingConv<[
+  CCIfType<[iFATPTR], CCAssignToReg<[C1]>>,
   // i32 are returned in registers V0, V1, A0, A1
   CCIfType<[i32], CCAssignToReg<[V0, V1, A0, A1]>>,
 
@@ -65,7 +66,9 @@ def CC_MipsN : CallingConv<[
 
   // All stack parameter slots become 64-bit doublewords and are 8-byte aligned.
   CCIfType<[i32, f32], CCAssignToStack<4, 8>>,
-  CCIfType<[i64, f64], CCAssignToStack<8, 8>>
+  CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
+  CCIfType<[iFATPTR], CCAssignToReg<[C1, C2, C3, C4]>>,
+  CCIfType<[iFATPTR], CCAssignToStack<32, 32>>
 ]>;
 
 // N32/64 variable arguments.
@@ -85,6 +88,9 @@ def CC_MipsN_VarArg : CallingConv<[
 ]>;
 
 def RetCC_MipsN : CallingConv<[
+  // Capabilities are returned in C1
+  CCIfType<[iFATPTR], CCAssignToReg<[C1]>>,
+
   // i32 are returned in registers V0, V1
   CCIfType<[i32], CCAssignToReg<[V0, V1]>>,
 
@@ -136,6 +142,7 @@ def CC_MipsEABI : CallingConv<[
 ]>;
 
 def RetCC_MipsEABI : CallingConv<[
+  CCIfType<[iFATPTR], CCAssignToReg<[C1]>>,
   // i32 are returned in registers V0, V1
   CCIfType<[i32], CCAssignToReg<[V0, V1]>>,
 
@@ -243,7 +250,8 @@ def CSR_N32 : CalleeSavedRegs<(add D31_64, D29_64, D27_64, D25_64, D24_64,
                                    (sequence "S%u_64", 7, 0))>;
 
 def CSR_N64 : CalleeSavedRegs<(add (sequence "D%u_64", 31, 24), RA_64, FP_64,
-                                   GP_64, (sequence "S%u_64", 7, 0))>;
+                                   GP_64, (sequence "S%u_64", 7, 0),
+                                   (sequence "C%u", 24, 16))>;
 
 def CSR_Mips16RetHelper :
   CalleeSavedRegs<(add V0, V1, FP,

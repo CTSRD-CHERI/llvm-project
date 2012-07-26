@@ -1759,3 +1759,45 @@ def int_mips_xor_v : GCCBuiltin<"__builtin_msa_xor_v">,
 def int_mips_xori_b : GCCBuiltin<"__builtin_msa_xori_b">,
   Intrinsic<[llvm_v16i8_ty], [llvm_v16i8_ty, llvm_i32_ty], [IntrNoMem]>;
 }
+
+let TargetPrefix = "cheri" in {  // All intrinsics start with "llvm.cheri.".
+  // Set the length of a capability
+  def int_cheri_set_cap_length : Intrinsic<[llvm_fatptr_ty],
+                                           [llvm_fatptr_ty, llvm_i64_ty],
+                                           [IntrNoMem]>;
+  def int_cheri_get_cap_length : Intrinsic<[llvm_i64_ty],
+                                           [llvm_fatptr_ty],
+                                           [IntrNoMem]>;
+  def int_cheri_and_cap_perms : Intrinsic<[llvm_fatptr_ty],
+                                          [llvm_fatptr_ty, llvm_i64_ty],
+                                          [IntrNoMem]>;
+  def int_cheri_get_cap_perms : Intrinsic<[llvm_i64_ty],
+                                          [llvm_fatptr_ty],
+                                          [IntrNoMem]>;
+  def int_cheri_set_cap_type : Intrinsic<[llvm_fatptr_ty],
+                                          [llvm_fatptr_ty, llvm_i64_ty],
+                                          [IntrNoMem]>;
+  def int_cheri_get_cap_type : Intrinsic<[llvm_i64_ty],
+                                          [llvm_fatptr_ty],
+                                          [IntrNoMem]>;
+  def int_cheri_get_cap_tag  : Intrinsic<[llvm_i32_ty],
+                                          [llvm_fatptr_ty],
+                                          [IntrNoMem]>;
+
+  def int_cheri_get_cap_reg  : Intrinsic<[llvm_fatptr_ty],
+                                         [llvm_i32_ty],
+                                         [IntrNoMem]>;
+  def int_cheri_set_cap_reg  : Intrinsic<[],
+                                         [llvm_i32_ty, llvm_fatptr_ty],
+                                         []>;
+  def int_cheri_seal_cap_code  : Intrinsic<[llvm_fatptr_ty],
+                                         [llvm_fatptr_ty],
+                                         [IntrNoMem]>;
+  def int_cheri_seal_cap_data  : Intrinsic<[llvm_fatptr_ty],
+                                         [llvm_fatptr_ty, llvm_fatptr_ty],
+                                         [IntrNoMem]>;
+  def int_cheri_unseal_cap  : Intrinsic<[llvm_fatptr_ty],
+                                         [llvm_fatptr_ty, llvm_fatptr_ty],
+                                         [IntrNoMem]>;
+}
+

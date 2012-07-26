@@ -173,11 +173,11 @@ def SDTBrind : SDTypeProfile<0, 1, [        // brind
 def SDTNone : SDTypeProfile<0, 0, []>;      // ret, trap
 
 def SDTLoad : SDTypeProfile<1, 1, [         // load
-  SDTCisPtrTy<1>
+  //SDTCisPtrTy<1>
 ]>;
 
 def SDTStore : SDTypeProfile<0, 2, [        // store
-  SDTCisPtrTy<1>
+  //SDTCisPtrTy<1>
 ]>;
 
 def SDTIStore : SDTypeProfile<1, 3, [       // indexed store
@@ -359,6 +359,8 @@ def zext       : SDNode<"ISD::ZERO_EXTEND", SDTIntExtendOp>;
 def anyext     : SDNode<"ISD::ANY_EXTEND" , SDTIntExtendOp>;
 def trunc      : SDNode<"ISD::TRUNCATE"   , SDTIntTruncOp>;
 def bitconvert : SDNode<"ISD::BITCAST"    , SDTUnaryOp>;
+def inttoptr   : SDNode<"ISD::INTTOPTR"    , SDTUnaryOp>;
+def ptrtoint   : SDNode<"ISD::PTRTOINT"    , SDTUnaryOp>;
 def extractelt : SDNode<"ISD::EXTRACT_VECTOR_ELT", SDTVecExtract>;
 def insertelt  : SDNode<"ISD::INSERT_VECTOR_ELT", SDTVecInsert>;
 

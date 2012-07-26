@@ -698,4 +698,5 @@ extern "C" void LLVMInitializeMipsAsmPrinter() {
   RegisterAsmPrinter<MipsAsmPrinter> Mips4(TheMips4Target);
   RegisterAsmPrinter<MipsAsmPrinter> A(TheMips64Target);
   RegisterAsmPrinter<MipsAsmPrinter> B(TheMips64elTarget);
+  RegisterAsmPrinter<MipsAsmPrinter> C(TheMipsCheriTarget);
 }

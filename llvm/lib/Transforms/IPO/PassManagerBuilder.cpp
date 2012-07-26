@@ -121,6 +121,7 @@ void PassManagerBuilder::populateFunctionPassManager(FunctionPassManager &FPM) {
     FPM.add(createScalarReplAggregatesPass());
   FPM.add(createEarlyCSEPass());
   FPM.add(createLowerExpectIntrinsicPass());
+  FPM.add(createCheriRangeChecker());
 }
 
 void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {

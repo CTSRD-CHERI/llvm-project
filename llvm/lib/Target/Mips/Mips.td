@@ -73,6 +73,9 @@ def FeatureMips64      : SubtargetFeature<"mips64", "MipsArchVersion",
 def FeatureMips64r2    : SubtargetFeature<"mips64r2", "MipsArchVersion",
                                 "Mips64r2", "Mips64r2 ISA Support",
                                 [FeatureMips64, FeatureMips32r2]>;
+def FeatureMipsCheri   : SubtargetFeature<"cheri", "IsCheri", "true",
+                                "Supports the CHERI capability coprocessor",
+                                [FeatureGP64Bit]>;
 
 def FeatureMips16  : SubtargetFeature<"mips16", "InMips16Mode", "true",
                                       "Mips16 mode">;
@@ -99,6 +102,7 @@ def : Proc<"mips4", [FeatureMips4]>;
 def : Proc<"mips64", [FeatureMips64]>;
 def : Proc<"mips64r2", [FeatureMips64r2]>;
 def : Proc<"mips16", [FeatureMips16]>;
+def : Proc<"cheri", [FeatureMipsCheri, FeatureMips64]>;
 
 def MipsAsmParser : AsmParser {
   let ShouldEmitMatchRegisterName = 0;

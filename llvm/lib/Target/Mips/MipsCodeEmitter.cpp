@@ -116,6 +116,7 @@ private:
   unsigned getSizeExtEncoding(const MachineInstr &MI, unsigned OpNo) const;
   unsigned getSizeInsEncoding(const MachineInstr &MI, unsigned OpNo) const;
   unsigned getLSAImmEncoding(const MachineInstr &MI, unsigned OpNo) const;
+  unsigned getCapMemEncoding(const MachineInstr &MI, unsigned OpNo) const;
 
   void emitGlobalAddressUnaligned(const GlobalValue *GV, unsigned Reloc,
                                   int Offset) const;
@@ -229,6 +230,18 @@ unsigned MipsCodeEmitter::getMSAMemEncoding(const MachineInstr &MI,
                                             unsigned OpNo) const {
   llvm_unreachable("Unimplemented function.");
   return 0;
+}
+
+unsigned MipsCodeEmitter::getCapMemEncoding(const MachineInstr &MI,
+                                            unsigned OpNo) const {
+  // Capability register is encoded in bits 20-16, Base register is encoded in
+  // bits 15-11, offset is encoded in bits 10-3.
+  assert(MI.getOperand(OpNo).isReg());
+  assert(MI.getOperand(OpNo+1).isReg());
+  unsigned CapRegBits = getMachineOpValue(MI, MI.getOperand(OpNo)) << 16;
+  unsigned RegBits = getMachineOpValue(MI, MI.getOperand(OpNo+1)) << 11;
+  return ((getMachineOpValue(MI, MI.getOperand(OpNo+2)) & 0xFF) << 3) |
+    RegBits | CapRegBits;
 }
 
 unsigned MipsCodeEmitter::getSizeExtEncoding(const MachineInstr &MI,

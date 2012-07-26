@@ -65,6 +65,8 @@ static std::string ParseMipsTriple(StringRef TT, StringRef CPU) {
         MipsArchFeature = "+mips64";
       } else if (CPU == "mips64r2") {
         MipsArchFeature = "+mips64r2";
+      } else if (CPU == "cheri") {
+        MipsArchFeature = "+cheri+soft-float";
       }
   }
   return MipsArchFeature;
@@ -180,4 +182,5 @@ extern "C" void LLVMInitializeMipsTargetMC() {
   registerTarget(TheMips4Target, /* isBigEndian */true, /*is64Bit*/true);
   registerTarget(TheMips64Target, /* isBigEndian */true, /*is64Bit*/true);
   registerTarget(TheMips64elTarget, /* isBigEndian */false, /*is64Bit*/true);
+  registerTarget(TheCheriTarget, /* isBigEndian */true, /*is64Bit*/true);
 }

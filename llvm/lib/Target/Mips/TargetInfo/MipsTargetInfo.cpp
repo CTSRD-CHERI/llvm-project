@@ -14,6 +14,7 @@ using namespace llvm;
 
 Target llvm::TheMipsTarget, llvm::TheMipselTarget;
 Target llvm::TheMips64Target, llvm::TheMips4Target, llvm::TheMips64elTarget;
+Target llvm::TheMipsCheriTarget;
 
 extern "C" void LLVMInitializeMipsTargetInfo() {
   RegisterTarget<Triple::mips,
@@ -31,4 +32,6 @@ extern "C" void LLVMInitializeMipsTargetInfo() {
   RegisterTarget<Triple::mips64el,
         /*HasJIT=*/false> B(TheMips64elTarget,
                             "mips64el", "Mips64el [experimental]");
+  RegisterTarget<Triple::cheri,
+        /*HasJIT=*/true> C(TheMipsCheriTarget, "cheri", "CHERI");
 }

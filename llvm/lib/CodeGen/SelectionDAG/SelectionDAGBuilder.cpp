@@ -367,6 +367,8 @@ static void getCopyToParts(SelectionDAG &DAG, SDLoc DL,
     if (PartVT.isFloatingPoint() && ValueVT.isFloatingPoint()) {
       assert(NumParts == 1 && "Do not know what to promote to!");
       Val = DAG.getNode(ISD::FP_EXTEND, DL, PartVT, Val);
+    } else if (PartVT.SimpleTy == MVT::iFATPTR) {
+      Val = DAG.getNode(ISD::INTTOPTR, DL, PartVT, Val);
     } else {
       assert((PartVT.isInteger() || PartVT == MVT::x86mmx) &&
              ValueVT.isInteger() &&
@@ -2925,6 +2927,12 @@ void SelectionDAGBuilder::visitPtrToInt(const User &I) {
   // We can either truncate, zero extend, or no-op, accordingly.
   SDValue N = getValue(I.getOperand(0));
   EVT DestVT = TM.getTargetLowering()->getValueType(I.getType());
+  // FIXME!
+  if (PointerType *PTy = dyn_cast<PointerType>(I.getOperand(0)->getType()))
+    if (PTy->getAddressSpace() == 200) {
+      setValue(&I, DAG.getNode(ISD::PTRTOINT, getCurSDLoc(), DestVT, N));
+      return;
+    }
   setValue(&I, DAG.getZExtOrTrunc(N, getCurSDLoc(), DestVT));
 }
 
@@ -2933,6 +2941,12 @@ void SelectionDAGBuilder::visitIntToPtr(const User &I) {
   // We can either truncate, zero extend, or no-op, accordingly.
   SDValue N = getValue(I.getOperand(0));
   EVT DestVT = TM.getTargetLowering()->getValueType(I.getType());
+  // FIXME!
+  if (PointerType *PTy = dyn_cast<PointerType>(I.getType()))
+    if (PTy->getAddressSpace() == 200) {
+      setValue(&I, DAG.getNode(ISD::INTTOPTR, getCurSDLoc(), DestVT, N));
+      return;
+    }
   setValue(&I, DAG.getZExtOrTrunc(N, getCurSDLoc(), DestVT));
 }
 
@@ -3263,6 +3277,13 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
   unsigned AS = Ty->getPointerAddressSpace();
   SDValue N = getValue(Op0);
 
+  bool FatPointer = N.getValueType() == MVT::iFATPTR;
+  SDValue OrigN = N;
+
+  if (FatPointer) {
+    N = DAG.getIntPtrConstant(0);
+  }
+
   for (GetElementPtrInst::const_op_iterator OI = I.op_begin()+1, E = I.op_end();
        OI != E; ++OI) {
     const Value *Idx = *OI;
@@ -3328,6 +3349,12 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
     }
   }
 
+  if (FatPointer) {
+    SDValue Base = DAG.getNode(ISD::ADD, getCurSDLoc(), N.getValueType(), 
+        DAG.getNode(ISD::PTRTOINT, getCurSDLoc(), N.getValueType(),
+          OrigN), N);
+    N = DAG.getNode(ISD::INTTOPTR, getCurSDLoc(), OrigN.getValueType(), Base);
+  }
   setValue(&I, N);
 }
 
@@ -3445,9 +3472,10 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
       Root = Chain;
       ChainI = 0;
     }
-    SDValue A = DAG.getNode(ISD::ADD, getCurSDLoc(),
+    //FIXME:
+    SDValue A = Offsets[i] ? DAG.getNode(ISD::ADD, getCurSDLoc(),
                             PtrVT, Ptr,
-                            DAG.getConstant(Offsets[i], PtrVT));
+                            DAG.getConstant(Offsets[i], PtrVT)) : Ptr;
     SDValue L = DAG.getLoad(ValueVTs[i], getCurSDLoc(), Root,
                             A, MachinePointerInfo(SV, Offsets[i]), isVolatile,
                             isNonTemporal, isInvariant, Alignment, TBAAInfo,
@@ -3509,8 +3537,9 @@ void SelectionDAGBuilder::visitStore(const StoreInst &I) {
       Root = Chain;
       ChainI = 0;
     }
-    SDValue Add = DAG.getNode(ISD::ADD, getCurSDLoc(), PtrVT, Ptr,
-                              DAG.getConstant(Offsets[i], PtrVT));
+    // FIXME:
+    SDValue Add = Offsets[i] ? DAG.getNode(ISD::ADD, getCurSDLoc(), PtrVT, Ptr,
+                              DAG.getConstant(Offsets[i], PtrVT)) : Ptr;
     SDValue St = DAG.getStore(Root, getCurSDLoc(),
                               SDValue(Src.getNode(), Src.getResNo() + i),
                               Add, MachinePointerInfo(PtrV, Offsets[i]),

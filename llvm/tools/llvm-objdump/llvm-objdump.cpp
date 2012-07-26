@@ -501,6 +501,9 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
           outs() << "\n";
         } else {
           errs() << ToolName << ": warning: invalid instruction encoding\n";
+          outs() << format("%8" PRIx64 ":\t", SectionAddr + Index);
+          DumpBytes(StringRef(Bytes.data() + Index, 4));
+          outs() << "\n";
           if (Size == 0)
             Size = 1; // skip illegible bytes
         }

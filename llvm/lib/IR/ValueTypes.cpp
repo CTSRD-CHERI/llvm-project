@@ -118,6 +118,7 @@ std::string EVT::getEVTString() const {
   case MVT::i32:     return "i32";
   case MVT::i64:     return "i64";
   case MVT::i128:    return "i128";
+  case MVT::iFATPTR: return "iFATPTR";
   case MVT::f16:     return "f16";
   case MVT::f32:     return "f32";
   case MVT::f64:     return "f64";
@@ -238,6 +239,7 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   case MVT::v4f64:   return VectorType::get(Type::getDoubleTy(Context), 4); 
   case MVT::v8f64:   return VectorType::get(Type::getDoubleTy(Context), 8); 
   case MVT::Metadata: return Type::getMetadataTy(Context);
+  case MVT::iFATPTR:      return PointerType::get(Type::getInt8Ty(Context), 200);
  }
 }
 
@@ -260,7 +262,12 @@ MVT MVT::getVT(Type *Ty, bool HandleUnknown){
   case Type::X86_MMXTyID:   return MVT(MVT::x86mmx);
   case Type::FP128TyID:     return MVT(MVT::f128);
   case Type::PPC_FP128TyID: return MVT(MVT::ppcf128);
-  case Type::PointerTyID:   return MVT(MVT::iPTR);
+  case Type::PointerTyID: {
+    // FIXME!
+    if (cast<PointerType>(Ty)->getAddressSpace() == 200)
+      return MVT(MVT::iFATPTR);
+    return MVT(MVT::iPTR);
+  }
   case Type::VectorTyID: {
     VectorType *VTy = cast<VectorType>(Ty);
     return getVectorVT(

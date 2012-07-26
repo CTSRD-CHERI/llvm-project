@@ -197,6 +197,7 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::ILVR:              return "MipsISD::ILVR";
   case MipsISD::PCKEV:             return "MipsISD::PCKEV";
   case MipsISD::PCKOD:             return "MipsISD::PCKOD";
+  case MipsISD::BC2F:              return "MipsISD::BC2F";
   default:                         return NULL;
   }
 }
@@ -1431,7 +1432,30 @@ SDValue MipsTargetLowering::lowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   SDValue Dest = Op.getOperand(2);
   SDLoc DL(Op);
 
-  SDValue CondRes = createFPCmp(DAG, Op.getOperand(1));
+  SDValue Cond = Op.getOperand(1);
+  // If this is a branch on the tag, see if we can change it to a BC2F
+  if (Cond.getOpcode() == ISD::SETCC) {
+    SDValue Source = Cond.getOperand(0);
+    if (Source.getOpcode() == ISD::INTRINSIC_WO_CHAIN &&
+        cast<ConstantSDNode>(Source.getOperand(0))->getZExtValue() ==
+          Intrinsic::cheri_get_cap_tag) {
+      // If we're not comparing to a constant, we must use general purpose
+      // comparisons
+      if (ConstantSDNode *Target =
+              dyn_cast<ConstantSDNode>(Cond.getOperand(1))) {
+        unsigned CmpVal  = Target->getZExtValue();
+        ISD::CondCode CmpType =
+            cast<CondCodeSDNode>(Cond.getOperand(2))->get();
+        if ((CmpVal == 0 && CmpType == ISD::SETEQ) ||
+            (CmpVal == 1 && CmpType == ISD::SETNE)) {
+          return DAG.getNode(MipsISD::BC2F, dl, Op.getValueType(), Chain,
+                  Source.getOperand(1), Dest);
+        }
+      }
+    }
+  }
+
+  SDValue CondRes = CreateFPCmp(DAG, Op.getOperand(1));
 
   // Return if flag is not set by a floating point comparison.
   if (CondRes.getOpcode() != MipsISD::FPCmp)
@@ -3198,6 +3222,17 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
                                             bool IsMemset, bool ZeroMemset,
                                             bool MemcpyStrSrc,
                                             MachineFunction &MF) const {
+  // If the source alignment is 32 then we are copying something that may
+  // contain capabilities.  If the destination alignment is 32, then we are
+  // copying to something that may contain capabilities.  If both of these is
+  // true, then we must use capability copies to do preserve tag bits.
+  // Otherwise, we do copying that will clear the capability tags.  For memset,
+  // the source align will be 0.  We don't want to use capabilities in this
+  // case, because the capability tag will always be 0.  For very long memsets,
+  // we can use the capability registers in the library implementation.
+  if ((SrcAlign == 32) && (DstAlign == 32))
+    return MVT::iFATPTR;
+
   if (Subtarget->hasMips64())
     return MVT::i64;
 

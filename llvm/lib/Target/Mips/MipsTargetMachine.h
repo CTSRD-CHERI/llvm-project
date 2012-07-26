@@ -120,6 +120,17 @@ public:
                       CodeGenOpt::Level OL);
 };
 
+/// MipsCheriTargetMachine - MIPS with CHERI capability extensions.
+class MipsCheriTargetMachine : public MipsebTargetMachine {
+  virtual void anchor();
+public:
+  MipsCheriTargetMachine(const Target &T, StringRef TT,
+                        StringRef CPU, StringRef FS,
+                        const TargetOptions &Options,
+                        Reloc::Model RM, CodeModel::Model CM,
+                        CodeGenOpt::Level OL);
+};
+
 } // End llvm namespace
 
 #endif

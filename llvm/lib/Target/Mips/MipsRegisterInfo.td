@@ -79,6 +79,9 @@ class ACCReg<bits<16> Enc, string n, list<Register> subregs>
 // Mips Hardware Registers
 class HWR<bits<16> Enc, string n> : MipsReg<Enc, n>;
 
+// CHERI capability registers
+class CAP<bits<16> Enc, string n> : MipsReg<Enc, n>;
+
 //===----------------------------------------------------------------------===//
 //  Registers
 //===----------------------------------------------------------------------===//
@@ -246,6 +249,40 @@ let Namespace = "Mips" in {
   def MSARequest : MipsReg<5, "5">;
   def MSAMap     : MipsReg<6, "6">;
   def MSAUnmap   : MipsReg<7, "7">;
+
+  // Capability registers
+  def C0  : CAP<0, "C0">, DwarfRegNum<[64]>;
+  def C1  : CAP<0, "C1">, DwarfRegNum<[65]>;
+  def C2  : CAP<0, "C2">, DwarfRegNum<[66]>;
+  def C3  : CAP<0, "C3">, DwarfRegNum<[67]>;
+  def C4  : CAP<0, "C4">, DwarfRegNum<[68]>;
+  def C5  : CAP<0, "C5">, DwarfRegNum<[69]>;
+  def C6  : CAP<0, "C6">, DwarfRegNum<[70]>;
+  def C7  : CAP<0, "C7">, DwarfRegNum<[71]>;
+  def C8  : CAP<0, "C8">, DwarfRegNum<[72]>;
+  def C9  : CAP<0, "C9">, DwarfRegNum<[73]>;
+  def C10 : CAP<0, "C10">, DwarfRegNum<[74]>;
+  def C11 : CAP<0, "C11">, DwarfRegNum<[75]>;
+  def C12 : CAP<0, "C12">, DwarfRegNum<[76]>;
+  def C13 : CAP<0, "C13">, DwarfRegNum<[77]>;
+  def C14 : CAP<0, "C14">, DwarfRegNum<[78]>;
+  def C15 : CAP<0, "C15">, DwarfRegNum<[79]>;
+  def C16 : CAP<0, "C16">, DwarfRegNum<[80]>;
+  def C17 : CAP<0, "C17">, DwarfRegNum<[81]>;
+  def C18 : CAP<0, "C18">, DwarfRegNum<[82]>;
+  def C19 : CAP<0, "C19">, DwarfRegNum<[83]>;
+  def C20 : CAP<0, "C20">, DwarfRegNum<[84]>;
+  def C21 : CAP<0, "C21">, DwarfRegNum<[85]>;
+  def C22 : CAP<0, "C22">, DwarfRegNum<[86]>;
+  def C23 : CAP<0, "C23">, DwarfRegNum<[87]>;
+  def C24 : CAP<0, "C24">, DwarfRegNum<[88]>;
+  def C25 : CAP<0, "C25">, DwarfRegNum<[89]>;
+  def C26 : CAP<0, "C26">, DwarfRegNum<[90]>;
+  def C27 : CAP<0, "C27">, DwarfRegNum<[91]>;
+  def C28 : CAP<0, "C28">, DwarfRegNum<[92]>;
+  def C29 : CAP<0, "C29">, DwarfRegNum<[93]>;
+  def C30 : CAP<0, "C30">, DwarfRegNum<[94]>;
+  def C31 : CAP<0, "C31">, DwarfRegNum<[95]>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -300,6 +337,12 @@ def CPU16RegsPlusSP : RegisterClass<"Mips", [i32], 32, (add
 def CPURAReg : RegisterClass<"Mips", [i32], 32, (add RA)>, Unallocatable;
 
 def CPUSPReg : RegisterClass<"Mips", [i32], 32, (add SP)>, Unallocatable;
+
+def CheriRegs : RegisterClass<"Mips", [iFATPTR], 256, (add
+  C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, 
+  C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, 
+  C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, 
+  C30, C31)>;
 
 // 64bit fp:
 // * FGR64  - 32 64-bit registers

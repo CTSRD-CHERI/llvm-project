@@ -44,6 +44,7 @@ extern "C" void LLVMInitializeMipsTarget() {
   RegisterTargetMachine<MipsebTargetMachine> Mips4(TheMips4Target);
   RegisterTargetMachine<MipsebTargetMachine> A(TheMips64Target);
   RegisterTargetMachine<MipselTargetMachine> B(TheMips64elTarget);
+  RegisterTargetMachine<MipsCheriTargetMachine> C(TheMipsCheriTarget);
 }
 
 static std::string computeDataLayout(const MipsSubtarget &ST) {
@@ -150,6 +151,15 @@ MipselTargetMachine(const Target &T, StringRef TT,
                     Reloc::Model RM, CodeModel::Model CM,
                     CodeGenOpt::Level OL)
   : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, true) {}
+
+void MipsCheriTargetMachine::anchor() { }
+
+MipsCheriTargetMachine::
+MipsCheriTargetMachine(const Target &T, StringRef TT,
+                      StringRef CPU, StringRef FS, const TargetOptions &Options,
+                      Reloc::Model RM, CodeModel::Model CM,
+                      CodeGenOpt::Level OL)
+  : MipsebTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL) {}
 
 namespace {
 /// Mips Code Generator Pass Configuration Options.
