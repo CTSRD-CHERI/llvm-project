@@ -870,6 +870,10 @@ static void getMipsCPUAndABI(const ArgList &Args,
     case llvm::Triple::mips64el:
       CPUName = DefMips64CPU;
       break;
+    case llvm::Triple::cheri:
+      CPUName = "cheri";
+      ABIName = "n64";
+      break;
     }
   }
 
@@ -2493,6 +2497,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mips4:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+  case llvm::Triple::cheri:
     AddMIPSTargetArgs(Args, CmdArgs);
     break;
 
@@ -5847,6 +5852,7 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (getToolChain().getArch() == llvm::Triple::mips ||
         getToolChain().getArch() == llvm::Triple::mips4 ||
+        getToolChain().getArch() == llvm::Triple::cheri ||
         getToolChain().getArch() == llvm::Triple::mips64)
       CmdArgs.push_back("-EB");
     else

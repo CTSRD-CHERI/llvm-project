@@ -62,6 +62,12 @@ class ScalarExprEmitter
   CGBuilderTy &Builder;
   bool IgnoreResultAssign;
   llvm::LLVMContext &VMContext;
+
+  llvm::Value* emitPointerCast(CGBuilderTy &Builder,
+                               const TargetInfo &TI,
+                               llvm::Value *From,
+                               QualType FromTy,
+                               QualType ToTy);
 public:
 
   ScalarExprEmitter(CodeGenFunction &cgf, bool ira=false)
@@ -1263,6 +1269,33 @@ static bool ShouldNullCheckClassCastValue(const CastExpr *CE) {
   return true;
 }
 
+llvm::Value* ScalarExprEmitter::emitPointerCast(CGBuilderTy &Builder,
+                                                const TargetInfo &TI,
+                                                llvm::Value *From,
+                                                QualType FromTy,
+                                                QualType ToTy) {
+  llvm::PointerType *toTy = cast<llvm::PointerType>(ConvertType(ToTy));
+  llvm::PointerType *fromTy = cast<llvm::PointerType>(From->getType());
+  // Casts within address spaces, or between two address spaces of the same size, 
+  unsigned FromAddrSpace = fromTy->getAddressSpace();
+  unsigned ToAddrSpace = toTy->getAddressSpace();
+  llvm::Value *result;
+  if ((FromAddrSpace == ToAddrSpace) ||
+      (TI.getPointerWidth(FromAddrSpace) == TI.getPointerWidth(ToAddrSpace))) {
+    if (fromTy == toTy)
+     result = From;
+    else
+      result = Builder.CreateBitCast(From, toTy);
+  } else {
+    result = Builder.CreatePtrToInt(From,
+            llvm::IntegerType::get(From->getContext(),
+                TI.getPointerWidth(FromAddrSpace)));
+    result = Builder.CreateIntToPtr(result, toTy);
+  }
+  return result;
+}
+
+
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
 // have to handle a more broad range of conversions than explicit casts, as they
 // handle things like function to ptr-to-function decay etc.
@@ -1291,10 +1324,14 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
                             CE->getExprLoc());
   }
 
+  case CK_BitCast: {
+    if (!(E->getType()->isPointerType() && DestTy->isPointerType()))
+      return Builder.CreateBitCast(Visit(const_cast<Expr*>(E)),
+              ConvertType(DestTy));
+  }
   case CK_CPointerToObjCPointerCast:
   case CK_BlockPointerToObjCPointerCast:
-  case CK_AnyPointerToBlockPointerCast:
-  case CK_BitCast: {
+  case CK_AnyPointerToBlockPointerCast: {
     Value *Src = Visit(const_cast<Expr*>(E));
     llvm::Type *SrcTy = Src->getType();
     llvm::Type *DstTy = ConvertType(DestTy);
@@ -1307,7 +1344,19 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   }
   case CK_AddressSpaceConversion: {
     Value *Src = Visit(const_cast<Expr*>(E));
-    return Builder.CreateAddrSpaceCast(Src, ConvertType(DestTy));
+    llvm::Type *DstTy = ConvertType(DestTy);
+    Value *Cast = Builder.CreateAddrSpaceCast(Src, DstTy);
+    if (CGF.Target.getTriple().getArch() == llvm::Triple::cheri)
+      // FIXME: 200 should not be a magic number!
+      if (cast<PointerType>(DstTy)->getPointerAddressSpace() == 200 &&
+          ToTy->getPointeeType().isConstQualified() &&
+          !FromTy->getPointeeType().isConstQualified()) {
+        Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_and_cap_perms);
+        // Clear the store and store-capability flags
+        Cast = Builder.CreateCall2(F, Cast,
+            llvm::ConstantInt::get(CGF.SizeTy, 0x57FF));
+      }
+    return Cast;
   }
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:

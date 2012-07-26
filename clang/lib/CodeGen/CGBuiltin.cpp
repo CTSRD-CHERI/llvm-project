@@ -1602,6 +1602,9 @@ Value *CodeGenFunction::EmitTargetBuiltinExpr(unsigned BuiltinID,
   case llvm::Triple::ppc64:
   case llvm::Triple::ppc64le:
     return EmitPPCBuiltinExpr(BuiltinID, E);
+  case llvm::Triple::mips64:
+  case llvm::Triple::cheri:
+    return EmitMIPSBuiltinExpr(BuiltinID, E);
   default:
     return 0;
   }
@@ -5209,6 +5212,54 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   }
 }
 
+Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
+                                           const CallExpr *E) {
+  switch (BuiltinID) {
+    case Mips::BI__builtin_cheri_set_cap_length: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_set_cap_length);
+      return Builder.CreateCall2(F, EmitScalarExpr(E->getArg(0)),
+                                                EmitScalarExpr(E->getArg(1)));
+    }
+    case Mips::BI__builtin_cheri_get_cap_length: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_length);
+      return Builder.CreateCall(F, EmitScalarExpr(E->getArg(0)));
+    }
+    case Mips::BI__builtin_cheri_set_cap_type: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_set_cap_type);
+      return Builder.CreateCall2(F, EmitScalarExpr(E->getArg(0)),
+                                 EmitScalarExpr(E->getArg(1)));
+    }
+    case Mips::BI__builtin_cheri_get_cap_type: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_type);
+      return Builder.CreateCall(F, EmitScalarExpr(E->getArg(0)));
+    }
+    case Mips::BI__builtin_cheri_and_cap_perms: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_and_cap_perms);
+      return Builder.CreateCall2(F, EmitScalarExpr(E->getArg(0)),
+                                 Builder.CreateZExt(EmitScalarExpr(E->getArg(1)),
+                                                    Int64Ty));
+    }
+    case Mips::BI__builtin_cheri_get_cap_perms: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_perms);
+      return Builder.CreateTrunc(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
+                                 Int16Ty);
+    }
+    case Mips::BI__builtin_cheri_get_cap_tag: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_tag);
+      return Builder.CreateZExt(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
+                                Int64Ty);
+    }
+    case Mips::BI__builtin_cheri_get_cap_register: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_reg);
+      return Builder.CreateCall(F, EmitScalarExpr(E->getArg(0)));
+    }
+    case Mips::BI__builtin_cheri_set_cap_register: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_set_cap_reg);
+      return Builder.CreateCall2(F, EmitScalarExpr(E->getArg(0)),
+                                    EmitScalarExpr(E->getArg(1)));
+    }
+  }
+}
 
 Value *CodeGenFunction::EmitPPCBuiltinExpr(unsigned BuiltinID,
                                            const CallExpr *E) {

@@ -4837,6 +4837,7 @@ class MipsTargetInfoBase : public TargetInfo {
     NoDSP, DSP1, DSP2
   } DspRev;
   bool HasMSA;
+  bool IsCheri;
 
 protected:
   bool HasFP64;
@@ -4907,6 +4908,32 @@ public:
 
     if (HasMSA)
       Builder.defineMacro("__mips_msa", Twine(1));
+
+    if (IsCheri) {
+      Builder.defineMacro("__CHERI__", Twine(1));
+
+      // Macros for use with the set and get permissions builtins.
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_NON_EPHEMERAL__", Twine(1<<0));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_EPCC__", Twine(1<<1));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KDC__", Twine(1<<2));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KCC__", Twine(1<<3));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_TSC__", Twine(1<<4));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SET_TYPE__", Twine(1<<7));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<8));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_EPHEMERAL__",
+              Twine(1<<9));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__", Twine(1<<10));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__", Twine(1<<11));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
+              Twine(1<<12));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
+              Twine(1<<13));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
+              Twine(1<<14));
+
+      Builder.defineMacro("_MIPS_SZCAP", Twine(getPointerWidth(200)));
+      Builder.defineMacro("__capability", Twine("__attribute__((address_space(200)))"));
+    }
 
     Builder.defineMacro("_MIPS_SZPTR", Twine(getPointerWidth(0)));
     Builder.defineMacro("_MIPS_SZINT", Twine(getIntWidth()));
@@ -5019,6 +5046,9 @@ public:
         HasFP64 = false;
       else if (*it == "+nan2008")
         IsNan2008 = true;
+      else if (*it == "+cheri") {
+        IsCheri = true;
+      }
     }
 
     // Remove front-end specific options.
@@ -5263,6 +5293,16 @@ public:
     DefineStd(Builder, "MIPSEB", Opts);
     Builder.defineMacro("_MIPSEB");
     Mips64TargetInfoBase::getTargetDefines(Opts, Builder);
+  }
+};
+
+struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
+  MipsCheriTargetInfo(const std::string& triple) : Mips64EBTargetInfo("cheri-unknown-freebsd") {}
+  virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
+    return (AddrSpace == 200) ? 256 : PointerWidth;
+  }
+  virtual uint64_t getPointerAlignV(unsigned AddrSpace) const {
+    return (AddrSpace == 200) ? 256 : PointerAlign;
   }
 };
 
@@ -5604,6 +5644,19 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple) {
       return new OpenBSDTargetInfo<Mips64EBTargetInfo>(Triple);
     default:
       return new Mips64EBTargetInfo(Triple);
+    }
+  case llvm::Triple::cheri:
+    switch (os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<MipsCheriTargetInfo>(T);
+    case llvm::Triple::RTEMS:
+      return new RTEMSTargetInfo<MipsCheriTargetInfo>(T);
+    case llvm::Triple::FreeBSD:
+      return new FreeBSDTargetInfo<MipsCheriTargetInfo>(T);
+    case llvm::Triple::NetBSD:
+      return new NetBSDTargetInfo<MipsCheriTargetInfo>(T);
+    default:
+      return new MipsCheriTargetInfo(T);
     }
 
   case llvm::Triple::mips64el:
