@@ -892,6 +892,32 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     // rather than the value.
     RValue Result = EmitReferenceBindingToExpr(RV);
     Builder.CreateStore(Result.getScalarVal(), ReturnValue);
+  } else if (!hasAggregateLLVMType(RV->getType())) {
+    llvm::Value *RetV = EmitScalarExpr(RV);
+    QualType Ty = RV->getType();
+    if (Ty->isPointerType())
+      if (const TypedefType *TT = dyn_cast<TypedefType>(Ty))
+        if (VarDecl *Key = cast<TypedefDecl>(TT->getDecl())->getOpaqueKey()) {
+          llvm::Type *RetTy = RetV->getType();
+          llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
+          KeyV = Builder.CreateLoad(KeyV);
+          // FIXME: Don't hard-code address space 200!
+          // If this is CHERI, enforce this in hardware
+          if (Ty->getPointeeType().getAddressSpace() == 200) {
+            llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_seal_cap_data);
+            llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, 200);
+            RetV = Builder.CreateCall2(F,
+                Builder.CreateBitCast(RetV, CapPtrTy),
+                Builder.CreateBitCast(KeyV, CapPtrTy));
+            RetV = Builder.CreateBitCast(RetV, RetTy);
+          } else {
+            KeyV = Builder.CreatePtrToInt(KeyV, IntPtrTy);
+            RetV = Builder.CreatePtrToInt(RetV, IntPtrTy);
+            RetV = Builder.CreateXor(RetV, KeyV);
+            RetV = Builder.CreateIntToPtr(RetV, RetTy);
+          }
+        }
+    Builder.CreateStore(RetV, ReturnValue);
   } else {
     switch (getEvaluationKind(RV->getType())) {
     case TEK_Scalar:

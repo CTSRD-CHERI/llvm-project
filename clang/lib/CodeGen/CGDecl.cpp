@@ -1721,7 +1721,31 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, llvm::Value *Arg,
     }
 
     // Store the initial value into the alloca.
-    if (doStore)
+    if (doStore) {
+      LValue lv = MakeAddrLValue(DeclPtr, Ty,
+                                 getContext().getDeclAlign(&D));
+      if (Ty->isPointerType())
+        if (const TypedefType *TT = dyn_cast<TypedefType>(Ty))
+          if (VarDecl *Key = cast<TypedefDecl>(TT->getDecl())->getOpaqueKey()) {
+            llvm::Type *ArgTy = Arg->getType();
+            llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
+            KeyV = Builder.CreateLoad(KeyV);
+            // FIXME: Don't hard-code address space 200!
+            // If this is CHERI, enforce this in hardware
+            if (Ty->getPointeeType().getAddressSpace() == 200) {
+              llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_unseal_cap);
+              llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, 200);
+              Arg = Builder.CreateCall2(F,
+                  Builder.CreateBitCast(Arg, CapPtrTy),
+                  Builder.CreateBitCast(KeyV, CapPtrTy));
+              Arg = Builder.CreateBitCast(Arg, ArgTy);
+            } else {
+              KeyV = Builder.CreatePtrToInt(KeyV, IntPtrTy);
+              Arg = Builder.CreatePtrToInt(Arg, IntPtrTy);
+              Arg = Builder.CreateXor(Arg, KeyV);
+              Arg = Builder.CreateIntToPtr(Arg, ArgTy);
+            }
+          }
       EmitStoreOfScalar(Arg, lv, /* isInitialization */ true);
   }
 

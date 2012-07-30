@@ -2432,9 +2432,12 @@ public:
 /// TypedefDecl - Represents the declaration of a typedef-name via the 'typedef'
 /// type specifier.
 class TypedefDecl : public TypedefNameDecl {
+  VarDecl *Key;
+
   TypedefDecl(DeclContext *DC, SourceLocation StartLoc, SourceLocation IdLoc,
               IdentifierInfo *Id, TypeSourceInfo *TInfo)
-    : TypedefNameDecl(Typedef, DC, StartLoc, IdLoc, Id, TInfo) {}
+    : TypedefNameDecl(Typedef, DC, StartLoc, IdLoc, Id, TInfo), Key(0) {}
+
 
 public:
   static TypedefDecl *Create(ASTContext &C, DeclContext *DC,
@@ -2443,6 +2446,9 @@ public:
   static TypedefDecl *CreateDeserialized(ASTContext &C, unsigned ID);
   
   SourceRange getSourceRange() const LLVM_READONLY;
+
+  void setOpaqueKey(VarDecl *VD) { Key = VD; }
+  VarDecl *getOpaqueKey() const { return Key; }
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }

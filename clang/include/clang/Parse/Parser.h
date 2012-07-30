@@ -149,6 +149,7 @@ class Parser : public CodeCompletionHandler {
   OwningPtr<PragmaHandler> UnusedHandler;
   OwningPtr<PragmaHandler> WeakHandler;
   OwningPtr<PragmaHandler> RedefineExtnameHandler;
+  OwningPtr<PragmaHandler> OpaqueHandler;
   OwningPtr<PragmaHandler> FPContractHandler;
   OwningPtr<PragmaHandler> OpenCLExtensionHandler;
   OwningPtr<CommentHandler> CommentSemaHandler;

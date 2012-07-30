@@ -6986,6 +6986,12 @@ public:
                                   SourceLocation WeakNameLoc,
                                   SourceLocation AliasNameLoc);
 
+  void ActOnPragmaOpaque(IdentifierInfo* TypeName,
+                         IdentifierInfo* KeyName,
+                         SourceLocation PragmaLoc,
+                         SourceLocation TypeLoc,
+                         SourceLocation KeyLoc);
+
   /// ActOnPragmaWeakAlias - Called on well formed \#pragma weak ident = ident.
   void ActOnPragmaWeakAlias(IdentifierInfo* WeakName,
                             IdentifierInfo* AliasName,

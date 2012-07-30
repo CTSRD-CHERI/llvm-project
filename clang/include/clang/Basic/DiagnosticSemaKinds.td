@@ -487,6 +487,11 @@ def err_pragma_pop_visibility_mismatch : Error<
 def note_surrounding_namespace_starts_here : Note<
   "surrounding namespace with visibility attribute starts here">;
 
+def err_pragma_opaque_invalid_type : Error<
+  "#pragma opaque type must specify a pointer typedef">;
+def err_pragma_opaque_invalid_key : Error<
+  "#pragma opaque key must specify a value of the same size as the opaque type">;
+
 /// Objective-C parser diagnostics
 def err_duplicate_class_def : Error<
   "duplicate interface definition for class %0">;

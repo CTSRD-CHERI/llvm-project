@@ -626,6 +626,46 @@ void PragmaWeakHandler::HandlePragma(Preprocessor &PP,
   }
 }
 
+/// Handle #pragma opaque {type} {lock variable}
+void PragmaOpaqueHandler::HandlePragma(Preprocessor &PP, 
+                                       PragmaIntroducerKind Introducer,
+                                       Token &OpaqueToken) {
+  SourceLocation OpaqueLoc = OpaqueToken.getLocation();
+
+  Token Tok;
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::identifier)) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_expected_identifier) <<
+      "opaque";
+    return;
+  }
+
+
+
+  IdentifierInfo *TypeName = Tok.getIdentifierInfo(), *KeyName = 0;
+  SourceLocation TypeNameLoc = Tok.getLocation(), KeyNameLoc;
+
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::identifier)) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_expected_identifier)
+        << "opaque";
+    return;
+  }
+  KeyName = Tok.getIdentifierInfo();
+  KeyNameLoc = Tok.getLocation();
+  PP.Lex(Tok);
+
+  if (Tok.isNot(tok::eod)) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_extra_tokens_at_eol) <<
+      "opaque";
+    return;
+  }
+
+  Actions.ActOnPragmaOpaque(TypeName, KeyName, OpaqueLoc,
+      TypeNameLoc, KeyNameLoc);
+}
+
+
 // #pragma redefine_extname identifier identifier
 void PragmaRedefineExtnameHandler::HandlePragma(Preprocessor &PP, 
                                                PragmaIntroducerKind Introducer,
