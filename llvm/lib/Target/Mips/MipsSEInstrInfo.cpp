@@ -153,6 +153,15 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
       Opc = Mips::MTLO64, DestReg = 0;
     else if (Mips::FGR64RegClass.contains(DestReg))
       Opc = Mips::DMTC1;
+ } else if (Mips::CheriRegsRegClass.contains(SrcReg)) {
+   Opc = Mips::CIncBase;
+   // CIncBase takes the operands in a different order to the other copy
+   // operations
+   MachineInstrBuilder MIB = BuildMI(MBB, I, DL, get(Mips::CIncBase));
+   MIB.addReg(DestReg, RegState::Define);
+   MIB.addReg(SrcReg, getKillRegState(KillSrc));
+   MIB.addReg(Mips::ZERO);
+   return;
   }
   else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
     if (Mips::MSA128BRegClass.contains(SrcReg))
@@ -210,6 +219,14 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     Opc = Mips::ST_W;
   else if (RC->hasType(MVT::v2i64) || RC->hasType(MVT::v2f64))
     Opc = Mips::ST_D;
+  else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+    Opc = Mips::STORECAP;
+    // FIXME: C0 -> Stack capability
+    BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
+      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addReg(Mips::C0);
+    return;
+  }
 
   assert(Opc && "Register class not handled!");
   BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
@@ -242,6 +259,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (Mips::AFGR64RegClass.hasSubClassEq(RC))
     Opc = Mips::LDC1;
   else if (Mips::FGR64RegClass.hasSubClassEq(RC))
+<<<<<<< HEAD
     Opc = Mips::LDC164;
   else if (RC->hasType(MVT::v16i8))
     Opc = Mips::LD_B;
@@ -251,6 +269,16 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     Opc = Mips::LD_W;
   else if (RC->hasType(MVT::v2i64) || RC->hasType(MVT::v2f64))
     Opc = Mips::LD_D;
+=======
+    Opc = IsN64 ? Mips::LDC164_P8 : Mips::LDC164;
+  else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+    Opc = Mips::LOADCAP;
+    // FIXME: C0 -> Stack capability
+    BuildMI(MBB, I, DL, get(Opc)).addReg(DestReg)
+      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addReg(Mips::C0);
+  }
+>>>>>>> 216b079... Fix stack spills of capabilities and 64<->32 bit register copies.
 
   assert(Opc && "Register class not handled!");
   BuildMI(MBB, I, DL, get(Opc), DestReg).addFrameIndex(FI).addImm(Offset)
