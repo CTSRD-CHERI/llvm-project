@@ -1151,6 +1151,38 @@ int MipsAsmParser::matchCPURegisterName(StringRef Name) {
            .Case("t7", 15)
            .Case("t8", 24)
            .Case("t9", 25)
+           .Case("c0", Mips::C0)
+           .Case("c1", Mips::C1)
+           .Case("c2", Mips::C2)
+           .Case("c3", Mips::C3)
+           .Case("c4", Mips::C4)
+           .Case("c5", Mips::C5)
+           .Case("c6", Mips::C6)
+           .Case("c7", Mips::C7)
+           .Case("c8", Mips::C8)
+           .Case("c9", Mips::C9)
+           .Case("c10", Mips::C10)
+           .Case("c11", Mips::C11)
+           .Case("c12", Mips::C12)
+           .Case("c13", Mips::C13)
+           .Case("c14", Mips::C14)
+           .Case("c15", Mips::C15)
+           .Case("c16", Mips::C16)
+           .Case("c17", Mips::C17)
+           .Case("c18", Mips::C18)
+           .Case("c19", Mips::C19)
+           .Case("c20", Mips::C20)
+           .Case("c21", Mips::C21)
+           .Case("c22", Mips::C22)
+           .Case("c23", Mips::C23)
+           .Case("c24", Mips::C24)
+           .Case("c25", Mips::C25)
+           .Case("c26", Mips::C26)
+           .Case("c27", Mips::C27)
+           .Case("c28", Mips::C28)
+           .Case("c29", Mips::C29)
+           .Case("c30", Mips::C30)
+           .Case("c31", Mips::C31)
            .Default(-1);
 
   // Although SGI documentation just cuts out t0-t3 for n32/n64,
@@ -2396,8 +2428,63 @@ bool MipsAsmParser::ParseInstruction(
       return Error(Loc, "unexpected token in argument list");
     }
 
-    while (getLexer().is(AsmToken::Comma)) {
-      Parser.Lex(); // Eat the comma.
+    // If this is a capability load / store, then we parse operands in the
+    // following form:
+    // $rt + offset($cb)
+    // We have already parsed the $rt
+      //fprintf(stderr, "Parsing arguments for %s\n", Name.str().c_str());
+    if (Name.startswith("cl") || Name.startswith("cs")) {
+      //fprintf(stderr, "Parsing capability instruction\n");
+      if (getLexer().isNot(AsmToken::Comma)) {
+        SMLoc Loc = getLexer().getLoc();
+        Parser.EatToEndOfStatement();
+        return Error(Loc,
+            "expecting comma when parsing capability-relative address");
+      }
+      Parser.Lex();  // Eat the comma.
+      if (ParseOperand(Operands, Name)) {
+        SMLoc Loc = getLexer().getLoc();
+        Parser.EatToEndOfStatement();
+        return Error(Loc, "unexpected token in argument list");
+      }
+      if (getLexer().isNot(AsmToken::Plus)) {
+        SMLoc Loc = getLexer().getLoc();
+        Parser.EatToEndOfStatement();
+        return Error(Loc,
+            "expecting offset when parsing capability-relative address");
+      }
+      Operands.push_back(MipsOperand::CreateToken("+", getLexer().getLoc()));
+      Parser.Lex();  // Eat the plus.
+      if (ParseOperand(Operands, Name)) {
+        SMLoc Loc = getLexer().getLoc();
+        Parser.EatToEndOfStatement();
+        return Error(Loc, "unexpected token in argument list");
+      }
+      if (getLexer().isNot(AsmToken::LParen)) {
+        SMLoc Loc = getLexer().getLoc();
+        Parser.EatToEndOfStatement();
+        return Error(Loc,
+            "expecting capability register when parsing capability-relative address");
+      }
+      Operands.push_back(MipsOperand::CreateToken("(", getLexer().getLoc()));
+      Parser.Lex();  // Eat the left paren.
+      if (ParseOperand(Operands, Name)) {
+        SMLoc Loc = getLexer().getLoc();
+        Parser.EatToEndOfStatement();
+        return Error(Loc, "unexpected token in argument list");
+      }
+      if (getLexer().isNot(AsmToken::RParen)) {
+        SMLoc Loc = getLexer().getLoc();
+        Parser.EatToEndOfStatement();
+        return Error(Loc,
+            "expecting right parenthesis when parsing capability-relative address");
+      }
+      Operands.push_back(MipsOperand::CreateToken(")", getLexer().getLoc()));
+      Parser.Lex();  // Eat the right paren.
+    }
+    else while (getLexer().is(AsmToken::Comma)) {
+      Parser.Lex();  // Eat the comma.
+
       // Parse and remember the operand.
       if (ParseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();

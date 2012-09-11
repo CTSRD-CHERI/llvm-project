@@ -1456,15 +1456,15 @@ def immSExt11  : PatLeaf<(imm), [{ return isInt<11>(N->getSExtValue()); }]>;
 def simm8: Operand<i64>;
 
 def CIncBase : CheriFmtSet<1, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64Opnd:$rt),
-                           "CIncBase\t$cd, $cb, $rt",
+                           "cincbase\t$cd, $cb, $rt",
                            [(set CheriRegs:$cd, (inttoptr (add GPR64Opnd:$rt, (ptrtoint CheriRegs:$cb))))]>;
 
 def CGetBase : CheriFmtGet<1, (outs GPR64Opnd:$rd), (ins CheriRegs:$cb),
-                           "CGetBase $rd, $cb",
+                           "cgetbase $rd, $cb",
                            [(set GPR64Opnd:$rd, (ptrtoint CheriRegs:$cb))]>;
 
 def BC2F : CheriFmtBC2F<(outs), (ins CheriRegs:$cd, brtarget:$offset),
-                        "BC2F\t$cd, $offset",
+                        "bc2f\t$cd, $offset",
                         [(MipsBC2F CheriRegs:$cd, bb:$offset)]>;
 
 def CGetTag : CheriFmtGet<3, (outs GPR32Opnd:$rd), (ins CheriRegs:$cb),
@@ -1590,13 +1590,13 @@ multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
 }
 
 
-defm CAPLOAD8      : LoadViaCap<0, 1, "CLB", GPR32Opnd, sextloadi8>;
-defm CAPLOAD16     : LoadViaCap<1, 1, "CLH", GPR32Opnd, sextloadi16>;
-defm CAPLOAD32     : LoadViaCap<2, 1, "CLW", GPR32Opnd, load>;
-defm CAPLOAD64     : LoadViaCap<3, 1, "CLD", GPR64Opnd, load>;
+defm CAPLOAD8      : LoadViaCap<0, 1, "clb", GPR32Opnd, sextloadi8>;
+defm CAPLOAD16     : LoadViaCap<1, 1, "clh", GPR32Opnd, sextloadi16>;
+defm CAPLOAD32     : LoadViaCap<2, 1, "clw", GPR32Opnd, load>;
+defm CAPLOAD64     : LoadViaCap<3, 1, "cld", GPR64Opnd, load>;
 
-defm CAPLOADU8     : LoadViaCap<0, 0, "CLBU", GPR32Opnd, extloadi8>;
-defm CAPLOADU16    : LoadViaCap<1, 0, "CLHU", GPR32Opnd, extloadi16>;
+defm CAPLOADU8     : LoadViaCap<0, 0, "clbu", GPR32Opnd, extloadi8>;
+defm CAPLOADU16    : LoadViaCap<1, 0, "clhu", GPR32Opnd, extloadi16>;
 
 defm CAP0LOADA8     : LoadViaCap0<CAPLOAD8, extloadi8>;
 defm CAP0LOADA16    : LoadViaCap0<CAPLOAD16, extloadi16>;
@@ -1625,10 +1625,10 @@ multiclass StoreViaCap0<Instruction Op, RegisterOperand RC, PatFrag storeType> {
   def : Pat<(storeType RC:$rd, (add (ptrtoint CheriRegs:$cb), GPR64Opnd:$rt)),
             (Op RC:$rd, GPR64Opnd:$rt, (i64 0), CheriRegs:$cb)>;
 }
-defm CAPSTORE8      : StoreViaCap<0, 0, "CSB", GPR32Opnd, truncstorei8>;
-defm CAPSTORE16     : StoreViaCap<1, 0, "CSH", GPR32Opnd, truncstorei16>;
-defm CAPSTORE32     : StoreViaCap<2, 0, "CSW", GPR32Opnd, store>;
-defm CAPSTORE64     : StoreViaCap<3, 0, "CSD", GPR64Opnd, store>;
+defm CAPSTORE8      : StoreViaCap<0, 0, "csb", GPR32Opnd, truncstorei8>;
+defm CAPSTORE16     : StoreViaCap<1, 0, "csh", GPR32Opnd, truncstorei16>;
+defm CAPSTORE32     : StoreViaCap<2, 0, "csw", GPR32Opnd, store>;
+defm CAPSTORE64     : StoreViaCap<3, 0, "csd", GPR64Opnd, store>;
 
 defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR32Opnd, truncstorei8>;
 defm CAP0STORE16    : StoreViaCap0<CAPSTORE16, GPR32Opnd, truncstorei16>;
