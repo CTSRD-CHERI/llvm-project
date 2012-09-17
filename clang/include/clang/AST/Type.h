@@ -116,7 +116,8 @@ public:
     Const    = 0x1,
     Restrict = 0x2,
     Volatile = 0x4,
-    CVRMask = Const | Volatile | Restrict
+    Output   = 0x8,
+    CVRMask = Const | Volatile | Restrict | Output
   };
 
   enum GC {
@@ -150,7 +151,7 @@ public:
   enum {
     /// The maximum supported address space number.
     /// 24 bits should be enough for anyone.
-    MaxAddressSpace = 0xffffffu,
+    MaxAddressSpace = 0x7fffffu,
 
     /// The width of the "fast" qualifier mask.
     FastWidth = 3,
@@ -243,6 +244,8 @@ public:
   }
   void removeRestrict() { Mask &= ~Restrict; }
   void addRestrict() { Mask |= Restrict; }
+
+  bool hasOutput() const { return Mask & Output; }
 
   bool hasCVRQualifiers() const { return getCVRQualifiers(); }
   unsigned getCVRQualifiers() const { return Mask & CVRMask; }
@@ -479,16 +482,16 @@ public:
 
 private:
 
-  // bits:     |0 1 2|3 .. 4|5  ..  7|8   ...   31|
+  // bits:     |0 1 2|4 .. 5|6  ..  8|9   ...   31|
   //           |C R V|GCAttr|Lifetime|AddressSpace|
   uint32_t Mask;
 
-  static const uint32_t GCAttrMask = 0x18;
-  static const uint32_t GCAttrShift = 3;
-  static const uint32_t LifetimeMask = 0xE0;
-  static const uint32_t LifetimeShift = 5;
+  static const uint32_t GCAttrMask = 0x30;
+  static const uint32_t GCAttrShift = 4;
+  static const uint32_t LifetimeMask = 0x1C0;
+  static const uint32_t LifetimeShift = 6;
   static const uint32_t AddressSpaceMask = ~(CVRMask|GCAttrMask|LifetimeMask);
-  static const uint32_t AddressSpaceShift = 8;
+  static const uint32_t AddressSpaceShift = 9;
 };
 
 /// A std::pair-like structure for storing a qualified type split

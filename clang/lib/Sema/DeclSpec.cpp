@@ -461,6 +461,7 @@ const char *DeclSpec::getSpecifierName(TQ T) {
   case DeclSpec::TQ_restrict:    return "restrict";
   case DeclSpec::TQ_volatile:    return "volatile";
   case DeclSpec::TQ_atomic:      return "_Atomic";
+  case DeclSpec::TQ_output:      return "__output";
   }
   llvm_unreachable("Unknown typespec!");
 }
@@ -747,6 +748,7 @@ bool DeclSpec::SetTypeQual(TQ T, SourceLocation Loc, const char *&PrevSpec,
   case TQ_restrict: TQ_restrictLoc = Loc; return false;
   case TQ_volatile: TQ_volatileLoc = Loc; return false;
   case TQ_atomic:   TQ_atomicLoc = Loc; return false;
+  case TQ_output: TQ_outputLoc = Loc; return false;
   }
 
   llvm_unreachable("Unknown type qualifier!");

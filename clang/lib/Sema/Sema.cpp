@@ -313,8 +313,14 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
   assert((VK == VK_RValue || !E->isRValue()) && "can't cast rvalue to lvalue");
 #endif
 
+
   QualType ExprTy = Context.getCanonicalType(E->getType());
   QualType TypeTy = Context.getCanonicalType(Ty);
+
+  if (ExprTy.getQualifiers().hasOutput() &&
+      !TypeTy.getQualifiers().hasOutput())
+    return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_read_output)
+      << E->getSourceRange());
 
   if (ExprTy == TypeTy)
     return Owned(E);

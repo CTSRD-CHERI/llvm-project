@@ -527,6 +527,11 @@ static void DiagnoseDirectIsaAccess(Sema &S, const ObjCIvarRefExpr *OIRE,
 }
 
 ExprResult Sema::DefaultLvalueConversion(Expr *E) {
+  if (E->getType().getQualifiers().hasOutput()) {
+    return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_read_output)
+      << E->getSourceRange());
+  }
+
   // Handle any placeholder expressions which made it here.
   if (E->getType()->isPlaceholderType()) {
     ExprResult result = CheckPlaceholderExpr(E);
@@ -9617,6 +9622,12 @@ ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
 ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
                                       UnaryOperatorKind Opc,
                                       Expr *InputExpr) {
+  if (InputExpr->getType().getQualifiers().hasOutput()) {
+    return ExprError(Diag(InputExpr->getExprLoc(), diag::err_typecheck_read_output)
+      << InputExpr->getSourceRange());
+  }
+
+
   ExprResult Input = Owned(InputExpr);
   ExprValueKind VK = VK_RValue;
   ExprObjectKind OK = OK_Ordinary;

@@ -4621,6 +4621,7 @@ def ext_typecheck_comparison_of_distinct_pointers_nonstandard : ExtWarn<
   "comparison of distinct pointer types (%0 and %1) uses non-standard "
   "composite pointer type %2">, InGroup<CompareDistinctPointerType>;
 def err_typecheck_assign_const : Error<"read-only variable is not assignable">;
+def err_typecheck_read_output : Error<"write-only variable is not readable">;
 def err_stmtexpr_file_scope : Error<
   "statement expression not allowed at file scope">;
 def warn_mixed_sign_comparison : Warning<

@@ -1292,6 +1292,28 @@ llvm::Value* ScalarExprEmitter::emitPointerCast(CGBuilderTy &Builder,
                 TI.getPointerWidth(FromAddrSpace)));
     result = Builder.CreateIntToPtr(result, toTy);
   }
+  if (CGF.Target.getTriple().getArch() == llvm::Triple::cheri) {
+    unsigned flags = 0xffff;
+    // Clear the store and store-capability flags
+    if (ToTy->getPointeeType().isConstQualified() &&
+        !FromTy->getPointeeType().isConstQualified())
+      flags &= 0x57FF;
+    // Clear the load and load-capability flags
+    if (ToTy->getPointeeType().getQualifiers().hasOutput() &&
+        !FromTy->getPointeeType().getQualifiers().hasOutput())
+      flags &= 0xFFEB;
+
+    if (flags != 0xffff) {
+      llvm::Function *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_and_cap_perms);
+      if (F->getFunctionType()->getParamType(0) != result->getType())
+        result = Builder.CreateBitCast(result, F->getFunctionType()->getParamType(0));
+      result = Builder.CreateCall2(F, result,
+          llvm::ConstantInt::get(CGF.SizeTy, 0xFFEB));
+      if (toTy != result->getType())
+        result = Builder.CreateBitCast(result, toTy);
+    }
+  }
+  result->dump();
   return result;
 }
 
