@@ -143,6 +143,8 @@ namespace
   };
 }
 
+char CheriRangeChecker::ID;
+
 namespace llvm {
 FunctionPass *createCheriRangeChecker(void) {
   return new CheriRangeChecker();

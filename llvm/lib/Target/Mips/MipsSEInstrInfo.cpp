@@ -274,9 +274,10 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
     Opc = Mips::LOADCAP;
     // FIXME: C0 -> Stack capability
-    BuildMI(MBB, I, DL, get(Opc)).addReg(DestReg)
+    BuildMI(MBB, I, DL, get(Opc), DestReg)
       .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
       .addReg(Mips::C0);
+    return;
   }
 >>>>>>> 216b079... Fix stack spills of capabilities and 64<->32 bit register copies.
 
