@@ -1297,7 +1297,7 @@ llvm::Value* ScalarExprEmitter::emitPointerCast(CGBuilderTy &Builder,
     // Clear the store and store-capability flags
     if (ToTy->getPointeeType().isConstQualified() &&
         !FromTy->getPointeeType().isConstQualified())
-      flags &= 0x57FF;
+      flags &= 0xFFD7;
     // Clear the load and load-capability flags
     if (ToTy->getPointeeType().getQualifiers().hasOutput() &&
         !FromTy->getPointeeType().getQualifiers().hasOutput())
@@ -1308,7 +1308,7 @@ llvm::Value* ScalarExprEmitter::emitPointerCast(CGBuilderTy &Builder,
       if (F->getFunctionType()->getParamType(0) != result->getType())
         result = Builder.CreateBitCast(result, F->getFunctionType()->getParamType(0));
       result = Builder.CreateCall2(F, result,
-          llvm::ConstantInt::get(CGF.SizeTy, 0xFFEB));
+          llvm::ConstantInt::get(CGF.SizeTy, flags));
       if (toTy != result->getType())
         result = Builder.CreateBitCast(result, toTy);
     }

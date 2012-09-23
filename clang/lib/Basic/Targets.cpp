@@ -4914,22 +4914,23 @@ public:
 
       // Macros for use with the set and get permissions builtins.
       Builder.defineMacro("__CHERI_CAP_PERMISSION_NON_EPHEMERAL__", Twine(1<<0));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_EPCC__", Twine(1<<1));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KDC__", Twine(1<<2));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KCC__", Twine(1<<3));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_TSC__", Twine(1<<4));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SET_TYPE__", Twine(1<<7));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<8));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_EPHEMERAL__",
-              Twine(1<<9));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__", Twine(1<<10));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__", Twine(1<<11));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
-              Twine(1<<12));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
-              Twine(1<<13));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
-              Twine(1<<14));
+              Twine(1<<1));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__", Twine(1<<2));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__", Twine(1<<3));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
+              Twine(1<<4));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
+              Twine(1<<5));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_EPHEMERAL__",
+              Twine(1<<6));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<7));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SET_TYPE__", Twine(1<<8));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_EPCC__", Twine(1<<10));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KDC__", Twine(1<<11));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KCC__", Twine(1<<12));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR1C__", Twine(1<<13));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR2C__", Twine(1<<14));
 
       Builder.defineMacro("_MIPS_SZCAP", Twine(getPointerWidth(200)));
       Builder.defineMacro("__capability", Twine("__attribute__((address_space(200)))"));
