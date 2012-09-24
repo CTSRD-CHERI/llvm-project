@@ -1289,7 +1289,7 @@ llvm::Value* ScalarExprEmitter::emitPointerCast(CGBuilderTy &Builder,
   } else {
     result = Builder.CreatePtrToInt(From,
             llvm::IntegerType::get(From->getContext(),
-                TI.getPointerWidth(FromAddrSpace)));
+                TI.getPointerWidth(0)));
     result = Builder.CreateIntToPtr(result, toTy);
   }
   if (CGF.Target.getTriple().getArch() == llvm::Triple::cheri) {
