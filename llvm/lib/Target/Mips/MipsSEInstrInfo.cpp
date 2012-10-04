@@ -154,13 +154,12 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     else if (Mips::FGR64RegClass.contains(DestReg))
       Opc = Mips::DMTC1;
  } else if (Mips::CheriRegsRegClass.contains(SrcReg)) {
-   Opc = Mips::CIncBase;
    // CIncBase takes the operands in a different order to the other copy
    // operations
-   MachineInstrBuilder MIB = BuildMI(MBB, I, DL, get(Mips::CIncBase));
-   MIB.addReg(DestReg, RegState::Define);
-   MIB.addReg(SrcReg, getKillRegState(KillSrc));
-   MIB.addReg(Mips::ZERO);
+   BuildMI(MBB, I, DL, get(Mips::CIncBase))
+   .addReg(DestReg, RegState::Define)
+   .addReg(SrcReg, getKillRegState(KillSrc))
+   .addReg(Mips::ZERO);
    return;
   }
   else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
