@@ -1457,7 +1457,9 @@ def simm8: Operand<i64>;
 
 def CIncBase : CheriFmtSet<2, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64Opnd:$rt),
                            "cincbase\t$cd, $cb, $rt",
-                           [(set CheriRegs:$cd, (inttoptr (add GPR64Opnd:$rt, (ptrtoint CheriRegs:$cb))))]>;
+                           [(set CheriRegs:$cd, (inttoptr (add GPR64Opnd:$rt, (ptrtoint CheriRegs:$cb))))]> {
+  let hasSideEffects = 1;
+}
 
 def CGetBase : CheriFmtGet<2, (outs GPR64Opnd:$rd), (ins CheriRegs:$cb),
                            "cgetbase $rd, $cb",
@@ -1477,7 +1479,9 @@ def : Pat<(brcond (i32 (setne (int_cheri_get_cap_tag CheriRegs:$cd), (i32 0))), 
 
 def CSetLength : CheriFmtSet<3, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64Opnd:$rt),
                              "CSetLen\t$cd, $cb, $rt",
-                             [(set CheriRegs:$cd, (int_cheri_set_cap_length CheriRegs:$cb, GPR64Opnd:$rt))]>;
+                             [(set CheriRegs:$cd, (int_cheri_set_cap_length CheriRegs:$cb, GPR64Opnd:$rt))]> {
+  let hasSideEffects = 1;
+}
 
 def CGetLength : CheriFmtGet<3, (outs GPR64Opnd:$rd), (ins CheriRegs:$cb),
                              "CGetLength $rd, $cb",
