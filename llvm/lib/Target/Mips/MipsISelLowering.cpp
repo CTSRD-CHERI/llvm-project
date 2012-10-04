@@ -915,6 +915,13 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
   case Mips::PseudoDSDIV:
   case Mips::PseudoDUDIV:
     return expandPseudoDIV(MI, *BB, *getTargetMachine().getInstrInfo(), true);
+  case Mips::SetCapReg:
+    BuildMI(*BB, MI, MI->getDebugLoc(), getTargetMachine().getInstrInfo()->get(Mips::CIncBase))
+      .addReg(MI->getOperand(0).getImm() + Mips::C0,  RegState::Define)
+      .addReg(MI->getOperand(1).getReg())
+      .addReg(Mips::ZERO);
+    MI->eraseFromParent();
+    return BB;
   }
 }
 
