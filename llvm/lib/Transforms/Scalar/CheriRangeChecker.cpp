@@ -126,7 +126,7 @@ namespace
           for (ConstantCast *i=ConstantCasts.begin(), *e=ConstantCasts.end() ;
               i!=e ; ++i) {
             Value *I2P = i->Instr->getOperand(i->OpNo);
-            Value *Src = i->Origin->getOperand(0);
+            Value *Src = i->Origin->getOperand(0)->stripPointerCasts();
             PointerType *AllocType = cast<PointerType>(Src->getType());
             uint64_t size = TD->getTypeAllocSize(AllocType->getElementType());
             IRBuilder<> B(i->Instr);
