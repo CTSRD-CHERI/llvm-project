@@ -107,7 +107,7 @@ namespace
           for (pair<PtrToIntInst*, IntToPtrInst*> *i=Casts.begin(), *e=Casts.end() ; i!=e ; ++i) {
             PtrToIntInst *P2I = i->first;
             IntToPtrInst *I2P = i->second;
-            Value *Src = P2I->getOperand(0);
+            Value *Src = P2I->getOperand(0)->stripPointerCasts();
             PointerType *AllocType = cast<PointerType>(Src->getType());
             uint64_t size = TD->getTypeAllocSize(AllocType->getElementType());
             ilist_iterator<llvm::Instruction> InsertPt = I2P->getParent()->begin();
