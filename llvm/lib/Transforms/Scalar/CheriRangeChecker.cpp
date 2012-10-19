@@ -8,6 +8,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/InstVisitor.h"
 
@@ -23,17 +24,54 @@ namespace
 {
   class CheriRangeChecker : public FunctionPass,
                             public InstVisitor<CheriRangeChecker> {
-    DataLayout *TD;
-    Module *M;
-    IntegerType *Int64Ty;
-    PointerType *CapPtrTy;
-    SmallVector<pair<PtrToIntInst*, IntToPtrInst*>, 32> Casts;
+    // Operands for an allocation.  Either one or two integers (constant or
+    // variable).  If there are two, then they must be multiplied together.
+    typedef pair<Value*, Value*> AllocOperands;
     struct ConstantCast {
       Instruction *Instr;
       unsigned OpNo;
       User *Origin;
     };
-    SmallVector<ConstantCast, 32> ConstantCasts;
+    DataLayout *TD;
+    Module *M;
+    IntegerType *Int64Ty;
+    PointerType *CapPtrTy;
+    SmallVector<pair<AllocOperands, IntToPtrInst*>, 32> Casts;
+    SmallVector<pair<AllocOperands, ConstantCast>, 32> ConstantCasts;
+    Function *SetLengthFn;
+
+    AllocOperands getRangeForAllocation(Value *Src) {
+      CallSite Malloc = CallSite(Src);
+      if (Malloc != CallSite()) {
+        Function *Fn = Malloc.getCalledFunction();
+        if (!Fn) return AllocOperands();
+        switch (StringSwitch<int>(Fn->getName())
+                .Case("malloc", 1)
+                .Case("valloc", 1)
+                .Case("realloc", 2)
+                .Case("reallocf", 2)
+                .Case("calloc", 3)) {
+          default: return AllocOperands();
+          case 1: return AllocOperands(Malloc.getArgument(0), 0);
+          case 2: return AllocOperands(Malloc.getArgument(1), 0);
+          case 3:
+            return AllocOperands(Malloc.getArgument(0), Malloc.getArgument(1));
+        }
+      }
+      PointerType *AllocType = cast<PointerType>(Src->getType());
+      uint64_t size = TD->getTypeAllocSize(AllocType->getElementType());
+      return AllocOperands(ConstantInt::get(Int64Ty, size), 0);
+    }
+    Value *RangeCheckedValue(Instruction *InsertPt,
+                             AllocOperands AO,
+                             Value *I2P,
+                             Instruction *&BitCast) {
+      IRBuilder<> B(InsertPt);
+      Value *Size = (AO.second) ? B.CreateMul(AO.first, AO.second) : AO.first;
+      BitCast = cast<Instruction>(B.CreateBitCast(I2P, CapPtrTy));
+      CallInst *SetLength = B.CreateCall2(SetLengthFn, BitCast, Size);
+      return B.CreateBitCast(SetLength, I2P->getType());
+    }
     public:
       static char ID;
       CheriRangeChecker() : FunctionPass(ID) {}
@@ -62,7 +100,8 @@ namespace
             PointerType *SrcTy = dyn_cast<PointerType>(P2I->getOperand(0)->getType());
             if (SrcTy && SrcTy->getAddressSpace() == 0) {
               Value *Src = P2I->getOperand(0)->stripPointerCasts();
-              if (isa<AllocaInst>(Src) || isa<GlobalVariable>(Src)) {
+              if (isa<AllocaInst>(Src) || isa<GlobalVariable>(Src) ||
+                  CallSite(Src) != CallSite()) {
                 return P2I;
               }
             }
@@ -71,17 +110,23 @@ namespace
         return 0;
       }
       void visitIntToPtrInst(IntToPtrInst &I2P) {
-        if (User *P2I = testI2P(I2P))
-          Casts.push_back(pair<PtrToIntInst*,
-              IntToPtrInst*>(cast<PtrToIntInst>(P2I),
-                cast<IntToPtrInst>(&I2P)));
+        if (User *P2I = testI2P(I2P)) {
+          Value *Src = P2I->getOperand(0)->stripPointerCasts();
+          AllocOperands AO = getRangeForAllocation(Src);
+          if (AO != AllocOperands())
+           Casts.push_back(pair<AllocOperands, IntToPtrInst*>(AO, &I2P));
+          }
       }
       void visitRet(ReturnInst &RI) {
         Value *RV = RI.getReturnValue();
         if (RV && isa<ConstantExpr>(RV)) {
           ConstantCast C = { &RI, 0, testI2P(*cast<User>(RV)) };
-          if (C.Origin)
-            ConstantCasts.push_back(C);
+          if (C.Origin) {
+            Value *Src = C.Origin->getOperand(0)->stripPointerCasts();
+            AllocOperands AO = getRangeForAllocation(Src);
+            if (AO != AllocOperands())
+              ConstantCasts.push_back(pair<AllocOperands, ConstantCast>(AO, C));
+          }
         }
       }
       void visitCall(CallInst &CI) {
@@ -89,8 +134,12 @@ namespace
           Value *AV = CI.getOperand(i);
           if (AV && isa<ConstantExpr>(AV)) {
             ConstantCast C = { &CI, i, testI2P(*cast<User>(AV)) };
-            if (C.Origin)
-              ConstantCasts.push_back(C);
+            if (C.Origin) {
+              Value *Src = C.Origin->getOperand(0)->stripPointerCasts();
+              AllocOperands AO = getRangeForAllocation(Src);
+              if (AO != AllocOperands())
+                ConstantCasts.push_back(pair<AllocOperands, ConstantCast>(AO, C));
+            }
           }
         }
       }
@@ -101,40 +150,30 @@ namespace
         visit(F);
 
         if (!(Casts.empty() && ConstantCasts.empty())) {
-          Function *SetLengthFn = Intrinsic::getDeclaration(M,
+          SetLengthFn = Intrinsic::getDeclaration(M,
               Intrinsic::cheri_set_cap_length);
+          Instruction *BitCast;
 
-          for (pair<PtrToIntInst*, IntToPtrInst*> *i=Casts.begin(), *e=Casts.end() ; i!=e ; ++i) {
-            PtrToIntInst *P2I = i->first;
+          for (pair<AllocOperands, IntToPtrInst*> *i=Casts.begin(),
+               *e=Casts.end() ; i!=e ; ++i) {
             IntToPtrInst *I2P = i->second;
-            Value *Src = P2I->getOperand(0)->stripPointerCasts();
-            PointerType *AllocType = cast<PointerType>(Src->getType());
-            uint64_t size = TD->getTypeAllocSize(AllocType->getElementType());
-            ilist_iterator<llvm::Instruction> InsertPt = I2P->getParent()->begin();
+            ilist_iterator<llvm::Instruction> InsertPt =
+              I2P->getParent()->begin();
             while (InsertPt.getNodePtrUnchecked() != (Instruction*)I2P) {
               ++InsertPt;
             }
             ++InsertPt;
-            IRBuilder<> B(InsertPt.getNodePtrUnchecked());
-            Instruction *BitCast = cast<Instruction>(B.CreateBitCast(I2P, CapPtrTy));
-            CallInst *SetLength = B.CreateCall2(SetLengthFn, BitCast,
-                ConstantInt::get(Int64Ty, size));
-            Value *New = B.CreateBitCast(SetLength, I2P->getType());
+            Value *New = RangeCheckedValue(InsertPt.getNodePtrUnchecked(),
+                i->first, I2P, BitCast);
             I2P->replaceAllUsesWith(New);
             BitCast->setOperand(0, I2P);
           }
-          for (ConstantCast *i=ConstantCasts.begin(), *e=ConstantCasts.end() ;
-              i!=e ; ++i) {
-            Value *I2P = i->Instr->getOperand(i->OpNo);
-            Value *Src = i->Origin->getOperand(0)->stripPointerCasts();
-            PointerType *AllocType = cast<PointerType>(Src->getType());
-            uint64_t size = TD->getTypeAllocSize(AllocType->getElementType());
-            IRBuilder<> B(i->Instr);
-            Value *BitCast = B.CreateBitCast(I2P, CapPtrTy);
-            CallInst *SetLength = B.CreateCall2(SetLengthFn, BitCast,
-                ConstantInt::get(Int64Ty, size));
-            Value *New = B.CreateBitCast(SetLength, I2P->getType());
-            i->Instr->setOperand(i->OpNo, New);
+          for (pair<AllocOperands, ConstantCast> *i=ConstantCasts.begin(),
+               *e=ConstantCasts.end() ; i!=e ; ++i) {
+            Value *I2P = i->second.Instr->getOperand(i->second.OpNo);
+            Value *New = RangeCheckedValue(i->second.Instr, i->first, I2P,
+                BitCast);
+            i->second.Instr->setOperand(i->second.OpNo, New);
           }
           return true;
         }
