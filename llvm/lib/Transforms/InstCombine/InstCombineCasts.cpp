@@ -1415,6 +1415,8 @@ Instruction *InstCombiner::visitIntToPtr(IntToPtrInst &CI) {
 
   if (TD) {
     unsigned AS = CI.getAddressSpace();
+    // FIXME
+    if (TD->getPointerSizeInBits(AS) > 64) return 0;
     if (CI.getOperand(0)->getType()->getScalarSizeInBits() !=
         TD->getPointerSizeInBits(AS)) {
       Type *Ty = TD->getIntPtrType(CI.getContext(), AS);
