@@ -49,6 +49,7 @@ namespace
                 .Case("malloc", 1)
                 .Case("valloc", 1)
                 .Case("realloc", 2)
+                .Case("aligned_alloc", 2)
                 .Case("reallocf", 2)
                 .Case("calloc", 3)) {
           default: return AllocOperands();

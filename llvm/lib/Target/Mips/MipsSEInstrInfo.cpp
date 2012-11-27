@@ -44,7 +44,7 @@ isLoadFromStackSlot(const MachineInstr *MI, int &FrameIndex) const
 {
   unsigned Opc = MI->getOpcode();
 
-  if ((Opc == Mips::LW)   || (Opc == Mips::LD)   ||
+  if ((Opc == Mips::LW)   || (Opc == Mips::LD)   || (Opc == Mips::LOADCAP) ||
       (Opc == Mips::LWC1) || (Opc == Mips::LDC1) || (Opc == Mips::LDC164)) {
     if ((MI->getOperand(1).isFI()) && // is a stack slot
         (MI->getOperand(2).isImm()) &&  // the imm is zero
@@ -67,7 +67,7 @@ isStoreToStackSlot(const MachineInstr *MI, int &FrameIndex) const
 {
   unsigned Opc = MI->getOpcode();
 
-  if ((Opc == Mips::SW)   || (Opc == Mips::SD)   ||
+  if ((Opc == Mips::SW)   || (Opc == Mips::SD)   || (Opc == Mips::STORECAP) ||
       (Opc == Mips::SWC1) || (Opc == Mips::SDC1) || (Opc == Mips::SDC164)) {
     if ((MI->getOperand(1).isFI()) && // is a stack slot
         (MI->getOperand(2).isImm()) &&  // the imm is zero
@@ -258,7 +258,6 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (Mips::AFGR64RegClass.hasSubClassEq(RC))
     Opc = Mips::LDC1;
   else if (Mips::FGR64RegClass.hasSubClassEq(RC))
-<<<<<<< HEAD
     Opc = Mips::LDC164;
   else if (RC->hasType(MVT::v16i8))
     Opc = Mips::LD_B;
@@ -268,8 +267,6 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     Opc = Mips::LD_W;
   else if (RC->hasType(MVT::v2i64) || RC->hasType(MVT::v2f64))
     Opc = Mips::LD_D;
-=======
-    Opc = IsN64 ? Mips::LDC164_P8 : Mips::LDC164;
   else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
     Opc = Mips::LOADCAP;
     // FIXME: C0 -> Stack capability
@@ -278,7 +275,6 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       .addReg(Mips::C0);
     return;
   }
->>>>>>> 216b079... Fix stack spills of capabilities and 64<->32 bit register copies.
 
   assert(Opc && "Register class not handled!");
   BuildMI(MBB, I, DL, get(Opc), DestReg).addFrameIndex(FI).addImm(Offset)

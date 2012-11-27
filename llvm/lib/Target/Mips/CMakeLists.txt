@@ -46,6 +46,8 @@ add_llvm_target(MipsCodeGen
   MipsTargetMachine.cpp
   MipsTargetObjectFile.cpp
   MipsSelectionDAGInfo.cpp
+  CheriStackInvalidatePass.cpp
+  CheriRangeChecker.cpp
   )
 
 add_subdirectory(InstPrinter)

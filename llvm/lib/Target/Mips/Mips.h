@@ -29,6 +29,10 @@ namespace llvm {
   FunctionPass *createMipsJITCodeEmitterPass(MipsTargetMachine &TM,
                                              JITCodeEmitter &JCE);
   FunctionPass *createMipsConstantIslandPass(MipsTargetMachine &tm);
+
+  FunctionPass *createCheriInvalidatePass(MipsTargetMachine &TM);
+  FunctionPass *createCheriRangeChecker(void);
+
 } // end namespace llvm;
 
 #endif
