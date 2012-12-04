@@ -5213,7 +5213,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 }
 
 Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
-                                           const CallExpr *E) {
+                                            const CallExpr *E) {
   switch (BuiltinID) {
     case Mips::BI__builtin_cheri_set_cap_length: {
       Value *F = CGM.getIntrinsic(Intrinsic::cheri_set_cap_length);
@@ -5246,8 +5246,8 @@ Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
     }
     case Mips::BI__builtin_cheri_get_cap_tag: {
       Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_tag);
-      return Builder.CreateZExt(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
-                                Int64Ty);
+      return Builder.CreateZExtOrTrunc(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
+                                       cast<llvm::IntegerType>(getTypes().ConvertType(E->getType())));
     }
     case Mips::BI__builtin_cheri_get_cap_register: {
       Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_reg);
