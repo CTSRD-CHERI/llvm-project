@@ -1293,6 +1293,7 @@ llvm::Value* ScalarExprEmitter::emitPointerCast(CGBuilderTy &Builder,
     result = Builder.CreateIntToPtr(result, toTy);
   }
   if (CGF.Target.getTriple().getArch() == llvm::Triple::cheri) {
+    if (ToAddrSpace != 200) return result;
     unsigned flags = 0xffff;
     // Clear the store and store-capability flags
     if (ToTy->getPointeeType().isConstQualified() &&
