@@ -12,6 +12,9 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Function.h"
+#include "llvm/Metadata.h"
+#include "llvm/Module.h"
 
 using namespace llvm;
 
@@ -39,6 +42,23 @@ namespace {
     }
 
     virtual bool runOnMachineFunction(MachineFunction &F) {
+      const Function *IRFunction = F.getFunction();
+      const Module *Mod = IRFunction->getParent();
+      NamedMDNode *SensitiveFunctions =
+        Mod->getNamedMetadata("cheri.sensitive.functions");
+      if (!SensitiveFunctions) return false;
+      bool foundFunction = false;
+      for (unsigned i=0 ; i<SensitiveFunctions->getNumOperands() ; i++) {
+        Value *SensitiveFunction =
+          SensitiveFunctions->getOperand(i)->getOperand(0);
+        if (SensitiveFunction == IRFunction) {
+          foundFunction = true;
+          break;
+        }
+      }
+      if (!foundFunction) return false;
+
+
       DEBUG(dbgs() << "Zeroing stack spills\n");
       StackStores.clear();
       Returns.clear();
