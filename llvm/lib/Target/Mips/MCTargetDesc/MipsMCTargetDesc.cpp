@@ -66,7 +66,7 @@ static std::string ParseMipsTriple(StringRef TT, StringRef CPU) {
       } else if (CPU == "mips64r2") {
         MipsArchFeature = "+mips64r2";
       } else if (CPU == "cheri") {
-        MipsArchFeature = "+cheri+soft-float";
+        MipsArchFeature = "+cheri";
       }
   }
   return MipsArchFeature;
