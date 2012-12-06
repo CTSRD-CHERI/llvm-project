@@ -849,6 +849,11 @@ def Sentinel : InheritableAttr {
 //  let Subjects = SubjectList<[Function, ObjCMethod, Block, Var]>;
 }
 
+def Sensitive : InheritableAttr {
+  let Spellings = [GNU<"sensitive">];
+}
+
+
 def StdCall : InheritableAttr {
   let Spellings = [GNU<"stdcall">, CXX11<"gnu", "stdcall">,
                    Keyword<"__stdcall">, Keyword<"_stdcall">];

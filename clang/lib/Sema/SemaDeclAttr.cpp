@@ -3073,12 +3073,25 @@ static void handleGlobalAttr(Sema &S, Decl *D, const AttributeList &Attr) {
       S.Diag(FD->getTypeSpecStartLoc(), diag::err_kern_type_not_void_return)
         << FD->getType();
     }
-    return;
-  }
-
   D->addAttr(::new (S.Context)
               CUDAGlobalAttr(Attr.getRange(), S.Context,
                             Attr.getAttributeSpellingListIndex()));
+}
+
+
+static void handleSensitiveAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+  // check the attribute arguments.
+  if (!checkAttributeNumArgs(S, Attr, 0))
+    return;
+
+
+  if (!isa<FunctionDecl>(D)) {
+    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
+      << Attr.getName() << ExpectedFunction;
+    return;
+  }
+
+  D->addAttr(::new (S.Context) SensitiveAttr(Attr.getRange(), S.Context));
 }
 
 static void handleGNUInlineAttr(Sema &S, Decl *D, const AttributeList &Attr) {
@@ -4158,6 +4171,7 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_NoDebug:     handleNoDebugAttr     (S, D, Attr); break;
   case AttributeList::AT_NoInline:
     handleSimpleAttribute<NoInlineAttr>(S, D, Attr); break;
+  case AttributeList::AT_Sensitive:   handleSensitiveAttr   (S, D, Attr); break;
   case AttributeList::AT_NoInstrumentFunction:  // Interacts with -pg.
     handleSimpleAttribute<NoInstrumentFunctionAttr>(S, D, Attr); break;
   case AttributeList::AT_StdCall:

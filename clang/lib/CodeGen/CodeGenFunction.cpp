@@ -541,6 +541,16 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
     }
   }
 
+  if (D->hasAttr<SensitiveAttr>()) {
+    llvm::LLVMContext &Context = getLLVMContext();
+    llvm::Value *attrMDArgs[] = { Fn };
+    llvm::MDNode *FNNode= llvm::MDNode::get(Context, attrMDArgs);
+    llvm::NamedMDNode *OpenCLKernelMetadata =
+      CGM.getModule().getOrInsertNamedMetadata("cheri.sensitive.functions");
+    OpenCLKernelMetadata->addOperand(FNNode);
+  }
+
+
   llvm::BasicBlock *EntryBB = createBasicBlock("entry", CurFn);
 
   // Create a marker to make it easy to insert allocas into the entryblock
