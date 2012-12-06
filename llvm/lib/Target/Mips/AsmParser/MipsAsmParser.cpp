@@ -2447,14 +2447,13 @@ bool MipsAsmParser::ParseInstruction(
         Parser.EatToEndOfStatement();
         return Error(Loc, "unexpected token in argument list");
       }
-      if (getLexer().isNot(AsmToken::Plus)) {
+      if (getLexer().isNot(AsmToken::Comma)) {
         SMLoc Loc = getLexer().getLoc();
         Parser.EatToEndOfStatement();
         return Error(Loc,
             "expecting offset when parsing capability-relative address");
       }
-      Operands.push_back(MipsOperand::CreateToken("+", getLexer().getLoc()));
-      Parser.Lex();  // Eat the plus.
+      Parser.Lex();  // Eat the comma.
       if (ParseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();
         Parser.EatToEndOfStatement();
