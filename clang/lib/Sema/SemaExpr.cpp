@@ -4564,6 +4564,14 @@ Sema::BuildResolvedCallExpr(Expr *Fn, NamedDecl *NDecl,
   FunctionDecl *FDecl = dyn_cast_or_null<FunctionDecl>(NDecl);
   unsigned BuiltinID = (FDecl ? FDecl->getBuiltinID() : 0);
 
+  if (!BuiltinID)
+    if (NamedDecl *currentDecl = getCurFunctionOrMethodDecl())
+      if (currentDecl->hasAttr<SensitiveAttr>() &&
+          (!FDecl || !FDecl->hasAttr<SensitiveAttr>()))
+        Diag(RParenLoc, diag::warn_calling_non_sensitive_from_sensitive)
+            << FDecl << currentDecl;
+
+
   // Promote the function operand.
   // We special-case function promotion here because we only allow promoting
   // builtin functions to function pointers in the callee of a call.

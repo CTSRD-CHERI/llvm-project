@@ -14,6 +14,10 @@
 let Component = "Sema" in {
 let CategoryName = "Semantic Issue" in {
 
+def warn_calling_non_sensitive_from_sensitive : Warning<
+  "Calling non-sensitive function %0 from sensitive function %1 may result in"
+  " sensitive data being leaked to the stack">;
+
 // For loop analysis
 def warn_variables_not_in_loop_body : Warning<
   "variable%select{s| %1|s %1 and %2|s %1, %2, and %3|s %1, %2, %3, and %4}0 "
