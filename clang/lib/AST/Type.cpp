@@ -954,9 +954,9 @@ bool QualType::isCapabilityType() const {
     return BT->getKind() == BuiltinType::IntCap ||
            BT->getKind() == BuiltinType::UIntCap;
   const Type *T = CanonicalType.getTypePtr();
-  if (isa<PointerType>(T)) {
+  if (const PointerType *PT = dyn_cast<PointerType>(T)) {
     // FIXME: Don't hard-code address space
-    return getAddressSpace() == 200;
+    return PT->getPointeeType().getAddressSpace() == 200;
   }
   return false;
 }

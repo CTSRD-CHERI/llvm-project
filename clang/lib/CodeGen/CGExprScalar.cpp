@@ -1505,7 +1505,18 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
   case CK_IntegralToPointer: {
     Value *Src = Visit(const_cast<Expr*>(E));
+    llvm::Type *ResultType = ConvertType(DestTy);
 
+    // For __[u]intcap_t, the underlying LLVM type is actually a pointer.
+    if (E->getType().isCapabilityType()) {
+      fprintf(stderr, "Casting from cap.  To cap? %d\n", DestTy.isCapabilityType());
+      // If we're casting to a capability pointer, then it's just a bitcast:
+      if (DestTy.isCapabilityType())
+        return Builder.CreateBitCast(Src, ResultType);
+      // Otherwise, it's some kind of non-capability pointer, so we need to
+      // create an integer value first
+      Src = Builder.CreatePtrToInt(Src, CGF.IntPtrTy);
+    }
     // First, convert to the correct width so that we control the kind of
     // extension.
     llvm::Type *MiddleTy = CGF.IntPtrTy;
@@ -1513,7 +1524,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Value* IntResult =
       Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
 
-    return Builder.CreateIntToPtr(IntResult, ConvertType(DestTy));
+    return Builder.CreateIntToPtr(IntResult, ResultType);
   }
   case CK_PointerToIntegral: {
     llvm::Value *Src = Visit(E);
