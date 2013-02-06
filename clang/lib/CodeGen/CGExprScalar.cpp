@@ -1515,9 +1515,20 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
     return Builder.CreateIntToPtr(IntResult, ConvertType(DestTy));
   }
-  case CK_PointerToIntegral:
+  case CK_PointerToIntegral: {
+    llvm::Value *Src = Visit(E);
+    llvm::Type *ResultType = ConvertType(DestTy);
     assert(!DestTy->isBooleanType() && "bool should use PointerToBool");
-    return Builder.CreatePtrToInt(Visit(E), ConvertType(DestTy));
+    // For casts from pointers to intcap_t, we need to turn the pointer into a
+    // capability.
+    if (DestTy.isCapabilityType()) {
+      Src = Builder.CreatePtrToInt(Src,
+            llvm::IntegerType::get(Src->getContext(),
+                CGF.getContext().getTargetInfo().getPointerWidth(0)));
+      return Builder.CreateIntToPtr(Src, ResultType);
+    }
+    return Builder.CreatePtrToInt(Src, ResultType);
+  }
 
   case CK_ToVoid: {
     CGF.EmitIgnoredExpr(E);
