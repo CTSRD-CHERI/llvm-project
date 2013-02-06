@@ -1976,6 +1976,8 @@ void CXXNameMangler::mangleType(const BuiltinType *T) {
   case BuiltinType::OCLImage3d: Out << "11ocl_image3d"; break;
   case BuiltinType::OCLSampler: Out << "11ocl_sampler"; break;
   case BuiltinType::OCLEvent: Out << "9ocl_event"; break;
+  case BuiltinType::IntCap: Out << "u10__intcap_t"; break;
+  case BuiltinType::UIntCap: Out << "u11__uintcap_t"; break;
   }
 }
 

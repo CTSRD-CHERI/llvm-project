@@ -742,7 +742,11 @@ namespace clang {
       /// \brief OpenCL event type.
       PREDEF_TYPE_EVENT_ID      = 44,
       /// \brief OpenCL sampler type.
-      PREDEF_TYPE_SAMPLER_ID    = 45
+      PREDEF_TYPE_SAMPLER_ID    = 45,
+      /// \brief The '__uintcap_t' type.
+      PREDEF_TYPE_UINTCAP_ID    = 46,
+      /// \brief The '__intcap_t' type.
+      PREDEF_TYPE_INTCAP_ID     = 47
     };
 
     /// \brief The number of predefined type IDs that are reserved for

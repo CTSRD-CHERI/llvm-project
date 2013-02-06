@@ -200,6 +200,12 @@ class ASTContext : public RefCountedBase<ASTContext> {
 
   /// \brief The typedef for the __float128 stub type.
   mutable TypeDecl *Float128StubDecl;
+
+  /// \brief The typedef for the __intcap_t type.
+  mutable TypedefDecl *IntCapDecl;
+
+  /// \brief The typedef for the __uintcap_t type.
+  mutable TypedefDecl *UIntCapDecl;
   
   /// \brief The typedef for the target specific predefined
   /// __builtin_va_list type.
@@ -774,6 +780,7 @@ public:
   CanQualType Char32Ty; // [C++0x 3.9.1p5], integer type in C99.
   CanQualType SignedCharTy, ShortTy, IntTy, LongTy, LongLongTy, Int128Ty;
   CanQualType UnsignedCharTy, UnsignedShortTy, UnsignedIntTy, UnsignedLongTy;
+  CanQualType IntCapTy, UnsignedIntCapTy;
   CanQualType UnsignedLongLongTy, UnsignedInt128Ty;
   CanQualType FloatTy, DoubleTy, LongDoubleTy;
   CanQualType HalfTy; // [OpenCL 6.1.1.1], ARM NEON
@@ -848,6 +855,12 @@ public:
 
   /// \brief Retrieve the declaration for a 128-bit float stub type.
   TypeDecl *getFloat128StubType() const;
+
+  /// \brief Retrieve the declaration for the signed capability-as-integer type.
+  TypedefDecl *getIntCapDecl() const;
+
+  /// \brief Retrieve the declaration for the unsigned capability-as-integer type.
+  TypedefDecl *getUIntCapDecl() const;
   
   //===--------------------------------------------------------------------===//
   //                           Type Constructors

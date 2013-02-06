@@ -90,6 +90,9 @@ UNSIGNED_TYPE(ULong, UnsignedLongTy)
 // 'unsigned long long'
 UNSIGNED_TYPE(ULongLong, UnsignedLongLongTy)
 
+// '__uintcap_t', the equivalent of uintptr_t, but which can hold a capability.
+UNSIGNED_TYPE(UIntCap, UnsignedIntCapTy)
+
 // '__uint128_t'
 UNSIGNED_TYPE(UInt128, UnsignedInt128Ty)
 
@@ -116,7 +119,10 @@ SIGNED_TYPE(Long, LongTy)
 // 'long long' or 'signed long long'
 SIGNED_TYPE(LongLong, LongLongTy)
 
-// '__int128_t'
+// '__intcap_t', the equivalent of intptr_t, but which can hold a capability.
+SIGNED_TYPE(IntCap, IntCapTy)
+
+// '__int128_t'.  This must be the last integer type defined.
 SIGNED_TYPE(Int128, Int128Ty)
 
 //===- Floating point types -----------------------------------------------===//

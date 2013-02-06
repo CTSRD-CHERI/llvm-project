@@ -207,6 +207,10 @@ static bool TypeInfoIsInStandardLibrary(const BuiltinType *Ty) {
     case BuiltinType::Id:
 #include "clang/AST/BuiltinTypes.def"
       llvm_unreachable("asking for RRTI for a placeholder type!");
+
+    case BuiltinType::IntCap:
+    case BuiltinType::UIntCap:
+      llvm_unreachable("FIXME: Capability types are unsupported!");
       
     case BuiltinType::ObjCId:
     case BuiltinType::ObjCClass:

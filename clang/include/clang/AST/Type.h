@@ -688,6 +688,9 @@ public:
   /// (C++0x [basic.types]p9)
   bool isCXX11PODType(ASTContext &Context) const;
 
+  /// \brief Determine whether this type is a capability.
+  bool isCapabilityType() const;
+
   /// isTrivialType - Return true if this is a trivial type
   /// (C++0x [basic.types]p9)
   bool isTrivialType(ASTContext &Context) const;

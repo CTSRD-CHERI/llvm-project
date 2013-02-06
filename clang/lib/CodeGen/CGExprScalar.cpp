@@ -2056,6 +2056,13 @@ BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
   Result.Opcode = E->getOpcode();
   Result.FPContractable = E->isFPContractable();
   Result.E = E;
+
+  // If we're doing a comparison on a capability (including an __intcap_t)
+  // then we need to fudge it into an integer type first.
+  if (Result.Ty.isCapabilityType()) {
+    Result.LHS = Builder.CreatePtrToInt(Result.LHS, CGF.IntPtrTy);
+    Result.RHS = Builder.CreatePtrToInt(Result.RHS, CGF.IntPtrTy);
+  } 
   return Result;
 }
 
@@ -2837,6 +2844,13 @@ Value *ScalarExprEmitter::EmitCompare(const BinaryOperator *E,unsigned UICmpOpc,
       Result = Builder.CreateCall3(F, CR6Param, FirstVecArg, SecondVecArg, "");
       return EmitScalarConversion(Result, CGF.getContext().BoolTy, E->getType());
     }
+
+    // If we're doing a comparison on a capability (including an __intcap_t)
+    // then we need to fudge it into an integer type first.
+    if (LHSTy.isCapabilityType()) {
+      LHS = Builder.CreatePtrToInt(LHS, CGF.IntPtrTy);
+      RHS = Builder.CreatePtrToInt(RHS, CGF.IntPtrTy);
+    } 
 
     if (LHS->getType()->isFPOrFPVectorTy()) {
       Result = Builder.CreateFCmp((llvm::CmpInst::Predicate)FCmpOpc,

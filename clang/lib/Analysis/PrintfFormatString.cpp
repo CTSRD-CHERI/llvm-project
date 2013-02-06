@@ -467,6 +467,8 @@ bool PrintfSpecifier::fixType(QualType QT, const LangOptions &LangOpt,
   case BuiltinType::WChar_S:
   case BuiltinType::Char16:
   case BuiltinType::Char32:
+  case BuiltinType::UIntCap:
+  case BuiltinType::IntCap:
   case BuiltinType::UInt128:
   case BuiltinType::Int128:
   case BuiltinType::Half:

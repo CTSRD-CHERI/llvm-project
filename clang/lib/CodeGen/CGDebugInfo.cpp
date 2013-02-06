@@ -480,12 +480,14 @@ llvm::DIType CGDebugInfo::CreateType(const BuiltinType *BT) {
   case BuiltinType::UShort:
   case BuiltinType::UInt:
   case BuiltinType::UInt128:
+  case BuiltinType::UIntCap:
   case BuiltinType::ULong:
   case BuiltinType::WChar_U:
   case BuiltinType::ULongLong: Encoding = llvm::dwarf::DW_ATE_unsigned; break;
   case BuiltinType::Short:
   case BuiltinType::Int:
   case BuiltinType::Int128:
+  case BuiltinType::IntCap:
   case BuiltinType::Long:
   case BuiltinType::WChar_S:
   case BuiltinType::LongLong:  Encoding = llvm::dwarf::DW_ATE_signed; break;

@@ -353,6 +353,16 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
                                  static_cast<unsigned>(Context.getTypeSize(T)));
       break;
 
+    // We store these as capabilities (and must use capability instructions for
+    // writing them to memory), and must perform some explicit casts for
+    // arithmetic.
+    case BuiltinType::IntCap:
+    case BuiltinType::UIntCap:
+      // FIXME: Don't hard-code the capability address space.
+      ResultType =
+          llvm::PointerType::get(llvm::Type::getInt8Ty(getLLVMContext()), 200);
+      break;
+
     case BuiltinType::Half:
       // Half FP can either be storage-only (lowered to i16) or native.
       ResultType = getTypeForFormat(getLLVMContext(),

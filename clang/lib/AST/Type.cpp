@@ -948,6 +948,19 @@ bool Type::isIncompleteType(NamedDecl **Def) const {
   }
 }
 
+bool QualType::isCapabilityType() const {
+  const QualType CanonicalType = getCanonicalType();
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::IntCap ||
+           BT->getKind() == BuiltinType::UIntCap;
+  const Type *T = CanonicalType.getTypePtr();
+  if (isa<PointerType>(T)) {
+    // FIXME: Don't hard-code address space
+    return getAddressSpace() == 200;
+  }
+  return false;
+}
+
 bool QualType::isPODType(ASTContext &Context) const {
   // C++11 has a more relaxed definition of POD.
   if (Context.getLangOpts().CPlusPlus11)
@@ -1513,12 +1526,14 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
   case Long:              return "long";
   case LongLong:          return "long long";
   case Int128:            return "__int128";
+  case IntCap:            return "__intcap";
   case UChar:             return "unsigned char";
   case UShort:            return "unsigned short";
   case UInt:              return "unsigned int";
   case ULong:             return "unsigned long";
   case ULongLong:         return "unsigned long long";
   case UInt128:           return "unsigned __int128";
+  case UIntCap:           return "__uintcap";
   case Half:              return "half";
   case Float:             return "float";
   case Double:            return "double";

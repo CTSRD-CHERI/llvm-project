@@ -1257,6 +1257,8 @@ void MicrosoftCXXNameMangler::mangleType(const BuiltinType *T,
 
   case BuiltinType::NullPtr: Out << "$$T"; break;
 
+  case BuiltinType::IntCap:
+  case BuiltinType::UIntCap:
   case BuiltinType::Char16:
   case BuiltinType::Char32:
   case BuiltinType::Half: {
