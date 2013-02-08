@@ -541,7 +541,7 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
     }
   }
 
-  if (D->hasAttr<SensitiveAttr>()) {
+  if (D && D->hasAttr<SensitiveAttr>()) {
     llvm::LLVMContext &Context = getLLVMContext();
     llvm::Value *attrMDArgs[] = { Fn };
     llvm::MDNode *FNNode= llvm::MDNode::get(Context, attrMDArgs);
