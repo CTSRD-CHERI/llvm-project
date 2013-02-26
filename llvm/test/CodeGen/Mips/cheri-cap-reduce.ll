@@ -6,6 +6,7 @@ target triple = "cheri-unknown-freebsd"
 ; Check that this doesn't crash SelectionDAG trying to fold the trunc into the
 ; load.
 
+; CHECK: x
 define i32 @x(i64 addrspace(200)* nocapture %capmem) #0 {
 entry:
   %0 = load i64 addrspace(200)* %capmem, align 8, !tbaa !0
