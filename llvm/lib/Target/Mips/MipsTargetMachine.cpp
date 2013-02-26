@@ -58,6 +58,9 @@ static std::string computeDataLayout(const MipsSubtarget &ST) {
 
   Ret += "-m:m";
 
+  if (Subtarget.isCheri())
+    Ret += "-p200:256:256:256";
+
   // Pointers are 32 bit on some ABIs.
   if (!ST.isABI_N64())
     Ret += "-p:32:32";
