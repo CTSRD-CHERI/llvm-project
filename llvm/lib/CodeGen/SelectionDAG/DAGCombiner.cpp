@@ -5463,7 +5463,10 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
 
   EVT PtrType = N0.getOperand(1).getValueType();
 
-  if (PtrType == MVT::Untyped || PtrType.isExtended())
+  // FIXME: We can do this with fat pointers, but we need to be more careful
+  // about the arithmetic.
+  if (PtrType == MVT::Untyped || PtrType.isExtended() ||
+      PtrType == MVT::iFATPTR)
     // It's not possible to generate a constant of extended or untyped type.
     return SDValue();
 
