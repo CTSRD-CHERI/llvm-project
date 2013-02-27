@@ -680,7 +680,8 @@ static Constant *stripAndComputeConstantOffsets(const DataLayout *TD,
   Type *IntPtrTy = TD->getIntPtrType(V->getType())->getScalarType();
   APInt Offset = APInt::getNullValue(IntPtrTy->getIntegerBitWidth());
   // FIXME: should be is-fat-pointer
-  if (cast<PointerType>(V->getType())->getAddressSpace() == 200)
+  unsigned AS = cast<PointerType>(V->getType()->getScalarType())->getAddressSpace();
+  if (AS == 200)
   {
     return 0;
   }
