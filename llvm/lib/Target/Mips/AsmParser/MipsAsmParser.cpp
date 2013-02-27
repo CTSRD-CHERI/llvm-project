@@ -2433,7 +2433,8 @@ bool MipsAsmParser::ParseInstruction(
     // $rt + offset($cb)
     // We have already parsed the $rt
       //fprintf(stderr, "Parsing arguments for %s\n", Name.str().c_str());
-    if (Name.startswith("cl") || Name.startswith("cs")) {
+    if ((Name.startswith("cl") || Name.startswith("cs")) &&
+        !(Name.equals("clo") || Name.equals("clz"))) {
       //fprintf(stderr, "Parsing capability instruction\n");
       if (getLexer().isNot(AsmToken::Comma)) {
         SMLoc Loc = getLexer().getLoc();
