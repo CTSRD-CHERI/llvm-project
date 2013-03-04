@@ -32,26 +32,6 @@
 using namespace clang;
 using namespace CodeGen;
 
-static llvm::Value* emitPointerCast(CGBuilderTy &Builder,
-                                    const TargetInfo &TI,
-                                    llvm::Value *From,
-                                    llvm::Type *To) {
-  llvm::PointerType *fromTy = cast<llvm::PointerType>(From->getType());
-  // Null cast, just return the original
-  if (fromTy == To) return From;
-  llvm::PointerType *toTy = cast<llvm::PointerType>(To);
-  // Casts within address spaces, or between two address spaces of the same size, 
-  unsigned FromAddrSpace = fromTy->getAddressSpace();
-  unsigned ToAddrSpace = toTy->getAddressSpace();
-  if ((FromAddrSpace == ToAddrSpace) ||
-      (TI.getPointerWidth(FromAddrSpace) == TI.getPointerWidth(ToAddrSpace)))
-    return Builder.CreateBitCast(From, To);
-  From = Builder.CreatePtrToInt(From,
-          llvm::IntegerType::get(From->getContext(),
-          std::min(TI.getPointerWidth(FromAddrSpace), TI.getPointerWidth(ToAddrSpace))));
-  return Builder.CreateIntToPtr(From, To);
-}
-
 //===--------------------------------------------------------------------===//
 //                        Miscellaneous Helper Methods
 //===--------------------------------------------------------------------===//
@@ -64,8 +44,7 @@ llvm::Value *CodeGenFunction::EmitCastToVoidPtr(llvm::Value *value) {
   if (addressSpace)
     destType = llvm::Type::getInt8PtrTy(getLLVMContext(), addressSpace);
 
-  return emitPointerCast(Builder, getContext().getTargetInfo(),
-            value, destType);
+  return EmitPointerCast(value, destType);
 }
 
 /// CreateTempAlloca - This creates a alloca and inserts it into the entry
@@ -1705,8 +1684,7 @@ EmitBitCastOfLValueToProperType(CodeGenFunction &CGF,
                                 llvm::Value *V, llvm::Type *IRType,
                                 StringRef Name = StringRef()) {
   unsigned AS = cast<llvm::PointerType>(V->getType())->getAddressSpace();
-  return emitPointerCast(CGF.Builder, CGF.getContext().getTargetInfo(),
-            V, IRType->getPointerTo(AS));
+  return CGF.EmitPointerCast(V, IRType->getPointerTo(AS));
 }
 
 static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
@@ -2850,8 +2828,8 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
     const ExplicitCastExpr *CE = cast<ExplicitCastExpr>(E);
 
     LValue LV = EmitLValue(E->getSubExpr());
-    llvm::Value *V = emitPointerCast(Builder, getContext().getTargetInfo(),
-            LV.getAddress(), ConvertType(CE->getTypeAsWritten()));
+    llvm::Value *V = EmitPointerCast(LV.getAddress(),
+        cast<llvm::PointerType>(ConvertType(CE->getTypeAsWritten())));
     return MakeAddrLValue(V, E->getType());
   }
   case CK_ObjCObjectLValueCast: {

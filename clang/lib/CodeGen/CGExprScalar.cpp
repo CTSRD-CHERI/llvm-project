@@ -63,11 +63,6 @@ class ScalarExprEmitter
   bool IgnoreResultAssign;
   llvm::LLVMContext &VMContext;
 
-  llvm::Value* emitPointerCast(CGBuilderTy &Builder,
-                               const TargetInfo &TI,
-                               llvm::Value *From,
-                               QualType FromTy,
-                               QualType ToTy);
 public:
 
   ScalarExprEmitter(CodeGenFunction &cgf, bool ira=false)
@@ -1269,30 +1264,32 @@ static bool ShouldNullCheckClassCastValue(const CastExpr *CE) {
   return true;
 }
 
-llvm::Value* ScalarExprEmitter::emitPointerCast(CGBuilderTy &Builder,
-                                                const TargetInfo &TI,
-                                                llvm::Value *From,
-                                                QualType FromTy,
-                                                QualType ToTy) {
-  llvm::PointerType *toTy = cast<llvm::PointerType>(ConvertType(ToTy));
-  llvm::PointerType *fromTy = cast<llvm::PointerType>(From->getType());
+llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
+    llvm::PointerType *ToType) {
+  const TargetInfo &TI = getContext().getTargetInfo();
   // Casts within address spaces, or between two address spaces of the same size, 
+  llvm::PointerType *fromTy = cast<llvm::PointerType>(From->getType());
   unsigned FromAddrSpace = fromTy->getAddressSpace();
-  unsigned ToAddrSpace = toTy->getAddressSpace();
-  llvm::Value *result;
+  unsigned ToAddrSpace = ToType->getAddressSpace();
   if ((FromAddrSpace == ToAddrSpace) ||
       (TI.getPointerWidth(FromAddrSpace) == TI.getPointerWidth(ToAddrSpace))) {
-    if (fromTy == toTy)
-     result = From;
+    if (fromTy == ToType)
+     return From;
     else
-      result = Builder.CreateBitCast(From, toTy);
+      return Builder.CreateBitCast(From, ToType);
   } else {
-    result = Builder.CreatePtrToInt(From,
+    return Builder.CreateIntToPtr(Builder.CreatePtrToInt(From,
             llvm::IntegerType::get(From->getContext(),
-                TI.getPointerWidth(0)));
-    result = Builder.CreateIntToPtr(result, toTy);
+                TI.getPointerWidth(0))), ToType);
   }
-  if (CGF.Target.getTriple().getArch() == llvm::Triple::cheri) {
+}
+llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
+                                              QualType FromTy,
+                                              QualType ToTy) {
+  llvm::PointerType *toTy = cast<llvm::PointerType>(ConvertType(ToTy));
+  unsigned ToAddrSpace = toTy->getAddressSpace();
+  llvm::Value *result = EmitPointerCast(From, toTy);
+  if (Target.getTriple().getArch() == llvm::Triple::cheri) {
     if (ToAddrSpace != 200) return result;
     unsigned flags = 0xffff;
     // Clear the store and store-capability flags
@@ -1305,11 +1302,11 @@ llvm::Value* ScalarExprEmitter::emitPointerCast(CGBuilderTy &Builder,
       flags &= 0xFFEB;
 
     if (flags != 0xffff) {
-      llvm::Function *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_and_cap_perms);
+      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_and_cap_perms);
       if (F->getFunctionType()->getParamType(0) != result->getType())
         result = Builder.CreateBitCast(result, F->getFunctionType()->getParamType(0));
       result = Builder.CreateCall2(F, result,
-          llvm::ConstantInt::get(CGF.SizeTy, flags));
+          llvm::ConstantInt::get(SizeTy, flags));
       if (toTy != result->getType())
         result = Builder.CreateBitCast(result, toTy);
     }

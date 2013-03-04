@@ -1647,6 +1647,14 @@ public:
   llvm::Value *EmitDynamicCast(llvm::Value *V, const CXXDynamicCastExpr *DCE);
   llvm::Value* EmitCXXUuidofExpr(const CXXUuidofExpr *E);
 
+  /// Emit a pointer cast.  This should be used for all pointer casts and will
+  /// emit a simple bitcast where applicable or a more complex sequence for
+  /// different address spaces.
+  llvm::Value* EmitPointerCast(llvm::Value *From,
+                               QualType FromTy,
+                               QualType ToTy);
+  llvm::Value* EmitPointerCast(llvm::Value *From, llvm::PointerType *ToType);
+
   /// \brief Situations in which we might emit a check for the suitability of a
   ///        pointer or glvalue.
   enum TypeCheckKind {
