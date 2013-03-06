@@ -1506,7 +1506,6 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
     // For __[u]intcap_t, the underlying LLVM type is actually a pointer.
     if (E->getType().isCapabilityType()) {
-      fprintf(stderr, "Casting from cap.  To cap? %d\n", DestTy.isCapabilityType());
       // If we're casting to a capability pointer, then it's just a bitcast:
       if (DestTy.isCapabilityType())
         return Builder.CreateBitCast(Src, ResultType);
