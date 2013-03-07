@@ -4850,6 +4850,10 @@ public:
         IsNan2008(false), IsSingleFloat(false), FloatABI(HardFloat),
         DspRev(NoDSP), HasMSA(false), HasFP64(false), ABI(ABIStr) {}
 
+  virtual bool SupportsCapabilities() const { return IsCheri; }
+
+  virtual int AddressSpaceForCapabilities() { return IsCheri ? 200 : -1; }
+
   virtual const char *getABI() const { return ABI.c_str(); }
   virtual bool setABI(const std::string &Name) = 0;
   virtual bool setCPU(const std::string &Name) {

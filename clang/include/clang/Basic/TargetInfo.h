@@ -803,6 +803,15 @@ public:
     }
   }
 
+  /// SupportsCapabilities - Returns true if the target supports capabilities.
+  virtual bool SupportsCapabilities() const { return false; }
+
+  /// AddressSpaceForCapabilities - If this target supports capabilities,
+  /// returns the address space used to represent them.  The result is
+  /// undefined otherwise.
+  virtual int AddressSpaceForCapabilities() { return -1; }
+
+
 protected:
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
     return PointerWidth;
@@ -813,6 +822,7 @@ protected:
   virtual enum IntType getPtrDiffTypeV(unsigned AddrSpace) const {
     return PtrDiffType;
   }
+
   virtual void getGCCRegNames(const char * const *&Names,
                               unsigned &NumNames) const = 0;
   virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
