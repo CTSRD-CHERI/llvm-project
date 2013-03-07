@@ -151,7 +151,7 @@ public:
   enum {
     /// The maximum supported address space number.
     /// 24 bits should be enough for anyone.
-    MaxAddressSpace = 0x7fffffu,
+    MaxAddressSpace = 0xffffffu,
 
     /// The width of the "fast" qualifier mask.
     FastWidth = 3,
