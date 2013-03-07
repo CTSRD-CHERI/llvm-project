@@ -293,10 +293,9 @@ public:
     TQ_const       = 1,
     TQ_restrict    = 2,
     TQ_volatile    = 4,
-    TQ_output      = 8,
     // This has no corresponding Qualifiers::TQ value, because it's not treated
     // as a qualifier in our type system.
-    TQ_atomic      = 16
+    TQ_atomic      = 8
   };
 
   /// ParsedSpecifiers - Flags to query which specifiers were applied.  This is
@@ -314,6 +313,7 @@ private:
   /*SCS*/unsigned StorageClassSpec : 3;
   /*TSCS*/unsigned ThreadStorageClassSpec : 2;
   unsigned SCS_extern_in_linkage_spec : 1;
+  unsigned TQ_output : 1;
 
   // type-specifier
   /*TSW*/unsigned TypeSpecWidth : 2;
@@ -404,6 +404,7 @@ public:
     : StorageClassSpec(SCS_unspecified),
       ThreadStorageClassSpec(TSCS_unspecified),
       SCS_extern_in_linkage_spec(false),
+      TQ_output(false),
       TypeSpecWidth(TSW_unspecified),
       TypeSpecComplex(TSC_unspecified),
       TypeSpecSign(TSS_unspecified),
@@ -453,6 +454,8 @@ public:
     StorageClassSpecLoc        = SourceLocation();
     ThreadStorageClassSpecLoc  = SourceLocation();
   }
+  bool HasOutput() { return TQ_output; }
+  void SetOutput(bool O) { TQ_output = O; }
 
   void ClearTypeSpecType() {
     TypeSpecType = DeclSpec::TST_unspecified;

@@ -3191,8 +3191,8 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
                                  getLangOpts());
       break;
     case tok::kw___output:
-      isInvalid = DS.SetTypeQual(DeclSpec::TQ_output, Loc, PrevSpec, DiagID,
-                                 getLangOpts());
+      // FIXME: Invalid?
+      DS.SetOutput(true);
       break;
 
     // C++ typename-specifier:
@@ -4467,8 +4467,8 @@ void Parser::ParseTypeQualifierListOpt(DeclSpec &DS,
                                  getLangOpts());
       break;
     case tok::kw___output:
-      isInvalid = DS.SetTypeQual(DeclSpec::TQ_output   , Loc, PrevSpec, DiagID,
-                                 getLangOpts());
+      // FIXME: Invalid?
+      DS.SetOutput(true);
       break;
 
     // OpenCL qualifiers:

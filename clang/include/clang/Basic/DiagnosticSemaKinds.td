@@ -16,7 +16,8 @@ let CategoryName = "Semantic Issue" in {
 
 def warn_calling_non_sensitive_from_sensitive : Warning<
   "Calling non-sensitive function %0 from sensitive function %1 may result in"
-  " sensitive data being leaked to the stack">;
+  " sensitive data being leaked to the stack">,
+  InGroup<DiagGroup<"sensitive-function">>;
 
 // For loop analysis
 def warn_variables_not_in_loop_body : Warning<
