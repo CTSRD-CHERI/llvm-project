@@ -1,4 +1,5 @@
 import os
+from xml.sax.saxutils import escape
 
 # Test result codes.
 
@@ -194,3 +195,14 @@ class Test:
                 return True
 
         return False
+    
+    def getJUnitXML(self):
+        xml = "<testcase classname='" + ".".join(self.path_in_suite)
+        xml += "' name='" + '/'.join(self.path_in_suite) + "'"
+        if self.result.isFailure:
+          xml += ">\n\t<failure >\n" + escape(self.output) + "\n\t</failure>"
+          xml += "\n</testcase>"
+        else:
+          xml += "/>"
+        return xml
+

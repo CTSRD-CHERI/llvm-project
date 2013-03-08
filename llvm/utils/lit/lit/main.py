@@ -224,6 +224,9 @@ def main(builtinParameters = {}):
     group.add_option("", "--use-threads", dest="useProcesses",
                       help="Run tests in parallel with threads (not processes)",
                       action="store_false", default=useProcessesIsDefault)
+    group.add_option("", "--junit-xml-output", dest="xmlFile",
+                      help=("Write JUnit-compatible XML test reports to the"
+                            " specified file"), default=None)
     parser.add_option_group(group)
 
     (opts, args) = parser.parse_args()
@@ -402,6 +405,34 @@ def main(builtinParameters = {}):
         N = len(byCode.get(code,[]))
         if N:
             print('  %s: %d' % (name,N))
+    if opts.xmlFile:
+        # Collect the tests, indexed by test suite
+        bySuite = {}
+        for t in tests:
+            suite = t.suite.config.name
+            if suite not in bySuite:
+                bySuite[suite] = {
+                                   'passes'   : 0,
+                                   'failures' : 0,
+                                   'tests'    : [] }
+            bySuite[suite]['tests'].append(t)
+            if t.result.isFailure:
+                bySuite[suite]['failures'] += 1
+            else:
+                bySuite[suite]['passes'] += 1
+        xmlFile = open(opts.xmlFile, "w")
+        xmlFile.write("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n")
+        xmlFile.write("<testsuites>\n")
+        for suiteName in bySuite:
+            s = bySuite[suiteName]
+            xmlFile.write("<testsuite name='" + suiteName + "'")
+            xmlFile.write(" tests='" + str(s['passes'] + s['failures']) + "'")
+            xmlFile.write(" failures='" + str(s['failures']) + "'>\n")
+            for t in s['tests']:
+                xmlFile.write(t.getJUnitXML() + "\n")
+            xmlFile.write("</testsuite>\n")
+        xmlFile.write("</testsuites>")
+        xmlFile.close()
 
     # If we encountered any additional errors, exit abnormally.
     if litConfig.numErrors:
