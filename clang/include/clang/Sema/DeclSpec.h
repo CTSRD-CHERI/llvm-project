@@ -454,7 +454,7 @@ public:
     StorageClassSpecLoc        = SourceLocation();
     ThreadStorageClassSpecLoc  = SourceLocation();
   }
-  bool HasOutput() { return TQ_output; }
+  bool HasOutput() const { return TQ_output; }
   void SetOutput(bool O) { TQ_output = O; }
 
   void ClearTypeSpecType() {
