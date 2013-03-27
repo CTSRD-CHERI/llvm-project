@@ -1570,7 +1570,7 @@ def : Pat<(store CheriRegs:$cs, GPR64Opnd:$rt),
 
 // Load a capability
 def LOADCAP : CheriFmtCLCR<(outs CheriRegs:$cs), (ins GPR64Opnd:$rt, simm11:$offset, CheriRegs:$cb),
-                        "clc\t$cs ${rt}, ${offset}(${cb})",
+                        "clc\t$cs, ${rt}, ${offset}(${cb})",
                         [(set CheriRegs:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriRegs:$cb)), (i64 immSExt11:$offset))))]>;
 
 def : Pat<(load GPR64Opnd:$rt),
