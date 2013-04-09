@@ -66,10 +66,10 @@ namespace
     Value *RangeCheckedValue(Instruction *InsertPt,
                              AllocOperands AO,
                              Value *I2P,
-                             Instruction *&BitCast) {
+                             Value *&BitCast) {
       IRBuilder<> B(InsertPt);
       Value *Size = (AO.second) ? B.CreateMul(AO.first, AO.second) : AO.first;
-      BitCast = cast<Instruction>(B.CreateBitCast(I2P, CapPtrTy));
+      BitCast = B.CreateBitCast(I2P, CapPtrTy);
       CallInst *SetLength = B.CreateCall2(SetLengthFn, BitCast, Size);
       return B.CreateBitCast(SetLength, I2P->getType());
     }
@@ -153,7 +153,7 @@ namespace
         if (!(Casts.empty() && ConstantCasts.empty())) {
           SetLengthFn = Intrinsic::getDeclaration(M,
               Intrinsic::cheri_set_cap_length);
-          Instruction *BitCast;
+          Value *BitCast = 0;
 
           for (pair<AllocOperands, IntToPtrInst*> *i=Casts.begin(),
                *e=Casts.end() ; i!=e ; ++i) {
@@ -167,7 +167,7 @@ namespace
             Value *New = RangeCheckedValue(InsertPt.getNodePtrUnchecked(),
                 i->first, I2P, BitCast);
             I2P->replaceAllUsesWith(New);
-            BitCast->setOperand(0, I2P);
+            cast<Instruction>(BitCast)->setOperand(0, I2P);
           }
           for (pair<AllocOperands, ConstantCast> *i=ConstantCasts.begin(),
                *e=ConstantCasts.end() ; i!=e ; ++i) {
