@@ -2641,7 +2641,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         V->dump();
         if (V->getType() != RetIRTy)
           V = Builder.CreateBitCast(V, RetIRTy);
-        if (RetTy->isPointerType()) {
+        if (TargetDecl && RetTy->isPointerType()) {
           // By the time this is called, we've got the canonical form of the
           // function type, stripping typedefs.  We need to rediscover them to
           // create the opaque form.
