@@ -992,6 +992,7 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
            .Case("modules", LangOpts.Modules)
            .Case("tls", PP.getTargetInfo().isTLSSupported())
            .Case("underlying_type", LangOpts.CPlusPlus)
+           .Case("capabilities", PP.getTargetInfo().SupportsCapabilities())
            .Default(false);
 }
 
