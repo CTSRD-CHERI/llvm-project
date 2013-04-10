@@ -31,6 +31,8 @@
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Transforms/Utils/Local.h"
+#include "llvm/IR/Intrinsics.h"
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -2636,8 +2638,41 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         // If the argument doesn't match, perform a bitcast to coerce it.  This
         // can happen due to trivial type mismatches.
         llvm::Value *V = CI;
+        V->dump();
         if (V->getType() != RetIRTy)
           V = Builder.CreateBitCast(V, RetIRTy);
+        if (RetTy->isPointerType()) {
+          // By the time this is called, we've got the canonical form of the
+          // function type, stripping typedefs.  We need to rediscover them to
+          // create the opaque form.
+          QualType Ty = cast<ValueDecl>(TargetDecl)->getType();
+          if (const FunctionType *FT = dyn_cast<FunctionType>(Ty))
+            if (const TypedefType *TT = dyn_cast<TypedefType>(FT->getResultType())) {
+              // If this is a #pragma opaque return type, and we can see the
+              // key, then we should decode it so that we can use it.  DCE
+              // should later strip away the decoding if we don't use the
+              // result.
+              if (VarDecl *Key = cast<TypedefDecl>(TT->getDecl())->getOpaqueKey()) {
+                llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
+                KeyV = Builder.CreateLoad(KeyV);
+                // FIXME: Don't hard-code address space 200!
+                // If this is CHERI, enforce this in hardware
+                if (RetTy->getPointeeType().getAddressSpace() == 200) {
+                  llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_unseal_cap);
+                  llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, 200);
+                  V = Builder.CreateCall2(F,
+                      Builder.CreateBitCast(V, CapPtrTy),
+                      Builder.CreateBitCast(KeyV, CapPtrTy));
+                  V = Builder.CreateBitCast(V, RetIRTy);
+                } else {
+                  KeyV = Builder.CreatePtrToInt(KeyV, IntPtrTy);
+                  V = Builder.CreatePtrToInt(V, IntPtrTy);
+                  V = Builder.CreateXor(V, KeyV);
+                  V = Builder.CreateIntToPtr(V, RetIRTy);
+                }
+              }
+            }
+          }
         return RValue::get(V);
       }
       }

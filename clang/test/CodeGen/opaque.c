@@ -43,3 +43,16 @@ int getA_c(foo_c foo)
 	// CHECK: llvm.cheri.unseal.cap
 	return foo->a;
 }
+
+// CHECK: internal_call
+int internal_call(void)
+{
+	// CHECK: llvm.cheri.unseal.cap
+	return newFoo()->a;
+}
+// CHECK: internal_call2
+int internal_call2(void)
+{
+	// CHECK: xor
+	return newFoo_c()->a;
+}
