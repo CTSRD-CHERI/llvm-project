@@ -8,6 +8,7 @@
 ; RUN: -disable-mips-df-succbb-search=false < %s | \
 ; RUN: FileCheck %s -check-prefix=SUCCBB
 
+
 define void @foo1() nounwind {
 entry:
 ; Default:     jalr 

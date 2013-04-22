@@ -183,7 +183,6 @@ bool EEVT::TypeSet::MergeInTypeInfo(const EEVT::TypeSet &InVT, TreePattern &TP){
       if (!InCopy.isCompletelyUnknown())
         return false;
     }
-    break;
   }
 
   // If the input constraint is iAny/iPTR and this is an integer type list,
@@ -878,9 +877,20 @@ bool SDTypeConstraint::ApplyTypeConstraint(TreePatternNode *N,
   case SDTCisVT:
     // Operand must be a particular type.
     return NodeToApply->UpdateNodeType(ResNo, x.SDTCisVT_Info.VT, TP);
-  case SDTCisPtrTy:
+  case SDTCisPtrTy: {
     // Operand must be a pointer type.
+    // If we support fat pointers, then this narrows it down to two types.
+    if (TP.getDAGPatterns().enableFatPointers()) {
+      // FIXME: We should be able to do the type inference correctly from the
+      // two types, but for now just disable this constraint on architectures
+      // with fat pointers.
+      return false;
+      MVT::SimpleValueType Ptrs[] = { MVT::iFATPTR, MVT::iPTR };
+      ArrayRef<MVT::SimpleValueType> PtrTys(Ptrs);
+      return NodeToApply->UpdateNodeType(ResNo, PtrTys, TP);
+    }
     return NodeToApply->UpdateNodeType(ResNo, MVT::iPTR, TP);
+  }
   case SDTCisInt:
     // Require it to be one of the legal integer VTs.
     return NodeToApply->getExtType(ResNo).EnforceInteger(TP);
@@ -2125,6 +2135,10 @@ void TreePattern::dump() const { print(errs()); }
 
 CodeGenDAGPatterns::CodeGenDAGPatterns(RecordKeeper &R) :
   Records(R), Target(R) {
+
+  // If the target declares a class called SupportsFatPointers, then we enable
+  // support for two types of pointer.
+  FatPointers = R.getClass("SupportsFatPointers");
 
   Intrinsics = LoadIntrinsics(Records, false);
   TgtIntrinsics = LoadIntrinsics(Records, true);

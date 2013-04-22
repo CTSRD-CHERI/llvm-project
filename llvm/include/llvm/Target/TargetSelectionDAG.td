@@ -173,11 +173,11 @@ def SDTBrind : SDTypeProfile<0, 1, [        // brind
 def SDTNone : SDTypeProfile<0, 0, []>;      // ret, trap
 
 def SDTLoad : SDTypeProfile<1, 1, [         // load
-  //SDTCisPtrTy<1>
+  SDTCisPtrTy<1>
 ]>;
 
 def SDTStore : SDTypeProfile<0, 2, [        // store
-  //SDTCisPtrTy<1>
+  SDTCisPtrTy<1>
 ]>;
 
 def SDTIStore : SDTypeProfile<1, 3, [       // indexed store

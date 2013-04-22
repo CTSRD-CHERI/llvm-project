@@ -697,12 +697,17 @@ class CodeGenDAGPatterns {
   /// value is the pattern to match, the second pattern is the result to
   /// emit.
   std::vector<PatternToMatch> PatternsToMatch;
+
+  /// Flag indicating whether fat pointers should be supported.
+  bool FatPointers;
 public:
   CodeGenDAGPatterns(RecordKeeper &R);
   ~CodeGenDAGPatterns();
 
   CodeGenTarget &getTargetInfo() { return Target; }
   const CodeGenTarget &getTargetInfo() const { return Target; }
+
+  bool enableFatPointers() { return FatPointers; }
 
   Record *getSDNodeNamed(const std::string &Name) const;
 
