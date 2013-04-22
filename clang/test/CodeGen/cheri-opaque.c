@@ -1,4 +1,5 @@
 // RUN: %clang %s -O1 -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
+// XFAIL:
 
 struct example {
   int x;
