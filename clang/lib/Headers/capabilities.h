@@ -1,13 +1,14 @@
 #include <stdint.h>
 
+typedef unsigned short capperms_t;
 #if __has_feature(capabilities)
 typedef __intcap_t intcap_t;
 typedef __uintcap_t uintcap_t;
-typedef unsigned short capperms_t;
 #define capability __capability
-static inline void cap_set_length(capability void* __cap, size_t __size)
+#define output __output
+static inline capability void* cap_set_length(capability void* __cap, size_t __size)
 {
-	__builtin_cheri_set_cap_length(__cap, __size);
+	return __builtin_cheri_set_cap_length(__cap, __size);
 }
 static inline size_t cap_get_length(capability void* __cap)
 {
@@ -36,7 +37,12 @@ cap_is_valid(capability void* __cap)
 typedef intptr_t intcap_t;
 typedef uintptr_t uintcap_t;
 #define capability
-static inline void set_cap_length(capability void* __cap, size_t __size) { }
+#define output 
+static inline capability void* cap_set_length(capability void* __cap, size_t __size)
+{
+	return __cap;
+}
+
 static inline size_t cap_get_length(capability void* __cap)
 {
 	return SIZE_MAX - (uintcap_t)__cap;
