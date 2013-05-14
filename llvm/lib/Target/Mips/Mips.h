@@ -21,6 +21,7 @@
 namespace llvm {
   class MipsTargetMachine;
   class FunctionPass;
+  class MachineFunctionPass;
 
   FunctionPass *createMipsISelDag(MipsTargetMachine &TM);
   FunctionPass *createMipsOptimizePICCallPass(MipsTargetMachine &TM);
@@ -32,6 +33,7 @@ namespace llvm {
 
   FunctionPass *createCheriInvalidatePass(MipsTargetMachine &TM);
   FunctionPass *createCheriRangeChecker(void);
+  MachineFunctionPass *createCheriAddressingModeFolder(void);
 
 } // end namespace llvm;
 

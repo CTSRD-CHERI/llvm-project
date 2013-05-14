@@ -197,11 +197,21 @@ public:
   virtual bool addInstSelector();
   virtual void addMachineSSAOptimization();
   virtual bool addPreEmitPass();
+  virtual bool addPreRegAlloc();
 };
 } // namespace
 
 TargetPassConfig *MipsTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new MipsPassConfig(this, PM);
+}
+
+bool MipsPassConfig::addPreRegAlloc() {
+  MipsTargetMachine &TM = getMipsTargetMachine();
+  if (TM.getSubtargetImpl()->isCheri()) {
+    addPass(createCheriAddressingModeFolder());
+    return true;
+  }
+  return false;
 }
 
 void MipsPassConfig::addIRPasses() {
