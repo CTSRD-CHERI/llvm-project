@@ -187,7 +187,10 @@ def CC_MipsN_FastCC : CallingConv<[
 
   // Stack parameter slots for i64 and f64 are 64-bit doublewords and
   // 8-byte aligned.
-  CCIfType<[i64, f64], CCAssignToStack<8, 8>>
+  CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
+
+  CCIfType<[iFATPTR], CCAssignToReg<[C1, C2, C3, C4]>>,
+  CCIfType<[iFATPTR], CCAssignToStack<32, 32>>
 ]>;
 
 def CC_Mips_FastCC : CallingConv<[
