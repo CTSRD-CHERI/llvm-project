@@ -228,6 +228,9 @@ MipsTargetLowering(MipsTargetMachine &TM)
   // which is used implicitly by brcond and select operations.
   AddPromotedToType(ISD::SETCC, MVT::i1, MVT::i32);
 
+  // Trap is an invalid instruction sequence
+  setOperationAction(ISD::TRAP,               MVT::Other, Legal);
+
   // Mips Custom Operations
   setOperationAction(ISD::BR_JT,              MVT::Other, Custom);
   setOperationAction(ISD::GlobalAddress,      MVT::i32,   Custom);
