@@ -105,7 +105,7 @@ def : Proc<"mips4", [FeatureMips4]>;
 def : Proc<"mips64", [FeatureMips64]>;
 def : Proc<"mips64r2", [FeatureMips64r2]>;
 def : Proc<"mips16", [FeatureMips16]>;
-def : Proc<"cheri", [FeatureMipsCheri, FeatureMips64]>;
+def : Proc<"cheri", [FeatureMipsCheri, FeatureMips4]>;
 
 def MipsAsmParser : AsmParser {
   let ShouldEmitMatchRegisterName = 0;
