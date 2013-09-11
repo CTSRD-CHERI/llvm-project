@@ -892,7 +892,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     // rather than the value.
     RValue Result = EmitReferenceBindingToExpr(RV);
     Builder.CreateStore(Result.getScalarVal(), ReturnValue);
-  } else if (!hasAggregateLLVMType(RV->getType())) {
+  } else if (TEK_Scalar == getEvaluationKind(RV->getType())) {
     llvm::Value *RetV = EmitScalarExpr(RV);
     QualType Ty = RV->getType();
     if (Ty->isPointerType())

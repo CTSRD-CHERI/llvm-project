@@ -5307,7 +5307,8 @@ public:
 };
 
 struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
-  MipsCheriTargetInfo(const std::string& triple) : Mips64EBTargetInfo("cheri-unknown-freebsd") {}
+  MipsCheriTargetInfo(const llvm::Triple &Triple) :
+      Mips64EBTargetInfo(Triple) {}
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
     return (AddrSpace == 200) ? 256 : PointerWidth;
   }
@@ -5658,15 +5659,15 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple) {
   case llvm::Triple::cheri:
     switch (os) {
     case llvm::Triple::Linux:
-      return new LinuxTargetInfo<MipsCheriTargetInfo>(T);
+      return new LinuxTargetInfo<MipsCheriTargetInfo>(Triple);
     case llvm::Triple::RTEMS:
-      return new RTEMSTargetInfo<MipsCheriTargetInfo>(T);
+      return new RTEMSTargetInfo<MipsCheriTargetInfo>(Triple);
     case llvm::Triple::FreeBSD:
-      return new FreeBSDTargetInfo<MipsCheriTargetInfo>(T);
+      return new FreeBSDTargetInfo<MipsCheriTargetInfo>(Triple);
     case llvm::Triple::NetBSD:
-      return new NetBSDTargetInfo<MipsCheriTargetInfo>(T);
+      return new NetBSDTargetInfo<MipsCheriTargetInfo>(Triple);
     default:
-      return new MipsCheriTargetInfo(T);
+      return new MipsCheriTargetInfo(Triple);
     }
 
   case llvm::Triple::mips64el:

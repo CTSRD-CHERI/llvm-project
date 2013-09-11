@@ -1747,6 +1747,7 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, llvm::Value *Arg,
             }
           }
       EmitStoreOfScalar(Arg, lv, /* isInitialization */ true);
+    }
   }
 
   llvm::Value *&DMEntry = LocalDeclMap[&D];

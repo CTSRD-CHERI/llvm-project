@@ -89,7 +89,7 @@ Parser::Parser(Preprocessor &pp, Sema &actions, bool skipFunctionBodies)
 
   FPContractHandler.reset(new PragmaFPContractHandler());
 
-  OpaqueHandler.reset(new PragmaOpaqueHandler());
+  OpaqueHandler.reset(new PragmaOpaqueHandler(actions));
   PP.AddPragmaHandler(OpaqueHandler.get());
 
   PP.AddPragmaHandler("STDC", FPContractHandler.get());
