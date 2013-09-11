@@ -309,26 +309,6 @@ def : MipsPat<(bswap GPR64:$rt), (DSHD (DSBH GPR64:$rt))>;
 def : InstAlias<"move $dst, $src",
                 (DADDu GPR64Opnd:$dst,  GPR64Opnd:$src, ZERO_64), 1>,
       Requires<[IsGP64bit]>;
-def : InstAlias<"move $dst, $src",
-                (OR64 GPR64Opnd:$dst, GPR64Opnd:$src, ZERO_64), 1>,
-      Requires<[IsGP64bit]>;
-def : InstAlias<"and $rs, $rt, $imm",
-                (DANDi GPR64Opnd:$rs, GPR64Opnd:$rt, uimm16_64:$imm),
-                1>,
-      Requires<[IsGP64bit]>;
-def : InstAlias<"slt $rs, $rt, $imm",
-                (SLTi64 CPURegsOpnd:$rs, GPR64:$rt, simm16_64:$imm), 1>,
-      Requires<[IsGP64bit]>;
-def : InstAlias<"xor $rs, $rt, $imm",
-                (XORi64 GPR64Opnd:$rs, GPR64Opnd:$rt, uimm16_64:$imm),
-                1>,
-      Requires<[IsGP64bit]>;
-def : InstAlias<"not $rt, $rs",
-                (NOR64 GPR64Opnd:$rt, GPR64Opnd:$rs, ZERO_64), 1>,
-      Requires<[IsGP64bit]>;
-def : InstAlias<"j $rs", (JR64 GPR64:$rs), 0>, Requires<[IsGP64bit]>;
-def : InstAlias<"jalr $rs", (JALR64 RA_64, GPR64:$rs)>,
-      Requires<[IsGP64bit]>;
 def : InstAlias<"daddu $rs, $rt, $imm",
                 (DADDiu GPR64Opnd:$rs, GPR64Opnd:$rt, simm16_64:$imm),
                 0>;

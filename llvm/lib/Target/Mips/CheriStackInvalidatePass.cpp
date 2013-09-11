@@ -12,9 +12,9 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/Function.h"
-#include "llvm/Metadata.h"
-#include "llvm/Module.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Metadata.h"
+#include "llvm/IR/Module.h"
 
 using namespace llvm;
 
@@ -85,17 +85,17 @@ namespace {
           // If this is a capability store, then we just do a 64-bit integer
           // write.  This leaks information, but invalidates the capability.  
           if (Opc == Mips::STORECAP) {
-            MachineInstrBuilder MIB(Ret);
+            MachineInstrBuilder MIB(F, Ret);
             BuildMI(MBB, Ret, Ret->getDebugLoc(), InstrInfo->get(Mips::SD))
               .addReg(Mips::ZERO)
               .addFrameIndex(FI).addImm(Store->getOperand(2).getImm())
               .addMemOperand(InstrInfo->GetMemOperand(MBB, FI, MachineMemOperand::MOStore));
             DEBUG(dbgs() << "Zeroing capability spill\n");
-          } else if ((Opc == Mips::SW)    || (Opc == Mips::SW_P8)  ||
-                     (Opc == Mips::SD) || (Opc == Mips::SD_P8) ||
-                     (Opc == Mips::SWC1)   || (Opc == Mips::SWC1_P8) ||
-                     (Opc == Mips::SDC1)  || (Opc == Mips::SDC164) ||
-                     (Opc == Mips::SDC164_P8 )) {
+          } else if ((Opc == Mips::SW)    ||
+                     (Opc == Mips::SD) ||
+                     (Opc == Mips::SWC1)   ||
+                     (Opc == Mips::SDC1)  ||
+                     (Opc == Mips::SDC164)) {
             BuildMI(MBB, Ret, Ret->getDebugLoc(), InstrInfo->get(Opc))
               .addReg(Mips::ZERO)
               .addFrameIndex(FI).addImm(Store->getOperand(2).getImm())

@@ -2438,31 +2438,31 @@ bool MipsAsmParser::ParseInstruction(
       //fprintf(stderr, "Parsing capability instruction\n");
       if (getLexer().isNot(AsmToken::Comma)) {
         SMLoc Loc = getLexer().getLoc();
-        Parser.EatToEndOfStatement();
+        Parser.eatToEndOfStatement();
         return Error(Loc,
             "expecting comma when parsing capability-relative address");
       }
       Parser.Lex();  // Eat the comma.
       if (ParseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();
-        Parser.EatToEndOfStatement();
+        Parser.eatToEndOfStatement();
         return Error(Loc, "unexpected token in argument list");
       }
       if (getLexer().isNot(AsmToken::Comma)) {
         SMLoc Loc = getLexer().getLoc();
-        Parser.EatToEndOfStatement();
+        Parser.eatToEndOfStatement();
         return Error(Loc,
             "expecting offset when parsing capability-relative address");
       }
       Parser.Lex();  // Eat the comma.
       if (ParseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();
-        Parser.EatToEndOfStatement();
+        Parser.eatToEndOfStatement();
         return Error(Loc, "unexpected token in argument list");
       }
       if (getLexer().isNot(AsmToken::LParen)) {
         SMLoc Loc = getLexer().getLoc();
-        Parser.EatToEndOfStatement();
+        Parser.eatToEndOfStatement();
         return Error(Loc,
             "expecting capability register when parsing capability-relative address");
       }
@@ -2470,12 +2470,12 @@ bool MipsAsmParser::ParseInstruction(
       Parser.Lex();  // Eat the left paren.
       if (ParseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();
-        Parser.EatToEndOfStatement();
+        Parser.eatToEndOfStatement();
         return Error(Loc, "unexpected token in argument list");
       }
       if (getLexer().isNot(AsmToken::RParen)) {
         SMLoc Loc = getLexer().getLoc();
-        Parser.EatToEndOfStatement();
+        Parser.eatToEndOfStatement();
         return Error(Loc,
             "expecting right parenthesis when parsing capability-relative address");
       }

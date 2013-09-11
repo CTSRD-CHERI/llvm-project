@@ -31,6 +31,7 @@
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -918,13 +919,6 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
   case Mips::PseudoDSDIV:
   case Mips::PseudoDUDIV:
     return expandPseudoDIV(MI, *BB, *getTargetMachine().getInstrInfo(), true);
-  case Mips::SetCapReg:
-    BuildMI(*BB, MI, MI->getDebugLoc(), getTargetMachine().getInstrInfo()->get(Mips::CIncBase))
-      .addReg(MI->getOperand(0).getImm() + Mips::C0,  RegState::Define)
-      .addReg(MI->getOperand(1).getReg())
-      .addReg(Mips::ZERO);
-    MI->eraseFromParent();
-    return BB;
   }
 }
 
@@ -1458,14 +1452,14 @@ SDValue MipsTargetLowering::lowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
             cast<CondCodeSDNode>(Cond.getOperand(2))->get();
         if ((CmpVal == 0 && CmpType == ISD::SETEQ) ||
             (CmpVal == 1 && CmpType == ISD::SETNE)) {
-          return DAG.getNode(MipsISD::BC2F, dl, Op.getValueType(), Chain,
+          return DAG.getNode(MipsISD::BC2F, DL, Op.getValueType(), Chain,
                   Source.getOperand(1), Dest);
         }
       }
     }
   }
 
-  SDValue CondRes = CreateFPCmp(DAG, Op.getOperand(1));
+  SDValue CondRes = createFPCmp(DAG, Op.getOperand(1));
 
   // Return if flag is not set by a floating point comparison.
   if (CondRes.getOpcode() != MipsISD::FPCmp)
