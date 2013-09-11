@@ -2077,7 +2077,7 @@ BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
 
   // If we're doing a comparison on a capability (including an __intcap_t)
   // then we need to fudge it into an integer type first.
-  if (Result.Ty.isCapabilityType() && Result.Opcode != BO_And) {
+  if (Result.Ty.isCapabilityType() && Result.Opcode != BO_Add) {
     if (isa<llvm::PointerType>(Result.LHS->getType()))
       Result.LHS = Builder.CreatePtrToInt(Result.LHS, CGF.IntPtrTy);
     if (isa<llvm::PointerType>(Result.RHS->getType()))
