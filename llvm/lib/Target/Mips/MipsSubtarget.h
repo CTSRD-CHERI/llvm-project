@@ -89,6 +89,9 @@ protected:
   // HasFPIdx -- Floating point indexed load/store instructions.
   bool HasFPIdx;
 
+  /// IsCheri - Supports the CHERI capability extensions
+  bool IsCheri;
+
   // InMips16 -- can process Mips16 instructions
   bool InMips16Mode;
 
@@ -205,9 +208,6 @@ public:
   bool hasBitCount()  const { return HasBitCount; }
   bool hasFPIdx()     const { return HasFPIdx; }
   bool hasExtractInsert() const { return !inMips16Mode() && hasMips32r2(); }
-
-  /// IsCheri - Supports the CHERI capability extensions
-  bool IsCheri;
 
   const InstrItineraryData &getInstrItineraryData() const { return InstrItins; }
   bool allowMixed16_32() const { return inMips16ModeDefault() |
