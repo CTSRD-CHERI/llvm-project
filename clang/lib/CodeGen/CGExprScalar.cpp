@@ -1529,6 +1529,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     // For casts from pointers to intcap_t, we need to turn the pointer into a
     // capability.
     if (DestTy.isCapabilityType()) {
+      if (E->getType().isCapabilityType())
+        return Builder.CreateBitCast(Src, ResultType);
       Src = Builder.CreatePtrToInt(Src,
             llvm::IntegerType::get(Src->getContext(),
                 CGF.getContext().getTargetInfo().getPointerWidth(0)));
