@@ -112,6 +112,9 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM)
     }
   }
 
+  if (Subtarget->isCheri())
+    addRegisterClass(MVT::iFATPTR, &Mips::CheriRegsRegClass);
+
   setOperationAction(ISD::SMUL_LOHI,          MVT::i32, Custom);
   setOperationAction(ISD::UMUL_LOHI,          MVT::i32, Custom);
   setOperationAction(ISD::MULHS,              MVT::i32, Custom);
