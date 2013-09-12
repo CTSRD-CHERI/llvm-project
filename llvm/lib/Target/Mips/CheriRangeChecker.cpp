@@ -71,6 +71,8 @@ namespace
       Value *Size = (AO.second) ? B.CreateMul(AO.first, AO.second) : AO.first;
       BitCast = B.CreateBitCast(I2P, CapPtrTy);
       CallInst *SetLength = B.CreateCall2(SetLengthFn, BitCast, Size);
+      if (BitCast == I2P)
+        BitCast = SetLength;
       return B.CreateBitCast(SetLength, I2P->getType());
     }
     public:
@@ -176,6 +178,7 @@ namespace
                 BitCast);
             i->second.Instr->setOperand(i->second.OpNo, New);
           }
+          verifyModule(*F.getParent());
           return true;
         }
         return false;
