@@ -798,6 +798,9 @@ void TargetLoweringBase::initActions() {
 }
 
 MVT TargetLoweringBase::getPointerTy(uint32_t AS) const {
+  // FIXME:
+  if (AS == 200)
+    return MVT(MVT::iFATPTR);
   return MVT::getIntegerVT(getPointerSizeInBits(AS));
 }
 
