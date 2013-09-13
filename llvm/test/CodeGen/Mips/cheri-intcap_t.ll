@@ -1,7 +1,10 @@
+; RUN: llc %s -mcpu=cheri -o - | FileCheck %s
 ; ModuleID = 'llvm/tools/clang/test/CodeGen/intcap_t.c'
 target datalayout = "E-p200:256:256:256-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-i64:64:64-f32:32:32-f64:64:64-n32:64-S256"
 target triple = "cheri-unknown-freebsd"
 
+; Just check that it compiles, doesn't crash, does produce some output.
+; CHECK: c1
 ; Function Attrs: nounwind readnone
 define i32 @c1(i8 addrspace(200)* %x, i8 addrspace(200)* %y) #0 {
   %1 = ptrtoint i8 addrspace(200)* %x to i64
