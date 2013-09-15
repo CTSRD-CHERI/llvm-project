@@ -1626,10 +1626,12 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
       break;
     }
     break;
-  case Type::ObjCObjectPointer:
-    Width = Target->getPointerWidth(0);
-    Align = Target->getPointerAlign(0);
+  case Type::ObjCObjectPointer: {
+    unsigned AS = Target->AddressSpaceForObjC();
+    Width = Target->getPointerWidth(AS);
+    Align = Target->getPointerAlign(AS);
     break;
+   }
   case Type::BlockPointer: {
     unsigned AS = getTargetAddressSpace(
         cast<BlockPointerType>(T)->getPointeeType());

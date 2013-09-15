@@ -569,7 +569,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // recursive conversion.
     llvm::Type *T =
       ConvertTypeForMem(cast<ObjCObjectPointerType>(Ty)->getPointeeType());
-    ResultType = T->getPointerTo();
+    ResultType = T->getPointerTo(Target.AddressSpaceForObjC());
     break;
   }
 

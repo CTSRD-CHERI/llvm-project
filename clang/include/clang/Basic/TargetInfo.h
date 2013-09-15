@@ -809,7 +809,11 @@ public:
   /// AddressSpaceForCapabilities - If this target supports capabilities,
   /// returns the address space used to represent them.  The result is
   /// undefined otherwise.
-  virtual int AddressSpaceForCapabilities() { return -1; }
+  virtual int AddressSpaceForCapabilities() const { return -1; }
+
+  /// AddressSpaceForObjC - Returns the address space to use for 
+  /// Objective-C objects.
+  virtual int AddressSpaceForObjC() const { return 0; }
 
 
 protected:
