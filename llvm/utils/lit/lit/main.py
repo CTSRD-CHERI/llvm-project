@@ -408,7 +408,7 @@ def main(builtinParameters = {}):
     if opts.xmlFile:
         # Collect the tests, indexed by test suite
         bySuite = {}
-        for t in tests:
+        for t in run.tests:
             suite = t.suite.config.name
             if suite not in bySuite:
                 bySuite[suite] = {
@@ -416,7 +416,7 @@ def main(builtinParameters = {}):
                                    'failures' : 0,
                                    'tests'    : [] }
             bySuite[suite]['tests'].append(t)
-            if t.result.isFailure:
+            if t.result.code.isFailure:
                 bySuite[suite]['failures'] += 1
             else:
                 bySuite[suite]['passes'] += 1
