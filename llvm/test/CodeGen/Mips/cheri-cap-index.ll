@@ -12,8 +12,8 @@ entry:
 for.body:                                         ; preds = %entry, %for.body
 ; Check that we are emitting loads and stores relative to the argument
 ; capability, not relative to some computed result.  
-; CHECK: clw	$5, $1, 0($c1)
-; CHECK: csw	$2, $1, 0($c1)
+; CHECK: clw	$5, $1, 0($c3)
+; CHECK: csw	$2, $1, 0($c3)
 
   %i.011 = phi i32 [ %inc, %for.body ], [ 0, %entry ]
   %sum.010 = phi i32 [ %add, %for.body ], [ 0, %entry ]

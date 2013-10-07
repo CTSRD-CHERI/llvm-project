@@ -6,7 +6,7 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK: storeToPtr1
 define void @storeToPtr1(i8 addrspace(200)* nocapture %a, i8 signext %v) nounwind {
 entry:
-  ; CHECK: csb	$4, $zero, 0($c1)
+  ; CHECK: csb	$4, $zero, 0($c3)
   store i8 %v, i8 addrspace(200)* %a, align 1, !tbaa !0
   ret void
 }
@@ -14,7 +14,7 @@ entry:
 ; CHECK: storeToPtr2
 define void @storeToPtr2(i16 addrspace(200)* nocapture %a, i16 signext %v) nounwind {
 entry:
-  ; CHECK: csh	$4, $zero, 0($c1)
+  ; CHECK: csh	$4, $zero, 0($c3)
   store i16 %v, i16 addrspace(200)* %a, align 2, !tbaa !2
   ret void
 }
@@ -22,7 +22,7 @@ entry:
 ; CHECK: storeToPtr4
 define void @storeToPtr4(i32 addrspace(200)* nocapture %a, i32 %v) nounwind {
 entry:
-  ; CHECK: csw	$4, $zero, 0($c1)
+  ; CHECK: csw	$4, $zero, 0($c3)
   store i32 %v, i32 addrspace(200)* %a, align 4, !tbaa !3
   ret void
 }
@@ -30,7 +30,7 @@ entry:
 ; CHECK: storeToPtr8
 define void @storeToPtr8(i64 addrspace(200)* nocapture %a, i64 %v) nounwind {
 entry:
-  ; CHECK: csd	$4, $zero, 0($c1)
+  ; CHECK: csd	$4, $zero, 0($c3)
   store i64 %v, i64 addrspace(200)* %a, align 8, !tbaa !4
   ret void
 }
