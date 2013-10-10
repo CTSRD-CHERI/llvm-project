@@ -1,3 +1,4 @@
+; RUN: llc %s -mcpu=cheri -o - | FileCheck %s
 ; ModuleID = 'jon.c'
 target datalayout = "E-p200:256:256:256-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-i64:64:64-f32:32:32-f64:64:64-n32:64-S256"
 target triple = "cheri-unknown-freebsd"
@@ -7,11 +8,11 @@ target triple = "cheri-unknown-freebsd"
 @n = common global %struct.node addrspace(200)* addrspace(200)* null, align 32
 
 ; Function Attrs: nounwind
-; CHECK set
+; CHECK: set
 define void @set(%struct.node addrspace(200)* %h) #0 {
-; CHECK clc
+; CHECK: clc
   %1 = load %struct.node addrspace(200)* addrspace(200)** @n, align 32
-; CHECK csc
+; CHECK: csc
   store %struct.node addrspace(200)* %h, %struct.node addrspace(200)* addrspace(200)* %1, align 32
   ret void
 }
