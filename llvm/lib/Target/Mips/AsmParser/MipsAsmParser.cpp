@@ -240,6 +240,8 @@ class MipsAsmParser : public MCTargetAsmParser {
 
   int matchRegisterByNumber(unsigned RegNum, unsigned RegClass);
 
+  int matchCheriRegisterName(StringRef Name);
+
   int matchFPURegisterName(StringRef Name);
 
   int matchFCCRegisterName(StringRef Name);
@@ -1151,38 +1153,6 @@ int MipsAsmParser::matchCPURegisterName(StringRef Name) {
            .Case("t7", 15)
            .Case("t8", 24)
            .Case("t9", 25)
-           .Case("c0", Mips::C0)
-           .Case("c1", Mips::C1)
-           .Case("c2", Mips::C2)
-           .Case("c3", Mips::C3)
-           .Case("c4", Mips::C4)
-           .Case("c5", Mips::C5)
-           .Case("c6", Mips::C6)
-           .Case("c7", Mips::C7)
-           .Case("c8", Mips::C8)
-           .Case("c9", Mips::C9)
-           .Case("c10", Mips::C10)
-           .Case("c11", Mips::C11)
-           .Case("c12", Mips::C12)
-           .Case("c13", Mips::C13)
-           .Case("c14", Mips::C14)
-           .Case("c15", Mips::C15)
-           .Case("c16", Mips::C16)
-           .Case("c17", Mips::C17)
-           .Case("c18", Mips::C18)
-           .Case("c19", Mips::C19)
-           .Case("c20", Mips::C20)
-           .Case("c21", Mips::C21)
-           .Case("c22", Mips::C22)
-           .Case("c23", Mips::C23)
-           .Case("c24", Mips::C24)
-           .Case("c25", Mips::C25)
-           .Case("c26", Mips::C26)
-           .Case("c27", Mips::C27)
-           .Case("c28", Mips::C28)
-           .Case("c29", Mips::C29)
-           .Case("c30", Mips::C30)
-           .Case("c31", Mips::C31)
            .Default(-1);
 
   // Although SGI documentation just cuts out t0-t3 for n32/n64,
@@ -1222,6 +1192,21 @@ int MipsAsmParser::matchFPURegisterName(StringRef Name) {
   }
   return -1;
 }
+
+int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
+
+  if (Name[0] == 'c') {
+    StringRef NumString = Name.substr(1);
+    unsigned IntVal;
+    if (NumString.getAsInteger(10, IntVal))
+      return -1; // This is not an integer.
+    if (IntVal > 31) // Maximum index for CHERI register.
+      return -1;
+    return IntVal;
+  }
+  return -1;
+}
+
 
 int MipsAsmParser::matchFCCRegisterName(StringRef Name) {
 
@@ -1292,6 +1277,9 @@ int MipsAsmParser::matchRegisterName(StringRef Name, bool is64BitReg) {
   if (CC != -1)
     return matchRegisterByNumber(CC, isFP64() ? Mips::FGR64RegClassID
                                               : Mips::FGR32RegClassID);
+  CC = matchCheriRegisterName(Name);
+  if (CC != -1)
+    return matchRegisterByNumber(CC, Mips::CheriRegsRegClassID);
   return matchMSA128RegisterName(Name);
 }
 

@@ -252,37 +252,37 @@ let Namespace = "Mips" in {
 
   // Capability registers
   def C0  : CAP<0, "C0">, DwarfRegNum<[64]>;
-  def C1  : CAP<0, "C1">, DwarfRegNum<[65]>;
-  def C2  : CAP<0, "C2">, DwarfRegNum<[66]>;
-  def C3  : CAP<0, "C3">, DwarfRegNum<[67]>;
-  def C4  : CAP<0, "C4">, DwarfRegNum<[68]>;
-  def C5  : CAP<0, "C5">, DwarfRegNum<[69]>;
-  def C6  : CAP<0, "C6">, DwarfRegNum<[70]>;
-  def C7  : CAP<0, "C7">, DwarfRegNum<[71]>;
-  def C8  : CAP<0, "C8">, DwarfRegNum<[72]>;
-  def C9  : CAP<0, "C9">, DwarfRegNum<[73]>;
-  def C10 : CAP<0, "C10">, DwarfRegNum<[74]>;
-  def C11 : CAP<0, "C11">, DwarfRegNum<[75]>;
-  def C12 : CAP<0, "C12">, DwarfRegNum<[76]>;
-  def C13 : CAP<0, "C13">, DwarfRegNum<[77]>;
-  def C14 : CAP<0, "C14">, DwarfRegNum<[78]>;
-  def C15 : CAP<0, "C15">, DwarfRegNum<[79]>;
-  def C16 : CAP<0, "C16">, DwarfRegNum<[80]>;
-  def C17 : CAP<0, "C17">, DwarfRegNum<[81]>;
-  def C18 : CAP<0, "C18">, DwarfRegNum<[82]>;
-  def C19 : CAP<0, "C19">, DwarfRegNum<[83]>;
-  def C20 : CAP<0, "C20">, DwarfRegNum<[84]>;
-  def C21 : CAP<0, "C21">, DwarfRegNum<[85]>;
-  def C22 : CAP<0, "C22">, DwarfRegNum<[86]>;
-  def C23 : CAP<0, "C23">, DwarfRegNum<[87]>;
-  def C24 : CAP<0, "C24">, DwarfRegNum<[88]>;
-  def C25 : CAP<0, "C25">, DwarfRegNum<[89]>;
-  def C26 : CAP<0, "C26">, DwarfRegNum<[90]>;
-  def C27 : CAP<0, "C27">, DwarfRegNum<[91]>;
-  def C28 : CAP<0, "C28">, DwarfRegNum<[92]>;
-  def C29 : CAP<0, "C29">, DwarfRegNum<[93]>;
-  def C30 : CAP<0, "C30">, DwarfRegNum<[94]>;
-  def C31 : CAP<0, "C31">, DwarfRegNum<[95]>;
+  def C1  : CAP<1, "C1">, DwarfRegNum<[65]>;
+  def C2  : CAP<2, "C2">, DwarfRegNum<[66]>;
+  def C3  : CAP<3, "C3">, DwarfRegNum<[67]>;
+  def C4  : CAP<4, "C4">, DwarfRegNum<[68]>;
+  def C5  : CAP<5, "C5">, DwarfRegNum<[69]>;
+  def C6  : CAP<6, "C6">, DwarfRegNum<[70]>;
+  def C7  : CAP<7, "C7">, DwarfRegNum<[71]>;
+  def C8  : CAP<8, "C8">, DwarfRegNum<[72]>;
+  def C9  : CAP<9, "C9">, DwarfRegNum<[73]>;
+  def C10 : CAP<10, "C10">, DwarfRegNum<[74]>;
+  def C11 : CAP<11, "C11">, DwarfRegNum<[75]>;
+  def C12 : CAP<12, "C12">, DwarfRegNum<[76]>;
+  def C13 : CAP<13, "C13">, DwarfRegNum<[77]>;
+  def C14 : CAP<14, "C14">, DwarfRegNum<[78]>;
+  def C15 : CAP<15, "C15">, DwarfRegNum<[79]>;
+  def C16 : CAP<16, "C16">, DwarfRegNum<[80]>;
+  def C17 : CAP<17, "C17">, DwarfRegNum<[81]>;
+  def C18 : CAP<18, "C18">, DwarfRegNum<[82]>;
+  def C19 : CAP<19, "C19">, DwarfRegNum<[83]>;
+  def C20 : CAP<20, "C20">, DwarfRegNum<[84]>;
+  def C21 : CAP<21, "C21">, DwarfRegNum<[85]>;
+  def C22 : CAP<22, "C22">, DwarfRegNum<[86]>;
+  def C23 : CAP<23, "C23">, DwarfRegNum<[87]>;
+  def C24 : CAP<24, "C24">, DwarfRegNum<[88]>;
+  def C25 : CAP<25, "C25">, DwarfRegNum<[89]>;
+  def C26 : CAP<26, "C26">, DwarfRegNum<[90]>;
+  def C27 : CAP<27, "C27">, DwarfRegNum<[91]>;
+  def C28 : CAP<28, "C28">, DwarfRegNum<[92]>;
+  def C29 : CAP<29, "C29">, DwarfRegNum<[93]>;
+  def C30 : CAP<30, "C30">, DwarfRegNum<[94]>;
+  def C31 : CAP<31, "C31">, DwarfRegNum<[95]>;
 }
 
 //===----------------------------------------------------------------------===//
