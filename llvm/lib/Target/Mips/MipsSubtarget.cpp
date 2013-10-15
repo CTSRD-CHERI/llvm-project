@@ -136,6 +136,13 @@ MipsSubtarget::enablePostRAScheduler(CodeGenOpt::Level OptLevel,
   CriticalPathRCs.clear();
   CriticalPathRCs.push_back(isGP64bit() ?
                             &Mips::GPR64RegClass : &Mips::GPR32RegClass);
+  // Unconditionally enable the post-RA scheduler for CHERI because the
+  // in-order pipeline makes it essential.
+  if (IsCheri) {
+    Mode = TargetSubtargetInfo::ANTIDEP_ALL;
+    CriticalPathRCs.push_back(&Mips::CheriRegsRegClass);
+    return true;
+  }
   return OptLevel >= CodeGenOpt::Aggressive;
 }
 
