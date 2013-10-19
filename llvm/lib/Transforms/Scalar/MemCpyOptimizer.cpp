@@ -394,15 +394,14 @@ Instruction *MemCpyOpt::tryMergingIntoMemset(Instruction *StartInst,
         break;
 
       // Check that the pointer is in address space 0
-      // FIXME: Allow targets to advertise supporting memset in other address
-      // spaces.
-      Value *Ptr = NextStore->getPointerOperand();
-      if (cast<PointerType>(Ptr->getType())->getAddressSpace() != 0)
+      // FIXME: Allow targets to advertise supporting memset in other address spaces.
+      if (NextStore->getPointerAddressSpace() != 0)
         break;
 
       // Check to see if this store is to a constant offset from the start ptr.
       int64_t Offset;
-      if (!IsPointerOffset(StartPtr, Ptr, Offset, *TD))
+      if (!IsPointerOffset(StartPtr, NextStore->getPointerOperand(),
+                           Offset, *TD))
         break;
 
       Ranges.addStore(Offset, NextStore);
