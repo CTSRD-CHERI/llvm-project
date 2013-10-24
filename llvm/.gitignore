@@ -18,6 +18,8 @@
 # vim swap files
 .*.swp
 .sw?
+# The build directory
+Build
 
 #==============================================================================#
 # Explicit files to ignore (only matches one).
