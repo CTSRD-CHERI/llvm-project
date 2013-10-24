@@ -684,13 +684,18 @@ unsigned DataLayout::getPreferredTypeAlignmentShift(Type *Ty) const {
 
 IntegerType *DataLayout::getIntPtrType(LLVMContext &C,
                                        unsigned AddressSpace) const {
-  return IntegerType::get(C, getPointerSizeInBits(AddressSpace));
+  // FIXME: Should be checking the pointer range
+  unsigned NumBits = getPointerSizeInBits(AddressSpace);
+  return IntegerType::get(C, NumBits > 64 ? 64 : NumBits);
 }
 
 Type *DataLayout::getIntPtrType(Type *Ty) const {
   assert(Ty->isPtrOrPtrVectorTy() &&
          "Expected a pointer or pointer vector type.");
   unsigned NumBits = getTypeSizeInBits(Ty->getScalarType());
+  // FIXME: Should be checking the pointer range
+  if (NumBits > 64)
+    NumBits = 64;
   IntegerType *IntTy = IntegerType::get(Ty->getContext(), NumBits);
   if (VectorType *VecTy = dyn_cast<VectorType>(Ty))
     return VectorType::get(IntTy, VecTy->getNumElements());
