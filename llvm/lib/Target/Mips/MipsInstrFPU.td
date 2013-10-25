@@ -379,7 +379,7 @@ let Predicates = [NotFP64bit, HasStdEnc] in {
 }
 
 /// Cop2 Memory Instructions
-let Predicates = [HasStdEnc] in {
+let Predicates = [HasStdEnc, NotCHERI] in {
   def LWC2 : LW_FT<"lwc2", COP2Opnd, NoItinerary, load>, LW_FM<0x32>;
   def SWC2 : SW_FT<"swc2", COP2Opnd, NoItinerary, store>, LW_FM<0x3a>;
   def LDC2 : LW_FT<"ldc2", COP2Opnd, NoItinerary, load>, LW_FM<0x36>;
