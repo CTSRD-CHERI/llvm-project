@@ -4837,7 +4837,6 @@ class MipsTargetInfoBase : public TargetInfo {
     NoDSP, DSP1, DSP2
   } DspRev;
   bool HasMSA;
-  bool IsCheri;
 
 protected:
   bool HasFP64;
@@ -4849,8 +4848,8 @@ public:
                      const std::string &CPUStr)
       : TargetInfo(Triple), CPU(CPUStr), IsMips16(false), IsMicromips(false),
         IsNan2008(false), IsSingleFloat(false), FloatABI(HardFloat),
-        DspRev(NoDSP), HasMSA(false), IsCheri(false), HasFP64(false),
-        ABI(ABIStr) {}
+        DspRev(NoDSP), HasMSA(false), HasFP64(false), ABI(ABIStr),
+        IsCheri(false) {}
 
   virtual bool SupportsCapabilities() const { return IsCheri; }
 
