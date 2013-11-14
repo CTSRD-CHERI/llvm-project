@@ -51,7 +51,8 @@ namespace
                 .Case("realloc", 2)
                 .Case("aligned_alloc", 2)
                 .Case("reallocf", 2)
-                .Case("calloc", 3)) {
+                .Case("calloc", 3)
+                .Default(-1)) {
           default: return AllocOperands();
           case 1: return AllocOperands(Malloc.getArgument(0), 0);
           case 2: return AllocOperands(Malloc.getArgument(1), 0);
