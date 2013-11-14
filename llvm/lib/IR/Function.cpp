@@ -548,7 +548,7 @@ static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
   case IIT_IFATPTR: {
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::Pointer, 
                                              200));
-    DecodeIITType(NextElt, Infos, OutputTable);
+    DecodeIITType(++NextElt, Infos, OutputTable);
     return;
   }
   case IIT_ARG: {
