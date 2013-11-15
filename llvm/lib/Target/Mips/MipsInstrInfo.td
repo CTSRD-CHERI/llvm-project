@@ -1481,7 +1481,7 @@ def BC2F : CheriFmtBC2F<(outs), (ins CheriRegs:$cd, brtarget:$offset),
                         [(MipsBC2F CheriRegs:$cd, bb:$offset)]>;
 
 def CGetTag : CheriFmtGet<5, (outs GPR32Opnd:$rd), (ins CheriRegs:$cb),
-                          "cgettag $rd, $cb",
+                          "cgettag\t$rd, $cb",
                           [(set GPR32Opnd:$rd, (int_cheri_get_cap_tag CheriRegs:$cb))]>;
 
 def : Pat<(brcond (i32 (setne (int_cheri_get_cap_tag CheriRegs:$cd), (i32 0))), imm:$offset),
