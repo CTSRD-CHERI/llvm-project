@@ -2420,10 +2420,11 @@ bool MipsAsmParser::ParseInstruction(
     // following form:
     // $rt + offset($cb)
     // We have already parsed the $rt
-      //fprintf(stderr, "Parsing arguments for %s\n", Name.str().c_str());
-    if ((Name.startswith("cl") || Name.startswith("cs")) &&
-        !(Name.startswith("cset") ||Name.equals("clo") || Name.equals("clz"))) {
-      //fprintf(stderr, "Parsing capability instruction\n");
+    if (StringSwitch<bool>(Name).Case("clb", true).Case("clh", true)
+          .Case("clw", true).Case("cld", true).Case("clc", true)
+          .Case("cllc", true) .Case("csb", true).Case("csh", true)
+          .Case("csw", true).Case("csd", true).Case("csc", true)
+          .Case("cscc", true).Default(false)) {
       if (getLexer().isNot(AsmToken::Comma)) {
         SMLoc Loc = getLexer().getLoc();
         Parser.eatToEndOfStatement();
