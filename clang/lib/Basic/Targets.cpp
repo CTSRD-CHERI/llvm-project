@@ -5315,9 +5315,10 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
       Mips64EBTargetInfo(Triple) {
     IsCheri = true;
     setCPU("cheri");
+  }
+  virtual void setDescriptionString() {
     DescriptionString = "E-p200:256:256:256-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
-                        "i64:64:64-f32:32:32-f64:64:64-"
-                        "n32:64-S256";
+                        "i64:64:64-f32:32:32-f64:64:64-n32:64-S256";
   }
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
     return (AddrSpace == 200) ? 256 : PointerWidth;
