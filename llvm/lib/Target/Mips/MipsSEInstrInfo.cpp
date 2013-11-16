@@ -220,6 +220,11 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     Opc = Mips::ST_D;
   else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
     Opc = Mips::STORECAP;
+    // Ensure that capabilities have a 32-byte alignment
+    // FIXME: This shouldn't be needed.  Whatever is allocating the frame index
+    // ought to set it.
+    MachineFrameInfo *MFI = MBB.getParent()->getFrameInfo();
+    MFI->setObjectAlignment(FI, 32);
     // FIXME: C0 -> Stack capability
     BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
       .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
