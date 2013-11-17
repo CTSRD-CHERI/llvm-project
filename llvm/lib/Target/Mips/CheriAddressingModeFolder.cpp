@@ -18,11 +18,38 @@ namespace {
 struct CheriAddressingModeFolder : public MachineFunctionPass {
   static char ID;
   CheriAddressingModeFolder() : MachineFunctionPass(ID) {}
-  virtual bool runOnMachineFunction(MachineFunction &MF) {
+  bool tryToFoldAdd(unsigned vreg, MachineRegisterInfo &RI, MachineInstr *&AddInst, int64_t &offset) {
+    AddInst = RI.getUniqueVRegDef(vreg);
+    unsigned reg;
+    int64_t off;
+    // If this is an add-immediate then we can possibly fold it
+    switch (AddInst->getOpcode()) {
+      case Mips::DADDi:
+      case Mips::DADDiu:
+        reg = AddInst->getOperand(1).getReg();
+        off = AddInst->getOperand(2).getImm();
+        break;
+      default:
+        return false;
+    }
+    // We potentially could fold non-zero adds, but we'll leave them for now.
+    if (reg != Mips::ZERO_64)
+      return false;
+    off += offset;
+    // If the result is too big to fit in the offset field, give up
+    if (off < -127 || off > 127)
+    {
+      return false;
+    }
+    offset = off;
+    return true;
+  }
+  bool foldMachineFunction(MachineFunction &MF) {
     if (DisableAddressingModeFolder) return false;
 
     MachineRegisterInfo &RI = MF.getRegInfo();
     std::set<MachineInstr*> IncBases;
+    std::set<MachineInstr*> Adds;
     bool modified = false;
     for (MachineFunction::iterator BI=MF.begin(), BE=MF.end() ; BI!=BE ; ++BI)
       for (MachineBasicBlock::iterator I=BI->begin(), E=BI->end() ; I!=E ;
@@ -37,9 +64,19 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
               Op == Mips::CAPSTORE32 || Op == Mips::CAPSTORE64)) {
           continue;
         }
+        int64_t offset = I->getOperand(2).getImm();
         // If the load is not currently at register-zero offset, we can't fix
-        // it up to use relative addressing, so skip it.
-        if (I->getOperand(1).getReg() != Mips::ZERO_64) continue;
+        // it up to use relative addressing, but we may be able to modify it so
+        // that it is...
+        if (I->getOperand(1).getReg() != Mips::ZERO_64) {
+          MachineInstr *AddInst;
+          if (tryToFoldAdd(I->getOperand(1).getReg(), RI, AddInst, offset)) {
+            Adds.insert(AddInst);
+            I->getOperand(2).setImm(offset);
+            I->getOperand(1).setReg(Mips::ZERO_64);
+          } else 
+            continue;
+        }
         // Ignore ones that are not based on a CIncBase op
         MachineInstr *IncBase = RI.getUniqueVRegDef(I->getOperand(3).getReg());
         if (!IncBase || IncBase->getOpcode() != Mips::CIncBase) continue;
@@ -48,16 +85,40 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         MachineOperand Cap = IncBase->getOperand(1);
         MachineOperand Offset = IncBase->getOperand(2);
         assert(Cap.isReg());
-        I->getOperand(1).setReg(Offset.getReg());
+        MachineInstr *AddInst;
+        // If the CIncBase is of a daddi[u] then we can potentially replace
+        // both by just folding the 
+        if (tryToFoldAdd(Offset.getReg(), RI, AddInst, offset)) {
+          // the IncBase needs to be inserted first so that it will
+          Adds.insert(AddInst);
+          I->getOperand(1).setReg(Mips::ZERO_64);
+          I->getOperand(2).setImm(offset);
+        } else
+          I->getOperand(1).setReg(Offset.getReg());
         I->getOperand(3).setReg(Cap.getReg());
         IncBases.insert(IncBase);
         modified = true;
       }
     for (std::set<MachineInstr*>::iterator I=IncBases.begin(),E=IncBases.end();
          I!=E ; ++I) {
-      if (!RI.use_empty((*I)->getOperand(0).getReg())) continue;
+      if (!RI.use_empty((*I)->getOperand(0).getReg())) {
+        continue;
+      }
       (*I)->eraseFromBundle();
     }
+    for (std::set<MachineInstr*>::iterator I=Adds.begin(),E=Adds.end();
+         I!=E ; ++I) {
+      if (!RI.use_empty((*I)->getOperand(0).getReg())) {
+        continue;
+      }
+      (*I)->eraseFromBundle();
+    }
+    return modified;
+  }
+  virtual bool runOnMachineFunction(MachineFunction &MF) {
+    bool modified = false;
+    while (foldMachineFunction(MF))
+      modified = true;
     return modified;
   }
 };
