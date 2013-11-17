@@ -28,11 +28,12 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       for (MachineBasicBlock::iterator I=BI->begin(), E=BI->end() ; I!=E ;
           ++I) {
         int Op = I->getOpcode();
-        // Only look at cap-relative loads
+        // Only look at cap-relative loads and stores
         if (!(Op == Mips::CAPLOAD8 || Op == Mips::CAPLOADU8 ||
               Op == Mips::CAPLOAD16 || Op == Mips::CAPLOADU16 ||
               Op == Mips::CAPLOAD32 || Op == Mips::CAPLOAD64 ||
               Op == Mips::CAPSTORE8 || Op == Mips::CAPSTORE16 ||
+              Op == Mips::LOADCAP || Op == Mips::STORECAP ||
               Op == Mips::CAPSTORE32 || Op == Mips::CAPSTORE64)) {
           continue;
         }
