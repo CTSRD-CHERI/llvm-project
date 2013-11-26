@@ -2421,6 +2421,7 @@ bool MipsAsmParser::ParseInstruction(
     // $rt + offset($cb)
     // We have already parsed the $rt
     if (StringSwitch<bool>(Name).Case("clb", true).Case("clh", true)
+          .Case("clbu", true).Case("clhu", true).Case("clwu", true)
           .Case("clw", true).Case("cld", true).Case("clc", true)
           .Case("cllc", true) .Case("csb", true).Case("csh", true)
           .Case("csw", true).Case("csd", true).Case("csc", true)
