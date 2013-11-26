@@ -1566,6 +1566,20 @@ multiclass LoadViaCap<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC,
                            [(set RC:$rd, (loadType(add (add (ptrtoint CheriRegs:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset))))]>;
 }
 
+def CLLD : CheriFmtCLX<3, 1,
+                             (outs GPR64:$rd),
+                             (ins GPR64:$rt, simm8:$offset, CheriRegs:$cb),
+                             "clld\t$rd, ${rt}, ${offset}(${cb})",
+                           []> {
+  let mayLoad=1;
+}
+def CSCD : CheriFmtCSX<3, 1,
+                             (outs ),
+                             (ins GPR64:$rs, GPR64:$rt, simm8:$offset, CheriRegs:$cb),
+                             "cscd\t$rs, ${rt}, ${offset}(${cb})",
+                           []> {
+  let mayStore=1;
+}
 multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
   def : Pat<(loadType CheriRegs:$cb),
             (Op ZERO_64, (i64 0), CheriRegs:$cb)>;
@@ -1579,6 +1593,7 @@ defm CAPLOAD64     : LoadViaCap<3, 0, "cld", GPR64Opnd, load>;
 
 defm CAPLOADU8     : LoadViaCap<0, 0, "clbu", GPR32Opnd, extloadi8>;
 defm CAPLOADU16    : LoadViaCap<1, 0, "clhu", GPR32Opnd, extloadi16>;
+defm CAPLOADU32    : LoadViaCap<2, 0, "clwu", GPR64Opnd, extloadi32>;
 
 defm CAP0LOADA8     : LoadViaCap0<CAPLOAD8, extloadi8>;
 defm CAP0LOADA16    : LoadViaCap0<CAPLOAD16, extloadi16>;
