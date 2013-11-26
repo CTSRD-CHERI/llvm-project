@@ -903,8 +903,6 @@ BUILTIN(__builtin_cheri_and_cap_perms, "v*200v*200s", "nc")
 BUILTIN(__builtin_cheri_get_cap_perms, "sv*200", "nc")
 BUILTIN(__builtin_cheri_set_cap_type, "v*200v*200z", "nc")
 BUILTIN(__builtin_cheri_get_cap_type, "zv*200", "nc")
-BUILTIN(__builtin_cheri_get_cap_register , "v*200i", "nc")
-BUILTIN(__builtin_cheri_set_cap_register , "viv*200", "nc")
 BUILTIN(__builtin_cheri_get_cap_tag, "bv*200", "nc")
 
 

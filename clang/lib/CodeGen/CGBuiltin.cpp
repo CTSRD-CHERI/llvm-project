@@ -5249,14 +5249,6 @@ Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
       return Builder.CreateZExtOrTrunc(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
                                        cast<llvm::IntegerType>(getTypes().ConvertType(E->getType())));
     }
-    case Mips::BI__builtin_cheri_get_cap_register: {
-      Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_reg);
-      return Builder.CreateCall(F, EmitScalarExpr(E->getArg(0)));
-    }
-    case Mips::BI__builtin_cheri_set_cap_register: {
-      Value *F = CGM.getIntrinsic(Intrinsic::cheri_set_cap_reg);
-      return Builder.CreateCall2(F, EmitScalarExpr(E->getArg(0)),
-                                    EmitScalarExpr(E->getArg(1)));
     }
   }
   return 0;
