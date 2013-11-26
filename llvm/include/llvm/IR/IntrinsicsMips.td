@@ -1784,12 +1784,6 @@ let TargetPrefix = "cheri" in {  // All intrinsics start with "llvm.cheri.".
                                           [llvm_fatptr_ty],
                                           [IntrNoMem]>;
 
-  def int_cheri_get_cap_reg  : Intrinsic<[llvm_fatptr_ty],
-                                         [llvm_i32_ty],
-                                         []>;
-  def int_cheri_set_cap_reg  : Intrinsic<[],
-                                         [llvm_i32_ty, llvm_fatptr_ty],
-                                         []>;
   def int_cheri_seal_cap_code  : Intrinsic<[llvm_fatptr_ty],
                                          [llvm_fatptr_ty],
                                          [IntrNoMem]>;

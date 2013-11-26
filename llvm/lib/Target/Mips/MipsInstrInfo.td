@@ -1494,45 +1494,6 @@ def CGetLength : CheriFmtGet<3, (outs GPR64Opnd:$rd), (ins CheriRegs:$cb),
                              "cgetlen $rd, $cb",
                              [(set GPR64Opnd:$rd, (int_cheri_get_cap_length CheriRegs:$cb))]>;
 
-def : Pat<(int_cheri_get_cap_reg (i32 0)), (CIncBase C0, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 1)), (CIncBase C1, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 2)), (CIncBase C2, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 3)), (CIncBase C3, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 4)), (CIncBase C4, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 5)), (CIncBase C5, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 6)), (CIncBase C6, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 7)), (CIncBase C7, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 8)), (CIncBase C8, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 9)), (CIncBase C9, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 10)), (CIncBase C0, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 11)), (CIncBase C11, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 12)), (CIncBase C12, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 13)), (CIncBase C13, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 14)), (CIncBase C14, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 15)), (CIncBase C15, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 16)), (CIncBase C16, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 17)), (CIncBase C17, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 18)), (CIncBase C18, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 19)), (CIncBase C19, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 20)), (CIncBase C20, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 21)), (CIncBase C21, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 22)), (CIncBase C22, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 23)), (CIncBase C23, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 24)), (CIncBase C24, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 25)), (CIncBase C25, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 26)), (CIncBase C26, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 27)), (CIncBase C27, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 28)), (CIncBase C28, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 29)), (CIncBase C29, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 30)), (CIncBase C30, ZERO_64)>;
-def : Pat<(int_cheri_get_cap_reg (i32 31)), (CIncBase C31, ZERO_64)>;
-
-def regno: Operand<i32>;
-let usesCustomInserter = 1 in {
-  def SetCapReg : MipsPseudo<(outs), (ins regno:$RegNo, CheriRegs: $rd),
-             [(int_cheri_set_cap_reg imm:$RegNo, CheriRegs: $rd)]>;
-}
-
 def CAndPerm : CheriFmtSet<0, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64Opnd:$rt),
                            "candperm\t$cd, $cb, $rt",
                            [(set CheriRegs:$cd, (int_cheri_and_cap_perms CheriRegs:$cb, GPR64Opnd:$rt))]>;
