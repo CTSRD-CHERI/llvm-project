@@ -1456,9 +1456,12 @@ include "MicroMipsInstrFPU.td"
 // CHERI Support
 //===----------------------------------------------------------------------===//
 
-def SDT_MipsBC2F      : SDTypeProfile<0, 2, [SDTCisVT<0, iFATPTR>]>;
-def MipsBC2F : SDNode<"MipsISD::BC2F", SDT_MipsBC2F,
+def SDT_MipsCBT      : SDTypeProfile<0, 2, [SDTCisVT<0, iFATPTR>]>;
+def MipsCBTS : SDNode<"MipsISD::CBTS", SDT_MipsCBT,
                           [SDNPHasChain, SDNPOptInGlue]>;
+def MipsCBTU : SDNode<"MipsISD::CBTU", SDT_MipsCBT,
+                          [SDNPHasChain, SDNPOptInGlue]>;
+let isCall=1, hasDelaySlot=1, Defs = [RA] in {}
 
 // 11-bit immediate offset used by C[SL]CR
 def simm11: Operand<i64>;
@@ -1466,7 +1469,40 @@ def immSExt11  : PatLeaf<(imm), [{ return isInt<11>(N->getSExtValue()); }]>;
 // 8-bit immediate offset used by C[SL]C
 def simm8: Operand<i64>;
 
-def CIncBase : CheriFmtSet<2, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64Opnd:$rt),
+////////////////////////////////////////////////////////////////////////////////
+// Flow control
+////////////////////////////////////////////////////////////////////////////////
+def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriRegs:$cd, brtarget:$offset),
+                        "cbts\t$cd, $offset",
+                        [(MipsCBTS CheriRegs:$cd, bb:$offset)]>;
+def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriRegs:$cd, brtarget:$offset),
+                        "cbtu\t$cd, $offset",
+                        [(MipsCBTU CheriRegs:$cd, bb:$offset)]>;
+def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriRegs:$cb, GPR64:$rt),
+                              "cjr\t${rt}(${cb})",
+                              []> {
+  let hasDelaySlot=1;
+}
+let isTerminator=1, isCall=1, hasDelaySlot=1 in {
+def CJALR : CheriFmt3Caps<0x07, (outs), (ins CheriRegs:$cb, GPR64:$rt),
+                              "cjalr\t${rt}(${cb})",
+                              []>;
+def CCall : CheriFmt3Caps<0x05, (outs), (ins CheriRegs:$cs, CheriRegs:$cb),
+                              "ccall\t${cs}, ${cb}",
+                              []>;
+}
+def CReturn : CheriFmt3Caps<0x06, (outs), (ins variable_ops),
+                              "creturn",
+                              []> {
+  let isTerminator = 1;
+  let isReturn = 1;
+  let hasDelaySlot = 1;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Capability manipulation
+////////////////////////////////////////////////////////////////////////////////
+def CIncBase : CheriFmtSet<2, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64:$rt),
                            "cincbase\t$cd, $cb, $rt",
                            [(set CheriRegs:$cd, (inttoptr (add GPR64Opnd:$rt, (ptrtoint CheriRegs:$cb))))]> {
   let hasSideEffects = 1;
@@ -1476,9 +1512,6 @@ def CGetBase : CheriFmtGet<2, (outs GPR64Opnd:$rd), (ins CheriRegs:$cb),
                            "cgetbase\t$rd, $cb",
                            [(set GPR64Opnd:$rd, (ptrtoint CheriRegs:$cb))]>;
 
-def BC2F : CheriFmtBC2F<(outs), (ins CheriRegs:$cd, brtarget:$offset),
-                        "bc2f\t$cd, $offset",
-                        [(MipsBC2F CheriRegs:$cd, bb:$offset)]>;
 
 def CGetTag : CheriFmtGet<5, (outs GPR64Opnd:$rd), (ins CheriRegs:$cb),
                           "cgettag\t$rd, $cb",

@@ -198,7 +198,6 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::ILVR:              return "MipsISD::ILVR";
   case MipsISD::PCKEV:             return "MipsISD::PCKEV";
   case MipsISD::PCKOD:             return "MipsISD::PCKOD";
-  case MipsISD::BC2F:              return "MipsISD::BC2F";
   default:                         return NULL;
   }
 }
@@ -1435,29 +1434,6 @@ SDValue MipsTargetLowering::lowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   SDValue Chain = Op.getOperand(0);
   SDValue Dest = Op.getOperand(2);
   SDLoc DL(Op);
-
-  SDValue Cond = Op.getOperand(1);
-  // If this is a branch on the tag, see if we can change it to a BC2F
-  if (Cond.getOpcode() == ISD::SETCC) {
-    SDValue Source = Cond.getOperand(0);
-    if (Source.getOpcode() == ISD::INTRINSIC_WO_CHAIN &&
-        cast<ConstantSDNode>(Source.getOperand(0))->getZExtValue() ==
-          Intrinsic::cheri_get_cap_tag) {
-      // If we're not comparing to a constant, we must use general purpose
-      // comparisons
-      if (ConstantSDNode *Target =
-              dyn_cast<ConstantSDNode>(Cond.getOperand(1))) {
-        unsigned CmpVal  = Target->getZExtValue();
-        ISD::CondCode CmpType =
-            cast<CondCodeSDNode>(Cond.getOperand(2))->get();
-        if ((CmpVal == 0 && CmpType == ISD::SETEQ) ||
-            (CmpVal == 1 && CmpType == ISD::SETNE)) {
-          return DAG.getNode(MipsISD::BC2F, DL, Op.getValueType(), Chain,
-                  Source.getOperand(1), Dest);
-        }
-      }
-    }
-  }
 
   SDValue CondRes = createFPCmp(DAG, Op.getOperand(1));
 

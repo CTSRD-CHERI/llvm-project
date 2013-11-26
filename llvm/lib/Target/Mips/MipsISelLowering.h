@@ -145,8 +145,10 @@ namespace llvm {
       MSUB_DSP,
       MSUBU_DSP,
       // CHERI extensions:
-      /// Branch on coprocessor 2 false (branch on invalid capability in CHERI)
-      BC2F,
+      /// Capability branch if tag unset
+      CBTU,
+      /// Capability branch if tag set
+      CBTS,
 
       // DSP shift nodes.
       SHLL_DSP,

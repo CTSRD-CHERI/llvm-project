@@ -766,7 +766,7 @@ class CMov_F_F_FM<bits<5> fmt, bit tf> : StdArch {
 // CHERI instruction formats
 
 // BC2F
-class CheriFmtBC2F<dag outs, dag ins, string asmstr,
+class CheriFmtCBT<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   MipsInst<outs, ins, asmstr, pattern, IIBranch, FrmOther>
 {
@@ -774,13 +774,13 @@ class CheriFmtBC2F<dag outs, dag ins, string asmstr,
   bits<16> offset;
 
   let Opcode = 0x12;
-  let Inst{25-21} = 0x8;
+  let Inst{25-21} = op;
   let Inst{20-16} = rd;
   let Inst{15-0} = offset;
 
   let isBranch = 1;
   let isTerminator = 1;
-  let hasDelaySlot = 0;
+  let hasDelaySlot = 1;
 }
 
 // CGet*
