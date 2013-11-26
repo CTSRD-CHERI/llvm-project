@@ -5249,7 +5249,6 @@ Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
       return Builder.CreateZExtOrTrunc(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
                                        cast<llvm::IntegerType>(getTypes().ConvertType(E->getType())));
     }
-    }
   }
   return 0;
 }
