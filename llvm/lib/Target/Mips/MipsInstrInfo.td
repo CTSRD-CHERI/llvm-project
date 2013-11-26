@@ -1522,6 +1522,13 @@ def CUnseal   : CheriFmt3Caps<0x03, (outs CheriRegs:$cd), (ins CheriRegs:$cs, Ch
                               "cunseal\t$cd, $cs, $ct",
                               [(set CheriRegs: $cd, (int_cheri_unseal_cap CheriRegs:$cs, CheriRegs:$ct))]>;
 
+def CGetUnsealed : CheriFmtGet<6, (outs GPR64:$rd), (ins CheriRegs:$cb),
+                          "cgetunsealed\t$rd, $cb",
+                          []>;
+def CGetPCC : CheriFmtGet<7, (outs GPR64:$rd), (ins CheriRegs:$cb),
+                          "cgetpcc\t${rd}(${cb})",
+                          []>;
+
 // Int to pointer in address space 0
 def : Pat<(inttoptr GPR64Opnd:$rt),
           (CIncBase C0, GPR64Opnd:$rt)>;
