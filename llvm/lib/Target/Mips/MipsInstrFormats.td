@@ -847,6 +847,31 @@ class CheriFmt3Caps<bits<5> op, dag outs, dag ins, string asmstr,
   let Inst{10-6}  = ct;
   let Inst{5-0}   = 0; // Reserved
 }
+class CheriFmt3CCall<bits<5> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther> {
+  bits<5>  cs;
+  bits<5>  cb;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = op;
+  let Inst{20-16} = cs;
+  let Inst{15-11} = cb;
+  let Inst{10-0}   = 0; // Reserved
+}
+class CheriFmt3CJMP<bits<5> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther> {
+  bits<5>  cs;
+  bits<5>  rt;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = op;
+  let Inst{20-16} = 0;
+  let Inst{15-11} = cs;
+  let Inst{10-6}  = rt;
+  let Inst{5-0}   = 0; // Reserved
+}
 class CheriFmt3CRet<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>

@@ -1478,16 +1478,16 @@ def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriRegs:$cd, brtarget:$offset),
 def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriRegs:$cd, brtarget:$offset),
                         "cbtu\t$cd, $offset",
                         [(MipsCBTU CheriRegs:$cd, bb:$offset)]>;
-def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriRegs:$cb, GPR64:$rt),
+def CJR : CheriFmt3CJMP<0x08, (outs), (ins CheriRegs:$cb, GPR64:$rt),
                               "cjr\t${rt}(${cb})",
                               []> {
   let hasDelaySlot=1;
 }
 let isTerminator=1, isCall=1, hasDelaySlot=1 in {
-def CJALR : CheriFmt3Caps<0x07, (outs), (ins CheriRegs:$cb, GPR64:$rt),
+def CJALR : CheriFmt3CJMP<0x07, (outs), (ins CheriRegs:$cb, GPR64:$rt),
                               "cjalr\t${rt}(${cb})",
                               []>;
-def CCall : CheriFmt3Caps<0x05, (outs), (ins CheriRegs:$cs, CheriRegs:$cb),
+def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriRegs:$cs, CheriRegs:$cb),
                               "ccall\t${cs}, ${cb}",
                               []>;
 }
