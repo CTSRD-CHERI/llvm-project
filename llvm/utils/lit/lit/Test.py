@@ -200,7 +200,7 @@ class Test:
         xml = "<testcase classname='" + ".".join(self.path_in_suite)
         xml += "' name='" + '/'.join(self.path_in_suite) + "'"
         if self.result.code.isFailure:
-          xml += ">\n\t<failure >\n" + escape(self.output) + "\n\t</failure>"
+          xml += ">\n\t<failure >\n" + escape(self.result.output) + "\n\t</failure>"
           xml += "\n</testcase>"
         else:
           xml += "/>"
