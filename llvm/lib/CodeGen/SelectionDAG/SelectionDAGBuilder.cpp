@@ -3313,7 +3313,8 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
           OffsVal = DAG.getNode(ISD::TRUNCATE, getCurSDLoc(), PTy,
                                 DAG.getConstant(Offs, MVT::i64));
         else
-          OffsVal = DAG.getConstant(Offs, PTy);
+          // FIXME: Should be checking for fat pointer offset size.
+          OffsVal = DAG.getConstant(Offs, MVT::i64);
 
         N = DAG.getNode(ISD::ADD, getCurSDLoc(), N.getValueType(), N,
                         OffsVal);
