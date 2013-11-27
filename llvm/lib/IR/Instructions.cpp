@@ -2245,6 +2245,10 @@ unsigned CastInst::isEliminableCastPair(
       if (!SrcIntPtrTy || DstIntPtrTy != SrcIntPtrTy)
         return 0;
       unsigned PtrSize = SrcIntPtrTy->getScalarSizeInBits();
+      // FIXME: This is probably too conservative for a number of platforms.
+      // FIXME: Remove this once addrspacecast things are in.
+      if (DstTy->getPointerAddressSpace() != SrcTy->getPointerAddressSpace())
+        return 0;
       if (MidSize >= PtrSize)
         return Instruction::BitCast;
       return 0;
