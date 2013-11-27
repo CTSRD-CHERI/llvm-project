@@ -847,6 +847,14 @@ class CheriFmt3Caps<bits<5> op, dag outs, dag ins, string asmstr,
   let Inst{10-6}  = ct;
   let Inst{5-0}   = 0; // Reserved
 }
+class CheriFmt3CRet<bits<5> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  let Opcode = 0x12;
+  let Inst{25-21} = op;
+  let Inst{20-0}   = 0; // Reserved
+}
 
 class CheriFmtClearTag<dag outs, dag ins, string asmstr,
                        list<dag> pattern> :

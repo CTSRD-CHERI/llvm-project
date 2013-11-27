@@ -1491,7 +1491,7 @@ def CCall : CheriFmt3Caps<0x05, (outs), (ins CheriRegs:$cs, CheriRegs:$cb),
                               "ccall\t${cs}, ${cb}",
                               []>;
 }
-def CReturn : CheriFmt3Caps<0x06, (outs), (ins variable_ops),
+def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
                               "creturn",
                               []> {
   let isTerminator = 1;
