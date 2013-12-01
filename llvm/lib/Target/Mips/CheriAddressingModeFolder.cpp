@@ -26,6 +26,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     switch (AddInst->getOpcode()) {
       case Mips::DADDi:
       case Mips::DADDiu:
+        // Don't try to fold in things that have relocations yet
+        if (!AddInst->getOperand(2).isImm())
+          return false;
         reg = AddInst->getOperand(1).getReg();
         off = AddInst->getOperand(2).getImm();
         break;
