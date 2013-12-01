@@ -24,3 +24,6 @@
 # CHECK: cgetpcc	$12($c1)
 # CHECK: encoding: [0x48,0x0c,0x08,0x07]
 	cgetpcc		$t0($c1)
+# CHECK: cgetcause	$t0
+# CHECK: encoding: [0x48,0x0c,0x00,0x04]
+	cgetcause	$t0
