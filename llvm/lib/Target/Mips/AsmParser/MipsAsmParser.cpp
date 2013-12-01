@@ -15,6 +15,7 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/MC/MCStreamer.h"
@@ -568,6 +569,33 @@ static const MCInstrDesc &getInstDesc(unsigned Opcode) {
 bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
                                        SmallVectorImpl<MCInst> &Instructions) {
   const MCInstrDesc &MCID = getInstDesc(Inst.getOpcode());
+
+  // If this is a pseudo, we need to expand it
+  if (MCID.isPseudo()) {
+    unsigned AddOp = 0;
+    switch (MCID.getOpcode()) {
+      case Mips::SUBi:
+        AddOp = Mips::ADDi;
+        break;
+      case Mips::SUBiu:
+        AddOp = Mips::ADDiu;
+        break;
+      case Mips::DSUBi:
+        AddOp = Mips::DADDi;
+        break;
+      case Mips::DSUBiu:
+        AddOp = Mips::DADDiu;
+        break;
+    }
+    if (AddOp) {
+      Instructions.push_back(MCInstBuilder(AddOp)
+          .addReg(Inst.getOperand(0).getReg())
+          .addReg(Inst.getOperand(1).getReg())
+          .addImm(0-Inst.getOperand(2).getImm()));
+      return false;
+    }
+  }
+
   Inst.setLoc(IDLoc);
 
   if (MCID.isBranch() || MCID.isCall()) {
