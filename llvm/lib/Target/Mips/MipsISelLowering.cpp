@@ -2119,6 +2119,20 @@ static SDValue lowerFP_TO_SINT_STORE(StoreSDNode *SD, SelectionDAG &DAG) {
 SDValue MipsTargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
   StoreSDNode *SD = cast<StoreSDNode>(Op);
   EVT MemVT = SD->getMemoryVT();
+  const SDValue Val = SD->getValue();
+
+  // If we're doing a capability-relative load or store of something smaller
+  // than 64 bite, then we need to insert an anyext node to make the input
+  // value an i64
+  if (Subtarget->isCheri() && SD->isTruncatingStore() && Val.getValueType() == MVT::i32) {
+    SDValue Chain = SD->getChain();
+    SDValue BasePtr = SD->getBasePtr();
+    SDLoc DL(Op);
+    const SDValue ExtNode = DAG.getAnyExtOrTrunc(Val, DL, MVT::i64);
+    ExtNode.dump();
+    return DAG.getTruncStore(Chain, DL, ExtNode, BasePtr, SD->getPointerInfo(), MemVT,
+        SD->isVolatile(), SD->isNonTemporal(), SD->getAlignment());
+  }
 
   // Lower unaligned integer stores.
   if ((SD->getAlignment() < MemVT.getSizeInBits() / 8) &&
