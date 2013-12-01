@@ -798,6 +798,19 @@ class CheriFmtGet<bits<3> op, dag outs, dag ins, string asmstr,
   let Inst{10-3}  = 0; // Reserved
   let Inst{2-0}   = op;
 }
+class CheriFmtGetCause<bits<3> op, dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5>  rd;
+  bits<5>  cb;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = 0;
+  let Inst{20-16} = rd;
+  let Inst{15-3}  = 0; // Reserved
+  let Inst{2-0}   = op;
+}
 
 // CSet*
 class CheriFmtSet<bits<3> op, dag outs, dag ins, string asmstr,
