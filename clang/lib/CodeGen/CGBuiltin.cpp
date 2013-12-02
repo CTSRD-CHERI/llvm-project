@@ -5249,6 +5249,29 @@ Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
       return Builder.CreateZExtOrTrunc(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
                                        cast<llvm::IntegerType>(getTypes().ConvertType(E->getType())));
     }
+    case Mips::BI__builtin_cheri_seal_cap_code: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_seal_cap_code);
+      return Builder.CreateCall(F, EmitScalarExpr(E->getArg(0)));
+    }
+    case Mips::BI__builtin_cheri_seal_cap_data: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_seal_cap_data);
+      return Builder.CreateCall2(F, EmitScalarExpr(E->getArg(0)),
+          EmitScalarExpr(E->getArg(1)));
+    }
+    case Mips::BI__builtin_cheri_unseal_cap: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_unseal_cap);
+      return Builder.CreateCall2(F, EmitScalarExpr(E->getArg(0)),
+          EmitScalarExpr(E->getArg(1)));
+    }
+    case Mips::BI__builtin_cheri_get_cause: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cause);
+      return Builder.CreateZExtOrTrunc(Builder.CreateCall(F),
+                                       cast<llvm::IntegerType>(getTypes().ConvertType(E->getType())));
+    }
+    case Mips::BI__builtin_cheri_set_cause: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_set_cause);
+      return Builder.CreateCall(F, EmitScalarExpr(E->getArg(0)));
+    }
   }
   return 0;
 }
