@@ -1559,13 +1559,16 @@ def CUnseal   : CheriFmt3Caps<0x03, (outs CheriRegs:$cd), (ins CheriRegs:$cs, Ch
 
 def CGetUnsealed : CheriFmtGet<6, (outs GPR64:$rd), (ins CheriRegs:$cb),
                           "cgetunsealed\t$rd, $cb",
-                          []>;
-def CGetPCC : CheriFmtGet<7, (outs GPR64:$rd), (ins CheriRegs:$cb),
+                          [(set GPR64:$rd, (int_cheri_get_cap_unsealed CheriRegs:$cb))]>;
+def CGetPCC : CheriFmtGet<7, (outs GPR64:$rd, CheriRegs:$cb), (ins),
                           "cgetpcc\t${rd}(${cb})",
                           []>;
-def CGetCause : CheriFmtGetCause<4, (outs GPR64:$rd), (ins ),
+def CGetCause : CheriFmtCause<0, (outs GPR64:$rd), (ins ),
                           "cgetcause\t${rd}",
-                          []>;
+                          [(set GPR64:$rd, (int_cheri_get_cause))]>;
+def CSetCause : CheriFmtCause<4, (outs), (ins GPR64: $rs),
+                          "csetcause\t${rs}",
+                          [(int_cheri_set_cause GPR64: $rs)]>;
 
 // Int to pointer in address space 0
 def : Pat<(inttoptr GPR64Opnd:$rt),
