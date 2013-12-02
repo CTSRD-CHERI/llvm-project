@@ -131,9 +131,9 @@ namespace CallingConv {
     /// arguments are shadowed by GPRs, and vice versa.
     X86_64_Win64 = 79,
 
-    /// CHERI_UNTRUSTED - Calling convention used for CHERI when crossing a
+    /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
-    CHERI_PROTCROSS = 80
+    CHERI_CCall = 80
   };
 } // End CallingConv namespace
 

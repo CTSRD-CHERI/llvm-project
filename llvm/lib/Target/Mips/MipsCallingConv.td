@@ -70,6 +70,11 @@ def CC_MipsN : CallingConv<[
   CCIfType<[iFATPTR], CCAssignToStack<32, 32>>
 ]>;
 
+def CC_CHERI_CCall : CallingConv<[
+  CCIfType<[iFATPTR], CCAssignToReg<[C1, C2, C3, C4, C5, C6, C7, C8, C9, C10]>>,
+  CCDelegateTo<CC_MipsN>
+]>;
+
 // N32/64 variable arguments.
 // All arguments are passed in integer registers.
 def CC_MipsN_VarArg : CallingConv<[

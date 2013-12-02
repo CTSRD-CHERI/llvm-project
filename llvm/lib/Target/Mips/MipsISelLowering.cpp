@@ -3467,6 +3467,8 @@ const uint16_t *MipsTargetLowering::MipsCC::intArgRegs() const {
 llvm::CCAssignFn *MipsTargetLowering::MipsCC::fixedArgFn() const {
   if (CallConv == CallingConv::Fast)
     return CC_Mips_FastCC;
+  if (CallConv == CallingConv::CHERI_CCall)
+    return CC_CHERI_CCall;
 
   if (SpecialCallingConv == Mips16RetHelperConv)
     return CC_Mips16RetHelper;
