@@ -5021,6 +5021,10 @@ public:
     }
   }
 
+  virtual CallingConvCheckResult checkCallingConvention(CallingConv CC) const {
+    return ((CC == CC_CheriCCall) && IsCheri) ? CCCR_OK : CCCR_Warning;
+  }
+
   virtual const char *getClobbers() const {
     // FIXME: Implement!
     return "";

@@ -104,6 +104,7 @@ static void diagnoseBadTypeAttribute(Sema &S, const AttributeList &attr,
 #define FUNCTION_TYPE_ATTRS_CASELIST \
     case AttributeList::AT_NoReturn: \
     case AttributeList::AT_CDecl: \
+    case AttributeList::AT_CheriCCall: \
     case AttributeList::AT_FastCall: \
     case AttributeList::AT_StdCall: \
     case AttributeList::AT_ThisCall: \
@@ -3419,6 +3420,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
   case AttributedType::attr_pcs:
   case AttributedType::attr_pcs_vfp:
     return AttributeList::AT_Pcs;
+  case AttributedType::attr_cheri_ccall:
+    return AttributeList::AT_CheriCCall;
   case AttributedType::attr_pnaclcall:
     return AttributeList::AT_PnaclCall;
   case AttributedType::attr_inteloclbicc:
@@ -4420,6 +4423,8 @@ static AttributedType::Kind getCCTypeAttrKind(AttributeList &Attr) {
         .Case("aapcs", AttributedType::attr_pcs)
         .Case("aapcs-vfp", AttributedType::attr_pcs_vfp);
   }
+  case AttributeList::AT_CheriCCall:
+    return AttributedType::attr_cheri_ccall;
   case AttributeList::AT_PnaclCall:
     return AttributedType::attr_pnaclcall;
   case AttributeList::AT_IntelOclBicc:

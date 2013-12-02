@@ -209,7 +209,8 @@ namespace clang {
     CC_AAPCS,       // __attribute__((pcs("aapcs")))
     CC_AAPCS_VFP,   // __attribute__((pcs("aapcs-vfp")))
     CC_PnaclCall,   // __attribute__((pnaclcall))
-    CC_IntelOclBicc // __attribute__((intel_ocl_bicc))
+    CC_IntelOclBicc,// __attribute__((intel_ocl_bicc))
+    CC_CheriCCall   // __attribute__((cheri_ccall))
   };
 
   /// \brief Checks whether the given calling convention is callee-cleanup.

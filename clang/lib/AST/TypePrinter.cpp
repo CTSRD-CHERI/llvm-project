@@ -684,6 +684,9 @@ void TypePrinter::printFunctionProtoAfter(const FunctionProtoType *T,
     case CC_X86_64SysV:
       OS << " __attribute__((sysv_abi))";
       break;
+    case CC_CheriCCall:
+      OS << " __attribute__((cheri_ccall))";
+      break;
     }
   }
 

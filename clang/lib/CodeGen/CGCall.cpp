@@ -41,6 +41,7 @@ using namespace CodeGen;
 static unsigned ClangCallConvToLLVMCallConv(CallingConv CC) {
   switch (CC) {
   default: return llvm::CallingConv::C;
+  case CC_CheriCCall: return llvm::CallingConv::CHERI_CCall;
   case CC_X86StdCall: return llvm::CallingConv::X86_StdCall;
   case CC_X86FastCall: return llvm::CallingConv::X86_FastCall;
   case CC_X86ThisCall: return llvm::CallingConv::X86_ThisCall;
@@ -144,6 +145,9 @@ static CallingConv getCallingConventionForDecl(const Decl *D, bool IsWindows) {
 
   if (D->hasAttr<PnaclCallAttr>())
     return CC_PnaclCall;
+
+  if (D->hasAttr<CheriCCallAttr>())
+    return CC_CheriCCall;
 
   if (D->hasAttr<IntelOclBiccAttr>())
     return CC_IntelOclBicc;

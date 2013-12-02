@@ -515,6 +515,7 @@ CXCallingConv clang_getFunctionTypeCallingConv(CXType X) {
 #define TCALLINGCONV(X) case CC_##X: return CXCallingConv_##X
     switch (FD->getCallConv()) {
       TCALLINGCONV(C);
+      TCALLINGCONV(CheriCCall);
       TCALLINGCONV(X86StdCall);
       TCALLINGCONV(X86FastCall);
       TCALLINGCONV(X86ThisCall);
