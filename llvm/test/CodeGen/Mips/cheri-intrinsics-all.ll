@@ -71,8 +71,13 @@ define i64 @test(i8 addrspace(200)* %foo) #0 {
   ; CHECK: cgetcause
   %37 = call i64 @llvm.cheri.get.cause()
   %38 = and i64 %36, %37
+  ; CHECK: cgetunsealed
+  %39 = call i64 @llvm.cheri.get.cap.unsealed(i8 addrspace(200)* %16)
+  %40 = trunc i64 %39 to i1
+  %41 = zext i1 %40 to i64
+  %42 = and i64 %41, %38
   ; CHECK: jr
-  ret i64 %38
+  ret i64 %42
 }
 
 ; Function Attrs: nounwind readnone
@@ -83,6 +88,9 @@ declare i64 @llvm.cheri.get.cap.perms(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
 declare i64 @llvm.cheri.get.cap.type(i8 addrspace(200)*) #1
+
+; Function Attrs: nounwind readnone
+declare i64 @llvm.cheri.get.cap.unsealed(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
 declare i64 @llvm.cheri.get.cap.tag(i8 addrspace(200)*) #1
