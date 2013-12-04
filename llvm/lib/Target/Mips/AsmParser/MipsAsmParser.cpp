@@ -1204,7 +1204,15 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
       return -1;
     return IntVal;
   }
-  return -1;
+  int CC = StringSwitch<unsigned>(Name)
+           .Case("idc", 26)
+           .Case("kr1c", 27)
+           .Case("kr1c", 28)
+           .Case("kcc", 29)
+           .Case("kdc", 30)
+           .Case("epcc", 31)
+           .Default(-1);
+  return CC;
 }
 
 
