@@ -5249,6 +5249,11 @@ Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
       return Builder.CreateZExtOrTrunc(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
                                        cast<llvm::IntegerType>(getTypes().ConvertType(E->getType())));
     }
+    case Mips::BI__builtin_cheri_get_cap_unsealed: {
+      Value *F = CGM.getIntrinsic(Intrinsic::cheri_get_cap_unsealed);
+      return Builder.CreateZExtOrTrunc(Builder.CreateCall(F, EmitScalarExpr(E->getArg(0))),
+                                       cast<llvm::IntegerType>(getTypes().ConvertType(E->getType())));
+    }
     case Mips::BI__builtin_cheri_seal_cap_code: {
       Value *F = CGM.getIntrinsic(Intrinsic::cheri_seal_cap_code);
       return Builder.CreateCall(F, EmitScalarExpr(E->getArg(0)));
