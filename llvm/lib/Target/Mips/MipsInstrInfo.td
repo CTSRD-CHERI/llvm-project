@@ -1574,7 +1574,8 @@ def CSetCause : CheriFmtCause<4, (outs), (ins GPR64: $rs),
 def : Pat<(inttoptr GPR64Opnd:$rt),
           (CIncBase C0, GPR64Opnd:$rt)>;
 
-def STORECAP : CheriFmtCSCR<(outs), (ins CheriRegs:$cs, GPR64Opnd:$rt, simm11:$offset, CheriRegs:$cb),
+let DecoderNamespace="CHERI" in
+def STORECAP : CheriFmtCSCR<(outs), (ins CheriRegs:$cs, GPR64:$rt, simm11:$offset, CheriRegs:$cb),
                          "csc\t$cs, ${rt}, ${offset}(${cb})",
                          [(store CheriRegs:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriRegs:$cb)), (i64 immSExt11:$offset)))]>;
 
@@ -1590,7 +1591,9 @@ def : Pat<(store CheriRegs:$cs, GPR64Opnd:$rt),
 let Predicates = [IsCHERI] in {
 def LOADCAP : CheriFmtCLCR<(outs CheriRegs:$cs), (ins GPR64Opnd:$rt, simm11:$offset, CheriRegs:$cb),
                         "clc\t$cs, ${rt}, ${offset}(${cb})",
-                        [(set CheriRegs:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriRegs:$cb)), (i64 immSExt11:$offset))))]>;
+                        [(set CheriRegs:$cs, (load (add (add GPR64:$rt, (ptrtoint CheriRegs:$cb)), (i64 immSExt11:$offset))))]> {
+  let DecoderNamespace="CHERI";
+}
 
 def : Pat<(load GPR64Opnd:$rt),
           (LOADCAP GPR64Opnd:$rt, (i64 0), C0)>;
@@ -1598,7 +1601,7 @@ def : Pat<(load CheriRegs:$cb),
           (LOADCAP ZERO_64, (i64 0), CheriRegs:$cb)>;
 
 // Load via a capability register
-let canFoldAsLoad = 1 in
+let canFoldAsLoad = 1, DecoderNamespace="CHERI" in
 multiclass LoadViaCap<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC, PatFrag loadType> {
   def #NAME# : CheriFmtCLX<t, sExt,
                              (outs RC:$rd),
@@ -1607,6 +1610,7 @@ multiclass LoadViaCap<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC,
                            [(set RC:$rd, (loadType(add (add (ptrtoint CheriRegs:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset))))]>;
 }
 
+let DecoderNamespace="CHERI" in {
 def CLLD : CheriFmtCLX<3, 1,
                              (outs GPR64:$rd),
                              (ins GPR64:$rt, simm8:$offset, CheriRegs:$cb),
@@ -1620,6 +1624,7 @@ def CSCD : CheriFmtCSX<3, 1,
                              "cscd\t$rs, ${rt}, ${offset}(${cb})",
                            []> {
   let mayStore=1;
+}
 }
 multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
   def : Pat<(loadType CheriRegs:$cb),
@@ -1650,6 +1655,7 @@ defm CAP0LOAD32    : LoadViaCap0<CAPLOAD32, load>;
 defm CAP0LOAD64    : LoadViaCap0<CAPLOAD64, load>;
 
 // Store via a capability register
+let DecoderNamespace="CHERI" in
 multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> {
   def #NAME# : CheriFmtCSX<t, e,
                              (outs),
