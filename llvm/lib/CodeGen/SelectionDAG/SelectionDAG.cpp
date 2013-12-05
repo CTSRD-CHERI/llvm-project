@@ -3574,6 +3574,13 @@ static SDValue getMemsetStringVal(EVT VT, SDLoc dl, SelectionDAG &DAG,
 static SDValue getMemBasePlusOffset(SDValue Base, unsigned Offset, SDLoc dl,
                                       SelectionDAG &DAG) {
   EVT VT = Base.getValueType();
+  if (VT == MVT::iFATPTR) {
+    SDValue SV = DAG.getNode(ISD::PTRTOINT, dl, MVT::i64, Base);
+    // FIXME: fat pointers with 32-bit address space
+    SV = DAG.getNode(ISD::ADD, dl,
+                     MVT::i64, SV, DAG.getConstant(Offset, MVT::i64));
+    return DAG.getNode(ISD::INTTOPTR, dl, VT, SV);
+  }
   return DAG.getNode(ISD::ADD, dl,
                      VT, Base, DAG.getConstant(Offset, VT));
 }
