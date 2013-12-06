@@ -1069,7 +1069,7 @@ processLoopStoreOfLoopLoad(StoreInst *SI, unsigned StoreSize,
                            const SCEVAddRecExpr *LoadEv,
                            const SCEV *BECount) {
   // If we're not allowed to form memcpy, we fail.
-  if (!TLI->has(LibFunc::memcpy))
+  if (!TLI->has(LibFunc::memcpy) || SI->getPointerAddressSpace() != 0)
     return false;
 
   LoadInst *LI = cast<LoadInst>(SI->getValueOperand());
