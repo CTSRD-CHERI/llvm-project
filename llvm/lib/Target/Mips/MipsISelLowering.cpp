@@ -2144,7 +2144,6 @@ SDValue MipsTargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
     SDValue BasePtr = SD->getBasePtr();
     SDLoc DL(Op);
     const SDValue ExtNode = DAG.getAnyExtOrTrunc(Val, DL, MVT::i64);
-    ExtNode.dump();
     return DAG.getTruncStore(Chain, DL, ExtNode, BasePtr, SD->getPointerInfo(), MemVT,
         SD->isVolatile(), SD->isNonTemporal(), SD->getAlignment());
   }
