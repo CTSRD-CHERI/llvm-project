@@ -1632,14 +1632,14 @@ multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
 }
 
 
-defm CAPLOAD8      : LoadViaCap<0, 1, "clb", GPR32Opnd, sextloadi8>;
-defm CAPLOAD16     : LoadViaCap<1, 1, "clh", GPR32Opnd, sextloadi16>;
+defm CAPLOAD8      : LoadViaCap<0, 1, "clb", GPR64Opnd, sextloadi8>;
+defm CAPLOAD16     : LoadViaCap<1, 1, "clh", GPR64Opnd, sextloadi16>;
 defm CAPLOAD32     : LoadViaCap<2, 1, "clw", GPR32Opnd, load>;
 defm CAPLOAD64     : LoadViaCap<3, 0, "cld", GPR64Opnd, load>;
 
-defm CAPLOADU8     : LoadViaCap<0, 0, "clbu", GPR32Opnd, extloadi8>;
-defm CAPLOADU16    : LoadViaCap<1, 0, "clhu", GPR32Opnd, extloadi16>;
-defm CAPLOADU32    : LoadViaCap<2, 0, "clwu", GPR64Opnd, extloadi32>;
+defm CAPLOADU8     : LoadViaCap<0, 0, "clbu", GPR64Opnd, extloadi8>;
+defm CAPLOADU16    : LoadViaCap<1, 0, "clhu", GPR64Opnd, extloadi16>;
+defm CAPLOADU32    : LoadViaCap<2, 0, "clwu", GPR32Opnd, extloadi32>;
 
 defm CAP0LOADA8     : LoadViaCap0<CAPLOAD8, extloadi8>;
 defm CAP0LOADA16    : LoadViaCap0<CAPLOAD16, extloadi16>;

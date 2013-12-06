@@ -1998,6 +1998,21 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   LoadSDNode *LD = cast<LoadSDNode>(Op);
   EVT MemVT = LD->getMemoryVT();
 
+  // If we're doing a capability-relative load or store of something smaller
+  // than 64 bite, then we need to insert an anyext node to make the input
+  // value an i64
+  if (Subtarget->isCheri() && (ISD::NON_EXTLOAD != LD->getExtensionType()) &&
+      Op.getValueType() == MVT::i32) {
+    SDValue Chain = LD->getChain();
+    SDValue BasePtr = LD->getBasePtr();
+    SDLoc DL(Op);
+    const SDValue Load = DAG.getExtLoad(LD->getExtensionType(), DL, MVT::i64,
+        Chain, BasePtr, LD->getPointerInfo(), LD->getMemoryVT(), LD->isVolatile(),
+        LD->isNonTemporal(), LD->getAlignment());
+    const SDValue Trunc = DAG.getAnyExtOrTrunc(Load, DL, MVT::i32);
+    return Trunc;
+  }
+
   // Return if load is aligned or if MemVT is neither i32 nor i64.
   if ((LD->getAlignment() >= MemVT.getSizeInBits() / 8) ||
       ((MemVT != MVT::i32) && (MemVT != MVT::i64)))

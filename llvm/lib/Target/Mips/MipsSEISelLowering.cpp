@@ -116,6 +116,12 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM)
     addRegisterClass(MVT::iFATPTR, &Mips::CheriRegsRegClass);
     setTruncStoreAction(MVT::i32, MVT::i8, Custom);
     setTruncStoreAction(MVT::i32, MVT::i16, Custom);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i8, Custom);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i8, Custom);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i8, Custom);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i16, Custom);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i16, Custom);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i16, Custom);
   }
 
   setOperationAction(ISD::SMUL_LOHI,          MVT::i32, Custom);
