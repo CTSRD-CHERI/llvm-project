@@ -1998,9 +1998,10 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   LoadSDNode *LD = cast<LoadSDNode>(Op);
   EVT MemVT = LD->getMemoryVT();
 
-  // If we're doing a capability-relative load or store of something smaller
-  // than 64 bite, then we need to insert an anyext node to make the input
-  // value an i64
+  // If we're doing a capability-relative load of something smaller
+  // than 32 bits, then we need to do a load that extends to 64 bits and then
+  // truncate to 32 bits.  This is only required because of the interesting way
+  // that the MIPS back end represents registers in 64-bit mode.
   if (Subtarget->isCheri() && (ISD::NON_EXTLOAD != LD->getExtensionType()) &&
       Op.getValueType() == MVT::i32) {
     SDValue Chain = LD->getChain();
@@ -2009,7 +2010,7 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
     const SDValue Load = DAG.getExtLoad(LD->getExtensionType(), DL, MVT::i64,
         Chain, BasePtr, LD->getPointerInfo(), LD->getMemoryVT(), LD->isVolatile(),
         LD->isNonTemporal(), LD->getAlignment());
-    const SDValue Trunc = DAG.getAnyExtOrTrunc(Load, DL, MVT::i32);
+    const SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, Op.getValueType(), Load);
     return Trunc;
   }
 
