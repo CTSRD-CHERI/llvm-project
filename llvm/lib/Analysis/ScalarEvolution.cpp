@@ -3179,6 +3179,11 @@ const SCEV *ScalarEvolution::createNodeForGEP(GEPOperator *GEP) {
   // Don't attempt to analyze GEPs over unsized objects.
   if (!Base->getType()->getPointerElementType()->isSized())
     return getUnknown(GEP);
+  // FIXME: This is really ugly, and at the very least should be a proper
+  // is-fat-pointer check.  Ideally, we should teach Scalar Evolution to
+  // understand fat pointers.
+  if (Base->getType()->getPointerAddressSpace() == 200)
+    return getUnknown(GEP);
 
   // Don't blindly transfer the inbounds flag from the GEP instruction to the
   // Add expression, because the Instruction may be guarded by control flow
