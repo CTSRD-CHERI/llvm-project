@@ -1324,6 +1324,10 @@ Instruction *InstCombiner::visitICmpInstWithInstAndIntCst(ICmpInst &ICI,
       break;
     Value *P, *Q;
     if (match(LHSI, m_Or(m_PtrToInt(m_Value(P)), m_PtrToInt(m_Value(Q))))) {
+      unsigned IntSize = LHSI->getType()->getIntegerBitWidth();
+      if ((TD->getPointerTypeSizeInBits(P->getType()) != IntSize) ||
+          (TD->getPointerTypeSizeInBits(Q->getType()) != IntSize))
+        break;
       // Simplify icmp eq (or (ptrtoint P), (ptrtoint Q)), 0
       // -> and (icmp eq P, null), (icmp eq Q, null).
       Value *ICIP = Builder->CreateICmp(ICI.getPredicate(), P,
