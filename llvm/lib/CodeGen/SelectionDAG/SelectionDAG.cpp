@@ -987,6 +987,12 @@ SDValue SelectionDAG::getConstant(const ConstantInt &Val, EVT VT, bool isT) {
   assert((VT.isInteger() || (VT == MVT::iFATPTR)) &&
          "Cannot create FP integer constant!");
 
+  if (VT == MVT::iFATPTR) {
+    const ConstantInt *V = ConstantInt::get(*Context, Val.getValue().trunc(64));
+    SDValue IntVal = getConstant(*V, MVT::i64, isT);
+    return getNode(ISD::INTTOPTR, SDLoc(), VT, IntVal);
+  }
+
   EVT EltVT = VT.getScalarType();
   const ConstantInt *Elt = &Val;
 
