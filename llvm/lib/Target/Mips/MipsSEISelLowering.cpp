@@ -1065,6 +1065,14 @@ MipsSETargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
     return emitFEXP2_W_1(MI, BB);
   case Mips::FEXP2_D_1_PSEUDO:
     return emitFEXP2_D_1(MI, BB);
+  case Mips::CapFloat32Load:
+    return emitCapFloat32Load(MI, BB);
+  case Mips::CapFloat64Load:
+    return emitCapFloat64Load(MI, BB);
+  case Mips::CapFloat32Store:
+    return emitCapFloat32Store(MI, BB);
+  case Mips::CapFloat64Store:
+    return emitCapFloat64Store(MI, BB);
   }
 }
 
@@ -2976,5 +2984,71 @@ MipsSETargetLowering::emitFEXP2_D_1(MachineInstr *MI,
       .addReg(MI->getOperand(1).getReg());
 
   MI->eraseFromParent(); // The pseudo instruction is gone now.
+  return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapFloat32Load(MachineInstr *MI,
+                                    MachineBasicBlock *BB) const {
+  DebugLoc DL = MI->getDebugLoc();
+  MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
+  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR32RegClass);
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
+  BuildMI(*BB, MI, DL, TII->get(Mips::CAPLOAD32), IntReg)
+      .addReg(MI->getOperand(1).getReg())
+      .addImm(MI->getOperand(2).getImm())
+      .addReg(MI->getOperand(3).getReg());
+  BuildMI(*BB, MI, DL, TII->get(Mips::MTC1), MI->getOperand(0).getReg())
+      .addReg(IntReg);
+  MI->eraseFromParent();
+  return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapFloat64Load(MachineInstr *MI,
+                                    MachineBasicBlock *BB) const {
+  DebugLoc DL = MI->getDebugLoc();
+  MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
+  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
+  BuildMI(*BB, MI, DL, TII->get(Mips::CAPLOAD64), IntReg)
+      .addReg(MI->getOperand(1).getReg())
+      .addImm(MI->getOperand(2).getImm())
+      .addReg(MI->getOperand(3).getReg());
+  BuildMI(*BB, MI, DL, TII->get(Mips::DMTC1), MI->getOperand(0).getReg())
+      .addReg(IntReg);
+  MI->eraseFromParent();
+  return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapFloat32Store(MachineInstr *MI,
+                                    MachineBasicBlock *BB) const {
+  DebugLoc DL = MI->getDebugLoc();
+  MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
+  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
+  BuildMI(*BB, MI, DL, TII->get(Mips::MFC1), IntReg)
+      .addReg(MI->getOperand(0).getReg());
+  BuildMI(*BB, MI, DL, TII->get(Mips::CAPSTORE32))
+      .addReg(IntReg, RegState::Kill)
+      .addReg(MI->getOperand(1).getReg())
+      .addImm(MI->getOperand(2).getImm())
+      .addReg(MI->getOperand(3).getReg());
+  MI->eraseFromParent();
+  return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapFloat64Store(MachineInstr *MI,
+                                    MachineBasicBlock *BB) const {
+  DebugLoc DL = MI->getDebugLoc();
+  MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
+  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
+  BuildMI(*BB, MI, DL, TII->get(Mips::DMFC1), IntReg)
+      .addReg(MI->getOperand(0).getReg());
+  BuildMI(*BB, MI, DL, TII->get(Mips::CAPSTORE64))
+      .addReg(IntReg, RegState::Kill)
+      .addReg(MI->getOperand(1).getReg())
+      .addImm(MI->getOperand(2).getImm())
+      .addReg(MI->getOperand(3).getReg());
+  MI->eraseFromParent();
   return BB;
 }

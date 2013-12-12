@@ -235,4 +235,38 @@ defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR64Opnd, truncstorei8>;
 defm CAP0STORE16    : StoreViaCap0<CAPSTORE16, GPR64Opnd, truncstorei16>;
 defm CAP0STORE32    : StoreViaCap0<CAPSTORE32, GPR32Opnd, store>;
 defm CAP0STORE64    : StoreViaCap0<CAPSTORE64, GPR64Opnd, store>;
+
+class CheriFPUMemPseudo<dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, Pseudo>
+{
+  let isPseudo = 1;
+  let usesCustomInserter = 1;
+}
+
+def CapFloat64Load : CheriFPUMemPseudo<(outs FGR64: $rd),
+  (ins GPR64:$rt, simm8:$offset, CheriRegs:$cb),
+  "cldc1\t$rd,  ${rt}, ${offset}(${cb})",
+  [(set FGR64:$rd, (load (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset))))]>;
+
+def CapFloat32Load : CheriFPUMemPseudo<(outs FGR32: $rd),
+  (ins GPR64:$rt, simm8:$offset, CheriRegs:$cb),
+  "clwc1\t$rd,  ${rt}, ${offset}(${cb})",
+  [(set FGR32:$rd, (load (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset))))]>;
+
+def CapFloat64Store : CheriFPUMemPseudo<(outs),
+  (ins FGR64:$rs, GPR64:$rt, simm8:$offset, CheriRegs:$cb),
+  "cldc1\t$rs,  ${rt}, ${offset}(${cb})",
+  [(store (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset)), FGR64: $rs)]>;
+
+def CapFloat32Store : CheriFPUMemPseudo<(outs),
+  (ins FGR32:$rs, GPR64:$rt, simm8:$offset, CheriRegs:$cb),
+  "cldc1\t$rs,  ${rt}, ${offset}(${cb})",
+  [(store (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset)), FGR32: $rs)]>;
+
+defm CAP0LOADF32    : LoadViaCap0<CapFloat32Load, load>;
+defm CAP0LOADF64    : LoadViaCap0<CapFloat64Load, load>;
+defm CAP0STOREF32    : StoreViaCap0<CapFloat32Store, FGR32Opnd, store>;
+defm CAP0STOREF64    : StoreViaCap0<CapFloat64Store, FGR64Opnd, store>;
+
 }

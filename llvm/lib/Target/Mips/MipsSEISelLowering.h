@@ -108,6 +108,18 @@ namespace llvm {
     /// \brief Emit the FEXP2_D_1 pseudo instructions.
     MachineBasicBlock *emitFEXP2_D_1(MachineInstr *MI,
                                      MachineBasicBlock *BB) const;
+    /// \brief Emit the clwc1 pseudo instructions.
+    MachineBasicBlock *emitCapFloat32Load(MachineInstr *MI,
+                                     MachineBasicBlock *BB) const;
+    /// \brief Emit the cldc1 pseudo instructions.
+    MachineBasicBlock *emitCapFloat64Load(MachineInstr *MI,
+                                     MachineBasicBlock *BB) const;
+    /// \brief Emit the cswc1 pseudo instructions.
+    MachineBasicBlock *emitCapFloat32Store(MachineInstr *MI,
+                                     MachineBasicBlock *BB) const;
+    /// \brief Emit the csdc1 pseudo instructions.
+    MachineBasicBlock *emitCapFloat64Store(MachineInstr *MI,
+                                     MachineBasicBlock *BB) const;
   };
 }
 
