@@ -264,9 +264,9 @@ def CapFloat32Store : CheriFPUMemPseudo<(outs),
   "cldc1\t$rs,  ${rt}, ${offset}(${cb})",
   [(store (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset)), FGR32: $rs)]>;
 
-defm CAP0LOADF32    : LoadViaCap0<CapFloat32Load, load>;
-defm CAP0LOADF64    : LoadViaCap0<CapFloat64Load, load>;
-defm CAP0STOREF32    : StoreViaCap0<CapFloat32Store, FGR32Opnd, store>;
-defm CAP0STOREF64    : StoreViaCap0<CapFloat64Store, FGR64Opnd, store>;
+defm : LoadViaCap0<CapFloat32Load, load>;
+defm : LoadViaCap0<CapFloat64Load, load>;
+defm : StoreViaCap0<CapFloat32Store, FGR32Opnd, store>;
+defm : StoreViaCap0<CapFloat64Store, FGR64Opnd, store>;
 
 }
