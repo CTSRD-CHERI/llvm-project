@@ -1,5 +1,5 @@
 # RUN: llvm-mc -show-encoding -triple mips-unknown-unknown %s | FileCheck %s
-#
+# XFAIL:
 # CHECK:  .text
 # CHECK:  $BB0_2:
 # CHECK:  .abicalls
