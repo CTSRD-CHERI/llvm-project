@@ -2146,7 +2146,7 @@ SDValue MipsTargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
   const SDValue Val = SD->getValue();
 
   // If we're doing a capability-relative load or store of something smaller
-  // than 64 bite, then we need to insert an anyext node to make the input
+  // than 64 bits, then we need to insert an anyext node to make the input
   // value an i64
   if (Subtarget->isCheri() && SD->isTruncatingStore() && Val.getValueType() == MVT::i32) {
     SDValue Chain = SD->getChain();
