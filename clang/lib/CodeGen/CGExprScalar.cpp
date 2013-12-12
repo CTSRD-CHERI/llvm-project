@@ -467,7 +467,11 @@ public:
   // Binary operators and binary compound assignment operators.
 #define HANDLEBINOP(OP) \
   Value *VisitBin ## OP(const BinaryOperator *E) {                         \
-    return Emit ## OP(EmitBinOps(E));                                      \
+    Value *V = Emit ## OP(EmitBinOps(E));                                  \
+    if (E->getType().isCapabilityType() &&                                 \
+        !isa<llvm::PointerType>(V->getType()))                             \
+      V = Builder.CreateIntToPtr(V, ConvertType(E->getType()));            \
+    return V;                                                              \
   }                                                                        \
   Value *VisitBin ## OP ## Assign(const CompoundAssignOperator *E) {       \
     return EmitCompoundAssign(E, &ScalarExprEmitter::Emit ## OP);          \
@@ -2089,6 +2093,8 @@ BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
       Result.LHS = Builder.CreatePtrToInt(Result.LHS, CGF.IntPtrTy);
     if (isa<llvm::PointerType>(Result.RHS->getType()))
       Result.RHS = Builder.CreatePtrToInt(Result.RHS, CGF.IntPtrTy);
+    else
+      Result.RHS = Builder.CreateZExtOrTrunc(Result.RHS, CGF.IntPtrTy);
   }
 
   return Result;
