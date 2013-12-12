@@ -1837,9 +1837,15 @@ bool CodeGenPrepare::OptimizeSelectInst(SelectInst *SI) {
     SelectKind = TargetLowering::ScalarCondVectorVal;
   else
     SelectKind = TargetLowering::ScalarValSelect;
+  
+  int AS = -1;
+  if (PointerType *PT = dyn_cast<PointerType>(SI->getType()))
+    AS = PT->getAddressSpace();
 
   // Do we have efficient codegen support for this kind of 'selects' ?
-  if (TLI->isSelectSupported(SelectKind)) {
+  // FIXME: Target-specific test for selects on pointers in specific address
+  // spaces
+  if (TLI->isSelectSupported(SelectKind) && (AS != 200)) {
     // We have efficient codegen support for the select instruction.
     // Check if it is profitable to keep this 'select'.
     if (!TLI->isPredictableSelectExpensive() ||
