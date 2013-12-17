@@ -80,7 +80,6 @@ void MipsInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
   default:
     break;
   case Mips::RDHWR:
-  case Mips::RDHWR64:
     O << "\t.set\tpush\n";
     O << "\t.set\tmips32r2\n";
     break;
@@ -115,7 +114,6 @@ void MipsInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
   default:
     break;
   case Mips::RDHWR:
-  case Mips::RDHWR64:
     O << "\n\t.set\tpop";
   }
 }
