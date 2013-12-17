@@ -660,9 +660,10 @@ static DecodeStatus DecodeHWRegsRegisterClass(MCInst &Inst,
                                               uint64_t Address,
                                               const void *Decoder) {
   // Currently only hardware register 29 is supported.
-  if (RegNo != 29)
+  if (RegNo > 31)
     return  MCDisassembler::Fail;
-  Inst.addOperand(MCOperand::CreateReg(Mips::HWR29));
+  unsigned Reg = getReg(Decoder, Mips::HWRegsRegClassID, RegNo);
+  Inst.addOperand(MCOperand::CreateReg(Reg));
   return MCDisassembler::Success;
 }
 

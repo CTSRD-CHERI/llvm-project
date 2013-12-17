@@ -1661,10 +1661,8 @@ MipsAsmParser::parseRegs(SmallVectorImpl<MCParsedAsmOperand *> &Operands,
   } else if (getLexer().getKind() == AsmToken::Integer) {
     unsigned RegNum = Parser.getTok().getIntVal();
     if (Kind == MipsOperand::Kind_HWRegs) {
-      if (RegNum != 29)
+      if (RegNum > 31)
         return MatchOperand_NoMatch;
-      // Only hwreg 29 is supported, found at index 0.
-      RegNum = 0;
     }
     int Reg = matchRegisterByNumber(RegNum, regKindToRegClass(Kind));
     if (Reg == -1)

@@ -208,8 +208,9 @@ let Namespace = "Mips" in {
   // PC register
   def PC : Register<"pc">;
 
-  // Hardware register $29
-  def HWR29 : MipsReg<29, "29">;
+  // Hardware registers
+  foreach I = 0-31 in
+  def HWR#I : MipsReg<#I, ""#I>;
 
   // Accum registers
   foreach I = 0-3 in
@@ -355,7 +356,7 @@ def LO64 : RegisterClass<"Mips", [i64], 64, (add LO0_64)>;
 def HI64 : RegisterClass<"Mips", [i64], 64, (add HI0_64)>;
 
 // Hardware registers
-def HWRegs : RegisterClass<"Mips", [i32], 32, (add HWR29)>, Unallocatable;
+def HWRegs : RegisterClass<"Mips", [i32], 32, (sequence "HWR%u", 0, 31)>, Unallocatable;
 
 // Accumulator Registers
 def ACC64 : RegisterClass<"Mips", [untyped], 64, (add AC0)> {
