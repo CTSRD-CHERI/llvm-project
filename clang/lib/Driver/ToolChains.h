@@ -431,6 +431,14 @@ public:
 
   virtual void addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
                                      llvm::opt::ArgStringList &CC1Args) const;
+
+  virtual bool IsIntegratedAssemblerDefault() const {
+    // Default integrated assembler to on for x86.
+    return (getTriple().getArch() == llvm::Triple::aarch64 ||
+            getTriple().getArch() == llvm::Triple::x86 ||
+            getTriple().getArch() == llvm::Triple::cheri ||
+            getTriple().getArch() == llvm::Triple::x86_64);
+  }
 };
 
 class LLVM_LIBRARY_VISIBILITY AuroraUX : public Generic_GCC {
