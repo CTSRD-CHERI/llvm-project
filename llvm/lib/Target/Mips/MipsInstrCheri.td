@@ -244,29 +244,30 @@ class CheriFPUMemPseudo<dag outs, dag ins, string asmstr,
   let usesCustomInserter = 1;
 }
 
-def CapFloat64Load : CheriFPUMemPseudo<(outs FGR64: $rd),
+def CLDC1 : CheriFPUMemPseudo<(outs FGR64: $rd),
   (ins GPR64:$rt, simm8:$offset, CheriRegs:$cb),
   "cldc1\t$rd,  ${rt}, ${offset}(${cb})",
   [(set FGR64:$rd, (load (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset))))]>;
 
-def CapFloat32Load : CheriFPUMemPseudo<(outs FGR32: $rd),
+
+def CLWC1 : CheriFPUMemPseudo<(outs FGR32Opnd: $rd),
   (ins GPR64:$rt, simm8:$offset, CheriRegs:$cb),
   "clwc1\t$rd,  ${rt}, ${offset}(${cb})",
-  [(set FGR32:$rd, (load (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset))))]>;
+  [(set FGR32Opnd:$rd, (load (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset))))]>;
 
-def CapFloat64Store : CheriFPUMemPseudo<(outs),
+def CSDC1 : CheriFPUMemPseudo<(outs),
   (ins FGR64:$rs, GPR64:$rt, simm8:$offset, CheriRegs:$cb),
-  "cldc1\t$rs,  ${rt}, ${offset}(${cb})",
+  "csdc1\t$rs,  ${rt}, ${offset}(${cb})",
   [(store (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset)), FGR64: $rs)]>;
 
-def CapFloat32Store : CheriFPUMemPseudo<(outs),
-  (ins FGR32:$rs, GPR64:$rt, simm8:$offset, CheriRegs:$cb),
-  "cldc1\t$rs,  ${rt}, ${offset}(${cb})",
-  [(store (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset)), FGR32: $rs)]>;
+def CSWC1 : CheriFPUMemPseudo<(outs),
+  (ins FGR32Opnd:$rs, GPR64:$rt, simm8:$offset, CheriRegs:$cb),
+  "cswc1\t$rs,  ${rt}, ${offset}(${cb})",
+  [(store (add (add (ptrtoint CheriRegs:$cb), GPR64:$rt), (i64 immSExt8:$offset)), FGR32Opnd: $rs)]>;
 
-defm : LoadViaCap0<CapFloat32Load, load>;
-defm : LoadViaCap0<CapFloat64Load, load>;
-defm : StoreViaCap0<CapFloat32Store, FGR32Opnd, store>;
-defm : StoreViaCap0<CapFloat64Store, FGR64Opnd, store>;
+defm : LoadViaCap0<CLWC1, load>;
+defm : LoadViaCap0<CLDC1, load>;
+defm : StoreViaCap0<CSWC1, FGR32Opnd, store>;
+defm : StoreViaCap0<CSDC1, FGR64Opnd, store>;
 
 }
