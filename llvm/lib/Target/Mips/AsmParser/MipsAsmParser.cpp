@@ -962,8 +962,11 @@ bool MipsAsmParser::MatchAndEmitInstruction(
 int MipsAsmParser::matchCPURegisterName(StringRef Name) {
   int CC;
 
-  if (Name == "at")
-    return getATReg();
+  if (Name == "at") {
+    if (Options.getATRegNum() != 1)
+      Warning(getLexer().getLoc(), "Used $at without \".set noat\"");
+    return 1;
+  }
 
   CC = StringSwitch<unsigned>(Name)
            .Case("zero", 0)
