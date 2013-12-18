@@ -1277,9 +1277,17 @@ TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
         if (newVT.isRound()) {
           EVT PtrType = Lod->getOperand(1).getValueType();
           SDValue Ptr = Lod->getBasePtr();
-          if (bestOffset != 0)
-            Ptr = DAG.getNode(ISD::ADD, dl, PtrType, Lod->getBasePtr(),
-                              DAG.getConstant(bestOffset, PtrType));
+          if (bestOffset != 0) {
+            if (PtrType == MVT::iFATPTR) {
+              SDValue SV = DAG.getNode(ISD::PTRTOINT, dl, MVT::i64, Ptr);
+              // FIXME: fat pointers with 32-bit address space
+              SV = DAG.getNode(ISD::ADD, dl, MVT::i64,
+                               SV, DAG.getConstant(bestOffset, MVT::i64));
+              Ptr = DAG.getNode(ISD::INTTOPTR, dl, PtrType, SV);
+            } else
+              Ptr = DAG.getNode(ISD::ADD, dl, PtrType, Ptr,
+                                DAG.getConstant(bestOffset, PtrType));
+          }
           unsigned NewAlign = MinAlign(Lod->getAlignment(), bestOffset);
           SDValue NewLoad = DAG.getLoad(newVT, dl, Lod->getChain(), Ptr,
                                 Lod->getPointerInfo().getWithOffset(bestOffset),
