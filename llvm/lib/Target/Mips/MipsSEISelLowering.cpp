@@ -1069,9 +1069,9 @@ MipsSETargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
     return emitCapFloat32Load(MI, BB);
   case Mips::CLDC1:
     return emitCapFloat64Load(MI, BB);
-  case Mips::CSDC1:
-    return emitCapFloat32Store(MI, BB);
   case Mips::CSWC1:
+    return emitCapFloat32Store(MI, BB);
+  case Mips::CSDC1:
     return emitCapFloat64Store(MI, BB);
   }
 }
