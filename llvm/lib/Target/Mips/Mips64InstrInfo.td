@@ -374,6 +374,23 @@ def : InstAlias<"dsubu $rs, $imm",
                 (DSUBiu GPR64Opnd:$rs, GPR64Opnd:$rs, simm16_64:$imm),
                 0>;
 
+def imm64: Operand<i64>;
+class LoadImm64< string instr_asm, Operand Od, RegisterOperand RO> :
+  MipsAsmPseudoInst<(outs RO:$rt), (ins Od:$imm64),
+                     !strconcat(instr_asm, "\t$rt, $imm64")> ;
+def LoadImm64Reg : LoadImm64<"dli", uimm5, GPR64Opnd>;
+
+class LoadAddress64<string instr_asm, Operand MemOpnd, RegisterOperand RO> :
+  MipsAsmPseudoInst<(outs RO:$rt), (ins MemOpnd:$addr),
+                     !strconcat(instr_asm, "\t$rt, $addr")> ;
+def LoadAddr64Reg : LoadAddress64<"dla", mem, GPR64Opnd>;
+
+class LoadAddress64Imm<string instr_asm, Operand Od, RegisterOperand RO> :
+  MipsAsmPseudoInst<(outs RO:$rt), (ins Od:$imm64),
+                     !strconcat(instr_asm, "\t$rt, $imm64")> ;
+def LoadAddr64Imm : LoadAddress64Imm<"dla", uimm5, GPR64Opnd>;
+
+
 /// Move between CPU and coprocessor registers
 let DecoderNamespace = "Mips64", Predicates = [HasMips64] in {
 def DMFC0 : MFC3OP<"dmfc0", GPR64Opnd>, MFC3OP_FM<0x10, 1>;

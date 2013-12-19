@@ -697,6 +697,9 @@ bool MipsAsmParser::needsExpansion(MCInst &Inst) {
   case Mips::LoadImm32Reg:
   case Mips::LoadAddr32Imm:
   case Mips::LoadAddr32Reg:
+  case Mips::LoadImm64Reg:
+  case Mips::LoadAddr64Imm:
+  case Mips::LoadAddr64Reg:
     return true;
   default:
     return false;
@@ -707,12 +710,38 @@ void MipsAsmParser::expandInstruction(MCInst &Inst, SMLoc IDLoc,
                                       SmallVectorImpl<MCInst> &Instructions) {
   switch (Inst.getOpcode()) {
   case Mips::LoadImm32Reg:
+  case Mips::LoadImm64Reg:
     return expandLoadImm(Inst, IDLoc, Instructions);
   case Mips::LoadAddr32Imm:
+  case Mips::LoadAddr64Imm:
     return expandLoadAddressImm(Inst, IDLoc, Instructions);
   case Mips::LoadAddr32Reg:
+  case Mips::LoadAddr64Reg:
     return expandLoadAddressReg(Inst, IDLoc, Instructions);
   }
+}
+
+namespace {
+template<int Shift, bool PerformShift>
+void createShiftOr(int64_t Value, unsigned RegNo, SMLoc IDLoc,
+                   SmallVectorImpl<MCInst> &Instructions) {
+  MCInst tmpInst;
+  if (PerformShift) {
+    tmpInst.setOpcode(Mips::DSLL);
+    tmpInst.addOperand(MCOperand::CreateReg(RegNo));
+    tmpInst.addOperand(MCOperand::CreateReg(RegNo));
+    tmpInst.addOperand(MCOperand::CreateImm(16));
+    tmpInst.setLoc(IDLoc);
+    Instructions.push_back(tmpInst);
+    tmpInst.clear();
+  }
+  tmpInst.setOpcode(Mips::ORi);
+  tmpInst.addOperand(MCOperand::CreateReg(RegNo));
+  tmpInst.addOperand(MCOperand::CreateReg(RegNo));
+  tmpInst.addOperand(MCOperand::CreateImm(((Value & (0xffffLL << Shift)) >> Shift)));
+  tmpInst.setLoc(IDLoc);
+  Instructions.push_back(tmpInst);
+}
 }
 
 void MipsAsmParser::expandLoadImm(MCInst &Inst, SMLoc IDLoc,
@@ -723,8 +752,10 @@ void MipsAsmParser::expandLoadImm(MCInst &Inst, SMLoc IDLoc,
   const MCOperand &RegOp = Inst.getOperand(0);
   assert(RegOp.isReg() && "expected register operand kind");
 
-  int ImmValue = ImmOp.getImm();
+  int64_t ImmValue = ImmOp.getImm();
   tmpInst.setLoc(IDLoc);
+  // FIXME: gas has a special case for values that are 000...1111, which
+  // becomes a li -1 and then a dsrl
   if (0 <= ImmValue && ImmValue <= 65535) {
     // For 0 <= j <= 65535.
     // li d,j => ori d,$zero,j
@@ -741,21 +772,33 @@ void MipsAsmParser::expandLoadImm(MCInst &Inst, SMLoc IDLoc,
     tmpInst.addOperand(MCOperand::CreateReg(Mips::ZERO));
     tmpInst.addOperand(MCOperand::CreateImm(ImmValue));
     Instructions.push_back(tmpInst);
-  } else {
-    // For any other value of j that is representable as a 32-bit integer.
+  } else if ((ImmValue & 0xffffffff) == ImmValue) {
+    // For any value of j that is not representable as a 32-bit integer, create a sequence of 
     // li d,j => lui d,hi16(j)
     //           ori d,d,lo16(j)
     tmpInst.setOpcode(Mips::LUi);
     tmpInst.addOperand(MCOperand::CreateReg(RegOp.getReg()));
     tmpInst.addOperand(MCOperand::CreateImm((ImmValue & 0xffff0000) >> 16));
     Instructions.push_back(tmpInst);
-    tmpInst.clear();
-    tmpInst.setOpcode(Mips::ORi);
+    createShiftOr<0,false>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
+  } else if ((ImmValue & (0xffffLL << 48)) == 0) {
+    tmpInst.setOpcode(Mips::LUi);
     tmpInst.addOperand(MCOperand::CreateReg(RegOp.getReg()));
-    tmpInst.addOperand(MCOperand::CreateReg(RegOp.getReg()));
-    tmpInst.addOperand(MCOperand::CreateImm(ImmValue & 0xffff));
-    tmpInst.setLoc(IDLoc);
+    tmpInst.addOperand(MCOperand::CreateImm((ImmValue & (0xffffLL << 32)) >> 32));
     Instructions.push_back(tmpInst);
+    createShiftOr<16,false>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
+    createShiftOr<0,true>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
+  } else {
+    // For any value of j that isn't representable as a 32-bit integer.
+    // li d,j => lui d,hi16(j)
+    //           ori d,d,lo16(j)
+    tmpInst.setOpcode(Mips::LUi);
+    tmpInst.addOperand(MCOperand::CreateReg(RegOp.getReg()));
+    tmpInst.addOperand(MCOperand::CreateImm((ImmValue & (0xffffLL << 48)) >> 48));
+    Instructions.push_back(tmpInst);
+    createShiftOr<32,false>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
+    createShiftOr<16,true>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
+    createShiftOr<0,true>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
   }
 }
 
