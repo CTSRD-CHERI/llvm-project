@@ -179,6 +179,8 @@ class MipsAsmParser : public MCTargetAsmParser {
                          SmallVectorImpl<MCInst> &Instructions);
   void expandLoadImm(MCInst &Inst, SMLoc IDLoc,
                      SmallVectorImpl<MCInst> &Instructions);
+  void expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
+                            SmallVectorImpl<MCInst> &Instructions);
   void expandLoadAddressImm(MCInst &Inst, SMLoc IDLoc,
                             SmallVectorImpl<MCInst> &Instructions);
   void expandLoadAddressReg(MCInst &Inst, SMLoc IDLoc,
@@ -729,8 +731,8 @@ void MipsAsmParser::expandInstruction(MCInst &Inst, SMLoc IDLoc,
 }
 
 namespace {
-template<int Shift, bool PerformShift>
-void createShiftOr(int64_t Value, unsigned RegNo, SMLoc IDLoc,
+template<bool PerformShift>
+void createShiftOr(MCOperand Operand, unsigned RegNo, SMLoc IDLoc,
                    SmallVectorImpl<MCInst> &Instructions) {
   MCInst tmpInst;
   if (PerformShift) {
@@ -745,9 +747,16 @@ void createShiftOr(int64_t Value, unsigned RegNo, SMLoc IDLoc,
   tmpInst.setOpcode(Mips::ORi);
   tmpInst.addOperand(MCOperand::CreateReg(RegNo));
   tmpInst.addOperand(MCOperand::CreateReg(RegNo));
-  tmpInst.addOperand(MCOperand::CreateImm(((Value & (0xffffLL << Shift)) >> Shift)));
+  tmpInst.addOperand(Operand);
   tmpInst.setLoc(IDLoc);
   Instructions.push_back(tmpInst);
+}
+template<int Shift, bool PerformShift>
+void createShiftOr(int64_t Value, unsigned RegNo, SMLoc IDLoc,
+                   SmallVectorImpl<MCInst> &Instructions) {
+  createShiftOr<PerformShift>(
+      MCOperand::CreateImm(((Value & (0xffffLL << Shift)) >> Shift)),
+      RegNo, IDLoc, Instructions);
 }
 }
 
@@ -853,11 +862,52 @@ MipsAsmParser::expandLoadAddressReg(MCInst &Inst, SMLoc IDLoc,
 }
 
 void
+MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
+                                    SmallVectorImpl<MCInst> &Instructions) {
+  // FIXME: If we do have a valid at register to use, we should generate a
+  // slightly shorter sequence here.
+  MCInst tmpInst;
+  const MCOperand &SymOp = Inst.getOperand(1);
+  assert(SymOp.isExpr() && "expected symbol operand kind");
+  const MCOperand &RegOp = Inst.getOperand(0);
+  unsigned RegNo = RegOp.getReg();
+  const MCSymbolRefExpr *Symbol = cast<MCSymbolRefExpr>(SymOp.getExpr());
+  const MCSymbolRefExpr *HighestExpr = MCSymbolRefExpr::Create(
+      Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_HIGHEST,
+      getContext());
+  const MCSymbolRefExpr *HigherExpr = MCSymbolRefExpr::Create(
+      Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_HIGHER,
+      getContext());
+  const MCSymbolRefExpr *HiExpr = MCSymbolRefExpr::Create(
+      Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_ABS_HI,
+      getContext());
+  const MCSymbolRefExpr *LoExpr = MCSymbolRefExpr::Create(
+      Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_ABS_LO,
+      getContext());
+  tmpInst.setOpcode(Mips::LUi);
+  tmpInst.addOperand(MCOperand::CreateReg(RegNo));
+  tmpInst.addOperand(MCOperand::CreateExpr(isMips64() ? HighestExpr : HiExpr));
+  Instructions.push_back(tmpInst);
+  if (isMips64()) {
+    createShiftOr<false>(MCOperand::CreateExpr(HigherExpr), RegNo, SMLoc(),
+        Instructions);
+    createShiftOr<true>(MCOperand::CreateExpr(HiExpr), RegNo, SMLoc(),
+        Instructions);
+    createShiftOr<true>(MCOperand::CreateExpr(LoExpr), RegNo, SMLoc(),
+        Instructions);
+  } else
+    createShiftOr<false>(MCOperand::CreateExpr(LoExpr), RegNo, SMLoc(),
+        Instructions);
+}
+
+void
 MipsAsmParser::expandLoadAddressImm(MCInst &Inst, SMLoc IDLoc,
                                     SmallVectorImpl<MCInst> &Instructions) {
   MCInst tmpInst;
   const MCOperand &ImmOp = Inst.getOperand(1);
-  assert(ImmOp.isImm() && "expected immediate operand kind");
+  assert((ImmOp.isImm() || ImmOp.isExpr()) && "expected immediate operand kind");
+  if (!ImmOp.isImm())
+    return expandLoadAddressSym(Inst, IDLoc, Instructions);
   const MCOperand &RegOp = Inst.getOperand(0);
   assert(RegOp.isReg() && "expected register operand kind");
   int ImmValue = ImmOp.getImm();
