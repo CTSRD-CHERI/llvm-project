@@ -104,8 +104,9 @@ namespace
             PointerType *SrcTy = dyn_cast<PointerType>(P2I->getOperand(0)->getType());
             if (SrcTy && SrcTy->getAddressSpace() == 0) {
               Value *Src = P2I->getOperand(0)->stripPointerCasts();
-              if (isa<AllocaInst>(Src) || isa<GlobalVariable>(Src) ||
-                  CallSite(Src) != CallSite()) {
+              if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Src))
+                return GV->hasExternalLinkage() ? 0 : P2I;
+              if (isa<AllocaInst>(Src) || CallSite(Src) != CallSite()) {
                 return P2I;
               }
             }
