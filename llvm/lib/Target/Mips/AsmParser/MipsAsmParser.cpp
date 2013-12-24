@@ -823,7 +823,9 @@ MipsAsmParser::expandLoadAddressReg(MCInst &Inst, SMLoc IDLoc,
                                     SmallVectorImpl<MCInst> &Instructions) {
   MCInst tmpInst;
   const MCOperand &ImmOp = Inst.getOperand(2);
-  assert(ImmOp.isImm() && "expected immediate operand kind");
+  assert((ImmOp.isImm() || ImmOp.isExpr()) && "expected immediate operand kind");
+  if (!ImmOp.isImm())
+    return expandLoadAddressSym(Inst, IDLoc, Instructions);
   const MCOperand &SrcRegOp = Inst.getOperand(1);
   assert(SrcRegOp.isReg() && "expected register operand kind");
   const MCOperand &DstRegOp = Inst.getOperand(0);
@@ -867,7 +869,15 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
   // FIXME: If we do have a valid at register to use, we should generate a
   // slightly shorter sequence here.
   MCInst tmpInst;
-  const MCOperand &SymOp = Inst.getOperand(1);
+  int ExprOperandNo = 1;
+  // Sometimes the assembly parser will get the immediate expression as a $zero
+  // + immediate
+  if (Inst.getNumOperands() == 3) {
+    assert(Inst.getOperand(1).getReg() ==
+      (isMips64() ? Mips::ZERO_64 : Mips::ZERO));
+    ExprOperandNo = 2;
+  }
+  const MCOperand &SymOp = Inst.getOperand(ExprOperandNo);
   assert(SymOp.isExpr() && "expected symbol operand kind");
   const MCOperand &RegOp = Inst.getOperand(0);
   unsigned RegNo = RegOp.getReg();
