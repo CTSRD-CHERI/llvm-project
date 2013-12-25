@@ -4855,7 +4855,7 @@ public:
 
   virtual int AddressSpaceForCapabilities() const { return IsCheri ? 200 : -1; }
 
-  virtual int AddressSpaceForObjC() const { return IsCheri ? 200 : -1; }
+  virtual int AddressSpaceForObjC() const { return IsCheri ? 200 : 0; }
 
   virtual const char *getABI() const { return ABI.c_str(); }
   virtual bool setABI(const std::string &Name) = 0;
