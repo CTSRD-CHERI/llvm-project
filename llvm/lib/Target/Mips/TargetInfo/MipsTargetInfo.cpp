@@ -13,7 +13,7 @@
 using namespace llvm;
 
 Target llvm::TheMipsTarget, llvm::TheMipselTarget;
-Target llvm::TheMips64Target, llvm::TheMips64elTarget;
+Target llvm::TheMips64Target, llvm::TheMips4Target, llvm::TheMips64elTarget;
 
 extern "C" void LLVMInitializeMipsTargetInfo() {
   RegisterTarget<Triple::mips,
@@ -23,7 +23,8 @@ extern "C" void LLVMInitializeMipsTargetInfo() {
         /*HasJIT=*/true> Y(TheMipselTarget, "mipsel", "Mipsel");
 
   RegisterTarget<Triple::mips4,
-        /*HasJIT=*/false> Mips4(TheMips64Target, "mips4", "Mips4 [experimental]");
+        /*HasJIT=*/false> Mips4(TheMips4Target, "mips4", "Mips4 [experimental]");
+
   RegisterTarget<Triple::mips64,
         /*HasJIT=*/false> A(TheMips64Target, "mips64", "Mips64 [experimental]");
 

@@ -41,6 +41,7 @@ extern "C" void LLVMInitializeMipsTarget() {
   // Register the target.
   RegisterTargetMachine<MipsebTargetMachine> X(TheMipsTarget);
   RegisterTargetMachine<MipselTargetMachine> Y(TheMipselTarget);
+  RegisterTargetMachine<MipsebTargetMachine> Mips4(TheMips4Target);
   RegisterTargetMachine<MipsebTargetMachine> A(TheMips64Target);
   RegisterTargetMachine<MipselTargetMachine> B(TheMips64elTarget);
 }

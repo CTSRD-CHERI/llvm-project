@@ -265,7 +265,7 @@ static DecodeStatus DecodeExtSize(MCInst &Inst,
 
 namespace llvm {
 extern Target TheMipselTarget, TheMipsTarget, TheMips64Target,
-              TheMips64elTarget;
+              TheMips4Target, TheMips64elTarget;
 }
 
 static MCDisassembler *createMipsDisassembler(
@@ -298,6 +298,8 @@ extern "C" void LLVMInitializeMipsDisassembler() {
                                          createMipsDisassembler);
   TargetRegistry::RegisterMCDisassembler(TheMipselTarget,
                                          createMipselDisassembler);
+  TargetRegistry::RegisterMCDisassembler(TheMips4Target,
+                                         createMips64Disassembler);
   TargetRegistry::RegisterMCDisassembler(TheMips64Target,
                                          createMips64Disassembler);
   TargetRegistry::RegisterMCDisassembler(TheMips64elTarget,

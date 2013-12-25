@@ -2828,6 +2828,7 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
 extern "C" void LLVMInitializeMipsAsmParser() {
   RegisterMCAsmParser<MipsAsmParser> X(TheMipsTarget);
   RegisterMCAsmParser<MipsAsmParser> Y(TheMipselTarget);
+  RegisterMCAsmParser<MipsAsmParser> Mips4(TheMips4Target);
   RegisterMCAsmParser<MipsAsmParser> A(TheMips64Target);
   RegisterMCAsmParser<MipsAsmParser> B(TheMips64elTarget);
 }
