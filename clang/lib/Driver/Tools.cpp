@@ -5853,6 +5853,7 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     if (getToolChain().getArch() == llvm::Triple::mips ||
         getToolChain().getArch() == llvm::Triple::mips4 ||
         getToolChain().getArch() == llvm::Triple::cheri ||
+        getToolChain().getArch() == llvm::Triple::mips4 ||
         getToolChain().getArch() == llvm::Triple::mips64)
       CmdArgs.push_back("-EB");
     else
