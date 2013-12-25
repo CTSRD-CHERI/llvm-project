@@ -5205,7 +5205,7 @@ public:
 class Mips64TargetInfoBase : public MipsTargetInfoBase {
 public:
   Mips64TargetInfoBase(const llvm::Triple &Triple)
-      : MipsTargetInfoBase(Triple, "n64", Triple.getArchName()) {
+      : MipsTargetInfoBase(Triple, "n64", "mips64") {
     LongWidth = LongAlign = 64;
     PointerWidth = PointerAlign = 64;
     LongDoubleWidth = LongDoubleAlign = 128;
