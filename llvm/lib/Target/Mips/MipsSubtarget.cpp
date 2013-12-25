@@ -75,8 +75,11 @@ MipsSubtarget::MipsSubtarget(const std::string &TT, const std::string &CPU,
   RM(_RM), OverrideMode(NoOverride), TM(_TM)
 {
   std::string CPUName = CPU;
-  if (CPUName.empty())
+  if (CPUName.empty()) {
     CPUName = "mips32";
+    if (TT.find("mips4") == 0)
+      CPUName = "mips4";
+  }
 
   // Parse features string.
   ParseSubtargetFeatures(CPUName, FS);

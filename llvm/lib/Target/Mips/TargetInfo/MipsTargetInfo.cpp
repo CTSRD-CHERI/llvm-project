@@ -22,6 +22,8 @@ extern "C" void LLVMInitializeMipsTargetInfo() {
   RegisterTarget<Triple::mipsel,
         /*HasJIT=*/true> Y(TheMipselTarget, "mipsel", "Mipsel");
 
+  RegisterTarget<Triple::mips4,
+        /*HasJIT=*/false> Mips4(TheMips64Target, "mips4", "Mips4 [experimental]");
   RegisterTarget<Triple::mips64,
         /*HasJIT=*/false> A(TheMips64Target, "mips64", "Mips64 [experimental]");
 

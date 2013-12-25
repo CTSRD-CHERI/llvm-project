@@ -95,6 +95,7 @@ class Proc<string Name, list<SubtargetFeature> Features>
 
 def : Proc<"mips32", [FeatureMips32]>;
 def : Proc<"mips32r2", [FeatureMips32r2]>;
+def : Proc<"mips4", [FeatureMips4]>;
 def : Proc<"mips64", [FeatureMips64]>;
 def : Proc<"mips64r2", [FeatureMips64r2]>;
 def : Proc<"mips16", [FeatureMips16]>;

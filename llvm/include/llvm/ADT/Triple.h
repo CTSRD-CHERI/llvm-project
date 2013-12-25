@@ -51,6 +51,7 @@ public:
     hexagon, // Hexagon: hexagon
     mips,    // MIPS: mips, mipsallegrex
     mipsel,  // MIPSEL: mipsel, mipsallegrexel
+    mips4,   // MIPS4: mips4
     mips64,  // MIPS64: mips64
     mips64el,// MIPS64EL: mips64el
     msp430,  // MSP430: msp430
