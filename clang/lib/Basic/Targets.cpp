@@ -5590,6 +5590,7 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple) {
     }
 
   case llvm::Triple::mips64:
+  case llvm::Triple::mips4:
     switch (os) {
     case llvm::Triple::Linux:
       return new LinuxTargetInfo<Mips64EBTargetInfo>(Triple);
