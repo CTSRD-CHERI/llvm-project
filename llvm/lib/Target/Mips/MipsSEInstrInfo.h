@@ -113,6 +113,8 @@ private:
                           MachineBasicBlock::iterator I, bool FP64) const;
   void expandEhReturn(MachineBasicBlock &MBB,
                       MachineBasicBlock::iterator I) const;
+  void expandCPSETUP(MachineBasicBlock &MBB,
+                     MachineBasicBlock::iterator I) const;
 };
 
 }

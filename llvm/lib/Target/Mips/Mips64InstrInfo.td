@@ -161,6 +161,7 @@ def BLTZ64 : CBranchZero<"bltz", brtarget, setlt, GPR64Opnd>, BGEZ_FM<1, 0>;
 def JALR64 : JumpLinkReg<"jalr", GPR64Opnd>, JALR_FM;
 def JALR64Pseudo : JumpLinkRegPseudo<GPR64Opnd, JALR, RA, GPR32Opnd>;
 def TAILCALL64_R : TailCallReg<GPR64Opnd, JR, GPR32Opnd>;
+def CPSETUP : MipsPseudo<(outs GPR64Opnd: $gp), (ins GPR64Opnd: $t9), []>;
 }
 
 /// Multiply and Divide Instructions.

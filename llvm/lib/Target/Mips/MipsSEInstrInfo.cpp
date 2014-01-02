@@ -347,6 +347,9 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
   case Mips::MIPSeh_return64:
     expandEhReturn(MBB, MI);
     break;
+  case Mips::CPSETUP:
+    expandCPSETUP(MBB, MI);
+    break;
   }
 
   MBB.erase(MI);
@@ -593,6 +596,20 @@ void MipsSEInstrInfo::expandEhReturn(MachineBasicBlock &MBB,
   BuildMI(MBB, I, I->getDebugLoc(), TM.getInstrInfo()->get(ADDU), SP)
       .addReg(SP).addReg(OffsetReg);
   BuildMI(MBB, I, I->getDebugLoc(), TM.getInstrInfo()->get(JR)).addReg(RA);
+}
+
+void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,
+                                    MachineBasicBlock::iterator I) const {
+  unsigned GP = I->getOperand(0).getReg();
+  DebugLoc DL = I->getDebugLoc();
+  const TargetInstrInfo &TII = *TM.getInstrInfo();
+  const GlobalValue *FName = MBB.getParent()->getFunction();
+  BuildMI(MBB, I, DL, TII.get(Mips::LUi64), GP)
+    .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
+  BuildMI(MBB, I, DL, TII.get(Mips::DADDu), GP).addReg(GP)
+    .addReg(Mips::T9_64);
+  BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), GP).addReg(GP)
+    .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
 }
 
 const MipsInstrInfo *llvm::createMipsSEInstrInfo(MipsTargetMachine &TM) {
