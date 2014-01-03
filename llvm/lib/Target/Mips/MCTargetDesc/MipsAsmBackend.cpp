@@ -140,12 +140,18 @@ public:
     unsigned FullSize;
 
     switch ((unsigned)Kind) {
+    case FK_Data_1:
+      FullSize = 1;
+      break;
+    case FK_Data_2:
     case Mips::fixup_Mips_16:
       FullSize = 2;
       break;
+    case FK_Data_8:
     case Mips::fixup_Mips_64:
       FullSize = 8;
       break;
+    case FK_Data_4:
     default:
       FullSize = 4;
       break;
