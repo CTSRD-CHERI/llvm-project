@@ -2004,14 +2004,16 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   // that the MIPS back end represents registers in 64-bit mode.
   if (Subtarget->isCheri() && (ISD::NON_EXTLOAD != LD->getExtensionType()) &&
       Op.getValueType() == MVT::i32) {
-    SDValue Chain = LD->getChain();
     SDValue BasePtr = LD->getBasePtr();
-    SDLoc DL(Op);
-    const SDValue Load = DAG.getExtLoad(LD->getExtensionType(), DL, MVT::i64,
-        Chain, BasePtr, LD->getPointerInfo(), LD->getMemoryVT(), LD->isVolatile(),
-        LD->isNonTemporal(), LD->getAlignment());
-    const SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, Op.getValueType(), Load);
-    return Trunc;
+    if (BasePtr->getValueType(0) == MVT::iFATPTR) {
+      SDValue Chain = LD->getChain();
+      SDLoc DL(Op);
+      const SDValue Load = DAG.getExtLoad(LD->getExtensionType(), DL, MVT::i64,
+          Chain, BasePtr, LD->getPointerInfo(), LD->getMemoryVT(), LD->isVolatile(),
+          LD->isNonTemporal(), LD->getAlignment());
+      const SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, Op.getValueType(), Load);
+      return Trunc;
+    }
   }
 
   // Return if load is aligned or if MemVT is neither i32 nor i64.
