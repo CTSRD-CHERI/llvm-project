@@ -28,36 +28,6 @@
 
 using namespace llvm;
 
-static unsigned getFixupSize(unsigned Kind) {
-  switch (Kind) {
-  default: llvm_unreachable("invalid fixup kind!");
-  case FK_Data_1:
-  case FK_GPRel_1:
-  case FK_PCRel_1:
-  case FK_SecRel_1: return 1;
-  case FK_Data_2:
-  case FK_GPRel_2:
-  case FK_PCRel_2:
-  case FK_SecRel_2:
-  case Mips::fixup_MICROMIPS_PC16_S1:
-  case Mips::fixup_Mips_16:
-  case Mips::fixup_Mips_GPREL16:
-  case Mips::fixup_Mips_PC16: return 2;
-  case FK_Data_4:
-  case FK_GPRel_4:
-  case FK_PCRel_4:
-  case FK_SecRel_4:
-  case Mips::fixup_Mips_32:
-  case Mips::fixup_Mips_REL32:
-  case Mips::fixup_Mips_GPREL32: return 4;
-  case FK_Data_8:
-  case FK_GPRel_8:
-  case FK_PCRel_8:
-  case FK_SecRel_8:
-  case Mips::fixup_Mips_64: return 8;
-  }
-}
-
 // Prepare value for the target space for it
 static unsigned adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
                                  MCContext *Ctx = NULL) {
@@ -169,7 +139,18 @@ public:
     // Used to point to big endian bytes
     unsigned FullSize;
 
-    FullSize = getFixupSize(Kind);
+    switch ((unsigned)Kind) {
+    case Mips::fixup_Mips_16:
+      FullSize = 2;
+      break;
+    case FK_Data_8:
+    case Mips::fixup_Mips_64:
+      FullSize = 8;
+      break;
+    default:
+      FullSize = 4;
+      break;
+    }
 
     // Grab current value, if any, from bits.
     uint64_t CurVal = 0;
