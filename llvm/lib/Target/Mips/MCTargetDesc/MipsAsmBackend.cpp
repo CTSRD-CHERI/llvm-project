@@ -39,7 +39,9 @@ static unsigned getFixupSize(unsigned Kind) {
   case FK_GPRel_2:
   case FK_PCRel_2:
   case FK_SecRel_2:
+  case Mips::fixup_MICROMIPS_PC16_S1:
   case Mips::fixup_Mips_16:
+  case Mips::fixup_Mips_GPREL16:
   case Mips::fixup_Mips_PC16: return 2;
   case FK_Data_4:
   case FK_GPRel_4:
