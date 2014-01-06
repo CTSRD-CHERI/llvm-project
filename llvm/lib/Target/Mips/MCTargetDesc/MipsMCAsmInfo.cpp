@@ -27,7 +27,8 @@ MipsMCAsmInfo::MipsMCAsmInfo(StringRef TT) {
     IsLittleEndian = false;
 
   if ((TheTriple.getArch() == Triple::mips64el) ||
-      (TheTriple.getArch() == Triple::mips64)) {
+      (TheTriple.getArch() == Triple::mips64) ||
+      (TheTriple.getArch() == Triple::cheri)) {
     PointerSize = CalleeSaveStackSlotSize = 8;
   }
 
