@@ -1360,6 +1360,11 @@ static Value *getNaturalGEPWithOffset(IRBuilderTy &IRB, const DataLayout &DL,
 /// surrounding code.
 static Value *getAdjustedPtr(IRBuilderTy &IRB, const DataLayout &DL,
                              Value *Ptr, APInt Offset, Type *PointerTy) {
+  // Make sure that we're not inadvertently inserting a bitcast between address
+  // spaces.
+  unsigned AS = Ptr->getType()->getPointerAddressSpace();
+  if (PointerTy->getPointerAddressSpace() != AS)
+    PointerTy = PointerTy->getPointerElementType()->getPointerTo(AS);
   // Even though we don't look through PHI nodes, we could be called on an
   // instruction in an unreachable block, which may be on a cycle.
   SmallPtrSet<Value *, 4> Visited;
