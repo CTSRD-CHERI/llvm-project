@@ -238,6 +238,8 @@ void llvm::ComputeMaskedBits(Value *V, APInt &KnownZero, APInt &KnownOne,
   assert((!TD ||
           TD->getTypeSizeInBits(V->getType()->getScalarType()) == BitWidth) &&
          (!V->getType()->isIntOrIntVectorTy() ||
+          (V->getType()->isPointerTy() &&
+           V->getType()->getScalarSizeInBits() >= BitWidth) ||
           V->getType()->getScalarSizeInBits() == BitWidth) &&
          KnownZero.getBitWidth() == BitWidth &&
          KnownOne.getBitWidth() == BitWidth &&
