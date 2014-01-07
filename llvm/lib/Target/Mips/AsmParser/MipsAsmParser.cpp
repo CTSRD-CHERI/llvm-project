@@ -1073,7 +1073,9 @@ int MipsAsmParser::matchCPURegisterName(StringRef Name) {
   int CC;
 
   if (Name == "at") {
-    if (Options.getATRegNum() != 1)
+    // If noat is set then the at register is 0, otherwise it's defined as a
+    // specific register.  Warn if the assembler is free to use it.
+    if (Options.getATRegNum() != 0)
       Warning(getLexer().getLoc(), "Used $at without \".set noat\"");
     return 1;
   }
