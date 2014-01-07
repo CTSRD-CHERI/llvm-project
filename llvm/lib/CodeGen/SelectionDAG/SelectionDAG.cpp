@@ -3750,6 +3750,11 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, SDLoc dl,
   bool isZeroStr = CopyFromStr && Str.empty();
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
 
+  // If we're copying between two different kinds of pointer then we can't
+  // generate a memcpy
+  if (Src->getValueType(0) != Dst->getValueType(0))
+    Limit = ~0U;
+
   if (!FindOptimalMemOpLowering(MemOps, Limit, Size,
                                 (DstAlignCanChange ? 0 : Align),
                                 (isZeroStr ? 0 : SrcAlign),
