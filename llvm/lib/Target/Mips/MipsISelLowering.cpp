@@ -2032,7 +2032,8 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
           getShiftAmountTy(Hi.getValueType()));
       SDValue Result = DAG.getNode(ISD::SHL, DL, VT, Hi, ShiftAmount);
       Result = DAG.getNode(ISD::OR, DL, VT, Result, Lo);
-      return Result;
+      SDValue Ops[2] = {Result, cast<LoadSDNode>(Lo)->getChain()};
+      return DAG.getMergeValues(Ops, 2, DL);
     }
   }
 

@@ -1077,11 +1077,7 @@ void SelectionDAGLegalize::LegalizeLoadOps(SDNode *Node) {
                SDValue Res = TLI.LowerOperation(SDValue(Node, 0), DAG);
                if (Res.getNode()) {
                  Value = Res;
-                 // FIXME: We should have a more sensible way of passing out a chain
-                 if (Res->getNumValues() > 1)
-                   Chain = Res.getValue(1);
-                 else
-                   Chain = Res.getNode()->getOperand(0).getValue(1);
+                 Chain = Res.getValue(1);
                }
              } else {
                // If this is an unaligned load and the target doesn't support
