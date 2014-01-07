@@ -2012,7 +2012,8 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
           Chain, BasePtr, LD->getPointerInfo(), LD->getMemoryVT(), LD->isVolatile(),
           LD->isNonTemporal(), LD->getAlignment());
       const SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, Op.getValueType(), Load);
-      return Trunc;
+      SDValue Ops[2] = {Trunc, cast<LoadSDNode>(Load)->getChain()};
+      return DAG.getMergeValues(Ops, 2, DL);
     } else if ((MemVT == MVT::i16) && (LD->getAlignment() < 2)) {
       // We have to manually expand unaligned i16 loads on CHERI, because
       // SelectionDAG doesn't give us a way of only doing custom expansion on
