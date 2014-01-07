@@ -1984,9 +1984,17 @@ static SDValue createLoadLR(unsigned Opc, SelectionDAG &DAG, LoadSDNode *LD,
   SDLoc DL(LD);
   SDVTList VTList = DAG.getVTList(VT, MVT::Other);
 
-  if (Offset)
-    Ptr = DAG.getNode(ISD::ADD, DL, BasePtrVT, Ptr,
-                      DAG.getConstant(Offset, BasePtrVT));
+  if (Offset) {
+    if (BasePtrVT == MVT::iFATPTR) {
+      SDValue SV = DAG.getNode(ISD::PTRTOINT, DL, MVT::i64, Ptr);
+      // FIXME: fat pointers with 32-bit address space
+      SV = DAG.getNode(ISD::ADD, DL,
+                       MVT::i64, SV, DAG.getConstant(Offset, MVT::i64));
+      Ptr = DAG.getNode(ISD::INTTOPTR, DL, BasePtrVT, SV);
+    } else
+      Ptr = DAG.getNode(ISD::ADD, DL, BasePtrVT, Ptr,
+                        DAG.getConstant(Offset, BasePtrVT));
+  }
 
   SDValue Ops[] = { Chain, Ptr, Src };
   return DAG.getMemIntrinsicNode(Opc, DL, VTList, Ops, 3, MemVT,
