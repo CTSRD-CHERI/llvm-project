@@ -3754,7 +3754,7 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, SDLoc dl,
   // generate a memcpy.
   // FIXME: We should allow targets to provide cross-address-space memcpy
   // functions and advertise this support.
-  if (SrcPtrInfo->getAddressSpace() != DstAlignCanChange->getAddressSpace())
+  if (SrcPtrInfo.getAddrSpace() != DstPtrInfo.getAddrSpace())
     Limit = ~0U;
 
   if (!FindOptimalMemOpLowering(MemOps, Limit, Size,
