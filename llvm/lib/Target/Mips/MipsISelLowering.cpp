@@ -1980,21 +1980,11 @@ static SDValue createLoadLR(unsigned Opc, SelectionDAG &DAG, LoadSDNode *LD,
                             SDValue Chain, SDValue Src, unsigned Offset) {
   SDValue Ptr = LD->getBasePtr();
   EVT VT = LD->getValueType(0), MemVT = LD->getMemoryVT();
-  EVT BasePtrVT = Ptr.getValueType();
   SDLoc DL(LD);
   SDVTList VTList = DAG.getVTList(VT, MVT::Other);
 
-  if (Offset) {
-    if (BasePtrVT == MVT::iFATPTR) {
-      SDValue SV = DAG.getNode(ISD::PTRTOINT, DL, MVT::i64, Ptr);
-      // FIXME: fat pointers with 32-bit address space
-      SV = DAG.getNode(ISD::ADD, DL,
-                       MVT::i64, SV, DAG.getConstant(Offset, MVT::i64));
-      Ptr = DAG.getNode(ISD::INTTOPTR, DL, BasePtrVT, SV);
-    } else
-      Ptr = DAG.getNode(ISD::ADD, DL, BasePtrVT, Ptr,
-                        DAG.getConstant(Offset, BasePtrVT));
-  }
+  if (Offset)
+    Ptr = DAG.getPointerAdd(DL, Ptr, Offset);
 
   SDValue Ops[] = { Chain, Ptr, Src };
   return DAG.getMemIntrinsicNode(Opc, DL, VTList, Ops, 3, MemVT,
@@ -2054,12 +2044,7 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
         SDValue Hi = DAG.getExtLoad(ISD::ZEXTLOAD, DL, VT, Chain, BasePtr,
             LD->getPointerInfo(), MVT::i32, LD->isVolatile(),
             LD->isNonTemporal(), 4, LD->getTBAAInfo());
-        SDValue SV = DAG.getNode(ISD::PTRTOINT, DL, MVT::i64, BasePtr);
-        // FIXME: fat pointers with 32-bit address space
-        // FIXME: This really should be factored out into SelectionDAG
-        SV = DAG.getNode(ISD::ADD, DL,
-                         MVT::i64, SV, DAG.getConstant(4, MVT::i64));
-        SDValue Ptr = DAG.getNode(ISD::INTTOPTR, DL, BasePtr.getValueType(), SV);
+        SDValue Ptr = DAG.getPointerAdd(DL, BasePtr, 4);
         SDValue Lo = DAG.getExtLoad(ISD::ZEXTLOAD, DL, VT, Chain, Ptr,
                             LD->getPointerInfo().getWithOffset(4),
                             MVT::i32, LD->isVolatile(),

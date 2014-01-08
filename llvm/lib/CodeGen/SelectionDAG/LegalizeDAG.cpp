@@ -412,16 +412,7 @@ static void ExpandUnalignedStore(StoreSDNode *ST, SelectionDAG &DAG,
                              ST->getPointerInfo(), NewStoredVT,
                              ST->isVolatile(), ST->isNonTemporal(), Alignment);
 
-  EVT PtrVT = Ptr.getValueType();
-  if (PtrVT == MVT::iFATPTR) {
-    SDValue SV = DAG.getNode(ISD::PTRTOINT, dl, MVT::i64, Ptr);
-    // FIXME: fat pointers with 32-bit address space
-    SV = DAG.getNode(ISD::ADD, dl,
-                     MVT::i64, SV, DAG.getConstant(IncrementSize, MVT::i64));
-    Ptr = DAG.getNode(ISD::INTTOPTR, dl, PtrVT, SV);
-  } else
-    Ptr = DAG.getNode(ISD::ADD, dl, PtrVT, Ptr,
-                      DAG.getConstant(IncrementSize, TLI.getPointerTy(AS)));
+  Ptr = DAG.getPointerAdd(dl, Ptr, IncrementSize);
   Alignment = MinAlign(Alignment, IncrementSize);
   Store2 = DAG.getTruncStore(Chain, dl, TLI.isLittleEndian()?Hi:Lo, Ptr,
                              ST->getPointerInfo().getWithOffset(IncrementSize),
