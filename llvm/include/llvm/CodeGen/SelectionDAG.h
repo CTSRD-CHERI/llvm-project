@@ -647,6 +647,8 @@ public:
                     SDValue Size, unsigned Align, bool isVol,
                     MachinePointerInfo DstPtrInfo);
 
+  SDValue getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset);
+
   /// getSetCC - Helper function to make it easier to build SetCC's if you just
   /// have an ISD::CondCode instead of an SDValue.
   ///

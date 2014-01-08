@@ -4024,6 +4024,22 @@ static SDValue getMemsetStores(SelectionDAG &DAG, SDLoc dl,
                      &OutChains[0], OutChains.size());
 }
 
+SDValue SelectionDAG::getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset) {
+  EVT BasePtrVT = Ptr.getValueType();
+  if (BasePtrVT == MVT::iFATPTR) {
+    // Assume that address space 0 has the range of any pointer.
+    MVT IntPtrTy = MVT::getIntegerVT(TM.getTargetLowering()
+          ->getDataLayout()->getPointerSizeInBits(0));
+    SDValue SV = getNode(ISD::PTRTOINT, dl, IntPtrTy, Ptr);
+    // FIXME: fat pointers with 32-bit address space
+    SV = getNode(ISD::ADD, dl,
+                 IntPtrTy, SV, getConstant(Offset, IntPtrTy));
+    return getNode(ISD::INTTOPTR, dl, BasePtrVT, SV);
+  }
+  return getNode(ISD::ADD, dl, BasePtrVT, Ptr,
+                 getConstant(Offset, BasePtrVT));
+}
+
 SDValue SelectionDAG::getMemcpy(SDValue Chain, SDLoc dl, SDValue Dst,
                                 SDValue Src, SDValue Size,
                                 unsigned Align, bool isVol, bool AlwaysInline,
