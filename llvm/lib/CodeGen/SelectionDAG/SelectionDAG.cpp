@@ -4031,7 +4031,6 @@ SDValue SelectionDAG::getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset) {
     MVT IntPtrTy = MVT::getIntegerVT(TM.getTargetLowering()
           ->getDataLayout()->getPointerSizeInBits(0));
     SDValue SV = getNode(ISD::PTRTOINT, dl, IntPtrTy, Ptr);
-    // FIXME: fat pointers with 32-bit address space
     SV = getNode(ISD::ADD, dl,
                  IntPtrTy, SV, getConstant(Offset, IntPtrTy));
     return getNode(ISD::INTTOPTR, dl, BasePtrVT, SV);
