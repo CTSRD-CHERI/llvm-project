@@ -3751,8 +3751,10 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, SDLoc dl,
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
 
   // If we're copying between two different kinds of pointer then we can't
-  // generate a memcpy
-  if (Src->getValueType(0) != Dst->getValueType(0))
+  // generate a memcpy.
+  // FIXME: We should allow targets to provide cross-address-space memcpy
+  // functions and advertise this support.
+  if (SrcPtrInfo->getAddressSpace() != DstAlignCanChange->getAddressSpace())
     Limit = ~0U;
 
   if (!FindOptimalMemOpLowering(MemOps, Limit, Size,
