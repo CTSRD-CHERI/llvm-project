@@ -4,19 +4,19 @@ __capability void *results[12];
 long long test(__capability void* foo)
 {
 	long long x;
-	// CHECK: call i64 @llvm.cheri.get.cap.length
-	// CHECK: call i64 @llvm.cheri.get.cap.perms
-	// CHECK: call i64 @llvm.cheri.get.cap.type
-	// CHECK: call i64 @llvm.cheri.get.cap.tag
-	// CHECK: call i64 @llvm.cheri.get.cap.unsealed
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.set.cap.length
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.and.cap.perms
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.set.cap.type
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.seal.cap.code
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.seal.cap.data
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.unseal.cap
-	// CHECK: call void @llvm.cheri.set.cause(i64 42)
-	// CHECK: call i64 @llvm.cheri.get.cause()
+	// CHECK: call i64 @llvm.mips.get.cap.length
+	// CHECK: call i64 @llvm.mips.get.cap.perms
+	// CHECK: call i64 @llvm.mips.get.cap.type
+	// CHECK: call i64 @llvm.mips.get.cap.tag
+	// CHECK: call i64 @llvm.mips.get.cap.unsealed
+	// CHECK: call i8 addrspace(200)* @llvm.mips.set.cap.length
+	// CHECK: call i8 addrspace(200)* @llvm.mips.and.cap.perms
+	// CHECK: call i8 addrspace(200)* @llvm.mips.set.cap.type
+	// CHECK: call i8 addrspace(200)* @llvm.mips.seal.cap.code
+	// CHECK: call i8 addrspace(200)* @llvm.mips.seal.cap.data
+	// CHECK: call i8 addrspace(200)* @llvm.mips.unseal.cap
+	// CHECK: call void @llvm.mips.set.cause(i64 42)
+	// CHECK: call i64 @llvm.mips.get.cause()
 	x &= __builtin_cheri_get_cap_length(foo);
 	x &= __builtin_cheri_get_cap_perms(foo);
 	x &= __builtin_cheri_get_cap_type(foo);

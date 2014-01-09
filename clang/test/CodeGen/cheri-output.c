@@ -5,7 +5,7 @@ int write_only(__capability __output int *x);
 int caller(__capability int *x)
 {
 	// Ensure that the read and read capability flags are cleared.gq
-	// CHECK: llvm.cheri.and.cap.perms(
+	// CHECK: llvm.mips.and.cap.perms(
 	// CHECK: i64 65515)
 	return write_only(x);
 }

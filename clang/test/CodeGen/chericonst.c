@@ -8,7 +8,7 @@ int callconst(void)
   struct x { int a,b,c; } x;
   __capability struct x *y = (__capability struct x*)&x;
   // Make sure we remove the write permissions from the capability
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.and.cap.perms(
+  // CHECK: call i8 addrspace(200)* @llvm.mips.and.cap.perms(
   // CHECK: i64 65495)
   cst(y);
   return 0;

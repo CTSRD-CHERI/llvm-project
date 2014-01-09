@@ -32,6 +32,6 @@ void invoke_method()
 
   e = (example_t) &example_object;
   rc = example_method(e);
-  // CHECK: llvm.cheri.seal.cap.data
+  // CHECK: llvm.mips.seal.cap.data
 }
 
