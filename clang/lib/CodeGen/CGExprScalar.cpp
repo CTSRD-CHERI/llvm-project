@@ -1311,7 +1311,7 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
       flags &= 0xFFEB;
 
     if (flags != 0xffff) {
-      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_and_cap_perms);
+      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::mips_and_cap_perms);
       if (F->getFunctionType()->getParamType(0) != result->getType())
         result = Builder.CreateBitCast(result, F->getFunctionType()->getParamType(0));
       result = Builder.CreateCall2(F, result,

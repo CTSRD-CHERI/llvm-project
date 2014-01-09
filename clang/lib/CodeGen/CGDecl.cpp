@@ -1733,7 +1733,7 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, llvm::Value *Arg,
             // FIXME: Don't hard-code address space 200!
             // If this is CHERI, enforce this in hardware
             if (Ty->getPointeeType().getAddressSpace() == 200) {
-              llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_unseal_cap);
+              llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::mips_unseal_cap);
               llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, 200);
               Arg = Builder.CreateCall2(F,
                   Builder.CreateBitCast(Arg, CapPtrTy),

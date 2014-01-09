@@ -2661,7 +2661,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                 // FIXME: Don't hard-code address space 200!
                 // If this is CHERI, enforce this in hardware
                 if (RetTy->getPointeeType().getAddressSpace() == 200) {
-                  llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_unseal_cap);
+                  llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::mips_unseal_cap);
                   llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, 200);
                   V = Builder.CreateCall2(F,
                       Builder.CreateBitCast(V, CapPtrTy),
