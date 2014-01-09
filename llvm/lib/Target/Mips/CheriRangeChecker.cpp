@@ -156,7 +156,7 @@ namespace
 
         if (!(Casts.empty() && ConstantCasts.empty())) {
           SetLengthFn = Intrinsic::getDeclaration(M,
-              Intrinsic::cheri_set_cap_length);
+              Intrinsic::mips_set_cap_length);
           Value *BitCast = 0;
 
           for (pair<AllocOperands, IntToPtrInst*> *i=Casts.begin(),

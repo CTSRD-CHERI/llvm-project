@@ -72,58 +72,58 @@ def CGetBase : CheriFmtGet<2, (outs GPR64:$rd), (ins CheriRegs:$cb),
 
 def CGetTag : CheriFmtGet<5, (outs GPR64:$rd), (ins CheriRegs:$cb),
                           "cgettag $rd, $cb",
-                          [(set GPR64:$rd, (int_cheri_get_cap_tag CheriRegs:$cb))]>;
+                          [(set GPR64:$rd, (int_mips_get_cap_tag CheriRegs:$cb))]>;
 
 def CSetLength : CheriFmtSet<3, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64:$rt),
                              "csetlen\t$cd, $cb, $rt",
-                             [(set CheriRegs:$cd, (int_cheri_set_cap_length CheriRegs:$cb, GPR64:$rt))]> {
+                             [(set CheriRegs:$cd, (int_mips_set_cap_length CheriRegs:$cb, GPR64:$rt))]> {
   let hasSideEffects = 1;
 }
 
 def CGetLength : CheriFmtGet<3, (outs GPR64:$rd), (ins CheriRegs:$cb),
                              "cgetlen $rd, $cb",
-                             [(set GPR64:$rd, (int_cheri_get_cap_length CheriRegs:$cb))]>;
+                             [(set GPR64:$rd, (int_mips_get_cap_length CheriRegs:$cb))]>;
 
 def CAndPerm : CheriFmtSet<0, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64:$rt),
                            "candperm\t$cd, $cb, $rt",
-                           [(set CheriRegs:$cd, (int_cheri_and_cap_perms CheriRegs:$cb, GPR64:$rt))]>;
+                           [(set CheriRegs:$cd, (int_mips_and_cap_perms CheriRegs:$cb, GPR64:$rt))]>;
 
 def CGetPerm : CheriFmtGet<0, (outs GPR64:$rd), (ins CheriRegs:$cb),
                            "cgetperm $rd, $cb",
-                           [(set GPR64:$rd, (int_cheri_get_cap_perms CheriRegs:$cb))]>;
+                           [(set GPR64:$rd, (int_mips_get_cap_perms CheriRegs:$cb))]>;
 
 def CSetType : CheriFmtSet<1, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64:$rt),
                            "csettype\t$cd, $cb, $rt",
-                           [(set CheriRegs:$cd, (int_cheri_set_cap_type CheriRegs:$cb, GPR64:$rt))]>;
+                           [(set CheriRegs:$cd, (int_mips_set_cap_type CheriRegs:$cb, GPR64:$rt))]>;
 
 def CGetType : CheriFmtGet<1, (outs GPR64:$rd), (ins CheriRegs:$cb),
                            "cgettype $rd, $cb",
-                           [(set GPR64:$rd, (int_cheri_get_cap_type CheriRegs:$cb))]>;
+                           [(set GPR64:$rd, (int_mips_get_cap_type CheriRegs:$cb))]>;
 
 def CSealData : CheriFmt3Caps<0x02, (outs CheriRegs:$cd), (ins CheriRegs:$cs, CheriRegs:$ct),
                               "csealdata\t$cd, $cs, $ct",
-                              [(set CheriRegs: $cd, (int_cheri_seal_cap_data CheriRegs:$cs, CheriRegs:$ct))]>;
+                              [(set CheriRegs: $cd, (int_mips_seal_cap_data CheriRegs:$cs, CheriRegs:$ct))]>;
 
 def CSealCode : CheriFmt2Caps<0x01, (outs CheriRegs:$cd), (ins CheriRegs:$cs),
                               "csealcode\t$cd, $cs",
-                              [(set CheriRegs: $cd, (int_cheri_seal_cap_code CheriRegs:$cs))]>;
+                              [(set CheriRegs: $cd, (int_mips_seal_cap_code CheriRegs:$cs))]>;
 
 def CUnseal   : CheriFmt3Caps<0x03, (outs CheriRegs:$cd), (ins CheriRegs:$cs, CheriRegs:$ct),
                               "cunseal\t$cd, $cs, $ct",
-                              [(set CheriRegs: $cd, (int_cheri_unseal_cap CheriRegs:$cs, CheriRegs:$ct))]>;
+                              [(set CheriRegs: $cd, (int_mips_unseal_cap CheriRegs:$cs, CheriRegs:$ct))]>;
 
 def CGetUnsealed : CheriFmtGet<6, (outs GPR64:$rd), (ins CheriRegs:$cb),
                           "cgetunsealed\t$rd, $cb",
-                          [(set GPR64:$rd, (int_cheri_get_cap_unsealed CheriRegs:$cb))]>;
+                          [(set GPR64:$rd, (int_mips_get_cap_unsealed CheriRegs:$cb))]>;
 def CGetPCC : CheriFmtGet<7, (outs GPR64:$rd, CheriRegs:$cb), (ins),
                           "cgetpcc\t${rd}(${cb})",
                           []>;
 def CGetCause : CheriFmtCause<0, (outs GPR64:$rd), (ins ),
                           "cgetcause\t${rd}",
-                          [(set GPR64:$rd, (int_cheri_get_cause))]>;
+                          [(set GPR64:$rd, (int_mips_get_cause))]>;
 def CSetCause : CheriFmtCause<4, (outs), (ins GPR64: $rs),
                           "csetcause\t${rs}",
-                          [(int_cheri_set_cause GPR64: $rs)]>;
+                          [(int_mips_set_cause GPR64: $rs)]>;
 
 // Int to pointer in address space 0
 def : Pat<(inttoptr GPR64:$rt),
