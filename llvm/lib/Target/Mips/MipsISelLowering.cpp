@@ -2005,36 +2005,35 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
     SDValue BasePtr = LD->getBasePtr();
     SDValue Chain = LD->getChain();
     if ((ISD::NON_EXTLOAD != LD->getExtensionType()) &&
-      Op.getValueType() == MVT::i32) {
-      if (BasePtr->getValueType(0) == MVT::iFATPTR) {
-        const SDValue Load = DAG.getExtLoad(LD->getExtensionType(), DL, MVT::i64,
-            Chain, BasePtr, LD->getPointerInfo(), LD->getMemoryVT(), LD->isVolatile(),
-            LD->isNonTemporal(), LD->getAlignment());
-        const SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, Op.getValueType(), Load);
-        SDValue Ops[2] = {Trunc, cast<LoadSDNode>(Load)->getChain()};
-        return DAG.getMergeValues(Ops, 2, DL);
-      } else if ((MemVT == MVT::i16) && (LD->getAlignment() < 2)) {
-        // We have to manually expand unaligned i16 loads on CHERI, because
-        // SelectionDAG doesn't give us a way of only doing custom expansion on
-        // certain types of pointer.
-        ISD::LoadExtType HiExtType = LD->getExtensionType();
-        EVT VT = Op.getValueType();
-        SDValue Hi = DAG.getExtLoad(HiExtType, DL, VT, Chain, BasePtr, LD->getPointerInfo(),
-                            MVT::i8, LD->isVolatile(),
-                            LD->isNonTemporal(), 1, LD->getTBAAInfo());
-        SDValue Ptr = DAG.getNode(ISD::ADD, DL, BasePtr.getValueType(), BasePtr,
-                          DAG.getConstant(1, BasePtr.getValueType()));
-        SDValue Lo = DAG.getExtLoad(ISD::ZEXTLOAD, DL, VT, Chain, Ptr,
-                            LD->getPointerInfo().getWithOffset(1),
-                            MVT::i8, LD->isVolatile(),
-                            LD->isNonTemporal(), 1, LD->getTBAAInfo());
-        SDValue ShiftAmount = DAG.getConstant(8,
-            getShiftAmountTy(Hi.getValueType()));
-        SDValue Result = DAG.getNode(ISD::SHL, DL, VT, Hi, ShiftAmount);
-        Result = DAG.getNode(ISD::OR, DL, VT, Result, Lo);
-        SDValue Ops[2] = {Result, cast<LoadSDNode>(Lo)->getChain()};
-        return DAG.getMergeValues(Ops, 2, DL);
-      }
+      Op.getValueType() == MVT::i32 &&
+      BasePtr->getValueType(0) == MVT::iFATPTR) {
+      const SDValue Load = DAG.getExtLoad(LD->getExtensionType(), DL, MVT::i64,
+          Chain, BasePtr, LD->getPointerInfo(), LD->getMemoryVT(), LD->isVolatile(),
+          LD->isNonTemporal(), LD->getAlignment());
+      const SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, Op.getValueType(), Load);
+      SDValue Ops[2] = {Trunc, cast<LoadSDNode>(Load)->getChain()};
+      return DAG.getMergeValues(Ops, 2, DL);
+    } else if ((MemVT == MVT::i16) && (LD->getAlignment() < 2)) {
+      // We have to manually expand unaligned i16 loads on CHERI, because
+      // SelectionDAG doesn't give us a way of only doing custom expansion on
+      // certain types of pointer.
+      ISD::LoadExtType HiExtType = LD->getExtensionType();
+      EVT VT = Op.getValueType();
+      SDValue Hi = DAG.getExtLoad(HiExtType, DL, VT, Chain, BasePtr, LD->getPointerInfo(),
+                          MVT::i8, LD->isVolatile(),
+                          LD->isNonTemporal(), 1, LD->getTBAAInfo());
+      SDValue Ptr = DAG.getNode(ISD::ADD, DL, BasePtr.getValueType(), BasePtr,
+                        DAG.getConstant(1, BasePtr.getValueType()));
+      SDValue Lo = DAG.getExtLoad(ISD::ZEXTLOAD, DL, VT, Chain, Ptr,
+                          LD->getPointerInfo().getWithOffset(1),
+                          MVT::i8, LD->isVolatile(),
+                          LD->isNonTemporal(), 1, LD->getTBAAInfo());
+      SDValue ShiftAmount = DAG.getConstant(8,
+          getShiftAmountTy(Hi.getValueType()));
+      SDValue Result = DAG.getNode(ISD::SHL, DL, VT, Hi, ShiftAmount);
+      Result = DAG.getNode(ISD::OR, DL, VT, Result, Lo);
+      SDValue Ops[2] = {Result, cast<LoadSDNode>(Lo)->getChain()};
+      return DAG.getMergeValues(Ops, 2, DL);
     } else if ((MemVT == MVT::i64) && (LD->getAlignment() < 8) &&
                (BasePtr->getValueType(0) == MVT::iFATPTR)) {
       // CHERI doesn't have capability versions of LDL / LDR, so we have to
@@ -2056,6 +2055,8 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
         SDValue Ops[2] = {Result, cast<LoadSDNode>(Lo)->getChain()};
         return DAG.getMergeValues(Ops, 2, DL);
       }
+      assert(0 &&
+          "64-bit loads with less than 4-byte alignment not yet handled");
     }
   }
 
