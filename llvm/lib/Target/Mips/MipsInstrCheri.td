@@ -194,7 +194,7 @@ defm CAPLOAD64     : LoadViaCap<3, 0, "cld", GPR64Opnd, load>;
 
 defm CAPLOADU8     : LoadViaCap<0, 0, "clbu", GPR64Opnd, extloadi8>;
 defm CAPLOADU16    : LoadViaCap<1, 0, "clhu", GPR64Opnd, extloadi16>;
-defm CAPLOADU32    : LoadViaCap<2, 0, "clwu", GPR64Opnd, extloadi32>;
+defm CAPLOADU32    : LoadViaCap<2, 0, "clwu", GPR64Opnd, zextloadi32>;
 
 defm CAP0LOADA8     : LoadViaCap0<CAPLOAD8, extloadi8>;
 defm CAP0LOADA16    : LoadViaCap0<CAPLOAD16, extloadi16>;
