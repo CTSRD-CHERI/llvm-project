@@ -148,7 +148,6 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
     // lui $v0, %hi(%neg(%gp_rel(fname)))
     // daddu $v1, $v0, $t9
     // daddiu $globalbasereg, $v1, %lo(%neg(%gp_rel(fname)))
-#ifdef NON_CRAPPY_LINKER
     const GlobalValue *FName = MF.getFunction();
     BuildMI(MBB, I, DL, TII.get(Mips::LUi64), V0)
       .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
@@ -156,10 +155,6 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
       .addReg(Mips::T9_64);
     BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), GlobalBaseReg).addReg(V1)
       .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
-#else
-    BuildMI(MBB, I, DL, TII.get(Mips::CPSETUP), GlobalBaseReg)
-      .addReg(Mips::T9_64);
-#endif
     return;
   }
 
