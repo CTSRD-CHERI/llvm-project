@@ -230,6 +230,14 @@ defm CAPSTORE32     : StoreViaCap<2, 0, "csw", GPR32Opnd, store>;
 defm CAPSTORE64     : StoreViaCap<3, 0, "csd", GPR64Opnd, store>;
 //def : Pat<(truncstorei8 (add (add (ptrtoint CheriRegs:$cb), GPR64: $rt), (i64 immSExt8:$offset)),
           
+def : Pat<(int_mips_get_c0), (CIncBase C0, ZERO_64)>;
+def : Pat<(int_mips_get_idc), (CIncBase C26, ZERO_64)>;
+def : Pat<(int_mips_get_kr1c), (CIncBase C27, ZERO_64)>;
+def : Pat<(int_mips_get_kr2c), (CIncBase C28, ZERO_64)>;
+def : Pat<(int_mips_get_kcc), (CIncBase C29, ZERO_64)>;
+def : Pat<(int_mips_get_kdc), (CIncBase C30, ZERO_64)>;
+def : Pat<(int_mips_get_epcc), (CIncBase C31, ZERO_64)>;
+
 
 defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR64Opnd, truncstorei8>;
 defm CAP0STORE16    : StoreViaCap0<CAPSTORE16, GPR64Opnd, truncstorei16>;
