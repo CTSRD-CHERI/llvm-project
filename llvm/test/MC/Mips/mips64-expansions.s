@@ -16,6 +16,17 @@
 # CHECK-DLA:   fixup A - offset: 0, value: function@ABS_LO, kind: fixup_Mips_LO16
 # CHECK-DLA: dsll32	$12, $12, 0             # encoding: [0x3c,0x60,0x0c,0x00]
 # CHECK-DLA: daddu	$12, $12, $1            # encoding: [0x2d,0x60,0x81,0x01]
+# CHECK-DLA: lui	$12, %highest(symbol)   # encoding: [A,A,0x0c,0x3c]
+# CHECK-DLA:  fixup A - offset: 0, value: symbol@HIGHEST, kind: fixup_Mips_HIGHEST
+# CHECK-DLA: daddiu	$12, $12, %higher(symbol) # encoding: [A,A,0x8c,0x65]
+# CHECK-DLA:  fixup A - offset: 0, value: symbol@HIGHER, kind: fixup_Mips_HIGHER
+# CHECK-DLA: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
+# CHECK-DLA: daddiu	$12, $12, %hi(symbol)   # encoding: [A,A,0x8c,0x65]
+# CHECK-DLA:  fixup A - offset: 0, value: symbol@ABS_HI, kind: fixup_Mips_HI16
+# CHECK-DLA: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
+# CHECK-DLA: daddiu	$12, $12, %lo(symbol)   # encoding: [A,A,0x8c,0x65]
+# CHECK-DLA:  fixup A - offset: 0, value: symbol@ABS_LO, kind: fixup_Mips_LO16
+
 
 # CHECK: ori	$12, $zero, 1           # encoding: [0x01,0x00,0x0c,0x34]
 # CHECK: ori	$12, $zero, 10          # encoding: [0x0a,0x00,0x0c,0x34]
@@ -179,6 +190,9 @@
 # CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
 
 	dla	$t0, symbol
+.set noat
+	dla	$t0, symbol
+.set at
 
 	dli	$t0, 1
 	dli	$t0, 10

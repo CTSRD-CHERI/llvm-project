@@ -914,6 +914,21 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
       Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_ABS_LO,
       getContext());
   if (isMips64()) {
+    if (Options.getATRegNum() == 0) {
+      pushInstr(Instructions, Mips::LUi, RegNo,
+                MCOperand::CreateExpr(HighestExpr), IDLoc);
+      pushInstr(Instructions, Mips::DADDiu, RegNo, RegNo,
+                MCOperand::CreateExpr(HigherExpr), IDLoc);
+      pushInstr(Instructions, Mips::DSLL, RegNo, RegNo,
+          MCOperand::CreateImm(16), IDLoc);
+      pushInstr(Instructions, Mips::DADDiu, RegNo, RegNo,
+                MCOperand::CreateExpr(HiExpr), IDLoc);
+      pushInstr(Instructions, Mips::DSLL, RegNo, RegNo,
+          MCOperand::CreateImm(16), IDLoc);
+      pushInstr(Instructions, Mips::DADDiu, RegNo, RegNo,
+                MCOperand::CreateExpr(LoExpr), IDLoc);
+      return;
+    }
     unsigned AtRegNum = getReg(Mips::GPR64RegClassID, getATReg());
     pushInstr(Instructions, Mips::LUi, RegNo,
               MCOperand::CreateExpr(HighestExpr), IDLoc);
