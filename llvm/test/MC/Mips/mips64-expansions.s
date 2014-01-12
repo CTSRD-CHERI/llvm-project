@@ -6,12 +6,17 @@
 #
 # XXXRW: Does using powers of ten make me a bad person?
 #
-# CHECK-DLA: lui	$12, 0x0
-# CHECK-DLA: lui	$1,0x0
-# CHECK-DLA: daddiu	$12, $12, 0
-# CHECK-DLA: daddiu	$1,$1,0
-# CHECK-DLA: dsll32	$12, $12, 0x0
-# CHECK-DLA: daddu	$12, $12, $1
+# CHECK-DLA: lui	$12, %highest(function)  # encoding: [A,A,0x0c,0x3c]
+# CHECK-DLA:   fixup A - offset: 0, value: function@HIGHEST, kind: fixup_Mips_HIGHEST
+# CHECK-DLA: lui	$1, %hi(function)        # encoding: [A,A,0x01,0x3c]
+# CHECK-DLA:   fixup A - offset: 0, value: function@ABS_HI, kind: fixup_Mips_HI16
+# CHECK-DLA: daddiu	$12, $12, %higher(function) # encoding: [A,A,0x8c,0x65]
+# CHECK-DLA:   fixup A - offset: 0, value: function@HIGHER, kind: fixup_Mips_HIGHER
+# CHECK-DLA: daddiu	$1, $1, %lo(function)    # encoding: [A,A,0x21,0x64]
+# CHECK-DLA:   fixup A - offset: 0, value: function@ABS_LO, kind: fixup_Mips_LO16
+# CHECK-DLA: dsll32	$12, $12, 0             # encoding: [0x3c,0x60,0x0c,0x00]
+# CHECK-DLA: daddu	$12, $12, $1            # encoding: [0x2d,0x60,0x81,0x01]
+
 # CHECK: ori	$12, $zero, 1           # encoding: [0x01,0x00,0x0c,0x34]
 # CHECK: ori	$12, $zero, 10          # encoding: [0x0a,0x00,0x0c,0x34]
 # CHECK: ori	$12, $zero, 100         # encoding: [0x64,0x00,0x0c,0x34]
@@ -173,7 +178,7 @@
 # CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
 # CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
 
-#	dla	$t0, symbol
+	dla	$t0, symbol
 
 	dli	$t0, 1
 	dli	$t0, 10

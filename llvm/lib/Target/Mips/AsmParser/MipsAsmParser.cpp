@@ -731,25 +731,45 @@ void MipsAsmParser::expandInstruction(MCInst &Inst, SMLoc IDLoc,
 }
 
 namespace {
+
+void pushInstr(SmallVectorImpl<MCInst> &Instructions, unsigned OpCode,
+    unsigned Reg0, unsigned Reg1, MCOperand Op1, SMLoc IDLoc) {
+  MCInst tmpInst;
+  tmpInst.setOpcode(OpCode);
+  tmpInst.addOperand(MCOperand::CreateReg(Reg0));
+  tmpInst.addOperand(MCOperand::CreateReg(Reg1));
+  tmpInst.addOperand(Op1);
+  tmpInst.setLoc(IDLoc);
+  Instructions.push_back(tmpInst);
+}
+void pushInstr(SmallVectorImpl<MCInst> &Instructions, unsigned OpCode,
+    unsigned Reg0, unsigned Reg1, unsigned Reg2, SMLoc IDLoc) {
+  MCInst tmpInst;
+  tmpInst.setOpcode(OpCode);
+  tmpInst.addOperand(MCOperand::CreateReg(Reg0));
+  tmpInst.addOperand(MCOperand::CreateReg(Reg1));
+  tmpInst.addOperand(MCOperand::CreateReg(Reg2));
+  tmpInst.setLoc(IDLoc);
+  Instructions.push_back(tmpInst);
+}
+void pushInstr(SmallVectorImpl<MCInst> &Instructions, unsigned OpCode,
+    unsigned Reg, MCOperand Op1, SMLoc IDLoc) {
+  MCInst tmpInst;
+  tmpInst.setOpcode(OpCode);
+  tmpInst.addOperand(MCOperand::CreateReg(Reg));
+  tmpInst.addOperand(Op1);
+  tmpInst.setLoc(IDLoc);
+  Instructions.push_back(tmpInst);
+}
+
 template<bool PerformShift>
 void createShiftOr(MCOperand Operand, unsigned RegNo, SMLoc IDLoc,
                    SmallVectorImpl<MCInst> &Instructions) {
   MCInst tmpInst;
-  if (PerformShift) {
-    tmpInst.setOpcode(Mips::DSLL);
-    tmpInst.addOperand(MCOperand::CreateReg(RegNo));
-    tmpInst.addOperand(MCOperand::CreateReg(RegNo));
-    tmpInst.addOperand(MCOperand::CreateImm(16));
-    tmpInst.setLoc(IDLoc);
-    Instructions.push_back(tmpInst);
-    tmpInst.clear();
-  }
-  tmpInst.setOpcode(Mips::ORi);
-  tmpInst.addOperand(MCOperand::CreateReg(RegNo));
-  tmpInst.addOperand(MCOperand::CreateReg(RegNo));
-  tmpInst.addOperand(Operand);
-  tmpInst.setLoc(IDLoc);
-  Instructions.push_back(tmpInst);
+  if (PerformShift)
+    pushInstr(Instructions, Mips::DSLL, RegNo, RegNo, MCOperand::CreateImm(16),
+        IDLoc);
+  pushInstr(Instructions, Mips::ORi, RegNo, RegNo, Operand, IDLoc);
 }
 template<int Shift, bool PerformShift>
 void createShiftOr(int64_t Value, unsigned RegNo, SMLoc IDLoc,
@@ -868,7 +888,6 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
                                     SmallVectorImpl<MCInst> &Instructions) {
   // FIXME: If we do have a valid at register to use, we should generate a
   // slightly shorter sequence here.
-  MCInst tmpInst;
   int ExprOperandNo = 1;
   // Sometimes the assembly parser will get the immediate expression as a $zero
   // + immediate
@@ -894,20 +913,25 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
   const MCSymbolRefExpr *LoExpr = MCSymbolRefExpr::Create(
       Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_ABS_LO,
       getContext());
-  tmpInst.setOpcode(Mips::LUi);
-  tmpInst.addOperand(MCOperand::CreateReg(RegNo));
-  tmpInst.addOperand(MCOperand::CreateExpr(isMips64() ? HighestExpr : HiExpr));
-  Instructions.push_back(tmpInst);
   if (isMips64()) {
-    createShiftOr<false>(MCOperand::CreateExpr(HigherExpr), RegNo, SMLoc(),
-        Instructions);
-    createShiftOr<true>(MCOperand::CreateExpr(HiExpr), RegNo, SMLoc(),
-        Instructions);
-    createShiftOr<true>(MCOperand::CreateExpr(LoExpr), RegNo, SMLoc(),
-        Instructions);
-  } else
-    createShiftOr<false>(MCOperand::CreateExpr(LoExpr), RegNo, SMLoc(),
-        Instructions);
+    unsigned AtRegNum = getReg(Mips::GPR64RegClassID, getATReg());
+    pushInstr(Instructions, Mips::LUi, RegNo,
+              MCOperand::CreateExpr(HighestExpr), IDLoc);
+    pushInstr(Instructions, Mips::LUi, AtRegNum,
+              MCOperand::CreateExpr(HiExpr), IDLoc);
+    pushInstr(Instructions, Mips::DADDiu, RegNo, RegNo,
+              MCOperand::CreateExpr(HigherExpr), IDLoc);
+    pushInstr(Instructions, Mips::DADDiu, AtRegNum, AtRegNum,
+              MCOperand::CreateExpr(LoExpr), IDLoc);
+    pushInstr(Instructions, Mips::DSLL32, RegNo, RegNo,
+              MCOperand::CreateImm(0), IDLoc);
+    pushInstr(Instructions, Mips::DADDu, RegNo, RegNo, AtRegNum, IDLoc);
+  } else {
+    pushInstr(Instructions, Mips::LUi, RegNo,
+              MCOperand::CreateExpr(HiExpr), IDLoc);
+    pushInstr(Instructions, Mips::ADDiu, RegNo, RegNo,
+        MCOperand::CreateExpr(LoExpr), IDLoc);
+  }
 }
 
 void
