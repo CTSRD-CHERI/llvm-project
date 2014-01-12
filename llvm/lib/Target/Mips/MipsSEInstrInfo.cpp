@@ -601,6 +601,7 @@ void MipsSEInstrInfo::expandEhReturn(MachineBasicBlock &MBB,
 void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator I) const {
   unsigned GP = I->getOperand(0).getReg();
+  assert(GP != Mips::T9_64);
   DebugLoc DL = I->getDebugLoc();
   const TargetInstrInfo &TII = *TM.getInstrInfo();
   const GlobalValue *FName = MBB.getParent()->getFunction();
