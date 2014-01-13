@@ -4947,6 +4947,7 @@ llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   llvm::Type *PTy = llvm::PointerType::getUnqual(CGF.ConvertType(Ty));
   llvm::Value *AddrTyped;
   llvm::IntegerType *IntTy = (PtrWidth == 32) ? CGF.Int32Ty : CGF.Int64Ty;
+  TypeAlign = std::max((unsigned)TypeAlign, MinABIStackAlignInBytes);
 
   if (TypeAlign > MinABIStackAlignInBytes) {
     llvm::Value *AddrAsInt = CGF.Builder.CreatePtrToInt(Addr, IntTy);
@@ -4965,11 +4966,11 @@ llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
       llvm::ConstantInt::get(IntTy, MinABIStackAlignInBytes - Size);
     llvm::Value *Add = CGF.Builder.CreateAdd(AddrAsInt, Inc);
     AddrTyped = CGF.Builder.CreateIntToPtr(Add, PTy);
+    TypeAlign = Size;
   } else
     AddrTyped = Builder.CreateBitCast(Addr, PTy);  
 
   llvm::Value *AlignedAddr = Builder.CreateBitCast(AddrTyped, BP);
-  TypeAlign = std::max((unsigned)TypeAlign, MinABIStackAlignInBytes);
   uint64_t Offset = llvm::RoundUpToAlignment(Size, TypeAlign);
   llvm::Value *NextAddr =
     Builder.CreateGEP(AlignedAddr, llvm::ConstantInt::get(IntTy, Offset),
