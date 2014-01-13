@@ -213,7 +213,7 @@ class MipsAsmParser : public MCTargetAsmParser {
   MCSymbolRefExpr::VariantKind getVariantKind(StringRef Symbol);
 
   bool isMips64() const {
-    return (STI.getFeatureBits() & Mips::FeatureMips64) != 0;
+    return (STI.getFeatureBits() & Mips::FeatureGP64Bit) != 0;
   }
 
   bool isFP64() const {

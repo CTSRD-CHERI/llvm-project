@@ -653,6 +653,8 @@ static void emitELFHeaderFlagsCG(MipsTargetStreamer &TargetStreamer,
     EFlags |= ELF::EF_MIPS_ARCH_64R2;
   else if (Subtarget.hasMips64())
     EFlags |= ELF::EF_MIPS_ARCH_64;
+  else if (Subtarget.isGP64bit())
+    EFlags |= ELF::EF_MIPS_ARCH_4;
   else if (Subtarget.hasMips32r2())
     EFlags |= ELF::EF_MIPS_ARCH_32R2;
   else

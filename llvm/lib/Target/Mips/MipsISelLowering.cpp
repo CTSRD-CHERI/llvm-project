@@ -205,7 +205,7 @@ MipsTargetLowering::
 MipsTargetLowering(MipsTargetMachine &TM)
   : TargetLowering(TM, new MipsTargetObjectFile()),
     Subtarget(&TM.getSubtarget<MipsSubtarget>()),
-    HasMips64(Subtarget->hasMips64()), IsN64(Subtarget->isABI_N64()),
+    IsGP64bit(Subtarget->isGP64bit()), IsN64(Subtarget->isABI_N64()),
     IsO32(Subtarget->isABI_O32()) {
   // Mips does not have i1 type, so use i32 for
   // setcc operations results (slt, sgt, ...).
@@ -252,7 +252,7 @@ MipsTargetLowering(MipsTargetMachine &TM)
     setOperationAction(ISD::FABS,             MVT::f64,   Custom);
   }
 
-  if (HasMips64) {
+  if (IsGP64bit) {
     setOperationAction(ISD::GlobalAddress,      MVT::i64,   Custom);
     setOperationAction(ISD::BlockAddress,       MVT::i64,   Custom);
     setOperationAction(ISD::GlobalTLSAddress,   MVT::i64,   Custom);
@@ -264,14 +264,14 @@ MipsTargetLowering(MipsTargetMachine &TM)
     setOperationAction(ISD::FP_TO_SINT,         MVT::i64,   Custom);
   }
 
-  if (!HasMips64) {
+  if (!IsGP64bit) {
     setOperationAction(ISD::SHL_PARTS,          MVT::i32,   Custom);
     setOperationAction(ISD::SRA_PARTS,          MVT::i32,   Custom);
     setOperationAction(ISD::SRL_PARTS,          MVT::i32,   Custom);
   }
 
   setOperationAction(ISD::ADD,                MVT::i32,   Custom);
-  if (HasMips64)
+  if (IsGP64bit)
     setOperationAction(ISD::ADD,                MVT::i64,   Custom);
 
   setOperationAction(ISD::SDIV, MVT::i32, Expand);
@@ -368,7 +368,7 @@ MipsTargetLowering(MipsTargetMachine &TM)
     setOperationAction(ISD::BSWAP, MVT::i64, Expand);
   }
 
-  if (HasMips64) {
+  if (IsGP64bit) {
     setLoadExtAction(ISD::SEXTLOAD, MVT::i32, Custom);
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i32, Custom);
     setLoadExtAction(ISD::EXTLOAD, MVT::i32, Custom);
@@ -384,7 +384,7 @@ MipsTargetLowering(MipsTargetMachine &TM)
   setTargetDAGCombine(ISD::OR);
   setTargetDAGCombine(ISD::ADD);
 
-  setMinFunctionAlignment(HasMips64 ? 3 : 2);
+  setMinFunctionAlignment(IsGP64bit ? 3 : 2);
 
   setStackPointerRegisterToSaveRestore(IsN64 ? Mips::SP_64 : Mips::SP);
 
@@ -1513,7 +1513,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   }
 
   if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
-    return getAddrLocal(N, Ty, DAG, HasMips64);
+    return getAddrLocal(N, Ty, DAG, IsGP64bit);
 
   if (LargeGOT)
     return getAddrGlobalLargeGOT(N, Ty, DAG, MipsII::MO_GOT_HI16,
@@ -1521,7 +1521,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
                                  MachinePointerInfo::getGOT());
 
   return getAddrGlobal(N, Ty, DAG,
-                       HasMips64 ? MipsII::MO_GOT_DISP : MipsII::MO_GOT16,
+                       IsGP64bit ? MipsII::MO_GOT_DISP : MipsII::MO_GOT16,
                        DAG.getEntryNode(), MachinePointerInfo::getGOT());
 }
 
@@ -1533,7 +1533,7 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
   if (getTargetMachine().getRelocationModel() != Reloc::PIC_ && !IsN64)
     return getAddrNonPIC(N, Ty, DAG);
 
-  return getAddrLocal(N, Ty, DAG, HasMips64);
+  return getAddrLocal(N, Ty, DAG, IsGP64bit);
 }
 
 SDValue MipsTargetLowering::
@@ -1626,7 +1626,7 @@ lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
   if (getTargetMachine().getRelocationModel() != Reloc::PIC_ && !IsN64)
     return getAddrNonPIC(N, Ty, DAG);
 
-  return getAddrLocal(N, Ty, DAG, HasMips64);
+  return getAddrLocal(N, Ty, DAG, IsGP64bit);
 }
 
 SDValue MipsTargetLowering::
@@ -1647,7 +1647,7 @@ lowerConstantPool(SDValue Op, SelectionDAG &DAG) const
   if (getTargetMachine().getRelocationModel() != Reloc::PIC_ && !IsN64)
     return getAddrNonPIC(N, Ty, DAG);
 
-  return getAddrLocal(N, Ty, DAG, HasMips64);
+  return getAddrLocal(N, Ty, DAG, IsGP64bit);
 }
 
 SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
@@ -2504,7 +2504,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       InternalLinkage = Val->hasInternalLinkage();
 
       if (InternalLinkage)
-        Callee = getAddrLocal(G, Ty, DAG, HasMips64);
+        Callee = getAddrLocal(G, Ty, DAG, IsGP64bit);
       else if (LargeGOT)
         Callee = getAddrGlobalLargeGOT(G, Ty, DAG, MipsII::MO_CALL_HI16,
                                        MipsII::MO_CALL_LO16, Chain,
@@ -3024,9 +3024,9 @@ getRegForInlineAsmConstraint(const std::string &Constraint, MVT VT) const
           return std::make_pair(0U, &Mips::CPU16RegsRegClass);
         return std::make_pair(0U, &Mips::GPR32RegClass);
       }
-      if (VT == MVT::i64 && !HasMips64)
+      if (VT == MVT::i64 && !IsGP64bit)
         return std::make_pair(0U, &Mips::GPR32RegClass);
-      if (VT == MVT::i64 && HasMips64)
+      if (VT == MVT::i64 && IsGP64bit)
         return std::make_pair(0U, &Mips::GPR64RegClass);
       // This will generate an error message
       return std::make_pair(0u, static_cast<const TargetRegisterClass*>(0));

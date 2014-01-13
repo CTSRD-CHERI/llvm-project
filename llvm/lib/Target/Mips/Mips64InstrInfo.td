@@ -192,13 +192,15 @@ def SEB64 : SignExtInReg<"seb", i8, GPR64Opnd>, SEB_FM<0x10, 0x20>;
 def SEH64 : SignExtInReg<"seh", i16, GPR64Opnd>, SEB_FM<0x18, 0x20>;
 }
 
-/// Count Leading
-def DCLZ : CountLeading0<"dclz", GPR64Opnd>, CLO_FM<0x24>;
-def DCLO : CountLeading1<"dclo", GPR64Opnd>, CLO_FM<0x25>;
+let Predicates = [HasMips64] in {
+  /// Count Leading
+  def DCLZ : CountLeading0<"dclz", GPR64Opnd>, CLO_FM<0x24>;
+  def DCLO : CountLeading1<"dclo", GPR64Opnd>, CLO_FM<0x25>;
 
-/// Double Word Swap Bytes/HalfWords
-def DSBH : SubwordSwap<"dsbh", GPR64Opnd>, SEB_FM<2, 0x24>;
-def DSHD : SubwordSwap<"dshd", GPR64Opnd>, SEB_FM<5, 0x24>;
+  /// Double Word Swap Bytes/HalfWords
+  def DSBH : SubwordSwap<"dsbh", GPR64Opnd>, SEB_FM<2, 0x24>;
+  def DSHD : SubwordSwap<"dshd", GPR64Opnd>, SEB_FM<5, 0x24>;
+}
 
 def LEA_ADDiu64 : EffectiveAddress<"daddiu", GPR64Opnd>, LW_FM<0x19>;
 

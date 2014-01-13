@@ -38,7 +38,7 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM)
   // Set up the register classes
   addRegisterClass(MVT::i32, &Mips::GPR32RegClass);
 
-  if (HasMips64)
+  if (IsGP64bit)
     addRegisterClass(MVT::i64, &Mips::GPR64RegClass);
 
   if (Subtarget->hasDSP() || Subtarget->hasMSA()) {
@@ -117,7 +117,7 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM)
   setOperationAction(ISD::MULHS,              MVT::i32, Custom);
   setOperationAction(ISD::MULHU,              MVT::i32, Custom);
 
-  if (HasMips64) {
+  if (IsGP64bit) {
     setOperationAction(ISD::MULHS,            MVT::i64, Custom);
     setOperationAction(ISD::MULHU,            MVT::i64, Custom);
     setOperationAction(ISD::MUL,              MVT::i64, Custom);
