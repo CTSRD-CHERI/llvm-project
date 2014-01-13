@@ -2494,7 +2494,11 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
           llvm::Value *EltPtr = Builder.CreateConstGEP2_32(SrcPtr, 0, i);
           llvm::LoadInst *LI = Builder.CreateLoad(EltPtr);
           // We don't know what we're loading from.
-          LI->setAlignment(1);
+          // FIXME: For CHERI, capabilities must be aligned and so we don't
+          // want to explicitly say that they're unaligned.  This is an ugly
+          // hack.
+          if (LI->getType()->getPointerAddressSpace() != 200)
+            LI->setAlignment(1);
           Args.push_back(LI);
           
           // Validate argument match.
