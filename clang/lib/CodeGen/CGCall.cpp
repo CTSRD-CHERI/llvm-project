@@ -2497,7 +2497,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
           // FIXME: For CHERI, capabilities must be aligned and so we don't
           // want to explicitly say that they're unaligned.  This is an ugly
           // hack.
-          if (LI->getType()->getPointerAddressSpace() != 200)
+          if (LI->getType()->isPointerTy() &&
+              (LI->getType()->getPointerAddressSpace() != 200))
             LI->setAlignment(1);
           Args.push_back(LI);
           
