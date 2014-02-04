@@ -1275,22 +1275,13 @@ static bool ShouldNullCheckClassCastValue(const CastExpr *CE) {
 
 llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
     llvm::PointerType *ToType) {
-  const TargetInfo &TI = getContext().getTargetInfo();
-  // Casts within address spaces, or between two address spaces of the same size, 
-  llvm::PointerType *fromTy = cast<llvm::PointerType>(From->getType());
-  unsigned FromAddrSpace = fromTy->getAddressSpace();
+  llvm::PointerType *FromTy = cast<llvm::PointerType>(From->getType());
+  unsigned FromAddrSpace = FromTy->getAddressSpace();
   unsigned ToAddrSpace = ToType->getAddressSpace();
-  if ((FromAddrSpace == ToAddrSpace) ||
-      (TI.getPointerWidth(FromAddrSpace) == TI.getPointerWidth(ToAddrSpace))) {
-    if (fromTy == ToType)
-     return From;
-    else
+  if (FromAddrSpace == ToAddrSpace)
       return Builder.CreateBitCast(From, ToType);
-  } else {
-    return Builder.CreateIntToPtr(Builder.CreatePtrToInt(From,
-            llvm::IntegerType::get(From->getContext(),
-                TI.getPointerWidth(0))), ToType);
-  }
+  else
+    return Builder.CreateAddrSpaceCast(From, ToType);
 }
 llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
                                               QualType FromTy,
@@ -1359,21 +1350,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   }
   case CK_CPointerToObjCPointerCast:
   case CK_BlockPointerToObjCPointerCast:
-  case CK_AnyPointerToBlockPointerCast: {
-    Value *Src = Visit(const_cast<Expr*>(E));
-    llvm::Type *SrcTy = Src->getType();
-    llvm::Type *DstTy = ConvertType(DestTy);
-    if (SrcTy->isPtrOrPtrVectorTy() && DstTy->isPtrOrPtrVectorTy() && 
-        SrcTy->getPointerAddressSpace() != DstTy->getPointerAddressSpace()) {
-      llvm::Type *MidTy = CGF.CGM.getDataLayout().getIntPtrType(SrcTy);
-      return Builder.CreateIntToPtr(Builder.CreatePtrToInt(Src, MidTy), DstTy);
-    }
-    return Builder.CreateBitCast(Src, DstTy);
-  }
-  case CK_AddressSpaceConversion: {
-    Value *Src = Visit(const_cast<Expr*>(E));
-    return Builder.CreateAddrSpaceCast(Src, ConvertType(DestTy));
-  }
+  case CK_AnyPointerToBlockPointerCast:
+  case CK_AddressSpaceConversion:
+    return CGF.EmitPointerCast(Visit(const_cast<Expr*>(E)), E->getType(),
+        DestTy);
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
   case CK_NoOp:
