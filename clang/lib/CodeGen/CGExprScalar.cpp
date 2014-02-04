@@ -1372,19 +1372,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   }
   case CK_AddressSpaceConversion: {
     Value *Src = Visit(const_cast<Expr*>(E));
-    llvm::Type *DstTy = ConvertType(DestTy);
-    Value *Cast = Builder.CreateAddrSpaceCast(Src, DstTy);
-    if (CGF.Target.getTriple().getArch() == llvm::Triple::cheri)
-      // FIXME: 200 should not be a magic number!
-      if (cast<PointerType>(DstTy)->getPointerAddressSpace() == 200 &&
-          ToTy->getPointeeType().isConstQualified() &&
-          !FromTy->getPointeeType().isConstQualified()) {
-        Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_and_cap_perms);
-        // Clear the store and store-capability flags
-        Cast = Builder.CreateCall2(F, Cast,
-            llvm::ConstantInt::get(CGF.SizeTy, 0x57FF));
-      }
-    return Cast;
+    return Builder.CreateAddrSpaceCast(Src, ConvertType(DestTy));
   }
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
