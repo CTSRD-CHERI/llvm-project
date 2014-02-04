@@ -3073,6 +3073,9 @@ static void handleGlobalAttr(Sema &S, Decl *D, const AttributeList &Attr) {
       S.Diag(FD->getTypeSpecStartLoc(), diag::err_kern_type_not_void_return)
         << FD->getType();
     }
+    return;
+  }
+
   D->addAttr(::new (S.Context)
               CUDAGlobalAttr(Attr.getRange(), S.Context,
                             Attr.getAttributeSpellingListIndex()));
