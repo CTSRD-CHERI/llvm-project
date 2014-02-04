@@ -1,6 +1,5 @@
 # RUN: llvm-mc %s -triple=mips64el-unknown-linux -show-encoding -mcpu=mips64r2 | FileCheck %s
 #
-# XFAIL:
 # The GNU assembler implements 'dli' and 'dla' variants on 'li' and 'la'
 # supporting double-word lengths.  Test that not only are they present, bu
 # that they also seem to handle 64-bit values.
