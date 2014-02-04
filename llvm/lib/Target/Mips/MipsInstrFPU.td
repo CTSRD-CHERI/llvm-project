@@ -398,11 +398,6 @@ let Predicates = [HasFPIdx, NotFP64bit, HasStdEnc, NotInMicroMips] in {
   def SDXC1 : SWXC1_FT<"sdxc1", AFGR64Opnd, IIFStore, store>, SWXC1_FM<9>;
 }
 
-let Predicates = [HasFPIdx, NotFP64bit, HasStdEnc] in {
-  def LDXC1 : LWXC1_FT<"ldxc1", AFGR64Opnd, IIFLoad, load>, LWXC1_FM<1>;
-  def SDXC1 : SWXC1_FT<"sdxc1", AFGR64Opnd, IIFStore, store>, SWXC1_FM<9>;
-}
-
 let Predicates = [HasFPIdx, IsFP64bit, HasStdEnc],
     DecoderNamespace="Mips64" in {
   def LDXC164 : LWXC1_FT<"ldxc1", FGR64Opnd, IIFLoad, load>, LWXC1_FM<1>;
