@@ -182,5 +182,5 @@ extern "C" void LLVMInitializeMipsTargetMC() {
   registerTarget(TheMips4Target, /* isBigEndian */true, /*is64Bit*/true);
   registerTarget(TheMips64Target, /* isBigEndian */true, /*is64Bit*/true);
   registerTarget(TheMips64elTarget, /* isBigEndian */false, /*is64Bit*/true);
-  registerTarget(TheCheriTarget, /* isBigEndian */true, /*is64Bit*/true);
+  registerTarget(TheMipsCheriTarget, /* isBigEndian */true, /*is64Bit*/true);
 }
