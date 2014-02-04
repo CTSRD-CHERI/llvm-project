@@ -1137,15 +1137,6 @@ def MTC0 : MFC3OP<"mtc0", GPR32Opnd>, MFC3OP_FM<0x10, 4>;
 def MFC2 : MFC3OP<"mfc2", GPR32Opnd>, MFC3OP_FM<0x12, 0>;
 def MTC2 : MFC3OP<"mtc2", GPR32Opnd>, MFC3OP_FM<0x12, 4>;
 
-class BREAK : InstSE<(outs), (ins),
-                     "break", [(trap)], NoItinerary, FrmOther> {
-  let Inst{31-6} = 0;
-  let Inst{5-0} = 0xd;
-}
-
-def BRK : BREAK;
-
-
 //===----------------------------------------------------------------------===//
 // Instruction aliases
 //===----------------------------------------------------------------------===//
