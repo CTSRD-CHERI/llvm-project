@@ -68,6 +68,11 @@ def : InstAlias<"cmove $dst, $src",
 def CGetBase : CheriFmtGet<2, (outs GPR64:$rd), (ins CheriRegs:$cb),
                            "cgetbase $rd, $cb",
                            [(set GPR64:$rd, (ptrtoint CheriRegs:$cb))]>;
+let isCodeGenOnly=1 in {
+def CGetBase32 : CheriFmtGet<2, (outs GPR32:$rd), (ins CheriRegs:$cb),
+                           "cgetbase $rd, $cb",
+                           [(set GPR32:$rd, (ptrtoint CheriRegs:$cb))]>;
+}
 
 
 def CGetTag : CheriFmtGet<5, (outs GPR64:$rd), (ins CheriRegs:$cb),
