@@ -192,15 +192,17 @@ multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
 }
 
 let isCodeGenOnly = 1 in {
-defm CAPLOAD832    : LoadViaCap<0, 1, "clb", GPR32Opnd, extloadi8>;
+defm CAPLOAD832    : LoadViaCap<0, 1, "clb", GPR32Opnd, sextloadi8>;
 defm CAPLOADU832   : LoadViaCap<0, 0, "clbu", GPR32Opnd, extloadi8>;
 defm CAPLOAD1632   : LoadViaCap<1, 1, "clh", GPR32Opnd, sextloadi16>;
 defm CAPLOADU1632  : LoadViaCap<1, 0, "clhu", GPR32Opnd, extloadi16>;
 }
-defm CAP0LOADA832 : LoadViaCap0<CAPLOAD832, extloadi8>;
-defm CAP0LOADU832     : LoadViaCap0<CAPLOADU832, zextloadi8>;
-defm CAP0LOADA1632 : LoadViaCap0<CAPLOAD1632, extloadi16>;
-defm CAP0LOADU1632     : LoadViaCap0<CAPLOADU1632, zextloadi16>;
+defm : LoadViaCap0<CAPLOAD832, sextloadi8>;
+defm : LoadViaCap0<CAPLOAD832, extloadi8>;
+defm : LoadViaCap0<CAPLOADU832, zextloadi8>;
+defm : LoadViaCap0<CAPLOAD1632, extloadi16>;
+defm : LoadViaCap0<CAPLOAD1632, sextloadi16>;
+defm : LoadViaCap0<CAPLOADU1632, zextloadi16>;
 
 defm CAPLOAD8      : LoadViaCap<0, 1, "clb", GPR64Opnd, sextloadi8>;
 defm CAPLOAD16     : LoadViaCap<1, 1, "clh", GPR64Opnd, sextloadi16>;
