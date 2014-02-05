@@ -230,6 +230,10 @@ MipsTargetLowering(MipsTargetMachine &TM)
 
   // Trap is an invalid instruction sequence
   setOperationAction(ISD::TRAP,               MVT::Other, Legal);
+  if (Subtarget->isCheri()) {
+    setOperationAction(ISD::ADDRSPACECAST,    MVT::iFATPTR, Custom);
+    setOperationAction(ISD::ADDRSPACECAST,    MVT::iPTR, Custom);
+  }
 
   // Mips Custom Operations
   setOperationAction(ISD::BR_JT,              MVT::Other, Custom);
@@ -768,6 +772,7 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const
 {
   switch (Op.getOpcode())
   {
+  case ISD::ADDRSPACECAST:      return lowerADDRSPACECAST(Op, DAG);
   case ISD::BR_JT:              return lowerBR_JT(Op, DAG);
   case ISD::BRCOND:             return lowerBRCOND(Op, DAG);
   case ISD::ConstantPool:       return lowerConstantPool(Op, DAG);
@@ -1428,6 +1433,19 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op, SelectionDAG &DAG) const {
   return DAG.getNode(ISD::BRIND, DL, MVT::Other, Chain, Addr);
 }
 
+SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
+  const {
+  SDLoc DL(Op);
+  SDValue Src = Op.getOperand(0);
+  EVT DstTy = Op.getValueType();
+  if (Src.getValueType() == MVT::i64) {
+    assert(Op.getValueType() == MVT::iFATPTR);
+    return DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
+  }
+  assert(Src.getValueType() == MVT::iFATPTR);
+  assert(Op.getValueType() == MVT::i64);
+  return DAG.getNode(ISD::PTRTOINT, DL, DstTy, Src);
+}
 SDValue MipsTargetLowering::lowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   // The first operand is the chain, the second is the condition, the third is
   // the block to branch to if the condition is true.

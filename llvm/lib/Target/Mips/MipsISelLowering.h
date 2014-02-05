@@ -467,6 +467,7 @@ namespace llvm {
                             const SDNode *CallNode, const Type *RetTy) const;
 
     // Lower Operand specifics
+    SDValue lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
