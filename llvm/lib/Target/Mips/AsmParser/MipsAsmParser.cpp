@@ -1255,6 +1255,8 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
     unsigned IntVal;
     if (NumString.getAsInteger(10, IntVal))
       return -1; // This is not an integer.
+    if (IntVal == 0)
+      Warning(Parser.getTok().getLoc(), "Direct access to c0 is deprecated.");
     if (IntVal > 31) // Maximum index for CHERI register.
       return -1;
     return IntVal;
