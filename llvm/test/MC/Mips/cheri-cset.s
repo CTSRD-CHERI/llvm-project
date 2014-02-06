@@ -27,3 +27,10 @@
 # CHECK: ccleartag	$c1
 # CHECK: encoding: [0x48,0x81,0x00,0x05]
 	ccleartag	$c1
+
+# CHECK: csetdefault	$c1
+# CHECK: encoding: [0x48,0x80,0x08,0x02]
+	CSetDefault	$c1
+# CHECK: cgetdefault	$c1
+# CHECK: encoding: [0x48,0x81,0x00,0x02]
+	CGetDefault	$c1
