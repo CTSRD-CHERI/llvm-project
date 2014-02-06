@@ -127,10 +127,10 @@ def CGetUnsealed : CheriFmtGet<6, (outs GPR64:$rd), (ins CheriRegs:$cb),
 def CGetPCC : CheriFmtGet<7, (outs GPR64:$rd, CheriRegs:$cb), (ins),
                           "cgetpcc\t${rd}(${cb})",
                           []>;
-def CGetCause : CheriFmtCause<0, (outs GPR64:$rd), (ins ),
+def CGetCause : CheriFmtGetCause<0, (outs GPR64:$rd), (ins ),
                           "cgetcause\t${rd}",
                           [(set GPR64:$rd, (int_mips_get_cause))]>;
-def CSetCause : CheriFmtCause<4, (outs), (ins GPR64: $rs),
+def CSetCause : CheriFmtSetCause<4, (outs), (ins GPR64: $rs),
                           "csetcause\t${rs}",
                           [(int_mips_set_cause GPR64: $rs)]>;
 
