@@ -209,6 +209,7 @@ bool MipsPassConfig::addPreRegAlloc() {
   MipsTargetMachine &TM = getMipsTargetMachine();
   if (TM.getSubtargetImpl()->isCheri()) {
     addPass(createCheriAddressingModeFolder());
+    addPass(createCheriBranchFolder());
     return true;
   }
   return false;
