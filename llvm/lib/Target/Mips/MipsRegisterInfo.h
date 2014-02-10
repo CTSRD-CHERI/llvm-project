@@ -25,10 +25,9 @@ class MipsSubtarget;
 class Type;
 
 class MipsRegisterInfo : public MipsGenRegisterInfo {
-protected:
+public:
   const MipsSubtarget &Subtarget;
 
-public:
   MipsRegisterInfo(const MipsSubtarget &Subtarget);
 
   /// getRegisterNumbering - Given the enum value for some register, e.g.

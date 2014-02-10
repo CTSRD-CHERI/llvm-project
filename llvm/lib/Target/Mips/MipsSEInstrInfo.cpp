@@ -192,6 +192,28 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   unsigned Opc = 0;
 
+  if (RI.Subtarget.isCheri()) {
+    if (Mips::GPR32RegClass.hasSubClassEq(RC))
+      Opc = Mips::CAPSTORE32;
+    else if (Mips::GPR64RegClass.hasSubClassEq(RC))
+      Opc = Mips::CAPSTORE64;
+    else if (Mips::FGR64RegClass.hasSubClassEq(RC))
+      Opc = Mips::CSDC1;
+    else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+      Opc = Mips::STORECAP;
+      // Ensure that capabilities have a 32-byte alignment
+      // FIXME: This shouldn't be needed.  Whatever is allocating the frame index
+      // ought to set it.
+      MachineFrameInfo *MFI = MBB.getParent()->getFrameInfo();
+      MFI->setObjectAlignment(FI, 32);
+    } else {
+      llvm_unreachable("Unexpected register type for CHERI!");
+    }
+    BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
+      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addReg(Mips::C11);
+    return;
+  }
   if (Mips::GPR32RegClass.hasSubClassEq(RC))
     Opc = Mips::SW;
   else if (Mips::GPR64RegClass.hasSubClassEq(RC))
@@ -246,6 +268,21 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   MachineMemOperand *MMO = GetMemOperand(MBB, FI, MachineMemOperand::MOLoad);
   unsigned Opc = 0;
 
+  if (RI.Subtarget.isCheri()) {
+    if (Mips::GPR32RegClass.hasSubClassEq(RC))
+      Opc = Mips::CAPLOAD32;
+    else if (Mips::GPR64RegClass.hasSubClassEq(RC))
+      Opc = Mips::CAPLOAD64;
+    else if (Mips::FGR64RegClass.hasSubClassEq(RC))
+      Opc = Mips::CLDC1;
+    else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+      Opc = Mips::LOADCAP;
+    }
+    BuildMI(MBB, I, DL, get(Opc), DestReg)
+      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addReg(Mips::C11);
+    return;
+  }
   if (Mips::GPR32RegClass.hasSubClassEq(RC))
     Opc = Mips::LW;
   else if (Mips::GPR64RegClass.hasSubClassEq(RC))
