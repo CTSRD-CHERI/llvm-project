@@ -229,8 +229,10 @@ void MipsPassConfig::addIRPasses() {
     addPass(createMipsOs16(getMipsTargetMachine()));
   if (getMipsSubtarget().inMips16HardFloat())
     addPass(createMips16HardFloat(getMipsTargetMachine()));
-  if (getMipsSubtarget().isCheri())
+  if (getMipsSubtarget().isCheri()) {
     addPass(createCheriRangeChecker());
+    addPass(createCheriStackHack());
+  }
   addPass(createPartiallyInlineLibCallsPass());
 }
 // Install an instruction selector pass using

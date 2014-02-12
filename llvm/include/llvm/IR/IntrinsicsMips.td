@@ -1839,5 +1839,7 @@ def int_mips_get_kdc : GCCBuiltin<"__builtin_cheri_get_kernel_data_cap">,
     Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
 def int_mips_get_epcc : GCCBuiltin<"__builtin_cheri_get_exception_program_counter_cap">,
     Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+
+def int_mips_stack_to_cap : Intrinsic<[llvm_fatptr_ty], [llvm_ptr_ty], [IntrNoMem]>;
 }
 

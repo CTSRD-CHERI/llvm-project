@@ -314,7 +314,7 @@ def : Pat<(int_mips_get_kdc), (CIncBase C30, ZERO_64)>;
 def : Pat<(int_mips_get_epcc), (CIncBase C31, ZERO_64)>;
 
 def : Pat<(int_mips_inc_cap_base CheriRegs:$cb, GPR64Opnd:$rd), (CIncBase $cb, $rd)>;
-
+def : Pat<(int_mips_stack_to_cap GPR64Opnd:$addr), (CIncBase C11, $addr)>;
 
 defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR64Opnd, truncstorei8>;
 defm CAP0STORE16    : StoreViaCap0<CAPSTORE16, GPR64Opnd, truncstorei16>;
