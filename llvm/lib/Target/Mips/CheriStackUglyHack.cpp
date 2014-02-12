@@ -24,9 +24,12 @@ namespace
 {
 class CheriStackHack : public FunctionPass,
                        public InstVisitor<CheriStackHack> {
-  DataLayout *TD;
+  DataLayout *DL;
   Module *M;
   llvm::SmallVector<AllocaInst*, 16> Allocas;
+
+  Value *InitialBitCast;
+  Value *CastToCap;
 
   void replaceGEP(GetElementPtrInst *GEP, Value *Cap) {
     SmallVector<Value*, 8> Idxs;
@@ -63,6 +66,8 @@ class CheriStackHack : public FunctionPass,
     AI->eraseFromParent();
   }
   void replaceCall(CallInst *CI, Value *Cap) {
+    if (CI == CastToCap)
+      return;
     // We can safely ignore some intrinsics: they are only used for mid-level
     // optimisers.
     if (Function *F = CI->getCalledFunction())
@@ -83,7 +88,6 @@ class CheriStackHack : public FunctionPass,
     BI->dump();
     llvm_unreachable("Can't handle bitcasts yet");
   }
-  Value *InitialBitCast;
   void replaceUsers(Instruction *Inst, Value *Cap) {
     for (auto U=Inst->use_begin(),E=Inst->use_end() ; U!=E ; ++U) {
       if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(*U))
@@ -111,11 +115,11 @@ class CheriStackHack : public FunctionPass,
     CheriStackHack() : FunctionPass(ID) {}
     virtual bool doInitialization(Module &Mod) {
       M = &Mod;
-      TD = new DataLayout(M);
+      DL = new DataLayout(M);
       return true;
     }
     virtual ~CheriStackHack() {
-      delete TD;
+      delete DL;
     }
     void visitAllocaInst(AllocaInst &AI) {
       Allocas.push_back(&AI);
@@ -129,6 +133,8 @@ class CheriStackHack : public FunctionPass,
       LLVMContext &C = M->getContext();
       Function *CastFn =
         Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
+      Function *SetLenFun =
+        Intrinsic::getDeclaration(M, Intrinsic::mips_set_cap_length);
 
       IRBuilder<> B(C);
 
@@ -138,10 +144,17 @@ class CheriStackHack : public FunctionPass,
 
         PointerType *AllocaTy = AI->getType();
         Type *AllocationTy = AllocaTy->getElementType();
+        unsigned ElementSize = DL->getTypeAllocSize(AllocationTy);
+        Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
+        AI->getArraySize()->dump();
+        if (AI->isArrayAllocation())
+          Size = B.CreateMul(Size, AI->getArraySize());
+
         PointerType *CapTy = PointerType::get(AllocationTy, 200);
         InitialBitCast = B.CreateBitCast(AI, Type::getInt8PtrTy(C, 0));
-        Value *AllocaAsCap = B.CreateBitCast(
-            B.CreateCall(CastFn, InitialBitCast), CapTy);
+        CastToCap = B.CreateCall(CastFn, InitialBitCast);
+        Value *AllocaAsCap = B.CreateCall2(SetLenFun, CastToCap, Size);
+        AllocaAsCap = B.CreateBitCast(AllocaAsCap, CapTy);
         replaceUsers(AI, AllocaAsCap);
       }
       return true;
