@@ -232,7 +232,7 @@ MipsTargetLowering(MipsTargetMachine &TM)
   setOperationAction(ISD::TRAP,               MVT::Other, Legal);
   if (Subtarget->isCheri()) {
     setOperationAction(ISD::ADDRSPACECAST,    MVT::iFATPTR, Custom);
-    setOperationAction(ISD::ADDRSPACECAST,    MVT::iPTR, Custom);
+    setOperationAction(ISD::ADDRSPACECAST,    MVT::i64, Custom);
   }
 
   // Mips Custom Operations
