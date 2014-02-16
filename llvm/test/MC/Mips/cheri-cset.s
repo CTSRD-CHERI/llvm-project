@@ -26,8 +26,8 @@
 # CHECK: encoding: [0x48,0x81,0x13,0x03]
 	csetlen		$c1, $c2, $t0
 # CHECK: ccleartag	$c1
-# CHECK: encoding: [0x48,0x81,0x00,0x05]
-	ccleartag	$c1
+# CHECK: encoding: [0x48,0x81,0x08,0x05]
+	ccleartag	$c1, $c1
 
 # Check for correct encoding of explicit set / get default and deprecated
 # direct access to C0

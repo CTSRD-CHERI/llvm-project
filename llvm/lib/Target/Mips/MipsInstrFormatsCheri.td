@@ -135,7 +135,6 @@ class CheriFmtClearTag<dag outs, dag ins, string asmstr,
                        list<dag> pattern> :
   CheriFmtSet<0x5, outs, ins, asmstr, pattern>
 {
-  let cb = 0;
   let rt = 0;
 }
 
