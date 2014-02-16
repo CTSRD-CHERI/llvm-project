@@ -5486,6 +5486,10 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   QualType lhptee = LHSTy->getAs<PointerType>()->getPointeeType();
   QualType rhptee = RHSTy->getAs<PointerType>()->getPointeeType();
 
+  // Get the cast kind to use for adding qualifiers
+  CastKind NopCastKind = (lhptee.getAddressSpace() == rhptee.getAddressSpace())
+    ?  CK_NoOp : CK_AddressSpaceConversion;
+
   // ignore qualifiers on void (C99 6.5.15p3, clause 6)
   if (lhptee->isVoidType() && rhptee->isIncompleteOrObjectType()) {
     // Figure out necessary qualifiers (C99 6.5.15p6)
@@ -5493,7 +5497,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(destPointee);
     // Add qualifiers if necessary.
-    LHS = S.ImpCastExprToType(LHS.take(), destType, CK_NoOp);
+    LHS = S.ImpCastExprToType(LHS.take(), destType, NopCastKind);
     // Promote to void*.
     RHS = S.ImpCastExprToType(RHS.take(), destType, CK_BitCast);
     return destType;
@@ -5503,7 +5507,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(destPointee);
     // Add qualifiers if necessary.
-    RHS = S.ImpCastExprToType(RHS.take(), destType, CK_NoOp);
+    RHS = S.ImpCastExprToType(RHS.take(), destType, NopCastKind);
     // Promote to void*.
     LHS = S.ImpCastExprToType(LHS.take(), destType, CK_BitCast);
     return destType;
