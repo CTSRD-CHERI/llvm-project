@@ -835,8 +835,7 @@ void DAGTypeLegalizer::SplitVecRes_LOAD(LoadSDNode *LD, SDValue &Lo,
                    isInvariant, Alignment, TBAAInfo);
 
   unsigned IncrementSize = LoMemVT.getSizeInBits()/8;
-  Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                    DAG.getConstant(IncrementSize, Ptr.getValueType()));
+  Ptr = DAG.getPointerAdd(dl, Ptr, IncrementSize);
   Hi = DAG.getLoad(ISD::UNINDEXED, ExtType, HiVT, dl, Ch, Ptr, Offset,
                    LD->getPointerInfo().getWithOffset(IncrementSize),
                    HiMemVT, isVolatile, isNonTemporal, isInvariant, Alignment,
