@@ -70,12 +70,10 @@ def : InstAlias<"cmove $dst, $src",
                 (CIncBase CheriRegs:$dst, CheriRegs:$src,ZERO_64), 1>;
 
 def CGetBase : CheriFmtGet<2, (outs GPR64:$rd), (ins CheriRegs:$cb),
-                           "cgetbase $rd, $cb",
-                           [(set GPR64:$rd, (ptrtoint CheriRegs:$cb))]>;
+                           "cgetbase $rd, $cb", []>;
 let isCodeGenOnly=1 in {
 def CGetBase32 : CheriFmtGet<2, (outs GPR32:$rd), (ins CheriRegs:$cb),
-                           "cgetbase $rd, $cb",
-                           [(set GPR32:$rd, (ptrtoint CheriRegs:$cb))]>;
+                           "cgetbase $rd, $cb", []>;
 }
 
 
@@ -127,16 +125,28 @@ def CGetUnsealed : CheriFmtGet<6, (outs GPR64:$rd), (ins CheriRegs:$cb),
 def CGetPCC : CheriFmtGet<7, (outs GPR64:$rd, CheriRegs:$cb), (ins),
                           "cgetpcc\t${rd}(${cb})",
                           []>;
-def CGetCause : CheriFmtGetCause<0, (outs GPR64:$rd), (ins ),
+def CGetCause : CheriFmtGetCause<0, (outs GPR64:$rd), (ins),
                           "cgetcause\t${rd}",
                           [(set GPR64:$rd, (int_mips_get_cause))]>;
 def CSetCause : CheriFmtSetCause<4, (outs), (ins GPR64: $rs),
                           "csetcause\t${rs}",
                           [(int_mips_set_cause GPR64: $rs)]>;
 
+// Casting:
+
+def CFromPtr : CheriFmtRegs<4, 7, (outs CheriRegs: $r0),
+  (ins CheriRegs: $r1, GPR64Opnd: $r2),
+  "cfromptr $r0, $r1, $r2", []>;
+def CToPtr : CheriFmtRegs<0xc, 0, (outs GPR64Opnd: $r0),
+  (ins CheriRegs: $r1, CheriRegs: $r2),
+  "ctoptr $r0, $r1, $r2", []>;
+
 // Int to pointer in address space 0
 def : Pat<(inttoptr GPR64:$rt),
-          (CIncBase C0, GPR64:$rt)>;
+          (CFromPtr C0, $rt)>;
+def : Pat<(ptrtoint CheriRegs:$rt),
+          (CToPtr C0, $rt)>;
+
 
 let DecoderNamespace="CHERI" in
 def STORECAP : CheriFmtCSCR<(outs), (ins CheriRegs:$cs, GPR64:$rt, simm11:$offset, CheriRegs:$cb),
