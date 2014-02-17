@@ -2542,6 +2542,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   MipsCC::byval_iterator ByValArg = MipsCCInfo.byval_begin();
 
   unsigned CapArgs = 0;
+  unsigned IntArgs = 0;
 
   // Walk the register/memloc assignments, inserting copies/loads.
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
@@ -2549,8 +2550,6 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     CCValAssign &VA = ArgLocs[i];
     MVT ValVT = VA.getValVT(), LocVT = VA.getLocVT();
     ISD::ArgFlagsTy Flags = Outs[i].Flags;
-    if (ValVT == MVT::iFATPTR)
-      CapArgs++;
 
     // ByVal Arg.
     if (Flags.isByVal()) {
@@ -2603,6 +2602,11 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // Arguments that can be passed on register must be kept at
     // RegsToPass vector
     if (VA.isRegLoc()) {
+      if (ValVT == MVT::iFATPTR)
+        CapArgs++;
+      else if ((VA.getLocReg() >= Mips::A0_64) &&
+               (VA.getLocReg() <= Mips::T3_64))
+        IntArgs++;
       RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
       continue;
     }
@@ -2626,6 +2630,13 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       SDValue Zero = DAG.getNode(ISD::INTTOPTR, DL, MVT::iFATPTR,
           DAG.getConstant(0, MVT::i64));
       RegsToPass.push_back(std::make_pair(RegList[i], Zero));
+    }
+    static const unsigned IntRegList[] = { Mips::A0_64, Mips::A1_64,
+      Mips::A2_64, Mips::A3_64, Mips::T0_64, Mips::T1_64, Mips::T2_64,
+      Mips::T3_64 };
+    for (unsigned i=IntArgs ; i<8 ; i++) {
+      SDValue Zero = DAG.getConstant(0, MVT::i64);
+      RegsToPass.push_back(std::make_pair(IntRegList[i], Zero));
     }
   }
 
