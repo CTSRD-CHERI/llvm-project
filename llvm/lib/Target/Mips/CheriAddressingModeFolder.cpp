@@ -20,6 +20,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
   CheriAddressingModeFolder() : MachineFunctionPass(ID) {}
   bool tryToFoldAdd(unsigned vreg, MachineRegisterInfo &RI, MachineInstr *&AddInst, int64_t &offset) {
     AddInst = RI.getUniqueVRegDef(vreg);
+    // If we can't uniquely identify the definition, give up.
+    if (AddInst == 0)
+      return false;
     unsigned reg;
     int64_t off;
     // If this is an add-immediate then we can possibly fold it
