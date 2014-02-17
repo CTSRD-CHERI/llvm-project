@@ -2541,12 +2541,16 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SmallVector<SDValue, 8> MemOpChains;
   MipsCC::byval_iterator ByValArg = MipsCCInfo.byval_begin();
 
+  unsigned CapArgs = 0;
+
   // Walk the register/memloc assignments, inserting copies/loads.
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     SDValue Arg = OutVals[i];
     CCValAssign &VA = ArgLocs[i];
     MVT ValVT = VA.getValVT(), LocVT = VA.getLocVT();
     ISD::ArgFlagsTy Flags = Outs[i].Flags;
+    if (ValVT == MVT::iFATPTR)
+      CapArgs++;
 
     // ByVal Arg.
     if (Flags.isByVal()) {
@@ -2610,6 +2614,19 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // parameter value to a stack Location
     MemOpChains.push_back(passArgOnStack(StackPtr, VA.getLocMemOffset(),
                                          Chain, Arg, DL, IsTailCall, DAG));
+  }
+  // If we're doing a CCall then any unused arg registers should be zero.
+  if(CallConv == CallingConv::CHERI_CCall) {
+    assert(CapArgs >= 2);
+    CapArgs -= 2;
+    // Optional argument registers for CCall calling convention
+    static const unsigned RegList[] = { Mips::C3, Mips::C4, Mips::C5, Mips::C6,
+      Mips::C7, Mips::C8, Mips::C9, Mips::C10 };
+    for (unsigned i=CapArgs ; i<8 ; i++) {
+      SDValue Zero = DAG.getNode(ISD::INTTOPTR, DL, MVT::iFATPTR,
+          DAG.getConstant(0, MVT::i64));
+      RegsToPass.push_back(std::make_pair(RegList[i], Zero));
+    }
   }
 
   // Transform all store nodes into one single node because all store
