@@ -1462,6 +1462,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
   assert(!(Flags & ~(SCEV::FlagNUW | SCEV::FlagNSW)) &&
          "only nuw or nsw allowed");
   assert(!Ops.empty() && "Cannot get empty add!");
+  if (isa<SCEVUnknown>(Ops[0])) return Ops[0];
   if (Ops.size() == 1) return Ops[0];
 #ifndef NDEBUG
   Type *ETy = getEffectiveSCEVType(Ops[0]->getType());
