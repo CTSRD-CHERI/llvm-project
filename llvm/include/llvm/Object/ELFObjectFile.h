@@ -937,6 +937,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "ELF64-ppc64";
     case ELF::EM_S390:
       return "ELF64-s390";
+    case ELF::EM_MIPS:
+      return "ELF64-mips";
     default:
       return "ELF64-unknown";
     }
