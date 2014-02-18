@@ -2826,8 +2826,6 @@ SDValue DAGCombiner::visitAND(SDNode *N) {
         // be expensive (and would be wrong if the type is not byte sized).
         if (!LN0->isVolatile() && LoadedVT.bitsGT(ExtVT) && ExtVT.isRound() &&
             (!LegalOperations || TLI.isLoadExtLegal(ISD::ZEXTLOAD, ExtVT))) {
-          EVT PtrType = LN0->getOperand(1).getValueType();
-
           unsigned Alignment = LN0->getAlignment();
           SDValue NewPtr = LN0->getBasePtr();
 
@@ -2838,8 +2836,7 @@ SDValue DAGCombiner::visitAND(SDNode *N) {
             unsigned LVTStoreBytes = LoadedVT.getStoreSize();
             unsigned EVTStoreBytes = ExtVT.getStoreSize();
             unsigned PtrOff = LVTStoreBytes - EVTStoreBytes;
-            NewPtr = DAG.getNode(ISD::ADD, SDLoc(LN0), PtrType,
-                                 NewPtr, DAG.getConstant(PtrOff, PtrType));
+            NewPtr = DAG.getPointerAdd(SDLoc(LN0), NewPtr, PtrOff);
             Alignment = MinAlign(Alignment, PtrOff);
           }
 
