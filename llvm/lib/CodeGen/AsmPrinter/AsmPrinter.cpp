@@ -1926,7 +1926,7 @@ static void emitGlobalConstantImpl(const Constant *CV, AsmPrinter &AP) {
     return emitGlobalConstantFP(CFP, AP);
 
   if (isa<ConstantPointerNull>(CV)) {
-    AP.OutStreamer.EmitIntValue(0, Size);
+    AP.OutStreamer.EmitZeros(Size);
     return;
   }
 
