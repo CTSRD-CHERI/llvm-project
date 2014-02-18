@@ -334,6 +334,8 @@ bool ArgType::matchesType(ASTContext &C, QualType argTy) const {
       if (!PT)
         return false;
       QualType pointeeTy = PT->getPointeeType();
+      if (pointeeTy.getAddressSpace() != 0)
+        return false;
       if (const BuiltinType *BT = pointeeTy->getAs<BuiltinType>())
         switch (BT->getKind()) {
           case BuiltinType::Void:
@@ -377,6 +379,11 @@ bool ArgType::matchesType(ASTContext &C, QualType argTy) const {
     }
 
     case CPointerTy:
+      if (const PointerType *PT = argTy->getAs<PointerType>()) {
+        QualType pointeeTy = PT->getPointeeType();
+        if (pointeeTy.getAddressSpace() != 0)
+          return false;
+      }
       return argTy->isPointerType() || argTy->isObjCObjectPointerType() ||
              argTy->isBlockPointerType() || argTy->isNullPtrType();
 
