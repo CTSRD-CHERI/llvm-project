@@ -899,6 +899,8 @@ BUILTIN(__builtin_msa_xori_b, "V16cV16cIUi", "nc")
 
 BUILTIN(__builtin_cheri_set_cap_length, "v*200v*200z", "nc")
 BUILTIN(__builtin_cheri_get_cap_length, "zv*200", "nc")
+BUILTIN(__builtin_cheri_inc_cap_base, "v*200v*200z", "nc")
+BUILTIN(__builtin_cheri_get_cap_base, "zv*200", "nc")
 BUILTIN(__builtin_cheri_and_cap_perms, "v*200v*200z", "nc")
 BUILTIN(__builtin_cheri_get_cap_perms, "zv*200", "nc")
 BUILTIN(__builtin_cheri_set_cap_type, "v*200v*200z", "nc")
