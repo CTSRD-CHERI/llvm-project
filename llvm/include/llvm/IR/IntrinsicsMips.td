@@ -1768,6 +1768,15 @@ def int_mips_get_cap_length : GCCBuiltin<"__builtin_cheri_get_cap_length">,
     Intrinsic<[llvm_i64_ty],
               [llvm_fatptr_ty],
               [IntrNoMem]>;
+def int_mips_inc_cap_base : GCCBuiltin<"__builtin_cheri_inc_cap_base">,
+    Intrinsic<[llvm_fatptr_ty],
+              [llvm_fatptr_ty, llvm_i64_ty],
+              [IntrNoMem]>;
+def int_mips_get_cap_base : GCCBuiltin<"__builtin_cheri_get_cap_base">,
+    Intrinsic<[llvm_i64_ty],
+              [llvm_fatptr_ty],
+              [IntrNoMem]>;
+
 def int_mips_and_cap_perms : GCCBuiltin<"__builtin_cheri_and_cap_perms">,
     Intrinsic<[llvm_fatptr_ty],
               [llvm_fatptr_ty, llvm_i64_ty],

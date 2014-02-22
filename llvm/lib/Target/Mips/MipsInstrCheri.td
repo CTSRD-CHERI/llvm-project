@@ -59,7 +59,7 @@ def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
 ////////////////////////////////////////////////////////////////////////////////
 def CIncBase : CheriFmtSet<2, (outs CheriRegs:$cd), (ins CheriRegs:$cb, GPR64:$rt),
                            "cincbase\t$cd, $cb, $rt",
-                           [(set CheriRegs:$cd, (inttoptr (add GPR64:$rt, (ptrtoint CheriRegs:$cb))))]> {
+                         [(set CheriRegs:$cd, (inttoptr (add GPR64:$rt, (ptrtoint CheriRegs:$cb))))]> {
   let hasSideEffects = 1;
 }
 def : InstAlias<"cgetdefault $dst",
@@ -70,7 +70,8 @@ def : InstAlias<"cmove $dst, $src",
                 (CIncBase CheriRegs:$dst, CheriRegs:$src,ZERO_64), 1>;
 
 def CGetBase : CheriFmtGet<2, (outs GPR64:$rd), (ins CheriRegs:$cb),
-                           "cgetbase $rd, $cb", []>;
+                           "cgetbase $rd, $cb",
+                           [(set GPR64:$rd, (int_mips_get_cap_base CheriRegs:$cb))]>;
 let isCodeGenOnly=1 in {
 def CGetBase32 : CheriFmtGet<2, (outs GPR32:$rd), (ins CheriRegs:$cb),
                            "cgetbase $rd, $cb", []>;
@@ -268,6 +269,8 @@ def : Pat<(int_mips_get_kr2c), (CIncBase C28, ZERO_64)>;
 def : Pat<(int_mips_get_kcc), (CIncBase C29, ZERO_64)>;
 def : Pat<(int_mips_get_kdc), (CIncBase C30, ZERO_64)>;
 def : Pat<(int_mips_get_epcc), (CIncBase C31, ZERO_64)>;
+
+def : Pat<(int_mips_inc_cap_base CheriRegs:$cb, GPR64Opnd:$rd), (CIncBase $cb, $rd)>;
 
 
 defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR64Opnd, truncstorei8>;
