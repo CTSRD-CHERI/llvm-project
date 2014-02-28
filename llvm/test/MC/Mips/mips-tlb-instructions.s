@@ -2,6 +2,7 @@
 # RUN: FileCheck -check-prefix=CHECK32  %s
 # RUN: llvm-mc %s -triple=mips64el-unknown-linux -show-encoding -mcpu=mips64r2 | \
 # RUN: FileCheck -check-prefix=CHECK64  %s
+# XFAIL: *
 
 # Check that the assembler can handle the documented syntax
 # for memory-management instructions.
