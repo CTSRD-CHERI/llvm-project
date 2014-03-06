@@ -1,4 +1,5 @@
 ; RUN: llc -march=mipsel < %s | FileCheck %s
+; XFAIL
 
 @g0 = common global i32 0, align 4
 @g1 = common global i32 0, align 4

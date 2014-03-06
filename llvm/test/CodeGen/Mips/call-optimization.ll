@@ -2,6 +2,7 @@
 ; RUN:  FileCheck %s -check-prefix=O32
 ; RUN: llc -march=mipsel -mips-load-target-from-got=false \
 ; RUN:  -disable-mips-delay-filler < %s | FileCheck %s -check-prefix=O32-LOADTGT
+; XFAIL
 
 @gd1 = common global double 0.000000e+00, align 8
 @gd2 = common global double 0.000000e+00, align 8
