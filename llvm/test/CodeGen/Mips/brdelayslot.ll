@@ -135,7 +135,7 @@ declare void @foo11()
 ; SUCCBB:      blez $5, $BB
 ; SUCCBB-NEXT: addiu
 ; SUCCBB:      bnez ${{[0-9]+}}, $BB
-; SUCCBB-NEXT: addiu
+; SUCCBB-NEXT: sll	$1, $3, 2
 
 define i32 @succbbs_loop1(i32* nocapture %a, i32 %n) {
 entry:
