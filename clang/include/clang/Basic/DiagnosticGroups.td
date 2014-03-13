@@ -47,6 +47,7 @@ def ImplicitConversionFloatingPointToBool :
 def BadArrayNewLength : DiagGroup<"bad-array-new-length">;
 def BuiltinMacroRedefined : DiagGroup<"builtin-macro-redefined">;
 def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
+def CHERICaps : DiagGroup<"cheri-capability-misuse">;
 def C99Compat : DiagGroup<"c99-compat">;
 def CXXCompat: DiagGroup<"c++-compat">;
 def ExternCCompat : DiagGroup<"extern-c-compat">;
