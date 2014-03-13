@@ -206,13 +206,21 @@ TargetPassConfig *MipsTargetMachine::createPassConfig(PassManagerBase &PM) {
 }
 
 bool MipsPassConfig::addPreRegAlloc() {
+  bool ret = false;
+  if (getOptLevel() == CodeGenOpt::None) {
+    addPass(createMipsOptimizePICCallPass(getMipsTargetMachine()));
+    ret = true;
+  }
+  else
+    ret = false;
+
   MipsTargetMachine &TM = getMipsTargetMachine();
   if (TM.getSubtargetImpl()->isCheri()) {
     addPass(createCheriAddressingModeFolder());
     addPass(createCheriBranchFolder());
     return true;
   }
-  return false;
+  return ret;
 }
 
 void MipsPassConfig::addIRPasses() {
