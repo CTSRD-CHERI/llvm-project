@@ -1818,6 +1818,10 @@ def int_mips_get_cause : GCCBuiltin<"__builtin_cheri_get_cause">,
     Intrinsic<[llvm_i64_ty], [], []>;
 def int_mips_set_cause : GCCBuiltin<"__builtin_cheri_set_cause">,
     Intrinsic<[], [llvm_i64_ty], []>;
+def int_mips_check_perms : GCCBuiltin<"__builtin_cheri_check_perms">,
+    Intrinsic<[], [llvm_fatptr_ty, llvm_i64_ty], []>;
+def int_mips_check_type : GCCBuiltin<"__builtin_cheri_check_type">,
+    Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty], []>;
 
 def int_mips_get_c0 : GCCBuiltin<"__builtin_cheri_get_global_data_cap">,
     Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;

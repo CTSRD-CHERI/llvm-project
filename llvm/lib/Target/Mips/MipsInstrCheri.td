@@ -133,6 +133,28 @@ def CSetCause : CheriFmtSetCause<4, (outs), (ins GPR64: $rs),
                           "csetcause\t${rs}",
                           [(int_mips_set_cause GPR64: $rs)]>;
 
+
+def CCheckPerm : CheriFmtRegs<0x0b, 0, (outs), (ins CheriRegs:$cs, GPR64: $rs),
+                              "ccheckperm\t${cs}, ${rs}",
+                              [(int_mips_check_perms CheriRegs:$cs,  GPR64: $rs)]>
+{
+  bits<5>  cs;
+  bits<5>  rs;
+  let r0 = cs;
+  let r1 = 0;
+  let r2 = rs;
+}
+def CCheckType : CheriFmtRegs<0x0b, 1, (outs), (ins CheriRegs:$cs, CheriRegs:$cb),
+                              "cchecktype\t${cs}, ${cb}",
+                              [(int_mips_check_type CheriRegs:$cs,  CheriRegs:$cb)]>
+{
+  bits<5>  cs;
+  bits<5>  cb;
+  let r0 = cs;
+  let r1 = cb;
+  let r2 = 0;
+}
+
 // Casting:
 
 def CFromPtr : CheriFmtRegs<4, 7, (outs CheriRegs: $r0),

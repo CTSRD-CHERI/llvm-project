@@ -76,6 +76,10 @@ define i64 @test(i8 addrspace(200)* %foo) #0 {
   %40 = trunc i64 %39 to i1
   %41 = zext i1 %40 to i64
   %42 = and i64 %41, %38
+  ; CHECK: ccheckperm
+  call void @llvm.mips.check.perms(i8 addrspace(200)* %30, i64 12)
+  ; CHECK: cchecktype
+  call void @llvm.mips.check.type(i8 addrspace(200)* %30, i8 addrspace(200)* %31)
   ; CHECK: jr
   ret i64 %42
 }
@@ -112,6 +116,12 @@ declare i8 addrspace(200)* @llvm.mips.seal.cap.data(i8 addrspace(200)*, i8 addrs
 
 ; Function Attrs: nounwind readnone
 declare i8 addrspace(200)* @llvm.mips.unseal.cap(i8 addrspace(200)*, i8 addrspace(200)*) #1
+
+; Function Attrs: nounwind readnone
+declare void @llvm.mips.check.perms(i8 addrspace(200)*, i64) #1
+
+; Function Attrs: nounwind readnone
+declare void @llvm.mips.check.type(i8 addrspace(200)*, i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
 declare void @llvm.mips.set.cause(i64) #2
