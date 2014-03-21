@@ -16,6 +16,8 @@ long long test(__capability void* foo)
 	// CHECK: call i8 addrspace(200)* @llvm.mips.seal.cap.data
 	// CHECK: call i8 addrspace(200)* @llvm.mips.unseal.cap
 	// CHECK: call void @llvm.mips.set.cause(i64 42)
+	// CHECK: call void @llvm.mips.check.perms
+	// CHECK: call void @llvm.mips.check.type
 	// CHECK: call i64 @llvm.mips.get.cause()
 	x &= __builtin_cheri_get_cap_length(foo);
 	x &= __builtin_cheri_get_cap_perms(foo);
@@ -29,5 +31,7 @@ long long test(__capability void* foo)
 	results[4] = __builtin_cheri_seal_cap_data(foo, foo);
 	results[5] = __builtin_cheri_unseal_cap(foo, foo);
 	__builtin_cheri_set_cause(42);
+	__builtin_cheri_check_perms(foo, 12);
+	__builtin_cheri_check_type(foo, results[0]);
 	return x & __builtin_cheri_get_cause();
 }

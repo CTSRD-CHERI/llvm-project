@@ -913,6 +913,9 @@ BUILTIN(__builtin_cheri_unseal_cap, "v*200v*200v*200", "nc")
 BUILTIN(__builtin_cheri_get_cause, "z", "nc")
 BUILTIN(__builtin_cheri_set_cause, "vz", "nc")
 
+BUILTIN(__builtin_cheri_check_perms, "vv*200z", "nc")
+BUILTIN(__builtin_cheri_check_type, "vv*200v*200", "nc")
+
 BUILTIN(__builtin_cheri_get_global_data_cap, "v*200", "nc")
 BUILTIN(__builtin_cheri_get_invoke_data_cap, "v*200", "nc")
 BUILTIN(__builtin_cheri_get_kernel_cap1, "v*200", "nc")
