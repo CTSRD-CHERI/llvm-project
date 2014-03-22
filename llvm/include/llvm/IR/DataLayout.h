@@ -309,6 +309,23 @@ public:
     }
     return val->second.PrefAlign;
   }
+
+  /// Get the size of the base address component of a pointer.
+  /// For pointers that are simple integer representations this returns the
+  /// size of the pointer.  For fat pointers, it returns the size of the base
+  /// component of the pointer, ignoring the length, permissions and so on
+  /// components.
+  unsigned getPointerBaseSize(unsigned AS) const {
+    // FIXME: This is a really ugly hack.  We should allow targets to specify
+    // that a specific pointer address space is used for fat pointers.
+    if (AS == 200)
+      return 8;
+    return getPointerSize(AS);
+  }
+  unsigned getPointerBaseSizeInBits(unsigned AS) const {
+    return getPointerBaseSize(AS) * 8;
+  }
+
   /// Layout pointer size
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
