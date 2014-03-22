@@ -684,9 +684,8 @@ unsigned DataLayout::getPreferredTypeAlignmentShift(Type *Ty) const {
 
 IntegerType *DataLayout::getIntPtrType(LLVMContext &C,
                                        unsigned AddressSpace) const {
-  // FIXME: Should be checking the pointer range
-  unsigned NumBits = getPointerSizeInBits(AddressSpace);
-  return IntegerType::get(C, NumBits > 64 ? 64 : NumBits);
+  unsigned NumBits = getPointerBaseSizeInBits(AddressSpace);
+  return IntegerType::get(C, NumBits);
 }
 
 Type *DataLayout::getIntPtrType(Type *Ty) const {
