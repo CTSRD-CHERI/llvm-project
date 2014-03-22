@@ -401,7 +401,7 @@ Value *Value::stripAndAccumulateInBoundsConstantOffsets(const DataLayout &DL,
   if (!getType()->isPointerTy())
     return this;
 
-  assert(Offset.getBitWidth() == DL.getPointerSizeInBits(cast<PointerType>(
+  assert(Offset.getBitWidth() == DL.getPointerBaseSizeInBits(cast<PointerType>(
                                      getType())->getAddressSpace()) &&
          "The offset must have exactly as many bits as our pointer.");
 
