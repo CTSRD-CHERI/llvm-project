@@ -1186,7 +1186,7 @@ bool BoUpSLP::isConsecutiveAccess(Value *A, Value *B) {
   if (PtrA == PtrB || PtrA->getType() != PtrB->getType())
     return false;
 
-  unsigned PtrBitWidth = DL->getPointerSizeInBits(ASA);
+  unsigned PtrBitWidth = DL->getPointerBaseSizeInBits(ASA);
   Type *Ty = cast<PointerType>(PtrA->getType())->getElementType();
   APInt Size(PtrBitWidth, DL->getTypeStoreSize(Ty));
 
