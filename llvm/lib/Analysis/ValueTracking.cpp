@@ -1719,7 +1719,15 @@ Value *llvm::GetPointerBaseWithConstantOffset(Value *Ptr, int64_t &Offset,
                                               const DataLayout *DL) {
   // Without DataLayout, conservatively assume 64-bit offsets, which is
   // the widest we support.
-  unsigned BitWidth = DL ? DL->getPointerTypeSizeInBits(Ptr->getType()) : 64;
+  unsigned BitWidth = 64;
+  if (DL) {
+    PointerType *PTy = dyn_cast<PointerType>(Ptr->getType());
+    if (!PTy) {
+      VectorType *VTy = cast<VectorType>(Ptr->getType());
+      PTy = cast<PointerType>(VTy->getElementType());
+    }
+    BitWidth = DL->getPointerBaseSizeInBits(PTy->getPointerAddressSpace());
+  }
   APInt ByteOffset(BitWidth, 0);
   while (1) {
     if (Ptr->getType()->isVectorTy())
