@@ -1355,7 +1355,7 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
   if (BitCastInst *BCI = dyn_cast<BitCastInst>(PtrOp)) {
     Value *Operand = BCI->getOperand(0);
     PointerType *OpType = cast<PointerType>(Operand->getType());
-    unsigned OffsetBits = TD->getPointerTypeSizeInBits(OpType);
+    unsigned OffsetBits = TD->getPointerBaseSizeInBits(OpType->getPointerAddressSpace());
     APInt Offset(OffsetBits, 0);
     if (!isa<BitCastInst>(Operand) &&
         GEP.accumulateConstantOffset(*TD, Offset) &&
