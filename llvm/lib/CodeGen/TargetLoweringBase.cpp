@@ -798,8 +798,9 @@ void TargetLoweringBase::initActions() {
 }
 
 MVT TargetLoweringBase::getPointerTy(uint32_t AS) const {
-  // FIXME:
-  if (AS == 200)
+  const DataLayout *DL = TM.getDataLayout();
+  // If the pointer size is bigger than the pointer range, it's a fat pointer.
+  if (DL->getPointerSizeInBits(AS) > DL->getPointerBaseSizeInBits(AS))
     return MVT(MVT::iFATPTR);
   return MVT::getIntegerVT(getPointerSizeInBits(AS));
 }

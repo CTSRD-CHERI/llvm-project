@@ -442,12 +442,8 @@ public:
   /// must be at exactly as wide as the IntPtr type for the address space of the
   /// base GEP pointer.
   bool accumulateConstantOffset(const DataLayout &DL, APInt &Offset) const {
-      // FIXME: This is a hack that should be replaced by a proper fat pointer
-      // base width test.
     assert((Offset.getBitWidth() ==
-           DL.getPointerSizeInBits(getPointerAddressSpace())) ||
-           (DL.getPointerSizeInBits(getPointerAddressSpace()) > 64 &&
-            Offset.getBitWidth() == 64) &&
+           DL.getPointerBaseSizeInBits(getPointerAddressSpace())) &&
            "The offset must have exactly as many bits as our pointer.");
 
     for (gep_type_iterator GTI = gep_type_begin(this), GTE = gep_type_end(this);

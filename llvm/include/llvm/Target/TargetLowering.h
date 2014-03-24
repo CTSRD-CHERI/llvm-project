@@ -586,15 +586,8 @@ public:
   /// otherwise it will assert.
   EVT getValueType(Type *Ty, bool AllowUnknown = false) const {
     // Lower scalar pointers to native pointer types.
-    // FIXME: Uncomment when iFATPTR is gone
-    //if (PointerType *PTy = dyn_cast<PointerType>(Ty))
-    //  return getPointerTy(PTy->getAddressSpace());
-    //if (Ty->isPointerTy()) return getPointerTy(Ty->getPointerAddressSpace());
-    if (Ty->isPointerTy()) {
-      if (cast<PointerType>(Ty)->getAddressSpace() == 200)
-        return MVT(MVT::iFATPTR);
+    if (Ty->isPointerTy())
       return getPointerTy(Ty->getPointerAddressSpace());
-    }
 
     if (Ty->isVectorTy()) {
       VectorType *VTy = cast<VectorType>(Ty);
