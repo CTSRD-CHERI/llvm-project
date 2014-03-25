@@ -126,6 +126,14 @@ def CGetUnsealed : CheriFmtGet<6, (outs GPR64:$rd), (ins CheriRegs:$cb),
 def CGetPCC : CheriFmtGet<7, (outs GPR64:$rd, CheriRegs:$cb), (ins),
                           "cgetpcc\t${rd}(${cb})",
                           []>;
+def CGetOnlyPCC : CheriFmtGet<7, (outs CheriRegs:$cb), (ins),
+                          "cgetpcc\t${cb}",
+                          [(set CheriRegs:$cb, (int_mips_get_pcc))]>
+{
+  let isCodeGenOnly=1;
+  let rd = 0;
+}
+
 def CGetCause : CheriFmtGetCause<0, (outs GPR64:$rd), (ins),
                           "cgetcause\t${rd}",
                           [(set GPR64:$rd, (int_mips_get_cause))]>;
