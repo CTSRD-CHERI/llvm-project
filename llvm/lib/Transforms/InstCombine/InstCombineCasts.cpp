@@ -1459,7 +1459,7 @@ Instruction *InstCombiner::commonPointerCastTransforms(CastInst &CI) {
     // instructions into fewer.  This typically happens with unions and other
     // non-type-safe code.
     unsigned AS = GEP->getPointerAddressSpace();
-    unsigned OffsetBits = TD->getPointerSizeInBits(AS);
+    unsigned OffsetBits = TD->getPointerBaseSizeInBits(AS);
     APInt Offset(OffsetBits, 0);
     BitCastInst *BCI = dyn_cast<BitCastInst>(GEP->getOperand(0));
     if (GEP->hasOneUse() &&
