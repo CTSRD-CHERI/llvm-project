@@ -2741,13 +2741,11 @@ bool MipsAsmParser::parseDirectiveCPSetup() {
   if (!eatComma("expected comma parsing directive"))
     return true;
   if (!parseRegister(Save)) {
-    const AsmToken &Tok = Parser.getTok();
-    if (Tok.is(AsmToken::Integer)) {
-      Save = Tok.getIntVal();
-      SaveIsReg = false;
-      Parser.Lex();
-    } else
+    int64_t SaveOffset;
+    if (Parser.parseAbsoluteExpression(SaveOffset))
       return reportParseError("expected save register or stack offset");
+    Save = SaveOffset;
+    SaveIsReg = false;
   } else
     Save = getGPR(Save);
 

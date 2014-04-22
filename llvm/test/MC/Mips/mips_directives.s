@@ -48,7 +48,7 @@ $BB0_4:
 # CHECK:                               #   fixup A - offset: 0, value: ($tmp7)@ABS_HI, kind: fixup_Mips_HI16
     abs.s  f6,FPU_MASK
     lui $1, %hi($tmp7)
-    .cpsetup $25, 8, __cerror
+    .cpsetup $25, ((8 * 4) - 3 * 8), __cerror
 # CHECK: sd	$gp, 8($sp)             # encoding: [0xff,0xbc,0x00,0x08]
 # CHECK: lui	$gp, %hi(%neg(%gp_rel(__cerror))) # encoding: [0x3c'A',0x1c'A',0x00,0x00]
 # CHECK:                                        #   fixup A - offset: 0, value: __cerror@GPOFF_HI, kind: fixup_Mips_GPOFF_HI
