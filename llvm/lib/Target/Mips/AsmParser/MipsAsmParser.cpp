@@ -67,6 +67,9 @@ class MipsAsmParser : public MCTargetAsmParser {
   MipsAssemblerOptions Options;
   bool hasConsumedDollar;
 
+  unsigned SaveLocation;
+  bool     SaveLocationIsRegister;
+
 #define GET_ASSEMBLER_HEADER
 #include "MipsGenAsmMatcher.inc"
 
@@ -201,6 +204,7 @@ class MipsAsmParser : public MCTargetAsmParser {
 
   bool isEvaluated(const MCExpr *Expr);
   bool parseDirectiveCPSetup();
+  bool parseDirectiveCPReturn();
   bool parseDirectiveSet();
   bool parseDirectiveMipsHackStocg();
   bool parseDirectiveMipsHackELFFlags();
@@ -2731,6 +2735,24 @@ bool MipsAsmParser::eatComma(StringRef ErrorStr) {
   return true;
 }
 
+bool MipsAsmParser::parseDirectiveCPReturn() {
+  MCInst Inst;
+  // Either restore the old $gp from a register or on the stack
+  if (SaveLocationIsRegister) {
+    Inst.setOpcode(Mips::DADDi);
+    Inst.addOperand(MCOperand::CreateReg(SaveLocation));
+    Inst.addOperand(MCOperand::CreateReg(getGPR(matchCPURegisterName("gp"))));
+    Inst.addOperand(MCOperand::CreateImm(0));
+  } else {
+    Inst.setOpcode(Mips::LD);
+    Inst.addOperand(MCOperand::CreateReg(getGPR(matchCPURegisterName("gp"))));
+    Inst.addOperand(MCOperand::CreateReg(getGPR(matchCPURegisterName("sp"))));
+    Inst.addOperand(MCOperand::CreateImm(SaveLocation));
+  }
+  getStreamer().EmitInstruction(Inst);
+  return false;
+}
+
 bool MipsAsmParser::parseDirectiveCPSetup() {
   unsigned FuncReg;
   unsigned Save;
@@ -2756,6 +2778,9 @@ bool MipsAsmParser::parseDirectiveCPSetup() {
     reportParseError("expected identifier");
   MCSymbol *Sym = getContext().GetOrCreateSymbol(Name);
   unsigned GPReg = getGPR(matchCPURegisterName("gp"));
+
+  SaveLocation = Save;
+  SaveLocationIsRegister = SaveIsReg;
 
   MCStreamer &TS = getStreamer();
   MCInst Inst;
@@ -3007,6 +3032,9 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
 
   if (IDVal == ".cpsetup")
     return parseDirectiveCPSetup();
+
+  if (IDVal == ".cpreturn")
+    return parseDirectiveCPReturn();
 
   return true;
 }

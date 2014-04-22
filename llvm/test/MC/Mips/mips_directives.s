@@ -55,3 +55,9 @@ $BB0_4:
 # CHECK: daddu	$gp, $gp, $25           # encoding: [0x03,0x99,0xe0,0x2d]
 # CHECK: daddiu	$gp, $gp, %lo(%neg(%gp_rel(__cerror))) # encoding: [0x67'A',0x9c'A',0x00,0x00]
 # CHECK:                                        #   fixup A - offset: 0, value: __cerror@GPOFF_LO, kind: fixup_Mips_GPOFF_LO
+    .cpreturn
+# CHECK: ld	$gp, 8($sp)
+    .cpsetup $25, $22, __cerror
+# CHECK: daddi	$22, $gp, 0             # encoding: [0x63,0x96,0x00,0x00]
+    .cpreturn
+# CHECK: daddi	$22, $gp, 0             # encoding: [0x63,0x96,0x00,0x00]
