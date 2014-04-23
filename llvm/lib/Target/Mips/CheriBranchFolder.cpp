@@ -72,8 +72,10 @@ struct CheriBranchFolder : public MachineFunctionPass {
       } else {
         Op = Mips::CBTS;
       }
-      BuildMI(*MBB, Branch, Branch->getDebugLoc(),
-          MipsInsts[Op]).addReg(Reg).addOperand(Branch->getOperand(2));
+      BuildMI(*MBB, Branch, Branch->getDebugLoc(), MipsInsts[Op])
+        .addReg(Reg)
+        .addOperand(Branch->getOperand(2))
+        .addOperand(Branch->getOperand(3));
       Branch->eraseFromBundle();
     }
     for (auto I : GetTags) {
