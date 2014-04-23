@@ -2044,6 +2044,17 @@ Value *ScalarExprEmitter::VisitUnaryImag(const UnaryOperator *E) {
 //                           Binary Operators
 //===----------------------------------------------------------------------===//
 
+static Value *getCapabilityBase(CodeGenModule &CGM, CGBuilderTy &B, Value *Cap,
+    llvm::Type *IntPtrTy) {
+  int AS = cast<llvm::PointerType>(Cap->getType())->getAddressSpace();
+  llvm::Type *CapTy =
+    llvm::PointerType::get(llvm::Type::getInt8Ty(Cap->getContext()), AS);
+  Cap = B.CreateBitCast(Cap, CapTy);
+  Cap = B.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::mips_get_cap_base),
+      Cap);
+  return B.CreateBitCast(Cap, IntPtrTy);
+}
+
 BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
   TestAndClearIgnoreResultAssign();
   BinOpInfo Result;
@@ -2058,9 +2069,9 @@ BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
   // then we need to fudge it into an integer type first.
   if (Result.Ty.isCapabilityType() && Result.Opcode != BO_And) {
     if (isa<llvm::PointerType>(Result.LHS->getType()))
-      Result.LHS = Builder.CreatePtrToInt(Result.LHS, CGF.IntPtrTy);
+      Result.LHS = getCapabilityBase(CGF.CGM, Builder, Result.LHS, CGF.IntPtrTy);
     if (isa<llvm::PointerType>(Result.RHS->getType()))
-      Result.RHS = Builder.CreatePtrToInt(Result.RHS, CGF.IntPtrTy);
+      Result.RHS = getCapabilityBase(CGF.CGM, Builder, Result.RHS, CGF.IntPtrTy);
     else
       Result.RHS = Builder.CreateZExtOrTrunc(Result.RHS, CGF.IntPtrTy);
   }
@@ -2850,8 +2861,8 @@ Value *ScalarExprEmitter::EmitCompare(const BinaryOperator *E,unsigned UICmpOpc,
     // If we're doing a comparison on a capability (including an __intcap_t)
     // then we need to fudge it into an integer type first.
     if (LHSTy.isCapabilityType()) {
-      LHS = Builder.CreatePtrToInt(LHS, CGF.IntPtrTy);
-      RHS = Builder.CreatePtrToInt(RHS, CGF.IntPtrTy);
+      LHS = getCapabilityBase(CGF.CGM, Builder, LHS, CGF.IntPtrTy);
+      RHS = getCapabilityBase(CGF.CGM, Builder, RHS, CGF.IntPtrTy);
     } 
 
     if (LHS->getType()->isFPOrFPVectorTy()) {
