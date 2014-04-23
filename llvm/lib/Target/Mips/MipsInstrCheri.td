@@ -27,16 +27,18 @@ def simm8: Operand<i64>;
 ////////////////////////////////////////////////////////////////////////////////
 // Flow control
 ////////////////////////////////////////////////////////////////////////////////
+let hasDelaySlot=1, isTerminator=1 in {
+let isBranch=1 in {
 def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriRegs:$cd, brtarget:$offset),
                         "cbts\t$cd, $offset",
                         [(MipsCBTS CheriRegs:$cd, bb:$offset)]>;
 def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriRegs:$cd, brtarget:$offset),
                         "cbtu\t$cd, $offset",
                         [(MipsCBTU CheriRegs:$cd, bb:$offset)]>;
+}
 def CJR : CheriFmt3CJMP<0x08, (outs), (ins CheriRegs:$cb, GPR64:$rt),
                               "cjr\t${rt}(${cb})",
-                              []> {
-  let hasDelaySlot=1;
+                              []>;
 }
 let isTerminator=1, isCall=1, hasDelaySlot=1 in {
 def CJALR : CheriFmt3CJMP<0x07, (outs), (ins CheriRegs:$cb, GPR64:$rt),
