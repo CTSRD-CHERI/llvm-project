@@ -173,12 +173,24 @@ def CFromPtr : CheriFmtRegs<4, 7, (outs CheriRegs: $r0),
 def CToPtr : CheriFmtRegs<0xc, 0, (outs GPR64Opnd: $r0),
   (ins CheriRegs: $r2, CheriRegs: $r1),
   "ctoptr $r0, $r2, $r1", []>;
+let isCodeGenOnly = 1 in {
+def CFromPtr32 : CheriFmtRegs<4, 7, (outs CheriRegs: $r0),
+  (ins CheriRegs: $r1, GPR32Opnd: $r2),
+  "cfromptr $r0, $r1, $r2", []>;
+def CToPtr32 : CheriFmtRegs<0xc, 0, (outs GPR32Opnd: $r0),
+  (ins CheriRegs: $r2, CheriRegs: $r1),
+  "ctoptr $r0, $r2, $r1", []>;
+}
 
 // Int to pointer in address space 0
 def : Pat<(inttoptr GPR64:$rt),
           (CFromPtr C0, $rt)>;
+def : Pat<(inttoptr GPR32:$rt),
+          (CFromPtr32 C0, $rt)>;
 def : Pat<(ptrtoint CheriRegs:$rt),
           (CToPtr C0, $rt)>;
+def : Pat<(ptrtoint CheriRegs:$rt),
+          (CToPtr32 C0, $rt)>;
 
 
 let DecoderNamespace="CHERI" in
