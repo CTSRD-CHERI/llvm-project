@@ -28,12 +28,12 @@ def simm8: Operand<i64>;
 ////////////////////////////////////////////////////////////////////////////////
 let hasDelaySlot=1, isTerminator=1 in {
 let isBranch=1 in {
-def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriRegs:$cd, brtarget:$offset),
-                        "cbts\t$cd, $offset",
-                        [(MipsCBTS CheriRegs:$cd, bb:$offset)]>;
-def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriRegs:$cd, brtarget:$offset),
-                        "cbtu\t$cd, $offset",
-                        [(MipsCBTU CheriRegs:$cd, bb:$offset)]>;
+def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriRegs:$cb, brtarget:$offset),
+                        "cbts\t$cb, $offset",
+                        [(MipsCBTS CheriRegs:$cb, bb:$offset)]>;
+def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriRegs:$cb, brtarget:$offset),
+                        "cbtu\t$cb, $offset",
+                        [(MipsCBTU CheriRegs:$cb, bb:$offset)]>;
 }
 def CJR : CheriFmt3CJMP<0x08, (outs), (ins CheriRegs:$cb, GPR64:$rt),
                               "cjr\t${rt}(${cb})",

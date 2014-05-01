@@ -12,12 +12,12 @@ class CheriFmtCBT<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   MipsInst<outs, ins, asmstr, pattern, IIBranch, FrmOther>
 {
-  bits<5>  rd;
+  bits<5>  cb;
   bits<16> offset;
 
   let Opcode = 0x12;
   let Inst{25-21} = op;
-  let Inst{20-16} = rd;
+  let Inst{20-16} = cb;
   let Inst{15-0} = offset;
 
   let isBranch = 1;
