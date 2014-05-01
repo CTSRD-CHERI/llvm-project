@@ -16,7 +16,6 @@ def MipsCBTS : SDNode<"MipsISD::CBTS", SDT_MipsCBT,
                           [SDNPHasChain, SDNPOptInGlue]>;
 def MipsCBTU : SDNode<"MipsISD::CBTU", SDT_MipsCBT,
                           [SDNPHasChain, SDNPOptInGlue]>;
-let isCall=1, hasDelaySlot=1, Defs = [RA] in {}
 
 // 11-bit immediate offset used by C[SL]CR
 def simm11: Operand<i64>;
