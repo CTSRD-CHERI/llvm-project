@@ -105,7 +105,26 @@ class CheriStackHack : public FunctionPass,
     PI->replaceUsesOfWith(R.Alloca, R.Ptr);
   }
   void replaceBitCast(BitCastInst *BI, const Replacement &R) {
-    BI->replaceUsesOfWith(R.Alloca, R.Ptr);
+    // If the bitcast isn't a pointer cast, then just use the pointer version
+    if (!BI->getType()->isPointerTy()) {
+      BI->replaceUsesOfWith(R.Alloca, R.Ptr);
+      return;
+    }
+    // If it is a pointer, then we want to replace it with a capability version
+    // and then propagate this to users.
+    PointerType *BaseType = cast<PointerType>(BI->getType());
+    // If it's not address space, then just reuse the original
+    if (BaseType->getAddressSpace() != 0) {
+      BI->replaceUsesOfWith(R.Alloca, R.Ptr);
+      return;
+    }
+    Type *CapTy = PointerType::get(BaseType->getElementType(), 200);
+    Value *CapBitcast = new BitCastInst(R.Cap, CapTy, BI->getName(), BI);
+    Value *PtrBitcast = new BitCastInst(R.Ptr, BI->getType(), BI->getName(),
+        BI);
+
+    Replacement BCR = { BI, CapBitcast, PtrBitcast };
+    replaceUsers(BI, BCR);
   }
 
   void replaceUsers(Instruction *Inst, const Replacement &R) {
