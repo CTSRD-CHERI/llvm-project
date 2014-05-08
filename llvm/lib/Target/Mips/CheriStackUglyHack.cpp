@@ -193,6 +193,9 @@ class CheriStackHack : public FunctionPass,
       SimplifyInstructionsInBlock(&BB, DL);
     }
     removeUnreachableBlocks(F);
+#ifndef NDEBUG
+    verifyModule(*F.getParent());
+#endif
       return true;
     }
 };
