@@ -1292,8 +1292,7 @@ SDValue DAGTypeLegalizer::SplitVecOp_STORE(StoreSDNode *N, unsigned OpNo) {
                       isVol, isNT, Alignment, TBAAInfo);
 
   // Increment the pointer to the other half.
-  Ptr = DAG.getNode(ISD::ADD, DL, Ptr.getValueType(), Ptr,
-                    DAG.getConstant(IncrementSize, Ptr.getValueType()));
+  Ptr = DAG.getPointerAdd(DL, Ptr, IncrementSize);
 
   if (isTruncating)
     Hi = DAG.getTruncStore(Ch, DL, Hi, Ptr,
