@@ -58,8 +58,6 @@ class CheriStackHack : public FunctionPass,
 
     Replacement GEPR = { GEP, NewGEP, NewGEPAsPtr };
     replaceUsers(GEP, GEPR);
-    RecursivelyDeleteTriviallyDeadInstructions(GEP);
-    RecursivelyDeleteTriviallyDeadInstructions(NewGEPAsPtr);
   }
   void replaceStore(StoreInst *SI, const Replacement &R) {
     new StoreInst(SI->getOperand(0), R.Cap, SI->isVolatile(),
@@ -189,8 +187,12 @@ class CheriStackHack : public FunctionPass,
         Value *AllocaAsPtr = B.CreateAddrSpaceCast(CastToCap, AllocaTy);
         Replacement R = { AI, AllocaAsCap, AllocaAsPtr };
         replaceUsers(AI, R);
-        RecursivelyDeleteTriviallyDeadInstructions(AllocaAsPtr);
       }
+    for (BasicBlock &BB : F)
+    {
+      SimplifyInstructionsInBlock(&BB, DL);
+    }
+    removeUnreachableBlocks(F);
       return true;
     }
 };
