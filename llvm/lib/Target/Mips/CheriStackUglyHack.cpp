@@ -41,6 +41,10 @@ class CheriStackHack : public FunctionPass,
   Value *InitialBitCast;
   Value *CastToCap;
 
+  virtual const char *getPassName() const {
+    return "CHERI capability stack transform";
+  }
+
   void replaceGEP(GetElementPtrInst *GEP, const Replacement &R) {
     SmallVector<Value*, 8> Idxs;
     for (auto I=GEP->idx_begin(),E=GEP->idx_end() ; I!=E ; I++)
