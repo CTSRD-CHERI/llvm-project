@@ -129,8 +129,8 @@ getReservedRegs(const MachineFunction &MF) const {
   };
 
   static const uint16_t ReservedCheriRegs[] = {
-    Mips::C0, Mips::C11, Mips::C25, Mips::C26, Mips::C27, Mips::C28, Mips::C29,
-    Mips::C30, Mips::C31
+    Mips::C0, Mips::C25, Mips::C26, Mips::C27, Mips::C28, Mips::C29, Mips::C30,
+    Mips::C31
   };
 
   BitVector Reserved(getNumRegs());
@@ -157,6 +157,8 @@ getReservedRegs(const MachineFunction &MF) const {
   if (Subtarget.isCheri()) {
     for (unsigned I = 0; I < array_lengthof(ReservedCheriRegs); ++I)
       Reserved.set(ReservedCheriRegs[I]);
+    if (Subtarget.usesCheriStackCapabilityABI())
+      Reserved.set(Mips::C11);
   }
 
   // Reserve FP if this function should have a dedicated frame pointer register.
