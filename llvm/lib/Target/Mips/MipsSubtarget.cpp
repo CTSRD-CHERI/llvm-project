@@ -59,6 +59,16 @@ Mips16ConstantIslands(
   cl::desc("MIPS: mips16 constant islands enable."),
   cl::init(true));
 
+static cl::opt<bool>
+CheriStackCapabilityABI(
+  "cheri-stack-cap", cl::NotHidden,
+  cl::desc("CHERI: Stack pointer is capability-relative."),
+  cl::init(false));
+
+bool MipsSubtarget::usesCheriStackCapabilityABI() const {
+  return CheriStackCapabilityABI;
+}
+
 void MipsSubtarget::anchor() { }
 
 MipsSubtarget::MipsSubtarget(const std::string &TT, const std::string &CPU,

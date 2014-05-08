@@ -192,6 +192,8 @@ public:
   bool isLinux() const { return IsLinux; }
   bool useSmallSection() const { return UseSmallSection; }
   bool isCheri() const { return IsCheri; }
+  /// Uses the ABI where the stack pointer is relative to C11, not C0.
+  bool usesCheriStackCapabilityABI() const;
 
   bool hasStandardEncoding() const { return !inMips16Mode(); }
 
