@@ -1802,6 +1802,11 @@ def int_mips_get_cap_unsealed  : GCCBuiltin<"__builtin_cheri_get_cap_unsealed">,
               [llvm_fatptr_ty],
               [IntrNoMem]>;
 
+def int_mips_clear_cap_tag  : GCCBuiltin<"__builtin_cheri_clear_cap_tag">,
+    Intrinsic<[llvm_fatptr_ty],
+              [llvm_fatptr_ty],
+              [IntrNoMem]>;
+
 def int_mips_seal_cap_code  : GCCBuiltin<"__builtin_cheri_seal_cap_code">,
     Intrinsic<[llvm_fatptr_ty],
               [llvm_fatptr_ty],

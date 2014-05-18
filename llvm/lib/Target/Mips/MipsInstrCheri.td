@@ -198,7 +198,7 @@ def STORECAP : CheriFmtCSCR<(outs), (ins CheriRegs:$cs, GPR64:$rt, simm11:$offse
                          [(store CheriRegs:$cs, (add (add GPR64:$rt, (ptrtoint CheriRegs:$cb)), (i64 immSExt11:$offset)))]>;
 
 def CLEARTAG : CheriFmtClearTag<(outs CheriRegs:$cd), (ins CheriRegs:$cb), "ccleartag\t$cd, $cb",
-                                []>;
+                                [(set CheriRegs:$cd, (int_mips_clear_cap_tag CheriRegs:$cb))]>;
 
 def : Pat<(store CheriRegs:$cs, CheriRegs:$cb),
           (STORECAP CheriRegs:$cs, ZERO_64, (i64 0), $cb)>;
