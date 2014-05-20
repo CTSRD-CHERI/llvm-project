@@ -15,6 +15,7 @@
 
 #include <string>
 #include <utility>
+#include <unordered_map>
 
 #include "llvm/IR/Verifier.h"
 
@@ -37,9 +38,18 @@ class CheriStackHack : public FunctionPass,
     Value *Ptr;
   };
   llvm::SmallVector<AllocaInst*, 16> Allocas;
+  std::unordered_map<PHINode*, PHINode*> ModifiedPHIs;
 
   Value *InitialBitCast;
   Value *CastToCap;
+
+  PointerType *getCapType(PointerType *Ty) {
+    assert(Ty->getAddressSpace() == 0);
+    return PointerType::get(Ty->getElementType(), 200);
+  }
+  PointerType *getCapType(Value *V) {
+    return getCapType(cast<PointerType>(V->getType()));
+  }
 
   virtual const char *getPassName() const {
     return "CHERI capability stack transform";
@@ -64,6 +74,36 @@ class CheriStackHack : public FunctionPass,
         SI->getAlignment(), SI->getOrdering(), SI->getSynchScope(), SI);
     // Stores can't have users...
     SI->eraseFromParent();
+  }
+  void replacePHI(PHINode *Phi, const Replacement &R) {
+    unsigned Count = Phi->getNumIncomingValues();
+    Phi->replaceUsesOfWith(R.Alloca, R.Ptr);
+    PHINode *NewPhi = ModifiedPHIs[Phi];
+    // If the replacement (capability) PHI node has already been created, then
+    // just add this use
+    if (NewPhi) {
+      for (unsigned i=0 ; i<Count ; i++)
+        if (Phi->getIncomingValue(i) == R.Alloca)
+          NewPhi->setIncomingValue(i, R.Cap);
+      return;
+    }
+    Type *CapTy = getCapType(Phi);
+    NewPhi = PHINode::Create(CapTy, Count, Phi->getName(), Phi);
+    ModifiedPHIs[Phi] = NewPhi;
+    for (unsigned i=0 ; i<Count ; i++) {
+      // We need a placeholder value for a 'value not yet known', but it can't
+      // be null and must have the same type as the Phi, so we use the Phi
+      // itself.  This results in an invalid module (which the verifier will
+      // spot), but the verifier shouldn't be run for an under-construction
+      // module and we want it to complain if we haven't fixed it by the time
+      // this pass finishes.
+      NewPhi->addIncoming(NewPhi, Phi->getIncomingBlock(i));
+      if (Phi->getIncomingValue(i) == R.Ptr)
+        NewPhi->setIncomingValue(i, R.Cap);
+    }
+    Replacement NewR = { Phi, NewPhi, Phi };
+    replaceUsers(Phi, NewR);
+    return;
   }
   void replaceLoad(LoadInst *LI, const Replacement &R) {
     LoadInst *CapLoad = new LoadInst(R.Cap, LI->getName(), LI->isVolatile(),
@@ -151,7 +191,8 @@ class CheriStackHack : public FunctionPass,
       else if (BitCastInst *BI = dyn_cast<BitCastInst>(U)) {
         if (BI != InitialBitCast)
           replaceBitCast(BI, R);
-      }
+      } else if (PHINode *P = dyn_cast<PHINode>(U))
+        replacePHI(P, R);
       else {
         U->dump();
         llvm_unreachable("Unknown instruction using alloca!");
@@ -175,6 +216,7 @@ class CheriStackHack : public FunctionPass,
     }
     virtual bool runOnFunction(Function &F) {
       Allocas.clear();
+      ModifiedPHIs.clear();
       visit(F);
       if (Allocas.empty())
         return false;
@@ -206,6 +248,21 @@ class CheriStackHack : public FunctionPass,
         Value *AllocaAsPtr = B.CreateAddrSpaceCast(CastToCap, AllocaTy);
         Replacement R = { AI, AllocaAsCap, AllocaAsPtr };
         replaceUsers(AI, R);
+      }
+      // Some of the PHI nodes may not have had a capability propagated to all
+      // of their values.  For these, we just construct a capability that we
+      // can then use from the pointer available at the end of the incoming
+      // block.
+      for (auto &I : ModifiedPHIs) {
+        PHINode *PtrPhi = I.first;
+        PHINode *CapPhi = I.second;
+        for (unsigned i=0, e=PtrPhi->getNumIncomingValues() ; i<e ; i++)
+          if (CapPhi == CapPhi->getIncomingValue(i)) {
+            Instruction *Insert = CapPhi->getIncomingBlock(i)->getTerminator();
+            Value *Cap = new AddrSpaceCastInst(PtrPhi->getIncomingValue(i),
+                CapPhi->getType(), "", Insert);
+            CapPhi->setIncomingValue(i, Cap);
+          }
       }
       for (BasicBlock &BB : F) {
         SimplifyInstructionsInBlock(&BB, DL);
