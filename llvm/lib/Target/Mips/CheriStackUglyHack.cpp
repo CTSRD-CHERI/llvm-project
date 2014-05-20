@@ -207,13 +207,12 @@ class CheriStackHack : public FunctionPass,
         Replacement R = { AI, AllocaAsCap, AllocaAsPtr };
         replaceUsers(AI, R);
       }
-    for (BasicBlock &BB : F)
-    {
-      SimplifyInstructionsInBlock(&BB, DL);
-    }
-    removeUnreachableBlocks(F);
+      for (BasicBlock &BB : F) {
+        SimplifyInstructionsInBlock(&BB, DL);
+      }
+      removeUnreachableBlocks(F);
 #ifndef NDEBUG
-    verifyModule(*F.getParent());
+      verifyModule(*F.getParent());
 #endif
       return true;
     }
