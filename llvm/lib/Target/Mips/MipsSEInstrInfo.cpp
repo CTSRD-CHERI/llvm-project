@@ -197,8 +197,17 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       Opc = Mips::CAPSTORE32;
     else if (Mips::GPR64RegClass.hasSubClassEq(RC))
       Opc = Mips::CAPSTORE64;
-    else if (Mips::FGR64RegClass.hasSubClassEq(RC))
-      Opc = Mips::CSDC1;
+    else if (Mips::FGR64RegClass.hasSubClassEq(RC)) {
+      DebugLoc DL = I->getDebugLoc();
+      MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
+      unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+      BuildMI(MBB, I, DL, get(Mips::DMFC1), IntReg)
+        .addReg(SrcReg);
+      BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
+        .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+        .addReg(Mips::C11);
+      return;
+    }
     else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
       Opc = Mips::STORECAP;
       // Ensure that capabilities have a 32-byte alignment
@@ -272,8 +281,17 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       Opc = Mips::CAPLOAD32;
     else if (Mips::GPR64RegClass.hasSubClassEq(RC))
       Opc = Mips::CAPLOAD64;
-    else if (Mips::FGR64RegClass.hasSubClassEq(RC))
-      Opc = Mips::CLDC1;
+    else if (Mips::FGR64RegClass.hasSubClassEq(RC)) {
+      DebugLoc DL = I->getDebugLoc();
+      MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
+      unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+      BuildMI(MBB, I, DL, get(Mips::CAPLOAD64), IntReg)
+        .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+        .addReg(Mips::C11);
+      BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
+        .addReg(IntReg, getKillRegState(true));
+      return;
+    }
     else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
       Opc = Mips::LOADCAP;
     }
