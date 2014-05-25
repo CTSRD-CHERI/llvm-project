@@ -271,6 +271,10 @@ defm CAPLOADU8     : LoadViaCap<0, 0, "clbu", GPR64Opnd, extloadi8>;
 defm CAPLOADU16    : LoadViaCap<1, 0, "clhu", GPR64Opnd, extloadi16>;
 defm CAPLOADU32    : LoadViaCap<2, 0, "clwu", GPR64Opnd, zextloadi32>;
 
+let isCodeGenOnly=1 in {
+defm CAPLOAD3264   : LoadViaCap<2, 0, "clw", GPR64Opnd, extloadi32>;
+}
+
 defm CAP0LOADA8     : LoadViaCap0<CAPLOAD8, extloadi8>;
 defm CAP0LOADA16    : LoadViaCap0<CAPLOAD16, extloadi16>;
 defm CAP0LOADA32    : LoadViaCap0<CAPLOAD32, extloadi32>;
@@ -281,6 +285,7 @@ defm CAP0LOADU32    : LoadViaCap0<CAPLOADU32, zextloadi32>;
 
 defm CAP0LOAD8     : LoadViaCap0<CAPLOAD8, sextloadi8>;
 defm CAP0LOAD16    : LoadViaCap0<CAPLOAD16, sextloadi16>;
+defm CAP0LOAD3264  : LoadViaCap0<CAPLOAD3264, sextloadi32>;
 defm CAP0LOAD32    : LoadViaCap0<CAPLOAD32, load>;
 defm CAP0LOAD64    : LoadViaCap0<CAPLOAD64, load>;
 
