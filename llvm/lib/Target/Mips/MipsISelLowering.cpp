@@ -2184,9 +2184,35 @@ static SDValue createStoreLR(unsigned Opc, SelectionDAG &DAG, StoreSDNode *SD,
 
 // Expand an unaligned 32 or 64-bit integer store node.
 static SDValue lowerUnalignedIntStore(StoreSDNode *SD, SelectionDAG &DAG,
-                                      bool IsLittle) {
+                                      bool IsLittle, bool IsCHERI) {
   SDValue Value = SD->getValue(), Chain = SD->getChain();
   EVT VT = Value.getValueType();
+  SDValue BasePtr = SD->getBasePtr();
+
+  // CHERI doesn't have a capability version of SDR / SDL, so we turn this into
+  // a sequence of byte stores and shifts.
+  if (IsCHERI && (BasePtr->getValueType(0) == MVT::iFATPTR)) {
+    SD->dump();
+    SDLoc DL(SD);
+    EVT MemVT = SD->getMemoryVT();
+    SDValue Store;
+    int Size = (MemVT.getSizeInBits() / 8);
+    SmallVector<SDValue, 8> Ops;
+    // CHERI is big endian.  We'll write the lowest bytes at the end of the
+    // word first
+    for (int Offset=Size-1 ; Offset>=0 ; Offset-=1) {
+      // Address to store this byte
+      SDValue Ptr = DAG.getPointerAdd(DL, BasePtr, Offset);
+      // Store the next byte
+      Store = DAG.getTruncStore(Chain, DL, Value, Ptr, SD->getPointerInfo(),
+          MVT::i8, SD->isVolatile(), SD->isNonTemporal(), SD->getAlignment());
+      Ops.push_back(Store);
+      Chain = Store;
+      // Shift the value
+      Value = DAG.getNode(ISD::SRL, DL, VT, Value, DAG.getConstant(8, VT));
+    }
+    return Store;
+  }
 
   // Expand
   //  (store val, baseptr) or
@@ -2247,7 +2273,8 @@ SDValue MipsTargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
   // Lower unaligned integer stores.
   if ((SD->getAlignment() < MemVT.getSizeInBits() / 8) &&
       ((MemVT == MVT::i32) || (MemVT == MVT::i64)))
-    return lowerUnalignedIntStore(SD, DAG, Subtarget->isLittle());
+    return lowerUnalignedIntStore(SD, DAG, Subtarget->isLittle(),
+        Subtarget->isCheri());
 
   return lowerFP_TO_SINT_STORE(SD, DAG);
 }
