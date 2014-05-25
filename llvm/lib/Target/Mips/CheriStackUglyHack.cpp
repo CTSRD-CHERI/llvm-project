@@ -70,7 +70,13 @@ class CheriStackHack : public FunctionPass,
     replaceUsers(GEP, GEPR);
   }
   void replaceStore(StoreInst *SI, const Replacement &R) {
-    new StoreInst(SI->getOperand(0), R.Cap, SI->isVolatile(),
+    Value *Ptr = SI->getPointerOperand();
+    Value *Val = SI->getValueOperand();
+    if (Ptr == R.Alloca)
+      Ptr = R.Cap;
+    if (Val == R.Alloca)
+      Val = R.Ptr;
+    new StoreInst(Val, Ptr, SI->isVolatile(),
         SI->getAlignment(), SI->getOrdering(), SI->getSynchScope(), SI);
     // Stores can't have users...
     SI->eraseFromParent();
