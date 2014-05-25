@@ -144,6 +144,10 @@ class CheriStackHack : public FunctionPass,
   void replacePtrToInt(PtrToIntInst *PI, const Replacement &R) {
     PI->replaceUsesOfWith(R.Alloca, R.Ptr);
   }
+  void replaceICmp(ICmpInst *II, const Replacement &R) {
+    II->replaceUsesOfWith(R.Alloca, R.Ptr);
+  }
+
   void replaceBitCast(BitCastInst *BI, const Replacement &R) {
     // If the bitcast isn't a pointer cast, then just use the pointer version
     if (!BI->getType()->isPointerTy()) {
@@ -193,6 +197,8 @@ class CheriStackHack : public FunctionPass,
           replaceBitCast(BI, R);
       } else if (PHINode *P = dyn_cast<PHINode>(U))
         replacePHI(P, R);
+      else if (ICmpInst *I = dyn_cast<ICmpInst>(U))
+        replaceICmp(I, R);
       else {
         U->dump();
         llvm_unreachable("Unknown instruction using alloca!");
