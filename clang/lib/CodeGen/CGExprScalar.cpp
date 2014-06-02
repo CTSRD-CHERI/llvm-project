@@ -2046,13 +2046,7 @@ Value *ScalarExprEmitter::VisitUnaryImag(const UnaryOperator *E) {
 
 static Value *getCapabilityBase(CodeGenModule &CGM, CGBuilderTy &B, Value *Cap,
     llvm::Type *IntPtrTy) {
-  int AS = cast<llvm::PointerType>(Cap->getType())->getAddressSpace();
-  llvm::Type *CapTy =
-    llvm::PointerType::get(llvm::Type::getInt8Ty(Cap->getContext()), AS);
-  Cap = B.CreateBitCast(Cap, CapTy);
-  Cap = B.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::mips_get_cap_base),
-      Cap);
-  return B.CreateBitCast(Cap, IntPtrTy);
+  return B.CreatePtrToInt(Cap, IntPtrTy);
 }
 
 BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
