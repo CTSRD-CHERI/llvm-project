@@ -167,6 +167,10 @@ def CCheckType : CheriFmtRegs<0x0b, 1, (outs), (ins CheriRegs:$cs, CheriRegs:$cb
 // Cursors
 def CIncCursor : CheriFmtRegs<0x0d, 0, (outs CheriRegs: $r0),
   (ins CheriRegs: $r1, GPR64Opnd: $r2),
+  "cinccursor\t$r0, $r1, $r2",
+  [(set CheriRegs:$r0, (inttoptr (add (ptrtoint CheriRegs:$r1), GPR64Opnd:$r2)))]>;
+def CSetCursor : CheriFmtRegs<0x0d, 1, (outs CheriRegs: $r0),
+  (ins CheriRegs: $r1, GPR64Opnd: $r2),
   "csetcursor\t$r0, $r1, $r2",
   []>;
 def CGetCursor : CheriFmtRegs<0x0d, 2, (outs GPR64:$r0),
