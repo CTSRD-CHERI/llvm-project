@@ -169,18 +169,19 @@ def CIncCursor : CheriFmtRegs<0x0d, 0, (outs CheriRegs: $r0),
   (ins CheriRegs: $r1, GPR64Opnd: $r2),
   "cinccursor\t$r0, $r1, $r2",
   [(set CheriRegs:$r0, (inttoptr (add (ptrtoint CheriRegs:$r1), GPR64Opnd:$r2)))]>;
+def : Pat<(int_mips_cap_inc_cursor CheriRegs: $r1, GPR64Opnd: $r2), (CIncCursor $r1, $r2)>;
 def CSetCursor : CheriFmtRegs<0x0d, 1, (outs CheriRegs: $r0),
   (ins CheriRegs: $r1, GPR64Opnd: $r2),
   "csetcursor\t$r0, $r1, $r2",
-  []>;
+  [(set CheriRegs: $r0, (int_mips_cap_set_cursor CheriRegs: $r1, GPR64Opnd: $r2))]>;
 def CGetCursor : CheriFmtRegs<0x0d, 2, (outs GPR64:$r0),
   (ins CheriRegs:$r1),
   "cgetcursor\t$r0, $r1",
-  []> { let r2 = 0; }
+  [(set GPR64: $r0, (int_mips_cap_get_cursor CheriRegs: $r1))]> { let r2 = 0; }
 def CIncBase2  : CheriFmtRegs<0x0d, 3, (outs CheriRegs: $r0),
   (ins CheriRegs: $r1, GPR64: $r2),
   "cincbase2\t$r0, $r1, $r2",
-  []>;
+  [(set CheriRegs: $r0, (int_mips_cap_inc_base_only CheriRegs: $r1, GPR64: $r2))]>;
 
 
 // Casting:

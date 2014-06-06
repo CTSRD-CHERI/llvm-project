@@ -1846,5 +1846,19 @@ def int_mips_get_epcc : GCCBuiltin<"__builtin_cheri_get_exception_program_counte
     Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
 
 def int_mips_stack_to_cap : Intrinsic<[llvm_fatptr_ty], [llvm_ptr_ty], [IntrNoMem]>;
+
+////////////////////////////////////////////////////////////////////////////////
+// Cursor-related intrinsics
+////////////////////////////////////////////////////////////////////////////////
+
+def int_mips_cap_inc_cursor: GCCBuiltin<"__builtin_cheri_cap_offset_increment">,
+    Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+def int_mips_cap_set_cursor: GCCBuiltin<"__builtin_cheri_cap_offset_set">,
+    Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+def int_mips_cap_get_cursor: GCCBuiltin<"__builtin_cheri_cap_offset_get">,
+    Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
+def int_mips_cap_inc_base_only : GCCBuiltin<"__builtin_cheri_cap_base_inc_only">,
+    Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+
 }
 
