@@ -926,4 +926,9 @@ BUILTIN(__builtin_cheri_get_kernel_data_cap, "v*200", "nc")
 BUILTIN(__builtin_cheri_get_program_counter_cap, "v*200", "nc")
 BUILTIN(__builtin_cheri_get_exception_program_counter_cap, "v*200", "nc")
 
+BUILTIN(__builtin_cheri_cap_offset_increment, "v*200v*200z", "nc")
+BUILTIN(__builtin_cheri_cap_offset_set, "v*200v*200z", "nc")
+BUILTIN(__builtin_cheri_cap_offset_get, "zv*200", "nc")
+BUILTIN(__builtin_cheri_cap_base_inc_only, "v*200v*200z", "nc")
+
 #undef BUILTIN
