@@ -2192,7 +2192,6 @@ static SDValue lowerUnalignedIntStore(StoreSDNode *SD, SelectionDAG &DAG,
   // CHERI doesn't have a capability version of SDR / SDL, so we turn this into
   // a sequence of byte stores and shifts.
   if (IsCHERI && (BasePtr->getValueType(0) == MVT::iFATPTR)) {
-    SD->dump();
     SDLoc DL(SD);
     EVT MemVT = SD->getMemoryVT();
     SDValue Store;
