@@ -67,6 +67,24 @@ MipsSERegisterInfo::intRegClass(unsigned Size) const {
 /// instruction immediate.
 static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode) {
   switch (Opcode) {
+  case Mips::CAPLOAD832:
+  case Mips::CAPLOADU832:
+  case Mips::CAPLOAD1632:
+  case Mips::CAPLOADU1632:
+  case Mips::CAPSTORE8:
+  case Mips::CAPSTORE16:
+  case Mips::CAPSTORE32:
+  case Mips::CAPSTORE64:
+  case Mips::CAPLOAD8:
+  case Mips::CAPLOAD16:
+  case Mips::CAPLOAD32:
+  case Mips::CAPLOAD64:
+  case Mips::CAPLOADU8:
+  case Mips::CAPLOADU16:
+  case Mips::CAPLOADU32:
+    return 8;
+  case Mips::LOADCAP:
+  case Mips::STORECAP:
   case Mips::LD_B:
   case Mips::ST_B:
     return 10;
