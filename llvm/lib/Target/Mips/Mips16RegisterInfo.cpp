@@ -79,7 +79,7 @@ Mips16RegisterInfo::intRegClass(unsigned Size) const {
 void Mips16RegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
                                      unsigned OpNo, int FrameIndex,
                                      uint64_t StackSize,
-                                     int64_t SPOffset) const {
+                                     int64_t SPOffset, RegScavenger *RS) const {
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
   MachineFrameInfo *MFI = MF.getFrameInfo();

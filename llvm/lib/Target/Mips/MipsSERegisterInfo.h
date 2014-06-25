@@ -33,7 +33,7 @@ public:
 private:
   virtual void eliminateFI(MachineBasicBlock::iterator II, unsigned OpNo,
                            int FrameIndex, uint64_t StackSize,
-                           int64_t SPOffset) const;
+                           int64_t SPOffset, RegScavenger *RS) const;
 };
 
 } // end namespace llvm

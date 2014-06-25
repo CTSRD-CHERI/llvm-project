@@ -240,7 +240,7 @@ eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
                << "spOffset   : " << spOffset << "\n"
                << "stackSize  : " << stackSize << "\n");
 
-  eliminateFI(MI, FIOperandNum, FrameIndex, stackSize, spOffset);
+  eliminateFI(MI, FIOperandNum, FrameIndex, stackSize, spOffset, RS);
 }
 
 unsigned MipsRegisterInfo::
