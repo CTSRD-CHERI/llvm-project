@@ -537,7 +537,18 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
   uint64_t MaxSPOffset = MF.getInfo<MipsFunctionInfo>()->getIncomingArgSize() +
     estimateStackSize(MF);
 
-  if (isInt<16>(MaxSPOffset))
+  // We will need the emergency spill slot if we have any stack offsets that
+  // don't fit in an immediate.  In normal MIPS code, this means a 16-bit
+  // field, for CHERI code we have an 11-bit immediate for csc / cld, but only
+  // 8-bit immediates for c[ls]x instructions for other spills.  The latter
+  // only matters if we're using the capability-stack ABI.
+  if (STI.isCheri()) {
+    if (STI.usesCheriStackCapabilityABI()) {
+      if (isInt<8>(MaxSPOffset))
+        return;
+    } else if (isInt<11>(MaxSPOffset))
+      return;
+  } else if (isInt<16>(MaxSPOffset))
     return;
 
   const TargetRegisterClass *RC = STI.isABI_N64() ?
