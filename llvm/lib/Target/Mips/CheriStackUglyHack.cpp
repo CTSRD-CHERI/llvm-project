@@ -89,7 +89,7 @@ class CheriStackHack : public FunctionPass,
     // just add this use
     if (NewPhi) {
       for (unsigned i=0 ; i<Count ; i++)
-        if (Phi->getIncomingValue(i) == R.Alloca)
+        if (Phi->getIncomingValue(i) == R.Ptr)
           NewPhi->setIncomingValue(i, R.Cap);
       return;
     }
