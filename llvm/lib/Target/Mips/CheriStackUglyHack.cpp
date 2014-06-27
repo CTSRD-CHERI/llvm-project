@@ -59,12 +59,36 @@ class CheriStackHack : public FunctionPass,
     SmallVector<Value*, 8> Idxs;
     for (auto I=GEP->idx_begin(),E=GEP->idx_end() ; I!=E ; I++)
       Idxs.push_back(I->get());
-    // The result of a GEP is another pointer, so we must do the replacement
-    // here.
-    Value *NewGEP = GetElementPtrInst::Create(R.Cap, Idxs, GEP->getName(),
-        GEP);
-    Value *NewGEPAsPtr = new AddrSpaceCastInst(NewGEP, GEP->getType(),
-        GEP->getName(), GEP);
+    Value *NewGEP;
+    Instruction *NewGEPAsPtr;
+
+    APInt Offset(64, 0, true);
+    if (GEP->accumulateConstantOffset(*DL, Offset) && Offset.isNegative()) {
+      // If the GEP is negative then a capability offset will fail.  We must
+      // re-derive the capability version from the pointer.
+      // FIXME: This becomes obsolete with cursors.
+      NewGEPAsPtr = GetElementPtrInst::Create(R.Ptr, Idxs, GEP->getName(),
+          GEP);
+
+      LLVMContext &C = M->getContext();
+      IRBuilder<> B(C);
+      ilist_iterator<Instruction> I(NewGEPAsPtr);
+      B.SetInsertPoint(GEP->getParent(), ++I);
+
+      Function *CastFn =
+        Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
+      Value *I8GEP = B.CreateBitCast(NewGEPAsPtr, Type::getInt8PtrTy(C, 0));
+      Value *I8CapGEP  = B.CreateCall(CastFn, I8GEP);
+      NewGEP = B.CreateBitCast(I8CapGEP,
+          getCapType(cast<PointerType>(NewGEPAsPtr->getType())));
+    } else {
+      // The result of a GEP is another pointer, so we must do the replacement
+      // here.
+      NewGEP = GetElementPtrInst::Create(R.Cap, Idxs, GEP->getName(), GEP);
+      NewGEPAsPtr = new AddrSpaceCastInst(NewGEP, GEP->getType(),
+          GEP->getName(), GEP);
+    }
+
 
     Replacement GEPR = { GEP, NewGEP, NewGEPAsPtr };
     replaceUsers(GEP, GEPR);
