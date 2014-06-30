@@ -1223,6 +1223,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case AttributedType::attr_noreturn: OS << "noreturn"; break;
 
   case AttributedType::attr_cdecl: OS << "cdecl"; break;
+  case AttributedType::attr_cheri_ccall: OS << "cheri_ccall"; break;
   case AttributedType::attr_fastcall: OS << "fastcall"; break;
   case AttributedType::attr_stdcall: OS << "stdcall"; break;
   case AttributedType::attr_thiscall: OS << "thiscall"; break;
