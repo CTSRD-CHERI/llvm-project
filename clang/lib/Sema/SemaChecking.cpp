@@ -6376,20 +6376,6 @@ void Sema::CheckArrayAccess(const Expr *BaseExpr, const Expr *IndexExpr,
   BaseExpr = BaseExpr->IgnoreParenCasts();
   const ConstantArrayType *ArrayTy =
     Context.getAsConstantArrayType(BaseExpr->getType());
-
-  if (Context.getTargetInfo().SupportsCapabilities() &&
-      BaseExpr->getType().isCapabilityType()) {
-    bool IsProbableSubtraction = IndexNegated;
-    if (!IndexNegated) {
-      llvm::APSInt index;
-      if (IndexExpr->EvaluateAsInt(index, Context))
-        IsProbableSubtraction = index.isNegative();
-    }
-    if (IsProbableSubtraction)
-      DiagRuntimeBehavior(BaseExpr->getLocStart(), BaseExpr,
-                          PDiag(diag::warn_capability_subtraction));
-  }
-
   if (!ArrayTy)
     return;
 

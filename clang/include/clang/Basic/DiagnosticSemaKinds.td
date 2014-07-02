@@ -6141,10 +6141,6 @@ def warn_array_index_exceeds_bounds : Warning<
 def note_array_index_out_of_bounds : Note<
   "array %0 declared here">;
 
-def warn_capability_subtraction: Warning<
-  "Subtracting from capability will result in an invalid capability">,
-  InGroup<CHERICaps>;
-
 def warn_printf_insufficient_data_args : Warning<
   "more '%%' conversions than data arguments">, InGroup<Format>;
 def warn_printf_data_arg_not_used : Warning<
