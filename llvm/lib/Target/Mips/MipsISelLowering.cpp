@@ -1843,7 +1843,7 @@ static SDValue lowerFABS64(SDValue Op, SelectionDAG &DAG,
 
 SDValue
 MipsTargetLowering::lowerFABS(SDValue Op, SelectionDAG &DAG) const {
-  if (Subtarget->hasMips64() && (Op.getValueType() == MVT::f64))
+  if (IsGP64bit && (Op.getValueType() == MVT::f64))
     return lowerFABS64(Op, DAG, Subtarget->hasExtractInsert());
 
   return lowerFABS32(Op, DAG, Subtarget->hasExtractInsert());
