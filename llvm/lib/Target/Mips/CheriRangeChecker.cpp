@@ -36,7 +36,7 @@ namespace
     Module *M;
     IntegerType *Int64Ty;
     PointerType *CapPtrTy;
-    SmallVector<pair<AllocOperands, IntToPtrInst*>, 32> Casts;
+    SmallVector<pair<AllocOperands, Instruction*>, 32> Casts;
     SmallVector<pair<AllocOperands, ConstantCast>, 32> ConstantCasts;
     Function *SetLengthFn;
 
@@ -114,12 +114,29 @@ namespace
         }
         return 0;
       }
+      void visitAddrSpaceCast(AddrSpaceCastInst &ASC) {
+        PointerType *DestTy = dyn_cast<PointerType>(ASC.getType());
+        Value *Src = ASC.getOperand(0);
+        PointerType *SrcTy = dyn_cast<PointerType>(Src->getType());
+        if ((DestTy && DestTy->getAddressSpace() == 200) &&
+            (SrcTy && SrcTy->getAddressSpace() == 0)) {
+          Src = Src->stripPointerCasts();
+          if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Src)) {
+            if (GV->hasExternalLinkage())
+              return;
+          } else if (!(isa<AllocaInst>(Src) || CallSite(Src) != CallSite()))
+            return;
+          AllocOperands AO = getRangeForAllocation(Src);
+          if (AO != AllocOperands())
+            Casts.push_back(pair<AllocOperands, Instruction*>(AO, &ASC));
+        }
+      }
       void visitIntToPtrInst(IntToPtrInst &I2P) {
         if (User *P2I = testI2P(I2P)) {
           Value *Src = P2I->getOperand(0)->stripPointerCasts();
           AllocOperands AO = getRangeForAllocation(Src);
           if (AO != AllocOperands())
-           Casts.push_back(pair<AllocOperands, IntToPtrInst*>(AO, &I2P));
+           Casts.push_back(pair<AllocOperands, Instruction*>(AO, &I2P));
           }
       }
       void visitRet(ReturnInst &RI) {
@@ -159,12 +176,11 @@ namespace
               Intrinsic::mips_set_cap_length);
           Value *BitCast = 0;
 
-          for (pair<AllocOperands, IntToPtrInst*> *i=Casts.begin(),
-               *e=Casts.end() ; i!=e ; ++i) {
-            IntToPtrInst *I2P = i->second;
+          for (auto *i=Casts.begin(), *e=Casts.end() ; i!=e ; ++i) {
+            Instruction *I2P = i->second;
             ilist_iterator<llvm::Instruction> InsertPt =
               I2P->getParent()->begin();
-            while (InsertPt.getNodePtrUnchecked() != (Instruction*)I2P) {
+            while (InsertPt.getNodePtrUnchecked() != I2P) {
               ++InsertPt;
             }
             ++InsertPt;
