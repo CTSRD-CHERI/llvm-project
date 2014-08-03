@@ -135,7 +135,7 @@ public:
     llvm::PointerType *PT = cast<llvm::PointerType>(V->getType());
     if ((int)PT->getAddressSpace() ==
         CGF.getTarget().AddressSpaceForCapabilities()){
-      return Builder.CreateIsNull(
+      return Builder.CreateIsNotNull(
           Builder.CreatePtrToInt(V, CGF.IntPtrTy), "tobool");
     }
     Value *Zero = llvm::ConstantPointerNull::get(PT);
