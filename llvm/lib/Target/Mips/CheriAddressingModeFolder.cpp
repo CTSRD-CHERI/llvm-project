@@ -43,6 +43,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       return false;
     off += offset;
     // If the result is too big to fit in the offset field, give up
+    // FIXME: Offset for clc / csc is bigger...
     if (off < -127 || off > 127)
     {
       return false;
@@ -54,7 +55,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     if (DisableAddressingModeFolder) return false;
 
     MachineRegisterInfo &RI = MF.getRegInfo();
-    std::set<MachineInstr*> IncBases;
+    std::set<MachineInstr*> IncOffsets;
     std::set<MachineInstr*> Adds;
     bool modified = false;
     for (MachineFunction::iterator BI=MF.begin(), BE=MF.end() ; BI!=BE ; ++BI)
@@ -76,6 +77,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // that it is...
         if (I->getOperand(1).getReg() != Mips::ZERO_64) {
           MachineInstr *AddInst;
+          // If the register offset is a simple constant, then try to move it
+          // into the memory operation
           if (tryToFoldAdd(I->getOperand(1).getReg(), RI, AddInst, offset)) {
             Adds.insert(AddInst);
             I->getOperand(2).setImm(offset);
@@ -83,29 +86,38 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           } else 
             continue;
         }
-        // Ignore ones that are not based on a CIncBase op
-        MachineInstr *IncBase = RI.getUniqueVRegDef(I->getOperand(3).getReg());
-        if (!IncBase || IncBase->getOpcode() != Mips::CIncBase) continue;
-        assert(IncBase);
+        // If we get to here, then the memory operation has a capability and
+        // (possibly) an immediate offset, but the register offset is $zero.
+        // If the capability is formed by incrementing an offset, then try to
+        // pull that calculation into the memory operation.
 
-        MachineOperand Cap = IncBase->getOperand(1);
-        MachineOperand Offset = IncBase->getOperand(2);
+        // Ignore ones that are not based on a CIncOffset op
+        MachineInstr *IncOffset = RI.getUniqueVRegDef(I->getOperand(3).getReg());
+        if (!IncOffset || IncOffset->getOpcode() != Mips::CIncOffset) continue;
+        assert(IncOffset);
+
+        MachineOperand Cap = IncOffset->getOperand(1);
+        MachineOperand Offset = IncOffset->getOperand(2);
         assert(Cap.isReg());
         MachineInstr *AddInst;
-        // If the CIncBase is of a daddi[u] then we can potentially replace
-        // both by just folding the 
+        // If the CIncOffset is of a daddi[u] then we can potentially replace
+        // both by just folding the register and immediate offsets into the
+        // load / store.
         if (tryToFoldAdd(Offset.getReg(), RI, AddInst, offset)) {
-          // the IncBase needs to be inserted first so that it will
+          // If we managed to pull the offset calculation entirely away, then
+          // just use the computed immediate
           Adds.insert(AddInst);
           I->getOperand(1).setReg(Mips::ZERO_64);
           I->getOperand(2).setImm(offset);
         } else
+          // If we didn't, then use the CIncOffset's register value as our
+          // offset
           I->getOperand(1).setReg(Offset.getReg());
         I->getOperand(3).setReg(Cap.getReg());
-        IncBases.insert(IncBase);
+        IncOffsets.insert(IncOffset);
         modified = true;
       }
-    for (std::set<MachineInstr*>::iterator I=IncBases.begin(),E=IncBases.end();
+    for (std::set<MachineInstr*>::iterator I=IncOffsets.begin(),E=IncOffsets.end();
          I!=E ; ++I) {
       if (!RI.use_empty((*I)->getOperand(0).getReg())) {
         continue;
