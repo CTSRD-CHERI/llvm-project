@@ -447,6 +447,14 @@ public:
   Value *EmitShl(const BinOpInfo &Ops);
   Value *EmitShr(const BinOpInfo &Ops);
   Value *EmitAnd(const BinOpInfo &Ops) {
+    // FIXME: This should probably involve getting the base and offset and
+    // recomputing the offset.
+    if (Ops.E->getType().isCapabilityType()) {
+      Value *LHS = Builder.CreatePtrToInt(Ops.LHS, CGF.IntPtrTy);
+      Value *RHS = Builder.CreatePtrToInt(Ops.RHS, CGF.IntPtrTy);
+      Value *V = Builder.CreateAnd(LHS, RHS, "and");
+      return Builder.CreateIntToPtr(V, ConvertType(Ops.E->getType()));
+    }
     return Builder.CreateAnd(Ops.LHS, Ops.RHS, "and");
   }
   Value *EmitXor(const BinOpInfo &Ops) {
