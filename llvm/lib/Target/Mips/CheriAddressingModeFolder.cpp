@@ -93,7 +93,10 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
 
         // Ignore ones that are not based on a CIncOffset op
         MachineInstr *IncOffset = RI.getUniqueVRegDef(I->getOperand(3).getReg());
-        if (!IncOffset || IncOffset->getOpcode() != Mips::CIncOffset) continue;
+        if (!IncOffset ||
+            ((IncOffset->getOpcode() != Mips::CIncOffset) &&
+             (IncOffset->getOpcode() != Mips::CIncBase)))
+                 continue;
         assert(IncOffset);
 
         MachineOperand Cap = IncOffset->getOperand(1);
