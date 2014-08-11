@@ -438,6 +438,23 @@ public:
   // Check for undefined division and modulus behaviors.
   void EmitUndefinedBehaviorIntegerDivAndRemCheck(const BinOpInfo &Ops,
                                                   llvm::Value *Zero,bool isDiv);
+  Value *GetBinOpVal(const BinOpInfo &Op, Value *V) {
+    if (!Op.E->getType().isCapabilityType())
+      return V;
+    assert(V->getType()->isPointerTy());
+    // FIXME: Once more than one architecture supports capabilities, this
+    // should be a generic intrinsic
+    llvm::Function *GetOffset =
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_get_offset);
+    return Builder.CreateCall(GetOffset, V);
+  }
+  Value *GetBinOpResult(BinOpInfo &Op, Value *LHS, Value *V) {
+    if (!Op.E->getType().isCapabilityType())
+      return V;
+    llvm::Function *GetOffset =
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
+    return Builder.CreateCall2(GetOffset, LHS, V);
+  }
   // Common helper for getting how wide LHS of shift is.
   static Value *GetWidthMinusOneValue(Value* LHS,Value* RHS);
   Value *EmitDiv(const BinOpInfo &Ops);
@@ -447,14 +464,6 @@ public:
   Value *EmitShl(const BinOpInfo &Ops);
   Value *EmitShr(const BinOpInfo &Ops);
   Value *EmitAnd(const BinOpInfo &Ops) {
-    // FIXME: This should probably involve getting the base and offset and
-    // recomputing the offset.
-    if (Ops.E->getType().isCapabilityType()) {
-      Value *LHS = Builder.CreatePtrToInt(Ops.LHS, CGF.IntPtrTy);
-      Value *RHS = Builder.CreatePtrToInt(Ops.RHS, CGF.IntPtrTy);
-      Value *V = Builder.CreateAnd(LHS, RHS, "and");
-      return Builder.CreateIntToPtr(V, ConvertType(Ops.E->getType()));
-    }
     return Builder.CreateAnd(Ops.LHS, Ops.RHS, "and");
   }
   Value *EmitXor(const BinOpInfo &Ops) {
@@ -475,11 +484,12 @@ public:
   // Binary operators and binary compound assignment operators.
 #define HANDLEBINOP(OP) \
   Value *VisitBin ## OP(const BinaryOperator *E) {                         \
-    Value *V = Emit ## OP(EmitBinOps(E));                                  \
-    if (E->getType().isCapabilityType() &&                                 \
-        !isa<llvm::PointerType>(V->getType()))                             \
-      V = Builder.CreateIntToPtr(V, ConvertType(E->getType()));            \
-    return V;                                                              \
+    BinOpInfo BOP = EmitBinOps(E);                                         \
+    Value *Base = BOP.LHS;                                                 \
+    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);                                   \
+    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);                                   \
+    Value *V = Emit ## OP(BOP);                                            \
+    return GetBinOpResult(BOP, Base, V);                                   \
   }                                                                        \
   Value *VisitBin ## OP ## Assign(const CompoundAssignOperator *E) {       \
     return EmitCompoundAssign(E, &ScalarExprEmitter::Emit ## OP);          \
@@ -2066,18 +2076,6 @@ BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
   Result.Opcode = E->getOpcode();
   Result.FPContractable = E->isFPContractable();
   Result.E = E;
-
-  // If we're doing a comparison on a capability (including an __intcap_t)
-  // then we need to fudge it into an integer type first.
-  if (Result.Ty.isCapabilityType() && Result.Opcode != BO_And) {
-    if (isa<llvm::PointerType>(Result.LHS->getType()))
-      Result.LHS = getCapabilityBase(CGF.CGM, Builder, Result.LHS, CGF.IntPtrTy);
-    if (isa<llvm::PointerType>(Result.RHS->getType()))
-      Result.RHS = getCapabilityBase(CGF.CGM, Builder, Result.RHS, CGF.IntPtrTy);
-    else
-      Result.RHS = Builder.CreateZExtOrTrunc(Result.RHS, CGF.IntPtrTy);
-  }
-
   return Result;
 }
 
@@ -2863,6 +2861,8 @@ Value *ScalarExprEmitter::EmitCompare(const BinaryOperator *E,unsigned UICmpOpc,
     // If we're doing a comparison on a capability (including an __intcap_t)
     // then we need to fudge it into an integer type first.
     if (LHSTy.isCapabilityType()) {
+      // FIXME: Comparisons are broken for in-object comparisons between
+      // capabilities outside of C0
       LHS = getCapabilityBase(CGF.CGM, Builder, LHS, CGF.IntPtrTy);
       RHS = getCapabilityBase(CGF.CGM, Builder, RHS, CGF.IntPtrTy);
     } 
