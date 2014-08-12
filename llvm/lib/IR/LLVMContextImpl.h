@@ -365,6 +365,8 @@ public:
 
   int getOrAddScopeRecordIdxEntry(MDNode *N, int ExistingIdx);
   int getOrAddScopeInlinedAtIdxEntry(MDNode *Scope, MDNode *IA,int ExistingIdx);
+
+  int AllocaAS;
   
   LLVMContextImpl(LLVMContext &C);
   ~LLVMContextImpl();

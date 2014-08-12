@@ -739,6 +739,10 @@ PointerType *PointerType::get(Type *EltTy, unsigned AddressSpace) {
   return Entry;
 }
 
+PointerType *PointerType::getAllocaTy(Type *ElTy) {
+  return get(ElTy, ElTy->getContext().getAllocaAddressSpace());
+}
+
 
 PointerType::PointerType(Type *E, unsigned AddrSpace)
   : SequentialType(PointerTyID, E) {

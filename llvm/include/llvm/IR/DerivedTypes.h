@@ -436,6 +436,9 @@ public:
   static PointerType *getUnqual(Type *ElementType) {
     return PointerType::get(ElementType, 0);
   }
+  /// PointerType::getAllocaTy - This constructs a pointer to an object that
+  //has the type used for allocas.
+  static PointerType *getAllocaTy(Type *ElementType);
 
   /// isValidElementType - Return true if the specified type is valid as a
   /// element type.

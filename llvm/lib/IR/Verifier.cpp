@@ -1876,8 +1876,8 @@ void Verifier::visitStoreInst(StoreInst &SI) {
 void Verifier::visitAllocaInst(AllocaInst &AI) {
   SmallPtrSet<const Type*, 4> Visited;
   PointerType *PTy = AI.getType();
-  Assert1(PTy->getAddressSpace() == 0,
-          "Allocation instruction pointer not in the generic address space!",
+  Assert1(PTy->getAddressSpace() == (unsigned)Context->getAllocaAddressSpace(),
+          "Allocation instruction pointer not in the stack address space!",
           &AI);
   Assert1(PTy->getElementType()->isSized(&Visited), "Cannot allocate unsized type",
           &AI);

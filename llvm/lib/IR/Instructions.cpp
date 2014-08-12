@@ -833,7 +833,7 @@ static Value *getAISize(LLVMContext &Context, Value *Amt) {
 
 AllocaInst::AllocaInst(Type *Ty, Value *ArraySize,
                        const Twine &Name, Instruction *InsertBefore)
-  : UnaryInstruction(PointerType::getUnqual(Ty), Alloca,
+  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
                      getAISize(Ty->getContext(), ArraySize), InsertBefore) {
   setAlignment(0);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -842,7 +842,7 @@ AllocaInst::AllocaInst(Type *Ty, Value *ArraySize,
 
 AllocaInst::AllocaInst(Type *Ty, Value *ArraySize,
                        const Twine &Name, BasicBlock *InsertAtEnd)
-  : UnaryInstruction(PointerType::getUnqual(Ty), Alloca,
+  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
                      getAISize(Ty->getContext(), ArraySize), InsertAtEnd) {
   setAlignment(0);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -851,7 +851,7 @@ AllocaInst::AllocaInst(Type *Ty, Value *ArraySize,
 
 AllocaInst::AllocaInst(Type *Ty, const Twine &Name,
                        Instruction *InsertBefore)
-  : UnaryInstruction(PointerType::getUnqual(Ty), Alloca,
+  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
                      getAISize(Ty->getContext(), 0), InsertBefore) {
   setAlignment(0);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -860,7 +860,7 @@ AllocaInst::AllocaInst(Type *Ty, const Twine &Name,
 
 AllocaInst::AllocaInst(Type *Ty, const Twine &Name,
                        BasicBlock *InsertAtEnd)
-  : UnaryInstruction(PointerType::getUnqual(Ty), Alloca,
+  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
                      getAISize(Ty->getContext(), 0), InsertAtEnd) {
   setAlignment(0);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -869,7 +869,7 @@ AllocaInst::AllocaInst(Type *Ty, const Twine &Name,
 
 AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
                        const Twine &Name, Instruction *InsertBefore)
-  : UnaryInstruction(PointerType::getUnqual(Ty), Alloca,
+  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
                      getAISize(Ty->getContext(), ArraySize), InsertBefore) {
   setAlignment(Align);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -878,7 +878,7 @@ AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
 
 AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
                        const Twine &Name, BasicBlock *InsertAtEnd)
-  : UnaryInstruction(PointerType::getUnqual(Ty), Alloca,
+  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
                      getAISize(Ty->getContext(), ArraySize), InsertAtEnd) {
   setAlignment(Align);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
