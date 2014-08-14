@@ -4851,12 +4851,6 @@ public:
         DspRev(NoDSP), HasMSA(false), HasFP64(false), ABI(ABIStr),
         IsCheri(false) {}
 
-  virtual bool SupportsCapabilities() const { return IsCheri; }
-
-  virtual int AddressSpaceForCapabilities() const { return IsCheri ? 200 : -1; }
-
-  virtual int AddressSpaceForObjC() const { return IsCheri ? 200 : 0; }
-
   virtual const char *getABI() const { return ABI.c_str(); }
   virtual bool setABI(const std::string &Name) = 0;
   virtual bool setCPU(const std::string &Name) {
@@ -5330,6 +5324,12 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
   virtual uint64_t getPointerAlignV(unsigned AddrSpace) const {
     return (AddrSpace == 200) ? 256 : PointerAlign;
   }
+
+  virtual bool SupportsCapabilities() const { return true; }
+
+  virtual int AddressSpaceForCapabilities() const { return 200; }
+
+  virtual int AddressSpaceForObjC() const { return 200; }
 };
 
 class Mips64ELTargetInfo : public Mips64TargetInfoBase {
