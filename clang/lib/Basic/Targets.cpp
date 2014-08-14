@@ -4842,6 +4842,7 @@ protected:
   bool HasFP64;
   std::string ABI;
   bool IsCheri;
+  bool SandboxABI;
 
 public:
   MipsTargetInfoBase(const llvm::Triple &Triple, const std::string &ABIStr,
@@ -4849,7 +4850,7 @@ public:
       : TargetInfo(Triple), CPU(CPUStr), IsMips16(false), IsMicromips(false),
         IsNan2008(false), IsSingleFloat(false), FloatABI(HardFloat),
         DspRev(NoDSP), HasMSA(false), HasFP64(false), ABI(ABIStr),
-        IsCheri(false) {}
+        IsCheri(false), SandboxABI(false) {}
 
   virtual const char *getABI() const { return ABI.c_str(); }
   virtual bool setABI(const std::string &Name) = 0;
@@ -4860,6 +4861,7 @@ public:
   void getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     Features[ABI] = true;
     Features[CPU] = true;
+    Features["sandbox"] = SandboxABI;
   }
 
   virtual void getTargetDefines(const LangOptions &Opts,
@@ -5058,6 +5060,8 @@ public:
         IsNan2008 = true;
       else if (*it == "+cheri") {
         IsCheri = true;
+      } else if (*it == "+sandbox") {
+        SandboxABI = true;
       }
     }
 
@@ -5309,9 +5313,8 @@ public:
 };
 
 struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
-  bool SandboxABI;
   MipsCheriTargetInfo(const llvm::Triple &Triple) :
-      Mips64EBTargetInfo(Triple), SandboxABI(false){
+      Mips64EBTargetInfo(Triple) {
     IsCheri = true;
     setCPU("cheri");
   }
