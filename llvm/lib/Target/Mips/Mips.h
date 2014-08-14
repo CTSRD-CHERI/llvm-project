@@ -34,6 +34,7 @@ namespace llvm {
   FunctionPass *createCheriInvalidatePass(MipsTargetMachine &TM);
   FunctionPass *createCheriRangeChecker(void);
   FunctionPass *createCheriStackHack(void);
+  ModulePass *createCheriSandboxABI(void);
   MachineFunctionPass *createCheriAddressingModeFolder(void);
   MachineFunctionPass *createCheriBranchFolder(void);
 } // end namespace llvm;

@@ -66,7 +66,7 @@ CheriStackCapabilityABI(
   cl::init(false));
 
 bool MipsSubtarget::usesCheriStackCapabilityABI() const {
-  return CheriStackCapabilityABI;
+  return CheriStackCapabilityABI || isCheriSandbox();
 }
 
 void MipsSubtarget::anchor() { }

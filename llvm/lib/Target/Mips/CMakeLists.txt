@@ -52,6 +52,7 @@ add_llvm_target(MipsCodeGen
   CheriStackInvalidatePass.cpp
   CheriStackUglyHack.cpp
   CheriRangeChecker.cpp
+  CheriSandboxABI.cpp
   )
 
 add_subdirectory(InstPrinter)
