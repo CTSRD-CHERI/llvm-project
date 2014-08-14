@@ -92,6 +92,10 @@ protected:
   /// IsCheri - Supports the CHERI capability extensions
   bool IsCheri;
 
+  /// IsCheriSandbox - Is using the CHERI sandbox ABI (everything is a
+  /// capability)
+  bool IsCheriSandbox;
+
   // InMips16 -- can process Mips16 instructions
   bool InMips16Mode;
 
@@ -192,6 +196,7 @@ public:
   bool isLinux() const { return IsLinux; }
   bool useSmallSection() const { return UseSmallSection; }
   bool isCheri() const { return IsCheri; }
+  bool isCheriSandbox() const { return IsCheriSandbox; }
   /// Uses the ABI where the stack pointer is relative to C11, not C0.
   bool usesCheriStackCapabilityABI() const;
 
