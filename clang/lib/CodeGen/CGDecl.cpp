@@ -474,7 +474,11 @@ namespace {
       : Addr(addr), Size(size) {}
 
     void Emit(CodeGenFunction &CGF, Flags flags) {
-      llvm::Value *castAddr = CGF.Builder.CreateBitCast(Addr, CGF.Int8PtrTy);
+      llvm::Value *castAddr;
+      if (cast<llvm::PointerType>(Addr->getType())->getAddressSpace() != 0)
+        castAddr = CGF.Builder.CreateAddrSpaceCast(Addr, CGF.Int8PtrTy);
+      else
+        castAddr = CGF.Builder.CreateBitCast(Addr, CGF.Int8PtrTy);
       CGF.Builder.CreateCall2(CGF.CGM.getLLVMLifetimeEndFn(),
                               Size, castAddr)
         ->setDoesNotThrow();
@@ -921,7 +925,12 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
         llvm::Value *sizeV = llvm::ConstantInt::get(Int64Ty, size);
 
         emission.SizeForLifetimeMarkers = sizeV;
-        llvm::Value *castAddr = Builder.CreateBitCast(Alloc, Int8PtrTy);
+        // FIXME: Use CreatePointerBitCastOrAddrSpaceCast after updating LLVM
+        llvm::Value *castAddr;
+        if (Alloc->getType()->getAddressSpace() != 0)
+          castAddr = Builder.CreateAddrSpaceCast(Alloc, Int8PtrTy);
+        else
+          castAddr = Builder.CreateBitCast(Alloc, Int8PtrTy);
         Builder.CreateCall2(CGM.getLLVMLifetimeStartFn(), sizeV, castAddr)
           ->setDoesNotThrow();
       } else {
