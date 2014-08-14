@@ -415,6 +415,7 @@ private:
 
   const TargetInfo *Target;
   clang::PrintingPolicy PrintingPolicy;
+  unsigned DefaultAS;
   
 public:
   IdentifierTable &Idents;
@@ -1968,6 +1969,9 @@ public:
   }
 
   unsigned getTargetAddressSpace(unsigned AS) const {
+    if (AS == 0) {
+      return DefaultAS;
+    }
     if (AS < LangAS::Offset || AS >= LangAS::Offset + LangAS::Count)
       return AS;
     else

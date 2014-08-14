@@ -811,6 +811,10 @@ public:
   /// undefined otherwise.
   virtual int AddressSpaceForCapabilities() const { return -1; }
 
+  /// AddressSpaceForStack - Returns the address space to use for stack
+  /// allocations
+  virtual int AddressSpaceForStack() const { return 0; }
+
   /// AddressSpaceForObjC - Returns the address space to use for 
   /// Objective-C objects.
   virtual int AddressSpaceForObjC() const { return 0; }

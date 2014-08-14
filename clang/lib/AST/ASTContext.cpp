@@ -734,6 +734,7 @@ ASTContext::ASTContext(LangOptions& LOpts, SourceManager &SM,
     FirstLocalImport(), LastLocalImport(),
     SourceMgr(SM), LangOpts(LOpts), 
     AddrSpaceMap(0), Target(t), PrintingPolicy(LOpts),
+    DefaultAS(0),
     Idents(idents), Selectors(sels),
     BuiltinInfo(builtins),
     DeclarationNames(*this),
@@ -942,6 +943,7 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target) {
   assert(VoidTy.isNull() && "Context reinitialized?");
 
   this->Target = &Target;
+  DefaultAS = Target.AddressSpaceForStack();
   
   ABI.reset(createCXXABI(Target));
   AddrSpaceMap = getAddressSpaceMap(Target, LangOpts);
