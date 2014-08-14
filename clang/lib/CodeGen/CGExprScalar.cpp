@@ -439,9 +439,11 @@ public:
   void EmitUndefinedBehaviorIntegerDivAndRemCheck(const BinOpInfo &Ops,
                                                   llvm::Value *Zero,bool isDiv);
   Value *GetBinOpVal(const BinOpInfo &Op, Value *V) {
-    if (!Op.E->getType().isCapabilityType())
+    // If this isn't a capability type, do nothing.  If it's not a pointer
+    // type, also do nothing - add operations are handled differently so need
+    // the second case.
+    if (!Op.E->getType().isCapabilityType() || !V->getType()->isPointerTy())
       return V;
-    assert(V->getType()->isPointerTy());
     // FIXME: Once more than one architecture supports capabilities, this
     // should be a generic intrinsic
     llvm::Function *GetOffset =
