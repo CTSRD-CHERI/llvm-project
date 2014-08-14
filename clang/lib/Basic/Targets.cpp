@@ -5309,8 +5309,9 @@ public:
 };
 
 struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
+  bool SandboxABI;
   MipsCheriTargetInfo(const llvm::Triple &Triple) :
-      Mips64EBTargetInfo(Triple) {
+      Mips64EBTargetInfo(Triple), SandboxABI(false){
     IsCheri = true;
     setCPU("cheri");
   }
@@ -5329,7 +5330,18 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
 
   virtual int AddressSpaceForCapabilities() const { return 200; }
 
+
   virtual int AddressSpaceForObjC() const { return 200; }
+
+  virtual bool setABI(const std::string &Name) {
+    if (Name == "sandbox") {
+      ABI = "n64";
+      SandboxABI = true;
+      return true;
+    }
+    return Mips64EBTargetInfo::setABI(Name);
+  }
+  virtual int AddressSpaceForStack() const { return SandboxABI ? 200 : 0; }
 };
 
 class Mips64ELTargetInfo : public Mips64TargetInfoBase {

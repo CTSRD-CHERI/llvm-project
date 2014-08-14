@@ -335,6 +335,9 @@ static raw_ostream *GetOutputStream(CompilerInstance &CI,
 
 ASTConsumer *CodeGenAction::CreateASTConsumer(CompilerInstance &CI,
                                               StringRef InFile) {
+  if (CI.hasTarget())
+    VMContext->setAllocaAddressSpace(CI.getTarget().AddressSpaceForStack());
+
   BackendAction BA = static_cast<BackendAction>(Act);
   OwningPtr<raw_ostream> OS(GetOutputStream(CI, InFile, BA));
   if (BA != Backend_EmitNothing && !OS)
