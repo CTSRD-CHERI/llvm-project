@@ -499,7 +499,23 @@ public:
   HANDLEBINOP(Mul)
   HANDLEBINOP(Div)
   HANDLEBINOP(Rem)
-  HANDLEBINOP(Add)
+  //HANDLEBINOP(Add)
+  Value *VisitBinAdd(const BinaryOperator *E) {
+    // Adds require special handling.  If we are adding intcap_t values, then we
+    // must do the same trick as other operations.  If not, then we can just use
+    // the normal path.
+    BinOpInfo BOP = EmitBinOps(E);
+    if (!(E->getType().isCapabilityType() && !E->getType()->isPointerType()))
+      return EmitAdd(BOP);
+    Value *Base = BOP.LHS;
+    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);
+    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);
+    Value *V = EmitAdd(BOP);
+    return GetBinOpResult(BOP, Base, V);
+  }
+  Value *VisitBinAddAssign(const CompoundAssignOperator *E) {
+    return EmitCompoundAssign(E, &ScalarExprEmitter::EmitAdd);
+  }
   HANDLEBINOP(Sub)
   HANDLEBINOP(Shl)
   HANDLEBINOP(Shr)
