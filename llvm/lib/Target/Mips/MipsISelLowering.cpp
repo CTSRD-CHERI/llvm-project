@@ -237,6 +237,7 @@ MipsTargetLowering(MipsTargetMachine &TM)
 
   // Mips Custom Operations
   setOperationAction(ISD::BR_JT,              MVT::Other, Custom);
+  setOperationAction(ISD::GlobalAddress,      MVT::iFATPTR,Custom);
   setOperationAction(ISD::GlobalAddress,      MVT::i32,   Custom);
   setOperationAction(ISD::BlockAddress,       MVT::i32,   Custom);
   setOperationAction(ISD::GlobalTLSAddress,   MVT::i32,   Custom);
@@ -1542,6 +1543,12 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
                                  MipsII::MO_GOT_LO16, DAG.getEntryNode(),
                                  MachinePointerInfo::getGOT());
 
+  if (GV->getType()->getAddressSpace() == 200) {
+    SDValue C0Global = getAddrGlobal(N, MVT::i64, DAG,
+                         MipsII::MO_GOT_DISP,
+                         DAG.getEntryNode(), MachinePointerInfo::getGOT());
+    return DAG.getNode(ISD::INTTOPTR, DL, Ty, C0Global);
+  }
   return getAddrGlobal(N, Ty, DAG,
                        IsGP64bit ? MipsII::MO_GOT_DISP : MipsII::MO_GOT16,
                        DAG.getEntryNode(), MachinePointerInfo::getGOT());
