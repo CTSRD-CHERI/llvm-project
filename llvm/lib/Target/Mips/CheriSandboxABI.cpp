@@ -30,14 +30,6 @@ class CheriSandboxABI : public ModulePass,
   Module *M;
   llvm::SmallVector<AllocaInst*, 16> Allocas;
 
-  PointerType *getCapType(PointerType *Ty) {
-    assert(Ty->getAddressSpace() == 0);
-    return PointerType::get(Ty->getElementType(), 200);
-  }
-  PointerType *getCapType(Value *V) {
-    return getCapType(cast<PointerType>(V->getType()));
-  }
-
   virtual const char *getPassName() const {
     return "CHERI sandbox ABI setup";
   }
