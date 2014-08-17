@@ -36,7 +36,7 @@ class CheriSandboxABI : public ModulePass,
 
   public:
     static char ID;
-    CheriSandboxABI() : ModulePass(ID) {}
+    CheriSandboxABI() : ModulePass(ID), DL(nullptr) {}
     virtual ~CheriSandboxABI() {
       if (DL)
         delete DL;
@@ -44,7 +44,7 @@ class CheriSandboxABI : public ModulePass,
     void visitAllocaInst(AllocaInst &AI) {
       Allocas.push_back(&AI);
     }
-    virtual bool runOnModule(Module &Mod) : DL(0) {
+    virtual bool runOnModule(Module &Mod) {
       LLVMContext &C = Mod.getContext();
       // Early abort if we aren't using capabilities on the stack
       if (C.getAllocaAddressSpace() != 200)
