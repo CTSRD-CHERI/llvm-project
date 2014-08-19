@@ -4936,7 +4936,8 @@ void MipsABIInfo::computeInfo(CGFunctionInfo &FI) const {
 llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
                                     CodeGenFunction &CGF) const {
   llvm::Type *BP = CGF.Int8PtrTy;
-  llvm::Type *BPP = CGF.Int8PtrPtrTy;
+  llvm::Type *BPP = llvm::PointerType::get(BP,
+		  getTarget().AddressSpaceForStack());
   unsigned PtrWidth = getTarget().getPointerWidth(0);
   uint64_t Size = CGF.getContext().getTypeSize(Ty) / 8;
  
