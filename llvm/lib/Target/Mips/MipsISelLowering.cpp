@@ -1535,23 +1535,24 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     return getAddrNonPIC(N, Ty, DAG);
   }
 
-  if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
-    return getAddrLocal(N, Ty, DAG, IsGP64bit);
 
-  if (LargeGOT)
-    return getAddrGlobalLargeGOT(N, Ty, DAG, MipsII::MO_GOT_HI16,
+  EVT AddrTy = Ty;
+  if (GV->getType()->getAddressSpace() == 200)
+    Ty = MVT::i64;
+  SDValue Global;
+  if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
+    Global = getAddrLocal(N, Ty, DAG, IsGP64bit);
+  else if (LargeGOT)
+    Global = getAddrGlobalLargeGOT(N, Ty, DAG, MipsII::MO_GOT_HI16,
                                  MipsII::MO_GOT_LO16, DAG.getEntryNode(),
                                  MachinePointerInfo::getGOT());
-
-  if (GV->getType()->getAddressSpace() == 200) {
-    SDValue C0Global = getAddrGlobal(N, MVT::i64, DAG,
-                         MipsII::MO_GOT_DISP,
-                         DAG.getEntryNode(), MachinePointerInfo::getGOT());
-    return DAG.getNode(ISD::INTTOPTR, DL, Ty, C0Global);
-  }
-  return getAddrGlobal(N, Ty, DAG,
+  else
+    Global = getAddrGlobal(N, Ty, DAG,
                        IsGP64bit ? MipsII::MO_GOT_DISP : MipsII::MO_GOT16,
                        DAG.getEntryNode(), MachinePointerInfo::getGOT());
+  if (GV->getType()->getAddressSpace() == 200)
+    return DAG.getNode(ISD::INTTOPTR, DL, AddrTy, Global);
+  return Global;
 }
 
 SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
