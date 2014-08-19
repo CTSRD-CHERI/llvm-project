@@ -1051,7 +1051,8 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
   // Not found yet, create a new global.
   llvm::Constant *s = llvm::ConstantDataArray::getString(getLLVMContext(), Str);
   llvm::GlobalValue *gv = new llvm::GlobalVariable(getModule(), s->getType(),
-    true, llvm::GlobalValue::PrivateLinkage, s, ".str");
+    true, llvm::GlobalValue::PrivateLinkage, s, ".str", nullptr,
+    llvm::GlobalVariable::NotThreadLocal, Target.AddressSpaceForStack());
   gv->setSection(AnnotationSection);
   gv->setUnnamedAddr(true);
   AStr = gv;
@@ -2384,7 +2385,9 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
   // CFStrings writable. (See <rdar://problem/10657500>)
   llvm::GlobalVariable *GV =
     new llvm::GlobalVariable(getModule(), C->getType(), /*isConstant=*/true,
-                             Linkage, C, ".str");
+                             Linkage, C, ".str", nullptr,
+                             llvm::GlobalVariable::NotThreadLocal,
+                             Target.AddressSpaceForStack());
   GV->setUnnamedAddr(true);
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
@@ -2507,7 +2510,9 @@ CodeGenModule::GetAddrOfConstantString(const StringLiteral *Literal) {
   
   llvm::GlobalVariable *GV =
   new llvm::GlobalVariable(getModule(), C->getType(), isConstant, Linkage, C,
-                           ".str");
+                           ".str", nullptr,
+                           llvm::GlobalVariable::NotThreadLocal,
+                           Target.AddressSpaceForStack());
   GV->setUnnamedAddr(true);
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
@@ -2629,7 +2634,9 @@ CodeGenModule::GetAddrOfConstantStringFromLiteral(const StringLiteral *S) {
     new llvm::GlobalVariable(getModule(),C->getType(),
                              !LangOpts.WritableStrings,
                              llvm::GlobalValue::PrivateLinkage,
-                             C,".str");
+                             C,".str", nullptr,
+                             llvm::GlobalVariable::NotThreadLocal,
+                             Target.AddressSpaceForStack());
 
   GV->setAlignment(Align.getQuantity());
   GV->setUnnamedAddr(true);
@@ -2658,7 +2665,7 @@ static llvm::GlobalVariable *GenerateStringLiteral(StringRef str,
       llvm::ConstantDataArray::getString(CGM.getLLVMContext(), str, false);
 
   // OpenCL v1.1 s6.5.3: a string literal is in the constant address space.
-  unsigned AddrSpace = 0;
+  unsigned AddrSpace = CGM.getTarget().AddressSpaceForStack();
   if (CGM.getLangOpts().OpenCL)
     AddrSpace = CGM.getContext().getTargetAddressSpace(LangAS::opencl_constant);
 
