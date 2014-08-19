@@ -518,7 +518,23 @@ public:
   Value *VisitBinAddAssign(const CompoundAssignOperator *E) {
     return EmitCompoundAssign(E, &ScalarExprEmitter::EmitAdd);
   }
-  HANDLEBINOP(Sub)
+  Value *VisitBinSub(const BinaryOperator *E) {
+    // Subs require special handling.  If we are adding intcap_t values, then we
+    // must do the same trick as other operations.  If not, then we can just use
+    // the normal path.
+    BinOpInfo BOP = EmitBinOps(E);
+    if (!(E->getType().isCapabilityType(CGF.getContext()) &&
+          !E->getType()->isPointerType()))
+      return EmitSub(BOP);
+    Value *Base = BOP.LHS;
+    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);
+    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);
+    Value *V = EmitSub(BOP);
+    return GetBinOpResult(BOP, Base, V);
+  }
+  Value *VisitBinSubAssign(const CompoundAssignOperator *E) {
+    return EmitCompoundAssign(E, &ScalarExprEmitter::EmitSub);
+  }
   HANDLEBINOP(Shl)
   HANDLEBINOP(Shr)
   HANDLEBINOP(And)
