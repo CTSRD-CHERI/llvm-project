@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/TargetInfo.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/CharUnits.h"
@@ -948,15 +949,17 @@ bool Type::isIncompleteType(NamedDecl **Def) const {
   }
 }
 
-bool QualType::isCapabilityType() const {
+bool QualType::isCapabilityType(ASTContext &Context) const {
   const QualType CanonicalType = getCanonicalType();
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() == BuiltinType::IntCap ||
            BT->getKind() == BuiltinType::UIntCap;
   const Type *T = CanonicalType.getTypePtr();
   if (const PointerType *PT = dyn_cast<PointerType>(T)) {
-    // FIXME: Don't hard-code address space
-    return PT->getPointeeType().getAddressSpace() == 200;
+    int AS = PT->getPointeeType().getAddressSpace();
+    if (AS == 0)
+      AS = Context.getTargetInfo().AddressSpaceForStack();
+    return AS == Context.getTargetInfo().AddressSpaceForCapabilities();
   }
   return false;
 }

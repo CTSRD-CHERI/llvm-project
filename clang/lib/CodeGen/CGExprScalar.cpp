@@ -442,7 +442,8 @@ public:
     // If this isn't a capability type, do nothing.  If it's not a pointer
     // type, also do nothing - add operations are handled differently so need
     // the second case.
-    if (!Op.E->getType().isCapabilityType() || !V->getType()->isPointerTy())
+    if (!Op.E->getType().isCapabilityType(CGF.getContext()) ||
+        !V->getType()->isPointerTy())
       return V;
     // FIXME: Once more than one architecture supports capabilities, this
     // should be a generic intrinsic
@@ -451,7 +452,7 @@ public:
     return Builder.CreateCall(GetOffset, V);
   }
   Value *GetBinOpResult(BinOpInfo &Op, Value *LHS, Value *V) {
-    if (!Op.E->getType().isCapabilityType())
+    if (!Op.E->getType().isCapabilityType(CGF.getContext()))
       return V;
     llvm::Function *GetOffset =
       CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
@@ -505,7 +506,8 @@ public:
     // must do the same trick as other operations.  If not, then we can just use
     // the normal path.
     BinOpInfo BOP = EmitBinOps(E);
-    if (!(E->getType().isCapabilityType() && !E->getType()->isPointerType()))
+    if (!(E->getType().isCapabilityType(CGF.getContext()) &&
+          !E->getType()->isPointerType()))
       return EmitAdd(BOP);
     Value *Base = BOP.LHS;
     BOP.LHS = GetBinOpVal(BOP, BOP.LHS);
@@ -1518,9 +1520,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Type *ResultType = ConvertType(DestTy);
 
     // For __[u]intcap_t, the underlying LLVM type is actually a pointer.
-    if (E->getType().isCapabilityType()) {
+    if (E->getType().isCapabilityType(CGF.getContext()) ) {
       // If we're casting to a capability pointer, then it's just a bitcast:
-      if (DestTy.isCapabilityType())
+      if (DestTy.isCapabilityType(CGF.getContext()))
         return Builder.CreateBitCast(Src, ResultType);
       // Otherwise, it's some kind of non-capability pointer, so we need to
       // create an integer value first
@@ -1541,8 +1543,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     assert(!DestTy->isBooleanType() && "bool should use PointerToBool");
     // For casts from pointers to intcap_t, we need to turn the pointer into a
     // capability.
-    if (DestTy.isCapabilityType()) {
-      if (E->getType().isCapabilityType())
+    if (DestTy.isCapabilityType(CGF.getContext())) {
+      if (E->getType().isCapabilityType(CGF.getContext()))
         return Builder.CreateBitCast(Src, ResultType);
       Src = Builder.CreatePtrToInt(Src,
             llvm::IntegerType::get(Src->getContext(),
@@ -2878,7 +2880,7 @@ Value *ScalarExprEmitter::EmitCompare(const BinaryOperator *E,unsigned UICmpOpc,
 
     // If we're doing a comparison on a capability (including an __intcap_t)
     // then we need to fudge it into an integer type first.
-    if (LHSTy.isCapabilityType()) {
+    if (LHSTy.isCapabilityType(CGF.getContext())) {
       // FIXME: Comparisons are broken for in-object comparisons between
       // capabilities outside of C0
       LHS = getCapabilityBase(CGF.CGM, Builder, LHS, CGF.IntPtrTy);
