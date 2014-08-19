@@ -430,6 +430,10 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     if (PointeeType->isVoidTy())
       PointeeType = llvm::Type::getInt8Ty(getLLVMContext());
     unsigned AS = Context.getTargetAddressSpace(ETy);
+    // FIXME: Eventually we want to allow function pointers to be in a
+    // different address space.
+    if (ETy->isFunctionType())
+      AS = 0;
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
