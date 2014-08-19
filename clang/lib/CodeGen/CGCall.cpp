@@ -833,7 +833,8 @@ static void CreateCoercedStore(llvm::Value *Src,
   // If store is legal, just bitcast the src pointer.
   if (SrcSize <= DstSize) {
     llvm::Value *Casted =
-      CGF.Builder.CreateBitCast(DstPtr, llvm::PointerType::getUnqual(SrcTy));
+      CGF.Builder.CreateBitCast(DstPtr, llvm::PointerType::get(SrcTy,
+                  DstPtr->getType()->getPointerAddressSpace()));
     // FIXME: Use better alignment / avoid requiring aligned store.
     BuildAggStore(CGF, Src, Casted, DstIsVolatile, true);
   } else {
@@ -1396,7 +1397,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         uint64_t DstSize = CGM.getDataLayout().getTypeAllocSize(DstTy);
 
         if (SrcSize <= DstSize) {
-          Ptr = Builder.CreateBitCast(Ptr, llvm::PointerType::getUnqual(STy));
+          Ptr = Builder.CreateBitCast(Ptr, llvm::PointerType::get(STy,
+                      Ptr->getType()->getPointerAddressSpace()));
 
           for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i) {
             assert(AI != Fn->arg_end() && "Argument mismatch!");
@@ -2486,8 +2488,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
           Builder.CreateMemCpy(TempAlloca, SrcPtr, SrcSize, 0);
           SrcPtr = TempAlloca;
         } else {
-          SrcPtr = Builder.CreateBitCast(SrcPtr,
-                                         llvm::PointerType::getUnqual(STy));
+          SrcPtr = Builder.CreateBitCast(SrcPtr, llvm::PointerType::get(STy,
+                      SrcPtr->getType()->getPointerAddressSpace()));
         }
 
         for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i) {
