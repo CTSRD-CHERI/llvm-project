@@ -1838,6 +1838,11 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
   // Entry is now either a Function or GlobalVariable.
   llvm::GlobalVariable *GV = dyn_cast<llvm::GlobalVariable>(Entry);
 
+  if (InitExpr && InitExpr->getType().isCapabilityType(getContext())) {
+    NeedsGlobalCtor = true;
+    Init = EmitNullConstant(D->getType());
+  }
+
   // We have a definition after a declaration with the wrong type.
   // We must make a new GlobalVariable* and update everything that used OldGV
   // (a declaration or tentative definition) with the new GlobalVariable*
