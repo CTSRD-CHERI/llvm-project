@@ -3457,7 +3457,6 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
   SmallVector<SDValue, 4> Values(NumValues);
   SmallVector<SDValue, 4> Chains(std::min(unsigned(MaxParallelChains),
                                           NumValues));
-  EVT PtrVT = Ptr.getValueType();
   unsigned ChainI = 0;
   for (unsigned i = 0; i != NumValues; ++i, ++ChainI) {
     // Serializing loads here may result in excessive register pressure, and
@@ -3473,10 +3472,8 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
       Root = Chain;
       ChainI = 0;
     }
-    //FIXME:
-    SDValue A = Offsets[i] ? DAG.getNode(ISD::ADD, getCurSDLoc(),
-                            PtrVT, Ptr,
-                            DAG.getConstant(Offsets[i], PtrVT)) : Ptr;
+    SDValue A = Offsets[i] ? DAG.getPointerAdd(getCurSDLoc(), Ptr, Offsets[i])
+                           : Ptr;
     SDValue L = DAG.getLoad(ValueVTs[i], getCurSDLoc(), Root,
                             A, MachinePointerInfo(SV, Offsets[i]), isVolatile,
                             isNonTemporal, isInvariant, Alignment, TBAAInfo,
