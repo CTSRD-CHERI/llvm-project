@@ -750,7 +750,8 @@ static llvm::Value *CreateCoercedLoad(llvm::Value *SrcPtr,
     // FIXME: Assert that we aren't truncating non-padding bits when have access
     // to that information.
     llvm::Value *Casted =
-      CGF.Builder.CreateBitCast(SrcPtr, llvm::PointerType::getUnqual(Ty));
+      CGF.Builder.CreateBitCast(SrcPtr, llvm::PointerType::get(Ty,
+            cast<llvm::PointerType>(SrcPtr->getType())->getAddressSpace()));
     llvm::LoadInst *Load = CGF.Builder.CreateLoad(Casted);
     // FIXME: Use better alignment / avoid requiring aligned load.
     Load->setAlignment(1);
