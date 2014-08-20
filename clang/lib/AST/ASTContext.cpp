@@ -1334,7 +1334,8 @@ CharUnits ASTContext::getDeclAlign(const Decl *D, bool ForAlignof) const {
       else
         T = getPointerType(RT->getPointeeType());
     }
-    if (!T->isIncompleteType() && !T->isFunctionType()) {
+    if ((!T->isIncompleteType() && !T->isFunctionType()) ||
+        T->isIncompleteArrayType()) {
       // Adjust alignments of declarations with array type by the
       // large-array alignment on the target.
       if (const ArrayType *arrayType = getAsArrayType(T)) {
