@@ -1349,12 +1349,15 @@ CharUnits ASTContext::getDeclAlign(const Decl *D, bool ForAlignof) const {
         }
 
         // Walk through any array types while we're at it.
-        T = getBaseElementType(arrayType);
+        if (!T->isIncompleteArrayType())
+          T = getBaseElementType(arrayType);
       }
-      Align = std::max(Align, getPreferredTypeAlign(T.getTypePtr()));
-      if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
-        if (VD->hasGlobalStorage())
-          Align = std::max(Align, getTargetInfo().getMinGlobalAlign());
+      if (!T->isIncompleteArrayType()) {
+        Align = std::max(Align, getPreferredTypeAlign(T.getTypePtr()));
+        if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
+          if (VD->hasGlobalStorage())
+            Align = std::max(Align, getTargetInfo().getMinGlobalAlign());
+        }
       }
     }
 
