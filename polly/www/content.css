@@ -3,17 +3,16 @@ html { margin: 0px; } body { margin: 8px; }
 html, body {
   padding:0px;
   font-family:"Lucida Grande", "Lucida Sans Unicode", Arial, Verdana, Helvetica, sans-serif; background-color: #fff; color: #222;
-  line-height:1.5;
 }
 
 #box {
   margin-left: auto;
   margin-right: auto;
-  max-width: 80em;
+  max-width: 70em;
 }
 [id=content] {
 	/* *****  EDIT THIS VALUE IF CONTENT OVERLAPS MENU ***** */
-        margin-left: 15em;
+        margin-left: 18em;
 	padding-left: 3em;
 }
 
@@ -32,6 +31,8 @@ ul { padding-left:1.5em; }
 TD.done {background-color: #88ff99; text-align: center}
 TD.inprogress{background-color: #ffce00; text-align: center}
 TD.open{background-color: #e6705f; text-align: center}
+TD.nice{background-color: #5555df; text-align: center}
+TD.niceinprogress{background-color: #8888ff; text-align: center}
 
 PRE.code {padding-left: 0.5em; background-color: #eeeeee}
 PRE {padding-left: 0.5em}
@@ -57,7 +58,7 @@ tr { vertical-align:top }
     background-image:url(images/header-background.png);
     background-repeat:no-repeat;
     background-position: right;
-    max-width: 89em;
+    max-width: 70em;
     margin-bottom: 1em
 
 

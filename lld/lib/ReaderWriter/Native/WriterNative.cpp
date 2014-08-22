@@ -8,18 +8,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "lld/ReaderWriter/Writer.h"
+#include "NativeFileFormat.h"
 #include "lld/Core/File.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/system_error.h"
-
-#include "NativeFileFormat.h"
-
 #include <cstdint>
 #include <set>
+#include <system_error>
 #include <vector>
 
 namespace lld {
@@ -32,12 +29,27 @@ class Writer : public lld::Writer {
 public:
   Writer(const LinkingContext &context) {}
 
-  virtual error_code writeFile(const lld::File &file, StringRef outPath) {
+  std::error_code writeFile(const lld::File &file, StringRef outPath) override {
     // reserve first byte for unnamed atoms
     _stringPool.push_back('\0');
     // visit all atoms
     for ( const DefinedAtom *defAtom : file.defined() ) {
       this->addIVarsForDefinedAtom(*defAtom);
+      // We are trying to process all atoms, but the defined() iterator does not
+      // return group children. So, when a group parent is found, we need to
+      // handle each child atom.
+      if (defAtom->isGroupParent()) {
+        for (const Reference *r : *defAtom) {
+          if (r->kindNamespace() != lld::Reference::KindNamespace::all)
+            continue;
+          if (r->kindValue() == lld::Reference::kindGroupChild) {
+            const DefinedAtom *target = dyn_cast<DefinedAtom>(r->target());
+            assert(target && "Internal Error: kindGroupChild references need "
+                             "to be associated with Defined Atoms only");
+            this->addIVarsForDefinedAtom(*target);
+          }
+        }
+      }
     }
     for ( const UndefinedAtom *undefAtom : file.undefined() ) {
       this->addIVarsForUndefinedAtom(*undefAtom);
@@ -56,13 +68,13 @@ public:
 
     std::string errorInfo;
     llvm::raw_fd_ostream out(outPath.data(), errorInfo,
-                             llvm::sys::fs::F_Binary);
+                             llvm::sys::fs::F_None);
     if (!errorInfo.empty())
-      return error_code::success(); // FIXME
+      return std::error_code(); // FIXME
 
     this->write(out);
 
-    return error_code::success();
+    return std::error_code();
   }
 
   virtual ~Writer() {
@@ -159,7 +171,7 @@ private:
       v1.kindArch = v2.kindArch;
       v1.kindValue = v2.kindValue;
       v1.targetIndex = (v2.targetIndex == NativeReferenceIvarsV2::noTarget) ?
-          NativeReferenceIvarsV1::noTarget : v2.targetIndex;
+          (uint16_t)NativeReferenceIvarsV1::noTarget : v2.targetIndex;
       v1.addendIndex = this->getAddendIndex(v2.addend);
       _referencesV1.push_back(v1);
     }
@@ -416,7 +428,6 @@ private:
     attrs.deadStrip         = atom.deadStrip();
     attrs.dynamicExport     = atom.dynamicExport();
     attrs.permissions       = atom.permissions();
-    attrs.alias             = atom.isAlias();
     return attrs;
   }
 

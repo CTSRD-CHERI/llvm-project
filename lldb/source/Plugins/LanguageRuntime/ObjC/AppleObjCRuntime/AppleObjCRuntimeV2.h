@@ -105,6 +105,9 @@ public:
     virtual lldb::addr_t
     LookupRuntimeSymbol (const ConstString &name);
     
+    virtual EncodingToTypeSP
+    GetEncodingToType ();
+    
 protected:
     virtual lldb::BreakpointResolverSP
     CreateExceptionResolver (Breakpoint *bkpt, bool catch_bp, bool throw_bp);
@@ -226,15 +229,9 @@ private:
         GetClassDescriptor (lldb::addr_t ptr);
     protected:
         TaggedPointerVendorLegacy (AppleObjCRuntimeV2& runtime) :
-        TaggedPointerVendor (runtime),
-        m_Foundation_version(0)
+        TaggedPointerVendor (runtime)
         {
         }
-        
-        static uint32_t
-        GetFoundationVersion (Target& target);
-        
-        uint32_t m_Foundation_version;
         
         friend class AppleObjCRuntimeV2::TaggedPointerVendor;
         
@@ -283,6 +280,7 @@ private:
     bool                                    m_loaded_objc_opt;
     std::unique_ptr<NonPointerISACache>       m_non_pointer_isa_cache_ap;
     std::unique_ptr<TaggedPointerVendor>    m_tagged_pointer_vendor_ap;
+    EncodingToTypeSP                        m_encoding_to_type_sp;
 };
     
 } // namespace lldb_private

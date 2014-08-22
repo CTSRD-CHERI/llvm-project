@@ -20,6 +20,7 @@ class DynamicValueTestCase(TestBase):
         self.buildDsym(dictionary=self.getBuildFlags())
         self.do_get_dynamic_vals()
 
+    @expectedFailureFreeBSD # FIXME: This needs to be root-caused.
     @expectedFailureLinux # FIXME: This needs to be root-caused.  It looks like the DWARF info is anticipating the derived class assignment.
     @python_api_test
     @dwarf_test
@@ -39,15 +40,6 @@ class DynamicValueTestCase(TestBase):
                                                  '// Break here and get real addresses of myB and otherB.')
         self.main_second_call_line = line_number('pass-to-base.cpp',
                                                        '// Break here and get real address of reallyA.')
-
-        self.main_third_call_line = line_number('pass-to-base.cpp',
-                                                       '// Break here and check b has 0 children')
-        self.main_fourth_call_line = line_number('pass-to-base.cpp',
-                                                       '// Break here and check b still has 0 children')
-        self.main_fifth_call_line = line_number('pass-to-base.cpp',
-                                                       '// Break here and check b has one child now')
-
-
 
 
     def examine_value_object_of_this_ptr (self, this_static, this_dynamic, dynamic_location):
@@ -128,15 +120,6 @@ class DynamicValueTestCase(TestBase):
 
         second_call_bpt = target.BreakpointCreateByLocation('pass-to-base.cpp', self.main_second_call_line)
         self.assertTrue(second_call_bpt,
-                        VALID_BREAKPOINT)
-        third_call_bpt = target.BreakpointCreateByLocation('pass-to-base.cpp', self.main_third_call_line)
-        self.assertTrue(third_call_bpt,
-                        VALID_BREAKPOINT)
-        fourth_call_bpt = target.BreakpointCreateByLocation('pass-to-base.cpp', self.main_fourth_call_line)
-        self.assertTrue(fourth_call_bpt,
-                        VALID_BREAKPOINT)
-        fifth_call_bpt = target.BreakpointCreateByLocation('pass-to-base.cpp', self.main_fifth_call_line)
-        self.assertTrue(fifth_call_bpt,
                         VALID_BREAKPOINT)
 
         # Now launch the process, and do not stop at the entry point.
@@ -250,20 +233,6 @@ class DynamicValueTestCase(TestBase):
         anotherA_loc = int (anotherA_value.GetValue(), 16)
         self.assertTrue (anotherA_loc == reallyA_loc)
         self.assertTrue (anotherA_value.GetTypeName().find ('B') == -1)
-
-        self.runCmd("continue")
-#        self.runCmd("frame select 0")
-#        self.runCmd("frame variable")
-        b = self.frame().FindVariable("b").GetDynamicValue(lldb.eDynamicCanRunTarget)
-        self.assertTrue(b.GetNumChildren() == 0, "b has 0 children")
-        self.runCmd("next")
-#        self.runCmd("frame select 0")
-#        self.runCmd("frame variable")
-        self.assertTrue(b.GetNumChildren() == 0, "b still has 0 children")
-        self.runCmd("continue")
-#        self.runCmd("frame select 0")
-#        self.runCmd("frame variable")
-        self.assertTrue(b.GetNumChildren() != 0, "b now has 1 child")
 
 if __name__ == '__main__':
     import atexit

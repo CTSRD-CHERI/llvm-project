@@ -146,21 +146,32 @@ it is because you installed cloog to a non-standard path, and libisl/libcloog
 could not be found. To solve this issue, you need to append the path of parent
 directory of libisl/libcloog, i.e. ${CLOOG_INSTALL}/lib, to LD_LIBRARY_PATH by:
 
-<pre>export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CLOOG_INSTALL}/lib</pre>
+<pre>export LD_LIBRARY_PATH=${CLOOG_INSTALL}/lib:$LD_LIBRARY_PATH</pre>
+
+<p>Also try the above command if you get errors such as:
+<code>undefined symbol: isl_ctx_get_max_operations</code>
+
+<p>If you get an error in one of the python files, your system probably uses python3
+as default python interpreter. This is the case, for instance, under Arch Linux.
+To solve this issue, run <code>cmake</code> again, but with the added argument:
+<code>-DPYTHON_EXECUTABLE=/usr/bin/python2</code> (replace <code>/usr/bin/python2</code>
+with the location of the python2 interpreter under your system).
+
+<pre>cmake -DCMAKE_PREFIX_PATH=${CLOOG_INSTALL} -DPYTHON_EXECUTABLE=/usr/bin/python2 ${LLVM_SRC}</pre>
 
 <h2> Optional Features </h2>
 
-<h3> Pocc </h3>
+<h3> Pocc [Supported until <a href="http://llvm.org/releases/download.html#3.4.2">LLVM 3.4.2</a>]</h3>
 
 <p>Polly can use <a href="http://www.cse.ohio-state.edu/~pouchet/software/pocc">
 PoCC</a> as an external optimizer. PoCC is a research project that provides
-an integrated version of <a href="http://pluto.sf.net">Pluto</a>, an
+an integrated version of <a href="http://pluto-compiler.sf.net">Pluto</a>, an
 advanced data-locality and tileability optimizer. Polly includes internally
 already a similar optimizer, such that in general PoCC is not needed. It is
 only recommended for people who want to compare against a different
 optimizer.</a>
 <br/>
-To use it install PoCC 1.0-rc3.1 (the one with Polly support) and add it to your PATH. 
+To use it install PoCC 1.0-rc3.1 (the one with Polly support) and add it to your PATH.
 
 <pre>
 wget <a

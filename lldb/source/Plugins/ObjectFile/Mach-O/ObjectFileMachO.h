@@ -10,9 +10,10 @@
 #ifndef liblldb_ObjectFileMachO_h_
 #define liblldb_ObjectFileMachO_h_
 
-#include "llvm/Support/MachO.h"
+#include "lldb/Utility/SafeMachO.h"
 
 #include "lldb/Core/Address.h"
+#include "lldb/Core/FileSpecList.h"
 #include "lldb/Core/RangeMap.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Mutex.h"
@@ -64,6 +65,11 @@ public:
                              lldb_private::ModuleSpecList &specs);
 
     static bool
+    SaveCore (const lldb::ProcessSP &process_sp,
+              const lldb_private::FileSpec &outfile,
+              lldb_private::Error &error);
+
+    static bool
     MagicBytesMatch (lldb::DataBufferSP& data_sp,
                      lldb::addr_t offset, 
                      lldb::addr_t length);
@@ -89,6 +95,11 @@ public:
     virtual bool
     ParseHeader ();
 
+    virtual bool
+    SetLoadAddress(lldb_private::Target &target,
+                   lldb::addr_t value,
+                   bool value_is_offset);
+    
     virtual lldb::ByteOrder
     GetByteOrder () const;
     
@@ -122,6 +133,11 @@ public:
     virtual uint32_t
     GetDependentModules (lldb_private::FileSpecList& files);
 
+    virtual lldb_private::FileSpecList
+    GetReExportedLibraries ()
+    {
+        return m_reexported_dylibs;
+    }
     //------------------------------------------------------------------
     // PluginInterface protocol
     //------------------------------------------------------------------
@@ -157,14 +173,13 @@ public:
     
     virtual uint32_t
     GetSDKVersion (uint32_t *versions, uint32_t num_versions);
-
-protected:
-
+    
     static bool
     ParseHeader (lldb_private::DataExtractor &data,
                  lldb::offset_t *data_offset_ptr,
                  llvm::MachO::mach_header &header);
     
+protected:
     
     static bool
     GetUUID (const llvm::MachO::mach_header &header,
@@ -172,6 +187,12 @@ protected:
              lldb::offset_t lc_offset, // Offset to the first load command
              lldb_private::UUID& uuid);
     
+    static bool
+    GetArchitecture (const llvm::MachO::mach_header &header,
+                     const lldb_private::DataExtractor &data,
+                     lldb::offset_t lc_offset,
+                     lldb_private::ArchSpec &arch);
+
     // Intended for same-host arm device debugging where lldb needs to
     // detect libraries in the shared cache and augment the nlist entries
     // with an on-disk dyld_shared_cache file.  The process will record
@@ -204,6 +225,7 @@ protected:
     lldb_private::Address  m_entry_point_address;
     FileRangeArray m_thread_context_offsets;
     bool m_thread_context_offsets_valid;
+    lldb_private::FileSpecList m_reexported_dylibs;
 
     size_t
     ParseSymtab ();

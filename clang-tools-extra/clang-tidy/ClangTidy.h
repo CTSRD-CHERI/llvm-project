@@ -11,10 +11,13 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANG_TIDY_H
 
 #include "ClangTidyDiagnosticConsumer.h"
+#include "ClangTidyOptions.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Tooling/Refactoring.h"
+#include <memory>
+#include <vector>
 
 namespace clang {
 
@@ -76,73 +79,59 @@ public:
   void setContext(ClangTidyContext *Ctx) { Context = Ctx; }
 
   /// \brief Add a diagnostic with the check's name.
-  DiagnosticBuilder diag(SourceLocation Loc, StringRef Message);
+  DiagnosticBuilder diag(SourceLocation Loc, StringRef Description,
+                         DiagnosticIDs::Level Level = DiagnosticIDs::Warning);
 
   /// \brief Sets the check name. Intended to be used by the clang-tidy
   /// framework. Can be called only once.
   void setName(StringRef Name);
 
 private:
-  virtual void run(const ast_matchers::MatchFinder::MatchResult &Result);
+  void run(const ast_matchers::MatchFinder::MatchResult &Result) override;
   ClangTidyContext *Context;
   std::string CheckName;
-};
-
-/// \brief Filters checks by name.
-class ChecksFilter {
-public:
-  ChecksFilter(StringRef EnableChecksRegex, StringRef DisableChecksRegex);
-  bool IsCheckEnabled(StringRef Name);
-
-private:
-  llvm::Regex EnableChecks;
-  llvm::Regex DisableChecks;
 };
 
 class ClangTidyCheckFactories;
 
 class ClangTidyASTConsumerFactory {
 public:
-  ClangTidyASTConsumerFactory(StringRef EnableChecksRegex,
-                              StringRef DisableChecksRegex,
-                              ClangTidyContext &Context);
-  ~ClangTidyASTConsumerFactory();
+  ClangTidyASTConsumerFactory(ClangTidyContext &Context);
 
   /// \brief Returns an ASTConsumer that runs the specified clang-tidy checks.
-  clang::ASTConsumer *CreateASTConsumer(clang::CompilerInstance &Compiler,
-                                        StringRef File);
+  std::unique_ptr<clang::ASTConsumer>
+  CreateASTConsumer(clang::CompilerInstance &Compiler, StringRef File);
 
   /// \brief Get the list of enabled checks.
-  std::vector<std::string> getCheckNames();
+  std::vector<std::string> getCheckNames(GlobList &Filter);
 
 private:
   typedef std::vector<std::pair<std::string, bool> > CheckersList;
-  CheckersList getCheckersControlList();
+  CheckersList getCheckersControlList(GlobList &Filter);
 
-  ChecksFilter Filter;
-  SmallVector<ClangTidyCheck *, 8> Checks;
   ClangTidyContext &Context;
-  ast_matchers::MatchFinder Finder;
-  OwningPtr<ClangTidyCheckFactories> CheckFactories;
+  std::unique_ptr<ClangTidyCheckFactories> CheckFactories;
 };
 
 /// \brief Fills the list of check names that are enabled when the provided
 /// filters are applied.
-std::vector<std::string> getCheckNames(StringRef EnableChecksRegex,
-                                       StringRef DisableChecksRegex);
+std::vector<std::string> getCheckNames(const ClangTidyOptions &Options);
 
 /// \brief Run a set of clang-tidy checks on a set of files.
-void runClangTidy(StringRef EnableChecksRegex, StringRef DisableChecksRegex,
-                  const tooling::CompilationDatabase &Compilations,
-                  ArrayRef<std::string> Ranges,
-                  SmallVectorImpl<ClangTidyError> *Errors);
+///
+/// Takes ownership of the \c OptionsProvider.
+ClangTidyStats
+runClangTidy(ClangTidyOptionsProvider *OptionsProvider,
+             const tooling::CompilationDatabase &Compilations,
+             ArrayRef<std::string> InputFiles,
+             std::vector<ClangTidyError> *Errors);
 
 // FIXME: This interface will need to be significantly extended to be useful.
 // FIXME: Implement confidence levels for displaying/fixing errors.
 //
 /// \brief Displays the found \p Errors to the users. If \p Fix is true, \p
 /// Errors containing fixes are automatically applied.
-void handleErrors(SmallVectorImpl<ClangTidyError> &Errors, bool Fix);
+void handleErrors(const std::vector<ClangTidyError> &Errors, bool Fix);
 
 } // end namespace tidy
 } // end namespace clang

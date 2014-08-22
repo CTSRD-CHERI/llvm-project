@@ -6,8 +6,8 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#ifndef LLD_READER_WRITER_ELF_MIPS_RELOCATION_HANDLER_H
-#define LLD_READER_WRITER_ELF_MIPS_RELOCATION_HANDLER_H
+#ifndef LLD_READER_WRITER_ELF_MIPS_MIPS_RELOCATION_HANDLER_H
+#define LLD_READER_WRITER_ELF_MIPS_MIPS_RELOCATION_HANDLER_H
 
 #include "MipsLinkingContext.h"
 
@@ -16,32 +16,18 @@ namespace elf {
 
 class MipsTargetHandler;
 
-class MipsTargetRelocationHandler LLVM_FINAL
+class MipsTargetRelocationHandler final
     : public TargetRelocationHandler<Mips32ElELFType> {
 public:
-  MipsTargetRelocationHandler(const MipsLinkingContext &context,
-                              const MipsTargetHandler &handler);
+  MipsTargetRelocationHandler(MipsTargetLayout<Mips32ElELFType> &layout)
+      : _mipsTargetLayout(layout) {}
 
-  ~MipsTargetRelocationHandler();
-
-  virtual error_code applyRelocation(ELFWriter &, llvm::FileOutputBuffer &,
-                                     const lld::AtomLayout &,
-                                     const Reference &) const;
+  std::error_code applyRelocation(ELFWriter &, llvm::FileOutputBuffer &,
+                                  const lld::AtomLayout &,
+                                  const Reference &) const override;
 
 private:
-  const MipsTargetHandler &_targetHandler;
-
-  typedef std::vector<const Reference *> PairedRelocationsT;
-  typedef std::unordered_map<const lld::AtomLayout *, PairedRelocationsT>
-  PairedRelocationMapT;
-
-  mutable PairedRelocationMapT _pairedRelocations;
-
-  void savePairedRelocation(const lld::AtomLayout &atom,
-                            const Reference &ref) const;
-  void applyPairedRelocations(ELFWriter &writer, llvm::FileOutputBuffer &buf,
-                              const lld::AtomLayout &atom,
-                              int64_t loAddend) const;
+  MipsTargetLayout<Mips32ElELFType> &_mipsTargetLayout;
 };
 
 } // elf

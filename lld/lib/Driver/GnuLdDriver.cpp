@@ -24,6 +24,7 @@
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/Option.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -32,7 +33,12 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Signals.h"
 
+#include <cstring>
+#include <tuple>
+
 using namespace lld;
+
+using llvm::BumpPtrAllocator;
 
 namespace {
 
@@ -68,10 +74,48 @@ public:
   GnuLdOptTable() : OptTable(infoTable, llvm::array_lengthof(infoTable)){}
 };
 
+class DriverStringSaver : public llvm::cl::StringSaver {
+public:
+  DriverStringSaver(BumpPtrAllocator &alloc) : _alloc(alloc) {}
+
+  const char *SaveString(const char *s) override {
+    char *p = _alloc.Allocate<char>(strlen(s) + 1);
+    strcpy(p, s);
+    return p;
+  }
+
+private:
+  BumpPtrAllocator &_alloc;
+};
+
+} // anonymous namespace
+
+// If a command line option starts with "@", the driver reads its suffix as a
+// file, parse its contents as a list of command line options, and insert them
+// at the original @file position. If file cannot be read, @file is not expanded
+// and left unmodified. @file can appear in a response file, so it's a recursive
+// process.
+static std::tuple<int, const char **>
+maybeExpandResponseFiles(int argc, const char **argv, BumpPtrAllocator &alloc) {
+  // Expand response files.
+  SmallVector<const char *, 256> smallvec;
+  for (int i = 0; i < argc; ++i)
+    smallvec.push_back(argv[i]);
+  DriverStringSaver saver(alloc);
+  llvm::cl::ExpandResponseFiles(saver, llvm::cl::TokenizeGNUCommandLine, smallvec);
+
+  // Pack the results to a C-array and return it.
+  argc = smallvec.size();
+  const char **copy = alloc.Allocate<const char *>(argc + 1);
+  std::copy(smallvec.begin(), smallvec.end(), copy);
+  copy[argc] = nullptr;
+  return std::make_tuple(argc, copy);
+}
+
 // Get the Input file magic for creating appropriate InputGraph nodes.
-error_code getFileMagic(ELFLinkingContext &ctx, StringRef path,
-                        llvm::sys::fs::file_magic &magic) {
-  error_code ec = llvm::sys::fs::identify_magic(path, magic);
+static std::error_code getFileMagic(ELFLinkingContext &ctx, StringRef path,
+                                    llvm::sys::fs::file_magic &magic) {
+  std::error_code ec = llvm::sys::fs::identify_magic(path, magic);
   if (ec)
     return ec;
   switch (magic) {
@@ -79,24 +123,45 @@ error_code getFileMagic(ELFLinkingContext &ctx, StringRef path,
   case llvm::sys::fs::file_magic::elf_relocatable:
   case llvm::sys::fs::file_magic::elf_shared_object:
   case llvm::sys::fs::file_magic::unknown:
-    return error_code::success();
+    return std::error_code();
   default:
     break;
   }
   return make_error_code(ReaderError::unknown_file_format);
 }
 
-} // namespace
-
-llvm::ErrorOr<StringRef> ELFFileNode::getPath(const LinkingContext &) const {
-  if (!_isDashlPrefix)
-    return _path;
-  return _elfLinkingContext.searchLibrary(_path);
+// Parses an argument of --defsym=<sym>=<number>
+static bool parseDefsymAsAbsolute(StringRef opt, StringRef &sym,
+                                  uint64_t &addr) {
+  size_t equalPos = opt.find('=');
+  if (equalPos == 0 || equalPos == StringRef::npos)
+    return false;
+  sym = opt.substr(0, equalPos);
+  if (opt.substr(equalPos + 1).getAsInteger(0, addr))
+    return false;
+  return true;
 }
 
-std::string ELFFileNode::errStr(error_code errc) {
+// Parses an argument of --defsym=<sym>=<sym>
+static bool parseDefsymAsAlias(StringRef opt, StringRef &sym,
+                               StringRef &target) {
+  size_t equalPos = opt.find('=');
+  if (equalPos == 0 || equalPos == StringRef::npos)
+    return false;
+  sym = opt.substr(0, equalPos);
+  target = opt.substr(equalPos + 1);
+  return !target.empty();
+}
+
+llvm::ErrorOr<StringRef> ELFFileNode::getPath(const LinkingContext &) const {
+  if (_attributes._isDashlPrefix)
+    return _elfLinkingContext.searchLibrary(_path);
+  return _elfLinkingContext.searchFile(_path, _attributes._isSysRooted);
+}
+
+std::string ELFFileNode::errStr(std::error_code errc) {
   if (errc == llvm::errc::no_such_file_or_directory) {
-    if (_isDashlPrefix)
+    if (_attributes._isDashlPrefix)
       return (Twine("Unable to find library -l") + _path).str();
     return (Twine("Unable to find file ") + _path).str();
   }
@@ -105,6 +170,8 @@ std::string ELFFileNode::errStr(error_code errc) {
 
 bool GnuLdDriver::linkELF(int argc, const char *argv[],
                           raw_ostream &diagnostics) {
+  BumpPtrAllocator alloc;
+  std::tie(argc, argv) = maybeExpandResponseFiles(argc, argv, alloc);
   std::unique_ptr<ELFLinkingContext> options;
   if (!parse(argc, argv, options, diagnostics))
     return false;
@@ -119,15 +186,12 @@ bool GnuLdDriver::linkELF(int argc, const char *argv[],
   options->registry().addSupportNativeObjects();
   if (options->allowLinkWithDynamicLibraries())
     options->registry().addSupportELFDynamicSharedObjects(
-        options->useShlibUndefines());
-
+        options->useShlibUndefines(), options->targetHandler());
   return link(*options, diagnostics);
 }
 
 static llvm::Optional<llvm::Triple::ArchType>
 getArchType(const llvm::Triple &triple, StringRef value) {
-  if (triple.getOS() != llvm::Triple::NetBSD)
-    return llvm::None;
   switch (triple.getArch()) {
   case llvm::Triple::x86:
   case llvm::Triple::x86_64:
@@ -135,6 +199,14 @@ getArchType(const llvm::Triple &triple, StringRef value) {
       return llvm::Triple::x86;
     if (value == "elf_x86_64")
       return llvm::Triple::x86_64;
+    return llvm::None;
+  case llvm::Triple::mipsel:
+    if (value == "elf32ltsmip")
+      return llvm::Triple::mipsel;
+    return llvm::None;
+  case llvm::Triple::aarch64:
+    if (value == "aarch64linux")
+      return llvm::Triple::aarch64;
     return llvm::None;
   default:
     return llvm::None;
@@ -161,21 +233,11 @@ bool GnuLdDriver::applyEmulation(llvm::Triple &triple,
 void GnuLdDriver::addPlatformSearchDirs(ELFLinkingContext &ctx,
                                        llvm::Triple &triple,
                                        llvm::Triple &baseTriple) {
-  switch (triple.getOS()) {
-  case llvm::Triple::NetBSD:
-    switch (triple.getArch()) {
-    case llvm::Triple::x86:
-      if (baseTriple.getArch() == llvm::Triple::x86_64) {
-        ctx.addSearchPath("=/usr/lib/i386");
-        return;
-      }
-      break;
-    default:
-      break;
-    }
-    break;
-  default:
-    break;
+  if (triple.getOS() == llvm::Triple::NetBSD &&
+      triple.getArch() == llvm::Triple::x86 &&
+      baseTriple.getArch() == llvm::Triple::x86_64) {
+    ctx.addSearchPath("=/usr/lib/i386");
+    return;
   }
   ctx.addSearchPath("=/usr/lib");
 }
@@ -223,39 +285,32 @@ bool GnuLdDriver::parse(int argc, const char *argv[],
   }
 
   std::unique_ptr<InputGraph> inputGraph(new InputGraph());
-  std::stack<InputElement *> controlNodeStack;
+  std::stack<Group *> groupStack;
 
-  // Positional options for an Input File
-  bool isWholeArchive = false;
-  bool asNeeded = false;
+  ELFFileNode::Attributes attributes;
+
   bool _outputOptionSet = false;
 
-  int index = 0;
-
   // Ignore unknown arguments.
-  for (auto it = parsedArgs->filtered_begin(OPT_UNKNOWN),
-            ie = parsedArgs->filtered_end();
-       it != ie; ++it)
-    diagnostics << "warning: ignoring unknown argument: " << (*it)->getValue()
-                << "\n";
+  for (auto unknownArg : parsedArgs->filtered(OPT_UNKNOWN))
+    diagnostics << "warning: ignoring unknown argument: "
+                << unknownArg->getValue() << "\n";
 
   // Set sys root path.
   if (llvm::opt::Arg *sysRootPath = parsedArgs->getLastArg(OPT_sysroot))
     ctx->setSysroot(sysRootPath->getValue());
 
   // Add all search paths.
-  for (auto it = parsedArgs->filtered_begin(OPT_L),
-            ie = parsedArgs->filtered_end();
-       it != ie; ++it)
-    ctx->addSearchPath((*it)->getValue());
+  for (auto libDir : parsedArgs->filtered(OPT_L))
+    ctx->addSearchPath(libDir->getValue());
 
   if (!parsedArgs->hasArg(OPT_nostdlib))
     addPlatformSearchDirs(*ctx, triple, baseTriple);
 
   // Figure out output kind ( -r, -static, -shared)
-  if ( llvm::opt::Arg *kind = parsedArgs->getLastArg(OPT_relocatable, OPT_static,
-                                      OPT_shared, OPT_nmagic,
-                                      OPT_omagic, OPT_no_omagic)) {
+  if (llvm::opt::Arg *kind =
+          parsedArgs->getLastArg(OPT_relocatable, OPT_static, OPT_shared,
+                                 OPT_nmagic, OPT_omagic, OPT_no_omagic)) {
     switch (kind->getOption().getID()) {
     case OPT_relocatable:
       ctx->setOutputELFType(llvm::ELF::ET_REL);
@@ -276,8 +331,8 @@ bool GnuLdDriver::parse(int argc, const char *argv[],
   }
 
   // Figure out if the output type is nmagic/omagic
-  if ( llvm::opt::Arg *kind = parsedArgs->getLastArg(OPT_nmagic, OPT_omagic,
-                                                     OPT_no_omagic)) {
+  if (llvm::opt::Arg *kind =
+          parsedArgs->getLastArg(OPT_nmagic, OPT_omagic, OPT_no_omagic)) {
     switch (kind->getOption().getID()) {
     case OPT_nmagic:
       ctx->setOutputMagic(ELFLinkingContext::OutputMagic::NMAGIC);
@@ -335,6 +390,10 @@ bool GnuLdDriver::parse(int argc, const char *argv[],
       ctx->setUseShlibUndefines(true);
       break;
 
+    case OPT_allow_multiple_definition:
+      ctx->setAllowDuplicates(true);
+      break;
+
     case OPT_dynamic_linker:
       ctx->setInterpreter(inputArg->getValue());
       break;
@@ -356,37 +415,60 @@ bool GnuLdDriver::parse(int argc, const char *argv[],
       break;
 
     case OPT_no_whole_archive:
-      isWholeArchive = false;
+      attributes.setWholeArchive(false);
       break;
 
     case OPT_whole_archive:
-      isWholeArchive = true;
+      attributes.setWholeArchive(true);
       break;
 
     case OPT_as_needed:
-      asNeeded = true;
+      attributes.setAsNeeded(true);
       break;
 
     case OPT_no_as_needed:
-      asNeeded = false;
+      attributes.setAsNeeded(false);
       break;
 
+    case OPT_defsym: {
+      StringRef sym, target;
+      uint64_t addr;
+      if (parseDefsymAsAbsolute(inputArg->getValue(), sym, addr)) {
+        ctx->addInitialAbsoluteSymbol(sym, addr);
+      } else if (parseDefsymAsAlias(inputArg->getValue(), sym, target)) {
+        ctx->addAlias(sym, target);
+      } else {
+        diagnostics << "invalid --defsym: " << inputArg->getValue() << "\n";
+        return false;
+      }
+      break;
+    }
+
     case OPT_start_group: {
-      std::unique_ptr<InputElement> controlStart(new ELFGroup(*ctx, index++));
-      controlNodeStack.push(controlStart.get());
-      dyn_cast<ControlNode>(controlNodeStack.top())->processControlEnter();
-      inputGraph->addInputElement(std::move(controlStart));
+      std::unique_ptr<Group> group(new Group());
+      groupStack.push(group.get());
+      inputGraph->addInputElement(std::move(group));
       break;
     }
 
     case OPT_end_group:
-      dyn_cast<ControlNode>(controlNodeStack.top())->processControlExit();
-      controlNodeStack.pop();
+      groupStack.pop();
       break;
+
+    case OPT_z: {
+      StringRef extOpt = inputArg->getValue();
+      if (extOpt == "muldefs")
+        ctx->setAllowDuplicates(true);
+      else
+        diagnostics << "warning: ignoring unknown argument for -z: " << extOpt
+                    << "\n";
+      break;
+    }
 
     case OPT_INPUT:
     case OPT_l: {
       bool isDashlPrefix = (inputArg->getOption().getID() == OPT_l);
+      attributes.setDashlPrefix(isDashlPrefix);
       bool isELFFileNode = true;
       StringRef userPath = inputArg->getValue();
       std::string resolvedInputPath = userPath;
@@ -404,34 +486,32 @@ bool GnuLdDriver::parse(int argc, const char *argv[],
       // FIXME: Calling getFileMagic() is expensive.  It would be better to
       // wire up the LdScript parser into the registry.
       llvm::sys::fs::file_magic magic = llvm::sys::fs::file_magic::unknown;
-      error_code ec = getFileMagic(*ctx, resolvedInputPath, magic);
+      std::error_code ec = getFileMagic(*ctx, resolvedInputPath, magic);
       if (ec) {
         diagnostics << "lld: unknown input file format for file " << userPath
                     << "\n";
         return false;
       }
-      if ((!userPath.endswith(".objtxt")) &&
-          (magic == llvm::sys::fs::file_magic::unknown))
+      if (!userPath.endswith(".objtxt") &&
+          magic == llvm::sys::fs::file_magic::unknown)
         isELFFileNode = false;
       FileNode *inputNode = nullptr;
-      if (isELFFileNode)
-        inputNode = new ELFFileNode(*ctx, userPath, index++, isWholeArchive,
-                                    asNeeded, isDashlPrefix);
-      else {
-        inputNode = new ELFGNULdScript(*ctx, resolvedInputPath, index++);
+      if (isELFFileNode) {
+        inputNode = new ELFFileNode(*ctx, userPath, attributes);
+      } else {
+        inputNode = new ELFGNULdScript(*ctx, resolvedInputPath);
         ec = inputNode->parse(*ctx, diagnostics);
         if (ec) {
-          diagnostics << userPath << ": Error parsing linker script"
-                      << "\n";
+          diagnostics << userPath << ": Error parsing linker script\n";
           return false;
         }
       }
       std::unique_ptr<InputElement> inputFile(inputNode);
-      if (controlNodeStack.empty())
+      if (groupStack.empty()) {
         inputGraph->addInputElement(std::move(inputFile));
-      else
-        dyn_cast<ControlNode>(controlNodeStack.top())
-            ->processInputElement(std::move(inputFile));
+      } else {
+        groupStack.top()->addFile(std::move(inputFile));
+      }
       break;
     }
 
@@ -488,13 +568,8 @@ bool GnuLdDriver::parse(int argc, const char *argv[],
   if (!ctx->validate(diagnostics))
     return false;
 
-  // Normalize the InputGraph.
-  inputGraph->normalize();
-
   ctx->setInputGraph(std::move(inputGraph));
-
   context.swap(ctx);
-
   return true;
 }
 

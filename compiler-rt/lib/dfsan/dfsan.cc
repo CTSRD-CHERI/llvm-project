@@ -169,8 +169,20 @@ dfsan_label dfsan_create_label(const char *desc, void *userdata) {
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __dfsan_set_label(dfsan_label label, void *addr, uptr size) {
-  for (dfsan_label *labelp = shadow_for(addr); size != 0; --size, ++labelp)
+  for (dfsan_label *labelp = shadow_for(addr); size != 0; --size, ++labelp) {
+    // Don't write the label if it is already the value we need it to be.
+    // In a program where most addresses are not labeled, it is common that
+    // a page of shadow memory is entirely zeroed.  The Linux copy-on-write
+    // implementation will share all of the zeroed pages, making a copy of a
+    // page when any value is written.  The un-sharing will happen even if
+    // the value written does not change the value in memory.  Avoiding the
+    // write when both |label| and |*labelp| are zero dramatically reduces
+    // the amount of real memory used by large programs.
+    if (label == *labelp)
+      continue;
+
     *labelp = label;
+  }
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
@@ -230,14 +242,22 @@ dfsan_has_label_with_desc(dfsan_label label, const char *desc) {
   }
 }
 
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE uptr
+dfsan_get_label_count(void) {
+  dfsan_label max_label_allocated =
+      atomic_load(&__dfsan_last_label, memory_order_relaxed);
+
+  return static_cast<uptr>(max_label_allocated);
+}
+
 static void InitializeFlags(Flags &f, const char *env) {
   f.warn_unimplemented = true;
   f.warn_nonzero_labels = false;
   f.strict_data_dependencies = true;
 
-  ParseFlag(env, &f.warn_unimplemented, "warn_unimplemented");
-  ParseFlag(env, &f.warn_nonzero_labels, "warn_nonzero_labels");
-  ParseFlag(env, &f.strict_data_dependencies, "strict_data_dependencies");
+  ParseFlag(env, &f.warn_unimplemented, "warn_unimplemented", "");
+  ParseFlag(env, &f.warn_nonzero_labels, "warn_nonzero_labels", "");
+  ParseFlag(env, &f.strict_data_dependencies, "strict_data_dependencies", "");
 }
 
 #ifdef DFSAN_NOLIBC
@@ -261,7 +281,7 @@ static void dfsan_init(int argc, char **argv, char **envp) {
   InitializeInterceptors();
 }
 
-#ifndef DFSAN_NOLIBC
+#if !defined(DFSAN_NOLIBC) && SANITIZER_CAN_USE_PREINIT_ARRAY
 __attribute__((section(".preinit_array"), used))
 static void (*dfsan_init_ptr)(int, char **, char **) = dfsan_init;
 #endif

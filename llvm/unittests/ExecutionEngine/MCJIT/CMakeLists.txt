@@ -2,7 +2,9 @@ set(LLVM_LINK_COMPONENTS
   Analysis
   Core
   ExecutionEngine
+  IPO
   JIT
+  MC
   MCJIT
   ScalarOpts
   Support

@@ -5,9 +5,6 @@
 // RUN: %clang -### -c -integrated-as -Wa,-L %s 2>&1 | FileCheck --check-prefix=OPT_L %s
 // OPT_L: msave-temp-labels
 
-// RUN: not %clang -c -integrated-as -Wa,--compress-debug-sections %s 2>&1 | FileCheck --check-prefix=INVALID %s
-// INVALID: error: unsupported argument '--compress-debug-sections' to option 'Wa,'
-
 // RUN: %clang -### -target x86_64-linux-gnu -c -integrated-as %s -fsanitize=address 2>&1 %s | FileCheck --check-prefix=SANITIZE %s
 // SANITIZE: argument unused during compilation: '-fsanitize=address'
 
@@ -31,3 +28,18 @@
 // RUN: %clang -### -c -integrated-as %s -Xassembler -Ifoo_dir 2>&1 | FileCheck --check-prefix=XA_INCLUDE2 %s
 // XA_INCLUDE2: cc1as
 // XA_INCLUDE2: "-Ifoo_dir"
+
+// RUN: %clang -### -c -integrated-as %s -gdwarf-2 2>&1 | FileCheck --check-prefix=DWARF2 %s
+// DWARF2: "-g" "-gdwarf-2"
+
+// RUN: %clang -### -c -integrated-as %s -gdwarf-3 2>&1 | FileCheck --check-prefix=DWARF3 %s
+// DWARF3: "-g" "-gdwarf-3"
+
+// RUN: %clang -### -c -integrated-as %s -gdwarf-4 2>&1 | FileCheck --check-prefix=DWARF4 %s
+// DWARF4: "-g" "-gdwarf-4"
+
+// RUN: %clang -### -c -integrated-as %s -Xassembler -gdwarf-2 2>&1 | FileCheck --check-prefix=DWARF2XASSEMBLER %s
+// DWARF2XASSEMBLER: "-gdwarf-2"
+
+// RUN: %clang -### -c -integrated-as %s -Wa,-gdwarf-2 2>&1 | FileCheck --check-prefix=DWARF2WA %s
+// DWARF2WA: "-gdwarf-2"

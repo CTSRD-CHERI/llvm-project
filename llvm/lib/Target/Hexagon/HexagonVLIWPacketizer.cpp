@@ -16,7 +16,6 @@
 // prune the dependence.
 //
 //===----------------------------------------------------------------------===//
-#define DEBUG_TYPE "packets"
 #include "llvm/CodeGen/DFAPacketizer.h"
 #include "Hexagon.h"
 #include "HexagonMachineFunctionInfo.h"
@@ -51,6 +50,8 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "packets"
+
 static cl::opt<bool> PacketizeVolatiles("hexagon-packetize-volatiles",
       cl::ZeroOrMore, cl::Hidden, cl::init(true),
       cl::desc("Allow non-solo packetization of volatile memory references"));
@@ -69,7 +70,7 @@ namespace {
       initializeHexagonPacketizerPass(*PassRegistry::getPassRegistry());
     }
 
-    void getAnalysisUsage(AnalysisUsage &AU) const {
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.setPreservesCFG();
       AU.addRequired<MachineDominatorTree>();
       AU.addRequired<MachineBranchProbabilityInfo>();
@@ -79,11 +80,11 @@ namespace {
       MachineFunctionPass::getAnalysisUsage(AU);
     }
 
-    const char *getPassName() const {
+    const char *getPassName() const override {
       return "Hexagon Packetizer";
     }
 
-    bool runOnMachineFunction(MachineFunction &Fn);
+    bool runOnMachineFunction(MachineFunction &Fn) override;
   };
   char HexagonPacketizer::ID = 0;
 
@@ -117,28 +118,28 @@ namespace {
   public:
     // Ctor.
     HexagonPacketizerList(MachineFunction &MF, MachineLoopInfo &MLI,
-                          MachineDominatorTree &MDT,
                           const MachineBranchProbabilityInfo *MBPI);
 
     // initPacketizerState - initialize some internal flags.
-    void initPacketizerState();
+    void initPacketizerState() override;
 
     // ignorePseudoInstruction - Ignore bundling of pseudo instructions.
-    bool ignorePseudoInstruction(MachineInstr *MI, MachineBasicBlock *MBB);
+    bool ignorePseudoInstruction(MachineInstr *MI,
+                                 MachineBasicBlock *MBB) override;
 
     // isSoloInstruction - return true if instruction MI can not be packetized
     // with any other instruction, which means that MI itself is a packet.
-    bool isSoloInstruction(MachineInstr *MI);
+    bool isSoloInstruction(MachineInstr *MI) override;
 
     // isLegalToPacketizeTogether - Is it legal to packetize SUI and SUJ
     // together.
-    bool isLegalToPacketizeTogether(SUnit *SUI, SUnit *SUJ);
+    bool isLegalToPacketizeTogether(SUnit *SUI, SUnit *SUJ) override;
 
     // isLegalToPruneDependencies - Is it legal to prune dependece between SUI
     // and SUJ.
-    bool isLegalToPruneDependencies(SUnit *SUI, SUnit *SUJ);
+    bool isLegalToPruneDependencies(SUnit *SUI, SUnit *SUJ) override;
 
-    MachineBasicBlock::iterator addToPacket(MachineInstr *MI);
+    MachineBasicBlock::iterator addToPacket(MachineInstr *MI) override;
   private:
     bool IsCallDependent(MachineInstr* MI, SDep::Kind DepType, unsigned DepReg);
     bool PromoteToDotNew(MachineInstr* MI, SDep::Kind DepType,
@@ -182,20 +183,19 @@ INITIALIZE_PASS_END(HexagonPacketizer, "packets", "Hexagon Packetizer",
 
 // HexagonPacketizerList Ctor.
 HexagonPacketizerList::HexagonPacketizerList(
-  MachineFunction &MF, MachineLoopInfo &MLI,MachineDominatorTree &MDT,
-  const MachineBranchProbabilityInfo *MBPI)
-  : VLIWPacketizerList(MF, MLI, MDT, true){
+    MachineFunction &MF, MachineLoopInfo &MLI,
+    const MachineBranchProbabilityInfo *MBPI)
+    : VLIWPacketizerList(MF, MLI, true) {
   this->MBPI = MBPI;
 }
 
 bool HexagonPacketizer::runOnMachineFunction(MachineFunction &Fn) {
-  const TargetInstrInfo *TII = Fn.getTarget().getInstrInfo();
+  const TargetInstrInfo *TII = Fn.getSubtarget().getInstrInfo();
   MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
-  MachineDominatorTree &MDT = getAnalysis<MachineDominatorTree>();
   const MachineBranchProbabilityInfo *MBPI =
     &getAnalysis<MachineBranchProbabilityInfo>();
   // Instantiate the packetizer.
-  HexagonPacketizerList Packetizer(Fn, MLI, MDT, MBPI);
+  HexagonPacketizerList Packetizer(Fn, MLI, MBPI);
 
   // DFA state table should not be empty.
   assert(Packetizer.getResourceTracker() && "Empty DFA table!");
@@ -237,20 +237,20 @@ bool HexagonPacketizer::runOnMachineFunction(MachineFunction &Fn) {
       // instruction stream until we find the nearest boundary.
       MachineBasicBlock::iterator I = RegionEnd;
       for(;I != MBB->begin(); --I, --RemainingCount) {
-        if (TII->isSchedulingBoundary(llvm::prior(I), MBB, Fn))
+        if (TII->isSchedulingBoundary(std::prev(I), MBB, Fn))
           break;
       }
       I = MBB->begin();
 
       // Skip empty scheduling regions.
       if (I == RegionEnd) {
-        RegionEnd = llvm::prior(RegionEnd);
+        RegionEnd = std::prev(RegionEnd);
         --RemainingCount;
         continue;
       }
       // Skip regions with one instruction.
-      if (I == llvm::prior(RegionEnd)) {
-        RegionEnd = llvm::prior(RegionEnd);
+      if (I == std::prev(RegionEnd)) {
+        RegionEnd = std::prev(RegionEnd);
         continue;
       }
 
@@ -322,8 +322,8 @@ bool HexagonPacketizerList::IsCallDependent(MachineInstr* MI,
                                           unsigned DepReg) {
 
   const HexagonInstrInfo *QII = (const HexagonInstrInfo *) TII;
-  const HexagonRegisterInfo* QRI =
-              (const HexagonRegisterInfo *) TM.getRegisterInfo();
+  const HexagonRegisterInfo *QRI =
+      (const HexagonRegisterInfo *)TM.getSubtargetImpl()->getRegisterInfo();
 
   // Check for lr dependence
   if (DepReg == QRI->getRARegister()) {
@@ -390,7 +390,7 @@ static bool IsLoopN(MachineInstr *MI) {
 /// callee-saved register.
 static bool DoesModifyCalleeSavedReg(MachineInstr *MI,
                                      const TargetRegisterInfo *TRI) {
-  for (const uint16_t *CSR = TRI->getCalleeSavedRegs(); *CSR; ++CSR) {
+  for (const MCPhysReg *CSR = TRI->getCalleeSavedRegs(); *CSR; ++CSR) {
     unsigned CalleeSavedReg = *CSR;
     if (MI->modifiesRegister(CalleeSavedReg, TRI))
       return true;
@@ -547,8 +547,8 @@ bool HexagonPacketizerList::CanPromoteToNewValueStore( MachineInstr *MI,
       GetStoreValueOperand(MI).getReg() != DepReg)
     return false;
 
-  const HexagonRegisterInfo* QRI =
-                            (const HexagonRegisterInfo *) TM.getRegisterInfo();
+  const HexagonRegisterInfo *QRI =
+      (const HexagonRegisterInfo *)TM.getSubtargetImpl()->getRegisterInfo();
   const MCInstrDesc& MCID = PacketMI->getDesc();
   // first operand is always the result
 
@@ -603,7 +603,7 @@ bool HexagonPacketizerList::CanPromoteToNewValueStore( MachineInstr *MI,
     // evaluate identically
     unsigned predRegNumSrc = 0;
     unsigned predRegNumDst = 0;
-    const TargetRegisterClass* predRegClass = NULL;
+    const TargetRegisterClass* predRegClass = nullptr;
 
     // Get predicate register used in the source instruction
     for(unsigned opNum = 0; opNum < PacketMI->getNumOperands(); opNum++) {
@@ -722,8 +722,8 @@ bool HexagonPacketizerList::CanPromoteToNewValue( MachineInstr *MI,
 {
 
   const HexagonInstrInfo *QII = (const HexagonInstrInfo *) TII;
-  const HexagonRegisterInfo* QRI =
-                            (const HexagonRegisterInfo *) TM.getRegisterInfo();
+  const HexagonRegisterInfo *QRI =
+      (const HexagonRegisterInfo *)TM.getSubtargetImpl()->getRegisterInfo();
   if (!QRI->Subtarget.hasV4TOps() ||
       !QII->mayBeNewStore(MI))
     return false;
@@ -1005,8 +1005,8 @@ bool HexagonPacketizerList::isLegalToPacketizeTogether(SUnit *SUI, SUnit *SUJ) {
   MachineBasicBlock::iterator II = I;
 
   const unsigned FrameSize = MF.getFrameInfo()->getStackSize();
-  const HexagonRegisterInfo* QRI =
-                      (const HexagonRegisterInfo *) TM.getRegisterInfo();
+  const HexagonRegisterInfo *QRI =
+      (const HexagonRegisterInfo *)TM.getSubtargetImpl()->getRegisterInfo();
   const HexagonInstrInfo *QII = (const HexagonInstrInfo *) TII;
 
   // Inline asm cannot go in the packet.
@@ -1172,7 +1172,7 @@ bool HexagonPacketizerList::isLegalToPacketizeTogether(SUnit *SUI, SUnit *SUJ) {
       // of that (IsCallDependent) function. Bug 6216 is opened for this.
       //
       unsigned DepReg = 0;
-      const TargetRegisterClass* RC = NULL;
+      const TargetRegisterClass* RC = nullptr;
       if (DepType == SDep::Data) {
         DepReg = SUJ->Succs[i].getReg();
         RC = QRI->getMinimalPhysRegClass(DepReg);

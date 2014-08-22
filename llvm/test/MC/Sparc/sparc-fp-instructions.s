@@ -64,6 +64,12 @@
         faddd %f0, %f4, %f8
         faddq %f0, %f4, %f8
 
+        ! make sure we can handle V9 double registers and their aliased quad registers.
+        ! CHECK: faddd %f32, %f34, %f62           ! encoding: [0xbf,0xa0,0x48,0x43]
+        ! CHECK: faddq %f32, %f36, %f60           ! encoding: [0xbb,0xa0,0x48,0x65]
+        faddd %f32, %f34, %f62
+        faddq %f32, %f36, %f60
+
         ! CHECK: fsubs %f0, %f4, %f8             ! encoding: [0x91,0xa0,0x08,0xa4]
         ! CHECK: fsubd %f0, %f4, %f8             ! encoding: [0x91,0xa0,0x08,0xc4]
         ! CHECK: fsubq %f0, %f4, %f8             ! encoding: [0x91,0xa0,0x08,0xe4]
@@ -96,6 +102,27 @@
         fcmps %f0, %f4
         fcmpd %f0, %f4
         fcmpq %f0, %f4
+
+        ! CHECK: fcmpes %f0, %f4                  ! encoding: [0x81,0xa8,0x0a,0xa4]
+        ! CHECK: fcmped %f0, %f4                  ! encoding: [0x81,0xa8,0x0a,0xc4]
+        ! CHECK: fcmpeq %f0, %f4                  ! encoding: [0x81,0xa8,0x0a,0xe4]
+        fcmpes %f0, %f4
+        fcmped %f0, %f4
+        fcmpeq %f0, %f4
+
+        ! CHECK: fcmps %fcc2, %f0, %f4                  ! encoding: [0x85,0xa8,0x0a,0x24]
+        ! CHECK: fcmpd %fcc2, %f0, %f4                  ! encoding: [0x85,0xa8,0x0a,0x44]
+        ! CHECK: fcmpq %fcc2, %f0, %f4                  ! encoding: [0x85,0xa8,0x0a,0x64]
+        fcmps %fcc2, %f0, %f4
+        fcmpd %fcc2, %f0, %f4
+        fcmpq %fcc2, %f0, %f4
+
+        ! CHECK: fcmpes %fcc2, %f0, %f4                  ! encoding: [0x85,0xa8,0x0a,0xa4]
+        ! CHECK: fcmped %fcc2, %f0, %f4                  ! encoding: [0x85,0xa8,0x0a,0xc4]
+        ! CHECK: fcmpeq %fcc2, %f0, %f4                  ! encoding: [0x85,0xa8,0x0a,0xe4]
+        fcmpes %fcc2, %f0, %f4
+        fcmped %fcc2, %f0, %f4
+        fcmpeq %fcc2, %f0, %f4
 
         ! CHECK: fxtos %f0, %f4                  ! encoding: [0x89,0xa0,0x10,0x80]
         ! CHECK: fxtod %f0, %f4                  ! encoding: [0x89,0xa0,0x11,0x00]

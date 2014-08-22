@@ -87,7 +87,8 @@ start with ``err_``, ``warn_``, ``ext_`` to encode the severity into the name.
 Since the enum is referenced in the C++ code that produces the diagnostic, it
 is somewhat useful for it to be reasonably short.
 
-The severity of the diagnostic comes from the set {``NOTE``, ``WARNING``,
+The severity of the diagnostic comes from the set {``NOTE``, ``REMARK``,
+``WARNING``,
 ``EXTENSION``, ``EXTWARN``, ``ERROR``}.  The ``ERROR`` severity is used for
 diagnostics indicating the program is never acceptable under any circumstances.
 When an error is emitted, the AST for the input code may not be fully built.
@@ -97,11 +98,13 @@ represent them in the AST, but we produce diagnostics to tell the user their
 code is non-portable.  The difference is that the former are ignored by
 default, and the later warn by default.  The ``WARNING`` severity is used for
 constructs that are valid in the currently selected source language but that
-are dubious in some way.  The ``NOTE`` level is used to staple more information
-onto previous diagnostics.
+are dubious in some way.  The ``REMARK`` severity provides generic information
+about the compilation that is not necessarily related to any dubious code.  The
+``NOTE`` level is used to staple more information onto previous diagnostics.
 
 These *severities* are mapped into a smaller set (the ``Diagnostic::Level``
-enum, {``Ignored``, ``Note``, ``Warning``, ``Error``, ``Fatal``}) of output
+enum, {``Ignored``, ``Note``, ``Remark``, ``Warning``, ``Error``, ``Fatal``}) of
+output
 *levels* by the diagnostics subsystem based on various configuration options.
 Clang internally supports a fully fine grained mapping mechanism that allows
 you to map almost any diagnostic to the output level that you want.  The only
@@ -1713,9 +1716,34 @@ For instance, ``AttributeList::AT_Interrupt`` is the shared parsed attribute
 kind, but ARMInterruptAttr and MSP430InterruptAttr are the semantic attributes 
 generated.
 
+By default, when declarations are merging attributes, an attribute will not be 
+duplicated. However, if an attribute can be duplicated during this merging 
+stage, set ``DuplicatesAllowedWhileMerging`` to ``1``, and the attribute will 
+be merged.
+
+By default, attribute arguments are parsed in an evaluated context. If the 
+arguments for an attribute should be parsed in an unevaluated context (akin to 
+the way the argument to a ``sizeof`` expression is parsed), you can set 
+``ParseArgumentsAsUnevaluated`` to ``1``.
+
 If additional functionality is desired for the semantic form of the attribute, 
 the ``AdditionalMembers`` field specifies code to be copied verbatim into the 
 semantic attribute class object.
+
+All attributes must have one or more form of documentation, which is provided 
+in the ``Documentation`` list. Generally, the documentation for an attribute 
+is a stand-alone definition in `include/clang/Basic/AttrDocs.td 
+<http://llvm.org/viewvc/llvm-project/cfe/trunk/include/clang/Basic/AttdDocs.td?view=markup>`_
+that is named after the attribute being documented. Each documentation element 
+is given a ``Category`` (variable, function, or type) and ``Content``. A single 
+attribute may contain multiple documentation elements for distinct categories. 
+For instance, an attribute which can appertain to both function and types (such 
+as a calling convention attribute), should contain two documentation elements. 
+The ``Content`` for an attribute uses reStructuredText (RST) syntax.
+
+If an attribute is used internally by the compiler, but is not written by users 
+(such as attributes with an empty spelling list), it can use the 
+``Undocumented`` documentation element.
 
 Boilerplate
 ^^^^^^^^^^^
@@ -1824,13 +1852,14 @@ are similar.
    * Make sure that ``children()`` visits all of the subexpressions.  This is
      important for a number of features (e.g., IDE support, C++ variadic
      templates).  If you have sub-types, you'll also need to visit those
-     sub-types in the ``RecursiveASTVisitor``.
-   * Add printing support (``StmtPrinter.cpp``) and dumping support
-     (``StmtDumper.cpp``) for your expression.
+     sub-types in ``RecursiveASTVisitor`` and ``DataRecursiveASTVisitor``.
+   * Add printing support (``StmtPrinter.cpp``) for your expression.
    * Add profiling support (``StmtProfile.cpp``) for your AST node, noting the
      distinguishing (non-source location) characteristics of an instance of
      your expression.  Omitting this step will lead to hard-to-diagnose
      failures regarding matching of template declarations.
+   * Add serialization support (``ASTReaderStmt.cpp``, ``ASTWriterStmt.cpp``)
+     for your AST node.
 
 #. Teach semantic analysis to build your AST node.  At this point, you can wire
    up your ``Sema::BuildXXX`` function to actually create your AST.  A few

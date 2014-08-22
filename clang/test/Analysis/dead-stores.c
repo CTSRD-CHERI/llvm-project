@@ -11,7 +11,7 @@ void f2(void *b) {
  char *c = (char*)b; // no-warning
  char *d = b+1; // expected-warning {{never read}} expected-warning{{unused variable 'd'}}
  printf("%s", c); // expected-warning{{implicitly declaring library function 'printf' with type 'int (const char *, ...)'}} \
- // expected-note{{please include the header <stdio.h> or explicitly provide a declaration for 'printf'}}
+ // expected-note{{include the header <stdio.h> or explicitly provide a declaration for 'printf'}}
 }
 
 int f();
@@ -480,7 +480,7 @@ int f26_nestedblocks() {
 // placed within the increment code of for loops.
 void rdar8014335() {
   for (int i = 0 ; i != 10 ; ({ break; })) {
-    for ( ; ; ({ ++i; break; })) ;
+    for ( ; ; ({ ++i; break; })) ; // expected-warning {{'break' is bound to current loop, GCC binds it to the enclosing loop}}
     // Note that the next value stored to 'i' is never executed
     // because the next statement to be executed is the 'break'
     // in the increment code of the first loop.

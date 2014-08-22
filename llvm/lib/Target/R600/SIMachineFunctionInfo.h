@@ -12,8 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 
-#ifndef SIMACHINEFUNCTIONINFO_H_
-#define SIMACHINEFUNCTIONINFO_H_
+#ifndef LLVM_LIB_TARGET_R600_SIMACHINEFUNCTIONINFO_H
+#define LLVM_LIB_TARGET_R600_SIMACHINEFUNCTIONINFO_H
 
 #include "AMDGPUMachineFunction.h"
 #include <map>
@@ -25,7 +25,7 @@ class MachineRegisterInfo;
 /// This class keeps track of the SPI_SP_INPUT_ADDR config register, which
 /// tells the hardware which interpolation parameters to load.
 class SIMachineFunctionInfo : public AMDGPUMachineFunction {
-  virtual void anchor();
+  void anchor() override;
 public:
 
   struct SpilledReg {
@@ -43,7 +43,12 @@ public:
   public:
     unsigned LaneVGPR;
     RegSpillTracker() : CurrentLane(0), SpilledRegisters(), LaneVGPR(0) { }
-    unsigned getNextLane(MachineRegisterInfo &MRI);
+    /// \p NumRegs The number of consecutive registers what need to be spilled.
+    ///            This function will ensure that all registers are stored in
+    ///            the same VGPR.
+    /// \returns The lane to be used for storing the first register.
+    unsigned reserveLanes(MachineRegisterInfo &MRI, MachineFunction *MF,
+                          unsigned NumRegs = 1);
     void addSpilledReg(unsigned FrameIndex, unsigned Reg, int Lane = -1);
     const SpilledReg& getSpilledReg(unsigned FrameIndex);
     bool programSpillsRegisters() { return !SpilledRegisters.empty(); }
@@ -54,9 +59,10 @@ public:
   SIMachineFunctionInfo(const MachineFunction &MF);
   unsigned PSInputAddr;
   struct RegSpillTracker SpillTracker;
+  unsigned NumUserSGPRs;
 };
 
 } // End namespace llvm
 
 
-#endif //_SIMACHINEFUNCTIONINFO_H_
+#endif

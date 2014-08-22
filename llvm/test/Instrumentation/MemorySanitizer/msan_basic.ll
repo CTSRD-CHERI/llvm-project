@@ -249,13 +249,16 @@ entry:
 }
 
 ; CHECK: @Select
-; CHECK: select
-; CHECK-NEXT: sext i1 {{.*}} to i32
-; CHECK-NEXT: or i32
-; CHECK-NEXT: select
-; CHECK-ORIGINS: select
-; CHECK-ORIGINS: select
-; CHECK: select
+; CHECK: select i1
+; CHECK-DAG: or i32
+; CHECK-DAG: xor i32
+; CHECK: or i32
+; CHECK-DAG: select i1
+; CHECK-ORIGINS-DAG: select
+; CHECK-ORIGINS-DAG: select
+; CHECK-DAG: select i1
+; CHECK: store i32{{.*}}@__msan_retval_tls
+; CHECK-ORIGINS: store i32{{.*}}@__msan_retval_origin_tls
 ; CHECK: ret i32
 
 
@@ -271,17 +274,16 @@ entry:
 
 ; CHECK: @SelectVector
 ; CHECK: select <8 x i1>
-; CHECK-NEXT: sext <8 x i1> {{.*}} to <8 x i16>
-; CHECK-NEXT: or <8 x i16>
-; CHECK-ORIGINS: bitcast <8 x i1> {{.*}} to i8
-; CHECK-ORIGINS: icmp ne i8 {{.*}}, 0
-; CHECK-ORIGINS: bitcast <8 x i1> {{.*}} to i8
-; CHECK-ORIGINS: icmp ne i8 {{.*}}, 0
-; CHECK-ORIGINS: select i1
-; CHECK-ORIGINS: select i1
-; CHECK: select <8 x i1>
+; CHECK-DAG: or <8 x i16>
+; CHECK-DAG: xor <8 x i16>
+; CHECK: or <8 x i16>
+; CHECK-DAG: select <8 x i1>
+; CHECK-ORIGINS-DAG: select
+; CHECK-ORIGINS-DAG: select
+; CHECK-DAG: select <8 x i1>
+; CHECK: store <8 x i16>{{.*}}@__msan_retval_tls
+; CHECK-ORIGINS: store i32{{.*}}@__msan_retval_origin_tls
 ; CHECK: ret <8 x i16>
-
 
 
 ; Check that we propagate origin for "select" with scalar condition and vector
@@ -296,12 +298,13 @@ entry:
 
 ; CHECK: @SelectVector2
 ; CHECK: select i1
-; CHECK: sext i1 {{.*}} to i128
-; CHECK: bitcast i128 {{.*}} to <8 x i16>
+; CHECK-DAG: or <8 x i16>
+; CHECK-DAG: xor <8 x i16>
 ; CHECK: or <8 x i16>
-; CHECK-ORIGINS: select i1
-; CHECK-ORIGINS: select i1
-; CHECK: select i1
+; CHECK-DAG: select i1
+; CHECK-ORIGINS-DAG: select i1
+; CHECK-ORIGINS-DAG: select i1
+; CHECK-DAG: select i1
 ; CHECK: ret <8 x i16>
 
 
@@ -318,6 +321,21 @@ entry:
 ; CHECK-ORIGINS: select i1
 ; CHECK-NEXT: select i1 {{.*}}, { i64, i64 }
 ; CHECK: ret { i64, i64 }
+
+
+define { i64*, double } @SelectStruct2(i1 zeroext %x, { i64*, double } %a, { i64*, double } %b) readnone sanitize_memory {
+entry:
+  %c = select i1 %x, { i64*, double } %a, { i64*, double } %b
+  ret { i64*, double } %c
+}
+
+; CHECK: @SelectStruct2
+; CHECK: select i1 {{.*}}, { i64, i64 }
+; CHECK-NEXT: select i1 {{.*}}, { i64, i64 } { i64 -1, i64 -1 }, { i64, i64 }
+; CHECK-ORIGINS: select i1
+; CHECK-ORIGINS: select i1
+; CHECK-NEXT: select i1 {{.*}}, { i64*, double }
+; CHECK: ret { i64*, double }
 
 
 define i8* @IntToPtr(i64 %x) nounwind uwtable readnone sanitize_memory {
@@ -633,7 +651,7 @@ define void @VACopy(i8* %p1, i8* %p2) nounwind uwtable sanitize_memory {
 declare void @llvm.va_start(i8*) nounwind
 
 ; Function Attrs: nounwind uwtable
-define void @VAStart(i32 %x, ...) {
+define void @VAStart(i32 %x, ...) sanitize_memory {
 entry:
   %x.addr = alloca i32, align 4
   %va = alloca [1 x %struct.__va_list_tag], align 16
@@ -665,7 +683,7 @@ entry:
 ; CHECK: ret void
 
 
-; Test that checks are omitted but shadow propagation is kept if
+; Test that checks are omitted and returned value is always initialized if
 ; sanitize_memory attribute is missing.
 
 define i32 @NoSanitizeMemory(i32 %x) uwtable {
@@ -685,9 +703,7 @@ declare void @bar()
 
 ; CHECK: @NoSanitizeMemory
 ; CHECK-NOT: @__msan_warning
-; CHECK: load i32* {{.*}} @__msan_param_tls
-; CHECK-NOT: @__msan_warning
-; CHECK: store {{.*}} @__msan_retval_tls
+; CHECK: store i32 0, {{.*}} @__msan_retval_tls
 ; CHECK-NOT: @__msan_warning
 ; CHECK: ret i32
 
@@ -724,6 +740,47 @@ declare i32 @NoSanitizeMemoryUndefHelper(i32 %x)
 ; CHECK: @NoSanitizeMemoryAlloca
 ; CHECK: store i32 0, i32* {{.*}} @__msan_param_tls
 ; CHECK: call i32 @NoSanitizeMemoryUndefHelper(i32 undef)
+; CHECK: ret i32
+
+
+; Test PHINode instrumentation in blacklisted functions
+
+define i32 @NoSanitizeMemoryPHI(i32 %x) {
+entry:
+  %tobool = icmp ne i32 %x, 0
+  br i1 %tobool, label %cond.true, label %cond.false
+
+cond.true:                                        ; preds = %entry
+  br label %cond.end
+
+cond.false:                                       ; preds = %entry
+  br label %cond.end
+
+cond.end:                                         ; preds = %cond.false, %cond.true
+  %cond = phi i32 [ undef, %cond.true ], [ undef, %cond.false ]
+  ret i32 %cond
+}
+
+; CHECK: [[A:%.*]] = phi i32 [ undef, %cond.true ], [ undef, %cond.false ]
+; CHECK: store i32 0, i32* bitcast {{.*}} @__msan_retval_tls
+; CHECK: ret i32 [[A]]
+
+
+; Test that there are no __msan_param_origin_tls stores when
+; argument shadow is a compile-time zero constant (which is always the case
+; in functions missing sanitize_memory attribute).
+
+define i32 @NoSanitizeMemoryParamTLS(i32* nocapture readonly %x) {
+entry:
+  %0 = load i32* %x, align 4
+  %call = tail call i32 @NoSanitizeMemoryParamTLSHelper(i32 %0)
+  ret i32 %call
+}
+
+declare i32 @NoSanitizeMemoryParamTLSHelper(i32 %x)
+
+; CHECK-LABEL: define i32 @NoSanitizeMemoryParamTLS(
+; CHECK-NOT: __msan_param_origin_tls
 ; CHECK: ret i32
 
 
@@ -765,3 +822,59 @@ entry:
 ; Second element app value
 ; CHECK-ORIGINS: insertvalue { i64, i32 } {{.*}}, i32 {{.*}}, 1
 ; CHECK-ORIGINS: ret { i64, i32 }
+
+
+; Test shadow propagation for aggregates passed through ellipsis.
+
+%struct.StructByVal = type { i32, i32, i32, i32 }
+
+declare void @VAArgStructFn(i32 %guard, ...)
+
+define void @VAArgStruct(%struct.StructByVal* nocapture %s) sanitize_memory {
+entry:
+  %agg.tmp2 = alloca %struct.StructByVal, align 8
+  %0 = bitcast %struct.StructByVal* %s to i8*
+  %agg.tmp.sroa.0.0..sroa_cast = bitcast %struct.StructByVal* %s to i64*
+  %agg.tmp.sroa.0.0.copyload = load i64* %agg.tmp.sroa.0.0..sroa_cast, align 4
+  %agg.tmp.sroa.2.0..sroa_idx = getelementptr inbounds %struct.StructByVal* %s, i64 0, i32 2
+  %agg.tmp.sroa.2.0..sroa_cast = bitcast i32* %agg.tmp.sroa.2.0..sroa_idx to i64*
+  %agg.tmp.sroa.2.0.copyload = load i64* %agg.tmp.sroa.2.0..sroa_cast, align 4
+  %1 = bitcast %struct.StructByVal* %agg.tmp2 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %1, i8* %0, i64 16, i32 4, i1 false)
+  call void (i32, ...)* @VAArgStructFn(i32 undef, i64 %agg.tmp.sroa.0.0.copyload, i64 %agg.tmp.sroa.2.0.copyload, i64 %agg.tmp.sroa.0.0.copyload, i64 %agg.tmp.sroa.2.0.copyload, %struct.StructByVal* byval align 8 %agg.tmp2)
+  ret void
+}
+
+; "undef" and the first 2 structs go to general purpose registers;
+; the third struct goes to the overflow area byval
+
+; CHECK: @VAArgStruct
+; undef
+; CHECK: store i32 -1, i32* {{.*}}@__msan_va_arg_tls {{.*}}, align 8
+; first struct through general purpose registers
+; CHECK: store i64 {{.*}}, i64* {{.*}}@__msan_va_arg_tls{{.*}}, i64 8){{.*}}, align 8
+; CHECK: store i64 {{.*}}, i64* {{.*}}@__msan_va_arg_tls{{.*}}, i64 16){{.*}}, align 8
+; second struct through general purpose registers
+; CHECK: store i64 {{.*}}, i64* {{.*}}@__msan_va_arg_tls{{.*}}, i64 24){{.*}}, align 8
+; CHECK: store i64 {{.*}}, i64* {{.*}}@__msan_va_arg_tls{{.*}}, i64 32){{.*}}, align 8
+; third struct through the overflow area byval
+; CHECK: ptrtoint %struct.StructByVal* {{.*}} to i64
+; CHECK: bitcast { i32, i32, i32, i32 }* {{.*}}@__msan_va_arg_tls {{.*}}, i64 176
+; CHECK: call void @llvm.memcpy.p0i8.p0i8.i64
+; CHECK: store i64 16, i64* @__msan_va_arg_overflow_size_tls
+; CHECK: call void (i32, ...)* @VAArgStructFn
+; CHECK: ret void
+
+declare i32 @InnerTailCall(i32 %a)
+
+define void @MismatchedReturnTypeTailCall(i32 %a) sanitize_memory {
+  %b = tail call i32 @InnerTailCall(i32 %a)
+  ret void
+}
+
+; We used to strip off the 'tail' modifier, but now that we unpoison return slot
+; shadow before the call, we don't need to anymore.
+
+; CHECK-LABEL: define void @MismatchedReturnTypeTailCall
+; CHECK: tail call i32 @InnerTailCall
+; CHECK: ret void

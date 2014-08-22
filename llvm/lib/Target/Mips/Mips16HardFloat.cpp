@@ -11,7 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "mips16-hard-float"
 #include "Mips16HardFloat.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Value.h"
@@ -19,6 +18,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <string>
+
+#define DEBUG_TYPE "mips16-hard-float"
 
 static void inlineAsmOut
   (LLVMContext &C, StringRef AsmString, BasicBlock *BB ) {
@@ -245,8 +246,8 @@ static void swapFPIntParams
 // Make sure that we know we already need a stub for this function.
 // Having called needsFPHelperFromSig
 //
-static void assureFPCallStub(Function &F, Module *M,  
-                             const MipsSubtarget &Subtarget){
+static void assureFPCallStub(Function &F, Module *M,
+                             const MipsSubtarget &Subtarget) {
   // for now we only need them for static relocation
   if (Subtarget.getRelocationModel() == Reloc::PIC_)
     return;
@@ -354,9 +355,8 @@ static const char *IntrinsicInline[] =
   };
 
 static bool isIntrinsicInline(Function *F) {
-  return std::binary_search(
-    IntrinsicInline, array_endof(IntrinsicInline),
-    F->getName());
+  return std::binary_search(std::begin(IntrinsicInline),
+                            std::end(IntrinsicInline), F->getName());
 }
 //
 // Returns of float, double and complex need to be handled with a helper
@@ -407,11 +407,11 @@ static bool fixupFPReturnAndCall
         CallInst::Create(F, Params, "", &Inst );
       } else if (const CallInst *CI = dyn_cast<CallInst>(I)) {
           const Value* V = CI->getCalledValue();
-          const Type* T = 0;
+          const Type* T = nullptr;
           if (V) T = V->getType();
-          const PointerType *PFT=0;
+          const PointerType *PFT=nullptr;
           if (T) PFT = dyn_cast<PointerType>(T);
-          const FunctionType *FT=0;
+          const FunctionType *FT=nullptr;
           if (PFT) FT = dyn_cast<FunctionType>(PFT->getElementType());
           Function *F_ =  CI->getCalledFunction();
           if (FT && needsFPReturnHelper(*FT) &&
@@ -500,8 +500,9 @@ namespace llvm {
 // declared via attributes as nomips16, we must:
 //    1) fixup all returns of float, double, single and double complex
 //       by calling a helper function before the actual return.
-//    2) generate helper functions (stubs) that can be called by mips32 functions
-//       that will move parameters passed normally passed in floating point
+//    2) generate helper functions (stubs) that can be called by mips32
+//       functions that will move parameters passed normally passed in
+//       floating point
 //       registers the soft float equivalents.
 //    3) in the case of static relocation, generate helper functions so that
 //       mips16 functions can call extern functions of unknown type (mips16 or

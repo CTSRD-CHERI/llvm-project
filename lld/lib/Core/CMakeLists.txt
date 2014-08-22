@@ -6,12 +6,11 @@ add_lld_library(lldCore
   File.cpp
   InputGraph.cpp
   LinkingContext.cpp
-  PassManager.cpp
   Resolver.cpp
   SymbolTable.cpp
   )
 
-target_link_libraries(lldCore 
+target_link_libraries(lldCore ${cmake_2_8_12_INTERFACE}
   lldNative
   lldYAML
   )

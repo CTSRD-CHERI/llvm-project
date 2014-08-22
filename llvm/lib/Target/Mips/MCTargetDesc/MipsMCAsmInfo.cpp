@@ -22,7 +22,6 @@ MipsMCAsmInfo::MipsMCAsmInfo(StringRef TT) {
   Triple TheTriple(TT);
   if ((TheTriple.getArch() == Triple::mips) ||
       (TheTriple.getArch() == Triple::mips64) ||
-      (TheTriple.getArch() == Triple::mips4) ||
       (TheTriple.getArch() == Triple::cheri))
     IsLittleEndian = false;
 
@@ -41,9 +40,8 @@ MipsMCAsmInfo::MipsMCAsmInfo(StringRef TT) {
   ZeroDirective               = "\t.space\t";
   GPRel32Directive            = "\t.gpword\t";
   GPRel64Directive            = "\t.gpdword\t";
-  DebugLabelSuffix            = "=.";
+  UseAssignmentForEHBegin = true;
   SupportsDebugInformation = true;
   ExceptionsType = ExceptionHandling::DwarfCFI;
-  HasLEB128 = true;
   DwarfRegNumForCFI = true;
 }

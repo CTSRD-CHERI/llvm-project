@@ -42,14 +42,13 @@
 #include "clang/Tooling/CompilationDatabase.h"
 #include "clang/Tooling/Refactoring.h"
 #include "clang/Tooling/Tooling.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/system_error.h"
+#include <system_error>
 
 using namespace clang;
 using namespace clang::ast_matchers;
@@ -179,16 +178,16 @@ cl::list<std::string> SourcePaths(
 
 int main(int argc, const char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal();
-  llvm::OwningPtr<CompilationDatabase> Compilations(
-    tooling::FixedCompilationDatabase::loadFromCommandLine(argc, argv));
+  std::unique_ptr<CompilationDatabase> Compilations(
+      tooling::FixedCompilationDatabase::loadFromCommandLine(argc, argv));
   cl::ParseCommandLineOptions(argc, argv);
   if (!Compilations) {
     std::string ErrorMessage;
-    Compilations.reset(
-           CompilationDatabase::loadFromDirectory(BuildPath, ErrorMessage));
+    Compilations =
+        CompilationDatabase::loadFromDirectory(BuildPath, ErrorMessage);
     if (!Compilations)
       llvm::report_fatal_error(ErrorMessage);
-    }
+  }
   tooling::RefactoringTool Tool(*Compilations, SourcePaths);
   ast_matchers::MatchFinder Finder;
   FixCStrCall Callback(&Tool.getReplacements());
@@ -234,5 +233,5 @@ int main(int argc, const char **argv) {
                   callee(methodDecl(hasName(StringCStrMethod))),
                   on(id("arg", expr())))))),
       &Callback);
-  return Tool.runAndSave(newFrontendActionFactory(&Finder));
+  return Tool.runAndSave(newFrontendActionFactory(&Finder).get());
 }

@@ -31,6 +31,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
@@ -108,7 +109,7 @@ int main(int argc, char **argv) {
     if (OutputFilename != "-") {
       std::string ErrInfo;
       out = new raw_fd_ostream(OutputFilename.c_str(), ErrInfo,
-                               sys::fs::F_Binary);
+                               sys::fs::F_None);
     }
   }
 
@@ -124,13 +125,13 @@ int main(int argc, char **argv) {
 
   //Read the BrainF program
   BrainF bf;
-  Module *mod = bf.parse(in, 65536, cf, Context); //64 KiB
+  std::unique_ptr<Module> Mod(bf.parse(in, 65536, cf, Context)); // 64 KiB
   if (in != &std::cin)
     delete in;
-  addMainFunction(mod);
+  addMainFunction(Mod.get());
 
   //Verify generated code
-  if (verifyModule(*mod)) {
+  if (verifyModule(*Mod)) {
     errs() << "Error: module failed verification.  This shouldn't happen.\n";
     abort();
   }
@@ -140,18 +141,18 @@ int main(int argc, char **argv) {
     InitializeNativeTarget();
 
     outs() << "------- Running JIT -------\n";
-    ExecutionEngine *ee = EngineBuilder(mod).create();
+    Module &M = *Mod;
+    ExecutionEngine *ee = EngineBuilder(std::move(Mod)).create();
     std::vector<GenericValue> args;
-    Function *brainf_func = mod->getFunction("brainf");
+    Function *brainf_func = M.getFunction("brainf");
     GenericValue gv = ee->runFunction(brainf_func, args);
   } else {
-    WriteBitcodeToFile(mod, *out);
+    WriteBitcodeToFile(Mod.get(), *out);
   }
 
   //Clean up
   if (out != &outs())
     delete out;
-  delete mod;
 
   llvm_shutdown();
 

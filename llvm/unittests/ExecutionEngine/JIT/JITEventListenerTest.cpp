@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ExecutionEngine/JITEventListener.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/CodeGen/MachineCodeInfo.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/IR/Instructions.h"
@@ -61,19 +60,20 @@ struct RecordingJITEventListener : public JITEventListener {
 
 class JITEventListenerTest : public testing::Test {
  protected:
-  JITEventListenerTest()
-      : M(new Module("module", getGlobalContext())),
-        EE(EngineBuilder(M)
-           .setEngineKind(EngineKind::JIT)
-           .create()) {
-  }
+   JITEventListenerTest() {
+     auto Owner = make_unique<Module>("module", getGlobalContext());
+     M = Owner.get();
+     EE.reset(EngineBuilder(std::move(Owner))
+                  .setEngineKind(EngineKind::JIT)
+                  .create());
+   }
 
   Module *M;
-  const OwningPtr<ExecutionEngine> EE;
+  std::unique_ptr<ExecutionEngine> EE;
 };
 
 // Tests on SystemZ disabled as we're running the old JIT
-#if !defined(__s390__)
+#if !defined(__s390__) && !defined(__aarch64__)
 Function *buildFunction(Module *M) {
   Function *Result = Function::Create(
       TypeBuilder<int32_t(int32_t), false>::get(getGlobalContext()),

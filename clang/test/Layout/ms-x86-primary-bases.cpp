@@ -1,6 +1,6 @@
-// RUN: %clang_cc1 -fno-rtti -emit-llvm-only -triple i686-pc-win32 -fdump-record-layouts -fsyntax-only -cxx-abi microsoft %s 2>/dev/null \
+// RUN: %clang_cc1 -fno-rtti -emit-llvm-only -triple i686-pc-win32 -fdump-record-layouts -fsyntax-only %s 2>/dev/null \
 // RUN:            | FileCheck %s
-// RUN: %clang_cc1 -fno-rtti -emit-llvm-only -triple x86_64-pc-win32 -fdump-record-layouts -fsyntax-only -cxx-abi microsoft %s 2>/dev/null \
+// RUN: %clang_cc1 -fno-rtti -emit-llvm-only -triple x86_64-pc-win32 -fdump-record-layouts -fsyntax-only %s 2>/dev/null \
 // RUN:            | FileCheck %s -check-prefix CHECK-X64
 
 extern "C" int printf(const char *fmt, ...);
@@ -170,11 +170,11 @@ struct AX : B0X, B1X { int a; AX() : a(0xf000000A) {} virtual void f() { printf(
 // CHECK: *** Dumping AST Record Layout
 // CHECK: *** Dumping AST Record Layout
 // CHECK-NEXT:    0 | struct AX
-// CHECK-NEXT:    8 |   struct B0X (base)
-// CHECK-NEXT:    8 |     int a
 // CHECK-NEXT:    0 |   struct B1X (primary base)
 // CHECK-NEXT:    0 |     (B1X vftable pointer)
 // CHECK-NEXT:    4 |     int a
+// CHECK-NEXT:    8 |   struct B0X (base)
+// CHECK-NEXT:    8 |     int a
 // CHECK-NEXT:   12 |   int a
 // CHECK-NEXT:      | [sizeof=16, align=4
 // CHECK-NEXT:      |  nvsize=16, nvalign=4]
@@ -182,11 +182,11 @@ struct AX : B0X, B1X { int a; AX() : a(0xf000000A) {} virtual void f() { printf(
 // CHECK-X64: *** Dumping AST Record Layout
 // CHECK-X64: *** Dumping AST Record Layout
 // CHECK-X64-NEXT:    0 | struct AX
-// CHECK-X64-NEXT:   16 |   struct B0X (base)
-// CHECK-X64-NEXT:   16 |     int a
 // CHECK-X64-NEXT:    0 |   struct B1X (primary base)
 // CHECK-X64-NEXT:    0 |     (B1X vftable pointer)
 // CHECK-X64-NEXT:    8 |     int a
+// CHECK-X64-NEXT:   16 |   struct B0X (base)
+// CHECK-X64-NEXT:   16 |     int a
 // CHECK-X64-NEXT:   20 |   int a
 // CHECK-X64-NEXT:      | [sizeof=24, align=8
 // CHECK-X64-NEXT:      |  nvsize=24, nvalign=8]
@@ -195,24 +195,24 @@ struct BX : B0X, B1X { int a; BX() : a(0xf000000B) {} virtual void g() { printf(
 
 // CHECK: *** Dumping AST Record Layout
 // CHECK-NEXT:    0 | struct BX
-// CHECK-NEXT:    8 |   struct B0X (base)
-// CHECK-NEXT:    8 |     int a
 // CHECK-NEXT:    0 |   struct B1X (primary base)
 // CHECK-NEXT:    0 |     (B1X vftable pointer)
 // CHECK-NEXT:    4 |     int a
+// CHECK-NEXT:    8 |   struct B0X (base)
+// CHECK-NEXT:    8 |     int a
 // CHECK-NEXT:   12 |   int a
 // CHECK-NEXT:      | [sizeof=16, align=4
 // CHECK-NEXT:      |  nvsize=16, nvalign=4]
-// CHECK-x64: *** Dumping AST Record Layout
-// CHECK-x64-NEXT:    0 | struct BX
-// CHECK-x64-NEXT:   16 |   struct B0X (base)
-// CHECK-x64-NEXT:   16 |     int a
-// CHECK-x64-NEXT:    0 |   struct B1X (primary base)
-// CHECK-x64-NEXT:    0 |     (B1X vftable pointer)
-// CHECK-x64-NEXT:    8 |     int a
-// CHECK-x64-NEXT:   24 |   int a
-// CHECK-x64-NEXT:      | [sizeof=24, align=8
-// CHECK-x64-NEXT:      |  nvsize=24, nvalign=8]
+// CHECK-X64: *** Dumping AST Record Layout
+// CHECK-X64-NEXT:    0 | struct BX
+// CHECK-X64-NEXT:    0 |   struct B1X (primary base)
+// CHECK-X64-NEXT:    0 |     (B1X vftable pointer)
+// CHECK-X64-NEXT:    8 |     int a
+// CHECK-X64-NEXT:   16 |   struct B0X (base)
+// CHECK-X64-NEXT:   16 |     int a
+// CHECK-X64-NEXT:   20 |   int a
+// CHECK-X64-NEXT:      | [sizeof=24, align=8
+// CHECK-X64-NEXT:      |  nvsize=24, nvalign=8]
 
 struct CX : B0X, B2X { int a; CX() : a(0xf000000C) {} virtual void g() { printf("C"); } };
 
@@ -231,7 +231,6 @@ struct CX : B0X, B2X { int a; CX() : a(0xf000000C) {} virtual void g() { printf(
 // CHECK-NEXT:   24 |     int a
 // CHECK-NEXT:      | [sizeof=28, align=4
 // CHECK-NEXT:      |  nvsize=20, nvalign=4]
-// CHECK-X64: *** Dumping AST Record Layout
 // CHECK-X64: *** Dumping AST Record Layout
 // CHECK-X64: *** Dumping AST Record Layout
 // CHECK-X64-NEXT:    0 | struct CX

@@ -1,16 +1,15 @@
 set(LLVM_LINK_COMPONENTS
   Option
   Support
-  TransformUtils
   )
 
 add_clang_library(clangDriver
   Action.cpp
-  CC1AsOptions.cpp
   Compilation.cpp
   Driver.cpp
   DriverOptions.cpp
   Job.cpp
+  Multilib.cpp
   Phases.cpp
   SanitizerArgs.cpp
   Tool.cpp
@@ -19,16 +18,10 @@ add_clang_library(clangDriver
   WindowsToolChain.cpp
   Tools.cpp
   Types.cpp
-  )
 
-add_dependencies(clangDriver
-  ClangAttrList
-  ClangCC1AsOptions
-  ClangDiagnosticCommon
-  ClangDiagnosticDriver
+  DEPENDS
   ClangDriverOptions
-  )
 
-target_link_libraries(clangDriver
+  LINK_LIBS
   clangBasic
   )

@@ -8,11 +8,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "lld/ReaderWriter/MachOLinkingContext.h"
-#include "GOTPass.hpp"
-#include "StubsPass.hpp"
-#include "ReferenceKinds.h"
+
+#include "ArchHandler.h"
+#include "File.h"
+#include "MachOPasses.h"
 
 #include "lld/Core/PassManager.h"
+#include "lld/Driver/DarwinInputGraph.h"
 #include "lld/ReaderWriter/Reader.h"
 #include "lld/ReaderWriter/Writer.h"
 #include "lld/Passes/LayoutPass.h"
@@ -20,10 +22,15 @@
 
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/MachO.h"
+#include "llvm/Support/Path.h"
 
-using lld::mach_o::KindHandler;
+#include <algorithm>
+
+using lld::mach_o::ArchHandler;
+using lld::mach_o::MachODylibFile;
 using namespace llvm::MachO;
 
 namespace lld {
@@ -119,21 +126,23 @@ uint32_t MachOLinkingContext::cpuSubtypeFromArch(Arch arch) {
 }
 
 MachOLinkingContext::MachOLinkingContext()
-    : _outputFileType(MH_EXECUTE), _outputFileTypeStatic(false),
+    : _outputMachOType(MH_EXECUTE), _outputMachOTypeStatic(false),
       _doNothing(false), _arch(arch_unknown), _os(OS::macOSX), _osMinVersion(0),
       _pageZeroSize(0), _pageSize(4096), _compatibilityVersion(0),
-      _currentVersion(0), _deadStrippableDylib(false), _kindHandler(nullptr) {}
+      _currentVersion(0), _deadStrippableDylib(false), _printAtoms(false),
+      _testingFileUsage(false), _keepPrivateExterns(false),
+      _archHandler(nullptr), _exportMode(ExportMode::globals) {}
 
 MachOLinkingContext::~MachOLinkingContext() {}
 
 void MachOLinkingContext::configure(HeaderFileType type, Arch arch, OS os,
                                     uint32_t minOSVersion) {
-  _outputFileType = type;
+  _outputMachOType = type;
   _arch = arch;
   _os = os;
   _osMinVersion = minOSVersion;
 
-  switch (_outputFileType) {
+  switch (_outputMachOType) {
   case llvm::MachO::MH_EXECUTE:
     // If targeting newer OS, use _main
     if (minOS("10.8", "6.0")) {
@@ -210,7 +219,7 @@ bool MachOLinkingContext::is64Bit() const {
 }
 
 bool MachOLinkingContext::outputTypeHasEntry() const {
-  switch (_outputFileType) {
+  switch (_outputMachOType) {
   case MH_EXECUTE:
   case MH_DYLINKER:
   case MH_PRELOAD:
@@ -219,6 +228,33 @@ bool MachOLinkingContext::outputTypeHasEntry() const {
     return false;
   }
 }
+
+bool MachOLinkingContext::needsStubsPass() const {
+  switch (_outputMachOType) {
+  case MH_EXECUTE:
+    return !_outputMachOTypeStatic;
+  case MH_DYLIB:
+  case MH_BUNDLE:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool MachOLinkingContext::needsGOTPass() const {
+  // Only x86_64 uses GOT pass but not in -r mode.
+  if (_arch != arch_x86_64)
+    return false;
+  return (_outputMachOType != MH_OBJECT);
+}
+
+
+StringRef MachOLinkingContext::binderSymbolName() const {
+  return archHandler().stubInfo().binderSymbolName;
+}
+
+
+
 
 bool MachOLinkingContext::minOS(StringRef mac, StringRef iOS) const {
   uint32_t parsedVersion;
@@ -239,16 +275,16 @@ bool MachOLinkingContext::minOS(StringRef mac, StringRef iOS) const {
 }
 
 bool MachOLinkingContext::addEntryPointLoadCommand() const {
-  if ((_outputFileType == MH_EXECUTE) && !_outputFileTypeStatic) {
+  if ((_outputMachOType == MH_EXECUTE) && !_outputMachOTypeStatic) {
     return minOS("10.8", "6.0");
   }
   return false;
 }
 
 bool MachOLinkingContext::addUnixThreadLoadCommand() const {
-  switch (_outputFileType) {
+  switch (_outputMachOType) {
   case MH_EXECUTE:
-    if (_outputFileTypeStatic)
+    if (_outputMachOTypeStatic)
       return true;
     else
       return !minOS("10.8", "6.0");
@@ -261,54 +297,304 @@ bool MachOLinkingContext::addUnixThreadLoadCommand() const {
   }
 }
 
+bool MachOLinkingContext::pathExists(StringRef path) const {
+  if (!_testingFileUsage)
+    return llvm::sys::fs::exists(path.str());
+
+  // Otherwise, we're in test mode: only files explicitly provided on the
+  // command-line exist.
+  std::string key = path.str();
+  std::replace(key.begin(), key.end(), '\\', '/');
+  return _existingPaths.find(key) != _existingPaths.end();
+}
+
+void MachOLinkingContext::setSysLibRoots(const StringRefVector &paths) {
+  _syslibRoots = paths;
+}
+
+void MachOLinkingContext::addModifiedSearchDir(StringRef libPath,
+                                               bool isSystemPath) {
+  bool addedModifiedPath = false;
+
+  // -syslibroot only applies to absolute paths.
+  if (libPath.startswith("/")) {
+    for (auto syslibRoot : _syslibRoots) {
+      SmallString<256> path(syslibRoot);
+      llvm::sys::path::append(path, libPath);
+      if (pathExists(path)) {
+        _searchDirs.push_back(path.str().copy(_allocator));
+        addedModifiedPath = true;
+      }
+    }
+  }
+
+  if (addedModifiedPath)
+    return;
+
+  // Finally, if only one -syslibroot is given, system paths which aren't in it
+  // get suppressed.
+  if (_syslibRoots.size() != 1 || !isSystemPath) {
+    if (pathExists(libPath)) {
+      _searchDirs.push_back(libPath);
+    }
+  }
+}
+
+void MachOLinkingContext::addFrameworkSearchDir(StringRef fwPath,
+                                                bool isSystemPath) {
+  bool pathAdded = false;
+
+  // -syslibroot only used with to absolute framework search paths.
+  if (fwPath.startswith("/")) {
+    for (auto syslibRoot : _syslibRoots) {
+      SmallString<256> path(syslibRoot);
+      llvm::sys::path::append(path, fwPath);
+      if (pathExists(path)) {
+        _frameworkDirs.push_back(path.str().copy(_allocator));
+        pathAdded = true;
+      }
+    }
+  }
+  // If fwPath found in any -syslibroot, then done.
+  if (pathAdded)
+    return;
+
+  // If only one -syslibroot, system paths not in that SDK are suppressed.
+  if (isSystemPath && (_syslibRoots.size() == 1))
+    return;
+
+  // Only use raw fwPath if that directory exists.
+  if (pathExists(fwPath))
+    _frameworkDirs.push_back(fwPath);
+}
+
+
+ErrorOr<StringRef>
+MachOLinkingContext::searchDirForLibrary(StringRef path,
+                                         StringRef libName) const {
+  SmallString<256> fullPath;
+  if (libName.endswith(".o")) {
+    // A request ending in .o is special: just search for the file directly.
+    fullPath.assign(path);
+    llvm::sys::path::append(fullPath, libName);
+    if (pathExists(fullPath))
+      return fullPath.str().copy(_allocator);
+    return make_error_code(llvm::errc::no_such_file_or_directory);
+  }
+
+  // Search for dynamic library
+  fullPath.assign(path);
+  llvm::sys::path::append(fullPath, Twine("lib") + libName + ".dylib");
+  if (pathExists(fullPath))
+    return fullPath.str().copy(_allocator);
+
+  // If not, try for a static library
+  fullPath.assign(path);
+  llvm::sys::path::append(fullPath, Twine("lib") + libName + ".a");
+  if (pathExists(fullPath))
+    return fullPath.str().copy(_allocator);
+
+  return make_error_code(llvm::errc::no_such_file_or_directory);
+}
+
+
+
+ErrorOr<StringRef> MachOLinkingContext::searchLibrary(StringRef libName) const {
+  SmallString<256> path;
+  for (StringRef dir : searchDirs()) {
+    ErrorOr<StringRef> ec = searchDirForLibrary(dir, libName);
+    if (ec)
+      return ec;
+  }
+
+  return make_error_code(llvm::errc::no_such_file_or_directory);
+}
+
+
+ErrorOr<StringRef> MachOLinkingContext::findPathForFramework(StringRef fwName) const{
+  SmallString<256> fullPath;
+  for (StringRef dir : frameworkDirs()) {
+    fullPath.assign(dir);
+    llvm::sys::path::append(fullPath, Twine(fwName) + ".framework", fwName);
+    if (pathExists(fullPath))
+      return fullPath.str().copy(_allocator);
+  }
+
+  return make_error_code(llvm::errc::no_such_file_or_directory);
+}
+
 bool MachOLinkingContext::validateImpl(raw_ostream &diagnostics) {
   // TODO: if -arch not specified, look at arch of first .o file.
 
-  if (_currentVersion && _outputFileType != MH_DYLIB) {
+  if (_currentVersion && _outputMachOType != MH_DYLIB) {
     diagnostics << "error: -current_version can only be used with dylibs\n";
     return false;
   }
 
-  if (_compatibilityVersion && _outputFileType != MH_DYLIB) {
+  if (_compatibilityVersion && _outputMachOType != MH_DYLIB) {
     diagnostics
         << "error: -compatibility_version can only be used with dylibs\n";
     return false;
   }
 
-  if (_deadStrippableDylib && _outputFileType != MH_DYLIB) {
+  if (_deadStrippableDylib && _outputMachOType != MH_DYLIB) {
     diagnostics
         << "error: -mark_dead_strippable_dylib can only be used with dylibs.\n";
     return false;
   }
 
-  if (!_bundleLoader.empty() && outputFileType() != MH_BUNDLE) {
+  if (!_bundleLoader.empty() && outputMachOType() != MH_BUNDLE) {
     diagnostics
         << "error: -bundle_loader can only be used with Mach-O bundles\n";
     return false;
+  }
+
+  // If -exported_symbols_list used, all exported symbols must be defined.
+  if (_exportMode == ExportMode::whiteList) {
+    for (const auto &symbol : _exportedSymbols)
+      addInitialUndefinedSymbol(symbol.getKey());
   }
 
   return true;
 }
 
 void MachOLinkingContext::addPasses(PassManager &pm) {
-  if (outputFileType() != MH_OBJECT) {
-    pm.add(std::unique_ptr<Pass>(new mach_o::GOTPass));
-    pm.add(std::unique_ptr<Pass>(new mach_o::StubsPass(*this)));
-  }
-  pm.add(std::unique_ptr<Pass>(new LayoutPass()));
+  pm.add(std::unique_ptr<Pass>(new LayoutPass(registry())));
+  if (needsStubsPass())
+    mach_o::addStubsPass(pm, *this);
+  if (needsGOTPass())
+    mach_o::addGOTPass(pm, *this);
 }
 
 Writer &MachOLinkingContext::writer() const {
-  if (!_writer) {
+  if (!_writer)
     _writer = createWriterMachO(*this);
-  }
   return *_writer;
 }
 
-KindHandler &MachOLinkingContext::kindHandler() const {
-  if (!_kindHandler)
-    _kindHandler = KindHandler::create(_arch);
-  return *_kindHandler;
+MachODylibFile* MachOLinkingContext::loadIndirectDylib(StringRef path) const {
+  std::unique_ptr<MachOFileNode> node(new MachOFileNode(path, false));
+  std::error_code ec = node->parse(*this, llvm::errs());
+  if (ec)
+    return nullptr;
+
+  assert(node->files().size() == 1 && "expected one file in dylib");
+  // lld::File object is owned by MachOFileNode object. This method returns
+  // an unowned pointer to the lld::File object.
+  MachODylibFile* result = reinterpret_cast<MachODylibFile*>(
+                                                   node->files().front().get());
+
+  // Node object now owned by _indirectDylibs vector.
+  _indirectDylibs.push_back(std::move(node));
+
+  return result;
+}
+
+
+MachODylibFile* MachOLinkingContext::findIndirectDylib(StringRef path) const {
+  // See if already loaded.
+  auto pos = _pathToDylibMap.find(path);
+  if (pos != _pathToDylibMap.end())
+    return pos->second;
+
+  // Search -L paths if of the form "libXXX.dylib"
+  std::pair<StringRef, StringRef> split = path.rsplit('/');
+  StringRef leafName = split.second;
+  if (leafName.startswith("lib") && leafName.endswith(".dylib")) {
+    // FIXME: Need to enhance searchLibrary() to only look for .dylib
+    auto libPath = searchLibrary(leafName);
+    if (!libPath.getError()) {
+      return loadIndirectDylib(libPath.get());
+    }
+  }
+
+  // Try full path with sysroot.
+  for (StringRef sysPath : _syslibRoots) {
+    SmallString<256> fullPath;
+    fullPath.assign(sysPath);
+    llvm::sys::path::append(fullPath, path);
+    if (pathExists(fullPath))
+      return loadIndirectDylib(fullPath);
+  }
+
+  // Try full path.
+  if (pathExists(path)) {
+    return loadIndirectDylib(path);
+  }
+
+  return nullptr;
+}
+
+bool MachOLinkingContext::createImplicitFiles(
+                            std::vector<std::unique_ptr<File> > &result) const {
+  // Add indirect dylibs by asking each linked dylib to add its indirects.
+  // Iterate until no more dylibs get loaded.
+  size_t dylibCount = 0;
+  while (dylibCount != _allDylibs.size()) {
+    dylibCount = _allDylibs.size();
+    for (MachODylibFile *dylib : _allDylibs) {
+      dylib->loadReExportedDylibs([this] (StringRef path) -> MachODylibFile* {
+                                  return findIndirectDylib(path); });
+    }
+  }
+
+  // Let writer add output type specific extras.
+  return writer().createImplicitFiles(result);
+}
+
+
+void MachOLinkingContext::registerDylib(MachODylibFile *dylib) {
+  _allDylibs.insert(dylib);
+  _pathToDylibMap[dylib->installName()] = dylib;
+  // If path is different than install name, register path too.
+  if (!dylib->path().equals(dylib->installName()))
+    _pathToDylibMap[dylib->path()] = dylib;
+}
+
+
+ArchHandler &MachOLinkingContext::archHandler() const {
+  if (!_archHandler)
+    _archHandler = ArchHandler::create(_arch);
+  return *_archHandler;
+}
+
+
+void MachOLinkingContext::addSectionAlignment(StringRef seg, StringRef sect,
+                                                               uint8_t align2) {
+  SectionAlign entry;
+  entry.segmentName = seg;
+  entry.sectionName = sect;
+  entry.align2 = align2;
+  _sectAligns.push_back(entry);
+}
+
+bool MachOLinkingContext::sectionAligned(StringRef seg, StringRef sect,
+                                                        uint8_t &align2) const {
+  for (const SectionAlign &entry : _sectAligns) {
+    if (seg.equals(entry.segmentName) && sect.equals(entry.sectionName)) {
+      align2 = entry.align2;
+      return true;
+    }
+  }
+  return false;
+}
+
+
+void MachOLinkingContext::addExportSymbol(StringRef sym) {
+  // FIXME: Support wildcards.
+  _exportedSymbols.insert(sym);
+}
+
+bool MachOLinkingContext::exportSymbolNamed(StringRef sym) const {
+  switch (_exportMode) {
+  case ExportMode::globals:
+    llvm_unreachable("exportSymbolNamed() should not be called in this mode");
+    break;
+  case ExportMode::whiteList:
+    return _exportedSymbols.count(sym);
+  case ExportMode::blackList:
+    return !_exportedSymbols.count(sym);
+  }
 }
 
 

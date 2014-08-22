@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CODEGEN_REGISTER_COALESCER_H
-#define LLVM_CODEGEN_REGISTER_COALESCER_H
+#ifndef LLVM_LIB_CODEGEN_REGISTERCOALESCER_H
+#define LLVM_LIB_CODEGEN_REGISTERCOALESCER_H
 
 namespace llvm {
 
@@ -61,14 +61,14 @@ namespace llvm {
   public:
     CoalescerPair(const TargetRegisterInfo &tri)
       : TRI(tri), DstReg(0), SrcReg(0), DstIdx(0), SrcIdx(0),
-        Partial(false), CrossClass(false), Flipped(false), NewRC(0) {}
+        Partial(false), CrossClass(false), Flipped(false), NewRC(nullptr) {}
 
     /// Create a CoalescerPair representing a virtreg-to-physreg copy.
     /// No need to call setRegisters().
     CoalescerPair(unsigned VirtReg, unsigned PhysReg,
                   const TargetRegisterInfo &tri)
       : TRI(tri), DstReg(PhysReg), SrcReg(VirtReg), DstIdx(0), SrcIdx(0),
-        Partial(false), CrossClass(false), Flipped(false), NewRC(0) {}
+        Partial(false), CrossClass(false), Flipped(false), NewRC(nullptr) {}
 
     /// setRegisters - set registers to match the copy instruction MI. Return
     /// false if MI is not a coalescable copy instruction.

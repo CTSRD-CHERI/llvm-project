@@ -10,7 +10,7 @@
 #include "lld/ReaderWriter/ELFLinkingContext.h"
 
 #include "ArrayOrderPass.h"
-#include "File.h"
+#include "ELFFile.h"
 #include "TargetHandler.h"
 #include "Targets.h"
 
@@ -19,18 +19,35 @@
 #include "lld/Passes/RoundTripYAMLPass.h"
 
 #include "llvm/ADT/Triple.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/ELF.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 
 namespace lld {
 
+class CommandLineAbsoluteAtom : public AbsoluteAtom {
+public:
+  CommandLineAbsoluteAtom(const File &file, StringRef name, uint64_t value)
+      : _file(file), _name(name), _value(value) {}
+
+  const File &file() const override { return _file; }
+  StringRef name() const override { return _name; }
+  uint64_t value() const override { return _value; }
+  Scope scope() const override { return scopeGlobal; }
+
+private:
+  const File &_file;
+  StringRef _name;
+  uint64_t _value;
+};
+
 class CommandLineUndefinedAtom : public SimpleUndefinedAtom {
 public:
   CommandLineUndefinedAtom(const File &f, StringRef name)
       : SimpleUndefinedAtom(f, name) {}
 
-  virtual CanBeNull canBeNull() const {
+  CanBeNull canBeNull() const override {
     return CanBeNull::canBeNullAtBuildtime;
   }
 };
@@ -54,7 +71,7 @@ bool ELFLinkingContext::isLittleEndian() const {
 
 void ELFLinkingContext::addPasses(PassManager &pm) {
   if (_runLayoutPass)
-    pm.add(std::unique_ptr<Pass>(new LayoutPass()));
+    pm.add(std::unique_ptr<Pass>(new LayoutPass(registry())));
   pm.add(std::unique_ptr<Pass>(new elf::ArrayOrderPass()));
 }
 
@@ -70,6 +87,8 @@ uint16_t ELFLinkingContext::getOutputMachine() const {
     return llvm::ELF::EM_MIPS;
   case llvm::Triple::ppc:
     return llvm::ELF::EM_PPC;
+  case llvm::Triple::aarch64:
+    return llvm::ELF::EM_AARCH64;
   default:
     llvm_unreachable("Unhandled arch");
   }
@@ -90,7 +109,7 @@ bool ELFLinkingContext::validateImpl(raw_ostream &diagnostics) {
     llvm_unreachable("Unimplemented");
     break;
   default:
-    _writer = createWriterELF(*this);
+    _writer = createWriterELF(this->targetHandler());
     break;
   }
   return true;
@@ -130,53 +149,85 @@ ELFLinkingContext::create(llvm::Triple triple) {
   case llvm::Triple::ppc:
     return std::unique_ptr<ELFLinkingContext>(
         new lld::elf::PPCLinkingContext(triple));
+  case llvm::Triple::aarch64:
+    return std::unique_ptr<ELFLinkingContext>(
+        new lld::elf::AArch64LinkingContext(triple));
   default:
     return nullptr;
   }
 }
 
+static void buildSearchPath(SmallString<128> &path, StringRef dir,
+                            StringRef sysRoot) {
+  if (!dir.startswith("=/"))
+    path.assign(dir);
+  else {
+    path.assign(sysRoot);
+    path.append(dir.substr(1));
+  }
+}
+
 ErrorOr<StringRef> ELFLinkingContext::searchLibrary(StringRef libName) const {
-  bool foundFile = false;
-  StringRef pathref;
+  bool hasColonPrefix = libName[0] == ':';
+  Twine soName =
+      hasColonPrefix ? libName.drop_front() : Twine("lib", libName) + ".so";
+  Twine archiveName =
+      hasColonPrefix ? libName.drop_front() : Twine("lib", libName) + ".a";
   SmallString<128> path;
   for (StringRef dir : _inputSearchPaths) {
     // Search for dynamic library
     if (!_isStaticExecutable) {
-      path.clear();
-      if (dir.startswith("=/")) {
-        path.assign(_sysrootPath);
-        path.append(dir.substr(1));
-      } else {
-        path.assign(dir);
-      }
-      llvm::sys::path::append(path, Twine("lib") + libName + ".so");
-      pathref = path.str();
-      if (llvm::sys::fs::exists(pathref)) {
-        foundFile = true;
-      }
+      buildSearchPath(path, dir, _sysrootPath);
+      llvm::sys::path::append(path, soName);
+      if (llvm::sys::fs::exists(path.str()))
+        return StringRef(*new (_allocator) std::string(path.str()));
     }
     // Search for static libraries too
-    if (!foundFile) {
-      path.clear();
-      if (dir.startswith("=/")) {
-        path.assign(_sysrootPath);
-        path.append(dir.substr(1));
-      } else {
-        path.assign(dir);
-      }
-      llvm::sys::path::append(path, Twine("lib") + libName + ".a");
-      pathref = path.str();
-      if (llvm::sys::fs::exists(pathref)) {
-        foundFile = true;
-      }
-    }
-    if (foundFile)
-      return StringRef(*new (_allocator) std::string(pathref));
+    buildSearchPath(path, dir, _sysrootPath);
+    llvm::sys::path::append(path, archiveName);
+    if (llvm::sys::fs::exists(path.str()))
+      return StringRef(*new (_allocator) std::string(path.str()));
   }
   if (!llvm::sys::fs::exists(libName))
-    return llvm::make_error_code(llvm::errc::no_such_file_or_directory);
+    return make_error_code(llvm::errc::no_such_file_or_directory);
 
   return libName;
+}
+
+ErrorOr<StringRef> ELFLinkingContext::searchFile(StringRef fileName,
+                                                 bool isSysRooted) const {
+  SmallString<128> path;
+  if (llvm::sys::path::is_absolute(fileName) && isSysRooted) {
+    path.assign(_sysrootPath);
+    path.append(fileName);
+    if (llvm::sys::fs::exists(path.str()))
+      return StringRef(*new (_allocator) std::string(path.str()));
+  } else if (llvm::sys::fs::exists(fileName))
+    return fileName;
+
+  if (llvm::sys::path::is_absolute(fileName))
+    return make_error_code(llvm::errc::no_such_file_or_directory);
+
+  for (StringRef dir : _inputSearchPaths) {
+    buildSearchPath(path, dir, _sysrootPath);
+    llvm::sys::path::append(path, fileName);
+    if (llvm::sys::fs::exists(path.str()))
+      return StringRef(*new (_allocator) std::string(path.str()));
+  }
+  return make_error_code(llvm::errc::no_such_file_or_directory);
+}
+
+void ELFLinkingContext::createInternalFiles(
+    std::vector<std::unique_ptr<File>> &files) const {
+  std::unique_ptr<SimpleFile> file(
+      new SimpleFile("<internal file for --defsym>"));
+  for (auto &i : getAbsoluteSymbols()) {
+    StringRef sym = i.first;
+    uint64_t val = i.second;
+    file->addAtom(*(new (_allocator) CommandLineAbsoluteAtom(*file, sym, val)));
+  }
+  files.push_back(std::move(file));
+  LinkingContext::createInternalFiles(files);
 }
 
 std::unique_ptr<File> ELFLinkingContext::createUndefinedSymbolFile() const {
@@ -186,7 +237,7 @@ std::unique_ptr<File> ELFLinkingContext::createUndefinedSymbolFile() const {
       new SimpleFile("command line option -u"));
   for (auto undefSymStr : _initialUndefinedSymbols)
     undefinedSymFile->addAtom(*(new (_allocator) CommandLineUndefinedAtom(
-                                   *undefinedSymFile, undefSymStr)));
+        *undefinedSymFile, undefSymStr)));
   return std::move(undefinedSymFile);
 }
 

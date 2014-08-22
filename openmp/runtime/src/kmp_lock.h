@@ -415,7 +415,7 @@ struct kmp_base_drdpa_lock {
 
     //
     // now_serving is used to store our ticket value while we hold the lock.
-    // It has a slighly different meaning in the DRDPA ticket locks (where
+    // It has a slightly different meaning in the DRDPA ticket locks (where
     // it is written by the acquiring thread) than it does in the simple
     // ticket locks (where it is written by the releasing thread).
     //
@@ -518,7 +518,7 @@ __kmp_destroy_bootstrap_lock( kmp_bootstrap_lock_t *lck )
 // Internal RTL locks are also implemented as ticket locks, for now.
 //
 // FIXME - We should go through and figure out which lock kind works best for
-// each internal lock, and use the type deeclaration and function calls for
+// each internal lock, and use the type declaration and function calls for
 // that explicit lock kind (and get rid of this section).
 //
 

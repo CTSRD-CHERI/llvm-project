@@ -7,6 +7,7 @@
 # License. See LICENSE.TXT for details.
 #
 #===------------------------------------------------------------------------===#
+import argparse
 import bisect
 import getopt
 import os
@@ -16,20 +17,33 @@ import subprocess
 import sys
 import termios
 
-llvm_symbolizer = None
 symbolizers = {}
 DEBUG = False
-demangle = False;
-
+demangle = False
+binutils_prefix = None
+sysroot_path = None
+binary_name_filter = None
+fix_filename_patterns = None
+logfile = None
 
 # FIXME: merge the code that calls fix_filename().
 def fix_filename(file_name):
-  for path_to_cut in sys.argv[1:]:
-    file_name = re.sub('.*' + path_to_cut, '', file_name)
+  if fix_filename_patterns:
+    for path_to_cut in fix_filename_patterns:
+      file_name = re.sub('.*' + path_to_cut, '', file_name)
   file_name = re.sub('.*asan_[a-z_]*.cc:[0-9]*', '_asan_rtl_', file_name)
   file_name = re.sub('.*crtstuff.c:0', '???:0', file_name)
   return file_name
 
+def sysroot_path_filter(binary_name):
+  return sysroot_path + binary_name
+
+def guess_arch(addr):
+  # Guess which arch we're running. 10 = len('0x') + 8 hex digits.
+  if len(addr) > 10:
+    return 'x86_64'
+  else:
+    return 'i386'
 
 class Symbolizer(object):
   def __init__(self):
@@ -52,23 +66,27 @@ class Symbolizer(object):
 
 
 class LLVMSymbolizer(Symbolizer):
-  def __init__(self, symbolizer_path):
+  def __init__(self, symbolizer_path, addr):
     super(LLVMSymbolizer, self).__init__()
     self.symbolizer_path = symbolizer_path
+    self.default_arch = guess_arch(addr)
     self.pipe = self.open_llvm_symbolizer()
 
   def open_llvm_symbolizer(self):
-    if not os.path.exists(self.symbolizer_path):
-      return None
     cmd = [self.symbolizer_path,
            '--use-symbol-table=true',
            '--demangle=%s' % demangle,
-           '--functions=true',
-           '--inlining=true']
+           '--functions=short',
+           '--inlining=true',
+           '--default-arch=%s' % self.default_arch]
     if DEBUG:
       print ' '.join(cmd)
-    return subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE)
+    try:
+      result = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE)
+    except OSError:
+      result = None
+    return result
 
   def symbolize(self, addr, binary, offset):
     """Overrides Symbolizer.symbolize."""
@@ -86,9 +104,9 @@ class LLVMSymbolizer(Symbolizer):
           break
         file_name = self.pipe.stdout.readline().rstrip()
         file_name = fix_filename(file_name)
-        if (not function_name.startswith('??') and
+        if (not function_name.startswith('??') or
             not file_name.startswith('??')):
-          # Append only valid frames.
+          # Append only non-trivial frames.
           result.append('%s in %s %s' % (addr, function_name,
                                          file_name))
     except Exception:
@@ -98,14 +116,14 @@ class LLVMSymbolizer(Symbolizer):
     return result
 
 
-def LLVMSymbolizerFactory(system):
+def LLVMSymbolizerFactory(system, addr):
   symbolizer_path = os.getenv('LLVM_SYMBOLIZER_PATH')
   if not symbolizer_path:
     symbolizer_path = os.getenv('ASAN_SYMBOLIZER_PATH')
     if not symbolizer_path:
       # Assume llvm-symbolizer is in PATH.
       symbolizer_path = 'llvm-symbolizer'
-  return LLVMSymbolizer(symbolizer_path)
+  return LLVMSymbolizer(symbolizer_path, addr)
 
 
 class Addr2LineSymbolizer(Symbolizer):
@@ -115,7 +133,10 @@ class Addr2LineSymbolizer(Symbolizer):
     self.pipe = self.open_addr2line()
 
   def open_addr2line(self):
-    cmd = ['addr2line', '-f']
+    addr2line_tool = 'addr2line'
+    if binutils_prefix:
+      addr2line_tool = binutils_prefix + addr2line_tool
+    cmd = [addr2line_tool, '-f']
     if demangle:
       cmd += ['--demangle']
     cmd += ['-e', self.binary]
@@ -173,11 +194,7 @@ class DarwinSymbolizer(Symbolizer):
   def __init__(self, addr, binary):
     super(DarwinSymbolizer, self).__init__()
     self.binary = binary
-    # Guess which arch we're running. 10 = len('0x') + 8 hex digits.
-    if len(addr) > 10:
-      self.arch = 'x86_64'
-    else:
-      self.arch = 'i386'
+    self.arch = guess_arch(addr)
     self.open_atos()
 
   def open_atos(self):
@@ -323,12 +340,15 @@ class SymbolizationLoop(object):
     # E.g. in Chrome several binaries may share a single .dSYM.
     self.binary_name_filter = binary_name_filter
     self.system = os.uname()[0]
-    if self.system in ['Linux', 'Darwin']:
-      self.llvm_symbolizer = LLVMSymbolizerFactory(self.system)
-    else:
+    if self.system not in ['Linux', 'Darwin', 'FreeBSD']:
       raise Exception('Unknown system')
+    self.llvm_symbolizer = None
+    self.frame_no = 0
 
   def symbolize_address(self, addr, binary, offset):
+    # Initialize llvm-symbolizer lazily.
+    if not self.llvm_symbolizer:
+      self.llvm_symbolizer = LLVMSymbolizerFactory(self.system, addr)
     # Use the chain of symbolizers:
     # Breakpad symbolizer -> LLVM symbolizer -> addr2line/atos
     # (fall back to next symbolizer if the previous one fails).
@@ -345,48 +365,77 @@ class SymbolizationLoop(object):
     assert result
     return result
 
-  def print_symbolized_lines(self, symbolized_lines):
+  def get_symbolized_lines(self, symbolized_lines):
     if not symbolized_lines:
-      print self.current_line
+      return [self.current_line]
     else:
+      result = []
       for symbolized_frame in symbolized_lines:
-        print '    #' + str(self.frame_no) + ' ' + symbolized_frame.rstrip()
+        result.append('    #%s %s' % (str(self.frame_no), symbolized_frame.rstrip()))
         self.frame_no += 1
+      return result
 
-  def process_stdin(self):
+  def process_logfile(self):
     self.frame_no = 0
     while True:
-      line = sys.stdin.readline()
+      line = logfile.readline()
       if not line:
         break
-      self.current_line = line.rstrip()
-      #0 0x7f6e35cf2e45  (/blah/foo.so+0x11fe45)
-      stack_trace_line_format = (
-          '^( *#([0-9]+) *)(0x[0-9a-f]+) *\((.*)\+(0x[0-9a-f]+)\)')
-      match = re.match(stack_trace_line_format, line)
-      if not match:
-        print self.current_line
-        continue
-      if DEBUG:
-        print line
-      _, frameno_str, addr, binary, offset = match.groups()
-      if frameno_str == '0':
-        # Assume that frame #0 is the first frame of new stack trace.
-        self.frame_no = 0
-      original_binary = binary
-      if self.binary_name_filter:
-        binary = self.binary_name_filter(binary)
-      symbolized_line = self.symbolize_address(addr, binary, offset)
-      if not symbolized_line:
-        if original_binary != binary:
-          symbolized_line = self.symbolize_address(addr, binary, offset)
-      self.print_symbolized_lines(symbolized_line)
+      processed = self.process_line(line)
+      print ''.join(processed)
+
+  def process_line(self, line):
+    self.current_line = line.rstrip()
+    #0 0x7f6e35cf2e45  (/blah/foo.so+0x11fe45)
+    stack_trace_line_format = (
+        '^( *#([0-9]+) *)(0x[0-9a-f]+) *\((.*)\+(0x[0-9a-f]+)\)')
+    match = re.match(stack_trace_line_format, line)
+    if not match:
+      return [self.current_line]
+    if DEBUG:
+      print line
+    _, frameno_str, addr, binary, offset = match.groups()
+    if frameno_str == '0':
+      # Assume that frame #0 is the first frame of new stack trace.
+      self.frame_no = 0
+    original_binary = binary
+    if self.binary_name_filter:
+      binary = self.binary_name_filter(binary)
+    symbolized_line = self.symbolize_address(addr, binary, offset)
+    if not symbolized_line:
+      if original_binary != binary:
+        symbolized_line = self.symbolize_address(addr, binary, offset)
+    return self.get_symbolized_lines(symbolized_line)
 
 
 if __name__ == '__main__':
-  opts, args = getopt.getopt(sys.argv[1:], "d", ["demangle"])
-  for o, a in opts:
-    if o in ("-d", "--demangle"):
-      demangle = True;
-  loop = SymbolizationLoop()
-  loop.process_stdin()
+  parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
+  description='ASan symbolization script',
+  epilog='''Example of use:
+  asan_symbolize.py -c "$HOME/opt/cross/bin/arm-linux-gnueabi-" -s "$HOME/SymbolFiles" < asan.log''')
+  parser.add_argument('path_to_cut', nargs='*',
+    help='pattern to be cut from the result file path ')
+  parser.add_argument('-d','--demangle', action='store_true',
+    help='demangle function names')
+  parser.add_argument('-s', metavar='SYSROOT',
+    help='set path to sysroot for sanitized binaries')
+  parser.add_argument('-c', metavar='CROSS_COMPILE',
+    help='set prefix for binutils')
+  parser.add_argument('-l','--logfile', default=sys.stdin, type=argparse.FileType('r'),
+    help='set log file name to parse, default is stdin')
+  args = parser.parse_args()
+  if args.path_to_cut:
+    fix_filename_patterns = args.path_to_cut
+  if args.demangle:
+    demangle = True
+  if args.s:
+    binary_name_filter = sysroot_path_filter
+    sysroot_path = args.s
+  if args.c:
+    binutils_prefix = args.c
+  if args.logfile:
+    logfile = args.logfile
+  else:
+    logfile = sys.stdin
+  loop = SymbolizationLoop(binary_name_filter)
+  loop.process_logfile()

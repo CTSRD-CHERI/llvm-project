@@ -11,9 +11,6 @@
 /* Function Attributes */
 #include <clc/clcfunc.h>
 
-/* Pattern Macro Definitions */
-#include <clc/clcmacro.h>
-
 /* 6.1 Supported Data Types */
 #include <clc/clctypes.h>
 
@@ -22,6 +19,9 @@
 
 /* 6.2.4.2 Reinterpreting Types Using as_type() and as_typen() */
 #include <clc/as_type.h>
+
+/* 6.9 Preprocessor Directives and Macros */
+#include <clc/clcversion.h>
 
 /* 6.11.1 Work-Item Functions */
 #include <clc/workitem/get_global_size.h>
@@ -32,9 +32,13 @@
 #include <clc/workitem/get_group_id.h>
 
 /* 6.11.2 Math Functions */
+#include <clc/math/atan.h>
+#include <clc/math/atan2.h>
+#include <clc/math/copysign.h>
 #include <clc/math/cos.h>
 #include <clc/math/ceil.h>
 #include <clc/math/exp.h>
+#include <clc/math/exp10.h>
 #include <clc/math/exp2.h>
 #include <clc/math/fabs.h>
 #include <clc/math/floor.h>
@@ -45,16 +49,20 @@
 #include <clc/math/log.h>
 #include <clc/math/log2.h>
 #include <clc/math/mad.h>
+#include <clc/math/mix.h>
 #include <clc/math/nextafter.h>
 #include <clc/math/pow.h>
+#include <clc/math/pown.h>
 #include <clc/math/rint.h>
 #include <clc/math/round.h>
 #include <clc/math/sin.h>
+#include <clc/math/sincos.h>
 #include <clc/math/sqrt.h>
 #include <clc/math/trunc.h>
 #include <clc/math/native_cos.h>
 #include <clc/math/native_divide.h>
 #include <clc/math/native_exp.h>
+#include <clc/math/native_exp10.h>
 #include <clc/math/native_exp2.h>
 #include <clc/math/native_log.h>
 #include <clc/math/native_log2.h>
@@ -101,14 +109,25 @@
 #include <clc/geometric/normalize.h>
 
 /* 6.11.6 Relational Functions */
+#include <clc/relational/all.h>
 #include <clc/relational/any.h>
 #include <clc/relational/bitselect.h>
+#include <clc/relational/isequal.h>
+#include <clc/relational/isgreater.h>
+#include <clc/relational/isgreaterequal.h>
+#include <clc/relational/isless.h>
+#include <clc/relational/islessequal.h>
 #include <clc/relational/isnan.h>
+#include <clc/relational/isnotequal.h>
 #include <clc/relational/select.h>
+#include <clc/relational/signbit.h>
 
 /* 6.11.8 Synchronization Functions */
 #include <clc/synchronization/cl_mem_fence_flags.h>
 #include <clc/synchronization/barrier.h>
+
+/* 6.11.10 Async Copy and Prefetch Functions */
+#include <clc/async/prefetch.h>
 
 /* 6.11.11 Atomic Functions */
 #include <clc/atomic/atomic_add.h>

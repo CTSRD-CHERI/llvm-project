@@ -35,7 +35,7 @@ int PassByValueTransform::apply(const tooling::CompilationDatabase &Database,
   // make the replacer available to handleBeginSource()
   this->Replacer = &Replacer;
 
-  if (Tool.run(createActionFactory(Finder))) {
+  if (Tool.run(createActionFactory(Finder).get())) {
     llvm::errs() << "Error encountered during translation.\n";
     return 1;
   }
@@ -62,7 +62,7 @@ struct PassByValueFactory : TransformFactory {
     Since.Msvc = Version(11);
   }
 
-  Transform *createTransform(const TransformOptions &Opts) LLVM_OVERRIDE {
+  Transform *createTransform(const TransformOptions &Opts) override {
     return new PassByValueTransform(Opts);
   }
 };

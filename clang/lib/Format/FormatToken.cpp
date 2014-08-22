@@ -22,6 +22,36 @@
 namespace clang {
 namespace format {
 
+// FIXME: This is copy&pasted from Sema. Put it in a common place and remove
+// duplication.
+bool FormatToken::isSimpleTypeSpecifier() const {
+  switch (Tok.getKind()) {
+  case tok::kw_short:
+  case tok::kw_long:
+  case tok::kw___int64:
+  case tok::kw___int128:
+  case tok::kw_signed:
+  case tok::kw_unsigned:
+  case tok::kw_void:
+  case tok::kw_char:
+  case tok::kw_int:
+  case tok::kw_half:
+  case tok::kw_float:
+  case tok::kw_double:
+  case tok::kw_wchar_t:
+  case tok::kw_bool:
+  case tok::kw___underlying_type:
+  case tok::annot_typename:
+  case tok::kw_char16_t:
+  case tok::kw_char32_t:
+  case tok::kw_typeof:
+  case tok::kw_decltype:
+    return true;
+  default:
+    return false;
+  }
+}
+
 TokenRole::~TokenRole() {}
 
 void TokenRole::precomputeFormattingInfos(const FormatToken *Token) {}
@@ -34,16 +64,15 @@ unsigned CommaSeparatedList::formatAfterToken(LineState &State,
 
   // Ensure that we start on the opening brace.
   const FormatToken *LBrace = State.NextToken->Previous->Previous;
-  if (LBrace->isNot(tok::l_brace) ||
-      LBrace->BlockKind == BK_Block ||
+  if (LBrace->isNot(tok::l_brace) || LBrace->BlockKind == BK_Block ||
       LBrace->Type == TT_DictLiteral ||
       LBrace->Next->Type == TT_DesignatedInitializerPeriod)
     return 0;
 
   // Calculate the number of code points we have to format this list. As the
   // first token is already placed, we have to subtract it.
-  unsigned RemainingCodePoints = Style.ColumnLimit - State.Column +
-                                 State.NextToken->Previous->ColumnWidth;
+  unsigned RemainingCodePoints =
+      Style.ColumnLimit - State.Column + State.NextToken->Previous->ColumnWidth;
 
   // Find the best ColumnFormat, i.e. the best number of columns to use.
   const ColumnFormat *Format = getColumnFormat(RemainingCodePoints);
@@ -102,6 +131,13 @@ void CommaSeparatedList::precomputeFormattingInfos(const FormatToken *Token) {
   if (!Token->MatchingParen || Token->isNot(tok::l_brace))
     return;
 
+  // In C++11 braced list style, we should not format in columns unless they
+  // have many items (20 or more) or we allow bin-packing of function
+  // parameters.
+  if (Style.Cpp11BracedListStyle && !Style.BinPackParameters &&
+      Commas.size() < 19)
+    return;
+
   FormatToken *ItemBegin = Token->Next;
   SmallVector<bool, 8> MustBreakBeforeItem;
 
@@ -117,7 +153,7 @@ void CommaSeparatedList::precomputeFormattingInfos(const FormatToken *Token) {
     MustBreakBeforeItem.push_back(ItemBegin->MustBreakBefore);
     if (ItemBegin->is(tok::l_brace))
       HasNestedBracedList = true;
-    const FormatToken *ItemEnd = NULL;
+    const FormatToken *ItemEnd = nullptr;
     if (i == Commas.size()) {
       ItemEnd = Token->MatchingParen;
       const FormatToken *NonCommentEnd = ItemEnd->getPreviousNonComment();
@@ -151,8 +187,7 @@ void CommaSeparatedList::precomputeFormattingInfos(const FormatToken *Token) {
   // If this doesn't have a nested list, we require at least 6 elements in order
   // create a column layout. If it has a nested list, column layout ensures one
   // list element per line.
-  if (HasNestedBracedList || Commas.size() < 5 ||
-      Token->NestingLevel != 0)
+  if (HasNestedBracedList || Commas.size() < 5 || Token->NestingLevel != 0)
     return;
 
   // We can never place more than ColumnLimit / 3 items in a row (because of the
@@ -174,8 +209,7 @@ void CommaSeparatedList::precomputeFormattingInfos(const FormatToken *Token) {
         HasRowWithSufficientColumns = true;
       unsigned length =
           (Column == Columns - 1) ? EndOfLineItemLength[i] : ItemLengths[i];
-      Format.ColumnSizes[Column] =
-          std::max(Format.ColumnSizes[Column], length);
+      Format.ColumnSizes[Column] = std::max(Format.ColumnSizes[Column], length);
       ++Column;
     }
     // If all rows are terminated early (e.g. by trailing comments), we don't
@@ -197,7 +231,7 @@ void CommaSeparatedList::precomputeFormattingInfos(const FormatToken *Token) {
 
 const CommaSeparatedList::ColumnFormat *
 CommaSeparatedList::getColumnFormat(unsigned RemainingCharacters) const {
-  const ColumnFormat *BestFormat = NULL;
+  const ColumnFormat *BestFormat = nullptr;
   for (SmallVector<ColumnFormat, 4>::const_reverse_iterator
            I = Formats.rbegin(),
            E = Formats.rend();

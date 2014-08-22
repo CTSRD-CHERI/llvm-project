@@ -1,5 +1,8 @@
 set(LLVM_NO_RTTI 1)
 
+# On Windows, the file list for liblldb is maintained in source\CMakeLists.txt.
+# When adding a file to this list, do not forget to add it to the other list as
+# well (where appropriate).
 add_lldb_library(lldbAPI
   SBAddress.cpp
   SBBlock.cpp
@@ -21,7 +24,6 @@ add_lldb_library(lldbAPI
   SBFrame.cpp
   SBFunction.cpp
   SBHostOS.cpp
-  SBInputReader.cpp
   SBInstruction.cpp
   SBInstructionList.cpp
   SBLineEntry.cpp
@@ -43,6 +45,7 @@ add_lldb_library(lldbAPI
   SBThread.cpp
   SBType.cpp
   SBTypeCategory.cpp
+  SBTypeEnumMember.cpp
   SBTypeFilter.cpp
   SBTypeFormat.cpp
   SBTypeNameSpecifier.cpp
@@ -51,4 +54,5 @@ add_lldb_library(lldbAPI
   SBValue.cpp
   SBValueList.cpp
   SBWatchpoint.cpp
+  SBUnixSignals.cpp
   )

@@ -17,9 +17,10 @@
 
 // Other libraries and framework includes
 #include "lldb/Target/Process.h"
-#include "LinuxSignals.h"
 #include "ProcessMessage.h"
 #include "ProcessPOSIX.h"
+
+#include "Plugins/Process/Utility/LinuxSignals.h"
 
 class ProcessMonitor;
 
@@ -56,6 +57,9 @@ public:
 
     virtual lldb_private::Error
     DoDetach(bool keep_stopped);
+
+    virtual bool
+    DetachRequiresHalt() { return true; }
 
     virtual bool
     UpdateThreadList(lldb_private::ThreadList &old_thread_list, lldb_private::ThreadList &new_thread_list);
@@ -104,7 +108,7 @@ public:
 private:
 
     /// Linux-specific signal set.
-    LinuxSignals m_linux_signals;
+    process_linux::LinuxSignals m_linux_signals;
 
     lldb_private::FileSpec *m_core_file;
 

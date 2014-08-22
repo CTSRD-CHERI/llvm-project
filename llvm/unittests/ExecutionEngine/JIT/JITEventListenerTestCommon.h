@@ -12,10 +12,10 @@
 
 #include "llvm/CodeGen/MachineCodeInfo.h"
 #include "llvm/Config/config.h"
-#include "llvm/DIBuilder.h"
-#include "llvm/DebugInfo.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
@@ -53,8 +53,8 @@ inline const char* getFilename() {
 template<typename WrapperT>
 class JITEventListenerTestBase : public testing::Test {
 protected:
-  llvm::OwningPtr<WrapperT> MockWrapper;
-  llvm::OwningPtr<llvm::JITEventListener> Listener;
+  std::unique_ptr<WrapperT> MockWrapper;
+  std::unique_ptr<llvm::JITEventListener> Listener;
 
 public:
   llvm::Module* M;
@@ -66,7 +66,7 @@ public:
   JITEventListenerTestBase(WrapperT* w)
   : MockWrapper(w)
   , M(new llvm::Module("module", llvm::getGlobalContext()))
-  , EE(llvm::EngineBuilder(M)
+  , EE(llvm::EngineBuilder(std::unique_ptr<llvm::Module>(M))
     .setEngineKind(llvm::EngineKind::JIT)
     .setOptLevel(llvm::CodeGenOpt::None)
     .create())

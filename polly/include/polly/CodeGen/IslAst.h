@@ -27,7 +27,6 @@
 
 #include "isl/ast.h"
 
-struct clast_name;
 namespace llvm {
 class raw_ostream;
 }
@@ -35,77 +34,109 @@ class raw_ostream;
 struct isl_ast_node;
 struct isl_ast_expr;
 struct isl_ast_build;
+struct isl_union_map;
 struct isl_pw_multi_aff;
 
 namespace polly {
 class Scop;
 class IslAst;
-
-// Information about an ast node.
-struct IslAstUser {
-  struct isl_ast_build *Context;
-  struct isl_pw_multi_aff *PMA;
-  // The node is the outermost parallel loop.
-  int IsOutermostParallel;
-
-  // The node is the innermost parallel loop.
-  int IsInnermostParallel;
-};
+class MemoryAccess;
 
 class IslAstInfo : public ScopPass {
+public:
+  using MemoryAccessSet = SmallPtrSet<MemoryAccess *, 4>;
+
+  /// @brief Payload information used to annotate an AST node.
+  struct IslAstUserPayload {
+    /// @brief Construct and initialize the payload.
+    IslAstUserPayload()
+        : IsInnermost(false), IsInnermostParallel(false),
+          IsOutermostParallel(false), IsReductionParallel(false),
+          Build(nullptr) {}
+
+    /// @brief Cleanup all isl structs on destruction.
+    ~IslAstUserPayload();
+
+    /// @brief Flag to mark innermost loops.
+    bool IsInnermost;
+
+    /// @brief Flag to mark innermost parallel loops.
+    bool IsInnermostParallel;
+
+    /// @brief Flag to mark outermost parallel loops.
+    bool IsOutermostParallel;
+
+    /// @brief Flag to mark parallel loops which break reductions.
+    bool IsReductionParallel;
+
+    /// @brief The build environment at the time this node was constructed.
+    isl_ast_build *Build;
+
+    /// @brief Set of accesses which break reduction dependences.
+    MemoryAccessSet BrokenReductions;
+  };
+
+private:
   Scop *S;
   IslAst *Ast;
 
 public:
   static char ID;
-  IslAstInfo() : ScopPass(ID), Ast(NULL) {}
+  IslAstInfo() : ScopPass(ID), S(nullptr), Ast(nullptr) {}
 
-  /// Print a source code representation of the program.
-  void pprint(llvm::raw_ostream &OS);
+  /// @brief Build the AST for the given SCoP @p S.
+  bool runOnScop(Scop &S);
 
-  isl_ast_node *getAst();
+  /// @brief Print a source code representation of the program.
+  void printScop(llvm::raw_ostream &OS) const;
 
-  /// @brief Get the run conditon.
+  /// @brief Return a copy of the AST root node.
+  __isl_give isl_ast_node *getAst() const;
+
+  /// @brief Get the run condition.
   ///
   /// Only if the run condition evaluates at run-time to a non-zero value, the
   /// assumptions that have been taken hold. If the run condition evaluates to
   /// zero/false some assumptions do not hold and the original code needs to
   /// be executed.
-  __isl_give isl_ast_expr *getRunCondition();
+  __isl_give isl_ast_expr *getRunCondition() const;
 
-  bool runOnScop(Scop &S);
-  void printScop(llvm::raw_ostream &OS) const;
+  /// @name Extract information attached to an isl ast (for) node.
+  ///
+  ///{
+
+  /// @brief Get the complete payload attached to @p Node.
+  static IslAstUserPayload *getNodePayload(__isl_keep isl_ast_node *Node);
+
+  /// @brief Is this loop an innermost loop?
+  static bool isInnermost(__isl_keep isl_ast_node *Node);
+
+  /// @brief Is this loop a parallel loop?
+  static bool isParallel(__isl_keep isl_ast_node *Node);
+
+  /// @brief Is this loop an outermost parallel loop?
+  static bool isOutermostParallel(__isl_keep isl_ast_node *Node);
+
+  /// @brief Is this loop an innermost parallel loop?
+  static bool isInnermostParallel(__isl_keep isl_ast_node *Node);
+
+  /// @brief Is this loop a reduction parallel loop?
+  static bool isReductionParallel(__isl_keep isl_ast_node *Node);
+
+  /// @brief Get the nodes schedule or a nullptr if not available.
+  static __isl_give isl_union_map *getSchedule(__isl_keep isl_ast_node *Node);
+
+  /// @brief Get the nodes broken reductions or a nullptr if not available.
+  static MemoryAccessSet *getBrokenReductions(__isl_keep isl_ast_node *Node);
+
+  /// @brief Get the nodes build context or a nullptr if not available.
+  static __isl_give isl_ast_build *getBuild(__isl_keep isl_ast_node *Node);
+
+  ///}
+
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   virtual void releaseMemory();
 };
-
-// Returns true when Node has been tagged as an innermost parallel loop.
-static inline bool isInnermostParallel(__isl_keep isl_ast_node *Node) {
-  isl_id *Id = isl_ast_node_get_annotation(Node);
-  if (!Id)
-    return false;
-  struct IslAstUser *Info = (struct IslAstUser *)isl_id_get_user(Id);
-
-  bool Res = false;
-  if (Info)
-    Res = Info->IsInnermostParallel;
-  isl_id_free(Id);
-  return Res;
-}
-
-// Returns true when Node has been tagged as an outermost parallel loop.
-static inline bool isOutermostParallel(__isl_keep isl_ast_node *Node) {
-  isl_id *Id = isl_ast_node_get_annotation(Node);
-  if (!Id)
-    return false;
-  struct IslAstUser *Info = (struct IslAstUser *)isl_id_get_user(Id);
-
-  bool Res = false;
-  if (Info)
-    Res = Info->IsOutermostParallel;
-  isl_id_free(Id);
-  return Res;
-}
 }
 
 namespace llvm {

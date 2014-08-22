@@ -1,12 +1,13 @@
 set(LLVM_LINK_COMPONENTS
-  Support
+  lineeditor
+  support
   )
 
 add_clang_library(clangQuery
   Query.cpp
   QueryParser.cpp
-  )
-target_link_libraries(clangQuery
+
+  LINK_LIBS
   clangAST
   clangASTMatchers
   clangBasic

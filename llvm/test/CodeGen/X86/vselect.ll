@@ -174,3 +174,105 @@ define <8 x i16> @test17(<8 x i16> %a, <8 x i16> %b) {
 ; CHECK-NOT: xorps
 ; CHECK: ret
 
+define <4 x float> @test18(<4 x float> %a, <4 x float> %b) {
+  %1 = select <4 x i1> <i1 false, i1 true, i1 true, i1 true>, <4 x float> %a, <4 x float> %b
+  ret <4 x float> %1
+}
+; CHECK-LABEL: test18
+; CHECK-NOT: psllw
+; CHECK-NOT: psraw
+; CHECK-NOT: xorps
+; CHECK: movss
+; CHECK: ret
+
+define <4 x i32> @test19(<4 x i32> %a, <4 x i32> %b) {
+  %1 = select <4 x i1> <i1 false, i1 true, i1 true, i1 true>, <4 x i32> %a, <4 x i32> %b
+  ret <4 x i32> %1
+}
+; CHECK-LABEL: test19
+; CHECK-NOT: psllw
+; CHECK-NOT: psraw
+; CHECK-NOT: xorps
+; CHECK: movss
+; CHECK: ret
+
+define <2 x double> @test20(<2 x double> %a, <2 x double> %b) {
+  %1 = select <2 x i1> <i1 false, i1 true>, <2 x double> %a, <2 x double> %b
+  ret <2 x double> %1
+}
+; CHECK-LABEL: test20
+; CHECK-NOT: psllw
+; CHECK-NOT: psraw
+; CHECK-NOT: xorps
+; CHECK: movsd
+; CHECK: ret
+
+define <2 x i64> @test21(<2 x i64> %a, <2 x i64> %b) {
+  %1 = select <2 x i1> <i1 false, i1 true>, <2 x i64> %a, <2 x i64> %b
+  ret <2 x i64> %1
+}
+; CHECK-LABEL: test21
+; CHECK-NOT: psllw
+; CHECK-NOT: psraw
+; CHECK-NOT: xorps
+; CHECK: movsd
+; CHECK: ret
+
+define <4 x float> @test22(<4 x float> %a, <4 x float> %b) {
+  %1 = select <4 x i1> <i1 true, i1 false, i1 false, i1 false>, <4 x float> %a, <4 x float> %b
+  ret <4 x float> %1
+}
+; CHECK-LABEL: test22
+; CHECK-NOT: psllw
+; CHECK-NOT: psraw
+; CHECK-NOT: xorps
+; CHECK: movss
+; CHECK: ret
+
+define <4 x i32> @test23(<4 x i32> %a, <4 x i32> %b) {
+  %1 = select <4 x i1> <i1 true, i1 false, i1 false, i1 false>, <4 x i32> %a, <4 x i32> %b
+  ret <4 x i32> %1
+}
+; CHECK-LABEL: test23
+; CHECK-NOT: psllw
+; CHECK-NOT: psraw
+; CHECK-NOT: xorps
+; CHECK: movss
+; CHECK: ret
+
+define <2 x double> @test24(<2 x double> %a, <2 x double> %b) {
+  %1 = select <2 x i1> <i1 true, i1 false>, <2 x double> %a, <2 x double> %b
+  ret <2 x double> %1
+}
+; CHECK-LABEL: test24
+; CHECK-NOT: psllw
+; CHECK-NOT: psraw
+; CHECK-NOT: xorps
+; CHECK: movsd
+; CHECK: ret
+
+define <2 x i64> @test25(<2 x i64> %a, <2 x i64> %b) {
+  %1 = select <2 x i1> <i1 true, i1 false>, <2 x i64> %a, <2 x i64> %b
+  ret <2 x i64> %1
+}
+; CHECK-LABEL: test25
+; CHECK-NOT: psllw
+; CHECK-NOT: psraw
+; CHECK-NOT: xorps
+; CHECK: movsd
+; CHECK: ret
+
+define <4 x float> @select_of_shuffles_0(<2 x float> %a0, <2 x float> %b0, <2 x float> %a1, <2 x float> %b1) {
+; CHECK-LABEL: select_of_shuffles_0
+; CHECK-DAG: movlhps %xmm2, [[REGA:%xmm[0-9]+]]
+; CHECK-DAG: movlhps %xmm3, [[REGB:%xmm[0-9]+]]
+; CHECK: subps [[REGB]], [[REGA]]
+  %1 = shufflevector <2 x float> %a0, <2 x float> undef, <4 x i32> <i32 0, i32 1, i32 undef, i32 undef>
+  %2 = shufflevector <2 x float> %a1, <2 x float> undef, <4 x i32> <i32 undef, i32 undef, i32 0, i32 1>
+  %3 = select <4 x i1> <i1 false, i1 false, i1 true, i1 true>, <4 x float> %2, <4 x float> %1
+  %4 = shufflevector <2 x float> %b0, <2 x float> undef, <4 x i32> <i32 0, i32 1, i32 undef, i32 undef>
+  %5 = shufflevector <2 x float> %b1, <2 x float> undef, <4 x i32> <i32 undef, i32 undef, i32 0, i32 1>
+  %6 = select <4 x i1> <i1 false, i1 false, i1 true, i1 true>, <4 x float> %5, <4 x float> %4
+  %7 = fsub <4 x float> %3, %6
+  ret <4 x float> %7
+}

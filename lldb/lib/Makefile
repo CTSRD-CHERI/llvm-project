@@ -32,16 +32,21 @@ USEDLIBS = lldbAPI.a \
 	lldbInitAndLog.a \
 	lldbInterpreter.a \
 	lldbPluginABIMacOSX_arm.a \
+	lldbPluginABIMacOSX_arm64.a \
 	lldbPluginABIMacOSX_i386.a \
 	lldbPluginABISysV_x86_64.a \
+	lldbPluginABISysV_hexagon.a \
 	lldbPluginDisassemblerLLVM.a \
 	lldbPluginDynamicLoaderStatic.a \
 	lldbPluginDynamicLoaderPOSIX.a \
+	lldbPluginDynamicLoaderHexagon.a \
 	lldbPluginEmulateInstructionARM.a \
+	lldbPluginEmulateInstructionARM64.a \
 	lldbPluginLanguageRuntimeCPlusPlusItaniumABI.a \
 	lldbPluginLanguageRuntimeObjCAppleObjCRuntime.a \
 	lldbPluginObjectContainerBSDArchive.a \
 	lldbPluginObjectFileELF.a \
+	lldbPluginObjectFileJIT.a \
 	lldbPluginSymbolVendorELF.a \
 	lldbPluginObjectFilePECOFF.a \
 	lldbPluginOperatingSystemPython.a \
@@ -68,17 +73,19 @@ USEDLIBS = lldbAPI.a \
 	clangSerialization.a \
 	LLVMMCDisassembler.a \
 	LLVMObjCARCOpts.a \
+	LLVMProfileData.a \
 	lldbPluginPlatformMacOSX.a \
 	lldbPluginPlatformLinux.a \
 	lldbPluginPlatformWindows.a \
 	lldbPluginPlatformFreeBSD.a \
-	lldbPluginPlatformPOSIX.a
+	lldbPluginPlatformPOSIX.a \
+	lldbPluginPlatformKalimba.a
 
 # Because GCC requires RTTI enabled for lldbCore (see source/Core/Makefile) it is
 # necessary to also link the clang rewriter libraries so vtable references can
 # be resolved correctly, if we are building with GCC.
 ifeq (g++,$(shell basename $(CXX) | cut -c 1-4))
-  USEDLIBS += clangRewriteCore.a \
+  USEDLIBS += clangRewrite.a \
               clangRewriteFrontend.a
 endif
 
@@ -90,31 +97,52 @@ LINK_COMPONENTS := $(TARGETS_TO_BUILD) asmparser bitreader bitwriter codegen \
 
 ifeq ($(HOST_OS),Darwin)
   USEDLIBS += lldbHostMacOSX.a \
+              lldbHostPosix.a \
               lldbPluginDynamicLoaderMacOSX.a \
               lldbPluginDynamicLoaderDarwinKernel.a \
               lldbPluginObjectContainerUniversalMachO.a \
               lldbPluginObjectFileMachO.a \
               lldbPluginSymbolVendorMacOSX.a \
               lldbPluginProcessDarwin.a \
-              lldbPluginProcessMachCore.a
+              lldbPluginProcessMachCore.a \
+              lldbPluginSystemRuntimeMacOSX.a \
+              lldbPluginProcessElfCore.a \
+              lldbPluginJITLoaderGDB.a
 endif
 
 ifeq ($(HOST_OS),Linux)
   USEDLIBS += lldbHostLinux.a \
+              lldbHostPosix.a \
               lldbPluginProcessLinux.a \
               lldbPluginProcessPOSIX.a \
               lldbPluginDynamicLoaderMacOSX.a \
-              lldbPluginProcessElfCore.a
+              lldbPluginProcessElfCore.a \
+              lldbPluginJITLoaderGDB.a
+endif
+
+ifeq ($(HOST_OS),MingW)
+  USEDLIBS += lldbHostWindows.a \
+              lldbPluginProcessElfCore.a \
+              lldbPluginJITLoaderGDB.a
 endif
 
 ifneq (,$(filter $(HOST_OS), FreeBSD GNU/kFreeBSD))
   USEDLIBS += lldbHostFreeBSD.a \
+              lldbHostPosix.a \
               lldbPluginProcessPOSIX.a \
               lldbPluginProcessFreeBSD.a \
-              lldbPluginProcessElfCore.a
+              lldbPluginProcessElfCore.a \
+              lldbPluginJITLoaderGDB.a
 endif
 
 include $(LEVEL)/Makefile.common
+
+ifeq ($(HOST_OS),MingW)
+    LLVMLibsOptions += -lws2_32
+    # Include everything from the .a's into the shared library.
+    ProjLibsOptions := -Wl,--whole-archive $(ProjLibsOptions) \
+                       -Wl,--no-whole-archive
+endif
 
 ifeq ($(HOST_OS),Darwin)
     LLVMLibsOptions += -Wl,-all_load
@@ -129,7 +157,7 @@ ifeq ($(HOST_OS),Darwin)
 	LLVMLibsOptions += -framework Foundation -framework CoreFoundation
 	LLVMLibsOptions += -framework CoreServices -framework Carbon -framework Security
 	LLVMLibsOptions += -framework DebugSymbols $(PYTHON_BUILD_FLAGS) -lobjc
-	LLVMLibsOptions += -lxml2
+	LLVMLibsOptions += -lxml2 -ledit -lpanel -lcurses
 	ifneq ($(EXPORTED_SYMBOL_FILE),)
 		LLVMLibsOptions += -Wl,-exported_symbols_list -Wl,"$(EXPORTED_SYMBOL_FILE)"
 	endif
@@ -148,7 +176,7 @@ ifeq ($(HOST_OS), $(filter $(HOST_OS), Linux GNU GNU/kFreeBSD))
     # Don't allow unresolved symbols.
     LLVMLibsOptions += -Wl,--no-undefined
     # Link in python
-    LLVMLibsOptions += $(PYTHON_BUILD_FLAGS) -lrt
+    LLVMLibsOptions += $(PYTHON_BUILD_FLAGS) -lrt -ledit -lncurses -lpanel
     LLVMLibsOptions += -Wl,--soname,lib$(LIBRARYNAME)$(SHLIBEXT)
 endif
 
@@ -159,5 +187,6 @@ ifeq ($(HOST_OS),FreeBSD)
     # Allow unresolved symbols.
     LLVMLibsOptions += -Wl,--allow-shlib-undefined
     # Link in python
-    LLVMLibsOptions += $(PYTHON_BUILD_FLAGS) -lrt -L/usr/local/lib -lexecinfo
+    LLVMLibsOptions += $(PYTHON_BUILD_FLAGS) -lrt -L/usr/local/lib -lexecinfo \
+                       -ledit -lncurses -lpanel
 endif

@@ -12,8 +12,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_TYPETRAITS_H
-#define LLVM_CLANG_TYPETRAITS_H
+#ifndef LLVM_CLANG_BASIC_TYPETRAITS_H
+#define LLVM_CLANG_BASIC_TYPETRAITS_H
 
 namespace clang {
 
@@ -37,6 +37,7 @@ namespace clang {
     UTT_IsCompleteType,
     UTT_IsCompound,
     UTT_IsConst,
+    UTT_IsDestructible,
     UTT_IsEmpty,
     UTT_IsEnum,
     UTT_IsFinal,
@@ -50,6 +51,7 @@ namespace clang {
     UTT_IsMemberFunctionPointer,
     UTT_IsMemberObjectPointer,
     UTT_IsMemberPointer,
+    UTT_IsNothrowDestructible,
     UTT_IsObject,
     UTT_IsPOD,
     UTT_IsPointer,
@@ -72,8 +74,11 @@ namespace clang {
     BTT_IsConvertibleTo,
     BTT_IsSame,
     BTT_TypeCompatible,
+    BTT_IsNothrowAssignable,
     BTT_IsTriviallyAssignable,
     BTT_Last = BTT_IsTriviallyAssignable,
+    TT_IsConstructible,
+    TT_IsNothrowConstructible,
     TT_IsTriviallyConstructible
   };
 

@@ -26,7 +26,6 @@ using namespace llvm;
 namespace llvm {
 template <>
 struct GraphTraits<ScopDetection *> : public GraphTraits<RegionInfo *> {
-
   static NodeType *getEntryNode(ScopDetection *SD) {
     return GraphTraits<RegionInfo *>::getEntryNode(SD->getRI());
   }
@@ -39,11 +38,9 @@ struct GraphTraits<ScopDetection *> : public GraphTraits<RegionInfo *> {
 };
 
 template <> struct DOTGraphTraits<RegionNode *> : public DefaultDOTGraphTraits {
-
   DOTGraphTraits(bool isSimple = false) : DefaultDOTGraphTraits(isSimple) {}
 
   std::string getNodeLabel(RegionNode *Node, RegionNode *Graph) {
-
     if (!Node->isSubRegion()) {
       BasicBlock *BB = Node->getNodeAs<BasicBlock>();
 
@@ -68,7 +65,6 @@ struct DOTGraphTraits<ScopDetection *> : public DOTGraphTraits<RegionNode *> {
   std::string getEdgeAttributes(RegionNode *srcNode,
                                 GraphTraits<RegionInfo *>::ChildIteratorType CI,
                                 ScopDetection *SD) {
-
     RegionNode *destNode = *CI;
 
     if (srcNode->isSubRegion() || destNode->isSubRegion())
@@ -95,19 +91,17 @@ struct DOTGraphTraits<ScopDetection *> : public DOTGraphTraits<RegionNode *> {
 
   std::string getNodeLabel(RegionNode *Node, ScopDetection *SD) {
     return DOTGraphTraits<RegionNode *>::getNodeLabel(
-        Node, SD->getRI()->getTopLevelRegion());
+        Node, reinterpret_cast<RegionNode *>(SD->getRI()->getTopLevelRegion()));
   }
 
   static std::string escapeString(std::string String) {
     std::string Escaped;
 
-    for (std::string::iterator SI = String.begin(), SE = String.end(); SI != SE;
-         ++SI) {
-
-      if (*SI == '"')
+    for (const auto &C : String) {
+      if (C == '"')
         Escaped += '\\';
 
-      Escaped += *SI;
+      Escaped += C;
     }
     return Escaped;
   }
@@ -139,18 +133,16 @@ struct DOTGraphTraits<ScopDetection *> : public DOTGraphTraits<RegionNode *> {
       O.indent(2 * (depth + 1)) << "color = " << color << "\n";
     }
 
-    for (Region::const_iterator RI = R->begin(), RE = R->end(); RI != RE; ++RI)
-      printRegionCluster(SD, *RI, O, depth + 1);
+    for (const auto &SubRegion : *R)
+      printRegionCluster(SD, SubRegion.get(), O, depth + 1);
 
     RegionInfo *RI = R->getRegionInfo();
 
-    for (Region::const_block_iterator BI = R->block_begin(),
-                                      BE = R->block_end();
-         BI != BE; ++BI)
-      if (RI->getRegionFor(*BI) == R)
+    for (const auto &BB : R->blocks())
+      if (RI->getRegionFor(BB) == R)
         O.indent(2 * (depth + 1))
             << "Node"
-            << static_cast<void *>(RI->getTopLevelRegion()->getBBNode(*BI))
+            << static_cast<void *>(RI->getTopLevelRegion()->getBBNode(BB))
             << ";\n";
 
     O.indent(2 * depth) << "}\n";
@@ -195,15 +187,15 @@ static RegisterPass<ScopViewer> X("view-scops",
                                   "Polly - View Scops of function");
 
 static RegisterPass<ScopOnlyViewer>
-Y("view-scops-only",
-  "Polly - View Scops of function (with no function bodies)");
+    Y("view-scops-only",
+      "Polly - View Scops of function (with no function bodies)");
 
 static RegisterPass<ScopPrinter> M("dot-scops",
                                    "Polly - Print Scops of function");
 
 static RegisterPass<ScopOnlyPrinter>
-N("dot-scops-only",
-  "Polly - Print Scops of function (with no function bodies)");
+    N("dot-scops-only",
+      "Polly - Print Scops of function (with no function bodies)");
 
 Pass *polly::createDOTViewerPass() { return new ScopViewer(); }
 

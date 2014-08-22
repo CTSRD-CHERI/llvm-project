@@ -25,9 +25,8 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
-#include "llvm/CodeGen/ValueTypes.h"
-#include "llvm/DebugInfo.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
@@ -40,6 +39,8 @@
 #include "llvm/Target/TargetOptions.h"
 
 using namespace llvm;
+
+#define DEBUG_TYPE "mips-reg-info"
 
 MipsSERegisterInfo::MipsSERegisterInfo(const MipsSubtarget &ST)
   : MipsRegisterInfo(ST) {}
@@ -177,14 +178,14 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     unsigned OffsetBitSize = getLoadStoreOffsetSizeInBits(MI.getOpcode());
     unsigned OffsetAlign = getLoadStoreOffsetAlign(MI.getOpcode());
 
+    const TargetMachine &TM = MF.getTarget();
+      const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
+          TM.getSubtargetImpl()->getInstrInfo());
     if (RS && RS->isScavengingFrameIndex(FrameIndex)) {
       assert(isInt<16>(Offset) &&
           "Emergency spill slot must be within 32K of the frame pointer!");
       MachineBasicBlock &MBB = *MI.getParent();
       DebugLoc DL = II->getDebugLoc();
-      const MipsSEInstrInfo &TII =
-          *static_cast<const MipsSEInstrInfo *>(
-               MBB.getParent()->getTarget().getInstrInfo());
       unsigned ADDiu = Subtarget.isABI_N64() ? Mips::DADDiu : Mips::ADDiu;
       // Add the offset to the frame register
       BuildMI(MBB, II, DL, TII.get(ADDiu), FrameReg)
@@ -206,9 +207,6 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
           Subtarget.isABI_N64() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
       unsigned Reg = RegInfo.createVirtualRegister(RC);
-      const MipsSEInstrInfo &TII =
-          *static_cast<const MipsSEInstrInfo *>(
-               MBB.getParent()->getTarget().getInstrInfo());
       BuildMI(MBB, II, DL, TII.get(ADDiu), Reg).addReg(FrameReg).addImm(Offset);
 
       FrameReg = Reg;
@@ -221,11 +219,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       DebugLoc DL = II->getDebugLoc();
       unsigned ADDu = Subtarget.isABI_N64() ? Mips::DADDu : Mips::ADDu;
       unsigned NewImm = 0;
-      const MipsSEInstrInfo &TII =
-          *static_cast<const MipsSEInstrInfo *>(
-               MBB.getParent()->getTarget().getInstrInfo());
       unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL,
-                                       OffsetBitSize == 16 ? &NewImm : NULL);
+                                       OffsetBitSize == 16 ? &NewImm : nullptr);
       BuildMI(MBB, II, DL, TII.get(ADDu), Reg).addReg(FrameReg)
         .addReg(Reg, RegState::Kill);
 

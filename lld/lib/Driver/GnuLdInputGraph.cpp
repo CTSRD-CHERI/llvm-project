@@ -10,51 +10,49 @@
 #include "lld/Driver/GnuLdInputGraph.h"
 #include "lld/ReaderWriter/LinkerScript.h"
 
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
+
 using namespace lld;
 
 /// \brief Parse the input file to lld::File.
-error_code ELFFileNode::parse(const LinkingContext &ctx,
-                              raw_ostream &diagnostics) {
+std::error_code ELFFileNode::parse(const LinkingContext &ctx,
+                                   raw_ostream &diagnostics) {
   ErrorOr<StringRef> filePath = getPath(ctx);
-  if (error_code ec = filePath.getError())
+  if (std::error_code ec = filePath.getError())
     return ec;
-
-  if (error_code ec = getBuffer(*filePath))
+  if (std::error_code ec = getBuffer(*filePath))
     return ec;
-
   if (ctx.logInputFiles())
     diagnostics << *filePath << "\n";
 
-  if (_isWholeArchive) {
+  if (_attributes._isWholeArchive) {
     std::vector<std::unique_ptr<File>> parsedFiles;
-    error_code ec = ctx.registry().parseFile(_buffer, parsedFiles);
-    if (ec)
+    if (std::error_code ec = ctx.registry().parseFile(_buffer, parsedFiles))
       return ec;
     assert(parsedFiles.size() == 1);
     std::unique_ptr<File> f(parsedFiles[0].release());
-    if (auto archive = reinterpret_cast<const ArchiveLibraryFile *>(f.get())) {
+    if (const auto *archive = dyn_cast<ArchiveLibraryFile>(f.get())) {
       // Have this node own the FileArchive object.
       _archiveFile.reset(archive);
       f.release();
       // Add all members to _files vector
       return archive->parseAllMembers(_files);
-    } else {
-      // if --whole-archive is around non-archive, just use it as normal.
-      _files.push_back(std::move(f));
-      return error_code::success();
     }
+    // if --whole-archive is around non-archive, just use it as normal.
+    _files.push_back(std::move(f));
+    return std::error_code();
   }
   return ctx.registry().parseFile(_buffer, _files);
 }
 
 /// \brief Parse the GnuLD Script
-error_code GNULdScript::parse(const LinkingContext &ctx,
-                              raw_ostream &diagnostics) {
+std::error_code GNULdScript::parse(const LinkingContext &ctx,
+                                   raw_ostream &diagnostics) {
   ErrorOr<StringRef> filePath = getPath(ctx);
-  if (error_code ec = filePath.getError())
+  if (std::error_code ec = filePath.getError())
     return ec;
-
-  if (error_code ec = getBuffer(*filePath))
+  if (std::error_code ec = getBuffer(*filePath))
     return ec;
 
   if (ctx.logInputFiles())
@@ -68,30 +66,44 @@ error_code GNULdScript::parse(const LinkingContext &ctx,
   if (!_linkerScript)
     return LinkerScriptReaderError::parse_error;
 
-  return error_code::success();
+  return std::error_code();
+}
+
+static bool isPathUnderSysroot(StringRef sysroot, StringRef path) {
+  if (sysroot.empty())
+    return false;
+
+  while (!path.empty() && !llvm::sys::fs::equivalent(sysroot, path))
+    path = llvm::sys::path::parent_path(path);
+
+  return !path.empty();
 }
 
 /// \brief Handle GnuLD script for ELF.
-error_code ELFGNULdScript::parse(const LinkingContext &ctx,
-                                 raw_ostream &diagnostics) {
-  int64_t index = 0;
-  if (error_code ec = GNULdScript::parse(ctx, diagnostics))
+std::error_code ELFGNULdScript::parse(const LinkingContext &ctx,
+                                      raw_ostream &diagnostics) {
+  ELFFileNode::Attributes attributes;
+  if (std::error_code ec = GNULdScript::parse(ctx, diagnostics))
     return ec;
-  for (const auto &c : _linkerScript->_commands) {
-    if (auto group = dyn_cast<script::Group>(c)) {
-      std::unique_ptr<InputElement> controlStart(
-          new ELFGroup(_elfLinkingContext, index++));
-      for (auto &path : group->getPaths()) {
-        // TODO : Propagate Set WholeArchive/dashlPrefix
-        auto inputNode = new ELFFileNode(
-            _elfLinkingContext, _elfLinkingContext.allocateString(path._path),
-            index++, false, path._asNeeded, false);
-        std::unique_ptr<InputElement> inputFile(inputNode);
-        dyn_cast<ControlNode>(controlStart.get())
-            ->processInputElement(std::move(inputFile));
-      }
-      _expandElements.push_back(std::move(controlStart));
+  StringRef sysRoot = _elfLinkingContext.getSysroot();
+  if (!sysRoot.empty() && isPathUnderSysroot(sysRoot, *getPath(ctx)))
+    attributes.setSysRooted(true);
+  for (const script::Command *c : _linkerScript->_commands) {
+    auto *group = dyn_cast<script::Group>(c);
+    if (!group)
+      continue;
+    std::unique_ptr<Group> groupStart(new Group());
+    for (const script::Path &path : group->getPaths()) {
+      // TODO : Propagate Set WholeArchive/dashlPrefix
+      attributes.setAsNeeded(path._asNeeded);
+      attributes.setDashlPrefix(path._isDashlPrefix);
+      auto inputNode = new ELFFileNode(
+          _elfLinkingContext, _elfLinkingContext.allocateString(path._path),
+          attributes);
+      std::unique_ptr<InputElement> inputFile(inputNode);
+      groupStart.get()->addFile(std::move(inputFile));
     }
+    _expandElements.push_back(std::move(groupStart));
   }
-  return error_code::success();
+  return std::error_code();
 }

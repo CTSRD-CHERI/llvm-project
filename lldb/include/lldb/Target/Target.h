@@ -82,6 +82,12 @@ public:
     SetDisableASLR (bool b);
     
     bool
+    GetDetachOnError () const;
+    
+    void
+    SetDetachOnError (bool b);
+    
+    bool
     GetDisableSTDIO () const;
     
     void
@@ -177,6 +183,11 @@ public:
     MemoryModuleLoadLevel
     GetMemoryModuleLoadLevel() const;
 
+    bool
+    GetUserSpecifiedTrapHandlerNames (Args &args) const;
+
+    void
+    SetUserSpecifiedTrapHandlerNames (const Args &args);
 };
 
 typedef std::shared_ptr<TargetProperties> TargetPropertiesSP;
@@ -196,9 +207,15 @@ public:
         m_stop_others(true),
         m_debug(false),
         m_trap_exceptions(true),
+        m_generate_debug_info(false),
+        m_result_is_internal(false),
         m_use_dynamic(lldb::eNoDynamicValues),
-        m_timeout_usec(default_timeout)
-    {}
+        m_timeout_usec(default_timeout),
+        m_one_thread_timeout_usec(0),
+        m_cancel_callback (nullptr),
+        m_cancel_callback_baton (nullptr)
+    {
+    }
     
     ExecutionPolicy
     GetExecutionPolicy () const
@@ -296,6 +313,18 @@ public:
         m_timeout_usec = timeout;
     }
     
+    uint32_t
+    GetOneThreadTimeoutUsec () const
+    {
+        return m_one_thread_timeout_usec;
+    }
+    
+    void
+    SetOneThreadTimeoutUsec (uint32_t timeout = 0)
+    {
+        m_one_thread_timeout_usec = timeout;
+    }
+    
     bool
     GetTryAllThreads () const
     {
@@ -330,6 +359,20 @@ public:
     SetDebug(bool b)
     {
         m_debug = b;
+        if (m_debug)
+            m_generate_debug_info = true;
+    }
+    
+    bool
+    GetGenerateDebugInfo() const
+    {
+        return m_generate_debug_info;
+    }
+    
+    void
+    SetGenerateDebugInfo(bool b)
+    {
+        m_generate_debug_info = b;
     }
     
     bool
@@ -343,6 +386,34 @@ public:
     {
         m_trap_exceptions = b;
     }
+    
+    void
+    SetCancelCallback (lldb::ExpressionCancelCallback callback, void *baton)
+    {
+        m_cancel_callback_baton = baton;
+        m_cancel_callback = callback;
+    }
+    
+    bool
+    InvokeCancelCallback (lldb::ExpressionEvaluationPhase phase) const
+    {
+        if (m_cancel_callback == nullptr)
+            return false;
+        else
+            return m_cancel_callback (phase, m_cancel_callback_baton);
+    }
+
+    void
+    SetResultIsInternal (bool b)
+    {
+        m_result_is_internal = b;
+    }
+
+    bool
+    GetResultIsInternal () const
+    {
+        return m_result_is_internal;
+    }
 
 private:
     ExecutionPolicy m_execution_policy;
@@ -355,8 +426,13 @@ private:
     bool m_stop_others;
     bool m_debug;
     bool m_trap_exceptions;
+    bool m_generate_debug_info;
+    bool m_result_is_internal;
     lldb::DynamicValueType m_use_dynamic;
     uint32_t m_timeout_usec;
+    uint32_t m_one_thread_timeout_usec;
+    lldb::ExpressionCancelCallback m_cancel_callback;
+    void *m_cancel_callback_baton;
 };
 
 //----------------------------------------------------------------------
@@ -508,7 +584,7 @@ public:
     /// in a target.
     ///
     /// @param[in] s
-    ///     The stream to which to dump the object descripton.
+    ///     The stream to which to dump the object description.
     //------------------------------------------------------------------
     void
     Dump (Stream *s, lldb::DescriptionLevel description_level);
@@ -1081,7 +1157,7 @@ public:
     // we provide a way for expressions to be evaluated from the Target itself.
     // If an expression is going to be run, then it should have a frame filled
     // in in th execution context. 
-    ExecutionResults
+    lldb::ExpressionResults
     EvaluateExpression (const char *expression,
                         StackFrame *frame,
                         lldb::ValueObjectSP &result_valobj_sp,
@@ -1172,7 +1248,7 @@ public:
         std::unique_ptr<ThreadSpec> m_thread_spec_ap;
         bool m_active;
         
-        // Use AddStopHook to make a new empty stop hook.  The GetCommandPointer and fill it with commands,
+        // Use CreateStopHook to make a new empty stop hook. The GetCommandPointer and fill it with commands,
         // and SetSpecifier to set the specifier shared pointer (can be null, that will match anything.)
         StopHook (lldb::TargetSP target_sp, lldb::user_id_t uid);
         friend class Target;
@@ -1181,8 +1257,8 @@ public:
     
     // Add an empty stop hook to the Target's stop hook list, and returns a shared pointer to it in new_hook.  
     // Returns the id of the new hook.        
-    lldb::user_id_t
-    AddStopHook (StopHookSP &new_hook);
+    StopHookSP
+    CreateStopHook ();
     
     void
     RunStopHooks ();

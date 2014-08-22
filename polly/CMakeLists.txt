@@ -12,7 +12,7 @@ if (NOT DEFINED LLVM_MAIN_SRC_DIR)
   #FileCheck is not install by default, warn the user to Copy FileCheck
   if( NOT EXISTS ${LLVM_INSTALL_ROOT}/bin/FileCheck
       OR NOT EXISTS ${LLVM_INSTALL_ROOT}/bin/not)
-    message(WARNING "FileCheck or not are requred by running regress tests, "
+    message(WARNING "FileCheck or not are required by running regress tests, "
                     "but they are not installed! Please copy it to "
                     "${LLVM_INSTALL_ROOT}/bin.")
   endif(NOT EXISTS ${LLVM_INSTALL_ROOT}/bin/FileCheck
@@ -79,15 +79,29 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
 # Add path for custom modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${POLLY_SOURCE_DIR}/cmake")
 
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 FIND_PACKAGE(Isl REQUIRED)
-FIND_PACKAGE(Gmp REQUIRED)
+set(POLLY_LINK_LIBS ${ISL_LIBRARY})
+
 FIND_PACKAGE(Pluto)
+if(PLUTO_FOUND)
+  set(POLLY_LINK_LIBS ${POLLY_LINK_LIBS} ${PLUTO_LIBRARY})
+endif(PLUTO_FOUND)
 
 option(POLLY_USE_CLOOG "Build Polly with Cloog support" ON)
-if (POLLY_USE_CLOOG)
+if(POLLY_USE_CLOOG)
   # Build Cloog support in Polly (default is for cloog-isl).
   FIND_PACKAGE(Cloog)
+  FIND_PACKAGE(Gmp REQUIRED)
+  if(CLOOG_FOUND)
+    set(POLLY_LINK_LIBS ${POLLY_LINK_LIBS} ${CLOOG_LIBRARY})
+  endif(CLOOG_FOUND)
 endif(POLLY_USE_CLOOG)
+
+if(GMP_FOUND)
+  set(POLLY_LINK_LIBS ${POLLY_LINK_LIBS} ${GMP_LIBRARY})
+endif(GMP_FOUND)
 
 option(POLLY_ENABLE_GPGPU_CODEGEN "Enable GPGPU code generation feature" OFF)
 if (POLLY_ENABLE_GPGPU_CODEGEN)
@@ -97,16 +111,6 @@ if (POLLY_ENABLE_GPGPU_CODEGEN)
   set(GPU_CODEGEN TRUE)
 endif(POLLY_ENABLE_GPGPU_CODEGEN)
 
-option(POLLY_ENABLE_OPENSCOP "Enable Openscop library for scop import/export" ON)
-if (POLLY_ENABLE_OPENSCOP)
-  FIND_PACKAGE(OpenScop)
-endif(POLLY_ENABLE_OPENSCOP)
-
-option(POLLY_ENABLE_SCOPLIB "Enable SCoPLib library for scop import/export" ON)
-if (POLLY_ENABLE_SCOPLIB)
-  FIND_PACKAGE(SCoPLib)
-endif(POLLY_ENABLE_SCOPLIB)
-
 if (CLOOG_FOUND)
   INCLUDE_DIRECTORIES( ${CLOOG_INCLUDE_DIR} )
 endif(CLOOG_FOUND)
@@ -114,23 +118,17 @@ if (PLUTO_FOUND)
   INCLUDE_DIRECTORIES( ${PLUTO_INCLUDE_DIR} )
 endif(PLUTO_FOUND)
 INCLUDE_DIRECTORIES( ${ISL_INCLUDE_DIR} )
-INCLUDE_DIRECTORIES( ${GMP_INCLUDE_DIR} )
+if (GMP_FOUND)
+  INCLUDE_DIRECTORIES( ${GMP_INCLUDE_DIR} )
+endif(GMP_FOUND)
 
 # Support GPGPU code generation if the library is available.
 if (CUDALIB_FOUND)
   INCLUDE_DIRECTORIES( ${CUDALIB_INCLUDE_DIR} )
 endif(CUDALIB_FOUND)
 
-# Support OpenScop export/import if the library is available.
-if (OPENSCOP_FOUND)
-  INCLUDE_DIRECTORIES( ${OPENSCOP_INCLUDE_DIR} )
-endif(OPENSCOP_FOUND)
-if (SCOPLIB_FOUND)
-  INCLUDE_DIRECTORIES( ${SCOPLIB_INCLUDE_DIR} )
-endif(SCOPLIB_FOUND)
-
-
 include_directories(
+  BEFORE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/lib/JSON/include
   ${CMAKE_CURRENT_BINARY_DIR}/include
@@ -175,3 +173,6 @@ add_custom_command( OUTPUT formatting-update COMMAND
   CLANG_FORMAT=${LLVM_BINARY_DIR}/bin/clang-format
   ${CMAKE_CURRENT_SOURCE_DIR}/utils/update_format.sh ${files})
 add_custom_target(polly-update-format DEPENDS formatting-update)
+
+# Set the variable POLLY_LINK_LIBS in the llvm/tools/ dir.
+set(POLLY_LINK_LIBS ${POLLY_LINK_LIBS} PARENT_SCOPE)

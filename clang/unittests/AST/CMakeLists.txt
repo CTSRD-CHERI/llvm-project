@@ -10,6 +10,9 @@ add_clang_unittest(ASTTests
   CommentParser.cpp
   DeclPrinterTest.cpp
   DeclTest.cpp
+  EvaluateAsRValueTest.cpp
+  ExternalASTSourceTest.cpp
+  NamedDeclPrinterTest.cpp
   SourceLocationTest.cpp
   StmtPrinterTest.cpp
   )

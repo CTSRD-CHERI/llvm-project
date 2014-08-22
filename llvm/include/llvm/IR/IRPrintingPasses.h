@@ -16,8 +16,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_IR_PRINTMODULEPASS_H
-#define LLVM_IR_PRINTMODULEPASS_H
+#ifndef LLVM_IR_IRPRINTINGPASSES_H
+#define LLVM_IR_IRPRINTINGPASSES_H
 
 #include "llvm/ADT/StringRef.h"
 #include <string>

@@ -53,6 +53,8 @@
     #define KMP_COMPILER "Clang " stringer( __clang_major__ ) "." stringer( __clang_minor__ )
 #elif KMP_COMPILER_GCC
     #define KMP_COMPILER "GCC " stringer( __GNUC__ ) "." stringer( __GNUC_MINOR__ )
+#elif KMP_COMPILER_MSVC
+    #define KMP_COMPILER "MSVC " stringer( __MSC_FULL_VER )
 #endif
 #ifndef KMP_COMPILER
     #warning "Unknown compiler"
@@ -169,7 +171,7 @@ __kmp_print_version_1( void )
             & buffer,
             "%sthread affinity support: %s\n",
             KMP_VERSION_PREF_STR,
-            #if KMP_OS_WINDOWS || KMP_OS_LINUX
+            #if KMP_AFFINITY_SUPPORTED
                 (
                     KMP_AFFINITY_CAPABLE()
                     ?

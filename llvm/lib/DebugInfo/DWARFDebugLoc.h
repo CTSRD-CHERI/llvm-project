@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_DEBUGINFO_DWARFDEBUGLOC_H
-#define LLVM_DEBUGINFO_DWARFDEBUGLOC_H
+#ifndef LLVM_LIB_DEBUGINFO_DWARFDEBUGLOC_H
+#define LLVM_LIB_DEBUGINFO_DWARFDEBUGLOC_H
 
 #include "DWARFRelocMap.h"
 #include "llvm/ADT/SmallVector.h"
@@ -54,6 +54,27 @@ public:
   /// Parse the debug_loc section accessible via the 'data' parameter using the
   /// specified address size to interpret the address ranges.
   void parse(DataExtractor data, unsigned AddressSize);
+};
+
+class DWARFDebugLocDWO {
+  struct Entry {
+    uint64_t Start;
+    uint32_t Length;
+    SmallVector<unsigned char, 4> Loc;
+  };
+
+  struct LocationList {
+    unsigned Offset;
+    SmallVector<Entry, 2> Entries;
+  };
+
+  typedef SmallVector<LocationList, 4> LocationLists;
+
+  LocationLists Locations;
+
+public:
+  void parse(DataExtractor data);
+  void dump(raw_ostream &OS) const;
 };
 }
 

@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SPARC_RELOCATIONS_H
-#define SPARC_RELOCATIONS_H
+#ifndef LLVM_LIB_TARGET_SPARC_SPARCRELOCATIONS_H
+#define LLVM_LIB_TARGET_SPARC_SPARCRELOCATIONS_H
 
 #include "llvm/CodeGen/MachineRelocation.h"
 
@@ -33,7 +33,22 @@ namespace llvm {
       reloc_sparc_pc22 = 4,
 
       // reloc_sparc_pc22 - pc rel. 19 bits for branch with icc/xcc
-      reloc_sparc_pc19 = 5
+      reloc_sparc_pc19 = 5,
+
+      // reloc_sparc_h44 - 43-22 bits
+      reloc_sparc_h44 = 6,
+
+      // reloc_sparc_m44 - 21-12 bits
+      reloc_sparc_m44 = 7,
+
+      // reloc_sparc_l44 - lower 12 bits
+      reloc_sparc_l44 = 8,
+
+      // reloc_sparc_hh - 63-42 bits
+      reloc_sparc_hh  = 9,
+
+      // reloc_sparc_hm - 41-32 bits
+      reloc_sparc_hm  = 10
     };
   }
 }

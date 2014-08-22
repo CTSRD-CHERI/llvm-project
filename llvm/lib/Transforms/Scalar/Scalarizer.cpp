@@ -14,16 +14,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "scalarizer"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/InstVisitor.h"
+#include "llvm/IR/InstVisitor.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 using namespace llvm;
+
+#define DEBUG_TYPE "scalarizer"
 
 namespace {
 // Used to store the scattered form of a vector.
@@ -48,7 +49,7 @@ public:
   // insert them before BBI in BB.  If Cache is nonnull, use it to cache
   // the results.
   Scatterer(BasicBlock *bb, BasicBlock::iterator bbi, Value *v,
-            ValueVector *cachePtr = 0);
+            ValueVector *cachePtr = nullptr);
 
   // Return component I, creating a new Value for it if necessary.
   Value *operator[](unsigned I);
@@ -101,7 +102,7 @@ struct BinarySplitter {
 
 // Information about a load or store that we're scalarizing.
 struct VectorLayout {
-  VectorLayout() : VecTy(0), ElemTy(0), VecAlign(0), ElemSize(0) {}
+  VectorLayout() : VecTy(nullptr), ElemTy(nullptr), VecAlign(0), ElemSize(0) {}
 
   // Return the alignment of element I.
   uint64_t getElemAlign(unsigned I) {
@@ -131,8 +132,8 @@ public:
     initializeScalarizerPass(*PassRegistry::getPassRegistry());
   }
 
-  virtual bool doInitialization(Module &M);
-  virtual bool runOnFunction(Function &F);
+  bool doInitialization(Module &M) override;
+  bool runOnFunction(Function &F) override;
 
   // InstVisitor methods.  They return true if the instruction was scalarized,
   // false if nothing changed.
@@ -162,7 +163,7 @@ private:
   ScatterMap Scattered;
   GatherList Gathered;
   unsigned ParallelLoopAccessMDKind;
-  const DataLayout *TDL;
+  const DataLayout *DL;
 };
 
 char Scalarizer::ID = 0;
@@ -186,9 +187,9 @@ Scatterer::Scatterer(BasicBlock *bb, BasicBlock::iterator bbi, Value *v,
     Ty = PtrTy->getElementType();
   Size = Ty->getVectorNumElements();
   if (!CachePtr)
-    Tmp.resize(Size, 0);
+    Tmp.resize(Size, nullptr);
   else if (CachePtr->empty())
-    CachePtr->resize(Size, 0);
+    CachePtr->resize(Size, nullptr);
   else
     assert(Size == CachePtr->size() && "Inconsistent vector sizes");
 }
@@ -240,7 +241,8 @@ bool Scalarizer::doInitialization(Module &M) {
 }
 
 bool Scalarizer::runOnFunction(Function &F) {
-  TDL = getAnalysisIfAvailable<DataLayout>();
+  DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
+  DL = DLP ? &DLP->getDataLayout() : nullptr;
   for (Function::iterator BBI = F.begin(), BBE = F.end(); BBI != BBE; ++BBI) {
     BasicBlock *BB = BBI;
     for (BasicBlock::iterator II = BB->begin(), IE = BB->end(); II != IE;) {
@@ -268,7 +270,7 @@ Scatterer Scalarizer::scatter(Instruction *Point, Value *V) {
     // Put the scattered form of an instruction directly after the
     // instruction.
     BasicBlock *BB = VOp->getParent();
-    return Scatterer(BB, llvm::next(BasicBlock::iterator(VOp)),
+    return Scatterer(BB, std::next(BasicBlock::iterator(VOp)),
                      V, &Scattered[V]);
   }
   // In the fallback case, just put the scattered before Point and
@@ -310,6 +312,8 @@ bool Scalarizer::canTransferMetadata(unsigned Tag) {
           || Tag == LLVMContext::MD_fpmath
           || Tag == LLVMContext::MD_tbaa_struct
           || Tag == LLVMContext::MD_invariant_load
+          || Tag == LLVMContext::MD_alias_scope
+          || Tag == LLVMContext::MD_noalias
           || Tag == ParallelLoopAccessMDKind);
 }
 
@@ -333,7 +337,7 @@ void Scalarizer::transferMetadata(Instruction *Op, const ValueVector &CV) {
 // the alignment of the vector, or 0 if the ABI default should be used.
 bool Scalarizer::getVectorLayout(Type *Ty, unsigned Alignment,
                                  VectorLayout &Layout) {
-  if (!TDL)
+  if (!DL)
     return false;
 
   // Make sure we're dealing with a vector.
@@ -343,15 +347,15 @@ bool Scalarizer::getVectorLayout(Type *Ty, unsigned Alignment,
 
   // Check that we're dealing with full-byte elements.
   Layout.ElemTy = Layout.VecTy->getElementType();
-  if (TDL->getTypeSizeInBits(Layout.ElemTy) !=
-      TDL->getTypeStoreSizeInBits(Layout.ElemTy))
+  if (DL->getTypeSizeInBits(Layout.ElemTy) !=
+      DL->getTypeStoreSizeInBits(Layout.ElemTy))
     return false;
 
   if (Alignment)
     Layout.VecAlign = Alignment;
   else
-    Layout.VecAlign = TDL->getABITypeAlignment(Layout.VecTy);
-  Layout.ElemSize = TDL->getTypeStoreSize(Layout.ElemTy);
+    Layout.VecAlign = DL->getABITypeAlignment(Layout.VecTy);
+  Layout.ElemSize = DL->getTypeStoreSize(Layout.ElemTy);
   return true;
 }
 

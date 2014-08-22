@@ -38,7 +38,27 @@ SANITIZER_INTERFACE_ATTRIBUTE __attribute__((noreturn))
 void __msan_warning_noreturn();
 
 SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_maybe_warning_1(u8 s, u32 o);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_maybe_warning_2(u16 s, u32 o);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_maybe_warning_4(u32 s, u32 o);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_maybe_warning_8(u64 s, u32 o);
+
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_maybe_store_origin_1(u8 s, void *p, u32 o);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_maybe_store_origin_2(u16 s, void *p, u32 o);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_maybe_store_origin_4(u32 s, void *p, u32 o);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_maybe_store_origin_8(u64 s, void *p, u32 o);
+
+SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_unpoison(const void *a, uptr size);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_unpoison_string(const char *s);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_clear_and_unpoison(void *a, uptr size);
 SANITIZER_INTERFACE_ATTRIBUTE
@@ -47,12 +67,6 @@ SANITIZER_INTERFACE_ATTRIBUTE
 void* __msan_memset(void *s, int c, uptr n);
 SANITIZER_INTERFACE_ATTRIBUTE
 void* __msan_memmove(void* dest, const void* src, uptr n);
-SANITIZER_INTERFACE_ATTRIBUTE
-void __msan_copy_poison(void *dst, const void *src, uptr size);
-SANITIZER_INTERFACE_ATTRIBUTE
-void __msan_copy_origin(void *dst, const void *src, uptr size);
-SANITIZER_INTERFACE_ATTRIBUTE
-void __msan_move_poison(void *dst, const void *src, uptr size);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_poison(const void *a, uptr size);
 SANITIZER_INTERFACE_ATTRIBUTE
@@ -69,11 +83,16 @@ SANITIZER_INTERFACE_ATTRIBUTE
 sptr __msan_test_shadow(const void *x, uptr size);
 
 SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_check_mem_is_initialized(const void *x, uptr size);
+
+SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_set_origin(const void *a, uptr size, u32 origin);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_set_alloca_origin(void *a, uptr size, const char *descr);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_set_alloca_origin4(void *a, uptr size, const char *descr, uptr pc);
+SANITIZER_INTERFACE_ATTRIBUTE
+u32 __msan_chain_origin(u32 id);
 SANITIZER_INTERFACE_ATTRIBUTE
 u32 __msan_get_origin(const void *a);
 
@@ -99,7 +118,7 @@ void __msan_set_expect_umr(int expect_umr);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_print_shadow(const void *x, uptr size);
 SANITIZER_INTERFACE_ATTRIBUTE
-void __msan_print_param_shadow();
+void __msan_dump_shadow(const void *x, uptr size);
 SANITIZER_INTERFACE_ATTRIBUTE
 int  __msan_has_dynamic_component();
 
@@ -116,8 +135,6 @@ bool __msan_is_in_loader();
 // For testing.
 SANITIZER_INTERFACE_ATTRIBUTE
 u32 __msan_get_umr_origin();
-SANITIZER_INTERFACE_ATTRIBUTE
-const char *__msan_get_origin_descr_if_stack(u32 id);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_partial_poison(const void* data, void* shadow, uptr size);
 
@@ -145,33 +162,6 @@ SANITIZER_INTERFACE_ATTRIBUTE
 void __sanitizer_unaligned_store64(uu64 *p, u64 x);
 
 SANITIZER_INTERFACE_ATTRIBUTE
-uptr __msan_get_estimated_allocated_size(uptr size);
-
-SANITIZER_INTERFACE_ATTRIBUTE
-int __msan_get_ownership(const void *p);
-
-SANITIZER_INTERFACE_ATTRIBUTE
-uptr __msan_get_allocated_size(const void *p);
-
-SANITIZER_INTERFACE_ATTRIBUTE
-uptr __msan_get_current_allocated_bytes();
-
-SANITIZER_INTERFACE_ATTRIBUTE
-uptr __msan_get_heap_size();
-
-SANITIZER_INTERFACE_ATTRIBUTE
-uptr __msan_get_free_bytes();
-
-SANITIZER_INTERFACE_ATTRIBUTE
-uptr __msan_get_unmapped_bytes();
-
-SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
-/* OPTIONAL */ void __msan_malloc_hook(void *ptr, uptr size);
-
-SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
-/* OPTIONAL */ void __msan_free_hook(void *ptr);
-
-SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_dr_is_initialized();
 
 SANITIZER_INTERFACE_ATTRIBUTE
@@ -179,6 +169,9 @@ void *__msan_wrap_indirect_call(void *target);
 
 SANITIZER_INTERFACE_ATTRIBUTE
 void __msan_set_indirect_call_wrapper(uptr wrapper);
+
+SANITIZER_INTERFACE_ATTRIBUTE
+void __msan_set_death_callback(void (*callback)(void));
 }  // extern "C"
 
 #endif  // MSAN_INTERFACE_INTERNAL_H

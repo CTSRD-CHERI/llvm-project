@@ -213,13 +213,13 @@ static CompilerVersions handleSupportedCompilers(const char *ProgName,
                                                         E = Compilers.end();
        I != E; ++I) {
     llvm::StringRef Compiler, VersionStr;
-    llvm::tie(Compiler, VersionStr) = I->split('-');
+    std::tie(Compiler, VersionStr) = I->split('-');
     Version *V = llvm::StringSwitch<Version *>(Compiler)
         .Case("clang", &RequiredVersions.Clang)
         .Case("gcc", &RequiredVersions.Gcc).Case("icc", &RequiredVersions.Icc)
-        .Case("msvc", &RequiredVersions.Msvc).Default(NULL);
+        .Case("msvc", &RequiredVersions.Msvc).Default(nullptr);
 
-    if (V == NULL) {
+    if (V == nullptr) {
       llvm::errs() << ProgName << ": " << Compiler
                    << ": unsupported platform\n";
       Error = true;
@@ -248,14 +248,15 @@ static CompilerVersions handleSupportedCompilers(const char *ProgName,
   return RequiredVersions;
 }
 
-CompilationDatabase *autoDetectCompilations(std::string &ErrorMessage) {
+std::unique_ptr<CompilationDatabase>
+autoDetectCompilations(std::string &ErrorMessage) {
   // Auto-detect a compilation database from BuildPath.
   if (BuildPath.getNumOccurrences() > 0)
     return CompilationDatabase::autoDetectFromDirectory(BuildPath,
                                                         ErrorMessage);
   // Try to auto-detect a compilation database from the first source.
   if (!SourcePaths.empty()) {
-    if (CompilationDatabase *Compilations =
+    if (std::unique_ptr<CompilationDatabase> Compilations =
             CompilationDatabase::autoDetectFromSource(SourcePaths[0],
                                                       ErrorMessage)) {
       // FIXME: just pass SourcePaths[0] once getCompileCommands supports
@@ -275,11 +276,11 @@ CompilationDatabase *autoDetectCompilations(std::string &ErrorMessage) {
     // If no compilation database can be detected from source then we create a
     // fixed compilation database with c++11 support.
     std::string CommandLine[] = { "-std=c++11" };
-    return new FixedCompilationDatabase(".", CommandLine);
+    return llvm::make_unique<FixedCompilationDatabase>(".", CommandLine);
   }
 
   ErrorMessage = "Could not determine sources to transform";
-  return 0;
+  return nullptr;
 }
 
 // Predicate definition for determining whether a file is not included.
@@ -323,7 +324,7 @@ int main(int argc, const char **argv) {
   cl::SetVersionPrinter(&printVersion);
 
   // Parse options and generate compilations.
-  OwningPtr<CompilationDatabase> Compilations(
+  std::unique_ptr<CompilationDatabase> Compilations(
       FixedCompilationDatabase::loadFromCommandLine(argc, argv));
   cl::ParseCommandLineOptions(argc, argv);
 
@@ -334,7 +335,7 @@ int main(int argc, const char **argv) {
 
   if (!Compilations) {
     std::string ErrorMessage;
-    Compilations.reset(autoDetectCompilations(ErrorMessage));
+    Compilations = autoDetectCompilations(ErrorMessage);
     if (!Compilations) {
       llvm::errs() << llvm::sys::path::filename(argv[0]) << ": " << ErrorMessage
                    << "\n";
@@ -395,7 +396,7 @@ int main(int argc, const char **argv) {
       new DiagnosticOptions());
   DiagnosticsEngine Diagnostics(
       llvm::IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs()),
-      DiagOpts.getPtr());
+      DiagOpts.get());
 
   // FIXME: Make this DiagnosticsEngine available to all Transforms probably via
   // GlobalOptions.
@@ -469,7 +470,7 @@ int main(int argc, const char **argv) {
 
   if (FinalSyntaxCheck) {
     ClangTool SyntaxTool(*Compilations, SourcePaths);
-    if (SyntaxTool.run(newFrontendActionFactory<SyntaxOnlyAction>()) != 0)
+    if (SyntaxTool.run(newFrontendActionFactory<SyntaxOnlyAction>().get()) != 0)
       return 1;
   }
 

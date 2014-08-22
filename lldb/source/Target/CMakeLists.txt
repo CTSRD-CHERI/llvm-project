@@ -6,13 +6,20 @@ add_lldb_library(lldbTarget
   ABI.cpp
   CPPLanguageRuntime.cpp
   ExecutionContext.cpp
+  FileAction.cpp
+  JITLoader.cpp
+  JITLoaderList.cpp
   LanguageRuntime.cpp
   Memory.cpp
+  NativeRegisterContext.cpp
+  NativeRegisterContextRegisterInfo.cpp
   ObjCLanguageRuntime.cpp
   OperatingSystem.cpp
   PathMappingList.cpp
   Platform.cpp
   Process.cpp
+  ProcessInfo.cpp
+  ProcessLaunchInfo.cpp
   Queue.cpp
   QueueItem.cpp
   QueueList.cpp

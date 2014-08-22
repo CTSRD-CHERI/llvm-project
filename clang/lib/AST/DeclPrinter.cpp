@@ -85,8 +85,9 @@ namespace {
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
 
     void PrintTemplateParameters(const TemplateParameterList *Params,
-                                 const TemplateArgumentList *Args = 0);
+                                 const TemplateArgumentList *Args = nullptr);
     void prettyPrintAttributes(Decl *D);
+    void printDeclType(QualType T, StringRef DeclName, bool Pack = false);
   };
 }
 
@@ -114,7 +115,7 @@ static QualType GetBaseType(QualType T) {
     else if (const ArrayType* ATy = dyn_cast<ArrayType>(BaseType))
       BaseType = ATy->getElementType();
     else if (const FunctionType* FTy = BaseType->getAs<FunctionType>())
-      BaseType = FTy->getResultType();
+      BaseType = FTy->getReturnType();
     else if (const VectorType *VTy = BaseType->getAs<VectorType>())
       BaseType = VTy->getElementType();
     else if (const ReferenceType *RTy = BaseType->getAs<ReferenceType>())
@@ -195,6 +196,17 @@ void DeclPrinter::prettyPrintAttributes(Decl *D) {
       A->printPretty(Out, Policy);
     }
   }
+}
+
+void DeclPrinter::printDeclType(QualType T, StringRef DeclName, bool Pack) {
+  // Normally, a PackExpansionType is written as T[3]... (for instance, as a
+  // template argument), but if it is the type of a declaration, the ellipsis
+  // is placed before the name being declared.
+  if (auto *PET = T->getAs<PackExpansionType>()) {
+    Pack = true;
+    T = PET->getPattern();
+  }
+  T.print(Out, Policy, (Pack ? "..." : "") + DeclName);
 }
 
 void DeclPrinter::ProcessDeclGroup(SmallVectorImpl<Decl*>& Decls) {
@@ -282,21 +294,21 @@ void DeclPrinter::VisitDeclContext(DeclContext *DC, bool Indent) {
     Visit(*D);
 
     // FIXME: Need to be able to tell the DeclPrinter when
-    const char *Terminator = 0;
+    const char *Terminator = nullptr;
     if (isa<OMPThreadPrivateDecl>(*D))
-      Terminator = 0;
+      Terminator = nullptr;
     else if (isa<FunctionDecl>(*D) &&
              cast<FunctionDecl>(*D)->isThisDeclarationADefinition())
-      Terminator = 0;
+      Terminator = nullptr;
     else if (isa<ObjCMethodDecl>(*D) && cast<ObjCMethodDecl>(*D)->getBody())
-      Terminator = 0;
+      Terminator = nullptr;
     else if (isa<NamespaceDecl>(*D) || isa<LinkageSpecDecl>(*D) ||
              isa<ObjCImplementationDecl>(*D) ||
              isa<ObjCInterfaceDecl>(*D) ||
              isa<ObjCProtocolDecl>(*D) ||
              isa<ObjCCategoryImplDecl>(*D) ||
              isa<ObjCCategoryDecl>(*D))
-      Terminator = 0;
+      Terminator = nullptr;
     else if (isa<EnumConstantDecl>(*D)) {
       DeclContext::decl_iterator Next = D;
       ++Next;
@@ -379,12 +391,13 @@ void DeclPrinter::VisitEnumConstantDecl(EnumConstantDecl *D) {
   Out << *D;
   if (Expr *Init = D->getInitExpr()) {
     Out << " = ";
-    Init->printPretty(Out, 0, Policy, Indentation);
+    Init->printPretty(Out, nullptr, Policy, Indentation);
   }
 }
 
 void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
   CXXConstructorDecl *CDecl = dyn_cast<CXXConstructorDecl>(D);
+  CXXConversionDecl *ConversionDecl = dyn_cast<CXXConversionDecl>(D);
   if (!Policy.SuppressSpecifiers) {
     switch (D->getStorageClass()) {
     case SC_None: break;
@@ -398,7 +411,9 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
     if (D->isInlineSpecified())  Out << "inline ";
     if (D->isVirtualAsWritten()) Out << "virtual ";
     if (D->isModulePrivate())    Out << "__module_private__ ";
-    if (CDecl && CDecl->isExplicitSpecified())
+    if (D->isConstexpr() && !D->isExplicitlyDefaulted()) Out << "constexpr ";
+    if ((CDecl && CDecl->isExplicitSpecified()) ||
+        (ConversionDecl && ConversionDecl->isExplicit()))
       Out << "explicit ";
   }
 
@@ -413,7 +428,7 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
   }
 
   if (const FunctionType *AFT = Ty->getAs<FunctionType>()) {
-    const FunctionProtoType *FT = 0;
+    const FunctionProtoType *FT = nullptr;
     if (D->hasWrittenPrototype())
       FT = dyn_cast<FunctionProtoType>(AFT);
 
@@ -447,6 +462,17 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
         Proto += " volatile";
       if (FT->isRestrict())
         Proto += " restrict";
+
+      switch (FT->getRefQualifier()) {
+      case RQ_None:
+        break;
+      case RQ_LValue:
+        Proto += " &";
+        break;
+      case RQ_RValue:
+        Proto += " &&";
+        break;
+      }
     }
 
     if (FT && FT->hasDynamicExceptionSpec()) {
@@ -466,7 +492,7 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
       if (FT->getExceptionSpecType() == EST_ComputedNoexcept) {
         Proto += "(";
         llvm::raw_string_ostream EOut(Proto);
-        FT->getNoexceptExpr()->printPretty(EOut, 0, SubPolicy,
+        FT->getNoexceptExpr()->printPretty(EOut, nullptr, SubPolicy,
                                            Indentation);
         EOut.flush();
         Proto += EOut.str();
@@ -476,10 +502,7 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
 
     if (CDecl) {
       bool HasInitializerList = false;
-      for (CXXConstructorDecl::init_const_iterator B = CDecl->init_begin(),
-           E = CDecl->init_end();
-           B != E; ++B) {
-        CXXCtorInitializer *BMInitializer = (*B);
+      for (const auto *BMInitializer : CDecl->inits()) {
         if (BMInitializer->isInClassMemberInitializer())
           continue;
 
@@ -507,9 +530,9 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
             Init = Tmp->getSubExpr();
           
           Init = Init->IgnoreParens();
-          
-          Expr *SimpleInit = 0;
-          Expr **Args = 0;
+
+          Expr *SimpleInit = nullptr;
+          Expr **Args = nullptr;
           unsigned NumArgs = 0;
           if (ParenListExpr *ParenList = dyn_cast<ParenListExpr>(Init)) {
             Args = ParenList->getExprs();
@@ -522,29 +545,32 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
             SimpleInit = Init;
           
           if (SimpleInit)
-            SimpleInit->printPretty(Out, 0, Policy, Indentation);
+            SimpleInit->printPretty(Out, nullptr, Policy, Indentation);
           else {
             for (unsigned I = 0; I != NumArgs; ++I) {
+              assert(Args[I] != nullptr && "Expected non-null Expr");
               if (isa<CXXDefaultArgExpr>(Args[I]))
                 break;
               
               if (I)
                 Out << ", ";
-              Args[I]->printPretty(Out, 0, Policy, Indentation);
+              Args[I]->printPretty(Out, nullptr, Policy, Indentation);
             }
           }
         }
         Out << ")";
+        if (BMInitializer->isPackExpansion())
+          Out << "...";
       }
-      if (!Proto.empty())
-        Out << Proto;
-    } else {
+    } else if (!ConversionDecl && !isa<CXXDestructorDecl>(D)) {
       if (FT && FT->hasTrailingReturn()) {
         Out << "auto " << Proto << " -> ";
         Proto.clear();
       }
-      AFT->getResultType().print(Out, Policy, Proto);
+      AFT->getReturnType().print(Out, Policy, Proto);
+      Proto.clear();
     }
+    Out << Proto;
   } else {
     Ty.print(Out, Policy, Proto);
   }
@@ -573,7 +599,8 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
     } else
       Out << ' ';
 
-    D->getBody()->printPretty(Out, 0, SubPolicy, Indentation);
+    if (D->getBody())
+      D->getBody()->printPretty(Out, nullptr, SubPolicy, Indentation);
     Out << '\n';
   }
 }
@@ -614,7 +641,7 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
 
   if (D->isBitField()) {
     Out << " : ";
-    D->getBitWidth()->printPretty(Out, 0, Policy, Indentation);
+    D->getBitWidth()->printPretty(Out, nullptr, Policy, Indentation);
   }
 
   Expr *Init = D->getInClassInitializer();
@@ -623,7 +650,7 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
       Out << " ";
     else
       Out << " = ";
-    Init->printPretty(Out, 0, Policy, Indentation);
+    Init->printPretty(Out, nullptr, Policy, Indentation);
   }
   prettyPrintAttributes(D);
 }
@@ -631,7 +658,6 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
 void DeclPrinter::VisitLabelDecl(LabelDecl *D) {
   Out << *D << ":";
 }
-
 
 void DeclPrinter::VisitVarDecl(VarDecl *D) {
   if (!Policy.SuppressSpecifiers) {
@@ -660,7 +686,7 @@ void DeclPrinter::VisitVarDecl(VarDecl *D) {
   QualType T = D->getTypeSourceInfo()
     ? D->getTypeSourceInfo()->getType()
     : D->getASTContext().getUnqualifiedObjCPointerType(D->getType());
-  T.print(Out, Policy, D->getName());
+  printDeclType(T, D->getName());
   Expr *Init = D->getInit();
   if (!Policy.SuppressInitializers && Init) {
     bool ImplicitInit = false;
@@ -678,7 +704,7 @@ void DeclPrinter::VisitVarDecl(VarDecl *D) {
       else if (D->getInitStyle() == VarDecl::CInit) {
         Out << " = ";
       }
-      Init->printPretty(Out, 0, Policy, Indentation);
+      Init->printPretty(Out, nullptr, Policy, Indentation);
       if ((D->getInitStyle() == VarDecl::CallInit) && !isa<ParenListExpr>(Init))
         Out << ")";
     }
@@ -692,7 +718,7 @@ void DeclPrinter::VisitParmVarDecl(ParmVarDecl *D) {
 
 void DeclPrinter::VisitFileScopeAsmDecl(FileScopeAsmDecl *D) {
   Out << "__asm (";
-  D->getAsmString()->printPretty(Out, 0, Policy, Indentation);
+  D->getAsmString()->printPretty(Out, nullptr, Policy, Indentation);
   Out << ")";
 }
 
@@ -703,9 +729,9 @@ void DeclPrinter::VisitImportDecl(ImportDecl *D) {
 
 void DeclPrinter::VisitStaticAssertDecl(StaticAssertDecl *D) {
   Out << "static_assert(";
-  D->getAssertExpr()->printPretty(Out, 0, Policy, Indentation);
+  D->getAssertExpr()->printPretty(Out, nullptr, Policy, Indentation);
   Out << ", ";
-  D->getMessage()->printPretty(Out, 0, Policy, Indentation);
+  D->getMessage()->printPretty(Out, nullptr, Policy, Indentation);
   Out << ")";
 }
 
@@ -758,9 +784,11 @@ void DeclPrinter::VisitCXXRecordDecl(CXXRecordDecl *D) {
           Out << "virtual ";
 
         AccessSpecifier AS = Base->getAccessSpecifierAsWritten();
-        if (AS != AS_none)
+        if (AS != AS_none) {
           Print(AS);
-        Out << " " << Base->getType().getAsString(Policy);
+          Out << " ";
+        }
+        Out << Base->getType().getAsString(Policy);
 
         if (Base->isPackExpansion())
           Out << "...";
@@ -815,7 +843,7 @@ void DeclPrinter::PrintTemplateParameters(const TemplateParameterList *Params,
         Out << "class ";
 
       if (TTP->isParameterPack())
-        Out << "... ";
+        Out << "...";
 
       Out << *TTP;
 
@@ -828,22 +856,18 @@ void DeclPrinter::PrintTemplateParameters(const TemplateParameterList *Params,
       };
     } else if (const NonTypeTemplateParmDecl *NTTP =
                  dyn_cast<NonTypeTemplateParmDecl>(Param)) {
-      Out << NTTP->getType().getAsString(Policy);
-
-      if (NTTP->isParameterPack() && !isa<PackExpansionType>(NTTP->getType()))
-        Out << "...";
-        
-      if (IdentifierInfo *Name = NTTP->getIdentifier()) {
-        Out << ' ';
-        Out << Name->getName();
-      }
+      StringRef Name;
+      if (IdentifierInfo *II = NTTP->getIdentifier())
+        Name = II->getName();
+      printDeclType(NTTP->getType(), Name, NTTP->isParameterPack());
 
       if (Args) {
         Out << " = ";
         Args->get(i).print(Policy, Out);
       } else if (NTTP->hasDefaultArgument()) {
         Out << " = ";
-        NTTP->getDefaultArgument()->printPretty(Out, 0, Policy, Indentation);
+        NTTP->getDefaultArgument()->printPretty(Out, nullptr, Policy,
+                                                Indentation);
       }
     } else if (const TemplateTemplateParmDecl *TTPD =
                  dyn_cast<TemplateTemplateParmDecl>(Param)) {
@@ -872,10 +896,9 @@ void DeclPrinter::VisitTemplateDecl(const TemplateDecl *D) {
 void DeclPrinter::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   if (PrintInstantiation) {
     TemplateParameterList *Params = D->getTemplateParameters();
-    for (FunctionTemplateDecl::spec_iterator I = D->spec_begin(), E = D->spec_end();
-         I != E; ++I) {
-      PrintTemplateParameters(Params, (*I)->getTemplateSpecializationArgs());
-      Visit(*I);
+    for (auto *I : D->specializations()) {
+      PrintTemplateParameters(Params, I->getTemplateSpecializationArgs());
+      Visit(I);
     }
   }
 
@@ -885,10 +908,9 @@ void DeclPrinter::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
 void DeclPrinter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
   if (PrintInstantiation) {
     TemplateParameterList *Params = D->getTemplateParameters();
-    for (ClassTemplateDecl::spec_iterator I = D->spec_begin(), E = D->spec_end();
-         I != E; ++I) {
-      PrintTemplateParameters(Params, &(*I)->getTemplateArgs());
-      Visit(*I);
+    for (auto *I : D->specializations()) {
+      PrintTemplateParameters(Params, &I->getTemplateArgs());
+      Visit(I);
       Out << '\n';
     }
   }
@@ -905,19 +927,19 @@ void DeclPrinter::VisitObjCMethodDecl(ObjCMethodDecl *OMD) {
     Out << "- ";
   else
     Out << "+ ";
-  if (!OMD->getResultType().isNull())
-    Out << '(' << OMD->getASTContext().getUnqualifiedObjCPointerType(OMD->getResultType()).
-                    getAsString(Policy) << ")";
+  if (!OMD->getReturnType().isNull())
+    Out << '(' << OMD->getASTContext()
+                      .getUnqualifiedObjCPointerType(OMD->getReturnType())
+                      .getAsString(Policy) << ")";
 
   std::string name = OMD->getSelector().getAsString();
   std::string::size_type pos, lastPos = 0;
-  for (ObjCMethodDecl::param_iterator PI = OMD->param_begin(),
-       E = OMD->param_end(); PI != E; ++PI) {
+  for (const auto *PI : OMD->params()) {
     // FIXME: selector is missing here!
     pos = name.find_first_of(':', lastPos);
     Out << " " << name.substr(lastPos, pos - lastPos);
-    Out << ":(" << (*PI)->getASTContext().getUnqualifiedObjCPointerType((*PI)->getType()).
-                      getAsString(Policy) << ')' << **PI;
+    Out << ":(" << PI->getASTContext().getUnqualifiedObjCPointerType(PI->getType()).
+                      getAsString(Policy) << ')' << *PI;
     lastPos = pos + 1;
   }
 
@@ -929,7 +951,7 @@ void DeclPrinter::VisitObjCMethodDecl(ObjCMethodDecl *OMD) {
 
   if (OMD->getBody() && !Policy.TerseOutput) {
     Out << ' ';
-    OMD->getBody()->printPretty(Out, 0, Policy);
+    OMD->getBody()->printPretty(Out, nullptr, Policy);
     Out << '\n';
   }
   else if (Policy.PolishForDeclaration)
@@ -948,10 +970,9 @@ void DeclPrinter::VisitObjCImplementationDecl(ObjCImplementationDecl *OID) {
   if (OID->ivar_size() > 0) {
     Out << "{\n";
     Indentation += Policy.Indentation;
-    for (ObjCImplementationDecl::ivar_iterator I = OID->ivar_begin(),
-         E = OID->ivar_end(); I != E; ++I) {
+    for (const auto *I : OID->ivars()) {
       Indent() << I->getASTContext().getUnqualifiedObjCPointerType(I->getType()).
-                    getAsString(Policy) << ' ' << **I << ";\n";
+                    getAsString(Policy) << ' ' << *I << ";\n";
     }
     Indentation -= Policy.Indentation;
     Out << "}\n";
@@ -987,10 +1008,10 @@ void DeclPrinter::VisitObjCInterfaceDecl(ObjCInterfaceDecl *OID) {
     Out << "{\n";
     eolnOut = true;
     Indentation += Policy.Indentation;
-    for (ObjCInterfaceDecl::ivar_iterator I = OID->ivar_begin(),
-         E = OID->ivar_end(); I != E; ++I) {
-      Indent() << I->getASTContext().getUnqualifiedObjCPointerType(I->getType()).
-                    getAsString(Policy) << ' ' << **I << ";\n";
+    for (const auto *I : OID->ivars()) {
+      Indent() << I->getASTContext()
+                      .getUnqualifiedObjCPointerType(I->getType())
+                      .getAsString(Policy) << ' ' << *I << ";\n";
     }
     Indentation -= Policy.Indentation;
     Out << "}\n";
@@ -1039,11 +1060,9 @@ void DeclPrinter::VisitObjCCategoryDecl(ObjCCategoryDecl *PID) {
   if (PID->ivar_size() > 0) {
     Out << "{\n";
     Indentation += Policy.Indentation;
-    for (ObjCCategoryDecl::ivar_iterator I = PID->ivar_begin(),
-         E = PID->ivar_end(); I != E; ++I) {
+    for (const auto *I : PID->ivars())
       Indent() << I->getASTContext().getUnqualifiedObjCPointerType(I->getType()).
-                    getAsString(Policy) << ' ' << **I << ";\n";
-    }
+                    getAsString(Policy) << ' ' << *I << ";\n";
     Indentation -= Policy.Indentation;
     Out << "}\n";
   }

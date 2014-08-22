@@ -10,6 +10,7 @@ set(INTERCEPTION_SOURCES
 include_directories(..)
 
 set(INTERCEPTION_CFLAGS ${SANITIZER_COMMON_CFLAGS})
+append_no_rtti_flag(INTERCEPTION_CFLAGS)
 
 if(APPLE)
   # Build universal binary on APPLE.

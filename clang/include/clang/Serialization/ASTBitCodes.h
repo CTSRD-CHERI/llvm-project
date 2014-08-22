@@ -14,8 +14,8 @@
 // respective lists.
 //
 //===----------------------------------------------------------------------===//
-#ifndef LLVM_CLANG_FRONTEND_PCHBITCODES_H
-#define LLVM_CLANG_FRONTEND_PCHBITCODES_H
+#ifndef LLVM_CLANG_SERIALIZATION_ASTBITCODES_H
+#define LLVM_CLANG_SERIALIZATION_ASTBITCODES_H
 
 #include "clang/AST/Type.h"
 #include "llvm/ADT/DenseMap.h"
@@ -213,9 +213,6 @@ namespace clang {
       /// types and decls used within the AST file.
       DECLTYPES_BLOCK_ID,
 
-      /// \brief The block containing DECL_UPDATES records.
-      DECL_UPDATES_BLOCK_ID,
-      
       /// \brief The block containing the detailed preprocessing record.
       PREPROCESSOR_DETAIL_BLOCK_ID,
       
@@ -284,7 +281,14 @@ namespace clang {
       HEADER_SEARCH_OPTIONS = 11,
 
       /// \brief Record code for the preprocessor options table.
-      PREPROCESSOR_OPTIONS = 12
+      PREPROCESSOR_OPTIONS = 12,
+
+      /// \brief Record code for the module name.
+      MODULE_NAME = 13,
+
+      /// \brief Record code for the module map file that was used to build this
+      /// AST file.
+      MODULE_MAP_FILE = 14
     };
 
     /// \brief Record types that occur within the input-files block
@@ -349,15 +353,15 @@ namespace clang {
       /// IDs).
       IDENTIFIER_TABLE = 5,
 
-      /// \brief Record code for the array of external definitions.
+      /// \brief Record code for the array of eagerly deserialized decls.
       ///
-      /// The AST file contains a list of all of the unnamed external
-      /// definitions present within the parsed headers, stored as an
-      /// array of declaration IDs. These external definitions will be
+      /// The AST file contains a list of all of the declarations that should be
+      /// eagerly deserialized present within the parsed headers, stored as an
+      /// array of declaration IDs. These declarations will be
       /// reported to the AST consumer after the AST file has been
       /// read, since their presence can affect the semantics of the
       /// program (e.g., for code generation).
-      EXTERNAL_DEFINITIONS = 6,
+      EAGERLY_DESERIALIZED_DECLS = 6,
 
       /// \brief Record code for the set of non-builtin, special
       /// types.
@@ -538,7 +542,10 @@ namespace clang {
       UNDEFINED_BUT_USED = 49,
 
       /// \brief Record code for late parsed template functions.
-      LATE_PARSED_TEMPLATE = 50
+      LATE_PARSED_TEMPLATE = 50,
+
+      /// \brief Record code for \#pragma optimize options.
+      OPTIMIZE_PRAGMA_OPTIONS = 51
     };
 
     /// \brief Record types used within a source manager block.
@@ -751,9 +758,6 @@ namespace clang {
     /// Type IDs for non-predefined types will start at
     /// NUM_PREDEF_TYPE_IDs.
     const unsigned NUM_PREDEF_TYPE_IDS = 100;
-
-    /// \brief The number of allowed abbreviations in bits
-    const unsigned NUM_ALLOWED_ABBREVS_SIZE = 4;
 
     /// \brief Record codes for each kind of type.
     ///
@@ -1327,12 +1331,29 @@ namespace clang {
       EXPR_CXX_PROPERTY_REF_EXPR, // MSPropertyRefExpr
       EXPR_CXX_UUIDOF_EXPR,       // CXXUuidofExpr (of expr).
       EXPR_CXX_UUIDOF_TYPE,       // CXXUuidofExpr (of type).
+      STMT_SEH_LEAVE,             // SEHLeaveStmt
       STMT_SEH_EXCEPT,            // SEHExceptStmt
       STMT_SEH_FINALLY,           // SEHFinallyStmt
       STMT_SEH_TRY,               // SEHTryStmt
 
       // OpenMP drectives
       STMT_OMP_PARALLEL_DIRECTIVE,
+      STMT_OMP_SIMD_DIRECTIVE,
+      STMT_OMP_FOR_DIRECTIVE,
+      STMT_OMP_SECTIONS_DIRECTIVE,
+      STMT_OMP_SECTION_DIRECTIVE,
+      STMT_OMP_SINGLE_DIRECTIVE,
+      STMT_OMP_MASTER_DIRECTIVE,
+      STMT_OMP_CRITICAL_DIRECTIVE,
+      STMT_OMP_PARALLEL_FOR_DIRECTIVE,
+      STMT_OMP_PARALLEL_SECTIONS_DIRECTIVE,
+      STMT_OMP_TASK_DIRECTIVE,
+      STMT_OMP_TASKYIELD_DIRECTIVE,
+      STMT_OMP_BARRIER_DIRECTIVE,
+      STMT_OMP_TASKWAIT_DIRECTIVE,
+      STMT_OMP_FLUSH_DIRECTIVE,
+      STMT_OMP_ORDERED_DIRECTIVE,
+      STMT_OMP_ATOMIC_DIRECTIVE,
 
       // ARC
       EXPR_OBJC_BRIDGED_CAST,     // ObjCBridgedCastExpr

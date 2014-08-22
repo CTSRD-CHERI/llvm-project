@@ -5,7 +5,6 @@ Test lldb 'commands regex' command which allows the user to create a regular exp
 import os
 import unittest2
 import lldb
-import pexpect
 from lldbtest import *
 
 class CommandRegexTestCase(TestBase):
@@ -13,9 +12,10 @@ class CommandRegexTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     def test_command_regex(self):
-        """Test a simple scenario of 'command regexp' invocation and subsequent use."""
+        """Test a simple scenario of 'command regex' invocation and subsequent use."""
+        import pexpect
         prompt = "(lldb) "
-        regex_prompt = "Enter regular expressions in the form 's/<regex>/<subst>/' and terminate with an empty line:\r\n"
+        regex_prompt = "Enter one of more sed substitution commands in the form: 's/<regex>/<subst>/'.\r\nTerminate the substitution list with an empty line.\r\n"
         regex_prompt1 = "\r\n"
 
         child = pexpect.spawn('%s %s' % (self.lldbHere, self.lldbOption))

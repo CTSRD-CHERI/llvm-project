@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "asm-printer"
 #include "MipsInstPrinter.h"
+#include "MCTargetDesc/MipsMCExpr.h"
 #include "MipsInstrInfo.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/MC/MCExpr.h"
@@ -22,6 +22,8 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
+
+#define DEBUG_TYPE "asm-printer"
 
 #define PRINT_ALIAS_INSTR
 #include "MipsGenAsmWriter.inc"
@@ -127,8 +129,10 @@ static void printExpr(const MCExpr *Expr, raw_ostream &OS) {
     const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(BE->getRHS());
     assert(SRE && CE && "Binary expression must be sym+const.");
     Offset = CE->getValue();
-  }
-  else if (!(SRE = dyn_cast<MCSymbolRefExpr>(Expr)))
+  } else if (const MipsMCExpr *ME = dyn_cast<MipsMCExpr>(Expr)) {
+    ME->print(OS);
+    return;
+  } else if (!(SRE = dyn_cast<MCSymbolRefExpr>(Expr)))
     assert(false && "Unexpected MCExpr type.");
 
   MCSymbolRefExpr::VariantKind Kind = SRE->getKind();
@@ -160,6 +164,8 @@ static void printExpr(const MCExpr *Expr, raw_ostream &OS) {
   case MCSymbolRefExpr::VK_Mips_GOT_LO16:  OS << "%got_lo("; break;
   case MCSymbolRefExpr::VK_Mips_CALL_HI16: OS << "%call_hi("; break;
   case MCSymbolRefExpr::VK_Mips_CALL_LO16: OS << "%call_lo("; break;
+  case MCSymbolRefExpr::VK_Mips_PCREL_HI16: OS << "%pcrel_hi("; break;
+  case MCSymbolRefExpr::VK_Mips_PCREL_LO16: OS << "%pcrel_lo("; break;
   }
 
   OS << SRE->getSymbol();

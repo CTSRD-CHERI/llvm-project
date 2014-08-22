@@ -12,7 +12,7 @@
 // C Includes
 #include <stdio.h>
 #if defined (_WIN32)
-#include "lldb/Host/windows/Windows.h"
+#include "lldb/Host/windows/windows.h"
 #include <winsock2.h>
 #endif
 
@@ -22,7 +22,7 @@
 #include "lldb/Core/Error.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Host/Host.h"
+#include "lldb/Host/HostInfo.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
@@ -31,6 +31,40 @@ using namespace lldb;
 using namespace lldb_private;
 
 static uint32_t g_initialize_count = 0;
+
+namespace
+{
+    class SupportedArchList
+    {
+    public:
+        SupportedArchList()
+        {
+            AddArch(ArchSpec("i686-pc-windows"));
+            AddArch(HostInfo::GetArchitecture(HostInfo::eArchKindDefault));
+            AddArch(HostInfo::GetArchitecture(HostInfo::eArchKind32));
+            AddArch(HostInfo::GetArchitecture(HostInfo::eArchKind64));
+            AddArch(ArchSpec("i386-pc-windows"));
+        }
+
+        size_t Count() const { return m_archs.size(); }
+
+        const ArchSpec& operator[](int idx) { return m_archs[idx]; }
+
+    private:
+        void AddArch(const ArchSpec& spec)
+        {
+            auto iter = std::find_if(
+                m_archs.begin(), m_archs.end(), 
+                [spec](const ArchSpec& rhs) { return spec.IsExactMatch(rhs); });
+            if (iter != m_archs.end())
+                return;
+            if (spec.IsValid())
+                m_archs.push_back(spec);
+        }
+
+        std::vector<ArchSpec> m_archs;
+    };
+}
 
 Platform *
 PlatformWindows::CreateInstance (bool force, const lldb_private::ArchSpec *arch)
@@ -62,7 +96,6 @@ PlatformWindows::CreateInstance (bool force, const lldb_private::ArchSpec *arch)
             switch (triple.getOS())
             {
             case llvm::Triple::Win32:
-            case llvm::Triple::MinGW32:
                 break;
 
             case llvm::Triple::UnknownOS:
@@ -120,7 +153,7 @@ PlatformWindows::Initialize(void)
         WSAStartup(MAKEWORD(2,2), &dummy);
         // Force a host flag to true for the default platform object.
         PlatformSP default_platform_sp (new PlatformWindows(true));
-        default_platform_sp->SetSystemArchitecture (Host::GetArchitecture());
+        default_platform_sp->SetSystemArchitecture(HostInfo::GetArchitecture());
         Platform::SetDefaultPlatform (default_platform_sp);
 #endif
         PluginManager::RegisterPlugin(PlatformWindows::GetPluginNameStatic(false),
@@ -224,7 +257,7 @@ PlatformWindows::ResolveExecutable (const FileSpec &exe_file,
                                                  NULL,
                                                  NULL);
 
-            if (!exe_module_sp && exe_module_sp->GetObjectFile() == NULL)
+            if (!exe_module_sp || exe_module_sp->GetObjectFile() == NULL)
             {
                 exe_module_sp.reset();
                 error.SetErrorStringWithFormat ("'%s' doesn't contain the architecture %s",
@@ -261,10 +294,17 @@ PlatformWindows::ResolveExecutable (const FileSpec &exe_file,
 
             if (error.Fail() || !exe_module_sp)
             {
-                error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
-                                                exe_file.GetPath().c_str(),
-                                                GetPluginName().GetCString(),
-                                                arch_names.GetString().c_str());
+                if (exe_file.Readable())
+                {
+                    error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
+                                                    exe_file.GetPath().c_str(),
+                                                    GetPluginName().GetCString(),
+                                                    arch_names.GetString().c_str());
+                }
+                else
+                {
+                    error.SetErrorStringWithFormat("'%s' is not readable", exe_file.GetPath().c_str());
+                }
             }
         }
     }
@@ -279,10 +319,10 @@ PlatformWindows::GetSoftwareBreakpointTrapOpcode (Target &target, BreakpointSite
     const uint8_t *trap_opcode = NULL;
     size_t trap_opcode_size = 0;
 
-    switch (arch.GetCore())
+    switch (arch.GetMachine())
     {
-    case ArchSpec::eCore_x86_32_i386:
-    case ArchSpec::eCore_x86_64_x86_64:
+    case llvm::Triple::x86:
+    case llvm::Triple::x86_64:
         {
             static const uint8_t g_i386_opcode[] = { 0xCC };
             trap_opcode = g_i386_opcode;
@@ -290,6 +330,13 @@ PlatformWindows::GetSoftwareBreakpointTrapOpcode (Target &target, BreakpointSite
         }
         break;
 
+    case llvm::Triple::hexagon:
+        {
+            static const uint8_t g_hex_opcode[] = { 0x0c, 0xdb, 0x00, 0x54 };
+            trap_opcode = g_hex_opcode;
+            trap_opcode_size = sizeof(g_hex_opcode);
+        }
+        break;
     default:
         llvm_unreachable("Unhandled architecture in PlatformWindows::GetSoftwareBreakpointTrapOpcode()");
         break;
@@ -542,14 +589,14 @@ PlatformWindows::GetGroupName (uint32_t gid)
 }
 
 Error
-PlatformWindows::GetFile (const FileSpec &platform_file,
-                          const UUID *uuid_ptr,
-                          FileSpec &local_file)
+PlatformWindows::GetFileWithUUID (const FileSpec &platform_file,
+                                  const UUID *uuid_ptr,
+                                  FileSpec &local_file)
 {
     if (IsRemote())
     {
         if (m_remote_platform_sp)
-            return m_remote_platform_sp->GetFile (platform_file, uuid_ptr, local_file);
+            return m_remote_platform_sp->GetFileWithUUID (platform_file, uuid_ptr, local_file);
     }
 
     // Default to the local case
@@ -598,26 +645,12 @@ PlatformWindows::GetSharedModule (const ModuleSpec &module_spec,
 bool
 PlatformWindows::GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
-    // From macosx;s plugin code. For FreeBSD we may want to support more archs.
-    if (idx == 0)
-    {
-        arch = Host::GetArchitecture (Host::eSystemDefaultArchitecture);
-        return arch.IsValid();
-    }
-    else if (idx == 1)
-    {
-        ArchSpec platform_arch (Host::GetArchitecture (Host::eSystemDefaultArchitecture));
-        ArchSpec platform_arch64 (Host::GetArchitecture (Host::eSystemDefaultArchitecture64));
-        if (platform_arch.IsExactMatch(platform_arch64))
-        {
-            // This freebsd platform supports both 32 and 64 bit. Since we already
-            // returned the 64 bit arch for idx == 0, return the 32 bit arch
-            // for idx == 1
-            arch = Host::GetArchitecture (Host::eSystemDefaultArchitecture32);
-            return arch.IsValid();
-        }
-    }
-    return false;
+    static SupportedArchList architectures;
+
+    if (idx >= architectures.Count())
+        return false;
+    arch = architectures[idx];
+    return true;
 }
 
 void
@@ -626,19 +659,17 @@ PlatformWindows::GetStatus (Stream &strm)
     Platform::GetStatus(strm);
 
 #ifdef _WIN32
-    OSVERSIONINFO info;
-
-    ZeroMemory(&info, sizeof(OSVERSIONINFO));
-    info.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-
-    if (GetVersionEx(&info) == 0)
+    uint32_t major;
+    uint32_t minor;
+    uint32_t update;
+    if (!HostInfo::GetOSVersion(major, minor, update))
     {
         strm << "Windows";
         return;
     }
 
-    strm << "Host: Windows " << (int) info.dwMajorVersion
-        << '.' << (int) info.dwMinorVersion
-        << " Build: " << (int) info.dwBuildNumber << '\n';
+    strm << "Host: Windows " << major
+         << '.' << minor
+         << " Build: " << update << '\n';
 #endif
 }

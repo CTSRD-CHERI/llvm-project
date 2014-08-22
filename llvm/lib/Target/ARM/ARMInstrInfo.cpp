@@ -90,6 +90,83 @@ unsigned ARMInstrInfo::getUnindexedOpcode(unsigned Opc) const {
   return 0;
 }
 
+void ARMInstrInfo::expandLoadStackGuard(MachineBasicBlock::iterator MI,
+                                        Reloc::Model RM) const {
+  if (RM == Reloc::PIC_)
+    expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_pcrel, ARM::LDRi12, RM);
+  else
+    expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_abs, ARM::LDRi12, RM);
+}
+
+bool ARMInstrInfo::getRegSequenceLikeInputs(
+    const MachineInstr &MI, unsigned DefIdx,
+    SmallVectorImpl<RegSubRegPairAndIdx> &InputRegs) const {
+  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
+  assert(MI.isRegSequenceLike() && "Invalid kind of instruction");
+
+  switch (MI.getOpcode()) {
+  case ARM::VMOVDRR:
+    // dX = VMOVDRR rY, rZ
+    // is the same as:
+    // dX = REG_SEQUENCE rY, ssub_0, rZ, ssub_1
+    // Populate the InputRegs accordingly.
+    // rY
+    const MachineOperand *MOReg = &MI.getOperand(1);
+    InputRegs.push_back(
+        RegSubRegPairAndIdx(MOReg->getReg(), MOReg->getSubReg(), ARM::ssub_0));
+    // rZ
+    MOReg = &MI.getOperand(2);
+    InputRegs.push_back(
+        RegSubRegPairAndIdx(MOReg->getReg(), MOReg->getSubReg(), ARM::ssub_1));
+    return true;
+  }
+  llvm_unreachable("Target dependent opcode missing");
+}
+
+bool ARMInstrInfo::getExtractSubregLikeInputs(
+    const MachineInstr &MI, unsigned DefIdx,
+    RegSubRegPairAndIdx &InputReg) const {
+  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
+  assert(MI.isExtractSubregLike() && "Invalid kind of instruction");
+
+  switch (MI.getOpcode()) {
+  case ARM::VMOVRRD:
+    // rX, rY = VMOVRRD dZ
+    // is the same as:
+    // rX = EXTRACT_SUBREG dZ, ssub_0
+    // rY = EXTRACT_SUBREG dZ, ssub_1
+    const MachineOperand &MOReg = MI.getOperand(2);
+    InputReg.Reg = MOReg.getReg();
+    InputReg.SubReg = MOReg.getSubReg();
+    InputReg.SubIdx = DefIdx == 0 ? ARM::ssub_0 : ARM::ssub_1;
+    return true;
+  }
+  llvm_unreachable("Target dependent opcode missing");
+}
+
+bool ARMInstrInfo::getInsertSubregLikeInputs(
+    const MachineInstr &MI, unsigned DefIdx, RegSubRegPair &BaseReg,
+    RegSubRegPairAndIdx &InsertedReg) const {
+  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
+  assert(MI.isInsertSubregLike() && "Invalid kind of instruction");
+
+  switch (MI.getOpcode()) {
+  case ARM::VSETLNi32:
+    // dX = VSETLNi32 dY, rZ, imm
+    const MachineOperand &MOBaseReg = MI.getOperand(1);
+    const MachineOperand &MOInsertedReg = MI.getOperand(2);
+    const MachineOperand &MOIndex = MI.getOperand(3);
+    BaseReg.Reg = MOBaseReg.getReg();
+    BaseReg.SubReg = MOBaseReg.getSubReg();
+
+    InsertedReg.Reg = MOInsertedReg.getReg();
+    InsertedReg.SubReg = MOInsertedReg.getSubReg();
+    InsertedReg.SubIdx = MOIndex.getImm() == 0 ? ARM::ssub_0 : ARM::ssub_1;
+    return true;
+  }
+  llvm_unreachable("Target dependent opcode missing");
+}
+
 namespace {
   /// ARMCGBR - Create Global Base Reg pass. This initializes the PIC
   /// global base register for ARM ELF.
@@ -97,7 +174,7 @@ namespace {
     static char ID;
     ARMCGBR() : MachineFunctionPass(ID) {}
 
-    virtual bool runOnMachineFunction(MachineFunction &MF) {
+    bool runOnMachineFunction(MachineFunction &MF) override {
       ARMFunctionInfo *AFI = MF.getInfo<ARMFunctionInfo>();
       if (AFI->getGlobalBaseReg() == 0)
         return false;
@@ -113,8 +190,9 @@ namespace {
       ARMConstantPoolValue *CPV = ARMConstantPoolSymbol::Create(
           *Context, "_GLOBAL_OFFSET_TABLE_", ARMPCLabelIndex, PCAdj);
 
-      unsigned Align = TM->getDataLayout()
-          ->getPrefTypeAlignment(Type::getInt32PtrTy(*Context));
+      unsigned Align =
+          TM->getSubtargetImpl()->getDataLayout()->getPrefTypeAlignment(
+              Type::getInt32PtrTy(*Context));
       unsigned Idx = MF.getConstantPool()->getConstantPoolIndex(CPV, Align);
 
       MachineBasicBlock &FirstMBB = MF.front();
@@ -124,7 +202,7 @@ namespace {
           MF.getRegInfo().createVirtualRegister(&ARM::rGPRRegClass);
       unsigned Opc = TM->getSubtarget<ARMSubtarget>().isThumb2() ?
                      ARM::t2LDRpci : ARM::LDRcp;
-      const TargetInstrInfo &TII = *TM->getInstrInfo();
+      const TargetInstrInfo &TII = *TM->getSubtargetImpl()->getInstrInfo();
       MachineInstrBuilder MIB = BuildMI(FirstMBB, MBBI, DL,
                                         TII.get(Opc), TempReg)
                                 .addConstantPoolIndex(Idx);
@@ -146,11 +224,11 @@ namespace {
       return true;
     }
 
-    virtual const char *getPassName() const {
+    const char *getPassName() const override {
       return "ARM PIC Global Base Reg Initialization";
     }
 
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.setPreservesCFG();
       MachineFunctionPass::getAnalysisUsage(AU);
     }

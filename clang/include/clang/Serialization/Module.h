@@ -18,17 +18,21 @@
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Serialization/ASTBitCodes.h"
 #include "clang/Serialization/ContinuousRangeMap.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Bitcode/BitstreamReader.h"
+#include <memory>
 #include <string>
+
+namespace llvm {
+template <typename Info> class OnDiskChainedHashTable;
+template <typename Info> class OnDiskIterableChainedHashTable;
+}
 
 namespace clang {
 
 class FileEntry;
 class DeclContext;
 class Module;
-template<typename Info> class OnDiskChainedHashTable;
 
 namespace serialization {
 
@@ -49,7 +53,7 @@ struct DeclContextInfo {
   DeclContextInfo()
     : NameLookupTableData(), LexicalDecls(), NumLexicalDecls() {}
 
-  OnDiskChainedHashTable<reader::ASTDeclContextNameLookupTrait>
+  llvm::OnDiskIterableChainedHashTable<reader::ASTDeclContextNameLookupTrait>
     *NameLookupTableData; // an ASTDeclContextNameLookupTable.
   const KindDeclIDPair *LexicalDecls;
   unsigned NumLexicalDecls;
@@ -115,6 +119,13 @@ public:
   /// \brief The file name of the module file.
   std::string FileName;
 
+  /// \brief The name of the module.
+  std::string ModuleName;
+
+  std::string getTimestampFilename() const {
+    return FileName + ".timestamp";
+  }
+
   /// \brief The original source file name that was used to build the
   /// primary AST file, which may have been modified for
   /// relocatable-pch support.
@@ -132,6 +143,8 @@ public:
   /// allow resolving headers even after headers+PCH was moved to a new path.
   std::string OriginalDir;
 
+  std::string ModuleMapPath;
+
   /// \brief Whether this precompiled header is a relocatable PCH file.
   bool RelocatablePCH;
 
@@ -147,7 +160,7 @@ public:
   
   /// \brief The memory buffer that stores the data associated with
   /// this AST file.
-  OwningPtr<llvm::MemoryBuffer> Buffer;
+  std::unique_ptr<llvm::MemoryBuffer> Buffer;
 
   /// \brief The size of this file, in bits.
   uint64_t SizeInBits;
@@ -167,6 +180,9 @@ public:
   /// If module A depends on and imports module B, both modules will have the
   /// same DirectImportLoc, but different ImportLoc (B's ImportLoc will be a
   /// source location inside module A).
+  ///
+  /// WARNING: This is largely useless. It doesn't tell you when a module was
+  /// made visible, just when the first submodule of that module was imported.
   SourceLocation DirectImportLoc;
 
   /// \brief The source location where this module was first imported.
@@ -184,6 +200,12 @@ public:
 
   /// \brief The input files that have been loaded from this AST file.
   std::vector<InputFile> InputFilesLoaded;
+
+  /// \brief If non-zero, specifies the time when we last validated input
+  /// files.  Zero means we never validated them.
+  ///
+  /// The time is specified in seconds since the start of the Epoch.
+  uint64_t InputFilesValidationTimestamp;
 
   // === Source Locations ===
 

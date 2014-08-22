@@ -12,7 +12,7 @@
 
 #include "lld/Core/File.h"
 #include "lld/Core/Pass.h"
-#include "lld/ReaderWriter/Simple.h"
+#include "lld/Core/Simple.h"
 #include "llvm/Support/COFF.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Endian.h"
@@ -50,9 +50,16 @@ std::vector<uint8_t> HintNameAtom::assembleRawContent(uint16_t hint,
 }
 
 std::vector<uint8_t>
-ImportTableEntryAtom::assembleRawContent(uint32_t contents) {
+ImportTableEntryAtom::assembleRawContent(uint32_t rva, bool is64) {
+  // The element size of the import table is 32 bit in PE and 64 bit
+  // in PE+. In PE+, bits 62-31 are filled with zero.
+  if (is64) {
+    std::vector<uint8_t> ret(8);
+    *reinterpret_cast<llvm::support::ulittle64_t *>(&ret[0]) = rva;
+    return ret;
+  }
   std::vector<uint8_t> ret(4);
-  *reinterpret_cast<llvm::support::ulittle32_t *>(&ret[0]) = contents;
+  *reinterpret_cast<llvm::support::ulittle32_t *>(&ret[0]) = rva;
   return ret;
 }
 
@@ -97,7 +104,7 @@ std::vector<ImportTableEntryAtom *> ImportDirectoryAtom::createImportTableAtoms(
       entry = new (_alloc) ImportTableEntryAtom(context, 0, sectionName);
       HintNameAtom *hintName =
           new (_alloc) HintNameAtom(context, atom->hint(), atom->importName());
-      addDir32NBReloc(entry, hintName);
+      addDir32NBReloc(entry, hintName, 0);
     }
     ret.push_back(entry);
     if (shouldAddReference)
@@ -111,10 +118,10 @@ std::vector<ImportTableEntryAtom *> ImportDirectoryAtom::createImportTableAtoms(
 } // namespace idata
 
 void IdataPass::perform(std::unique_ptr<MutableFile> &file) {
-  if (file->sharedLibrary().size() == 0)
+  if (file->sharedLibrary().empty())
     return;
 
-  idata::Context context(*file, _dummyFile);
+  idata::Context context(*file, _dummyFile, _is64);
   std::map<StringRef, std::vector<COFFSharedLibraryAtom *> > sharedAtoms =
       groupByLoadName(*file);
   for (auto i : sharedAtoms) {

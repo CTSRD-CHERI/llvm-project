@@ -11,14 +11,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef PPC_TARGETMACHINE_H
-#define PPC_TARGETMACHINE_H
+#ifndef LLVM_LIB_TARGET_POWERPC_PPCTARGETMACHINE_H
+#define LLVM_LIB_TARGET_POWERPC_PPCTARGETMACHINE_H
 
-#include "PPCFrameLowering.h"
-#include "PPCISelLowering.h"
 #include "PPCInstrInfo.h"
-#include "PPCJITInfo.h"
-#include "PPCSelectionDAGInfo.h"
 #include "PPCSubtarget.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Target/TargetMachine.h"
@@ -29,48 +25,22 @@ namespace llvm {
 ///
 class PPCTargetMachine : public LLVMTargetMachine {
   PPCSubtarget        Subtarget;
-  const DataLayout    DL;       // Calculates type size & alignment
-  PPCInstrInfo        InstrInfo;
-  PPCFrameLowering    FrameLowering;
-  PPCJITInfo          JITInfo;
-  PPCTargetLowering   TLInfo;
-  PPCSelectionDAGInfo TSInfo;
-  InstrItineraryData  InstrItins;
 
 public:
   PPCTargetMachine(const Target &T, StringRef TT,
                    StringRef CPU, StringRef FS, const TargetOptions &Options,
                    Reloc::Model RM, CodeModel::Model CM,
-                   CodeGenOpt::Level OL, bool is64Bit);
+                   CodeGenOpt::Level OL);
 
-  virtual const PPCInstrInfo      *getInstrInfo() const { return &InstrInfo; }
-  virtual const PPCFrameLowering  *getFrameLowering() const {
-    return &FrameLowering;
-  }
-  virtual       PPCJITInfo        *getJITInfo()         { return &JITInfo; }
-  virtual const PPCTargetLowering *getTargetLowering() const {
-   return &TLInfo;
-  }
-  virtual const PPCSelectionDAGInfo* getSelectionDAGInfo() const {
-    return &TSInfo;
-  }
-  virtual const PPCRegisterInfo   *getRegisterInfo() const {
-    return &InstrInfo.getRegisterInfo();
-  }
-
-  virtual const DataLayout    *getDataLayout() const    { return &DL; }
-  virtual const PPCSubtarget  *getSubtargetImpl() const { return &Subtarget; }
-  virtual const InstrItineraryData *getInstrItineraryData() const {
-    return &InstrItins;
-  }
+  const PPCSubtarget *getSubtargetImpl() const override { return &Subtarget; }
 
   // Pass Pipeline Configuration
-  virtual TargetPassConfig *createPassConfig(PassManagerBase &PM);
-  virtual bool addCodeEmitter(PassManagerBase &PM,
-                              JITCodeEmitter &JCE);
+  TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
+  bool addCodeEmitter(PassManagerBase &PM,
+                      JITCodeEmitter &JCE) override;
 
   /// \brief Register PPC analysis passes with a pass manager.
-  virtual void addAnalysisPasses(PassManagerBase &PM);
+  void addAnalysisPasses(PassManagerBase &PM) override;
 };
 
 /// PPC32TargetMachine - PowerPC 32-bit target machine.

@@ -608,6 +608,20 @@
                     return PyString_FromString("");
         }
 }
+%extend lldb::SBTypeEnumMember {
+        PyObject *lldb::SBTypeEnumMember::__str__ (){
+                lldb::SBStream description;
+                $self->GetDescription (description, lldb::eDescriptionLevelBrief);
+                const char *desc = description.GetData();
+                size_t desc_len = description.GetSize();
+                if (desc_len > 0 && (desc[desc_len-1] == '\n' || desc[desc_len-1] == '\r'))
+                    --desc_len;
+                if (desc_len > 0)
+                    return PyString_FromStringAndSize (desc, desc_len);
+                else
+                    return PyString_FromString("");
+        }
+}
 %extend lldb::SBTypeNameSpecifier {
         PyObject *lldb::SBTypeNameSpecifier::__str__ (){
                 lldb::SBStream description;
@@ -775,15 +789,6 @@
 //             // Only call Py_XDECREF if we have a Python object (or NULL)
 //             if (LLDBSwigPythonCallPythonLogOutputCallback == $self->GetLogOutPutCallback())
 //                 Py_XDECREF($self->GetCallbackBaton());
-//         }
-// }
-// %extend lldb::SBInputReader {
-//         // FIXME: m_callback_function is private and we have no other
-//         // way to access it.
-//         PyObject *lldb::SBInputReader::__del__ (){
-//             // Only call Py_XDECREF if we have a Python object (or NULL)
-//             if (LLDBSwigPythonCallSBInputReaderCallback == $self->m_callback_function)
-//                 Py_XDECREF($self->m_callback_baton);
 //         }
 // }
 

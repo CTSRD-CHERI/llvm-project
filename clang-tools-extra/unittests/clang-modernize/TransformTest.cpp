@@ -93,8 +93,8 @@ public:
 };
 
 struct ConsumerFactory {
-  ASTConsumer *newASTConsumer() {
-    return new TimePassingASTConsumer(&Called);
+  std::unique_ptr<ASTConsumer> newASTConsumer() {
+    return llvm::make_unique<TimePassingASTConsumer>(&Called);
   }
   bool Called;
 };
@@ -124,7 +124,7 @@ TEST(Transform, Timings) {
   // file anyway. What is important is that we have an absolute path with which
   // to use with mapVirtualFile().
   SmallString<128> CurrentDir;
-  llvm::error_code EC = llvm::sys::fs::current_path(CurrentDir);
+  std::error_code EC = llvm::sys::fs::current_path(CurrentDir);
   assert(!EC);
   (void)EC;
 
@@ -153,7 +153,8 @@ TEST(Transform, Timings) {
   // handleEndSource() calls to it.
   CallbackForwarder Callbacks(T);
 
-  Tool.run(clang::tooling::newFrontendActionFactory(&Factory, &Callbacks));
+  Tool.run(
+      clang::tooling::newFrontendActionFactory(&Factory, &Callbacks).get());
 
   EXPECT_TRUE(Factory.Called);
   Transform::TimingVec::const_iterator I = T.timing_begin();
@@ -186,7 +187,7 @@ public:
   virtual void
   run(const clang::ast_matchers::MatchFinder::MatchResult &Result) {
     const VarDecl *Decl = Result.Nodes.getNodeAs<VarDecl>("decl");
-    ASSERT_TRUE(Decl != 0);
+    ASSERT_TRUE(Decl != nullptr);
 
     const SourceManager &SM = *Result.SourceManager;
 
@@ -236,7 +237,7 @@ TEST(Transform, isFileModifiable) {
   // file anyway. What is important is that we have an absolute path with which
   // to use with mapVirtualFile().
   SmallString<128> CurrentDir;
-  llvm::error_code EC = llvm::sys::fs::current_path(CurrentDir);
+  std::error_code EC = llvm::sys::fs::current_path(CurrentDir);
   assert(!EC);
   (void)EC;
 
@@ -271,7 +272,7 @@ TEST(Transform, isFileModifiable) {
   DummyTransform T("dummy", Options);
   MatchFinder Finder;
   Finder.addMatcher(varDecl().bind("decl"), new ModifiableCallback(T));
-  Tool.run(tooling::newFrontendActionFactory(&Finder));
+  Tool.run(tooling::newFrontendActionFactory(&Finder).get());
 }
 
 TEST(VersionTest, Interface) {

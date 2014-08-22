@@ -25,6 +25,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <mutex>
@@ -43,9 +44,10 @@ bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
     args[numArgs + 1] = 0;
     llvm::cl::ParseCommandLineOptions(numArgs + 1, args);
   }
-  InputGraph &inputGraph = context.inputGraph();
+  InputGraph &inputGraph = context.getInputGraph();
   if (!inputGraph.size())
     return false;
+  inputGraph.normalize();
 
   bool fail = false;
 
@@ -53,10 +55,7 @@ bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
   ScopedTask readTask(getDefaultDomain(), "Read Args");
   TaskGroup tg;
   std::mutex diagnosticsMutex;
-  for (auto &ie : inputGraph.inputElements()) {
-    // Skip Hidden elements.
-    if (ie->isHidden())
-      continue;
+  for (std::unique_ptr<InputElement> &ie : inputGraph.inputElements()) {
     tg.spawn([&] {
       // Writes to the same output stream is not guaranteed to be thread-safe.
       // We buffer the diagnostics output to a separate string-backed output
@@ -64,9 +63,14 @@ bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
       std::string buf;
       llvm::raw_string_ostream stream(buf);
 
-      if (error_code ec = ie->parse(context, stream)) {
-        FileNode *fileNode = dyn_cast<FileNode>(ie.get());
-        stream << fileNode->errStr(ec) << "\n";
+      if (std::error_code ec = ie->parse(context, stream)) {
+        if (FileNode *fileNode = dyn_cast<FileNode>(ie.get()))
+          stream << fileNode->errStr(ec) << "\n";
+        else if (dyn_cast<Group>(ie.get()))
+          // FIXME: We need a better diagnostics here
+          stream << "Cannot parse group input element\n";
+        else
+          llvm_unreachable("Unknown type of input element");
         fail = true;
       }
 
@@ -97,13 +101,7 @@ bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
   context.createImplicitFiles(implicitFiles);
   if (implicitFiles.size())
     fileNode->addFiles(std::move(implicitFiles));
-
-  context.inputGraph().insertOneElementAt(std::move(fileNode),
-                                          InputGraph::Position::BEGIN);
-
-  context.inputGraph().assignOrdinals();
-
-  context.inputGraph().doPostProcess();
+  context.getInputGraph().addInputElementFront(std::move(fileNode));
 
   // Do core linking.
   ScopedTask resolveTask(getDefaultDomain(), "Resolve");
@@ -119,8 +117,11 @@ bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
   context.addPasses(pm);
 
 #ifndef NDEBUG
-  pm.add(std::unique_ptr<Pass>(new RoundTripYAMLPass(context)));
-  pm.add(std::unique_ptr<Pass>(new RoundTripNativePass(context)));
+  llvm::Optional<std::string> env = llvm::sys::Process::GetEnv("LLD_RUN_ROUNDTRIP_TEST");
+  if (env.hasValue() && !env.getValue().empty()) {
+    pm.add(std::unique_ptr<Pass>(new RoundTripYAMLPass(context)));
+    pm.add(std::unique_ptr<Pass>(new RoundTripNativePass(context)));
+  }
 #endif
 
   pm.runOnFile(merged);
@@ -128,7 +129,7 @@ bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
 
   // Give linked atoms to Writer to generate output file.
   ScopedTask writeTask(getDefaultDomain(), "Write");
-  if (error_code ec = context.writeFile(*merged)) {
+  if (std::error_code ec = context.writeFile(*merged)) {
     diagnostics << "Failed to write file '" << context.outputPath()
                 << "': " << ec.message() << "\n";
     return false;

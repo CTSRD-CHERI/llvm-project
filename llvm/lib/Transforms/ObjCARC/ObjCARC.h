@@ -20,17 +20,17 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TRANSFORMS_SCALAR_OBJCARC_H
-#define LLVM_TRANSFORMS_SCALAR_OBJCARC_H
+#ifndef LLVM_LIB_TRANSFORMS_OBJCARC_OBJCARC_H
+#define LLVM_LIB_TRANSFORMS_OBJCARC_OBJCARC_H
 
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/CallSite.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/CallSite.h"
-#include "llvm/Support/InstIterator.h"
 #include "llvm/Transforms/ObjCARC.h"
 #include "llvm/Transforms/Utils/Local.h"
 
@@ -308,6 +308,7 @@ static inline bool IsPotentialRetainableObjPtr(const Value *Op) {
   // Special arguments can not be a valid retainable object pointer.
   if (const Argument *Arg = dyn_cast<Argument>(Op))
     if (Arg->hasByValAttr() ||
+        Arg->hasInAllocaAttr() ||
         Arg->hasNestAttr() ||
         Arg->hasStructRetAttr())
       return false;
@@ -394,4 +395,4 @@ static inline bool IsObjCIdentifiedObject(const Value *V) {
 } // end namespace objcarc
 } // end namespace llvm
 
-#endif // LLVM_TRANSFORMS_SCALAR_OBJCARC_H
+#endif

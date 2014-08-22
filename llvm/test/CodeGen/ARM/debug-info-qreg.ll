@@ -2,13 +2,15 @@
 target datalayout = "e-p:32:32:32-i1:8:32-i8:8:32-i16:16:32-i32:32:32-i64:32:32-f32:32:32-f64:32:32-v64:32:64-v128:32:128-a0:0:32-n32"
 target triple = "thumbv7-apple-macosx10.6.7"
 
-;CHECK: DW_OP_regx for Q register: D1
+;CHECK: sub-register
+;CHECK-NEXT: DW_OP_regx
 ;CHECK-NEXT: ascii
-;CHECK-NEXT: DW_OP_piece 8
+;CHECK-NEXT: DW_OP_piece
 ;CHECK-NEXT: byte   8
-;CHECK-NEXT: DW_OP_regx for Q register: D2
+;CHECK-NEXT: sub-register
+;CHECK-NEXT: DW_OP_regx
 ;CHECK-NEXT: ascii
-;CHECK-NEXT: DW_OP_piece 8
+;CHECK-NEXT: DW_OP_piece
 ;CHECK-NEXT: byte   8
 
 @.str = external constant [13 x i8]
@@ -40,7 +42,7 @@ declare void @llvm.dbg.value(metadata, i64, metadata) nounwind readnone
 
 !0 = metadata !{i32 786478, metadata !54, metadata !1, metadata !"test0001", metadata !"test0001", metadata !"", i32 3, metadata !3, i1 false, i1 true, i32 0, i32 0, null, i32 256, i1 true, <4 x float> (float)* @test0001, null, null, metadata !51, i32 3} ; [ DW_TAG_subprogram ] [line 3] [def] [test0001]
 !1 = metadata !{i32 786473, metadata !54} ; [ DW_TAG_file_type ]
-!2 = metadata !{i32 786449, metadata !54, i32 12, metadata !"clang version 3.0 (trunk 129915)", i1 true, metadata !"", i32 0, metadata !17, metadata !17, metadata !50, null,  null, null} ; [ DW_TAG_compile_unit ]
+!2 = metadata !{i32 786449, metadata !54, i32 12, metadata !"clang version 3.0 (trunk 129915)", i1 true, metadata !"", i32 0, metadata !17, metadata !17, metadata !50, null,  null, null, i32 1} ; [ DW_TAG_compile_unit ]
 !3 = metadata !{i32 786453, metadata !54, metadata !1, metadata !"", i32 0, i64 0, i64 0, i32 0, i32 0, null, metadata !4, i32 0, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
 !4 = metadata !{metadata !5}
 !5 = metadata !{i32 786454, metadata !54, metadata !2, metadata !"v4f32", i32 14, i64 0, i64 0, i64 0, i32 0, metadata !6} ; [ DW_TAG_typedef ]

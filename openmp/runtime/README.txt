@@ -37,7 +37,7 @@ omp_root:    The path to the top-level directory containing the top-level
 	     current working directory.
 
 omp_os:      Operating system.  By default, the build will attempt to 
-	     detect this. Currently supports "linux", "macos", and 
+	     detect this. Currently supports "linux", "freebsd", "macos", and
 	     "windows".
 
 arch:        Architecture. By default, the build will attempt to 
@@ -68,6 +68,10 @@ example, if you want to build with gcc instead of icc, type:
 
 make compiler=gcc
 
+There is also an experimental CMake build system. This is *not* yet
+supported for production use and resulting binaries have not been checked
+for compatibility.
+
 Supported RTL Build Configurations
 ==================================
 
@@ -78,6 +82,7 @@ Intel(R) Many Integrated Core Architecture
               |   icc/icl     |    gcc      |   clang    |
 --------------|---------------|--------------------------|
 | Linux* OS   |   Yes(1,5)    |  Yes(2,4)   | Yes(4,6,7) |
+| FreeBSD*    |   No          |  No         | Yes(4,6,7) |
 | OS X*       |   Yes(1,3,4)  |  No         | Yes(4,6,7) |
 | Windows* OS |   Yes(1,4)    |  No         | No         |
 ----------------------------------------------------------

@@ -915,7 +915,7 @@ void generateStringPrint(llvm::LLVMContext &context,
     new llvm::GlobalVariable(module,
                              stringConstant->getType(),
                              true,
-                             llvm::GlobalValue::LinkerPrivateLinkage,
+                             llvm::GlobalValue::PrivateLinkage,
                              stringConstant,
                              "");
   }
@@ -959,7 +959,7 @@ void generateIntegerPrint(llvm::LLVMContext &context,
     new llvm::GlobalVariable(module,
                              stringConstant->getType(),
                              true,
-                             llvm::GlobalValue::LinkerPrivateLinkage,
+                             llvm::GlobalValue::PrivateLinkage,
                              stringConstant,
                              "");
   }
@@ -1957,12 +1957,14 @@ int main(int argc, char *argv[]) {
   llvm::IRBuilder<> theBuilder(context);
 
   // Make the module, which holds all the code.
-  llvm::Module *module = new llvm::Module("my cool jit", context);
+  std::unique_ptr<llvm::Module> Owner =
+      llvm::make_unique<llvm::Module>("my cool jit", context);
+  llvm::Module *module = Owner.get();
 
   llvm::RTDyldMemoryManager *MemMgr = new llvm::SectionMemoryManager();
 
   // Build engine with JIT
-  llvm::EngineBuilder factory(module);
+  llvm::EngineBuilder factory(std::move(Owner));
   factory.setEngineKind(llvm::EngineKind::JIT);
   factory.setAllocateGVsWithCode(false);
   factory.setTargetOptions(Opts);
@@ -1976,7 +1978,8 @@ int main(int argc, char *argv[]) {
     // Set up the optimizer pipeline.
     // Start with registering info about how the
     // target lays out data structures.
-    fpm.add(new llvm::DataLayout(*executionEngine->getDataLayout()));
+    module->setDataLayout(executionEngine->getDataLayout());
+    fpm.add(new llvm::DataLayoutPass(module));
 
     // Optimizations turned on
 #ifdef ADD_OPT_PASSES

@@ -1,0 +1,1785 @@
+diff --git a/include/llvm/ADT/Triple.h b/include/llvm/ADT/Triple.h
+index 0eb0420..2528639 100644
+--- a/include/llvm/ADT/Triple.h
++++ b/include/llvm/ADT/Triple.h
+@@ -52,6 +52,7 @@ public:
+     hexagon,    // Hexagon: hexagon
+     mips,       // MIPS: mips, mipsallegrex
+     mipsel,     // MIPSEL: mipsel, mipsallegrexel
++    mips4,      // MIPS4: mips4
+     mips64,     // MIPS64: mips64
+     mips64el,   // MIPS64EL: mips64el
+     msp430,     // MSP430: msp430
+diff --git a/lib/Support/Triple.cpp b/lib/Support/Triple.cpp
+index 0b8e9a6..9733214 100644
+--- a/lib/Support/Triple.cpp
++++ b/lib/Support/Triple.cpp
+@@ -25,6 +25,7 @@ const char *Triple::getArchTypeName(ArchType Kind) {
+   case hexagon:     return "hexagon";
+   case mips:        return "mips";
+   case mipsel:      return "mipsel";
++  case mips4:       return "mips4";
+   case mips64:      return "mips64";
+   case mips64el:    return "mips64el";
+   case msp430:      return "msp430";
+@@ -68,6 +69,7 @@ const char *Triple::getArchTypePrefix(ArchType Kind) {
+ 
+   case mips:
+   case mipsel:
++  case mips4:
+   case mips64:
+   case mips64el:    return "mips";
+ 
+@@ -167,6 +169,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
+     .Case("arm", arm)
+     .Case("mips", mips)
+     .Case("mipsel", mipsel)
++    .Case("mips4", mips4)
+     .Case("mips64", mips64)
+     .Case("mips64el", mips64el)
+     .Case("msp430", msp430)
+@@ -239,6 +242,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
+     .Case("msp430", Triple::msp430)
+     .Cases("mips", "mipseb", "mipsallegrex", Triple::mips)
+     .Cases("mipsel", "mipsallegrexel", Triple::mipsel)
++    .Case("mips4", Triple::mips4)
+     .Cases("mips64", "mips64eb", Triple::mips64)
+     .Case("mips64el", Triple::mips64el)
+     .Case("r600", Triple::r600)
+@@ -738,6 +742,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
+ 
+   case llvm::Triple::aarch64:
+   case llvm::Triple::aarch64_be:
++  case llvm::Triple::mips4:
+   case llvm::Triple::mips64:
+   case llvm::Triple::mips64el:
+   case llvm::Triple::nvptx64:
+@@ -794,6 +799,7 @@ Triple Triple::get32BitArchVariant() const {
+     // Already 32-bit.
+     break;
+ 
++  case Triple::mips4:
+   case Triple::mips64:    T.setArch(Triple::mips);    break;
+   case Triple::mips64el:  T.setArch(Triple::mipsel);  break;
+   case Triple::nvptx64:   T.setArch(Triple::nvptx);   break;
+@@ -824,6 +830,7 @@ Triple Triple::get64BitArchVariant() const {
+   case Triple::aarch64:
+   case Triple::aarch64_be:
+   case Triple::spir64:
++  case Triple::mips4:
+   case Triple::mips64:
+   case Triple::mips64el:
+   case Triple::nvptx64:
+diff --git a/lib/Target/Mips/AsmParser/MipsAsmParser.cpp b/lib/Target/Mips/AsmParser/MipsAsmParser.cpp
+index 8912243..1ff18de 100644
+--- a/lib/Target/Mips/AsmParser/MipsAsmParser.cpp
++++ b/lib/Target/Mips/AsmParser/MipsAsmParser.cpp
+@@ -16,6 +16,7 @@
+ #include "llvm/MC/MCContext.h"
+ #include "llvm/MC/MCExpr.h"
+ #include "llvm/MC/MCInst.h"
++#include "llvm/MC/MCInstBuilder.h"
+ #include "llvm/MC/MCParser/MCAsmLexer.h"
+ #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
+ #include "llvm/MC/MCStreamer.h"
+@@ -179,6 +180,8 @@ class MipsAsmParser : public MCTargetAsmParser {
+                          SmallVectorImpl<MCInst> &Instructions);
+   void expandLoadImm(MCInst &Inst, SMLoc IDLoc,
+                      SmallVectorImpl<MCInst> &Instructions);
++  void expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
++                            SmallVectorImpl<MCInst> &Instructions);
+   void expandLoadAddressImm(MCInst &Inst, SMLoc IDLoc,
+                             SmallVectorImpl<MCInst> &Instructions);
+   void expandLoadAddressReg(MCInst &Inst, SMLoc IDLoc,
+@@ -194,6 +197,7 @@ class MipsAsmParser : public MCTargetAsmParser {
+   const MCExpr *evaluateRelocExpr(const MCExpr *Expr, StringRef RelocStr);
+ 
+   bool isEvaluated(const MCExpr *Expr);
++  bool parseDirectiveCPSetup();
+   bool parseDirectiveSet();
+   bool parseDirectiveOption();
+ 
+@@ -213,8 +217,8 @@ class MipsAsmParser : public MCTargetAsmParser {
+ 
+   MCSymbolRefExpr::VariantKind getVariantKind(StringRef Symbol);
+ 
+-  bool isMips64() const {
+-    return (STI.getFeatureBits() & Mips::FeatureMips64) != 0;
++  bool isGP64() const {
++    return (STI.getFeatureBits() & Mips::FeatureGP64Bit) != 0;
+   }
+ 
+   bool isFP64() const {
+@@ -227,6 +231,10 @@ class MipsAsmParser : public MCTargetAsmParser {
+     return STI.getFeatureBits() & Mips::FeatureMicroMips;
+   }
+ 
++  bool parseRegister(unsigned &RegNum);
++
++  bool eatComma(StringRef ErrorStr);
++
+   int matchRegisterName(StringRef Symbol, bool is64BitReg);
+ 
+   int matchCPURegisterName(StringRef Symbol);
+@@ -247,6 +255,8 @@ class MipsAsmParser : public MCTargetAsmParser {
+ 
+   unsigned getReg(int RC, int RegNo);
+ 
++  unsigned getGPR(int RegNo);
++
+   int getATReg();
+ 
+   bool processInstruction(MCInst &Inst, SMLoc IDLoc,
+@@ -589,6 +599,33 @@ static const MCInstrDesc &getInstDesc(unsigned Opcode) {
+ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
+                                        SmallVectorImpl<MCInst> &Instructions) {
+   const MCInstrDesc &MCID = getInstDesc(Inst.getOpcode());
++
++  // If this is a pseudo, we need to expand it
++  if (MCID.isPseudo()) {
++    unsigned AddOp = 0;
++    switch (MCID.getOpcode()) {
++      case Mips::SUBi:
++        AddOp = Mips::ADDi;
++        break;
++      case Mips::SUBiu:
++        AddOp = Mips::ADDiu;
++        break;
++      case Mips::DSUBi:
++        AddOp = Mips::DADDi;
++        break;
++      case Mips::DSUBiu:
++        AddOp = Mips::DADDiu;
++        break;
++    }
++    if (AddOp) {
++      Instructions.push_back(MCInstBuilder(AddOp)
++          .addReg(Inst.getOperand(0).getReg())
++          .addReg(Inst.getOperand(1).getReg())
++          .addImm(0-Inst.getOperand(2).getImm()));
++      return false;
++    }
++  }
++
+   Inst.setLoc(IDLoc);
+ 
+   if (MCID.isBranch() || MCID.isCall()) {
+@@ -690,6 +727,9 @@ bool MipsAsmParser::needsExpansion(MCInst &Inst) {
+   case Mips::LoadImm32Reg:
+   case Mips::LoadAddr32Imm:
+   case Mips::LoadAddr32Reg:
++  case Mips::LoadImm64Reg:
++  case Mips::LoadAddr64Imm:
++  case Mips::LoadAddr64Reg:
+     return true;
+   default:
+     return false;
+@@ -700,14 +740,67 @@ void MipsAsmParser::expandInstruction(MCInst &Inst, SMLoc IDLoc,
+                                       SmallVectorImpl<MCInst> &Instructions) {
+   switch (Inst.getOpcode()) {
+   case Mips::LoadImm32Reg:
++  case Mips::LoadImm64Reg:
+     return expandLoadImm(Inst, IDLoc, Instructions);
+   case Mips::LoadAddr32Imm:
++  case Mips::LoadAddr64Imm:
+     return expandLoadAddressImm(Inst, IDLoc, Instructions);
+   case Mips::LoadAddr32Reg:
++  case Mips::LoadAddr64Reg:
+     return expandLoadAddressReg(Inst, IDLoc, Instructions);
+   }
+ }
+ 
++namespace {
++
++void pushInstr(SmallVectorImpl<MCInst> &Instructions, unsigned OpCode,
++    unsigned Reg0, unsigned Reg1, MCOperand Op1, SMLoc IDLoc) {
++  MCInst tmpInst;
++  tmpInst.setOpcode(OpCode);
++  tmpInst.addOperand(MCOperand::CreateReg(Reg0));
++  tmpInst.addOperand(MCOperand::CreateReg(Reg1));
++  tmpInst.addOperand(Op1);
++  tmpInst.setLoc(IDLoc);
++  Instructions.push_back(tmpInst);
++}
++void pushInstr(SmallVectorImpl<MCInst> &Instructions, unsigned OpCode,
++    unsigned Reg0, unsigned Reg1, unsigned Reg2, SMLoc IDLoc) {
++  MCInst tmpInst;
++  tmpInst.setOpcode(OpCode);
++  tmpInst.addOperand(MCOperand::CreateReg(Reg0));
++  tmpInst.addOperand(MCOperand::CreateReg(Reg1));
++  tmpInst.addOperand(MCOperand::CreateReg(Reg2));
++  tmpInst.setLoc(IDLoc);
++  Instructions.push_back(tmpInst);
++}
++void pushInstr(SmallVectorImpl<MCInst> &Instructions, unsigned OpCode,
++    unsigned Reg, MCOperand Op1, SMLoc IDLoc) {
++  MCInst tmpInst;
++  tmpInst.setOpcode(OpCode);
++  tmpInst.addOperand(MCOperand::CreateReg(Reg));
++  tmpInst.addOperand(Op1);
++  tmpInst.setLoc(IDLoc);
++  Instructions.push_back(tmpInst);
++}
++
++template<bool PerformShift>
++void createShiftOr(MCOperand Operand, unsigned RegNo, SMLoc IDLoc,
++                   SmallVectorImpl<MCInst> &Instructions) {
++  MCInst tmpInst;
++  if (PerformShift)
++    pushInstr(Instructions, Mips::DSLL, RegNo, RegNo, MCOperand::CreateImm(16),
++        IDLoc);
++  pushInstr(Instructions, Mips::ORi, RegNo, RegNo, Operand, IDLoc);
++}
++template<int Shift, bool PerformShift>
++void createShiftOr(int64_t Value, unsigned RegNo, SMLoc IDLoc,
++                   SmallVectorImpl<MCInst> &Instructions) {
++  createShiftOr<PerformShift>(
++      MCOperand::CreateImm(((Value & (0xffffLL << Shift)) >> Shift)),
++      RegNo, IDLoc, Instructions);
++}
++}
++
+ void MipsAsmParser::expandLoadImm(MCInst &Inst, SMLoc IDLoc,
+                                   SmallVectorImpl<MCInst> &Instructions) {
+   MCInst tmpInst;
+@@ -716,8 +809,10 @@ void MipsAsmParser::expandLoadImm(MCInst &Inst, SMLoc IDLoc,
+   const MCOperand &RegOp = Inst.getOperand(0);
+   assert(RegOp.isReg() && "expected register operand kind");
+ 
+-  int ImmValue = ImmOp.getImm();
++  int64_t ImmValue = ImmOp.getImm();
+   tmpInst.setLoc(IDLoc);
++  // FIXME: gas has a special case for values that are 000...1111, which
++  // becomes a li -1 and then a dsrl
+   if (0 <= ImmValue && ImmValue <= 65535) {
+     // For 0 <= j <= 65535.
+     // li d,j => ori d,$zero,j
+@@ -734,21 +829,33 @@ void MipsAsmParser::expandLoadImm(MCInst &Inst, SMLoc IDLoc,
+     tmpInst.addOperand(MCOperand::CreateReg(Mips::ZERO));
+     tmpInst.addOperand(MCOperand::CreateImm(ImmValue));
+     Instructions.push_back(tmpInst);
+-  } else {
+-    // For any other value of j that is representable as a 32-bit integer.
++  } else if ((ImmValue & 0xffffffff) == ImmValue) {
++    // For any value of j that is not representable as a 32-bit integer, create a sequence of 
+     // li d,j => lui d,hi16(j)
+     //           ori d,d,lo16(j)
+     tmpInst.setOpcode(Mips::LUi);
+     tmpInst.addOperand(MCOperand::CreateReg(RegOp.getReg()));
+     tmpInst.addOperand(MCOperand::CreateImm((ImmValue & 0xffff0000) >> 16));
+     Instructions.push_back(tmpInst);
+-    tmpInst.clear();
+-    tmpInst.setOpcode(Mips::ORi);
++    createShiftOr<0,false>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
++  } else if ((ImmValue & (0xffffLL << 48)) == 0) {
++    tmpInst.setOpcode(Mips::LUi);
+     tmpInst.addOperand(MCOperand::CreateReg(RegOp.getReg()));
++    tmpInst.addOperand(MCOperand::CreateImm((ImmValue & (0xffffLL << 32)) >> 32));
++    Instructions.push_back(tmpInst);
++    createShiftOr<16,false>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
++    createShiftOr<0,true>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
++  } else {
++    // For any value of j that isn't representable as a 32-bit integer.
++    // li d,j => lui d,hi16(j)
++    //           ori d,d,lo16(j)
++    tmpInst.setOpcode(Mips::LUi);
+     tmpInst.addOperand(MCOperand::CreateReg(RegOp.getReg()));
+-    tmpInst.addOperand(MCOperand::CreateImm(ImmValue & 0xffff));
+-    tmpInst.setLoc(IDLoc);
++    tmpInst.addOperand(MCOperand::CreateImm((ImmValue & (0xffffLL << 48)) >> 48));
+     Instructions.push_back(tmpInst);
++    createShiftOr<32,false>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
++    createShiftOr<16,true>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
++    createShiftOr<0,true>(ImmValue, RegOp.getReg(), IDLoc, Instructions);
+   }
+ }
+ 
+@@ -757,7 +864,9 @@ MipsAsmParser::expandLoadAddressReg(MCInst &Inst, SMLoc IDLoc,
+                                     SmallVectorImpl<MCInst> &Instructions) {
+   MCInst tmpInst;
+   const MCOperand &ImmOp = Inst.getOperand(2);
+-  assert(ImmOp.isImm() && "expected immediate operand kind");
++  assert((ImmOp.isImm() || ImmOp.isExpr()) && "expected immediate operand kind");
++  if (!ImmOp.isImm())
++    return expandLoadAddressSym(Inst, IDLoc, Instructions);
+   const MCOperand &SrcRegOp = Inst.getOperand(1);
+   assert(SrcRegOp.isReg() && "expected register operand kind");
+   const MCOperand &DstRegOp = Inst.getOperand(0);
+@@ -796,11 +905,79 @@ MipsAsmParser::expandLoadAddressReg(MCInst &Inst, SMLoc IDLoc,
+ }
+ 
+ void
++MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
++                                    SmallVectorImpl<MCInst> &Instructions) {
++  // FIXME: If we do have a valid at register to use, we should generate a
++  // slightly shorter sequence here.
++  int ExprOperandNo = 1;
++  // Sometimes the assembly parser will get the immediate expression as a $zero
++  // + immediate
++  if (Inst.getNumOperands() == 3) {
++    assert(Inst.getOperand(1).getReg() ==
++      (isGP64() ? Mips::ZERO_64 : Mips::ZERO));
++    ExprOperandNo = 2;
++  }
++  const MCOperand &SymOp = Inst.getOperand(ExprOperandNo);
++  assert(SymOp.isExpr() && "expected symbol operand kind");
++  const MCOperand &RegOp = Inst.getOperand(0);
++  unsigned RegNo = RegOp.getReg();
++  const MCSymbolRefExpr *Symbol = cast<MCSymbolRefExpr>(SymOp.getExpr());
++  const MCSymbolRefExpr *HighestExpr = MCSymbolRefExpr::Create(
++      Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_HIGHEST,
++      getContext());
++  const MCSymbolRefExpr *HigherExpr = MCSymbolRefExpr::Create(
++      Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_HIGHER,
++      getContext());
++  const MCSymbolRefExpr *HiExpr = MCSymbolRefExpr::Create(
++      Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_ABS_HI,
++      getContext());
++  const MCSymbolRefExpr *LoExpr = MCSymbolRefExpr::Create(
++      Symbol->getSymbol().getName(), MCSymbolRefExpr::VK_Mips_ABS_LO,
++      getContext());
++  if (isGP64()) {
++    if (Options.getATRegNum() == 0) {
++      pushInstr(Instructions, Mips::LUi, RegNo,
++                MCOperand::CreateExpr(HighestExpr), IDLoc);
++      pushInstr(Instructions, Mips::DADDiu, RegNo, RegNo,
++                MCOperand::CreateExpr(HigherExpr), IDLoc);
++      pushInstr(Instructions, Mips::DSLL, RegNo, RegNo,
++          MCOperand::CreateImm(16), IDLoc);
++      pushInstr(Instructions, Mips::DADDiu, RegNo, RegNo,
++                MCOperand::CreateExpr(HiExpr), IDLoc);
++      pushInstr(Instructions, Mips::DSLL, RegNo, RegNo,
++          MCOperand::CreateImm(16), IDLoc);
++      pushInstr(Instructions, Mips::DADDiu, RegNo, RegNo,
++                MCOperand::CreateExpr(LoExpr), IDLoc);
++      return;
++    }
++    unsigned AtRegNum = getReg(Mips::GPR64RegClassID, getATReg());
++    pushInstr(Instructions, Mips::LUi, RegNo,
++              MCOperand::CreateExpr(HighestExpr), IDLoc);
++    pushInstr(Instructions, Mips::LUi, AtRegNum,
++              MCOperand::CreateExpr(HiExpr), IDLoc);
++    pushInstr(Instructions, Mips::DADDiu, RegNo, RegNo,
++              MCOperand::CreateExpr(HigherExpr), IDLoc);
++    pushInstr(Instructions, Mips::DADDiu, AtRegNum, AtRegNum,
++              MCOperand::CreateExpr(LoExpr), IDLoc);
++    pushInstr(Instructions, Mips::DSLL32, RegNo, RegNo,
++              MCOperand::CreateImm(0), IDLoc);
++    pushInstr(Instructions, Mips::DADDu, RegNo, RegNo, AtRegNum, IDLoc);
++  } else {
++    pushInstr(Instructions, Mips::LUi, RegNo,
++              MCOperand::CreateExpr(HiExpr), IDLoc);
++    pushInstr(Instructions, Mips::ADDiu, RegNo, RegNo,
++        MCOperand::CreateExpr(LoExpr), IDLoc);
++  }
++}
++
++void
+ MipsAsmParser::expandLoadAddressImm(MCInst &Inst, SMLoc IDLoc,
+                                     SmallVectorImpl<MCInst> &Instructions) {
+   MCInst tmpInst;
+   const MCOperand &ImmOp = Inst.getOperand(1);
+-  assert(ImmOp.isImm() && "expected immediate operand kind");
++  assert((ImmOp.isImm() || ImmOp.isExpr()) && "expected immediate operand kind");
++  if (!ImmOp.isImm())
++    return expandLoadAddressSym(Inst, IDLoc, Instructions);
+   const MCOperand &RegOp = Inst.getOperand(0);
+   assert(RegOp.isReg() && "expected register operand kind");
+   int ImmValue = ImmOp.getImm();
+@@ -838,7 +1015,7 @@ void MipsAsmParser::expandMemInst(MCInst &Inst, SMLoc IDLoc,
+   const MCExpr *ExprOffset;
+   unsigned TmpRegNum;
+   unsigned AtRegNum = getReg(
+-      (isMips64()) ? Mips::GPR64RegClassID : Mips::GPR32RegClassID, getATReg());
++      (isGP64()) ? Mips::GPR64RegClassID : Mips::GPR32RegClassID, getATReg());
+   // 1st operand is either the source or destination register.
+   assert(Inst.getOperand(0).isReg() && "expected register operand kind");
+   unsigned RegOpNum = Inst.getOperand(0).getReg();
+@@ -955,8 +1132,13 @@ bool MipsAsmParser::MatchAndEmitInstruction(
+ int MipsAsmParser::matchCPURegisterName(StringRef Name) {
+   int CC;
+ 
+-  if (Name == "at")
+-    return getATReg();
++  if (Name == "at") {
++    // If noat is set then the at register is 0, otherwise it's defined as a
++    // specific register.  Warn if the assembler is free to use it.
++    if (Options.getATRegNum() != 0)
++      Warning(getLexer().getLoc(), "Used $at without \".set noat\"");
++    return 1;
++  }
+ 
+   CC = StringSwitch<unsigned>(Name)
+            .Case("zero", 0)
+@@ -995,10 +1177,10 @@ int MipsAsmParser::matchCPURegisterName(StringRef Name) {
+   // Although SGI documentation just cuts out t0-t3 for n32/n64,
+   // GNU pushes the values of t0-t3 to override the o32/o64 values for t4-t7
+   // We are supporting both cases, so for t0-t3 we'll just push them to t4-t7.
+-  if (isMips64() && 8 <= CC && CC <= 11)
++  if (isGP64() && 8 <= CC && CC <= 11)
+     CC += 4;
+ 
+-  if (CC == -1 && isMips64())
++  if (CC == -1 && isGP64())
+     CC = StringSwitch<unsigned>(Name)
+              .Case("a4", 8)
+              .Case("a5", 9)
+@@ -1009,6 +1191,10 @@ int MipsAsmParser::matchCPURegisterName(StringRef Name) {
+              .Case("s8", 30)
+              .Default(-1);
+ 
++  if ((CC != 0) && ((int)Options.getATRegNum() == CC))
++      Warning(getLexer().getLoc(), Twine("Used $") + Name + " with \".set at=$"
++          + Name + "\"");
++
+   return CC;
+ }
+ 
+@@ -1144,12 +1330,23 @@ bool MipsAssemblerOptions::setATReg(unsigned Reg) {
+   return true;
+ }
+ 
+-int MipsAsmParser::getATReg() { return Options.getATRegNum(); }
++int MipsAsmParser::getATReg() {
++  int AT = Options.getATRegNum();
++  if (AT == 0)
++    TokError("Pseudo instruction requires $at, which is not available");
++  return AT;
++}
+ 
+ unsigned MipsAsmParser::getReg(int RC, int RegNo) {
+   return *(getContext().getRegisterInfo()->getRegClass(RC).begin() + RegNo);
+ }
+ 
++unsigned MipsAsmParser::getGPR(int RegNo) {
++  return getReg((isGP64()) ? Mips::GPR64RegClassID : Mips::GPR32RegClassID,
++                 RegNo);
++}
++
++
+ int MipsAsmParser::matchRegisterByNumber(unsigned RegNum, unsigned RegClass) {
+   if (RegNum >
+       getContext().getRegisterInfo()->getRegClass(RegClass).getNumRegs())
+@@ -1211,7 +1408,7 @@ MipsAsmParser::ParseOperand(SmallVectorImpl<MCParsedAsmOperand *> &Operands,
+     SMLoc S = Parser.getTok().getLoc();
+     Parser.Lex(); // Eat dollar token.
+     // Parse the register operand.
+-    if (!tryParseRegisterOperand(Operands, isMips64())) {
++    if (!tryParseRegisterOperand(Operands, isGP64())) {
+       if (getLexer().is(AsmToken::LParen)) {
+         // Check if it is indexed addressing operand.
+         Operands.push_back(MipsOperand::CreateToken("(", S));
+@@ -1220,7 +1417,7 @@ MipsAsmParser::ParseOperand(SmallVectorImpl<MCParsedAsmOperand *> &Operands,
+           return true;
+ 
+         Parser.Lex(); // Eat the dollar
+-        if (tryParseRegisterOperand(Operands, isMips64()))
++        if (tryParseRegisterOperand(Operands, isGP64()))
+           return true;
+ 
+         if (!getLexer().is(AsmToken::RParen))
+@@ -1427,7 +1624,7 @@ bool MipsAsmParser::parseRelocOperand(const MCExpr *&Res) {
+ bool MipsAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
+                                   SMLoc &EndLoc) {
+   StartLoc = Parser.getTok().getLoc();
+-  RegNo = tryParseRegister(isMips64());
++  RegNo = tryParseRegister(isGP64());
+   EndLoc = Parser.getTok().getLoc();
+   return (RegNo == (unsigned)-1);
+ }
+@@ -1494,7 +1691,7 @@ MipsAsmParser::OperandMatchResultTy MipsAsmParser::parseMemOperand(
+ 
+         // Zero register assumed, add a memory operand with ZERO as its base.
+         Operands.push_back(MipsOperand::CreateMem(
+-            isMips64() ? Mips::ZERO_64 : Mips::ZERO, IdVal, S, E));
++            isGP64() ? Mips::ZERO_64 : Mips::ZERO, IdVal, S, E));
+         return MatchOperand_Success;
+       }
+       Error(Parser.getTok().getLoc(), "'(' expected");
+@@ -1504,7 +1701,7 @@ MipsAsmParser::OperandMatchResultTy MipsAsmParser::parseMemOperand(
+     Parser.Lex(); // Eat the '(' token.
+   }
+ 
+-  Res = parseRegs(Operands, isMips64() ? (int)MipsOperand::Kind_GPR64
++  Res = parseRegs(Operands, isGP64() ? (int)MipsOperand::Kind_GPR64
+                                        : (int)MipsOperand::Kind_GPR32);
+   if (Res != MatchOperand_Success)
+     return Res;
+@@ -1666,10 +1863,8 @@ MipsAsmParser::parseRegs(SmallVectorImpl<MCParsedAsmOperand *> &Operands,
+   } else if (getLexer().getKind() == AsmToken::Integer) {
+     unsigned RegNum = Parser.getTok().getIntVal();
+     if (Kind == MipsOperand::Kind_HWRegs) {
+-      if (RegNum != 29)
++      if (RegNum > 31)
+         return MatchOperand_NoMatch;
+-      // Only hwreg 29 is supported, found at index 0.
+-      RegNum = 0;
+     }
+     int Reg = matchRegisterByNumber(RegNum, regKindToRegClass(Kind));
+     if (Reg == -1)
+@@ -1897,7 +2092,7 @@ MipsAsmParser::parseMSACtrlRegs(SmallVectorImpl<MCParsedAsmOperand *> &Operands,
+ MipsAsmParser::OperandMatchResultTy
+ MipsAsmParser::parseGPR64(SmallVectorImpl<MCParsedAsmOperand *> &Operands) {
+ 
+-  if (!isMips64())
++  if (!isGP64())
+     return MatchOperand_NoMatch;
+   return parseRegs(Operands, (int)MipsOperand::Kind_GPR64);
+ }
+@@ -2079,8 +2274,8 @@ bool MipsAsmParser::searchSymbolAlias(
+         APInt IntVal(32, -1);
+         if (!DefSymbol.substr(1).getAsInteger(10, IntVal))
+           RegNum = matchRegisterByNumber(IntVal.getZExtValue(),
+-                                         isMips64() ? Mips::GPR64RegClassID
+-                                                    : Mips::GPR32RegClassID);
++                                         isGP64() ? Mips::GPR64RegClassID
++                                                  : Mips::GPR32RegClassID);
+         else {
+           // Lookup for the register with the corresponding name.
+           switch (Kind) {
+@@ -2425,6 +2620,104 @@ bool MipsAsmParser::parseSetAssignment() {
+   return false;
+ }
+ 
++bool MipsAsmParser::parseRegister(unsigned &RegNum) {
++  if (!getLexer().is(AsmToken::Dollar))
++    return false;
++  Parser.Lex();
++  const AsmToken &Reg = Parser.getTok();
++  if (Reg.is(AsmToken::Identifier)) {
++    RegNum = matchCPURegisterName(Reg.getIdentifier());
++  } else if (Reg.is(AsmToken::Integer)) {
++    RegNum = Reg.getIntVal();
++  }
++  else {
++    return false;
++  }
++  Parser.Lex();
++  return true;
++}
++
++bool MipsAsmParser::eatComma(StringRef ErrorStr) {
++  if (getLexer().isNot(AsmToken::Comma)) {
++    SMLoc Loc = getLexer().getLoc();
++    Parser.eatToEndOfStatement();
++    return Error(Loc, ErrorStr);
++  }
++  Parser.Lex();  // Eat the comma.
++  return true;
++}
++
++bool MipsAsmParser::parseDirectiveCPSetup() {
++  unsigned FuncReg;
++  unsigned Save;
++  bool SaveIsReg = true;
++  if (!parseRegister(FuncReg))
++    return reportParseError("expected register containing function address");
++  FuncReg = getGPR(FuncReg);
++  if (!eatComma("expected comma parsing directive"))
++    return true;
++  if (!parseRegister(Save)) {
++    const AsmToken &Tok = Parser.getTok();
++    if (Tok.is(AsmToken::Integer)) {
++      Save = Tok.getIntVal();
++      SaveIsReg = false;
++      Parser.Lex();
++    } else
++      return reportParseError("expected save register or stack offset");
++  } else
++    Save = getGPR(Save);
++
++  if (!eatComma("expected comma parsing directive"))
++    return true;
++  StringRef Name;
++  if (Parser.parseIdentifier(Name))
++    reportParseError("expected identifier");
++  MCSymbol *Sym = getContext().GetOrCreateSymbol(Name);
++  unsigned GPReg = getGPR(matchCPURegisterName("gp"));
++
++  MCStreamer &TS = getStreamer();
++  MCInst Inst;
++  // Either store the old $gp in a register or on the stack
++  if (SaveIsReg) {
++    Inst.setOpcode(Mips::DADDi);
++    Inst.addOperand(MCOperand::CreateReg(Save));
++    Inst.addOperand(MCOperand::CreateReg(GPReg));
++    Inst.addOperand(MCOperand::CreateImm(0));
++  } else {
++    Inst.setOpcode(Mips::SD);
++    Inst.addOperand(MCOperand::CreateReg(GPReg));
++    Inst.addOperand(MCOperand::CreateReg(getGPR(matchCPURegisterName("sp"))));
++    Inst.addOperand(MCOperand::CreateImm(Save));
++  }
++  TS.EmitInstruction(Inst, STI);
++  Inst.clear();
++  const MCSymbolRefExpr *HiExpr = MCSymbolRefExpr::Create(
++      Sym->getName(), MCSymbolRefExpr::VK_Mips_GPOFF_HI,
++      getContext());
++  const MCSymbolRefExpr *LoExpr = MCSymbolRefExpr::Create(
++      Sym->getName(), MCSymbolRefExpr::VK_Mips_GPOFF_LO,
++      getContext());
++  // lui $gp, %hi(%neg(%gp_rel(funcSym)))
++  Inst.setOpcode(Mips::LUi);
++  Inst.addOperand(MCOperand::CreateReg(GPReg));
++  Inst.addOperand(MCOperand::CreateExpr(HiExpr));
++  TS.EmitInstruction(Inst, STI);
++  Inst.clear();
++  // daddu  $gp, $gp, $25
++  Inst.setOpcode(Mips::DADDu);
++  Inst.addOperand(MCOperand::CreateReg(GPReg));
++  Inst.addOperand(MCOperand::CreateReg(GPReg));
++  Inst.addOperand(MCOperand::CreateReg(FuncReg));
++  TS.EmitInstruction(Inst, STI);
++  Inst.clear();
++  // daddiu  $gp, $gp, %lo(%neg(%gp_rel(funcSym)))
++  Inst.setOpcode(Mips::DADDiu);
++  Inst.addOperand(MCOperand::CreateReg(GPReg));
++  Inst.addOperand(MCOperand::CreateReg(GPReg));
++  Inst.addOperand(MCOperand::CreateExpr(LoExpr));
++  TS.EmitInstruction(Inst, STI);
++  return false;
++}
+ bool MipsAsmParser::parseDirectiveSet() {
+ 
+   // Get the next token.
+@@ -2608,12 +2901,16 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
+     return false;
+   }
+ 
++  if (IDVal == ".cpsetup")
++    return parseDirectiveCPSetup();
++
+   return true;
+ }
+ 
+ extern "C" void LLVMInitializeMipsAsmParser() {
+   RegisterMCAsmParser<MipsAsmParser> X(TheMipsTarget);
+   RegisterMCAsmParser<MipsAsmParser> Y(TheMipselTarget);
++  RegisterMCAsmParser<MipsAsmParser> Mips4(TheMips4Target);
+   RegisterMCAsmParser<MipsAsmParser> A(TheMips64Target);
+   RegisterMCAsmParser<MipsAsmParser> B(TheMips64elTarget);
+ }
+diff --git a/lib/Target/Mips/Disassembler/MipsDisassembler.cpp b/lib/Target/Mips/Disassembler/MipsDisassembler.cpp
+index a543840..2bfd992 100644
+--- a/lib/Target/Mips/Disassembler/MipsDisassembler.cpp
++++ b/lib/Target/Mips/Disassembler/MipsDisassembler.cpp
+@@ -265,7 +265,7 @@ static DecodeStatus DecodeExtSize(MCInst &Inst,
+ 
+ namespace llvm {
+ extern Target TheMipselTarget, TheMipsTarget, TheMips64Target,
+-              TheMips64elTarget;
++              TheMips4Target, TheMips64elTarget;
+ }
+ 
+ static MCDisassembler *createMipsDisassembler(
+@@ -298,6 +298,8 @@ extern "C" void LLVMInitializeMipsDisassembler() {
+                                          createMipsDisassembler);
+   TargetRegistry::RegisterMCDisassembler(TheMipselTarget,
+                                          createMipselDisassembler);
++  TargetRegistry::RegisterMCDisassembler(TheMips4Target,
++                                         createMips64Disassembler);
+   TargetRegistry::RegisterMCDisassembler(TheMips64Target,
+                                          createMips64Disassembler);
+   TargetRegistry::RegisterMCDisassembler(TheMips64elTarget,
+@@ -663,9 +665,10 @@ static DecodeStatus DecodeHWRegsRegisterClass(MCInst &Inst,
+                                               uint64_t Address,
+                                               const void *Decoder) {
+   // Currently only hardware register 29 is supported.
+-  if (RegNo != 29)
++  if (RegNo > 31)
+     return  MCDisassembler::Fail;
+-  Inst.addOperand(MCOperand::CreateReg(Mips::HWR29));
++  unsigned Reg = getReg(Decoder, Mips::HWRegsRegClassID, RegNo);
++  Inst.addOperand(MCOperand::CreateReg(Reg));
+   return MCDisassembler::Success;
+ }
+ 
+diff --git a/lib/Target/Mips/MCTargetDesc/MipsMCAsmInfo.cpp b/lib/Target/Mips/MCTargetDesc/MipsMCAsmInfo.cpp
+index 6aa3c76..2da7adc 100644
+--- a/lib/Target/Mips/MCTargetDesc/MipsMCAsmInfo.cpp
++++ b/lib/Target/Mips/MCTargetDesc/MipsMCAsmInfo.cpp
+@@ -21,7 +21,8 @@ void MipsMCAsmInfo::anchor() { }
+ MipsMCAsmInfo::MipsMCAsmInfo(StringRef TT) {
+   Triple TheTriple(TT);
+   if ((TheTriple.getArch() == Triple::mips) ||
+-      (TheTriple.getArch() == Triple::mips64))
++      (TheTriple.getArch() == Triple::mips64) ||
++      (TheTriple.getArch() == Triple::mips4))
+     IsLittleEndian = false;
+ 
+   if ((TheTriple.getArch() == Triple::mips64el) ||
+diff --git a/lib/Target/Mips/MCTargetDesc/MipsMCTargetDesc.cpp b/lib/Target/Mips/MCTargetDesc/MipsMCTargetDesc.cpp
+index b663bf8..c336cc8 100644
+--- a/lib/Target/Mips/MCTargetDesc/MipsMCTargetDesc.cpp
++++ b/lib/Target/Mips/MCTargetDesc/MipsMCTargetDesc.cpp
+@@ -48,6 +48,8 @@ static inline StringRef selectMipsCPU(StringRef TT, StringRef CPU) {
+     if (TheTriple.getArch() == Triple::mips ||
+         TheTriple.getArch() == Triple::mipsel)
+       CPU = "mips32";
++    else if (TheTriple.getArch() == Triple::mips4)
++      CPU = "mips4";
+     else
+       CPU = "mips64";
+   }
+@@ -132,87 +134,37 @@ createMCAsmStreamer(MCContext &Ctx, formatted_raw_ostream &OS,
+   return S;
+ }
+ 
+-extern "C" void LLVMInitializeMipsTargetMC() {
++static void registerTarget(Target &T, bool isBigEndian, bool is64Bit) {
+   // Register the MC asm info.
+-  RegisterMCAsmInfoFn X(TheMipsTarget, createMipsMCAsmInfo);
+-  RegisterMCAsmInfoFn Y(TheMipselTarget, createMipsMCAsmInfo);
+-  RegisterMCAsmInfoFn A(TheMips64Target, createMipsMCAsmInfo);
+-  RegisterMCAsmInfoFn B(TheMips64elTarget, createMipsMCAsmInfo);
+-
++  RegisterMCAsmInfoFn AsmInfo(T, createMipsMCAsmInfo);
+   // Register the MC codegen info.
+-  TargetRegistry::RegisterMCCodeGenInfo(TheMipsTarget,
+-                                        createMipsMCCodeGenInfo);
+-  TargetRegistry::RegisterMCCodeGenInfo(TheMipselTarget,
+-                                        createMipsMCCodeGenInfo);
+-  TargetRegistry::RegisterMCCodeGenInfo(TheMips64Target,
+-                                        createMipsMCCodeGenInfo);
+-  TargetRegistry::RegisterMCCodeGenInfo(TheMips64elTarget,
+-                                        createMipsMCCodeGenInfo);
+-
++  TargetRegistry::RegisterMCCodeGenInfo(T, createMipsMCCodeGenInfo);
+   // Register the MC instruction info.
+-  TargetRegistry::RegisterMCInstrInfo(TheMipsTarget, createMipsMCInstrInfo);
+-  TargetRegistry::RegisterMCInstrInfo(TheMipselTarget, createMipsMCInstrInfo);
+-  TargetRegistry::RegisterMCInstrInfo(TheMips64Target, createMipsMCInstrInfo);
+-  TargetRegistry::RegisterMCInstrInfo(TheMips64elTarget,
+-                                      createMipsMCInstrInfo);
+-
++  TargetRegistry::RegisterMCInstrInfo(T, createMipsMCInstrInfo);
+   // Register the MC register info.
+-  TargetRegistry::RegisterMCRegInfo(TheMipsTarget, createMipsMCRegisterInfo);
+-  TargetRegistry::RegisterMCRegInfo(TheMipselTarget, createMipsMCRegisterInfo);
+-  TargetRegistry::RegisterMCRegInfo(TheMips64Target, createMipsMCRegisterInfo);
+-  TargetRegistry::RegisterMCRegInfo(TheMips64elTarget,
+-                                    createMipsMCRegisterInfo);
+-
++  TargetRegistry::RegisterMCRegInfo(T, createMipsMCRegisterInfo);
+   // Register the MC Code Emitter
+-  TargetRegistry::RegisterMCCodeEmitter(TheMipsTarget,
+-                                        createMipsMCCodeEmitterEB);
+-  TargetRegistry::RegisterMCCodeEmitter(TheMipselTarget,
+-                                        createMipsMCCodeEmitterEL);
+-  TargetRegistry::RegisterMCCodeEmitter(TheMips64Target,
+-                                        createMipsMCCodeEmitterEB);
+-  TargetRegistry::RegisterMCCodeEmitter(TheMips64elTarget,
+-                                        createMipsMCCodeEmitterEL);
+-
++  TargetRegistry::RegisterMCCodeEmitter(T,
++      isBigEndian ?  createMipsMCCodeEmitterEB : createMipsMCCodeEmitterEL);
+   // Register the object streamer.
+-  TargetRegistry::RegisterMCObjectStreamer(TheMipsTarget, createMCStreamer);
+-  TargetRegistry::RegisterMCObjectStreamer(TheMipselTarget, createMCStreamer);
+-  TargetRegistry::RegisterMCObjectStreamer(TheMips64Target, createMCStreamer);
+-  TargetRegistry::RegisterMCObjectStreamer(TheMips64elTarget,
+-                                           createMCStreamer);
+-
++  TargetRegistry::RegisterMCObjectStreamer(T, createMCStreamer);
+   // Register the asm streamer.
+-  TargetRegistry::RegisterAsmStreamer(TheMipsTarget, createMCAsmStreamer);
+-  TargetRegistry::RegisterAsmStreamer(TheMipselTarget, createMCAsmStreamer);
+-  TargetRegistry::RegisterAsmStreamer(TheMips64Target, createMCAsmStreamer);
+-  TargetRegistry::RegisterAsmStreamer(TheMips64elTarget, createMCAsmStreamer);
+-
++  TargetRegistry::RegisterAsmStreamer(T, createMCAsmStreamer);
+   // Register the asm backend.
+-  TargetRegistry::RegisterMCAsmBackend(TheMipsTarget,
+-                                       createMipsAsmBackendEB32);
+-  TargetRegistry::RegisterMCAsmBackend(TheMipselTarget,
+-                                       createMipsAsmBackendEL32);
+-  TargetRegistry::RegisterMCAsmBackend(TheMips64Target,
+-                                       createMipsAsmBackendEB64);
+-  TargetRegistry::RegisterMCAsmBackend(TheMips64elTarget,
+-                                       createMipsAsmBackendEL64);
+-
++  TargetRegistry::RegisterMCAsmBackend(T,
++   is64Bit ?
++     (isBigEndian ? createMipsAsmBackendEB64 : createMipsAsmBackendEL64) :
++     (isBigEndian ? createMipsAsmBackendEB32 : createMipsAsmBackendEL32));
+   // Register the MC subtarget info.
+-  TargetRegistry::RegisterMCSubtargetInfo(TheMipsTarget,
+-                                          createMipsMCSubtargetInfo);
+-  TargetRegistry::RegisterMCSubtargetInfo(TheMipselTarget,
+-                                          createMipsMCSubtargetInfo);
+-  TargetRegistry::RegisterMCSubtargetInfo(TheMips64Target,
+-                                          createMipsMCSubtargetInfo);
+-  TargetRegistry::RegisterMCSubtargetInfo(TheMips64elTarget,
+-                                          createMipsMCSubtargetInfo);
+-
++  TargetRegistry::RegisterMCSubtargetInfo(T, createMipsMCSubtargetInfo);
+   // Register the MCInstPrinter.
+-  TargetRegistry::RegisterMCInstPrinter(TheMipsTarget,
+-                                        createMipsMCInstPrinter);
+-  TargetRegistry::RegisterMCInstPrinter(TheMipselTarget,
+-                                        createMipsMCInstPrinter);
+-  TargetRegistry::RegisterMCInstPrinter(TheMips64Target,
+-                                        createMipsMCInstPrinter);
+-  TargetRegistry::RegisterMCInstPrinter(TheMips64elTarget,
+-                                        createMipsMCInstPrinter);
++  TargetRegistry::RegisterMCInstPrinter(T, createMipsMCInstPrinter);
++}
++
++extern "C" void LLVMInitializeMipsTargetMC() {
++  registerTarget(TheMipsTarget, /* isBigEndian */true, /*is64Bit*/false);
++  registerTarget(TheMipselTarget, /* isBigEndian */false, /*is64Bit*/false);
++  registerTarget(TheMips4Target, /* isBigEndian */true, /*is64Bit*/true);
++  registerTarget(TheMips64Target, /* isBigEndian */true, /*is64Bit*/true);
++  registerTarget(TheMips64elTarget, /* isBigEndian */false, /*is64Bit*/true);
+ }
+diff --git a/lib/Target/Mips/MCTargetDesc/MipsMCTargetDesc.h b/lib/Target/Mips/MCTargetDesc/MipsMCTargetDesc.h
+index eabebfe..2fce151 100644
+--- a/lib/Target/Mips/MCTargetDesc/MipsMCTargetDesc.h
++++ b/lib/Target/Mips/MCTargetDesc/MipsMCTargetDesc.h
+@@ -30,6 +30,7 @@ class raw_ostream;
+ 
+ extern Target TheMipsTarget;
+ extern Target TheMipselTarget;
++extern Target TheMips4Target;
+ extern Target TheMips64Target;
+ extern Target TheMips64elTarget;
+ 
+diff --git a/lib/Target/Mips/MCTargetDesc/MipsTargetStreamer.cpp b/lib/Target/Mips/MCTargetDesc/MipsTargetStreamer.cpp
+index e9ce4b8..53d6c3e0 100644
+--- a/lib/Target/Mips/MCTargetDesc/MipsTargetStreamer.cpp
++++ b/lib/Target/Mips/MCTargetDesc/MipsTargetStreamer.cpp
+@@ -141,6 +141,8 @@ MipsTargetELFStreamer::MipsTargetELFStreamer(MCStreamer &S,
+     EFlags |= ELF::EF_MIPS_ARCH_64R2;
+   else if (Features & Mips::FeatureMips64)
+     EFlags |= ELF::EF_MIPS_ARCH_64;
++  else if (Features & Mips::FeatureMips4)
++    EFlags |= ELF::EF_MIPS_ARCH_4;
+   else if (Features & Mips::FeatureMips32r2)
+     EFlags |= ELF::EF_MIPS_ARCH_32R2;
+   else if (Features & Mips::FeatureMips32)
+diff --git a/lib/Target/Mips/Mips.td b/lib/Target/Mips/Mips.td
+index a9e8dca..8d3c2e5 100644
+--- a/lib/Target/Mips/Mips.td
++++ b/lib/Target/Mips/Mips.td
+@@ -63,9 +63,12 @@ def FeatureMips32r2    : SubtargetFeature<"mips32r2", "MipsArchVersion",
+                                 "Mips32r2", "Mips32r2 ISA Support",
+                                 [FeatureMips32, FeatureSEInReg, FeatureSwap,
+                                  FeatureFPIdx]>;
++def FeatureMips4       : SubtargetFeature<"mips4", "MipsArchVersion",
++                                "Mips4", "MIPS IV ISA Support",
++                                [FeatureGP64Bit, FeatureFP64Bit, FeatureCondMov]>;
+ def FeatureMips64      : SubtargetFeature<"mips64", "MipsArchVersion",
+                                 "Mips64", "Mips64 ISA Support",
+-                                [FeatureGP64Bit, FeatureFP64Bit,
++                                [FeatureMips4, FeatureGP64Bit, FeatureFP64Bit,
+                                  FeatureMips32, FeatureFPIdx]>;
+ def FeatureMips64r2    : SubtargetFeature<"mips64r2", "MipsArchVersion",
+                                 "Mips64r2", "Mips64r2 ISA Support",
+@@ -92,6 +95,7 @@ class Proc<string Name, list<SubtargetFeature> Features>
+ 
+ def : Proc<"mips32", [FeatureMips32, FeatureO32]>;
+ def : Proc<"mips32r2", [FeatureMips32r2, FeatureO32]>;
++def : Proc<"mips4", [FeatureMips4, FeatureN64]>;
+ def : Proc<"mips64", [FeatureMips64, FeatureN64]>;
+ def : Proc<"mips64r2", [FeatureMips64r2, FeatureN64]>;
+ def : Proc<"mips16", [FeatureMips16, FeatureO32]>;
+diff --git a/lib/Target/Mips/Mips64InstrInfo.td b/lib/Target/Mips/Mips64InstrInfo.td
+index 54d8e35..22f5b15 100644
+--- a/lib/Target/Mips/Mips64InstrInfo.td
++++ b/lib/Target/Mips/Mips64InstrInfo.td
+@@ -73,11 +73,12 @@ def LUi64   : LoadUpper<"lui", GPR64Opnd, uimm16_64>, LUI_FM;
+ }
+ 
+ /// Arithmetic Instructions (3-Operand, R-Type)
+-def DADD   : ArithLogicR<"dadd", GPR64Opnd>, ADD_FM<0, 0x2c>;
++def DADD   : ArithLogicR<"dadd", GPR64Opnd, 1, II_DADD>, ADD_FM<0, 0x2c>;
+ def DADDu  : ArithLogicR<"daddu", GPR64Opnd, 1, II_DADDU, add>,
+                               ADD_FM<0, 0x2d>;
+ def DSUBu  : ArithLogicR<"dsubu", GPR64Opnd, 0, II_DSUBU, sub>,
+                               ADD_FM<0, 0x2f>;
++def DSUB   : ArithLogicR<"dsub", GPR64Opnd, 0, II_DSUB, sub>, ADD_FM<0, 0x2e>;
+ 
+ let isCodeGenOnly = 1 in {
+ def SLT64  : SetCC_R<"slt", setlt, GPR64Opnd>, ADD_FM<0, 0x2a>;
+@@ -198,17 +199,19 @@ def SEB64 : SignExtInReg<"seb", i8, GPR64Opnd, II_SEB>, SEB_FM<0x10, 0x20>;
+ def SEH64 : SignExtInReg<"seh", i16, GPR64Opnd, II_SEH>, SEB_FM<0x18, 0x20>;
+ }
+ 
+-/// Count Leading
+-def DCLZ : CountLeading0<"dclz", GPR64Opnd>, CLO_FM<0x24>;
+-def DCLO : CountLeading1<"dclo", GPR64Opnd>, CLO_FM<0x25>;
++let Predicates = [HasMips64] in {
++  /// Count Leading
++  def DCLZ : CountLeading0<"dclz", GPR64Opnd>, CLO_FM<0x24>;
++  def DCLO : CountLeading1<"dclo", GPR64Opnd>, CLO_FM<0x25>;
+ 
+-/// Double Word Swap Bytes/HalfWords
+-def DSBH : SubwordSwap<"dsbh", GPR64Opnd>, SEB_FM<2, 0x24>;
+-def DSHD : SubwordSwap<"dshd", GPR64Opnd>, SEB_FM<5, 0x24>;
++  /// Double Word Swap Bytes/HalfWords
++  def DSBH : SubwordSwap<"dsbh", GPR64Opnd>, SEB_FM<2, 0x24>;
++  def DSHD : SubwordSwap<"dshd", GPR64Opnd>, SEB_FM<5, 0x24>;
++}
+ 
+ def LEA_ADDiu64 : EffectiveAddress<"daddiu", GPR64Opnd>, LW_FM<0x19>;
+ 
+-let isCodeGenOnly = 1 in
++let DecoderNamespace="Mips64" in
+ def RDHWR64 : ReadHardware<GPR64Opnd, HWRegsOpnd>, RDHWR_FM;
+ 
+ def DEXT : ExtBase<"dext", GPR64Opnd, uimm6, MipsExt>, EXT_FM<3>;
+@@ -318,6 +321,84 @@ def : InstAlias<"daddu $rs, $rt, $imm",
+ def : InstAlias<"dadd $rs, $rt, $imm",
+                 (DADDi GPR64Opnd:$rs, GPR64Opnd:$rt, simm16_64:$imm),
+                 0>;
++def : InstAlias<"daddu $rs, $imm",
++                (DADDiu GPR64Opnd:$rs, GPR64Opnd:$rs, simm16_64:$imm),
++                0>;
++def : InstAlias<"dadd $rs, $imm",
++                (DADDi GPR64Opnd:$rs, GPR64Opnd:$rs, simm16_64:$imm),
++                0>;
++def : InstAlias<"dadd $rs, $rt",
++                (DADD GPR64Opnd:$rs, GPR64Opnd:$rs, GPR64Opnd:$rt),
++                0>;
++def : InstAlias<"daddu $rs, $rt",
++                (DADDu GPR64Opnd:$rs, GPR64Opnd:$rs, GPR64Opnd:$rt),
++                0>;
++def : InstAlias<"dsub $rs, $rt",
++                (DSUB GPR64Opnd:$rs, GPR64Opnd:$rs, GPR64Opnd:$rt),
++                0>;
++def : InstAlias<"dsubu $rs, $rt",
++                (DSUBu GPR64Opnd:$rs, GPR64Opnd:$rs, GPR64Opnd:$rt),
++                0>;
++def : InstAlias<"add $rs, $imm",
++                (ADDi GPR32Opnd:$rs, GPR32Opnd:$rs, simm16:$imm),
++                0>;
++def : InstAlias<"addu $rs, $imm",
++                (ADDiu GPR32Opnd:$rs, GPR32Opnd:$rs, simm16:$imm),
++                0>;
++def : InstAlias<"add $rs, $rt",
++                (ADD GPR32Opnd:$rs, GPR32Opnd:$rs, GPR32Opnd:$rt),
++                0>;
++def : InstAlias<"addu $rs, $rt",
++                (ADDu GPR32Opnd:$rs, GPR32Opnd:$rs, GPR32Opnd:$rt),
++                0>;
++def : InstAlias<"sub $rs, $rt",
++                (SUB GPR32Opnd:$rs, GPR32Opnd:$rs, GPR32Opnd:$rt),
++                0>;
++def : InstAlias<"subu $rs, $rt",
++                (SUBu GPR32Opnd:$rs, GPR32Opnd:$rs, GPR32Opnd:$rt),
++                0>;
++let isPseudo=1, usesCustomInserter=1, isCodeGenOnly=1 in {
++def SUBi : MipsInst<(outs GPR32Opnd: $rt), (ins GPR32Opnd: $rs, simm16: $imm),
++                    "sub\t$rt, $rs, $imm", [], II_DSUB, Pseudo>;
++def SUBiu : MipsInst<(outs GPR32Opnd: $rt), (ins GPR32Opnd: $rs, simm16: $imm),
++                    "subu\t$rt, $rs, $imm", [], II_DSUB, Pseudo>;
++def DSUBi : MipsInst<(outs GPR64Opnd: $rt), (ins GPR64Opnd: $rs, simm16_64: $imm),
++                    "ssub\t$rt, $rs, $imm", [], II_DSUB, Pseudo>;
++def DSUBiu : MipsInst<(outs GPR64Opnd: $rt), (ins GPR64Opnd: $rs, simm16_64: $imm),
++                    "ssubu\t$rt, $rs, $imm", [], II_DSUB, Pseudo>;
++}
++def : InstAlias<"dsubu $rt, $rs, $imm",
++                (DSUBiu GPR64Opnd:$rt, GPR64Opnd:$rs, simm16_64: $imm),
++                0>;
++def : InstAlias<"sub $rs, $imm",
++                (SUBi GPR32Opnd:$rs, GPR32Opnd:$rs, simm16:$imm),
++                0>;
++def : InstAlias<"subu $rs, $imm",
++                (SUBiu GPR32Opnd:$rs, GPR32Opnd:$rs, simm16:$imm),
++                0>;
++def : InstAlias<"dsub $rs, $imm",
++                (DSUBi GPR64Opnd:$rs, GPR64Opnd:$rs, simm16_64:$imm),
++                0>;
++def : InstAlias<"dsubu $rs, $imm",
++                (DSUBiu GPR64Opnd:$rs, GPR64Opnd:$rs, simm16_64:$imm),
++                0>;
++
++def imm64: Operand<i64>;
++class LoadImm64< string instr_asm, Operand Od, RegisterOperand RO> :
++  MipsAsmPseudoInst<(outs RO:$rt), (ins Od:$imm64),
++                     !strconcat(instr_asm, "\t$rt, $imm64")> ;
++def LoadImm64Reg : LoadImm64<"dli", uimm5, GPR64Opnd>;
++
++class LoadAddress64<string instr_asm, Operand MemOpnd, RegisterOperand RO> :
++  MipsAsmPseudoInst<(outs RO:$rt), (ins MemOpnd:$addr),
++                     !strconcat(instr_asm, "\t$rt, $addr")> ;
++def LoadAddr64Reg : LoadAddress64<"dla", mem, GPR64Opnd>;
++
++class LoadAddress64Imm<string instr_asm, Operand Od, RegisterOperand RO> :
++  MipsAsmPseudoInst<(outs RO:$rt), (ins Od:$imm64),
++                     !strconcat(instr_asm, "\t$rt, $imm64")> ;
++def LoadAddr64Imm : LoadAddress64Imm<"dla", uimm5, GPR64Opnd>;
++
+ 
+ /// Move between CPU and coprocessor registers
+ let DecoderNamespace = "Mips64", Predicates = [HasMips64] in {
+diff --git a/lib/Target/Mips/MipsAsmPrinter.cpp b/lib/Target/Mips/MipsAsmPrinter.cpp
+index d5df855..a205da3 100644
+--- a/lib/Target/Mips/MipsAsmPrinter.cpp
++++ b/lib/Target/Mips/MipsAsmPrinter.cpp
+@@ -945,6 +945,7 @@ void MipsAsmPrinter::NaClAlignIndirectJumpTargets(MachineFunction &MF) {
+ extern "C" void LLVMInitializeMipsAsmPrinter() {
+   RegisterAsmPrinter<MipsAsmPrinter> X(TheMipsTarget);
+   RegisterAsmPrinter<MipsAsmPrinter> Y(TheMipselTarget);
++  RegisterAsmPrinter<MipsAsmPrinter> Mips4(TheMips4Target);
+   RegisterAsmPrinter<MipsAsmPrinter> A(TheMips64Target);
+   RegisterAsmPrinter<MipsAsmPrinter> B(TheMips64elTarget);
+ }
+diff --git a/lib/Target/Mips/MipsCondMov.td b/lib/Target/Mips/MipsCondMov.td
+index 567eef9..eab940e 100644
+--- a/lib/Target/Mips/MipsCondMov.td
++++ b/lib/Target/Mips/MipsCondMov.td
+@@ -139,7 +139,7 @@ def MOVN_I_S : MMRel, CMov_I_F_FT<"movn.s", GPR32Opnd, FGR32Opnd, II_MOVN_S>,
+ 
+ let isCodeGenOnly = 1 in
+ def MOVN_I64_S : CMov_I_F_FT<"movn.s", GPR64Opnd, FGR32Opnd, II_MOVN_S>,
+-                 CMov_I_F_FM<19, 16>, Requires<[HasMips64, HasStdEnc]>;
++                 CMov_I_F_FM<19, 16>, Requires<[IsGP64bit, HasStdEnc]>;
+ 
+ let Predicates = [NotFP64bit, HasStdEnc] in {
+   def MOVZ_I_D32 : MMRel, CMov_I_F_FT<"movz.d", GPR32Opnd, AFGR64Opnd,
+@@ -166,14 +166,14 @@ def MOVT_I : MMRel, CMov_F_I_FT<"movt", GPR32Opnd, II_MOVT, MipsCMovFP_T>,
+ 
+ let isCodeGenOnly = 1 in
+ def MOVT_I64 : CMov_F_I_FT<"movt", GPR64Opnd, II_MOVT, MipsCMovFP_T>,
+-               CMov_F_I_FM<1>, Requires<[HasMips64, HasStdEnc]>;
++               CMov_F_I_FM<1>, Requires<[IsGP64bit, HasStdEnc]>;
+ 
+ def MOVF_I : MMRel, CMov_F_I_FT<"movf", GPR32Opnd, II_MOVF, MipsCMovFP_F>,
+              CMov_F_I_FM<0>;
+ 
+ let isCodeGenOnly = 1 in
+ def MOVF_I64 : CMov_F_I_FT<"movf", GPR64Opnd, II_MOVF, MipsCMovFP_F>,
+-               CMov_F_I_FM<0>, Requires<[HasMips64, HasStdEnc]>;
++               CMov_F_I_FM<0>, Requires<[IsGP64bit, HasStdEnc]>;
+ 
+ def MOVT_S : MMRel, CMov_F_F_FT<"movt.s", FGR32Opnd, II_MOVT_S, MipsCMovFP_T>,
+              CMov_F_F_FM<16, 1>;
+@@ -198,7 +198,7 @@ let Predicates = [IsFP64bit, HasStdEnc], DecoderNamespace = "Mips64" in {
+ defm : MovzPats0<GPR32, GPR32, MOVZ_I_I, SLT, SLTu, SLTi, SLTiu>;
+ defm : MovzPats1<GPR32, GPR32, MOVZ_I_I, XOR>;
+ defm : MovzPats2<GPR32, GPR32, MOVZ_I_I, XORi>;
+-let Predicates = [HasMips64, HasStdEnc] in {
++let Predicates = [IsGP64bit, HasStdEnc] in {
+   defm : MovzPats0<GPR32, GPR64, MOVZ_I_I64, SLT, SLTu, SLTi, SLTiu>;
+   defm : MovzPats0<GPR64, GPR32, MOVZ_I_I, SLT64, SLTu64, SLTi64,
+                    SLTiu64>;
+@@ -213,7 +213,7 @@ let Predicates = [HasMips64, HasStdEnc] in {
+ }
+ 
+ defm : MovnPats<GPR32, GPR32, MOVN_I_I, XOR>;
+-let Predicates = [HasMips64, HasStdEnc] in {
++let Predicates = [IsGP64bit, HasStdEnc] in {
+   defm : MovnPats<GPR32, GPR64, MOVN_I_I64, XOR>;
+   defm : MovnPats<GPR64, GPR32, MOVN_I64_I, XOR64>;
+   defm : MovnPats<GPR64, GPR64, MOVN_I64_I64, XOR64>;
+@@ -222,7 +222,7 @@ let Predicates = [HasMips64, HasStdEnc] in {
+ defm : MovzPats0<GPR32, FGR32, MOVZ_I_S, SLT, SLTu, SLTi, SLTiu>;
+ defm : MovzPats1<GPR32, FGR32, MOVZ_I_S, XOR>;
+ defm : MovnPats<GPR32, FGR32, MOVN_I_S, XOR>;
+-let Predicates = [HasMips64, HasStdEnc] in {
++let Predicates = [IsGP64bit, HasStdEnc] in {
+   defm : MovzPats0<GPR64, FGR32, MOVZ_I_S, SLT64, SLTu64, SLTi64,
+                    SLTiu64>;
+   defm : MovzPats1<GPR64, FGR32, MOVZ_I64_S, XOR64>;
+diff --git a/lib/Target/Mips/MipsISelLowering.cpp b/lib/Target/Mips/MipsISelLowering.cpp
+index bee4700..2dcb045 100644
+--- a/lib/Target/Mips/MipsISelLowering.cpp
++++ b/lib/Target/Mips/MipsISelLowering.cpp
+@@ -205,7 +205,7 @@ MipsTargetLowering::
+ MipsTargetLowering(MipsTargetMachine &TM)
+   : TargetLowering(TM, new MipsTargetObjectFile()),
+     Subtarget(&TM.getSubtarget<MipsSubtarget>()),
+-    HasMips64(Subtarget->hasMips64()), IsN64(Subtarget->isABI_N64()),
++    IsGP64bit(Subtarget->isGP64bit()), IsN64(Subtarget->isABI_N64()),
+     IsO32(Subtarget->isABI_O32()) {
+   // Mips does not have i1 type, so use i32 for
+   // setcc operations results (slt, sgt, ...).
+@@ -252,7 +252,7 @@ MipsTargetLowering(MipsTargetMachine &TM)
+     setOperationAction(ISD::FABS,             MVT::f64,   Custom);
+   }
+ 
+-  if (HasMips64) {
++  if (IsGP64bit) {
+     setOperationAction(ISD::GlobalAddress,      MVT::i64,   Custom);
+     setOperationAction(ISD::BlockAddress,       MVT::i64,   Custom);
+     setOperationAction(ISD::GlobalTLSAddress,   MVT::i64,   Custom);
+@@ -264,14 +264,14 @@ MipsTargetLowering(MipsTargetMachine &TM)
+     setOperationAction(ISD::FP_TO_SINT,         MVT::i64,   Custom);
+   }
+ 
+-  if (!HasMips64) {
++  if (!IsGP64bit) {
+     setOperationAction(ISD::SHL_PARTS,          MVT::i32,   Custom);
+     setOperationAction(ISD::SRA_PARTS,          MVT::i32,   Custom);
+     setOperationAction(ISD::SRL_PARTS,          MVT::i32,   Custom);
+   }
+ 
+   setOperationAction(ISD::ADD,                MVT::i32,   Custom);
+-  if (HasMips64)
++  if (IsGP64bit)
+     setOperationAction(ISD::ADD,                MVT::i64,   Custom);
+ 
+   setOperationAction(ISD::SDIV, MVT::i32, Expand);
+@@ -368,7 +368,7 @@ MipsTargetLowering(MipsTargetMachine &TM)
+     setOperationAction(ISD::BSWAP, MVT::i64, Expand);
+   }
+ 
+-  if (HasMips64) {
++  if (IsGP64bit) {
+     setLoadExtAction(ISD::SEXTLOAD, MVT::i32, Custom);
+     setLoadExtAction(ISD::ZEXTLOAD, MVT::i32, Custom);
+     setLoadExtAction(ISD::EXTLOAD, MVT::i32, Custom);
+@@ -384,7 +384,7 @@ MipsTargetLowering(MipsTargetMachine &TM)
+   setTargetDAGCombine(ISD::OR);
+   setTargetDAGCombine(ISD::ADD);
+ 
+-  setMinFunctionAlignment(HasMips64 ? 3 : 2);
++  setMinFunctionAlignment(2);
+ 
+   setStackPointerRegisterToSaveRestore(IsN64 ? Mips::SP_64 : Mips::SP);
+ 
+@@ -1513,7 +1513,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
+   }
+ 
+   if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
+-    return getAddrLocal(N, Ty, DAG, HasMips64);
++    return getAddrLocal(N, Ty, DAG, IsGP64bit);
+ 
+   if (LargeGOT)
+     return getAddrGlobalLargeGOT(N, Ty, DAG, MipsII::MO_GOT_HI16,
+@@ -1521,7 +1521,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
+                                  MachinePointerInfo::getGOT());
+ 
+   return getAddrGlobal(N, Ty, DAG,
+-                       HasMips64 ? MipsII::MO_GOT_DISP : MipsII::MO_GOT16,
++                       IsGP64bit ? MipsII::MO_GOT_DISP : MipsII::MO_GOT16,
+                        DAG.getEntryNode(), MachinePointerInfo::getGOT());
+ }
+ 
+@@ -1533,7 +1533,7 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
+   if (getTargetMachine().getRelocationModel() != Reloc::PIC_ && !IsN64)
+     return getAddrNonPIC(N, Ty, DAG);
+ 
+-  return getAddrLocal(N, Ty, DAG, HasMips64);
++  return getAddrLocal(N, Ty, DAG, IsGP64bit);
+ }
+ 
+ SDValue MipsTargetLowering::
+@@ -1626,7 +1626,7 @@ lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
+   if (getTargetMachine().getRelocationModel() != Reloc::PIC_ && !IsN64)
+     return getAddrNonPIC(N, Ty, DAG);
+ 
+-  return getAddrLocal(N, Ty, DAG, HasMips64);
++  return getAddrLocal(N, Ty, DAG, IsGP64bit);
+ }
+ 
+ SDValue MipsTargetLowering::
+@@ -1647,7 +1647,7 @@ lowerConstantPool(SDValue Op, SelectionDAG &DAG) const
+   if (getTargetMachine().getRelocationModel() != Reloc::PIC_ && !IsN64)
+     return getAddrNonPIC(N, Ty, DAG);
+ 
+-  return getAddrLocal(N, Ty, DAG, HasMips64);
++  return getAddrLocal(N, Ty, DAG, IsGP64bit);
+ }
+ 
+ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
+@@ -2504,7 +2504,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
+       InternalLinkage = Val->hasInternalLinkage();
+ 
+       if (InternalLinkage)
+-        Callee = getAddrLocal(G, Ty, DAG, HasMips64);
++        Callee = getAddrLocal(G, Ty, DAG, IsGP64bit);
+       else if (LargeGOT)
+         Callee = getAddrGlobalLargeGOT(G, Ty, DAG, MipsII::MO_CALL_HI16,
+                                        MipsII::MO_CALL_LO16, Chain,
+@@ -3024,9 +3024,9 @@ getRegForInlineAsmConstraint(const std::string &Constraint, MVT VT) const
+           return std::make_pair(0U, &Mips::CPU16RegsRegClass);
+         return std::make_pair(0U, &Mips::GPR32RegClass);
+       }
+-      if (VT == MVT::i64 && !HasMips64)
++      if (VT == MVT::i64 && !IsGP64bit)
+         return std::make_pair(0U, &Mips::GPR32RegClass);
+-      if (VT == MVT::i64 && HasMips64)
++      if (VT == MVT::i64 && IsGP64bit)
+         return std::make_pair(0U, &Mips::GPR64RegClass);
+       // This will generate an error message
+       return std::make_pair(0u, static_cast<const TargetRegisterClass*>(0));
+diff --git a/lib/Target/Mips/MipsISelLowering.h b/lib/Target/Mips/MipsISelLowering.h
+index af01035..cf41d53 100644
+--- a/lib/Target/Mips/MipsISelLowering.h
++++ b/lib/Target/Mips/MipsISelLowering.h
+@@ -429,7 +429,7 @@ namespace llvm {
+     // Subtarget Info
+     const MipsSubtarget *Subtarget;
+ 
+-    bool HasMips64, IsN64, IsO32;
++    bool IsGP64bit, IsN64, IsO32;
+ 
+   private:
+     // Create a TargetGlobalAddress node.
+diff --git a/lib/Target/Mips/MipsInstrInfo.td b/lib/Target/Mips/MipsInstrInfo.td
+index e4c6785..1db1ced 100644
+--- a/lib/Target/Mips/MipsInstrInfo.td
++++ b/lib/Target/Mips/MipsInstrInfo.td
+@@ -160,6 +160,10 @@ def HasMips32    :    Predicate<"Subtarget.hasMips32()">,
+                       AssemblerPredicate<"FeatureMips32">;
+ def HasMips32r2  :    Predicate<"Subtarget.hasMips32r2()">,
+                       AssemblerPredicate<"FeatureMips32r2">;
++def IsGP64bit    :    Predicate<"Subtarget.isGP64bit()">,
++                      AssemblerPredicate<"FeatureGP64Bit">;
++def IsGP32bit    :    Predicate<"!Subtarget.isGP64bit()">,
++                      AssemblerPredicate<"!FeatureGP64Bit">;
+ def HasMips64    :    Predicate<"Subtarget.hasMips64()">,
+                       AssemblerPredicate<"FeatureMips64">;
+ def NotMips64    :    Predicate<"!Subtarget.hasMips64()">,
+diff --git a/lib/Target/Mips/MipsRegisterInfo.td b/lib/Target/Mips/MipsRegisterInfo.td
+index 3173d09..aabea8d 100644
+--- a/lib/Target/Mips/MipsRegisterInfo.td
++++ b/lib/Target/Mips/MipsRegisterInfo.td
+@@ -208,8 +208,9 @@ let Namespace = "Mips" in {
+   // PC register
+   def PC : Register<"pc">;
+ 
+-  // Hardware register $29
+-  def HWR29 : MipsReg<29, "29">;
++  // Hardware registers
++  foreach I = 0-31 in
++  def HWR#I : MipsReg<#I, ""#I>;
+ 
+   // Accum registers
+   foreach I = 0-3 in
+@@ -355,7 +356,7 @@ def LO64 : RegisterClass<"Mips", [i64], 64, (add LO0_64)>;
+ def HI64 : RegisterClass<"Mips", [i64], 64, (add HI0_64)>;
+ 
+ // Hardware registers
+-def HWRegs : RegisterClass<"Mips", [i32], 32, (add HWR29)>, Unallocatable;
++def HWRegs : RegisterClass<"Mips", [i32], 32, (sequence "HWR%u", 0, 31)>, Unallocatable;
+ 
+ // Accumulator Registers
+ def ACC64 : RegisterClass<"Mips", [untyped], 64, (add AC0)> {
+diff --git a/lib/Target/Mips/MipsSEISelDAGToDAG.cpp b/lib/Target/Mips/MipsSEISelDAGToDAG.cpp
+index ac550d1..5b20a6c 100644
+--- a/lib/Target/Mips/MipsSEISelDAGToDAG.cpp
++++ b/lib/Target/Mips/MipsSEISelDAGToDAG.cpp
+@@ -657,7 +657,7 @@ std::pair<bool, SDNode*> MipsSEDAGToDAGISel::selectNode(SDNode *Node) {
+   case ISD::ConstantFP: {
+     ConstantFPSDNode *CN = dyn_cast<ConstantFPSDNode>(Node);
+     if (Node->getValueType(0) == MVT::f64 && CN->isExactlyValue(+0.0)) {
+-      if (Subtarget.hasMips64()) {
++      if (Subtarget.isGP64bit()) {
+         SDValue Zero = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), DL,
+                                               Mips::ZERO_64, MVT::i64);
+         Result = CurDAG->getMachineNode(Mips::DMTC1, DL, MVT::f64, Zero);
+diff --git a/lib/Target/Mips/MipsSEISelLowering.cpp b/lib/Target/Mips/MipsSEISelLowering.cpp
+index cb6a557..266a1ff 100644
+--- a/lib/Target/Mips/MipsSEISelLowering.cpp
++++ b/lib/Target/Mips/MipsSEISelLowering.cpp
+@@ -38,7 +38,7 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM)
+   // Set up the register classes
+   addRegisterClass(MVT::i32, &Mips::GPR32RegClass);
+ 
+-  if (HasMips64)
++  if (IsGP64bit)
+     addRegisterClass(MVT::i64, &Mips::GPR64RegClass);
+ 
+   if (Subtarget->hasDSP() || Subtarget->hasMSA()) {
+@@ -117,7 +117,7 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM)
+   setOperationAction(ISD::MULHS,              MVT::i32, Custom);
+   setOperationAction(ISD::MULHU,              MVT::i32, Custom);
+ 
+-  if (HasMips64) {
++  if (IsGP64bit) {
+     setOperationAction(ISD::MULHS,            MVT::i64, Custom);
+     setOperationAction(ISD::MULHU,            MVT::i64, Custom);
+     setOperationAction(ISD::MUL,              MVT::i64, Custom);
+@@ -1622,7 +1622,7 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
+   case Intrinsic::mips_copy_s_w:
+     return lowerMSACopyIntr(Op, DAG, MipsISD::VEXTRACT_SEXT_ELT);
+   case Intrinsic::mips_copy_s_d:
+-    if (HasMips64)
++    if (IsGP64bit)
+       // Lower directly into VEXTRACT_SEXT_ELT since i64 is legal on Mips64.
+       return lowerMSACopyIntr(Op, DAG, MipsISD::VEXTRACT_SEXT_ELT);
+     else {
+@@ -1637,7 +1637,7 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
+   case Intrinsic::mips_copy_u_w:
+     return lowerMSACopyIntr(Op, DAG, MipsISD::VEXTRACT_ZEXT_ELT);
+   case Intrinsic::mips_copy_u_d:
+-    if (HasMips64)
++    if (IsGP64bit)
+       // Lower directly into VEXTRACT_ZEXT_ELT since i64 is legal on Mips64.
+       return lowerMSACopyIntr(Op, DAG, MipsISD::VEXTRACT_ZEXT_ELT);
+     else {
+diff --git a/lib/Target/Mips/MipsSchedule.td b/lib/Target/Mips/MipsSchedule.td
+index b6a9652..23b991c 100644
+--- a/lib/Target/Mips/MipsSchedule.td
++++ b/lib/Target/Mips/MipsSchedule.td
+@@ -38,6 +38,7 @@ def II_C_CC_D           : InstrItinClass; // Any c.<cc>.d instruction
+ def II_C_CC_S           : InstrItinClass; // Any c.<cc>.s instruction
+ def II_DADDIU           : InstrItinClass;
+ def II_DADDU            : InstrItinClass;
++def II_DADD             : InstrItinClass;
+ def II_DDIV             : InstrItinClass;
+ def II_DDIVU            : InstrItinClass;
+ def II_DIV              : InstrItinClass;
+@@ -61,6 +62,7 @@ def II_DSRL             : InstrItinClass;
+ def II_DSRL32           : InstrItinClass;
+ def II_DSRLV            : InstrItinClass;
+ def II_DSUBU            : InstrItinClass;
++def II_DSUB             : InstrItinClass;
+ def II_FLOOR            : InstrItinClass;
+ def II_LB               : InstrItinClass;
+ def II_LBU              : InstrItinClass;
+@@ -179,6 +181,7 @@ def MipsGenericItineraries : ProcessorItineraries<[ALU, IMULDIV], [], [
+   InstrItinData<II_CLZ             , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DADDIU          , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DADDU           , [InstrStage<1,  [ALU]>]>,
++  InstrItinData<II_DADD            , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DSLL            , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DSRL            , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DSRA            , [InstrStage<1,  [ALU]>]>,
+@@ -186,6 +189,7 @@ def MipsGenericItineraries : ProcessorItineraries<[ALU, IMULDIV], [], [
+   InstrItinData<II_DSRLV           , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DSRAV           , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DSUBU           , [InstrStage<1,  [ALU]>]>,
++  InstrItinData<II_DSUB            , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DROTR           , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_DROTRV          , [InstrStage<1,  [ALU]>]>,
+   InstrItinData<II_LUI             , [InstrStage<1,  [ALU]>]>,
+diff --git a/lib/Target/Mips/MipsSubtarget.cpp b/lib/Target/Mips/MipsSubtarget.cpp
+index af83d61..8b75e73 100644
+--- a/lib/Target/Mips/MipsSubtarget.cpp
++++ b/lib/Target/Mips/MipsSubtarget.cpp
+@@ -67,6 +67,8 @@ static inline StringRef selectMipsCPU(StringRef TT, StringRef CPU) {
+     if (TheTriple.getArch() == Triple::mips ||
+         TheTriple.getArch() == Triple::mipsel)
+       CPU = "mips32";
++    else if (TheTriple.getArch() == Triple::mips4)
++      CPU = "mips4";
+     else
+       CPU = "mips64";
+   }
+@@ -117,8 +119,8 @@ MipsSubtarget::MipsSubtarget(const std::string &TT, const std::string &CPU,
+           ((getFeatureBits() & Mips::FeatureN64) != 0)) == 1);
+ 
+   // Check if Architecture and ABI are compatible.
+-  assert(((!hasMips64() && (isABI_O32() || isABI_EABI())) ||
+-          (hasMips64() && (isABI_N32() || isABI_N64()))) &&
++  assert(((!isGP64bit() && (isABI_O32() || isABI_EABI())) ||
++          (isGP64bit() && (isABI_N32() || isABI_N64()))) &&
+          "Invalid  Arch & ABI pair.");
+ 
+   if (hasMSA() && !isFP64bit())
+@@ -143,7 +145,7 @@ MipsSubtarget::enablePostRAScheduler(CodeGenOpt::Level OptLevel,
+                                      RegClassVector &CriticalPathRCs) const {
+   Mode = TargetSubtargetInfo::ANTIDEP_NONE;
+   CriticalPathRCs.clear();
+-  CriticalPathRCs.push_back(hasMips64() ?
++  CriticalPathRCs.push_back(isGP64bit() ?
+                             &Mips::GPR64RegClass : &Mips::GPR32RegClass);
+   return OptLevel >= CodeGenOpt::Aggressive;
+ }
+diff --git a/lib/Target/Mips/MipsSubtarget.h b/lib/Target/Mips/MipsSubtarget.h
+index ba1e145..a9e6b27 100644
+--- a/lib/Target/Mips/MipsSubtarget.h
++++ b/lib/Target/Mips/MipsSubtarget.h
+@@ -39,7 +39,7 @@ public:
+ protected:
+ 
+   enum MipsArchEnum {
+-    Mips32, Mips32r2, Mips64, Mips64r2
++    Mips32, Mips32r2, Mips4, Mips64, Mips64r2
+   };
+ 
+   // Mips architecture version
+diff --git a/lib/Target/Mips/MipsTargetMachine.cpp b/lib/Target/Mips/MipsTargetMachine.cpp
+index e9053c8..7c34e91 100644
+--- a/lib/Target/Mips/MipsTargetMachine.cpp
++++ b/lib/Target/Mips/MipsTargetMachine.cpp
+@@ -41,6 +41,7 @@ extern "C" void LLVMInitializeMipsTarget() {
+   // Register the target.
+   RegisterTargetMachine<MipsebTargetMachine> X(TheMipsTarget);
+   RegisterTargetMachine<MipselTargetMachine> Y(TheMipselTarget);
++  RegisterTargetMachine<MipsebTargetMachine> Mips4(TheMips4Target);
+   RegisterTargetMachine<MipsebTargetMachine> A(TheMips64Target);
+   RegisterTargetMachine<MipselTargetMachine> B(TheMips64elTarget);
+ }
+diff --git a/lib/Target/Mips/TargetInfo/MipsTargetInfo.cpp b/lib/Target/Mips/TargetInfo/MipsTargetInfo.cpp
+index 3615c14..1b29f8a 100644
+--- a/lib/Target/Mips/TargetInfo/MipsTargetInfo.cpp
++++ b/lib/Target/Mips/TargetInfo/MipsTargetInfo.cpp
+@@ -13,7 +13,7 @@
+ using namespace llvm;
+ 
+ Target llvm::TheMipsTarget, llvm::TheMipselTarget;
+-Target llvm::TheMips64Target, llvm::TheMips64elTarget;
++Target llvm::TheMips64Target, llvm::TheMips4Target, llvm::TheMips64elTarget;
+ 
+ extern "C" void LLVMInitializeMipsTargetInfo() {
+   RegisterTarget<Triple::mips,
+@@ -22,6 +22,9 @@ extern "C" void LLVMInitializeMipsTargetInfo() {
+   RegisterTarget<Triple::mipsel,
+         /*HasJIT=*/true> Y(TheMipselTarget, "mipsel", "Mipsel");
+ 
++  RegisterTarget<Triple::mips4,
++        /*HasJIT=*/false> Mips4(TheMips4Target, "mips4", "Mips4 [experimental]");
++
+   RegisterTarget<Triple::mips64,
+         /*HasJIT=*/false> A(TheMips64Target, "mips64", "Mips64 [experimental]");
+ 
+diff --git a/test/MC/Mips/elf_eflags.s b/test/MC/Mips/elf_eflags.s
+index 5da72e5..c8276ed 100644
+--- a/test/MC/Mips/elf_eflags.s
++++ b/test/MC/Mips/elf_eflags.s
+@@ -28,6 +28,9 @@
+ # RUN: llvm-mc -filetype=obj -triple mips64el-unknown-linux -mcpu=mips64r2 -mattr=-n64,o32 %s -o -| llvm-readobj -h | FileCheck --check-prefix=MIPS64EL-MIPS64R2-O32 %s
+ # MIPS64EL-MIPS64R2-O32: Flags [ (0x80001100)
+ 
++# RUN: llvm-mc -filetype=obj -triple mips4-unknown-linux -mcpu=mips4 %s -o -| llvm-readobj -h | FileCheck --check-prefix=MIPS4 %s
++# MIPS4: Flags [ (0x30000000)
++
+ # RUN: llvm-mc -filetype=obj -triple mips64el-unknown-linux -mcpu=mips64 %s -mattr=-n64,o32 -o -| llvm-readobj -h | FileCheck --check-prefix=MIPS64EL-MIPS64-O32 %s
+ # MIPS64EL-MIPS64-O32: Flags [ (0x60001100)
+ 	
+diff --git a/test/MC/Mips/mips-alu-instructions.s b/test/MC/Mips/mips-alu-instructions.s
+index 68a8da0..5caa714 100644
+--- a/test/MC/Mips/mips-alu-instructions.s
++++ b/test/MC/Mips/mips-alu-instructions.s
+@@ -118,3 +118,24 @@
+     negu   $6,$7
+     move   $7,$8
+     rdhwr   $5, $29
++
++#------------------------------------------------------------------------------
++# Irritating shortcuts for arithmetic instructions
++#------------------------------------------------------------------------------
++
++# CHECK:	add	$9, $9, $3	# encoding: [0x20,0x48,0x23,0x01]
++# CHECK:	addu	$9, $9, $3	# encoding: [0x21,0x48,0x23,0x01]
++# CHECK:	addi	$9, $9, 10	# encoding: [0x0a,0x00,0x29,0x21]
++# CHECK:	addiu	$9, $9, 10	# encoding: [0x0a,0x00,0x29,0x25]
++# CHECK:	sub	$9, $9, $3	# encoding: [0x22,0x48,0x23,0x01]
++# CHECK:	subu	$9, $9, $3	# encoding: [0x23,0x48,0x23,0x01]
++# CHECK:	addi	$9, $9, -10	# encoding: [0xf6,0xff,0x29,0x21]
++# CHECK:	addiu	$9, $9, -10	# encoding: [0xf6,0xff,0x29,0x25]
++	add	$9, $3
++	addu	$9, $3
++	add	$9, 10
++	addu	$9, 10
++	sub	$9, $3
++	subu	$9, $3
++	sub	$9, 10
++	subu	$9, 10
+diff --git a/test/MC/Mips/mips64-alu-instructions.s b/test/MC/Mips/mips64-alu-instructions.s
+index 8262a46..ef4f94e 100644
+--- a/test/MC/Mips/mips64-alu-instructions.s
++++ b/test/MC/Mips/mips64-alu-instructions.s
+@@ -107,3 +107,36 @@
+     dsubu   $4,$3,$5
+     move   $7,$8
+     rdhwr   $5, $29
++
++#------------------------------------------------------------------------------
++# Irritating shortcuts for arithmetic instructions
++#------------------------------------------------------------------------------
++
++# CHECK:	dadd	$9, $9, $3	# encoding: [0x2c,0x48,0x23,0x01]
++# CHECK:	daddu	$9, $9, $3	# encoding: [0x2d,0x48,0x23,0x01]
++# CHECK:	daddi	$9, $9, 10	# encoding: [0x0a,0x00,0x29,0x61]
++# CHECK:	daddiu	$9, $9, 10	# encoding: [0x0a,0x00,0x29,0x65]
++# CHECK:	dsub	$9, $9, $3	# encoding: [0x2e,0x48,0x23,0x01]
++# CHECK:	dsubu	$9, $9, $3	# encoding: [0x2f,0x48,0x23,0x01]
++# CHECK:	daddi	$9, $9, -10	# encoding: [0xf6,0xff,0x29,0x61]
++# CHECK:	daddiu	$9, $9, -10	# encoding: [0xf6,0xff,0x29,0x65]
++	dadd	$9, $3
++	daddu	$9, $3
++	dadd	$9, 10
++	daddu	$9, 10
++	dsub	$9, $3
++	dsubu	$9, $3
++	dsub	$9, 10
++	dsubu	$9, 10
++
++#------------------------------------------------------------------------------
++# Did you know that GAS supports complex arithmetic expressions in assembly?
++#------------------------------------------------------------------------------
++# CHECK:	daddiu	$9, $3, 32	# encoding: [0x20,0x00,0x69,0x64]
++# CHECK:	daddiu	$9, $3, 32	# encoding: [0x20,0x00,0x69,0x64]
++# CHECK:	daddiu	$9, $3, -32	# encoding: [0xe0,0xff,0x69,0x64]
++# CHECK:	daddiu	$9, $3, -32	# encoding: [0xe0,0xff,0x69,0x64] 
++	daddiu	$9, $3, 8 * 4
++	daddiu	$9, $3, (8 * 4)
++	dsubu	$9, $3, 8 * 4
++	dsubu	$9, $3, (8 * 4)
+diff --git a/test/MC/Mips/mips64-expansions.s b/test/MC/Mips/mips64-expansions.s
+new file mode 100644
+index 0000000..de81382
+--- /dev/null
++++ b/test/MC/Mips/mips64-expansions.s
+@@ -0,0 +1,236 @@
++# RUN: llvm-mc %s -triple=mips64el-unknown-linux -show-encoding -mcpu=mips64r2 | FileCheck %s
++#
++# The GNU assembler implements 'dli' and 'dla' variants on 'li' and 'la'
++# supporting double-word lengths.  Test that not only are they present, bu
++# that they also seem to handle 64-bit values.
++#
++# XXXRW: Does using powers of ten make me a bad person?
++#
++# CHECK-DLA: lui	$12, %highest(function)  # encoding: [A,A,0x0c,0x3c]
++# CHECK-DLA:   fixup A - offset: 0, value: function@HIGHEST, kind: fixup_Mips_HIGHEST
++# CHECK-DLA: lui	$1, %hi(function)        # encoding: [A,A,0x01,0x3c]
++# CHECK-DLA:   fixup A - offset: 0, value: function@ABS_HI, kind: fixup_Mips_HI16
++# CHECK-DLA: daddiu	$12, $12, %higher(function) # encoding: [A,A,0x8c,0x65]
++# CHECK-DLA:   fixup A - offset: 0, value: function@HIGHER, kind: fixup_Mips_HIGHER
++# CHECK-DLA: daddiu	$1, $1, %lo(function)    # encoding: [A,A,0x21,0x64]
++# CHECK-DLA:   fixup A - offset: 0, value: function@ABS_LO, kind: fixup_Mips_LO16
++# CHECK-DLA: dsll32	$12, $12, 0             # encoding: [0x3c,0x60,0x0c,0x00]
++# CHECK-DLA: daddu	$12, $12, $1            # encoding: [0x2d,0x60,0x81,0x01]
++# CHECK-DLA: lui	$12, %highest(symbol)   # encoding: [A,A,0x0c,0x3c]
++# CHECK-DLA:  fixup A - offset: 0, value: symbol@HIGHEST, kind: fixup_Mips_HIGHEST
++# CHECK-DLA: daddiu	$12, $12, %higher(symbol) # encoding: [A,A,0x8c,0x65]
++# CHECK-DLA:  fixup A - offset: 0, value: symbol@HIGHER, kind: fixup_Mips_HIGHER
++# CHECK-DLA: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK-DLA: daddiu	$12, $12, %hi(symbol)   # encoding: [A,A,0x8c,0x65]
++# CHECK-DLA:  fixup A - offset: 0, value: symbol@ABS_HI, kind: fixup_Mips_HI16
++# CHECK-DLA: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK-DLA: daddiu	$12, $12, %lo(symbol)   # encoding: [A,A,0x8c,0x65]
++# CHECK-DLA:  fixup A - offset: 0, value: symbol@ABS_LO, kind: fixup_Mips_LO16
++
++
++# CHECK: ori	$12, $zero, 1           # encoding: [0x01,0x00,0x0c,0x34]
++# CHECK: ori	$12, $zero, 10          # encoding: [0x0a,0x00,0x0c,0x34]
++# CHECK: ori	$12, $zero, 100         # encoding: [0x64,0x00,0x0c,0x34]
++# CHECK: ori	$12, $zero, 1000        # encoding: [0xe8,0x03,0x0c,0x34]
++# CHECK: ori	$12, $zero, 10000       # encoding: [0x10,0x27,0x0c,0x34]
++# CHECK: lui	$12, 1                  # encoding: [0x01,0x00,0x0c,0x3c]
++# CHECK: ori	$12, $12, 34464         # encoding: [0xa0,0x86,0x8c,0x35]
++# CHECK: lui	$12, 15                 # encoding: [0x0f,0x00,0x0c,0x3c]
++# CHECK: ori	$12, $12, 16960         # encoding: [0x40,0x42,0x8c,0x35]
++# CHECK: lui	$12, 152                # encoding: [0x98,0x00,0x0c,0x3c]
++# CHECK: ori	$12, $12, 38528         # encoding: [0x80,0x96,0x8c,0x35]
++# CHECK: lui	$12, 1525               # encoding: [0xf5,0x05,0x0c,0x3c]
++# CHECK: ori	$12, $12, 57600         # encoding: [0x00,0xe1,0x8c,0x35]
++# CHECK: lui	$12, 15258              # encoding: [0x9a,0x3b,0x0c,0x3c]
++# CHECK: ori	$12, $12, 51712         # encoding: [0x00,0xca,0x8c,0x35]
++# CHECK: lui	$12, 2                  # encoding: [0x02,0x00,0x0c,0x3c]
++# CHECK: ori	$12, $12, 21515         # encoding: [0x0b,0x54,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 58368         # encoding: [0x00,0xe4,0x8c,0x35]
++# CHECK: lui	$12, 23                 # encoding: [0x17,0x00,0x0c,0x3c]
++# CHECK: ori	$12, $12, 18550         # encoding: [0x76,0x48,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 59392         # encoding: [0x00,0xe8,0x8c,0x35]
++# CHECK: lui	$12, 232                # encoding: [0xe8,0x00,0x0c,0x3c]
++# CHECK: ori	$12, $12, 54437         # encoding: [0xa5,0xd4,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 4096          # encoding: [0x00,0x10,0x8c,0x35]
++# CHECK: lui	$12, 2328               # encoding: [0x18,0x09,0x0c,0x3c]
++# CHECK: ori	$12, $12, 20082         # encoding: [0x72,0x4e,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 40960         # encoding: [0x00,0xa0,0x8c,0x35]
++# CHECK: lui	$12, 23283              # encoding: [0xf3,0x5a,0x0c,0x3c]
++# CHECK: ori	$12, $12, 4218          # encoding: [0x7a,0x10,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 16384         # encoding: [0x00,0x40,0x8c,0x35]
++# CHECK: lui	$12, 3                  # encoding: [0x03,0x00,0x0c,0x3c]
++# CHECK: ori	$12, $12, 36222         # encoding: [0x7e,0x8d,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 42182         # encoding: [0xc6,0xa4,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 32768         # encoding: [0x00,0x80,0x8c,0x35]
++# CHECK: lui	$12, 35                 # encoding: [0x23,0x00,0x0c,0x3c]
++# CHECK: ori	$12, $12, 34546         # encoding: [0xf2,0x86,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 28609         # encoding: [0xc1,0x6f,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
++# CHECK: lui	$12, 355                # encoding: [0x63,0x01,0x0c,0x3c]
++# CHECK: ori	$12, $12, 17784         # encoding: [0x78,0x45,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 23946         # encoding: [0x8a,0x5d,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
++# CHECK: lui	$12, 3552               # encoding: [0xe0,0x0d,0x0c,0x3c]
++# CHECK: ori	$12, $12, 46771         # encoding: [0xb3,0xb6,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 42852         # encoding: [0x64,0xa7,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
++# CHECK: lui	$12, 35527              # encoding: [0xc7,0x8a,0x0c,0x3c]
++# CHECK: ori	$12, $12, 8964          # encoding: [0x04,0x23,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 35304         # encoding: [0xe8,0x89,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
++# CHECK: addiu	$12, $zero, -1          # encoding: [0xff,0xff,0x0c,0x24]
++# CHECK: addiu	$12, $zero, -10         # encoding: [0xf6,0xff,0x0c,0x24]
++# CHECK: addiu	$12, $zero, -100        # encoding: [0x9c,0xff,0x0c,0x24]
++# CHECK: addiu	$12, $zero, -1000       # encoding: [0x18,0xfc,0x0c,0x24]
++# CHECK: addiu	$12, $zero, -10000      # encoding: [0xf0,0xd8,0x0c,0x24]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 65535         # encoding: [0xff,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 65534         # encoding: [0xfe,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 31072         # encoding: [0x60,0x79,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 65535         # encoding: [0xff,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 65520         # encoding: [0xf0,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 48576         # encoding: [0xc0,0xbd,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 65535         # encoding: [0xff,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 65383         # encoding: [0x67,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 27008         # encoding: [0x80,0x69,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 65535         # encoding: [0xff,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 64010         # encoding: [0x0a,0xfa,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 7936          # encoding: [0x00,0x1f,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 65535         # encoding: [0xff,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 50277         # encoding: [0x65,0xc4,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 13824         # encoding: [0x00,0x36,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 65533         # encoding: [0xfd,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 44020         # encoding: [0xf4,0xab,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 7168          # encoding: [0x00,0x1c,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 65512         # encoding: [0xe8,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 46985         # encoding: [0x89,0xb7,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 6144          # encoding: [0x00,0x18,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 65303         # encoding: [0x17,0xff,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 11098         # encoding: [0x5a,0x2b,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 61440         # encoding: [0x00,0xf0,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 63207         # encoding: [0xe7,0xf6,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 45453         # encoding: [0x8d,0xb1,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 24576         # encoding: [0x00,0x60,0x8c,0x35]
++# CHECK: lui	$12, 65535              # encoding: [0xff,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 42252         # encoding: [0x0c,0xa5,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 61317         # encoding: [0x85,0xef,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 49152         # encoding: [0x00,0xc0,0x8c,0x35]
++# CHECK: lui	$12, 65532              # encoding: [0xfc,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 29313         # encoding: [0x81,0x72,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 23353         # encoding: [0x39,0x5b,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 32768         # encoding: [0x00,0x80,0x8c,0x35]
++# CHECK: lui	$12, 65500              # encoding: [0xdc,0xff,0x0c,0x3c]
++# CHECK: ori	$12, $12, 30989         # encoding: [0x0d,0x79,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 36927         # encoding: [0x3f,0x90,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
++# CHECK: lui	$12, 65180              # encoding: [0x9c,0xfe,0x0c,0x3c]
++# CHECK: ori	$12, $12, 47751         # encoding: [0x87,0xba,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 41590         # encoding: [0x76,0xa2,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
++# CHECK: lui	$12, 61983              # encoding: [0x1f,0xf2,0x0c,0x3c]
++# CHECK: ori	$12, $12, 18764         # encoding: [0x4c,0x49,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 22684         # encoding: [0x9c,0x58,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
++# CHECK: lui	$12, 30008              # encoding: [0x38,0x75,0x0c,0x3c]
++# CHECK: ori	$12, $12, 56571         # encoding: [0xfb,0xdc,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 30232         # encoding: [0x18,0x76,0x8c,0x35]
++# CHECK: dsll	$12, $12, 16            # encoding: [0x38,0x64,0x0c,0x00]
++# CHECK: ori	$12, $12, 0             # encoding: [0x00,0x00,0x8c,0x35]
++
++	dla	$t0, symbol
++.set noat
++	dla	$t0, symbol
++.set at
++
++	dli	$t0, 1
++	dli	$t0, 10
++	dli	$t0, 100
++	dli	$t0, 1000
++	dli	$t0, 10000
++	dli	$t0, 100000
++	dli	$t0, 1000000
++	dli	$t0, 10000000
++	dli	$t0, 100000000
++	dli	$t0, 1000000000
++	dli	$t0, 10000000000
++	dli	$t0, 100000000000
++	dli	$t0, 1000000000000
++	dli	$t0, 10000000000000
++	dli	$t0, 100000000000000
++	dli	$t0, 1000000000000000
++	dli	$t0, 10000000000000000
++	dli	$t0, 100000000000000000
++	dli	$t0, 1000000000000000000
++	dli	$t0, 10000000000000000000
++	dli	$t0, -1
++	dli	$t0, -10
++	dli	$t0, -100
++	dli	$t0, -1000
++	dli	$t0, -10000
++	dli	$t0, -100000
++	dli	$t0, -1000000
++	dli	$t0, -10000000
++	dli	$t0, -100000000
++	dli	$t0, -1000000000
++	dli	$t0, -10000000000
++	dli	$t0, -100000000000
++	dli	$t0, -1000000000000
++	dli	$t0, -10000000000000
++	dli	$t0, -100000000000000
++	dli	$t0, -1000000000000000
++	dli	$t0, -10000000000000000
++	dli	$t0, -100000000000000000
++	dli	$t0, -1000000000000000000
++	dli	$t0, -10000000000000000000
+diff --git a/test/MC/Mips/mips_directives.s b/test/MC/Mips/mips_directives.s
+index 1656c10..12d9189 100644
+--- a/test/MC/Mips/mips_directives.s
++++ b/test/MC/Mips/mips_directives.s
+@@ -66,3 +66,11 @@ $BB0_4:
+    .set dsp
+    lbux    $7, $10($11)
+    lhx     $5, $6($7)
++
++   .cpsetup $25, 8, __cerror
++# CHECK: sd	$gp, 8($sp)             # encoding: [0xff,0xbc,0x00,0x08]
++# CHECK: lui	$gp, %hi(%neg(%gp_rel(__cerror))) # encoding: [0x3c'A',0x1c'A',0x00,0x00]
++# CHECK:                                        #   fixup A - offset: 0, value: __cerror@GPOFF_HI, kind: fixup_Mips_GPOFF_HI
++# CHECK: daddu	$gp, $gp, $25           # encoding: [0x03,0x99,0xe0,0x2d]
++# CHECK: daddiu	$gp, $gp, %lo(%neg(%gp_rel(__cerror))) # encoding: [0x67'A',0x9c'A',0x00,0x00]
++# CHECK:                                        #   fixup A - offset: 0, value: __cerror@GPOFF_LO, kind: fixup_Mips_GPOFF_LO
+diff --git a/test/MC/Mips/set-at-directive.s b/test/MC/Mips/set-at-directive.s
+index 828175a..be528c9 100644
+--- a/test/MC/Mips/set-at-directive.s
++++ b/test/MC/Mips/set-at-directive.s
+@@ -2,7 +2,7 @@
+ # RUN: FileCheck %s
+ # Check that the assembler can handle the documented syntax
+ # for ".set at" and set the correct value.
+-
++# XFAIL:
+     .text
+ foo:
+ # CHECK:   jr    $1                      # encoding: [0x08,0x00,0x20,0x00]

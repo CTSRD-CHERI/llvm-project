@@ -21,7 +21,6 @@
 #include "lldb/Core/Broadcaster.h"
 #include "lldb/Core/ConstString.h"
 #include "lldb/Core/Error.h"
-#include "lldb/Core/InputReader.h"
 #include "lldb/Core/StreamString.h"
 #include "lldb/Core/StringList.h"
 #include "lldb/Core/ThreadSafeValue.h"
@@ -106,7 +105,7 @@ public:
     DoAttachToProcessWithName (const char *process_name, const lldb_private::ProcessAttachInfo &attach_info);
     
     virtual void
-    DidAttach ();
+    DidAttach (lldb_private::ArchSpec &process_arch);
     
     lldb::addr_t
     GetImageInfoAddress();

@@ -7,12 +7,12 @@ include "llvm/Option/OptParser.td"
 multiclass smDash<string opt1, string opt2, string help> {
   // Option
   def "" : Separate<["-"], opt1>, HelpText<help>;
-  def opt1_eq : Separate<["-"], opt1#"=">,
+  def opt1_eq : Joined<["-"], opt1#"=">,
       Alias<!cast<Option>(opt1)>;
   // Compatibility aliases
   def opt2_dashdash : Separate<["--"], opt2>,
       Alias<!cast<Option>(opt1)>;
-  def opt2_dashdash_eq : Separate<["--"], opt2#"=">,
+  def opt2_dashdash_eq : Joined<["--"], opt2#"=">,
       Alias<!cast<Option>(opt1)>;
 }
 
@@ -21,7 +21,7 @@ multiclass dashEq<string opt1, string opt2, string help> {
   // Option
   def "" : Separate<["-"], opt1>, HelpText<help>;
   // Compatibility aliases
-  def opt2_eq : Separate<["-"], opt2#"=">,
+  def opt2_eq : Joined<["-"], opt2#"=">,
       Alias<!cast<Option>(opt1)>;
 }
 
@@ -133,8 +133,8 @@ def dynamic_linker : Joined<["--"], "dynamic-linker=">,
 // Executable options - compatibility aliases
 def dynamic_linker_alias : Separate<["-"], "dynamic-linker">,
     Alias<dynamic_linker>;
-def rpath : Separate<["-"], "rpath">,
-     HelpText<"Add a directory to the runtime library search path">,
+defm rpath : dashEq<"rpath", "rpath",
+     "Add a directory to the runtime library search path">,
      Group<grp_dynlibexec>;
 def rpath_link : Separate<["-"], "rpath-link">,
      HelpText<"Specifies the first set of directories to search">,
@@ -145,9 +145,11 @@ def rpath_link : Separate<["-"], "rpath-link">,
 //===----------------------------------------------------------------------===//
 def grp_dynlib : OptionGroup<"opts">,
      HelpText<"DYNAMIC LIBRARY OPTIONS">;
-def soname : Separate<["-"], "soname">,
+def soname : Joined<["-", "--"], "soname=">,
      HelpText<"Set the internal DT_SONAME field to the specified name">,
      Group<grp_dynlib>;
+def soname_separate : Separate<["-", "--"], "soname">, Alias<soname>;
+def soname_h : Separate<["-"], "h">, Alias<soname>;
 
 //===----------------------------------------------------------------------===//
 /// Resolver Options
@@ -187,9 +189,15 @@ def allow_shlib_undefs : Flag<["--"], "allow-shlib-undefined">,
 def use_shlib_undefs: Flag<["--"], "use-shlib-undefines">,
     HelpText<"Resolve undefined symbols from dynamic libraries">,
     Group<grp_resolveropt>;
+def allow_multiple_definition: Flag<["--"], "allow-multiple-definition">,
+    HelpText<"Allow multiple definitions">,
+    Group<grp_resolveropt>;
+def defsym : Joined<["--"], "defsym=">,
+     HelpText<"Create a defined symbol">,
+     Group<grp_resolveropt>;
 
 //===----------------------------------------------------------------------===//
-/// Custom Options 
+/// Custom Options
 //===----------------------------------------------------------------------===//
 def grp_customopts : OptionGroup<"opts">,
      HelpText<"CUSTOM OPTIONS">;
@@ -240,4 +248,3 @@ def alias_output_filetype: Joined<["--"], "output-filetype=">,
 //===----------------------------------------------------------------------===//
 def help : Flag<["--"], "help">,
      HelpText<"Display this help message">;
-

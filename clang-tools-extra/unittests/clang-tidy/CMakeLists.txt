@@ -7,8 +7,11 @@ get_filename_component(CLANG_LINT_SOURCE_DIR
 include_directories(${CLANG_LINT_SOURCE_DIR})
 
 add_extra_unittest(ClangTidyTests
+  ClangTidyDiagnosticConsumerTest.cpp
+  ClangTidyOptionsTest.cpp
   LLVMModuleTest.cpp
-  GoogleModuleTest.cpp)
+  GoogleModuleTest.cpp
+  MiscModuleTest.cpp)
 
 target_link_libraries(ClangTidyTests
   clangAST
@@ -18,5 +21,6 @@ target_link_libraries(ClangTidyTests
   clangTidy
   clangTidyGoogleModule
   clangTidyLLVMModule
+  clangTidyMiscModule
   clangTooling
   )

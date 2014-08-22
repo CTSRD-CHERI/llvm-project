@@ -12,27 +12,28 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "lazy-value-info"
 #include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/CFG.h"
+#include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Support/CFG.h"
-#include "llvm/Support/ConstantRange.h"
+#include "llvm/IR/PatternMatch.h"
+#include "llvm/IR/ValueHandle.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/PatternMatch.h"
-#include "llvm/Support/ValueHandle.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetLibraryInfo.h"
 #include <map>
 #include <stack>
 using namespace llvm;
 using namespace PatternMatch;
+
+#define DEBUG_TYPE "lazy-value-info"
 
 char LazyValueInfo::ID = 0;
 INITIALIZE_PASS_BEGIN(LazyValueInfo, "lazy-value-info",
@@ -82,7 +83,7 @@ class LVILatticeVal {
   ConstantRange Range;
   
 public:
-  LVILatticeVal() : Tag(undefined), Val(0), Range(1, true) {}
+  LVILatticeVal() : Tag(undefined), Val(nullptr), Range(1, true) {}
 
   static LVILatticeVal get(Constant *C) {
     LVILatticeVal Res;
@@ -302,9 +303,9 @@ namespace {
       
     LVIValueHandle(Value *V, LazyValueInfoCache *P)
       : CallbackVH(V), Parent(P) { }
-      
-    void deleted();
-    void allUsesReplacedWith(Value *V) {
+
+    void deleted() override;
+    void allUsesReplacedWith(Value *V) override {
       deleted();
     }
   };
@@ -499,8 +500,23 @@ bool LazyValueInfoCache::solveBlockValue(Value *Val, BasicBlock *BB) {
   // cache needs updating, i.e. if we have solve a new value or not.
   OverDefinedCacheUpdater ODCacheUpdater(Val, BB, BBLV, this);
 
-  // If we've already computed this block's value, return it.
-  if (!BBLV.isUndefined()) {
+  // Once this BB is encountered, Val's value for this BB will not be Undefined
+  // any longer. When we encounter this BB again, if Val's value is Overdefined,
+  // we need to compute its value again.
+  // 
+  // For example, considering this control flow,
+  //   BB1->BB2, BB1->BB3, BB2->BB3, BB2->BB4
+  //
+  // Suppose we have "icmp slt %v, 0" in BB1, and "icmp sgt %v, 0" in BB3. At
+  // the very beginning, when analyzing edge BB2->BB3, we don't know %v's value
+  // in BB2, and the data flow algorithm tries to compute BB2's predecessors, so
+  // then we know %v has negative value on edge BB1->BB2. And then we return to
+  // check BB2 again, and at this moment BB2 has Overdefined value for %v in
+  // BB2. So we should have to follow data flow propagation algorithm to get the
+  // value on edge BB1->BB2 propagated to BB2, and finally %v on BB2 has a
+  // constant range describing a negative value.
+
+  if (!BBLV.isUndefined() && !BBLV.isOverdefined()) {
     DEBUG(dbgs() << "  reuse BB '" << BB->getName() << "' val=" << BBLV <<'\n');
     
     // Since we're reusing a cached value here, we don't need to update the 
@@ -516,7 +532,7 @@ bool LazyValueInfoCache::solveBlockValue(Value *Val, BasicBlock *BB) {
   BBLV.markOverdefined();
   
   Instruction *BBI = dyn_cast<Instruction>(Val);
-  if (BBI == 0 || BBI->getParent() != BB) {
+  if (!BBI || BBI->getParent() != BB) {
     return ODCacheUpdater.markResult(solveBlockValueNonLocal(BBLV, Val, BB));
   }
 
@@ -595,7 +611,7 @@ bool LazyValueInfoCache::solveBlockValueNonLocal(LVILatticeVal &BBLV,
       Value *UnderlyingVal = GetUnderlyingObject(Val);
       // If 'GetUnderlyingObject' didn't converge, skip it. It won't converge
       // inside InstructionDereferencesPointer either.
-      if (UnderlyingVal == GetUnderlyingObject(UnderlyingVal, NULL, 1)) {
+      if (UnderlyingVal == GetUnderlyingObject(UnderlyingVal, nullptr, 1)) {
         for (BasicBlock::iterator BI = BB->begin(), BE = BB->end();
              BI != BE; ++BI) {
           if (InstructionDereferencesPointer(BI, UnderlyingVal)) {
@@ -813,7 +829,7 @@ static bool getEdgeValueLocal(Value *Val, BasicBlock *BBFrom,
 
         // Recognize the range checking idiom that InstCombine produces.
         // (X-C1) u< C2 --> [C1, C1+C2)
-        ConstantInt *NegOffset = 0;
+        ConstantInt *NegOffset = nullptr;
         if (ICI->getPredicate() == ICmpInst::ICMP_ULT)
           match(ICI->getOperand(0), m_Add(m_Specific(Val),
                                           m_ConstantInt(NegOffset)));
@@ -1013,7 +1029,8 @@ bool LazyValueInfo::runOnFunction(Function &F) {
   if (PImpl)
     getCache(PImpl).clear();
 
-  TD = getAnalysisIfAvailable<DataLayout>();
+  DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
+  DL = DLP ? &DLP->getDataLayout() : nullptr;
   TLI = &getAnalysis<TargetLibraryInfo>();
 
   // Fully lazy.
@@ -1029,7 +1046,7 @@ void LazyValueInfo::releaseMemory() {
   // If the cache was allocated, free it.
   if (PImpl) {
     delete &getCache(PImpl);
-    PImpl = 0;
+    PImpl = nullptr;
   }
 }
 
@@ -1043,7 +1060,7 @@ Constant *LazyValueInfo::getConstant(Value *V, BasicBlock *BB) {
     if (const APInt *SingleVal = CR.getSingleElement())
       return ConstantInt::get(V->getContext(), *SingleVal);
   }
-  return 0;
+  return nullptr;
 }
 
 /// getConstantOnEdge - Determine whether the specified value is known to be a
@@ -1059,7 +1076,7 @@ Constant *LazyValueInfo::getConstantOnEdge(Value *V, BasicBlock *FromBB,
     if (const APInt *SingleVal = CR.getSingleElement())
       return ConstantInt::get(V->getContext(), *SingleVal);
   }
-  return 0;
+  return nullptr;
 }
 
 /// getPredicateOnEdge - Determine whether the specified value comparison
@@ -1071,9 +1088,9 @@ LazyValueInfo::getPredicateOnEdge(unsigned Pred, Value *V, Constant *C,
   LVILatticeVal Result = getCache(PImpl).getValueOnEdge(V, FromBB, ToBB);
   
   // If we know the value is a constant, evaluate the conditional.
-  Constant *Res = 0;
+  Constant *Res = nullptr;
   if (Result.isConstant()) {
-    Res = ConstantFoldCompareInstOperands(Pred, Result.getConstant(), C, TD,
+    Res = ConstantFoldCompareInstOperands(Pred, Result.getConstant(), C, DL,
                                           TLI);
     if (ConstantInt *ResCI = dyn_cast<ConstantInt>(Res))
       return ResCI->isZero() ? False : True;
@@ -1115,14 +1132,14 @@ LazyValueInfo::getPredicateOnEdge(unsigned Pred, Value *V, Constant *C,
     if (Pred == ICmpInst::ICMP_EQ) {
       // !C1 == C -> false iff C1 == C.
       Res = ConstantFoldCompareInstOperands(ICmpInst::ICMP_NE,
-                                            Result.getNotConstant(), C, TD,
+                                            Result.getNotConstant(), C, DL,
                                             TLI);
       if (Res->isNullValue())
         return False;
     } else if (Pred == ICmpInst::ICMP_NE) {
       // !C1 != C -> true iff C1 == C.
       Res = ConstantFoldCompareInstOperands(ICmpInst::ICMP_NE,
-                                            Result.getNotConstant(), C, TD,
+                                            Result.getNotConstant(), C, DL,
                                             TLI);
       if (Res->isNullValue())
         return True;

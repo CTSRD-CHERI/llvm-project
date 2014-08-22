@@ -45,7 +45,8 @@ public:
         ErrorReplyTimeout,  // Timed out waiting for reply
         ErrorReplyInvalid,  // Got a reply but it wasn't valid for the packet that was sent
         ErrorReplyAck,      // Sending reply ack failed
-        ErrorDisconnected   // We were disconnected
+        ErrorDisconnected,  // We were disconnected
+        ErrorNoSequenceLock // We couldn't get the sequence lock for a multi-packet request
     };
     //------------------------------------------------------------------
     // Constructors and Destructors
@@ -270,7 +271,7 @@ protected:
     
 
     lldb_private::Error
-    StartListenThread (const char *hostname = "localhost",
+    StartListenThread (const char *hostname = "127.0.0.1",
                        uint16_t port = 0);
 
     bool

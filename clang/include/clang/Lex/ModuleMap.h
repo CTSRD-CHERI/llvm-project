@@ -86,7 +86,7 @@ public:
     llvm::PointerIntPair<Module *, 2, ModuleHeaderRole> Storage;
 
   public:
-    KnownHeader() : Storage(0, NormalHeader) { }
+    KnownHeader() : Storage(nullptr, NormalHeader) { }
     KnownHeader(Module *M, ModuleHeaderRole Role) : Storage(M, Role) { }
 
     /// \brief Retrieve the module the header is stored in.
@@ -102,8 +102,12 @@ public:
 
     // \brief Whether this known header is valid (i.e., it has an
     // associated module).
-    LLVM_EXPLICIT operator bool() const { return Storage.getPointer() != 0; }
+    LLVM_EXPLICIT operator bool() const {
+      return Storage.getPointer() != nullptr;
+    }
   };
+
+  typedef llvm::SmallPtrSet<const FileEntry *, 1> AdditionalModMapsSet;
 
 private:
   typedef llvm::DenseMap<const FileEntry *, SmallVector<KnownHeader, 1> >
@@ -131,6 +135,10 @@ private:
     /// \brief Whether the modules we infer are [system] modules.
     unsigned InferSystemModules : 1;
 
+    /// \brief If \c InferModules is non-zero, the module map file that allowed
+    /// inferred modules.  Otherwise, nullptr.
+    const FileEntry *ModuleMapFile;
+
     /// \brief The names of modules that cannot be inferred within this
     /// directory.
     SmallVector<std::string, 2> ExcludedModules;
@@ -139,6 +147,12 @@ private:
   /// \brief A mapping from directories to information about inferring
   /// framework modules from within those directories.
   llvm::DenseMap<const DirectoryEntry *, InferredDirectory> InferredDirectories;
+
+  /// A mapping from an inferred module to the module map that allowed the
+  /// inference.
+  llvm::DenseMap<const Module *, const FileEntry *> InferredModuleAllowedBy;
+
+  llvm::DenseMap<const Module *, AdditionalModMapsSet> AdditionalModMaps;
 
   /// \brief Describes whether we haved parsed a particular file as a module
   /// map.
@@ -182,6 +196,22 @@ private:
   /// associated with a specific module (e.g. in /usr/include).
   HeadersMap::iterator findKnownHeader(const FileEntry *File);
 
+  /// \brief Searches for a module whose umbrella directory contains \p File.
+  ///
+  /// \param File The header to search for.
+  ///
+  /// \param IntermediateDirs On success, contains the set of directories
+  /// searched before finding \p File.
+  KnownHeader findHeaderInUmbrellaDirs(const FileEntry *File,
+                    SmallVectorImpl<const DirectoryEntry *> &IntermediateDirs);
+
+  /// \brief A convenience method to determine if \p File is (possibly nested)
+  /// in an umbrella directory.
+  bool isHeaderInUmbrellaDirs(const FileEntry *File) {
+    SmallVector<const DirectoryEntry *, 2> IntermediateDirs;
+    return static_cast<bool>(findHeaderInUmbrellaDirs(File, IntermediateDirs));
+  }
+
 public:
   /// \brief Construct a new module map.
   ///
@@ -223,7 +253,7 @@ public:
   /// given header file.  The KnownHeader is default constructed to indicate
   /// that no module owns this header file.
   KnownHeader findModuleForHeader(const FileEntry *File,
-                                  Module *RequestingModule = NULL);
+                                  Module *RequestingModule = nullptr);
 
   /// \brief Reports errors if a module must not include a specific file.
   ///
@@ -241,6 +271,11 @@ public:
   /// \brief Determine whether the given header is part of a module
   /// marked 'unavailable'.
   bool isHeaderInUnavailableModule(const FileEntry *Header) const;
+
+  /// \brief Determine whether the given header is unavailable as part
+  /// of the specified module.
+  bool isHeaderUnavailableInModule(const FileEntry *Header,
+                                   const Module *RequestingModule) const;
 
   /// \brief Retrieve a module with the given name.
   ///
@@ -285,7 +320,7 @@ public:
   ///
   /// \returns The found or newly-created module, along with a boolean value
   /// that will be true if the module is newly-created.
-  std::pair<Module *, bool> findOrCreateModule(StringRef Name, Module *Parent, 
+  std::pair<Module *, bool> findOrCreateModule(StringRef Name, Module *Parent,
                                                bool IsFramework,
                                                bool IsExplicit);
 
@@ -318,7 +353,35 @@ public:
   ///
   /// \returns The file entry for the module map file containing the given
   /// module, or NULL if the module definition was inferred.
-  const FileEntry *getContainingModuleMapFile(Module *Module) const;
+  const FileEntry *getContainingModuleMapFile(const Module *Module) const;
+
+  /// \brief Get the module map file that (along with the module name) uniquely
+  /// identifies this module.
+  ///
+  /// The particular module that \c Name refers to may depend on how the module
+  /// was found in header search. However, the combination of \c Name and
+  /// this module map will be globally unique for top-level modules. In the case
+  /// of inferred modules, returns the module map that allowed the inference
+  /// (e.g. contained 'module *'). Otherwise, returns
+  /// getContainingModuleMapFile().
+  const FileEntry *getModuleMapFileForUniquing(const Module *M) const;
+
+  void setInferredModuleAllowedBy(Module *M, const FileEntry *ModuleMap);
+
+  /// \brief Get any module map files other than getModuleMapFileForUniquing(M)
+  /// that define submodules of a top-level module \p M. This is cheaper than
+  /// getting the module map file for each submodule individually, since the
+  /// expected number of results is very small.
+  AdditionalModMapsSet *getAdditionalModuleMapFiles(const Module *M) {
+    auto I = AdditionalModMaps.find(M);
+    if (I == AdditionalModMaps.end())
+      return nullptr;
+    return &I->second;
+  }
+
+  void addAdditionalModuleMapFile(const Module *M, const FileEntry *ModuleMap) {
+    AdditionalModMaps[M].insert(ModuleMap);
+  }
 
   /// \brief Resolve all of the unresolved exports in the given module.
   ///

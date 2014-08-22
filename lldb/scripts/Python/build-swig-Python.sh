@@ -20,6 +20,8 @@ SWIG=$6
 makefile_flag=$7
 dependency_flag=$8
 
+PYTHON=${PYTHON_EXECUTABLE:-/usr/bin/env python}
+
 if [ -n "$makefile_flag" -a "$makefile_flag" = "-m" ]
 then
     MakefileCalled=1
@@ -36,12 +38,7 @@ else
     GenerateDependencies=0
 fi
 
-if [ $MakefileCalled -eq 0 ]
-then
-  swig_output_file=${SRC_ROOT}/source/LLDBWrapPython.cpp
-else
-  swig_output_file=${TARGET_DIR}/LLDBWrapPython.cpp
-fi
+swig_output_file=${TARGET_DIR}/LLDBWrapPython.cpp
 swig_input_file=${SRC_ROOT}/scripts/lldb.swig
 swig_python_extensions=${SRC_ROOT}/scripts/Python/python-extensions.swig
 swig_python_wrapper=${SRC_ROOT}/scripts/Python/python-wrapper.swig
@@ -99,7 +96,6 @@ HEADER_FILES="${SRC_ROOT}/include/lldb/lldb.h"\
 " ${SRC_ROOT}/include/lldb/API/SBFrame.h"\
 " ${SRC_ROOT}/include/lldb/API/SBFunction.h"\
 " ${SRC_ROOT}/include/lldb/API/SBHostOS.h"\
-" ${SRC_ROOT}/include/lldb/API/SBInputReader.h"\
 " ${SRC_ROOT}/include/lldb/API/SBInstruction.h"\
 " ${SRC_ROOT}/include/lldb/API/SBInstructionList.h"\
 " ${SRC_ROOT}/include/lldb/API/SBLineEntry.h"\
@@ -126,7 +122,8 @@ HEADER_FILES="${SRC_ROOT}/include/lldb/lldb.h"\
 " ${SRC_ROOT}/include/lldb/API/SBTypeSynthetic.h"\
 " ${SRC_ROOT}/include/lldb/API/SBValue.h"\
 " ${SRC_ROOT}/include/lldb/API/SBValueList.h"\
-" ${SRC_ROOT}/include/lldb/API/SBWatchpoint.h"
+" ${SRC_ROOT}/include/lldb/API/SBWatchpoint.h"\
+" ${SRC_ROOT}/include/lldb/API/SBUnixSignals.h"
 
 INTERFACE_FILES="${SRC_ROOT}/scripts/Python/interface/SBAddress.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBBlock.i"\
@@ -147,7 +144,6 @@ INTERFACE_FILES="${SRC_ROOT}/scripts/Python/interface/SBAddress.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBFrame.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBFunction.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBHostOS.i"\
-" ${SRC_ROOT}/scripts/Python/interface/SBInputReader.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBInstruction.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBInstructionList.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBLineEntry.i"\
@@ -174,7 +170,8 @@ INTERFACE_FILES="${SRC_ROOT}/scripts/Python/interface/SBAddress.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBTypeSynthetic.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBValue.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBValueList.i"\
-" ${SRC_ROOT}/scripts/Python/interface/SBWatchpoint.i"
+" ${SRC_ROOT}/scripts/Python/interface/SBWatchpoint.i"\
+" ${SRC_ROOT}/scripts/Python/interface/SBUnixSignals.i"
 
 if [ $Debug -eq 1 ]
 then
@@ -299,7 +296,7 @@ then
     fi
 fi
 
-python_version=`/usr/bin/env python --version 2>&1 | sed -e 's,Python ,,' -e 's,[.][0-9],,2' -e 's,[a-z][a-z][0-9],,'`
+python_version=`${PYTHON} --version 2>&1 | sed -e 's,Python ,,' -e 's,[.][0-9],,2' -e 's,[a-z][a-z][0-9],,'`
 
 if [ $MakefileCalled -eq 0 ]
 then
@@ -307,9 +304,9 @@ then
 else
     if [ -n "${PYTHON_INSTALL_DIR}" ]
     then
-        framework_python_dir=`/usr/bin/env python -c "from distutils.sysconfig import get_python_lib; print get_python_lib(True, False, \"${PYTHON_INSTALL_DIR}\");"`/lldb
+        framework_python_dir=`${PYTHON} -c "from distutils.sysconfig import get_python_lib; print get_python_lib(True, False, \"${PYTHON_INSTALL_DIR}\");"`/lldb
     else
-        framework_python_dir=`/usr/bin/env python -c "from distutils.sysconfig import get_python_lib; print get_python_lib(True, False);"`/lldb
+        framework_python_dir=`${PYTHON} -c "from distutils.sysconfig import get_python_lib; print get_python_lib(True, False);"`/lldb
     fi
 fi
 
@@ -360,7 +357,7 @@ fi
 current_dir=`pwd`
 if [ -f "${current_dir}/modify-python-lldb.py" ]
 then
-    /usr/bin/env python ${current_dir}/modify-python-lldb.py ${CONFIG_BUILD_DIR}
+    ${PYTHON} ${current_dir}/modify-python-lldb.py ${CONFIG_BUILD_DIR}
 fi
 
 

@@ -32,7 +32,7 @@ class IncludeDirectivesPPCallback : public clang::PPCallbacks {
   // Struct helping the detection of header guards in the various callbacks
   struct GuardDetection {
     GuardDetection(FileID FID)
-      : FID(FID), Count(0), TheMacro(0), CountAtEndif(0) {}
+      : FID(FID), Count(0), TheMacro(nullptr), CountAtEndif(0) {}
 
     FileID FID;
     // count for relevant preprocessor directives
@@ -58,7 +58,8 @@ class IncludeDirectivesPPCallback : public clang::PPCallbacks {
   };
 
 public:
-  IncludeDirectivesPPCallback(IncludeDirectives *Self) : Self(Self), Guard(0) {}
+  IncludeDirectivesPPCallback(IncludeDirectives *Self)
+      : Self(Self), Guard(nullptr) {}
 
 private:
   virtual ~IncludeDirectivesPPCallback() {}
@@ -66,7 +67,7 @@ private:
                           StringRef FileName, bool IsAngled,
                           CharSourceRange FilenameRange, const FileEntry *File,
                           StringRef SearchPath, StringRef RelativePath,
-                          const Module *Imported) LLVM_OVERRIDE {
+                          const Module *Imported) override {
     SourceManager &SM = Self->Sources;
     const FileEntry *FE = SM.getFileEntryForID(SM.getFileID(HashLoc));
     assert(FE && "Valid file expected.");
@@ -79,7 +80,7 @@ private:
   // Keep track of the current file in the stack
   virtual void FileChanged(SourceLocation Loc, FileChangeReason Reason,
                            SrcMgr::CharacteristicKind FileType,
-                           FileID PrevFID) LLVM_OVERRIDE {
+                           FileID PrevFID) override {
     SourceManager &SM = Self->Sources;
     switch (Reason) {
     case EnterFile:
@@ -115,7 +116,8 @@ private:
     // checking for equality because it can also be part of the preamble if the
     // preamble is the whole file.
     unsigned Preamble =
-        Lexer::ComputePreamble(SM.getBuffer(Guard.FID), LangOpts).first;
+        Lexer::ComputePreamble(SM.getBuffer(Guard.FID)->getBuffer(), LangOpts)
+            .first;
     unsigned IfndefOffset = SM.getFileOffset(Guard.IfndefLoc);
     if (IfndefOffset > (Preamble + 1))
       return;
@@ -142,13 +144,13 @@ private:
   }
 
   virtual void Ifndef(SourceLocation Loc, const Token &MacroNameTok,
-                      const MacroDirective *MD) LLVM_OVERRIDE {
+                      const MacroDirective *MD) override {
     Guard->Count++;
 
     // If this #ifndef is the top-most directive and the symbol isn't defined
     // store those information in the guard detection, the next step will be to
     // check for the define.
-    if (Guard->Count == 1 && MD == 0) {
+    if (Guard->Count == 1 && MD == nullptr) {
       IdentifierInfo *MII = MacroNameTok.getIdentifierInfo();
 
       if (MII->hasMacroDefinition())
@@ -159,13 +161,13 @@ private:
   }
 
   virtual void MacroDefined(const Token &MacroNameTok,
-                            const MacroDirective *MD) LLVM_OVERRIDE {
+                            const MacroDirective *MD) override {
     Guard->Count++;
 
     // If this #define is the second directive of the file and the symbol
     // defined is the same as the one checked in the #ifndef then store the
     // information about this define.
-    if (Guard->Count == 2 && Guard->TheMacro != 0) {
+    if (Guard->Count == 2 && Guard->TheMacro != nullptr) {
       IdentifierInfo *MII = MacroNameTok.getIdentifierInfo();
 
       // macro unrelated to the ifndef, doesn't look like a proper header guard
@@ -176,7 +178,7 @@ private:
     }
   }
 
-  virtual void Endif(SourceLocation Loc, SourceLocation IfLoc) LLVM_OVERRIDE {
+  virtual void Endif(SourceLocation Loc, SourceLocation IfLoc) override {
     Guard->Count++;
 
     // If it's the #endif corresponding to the top-most #ifndef
@@ -195,30 +197,30 @@ private:
   }
 
   virtual void MacroExpands(const Token &, const MacroDirective *, SourceRange,
-                            const MacroArgs *) LLVM_OVERRIDE {
+                            const MacroArgs *) override {
     Guard->Count++;
   }
   virtual void MacroUndefined(const Token &,
-                              const MacroDirective *) LLVM_OVERRIDE {
+                              const MacroDirective *) override {
     Guard->Count++;
   }
   virtual void Defined(const Token &, const MacroDirective *,
-                       SourceRange) LLVM_OVERRIDE {
+                       SourceRange) override {
     Guard->Count++;
   }
   virtual void If(SourceLocation, SourceRange,
-                  ConditionValueKind) LLVM_OVERRIDE {
+                  ConditionValueKind) override {
     Guard->Count++;
   }
   virtual void Elif(SourceLocation, SourceRange, ConditionValueKind,
-                    SourceLocation) LLVM_OVERRIDE {
+                    SourceLocation) override {
     Guard->Count++;
   }
   virtual void Ifdef(SourceLocation, const Token &,
-                     const MacroDirective *) LLVM_OVERRIDE {
+                     const MacroDirective *) override {
     Guard->Count++;
   }
-  virtual void Else(SourceLocation, SourceLocation) LLVM_OVERRIDE {
+  virtual void Else(SourceLocation, SourceLocation) override {
     Guard->Count++;
   }
 
@@ -363,7 +365,7 @@ Replacement IncludeDirectives::addAngledInclude(const clang::FileEntry *File,
     return Replacement();
 
   unsigned Offset, NLFlags;
-  llvm::tie(Offset, NLFlags) = angledIncludeInsertionOffset(FID);
+  std::tie(Offset, NLFlags) = angledIncludeInsertionOffset(FID);
 
   StringRef EOL = guessEOL(Sources, FID);
   llvm::SmallString<32> InsertionText;

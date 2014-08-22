@@ -9,11 +9,12 @@
 
 #include "Atoms.h"
 #include "HexagonLinkingContext.h"
+#include "HexagonTargetHandler.h"
 
 #include "lld/Core/File.h"
 #include "lld/Core/Pass.h"
 #include "lld/Core/PassManager.h"
-#include "lld/ReaderWriter/Simple.h"
+#include "lld/Core/Simple.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -36,11 +37,11 @@ public:
     _name += function;
 #endif
   }
-  virtual ArrayRef<uint8_t> rawContent() const {
+  ArrayRef<uint8_t> rawContent() const override {
     return ArrayRef<uint8_t>(hexagonInitFiniAtomContent, 4);
   }
 
-  virtual Alignment alignment() const { return Alignment(2); }
+  Alignment alignment() const override { return Alignment(2); }
 };
 
 class HexagonFiniAtom : public InitFiniAtom {
@@ -52,10 +53,10 @@ public:
     _name += function;
 #endif
   }
-  virtual ArrayRef<uint8_t> rawContent() const {
+  ArrayRef<uint8_t> rawContent() const override {
     return ArrayRef<uint8_t>(hexagonInitFiniAtomContent, 4);
   }
-  virtual Alignment alignment() const { return Alignment(2); }
+  Alignment alignment() const override { return Alignment(2); }
 };
 
 class HexagonInitFiniFile : public SimpleFile {
@@ -101,3 +102,7 @@ void elf::HexagonLinkingContext::createInternalFiles(
     initFiniFile->addFiniFunction(ai);
   result.push_back(std::move(initFiniFile));
 }
+
+HexagonLinkingContext::HexagonLinkingContext(llvm::Triple triple)
+    : ELFLinkingContext(triple, std::unique_ptr<TargetHandlerBase>(
+                                    new HexagonTargetHandler(*this))) {}

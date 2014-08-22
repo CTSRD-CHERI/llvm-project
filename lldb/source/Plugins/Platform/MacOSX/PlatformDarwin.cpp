@@ -23,11 +23,14 @@
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/Timer.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostInfo.h"
+#include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Symbols.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Symbol/SymbolVendor.h"
 #include "lldb/Target/Target.h"
+#include "llvm/ADT/STLExtras.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -38,9 +41,7 @@ using namespace lldb_private;
 //------------------------------------------------------------------
 PlatformDarwin::PlatformDarwin (bool is_host) :
     PlatformPOSIX(is_host),  // This is the local host platform
-    m_developer_directory (),
-    m_dispatch_queue_offsets_addr (LLDB_INVALID_ADDRESS),
-    m_libdispatch_offsets()
+    m_developer_directory ()
 {
 }
 
@@ -56,7 +57,8 @@ PlatformDarwin::~PlatformDarwin()
 
 FileSpecList
 PlatformDarwin::LocateExecutableScriptingResources (Target *target,
-                                                    Module &module)
+                                                    Module &module,
+                                                    Stream* feedback_stream)
 {
     FileSpecList file_list;
     if (target && target->GetDebugger().GetScriptLanguage() == eScriptLanguagePython)
@@ -84,6 +86,7 @@ PlatformDarwin::LocateExecutableScriptingResources (Target *target,
                             while (module_spec.GetFilename())
                             {
                                 std::string module_basename (module_spec.GetFilename().GetCString());
+                                std::string original_module_basename (module_basename);
 
                                 // FIXME: for Python, we cannot allow certain characters in module
                                 // filenames we import. Theoretically, different scripting languages may
@@ -97,10 +100,39 @@ PlatformDarwin::LocateExecutableScriptingResources (Target *target,
                                 
 
                                 StreamString path_string;
+                                StreamString original_path_string;
                                 // for OSX we are going to be in .dSYM/Contents/Resources/DWARF/<basename>
                                 // let us go to .dSYM/Contents/Resources/Python/<basename>.py and see if the file exists
                                 path_string.Printf("%s/../Python/%s.py",symfile_spec.GetDirectory().GetCString(), module_basename.c_str());
+                                original_path_string.Printf("%s/../Python/%s.py",symfile_spec.GetDirectory().GetCString(), original_module_basename.c_str());
                                 FileSpec script_fspec(path_string.GetData(), true);
+                                FileSpec orig_script_fspec(original_path_string.GetData(), true);
+                                
+                                // if we did some replacements of reserved characters, and a file with the untampered name
+                                // exists, then warn the user that the file as-is shall not be loaded
+                                if (feedback_stream)
+                                {
+                                    if (module_basename != original_module_basename
+                                        && orig_script_fspec.Exists())
+                                    {
+                                        if (script_fspec.Exists())
+                                            feedback_stream->Printf("warning: the symbol file '%s' contains a debug script. However, its name"
+                                                                    " '%s' contains reserved characters and as such cannot be loaded. LLDB will"
+                                                                    " load '%s' instead. Consider removing the file with the malformed name to"
+                                                                    " eliminate this warning.\n",
+                                                                    symfile_spec.GetPath().c_str(),
+                                                                    original_path_string.GetData(),
+                                                                    path_string.GetData());
+                                        else
+                                            feedback_stream->Printf("warning: the symbol file '%s' contains a debug script. However, its name"
+                                                                    " contains reserved characters and as such cannot be loaded. If you intend"
+                                                                    " to have this script loaded, please rename '%s' to '%s' and retry.\n",
+                                                                    symfile_spec.GetPath().c_str(),
+                                                                    original_path_string.GetData(),
+                                                                    path_string.GetData());
+                                    }
+                                }
+                                
                                 if (script_fspec.Exists())
                                 {
                                     file_list.Append (script_fspec);
@@ -140,7 +172,11 @@ PlatformDarwin::ResolveExecutable (const FileSpec &exe_file,
     {
         // If we have "ls" as the exe_file, resolve the executable loation based on
         // the current path variables
-        if (!resolved_exe_file.Exists())
+        if (resolved_exe_file.Exists())
+        {
+            
+        }
+        else
         {
             exe_file.GetPath (exe_path, sizeof(exe_path));
             resolved_exe_file.SetFile(exe_path, true);
@@ -156,8 +192,11 @@ PlatformDarwin::ResolveExecutable (const FileSpec &exe_file,
             error.Clear();
         else
         {
-            exe_file.GetPath (exe_path, sizeof(exe_path));
-            error.SetErrorStringWithFormat ("unable to find executable for '%s'", exe_path);
+            const uint32_t permissions = resolved_exe_file.GetPermissions();
+            if (permissions && (permissions & eFilePermissionsEveryoneR) == 0)
+                error.SetErrorStringWithFormat ("executable '%s' is not readable", resolved_exe_file.GetPath().c_str());
+            else
+                error.SetErrorStringWithFormat ("unable to find executable for '%s'", resolved_exe_file.GetPath().c_str());
         }
     }
     else
@@ -232,10 +271,17 @@ PlatformDarwin::ResolveExecutable (const FileSpec &exe_file,
             
             if (error.Fail() || !exe_module_sp)
             {
-                error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
-                                                exe_file.GetPath().c_str(),
-                                                GetPluginName().GetCString(),
-                                                arch_names.GetString().c_str());
+                if (exe_file.Readable())
+                {
+                    error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
+                                                    exe_file.GetPath().c_str(),
+                                                    GetPluginName().GetCString(),
+                                                    arch_names.GetString().c_str());
+                }
+                else
+                {
+                    error.SetErrorStringWithFormat("'%s' is not readable", exe_file.GetPath().c_str());
+                }
             }
         }
     }
@@ -274,7 +320,7 @@ static lldb_private::Error
 MakeCacheFolderForFile (const FileSpec& module_cache_spec)
 {
     FileSpec module_cache_folder = module_cache_spec.CopyByRemovingLastPathComponent();
-    return Host::MakeDirectory(module_cache_folder.GetPath().c_str(), eFilePermissionsDirectoryDefault);
+    return FileSystem::MakeDirectory(module_cache_folder.GetPath().c_str(), eFilePermissionsDirectoryDefault);
 }
 
 static lldb_private::Error
@@ -305,102 +351,113 @@ PlatformDarwin::GetSharedModuleWithLocalCache (const lldb_private::ModuleSpec &m
                      module_spec.GetPlatformFileSpec().GetFilename().AsCString(),
                      module_spec.GetSymbolFileSpec().GetDirectory().AsCString(),
                      module_spec.GetSymbolFileSpec().GetFilename().AsCString());
-
-    std::string cache_path(GetLocalCacheDirectory());
-    std::string module_path (module_spec.GetFileSpec().GetPath());
-    cache_path.append(module_path);
-    FileSpec module_cache_spec(cache_path.c_str(),false);
     
-    // if rsync is supported, always bring in the file - rsync will be very efficient
-    // when files are the same on the local and remote end of the connection
-    if (this->GetSupportsRSync())
+    Error err;
+    
+    err = ModuleList::GetSharedModule(module_spec, module_sp, module_search_paths_ptr, old_module_sp_ptr, did_create_ptr);
+    if (module_sp)
+        return err;
+    
+    if (!IsHost())
     {
-        Error err = BringInRemoteFile (this, module_spec, module_cache_spec);
-        if (err.Fail())
-            return err;
-        if (module_cache_spec.Exists())
+        std::string cache_path(GetLocalCacheDirectory());
+        // Only search for a locally cached file if we have a valid cache path
+        if (!cache_path.empty())
         {
-            Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM));
+            std::string module_path (module_spec.GetFileSpec().GetPath());
+            cache_path.append(module_path);
+            FileSpec module_cache_spec(cache_path.c_str(),false);
+        
+            // if rsync is supported, always bring in the file - rsync will be very efficient
+            // when files are the same on the local and remote end of the connection
+            if (this->GetSupportsRSync())
+            {
+                err = BringInRemoteFile (this, module_spec, module_cache_spec);
+                if (err.Fail())
+                    return err;
+                if (module_cache_spec.Exists())
+                {
+                    Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM));
+                    if (log)
+                        log->Printf("[%s] module %s/%s was rsynced and is now there",
+                                     (IsHost() ? "host" : "remote"),
+                                     module_spec.GetFileSpec().GetDirectory().AsCString(),
+                                     module_spec.GetFileSpec().GetFilename().AsCString());
+                    ModuleSpec local_spec(module_cache_spec, module_spec.GetArchitecture());
+                    module_sp.reset(new Module(local_spec));
+                    module_sp->SetPlatformFileSpec(module_spec.GetFileSpec());
+                    return Error();
+                }
+            }
+            
+            // try to find the module in the cache
+            if (module_cache_spec.Exists())
+            {
+                // get the local and remote MD5 and compare
+                if (m_remote_platform_sp)
+                {
+                    // when going over the *slow* GDB remote transfer mechanism we first check
+                    // the hashes of the files - and only do the actual transfer if they differ
+                    uint64_t high_local,high_remote,low_local,low_remote;
+                    FileSystem::CalculateMD5(module_cache_spec, low_local, high_local);
+                    m_remote_platform_sp->CalculateMD5(module_spec.GetFileSpec(), low_remote, high_remote);
+                    if (low_local != low_remote || high_local != high_remote)
+                    {
+                        // bring in the remote file
+                        Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM));
+                        if (log)
+                            log->Printf("[%s] module %s/%s needs to be replaced from remote copy",
+                                         (IsHost() ? "host" : "remote"),
+                                         module_spec.GetFileSpec().GetDirectory().AsCString(),
+                                         module_spec.GetFileSpec().GetFilename().AsCString());
+                        Error err = BringInRemoteFile (this, module_spec, module_cache_spec);
+                        if (err.Fail())
+                            return err;
+                    }
+                }
+                
+                ModuleSpec local_spec(module_cache_spec, module_spec.GetArchitecture());
+                module_sp.reset(new Module(local_spec));
+                module_sp->SetPlatformFileSpec(module_spec.GetFileSpec());
+                Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM));
+                    if (log)
+                        log->Printf("[%s] module %s/%s was found in the cache",
+                                     (IsHost() ? "host" : "remote"),
+                                     module_spec.GetFileSpec().GetDirectory().AsCString(),
+                                     module_spec.GetFileSpec().GetFilename().AsCString());
+                return Error();
+            }
+            
+            // bring in the remote module file
             if (log)
-                log->Printf("[%s] module %s/%s was rsynced and is now there",
+                log->Printf("[%s] module %s/%s needs to come in remotely",
                              (IsHost() ? "host" : "remote"),
                              module_spec.GetFileSpec().GetDirectory().AsCString(),
                              module_spec.GetFileSpec().GetFilename().AsCString());
-            ModuleSpec local_spec(module_cache_spec, module_spec.GetArchitecture());
-            module_sp.reset(new Module(local_spec));
-            module_sp->SetPlatformFileSpec(module_spec.GetFileSpec());
-            return Error();
-        }
-    }
-
-    if (module_spec.GetFileSpec().Exists() && !module_sp)
-    {
-        module_sp.reset(new Module(module_spec));
-        return Error();
-    }
-    
-    // try to find the module in the cache
-    if (module_cache_spec.Exists())
-    {
-        // get the local and remote MD5 and compare
-        if (m_remote_platform_sp)
-        {
-            // when going over the *slow* GDB remote transfer mechanism we first check
-            // the hashes of the files - and only do the actual transfer if they differ
-            uint64_t high_local,high_remote,low_local,low_remote;
-            Host::CalculateMD5 (module_cache_spec, low_local, high_local);
-            m_remote_platform_sp->CalculateMD5(module_spec.GetFileSpec(), low_remote, high_remote);
-            if (low_local != low_remote || high_local != high_remote)
+            Error err = BringInRemoteFile (this, module_spec, module_cache_spec);
+            if (err.Fail())
+                return err;
+            if (module_cache_spec.Exists())
             {
-                // bring in the remote file
                 Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM));
                 if (log)
-                    log->Printf("[%s] module %s/%s needs to be replaced from remote copy",
+                    log->Printf("[%s] module %s/%s is now cached and fine",
                                  (IsHost() ? "host" : "remote"),
                                  module_spec.GetFileSpec().GetDirectory().AsCString(),
                                  module_spec.GetFileSpec().GetFilename().AsCString());
-                Error err = BringInRemoteFile (this, module_spec, module_cache_spec);
-                if (err.Fail())
-                    return err;
+                ModuleSpec local_spec(module_cache_spec, module_spec.GetArchitecture());
+                module_sp.reset(new Module(local_spec));
+                module_sp->SetPlatformFileSpec(module_spec.GetFileSpec());
+                return Error();
             }
+            else
+                return Error("unable to obtain valid module file");
         }
-        
-        ModuleSpec local_spec(module_cache_spec, module_spec.GetArchitecture());
-        module_sp.reset(new Module(local_spec));
-        module_sp->SetPlatformFileSpec(module_spec.GetFileSpec());
-        Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM));
-            if (log)
-                log->Printf("[%s] module %s/%s was found in the cache",
-                             (IsHost() ? "host" : "remote"),
-                             module_spec.GetFileSpec().GetDirectory().AsCString(),
-                             module_spec.GetFileSpec().GetFilename().AsCString());
-        return Error();
-    }
-    
-    // bring in the remote module file
-    if (log)
-        log->Printf("[%s] module %s/%s needs to come in remotely",
-                     (IsHost() ? "host" : "remote"),
-                     module_spec.GetFileSpec().GetDirectory().AsCString(),
-                     module_spec.GetFileSpec().GetFilename().AsCString());
-    Error err = BringInRemoteFile (this, module_spec, module_cache_spec);
-    if (err.Fail())
-        return err;
-    if (module_cache_spec.Exists())
-    {
-        Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM));
-        if (log)
-            log->Printf("[%s] module %s/%s is now cached and fine",
-                         (IsHost() ? "host" : "remote"),
-                         module_spec.GetFileSpec().GetDirectory().AsCString(),
-                         module_spec.GetFileSpec().GetFilename().AsCString());
-        ModuleSpec local_spec(module_cache_spec, module_spec.GetArchitecture());
-        module_sp.reset(new Module(local_spec));
-        module_sp->SetPlatformFileSpec(module_spec.GetFileSpec());
-        return Error();
+        else
+            return Error("no cache path");
     }
     else
-        return Error("unable to obtain valid module file");
+        return Error ("unable to resolve module");
 }
 
 Error
@@ -521,6 +578,17 @@ PlatformDarwin::GetSoftwareBreakpointTrapOpcode (Target &target, BreakpointSite 
         }
         break;
 
+    case llvm::Triple::aarch64:
+        {
+            // TODO: fix this with actual darwin breakpoint opcode for arm64.
+            // right now debugging uses the Z packets with GDB remote so this
+            // is not needed, but the size needs to be correct...
+            static const uint8_t g_arm64_breakpoint_opcode[] = { 0xFE, 0xDE, 0xFF, 0xE7 };
+            trap_opcode = g_arm64_breakpoint_opcode;
+            trap_opcode_size = sizeof(g_arm64_breakpoint_opcode);
+        }
+        break;
+
     case llvm::Triple::thumb:
         bp_is_thumb = true; // Fall through...
     case llvm::Triple::arm:
@@ -570,135 +638,6 @@ PlatformDarwin::GetSoftwareBreakpointTrapOpcode (Target &target, BreakpointSite 
 }
 
 bool
-PlatformDarwin::GetRemoteOSVersion ()
-{
-    if (m_remote_platform_sp)
-        return m_remote_platform_sp->GetOSVersion (m_major_os_version, 
-                                                   m_minor_os_version, 
-                                                   m_update_os_version);
-    return false;
-}
-
-bool
-PlatformDarwin::GetRemoteOSBuildString (std::string &s)
-{
-    if (m_remote_platform_sp)
-        return m_remote_platform_sp->GetRemoteOSBuildString (s);
-    s.clear();
-    return false;
-}
-
-bool
-PlatformDarwin::GetRemoteOSKernelDescription (std::string &s)
-{
-    if (m_remote_platform_sp)
-        return m_remote_platform_sp->GetRemoteOSKernelDescription (s);
-    s.clear();
-    return false;
-}
-
-// Remote Platform subclasses need to override this function
-ArchSpec
-PlatformDarwin::GetRemoteSystemArchitecture ()
-{
-    if (m_remote_platform_sp)
-        return m_remote_platform_sp->GetRemoteSystemArchitecture ();
-    return ArchSpec();
-}
-
-
-const char *
-PlatformDarwin::GetHostname ()
-{
-    if (IsHost())
-        return Platform::GetHostname();
-
-    if (m_remote_platform_sp)
-        return m_remote_platform_sp->GetHostname ();
-    return NULL;
-}
-
-bool
-PlatformDarwin::IsConnected () const
-{
-    if (IsHost())
-        return true;
-    else if (m_remote_platform_sp)
-        return m_remote_platform_sp->IsConnected();
-    return false;
-}
-
-Error
-PlatformDarwin::ConnectRemote (Args& args)
-{
-    Error error;
-    if (IsHost())
-    {
-        error.SetErrorStringWithFormat ("can't connect to the host platform '%s', always connected", GetPluginName().GetCString());
-    }
-    else
-    {
-        if (!m_remote_platform_sp)
-            m_remote_platform_sp = Platform::Create ("remote-gdb-server", error);
-
-        if (m_remote_platform_sp && error.Success())
-            error = m_remote_platform_sp->ConnectRemote (args);
-        else
-            error.SetErrorString ("failed to create a 'remote-gdb-server' platform");
-        
-        if (error.Fail())
-            m_remote_platform_sp.reset();
-    }
-    
-    if (error.Success() && m_remote_platform_sp)
-    {
-        if (m_options.get())
-        {
-            OptionGroupOptions* options = m_options.get();
-            OptionGroupPlatformRSync* m_rsync_options = (OptionGroupPlatformRSync*)options->GetGroupWithOption('r');
-            OptionGroupPlatformSSH* m_ssh_options = (OptionGroupPlatformSSH*)options->GetGroupWithOption('s');
-            OptionGroupPlatformCaching* m_cache_options = (OptionGroupPlatformCaching*)options->GetGroupWithOption('c');
-            
-            if (m_rsync_options->m_rsync)
-            {
-                SetSupportsRSync(true);
-                SetRSyncOpts(m_rsync_options->m_rsync_opts.c_str());
-                SetRSyncPrefix(m_rsync_options->m_rsync_prefix.c_str());
-                SetIgnoresRemoteHostname(m_rsync_options->m_ignores_remote_hostname);
-            }
-            if (m_ssh_options->m_ssh)
-            {
-                SetSupportsSSH(true);
-                SetSSHOpts(m_ssh_options->m_ssh_opts.c_str());
-            }
-            SetLocalCacheDirectory(m_cache_options->m_cache_dir.c_str());
-        }
-    }
-
-    return error;
-}
-
-Error
-PlatformDarwin::DisconnectRemote ()
-{
-    Error error;
-    
-    if (IsHost())
-    {
-        error.SetErrorStringWithFormat ("can't disconnect from the host platform '%s', always connected", GetPluginName().GetCString());
-    }
-    else
-    {
-        if (m_remote_platform_sp)
-            error = m_remote_platform_sp->DisconnectRemote ();
-        else
-            error.SetErrorString ("the platform is not currently connected");
-    }
-    return error;
-}
-
-
-bool
 PlatformDarwin::GetProcessInfo (lldb::pid_t pid, ProcessInstanceInfo &process_info)
 {
     bool sucess = false;
@@ -713,8 +652,6 @@ PlatformDarwin::GetProcessInfo (lldb::pid_t pid, ProcessInstanceInfo &process_in
     }
     return sucess;
 }
-
-
 
 uint32_t
 PlatformDarwin::FindProcesses (const ProcessInstanceInfoMatch &match_info,
@@ -755,31 +692,6 @@ PlatformDarwin::LaunchProcess (ProcessLaunchInfo &launch_info)
 }
 
 lldb::ProcessSP
-PlatformDarwin::DebugProcess (ProcessLaunchInfo &launch_info,
-                              Debugger &debugger,
-                              Target *target,       // Can be NULL, if NULL create a new target, else use existing one
-                              Listener &listener,
-                              Error &error)
-{
-    ProcessSP process_sp;
-    
-    if (IsHost())
-    {
-        process_sp = Platform::DebugProcess (launch_info, debugger, target, listener, error);
-    }
-    else
-    {
-        if (m_remote_platform_sp)
-            process_sp = m_remote_platform_sp->DebugProcess (launch_info, debugger, target, listener, error);
-        else
-            error.SetErrorString ("the platform is not currently connected");
-    }
-    return process_sp;
-    
-}
-
-
-lldb::ProcessSP
 PlatformDarwin::Attach (ProcessAttachInfo &attach_info,
                         Debugger &debugger,
                         Target *target,
@@ -812,7 +724,12 @@ PlatformDarwin::Attach (ProcessAttachInfo &attach_info,
             process_sp = target->CreateProcess (listener, attach_info.GetProcessPluginName(), NULL);
             
             if (process_sp)
+            {
+                ListenerSP listener_sp (new Listener("lldb.PlatformDarwin.attach.hijack"));
+                attach_info.SetHijackListener(listener_sp);
+                process_sp->HijackProcessEvents(listener_sp.get());
                 error = process_sp->Attach (attach_info);
+            }
         }
     }
     else
@@ -823,31 +740,6 @@ PlatformDarwin::Attach (ProcessAttachInfo &attach_info,
             error.SetErrorString ("the platform is not currently connected");
     }
     return process_sp;
-}
-
-const char *
-PlatformDarwin::GetUserName (uint32_t uid)
-{
-    // Check the cache in Platform in case we have already looked this uid up
-    const char *user_name = Platform::GetUserName(uid);
-    if (user_name)
-        return user_name;
-
-    if (IsRemote() && m_remote_platform_sp)
-        return m_remote_platform_sp->GetUserName(uid);
-    return NULL;
-}
-
-const char *
-PlatformDarwin::GetGroupName (uint32_t gid)
-{
-    const char *group_name = Platform::GetGroupName(gid);
-    if (group_name)
-        return group_name;
-
-    if (IsRemote() && m_remote_platform_sp)
-        return m_remote_platform_sp->GetGroupName(gid);
-    return NULL;
 }
 
 bool
@@ -867,133 +759,48 @@ PlatformDarwin::ModuleIsExcludedForNonModuleSpecificSearches (lldb_private::Targ
         return false;
 }
 
-std::string
-PlatformDarwin::GetQueueNameForThreadQAddress (Process *process, addr_t thread_dispatch_qaddr)
-{
-    std::string dispatch_queue_name;
-    if (thread_dispatch_qaddr == LLDB_INVALID_ADDRESS || thread_dispatch_qaddr == 0 || process == NULL)
-        return "";
-
-    ReadLibdispatchOffsets (process);
-    if (m_libdispatch_offsets.IsValid ())
-    {
-        Error error;
-        addr_t queue_addr = process->ReadPointerFromMemory (thread_dispatch_qaddr, error);
-        if (error.Success())
-        {
-            if (m_libdispatch_offsets.dqo_version >= 4)
-            {
-                // libdispatch versions 4+, pointer to dispatch name is in the
-                // queue structure.
-                addr_t pointer_to_label_address = queue_addr + m_libdispatch_offsets.dqo_label;
-                addr_t label_addr = process->ReadPointerFromMemory (pointer_to_label_address, error);
-                if (error.Success())
-                {
-                    process->ReadCStringFromMemory (label_addr, dispatch_queue_name, error);
-                }
-            }
-            else
-            {
-                // libdispatch versions 1-3, dispatch name is a fixed width char array
-                // in the queue structure.
-                addr_t label_addr = queue_addr + m_libdispatch_offsets.dqo_label;
-                dispatch_queue_name.resize (m_libdispatch_offsets.dqo_label_size, '\0');
-                size_t bytes_read = process->ReadMemory (label_addr, &dispatch_queue_name[0], m_libdispatch_offsets.dqo_label_size, error);
-                if (bytes_read < m_libdispatch_offsets.dqo_label_size)
-                    dispatch_queue_name.erase (bytes_read);
-            }
-        }
-    }
-    return dispatch_queue_name;
-}
-
-void
-PlatformDarwin::ReadLibdispatchOffsetsAddress (Process *process)
-{
-    if (m_dispatch_queue_offsets_addr != LLDB_INVALID_ADDRESS)
-        return;
-
-    static ConstString g_dispatch_queue_offsets_symbol_name ("dispatch_queue_offsets");
-    const Symbol *dispatch_queue_offsets_symbol = NULL;
-
-    // libdispatch symbols were in libSystem.B.dylib up through Mac OS X 10.6 ("Snow Leopard")
-    ModuleSpec libSystem_module_spec (FileSpec("libSystem.B.dylib", false));
-    ModuleSP module_sp(process->GetTarget().GetImages().FindFirstModule (libSystem_module_spec));
-    if (module_sp)
-        dispatch_queue_offsets_symbol = module_sp->FindFirstSymbolWithNameAndType (g_dispatch_queue_offsets_symbol_name, eSymbolTypeData);
-    
-    // libdispatch symbols are in their own dylib as of Mac OS X 10.7 ("Lion") and later
-    if (dispatch_queue_offsets_symbol == NULL)
-    {
-        ModuleSpec libdispatch_module_spec (FileSpec("libdispatch.dylib", false));
-        module_sp = process->GetTarget().GetImages().FindFirstModule (libdispatch_module_spec);
-        if (module_sp)
-            dispatch_queue_offsets_symbol = module_sp->FindFirstSymbolWithNameAndType (g_dispatch_queue_offsets_symbol_name, eSymbolTypeData);
-    }
-    if (dispatch_queue_offsets_symbol)
-        m_dispatch_queue_offsets_addr = dispatch_queue_offsets_symbol->GetAddress().GetLoadAddress(&process->GetTarget());
-}
-
-void
-PlatformDarwin::ReadLibdispatchOffsets (Process *process)
-{
-    if (m_libdispatch_offsets.IsValid())
-        return;
-
-    ReadLibdispatchOffsetsAddress (process);
-
-    uint8_t memory_buffer[sizeof (struct LibdispatchOffsets)];
-    DataExtractor data (memory_buffer, 
-                        sizeof(memory_buffer), 
-                        process->GetTarget().GetArchitecture().GetByteOrder(), 
-                        process->GetTarget().GetArchitecture().GetAddressByteSize());
-
-    Error error;
-    if (process->ReadMemory (m_dispatch_queue_offsets_addr, memory_buffer, sizeof(memory_buffer), error) == sizeof(memory_buffer))
-    {
-        lldb::offset_t data_offset = 0;
-
-        // The struct LibdispatchOffsets is a series of uint16_t's - extract them all
-        // in one big go.
-        data.GetU16 (&data_offset, &m_libdispatch_offsets.dqo_version, sizeof (struct LibdispatchOffsets) / sizeof (uint16_t));
-    }
-}
-
-lldb::queue_id_t
-PlatformDarwin::GetQueueIDForThreadQAddress (Process *process, lldb::addr_t dispatch_qaddr)
-{
-    if (dispatch_qaddr == LLDB_INVALID_ADDRESS || dispatch_qaddr == 0 || process == NULL)
-        return LLDB_INVALID_QUEUE_ID;
-
-    Error error;
-    uint32_t ptr_size = process->GetTarget().GetArchitecture().GetAddressByteSize();
-    uint64_t this_thread_queue_id = process->ReadUnsignedIntegerFromMemory (dispatch_qaddr, ptr_size, LLDB_INVALID_QUEUE_ID, error);
-    if (!error.Success())
-        return LLDB_INVALID_QUEUE_ID;
-
-    return this_thread_queue_id;
-}
-
-
 bool
 PlatformDarwin::x86GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
-    if (idx == 0)
+    ArchSpec host_arch = HostInfo::GetArchitecture(HostInfo::eArchKindDefault);
+    if (host_arch.GetCore() == ArchSpec::eCore_x86_64_x86_64h)
     {
-        arch = Host::GetArchitecture (Host::eSystemDefaultArchitecture);
-        return arch.IsValid();
-    }
-    else if (idx == 1)
-    {
-        ArchSpec platform_arch (Host::GetArchitecture (Host::eSystemDefaultArchitecture));
-        ArchSpec platform_arch64 (Host::GetArchitecture (Host::eSystemDefaultArchitecture64));
-        if (platform_arch.IsExactMatch(platform_arch64))
+        switch (idx)
         {
-            // This macosx platform supports both 32 and 64 bit. Since we already
-            // returned the 64 bit arch for idx == 0, return the 32 bit arch 
-            // for idx == 1
-            arch = Host::GetArchitecture (Host::eSystemDefaultArchitecture32);
+            case 0:
+                arch = host_arch;
+                return true;
+
+            case 1:
+                arch.SetTriple("x86_64-apple-macosx");
+                return true;
+
+            case 2:
+                arch = HostInfo::GetArchitecture(HostInfo::eArchKind32);
+                return true;
+
+            default: return false;
+        }
+    }
+    else
+    {
+        if (idx == 0)
+        {
+            arch = HostInfo::GetArchitecture(HostInfo::eArchKindDefault);
             return arch.IsValid();
+        }
+        else if (idx == 1)
+        {
+            ArchSpec platform_arch(HostInfo::GetArchitecture(HostInfo::eArchKindDefault));
+            ArchSpec platform_arch64(HostInfo::GetArchitecture(HostInfo::eArchKind64));
+            if (platform_arch.IsExactMatch(platform_arch64))
+            {
+                // This macosx platform supports both 32 and 64 bit. Since we already
+                // returned the 64 bit arch for idx == 0, return the 32 bit arch 
+                // for idx == 1
+                arch = HostInfo::GetArchitecture(HostInfo::eArchKind32);
+                return arch.IsValid();
+            }
         }
     }
     return false;
@@ -1006,20 +813,51 @@ bool
 PlatformDarwin::ARMGetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
     ArchSpec system_arch (GetSystemArchitecture());
+
     const ArchSpec::Core system_core = system_arch.GetCore();
     switch (system_core)
     {
     default:
         switch (idx)
         {
-            case  0: arch.SetTriple ("armv7-apple-ios");    return true;
-            case  1: arch.SetTriple ("armv7f-apple-ios");   return true;
-            case  2: arch.SetTriple ("armv7k-apple-ios");   return true;
-            case  3: arch.SetTriple ("armv7s-apple-ios");   return true;
-            case  4: arch.SetTriple ("armv7m-apple-ios");   return true;
-            case  5: arch.SetTriple ("armv7em-apple-ios");  return true;
-            case  6: arch.SetTriple ("armv6-apple-ios");    return true;
+            case  0: arch.SetTriple ("arm64-apple-ios");    return true;
+            case  1: arch.SetTriple ("armv7-apple-ios");    return true;
+            case  2: arch.SetTriple ("armv7f-apple-ios");   return true;
+            case  3: arch.SetTriple ("armv7k-apple-ios");   return true;
+            case  4: arch.SetTriple ("armv7s-apple-ios");   return true;
+            case  5: arch.SetTriple ("armv7m-apple-ios");   return true;
+            case  6: arch.SetTriple ("armv7em-apple-ios");  return true;
             case  7: arch.SetTriple ("armv6m-apple-ios");   return true;
+            case  8: arch.SetTriple ("armv6-apple-ios");    return true;
+            case  9: arch.SetTriple ("armv5-apple-ios");    return true;
+            case 10: arch.SetTriple ("armv4-apple-ios");    return true;
+            case 11: arch.SetTriple ("arm-apple-ios");      return true;
+            case 12: arch.SetTriple ("thumbv7-apple-ios");  return true;
+            case 13: arch.SetTriple ("thumbv7f-apple-ios"); return true;
+            case 14: arch.SetTriple ("thumbv7k-apple-ios"); return true;
+            case 15: arch.SetTriple ("thumbv7s-apple-ios"); return true;
+            case 16: arch.SetTriple ("thumbv7m-apple-ios"); return true;
+            case 17: arch.SetTriple ("thumbv7em-apple-ios"); return true;
+            case 18: arch.SetTriple ("thumbv6m-apple-ios"); return true;
+            case 19: arch.SetTriple ("thumbv6-apple-ios");  return true;
+            case 20: arch.SetTriple ("thumbv5-apple-ios");  return true;
+            case 21: arch.SetTriple ("thumbv4t-apple-ios"); return true;
+            case 22: arch.SetTriple ("thumb-apple-ios");    return true;
+            default: break;
+        }
+        break;
+
+    case ArchSpec::eCore_arm_arm64:
+        switch (idx)
+        {
+            case  0: arch.SetTriple ("arm64-apple-ios");   return true;
+            case  1: arch.SetTriple ("armv7s-apple-ios");   return true;
+            case  2: arch.SetTriple ("armv7f-apple-ios");   return true;
+            case  3: arch.SetTriple ("armv7m-apple-ios");   return true;
+            case  4: arch.SetTriple ("armv7em-apple-ios");  return true;
+            case  5: arch.SetTriple ("armv7-apple-ios");    return true;
+            case  6: arch.SetTriple ("armv6m-apple-ios");   return true;
+            case  7: arch.SetTriple ("armv6-apple-ios");    return true;
             case  8: arch.SetTriple ("armv5-apple-ios");    return true;
             case  9: arch.SetTriple ("armv4-apple-ios");    return true;
             case 10: arch.SetTriple ("arm-apple-ios");      return true;
@@ -1029,8 +867,8 @@ PlatformDarwin::ARMGetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch
             case 14: arch.SetTriple ("thumbv7s-apple-ios"); return true;
             case 15: arch.SetTriple ("thumbv7m-apple-ios"); return true;
             case 16: arch.SetTriple ("thumbv7em-apple-ios"); return true;
-            case 17: arch.SetTriple ("thumbv6-apple-ios");  return true;
-            case 18: arch.SetTriple ("thumbv6m-apple-ios"); return true;
+            case 17: arch.SetTriple ("thumbv6m-apple-ios"); return true;
+            case 18: arch.SetTriple ("thumbv6-apple-ios");  return true;
             case 19: arch.SetTriple ("thumbv5-apple-ios");  return true;
             case 20: arch.SetTriple ("thumbv4t-apple-ios"); return true;
             case 21: arch.SetTriple ("thumb-apple-ios");    return true;
@@ -1352,7 +1190,7 @@ PlatformDarwin::SetThreadCreationBreakpoint (Target &target)
     };
 
     FileSpecList bp_modules;
-    for (size_t i = 0; i < sizeof(g_bp_modules)/sizeof(const char *); i++)
+    for (size_t i = 0; i < llvm::array_lengthof(g_bp_modules); i++)
     {
         const char *bp_module = g_bp_modules[i];
         bp_modules.Append(FileSpec(bp_module, false));
@@ -1364,7 +1202,7 @@ PlatformDarwin::SetThreadCreationBreakpoint (Target &target)
     bp_sp = target.CreateBreakpoint (&bp_modules,
                                      NULL,
                                      g_bp_names,
-                                     sizeof(g_bp_names)/sizeof(const char *),
+                                     llvm::array_lengthof(g_bp_names),
                                      eFunctionNameTypeFull,
                                      skip_prologue,
                                      internal,
@@ -1425,3 +1263,9 @@ PlatformDarwin::GetResumeCountForLaunchInfo (ProcessLaunchInfo &launch_info)
     else
         return 1;
 }
+
+void
+PlatformDarwin::CalculateTrapHandlerSymbolNames ()
+{   
+    m_trap_handlers.push_back (ConstString ("_sigtramp"));
+}   

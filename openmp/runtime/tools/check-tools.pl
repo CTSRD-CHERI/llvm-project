@@ -296,15 +296,14 @@ sub get_clang_compiler_version($) {
     $rc = run( [ $tool, "--version" ], $stdout, $stderr );
     if ( $rc >= 0 ) {
         my ( $ver, $bld );
-        if ( $target_os eq "mac" ) {
+        if ( $target_os eq "mac" and $stdout =~ m{^.*? (\d+\.\d+) \(.*-(\d+\.\d+\.\d+)\)}m ) {
             # Apple LLVM version 4.2 (clang-425.0.28) (based on LLVM 3.2svn)
-            $stdout =~ m{^.*? (\d+\.\d+) \(.*-(\d+\.\d+\.\d+)\)}m;
             ( $ver, $bld ) = ( $1, $2 );
         } else {
             if ( 0 ) {
-            } elsif ( $stdout =~ m{^.*? (\d+\.\d+) \((.*)\)}m ) {
+            } elsif ( $stdout =~ m{^.*? (\d+\.\d+)( \((.*)\))?}m ) {
                 # clang version 3.3 (tags/RELEASE_33/final)
-                ( $ver, $bld ) = ( $1, $2 );
+                ( $ver, $bld ) = ( $1, $3 );
             } 
         }; # if
         if ( defined( $ver ) ) {
@@ -427,13 +426,13 @@ if ( $intel ) {
     };
 }; # if
 if ( $target_os eq "lin" or $target_os eq "mac" ) {
-    # check for gnu tools by default because touch-test.c is compiled with them.
-    push( @versions, [ "GNU C Compiler",     get_gnu_compiler_version( $gnu_compilers->{ $target_os }->{ c   } ) ] );
-    push( @versions, [ "GNU C++ Compiler",   get_gnu_compiler_version( $gnu_compilers->{ $target_os }->{ cpp } ) ] );
     if ( $clang ) {
         push( @versions, [ "Clang C Compiler",     get_clang_compiler_version( $clang_compilers->{ $target_os }->{ c   } ) ] );
         push( @versions, [ "Clang C++ Compiler",   get_clang_compiler_version( $clang_compilers->{ $target_os }->{ cpp } ) ] );
-    }; 
+    } else {
+        push( @versions, [ "GNU C Compiler",     get_gnu_compiler_version( $gnu_compilers->{ $target_os }->{ c   } ) ] );
+        push( @versions, [ "GNU C++ Compiler",   get_gnu_compiler_version( $gnu_compilers->{ $target_os }->{ cpp } ) ] );
+    }; # if
     # if intel fortran has been checked then gnu fortran is unnecessary
     # also, if user specifies clang as build compiler, then gfortran is assumed fortran compiler
     if ( $fortran and not $intel ) {

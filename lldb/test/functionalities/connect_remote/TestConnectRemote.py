@@ -5,17 +5,16 @@ Test lldb 'process connect' command.
 import os
 import unittest2
 import lldb
-import pexpect
 from lldbtest import *
 
 class ConnectRemoteTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @expectedFailureFreeBSD('llvm.org/pr18313')
     def test_connect_remote(self):
         """Test "process connect connect:://localhost:12345"."""
 
+        import pexpect
         # First, we'll start a fake debugserver (a simple echo server).
         fakeserver = pexpect.spawn('./EchoServer.py')
 

@@ -46,13 +46,18 @@ def DirectivePwr5x: SubtargetFeature<"", "DarwinDirective", "PPC::DIR_PWR5X", ""
 def DirectivePwr6: SubtargetFeature<"", "DarwinDirective", "PPC::DIR_PWR6", "">;
 def DirectivePwr6x: SubtargetFeature<"", "DarwinDirective", "PPC::DIR_PWR6X", "">;
 def DirectivePwr7: SubtargetFeature<"", "DarwinDirective", "PPC::DIR_PWR7", "">;
+def DirectivePwr8: SubtargetFeature<"", "DarwinDirective", "PPC::DIR_PWR8", "">;
 
 def Feature64Bit     : SubtargetFeature<"64bit","Has64BitSupport", "true",
                                         "Enable 64-bit instructions">;
 def Feature64BitRegs : SubtargetFeature<"64bitregs","Use64BitRegs", "true",
                               "Enable 64-bit registers usage for ppc32 [beta]">;
+def FeatureCRBits    : SubtargetFeature<"crbits", "UseCRBits", "true",
+                              "Use condition-register bits individually">;
 def FeatureAltivec   : SubtargetFeature<"altivec","HasAltivec", "true",
                                         "Enable Altivec instructions">;
+def FeatureSPE       : SubtargetFeature<"spe","HasSPE", "true",
+                                        "Enable SPE instructions">;
 def FeatureMFOCRF    : SubtargetFeature<"mfocrf","HasMFOCRF", "true",
                                         "Enable the MFOCRF instruction">;
 def FeatureFSqrt     : SubtargetFeature<"fsqrt","HasFSQRT", "true",
@@ -85,10 +90,17 @@ def FeatureLDBRX     : SubtargetFeature<"ldbrx","HasLDBRX", "true",
                                         "Enable the ldbrx instruction">;
 def FeatureBookE     : SubtargetFeature<"booke", "IsBookE", "true",
                                         "Enable Book E instructions">;
+def FeatureE500      : SubtargetFeature<"e500", "IsE500", "true",
+                                        "Enable E500/E500mc instructions">;
+def FeaturePPC4xx    : SubtargetFeature<"ppc4xx", "IsPPC4xx", "true",
+                                        "Enable PPC 4xx instructions">;
+def FeaturePPC6xx    : SubtargetFeature<"ppc6xx", "IsPPC6xx", "true",
+                                        "Enable PPC 6xx instructions">;
 def FeatureQPX       : SubtargetFeature<"qpx","HasQPX", "true",
                                         "Enable QPX instructions">;
 def FeatureVSX       : SubtargetFeature<"vsx","HasVSX", "true",
-                                        "Enable VSX instructions">;
+                                        "Enable VSX instructions",
+                                        [FeatureAltivec]>;
 
 def DeprecatedMFTB   : SubtargetFeature<"", "DeprecatedMFTB", "true",
                                         "Treat mftb as deprecated">;
@@ -104,11 +116,27 @@ def DeprecatedDST    : SubtargetFeature<"", "DeprecatedDST", "true",
 // VSX          p7                 vector-scalar instruction set
 
 //===----------------------------------------------------------------------===//
+// ABI Selection                                                              //
+//===----------------------------------------------------------------------===//
+
+def FeatureELFv1 : SubtargetFeature<"elfv1", "TargetABI", "PPC_ABI_ELFv1",
+                                    "Use the ELFv1 ABI">;
+
+def FeatureELFv2 : SubtargetFeature<"elfv2", "TargetABI", "PPC_ABI_ELFv2",
+                                    "Use the ELFv2 ABI">;
+
+//===----------------------------------------------------------------------===//
 // Classes used for relation maps.
 //===----------------------------------------------------------------------===//
 // RecFormRel - Filter class used to relate non-record-form instructions with
 // their record-form variants.
 class RecFormRel;
+
+// AltVSXFMARel - Filter class used to relate the primary addend-killing VSX
+// FMA instruction forms with their corresponding factor-killing forms.
+class AltVSXFMARel {
+  bit IsVSXFMAAlt = 0;
+}
 
 //===----------------------------------------------------------------------===//
 // Relation Map Definitions.
@@ -138,6 +166,19 @@ def getNonRecordFormOpcode : InstrMapping {
   let KeyCol = ["1"];
   // Value columns are RC=0
   let ValueCols = [["0"]];
+}
+
+def getAltVSXFMAOpcode : InstrMapping {
+  let FilterClass = "AltVSXFMARel";
+  // Instructions with the same BaseName and Interpretation64Bit values
+  // form a row.
+  let RowFields = ["BaseName"];
+  // Instructions with the same RC value form a column.
+  let ColFields = ["IsVSXFMAAlt"];
+  // The key column are the (default) addend-killing instructions.
+  let KeyCol = ["0"];
+  // Value columns IsVSXFMAAlt=1
+  let ValueCols = [["1"]];
 }
 
 //===----------------------------------------------------------------------===//
@@ -263,6 +304,15 @@ def : ProcessorModel<"pwr7", P7Model,
                    FeaturePOPCNTD, FeatureLDBRX,
                    Feature64Bit /*, Feature64BitRegs */,
                    DeprecatedMFTB, DeprecatedDST]>;
+def : ProcessorModel<"pwr8", P7Model /* FIXME: Update to P8Model when available */,
+                  [DirectivePwr8, FeatureAltivec,
+                   FeatureMFOCRF, FeatureFCPSGN, FeatureFSqrt, FeatureFRE,
+                   FeatureFRES, FeatureFRSQRTE, FeatureFRSQRTES,
+                   FeatureRecipPrec, FeatureSTFIWX, FeatureLFIWAX,
+                   FeatureFPRND, FeatureFPCVT, FeatureISEL,
+                   FeaturePOPCNTD, FeatureLDBRX,
+                   Feature64Bit /*, Feature64BitRegs */,
+                   DeprecatedMFTB, DeprecatedDST]>;
 def : Processor<"ppc", G3Itineraries, [Directive32]>;
 def : ProcessorModel<"ppc64", G5Model,
                   [Directive64, FeatureAltivec,
@@ -286,6 +336,8 @@ def PPCInstrInfo : InstrInfo {
 
   // FIXME: Unset this when no longer needed!
   let decodePositionallyEncodedOperands = 1;
+
+  let noNamedPositionallyEncodedOperands = 1;
 }
 
 def PPCAsmParser : AsmParser {

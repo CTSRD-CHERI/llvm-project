@@ -19,13 +19,6 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "WriterPECOFF"
-
-#include <algorithm>
-#include <map>
-#include <time.h>
-#include <vector>
-
 #include "Atoms.h"
 #include "WriterImportLibrary.h"
 
@@ -45,16 +38,22 @@
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/Format.h"
 
+#include <algorithm>
+#include <cstdlib>
+#include <map>
+#include <time.h>
+#include <vector>
+
+#define DEBUG_TYPE "WriterPECOFF"
+
+using llvm::COFF::DataDirectoryIndex;
+using llvm::object::coff_runtime_function_x64;
 using llvm::support::ulittle16_t;
 using llvm::support::ulittle32_t;
-using llvm::COFF::DataDirectoryIndex;
+using llvm::support::ulittle64_t;
 
 namespace lld {
 namespace pecoff {
-
-// Page size of x86 processor. Some data needs to be aligned at page boundary
-// when loaded into memory.
-static const int PAGE_SIZE = 4096;
 
 // Disk sector size. Some data needs to be aligned at disk sector boundary in
 // file.
@@ -76,6 +75,7 @@ public:
   virtual ~Chunk() {}
   virtual void write(uint8_t *buffer) = 0;
   virtual uint64_t size() const { return _size; }
+  virtual uint64_t onDiskSize() const { return size(); }
   virtual uint64_t align() const { return 1; }
 
   uint64_t fileOffset() const { return _fileOffset; }
@@ -111,7 +111,7 @@ public:
     _size = llvm::RoundUpToAlignment(size, 8);
   }
 
-  virtual void write(uint8_t *buffer) {
+  void write(uint8_t *buffer) override {
     ArrayRef<uint8_t> array = _context.getDosStub();
     std::memcpy(buffer, array.data(), array.size());
     auto *header = reinterpret_cast<llvm::object::dos_header *>(buffer);
@@ -123,11 +123,12 @@ private:
 };
 
 /// A PEHeaderChunk represents PE header including COFF header.
+template <class PEHeader>
 class PEHeaderChunk : public HeaderChunk {
 public:
-  explicit PEHeaderChunk(const PECOFFLinkingContext &context);
+  explicit PEHeaderChunk(const PECOFFLinkingContext &ctx);
 
-  virtual void write(uint8_t *buffer);
+  void write(uint8_t *buffer) override;
 
   void setSizeOfHeaders(uint64_t size) {
     // Must be multiple of FileAlignment.
@@ -136,7 +137,7 @@ public:
 
   void setSizeOfCode(uint64_t size) { _peHeader.SizeOfCode = size; }
   void setBaseOfCode(uint32_t rva) { _peHeader.BaseOfCode = rva; }
-  void setBaseOfData(uint32_t rva) { _peHeader.BaseOfData = rva; }
+  void setBaseOfData(uint32_t rva);
   void setSizeOfImage(uint32_t size) { _peHeader.SizeOfImage = size; }
 
   void setSizeOfInitializedData(uint64_t size) {
@@ -155,7 +156,7 @@ public:
 
 private:
   llvm::object::coff_file_header _coffHeader;
-  llvm::object::pe32_header _peHeader;
+  PEHeader _peHeader;
 };
 
 /// A SectionHeaderTableChunk represents Section Table Header of PE/COFF
@@ -164,8 +165,8 @@ class SectionHeaderTableChunk : public HeaderChunk {
 public:
   SectionHeaderTableChunk() : HeaderChunk() {}
   void addSection(SectionChunk *chunk);
-  virtual uint64_t size() const;
-  virtual void write(uint8_t *buffer);
+  uint64_t size() const override;
+  void write(uint8_t *buffer) override;
 
 private:
   static llvm::object::coff_section createSectionHeader(SectionChunk *chunk);
@@ -175,7 +176,13 @@ private:
 
 class SectionChunk : public Chunk {
 public:
-  virtual uint64_t align() const { return SECTOR_SIZE; }
+  uint64_t onDiskSize() const override {
+    if (_characteristics & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA)
+      return 0;
+    return llvm::RoundUpToAlignment(size(), SECTOR_SIZE);
+  }
+
+  uint64_t align() const override { return SECTOR_SIZE; }
   uint32_t getCharacteristics() const { return _characteristics; }
   StringRef getSectionName() const { return _sectionName; }
 
@@ -204,18 +211,24 @@ public:
   AtomChunk(const PECOFFLinkingContext &ctx, StringRef name,
             const std::vector<const DefinedAtom *> &atoms);
 
-  virtual void write(uint8_t *buffer);
+  void write(uint8_t *buffer) override;
 
   void appendAtom(const DefinedAtom *atom);
   void buildAtomRvaMap(std::map<const Atom *, uint64_t> &atomRva) const;
-  void applyRelocations(uint8_t *buffer,
-                        std::map<const Atom *, uint64_t> &atomRva,
-                        std::vector<uint64_t> &sectionRva,
-                        uint64_t imageBaseAddress);
+
+  void applyRelocations32(uint8_t *buffer,
+                          std::map<const Atom *, uint64_t> &atomRva,
+                          std::vector<uint64_t> &sectionRva,
+                          uint64_t imageBaseAddress);
+  void applyRelocations64(uint8_t *buffer,
+                          std::map<const Atom *, uint64_t> &atomRva,
+                          std::vector<uint64_t> &sectionRva,
+                          uint64_t imageBaseAddress);
+
   void printAtomAddresses(uint64_t baseAddr) const;
   void addBaseRelocations(std::vector<uint64_t> &relocSites) const;
 
-  virtual void setVirtualAddress(uint32_t rva);
+  void setVirtualAddress(uint32_t rva) override;
   uint64_t getAtomVirtualAddress(StringRef name) const;
 
   static bool classof(const Chunk *c) { return c->getKind() == kindAtomChunk; }
@@ -247,12 +260,12 @@ public:
   DataDirectoryChunk()
       : HeaderChunk(), _data(std::vector<llvm::object::data_directory>(16)) {}
 
-  virtual uint64_t size() const {
+  uint64_t size() const override {
     return sizeof(llvm::object::data_directory) * _data.size();
   }
 
   void setField(DataDirectoryIndex index, uint32_t addr, uint32_t size);
-  virtual void write(uint8_t *buffer);
+  void write(uint8_t *buffer) override;
 
 private:
   std::vector<llvm::object::data_directory> _data;
@@ -276,15 +289,15 @@ class BaseRelocChunk : public SectionChunk {
   typedef std::map<uint64_t, std::vector<uint16_t> > PageOffsetT;
 
 public:
-  BaseRelocChunk(ChunkVectorT &chunks)
+  BaseRelocChunk(ChunkVectorT &chunks, const PECOFFLinkingContext &ctx)
       : SectionChunk(kindSection, ".reloc", characteristics),
-        _contents(createContents(chunks)) {}
+        _ctx(ctx), _contents(createContents(chunks)) {}
 
-  virtual void write(uint8_t *buffer) {
+  void write(uint8_t *buffer) override {
     std::memcpy(buffer, &_contents[0], _contents.size());
   }
 
-  virtual uint64_t size() const { return _contents.size(); }
+  uint64_t size() const override { return _contents.size(); }
 
 private:
   // When loaded into memory, reloc section should be readable and writable.
@@ -307,38 +320,40 @@ private:
   createBaseRelocBlock(uint64_t pageAddr,
                        const std::vector<uint16_t> &offsets) const;
 
+  const PECOFFLinkingContext &_ctx;
   std::vector<uint8_t> _contents;
 };
 
-PEHeaderChunk::PEHeaderChunk(const PECOFFLinkingContext &context)
+template <class PEHeader>
+PEHeaderChunk<PEHeader>::PEHeaderChunk(const PECOFFLinkingContext &ctx)
     : HeaderChunk() {
   // Set the size of the chunk and initialize the header with null bytes.
   _size = sizeof(llvm::COFF::PEMagic) + sizeof(_coffHeader) + sizeof(_peHeader);
   std::memset(&_coffHeader, 0, sizeof(_coffHeader));
   std::memset(&_peHeader, 0, sizeof(_peHeader));
 
-  _coffHeader.Machine = context.getMachineType();
+  _coffHeader.Machine = ctx.getMachineType();
   _coffHeader.TimeDateStamp = time(nullptr);
 
-  // The size of PE header including optional data directory is always 224.
-  _coffHeader.SizeOfOptionalHeader = 224;
-
   // Attributes of the executable.
-  uint16_t characteristics = llvm::COFF::IMAGE_FILE_32BIT_MACHINE |
-                             llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE;
-  if (context.getLargeAddressAware())
+  uint16_t characteristics = llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE;
+  if (!ctx.is64Bit())
+    characteristics |= llvm::COFF::IMAGE_FILE_32BIT_MACHINE;
+  if (ctx.isDll())
+    characteristics |= llvm::COFF::IMAGE_FILE_DLL;
+  if (ctx.getLargeAddressAware() || ctx.is64Bit())
     characteristics |= llvm::COFF::IMAGE_FILE_LARGE_ADDRESS_AWARE;
-  if (context.getSwapRunFromCD())
+  if (ctx.getSwapRunFromCD())
     characteristics |= llvm::COFF::IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP;
-  if (context.getSwapRunFromNet())
+  if (ctx.getSwapRunFromNet())
     characteristics |= llvm::COFF::IMAGE_FILE_NET_RUN_FROM_SWAP;
-  if (!context.getBaseRelocationEnabled())
+  if (!ctx.getBaseRelocationEnabled())
     characteristics |= llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED;
 
   _coffHeader.Characteristics = characteristics;
 
-  // 0x10b indicates a normal PE32 executable. For PE32+ it should be 0x20b.
-  _peHeader.Magic = 0x10b;
+  _peHeader.Magic = ctx.is64Bit() ? llvm::COFF::PE32Header::PE32_PLUS
+                                  : llvm::COFF::PE32Header::PE32;
 
   // The address of entry point relative to ImageBase. Windows executable
   // usually starts at address 0x401000.
@@ -346,11 +361,11 @@ PEHeaderChunk::PEHeaderChunk(const PECOFFLinkingContext &context)
 
   // The address of the executable when loaded into memory. The default for
   // DLLs is 0x10000000. The default for executables is 0x400000.
-  _peHeader.ImageBase = context.getBaseAddress();
+  _peHeader.ImageBase = ctx.getBaseAddress();
 
   // Sections should be page-aligned when loaded into memory, which is 4KB on
   // x86.
-  _peHeader.SectionAlignment = context.getSectionDefaultAlignment();
+  _peHeader.SectionAlignment = ctx.getSectionDefaultAlignment();
 
   // Sections in an executable file on disk should be sector-aligned (512 byte).
   _peHeader.FileAlignment = SECTOR_SIZE;
@@ -358,49 +373,66 @@ PEHeaderChunk::PEHeaderChunk(const PECOFFLinkingContext &context)
   // The version number of the resultant executable/DLL. The number is purely
   // informative, and neither the linker nor the loader won't use it. User can
   // set the value using /version command line option. Default is 0.0.
-  PECOFFLinkingContext::Version imageVersion = context.getImageVersion();
+  PECOFFLinkingContext::Version imageVersion = ctx.getImageVersion();
   _peHeader.MajorImageVersion = imageVersion.majorVersion;
   _peHeader.MinorImageVersion = imageVersion.minorVersion;
 
   // The required Windows version number. This is the internal version and
   // shouldn't be confused with product name. Windows 7 is version 6.1 and
   // Windows 8 is 6.2, for example.
-  PECOFFLinkingContext::Version minOSVersion = context.getMinOSVersion();
+  PECOFFLinkingContext::Version minOSVersion = ctx.getMinOSVersion();
   _peHeader.MajorOperatingSystemVersion = minOSVersion.majorVersion;
   _peHeader.MinorOperatingSystemVersion = minOSVersion.minorVersion;
   _peHeader.MajorSubsystemVersion = minOSVersion.majorVersion;
   _peHeader.MinorSubsystemVersion = minOSVersion.minorVersion;
 
-  _peHeader.Subsystem = context.getSubsystem();
+  _peHeader.Subsystem = ctx.getSubsystem();
 
   // Despite its name, DLL characteristics field has meaning both for
   // executables and DLLs. We are not very sure if the following bits must
   // be set, but regular binaries seem to have these bits, so we follow
   // them.
-  uint16_t dllCharacteristics = llvm::COFF::IMAGE_DLL_CHARACTERISTICS_NO_SEH;
-  if (context.isTerminalServerAware())
+  uint16_t dllCharacteristics = 0;
+  if (ctx.noSEH())
+    dllCharacteristics |= llvm::COFF::IMAGE_DLL_CHARACTERISTICS_NO_SEH;
+  if (ctx.isTerminalServerAware())
     dllCharacteristics |=
         llvm::COFF::IMAGE_DLL_CHARACTERISTICS_TERMINAL_SERVER_AWARE;
-  if (context.isNxCompat())
+  if (ctx.isNxCompat())
     dllCharacteristics |= llvm::COFF::IMAGE_DLL_CHARACTERISTICS_NX_COMPAT;
-  if (context.getDynamicBaseEnabled())
+  if (ctx.getDynamicBaseEnabled())
     dllCharacteristics |= llvm::COFF::IMAGE_DLL_CHARACTERISTICS_DYNAMIC_BASE;
-  if (!context.getAllowBind())
+  if (!ctx.getAllowBind())
     dllCharacteristics |= llvm::COFF::IMAGE_DLL_CHARACTERISTICS_NO_BIND;
-  if (!context.getAllowIsolation())
+  if (!ctx.getAllowIsolation())
     dllCharacteristics |= llvm::COFF::IMAGE_DLL_CHARACTERISTICS_NO_ISOLATION;
   _peHeader.DLLCharacteristics = dllCharacteristics;
 
-  _peHeader.SizeOfStackReserve = context.getStackReserve();
-  _peHeader.SizeOfStackCommit = context.getStackCommit();
-  _peHeader.SizeOfHeapReserve = context.getHeapReserve();
-  _peHeader.SizeOfHeapCommit = context.getHeapCommit();
+  _peHeader.SizeOfStackReserve = ctx.getStackReserve();
+  _peHeader.SizeOfStackCommit = ctx.getStackCommit();
+  _peHeader.SizeOfHeapReserve = ctx.getHeapReserve();
+  _peHeader.SizeOfHeapCommit = ctx.getHeapCommit();
 
   // The number of data directory entries. We always have 16 entries.
   _peHeader.NumberOfRvaAndSize = 16;
+
+  // The size of PE header including optional data directory.
+  _coffHeader.SizeOfOptionalHeader = sizeof(PEHeader) +
+      _peHeader.NumberOfRvaAndSize * sizeof(llvm::object::data_directory);
 }
 
-void PEHeaderChunk::write(uint8_t *buffer) {
+template <>
+void PEHeaderChunk<llvm::object::pe32_header>::setBaseOfData(uint32_t rva) {
+  _peHeader.BaseOfData = rva;
+}
+
+template <>
+void PEHeaderChunk<llvm::object::pe32plus_header>::setBaseOfData(uint32_t rva) {
+  // BaseOfData field does not exist in PE32+ header.
+}
+
+template <class PEHeader>
+void PEHeaderChunk<PEHeader>::write(uint8_t *buffer) {
   std::memcpy(buffer, llvm::COFF::PEMagic, sizeof(llvm::COFF::PEMagic));
   buffer += sizeof(llvm::COFF::PEMagic);
   std::memcpy(buffer, &_coffHeader, sizeof(_coffHeader));
@@ -447,10 +479,29 @@ AtomChunk::buildAtomRvaMap(std::map<const Atom *, uint64_t> &atomRva) const {
     atomRva[layout->_atom] = layout->_virtualAddr;
 }
 
-void AtomChunk::applyRelocations(uint8_t *buffer,
-                                 std::map<const Atom *, uint64_t> &atomRva,
-                                 std::vector<uint64_t> &sectionRva,
-                                 uint64_t imageBaseAddress) {
+static int getSectionIndex(uint64_t targetAddr,
+                           const std::vector<uint64_t> &sectionRva) {
+  int i = 1;
+  for (uint64_t rva : sectionRva) {
+    if (targetAddr < rva)
+      return i;
+    ++i;
+  }
+  return i;
+}
+
+static uint32_t getSectionStartAddr(uint64_t targetAddr,
+                                    const std::vector<uint64_t> &sectionRva) {
+  for (int i = 0, e = sectionRva.size(); i < e; ++i)
+    if (i == e - 1 || (sectionRva[i] <= targetAddr && targetAddr <= sectionRva[i + 1]))
+      return sectionRva[i];
+  llvm_unreachable("Section missing");
+}
+
+void AtomChunk::applyRelocations32(uint8_t *buffer,
+                                   std::map<const Atom *, uint64_t> &atomRva,
+                                   std::vector<uint64_t> &sectionRva,
+                                   uint64_t imageBaseAddress) {
   buffer += _fileOffset;
   for (const auto *layout : _atomLayouts) {
     const DefinedAtom *atom = cast<DefinedAtom>(layout->_atom);
@@ -484,30 +535,74 @@ void AtomChunk::applyRelocations(uint8_t *buffer,
         *relocSite32 = targetAddr - disp;
         break;
       }
-      case llvm::COFF::IMAGE_REL_I386_SECTION: {
+      case llvm::COFF::IMAGE_REL_I386_SECTION:
         // The 16-bit section index that contains the target symbol.
-        uint16_t i = 1;
-        for (uint64_t rva : sectionRva) {
-          if (targetAddr < rva) {
-            *relocSite16 = i;
-            break;
-          }
-          ++i;
-        }
+        *relocSite16 = getSectionIndex(targetAddr, sectionRva);
         break;
-      }
       case llvm::COFF::IMAGE_REL_I386_SECREL:
         // The 32-bit relative address from the beginning of the section that
         // contains the target symbol.
-        for (int i = 0, e = sectionRva.size(); i < e; ++i) {
-          if (i == e - 1 || (sectionRva[i] <= targetAddr &&
-                             targetAddr <= sectionRva[i + 1])) {
-            *relocSite32 = targetAddr - sectionRva[i];
-            break;
-          }
-        }
+        *relocSite32 = targetAddr - getSectionStartAddr(targetAddr, sectionRva);
         break;
       default:
+        llvm_unreachable("Unsupported relocation kind");
+      }
+    }
+  }
+}
+
+void AtomChunk::applyRelocations64(uint8_t *buffer,
+                                   std::map<const Atom *, uint64_t> &atomRva,
+                                   std::vector<uint64_t> &sectionRva,
+                                   uint64_t imageBase) {
+  buffer += _fileOffset;
+  for (const auto *layout : _atomLayouts) {
+    const DefinedAtom *atom = cast<DefinedAtom>(layout->_atom);
+    for (const Reference *ref : *atom) {
+      if (ref->kindNamespace() != Reference::KindNamespace::COFF)
+        continue;
+
+      uint8_t *loc = buffer + layout->_fileOffset + ref->offsetInAtom();
+      auto relocSite16 = reinterpret_cast<ulittle16_t *>(loc);
+      auto relocSite32 = reinterpret_cast<ulittle32_t *>(loc);
+      auto relocSite64 = reinterpret_cast<ulittle64_t *>(loc);
+      uint64_t targetAddr = atomRva[ref->target()];
+
+      switch (ref->kindValue()) {
+      case llvm::COFF::IMAGE_REL_AMD64_ADDR64:
+        *relocSite64 = targetAddr;
+        break;
+      case llvm::COFF::IMAGE_REL_AMD64_ADDR32:
+        *relocSite32 = targetAddr + imageBase;
+        break;
+      case llvm::COFF::IMAGE_REL_AMD64_ADDR32NB:
+        *relocSite32 = targetAddr;
+        break;
+      case llvm::COFF::IMAGE_REL_AMD64_REL32:
+        *relocSite32 = targetAddr - atomRva[atom] + ref->offsetInAtom() + 4;
+        break;
+
+#define REL32(x)                                                             \
+      case llvm::COFF::IMAGE_REL_AMD64_REL32_ ## x: {                        \
+        uint32_t off = targetAddr - atomRva[atom] + ref->offsetInAtom() + 4; \
+        *relocSite32 = off + x;                                              \
+      }
+      REL32(1);
+      REL32(2);
+      REL32(3);
+      REL32(4);
+      REL32(5);
+#undef CASE
+
+      case llvm::COFF::IMAGE_REL_AMD64_SECTION:
+        *relocSite16 = getSectionIndex(targetAddr, sectionRva);
+        break;
+      case llvm::COFF::IMAGE_REL_AMD64_SECREL:
+        *relocSite32 = targetAddr - getSectionStartAddr(targetAddr, sectionRva);
+        break;
+
+      default:
+        llvm::errs() << "Kind: " << (int)ref->kindValue() << "\n";
         llvm_unreachable("Unsupported relocation kind");
       }
     }
@@ -642,19 +737,18 @@ SectionHeaderTableChunk::createSectionHeader(SectionChunk *chunk) {
                std::min(sizeof(header.Name), sectionName.size()));
 
   uint32_t characteristics = chunk->getCharacteristics();
+  header.VirtualSize = chunk->size();
   header.VirtualAddress = chunk->getVirtualAddress();
+  header.SizeOfRawData = chunk->onDiskSize();
   header.PointerToRelocations = 0;
   header.PointerToLinenumbers = 0;
   header.NumberOfRelocations = 0;
   header.NumberOfLinenumbers = 0;
-  header.SizeOfRawData = chunk->size();
   header.Characteristics = characteristics;
 
   if (characteristics & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA) {
-    header.VirtualSize = 0;
     header.PointerToRawData = 0;
   } else {
-    header.VirtualSize = chunk->size();
     header.PointerToRawData = chunk->fileOffset();
   }
   return header;
@@ -698,7 +792,7 @@ BaseRelocChunk::listRelocSites(ChunkVectorT &chunks) const {
 BaseRelocChunk::PageOffsetT
 BaseRelocChunk::groupByPage(const std::vector<uint64_t> &relocSites) const {
   PageOffsetT blocks;
-  uint64_t mask = static_cast<uint64_t>(PAGE_SIZE) - 1;
+  uint64_t mask = _ctx.getPageSize() - 1;
   for (uint64_t addr : relocSites)
     blocks[addr & ~mask].push_back(addr & mask);
   return blocks;
@@ -726,7 +820,7 @@ std::vector<uint8_t> BaseRelocChunk::createBaseRelocBlock(
 
   // The rest of the block consists of offsets in the page.
   for (uint16_t offset : offsets) {
-    assert(offset < PAGE_SIZE);
+    assert(offset < _ctx.getPageSize());
     uint16_t val = (llvm::COFF::IMAGE_REL_BASED_HIGHLOW << 12) | offset;
     *reinterpret_cast<ulittle16_t *>(ptr) = val;
     ptr += sizeof(ulittle16_t);
@@ -739,19 +833,22 @@ std::vector<uint8_t> BaseRelocChunk::createBaseRelocBlock(
 class PECOFFWriter : public Writer {
 public:
   explicit PECOFFWriter(const PECOFFLinkingContext &context)
-      : _PECOFFLinkingContext(context), _numSections(0),
-        _imageSizeInMemory(PAGE_SIZE), _imageSizeOnDisk(0) {}
+      : _ctx(context), _numSections(0), _imageSizeInMemory(_ctx.getPageSize()),
+        _imageSizeOnDisk(0) {}
 
-  void build(const File &linkedFile);
-  virtual error_code writeFile(const File &linkedFile, StringRef path);
+  template <class PEHeader> void build(const File &linkedFile);
+  std::error_code writeFile(const File &linkedFile, StringRef path) override;
 
 private:
   void applyAllRelocations(uint8_t *bufferStart);
   void printAllAtomAddresses() const;
+  void reorderSEHTableEntries(uint8_t *bufferStart);
+  void reorderSEHTableEntriesX86(uint8_t *bufferStart);
+  void reorderSEHTableEntriesX64(uint8_t *bufferStart);
+
   void addChunk(Chunk *chunk);
   void addSectionChunk(SectionChunk *chunk, SectionHeaderTableChunk *table);
   void setImageSizeOnDisk();
-  void setAddressOfEntryPoint(AtomChunk *text, PEHeaderChunk *peHeader);
   uint64_t
   calcSectionSize(llvm::COFF::SectionCharacteristics sectionType) const;
 
@@ -768,13 +865,13 @@ private:
   }
 
   std::vector<std::unique_ptr<Chunk> > _chunks;
-  const PECOFFLinkingContext &_PECOFFLinkingContext;
+  const PECOFFLinkingContext &_ctx;
   uint32_t _numSections;
 
-  // The size of the image in memory. This is initialized with PAGE_SIZE, as the
-  // first page starting at ImageBase is usually left unmapped. IIUC there's no
-  // technical reason to do so, but we'll follow that convention so that we
-  // don't produce odd-looking binary.
+  // The size of the image in memory. This is initialized with
+  // _ctx.getPageSize(), as the first page starting at ImageBase is usually left
+  // unmapped. IIUC there's no technical reason to do so, but we'll follow that
+  // convention so that we don't produce odd-looking binary.
   uint32_t _imageSizeInMemory;
 
   // The size of the image on disk. This is basically the sum of all chunks in
@@ -829,13 +926,14 @@ void groupAtoms(const PECOFFLinkingContext &ctx, const File &file,
 }
 
 // Create all chunks that consist of the output file.
+template <class PEHeader>
 void PECOFFWriter::build(const File &linkedFile) {
   AtomVectorMap atoms;
-  groupAtoms(_PECOFFLinkingContext, linkedFile, atoms);
+  groupAtoms(_ctx, linkedFile, atoms);
 
   // Create file chunks and add them to the list.
-  auto *dosStub = new DOSStubChunk(_PECOFFLinkingContext);
-  auto *peHeader = new PEHeaderChunk(_PECOFFLinkingContext);
+  auto *dosStub = new DOSStubChunk(_ctx);
+  auto *peHeader = new PEHeaderChunk<PEHeader>(_ctx);
   auto *dataDirectory = new DataDirectoryChunk();
   auto *sectionTable = new SectionHeaderTableChunk();
   addChunk(dosStub);
@@ -846,15 +944,16 @@ void PECOFFWriter::build(const File &linkedFile) {
   for (auto i : atoms) {
     StringRef sectionName = i.first;
     std::vector<const DefinedAtom *> &contents = i.second;
-    auto *section = new AtomChunk(_PECOFFLinkingContext, sectionName, contents);
-    addSectionChunk(section, sectionTable);
+    auto *section = new AtomChunk(_ctx, sectionName, contents);
+    if (section->size() > 0)
+      addSectionChunk(section, sectionTable);
   }
 
   // Now that we know the addresses of all defined atoms that needs to be
   // relocated. So we can create the ".reloc" section which contains all the
   // relocation sites.
-  if (_PECOFFLinkingContext.getBaseRelocationEnabled()) {
-    BaseRelocChunk *baseReloc = new BaseRelocChunk(_chunks);
+  if (_ctx.getBaseRelocationEnabled()) {
+    BaseRelocChunk *baseReloc = new BaseRelocChunk(_chunks, _ctx);
     if (baseReloc->size()) {
       addSectionChunk(baseReloc, sectionTable);
       dataDirectory->setField(DataDirectoryIndex::BASE_RELOCATION_TABLE,
@@ -871,10 +970,28 @@ void PECOFFWriter::build(const File &linkedFile) {
       continue;
     if (section->getSectionName() == ".text") {
       peHeader->setBaseOfCode(section->getVirtualAddress());
-      setAddressOfEntryPoint(dyn_cast<AtomChunk>(section), peHeader);
+
+      // Find the virtual address of the entry point symbol if any.  PECOFF spec
+      // says that entry point for dll images is optional, in which case it must
+      // be set to 0.
+      if (_ctx.hasEntry()) {
+        uint64_t entryPointAddress =
+            dyn_cast<AtomChunk>(section)
+                ->getAtomVirtualAddress(_ctx.getEntrySymbolName());
+        if (entryPointAddress != 0)
+          peHeader->setAddressOfEntryPoint(entryPointAddress);
+      } else {
+        peHeader->setAddressOfEntryPoint(0);
+      }
     }
     if (section->getSectionName() == ".data")
       peHeader->setBaseOfData(section->getVirtualAddress());
+    if (section->getSectionName() == ".pdata")
+      dataDirectory->setField(DataDirectoryIndex::EXCEPTION_TABLE,
+                              section->getVirtualAddress(), section->size());
+    if (section->getSectionName() == ".rsrc")
+      dataDirectory->setField(DataDirectoryIndex::RESOURCE_TABLE,
+                              section->getVirtualAddress(), section->size());
     if (section->getSectionName() == ".idata.a")
       dataDirectory->setField(DataDirectoryIndex::IAT,
                               section->getVirtualAddress(), section->size());
@@ -883,6 +1000,9 @@ void PECOFFWriter::build(const File &linkedFile) {
                               section->getVirtualAddress(), section->size());
     if (section->getSectionName() == ".edata")
       dataDirectory->setField(DataDirectoryIndex::EXPORT_TABLE,
+                              section->getVirtualAddress(), section->size());
+    if (section->getSectionName() == ".loadcfg")
+      dataDirectory->setField(DataDirectoryIndex::LOAD_CONFIG_TABLE,
                               section->getVirtualAddress(), section->size());
   }
 
@@ -896,12 +1016,18 @@ void PECOFFWriter::build(const File &linkedFile) {
   peHeader->setSizeOfHeaders(sectionTable->fileOffset() + sectionTable->size());
 }
 
-error_code PECOFFWriter::writeFile(const File &linkedFile, StringRef path) {
-  this->build(linkedFile);
+std::error_code PECOFFWriter::writeFile(const File &linkedFile,
+                                        StringRef path) {
+  if (_ctx.is64Bit()) {
+    this->build<llvm::object::pe32plus_header>(linkedFile);
+  } else {
+    this->build<llvm::object::pe32_header>(linkedFile);
+  }
 
-  uint64_t totalSize = _chunks.back()->fileOffset() + _chunks.back()->size();
-  OwningPtr<llvm::FileOutputBuffer> buffer;
-  error_code ec = llvm::FileOutputBuffer::create(
+  uint64_t totalSize =
+      _chunks.back()->fileOffset() + _chunks.back()->onDiskSize();
+  std::unique_ptr<llvm::FileOutputBuffer> buffer;
+  std::error_code ec = llvm::FileOutputBuffer::create(
       path, totalSize, buffer, llvm::FileOutputBuffer::F_executable);
   if (ec)
     return ec;
@@ -909,10 +1035,11 @@ error_code PECOFFWriter::writeFile(const File &linkedFile, StringRef path) {
   for (std::unique_ptr<Chunk> &chunk : _chunks)
     chunk->write(buffer->getBufferStart() + chunk->fileOffset());
   applyAllRelocations(buffer->getBufferStart());
+  reorderSEHTableEntries(buffer->getBufferStart());
   DEBUG(printAllAtomAddresses());
 
-  if (_PECOFFLinkingContext.isDll())
-    writeImportLibrary(_PECOFFLinkingContext);
+  if (_ctx.isDll())
+    writeImportLibrary(_ctx);
 
   return buffer->commit();
 }
@@ -936,17 +1063,68 @@ void PECOFFWriter::applyAllRelocations(uint8_t *bufferStart) {
       chunk->buildAtomRvaMap(atomRva);
 
   // Pass 2
-  for (auto &cp : _chunks)
-    if (AtomChunk *chunk = dyn_cast<AtomChunk>(&*cp))
-      chunk->applyRelocations(bufferStart, atomRva, sectionRva,
-                              _PECOFFLinkingContext.getBaseAddress());
+  uint64_t base = _ctx.getBaseAddress();
+  for (auto &cp : _chunks) {
+    if (AtomChunk *chunk = dyn_cast<AtomChunk>(&*cp)) {
+      if (_ctx.is64Bit()) {
+        chunk->applyRelocations64(bufferStart, atomRva, sectionRva, base);
+      } else {
+        chunk->applyRelocations32(bufferStart, atomRva, sectionRva, base);
+      }
+    }
+  }
 }
 
 /// Print atom VAs. Used only for debugging.
 void PECOFFWriter::printAllAtomAddresses() const {
   for (auto &cp : _chunks)
     if (AtomChunk *chunk = dyn_cast<AtomChunk>(&*cp))
-      chunk->printAtomAddresses(_PECOFFLinkingContext.getBaseAddress());
+      chunk->printAtomAddresses(_ctx.getBaseAddress());
+}
+
+void PECOFFWriter::reorderSEHTableEntries(uint8_t *bufferStart) {
+  auto machineType = _ctx.getMachineType();
+  if (machineType == llvm::COFF::IMAGE_FILE_MACHINE_I386)
+    reorderSEHTableEntriesX86(bufferStart);
+  if (machineType == llvm::COFF::IMAGE_FILE_MACHINE_AMD64)
+    reorderSEHTableEntriesX64(bufferStart);
+}
+
+/// It seems that the entries in .sxdata must be sorted. This function is called
+/// after a COFF file image is created in memory and before it is written to
+/// disk. It is safe to reorder entries at this stage because the contents of
+/// the entries are RVAs and there's no reference to a .sxdata entry other than
+/// to the beginning of the section.
+void PECOFFWriter::reorderSEHTableEntriesX86(uint8_t *bufferStart) {
+  for (std::unique_ptr<Chunk> &chunk : _chunks) {
+    if (SectionChunk *section = dyn_cast<SectionChunk>(chunk.get())) {
+      if (section->getSectionName() == ".sxdata") {
+        int numEntries = section->size() / sizeof(ulittle32_t);
+        ulittle32_t *begin = reinterpret_cast<ulittle32_t *>(bufferStart + section->fileOffset());
+        ulittle32_t *end = begin + numEntries;
+        std::sort(begin, end);
+      }
+    }
+  }
+}
+
+/// The entries in .pdata must be sorted according to its BeginAddress field
+/// value. It's safe to do it because of the same reason as .sxdata.
+void PECOFFWriter::reorderSEHTableEntriesX64(uint8_t *bufferStart) {
+  for (std::unique_ptr<Chunk> &chunk : _chunks) {
+    if (SectionChunk *section = dyn_cast<SectionChunk>(chunk.get())) {
+      if (section->getSectionName() != ".pdata")
+        continue;
+      int numEntries = section->size() / sizeof(coff_runtime_function_x64);
+      coff_runtime_function_x64 *begin =
+          (coff_runtime_function_x64 *)(bufferStart + section->fileOffset());
+      coff_runtime_function_x64 *end = begin + numEntries;
+      std::sort(begin, end, [](const coff_runtime_function_x64 &lhs,
+                               const coff_runtime_function_x64 &rhs) {
+        return lhs.BeginAddress < rhs.BeginAddress;
+      });
+    }
+  }
 }
 
 void PECOFFWriter::addChunk(Chunk *chunk) {
@@ -963,8 +1141,8 @@ void PECOFFWriter::addSectionChunk(SectionChunk *chunk,
   // memory. They are different from positions on disk because sections need
   // to be sector-aligned on disk but page-aligned in memory.
   chunk->setVirtualAddress(_imageSizeInMemory);
-  _imageSizeInMemory =
-      llvm::RoundUpToAlignment(_imageSizeInMemory + chunk->size(), PAGE_SIZE);
+  _imageSizeInMemory = llvm::RoundUpToAlignment(
+      _imageSizeInMemory + chunk->size(), _ctx.getPageSize());
 }
 
 void PECOFFWriter::setImageSizeOnDisk() {
@@ -973,23 +1151,7 @@ void PECOFFWriter::setImageSizeOnDisk() {
     _imageSizeOnDisk =
         llvm::RoundUpToAlignment(_imageSizeOnDisk, chunk->align());
     chunk->setFileOffset(_imageSizeOnDisk);
-    _imageSizeOnDisk += chunk->size();
-  }
-}
-
-void PECOFFWriter::setAddressOfEntryPoint(AtomChunk *text,
-                                          PEHeaderChunk *peHeader) {
-  // Find the virtual address of the entry point symbol if any.
-  // PECOFF spec says that entry point for dll images is optional, in which
-  // case it must be set to 0.
-  if (_PECOFFLinkingContext.entrySymbolName().empty() &&
-      _PECOFFLinkingContext.isDll()) {
-    peHeader->setAddressOfEntryPoint(0);
-  } else {
-    uint64_t entryPointAddress =
-        text->getAtomVirtualAddress(_PECOFFLinkingContext.entrySymbolName());
-    if (entryPointAddress != 0)
-      peHeader->setAddressOfEntryPoint(entryPointAddress);
+    _imageSizeOnDisk += chunk->onDiskSize();
   }
 }
 
@@ -999,7 +1161,7 @@ uint64_t PECOFFWriter::calcSectionSize(
   for (auto &cp : _chunks)
     if (SectionChunk *chunk = dyn_cast<SectionChunk>(&*cp))
       if (chunk->getCharacteristics() & sectionType)
-        ret += chunk->size();
+        ret += chunk->onDiskSize();
   return ret;
 }
 

@@ -26,7 +26,7 @@ namespace {
     public:
     static char ID;
     CheriInvalidatePass(MipsTargetMachine &TM) : MachineFunctionPass(ID) {
-      InstrInfo = TM.getInstrInfo();
+      InstrInfo = TM.getSubtargetImpl()->getInstrInfo();
     }
 
     void runOnMachineBasicBlock(MachineBasicBlock &MBB) {

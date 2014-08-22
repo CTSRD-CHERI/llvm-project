@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -std=c++11 -cxx-abi itanium -fsyntax-only -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -verify %s
-// RUN: %clang_cc1 -std=c++11 -cxx-abi microsoft -DMSABI -fsyntax-only -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -verify %s
+// RUN: %clang_cc1 -std=c++11 -triple %itanium_abi_triple -fsyntax-only -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -verify %s
+// RUN: %clang_cc1 -std=c++11 -triple %ms_abi_triple -DMSABI -fsyntax-only -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -verify %s
 class A {
 public:
   ~A();
@@ -195,7 +195,7 @@ struct B { // expected-warning {{has virtual functions but non-virtual destructo
 
 struct D: B {}; // expected-warning {{has virtual functions but non-virtual destructor}}
 
-struct F final: B {}; // expected-warning {{has virtual functions but non-virtual destructor}}
+struct F final : B {};
 
 struct VB {
   virtual void foo();
@@ -379,4 +379,10 @@ namespace PR7900 {
 
 namespace PR16892 {
   auto p = &A::~A; // expected-error{{taking the address of a destructor}}
+}
+
+namespace PR20238 {
+struct S {
+  volatile ~S() { } // expected-error{{destructor cannot have a return type}}
+};
 }

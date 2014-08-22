@@ -6,8 +6,8 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#ifndef CLANG_LIB_DRIVER_SANITIZERARGS_H_
-#define CLANG_LIB_DRIVER_SANITIZERARGS_H_
+#ifndef LLVM_CLANG_DRIVER_SANITIZERARGS_H
+#define LLVM_CLANG_DRIVER_SANITIZERARGS_H
 
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
@@ -42,21 +42,24 @@ class SanitizerArgs {
     NeedsLeakDetection = Leak,
     NeedsUbsanRt = Undefined | Integer,
     NotAllowedWithTrap = Vptr,
-    HasZeroBaseShadow = Thread | Memory | DataFlow
+    HasZeroBaseShadow = Thread | Memory | DataFlow,
+    NeedsUnwindTables = Address | Thread | Memory | DataFlow
   };
   unsigned Kind;
 
   std::string BlacklistFile;
-  bool MsanTrackOrigins;
+  int MsanTrackOrigins;
   bool AsanZeroBaseShadow;
   bool UbsanTrapOnError;
+  bool AsanSharedRuntime;
+  bool LinkCXXRuntimes;
 
  public:
-  SanitizerArgs();
   /// Parses the sanitizer arguments from an argument list.
   SanitizerArgs(const ToolChain &TC, const llvm::opt::ArgList &Args);
 
   bool needsAsanRt() const { return Kind & NeedsAsanRt; }
+  bool needsSharedAsanRt() const { return AsanSharedRuntime; }
   bool needsTsanRt() const { return Kind & NeedsTsanRt; }
   bool needsMsanRt() const { return Kind & NeedsMsanRt; }
   bool needsLeakDetection() const { return Kind & NeedsLeakDetection; }
@@ -73,6 +76,8 @@ class SanitizerArgs {
   bool hasZeroBaseShadow() const {
     return (Kind & HasZeroBaseShadow) || AsanZeroBaseShadow;
   }
+  bool needsUnwindTables() const { return Kind & NeedsUnwindTables; }
+  bool linkCXXRuntimes() const { return LinkCXXRuntimes; }
   void addArgs(const llvm::opt::ArgList &Args,
                llvm::opt::ArgStringList &CmdArgs) const;
 
@@ -98,7 +103,7 @@ class SanitizerArgs {
 
   /// Produce an argument string from ArgList \p Args, which shows how it
   /// provides a sanitizer kind in \p Mask. For example, the argument list
-  /// "-fsanitize=thread,vptr -faddress-sanitizer" with mask \c NeedsUbsanRt
+  /// "-fsanitize=thread,vptr -fsanitize=address" with mask \c NeedsUbsanRt
   /// would produce "-fsanitize=vptr".
   static std::string lastArgumentForKind(const Driver &D,
                                          const llvm::opt::ArgList &Args,
@@ -143,4 +148,4 @@ class SanitizerArgs {
 }  // namespace driver
 }  // namespace clang
 
-#endif // CLANG_LIB_DRIVER_SANITIZERARGS_H_
+#endif

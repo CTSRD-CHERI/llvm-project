@@ -58,6 +58,27 @@ public:
                                   StringExtractorGDBRemote &response,
                                   bool send_async);
 
+    // For packets which specify a range of output to be returned,
+    // return all of the output via a series of request packets of the form
+    // <prefix>0,<size>
+    // <prefix><size>,<size>
+    // <prefix><size>*2,<size>
+    // <prefix><size>*3,<size>
+    // ...
+    // until a "$l..." packet is received, indicating the end.
+    // (size is in hex; this format is used by a standard gdbserver to
+    // return the given portion of the output specified by <prefix>;
+    // for example, "qXfer:libraries-svr4:read::fff,1000" means
+    // "return a chunk of the xml description file for shared
+    // library load addresses, where the chunk starts at offset 0xfff
+    // and continues for 0x1000 bytes").
+    // Concatenate the resulting server response packets together and
+    // return in response_string.  If any packet fails, the return value
+    // indicates that failure and the returned string value is undefined.
+    PacketResult
+    SendPacketsAndConcatenateResponses (const char *send_payload_prefix,
+                                        std::string &response_string);
+
     lldb::StateType
     SendContinuePacketAndWaitForResponse (ProcessGDBRemote *process,
                                           const char *packet_payload,
@@ -71,7 +92,7 @@ public:
     // indicates if the packet was send and any response was received
     // even in the response is UNIMPLEMENTED. If the packet failed to
     // get a response, then false is returned. This quickly tells us
-    // if we were able to connect and communicte with the remote GDB
+    // if we were able to connect and communicate with the remote GDB
     // server
     bool
     QueryNoAckModeSupported ();
@@ -138,6 +159,10 @@ public:
 
     int
     SendLaunchArchPacket (const char *arch);
+    
+    int
+    SendLaunchEventDataPacket (const char *data, bool *was_supported = NULL);
+    
     //------------------------------------------------------------------
     /// Sends a "vAttach:PID" where PID is in hex. 
     ///
@@ -180,13 +205,25 @@ public:
     /// be launched with the 'A' packet.
     ///
     /// @param[in] enable
-    ///     A boolean value indicating wether to disable ASLR or not.
+    ///     A boolean value indicating whether to disable ASLR or not.
     ///
     /// @return
     ///     Zero if the for success, or an error code for failure.
     //------------------------------------------------------------------
     int
     SetDisableASLR (bool enable);
+    
+    //------------------------------------------------------------------
+    /// Sets the DetachOnError flag to \a enable for the process controlled by the stub.
+    ///
+    /// @param[in] enable
+    ///     A boolean value indicating whether to detach on error or not.
+    ///
+    /// @return
+    ///     Zero if the for success, or an error code for failure.
+    //------------------------------------------------------------------
+    int
+    SetDetachOnError (bool enable);
 
     //------------------------------------------------------------------
     /// Sets the working directory to \a path for a process that will 
@@ -196,7 +233,7 @@ public:
     /// directory for the platform process.
     ///
     /// @param[in] path
-    ///     The path to a directory to use when launching our processs
+    ///     The path to a directory to use when launching our process
     ///
     /// @return
     ///     Zero if the for success, or an error code for failure.
@@ -248,11 +285,17 @@ public:
     const lldb_private::ArchSpec &
     GetProcessArchitecture ();
 
+    void
+    GetRemoteQSupported();
+
     bool
     GetVContSupported (char flavor);
 
     bool
     GetpPacketSupported (lldb::tid_t tid);
+
+    bool
+    GetxPacketSupported ();
 
     bool
     GetVAttachOrWaitSupported ();
@@ -359,6 +402,21 @@ public:
     bool
     SetCurrentThreadForRun (uint64_t tid);
 
+    bool
+    GetQXferAuxvReadSupported ();
+
+    bool
+    GetQXferLibrariesReadSupported ();
+
+    bool
+    GetQXferLibrariesSVR4ReadSupported ();
+
+    uint64_t
+    GetRemoteMaxPacketSize();
+
+    bool
+    GetAugmentedLibrariesSVR4ReadSupported ();
+
     lldb_private::LazyBool
     SupportsAllocDeallocMemory () // const
     {
@@ -455,7 +513,19 @@ public:
     
     bool
     RestoreRegisterState (lldb::tid_t tid, uint32_t save_id);
+
+    const char *
+    GetGDBServerProgramName();
     
+    uint32_t
+    GetGDBServerProgramVersion();
+
+    bool
+    AvoidGPackets(ProcessGDBRemote *process);
+
+    bool
+    GetThreadExtendedInfoSupported();
+
 protected:
 
     PacketResult
@@ -465,6 +535,9 @@ protected:
 
     bool
     GetCurrentProcessInfo ();
+
+    bool
+    GetGDBServerVersion();
 
     //------------------------------------------------------------------
     // Classes that inherit from GDBRemoteCommunicationClient can see and modify these
@@ -479,7 +552,9 @@ protected:
     lldb_private::LazyBool m_supports_vCont_s;
     lldb_private::LazyBool m_supports_vCont_S;
     lldb_private::LazyBool m_qHostInfo_is_valid;
+    lldb_private::LazyBool m_curr_pid_is_valid;
     lldb_private::LazyBool m_qProcessInfo_is_valid;
+    lldb_private::LazyBool m_qGDBServerVersion_is_valid;
     lldb_private::LazyBool m_supports_alloc_dealloc_memory;
     lldb_private::LazyBool m_supports_memory_region_info;
     lldb_private::LazyBool m_supports_watchpoint_support_info;
@@ -488,8 +563,15 @@ protected:
     lldb_private::LazyBool m_attach_or_wait_reply;
     lldb_private::LazyBool m_prepare_for_reg_writing_reply;
     lldb_private::LazyBool m_supports_p;
+    lldb_private::LazyBool m_supports_x;
+    lldb_private::LazyBool m_avoid_g_packets;
     lldb_private::LazyBool m_supports_QSaveRegisterState;
-    
+    lldb_private::LazyBool m_supports_qXfer_auxv_read;
+    lldb_private::LazyBool m_supports_qXfer_libraries_read;
+    lldb_private::LazyBool m_supports_qXfer_libraries_svr4_read;
+    lldb_private::LazyBool m_supports_augmented_libraries_svr4_read;
+    lldb_private::LazyBool m_supports_jThreadExtendedInfo;
+
     bool
         m_supports_qProcessInfoPID:1,
         m_supports_qfProcessInfo:1,
@@ -504,7 +586,7 @@ protected:
         m_supports_QEnvironment:1,
         m_supports_QEnvironmentHexEncoded:1;
     
-
+    lldb::pid_t m_curr_pid;
     lldb::tid_t m_curr_tid;         // Current gdb remote protocol thread index for all other operations
     lldb::tid_t m_curr_tid_run;     // Current gdb remote protocol thread index for continue, step, etc
 
@@ -531,7 +613,10 @@ protected:
     std::string m_os_build;
     std::string m_os_kernel;
     std::string m_hostname;
+    std::string m_gdb_server_name; // from reply to qGDBServerVersion, empty if qGDBServerVersion is not supported
+    uint32_t m_gdb_server_version; // from reply to qGDBServerVersion, zero if qGDBServerVersion is not supported
     uint32_t m_default_packet_timeout;
+    uint64_t m_max_packet_size;  // as returned by qSupported
     
     bool
     DecodeProcessInfoResponse (StringExtractorGDBRemote &response, 

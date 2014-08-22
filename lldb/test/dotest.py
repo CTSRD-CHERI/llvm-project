@@ -20,9 +20,9 @@ Type:
 for available options.
 """
 
-import atexit
 import commands
 import os
+import errno
 import platform
 import progress
 import signal
@@ -101,7 +101,8 @@ validCategories = {
 'pyapi':'Tests related to the Python API',
 'basic_process': 'Basic process execution sniff tests.',
 'cmdline' : 'Tests related to the LLDB command-line interface',
-'dyntype' : 'Tests related to dynamic type support'
+'dyntype' : 'Tests related to dynamic type support',
+'stresstest' : 'Tests related to stressing lldb limits'
 }
 
 # The test suite.
@@ -124,6 +125,13 @@ just_do_benchmarks_test = False
 # tests from running.
 dont_do_dsym_test = "linux" in sys.platform or "freebsd" in sys.platform
 dont_do_dwarf_test = False
+
+# Don't do debugserver tests on everything except OS X.
+# Something for Windows here?
+dont_do_debugserver_test = "linux" in sys.platform or "freebsd" in sys.platform
+
+# Don't do lldb-gdbserver (llgs) tests on anything except Linux.
+dont_do_llgs_test = not ("linux" in sys.platform)
 
 # The blacklist is optional (-b blacklistFile) and allows a central place to skip
 # testclass's and/or testclass.testmethod's.
@@ -181,7 +189,7 @@ dumpSysPath = False
 bmExecutable = None
 # The breakpoint specification of bmExecutable, as specified by the '-x' option.
 bmBreakpointSpec = None
-# The benchamrk iteration count, as specified by the '-y' option.
+# The benchmark iteration count, as specified by the '-y' option.
 bmIterationCount = -1
 
 # By default, don't exclude any directories.  Use '-X' to add one excluded directory.
@@ -267,7 +275,7 @@ def usage(parser):
         print """
 Examples:
 
-This is an example of using the -f option to pinpoint to a specfic test class
+This is an example of using the -f option to pinpoint to a specific test class
 and test method to be run:
 
 $ ./dotest.py -f ClassTypesTestCase.test_with_dsym_and_run_command
@@ -391,7 +399,10 @@ setCrashInfoHook = None
 
 def deleteCrashInfoDylib(dylib_path):
     try:
-        os.remove(dylib_path)
+        # Need to modify this to handle multiple tests running at the same time.  If we move this
+        # to the test's real dir, all should be we run sequentially within a test directory.
+        # os.remove(dylib_path)
+        None
     finally:
         pass
 
@@ -407,7 +418,6 @@ def setupCrashInfoHook():
         cmd = "xcrun clang %s -o %s -framework Python -Xlinker -dylib -iframework /System/Library/Frameworks/ -Xlinker -F /System/Library/Frameworks/" % (dylib_src,dylib_dst)
         if subprocess.call(cmd,shell=True) == 0 and os.path.exists(dylib_dst):
             setCrashInfoHook = setCrashInfoHook_Mac
-            atexit.register(deleteCrashInfoDylib,dylib_dst)
     else:
         pass
 
@@ -566,10 +576,7 @@ def parseOptionsAndInitTestdirs():
             if arch.startswith('arm') and platform_system == 'Darwin':
                 os.environ['SDKROOT'] = commands.getoutput('xcodebuild -version -sdk iphoneos.internal Path')
     else:
-        if (platform_system == 'Darwin' or (platform_system == 'Linux' and compilers == ['clang'])) and platform_machine == 'x86_64':
-            archs = ['x86_64', 'i386']
-        else:
-            archs = [platform_machine]
+        archs = [platform_machine]
 
     if args.categoriesList:
         categoriesList = set(validate_categories(args.categoriesList))
@@ -873,10 +880,13 @@ def setupSysPath():
     pluginPath = os.path.join(scriptPath, 'plugins')
     pexpectPath = os.path.join(scriptPath, 'pexpect-2.4')
 
-    # Append script dir, plugin dir, and pexpect dir to the sys.path.
+    # Put embedded pexpect at front of the load path so we ensure we
+    # use that version.
+    sys.path.insert(0, pexpectPath)
+
+    # Append script dir and plugin dir to the sys.path.
     sys.path.append(scriptPath)
     sys.path.append(pluginPath)
-    sys.path.append(pexpectPath)
 
     # This is our base name component.
     base = os.path.abspath(os.path.join(scriptPath, os.pardir))
@@ -989,19 +999,19 @@ def setupSysPath():
         
         # If our lldb supports the -P option, use it to find the python path:
         init_in_python_dir = 'lldb/__init__.py'
-        import pexpect
         lldb_dash_p_result = None
 
         if lldbHere:
-            lldb_dash_p_result = pexpect.run("%s -P"%(lldbHere))
+            lldb_dash_p_result = subprocess.check_output([lldbHere, "-P"], stderr=subprocess.STDOUT)
         elif lldbExec:
-            lldb_dash_p_result = pexpect.run("%s -P"%(lldbExec))
+            lldb_dash_p_result = subprocess.check_output([lldbExec, "-P"], stderr=subprocess.STDOUT)
 
-        if lldb_dash_p_result and not lldb_dash_p_result.startswith(("<", "lldb: invalid option:")):
+        if lldb_dash_p_result and not lldb_dash_p_result.startswith(("<", "lldb: invalid option:")) \
+							  and not lldb_dash_p_result.startswith("Traceback"):
             lines = lldb_dash_p_result.splitlines()
-            if len(lines) == 1 and os.path.isfile(os.path.join(lines[0], init_in_python_dir)):
+            if len(lines) >= 1 and os.path.isfile(os.path.join(lines[0], init_in_python_dir)):
                 lldbPath = lines[0]
-                if "linux" in sys.platform:
+                if "freebsd" in sys.platform or "linux" in sys.platform:
                     os.environ['LLDB_LIB_DIR'] = os.path.join(lldbPath, '..', '..')
         
         if not lldbPath: 
@@ -1170,10 +1180,7 @@ def lldbLoggings():
             raise Exception('log enable failed (check GDB_REMOTE_LOG env variable)')
 
 def getMyCommandLine():
-    ps = subprocess.Popen([which('ps'), '-o', "command=CMD", str(os.getpid())], stdout=subprocess.PIPE).communicate()[0]
-    lines = ps.split('\n')
-    cmd_line = lines[1]
-    return cmd_line
+    return ' '.join(sys.argv)
 
 # ======================================== #
 #                                          #
@@ -1191,6 +1198,11 @@ def checkDsymForUUIDIsNotOn():
         print "Disable automatic lookup and caching of dSYMs before running the test suite!"
         print "Exiting..."
         sys.exit(0)
+
+def exitTestSuite(exitCode = None):
+    lldb.SBDebugger.Terminate()
+    if exitCode:
+        sys.exit(exitCode)
 
 # On MacOS X, check to make sure that domain for com.apple.DebugSymbols defaults
 # does not exist before proceeding to running the test suite.
@@ -1223,11 +1235,7 @@ for testdir in testdirs:
 
 # For the time being, let's bracket the test runner within the
 # lldb.SBDebugger.Initialize()/Terminate() pair.
-import lldb, atexit
-# Update: the act of importing lldb now executes lldb.SBDebugger.Initialize(),
-# there's no need to call it a second time.
-#lldb.SBDebugger.Initialize()
-atexit.register(lambda: lldb.SBDebugger.Terminate())
+import lldb
 
 # Create a singleton SBDebugger in the lldb namespace.
 lldb.DBG = lldb.SBDebugger.Create()
@@ -1237,7 +1245,7 @@ if lldb_platform_name:
     lldb.remote_platform = lldb.SBPlatform(lldb_platform_name)
     if not lldb.remote_platform.IsValid():
         print "error: unable to create the LLDB platform named '%s'." % (lldb_platform_name)
-        sys.exit(1)
+        exitTestSuite(1)
     if lldb_platform_url:
         # We must connect to a remote platform if a LLDB platform URL was specified
         print "Connecting to remote platform '%s' at '%s'..." % (lldb_platform_name, lldb_platform_url)
@@ -1247,7 +1255,7 @@ if lldb_platform_name:
             print "Connected."
         else:
             print "error: failed to connect to remote platform using URL '%s': %s" % (lldb_platform_url, err)
-            sys.exit(1)
+            exitTestSuite(1)
     
     if lldb_platform_working_dir:
         print "Setting remote platform working directory to '%s'..." % (lldb_platform_working_dir)
@@ -1296,6 +1304,8 @@ lldb.just_do_python_api_test = just_do_python_api_test
 lldb.just_do_benchmarks_test = just_do_benchmarks_test
 lldb.dont_do_dsym_test = dont_do_dsym_test
 lldb.dont_do_dwarf_test = dont_do_dwarf_test
+lldb.dont_do_debugserver_test = dont_do_debugserver_test
+lldb.dont_do_llgs_test = dont_do_llgs_test
 
 # Do we need to skip build and cleanup?
 lldb.skip_build_and_cleanup = skip_build_and_cleanup
@@ -1333,7 +1343,11 @@ if not noHeaders:
     sys.stderr.write("Command invoked: %s\n" % getMyCommandLine())
 
 if not os.path.isdir(sdir_name):
-    os.mkdir(sdir_name)
+    try:
+        os.mkdir(sdir_name)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
 where_to_save_session = os.getcwd()
 fname = os.path.join(sdir_name, "TestStarted")
 with open(fname, "w") as f:
@@ -1382,7 +1396,7 @@ if not parsable:
 
 if not compilers or len(compilers) == 0:
     print "No eligible compiler found, exiting."
-    sys.exit(1)
+    exitTestSuite(1)
 
 if isinstance(compilers, list) and len(compilers) >= 1:
     iterCompilers = True
@@ -1478,7 +1492,7 @@ for ia in range(len(archs) if iterArchs else 1):
             Overwrite addError(), addFailure(), and addExpectedFailure() methods
             to enable each test instance to track its failure/error status.  It
             is used in the LLDB test framework to emit detailed trace messages
-            to a log file for easier human inspection of test failres/errors.
+            to a log file for easier human inspection of test failures/errors.
             """
             __singleton__ = None
             __ignore_singleton__ = False
@@ -1723,4 +1737,4 @@ if ("LLDB_TESTSUITE_FORCE_FINISH" in os.environ):
     subprocess.Popen(["/bin/sh", "-c", "kill %s; exit 0" % (os.getpid())])
 
 # Exiting.
-sys.exit(failed)
+exitTestSuite()

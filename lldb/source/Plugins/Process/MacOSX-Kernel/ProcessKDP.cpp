@@ -22,6 +22,7 @@
 #include "lldb/Core/UUID.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/Symbols.h"
+#include "lldb/Host/Socket.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Interpreter/CommandObjectMultiword.h"
@@ -272,7 +273,8 @@ ProcessKDP::DoConnectRemote (Stream *strm, const char *remote_url)
 
     if (conn_ap->IsConnected())
     {
-        const uint16_t reply_port = conn_ap->GetReadPort ();
+        const Socket& socket = static_cast<const Socket&>(*conn_ap->GetReadObject());
+        const uint16_t reply_port = socket.GetPortNumber();
 
         if (reply_port != 0)
         {
@@ -297,7 +299,41 @@ ProcessKDP::DoConnectRemote (Stream *strm, const char *remote_url)
 
                     if (m_comm.RemoteIsEFI ())
                     {
-                        m_dyld_plugin_name = DynamicLoaderStatic::GetPluginNameStatic();
+                        // Select an invalid plugin name for the dynamic loader so one doesn't get used
+                        // since EFI does its own manual loading via python scripting
+                        static ConstString g_none_dynamic_loader("none");
+                        m_dyld_plugin_name = g_none_dynamic_loader;
+
+                        if (kernel_uuid.IsValid()) {
+                            // If EFI passed in a UUID= try to lookup UUID
+                            // The slide will not be provided. But the UUID
+                            // lookup will be used to launch EFI debug scripts
+                            // from the dSYM, that can load all of the symbols.
+                            ModuleSpec module_spec;
+                            module_spec.GetUUID() = kernel_uuid;
+                            module_spec.GetArchitecture() = m_target.GetArchitecture();
+
+                            // Lookup UUID locally, before attempting dsymForUUID like action
+                            module_spec.GetSymbolFileSpec() = Symbols::LocateExecutableSymbolFile(module_spec);
+                            if (module_spec.GetSymbolFileSpec())
+                                 module_spec.GetFileSpec() = Symbols::LocateExecutableObjectFile (module_spec);
+                            if (!module_spec.GetSymbolFileSpec() || !module_spec.GetSymbolFileSpec())
+                                 Symbols::DownloadObjectAndSymbolFile (module_spec, true);
+
+                            if (module_spec.GetFileSpec().Exists())
+                            {
+                                ModuleSP module_sp(new Module (module_spec.GetFileSpec(), m_target.GetArchitecture()));
+                                if (module_sp.get() && module_sp->MatchesModuleSpec (module_spec))
+                                {
+                                    // Get the current target executable
+                                    ModuleSP exe_module_sp (m_target.GetExecutableModule ());
+
+                                    // Make sure you don't already have the right module loaded and they will be uniqued
+                                    if (exe_module_sp.get() != module_sp.get())
+                                        m_target.SetExecutableModule (module_sp, false);
+                                }
+                            }
+                        }
                     }
                     else if (m_comm.RemoteIsDarwinKernel ())
                     {
@@ -394,8 +430,10 @@ ProcessKDP::DoAttachToProcessWithName (const char *process_name, const ProcessAt
 
 
 void
-ProcessKDP::DidAttach ()
+ProcessKDP::DidAttach (ArchSpec &process_arch)
 {
+    Process::DidAttach(process_arch);
+    
     Log *log (ProcessKDPLog::GetLogIfAllCategoriesSet (KDP_LOG_PROCESS));
     if (log)
         log->Printf ("ProcessKDP::DidAttach()");
@@ -599,10 +637,6 @@ ProcessKDP::DoDetach(bool keep_stopped)
     }
     else
     {
-        DisableAllBreakpointSites ();
-        
-        m_thread_list.DiscardThreadPlans();
-        
         // If we are going to keep the target stopped, then don't send the disconnect message.
         if (!keep_stopped && m_comm.IsConnected())
         {
@@ -651,8 +685,32 @@ ProcessKDP::IsAlive ()
 size_t
 ProcessKDP::DoReadMemory (addr_t addr, void *buf, size_t size, Error &error)
 {
+    uint8_t *data_buffer = (uint8_t *) buf;
     if (m_comm.IsConnected())
-        return m_comm.SendRequestReadMemory (addr, buf, size, error);
+    {
+        const size_t max_read_size = 512;
+        size_t total_bytes_read = 0;
+
+        // Read the requested amount of memory in 512 byte chunks
+        while (total_bytes_read < size)
+        {
+            size_t bytes_to_read_this_request = size - total_bytes_read;
+            if (bytes_to_read_this_request > max_read_size)
+            {
+                bytes_to_read_this_request = max_read_size;
+            }
+            size_t bytes_read = m_comm.SendRequestReadMemory (addr + total_bytes_read, 
+                                                              data_buffer + total_bytes_read, 
+                                                              bytes_to_read_this_request, error);
+            total_bytes_read += bytes_read;
+            if (error.Fail() || bytes_read == 0)
+            {
+                return total_bytes_read;
+            }
+        }
+
+        return total_bytes_read;
+    }
     error.SetErrorString ("not connected");
     return 0;
 }

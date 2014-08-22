@@ -1,5 +1,5 @@
 ; RUN: opt %loadPolly -basicaa -polly-dependences -analyze -polly-dependences-analysis-type=value-based < %s | FileCheck %s -check-prefix=VALUE
-; RUN: opt %loadPolly -basicaa -polly-dependences -analyze -polly-dependences-analysis-type=memory-based < %s | FileCheck %s -check-prefix=MEMORY
+; RUN: opt %loadPolly -basicaa -polly-dependences -analyze -polly-dependences-analysis-type=memory-based -polly-delinearize < %s | FileCheck %s -check-prefix=MEMORY
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -73,8 +73,8 @@ do.end45:                                         ; preds = %do.cond42
 ; VALUE:  { Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, 1 + i2] : i0 >= 0 and i0 <= 35 and i1 >= 0 and i1 <= 35 and i2 >= 0 and i2 <= 34 }
 
 ; MEMORY: RAW dependences:
-; MEMORY:   { Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, o2] : i0 >= 0 and i0 <= 35 and i1 >= 0 and i1 <= 35 and i2 >= 0 and i2 <= 35 and o2 >= 1 + i2 and o2 <= 35 and o2 >= 0 }
+; MEMORY:  { Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, o2] : i0 <= 35 and i0 >= 0 and i1 <= 35 and i1 >= 0 and i2 >= 0 and o2 >= 1 + i2 and o2 <= 35 and o2 >= 0 }
 ; MEMORY: WAR dependences:
-; MEMORY:   { Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, o2] : i0 >= 0 and i0 <= 35 and i1 >= 0 and i1 <= 35 and i2 >= 0 and i2 <= 35 and o2 >= 1 + i2 and o2 <= 35 and o2 >= 0 }
+; MEMORY:  { Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, o2] : i0 <= 35 and i0 >= 0 and i1 <= 35 and i1 >= 0 and i2 >= 0 and o2 >= 1 + i2 and o2 <= 35 and o2 >= 0 }
 ; MEMORY: WAW dependences:
-; MEMORY:   { Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, o2] : i0 >= 0 and i0 <= 35 and i1 >= 0 and i1 <= 35 and i2 >= 0 and i2 <= 35 and o2 >= 1 + i2 and o2 <= 35 and o2 >= 0 }
+; MEMORY:  { Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, o2] : i0 <= 35 and i0 >= 0 and i1 <= 35 and i1 >= 0 and i2 >= 0 and o2 >= 1 + i2 and o2 <= 35 and o2 >= 0 }

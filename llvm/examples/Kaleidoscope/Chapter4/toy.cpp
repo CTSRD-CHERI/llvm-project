@@ -572,11 +572,13 @@ int main() {
   getNextToken();
 
   // Make the module, which holds all the code.
-  TheModule = new Module("my cool jit", Context);
+  std::unique_ptr<Module> Owner = make_unique<Module>("my cool jit", Context);
+  TheModule = Owner.get();
 
   // Create the JIT.  This takes ownership of the module.
   std::string ErrStr;
-  TheExecutionEngine = EngineBuilder(TheModule).setErrorStr(&ErrStr).create();
+  TheExecutionEngine =
+      EngineBuilder(std::move(Owner)).setErrorStr(&ErrStr).create();
   if (!TheExecutionEngine) {
     fprintf(stderr, "Could not create ExecutionEngine: %s\n", ErrStr.c_str());
     exit(1);
@@ -586,7 +588,8 @@ int main() {
 
   // Set up the optimizer pipeline.  Start with registering info about how the
   // target lays out data structures.
-  OurFPM.add(new DataLayout(*TheExecutionEngine->getDataLayout()));
+  TheModule->setDataLayout(TheExecutionEngine->getDataLayout());
+  OurFPM.add(new DataLayoutPass(TheModule));
   // Provide basic AliasAnalysis support for GVN.
   OurFPM.add(createBasicAliasAnalysisPass());
   // Do simple "peephole" optimizations and bit-twiddling optzns.

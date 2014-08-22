@@ -1,6 +1,6 @@
 ; RUN: opt < %s -instcombine -S | FileCheck %s
 
-target datalayout = "e-p:64:64-p1:16:16-p2:32:32:32"
+target datalayout = "e-p:64:64-p1:16:16-p2:32:32:32-p3:64:64:64"
 
 %intstruct = type { i32 }
 %pair = type { i32, i32 }
@@ -580,6 +580,16 @@ define i32 addrspace(1)* @test33_array_struct_as1([10 x %struct.Key] addrspace(1
   ret i32 addrspace(1)* %C
 }
 
+define i32 addrspace(1)* @test33_addrspacecast(%struct.Key* %A) {
+; CHECK-LABEL: @test33_addrspacecast(
+; CHECK: %C = getelementptr %struct.Key* %A, i64 0, i32 0, i32 1
+; CHECK-NEXT: addrspacecast i32* %C to i32 addrspace(1)*
+; CHECK-NEXT: ret
+  %B = addrspacecast %struct.Key* %A to %struct.anon addrspace(1)*
+  %C = getelementptr %struct.anon addrspace(1)* %B, i32 0, i32 2
+  ret i32 addrspace(1)* %C
+}
+
 	%T2 = type { i8*, i8 }
 define i8* @test34(i8* %Val, i64 %V) nounwind {
 entry:
@@ -728,6 +738,20 @@ define i64 @test_gep_bitcast_array_same_size_element([100 x double]* %arr, i64 %
   ret i64 %x
 }
 
+; gep should be done in the original address space.
+define i64 @test_gep_bitcast_array_same_size_element_addrspacecast([100 x double]* %arr, i64 %N) {
+; CHECK-LABEL: @test_gep_bitcast_array_same_size_element_addrspacecast(
+; CHECK: getelementptr [100 x double]* %arr, i64 0, i64 %V
+; CHECK-NEXT: bitcast double*
+; CHECK-NEXT: %t = addrspacecast i64*
+; CHECK: load i64 addrspace(3)* %t
+  %cast = addrspacecast [100 x double]* %arr to i64 addrspace(3)*
+  %V = mul i64 %N, 8
+  %t = getelementptr i64 addrspace(3)* %cast, i64 %V
+  %x = load i64 addrspace(3)* %t
+  ret i64 %x
+}
+
 ; The element size of the array is different the element size of the pointer
 define i8 @test_gep_bitcast_array_different_size_element([100 x double]* %arr, i64 %N) {
 ; CHECK-LABEL: @test_gep_bitcast_array_different_size_element(
@@ -787,6 +811,27 @@ define i16 @test41([3 x i32] addrspace(1)* %array) {
 
 ; CHECK-LABEL: @test41(
 ; CHECK-NEXT: ret i16 8
+}
+
+define i32 addrspace(1)* @ascast_0_gep(i32* %p) nounwind {
+; CHECK-LABEL: @ascast_0_gep(
+; CHECK-NOT: getelementptr
+; CHECK: ret
+  %gep = getelementptr i32* %p, i32 0
+  %x = addrspacecast i32* %gep to i32 addrspace(1)*
+  ret i32 addrspace(1)* %x
+}
+
+; Do not merge the GEP and the addrspacecast, because it would undo the
+; addrspacecast canonicalization.
+define i32 addrspace(1)* @ascast_0_0_gep([128 x i32]* %p) nounwind {
+; CHECK-LABEL: @ascast_0_0_gep(
+; CHECK-NEXT: getelementptr [128 x i32]
+; CHECK-NEXT: addrspacecast i32*
+; CHECK-NEXT: ret i32 addrspace(1)*
+  %gep = getelementptr [128 x i32]* %p, i32 0, i32 0
+  %x = addrspacecast i32* %gep to i32 addrspace(1)*
+  ret i32 addrspace(1)* %x
 }
 
 ; CHECK: attributes [[NUW]] = { nounwind }

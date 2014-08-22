@@ -8,7 +8,7 @@
 // CHECK-V7: __ARMEL__ 1
 // CHECK-V7: __ARM_ARCH 7
 // CHECK-V7: __ARM_ARCH_7A__ 1
-// CHECK-NOT-V7: __ARM_FEATURE_CRC32
+// CHECK-V7-NOT: __ARM_FEATURE_CRC32
 
 // RUN: %clang -target armv8a -mfloat-abi=hard -x c -E -dM %s | FileCheck --check-prefix=CHECK-V8-BAREHF %s
 // CHECK-V8-BAREHF: __ARMEL__ 1
@@ -68,6 +68,15 @@
 // RUN: %clang -target armv8a-eabi -x c -E -dM %s -o - | FileCheck --check-prefix=THUMBV8A-EABI %s
 // THUMBV8A-EABI:#define __ARM_ARCH_EXT_IDIV__ 1
 
+// RUN: %clang -target arm-none-linux-gnu -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-DEFS %s
+// CHECK-DEFS:#define __ARM_SIZEOF_MINIMAL_ENUM 4
+// CHECK-DEFS:#define __ARM_SIZEOF_WCHAR_T 4
+
+// RUN: %clang -target arm-none-linux-gnu -fshort-wchar -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-SHORTWCHAR %s
+// CHECK-SHORTWCHAR:#define __ARM_SIZEOF_WCHAR_T 2
+
+// RUN: %clang -target arm-none-linux-gnu -fshort-enums -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-SHORTENUMS %s
+// CHECK-SHORTENUMS:#define __ARM_SIZEOF_MINIMAL_ENUM 1
 
 // Test that -mhwdiv has the right effect for a target CPU which has hwdiv enabled by default.
 // RUN: %clang -target armv7 -mcpu=cortex-a15 -x c -E -dM %s -o - | FileCheck --check-prefix=DEFAULTHWDIV-ARM %s
@@ -139,7 +148,7 @@
 // RUN: %clang -target armv7 -mthumb -mcpu=cortex-a5 -x c -E -dM %s -o - | FileCheck --check-prefix=A5 %s
 // A5:#define __ARM_ARCH 7
 // A5:#define __ARM_ARCH_7A__ 1
-// A5:#define __ARM_ARCH_PROFILE A
+// A5:#define __ARM_ARCH_PROFILE 'A'
 
 // Test whether predefines are as expected when targeting cortex-a7.
 // RUN: %clang -target armv7 -mcpu=cortex-a7 -x c -E -dM %s -o - | FileCheck --check-prefix=A7 %s
@@ -147,7 +156,7 @@
 // A7:#define __ARM_ARCH 7
 // A7:#define __ARM_ARCH_7A__ 1
 // A7:#define __ARM_ARCH_EXT_IDIV__ 1
-// A7:#define __ARM_ARCH_PROFILE A
+// A7:#define __ARM_ARCH_PROFILE 'A'
 
 // Test whether predefines are as expected when targeting cortex-a8.
 // RUN: %clang -target armv7 -mcpu=cortex-a8 -x c -E -dM %s -o - | FileCheck --check-prefix=A8-ARM %s
@@ -181,7 +190,7 @@
 // A12:#define __ARM_ARCH 7
 // A12:#define __ARM_ARCH_7A__ 1
 // A12:#define __ARM_ARCH_EXT_IDIV__ 1
-// A12:#define __ARM_ARCH_PROFILE A
+// A12:#define __ARM_ARCH_PROFILE 'A'
 
 // Test whether predefines are as expected when targeting cortex-a15.
 // RUN: %clang -target armv7 -mcpu=cortex-a15 -x c -E -dM %s -o - | FileCheck --check-prefix=A15-ARM %s

@@ -16,23 +16,13 @@
 C++ linux memory layout:
 0000 0000 0000 - 03c0 0000 0000: protected
 03c0 0000 0000 - 1000 0000 0000: shadow
-1000 0000 0000 - 6000 0000 0000: protected
+1000 0000 0000 - 3000 0000 0000: protected
+3000 0000 0000 - 4000 0000 0000: metainfo (memory blocks and sync objects)
+4000 0000 0000 - 6000 0000 0000: protected
 6000 0000 0000 - 6200 0000 0000: traces
 6200 0000 0000 - 7d00 0000 0000: -
 7d00 0000 0000 - 7e00 0000 0000: heap
 7e00 0000 0000 - 7fff ffff ffff: modules and main thread stack
-
-C++ COMPAT linux memory layout:
-0000 0000 0000 - 0400 0000 0000: protected
-0400 0000 0000 - 1000 0000 0000: shadow
-1000 0000 0000 - 2900 0000 0000: protected
-2900 0000 0000 - 2c00 0000 0000: modules
-2c00 0000 0000 - 6000 0000 0000: -
-6000 0000 0000 - 6200 0000 0000: traces
-6200 0000 0000 - 7d00 0000 0000: -
-7d00 0000 0000 - 7e00 0000 0000: heap
-7e00 0000 0000 - 7f00 0000 0000: -
-7f00 0000 0000 - 7fff ffff ffff: main thread stack
 
 Go linux and darwin memory layout:
 0000 0000 0000 - 0000 1000 0000: executable
@@ -40,7 +30,9 @@ Go linux and darwin memory layout:
 00c0 0000 0000 - 00e0 0000 0000: heap
 00e0 0000 0000 - 1000 0000 0000: -
 1000 0000 0000 - 1380 0000 0000: shadow
-1460 0000 0000 - 6000 0000 0000: -
+1460 0000 0000 - 2000 0000 0000: -
+3000 0000 0000 - 4000 0000 0000: metainfo (memory blocks and sync objects)
+4000 0000 0000 - 6000 0000 0000: -
 6000 0000 0000 - 6200 0000 0000: traces
 6200 0000 0000 - 7fff ffff ffff: -
 
@@ -51,7 +43,8 @@ Go windows memory layout:
 00e0 0000 0000 - 0100 0000 0000: -
 0100 0000 0000 - 0560 0000 0000: shadow
 0560 0000 0000 - 0760 0000 0000: traces
-0760 0000 0000 - 07ff ffff ffff: -
+0760 0000 0000 - 07d0 0000 0000: metainfo (memory blocks and sync objects)
+07d0 0000 0000 - 07ff ffff ffff: -
 */
 
 #ifndef TSAN_PLATFORM_H
@@ -68,16 +61,16 @@ static const uptr kLinuxAppMemBeg = 0x000000000000ULL;
 static const uptr kLinuxAppMemEnd = 0x04dfffffffffULL;
 # if SANITIZER_WINDOWS
 static const uptr kLinuxShadowMsk = 0x010000000000ULL;
-# else
+static const uptr kMetaShadow     = 0x076000000000ULL;
+static const uptr kMetaSize       = 0x007000000000ULL;
+# else  // if SANITIZER_WINDOWS
 static const uptr kLinuxShadowMsk = 0x200000000000ULL;
-# endif
-// TSAN_COMPAT_SHADOW is intended for COMPAT virtual memory layout,
-// when memory addresses are of the 0x2axxxxxxxxxx form.
-// The option is enabled with 'setarch x86_64 -L'.
-#elif defined(TSAN_COMPAT_SHADOW) && TSAN_COMPAT_SHADOW
-static const uptr kLinuxAppMemBeg = 0x290000000000ULL;
-static const uptr kLinuxAppMemEnd = 0x7fffffffffffULL;
-#else
+static const uptr kMetaShadow     = 0x300000000000ULL;
+static const uptr kMetaSize       = 0x100000000000ULL;
+# endif  // if SANITIZER_WINDOWS
+#else  // defined(TSAN_GO)
+static const uptr kMetaShadow     = 0x300000000000ULL;
+static const uptr kMetaSize       = 0x100000000000ULL;
 static const uptr kLinuxAppMemBeg = 0x7cf000000000ULL;
 static const uptr kLinuxAppMemEnd = 0x7fffffffffffULL;
 #endif
@@ -94,10 +87,16 @@ const uptr kTraceMemSize = 0x020000000000ULL;
 // This has to be a macro to allow constant initialization of constants below.
 #ifndef TSAN_GO
 #define MemToShadow(addr) \
-    (((addr) & ~(kLinuxAppMemMsk | (kShadowCell - 1))) * kShadowCnt)
+    ((((uptr)addr) & ~(kLinuxAppMemMsk | (kShadowCell - 1))) * kShadowCnt)
+#define MemToMeta(addr) \
+    (u32*)(((((uptr)addr) & ~(kLinuxAppMemMsk | (kMetaShadowCell - 1))) \
+    / kMetaShadowCell * kMetaShadowSize) | kMetaShadow)
 #else
 #define MemToShadow(addr) \
-    ((((addr) & ~(kShadowCell - 1)) * kShadowCnt) | kLinuxShadowMsk)
+    (((((uptr)addr) & ~(kShadowCell - 1)) * kShadowCnt) | kLinuxShadowMsk)
+#define MemToMeta(addr) \
+    (u32*)(((((uptr)addr) & ~(kMetaShadowCell - 1)) \
+    / kMetaShadowCell * kMetaShadowSize) | kMetaShadow)
 #endif
 
 static const uptr kLinuxShadowBeg = MemToShadow(kLinuxAppMemBeg);
@@ -105,7 +104,11 @@ static const uptr kLinuxShadowEnd =
     MemToShadow(kLinuxAppMemEnd) | 0xff;
 
 static inline bool IsAppMem(uptr mem) {
+#if defined(TSAN_GO)
+  return mem <= kLinuxAppMemEnd;
+#else
   return mem >= kLinuxAppMemBeg && mem <= kLinuxAppMemEnd;
+#endif
 }
 
 static inline bool IsShadowMem(uptr mem) {
@@ -121,27 +124,17 @@ static inline uptr ShadowToMem(uptr shadow) {
 #endif
 }
 
-// For COMPAT mapping returns an alternative address
-// that mapped to the same shadow address.
-// COMPAT mapping is not quite one-to-one.
-static inline uptr AlternativeAddress(uptr addr) {
-#if defined(TSAN_COMPAT_SHADOW) && TSAN_COMPAT_SHADOW
-  return (addr & ~kLinuxAppMemMsk) | 0x280000000000ULL;
-#else
-  return 0;
-#endif
-}
-
 void FlushShadowMemory();
-void WriteMemoryProfile(char *buf, uptr buf_size);
+void WriteMemoryProfile(char *buf, uptr buf_size, uptr nthread, uptr nlive);
 uptr GetRSS();
 
-const char *InitializePlatform();
+void InitializePlatform();
 void FinalizePlatform();
 
 // The additional page is to catch shadow stack overflow as paging fault.
-const uptr kTotalTraceSize = (kTraceSize * sizeof(Event) + sizeof(Trace) + 4096
-    + 4095) & ~4095;
+// Windows wants 64K alignment for mmaps.
+const uptr kTotalTraceSize = (kTraceSize * sizeof(Event) + sizeof(Trace)
+    + (64 << 10) + (64 << 10) - 1) & ~((64 << 10) - 1);
 
 uptr ALWAYS_INLINE GetThreadTrace(int tid) {
   uptr p = kTraceMemBegin + (uptr)tid * kTotalTraceSize;
@@ -156,13 +149,18 @@ uptr ALWAYS_INLINE GetThreadTraceHeader(int tid) {
   return p;
 }
 
-void internal_start_thread(void(*func)(void*), void *arg);
+void *internal_start_thread(void(*func)(void*), void *arg);
+void internal_join_thread(void *th);
 
 // Says whether the addr relates to a global var.
 // Guesses with high probability, may yield both false positives and negatives.
 bool IsGlobalVar(uptr addr);
 int ExtractResolvFDs(void *state, int *fds, int nfd);
 int ExtractRecvmsgFDs(void *msg, int *fds, int nfd);
+
+int call_pthread_cancel_with_cleanup(int(*fn)(void *c, void *m,
+    void *abstime), void *c, void *m, void *abstime,
+    void(*cleanup)(void *arg), void *arg);
 
 }  // namespace __tsan
 

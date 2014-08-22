@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=mips4-unknown-freebsd -o - %s -O0 | FileCheck %s
+; RUN: llc -mtriple=mips64-unknown-freebsd -o - %s -O0 | FileCheck %s
 ; ModuleID = 'printf.c'
 target datalayout = "E-m:m-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "mips4-unknown-freebsd"

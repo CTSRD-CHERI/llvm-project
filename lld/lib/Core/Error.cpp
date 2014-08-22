@@ -9,17 +9,22 @@
 
 #include "lld/Core/Error.h"
 
+#include "llvm/ADT/Twine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/Mutex.h"
+
+#include <string>
+#include <vector>
 
 using namespace lld;
 
-class _NativeReaderErrorCategory : public llvm::_do_message {
+class _NativeReaderErrorCategory : public std::error_category {
 public:
-  virtual const char* name() const {
+  const char* name() const LLVM_NOEXCEPT override {
     return "lld.native.reader";
   }
 
-  virtual std::string message(int ev) const {
+  std::string message(int ev) const override {
     if (NativeReaderError(ev) == NativeReaderError::success)
       return "Success";
     if (NativeReaderError(ev) == NativeReaderError::unknown_file_format)
@@ -35,26 +40,20 @@ public:
     llvm_unreachable("An enumerator of NativeReaderError does not have a "
                      "message defined.");
   }
-
-  virtual llvm::error_condition default_error_condition(int ev) const {
-    if (NativeReaderError(ev) == NativeReaderError::success)
-      return llvm::errc::success;
-    return llvm::errc::invalid_argument;
-  }
 };
 
-const llvm::error_category &lld::native_reader_category() {
+const std::error_category &lld::native_reader_category() {
   static _NativeReaderErrorCategory o;
   return o;
 }
 
-class _YamlReaderErrorCategory : public llvm::_do_message {
+class _YamlReaderErrorCategory : public std::error_category {
 public:
-  virtual const char* name() const {
+  const char* name() const LLVM_NOEXCEPT override {
     return "lld.yaml.reader";
   }
 
-  virtual std::string message(int ev) const {
+  std::string message(int ev) const override {
     if (YamlReaderError(ev) == YamlReaderError::success)
       return "Success";
     if (YamlReaderError(ev) == YamlReaderError::unknown_keyword)
@@ -64,24 +63,20 @@ public:
     llvm_unreachable("An enumerator of YamlReaderError does not have a "
                      "message defined.");
   }
-
-  virtual llvm::error_condition default_error_condition(int ev) const {
-    if (YamlReaderError(ev) == YamlReaderError::success)
-      return llvm::errc::success;
-    return llvm::errc::invalid_argument;
-  }
 };
 
-const llvm::error_category &lld::YamlReaderCategory() {
+const std::error_category &lld::YamlReaderCategory() {
   static _YamlReaderErrorCategory o;
   return o;
 }
 
-class _LinkerScriptReaderErrorCategory : public llvm::_do_message {
+class _LinkerScriptReaderErrorCategory : public std::error_category {
 public:
-  virtual const char *name() const { return "lld.linker-script.reader"; }
+  const char *name() const LLVM_NOEXCEPT override {
+    return "lld.linker-script.reader";
+  }
 
-  virtual std::string message(int ev) const {
+  std::string message(int ev) const override {
     LinkerScriptReaderError e = LinkerScriptReaderError(ev);
     if (e == LinkerScriptReaderError::success)
       return "Success";
@@ -91,48 +86,39 @@ public:
         "An enumerator of LinkerScriptReaderError does not have a "
         "message defined.");
   }
-
-  virtual llvm::error_condition default_error_condition(int ev) const {
-    LinkerScriptReaderError e = LinkerScriptReaderError(ev);
-    if (e == LinkerScriptReaderError::success)
-      return llvm::errc::success;
-    return llvm::errc::invalid_argument;
-  }
 };
 
-const llvm::error_category &lld::LinkerScriptReaderCategory() {
+const std::error_category &lld::LinkerScriptReaderCategory() {
   static _LinkerScriptReaderErrorCategory o;
   return o;
 }
 
-class _InputGraphErrorCategory : public llvm::_do_message {
+class _InputGraphErrorCategory : public std::error_category {
 public:
-  virtual const char *name() const { return "lld.inputGraph.parse"; }
+  const char *name() const LLVM_NOEXCEPT override {
+    return "lld.inputGraph.parse";
+  }
 
-  virtual std::string message(int ev) const {
+  std::string message(int ev) const override {
     if (InputGraphError(ev) == InputGraphError::success)
       return "Success";
     llvm_unreachable("An enumerator of InputGraphError does not have a "
                      "message defined.");
   }
-
-  virtual llvm::error_condition default_error_condition(int ev) const {
-    if (InputGraphError(ev) == InputGraphError::success)
-      return llvm::errc::success;
-    return llvm::errc::invalid_argument;
-  }
 };
 
-const llvm::error_category &lld::InputGraphErrorCategory() {
+const std::error_category &lld::InputGraphErrorCategory() {
   static _InputGraphErrorCategory i;
   return i;
 }
 
-class _ReaderErrorCategory : public llvm::_do_message {
+class _ReaderErrorCategory : public std::error_category {
 public:
-  virtual const char *name() const { return "lld.inputGraph.parse"; }
+  const char *name() const LLVM_NOEXCEPT override {
+    return "lld.inputGraph.parse";
+  }
 
-  virtual std::string message(int ev) const {
+  std::string message(int ev) const override {
     if (ReaderError(ev) == ReaderError::success)
       return "Success";
     else if (ReaderError(ev) == ReaderError::unknown_file_format)
@@ -141,15 +127,59 @@ public:
     llvm_unreachable("An enumerator of ReaderError does not have a "
                      "message defined.");
   }
-
-  virtual llvm::error_condition default_error_condition(int ev) const {
-    if (ReaderError(ev) == ReaderError::success)
-      return llvm::errc::success;
-    return llvm::errc::invalid_argument;
-  }
 };
 
-const llvm::error_category &lld::ReaderErrorCategory() {
+const std::error_category &lld::ReaderErrorCategory() {
   static _ReaderErrorCategory i;
   return i;
 }
+
+
+
+
+namespace lld {
+
+
+/// Temporary class to enable make_dynamic_error_code() until
+/// llvm::ErrorOr<> is updated to work with error encapsulations 
+/// other than error_code.
+class dynamic_error_category : public std::error_category {
+public:
+  const char *name() const LLVM_NOEXCEPT override {
+    return "lld.dynamic_error";
+  }
+
+  std::string message(int ev) const override {
+    assert(ev >= 0);
+    assert(ev < (int)_messages.size());
+    // The value is an index into the string vector.
+    return _messages[ev];
+  }
+  
+  int add(std::string msg) {
+    llvm::sys::SmartScopedLock<true> lock(_mutex);
+    // Value zero is always the successs value.
+    if (_messages.empty())
+      _messages.push_back("Success");
+    _messages.push_back(msg);
+    // Return the index of the string just appended.
+    return _messages.size() - 1;
+  }
+  
+private:
+  std::vector<std::string> _messages;
+  llvm::sys::SmartMutex<true> _mutex;
+};
+
+static dynamic_error_category categorySingleton;
+
+std::error_code make_dynamic_error_code(StringRef msg) {
+  return std::error_code(categorySingleton.add(msg), categorySingleton);
+}
+
+std::error_code make_dynamic_error_code(const Twine &msg) {
+  return std::error_code(categorySingleton.add(msg.str()), categorySingleton);
+}
+
+}
+

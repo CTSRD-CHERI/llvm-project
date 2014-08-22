@@ -12,8 +12,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_AST_MATCHERS_DYNAMIC_DIAGNOSTICS_H
-#define LLVM_CLANG_AST_MATCHERS_DYNAMIC_DIAGNOSTICS_H
+#ifndef LLVM_CLANG_ASTMATCHERS_DYNAMIC_DIAGNOSTICS_H
+#define LLVM_CLANG_ASTMATCHERS_DYNAMIC_DIAGNOSTICS_H
 
 #include "clang/ASTMatchers/Dynamic/VariantValue.h"
 #include "clang/Basic/LLVM.h"
@@ -60,11 +60,12 @@ public:
   enum ErrorType {
     ET_None = 0,
 
-    ET_RegistryNotFound = 1,
+    ET_RegistryMatcherNotFound = 1,
     ET_RegistryWrongArgCount = 2,
     ET_RegistryWrongArgType = 3,
     ET_RegistryNotBindable = 4,
     ET_RegistryAmbiguousOverload = 5,
+    ET_RegistryValueNotFound = 6,
 
     ET_ParserStringError = 100,
     ET_ParserNoOpenParen = 101,

@@ -36,6 +36,12 @@ class Atom;
 /// means R_X86_64_32 for x86_64, and R_386_GOTPC for i386. For PE/COFF
 /// relocation 10 means IMAGE_REL_AMD64_SECTION.
 ///
+/// References and atoms form a directed graph. The dead-stripping pass
+/// traverses them starting from dead-strip root atoms to garbage collect
+/// unreachable ones.
+///
+/// References of any kind are considered as directed edges. In addition to
+/// that, references of some kind is considered as bidirected edges.
 class Reference {
 public:
   /// Which universe defines the kindValue().
@@ -58,7 +64,8 @@ public:
     ARM     = 3,
     PowerPC = 4,
     Hexagon = 5,
-    Mips    = 6
+    Mips    = 6,
+    AArch64 = 7
   };
 
   KindArch kindArch() const { return (KindArch)_kindArch; }
@@ -76,9 +83,16 @@ public:
 
   /// KindValues used with KindNamespace::all and KindArch::all.
   enum {
-    kindInGroup      = 1,
-    kindLayoutAfter  = 2,
-    kindLayoutBefore = 3
+    kindInGroup = 1,
+    // kindLayoutAfter is treated as a bidirected edge by the dead-stripping
+    // pass.
+    kindLayoutAfter = 2,
+    // kindLayoutBefore is currently used only by PECOFF port, and will
+    // be removed soon. To enforce layout, use kindLayoutAfter instead.
+    kindLayoutBefore = 3,
+    // kindGroupChild is treated as a bidirected edge too.
+    kindGroupChild = 4,
+    kindAssociate = 5,
   };
 
   // A value to be added to the value of a target
@@ -88,8 +102,7 @@ public:
   /// byte offset into the Atom's content to do the fix up.
   virtual uint64_t offsetInAtom() const = 0;
 
-  /// If the reference is an edge to another Atom, then this returns the
-  /// other Atom.  Otherwise, it returns nullptr.
+  /// Returns the atom this reference refers to.
   virtual const Atom *target() const = 0;
 
   /// During linking, the linker may merge graphs which coalesces some nodes

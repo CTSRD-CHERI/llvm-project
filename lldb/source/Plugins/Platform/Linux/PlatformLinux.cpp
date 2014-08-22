@@ -23,15 +23,20 @@
 // Project includes
 #include "lldb/Core/Error.h"
 #include "lldb/Core/Debugger.h"
+#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/StreamString.h"
 #include "lldb/Host/FileSpec.h"
-#include "lldb/Host/Host.h"
+#include "lldb/Host/HostInfo.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Process.h"
+
+#if defined(__linux__)
+#include "../../Process/Linux/NativeProcessLinux.h"
+#endif
 
 using namespace lldb;
 using namespace lldb_private;
@@ -41,6 +46,20 @@ static uint32_t g_initialize_count = 0;
 Platform *
 PlatformLinux::CreateInstance (bool force, const ArchSpec *arch)
 {
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_PLATFORM));
+    if (log)
+    {
+        const char *arch_name;
+        if (arch && arch->GetArchitectureName ())
+            arch_name = arch->GetArchitectureName ();
+        else
+            arch_name = "<null>";
+
+        const char *triple_cstr = arch ? arch->GetTriple ().getTriple ().c_str() : "<null>";
+
+        log->Printf ("PlatformLinux::%s(force=%s, arch={%s,%s})", __FUNCTION__, force ? "true" : "false", arch_name, triple_cstr);
+    }
+
     bool create = force;
     if (create == false && arch && arch->IsValid())
     {
@@ -53,9 +72,9 @@ PlatformLinux::CreateInstance (bool force, const ArchSpec *arch)
                 
 #if defined(__linux__)
             // Only accept "unknown" for the vendor if the host is linux and
-            // it "unknown" wasn't specified (it was just returned becasue it
+            // it "unknown" wasn't specified (it was just returned because it
             // was NOT specified_
-            case llvm::Triple::UnknownArch:
+            case llvm::Triple::VendorType::UnknownVendor:
                 create = !arch->TripleVendorWasSpecified();
                 break;
 #endif
@@ -72,9 +91,9 @@ PlatformLinux::CreateInstance (bool force, const ArchSpec *arch)
                     
 #if defined(__linux__)
                 // Only accept "unknown" for the OS if the host is linux and
-                // it "unknown" wasn't specified (it was just returned becasue it
+                // it "unknown" wasn't specified (it was just returned because it
                 // was NOT specified)
-                case llvm::Triple::UnknownOS:
+                case llvm::Triple::OSType::UnknownOS:
                     create = !arch->TripleOSWasSpecified();
                     break;
 #endif
@@ -84,8 +103,17 @@ PlatformLinux::CreateInstance (bool force, const ArchSpec *arch)
             }
         }
     }
+
     if (create)
-        return new PlatformLinux(true);
+    {
+        if (log)
+            log->Printf ("PlatformLinux::%s() creating remote-linux platform", __FUNCTION__);
+        return new PlatformLinux(false);
+    }
+
+    if (log)
+        log->Printf ("PlatformLinux::%s() aborting creation of remote-linux platform", __FUNCTION__);
+
     return NULL;
 }
 
@@ -127,7 +155,7 @@ PlatformLinux::Initialize ()
     {
 #if defined(__linux__)
         PlatformSP default_platform_sp (new PlatformLinux(true));
-        default_platform_sp->SetSystemArchitecture (Host::GetArchitecture());
+        default_platform_sp->SetSystemArchitecture(HostInfo::GetArchitecture());
         Platform::SetDefaultPlatform (default_platform_sp);
 #endif
         PluginManager::RegisterPlugin(PlatformLinux::GetPluginNameStatic(false),
@@ -220,7 +248,7 @@ PlatformLinux::ResolveExecutable (const FileSpec &exe_file,
                 bool is_os_specified = (module_triple.getOS() != llvm::Triple::UnknownOS);
                 if (!is_vendor_specified || !is_os_specified)
                 {
-                    const llvm::Triple &host_triple = Host::GetArchitecture (Host::eSystemDefaultArchitecture).GetTriple();
+                    const llvm::Triple &host_triple = HostInfo::GetArchitecture(HostInfo::eArchKindDefault).GetTriple();
 
                     if (!is_vendor_specified)
                         module_triple.setVendorName (host_triple.getVendorName());
@@ -273,10 +301,17 @@ PlatformLinux::ResolveExecutable (const FileSpec &exe_file,
             
             if (error.Fail() || !exe_module_sp)
             {
-                error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
-                                                exe_file.GetPath().c_str(),
-                                                GetPluginName().GetCString(),
-                                                arch_names.GetString().c_str());
+                if (exe_file.Readable())
+                {
+                    error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
+                                                    exe_file.GetPath().c_str(),
+                                                    GetPluginName().GetCString(),
+                                                    arch_names.GetString().c_str());
+                }
+                else
+                {
+                    error.SetErrorStringWithFormat("'%s' is not readable", exe_file.GetPath().c_str());
+                }
             }
         }
     }
@@ -285,13 +320,13 @@ PlatformLinux::ResolveExecutable (const FileSpec &exe_file,
 }
 
 Error
-PlatformLinux::GetFile (const FileSpec &platform_file, 
-                        const UUID *uuid_ptr, FileSpec &local_file)
+PlatformLinux::GetFileWithUUID (const FileSpec &platform_file, 
+                                const UUID *uuid_ptr, FileSpec &local_file)
 {
     if (IsRemote())
     {
         if (m_remote_platform_sp)
-            return m_remote_platform_sp->GetFile (platform_file, uuid_ptr, local_file);
+            return m_remote_platform_sp->GetFileWithUUID (platform_file, uuid_ptr, local_file);
     }
 
     // Default to the local case
@@ -304,8 +339,7 @@ PlatformLinux::GetFile (const FileSpec &platform_file,
 /// Default Constructor
 //------------------------------------------------------------------
 PlatformLinux::PlatformLinux (bool is_host) :
-    Platform(is_host),  // This is the local host platform
-    m_remote_platform_sp ()
+    PlatformPOSIX(is_host)  // This is the local host platform
 {
 }
 
@@ -340,17 +374,16 @@ PlatformLinux::GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
     if (idx == 0)
     {
-        arch = Host::GetArchitecture (Host::eSystemDefaultArchitecture);
+        arch = HostInfo::GetArchitecture(HostInfo::eArchKindDefault);
         return arch.IsValid();
     }
     else if (idx == 1)
     {
         // If the default host architecture is 64-bit, look for a 32-bit variant
-        ArchSpec hostArch
-                      = Host::GetArchitecture(Host::eSystemDefaultArchitecture);
+        ArchSpec hostArch = HostInfo::GetArchitecture(HostInfo::eArchKindDefault);
         if (hostArch.IsValid() && hostArch.GetTriple().isArch64Bit())
         {
-            arch = Host::GetArchitecture (Host::eSystemDefaultArchitecture32);
+            arch = HostInfo::GetArchitecture(HostInfo::eArchKind32);
             return arch.IsValid();
         }
     }
@@ -382,18 +415,25 @@ PlatformLinux::GetSoftwareBreakpointTrapOpcode (Target &target,
     const uint8_t *trap_opcode = NULL;
     size_t trap_opcode_size = 0;
 
-    switch (arch.GetCore())
+    switch (arch.GetMachine())
     {
     default:
         assert(false && "CPU type not supported!");
         break;
-
-    case ArchSpec::eCore_x86_32_i386:
-    case ArchSpec::eCore_x86_64_x86_64:
+            
+    case llvm::Triple::x86:
+    case llvm::Triple::x86_64:
         {
             static const uint8_t g_i386_breakpoint_opcode[] = { 0xCC };
             trap_opcode = g_i386_breakpoint_opcode;
             trap_opcode_size = sizeof(g_i386_breakpoint_opcode);
+        }
+        break;
+    case llvm::Triple::hexagon:
+        {
+            static const uint8_t g_hex_opcode[] = { 0x0c, 0xdb, 0x00, 0x54 };
+            trap_opcode = g_hex_opcode;
+            trap_opcode_size = sizeof(g_hex_opcode);
         }
         break;
     }
@@ -406,10 +446,14 @@ PlatformLinux::GetSoftwareBreakpointTrapOpcode (Target &target,
 Error
 PlatformLinux::LaunchProcess (ProcessLaunchInfo &launch_info)
 {
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_PLATFORM));
     Error error;
     
     if (IsHost())
     {
+        if (log)
+            log->Printf ("PlatformLinux::%s() launching process as host", __FUNCTION__);
+
         if (launch_info.GetFlags().Test (eLaunchFlagLaunchInShell))
         {
             const bool is_localhost = true;
@@ -427,9 +471,32 @@ PlatformLinux::LaunchProcess (ProcessLaunchInfo &launch_info)
     }
     else
     {
-        error.SetErrorString ("the platform is not currently connected");
+        if (m_remote_platform_sp)
+        {
+            if (log)
+                log->Printf ("PlatformLinux::%s() attempting to launch remote process", __FUNCTION__);
+            error = m_remote_platform_sp->LaunchProcess (launch_info);
+        }
+        else
+        {
+            if (log)
+                log->Printf ("PlatformLinux::%s() attempted to launch process but is not the host and no remote platform set", __FUNCTION__);
+            error.SetErrorString ("the platform is not currently connected");
+        }
     }
     return error;
+}
+
+// Linux processes can not be launched by spawning and attaching.
+bool
+PlatformLinux::CanDebugProcess ()
+{
+    // If we're the host, launch via normal host setup.
+    if (IsHost ())
+        return false;
+
+    // If we're connected, we can debug.
+    return IsConnected ();
 }
 
 lldb::ProcessSP
@@ -478,4 +545,64 @@ PlatformLinux::Attach(ProcessAttachInfo &attach_info,
             error.SetErrorString ("the platform is not currently connected");
     }
     return process_sp;
+}
+
+void
+PlatformLinux::CalculateTrapHandlerSymbolNames ()
+{   
+    m_trap_handlers.push_back (ConstString ("_sigtramp"));
+}   
+
+Error
+PlatformLinux::LaunchNativeProcess (
+    ProcessLaunchInfo &launch_info,
+    lldb_private::NativeProcessProtocol::NativeDelegate &native_delegate,
+    NativeProcessProtocolSP &process_sp)
+{
+#if !defined(__linux__)
+    return Error("only implemented on Linux hosts");
+#else
+    if (!IsHost ())
+        return Error("PlatformLinux::%s (): cannot launch a debug process when not the host", __FUNCTION__);
+
+    // Retrieve the exe module.
+    lldb::ModuleSP exe_module_sp;
+
+    Error error = ResolveExecutable (
+        launch_info.GetExecutableFile (),
+        launch_info.GetArchitecture (),
+        exe_module_sp,
+        NULL);
+
+    if (!error.Success ())
+        return error;
+
+    if (!exe_module_sp)
+        return Error("exe_module_sp could not be resolved for %s", launch_info.GetExecutableFile ().GetPath ().c_str ());
+
+    // Launch it for debugging
+    error = NativeProcessLinux::LaunchProcess (
+        exe_module_sp.get (),
+        launch_info,
+        native_delegate,
+        process_sp);
+
+    return error;
+#endif
+}
+
+Error
+PlatformLinux::AttachNativeProcess (lldb::pid_t pid,
+                                    lldb_private::NativeProcessProtocol::NativeDelegate &native_delegate,
+                                    NativeProcessProtocolSP &process_sp)
+{
+#if !defined(__linux__)
+    return Error("only implemented on Linux hosts");
+#else
+    if (!IsHost ())
+        return Error("PlatformLinux::%s (): cannot attach to a debug process when not the host", __FUNCTION__);
+
+    // Launch it for debugging
+    return NativeProcessLinux::AttachToProcess (pid, native_delegate, process_sp);
+#endif
 }

@@ -12,17 +12,20 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef X86_SHUFFLE_DECODE_H
-#define X86_SHUFFLE_DECODE_H
+#ifndef LLVM_LIB_TARGET_X86_UTILS_X86SHUFFLEDECODE_H
+#define LLVM_LIB_TARGET_X86_UTILS_X86SHUFFLEDECODE_H
 
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/CodeGen/ValueTypes.h"
+#include "llvm/ADT/ArrayRef.h"
 
 //===----------------------------------------------------------------------===//
 //  Vector Mask Decoding
 //===----------------------------------------------------------------------===//
 
 namespace llvm {
+class ConstantDataSequential;
+class MVT;
+
 enum {
   SM_SentinelZero = -1
 };
@@ -58,6 +61,17 @@ void DecodeUNPCKHMask(MVT VT, SmallVectorImpl<int> &ShuffleMask);
 /// different datatypes and vector widths.
 void DecodeUNPCKLMask(MVT VT, SmallVectorImpl<int> &ShuffleMask);
 
+/// \brief Decode a PSHUFB mask from an IR-level vector constant.
+void DecodePSHUFBMask(const ConstantDataSequential *C,
+                      SmallVectorImpl<int> &ShuffleMask);
+
+/// \brief Decode a PSHUFB mask from a raw array of constants such as from
+/// BUILD_VECTOR.
+void DecodePSHUFBMask(ArrayRef<uint64_t> RawMask,
+                      SmallVectorImpl<int> &ShuffleMask);
+
+/// \brief Decode a BLEND immediate mask into a shuffle mask.
+void DecodeBLENDMask(MVT VT, unsigned Imm, SmallVectorImpl<int> &ShuffleMask);
 
 void DecodeVPERM2X128Mask(MVT VT, unsigned Imm,
                           SmallVectorImpl<int> &ShuffleMask);

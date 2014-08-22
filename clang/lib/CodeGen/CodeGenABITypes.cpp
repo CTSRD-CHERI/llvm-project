@@ -26,9 +26,11 @@ using namespace CodeGen;
 
 CodeGenABITypes::CodeGenABITypes(ASTContext &C,
                                  llvm::Module &M,
-                                 const llvm::DataLayout &TD)
+                                 const llvm::DataLayout &TD,
+                                 CoverageSourceInfo *CoverageInfo)
   : CGO(new CodeGenOptions),
-    CGM(new CodeGen::CodeGenModule(C, *CGO, M, TD, C.getDiagnostics())) {
+    CGM(new CodeGen::CodeGenModule(C, *CGO, M, TD, C.getDiagnostics(),
+                                   CoverageInfo)) {
 }
 
 CodeGenABITypes::~CodeGenABITypes()
@@ -60,10 +62,10 @@ CodeGenABITypes::arrangeCXXMethodType(const CXXRecordDecl *RD,
 }
 
 const CGFunctionInfo &
-CodeGenABITypes::arrangeLLVMFunctionInfo(CanQualType returnType,
-                                         llvm::ArrayRef<CanQualType> argTypes,
+CodeGenABITypes::arrangeFreeFunctionCall(CanQualType returnType,
+                                         ArrayRef<CanQualType> argTypes,
                                          FunctionType::ExtInfo info,
                                          RequiredArgs args) {
-  return CGM->getTypes().arrangeLLVMFunctionInfo(returnType, argTypes,
-                                                info, args);
+  return CGM->getTypes().arrangeLLVMFunctionInfo(
+      returnType, /*IsInstanceMethod=*/false, argTypes, info, args);
 }

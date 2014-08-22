@@ -54,7 +54,7 @@ namespace llvm {
       cxa_atexit,
       /// void __cxa_guard_abort(guard_t *guard);
       /// guard_t is int64_t in Itanium ABI or int32_t on ARM eabi.
-      cxa_guard_abort,      
+      cxa_guard_abort,
       /// int __cxa_guard_acquire(guard_t *guard);
       cxa_guard_acquire,
       /// void __cxa_guard_release(guard_t *guard);
@@ -67,8 +67,8 @@ namespace llvm {
       memcpy_chk,
       /// double __sincospi_stret(double x);
       sincospi_stret,
-      /// float __sincospi_stretf(float x);
-      sincospi_stretf,
+      /// float __sincospif_stret(float x);
+      sincospif_stret,
       /// double __sinpi(double x);
       sinpi,
       /// float __sinpif(float x);
@@ -352,6 +352,12 @@ namespace llvm {
       labs,
       /// int lchown(const char *path, uid_t owner, gid_t group);
       lchown,
+      /// double ldexp(double x, int n);
+      ldexp,
+      /// float ldexpf(float x, int n);
+      ldexpf,
+      /// long double ldexpl(long double x, int n);
+      ldexpl,
       /// long long int llabs(long long int j);
       llabs,
       /// double log(double x);
@@ -690,7 +696,7 @@ public:
   TargetLibraryInfo();
   TargetLibraryInfo(const Triple &T);
   explicit TargetLibraryInfo(const TargetLibraryInfo &TLI);
-  
+
   /// getLibFunc - Search for a particular function name.  If it is one of the
   /// known library functions, return true and set F to the corresponding value.
   bool getLibFunc(StringRef funcName, LibFunc::Func &F) const;

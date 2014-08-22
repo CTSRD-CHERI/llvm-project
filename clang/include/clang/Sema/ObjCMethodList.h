@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_SEMA_OBJC_METHOD_LIST_H
-#define LLVM_CLANG_SEMA_OBJC_METHOD_LIST_H
+#ifndef LLVM_CLANG_SEMA_OBJCMETHODLIST_H
+#define LLVM_CLANG_SEMA_OBJCMETHODLIST_H
 
 #include "llvm/ADT/PointerIntPair.h"
 
@@ -26,7 +26,7 @@ struct ObjCMethodList {
   /// \brief The next list object and 2 bits for extra info.
   llvm::PointerIntPair<ObjCMethodList *, 2> NextAndExtraBits;
 
-  ObjCMethodList() : Method(0) { }
+  ObjCMethodList() : Method(nullptr) { }
   ObjCMethodList(ObjCMethodDecl *M, ObjCMethodList *C)
     : Method(M), NextAndExtraBits(C, 0) { }
 

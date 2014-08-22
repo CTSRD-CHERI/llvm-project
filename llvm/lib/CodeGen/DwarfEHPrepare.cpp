@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "dwarfehprepare"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/IR/CallSite.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
@@ -22,11 +22,13 @@
 #include "llvm/IR/Module.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/CallSite.h"
 #include "llvm/Target/TargetLowering.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 using namespace llvm;
+
+#define DEBUG_TYPE "dwarfehprepare"
 
 STATISTIC(NumResumesLowered, "Number of resume calls lowered");
 
@@ -43,15 +45,15 @@ namespace {
   public:
     static char ID; // Pass identification, replacement for typeid.
     DwarfEHPrepare(const TargetMachine *TM)
-        : FunctionPass(ID), TM(TM), RewindFunction(0) {
+        : FunctionPass(ID), TM(TM), RewindFunction(nullptr) {
       initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
     }
 
-    virtual bool runOnFunction(Function &Fn);
+    bool runOnFunction(Function &Fn) override;
 
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const { }
+    void getAnalysisUsage(AnalysisUsage &AU) const override { }
 
-    const char *getPassName() const {
+    const char *getPassName() const override {
       return "Exception handling preparation";
     }
   };
@@ -68,10 +70,10 @@ FunctionPass *llvm::createDwarfEHPass(const TargetMachine *TM) {
 /// instructions, including the 'resume' instruction.
 Value *DwarfEHPrepare::GetExceptionObject(ResumeInst *RI) {
   Value *V = RI->getOperand(0);
-  Value *ExnObj = 0;
+  Value *ExnObj = nullptr;
   InsertValueInst *SelIVI = dyn_cast<InsertValueInst>(V);
-  LoadInst *SelLoad = 0;
-  InsertValueInst *ExcIVI = 0;
+  LoadInst *SelLoad = nullptr;
+  InsertValueInst *ExcIVI = nullptr;
   bool EraseIVIs = false;
 
   if (SelIVI) {
@@ -117,7 +119,7 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls(Function &Fn) {
     return false;
 
   // Find the rewind function if we didn't already.
-  const TargetLowering *TLI = TM->getTargetLowering();
+  const TargetLowering *TLI = TM->getSubtargetImpl()->getTargetLowering();
   if (!RewindFunction) {
     LLVMContext &Ctx = Resumes[0]->getContext();
     FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx),

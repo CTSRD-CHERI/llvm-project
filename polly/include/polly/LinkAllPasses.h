@@ -53,22 +53,9 @@ llvm::Pass *createIslCodeGenerationPass();
 llvm::Pass *createIslScheduleOptimizerPass();
 llvm::Pass *createTempScopInfoPass();
 
-#ifdef OPENSCOP_FOUND
-llvm::Pass *createScopExporterPass();
-llvm::Pass *createScopImporterPass();
-#endif
-
-#ifdef SCOPLIB_FOUND
-llvm::Pass *createPoccPass();
-llvm::Pass *createScopLibExporterPass();
-llvm::Pass *createScopLibImporterPass();
-#endif
-
 extern char &IndependentBlocksID;
 extern char &CodePreparationID;
 }
-
-using namespace polly;
 
 namespace {
 struct PollyForcePassLinking {
@@ -81,41 +68,31 @@ struct PollyForcePassLinking {
       return;
 
 #ifdef CLOOG_FOUND
-    createCloogExporterPass();
-    createCloogInfoPass();
-    createCodeGenerationPass();
+    polly::createCloogExporterPass();
+    polly::createCloogInfoPass();
+    polly::createCodeGenerationPass();
 #endif
-    createCodePreparationPass();
-    createDeadCodeElimPass();
-    createDependencesPass();
-    createDOTOnlyPrinterPass();
-    createDOTOnlyViewerPass();
-    createDOTPrinterPass();
-    createDOTViewerPass();
-    createIndependentBlocksPass();
-    createIndVarSimplifyPass();
-    createJSONExporterPass();
-    createJSONImporterPass();
-    createScopDetectionPass();
-    createScopInfoPass();
+    polly::createCodePreparationPass();
+    polly::createDeadCodeElimPass();
+    polly::createDependencesPass();
+    polly::createDOTOnlyPrinterPass();
+    polly::createDOTOnlyViewerPass();
+    polly::createDOTPrinterPass();
+    polly::createDOTViewerPass();
+    polly::createIndependentBlocksPass();
+    polly::createIndVarSimplifyPass();
+    polly::createJSONExporterPass();
+    polly::createJSONImporterPass();
+    polly::createScopDetectionPass();
+    polly::createScopInfoPass();
 #ifdef PLUTO_FOUND
-    createPlutoOptimizerPass();
+    polly::createPlutoOptimizerPass();
 #endif
-    createPollyCanonicalizePass();
-    createIslAstInfoPass();
-    createIslCodeGenerationPass();
-    createIslScheduleOptimizerPass();
-    createTempScopInfoPass();
-
-#ifdef OPENSCOP_FOUND
-    createScopExporterPass();
-    createScopImporterPass();
-#endif
-#ifdef SCOPLIB_FOUND
-    createPoccPass();
-    createScopLibExporterPass();
-    createScopLibImporterPass();
-#endif
+    polly::createPollyCanonicalizePass();
+    polly::createIslAstInfoPass();
+    polly::createIslCodeGenerationPass();
+    polly::createIslScheduleOptimizerPass();
+    polly::createTempScopInfoPass();
   }
 } PollyForcePassLinking; // Force link by creating a global definition.
 }
@@ -137,9 +114,6 @@ void initializeIslScheduleOptimizerPass(llvm::PassRegistry &);
 void initializePlutoOptimizerPass(llvm::PassRegistry &);
 #endif
 void initializePollyCanonicalizePass(llvm::PassRegistry &);
-#ifdef SCOPLIB_FOUND
-void initializePoccPass(llvm::PassRegistry &);
-#endif
 void initializePollyIndVarSimplifyPass(llvm::PassRegistry &);
 }
 

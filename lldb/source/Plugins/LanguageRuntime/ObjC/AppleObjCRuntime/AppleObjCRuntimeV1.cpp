@@ -11,7 +11,6 @@
 #include "AppleObjCTrampolineHandler.h"
 #include "AppleObjCTypeVendor.h"
 
-#include "llvm/Support/MachO.h"
 #include "clang/AST/Type.h"
 
 #include "lldb/Breakpoint/BreakpointLocation.h"
@@ -276,7 +275,7 @@ bool
 AppleObjCRuntimeV1::ClassDescriptorV1::Describe (std::function <void (ObjCLanguageRuntime::ObjCISA)> const &superclass_func,
                                                  std::function <bool (const char *, const char *)> const &instance_method_func,
                                                  std::function <bool (const char *, const char *)> const &class_method_func,
-                                                 std::function <bool (const char *, const char *, lldb::addr_t, uint64_t)> const &ivar_func)
+                                                 std::function <bool (const char *, const char *, lldb::addr_t, uint64_t)> const &ivar_func) const
 {
     return false;
 }
@@ -327,7 +326,7 @@ AppleObjCRuntimeV1::UpdateISAToDescriptorMapIfNeeded()
     if (process)
     {
         // Update the process stop ID that indicates the last time we updated the
-        // map, wether it was successful or not.
+        // map, whether it was successful or not.
         m_isa_to_descriptor_stop_id = process->GetStopID();
         
         Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PROCESS));

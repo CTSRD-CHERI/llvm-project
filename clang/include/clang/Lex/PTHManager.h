@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_PTHMANAGER_H
-#define LLVM_CLANG_PTHMANAGER_H
+#ifndef LLVM_CLANG_LEX_PTHMANAGER_H
+#define LLVM_CLANG_LEX_PTHMANAGER_H
 
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/IdentifierTable.h"
@@ -114,7 +114,7 @@ public:
   ///  Unlike the version in IdentifierTable, this returns a pointer instead
   ///  of a reference.  If the pointer is NULL then the IdentifierInfo cannot
   ///  be found.
-  IdentifierInfo *get(StringRef Name);
+  IdentifierInfo *get(StringRef Name) override;
 
   /// Create - This method creates PTHManager objects.  The 'file' argument
   ///  is the name of the PTH file.  This method returns NULL upon failure.
@@ -131,7 +131,7 @@ public:
   ///  FileManager objects.  These objects use the PTH data to speed up
   ///  calls to stat by memoizing their results from when the PTH file
   ///  was generated.
-  FileSystemStatCache *createStatCache();
+  std::unique_ptr<FileSystemStatCache> createStatCache();
 };
 
 }  // end namespace clang

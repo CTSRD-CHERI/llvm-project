@@ -28,6 +28,11 @@ static inline char hexdigit(unsigned X, bool LowerCase = false) {
   return X < 10 ? '0' + X : HexChar + X - 10;
 }
 
+/// Construct a string ref from a boolean.
+static inline StringRef toStringRef(bool B) {
+  return StringRef(B ? "true" : "false");
+}
+
 /// Interpret the given character \p C as a hexadecimal digit and return its
 /// value.
 ///
@@ -48,7 +53,7 @@ static inline unsigned hexDigitValue(char C) {
 /// This should only be used with unsigned types.
 ///
 template<typename IntTy>
-static inline char *utohex_buffer(IntTy X, char *BufferEnd) {
+static inline char *utohex_buffer(IntTy X, char *BufferEnd, bool LowerCase = false) {
   char *BufPtr = BufferEnd;
   *--BufPtr = 0;      // Null terminate buffer.
   if (X == 0) {
@@ -58,15 +63,15 @@ static inline char *utohex_buffer(IntTy X, char *BufferEnd) {
 
   while (X) {
     unsigned char Mod = static_cast<unsigned char>(X) & 15;
-    *--BufPtr = hexdigit(Mod);
+    *--BufPtr = hexdigit(Mod, LowerCase);
     X >>= 4;
   }
   return BufPtr;
 }
 
-static inline std::string utohexstr(uint64_t X) {
+static inline std::string utohexstr(uint64_t X, bool LowerCase = false) {
   char Buffer[17];
-  return utohex_buffer(X, Buffer+17);
+  return utohex_buffer(X, Buffer+17, LowerCase);
 }
 
 static inline std::string utostr_32(uint32_t X, bool isNeg = false) {
@@ -136,7 +141,7 @@ void SplitString(StringRef Source,
 // better: http://eternallyconfuzzled.com/tuts/algorithms/jsw_tut_hashing.aspx
 //   X*33+c -> X*33^c
 static inline unsigned HashString(StringRef Str, unsigned Result = 0) {
-  for (unsigned i = 0, e = Str.size(); i != e; ++i)
+  for (StringRef::size_type i = 0, e = Str.size(); i != e; ++i)
     Result = Result * 33 + (unsigned char)Str[i];
   return Result;
 }

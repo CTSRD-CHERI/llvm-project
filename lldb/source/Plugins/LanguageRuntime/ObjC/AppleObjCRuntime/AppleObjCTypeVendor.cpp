@@ -29,7 +29,7 @@ public:
         m_type_vendor(type_vendor)
     {
     }
-    
+
     bool
     FindExternalVisibleDeclsByName (const clang::DeclContext *decl_ctx,
                                     clang::DeclarationName name)
@@ -43,34 +43,33 @@ public:
         {
             log->Printf("AppleObjCExternalASTSource::FindExternalVisibleDeclsByName[%u] on (ASTContext*)%p Looking for %s in (%sDecl*)%p",
                         current_id,
-                        &decl_ctx->getParentASTContext(),
-                        name.getAsString().c_str(),
-                        decl_ctx->getDeclKindName(),
-                        decl_ctx);
+                        static_cast<void*>(&decl_ctx->getParentASTContext()),
+                        name.getAsString().c_str(), decl_ctx->getDeclKindName(),
+                        static_cast<const void*>(decl_ctx));
         }
-        
+
         do
         {
             const clang::ObjCInterfaceDecl *interface_decl = llvm::dyn_cast<clang::ObjCInterfaceDecl>(decl_ctx);
-        
+
             if (!interface_decl)
                 break;
-            
+
             clang::ObjCInterfaceDecl *non_const_interface_decl = const_cast<clang::ObjCInterfaceDecl*>(interface_decl);
 
             if (!m_type_vendor.FinishDecl(non_const_interface_decl))
                 break;
-            
+
             clang::DeclContext::lookup_const_result result = non_const_interface_decl->lookup(name);
-            
+
             return (result.size() != 0);
         }
         while(0);
-        
+
         SetNoExternalVisibleDeclsForName(decl_ctx, name);
         return false;
     }
-    
+
     clang::ExternalLoadResult
     FindExternalLexicalDecls (const clang::DeclContext *DC,
                               bool (*isKindWeWant)(clang::Decl::Kind),
@@ -78,7 +77,7 @@ public:
     {
         return clang::ELR_Success;
     }
-    
+
     void
     CompleteType (clang::TagDecl *tag_decl)
     {
@@ -86,20 +85,20 @@ public:
         unsigned int current_id = invocation_id++;
 
         Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_EXPRESSIONS));  // FIXME - a more appropriate log channel?
-        
+
         if (log)
         {
             log->Printf("AppleObjCExternalASTSource::CompleteType[%u] on (ASTContext*)%p Completing (TagDecl*)%p named %s",
                         current_id,
-                        &tag_decl->getASTContext(),
-                        tag_decl,
+                        static_cast<void*>(&tag_decl->getASTContext()),
+                        static_cast<void*>(tag_decl),
                         tag_decl->getName().str().c_str());
-            
+
             log->Printf("  AOEAS::CT[%u] Before:", current_id);
             ASTDumper dumper((clang::Decl*)tag_decl);
             dumper.ToLog(log, "    [CT] ");
         }
-        
+
         if (log)
         {
             log->Printf("  AOEAS::CT[%u] After:", current_id);
@@ -108,30 +107,30 @@ public:
         }
         return;
     }
-    
+
     void
     CompleteType (clang::ObjCInterfaceDecl *interface_decl)
     {
         static unsigned int invocation_id = 0;
         unsigned int current_id = invocation_id++;
-        
+
         Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_EXPRESSIONS));  // FIXME - a more appropriate log channel?
-        
+
         if (log)
         {
             log->Printf("AppleObjCExternalASTSource::CompleteType[%u] on (ASTContext*)%p Completing (ObjCInterfaceDecl*)%p named %s",
                         current_id,
-                        &interface_decl->getASTContext(),
-                        interface_decl,
+                        static_cast<void*>(&interface_decl->getASTContext()),
+                        static_cast<void*>(interface_decl),
                         interface_decl->getName().str().c_str());
-            
+
             log->Printf("  AOEAS::CT[%u] Before:", current_id);
             ASTDumper dumper((clang::Decl*)interface_decl);
             dumper.ToLog(log, "    [CT] ");
         }
-        
+
         m_type_vendor.FinishDecl(interface_decl);
-                
+
         if (log)
         {
             log->Printf("  [CT] After:");
@@ -140,7 +139,7 @@ public:
         }
         return;
     }
-    
+
     bool
     layoutRecordType(const clang::RecordDecl *Record,
                      uint64_t &Size,
@@ -151,7 +150,7 @@ public:
     {
         return false;
     }
-    
+
     void StartTranslationUnit (clang::ASTConsumer *Consumer)
     {
         clang::TranslationUnitDecl *translation_unit_decl = m_type_vendor.m_ast_ctx.getASTContext()->getTranslationUnitDecl();
@@ -165,10 +164,11 @@ private:
 AppleObjCTypeVendor::AppleObjCTypeVendor(ObjCLanguageRuntime &runtime) :
     TypeVendor(),
     m_runtime(runtime),
-    m_ast_ctx(runtime.GetProcess()->GetTarget().GetArchitecture().GetTriple().getTriple().c_str())
+    m_ast_ctx(runtime.GetProcess()->GetTarget().GetArchitecture().GetTriple().getTriple().c_str()),
+    m_type_realizer_sp(m_runtime.GetEncodingToType())
 {
     m_external_source = new AppleObjCExternalASTSource (*this);
-    llvm::OwningPtr<clang::ExternalASTSource> external_source_owning_ptr (m_external_source);
+    llvm::IntrusiveRefCntPtr<clang::ExternalASTSource> external_source_owning_ptr (m_external_source);
     m_ast_ctx.getASTContext()->setExternalSource(external_source_owning_ptr);
 }
 
@@ -324,7 +324,7 @@ public:
         }
     }
     
-    clang::ObjCMethodDecl *BuildMethod (clang::ObjCInterfaceDecl *interface_decl, const char *name, bool instance)
+    clang::ObjCMethodDecl *BuildMethod (clang::ObjCInterfaceDecl *interface_decl, const char *name, bool instance, ObjCLanguageRuntime::EncodingToTypeSP type_realizer_sp)
     {
         if (!m_is_valid || m_type_vector.size() < 3)
             return NULL;
@@ -340,11 +340,13 @@ public:
         const bool isDefined = false;
         const clang::ObjCMethodDecl::ImplementationControl impControl = clang::ObjCMethodDecl::None;
         const bool HasRelatedResultType = false;
+        const bool allow_unknownanytype = true;
         
         std::vector <clang::IdentifierInfo *> selector_components;
         
         const char *name_cursor = name;
         bool is_zero_argument = true;
+        
         
         while (*name_cursor != '\0')
         {
@@ -364,7 +366,7 @@ public:
         
         clang::Selector sel = ast_ctx.Selectors.getSelector(is_zero_argument ? 0 : selector_components.size(), selector_components.data());
         
-        clang::QualType ret_type = BuildType(ast_ctx, m_type_vector[0].c_str());
+        clang::QualType ret_type = type_realizer_sp->RealizeType(interface_decl->getASTContext(), m_type_vector[0].c_str(), allow_unknownanytype).GetQualType();
         
         if (ret_type.isNull())
             return NULL;
@@ -390,7 +392,8 @@ public:
              ai != ae;
              ++ai)
         {
-            clang::QualType arg_type = BuildType(ast_ctx, m_type_vector[ai].c_str());
+            const bool allow_unknownanytype = true;
+            clang::QualType arg_type = type_realizer_sp->RealizeType(ast_ctx, m_type_vector[ai].c_str(), allow_unknownanytype).GetQualType();
             
             if (arg_type.isNull())
                 return NULL; // well, we just wasted a bunch of time.  Wish we could delete the stuff we'd just made!
@@ -411,81 +414,6 @@ public:
         return ret;
     }
 private:
-    clang::QualType BuildType (clang::ASTContext &ast_ctx, const char *type)
-    {
-        if (!type)
-            return clang::QualType();
-        
-        switch (*type)
-        {
-        default:
-            return ast_ctx.UnknownAnyTy;
-        case 'r':
-            {
-                clang::QualType target_type = BuildType(ast_ctx, type+1);
-                if (target_type.isNull())
-                    return clang::QualType();
-                else if (target_type == ast_ctx.UnknownAnyTy)
-                    return ast_ctx.UnknownAnyTy;
-                else
-                    return ast_ctx.getConstType(target_type);
-            }
-        case '^':
-        {
-            clang::QualType target_type = BuildType(ast_ctx, type+1);
-            if (target_type.isNull())
-                return clang::QualType();
-            else if (target_type == ast_ctx.UnknownAnyTy)
-                return ast_ctx.UnknownAnyTy;
-            else
-                return ast_ctx.getPointerType(target_type);
-        }
-        case 'c':
-            return ast_ctx.CharTy;
-        case 'i':
-            return ast_ctx.IntTy;
-        case 's':
-            return ast_ctx.ShortTy;
-        case 'l':
-            if (ast_ctx.getTypeSize(ast_ctx.VoidTy) == 64)
-                return ast_ctx.IntTy;
-            else
-                return ast_ctx.LongTy;
-        case 'q':
-            return ast_ctx.LongLongTy;
-        case 'C':
-            return ast_ctx.UnsignedCharTy;
-        case 'I':
-            return ast_ctx.UnsignedIntTy;
-        case 'S':
-            return ast_ctx.UnsignedShortTy;
-        case 'L':
-            if (ast_ctx.getTypeSize(ast_ctx.VoidTy) == 64)
-                return ast_ctx.UnsignedIntTy;
-            else
-                return ast_ctx.UnsignedLongTy;
-        case 'Q':
-            return ast_ctx.UnsignedLongLongTy;
-        case 'f':
-            return ast_ctx.FloatTy;
-        case 'd':
-            return ast_ctx.DoubleTy;
-        case 'B':
-            return ast_ctx.BoolTy;
-        case 'v':
-            return ast_ctx.VoidTy;
-        case '*':
-            return ast_ctx.getPointerType(ast_ctx.CharTy);
-        case '@':
-            return ast_ctx.getObjCIdType();
-        case '#':
-            return ast_ctx.getObjCClassType();
-        case ':':
-            return ast_ctx.getObjCSelType();
-        }
-        return clang::QualType();
-    }
-    
     typedef std::vector <std::string> TypeVector;
     
     TypeVector  m_type_vector;
@@ -533,7 +461,7 @@ AppleObjCTypeVendor::FinishDecl(clang::ObjCInterfaceDecl *interface_decl)
 
         ObjCRuntimeMethodType method_type(types);
         
-        clang::ObjCMethodDecl *method_decl = method_type.BuildMethod (interface_decl, name, true);
+        clang::ObjCMethodDecl *method_decl = method_type.BuildMethod (interface_decl, name, true, m_type_realizer_sp);
         
         if (log)
             log->Printf("[  AOTV::FD] Instance method [%s] [%s]", name, types);
@@ -551,7 +479,7 @@ AppleObjCTypeVendor::FinishDecl(clang::ObjCInterfaceDecl *interface_decl)
         
         ObjCRuntimeMethodType method_type(types);
         
-        clang::ObjCMethodDecl *method_decl = method_type.BuildMethod (interface_decl, name, false);
+        clang::ObjCMethodDecl *method_decl = method_type.BuildMethod (interface_decl, name, false, m_type_realizer_sp);
         
         if (log)
             log->Printf("[  AOTV::FD] Class method [%s] [%s]", name, types);

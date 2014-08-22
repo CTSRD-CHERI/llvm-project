@@ -50,9 +50,10 @@ extern "C" {
   ((void)(addr), (void)(size))
 #endif
 
-  // Returns true iff addr is poisoned (i.e. 1-byte read/write access to this
+  // Returns 1 if addr is poisoned (i.e. 1-byte read/write access to this
   // address will result in error report from AddressSanitizer).
-  bool __asan_address_is_poisoned(void const volatile *addr);
+  // Otherwise returns 0.
+  int __asan_address_is_poisoned(void const volatile *addr);
 
   // If at least on byte in [beg, beg+size) is poisoned, return the address
   // of the first such byte. Otherwise return 0.
@@ -61,11 +62,27 @@ extern "C" {
   // Print the description of addr (useful when debugging in gdb).
   void __asan_describe_address(void *addr);
 
+  // Useful for calling from the debugger to get the allocation stack trace
+  // and thread ID for a heap address. Stores up to 'size' frames into 'trace',
+  // returns the number of stored frames or 0 on error.
+  size_t __asan_get_alloc_stack(void *addr, void **trace, size_t size,
+                                int *thread_id);
+
+  // Useful for calling from the debugger to get the free stack trace
+  // and thread ID for a heap address. Stores up to 'size' frames into 'trace',
+  // returns the number of stored frames or 0 on error.
+  size_t __asan_get_free_stack(void *addr, void **trace, size_t size,
+                               int *thread_id);
+
+  // Useful for calling from the debugger to get the current shadow memory
+  // mapping.
+  void __asan_get_shadow_mapping(size_t *shadow_scale, size_t *shadow_offset);
+
   // This is an internal function that is called to report an error.
   // However it is still a part of the interface because users may want to
   // set a breakpoint on this function in a debugger.
   void __asan_report_error(void *pc, void *bp, void *sp,
-                           void *addr, bool is_write, size_t access_size);
+                           void *addr, int is_write, size_t access_size);
 
   // Sets the exit code to use when reporting an error.
   // Returns the old value.
@@ -82,32 +99,6 @@ extern "C" {
   // the program crashes before ASan report is printed.
   void __asan_on_error();
 
-  // Returns the estimated number of bytes that will be reserved by allocator
-  // for request of "size" bytes. If ASan allocator can't allocate that much
-  // memory, returns the maximal possible allocation size, otherwise returns
-  // "size".
-  size_t __asan_get_estimated_allocated_size(size_t size);
-  // Returns true if p was returned by the ASan allocator and
-  // is not yet freed.
-  bool __asan_get_ownership(const void *p);
-  // Returns the number of bytes reserved for the pointer p.
-  // Requires (get_ownership(p) == true) or (p == 0).
-  size_t __asan_get_allocated_size(const void *p);
-  // Number of bytes, allocated and not yet freed by the application.
-  size_t __asan_get_current_allocated_bytes();
-  // Number of bytes, mmaped by asan allocator to fulfill allocation requests.
-  // Generally, for request of X bytes, allocator can reserve and add to free
-  // lists a large number of chunks of size X to use them for future requests.
-  // All these chunks count toward the heap size. Currently, allocator never
-  // releases memory to OS (instead, it just puts freed chunks to free lists).
-  size_t __asan_get_heap_size();
-  // Number of bytes, mmaped by asan allocator, which can be used to fulfill
-  // allocation requests. When a user program frees memory chunk, it can first
-  // fall into quarantine and will count toward __asan_get_free_bytes() later.
-  size_t __asan_get_free_bytes();
-  // Number of bytes in unmapped pages, that are released to OS. Currently,
-  // always returns 0.
-  size_t __asan_get_unmapped_bytes();
   // Prints accumulated stats to stderr. Used for debugging.
   void __asan_print_accumulated_stats();
 
@@ -115,13 +106,23 @@ extern "C" {
   // a string containing ASan runtime options. See asan_flags.h for details.
   const char* __asan_default_options();
 
-  // Malloc hooks that may be optionally provided by user.
-  // __asan_malloc_hook(ptr, size) is called immediately after
-  //   allocation of "size" bytes, which returned "ptr".
-  // __asan_free_hook(ptr) is called immediately before
-  //   deallocation of "ptr".
-  void __asan_malloc_hook(void *ptr, size_t size);
-  void __asan_free_hook(void *ptr);
+  // The following 2 functions facilitate garbage collection in presence of
+  // asan's fake stack.
+
+  // Returns an opaque handler to be used later in __asan_addr_is_in_fake_stack.
+  // Returns NULL if the current thread does not have a fake stack.
+  void *__asan_get_current_fake_stack();
+
+  // If fake_stack is non-NULL and addr belongs to a fake frame in
+  // fake_stack, returns the address on real stack that corresponds to
+  // the fake frame and sets beg/end to the boundaries of this fake frame.
+  // Otherwise returns NULL and does not touch beg/end.
+  // If beg/end are NULL, they are not touched.
+  // This function may be called from a thread other than the owner of
+  // fake_stack, but the owner thread need to be alive.
+  void *__asan_addr_is_in_fake_stack(void *fake_stack, void *addr, void **beg,
+                                     void **end);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

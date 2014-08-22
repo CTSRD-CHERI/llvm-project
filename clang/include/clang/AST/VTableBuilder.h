@@ -21,6 +21,7 @@
 #include "clang/Basic/ABI.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SetVector.h"
+#include <memory>
 #include <utility>
 
 namespace clang {
@@ -208,11 +209,11 @@ public:
   typedef llvm::DenseMap<BaseSubobject, uint64_t> AddressPointsMapTy;
 private:
   uint64_t NumVTableComponents;
-  llvm::OwningArrayPtr<VTableComponent> VTableComponents;
+  std::unique_ptr<VTableComponent[]> VTableComponents;
 
   /// \brief Contains thunks needed by vtables, sorted by indices.
   uint64_t NumVTableThunks;
-  llvm::OwningArrayPtr<VTableThunkTy> VTableThunks;
+  std::unique_ptr<VTableThunkTy[]> VTableThunks;
 
   /// \brief Address points for all vtables.
   AddressPointsMapTy AddressPoints;
@@ -296,7 +297,7 @@ public:
     ThunksMapTy::const_iterator I = Thunks.find(MD);
     if (I == Thunks.end()) {
       // We did not find a thunk for this method.
-      return 0;
+      return nullptr;
     }
 
     return &I->second;
@@ -328,7 +329,7 @@ private:
     VirtualBaseClassOffsetOffsetsMapTy;
   VirtualBaseClassOffsetOffsetsMapTy VirtualBaseClassOffsetOffsets;
 
-  void computeVTableRelatedInformation(const CXXRecordDecl *RD);
+  void computeVTableRelatedInformation(const CXXRecordDecl *RD) override;
 
 public:
   ItaniumVTableContext(ASTContext &Context);
@@ -366,76 +367,37 @@ public:
   }
 };
 
-struct VFPtrInfo {
+/// Holds information about the inheritance path to a virtual base or function
+/// table pointer.  A record may contain as many vfptrs or vbptrs as there are
+/// base subobjects.
+struct VPtrInfo {
   typedef SmallVector<const CXXRecordDecl *, 1> BasePath;
 
-  // Don't pass the PathToMangle as it should be calculated later.
-  VFPtrInfo(CharUnits VFPtrOffset, const BasePath &PathToBaseWithVFPtr)
-      : VBTableIndex(0), LastVBase(0), VFPtrOffset(VFPtrOffset),
-        PathToBaseWithVFPtr(PathToBaseWithVFPtr), VFPtrFullOffset(VFPtrOffset) {
-  }
-
-  // Don't pass the PathToMangle as it should be calculated later.
-  VFPtrInfo(uint64_t VBTableIndex, const CXXRecordDecl *LastVBase,
-            CharUnits VFPtrOffset, const BasePath &PathToBaseWithVFPtr,
-            CharUnits VFPtrFullOffset)
-      : VBTableIndex(VBTableIndex), LastVBase(LastVBase),
-        VFPtrOffset(VFPtrOffset), PathToBaseWithVFPtr(PathToBaseWithVFPtr),
-        VFPtrFullOffset(VFPtrFullOffset) {
-    assert(VBTableIndex && "The full constructor should only be used "
-                           "for vfptrs in virtual bases");
-    assert(LastVBase);
-  }
-
-  /// If nonzero, holds the vbtable index of the virtual base with the vfptr.
-  uint64_t VBTableIndex;
-
-  /// Stores the last vbase on the path from the complete type to the vfptr.
-  const CXXRecordDecl *LastVBase;
-
-  /// This is the offset of the vfptr from the start of the last vbase,
-  /// or the complete type if there are no virtual bases.
-  CharUnits VFPtrOffset;
-
-  /// This holds the base classes path from the complete type to the first base
-  /// with the given vfptr offset, in the base-to-derived order.
-  BasePath PathToBaseWithVFPtr;
-
-  /// This holds the subset of records that need to be mangled into the vftable
-  /// symbol name in order to get a unique name, in the derived-to-base order.
-  BasePath PathToMangle;
-
-  /// This is the full offset of the vfptr from the start of the complete type.
-  CharUnits VFPtrFullOffset;
-};
-
-/// Holds information for a virtual base table for a single subobject.  A record
-/// may contain as many vbptrs as there are base subobjects.
-struct VBTableInfo {
-  VBTableInfo(const CXXRecordDecl *RD)
-      : ReusingBase(RD), BaseWithVBPtr(RD), NextBaseToMangle(RD) {}
+  VPtrInfo(const CXXRecordDecl *RD)
+      : ReusingBase(RD), BaseWithVPtr(RD), NextBaseToMangle(RD) {}
 
   // Copy constructor.
   // FIXME: Uncomment when we've moved to C++11.
-  //VBTableInfo(const VBTableInfo &) = default;
+  // VPtrInfo(const VPtrInfo &) = default;
 
-  /// The vbtable will hold all of the virtual bases of ReusingBase.  This may
-  /// or may not be the same class as VBPtrSubobject.Base.  A derived class will
-  /// reuse the vbptr of the first non-virtual base subobject that has one.
+  /// The vtable will hold all of the virtual bases or virtual methods of
+  /// ReusingBase.  This may or may not be the same class as VPtrSubobject.Base.
+  /// A derived class will reuse the vptr of the first non-virtual base
+  /// subobject that has one.
   const CXXRecordDecl *ReusingBase;
 
-  /// BaseWithVBPtr is at this offset from its containing complete object or
+  /// BaseWithVPtr is at this offset from its containing complete object or
   /// virtual base.
   CharUnits NonVirtualOffset;
 
-  /// The vbptr is stored inside this subobject.
-  const CXXRecordDecl *BaseWithVBPtr;
+  /// The vptr is stored inside this subobject.
+  const CXXRecordDecl *BaseWithVPtr;
 
   /// The bases from the inheritance path that got used to mangle the vbtable
   /// name.  This is not really a full path like a CXXBasePath.  It holds the
   /// subset of records that need to be mangled into the vbtable symbol name in
   /// order to get a unique name.
-  SmallVector<const CXXRecordDecl *, 1> MangledPath;
+  BasePath MangledPath;
 
   /// The next base to push onto the mangled path if this path is ambiguous in a
   /// derived class.  If it's null, then it's already been pushed onto the path.
@@ -443,22 +405,31 @@ struct VBTableInfo {
 
   /// The set of possibly indirect vbases that contain this vbtable.  When a
   /// derived class indirectly inherits from the same vbase twice, we only keep
-  /// vbtables and their paths from the first instance.
-  SmallVector<const CXXRecordDecl *, 1> ContainingVBases;
+  /// vtables and their paths from the first instance.
+  BasePath ContainingVBases;
 
-  /// The vbptr is stored inside the non-virtual component of this virtual base.
-  const CXXRecordDecl *getVBaseWithVBPtr() const {
-    return ContainingVBases.empty() ? 0 : ContainingVBases.front();
+  /// This holds the base classes path from the complete type to the first base
+  /// with the given vfptr offset, in the base-to-derived order.  Only used for
+  /// vftables.
+  BasePath PathToBaseWithVPtr;
+
+  /// Static offset from the top of the most derived class to this vfptr,
+  /// including any virtual base offset.  Only used for vftables.
+  CharUnits FullOffsetInMDC;
+
+  /// The vptr is stored inside the non-virtual component of this virtual base.
+  const CXXRecordDecl *getVBaseWithVPtr() const {
+    return ContainingVBases.empty() ? nullptr : ContainingVBases.front();
   }
 };
 
-typedef SmallVector<VBTableInfo *, 2> VBTableVector;
+typedef SmallVector<VPtrInfo *, 2> VPtrInfoVector;
 
 /// All virtual base related information about a given record decl.  Includes
 /// information on all virtual base tables and the path components that are used
 /// to mangle them.
 struct VirtualBaseInfo {
-  ~VirtualBaseInfo() { llvm::DeleteContainerPointers(VBTables); }
+  ~VirtualBaseInfo() { llvm::DeleteContainerPointers(VBPtrPaths); }
 
   /// A map from virtual base to vbtable index for doing a conversion from the
   /// the derived class to the a base.
@@ -466,7 +437,7 @@ struct VirtualBaseInfo {
 
   /// Information on all virtual base tables used when this record is the most
   /// derived class.
-  VBTableVector VBTables;
+  VPtrInfoVector VBPtrPaths;
 };
 
 class MicrosoftVTableContext : public VTableContextBase {
@@ -487,7 +458,7 @@ public:
     uint64_t Index;
 
     MethodVFTableLocation()
-        : VBTableIndex(0), VBase(0), VFPtrOffset(CharUnits::Zero()),
+        : VBTableIndex(0), VBase(nullptr), VFPtrOffset(CharUnits::Zero()),
           Index(0) {}
 
     MethodVFTableLocation(uint64_t VBTableIndex, const CXXRecordDecl *VBase,
@@ -500,15 +471,10 @@ public:
         assert(VBase != other.VBase);
         return VBTableIndex < other.VBTableIndex;
       }
-      if (VFPtrOffset != other.VFPtrOffset)
-        return VFPtrOffset < other.VFPtrOffset;
-      if (Index != other.Index)
-        return Index < other.Index;
-      return false;
+      return std::tie(VFPtrOffset, Index) <
+             std::tie(other.VFPtrOffset, other.Index);
     }
   };
-
-  typedef SmallVector<VFPtrInfo, 1> VFPtrListTy;
 
 private:
   ASTContext &Context;
@@ -517,7 +483,7 @@ private:
     MethodVFTableLocationsTy;
   MethodVFTableLocationsTy MethodVFTableLocations;
 
-  typedef llvm::DenseMap<const CXXRecordDecl *, VFPtrListTy>
+  typedef llvm::DenseMap<const CXXRecordDecl *, VPtrInfoVector *>
     VFPtrLocationsMapTy;
   VFPtrLocationsMapTy VFPtrLocations;
 
@@ -527,18 +493,9 @@ private:
 
   llvm::DenseMap<const CXXRecordDecl *, VirtualBaseInfo *> VBaseInfo;
 
-  typedef llvm::SmallSetVector<const CXXRecordDecl *, 8> BasesSetVectorTy;
-  void enumerateVFPtrs(const CXXRecordDecl *MostDerivedClass,
-                       const ASTRecordLayout &MostDerivedClassLayout,
-                       BaseSubobject Base, const CXXRecordDecl *LastVBase,
-                       const VFPtrInfo::BasePath &PathFromCompleteClass,
-                       BasesSetVectorTy &VisitedVBases,
-                       MicrosoftVTableContext::VFPtrListTy &Result);
+  void enumerateVFPtrs(const CXXRecordDecl *ForClass, VPtrInfoVector &Result);
 
-  void enumerateVFPtrs(const CXXRecordDecl *ForClass,
-                       MicrosoftVTableContext::VFPtrListTy &Result);
-
-  void computeVTableRelatedInformation(const CXXRecordDecl *RD);
+  void computeVTableRelatedInformation(const CXXRecordDecl *RD) override;
 
   void dumpMethodLocations(const CXXRecordDecl *RD,
                            const MethodVFTableLocationsTy &NewMethods,
@@ -547,7 +504,8 @@ private:
   const VirtualBaseInfo *
   computeVBTableRelatedInformation(const CXXRecordDecl *RD);
 
-  void computeVBTablePaths(const CXXRecordDecl *RD, VBTableVector &Paths);
+  void computeVTablePaths(bool ForVBTables, const CXXRecordDecl *RD,
+                          VPtrInfoVector &Paths);
 
 public:
   MicrosoftVTableContext(ASTContext &Context)
@@ -555,18 +513,18 @@ public:
 
   ~MicrosoftVTableContext();
 
-  const VFPtrListTy &getVFPtrOffsets(const CXXRecordDecl *RD);
+  const VPtrInfoVector &getVFPtrOffsets(const CXXRecordDecl *RD);
 
   const VTableLayout &getVFTableLayout(const CXXRecordDecl *RD,
                                        CharUnits VFPtrOffset);
 
   const MethodVFTableLocation &getMethodVFTableLocation(GlobalDecl GD);
 
-  const ThunkInfoVectorTy *getThunkInfo(GlobalDecl GD) {
+  const ThunkInfoVectorTy *getThunkInfo(GlobalDecl GD) override {
     // Complete destructors don't have a slot in a vftable, so no thunks needed.
     if (isa<CXXDestructorDecl>(GD.getDecl()) &&
         GD.getDtorType() == Dtor_Complete)
-      return 0;
+      return nullptr;
     return VTableContextBase::getThunkInfo(GD);
   }
 
@@ -577,7 +535,7 @@ public:
   unsigned getVBTableIndex(const CXXRecordDecl *Derived,
                            const CXXRecordDecl *VBase);
 
-  const VBTableVector &enumerateVBTables(const CXXRecordDecl *RD);
+  const VPtrInfoVector &enumerateVBTables(const CXXRecordDecl *RD);
 
   static bool classof(const VTableContextBase *VT) { return VT->isMicrosoft(); }
 };

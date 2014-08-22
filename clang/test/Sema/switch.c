@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -verify -Wswitch-enum -Wcovered-switch-default %s
+// RUN: %clang_cc1 -fsyntax-only -verify -Wswitch-enum -Wcovered-switch-default -triple x86_64-linux-gnu %s
 void f (int z) { 
   while (z) { 
     default: z--;            // expected-error {{statement not in switch}}
@@ -109,14 +109,14 @@ void test7() {
   switch(a) {
     case A:
     case B:
-    case 3: // expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 3: // expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
       break;
   }
   switch(a) {
     case A:
     case B:
-    case 3 ... //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
-        4: //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 3 ... //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
+        4: //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
       break;
   }
   switch(a) {
@@ -124,16 +124,16 @@ void test7() {
       break;
   }
   switch(a) {
-    case 0 ... 2: //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 0 ... 2: //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
       break;
   }
   switch(a) {
-    case 1 ... 3: //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 1 ... 3: //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
       break;
   }
   switch(a) {
-    case 0 ...  //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
-      3:  //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 0 ...  //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
+      3:  //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
       break;
   }
 
@@ -167,11 +167,11 @@ void test9() {
     C = 1
   } a;
   switch(a) {
-    case 0: //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 0: //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
     case 1:
-    case 2: //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 2: //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
     case 3:
-    case 4: //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 4: //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
       break;
   }
 }
@@ -184,14 +184,14 @@ void test10() {
     D = 12
   } a;
   switch(a) {
-    case 0 ...  //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
-	    1:  //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 0 ...  //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
+	    1:  //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
     case 2 ... 4:
-    case 5 ...  //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}	
-	      9:  //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 5 ...  //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}	
+	      9:  //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
     case 10 ... 12:
-    case 13 ...  //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
-              16: //expected-warning{{case value not in enumerated type 'enum <anonymous enum}}
+    case 13 ...  //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
+              16: //expected-warning{{case value not in enumerated type 'enum (anonymous enum}}
       break;
   }
 }
@@ -375,3 +375,13 @@ void switch_on_ExtendedEnum1(enum ExtendedEnum1 e) {
   }
 }
 
+void PR11778(char c, int n, long long ll) {
+  // Do not reject this; we don't have duplicate case values because we
+  // check for duplicates in the promoted type.
+  switch (c) case 1: case 257: ; // expected-warning {{overflow}}
+
+  switch (n) case 0x100000001LL: case 1: ; // expected-warning {{overflow}} expected-error {{duplicate}} expected-note {{previous}}
+  switch ((int)ll) case 0x100000001LL: case 1: ; // expected-warning {{overflow}} expected-error {{duplicate}} expected-note {{previous}}
+  switch ((long long)n) case 0x100000001LL: case 1: ;
+  switch (ll) case 0x100000001LL: case 1: ;
+}

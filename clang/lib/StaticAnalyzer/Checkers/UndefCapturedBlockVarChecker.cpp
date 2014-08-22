@@ -27,7 +27,7 @@ using namespace ento;
 namespace {
 class UndefCapturedBlockVarChecker
   : public Checker< check::PostStmt<BlockExpr> > {
- mutable OwningPtr<BugType> BT;
+  mutable std::unique_ptr<BugType> BT;
 
 public:
   void checkPostStmt(const BlockExpr *BE, CheckerContext &C) const;
@@ -48,7 +48,7 @@ static const DeclRefExpr *FindBlockDeclRefExpr(const Stmt *S,
         return BR;
     }
 
-  return NULL;
+  return nullptr;
 }
 
 void
@@ -79,7 +79,8 @@ UndefCapturedBlockVarChecker::checkPostStmt(const BlockExpr *BE,
           state->getSVal(I.getOriginalRegion()).getAs<UndefinedVal>()) {
       if (ExplodedNode *N = C.generateSink()) {
         if (!BT)
-          BT.reset(new BuiltinBug("uninitialized variable captured by block"));
+          BT.reset(
+              new BuiltinBug(this, "uninitialized variable captured by block"));
 
         // Generate a bug report.
         SmallString<128> buf;

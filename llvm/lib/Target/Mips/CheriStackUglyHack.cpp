@@ -9,8 +9,8 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/Support/CallSite.h"
-#include "llvm/InstVisitor.h"
+#include "llvm/IR/CallSite.h"
+#include "llvm/IR/InstVisitor.h"
 #include "llvm/Transforms/Utils/Local.h"
 
 #include <string>

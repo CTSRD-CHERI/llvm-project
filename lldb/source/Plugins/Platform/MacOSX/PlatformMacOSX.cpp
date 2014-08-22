@@ -10,27 +10,24 @@
 #include "PlatformMacOSX.h"
 #include "lldb/Host/Config.h"
 
-// C Includes
-#ifndef LLDB_DISABLE_POSIX
-#include <sys/stat.h>
-#include <sys/sysctl.h>
-#endif
-
 // C++ Includes
 
 #include <sstream>
 
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/Error.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
+#include "lldb/Core/Error.h"
 #include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h"
+#include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/StreamString.h"
 #include "lldb/Host/FileSpec.h"
+#include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostInfo.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
@@ -47,7 +44,7 @@ PlatformMacOSX::Initialize ()
     {
 #if defined (__APPLE__)
         PlatformSP default_platform_sp (new PlatformMacOSX(true));
-        default_platform_sp->SetSystemArchitecture (Host::GetArchitecture());
+        default_platform_sp->SetSystemArchitecture(HostInfo::GetArchitecture());
         Platform::SetDefaultPlatform (default_platform_sp);
 #endif        
         PluginManager::RegisterPlugin (PlatformMacOSX::GetPluginNameStatic(false),
@@ -88,7 +85,7 @@ PlatformMacOSX::CreateInstance (bool force, const ArchSpec *arch)
                 
 #if defined(__APPLE__)
             // Only accept "unknown" for vendor if the host is Apple and
-            // it "unknown" wasn't specified (it was just returned becasue it
+            // it "unknown" wasn't specified (it was just returned because it
             // was NOT specified)
             case llvm::Triple::UnknownArch:
                 create = !arch->TripleVendorWasSpecified();
@@ -107,7 +104,7 @@ PlatformMacOSX::CreateInstance (bool force, const ArchSpec *arch)
                     break;
 #if defined(__APPLE__)
                 // Only accept "vendor" for vendor if the host is Apple and
-                // it "unknown" wasn't specified (it was just returned becasue it
+                // it "unknown" wasn't specified (it was just returned because it
                 // was NOT specified)
                 case llvm::Triple::UnknownOS:
                     create = !arch->TripleOSWasSpecified();
@@ -249,7 +246,7 @@ PlatformMacOSX::GetSymbolFile (const FileSpec &platform_file,
     if (IsRemote())
     {
         if (m_remote_platform_sp)
-            return m_remote_platform_sp->GetFile (platform_file, uuid_ptr, local_file);
+            return m_remote_platform_sp->GetFileWithUUID (platform_file, uuid_ptr, local_file);
     }
 
     // Default to the local case
@@ -258,14 +255,16 @@ PlatformMacOSX::GetSymbolFile (const FileSpec &platform_file,
 }
 
 lldb_private::Error
-PlatformMacOSX::GetFile (const lldb_private::FileSpec &platform_file,
-                         const lldb_private::UUID *uuid_ptr,
-                         lldb_private::FileSpec &local_file)
+PlatformMacOSX::GetFileWithUUID (const lldb_private::FileSpec &platform_file,
+                                 const lldb_private::UUID *uuid_ptr,
+                                 lldb_private::FileSpec &local_file)
 {
     if (IsRemote() && m_remote_platform_sp)
     {
         std::string local_os_build;
-        Host::GetOSBuildString(local_os_build);
+#if !defined(__linux__)
+        HostInfo::GetOSBuildString(local_os_build);
+#endif
         std::string remote_os_build;
         m_remote_platform_sp->GetOSBuildString(remote_os_build);
         if (local_os_build.compare(remote_os_build) == 0)
@@ -289,7 +288,8 @@ PlatformMacOSX::GetFile (const lldb_private::FileSpec &platform_file,
             // bring in the remote module file
             FileSpec module_cache_folder = module_cache_spec.CopyByRemovingLastPathComponent();
             // try to make the local directory first
-            Error err = Host::MakeDirectory(module_cache_folder.GetPath().c_str(), eFilePermissionsDirectoryDefault);
+            Error err =
+                FileSystem::MakeDirectory(module_cache_folder.GetPath().c_str(), eFilePermissionsDirectoryDefault);
             if (err.Fail())
                 return err;
             err = GetFile(platform_file, module_cache_spec);
@@ -311,7 +311,7 @@ PlatformMacOSX::GetFile (const lldb_private::FileSpec &platform_file,
 bool
 PlatformMacOSX::GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
-#if defined (__arm__)
+#if defined (__arm__) || defined (__arm64__) || defined (__aarch64__)
     return ARMGetSupportedArchitectureAtIndex (idx, arch);
 #else
     return x86GetSupportedArchitectureAtIndex (idx, arch);
@@ -325,5 +325,34 @@ PlatformMacOSX::GetSharedModule (const lldb_private::ModuleSpec &module_spec,
                                  lldb::ModuleSP *old_module_sp_ptr,
                                  bool *did_create_ptr)
 {
-    return GetSharedModuleWithLocalCache(module_spec, module_sp, module_search_paths_ptr, old_module_sp_ptr, did_create_ptr);
+    Error error = GetSharedModuleWithLocalCache(module_spec, module_sp, module_search_paths_ptr, old_module_sp_ptr, did_create_ptr);
+    
+    if (module_sp)
+    {
+        if (module_spec.GetArchitecture().GetCore() == ArchSpec::eCore_x86_64_x86_64h)
+        {
+            ObjectFile *objfile = module_sp->GetObjectFile();
+            if (objfile == NULL)
+            {
+                // We didn't find an x86_64h slice, fall back to a x86_64 slice
+                ModuleSpec module_spec_x86_64 (module_spec);
+                module_spec_x86_64.GetArchitecture() = ArchSpec("x86_64-apple-macosx");
+                lldb::ModuleSP x86_64_module_sp;
+                lldb::ModuleSP old_x86_64_module_sp;
+                bool did_create = false;
+                Error x86_64_error = GetSharedModuleWithLocalCache(module_spec_x86_64, x86_64_module_sp, module_search_paths_ptr, &old_x86_64_module_sp, &did_create);
+                if (x86_64_module_sp && x86_64_module_sp->GetObjectFile())
+                {
+                    module_sp = x86_64_module_sp;
+                    if (old_module_sp_ptr)
+                        *old_module_sp_ptr = old_x86_64_module_sp;
+                    if (did_create_ptr)
+                        *did_create_ptr = did_create;
+                    return x86_64_error;
+                }
+            }
+        }
+    }
+    return error;
 }
+

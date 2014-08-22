@@ -93,12 +93,14 @@ public:
   enum Merge {
     mergeNo,                // Another atom with same name is error
     mergeAsTentative,       // Is ANSI C tentative definition, can be coalesced
-    mergeAsWeak,            // is C++ inline definition that was not inlined,
+    mergeAsWeak,            // Is C++ inline definition that was not inlined,
                             // but address was not taken, so atom can be hidden
                             // by linker
-    mergeAsWeakAndAddressUsed,// is C++ definition inline definition whose
-                              // address was taken.
-    mergeByContent          // merge with other constants with same content
+    mergeAsWeakAndAddressUsed, // Is C++ definition inline definition whose
+                               // address was taken.
+    mergeSameNameAndSize,   // Another atom with different size is error
+    mergeByLargestSection,  // Choose an atom whose section is the largest.
+    mergeByContent,         // Merge with other constants with same content.
   };
 
   enum ContentType {
@@ -144,6 +146,8 @@ public:
     typeRONote,             // Identifies readonly note sections [ELF]
     typeRWNote,             // Identifies readwrite note sections [ELF]
     typeNoAlloc,            // Identifies non allocatable sections [ELF]
+    typeGroupComdat,        // Identifies a section group [ELF, COFF]
+    typeGnuLinkOnce,        // Identifies a gnu.linkonce section [ELF]
   };
 
   // Permission bits for atoms and segments. The order of these values are
@@ -266,12 +270,6 @@ public:
   /// is R__.
   virtual ContentPermissions permissions() const;
 
-  /// \brief means this is a zero size atom that exists to provide an alternate
-  /// name for another atom.  Alias atoms must have a special Reference to the
-  /// atom they alias which the layout engine recognizes and forces the alias
-  /// atom to layout right before the target atom.
-  virtual bool isAlias() const = 0;
-
   /// \brief returns a reference to the raw (unrelocated) bytes of this Atom's
   /// content.
   virtual ArrayRef<uint8_t> rawContent() const = 0;
@@ -325,6 +323,14 @@ public:
              atomContentType == DefinedAtom::typeZeroFillFast ||
              atomContentType == DefinedAtom::typeTLVInitialZeroFill ||
              atomContentType == DefinedAtom::typeThreadZeroFill);
+  }
+
+  /// Utility function to check if the atom belongs to a group section
+  /// that represents section groups or .gnu.linkonce sections.
+  bool isGroupParent() const {
+    ContentType atomContentType = contentType();
+    return (atomContentType == DefinedAtom::typeGroupComdat ||
+            atomContentType == DefinedAtom::typeGnuLinkOnce);
   }
 
 protected:

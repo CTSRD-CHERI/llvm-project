@@ -6,13 +6,19 @@ add_clang_library(clangTidy
   ClangTidy.cpp
   ClangTidyModule.cpp
   ClangTidyDiagnosticConsumer.cpp
-  )
-target_link_libraries(clangTidy
+  ClangTidyOptions.cpp
+
+  DEPENDS
+  ClangSACheckers
+
+  LINK_LIBS
   clangAST
   clangASTMatchers
   clangBasic
   clangFrontend
-  clangRewriteCore
+  clangRewrite
+  clangSema
+  clangStaticAnalyzerCore
   clangStaticAnalyzerFrontend
   clangTooling
   )
@@ -20,3 +26,5 @@ target_link_libraries(clangTidy
 add_subdirectory(tool)
 add_subdirectory(llvm)
 add_subdirectory(google)
+add_subdirectory(misc)
+add_subdirectory(utils)

@@ -88,7 +88,7 @@
 #include "kmp_lock.h"
 #include "kmp_i18n.h"
 
-#define KMP_HANDLE_SIGNALS (KMP_OS_LINUX || KMP_OS_WINDOWS || KMP_OS_DARWIN)
+#define KMP_HANDLE_SIGNALS (KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_WINDOWS || KMP_OS_DARWIN)
 
 #ifdef KMP_SETVERSION
 /*  from factory/Include, to get VERSION_STRING embedded for 'what'  */
@@ -459,7 +459,16 @@ typedef int PACKED_REDUCTION_METHOD_T;
 /*
  * Only Linux* OS and Windows* OS support thread affinity.
  */
-#if KMP_OS_LINUX || KMP_OS_WINDOWS
+#if (KMP_OS_LINUX || KMP_OS_WINDOWS) && !KMP_OS_CNK && !KMP_ARCH_PPC64
+# define KMP_AFFINITY_SUPPORTED 1
+#elif KMP_OS_DARWIN || KMP_OS_FREEBSD || KMP_OS_CNK || KMP_ARCH_PPC64
+// affinity not supported
+# define KMP_AFFINITY_SUPPORTED 0
+#else
+# error "Unknown or unsupported OS"
+#endif
+
+#if KMP_AFFINITY_SUPPORTED
 
 extern size_t __kmp_affin_mask_size;
 # define KMP_AFFINITY_CAPABLE() (__kmp_affin_mask_size > 0)
@@ -467,7 +476,7 @@ extern size_t __kmp_affin_mask_size;
 
 # if KMP_OS_LINUX
 //
-// On Linux* OS, the mask isactually a vector of length __kmp_affin_mask_size
+// On Linux* OS, the mask is actually a vector of length __kmp_affin_mask_size
 // (in bytes).  It should be allocated on a word boundary.
 //
 // WARNING!!!  We have made the base type of the affinity mask unsigned char,
@@ -719,11 +728,7 @@ extern kmp_affin_mask_t *__kmp_affinity_get_fullMask();
 # endif /* KMP_OS_LINUX */
 extern char const * __kmp_cpuinfo_file;
 
-#elif KMP_OS_DARWIN
-    // affinity not supported
-#else
-    #error "Unknown or unsupported OS"
-#endif /* KMP_OS_LINUX || KMP_OS_WINDOWS */
+#endif /* KMP_AFFINITY_SUPPORTED */
 
 #if OMP_40_ENABLED
 
@@ -749,10 +754,10 @@ typedef struct kmp_nested_proc_bind_t {
 
 extern kmp_nested_proc_bind_t __kmp_nested_proc_bind;
 
-# if (KMP_OS_WINDOWS || KMP_OS_LINUX)
+# if KMP_AFFINITY_SUPPORTED
 #  define KMP_PLACE_ALL       (-1)
 #  define KMP_PLACE_UNDEFINED (-2)
-# endif /* (KMP_OS_WINDOWS || KMP_OS_LINUX) */
+# endif /* KMP_AFFINITY_SUPPORTED */
 
 extern int __kmp_affinity_num_places;
 
@@ -941,13 +946,18 @@ extern unsigned int __kmp_place_core_offset;
 #if KMP_OS_WINDOWS
 #  define KMP_INIT_WAIT    64U          /* initial number of spin-tests   */
 #  define KMP_NEXT_WAIT    32U          /* susequent number of spin-tests */
+#elif KMP_OS_CNK
+#  define KMP_INIT_WAIT    16U          /* initial number of spin-tests   */
+#  define KMP_NEXT_WAIT     8U          /* susequent number of spin-tests */
 #elif KMP_OS_LINUX
 #  define KMP_INIT_WAIT  1024U          /* initial number of spin-tests   */
 #  define KMP_NEXT_WAIT   512U          /* susequent number of spin-tests */
-#elif KMP_OS_DARWIN
-/* TODO: tune for KMP_OS_DARWIN */
+#elif KMP_OS_DARWIN || KMP_OS_FREEBSD
+/* TODO: tune for OS */
 #  define KMP_INIT_WAIT  1024U          /* initial number of spin-tests   */
 #  define KMP_NEXT_WAIT   512U          /* susequent number of spin-tests */
+#else
+#  error "Unknown or unsupported OS"
 #endif
 
 #if KMP_ARCH_X86 || KMP_ARCH_X86_64
@@ -964,6 +974,11 @@ extern void __kmp_x86_cpuid( int mode, int mode2, struct kmp_cpuid *p );
   extern void __kmp_x86_pause( void );
 # endif
 # define KMP_CPU_PAUSE()        __kmp_x86_pause()
+#elif KMP_ARCH_PPC64
+# define KMP_PPC64_PRI_LOW() __asm__ volatile ("or 1, 1, 1")
+# define KMP_PPC64_PRI_MED() __asm__ volatile ("or 2, 2, 2")
+# define KMP_PPC64_PRI_LOC_MB() __asm__ volatile ("" : : : "memory")
+# define KMP_CPU_PAUSE() do { KMP_PPC64_PRI_LOW(); KMP_PPC64_PRI_MED(); KMP_PPC64_PRI_LOC_MB(); } while (0)
 #else
 # define KMP_CPU_PAUSE()        /* nothing to do */
 #endif
@@ -1179,7 +1194,7 @@ typedef struct kmpc_task_queue_t {
     kmp_int32                     tq_hiwat;             /*  high-water mark for tq_nfull and queue scheduling  */
     volatile kmp_int32            tq_flags;             /*  TQF_xxx  */
 
-        /* bookkeeping for oustanding thunks */
+        /* bookkeeping for outstanding thunks */
     struct kmpc_aligned_int32_t  *tq_th_thunks;         /*  per-thread array for # of regular thunks currently being executed */
     kmp_int32                     tq_nproc;             /*  number of thunks in the th_thunks array */
 
@@ -2146,7 +2161,7 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     kmp_internal_control_t  th_fixed_icvs;            /* Initial ICVs for the thread */
 
 
-#if KMP_OS_WINDOWS || KMP_OS_LINUX
+#if KMP_AFFINITY_SUPPORTED
     kmp_affin_mask_t  *th_affin_mask; /* thread's current affinity mask */
 #endif
 
@@ -2158,7 +2173,7 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
 #if OMP_40_ENABLED
     int                     th_set_nth_teams; /* number of threads in parallel nested in teams construct */
     kmp_proc_bind_t         th_set_proc_bind; /* if != proc_bind_default, use request for next fork */
-# if (KMP_OS_WINDOWS || KMP_OS_LINUX)
+# if KMP_AFFINITY_SUPPORTED
     int                     th_current_place; /* place currently bound to */
     int                     th_new_place;     /* place to bind to in par reg */
     int                     th_first_place;   /* first place in partition */
@@ -2305,7 +2320,7 @@ typedef int     (*launch_t)( int gtid );
 
 typedef struct KMP_ALIGN_CACHE kmp_base_team {
 /*
- * Syncronization Data
+ * Synchronization Data
  */
     KMP_ALIGN_CACHE kmp_ordered_team_t       t_ordered;
     kmp_balign_team_t        t_bar[ bs_last_barrier ];
@@ -2376,12 +2391,12 @@ typedef struct KMP_ALIGN_CACHE kmp_base_team {
     int                      t_active_level; /* nested active parallel level */
     kmp_r_sched_t            t_sched;        /* run-time schedule for the team */
 #endif // OMP_30_ENABLED
-#if OMP_40_ENABLED && (KMP_OS_WINDOWS || KMP_OS_LINUX)
+#if OMP_40_ENABLED && KMP_AFFINITY_SUPPORTED
     int                      t_first_place;  /* first & last place in      */
     int                      t_last_place;   /* parent thread's partition. */
                                              /* Restore these values to    */
                                              /* master after par region.   */
-#endif // OMP_40_ENABLED && (KMP_OS_WINDOWS || KMP_OS_LINUX)
+#endif // OMP_40_ENABLED && KMP_AFFINITY_SUPPORTED
 #if KMP_MIC
     int                      t_size_changed; /* team size was changed?: 0 - no, 1 - yes, -1 - changed via omp_set_num_threads() call */
 #endif
@@ -2971,7 +2986,7 @@ extern void __kmp_initialize_system_tick( void );  /* Initialize timer tick valu
 extern void __kmp_runtime_initialize( void );  /* machine specific initialization */
 extern void __kmp_runtime_destroy( void );
 
-#if KMP_OS_LINUX || KMP_OS_WINDOWS
+#if KMP_AFFINITY_SUPPORTED
 extern char *__kmp_affinity_print_mask(char *buf, int buf_len, kmp_affin_mask_t *mask);
 extern void __kmp_affinity_initialize(void);
 extern void __kmp_affinity_uninitialize(void);
@@ -2989,7 +3004,7 @@ extern int __kmp_aux_unset_affinity_mask_proc(int proc, void **mask);
 extern int __kmp_aux_get_affinity_mask_proc(int proc, void **mask);
 extern void __kmp_balanced_affinity( int tid, int team_size );
 
-#endif /* KMP_OS_LINUX || KMP_OS_WINDOWS */
+#endif /* KMP_AFFINITY_SUPPORTED */
 
 #if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM)
 

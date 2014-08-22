@@ -21,6 +21,7 @@ class ELFLinkingContext;
 class MachOLinkingContext;
 class PECOFFLinkingContext;
 class LinkingContext;
+class TargetHandlerBase;
 
 /// \brief The Writer is an abstract class for writing object files, shared
 /// library files, and executable files.  Each file format (e.g. ELF, mach-o,
@@ -30,7 +31,7 @@ public:
   virtual ~Writer();
 
   /// \brief Write a file from the supplied File object
-  virtual error_code writeFile(const File &linkedFile, StringRef path) = 0;
+  virtual std::error_code writeFile(const File &linkedFile, StringRef path) = 0;
 
   /// \brief This method is called by Core Linking to give the Writer a chance
   /// to add file format specific "files" to set of files to be linked. This is
@@ -42,7 +43,7 @@ protected:
   Writer();
 };
 
-std::unique_ptr<Writer> createWriterELF(const ELFLinkingContext &);
+std::unique_ptr<Writer> createWriterELF(TargetHandlerBase *handler);
 std::unique_ptr<Writer> createWriterMachO(const MachOLinkingContext &);
 std::unique_ptr<Writer> createWriterPECOFF(const PECOFFLinkingContext &);
 std::unique_ptr<Writer> createWriterNative(const LinkingContext &);

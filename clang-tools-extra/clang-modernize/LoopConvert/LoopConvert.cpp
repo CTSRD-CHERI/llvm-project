@@ -48,7 +48,7 @@ int LoopConvertTransform::apply(const CompilationDatabase &Database,
                                   LFK_PseudoArray, /*Owner=*/ *this);
   Finder.addMatcher(makePseudoArrayLoopMatcher(), &PseudoarrrayLoopFixer);
 
-  if (int result = LoopTool.run(createActionFactory(Finder))) {
+  if (int result = LoopTool.run(createActionFactory(Finder).get())) {
     llvm::errs() << "Error encountered during translation.\n";
     return result;
   }
@@ -77,7 +77,7 @@ struct LoopConvertFactory : TransformFactory {
     Since.Msvc = Version(11);
   }
 
-  Transform *createTransform(const TransformOptions &Opts) LLVM_OVERRIDE {
+  Transform *createTransform(const TransformOptions &Opts) override {
     return new LoopConvertTransform(Opts);
   }
 };

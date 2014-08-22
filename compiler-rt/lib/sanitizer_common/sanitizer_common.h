@@ -19,6 +19,7 @@
 #include "sanitizer_internal_defs.h"
 #include "sanitizer_libc.h"
 #include "sanitizer_mutex.h"
+#include "sanitizer_flags.h"
 
 namespace __sanitizer {
 struct StackTrace;
@@ -27,9 +28,15 @@ struct StackTrace;
 const uptr kWordSize = SANITIZER_WORDSIZE / 8;
 const uptr kWordSizeInBits = 8 * kWordSize;
 
-const uptr kCacheLineSize = 64;
+#if defined(__powerpc__) || defined(__powerpc64__)
+  const uptr kCacheLineSize = 128;
+#else
+  const uptr kCacheLineSize = 64;
+#endif
 
 const uptr kMaxPathLength = 512;
+
+const uptr kMaxThreadStackSize = 1 << 30;  // 1Gb
 
 extern const char *SanitizerToolName;  // Can be changed by the tool.
 
@@ -57,6 +64,8 @@ void *MmapAlignedOrDie(uptr size, uptr alignment, const char *mem_type);
 // Used to check if we can map shadow memory to a fixed location.
 bool MemoryRangeIsAvailable(uptr range_start, uptr range_end);
 void FlushUnneededShadowMemory(uptr addr, uptr size);
+void IncreaseTotalMmap(uptr size);
+void DecreaseTotalMmap(uptr size);
 
 // InternalScopedBuffer can be used instead of large stack arrays to
 // keep frame size low.
@@ -122,6 +131,7 @@ void RawWrite(const char *buffer);
 bool PrintsToTty();
 // Caching version of PrintsToTty(). Not thread-safe.
 bool PrintsToTtyCached();
+bool ColorizeReports();
 void Printf(const char *format, ...);
 void Report(const char *format, ...);
 void SetPrintfAndReportCallback(void (*callback)(const char *));
@@ -155,6 +165,7 @@ uptr ReadFileToBuffer(const char *file_name, char **buff,
 // (or NULL if the mapping failes). Stores the size of mmaped region
 // in '*buff_size'.
 void *MapFileToMemory(const char *file_name, uptr *buff_size);
+void *MapWritableFileToMemory(void *addr, uptr size, uptr fd, uptr offset);
 
 // Error report formatting.
 const char *StripPathPrefix(const char *filepath,
@@ -165,7 +176,7 @@ void PrintModuleAndOffset(InternalScopedString *buffer,
                           const char *module, uptr offset);
 
 // OS
-void DisableCoreDumper();
+void DisableCoreDumperIfNecessary();
 void DumpProcessMap();
 bool FileExists(const char *filename);
 const char *GetEnv(const char *name);
@@ -176,7 +187,16 @@ u32 GetUid();
 void ReExec();
 bool StackSizeIsUnlimited();
 void SetStackSizeLimitInBytes(uptr limit);
-void PrepareForSandboxing();
+bool AddressSpaceIsUnlimited();
+void SetAddressSpaceUnlimited();
+void AdjustStackSize(void *attr);
+void PrepareForSandboxing(__sanitizer_sandbox_arguments *args);
+void CovPrepareForSandboxing(__sanitizer_sandbox_arguments *args);
+void SetSandboxingCallback(void (*f)());
+
+void CovUpdateMapping(uptr caller_pc = 0);
+void CovBeforeFork();
+void CovAfterFork(int child_pid);
 
 void InitTlsSize();
 uptr GetTlsSize();
@@ -213,6 +233,14 @@ typedef void (*CheckFailedCallbackType)(const char *, int, const char *,
                                        u64, u64);
 void SetCheckFailedCallback(CheckFailedCallbackType callback);
 
+// Functions related to signal handling.
+typedef void (*SignalHandlerType)(int, void *, void *);
+bool IsDeadlySignal(int signum);
+void InstallDeadlySignalHandlers(SignalHandlerType handler);
+// Alternative signal stack (POSIX-only).
+void SetAlternateSignalStack();
+void UnsetAlternateSignalStack();
+
 // We don't want a summary too long.
 const int kMaxSummaryLength = 1024;
 // Construct a one-line string:
@@ -246,6 +274,19 @@ INLINE uptr MostSignificantSetBitIndex(uptr x) {
   _BitScanReverse64(&up, x);
 #else
   _BitScanReverse(&up, x);
+#endif
+  return up;
+}
+
+INLINE uptr LeastSignificantSetBitIndex(uptr x) {
+  CHECK_NE(x, 0U);
+  unsigned long up;  // NOLINT
+#if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
+  up = __builtin_ctzl(x);
+#elif defined(_WIN64)
+  _BitScanForward64(&up, x);
+#else
+  _BitScanForward(&up, x);
 #endif
   return up;
 }
@@ -443,11 +484,16 @@ uptr InternalBinarySearch(const Container &v, uptr first, uptr last,
 class LoadedModule {
  public:
   LoadedModule(const char *module_name, uptr base_address);
-  void addAddressRange(uptr beg, uptr end);
+  void addAddressRange(uptr beg, uptr end, bool executable);
   bool containsAddress(uptr address) const;
 
   const char *full_name() const { return full_name_; }
   uptr base_address() const { return base_address_; }
+
+  uptr n_ranges() const { return n_ranges_; }
+  uptr address_range_start(int i) const { return ranges_[i].beg; }
+  uptr address_range_end(int i) const { return ranges_[i].end; }
+  bool address_range_executable(int i) const { return exec_[i]; }
 
  private:
   struct AddressRange {
@@ -458,6 +504,7 @@ class LoadedModule {
   uptr base_address_;
   static const uptr kMaxNumberOfAddressRanges = 6;
   AddressRange ranges_[kMaxNumberOfAddressRanges];
+  bool exec_[kMaxNumberOfAddressRanges];
   uptr n_ranges_;
 };
 
@@ -479,7 +526,7 @@ const uptr kPthreadDestructorIterations = 0;
 // Callback type for iterating over a set of memory ranges.
 typedef void (*RangeIteratorCallback)(uptr begin, uptr end, void *arg);
 
-#if SANITIZER_LINUX && !defined(SANITIZER_GO)
+#if (SANITIZER_FREEBSD || SANITIZER_LINUX) && !defined(SANITIZER_GO)
 extern uptr indirect_call_wrapper;
 void SetIndirectCallWrapper(uptr wrapper);
 
@@ -489,11 +536,21 @@ F IndirectExternCall(F f) {
   return indirect_call_wrapper ? ((WrapF)indirect_call_wrapper)(f) : f;
 }
 #else
-inline void SetIndirectCallWrapper(uptr wrapper) {}
+INLINE void SetIndirectCallWrapper(uptr wrapper) {}
 template <typename F>
 F IndirectExternCall(F f) {
   return f;
 }
+#endif
+
+#if SANITIZER_ANDROID
+void AndroidLogWrite(const char *buffer);
+void GetExtraActivationFlags(char *buf, uptr size);
+void SanitizerInitializeUnwinder();
+#else
+INLINE void AndroidLogWrite(const char *buffer_unused) {}
+INLINE void GetExtraActivationFlags(char *buf, uptr size) { *buf = '\0'; }
+INLINE void SanitizerInitializeUnwinder() {}
 #endif
 }  // namespace __sanitizer
 
@@ -501,5 +558,10 @@ inline void *operator new(__sanitizer::operator_new_size_type size,
                           __sanitizer::LowLevelAllocator &alloc) {
   return alloc.Allocate(size);
 }
+
+struct StackDepotStats {
+  uptr n_uniq_ids;
+  uptr allocated;
+};
 
 #endif  // SANITIZER_COMMON_H

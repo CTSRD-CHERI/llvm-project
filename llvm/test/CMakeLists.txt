@@ -19,6 +19,7 @@ set(LLVM_TEST_DEPENDS
           UnitTests
           BugpointPasses
           LLVMHello
+          bugpoint
           llc
           lli
           lli-child-target
@@ -36,18 +37,22 @@ set(LLVM_TEST_DEPENDS
           llvm-mc
           llvm-mcmarkup
           llvm-nm
+          llvm-size
           llvm-objdump
+          llvm-profdata
           llvm-readobj
           llvm-rtdyld
           llvm-symbolizer
+          llvm-tblgen
+          llvm-vtabledump
           macho-dump
           opt
-          profile_rt-shared
           FileCheck
           count
           not
           yaml2obj
           obj2yaml
+          verify-uselistorder
         )
 
 # If Intel JIT events are supported, depend on a tool that tests the listener.

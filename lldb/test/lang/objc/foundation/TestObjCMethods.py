@@ -3,13 +3,14 @@ Set breakpoints on objective-c class and instance methods in foundation.
 Also lookup objective-c data types and evaluate expressions.
 """
 
-import os, time
+import os, os.path, time
 import unittest2
 import lldb
 import string
 from lldbtest import *
 import lldbutil
 
+file_index = 0
 @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
 class FoundationTestCase(TestBase):
 
@@ -113,14 +114,12 @@ class FoundationTestCase(TestBase):
             substrs = ["Foundation`-[NSAutoreleasePool release]"])
 
     @dsym_test
-    @expectedFailureDarwin(15797390)
     def test_expression_lookups_objc_dsym(self):
         """Test running an expression detect spurious debug info lookups (dSYM)."""
         self.buildDsym()
         self.expression_lookups_objc()
 
     @dwarf_test
-    @expectedFailureDarwin(15797390)
     def test_expression_lookups_objc_dwarf(self):
         """Test running an expression detect spurious debug info lookups (DWARF)."""
         self.buildDwarf()
@@ -136,28 +135,32 @@ class FoundationTestCase(TestBase):
 
         self.runCmd("run", RUN_SUCCEEDED)
 
+        global file_index
         # Log any DWARF lookups
-        logfile = os.path.join(os.getcwd(), "dwarf-lookups.txt")
+        ++file_index
+        logfile = os.path.join(os.getcwd(), "dwarf-lookups-" + self.getArchitecture() + "-" + str(file_index) + ".txt")
         self.runCmd("log enable -f %s dwarf lookups" % (logfile))
         self.runCmd("expr self")
         self.runCmd("log disable dwarf lookups")
         
         def cleanup():
-            sys.unlink (logfile)
+            if os.path.exists (logfile):
+                os.unlink (logfile)
         
         self.addTearDownHook(cleanup)
         
-        f = open(logfile)
-        lines = f.readlines()
-        num_errors = 0
-        for line in lines:
-            if string.find(line, "$__lldb") != -1:
-                if num_errors == 0:
-                    print "error: found spurious name lookups when evaluating an expression:"
-                num_errors += 1
-                print line,
-        self.assertTrue(num_errors == 0, "Spurious lookups detected")
-        f.close()
+        if os.path.exists (logfile):
+            f = open(logfile)
+            lines = f.readlines()
+            num_errors = 0
+            for line in lines:
+                if string.find(line, "$__lldb") != -1:
+                    if num_errors == 0:
+                        print "error: found spurious name lookups when evaluating an expression:"
+                    num_errors += 1
+                    print line,
+            self.assertTrue(num_errors == 0, "Spurious lookups detected")
+            f.close()
 
     def setUp(self):
         # Call super's setUp().

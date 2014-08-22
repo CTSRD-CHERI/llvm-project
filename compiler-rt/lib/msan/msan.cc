@@ -13,6 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "msan.h"
+#include "msan_chained_origin_depot.h"
+#include "msan_origin.h"
+#include "msan_thread.h"
 #include "sanitizer_common/sanitizer_atomic.h"
 #include "sanitizer_common/sanitizer_common.h"
 #include "sanitizer_common/sanitizer_flags.h"
@@ -20,6 +23,7 @@
 #include "sanitizer_common/sanitizer_procmaps.h"
 #include "sanitizer_common/sanitizer_stacktrace.h"
 #include "sanitizer_common/sanitizer_symbolizer.h"
+#include "sanitizer_common/sanitizer_stackdepot.h"
 
 
 // ACHTUNG! No system header includes in this file.
@@ -58,8 +62,6 @@ THREADLOCAL u64 __msan_va_arg_overflow_size_tls;
 SANITIZER_INTERFACE_ATTRIBUTE
 THREADLOCAL u32 __msan_origin_tls;
 
-THREADLOCAL MsanStackBounds msan_stack_bounds;
-
 static THREADLOCAL int is_in_symbolizer;
 static THREADLOCAL int is_in_loader;
 
@@ -96,6 +98,8 @@ bool msan_init_is_running;
 
 int msan_report_count = 0;
 
+void (*death_callback)(void);
+
 // Array of stack origins.
 // FIXME: make it resizable.
 static const uptr kNumStackOriginDescrs = 1024 * 1024;
@@ -106,24 +110,50 @@ static atomic_uint32_t NumStackOriginDescrs;
 static void ParseFlagsFromString(Flags *f, const char *str) {
   CommonFlags *cf = common_flags();
   ParseCommonFlagsFromString(cf, str);
-  ParseFlag(str, &f->poison_heap_with_zeroes, "poison_heap_with_zeroes");
-  ParseFlag(str, &f->poison_stack_with_zeroes, "poison_stack_with_zeroes");
-  ParseFlag(str, &f->poison_in_malloc, "poison_in_malloc");
-  ParseFlag(str, &f->poison_in_free, "poison_in_free");
-  ParseFlag(str, &f->exit_code, "exit_code");
+  ParseFlag(str, &f->poison_heap_with_zeroes, "poison_heap_with_zeroes", "");
+  ParseFlag(str, &f->poison_stack_with_zeroes, "poison_stack_with_zeroes", "");
+  ParseFlag(str, &f->poison_in_malloc, "poison_in_malloc", "");
+  ParseFlag(str, &f->poison_in_free, "poison_in_free", "");
+  ParseFlag(str, &f->exit_code, "exit_code", "");
   if (f->exit_code < 0 || f->exit_code > 127) {
     Printf("Exit code not in [0, 128) range: %d\n", f->exit_code);
     Die();
   }
-  ParseFlag(str, &f->report_umrs, "report_umrs");
-  ParseFlag(str, &f->wrap_signals, "wrap_signals");
+  ParseFlag(str, &f->origin_history_size, "origin_history_size", "");
+  if (f->origin_history_size < 0 ||
+      f->origin_history_size > Origin::kMaxDepth) {
+    Printf(
+        "Origin history size invalid: %d. Must be 0 (unlimited) or in [1, %d] "
+        "range.\n",
+        f->origin_history_size, Origin::kMaxDepth);
+    Die();
+  }
+  ParseFlag(str, &f->origin_history_per_stack_limit,
+            "origin_history_per_stack_limit", "");
+  // Limiting to kStackDepotMaxUseCount / 2 to avoid overflow in
+  // StackDepotHandle::inc_use_count_unsafe.
+  if (f->origin_history_per_stack_limit < 0 ||
+      f->origin_history_per_stack_limit > kStackDepotMaxUseCount / 2) {
+    Printf(
+        "Origin per-stack limit invalid: %d. Must be 0 (unlimited) or in [1, "
+        "%d] range.\n",
+        f->origin_history_per_stack_limit, kStackDepotMaxUseCount / 2);
+    Die();
+  }
+
+  ParseFlag(str, &f->report_umrs, "report_umrs", "");
+  ParseFlag(str, &f->wrap_signals, "wrap_signals", "");
+  ParseFlag(str, &f->print_stats, "print_stats", "");
+  ParseFlag(str, &f->atexit, "atexit", "");
+  ParseFlag(str, &f->store_context_size, "store_context_size", "");
+  if (f->store_context_size < 1) f->store_context_size = 1;
 
   // keep_going is an old name for halt_on_error,
   // and it has inverse meaning.
   f->halt_on_error = !f->halt_on_error;
-  ParseFlag(str, &f->halt_on_error, "keep_going");
+  ParseFlag(str, &f->halt_on_error, "keep_going", "");
   f->halt_on_error = !f->halt_on_error;
-  ParseFlag(str, &f->halt_on_error, "halt_on_error");
+  ParseFlag(str, &f->halt_on_error, "halt_on_error", "");
 }
 
 static void InitializeFlags(Flags *f, const char *options) {
@@ -132,6 +162,9 @@ static void InitializeFlags(Flags *f, const char *options) {
   cf->external_symbolizer_path = GetEnv("MSAN_SYMBOLIZER_PATH");
   cf->malloc_context_size = 20;
   cf->handle_ioctl = true;
+  // FIXME: test and enable.
+  cf->check_printf = false;
+  cf->intercept_tls_get_addr = true;
 
   internal_memset(f, 0, sizeof(*f));
   f->poison_heap_with_zeroes = false;
@@ -139,9 +172,14 @@ static void InitializeFlags(Flags *f, const char *options) {
   f->poison_in_malloc = true;
   f->poison_in_free = true;
   f->exit_code = 77;
+  f->origin_history_size = Origin::kMaxDepth;
+  f->origin_history_per_stack_limit = 20000;
   f->report_umrs = true;
   f->wrap_signals = true;
+  f->print_stats = false;
+  f->atexit = false;
   f->halt_on_error = !&__msan_keep_going;
+  f->store_context_size = 20;
 
   // Override from user-specified string.
   if (__msan_default_options)
@@ -151,22 +189,18 @@ static void InitializeFlags(Flags *f, const char *options) {
 
 void GetStackTrace(StackTrace *stack, uptr max_s, uptr pc, uptr bp,
                    bool request_fast_unwind) {
-  if (!StackTrace::WillUseFastUnwind(request_fast_unwind)) {
+  MsanThread *t = GetCurrentThread();
+  if (!t || !StackTrace::WillUseFastUnwind(request_fast_unwind)) {
     // Block reports from our interceptors during _Unwind_Backtrace.
     SymbolizerScope sym_scope;
-    return stack->Unwind(max_s, pc, bp, 0, 0, request_fast_unwind);
+    return stack->Unwind(max_s, pc, bp, 0, 0, 0, request_fast_unwind);
   }
-  uptr stack_bottom = msan_stack_bounds.stack_addr;
-  uptr stack_top = stack_bottom + msan_stack_bounds.stack_size;
-  stack->Unwind(max_s, pc, bp, stack_top, stack_bottom, request_fast_unwind);
+  stack->Unwind(max_s, pc, bp, 0, t->stack_top(), t->stack_bottom(),
+                request_fast_unwind);
 }
 
 void PrintWarning(uptr pc, uptr bp) {
   PrintWarningWithOrigin(pc, bp, __msan_origin_tls);
-}
-
-bool OriginIsValid(u32 origin) {
-  return origin != 0 && origin != (u32)-1;
 }
 
 void PrintWarningWithOrigin(uptr pc, uptr bp, u32 origin) {
@@ -179,15 +213,13 @@ void PrintWarningWithOrigin(uptr pc, uptr bp, u32 origin) {
 
   ++msan_report_count;
 
-  StackTrace stack;
-  GetStackTrace(&stack, kStackTraceMax, pc, bp,
-                common_flags()->fast_unwind_on_fatal);
+  GET_FATAL_STACK_TRACE_PC_BP(pc, bp);
 
   u32 report_origin =
-    (__msan_get_track_origins() && OriginIsValid(origin)) ? origin : 0;
+    (__msan_get_track_origins() && Origin(origin).isValid()) ? origin : 0;
   ReportUMR(&stack, report_origin);
 
-  if (__msan_get_track_origins() && !OriginIsValid(origin)) {
+  if (__msan_get_track_origins() && !Origin(origin).isValid()) {
     Printf(
         "  ORIGIN: invalid (%x). Might be a bug in MemorySanitizer origin "
         "tracking.\n    This could still be a bug in your code, too!\n",
@@ -216,7 +248,8 @@ void ScopedThreadLocalStateBackup::Restore() {
   internal_memset(__msan_va_arg_tls, 0, sizeof(__msan_va_arg_tls));
 
   if (__msan_get_track_origins()) {
-    internal_memset(&__msan_retval_origin_tls, 0, sizeof(__msan_retval_tls));
+    internal_memset(&__msan_retval_origin_tls, 0,
+                    sizeof(__msan_retval_origin_tls));
     internal_memset(__msan_param_origin_tls, 0,
                     sizeof(__msan_param_origin_tls));
   }
@@ -225,12 +258,40 @@ void ScopedThreadLocalStateBackup::Restore() {
 void UnpoisonThreadLocalState() {
 }
 
-const char *GetOriginDescrIfStack(u32 id, uptr *pc) {
-  if ((id >> 31) == 0) return 0;
-  id &= (1U << 31) - 1;
+const char *GetStackOriginDescr(u32 id, uptr *pc) {
   CHECK_LT(id, kNumStackOriginDescrs);
   if (pc) *pc = StackOriginPC[id];
   return StackOriginDescr[id];
+}
+
+u32 ChainOrigin(u32 id, StackTrace *stack) {
+  MsanThread *t = GetCurrentThread();
+  if (t && t->InSignalHandler())
+    return id;
+
+  Origin o(id);
+  int depth = o.depth();
+  // 0 means unlimited depth.
+  if (flags()->origin_history_size > 0 && depth > 0) {
+    if (depth >= flags()->origin_history_size) {
+      return id;
+    } else {
+      ++depth;
+    }
+  }
+
+  StackDepotHandle h = StackDepotPut_WithHandle(stack->trace, stack->size);
+  if (!h.valid()) return id;
+  int use_count = h.use_count();
+  if (use_count > flags()->origin_history_per_stack_limit)
+    return id;
+
+  u32 chained_id;
+  bool inserted = ChainedOriginDepotPut(h.id(), o.id(), &chained_id);
+
+  if (inserted) h.inc_use_count_unsafe();
+
+  return Origin(chained_id, depth).raw_id();
 }
 
 }  // namespace __msan
@@ -239,11 +300,49 @@ const char *GetOriginDescrIfStack(u32 id, uptr *pc) {
 
 using namespace __msan;
 
+#define MSAN_MAYBE_WARNING(type, size)              \
+  void __msan_maybe_warning_##size(type s, u32 o) { \
+    GET_CALLER_PC_BP_SP;                            \
+    (void) sp;                                      \
+    if (UNLIKELY(s)) {                              \
+      PrintWarningWithOrigin(pc, bp, o);            \
+      if (__msan::flags()->halt_on_error) {         \
+        Printf("Exiting\n");                        \
+        Die();                                      \
+      }                                             \
+    }                                               \
+  }
+
+MSAN_MAYBE_WARNING(u8, 1)
+MSAN_MAYBE_WARNING(u16, 2)
+MSAN_MAYBE_WARNING(u32, 4)
+MSAN_MAYBE_WARNING(u64, 8)
+
+#define MSAN_MAYBE_STORE_ORIGIN(type, size)                       \
+  void __msan_maybe_store_origin_##size(type s, void *p, u32 o) { \
+    if (UNLIKELY(s)) {                                            \
+      if (__msan_get_track_origins() > 1) {                       \
+        GET_CALLER_PC_BP_SP;                                      \
+        (void) sp;                                                \
+        GET_STORE_STACK_TRACE_PC_BP(pc, bp);                      \
+        o = ChainOrigin(o, &stack);                               \
+      }                                                           \
+      *(u32 *)MEM_TO_ORIGIN((uptr)p & ~3UL) = o;                  \
+    }                                                             \
+  }
+
+MSAN_MAYBE_STORE_ORIGIN(u8, 1)
+MSAN_MAYBE_STORE_ORIGIN(u16, 2)
+MSAN_MAYBE_STORE_ORIGIN(u32, 4)
+MSAN_MAYBE_STORE_ORIGIN(u64, 8)
+
 void __msan_warning() {
   GET_CALLER_PC_BP_SP;
   (void)sp;
   PrintWarning(pc, bp);
   if (__msan::flags()->halt_on_error) {
+    if (__msan::flags()->print_stats)
+      ReportStats();
     Printf("Exiting\n");
     Die();
   }
@@ -253,6 +352,8 @@ void __msan_warning_noreturn() {
   GET_CALLER_PC_BP_SP;
   (void)sp;
   PrintWarning(pc, bp);
+  if (__msan::flags()->print_stats)
+    ReportStats();
   Printf("Exiting\n");
   Die();
 }
@@ -268,6 +369,7 @@ void __msan_init() {
 
   const char *msan_options = GetEnv("MSAN_OPTIONS");
   InitializeFlags(&msan_flags, msan_options);
+  if (common_flags()->help) PrintFlagDescriptions();
   __sanitizer_set_report_path(common_flags()->log_path);
 
   InitializeInterceptors();
@@ -275,6 +377,7 @@ void __msan_init() {
 
   if (MSAN_REPLACE_OPERATORS_NEW_AND_DELETE)
     ReplaceOperatorsNewAndDelete();
+  DisableCoreDumperIfNecessary();
   if (StackSizeIsUnlimited()) {
     VPrintf(1, "Unlimited stack, doing reexec\n");
     // A reasonably large stack size. It is bigger than the usual 8Mb, because,
@@ -288,9 +391,8 @@ void __msan_init() {
   __msan_clear_on_return();
   if (__msan_get_track_origins())
     VPrintf(1, "msan_track_origins\n");
-  if (!InitShadow(/* prot1 */ false, /* prot2 */ true, /* map_shadow */ true,
-                  __msan_get_track_origins())) {
-    // FIXME: prot1 = false is only required when running under DR.
+  if (!InitShadow(/* prot1 */ !msan_running_under_dr, /* prot2 */ true,
+                  /* map_shadow */ true, __msan_get_track_origins())) {
     Printf("FATAL: MemorySanitizer can not mmap the shadow memory.\n");
     Printf("FATAL: Make sure to compile with -fPIE and to link with -pie.\n");
     Printf("FATAL: Disabling ASLR is known to cause this error.\n");
@@ -300,13 +402,14 @@ void __msan_init() {
     Die();
   }
 
-  Symbolizer::Init(common_flags()->external_symbolizer_path);
-  Symbolizer::Get()->AddHooks(EnterSymbolizer, ExitSymbolizer);
+  Symbolizer::GetOrInit()->AddHooks(EnterSymbolizer, ExitSymbolizer);
 
-  GetThreadStackAndTls(/* main */ true, &msan_stack_bounds.stack_addr,
-                       &msan_stack_bounds.stack_size,
-                       &msan_stack_bounds.tls_addr,
-                       &msan_stack_bounds.tls_size);
+  MsanTSDInit(MsanTSDDtor);
+
+  MsanThread *main_thread = MsanThread::Create(0, 0);
+  SetCurrentThread(main_thread);
+  main_thread->ThreadStart();
+
   VPrintf(1, "MemorySanitizer init done\n");
 
   msan_init_is_running = 0;
@@ -327,9 +430,7 @@ void __msan_set_expect_umr(int expect_umr) {
   } else if (!msan_expected_umr_found) {
     GET_CALLER_PC_BP_SP;
     (void)sp;
-    StackTrace stack;
-    GetStackTrace(&stack, kStackTraceMax, pc, bp,
-                  common_flags()->fast_unwind_on_fatal);
+    GET_FATAL_STACK_TRACE_PC_BP(pc, bp);
     ReportExpectedUMRNotFound(&stack);
     Die();
   }
@@ -341,23 +442,23 @@ void __msan_print_shadow(const void *x, uptr size) {
     Printf("Not a valid application address: %p\n", x);
     return;
   }
-  unsigned char *s = (unsigned char*)MEM_TO_SHADOW(x);
-  u32 *o = (u32*)MEM_TO_ORIGIN(x);
-  for (uptr i = 0; i < size; i++) {
-    Printf("%x%x ", s[i] >> 4, s[i] & 0xf);
-  }
-  Printf("\n");
-  if (__msan_get_track_origins()) {
-    for (uptr i = 0; i < size / 4; i++) {
-      Printf(" o: %x ", o[i]);
-    }
-    Printf("\n");
-  }
+
+  DescribeMemoryRange(x, size);
 }
 
-void __msan_print_param_shadow() {
-  for (int i = 0; i < 16; i++) {
-    Printf("#%d:%zx ", i, __msan_param_tls[i]);
+void __msan_dump_shadow(const void *x, uptr size) {
+  if (!MEM_IS_APP(x)) {
+    Printf("Not a valid application address: %p\n", x);
+    return;
+  }
+
+  unsigned char *s = (unsigned char*)MEM_TO_SHADOW(x);
+  for (uptr i = 0; i < size; i++) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    Printf("%x%x ", s[i] & 0xf, s[i] >> 4);
+#else
+    Printf("%x%x ", s[i] >> 4, s[i] & 0xf);
+#endif
   }
   Printf("\n");
 }
@@ -369,6 +470,23 @@ sptr __msan_test_shadow(const void *x, uptr size) {
     if (s[i])
       return i;
   return -1;
+}
+
+void __msan_check_mem_is_initialized(const void *x, uptr size) {
+  if (!__msan::flags()->report_umrs) return;
+  sptr offset = __msan_test_shadow(x, size);
+  if (offset < 0)
+    return;
+
+  GET_CALLER_PC_BP_SP;
+  (void)sp;
+  ReportUMRInsideAddressRange(__func__, x, size, offset);
+  __msan::PrintWarningWithOrigin(pc, bp,
+                                 __msan_get_origin(((char *)x) + offset));
+  if (__msan::flags()->halt_on_error) {
+    Printf("Exiting\n");
+    Die();
+  }
 }
 
 int __msan_set_poison_in_malloc(int do_poison) {
@@ -456,23 +574,25 @@ void __msan_set_alloca_origin4(void *a, uptr size, const char *descr, uptr pc) {
   bool print = false;  // internal_strstr(descr + 4, "AllocaTOTest") != 0;
   u32 id = *id_ptr;
   if (id == first_timer) {
-    id = atomic_fetch_add(&NumStackOriginDescrs,
-                          1, memory_order_relaxed);
+    u32 idx = atomic_fetch_add(&NumStackOriginDescrs, 1, memory_order_relaxed);
+    CHECK_LT(idx, kNumStackOriginDescrs);
+    StackOriginDescr[idx] = descr + 4;
+    StackOriginPC[idx] = pc;
+    ChainedOriginDepotPut(idx, Origin::kStackRoot, &id);
     *id_ptr = id;
-    CHECK_LT(id, kNumStackOriginDescrs);
-    StackOriginDescr[id] = descr + 4;
-    StackOriginPC[id] = pc;
     if (print)
-      Printf("First time: id=%d %s %p \n", id, descr + 4, pc);
+      Printf("First time: idx=%d id=%d %s %p \n", idx, id, descr + 4, pc);
   }
-  id |= 1U << 31;
   if (print)
     Printf("__msan_set_alloca_origin: descr=%s id=%x\n", descr + 4, id);
-  __msan_set_origin(a, size, id);
+  __msan_set_origin(a, size, Origin(id, 1).raw_id());
 }
 
-const char *__msan_get_origin_descr_if_stack(u32 id) {
-  return GetOriginDescrIfStack(id, 0);
+u32 __msan_chain_origin(u32 id) {
+  GET_CALLER_PC_BP_SP;
+  (void)sp;
+  GET_STORE_STACK_TRACE_PC_BP(pc, bp);
+  return ChainOrigin(id, &stack);
 }
 
 u32 __msan_get_origin(const void *a) {
@@ -490,41 +610,48 @@ u32 __msan_get_umr_origin() {
 u16 __sanitizer_unaligned_load16(const uu16 *p) {
   __msan_retval_tls[0] = *(uu16 *)MEM_TO_SHADOW((uptr)p);
   if (__msan_get_track_origins())
-    __msan_retval_origin_tls = *(uu32 *)(MEM_TO_ORIGIN((uptr)p) & ~3UL);
+    __msan_retval_origin_tls = GetOriginIfPoisoned((uptr)p, sizeof(*p));
   return *p;
 }
 u32 __sanitizer_unaligned_load32(const uu32 *p) {
   __msan_retval_tls[0] = *(uu32 *)MEM_TO_SHADOW((uptr)p);
   if (__msan_get_track_origins())
-    __msan_retval_origin_tls = *(uu32 *)(MEM_TO_ORIGIN((uptr)p) & ~3UL);
+    __msan_retval_origin_tls = GetOriginIfPoisoned((uptr)p, sizeof(*p));
   return *p;
 }
 u64 __sanitizer_unaligned_load64(const uu64 *p) {
   __msan_retval_tls[0] = *(uu64 *)MEM_TO_SHADOW((uptr)p);
   if (__msan_get_track_origins())
-    __msan_retval_origin_tls = *(uu32 *)(MEM_TO_ORIGIN((uptr)p) & ~3UL);
+    __msan_retval_origin_tls = GetOriginIfPoisoned((uptr)p, sizeof(*p));
   return *p;
 }
 void __sanitizer_unaligned_store16(uu16 *p, u16 x) {
-  *(uu16 *)MEM_TO_SHADOW((uptr)p) = __msan_param_tls[1];
-  if (__msan_get_track_origins())
+  u16 s = __msan_param_tls[1];
+  *(uu16 *)MEM_TO_SHADOW((uptr)p) = s;
+  if (s && __msan_get_track_origins())
     if (uu32 o = __msan_param_origin_tls[2])
-      __msan_set_origin(p, 2, o);
+      SetOriginIfPoisoned((uptr)p, (uptr)&s, sizeof(s), o);
   *p = x;
 }
 void __sanitizer_unaligned_store32(uu32 *p, u32 x) {
-  *(uu32 *)MEM_TO_SHADOW((uptr)p) = __msan_param_tls[1];
-  if (__msan_get_track_origins())
+  u32 s = __msan_param_tls[1];
+  *(uu32 *)MEM_TO_SHADOW((uptr)p) = s;
+  if (s && __msan_get_track_origins())
     if (uu32 o = __msan_param_origin_tls[2])
-      __msan_set_origin(p, 4, o);
+      SetOriginIfPoisoned((uptr)p, (uptr)&s, sizeof(s), o);
   *p = x;
 }
 void __sanitizer_unaligned_store64(uu64 *p, u64 x) {
-  *(uu64 *)MEM_TO_SHADOW((uptr)p) = __msan_param_tls[1];
-  if (__msan_get_track_origins())
+  u64 s = __msan_param_tls[1];
+  *(uu64 *)MEM_TO_SHADOW((uptr)p) = s;
+  if (s && __msan_get_track_origins())
     if (uu32 o = __msan_param_origin_tls[2])
-      __msan_set_origin(p, 8, o);
+      SetOriginIfPoisoned((uptr)p, (uptr)&s, sizeof(s), o);
   *p = x;
+}
+
+void __msan_set_death_callback(void (*callback)(void)) {
+  death_callback = callback;
 }
 
 void *__msan_wrap_indirect_call(void *target) {
@@ -545,3 +672,11 @@ SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
 const char* __msan_default_options() { return ""; }
 }  // extern "C"
 #endif
+
+extern "C" {
+SANITIZER_INTERFACE_ATTRIBUTE
+void __sanitizer_print_stack_trace() {
+  GET_FATAL_STACK_TRACE_PC_BP(StackTrace::GetCurrentPc(), GET_CURRENT_FRAME());
+  stack.Print();
+}
+}  // extern "C"

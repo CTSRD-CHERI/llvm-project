@@ -65,8 +65,8 @@
 /// ultimately led to the creation of an illegal COPY.
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "sgpr-copies"
 #include "AMDGPU.h"
+#include "AMDGPUSubtarget.h"
 #include "SIInstrInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -76,6 +76,8 @@
 #include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
+
+#define DEBUG_TYPE "sgpr-copies"
 
 namespace {
 
@@ -97,9 +99,9 @@ private:
 public:
   SIFixSGPRCopies(TargetMachine &tm) : MachineFunctionPass(ID) { }
 
-  virtual bool runOnMachineFunction(MachineFunction &MF);
+  bool runOnMachineFunction(MachineFunction &MF) override;
 
-  const char *getPassName() const {
+  const char *getPassName() const override {
     return "SI Fix SGPR copies";
   }
 
@@ -141,8 +143,8 @@ const TargetRegisterClass *SIFixSGPRCopies::inferRegClassFromUses(
 
   const TargetRegisterClass *RC = MRI.getRegClass(Reg);
   RC = TRI->getSubRegClass(RC, SubReg);
-  for (MachineRegisterInfo::use_iterator I = MRI.use_begin(Reg),
-                                         E = MRI.use_end(); I != E; ++I) {
+  for (MachineRegisterInfo::use_instr_iterator
+       I = MRI.use_instr_begin(Reg), E = MRI.use_instr_end(); I != E; ++I) {
     switch (I->getOpcode()) {
     case AMDGPU::COPY:
       RC = TRI->getCommonSubClass(RC, inferRegClassFromUses(TRI, MRI,
@@ -184,19 +186,20 @@ bool SIFixSGPRCopies::isVGPRToSGPRCopy(const MachineInstr &Copy,
   const TargetRegisterClass *SrcRC;
 
   if (!TargetRegisterInfo::isVirtualRegister(SrcReg) ||
-      DstRC == &AMDGPU::M0RegRegClass)
+      DstRC == &AMDGPU::M0RegRegClass ||
+      MRI.getRegClass(SrcReg) == &AMDGPU::VReg_1RegClass)
     return false;
 
-  SrcRC = inferRegClassFromDef(TRI, MRI, SrcReg, SrcSubReg);
+  SrcRC = TRI->getSubRegClass(MRI.getRegClass(SrcReg), SrcSubReg);
   return TRI->isSGPRClass(DstRC) && TRI->hasVGPRs(SrcRC);
 }
 
 bool SIFixSGPRCopies::runOnMachineFunction(MachineFunction &MF) {
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const SIRegisterInfo *TRI = static_cast<const SIRegisterInfo *>(
-      MF.getTarget().getRegisterInfo());
-  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
-      MF.getTarget().getInstrInfo());
+  const SIRegisterInfo *TRI =
+      static_cast<const SIRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
+  const SIInstrInfo *TII =
+      static_cast<const SIInstrInfo *>(MF.getSubtarget().getInstrInfo());
   for (MachineFunction::iterator BI = MF.begin(), BE = MF.end();
                                                   BI != BE; ++BI) {
 
@@ -254,6 +257,19 @@ bool SIFixSGPRCopies::runOnMachineFunction(MachineFunction &MF) {
         DEBUG(MI.print(dbgs()));
 
         TII->moveToVALU(MI);
+        break;
+      }
+      case AMDGPU::INSERT_SUBREG: {
+        const TargetRegisterClass *DstRC, *Src0RC, *Src1RC;
+        DstRC = MRI.getRegClass(MI.getOperand(0).getReg());
+        Src0RC = MRI.getRegClass(MI.getOperand(1).getReg());
+        Src1RC = MRI.getRegClass(MI.getOperand(2).getReg());
+        if (TRI->isSGPRClass(DstRC) &&
+            (TRI->hasVGPRs(Src0RC) || TRI->hasVGPRs(Src1RC))) {
+          DEBUG(dbgs() << " Fixing INSERT_SUBREG:\n");
+          DEBUG(MI.print(dbgs()));
+          TII->moveToVALU(MI);
+        }
         break;
       }
       }

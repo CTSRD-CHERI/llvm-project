@@ -16,14 +16,15 @@
 #define LLD_READER_WRITER_LINKER_SCRIPT_H
 
 #include "lld/Core/LLVM.h"
-
-#include "llvm/ADT/OwningPtr.h"
+#include "lld/Core/range.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/system_error.h"
+#include "llvm/Support/raw_ostream.h"
+#include <memory>
+#include <system_error>
+#include <vector>
 
 namespace lld {
 namespace script {
@@ -33,11 +34,14 @@ public:
     unknown,
     eof,
     identifier,
+    libname,
+    comma,
     l_paren,
     r_paren,
     kw_entry,
     kw_group,
     kw_output_format,
+    kw_output_arch,
     kw_as_needed
   };
 
@@ -75,11 +79,7 @@ private:
 
 class Command {
 public:
-  enum class Kind {
-    Entry,
-    OutputFormat,
-    Group,
-  };
+  enum class Kind { Entry, OutputFormat, OutputArch, Group, };
 
   Kind getKind() const { return _kind; }
 
@@ -96,53 +96,83 @@ private:
 
 class OutputFormat : public Command {
 public:
-  explicit OutputFormat(StringRef format)
-      : Command(Kind::OutputFormat), _format(format) {}
+  explicit OutputFormat(StringRef format) : Command(Kind::OutputFormat) {
+    _formats.push_back(format);
+  }
 
   static bool classof(const Command *c) {
     return c->getKind() == Kind::OutputFormat;
   }
 
-  virtual void dump(raw_ostream &os) const {
-    os << "OUTPUT_FORMAT(" << getFormat() << ")\n";
+  void dump(raw_ostream &os) const override {
+    os << "OUTPUT_FORMAT(";
+    bool first = true;
+    for (StringRef format : _formats) {
+      if (!first)
+        os << ",";
+      first = false;
+      os << format;
+    }
+    os << ")\n";
   }
 
-  StringRef getFormat() const { return _format; }
+  virtual void addOutputFormat(StringRef format) { _formats.push_back(format); }
+
+  range<StringRef *> getFormats() { return _formats; }
 
 private:
-  StringRef _format;
+  std::vector<StringRef> _formats;
+};
+
+class OutputArch : public Command {
+public:
+  explicit OutputArch(StringRef arch)
+      : Command(Kind::OutputArch), _arch(arch) {}
+
+  static bool classof(const Command *c) {
+    return c->getKind() == Kind::OutputArch;
+  }
+
+  void dump(raw_ostream &os) const override {
+    os << "OUTPUT_arch(" << getArch() << ")\n";
+  }
+
+  StringRef getArch() const { return _arch; }
+
+private:
+  StringRef _arch;
 };
 
 struct Path {
   StringRef _path;
   bool _asNeeded;
+  bool _isDashlPrefix;
 
-  Path() : _asNeeded(false) {}
-  explicit Path(StringRef path, bool asNeeded = false)
-      : _path(path), _asNeeded(asNeeded) {}
+  Path() : _asNeeded(false), _isDashlPrefix(false) {}
+  explicit Path(StringRef path, bool asNeeded = false, bool isLib = false)
+      : _path(path), _asNeeded(asNeeded), _isDashlPrefix(isLib) {}
 };
 
 class Group : public Command {
 public:
   template <class RangeT>
   explicit Group(RangeT range) : Command(Kind::Group) {
-    using std::begin;
-    using std::end;
-    std::copy(begin(range), end(range), std::back_inserter(_paths));
+    std::copy(std::begin(range), std::end(range), std::back_inserter(_paths));
   }
 
   static bool classof(const Command *c) { return c->getKind() == Kind::Group; }
 
-  virtual void dump(raw_ostream &os) const {
+  void dump(raw_ostream &os) const override {
     os << "GROUP(";
     bool first = true;
-    for (const auto &path : getPaths()) {
+    for (const Path &path : getPaths()) {
       if (!first)
         os << " ";
-      else
-        first = false;
+      first = false;
       if (path._asNeeded)
         os << "AS_NEEDED(";
+      if (path._isDashlPrefix)
+        os << "-l";
       os << path._path;
       if (path._asNeeded)
         os << ")";
@@ -165,7 +195,7 @@ public:
     return c->getKind() == Kind::Entry;
   }
 
-  virtual void dump(raw_ostream &os) const {
+  void dump(raw_ostream &os) const override {
     os << "ENTRY(" << _entryName << ")\n";
   }
 
@@ -180,7 +210,7 @@ private:
 class LinkerScript {
 public:
   void dump(raw_ostream &os) const {
-    for (const auto &c : _commands)
+    for (const Command *c : _commands)
       c->dump(os);
   }
 
@@ -211,7 +241,10 @@ private:
     return true;
   }
 
+  bool isNextToken(Token::Kind kind) { return (_tok._kind == kind); }
+
   OutputFormat *parseOutputFormat();
+  OutputArch *parseOutputArch();
   Group *parseGroup();
   bool parseAsNeeded(std::vector<Path> &paths);
   Entry *parseEntry();

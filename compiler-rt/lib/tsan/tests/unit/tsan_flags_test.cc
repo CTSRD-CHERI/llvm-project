@@ -38,10 +38,10 @@ static const char *options1 =
   " enable_annotations=0"
   " suppress_equal_stacks=0"
   " suppress_equal_addresses=0"
-  " suppress_java=0"
   " report_bugs=0"
   " report_thread_leaks=0"
   " report_destroy_locked=0"
+  " report_mutex_bugs=0"
   " report_signal_unsafe=0"
   " report_atomic_races=0"
   " force_seq_cst_atomics=0"
@@ -59,9 +59,11 @@ static const char *options1 =
   " running_on_valgrind=0"
   " history_size=5"
   " io_sync=1"
+  " die_after_fork=true"
 
   " symbolize=0"
   " external_symbolizer_path=asdfgh"
+  " allow_addr2line=true"
   " strip_path_prefix=zxcvb"
   " fast_unwind_on_fatal=0"
   " fast_unwind_on_malloc=0"
@@ -73,16 +75,17 @@ static const char *options1 =
   " leak_check_at_exit=0"
   " allocator_may_return_null=0"
   " print_summary=0"
+  " legacy_pthread_cond=0"
   "";
 
 static const char *options2 =
   " enable_annotations=true"
   " suppress_equal_stacks=true"
   " suppress_equal_addresses=true"
-  " suppress_java=true"
   " report_bugs=true"
   " report_thread_leaks=true"
   " report_destroy_locked=true"
+  " report_mutex_bugs=true"
   " report_signal_unsafe=true"
   " report_atomic_races=true"
   " force_seq_cst_atomics=true"
@@ -100,9 +103,11 @@ static const char *options2 =
   " running_on_valgrind=true"
   " history_size=6"
   " io_sync=2"
+  " die_after_fork=false"
 
   " symbolize=true"
   " external_symbolizer_path=cccccc"
+  " allow_addr2line=false"
   " strip_path_prefix=ddddddd"
   " fast_unwind_on_fatal=true"
   " fast_unwind_on_malloc=true"
@@ -114,16 +119,17 @@ static const char *options2 =
   " leak_check_at_exit=true"
   " allocator_may_return_null=true"
   " print_summary=true"
+  " legacy_pthread_cond=true"
   "";
 
 void VerifyOptions1(Flags *f) {
   EXPECT_EQ(f->enable_annotations, 0);
   EXPECT_EQ(f->suppress_equal_stacks, 0);
   EXPECT_EQ(f->suppress_equal_addresses, 0);
-  EXPECT_EQ(f->suppress_java, 0);
   EXPECT_EQ(f->report_bugs, 0);
   EXPECT_EQ(f->report_thread_leaks, 0);
   EXPECT_EQ(f->report_destroy_locked, 0);
+  EXPECT_EQ(f->report_mutex_bugs, 0);
   EXPECT_EQ(f->report_signal_unsafe, 0);
   EXPECT_EQ(f->report_atomic_races, 0);
   EXPECT_EQ(f->force_seq_cst_atomics, 0);
@@ -141,9 +147,11 @@ void VerifyOptions1(Flags *f) {
   EXPECT_EQ(f->running_on_valgrind, 0);
   EXPECT_EQ(f->history_size, 5);
   EXPECT_EQ(f->io_sync, 1);
+  EXPECT_EQ(f->die_after_fork, true);
 
   EXPECT_EQ(f->symbolize, 0);
-  EXPECT_EQ(f->external_symbolizer_path, std::string(""));
+  EXPECT_EQ(f->external_symbolizer_path, std::string("asdfgh"));
+  EXPECT_EQ(f->allow_addr2line, true);
   EXPECT_EQ(f->strip_path_prefix, std::string("zxcvb"));
   EXPECT_EQ(f->fast_unwind_on_fatal, 0);
   EXPECT_EQ(f->fast_unwind_on_malloc, 0);
@@ -155,16 +163,17 @@ void VerifyOptions1(Flags *f) {
   EXPECT_EQ(f->leak_check_at_exit, 0);
   EXPECT_EQ(f->allocator_may_return_null, 0);
   EXPECT_EQ(f->print_summary, 0);
+  EXPECT_EQ(f->legacy_pthread_cond, false);
 }
 
 void VerifyOptions2(Flags *f) {
   EXPECT_EQ(f->enable_annotations, true);
   EXPECT_EQ(f->suppress_equal_stacks, true);
   EXPECT_EQ(f->suppress_equal_addresses, true);
-  EXPECT_EQ(f->suppress_java, true);
   EXPECT_EQ(f->report_bugs, true);
   EXPECT_EQ(f->report_thread_leaks, true);
   EXPECT_EQ(f->report_destroy_locked, true);
+  EXPECT_EQ(f->report_mutex_bugs, true);
   EXPECT_EQ(f->report_signal_unsafe, true);
   EXPECT_EQ(f->report_atomic_races, true);
   EXPECT_EQ(f->force_seq_cst_atomics, true);
@@ -182,9 +191,11 @@ void VerifyOptions2(Flags *f) {
   EXPECT_EQ(f->running_on_valgrind, true);
   EXPECT_EQ(f->history_size, 6);
   EXPECT_EQ(f->io_sync, 2);
+  EXPECT_EQ(f->die_after_fork, false);
 
   EXPECT_EQ(f->symbolize, true);
   EXPECT_EQ(f->external_symbolizer_path, std::string("cccccc"));
+  EXPECT_EQ(f->allow_addr2line, false);
   EXPECT_EQ(f->strip_path_prefix, std::string("ddddddd"));
   EXPECT_EQ(f->fast_unwind_on_fatal, true);
   EXPECT_EQ(f->fast_unwind_on_malloc, true);
@@ -196,6 +207,7 @@ void VerifyOptions2(Flags *f) {
   EXPECT_EQ(f->leak_check_at_exit, true);
   EXPECT_EQ(f->allocator_may_return_null, true);
   EXPECT_EQ(f->print_summary, true);
+  EXPECT_EQ(f->legacy_pthread_cond, true);
 }
 
 static const char *test_default_options;

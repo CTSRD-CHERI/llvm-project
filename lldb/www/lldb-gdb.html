@@ -352,7 +352,7 @@
                     <tr>
                         <td class="content">
                             <b>(gdb)</b> break main<br>
-                            <i>(Hope that there are no C funtions named <b>main</b>)</i>.
+                            <i>(Hope that there are no C functions named <b>main</b>)</i>.
                         </td>
                         <td class="content">
                             <b>(lldb)</b> breakpoint set --method main<br>
@@ -375,7 +375,7 @@
                     <tr>
                         <td class="content">
                             <b>(gdb)</b> break count<br>
-                            <i>(Hope that there are no C or C++ funtions named <b>count</b>)</i>.
+                            <i>(Hope that there are no C or C++ functions named <b>count</b>)</i>.
                         </td>
                         <td class="content">
                             <b>(lldb)</b> breakpoint set --selector count<br>
@@ -416,6 +416,18 @@
                         <td class="content">
                             <b>(lldb)</b> breakpoint set --source-pattern regular-expression --file SourceFile<br>
                             <b>(lldb)</b> br s -p regular-expression -f file<br>
+                        </td>
+                    </tr>
+
+                    <tr><td class="header" colspan="2">Set a conditional breakpoint</td></tr>
+
+                    <tr>
+                        <td class="content">
+                            <b>(gdb)</b> break foo if strcmp(y,&quot;hello&quot;) == 0<br>
+                        </td>
+                        <td class="content">
+                            <b>(lldb)</b> breakpoint set --name foo --condition '(int)strcmp(y,&quot;hello&quot;) == 0'<br>
+                            <b>(lldb)</b> br s -n foo -c '(int)strcmp(y,&quot;hello&quot;) == 0'<br>
                         </td>
                     </tr>
 
@@ -604,7 +616,7 @@
                         </td>
                     </tr>
 
-                    <tr><td class="header" colspan="2">Display a the variable "argc" and "argv" every time you stop.</td></tr>
+                    <tr><td class="header" colspan="2">Display the variables "argc" and "argv" every time you stop.</td></tr>
                     <tr>
                         <td class="content">
                             <b>(gdb)</b> display argc<br>
@@ -618,7 +630,7 @@
                         </td>
                     </tr>
 
-                    <tr><td class="header" colspan="2">Display a the variable "argc" and "argv" only when you stop in the function named <b>main</b>.</td></tr>
+                    <tr><td class="header" colspan="2">Display the variables "argc" and "argv" only when you stop in the function named <b>main</b>.</td></tr>
                     <tr>
                         <td class="content">
                         </td>
@@ -974,8 +986,8 @@
                             <b>(gdb)</b> dump memory /tmp/mem.bin 0x1000 0x2000
                         </td>
                         <td class="content">
-                            <b>(lldb)</b> memory read --outfile /tmp/mem.bin --binary  0x1000 0x1200<br>
-                            <b>(lldb)</b> me r -o /tmp/mem.bin -b 0x1000 0x1200<br>
+                            <b>(lldb)</b> memory read --outfile /tmp/mem.bin --binary  0x1000 0x2000<br>
+                            <b>(lldb)</b> me r -o /tmp/mem.bin -b 0x1000 0x2000<br>
                         </td>
                     </tr>
                     <tr><td class="header" colspan="2">Get information about a specific heap allocation (available on Mac OS X only).</td></tr>
@@ -1145,7 +1157,7 @@
                         </td>
                     </tr>
 
-                    <tr><td class="header" colspan="2">Find full souce line information.</td></tr>
+                    <tr><td class="header" colspan="2">Find full source line information.</td></tr>
                     <tr>
                         <td class="content">
                             <b>(gdb)</b> info line 0x1ec4<br>
@@ -1255,7 +1267,7 @@
                             <b>(gdb)</b> directory /my/path<br>
                         </td>
                         <td class="content">
-                            (<i>No equivalent command - use the source-map instead.)<br>
+                            (<i>No equivalent command - use the source-map instead.</i>)<br>
                         </td>
                     </tr>
 

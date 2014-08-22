@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_GR_FRONTENDACTIONS_H
-#define LLVM_CLANG_GR_FRONTENDACTIONS_H
+#ifndef LLVM_CLANG_STATICANALYZER_FRONTEND_FRONTENDACTIONS_H
+#define LLVM_CLANG_STATICANALYZER_FRONTEND_FRONTENDACTIONS_H
 
 #include "clang/Frontend/FrontendAction.h"
 
@@ -22,8 +22,8 @@ namespace ento {
 
 class AnalysisAction : public ASTFrontendAction {
 protected:
-  virtual ASTConsumer *CreateASTConsumer(CompilerInstance &CI,
-                                         StringRef InFile);
+  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
+                                                 StringRef InFile) override;
 };
 
 void printCheckerHelp(raw_ostream &OS, ArrayRef<std::string> plugins);

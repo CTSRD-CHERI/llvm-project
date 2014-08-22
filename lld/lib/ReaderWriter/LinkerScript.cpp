@@ -24,10 +24,13 @@ void Token::dump(raw_ostream &os) const {
     break;
   CASE(eof)
   CASE(identifier)
+  CASE(libname)
   CASE(kw_as_needed)
   CASE(kw_entry)
   CASE(kw_group)
   CASE(kw_output_format)
+  CASE(kw_output_arch)
+  CASE(comma)
   CASE(l_paren)
   CASE(r_paren)
   CASE(unknown)
@@ -66,7 +69,13 @@ bool Lexer::canContinueName(char c) const {
   case '0': case '1': case '2': case '3': case '4': case '5': case '6':
   case '7': case '8': case '9':
   case '_': case '.': case '$': case '/': case '\\': case '~': case '=':
-  case '+': case ',': case '[': case ']': case '*': case '?': case '-':
+  case '+':
+  case '[':
+  case ']':
+  case '*':
+  case '?':
+  case '-':
+  case ':':
     return true;
   default:
     return false;
@@ -92,7 +101,42 @@ void Lexer::lex(Token &tok) {
     tok = Token(_buffer.substr(0, 1), Token::r_paren);
     _buffer = _buffer.drop_front();
     return;
+  case ',':
+    tok = Token(_buffer.substr(0, 1), Token::comma);
+    _buffer = _buffer.drop_front();
+    return;
   default:
+    // Handle quoted strings. They are treated as identifiers for
+    // simplicity.
+    if ((_buffer[0] == '\"') || (_buffer[0] == '\'')) {
+      char c = _buffer[0];
+      _buffer = _buffer.drop_front();
+      auto quotedStringEnd = _buffer.find(c);
+      if (quotedStringEnd == StringRef::npos || quotedStringEnd == 0)
+        break;
+      StringRef word = _buffer.substr(0, quotedStringEnd);
+      tok = Token(word, Token::identifier);
+      _buffer = _buffer.drop_front(quotedStringEnd + 1);
+      return;
+    }
+    // -l<lib name>
+    if (_buffer.startswith("-l")) {
+      _buffer = _buffer.drop_front(2);
+      StringRef::size_type start = 0;
+      if (_buffer[start] == ':')
+        ++start;
+      if (!canStartName(_buffer[start]))
+        // Create 'unknown' token.
+        break;
+      auto libNameEnd =
+          std::find_if(_buffer.begin() + start + 1, _buffer.end(),
+                       [=](char c) { return !canContinueName(c); });
+      StringRef::size_type libNameLen =
+          std::distance(_buffer.begin(), libNameEnd);
+      tok = Token(_buffer.substr(0, libNameLen), Token::libname);
+      _buffer = _buffer.drop_front(libNameLen);
+      return;
+    }
     /// keyword or identifer.
     if (!canStartName(_buffer[0]))
       break;
@@ -107,11 +151,12 @@ void Lexer::lex(Token &tok) {
       break;
     StringRef word = _buffer.substr(0, end);
     Token::Kind kind = llvm::StringSwitch<Token::Kind>(word)
-      .Case("OUTPUT_FORMAT", Token::kw_output_format)
-      .Case("GROUP", Token::kw_group)
-      .Case("AS_NEEDED", Token::kw_as_needed)
-      .Case("ENTRY", Token::kw_entry)
-      .Default(Token::identifier);
+                           .Case("OUTPUT_FORMAT", Token::kw_output_format)
+                           .Case("OUTPUT_ARCH", Token::kw_output_arch)
+                           .Case("GROUP", Token::kw_group)
+                           .Case("AS_NEEDED", Token::kw_as_needed)
+                           .Case("ENTRY", Token::kw_entry)
+                           .Default(Token::identifier);
     tok = Token(word, kind);
     _buffer = _buffer.drop_front(end);
     return;
@@ -172,6 +217,13 @@ LinkerScript *Parser::parse() {
       _script._commands.push_back(outputFormat);
       break;
     }
+    case Token::kw_output_arch: {
+      auto outputArch = parseOutputArch();
+      if (!outputArch)
+        return nullptr;
+      _script._commands.push_back(outputArch);
+      break;
+    }
     case Token::kw_group: {
       auto group = parseGroup();
       if (!group)
@@ -213,6 +265,40 @@ OutputFormat *Parser::parseOutputFormat() {
   auto ret = new (_alloc) OutputFormat(_tok._range);
   consumeToken();
 
+  do {
+    if (isNextToken(Token::comma))
+      consumeToken();
+    else
+      break;
+    if (_tok._kind != Token::identifier) {
+      error(_tok, "Expected identifier in OUTPUT_FORMAT.");
+      return nullptr;
+    }
+    ret->addOutputFormat(_tok._range);
+    consumeToken();
+  } while (isNextToken(Token::comma));
+
+  if (!expectAndConsume(Token::r_paren, "expected )"))
+    return nullptr;
+
+  return ret;
+}
+
+// Parse OUTPUT_ARCH(ident)
+OutputArch *Parser::parseOutputArch() {
+  assert(_tok._kind == Token::kw_output_arch && "Expected OUTPUT_ARCH!");
+  consumeToken();
+  if (!expectAndConsume(Token::l_paren, "expected ("))
+    return nullptr;
+
+  if (_tok._kind != Token::identifier) {
+    error(_tok, "Expected identifier in OUTPUT_ARCH.");
+    return nullptr;
+  }
+
+  auto ret = new (_alloc) OutputArch(_tok._range);
+  consumeToken();
+
   if (!expectAndConsume(Token::r_paren, "expected )"))
     return nullptr;
 
@@ -228,10 +314,15 @@ Group *Parser::parseGroup() {
 
   std::vector<Path> paths;
 
-  while (_tok._kind == Token::identifier || _tok._kind == Token::kw_as_needed) {
+  while (_tok._kind == Token::identifier || _tok._kind == Token::libname ||
+         _tok._kind == Token::kw_as_needed) {
     switch (_tok._kind) {
     case Token::identifier:
       paths.push_back(Path(_tok._range));
+      consumeToken();
+      break;
+    case Token::libname:
+      paths.push_back(Path(_tok._range, false, true));
       consumeToken();
       break;
     case Token::kw_as_needed:
@@ -258,9 +349,19 @@ bool Parser::parseAsNeeded(std::vector<Path> &paths) {
   if (!expectAndConsume(Token::l_paren, "expected ("))
     return false;
 
-  while (_tok._kind == Token::identifier) {
-    paths.push_back(Path(_tok._range, true));
-    consumeToken();
+  while (_tok._kind == Token::identifier || _tok._kind == Token::libname) {
+    switch (_tok._kind) {
+    case Token::identifier:
+      paths.push_back(Path(_tok._range, true, false));
+      consumeToken();
+      break;
+    case Token::libname:
+      paths.push_back(Path(_tok._range, true, true));
+      consumeToken();
+      break;
+    default:
+      llvm_unreachable("Invalid token.");
+    }
   }
 
   if (!expectAndConsume(Token::r_paren, "expected )"))

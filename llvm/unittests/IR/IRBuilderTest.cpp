@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
@@ -16,7 +15,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Module.h"
-#include "llvm/Support/NoFolder.h"
+#include "llvm/IR/NoFolder.h"
 #include "gtest/gtest.h"
 
 using namespace llvm;
@@ -32,16 +31,16 @@ protected:
     F = Function::Create(FTy, Function::ExternalLinkage, "", M.get());
     BB = BasicBlock::Create(Ctx, "", F);
     GV = new GlobalVariable(*M, Type::getFloatTy(Ctx), true,
-                            GlobalValue::ExternalLinkage, 0);
+                            GlobalValue::ExternalLinkage, nullptr);
   }
 
   virtual void TearDown() {
-    BB = 0;
+    BB = nullptr;
     M.reset();
   }
 
   LLVMContext Ctx;
-  OwningPtr<Module> M;
+  std::unique_ptr<Module> M;
   Function *F;
   BasicBlock *BB;
   GlobalVariable *GV;
@@ -72,9 +71,9 @@ TEST_F(IRBuilderTest, Lifetime) {
 
   IntrinsicInst *II_Start1 = dyn_cast<IntrinsicInst>(Start1);
   IntrinsicInst *II_End1 = dyn_cast<IntrinsicInst>(End1);
-  ASSERT_TRUE(II_Start1 != NULL);
+  ASSERT_TRUE(II_Start1 != nullptr);
   EXPECT_EQ(II_Start1->getIntrinsicID(), Intrinsic::lifetime_start);
-  ASSERT_TRUE(II_End1 != NULL);
+  ASSERT_TRUE(II_End1 != nullptr);
   EXPECT_EQ(II_End1->getIntrinsicID(), Intrinsic::lifetime_end);
 }
 
@@ -106,6 +105,14 @@ TEST_F(IRBuilderTest, LandingPadName) {
   LandingPadInst *LP = Builder.CreateLandingPad(Builder.getInt32Ty(),
                                                 Builder.getInt32(0), 0, "LP");
   EXPECT_EQ(LP->getName(), "LP");
+}
+
+TEST_F(IRBuilderTest, DataLayout) {
+  std::unique_ptr<Module> M(new Module("test", Ctx));
+  M->setDataLayout("e-n32");
+  EXPECT_TRUE(M->getDataLayout()->isLegalInteger(32));
+  M->setDataLayout("e");
+  EXPECT_FALSE(M->getDataLayout()->isLegalInteger(32));
 }
 
 TEST_F(IRBuilderTest, GetIntTy) {
@@ -196,7 +203,7 @@ TEST_F(IRBuilderTest, WrapFlags) {
 
   // Test instructions.
   GlobalVariable *G = new GlobalVariable(*M, Builder.getInt32Ty(), true,
-                                         GlobalValue::ExternalLinkage, 0);
+                                         GlobalValue::ExternalLinkage, nullptr);
   Value *V = Builder.CreateLoad(G);
   EXPECT_TRUE(
       cast<BinaryOperator>(Builder.CreateNSWAdd(V, V))->hasNoSignedWrap());

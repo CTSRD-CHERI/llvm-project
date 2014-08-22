@@ -7,9 +7,7 @@ else ()
   set(LLVM_BUILD_MODE "%(build_mode)s")
 endif ()
 
-string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} CLANG_TOOLS_DIR ${CLANG_RUNTIME_OUTPUT_INTDIR})
-string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} LLVM_TOOLS_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR})
-string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} LLVM_LIBS_DIR  ${LLVM_LIBRARY_OUTPUT_INTDIR})
+string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} CLANG_TOOLS_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR})
 
 configure_lit_site_cfg(
   ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
@@ -28,11 +26,31 @@ endif ()
 
 list(APPEND CLANG_TEST_DEPS
   clang clang-headers
-  c-index-test diagtool arcmt-test c-arcmt-test
   clang-check clang-format
-  PrintFunctionNames
-  SampleAnalyzerPlugin
+  c-index-test diagtool
+  clang-tblgen
   )
+
+if (CLANG_ENABLE_ARCMT)
+  list(APPEND CLANG_TEST_DEPS
+    arcmt-test
+    c-arcmt-test
+  )
+endif ()
+
+if (ENABLE_CLANG_EXAMPLES)
+  list(APPEND CLANG_TEST_DEPS
+    clang-interpreter
+    PrintFunctionNames
+    )
+endif ()
+
+if (ENABLE_CLANG_STATIC_ANALYZER AND ENABLE_CLANG_EXAMPLES)
+  list(APPEND CLANG_TEST_DEPS
+    SampleAnalyzerPlugin
+    )
+endif ()
+
 set(CLANG_TEST_PARAMS
   clang_site_config=${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
   )
@@ -40,7 +58,7 @@ set(CLANG_TEST_PARAMS
 if( NOT CLANG_BUILT_STANDALONE )
   list(APPEND CLANG_TEST_DEPS
     llvm-config
-    llc opt FileCheck count not llvm-symbolizer
+    llc opt FileCheck count not llvm-symbolizer llvm-profdata
     )
 endif()
 

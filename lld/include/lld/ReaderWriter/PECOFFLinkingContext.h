@@ -21,6 +21,7 @@
 #include "llvm/Support/FileUtilities.h"
 
 #include <map>
+#include <mutex>
 #include <set>
 #include <vector>
 
@@ -35,7 +36,8 @@ class Group;
 class PECOFFLinkingContext : public LinkingContext {
 public:
   PECOFFLinkingContext()
-      : _baseAddress(0x400000), _stackReserve(1024 * 1024), _stackCommit(4096),
+      : _mutex(), _allocMutex(), _hasEntry(true), _baseAddress(invalidBaseAddress),
+        _stackReserve(1024 * 1024), _stackCommit(4096),
         _heapReserve(1024 * 1024), _heapCommit(4096), _noDefaultLibAll(false),
         _sectionDefaultAlignment(4096),
         _subsystem(llvm::COFF::IMAGE_SUBSYSTEM_UNKNOWN),
@@ -45,8 +47,10 @@ public:
         _swapRunFromNet(false), _baseRelocationEnabled(true),
         _terminalServerAware(true), _dynamicBaseEnabled(true),
         _createManifest(true), _embedManifest(false), _manifestId(1),
-        _manifestLevel("'asInvoker'"), _manifestUiAccess("'false'"),
-        _isDll(false), _dosStub(llvm::makeArrayRef(DEFAULT_DOS_STUB)) {
+        _manifestUAC(true), _manifestLevel("'asInvoker'"),
+        _manifestUiAccess("'false'"), _isDll(false), _requireSEH(false),
+        _noSEH(false), _implib(""),
+        _dosStub(llvm::makeArrayRef(DEFAULT_DOS_STUB)) {
     setDeadStripping(true);
   }
 
@@ -63,6 +67,7 @@ public:
     }
 
     std::string name;
+    std::string externalName;
     int ordinal;
     bool noname;
     bool isData;
@@ -71,13 +76,23 @@ public:
   /// \brief Casting support
   static inline bool classof(const LinkingContext *info) { return true; }
 
-  virtual Writer &writer() const;
-  virtual bool validateImpl(raw_ostream &diagnostics);
+  Writer &writer() const override;
+  bool validateImpl(raw_ostream &diagnostics) override;
 
-  virtual void addPasses(PassManager &pm);
+  void addPasses(PassManager &pm) override;
 
-  virtual bool
-  createImplicitFiles(std::vector<std::unique_ptr<File> > &result) const;
+  bool createImplicitFiles(
+      std::vector<std::unique_ptr<File> > &result) const override;
+
+  bool is64Bit() const {
+    return _machineType == llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
+  }
+
+  /// Page size of x86 processor. Some data needs to be aligned at page boundary
+  /// when loaded into memory.
+  uint64_t getPageSize() const {
+    return 0x1000;
+  }
 
   void appendInputSearchPath(StringRef dirPath) {
     _inputSearchPaths.push_back(dirPath);
@@ -98,13 +113,14 @@ public:
   StringRef decorateSymbol(StringRef name) const;
   StringRef undecorateSymbol(StringRef name) const;
 
-  void setEntrySymbolName(StringRef name) {
-    if (!name.empty())
-      LinkingContext::setEntrySymbolName(decorateSymbol(name));
-  }
+  void setEntrySymbolName(StringRef name) { _entry = name; }
+  StringRef getEntrySymbolName() const { return _entry; }
+
+  void setHasEntry(bool val) { _hasEntry = val; }
+  bool hasEntry() const { return _hasEntry; }
 
   void setBaseAddress(uint64_t addr) { _baseAddress = addr; }
-  uint64_t getBaseAddress() const { return _baseAddress; }
+  uint64_t getBaseAddress() const;
 
   void setStackReserve(uint64_t size) { _stackReserve = size; }
   void setStackCommit(uint64_t size) { _stackCommit = size; }
@@ -176,6 +192,9 @@ public:
   void setManifestId(int val) { _manifestId = val; }
   int getManifestId() const { return _manifestId; }
 
+  void setManifestUAC(bool val) { _manifestUAC = val; }
+  bool getManifestUAC() const { return _manifestUAC; }
+
   void setManifestLevel(std::string val) { _manifestLevel = std::move(val); }
   const std::string &getManifestLevel() const { return _manifestLevel; }
 
@@ -189,6 +208,18 @@ public:
 
   void setIsDll(bool val) { _isDll = val; }
   bool isDll() const { return _isDll; }
+
+  void setSafeSEH(bool val) {
+    if (val)
+      _requireSEH = true;
+    else
+      _noSEH = true;
+  }
+  bool requireSEH() const { return _requireSEH; }
+  bool noSEH() const { return _noSEH; }
+
+  void setOutputImportLibraryPath(const std::string &val) { _implib = val; }
+  std::string getOutputImportLibraryPath() const;
 
   StringRef getOutputSectionName(StringRef sectionName) const;
   bool addSectionRenaming(raw_ostream &diagnostics,
@@ -220,7 +251,9 @@ public:
   const std::set<ExportDesc> &getDllExports() const { return _dllExports; }
 
   StringRef allocate(StringRef ref) const {
+    _allocMutex.lock();
     char *x = _allocator.Allocate<char>(ref.size() + 1);
+    _allocMutex.unlock();
     memcpy(x, ref.data(), ref.size());
     x[ref.size()] = '\0';
     return x;
@@ -228,24 +261,59 @@ public:
 
   ArrayRef<uint8_t> allocate(ArrayRef<uint8_t> array) const {
     size_t size = array.size();
+    _allocMutex.lock();
     uint8_t *p = _allocator.Allocate<uint8_t>(size);
+    _allocMutex.unlock();
     memcpy(p, array.data(), size);
     return ArrayRef<uint8_t>(p, p + array.size());
   }
 
+  template <typename T> T &allocateCopy(const T &x) const {
+    _allocMutex.lock();
+    T *r = new (_allocator) T(x);
+    _allocMutex.unlock();
+    return *r;
+  }
+
   virtual bool hasInputGraph() { return !!_inputGraph; }
+
+  void setEntryNode(SimpleFileNode *node) { _entryNode = node; }
+  SimpleFileNode *getEntryNode() const { return _entryNode; }
 
   void setLibraryGroup(Group *group) { _libraryGroup = group; }
   Group *getLibraryGroup() const { return _libraryGroup; }
 
+  void setModuleDefinitionFile(const std::string val) {
+    _moduleDefinitionFile = val;
+  }
+  std::string getModuleDefinitionFile() const {
+    return _moduleDefinitionFile;
+  }
+
+  std::recursive_mutex &getMutex() { return _mutex; }
+
 protected:
   /// Method to create a internal file for the entry symbol
-  virtual std::unique_ptr<File> createEntrySymbolFile() const;
+  std::unique_ptr<File> createEntrySymbolFile() const override;
 
   /// Method to create a internal file for an undefined symbol
-  virtual std::unique_ptr<File> createUndefinedSymbolFile() const;
+  std::unique_ptr<File> createUndefinedSymbolFile() const override;
 
 private:
+  enum : uint64_t {
+    invalidBaseAddress = UINT64_MAX,
+    pe32DefaultBaseAddress = 0x400000U,
+    pe32PlusDefaultBaseAddress = 0x140000000U
+  };
+
+  std::recursive_mutex _mutex;
+  mutable std::mutex _allocMutex;
+
+  std::string _entry;
+
+  // False if /noentry option is given.
+  bool _hasEntry;
+
   // The start address for the program. The default value for the executable is
   // 0x400000, but can be altered using /base command line option.
   uint64_t _baseAddress;
@@ -273,10 +341,24 @@ private:
   std::string _manifestOutputPath;
   bool _embedManifest;
   int _manifestId;
+  bool _manifestUAC;
   std::string _manifestLevel;
   std::string _manifestUiAccess;
   std::string _manifestDependency;
   bool _isDll;
+
+  // True if /SAFESEH option is specified. Valid only for x86. If true, LLD will
+  // produce an image with SEH table. If any modules were not compatible with
+  // SEH, LLD will exit with an error.
+  bool _requireSEH;
+
+  // True if /SAFESEH:no option is specified. Valid only for x86. If true, LLD
+  // will not produce an image with SEH table even if all input object files are
+  // compatible with SEH.
+  bool _noSEH;
+
+  // /IMPLIB command line option.
+  std::string _implib;
 
   // The set to store /nodefaultlib arguments.
   std::set<std::string> _noDefaultLibs;
@@ -308,8 +390,15 @@ private:
   // Microsoft Windows." This feature was somewhat useful before Windows 95.
   ArrayRef<uint8_t> _dosStub;
 
+  // The node containing the entry point file.
+  SimpleFileNode *_entryNode;
+
   // The PECOFFGroup that contains all the .lib files.
   Group *_libraryGroup;
+
+  // Name of the temporary file for lib.exe subcommand. For debugging
+  // only.
+  std::string _moduleDefinitionFile;
 };
 
 } // end namespace lld

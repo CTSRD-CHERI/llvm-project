@@ -35,14 +35,14 @@
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Metadata.h"
+#include "llvm/IR/ValueHandle.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MachineLocation.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/DataTypes.h"
-#include "llvm/Support/DebugLoc.h"
 #include "llvm/Support/Dwarf.h"
-#include "llvm/Support/ValueHandle.h"
 
 namespace llvm {
 
@@ -71,7 +71,7 @@ struct LandingPadInfo {
   std::vector<int> TypeIds;              // List of type ids (filters negative)
 
   explicit LandingPadInfo(MachineBasicBlock *MBB)
-    : LandingPadBlock(MBB), LandingPadLabel(0), Personality(0) {}
+    : LandingPadBlock(MBB), LandingPadLabel(nullptr), Personality(nullptr) {}
 };
 
 //===----------------------------------------------------------------------===//
@@ -109,10 +109,6 @@ class MachineModuleInfo : public ImmutablePass {
   /// List of moves done by a function's prolog.  Used to construct frame maps
   /// by debug and exception handling consumers.
   std::vector<MCCFIInstruction> FrameInstructions;
-
-  /// CompactUnwindEncoding - If the target supports it, this is the compact
-  /// unwind encoding. It replaces a function's CIE and FDE.
-  uint32_t CompactUnwindEncoding;
 
   /// LandingPads - List of LandingPadInfo describing the landing pad
   /// information in the current function.
@@ -168,10 +164,13 @@ class MachineModuleInfo : public ImmutablePass {
 public:
   static char ID; // Pass identification, replacement for typeid
 
-  typedef std::pair<unsigned, DebugLoc> UnsignedDebugLocPair;
-  typedef SmallVector<std::pair<TrackingVH<MDNode>, UnsignedDebugLocPair>, 4>
-    VariableDbgInfoMapTy;
-  VariableDbgInfoMapTy VariableDbgInfo;
+  struct VariableDbgInfo {
+    TrackingVH<MDNode> Var;
+    unsigned Slot;
+    DebugLoc Loc;
+  };
+  typedef SmallVector<VariableDbgInfo, 4> VariableDbgInfoMapTy;
+  VariableDbgInfoMapTy VariableDbgInfos;
 
   MachineModuleInfo();  // DUMMY CONSTRUCTOR, DO NOT CALL.
   // Real constructor.
@@ -180,8 +179,8 @@ public:
   ~MachineModuleInfo();
 
   // Initialization and Finalization
-  virtual bool doInitialization(Module &);
-  virtual bool doFinalization(Module &);
+  bool doInitialization(Module &) override;
+  bool doFinalization(Module &) override;
 
   /// EndFunction - Discard function meta information.
   ///
@@ -198,7 +197,7 @@ public:
   ///
   template<typename Ty>
   Ty &getObjFileInfo() {
-    if (ObjFileMMI == 0)
+    if (ObjFileMMI == nullptr)
       ObjFileMMI = new Ty(*this);
     return *static_cast<Ty*>(ObjFileMMI);
   }
@@ -238,18 +237,11 @@ public:
     return FrameInstructions;
   }
 
-  void addFrameInst(const MCCFIInstruction &Inst) {
+  unsigned LLVM_ATTRIBUTE_UNUSED_RESULT
+  addFrameInst(const MCCFIInstruction &Inst) {
     FrameInstructions.push_back(Inst);
+    return FrameInstructions.size() - 1;
   }
-
-  /// getCompactUnwindEncoding - Returns the compact unwind encoding for a
-  /// function if the target supports the encoding. This encoding replaces a
-  /// function's CIE and FDE.
-  uint32_t getCompactUnwindEncoding() const { return CompactUnwindEncoding; }
-
-  /// setCompactUnwindEncoding - Set the compact unwind encoding for a function
-  /// if the target supports the encoding.
-  void setCompactUnwindEncoding(uint32_t Enc) { CompactUnwindEncoding = Enc; }
 
   /// getAddrLabelSymbol - Return the symbol to be used for the specified basic
   /// block when its address is taken.  This cannot be its normal LBB label
@@ -329,7 +321,7 @@ public:
 
   /// TidyLandingPads - Remap landing pad labels and remove any deleted landing
   /// pads.
-  void TidyLandingPads(DenseMap<MCSymbol*, uintptr_t> *LPMap = 0);
+  void TidyLandingPads(DenseMap<MCSymbol*, uintptr_t> *LPMap = nullptr);
 
   /// getLandingPads - Return a reference to the landing pad info for the
   /// current function.
@@ -399,10 +391,11 @@ public:
   /// setVariableDbgInfo - Collect information used to emit debugging
   /// information of a variable.
   void setVariableDbgInfo(MDNode *N, unsigned Slot, DebugLoc Loc) {
-    VariableDbgInfo.push_back(std::make_pair(N, std::make_pair(Slot, Loc)));
+    VariableDbgInfo Info = { N, Slot, Loc };
+    VariableDbgInfos.push_back(std::move(Info));
   }
 
-  VariableDbgInfoMapTy &getVariableDbgInfo() { return VariableDbgInfo; }
+  VariableDbgInfoMapTy &getVariableDbgInfo() { return VariableDbgInfos; }
 
 }; // End class MachineModuleInfo
 

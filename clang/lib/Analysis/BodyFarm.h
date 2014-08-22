@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_ANALYSIS_BODYFARM_H
-#define LLVM_CLANG_ANALYSIS_BODYFARM_H
+#ifndef LLVM_CLANG_LIB_ANALYSIS_BODYFARM_H
+#define LLVM_CLANG_LIB_ANALYSIS_BODYFARM_H
 
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/DenseMap.h"
@@ -36,7 +36,7 @@ public:
   Stmt *getBody(const FunctionDecl *D);
 
   /// Factory method for creating bodies for Objective-C properties.
-  Stmt *getBody(const ObjCMethodDecl *D, const ObjCPropertyDecl *Prop = 0);
+  Stmt *getBody(const ObjCMethodDecl *D);
 
 private:
   typedef llvm::DenseMap<const Decl *, Optional<Stmt *> > BodyMap;

@@ -1,4 +1,4 @@
-; RUN: llc < %s -march=x86 -mcpu=corei7-avx | FileCheck %s
+; RUN: llc < %s -mtriple=i686-linux -mcpu=corei7-avx | FileCheck %s
 ; RUN: opt -instsimplify -disable-output < %s
 
 ;CHECK-LABEL: AGEP0:
@@ -34,7 +34,7 @@ entry:
 ;CHECK-LABEL: AGEP2:
 define i32 @AGEP2(<4 x i32*> %param, <4 x i32> %off) nounwind {
 entry:
-;CHECK_LABEL: AGEP2
+;CHECK-LABEL: AGEP2
 ;CHECK: vpslld $2
 ;CHECK-NEXT: vpadd
   %A2 = getelementptr <4 x i32*> %param, <4 x i32> %off

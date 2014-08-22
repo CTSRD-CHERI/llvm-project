@@ -10,7 +10,6 @@
 #include "AppleObjCRuntime.h"
 #include "AppleObjCTrampolineHandler.h"
 
-#include "llvm/Support/MachO.h"
 #include "clang/AST/Type.h"
 
 #include "lldb/Breakpoint/BreakpointLocation.h"
@@ -130,7 +129,8 @@ AppleObjCRuntime::GetObjectDescription (Stream &strm, Value &value, ExecutionCon
     ClangFunction func (*exe_ctx.GetBestExecutionContextScope(),
                         return_clang_type, 
                         *function_address, 
-                        arg_value_list);
+                        arg_value_list,
+                        "objc-object-description");
 
     StreamString error_stream;
     
@@ -144,12 +144,12 @@ AppleObjCRuntime::GetObjectDescription (Stream &strm, Value &value, ExecutionCon
     options.SetIgnoreBreakpoints(true);
     options.SetTimeoutUsec(PO_FUNCTION_TIMEOUT_USEC);
     
-    ExecutionResults results = func.ExecuteFunction (exe_ctx, 
+    ExpressionResults results = func.ExecuteFunction (exe_ctx, 
                                                      &wrapper_struct_addr,
                                                      options,
                                                      error_stream, 
                                                      ret);
-    if (results != eExecutionCompleted)
+    if (results != eExpressionCompleted)
     {
         strm.Printf("Error evaluating Print Object function: %d.\n", results);
         return false;
@@ -249,6 +249,32 @@ AppleObjCRuntime::AppleIsModuleObjCLibrary (const ModuleSP &module_sp)
         }
     }
     return false;
+}
+
+// we use the version of Foundation to make assumptions about the ObjC runtime on a target
+uint32_t
+AppleObjCRuntime::GetFoundationVersion ()
+{
+    if (!m_Foundation_major.hasValue())
+    {
+        const ModuleList& modules = m_process->GetTarget().GetImages();
+        uint32_t major = UINT32_MAX;
+        for (uint32_t idx = 0; idx < modules.GetSize(); idx++)
+        {
+            lldb::ModuleSP module_sp = modules.GetModuleAtIndex(idx);
+            if (!module_sp)
+                continue;
+            if (strcmp(module_sp->GetFileSpec().GetFilename().AsCString(""),"Foundation") == 0)
+            {
+                module_sp->GetVersion(&major,1);
+                m_Foundation_major = major;
+                return major;
+            }
+        }
+        return LLDB_INVALID_MODULE_VERSION;
+    }
+    else
+        return m_Foundation_major.getValue();
 }
 
 bool

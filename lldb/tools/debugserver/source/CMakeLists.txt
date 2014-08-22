@@ -11,8 +11,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 endif()
 
 add_definitions(
-  -DDEBUGSERVER_VERSION_NUM=${LLDB_VERSION}
-  -DDEBUGSERVER_VERSION_STR=${LLDB_VERSION}
+  -DDEBUGSERVER_VERSION_STR="${LLDB_VERSION}"
   )
 
 add_library(lldbDebugserverCommon
@@ -41,6 +40,8 @@ add_library(lldbDebugserverCommon
 add_dependencies(lldbDebugserverCommon generate_dnbconfig)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  find_library(COCOA_LIBRARY Cocoa)
+  target_link_libraries(lldbDebugserverCommon ${COCOA_LIBRARY})
   add_subdirectory(MacOSX)
 endif()
 

@@ -38,17 +38,12 @@ Optimizations (ongoing)</h3>
   <th> Owner </th>
 </tr>
 <tr>
-<tr>
-<tr>
 <th align="left"> Non-affine access functions
 </th><td align="center" class='done'> Done, needs testing
 </td><td>Marcello
-</td></tr>
-<th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=12402">Finer
-grained statements</a>
-</th><td align="center" class='open'>Open
-</td><td>
-</td></tr>
+</td>
+</tr>
+
 
 <tr>
 <th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=12397">Model
@@ -61,14 +56,32 @@ integer wrapping</a>
 href="http://llvm.org/bugs/show_bug.cgi?id=12403">Variable-size
 multi-dimensional arrays</a>
 </th><td align="center" class='open'> Open
-</td><td>
+</td><td>Sebastian
 </td></tr>
+<tr>
 <th align="left"> <a
 href="http://llvm.org/bugs/show_bug.cgi?id=12407">Derive information for
 the SCoP context
 </a>
-</th><td align="center" class='open'> Open
+</th>
+<td align="center" class='nice'> Open
 </td><td>
+</td></tr>
+<tr>
+<th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=12402">Finer
+grained statements</a>
+</th><td align="center" class='nice'> Open
+</td><td>
+</td></tr>
+<tr>
+<th align="left"> Detect reductions
+</th><td align="center" class='nice'>Open
+</td><td>Johannes
+</td></tr>
+<tr>
+<th align="left"> Assume static sized arrays are only accessed in-bounds
+</th><td align="center" class='nice'>Open
+</td><td>Zino
 </td></tr>
 <tr><td colspan='4'>&nbsp;</td></tr>
 <tr><th colspan="3" style="background: rgb(239, 239, 239);"> Optimizer </th></tr>
@@ -80,13 +93,12 @@ the SCoP context
 <tr>
 <th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=12405">Polyhedral
 dead code elimination</a>
-</th><td class="open">Open
+</th><td class="done">Done
 </td><td>
 </td></tr>
 <th align="left"> <a
-href="http://llvm.org/bugs/show_bug.cgi?id=10229">OpenSCoP Import/Export - Update to
-current version</a>
-</th><td class="open">Open
+href="http://llvm.org/bugs/show_bug.cgi?id=10229">OpenSCoP Import/Export</a>
+</th><td class="nice">Open
 </td><td>
 </td></tr>
 
@@ -97,19 +109,17 @@ current version</a>
   <th width="150px"> Status </th>
   <th> Owner </th>
 </tr>
-<th align="left"> <a
-href="http://polly.llvm.org/documentation/memaccess.html">Allow optimizers to
-change memory access functions</a>
-</th><td class="inprogress">10% done
-</td><td>
-</td><td>
-
+<tr>
+<th align="left"> Make OpenMP independent of Polly code generation
+(requirement to enable scev codegen)
+</th><td class="open"> Open
+</td><td> Zino
 </td></tr>
 <tr>
-<th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=10381">Derive
-optimal types (instead of always using i64)</a>
+<th align="left"> Support for scalars/PHIs directly in the code generation
+(requirement to remove polly independent)
 </th><td class="open"> Open
-</td><td>
+</td><td>Tobias
 </td></tr>
 <tr>
 <th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=12398">Remove
@@ -118,22 +128,42 @@ the need for independent blocks</a>
 </td><td>
 </td></tr>
 <tr>
-<th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=12406">Make code
-generation independent of the clast</a>
-</th><td class="done">Done
-</td><td>
+<th align="left"> Run-time alias checks
+</th><td class="open"> Open
+</td><td>Sebastian
 </td></tr>
 <tr>
 <th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=12404">Integrate
 with the LLVM BBVectorizer</a>
-</th><td class="open">Open
+</th><td class="nice">Open
 </td><td>
+</td></tr>
+<tr>
+<th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=10381">Derive
+optimal types (instead of always using i64)</a>
+</th><td class="niceinprogress"> in progress
+</td><td>Tobias
 </td></tr>
 <tr>
 <th align="left"> <a
 href="http://polly.llvm.org/documentation/gpgpucodegen.html">GPGPU Code
 Generation</a>
-</th><td class="inprogress">In Design
+</th><td class="niceinprogress">in progress
+</td><td>
+Yabin
+</td></tr>
+<tr>
+<th align="left"> <a
+href="http://polly.llvm.org/documentation/memaccess.html">Allow optimizers to
+change memory access functions</a>
+</th><td class="nice"> Open
+</td><td>
+</td><td>
+</td></tr>
+<tr>
+<th align="left"> <a href="http://llvm.org/bugs/show_bug.cgi?id=12406">Make code
+generation independent of the clast</a>
+</th><td class="done">Done
 </td><td>
 </td></tr>
 
@@ -146,10 +176,11 @@ Generation</a>
   <th> Owner </th>
 </tr>
 <tr>
-<th align="left"> Add FORTRAN Support to the LLVM test suite
-</th><td class="open"> Open
+<th align="left"> Teach bugpoint to extract regions
+</th><td class="nice"> Open
 </td><td>
 </td></tr>
+<tr>
 <th align="left"> Add <a
 href="http://www.cse.ohio-state.edu/~pouchet/software/polybench/">Polybench
 3.2</a> to the LLVM test suite
@@ -158,12 +189,12 @@ href="http://www.cse.ohio-state.edu/~pouchet/software/polybench/">Polybench
 </td></tr>
 <tr>
 <th align="left"> Build against an installed LLVM
-</th><td class="inprogress"> Partial <br />(cmake only, no tests)
+</th><td class="done"> Done<br />
 </td><td>
 </td></tr>
 <tr>
 <th align="left"> Setup buildbot regression testers using LNT
-</th><td class="inprogress"> In progress
+</th><td class="done"> Done
 </td><td> Tobias
 </td></tr>
 </tbody></table>
@@ -386,11 +417,6 @@ Ether
 </td><td>Tobias
 
 </td></tr>
-<tr>
-<th align="left"> Import/Export using current openscop version
-</td><td class="done"> Done
-</td><td>Tobias
-</td></tr>
 <tr><td colspan='4'>&nbsp;</td></tr>
 <tr><th colspan="3" style="background: rgb(239, 239, 239);"> Back End</th></tr>
 <tr style="background: rgb(239, 239, 239)">
@@ -422,7 +448,9 @@ Ether
 </td><td class="done"> Done
 </td><td> Tobias
 
-</td></tr></tbody></table>
+</td></tr>
+
+</tbody></table>
 </div>
 </div>
 </body>

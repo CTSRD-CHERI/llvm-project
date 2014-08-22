@@ -21,36 +21,51 @@ namespace elf {
 typedef llvm::object::ELFType<llvm::support::little, 2, false> X86ELFType;
 class X86LinkingContext;
 
-class X86TargetRelocationHandler LLVM_FINAL
-    : public TargetRelocationHandler<X86ELFType> {
+template <class ELFT> class X86TargetLayout : public TargetLayout<ELFT> {
 public:
-  X86TargetRelocationHandler(const X86LinkingContext &context) {}
-
-  virtual error_code applyRelocation(ELFWriter &, llvm::FileOutputBuffer &,
-                                     const lld::AtomLayout &,
-                                     const Reference &) const;
-
-  static const Registry::KindStrings kindStrings[];
+  X86TargetLayout(X86LinkingContext &context) : TargetLayout<ELFT>(context) {}
 };
 
-class X86TargetHandler LLVM_FINAL
+class X86TargetRelocationHandler final
+    : public TargetRelocationHandler<X86ELFType> {
+public:
+  X86TargetRelocationHandler(X86LinkingContext &context,
+                             X86TargetLayout<X86ELFType> &layout)
+      : _x86Context(context), _x86TargetLayout(layout) {}
+
+  std::error_code applyRelocation(ELFWriter &, llvm::FileOutputBuffer &,
+                                  const lld::AtomLayout &,
+                                  const Reference &) const override;
+
+  static const Registry::KindStrings kindStrings[];
+
+protected:
+  X86LinkingContext &_x86Context;
+  X86TargetLayout<X86ELFType> &_x86TargetLayout;
+};
+
+class X86TargetHandler final
     : public DefaultTargetHandler<X86ELFType> {
 public:
   X86TargetHandler(X86LinkingContext &context);
 
-  virtual void registerRelocationNames(Registry &registry);
-
-  virtual TargetLayout<X86ELFType> &targetLayout() { return _targetLayout; }
-
-  virtual const X86TargetRelocationHandler &getRelocationHandler() const {
-    return _relocationHandler;
+  X86TargetLayout<X86ELFType> &getTargetLayout() override {
+    return *(_x86TargetLayout.get());
   }
 
-private:
-  static const Registry::KindStrings kindStrings[];
+  void registerRelocationNames(Registry &registry) override;
 
-  X86TargetRelocationHandler _relocationHandler;
-  TargetLayout<X86ELFType> _targetLayout;
+  const X86TargetRelocationHandler &getRelocationHandler() const override {
+    return *(_x86RelocationHandler.get());
+  }
+
+  std::unique_ptr<Writer> getWriter() override;
+
+protected:
+  static const Registry::KindStrings kindStrings[];
+  X86LinkingContext &_x86LinkingContext;
+  std::unique_ptr<X86TargetLayout<X86ELFType>> _x86TargetLayout;
+  std::unique_ptr<X86TargetRelocationHandler> _x86RelocationHandler;
 };
 } // end namespace elf
 } // end namespace lld

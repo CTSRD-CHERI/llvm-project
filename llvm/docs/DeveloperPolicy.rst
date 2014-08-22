@@ -212,13 +212,10 @@ features added.  Some tips for getting your testcase approved:
   directory. The appropriate sub-directory should be selected (see the
   :doc:`Testing Guide <TestingGuide>` for details).
 
-* Test cases should be written in `LLVM assembly language <LangRef.html>`_
-  unless the feature or regression being tested requires another language
-  (e.g. the bug being fixed or feature being implemented is in the llvm-gcc C++
-  front-end, in which case it must be written in C++).
+* Test cases should be written in :doc:`LLVM assembly language <LangRef>`.
 
 * Test cases, especially for regressions, should be reduced as much as possible,
-  by `bugpoint <Bugpoint.html>`_ or manually. It is unacceptable to place an
+  by :doc:`bugpoint <Bugpoint>` or manually. It is unacceptable to place an
   entire failing program into ``llvm/test`` as this creates a *time-to-test*
   burden on all developers. Please keep them short.
 
@@ -339,7 +336,7 @@ Making a Major Change
 ---------------------
 
 When a developer begins a major new project with the aim of contributing it back
-to LLVM, s/he should inform the community with an email to the `llvmdev
+to LLVM, they should inform the community with an email to the `llvmdev
 <http://lists.cs.uiuc.edu/mailman/listinfo/llvmdev>`_ email list, to the extent
 possible. The reason for this is to:
 
@@ -439,6 +436,29 @@ list, development list, or LLVM bug tracker component. If someone sends you
 a patch privately, encourage them to submit it to the appropriate list first.
 
 
+IR Backwards Compatibility
+--------------------------
+
+When the IR format has to be changed, keep in mind that we try to maintain some
+backwards compatibility. The rules are intended as a balance between convenience
+for llvm users and not imposing a big burden on llvm developers:
+
+* The textual format is not backwards compatible. We don't change it too often,
+  but there are no specific promises.
+
+* The bitcode format produced by a X.Y release will be readable by all following
+  X.Z releases and the (X+1).0 release.
+
+* Newer releases can ignore features from older releases, but they cannot
+  miscompile them. For example, if nsw is ever replaced with something else,
+  dropping it would be a valid way to upgrade the IR.
+
+* Debug metadata is special in that it is currently dropped during upgrades.
+
+* Non-debug metadata is defined to be safe to drop, so a valid way to upgrade
+  it is to drop it. That is not very user friendly and a bit more effort is
+  expected, but no promises are made.
+
 .. _copyright-license-patents:
 
 Copyright, License, and Patents
@@ -517,12 +537,12 @@ to move code from (e.g.)  libc++ to the LLVM core without concern, but that code
 cannot be moved from the LLVM core to libc++ without the copyright owner's
 permission.
 
-Note that the LLVM Project does distribute llvm-gcc and dragonegg, **which are
-GPL.** This means that anything "linked" into llvm-gcc must itself be compatible
+Note that the LLVM Project does distribute dragonegg, **which is
+GPL.** This means that anything "linked" into dragonegg must itself be compatible
 with the GPL, and must be releasable under the terms of the GPL.  This implies
-that **any code linked into llvm-gcc and distributed to others may be subject to
+that **any code linked into dragonegg and distributed to others may be subject to
 the viral aspects of the GPL** (for example, a proprietary code generator linked
-into llvm-gcc must be made available under the GPL).  This is not a problem for
+into dragonegg must be made available under the GPL).  This is not a problem for
 code already distributed under a more liberal license (like the UIUC license),
 and GPL-containing subprojects are kept in separate SVN repositories whose
 LICENSE.txt files specifically indicate that they contain GPL code.

@@ -22,10 +22,9 @@ configure_lit_site_cfg(
 if ( NOT LLD_BUILT_STANDALONE )
 
   set(LLD_TEST_DEPS
-    lld-test.deps
     FileCheck not llvm-nm
-    lld llc llvm-objdump llvm-readobj yaml2obj
-    linker-script-test
+    lld llvm-config llvm-objdump llvm-readobj llvm-mc yaml2obj obj2yaml
+    linker-script-test macho-dump
     LLDUnitTests
     )
   set(LLD_TEST_PARAMS

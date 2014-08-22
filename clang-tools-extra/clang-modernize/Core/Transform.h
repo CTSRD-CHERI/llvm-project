@@ -18,7 +18,6 @@
 
 #include "Core/IncludeExcludeInfo.h"
 #include "Core/Refactoring.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Registry.h"
 #include "llvm/Support/Timer.h"
@@ -209,8 +208,8 @@ protected:
   ///
   /// The factory returned by this function is responsible for calling back to
   /// Transform to call handleBeginSource() and handleEndSource().
-  clang::tooling::FrontendActionFactory *
-      createActionFactory(clang::ast_matchers::MatchFinder &Finder);
+  std::unique_ptr<clang::tooling::FrontendActionFactory>
+  createActionFactory(clang::ast_matchers::MatchFinder &Finder);
 
 private:
   const std::string Name;
@@ -291,7 +290,7 @@ struct CompilerVersions {
 ///     Since.Msvc = Version(10);
 ///   }
 ///
-///   Transform *createTransform(const TransformOptions &Opts) LLVM_OVERRIDE {
+///   Transform *createTransform(const TransformOptions &Opts) override {
 ///     return new MyTransform(Opts);
 ///   }
 /// };
@@ -322,5 +321,7 @@ protected:
 };
 
 typedef llvm::Registry<TransformFactory> TransformFactoryRegistry;
+
+extern template class llvm::Registry<TransformFactory>;
 
 #endif // CLANG_MODERNIZE_TRANSFORM_H

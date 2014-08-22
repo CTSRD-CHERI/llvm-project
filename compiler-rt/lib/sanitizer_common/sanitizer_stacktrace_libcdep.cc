@@ -37,6 +37,14 @@ void StackTrace::PrintStack(const uptr *addr, uptr size) {
     uptr pc = GetPreviousInstructionPc(addr[i]);
     uptr addr_frames_num = Symbolizer::GetOrInit()->SymbolizePC(
         pc, addr_frames.data(), addr_frames.size());
+    if (addr_frames_num == 0) {
+      frame_desc.clear();
+      PrintStackFramePrefix(&frame_desc, frame_num, pc);
+      frame_desc.append(" (<unknown module>)");
+      Printf("%s\n", frame_desc.data());
+      frame_num++;
+      continue;
+    }
     for (uptr j = 0; j < addr_frames_num; j++) {
       AddressInfo &info = addr_frames[j];
       frame_desc.clear();
@@ -63,14 +71,28 @@ void StackTrace::PrintStack(const uptr *addr, uptr size) {
   Printf("\n");
 }
 
-void StackTrace::Unwind(uptr max_depth, uptr pc, uptr bp, uptr stack_top,
-                        uptr stack_bottom, bool request_fast_unwind) {
-  if (!WillUseFastUnwind(request_fast_unwind))
-    SlowUnwindStack(pc, max_depth);
-  else
+void StackTrace::Unwind(uptr max_depth, uptr pc, uptr bp, void *context,
+                        uptr stack_top, uptr stack_bottom,
+                        bool request_fast_unwind) {
+  top_frame_bp = (max_depth > 0) ? bp : 0;
+  // Avoid doing any work for small max_depth.
+  if (max_depth == 0) {
+    size = 0;
+    return;
+  }
+  if (max_depth == 1) {
+    size = 1;
+    trace[0] = pc;
+    return;
+  }
+  if (!WillUseFastUnwind(request_fast_unwind)) {
+    if (context)
+      SlowUnwindStackWithContext(pc, context, max_depth);
+    else
+      SlowUnwindStack(pc, max_depth);
+  } else {
     FastUnwindStack(pc, bp, stack_top, stack_bottom, max_depth);
-
-  top_frame_bp = size ? bp : 0;
+  }
 }
 
 }  // namespace __sanitizer

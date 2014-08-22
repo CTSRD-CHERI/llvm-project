@@ -4,6 +4,7 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_clang_library(clangBasic
+  Attributes.cpp
   Builtins.cpp
   CharInfo.cpp
   Diagnostic.cpp
@@ -23,6 +24,8 @@ add_clang_library(clangBasic
   TokenKinds.cpp
   Version.cpp
   VersionTuple.cpp
+  VirtualFileSystem.cpp
+  Warnings.cpp
   )
 
 # Determine Subversion revision.
@@ -50,20 +53,3 @@ if (Subversion_FOUND AND EXISTS "${CLANG_SOURCE_DIR}/.svn")
     PROPERTIES COMPILE_DEFINITIONS "HAVE_SVN_VERSION_INC")
 
 endif()
-
-add_dependencies(clangBasic
-  ClangARMNeon
-  ClangAttrList
-  ClangDiagnosticAnalysis
-  ClangDiagnosticAST
-  ClangDiagnosticComment
-  ClangDiagnosticCommon
-  ClangDiagnosticDriver
-  ClangDiagnosticFrontend
-  ClangDiagnosticGroups
-  ClangDiagnosticIndexName
-  ClangDiagnosticLex
-  ClangDiagnosticParse
-  ClangDiagnosticSema
-  ClangDiagnosticSerialization
-  )

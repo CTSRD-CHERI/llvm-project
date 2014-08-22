@@ -14,6 +14,7 @@
 
 #include "clang/Tooling/CompilationDatabase.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
@@ -26,15 +27,15 @@
 #include "llvm/Option/Arg.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/Path.h"
-#include "llvm/Support/system_error.h"
 #include <sstream>
+#include <system_error>
 
 namespace clang {
 namespace tooling {
 
 CompilationDatabase::~CompilationDatabase() {}
 
-CompilationDatabase *
+std::unique_ptr<CompilationDatabase>
 CompilationDatabase::loadFromDirectory(StringRef BuildDirectory,
                                        std::string &ErrorMessage) {
   std::stringstream ErrorStream;
@@ -43,18 +44,17 @@ CompilationDatabase::loadFromDirectory(StringRef BuildDirectory,
        Ie = CompilationDatabasePluginRegistry::end();
        It != Ie; ++It) {
     std::string DatabaseErrorMessage;
-    OwningPtr<CompilationDatabasePlugin> Plugin(It->instantiate());
-    if (CompilationDatabase *DB =
-        Plugin->loadFromDirectory(BuildDirectory, DatabaseErrorMessage))
+    std::unique_ptr<CompilationDatabasePlugin> Plugin(It->instantiate());
+    if (std::unique_ptr<CompilationDatabase> DB =
+            Plugin->loadFromDirectory(BuildDirectory, DatabaseErrorMessage))
       return DB;
-    else
-      ErrorStream << It->getName() << ": " << DatabaseErrorMessage << "\n";
+    ErrorStream << It->getName() << ": " << DatabaseErrorMessage << "\n";
   }
   ErrorMessage = ErrorStream.str();
-  return NULL;
+  return nullptr;
 }
 
-static CompilationDatabase *
+static std::unique_ptr<CompilationDatabase>
 findCompilationDatabaseFromDirectory(StringRef Directory,
                                      std::string &ErrorMessage) {
   std::stringstream ErrorStream;
@@ -62,8 +62,8 @@ findCompilationDatabaseFromDirectory(StringRef Directory,
   while (!Directory.empty()) {
     std::string LoadErrorMessage;
 
-    if (CompilationDatabase *DB =
-           CompilationDatabase::loadFromDirectory(Directory, LoadErrorMessage))
+    if (std::unique_ptr<CompilationDatabase> DB =
+            CompilationDatabase::loadFromDirectory(Directory, LoadErrorMessage))
       return DB;
 
     if (!HasErrorMessage) {
@@ -75,17 +75,17 @@ findCompilationDatabaseFromDirectory(StringRef Directory,
     Directory = llvm::sys::path::parent_path(Directory);
   }
   ErrorMessage = ErrorStream.str();
-  return NULL;
+  return nullptr;
 }
 
-CompilationDatabase *
+std::unique_ptr<CompilationDatabase>
 CompilationDatabase::autoDetectFromSource(StringRef SourceFile,
                                           std::string &ErrorMessage) {
   SmallString<1024> AbsolutePath(getAbsolutePath(SourceFile));
   StringRef Directory = llvm::sys::path::parent_path(AbsolutePath);
 
-  CompilationDatabase *DB = findCompilationDatabaseFromDirectory(Directory,
-                                                                 ErrorMessage);
+  std::unique_ptr<CompilationDatabase> DB =
+      findCompilationDatabaseFromDirectory(Directory, ErrorMessage);
 
   if (!DB)
     ErrorMessage = ("Could not auto-detect compilation database for file \"" +
@@ -93,13 +93,13 @@ CompilationDatabase::autoDetectFromSource(StringRef SourceFile,
   return DB;
 }
 
-CompilationDatabase *
+std::unique_ptr<CompilationDatabase>
 CompilationDatabase::autoDetectFromDirectory(StringRef SourceDir,
                                              std::string &ErrorMessage) {
   SmallString<1024> AbsolutePath(getAbsolutePath(SourceDir));
 
-  CompilationDatabase *DB = findCompilationDatabaseFromDirectory(AbsolutePath,
-                                                                 ErrorMessage);
+  std::unique_ptr<CompilationDatabase> DB =
+      findCompilationDatabaseFromDirectory(AbsolutePath, ErrorMessage);
 
   if (!DB)
     ErrorMessage = ("Could not auto-detect compilation database from directory \"" +
@@ -150,14 +150,14 @@ private:
 // options.
 class UnusedInputDiagConsumer : public DiagnosticConsumer {
 public:
-  UnusedInputDiagConsumer() : Other(0) {}
+  UnusedInputDiagConsumer() : Other(nullptr) {}
 
   // Useful for debugging, chain diagnostics to another consumer after
   // recording for our own purposes.
   UnusedInputDiagConsumer(DiagnosticConsumer *Other) : Other(Other) {}
 
   virtual void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
-                                const Diagnostic &Info) LLVM_OVERRIDE {
+                                const Diagnostic &Info) override {
     if (Info.getID() == clang::diag::warn_drv_input_file_unused) {
       // Arg 1 for this diagnostic is the option that didn't get used.
       UnusedInputs.push_back(Info.getArgStdStr(0));
@@ -211,11 +211,11 @@ static bool stripPositionalArgs(std::vector<const char *> Args,
       IntrusiveRefCntPtr<clang::DiagnosticIDs>(new DiagnosticIDs()),
       &*DiagOpts, &DiagClient, false);
 
-  // Neither clang executable nor default image name are required since the
-  // jobs the driver builds will not be executed.
-  OwningPtr<driver::Driver> NewDriver(new driver::Driver(
+  // The clang executable path isn't required since the jobs the driver builds
+  // will not be executed.
+  std::unique_ptr<driver::Driver> NewDriver(new driver::Driver(
       /* ClangExecutable= */ "", llvm::sys::getDefaultTargetTriple(),
-      /* DefaultImageName= */ "", Diagnostics));
+      Diagnostics));
   NewDriver->setCheckInputsExist(false);
 
   // This becomes the new argv[0]. The value is actually not important as it
@@ -238,10 +238,11 @@ static bool stripPositionalArgs(std::vector<const char *> Args,
 
   // Remove -no-integrated-as; it's not used for syntax checking,
   // and it confuses targets which don't support this option.
-  std::remove_if(Args.begin(), Args.end(),
-                 MatchesAny(std::string("-no-integrated-as")));
+  Args.erase(std::remove_if(Args.begin(), Args.end(),
+                            MatchesAny(std::string("-no-integrated-as"))),
+             Args.end());
 
-  const OwningPtr<driver::Compilation> Compilation(
+  const std::unique_ptr<driver::Compilation> Compilation(
       NewDriver->BuildCompilation(Args));
 
   const driver::JobList &Jobs = Compilation->getJobs();
@@ -288,13 +289,13 @@ FixedCompilationDatabase::loadFromCommandLine(int &Argc,
                                               Twine Directory) {
   const char **DoubleDash = std::find(Argv, Argv + Argc, StringRef("--"));
   if (DoubleDash == Argv + Argc)
-    return NULL;
+    return nullptr;
   std::vector<const char *> CommandLine(DoubleDash + 1, Argv + Argc);
   Argc = DoubleDash - Argv;
 
   std::vector<std::string> StrippedArgs;
   if (!stripPositionalArgs(CommandLine, StrippedArgs))
-    return 0;
+    return nullptr;
   return new FixedCompilationDatabase(Directory, StrippedArgs);
 }
 
@@ -303,7 +304,8 @@ FixedCompilationDatabase(Twine Directory, ArrayRef<std::string> CommandLine) {
   std::vector<std::string> ToolCommandLine(1, "clang-tool");
   ToolCommandLine.insert(ToolCommandLine.end(),
                          CommandLine.begin(), CommandLine.end());
-  CompileCommands.push_back(CompileCommand(Directory, ToolCommandLine));
+  CompileCommands.push_back(
+      CompileCommand(Directory, std::move(ToolCommandLine)));
 }
 
 std::vector<CompileCommand>

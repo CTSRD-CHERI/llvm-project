@@ -15,7 +15,7 @@
 #ifndef LLVM_C_CORE_H
 #define LLVM_C_CORE_H
 
-#include "llvm/Support/DataTypes.h"
+#include "llvm-c/Support.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,8 +61,6 @@ extern "C" {
  *
  * @{
  */
-
-typedef int LLVMBool;
 
 /* Opaque types. */
 
@@ -114,13 +112,6 @@ typedef struct LLVMOpaqueBuilder *LLVMBuilderRef;
  */
 typedef struct LLVMOpaqueModuleProvider *LLVMModuleProviderRef;
 
-/**
- * Used to provide a module to JIT or interpreter.
- *
- * @see llvm::MemoryBuffer
- */
-typedef struct LLVMOpaqueMemoryBuffer *LLVMMemoryBufferRef;
-
 /** @see llvm::PassManagerBase */
 typedef struct LLVMOpaquePassManager *LLVMPassManagerRef;
 
@@ -132,6 +123,12 @@ typedef struct LLVMOpaquePassRegistry *LLVMPassRegistryRef;
  *
  * @see llvm::Use */
 typedef struct LLVMOpaqueUse *LLVMUseRef;
+
+
+/**
+ * @see llvm::DiagnosticInfo
+ */
+typedef struct LLVMOpaqueDiagnosticInfo *LLVMDiagnosticInfoRef;
 
 typedef enum {
     LLVMZExtAttribute       = 1<<0,
@@ -168,7 +165,10 @@ typedef enum {
     LLVMStackProtectStrongAttribute = 1ULL<<33,
     LLVMCold = 1ULL << 34,
     LLVMOptimizeNone = 1ULL << 35,
-    LLVMInAllocaAttribute = 1ULL << 36
+    LLVMInAllocaAttribute = 1ULL << 36,
+    LLVMNonNullAttribute = 1ULL << 37,
+    LLVMJumpTableAttribute = 1ULL << 38,
+    LLVMDereferenceableAttribute = 1ULL << 39,
     */
 } LLVMAttribute;
 
@@ -284,8 +284,8 @@ typedef enum {
   LLVMInternalLinkage,    /**< Rename collisions when linking (static
                                functions) */
   LLVMPrivateLinkage,     /**< Like Internal, but omit from symbol table */
-  LLVMDLLImportLinkage,   /**< Function to be imported from DLL */
-  LLVMDLLExportLinkage,   /**< Function to be accessible from DLL */
+  LLVMDLLImportLinkage,   /**< Obsolete */
+  LLVMDLLExportLinkage,   /**< Obsolete */
   LLVMExternalWeakLinkage,/**< ExternalWeak linkage description */
   LLVMGhostLinkage,       /**< Obsolete */
   LLVMCommonLinkage,      /**< Tentative definitions */
@@ -298,6 +298,12 @@ typedef enum {
   LLVMHiddenVisibility,   /**< The GV is hidden */
   LLVMProtectedVisibility /**< The GV is protected */
 } LLVMVisibility;
+
+typedef enum {
+  LLVMDefaultStorageClass   = 0,
+  LLVMDLLImportStorageClass = 1, /**< Function to be imported from DLL. */
+  LLVMDLLExportStorageClass = 2  /**< Function to be accessible from DLL. */
+} LLVMDLLStorageClass;
 
 typedef enum {
   LLVMCCallConv           = 0,
@@ -403,6 +409,13 @@ typedef enum {
                              the old one */
 } LLVMAtomicRMWBinOp;
 
+typedef enum {
+    LLVMDSError,
+    LLVMDSWarning,
+    LLVMDSRemark,
+    LLVMDSNote
+} LLVMDiagnosticSeverity;
+
 /**
  * @}
  */
@@ -456,6 +469,9 @@ void LLVMEnablePrettyStackTrace(void);
  * @{
  */
 
+typedef void (*LLVMDiagnosticHandler)(LLVMDiagnosticInfoRef, void *);
+typedef void (*LLVMYieldCallback)(LLVMContextRef, void *);
+
 /**
  * Create a new context.
  *
@@ -470,12 +486,42 @@ LLVMContextRef LLVMContextCreate(void);
 LLVMContextRef LLVMGetGlobalContext(void);
 
 /**
+ * Set the diagnostic handler for this context.
+ */
+void LLVMContextSetDiagnosticHandler(LLVMContextRef C,
+                                     LLVMDiagnosticHandler Handler,
+                                     void *DiagnosticContext);
+
+/**
+ * Set the yield callback function for this context.
+ *
+ * @see LLVMContext::setYieldCallback()
+ */
+void LLVMContextSetYieldCallback(LLVMContextRef C, LLVMYieldCallback Callback,
+                                 void *OpaqueHandle);
+
+/**
  * Destroy a context instance.
  *
  * This should be called for every call to LLVMContextCreate() or memory
  * will be leaked.
  */
 void LLVMContextDispose(LLVMContextRef C);
+
+/**
+ * Return a string representation of the DiagnosticInfo. Use
+ * LLVMDisposeMessage to free the string.
+ *
+ * @see DiagnosticInfo::print()
+ */
+char *LLVMGetDiagInfoDescription(LLVMDiagnosticInfoRef DI);
+
+/**
+ * Return an enum LLVMDiagnosticSeverity.
+ *
+ * @see DiagnosticInfo::getSeverity()
+ */
+LLVMDiagnosticSeverity LLVMGetDiagInfoSeverity(LLVMDiagnosticInfoRef DI);
 
 unsigned LLVMGetMDKindIDInContext(LLVMContextRef C, const char* Name,
                                   unsigned SLen);
@@ -1124,9 +1170,10 @@ LLVMTypeRef LLVMX86MMXType(void);
       macro(ConstantStruct)                 \
       macro(ConstantVector)                 \
       macro(GlobalValue)                    \
-        macro(Function)                     \
         macro(GlobalAlias)                  \
-        macro(GlobalVariable)               \
+        macro(GlobalObject)                 \
+          macro(Function)                   \
+          macro(GlobalVariable)             \
       macro(UndefValue)                     \
     macro(Instruction)                      \
       macro(BinaryOperator)                 \
@@ -1331,6 +1378,13 @@ LLVMValueRef LLVMGetUsedValue(LLVMUseRef U);
 LLVMValueRef LLVMGetOperand(LLVMValueRef Val, unsigned Index);
 
 /**
+ * Obtain the use of an operand at a specific index in a llvm::User value.
+ *
+ * @see llvm::User::getOperandUse()
+ */
+LLVMUseRef LLVMGetOperandUse(LLVMValueRef Val, unsigned Index);
+
+/**
  * Set an operand at a specific index in a llvm::User value.
  *
  * @see llvm::User::setOperand()
@@ -1523,6 +1577,20 @@ LLVMValueRef LLVMConstString(const char *Str, unsigned Length,
                              LLVMBool DontNullTerminate);
 
 /**
+ * Returns true if the specified constant is an array of i8.
+ *
+ * @see ConstantDataSequential::getAsString()
+ */
+LLVMBool LLVMIsConstantString(LLVMValueRef c);
+
+/**
+ * Get the given constant data sequential as a string.
+ *
+ * @see ConstantDataSequential::getAsString()
+ */
+const char *LLVMGetAsString(LLVMValueRef c, size_t* out);
+
+/**
  * Create an anonymous ConstantStruct with the specified values.
  *
  * @see llvm::ConstantStruct::getAnon()
@@ -1558,6 +1626,13 @@ LLVMValueRef LLVMConstArray(LLVMTypeRef ElementTy,
 LLVMValueRef LLVMConstNamedStruct(LLVMTypeRef StructTy,
                                   LLVMValueRef *ConstantVals,
                                   unsigned Count);
+
+/**
+ * Get an element at specified index as a constant.
+ *
+ * @see ConstantDataSequential::getElementAsConstant()
+ */
+LLVMValueRef LLVMGetElementAsConstant(LLVMValueRef c, unsigned idx);
 
 /**
  * Create a ConstantVector from values.
@@ -1689,6 +1764,10 @@ const char *LLVMGetSection(LLVMValueRef Global);
 void LLVMSetSection(LLVMValueRef Global, const char *Section);
 LLVMVisibility LLVMGetVisibility(LLVMValueRef Global);
 void LLVMSetVisibility(LLVMValueRef Global, LLVMVisibility Viz);
+LLVMDLLStorageClass LLVMGetDLLStorageClass(LLVMValueRef Global);
+void LLVMSetDLLStorageClass(LLVMValueRef Global, LLVMDLLStorageClass Class);
+LLVMBool LLVMHasUnnamedAddr(LLVMValueRef Global);
+void LLVMSetUnnamedAddr(LLVMValueRef Global, LLVMBool HasUnnamedAddr);
 
 /**
  * @defgroup LLVMCCoreValueWithAlignment Values with alignment
@@ -1699,6 +1778,7 @@ void LLVMSetVisibility(LLVMValueRef Global, LLVMVisibility Viz);
 
 /**
  * Obtain the preferred alignment of the value.
+ * @see llvm::AllocaInst::getAlignment()
  * @see llvm::LoadInst::getAlignment()
  * @see llvm::StoreInst::getAlignment()
  * @see llvm::GlobalValue::getAlignment()
@@ -1707,6 +1787,7 @@ unsigned LLVMGetAlignment(LLVMValueRef V);
 
 /**
  * Set the preferred alignment of the value.
+ * @see llvm::AllocaInst::setAlignment()
  * @see llvm::LoadInst::setAlignment()
  * @see llvm::StoreInst::setAlignment()
  * @see llvm::GlobalValue::setAlignment()
@@ -2796,16 +2877,13 @@ void LLVMDisposePassManager(LLVMPassManagerRef PM);
  * @{
  */
 
-/** Allocate and initialize structures needed to make LLVM safe for
-    multithreading. The return value indicates whether multithreaded
-    initialization succeeded. Must be executed in isolation from all
-    other LLVM api calls.
-    @see llvm::llvm_start_multithreaded */
+/** Deprecated: Multi-threading can only be enabled/disabled with the compile
+    time define LLVM_ENABLE_THREADS.  This function always returns
+    LLVMIsMultithreaded(). */
 LLVMBool LLVMStartMultithreaded(void);
 
-/** Deallocate structures necessary to make LLVM safe for multithreading.
-    Must be executed in isolation from all other LLVM api calls.
-    @see llvm::llvm_stop_multithreaded */
+/** Deprecated: Multi-threading can only be enabled/disabled with the compile
+    time define LLVM_ENABLE_THREADS. */
 void LLVMStopMultithreaded(void);
 
 /** Check whether LLVM is executing in thread-safe mode or not.

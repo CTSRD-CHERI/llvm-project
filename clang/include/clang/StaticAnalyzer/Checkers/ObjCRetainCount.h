@@ -16,8 +16,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_OBJCRETAINCOUNT_H
-#define LLVM_CLANG_OBJCRETAINCOUNT_H
+#ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_OBJCRETAINCOUNT_H
+#define LLVM_CLANG_STATICANALYZER_CHECKERS_OBJCRETAINCOUNT_H
 
 namespace clang { namespace ento { namespace objc_retain {
 
@@ -197,7 +197,7 @@ class CallEffects {
 
 public:
   /// Returns the argument effects for a call.
-  llvm::ArrayRef<ArgEffect> getArgs() const { return Args; }
+  ArrayRef<ArgEffect> getArgs() const { return Args; }
 
   /// Returns the effects on the receiver.
   ArgEffect getReceiver() const { return Receiver; }

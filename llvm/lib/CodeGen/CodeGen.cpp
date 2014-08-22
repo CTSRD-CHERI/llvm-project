@@ -20,8 +20,10 @@ using namespace llvm;
 
 /// initializeCodeGen - Initialize all passes linked into the CodeGen library.
 void llvm::initializeCodeGen(PassRegistry &Registry) {
+  initializeAtomicExpandLoadLinkedPass(Registry);
   initializeBasicTTIPass(Registry);
   initializeBranchFolderPassPass(Registry);
+  initializeCodeGenPreparePass(Registry);
   initializeDeadMachineInstructionElimPass(Registry);
   initializeEarlyIfConverterPass(Registry);
   initializeExpandPostRAPass(Registry);
@@ -39,6 +41,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeMachineBlockPlacementPass(Registry);
   initializeMachineBlockPlacementStatsPass(Registry);
   initializeMachineCopyPropagationPass(Registry);
+  initializeMachineCombinerPass(Registry);
   initializeMachineCSEPass(Registry);
   initializeMachineDominatorTreePass(Registry);
   initializeMachinePostDominatorTreePass(Registry);

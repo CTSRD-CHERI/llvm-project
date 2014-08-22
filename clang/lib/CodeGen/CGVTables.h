@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef CLANG_CODEGEN_CGVTABLE_H
-#define CLANG_CODEGEN_CGVTABLE_H
+#ifndef LLVM_CLANG_LIB_CODEGEN_CGVTABLES_H
+#define LLVM_CLANG_LIB_CODEGEN_CGVTABLES_H
 
 #include "clang/AST/BaseSubobject.h"
 #include "clang/AST/CharUnits.h"
@@ -31,9 +31,8 @@ namespace CodeGen {
 class CodeGenVTables {
   CodeGenModule &CGM;
 
-  // FIXME: Consider moving VTContext into respective CXXABI classes?
-  OwningPtr<VTableContextBase> VTContext;
-  
+  VTableContextBase *VTContext;
+
   /// VTableAddressPointsMapTy - Address points for a single vtable.
   typedef llvm::DenseMap<BaseSubobject, uint64_t> VTableAddressPointsMapTy;
 
@@ -62,20 +61,19 @@ public:
   /// decl.
   /// \param Components - The vtable components; this is really an array of
   /// VTableComponents.
-  llvm::Constant *CreateVTableInitializer(const CXXRecordDecl *RD,
-                                          const VTableComponent *Components, 
-                                          unsigned NumComponents,
-                                const VTableLayout::VTableThunkTy *VTableThunks,
-                                          unsigned NumVTableThunks);
+  llvm::Constant *CreateVTableInitializer(
+      const CXXRecordDecl *RD, const VTableComponent *Components,
+      unsigned NumComponents, const VTableLayout::VTableThunkTy *VTableThunks,
+      unsigned NumVTableThunks, llvm::Constant *RTTI);
 
   CodeGenVTables(CodeGenModule &CGM);
 
   ItaniumVTableContext &getItaniumVTableContext() {
-    return *cast<ItaniumVTableContext>(VTContext.get());
+    return *cast<ItaniumVTableContext>(VTContext);
   }
 
   MicrosoftVTableContext &getMicrosoftVTableContext() {
-    return *cast<MicrosoftVTableContext>(VTContext.get());
+    return *cast<MicrosoftVTableContext>(VTContext);
   }
 
   /// getSubVTTIndex - Return the index of the sub-VTT for the base class of the
@@ -100,7 +98,7 @@ public:
                              VTableAddressPointsMapTy& AddressPoints);
 
     
-  /// GetAddrOfVTable - Get the address of the VTT for the given record decl.
+  /// GetAddrOfVTT - Get the address of the VTT for the given record decl.
   llvm::GlobalVariable *GetAddrOfVTT(const CXXRecordDecl *RD);
 
   /// EmitVTTDefinition - Emit the definition of the given vtable.

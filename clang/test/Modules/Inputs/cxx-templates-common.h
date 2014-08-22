@@ -9,3 +9,34 @@ struct DefinedInCommon {
 template<typename T> struct CommonTemplate {
   enum E { a = 1, b = 2, c = 3 };
 };
+
+namespace Std {
+  template<typename T> struct WithFriend {
+    friend bool operator!=(const WithFriend &A, const WithFriend &B) { return false; }
+  };
+}
+
+namespace Std {
+  template<typename T> void f() {
+    extern T g();
+  }
+}
+
+template<typename T> struct TemplateInstantiationVisibility { typedef int type; };
+
+template<typename T> struct Outer {
+  template<typename U> struct Inner {
+    static constexpr int f();
+    static constexpr int g();
+  };
+};
+
+template<typename T> struct WithPartialSpecialization {};
+template<typename T> struct WithPartialSpecialization<void(T)> { typedef int type; };
+typedef WithPartialSpecialization<int*> WithPartialSpecializationUse;
+typedef WithPartialSpecialization<void(int)> WithPartialSpecializationUse2;
+
+template<typename T> struct WithExplicitSpecialization;
+typedef WithExplicitSpecialization<int> WithExplicitSpecializationUse;
+
+template<typename T> struct WithImplicitSpecialMembers { int n; };

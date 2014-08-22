@@ -1,4 +1,4 @@
-//===- Support/GICHelper.h -- Helper functions for GMP, ISL, and Cloog -----===/
+//===- Support/GICHelper.h -- Helper functions for ISL --------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Helper functions for gmp, isl and Cloog objects.
+// Helper functions for isl objects.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,11 +15,10 @@
 #define POLLY_SUPPORT_GIC_HELPER_H
 
 #include "llvm/ADT/APInt.h"
-#include <gmp.h>
-
 #include "isl/ctx.h"
-
 #include "llvm/Support/raw_ostream.h"
+
+#include <string>
 
 struct isl_map;
 struct isl_union_map;
@@ -32,19 +31,11 @@ struct isl_aff;
 struct isl_pw_aff;
 struct isl_val;
 
+namespace llvm {
+class Value;
+}
+
 namespace polly {
-
-/// @brief Convert APInt to mpz.
-///
-/// @param v      The mpz_t object your want to hold the result.
-/// @param apint  The APInt you want to convert.
-void MPZ_from_APInt(mpz_t v, const llvm::APInt apint, bool is_signed = true);
-
-/// @brief Convert mpz to APInt.
-///
-/// @param mpz    The mpz_t you want to convert.
-llvm::APInt APInt_from_MPZ(const mpz_t mpz);
-
 __isl_give isl_val *isl_valFromAPInt(isl_ctx *Ctx, const llvm::APInt Int,
                                      bool IsSigned);
 llvm::APInt APIntFromVal(__isl_take isl_val *Val);
@@ -73,6 +64,11 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
   OS << polly::stringFromIslObj(Map);
   return OS;
 }
+
+/// @brief Return @p Prefix + @p Val->getName() + @p Suffix but Isl compatible.
+std::string getIslCompatibleName(std::string Prefix, const llvm::Value *Val,
+                                 std::string Suffix);
+
 } // end namespace polly
 
 #endif

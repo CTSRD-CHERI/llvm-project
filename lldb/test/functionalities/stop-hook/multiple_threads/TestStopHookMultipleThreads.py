@@ -5,7 +5,6 @@ Test that lldb stop-hook works for multiple threads.
 import os, time
 import unittest2
 import lldb
-import pexpect
 from lldbtest import *
 
 class StopHookForMultipleThreadsTestCase(TestBase):
@@ -20,8 +19,9 @@ class StopHookForMultipleThreadsTestCase(TestBase):
         self.setTearDownCleanup(dictionary=self.d)
         self.stop_hook_multiple_threads()
 
-    @skipIfLinux # llvm.org/pr15037 -- stop hooks sometimes fail to fire on Linux
     @dwarf_test
+    @expectedFailureFreeBSD("llvm.org/pr15037")
+    @expectedFailureLinux("llvm.org/pr15037") # stop hooks sometimes fail to fire on Linux
     def test_stop_hook_multiple_threads_with_dwarf(self):
         """Test that lldb stop-hook works for multiple threads."""
         self.buildDwarf(dictionary=self.d)
@@ -42,6 +42,7 @@ class StopHookForMultipleThreadsTestCase(TestBase):
 
     def stop_hook_multiple_threads(self):
         """Test that lldb stop-hook works for multiple threads."""
+        import pexpect
         exe = os.path.join(os.getcwd(), self.exe_name)
         prompt = "(lldb) "
 
