@@ -55,10 +55,9 @@ class CheriSandboxABI : public ModulePass,
       bool Modified = false;
       for (Function &F : Mod)
         Modified |= runOnFunction(F);
-      if (Modified)
-
 #ifndef NDEBUG
-      verifyModule(Mod);
+      if (Modified)
+        verifyModule(Mod);
 #endif
       return Modified;
     }
