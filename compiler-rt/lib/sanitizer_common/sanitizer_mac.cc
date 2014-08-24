@@ -7,9 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file is shared between AddressSanitizer and ThreadSanitizer
-// run-time libraries and implements mac-specific functions from
-// sanitizer_libc.h.
+// This file is shared between various sanitizers' runtime libraries and
+// implements OSX-specific functions.
 //===----------------------------------------------------------------------===//
 
 #include "sanitizer_platform.h"
@@ -23,8 +22,10 @@
 #include <stdio.h>
 
 #include "sanitizer_common.h"
+#include "sanitizer_flags.h"
 #include "sanitizer_internal_defs.h"
 #include "sanitizer_libc.h"
+#include "sanitizer_mac.h"
 #include "sanitizer_placement_new.h"
 #include "sanitizer_procmaps.h"
 
@@ -32,9 +33,11 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <sched.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <libkern/OSAtomic.h>
@@ -118,6 +121,24 @@ uptr internal_getpid() {
   return getpid();
 }
 
+int internal_sigaction(int signum, const void *act, void *oldact) {
+  return sigaction(signum,
+                   (struct sigaction *)act, (struct sigaction *)oldact);
+}
+
+int internal_fork() {
+  // TODO(glider): this may call user's pthread_atfork() handlers which is bad.
+  return fork();
+}
+
+uptr internal_rename(const char *oldpath, const char *newpath) {
+  return rename(oldpath, newpath);
+}
+
+uptr internal_ftruncate(fd_t fd, uptr size) {
+  return ftruncate(fd, size);
+}
+
 // ----------------- sanitizer_common.h
 bool FileExists(const char *filename) {
   struct stat st;
@@ -136,6 +157,20 @@ void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
   CHECK(stack_top);
   CHECK(stack_bottom);
   uptr stacksize = pthread_get_stacksize_np(pthread_self());
+  // pthread_get_stacksize_np() returns an incorrect stack size for the main
+  // thread on Mavericks. See
+  // https://code.google.com/p/address-sanitizer/issues/detail?id=261
+  if ((GetMacosVersion() == MACOS_VERSION_MAVERICKS) && at_initialization &&
+      stacksize == (1 << 19))  {
+    struct rlimit rl;
+    CHECK_EQ(getrlimit(RLIMIT_STACK, &rl), 0);
+    // Most often rl.rlim_cur will be the desired 8M.
+    if (rl.rlim_cur < kMaxThreadStackSize) {
+      stacksize = rl.rlim_cur;
+    } else {
+      stacksize = kMaxThreadStackSize;
+    }
+  }
   void *stackaddr = pthread_get_stackaddr_np(pthread_self());
   *stack_top = (uptr)stackaddr;
   *stack_bottom = *stack_top - stacksize;
@@ -169,7 +204,8 @@ void ReExec() {
   UNIMPLEMENTED();
 }
 
-void PrepareForSandboxing() {
+void PrepareForSandboxing(__sanitizer_sandbox_arguments *args) {
+  (void)args;
   // Nothing here for now.
 }
 
@@ -236,6 +272,48 @@ uptr GetListOfModules(LoadedModule *modules, uptr max_modules,
                       string_predicate_t filter) {
   MemoryMappingLayout memory_mapping(false);
   return memory_mapping.DumpListOfModules(modules, max_modules, filter);
+}
+
+bool IsDeadlySignal(int signum) {
+  return (signum == SIGSEGV || signum == SIGBUS) && common_flags()->handle_segv;
+}
+
+MacosVersion cached_macos_version = MACOS_VERSION_UNINITIALIZED;
+
+MacosVersion GetMacosVersionInternal() {
+  int mib[2] = { CTL_KERN, KERN_OSRELEASE };
+  char version[100];
+  uptr len = 0, maxlen = sizeof(version) / sizeof(version[0]);
+  for (uptr i = 0; i < maxlen; i++) version[i] = '\0';
+  // Get the version length.
+  CHECK_NE(sysctl(mib, 2, 0, &len, 0, 0), -1);
+  CHECK_LT(len, maxlen);
+  CHECK_NE(sysctl(mib, 2, version, &len, 0, 0), -1);
+  switch (version[0]) {
+    case '9': return MACOS_VERSION_LEOPARD;
+    case '1': {
+      switch (version[1]) {
+        case '0': return MACOS_VERSION_SNOW_LEOPARD;
+        case '1': return MACOS_VERSION_LION;
+        case '2': return MACOS_VERSION_MOUNTAIN_LION;
+        case '3': return MACOS_VERSION_MAVERICKS;
+        default: return MACOS_VERSION_UNKNOWN;
+      }
+    }
+    default: return MACOS_VERSION_UNKNOWN;
+  }
+}
+
+MacosVersion GetMacosVersion() {
+  atomic_uint32_t *cache =
+      reinterpret_cast<atomic_uint32_t*>(&cached_macos_version);
+  MacosVersion result =
+      static_cast<MacosVersion>(atomic_load(cache, memory_order_acquire));
+  if (result == MACOS_VERSION_UNINITIALIZED) {
+    result = GetMacosVersionInternal();
+    atomic_store(cache, result, memory_order_release);
+  }
+  return result;
 }
 
 }  // namespace __sanitizer

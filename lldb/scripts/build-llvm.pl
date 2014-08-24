@@ -11,7 +11,9 @@
 use strict;
 use File::Basename;
 use File::Glob ':glob';
+use File::Slurp;
 use List::Util qw[min max];
+use Digest::MD5 qw(md5_hex);
 
 our $llvm_srcroot = $ENV{SCRIPT_INPUT_FILE_0};
 our $llvm_dstroot = $ENV{SCRIPT_INPUT_FILE_1};
@@ -49,61 +51,11 @@ else
 {
     die "Unsupported LLVM configuration: '$llvm_configuration'\n";
 }
-
-our @archive_files = (
-    "$llvm_configuration/lib/libclang.a",
-    "$llvm_configuration/lib/libclangAnalysis.a",
-    "$llvm_configuration/lib/libclangAST.a",
-    "$llvm_configuration/lib/libclangBasic.a",
-    "$llvm_configuration/lib/libclangCodeGen.a",
-    "$llvm_configuration/lib/libclangEdit.a",
-    "$llvm_configuration/lib/libclangFrontend.a",
-    "$llvm_configuration/lib/libclangDriver.a",
-    "$llvm_configuration/lib/libclangLex.a",
-    "$llvm_configuration/lib/libclangParse.a",
-    "$llvm_configuration/lib/libclangSema.a",
-    "$llvm_configuration/lib/libclangSerialization.a",
-    "$llvm_configuration/lib/libLLVMAnalysis.a",
-    "$llvm_configuration/lib/libLLVMARMAsmParser.a",
-    "$llvm_configuration/lib/libLLVMARMAsmPrinter.a",
-    "$llvm_configuration/lib/libLLVMARMCodeGen.a",
-    "$llvm_configuration/lib/libLLVMARMDesc.a",
-    "$llvm_configuration/lib/libLLVMARMDisassembler.a",
-    "$llvm_configuration/lib/libLLVMARMInfo.a",
-    "$llvm_configuration/lib/libLLVMAsmParser.a",
-    "$llvm_configuration/lib/libLLVMAsmPrinter.a",
-    "$llvm_configuration/lib/libLLVMBitReader.a",
-    "$llvm_configuration/lib/libLLVMBitWriter.a",
-    "$llvm_configuration/lib/libLLVMCodeGen.a",
-    "$llvm_configuration/lib/libLLVMCore.a",
-    "$llvm_configuration/lib/libLLVMExecutionEngine.a",
-    "$llvm_configuration/lib/libLLVMInstCombine.a",
-    "$llvm_configuration/lib/libLLVMInstrumentation.a",
-    "$llvm_configuration/lib/libLLVMipa.a",
-    "$llvm_configuration/lib/libLLVMInterpreter.a",
-    "$llvm_configuration/lib/libLLVMipo.a",
-    "$llvm_configuration/lib/libLLVMJIT.a",
-    "$llvm_configuration/lib/libLLVMLinker.a",
-    "$llvm_configuration/lib/libLLVMMC.a",
-    "$llvm_configuration/lib/libLLVMMCParser.a",
-    "$llvm_configuration/lib/libLLVMMCDisassembler.a",
-    "$llvm_configuration/lib/libLLVMMCJIT.a",
-    "$llvm_configuration/lib/libLLVMObject.a",
-    "$llvm_configuration/lib/libLLVMOption.a",
-    "$llvm_configuration/lib/libLLVMRuntimeDyld.a",
-    "$llvm_configuration/lib/libLLVMScalarOpts.a",
-    "$llvm_configuration/lib/libLLVMSelectionDAG.a",
-    "$llvm_configuration/lib/libLLVMSupport.a",
-    "$llvm_configuration/lib/libLLVMTarget.a",
-    "$llvm_configuration/lib/libLLVMTransformUtils.a",
-    "$llvm_configuration/lib/libLLVMX86AsmParser.a",
-    "$llvm_configuration/lib/libLLVMX86AsmPrinter.a",
-    "$llvm_configuration/lib/libLLVMX86CodeGen.a",
-    "$llvm_configuration/lib/libLLVMX86Desc.a",
-    "$llvm_configuration/lib/libLLVMX86Disassembler.a",
-    "$llvm_configuration/lib/libLLVMX86Info.a",
-    "$llvm_configuration/lib/libLLVMX86Utils.a",
+our @llvm_repositories = (
+    "$llvm_srcroot",
+    "$llvm_srcroot/tools/clang"
 );
+
 
 if (-e "$llvm_srcroot/lib")
 {
@@ -157,6 +109,28 @@ sub build_llvm
     #my $extra_svn_options = $debug ? "" : "--quiet";
     # Make the llvm build directory
     my $arch_idx = 0;
+    
+    # Calculate if the current source digest so we can compare it to each architecture
+    # build folder
+    my @llvm_md5_strings;
+    foreach my $repo (@llvm_repositories)
+    {
+        if (-d "$repo/.svn")
+        {
+            push(@llvm_md5_strings, `svn info '$repo'`);
+            push(@llvm_md5_strings, `svn diff '$repo'`);
+        }
+        elsif (-d "$repo/.git")
+        {
+            push(@llvm_md5_strings, `cd '$repo'; git branch -v`);
+            push(@llvm_md5_strings, `cd '$repo'; git diff`);
+        }
+    }
+    #print "LLVM MD5 will be generated from:\n";
+    #print @llvm_md5_strings;
+    my $llvm_hex_digest = md5_hex(@llvm_md5_strings);
+
+    #print "llvm MD5: $llvm_hex_digest\n";
     foreach my $arch (@archs)
     {
         my $llvm_dstroot_arch = "${llvm_dstroot}/${arch}";
@@ -165,6 +139,8 @@ sub build_llvm
         my $do_configure = 0;
         my $do_make = 0;
         my $is_arm = $arch =~ /^arm/;
+        my $save_arch_digest = 1;
+        my $arch_digest_file = "$llvm_dstroot_arch/md5";
 
         my $llvm_dstroot_arch_archive = "$llvm_dstroot_arch/$llvm_clang_basename";
         print "LLVM architecture root for ${arch} exists at '$llvm_dstroot_arch'...";
@@ -173,22 +149,69 @@ sub build_llvm
             print "YES\n";
             $do_configure = !-e "$llvm_dstroot_arch/config.log";
 
-            # dstroot for llvm build exists, make sure all .a files are built
-            for my $llvm_lib (@archive_files)
+            my @archive_modtimes;
+            if ($do_make == 0)
             {
-                if (!-e "$llvm_dstroot_arch/$llvm_lib")
+                if (-e $arch_digest_file)
                 {
-                    print "missing archive: '$llvm_dstroot_arch/$llvm_lib'\n";
+                    my $arch_hex_digest = read_file($arch_digest_file);
+                    if ($arch_hex_digest eq $llvm_hex_digest)
+                    {
+                        # No sources have been changed or updated
+                        $save_arch_digest = 0;
+                    }
+                    else
+                    {
+                        # Sources have changed, or svn has been updated
+                        print "Sources have changed, rebuilding...\n";
+                        $do_make = 1;
+                    }
+                }
+                else
+                {
+                    # No MD5 digest, we need to make
+                    print "Missing MD5 digest file '$arch_digest_file', rebuilding...\n";
                     $do_make = 1;
                 }
+                
+                if ($do_make == 0)
+                {
+                    if (-e $llvm_dstroot_arch_archive)
+                    {
+                        # the final archive exists, check the modification times on all .a files that
+                        # make the final archive to make sure we don't need to rebuild
+                        my $llvm_dstroot_arch_archive_modtime = (stat($llvm_dstroot_arch_archive))[9];
+                        
+                        our @archive_files = glob "$llvm_dstroot_arch/$llvm_configuration/lib/*.a";
+                        
+                        for my $llvm_lib (@archive_files)
+                        {
+                            if (-e $llvm_lib)
+                            {
+                                if ($llvm_dstroot_arch_archive_modtime < (stat($llvm_lib))[9])
+                                {
+                                    print "'$llvm_dstroot_arch/$llvm_lib' is newer than '$llvm_dstroot_arch_archive', rebuilding...\n";
+                                    $do_make = 1;
+                                    last;
+                                }
+                            }
+                        }
+
+                        if ($do_make == 0)
+                        {
+                            print "LLVM architecture archive for ${arch} is '$llvm_dstroot_arch_archive' and is up to date.\n";
+                        }
+                    }
+                    else
+                    {
+                        $do_make = 1;
+                    }
+                }
             }
-            if (!-e $llvm_dstroot_arch_archive)
+            
+            if ($do_make)
             {
-                $do_make = 1;
-            }
-            else
-            {
-                print "LLVM architecture archive for ${arch} is '$llvm_dstroot_arch_archive'\n";
+                unlink($llvm_dstroot_arch_archive);
             }
         }
         else
@@ -235,12 +258,23 @@ sub build_llvm
                 }
             }
         }
+        
+        if ($save_arch_digest)
+        {
+            write_file($arch_digest_file, \$llvm_hex_digest);
+        }
 
         if ($do_configure)
         {
             # Build llvm and clang
             print "Configuring clang ($arch) in '$llvm_dstroot_arch'...\n";
-            my $lldb_configuration_options = "--enable-targets=x86_64,arm $common_configure_options $llvm_config_href->{configure_options}";
+            my $lldb_configuration_options = "--enable-targets=x86_64,arm,arm64 $common_configure_options $llvm_config_href->{configure_options}";
+
+            # We're configuring llvm/clang with --enable-cxx11 and --enable-libcpp but llvm/configure doesn't
+            # pick up the right C++ standard library.  If we have a MACOSX_DEPLOYMENT_TARGET of 10.7 or 10.8
+            # (or are using actually building on those releases), we need to specify "-stdlib=libc++" at link
+            # time or llvm/configure will not see <atomic> as available and error out (v. llvm r199313).
+            $ENV{LDFLAGS} = $ENV{LDFLAGS} . " -stdlib=libc++";
 
             if ($is_arm)
             {
@@ -353,10 +387,11 @@ sub create_single_llvm_archive_for_arch
     -e $arch_output_file and return;
     my $files = "$arch_dstroot/files.txt";
     open (FILES, ">$files") or die "Can't open $! for writing...\n";
-
-    for my $path (@archive_files)
+    
+    our @archive_files = glob "$arch_dstroot/$llvm_configuration/lib/*.a";
+    
+    for my $archive_fullpath (@archive_files)
     {
-        my $archive_fullpath = finalize_path ("$arch_dstroot/$path");
         if (-e $archive_fullpath)
         {
             if ($split_into_objects)

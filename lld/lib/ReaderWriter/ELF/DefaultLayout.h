@@ -22,15 +22,16 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Hashing.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/Format.h"
 
 #include <map>
+#include <memory>
 #include <tuple>
 #include <unordered_map>
 
@@ -115,6 +116,8 @@ public:
   };
 
   typedef typename std::vector<Chunk<ELFT> *>::iterator ChunkIter;
+  typedef typename std::vector<Segment<ELFT> *>::iterator SegmentIter;
+
   // The additional segments are used to figure out
   // if there is a segment by that type already created
   // For example : PT_TLS, we have two sections .tdata/.tbss
@@ -169,8 +172,8 @@ public:
   DefaultLayout(const ELFLinkingContext &context) : _context(context) {}
 
   /// \brief Return the section order for a input section
-  virtual SectionOrder getSectionOrder(StringRef name, int32_t contentType,
-                                       int32_t contentPermissions);
+  SectionOrder getSectionOrder(StringRef name, int32_t contentType,
+                               int32_t contentPermissions) override;
 
   /// \brief This maps the input sections to the output section names
   virtual StringRef getSectionName(const DefinedAtom *da) const;
@@ -188,7 +191,7 @@ public:
   static bool hasOutputSegment(Section<ELFT> *section);
 
   // Adds an atom to the section
-  virtual ErrorOr<const lld::AtomLayout &> addAtom(const Atom *atom);
+  ErrorOr<const lld::AtomLayout &> addAtom(const Atom *atom) override;
 
   /// \brief Find an output Section given a section name.
   MergedSections<ELFT> *findOutputSection(StringRef name) {
@@ -207,13 +210,13 @@ public:
   // Merge sections with the same name into a MergedSections
   void mergeSimilarSections();
 
-  void assignSectionsToSegments();
+  void assignSectionsToSegments() override;
 
-  void assignVirtualAddress();
+  void assignVirtualAddress() override;
 
   void assignOffsetsForMiscSections();
 
-  void assignFileOffsets();
+  void assignFileOffsets() override;
 
   /// Inline functions
   inline range<AbsoluteAtomIterT> absoluteAtoms() { return _absoluteAtoms; }
@@ -233,7 +236,7 @@ public:
       si->doPreFlight();
   }
 
-  inline bool findAtomAddrByName(StringRef name, uint64_t &addr) {
+  inline bool findAtomAddrByName(StringRef name, uint64_t &addr) override {
     for (auto sec : _sections)
       if (auto section = dyn_cast<Section<ELFT> >(sec))
         if (section->findAtomAddrByName(name, addr))
@@ -251,7 +254,7 @@ public:
 
   inline range<ChunkIter> sections() { return _sections; }
 
-  inline range<ChunkIter> segments() { return _segments; }
+  inline range<SegmentIter> segments() { return _segments; }
 
   inline ELFHeader<ELFT> *getHeader() { return _elfHeader; }
 
@@ -268,7 +271,8 @@ public:
   RelocationTable<ELFT> *getDynamicRelocationTable() {
     if (!_dynamicRelocationTable) {
       _dynamicRelocationTable.reset(new (_allocator) RelocationTable<ELFT>(
-          _context, ".rela.dyn", ORDER_DYNAMIC_RELOCS));
+          _context, _context.isRelaOutputFormat() ? ".rela.dyn" : ".rel.dyn",
+          ORDER_DYNAMIC_RELOCS));
       addSection(_dynamicRelocationTable.get());
     }
     return _dynamicRelocationTable.get();
@@ -278,7 +282,8 @@ public:
   RelocationTable<ELFT> *getPLTRelocationTable() {
     if (!_pltRelocationTable) {
       _pltRelocationTable.reset(new (_allocator) RelocationTable<ELFT>(
-          _context, ".rela.plt", ORDER_DYNAMIC_PLT_RELOCS));
+          _context, _context.isRelaOutputFormat() ? ".rela.plt" : ".rel.plt",
+          ORDER_DYNAMIC_PLT_RELOCS));
       addSection(_pltRelocationTable.get());
     }
     return _pltRelocationTable.get();
@@ -596,7 +601,7 @@ template <class ELFT> void DefaultLayout<ELFT>::assignSectionsToSegments() {
   ScopedTask task(getDefaultDomain(), "assignSectionsToSegments");
   ELFLinkingContext::OutputMagic outputMagic = _context.getOutputMagic();
     // TODO: Do we want to give a chance for the targetHandlers
-    // to sort segments in an arbitrary order ?
+    // to sort segments in an arbitrary order?
   // sort the sections by their order as defined by the layout
   std::stable_sort(_sections.begin(), _sections.end(),
                    [](Chunk<ELFT> *A, Chunk<ELFT> *B) {
@@ -687,7 +692,7 @@ template <class ELFT> void DefaultLayout<ELFT>::assignSectionsToSegments() {
       }
     }
   }
-  if (_context.isDynamic()) {
+  if (_context.isDynamic() && !_context.isDynamicLibrary()) {
     Segment<ELFT> *segment =
         new (_allocator) ProgramHeaderSegment<ELFT>(_context);
     _segments.push_back(segment);
@@ -698,7 +703,7 @@ template <class ELFT> void DefaultLayout<ELFT>::assignSectionsToSegments() {
 
 template <class ELFT> void DefaultLayout<ELFT>::assignFileOffsets() {
   // TODO: Do we want to give a chance for the targetHandlers
-  // to sort segments in an arbitrary order ?
+  // to sort segments in an arbitrary order?
   std::sort(_segments.begin(), _segments.end(), Segment<ELFT>::compareSegments);
   int ordinal = 0;
   // Compute the number of segments that might be needed, so that the

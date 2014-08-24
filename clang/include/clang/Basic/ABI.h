@@ -13,8 +13,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef CLANG_BASIC_ABI_H
-#define CLANG_BASIC_ABI_H
+#ifndef LLVM_CLANG_BASIC_ABI_H
+#define LLVM_CLANG_BASIC_ABI_H
 
 #include "llvm/Support/DataTypes.h"
 
@@ -186,10 +186,10 @@ struct ThunkInfo {
   /// an ABI-specific comparator.
   const CXXMethodDecl *Method;
 
-  ThunkInfo() : Method(0) { }
+  ThunkInfo() : Method(nullptr) { }
 
   ThunkInfo(const ThisAdjustment &This, const ReturnAdjustment &Return,
-            const CXXMethodDecl *Method = 0)
+            const CXXMethodDecl *Method = nullptr)
       : This(This), Return(Return), Method(Method) {}
 
   friend bool operator==(const ThunkInfo &LHS, const ThunkInfo &RHS) {
@@ -197,9 +197,11 @@ struct ThunkInfo {
            LHS.Method == RHS.Method;
   }
 
-  bool isEmpty() const { return This.isEmpty() && Return.isEmpty() && Method == 0; }
+  bool isEmpty() const {
+    return This.isEmpty() && Return.isEmpty() && Method == nullptr;
+  }
 };  
 
 } // end namespace clang
 
-#endif // CLANG_BASIC_ABI_H
+#endif

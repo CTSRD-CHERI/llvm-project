@@ -15,7 +15,7 @@ class ExprCommandWithTimeoutsTestCase(TestBase):
         # Call super's setUp().
         TestBase.setUp(self)
 
-        self.main_source = "wait-a-while.c"
+        self.main_source = "wait-a-while.cpp"
         self.main_source_spec = lldb.SBFileSpec (self.main_source)
 
 
@@ -26,7 +26,8 @@ class ExprCommandWithTimeoutsTestCase(TestBase):
         self.buildDsym()
         self.call_function()
 
-    @skipIfFreeBSD # llvm.org/pr17233
+    @expectedFailureFreeBSD("llvm.org/pr19605") # fails on buildbot
+    @expectedFailureLinux("llvm.org/pr20275") # fails intermittently on Linux
     @dwarf_test
     def test_with_dwarf(self):
         """Test calling std::String member function."""
@@ -88,6 +89,16 @@ class ExprCommandWithTimeoutsTestCase(TestBase):
         return_value = interp.HandleCommand ("expr -t 1000000 -u true -- wait_a_while(1000)", result)
         self.assertTrue(return_value == lldb.eReturnStatusSuccessFinishResult)
 
+
+        # Finally set the one thread timeout and make sure that doesn't change things much:
+
+        options.SetTimeoutInMicroSeconds(1000000)
+        options.SetOneThreadTimeoutInMicroSeconds(500000)
+        value = frame.EvaluateExpression ("wait_a_while (1000)", options)
+        self.assertTrue(value.IsValid())
+        self.assertTrue (value.GetError().Success() == True)
+        
+        
 if __name__ == '__main__':
     import atexit
     lldb.SBDebugger.Initialize()

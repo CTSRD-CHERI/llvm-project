@@ -23,7 +23,8 @@
 
 #include "lld/Core/File.h"
 #include "lld/Core/Pass.h"
-#include "lld/ReaderWriter/Simple.h"
+#include "lld/Core/Simple.h"
+#include "lld/ReaderWriter/PECOFFLinkingContext.h"
 #include "llvm/Support/COFF.h"
 
 #include <algorithm>
@@ -41,18 +42,20 @@ class ImportTableEntryAtom;
 
 // A state object of this pass.
 struct Context {
-  Context(MutableFile &f, VirtualFile &g) : file(f), dummyFile(g) {}
+  Context(MutableFile &f, VirtualFile &g, bool peplus)
+      : file(f), dummyFile(g), is64(peplus) {}
   MutableFile &file;
   VirtualFile &dummyFile;
+  bool is64;
 };
 
 /// The root class of all idata atoms.
 class IdataAtom : public COFFLinkerInternalAtom {
 public:
-  virtual SectionChoice sectionChoice() const { return sectionCustomRequired; }
-  virtual StringRef customSectionName() const { return ".idata"; }
-  virtual ContentType contentType() const { return typeData; }
-  virtual ContentPermissions permissions() const { return permR__; }
+  SectionChoice sectionChoice() const override { return sectionCustomRequired; }
+  StringRef customSectionName() const override { return ".idata"; }
+  ContentType contentType() const override { return typeData; }
+  ContentPermissions permissions() const override { return permR__; }
 
 protected:
   IdataAtom(Context &context, std::vector<uint8_t> data);
@@ -79,17 +82,16 @@ private:
 
 class ImportTableEntryAtom : public IdataAtom {
 public:
-  ImportTableEntryAtom(Context &context, uint32_t contents,
-                       StringRef sectionName)
-      : IdataAtom(context, assembleRawContent(contents)),
+  ImportTableEntryAtom(Context &ctx, uint32_t contents, StringRef sectionName)
+      : IdataAtom(ctx, assembleRawContent(contents, ctx.is64)),
         _sectionName(sectionName) {}
 
-  virtual StringRef customSectionName() const {
+  StringRef customSectionName() const override {
     return _sectionName;
   };
 
 private:
-  std::vector<uint8_t> assembleRawContent(uint32_t contents);
+  std::vector<uint8_t> assembleRawContent(uint32_t contents, bool is64);
   StringRef _sectionName;
 };
 
@@ -105,7 +107,7 @@ public:
     addRelocations(context, loadName, sharedAtoms);
   }
 
-  virtual StringRef customSectionName() const { return ".idata.d"; }
+  StringRef customSectionName() const override { return ".idata.d"; }
 
 private:
   void addRelocations(Context &context, StringRef loadName,
@@ -124,16 +126,17 @@ public:
   explicit NullImportDirectoryAtom(Context &context)
       : IdataAtom(context, std::vector<uint8_t>(20, 0)) {}
 
-  virtual StringRef customSectionName() const { return ".idata.d"; }
+  StringRef customSectionName() const override { return ".idata.d"; }
 };
 
 } // namespace idata
 
 class IdataPass : public lld::Pass {
 public:
-  IdataPass(const LinkingContext &ctx) : _dummyFile(ctx) {}
+  IdataPass(const PECOFFLinkingContext &ctx)
+      : _dummyFile(ctx), _is64(ctx.is64Bit()) {}
 
-  virtual void perform(std::unique_ptr<MutableFile> &file);
+  void perform(std::unique_ptr<MutableFile> &file) override;
 
 private:
   std::map<StringRef, std::vector<COFFSharedLibraryAtom *> >
@@ -146,6 +149,7 @@ private:
   // read from a file, so we use this object.
   VirtualFile _dummyFile;
 
+  bool _is64;
   llvm::BumpPtrAllocator _alloc;
 };
 

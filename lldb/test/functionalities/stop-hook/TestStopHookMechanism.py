@@ -5,7 +5,6 @@ Test lldb target stop-hook mechanism to see whether it fires off correctly .
 import os
 import unittest2
 import lldb
-import pexpect
 from lldbtest import *
 
 class StopHookMechanismTestCase(TestBase):
@@ -20,7 +19,7 @@ class StopHookMechanismTestCase(TestBase):
         self.stop_hook_firing()
 
     @skipIfFreeBSD # llvm.org/pr15037
-    @skipIfLinux # llvm.org/pr15037: stop-hooks sometimes fail to fire on Linux (disabled to avoid needless noise)
+    @expectedFailureLinux('llvm.org/pr15037') # stop-hooks sometimes fail to fire on Linux
     @dwarf_test
     def test_with_dwarf(self):
         """Test the stop-hook mechanism."""
@@ -38,6 +37,7 @@ class StopHookMechanismTestCase(TestBase):
 
     def stop_hook_firing(self):
         """Test the stop-hook mechanism."""
+        import pexpect
         exe = os.path.join(os.getcwd(), "a.out")
         prompt = "(lldb) "
         add_prompt = "Enter your stop hook command(s).  Type 'DONE' to end.\r\n> "

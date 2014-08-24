@@ -9,6 +9,8 @@
 
 #include "lldb/lldb-python.h"
 
+#include "lldb/Utility/SafeMachO.h"
+
 #include "lldb/Breakpoint/StoppointCallbackContext.h"
 #include "lldb/Core/DataBuffer.h"
 #include "lldb/Core/DataBufferHeap.h"
@@ -19,6 +21,7 @@
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/State.h"
+#include "lldb/Core/StreamFile.h"
 #include "lldb/Host/Symbols.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/RegisterContext.h"
@@ -323,6 +326,8 @@ DynamicLoaderDarwinKernel::SearchForKernelNearPC (Process *process)
             return addr + 0x1000;
         if (CheckForKernelImageAtAddress (addr + 0x2000, process).IsValid())
             return addr + 0x2000;
+        if (CheckForKernelImageAtAddress (addr + 0x4000, process).IsValid())
+            return addr + 0x4000;
         i++;
         addr -= 0x100000;
     }
@@ -373,6 +378,8 @@ DynamicLoaderDarwinKernel::SearchForKernelViaExhaustiveSearch (Process *process)
             return addr + 0x1000;
         if (CheckForKernelImageAtAddress (addr + 0x2000, process).IsValid())
             return addr + 0x2000;
+        if (CheckForKernelImageAtAddress (addr + 0x4000, process).IsValid())
+            return addr + 0x4000;
         addr += 0x100000;
     }
     return LLDB_INVALID_ADDRESS;
@@ -541,7 +548,7 @@ DynamicLoaderDarwinKernel::KextImageInfo::LoadImageAtFileAddress (Process *proce
     if (m_module_sp)
     {
         bool changed = false;
-        if (m_module_sp->SetLoadAddress (process->GetTarget(), 0, changed))
+        if (m_module_sp->SetLoadAddress (process->GetTarget(), 0, true, changed))
             m_load_process_stop_id = process->GetStopID();
     }
     return false;
@@ -717,7 +724,7 @@ DynamicLoaderDarwinKernel::KextImageInfo::ReadMemoryModule (Process *process)
             {
                 if (m_uuid != exe_module->GetUUID())
                 {
-                    Stream *s = &process->GetTarget().GetDebugger().GetOutputStream();
+                    Stream *s = process->GetTarget().GetDebugger().GetOutputFile().get();
                     if (s)
                     {
                         s->Printf ("warning: Host-side kernel file has Mach-O UUID of %s but remote kernel has a UUID of %s -- a mismatched kernel file will result in a poor debugger experience.\n", 
@@ -765,7 +772,7 @@ DynamicLoaderDarwinKernel::KextImageInfo::LoadImageUsingMemoryModule (Process *p
 
     if (IsKernel() && uuid_is_valid && m_memory_module_sp.get())
     {
-        Stream *s = &target.GetDebugger().GetOutputStream();
+        Stream *s = target.GetDebugger().GetOutputFile().get();
         if (s)
         {
             s->Printf ("Kernel UUID: %s\n", m_memory_module_sp->GetUUID().GetAsString().c_str());
@@ -809,7 +816,7 @@ DynamicLoaderDarwinKernel::KextImageInfo::LoadImageUsingMemoryModule (Process *p
             // to be the bundle ID for this kext, e.g. "com.apple.filesystems.msdosfs", and ask the platform
             // to find it.
             PlatformSP platform_sp (target.GetPlatform());
-            if (platform_sp)
+            if (!m_module_sp && platform_sp)
             {
                 ConstString platform_name (platform_sp->GetPluginName());
                 static ConstString g_platform_name (PlatformDarwinKernel::GetPluginNameStatic());
@@ -834,7 +841,7 @@ DynamicLoaderDarwinKernel::KextImageInfo::LoadImageUsingMemoryModule (Process *p
 
             if (IsKernel() && !m_module_sp)
             {
-                Stream *s = &target.GetDebugger().GetOutputStream();
+                Stream *s = target.GetDebugger().GetOutputFile().get();
                 if (s)
                 {
                     s->Printf ("WARNING: Unable to locate kernel binary on the debugger system.\n");
@@ -867,7 +874,7 @@ DynamicLoaderDarwinKernel::KextImageInfo::LoadImageUsingMemoryModule (Process *p
     
     if (!m_module_sp && !IsKernel() && m_uuid.IsValid() && !m_name.empty())
     {
-        Stream *s = &target.GetDebugger().GetOutputStream();
+        Stream *s = target.GetDebugger().GetOutputFile().get();
         if (s)
         {
             s->Printf ("warning: Can't find binary/dSYM for %s (%s)\n", 
@@ -945,7 +952,7 @@ DynamicLoaderDarwinKernel::KextImageInfo::LoadImageUsingMemoryModule (Process *p
     
     if (is_loaded && m_module_sp && IsKernel())
     {
-        Stream *s = &target.GetDebugger().GetOutputStream();
+        Stream *s = target.GetDebugger().GetOutputFile().get();
         if (s)
         {
             ObjectFile *kernel_object_file = m_module_sp->GetObjectFile();
@@ -1126,7 +1133,7 @@ DynamicLoaderDarwinKernel::ReadKextSummaryHeader ()
         const ByteOrder byte_order = m_kernel.GetByteOrder();
         Error error;
         // Read enough bytes for a "OSKextLoadedKextSummaryHeader" structure
-        // which is currenty 4 uint32_t and a pointer.
+        // which is currently 4 uint32_t and a pointer.
         uint8_t buf[24];
         DataExtractor data (buf, sizeof(buf), byte_order, addr_size);
         const size_t count = 4 * sizeof(uint32_t) + addr_size;
@@ -1145,9 +1152,25 @@ DynamicLoaderDarwinKernel::ReadKextSummaryHeader ()
                 {
                     lldb::offset_t offset = 0;
                     m_kext_summary_header.version = data.GetU32(&offset);
+                    if (m_kext_summary_header.version > 128)
+                    {
+                        Stream *s = m_process->GetTarget().GetDebugger().GetOutputFile().get();
+                        s->Printf ("WARNING: Unable to read kext summary header, got improbable version number %u\n", m_kext_summary_header.version);
+                        // If we get an improbably large version number, we're probably getting bad memory.
+                        m_kext_summary_header_addr.Clear();
+                        return false;
+                    }
                     if (m_kext_summary_header.version >= 2)
                     {
                         m_kext_summary_header.entry_size = data.GetU32(&offset);
+                        if (m_kext_summary_header.entry_size > 4096)
+                        {
+                            // If we get an improbably large entry_size, we're probably getting bad memory.
+                            Stream *s = m_process->GetTarget().GetDebugger().GetOutputFile().get();
+                            s->Printf ("WARNING: Unable to read kext summary header, got improbable entry_size %u\n", m_kext_summary_header.entry_size);
+                            m_kext_summary_header_addr.Clear();
+                            return false;
+                        }
                     }
                     else
                     {
@@ -1155,6 +1178,14 @@ DynamicLoaderDarwinKernel::ReadKextSummaryHeader ()
                         m_kext_summary_header.entry_size = KERNEL_MODULE_ENTRY_SIZE_VERSION_1;
                     }
                     m_kext_summary_header.entry_count = data.GetU32(&offset);
+                    if (m_kext_summary_header.entry_count > 10000)
+                    {
+                        // If we get an improbably large number of kexts, we're probably getting bad memory.
+                        Stream *s = m_process->GetTarget().GetDebugger().GetOutputFile().get();
+                        s->Printf ("WARNING: Unable to read kext summary header, got improbable number of kexts %u\n", m_kext_summary_header.entry_count);
+                        m_kext_summary_header_addr.Clear();
+                        return false;
+                    }
                     return true;
                 }
             }
@@ -1248,7 +1279,7 @@ DynamicLoaderDarwinKernel::ParseKextSummaries (const Address &kext_summary_addr,
     if (number_of_new_kexts_being_added == 0 && number_of_old_kexts_being_removed == 0)
         return true;
 
-    Stream *s = &m_process->GetTarget().GetDebugger().GetOutputStream();
+    Stream *s = m_process->GetTarget().GetDebugger().GetOutputFile().get();
     if (s && load_kexts)
     {
         if (number_of_new_kexts_being_added > 0 && number_of_old_kexts_being_removed > 0)

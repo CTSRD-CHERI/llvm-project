@@ -1,6 +1,7 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=debug.DumpCFG -triple x86_64-apple-darwin12 -std=c++11 %s > %t 2>&1
+// RUN: %clang_cc1 -analyze -analyzer-checker=debug.DumpCFG -triple x86_64-apple-darwin12 -analyzer-config cfg-temporary-dtors=true -std=c++11 %s > %t 2>&1
 // RUN: FileCheck --input-file=%t %s
 
+// CHECK-LABEL: void checkWrap(int i)
 // CHECK: ENTRY
 // CHECK-NEXT: Succs (1): B1
 // CHECK: [B1]
@@ -36,6 +37,7 @@ void checkWrap(int i) {
   }
 }
 
+// CHECK-LABEL: void checkDeclStmts()
 // CHECK: ENTRY
 // CHECK-NEXT: Succs (1): B1
 // CHECK: [B1]
@@ -49,7 +51,7 @@ void checkWrap(int i) {
 // CHECK-NEXT: CXXConstructExpr
 // CHECK-NEXT:   9: struct standalone myStandalone;
 // CHECK-NEXT: CXXConstructExpr
-// CHECK-NEXT:  11: struct <anonymous struct at {{.*}}> myAnon;
+// CHECK-NEXT:  11: struct (anonymous struct at {{.*}}) myAnon;
 // CHECK-NEXT: CXXConstructExpr
 // CHECK-NEXT:  13: struct named myNamed;
 // CHECK-NEXT:   Preds (1): B2
@@ -68,6 +70,7 @@ void checkDeclStmts() {
   static_assert(1, "abc");
 }
 
+// CHECK-LABEL: void F(EmptyE e)
 // CHECK: ENTRY
 // CHECK-NEXT: Succs (1): B1
 // CHECK: [B1]
@@ -84,6 +87,7 @@ void F(EmptyE e) {
   switch (e) {}
 }
 
+// CHECK-LABEL: void testBuiltinSize()
 // CHECK: ENTRY
 // CHECK-NEXT: Succs (1): B1
 // CHECK: [B1]
@@ -107,6 +111,7 @@ public:
   ~A() {}
 };
 
+// CHECK-LABEL: void test_deletedtor()
 // CHECK: [B2 (ENTRY)]
 // CHECK-NEXT:   Succs (1): B1
 // CHECK: [B1]
@@ -127,6 +132,7 @@ void test_deletedtor() {
   delete a;
 }
 
+// CHECK-LABEL: void test_deleteArraydtor()
 // CHECK: [B2 (ENTRY)]
 // CHECK-NEXT:   Succs (1): B1
 // CHECK: [B1]
@@ -160,7 +166,7 @@ namespace NoReturnSingleSuccessor {
     ~B() __attribute__((noreturn));
   };
 
-// CHECK: ENTRY
+// CHECK-LABEL: int test1(int *x)
 // CHECK: 1: 1
 // CHECK-NEXT: 2: return
 // CHECK-NEXT: ~B() (Implicit destructor)
@@ -172,7 +178,7 @@ namespace NoReturnSingleSuccessor {
       return 1;
   }
 
-// CHECK: ENTRY
+// CHECK-LABEL: int test2(int *x)
 // CHECK: 1: 1
 // CHECK-NEXT: 2: return
 // CHECK-NEXT: destructor
@@ -186,13 +192,14 @@ namespace NoReturnSingleSuccessor {
 }
 
 // Test CFG support for "extending" an enum.
+// CHECK-LABEL: int test_enum_with_extension(enum MyEnum value)
 // CHECK:  [B7 (ENTRY)]
 // CHECK-NEXT:    Succs (1): B2
 // CHECK:  [B1]
 // CHECK-NEXT:    1: x
 // CHECK-NEXT:    2: [B1.1] (ImplicitCastExpr, LValueToRValue, int)
 // CHECK-NEXT:    3: return [B1.2];
-// CHECK-NEXT:    Preds (4): B3 B4 B5 B6
+// CHECK-NEXT:    Preds (5): B3 B4 B5 B6 B2(Unreachable)
 // CHECK-NEXT:    Succs (1): B0
 // CHECK:  [B2]
 // CHECK-NEXT:    1: 0
@@ -202,7 +209,7 @@ namespace NoReturnSingleSuccessor {
 // CHECK-NEXT:    5: [B2.4] (ImplicitCastExpr, IntegralCast, int)
 // CHECK-NEXT:    T: switch [B2.5]
 // CHECK-NEXT:    Preds (1): B7
-// CHECK-NEXT:    Succs (5): B3 B4 B5 B6 NULL
+// CHECK-NEXT:    Succs (5): B3 B4 B5 B6 B1(Unreachable)
 // CHECK:  [B3]
 // CHECK-NEXT:   case D:
 // CHECK-NEXT:    1: 4
@@ -251,6 +258,7 @@ int test_enum_with_extension(enum MyEnum value) {
   return x;
 }
 
+// CHECK-LABEL: int test_enum_with_extension_default(enum MyEnum value)
 // CHECK:  [B7 (ENTRY)]
 // CHECK-NEXT:    Succs (1): B2
 // CHECK:  [B1]
@@ -267,13 +275,14 @@ int test_enum_with_extension(enum MyEnum value) {
 // CHECK-NEXT:    5: [B2.4] (ImplicitCastExpr, IntegralCast, int)
 // CHECK-NEXT:    T: switch [B2.5]
 // CHECK-NEXT:    Preds (1): B7
-// CHECK-NEXT:    Succs (4): B4 B5 B6 NULL
+// CHECK-NEXT:    Succs (4): B4 B5 B6 B3(Unreachable)
 // CHECK:  [B3]
 // CHECK-NEXT:   default:
 // CHECK-NEXT:    1: 4
 // CHECK-NEXT:    2: x
 // CHECK-NEXT:    3: [B3.2] = [B3.1]
 // CHECK-NEXT:    T: break;
+// CHECK-NEXT:    Preds (1): B2(Unreachable)
 // CHECK-NEXT:    Succs (1): B1
 // CHECK:  [B4]
 // CHECK-NEXT:   case C:
@@ -313,14 +322,7 @@ int test_enum_with_extension_default(enum MyEnum value) {
 }
 
 
-// CHECK:  [B1 (ENTRY)]
-// CHECK-NEXT:  Succs (1): B0
-// CHECK:  [B0 (EXIT)]
-// CHECK-NEXT:  Preds (1): B1
-// CHECK:  [B1 (ENTRY)]
-// CHECK-NEXT:  Succs (1): B0
-// CHECK:  [B0 (EXIT)]
-// CHECK-NEXT:  Preds (1): B1
+// CHECK-LABEL: void test_placement_new()
 // CHECK:  [B2 (ENTRY)]
 // CHECK-NEXT:  Succs (1): B1
 // CHECK:  [B1]
@@ -351,6 +353,7 @@ void test_placement_new() {
   MyClass* obj = new (buffer) MyClass();
 }
 
+// CHECK-LABEL: void test_placement_new_array()
 // CHECK:  [B2 (ENTRY)]
 // CHECK-NEXT:  Succs (1): B1
 // CHECK: [B1]
@@ -372,3 +375,84 @@ void test_placement_new_array() {
   int buffer[16];
   MyClass* obj = new (buffer) MyClass[5];
 }
+
+
+// CHECK-LABEL: void test_lifetime_extended_temporaries()
+// CHECK: [B1]
+struct LifetimeExtend { LifetimeExtend(int); ~LifetimeExtend(); };
+struct Aggregate { const LifetimeExtend a; const LifetimeExtend b; };
+struct AggregateRef { const LifetimeExtend &a; const LifetimeExtend &b; };
+void test_lifetime_extended_temporaries() {
+  // CHECK: LifetimeExtend(1);
+  // CHECK-NEXT: : 1
+  // CHECK-NEXT: ~LifetimeExtend()
+  // CHECK-NOT: ~LifetimeExtend()
+  {
+    const LifetimeExtend &l = LifetimeExtend(1);
+    1;
+  }
+  // CHECK: LifetimeExtend(2)
+  // CHECK-NEXT: ~LifetimeExtend()
+  // CHECK-NEXT: : 2
+  // CHECK-NOT: ~LifetimeExtend()
+  {
+    // No life-time extension.
+    const int &l = (LifetimeExtend(2), 2);
+    2;
+  }
+  // CHECK: LifetimeExtend(3)
+  // CHECK-NEXT: : 3
+  // CHECK-NEXT: ~LifetimeExtend()
+  // CHECK-NOT: ~LifetimeExtend()
+  {
+    // The last one is lifetime extended.
+    const LifetimeExtend &l = (3, LifetimeExtend(3));
+    3;
+  }
+  // CHECK: LifetimeExtend(4)
+  // CHECK-NEXT: ~LifetimeExtend()
+  // CHECK-NEXT: ~LifetimeExtend()
+  // CHECK-NEXT: : 4
+  // CHECK-NOT: ~LifetimeExtend()
+  {
+    Aggregate a{LifetimeExtend(4), LifetimeExtend(4)};
+    4;
+  }
+  // CHECK: LifetimeExtend(5)
+  // CHECK-NEXT: : 5
+  // FIXME: We want to emit the destructors of the lifetime
+  // extended variables here.
+  // CHECK-NOT: ~LifetimeExtend()
+  {
+    AggregateRef a{LifetimeExtend(5), LifetimeExtend(5)};
+    5;
+  }
+  // FIXME: Add tests for lifetime extension via subobject
+  // references (LifetimeExtend().some_member).
+}
+
+
+// CHECK-LABEL: int *PR18472()
+// CHECK: [B2 (ENTRY)]
+// CHECK-NEXT:   Succs (1): B1
+// CHECK: [B1]
+// CHECK-NEXT:   1: 0
+// CHECK-NEXT:   2: [B1.1] (ImplicitCastExpr, NullToPointer, PR18472_t)
+// CHECK-NEXT:   3: (PR18472_t)[B1.2] (CStyleCastExpr, NoOp, PR18472_t)
+// CHECK-NEXT:   4: CFGNewAllocator(int *)
+// CHECK-NEXT:   5: new (([B1.3])) int
+// CHECK-NEXT:   6: return [B1.5];
+// CHECK-NEXT:   Preds (1): B2
+// CHECK-NEXT:   Succs (1): B0
+// CHECK: [B0 (EXIT)]
+// CHECK-NEXT:   Preds (1): B1
+
+extern "C" typedef int *PR18472_t;
+void *operator new (unsigned long, PR18472_t);
+template <class T> T *PR18472() {
+  return new (((PR18472_t) 0)) T;
+}
+void PR18472_helper() {
+  PR18472<int>();
+}
+

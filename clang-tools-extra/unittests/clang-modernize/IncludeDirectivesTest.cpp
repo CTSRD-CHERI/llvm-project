@@ -41,7 +41,7 @@ namespace {
 class TestAddIncludeAction : public PreprocessOnlyAction {
 public:
   TestAddIncludeAction(StringRef Include, tooling::Replacements &Replaces,
-                       const char *HeaderToModify = 0)
+                       const char *HeaderToModify = nullptr)
       : Include(Include), Replaces(Replaces), HeaderToModify(HeaderToModify) {
     // some headers that the tests can include
     mapVirtualHeader("foo-inner.h", "#pragma once\n");
@@ -66,7 +66,7 @@ public:
   /// refer to the headers by using '\<FileName\>'.
   std::string makeHeaderFileName(StringRef FileName) const {
     SmallString<128> Path;
-    llvm::error_code EC = llvm::sys::fs::current_path(Path);
+    std::error_code EC = llvm::sys::fs::current_path(Path);
     assert(!EC);
     (void)EC;
 
@@ -83,7 +83,7 @@ public:
 
 private:
   virtual bool BeginSourceFileAction(CompilerInstance &CI,
-                                     StringRef FileName) LLVM_OVERRIDE {
+                                     StringRef FileName) override {
     if (!PreprocessOnlyAction::BeginSourceFileAction(CI, FileName))
       return false;
     VFHelper.mapVirtualFiles(CI.getSourceManager());
@@ -95,7 +95,7 @@ private:
     return true;
   }
 
-  virtual void EndSourceFileAction() LLVM_OVERRIDE {
+  virtual void EndSourceFileAction() override {
     const tooling::Replacement &Replace =
         FileIncludes->addAngledInclude(FileToModify, Include);
     if (Replace.isApplicable())
@@ -105,7 +105,7 @@ private:
   StringRef Include;
   VirtualFileHelper VFHelper;
   tooling::Replacements &Replaces;
-  OwningPtr<IncludeDirectives> FileIncludes;
+  std::unique_ptr<IncludeDirectives> FileIncludes;
   std::string FileToModify;
   // if non-null, add the include directives in this file instead of the main
   // file.

@@ -30,13 +30,13 @@
 #endif // __cplusplus
 
 /*
- * For compatiblity with the Gnu/MS Open MP codegen, omp_set_num_threads(),
+ * For compatibility with the Gnu/MS Open MP codegen, omp_set_num_threads(),
  * omp_set_nested(), and omp_set_dynamic() [in lowercase on MS, and w/o
  * a trailing underscore on Linux* OS] take call by value integer arguments.
  * + omp_set_max_active_levels()
  * + omp_set_schedule()
  *
- * For backward compatiblity with 9.1 and previous Intel compiler, these
+ * For backward compatibility with 9.1 and previous Intel compiler, these
  * entry points take call by reference integer arguments.
  */
 #ifdef KMP_GOMP_COMPAT
@@ -222,7 +222,7 @@ FTN_GET_LIBRARY (void)
 int FTN_STDCALL
 FTN_SET_AFFINITY( void **mask )
 {
-    #if defined(KMP_STUB) || !(KMP_OS_WINDOWS || KMP_OS_LINUX)
+    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
         return -1;
     #else
         if ( ! TCR_4(__kmp_init_middle) ) {
@@ -235,7 +235,7 @@ FTN_SET_AFFINITY( void **mask )
 int FTN_STDCALL
 FTN_GET_AFFINITY( void **mask )
 {
-    #if defined(KMP_STUB) || !(KMP_OS_WINDOWS || KMP_OS_LINUX)
+    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
         return -1;
     #else
         if ( ! TCR_4(__kmp_init_middle) ) {
@@ -248,7 +248,7 @@ FTN_GET_AFFINITY( void **mask )
 int FTN_STDCALL
 FTN_GET_AFFINITY_MAX_PROC( void )
 {
-    #if defined(KMP_STUB) || !(KMP_OS_WINDOWS || KMP_OS_LINUX)
+    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
         return 0;
     #else
         //
@@ -263,7 +263,7 @@ FTN_GET_AFFINITY_MAX_PROC( void )
 
     #if KMP_OS_WINDOWS && KMP_ARCH_X86_64
         if ( __kmp_num_proc_groups <= 1 ) {
-            return KMP_CPU_SETSIZE;
+            return (int)KMP_CPU_SETSIZE;
         }
     #endif /* KMP_OS_WINDOWS && KMP_ARCH_X86_64 */
         return __kmp_xproc;
@@ -273,7 +273,7 @@ FTN_GET_AFFINITY_MAX_PROC( void )
 void FTN_STDCALL
 FTN_CREATE_AFFINITY_MASK( void **mask )
 {
-    #if defined(KMP_STUB) || !(KMP_OS_WINDOWS || KMP_OS_LINUX)
+    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
         *mask = NULL;
     #else
         //
@@ -290,7 +290,7 @@ FTN_CREATE_AFFINITY_MASK( void **mask )
 void FTN_STDCALL
 FTN_DESTROY_AFFINITY_MASK( void **mask )
 {
-    #if defined(KMP_STUB) || !(KMP_OS_WINDOWS || KMP_OS_LINUX)
+    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
         // Nothing
     #else
         //
@@ -312,7 +312,7 @@ FTN_DESTROY_AFFINITY_MASK( void **mask )
 int FTN_STDCALL
 FTN_SET_AFFINITY_MASK_PROC( int KMP_DEREF proc, void **mask )
 {
-    #if defined(KMP_STUB) || !(KMP_OS_WINDOWS || KMP_OS_LINUX)
+    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
         return -1;
     #else
         if ( ! TCR_4(__kmp_init_middle) ) {
@@ -325,7 +325,7 @@ FTN_SET_AFFINITY_MASK_PROC( int KMP_DEREF proc, void **mask )
 int FTN_STDCALL
 FTN_UNSET_AFFINITY_MASK_PROC( int KMP_DEREF proc, void **mask )
 {
-    #if defined(KMP_STUB) || !(KMP_OS_WINDOWS || KMP_OS_LINUX)
+    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
         return -1;
     #else
         if ( ! TCR_4(__kmp_init_middle) ) {
@@ -338,7 +338,7 @@ FTN_UNSET_AFFINITY_MASK_PROC( int KMP_DEREF proc, void **mask )
 int FTN_STDCALL
 FTN_GET_AFFINITY_MASK_PROC( int KMP_DEREF proc, void **mask )
 {
-    #if defined(KMP_STUB) || !(KMP_OS_WINDOWS || KMP_OS_LINUX)
+    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
         return -1;
     #else
         if ( ! TCR_4(__kmp_init_middle) ) {
@@ -408,11 +408,11 @@ xexpand(FTN_GET_THREAD_NUM)( void )
     #else
         int gtid;
 
-        #if KMP_OS_DARWIN
+        #if KMP_OS_DARWIN || KMP_OS_FREEBSD
             gtid = __kmp_entry_gtid();
         #elif KMP_OS_WINDOWS
             if (!__kmp_init_parallel ||
-                (gtid = ((kmp_intptr_t)TlsGetValue( __kmp_gtid_threadprivate_key ))) == 0) {
+                (gtid = (int)((kmp_intptr_t)TlsGetValue( __kmp_gtid_threadprivate_key ))) == 0) {
                 // Either library isn't initialized or thread is not registered
                 // 0 is the correct TID in this case
                 return 0;
@@ -463,7 +463,6 @@ xexpand(FTN_GET_NUM_PROCS)( void )
     #ifdef KMP_STUB
         return 1;
     #else
-        int gtid;
         if ( ! TCR_4(__kmp_init_middle) ) {
             __kmp_middle_initialize();
         }
@@ -1013,7 +1012,7 @@ FTN_SET_DEFAULTS( char const * str
 {
     #ifndef KMP_STUB
         #ifdef PASS_ARGS_BY_VALUE
-            int len = strlen( str );
+            int len = (int)strlen( str );
         #endif
         __kmp_aux_set_defaults( str, len );
     #endif

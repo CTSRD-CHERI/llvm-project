@@ -26,6 +26,9 @@
 # Uncomment line below for debugging shell commands
 # SHELL = /bin/sh -x
 
+THIS_FILE_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))/
+LLDB_BASE_DIR := $(THIS_FILE_DIR)../../
+
 #----------------------------------------------------------------------
 # If ARCH is not defined, default to x86_64.
 # If OS is not defined, use 'uname -s' to determine the OS name.
@@ -64,7 +67,7 @@ ARCHFLAG ?= -arch
 # Change any build/tool options needed
 #----------------------------------------------------------------------
 ifeq "$(OS)" "Darwin"
-	DS := dsymutil
+	DS := $(shell xcrun -find -toolchain default dsymutil)
 	DSFLAGS =
 	DSYM = $(EXE).dSYM
 	AR := libtool
@@ -73,12 +76,25 @@ else
 	# On non-Apple platforms, -arch becomes -m
 	ARCHFLAG := -m
 
-	# i386 becomes 32, and x86_64 becomes 64
+	# i386, i686, x86 -> 32
+	# amd64, x86_64, x64 -> 64
+	ifeq "$(ARCH)" "amd64"
+		override ARCH := $(subst amd64,64,$(ARCH))
+	endif
 	ifeq "$(ARCH)" "x86_64"
-	    override ARCH := $(subst x86_64,64,$(ARCH))
+		override ARCH := $(subst x86_64,64,$(ARCH))
+	endif
+	ifeq "$(ARCH)" "x64"
+		override ARCH := $(subst x64,64,$(ARCH))
+	endif
+	ifeq "$(ARCH)" "x86"
+		override ARCH := $(subst x86,32,$(ARCH))
 	endif
 	ifeq "$(ARCH)" "i386"
-	    override ARCH := $(subst i386,32,$(ARCH))
+		override ARCH := $(subst i386,32,$(ARCH))
+	endif
+	ifeq "$(ARCH)" "i686"
+		override ARCH := $(subst i686,32,$(ARCH))
 	endif
 
 	ifeq "$(SPLIT_DEBUG_SYMBOLS)" "YES"
@@ -87,12 +103,21 @@ else
 endif
 
 CFLAGS ?= -g -O0
-CFLAGS += $(ARCHFLAG)$(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS)
+CFLAGS += $(ARCHFLAG)$(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) -I$(LLDB_BASE_DIR)include
 
-CXXFLAGS +=$(CFLAGS)
+# Use this one if you want to build one part of the result without debug information:
+CFLAGS_NO_DEBUG = -O0 $(ARCHFLAG)$(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS)
+
+CXXFLAGS += -std=c++11
+CXXFLAGS += $(CFLAGS)
 LD = $(CC)
 LDFLAGS ?= $(CFLAGS)
 LDFLAGS += $(LD_EXTRAS)
+ifneq "$(OS)" "Windows_NT"
+	ifeq "$(ENABLE_THREADS)" "YES"
+		LDFLAGS += -lpthread
+	endif
+endif
 OBJECTS =
 EXE ?= a.out
 
@@ -111,6 +136,17 @@ cxx_compiler = $(if $(findstring /,$(1)),$(join $(dir $(1)), $(call cxx_compiler
 # Function that returns the C++ linker, given $(CC) as arg.
 cxx_linker_notdir = $(if $(findstring clang,$(1)), $(subst clang,clang++,$(1)), $(if $(findstring icc,$(1)), $(subst icc,icpc,$(1)), $(if $(findstring llvm-gcc,$(1)), $(subst llvm-gcc,llvm-g++,$(1)), $(subst gcc,g++,$(1)))))
 cxx_linker = $(if $(findstring /,$(1)),$(join $(dir $(1)), $(call cxx_linker_notdir,$(notdir $(1)))),$(call cxx_linker_notdir,$(1)))
+
+#----------------------------------------------------------------------
+# Clang for Windows doesn't yet support exceptions
+#----------------------------------------------------------------------
+ifeq "$(OS)" "Windows_NT"
+	ifneq (,$(findstring clang,$(CC)))
+		CXXFLAGS += -fno-exceptions
+		CXXFLAGS += -include $(THIS_FILE_DIR)uncaught_exception.h
+		CXXFLAGS += -D_HAS_EXCEPTIONS=0
+	endif
+endif
 
 #----------------------------------------------------------------------
 # C++ standard library options
@@ -360,11 +396,16 @@ endif
 dsym:	$(DSYM)
 all:	$(EXE) $(DSYM)
 clean::
-ifeq "$(DYLIB_NAME)" ""
-	rm -rf "$(EXE)" "$(DSYM)" $(OBJECTS) $(PREREQS) $(ARCHIVE_NAME) $(ARCHIVE_OBJECTS) *.d.[0-9] *.d.[0-9][0-9] *.d.[0-9][0-9][0-9] *.d.[0-9][0-9][0-9][0-9] *.d.[0-9][0-9][0-9][0-9][0-9]
-else
-	rm -rf "$(EXE)" "$(DSYM)" $(OBJECTS) $(PREREQS) $(ARCHIVE_NAME) $(ARCHIVE_OBJECTS) $(DYLIB_OBJECTS) $(DYLIB_PREREQS) $(DYLIB_FILENAME) $(DYLIB_FILENAME).dSYM $(DYLIB_FILENAME).debug *.d.[0-9] *.d.[0-9][0-9] *.d.[0-9][0-9][0-9] *.d.[0-9][0-9][0-9][0-9] *.d.[0-9][0-9][0-9][0-9][0-9]
+	$(RM) "$(EXE)" $(OBJECTS) $(PREREQS) $(ARCHIVE_NAME) $(ARCHIVE_OBJECTS)
+	$(RM) -r $(wildcard *.d.[0-9] *.d.[0-9][0-9] *.d.[0-9][0-9][0-9] *.d.[0-9][0-9][0-9][0-9] *.d.[0-9][0-9][0-9][0-9][0-9])
+ifneq "$(DYLIB_NAME)" ""
+	$(RM) -r $(DYLIB_FILENAME).dSYM
+	$(RM) $(DYLIB_OBJECTS) $(DYLIB_PREREQS) $(DYLIB_FILENAME) $(DYLIB_FILENAME).debug
 endif
+ifneq "$(DSYM)" ""
+	$(RM) -r "$(DSYM)"
+endif
+	
 
 #----------------------------------------------------------------------
 # From http://blog.melski.net/tag/debugging-makefiles/

@@ -27,7 +27,7 @@ public:
 
     const char *
     GetName ();
-
+    
     lldb::SBType
     GetType ();
 
@@ -178,6 +178,9 @@ public:
     GetReferenceType();
 
     lldb::SBType
+    SBType::GetTypedefedType();
+    
+    lldb::SBType
     GetDereferencedType();
 
     lldb::SBType
@@ -210,8 +213,14 @@ public:
     lldb::SBTypeMember
     GetVirtualBaseClassAtIndex (uint32_t idx);
 
+    lldb::SBTypeEnumMemberList
+    GetEnumMembers();
+
     const char*
     GetName();
+    
+    const char *
+    GetDisplayTypeName ();
     
     lldb::TypeClass
     GetTypeClass ();
@@ -339,6 +348,14 @@ public:
                     members.append(field)
             return members
 
+        def get_enum_members_array(self):
+            '''An accessor function that returns a list() that contains all enum members in an lldb.SBType object.'''
+            enum_members_list = []
+            sb_enum_members = self.GetEnumMembers()
+            for idx in range(sb_enum_members.GetSize()):
+                enum_members_list.append(sb_enum_members.GetTypeEnumMemberAtIndex(idx))
+            return enum_members_list
+
         __swig_getmethods__["bases"] = get_bases_array
         if _newclass: bases = property(get_bases_array, None, doc='''A read only property that returns a list() of lldb.SBTypeMember objects that represent all of the direct base classes for this type.''')
         
@@ -350,6 +367,9 @@ public:
 
         __swig_getmethods__["members"] = get_members_array
         if _newclass: members = property(get_members_array, None, doc='''A read only property that returns a list() of all lldb.SBTypeMember objects that represent all of the base classes, virtual base classes and fields for this type in ascending bit offset order.''')
+
+        __swig_getmethods__["enum_members"] = get_enum_members_array
+        if _newclass: enum_members = property(get_enum_members_array, None, doc='''A read only property that returns a list() of all lldb.SBTypeEnumMember objects that represent the enum members for this type.''')
 
         %}
 

@@ -27,27 +27,15 @@ macro(add_polly_library name)
     endforeach(lib)
   endif( LLVM_USED_LIBS )
 
-  target_link_libraries( ${name} ${ISL_LIBRARY} ${GMP_LIBRARY})
-
-  if (CLOOG_FOUND)
-    target_link_libraries( ${name} ${CLOOG_LIBRARY})
-  endif(CLOOG_FOUND)
-
-  if (OPENSCOP_FOUND)
-    target_link_libraries( ${name} ${OPENSCOP_LIBRARY})
-  endif(OPENSCOP_FOUND)
-  if (SCOPLIB_FOUND)
-    target_link_libraries( ${name} ${SCOPLIB_LIBRARY})
-  endif(SCOPLIB_FOUND)
+  if(POLLY_LINK_LIBS)
+    foreach(lib ${POLLY_LINK_LIBS})
+      target_link_libraries(${name} ${lib})
+    endforeach(lib)
+  endif(POLLY_LINK_LIBS)
 
   if( LLVM_LINK_COMPONENTS )
     llvm_config(${name} ${LLVM_LINK_COMPONENTS})
   endif( LLVM_LINK_COMPONENTS )
-  get_system_libs(llvm_system_libs)
-  if( llvm_system_libs )
-    target_link_libraries(${name} ${llvm_system_libs})
-  endif( llvm_system_libs )
-
   if(MSVC)
     get_target_property(cflag ${name} COMPILE_FLAGS)
     if(NOT cflag)
@@ -63,7 +51,18 @@ endmacro(add_polly_library)
 
 macro(add_polly_loadable_module name)
   set(srcs ${ARGN})
+  # klduge: pass different values for MODULE with multiple targets in same dir
+  # this allows building shared-lib and module in same dir
+  # there must be a cleaner way to achieve this....
+  if (MODULE)
+  else()
+    set(GLOBAL_NOT_MODULE TRUE)
+  endif()
+  set(MODULE TRUE)
   add_polly_library(${name} ${srcs})
+  if (GLOBAL_NOT_MODULE)
+    unset (MODULE)
+  endif()
   if (APPLE)
     # Darwin-specific linker flags for loadable modules.
     set_target_properties(${name} PROPERTIES

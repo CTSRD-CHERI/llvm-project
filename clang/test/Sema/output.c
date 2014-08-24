@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-cpu cheri -o - %s -fsyntax-only -verify
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -fsyntax-only -verify
 
 int readFail(__capability __output int *x)
 {

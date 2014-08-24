@@ -29,8 +29,8 @@ using namespace polly;
 //                 |
 //                 v
 //              GuardBB
-//              /      \
-//     __  PreHeaderBB  \
+//              /      |
+//     __  PreHeaderBB  |
 //    /  \    /         |
 // latch  HeaderBB      |
 //    \  /    \         /
@@ -47,11 +47,10 @@ using namespace polly;
 // TODO: We currently always create the GuardBB. If we can prove the loop is
 //       always executed at least once, we can get rid of this branch.
 Value *polly::createLoop(Value *LB, Value *UB, Value *Stride,
-                         IRBuilder<> &Builder, Pass *P, BasicBlock *&ExitBB,
-                         ICmpInst::Predicate Predicate) {
-
-  DominatorTree &DT = P->getAnalysis<DominatorTree>();
-  LoopInfo &LI = P->getAnalysis<LoopInfo>();
+                         PollyIRBuilder &Builder, Pass *P, LoopInfo &LI,
+                         DominatorTree &DT, BasicBlock *&ExitBB,
+                         ICmpInst::Predicate Predicate,
+                         LoopAnnotator *Annotator, bool Parallel) {
   Function *F = Builder.GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 
@@ -64,6 +63,12 @@ Value *polly::createLoop(Value *LB, Value *UB, Value *Stride,
   BasicBlock *HeaderBB = BasicBlock::Create(Context, "polly.loop_header", F);
   BasicBlock *PreHeaderBB =
       BasicBlock::Create(Context, "polly.loop_preheader", F);
+
+  if (Annotator) {
+    Annotator->Begin(HeaderBB);
+    if (Parallel)
+      Annotator->SetCurrentParallel();
+  }
 
   // Update LoopInfo
   Loop *OuterLoop = LI.getLoopFor(BeforeBB);
@@ -134,17 +139,17 @@ void OMPGenerator::createCallParallelLoopStart(
     Type *LongTy = getIntPtrTy();
     GlobalValue::LinkageTypes Linkage = Function::ExternalLinkage;
 
-    Type *Params[] = { PointerType::getUnqual(FunctionType::get(
-                           Builder.getVoidTy(), Builder.getInt8PtrTy(), false)),
-                       Builder.getInt8PtrTy(), Builder.getInt32Ty(), LongTy,
-                       LongTy, LongTy, };
+    Type *Params[] = {PointerType::getUnqual(FunctionType::get(
+                          Builder.getVoidTy(), Builder.getInt8PtrTy(), false)),
+                      Builder.getInt8PtrTy(), Builder.getInt32Ty(), LongTy,
+                      LongTy, LongTy};
 
     FunctionType *Ty = FunctionType::get(Builder.getVoidTy(), Params, false);
     F = Function::Create(Ty, Linkage, Name, M);
   }
 
-  Value *Args[] = { SubFunction, SubfunctionParam, NumberOfThreads,
-                    LowerBound,  UpperBound,       Stride };
+  Value *Args[] = {SubFunction, SubfunctionParam, NumberOfThreads,
+                   LowerBound,  UpperBound,       Stride};
 
   Builder.CreateCall(F, Args);
 }
@@ -160,13 +165,13 @@ Value *OMPGenerator::createCallLoopNext(Value *LowerBoundPtr,
     Type *LongPtrTy = PointerType::getUnqual(getIntPtrTy());
     GlobalValue::LinkageTypes Linkage = Function::ExternalLinkage;
 
-    Type *Params[] = { LongPtrTy, LongPtrTy, };
+    Type *Params[] = {LongPtrTy, LongPtrTy};
 
     FunctionType *Ty = FunctionType::get(Builder.getInt8Ty(), Params, false);
     F = Function::Create(Ty, Linkage, Name, M);
   }
 
-  Value *Args[] = { LowerBoundPtr, UpperBoundPtr, };
+  Value *Args[] = {LowerBoundPtr, UpperBoundPtr};
 
   Value *Return = Builder.CreateCall(F, Args);
   Return = Builder.CreateICmpNE(
@@ -207,7 +212,8 @@ void OMPGenerator::createCallLoopEndNowait() {
 }
 
 IntegerType *OMPGenerator::getIntPtrTy() {
-  return P->getAnalysis<DataLayout>().getIntPtrType(Builder.getContext());
+  return P->getAnalysis<DataLayoutPass>().getDataLayout().getIntPtrType(
+      Builder.getContext());
 }
 
 Module *OMPGenerator::getModule() {
@@ -222,7 +228,7 @@ Function *OMPGenerator::createSubfunctionDefinition() {
   Function *FN = Function::Create(FT, Function::InternalLinkage,
                                   F->getName() + ".omp_subfn", M);
   // Do not run any polly pass on the new function.
-  P->getAnalysis<polly::ScopDetection>().markFunctionAsInvalid(FN);
+  FN->addFnAttr(PollySkipFnAttr);
 
   Function::arg_iterator AI = FN->arg_begin();
   AI->setName("omp.userContext");
@@ -233,8 +239,8 @@ Function *OMPGenerator::createSubfunctionDefinition() {
 Value *OMPGenerator::loadValuesIntoStruct(SetVector<Value *> &Values) {
   std::vector<Type *> Members;
 
-  for (unsigned i = 0; i < Values.size(); i++)
-    Members.push_back(Values[i]->getType());
+  for (Value *V : Values)
+    Members.push_back(V->getType());
 
   StructType *Ty = StructType::get(Builder.getContext(), Members);
   Value *Struct = Builder.CreateAlloca(Ty, 0, "omp.userContext");
@@ -279,7 +285,7 @@ Value *OMPGenerator::createSubfunction(Value *Stride, Value *StructData,
   CheckNextBB = BasicBlock::Create(Context, "omp.checkNext", FN);
   LoadIVBoundsBB = BasicBlock::Create(Context, "omp.loadIVBounds", FN);
 
-  DominatorTree &DT = P->getAnalysis<DominatorTree>();
+  DominatorTree &DT = P->getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   DT.addNewBlock(HeaderBB, PrevBB);
   DT.addNewBlock(ExitBB, HeaderBB);
   DT.addNewBlock(CheckNextBB, HeaderBB);
@@ -314,7 +320,8 @@ Value *OMPGenerator::createSubfunction(Value *Stride, Value *StructData,
 
   Builder.CreateBr(CheckNextBB);
   Builder.SetInsertPoint(--Builder.GetInsertPoint());
-  IV = createLoop(LowerBound, UpperBound, Stride, Builder, P, AfterBB,
+  LoopInfo &LI = P->getAnalysis<LoopInfo>();
+  IV = createLoop(LowerBound, UpperBound, Stride, Builder, P, LI, DT, AfterBB,
                   ICmpInst::ICMP_SLE);
 
   BasicBlock::iterator LoopBody = Builder.GetInsertPoint();

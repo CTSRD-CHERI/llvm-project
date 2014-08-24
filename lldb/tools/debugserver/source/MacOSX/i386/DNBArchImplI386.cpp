@@ -167,7 +167,12 @@ enum
     gcc_ecx,
     gcc_edx,
     gcc_ebx,
-    gcc_ebp,
+
+    // On i386 Darwin the eh_frame register numbers for ebp and esp are reversed from DWARF.
+    // It's due to an ancient compiler bug in the output of the eh_frame.
+    // Specifically, on i386 darwin eh_frame, 4 is ebp, 5 is esp.
+    // On i386 darwin debug_frame (and debug_info), 4 is esp, 5 is ebp.
+    gcc_ebp,   
     gcc_esp,
     gcc_esi,
     gcc_edi,
@@ -809,7 +814,7 @@ DNBArchImplI386::IsWatchpointVacant(const DBG &debug_state, uint32_t hw_index)
     return (debug_state.__dr7 & (3 << (2*hw_index))) == 0;
 }
 
-// Resets local copy of debug status register to wait for the next debug excpetion.
+// Resets local copy of debug status register to wait for the next debug exception.
 void
 DNBArchImplI386::ClearWatchpointHits(DBG &debug_state)
 {
@@ -1012,7 +1017,7 @@ DNBArchImplI386::EnableHardwareSingleStep (bool enable)
 
 
 //----------------------------------------------------------------------
-// Register information defintions
+// Register information definitions
 //----------------------------------------------------------------------
 
 #define DEFINE_GPR_PSEUDO_16(reg16,reg32) { e_regSetGPR, gpr_##reg16, #reg16, NULL, Uint, Hex, 2, 0,INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, g_contained_##reg32, g_invalidate_##reg32 }

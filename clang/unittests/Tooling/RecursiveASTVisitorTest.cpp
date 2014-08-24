@@ -10,7 +10,9 @@
 #include "TestVisitor.h"
 #include <stack>
 
-namespace clang {
+using namespace clang;
+
+namespace {
 
 class TypeLocVisitor : public ExpectedLocationVisitor<TypeLocVisitor> {
 public:
@@ -529,6 +531,15 @@ TEST(RecursiveASTVisitor, VisitsCompoundLiteralType) {
       TypeLocVisitor::Lang_C));
 }
 
+TEST(RecursiveASTVisitor, VisitsObjCPropertyType) {
+  TypeLocVisitor Visitor;
+  Visitor.ExpectMatch("NSNumber", 2, 33);
+  EXPECT_TRUE(Visitor.runOver(
+      "@class NSNumber; \n"
+      "@interface A @property (retain) NSNumber *x; @end\n",
+      TypeLocVisitor::Lang_OBJC));
+}
+
 TEST(RecursiveASTVisitor, VisitsLambdaExpr) {
   LambdaExprVisitor Visitor;
   Visitor.ExpectMatch("", 1, 12);
@@ -548,6 +559,16 @@ TEST(RecursiveASTVisitor, HasCaptureDefaultLoc) {
   Visitor.ExpectMatch("", 1, 20);
   EXPECT_TRUE(Visitor.runOver("void f() { int a; [=]{a;}; }",
                               LambdaDefaultCaptureVisitor::Lang_CXX11));
+}
+
+TEST(RecursiveASTVisitor, VisitsCopyExprOfBlockDeclCapture) {
+  DeclRefExprVisitor Visitor;
+  Visitor.ExpectMatch("x", 3, 24);
+  EXPECT_TRUE(Visitor.runOver("void f(int(^)(int)); \n"
+                              "void g() { \n"
+                              "  f([&](int x){ return x; }); \n"
+                              "}",
+                              DeclRefExprVisitor::Lang_OBJCXX11));
 }
 
 // Checks for lambda classes that are not marked as implicitly-generated.
@@ -614,5 +635,4 @@ TEST(RecursiveASTVisitor, AttributesAreVisited) {
     "};\n"));
 }
 
-
-} // end namespace clang
+} // end anonymous namespace

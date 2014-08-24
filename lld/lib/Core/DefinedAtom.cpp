@@ -71,6 +71,8 @@ DefinedAtom::ContentPermissions DefinedAtom::permissions(ContentType type) {
   case typeThreadZeroFill:
     return permRW_L;
 
+  case typeGroupComdat:
+  case typeGnuLinkOnce:
   case typeUnknown:
   case typeTempLTO:
     return permUnknown;

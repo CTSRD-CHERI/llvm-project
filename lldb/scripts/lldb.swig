@@ -72,7 +72,6 @@ import os
 #include "lldb/API/SBFrame.h"
 #include "lldb/API/SBFunction.h"
 #include "lldb/API/SBHostOS.h"
-#include "lldb/API/SBInputReader.h"
 #include "lldb/API/SBInstruction.h"
 #include "lldb/API/SBInstructionList.h"
 #include "lldb/API/SBLineEntry.h"
@@ -94,6 +93,7 @@ import os
 #include "lldb/API/SBThread.h"
 #include "lldb/API/SBType.h"
 #include "lldb/API/SBTypeCategory.h"
+#include "lldb/API/SBTypeEnumMember.h"
 #include "lldb/API/SBTypeFilter.h"
 #include "lldb/API/SBTypeFormat.h"
 #include "lldb/API/SBTypeNameSpecifier.h"
@@ -102,6 +102,7 @@ import os
 #include "lldb/API/SBValue.h"
 #include "lldb/API/SBValueList.h"
 #include "lldb/API/SBWatchpoint.h"
+#include "lldb/API/SBUnixSignals.h"
 
 #include "../scripts/Python/python-swigsafecast.swig"
 
@@ -109,6 +110,9 @@ import os
 
 /* Various liblldb typedefs that SWIG needs to know about.  */
 #define __extension__ /* Undefine GCC keyword to make Swig happy when processing glibc's stdint.h. */
+/* The ISO C99 standard specifies that in C++ implementations limit macros such
+   as INT32_MAX should only be defined if __STDC_LIMIT_MACROS is. */
+#define __STDC_LIMIT_MACROS
 %include "stdint.i"
 %include "lldb/lldb-defines.h"
 %include "lldb/lldb-enumerations.h"
@@ -139,7 +143,6 @@ import os
 %include "./Python/interface/SBFrame.i"
 %include "./Python/interface/SBFunction.i"
 %include "./Python/interface/SBHostOS.i"
-%include "./Python/interface/SBInputReader.i"
 %include "./Python/interface/SBInstruction.i"
 %include "./Python/interface/SBInstructionList.i"
 %include "./Python/interface/SBLineEntry.i"
@@ -161,6 +164,7 @@ import os
 %include "./Python/interface/SBThread.i"
 %include "./Python/interface/SBType.i"
 %include "./Python/interface/SBTypeCategory.i"
+%include "./Python/interface/SBTypeEnumMember.i"
 %include "./Python/interface/SBTypeFilter.i"
 %include "./Python/interface/SBTypeFormat.i"
 %include "./Python/interface/SBTypeNameSpecifier.i"
@@ -169,6 +173,7 @@ import os
 %include "./Python/interface/SBValue.i"
 %include "./Python/interface/SBValueList.i"
 %include "./Python/interface/SBWatchpoint.i"
+%include "./Python/interface/SBUnixSignals.i"
 
 %include "./Python/python-extensions.swig"
 

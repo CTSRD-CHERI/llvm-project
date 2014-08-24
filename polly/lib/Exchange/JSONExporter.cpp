@@ -16,13 +16,10 @@
 #include "polly/Options.h"
 #include "polly/ScopInfo.h"
 #include "polly/ScopPass.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/ToolOutputFile.h"
-#include "llvm/Support/system_error.h"
-
-#define DEBUG_TYPE "polly-import-jscop"
 
 #include "json/reader.h"
 #include "json/writer.h"
@@ -32,25 +29,29 @@
 #include "isl/constraint.h"
 #include "isl/printer.h"
 
+#include <memory>
 #include <string>
+#include <system_error>
 
 using namespace llvm;
 using namespace polly;
+
+#define DEBUG_TYPE "polly-import-jscop"
 
 STATISTIC(NewAccessMapFound, "Number of updated access functions");
 
 namespace {
 static cl::opt<std::string>
-ImportDir("polly-import-jscop-dir",
-          cl::desc("The directory to import the .jscop files from."),
-          cl::Hidden, cl::value_desc("Directory path"), cl::ValueRequired,
-          cl::init("."), cl::cat(PollyCategory));
+    ImportDir("polly-import-jscop-dir",
+              cl::desc("The directory to import the .jscop files from."),
+              cl::Hidden, cl::value_desc("Directory path"), cl::ValueRequired,
+              cl::init("."), cl::cat(PollyCategory));
 
 static cl::opt<std::string>
-ImportPostfix("polly-import-jscop-postfix",
-              cl::desc("Postfix to append to the import .jsop files."),
-              cl::Hidden, cl::value_desc("File postfix"), cl::ValueRequired,
-              cl::init(""), cl::cat(PollyCategory));
+    ImportPostfix("polly-import-jscop-postfix",
+                  cl::desc("Postfix to append to the import .jsop files."),
+                  cl::Hidden, cl::value_desc("File postfix"), cl::ValueRequired,
+                  cl::init(""), cl::cat(PollyCategory));
 
 struct JSONExporter : public ScopPass {
   static char ID;
@@ -103,13 +104,11 @@ Json::Value JSONExporter::getJSON(Scop &scop) const {
     statement["schedule"] = Stmt->getScatteringStr();
     statement["accesses"];
 
-    for (ScopStmt::memacc_iterator MI = Stmt->memacc_begin(),
-                                   ME = Stmt->memacc_end();
-         MI != ME; ++MI) {
+    for (MemoryAccess *MA : *Stmt) {
       Json::Value access;
 
-      access["kind"] = (*MI)->isRead() ? "read" : "write";
-      access["relation"] = (*MI)->getAccessRelationStr();
+      access["kind"] = MA->isRead() ? "read" : "write";
+      access["relation"] = MA->getAccessRelationStr();
 
       statement["accesses"].append(access);
     }
@@ -132,7 +131,7 @@ bool JSONExporter::runOnScop(Scop &scop) {
 
   // Write to file.
   std::string ErrInfo;
-  tool_output_file F(FileName.c_str(), ErrInfo);
+  tool_output_file F(FileName.c_str(), ErrInfo, llvm::sys::fs::F_Text);
 
   std::string FunctionName = R.getEntry()->getParent()->getName();
   errs() << "Writing JScop '" << R.getNameStr() << "' in function '"
@@ -192,8 +191,9 @@ bool JSONImporter::runOnScop(Scop &scop) {
   std::string FunctionName = R.getEntry()->getParent()->getName();
   errs() << "Reading JScop '" << R.getNameStr() << "' in function '"
          << FunctionName << "' from '" << FileName << "'.\n";
-  OwningPtr<MemoryBuffer> result;
-  error_code ec = MemoryBuffer::getFile(FileName, result);
+  ErrorOr<std::unique_ptr<MemoryBuffer>> result =
+      MemoryBuffer::getFile(FileName);
+  std::error_code ec = result.getError();
 
   if (ec) {
     errs() << "File could not be read: " << ec.message() << "\n";
@@ -203,7 +203,7 @@ bool JSONImporter::runOnScop(Scop &scop) {
   Json::Reader reader;
   Json::Value jscop;
 
-  bool parsingSuccessful = reader.parse(result->getBufferStart(), jscop);
+  bool parsingSuccessful = reader.parse(result.get()->getBufferStart(), jscop);
 
   if (!parsingSuccessful) {
     errs() << "JSCoP file could not be parsed\n";
@@ -262,14 +262,12 @@ bool JSONImporter::runOnScop(Scop &scop) {
     ScopStmt *Stmt = *SI;
 
     int memoryAccessIdx = 0;
-    for (ScopStmt::memacc_iterator MI = Stmt->memacc_begin(),
-                                   ME = Stmt->memacc_end();
-         MI != ME; ++MI) {
+    for (MemoryAccess *MA : *Stmt) {
       Json::Value accesses = jscop["statements"][statementIdx]["accesses"]
                                   [memoryAccessIdx]["relation"];
       isl_map *newAccessMap =
           isl_map_read_from_str(S->getIslCtx(), accesses.asCString());
-      isl_map *currentAccessMap = (*MI)->getAccessRelation();
+      isl_map *currentAccessMap = MA->getAccessRelation();
 
       if (isl_map_dim(newAccessMap, isl_dim_param) !=
           isl_map_dim(currentAccessMap, isl_dim_param)) {
@@ -310,7 +308,7 @@ bool JSONImporter::runOnScop(Scop &scop) {
         // Statistics.
         ++NewAccessMapFound;
         newAccessStrings.push_back(accesses.asCString());
-        (*MI)->setNewAccessRelation(newAccessMap);
+        MA->setNewAccessRelation(newAccessMap);
       } else {
         isl_map_free(newAccessMap);
       }

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -7,10 +7,12 @@ if [ "${LLVM_CHECKOUT}" == "" ]; then
   LLVM_CHECKOUT="${SCRIPT_DIR}/../../../../../"
 fi
 
-# Cpplint setup
+# python tools setup
 CPPLINT=${SCRIPT_DIR}/cpplint.py
+LITLINT=${SCRIPT_DIR}/litlint.py
 if [ "${PYTHON_EXECUTABLE}" != "" ]; then
   CPPLINT="${PYTHON_EXECUTABLE} ${CPPLINT}"
+  LITLINT="${PYTHON_EXECUTABLE} ${LITLINT}"
 fi
 
 # Filters
@@ -19,7 +21,7 @@ LLVM_LINT_FILTER=-,+whitespace
 COMMON_LINT_FILTER=-build/include,-build/header_guard,-legal/copyright,-whitespace/comments,-readability/casting,\
 -build/namespaces
 ASAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int
-ASAN_TEST_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/sizeof,-runtime/int,-runtime/printf
+ASAN_TEST_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/sizeof,-runtime/int,-runtime/printf,-runtime/threadsafe_fn
 ASAN_LIT_TEST_LINT_FILTER=${ASAN_TEST_LINT_FILTER},-whitespace/line_length
 TSAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER}
 TSAN_TEST_LINT_FILTER=${TSAN_RTL_LINT_FILTER},-runtime/threadsafe_fn,-runtime/int
@@ -28,7 +30,7 @@ MSAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER}
 LSAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER}
 LSAN_LIT_TEST_LINT_FILTER=${LSAN_RTL_LINT_FILTER},-whitespace/line_length
 DFSAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int,-runtime/printf,-runtime/references
-COMMON_RTL_INC_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int,-runtime/sizeof,-runtime/printf
+COMMON_RTL_INC_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int,-runtime/sizeof,-runtime/printf,-readability/fn_size
 SANITIZER_INCLUDES_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int
 MKTEMP="mktemp -q /tmp/tmp.XXXXXXXXXX"
 cd ${LLVM_CHECKOUT}
@@ -48,13 +50,16 @@ run_lint() {
   if [[ "${SILENT}" != "1" ]]; then
     cat $TASK_LOG
   fi
+  ${LITLINT} "$@" 2>>$ERROR_LOG
 }
 
 run_lint ${LLVM_LINT_FILTER} --filter=${LLVM_LINT_FILTER} \
-  lib/Transforms/Instrumentation/*Sanitizer.cpp \
-  lib/Transforms/Utils/SpecialCaseList.cpp &
+  lib/Transforms/Instrumentation/*Sanitizer.cpp &
 
-COMPILER_RT=projects/compiler-rt
+if [ "${COMPILER_RT}" == "" ]; then
+  COMPILER_RT=projects/compiler-rt
+fi
+LIT_TESTS=${COMPILER_RT}/test
 # Headers
 SANITIZER_INCLUDES=${COMPILER_RT}/include/sanitizer
 run_lint ${SANITIZER_INCLUDES_LINT_FILTER} ${SANITIZER_INCLUDES}/*.h &
@@ -72,14 +77,14 @@ run_lint ${ASAN_RTL_LINT_FILTER} ${INTERCEPTION}/*.{cc,h} &
 ASAN_RTL=${COMPILER_RT}/lib/asan
 run_lint ${ASAN_RTL_LINT_FILTER} ${ASAN_RTL}/*.{cc,h} &
 run_lint ${ASAN_TEST_LINT_FILTER} ${ASAN_RTL}/tests/*.{cc,h} &
-run_lint ${ASAN_LIT_TEST_LINT_FILTER} ${ASAN_RTL}/lit_tests/*/*.cc &
+run_lint ${ASAN_LIT_TEST_LINT_FILTER} ${LIT_TESTS}/asan/*/*.cc &
 
 # TSan
 TSAN_RTL=${COMPILER_RT}/lib/tsan
 run_lint ${TSAN_RTL_LINT_FILTER} ${TSAN_RTL}/rtl/*.{cc,h} &
 run_lint ${TSAN_TEST_LINT_FILTER} ${TSAN_RTL}/tests/rtl/*.{cc,h} \
                                   ${TSAN_RTL}/tests/unit/*.cc &
-run_lint ${TSAN_LIT_TEST_LINT_FILTER} ${TSAN_RTL}/lit_tests/*.cc &
+run_lint ${TSAN_LIT_TEST_LINT_FILTER} ${LIT_TESTS}/tsan/*.cc &
 
 # MSan
 MSAN_RTL=${COMPILER_RT}/lib/msan
@@ -87,9 +92,8 @@ run_lint ${MSAN_RTL_LINT_FILTER} ${MSAN_RTL}/*.{cc,h} &
 
 # LSan
 LSAN_RTL=${COMPILER_RT}/lib/lsan
-run_lint ${LSAN_RTL_LINT_FILTER} ${LSAN_RTL}/*.{cc,h} \
-                                 ${LSAN_RTL}/tests/*.{cc,h} &
-run_lint ${LSAN_LIT_TEST_LINT_FILTER} ${LSAN_RTL}/lit_tests/*/*.cc &
+run_lint ${LSAN_RTL_LINT_FILTER} ${LSAN_RTL}/*.{cc,h}
+run_lint ${LSAN_LIT_TEST_LINT_FILTER} ${LIT_TESTS}/lsan/*/*.cc &
 
 # DFSan
 DFSAN_RTL=${COMPILER_RT}/lib/dfsan

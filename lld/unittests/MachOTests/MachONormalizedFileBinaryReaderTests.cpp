@@ -9,7 +9,7 @@
 
 #include "gtest/gtest.h"
 
-#include <llvm/Support/MachO.h>
+#include "llvm/Support/MachO.h"
 #include "../../lib/ReaderWriter/MachO/MachONormalizedFile.h"
 
 #include <assert.h>
@@ -22,13 +22,13 @@ using llvm::ErrorOr;
 using namespace lld::mach_o::normalized;
 using namespace llvm::MachO;
 
-static std::unique_ptr<NormalizedFile> 
-fromBinary(const uint8_t bytes[], unsigned length) {
-
+static std::unique_ptr<NormalizedFile>
+fromBinary(const uint8_t bytes[], unsigned length, StringRef archStr) {
   StringRef sr((const char*)bytes, length);
   std::unique_ptr<MemoryBuffer> mb(MemoryBuffer::getMemBuffer(sr, "", false));
-  ErrorOr<std::unique_ptr<NormalizedFile>> r 
-                                    = lld::mach_o::normalized::readBinary(mb);
+  ErrorOr<std::unique_ptr<NormalizedFile>> r =
+      lld::mach_o::normalized::readBinary(
+          mb, lld::MachOLinkingContext::archFromName(archStr));
   EXPECT_FALSE(!r);
   return std::move(*r);
 }
@@ -36,30 +36,31 @@ fromBinary(const uint8_t bytes[], unsigned length) {
 
 TEST(BinaryReaderTest, empty_obj_x86_64) {
   const uint8_t fileBytes[] = {
-      0xcf, 0xfa, 0xed, 0xfe, 0x07, 0x00, 0x00, 0x01, 
+      0xcf, 0xfa, 0xed, 0xfe, 0x07, 0x00, 0x00, 0x01,
       0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-      0x01, 0x00, 0x00, 0x00, 0x98, 0x00, 0x00, 0x00, 
+      0x01, 0x00, 0x00, 0x00, 0x98, 0x00, 0x00, 0x00,
       0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x19, 0x00, 0x00, 0x00, 0x98, 0x00, 0x00, 0x00, 
+      0x19, 0x00, 0x00, 0x00, 0x98, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-      0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-      0x07, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
-      0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-      0x5f, 0x5f, 0x74, 0x65, 0x78, 0x74, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-      0x5f, 0x5f, 0x54, 0x45, 0x58, 0x54, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x07, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
+      0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x5f, 0x5f, 0x74, 0x65, 0x78, 0x74, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x5f, 0x5f, 0x54, 0x45, 0x58, 0x54, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; 
-  std::unique_ptr<NormalizedFile> f = fromBinary(fileBytes, sizeof(fileBytes));
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "x86_64");
   EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_x86_64);
   EXPECT_EQ((int)(f->fileType), MH_OBJECT);
   EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
@@ -90,7 +91,8 @@ TEST(BinaryReaderTest, empty_obj_x86) {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-  std::unique_ptr<NormalizedFile> f = fromBinary(fileBytes, sizeof(fileBytes));
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "i386");
   EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_x86);
   EXPECT_EQ((int)(f->fileType), MH_OBJECT);
   EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
@@ -121,7 +123,8 @@ TEST(BinaryReaderTest, empty_obj_ppc) {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-  std::unique_ptr<NormalizedFile> f = fromBinary(fileBytes, sizeof(fileBytes));
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "ppc");
   EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_ppc);
   EXPECT_EQ((int)(f->fileType), MH_OBJECT);
   EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
@@ -152,7 +155,8 @@ TEST(BinaryReaderTest, empty_obj_armv7) {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-  std::unique_ptr<NormalizedFile> f = fromBinary(fileBytes, sizeof(fileBytes));
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "armv7");
   EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_armv7);
   EXPECT_EQ((int)(f->fileType), MH_OBJECT);
   EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
@@ -161,7 +165,28 @@ TEST(BinaryReaderTest, empty_obj_armv7) {
   EXPECT_TRUE(f->undefinedSymbols.empty());
 }
 
+TEST(BinaryReaderTest, empty_obj_x86_64_arm7) {
+  const uint8_t fileBytes[] = {
+#include "empty_obj_x86_armv7.txt"
+  };
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "x86_64");
+  EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_x86_64);
+  EXPECT_EQ((int)(f->fileType), MH_OBJECT);
+  EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
+  EXPECT_TRUE(f->localSymbols.empty());
+  EXPECT_TRUE(f->globalSymbols.empty());
+  EXPECT_TRUE(f->undefinedSymbols.empty());
 
+  std::unique_ptr<NormalizedFile> f2 =
+      fromBinary(fileBytes, sizeof(fileBytes), "armv7");
+  EXPECT_EQ(f2->arch, lld::MachOLinkingContext::arch_armv7);
+  EXPECT_EQ((int)(f2->fileType), MH_OBJECT);
+  EXPECT_EQ((int)(f2->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
+  EXPECT_TRUE(f2->localSymbols.empty());
+  EXPECT_TRUE(f2->globalSymbols.empty());
+  EXPECT_TRUE(f2->undefinedSymbols.empty());
+}
 
 TEST(BinaryReaderTest, hello_obj_x86_64) {
   const uint8_t fileBytes[] = {
@@ -229,8 +254,9 @@ TEST(BinaryReaderTest, hello_obj_x86_64) {
     0x69, 0x6E, 0x00, 0x5F, 0x70, 0x72, 0x69, 0x6E,
     0x74, 0x66, 0x00, 0x4C, 0x5F, 0x2E, 0x73, 0x74,
     0x72, 0x00, 0x00, 0x00 };
-  std::unique_ptr<NormalizedFile> f = fromBinary(fileBytes, sizeof(fileBytes));
-    
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "x86_64");
+
   EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_x86_64);
   EXPECT_EQ((int)(f->fileType), MH_OBJECT);
   EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
@@ -239,7 +265,7 @@ TEST(BinaryReaderTest, hello_obj_x86_64) {
   EXPECT_TRUE(text.segmentName.equals("__TEXT"));
   EXPECT_TRUE(text.sectionName.equals("__text"));
   EXPECT_EQ(text.type, S_REGULAR);
-  EXPECT_EQ(text.attributes,SectionAttr(S_ATTR_PURE_INSTRUCTIONS 
+  EXPECT_EQ(text.attributes,SectionAttr(S_ATTR_PURE_INSTRUCTIONS
                                       | S_ATTR_SOME_INSTRUCTIONS));
   EXPECT_EQ(text.alignment, 4U);
   EXPECT_EQ(text.address, Hex64(0x0));
@@ -260,7 +286,7 @@ TEST(BinaryReaderTest, hello_obj_x86_64) {
   EXPECT_EQ(str.length, 2);
   EXPECT_EQ(str.isExtern, true);
   EXPECT_EQ(str.symbol, 0U);
-  
+
   const Section& cstring = f->sections[1];
   EXPECT_TRUE(cstring.segmentName.equals("__TEXT"));
   EXPECT_TRUE(cstring.sectionName.equals("__cstring"));
@@ -354,8 +380,9 @@ TEST(BinaryReaderTest, hello_obj_x86) {
     0x69, 0x6E, 0x00, 0x5F, 0x70, 0x72, 0x69, 0x6E,
     0x74, 0x66, 0x00, 0x00
   };
-  std::unique_ptr<NormalizedFile> f = fromBinary(fileBytes, sizeof(fileBytes));
-    
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "i386");
+
   EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_x86);
   EXPECT_EQ((int)(f->fileType), MH_OBJECT);
   EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
@@ -364,7 +391,7 @@ TEST(BinaryReaderTest, hello_obj_x86) {
   EXPECT_TRUE(text.segmentName.equals("__TEXT"));
   EXPECT_TRUE(text.sectionName.equals("__text"));
   EXPECT_EQ(text.type, S_REGULAR);
-  EXPECT_EQ(text.attributes,SectionAttr(S_ATTR_PURE_INSTRUCTIONS 
+  EXPECT_EQ(text.attributes,SectionAttr(S_ATTR_PURE_INSTRUCTIONS
                                       | S_ATTR_SOME_INSTRUCTIONS));
   EXPECT_EQ(text.alignment, 4U);
   EXPECT_EQ(text.address, Hex64(0x0));
@@ -395,7 +422,7 @@ TEST(BinaryReaderTest, hello_obj_x86) {
   EXPECT_EQ(pair.pcRel, false);
   EXPECT_EQ(pair.length, 2);
   EXPECT_EQ(pair.value, 0x0BU);
-  
+
   const Section& cstring = f->sections[1];
   EXPECT_TRUE(cstring.segmentName.equals("__TEXT"));
   EXPECT_TRUE(cstring.sectionName.equals("__cstring"));
@@ -486,8 +513,9 @@ TEST(BinaryReaderTest, hello_obj_armv7) {
     0x00, 0x5F, 0x6D, 0x61, 0x69, 0x6E, 0x00, 0x5F,
     0x70, 0x72, 0x69, 0x6E, 0x74, 0x66, 0x00, 0x00
   };
-  std::unique_ptr<NormalizedFile> f = fromBinary(fileBytes, sizeof(fileBytes));
-    
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "armv7");
+
   EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_armv7);
   EXPECT_EQ((int)(f->fileType), MH_OBJECT);
   EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
@@ -496,7 +524,7 @@ TEST(BinaryReaderTest, hello_obj_armv7) {
   EXPECT_TRUE(text.segmentName.equals("__TEXT"));
   EXPECT_TRUE(text.sectionName.equals("__text"));
   EXPECT_EQ(text.type, S_REGULAR);
-  EXPECT_EQ(text.attributes,SectionAttr(S_ATTR_PURE_INSTRUCTIONS 
+  EXPECT_EQ(text.attributes,SectionAttr(S_ATTR_PURE_INSTRUCTIONS
                                       | S_ATTR_SOME_INSTRUCTIONS));
   EXPECT_EQ(text.alignment, 2U);
   EXPECT_EQ(text.address, Hex64(0x0));
@@ -536,7 +564,7 @@ TEST(BinaryReaderTest, hello_obj_armv7) {
   EXPECT_EQ(movwPair.type, ARM_RELOC_PAIR);
   EXPECT_EQ(movwPair.length, 2);
   EXPECT_EQ(movwPair.value, Hex32(0xE));
-  
+
   const Section& cstring = f->sections[1];
   EXPECT_TRUE(cstring.segmentName.equals("__TEXT"));
   EXPECT_TRUE(cstring.sectionName.equals("__cstring"));
@@ -630,8 +658,9 @@ TEST(BinaryReaderTest, hello_obj_ppc) {
     0x00, 0x5F, 0x6D, 0x61, 0x69, 0x6E, 0x00, 0x5F,
     0x70, 0x72, 0x69, 0x6E, 0x74, 0x66, 0x00, 0x00
   };
-  std::unique_ptr<NormalizedFile> f = fromBinary(fileBytes, sizeof(fileBytes));
-  
+  std::unique_ptr<NormalizedFile> f =
+      fromBinary(fileBytes, sizeof(fileBytes), "ppc");
+
   EXPECT_EQ(f->arch, lld::MachOLinkingContext::arch_ppc);
   EXPECT_EQ((int)(f->fileType), MH_OBJECT);
   EXPECT_EQ((int)(f->flags), MH_SUBSECTIONS_VIA_SYMBOLS);
@@ -640,7 +669,7 @@ TEST(BinaryReaderTest, hello_obj_ppc) {
   EXPECT_TRUE(text.segmentName.equals("__TEXT"));
   EXPECT_TRUE(text.sectionName.equals("__text"));
   EXPECT_EQ(text.type, S_REGULAR);
-  EXPECT_EQ(text.attributes,SectionAttr(S_ATTR_PURE_INSTRUCTIONS 
+  EXPECT_EQ(text.attributes,SectionAttr(S_ATTR_PURE_INSTRUCTIONS
                                       | S_ATTR_SOME_INSTRUCTIONS));
   EXPECT_EQ(text.alignment, 2U);
   EXPECT_EQ(text.address, Hex64(0x0));
@@ -679,7 +708,7 @@ TEST(BinaryReaderTest, hello_obj_ppc) {
   EXPECT_EQ(haPair.type, PPC_RELOC_PAIR);
   EXPECT_EQ(haPair.length, 2);
   EXPECT_EQ(haPair.value, Hex32(0x18));
-  
+
   const Section& cstring = f->sections[1];
   EXPECT_TRUE(cstring.segmentName.equals("__TEXT"));
   EXPECT_TRUE(cstring.sectionName.equals("__cstring"));
@@ -693,7 +722,7 @@ TEST(BinaryReaderTest, hello_obj_ppc) {
   EXPECT_EQ((int)(cstring.content[2]), 0x6c);
   EXPECT_TRUE(cstring.indirectSymbols.empty());
   EXPECT_TRUE(cstring.relocations.empty());
-  
+
   EXPECT_EQ(f->localSymbols.size(), 0UL);
   EXPECT_EQ(f->globalSymbols.size(), 1UL);
   const Symbol& mainLabel = f->globalSymbols[0];
@@ -707,7 +736,7 @@ TEST(BinaryReaderTest, hello_obj_ppc) {
   EXPECT_TRUE(printfLabel.name.equals("_printf"));
   EXPECT_EQ(printfLabel.type, N_UNDF);
   EXPECT_EQ(printfLabel.scope, SymbolScope(N_EXT));
-  
+
   writeBinary(*f, "/tmp/foo.o");
 
 }

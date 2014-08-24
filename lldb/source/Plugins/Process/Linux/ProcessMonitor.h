@@ -55,6 +55,7 @@ public:
                    const char *stdout_path,
                    const char *stderr_path,
                    const char *working_dir,
+                   const lldb_private::ProcessLaunchInfo &launch_info,
                    lldb_private::Error &error);
 
     ProcessMonitor(ProcessPOSIX *process,
@@ -172,11 +173,9 @@ public:
     bool
     SingleStep(lldb::tid_t tid, uint32_t signo);
 
-    /// Sends the inferior process a PTRACE_KILL signal.  The inferior will
-    /// still exists and can be interrogated.  Once resumed it will exit as
-    /// though it received a SIGKILL.
+    /// Terminate the traced process.
     bool
-    BringProcessIntoLimbo();
+    Kill();
 
     lldb_private::Error
     Detach(lldb::tid_t tid);
@@ -235,7 +234,8 @@ private:
                    const char *stdin_path,
                    const char *stdout_path,
                    const char *stderr_path,
-                   const char *working_dir);
+                   const char *working_dir,
+                   const lldb_private::ProcessLaunchInfo &launch_info);
 
         ~LaunchArgs();
 
@@ -246,6 +246,7 @@ private:
         const char *m_stdout_path;      // Redirect stdout or NULL.
         const char *m_stderr_path;      // Redirect stderr or NULL.
         const char *m_working_dir;      // Working directory or NULL.
+        const lldb_private::ProcessLaunchInfo &m_launch_info;
     };
 
     void

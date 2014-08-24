@@ -23,8 +23,8 @@
 
 #include "lld/Core/File.h"
 #include "lld/Core/Pass.h"
+#include "lld/Core/Simple.h"
 #include "lld/ReaderWriter/PECOFFLinkingContext.h"
-#include "lld/ReaderWriter/Simple.h"
 #include "llvm/Support/COFF.h"
 
 #include <map>
@@ -38,7 +38,7 @@ namespace edata {
 struct TableEntry {
   TableEntry(StringRef exp, int ord, const DefinedAtom *a, bool n)
       : exportName(exp), ordinal(ord), atom(a), noname(n) {}
-  StringRef exportName;
+  std::string exportName;
   int ordinal;
   const DefinedAtom *atom;
   bool noname;
@@ -51,10 +51,10 @@ public:
       : COFFLinkerInternalAtom(file, file.getNextOrdinal(),
                                std::vector<uint8_t>(size)) {}
 
-  virtual SectionChoice sectionChoice() const { return sectionCustomRequired; }
-  virtual StringRef customSectionName() const { return ".edata"; }
-  virtual ContentType contentType() const { return typeData; }
-  virtual ContentPermissions permissions() const { return permR__; }
+  SectionChoice sectionChoice() const override { return sectionCustomRequired; }
+  StringRef customSectionName() const override { return ".edata"; }
+  ContentType contentType() const override { return typeData; }
+  ContentPermissions permissions() const override { return permR__; }
 
   template <typename T> T *getContents() const {
     return (T *)rawContent().data();
@@ -68,7 +68,7 @@ public:
   EdataPass(PECOFFLinkingContext &ctx)
       : _ctx(ctx), _file(ctx), _stringOrdinal(1024) {}
 
-  virtual void perform(std::unique_ptr<MutableFile> &file);
+  void perform(std::unique_ptr<MutableFile> &file) override;
 
 private:
   edata::EdataAtom *

@@ -207,7 +207,7 @@ With LLDB, for register information, remote GDB servers can add
 support for the "qRegisterInfoN" packet where "N" is a zero based
 base16 register number that must start at zero and increase by one
 for each register that is supported.  The response is done in typical
-GDB remote fashion where a serious of "KEY:VALUE;" pairs are returned.
+GDB remote fashion where a series of "KEY:VALUE;" pairs are returned.
 An example for the x86_64 registers is included below:
 
 send packet: $qRegisterInfo0#00
@@ -371,7 +371,7 @@ encoding    The encoding type of the register which must be one of:
                  uint (unsigned integer)
                  sint (signed integer)
                  ieee754 (IEEE 754 float)
-                 vector (vector regsiter)
+                 vector (vector register)
 
 format      The preferred format for display of this register. The value must
             be one of:
@@ -512,7 +512,7 @@ drwxrwxr-x  5 username groupname    4096 Aug 15 21:36 source.cpp
 // PRIORITY TO IMPLEMENT
 //  High. This packet is usually very easy to implement and can help
 //  LLDB select the correct plug-ins for the job based on the target
-//  triple information that is suppied.
+//  triple information that is supplied.
 //----------------------------------------------------------------------
 
 LLDB supports a host info call that gets all sorts of details of the system
@@ -523,8 +523,8 @@ read packet: $cputype:16777223;cpusubtype:3;ostype:darwin;vendor:apple;endian:li
 
 Key value pairs are one of:
 
-cputype: is a number that is the mach-o CPU type that is being debugged
-cpusubtype: is a number that is the mach-o CPU subtype type that is being debugged
+cputype: is a number that is the mach-o CPU type that is being debugged (base 10)
+cpusubtype: is a number that is the mach-o CPU subtype type that is being debugged (base 10)
 triple: a string for the target triple (x86_64-apple-macosx) that can be used to specify arch + vendor + os in one entry
 vendor: a string for the vendor (apple), not needed if "triple" is specified
 ostype: a string for the OS being debugged (darwin, linux, freebsd), not needed if "triple" is specified
@@ -536,6 +536,7 @@ os_kernel: a string describing the kernel version
 os_version: a version string that represents the current OS version (10.8.2)
 watchpoint_exceptions_received: one of "before" or "after" to specify if a watchpoint is triggered before or after the pc when it stops
 default_packet_timeout: an unsigned number that specifies the default timeout in seconds
+distribution_id: optional. For linux, specifies distribution id (e.g. ubuntu, fedora, etc.)
 
 //----------------------------------------------------------------------
 // "qGDBServerVersion"
@@ -620,8 +621,8 @@ real-uid: the real user id of the process
 real-gid: the real group id of the process
 effective-uid: the effective user id of the process
 effective-gid: the effective group id of the process
-cputype: the Mach-O CPU type of the process
-cpusubtype: the Mach-O CPU subtype of the process
+cputype: the Mach-O CPU type of the process  (base 16)
+cpusubtype: the Mach-O CPU subtype of the process  (base 16)
 ostype: is a string the represents the OS being debugged (darwin, linux, freebsd)
 vendor: is a string that represents the vendor (apple)
 endian: is one of "little", "big", or "pdp"
@@ -790,7 +791,7 @@ not supported.
 // "qMemoryRegionInfo:<addr>"
 //
 // BRIEF
-//  Get information about the address the range that contains "<addr>"
+//  Get information about the address range that contains "<addr>"
 //
 // PRIORITY TO IMPLEMENT
 //  Medium. This is nice to have, but it isn't necessary. It helps LLDB
@@ -808,7 +809,7 @@ We added a way to get information for a memory region. The packet is:
     
 Where <addr> is a big endian hex address. The response is returned in a series
 of tuples like the data returned in a stop reply packet. The currently valid
-tuples tp return are:
+tuples to return are:
 
     start:<start-addr>; // <start-addr> is a big endian hex address that is 
                         // the start address of the range that contains <addr>
@@ -834,6 +835,40 @@ For instance, with a Mac OS X process which has nothing mapped in the first
 
 The lack of 'permissions:' indicates that none of read/write/execute are valid
 for this region.
+
+//----------------------------------------------------------------------
+// "x" - Binary memory read
+//
+// Like the 'm' (read) and 'M' (write) packets, this is a partner to the
+// 'X' (write binary data) packet, 'x'.
+//
+// It is called like
+//
+// xADDRESS,LENGTH
+//
+// where both ADDRESS and LENGTH are big-endian base 16 values.
+//
+// To test if this packet is available, send a addr/len of 0:
+//
+// x0,0
+//
+// and you will get an "OK" response.
+//
+// The reply will be the data requested in 8-bit binary data format.
+// The standard quoting is applied to the payload -- characters
+//   }  #  $  *
+// will all be escaped with '}' (0x7d) character and then XOR'ed with 0x20.
+//
+// A typical use to read 512 bytes at 0x1000 would look like
+//
+// x0x1000,0x200
+//
+// The "0x" prefixes are optional - like most of the gdb-remote packets,
+// omitting them will work fine; these numbers are always base 16.
+// 
+// The length of the payload is not provided.  A reliable, 8-bit clean, 
+// transport layer is assumed.
+//----------------------------------------------------------------------
 
 //----------------------------------------------------------------------
 // Detach and stay stopped:
@@ -1048,7 +1083,7 @@ for this region.
 // "qsProcessInfo"
 //
 // BRIEF
-//  Get the first process info (qfProcessInfo) or subsequent processs
+//  Get the first process info (qfProcessInfo) or subsequent process
 //  info (qsProcessInfo) for one or more processes on the remote 
 //  platform. The first call gets the first match and subsequent calls
 //  to qsProcessInfo gets the subsequent matches. Return an error EXX,
@@ -1074,7 +1109,7 @@ for this region.
 //  "all_users"   bool      A boolean value that specifies if processes should
 //                          be listed for all users, not just the user that the 
 //                          platform is running as
-//  "triple"      ascii-hex An ASCII hex target triple string ("x86_64", 
+//  "triple"      string    An ASCII triple string ("x86_64", 
 //                          "x86_64-apple-macosx", "armv7-apple-ios")
 //
 // The response consists of key/value pairs where the key is separated from the
@@ -1084,9 +1119,9 @@ for this region.
 //
 // Sample packet/response:
 // send packet: $qfProcessInfo#00
-// read packet: $pid:60001;ppid:59948;uid:7746;gid:11;euid:7746;egid:11;name:6c6c6462;triple:7838365f36342d6170706c652d6d61636f7378;#00
+// read packet: $pid:60001;ppid:59948;uid:7746;gid:11;euid:7746;egid:11;name:6c6c6462;triple:x86_64-apple-macosx;#00
 // send packet: $qsProcessInfo#00
-// read packet: $pid:59992;ppid:192;uid:7746;gid:11;euid:7746;egid:11;name:6d64776f726b6572;triple:7838365f36342d6170706c652d6d61636f7378;#00
+// read packet: $pid:59992;ppid:192;uid:7746;gid:11;euid:7746;egid:11;name:6d64776f726b6572;triple:x86_64-apple-macosx;#00
 // send packet: $qsProcessInfo#00
 // read packet: $E04#00
 //----------------------------------------------------------------------
@@ -1154,9 +1189,123 @@ for this region.
 //  "euid"        integer   A string value containing the decimal effective user ID
 //  "egid"        integer   A string value containing the decimal effective group ID
 //  "name"        ascii-hex An ASCII hex string that contains the name of the process
-//  "triple"      ascii-hex A target triple ("x86_64-apple-macosx", "armv7-apple-ios")
+//  "triple"      string    A target triple ("x86_64-apple-macosx", "armv7-apple-ios")
 //
 // Sample packet/response:
 // send packet: $qProcessInfoPID:60050#00
-// read packet: $pid:60050;ppid:59948;uid:7746;gid:11;euid:7746;egid:11;name:6c6c6462;triple:7838365f36342d6170706c652d6d61636f7378;#00
+// read packet: $pid:60050;ppid:59948;uid:7746;gid:11;euid:7746;egid:11;name:6c6c6462;triple:x86_64-apple-macosx;#00
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+// "vAttachName"
+//
+// BRIEF
+//  Same as vAttach, except instead of a "pid" you send a process name.
+//  
+// PRIORITY TO IMPLEMENT
+//  Low. Only needed for "process attach -n".  If the packet isn't supported
+//  then "process attach -n" will fail gracefully.  So you need only to support
+//  it if attaching to a process by name makes sense for your environment.
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+// "vAttachWait"
+//
+// BRIEF
+//  Same as vAttachName, except that the stub should wait for the next instance
+//  of a process by that name to be launched and attach to that.
+//
+// PRIORITY TO IMPLEMENT
+//  Low. Only needed to support "process attach -w -n" which will fail
+//  gracefully if the packet is not supported.
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+// "qAttachOrWaitSupported"
+//
+// BRIEF
+//  This is a binary "is it supported" query.  Return OK if you support
+//  vAttachOrWait
+//
+// PRIORITY TO IMPLEMENT
+//  Low. This is required if you support vAttachOrWait, otherwise no support
+//  is needed since the standard "I don't recognize this packet" response
+//  will do the right thing.
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+// "vAttachOrWait"
+//
+// BRIEF
+//  Same as vAttachWait, except that the stub will attach to a process
+//  by name if it exists, and if it does not, it will wait for a process
+//  of that name to appear and attach to it.
+//
+// PRIORITY TO IMPLEMENT
+//  Low. Only needed to implement "process attach -w -i false -n".  If
+//  you don't implement it but do implement -n AND lldb can somehow get
+//  a process list from your device, it will fall back on scanning the
+//  process list, and sending vAttach or vAttachWait depending on
+//  whether the requested process exists already.  This is racy, 
+//  however, so if you want to support this behavior it is better to
+//  support this packet.
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+// "jThreadExtendedInfo"
+//
+// BRIEF
+//  This packet, which takes its arguments as JSON and sends its reply as
+//  JSON, allows the gdb remote stub to provide additional information 
+//  about a given thread.
+//
+// PRIORITY TO IMPLEMENT
+//  Low.  This packet is only needed if the gdb remote stub wants to 
+//  provide interesting additional information about a thread for the
+//  user.
+//
+// This packet takes its arguments in JSON form ( http://www.json.org ).
+// At a minimum, a thread must be specified, for example:
+//
+//  jThreadExtendedInfo:{"thread":612910}
+//
+// Because this is a JSON string, the thread number is provided in base10.
+// Additional key-value pairs may be provided by lldb to the gdb remote
+// stub.  For instance, on some versions of Mac OS X, lldb can read offset
+// information out of the system libraries.  Using those offsets, debugserver
+// is able to find the Thread Specific Address (TSD) for a thread and include
+// that in the return information.  So lldb will send these additional fields
+// like so:
+//
+//   jThreadExtendedInfo:{"plo_pthread_tsd_base_address_offset":0,"plo_pthread_tsd_base_offset":224,"plo_pthread_tsd_entry_size":8,"thread":612910}
+//
+// There are no requirements for what is included in the response.  A simple 
+// reply on a Mac OS X Yosemite / iOS 8 may include the pthread_t value, the
+// Thread Specific Data (TSD) address, the dispatch_queue_t value if the thread
+// is associated with a GCD queue, and the requested Quality of Service (QoS)
+// information about that thread.  For instance, a reply may look like:
+//
+//  {"tsd_address":4371349728,"requested_qos":{"enum_value":33,"constant_name":"QOS_CLASS_USER_INTERACTIVE","printable_name":"User Interactive"},"pthread_t":4371349504,"dispatch_queue_t":140735087127872}
+//
+// tsd_address, pthread_t, and dispatch_queue_t are all simple key-value pairs.  
+// The JSON standard requires that numbers be expressed in base 10 - so all of 
+// these are.  requested_qos is a dictionary with three key-value pairs in it - 
+// so the UI layer may choose the form most appropriate for displaying to the user.
+//
+// Sending JSON over gdb-remote protocol introduces some problems.  We may be 
+// sending strings with arbitrary contents in them, including the '#', '$', and '*'
+// characters that have special meaning in gdb-remote protocol and cannot occur
+// in the middle of the string.  The standard solution for this would be to require
+// ascii-hex encoding of all strings, or ascii-hex encode the entire JSON payload.
+//
+// Instead, the binary escaping convention is used for JSON data.  This convention
+// (e.g. used for the X packet) says that if '#', '$', '*', or '}' are to occur in
+// the payload, the character '}' (0x7d) is emitted, then the metacharacter is emitted
+// xor'ed by 0x20.  The '}' character occurs in every JSON payload at least once, and
+// '}' ^ 0x20 happens to be ']' so the raw packet characters for a request will look
+// like
+//
+//  jThreadExtendedInfo:{"thread":612910}]
+//
+// on the wire.
 //----------------------------------------------------------------------

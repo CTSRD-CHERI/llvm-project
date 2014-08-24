@@ -21,8 +21,8 @@ class WatchpointForMultipleThreadsTestCase(TestBase):
         self.setTearDownCleanup(dictionary=self.d)
         self.hello_multiple_threads()
 
-    @expectedFailureFreeBSD('llvm.org/pr16706') # Watchpoints fail on FreeBSD
     @skipIfGcc # causes intermittent gcc debian buildbot failures, skip until we can investigate
+    @expectedFailureLinux("llvm.org/pr20233") # note due to a @skipIfGcc above, this is going to check failure on Linux if using non-GCC (most likely clang)
     @dwarf_test
     def test_watchpoint_multiple_threads_with_dwarf(self):
         """Test that lldb watchpoint works for multiple threads."""
@@ -38,7 +38,6 @@ class WatchpointForMultipleThreadsTestCase(TestBase):
         self.setTearDownCleanup(dictionary=self.d)
         self.hello_multiple_threads_wp_set_and_then_delete()
 
-    @expectedFailureFreeBSD('llvm.org/pr16706') # Watchpoints fail on FreeBSD
     @skipIfGcc # causes intermittent gcc debian buildbot failures, skip until we can investigate 
     @dwarf_test
     def test_watchpoint_multiple_threads_wp_set_and_then_delete_with_dwarf(self):

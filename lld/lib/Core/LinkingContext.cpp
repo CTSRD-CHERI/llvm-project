@@ -7,25 +7,25 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "lld/Core/Alias.h"
 #include "lld/Core/LinkingContext.h"
 #include "lld/Core/Resolver.h"
+#include "lld/Core/Simple.h"
 #include "lld/ReaderWriter/Writer.h"
-#include "lld/ReaderWriter/Simple.h"
-
 #include "llvm/ADT/Triple.h"
 
 namespace lld {
 
 LinkingContext::LinkingContext()
-    : _deadStrip(false), _globalsAreDeadStripRoots(false),
+    : _deadStrip(false), _allowDuplicates(false),
+      _globalsAreDeadStripRoots(false),
       _searchArchivesToOverrideTentativeDefinitions(false),
       _searchSharedLibrariesToOverrideTentativeDefinitions(false),
       _warnIfCoalesableAtomsHaveDifferentCanBeNull(false),
       _warnIfCoalesableAtomsHaveDifferentLoadName(false),
       _printRemainingUndefines(true), _allowRemainingUndefines(false),
       _logInputFiles(false), _allowShlibUndefines(false),
-      _outputFileType(OutputFileType::Default), _currentInputElement(nullptr),
-      _nextOrdinal(0) {}
+      _outputFileType(OutputFileType::Default), _nextOrdinal(0) {}
 
 LinkingContext::~LinkingContext() {}
 
@@ -33,7 +33,7 @@ bool LinkingContext::validate(raw_ostream &diagnostics) {
   return validateImpl(diagnostics);
 }
 
-error_code LinkingContext::writeFile(const File &linkedFile) const {
+std::error_code LinkingContext::writeFile(const File &linkedFile) const {
   return this->writer().writeFile(linkedFile, _outputPath);
 }
 
@@ -43,7 +43,7 @@ bool LinkingContext::createImplicitFiles(
 }
 
 std::unique_ptr<File> LinkingContext::createEntrySymbolFile() const {
-  return createEntrySymbolFile("command line option -u");
+  return createEntrySymbolFile("<command line option -e>");
 }
 
 std::unique_ptr<File>
@@ -57,7 +57,7 @@ LinkingContext::createEntrySymbolFile(StringRef filename) const {
 }
 
 std::unique_ptr<File> LinkingContext::createUndefinedSymbolFile() const {
-  return createUndefinedSymbolFile("command line option -u");
+  return createUndefinedSymbolFile("<command line option -u or --defsym>");
 }
 
 std::unique_ptr<File>
@@ -65,52 +65,38 @@ LinkingContext::createUndefinedSymbolFile(StringRef filename) const {
   if (_initialUndefinedSymbols.empty())
     return nullptr;
   std::unique_ptr<SimpleFile> undefinedSymFile(new SimpleFile(filename));
-  for (auto undefSymStr : _initialUndefinedSymbols)
+  for (StringRef undefSym : _initialUndefinedSymbols)
     undefinedSymFile->addAtom(*(new (_allocator) SimpleUndefinedAtom(
-                                   *undefinedSymFile, undefSymStr)));
+                                   *undefinedSymFile, undefSym)));
   return std::move(undefinedSymFile);
+}
+
+std::unique_ptr<File> LinkingContext::createAliasSymbolFile() const {
+  if (getAliases().empty())
+    return nullptr;
+  std::unique_ptr<SimpleFile> file(new SimpleFile("<alias>"));
+  for (const auto &i : getAliases()) {
+    StringRef from = i.first;
+    StringRef to = i.second;
+    SimpleDefinedAtom *fromAtom = new (_allocator) AliasAtom(*file, from);
+    UndefinedAtom *toAtom = new (_allocator) SimpleUndefinedAtom(*file, to);
+    fromAtom->addReference(Reference::KindNamespace::all,
+                           Reference::KindArch::all, Reference::kindLayoutAfter,
+                           0, toAtom, 0);
+    file->addAtom(*fromAtom);
+    file->addAtom(*toAtom);
+  }
+  return std::move(file);
 }
 
 void LinkingContext::createInternalFiles(
     std::vector<std::unique_ptr<File> > &result) const {
-  std::unique_ptr<File> internalFile;
-  internalFile = createEntrySymbolFile();
-  if (internalFile)
-    result.push_back(std::move(internalFile));
-  internalFile = createUndefinedSymbolFile();
-  if (internalFile)
-    result.push_back(std::move(internalFile));
-}
-
-void LinkingContext::setResolverState(uint32_t state) {
-  _currentInputElement->setResolveState(state);
-}
-
-ErrorOr<File &> LinkingContext::nextFile() {
-  // When nextFile() is called for the first time, _currentInputElement is not
-  // initialized. Initialize it with the first element of the input graph.
-  if (_currentInputElement == nullptr) {
-    ErrorOr<InputElement *> elem = inputGraph().getNextInputElement();
-    if (elem.getError() == InputGraphError::no_more_elements)
-      return make_error_code(InputGraphError::no_more_files);
-    _currentInputElement = *elem;
-  }
-
-  // Otherwise, try to get the next file of _currentInputElement. If the current
-  // input element points to an archive file, and there's a file left in the
-  // archive, it will succeed. If not, try to get the next file in the input
-  // graph.
-  for (;;) {
-    ErrorOr<File &> nextFile = _currentInputElement->getNextFile();
-    if (nextFile.getError() != InputGraphError::no_more_files)
-      return std::move(nextFile);
-
-    ErrorOr<InputElement *> elem = inputGraph().getNextInputElement();
-    if (elem.getError() == InputGraphError::no_more_elements ||
-        *elem == nullptr)
-      return make_error_code(InputGraphError::no_more_files);
-    _currentInputElement = *elem;
-  }
+  if (std::unique_ptr<File> file = createEntrySymbolFile())
+    result.push_back(std::move(file));
+  if (std::unique_ptr<File> file = createUndefinedSymbolFile())
+    result.push_back(std::move(file));
+  if (std::unique_ptr<File> file = createAliasSymbolFile())
+    result.push_back(std::move(file));
 }
 
 void LinkingContext::addPasses(PassManager &pm) {}

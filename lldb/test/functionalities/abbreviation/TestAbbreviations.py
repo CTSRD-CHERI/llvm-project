@@ -12,6 +12,7 @@ class AbbreviationsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
+    @unittest2.skipIf(sys.platform.startswith("win32"), "one-shot script commands deadlock on Windows.")
     def test_nonrunning_command_abbreviations (self):
         self.expect("ap script",
                     startstr = "The following built-in commands may relate to 'script':",
@@ -47,8 +48,7 @@ class AbbreviationsTestCase(TestBase):
                     substrs = ["Ambiguous command 't'. Possible matches:",
                                "target", "thread", "type"])
 
-        self.expect("com sou ./change_prompt.lldb",
-                    patterns = ["Executing commands in '.*change_prompt.lldb'"])
+        self.runCmd("com sou ./change_prompt.lldb")
 
         self.expect("settings show prompt",
                     startstr = 'prompt (string) = "[with-three-trailing-spaces]   "')

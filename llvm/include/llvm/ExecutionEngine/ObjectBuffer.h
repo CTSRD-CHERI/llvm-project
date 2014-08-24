@@ -1,6 +1,6 @@
 //===---- ObjectBuffer.h - Utility class to wrap object image memory -----===//
 //
-//		       The LLVM Compiler Infrastructure
+//                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
@@ -15,20 +15,16 @@
 #ifndef LLVM_EXECUTIONENGINE_OBJECTBUFFER_H
 #define LLVM_EXECUTIONENGINE_OBJECTBUFFER_H
 
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
 
-/// ObjectBuffer - This class acts as a container for the memory buffer used during
-/// generation and loading of executable objects using MCJIT and RuntimeDyld.  The
+/// This class acts as a container for the memory buffer used during generation
+/// and loading of executable objects using MCJIT and RuntimeDyld. The
 /// underlying memory for the object will be owned by the ObjectBuffer instance
-/// throughout its lifetime.  The getMemBuffer() method provides a way to create a
-/// MemoryBuffer wrapper object instance to be owned by other classes (such as
-/// ObjectFile) as needed, but the MemoryBuffer instance returned does not own the
-/// actual memory it points to.
+/// throughout its lifetime.
 class ObjectBuffer {
   virtual void anchor();
 public:
@@ -36,28 +32,26 @@ public:
   ObjectBuffer(MemoryBuffer* Buf) : Buffer(Buf) {}
   virtual ~ObjectBuffer() {}
 
-  /// getMemBuffer - Like MemoryBuffer::getMemBuffer() this function
-  /// returns a pointer to an object that is owned by the caller. However,
-  /// the caller does not take ownership of the underlying memory.
-  MemoryBuffer *getMemBuffer() const {
-    return MemoryBuffer::getMemBuffer(Buffer->getBuffer(), "", false);
-  }
+  MemoryBufferRef getMemBuffer() const { return Buffer->getMemBufferRef(); }
 
   const char *getBufferStart() const { return Buffer->getBufferStart(); }
   size_t getBufferSize() const { return Buffer->getBufferSize(); }
   StringRef getBuffer() const { return Buffer->getBuffer(); }
+  StringRef getBufferIdentifier() const {
+    return Buffer->getBufferIdentifier();
+  }
 
 protected:
   // The memory contained in an ObjectBuffer
-  OwningPtr<MemoryBuffer> Buffer;
+  std::unique_ptr<MemoryBuffer> Buffer;
 };
 
-/// ObjectBufferStream - This class encapsulates the SmallVector and
-/// raw_svector_ostream needed to generate an object using MC code emission
-/// while providing a common ObjectBuffer interface for access to the
-/// memory once the object has been generated.
+/// This class encapsulates the SmallVector and raw_svector_ostream needed to
+/// generate an object using MC code emission while providing a common
+/// ObjectBuffer interface for access to the memory once the object has been
+/// generated.
 class ObjectBufferStream : public ObjectBuffer {
-  virtual void anchor();
+  void anchor() override;
 public:
   ObjectBufferStream() : OS(SV) {}
   virtual ~ObjectBufferStream() {}
@@ -69,13 +63,13 @@ public:
 
     // Make the data accessible via the ObjectBuffer::Buffer
     Buffer.reset(MemoryBuffer::getMemBuffer(StringRef(SV.data(), SV.size()),
-					    "",
-					    false));
+                                            "",
+                                            false));
   }
 
 protected:
   SmallVector<char, 4096> SV; // Working buffer into which we JIT.
-  raw_svector_ostream	  OS; // streaming wrapper
+  raw_svector_ostream     OS; // streaming wrapper
 };
 
 } // namespace llvm

@@ -14,20 +14,65 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_AST_MATCHERS_DYNAMIC_VARIANT_VALUE_H
-#define LLVM_CLANG_AST_MATCHERS_DYNAMIC_VARIANT_VALUE_H
+#ifndef LLVM_CLANG_ASTMATCHERS_DYNAMIC_VARIANTVALUE_H
+#define LLVM_CLANG_ASTMATCHERS_DYNAMIC_VARIANTVALUE_H
 
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchersInternal.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/Support/type_traits.h"
+#include <memory>
 #include <vector>
 
 namespace clang {
 namespace ast_matchers {
 namespace dynamic {
+
+/// \brief Kind identifier.
+///
+/// It supports all types that VariantValue can contain.
+class ArgKind {
+ public:
+  enum Kind {
+    AK_Matcher,
+    AK_Unsigned,
+    AK_String
+  };
+  /// \brief Constructor for non-matcher types.
+  ArgKind(Kind K) : K(K) { assert(K != AK_Matcher); }
+
+  /// \brief Constructor for matcher types.
+  ArgKind(ast_type_traits::ASTNodeKind MatcherKind)
+      : K(AK_Matcher), MatcherKind(MatcherKind) {}
+
+  Kind getArgKind() const { return K; }
+  ast_type_traits::ASTNodeKind getMatcherKind() const {
+    assert(K == AK_Matcher);
+    return MatcherKind;
+  }
+
+  /// \brief Determines if this type can be converted to \p To.
+  ///
+  /// \param To the requested destination type.
+  ///
+  /// \param Specificity value corresponding to the "specificity" of the
+  ///   convertion.
+  bool isConvertibleTo(ArgKind To, unsigned *Specificity) const;
+
+  bool operator<(const ArgKind &Other) const {
+    if (K == AK_Matcher && Other.K == AK_Matcher)
+      return MatcherKind < Other.MatcherKind;
+    return K < Other.K;
+  }
+
+  /// \brief String representation of the type.
+  std::string asString() const;
+
+private:
+  Kind K;
+  ast_type_traits::ASTNodeKind MatcherKind;
+};
 
 using ast_matchers::internal::DynTypedMatcher;
 
@@ -49,7 +94,8 @@ class VariantMatcher {
   class MatcherOps {
   public:
     virtual ~MatcherOps();
-    virtual bool canConstructFrom(const DynTypedMatcher &Matcher) const = 0;
+    virtual bool canConstructFrom(const DynTypedMatcher &Matcher,
+                                  bool &IsExactMatch) const = 0;
     virtual void constructFrom(const DynTypedMatcher &Matcher) = 0;
     virtual void constructVariadicOperator(
         ast_matchers::internal::VariadicOperatorFunction Func,
@@ -65,6 +111,8 @@ class VariantMatcher {
     virtual llvm::Optional<DynTypedMatcher> getSingleMatcher() const = 0;
     virtual std::string getTypeAsString() const = 0;
     virtual void makeTypedMatcher(MatcherOps &Ops) const = 0;
+    virtual bool isConvertibleTo(ast_type_traits::ASTNodeKind Kind,
+                                 unsigned *Specificity) const = 0;
   };
 
 public:
@@ -77,14 +125,15 @@ public:
   /// \brief Clones the provided matchers.
   ///
   /// They should be the result of a polymorphic matcher.
-  static VariantMatcher PolymorphicMatcher(ArrayRef<DynTypedMatcher> Matchers);
+  static VariantMatcher
+  PolymorphicMatcher(std::vector<DynTypedMatcher> Matchers);
 
   /// \brief Creates a 'variadic' operator matcher.
   ///
   /// It will bind to the appropriate type on getTypedMatcher<T>().
   static VariantMatcher VariadicOperatorMatcher(
       ast_matchers::internal::VariadicOperatorFunction Func,
-      ArrayRef<VariantMatcher> Args);
+      std::vector<VariantMatcher> Args);
 
   /// \brief Makes the matcher the "null" matcher.
   void reset();
@@ -112,6 +161,19 @@ public:
     TypedMatcherOps<T> Ops;
     if (Value) Value->makeTypedMatcher(Ops);
     return Ops.hasMatcher();
+  }
+
+  /// \brief Determines if the contained matcher can be converted to \p Kind.
+  ///
+  /// \param Kind the requested destination type.
+  ///
+  /// \param Specificity value corresponding to the "specificity" of the
+  ///   convertion.
+  bool isConvertibleTo(ast_type_traits::ASTNodeKind Kind,
+                       unsigned *Specificity) const {
+    if (Value)
+      return Value->isConvertibleTo(Kind, Specificity);
+    return false;
   }
 
   /// \brief Return this matcher as a \c Matcher<T>.
@@ -144,7 +206,10 @@ private:
   public:
     typedef ast_matchers::internal::Matcher<T> MatcherT;
 
-    virtual bool canConstructFrom(const DynTypedMatcher &Matcher) const {
+    virtual bool canConstructFrom(const DynTypedMatcher &Matcher,
+                                  bool &IsExactMatch) const {
+      IsExactMatch = Matcher.getSupportedKind().isSame(
+          ast_type_traits::ASTNodeKind::getFromNodeKind<T>());
       return Matcher.canConvertTo<T>();
     }
 
@@ -169,11 +234,11 @@ private:
               Func, DynMatchers)));
     }
 
-    bool hasMatcher() const { return Out.get() != NULL; }
+    bool hasMatcher() const { return Out.get() != nullptr; }
     const MatcherT &matcher() const { return *Out; }
 
   private:
-    OwningPtr<MatcherT> Out;
+    std::unique_ptr<MatcherT> Out;
   };
 
   IntrusiveRefCntPtr<const Payload> Value;
@@ -204,6 +269,10 @@ public:
   VariantValue(const std::string &String);
   VariantValue(const VariantMatcher &Matchers);
 
+  /// \brief Returns true iff this is not an empty value.
+  LLVM_EXPLICIT operator bool() const { return hasValue(); }
+  bool hasValue() const { return Type != VT_Nothing; }
+
   /// \brief Unsigned value functions.
   bool isUnsigned() const;
   unsigned getUnsigned() const;
@@ -218,6 +287,24 @@ public:
   bool isMatcher() const;
   const VariantMatcher &getMatcher() const;
   void setMatcher(const VariantMatcher &Matcher);
+
+  /// \brief Determines if the contained value can be converted to \p Kind.
+  ///
+  /// \param Kind the requested destination type.
+  ///
+  /// \param Specificity value corresponding to the "specificity" of the
+  ///   convertion.
+  bool isConvertibleTo(ArgKind Kind, unsigned* Specificity) const;
+
+  /// \brief Determines if the contained value can be converted to any kind
+  /// in \p Kinds.
+  ///
+  /// \param Kinds the requested destination types.
+  ///
+  /// \param Specificity value corresponding to the "specificity" of the
+  ///   convertion. It is the maximum specificity of all the possible
+  ///   conversions.
+  bool isConvertibleTo(ArrayRef<ArgKind> Kinds, unsigned *Specificity) const;
 
   /// \brief String representation of the type of the value.
   std::string getTypeAsString() const;

@@ -1,4 +1,4 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" 
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
           "http://www.w3.org/TR/html4/strict.dtd">
 <!-- Material used from: HTML 4.01 specs: http://www.w3.org/TR/html401/ -->
 <html>
@@ -26,6 +26,9 @@ href="bugs.html">Bug database</a> and consider reporting a bug.
             you need to compile them yourself from a recent svn/git checkout</b>
 <h2>Load Polly into clang</h2>
 
+By default Polly is configured as a shared library plugin that is loaded in
+tools like clang, opt, and bugpoint when they start their execution.
+
 By loading Polly into clang (or opt) the Polly options become automatically
 available. You can load Polly either by adding the relevant commands to
 the CPPFLAGS or by creating an alias.
@@ -37,6 +40,13 @@ $ export CPPFLAGS="-Xclang -load -Xclang ${POLLY_BUILD_DIR}/lib/LLVMPolly.so"
 or
 <pre class="code">
 $ alias pollycc clang -Xclang -load -Xclang ${POLLY_BUILD_DIR}/lib/LLVMPolly.so
+</pre>
+
+To avoid having to load Polly in the tools, Polly can optionally be configured
+with cmake to be statically linked in the tools:
+
+<pre class="code">
+$ cmake -D LINK_POLLY_INTO_TOOLS:Bool=ON
 </pre>
 
 <h2>Optimizing with Polly</h2>
@@ -105,8 +115,8 @@ possible to run <a
 href="http://www-rocq.inria.fr/~pouchet/software/pocc/">PoCC</a> as external
 optimizer. PoCC provides access to the original Pluto implementation. To use
 PoCC add <b>-polly-optimizer=pocc</b> to the command line (only available if
-Polly was compiled with scoplib support). To disable the
-optimizer entirely use the option <b>-polly-optimizer=none</b>.
+Polly was compiled with scoplib support) [removed after <a href="http://llvm.org/releases/download.html#3.4.2">LLVM 3.4.2</a>].
+To disable the optimizer entirely use the option <b>-polly-optimizer=none</b>.
 
 <h3>Disable tiling in the optimizer</h3>
 By default both optimizers perform tiling, if possible. In case this is not

@@ -27,7 +27,6 @@
 #include "polly/LinkAllPasses.h"
 #include "polly/ScopInfo.h"
 
-#define DEBUG_TYPE "polly-cloog"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
 
@@ -38,6 +37,8 @@
 
 using namespace llvm;
 using namespace polly;
+
+#define DEBUG_TYPE "polly-cloog"
 
 namespace polly {
 class Cloog {
@@ -62,7 +63,7 @@ public:
   void pprint(llvm::raw_ostream &OS);
 
   /// Create the Cloog AST from this program.
-  struct clast_root *getClast();
+  clast_root *getClast();
 };
 
 Cloog::Cloog(Scop *Scop) : S(Scop) {
@@ -137,7 +138,7 @@ void Cloog::pprint(raw_ostream &OS) {
 }
 
 /// Create the Cloog AST from this program.
-struct clast_root *Cloog::getClast() { return (clast_root *)ClastRoot; }
+clast_root *Cloog::getClast() { return (clast_root *)ClastRoot; }
 
 void Cloog::buildCloogOptions() {
   Options = cloog_options_malloc(State);
@@ -145,6 +146,9 @@ void Cloog::buildCloogOptions() {
   Options->strides = 1;
   Options->save_domains = 1;
   Options->noscalars = 1;
+
+  // Compute simple hulls to reduce code generation time.
+  Options->sh = 1;
 
   // The last loop depth to optimize should be the last scattering dimension.
   // CLooG by default will continue to split the loops even after the last

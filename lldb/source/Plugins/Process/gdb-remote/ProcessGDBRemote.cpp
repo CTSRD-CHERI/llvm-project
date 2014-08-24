@@ -34,7 +34,6 @@
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/ConnectionFileDescriptor.h"
 #include "lldb/Host/FileSpec.h"
-#include "lldb/Core/InputReader.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
@@ -57,11 +56,14 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/TargetList.h"
 #include "lldb/Target/ThreadPlanCallFunction.h"
+#include "lldb/Target/SystemRuntime.h"
 #include "lldb/Utility/PseudoTerminal.h"
 
 // Project includes
 #include "lldb/Host/Host.h"
+#include "Plugins/Process/Utility/FreeBSDSignals.h"
 #include "Plugins/Process/Utility/InferiorCallPOSIX.h"
+#include "Plugins/Process/Utility/LinuxSignals.h"
 #include "Plugins/Process/Utility/StopInfoMachException.h"
 #include "Plugins/Platform/MacOSX/PlatformRemoteiOS.h"
 #include "Utility/StringExtractorGDBRemote.h"
@@ -95,7 +97,7 @@ using namespace lldb_private;
 
 
 namespace {
-    
+
     static PropertyDefinition
     g_properties[] =
     {
@@ -167,8 +169,6 @@ namespace {
     
 } // anonymous namespace end
 
-static bool rand_initialized = false;
-
 // TODO Randomly assigning a port is unsafe.  We should get an unused
 // ephemeral port from the kernel and make sure we reserve it before passing
 // it to debugserver.
@@ -181,19 +181,22 @@ static bool rand_initialized = false;
 #define HIGH_PORT   (49151u)
 #endif
 
+#if defined(__APPLE__) && (defined(__arm__) || defined(__arm64__) || defined(__aarch64__))
+static bool rand_initialized = false;
+
 static inline uint16_t
 get_random_port ()
 {
     if (!rand_initialized)
     {
         time_t seed = time(NULL);
-        
+
         rand_initialized = true;
         srand(seed);
     }
     return (rand() % (HIGH_PORT - LOW_PORT)) + LOW_PORT;
 }
-
+#endif
 
 lldb_private::ConstString
 ProcessGDBRemote::GetPluginNameStatic()
@@ -244,6 +247,7 @@ ProcessGDBRemote::CanDebug (Target &target, bool plugin_specified_by_name)
             case ObjectFile::eTypeObjectFile:
             case ObjectFile::eTypeSharedLibrary:
             case ObjectFile::eTypeStubLibrary:
+            case ObjectFile::eTypeJIT:
                 return false;
             case ObjectFile::eTypeExecutable:
             case ObjectFile::eTypeDynamicLinker:
@@ -276,13 +280,15 @@ ProcessGDBRemote::ProcessGDBRemote(Target& target, Listener &listener) :
     m_continue_C_tids (),
     m_continue_s_tids (),
     m_continue_S_tids (),
-    m_max_memory_size (512),
+    m_max_memory_size (0),
+    m_remote_stub_max_memory_size (0),
     m_addr_to_mmap_size (),
     m_thread_create_bp_sp (),
     m_waiting_for_attach (false),
     m_destroy_tried_resuming (false),
     m_command_sp (),
-    m_breakpoint_pc_offset (0)
+    m_breakpoint_pc_offset (0),
+    m_unix_signals_sp (new UnixSignals ())
 {
     m_async_broadcaster.SetEventName (eBroadcastBitAsyncThreadShouldExit,   "async thread should exit");
     m_async_broadcaster.SetEventName (eBroadcastBitAsyncContinue,           "async thread continue");
@@ -625,6 +631,7 @@ ProcessGDBRemote::WillAttachToProcessWithName (const char *process_name, bool wa
 Error
 ProcessGDBRemote::DoConnectRemote (Stream *strm, const char *remote_url)
 {
+    Log *log (ProcessGDBRemoteLog::GetLogIfAllCategoriesSet (GDBR_LOG_PROCESS));
     Error error (WillLaunchOrAttach ());
     
     if (error.Fail())
@@ -675,7 +682,11 @@ ProcessGDBRemote::DoConnectRemote (Stream *strm, const char *remote_url)
             error.SetErrorStringWithFormat ("Process %" PRIu64 " was reported after connecting to '%s', but no stop reply packet was received", pid, remote_url);
     }
 
-    if (error.Success() 
+    if (log)
+        log->Printf ("ProcessGDBRemote::%s pid %" PRIu64 ": normalizing target architecture initial triple: %s (GetTarget().GetArchitecture().IsValid() %s, m_gdb_comm.GetHostArchitecture().IsValid(): %s)", __FUNCTION__, GetID (), GetTarget ().GetArchitecture ().GetTriple ().getTriple ().c_str (), GetTarget ().GetArchitecture ().IsValid () ? "true" : "false", m_gdb_comm.GetHostArchitecture ().IsValid () ? "true" : "false");
+
+
+    if (error.Success()
         && !GetTarget().GetArchitecture().IsValid()
         && m_gdb_comm.GetHostArchitecture().IsValid())
     {
@@ -684,6 +695,42 @@ ProcessGDBRemote::DoConnectRemote (Stream *strm, const char *remote_url)
             GetTarget().SetArchitecture(m_gdb_comm.GetProcessArchitecture());
         else
             GetTarget().SetArchitecture(m_gdb_comm.GetHostArchitecture());
+    }
+
+    if (log)
+        log->Printf ("ProcessGDBRemote::%s pid %" PRIu64 ": normalized target architecture triple: %s", __FUNCTION__, GetID (), GetTarget ().GetArchitecture ().GetTriple ().getTriple ().c_str ());
+
+    // Set the Unix signals properly for the target.
+    // FIXME Add a gdb-remote packet to discover dynamically.
+    if (error.Success ())
+    {
+        const ArchSpec arch_spec = GetTarget ().GetArchitecture ();
+        if (arch_spec.IsValid ())
+        {
+            if (log)
+                log->Printf ("ProcessGDBRemote::%s pid %" PRIu64 ": determining unix signals type based on architecture %s, triple %s", __FUNCTION__, GetID (), arch_spec.GetArchitectureName () ? arch_spec.GetArchitectureName () : "<null>", arch_spec.GetTriple ().getTriple ().c_str ());
+
+            switch (arch_spec.GetTriple ().getOS ())
+            {
+            case llvm::Triple::Linux:
+                m_unix_signals_sp.reset (new process_linux::LinuxSignals ());
+                if (log)
+                    log->Printf ("ProcessGDBRemote::%s using Linux unix signals type for pid %" PRIu64, __FUNCTION__, GetID ());
+                break;
+            case llvm::Triple::OpenBSD:
+            case llvm::Triple::FreeBSD:
+            case llvm::Triple::NetBSD:
+                m_unix_signals_sp.reset (new FreeBSDSignals ());
+                if (log)
+                    log->Printf ("ProcessGDBRemote::%s using *BSD unix signals type for pid %" PRIu64, __FUNCTION__, GetID ());
+                break;
+            default:
+                m_unix_signals_sp.reset (new UnixSignals ());
+                if (log)
+                    log->Printf ("ProcessGDBRemote::%s using generic unix signals type for pid %" PRIu64, __FUNCTION__, GetID ());
+                break;
+            }
+        }
     }
 
     return error;
@@ -711,23 +758,23 @@ ProcessGDBRemote::DoLaunch (Module *exe_module, ProcessLaunchInfo &launch_info)
     const char *stderr_path = NULL;
     const char *working_dir = launch_info.GetWorkingDirectory();
 
-    const ProcessLaunchInfo::FileAction *file_action;
+    const FileAction *file_action;
     file_action = launch_info.GetFileActionForFD (STDIN_FILENO);
     if (file_action)
     {
-        if (file_action->GetAction () == ProcessLaunchInfo::FileAction::eFileActionOpen)
+        if (file_action->GetAction() == FileAction::eFileActionOpen)
             stdin_path = file_action->GetPath();
     }
     file_action = launch_info.GetFileActionForFD (STDOUT_FILENO);
     if (file_action)
     {
-        if (file_action->GetAction () == ProcessLaunchInfo::FileAction::eFileActionOpen)
+        if (file_action->GetAction() == FileAction::eFileActionOpen)
             stdout_path = file_action->GetPath();
     }
     file_action = launch_info.GetFileActionForFD (STDERR_FILENO);
     if (file_action)
     {
-        if (file_action->GetAction () == ProcessLaunchInfo::FileAction::eFileActionOpen)
+        if (file_action->GetAction() == FileAction::eFileActionOpen)
             stderr_path = file_action->GetPath();
     }
 
@@ -796,8 +843,13 @@ ProcessGDBRemote::DoLaunch (Module *exe_module, ProcessLaunchInfo &launch_info)
                 m_gdb_comm.SetSTDERR (stderr_path);
 
             m_gdb_comm.SetDisableASLR (launch_flags & eLaunchFlagDisableASLR);
+            m_gdb_comm.SetDetachOnError (launch_flags & eLaunchFlagDetachOnError);
 
             m_gdb_comm.SendLaunchArchPacket (m_target.GetArchitecture().GetArchitectureName());
+            
+            const char * launch_event_data = launch_info.GetLaunchEventData();
+            if (launch_event_data != NULL && *launch_event_data != '\0')
+                m_gdb_comm.SendLaunchEventDataPacket (launch_event_data);
             
             if (working_dir && working_dir[0])
             {
@@ -959,7 +1011,7 @@ ProcessGDBRemote::ConnectToDebugserver (const char *connect_url)
 }
 
 void
-ProcessGDBRemote::DidLaunchOrAttach ()
+ProcessGDBRemote::DidLaunchOrAttach (ArchSpec& process_arch)
 {
     Log *log (ProcessGDBRemoteLog::GetLogIfAllCategoriesSet (GDBR_LOG_PROCESS));
     if (log)
@@ -970,16 +1022,17 @@ ProcessGDBRemote::DidLaunchOrAttach ()
 
         // See if the GDB server supports the qHostInfo information
 
-        ArchSpec gdb_remote_arch = m_gdb_comm.GetHostArchitecture();
 
         // See if the GDB server supports the qProcessInfo packet, if so
         // prefer that over the Host information as it will be more specific
         // to our process.
 
         if (m_gdb_comm.GetProcessArchitecture().IsValid())
-            gdb_remote_arch = m_gdb_comm.GetProcessArchitecture();
+            process_arch = m_gdb_comm.GetProcessArchitecture();
+        else
+            process_arch = m_gdb_comm.GetHostArchitecture();
 
-        if (gdb_remote_arch.IsValid())
+        if (process_arch.IsValid())
         {
             ArchSpec &target_arch = GetTarget().GetArchitecture();
 
@@ -992,15 +1045,15 @@ ProcessGDBRemote::DidLaunchOrAttach ()
                 // it has, so we really need to take the remote host architecture as our
                 // defacto architecture in this case.
 
-                if (gdb_remote_arch.GetMachine() == llvm::Triple::arm &&
-                    gdb_remote_arch.GetTriple().getVendor() == llvm::Triple::Apple)
+                if (process_arch.GetMachine() == llvm::Triple::arm &&
+                    process_arch.GetTriple().getVendor() == llvm::Triple::Apple)
                 {
-                    target_arch = gdb_remote_arch;
+                    GetTarget().SetArchitecture (process_arch);
                 }
                 else
                 {
                     // Fill in what is missing in the triple
-                    const llvm::Triple &remote_triple = gdb_remote_arch.GetTriple();
+                    const llvm::Triple &remote_triple = process_arch.GetTriple();
                     llvm::Triple &target_triple = target_arch.GetTriple();
                     if (target_triple.getVendorName().size() == 0)
                     {
@@ -1020,7 +1073,7 @@ ProcessGDBRemote::DidLaunchOrAttach ()
             {
                 // The target doesn't have a valid architecture yet, set it from
                 // the architecture we got from the remote GDB server
-                target_arch = gdb_remote_arch;
+                GetTarget().SetArchitecture (process_arch);
             }
         }
     }
@@ -1029,7 +1082,15 @@ ProcessGDBRemote::DidLaunchOrAttach ()
 void
 ProcessGDBRemote::DidLaunch ()
 {
-    DidLaunchOrAttach ();
+    ArchSpec process_arch;
+    DidLaunchOrAttach (process_arch);
+}
+
+UnixSignals&
+ProcessGDBRemote::GetUnixSignals ()
+{
+    assert (m_unix_signals_sp && "m_unix_signals_sp is null");
+    return *m_unix_signals_sp;
 }
 
 Error
@@ -1064,6 +1125,8 @@ ProcessGDBRemote::DoAttachToProcessWithID (lldb::pid_t attach_pid, const Process
     
         if (error.Success())
         {
+            m_gdb_comm.SetDetachOnError(attach_info.GetDetachOnError());
+            
             char packet[64];
             const int packet_len = ::snprintf (packet, sizeof(packet), "vAttach;%" PRIx64, attach_pid);
             SetID (attach_pid);            
@@ -1071,27 +1134,6 @@ ProcessGDBRemote::DoAttachToProcessWithID (lldb::pid_t attach_pid, const Process
         }
     }
     return error;
-}
-
-size_t
-ProcessGDBRemote::AttachInputReaderCallback
-(
-    void *baton, 
-    InputReader *reader, 
-    lldb::InputReaderAction notification,
-    const char *bytes, 
-    size_t bytes_len
-)
-{
-    if (notification == eInputReaderGotToken)
-    {
-        ProcessGDBRemote *gdb_process = (ProcessGDBRemote *)baton;
-        if (gdb_process->m_waiting_for_attach)
-            gdb_process->m_waiting_for_attach = false;
-        reader->SetIsDone(true);
-        return 1;
-    }
-    return 0;
 }
 
 Error
@@ -1121,6 +1163,8 @@ ProcessGDBRemote::DoAttachToProcessWithName (const char *process_name, const Pro
         if (error.Success())
         {
             StreamString packet;
+            
+            m_gdb_comm.SetDetachOnError(attach_info.GetDetachOnError());
             
             if (attach_info.GetWaitForLaunch())
             {
@@ -1157,9 +1201,11 @@ ProcessGDBRemote::SetExitStatus (int exit_status, const char *cstr)
 }
 
 void
-ProcessGDBRemote::DidAttach ()
+ProcessGDBRemote::DidAttach (ArchSpec &process_arch)
 {
-    DidLaunchOrAttach ();
+    // If you can figure out what the architecture is, fill it in here.
+    process_arch.Clear();
+    DidLaunchOrAttach (process_arch);
 }
 
 
@@ -1192,7 +1238,11 @@ ProcessGDBRemote::DoResume ()
         bool continue_packet_error = false;
         if (m_gdb_comm.HasAnyVContSupport ())
         {
-            if (m_continue_c_tids.size() == num_threads)
+            if (m_continue_c_tids.size() == num_threads ||
+                (m_continue_c_tids.empty() &&
+                 m_continue_C_tids.empty() &&
+                 m_continue_s_tids.empty() &&
+                 m_continue_S_tids.empty()))
             {
                 // All threads are continuing, just send a "c" packet
                 continue_packet.PutCString ("c");
@@ -1470,8 +1520,7 @@ ProcessGDBRemote::UpdateThreadList (ThreadList &old_thread_list, ThreadList &new
                 if (log && log->GetMask().Test(GDBR_LOG_VERBOSE))
                     log->Printf(
                             "ProcessGDBRemote::%s Making new thread: %p for thread ID: 0x%" PRIx64 ".\n",
-                            __FUNCTION__,
-                            thread_sp.get(),
+                            __FUNCTION__, static_cast<void*>(thread_sp.get()),
                             thread_sp->GetID());
             }
             else
@@ -1479,8 +1528,7 @@ ProcessGDBRemote::UpdateThreadList (ThreadList &old_thread_list, ThreadList &new
                 if (log && log->GetMask().Test(GDBR_LOG_VERBOSE))
                     log->Printf(
                            "ProcessGDBRemote::%s Found old thread: %p for thread ID: 0x%" PRIx64 ".\n",
-                           __FUNCTION__,
-                           thread_sp.get(),
+                           __FUNCTION__, static_cast<void*>(thread_sp.get()),
                            thread_sp->GetID());
             }
             new_thread_list.AddThread(thread_sp);
@@ -1575,9 +1623,9 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                         if (log && log->GetMask().Test(GDBR_LOG_VERBOSE))
                             log->Printf ("ProcessGDBRemote::%s Adding new thread: %p for thread ID: 0x%" PRIx64 ".\n",
                                          __FUNCTION__,
-                                         thread_sp.get(),
+                                         static_cast<void*>(thread_sp.get()),
                                          thread_sp->GetID());
-                                         
+
                         m_thread_list_real.AddThread(thread_sp);
                     }
                     gdb_thread = static_cast<ThreadGDBRemote *> (thread_sp.get());
@@ -1600,7 +1648,6 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                         if (tid != LLDB_INVALID_THREAD_ID)
                             m_thread_ids.push_back (tid);
                         value.erase(0, comma_pos + 1);
-                            
                     }
                     tid = Args::StringToUInt64 (value.c_str(), LLDB_INVALID_THREAD_ID, 16);
                     if (tid != LLDB_INVALID_THREAD_ID)
@@ -1663,6 +1710,21 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                 }
             }
 
+            // If the response is old style 'S' packet which does not provide us with thread information
+            // then update the thread list and choose the first one.
+            if (!thread_sp)
+            {
+                UpdateThreadIDList ();
+
+                if (!m_thread_ids.empty ())
+                {
+                    Mutex::Locker locker (m_thread_list_real.GetMutex ());
+                    thread_sp = m_thread_list_real.FindThreadByProtocolID (m_thread_ids.front (), false);
+                    if (thread_sp)
+                        gdb_thread = static_cast<ThreadGDBRemote *> (thread_sp.get ());
+                }
+            }
+
             if (thread_sp)
             {
                 // Clear the stop info just in case we don't set it to anything
@@ -1712,7 +1774,6 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                                     thread_sp->SetStopInfo (invalid_stop_info_sp);
                                 }
                             }
-                            
                         }
                         else if (reason.compare("trap") == 0)
                         {
@@ -1737,8 +1798,8 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                             handled = true;
                         }
                     }
-                    
-                    if (signo && did_exec == false)
+
+                    if (!handled && signo && did_exec == false)
                     {
                         if (signo == SIGTRAP)
                         {
@@ -1747,7 +1808,7 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                             handled = true;
                             addr_t pc = thread_sp->GetRegisterContext()->GetPC() + m_breakpoint_pc_offset;
                             lldb::BreakpointSiteSP bp_site_sp = thread_sp->GetProcess()->GetBreakpointSiteList().FindByAddress(pc);
-                            
+
                             if (bp_site_sp)
                             {
                                 // If the breakpoint is for this thread, then we'll report the hit, but if it is for another thread,
@@ -1779,7 +1840,7 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
                         if (!handled)
                             thread_sp->SetStopInfo (StopInfo::CreateStopReasonWithSignal (*thread_sp, signo));
                     }
-                    
+
                     if (!description.empty())
                     {
                         lldb::StopInfoSP stop_info_sp (thread_sp->GetStopInfo ());
@@ -1799,6 +1860,7 @@ ProcessGDBRemote::SetThreadStopInfo (StringExtractor& stop_packet)
         break;
 
     case 'W':
+    case 'X':
         // process exited
         return eStateExited;
 
@@ -1867,10 +1929,6 @@ ProcessGDBRemote::DoDetach(bool keep_stopped)
     if (log)
         log->Printf ("ProcessGDBRemote::DoDetach(keep_stopped: %i)", keep_stopped);
  
-    DisableAllBreakpointSites ();
-
-    m_thread_list.DiscardThreadPlans();
-
     error = m_gdb_comm.Detach (keep_stopped);
     if (log)
     {
@@ -1931,7 +1989,7 @@ ProcessGDBRemote::DoDestroy ()
             if (m_destroy_tried_resuming)
             {
                 if (log)
-                    log->PutCString ("ProcessGDBRemote::DoDestroy()Tried resuming to destroy once already, not doing it again.");
+                    log->PutCString ("ProcessGDBRemote::DoDestroy() - Tried resuming to destroy once already, not doing it again.");
             }
             else
             {            
@@ -2025,6 +2083,24 @@ ProcessGDBRemote::DoDestroy ()
 
                 if (packet_cmd == 'W' || packet_cmd == 'X')
                 {
+#if defined(__APPLE__)
+                    // For Native processes on Mac OS X, we launch through the Host Platform, then hand the process off
+                    // to debugserver, which becomes the parent process through "PT_ATTACH".  Then when we go to kill
+                    // the process on Mac OS X we call ptrace(PT_KILL) to kill it, then we call waitpid which returns
+                    // with no error and the correct status.  But amusingly enough that doesn't seem to actually reap
+                    // the process, but instead it is left around as a Zombie.  Probably the kernel is in the process of
+                    // switching ownership back to lldb which was the original parent, and gets confused in the handoff.
+                    // Anyway, so call waitpid here to finally reap it.
+                    PlatformSP platform_sp(GetTarget().GetPlatform());
+                    if (platform_sp && platform_sp->IsHost())
+                    {
+                        int status;
+                        ::pid_t reap_pid;
+                        reap_pid = waitpid (GetID(), &status, WNOHANG);
+                        if (log)
+                            log->Printf ("Reaped pid: %d, status: %d.\n", reap_pid, status);
+                    }
+#endif
                     SetLastStopPacket (response);
                     ClearThreadIDList ();
                     exit_status = response.GetHexU8();
@@ -2049,7 +2125,7 @@ ProcessGDBRemote::DoDestroy ()
         else
         {
             if (log)
-                log->Printf ("ProcessGDBRemote::DoDestroy - failed to send k packet");
+                log->Printf ("ProcessGDBRemote::DoDestroy - killed or interrupted while attaching");
             exit_string.assign ("killed or interrupted while attaching.");
         }
     }
@@ -2109,6 +2185,7 @@ ProcessGDBRemote::GetImageInfoAddress()
 size_t
 ProcessGDBRemote::DoReadMemory (addr_t addr, void *buf, size_t size, Error &error)
 {
+    GetMaxMemorySize ();
     if (size > m_max_memory_size)
     {
         // Keep memory read sizes down to a sane limit. This function will be
@@ -2118,7 +2195,16 @@ ProcessGDBRemote::DoReadMemory (addr_t addr, void *buf, size_t size, Error &erro
     }
 
     char packet[64];
-    const int packet_len = ::snprintf (packet, sizeof(packet), "m%" PRIx64 ",%" PRIx64, (uint64_t)addr, (uint64_t)size);
+    int packet_len;
+    bool binary_memory_read = m_gdb_comm.GetxPacketSupported();
+    if (binary_memory_read)
+    {
+        packet_len = ::snprintf (packet, sizeof(packet), "x0x%" PRIx64 ",0x%" PRIx64, (uint64_t)addr, (uint64_t)size);
+    }
+    else
+    {
+        packet_len = ::snprintf (packet, sizeof(packet), "m%" PRIx64 ",%" PRIx64, (uint64_t)addr, (uint64_t)size);
+    }
     assert (packet_len + 1 < (int)sizeof(packet));
     StringExtractorGDBRemote response;
     if (m_gdb_comm.SendPacketAndWaitForResponse(packet, packet_len, response, true) == GDBRemoteCommunication::PacketResult::Success)
@@ -2126,7 +2212,25 @@ ProcessGDBRemote::DoReadMemory (addr_t addr, void *buf, size_t size, Error &erro
         if (response.IsNormalResponse())
         {
             error.Clear();
-            return response.GetHexBytes(buf, size, '\xdd');
+            if (binary_memory_read)
+            {
+                // The lower level GDBRemoteCommunication packet receive layer has already de-quoted any
+                // 0x7d character escaping that was present in the packet
+
+                size_t data_received_size = response.GetBytesLeft();
+                if (data_received_size > size)
+                {
+                    // Don't write past the end of BUF if the remote debug server gave us too
+                    // much data for some reason.
+                    data_received_size = size;
+                }
+                memcpy (buf, response.GetStringRef().data(), data_received_size);
+                return data_received_size;
+            }
+            else
+            {
+                return response.GetHexBytes(buf, size, '\xdd');
+            }
         }
         else if (response.IsErrorResponse())
             error.SetErrorStringWithFormat("memory read failed for 0x%" PRIx64, addr);
@@ -2145,6 +2249,7 @@ ProcessGDBRemote::DoReadMemory (addr_t addr, void *buf, size_t size, Error &erro
 size_t
 ProcessGDBRemote::DoWriteMemory (addr_t addr, const void *buf, size_t size, Error &error)
 {
+    GetMaxMemorySize ();
     if (size > m_max_memory_size)
     {
         // Keep memory read sizes down to a sane limit. This function will be
@@ -2181,6 +2286,7 @@ ProcessGDBRemote::DoWriteMemory (addr_t addr, const void *buf, size_t size, Erro
 lldb::addr_t
 ProcessGDBRemote::DoAllocateMemory (size_t size, uint32_t permissions, Error &error)
 {
+    lldb_private::Log *log (lldb_private::GetLogIfAnyCategoriesSet (LIBLLDB_LOG_PROCESS|LIBLLDB_LOG_EXPRESSIONS));
     addr_t allocated_addr = LLDB_INVALID_ADDRESS;
     
     LazyBool supported = m_gdb_comm.SupportsAllocDeallocMemory();
@@ -2206,7 +2312,11 @@ ProcessGDBRemote::DoAllocateMemory (size_t size, uint32_t permissions, Error &er
                                  eMmapFlagsAnon | eMmapFlagsPrivate, -1, 0))
                 m_addr_to_mmap_size[allocated_addr] = size;
             else
+            {
                 allocated_addr = LLDB_INVALID_ADDRESS;
+                if (log)
+                    log->Printf ("ProcessGDBRemote::%s no direct stub support for memory allocation, and InferiorCallMmap also failed - is stub missing register context save/restore capability?", __FUNCTION__);
+            }
             break;
     }
     
@@ -2295,70 +2405,106 @@ Error
 ProcessGDBRemote::EnableBreakpointSite (BreakpointSite *bp_site)
 {
     Error error;
-    assert (bp_site != NULL);
+    assert(bp_site != NULL);
 
-    Log *log (ProcessGDBRemoteLog::GetLogIfAllCategoriesSet(GDBR_LOG_BREAKPOINTS));
+    // Get logging info
+    Log *log(ProcessGDBRemoteLog::GetLogIfAllCategoriesSet(GDBR_LOG_BREAKPOINTS));
     user_id_t site_id = bp_site->GetID();
-    const addr_t addr = bp_site->GetLoadAddress();
-    if (log)
-        log->Printf ("ProcessGDBRemote::EnableBreakpointSite (size_id = %" PRIu64 ") address = 0x%" PRIx64, site_id, (uint64_t)addr);
 
+    // Get the breakpoint address
+    const addr_t addr = bp_site->GetLoadAddress();
+
+    // Log that a breakpoint was requested
+    if (log)
+        log->Printf("ProcessGDBRemote::EnableBreakpointSite (size_id = %" PRIu64 ") address = 0x%" PRIx64, site_id, (uint64_t)addr);
+
+    // Breakpoint already exists and is enabled
     if (bp_site->IsEnabled())
     {
         if (log)
-            log->Printf ("ProcessGDBRemote::EnableBreakpointSite (size_id = %" PRIu64 ") address = 0x%" PRIx64 " -- SUCCESS (already enabled)", site_id, (uint64_t)addr);
+            log->Printf("ProcessGDBRemote::EnableBreakpointSite (size_id = %" PRIu64 ") address = 0x%" PRIx64 " -- SUCCESS (already enabled)", site_id, (uint64_t)addr);
         return error;
     }
-    else
-    {
-        const size_t bp_op_size = GetSoftwareBreakpointTrapOpcode (bp_site);
 
-        if (bp_site->HardwareRequired())
+    // Get the software breakpoint trap opcode size
+    const size_t bp_op_size = GetSoftwareBreakpointTrapOpcode(bp_site);
+
+    // SupportsGDBStoppointPacket() simply checks a boolean, indicating if this breakpoint type
+    // is supported by the remote stub. These are set to true by default, and later set to false
+    // only after we receive an unimplemented response when sending a breakpoint packet. This means
+    // initially that unless we were specifically instructed to use a hardware breakpoint, LLDB will
+    // attempt to set a software breakpoint. HardwareRequired() also queries a boolean variable which
+    // indicates if the user specifically asked for hardware breakpoints.  If true then we will
+    // skip over software breakpoints.
+    if (m_gdb_comm.SupportsGDBStoppointPacket(eBreakpointSoftware) && (!bp_site->HardwareRequired()))
+    {
+        // Try to send off a software breakpoint packet ($Z0)
+        if (m_gdb_comm.SendGDBStoppointTypePacket(eBreakpointSoftware, true, addr, bp_op_size) == 0)
         {
-            // Try and set hardware breakpoint, and if that fails, fall through
-            // and set a software breakpoint?
-            if (m_gdb_comm.SupportsGDBStoppointPacket (eBreakpointHardware))
-            {
-                if (m_gdb_comm.SendGDBStoppointTypePacket(eBreakpointHardware, true, addr, bp_op_size) == 0)
-                {
-                    bp_site->SetEnabled(true);
-                    bp_site->SetType (BreakpointSite::eHardware);
-                }
-                else
-                {
-                    error.SetErrorString("failed to set hardware breakpoint (hardware breakpoint resources might be exhausted or unavailable)");
-                }
-            }
-            else
-            {
-                error.SetErrorString("hardware breakpoints are not supported");
-            }
+            // The breakpoint was placed successfully
+            bp_site->SetEnabled(true);
+            bp_site->SetType(BreakpointSite::eExternal);
             return error;
         }
-        else if (m_gdb_comm.SupportsGDBStoppointPacket (eBreakpointSoftware))
+
+        // SendGDBStoppointTypePacket() will return an error if it was unable to set this
+        // breakpoint. We need to differentiate between a error specific to placing this breakpoint
+        // or if we have learned that this breakpoint type is unsupported. To do this, we
+        // must test the support boolean for this breakpoint type to see if it now indicates that
+        // this breakpoint type is unsupported.  If they are still supported then we should return
+        // with the error code.  If they are now unsupported, then we would like to fall through
+        // and try another form of breakpoint.
+        if (m_gdb_comm.SupportsGDBStoppointPacket(eBreakpointSoftware))
+            return error;
+
+        // We reach here when software breakpoints have been found to be unsupported. For future
+        // calls to set a breakpoint, we will not attempt to set a breakpoint with a type that is
+        // known not to be supported.
+        if (log)
+            log->Printf("Software breakpoints are unsupported");
+
+        // So we will fall through and try a hardware breakpoint
+    }
+
+    // The process of setting a hardware breakpoint is much the same as above.  We check the
+    // supported boolean for this breakpoint type, and if it is thought to be supported then we
+    // will try to set this breakpoint with a hardware breakpoint.
+    if (m_gdb_comm.SupportsGDBStoppointPacket(eBreakpointHardware))
+    {
+        // Try to send off a hardware breakpoint packet ($Z1)
+        if (m_gdb_comm.SendGDBStoppointTypePacket(eBreakpointHardware, true, addr, bp_op_size) == 0)
         {
-            if (m_gdb_comm.SendGDBStoppointTypePacket(eBreakpointSoftware, true, addr, bp_op_size) == 0)
-            {
-                bp_site->SetEnabled(true);
-                bp_site->SetType (BreakpointSite::eExternal);
-                return error;
-            }
+            // The breakpoint was placed successfully
+            bp_site->SetEnabled(true);
+            bp_site->SetType(BreakpointSite::eHardware);
+            return error;
         }
 
-        return EnableSoftwareBreakpoint (bp_site);
+        // Check if the error was something other then an unsupported breakpoint type
+        if (m_gdb_comm.SupportsGDBStoppointPacket(eBreakpointHardware))
+        {
+            // Unable to set this hardware breakpoint
+            error.SetErrorString("failed to set hardware breakpoint (hardware breakpoint resources might be exhausted or unavailable)");
+            return error;
+        }
+
+        // We will reach here when the stub gives an unsupported response to a hardware breakpoint
+        if (log)
+            log->Printf("Hardware breakpoints are unsupported");
+
+        // Finally we will falling through to a #trap style breakpoint
     }
 
-    if (log)
+    // Don't fall through when hardware breakpoints were specifically requested
+    if (bp_site->HardwareRequired())
     {
-        const char *err_string = error.AsCString();
-        log->Printf ("ProcessGDBRemote::EnableBreakpointSite () error for breakpoint at 0x%8.8" PRIx64 ": %s",
-                     bp_site->GetLoadAddress(),
-                     err_string ? err_string : "NULL");
+        error.SetErrorString("hardware breakpoints are not supported");
+        return error;
     }
-    // We shouldn't reach here on a successful breakpoint enable...
-    if (error.Success())
-        error.SetErrorToGenericError();
-    return error;
+
+    // As a last resort we want to place a manual breakpoint. An instruction
+    // is placed into the process memory using memory write packets.
+    return EnableSoftwareBreakpoint(bp_site);
 }
 
 Error
@@ -2384,13 +2530,21 @@ ProcessGDBRemote::DisableBreakpointSite (BreakpointSite *bp_site)
             break;
 
         case BreakpointSite::eHardware:
-            if (m_gdb_comm.SendGDBStoppointTypePacket(eBreakpointSoftware, false, addr, bp_op_size))
+            if (m_gdb_comm.SendGDBStoppointTypePacket(eBreakpointHardware, false, addr, bp_op_size))
                 error.SetErrorToGenericError();
             break;
 
         case BreakpointSite::eExternal:
-            if (m_gdb_comm.SendGDBStoppointTypePacket(eBreakpointSoftware, false, addr, bp_op_size))
+            {
+                GDBStoppointType stoppoint_type;
+                if (bp_site->IsHardware())
+                    stoppoint_type = eBreakpointHardware;
+                else
+                    stoppoint_type = eBreakpointSoftware;
+                
+                if (m_gdb_comm.SendGDBStoppointTypePacket(stoppoint_type, false, addr, bp_op_size))
                 error.SetErrorToGenericError();
+            }
             break;
         }
         if (error.Success())
@@ -2551,9 +2705,9 @@ ProcessGDBRemote::LaunchAndConnectToDebugserver (const ProcessInfo &process_info
         debugserver_launch_info.SetMonitorProcessCallback (MonitorDebugserverProcess, this, false);
         debugserver_launch_info.SetUserID(process_info.GetUserID());
 
-#if defined (__APPLE__) && defined (__arm__)
+#if defined (__APPLE__) && (defined (__arm__) || defined (__arm64__) || defined (__aarch64__))
         // On iOS, still do a local connection using a random port
-        const char *hostname = "localhost";
+        const char *hostname = "127.0.0.1";
         uint16_t port = get_random_port ();
 #else
         // Set hostname being NULL to do the reverse connect where debugserver
@@ -2867,13 +3021,33 @@ ProcessGDBRemote::AsyncThread (void *arg)
                                         break;
 
                                     case eStateExited:
+                                    {
                                         process->SetLastStopPacket (response);
                                         process->ClearThreadIDList();
                                         response.SetFilePos(1);
-                                        process->SetExitStatus(response.GetHexU8(), NULL);
+                                        
+                                        int exit_status = response.GetHexU8();
+                                        const char *desc_cstr = NULL;
+                                        StringExtractor extractor;
+                                        std::string desc_string;
+                                        if (response.GetBytesLeft() > 0 && response.GetChar('-') == ';')
+                                        {
+                                            std::string desc_token;
+                                            while (response.GetNameColonValue (desc_token, desc_string))
+                                            {
+                                                if (desc_token == "description")
+                                                {
+                                                    extractor.GetStringRef().swap(desc_string);
+                                                    extractor.SetFilePos(0);
+                                                    extractor.GetHexByteString (desc_string);
+                                                    desc_cstr = desc_string.c_str();
+                                                }
+                                            }
+                                        }
+                                        process->SetExitStatus(exit_status, desc_cstr);
                                         done = true;
                                         break;
-
+                                    }
                                     case eStateInvalid:
                                         process->SetExitStatus(-1, "lost connection");
                                         break;
@@ -3009,6 +3183,146 @@ ProcessGDBRemote::GetDynamicLoader ()
     return m_dyld_ap.get();
 }
 
+Error
+ProcessGDBRemote::SendEventData(const char *data)
+{
+    int return_value;
+    bool was_supported;
+    
+    Error error;
+    
+    return_value = m_gdb_comm.SendLaunchEventDataPacket (data, &was_supported);
+    if (return_value != 0)
+    {
+        if (!was_supported)
+            error.SetErrorString("Sending events is not supported for this process.");
+        else
+            error.SetErrorStringWithFormat("Error sending event data: %d.", return_value);
+    }
+    return error;
+}
+
+const DataBufferSP
+ProcessGDBRemote::GetAuxvData()
+{
+    DataBufferSP buf;
+    if (m_gdb_comm.GetQXferAuxvReadSupported())
+    {
+        std::string response_string;
+        if (m_gdb_comm.SendPacketsAndConcatenateResponses("qXfer:auxv:read::", response_string) == GDBRemoteCommunication::PacketResult::Success)
+            buf.reset(new DataBufferHeap(response_string.c_str(), response_string.length()));
+    }
+    return buf;
+}
+
+StructuredData::ObjectSP
+ProcessGDBRemote::GetExtendedInfoForThread (lldb::tid_t tid)
+{
+    StructuredData::ObjectSP object_sp;
+
+    if (m_gdb_comm.GetThreadExtendedInfoSupported())
+    {
+        StructuredData::ObjectSP args_dict(new StructuredData::Dictionary());
+        SystemRuntime *runtime = GetSystemRuntime();
+        if (runtime)
+        {
+            runtime->AddThreadExtendedInfoPacketHints (args_dict);
+        }
+        args_dict->GetAsDictionary()->AddIntegerItem ("thread", tid);
+
+        StreamString packet;
+        packet << "jThreadExtendedInfo:";
+        args_dict->Dump (packet);
+
+        // FIXME the final character of a JSON dictionary, '}', is the escape
+        // character in gdb-remote binary mode.  lldb currently doesn't escape
+        // these characters in its packet output -- so we add the quoted version
+        // of the } character here manually in case we talk to a debugserver which
+        // un-escapes the characters at packet read time.
+        packet << (char) (0x7d ^ 0x20);
+
+        StringExtractorGDBRemote response;
+        if (m_gdb_comm.SendPacketAndWaitForResponse(packet.GetData(), packet.GetSize(), response, false) == GDBRemoteCommunication::PacketResult::Success)
+        {
+            StringExtractorGDBRemote::ResponseType response_type = response.GetResponseType();
+            if (response_type == StringExtractorGDBRemote::eResponse)
+            {
+                if (!response.Empty())
+                {
+                    // The packet has already had the 0x7d xor quoting stripped out at the
+                    // GDBRemoteCommunication packet receive level.
+                    object_sp = StructuredData::ParseJSON (response.GetStringRef());
+                }
+            }
+        }
+    }
+    return object_sp;
+}
+
+// Establish the largest memory read/write payloads we should use.
+// If the remote stub has a max packet size, stay under that size.
+// 
+// If the remote stub's max packet size is crazy large, use a 
+// reasonable largeish default.
+//
+// If the remote stub doesn't advertise a max packet size, use a
+// conservative default.
+
+void
+ProcessGDBRemote::GetMaxMemorySize()
+{
+    const uint64_t reasonable_largeish_default = 128 * 1024;
+    const uint64_t conservative_default = 512;
+
+    if (m_max_memory_size == 0)
+    {
+        uint64_t stub_max_size = m_gdb_comm.GetRemoteMaxPacketSize();
+        if (stub_max_size != UINT64_MAX && stub_max_size != 0)
+        {
+            // Save the stub's claimed maximum packet size
+            m_remote_stub_max_memory_size = stub_max_size;
+
+            // Even if the stub says it can support ginormous packets,
+            // don't exceed our reasonable largeish default packet size.
+            if (stub_max_size > reasonable_largeish_default)
+            {
+                stub_max_size = reasonable_largeish_default;
+            }
+
+            m_max_memory_size = stub_max_size;
+        }
+        else
+        {
+            m_max_memory_size = conservative_default;
+        }
+    }
+}
+
+void
+ProcessGDBRemote::SetUserSpecifiedMaxMemoryTransferSize (uint64_t user_specified_max)
+{
+    if (user_specified_max != 0)
+    {
+        GetMaxMemorySize ();
+
+        if (m_remote_stub_max_memory_size != 0)
+        {
+            if (m_remote_stub_max_memory_size < user_specified_max)
+            {
+                m_max_memory_size = m_remote_stub_max_memory_size;   // user specified a packet size too big, go as big
+                                                                     // as the remote stub says we can go.
+            }
+            else
+            {
+                m_max_memory_size = user_specified_max;             // user's packet size is good
+            }
+        }
+        else
+        {
+            m_max_memory_size = user_specified_max;                 // user's packet size is probably fine
+        }
+    }
+}
 
 class CommandObjectProcessGDBRemotePacketHistory : public CommandObjectParsed
 {
@@ -3049,6 +3363,53 @@ public:
         return false;
     }
 };
+
+class CommandObjectProcessGDBRemotePacketXferSize : public CommandObjectParsed
+{
+private:
+    
+public:
+    CommandObjectProcessGDBRemotePacketXferSize(CommandInterpreter &interpreter) :
+    CommandObjectParsed (interpreter,
+                         "process plugin packet xfer-size",
+                         "Maximum size that lldb will try to read/write one one chunk.",
+                         NULL)
+    {
+    }
+    
+    ~CommandObjectProcessGDBRemotePacketXferSize ()
+    {
+    }
+    
+    bool
+    DoExecute (Args& command, CommandReturnObject &result)
+    {
+        const size_t argc = command.GetArgumentCount();
+        if (argc == 0)
+        {
+            result.AppendErrorWithFormat ("'%s' takes an argument to specify the max amount to be transferred when reading/writing", m_cmd_name.c_str());
+            result.SetStatus (eReturnStatusFailed);
+            return false;
+        }
+
+        ProcessGDBRemote *process = (ProcessGDBRemote *)m_interpreter.GetExecutionContext().GetProcessPtr();
+        if (process)
+        {
+            const char *packet_size = command.GetArgumentAtIndex(0);
+            errno = 0;
+            uint64_t user_specified_max = strtoul (packet_size, NULL, 10);
+            if (errno == 0 && user_specified_max != 0)
+            {
+                process->SetUserSpecifiedMaxMemoryTransferSize (user_specified_max);
+                result.SetStatus (eReturnStatusSuccessFinishResult);
+                return true;
+            }
+        }
+        result.SetStatus (eReturnStatusFailed);
+        return false;
+    }
+};
+
 
 class CommandObjectProcessGDBRemotePacketSend : public CommandObjectParsed
 {
@@ -3175,6 +3536,7 @@ public:
         LoadSubCommand ("history", CommandObjectSP (new CommandObjectProcessGDBRemotePacketHistory (interpreter)));
         LoadSubCommand ("send", CommandObjectSP (new CommandObjectProcessGDBRemotePacketSend (interpreter)));
         LoadSubCommand ("monitor", CommandObjectSP (new CommandObjectProcessGDBRemotePacketMonitor (interpreter)));
+        LoadSubCommand ("xfer-size", CommandObjectSP (new CommandObjectProcessGDBRemotePacketXferSize (interpreter)));
     }
     
     ~CommandObjectProcessGDBRemotePacket ()

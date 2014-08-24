@@ -67,6 +67,7 @@ public:
         vattachname,                    // 'vAttachName:XX...' where XX is one or more hex encoded process name ASCII bytes
         vcont,                          // 'vCont'
         vcont_list_actions,             // 'vCont?'
+        read_data_from_memory,          // 'x'
         write_data_to_memory,           // 'X'
         insert_mem_bp,                  // 'Z0'
         remove_mem_bp,                  // 'z0'
@@ -92,11 +93,13 @@ public:
         query_register_info,            // 'qRegisterInfo'
         query_shlib_notify_info_addr,   // 'qShlibInfoAddr'
         query_step_packet_supported,    // 'qStepPacketSupported'
+        query_supported_features,       // 'qSupported'
         query_vattachorwait_supported,  // 'qVAttachOrWaitSupported'
         query_sync_thread_state_supported,// 'QSyncThreadState'
         query_host_info,                // 'qHostInfo'
         query_gdb_server_version,       // 'qGDBServerVersion'
         query_process_info,             // 'qProcessInfo'
+        json_query_thread_extended_info,// 'jThreadExtendedInfo'
         pass_signals_to_inferior,       // 'QPassSignals'
         start_noack_mode,               // 'QStartNoAckMode'
         prefix_reg_packets_with_tid,    // 'QPrefixRegisterPacketsWithThreadID
@@ -119,9 +122,11 @@ public:
         watchpoint_support_info,        // 'qWatchpointSupportInfo:'
         allocate_memory,                // '_M'
         deallocate_memory,              // '_m'
+        set_process_event,               // 'QSetProcessEvent:'
         save_register_state,            // '_g'
         restore_register_state,         // '_G'
-        
+        speed_test,                     // 'qSpeedTest:'
+        set_detach_on_error,            // 'QSetDetachOnError:'
         unknown_type
     } PacketEnum;
 
@@ -178,6 +183,7 @@ public:
     rnb_err_t HandlePacket_qVAttachOrWaitSupported (const char *p);
     rnb_err_t HandlePacket_qSyncThreadStateSupported (const char *p);
     rnb_err_t HandlePacket_qThreadInfo (const char *p);
+    rnb_err_t HandlePacket_jThreadExtendedInfo (const char *p);
     rnb_err_t HandlePacket_qThreadExtraInfo (const char *p);
     rnb_err_t HandlePacket_qThreadStopInfo (const char *p);
     rnb_err_t HandlePacket_qHostInfo (const char *p);
@@ -197,9 +203,11 @@ public:
     rnb_err_t HandlePacket_QListThreadsInStopReply (const char *p);
     rnb_err_t HandlePacket_QSyncThreadState (const char *p);
     rnb_err_t HandlePacket_QPrefixRegisterPacketsWithThreadID (const char *p);
+    rnb_err_t HandlePacket_QSetProcessEvent (const char *p);
     rnb_err_t HandlePacket_last_signal (const char *p);
     rnb_err_t HandlePacket_m (const char *p);
     rnb_err_t HandlePacket_M (const char *p);
+    rnb_err_t HandlePacket_x (const char *p);
     rnb_err_t HandlePacket_X (const char *p);
     rnb_err_t HandlePacket_g (const char *p);
     rnb_err_t HandlePacket_G (const char *p);
@@ -213,6 +221,7 @@ public:
     rnb_err_t HandlePacket_k (const char *p);
     rnb_err_t HandlePacket_s (const char *p);
     rnb_err_t HandlePacket_S (const char *p);
+    rnb_err_t HandlePacket_qSupported (const char *p);
     rnb_err_t HandlePacket_v (const char *p);
     rnb_err_t HandlePacket_UNIMPLEMENTED (const char *p);
     rnb_err_t HandlePacket_ILLFORMED (const char *file, int line, const char *p, const char *description);
@@ -224,8 +233,9 @@ public:
     rnb_err_t HandlePacket_GetProfileData(const char *p);
     rnb_err_t HandlePacket_SetEnableAsyncProfiling(const char *p);
     rnb_err_t HandlePacket_WatchpointSupportInfo (const char *p);
-
+    rnb_err_t HandlePacket_qSpeedTest (const char *p);
     rnb_err_t HandlePacket_stop_process (const char *p);
+    rnb_err_t HandlePacket_QSetDetachOnError (const char *p);
 
     rnb_err_t SendStopReplyPacketForThread (nub_thread_t tid);
     rnb_err_t SendHexEncodedBytePacket (const char *header, const void *buf, size_t buf_len, const char *footer);
@@ -239,7 +249,7 @@ public:
     RNBSocket&      Comm() { return m_comm; }
 
 private:
-    // Outlaw some contructors
+    // Outlaw some constructors
     RNBRemote (const RNBRemote &);
 
 protected:

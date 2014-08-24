@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=s390x-linux-gnu -disable-fp-elim < %s | FileCheck %s
+; RUN: llc -mtriple=s390x-linux-gnu -disable-fp-elim -filetype=obj < %s \
+; RUN:     | llvm-dwarfdump -debug-dump=info - | FileCheck --check-prefix=DEBUG %s
 ;
 ; This is a regression test making sure the location of variables is correct in
 ; debugging information, even if they're addressed via the frame pointer.
@@ -10,20 +12,13 @@
 ; CHECK: aghi    %r15, -568
 ; CHECK: la      %r2, 164(%r11)
 ; CHECK: brasl   %r14, populate_array@PLT
-;
-; CHECK: .Linfo_string7:
-; CHECK-NEXT: main_arr
-;
-; Now check that the debugging information reflects this:
-; CHECK: DW_TAG_variable
-; CHECK-NEXT: .long .Linfo_string7
-;
-; Rather hard-coded, but 145 => DW_OP_fbreg and the .ascii is the sleb128
-; encoding of 164:
-; CHECK: DW_AT_location
-; CHECK-NEXT: .byte 145
-; CHECK-NEXT: .ascii "\244\001"
-;
+
+; DEBUG: DW_TAG_variable
+; Rather hard-coded, but 0x91 => DW_OP_fbreg and 0xa401 is SLEB128 encoded 164.
+; DEBUG-NOT: DW_TAG
+; DEBUG: DW_AT_location {{.*}}(<0x3> 91 a4 01 )
+; DEBUG-NOT: DW_TAG
+; DEBUG: DW_AT_name {{.*}} "main_arr"
 
 
 @.str = private unnamed_addr constant [13 x i8] c"Total is %d\0A\00", align 2
@@ -58,7 +53,7 @@ declare i32 @printf(i8*, ...)
 !llvm.module.flags = !{!30}
 
 !0 = metadata !{i32 786449, metadata !29, i32 12, metadata !"clang version 3.2 ", i1 false, metadata !"", i32 0, metadata !1, metadata !1, metadata !3, metadata !1,  metadata !1, metadata !""} ; [ DW_TAG_compile_unit ] [/home/timnor01/a64-trunk/build/simple.c] [DW_LANG_C99]
-!1 = metadata !{i32 0}
+!1 = metadata !{}
 !3 = metadata !{metadata !5, metadata !11, metadata !14}
 !5 = metadata !{i32 786478, metadata !29, metadata !6, metadata !"populate_array", metadata !"populate_array", metadata !"", i32 4, metadata !7, i1 false, i1 true, i32 0, i32 0, null, i32 256, i1 false, void (i32*, i32)* @populate_array, null, null, metadata !1, i32 4} ; [ DW_TAG_subprogram ] [line 4] [def] [populate_array]
 !6 = metadata !{i32 786473, metadata !29} ; [ DW_TAG_file_type ]

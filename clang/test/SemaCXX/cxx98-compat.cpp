@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -fsyntax-only -std=c++11 -Wc++98-compat -verify %s
-// RUN: %clang_cc1 -fsyntax-only -std=c++1y -Wc++98-compat -verify %s -DCXX1YCOMPAT
+// RUN: %clang_cc1 -fsyntax-only -std=c++1y -Wc++98-compat -verify %s -DCXX14COMPAT
 
 namespace std {
   struct type_info;
@@ -23,7 +23,7 @@ template<int ...I>  // expected-warning {{variadic templates are incompatible wi
 class Variadic3 {};
 
 alignas(8) int with_alignas; // expected-warning {{'alignas' is incompatible with C++98}}
-int with_attribute [[ ]]; // expected-warning {{generalized attributes are incompatible with C++98}}
+int with_attribute [[ ]]; // expected-warning {{C++11 attribute syntax is incompatible with C++98}}
 
 void Literals() {
   (void)u8"str"; // expected-warning {{unicode literals are incompatible with C++98}}
@@ -225,13 +225,6 @@ template<typename T> typename T::ImPrivate SFINAEAccessControl(T t) { // expecte
 int SFINAEAccessControl(...) { return 0; }
 int CheckSFINAEAccessControl = SFINAEAccessControl(PrivateMember()); // expected-note {{while substituting deduced template arguments into function template 'SFINAEAccessControl' [with T = PrivateMember]}}
 
-template<typename T>
-struct FriendRedefinition {
-  friend void Friend() {} // expected-warning {{friend function 'Friend' would be implicitly redefined in C++98}} expected-note {{previous}}
-};
-FriendRedefinition<int> FriendRedef1;
-FriendRedefinition<char> FriendRedef2; // expected-note {{requested here}}
-
 namespace CopyCtorIssues {
   struct Private {
     Private();
@@ -380,77 +373,49 @@ namespace rdar11736429 {
 }
 
 template<typename T> T var = T(10);
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
+#ifdef CXX14COMPAT
+// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++14}}
 #else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
+// expected-warning@-4 {{variable templates are a C++14 extension}}
 #endif
 
+// No diagnostic for specializations of variable templates; we will have
+// diagnosed the primary template.
 template<typename T> T* var<T*> = new T();
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
-#else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
-#endif
-
 template<> int var<int> = 10;
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
-#else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
-#endif
-
 template int var<int>;
 float fvar = var<float>;
 
-class A {  
+class A {
   template<typename T> static T var = T(10);
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
+#ifdef CXX14COMPAT
+// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++14}}
 #else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
-#endif
-  
-  template<typename T> static T* var<T*> = new T(); 
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
-#else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
+// expected-warning@-4 {{variable templates are a C++14 extension}}
 #endif
 
+  template<typename T> static T* var<T*> = new T();
 };
 
 struct B {  template<typename T> static T v; };
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
+#ifdef CXX14COMPAT
+// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++14}}
 #else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
+// expected-warning@-4 {{variable templates are a C++14 extension}}
 #endif
 
 template<typename T> T B::v = T();
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
+#ifdef CXX14COMPAT
+// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++14}}
 #else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
+// expected-warning@-4 {{variable templates are a C++14 extension}}
 #endif
 
 template<typename T> T* B::v<T*> = new T();
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
-#else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
-#endif
-
 template<> int B::v<int> = 10;
-#ifdef CXX1YCOMPAT
-// expected-warning@-2 {{variable templates are incompatible with C++ standards before C++1y}}
-#else
-// expected-warning@-4 {{variable templates are a C++1y extension}}
-#endif
-
 template int B::v<int>;
 float fsvar = B::v<float>;
 
-#ifdef CXX1YCOMPAT
-int digit_seps = 123'456; // expected-warning {{digit separators are incompatible with C++ standards before C++1y}}
+#ifdef CXX14COMPAT
+int digit_seps = 123'456; // expected-warning {{digit separators are incompatible with C++ standards before C++14}}
 #endif

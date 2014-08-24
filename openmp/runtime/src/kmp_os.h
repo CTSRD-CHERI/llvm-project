@@ -46,6 +46,7 @@
 #define KMP_COMPILER_ICC 0
 #define KMP_COMPILER_GCC 0
 #define KMP_COMPILER_CLANG 0
+#define KMP_COMPILER_MSVC 0
 
 #if defined( __INTEL_COMPILER )
 # undef KMP_COMPILER_ICC
@@ -56,6 +57,9 @@
 #elif defined( __GNUC__ )
 # undef KMP_COMPILER_GCC
 # define KMP_COMPILER_GCC 1
+#elif defined( _MSC_VER )
+# undef KMP_COMPILER_MSVC
+# define KMP_COMPILER_MSVC 1
 #else
 # error Unknown compiler
 #endif
@@ -63,12 +67,15 @@
 /* ---------------------- Operating system recognition ------------------- */
 
 #define KMP_OS_LINUX    0
+#define KMP_OS_FREEBSD  0
 #define KMP_OS_DARWIN   0
 #define KMP_OS_WINDOWS    0
-#define KMP_OS_UNIX     0  /* disjunction of KMP_OS_LINUX with KMP_OS_DARWIN */
+#define KMP_OS_CNK      0
+#define KMP_OS_UNIX     0  /* disjunction of KMP_OS_LINUX, KMP_OS_DARWIN etc. */
 
 #define KMP_ARCH_X86        0
 #define KMP_ARCH_X86_64	    0
+#define KMP_ARCH_PPC64      0
 
 #ifdef _WIN32
 # undef KMP_OS_WINDOWS
@@ -80,16 +87,31 @@
 # define KMP_OS_DARWIN 1
 #endif
 
+// in some ppc64 linux installations, only the second condition is met
 #if ( defined __linux )
 # undef KMP_OS_LINUX
 # define KMP_OS_LINUX 1
+#elif ( defined __linux__)
+# undef KMP_OS_LINUX
+# define KMP_OS_LINUX 1
+#else
 #endif
 
-#if (1 != KMP_OS_LINUX + KMP_OS_DARWIN + KMP_OS_WINDOWS)
+#if ( defined __FreeBSD__ )
+# undef KMP_OS_FREEBSD
+# define KMP_OS_FREEBSD 1
+#endif
+
+#if ( defined __bgq__ )
+# undef KMP_OS_CNK
+# define KMP_OS_CNK 1
+#endif
+
+#if (1 != KMP_OS_LINUX + KMP_OS_FREEBSD + KMP_OS_DARWIN + KMP_OS_WINDOWS)
 # error Unknown OS
 #endif
 
-#if KMP_OS_LINUX || KMP_OS_DARWIN
+#if KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_DARWIN
 # undef KMP_OS_UNIX
 # define KMP_OS_UNIX 1
 #endif
@@ -111,6 +133,9 @@
 # elif defined __i386
 #  undef KMP_ARCH_X86
 #  define KMP_ARCH_X86 1
+# elif defined __powerpc64__
+#  undef KMP_ARCH_PPC64
+#  define KMP_ARCH_PPC64 1
 # endif
 #endif
 
@@ -150,7 +175,7 @@
 # define KMP_ARCH_ARM 1
 #endif
 
-#if (1 != KMP_ARCH_X86 + KMP_ARCH_X86_64 + KMP_ARCH_ARM)
+#if (1 != KMP_ARCH_X86 + KMP_ARCH_X86_64 + KMP_ARCH_ARM + KMP_ARCH_PPC64)
 # error Unknown or unsupported architecture
 #endif
 
@@ -169,6 +194,8 @@
    typedef __float128 _Quad;
 #  undef  KMP_HAVE_QUAD
 #  define KMP_HAVE_QUAD 1
+# elif KMP_COMPILER_MSVC
+   typedef long double _Quad;
 # endif
 #else
 # if __LDBL_MAX_EXP__ >= 16384 && KMP_COMPILER_GCC
@@ -226,7 +253,7 @@
 
 #if KMP_ARCH_X86 || KMP_ARCH_ARM
 # define KMP_SIZE_T_SPEC KMP_UINT32_SPEC
-#elif KMP_ARCH_X86_64
+#elif KMP_ARCH_X86_64 || KMP_ARCH_PPC64
 # define KMP_SIZE_T_SPEC KMP_UINT64_SPEC
 #else
 # error "Can't determine size_t printf format specifier."
@@ -498,7 +525,7 @@ extern kmp_real64 __kmp_xchg_real64( volatile kmp_real64 *p, kmp_real64 v );
 # define KMP_XCHG_REAL64(p, v)                  __kmp_xchg_real64( (p), (v) );
 
 
-#elif (KMP_ASM_INTRINS && (KMP_OS_LINUX || KMP_OS_DARWIN)) || !(KMP_ARCH_X86 || KMP_ARCH_X86_64)
+#elif (KMP_ASM_INTRINS && (KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_DARWIN)) || !(KMP_ARCH_X86 || KMP_ARCH_X86_64)
 
 /* cast p to correct type so that proper intrinsic will be used */
 # define KMP_TEST_THEN_INC32(p)                 __sync_fetch_and_add( (kmp_int32 *)(p), 1 )
@@ -651,6 +678,10 @@ extern kmp_real64 __kmp_test_then_add_real64 ( volatile kmp_real64 *p, kmp_real6
 # endif
 #endif /* KMP_OS_WINDOWS */
 
+#if KMP_ARCH_PPC64
+# define KMP_MB()       __sync_synchronize()
+#endif
+
 #ifndef KMP_MB
 # define KMP_MB()       /* nothing to do */
 #endif
@@ -757,7 +788,7 @@ typedef void    (*microtask_t)( int *gtid, int *npr, ... );
 #endif /* KMP_I8 */
 
 /* Workaround for Intel(R) 64 code gen bug when taking address of static array (Intel(R) 64 Tracker #138) */
-#if KMP_ARCH_X86_64 && KMP_OS_LINUX
+#if (KMP_ARCH_X86_64 || KMP_ARCH_PPC64) && KMP_OS_LINUX
 # define STATIC_EFI2_WORKAROUND
 #else
 # define STATIC_EFI2_WORKAROUND static
@@ -780,7 +811,7 @@ typedef void    (*microtask_t)( int *gtid, int *npr, ... );
 // Warning levels
 enum kmp_warnings_level {
     kmp_warnings_off = 0,		/* No warnings */
-    kmp_warnings_low,			/* Minimal warmings (default) */
+    kmp_warnings_low,			/* Minimal warnings (default) */
     kmp_warnings_explicit = 6,		/* Explicitly set to ON - more warnings */
     kmp_warnings_verbose		/* reserved */
 };

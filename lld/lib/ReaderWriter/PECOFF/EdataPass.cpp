@@ -12,7 +12,7 @@
 
 #include "lld/Core/File.h"
 #include "lld/Core/Pass.h"
-#include "lld/ReaderWriter/Simple.h"
+#include "lld/Core/Simple.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Path.h"
 
@@ -46,13 +46,29 @@ static void assignOrdinals(PECOFFLinkingContext &ctx) {
   ctx.getDllExports().swap(exports);
 }
 
-static bool getExportedAtoms(const PECOFFLinkingContext &ctx, MutableFile *file,
+static StringRef removeStdcallSuffix(StringRef sym) {
+  if (!sym.startswith("_"))
+    return sym;
+  StringRef trimmed = sym.rtrim("0123456789");
+  if (sym.size() != trimmed.size() && trimmed.endswith("@"))
+    return trimmed.drop_back();
+  return sym;
+}
+
+static StringRef removeLeadingUnderscore(StringRef sym) {
+  if (sym.startswith("_"))
+    return sym.substr(1);
+  return sym;
+}
+
+static bool getExportedAtoms(PECOFFLinkingContext &ctx, MutableFile *file,
                              std::vector<TableEntry> &ret) {
   std::map<StringRef, const DefinedAtom *> definedAtoms;
   for (const DefinedAtom *atom : file->defined())
-    definedAtoms[atom->name()] = atom;
+    definedAtoms[removeStdcallSuffix(atom->name())] = atom;
 
-  for (const PECOFFLinkingContext::ExportDesc &desc : ctx.getDllExports()) {
+  std::set<PECOFFLinkingContext::ExportDesc> exports;
+  for (PECOFFLinkingContext::ExportDesc desc : ctx.getDllExports()) {
     auto it = definedAtoms.find(desc.name);
     if (it == definedAtoms.end()) {
       llvm::errs() << "Symbol <" << desc.name
@@ -60,8 +76,19 @@ static bool getExportedAtoms(const PECOFFLinkingContext &ctx, MutableFile *file,
       return false;
     }
     const DefinedAtom *atom = it->second;
-    ret.push_back(TableEntry(desc.name, desc.ordinal, atom, desc.noname));
+
+    // One can export a symbol with a different name than the symbol
+    // name used in DLL. If such name is specified, use it in the
+    // .edata section.
+    StringRef exportName =
+        desc.externalName.empty() ? desc.name : desc.externalName;
+    ret.push_back(TableEntry(exportName, desc.ordinal, atom, desc.noname));
+
+    if (desc.externalName.empty())
+      desc.externalName = removeLeadingUnderscore(atom->name());
+    exports.insert(desc);
   }
+  ctx.getDllExports().swap(exports);
   std::sort(ret.begin(), ret.end(), compare);
   return true;
 }
@@ -144,7 +171,7 @@ void EdataPass::perform(std::unique_ptr<MutableFile> &file) {
     return;
 
   int ordinalBase, maxOrdinal;
-  llvm::tie(ordinalBase, maxOrdinal) = getOrdinalBase(entries);
+  std::tie(ordinalBase, maxOrdinal) = getOrdinalBase(entries);
 
   std::vector<TableEntry> namedEntries;
   for (TableEntry &e : entries)

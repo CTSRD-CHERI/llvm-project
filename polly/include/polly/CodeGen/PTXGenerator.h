@@ -16,7 +16,7 @@
 #include "polly/Config/config.h"
 
 #ifdef GPU_CODEGEN
-#include "llvm/IR/IRBuilder.h"
+#include "polly/CodeGen/IRBuilder.h"
 #include "llvm/ADT/SetVector.h"
 
 #include <map>
@@ -34,7 +34,7 @@ class PTXGenerator {
 public:
   typedef std::map<Value *, Value *> ValueToValueMapTy;
 
-  PTXGenerator(IRBuilder<> &Builder, Pass *P, const std::string &Triple);
+  PTXGenerator(PollyIRBuilder &Builder, Pass *P, const std::string &Triple);
 
   /// @brief Create a GPGPU parallel loop.
   ///
@@ -76,7 +76,7 @@ public:
   void setOutputBytes(unsigned Bytes) { OutputBytes = Bytes; }
 
 private:
-  IRBuilder<> &Builder;
+  PollyIRBuilder &Builder;
   Pass *P;
 
   /// @brief The target triple of the device.
@@ -158,13 +158,6 @@ private:
   ///                     usually set to the number of memory accesses which
   ///                     will be copied from host to device.
   Function *createSubfunctionDefinition(int NumArgs);
-
-  /// @brief Extract all the ptx related subfunctions into a new module.
-  ///
-  /// @param M            Current module.
-  /// @return             The generated module containing only gpu related
-  ///                     subfunctions.
-  Module *extractPTXFunctionsFromModule(const Module *M);
 
   /// @brief Get the Value of CUDA block width.
   Value *getCUDABlockWidth();

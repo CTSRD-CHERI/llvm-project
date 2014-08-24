@@ -7,15 +7,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lld/ReaderWriter/Reader.h"
-#include "lld/ReaderWriter/Simple.h"
+#include "NativeFileFormat.h"
 
 #include "lld/Core/Atom.h"
 #include "lld/Core/Error.h"
 #include "lld/Core/File.h"
+#include "lld/Core/Simple.h"
+#include "lld/ReaderWriter/Reader.h"
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -23,10 +23,8 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "NativeFileFormat.h"
-
-#include <vector>
 #include <memory>
+#include <vector>
 
 namespace lld {
 namespace native {
@@ -44,74 +42,70 @@ public:
                           const NativeDefinedAtomIvarsV1* ivarData)
         : _file(&f), _ivarData(ivarData) { }
 
-  virtual const lld::File& file() const;
+  const lld::File& file() const override;
 
-  virtual uint64_t ordinal() const;
+  uint64_t ordinal() const override;
 
-  virtual StringRef name() const;
+  StringRef name() const override;
 
-  virtual uint64_t size() const {
+  uint64_t size() const override {
     return _ivarData->contentSize;
   }
 
-  virtual DefinedAtom::Scope scope() const {
+  DefinedAtom::Scope scope() const override {
     return (DefinedAtom::Scope)(attributes().scope);
   }
 
-  virtual DefinedAtom::Interposable interposable() const {
+  DefinedAtom::Interposable interposable() const override {
     return (DefinedAtom::Interposable)(attributes().interposable);
   }
 
-  virtual DefinedAtom::Merge merge() const {
+  DefinedAtom::Merge merge() const override {
     return (DefinedAtom::Merge)(attributes().merge);
   }
 
-  virtual DefinedAtom::ContentType contentType() const {
+  DefinedAtom::ContentType contentType() const override {
     const NativeAtomAttributesV1& attr = attributes();
     return (DefinedAtom::ContentType)(attr.contentType);
   }
 
-  virtual DefinedAtom::Alignment alignment() const {
+  DefinedAtom::Alignment alignment() const override {
     return DefinedAtom::Alignment(attributes().align2, attributes().alignModulus);
   }
 
-  virtual DefinedAtom::SectionChoice sectionChoice() const {
+  DefinedAtom::SectionChoice sectionChoice() const override {
     return (DefinedAtom::SectionChoice)(
         attributes().sectionChoiceAndPosition >> 4);
   }
 
-  virtual StringRef customSectionName() const;
+  StringRef customSectionName() const override;
 
-  virtual SectionPosition sectionPosition() const {
+  SectionPosition sectionPosition() const override {
      return (DefinedAtom::SectionPosition)(
         attributes().sectionChoiceAndPosition & 0xF);
   }
 
-  virtual DefinedAtom::DeadStripKind deadStrip() const {
+  DefinedAtom::DeadStripKind deadStrip() const override {
      return (DefinedAtom::DeadStripKind)(attributes().deadStrip);
   }
 
-  virtual DynamicExport dynamicExport() const {
+  DynamicExport dynamicExport() const override {
     return (DynamicExport)attributes().dynamicExport;
   }
 
-  virtual DefinedAtom::ContentPermissions permissions() const {
+  DefinedAtom::ContentPermissions permissions() const override {
      return (DefinedAtom::ContentPermissions)(attributes().permissions);
   }
 
-  virtual bool isAlias() const {
-     return (attributes().alias != 0);
-  }
+  ArrayRef<uint8_t> rawContent() const override;
 
-  virtual ArrayRef<uint8_t> rawContent() const;
+  reference_iterator begin() const override;
 
-  virtual reference_iterator begin() const;
+  reference_iterator end() const override;
 
-  virtual reference_iterator end() const;
+  const Reference* derefIterator(const void*) const override;
 
-  virtual const Reference* derefIterator(const void*) const;
-
-  virtual void incrementIterator(const void*& it) const;
+  void incrementIterator(const void*& it) const override;
 
 private:
   const NativeAtomAttributesV1& attributes() const;
@@ -132,14 +126,14 @@ public:
                              const NativeUndefinedAtomIvarsV1* ivarData)
         : _file(&f), _ivarData(ivarData) { }
 
-  virtual const lld::File& file() const;
-  virtual StringRef name() const;
+  const lld::File& file() const override;
+  StringRef name() const override;
 
-  virtual CanBeNull canBeNull() const {
+  CanBeNull canBeNull() const override {
     return (CanBeNull)(_ivarData->flags & 0x3);
   }
 
-  virtual const UndefinedAtom *fallback() const;
+  const UndefinedAtom *fallback() const override;
 
 private:
   const File                        *_file;
@@ -158,19 +152,19 @@ public:
                              const NativeSharedLibraryAtomIvarsV1* ivarData)
         : _file(&f), _ivarData(ivarData) { }
 
-  virtual const lld::File& file() const;
-  virtual StringRef name() const;
-  virtual StringRef loadName() const;
+  const lld::File& file() const override;
+  StringRef name() const override;
+  StringRef loadName() const override;
 
-  virtual bool canBeNullAtRuntime() const {
+  bool canBeNullAtRuntime() const override {
     return (_ivarData->flags & 0x1);
   }
 
-  virtual Type type() const {
+  Type type() const override {
     return (Type)_ivarData->type;
   }
 
-  virtual uint64_t size() const {
+  uint64_t size() const override {
     return _ivarData->size;
   }
 
@@ -190,13 +184,13 @@ public:
                              const NativeAbsoluteAtomIvarsV1* ivarData)
         : _file(&f), _ivarData(ivarData) { }
 
-  virtual const lld::File& file() const;
-  virtual StringRef name() const;
-  virtual Scope scope() const {
+  const lld::File& file() const override;
+  StringRef name() const override;
+  Scope scope() const override {
     const NativeAtomAttributesV1& attr = absAttributes();
     return (Scope)(attr.scope);
   }
-  virtual uint64_t value() const {
+  uint64_t value() const override {
     return _ivarData->value;
   }
 
@@ -218,14 +212,14 @@ public:
                   (KindArch)ivarData->kindArch, ivarData->kindValue),
         _file(&f), _ivarData(ivarData) {}
 
-  virtual uint64_t offsetInAtom() const {
+  uint64_t offsetInAtom() const override {
     return _ivarData->offsetInAtom;
   }
 
-  virtual const Atom* target() const;
-  virtual Addend addend() const;
-  virtual void setTarget(const Atom* newAtom);
-  virtual void setAddend(Addend a);
+  const Atom* target() const override;
+  Addend addend() const override;
+  void setTarget(const Atom* newAtom) override;
+  void setAddend(Addend a) override;
 
 private:
   const File                    *_file;
@@ -244,14 +238,14 @@ public:
                   (KindArch)ivarData->kindArch, ivarData->kindValue),
         _file(&f), _ivarData(ivarData) {}
 
-  virtual uint64_t offsetInAtom() const {
+  uint64_t offsetInAtom() const override {
     return _ivarData->offsetInAtom;
   }
 
-  virtual const Atom* target() const;
-  virtual Addend addend() const;
-  virtual void setTarget(const Atom* newAtom);
-  virtual void setAddend(Addend a);
+  const Atom* target() const override;
+  Addend addend() const override;
+  void setTarget(const Atom* newAtom) override;
+  void setAddend(Addend a) override;
 
 private:
   const File                    *_file;
@@ -267,8 +261,8 @@ public:
 
   /// Instantiates a File object from a native object file.  Ownership
   /// of the MemoryBuffer is transferred to the resulting File object.
-  static error_code make(std::unique_ptr<MemoryBuffer> mb,
-                         std::vector<std::unique_ptr<lld::File>> &result) {
+  static std::error_code make(std::unique_ptr<MemoryBuffer> mb,
+                              std::vector<std::unique_ptr<lld::File>> &result) {
     const uint8_t *const base =
         reinterpret_cast<const uint8_t *>(mb->getBufferStart());
     StringRef path(mb->getBufferIdentifier());
@@ -296,7 +290,7 @@ public:
 
     // process each chunk
     for (uint32_t i = 0; i < header->chunkCount; ++i) {
-      error_code ec;
+      std::error_code ec;
       const NativeChunk* chunk = &chunks[i];
       // sanity check chunk is within file
       if ( chunk->fileOffset > fileSize )
@@ -369,7 +363,7 @@ public:
   }
 
   virtual ~File() {
-    // _buffer is automatically deleted because of OwningPtr<>
+    // _buffer is automatically deleted because of std::unique_ptr<>
 
     // All other ivar pointers are pointers into the MemoryBuffer, except
     // the _definedAtoms array which was allocated to contain an array
@@ -384,16 +378,16 @@ public:
     delete [] _targetsTable;
   }
 
-  virtual const atom_collection<DefinedAtom>&  defined() const {
+  const atom_collection<DefinedAtom>&  defined() const override {
     return _definedAtoms;
   }
-  virtual const atom_collection<UndefinedAtom>& undefined() const {
+  const atom_collection<UndefinedAtom>& undefined() const override {
       return _undefinedAtoms;
   }
-  virtual const atom_collection<SharedLibraryAtom>& sharedLibrary() const {
+  const atom_collection<SharedLibraryAtom>& sharedLibrary() const override {
       return _sharedLibraryAtoms;
   }
-  virtual const atom_collection<AbsoluteAtom> &absolute() const {
+  const atom_collection<AbsoluteAtom> &absolute() const override {
     return _absoluteAtoms;
   }
 
@@ -406,8 +400,8 @@ private:
   friend NativeReferenceV2;
 
   // instantiate array of DefinedAtoms from v1 ivar data in file
-  error_code processDefinedAtomsV1(const uint8_t *base,
-                                   const NativeChunk *chunk) {
+  std::error_code processDefinedAtomsV1(const uint8_t *base,
+                                        const NativeChunk *chunk) {
     const size_t atomSize = sizeof(NativeDefinedAtomV1);
     size_t atomsArraySize = chunk->elementCount * atomSize;
     uint8_t* atomsStart = reinterpret_cast<uint8_t*>
@@ -443,8 +437,8 @@ private:
 
 
   // set up pointers to attributes array
-  error_code processAttributesV1(const uint8_t *base,
-                                 const NativeChunk *chunk) {
+  std::error_code processAttributesV1(const uint8_t *base,
+                                      const NativeChunk *chunk) {
     this->_attributes = base + chunk->fileOffset;
     this->_attributesMaxOffset = chunk->fileSize;
     DEBUG_WITH_TYPE("ReaderNative", llvm::dbgs()
@@ -456,8 +450,8 @@ private:
   }
 
   // set up pointers to attributes array
-  error_code processAbsoluteAttributesV1(const uint8_t *base,
-                                 const NativeChunk *chunk) {
+  std::error_code processAbsoluteAttributesV1(const uint8_t *base,
+                                              const NativeChunk *chunk) {
     this->_absAttributes = base + chunk->fileOffset;
     this->_absAbsoluteMaxOffset = chunk->fileSize;
     DEBUG_WITH_TYPE("ReaderNative", llvm::dbgs()
@@ -469,8 +463,8 @@ private:
   }
 
   // instantiate array of UndefinedAtoms from v1 ivar data in file
-  error_code processUndefinedAtomsV1(const uint8_t *base,
-                                     const NativeChunk *chunk) {
+  std::error_code processUndefinedAtomsV1(const uint8_t *base,
+                                          const NativeChunk *chunk) {
     const size_t atomSize = sizeof(NativeUndefinedAtomV1);
     size_t atomsArraySize = chunk->elementCount * atomSize;
     uint8_t* atomsStart = reinterpret_cast<uint8_t*>
@@ -505,8 +499,8 @@ private:
 
 
   // instantiate array of ShareLibraryAtoms from v1 ivar data in file
-  error_code processSharedLibraryAtomsV1(const uint8_t *base,
-                                         const NativeChunk *chunk) {
+  std::error_code processSharedLibraryAtomsV1(const uint8_t *base,
+                                              const NativeChunk *chunk) {
     const size_t atomSize = sizeof(NativeSharedLibraryAtomV1);
     size_t atomsArraySize = chunk->elementCount * atomSize;
     uint8_t* atomsStart = reinterpret_cast<uint8_t*>
@@ -541,8 +535,8 @@ private:
 
 
    // instantiate array of AbsoluteAtoms from v1 ivar data in file
-  error_code processAbsoluteAtomsV1(const uint8_t *base,
-                                    const NativeChunk *chunk) {
+  std::error_code processAbsoluteAtomsV1(const uint8_t *base,
+                                         const NativeChunk *chunk) {
     const size_t atomSize = sizeof(NativeAbsoluteAtomV1);
     size_t atomsArraySize = chunk->elementCount * atomSize;
     uint8_t* atomsStart = reinterpret_cast<uint8_t*>
@@ -575,9 +569,10 @@ private:
     return make_error_code(NativeReaderError::success);
   }
 
-  template<class T, class U>
-  error_code processReferences(const uint8_t *base, const NativeChunk *chunk,
-                               uint8_t *&refsStart, uint8_t *&refsEnd) const {
+  template <class T, class U>
+  std::error_code
+  processReferences(const uint8_t *base, const NativeChunk *chunk,
+                    uint8_t *&refsStart, uint8_t *&refsEnd) const {
     if (chunk->elementCount == 0)
       return make_error_code(NativeReaderError::success);
     size_t refsArraySize = chunk->elementCount * sizeof(T);
@@ -598,11 +593,11 @@ private:
   }
 
   // instantiate array of References from v1 ivar data in file
-  error_code processReferencesV1(const uint8_t *base,
-                                 const NativeChunk *chunk) {
+  std::error_code processReferencesV1(const uint8_t *base,
+                                      const NativeChunk *chunk) {
     uint8_t *refsStart, *refsEnd;
-    if (error_code ec
-            = processReferences<NativeReferenceV1, NativeReferenceIvarsV1>(
+    if (std::error_code ec =
+            processReferences<NativeReferenceV1, NativeReferenceIvarsV1>(
                 base, chunk, refsStart, refsEnd))
       return ec;
     this->_referencesV1.arrayStart = refsStart;
@@ -618,11 +613,11 @@ private:
   }
 
   // instantiate array of References from v2 ivar data in file
-  error_code processReferencesV2(const uint8_t *base,
-                                 const NativeChunk *chunk) {
+  std::error_code processReferencesV2(const uint8_t *base,
+                                      const NativeChunk *chunk) {
     uint8_t *refsStart, *refsEnd;
-    if (error_code ec
-            = processReferences<NativeReferenceV2, NativeReferenceIvarsV2>(
+    if (std::error_code ec =
+            processReferences<NativeReferenceV2, NativeReferenceIvarsV2>(
                 base, chunk, refsStart, refsEnd))
       return ec;
     this->_referencesV2.arrayStart = refsStart;
@@ -638,8 +633,8 @@ private:
   }
 
   // set up pointers to target table
-  error_code processTargetsTable(const uint8_t *base,
-                                 const NativeChunk *chunk) {
+  std::error_code processTargetsTable(const uint8_t *base,
+                                      const NativeChunk *chunk) {
     const uint32_t* targetIndexes = reinterpret_cast<const uint32_t*>
                                                   (base + chunk->fileOffset);
     this->_targetsTableCount = chunk->elementCount;
@@ -688,8 +683,8 @@ private:
 
 
   // set up pointers to addend pool in file
-  error_code processAddendsTable(const uint8_t *base,
-                                 const NativeChunk *chunk) {
+  std::error_code processAddendsTable(const uint8_t *base,
+                                      const NativeChunk *chunk) {
     this->_addends = reinterpret_cast<const Reference::Addend*>
                                                   (base + chunk->fileOffset);
     this->_addendsMaxIndex = chunk->elementCount;
@@ -702,8 +697,8 @@ private:
   }
 
   // set up pointers to string pool in file
-  error_code processStrings(const uint8_t *base,
-                            const NativeChunk *chunk) {
+  std::error_code processStrings(const uint8_t *base,
+                                 const NativeChunk *chunk) {
     this->_strings = reinterpret_cast<const char*>(base + chunk->fileOffset);
     this->_stringsMaxOffset = chunk->fileSize;
     DEBUG_WITH_TYPE("ReaderNative", llvm::dbgs()
@@ -714,8 +709,8 @@ private:
   }
 
   // set up pointers to content area in file
-  error_code processContent(const uint8_t *base,
-                            const NativeChunk *chunk) {
+  std::error_code processContent(const uint8_t *base,
+                                 const NativeChunk *chunk) {
     this->_contentStart = base + chunk->fileOffset;
     this->_contentEnd = base + chunk->fileOffset + chunk->fileSize;
     DEBUG_WITH_TYPE("ReaderNative", llvm::dbgs()
@@ -1003,18 +998,18 @@ namespace {
 class NativeReader : public Reader {
 public:
   virtual bool canParse(file_magic magic, StringRef,
-                        const MemoryBuffer &mb) const {
+                        const MemoryBuffer &mb) const override {
     const NativeFileHeader *const header =
         reinterpret_cast<const NativeFileHeader *>(mb.getBufferStart());
     return (memcmp(header->magic, NATIVE_FILE_HEADER_MAGIC,
                    sizeof(header->magic)) == 0);
   }
 
-  virtual error_code
+  virtual std::error_code
   parseFile(std::unique_ptr<MemoryBuffer> &mb, const class Registry &,
-            std::vector<std::unique_ptr<File>> &result) const {
+            std::vector<std::unique_ptr<File>> &result) const override {
     return lld::native::File::make(std::move(mb), result);
-    return error_code::success();
+    return std::error_code();
   }
 };
 }

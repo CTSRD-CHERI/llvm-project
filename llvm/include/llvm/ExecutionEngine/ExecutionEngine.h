@@ -18,11 +18,13 @@
 #include "llvm-c/ExecutionEngine.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/ValueMap.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/ValueHandle.h"
+#include "llvm/IR/ValueMap.h"
 #include "llvm/MC/MCCodeGenInfo.h"
+#include "llvm/Object/Binary.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Mutex.h"
-#include "llvm/Support/ValueHandle.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include <map>
@@ -41,7 +43,6 @@ class GlobalValue;
 class JITEventListener;
 class JITMemoryManager;
 class MachineCodeInfo;
-class Module;
 class MutexGuard;
 class ObjectCache;
 class RTDyldMemoryManager;
@@ -54,7 +55,7 @@ namespace object {
 }
 
 /// \brief Helper class for helping synchronize access to the global address map
-/// table.
+/// table.  Access to this class should be serialized under a mutex.
 class ExecutionEngineState {
 public:
   struct AddressMapConfig : public ValueMapConfig<const GlobalValue*> {
@@ -84,19 +85,19 @@ private:
 public:
   ExecutionEngineState(ExecutionEngine &EE);
 
-  GlobalAddressMapTy &getGlobalAddressMap(const MutexGuard &) {
+  GlobalAddressMapTy &getGlobalAddressMap() {
     return GlobalAddressMap;
   }
 
   std::map<void*, AssertingVH<const GlobalValue> > &
-  getGlobalAddressReverseMap(const MutexGuard &) {
+  getGlobalAddressReverseMap() {
     return GlobalAddressReverseMap;
   }
 
   /// \brief Erase an entry from the mapping table.
   ///
   /// \returns The address that \p ToUnmap was happed to.
-  void *RemoveMapping(const MutexGuard &, const GlobalValue *ToUnmap);
+  void *RemoveMapping(const GlobalValue *ToUnmap);
 };
 
 /// \brief Abstract interface for implementation execution of LLVM modules,
@@ -111,7 +112,7 @@ class ExecutionEngine {
   ExecutionEngineState EEState;
 
   /// The target data for the platform for which execution is being performed.
-  const DataLayout *TD;
+  const DataLayout *DL;
 
   /// Whether lazy JIT compilation is enabled.
   bool CompilingLazily;
@@ -123,14 +124,17 @@ class ExecutionEngine {
   /// using dlsym).
   bool SymbolSearchingDisabled;
 
+  /// Whether the JIT should verify IR modules during compilation.
+  bool VerifyModules;
+
   friend class EngineBuilder;  // To allow access to JITCtor and InterpCtor.
 
 protected:
   /// The list of Modules that we are JIT'ing from.  We use a SmallVector to
   /// optimize for the case where there is only one module.
-  SmallVector<Module*, 1> Modules;
+  SmallVector<std::unique_ptr<Module>, 1> Modules;
 
-  void setDataLayout(const DataLayout *td) { TD = td; }
+  void setDataLayout(const DataLayout *Val) { DL = Val; }
 
   /// getMemoryforGV - Allocate memory for a global variable.
   virtual char *getMemoryForGV(const GlobalVariable *GV);
@@ -139,18 +143,18 @@ protected:
   // libraries, the execution engine implementations set these functions to ctor
   // pointers at startup time if they are linked in.
   static ExecutionEngine *(*JITCtor)(
-    Module *M,
+    std::unique_ptr<Module> M,
     std::string *ErrorStr,
     JITMemoryManager *JMM,
     bool GVsWithCode,
     TargetMachine *TM);
   static ExecutionEngine *(*MCJITCtor)(
-    Module *M,
+    std::unique_ptr<Module> M,
     std::string *ErrorStr,
     RTDyldMemoryManager *MCJMM,
-    bool GVsWithCode,
     TargetMachine *TM);
-  static ExecutionEngine *(*InterpCtor)(Module *M, std::string *ErrorStr);
+  static ExecutionEngine *(*InterpCtor)(std::unique_ptr<Module> M,
+                                        std::string *ErrorStr);
 
   /// LazyFunctionCreator - If an unknown function is needed, this function
   /// pointer is invoked to create it.  If this returns null, the JIT will
@@ -169,44 +173,9 @@ public:
 
   virtual ~ExecutionEngine();
 
-  /// create - This is the factory method for creating an execution engine which
-  /// is appropriate for the current machine.  This takes ownership of the
-  /// module.
-  ///
-  /// \param GVsWithCode - Allocating globals with code breaks
-  /// freeMachineCodeForFunction and is probably unsafe and bad for performance.
-  /// However, we have clients who depend on this behavior, so we must support
-  /// it.  Eventually, when we're willing to break some backwards compatibility,
-  /// this flag should be flipped to false, so that by default
-  /// freeMachineCodeForFunction works.
-  static ExecutionEngine *create(Module *M,
-                                 bool ForceInterpreter = false,
-                                 std::string *ErrorStr = 0,
-                                 CodeGenOpt::Level OptLevel =
-                                 CodeGenOpt::Default,
-                                 bool GVsWithCode = true);
-
-  /// createJIT - This is the factory method for creating a JIT for the current
-  /// machine, it does not fall back to the interpreter.  This takes ownership
-  /// of the Module and JITMemoryManager if successful.
-  ///
-  /// Clients should make sure to initialize targets prior to calling this
-  /// function.
-  static ExecutionEngine *createJIT(Module *M,
-                                    std::string *ErrorStr = 0,
-                                    JITMemoryManager *JMM = 0,
-                                    CodeGenOpt::Level OptLevel =
-                                    CodeGenOpt::Default,
-                                    bool GVsWithCode = true,
-                                    Reloc::Model RM = Reloc::Default,
-                                    CodeModel::Model CMM =
-                                    CodeModel::JITDefault);
-
-  /// addModule - Add a Module to the list of modules that we can JIT from.
-  /// Note that this takes ownership of the Module: when the ExecutionEngine is
-  /// destroyed, it destroys the Module as well.
-  virtual void addModule(Module *M) {
-    Modules.push_back(M);
+  /// Add a Module to the list of modules that we can JIT from.
+  virtual void addModule(std::unique_ptr<Module> M) {
+    Modules.push_back(std::move(M));
   }
 
   /// addObjectFile - Add an ObjectFile to the execution engine.
@@ -219,10 +188,7 @@ public:
   /// needed by another object.
   ///
   /// MCJIT will take ownership of the ObjectFile.
-  virtual void addObjectFile(object::ObjectFile *O) {
-    llvm_unreachable(
-      "ExecutionEngine subclass doesn't implement addObjectFile.");
-  }
+  virtual void addObjectFile(std::unique_ptr<object::ObjectFile> O);
 
   /// addArchive - Add an Archive to the execution engine.
   ///
@@ -230,15 +196,11 @@ public:
   /// resolve external symbols in objects it is loading.  If a symbol is found
   /// in the Archive the contained object file will be extracted (in memory)
   /// and loaded for possible execution.
-  ///
-  /// MCJIT will take ownership of the Archive.
-  virtual void addArchive(object::Archive *A) {
-    llvm_unreachable("ExecutionEngine subclass doesn't implement addArchive.");
-  }
+  virtual void addArchive(object::OwningBinary<object::Archive> A);
 
   //===--------------------------------------------------------------------===//
 
-  const DataLayout *getDataLayout() const { return TD; }
+  const DataLayout *getDataLayout() const { return DL; }
 
   /// removeModule - Remove a Module from the list of modules.  Returns true if
   /// M is found.
@@ -312,11 +274,11 @@ public:
   /// \param isDtors - Run the destructors instead of constructors.
   virtual void runStaticConstructorsDestructors(bool isDtors);
 
-  /// runStaticConstructorsDestructors - This method is used to execute all of
-  /// the static constructors or destructors for a particular module.
+  /// This method is used to execute all of the static constructors or
+  /// destructors for a particular module.
   ///
   /// \param isDtors - Run the destructors instead of constructors.
-  void runStaticConstructorsDestructors(Module *module, bool isDtors);
+  void runStaticConstructorsDestructors(Module &module, bool isDtors);
 
 
   /// runFunctionAsMain - This is a helper function which wraps runFunction to
@@ -411,7 +373,7 @@ public:
   }
 
   // The JIT overrides a version that actually does this.
-  virtual void runJITOnFunction(Function *, MachineCodeInfo * = 0) { }
+  virtual void runJITOnFunction(Function *, MachineCodeInfo * = nullptr) { }
 
   /// getGlobalValueAtAddress - Return the LLVM global value object that starts
   /// at the specified address.
@@ -462,6 +424,24 @@ public:
     llvm_unreachable("No support for an object cache");
   }
 
+  /// setProcessAllSections (MCJIT Only): By default, only sections that are
+  /// "required for execution" are passed to the RTDyldMemoryManager, and other
+  /// sections are discarded. Passing 'true' to this method will cause
+  /// RuntimeDyld to pass all sections to its RTDyldMemoryManager regardless
+  /// of whether they are "required to execute" in the usual sense.
+  ///
+  /// Rationale: Some MCJIT clients want to be able to inspect metadata
+  /// sections (e.g. Dwarf, Stack-maps) to enable functionality or analyze
+  /// performance. Passing these sections to the memory manager allows the
+  /// client to make policy about the relevant sections, rather than having
+  /// MCJIT do it.
+  virtual void setProcessAllSections(bool ProcessAllSections) {
+    llvm_unreachable("No support for ProcessAllSections option");
+  }
+
+  /// Return the target machine (if available).
+  virtual TargetMachine *getTargetMachine() { return nullptr; }
+
   /// DisableLazyCompilation - When lazy compilation is off (the default), the
   /// JIT will eagerly compile every function reachable from the argument to
   /// getPointerToFunction.  If lazy compilation is turned on, the JIT will only
@@ -507,6 +487,17 @@ public:
     return SymbolSearchingDisabled;
   }
 
+  /// Enable/Disable IR module verification.
+  ///
+  /// Note: Module verification is enabled by default in Debug builds, and
+  /// disabled by default in Release. Use this method to override the default.
+  void setVerifyModules(bool Verify) {
+    VerifyModules = Verify;
+  }
+  bool getVerifyModules() const {
+    return VerifyModules;
+  }
+
   /// InstallLazyFunctionCreator - If an unknown function is needed, the
   /// specified function pointer is invoked to create it.  If it returns null,
   /// the JIT will abort.
@@ -515,7 +506,7 @@ public:
   }
 
 protected:
-  explicit ExecutionEngine(Module *M);
+  explicit ExecutionEngine(std::unique_ptr<Module> M);
 
   void emitGlobals();
 
@@ -535,12 +526,12 @@ namespace EngineKind {
   const static Kind Either = (Kind)(JIT | Interpreter);
 }
 
-/// EngineBuilder - Builder class for ExecutionEngines.  Use this by
-/// stack-allocating a builder, chaining the various set* methods, and
-/// terminating it with a .create() call.
+/// Builder class for ExecutionEngines. Use this by stack-allocating a builder,
+/// chaining the various set* methods, and terminating it with a .create()
+/// call.
 class EngineBuilder {
 private:
-  Module *M;
+  std::unique_ptr<Module> M;
   EngineKind::Kind WhichEngine;
   std::string *ErrorStr;
   CodeGenOpt::Level OptLevel;
@@ -554,25 +545,14 @@ private:
   std::string MCPU;
   SmallVector<std::string, 4> MAttrs;
   bool UseMCJIT;
+  bool VerifyModules;
 
   /// InitEngine - Does the common initialization of default options.
-  void InitEngine() {
-    WhichEngine = EngineKind::Either;
-    ErrorStr = NULL;
-    OptLevel = CodeGenOpt::Default;
-    MCJMM = NULL;
-    JMM = NULL;
-    Options = TargetOptions();
-    AllocateGVsWithCode = false;
-    RelocModel = Reloc::Default;
-    CMModel = CodeModel::JITDefault;
-    UseMCJIT = false;
-  }
+  void InitEngine();
 
 public:
-  /// EngineBuilder - Constructor for EngineBuilder.  If create() is called and
-  /// is successful, the created engine takes ownership of the module.
-  EngineBuilder(Module *m) : M(m) {
+  /// Constructor for EngineBuilder.
+  EngineBuilder(std::unique_ptr<Module> M) : M(std::move(M)) {
     InitEngine();
   }
 
@@ -592,7 +572,7 @@ public:
   /// the setJITMemoryManager() option.
   EngineBuilder &setMCJITMemoryManager(RTDyldMemoryManager *mcjmm) {
     MCJMM = mcjmm;
-    JMM = NULL;
+    JMM = nullptr;
     return *this;
   }
 
@@ -604,7 +584,7 @@ public:
   /// memory manager.  This option defaults to NULL. This option overrides
   /// setMCJITMemoryManager() as well.
   EngineBuilder &setJITMemoryManager(JITMemoryManager *jmm) {
-    MCJMM = NULL;
+    MCJMM = nullptr;
     JMM = jmm;
     return *this;
   }
@@ -673,6 +653,13 @@ public:
   /// (experimental).
   EngineBuilder &setUseMCJIT(bool Value) {
     UseMCJIT = Value;
+    return *this;
+  }
+
+  /// setVerifyModules - Set whether the JIT implementation should verify
+  /// IR modules during compilation.
+  EngineBuilder &setVerifyModules(bool Verify) {
+    VerifyModules = Verify;
     return *this;
   }
 

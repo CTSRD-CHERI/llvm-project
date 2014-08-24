@@ -1,5 +1,5 @@
-# Tests the functionality of archive libraries reading 
-# and resolution 
+# Tests the functionality of archive libraries reading
+# and resolution
 # Note: The binary files would not be required once we have support to generate
 # binary archives from textual(yaml) input
 #
@@ -8,8 +8,8 @@
 #
 #extern int __bss_start  __attribute__ ((weak));
 #int a;
-#int main() 
-#{ 
+#int main()
+#{
 #  return 0;
 #}
 #
@@ -28,6 +28,6 @@ CHECKSYMS:  00001004 A _end
 CHECKSYMS:  00001004 A end
 
 CHECKSHAREDSYMS:  00000000 a 1.c
-CHECKSHAREDSYMS:  0000012c T main
+CHECKSHAREDSYMS:  0000010c T main
 CHECKSHAREDSYMS:  00001000 B a
 CHECKSHAREDSYMS:  00001004 A _end

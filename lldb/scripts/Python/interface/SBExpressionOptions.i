@@ -64,6 +64,13 @@ public:
     void
     SetTimeoutInMicroSeconds (uint32_t timeout = 0);
     
+    uint32_t
+    GetOneThreadTimeoutInMicroSeconds () const;
+    
+    %feature("docstring", "Sets the timeout in microseconds to run the expression on one thread before either timing out or trying all threads.") SetTimeoutInMicroSeconds;
+    void
+    SetOneThreadTimeoutInMicroSeconds (uint32_t timeout = 0);
+    
     bool
     GetTryAllThreads () const;
     
@@ -72,12 +79,39 @@ public:
     SetTryAllThreads (bool run_others = true);
     
     bool
+    GetStopOthers () const;
+    
+    %feature("docstring", "Sets whether to stop other threads at all while running expressins.  If false, TryAllThreads does nothing.") SetTryAllThreads;
+    void
+    SetStopOthers (bool stop_others = true);
+    
+    bool
     GetTrapExceptions () const;
     
     %feature("docstring", "Sets whether to abort expression evaluation if an exception is thrown while executing.  Don't set this to false unless you know the function you are calling traps all exceptions itself.") SetTryAllThreads;
     void
     SetTrapExceptions (bool trap_exceptions = true);
     
+    %feature ("docstring", "Sets the language that LLDB should assume the expression is written in") SetLanguage;
+    void
+    SetLanguage (lldb::LanguageType language);
+
+    bool
+    GetGenerateDebugInfo ();
+
+    %feature("docstring", "Sets whether to generate debug information for the expression and also controls if a SBModule is generated.") SetGenerateDebugInfo;
+    void
+    SetGenerateDebugInfo (bool b = true);
+    
+    bool
+    GetSuppressPersistentResult ();
+    
+    %feature("docstring", "Sets whether to produce a persistent result that can be used in future expressions.") SetSuppressPersistentResult;
+    void
+    SetSuppressPersistentResult (bool b = false);
+
+
+
 protected:
 
     SBExpressionOptions (lldb_private::EvaluateExpressionOptions &expression_options);

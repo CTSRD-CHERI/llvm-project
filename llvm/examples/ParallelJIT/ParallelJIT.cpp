@@ -139,6 +139,7 @@ public:
   ~WaitForThreads()
   {
     int result = pthread_cond_destroy( &condition );
+    (void)result;
     assert( result == 0 );
 
     result = pthread_mutex_destroy( &mutex );
@@ -149,6 +150,7 @@ public:
   void block()
   {
     int result = pthread_mutex_lock( &mutex );
+    (void)result;
     assert( result == 0 );
     n ++;
     //~ std::cout << "block() n " << n << " waitFor " << waitFor << std::endl;
@@ -178,6 +180,7 @@ public:
   void releaseThreads( size_t num )
   {
     int result = pthread_mutex_lock( &mutex );
+    (void)result;
     assert( result == 0 );
 
     if ( n >= num ) {
@@ -240,13 +243,14 @@ int main() {
   LLVMContext Context;
 
   // Create some module to put our function into it.
-  Module *M = new Module("test", Context);
+  std::unique_ptr<Module> Owner = make_unique<Module>("test", Context);
+  Module *M = Owner.get();
 
   Function* add1F = createAdd1( M );
   Function* fibF = CreateFibFunction( M );
 
   // Now we create the JIT.
-  ExecutionEngine* EE = EngineBuilder(M).create();
+  ExecutionEngine* EE = EngineBuilder(std::move(Owner)).create();
 
   //~ std::cout << "We just constructed this LLVM module:\n\n" << *M;
   //~ std::cout << "\n\nRunning foo: " << std::flush;

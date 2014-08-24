@@ -12,15 +12,15 @@
 #include "GroupedSectionsPass.h"
 #include "IdataPass.h"
 #include "LinkerGeneratedSymbolFile.h"
-#include "SetSubsystemPass.h"
+#include "LoadConfigPass.h"
 
 #include "lld/Core/PassManager.h"
+#include "lld/Core/Simple.h"
 #include "lld/Passes/LayoutPass.h"
 #include "lld/Passes/RoundTripNativePass.h"
 #include "lld/Passes/RoundTripYAMLPass.h"
 #include "lld/ReaderWriter/PECOFFLinkingContext.h"
 #include "lld/ReaderWriter/Reader.h"
-#include "lld/ReaderWriter/Simple.h"
 #include "lld/ReaderWriter/Writer.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Allocator.h"
@@ -48,9 +48,9 @@ bool PECOFFLinkingContext::validateImpl(raw_ostream &diagnostics) {
   }
 
   // It's an error if the base address is not multiple of 64K.
-  if (_baseAddress & 0xffff) {
+  if (getBaseAddress() & 0xffff) {
     diagnostics << "Base address have to be multiple of 64K, but got "
-                << _baseAddress << "\n";
+                << getBaseAddress() << "\n";
     return false;
   }
 
@@ -66,6 +66,7 @@ bool PECOFFLinkingContext::validateImpl(raw_ostream &diagnostics) {
     exports.insert(desc.ordinal);
   }
 
+  // Check for /align.
   std::bitset<64> alignment(_sectionDefaultAlignment);
   if (alignment.count() != 1) {
     diagnostics << "Section alignment must be a power of 2, but got "
@@ -73,9 +74,16 @@ bool PECOFFLinkingContext::validateImpl(raw_ostream &diagnostics) {
     return false;
   }
 
-  // Architectures other than i386 is not supported yet.
-  if (_machineType != llvm::COFF::IMAGE_FILE_MACHINE_I386) {
-    diagnostics << "Machine type other than x86 is not supported.\n";
+  // /safeseh is only valid for x86.
+  if (getMachineType() != llvm::COFF::IMAGE_FILE_MACHINE_I386 && noSEH()) {
+    diagnostics << "/SAFESEH:NO is only valid for x86.\n";
+    return false;
+  }
+
+  // Architectures other than x86/x64 is not supported yet.
+  if (_machineType != llvm::COFF::IMAGE_FILE_MACHINE_I386 &&
+      _machineType != llvm::COFF::IMAGE_FILE_MACHINE_AMD64) {
+    diagnostics << "Machine type other than x86/x64 is not supported.\n";
     return false;
   }
 
@@ -84,22 +92,43 @@ bool PECOFFLinkingContext::validateImpl(raw_ostream &diagnostics) {
 }
 
 std::unique_ptr<File> PECOFFLinkingContext::createEntrySymbolFile() const {
-  return LinkingContext::createEntrySymbolFile("command line option /entry");
+  return LinkingContext::createEntrySymbolFile("<command line option /entry>");
 }
 
 std::unique_ptr<File> PECOFFLinkingContext::createUndefinedSymbolFile() const {
-  return LinkingContext::createUndefinedSymbolFile("command line option /include");
+  return LinkingContext::createUndefinedSymbolFile(
+      "<command line option /include>");
 }
 
 bool PECOFFLinkingContext::createImplicitFiles(
-    std::vector<std::unique_ptr<File> > &) const {
+    std::vector<std::unique_ptr<File>> &) const {
+  // Create a file for __ImageBase.
   std::unique_ptr<SimpleFileNode> fileNode(
       new SimpleFileNode("Implicit Files"));
   std::unique_ptr<File> linkerGeneratedSymFile(
       new pecoff::LinkerGeneratedSymbolFile(*this));
   fileNode->appendInputFile(std::move(linkerGeneratedSymFile));
-  inputGraph().insertOneElementAt(std::move(fileNode),
-                                  InputGraph::Position::END);
+  getInputGraph().addInputElement(std::move(fileNode));
+
+  // Create a file for _imp_ symbols.
+  std::unique_ptr<SimpleFileNode> impFileNode(new SimpleFileNode("imp"));
+  impFileNode->appendInputFile(
+      std::unique_ptr<File>(new pecoff::LocallyImportedSymbolFile(*this)));
+  getInputGraph().addInputElement(std::move(impFileNode));
+
+  std::shared_ptr<pecoff::ResolvableSymbols> syms(
+      new pecoff::ResolvableSymbols());
+  getInputGraph().registerObserver([=](File *file) { syms->add(file); });
+
+  // Create a file for dllexported symbols.
+  std::unique_ptr<SimpleFileNode> exportNode(new SimpleFileNode("<export>"));
+  auto *renameFile = new pecoff::ExportedSymbolRenameFile(*this, syms);
+  exportNode->appendInputFile(std::unique_ptr<File>(renameFile));
+  getLibraryGroup()->addFile(std::move(exportNode));
+
+  // Create a file for the entry point function.
+  getEntryNode()->appendInputFile(
+      std::unique_ptr<File>(new pecoff::EntryPointFile(*this, syms)));
   return true;
 }
 
@@ -196,12 +225,18 @@ StringRef PECOFFLinkingContext::decorateSymbol(StringRef name) const {
 StringRef PECOFFLinkingContext::undecorateSymbol(StringRef name) const {
   if (_machineType != llvm::COFF::IMAGE_FILE_MACHINE_I386)
     return name;
-  assert(name.startswith("_"));
+  if (!name.startswith("_"))
+    return name;
   return name.substr(1);
 }
 
-Writer &PECOFFLinkingContext::writer() const { return *_writer; }
+uint64_t PECOFFLinkingContext::getBaseAddress() const {
+  if (_baseAddress == invalidBaseAddress)
+    return is64Bit() ? pe32PlusDefaultBaseAddress : pe32DefaultBaseAddress;
+  return _baseAddress;
+}
 
+Writer &PECOFFLinkingContext::writer() const { return *_writer; }
 
 void PECOFFLinkingContext::setSectionSetMask(StringRef sectionName,
                                              uint32_t newFlags) {
@@ -240,6 +275,7 @@ static bool exportConflicts(const PECOFFLinkingContext::ExportDesc &a,
 }
 
 void PECOFFLinkingContext::addDllExport(ExportDesc &desc) {
+  addInitialUndefinedSymbol(allocate(desc.name));
   auto existing = _dllExports.insert(desc);
   if (existing.second)
     return;
@@ -252,11 +288,19 @@ void PECOFFLinkingContext::addDllExport(ExportDesc &desc) {
                << "' specified more than once.\n";
 }
 
+std::string PECOFFLinkingContext::getOutputImportLibraryPath() const {
+  if (!_implib.empty())
+    return _implib;
+  SmallString<128> path = outputPath();
+  llvm::sys::path::replace_extension(path, ".lib");
+  return path.str();
+}
+
 void PECOFFLinkingContext::addPasses(PassManager &pm) {
-  pm.add(std::unique_ptr<Pass>(new pecoff::SetSubsystemPass(*this)));
   pm.add(std::unique_ptr<Pass>(new pecoff::EdataPass(*this)));
   pm.add(std::unique_ptr<Pass>(new pecoff::IdataPass(*this)));
-  pm.add(std::unique_ptr<Pass>(new LayoutPass()));
+  pm.add(std::unique_ptr<Pass>(new LayoutPass(registry())));
+  pm.add(std::unique_ptr<Pass>(new pecoff::LoadConfigPass(*this)));
   pm.add(std::unique_ptr<Pass>(new pecoff::GroupedSectionsPass()));
 }
 

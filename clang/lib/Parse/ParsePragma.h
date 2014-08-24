@@ -84,16 +84,6 @@ public:
                             Token &FirstToken);
 };
 
-class PragmaOpaqueHandler : public PragmaHandler {
-  Sema &Actions;
-public:
-  explicit PragmaOpaqueHandler(Sema &A)
-    : PragmaHandler("opaque"), Actions(A) {}
-
-  virtual void HandlePragma(Preprocessor &PP, PragmaIntroducerKind Introducer,
-                            Token &FirstToken);
-};
-
 
 class PragmaOpenCLExtensionHandler : public PragmaHandler {
 public:

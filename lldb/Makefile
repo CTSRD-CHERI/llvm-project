@@ -14,7 +14,7 @@ ifndef LLDB_LEVEL
 
 IS_TOP_LEVEL := 1
 LLDB_LEVEL := .
-DIRS := include source lib tools
+DIRS := include scripts source lib tools
 
 PARALLEL_DIRS :=
 endif
@@ -29,7 +29,7 @@ LEVEL := $(LLDB_LEVEL)/../..
 include $(LEVEL)/Makefile.common
 
 # Set common LLDB build flags.
-CPP.Flags += -I$(PROJ_SRC_DIR)/$(LLDB_LEVEL)/include 
+CPP.Flags += -I$(PROJ_SRC_DIR)/$(LLDB_LEVEL)/include
 CPP.Flags += -I$(PROJ_OBJ_DIR)/$(LLDB_LEVEL)/include
 CPP.Flags += -I$(LLVM_SRC_ROOT)/tools/clang/include
 CPP.Flags += -I$(LLVM_OBJ_ROOT)/tools/clang/include
@@ -37,6 +37,11 @@ CPP.Flags += -I$(PROJ_SRC_DIR)/$(LLDB_LEVEL)/source
 CPP.Flags += -I$(PROJ_SRC_DIR)/$(LLDB_LEVEL)/source/Utility
 CPP.Flags += -I$(PROJ_SRC_DIR)/$(LLDB_LEVEL)/source/Plugins/Process/Utility
 CPP.Flags += -I$(PROJ_SRC_DIR)/$(LLDB_LEVEL)/source/Plugins/Process/POSIX
+
+# Disable python and curses on mingw build
+ifeq ($(HOST_OS),MingW)
+CXXFLAGS += -DLLDB_DISABLE_PYTHON -DLLDB_DISABLE_CURSES
+endif
 
 ifeq (,$(findstring -DLLDB_DISABLE_PYTHON,$(CXXFLAGS)))
 # Set Python include directory

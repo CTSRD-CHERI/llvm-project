@@ -15,9 +15,12 @@
 
 #include "polly/ScopInfo.h"
 #include "isl/aff.h"
+#include "isl/ast.h"
+#include "isl/ast_build.h"
 #include "isl/set.h"
 #include "polly/CodeGen/BlockGenerators.h"
 #include "polly/CodeGen/CodeGeneration.h"
+#include "polly/CodeGen/IslExprBuilder.h"
 #include "polly/Options.h"
 #include "polly/Support/GICHelper.h"
 #include "polly/Support/SCEVValidator.h"
@@ -25,20 +28,23 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 using namespace llvm;
 using namespace polly;
 
 static cl::opt<bool>
-Aligned("enable-polly-aligned", cl::desc("Assumed aligned memory accesses."),
-        cl::Hidden, cl::value_desc("OpenMP code generation enabled if true"),
-        cl::init(false), cl::ZeroOrMore, cl::cat(PollyCategory));
+    Aligned("enable-polly-aligned",
+            cl::desc("Assumed aligned memory accesses."), cl::Hidden,
+            cl::value_desc("OpenMP code generation enabled if true"),
+            cl::init(false), cl::ZeroOrMore, cl::cat(PollyCategory));
 
 static cl::opt<bool, true>
-SCEVCodegenF("polly-codegen-scev", cl::desc("Use SCEV based code generation."),
-             cl::Hidden, cl::location(SCEVCodegen), cl::init(false),
-             cl::ZeroOrMore, cl::cat(PollyCategory));
+    SCEVCodegenF("polly-codegen-scev",
+                 cl::desc("Use SCEV based code generation."), cl::Hidden,
+                 cl::location(SCEVCodegen), cl::init(false), cl::ZeroOrMore,
+                 cl::cat(PollyCategory));
 
 bool polly::SCEVCodegen;
 
@@ -60,103 +66,12 @@ bool polly::canSynthesize(const Instruction *I, const llvm::LoopInfo *LI,
   return L && I == L->getCanonicalInductionVariable() && R->contains(L);
 }
 
-// Helper class to generate memory location.
-namespace {
-class IslGenerator {
-public:
-  IslGenerator(IRBuilder<> &Builder, std::vector<Value *> &IVS)
-      : Builder(Builder), IVS(IVS) {}
-  Value *generateIslVal(__isl_take isl_val *Val);
-  Value *generateIslAff(__isl_take isl_aff *Aff);
-  Value *generateIslPwAff(__isl_take isl_pw_aff *PwAff);
-
-private:
-  typedef struct {
-    Value *Result;
-    class IslGenerator *Generator;
-  } IslGenInfo;
-
-  IRBuilder<> &Builder;
-  std::vector<Value *> &IVS;
-  static int mergeIslAffValues(__isl_take isl_set *Set, __isl_take isl_aff *Aff,
-                               void *User);
-};
-}
-
-Value *IslGenerator::generateIslVal(__isl_take isl_val *Val) {
-  Value *IntValue = Builder.getInt(APIntFromVal(Val));
-  return IntValue;
-}
-
-Value *IslGenerator::generateIslAff(__isl_take isl_aff *Aff) {
-  Value *Result;
-  Value *ConstValue;
-  isl_val *Val;
-
-  Val = isl_aff_get_constant_val(Aff);
-  ConstValue = generateIslVal(Val);
-  Type *Ty = Builder.getInt64Ty();
-
-  // FIXME: We should give the constant and coefficients the right type. Here
-  // we force it into i64.
-  Result = Builder.CreateSExtOrBitCast(ConstValue, Ty);
-
-  unsigned int NbInputDims = isl_aff_dim(Aff, isl_dim_in);
-
-  assert((IVS.size() == NbInputDims) &&
-         "The Dimension of Induction Variables must match the dimension of the "
-         "affine space.");
-
-  for (unsigned int i = 0; i < NbInputDims; ++i) {
-    Value *CoefficientValue;
-    Val = isl_aff_get_coefficient_val(Aff, isl_dim_in, i);
-
-    if (isl_val_is_zero(Val)) {
-      isl_val_free(Val);
-      continue;
-    }
-
-    CoefficientValue = generateIslVal(Val);
-    CoefficientValue = Builder.CreateIntCast(CoefficientValue, Ty, true);
-    Value *IV = Builder.CreateIntCast(IVS[i], Ty, true);
-    Value *PAdd = Builder.CreateMul(CoefficientValue, IV, "p_mul_coeff");
-    Result = Builder.CreateAdd(Result, PAdd, "p_sum_coeff");
-  }
-
-  isl_aff_free(Aff);
-
-  return Result;
-}
-
-int IslGenerator::mergeIslAffValues(__isl_take isl_set *Set,
-                                    __isl_take isl_aff *Aff, void *User) {
-  IslGenInfo *GenInfo = (IslGenInfo *)User;
-
-  assert((GenInfo->Result == NULL) &&
-         "Result is already set. Currently only single isl_aff is supported");
-  assert(isl_set_plain_is_universe(Set) &&
-         "Code generation failed because the set is not universe");
-
-  GenInfo->Result = GenInfo->Generator->generateIslAff(Aff);
-
-  isl_set_free(Set);
-  return 0;
-}
-
-Value *IslGenerator::generateIslPwAff(__isl_take isl_pw_aff *PwAff) {
-  IslGenInfo User;
-  User.Result = NULL;
-  User.Generator = this;
-  isl_pw_aff_foreach_piece(PwAff, mergeIslAffValues, &User);
-  assert(User.Result && "Code generation for isl_pw_aff failed");
-
-  isl_pw_aff_free(PwAff);
-  return User.Result;
-}
-
-BlockGenerator::BlockGenerator(IRBuilder<> &B, ScopStmt &Stmt, Pass *P)
-    : Builder(B), Statement(Stmt), P(P), SE(P->getAnalysis<ScalarEvolution>()) {
-}
+BlockGenerator::BlockGenerator(PollyIRBuilder &B, ScopStmt &Stmt, Pass *P,
+                               LoopInfo &LI, ScalarEvolution &SE,
+                               isl_ast_build *Build,
+                               IslExprBuilder *ExprBuilder)
+    : Builder(B), Statement(Stmt), P(P), LI(LI), SE(SE), Build(Build),
+      ExprBuilder(ExprBuilder) {}
 
 Value *BlockGenerator::lookupAvailableValue(const Value *Old, ValueMapT &BBMap,
                                             ValueMapT &GlobalMap) const {
@@ -185,7 +100,7 @@ Value *BlockGenerator::lookupAvailableValue(const Value *Old, ValueMapT &BBMap,
   if (Value *New = BBMap.lookup(Old))
     return New;
 
-  return NULL;
+  return nullptr;
 }
 
 Value *BlockGenerator::getNewValue(const Value *Old, ValueMapT &BBMap,
@@ -214,18 +129,21 @@ Value *BlockGenerator::getNewValue(const Value *Old, ValueMapT &BBMap,
   // Now the scalar dependence is neither available nor SCEVCodegenable, this
   // should never happen in the current code generator.
   llvm_unreachable("Unexpected scalar dependence in region!");
-  return NULL;
+  return nullptr;
 }
 
 void BlockGenerator::copyInstScalar(const Instruction *Inst, ValueMapT &BBMap,
                                     ValueMapT &GlobalMap, LoopToScevMapT &LTS) {
+  // We do not generate debug intrinsics as we did not investigate how to
+  // copy them correctly. At the current state, they just crash the code
+  // generation as the meta-data operands are not correctly copied.
+  if (isa<DbgInfoIntrinsic>(Inst))
+    return;
+
   Instruction *NewInst = Inst->clone();
 
   // Replace old operands with the new ones.
-  for (Instruction::const_op_iterator OI = Inst->op_begin(),
-                                      OE = Inst->op_end();
-       OI != OE; ++OI) {
-    Value *OldOperand = *OI;
+  for (Value *OldOperand : Inst->operands()) {
     Value *NewOperand =
         getNewValue(OldOperand, BBMap, GlobalMap, LTS, getLoopForInst(Inst));
 
@@ -246,42 +164,30 @@ void BlockGenerator::copyInstScalar(const Instruction *Inst, ValueMapT &BBMap,
     NewInst->setName("p_" + Inst->getName());
 }
 
-std::vector<Value *> BlockGenerator::getMemoryAccessIndex(
-    __isl_keep isl_map *AccessRelation, Value *BaseAddress, ValueMapT &BBMap,
-    ValueMapT &GlobalMap, LoopToScevMapT &LTS, Loop *L) {
+Value *BlockGenerator::getNewAccessOperand(const MemoryAccess &MA) {
+  isl_pw_multi_aff *PWSchedule, *PWAccRel;
+  isl_union_map *ScheduleU;
+  isl_map *Schedule, *AccRel;
+  isl_ast_expr *Expr;
 
-  assert((isl_map_dim(AccessRelation, isl_dim_out) == 1) &&
-         "Only single dimensional access functions supported");
+  assert(ExprBuilder && Build &&
+         "Cannot generate new value without IslExprBuilder!");
 
-  std::vector<Value *> IVS;
-  for (unsigned i = 0; i < Statement.getNumIterators(); ++i) {
-    const Value *OriginalIV = Statement.getInductionVariableForDimension(i);
-    Value *NewIV = getNewValue(OriginalIV, BBMap, GlobalMap, LTS, L);
-    IVS.push_back(NewIV);
-  }
+  AccRel = MA.getNewAccessRelation();
+  assert(AccRel && "We generate new code only for new access relations!");
 
-  isl_pw_aff *PwAff = isl_map_dim_max(isl_map_copy(AccessRelation), 0);
-  IslGenerator IslGen(Builder, IVS);
-  Value *OffsetValue = IslGen.generateIslPwAff(PwAff);
+  ScheduleU = isl_ast_build_get_schedule(Build);
+  ScheduleU = isl_union_map_intersect_domain(
+      ScheduleU, isl_union_set_from_set(MA.getStatement()->getDomain()));
+  Schedule = isl_map_from_union_map(ScheduleU);
 
-  Type *Ty = Builder.getInt64Ty();
-  OffsetValue = Builder.CreateIntCast(OffsetValue, Ty, true);
+  PWSchedule = isl_pw_multi_aff_from_map(isl_map_reverse(Schedule));
+  PWAccRel = isl_pw_multi_aff_from_map(AccRel);
+  PWAccRel = isl_pw_multi_aff_pullback_pw_multi_aff(PWAccRel, PWSchedule);
 
-  std::vector<Value *> IndexArray;
-  Value *NullValue = Constant::getNullValue(Ty);
-  IndexArray.push_back(NullValue);
-  IndexArray.push_back(OffsetValue);
-  return IndexArray;
-}
+  Expr = isl_ast_build_access_from_pw_multi_aff(Build, PWAccRel);
 
-Value *BlockGenerator::getNewAccessOperand(
-    __isl_keep isl_map *NewAccessRelation, Value *BaseAddress, ValueMapT &BBMap,
-    ValueMapT &GlobalMap, LoopToScevMapT &LTS, Loop *L) {
-  std::vector<Value *> IndexArray = getMemoryAccessIndex(
-      NewAccessRelation, BaseAddress, BBMap, GlobalMap, LTS, L);
-  Value *NewOperand =
-      Builder.CreateGEP(BaseAddress, IndexArray, "p_newarrayidx_");
-  return NewOperand;
+  return ExprBuilder->create(Expr);
 }
 
 Value *BlockGenerator::generateLocationAccessed(const Instruction *Inst,
@@ -289,31 +195,22 @@ Value *BlockGenerator::generateLocationAccessed(const Instruction *Inst,
                                                 ValueMapT &BBMap,
                                                 ValueMapT &GlobalMap,
                                                 LoopToScevMapT &LTS) {
-  const MemoryAccess &Access = Statement.getAccessFor(Inst);
-  isl_map *CurrentAccessRelation = Access.getAccessRelation();
-  isl_map *NewAccessRelation = Access.getNewAccessRelation();
-
-  assert(isl_map_has_equal_space(CurrentAccessRelation, NewAccessRelation) &&
-         "Current and new access function use different spaces");
+  const MemoryAccess &MA = Statement.getAccessFor(Inst);
+  isl_map *NewAccRel = MA.getNewAccessRelation();
 
   Value *NewPointer;
-
-  if (!NewAccessRelation) {
+  if (NewAccRel)
+    NewPointer = getNewAccessOperand(MA);
+  else
     NewPointer =
         getNewValue(Pointer, BBMap, GlobalMap, LTS, getLoopForInst(Inst));
-  } else {
-    Value *BaseAddress = const_cast<Value *>(Access.getBaseAddr());
-    NewPointer = getNewAccessOperand(NewAccessRelation, BaseAddress, BBMap,
-                                     GlobalMap, LTS, getLoopForInst(Inst));
-  }
 
-  isl_map_free(CurrentAccessRelation);
-  isl_map_free(NewAccessRelation);
+  isl_map_free(NewAccRel);
   return NewPointer;
 }
 
 Loop *BlockGenerator::getLoopForInst(const llvm::Instruction *Inst) {
-  return P->getAnalysis<LoopInfo>().getLoopFor(Inst->getParent());
+  return LI.getLoopFor(Inst->getParent());
 }
 
 Value *BlockGenerator::generateScalarLoad(const LoadInst *Load,
@@ -382,19 +279,16 @@ void BlockGenerator::copyBB(ValueMapT &GlobalMap, LoopToScevMapT &LTS) {
 
   ValueMapT BBMap;
 
-  for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end(); II != IE;
-       ++II)
-    copyInstruction(II, BBMap, GlobalMap, LTS);
+  for (Instruction &Inst : *BB)
+    copyInstruction(&Inst, BBMap, GlobalMap, LTS);
 }
 
-VectorBlockGenerator::VectorBlockGenerator(IRBuilder<> &B,
-                                           VectorValueMapT &GlobalMaps,
-                                           std::vector<LoopToScevMapT> &VLTS,
-                                           ScopStmt &Stmt,
-                                           __isl_keep isl_map *Schedule,
-                                           Pass *P)
-    : BlockGenerator(B, Stmt, P), GlobalMaps(GlobalMaps), VLTS(VLTS),
-      Schedule(Schedule) {
+VectorBlockGenerator::VectorBlockGenerator(
+    PollyIRBuilder &B, VectorValueMapT &GlobalMaps,
+    std::vector<LoopToScevMapT> &VLTS, ScopStmt &Stmt,
+    __isl_keep isl_map *Schedule, Pass *P, LoopInfo &LI, ScalarEvolution &SE)
+    : BlockGenerator(B, Stmt, P, LI, SE, nullptr, nullptr),
+      GlobalMaps(GlobalMaps), VLTS(VLTS), Schedule(Schedule) {
   assert(GlobalMaps.size() > 1 && "Only one vector lane found");
   assert(Schedule && "No statement domain provided");
 }
@@ -431,18 +325,34 @@ Type *VectorBlockGenerator::getVectorPtrTy(const Value *Val, int Width) {
   return PointerType::getUnqual(VectorType);
 }
 
-Value *VectorBlockGenerator::generateStrideOneLoad(const LoadInst *Load,
-                                                   ValueMapT &BBMap) {
+Value *
+VectorBlockGenerator::generateStrideOneLoad(const LoadInst *Load,
+                                            VectorValueMapT &ScalarMaps,
+                                            bool NegativeStride = false) {
+  unsigned VectorWidth = getVectorWidth();
   const Value *Pointer = Load->getPointerOperand();
-  Type *VectorPtrType = getVectorPtrTy(Pointer, getVectorWidth());
-  Value *NewPointer =
-      getNewValue(Pointer, BBMap, GlobalMaps[0], VLTS[0], getLoopForInst(Load));
+  Type *VectorPtrType = getVectorPtrTy(Pointer, VectorWidth);
+  unsigned Offset = NegativeStride ? VectorWidth - 1 : 0;
+
+  Value *NewPointer = nullptr;
+  NewPointer = getNewValue(Pointer, ScalarMaps[Offset], GlobalMaps[Offset],
+                           VLTS[Offset], getLoopForInst(Load));
   Value *VectorPtr =
       Builder.CreateBitCast(NewPointer, VectorPtrType, "vector_ptr");
   LoadInst *VecLoad =
       Builder.CreateLoad(VectorPtr, Load->getName() + "_p_vec_full");
   if (!Aligned)
     VecLoad->setAlignment(8);
+
+  if (NegativeStride) {
+    SmallVector<Constant *, 16> Indices;
+    for (int i = VectorWidth - 1; i >= 0; i--)
+      Indices.push_back(ConstantInt::get(Builder.getInt32Ty(), i));
+    Constant *SV = llvm::ConstantVector::get(Indices);
+    Value *RevVecLoad = Builder.CreateShuffleVector(
+        VecLoad, VecLoad, SV, Load->getName() + "_reverse");
+    return RevVecLoad;
+  }
 
   return VecLoad;
 }
@@ -504,11 +414,17 @@ void VectorBlockGenerator::generateLoad(const LoadInst *Load,
 
   const MemoryAccess &Access = Statement.getAccessFor(Load);
 
+  // Make sure we have scalar values available to access the pointer to
+  // the data location.
+  extractScalarValues(Load, VectorMap, ScalarMaps);
+
   Value *NewLoad;
   if (Access.isStrideZero(isl_map_copy(Schedule)))
     NewLoad = generateStrideZeroLoad(Load, ScalarMaps[0]);
   else if (Access.isStrideOne(isl_map_copy(Schedule)))
-    NewLoad = generateStrideOneLoad(Load, ScalarMaps[0]);
+    NewLoad = generateStrideOneLoad(Load, ScalarMaps);
+  else if (Access.isStrideX(isl_map_copy(Schedule), -1))
+    NewLoad = generateStrideOneLoad(Load, ScalarMaps, true);
   else
     NewLoad = generateUnknownStrideLoad(Load, ScalarMaps);
 
@@ -556,6 +472,10 @@ void VectorBlockGenerator::copyStore(const StoreInst *Store,
   Value *Vector = getVectorValue(Store->getValueOperand(), VectorMap,
                                  ScalarMaps, getLoopForInst(Store));
 
+  // Make sure we have scalar values available to access the pointer to
+  // the data location.
+  extractScalarValues(Store, VectorMap, ScalarMaps);
+
   if (Access.isStrideOne(isl_map_copy(Schedule))) {
     Type *VectorPtrType = getVectorPtrTy(Pointer, VectorWidth);
     Value *NewPointer = getNewValue(Pointer, ScalarMaps[0], GlobalMaps[0],
@@ -579,10 +499,8 @@ void VectorBlockGenerator::copyStore(const StoreInst *Store,
 
 bool VectorBlockGenerator::hasVectorOperands(const Instruction *Inst,
                                              ValueMapT &VectorMap) {
-  for (Instruction::const_op_iterator OI = Inst->op_begin(),
-                                      OE = Inst->op_end();
-       OI != OE; ++OI)
-    if (VectorMap.count(*OI))
+  for (Value *Operand : Inst->operands())
+    if (VectorMap.count(Operand))
       return true;
   return false;
 }
@@ -593,10 +511,8 @@ bool VectorBlockGenerator::extractScalarValues(const Instruction *Inst,
   bool HasVectorOperand = false;
   int VectorWidth = getVectorWidth();
 
-  for (Instruction::const_op_iterator OI = Inst->op_begin(),
-                                      OE = Inst->op_end();
-       OI != OE; ++OI) {
-    ValueMapT::iterator VecOp = VectorMap.find(*OI);
+  for (Value *Operand : Inst->operands()) {
+    ValueMapT::iterator VecOp = VectorMap.find(Operand);
 
     if (VecOp == VectorMap.end())
       continue;
@@ -610,10 +526,11 @@ bool VectorBlockGenerator::extractScalarValues(const Instruction *Inst,
       // If there is one scalar extracted, all scalar elements should have
       // already been extracted by the code here. So no need to check for the
       // existance of all of them.
-      if (SM.count(*OI))
+      if (SM.count(Operand))
         break;
 
-      SM[*OI] = Builder.CreateExtractElement(NewVector, Builder.getInt32(i));
+      SM[Operand] =
+          Builder.CreateExtractElement(NewVector, Builder.getInt32(i));
     }
   }
 
@@ -712,7 +629,6 @@ void VectorBlockGenerator::copyBB() {
   VectorValueMapT ScalarBlockMap(getVectorWidth());
   ValueMapT VectorBlockMap;
 
-  for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end(); II != IE;
-       ++II)
-    copyInstruction(II, VectorBlockMap, ScalarBlockMap);
+  for (Instruction &Inst : *BB)
+    copyInstruction(&Inst, VectorBlockMap, ScalarBlockMap);
 }

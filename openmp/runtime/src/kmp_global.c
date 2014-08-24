@@ -199,7 +199,7 @@ enum clock_function_type __kmp_clock_function;
 int __kmp_clock_function_param;
 #endif /* KMP_OS_LINUX */
 
-#if KMP_OS_LINUX || KMP_OS_WINDOWS
+#if KMP_AFFINITY_SUPPORTED
 
 # if KMP_OS_WINDOWS && KMP_ARCH_X86_64
 
@@ -229,7 +229,7 @@ unsigned __kmp_affinity_num_masks    = 0;
 
 char const *  __kmp_cpuinfo_file     = NULL;
 
-#endif /* KMP_OS_LINUX || KMP_OS_WINDOWS */
+#endif /* KMP_AFFINITY_SUPPORTED */
 
 #if OMP_40_ENABLED
 kmp_nested_proc_bind_t __kmp_nested_proc_bind = { NULL, 0, 0 };
@@ -321,7 +321,11 @@ int        __kmp_env_consistency_check  = FALSE;  /* KMP_CONSISTENCY_CHECK speci
 kmp_uint32 __kmp_yield_init = KMP_INIT_WAIT;
 kmp_uint32 __kmp_yield_next = KMP_NEXT_WAIT;
 kmp_uint32 __kmp_yielding_on = 1;
+#if KMP_OS_CNK
+kmp_uint32 __kmp_yield_cycle = 0;
+#else
 kmp_uint32 __kmp_yield_cycle = 1;     /* Yield-cycle is on by default */
+#endif
 kmp_int32  __kmp_yield_on_count = 10; /* By default, yielding is on for 10 monitor periods. */
 kmp_int32  __kmp_yield_off_count = 1; /* By default, yielding is off for 1 monitor periods. */
 /* ----------------------------------------------------- */
@@ -358,7 +362,7 @@ KMP_ALIGN_CACHE
 kmp_global_t __kmp_global = {{ 0 }};
 
 /* ----------------------------------------------- */
-/* GLOBAL SYNCRONIZATION LOCKS */
+/* GLOBAL SYNCHRONIZATION LOCKS */
 /* TODO verify the need for these locks and if they need to be global */
 KMP_ALIGN_CACHE
 

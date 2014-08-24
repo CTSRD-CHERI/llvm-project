@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple i686-linux -Wno-string-plus-int -Wno-pointer-arith -Wno-zero-length-array -fsyntax-only -fcxx-exceptions -verify -std=c++11 -pedantic %s -Wno-comment
+// RUN: %clang_cc1 -triple i686-linux -Wno-string-plus-int -Wno-pointer-arith -Wno-zero-length-array -fsyntax-only -fcxx-exceptions -verify -std=c++11 -pedantic %s -Wno-comment -Wno-tautological-pointer-compare -Wno-bool-conversion
 
 namespace StaticAssertFoldTest {
 
@@ -823,6 +823,19 @@ static_assert(X() == 0, "");
 
 }
 
+struct This {
+  constexpr int f() const { return 0; }
+  static constexpr int g() { return 0; }
+  void h() {
+    constexpr int x = f(); // expected-error {{must be initialized by a constant}}
+    // expected-note@-1 {{implicit use of 'this' pointer is only allowed within the evaluation of a call to a 'constexpr' member function}}
+    constexpr int y = this->f(); // expected-error {{must be initialized by a constant}}
+    // expected-note-re@-1 {{{{^}}use of 'this' pointer}}
+    constexpr int z = g();
+    static_assert(z == 0, "");
+  }
+};
+
 }
 
 namespace Temporaries {
@@ -859,6 +872,12 @@ static_assert(f(T(5)) == 5, "");
 
 constexpr bool b(int n) { return &n; }
 static_assert(b(0), "");
+
+struct NonLiteral {
+  NonLiteral();
+  int f();
+};
+constexpr int k = NonLiteral().f(); // expected-error {{constant expression}} expected-note {{non-literal type 'Temporaries::NonLiteral'}}
 
 }
 
@@ -1158,7 +1177,7 @@ namespace ExternConstexpr {
   void f() {
     extern constexpr int i; // expected-error {{constexpr variable declaration must be a definition}}
     constexpr int j = 0;
-    constexpr int k; // expected-error {{default initialization of an object of const type}}
+    constexpr int k; // expected-error {{default initialization of an object of const type}} expected-note{{add an explicit initializer to initialize 'k'}}
   }
 }
 
@@ -1424,7 +1443,7 @@ namespace InvalidClasses {
 
 namespace NamespaceAlias {
   constexpr int f() {
-    namespace NS = NamespaceAlias; // expected-warning {{use of this statement in a constexpr function is a C++1y extension}}
+    namespace NS = NamespaceAlias; // expected-warning {{use of this statement in a constexpr function is a C++14 extension}}
     return &NS::f != nullptr;
   }
 }
@@ -1681,7 +1700,7 @@ namespace VirtualFromBase {
   template <typename T> struct X : T {
     constexpr X() {}
     double d = 0.0;
-    constexpr int f() { return sizeof(T); } // expected-warning {{will not be implicitly 'const' in C++1y}}
+    constexpr int f() { return sizeof(T); } // expected-warning {{will not be implicitly 'const' in C++14}}
   };
 
   // Virtual f(), not OK.
@@ -1696,17 +1715,17 @@ namespace VirtualFromBase {
 }
 
 namespace ConstexprConstructorRecovery {
-  class X { 
-  public: 
-      enum E : short { 
-          headers = 0x1, 
-          middlefile = 0x2, 
-          choices = 0x4 
-      }; 
-      constexpr X() noexcept {}; 
-  protected: 
+  class X {
+  public:
+      enum E : short {
+          headers = 0x1,
+          middlefile = 0x2,
+          choices = 0x4
+      };
+      constexpr X() noexcept {};
+  protected:
       E val{0}; // expected-error {{cannot initialize a member subobject of type 'ConstexprConstructorRecovery::X::E' with an rvalue of type 'int'}}
-  }; 
+  };
   constexpr X x{};
 }
 
@@ -1862,4 +1881,14 @@ namespace BuiltinStrlen {
   // FIXME: The diagnostic here could be better.
   constexpr char d[] = { 'f', 'o', 'o' }; // no nul terminator.
   constexpr int bad = __builtin_strlen(d); // expected-error {{constant expression}} expected-note {{one-past-the-end}}
+}
+
+namespace PR19010 {
+  struct Empty {};
+  struct Empty2 : Empty {};
+  struct Test : Empty2 {
+    constexpr Test() {}
+    Empty2 array[2];
+  };
+  void test() { constexpr Test t; }
 }

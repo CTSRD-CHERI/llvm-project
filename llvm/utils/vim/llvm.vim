@@ -43,8 +43,7 @@ syn keyword llvmKeyword blockaddress byval c catch cc ccc cleanup coldcc common
 syn keyword llvmKeyword constant datalayout declare default define deplibs
 syn keyword llvmKeyword dllexport dllimport except extern_weak external fastcc
 syn keyword llvmKeyword filter gc global hidden initialexec inlinehint inreg
-syn keyword llvmKeyword intel_ocl_bicc inteldialect internal linker_private
-syn keyword llvmKeyword linker_private_weak
+syn keyword llvmKeyword intel_ocl_bicc inteldialect internal
 syn keyword llvmKeyword linkonce linkonce_odr
 syn keyword llvmKeyword localdynamic localexec minsize module monotonic
 syn keyword llvmKeyword msp430_intrcc naked nest noalias nocapture
@@ -58,6 +57,7 @@ syn keyword llvmKeyword tail target thread_local to triple unnamed_addr
 syn keyword llvmKeyword unordered uwtable volatile weak weak_odr
 syn keyword llvmKeyword x86_fastcallcc x86_stdcallcc x86_thiscallcc x86_64_sysvcc
 syn keyword llvmKeyword x86_64_win64cc zeroext
+syn keyword llvmKeyword uselistorder uselistorder_bb
 
 " Obsolete keywords.
 syn keyword llvmError  getresult begin end

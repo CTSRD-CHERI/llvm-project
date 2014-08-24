@@ -18,7 +18,7 @@ endfunction()
 # Check if a given flag is present in a space-separated flag_string.
 # Store the result in out_var.
 function(find_flag_in_string flag_string flag out_var)
-  string(REPLACE " " ";" flag_list ${flag_string})
+  string(REPLACE " " ";" flag_list "${flag_string}")
   list(FIND flag_list ${flag} flag_pos)
   if(NOT flag_pos EQUAL -1)
     set(${out_var} TRUE PARENT_SCOPE)
@@ -35,4 +35,27 @@ macro(pythonize_bool var)
   else()
     set(${var}_PYBOOL False)
   endif()
+endmacro()
+
+# Appends value to all lists in ARGN, if the condition is true.
+macro(append_if condition value)
+  if(${condition})
+    foreach(list ${ARGN})
+      list(APPEND ${list} ${value})
+    endforeach()
+  endif()
+endmacro()
+
+# Appends value to all strings in ARGN, if the condition is true.
+macro(append_string_if condition value)
+  if(${condition})
+    foreach(str ${ARGN})
+      set(${str} "${${str}} ${value}")
+    endforeach()
+  endif()
+endmacro()
+
+macro(append_no_rtti_flag list)
+  append_if(COMPILER_RT_HAS_FNO_RTTI_FLAG -fno-rtti ${list})
+  append_if(COMPILER_RT_HAS_GR_FLAG /GR- ${list})
 endmacro()

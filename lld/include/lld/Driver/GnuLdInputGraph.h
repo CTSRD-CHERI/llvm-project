@@ -28,58 +28,70 @@ namespace lld {
 /// \brief Represents a ELF File
 class ELFFileNode : public FileNode {
 public:
-  ELFFileNode(ELFLinkingContext &ctx, StringRef path, int64_t ordinal = -1,
-              bool isWholeArchive = false, bool asNeeded = false,
-              bool dashlPrefix = false)
-      : FileNode(path, ordinal), _elfLinkingContext(ctx),
-        _isWholeArchive(isWholeArchive), _asNeeded(asNeeded),
-        _isDashlPrefix(dashlPrefix) {}
+  /// \brief The attributes class provides a way for a input file to look into
+  /// all the positional attributes that were specified in the command line.
+  /// There are few positional operators and the number of arguments to the
+  /// ELFFileNode class keeps growing. This achieves code to be clean as well.
+  class Attributes {
+  public:
+    Attributes()
+        : _isWholeArchive(false), _asNeeded(false), _isDashlPrefix(false),
+          _isSysRooted(false) {}
+    void setWholeArchive(bool isWholeArchive) {
+      _isWholeArchive = isWholeArchive;
+    }
+    void setAsNeeded(bool asNeeded) { _asNeeded = asNeeded; }
+    void setDashlPrefix(bool isDashlPrefix) { _isDashlPrefix = isDashlPrefix; }
+    void setSysRooted(bool isSysRooted) { _isSysRooted = isSysRooted; }
 
-  virtual ErrorOr<StringRef> getPath(const LinkingContext &ctx) const;
+  public:
+    bool _isWholeArchive;
+    bool _asNeeded;
+    bool _isDashlPrefix;
+    bool _isSysRooted;
+  };
 
-  /// \brief validates the Input Element
-  virtual bool validate() { return true; }
+  ELFFileNode(ELFLinkingContext &ctx, StringRef path, Attributes &attributes)
+      : FileNode(path), _elfLinkingContext(ctx), _attributes(attributes) {}
+
+  ErrorOr<StringRef> getPath(const LinkingContext &ctx) const override;
 
   /// \brief create an error string for printing purposes
-  virtual std::string errStr(error_code);
+  std::string errStr(std::error_code) override;
 
   /// \brief Dump the Input Element
-  virtual bool dump(raw_ostream &diagnostics) {
-    diagnostics << "Name    : " << *getPath(_elfLinkingContext) << "\n";
-    diagnostics << "Type    : "
-                << "ELF File"
-                << "\n";
-    diagnostics << "Ordinal : " << getOrdinal() << "\n";
-    diagnostics << "Attributes : "
-                << "\n";
-    diagnostics << "  - wholeArchive : "
-                << ((_isWholeArchive) ? "true" : "false") << "\n";
-    diagnostics << "  - asNeeded : " << ((_asNeeded) ? "true" : "false")
-                << "\n";
+  bool dump(raw_ostream &diagnostics) override {
+    diagnostics << "Name    : " << *getPath(_elfLinkingContext) << "\n"
+                << "Type    : ELF File\n"
+                << "Attributes :\n"
+                << "  - wholeArchive : "
+                << ((_attributes._isWholeArchive) ? "true" : "false") << "\n"
+                << "  - asNeeded : "
+                << ((_attributes._asNeeded) ? "true" : "false") << "\n";
     return true;
   }
 
   /// \brief Parse the input file to lld::File.
-  error_code parse(const LinkingContext &, raw_ostream &);
+  std::error_code parse(const LinkingContext &, raw_ostream &) override;
 
   /// \brief This is used by Group Nodes, when there is a need to reset the
   /// the file to be processed next. When handling a group node that contains
   /// Input elements, if the group node has to be reprocessed, the linker needs
-  /// to start processing files as part of the inputelement from beginning.
-  /// reset the next file index to 0 only if the node is an archive library or
-  /// a shared library
-  virtual void resetNextIndex() {
-    if ((!_isWholeArchive && (_files[0]->kind() == File::kindArchiveLibrary)) ||
-        (_files[0]->kind() == File::kindSharedLibrary))
+  /// to start processing files as part of the input element from beginning.
+  /// Reset the next file index to 0 only if the node is an archive library.
+  void resetNextIndex() override {
+    auto kind = _files[0]->kind();
+    if (kind == File::kindSharedLibrary ||
+        (kind == File::kindArchiveLibrary && !_attributes._isWholeArchive)) {
       _nextFileIndex = 0;
-    setResolveState(Resolver::StateNoChange);
+    }
   }
 
   /// \brief Return the file that has to be processed by the resolver
   /// to resolve atoms. This iterates over all the files thats part
   /// of this node. Returns no_more_files when there are no files to be
   /// processed
-  virtual ErrorOr<File &> getNextFile() {
+  ErrorOr<File &> getNextFile() override {
     if (_nextFileIndex == _files.size())
       return make_error_code(InputGraphError::no_more_files);
     return *_files[_nextFileIndex++];
@@ -88,61 +100,18 @@ public:
 private:
   llvm::BumpPtrAllocator _alloc;
   const ELFLinkingContext &_elfLinkingContext;
-  bool _isWholeArchive;
-  bool _asNeeded;
-  bool _isDashlPrefix;
   std::unique_ptr<const ArchiveLibraryFile> _archiveFile;
-};
-
-/// \brief Represents a ELF control node
-class ELFGroup : public Group {
-public:
-  ELFGroup(const ELFLinkingContext &ctx, int64_t ordinal)
-      : Group(ordinal), _elfLinkingContext(ctx) {}
-
-  /// \brief Validate the options
-  virtual bool validate() {
-    (void)_elfLinkingContext;
-    return true;
-  }
-
-  /// \brief Dump the ELFGroup
-  virtual bool dump(raw_ostream &) { return true; }
-
-  /// \brief Parse the group members.
-  error_code parse(const LinkingContext &ctx, raw_ostream &diagnostics) {
-    for (auto &ei : _elements)
-      if (error_code ec = ei->parse(ctx, diagnostics))
-        return ec;
-    return error_code::success();
-  }
-
-private:
-  const ELFLinkingContext &_elfLinkingContext;
+  const Attributes _attributes;
 };
 
 /// \brief Parse GNU Linker scripts.
 class GNULdScript : public FileNode {
 public:
-  GNULdScript(ELFLinkingContext &ctx, StringRef userPath, int64_t ordinal)
-      : FileNode(userPath, ordinal), _elfLinkingContext(ctx),
-        _linkerScript(nullptr)
-  {}
-
-  /// \brief Is this node part of resolution ?
-  virtual bool isHidden() const { return true; }
-
-  /// \brief Validate the options
-  virtual bool validate() {
-    (void)_elfLinkingContext;
-    return true;
-  }
-
-  /// \brief Dump the Linker script.
-  virtual bool dump(raw_ostream &) { return true; }
+  GNULdScript(ELFLinkingContext &ctx, StringRef userPath)
+      : FileNode(userPath), _elfLinkingContext(ctx), _linkerScript(nullptr) {}
 
   /// \brief Parse the linker script.
-  virtual error_code parse(const LinkingContext &, raw_ostream &);
+  std::error_code parse(const LinkingContext &, raw_ostream &) override;
 
 protected:
   ELFLinkingContext &_elfLinkingContext;
@@ -154,35 +123,27 @@ protected:
 /// \brief Handle ELF style with GNU Linker scripts.
 class ELFGNULdScript : public GNULdScript {
 public:
-  ELFGNULdScript(ELFLinkingContext &ctx, StringRef userPath, int64_t ordinal)
-      : GNULdScript(ctx, userPath, ordinal) {}
+  ELFGNULdScript(ELFLinkingContext &ctx, StringRef userPath)
+      : GNULdScript(ctx, userPath) {}
 
-  virtual error_code parse(const LinkingContext &ctx, raw_ostream &diagnostics);
+  std::error_code parse(const LinkingContext &ctx,
+                        raw_ostream &diagnostics) override;
 
-  virtual ExpandType expandType() const {
-    return InputElement::ExpandType::ExpandOnly;
+  bool getReplacements(InputGraph::InputElementVectorT &result) override {
+    for (std::unique_ptr<InputElement> &elt : _expandElements)
+      result.push_back(std::move(elt));
+    return true;
   }
 
   /// Unused functions for ELFGNULdScript Nodes.
-  virtual ErrorOr<File &> getNextFile() {
+  ErrorOr<File &> getNextFile() override {
     return make_error_code(InputGraphError::no_more_files);
   }
 
-  /// Return the elements that we would want to expand with.
-  range<InputGraph::InputElementIterT> expandElements() {
-    return make_range(_expandElements.begin(), _expandElements.end());
-  }
-
-  virtual void setResolveState(uint32_t) {
-    llvm_unreachable("cannot use this function: setResolveState");
-  }
-
-  virtual uint32_t getResolveState() const {
-    llvm_unreachable("cannot use this function: getResolveState");
-  }
-
-  // Do nothing here.
-  virtual void resetNextIndex() {}
+  // Linker Script will be expanded and replaced with other elements
+  // by InputGraph::normalize(), so at link time it does not exist in
+  // the tree. No need to handle this message.
+  void resetNextIndex() override {}
 
 private:
   InputGraph::InputElementVectorT _expandElements;

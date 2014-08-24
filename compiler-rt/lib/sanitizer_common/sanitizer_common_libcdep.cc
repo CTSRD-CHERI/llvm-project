@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "sanitizer_common.h"
+#include "sanitizer_flags.h"
 
 namespace __sanitizer {
 
@@ -34,4 +35,23 @@ bool PrintsToTtyCached() {
   }
   return prints_to_tty;
 }
+
+bool ColorizeReports() {
+  const char *flag = common_flags()->color;
+  return internal_strcmp(flag, "always") == 0 ||
+         (internal_strcmp(flag, "auto") == 0 && PrintsToTtyCached());
+}
+
+static void (*sandboxing_callback)();
+void SetSandboxingCallback(void (*f)()) {
+  sandboxing_callback = f;
+}
+
 }  // namespace __sanitizer
+
+void NOINLINE
+__sanitizer_sandbox_on_notify(__sanitizer_sandbox_arguments *args) {
+  PrepareForSandboxing(args);
+  if (sandboxing_callback)
+    sandboxing_callback();
+}

@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_AST_SEMA_IDENTIFIERRESOLVER_H
-#define LLVM_CLANG_AST_SEMA_IDENTIFIERRESOLVER_H
+#ifndef LLVM_CLANG_SEMA_IDENTIFIERRESOLVER_H
+#define LLVM_CLANG_SEMA_IDENTIFIERRESOLVER_H
 
 #include "clang/Basic/IdentifierTable.h"
 #include "llvm/ADT/SmallVector.h"
@@ -156,7 +156,7 @@ public:
   ///        template instantiation or specialization). In this case, a
   ///        declaration is in scope if it's in the inline namespace set of the
   ///        context.
-  bool isDeclInScope(Decl *D, DeclContext *Ctx, Scope *S = 0,
+  bool isDeclInScope(Decl *D, DeclContext *Ctx, Scope *S = nullptr,
                      bool AllowInlineNamespace = false) const;
 
   /// AddDecl - Link the decl to its shadowed decl chain.

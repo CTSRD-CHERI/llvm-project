@@ -29,6 +29,7 @@
 #include "lldb/Core/Section.h"
 #include "lldb/Core/SourceManager.h"
 #include "lldb/Core/State.h"
+#include "lldb/Core/StreamFile.h"
 #include "lldb/Core/StreamString.h"
 #include "lldb/Core/Timer.h"
 #include "lldb/Core/ValueObject.h"
@@ -93,12 +94,12 @@ Target::Target(Debugger &debugger, const ArchSpec &target_arch, const lldb::Plat
     SetEventName (eBroadcastBitModulesUnloaded, "modules-unloaded");
     SetEventName (eBroadcastBitWatchpointChanged, "watchpoint-changed");
     SetEventName (eBroadcastBitSymbolsLoaded, "symbols-loaded");
-    
+
     CheckInWithManager();
 
     Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_OBJECT));
     if (log)
-        log->Printf ("%p Target::Target()", this);
+        log->Printf ("%p Target::Target()", static_cast<void*>(this));
     if (m_arch.IsValid())
     {
         LogIfAnyCategoriesSet(LIBLLDB_LOG_TARGET, "Target::Target created with architecture %s (%s)", m_arch.GetArchitectureName(), m_arch.GetTriple().getTriple().c_str());
@@ -112,7 +113,7 @@ Target::~Target()
 {
     Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_OBJECT));
     if (log)
-        log->Printf ("%p Target::~Target()", this);
+        log->Printf ("%p Target::~Target()", static_cast<void*>(this));
     DeleteCurrentProcess ();
 }
 
@@ -485,9 +486,12 @@ Target::CreateFuncRegexBreakpoint (const FileSpecList *containingModules,
                                    bool hardware)
 {
     SearchFilterSP filter_sp(GetSearchFilterForModuleAndCUList (containingModules, containingSourceFiles));
+    bool skip =
+      (skip_prologue == eLazyBoolCalculate) ? GetSkipPrologue()
+                                            : static_cast<bool>(skip_prologue);
     BreakpointResolverSP resolver_sp(new BreakpointResolverName (NULL, 
                                                                  func_regex, 
-                                                                 skip_prologue == eLazyBoolCalculate ? GetSkipPrologue() : skip_prologue));
+                                                                 skip));
 
     return CreateBreakpoint (filter_sp, resolver_sp, internal, hardware, true);
 }
@@ -634,7 +638,7 @@ Target::CreateWatchpoint(lldb::addr_t addr, size_t size, const ClangASTType *typ
         if (!CheckIfWatchpointsExhausted(this, error))
         {
             if (!OptionGroupWatchpoint::IsWatchSizeSupported(size))
-                error.SetErrorStringWithFormat("watch size of %zu is not supported", size);
+                error.SetErrorStringWithFormat("watch size of %" PRIu64 " is not supported", (uint64_t)size);
         }
         wp_sp.reset();
     }
@@ -1006,13 +1010,13 @@ LoadScriptingResourceForModule (const ModuleSP &module_sp, Target *target)
     if (module_sp && !module_sp->LoadScriptingResourceInTarget(target, error, &feedback_stream))
     {
         if (error.AsCString())
-            target->GetDebugger().GetErrorStream().Printf("unable to load scripting data for module %s - error reported was %s\n",
+            target->GetDebugger().GetErrorFile()->Printf("unable to load scripting data for module %s - error reported was %s\n",
                                                            module_sp->GetFileSpec().GetFileNameStrippingExtension().GetCString(),
                                                            error.AsCString());
-        if (feedback_stream.GetSize())
-            target->GetDebugger().GetOutputStream().Printf("%s\n",
-                                                           feedback_stream.GetData());
     }
+    if (feedback_stream.GetSize())
+        target->GetDebugger().GetErrorFile()->Printf("%s\n",
+                                                     feedback_stream.GetData());
 }
 
 void
@@ -1046,7 +1050,7 @@ Target::SetExecutableModule (ModuleSP& executable_sp, bool get_dependent_files)
                             "Target::SetExecutableModule (executable = '%s')",
                             executable_sp->GetFileSpec().GetPath().c_str());
 
-        m_images.Append(executable_sp); // The first image is our exectuable file
+        m_images.Append(executable_sp); // The first image is our executable file
 
         // If we haven't set an architecture yet, reset our architecture based on what we found in the executable module.
         if (!m_arch.IsValid())
@@ -1067,7 +1071,7 @@ Target::SetExecutableModule (ModuleSP& executable_sp, bool get_dependent_files)
                 FileSpec dependent_file_spec (dependent_files.GetFileSpecPointerAtIndex(i));
                 FileSpec platform_dependent_file_spec;
                 if (m_platform_sp)
-                    m_platform_sp->GetFile (dependent_file_spec, NULL, platform_dependent_file_spec);
+                    m_platform_sp->GetFileWithUUID (dependent_file_spec, NULL, platform_dependent_file_spec);
                 else
                     platform_dependent_file_spec = dependent_file_spec;
 
@@ -1141,41 +1145,44 @@ void
 Target::ModuleAdded (const ModuleList& module_list, const ModuleSP &module_sp)
 {
     // A module is being added to this target for the first time
-    ModuleList my_module_list;
-    my_module_list.Append(module_sp);
-    LoadScriptingResourceForModule(module_sp, this);
-    ModulesDidLoad (my_module_list);
+    if (m_valid)
+    {
+        ModuleList my_module_list;
+        my_module_list.Append(module_sp);
+        LoadScriptingResourceForModule(module_sp, this);
+        ModulesDidLoad (my_module_list);
+    }
 }
 
 void
 Target::ModuleRemoved (const ModuleList& module_list, const ModuleSP &module_sp)
 {
     // A module is being added to this target for the first time
-    ModuleList my_module_list;
-    my_module_list.Append(module_sp);
-    ModulesDidUnload (my_module_list, false);
+    if (m_valid)
+    {
+        ModuleList my_module_list;
+        my_module_list.Append(module_sp);
+        ModulesDidUnload (my_module_list, false);
+    }
 }
 
 void
 Target::ModuleUpdated (const ModuleList& module_list, const ModuleSP &old_module_sp, const ModuleSP &new_module_sp)
 {
     // A module is replacing an already added module
-    m_breakpoint_list.UpdateBreakpointsWhenModuleIsReplaced(old_module_sp, new_module_sp);
+    if (m_valid)
+        m_breakpoint_list.UpdateBreakpointsWhenModuleIsReplaced(old_module_sp, new_module_sp);
 }
 
 void
 Target::ModulesDidLoad (ModuleList &module_list)
 {
-    if (module_list.GetSize())
+    if (m_valid && module_list.GetSize())
     {
         m_breakpoint_list.UpdateBreakpoints (module_list, true, false);
         if (m_process_sp)
         {
-            SystemRuntime *sys_runtime = m_process_sp->GetSystemRuntime();
-            if (sys_runtime)
-            {
-                sys_runtime->ModulesDidLoad (module_list);
-            }
+            m_process_sp->ModulesDidLoad (module_list);
         }
         // TODO: make event data that packages up the module_list
         BroadcastEvent (eBroadcastBitModulesLoaded, NULL);
@@ -1185,7 +1192,7 @@ Target::ModulesDidLoad (ModuleList &module_list)
 void
 Target::SymbolsDidLoad (ModuleList &module_list)
 {
-    if (module_list.GetSize())
+    if (m_valid && module_list.GetSize())
     {
         if (m_process_sp)
         {
@@ -1205,7 +1212,7 @@ Target::SymbolsDidLoad (ModuleList &module_list)
 void
 Target::ModulesDidUnload (ModuleList &module_list, bool delete_locations)
 {
-    if (module_list.GetSize())
+    if (m_valid && module_list.GetSize())
     {
         m_breakpoint_list.UpdateBreakpoints (module_list, false, delete_locations);
         // TODO: make event data that packages up the module_list
@@ -1254,7 +1261,7 @@ Target::ReadMemoryFromFileCache (const Address& addr, void *dst, size_t dst_len,
     SectionSP section_sp (addr.GetSection());
     if (section_sp)
     {
-        // If the contents of this section are encrypted, the on-disk file is unusuable.  Read only from live memory.
+        // If the contents of this section are encrypted, the on-disk file is unusable.  Read only from live memory.
         if (section_sp->IsEncrypted())
         {
             error.SetErrorString("section is encrypted");
@@ -1319,7 +1326,7 @@ Target::ReadMemory (const Address& addr,
         }
         else
         {
-            // We have at least one section loaded. This can be becuase
+            // We have at least one section loaded. This can be because
             // we have manually loaded some sections with "target modules load ..."
             // or because we have have a live process that has sections loaded
             // through the dynamic loader
@@ -1375,7 +1382,7 @@ Target::ReadMemory (const Address& addr,
             }
             // If the address is not section offset we have an address that
             // doesn't resolve to any address in any currently loaded shared
-            // libaries and we failed to read memory so there isn't anything
+            // libraries and we failed to read memory so there isn't anything
             // more we can do. If it is section offset, we might be able to
             // read cached memory from the object file.
             if (!resolved_addr.IsSectionOffset())
@@ -1546,7 +1553,7 @@ Target::ReadPointerFromMemory (const Address& addr,
             }
             else
             {
-                // We have at least one section loaded. This can be becuase
+                // We have at least one section loaded. This can be because
                 // we have manually loaded some sections with "target modules load ..."
                 // or because we have have a live process that has sections loaded
                 // through the dynamic loader
@@ -1697,6 +1704,8 @@ Target::GetSharedModule (const ModuleSpec &module_spec, Error *error_ptr)
                 else
                     m_images.Append(module_sp);
             }
+            else
+                module_sp.reset();
         }
     }
     if (error_ptr)
@@ -1764,7 +1773,7 @@ Target::GetScratchClangASTContext(bool create_on_demand)
         m_scratch_ast_context_ap.reset (new ClangASTContext(m_arch.GetTriple().str().c_str()));
         m_scratch_ast_source_ap.reset (new ClangASTSource(shared_from_this()));
         m_scratch_ast_source_ap->InstallASTContext(m_scratch_ast_context_ap->getASTContext());
-        llvm::OwningPtr<clang::ExternalASTSource> proxy_ast_source(m_scratch_ast_source_ap->CreateProxy());
+        llvm::IntrusiveRefCntPtr<clang::ExternalASTSource> proxy_ast_source(m_scratch_ast_source_ap->CreateProxy());
         m_scratch_ast_context_ap->SetExternalSource(proxy_ast_source);
     }
     return m_scratch_ast_context_ap.get();
@@ -1849,7 +1858,7 @@ Target::GetTargetFromContexts (const ExecutionContext *exe_ctx_ptr, const Symbol
     return target;
 }
 
-ExecutionResults
+ExpressionResults
 Target::EvaluateExpression
 (
     const char *expr_cstr,
@@ -1860,7 +1869,7 @@ Target::EvaluateExpression
 {
     result_valobj_sp.reset();
     
-    ExecutionResults execution_results = eExecutionSetupError;
+    ExpressionResults execution_results = eExpressionSetupError;
 
     if (expr_cstr == NULL || expr_cstr[0] == '\0')
         return execution_results;
@@ -1895,7 +1904,7 @@ Target::EvaluateExpression
     if (persistent_var_sp)
     {
         result_valobj_sp = persistent_var_sp->GetValueObject ();
-        execution_results = eExecutionCompleted;
+        execution_results = eExpressionCompleted;
     }
     else
     {
@@ -1998,13 +2007,13 @@ Target::GetSourceManager ()
 }
 
 
-lldb::user_id_t
-Target::AddStopHook (Target::StopHookSP &new_hook_sp)
+Target::StopHookSP
+Target::CreateStopHook ()
 {
     lldb::user_id_t new_uid = ++m_stop_hook_next_id;
-    new_hook_sp.reset (new StopHook(shared_from_this(), new_uid));
-    m_stop_hooks[new_uid] = new_hook_sp;
-    return new_uid;
+    Target::StopHookSP stop_hook_sp (new StopHook(shared_from_this(), new_uid));
+    m_stop_hooks[new_uid] = stop_hook_sp;
+    return stop_hook_sp;
 }
 
 bool
@@ -2323,7 +2332,6 @@ Error
 Target::Launch (Listener &listener, ProcessLaunchInfo &launch_info)
 {
     Error error;
-    Error error2;
     
     StateType state = eStateInvalid;
     
@@ -2363,7 +2371,8 @@ Target::Launch (Listener &listener, ProcessLaunchInfo &launch_info)
     
     if (!launch_info.GetArchitecture().IsValid())
         launch_info.GetArchitecture() = GetArchitecture();
-    
+
+    // If we're not already connected to the process, and if we have a platform that can launch a process for debugging, go ahead and do that here.
     if (state != eStateConnected && platform_sp && platform_sp->CanDebugProcess ())
     {
         m_process_sp = GetPlatform()->DebugProcess (launch_info,
@@ -2380,10 +2389,12 @@ Target::Launch (Listener &listener, ProcessLaunchInfo &launch_info)
         }
         else
         {
+            // Use a Process plugin to construct the process.
             const char *plugin_name = launch_info.GetProcessPluginName();
             CreateProcess (listener, plugin_name, NULL);
         }
-        
+
+        // Since we didn't have a platform launch the process, launch it here.
         if (m_process_sp)
             error = m_process_sp->Launch (launch_info);
     }
@@ -2399,28 +2410,60 @@ Target::Launch (Listener &listener, ProcessLaunchInfo &launch_info)
     {
         if (launch_info.GetFlags().Test(eLaunchFlagStopAtEntry) == false)
         {
-            StateType state = m_process_sp->WaitForProcessToStop (NULL, NULL, false);
+            ListenerSP hijack_listener_sp (launch_info.GetHijackListener());
+            
+            StateType state = m_process_sp->WaitForProcessToStop (NULL, NULL, false, hijack_listener_sp.get());
             
             if (state == eStateStopped)
             {
-                error = m_process_sp->Resume();
+                if (!synchronous_execution)
+                    m_process_sp->RestoreProcessEvents ();
+
+                error = m_process_sp->PrivateResume();
+
                 if (error.Success())
                 {
+                    // there is a race condition where this thread will return up the call stack to the main command
+                    // handler and show an (lldb) prompt before HandlePrivateEvent (from PrivateStateThread) has
+                    // a chance to call PushProcessIOHandler()
+                    m_process_sp->SyncIOHandler(2000);
+
                     if (synchronous_execution)
                     {
-                        state = m_process_sp->WaitForProcessToStop (NULL);
+                        state = m_process_sp->WaitForProcessToStop (NULL, NULL, true, hijack_listener_sp.get());
                         const bool must_be_alive = false; // eStateExited is ok, so this must be false
                         if (!StateIsStoppedState(state, must_be_alive))
                         {
-                            error2.SetErrorStringWithFormat("process isn't stopped: %s", StateAsCString(state));
-                            return error2;
+                            error.SetErrorStringWithFormat("process isn't stopped: %s", StateAsCString(state));
                         }
                     }
                 }
                 else
                 {
+                    Error error2;
                     error2.SetErrorStringWithFormat("process resume at entry point failed: %s", error.AsCString());
-                    return error2;
+                    error = error2;
+                }
+            }
+            else if (state == eStateExited)
+            {
+                bool with_shell = launch_info.GetShell();
+                const int exit_status = m_process_sp->GetExitStatus();
+                const char *exit_desc = m_process_sp->GetExitDescription();
+#define LAUNCH_SHELL_MESSAGE "\n'r' and 'run' are aliases that default to launching through a shell.\nTry launching without going through a shell by using 'process launch'."
+                if (exit_desc && exit_desc[0])
+                {
+                    if (with_shell)
+                        error.SetErrorStringWithFormat ("process exited with status %i (%s)" LAUNCH_SHELL_MESSAGE, exit_status, exit_desc);
+                    else
+                        error.SetErrorStringWithFormat ("process exited with status %i (%s)", exit_status, exit_desc);
+                }
+                else
+                {
+                    if (with_shell)
+                        error.SetErrorStringWithFormat ("process exited with status %i" LAUNCH_SHELL_MESSAGE, exit_status);
+                    else
+                        error.SetErrorStringWithFormat ("process exited with status %i", exit_status);
                 }
             }
             else
@@ -2428,11 +2471,13 @@ Target::Launch (Listener &listener, ProcessLaunchInfo &launch_info)
                 error.SetErrorStringWithFormat ("initial process state wasn't stopped: %s", StateAsCString(state));
             }
         }
+        m_process_sp->RestoreProcessEvents ();
     }
     else
     {
+        Error error2;
         error2.SetErrorStringWithFormat ("process launch failed: %s", error.AsCString());
-        return error2;
+        error = error2;
     }
     return error;
 }
@@ -2608,6 +2653,7 @@ g_properties[] =
     { "input-path"                         , OptionValue::eTypeFileSpec  , false, 0                         , NULL, NULL, "The file/path to be used by the executable program for reading its standard input." },
     { "output-path"                        , OptionValue::eTypeFileSpec  , false, 0                         , NULL, NULL, "The file/path to be used by the executable program for writing its standard output." },
     { "error-path"                         , OptionValue::eTypeFileSpec  , false, 0                         , NULL, NULL, "The file/path to be used by the executable program for writing its standard error." },
+    { "detach-on-error"                    , OptionValue::eTypeBoolean   , false, true                      , NULL, NULL, "debugserver will detach (rather than killing) a process if it loses connection with lldb." },
     { "disable-aslr"                       , OptionValue::eTypeBoolean   , false, true                      , NULL, NULL, "Disable Address Space Layout Randomization (ASLR)" },
     { "disable-stdio"                      , OptionValue::eTypeBoolean   , false, false                     , NULL, NULL, "Disable stdin/stdout for process (e.g. for a GUI application)" },
     { "inline-breakpoint-strategy"         , OptionValue::eTypeEnum      , false, eInlineBreakpointsHeaders , NULL, g_inline_breakpoint_enums, "The strategy to use when settings breakpoints by file and line. "
@@ -2630,6 +2676,7 @@ g_properties[] =
         "'partial' will load sections and attempt to find function bounds without downloading the symbol table (faster, still accurate, missing symbol names). "
         "'minimal' is the fastest setting and will load section data with no symbols, but should rarely be used as stack frames in these memory regions will be inaccurate and not provide any context (fastest). " },
     { "display-expression-in-crashlogs"    , OptionValue::eTypeBoolean   , false, false,                      NULL, NULL, "Expressions that crash will show up in crash logs if the host system supports executable specific crash log strings and this setting is set to true." },
+    { "trap-handler-names"                 , OptionValue::eTypeArray     , true,  OptionValue::eTypeString,   NULL, NULL, "A list of trap handler function names, e.g. a common Unix user process one is _sigtramp." },
     { NULL                                 , OptionValue::eTypeInvalid   , false, 0                         , NULL, NULL, NULL }
 };
 enum
@@ -2653,6 +2700,7 @@ enum
     ePropertyInputPath,
     ePropertyOutputPath,
     ePropertyErrorPath,
+    ePropertyDetachOnError,
     ePropertyDisableASLR,
     ePropertyDisableSTDIO,
     ePropertyInlineStrategy,
@@ -2662,7 +2710,8 @@ enum
     ePropertyUseFastStepping,
     ePropertyLoadScriptFromSymbolFile,
     ePropertyMemoryModuleLoadLevel,
-    ePropertyDisplayExpressionsInCrashlogs
+    ePropertyDisplayExpressionsInCrashlogs,
+    ePropertyTrapHandlerNames
 };
 
 
@@ -2689,7 +2738,7 @@ public:
     virtual const Property *
     GetPropertyAtIndex (const ExecutionContext *exe_ctx, bool will_modify, uint32_t idx) const
     {
-        // When gettings the value for a key from the target options, we will always
+        // When getting the value for a key from the target options, we will always
         // try and grab the setting from the current target if there is one. Else we just
         // use the one from this instance.
         if (idx == ePropertyEnvVars)
@@ -2831,6 +2880,20 @@ void
 TargetProperties::SetDisableASLR (bool b)
 {
     const uint32_t idx = ePropertyDisableASLR;
+    m_collection_sp->SetPropertyAtIndexAsBoolean (NULL, idx, b);
+}
+
+bool
+TargetProperties::GetDetachOnError () const
+{
+    const uint32_t idx = ePropertyDetachOnError;
+    return m_collection_sp->GetPropertyAtIndexAsBoolean (NULL, idx, g_properties[idx].default_uint_value != 0);
+}
+
+void
+TargetProperties::SetDetachOnError (bool b)
+{
+    const uint32_t idx = ePropertyDetachOnError;
     m_collection_sp->SetPropertyAtIndexAsBoolean (NULL, idx, b);
 }
 
@@ -3069,7 +3132,19 @@ TargetProperties::GetMemoryModuleLoadLevel() const
     return (MemoryModuleLoadLevel)m_collection_sp->GetPropertyAtIndexAsEnumeration(NULL, idx, g_properties[idx].default_uint_value);
 }
 
+bool
+TargetProperties::GetUserSpecifiedTrapHandlerNames (Args &args) const
+{
+    const uint32_t idx = ePropertyTrapHandlerNames;
+    return m_collection_sp->GetPropertyAtIndexAsArgs (NULL, idx, args);
+}
 
+void
+TargetProperties::SetUserSpecifiedTrapHandlerNames (const Args &args)
+{
+    const uint32_t idx = ePropertyTrapHandlerNames;
+    m_collection_sp->SetPropertyAtIndexFromArgs (NULL, idx, args);
+}
 
 //----------------------------------------------------------------------
 // Target::TargetEventData

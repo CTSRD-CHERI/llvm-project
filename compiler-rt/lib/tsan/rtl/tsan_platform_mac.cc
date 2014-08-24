@@ -40,17 +40,18 @@
 
 namespace __tsan {
 
-ScopedInRtl::ScopedInRtl() {
-}
-
-ScopedInRtl::~ScopedInRtl() {
-}
-
 uptr GetShadowMemoryConsumption() {
   return 0;
 }
 
 void FlushShadowMemory() {
+}
+
+void WriteMemoryProfile(char *buf, uptr buf_size, uptr nthread, uptr nlive) {
+}
+
+uptr GetRSS() {
+  return 0;
 }
 
 #ifndef TSAN_GO
@@ -72,23 +73,27 @@ void InitializeShadowMemory() {
 }
 #endif
 
-const char *InitializePlatform() {
-  void *p = 0;
-  if (sizeof(p) == 8) {
-    // Disable core dumps, dumping of 16TB usually takes a bit long.
-    // The following magic is to prevent clang from replacing it with memset.
-    volatile rlimit lim;
-    lim.rlim_cur = 0;
-    lim.rlim_max = 0;
-    setrlimit(RLIMIT_CORE, (rlimit*)&lim);
-  }
-
-  return GetEnv(kTsanOptionsEnv);
+void InitializePlatform() {
+  DisableCoreDumperIfNecessary();
 }
 
 void FinalizePlatform() {
   fflush(0);
 }
+
+#ifndef TSAN_GO
+int call_pthread_cancel_with_cleanup(int(*fn)(void *c, void *m,
+    void *abstime), void *c, void *m, void *abstime,
+    void(*cleanup)(void *arg), void *arg) {
+  // pthread_cleanup_push/pop are hardcore macros mess.
+  // We can't intercept nor call them w/o including pthread.h.
+  int res;
+  pthread_cleanup_push(cleanup, arg);
+  res = fn(c, m, abstime);
+  pthread_cleanup_pop(0);
+  return res;
+}
+#endif
 
 }  // namespace __tsan
 

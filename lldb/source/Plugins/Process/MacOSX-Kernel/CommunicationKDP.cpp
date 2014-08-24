@@ -16,7 +16,6 @@
 #include <string.h>
 
 // C++ Includes
-#include "llvm/Support/MachO.h"
 
 // Other libraries and framework includes
 #include "lldb/Core/DataBufferHeap.h"
@@ -260,6 +259,7 @@ CommunicationKDP::WaitForPacketWithTimeoutMicroSecondsNoLock (DataExtractor &pac
         {
             switch (status)
             {
+            case eConnectionStatusInterrupted:
             case eConnectionStatusTimedOut:
                 timed_out = true;
                 break;

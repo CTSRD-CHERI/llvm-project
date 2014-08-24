@@ -25,7 +25,6 @@
 #include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/ModuleMap.h"
 #include "clang/Lex/Preprocessor.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Host.h"
 #include <string>
@@ -60,7 +59,7 @@ class ModuleMapChecker {
   // Supporting objects.
 
   /// Options controlling the language variant.
-  llvm::IntrusiveRefCntPtr<clang::LangOptions> LangOpts;
+  std::shared_ptr<clang::LangOptions> LangOpts;
   /// Diagnostic IDs.
   const llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs> DiagIDs;
   /// Options controlling the diagnostic engine.
@@ -70,7 +69,7 @@ class ModuleMapChecker {
   /// Diagnostic engine.
   llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine> Diagnostics;
   /// Options controlling the target.
-  llvm::IntrusiveRefCntPtr<clang::TargetOptions> TargetOpts;
+  std::shared_ptr<clang::TargetOptions> TargetOpts;
   /// Target information.
   llvm::IntrusiveRefCntPtr<clang::TargetInfo> Target;
   /// Options controlling the file system manager.
@@ -82,9 +81,9 @@ class ModuleMapChecker {
   /// Options controlling the \#include directive.
   llvm::IntrusiveRefCntPtr<clang::HeaderSearchOptions> HeaderSearchOpts;
   /// Header search manager.
-  llvm::OwningPtr<clang::HeaderSearch> HeaderInfo;
+  std::unique_ptr<clang::HeaderSearch> HeaderInfo;
   /// The module map.
-  llvm::OwningPtr<clang::ModuleMap> ModMap;
+  std::unique_ptr<clang::ModuleMap> ModMap;
 
   // Internal data.
 
@@ -138,7 +137,7 @@ public:
   /// \returns 0 if there were no errors or warnings, 1 if there
   ///   were warnings, 2 if any other problem, such as a bad
   ///   module map path argument was specified.
-  llvm::error_code doChecks();
+  std::error_code doChecks();
 
   // The following functions are called by doChecks.
 

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-cpu cheri -o - %s -emit-llvm | FileCheck %s
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -emit-llvm | FileCheck %s
 
 int write_only(__capability __output int *x);
 

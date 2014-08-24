@@ -18,35 +18,49 @@ namespace elf {
 typedef llvm::object::ELFType<llvm::support::big, 2, false> PPCELFType;
 class PPCLinkingContext;
 
-class PPCTargetRelocationHandler LLVM_FINAL
-    : public TargetRelocationHandler<PPCELFType> {
+template <class ELFT> class PPCTargetLayout : public TargetLayout<ELFT> {
 public:
-  PPCTargetRelocationHandler(const PPCLinkingContext &context) {}
-
-  virtual error_code applyRelocation(ELFWriter &, llvm::FileOutputBuffer &,
-                                     const lld::AtomLayout &,
-                                     const Reference &) const;
-
+  PPCTargetLayout(PPCLinkingContext &context) : TargetLayout<ELFT>(context) {}
 };
 
-class PPCTargetHandler LLVM_FINAL
+class PPCTargetRelocationHandler final
+    : public TargetRelocationHandler<PPCELFType> {
+public:
+  PPCTargetRelocationHandler(PPCLinkingContext &context,
+                             PPCTargetLayout<PPCELFType> &layout)
+      : _ppcContext(context), _ppcTargetLayout(layout) {}
+
+  virtual std::error_code applyRelocation(ELFWriter &, llvm::FileOutputBuffer &,
+                                          const lld::AtomLayout &,
+                                          const Reference &) const override;
+
+protected:
+  PPCLinkingContext &_ppcContext;
+  PPCTargetLayout<PPCELFType> &_ppcTargetLayout;
+};
+
+class PPCTargetHandler final
     : public DefaultTargetHandler<PPCELFType> {
 public:
-  PPCTargetHandler(PPCLinkingContext &targetInfo);
+  PPCTargetHandler(PPCLinkingContext &context);
 
-  virtual void registerRelocationNames(Registry &registry);
-
-  virtual TargetLayout<PPCELFType> &targetLayout() { return _targetLayout; }
-
-  virtual const PPCTargetRelocationHandler &getRelocationHandler() const {
-    return _relocationHandler;
+  PPCTargetLayout<PPCELFType> &getTargetLayout() override {
+    return *(_ppcTargetLayout.get());
   }
+
+  void registerRelocationNames(Registry &registry) override;
+
+  const PPCTargetRelocationHandler &getRelocationHandler() const override {
+    return *(_ppcRelocationHandler.get());
+  }
+
+  std::unique_ptr<Writer> getWriter() override;
 
 private:
   static const Registry::KindStrings kindStrings[];
-  
-  PPCTargetRelocationHandler _relocationHandler;
-  TargetLayout<PPCELFType> _targetLayout;
+  PPCLinkingContext &_ppcLinkingContext;
+  std::unique_ptr<PPCTargetLayout<PPCELFType>> _ppcTargetLayout;
+  std::unique_ptr<PPCTargetRelocationHandler> _ppcRelocationHandler;
 };
 } // end namespace elf
 } // end namespace lld

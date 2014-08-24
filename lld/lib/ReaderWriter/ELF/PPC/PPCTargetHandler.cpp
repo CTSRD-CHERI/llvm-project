@@ -35,7 +35,7 @@ static int relocB24PCREL(uint8_t *location, uint64_t P, uint64_t S,
   return 1;
 }
 
-error_code PPCTargetRelocationHandler::applyRelocation(
+std::error_code PPCTargetRelocationHandler::applyRelocation(
     ELFWriter &writer, llvm::FileOutputBuffer &buf, const lld::AtomLayout &atom,
     const Reference &ref) const {
   uint8_t *atomContent = buf.getBufferStart() + atom._fileOffset;
@@ -44,7 +44,7 @@ error_code PPCTargetRelocationHandler::applyRelocation(
   uint64_t relocVAddress = atom._virtualAddr + ref.offsetInAtom();
 
   if (ref.kindNamespace() != Reference::KindNamespace::ELF)
-    return error_code::success();
+    return std::error_code();
   assert(ref.kindArch() == Reference::KindArch::PowerPC);
   switch (ref.kindValue()) {
   case R_PPC_REL24:
@@ -60,16 +60,33 @@ error_code PPCTargetRelocationHandler::applyRelocation(
   }
   }
 
-  return error_code::success();
+  return std::error_code();
 }
 
-PPCTargetHandler::PPCTargetHandler(PPCLinkingContext &targetInfo)
-    : DefaultTargetHandler(targetInfo), _relocationHandler(targetInfo),
-      _targetLayout(targetInfo) {}
+PPCTargetHandler::PPCTargetHandler(PPCLinkingContext &context)
+    : DefaultTargetHandler(context), _ppcLinkingContext(context),
+      _ppcTargetLayout(new PPCTargetLayout<PPCELFType>(context)),
+      _ppcRelocationHandler(
+          new PPCTargetRelocationHandler(context, *_ppcTargetLayout.get())) {}
 
 void PPCTargetHandler::registerRelocationNames(Registry &registry) {
   registry.addKindTable(Reference::KindNamespace::ELF,
                         Reference::KindArch::PowerPC, kindStrings);
+}
+
+std::unique_ptr<Writer> PPCTargetHandler::getWriter() {
+  switch (_ppcLinkingContext.getOutputELFType()) {
+  case llvm::ELF::ET_EXEC:
+    return std::unique_ptr<Writer>(new elf::ExecutableWriter<PPCELFType>(
+        _ppcLinkingContext, *_ppcTargetLayout.get()));
+  case llvm::ELF::ET_DYN:
+    return std::unique_ptr<Writer>(new elf::DynamicLibraryWriter<PPCELFType>(
+        _ppcLinkingContext, *_ppcTargetLayout.get()));
+  case llvm::ELF::ET_REL:
+    llvm_unreachable("TODO: support -r mode");
+  default:
+    llvm_unreachable("unsupported output type");
+  }
 }
 
 const Registry::KindStrings PPCTargetHandler::kindStrings[] = {

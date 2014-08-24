@@ -16,7 +16,6 @@
 #ifndef POLLY_TEMP_SCOP_EXTRACTION_H
 #define POLLY_TEMP_SCOP_EXTRACTION_H
 
-#include "polly/MayAliasSet.h"
 #include "polly/ScopDetection.h"
 
 #include "llvm/Analysis/RegionPass.h"
@@ -29,13 +28,14 @@ class DataLayout;
 using namespace llvm;
 
 namespace polly {
-class MayAliasSetInfo;
+
+extern bool PollyDelinearize;
 
 //===---------------------------------------------------------------------===//
 /// @brief A memory access described by a SCEV expression and the access type.
 class IRAccess {
 public:
-  const Value *BaseAddress;
+  Value *BaseAddress;
 
   const SCEV *Offset;
 
@@ -43,9 +43,6 @@ public:
   enum TypeKind {
     READ = 0x1,
     WRITE = 0x2,
-    SCALAR = 0x4,
-    SCALARREAD = SCALAR | READ,
-    SCALARWRITE = SCALAR | WRITE
   };
 
 private:
@@ -54,14 +51,18 @@ private:
   bool IsAffine;
 
 public:
-  explicit IRAccess(TypeKind Type, const Value *BaseAddress, const SCEV *Offset,
-                    unsigned elemBytes, bool Affine)
+  SmallVector<const SCEV *, 4> Subscripts, Sizes;
+
+  explicit IRAccess(TypeKind Type, Value *BaseAddress, const SCEV *Offset,
+                    unsigned elemBytes, bool Affine,
+                    SmallVector<const SCEV *, 4> Subscripts,
+                    SmallVector<const SCEV *, 4> Sizes)
       : BaseAddress(BaseAddress), Offset(Offset), ElemBytes(elemBytes),
-        Type(Type), IsAffine(Affine) {}
+        Type(Type), IsAffine(Affine), Subscripts(Subscripts), Sizes(Sizes) {}
 
   enum TypeKind getType() const { return Type; }
 
-  const Value *getBase() const { return BaseAddress; }
+  Value *getBase() const { return BaseAddress; }
 
   const SCEV *getOffset() const { return Offset; }
 
@@ -69,17 +70,16 @@ public:
 
   bool isAffine() const { return IsAffine; }
 
-  bool isRead() const { return Type & READ; }
+  bool isRead() const { return Type == READ; }
 
-  bool isWrite() const { return Type & WRITE; }
+  bool isWrite() const { return Type == WRITE; }
 
-  bool isScalar() const { return Type & SCALAR; }
+  bool isScalar() const { return Subscripts.size() == 0; }
 
   void print(raw_ostream &OS) const;
 };
 
 class Comparison {
-
   const SCEV *LHS;
   const SCEV *RHS;
 
@@ -112,7 +112,7 @@ typedef std::map<const Loop *, const SCEV *> LoopBoundMapType;
 /// Mapping BBs to its condition constrains
 typedef std::map<const BasicBlock *, BBCond> BBCondMapType;
 
-typedef std::vector<std::pair<IRAccess, Instruction *> > AccFuncSetType;
+typedef std::vector<std::pair<IRAccess, Instruction *>> AccFuncSetType;
 typedef std::map<const BasicBlock *, AccFuncSetType> AccFuncMapType;
 
 //===---------------------------------------------------------------------===//
@@ -134,15 +134,12 @@ class TempScop {
   // Access function of bbs.
   const AccFuncMapType &AccFuncMap;
 
-  // The alias information about this SCoP.
-  MayAliasSetInfo *MayASInfo;
-
   friend class TempScopInfo;
 
   explicit TempScop(Region &r, LoopBoundMapType &loopBounds,
                     BBCondMapType &BBCmps, AccFuncMapType &accFuncMap)
       : R(r), MaxLoopDepth(0), LoopBounds(loopBounds), BBConds(BBCmps),
-        AccFuncMap(accFuncMap), MayASInfo(new MayAliasSetInfo()) {}
+        AccFuncMap(accFuncMap) {}
 
 public:
   ~TempScop();
@@ -236,7 +233,7 @@ class TempScopInfo : public FunctionPass {
   PostDominatorTree *PDT;
 
   // Target data for element size computing.
-  DataLayout *TD;
+  const DataLayout *TD;
 
   // Remember the bounds of loops, to help us build iteration domain of BBs.
   LoopBoundMapType LoopBounds;

@@ -7,6 +7,14 @@
 set(CLANG_TOOLS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
 set(CLANG_TOOLS_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/..")
 
+if (CMAKE_CFG_INTDIR STREQUAL ".")
+  set(LLVM_BUILD_MODE ".")
+else ()
+  set(LLVM_BUILD_MODE "%(build_mode)s")
+endif ()
+
+string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} CLANG_TOOLS_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR})
+
 configure_lit_site_cfg(
   ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
   ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
@@ -29,6 +37,8 @@ set(CLANG_TOOLS_TEST_DEPS
   # Individual tools we test.
   clang-apply-replacements
   clang-modernize
+  clang-rename
+  clang-query
   clang-tidy
   modularize
   module-map-checker
@@ -38,10 +48,6 @@ set(CLANG_TOOLS_TEST_DEPS
   # Unit tests
   ExtraToolsUnitTests
   )
-
-if(HAVE_LIBEDIT)
-  list(APPEND CLANG_TOOLS_TEST_DEPS clang-query)
-endif()
 
 add_lit_testsuite(check-clang-tools "Running the Clang extra tools' regression tests"
   ${CMAKE_CURRENT_BINARY_DIR}

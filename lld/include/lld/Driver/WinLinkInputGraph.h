@@ -24,27 +24,27 @@
 
 namespace lld {
 
+extern bool isCOFFLibraryFileExtension(StringRef path);
+
 /// \brief Represents a PECOFF File
 class PECOFFFileNode : public FileNode {
 public:
   PECOFFFileNode(PECOFFLinkingContext &ctx, StringRef path)
-      : FileNode(path), _ctx(ctx) {}
+      : FileNode(path), _ctx(ctx), _parsed(false) {}
 
-  virtual ErrorOr<StringRef> getPath(const LinkingContext &ctx) const;
+  ErrorOr<StringRef> getPath(const LinkingContext &ctx) const override;
 
   /// \brief Parse the input file to lld::File.
-  error_code parse(const LinkingContext &ctx, raw_ostream &diagnostics);
+  std::error_code parse(const LinkingContext &ctx,
+                        raw_ostream &diagnostics) override;
 
-  /// \brief validates the Input Element
-  virtual bool validate() { return true; }
-
-  /// \brief Dump the Input Element
-  virtual bool dump(raw_ostream &) { return true; }
-
-  virtual ErrorOr<File &> getNextFile();
+  ErrorOr<File &> getNextFile() override;
 
 protected:
   const PECOFFLinkingContext &_ctx;
+
+private:
+  bool _parsed;
 };
 
 /// \brief Represents a PECOFF Library File
@@ -53,24 +53,22 @@ public:
   PECOFFLibraryNode(PECOFFLinkingContext &ctx, StringRef path)
       : PECOFFFileNode(ctx, path) {}
 
-  virtual ErrorOr<StringRef> getPath(const LinkingContext &ctx) const;
+  ErrorOr<StringRef> getPath(const LinkingContext &ctx) const override;
 };
 
 /// \brief Represents a ELF control node
 class PECOFFGroup : public Group {
 public:
-  PECOFFGroup() : Group(0) {}
-
-  virtual bool validate() { return true; }
-  virtual bool dump(raw_ostream &) { return true; }
+  PECOFFGroup(PECOFFLinkingContext &ctx) : Group(), _ctx(ctx) {}
 
   /// \brief Parse the group members.
-  error_code parse(const LinkingContext &ctx, raw_ostream &diagnostics) {
-    for (auto &elem : _elements)
-      if (error_code ec = elem->parse(ctx, diagnostics))
-        return ec;
-    return error_code::success();
+  std::error_code parse(const LinkingContext &ctx, raw_ostream &diag) override {
+    std::lock_guard<std::recursive_mutex> lock(_ctx.getMutex());
+    return Group::parse(ctx, diag);
   }
+
+private:
+  PECOFFLinkingContext &_ctx;
 };
 
 } // namespace lld

@@ -17,6 +17,14 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// FIXME: This is also in unwind.h and cxxabi.h, can we consolidate?
+#if !defined(__USING_SJLJ_EXCEPTIONS__) && defined(__arm__) && \
+    !defined(__ARM_DWARF_EH__) && !defined(__APPLE__)
+#define LIBCXXABI_ARM_EHABI 1
+#else
+#define LIBCXXABI_ARM_EHABI 0
+#endif
+
 #if __APPLE__
   #include <Availability.h>
     #if __arm__
@@ -56,8 +64,13 @@ typedef struct unw_cursor_t unw_cursor_t;
 typedef struct unw_addr_space *unw_addr_space_t;
 
 typedef int unw_regnum_t;
+#if LIBCXXABI_ARM_EHABI
+typedef uint32_t unw_word_t;
+typedef uint64_t unw_fpreg_t;
+#else
 typedef uint64_t unw_word_t;
 typedef double unw_fpreg_t;
+#endif
 
 struct unw_proc_info_t {
   unw_word_t  start_ip;         /* start address of function */
@@ -86,6 +99,12 @@ extern int unw_get_fpreg(unw_cursor_t *, unw_regnum_t, unw_fpreg_t *) LIBUNWIND_
 extern int unw_set_reg(unw_cursor_t *, unw_regnum_t, unw_word_t) LIBUNWIND_AVAIL;
 extern int unw_set_fpreg(unw_cursor_t *, unw_regnum_t, unw_fpreg_t)  LIBUNWIND_AVAIL;
 extern int unw_resume(unw_cursor_t *) LIBUNWIND_AVAIL;
+
+#if __arm__
+/* Save VFP registers in FSTMX format (instead of FSTMD). */
+extern void unw_save_vfp_as_X(unw_cursor_t *) LIBUNWIND_AVAIL;
+#endif
+
 
 extern const char *unw_regname(unw_cursor_t *, unw_regnum_t) LIBUNWIND_AVAIL;
 extern int unw_get_proc_info(unw_cursor_t *, unw_proc_info_t *) LIBUNWIND_AVAIL;

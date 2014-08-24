@@ -12,6 +12,9 @@
 
 #include "DefaultLayout.h"
 #include "TargetHandler.h"
+#include "ELFReader.h"
+#include "DynamicLibraryWriter.h"
+#include "ExecutableWriter.h"
 
 #include "lld/ReaderWriter/ELFLinkingContext.h"
 
@@ -26,58 +29,21 @@ public:
   DefaultTargetHandler(ELFLinkingContext &context)
       : TargetHandler<ELFT>(context) {}
 
-  bool doesOverrideELFHeader() { return false; }
-
-  void setELFHeader(ELFHeader<ELFT> *elfHeader) {
-    llvm_unreachable("Target should provide implementation for function ");
-  }
-
-  /// TargetAtomHandler
-  TargetAtomHandler<ELFT> &targetAtomHandler() {
-    llvm_unreachable("Target should provide implementation for function ");
-  }
-
   const TargetRelocationHandler<ELFT> &getRelocationHandler() const {
     llvm_unreachable("Target should provide implementation for function ");
   }
 
-  /// Create a set of Default target sections that a target might needj
-  void createDefaultSections() {}
-
-  /// \brief Add a section to the current Layout
-  void addSection(Section<ELFT> *section) {}
-
-  /// \brief add new symbol file
-  bool createImplicitFiles(std::vector<std::unique_ptr<File> > &) {
-    return true;
+  virtual std::unique_ptr<Reader> getObjReader(bool atomizeStrings) {
+    return std::unique_ptr<Reader>(new ELFObjectReader(atomizeStrings));
   }
 
-  /// \brief Finalize the symbol values
-  void finalizeSymbolValues() {}
-
-  /// \brief allocate Commons, some architectures may move small common
-  /// symbols over to small data, this would also be used
-  void allocateCommons() {}
-
-  /// \brief create dynamic table
-  LLD_UNIQUE_BUMP_PTR(DynamicTable<ELFT>) createDynamicTable() {
-    return LLD_UNIQUE_BUMP_PTR(DynamicTable<ELFT>)(
-        new (_alloc) DynamicTable<ELFT>(
-            this->_context, ".dynamic", DefaultLayout<ELFT>::ORDER_DYNAMIC));
+  virtual std::unique_ptr<Reader> getDSOReader(bool useShlibUndefines) {
+    return std::unique_ptr<Reader>(new ELFDSOReader(useShlibUndefines));
   }
 
-  /// \brief create dynamic symbol table
-  LLD_UNIQUE_BUMP_PTR(DynamicSymbolTable<ELFT>) createDynamicSymbolTable() {
-    return LLD_UNIQUE_BUMP_PTR(DynamicSymbolTable<ELFT>)(
-        new (_alloc) DynamicSymbolTable<ELFT>(
-            this->_context, ".dynsym",
-            DefaultLayout<ELFT>::ORDER_DYNAMIC_SYMBOLS));
-  }
-
-private:
-  llvm::BumpPtrAllocator _alloc;
+  virtual std::unique_ptr<Writer> getWriter() = 0;
 };
+
 } // end namespace elf
 } // end namespace lld
-
 #endif

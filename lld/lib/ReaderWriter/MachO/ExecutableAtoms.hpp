@@ -13,33 +13,53 @@
 #include "llvm/Support/MachO.h"
 
 #include "lld/Core/DefinedAtom.h"
-#include "lld/Core/UndefinedAtom.h"
 #include "lld/Core/File.h"
-#include "lld/Core/Reference.h"
 #include "lld/Core/LinkingContext.h"
-#include "lld/ReaderWriter/Simple.h"
+#include "lld/Core/Reference.h"
+#include "lld/Core/Simple.h"
+#include "lld/Core/UndefinedAtom.h"
+#include "lld/ReaderWriter/MachOLinkingContext.h"
 
 namespace lld {
 namespace mach_o {
 
 
 //
-// CRuntimeFile adds an UndefinedAtom for "_main" so that the Resolving
+// CEntryFile adds an UndefinedAtom for "_main" so that the Resolving
 // phase will fail if "_main" is undefined.
 //
-class CRuntimeFile : public SimpleFile {
+class CEntryFile : public SimpleFile {
 public:
-  CRuntimeFile(const MachOLinkingContext &context)
-      : SimpleFile("C runtime"), _undefMain(*this, context.entrySymbolName()) {
-      // only main executables need _main
-      if (context.outputFileType() == llvm::MachO::MH_EXECUTE) {
-        this->addAtom(_undefMain);
-      }
-   }
+  CEntryFile(const MachOLinkingContext &context)
+      : SimpleFile("C entry"),
+       _undefMain(*this, context.entrySymbolName()) {
+    this->addAtom(_undefMain);
+  }
 
 private:
   SimpleUndefinedAtom   _undefMain;
 };
+
+
+//
+// StubHelperFile adds an UndefinedAtom for "dyld_stub_binder" so that
+// the Resolveing phase will fail if "dyld_stub_binder" is undefined.
+//
+class StubHelperFile : public SimpleFile {
+public:
+  StubHelperFile(const MachOLinkingContext &context)
+      : SimpleFile("stub runtime"),
+        _undefBinder(*this, context.binderSymbolName()) {
+    this->addAtom(_undefBinder);
+  }
+
+private:
+  SimpleUndefinedAtom   _undefBinder;
+};
+
+
+
+
 
 } // namespace mach_o
 } // namespace lld

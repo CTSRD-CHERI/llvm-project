@@ -1,11 +1,24 @@
 # If we are not building as a part of LLVM, build lld as a standalone project,
 # using LLVM as an external library.
 
+cmake_minimum_required(VERSION 2.8)
 
+# FIXME: It may be removed when we use 2.8.12.
+if(CMAKE_VERSION VERSION_LESS 2.8.12)
+  # Invalidate a couple of keywords.
+  set(cmake_2_8_12_INTERFACE)
+  set(cmake_2_8_12_PRIVATE)
+else()
+  # Use ${cmake_2_8_12_KEYWORD} intead of KEYWORD in target_link_libraries().
+  set(cmake_2_8_12_INTERFACE INTERFACE)
+  set(cmake_2_8_12_PRIVATE PRIVATE)
+  if(POLICY CMP0022)
+    cmake_policy(SET CMP0022 NEW) # automatic when 2.8.12 is required
+  endif()
+endif()
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(lld)
-  cmake_minimum_required(VERSION 2.8)
 
   set(LLD_PATH_TO_LLVM_SOURCE "" CACHE PATH
     "Path to LLVM source code. Not necessary if using an installed LLVM.")
@@ -95,7 +108,7 @@ endif()
 if (NOT MSVC)
   # gcc and clang require the -std=c++0x or -std=c++11 flag.
   if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|Clang" AND
-      NOT ("${CMAKE_CXX_FLAGS}" MATCHES ".*-std=(c|gnu)\\+\\+(0x|11).*"))
+      NOT ("${CMAKE_CXX_FLAGS}" MATCHES ".*-std=(c|gnu)\\+\\+(0x|11|1y).*"))
     message(FATAL_ERROR
       "lld requires c++11. Clang and gcc require -std=c++0x or -std=c++11 to "
       "enter this mode. Please set CMAKE_CXX_FLAGS accordingly.")
@@ -122,6 +135,7 @@ macro(add_lld_library name)
     set(libkind)
   endif()
   add_library(${name} ${libkind} ${srcs})
+  llvm_update_compile_flags(${name} ${srcs})
   if (LLVM_COMMON_DEPENDS)
     add_dependencies(${name} ${LLVM_COMMON_DEPENDS})
   endif()
@@ -129,7 +143,6 @@ macro(add_lld_library name)
   target_link_libraries(${name} ${LLVM_USED_LIBS})
   llvm_config(${name} ${LLVM_LINK_COMPONENTS})
   target_link_libraries(${name} ${LLVM_COMMON_LIBS})
-  link_system_libs(${name})
 
   if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
     install(TARGETS ${name}
@@ -167,3 +180,5 @@ add_subdirectory(test)
 if (LLVM_INCLUDE_TESTS AND NOT LLD_BUILT_STANDALONE)
   add_subdirectory(unittests)
 endif()
+
+add_subdirectory(docs)

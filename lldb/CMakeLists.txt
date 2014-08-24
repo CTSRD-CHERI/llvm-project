@@ -1,10 +1,23 @@
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
   set(LLDB_DEFAULT_DISABLE_PYTHON 1)
+  set(LLDB_DEFAULT_DISABLE_CURSES 1)
+  if (LLDB_DISABLE_PYTHON)
+    set(LLDB_DEFAULT_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION 0)
+  else()
+    set(LLDB_DEFAULT_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION 1)
+  endif()
 else()
   set(LLDB_DEFAULT_DISABLE_PYTHON 0)
+  set(LLDB_DEFAULT_DISABLE_CURSES 0)
+  set(LLDB_DEFAULT_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION 0)
 endif()
 set(LLDB_DISABLE_PYTHON ${LLDB_DEFAULT_DISABLE_PYTHON} CACHE BOOL
   "Disables the Python scripting integration.")
+set(LLDB_DISABLE_CURSES ${LLDB_DEFAULT_DISABLE_CURSES} CACHE BOOL
+  "Disables the Curses integration.")
+
+set(LLDB_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION ${LLDB_DEFAULT_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION} CACHE BOOL
+  "Enables using new Python scripts for SWIG API generation .")  
 
 # If we are not building as a part of LLVM, build LLDB as an
 # standalone project, using LLVM as an external library:
@@ -16,11 +29,11 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     "Path to LLVM source code. Not necessary if using an installed LLVM.")
   set(LLDB_PATH_TO_LLVM_BUILD "" CACHE PATH
     "Path to the directory where LLVM was built or installed.")
-    
+
   set(LLDB_PATH_TO_CLANG_SOURCE "" CACHE PATH
     "Path to Clang source code. Not necessary if using an installed Clang.")
   set(LLDB_PATH_TO_CLANG_BUILD "" CACHE PATH
-    "Path to the directory where Clang was built or installed.")    
+    "Path to the directory where Clang was built or installed.")
 
   if (LLDB_PATH_TO_LLVM_SOURCE)
     if (NOT EXISTS "${LLDB_PATH_TO_LLVM_SOURCE}/cmake/config-ix.cmake")
@@ -32,20 +45,20 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       list(APPEND CMAKE_MODULE_PATH "${LLVM_MAIN_SRC_DIR}/cmake/modules")
     endif()
   endif()
-  
+
   if (LLDB_PATH_TO_CLANG_SOURCE)
       get_filename_component(CLANG_MAIN_SRC_DIR ${LLDB_PATH_TO_CLANG_SOURCE}
                              ABSOLUTE)
-  endif()  
+  endif()
 
   list(APPEND CMAKE_MODULE_PATH "${LLDB_PATH_TO_LLVM_BUILD}/share/llvm/cmake")
 
   get_filename_component(PATH_TO_LLVM_BUILD ${LLDB_PATH_TO_LLVM_BUILD}
                          ABSOLUTE)
-                         
+
   get_filename_component(PATH_TO_CLANG_BUILD ${LLDB_PATH_TO_CLANG_BUILD}
-                         ABSOLUTE)                         
-                         
+                         ABSOLUTE)
+
   include(AddLLVM)
   include("${LLDB_PATH_TO_LLVM_BUILD}/share/llvm/cmake/LLVMConfig.cmake")
   include(HandleLLVMOptions)
@@ -54,7 +67,7 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   set(LLVM_MAIN_INCLUDE_DIR "${LLVM_MAIN_SRC_DIR}/include")
   set(LLVM_BINARY_DIR ${CMAKE_BINARY_DIR})
-  
+
   set(CLANG_MAIN_INCLUDE_DIR "${CLANG_MAIN_SRC_DIR}/include")
 
   set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -73,8 +86,17 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set(LLDB_BUILT_STANDALONE 1)
 endif()
 
+set(LLDB_DISABLE_PYTHON 0 CACHE BOOL "Disables the Python scripting integration.")
 if (LLDB_DISABLE_PYTHON)
   add_definitions( -DLLDB_DISABLE_PYTHON )
+endif()
+
+if ((NOT MSVC) OR MSVC12)
+  add_definitions( -DHAVE_ROUND )
+endif()
+
+if (LLDB_DISABLE_CURSES)
+  add_definitions( -DLLDB_DISABLE_CURSES )
 endif()
 
 macro(add_lldb_definitions)
@@ -86,9 +108,10 @@ macro(add_lldb_definitions)
 endmacro(add_lldb_definitions)
 
 if (NOT LLDB_DISABLE_PYTHON)
-  find_package(PythonLibs REQUIRED)
-  include_directories(${PYTHON_INCLUDE_DIRS})
+    find_package(PythonLibs REQUIRED)
+    include_directories(${PYTHON_INCLUDE_DIRS})
 endif()
+
 include_directories(../clang/include)
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/../clang/include")
 
@@ -118,19 +141,25 @@ elseif (MSVC_VERSION LESS 1700)
           "required to build lldb.")
 endif()
 
-# Disable Clang warnings
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  add_lldb_definitions(
-    -Wno-deprecated-declarations # Suppress "deprecated auto_ptr" warnings
-  )
-endif()
+# Disable GCC warnings
+check_cxx_compiler_flag("-Wno-deprecated-declarations"
+                        CXX_SUPPORTS_NO_DEPRECATED_DECLARATIONS)
+if (CXX_SUPPORTS_NO_DEPRECATED_DECLARATIONS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
+endif ()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-    AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "3.3")
-  add_lldb_definitions(
-    -Wno-deprecated-register # Suppress "deprecated register keyword" warnings
-  )
-endif()
+check_cxx_compiler_flag("-Wno-unknown-pragmas"
+                        CXX_SUPPORTS_NO_UNKNOWN_PRAGMAS)
+if (CXX_SUPPORTS_NO_UNKNOWN_PRAGMAS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas")
+endif ()
+
+# Disable Clang warnings
+check_cxx_compiler_flag("-Wno-deprecated-register"
+                        CXX_SUPPORTS_NO_DEPRECATED_REGISTER)
+if (CXX_SUPPORTS_NO_DEPRECATED_REGISTER)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
+endif ()
 
 # Disable MSVC warnings
 if( MSVC )
@@ -138,7 +167,9 @@ if( MSVC )
     -wd4018 # Suppress 'warning C4018: '>=' : signed/unsigned mismatch'
     -wd4068 # Suppress 'warning C4068: unknown pragma'
     -wd4150 # Suppress 'warning C4150: deletion of pointer to incomplete type'
+    -wd4251 # Suppress 'warning C4251: T must have dll-interface to be used by clients of class U.'
     -wd4521 # Suppress 'warning C4521: 'type' : multiple copy constructors specified'
+    -wd4530 # Suppress 'warning C4530: C++ exception handler used, but unwind semantics are not enabled.'
   )
 endif() 
 
@@ -166,6 +197,16 @@ string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" LLDB_VERSION
   ${PACKAGE_VERSION})
 message(STATUS "LLDB version: ${LLDB_VERSION}")
 
+if (CMAKE_VERSION VERSION_LESS 2.8.12)
+  set(cmake_2_8_12_INTERFACE)
+  set(cmake_2_8_12_PRIVATE)
+  set(cmake_2_8_12_PUBLIC)
+else ()
+  set(cmake_2_8_12_INTERFACE INTERFACE)
+  set(cmake_2_8_12_PRIVATE PRIVATE)
+  set(cmake_2_8_12_PUBLIC PUBLIC)
+endif ()
+
 macro(add_lldb_library name)
   llvm_process_sources(srcs ${ARGN})
   if (MSVC_IDE OR XCODE)
@@ -182,24 +223,34 @@ macro(add_lldb_library name)
   else()
     set(libkind STATIC)
   endif()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-  add_library(${name} ${libkind} ${srcs})
+  #PIC not needed on Win
+  if (NOT MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+  endif()
+  llvm_add_library(${name} ${libkind} ${srcs})
   #if (LLVM_COMMON_DEPENDS)
   ##add_dependencies(${name} ${LLVM_COMMON_DEPENDS})
   #endif()
 
+  if ("${libkind}" STREQUAL "STATIC")
+    set(lldb_library_keyword ${cmake_2_8_12_INTERFACE})
+  else ()
+    set(lldb_library_keyword ${cmake_2_8_12_PUBLIC})
+  endif ()
+
   if(LLDB_USED_LIBS)
-    if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR CMAKE_SYSTEM_NAME MATCHES "Windows")
-      target_link_libraries(${name} -Wl,--start-group ${LLDB_USED_LIBS} -Wl,--end-group)
+    # The Darwin linker doesn't understand --start-group/--end-group.
+    if (LLVM_COMPILER_IS_GCC_COMPATIBLE AND NOT "${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
+      target_link_libraries(${name} ${lldb_library_keyword}
+                            -Wl,--start-group ${LLDB_USED_LIBS} -Wl,--end-group)
     else()
-      target_link_libraries(${name} ${LLDB_USED_LIBS})
+      target_link_libraries(${name} ${lldb_library_keyword} ${LLDB_USED_LIBS})
     endif()
   endif()
-  target_link_libraries(${name} ${CLANG_USED_LIBS})
-  target_link_libraries(${name} ${LLVM_USED_LIBS})
+  target_link_libraries(${name} ${lldb_library_keyword} ${CLANG_USED_LIBS})
+  target_link_libraries(${name} ${lldb_library_keyword} ${LLVM_USED_LIBS})
   llvm_config(${name} ${LLVM_LINK_COMPONENTS})
-  target_link_libraries(${name} ${LLVM_COMMON_LIBS})
-  link_system_libs(${name})
+  target_link_libraries(${name} ${lldb_library_keyword} ${LLVM_COMMON_LIBS})
   if (LLVM_COMMON_DEPENDS)
     add_dependencies(${name} ${LLVM_COMMON_DEPENDS})
   endif()
@@ -219,15 +270,7 @@ macro(add_lldb_library name)
 endmacro(add_lldb_library)
 
 macro(add_lldb_executable name)
-  #add_llvm_executable(${name} ${ARGN})
-  llvm_process_sources( ALL_FILES ${ARGN} )
-  add_executable(${name} ${ALL_FILES})
-  #target_link_libraries(${name} ${CLANG_USED_LIBS})
-  #llvm_config( ${name} ${LLVM_LINK_COMPONENTS} )
-  #link_system_libs( ${name} )
-  #if (LLVM_COMMON_DEPENDS)
-  #add_dependencies(${name} ${LLVM_COMMON_DEPENDS})
-  #endif()
+  add_llvm_executable(${name} ${ARGN})
   set_target_properties(${name} PROPERTIES FOLDER "lldb executables")
 endmacro(add_lldb_executable)
 
@@ -253,23 +296,42 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
   find_library(SECURITY_LIBRARY Security)
   find_library(DEBUG_SYMBOLS_LIBRARY DebugSymbols PATHS "/System/Library/PrivateFrameworks")
 
-  set(LIBXML2_INCLUDE_DIR "/usr/include/libxml2")
-  list(APPEND system_libs xml2)
+  if (NOT LIBXML2_FOUND)
+    find_package(LibXml2)
+  endif ()
+  list(APPEND system_libs xml2 ncurses panel)
   list(APPEND system_libs ${CARBON_LIBRARY} ${FOUNDATION_LIBRARY}
   ${CORE_FOUNDATION_LIBRARY} ${CORE_SERVICES_LIBRARY} ${SECURITY_LIBRARY}
   ${DEBUG_SYMBOLS_LIBRARY})
 endif()
 
-# On FreeBSD, link libexecinfo because libc is missing  backtrace()
-if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
-  list(APPEND system_libs execinfo)
+if(LLDB_REQUIRES_EH)
+  set(LLDB_REQUIRES_RTTI ON)
+else()
+  if(LLVM_COMPILER_IS_GCC_COMPATIBLE)
+    set(LLDB_COMPILE_FLAGS "${LLDB_COMPILE_FLAGS} -fno-exceptions")
+  elseif(MSVC)
+    add_definitions( -D_HAS_EXCEPTIONS=0 )
+    set(LLDB_COMPILE_FLAGS "${LLDB_COMPILE_FLAGS} /EHs-c-")
+  endif()
 endif()
+
+# Disable RTTI by default
+if(NOT LLDB_REQUIRES_RTTI)
+  if (LLVM_COMPILER_IS_GCC_COMPATIBLE)
+    set(LLDB_COMPILE_FLAGS "${LLDB_COMPILE_FLAGS} -fno-rtti")
+  elseif(MSVC)
+    set(LLDB_COMPILE_FLAGS "${LLDB_COMPILE_FLAGS} /GR-")
+  endif()
+endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLDB_COMPILE_FLAGS}")
 
 #add_subdirectory(include)
 add_subdirectory(docs)
-if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
+if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows" OR NOT LLDB_DISABLE_PYTHON)
   add_subdirectory(scripts)
-endif()
+endif ()
 add_subdirectory(source)
 add_subdirectory(test)
 add_subdirectory(tools)

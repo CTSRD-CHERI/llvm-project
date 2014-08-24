@@ -212,7 +212,7 @@ int main(int argc, char **argv) {
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts(new DiagnosticOptions());
   DiagnosticsEngine Diagnostics(
       IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs()),
-      DiagOpts.getPtr());
+      DiagOpts.get());
 
   // Determine a formatting style from options.
   format::FormatStyle FormatStyle;
@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
   TUReplacements TUs;
   TUReplacementFiles TURFiles;
 
-  error_code ErrorCode =
+  std::error_code ErrorCode =
       collectReplacementsFromDirectory(Directory, TUs, TURFiles, Diagnostics);
 
   if (ErrorCode) {
@@ -233,7 +233,7 @@ int main(int argc, char **argv) {
 
   // Remove the TUReplacementFiles (triggered by "remove-change-desc-files"
   // command line option) when exiting main().
-  OwningPtr<ScopedFileRemover> Remover;
+  std::unique_ptr<ScopedFileRemover> Remover;
   if (RemoveTUReplacementFiles)
     Remover.reset(new ScopedFileRemover(TURFiles, Diagnostics));
 
@@ -272,7 +272,8 @@ int main(int argc, char **argv) {
 
     // Write new file to disk
     std::string ErrorInfo;
-    llvm::raw_fd_ostream FileStream(I->getKey().str().c_str(), ErrorInfo);
+    llvm::raw_fd_ostream FileStream(I->getKey().str().c_str(), ErrorInfo,
+                                    llvm::sys::fs::F_Text);
     if (!ErrorInfo.empty()) {
       llvm::errs() << "Could not open " << I->getKey() << " for writing\n";
       continue;

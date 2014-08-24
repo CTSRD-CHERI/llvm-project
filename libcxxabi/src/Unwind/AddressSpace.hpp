@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dlfcn.h>
 
 #if __APPLE__
@@ -30,11 +31,29 @@ namespace libunwind {
 #include "dwarf2.h"
 #include "Registers.hpp"
 
+#if LIBCXXABI_ARM_EHABI
+#if __linux__
+
+typedef long unsigned int *_Unwind_Ptr;
+extern "C" _Unwind_Ptr __gnu_Unwind_Find_exidx(_Unwind_Ptr addr, int *len);
+
+// Emulate the BSD dl_unwind_find_exidx API when on a GNU libdl system.
+#define dl_unwind_find_exidx __gnu_Unwind_Find_exidx
+
+#else
+#include <link.h>
+#endif
+#endif  // LIBCXXABI_ARM_EHABI
+
 namespace libunwind {
 
 /// Used by findUnwindSections() to return info about needed sections.
 struct UnwindInfoSections {
-  uintptr_t        dso_base;
+#if _LIBUNWIND_SUPPORT_DWARF_UNWIND || _LIBUNWIND_SUPPORT_DWARF_INDEX ||       \
+    _LIBUNWIND_SUPPORT_COMPACT_UNWIND
+  // No dso_base for ARM EHABI.
+  uintptr_t       dso_base;
+#endif
 #if _LIBUNWIND_SUPPORT_DWARF_UNWIND
   uintptr_t       dwarf_section;
   uintptr_t       dwarf_section_length;
@@ -46,6 +65,10 @@ struct UnwindInfoSections {
 #if _LIBUNWIND_SUPPORT_COMPACT_UNWIND
   uintptr_t       compact_unwind_section;
   uintptr_t       compact_unwind_section_length;
+#endif
+#if LIBCXXABI_ARM_EHABI
+  uintptr_t       arm_section;
+  uintptr_t       arm_section_length;
 #endif
 };
 
@@ -62,12 +85,36 @@ public:
   typedef uint32_t pint_t;
   typedef int32_t  sint_t;
 #endif
-  uint8_t         get8(pint_t addr)      { return *((uint8_t *)addr); }
-  uint16_t        get16(pint_t addr)     { return *((uint16_t *)addr); }
-  uint32_t        get32(pint_t addr)     { return *((uint32_t *)addr); }
-  uint64_t        get64(pint_t addr)     { return *((uint64_t *)addr); }
-  double          getDouble(pint_t addr) { return *((double *)addr); }
-  v128            getVector(pint_t addr) { return *((v128 *)addr); }
+  uint8_t         get8(pint_t addr) {
+    uint8_t val;
+    memcpy(&val, (void *)addr, sizeof(val));
+    return val;
+  }
+  uint16_t         get16(pint_t addr) {
+    uint16_t val;
+    memcpy(&val, (void *)addr, sizeof(val));
+    return val;
+  }
+  uint32_t         get32(pint_t addr) {
+    uint32_t val;
+    memcpy(&val, (void *)addr, sizeof(val));
+    return val;
+  }
+  uint64_t         get64(pint_t addr) {
+    uint64_t val;
+    memcpy(&val, (void *)addr, sizeof(val));
+    return val;
+  }
+  double           getDouble(pint_t addr) {
+    double val;
+    memcpy(&val, (void *)addr, sizeof(val));
+    return val;
+  }
+  v128             getVector(pint_t addr) {
+    v128 val;
+    memcpy(&val, (void *)addr, sizeof(val));
+    return val;
+  }
   uintptr_t       getP(pint_t addr);
   static uint64_t getULEB128(pint_t &addr, pint_t end);
   static int64_t  getSLEB128(pint_t &addr, pint_t end);
@@ -80,7 +127,6 @@ public:
 
   static LocalAddressSpace sThisAddressSpace;
 };
-
 
 inline uintptr_t LocalAddressSpace::getP(pint_t addr) {
 #if __LP64__
@@ -172,12 +218,14 @@ inline LocalAddressSpace::pint_t LocalAddressSpace::getEncodedP(pint_t &addr,
     result = (pint_t)getSLEB128(addr, end);
     break;
   case DW_EH_PE_sdata2:
-    result = (uint16_t)get16(addr);
+    // Sign extend from signed 16-bit value.
+    result = (pint_t)(int16_t)get16(addr);
     p += 2;
     addr = (pint_t) p;
     break;
   case DW_EH_PE_sdata4:
-    result = (uint32_t)get32(addr);
+    // Sign extend from signed 32-bit value.
+    result = (pint_t)(int32_t)get32(addr);
     p += 4;
     addr = (pint_t) p;
     break;
@@ -230,8 +278,9 @@ inline LocalAddressSpace::pint_t LocalAddressSpace::getEncodedP(pint_t &addr,
     const void*                 compact_unwind_section;
     uintptr_t                   compact_unwind_section_length;
   };
-  #if defined(__MAC_OS_X_VERSION_MIN_REQUIRED) \
-                                  && (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1070)
+  #if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) \
+                                 && (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1070)) \
+      || defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
     // In 10.7.0 or later, libSystem.dylib implements this function.
     extern "C" bool _dyld_find_unwind_sections(void *, dyld_unwind_sections *);
   #else
@@ -276,9 +325,15 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
     info.compact_unwind_section_length = dyldInfo.compact_unwind_section_length;
     return true;
   }
-#else
-  // TO DO
-
+#elif LIBCXXABI_ARM_EHABI
+  int length = 0;
+  info.arm_section = (uintptr_t) dl_unwind_find_exidx(
+      (_Unwind_Ptr) targetAddr, &length);
+  info.arm_section_length = (uintptr_t)length;
+  _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: section %X length %x\n",
+                             info.arm_section, info.arm_section_length);
+  if (info.arm_section && info.arm_section_length)
+    return true;
 #endif
 
   return false;
@@ -290,6 +345,8 @@ inline bool LocalAddressSpace::findOtherFDE(pint_t targetAddr, pint_t &fde) {
   return checkKeyMgrRegisteredFDEs(targetAddr, *((void**)&fde));
 #else
   // TO DO: if OS has way to dynamically register FDEs, check that.
+  (void)targetAddr;
+  (void)fde;
   return false;
 #endif
 }
@@ -297,10 +354,10 @@ inline bool LocalAddressSpace::findOtherFDE(pint_t targetAddr, pint_t &fde) {
 inline bool LocalAddressSpace::findFunctionName(pint_t addr, char *buf,
                                                 size_t bufLen,
                                                 unw_word_t *offset) {
-  dl_info dyldInfo;
+  Dl_info dyldInfo;
   if (dladdr((void *)addr, &dyldInfo)) {
     if (dyldInfo.dli_sname != NULL) {
-      strlcpy(buf, dyldInfo.dli_sname, bufLen);
+      snprintf(buf, bufLen, "%s", dyldInfo.dli_sname);
       *offset = (addr - (pint_t) dyldInfo.dli_saddr);
       return true;
     }

@@ -26,8 +26,25 @@
 #include <vector>
 #include <libproc.h>
 
+#if defined (__APPLE__)
+#include <pthread.h>
+#include <sched.h>
+#endif
+
+#define TRY_KQUEUE 1
+
+#ifdef TRY_KQUEUE
+    #include <sys/event.h>
+    #include <sys/time.h>
+    #ifdef NOTE_EXIT_DETAIL
+        #define USE_KQUEUE
+    #endif
+#endif
+
 #include "MacOSX/MachProcess.h"
 #include "MacOSX/MachTask.h"
+#include "MacOSX/Genealogy.h"
+#include "MacOSX/ThreadInfo.h"
 #include "CFString.h"
 #include "DNBLog.h"
 #include "DNBDataRef.h"
@@ -123,12 +140,163 @@ GetProcessSP (nub_process_t pid, MachProcessSP& procSP)
     return false;
 }
 
+#ifdef USE_KQUEUE
+void *
+kqueue_thread (void *arg)
+{
+    int kq_id = (int) (intptr_t) arg;
+    
+#if defined (__APPLE__)
+    pthread_setname_np ("kqueue thread");
+#if defined (__arm__) || defined (__arm64__) || defined (__aarch64__)
+    struct sched_param thread_param;
+    int thread_sched_policy;
+    if (pthread_getschedparam(pthread_self(), &thread_sched_policy, &thread_param) == 0) 
+    {
+        thread_param.sched_priority = 47;
+        pthread_setschedparam(pthread_self(), thread_sched_policy, &thread_param);
+    }
+#endif
+#endif
+
+    struct kevent death_event;
+    while (1)
+    {        
+        int n_events = kevent (kq_id, NULL, 0, &death_event, 1, NULL);
+        if (n_events == -1)
+        {
+            if (errno == EINTR)
+                continue;
+            else
+            {
+                DNBLogError ("kqueue failed with error: (%d): %s", errno, strerror(errno));
+                return NULL;
+            }
+        }
+        else if (death_event.flags & EV_ERROR)
+        {
+            int error_no = death_event.data;
+            const char *error_str = strerror(death_event.data);
+            if (error_str == NULL)
+                error_str = "Unknown error";
+            DNBLogError ("Failed to initialize kqueue event: (%d): %s", error_no, error_str );
+            return NULL;
+        }
+        else
+        {
+            int status;
+            const pid_t pid = (pid_t)death_event.ident;
+            const pid_t child_pid = waitpid (pid, &status, 0);
+            
+            
+            bool exited = false;
+            int signal = 0;
+            int exit_status = 0;
+            const char *status_cstr = NULL;
+            if (WIFSTOPPED(status))
+            {
+                signal = WSTOPSIG(status);
+                status_cstr = "STOPPED";
+                DNBLogThreadedIf(LOG_PROCESS, "waitpid (%i) -> STOPPED (signal = %i)", child_pid, signal);
+            }
+            else if (WIFEXITED(status))
+            {
+                exit_status = WEXITSTATUS(status);
+                status_cstr = "EXITED";
+                exited = true;
+                DNBLogThreadedIf(LOG_PROCESS, "waitpid (%i) -> EXITED (status = %i)", child_pid, exit_status);
+            }
+            else if (WIFSIGNALED(status))
+            {
+                signal = WTERMSIG(status);
+                status_cstr = "SIGNALED";
+                if (child_pid == abs(pid))
+                {
+                    DNBLogThreadedIf(LOG_PROCESS, "waitpid (%i) -> SIGNALED and EXITED (signal = %i)", child_pid, signal);
+                    char exit_info[64];
+                    ::snprintf (exit_info, sizeof(exit_info), "Terminated due to signal %i", signal);
+                    DNBProcessSetExitInfo (child_pid, exit_info);
+                    exited = true;
+                    exit_status = INT8_MAX;
+                }
+                else
+                {
+                    DNBLogThreadedIf(LOG_PROCESS, "waitpid (%i) -> SIGNALED (signal = %i)", child_pid, signal);
+                }
+            }
+
+            if (exited)
+            {
+                if (death_event.data & NOTE_EXIT_MEMORY)
+                    DNBProcessSetExitInfo (child_pid, "Terminated due to memory issue");
+                else if (death_event.data & NOTE_EXIT_DECRYPTFAIL)
+                    DNBProcessSetExitInfo (child_pid, "Terminated due to decrypt failure");
+                else if (death_event.data & NOTE_EXIT_CSERROR)
+                    DNBProcessSetExitInfo (child_pid, "Terminated due to code signing error");
+                
+                DNBLogThreadedIf(LOG_PROCESS, "waitpid_process_thread (): setting exit status for pid = %i to %i", child_pid, exit_status);
+                DNBProcessSetExitStatus (child_pid, status);
+                return NULL;
+            }
+        }
+    }
+}
+
+static bool
+spawn_kqueue_thread (pid_t pid)
+{
+    pthread_t thread;
+    int kq_id;
+    
+    kq_id = kqueue();
+    if (kq_id == -1)
+    {
+        DNBLogError ("Could not get kqueue for pid = %i.", pid);
+        return false;
+    }
+
+    struct kevent reg_event;
+    
+    EV_SET(&reg_event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_EXITSTATUS|NOTE_EXIT_DETAIL, 0, NULL);
+    // Register the event:
+    int result = kevent (kq_id, &reg_event, 1, NULL, 0, NULL);
+    if (result != 0)
+    {
+        DNBLogError ("Failed to register kqueue NOTE_EXIT event for pid %i, error: %d.", pid, result);
+        return false;
+    }
+    
+    int ret = ::pthread_create (&thread, NULL, kqueue_thread, (void *)(intptr_t)kq_id);
+    
+    // pthread_create returns 0 if successful
+    if (ret == 0)
+    {
+        ::pthread_detach (thread);
+        return true;
+    }
+    return false;
+}
+#endif // #if USE_KQUEUE
 
 static void *
 waitpid_thread (void *arg)
 {
     const pid_t pid = (pid_t)(intptr_t)arg;
     int status;
+
+#if defined (__APPLE__)
+    pthread_setname_np ("waitpid thread");
+#if defined (__arm__) || defined (__arm64__) || defined (__aarch64__)
+    struct sched_param thread_param;
+    int thread_sched_policy;
+    if (pthread_getschedparam(pthread_self(), &thread_sched_policy, &thread_param) == 0) 
+    {
+        thread_param.sched_priority = 47;
+        pthread_setschedparam(pthread_self(), thread_sched_policy, &thread_param);
+    }
+#endif
+#endif
+
     while (1)
     {
         pid_t child_pid = waitpid(pid, &status, 0);
@@ -161,10 +329,15 @@ waitpid_thread (void *arg)
     DNBProcessSetExitStatus (pid, -1);
     return NULL;
 }
-
 static bool
 spawn_waitpid_thread (pid_t pid)
 {
+#ifdef USE_KQUEUE
+    bool success = spawn_kqueue_thread (pid);
+    if (success)
+        return true;
+#endif
+
     pthread_t thread;
     int ret = ::pthread_create (&thread, NULL, waitpid_thread, (void *)(intptr_t)pid);
     // pthread_create returns 0 if successful
@@ -180,13 +353,14 @@ nub_process_t
 DNBProcessLaunch (const char *path,
                   char const *argv[],
                   const char *envp[],
-                  const char *working_directory, // NULL => dont' change, non-NULL => set working directory for inferior to this
+                  const char *working_directory, // NULL => don't change, non-NULL => set working directory for inferior to this
                   const char *stdin_path,
                   const char *stdout_path,
                   const char *stderr_path,
                   bool no_stdio,
                   nub_launch_flavor_t launch_flavor,
                   int disable_aslr,
+                  const char *event_data,
                   char *err_str,
                   size_t err_len)
 {
@@ -229,7 +403,8 @@ DNBProcessLaunch (const char *path,
                                                stderr_path, 
                                                no_stdio, 
                                                launch_flavor, 
-                                               disable_aslr, 
+                                               disable_aslr,
+                                               event_data,
                                                launch_err);
         if (err_str)
         {
@@ -650,6 +825,10 @@ DNBProcessDetach (nub_process_t pid)
     MachProcessSP procSP;
     if (GetProcessSP (pid, procSP))
     {
+        const bool remove = true;
+        DNBLogThreaded("Disabling breakpoints and watchpoints, and detaching from %d.", pid);
+        procSP->DisableAllBreakpoints(remove);
+        procSP->DisableAllWatchpoints (remove);
         return procSP->Detach();
     }
     return false;
@@ -673,6 +852,29 @@ DNBProcessSignal (nub_process_t pid, int signal)
     if (GetProcessSP (pid, procSP))
     {
         return procSP->Signal (signal);
+    }
+    return false;
+}
+
+
+nub_bool_t
+DNBProcessInterrupt(nub_process_t pid)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+        return procSP->Interrupt();
+    return false;
+}
+
+nub_bool_t
+DNBProcessSendEvent (nub_process_t pid, const char *event)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        // FIXME: Do something with the error...
+        DNBError send_error;
+        return procSP->SendEvent (event, send_error);
     }
     return false;
 }
@@ -729,6 +931,28 @@ DNBProcessSetExitStatus (nub_process_t pid, int status)
     return false;
 }
 
+const char *
+DNBProcessGetExitInfo (nub_process_t pid)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        return procSP->GetExitInfo();
+    }
+    return NULL;
+}
+
+nub_bool_t
+DNBProcessSetExitInfo (nub_process_t pid, const char *info)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        procSP->SetExitInfo(info);
+        return true;
+    }
+    return false;
+}
 
 const char *
 DNBThreadGetName (nub_process_t pid, nub_thread_t tid)
@@ -779,6 +1003,73 @@ DNBStateAsString(nub_state_t state)
     }
     return "nub_state_t ???";
 }
+
+Genealogy::ThreadActivitySP
+DNBGetGenealogyInfoForThread (nub_process_t pid, nub_thread_t tid, bool &timed_out)
+{
+    Genealogy::ThreadActivitySP thread_activity_sp;
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+        thread_activity_sp = procSP->GetGenealogyInfoForThread (tid, timed_out);
+    return thread_activity_sp;
+}
+
+Genealogy::ProcessExecutableInfoSP
+DNBGetGenealogyImageInfo (nub_process_t pid, size_t idx)
+{
+    Genealogy::ProcessExecutableInfoSP image_info_sp;
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        image_info_sp = procSP->GetGenealogyImageInfo (idx);
+    }
+    return image_info_sp;
+}
+
+ThreadInfo::QoS
+DNBGetRequestedQoSForThread (nub_process_t pid, nub_thread_t tid, nub_addr_t tsd, uint64_t dti_qos_class_index)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        return procSP->GetRequestedQoS (tid, tsd, dti_qos_class_index);
+    }
+    return ThreadInfo::QoS();
+}
+
+nub_addr_t
+DNBGetPThreadT (nub_process_t pid, nub_thread_t tid)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        return procSP->GetPThreadT (tid);
+    }
+    return INVALID_NUB_ADDRESS;
+}
+
+nub_addr_t
+DNBGetDispatchQueueT (nub_process_t pid, nub_thread_t tid)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        return procSP->GetDispatchQueueT (tid);
+    }
+    return INVALID_NUB_ADDRESS;
+}
+
+nub_addr_t
+DNBGetTSDAddressForThread (nub_process_t pid, nub_thread_t tid, uint64_t plo_pthread_tsd_base_address_offset, uint64_t plo_pthread_tsd_base_offset, uint64_t plo_pthread_tsd_entry_size)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        return procSP->GetTSDAddressForThread (tid, plo_pthread_tsd_base_address_offset, plo_pthread_tsd_base_offset, plo_pthread_tsd_entry_size);
+    }
+    return INVALID_NUB_ADDRESS;
+}
+
 
 const char *
 DNBProcessGetExecutablePath (nub_process_t pid)
@@ -1301,13 +1592,13 @@ DNBPrintf (nub_process_t pid, nub_thread_t tid, nub_addr_t base_addr, FILE *file
                         case 'a':    // Print the current address
                             ++f;
                             fprintf_format += "ll";
-                            fprintf_format += *f;    // actual format to show address with folows the 'a' ("%_ax")
+                            fprintf_format += *f;    // actual format to show address with follows the 'a' ("%_ax")
                             fprintf (file, fprintf_format.c_str(), addr);
                             break;
                         case 'o':    // offset from base address
                             ++f;
                             fprintf_format += "ll";
-                            fprintf_format += *f;    // actual format to show address with folows the 'a' ("%_ox")
+                            fprintf_format += *f;    // actual format to show address with follows the 'a' ("%_ox")
                             fprintf(file, fprintf_format.c_str(), addr - base_addr);
                             break;
                         default:
@@ -2050,8 +2341,9 @@ DNBInitialize()
 #if defined (__i386__) || defined (__x86_64__)
     DNBArchImplI386::Initialize();
     DNBArchImplX86_64::Initialize();
-#elif defined (__arm__)
+#elif defined (__arm__) || defined (__arm64__) || defined (__aarch64__)
     DNBArchMachARM::Initialize();
+    DNBArchMachARM64::Initialize();
 #endif
 }
 
@@ -2067,8 +2359,10 @@ DNBSetArchitecture (const char *arch)
     {
         if (strcasecmp (arch, "i386") == 0)
             return DNBArchProtocol::SetArchitecture (CPU_TYPE_I386);
-        else if (strcasecmp (arch, "x86_64") == 0)
+        else if ((strcasecmp (arch, "x86_64") == 0) || (strcasecmp (arch, "x86_64h") == 0))
             return DNBArchProtocol::SetArchitecture (CPU_TYPE_X86_64);
+        else if (strstr (arch, "arm64") == arch || strstr (arch, "armv8") == arch || strstr (arch, "aarch64") == arch)
+            return DNBArchProtocol::SetArchitecture (CPU_TYPE_ARM64);
         else if (strstr (arch, "arm") == arch)
             return DNBArchProtocol::SetArchitecture (CPU_TYPE_ARM);
     }

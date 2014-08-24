@@ -66,7 +66,7 @@ and automatic location of the compilation database using source files paths.
 
   // Apply a custom category to all command-line options so that they are the
   // only ones displayed.
-  llvm::cl::OptionCategory MyToolCategory("my-tool options");
+  static llvm::cl::OptionCategory MyToolCategory("my-tool options");
 
   int main(int argc, const char **argv) {
     // CommonOptionsParser constructor will parse arguments and create a
@@ -99,13 +99,13 @@ our ``FrontendAction`` over some code.  For example, to run the
   // on.  Thus, it takes a FrontendActionFactory as parameter.  To create a
   // FrontendActionFactory from a given FrontendAction type, we call
   // newFrontendActionFactory<clang::SyntaxOnlyAction>().
-  int result = Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>());
+  int result = Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>().get());
 
 Putting it together --- the first tool
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Now we combine the two previous steps into our first real tool.  This example
-tool is also checked into the clang tree at
+Now we combine the two previous steps into our first real tool.  A more advanced
+version of this example tool is also checked into the clang tree at
 ``tools/clang-check/ClangCheck.cpp``.
 
 .. code-block:: c++
@@ -122,7 +122,7 @@ tool is also checked into the clang tree at
 
   // Apply a custom category to all command-line options so that they are the
   // only ones displayed.
-  cl::OptionCategory MyToolCategory("my-tool options");
+  static cl::OptionCategory MyToolCategory("my-tool options");
 
   // CommonOptionsParser declares HelpMessage with a description of the common
   // command-line options related to the compilation database and input files.
@@ -135,8 +135,8 @@ tool is also checked into the clang tree at
   int main(int argc, const char **argv) {
     CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
     ClangTool Tool(OptionsParser.getCompilations(),
-    OptionsParser.getSourcePathList());
-    return Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>());
+                   OptionsParser.getSourcePathList());
+    return Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>().get());
   }
 
 Running the tool on some code

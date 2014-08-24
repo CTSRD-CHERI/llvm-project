@@ -7,12 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements post order view of the blocks in a CFG.
+// This file implements post order views of the blocks in a CFG.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_POSTORDER_CFGVIEW
-#define LLVM_CLANG_POSTORDER_CFGVIEW
+#ifndef LLVM_CLANG_ANALYSIS_ANALYSES_POSTORDERCFGVIEW_H
+#define LLVM_CLANG_ANALYSIS_ANALYSES_POSTORDERCFGVIEW_H
 
 #include <vector>
 //#include <algorithm>
@@ -52,7 +52,7 @@ public:
       // make sure that Block is non-null.  Moreover, the CFGBlock iterator will
       // occasionally hand out null pointers for pruned edges, so we catch those
       // here.
-      if (Block == 0)
+      if (!Block)
         return false;  // if an edge is trivially false.
       if (VisitedBlockIDs.test(Block->getBlockID()))
         return false;
@@ -68,22 +68,25 @@ public:
     }
   };
 
-private:
-  typedef llvm::po_iterator<const CFG*, CFGBlockSet, true>  po_iterator;
+protected:
   std::vector<const CFGBlock*> Blocks;
 
   typedef llvm::DenseMap<const CFGBlock *, unsigned> BlockOrderTy;
   BlockOrderTy BlockOrder;
 
 public:
-  typedef std::vector<const CFGBlock*>::reverse_iterator iterator;
+  typedef std::vector<const CFGBlock *>::reverse_iterator iterator;
+  typedef std::vector<const CFGBlock *>::const_reverse_iterator const_iterator;
 
   PostOrderCFGView(const CFG *cfg);
 
   iterator begin() { return Blocks.rbegin(); }
   iterator end()   { return Blocks.rend(); }
 
-  bool empty() { return begin() == end(); }
+  const_iterator begin() const { return Blocks.rbegin(); }
+  const_iterator end() const { return Blocks.rend(); }
+
+  bool empty() const { return begin() == end(); }
 
   struct BlockOrderCompare;
   friend struct BlockOrderCompare;
@@ -103,6 +106,15 @@ public:
   static const void *getTag();
 
   static PostOrderCFGView *create(AnalysisDeclContext &analysisContext);
+
+protected:
+  PostOrderCFGView() {}
+};
+
+class ReversePostOrderCFGView : public PostOrderCFGView {
+public:
+  ReversePostOrderCFGView(const CFG *cfg);
+  static ReversePostOrderCFGView *create(AnalysisDeclContext &analysisContext);
 };
 
 } // end clang namespace

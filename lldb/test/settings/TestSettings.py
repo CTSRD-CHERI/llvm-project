@@ -165,7 +165,7 @@ class SettingsCommandTestCase(TestBase):
         self.expect("settings show auto-confirm", SETTING_MSG("auto-confirm"),
             startstr = "auto-confirm (boolean) = false")
 
-    @unittest2.skipUnless(os.uname()[4] in ['amd64', 'i386', 'x86_64'], "requires x86 or x86_64")
+    @unittest2.skipUnless(os.name != "nt" and os.uname()[4] in ['amd64', 'i386', 'x86_64'], "requires x86 or x86_64")
     def test_disassembler_settings(self):
         """Test that user options for the disassembler take effect."""
         self.buildDefault()
@@ -290,11 +290,11 @@ class SettingsCommandTestCase(TestBase):
 
         self.expect("settings show target.error-path",
                     SETTING_MSG("target.error-path"),
-            startstr = 'target.error-path (file) = "stderr.txt"')
+                    substrs = ['target.error-path (file) = ', 'stderr.txt"'])
 
         self.expect("settings show target.output-path",
                     SETTING_MSG("target.output-path"),
-            startstr = 'target.output-path (file) = "stdout.txt"')
+                    substrs = ['target.output-path (file) = ', 'stdout.txt"'])
 
         self.runCmd("run", RUN_SUCCEEDED)
 

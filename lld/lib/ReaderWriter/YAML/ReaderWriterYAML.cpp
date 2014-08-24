@@ -7,31 +7,29 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lld/ReaderWriter/Reader.h"
-#include "lld/ReaderWriter/Simple.h"
-#include "lld/ReaderWriter/Writer.h"
-#include "lld/ReaderWriter/YamlContext.h"
-
 #include "lld/Core/ArchiveLibraryFile.h"
 #include "lld/Core/DefinedAtom.h"
 #include "lld/Core/Error.h"
 #include "lld/Core/File.h"
 #include "lld/Core/LLVM.h"
 #include "lld/Core/Reference.h"
-
+#include "lld/Core/Simple.h"
+#include "lld/ReaderWriter/Reader.h"
+#include "lld/ReaderWriter/Writer.h"
+#include "lld/ReaderWriter/YamlContext.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/system_error.h"
 #include "llvm/Support/YAMLTraits.h"
-
+#include "llvm/Support/raw_ostream.h"
+#include <memory>
 #include <string>
+#include <system_error>
 
 using llvm::yaml::MappingTraits;
 using llvm::yaml::ScalarEnumerationTraits;
@@ -63,13 +61,20 @@ class RefNameBuilder {
 public:
   RefNameBuilder(const lld::File &file)
       : _collisionCount(0), _unnamedCounter(0) {
-    if (&file == nullptr)
-      return;
     // visit all atoms
     for (const lld::DefinedAtom *atom : file.defined()) {
       // Build map of atoms names to detect duplicates
       if (!atom->name().empty())
         buildDuplicateNameMap(*atom);
+
+      if (atom->isGroupParent()) {
+        for (const lld::Reference *ref : *atom) {
+          if (ref->kindNamespace() != lld::Reference::KindNamespace::all)
+            continue;
+          if (ref->kindValue() == lld::Reference::kindGroupChild)
+            buildDuplicateNameMap(*ref->target());
+        }
+      }
 
       // Find references to unnamed atoms and create ref-names for them.
       for (const lld::Reference *ref : *atom) {
@@ -96,7 +101,8 @@ public:
       buildDuplicateNameMap(*shlibAtom);
     }
     for (const lld::AbsoluteAtom *absAtom : file.absolute()) {
-      buildDuplicateNameMap(*absAtom);
+      if (!absAtom->name().empty())
+        buildDuplicateNameMap(*absAtom);
     }
   }
 
@@ -150,7 +156,7 @@ private:
   typedef llvm::StringMap<const lld::Atom *> NameToAtom;
   typedef llvm::DenseMap<const lld::Atom *, std::string> AtomToRefName;
 
-  // Allocate a new copy of this string in _storage, so the strings 
+  // Allocate a new copy of this string in _storage, so the strings
   // can be freed when RefNameBuilder is destroyed.
   StringRef copyString(StringRef str) {
     char *s = _storage.Allocate<char>(str.size());
@@ -173,18 +179,37 @@ public:
 
   const lld::Atom *lookup(StringRef name) const {
     NameToAtom::const_iterator pos = _nameMap.find(name);
-    if (pos != _nameMap.end()) {
+    if (pos != _nameMap.end())
       return pos->second;
-    } else {
-      _io.setError(Twine("no such atom name: ") + name);
-      return nullptr;
-    }
+    _io.setError(Twine("no such atom name: ") + name);
+    return nullptr;
+  }
+
+  /// \brief Lookup a group parent when there is a reference of type
+  /// kindGroupChild. If there was no group-parent produce an appropriate
+  /// error.
+  const lld::Atom *lookupGroupParent(StringRef name) const {
+    NameToAtom::const_iterator pos = _groupMap.find(name);
+    if (pos != _groupMap.end())
+      return pos->second;
+    _io.setError(Twine("no such group name: ") + name);
+    return nullptr;
   }
 
 private:
   typedef llvm::StringMap<const lld::Atom *> NameToAtom;
 
   void add(StringRef name, const lld::Atom *atom) {
+    if (const lld::DefinedAtom *da = dyn_cast<DefinedAtom>(atom)) {
+      if (da->isGroupParent()) {
+        if (_groupMap.count(name)) {
+          _io.setError(Twine("duplicate group name: ") + name);
+        } else {
+          _groupMap[name] = atom;
+        }
+        return;
+      }
+    }
     if (_nameMap.count(name)) {
       _io.setError(Twine("duplicate atom name: ") + name);
     } else {
@@ -194,6 +219,7 @@ private:
 
   IO &_io;
   NameToAtom _nameMap;
+  NameToAtom _groupMap;
 };
 
 // Used in NormalizedFile to hold the atoms lists.
@@ -285,6 +311,8 @@ template <> struct ScalarTraits<RefKind> {
       return StringRef();
     return StringRef("unknown reference kind");
   }
+
+  static bool mustQuote(StringRef) { return false; }
 };
 
 template <> struct ScalarEnumerationTraits<lld::File::Kind> {
@@ -336,7 +364,10 @@ template <> struct ScalarEnumerationTraits<lld::DefinedAtom::Merge> {
     io.enumCase(value, "as-weak",      lld::DefinedAtom::mergeAsWeak);
     io.enumCase(value, "as-addressed-weak",
                                    lld::DefinedAtom::mergeAsWeakAndAddressUsed);
-    io.enumCase(value, "by-content",  lld::DefinedAtom::mergeByContent);
+    io.enumCase(value, "by-content",   lld::DefinedAtom::mergeByContent);
+    io.enumCase(value, "same-name-and-size",
+                lld::DefinedAtom::mergeSameNameAndSize);
+    io.enumCase(value, "largest", lld::DefinedAtom::mergeByLargestSection);
   }
 };
 
@@ -418,6 +449,8 @@ template <> struct ScalarEnumerationTraits<lld::DefinedAtom::ContentType> {
     io.enumCase(value, "ro-note",         DefinedAtom::typeRONote);
     io.enumCase(value, "rw-note",         DefinedAtom::typeRWNote);
     io.enumCase(value, "no-alloc",        DefinedAtom::typeNoAlloc);
+    io.enumCase(value, "group-comdat", DefinedAtom::typeGroupComdat);
+    io.enumCase(value, "gnu-linkonce", DefinedAtom::typeGnuLinkOnce);
   }
 };
 
@@ -488,6 +521,8 @@ template <> struct ScalarTraits<lld::DefinedAtom::Alignment> {
     }
     return StringRef(); // returning empty string means success
   }
+
+  static bool mustQuote(StringRef) { return false; }
 };
 
 template <> struct ScalarEnumerationTraits<FileKinds> {
@@ -534,6 +569,8 @@ template <> struct ScalarTraits<ImplicitHex8> {
     val = n;
     return StringRef(); // returning empty string means success
   }
+
+  static bool mustQuote(StringRef) { return false; }
 };
 
 // YAML conversion for std::vector<const lld::File*>
@@ -563,20 +600,20 @@ template <> struct MappingTraits<const lld::File *> {
 
     const lld::File *denormalize(IO &io) { return this; }
 
-    virtual const atom_collection<lld::DefinedAtom> &defined() const {
+    const atom_collection<lld::DefinedAtom> &defined() const override {
       return _noDefinedAtoms;
     }
-    virtual const atom_collection<lld::UndefinedAtom> &undefined() const {
+    const atom_collection<lld::UndefinedAtom> &undefined() const override {
       return _noUndefinedAtoms;
     }
     virtual const atom_collection<lld::SharedLibraryAtom> &
-    sharedLibrary() const {
+    sharedLibrary() const override {
       return _noSharedLibraryAtoms;
     }
-    virtual const atom_collection<lld::AbsoluteAtom> &absolute() const {
+    const atom_collection<lld::AbsoluteAtom> &absolute() const override {
       return _noAbsoluteAtoms;
     }
-    virtual const File *find(StringRef name, bool dataSymbolOnly) const {
+    const File *find(StringRef name, bool dataSymbolOnly) const override {
       for (const ArchMember &member : _members) {
         for (const lld::DefinedAtom *atom : member._content->defined()) {
           if (name == atom->name()) {
@@ -595,9 +632,9 @@ template <> struct MappingTraits<const lld::File *> {
       return nullptr;
     }
 
-    virtual error_code
-    parseAllMembers(std::vector<std::unique_ptr<File>> &result) const {
-      return error_code::success();
+    virtual std::error_code
+    parseAllMembers(std::vector<std::unique_ptr<File>> &result) const override {
+      return std::error_code();
     }
 
     StringRef               _path;
@@ -621,21 +658,21 @@ template <> struct MappingTraits<const lld::File *> {
     }
     const lld::File *denormalize(IO &io);
 
-    virtual const atom_collection<lld::DefinedAtom> &defined() const {
+    const atom_collection<lld::DefinedAtom> &defined() const override {
       return _definedAtoms;
     }
-    virtual const atom_collection<lld::UndefinedAtom> &undefined() const {
+    const atom_collection<lld::UndefinedAtom> &undefined() const override {
       return _undefinedAtoms;
     }
     virtual const atom_collection<lld::SharedLibraryAtom> &
-    sharedLibrary() const {
+    sharedLibrary() const override {
       return _sharedLibraryAtoms;
     }
-    virtual const atom_collection<lld::AbsoluteAtom> &absolute() const {
+    const atom_collection<lld::AbsoluteAtom> &absolute() const override {
       return _absoluteAtoms;
     }
 
-    // Allocate a new copy of this string in _storage, so the strings 
+    // Allocate a new copy of this string in _storage, so the strings
     // can be freed when File is destroyed.
     StringRef copyString(StringRef str) {
       char *s = _storage.Allocate<char>(str.size());
@@ -659,7 +696,7 @@ template <> struct MappingTraits<const lld::File *> {
     // Let any register tag handler process this.
     if (info->_registry && info->_registry->handleTaggedDoc(io, file))
       return;
-    // If no registered handler claims this tag and there is no tag, 
+    // If no registered handler claims this tag and there is no tag,
     // grandfather in as "!native".
     if (io.mapTag("!native", true) || io.mapTag("tag:yaml.org,2002:map"))
       mappingAtoms(io, file);
@@ -726,11 +763,11 @@ template <> struct MappingTraits<const lld::Reference *> {
     void bind(const RefNameResolver &);
     static StringRef targetName(IO &io, const lld::Reference *ref);
 
-    virtual uint64_t offsetInAtom() const { return _offset; }
-    virtual const lld::Atom *target() const { return _target; }
-    virtual Addend addend() const { return _addend; }
-    virtual void setAddend(Addend a) { _addend = a; }
-    virtual void setTarget(const lld::Atom *a) { _target = a; }
+    uint64_t offsetInAtom() const override { return _offset; }
+    const lld::Atom *target() const override { return _target; }
+    Addend addend() const override { return _addend; }
+    void setAddend(Addend a) override { _addend = a; }
+    void setTarget(const lld::Atom *a) override { _target = a; }
 
     const lld::Atom *_target;
     StringRef        _targetName;
@@ -757,7 +794,7 @@ template <> struct MappingTraits<const lld::DefinedAtom *> {
   public:
     NormalizedAtom(IO &io)
         : _file(fileFromContext(io)), _name(), _refName(), _contentType(),
-          _alignment(0), _content(), _references() {
+          _alignment(0), _content(), _references(), _isGroupChild(false) {
       static uint32_t ordinalCounter = 1;
       _ordinal = ordinalCounter++;
     }
@@ -805,46 +842,47 @@ template <> struct MappingTraits<const lld::DefinedAtom *> {
       return *info->_file;
     }
 
-    virtual const lld::File &file() const { return _file; }
-    virtual StringRef name() const { return _name; }
-    virtual uint64_t size() const { return _size; }
-    virtual Scope scope() const { return _scope; }
-    virtual Interposable interposable() const { return _interpose; }
-    virtual Merge merge() const { return _merge; }
-    virtual ContentType contentType() const { return _contentType; }
-    virtual Alignment alignment() const { return _alignment; }
-    virtual SectionChoice sectionChoice() const { return _sectionChoice; }
-    virtual StringRef customSectionName() const { return _sectionName; }
-    virtual SectionPosition sectionPosition() const { return _sectionPosition; }
-    virtual DeadStripKind deadStrip() const { return _deadStrip; }
-    virtual DynamicExport dynamicExport() const { return _dynamicExport; }
-    virtual ContentPermissions permissions() const { return _permissions; }
-    virtual bool isAlias() const { return false; }
-    ArrayRef<uint8_t> rawContent() const {
+    const lld::File &file() const override { return _file; }
+    StringRef name() const override { return _name; }
+    uint64_t size() const override { return _size; }
+    Scope scope() const override { return _scope; }
+    Interposable interposable() const override { return _interpose; }
+    Merge merge() const override { return _merge; }
+    ContentType contentType() const override { return _contentType; }
+    Alignment alignment() const override { return _alignment; }
+    SectionChoice sectionChoice() const override { return _sectionChoice; }
+    StringRef customSectionName() const override { return _sectionName; }
+    SectionPosition sectionPosition() const override { return _sectionPosition; }
+    DeadStripKind deadStrip() const override { return _deadStrip; }
+    DynamicExport dynamicExport() const override { return _dynamicExport; }
+    ContentPermissions permissions() const override { return _permissions; }
+    void setGroupChild(bool val) { _isGroupChild = val; }
+    bool isGroupChild() const { return _isGroupChild; }
+    ArrayRef<uint8_t> rawContent() const override {
       if (!occupiesDiskSpace())
         return ArrayRef<uint8_t>();
       return ArrayRef<uint8_t>(
           reinterpret_cast<const uint8_t *>(_content.data()), _content.size());
     }
 
-    virtual uint64_t ordinal() const { return _ordinal; }
+    uint64_t ordinal() const override { return _ordinal; }
 
-    reference_iterator begin() const {
+    reference_iterator begin() const override {
       uintptr_t index = 0;
       const void *it = reinterpret_cast<const void *>(index);
       return reference_iterator(*this, it);
     }
-    reference_iterator end() const {
+    reference_iterator end() const override {
       uintptr_t index = _references.size();
       const void *it = reinterpret_cast<const void *>(index);
       return reference_iterator(*this, it);
     }
-    const lld::Reference *derefIterator(const void *it) const {
+    const lld::Reference *derefIterator(const void *it) const override {
       uintptr_t index = reinterpret_cast<uintptr_t>(it);
       assert(index < _references.size());
       return _references[index];
     }
-    void incrementIterator(const void *&it) const {
+    void incrementIterator(const void *&it) const override {
       uintptr_t index = reinterpret_cast<uintptr_t>(it);
       ++index;
       it = reinterpret_cast<const void *>(index);
@@ -868,6 +906,7 @@ template <> struct MappingTraits<const lld::DefinedAtom *> {
     uint64_t                            _size;
     StringRef                           _sectionName;
     std::vector<const lld::Reference *> _references;
+    bool _isGroupChild;
   };
 
   static void mapping(IO &io, const lld::DefinedAtom *&atom) {
@@ -890,7 +929,7 @@ template <> struct MappingTraits<const lld::DefinedAtom *> {
     io.mapOptional("ref-name",         keys->_refName, StringRef());
     io.mapOptional("scope",            keys->_scope,
                                          DefinedAtom::scopeTranslationUnit);
-    io.mapOptional("type",             keys->_contentType, 
+    io.mapOptional("type",             keys->_contentType,
                                          DefinedAtom::typeCode);
     io.mapOptional("content",          keys->_content);
     io.mapOptional("size",             keys->_size, (uint64_t)keys->_content.size());
@@ -952,10 +991,10 @@ template <> struct MappingTraits<const lld::UndefinedAtom *> {
       return *info->_file;
     }
 
-    virtual const lld::File &file() const { return _file; }
-    virtual StringRef name() const { return _name; }
-    virtual CanBeNull canBeNull() const { return _canBeNull; }
-    virtual const UndefinedAtom *fallback() const { return _fallback; }
+    const lld::File &file() const override { return _file; }
+    StringRef name() const override { return _name; }
+    CanBeNull canBeNull() const override { return _canBeNull; }
+    const UndefinedAtom *fallback() const override { return _fallback; }
 
     const lld::File     &_file;
     StringRef            _name;
@@ -1013,12 +1052,12 @@ template <> struct MappingTraits<const lld::SharedLibraryAtom *> {
       return *info->_file;
     }
 
-    virtual const lld::File &file() const { return _file; }
-    virtual StringRef name() const { return _name; }
-    virtual StringRef loadName() const { return _loadName; }
-    virtual bool canBeNullAtRuntime() const { return _canBeNull; }
-    virtual Type type() const { return _type; }
-    virtual uint64_t size() const { return _size; }
+    const lld::File &file() const override { return _file; }
+    StringRef name() const override { return _name; }
+    StringRef loadName() const override { return _loadName; }
+    bool canBeNullAtRuntime() const override { return _canBeNull; }
+    Type type() const override { return _type; }
+    uint64_t size() const override { return _size; }
 
     const lld::File &_file;
     StringRef        _name;
@@ -1073,10 +1112,10 @@ template <> struct MappingTraits<const lld::AbsoluteAtom *> {
       return *info->_file;
     }
 
-    virtual const lld::File &file() const { return _file; }
-    virtual StringRef name() const { return _name; }
-    virtual uint64_t value() const { return _value; }
-    virtual Scope scope() const { return _scope; }
+    const lld::File &file() const override { return _file; }
+    StringRef name() const override { return _name; }
+    uint64_t value() const override { return _value; }
+    Scope scope() const override { return _scope; }
 
     const lld::File &_file;
     StringRef        _name;
@@ -1149,6 +1188,14 @@ MappingTraits<const lld::File *>::NormalizedFile::denormalize(IO &io) {
     NormalizedAtom *normAtom = (NormalizedAtom *)a;
     normAtom->bind(nameResolver);
   }
+
+  _definedAtoms._atoms.erase(std::remove_if(_definedAtoms._atoms.begin(),
+                                            _definedAtoms._atoms.end(),
+                                            [](const DefinedAtom *a) {
+                               return ((NormalizedAtom *)a)->isGroupChild();
+                             }),
+                             _definedAtoms._atoms.end());
+
   return this;
 }
 
@@ -1164,7 +1211,14 @@ inline void MappingTraits<const lld::DefinedAtom *>::NormalizedAtom::bind(
 
 inline void MappingTraits<const lld::Reference *>::NormalizedReference::bind(
     const RefNameResolver &resolver) {
+  typedef MappingTraits<const lld::DefinedAtom *>::NormalizedAtom NormalizedAtom;
+
   _target = resolver.lookup(_targetName);
+
+  if (_mappedKind.ns == lld::Reference::KindNamespace::all &&
+      _mappedKind.value == lld::Reference::kindGroupChild) {
+    ((NormalizedAtom *)_target)->setGroupChild(true);
+  }
 }
 
 inline StringRef
@@ -1189,12 +1243,12 @@ class Writer : public lld::Writer {
 public:
   Writer(const LinkingContext &context) : _context(context) {}
 
-  virtual error_code writeFile(const lld::File &file, StringRef outPath) {
+  std::error_code writeFile(const lld::File &file, StringRef outPath) override {
     // Create stream to path.
     std::string errorInfo;
-    llvm::raw_fd_ostream out(outPath.data(), errorInfo);
+    llvm::raw_fd_ostream out(outPath.data(), errorInfo, llvm::sys::fs::F_Text);
     if (!errorInfo.empty())
-      return llvm::make_error_code(llvm::errc::no_such_file_or_directory);
+      return make_error_code(llvm::errc::no_such_file_or_directory);
 
     // Create yaml Output writer, using yaml options for context.
     YamlContext yamlContext;
@@ -1206,7 +1260,7 @@ public:
     const lld::File *fileRef = &file;
     yout << fileRef;
 
-    return error_code::success();
+    return std::error_code();
   }
 
 private:
@@ -1219,7 +1273,7 @@ namespace {
 
 /// Handles !native tagged yaml documents.
 class NativeYamlIOTaggedDocumentHandler : public YamlIOTaggedDocumentHandler {
-  bool handledDocTag(llvm::yaml::IO &io, const lld::File *&file) const {
+  bool handledDocTag(llvm::yaml::IO &io, const lld::File *&file) const override {
     if (io.mapTag("!native")) {
       MappingTraits<const lld::File *>::mappingAtoms(io, file);
       return true;
@@ -1231,7 +1285,7 @@ class NativeYamlIOTaggedDocumentHandler : public YamlIOTaggedDocumentHandler {
 
 /// Handles !archive tagged yaml documents.
 class ArchiveYamlIOTaggedDocumentHandler : public YamlIOTaggedDocumentHandler {
-  bool handledDocTag(llvm::yaml::IO &io, const lld::File *&file) const {
+  bool handledDocTag(llvm::yaml::IO &io, const lld::File *&file) const override {
     if (io.mapTag("!archive")) {
       MappingTraits<const lld::File *>::mappingArchive(io, file);
       return true;
@@ -1246,13 +1300,13 @@ class YAMLReader : public Reader {
 public:
   YAMLReader(const Registry &registry) : _registry(registry) {}
 
-  virtual bool canParse(file_magic, StringRef ext, const MemoryBuffer &) const {
+  bool canParse(file_magic, StringRef ext, const MemoryBuffer &) const override {
     return (ext.equals(".objtxt") || ext.equals(".yaml"));
   }
 
-  virtual error_code
+  std::error_code
   parseFile(std::unique_ptr<MemoryBuffer> &mb, const class Registry &,
-            std::vector<std::unique_ptr<File>> &result) const {
+            std::vector<std::unique_ptr<File>> &result) const override {
     // Note: we do not take ownership of the MemoryBuffer.  That is
     // because yaml may produce multiple File objects, so there is no
     // *one* File to take ownership.  Therefore, the yaml File objects

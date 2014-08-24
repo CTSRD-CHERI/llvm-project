@@ -109,10 +109,16 @@ class MachineFrameInfo {
     // block and doesn't need additional handling for allocation beyond that.
     bool PreAllocated;
 
+    // If true, an LLVM IR value might point to this object.
+    // Normally, spill slots and fixed-offset objects don't alias IR-accessible
+    // objects, but there are exceptions (on PowerPC, for example, some byval
+    // arguments have ABI-prescribed offsets).
+    bool isAliased;
+
     StackObject(uint64_t Sz, unsigned Al, int64_t SP, bool IM,
-                bool isSS, const AllocaInst *Val)
+                bool isSS, const AllocaInst *Val, bool A)
       : SPOffset(SP), Size(Sz), Alignment(Al), isImmutable(IM),
-        isSpillSlot(isSS), Alloca(Val), PreAllocated(false) {}
+        isSpillSlot(isSS), Alloca(Val), PreAllocated(false), isAliased(A) {}
   };
 
   const TargetMachine &TM;
@@ -249,6 +255,7 @@ public:
     LocalFrameSize = 0;
     LocalFrameMaxAlign = 0;
     UseLocalStackAllocationBlock = false;
+    HasInlineAsmWithSPAdjust = false;
   }
 
   /// hasStackObjects - Return true if there are any stack objects in this
@@ -478,16 +485,28 @@ public:
 
   /// CreateFixedObject - Create a new object at a fixed location on the stack.
   /// All fixed objects should be created before other objects are created for
-  /// efficiency. By default, fixed objects are immutable. This returns an
-  /// index with a negative value.
+  /// efficiency. By default, fixed objects are not pointed to by LLVM IR
+  /// values. This returns an index with a negative value.
   ///
-  int CreateFixedObject(uint64_t Size, int64_t SPOffset, bool Immutable);
+  int CreateFixedObject(uint64_t Size, int64_t SPOffset, bool Immutable,
+                        bool isAliased = false);
 
+  /// CreateFixedSpillStackObject - Create a spill slot at a fixed location
+  /// on the stack.  Returns an index with a negative value.
+  int CreateFixedSpillStackObject(uint64_t Size, int64_t SPOffset);
 
   /// isFixedObjectIndex - Returns true if the specified index corresponds to a
   /// fixed stack object.
   bool isFixedObjectIndex(int ObjectIdx) const {
     return ObjectIdx < 0 && (ObjectIdx >= -(int)NumFixedObjects);
+  }
+
+  /// isAliasedObjectIndex - Returns true if the specified index corresponds
+  /// to an object that might be pointed to by an LLVM IR value.
+  bool isAliasedObjectIndex(int ObjectIdx) const {
+    assert(unsigned(ObjectIdx+NumFixedObjects) < Objects.size() &&
+           "Invalid Object Idx!");
+    return Objects[ObjectIdx+NumFixedObjects].isAliased;
   }
 
   /// isImmutableObjectIndex - Returns true if the specified index corresponds
@@ -518,7 +537,7 @@ public:
   /// a nonnegative identifier to represent it.
   ///
   int CreateStackObject(uint64_t Size, unsigned Alignment, bool isSS,
-                        const AllocaInst *Alloca = 0);
+                        const AllocaInst *Alloca = nullptr);
 
   /// CreateSpillStackObject - Create a new statically sized stack object that
   /// represents a spill slot, returning a nonnegative identifier to represent

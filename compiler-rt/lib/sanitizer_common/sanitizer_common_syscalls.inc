@@ -234,6 +234,7 @@ POST_SYSCALL(settimeofday)(long res, void *tv, void *tz) {
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(adjtimex)(void *txc_p) {}
 
 POST_SYSCALL(adjtimex)(long res, void *txc_p) {
@@ -241,6 +242,7 @@ POST_SYSCALL(adjtimex)(long res, void *txc_p) {
     if (txc_p) POST_WRITE(txc_p, struct_timex_sz);
   }
 }
+#endif
 
 PRE_SYSCALL(times)(void *tbuf) {}
 
@@ -386,24 +388,21 @@ PRE_SYSCALL(acct)(const void *name) {
 
 POST_SYSCALL(acct)(long res, const void *name) {}
 
-PRE_SYSCALL(capget)(void *header, void *dataptr) {}
+PRE_SYSCALL(capget)(void *header, void *dataptr) {
+  if (header) PRE_READ(header, __user_cap_header_struct_sz);
+}
 
 POST_SYSCALL(capget)(long res, void *header, void *dataptr) {
-  if (res >= 0) {
-    if (header) POST_WRITE(header, __user_cap_header_struct_sz);
+  if (res >= 0)
     if (dataptr) POST_WRITE(dataptr, __user_cap_data_struct_sz);
-  }
 }
 
 PRE_SYSCALL(capset)(void *header, const void *data) {
+  if (header) PRE_READ(header, __user_cap_header_struct_sz);
   if (data) PRE_READ(data, __user_cap_data_struct_sz);
 }
 
-POST_SYSCALL(capset)(long res, void *header, const void *data) {
-  if (res >= 0) {
-    if (header) POST_WRITE(header, __user_cap_header_struct_sz);
-  }
-}
+POST_SYSCALL(capset)(long res, void *header, const void *data) {}
 
 PRE_SYSCALL(personality)(long personality) {}
 
@@ -496,6 +495,7 @@ POST_SYSCALL(clock_gettime)(long res, long which_clock, void *tp) {
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(clock_adjtime)(long which_clock, void *tx) {}
 
 POST_SYSCALL(clock_adjtime)(long res, long which_clock, void *tx) {
@@ -503,6 +503,7 @@ POST_SYSCALL(clock_adjtime)(long res, long which_clock, void *tx) {
     if (tx) POST_WRITE(tx, struct_timex_sz);
   }
 }
+#endif
 
 PRE_SYSCALL(clock_getres)(long which_clock, void *tp) {}
 
@@ -830,6 +831,7 @@ POST_SYSCALL(stat)(long res, const void *filename, void *statbuf) {
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(statfs)(const void *path, void *buf) {
   if (path)
     PRE_READ(path, __sanitizer::internal_strlen((const char *)path) + 1);
@@ -867,6 +869,7 @@ POST_SYSCALL(fstatfs64)(long res, long fd, long sz, void *buf) {
     if (buf) POST_WRITE(buf, struct_statfs64_sz);
   }
 }
+#endif // !SANITIZER_ANDROID
 
 PRE_SYSCALL(lstat)(const void *filename, void *statbuf) {
   if (filename)
@@ -920,6 +923,7 @@ POST_SYSCALL(newfstat)(long res, long fd, void *statbuf) {
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(ustat)(long dev, void *ubuf) {}
 
 POST_SYSCALL(ustat)(long res, long dev, void *ubuf) {
@@ -927,6 +931,7 @@ POST_SYSCALL(ustat)(long res, long dev, void *ubuf) {
     if (ubuf) POST_WRITE(ubuf, struct_ustat_sz);
   }
 }
+#endif  // !SANITIZER_ANDROID
 
 PRE_SYSCALL(stat64)(const void *filename, void *statbuf) {
   if (filename)
@@ -1004,8 +1009,8 @@ PRE_SYSCALL(getxattr)(const void *path, const void *name, void *value,
 
 POST_SYSCALL(getxattr)(long res, const void *path, const void *name,
                        void *value, long size) {
-  if (res >= 0) {
-    if (value) POST_WRITE(value, size);
+  if (size && res > 0) {
+    if (value) POST_WRITE(value, res);
   }
 }
 
@@ -1019,8 +1024,8 @@ PRE_SYSCALL(lgetxattr)(const void *path, const void *name, void *value,
 
 POST_SYSCALL(lgetxattr)(long res, const void *path, const void *name,
                         void *value, long size) {
-  if (res >= 0) {
-    if (value) POST_WRITE(value, size);
+  if (size && res > 0) {
+    if (value) POST_WRITE(value, res);
   }
 }
 
@@ -1031,8 +1036,8 @@ PRE_SYSCALL(fgetxattr)(long fd, const void *name, void *value, long size) {
 
 POST_SYSCALL(fgetxattr)(long res, long fd, const void *name, void *value,
                         long size) {
-  if (res >= 0) {
-    if (value) POST_WRITE(value, size);
+  if (size && res > 0) {
+    if (value) POST_WRITE(value, res);
   }
 }
 
@@ -1042,8 +1047,8 @@ PRE_SYSCALL(listxattr)(const void *path, void *list, long size) {
 }
 
 POST_SYSCALL(listxattr)(long res, const void *path, void *list, long size) {
-  if (res >= 0) {
-    if (list) POST_WRITE(list, size);
+  if (size && res > 0) {
+    if (list) POST_WRITE(list, res);
   }
 }
 
@@ -1053,16 +1058,16 @@ PRE_SYSCALL(llistxattr)(const void *path, void *list, long size) {
 }
 
 POST_SYSCALL(llistxattr)(long res, const void *path, void *list, long size) {
-  if (res >= 0) {
-    if (list) POST_WRITE(list, size);
+  if (size && res > 0) {
+    if (list) POST_WRITE(list, res);
   }
 }
 
 PRE_SYSCALL(flistxattr)(long fd, void *list, long size) {}
 
 POST_SYSCALL(flistxattr)(long res, long fd, void *list, long size) {
-  if (res >= 0) {
-    if (list) POST_WRITE(list, size);
+  if (size && res > 0) {
+    if (list) POST_WRITE(list, res);
   }
 }
 
@@ -2082,6 +2087,7 @@ POST_SYSCALL(msgrcv)(long res, long msqid, void *msgp, long msgsz, long msgtyp,
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(msgctl)(long msqid, long cmd, void *buf) {}
 
 POST_SYSCALL(msgctl)(long res, long msqid, long cmd, void *buf) {
@@ -2089,6 +2095,7 @@ POST_SYSCALL(msgctl)(long res, long msqid, long cmd, void *buf) {
     if (buf) POST_WRITE(buf, struct_msqid_ds_sz);
   }
 }
+#endif
 
 PRE_SYSCALL(semget)(long key, long nsems, long semflg) {}
 
@@ -2290,7 +2297,7 @@ PRE_SYSCALL(ni_syscall)() {}
 POST_SYSCALL(ni_syscall)(long res) {}
 
 PRE_SYSCALL(ptrace)(long request, long pid, long addr, long data) {
-#if defined(__i386) || defined (__x86_64)
+#if !SANITIZER_ANDROID && (defined(__i386) || defined (__x86_64))
   if (data) {
     if (request == ptrace_setregs) {
       PRE_READ((void *)data, struct_user_regs_struct_sz);
@@ -2309,7 +2316,7 @@ PRE_SYSCALL(ptrace)(long request, long pid, long addr, long data) {
 }
 
 POST_SYSCALL(ptrace)(long res, long request, long pid, long addr, long data) {
-#if defined(__i386) || defined (__x86_64)
+#if !SANITIZER_ANDROID && (defined(__i386) || defined (__x86_64))
   if (res >= 0 && data) {
     // Note that this is different from the interceptor in
     // sanitizer_common_interceptors.inc.

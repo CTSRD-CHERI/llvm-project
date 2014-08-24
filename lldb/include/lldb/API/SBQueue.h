@@ -14,7 +14,6 @@
 
 #include "lldb/lldb-forward.h"
 #include "lldb/API/SBDefines.h"
-#include "lldb/API/SBQueueItem.h"
 
 namespace lldb {
 
@@ -57,13 +56,20 @@ public:
     GetThreadAtIndex (uint32_t);
 
     uint32_t
-    GetNumItems ();
+    GetNumPendingItems ();
 
     lldb::SBQueueItem
-    GetItemAtIndex (uint32_t);
+    GetPendingItemAtIndex (uint32_t);
+
+    uint32_t
+    GetNumRunningItems ();
+
+    lldb::QueueKind
+    GetKind ();
 
 protected:
     friend class SBProcess;
+    friend class SBThread;
 
     void
     SetQueue (const lldb::QueueSP& queue_sp);

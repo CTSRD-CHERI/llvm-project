@@ -30,7 +30,6 @@
 //===---------------------------------------------------------------------===//
 
 #include "Modularize.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
@@ -125,7 +124,7 @@ Module *Module::findSubModule(llvm::StringRef SubName) {
     if ((*I)->Name == SubName)
       return *I;
   }
-  return 0;
+  return nullptr;
 }
 
 // Implementation functions:
@@ -136,7 +135,7 @@ Module *Module::findSubModule(llvm::StringRef SubName) {
 static const char *ReservedNames[] = {
   "config_macros", "export",   "module", "conflict", "framework",
   "requires",      "exclude",  "header", "private",  "explicit",
-  "link",          "umbrella", "extern", "use",      0 // Flag end.
+  "link",          "umbrella", "extern", "use",      nullptr // Flag end.
 };
 
 // Convert module name to a non-keyword.
@@ -144,7 +143,7 @@ static const char *ReservedNames[] = {
 static std::string
 ensureNoCollisionWithReservedName(llvm::StringRef MightBeReservedName) {
   std::string SafeName = MightBeReservedName;
-  for (int Index = 0; ReservedNames[Index] != 0; ++Index) {
+  for (int Index = 0; ReservedNames[Index] != nullptr; ++Index) {
     if (MightBeReservedName == ReservedNames[Index]) {
       SafeName.insert(0, "_");
       break;
@@ -191,7 +190,7 @@ static bool addModuleDescription(Module *RootModule,
     std::string Stem = llvm::sys::path::stem(*I);
     Stem = ensureNoCollisionWithReservedName(Stem);
     Module *SubModule = CurrentModule->findSubModule(Stem);
-    if (SubModule == 0) {
+    if (!SubModule) {
       SubModule = new Module(Stem);
       CurrentModule->SubModules.push_back(SubModule);
     }
@@ -223,7 +222,7 @@ static Module *loadModuleDescriptions(
        I != E; ++I) {
     // Add as a module.
     if (!addModuleDescription(RootModule, *I, HeaderPrefix, Dependencies))
-      return NULL;
+      return nullptr;
   }
 
   return RootModule;
@@ -249,7 +248,7 @@ static bool writeModuleMap(llvm::StringRef ModuleMapPath,
 
   // Set up module map output file.
   std::string Error;
-  llvm::tool_output_file Out(FilePath.c_str(), Error);
+  llvm::tool_output_file Out(FilePath.c_str(), Error, llvm::sys::fs::F_Text);
   if (!Error.empty()) {
     llvm::errs() << Argv0 << ": error opening " << FilePath << ":" << Error
                  << "\n";
@@ -281,7 +280,7 @@ bool createModuleMap(llvm::StringRef ModuleMapPath,
                      DependencyMap &Dependencies, llvm::StringRef HeaderPrefix,
                      llvm::StringRef RootModuleName) {
   // Load internal representation of modules.
-  llvm::OwningPtr<Module> RootModule(loadModuleDescriptions(
+  std::unique_ptr<Module> RootModule(loadModuleDescriptions(
       RootModuleName, HeaderFileNames, Dependencies, HeaderPrefix));
   if (!RootModule.get())
     return false;

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -ast-print %s | FileCheck %s
+// RUN: %clang_cc1 -ast-print %s -std=gnu++11 | FileCheck %s
 
 // CHECK: r;
 // CHECK-NEXT: (r->method());
@@ -172,4 +172,39 @@ void test14() {
 // CHECK-NOT: extern "C"
 float test15() {
   return __builtin_asinf(1.0F);
+}
+
+namespace PR18776 {
+struct A {
+  operator void *();
+  explicit operator bool();
+  A operator&(A);
+};
+
+// CHECK: struct A
+// CHECK-NEXT: {{^[ ]*operator}} void *();
+// CHECK-NEXT: {{^[ ]*explicit}} operator bool();
+
+void bar(void *);
+
+void foo() {
+  A a, b;
+  bar(a & b);
+// CHECK: bar(a & b);
+  if (a & b)
+// CHECK: if (a & b)
+    return;
+}
+};
+
+namespace {
+void test(int i) {
+  switch (i) {
+    case 1:
+      // CHECK: {{\[\[clang::fallthrough\]\]}}
+      [[clang::fallthrough]];
+    case 2:
+      break;
+  }
+}
 }

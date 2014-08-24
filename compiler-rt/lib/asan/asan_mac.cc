@@ -17,12 +17,12 @@
 
 #include "asan_interceptors.h"
 #include "asan_internal.h"
-#include "asan_mac.h"
 #include "asan_mapping.h"
 #include "asan_stack.h"
 #include "asan_thread.h"
 #include "sanitizer_common/sanitizer_atomic.h"
 #include "sanitizer_common/sanitizer_libc.h"
+#include "sanitizer_common/sanitizer_mac.h"
 
 #include <crt_externs.h>  // for _NSGetArgv
 #include <dlfcn.h>  // for dladdr()
@@ -53,43 +53,6 @@ void GetPcSpBp(void *context, uptr *pc, uptr *sp, uptr *bp) {
 # endif  // SANITIZER_WORDSIZE
 }
 
-MacosVersion cached_macos_version = MACOS_VERSION_UNINITIALIZED;
-
-MacosVersion GetMacosVersionInternal() {
-  int mib[2] = { CTL_KERN, KERN_OSRELEASE };
-  char version[100];
-  uptr len = 0, maxlen = sizeof(version) / sizeof(version[0]);
-  for (uptr i = 0; i < maxlen; i++) version[i] = '\0';
-  // Get the version length.
-  CHECK_NE(sysctl(mib, 2, 0, &len, 0, 0), -1);
-  CHECK_LT(len, maxlen);
-  CHECK_NE(sysctl(mib, 2, version, &len, 0, 0), -1);
-  switch (version[0]) {
-    case '9': return MACOS_VERSION_LEOPARD;
-    case '1': {
-      switch (version[1]) {
-        case '0': return MACOS_VERSION_SNOW_LEOPARD;
-        case '1': return MACOS_VERSION_LION;
-        case '2': return MACOS_VERSION_MOUNTAIN_LION;
-        case '3': return MACOS_VERSION_MAVERICKS;
-        default: return MACOS_VERSION_UNKNOWN;
-      }
-    }
-    default: return MACOS_VERSION_UNKNOWN;
-  }
-}
-
-MacosVersion GetMacosVersion() {
-  atomic_uint32_t *cache =
-      reinterpret_cast<atomic_uint32_t*>(&cached_macos_version);
-  MacosVersion result =
-      static_cast<MacosVersion>(atomic_load(cache, memory_order_acquire));
-  if (result == MACOS_VERSION_UNINITIALIZED) {
-    result = GetMacosVersionInternal();
-    atomic_store(cache, result, memory_order_release);
-  }
-  return result;
-}
 
 bool PlatformHasDifferentMemcpyAndMemmove() {
   // On OS X 10.7 memcpy() and memmove() are both resolved
@@ -236,8 +199,15 @@ void *AsanDoesNotSupportStaticLinkage() {
   return 0;
 }
 
+// No-op. Mac does not support static linkage anyway.
+void AsanCheckDynamicRTPrereqs() {}
+
+// No-op. Mac does not support static linkage anyway.
+void AsanCheckIncompatibleRT() {}
+
 bool AsanInterceptsSignal(int signum) {
-  return (signum == SIGSEGV || signum == SIGBUS) && flags()->handle_segv;
+  return (signum == SIGSEGV || signum == SIGBUS) &&
+         common_flags()->handle_segv;
 }
 
 void AsanPlatformThreadInit() {
@@ -404,32 +374,44 @@ void dispatch_source_set_event_handler(dispatch_source_t ds, void(^work)(void));
     work(); \
   }
 
+// Forces the compiler to generate a frame pointer in the function.
+#define ENABLE_FRAME_POINTER                                       \
+  do {                                                             \
+    volatile uptr enable_fp;                                       \
+    enable_fp = GET_CURRENT_FRAME();                               \
+  } while (0)
+
 INTERCEPTOR(void, dispatch_async,
             dispatch_queue_t dq, void(^work)(void)) {
+  ENABLE_FRAME_POINTER;
   GET_ASAN_BLOCK(work);
   REAL(dispatch_async)(dq, asan_block);
 }
 
 INTERCEPTOR(void, dispatch_group_async,
             dispatch_group_t dg, dispatch_queue_t dq, void(^work)(void)) {
+  ENABLE_FRAME_POINTER;
   GET_ASAN_BLOCK(work);
   REAL(dispatch_group_async)(dg, dq, asan_block);
 }
 
 INTERCEPTOR(void, dispatch_after,
             dispatch_time_t when, dispatch_queue_t queue, void(^work)(void)) {
+  ENABLE_FRAME_POINTER;
   GET_ASAN_BLOCK(work);
   REAL(dispatch_after)(when, queue, asan_block);
 }
 
 INTERCEPTOR(void, dispatch_source_set_cancel_handler,
             dispatch_source_t ds, void(^work)(void)) {
+  ENABLE_FRAME_POINTER;
   GET_ASAN_BLOCK(work);
   REAL(dispatch_source_set_cancel_handler)(ds, asan_block);
 }
 
 INTERCEPTOR(void, dispatch_source_set_event_handler,
             dispatch_source_t ds, void(^work)(void)) {
+  ENABLE_FRAME_POINTER;
   GET_ASAN_BLOCK(work);
   REAL(dispatch_source_set_event_handler)(ds, asan_block);
 }

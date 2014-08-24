@@ -40,7 +40,7 @@ int AddOverrideTransform::apply(const CompilationDatabase &Database,
   // Make Fixer available to handleBeginSource().
   this->Fixer = &Fixer;
 
-  if (int result = AddOverrideTool.run(createActionFactory(Finder))) {
+  if (int result = AddOverrideTool.run(createActionFactory(Finder).get())) {
     llvm::errs() << "Error encountered during translation.\n";
     return result;
   }
@@ -51,7 +51,7 @@ int AddOverrideTransform::apply(const CompilationDatabase &Database,
 
 bool AddOverrideTransform::handleBeginSource(clang::CompilerInstance &CI,
                                              llvm::StringRef Filename) {
-  assert(Fixer != NULL && "Fixer must be set");
+  assert(Fixer != nullptr && "Fixer must be set");
   Fixer->setPreprocessor(CI.getPreprocessor());
   return Transform::handleBeginSource(CI, Filename);
 }
@@ -69,7 +69,7 @@ struct AddOverrideFactory : TransformFactory {
     }
   }
 
-  Transform *createTransform(const TransformOptions &Opts) LLVM_OVERRIDE {
+  Transform *createTransform(const TransformOptions &Opts) override {
     return new AddOverrideTransform(Opts);
   }
 };

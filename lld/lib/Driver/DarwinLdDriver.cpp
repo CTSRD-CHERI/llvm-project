@@ -23,6 +23,7 @@
 #include "llvm/Option/Option.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/MachO.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -31,6 +32,9 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Signals.h"
 
+#include <algorithm>
+
+using namespace lld;
 
 namespace {
 
@@ -65,6 +69,103 @@ public:
   DarwinLdOptTable() : OptTable(infoTable, llvm::array_lengthof(infoTable)){}
 };
 
+// Test may be running on Windows. Canonicalize the path
+// separator to '/' to get consistent outputs for tests.
+std::string canonicalizePath(StringRef path) {
+  char sep = llvm::sys::path::get_separator().front();
+  if (sep != '/') {
+    std::string fixedPath = path;
+    std::replace(fixedPath.begin(), fixedPath.end(), sep, '/');
+    return fixedPath;
+  } else {
+    return path;
+  }
+}
+
+void addFile(StringRef path, std::unique_ptr<InputGraph> &inputGraph,
+             bool forceLoad) {
+   inputGraph->addInputElement(std::unique_ptr<InputElement>(
+                                          new MachOFileNode(path, forceLoad)));
+}
+
+// Export lists are one symbol per line.  Blank lines are ignored.
+// Trailing comments start with #.
+std::error_code parseExportsList(StringRef exportFilePath,
+                                 MachOLinkingContext &ctx,
+                                 raw_ostream &diagnostics) {
+  // Map in export list file.
+  ErrorOr<std::unique_ptr<MemoryBuffer>> mb =
+                                   MemoryBuffer::getFileOrSTDIN(exportFilePath);
+  if (std::error_code ec = mb.getError())
+    return ec;
+  StringRef buffer = mb->get()->getBuffer();
+  while (!buffer.empty()) {
+    // Split off each line in the file.
+    std::pair<StringRef, StringRef> lineAndRest = buffer.split('\n');
+    StringRef line = lineAndRest.first;
+    // Ignore trailing # comments.
+    std::pair<StringRef, StringRef> symAndComment = line.split('#');
+    StringRef sym = symAndComment.first.trim();
+    if (!sym.empty())
+      ctx.addExportSymbol(sym);
+    buffer = lineAndRest.second;
+  }
+  return std::error_code();
+}
+
+//
+// There are two variants of the  -filelist option:
+//
+//   -filelist <path>
+// In this variant, the path is to a text file which contains one file path
+// per line.  There are no comments or trimming of whitespace.
+//
+//   -fileList <path>,<dir>
+// In this variant, the path is to a text file which contains a partial path
+// per line. The <dir> prefix is prepended to each partial path.
+//
+std::error_code parseFileList(StringRef fileListPath,
+                              std::unique_ptr<InputGraph> &inputGraph,
+                              MachOLinkingContext &ctx, bool forceLoad,
+                              raw_ostream &diagnostics) {
+  // If there is a comma, split off <dir>.
+  std::pair<StringRef, StringRef> opt = fileListPath.split(',');
+  StringRef filePath = opt.first;
+  StringRef dirName = opt.second;
+  // Map in file list file.
+  ErrorOr<std::unique_ptr<MemoryBuffer>> mb =
+                                        MemoryBuffer::getFileOrSTDIN(filePath);
+  if (std::error_code ec = mb.getError())
+    return ec;
+  StringRef buffer = mb->get()->getBuffer();
+  while (!buffer.empty()) {
+    // Split off each line in the file.
+    std::pair<StringRef, StringRef> lineAndRest = buffer.split('\n');
+    StringRef line = lineAndRest.first;
+    StringRef path;
+    if (!dirName.empty()) {
+      // If there is a <dir> then prepend dir to each line.
+      SmallString<256> fullPath;
+      fullPath.assign(dirName);
+      llvm::sys::path::append(fullPath, Twine(line));
+      path = ctx.copy(fullPath.str());
+    } else {
+      // No <dir> use whole line as input file path.
+      path = ctx.copy(line);
+    }
+    if (!ctx.pathExists(path)) {
+      return make_dynamic_error_code(Twine("File not found '")
+                                     + path
+                                     + "'");
+    }
+    if (ctx.testingFileUsage()) {
+      diagnostics << "Found filelist entry " << canonicalizePath(path) << '\n';
+    }
+    addFile(path, inputGraph, forceLoad);
+    buffer = lineAndRest.second;
+  }
+  return std::error_code();
+}
 
 } // namespace anonymous
 
@@ -79,7 +180,7 @@ bool DarwinLdDriver::linkMachO(int argc, const char *argv[],
     return true;
 
   // Register possible input file parsers.
-  ctx.registry().addSupportMachOObjects(ctx.archName());
+  ctx.registry().addSupportMachOObjects(ctx);
   ctx.registry().addSupportArchives(ctx.logInputFiles());
   ctx.registry().addSupportNativeObjects();
   ctx.registry().addSupportYamlFiles();
@@ -104,10 +205,9 @@ bool DarwinLdDriver::parse(int argc, const char *argv[],
     return false;
   }
 
-  for (auto it = parsedArgs->filtered_begin(OPT_UNKNOWN),
-            ie = parsedArgs->filtered_end(); it != ie; ++it) {
+  for (auto unknownArg : parsedArgs->filtered(OPT_UNKNOWN)) {
     diagnostics  << "warning: ignoring unknown argument: "
-                 << (*it)->getAsString(*parsedArgs) << "\n";
+                 << unknownArg->getAsString(*parsedArgs) << "\n";
   }
 
   // Figure out output kind ( -dylib, -r, -bundle, -preload, or -static )
@@ -191,6 +291,8 @@ bool DarwinLdDriver::parse(int argc, const char *argv[],
   // Handle -o xxx
   if (llvm::opt::Arg *outpath = parsedArgs->getLastArg(OPT_output))
     ctx.setOutputPath(outpath->getValue());
+  else
+    ctx.setOutputPath("a.out");
 
   // Handle -dead_strip
   if (parsedArgs->getLastArg(OPT_dead_strip))
@@ -203,6 +305,8 @@ bool DarwinLdDriver::parse(int argc, const char *argv[],
   // Handle -install_name
   if (llvm::opt::Arg *installName = parsedArgs->getLastArg(OPT_install_name))
     ctx.setInstallName(installName->getValue());
+  else
+    ctx.setInstallName(ctx.outputPath());
 
   // Handle -mark_dead_strippable_dylib
   if (parsedArgs->getLastArg(OPT_mark_dead_strippable_dylib))
@@ -211,7 +315,7 @@ bool DarwinLdDriver::parse(int argc, const char *argv[],
   // Handle -compatibility_version and -current_version
   if (llvm::opt::Arg *vers =
           parsedArgs->getLastArg(OPT_compatibility_version)) {
-    if (ctx.outputFileType() != llvm::MachO::MH_DYLIB) {
+    if (ctx.outputMachOType() != llvm::MachO::MH_DYLIB) {
       diagnostics
           << "error: -compatibility_version can only be used with -dylib\n";
       return false;
@@ -225,7 +329,7 @@ bool DarwinLdDriver::parse(int argc, const char *argv[],
   }
 
   if (llvm::opt::Arg *vers = parsedArgs->getLastArg(OPT_current_version)) {
-    if (ctx.outputFileType() != llvm::MachO::MH_DYLIB) {
+    if (ctx.outputMachOType() != llvm::MachO::MH_DYLIB) {
       diagnostics << "-current_version can only be used with -dylib\n";
       return false;
     }
@@ -241,34 +345,227 @@ bool DarwinLdDriver::parse(int argc, const char *argv[],
   if (llvm::opt::Arg *loader = parsedArgs->getLastArg(OPT_bundle_loader))
     ctx.setBundleLoader(loader->getValue());
 
-  // Handle -help
-  if (parsedArgs->getLastArg(OPT_help)) {
-    table.PrintHelp(llvm::outs(), argv[0], "LLVM Darwin Linker", false);
-    // If only -help on command line, don't try to do any linking
-    if (argc == 2) {
-      ctx.setDoNothing(true);
-      return true;
+  // Handle -sectalign segname sectname align
+  for (auto &alignArg : parsedArgs->filtered(OPT_sectalign)) {
+    const char* segName   = alignArg->getValue(0);
+    const char* sectName  = alignArg->getValue(1);
+    const char* alignStr  = alignArg->getValue(2);
+    if ((alignStr[0] == '0') && (alignStr[1] == 'x'))
+      alignStr += 2;
+    unsigned long long alignValue;
+    if (llvm::getAsUnsignedInteger(alignStr, 16, alignValue)) {
+      diagnostics << "error: -sectalign alignment value '"
+                  << alignStr << "' not a valid number\n";
+      return false;
     }
+    uint8_t align2 = llvm::countTrailingZeros(alignValue);
+    if ( (unsigned long)(1 << align2) != alignValue ) {
+      diagnostics << "warning: alignment for '-sectalign "
+                  << segName << " " << sectName
+                  << llvm::format(" 0x%llX", alignValue)
+                  << "' is not a power of two, using "
+                  << llvm::format("0x%08X", (1 << align2)) << "\n";
+    }
+    ctx.addSectionAlignment(segName, sectName, align2);
   }
 
-  // Handle -mllvm 
-  for (llvm::opt::arg_iterator it = parsedArgs->filtered_begin(OPT_mllvm),
-                               ie = parsedArgs->filtered_end();
-                               it != ie; ++it) {
-    ctx.appendLLVMOption((*it)->getValue());
+  // Handle -mllvm
+  for (auto &llvmArg : parsedArgs->filtered(OPT_mllvm)) {
+    ctx.appendLLVMOption(llvmArg->getValue());
+  }
+
+  // Handle -print_atoms
+  if (parsedArgs->getLastArg(OPT_print_atoms))
+    ctx.setPrintAtoms();
+
+  // Handle -t (trace) option.
+  if (parsedArgs->getLastArg(OPT_t))
+    ctx.setLogInputFiles(true);
+
+  // Handle -keep_private_externs
+  if (parsedArgs->getLastArg(OPT_keep_private_externs)) {
+    ctx.setKeepPrivateExterns(true);
+    if (ctx.outputMachOType() != llvm::MachO::MH_OBJECT)
+      diagnostics << "warning: -keep_private_externs only used in -r mode\n";
+  }
+
+  // In -test_file_usage mode, we'll be given an explicit list of paths that
+  // exist. We'll also be expected to print out information about how we located
+  // libraries and so on that the user specified, but not to actually do any
+  // linking.
+  if (parsedArgs->getLastArg(OPT_test_file_usage)) {
+    ctx.setTestingFileUsage();
+
+    // With paths existing by fiat, linking is not going to end well.
+    ctx.setDoNothing(true);
+
+    // Only bother looking for an existence override if we're going to use it.
+    for (auto existingPath : parsedArgs->filtered(OPT_path_exists)) {
+      ctx.addExistingPathForDebug(existingPath->getValue());
+    }
   }
 
   std::unique_ptr<InputGraph> inputGraph(new InputGraph());
 
+  // Now construct the set of library search directories, following ld64's
+  // baroque set of accumulated hacks. Mostly, the algorithm constructs
+  //     { syslibroots } x { libpaths }
+  //
+  // Unfortunately, there are numerous exceptions:
+  //   1. Only absolute paths get modified by syslibroot options.
+  //   2. If there is just 1 -syslibroot, system paths not found in it are
+  //      skipped.
+  //   3. If the last -syslibroot is "/", all of them are ignored entirely.
+  //   4. If { syslibroots } x path ==  {}, the original path is kept.
+  std::vector<StringRef> sysLibRoots;
+  for (auto syslibRoot : parsedArgs->filtered(OPT_syslibroot)) {
+    sysLibRoots.push_back(syslibRoot->getValue());
+  }
+  if (!sysLibRoots.empty()) {
+    // Ignore all if last -syslibroot is "/".
+    if (sysLibRoots.back() != "/")
+      ctx.setSysLibRoots(sysLibRoots);
+  }
+
+  // Paths specified with -L come first, and are not considered system paths for
+  // the case where there is precisely 1 -syslibroot.
+  for (auto libPath : parsedArgs->filtered(OPT_L)) {
+    ctx.addModifiedSearchDir(libPath->getValue());
+  }
+
+  // Process -F directories (where to look for frameworks).
+  for (auto fwPath : parsedArgs->filtered(OPT_F)) {
+    ctx.addFrameworkSearchDir(fwPath->getValue());
+  }
+
+  // -Z suppresses the standard search paths.
+  if (!parsedArgs->hasArg(OPT_Z)) {
+    ctx.addModifiedSearchDir("/usr/lib", true);
+    ctx.addModifiedSearchDir("/usr/local/lib", true);
+    ctx.addFrameworkSearchDir("/Library/Frameworks", true);
+    ctx.addFrameworkSearchDir("/System/Library/Frameworks", true);
+  }
+
+  // Now that we've constructed the final set of search paths, print out those
+  // search paths in verbose mode.
+  if (parsedArgs->getLastArg(OPT_v)) {
+    diagnostics << "Library search paths:\n";
+    for (auto path : ctx.searchDirs()) {
+      diagnostics << "    " << path << '\n';
+    }
+    diagnostics << "Framework search paths:\n";
+    for (auto path : ctx.frameworkDirs()) {
+      diagnostics << "    " << path << '\n';
+    }
+  }
+
+  // Handle -exported_symbols_list <file>
+  for (auto expFile : parsedArgs->filtered(OPT_exported_symbols_list)) {
+    if (ctx.exportMode() == MachOLinkingContext::ExportMode::blackList) {
+      diagnostics << "error: -exported_symbols_list cannot be combined "
+                  << "with -unexported_symbol[s_list]\n";
+       return false;
+    }
+    ctx.setExportMode(MachOLinkingContext::ExportMode::whiteList);
+    if (std::error_code ec = parseExportsList(expFile->getValue(), ctx,
+                                              diagnostics)) {
+      diagnostics << "error: " << ec.message()
+                  << ", processing '-exported_symbols_list "
+                  << expFile->getValue()
+                  << "'\n";
+      return false;
+    }
+  }
+
+  // Handle -exported_symbol <symbol>
+  for (auto symbol : parsedArgs->filtered(OPT_exported_symbol)) {
+    if (ctx.exportMode() == MachOLinkingContext::ExportMode::blackList) {
+      diagnostics << "error: -exported_symbol cannot be combined "
+                  << "with -unexported_symbol[s_list]\n";
+       return false;
+    }
+    ctx.setExportMode(MachOLinkingContext::ExportMode::whiteList);
+    ctx.addExportSymbol(symbol->getValue());
+  }
+
+  // Handle -unexported_symbols_list <file>
+  for (auto expFile : parsedArgs->filtered(OPT_unexported_symbols_list)) {
+    if (ctx.exportMode() == MachOLinkingContext::ExportMode::whiteList) {
+      diagnostics << "error: -unexported_symbols_list cannot be combined "
+                  << "with -exported_symbol[s_list]\n";
+       return false;
+    }
+    ctx.setExportMode(MachOLinkingContext::ExportMode::blackList);
+    if (std::error_code ec = parseExportsList(expFile->getValue(), ctx,
+                                              diagnostics)) {
+      diagnostics << "error: " << ec.message()
+                  << ", processing '-unexported_symbols_list "
+                  << expFile->getValue()
+                  << "'\n";
+      return false;
+    }
+  }
+
+  // Handle -unexported_symbol <symbol>
+  for (auto symbol : parsedArgs->filtered(OPT_unexported_symbol)) {
+    if (ctx.exportMode() == MachOLinkingContext::ExportMode::whiteList) {
+      diagnostics << "error: -unexported_symbol cannot be combined "
+                  << "with -exported_symbol[s_list]\n";
+       return false;
+    }
+    ctx.setExportMode(MachOLinkingContext::ExportMode::blackList);
+    ctx.addExportSymbol(symbol->getValue());
+  }
+
   // Handle input files
-  for (llvm::opt::arg_iterator it = parsedArgs->filtered_begin(OPT_INPUT),
-                               ie = parsedArgs->filtered_end();
-                              it != ie; ++it) {
-    inputGraph->addInputElement(std::unique_ptr<InputElement>(
-        new MachOFileNode(ctx, (*it)->getValue(), globalWholeArchive)));
+  for (auto &arg : *parsedArgs) {
+    ErrorOr<StringRef> resolvedPath = StringRef();
+    switch (arg->getOption().getID()) {
+    default:
+      continue;
+    case OPT_INPUT:
+      addFile(arg->getValue(), inputGraph, globalWholeArchive);
+      break;
+    case OPT_l:
+      resolvedPath = ctx.searchLibrary(arg->getValue());
+      if (!resolvedPath) {
+        diagnostics << "Unable to find library -l" << arg->getValue() << "\n";
+        return false;
+      } else if (ctx.testingFileUsage()) {
+       diagnostics << "Found library "
+                   << canonicalizePath(resolvedPath.get()) << '\n';
+      }
+      addFile(resolvedPath.get(), inputGraph, globalWholeArchive);
+      break;
+    case OPT_framework:
+      resolvedPath = ctx.findPathForFramework(arg->getValue());
+      if (!resolvedPath) {
+        diagnostics << "Unable to find -framework " << arg->getValue() << "\n";
+        return false;
+      } else if (ctx.testingFileUsage()) {
+        diagnostics << "Found framework "
+                    << canonicalizePath(resolvedPath.get()) << '\n';
+      }
+      addFile(resolvedPath.get(), inputGraph, globalWholeArchive);
+      break;
+    case OPT_filelist:
+      if (std::error_code ec = parseFileList(arg->getValue(), inputGraph,
+                                             ctx, globalWholeArchive,
+                                             diagnostics)) {
+        diagnostics << "error: " << ec.message()
+                    << ", processing '-filelist " << arg->getValue()
+                    << "'\n";
+        return false;
+      }
+      break;
+    }
   }
 
   if (!inputGraph->size()) {
+    if (parsedArgs->size() == 0) {
+      table.PrintHelp(llvm::outs(), "lld", "LLVM Linker", false);
+      return false;
+    }
     diagnostics << "No input files\n";
     return false;
   }
@@ -278,5 +575,6 @@ bool DarwinLdDriver::parse(int argc, const char *argv[],
   // Validate the combination of options used.
   return ctx.validate(diagnostics);
 }
+
 
 } // namespace lld

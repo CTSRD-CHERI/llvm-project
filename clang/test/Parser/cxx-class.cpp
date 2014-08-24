@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -verify -pedantic %s
+// RUN: %clang_cc1 -fsyntax-only -verify -pedantic -fcxx-exceptions %s
 class C;
 class C {
 public:
@@ -122,6 +122,32 @@ class pr16989 {
     void C2::f() {} // expected-error{{function definition is not allowed here}}
   };
 };
+
+namespace CtorErrors {
+  struct A {
+    A(NonExistent); // expected-error {{unknown type name 'NonExistent'}}
+  };
+  struct B {
+    B(NonExistent) : n(0) {} // expected-error {{unknown type name 'NonExistent'}}
+    int n;
+  };
+  struct C {
+    C(NonExistent) try {} catch (...) {} // expected-error {{unknown type name 'NonExistent'}}
+  };
+  struct D {
+    D(NonExistent) {} // expected-error {{unknown type name 'NonExistent'}}
+  };
+}
+
+namespace BadFriend {
+  struct A {
+    friend int : 3; // expected-error {{friends can only be classes or functions}}
+    friend void f() = 123; // expected-error {{illegal initializer}}
+    friend virtual void f(); // expected-error {{'virtual' is invalid in friend declarations}}
+    friend void f() final; // expected-error {{'final' is invalid in friend declarations}}
+    friend void f() override; // expected-error {{'override' is invalid in friend declarations}}
+  };
+}
 
 // PR11109 must appear at the end of the source file
 class pr11109r3 { // expected-note{{to match this '{'}}

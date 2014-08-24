@@ -24,8 +24,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TOOLS_CLANG_INCLUDE_CLANG_TOOLING_COMMONOPTIONSPARSER_H
-#define LLVM_TOOLS_CLANG_INCLUDE_CLANG_TOOLING_COMMONOPTIONSPARSER_H
+#ifndef LLVM_CLANG_TOOLING_COMMONOPTIONSPARSER_H
+#define LLVM_CLANG_TOOLING_COMMONOPTIONSPARSER_H
 
 #include "clang/Tooling/CompilationDatabase.h"
 #include "llvm/Support/CommandLine.h"
@@ -50,7 +50,7 @@ namespace tooling {
 /// static cl::OptionCategory MyToolCategory("My tool options");
 /// static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 /// static cl::extrahelp MoreHelp("\nMore help text...");
-/// static cl:opt<bool> YourOwnOption(...);
+/// static cl::opt<bool> YourOwnOption(...);
 /// ...
 ///
 /// int main(int argc, const char **argv) {
@@ -72,7 +72,7 @@ public:
   /// This constructor exits program in case of error.
   CommonOptionsParser(int &argc, const char **argv,
                       llvm::cl::OptionCategory &Category,
-                      const char *Overview = 0);
+                      const char *Overview = nullptr);
 
   /// Returns a reference to the loaded compilations database.
   CompilationDatabase &getCompilations() {
@@ -87,7 +87,7 @@ public:
   static const char *const HelpMessage;
 
 private:
-  OwningPtr<CompilationDatabase> Compilations;
+  std::unique_ptr<CompilationDatabase> Compilations;
   std::vector<std::string> SourcePathList;
 };
 

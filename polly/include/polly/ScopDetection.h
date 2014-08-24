@@ -50,6 +50,8 @@
 #include "llvm/Pass.h"
 #include "llvm/Analysis/AliasSetTracker.h"
 
+#include "polly/ScopDetectionDiagnostic.h"
+
 #include <set>
 #include <map>
 
@@ -63,6 +65,7 @@ class Loop;
 class ScalarEvolution;
 class SCEV;
 class SCEVAddRecExpr;
+class SCEVUnknown;
 class CallInst;
 class Instruction;
 class AliasAnalysis;
@@ -72,7 +75,41 @@ class Value;
 namespace polly {
 typedef std::set<const SCEV *> ParamSetType;
 
+// Description of the shape of an array.
+struct ArrayShape {
+  // Base pointer identifying all accesses to this array.
+  const SCEVUnknown *BasePointer;
+
+  // Sizes of each delinearized dimension.
+  SmallVector<const SCEV *, 4> DelinearizedSizes;
+
+  ArrayShape(const SCEVUnknown *B) : BasePointer(B), DelinearizedSizes() {}
+};
+
+struct MemAcc {
+  const Instruction *Insn;
+
+  // A pointer to the shape description of the array.
+  ArrayShape *Shape;
+
+  // Subscripts computed by delinearization.
+  SmallVector<const SCEV *, 4> DelinearizedSubscripts;
+
+  MemAcc(const Instruction *I, ArrayShape *S)
+      : Insn(I), Shape(S), DelinearizedSubscripts() {}
+};
+
+typedef std::map<const Instruction *, MemAcc *> MapInsnToMemAcc;
+typedef std::pair<const Instruction *, const SCEVAddRecExpr *> PairInsnAddRec;
+typedef std::vector<PairInsnAddRec> AFs;
+typedef std::map<const SCEVUnknown *, AFs> BaseToAFs;
+typedef std::map<const SCEVUnknown *, const SCEV *> BaseToElSize;
+
 extern bool PollyTrackFailures;
+extern bool PollyDelinearize;
+
+/// @brief A function attribute which will cause Polly to skip the function
+extern llvm::StringRef PollySkipFnAttr;
 
 //===----------------------------------------------------------------------===//
 /// @brief Pass to detect the maximal static control parts (Scops) of a
@@ -95,27 +132,35 @@ class ScopDetection : public FunctionPass {
     Region &CurRegion;   // The region to check.
     AliasSetTracker AST; // The AliasSetTracker to hold the alias information.
     bool Verifying;      // If we are in the verification phase?
+    RejectLog Log;
+
+    // Map a base pointer to all access functions accessing it.
+    BaseToAFs NonAffineAccesses, AffineAccesses;
+    BaseToElSize ElementSize;
+
     DetectionContext(Region &R, AliasAnalysis &AA, bool Verify)
-        : CurRegion(R), AST(AA), Verifying(Verify) {}
+        : CurRegion(R), AST(AA), Verifying(Verify), Log(&R) {}
   };
 
   // Remember the valid regions
   typedef std::set<const Region *> RegionSet;
   RegionSet ValidRegions;
 
-  // Invalid regions and the reason they fail.
-  std::map<const Region *, std::string> InvalidRegions;
+  // Remember a list of errors for every region.
+  mutable RejectLogsContainer RejectLogs;
 
-  // Remember the invalid functions producted by backends;
-  typedef std::set<const Function *> FunctionSet;
-  FunctionSet InvalidFunctions;
-  mutable std::string LastFailure;
+  // Delinearize all non affine memory accesses and return false when there
+  // exists a non affine memory access that cannot be delinearized. Return true
+  // when all array accesses are affine after delinearization.
+  bool hasAffineMemoryAccesses(DetectionContext &Context) const;
 
   // Try to expand the region R. If R can be expanded return the expanded
   // region, NULL otherwise.
   Region *expandRegion(Region &R);
 
-  // Find the Scops in this region tree.
+  /// Find the Scops in this region tree.
+  ///
+  /// @param The region tree to scan for scops.
   void findScops(Region &R);
 
   /// @brief Check if all basic block in the region are valid.
@@ -139,18 +184,27 @@ class ScopDetection : public FunctionPass {
   /// @return True if R is a Scop, false otherwise.
   bool isValidRegion(DetectionContext &Context) const;
 
+  /// @brief Check if a region is a Scop.
+  ///
+  /// @param Context The context of scop detection.
+  ///
+  /// @return True if R is a Scop, false otherwise.
+  bool isValidRegion(Region &R) const;
+
   /// @brief Check if a call instruction can be part of a Scop.
   ///
   /// @param CI The call instruction to check.
   /// @return True if the call instruction is valid, false otherwise.
   static bool isValidCallInst(CallInst &CI);
 
-  /// @brief Format the invalid alias message.
+  /// @brief Check if a value is invariant in the region Reg.
   ///
-  /// @param AS The alias set.
+  /// @param Val Value to check for invariance.
+  /// @param Reg The region to consider for the invariance of Val.
   ///
-  /// @return The failure message why the alias is invalid.
-  std::string formatInvalidAlias(AliasSet &AS) const;
+  /// @return True if the value represented by Val is invariant in the region
+  ///         identified by Reg.
+  bool isInvariant(const Value &Val, const Region &Reg) const;
 
   /// @brief Check if a memory access can be part of a Scop.
   ///
@@ -194,26 +248,22 @@ class ScopDetection : public FunctionPass {
   /// @return True if the loop is valid in the region.
   bool isValidLoop(Loop *L, DetectionContext &Context) const;
 
-  /// @brief Check if a function is an OpenMP subfunction.
+  /// @brief Check if the function @p F is marked as invalid.
   ///
-  /// An OpenMP subfunction is not valid for Scop detection.
-  ///
-  /// @param F The function to check.
-  ///
-  /// @return True if the function is not an OpenMP subfunction.
+  /// @note An OpenMP subfunction will be marked as invalid.
   bool isValidFunction(llvm::Function &F);
-
-  /// @brief Get the location of a region from the debug info.
-  ///
-  /// @param R The region to get debug info for.
-  /// @param LineBegin The first line in the region.
-  /// @param LineEnd The last line in the region.
-  /// @param FileName The filename where the region was defined.
-  void getDebugLocation(const Region *R, unsigned &LineBegin, unsigned &LineEnd,
-                        std::string &FileName);
 
   /// @brief Print the locations of all detected scops.
   void printLocations(llvm::Function &F);
+
+  /// @brief Track diagnostics for invalid scops.
+  ///
+  /// @param Context The context of scop detection.
+  /// @param Assert Throw an assert in verify mode or not.
+  /// @param Args Argument list that gets passed to the constructor of RR.
+  template <class RR, typename... Args>
+  inline bool invalid(DetectionContext &Context, bool Assert,
+                      Args &&... Arguments) const;
 
 public:
   static char ID;
@@ -227,9 +277,11 @@ public:
   /// @brief Is the region is the maximum region of a Scop?
   ///
   /// @param R The Region to test if it is maximum.
+  /// @param Verify Rerun the scop detection to verify SCoP was not invalidated
+  ///               meanwhile.
   ///
   /// @return Return true if R is the maximum Region in a Scop, false otherwise.
-  bool isMaxRegionInScop(const Region &R) const;
+  bool isMaxRegionInScop(const Region &R, bool Verify = true) const;
 
   /// @brief Get a message why a region is invalid
   ///
@@ -253,11 +305,44 @@ public:
   const_iterator end() const { return ValidRegions.end(); }
   //@}
 
+  /// @name Reject log iterators
+  ///
+  /// These iterators iterate over the logs of all rejected regions of this
+  //  function.
+  //@{
+  typedef std::map<const Region *, RejectLog>::iterator reject_iterator;
+  typedef std::map<const Region *, RejectLog>::const_iterator
+      const_reject_iterator;
+
+  reject_iterator reject_begin() { return RejectLogs.begin(); }
+  reject_iterator reject_end() { return RejectLogs.end(); }
+
+  const_reject_iterator reject_begin() const { return RejectLogs.begin(); }
+  const_reject_iterator reject_end() const { return RejectLogs.end(); }
+  //@}
+
+  /// @brief Emit rejection remarks for all smallest invalid regions.
+  ///
+  /// @param F The function to emit remarks for.
+  /// @param R The region to start the region tree traversal for.
+  void emitMissedRemarksForLeaves(const Function &F, const Region *R);
+
+  /// @brief Emit rejection remarks for the parent regions of all valid regions.
+  ///
+  /// Emitting rejection remarks for the parent regions of all valid regions
+  /// may give the end-user clues about how to increase the size of the
+  /// detected Scops.
+  ///
+  /// @param F The function to emit remarks for.
+  /// @param ValidRegions The set of valid regions to emit remarks for.
+  void emitMissedRemarksForValidRegions(const Function &F,
+                                        const RegionSet &ValidRegions);
+
   /// @brief Mark the function as invalid so we will not extract any scop from
   ///        the function.
   ///
   /// @param F The function to mark as invalid.
-  void markFunctionAsInvalid(const Function *F) { InvalidFunctions.insert(F); }
+  void markFunctionAsInvalid(Function *F) const;
 
   /// @brief Verify if all valid Regions in this Function are still valid
   /// after some transformations.

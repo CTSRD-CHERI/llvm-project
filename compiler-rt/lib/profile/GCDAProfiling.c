@@ -25,18 +25,33 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/mman.h>
-#include <sys/types.h>
 #ifdef _WIN32
 #include <direct.h>
 #endif
 
-#ifndef _MSC_VER
+#define I386_FREEBSD (defined(__FreeBSD__) && defined(__i386__))
+
+#if !I386_FREEBSD
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
+
+#if !defined(_MSC_VER) && !I386_FREEBSD
 #include <stdint.h>
-#else
+#endif
+
+#if defined(_MSC_VER)
 typedef unsigned int uint32_t;
-typedef unsigned int uint64_t;
+typedef unsigned long long uint64_t;
+#elif I386_FREEBSD
+/* System headers define 'size_t' incorrectly on x64 FreeBSD (prior to
+ * FreeBSD 10, r232261) when compiled in 32-bit mode.
+ */
+typedef unsigned char uint8_t;
+typedef unsigned int uint32_t;
+typedef unsigned long long uint64_t;
+int mkdir(const char*, unsigned short);
 #endif
 
 /* #define DEBUG_GCDAPROFILING */
@@ -150,15 +165,15 @@ static uint64_t read_64bit_value() {
 }
 
 static char *mangle_filename(const char *orig_filename) {
-  char *filename = 0;
-  int prefix_len = 0;
-  int prefix_strip = 0;
+  char *new_filename;
+  size_t filename_len, prefix_len;
+  int prefix_strip;
   int level = 0;
-  const char *fname = orig_filename, *ptr = NULL;
+  const char *fname, *ptr;
   const char *prefix = getenv("GCOV_PREFIX");
   const char *prefix_strip_str = getenv("GCOV_PREFIX_STRIP");
 
-  if (!prefix)
+  if (prefix == NULL || prefix[0] == '\0')
     return strdup(orig_filename);
 
   if (prefix_strip_str) {
@@ -167,38 +182,44 @@ static char *mangle_filename(const char *orig_filename) {
     /* Negative GCOV_PREFIX_STRIP values are ignored */
     if (prefix_strip < 0)
       prefix_strip = 0;
+  } else {
+    prefix_strip = 0;
   }
 
-  prefix_len = strlen(prefix);
-  filename = malloc(prefix_len + 1 + strlen(orig_filename) + 1);
-  strcpy(filename, prefix);
-
-  if (prefix[prefix_len - 1] != '/')
-    strcat(filename, "/");
-
-  for (ptr = fname + 1; *ptr != '\0' && level < prefix_strip; ++ptr) {
-    if (*ptr != '/') continue;
+  fname = orig_filename;
+  for (level = 0, ptr = fname + 1; level < prefix_strip; ++ptr) {
+    if (*ptr == '\0')
+      break;
+    if (*ptr != '/')
+      continue;
     fname = ptr;
     ++level;
   }
 
-  strcat(filename, fname);
+  filename_len = strlen(fname);
+  prefix_len = strlen(prefix);
+  new_filename = malloc(prefix_len + 1 + filename_len + 1);
+  memcpy(new_filename, prefix, prefix_len);
 
-  return filename;
+  if (prefix[prefix_len - 1] != '/')
+    new_filename[prefix_len++] = '/';
+  memcpy(new_filename + prefix_len, fname, filename_len + 1);
+
+  return new_filename;
 }
 
-static void recursive_mkdir(char *filename) {
+static void recursive_mkdir(char *path) {
   int i;
 
-  for (i = 1; filename[i] != '\0'; ++i) {
-    if (filename[i] != '/') continue;
-    filename[i] = '\0';
+  for (i = 1; path[i] != '\0'; ++i) {
+    if (path[i] != '/') continue;
+    path[i] = '\0';
 #ifdef _WIN32
-    _mkdir(filename);
+    _mkdir(path);
 #else
-    mkdir(filename, 0755);  /* Some of these will fail, ignore it. */
+    mkdir(path, 0755);  /* Some of these will fail, ignore it. */
 #endif
-    filename[i] = '/';
+    path[i] = '/';
   }
 }
 
@@ -368,13 +389,17 @@ void llvm_gcda_emit_arcs(uint32_t num_counters, uint64_t *counters) {
   if (val != (uint32_t)-1) {
     /* There are counters present in the file. Merge them. */
     if (val != 0x01a10000) {
-      fprintf(stderr, "profiling:invalid arc tag (0x%08x)\n", val);
+      fprintf(stderr, "profiling: %s: cannot merge previous GCDA file: "
+                      "corrupt arc tag (0x%08x)\n",
+              filename, val);
       return;
     }
 
     val = read_32bit_value();
     if (val == (uint32_t)-1 || val / 2 != num_counters) {
-      fprintf(stderr, "profiling:invalid number of counters (%d)\n", val);
+      fprintf(stderr, "profiling: %s: cannot merge previous GCDA file: "
+                      "mismatched number of counters (%d)\n",
+              filename, val);
       return;
     }
 
@@ -416,13 +441,17 @@ void llvm_gcda_summary_info() {
   if (val != (uint32_t)-1) {
     /* There are counters present in the file. Merge them. */
     if (val != 0xa1000000) {
-      fprintf(stderr, "profiling:invalid object tag (0x%08x)\n", val);
+      fprintf(stderr, "profiling: %s: cannot merge previous run count: "
+                      "corrupt object tag (0x%08x)\n",
+              filename, val);
       return;
     }
 
     val = read_32bit_value(); /* length */
     if (val != obj_summary_len) {
-      fprintf(stderr, "profiling:invalid object length (%d)\n", val);
+      fprintf(stderr, "profiling: %s: cannot merge previous run count: "
+                      "mismatched object length (%d)\n",
+              filename, val);
       return;
     }
 

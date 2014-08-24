@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef POLLY_LOOP_GENERATORS_H
 #define POLLY_LOOP_GENERATORS_H
-#include "llvm/IR/IRBuilder.h"
+#include "polly/CodeGen/IRBuilder.h"
 #include "llvm/ADT/SetVector.h"
 
 #include <map>
@@ -36,18 +36,25 @@ using namespace llvm;
 /// @param Builder    The builder used to create the loop.
 /// @param P          A pointer to the pass that uses this function. It is used
 ///                   to update analysis information.
+/// @param LI         The loop info for the current function
+/// @param DT         The dominator tree we need to update
 /// @param ExitBlock  The block the loop will exit to.
 /// @param Predicate  The predicate used to generate the upper loop bound.
+/// @param Annotator  This function can (optionally) take a LoopAnnotator which
+///                   tracks the loop structure.
+/// @param Parallel   If this loop should be marked parallel in the Annotator.
 /// @return Value*    The newly created induction variable for this loop.
 Value *createLoop(Value *LowerBound, Value *UpperBound, Value *Stride,
-                  IRBuilder<> &Builder, Pass *P, BasicBlock *&ExitBlock,
-                  ICmpInst::Predicate Predicate);
+                  PollyIRBuilder &Builder, Pass *P, LoopInfo &LI,
+                  DominatorTree &DT, BasicBlock *&ExitBlock,
+                  ICmpInst::Predicate Predicate,
+                  LoopAnnotator *Annotator = NULL, bool Parallel = false);
 
 class OMPGenerator {
 public:
   typedef std::map<Value *, Value *> ValueToValueMapTy;
 
-  OMPGenerator(IRBuilder<> &Builder, Pass *P) : Builder(Builder), P(P) {}
+  OMPGenerator(PollyIRBuilder &Builder, Pass *P) : Builder(Builder), P(P) {}
 
   /// @brief Create an OpenMP parallel loop.
   ///
@@ -73,7 +80,7 @@ public:
                             BasicBlock::iterator *LoopBody);
 
 private:
-  IRBuilder<> &Builder;
+  PollyIRBuilder &Builder;
   Pass *P;
 
   IntegerType *getIntPtrTy();

@@ -93,7 +93,7 @@ uptr ReadFileToBuffer(const char *file_name, char **buff,
     if (internal_iserror(openrv)) return 0;
     fd_t fd = openrv;
     UnmapOrDie(*buff, *buff_size);
-    *buff = (char*)MmapOrDie(size, __FUNCTION__);
+    *buff = (char*)MmapOrDie(size, __func__);
     *buff_size = size;
     // Read up to one page at a time.
     read_len = 0;
@@ -218,10 +218,11 @@ LoadedModule::LoadedModule(const char *module_name, uptr base_address) {
   n_ranges_ = 0;
 }
 
-void LoadedModule::addAddressRange(uptr beg, uptr end) {
+void LoadedModule::addAddressRange(uptr beg, uptr end, bool executable) {
   CHECK_LT(n_ranges_, kMaxNumberOfAddressRanges);
   ranges_[n_ranges_].beg = beg;
   ranges_[n_ranges_].end = end;
+  exec_[n_ranges_] = executable;
   n_ranges_++;
 }
 
@@ -242,6 +243,25 @@ char *StripModuleName(const char *module) {
   else
     short_module_name = module;
   return internal_strdup(short_module_name);
+}
+
+static atomic_uintptr_t g_total_mmaped;
+
+void IncreaseTotalMmap(uptr size) {
+  if (!common_flags()->mmap_limit_mb) return;
+  uptr total_mmaped =
+      atomic_fetch_add(&g_total_mmaped, size, memory_order_relaxed) + size;
+  if ((total_mmaped >> 20) > common_flags()->mmap_limit_mb) {
+    // Since for now mmap_limit_mb is not a user-facing flag, just CHECK.
+    uptr mmap_limit_mb = common_flags()->mmap_limit_mb;
+    common_flags()->mmap_limit_mb = 0;  // Allow mmap in CHECK.
+    RAW_CHECK(total_mmaped >> 20 < mmap_limit_mb);
+  }
+}
+
+void DecreaseTotalMmap(uptr size) {
+  if (!common_flags()->mmap_limit_mb) return;
+  atomic_fetch_sub(&g_total_mmaped, size, memory_order_relaxed);
 }
 
 }  // namespace __sanitizer
@@ -274,11 +294,6 @@ void __sanitizer_set_report_path(const char *path) {
     report_path_prefix[len] = '\0';
     log_to_file = true;
   }
-}
-
-void NOINLINE __sanitizer_sandbox_on_notify(void *reserved) {
-  (void)reserved;
-  PrepareForSandboxing();
 }
 
 void __sanitizer_report_error_summary(const char *error_summary) {

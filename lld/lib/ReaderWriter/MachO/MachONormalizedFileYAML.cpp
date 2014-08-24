@@ -11,16 +11,14 @@
 /// \file For mach-o object files, this implementation uses YAML I/O to
 /// provide the convert between YAML and the normalized mach-o (NM).
 ///
-///                  +------------+         +------+ 
-///                  | normalized |   <->   | yaml | 
-///                  +------------+         +------+ 
+///                  +------------+         +------+
+///                  | normalized |   <->   | yaml |
+///                  +------------+         +------+
 
 #include "MachONormalizedFile.h"
-
 #include "lld/Core/Error.h"
 #include "lld/Core/LLVM.h"
 #include "lld/ReaderWriter/YamlContext.h"
-
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -29,15 +27,13 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MachO.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/system_error.h"
 #include "llvm/Support/YAMLTraits.h"
+#include "llvm/Support/raw_ostream.h"
+#include <system_error>
 
 
 using llvm::StringRef;
-using llvm::error_code;
-using llvm::dyn_cast;
 using namespace llvm::yaml;
 using namespace llvm::MachO;
 using namespace lld::mach_o::normalized;
@@ -49,6 +45,7 @@ LLVM_YAML_IS_SEQUENCE_VECTOR(RebaseLocation)
 LLVM_YAML_IS_SEQUENCE_VECTOR(BindLocation)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Export)
 LLVM_YAML_IS_SEQUENCE_VECTOR(StringRef)
+LLVM_YAML_IS_SEQUENCE_VECTOR(DataInCode)
 
 
 // for compatibility with gcc-4.7 in C++11 mode, add extra namespace
@@ -138,13 +135,13 @@ struct ScalarEnumerationTraits<lld::MachOLinkingContext::Arch> {
 template <>
 struct ScalarEnumerationTraits<lld::MachOLinkingContext::OS> {
   static void enumeration(IO &io, lld::MachOLinkingContext::OS &value) {
-    io.enumCase(value, "unknown",    
+    io.enumCase(value, "unknown",
                           lld::MachOLinkingContext::OS::unknown);
-    io.enumCase(value, "Mac OS X",    
+    io.enumCase(value, "Mac OS X",
                           lld::MachOLinkingContext::OS::macOSX);
-    io.enumCase(value, "iOS",         
+    io.enumCase(value, "iOS",
                           lld::MachOLinkingContext::OS::iOS);
-    io.enumCase(value, "iOS Simulator", 
+    io.enumCase(value, "iOS Simulator",
                           lld::MachOLinkingContext::OS::iOS_simulator);
   }
 };
@@ -164,9 +161,9 @@ struct ScalarEnumerationTraits<HeaderFileType> {
 template <>
 struct ScalarBitSetTraits<FileFlags> {
   static void bitset(IO &io, FileFlags &value) {
-    io.bitSetCase(value, "MH_TWOLEVEL", 
+    io.bitSetCase(value, "MH_TWOLEVEL",
                           llvm::MachO::MH_TWOLEVEL);
-    io.bitSetCase(value, "MH_SUBSECTIONS_VIA_SYMBOLS",  
+    io.bitSetCase(value, "MH_SUBSECTIONS_VIA_SYMBOLS",
                           llvm::MachO::MH_SUBSECTIONS_VIA_SYMBOLS);
   }
 };
@@ -175,49 +172,49 @@ struct ScalarBitSetTraits<FileFlags> {
 template <>
 struct ScalarEnumerationTraits<SectionType> {
   static void enumeration(IO &io, SectionType &value) {
-    io.enumCase(value, "S_REGULAR",  
+    io.enumCase(value, "S_REGULAR",
                         llvm::MachO::S_REGULAR);
-    io.enumCase(value, "S_ZEROFILL", 
+    io.enumCase(value, "S_ZEROFILL",
                         llvm::MachO::S_ZEROFILL);
-    io.enumCase(value, "S_CSTRING_LITERALS", 
+    io.enumCase(value, "S_CSTRING_LITERALS",
                         llvm::MachO::S_CSTRING_LITERALS);
-    io.enumCase(value, "S_4BYTE_LITERALS", 
+    io.enumCase(value, "S_4BYTE_LITERALS",
                         llvm::MachO::S_4BYTE_LITERALS);
-    io.enumCase(value, "S_8BYTE_LITERALS", 
+    io.enumCase(value, "S_8BYTE_LITERALS",
                         llvm::MachO::S_8BYTE_LITERALS);
-    io.enumCase(value, "S_LITERAL_POINTERS", 
+    io.enumCase(value, "S_LITERAL_POINTERS",
                         llvm::MachO::S_LITERAL_POINTERS);
-    io.enumCase(value, "S_NON_LAZY_SYMBOL_POINTERS", 
+    io.enumCase(value, "S_NON_LAZY_SYMBOL_POINTERS",
                         llvm::MachO::S_NON_LAZY_SYMBOL_POINTERS);
-    io.enumCase(value, "S_LAZY_SYMBOL_POINTERS", 
+    io.enumCase(value, "S_LAZY_SYMBOL_POINTERS",
                         llvm::MachO::S_LAZY_SYMBOL_POINTERS);
-    io.enumCase(value, "S_SYMBOL_STUBS", 
+    io.enumCase(value, "S_SYMBOL_STUBS",
                         llvm::MachO::S_SYMBOL_STUBS);
-    io.enumCase(value, "S_MOD_INIT_FUNC_POINTERS", 
+    io.enumCase(value, "S_MOD_INIT_FUNC_POINTERS",
                         llvm::MachO::S_MOD_INIT_FUNC_POINTERS);
-    io.enumCase(value, "S_MOD_TERM_FUNC_POINTERS", 
+    io.enumCase(value, "S_MOD_TERM_FUNC_POINTERS",
                         llvm::MachO::S_MOD_TERM_FUNC_POINTERS);
-    io.enumCase(value, "S_COALESCED", 
+    io.enumCase(value, "S_COALESCED",
                         llvm::MachO::S_COALESCED);
-    io.enumCase(value, "S_GB_ZEROFILL", 
+    io.enumCase(value, "S_GB_ZEROFILL",
                         llvm::MachO::S_GB_ZEROFILL);
-    io.enumCase(value, "S_INTERPOSING", 
+    io.enumCase(value, "S_INTERPOSING",
                         llvm::MachO::S_INTERPOSING);
-    io.enumCase(value, "S_16BYTE_LITERALS", 
+    io.enumCase(value, "S_16BYTE_LITERALS",
                         llvm::MachO::S_16BYTE_LITERALS);
-    io.enumCase(value, "S_DTRACE_DOF", 
+    io.enumCase(value, "S_DTRACE_DOF",
                         llvm::MachO::S_DTRACE_DOF);
-    io.enumCase(value, "S_LAZY_DYLIB_SYMBOL_POINTERS", 
+    io.enumCase(value, "S_LAZY_DYLIB_SYMBOL_POINTERS",
                         llvm::MachO::S_LAZY_DYLIB_SYMBOL_POINTERS);
-    io.enumCase(value, "S_THREAD_LOCAL_REGULAR", 
+    io.enumCase(value, "S_THREAD_LOCAL_REGULAR",
                         llvm::MachO::S_THREAD_LOCAL_REGULAR);
-    io.enumCase(value, "S_THREAD_LOCAL_ZEROFILL", 
+    io.enumCase(value, "S_THREAD_LOCAL_ZEROFILL",
                         llvm::MachO::S_THREAD_LOCAL_ZEROFILL);
-    io.enumCase(value, "S_THREAD_LOCAL_VARIABLES", 
+    io.enumCase(value, "S_THREAD_LOCAL_VARIABLES",
                         llvm::MachO::S_THREAD_LOCAL_VARIABLES);
-    io.enumCase(value, "S_THREAD_LOCAL_VARIABLE_POINTERS", 
+    io.enumCase(value, "S_THREAD_LOCAL_VARIABLE_POINTERS",
                         llvm::MachO::S_THREAD_LOCAL_VARIABLE_POINTERS);
-    io.enumCase(value, "S_THREAD_LOCAL_INIT_FUNCTION_POINTERS", 
+    io.enumCase(value, "S_THREAD_LOCAL_INIT_FUNCTION_POINTERS",
                         llvm::MachO::S_THREAD_LOCAL_INIT_FUNCTION_POINTERS);
   }
 };
@@ -225,15 +222,15 @@ struct ScalarEnumerationTraits<SectionType> {
 template <>
 struct ScalarBitSetTraits<SectionAttr> {
   static void bitset(IO &io, SectionAttr &value) {
-    io.bitSetCase(value, "S_ATTR_PURE_INSTRUCTIONS", 
+    io.bitSetCase(value, "S_ATTR_PURE_INSTRUCTIONS",
                           llvm::MachO::S_ATTR_PURE_INSTRUCTIONS);
-    io.bitSetCase(value, "S_ATTR_SOME_INSTRUCTIONS",  
+    io.bitSetCase(value, "S_ATTR_SOME_INSTRUCTIONS",
                           llvm::MachO::S_ATTR_SOME_INSTRUCTIONS);
-    io.bitSetCase(value, "S_ATTR_NO_DEAD_STRIP",  
+    io.bitSetCase(value, "S_ATTR_NO_DEAD_STRIP",
                           llvm::MachO::S_ATTR_NO_DEAD_STRIP);
-    io.bitSetCase(value, "S_ATTR_EXT_RELOC",  
+    io.bitSetCase(value, "S_ATTR_EXT_RELOC",
                           llvm::MachO::S_ATTR_EXT_RELOC);
-    io.bitSetCase(value, "S_ATTR_LOC_RELOC",  
+    io.bitSetCase(value, "S_ATTR_LOC_RELOC",
                           llvm::MachO::S_ATTR_LOC_RELOC);
   }
 };
@@ -279,9 +276,19 @@ struct MappingTraits<Section> {
     io.mapOptional("attributes",      sect.attributes);
     io.mapOptional("alignment",       sect.alignment, 0U);
     io.mapRequired("address",         sect.address);
-    MappingNormalization<NormalizedContent, ArrayRef<uint8_t>> content(
+    if (sect.type == llvm::MachO::S_ZEROFILL) {
+      // S_ZEROFILL sections use "size:" instead of "content:"
+      uint64_t size = sect.content.size();
+      io.mapOptional("size",          size);
+      if (!io.outputting()) {
+        uint8_t *bytes = nullptr;
+        sect.content = makeArrayRef(bytes, size);
+      }
+    } else {
+      MappingNormalization<NormalizedContent, ArrayRef<uint8_t>> content(
         io, sect.content);
-    io.mapOptional("content",         content->_normalizedContent);
+      io.mapOptional("content",         content->_normalizedContent);
+    }
     io.mapOptional("relocations",     sect.relocations);
     io.mapOptional("indirect-syms",   sect.indirectSymbols);
   }
@@ -306,7 +313,7 @@ struct MappingTraits<Section> {
       std::copy(_normalizedContent.begin(), _normalizedContent.end(), bytes);
       return makeArrayRef(bytes, size);
     }
-    
+
     IO                &_io;
     ContentBytes       _normalizedContent;
   };
@@ -340,57 +347,57 @@ struct ScalarEnumerationTraits<RelocationInfoType> {
     assert(file != nullptr);
     switch (file->arch) {
     case lld::MachOLinkingContext::arch_x86_64:
-      io.enumCase(value, "X86_64_RELOC_UNSIGNED",  
+      io.enumCase(value, "X86_64_RELOC_UNSIGNED",
                                   llvm::MachO::X86_64_RELOC_UNSIGNED);
-      io.enumCase(value, "X86_64_RELOC_SIGNED",   
+      io.enumCase(value, "X86_64_RELOC_SIGNED",
                                   llvm::MachO::X86_64_RELOC_SIGNED);
-      io.enumCase(value, "X86_64_RELOC_BRANCH",    
+      io.enumCase(value, "X86_64_RELOC_BRANCH",
                                   llvm::MachO::X86_64_RELOC_BRANCH);
-      io.enumCase(value, "X86_64_RELOC_GOT_LOAD",    
+      io.enumCase(value, "X86_64_RELOC_GOT_LOAD",
                                   llvm::MachO::X86_64_RELOC_GOT_LOAD);
-      io.enumCase(value, "X86_64_RELOC_GOT",    
+      io.enumCase(value, "X86_64_RELOC_GOT",
                                   llvm::MachO::X86_64_RELOC_GOT);
-      io.enumCase(value, "X86_64_RELOC_SUBTRACTOR",   
+      io.enumCase(value, "X86_64_RELOC_SUBTRACTOR",
                                   llvm::MachO::X86_64_RELOC_SUBTRACTOR);
-      io.enumCase(value, "X86_64_RELOC_SIGNED_1",    
+      io.enumCase(value, "X86_64_RELOC_SIGNED_1",
                                   llvm::MachO::X86_64_RELOC_SIGNED_1);
-      io.enumCase(value, "X86_64_RELOC_SIGNED_2",    
+      io.enumCase(value, "X86_64_RELOC_SIGNED_2",
                                   llvm::MachO::X86_64_RELOC_SIGNED_2);
-      io.enumCase(value, "X86_64_RELOC_SIGNED_4",    
+      io.enumCase(value, "X86_64_RELOC_SIGNED_4",
                                   llvm::MachO::X86_64_RELOC_SIGNED_4);
-      io.enumCase(value, "X86_64_RELOC_TLV",    
+      io.enumCase(value, "X86_64_RELOC_TLV",
                                   llvm::MachO::X86_64_RELOC_TLV);
       break;
     case lld::MachOLinkingContext::arch_x86:
-      io.enumCase(value, "GENERIC_RELOC_VANILLA",  
+      io.enumCase(value, "GENERIC_RELOC_VANILLA",
                                   llvm::MachO::GENERIC_RELOC_VANILLA);
-      io.enumCase(value, "GENERIC_RELOC_PAIR",   
+      io.enumCase(value, "GENERIC_RELOC_PAIR",
                                   llvm::MachO::GENERIC_RELOC_PAIR);
-      io.enumCase(value, "GENERIC_RELOC_SECTDIFF",  
+      io.enumCase(value, "GENERIC_RELOC_SECTDIFF",
                                   llvm::MachO::GENERIC_RELOC_SECTDIFF);
-      io.enumCase(value, "GENERIC_RELOC_LOCAL_SECTDIFF",   
+      io.enumCase(value, "GENERIC_RELOC_LOCAL_SECTDIFF",
                                   llvm::MachO::GENERIC_RELOC_LOCAL_SECTDIFF);
-      io.enumCase(value, "GENERIC_RELOC_TLV",   
+      io.enumCase(value, "GENERIC_RELOC_TLV",
                                   llvm::MachO::GENERIC_RELOC_TLV);
       break;
     case lld::MachOLinkingContext::arch_armv6:
     case lld::MachOLinkingContext::arch_armv7:
     case lld::MachOLinkingContext::arch_armv7s:
-       io.enumCase(value, "ARM_RELOC_VANILLA",  
+       io.enumCase(value, "ARM_RELOC_VANILLA",
                                   llvm::MachO::ARM_RELOC_VANILLA);
-      io.enumCase(value, "ARM_RELOC_PAIR",   
+      io.enumCase(value, "ARM_RELOC_PAIR",
                                   llvm::MachO::ARM_RELOC_PAIR);
-      io.enumCase(value, "ARM_RELOC_SECTDIFF",  
+      io.enumCase(value, "ARM_RELOC_SECTDIFF",
                                   llvm::MachO::ARM_RELOC_SECTDIFF);
-      io.enumCase(value, "ARM_RELOC_LOCAL_SECTDIFF",   
+      io.enumCase(value, "ARM_RELOC_LOCAL_SECTDIFF",
                                   llvm::MachO::ARM_RELOC_LOCAL_SECTDIFF);
-      io.enumCase(value, "ARM_RELOC_BR24",   
+      io.enumCase(value, "ARM_RELOC_BR24",
                                   llvm::MachO::ARM_RELOC_BR24);
-      io.enumCase(value, "ARM_THUMB_RELOC_BR22",   
+      io.enumCase(value, "ARM_THUMB_RELOC_BR22",
                                   llvm::MachO::ARM_THUMB_RELOC_BR22);
-      io.enumCase(value, "ARM_RELOC_HALF",   
+      io.enumCase(value, "ARM_RELOC_HALF",
                                   llvm::MachO::ARM_RELOC_HALF);
-      io.enumCase(value, "ARM_RELOC_HALF_SECTDIFF",   
+      io.enumCase(value, "ARM_RELOC_HALF_SECTDIFF",
                                   llvm::MachO::ARM_RELOC_HALF_SECTDIFF);
       break;
     default:
@@ -407,8 +414,18 @@ struct MappingTraits<Symbol> {
     io.mapRequired("type",    sym.type);
     io.mapOptional("scope",   sym.scope, SymbolScope(0));
     io.mapOptional("sect",    sym.sect, (uint8_t)0);
-    io.mapOptional("desc",    sym.desc, SymbolDesc(0));
-    io.mapRequired("value",   sym.value);
+    if (sym.type == llvm::MachO::N_UNDF) {
+      // In undef symbols, desc field contains alignment/ordinal info
+      // which is better represented as a hex vaule.
+      uint16_t t1 = sym.desc;
+      Hex16 t2 = t1;
+      io.mapOptional("desc",  t2, Hex16(0));
+      sym.desc = t2;
+    } else {
+      // In defined symbols, desc fit is a set of option bits.
+      io.mapOptional("desc",    sym.desc, SymbolDesc(0));
+    }
+    io.mapRequired("value",  sym.value);
   }
 };
 
@@ -454,6 +471,7 @@ struct ScalarTraits<VMProtect> {
     // Return the empty string on success,
     return StringRef();
   }
+  static bool mustQuote(StringRef) { return false; }
 };
 
 
@@ -470,15 +488,15 @@ struct MappingTraits<Segment> {
 template <>
 struct ScalarEnumerationTraits<LoadCommandType> {
   static void enumeration(IO &io, LoadCommandType &value) {
-    io.enumCase(value, "LC_LOAD_DYLIB",  
+    io.enumCase(value, "LC_LOAD_DYLIB",
                         llvm::MachO::LC_LOAD_DYLIB);
-    io.enumCase(value, "LC_LOAD_WEAK_DYLIB",  
+    io.enumCase(value, "LC_LOAD_WEAK_DYLIB",
                         llvm::MachO::LC_LOAD_WEAK_DYLIB);
-    io.enumCase(value, "LC_REEXPORT_DYLIB",  
+    io.enumCase(value, "LC_REEXPORT_DYLIB",
                         llvm::MachO::LC_REEXPORT_DYLIB);
-    io.enumCase(value, "LC_LOAD_UPWARD_DYLIB", 
+    io.enumCase(value, "LC_LOAD_UPWARD_DYLIB",
                         llvm::MachO::LC_LOAD_UPWARD_DYLIB);
-    io.enumCase(value, "LC_LAZY_LOAD_DYLIB",  
+    io.enumCase(value, "LC_LAZY_LOAD_DYLIB",
                         llvm::MachO::LC_LAZY_LOAD_DYLIB);
   }
 };
@@ -491,15 +509,14 @@ struct MappingTraits<DependentDylib> {
   }
 };
 
-
 template <>
 struct ScalarEnumerationTraits<RebaseType> {
   static void enumeration(IO &io, RebaseType &value) {
-    io.enumCase(value, "REBASE_TYPE_POINTER",  
+    io.enumCase(value, "REBASE_TYPE_POINTER",
                         llvm::MachO::REBASE_TYPE_POINTER);
-    io.enumCase(value, "REBASE_TYPE_TEXT_PCREL32",  
+    io.enumCase(value, "REBASE_TYPE_TEXT_PCREL32",
                         llvm::MachO::REBASE_TYPE_TEXT_PCREL32);
-    io.enumCase(value, "REBASE_TYPE_TEXT_ABSOLUTE32",  
+    io.enumCase(value, "REBASE_TYPE_TEXT_ABSOLUTE32",
                         llvm::MachO::REBASE_TYPE_TEXT_ABSOLUTE32);
   }
 };
@@ -510,7 +527,7 @@ struct MappingTraits<RebaseLocation> {
   static void mapping(IO &io, RebaseLocation& rebase) {
     io.mapRequired("segment-index",   rebase.segIndex);
     io.mapRequired("segment-offset",  rebase.segOffset);
-    io.mapOptional("kind",            rebase.kind, 
+    io.mapOptional("kind",            rebase.kind,
                                       llvm::MachO::REBASE_TYPE_POINTER);
   }
 };
@@ -520,11 +537,11 @@ struct MappingTraits<RebaseLocation> {
 template <>
 struct ScalarEnumerationTraits<BindType> {
   static void enumeration(IO &io, BindType &value) {
-    io.enumCase(value, "BIND_TYPE_POINTER",  
+    io.enumCase(value, "BIND_TYPE_POINTER",
                         llvm::MachO::BIND_TYPE_POINTER);
-    io.enumCase(value, "BIND_TYPE_TEXT_ABSOLUTE32",  
+    io.enumCase(value, "BIND_TYPE_TEXT_ABSOLUTE32",
                         llvm::MachO::BIND_TYPE_TEXT_ABSOLUTE32);
-    io.enumCase(value, "BIND_TYPE_TEXT_PCREL32",  
+    io.enumCase(value, "BIND_TYPE_TEXT_PCREL32",
                         llvm::MachO::BIND_TYPE_TEXT_PCREL32);
   }
 };
@@ -534,7 +551,7 @@ struct MappingTraits<BindLocation> {
   static void mapping(IO &io, BindLocation &bind) {
     io.mapRequired("segment-index",   bind.segIndex);
     io.mapRequired("segment-offset",  bind.segOffset);
-    io.mapOptional("kind",            bind.kind, 
+    io.mapOptional("kind",            bind.kind,
                                       llvm::MachO::BIND_TYPE_POINTER);
     io.mapOptional("can-be-null",     bind.canBeNull, false);
     io.mapRequired("ordinal",         bind.ordinal);
@@ -547,9 +564,9 @@ struct MappingTraits<BindLocation> {
 template <>
 struct ScalarEnumerationTraits<ExportSymbolKind> {
   static void enumeration(IO &io, ExportSymbolKind &value) {
-    io.enumCase(value, "EXPORT_SYMBOL_FLAGS_KIND_REGULAR",       
+    io.enumCase(value, "EXPORT_SYMBOL_FLAGS_KIND_REGULAR",
                         llvm::MachO::EXPORT_SYMBOL_FLAGS_KIND_REGULAR);
-    io.enumCase(value, "EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCALl",  
+    io.enumCase(value, "EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCALl",
                         llvm::MachO::EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL);
   }
 };
@@ -557,11 +574,11 @@ struct ScalarEnumerationTraits<ExportSymbolKind> {
 template <>
 struct ScalarBitSetTraits<ExportFlags> {
   static void bitset(IO &io, ExportFlags &value) {
-    io.bitSetCase(value, "EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION",   
+    io.bitSetCase(value, "EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION",
                           llvm::MachO::EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION);
-    io.bitSetCase(value, "EXPORT_SYMBOL_FLAGS_REEXPORT",         
+    io.bitSetCase(value, "EXPORT_SYMBOL_FLAGS_REEXPORT",
                           llvm::MachO::EXPORT_SYMBOL_FLAGS_REEXPORT);
-    io.bitSetCase(value, "EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER",    
+    io.bitSetCase(value, "EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER",
                           llvm::MachO::EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER);
   }
 };
@@ -572,11 +589,36 @@ struct MappingTraits<Export> {
   static void mapping(IO &io, Export &exp) {
     io.mapRequired("name",         exp.name);
     io.mapRequired("offset",       exp.offset);
-    io.mapOptional("kind",         exp.kind, 
+    io.mapOptional("kind",         exp.kind,
                                 llvm::MachO::EXPORT_SYMBOL_FLAGS_KIND_REGULAR);
     io.mapOptional("flags",        exp.flags);
     io.mapOptional("other-offset", exp.otherOffset, Hex32(0));
     io.mapOptional("other-name",   exp.otherName, StringRef());
+  }
+};
+
+template <>
+struct ScalarEnumerationTraits<DataRegionType> {
+  static void enumeration(IO &io, DataRegionType &value) {
+    io.enumCase(value, "DICE_KIND_DATA",
+                        llvm::MachO::DICE_KIND_DATA);
+    io.enumCase(value, "DICE_KIND_JUMP_TABLE8",
+                        llvm::MachO::DICE_KIND_JUMP_TABLE8);
+    io.enumCase(value, "DICE_KIND_JUMP_TABLE16",
+                        llvm::MachO::DICE_KIND_JUMP_TABLE16);
+    io.enumCase(value, "DICE_KIND_JUMP_TABLE32",
+                        llvm::MachO::DICE_KIND_JUMP_TABLE32);
+    io.enumCase(value, "DICE_KIND_ABS_JUMP_TABLE32",
+                        llvm::MachO::DICE_KIND_ABS_JUMP_TABLE32);
+  }
+};
+
+template <>
+struct MappingTraits<DataInCode> {
+  static void mapping(IO &io, DataInCode &entry) {
+    io.mapRequired("offset",       entry.offset);
+    io.mapRequired("length",       entry.length);
+    io.mapRequired("kind",         entry.kind);
   }
 };
 
@@ -606,6 +648,7 @@ struct MappingTraits<NormalizedFile> {
     io.mapOptional("weak-bindings",    file.weakBindingInfo);
     io.mapOptional("lazy-bindings",    file.lazyBindingInfo);
     io.mapOptional("exports",          file.exportInfo);
+    io.mapOptional("dataInCode",       file.dataInCode);
   }
   static StringRef validate(IO &io, NormalizedFile &file) {
     return StringRef();
@@ -619,7 +662,7 @@ struct MappingTraits<NormalizedFile> {
 namespace lld {
 namespace mach_o {
 
-/// Handles !mach-o tagged yaml documents.  
+/// Handles !mach-o tagged yaml documents.
 bool MachOYamlIOTaggedDocumentHandler::handledDocTag(llvm::yaml::IO &io,
                                                  const lld::File *&file) const {
   if (!io.mapTag("!mach-o"))
@@ -634,13 +677,25 @@ bool MachOYamlIOTaggedDocumentHandler::handledDocTag(llvm::yaml::IO &io,
   // Step 2: parse normalized mach-o struct into atoms.
   ErrorOr<std::unique_ptr<lld::File>> foe = normalizedToAtoms(nf, info->_path,
                                                               true);
+  if (nf.arch != _arch) {
+    io.setError(Twine("file is wrong architecture. Expected ("
+                      + MachOLinkingContext::nameFromArch(_arch)
+                      + ") found ("
+                      + MachOLinkingContext::nameFromArch(nf.arch)
+                      + ")"));
+    return false;
+  }
+  info->_normalizeMachOFile = nullptr;
+
   if (foe) {
     // Transfer ownership to "out" File parameter.
     std::unique_ptr<lld::File> f = std::move(foe.get());
     file = f.release();
     return true;
+  } else {
+    io.setError(foe.getError().message());
+    return false;
   }
-  return false;
 }
 
 
@@ -671,8 +726,7 @@ readYaml(std::unique_ptr<MemoryBuffer> &mb) {
 
 
 /// Writes a yaml encoded mach-o files from an in-memory normalized view.
-error_code
-writeYaml(const NormalizedFile &file, raw_ostream &out) {
+std::error_code writeYaml(const NormalizedFile &file, raw_ostream &out) {
   // YAML I/O is not const aware, so need to cast away ;-(
   NormalizedFile *f = const_cast<NormalizedFile*>(&file);
 
@@ -684,7 +738,7 @@ writeYaml(const NormalizedFile &file, raw_ostream &out) {
   // Stream out yaml.
   yout << *f;
 
-  return error_code::success();
+  return std::error_code();
 }
 
 } // namespace normalized

@@ -81,7 +81,7 @@ public:
     Qualified
   };
 
-  TypeLoc() : Ty(0), Data(0) { }
+  TypeLoc() : Ty(nullptr), Data(nullptr) { }
   TypeLoc(QualType ty, void *opaqueData)
     : Ty(ty.getAsOpaquePtr()), Data(opaqueData) { }
   TypeLoc(const Type *ty, void *opaqueData)
@@ -631,7 +631,7 @@ public:
   bool isDefinition() const {
     TagDecl *D = getDecl();
     return D->isCompleteDefinition() &&
-         (D->getIdentifier() == 0 || D->getLocation() == getNameLoc());
+           (D->getIdentifier() == nullptr || D->getLocation() == getNameLoc());
   }
 };
 
@@ -786,7 +786,7 @@ public:
     setAttrNameLoc(loc);
     if (hasAttrExprOperand()) {
       setAttrOperandParensRange(SourceRange(loc));
-      setAttrExprOperand(0);
+      setAttrExprOperand(nullptr);
     } else if (hasAttrEnumOperand()) {
       setAttrOperandParensRange(SourceRange(loc));
       setAttrEnumOperandLoc(loc);
@@ -1101,7 +1101,7 @@ public:
 
   void initializeLocal(ASTContext &Context, SourceLocation Loc) {
     setSigilLoc(Loc);
-    setClassTInfo(0);
+    setClassTInfo(nullptr);
   }
 
   SourceRange getLocalSourceRange() const {
@@ -1208,23 +1208,23 @@ public:
   }
 
   ArrayRef<ParmVarDecl *> getParams() const {
-    return ArrayRef<ParmVarDecl *>(getParmArray(), getNumArgs());
+    return ArrayRef<ParmVarDecl *>(getParmArray(), getNumParams());
   }
 
-  // ParmVarDecls* are stored after Info, one for each argument.
+  // ParmVarDecls* are stored after Info, one for each parameter.
   ParmVarDecl **getParmArray() const {
     return (ParmVarDecl**) getExtraLocalData();
   }
 
-  unsigned getNumArgs() const {
+  unsigned getNumParams() const {
     if (isa<FunctionNoProtoType>(getTypePtr()))
       return 0;
-    return cast<FunctionProtoType>(getTypePtr())->getNumArgs();
+    return cast<FunctionProtoType>(getTypePtr())->getNumParams();
   }
-  ParmVarDecl *getArg(unsigned i) const { return getParmArray()[i]; }
-  void setArg(unsigned i, ParmVarDecl *VD) { getParmArray()[i] = VD; }
+  ParmVarDecl *getParam(unsigned i) const { return getParmArray()[i]; }
+  void setParam(unsigned i, ParmVarDecl *VD) { getParmArray()[i] = VD; }
 
-  TypeLoc getResultLoc() const {
+  TypeLoc getReturnLoc() const {
     return getInnerTypeLoc();
   }
 
@@ -1237,21 +1237,21 @@ public:
     setLParenLoc(Loc);
     setRParenLoc(Loc);
     setLocalRangeEnd(Loc);
-    for (unsigned i = 0, e = getNumArgs(); i != e; ++i)
-      setArg(i, NULL);
+    for (unsigned i = 0, e = getNumParams(); i != e; ++i)
+      setParam(i, nullptr);
   }
 
   /// \brief Returns the size of the type source info data block that is
   /// specific to this type.
   unsigned getExtraLocalDataSize() const {
-    return getNumArgs() * sizeof(ParmVarDecl*);
+    return getNumParams() * sizeof(ParmVarDecl *);
   }
 
   unsigned getExtraLocalDataAlignment() const {
     return llvm::alignOf<ParmVarDecl*>();
   }
 
-  QualType getInnerType() const { return getTypePtr()->getResultType(); }
+  QualType getInnerType() const { return getTypePtr()->getReturnType(); }
 };
 
 class FunctionProtoTypeLoc :
@@ -1314,7 +1314,7 @@ public:
   void initializeLocal(ASTContext &Context, SourceLocation Loc) {
     setLBracketLoc(Loc);
     setRBracketLoc(Loc);
-    setSizeExpr(NULL);
+    setSizeExpr(nullptr);
   }
 
   QualType getInnerType() const { return getTypePtr()->getElementType(); }
@@ -1774,7 +1774,7 @@ public:
       // template specialization type, we won't record the nested-name-specifier
       // location information when this type-source location information is
       // part of a nested-name-specifier.
-      getLocalData()->QualifierData = 0;
+      getLocalData()->QualifierData = nullptr;
       return;
     }
 

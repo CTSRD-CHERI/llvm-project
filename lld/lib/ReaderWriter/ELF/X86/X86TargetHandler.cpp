@@ -31,6 +31,21 @@ static int relocPC32(uint8_t *location, uint64_t P, uint64_t S, uint64_t A) {
   return 0;
 }
 
+std::unique_ptr<Writer> X86TargetHandler::getWriter() {
+  switch (_x86LinkingContext.getOutputELFType()) {
+  case llvm::ELF::ET_EXEC:
+    return std::unique_ptr<Writer>(new elf::ExecutableWriter<X86ELFType>(
+        _x86LinkingContext, *_x86TargetLayout.get()));
+  case llvm::ELF::ET_DYN:
+    return std::unique_ptr<Writer>(new elf::DynamicLibraryWriter<X86ELFType>(
+        _x86LinkingContext, *_x86TargetLayout.get()));
+  case llvm::ELF::ET_REL:
+    llvm_unreachable("TODO: support -r mode");
+  default:
+    llvm_unreachable("unsupported output type");
+  }
+}
+
 const Registry::KindStrings X86TargetHandler::kindStrings[] = {
   LLD_KIND_STRING_ENTRY(R_386_NONE),
   LLD_KIND_STRING_ENTRY(R_386_32),
@@ -81,7 +96,7 @@ void X86TargetHandler::registerRelocationNames(Registry &registry) {
                         kindStrings);
 }
 
-error_code X86TargetRelocationHandler::applyRelocation(
+std::error_code X86TargetRelocationHandler::applyRelocation(
     ELFWriter &writer, llvm::FileOutputBuffer &buf, const lld::AtomLayout &atom,
     const Reference &ref) const {
   uint8_t *atomContent = buf.getBufferStart() + atom._fileOffset;
@@ -90,7 +105,7 @@ error_code X86TargetRelocationHandler::applyRelocation(
   uint64_t relocVAddress = atom._virtualAddr + ref.offsetInAtom();
 
   if (ref.kindNamespace() != Reference::KindNamespace::ELF)
-    return error_code::success();
+    return std::error_code();
   assert(ref.kindArch() == Reference::KindArch::x86);
   switch (ref.kindValue()) {
   case R_386_32:
@@ -108,9 +123,11 @@ error_code X86TargetRelocationHandler::applyRelocation(
   }
   }
 
-  return error_code::success();
+  return std::error_code();
 }
 
-X86TargetHandler::X86TargetHandler(X86LinkingContext &targetInfo)
-    : DefaultTargetHandler(targetInfo), _relocationHandler(targetInfo),
-      _targetLayout(targetInfo) {}
+X86TargetHandler::X86TargetHandler(X86LinkingContext &context)
+    : DefaultTargetHandler(context), _x86LinkingContext(context),
+      _x86TargetLayout(new X86TargetLayout<X86ELFType>(context)),
+      _x86RelocationHandler(
+          new X86TargetRelocationHandler(context, *_x86TargetLayout.get())) {}

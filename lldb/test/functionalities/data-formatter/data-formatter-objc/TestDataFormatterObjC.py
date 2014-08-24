@@ -15,6 +15,7 @@ class ObjCDataFormatterTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @expectedFailureDarwin("llvm.org/pr20260")
     @dsym_test
     def test_plain_objc_with_dsym_and_run_command(self):
         """Test basic ObjC formatting behavior."""
@@ -22,6 +23,7 @@ class ObjCDataFormatterTestCase(TestBase):
         self.plain_data_formatter_commands()
 
     @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @expectedFailureDarwin("llvm.org/pr20260")
     @dwarf_test
     def test_plain_objc_with_dwarf_and_run_command(self):
         """Test basic ObjC formatting behavior."""
@@ -313,7 +315,7 @@ class ObjCDataFormatterTestCase(TestBase):
         self.expect('frame variable myclass',
                     substrs = ['(Class) myclass = NSValue'])
         self.expect('frame variable myclass2',
-                    substrs = ['(Class) myclass2 = __NSCFConstantString'])
+                    substrs = ['(Class) myclass2 = NS','String'])
         self.expect('frame variable myclass3',
                     substrs = ['(Class) myclass3 = Molecule'])
         self.expect('frame variable myclass4',
@@ -370,7 +372,7 @@ class ObjCDataFormatterTestCase(TestBase):
     def nsstring_data_formatter_commands(self):
         self.expect('frame variable str0 str1 str2 str3 str4 str5 str6 str8 str9 str10 str11 label1 label2 processName str12',
                     substrs = ['(NSString *) str1 = ',' @"A rather short ASCII NSString object is here"',
-                    '(NSString *) str0 = ',' @"255"',
+                    # '(NSString *) str0 = ',' @"255"',
                     '(NSString *) str1 = ',' @"A rather short ASCII NSString object is here"',
                     '(NSString *) str2 = ',' @"A rather short UTF8 NSString object is here"',
                     '(NSString *) str3 = ',' @"A string made with the at sign is here"',
@@ -527,20 +529,20 @@ class ObjCDataFormatterTestCase(TestBase):
 
         # check that the formatters are able to deal safely and correctly
         # with ValueObjects that the expression parser returns
-        self.expect('expression ((id)@"Hello")', matching=False,
-                    substrs = ['Hello'])
+        self.expect('expression ((id)@"Hello for long enough to avoid short string types")', matching=False,
+                    substrs = ['Hello for long enough to avoid short string types'])
 
-        self.expect('expression -d run -- ((id)@"Hello")',
-        substrs = ['Hello'])
+        self.expect('expression -d run -- ((id)@"Hello for long enough to avoid short string types")',
+        substrs = ['Hello for long enough to avoid short string types'])
 
         self.expect('expr -d run -- label1',
             substrs = ['Process Name'])
 
-        self.expect('expr -d run -- @"Hello"',
-            substrs = ['Hello'])
+        self.expect('expr -d run -- @"Hello for long enough to avoid short string types"',
+            substrs = ['Hello for long enough to avoid short string types'])
 
-        self.expect('expr -d run --object-description -- @"Hello"',
-            substrs = ['Hello'])
+        self.expect('expr -d run --object-description -- @"Hello for long enough to avoid short string types"',
+            substrs = ['Hello for long enough to avoid short string types'])
         self.expect('expr -d run --object-description -- @"Hello"', matching=False,
             substrs = ['@"Hello" Hello'])
 

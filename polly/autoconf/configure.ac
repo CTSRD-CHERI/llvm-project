@@ -11,7 +11,7 @@ dnl Tell autoconf that this is an LLVM project being configured
 dnl This provides the --with-llvmsrc and --with-llvmobj options
 LLVM_CONFIG_PROJECT($LLVM_SRC_ROOT,$LLVM_OBJ_ROOT)
 
-dnl Tell autoconf that the auxilliary files are actually located in
+dnl Tell autoconf that the auxiliary files are actually located in
 dnl the LLVM autoconf directory, not here.
 AC_CONFIG_AUX_DIR($LLVM_SRC/autoconf)
 
@@ -75,11 +75,11 @@ dnl **************************************************************************
 dnl * Set the location of various third-party software packages
 dnl **************************************************************************
 dnl Find Gmp
-find_lib_and_headers([gmp], [gmp.h], [gmp], [required])
+find_lib_and_headers([gmp], [gmp.h], [gmp])
 
 dnl Find Isl
 saved_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS $gmp_inc"
+CXXFLAGS="$CXXFLAGS"
 find_lib_and_headers([isl], [isl/val.h], [isl], [required])
 CXXFLAGS=$saved_CXXFLAGS
 
@@ -98,24 +98,6 @@ find_lib_and_headers([pluto], [pluto/libpluto.h], [pluto])
 CXXFLAGS=$saved_CXXFLAGS
 AS_IF([test "x$pluto_found" = "xyes"],
   [AC_DEFINE([PLUTO_FOUND],[1],[Define if pluto found])])
-
-dnl Check that we have openscop.
-find_lib_and_headers([openscop], [openscop/scop.h], [openscop])
-AS_IF([test "x$openscop_found" = "xyes"],
-  [AC_DEFINE([OPENSCOP_FOUND],[1],[Define if openscop found])])
-
-dnl Check that we have scoplib.
-find_lib_and_headers([scoplib], [scoplib/scop.h], [scoplib])
-AS_IF([test "x$scoplib_found" = "xyes"],
-  [AC_DEFINE([SCOPLIB_FOUND],[1],[Define if scoplib found])])
-
-if test "x$scoplib_found" = "xyes"; then :
-  scoplib_rpath="-Wl,-rpath=$given_lib_path"
-else
-  scoplib_rpath=""
-fi
-
-AC_SUBST(scoplib_rpath)
 
 dnl Check if CUDA lib there
 dnl Disable the build of polly, even if it is checked out into tools/polly.

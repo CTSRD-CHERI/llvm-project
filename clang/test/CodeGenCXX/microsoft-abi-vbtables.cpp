@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s -fno-rtti -cxx-abi microsoft -triple=i386-pc-win32 -emit-llvm -o - | FileCheck %s
+// RUN: %clang_cc1 %s -fno-rtti -triple=i386-pc-win32 -emit-llvm -o - | FileCheck %s
 
 // See microsoft-abi-structors.cpp for constructor codegen tests.
 
@@ -517,4 +517,14 @@ F x;
 // CHECK-DAG: @"\01??_8F@Test28@@7BC@1@E@1@@" =
 // CHECK-DAG: @"\01??_8F@Test28@@7BD@1@@" =
 // CHECK-DAG: @"\01??_8F@Test28@@7BE@1@@" =
+}
+
+namespace Test29 {
+struct A {};
+struct B : virtual A {};
+struct C : virtual B {};
+struct D : C {};
+D d;
+
+// CHECK-DAG: @"\01??_8D@Test29@@7BB@1@@" = linkonce_odr unnamed_addr constant [2 x i32] zeroinitializer
 }

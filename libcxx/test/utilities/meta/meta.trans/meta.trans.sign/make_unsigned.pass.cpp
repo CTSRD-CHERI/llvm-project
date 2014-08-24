@@ -21,6 +21,13 @@ enum BigEnum
     big = 0xFFFFFFFFFFFFFFFFULL
 };
 
+#if !defined(_LIBCPP_HAS_NO_INT128) && !defined(_LIBCPP_HAS_NO_STRONG_ENUMS)
+enum HugeEnum : __int128_t
+{
+    hugezero
+};
+#endif
+
 template <class T, class U>
 void test_make_unsigned()
 {
@@ -45,7 +52,14 @@ int main()
     test_make_unsigned<unsigned long long, unsigned long long> ();
     test_make_unsigned<wchar_t, std::conditional<sizeof(wchar_t) == 4, unsigned int, unsigned short>::type> ();
     test_make_unsigned<const wchar_t, std::conditional<sizeof(wchar_t) == 4, const unsigned int, const unsigned short>::type> ();
-    test_make_unsigned<const Enum, const unsigned int> ();
+    test_make_unsigned<const Enum, std::conditional<sizeof(Enum) == sizeof(int), const unsigned int, const unsigned char>::type >();
     test_make_unsigned<BigEnum,
                    std::conditional<sizeof(long) == 4, unsigned long long, unsigned long>::type> ();
+#ifndef _LIBCPP_HAS_NO_INT128
+    test_make_unsigned<__int128_t, __uint128_t>();
+    test_make_unsigned<__uint128_t, __uint128_t>();
+# ifndef _LIBCPP_HAS_NO_STRONG_ENUMS
+    test_make_unsigned<HugeEnum, __uint128_t>();
+# endif
+#endif
 }

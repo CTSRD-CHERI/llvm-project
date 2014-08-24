@@ -1,4 +1,4 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" 
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
           "http://www.w3.org/TR/html4/strict.dtd">
 <!-- Material used from: HTML 4.01 specs: http://www.w3.org/TR/html401/ -->
 <html>
@@ -23,13 +23,20 @@
   <h1>About Polly</h1>
   <!--*********************************************************************-->
 
-  <p> Polly is a polyhedral optimizer for LLVM. Using an abstract mathematical
-      representation it analyzes and optimizes the memory access pattern of a
-      program. This includes data-locality optimizations for cache locality as
-      well as automatic parallelization for thread-level and SIMD parallelism.
-      Our overall goal is an integrated optimizer for data-locality and
-      parallelism that takes advantage of multi-cores, cache hierarchies, short
-      vector instructions as well as dedicated accelerators.</p>
+  <p> Polly is a high-level loop and data-locality optimizer and optimization
+  infrastructure for LLVM. It uses an abstract mathematical representation based
+  on integer polyhedra to analyze and optimize the memory access pattern of a
+  program. We currently perform classical loop transformations, especially
+  tiling and loop fusion to improve data-locality. Polly can also exploit
+  OpenMP level parallelism, expose SIMDization opportunities. Work has also be
+  done in the area of automatic GPU code generation.</p>
+
+  For many users, however, it's not the existing optimizations in Polly that are
+  of most interest, but the new analyses and optimizations enabled by the Polly
+  infrastructure. At
+  <a href="http://polyhedral.info">polyhedral.info</a> you can get an idea of
+  what has already been done and what is possible in the context of polyhedral
+  compilation.
 
   <p>
   <div class="video-js-box" style="margin:auto; margin-top: 1em; margin-bottom: 1em">
@@ -57,13 +64,6 @@
       </object>
     </video>
   </div>
-  <b>WARNING:</b> Polly started as a research project and larger parts of it are
-  still open research projects. Even though we aim for a robust, production
-  quality implementation, not all parts of Polly are there yet. We invite
-  you to contribute - both as industry collaborator, who may want to use parts
-  of Polly in production, as well as researcher, who is more interested in using
-  his expertise to work on some of the open research projects.
-  </p>
 
   <!--=====================================================================-->
   <h2>News</h2>
@@ -71,6 +71,70 @@
 
   <table id="news">
   <tr><td><b>2014</b></td></tr>
+  <tr><td width="120"><p>August</p></td>
+  <td>
+  <h4>Polly drops the support of ScopLib and the external optimizer PoCC</h4>
+  The support for ScopLib as an exchange format has been removed as recent
+  versions of clan, candl and pluto all support the OpenScop exchange format.
+
+  The support of the external optmizer PoCC has been dropped in favor of the
+  isl optimizer (default) and the still available pluto support.
+  </td>
+  </tr>
+  <tr><td><b>2014</b></td></tr>
+  <tr><td width="120"><p>June</p></td>
+  <td>
+  <h4>Polly can be built without GPL licensed software</h4> After Sebastian
+  Pop's
+  and David Peixotto's (both Qualcomm) recent <a
+  href="http://repo.or.cz/w/isl.git/commit/60703e3ee89b9d5d4d1afb6a3f611292c0884574">commit</a>
+  to isl, isl's latest development version can be built with imath instead of
+  GMP. With both CLooG and gmp having become optional, the last obilgatory
+  dependency to GPL licensed software has been removed. Now Polly only depends
+  on isl (and the included imath), which are both MIT licensed.
+  </td>
+  </tr>
+  <tr><td width="120"><p>April</p></td>
+  <td>
+  <h4>Polly Phone Call - 23April</h4>
+  We had a polly phone call about delinearizing array accesses (II)<a
+  href="https://docs.google.com/document/d/1IZewI8Up0iEkCNIPr6gVtwJxF7RV6KmXkdwOBM_Q5Cs/edit?usp=sharing ">Meeting notes</a> are available online.
+  <h4>Polly Phone Call - 17th April</h4>
+  We had a polly phone call about delinearizing array accesses <a
+  href="https://docs.google.com/document/d/14d3ehkH2MsvBdqsEOSYjysH0Ztyzb75Lp843hnxh2IA/edit?usp=sharing">Meeting notes</a> are available online.
+  <h4>Polly Phone Call - 10th April</h4>
+  We had a polly phone call. <a
+  href="https://docs.google.com/document/d/12W-qZjiZGEQ_lVrob4OzvKJI3EooonC-ap1b9f9KCUE/edit?usp=sharing">Meeting notes</a> are available online.
+  <h4>Polly Phone Call - 4th April</h4>
+  We had a polly phone call. <a
+  href="https://drive.google.com/folderview?id=0B7OMOXTgCYIUWkpJbWVJcW04ams&usp=sharing">Meeting notes</a> are available online.
+  </td>
+  </tr>
+  <tr><td width="120"><p>March</p></td>
+  <td>
+  <h4>Static link Polly into tools</h4> Polly can now be configured with 'cmake
+  -D LINK_POLLY_INTO_TOOLS:Bool=ON' to be statically linked in the tools (opt,
+  bugpoint, and clang.) This makes it easier to use polly without having to load
+  a shared library, and it also reduces the complexity of compiling Polly on
+  Windows.
+  </td>
+  </tr>
+  <tr><td width="120"><p>February</p></td>
+  <td>
+  <h4>Polly presentation at FOSDEM 2014</h4> Polly was <a
+  href="https://fosdem.org/2014/schedule/event/polly/">presented</a> at the
+  FOSDEM LLVM developer's meeting.
+  <h4>New LLVM test-suite buildbots</h4>
+  The set of <a href="http://lab.llvm.org:8011/console?category=polly">Polly
+  buildbots</a> has been extended. We now have 16 new blades that track
+  correctness and performance when compiling the LLVM test-suite. For now five
+  of them are used to provide <a
+  href="http://llvm.org/perf/db_default/v4/nts/22463">fine granularity
+  reports</a> (almost per-commit)
+  for 'clang -O3' (no polly). We also have six machines that track different
+  configurations of polly.
+  </td>
+  </tr>
   <tr><td width="120"><p>January</p></td>
   <td>
   <h4>islplot released</h4>
@@ -217,7 +281,7 @@ research tool.<br \>
   <tr>
   <td><p>May </p></td>
   <td><p><a href="http://www.grosser.es">Tobias</a>' diploma thesis and
-  Raghesh's master thesis. See our <a 
+  Raghesh's master thesis. See our <a
   href="publications.html">list of publications</a>.</p></td>
   </tr>
 
@@ -276,11 +340,6 @@ research tool.<br \>
   <tr>
   <td><p>July</p></td>
   <td><p>Code generation works for normal SCoPs.  </p></td>
-  </tr>
-
-  <tr>
-  <td><p>June </p></td>
-  <td><p>OpenSCoP import/export works (as far as openscop is finished).</p></td>
   </tr>
 
   <tr>

@@ -38,11 +38,22 @@ SBHostOS::GetLLDBPythonPath ()
     return sb_lldb_python_filespec;
 }
 
+
+SBFileSpec
+SBHostOS::GetLLDBPath (lldb::PathType path_type)
+{
+    SBFileSpec sb_fspec;
+    FileSpec fspec;
+    if (Host::GetLLDBPath (path_type, fspec))
+        sb_fspec.SetFileSpec (fspec);
+    return sb_fspec;
+}
+
 lldb::thread_t
 SBHostOS::ThreadCreate
 (
     const char *name,
-    thread_func_t thread_function,
+    lldb::thread_func_t thread_function,
     void *thread_arg,
     SBError *error_ptr
 )
@@ -50,8 +61,10 @@ SBHostOS::ThreadCreate
     Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_API));
 
     if (log)
-        log->Printf ("SBHostOS::ThreadCreate (name=\"%s\", thread_function=%p, thread_arg=%p, error_ptr=%p)", name, 
-                     thread_function, thread_arg, error_ptr);
+        log->Printf ("SBHostOS::ThreadCreate (name=\"%s\", thread_function=%p, thread_arg=%p, error_ptr=%p)",
+                     name, reinterpret_cast<void*>(reinterpret_cast<intptr_t>(thread_function)),
+                     static_cast<void*>(thread_arg),
+                     static_cast<void*>(error_ptr));
 
     // FIXME: You should log the return value?
 
@@ -77,7 +90,7 @@ SBHostOS::ThreadDetach (lldb::thread_t thread, SBError *error_ptr)
 }
 
 bool
-SBHostOS::ThreadJoin (lldb::thread_t thread, thread_result_t *result, SBError *error_ptr)
+SBHostOS::ThreadJoin (lldb::thread_t thread, lldb::thread_result_t *result, SBError *error_ptr)
 {
     return Host::ThreadJoin (thread, result, error_ptr ? error_ptr->get() : NULL);
 }

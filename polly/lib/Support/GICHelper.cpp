@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "polly/Support/GICHelper.h"
+#include "llvm/IR/Value.h"
 #include "isl/aff.h"
 #include "isl/map.h"
 #include "isl/schedule.h"
@@ -20,25 +21,6 @@
 #include "isl/val.h"
 
 using namespace llvm;
-
-void polly::MPZ_from_APInt(mpz_t v, const APInt apint, bool is_signed) {
-  // There is no sign taken from the data, rop will simply be a positive
-  // integer. An application can handle any sign itself, and apply it for
-  // instance with mpz_neg.
-  APInt abs;
-  if (is_signed)
-    abs = apint.abs();
-  else
-    abs = apint;
-
-  const uint64_t *rawdata = abs.getRawData();
-  unsigned numWords = abs.getNumWords();
-
-  mpz_import(v, numWords, -1, sizeof(uint64_t), 0, 0, rawdata);
-
-  if (is_signed && apint.isNegative())
-    mpz_neg(v, v);
-}
 
 __isl_give isl_val *polly::isl_valFromAPInt(isl_ctx *Ctx, const APInt Int,
                                             bool IsSigned) {
@@ -59,27 +41,6 @@ __isl_give isl_val *polly::isl_valFromAPInt(isl_ctx *Ctx, const APInt Int,
     v = isl_val_neg(v);
 
   return v;
-}
-
-APInt polly::APInt_from_MPZ(const mpz_t mpz) {
-  uint64_t *p = NULL;
-  size_t sz;
-
-  p = (uint64_t *)mpz_export(p, &sz, -1, sizeof(uint64_t), 0, 0, mpz);
-
-  if (p) {
-    APInt A((unsigned)mpz_sizeinbase(mpz, 2), (unsigned)sz, p);
-    A = A.zext(A.getBitWidth() + 1);
-    free(p);
-
-    if (mpz_sgn(mpz) == -1)
-      return -A;
-    else
-      return A;
-  } else {
-    uint64_t val = 0;
-    return APInt(1, 1, &val);
-  }
 }
 
 APInt polly::APIntFromVal(__isl_take isl_val *Val) {
@@ -163,4 +124,31 @@ std::string polly::stringFromIslObj(__isl_keep isl_aff *aff) {
 std::string polly::stringFromIslObj(__isl_keep isl_pw_aff *pwaff) {
   return stringFromIslObjInternal(pwaff, isl_pw_aff_get_ctx,
                                   isl_printer_print_pw_aff);
+}
+
+static void replace(std::string &str, const std::string &find,
+                    const std::string &replace) {
+  size_t pos = 0;
+  while ((pos = str.find(find, pos)) != std::string::npos) {
+    str.replace(pos, find.length(), replace);
+    pos += replace.length();
+  }
+}
+
+static void makeIslCompatible(std::string &str) {
+  replace(str, ".", "_");
+  replace(str, "\"", "_");
+}
+
+std::string polly::getIslCompatibleName(std::string Prefix, const Value *Val,
+                                        std::string Suffix) {
+  std::string ValStr;
+  raw_string_ostream OS(ValStr);
+  Val->printAsOperand(OS, false);
+  ValStr = OS.str();
+  // Remove the leading %
+  ValStr.erase(0, 1);
+  ValStr = Prefix + ValStr + Suffix;
+  makeIslCompatible(ValStr);
+  return ValStr;
 }

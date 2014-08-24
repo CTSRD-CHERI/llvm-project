@@ -15,8 +15,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "Passes.h"
+#include "llvm/Analysis/CGSCCPassManager.h"
+#include "llvm/Analysis/LazyCallGraph.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/Debug.h"
 
 using namespace llvm;
@@ -29,6 +32,14 @@ struct NoOpModulePass {
   static StringRef name() { return "NoOpModulePass"; }
 };
 
+/// \brief No-op CGSCC pass which does nothing.
+struct NoOpCGSCCPass {
+  PreservedAnalyses run(LazyCallGraph::SCC *C) {
+    return PreservedAnalyses::all();
+  }
+  static StringRef name() { return "NoOpCGSCCPass"; }
+};
+
 /// \brief No-op function pass which does nothing.
 struct NoOpFunctionPass {
   PreservedAnalyses run(Function *F) { return PreservedAnalyses::all(); }
@@ -37,18 +48,29 @@ struct NoOpFunctionPass {
 
 } // End anonymous namespace.
 
-// FIXME: Factor all of the parsing logic into a .def file that we include
-// under different macros.
 static bool isModulePassName(StringRef Name) {
   if (Name == "no-op-module") return true;
-  if (Name == "print") return true;
+
+#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) return true;
+#include "PassRegistry.def"
+
+  return false;
+}
+
+static bool isCGSCCPassName(StringRef Name) {
+  if (Name == "no-op-cgscc") return true;
+
+#define CGSCC_PASS(NAME, CREATE_PASS) if (Name == NAME) return true;
+#include "PassRegistry.def"
 
   return false;
 }
 
 static bool isFunctionPassName(StringRef Name) {
   if (Name == "no-op-function") return true;
-  if (Name == "print") return true;
+
+#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) return true;
+#include "PassRegistry.def"
 
   return false;
 }
@@ -58,10 +80,30 @@ static bool parseModulePassName(ModulePassManager &MPM, StringRef Name) {
     MPM.addPass(NoOpModulePass());
     return true;
   }
-  if (Name == "print") {
-    MPM.addPass(PrintModulePass(dbgs()));
+
+#define MODULE_PASS(NAME, CREATE_PASS)                                         \
+  if (Name == NAME) {                                                          \
+    MPM.addPass(CREATE_PASS);                                                  \
+    return true;                                                               \
+  }
+#include "PassRegistry.def"
+
+  return false;
+}
+
+static bool parseCGSCCPassName(CGSCCPassManager &CGPM, StringRef Name) {
+  if (Name == "no-op-cgscc") {
+    CGPM.addPass(NoOpCGSCCPass());
     return true;
   }
+
+#define CGSCC_PASS(NAME, CREATE_PASS)                                          \
+  if (Name == NAME) {                                                          \
+    CGPM.addPass(CREATE_PASS);                                                 \
+    return true;                                                               \
+  }
+#include "PassRegistry.def"
+
   return false;
 }
 
@@ -70,15 +112,20 @@ static bool parseFunctionPassName(FunctionPassManager &FPM, StringRef Name) {
     FPM.addPass(NoOpFunctionPass());
     return true;
   }
-  if (Name == "print") {
-    FPM.addPass(PrintFunctionPass(dbgs()));
-    return true;
+
+#define FUNCTION_PASS(NAME, CREATE_PASS)                                       \
+  if (Name == NAME) {                                                          \
+    FPM.addPass(CREATE_PASS);                                                  \
+    return true;                                                               \
   }
+#include "PassRegistry.def"
+
   return false;
 }
 
 static bool parseFunctionPassPipeline(FunctionPassManager &FPM,
-                                      StringRef &PipelineText) {
+                                      StringRef &PipelineText,
+                                      bool VerifyEachPass) {
   for (;;) {
     // Parse nested pass managers by recursing.
     if (PipelineText.startswith("function(")) {
@@ -86,19 +133,70 @@ static bool parseFunctionPassPipeline(FunctionPassManager &FPM,
 
       // Parse the inner pipeline inte the nested manager.
       PipelineText = PipelineText.substr(strlen("function("));
-      if (!parseFunctionPassPipeline(NestedFPM, PipelineText) ||
+      if (!parseFunctionPassPipeline(NestedFPM, PipelineText, VerifyEachPass) ||
           PipelineText.empty())
         return false;
       assert(PipelineText[0] == ')');
       PipelineText = PipelineText.substr(1);
 
       // Add the nested pass manager with the appropriate adaptor.
-      FPM.addPass(NestedFPM);
+      FPM.addPass(std::move(NestedFPM));
     } else {
       // Otherwise try to parse a pass name.
       size_t End = PipelineText.find_first_of(",)");
       if (!parseFunctionPassName(FPM, PipelineText.substr(0, End)))
         return false;
+      if (VerifyEachPass)
+        FPM.addPass(VerifierPass());
+
+      PipelineText = PipelineText.substr(End);
+    }
+
+    if (PipelineText.empty() || PipelineText[0] == ')')
+      return true;
+
+    assert(PipelineText[0] == ',');
+    PipelineText = PipelineText.substr(1);
+  }
+}
+
+static bool parseCGSCCPassPipeline(CGSCCPassManager &CGPM,
+                                      StringRef &PipelineText,
+                                      bool VerifyEachPass) {
+  for (;;) {
+    // Parse nested pass managers by recursing.
+    if (PipelineText.startswith("cgscc(")) {
+      CGSCCPassManager NestedCGPM;
+
+      // Parse the inner pipeline into the nested manager.
+      PipelineText = PipelineText.substr(strlen("cgscc("));
+      if (!parseCGSCCPassPipeline(NestedCGPM, PipelineText, VerifyEachPass) ||
+          PipelineText.empty())
+        return false;
+      assert(PipelineText[0] == ')');
+      PipelineText = PipelineText.substr(1);
+
+      // Add the nested pass manager with the appropriate adaptor.
+      CGPM.addPass(std::move(NestedCGPM));
+    } else if (PipelineText.startswith("function(")) {
+      FunctionPassManager NestedFPM;
+
+      // Parse the inner pipeline inte the nested manager.
+      PipelineText = PipelineText.substr(strlen("function("));
+      if (!parseFunctionPassPipeline(NestedFPM, PipelineText, VerifyEachPass) ||
+          PipelineText.empty())
+        return false;
+      assert(PipelineText[0] == ')');
+      PipelineText = PipelineText.substr(1);
+
+      // Add the nested pass manager with the appropriate adaptor.
+      CGPM.addPass(createCGSCCToFunctionPassAdaptor(std::move(NestedFPM)));
+    } else {
+      // Otherwise try to parse a pass name.
+      size_t End = PipelineText.find_first_of(",)");
+      if (!parseCGSCCPassName(CGPM, PipelineText.substr(0, End)))
+        return false;
+      // FIXME: No verifier support for CGSCC passes!
 
       PipelineText = PipelineText.substr(End);
     }
@@ -112,7 +210,8 @@ static bool parseFunctionPassPipeline(FunctionPassManager &FPM,
 }
 
 static bool parseModulePassPipeline(ModulePassManager &MPM,
-                                    StringRef &PipelineText) {
+                                    StringRef &PipelineText,
+                                    bool VerifyEachPass) {
   for (;;) {
     // Parse nested pass managers by recursing.
     if (PipelineText.startswith("module(")) {
@@ -120,32 +219,48 @@ static bool parseModulePassPipeline(ModulePassManager &MPM,
 
       // Parse the inner pipeline into the nested manager.
       PipelineText = PipelineText.substr(strlen("module("));
-      if (!parseModulePassPipeline(NestedMPM, PipelineText) ||
+      if (!parseModulePassPipeline(NestedMPM, PipelineText, VerifyEachPass) ||
           PipelineText.empty())
         return false;
       assert(PipelineText[0] == ')');
       PipelineText = PipelineText.substr(1);
 
       // Now add the nested manager as a module pass.
-      MPM.addPass(NestedMPM);
-    } else if (PipelineText.startswith("function(")) {
-      FunctionPassManager NestedFPM;
+      MPM.addPass(std::move(NestedMPM));
+    } else if (PipelineText.startswith("cgscc(")) {
+      CGSCCPassManager NestedCGPM;
 
       // Parse the inner pipeline inte the nested manager.
-      PipelineText = PipelineText.substr(strlen("function("));
-      if (!parseFunctionPassPipeline(NestedFPM, PipelineText) ||
+      PipelineText = PipelineText.substr(strlen("cgscc("));
+      if (!parseCGSCCPassPipeline(NestedCGPM, PipelineText, VerifyEachPass) ||
           PipelineText.empty())
         return false;
       assert(PipelineText[0] == ')');
       PipelineText = PipelineText.substr(1);
 
       // Add the nested pass manager with the appropriate adaptor.
-      MPM.addPass(createModuleToFunctionPassAdaptor(NestedFPM));
+      MPM.addPass(
+          createModuleToPostOrderCGSCCPassAdaptor(std::move(NestedCGPM)));
+    } else if (PipelineText.startswith("function(")) {
+      FunctionPassManager NestedFPM;
+
+      // Parse the inner pipeline inte the nested manager.
+      PipelineText = PipelineText.substr(strlen("function("));
+      if (!parseFunctionPassPipeline(NestedFPM, PipelineText, VerifyEachPass) ||
+          PipelineText.empty())
+        return false;
+      assert(PipelineText[0] == ')');
+      PipelineText = PipelineText.substr(1);
+
+      // Add the nested pass manager with the appropriate adaptor.
+      MPM.addPass(createModuleToFunctionPassAdaptor(std::move(NestedFPM)));
     } else {
       // Otherwise try to parse a pass name.
       size_t End = PipelineText.find_first_of(",)");
       if (!parseModulePassName(MPM, PipelineText.substr(0, End)))
         return false;
+      if (VerifyEachPass)
+        MPM.addPass(VerifierPass());
 
       PipelineText = PipelineText.substr(End);
     }
@@ -161,15 +276,26 @@ static bool parseModulePassPipeline(ModulePassManager &MPM,
 // Primary pass pipeline description parsing routine.
 // FIXME: Should this routine accept a TargetMachine or require the caller to
 // pre-populate the analysis managers with target-specific stuff?
-bool llvm::parsePassPipeline(ModulePassManager &MPM, StringRef PipelineText) {
+bool llvm::parsePassPipeline(ModulePassManager &MPM, StringRef PipelineText,
+                             bool VerifyEachPass) {
   // Look at the first entry to figure out which layer to start parsing at.
   if (PipelineText.startswith("module("))
-    return parseModulePassPipeline(MPM, PipelineText) && PipelineText.empty();
+    return parseModulePassPipeline(MPM, PipelineText, VerifyEachPass) &&
+           PipelineText.empty();
+  if (PipelineText.startswith("cgscc(")) {
+    CGSCCPassManager CGPM;
+    if (!parseCGSCCPassPipeline(CGPM, PipelineText, VerifyEachPass) ||
+        !PipelineText.empty())
+      return false;
+    MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
+    return true;
+  }
   if (PipelineText.startswith("function(")) {
     FunctionPassManager FPM;
-    if (!parseFunctionPassPipeline(FPM, PipelineText) || !PipelineText.empty())
+    if (!parseFunctionPassPipeline(FPM, PipelineText, VerifyEachPass) ||
+        !PipelineText.empty())
       return false;
-    MPM.addPass(createModuleToFunctionPassAdaptor(FPM));
+    MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     return true;
   }
 
@@ -177,13 +303,24 @@ bool llvm::parsePassPipeline(ModulePassManager &MPM, StringRef PipelineText) {
   StringRef FirstName =
       PipelineText.substr(0, PipelineText.find_first_of(",)"));
   if (isModulePassName(FirstName))
-    return parseModulePassPipeline(MPM, PipelineText) && PipelineText.empty();
+    return parseModulePassPipeline(MPM, PipelineText, VerifyEachPass) &&
+           PipelineText.empty();
+
+  if (isCGSCCPassName(FirstName)) {
+    CGSCCPassManager CGPM;
+    if (!parseCGSCCPassPipeline(CGPM, PipelineText, VerifyEachPass) ||
+        !PipelineText.empty())
+      return false;
+    MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
+    return true;
+  }
 
   if (isFunctionPassName(FirstName)) {
     FunctionPassManager FPM;
-    if (!parseFunctionPassPipeline(FPM, PipelineText) || !PipelineText.empty())
+    if (!parseFunctionPassPipeline(FPM, PipelineText, VerifyEachPass) ||
+        !PipelineText.empty())
       return false;
-    MPM.addPass(createModuleToFunctionPassAdaptor(FPM));
+    MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     return true;
   }
 

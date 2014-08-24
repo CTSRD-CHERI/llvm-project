@@ -19,7 +19,6 @@
 #include "lld/ReaderWriter/Writer.h"
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/Allocator.h"
@@ -27,6 +26,7 @@
 #include "llvm/Support/ELF.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileOutputBuffer.h"
+#include <memory>
 
 namespace lld {
 namespace elf {
@@ -159,7 +159,8 @@ public:
   void assignVirtualAddress(uint64_t &addr);
 
   // Write the Segment
-  void write(ELFWriter *writer, llvm::FileOutputBuffer &buffer);
+  void write(ELFWriter *writer, TargetLayout<ELFT> &layout,
+             llvm::FileOutputBuffer &buffer);
 
   int64_t flags() const;
 
@@ -582,10 +583,11 @@ template <class ELFT> void Segment<ELFT>::assignVirtualAddress(uint64_t &addr) {
 
 // Write the Segment
 template <class ELFT>
-void Segment<ELFT>::write(ELFWriter *writer, llvm::FileOutputBuffer &buffer) {
+void Segment<ELFT>::write(ELFWriter *writer, TargetLayout<ELFT> &layout,
+                          llvm::FileOutputBuffer &buffer) {
   for (auto slice : slices())
     for (auto section : slice->sections())
-      section->write(writer, buffer);
+      section->write(writer, layout, buffer);
 }
 
 template<class ELFT>

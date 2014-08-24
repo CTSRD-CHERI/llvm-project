@@ -39,9 +39,7 @@ public:
     Errors.push_back(Error.toStringFull());
   }
 
-  llvm::Optional<MatcherCtor> lookupMatcherCtor(StringRef MatcherName,
-                                                const SourceRange &NameRange,
-                                                Diagnostics *Error) {
+  llvm::Optional<MatcherCtor> lookupMatcherCtor(StringRef MatcherName) {
     const ExpectedMatchersTy::value_type *Matcher =
         &*ExpectedMatchers.find(MatcherName);
     return reinterpret_cast<MatcherCtor>(Matcher);
@@ -154,6 +152,14 @@ TEST(ParserTest, ParseMatcher) {
 
 using ast_matchers::internal::Matcher;
 
+Parser::NamedValueMap getTestNamedValues() {
+  Parser::NamedValueMap Values;
+  Values["nameX"] = std::string("x");
+  Values["hasParamA"] =
+      VariantMatcher::SingleMatcher(hasParameter(0, hasName("a")));
+  return Values;
+}
+
 TEST(ParserTest, FullParserTest) {
   Diagnostics Error;
   llvm::Optional<DynTypedMatcher> VarDecl(Parser::parseMatcherExpression(
@@ -174,6 +180,19 @@ TEST(ParserTest, FullParserTest) {
 
   EXPECT_TRUE(matches("void f(int a, int x);", M));
   EXPECT_FALSE(matches("void f(int x, int a);", M));
+
+  // Test named values.
+  auto NamedValues = getTestNamedValues();
+  llvm::Optional<DynTypedMatcher> HasParameterWithNamedValues(
+      Parser::parseMatcherExpression(
+          "functionDecl(hasParamA, hasParameter(1, hasName(nameX)))",
+          nullptr, &NamedValues, &Error));
+  EXPECT_EQ("", Error.toStringFull());
+  M = HasParameterWithNamedValues->unconditionalConvertTo<Decl>();
+
+  EXPECT_TRUE(matches("void f(int a, int x);", M));
+  EXPECT_FALSE(matches("void f(int x, int a);", M));
+
 
   EXPECT_TRUE(!Parser::parseMatcherExpression(
                    "hasInitializer(\n    binaryOperator(hasLHS(\"A\")))",
@@ -208,6 +227,10 @@ TEST(ParserTest, Errors) {
       "1:9: Error parsing matcher. Found token <123> while looking for ','.",
       ParseWithError("Foo(\"A\" 123)"));
   EXPECT_EQ(
+      "1:1: Error parsing argument 1 for matcher stmt.\n"
+      "1:6: Value not found: someValue",
+      ParseWithError("stmt(someValue)"));
+  EXPECT_EQ(
       "1:1: Matcher not found: Foo\n"
       "1:4: Error parsing matcher. Found end-of-code while looking for ')'.",
       ParseWithError("Foo("));
@@ -232,7 +255,7 @@ TEST(ParserTest, Errors) {
             "1:1: Matcher does not support binding.",
             ParseWithError("isArrow().bind(\"foo\")"));
   EXPECT_EQ("Input value has unresolved overloaded type: "
-            "Matcher<DoStmt|ForStmt|WhileStmt>",
+            "Matcher<DoStmt|ForStmt|WhileStmt|CXXForRangeStmt>",
             ParseMatcherWithError("hasBody(stmt())"));
 }
 
@@ -243,6 +266,52 @@ TEST(ParserTest, OverloadErrors) {
             "1:8: Candidate 2: Incorrect type for arg 1. "
             "(Expected = Matcher<Decl>) != (Actual = String)",
             ParseWithError("callee(\"A\")"));
+}
+
+TEST(ParserTest, CompletionRegistry) {
+  std::vector<MatcherCompletion> Comps =
+      Parser::completeExpression("while", 5);
+  ASSERT_EQ(1u, Comps.size());
+  EXPECT_EQ("Stmt(", Comps[0].TypedText);
+  EXPECT_EQ("Matcher<Stmt> whileStmt(Matcher<WhileStmt>...)",
+            Comps[0].MatcherDecl);
+
+  Comps = Parser::completeExpression("whileStmt().", 12);
+  ASSERT_EQ(1u, Comps.size());
+  EXPECT_EQ("bind(\"", Comps[0].TypedText);
+  EXPECT_EQ("bind", Comps[0].MatcherDecl);
+}
+
+TEST(ParserTest, CompletionNamedValues) {
+  // Can complete non-matcher types.
+  auto NamedValues = getTestNamedValues();
+  StringRef Code = "functionDecl(hasName(";
+  std::vector<MatcherCompletion> Comps =
+      Parser::completeExpression(Code, Code.size(), nullptr, &NamedValues);
+  ASSERT_EQ(1u, Comps.size());
+  EXPECT_EQ("nameX", Comps[0].TypedText);
+  EXPECT_EQ("String nameX", Comps[0].MatcherDecl);
+
+  // Can complete if there are names in the expression.
+  Code = "methodDecl(hasName(nameX), ";
+  Comps = Parser::completeExpression(Code, Code.size(), nullptr, &NamedValues);
+  EXPECT_LT(0u, Comps.size());
+
+  // Can complete names and registry together.
+  Code = "methodDecl(hasP";
+  Comps = Parser::completeExpression(Code, Code.size(), nullptr, &NamedValues);
+  ASSERT_EQ(3u, Comps.size());
+  EXPECT_EQ("aramA", Comps[0].TypedText);
+  EXPECT_EQ("Matcher<FunctionDecl> hasParamA", Comps[0].MatcherDecl);
+
+  EXPECT_EQ("arameter(", Comps[1].TypedText);
+  EXPECT_EQ(
+      "Matcher<FunctionDecl> hasParameter(unsigned, Matcher<ParmVarDecl>)",
+      Comps[1].MatcherDecl);
+
+  EXPECT_EQ("arent(", Comps[2].TypedText);
+  EXPECT_EQ("Matcher<Decl> hasParent(Matcher<Decl|Stmt>)",
+            Comps[2].MatcherDecl);
 }
 
 }  // end anonymous namespace

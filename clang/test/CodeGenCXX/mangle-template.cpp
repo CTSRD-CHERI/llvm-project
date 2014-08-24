@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -verify -Wno-return-type -Wno-main -std=c++11 -emit-llvm -cxx-abi itanium -o - %s | FileCheck %s
+// RUN: %clang_cc1 -verify -Wno-return-type -Wno-main -std=c++11 -emit-llvm -triple %itanium_abi_triple -o - %s | FileCheck %s
 // expected-no-diagnostics
 
 namespace test1 {
@@ -147,7 +147,7 @@ namespace test10 {
   }
 }
 
-// Report from Jason Merrill on cxx-abi-dev, 2012.01.04.
+// Report from cxx-abi-dev, 2012.01.04.
 namespace test11 {
   int cmp(char a, char b);
   template <typename T, int (*cmp)(T, T)> struct A {};

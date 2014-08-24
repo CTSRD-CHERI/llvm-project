@@ -22,111 +22,160 @@ def vnot_ppc : PatFrag<(ops node:$in),
 
 def vpkuhum_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                               (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVPKUHUMShuffleMask(cast<ShuffleVectorSDNode>(N), false);
+  return PPC::isVPKUHUMShuffleMask(cast<ShuffleVectorSDNode>(N), 0, *CurDAG);
 }]>;
 def vpkuwum_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                               (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVPKUWUMShuffleMask(cast<ShuffleVectorSDNode>(N), false);
+  return PPC::isVPKUWUMShuffleMask(cast<ShuffleVectorSDNode>(N), 0, *CurDAG);
 }]>;
 def vpkuhum_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                     (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVPKUHUMShuffleMask(cast<ShuffleVectorSDNode>(N), true);
+  return PPC::isVPKUHUMShuffleMask(cast<ShuffleVectorSDNode>(N), 1, *CurDAG);
 }]>;
 def vpkuwum_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                     (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVPKUWUMShuffleMask(cast<ShuffleVectorSDNode>(N), true);
+  return PPC::isVPKUWUMShuffleMask(cast<ShuffleVectorSDNode>(N), 1, *CurDAG);
 }]>;
 
+// These fragments are provided for little-endian, where the inputs must be
+// swapped for correct semantics.
+def vpkuhum_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                                      (vector_shuffle node:$lhs, node:$rhs), [{
+  return PPC::isVPKUHUMShuffleMask(cast<ShuffleVectorSDNode>(N), 2, *CurDAG);
+}]>;
+def vpkuwum_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                                      (vector_shuffle node:$lhs, node:$rhs), [{
+  return PPC::isVPKUWUMShuffleMask(cast<ShuffleVectorSDNode>(N), 2, *CurDAG);
+}]>;
 
 def vmrglb_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle (v16i8 node:$lhs), node:$rhs), [{
-  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 1, false);
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 1, 0, *CurDAG);
 }]>;
 def vmrglh_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle (v16i8 node:$lhs), node:$rhs), [{
-  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 2, false);
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 2, 0, *CurDAG);
 }]>;
 def vmrglw_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle (v16i8 node:$lhs), node:$rhs), [{
-  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 4, false);
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 4, 0, *CurDAG);
 }]>;
 def vmrghb_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle (v16i8 node:$lhs), node:$rhs), [{
-  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 1, false);
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 1, 0, *CurDAG);
 }]>;
 def vmrghh_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle (v16i8 node:$lhs), node:$rhs), [{
-  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 2, false);
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 2, 0, *CurDAG);
 }]>;
 def vmrghw_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle (v16i8 node:$lhs), node:$rhs), [{
-  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 4, false);
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 4, 0, *CurDAG);
 }]>;
 
 
 def vmrglb_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                (vector_shuffle (v16i8 node:$lhs), node:$rhs), [{
-  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 1, true);
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 1, 1, *CurDAG);
 }]>;
 def vmrglh_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                    (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 2, true);
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 2, 1, *CurDAG);
 }]>;
 def vmrglw_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                    (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 4, true);
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 4, 1, *CurDAG);
 }]>;
 def vmrghb_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                    (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 1, true);
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 1, 1, *CurDAG);
 }]>;
 def vmrghh_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                    (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 2, true);
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 2, 1, *CurDAG);
 }]>;
 def vmrghw_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                    (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 4, true);
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 4, 1, *CurDAG);
+}]>;
+
+
+// These fragments are provided for little-endian, where the inputs must be
+// swapped for correct semantics.
+def vmrglb_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                               (vector_shuffle (v16i8 node:$lhs), node:$rhs), [{
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 1, 2, *CurDAG);
+}]>;
+def vmrglh_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                                   (vector_shuffle node:$lhs, node:$rhs), [{
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 2, 2, *CurDAG);
+}]>;
+def vmrglw_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                                   (vector_shuffle node:$lhs, node:$rhs), [{
+  return PPC::isVMRGLShuffleMask(cast<ShuffleVectorSDNode>(N), 4, 2, *CurDAG);
+}]>;
+def vmrghb_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                                   (vector_shuffle node:$lhs, node:$rhs), [{
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 1, 2, *CurDAG);
+}]>;
+def vmrghh_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                                   (vector_shuffle node:$lhs, node:$rhs), [{
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 2, 2, *CurDAG);
+}]>;
+def vmrghw_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                                   (vector_shuffle node:$lhs, node:$rhs), [{
+  return PPC::isVMRGHShuffleMask(cast<ShuffleVectorSDNode>(N), 4, 2, *CurDAG);
 }]>;
 
 
 def VSLDOI_get_imm : SDNodeXForm<vector_shuffle, [{
-  return getI32Imm(PPC::isVSLDOIShuffleMask(N, false));
+  return getI32Imm(PPC::isVSLDOIShuffleMask(N, 0, *CurDAG));
 }]>;
 def vsldoi_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVSLDOIShuffleMask(N, false) != -1;
+  return PPC::isVSLDOIShuffleMask(N, 0, *CurDAG) != -1;
 }], VSLDOI_get_imm>;
 
 
 /// VSLDOI_unary* - These are used to match vsldoi(X,X), which is turned into
 /// vector_shuffle(X,undef,mask) by the dag combiner.
 def VSLDOI_unary_get_imm : SDNodeXForm<vector_shuffle, [{
-  return getI32Imm(PPC::isVSLDOIShuffleMask(N, true));
+  return getI32Imm(PPC::isVSLDOIShuffleMask(N, 1, *CurDAG));
 }]>;
 def vsldoi_unary_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                                    (vector_shuffle node:$lhs, node:$rhs), [{
-  return PPC::isVSLDOIShuffleMask(N, true) != -1;
+  return PPC::isVSLDOIShuffleMask(N, 1, *CurDAG) != -1;
 }], VSLDOI_unary_get_imm>;
+
+
+/// VSLDOI_swapped* - These fragments are provided for little-endian, where
+/// the inputs must be swapped for correct semantics.
+def VSLDOI_swapped_get_imm : SDNodeXForm<vector_shuffle, [{
+  return getI32Imm(PPC::isVSLDOIShuffleMask(N, 2, *CurDAG));
+}]>;
+def vsldoi_swapped_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
+                                     (vector_shuffle node:$lhs, node:$rhs), [{
+  return PPC::isVSLDOIShuffleMask(N, 2, *CurDAG) != -1;
+}], VSLDOI_get_imm>;
 
 
 // VSPLT*_get_imm xform function: convert vector_shuffle mask to VSPLT* imm.
 def VSPLTB_get_imm : SDNodeXForm<vector_shuffle, [{
-  return getI32Imm(PPC::getVSPLTImmediate(N, 1));
+  return getI32Imm(PPC::getVSPLTImmediate(N, 1, *CurDAG));
 }]>;
 def vspltb_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle node:$lhs, node:$rhs), [{
   return PPC::isSplatShuffleMask(cast<ShuffleVectorSDNode>(N), 1);
 }], VSPLTB_get_imm>;
 def VSPLTH_get_imm : SDNodeXForm<vector_shuffle, [{
-  return getI32Imm(PPC::getVSPLTImmediate(N, 2));
+  return getI32Imm(PPC::getVSPLTImmediate(N, 2, *CurDAG));
 }]>;
 def vsplth_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle node:$lhs, node:$rhs), [{
   return PPC::isSplatShuffleMask(cast<ShuffleVectorSDNode>(N), 2);
 }], VSPLTH_get_imm>;
 def VSPLTW_get_imm : SDNodeXForm<vector_shuffle, [{
-  return getI32Imm(PPC::getVSPLTImmediate(N, 4));
+  return getI32Imm(PPC::getVSPLTImmediate(N, 4, *CurDAG));
 }]>;
 def vspltw_shuffle : PatFrag<(ops node:$lhs, node:$rhs),
                              (vector_shuffle node:$lhs, node:$rhs), [{
@@ -223,51 +272,67 @@ class VX2_Int_Ty2<bits<11> xo, string opc, Intrinsic IntID, ValueType OutTy,
 //===----------------------------------------------------------------------===//
 // Instruction Definitions.
 
-def HasAltivec : Predicate<"PPCSubTarget.hasAltivec()">;
+def HasAltivec : Predicate<"PPCSubTarget->hasAltivec()">;
 let Predicates = [HasAltivec] in {
 
-let isCodeGenOnly = 1 in {
-def DSS      : DSS_Form<822, (outs),
-                        (ins u5imm:$ZERO0, u5imm:$STRM,u5imm:$ZERO1,u5imm:$ZERO2),
-                        "dss $STRM", IIC_LdStLoad /*FIXME*/, []>,
-                        Deprecated<DeprecatedDST>;
-def DSSALL   : DSS_Form<822, (outs),
-                        (ins u5imm:$ONE, u5imm:$ZERO0,u5imm:$ZERO1,u5imm:$ZERO2),
-                        "dssall", IIC_LdStLoad /*FIXME*/, []>,
-                        Deprecated<DeprecatedDST>;
-def DST      : DSS_Form<342, (outs),
-                        (ins u5imm:$ZERO, u5imm:$STRM, gprc:$rA, gprc:$rB),
-                        "dst $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/, []>,
-                        Deprecated<DeprecatedDST>;
-def DSTT     : DSS_Form<342, (outs),
-                        (ins u5imm:$ONE, u5imm:$STRM, gprc:$rA, gprc:$rB),
-                        "dstt $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/, []>,
-                        Deprecated<DeprecatedDST>;
-def DSTST    : DSS_Form<374, (outs),
-                        (ins u5imm:$ZERO, u5imm:$STRM, gprc:$rA, gprc:$rB),
-                        "dstst $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/, []>,
-                        Deprecated<DeprecatedDST>;
-def DSTSTT   : DSS_Form<374, (outs),
-                        (ins u5imm:$ONE, u5imm:$STRM, gprc:$rA, gprc:$rB),
-                        "dststt $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/, []>,
+def DSS      : DSS_Form<0, 822, (outs), (ins u5imm:$STRM),
+                        "dss $STRM", IIC_LdStLoad /*FIXME*/, [(int_ppc_altivec_dss imm:$STRM)]>,
+                        Deprecated<DeprecatedDST> {
+  let A = 0;
+  let B = 0;
+}
+
+def DSSALL   : DSS_Form<1, 822, (outs), (ins),
+                        "dssall", IIC_LdStLoad /*FIXME*/, [(int_ppc_altivec_dssall)]>,
+                        Deprecated<DeprecatedDST> {
+  let STRM = 0;
+  let A = 0;
+  let B = 0;
+}
+
+def DST      : DSS_Form<0, 342, (outs), (ins u5imm:$STRM, gprc:$rA, gprc:$rB),
+                        "dst $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/,
+                        [(int_ppc_altivec_dst i32:$rA, i32:$rB, imm:$STRM)]>,
                         Deprecated<DeprecatedDST>;
 
-def DST64    : DSS_Form<342, (outs),
-                        (ins u5imm:$ZERO, u5imm:$STRM, g8rc:$rA, gprc:$rB),
-                        "dst $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/, []>,
+def DSTT     : DSS_Form<1, 342, (outs), (ins u5imm:$STRM, gprc:$rA, gprc:$rB),
+                        "dstt $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/,
+                        [(int_ppc_altivec_dstt i32:$rA, i32:$rB, imm:$STRM)]>,
                         Deprecated<DeprecatedDST>;
-def DSTT64   : DSS_Form<342, (outs),
-                        (ins u5imm:$ONE, u5imm:$STRM, g8rc:$rA, gprc:$rB),
-                        "dstt $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/, []>,
+
+def DSTST    : DSS_Form<0, 374, (outs), (ins u5imm:$STRM, gprc:$rA, gprc:$rB),
+                        "dstst $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/,
+                        [(int_ppc_altivec_dstst i32:$rA, i32:$rB, imm:$STRM)]>,
                         Deprecated<DeprecatedDST>;
-def DSTST64  : DSS_Form<374, (outs),
-                        (ins u5imm:$ZERO, u5imm:$STRM, g8rc:$rA, gprc:$rB),
-                        "dstst $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/, []>,
+
+def DSTSTT   : DSS_Form<1, 374, (outs), (ins u5imm:$STRM, gprc:$rA, gprc:$rB),
+                        "dststt $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/,
+                        [(int_ppc_altivec_dststt i32:$rA, i32:$rB, imm:$STRM)]>,
                         Deprecated<DeprecatedDST>;
-def DSTSTT64 : DSS_Form<374, (outs),
-                        (ins u5imm:$ONE, u5imm:$STRM, g8rc:$rA, gprc:$rB),
-                        "dststt $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/, []>,
-                        Deprecated<DeprecatedDST>;
+
+let isCodeGenOnly = 1 in {
+  // The very same instructions as above, but formally matching 64bit registers.
+  def DST64    : DSS_Form<0, 342, (outs), (ins u5imm:$STRM, g8rc:$rA, gprc:$rB),
+                          "dst $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/,
+                          [(int_ppc_altivec_dst i64:$rA, i32:$rB, imm:$STRM)]>,
+                          Deprecated<DeprecatedDST>;
+
+  def DSTT64   : DSS_Form<1, 342, (outs), (ins u5imm:$STRM, g8rc:$rA, gprc:$rB),
+                          "dstt $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/,
+                          [(int_ppc_altivec_dstt i64:$rA, i32:$rB, imm:$STRM)]>,
+                          Deprecated<DeprecatedDST>;
+
+  def DSTST64  : DSS_Form<0, 374, (outs), (ins u5imm:$STRM, g8rc:$rA, gprc:$rB),
+                          "dstst $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/,
+                          [(int_ppc_altivec_dstst i64:$rA, i32:$rB,
+                                                  imm:$STRM)]>,
+                          Deprecated<DeprecatedDST>;
+
+  def DSTSTT64 : DSS_Form<1, 374, (outs), (ins u5imm:$STRM, g8rc:$rA, gprc:$rB),
+                          "dststt $rA, $rB, $STRM", IIC_LdStLoad /*FIXME*/,
+                          [(int_ppc_altivec_dststt i64:$rA, i32:$rB,
+                                                   imm:$STRM)]>,
+                          Deprecated<DeprecatedDST>;
 }
 
 def MFVSCR : VXForm_4<1540, (outs vrrc:$vD), (ins),
@@ -324,6 +389,7 @@ def STVXL : XForm_8<31, 487, (outs), (ins vrrc:$rS, memrr:$dst),
 
 let PPC970_Unit = 5 in {  // VALU Operations.
 // VA-Form instructions.  3-input AltiVec ops.
+let isCommutable = 1 in {
 def VMADDFP : VAForm_1<46, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vC, vrrc:$vB),
                        "vmaddfp $vD, $vA, $vC, $vB", IIC_VecFP,
                        [(set v4f32:$vD,
@@ -333,12 +399,13 @@ def VMADDFP : VAForm_1<46, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vC, vrrc:$vB),
 def VNMSUBFP: VAForm_1<47, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vC, vrrc:$vB),
                        "vnmsubfp $vD, $vA, $vC, $vB", IIC_VecFP,
                        [(set v4f32:$vD, (fneg (fma v4f32:$vA, v4f32:$vC,
-                                                  (fneg v4f32:$vB))))]>; 
+                                                  (fneg v4f32:$vB))))]>;
 
 def VMHADDSHS  : VA1a_Int_Ty<32, "vmhaddshs", int_ppc_altivec_vmhaddshs, v8i16>;
 def VMHRADDSHS : VA1a_Int_Ty<33, "vmhraddshs", int_ppc_altivec_vmhraddshs,
                              v8i16>;
 def VMLADDUHM  : VA1a_Int_Ty<34, "vmladduhm", int_ppc_altivec_vmladduhm, v8i16>;
+} // isCommutable
 
 def VPERM      : VA1a_Int_Ty3<43, "vperm", int_ppc_altivec_vperm,
                               v4i32, v4i32, v16i8>;
@@ -351,6 +418,7 @@ def VSLDOI  : VAForm_2<44, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB, u5imm:$SH),
                          (vsldoi_shuffle:$SH v16i8:$vA, v16i8:$vB))]>;
 
 // VX-Form instructions.  AltiVec arithmetic ops.
+let isCommutable = 1 in {
 def VADDFP : VXForm_1<10, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
                       "vaddfp $vD, $vA, $vB", IIC_VecFP,
                       [(set v4f32:$vD, (fadd v4f32:$vA, v4f32:$vB))]>;
@@ -372,8 +440,9 @@ def VADDSWS : VX1_Int_Ty<896, "vaddsws", int_ppc_altivec_vaddsws, v4i32>;
 def VADDUBS : VX1_Int_Ty<512, "vaddubs", int_ppc_altivec_vaddubs, v16i8>;
 def VADDUHS : VX1_Int_Ty<576, "vadduhs", int_ppc_altivec_vadduhs, v8i16>;
 def VADDUWS : VX1_Int_Ty<640, "vadduws", int_ppc_altivec_vadduws, v4i32>;
-                             
-                             
+} // isCommutable
+
+let isCommutable = 1 in
 def VAND : VXForm_1<1028, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
                     "vand $vD, $vA, $vB", IIC_VecFP,
                     [(set v4i32:$vD, (and v4i32:$vA, v4i32:$vB))]>;
@@ -423,6 +492,7 @@ def VCTSXS_0 : VXForm_1<970, (outs vrrc:$vD), (ins vrrc:$vB),
 def VEXPTEFP : VX2_Int_SP<394, "vexptefp", int_ppc_altivec_vexptefp>;
 def VLOGEFP  : VX2_Int_SP<458, "vlogefp",  int_ppc_altivec_vlogefp>;
 
+let isCommutable = 1 in {
 def VAVGSB : VX1_Int_Ty<1282, "vavgsb", int_ppc_altivec_vavgsb, v16i8>;
 def VAVGSH : VX1_Int_Ty<1346, "vavgsh", int_ppc_altivec_vavgsh, v8i16>;
 def VAVGSW : VX1_Int_Ty<1410, "vavgsw", int_ppc_altivec_vavgsw, v4i32>;
@@ -444,6 +514,7 @@ def VMINSW : VX1_Int_Ty< 898, "vminsw", int_ppc_altivec_vminsw, v4i32>;
 def VMINUB : VX1_Int_Ty< 514, "vminub", int_ppc_altivec_vminub, v16i8>;
 def VMINUH : VX1_Int_Ty< 578, "vminuh", int_ppc_altivec_vminuh, v8i16>;
 def VMINUW : VX1_Int_Ty< 642, "vminuw", int_ppc_altivec_vminuw, v4i32>;
+} // isCommutable
 
 def VMRGHB : VXForm_1< 12, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
                       "vmrghb $vD, $vA, $vB", IIC_VecFP,
@@ -477,6 +548,7 @@ def VMSUMUHM : VA1a_Int_Ty3<38, "vmsumuhm", int_ppc_altivec_vmsumuhm,
 def VMSUMUHS : VA1a_Int_Ty3<39, "vmsumuhs", int_ppc_altivec_vmsumuhs,
                             v4i32, v8i16, v4i32>;
 
+let isCommutable = 1 in {
 def VMULESB : VX1_Int_Ty2<776, "vmulesb", int_ppc_altivec_vmulesb,
                           v8i16, v16i8>;
 def VMULESH : VX1_Int_Ty2<840, "vmulesh", int_ppc_altivec_vmulesh,
@@ -493,6 +565,7 @@ def VMULOUB : VX1_Int_Ty2<  8, "vmuloub", int_ppc_altivec_vmuloub,
                           v8i16, v16i8>;
 def VMULOUH : VX1_Int_Ty2< 72, "vmulouh", int_ppc_altivec_vmulouh,
                           v4i32, v8i16>;
+} // isCommutable
                        
 def VREFP     : VX2_Int_SP<266, "vrefp",     int_ppc_altivec_vrefp>;
 def VRFIM     : VX2_Int_SP<714, "vrfim",     int_ppc_altivec_vrfim>;
@@ -537,12 +610,14 @@ def VNOR : VXForm_1<1284, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
                     "vnor $vD, $vA, $vB", IIC_VecFP,
                     [(set v4i32:$vD, (vnot_ppc (or v4i32:$vA,
                                                    v4i32:$vB)))]>;
+let isCommutable = 1 in {
 def VOR : VXForm_1<1156, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
                       "vor $vD, $vA, $vB", IIC_VecFP,
                       [(set v4i32:$vD, (or v4i32:$vA, v4i32:$vB))]>;
 def VXOR : VXForm_1<1220, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
                       "vxor $vD, $vA, $vB", IIC_VecFP,
                       [(set v4i32:$vD, (xor v4i32:$vA, v4i32:$vB))]>;
+} // isCommutable
 
 def VRLB   : VX1_Int_Ty<   4, "vrlb", int_ppc_altivec_vrlb, v16i8>;
 def VRLH   : VX1_Int_Ty<  68, "vrlh", int_ppc_altivec_vrlh, v8i16>;
@@ -705,30 +780,6 @@ def V_SETALLONES  : VXForm_3<908, (outs vrrc:$vD), (ins),
 // Additional Altivec Patterns
 //
 
-// DS* intrinsics
-def : Pat<(int_ppc_altivec_dssall), (DSSALL 1, 0, 0, 0)>;
-def : Pat<(int_ppc_altivec_dss imm:$STRM), (DSS 0, imm:$STRM, 0, 0)>;
-
-//  * 32-bit
-def : Pat<(int_ppc_altivec_dst i32:$rA, i32:$rB, imm:$STRM),
-          (DST 0, imm:$STRM, $rA, $rB)>;
-def : Pat<(int_ppc_altivec_dstt i32:$rA, i32:$rB, imm:$STRM),
-          (DSTT 1, imm:$STRM, $rA, $rB)>;
-def : Pat<(int_ppc_altivec_dstst i32:$rA, i32:$rB, imm:$STRM),
-          (DSTST 0, imm:$STRM, $rA, $rB)>;
-def : Pat<(int_ppc_altivec_dststt i32:$rA, i32:$rB, imm:$STRM),
-          (DSTSTT 1, imm:$STRM, $rA, $rB)>;
-
-//  * 64-bit
-def : Pat<(int_ppc_altivec_dst i64:$rA, i32:$rB, imm:$STRM),
-          (DST64 0, imm:$STRM, $rA, $rB)>;
-def : Pat<(int_ppc_altivec_dstt i64:$rA, i32:$rB, imm:$STRM),
-          (DSTT64 1, imm:$STRM, $rA, $rB)>;
-def : Pat<(int_ppc_altivec_dstst i64:$rA, i32:$rB, imm:$STRM),
-          (DSTST64 0, imm:$STRM, $rA, $rB)>;
-def : Pat<(int_ppc_altivec_dststt i64:$rA, i32:$rB, imm:$STRM),
-          (DSTSTT64 1, imm:$STRM, $rA, $rB)>;
-
 // Loads.
 def : Pat<(v4i32 (load xoaddr:$src)), (LVX xoaddr:$src)>;
 
@@ -763,6 +814,16 @@ def:Pat<(vpkuwum_unary_shuffle v16i8:$vA, undef),
 def:Pat<(vpkuhum_unary_shuffle v16i8:$vA, undef),
         (VPKUHUM $vA, $vA)>;
 
+// Match vsldoi(y,x), vpkuwum(y,x), vpkuhum(y,x), i.e., swapped operands.
+// These fragments are matched for little-endian, where the inputs must
+// be swapped for correct semantics.
+def:Pat<(vsldoi_swapped_shuffle:$in v16i8:$vA, v16i8:$vB),
+        (VSLDOI $vB, $vA, (VSLDOI_swapped_get_imm $in))>;
+def:Pat<(vpkuwum_swapped_shuffle v16i8:$vA, v16i8:$vB),
+        (VPKUWUM $vB, $vA)>;
+def:Pat<(vpkuhum_swapped_shuffle v16i8:$vA, v16i8:$vB),
+        (VPKUHUM $vB, $vA)>;
+
 // Match vmrg*(x,x)
 def:Pat<(vmrglb_unary_shuffle v16i8:$vA, undef),
         (VMRGLB $vA, $vA)>;
@@ -776,6 +837,22 @@ def:Pat<(vmrghh_unary_shuffle v16i8:$vA, undef),
         (VMRGHH $vA, $vA)>;
 def:Pat<(vmrghw_unary_shuffle v16i8:$vA, undef),
         (VMRGHW $vA, $vA)>;
+
+// Match vmrg*(y,x), i.e., swapped operands.  These fragments
+// are matched for little-endian, where the inputs must be
+// swapped for correct semantics.
+def:Pat<(vmrglb_swapped_shuffle v16i8:$vA, v16i8:$vB),
+        (VMRGLB $vB, $vA)>;
+def:Pat<(vmrglh_swapped_shuffle v16i8:$vA, v16i8:$vB),
+        (VMRGLH $vB, $vA)>;
+def:Pat<(vmrglw_swapped_shuffle v16i8:$vA, v16i8:$vB),
+        (VMRGLW $vB, $vA)>;
+def:Pat<(vmrghb_swapped_shuffle v16i8:$vA, v16i8:$vB),
+        (VMRGHB $vB, $vA)>;
+def:Pat<(vmrghh_swapped_shuffle v16i8:$vA, v16i8:$vB),
+        (VMRGHH $vB, $vA)>;
+def:Pat<(vmrghw_swapped_shuffle v16i8:$vA, v16i8:$vB),
+        (VMRGHW $vB, $vA)>;
 
 // Logical Operations
 def : Pat<(vnot_ppc v4i32:$vA), (VNOR $vA, $vA)>;

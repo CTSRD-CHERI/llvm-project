@@ -46,20 +46,20 @@ There are only four different types of atoms:
 
 	* DefinedAtom
 		95% of all atoms.  This is a chunk of code or data
-		
-	* UndefinedAtom 
+
+	* UndefinedAtom
 	   This is a place holder in object files for a reference to some atom
 	   outside the translation unit.During core linking it is usually replaced
 	   by (coalesced into) another Atom.
-	   
+
 	* SharedLibraryAtom
-		If a required symbol name turns out to be defined in a dynamic shared 
-		library (and not some object file).  A SharedLibraryAtom is the 
+		If a required symbol name turns out to be defined in a dynamic shared
+		library (and not some object file).  A SharedLibraryAtom is the
 		placeholder Atom used to represent that fact.
-		
-		It is similar to an UndefinedAtom, but it also tracks information 
+
+		It is similar to an UndefinedAtom, but it also tracks information
 		about the associated shared library.
-		
+
 	* AbsoluteAtom
 		This is for embedded support where some stuff is implemented in ROM at
 		some fixed address.  This atom has no content.  It is just an address
@@ -112,7 +112,7 @@ instantiated by the by the reader which the linker uses to replace the
 Linking Steps
 -------------
 
-Through the use of abstract Atoms, the core of linking is architecture 
+Through the use of abstract Atoms, the core of linking is architecture
 independent and file format independent.  All command line parsing is factored
 out into a separate "options" abstraction which enables the linker to be driven
 with different command line sets.
@@ -136,27 +136,57 @@ they have no notion of file formats such as mach-o or ELF.
 Input Files
 ~~~~~~~~~~~
 
-Existing developer tools using different file formats for object files. 
+Existing developer tools using different file formats for object files.
 A goal of lld is to be file format independent.  This is done
 through a plug-in model for reading object files. The lld::Reader is the base
 class for all object file readers.  A Reader follows the factory method pattern.
 A Reader instantiates an lld::File object (which is a graph of Atoms) from a
 given object file (on disk or in-memory).
 
-Every Reader subclass defines its own "options" class (for instance the mach-o 
-Reader defines the class ReaderOptionsMachO).  This options class is the 
+Every Reader subclass defines its own "options" class (for instance the mach-o
+Reader defines the class ReaderOptionsMachO).  This options class is the
 one-and-only way to control how the Reader operates when parsing an input file
 into an Atom graph.  For instance, you may want the Reader to only accept
 certain architectures.  The options class can be instantiated from command
-line options, or it can be subclassed and the ivars programmatically set. 
+line options, or it can be subclassed and the ivars programmatically set.
 
+ELF Section Groups
+~~~~~~~~~~~~~~~~~~
+Reference : `ELF Section Groups <http://mentorembedded.github.io/cxx-abi/abi/prop-72-comdat.html>`_
+
+C++ has many situations where the compiler may need to emit code or data,
+but may not be able to identify a unique compilation unit where it should be
+emitted. The approach chosen by the C++ ABI group to deal with this problem, is
+to allow the compiler to emit the required information in multiple compilation
+units, in a form which allows the linker to remove all but one copy. This is
+essentially the feature called COMDAT in several existing implementations.
+
+The COMDAT sections in ELF are modeled by using '.group' sections in the input
+files. Each '.group' section is associated with a signature. The '.group'
+section has a list of members that are part of the the '.group' which the linker
+selects to appear in the input file(Whichever .group section appeared first
+in the link). References to any of the '.group' members can also appear from
+outside the '.group'.
+
+In lld the the '.group' sections with COMDAT are identified by contentType(
+typeGroupComdat). The '.group' members are identified by using
+**kindGroupChild** references.
+
+The point to be noted here is the 'group child' members would need to be emitted
+in the output file **iff** the group was selected by the resolver.
+
+This is modeled in lld by removing the 'group child' members from the
+definedAtom List.
+
+Any reference to the group-child from **outside the group** is referenced using
+a 'undefined' atom.
 
 Resolving
 ~~~~~~~~~
 
-The resolving step takes all the atoms' graphs from each object file and 
-combines them into one master object graph.  Unfortunately, it is not as simple 
-as appending the atom list from each file into one big list.  There are many 
+The resolving step takes all the atoms' graphs from each object file and
+combines them into one master object graph.  Unfortunately, it is not as simple
+as appending the atom list from each file into one big list.  There are many
 cases where atoms need to be coalesced.  That is, two or more atoms need to be
 coalesced into one atom.  This is necessary to support: C language "tentative
 definitions", C++ weak symbols for templates and inlines defined in headers,
@@ -241,30 +271,30 @@ object.  The writer's job is to create the executable content file wrapper and
 place the content of the atoms into it.
 
 lld uses a plug-in model for writing output files. All concrete writers (e.g.
-ELF, mach-o, etc) are subclasses of the lld::Writer class.  
+ELF, mach-o, etc) are subclasses of the lld::Writer class.
 
 Unlike the Reader class which has just one method to instantiate an lld::File,
-the Writer class has multiple methods.  The crucial method is to generate the 
+the Writer class has multiple methods.  The crucial method is to generate the
 output file, but there are also methods which allow the Writer to contribute
-Atoms to the resolver and specify passes to run.  
+Atoms to the resolver and specify passes to run.
 
 An example of contributing
 atoms is that if the Writer knows a main executable is being linked and such
 an executable requires a specially named entry point (e.g. "_main"), the Writer
-can add an UndefinedAtom with that special name to the resolver.  This will 
-cause the resolver to issue an error if that symbol is not defined.  
+can add an UndefinedAtom with that special name to the resolver.  This will
+cause the resolver to issue an error if that symbol is not defined.
 
 Sometimes a Writer supports lazily created symbols, such as names for the start
-of sections. To support this, the Writer can create a File object which vends 
-no initial atoms, but does lazily supply atoms by name as needed.  
+of sections. To support this, the Writer can create a File object which vends
+no initial atoms, but does lazily supply atoms by name as needed.
 
-Every Writer subclass defines its own "options" class (for instance the mach-o 
-Writer defines the class WriterOptionsMachO).  This options class is the 
-one-and-only way to control how the Writer operates when producing an output 
+Every Writer subclass defines its own "options" class (for instance the mach-o
+Writer defines the class WriterOptionsMachO).  This options class is the
+one-and-only way to control how the Writer operates when producing an output
 file from an Atom graph.  For instance, you may want the Writer to optimize
-the output for certain OS versions, or strip local symbols, etc. The options 
-class can be instantiated from command line options, or it can be subclassed 
-and the ivars programmatically set. 
+the output for certain OS versions, or strip local symbols, etc. The options
+class can be instantiated from command line options, or it can be subclassed
+and the ivars programmatically set.
 
 
 lld::File representations
@@ -317,11 +347,11 @@ updated to do its best to model (the lack of the new feature) given the old ivar
 data in existing native object files.
 
 With this model for the native file format, files can be read and turned
-into the in-memory graph of lld::Atoms with just a few memory allocations.  
+into the in-memory graph of lld::Atoms with just a few memory allocations.
 And the format can easily adapt over time to new features.
 
-The binary file format follows the ReaderWriter patterns used in lld. The lld 
-library comes with the classes: ReaderNative and WriterNative.  So, switching 
+The binary file format follows the ReaderWriter patterns used in lld. The lld
+library comes with the classes: ReaderNative and WriterNative.  So, switching
 between file formats is as easy as switching which Reader subclass is used.
 
 
@@ -335,7 +365,7 @@ that those can be omitted from the text representation.  Here is the atoms for a
 simple hello world program expressed in YAML::
 
   target-triple:   x86_64-apple-darwin11
-  
+
   atoms:
       - name:    _main
         scope:   global
@@ -349,10 +379,10 @@ simple hello world program expressed in YAML::
         - offset: 0E
           kind:   call32
           target: _fprintf
-  
+
       - type:    c-string
         content: [ 73, 5A, 00 ]
-  
+
   ...
 
 The biggest use for the textual format will be writing test cases.  Writing test
@@ -362,8 +392,8 @@ feature trying to be tested. By writing test cases in the linkers own textual
 format, we can exactly specify every attribute of every atom and thus target
 specific linker logic.
 
-The textual/YAML format follows the ReaderWriter patterns used in lld. The lld 
-library comes with the classes: ReaderYAML and WriterYAML.  
+The textual/YAML format follows the ReaderWriter patterns used in lld. The lld
+library comes with the classes: ReaderYAML and WriterYAML.
 
 
 Testing
@@ -397,11 +427,11 @@ undefined atom from one file will be replaced by a definition from another
 file::
 
   # RUN: lld-core %s | FileCheck %s
-  
+
   #
   # Test that undefined atoms are replaced with defined atoms.
   #
-  
+
   ---
   atoms:
       - name:              foo
@@ -412,7 +442,7 @@ file::
         scope:             global
         type:              code
   ...
-  
+
   # CHECK:       name:       foo
   # CHECK:       scope:      global
   # CHECK:       type:       code

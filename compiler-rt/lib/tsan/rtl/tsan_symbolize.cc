@@ -26,12 +26,14 @@ void EnterSymbolizer() {
   ThreadState *thr = cur_thread();
   CHECK(!thr->in_symbolizer);
   thr->in_symbolizer = true;
+  thr->ignore_interceptors++;
 }
 
 void ExitSymbolizer() {
   ThreadState *thr = cur_thread();
   CHECK(thr->in_symbolizer);
   thr->in_symbolizer = false;
+  thr->ignore_interceptors--;
 }
 
 ReportStack *NewReportStackEntry(uptr addr) {
@@ -105,8 +107,6 @@ ReportStack *SymbolizeCode(uptr addr) {
     ent->col = col;
     return ent;
   }
-  if (!Symbolizer::Get()->CanReturnFileLineInfo())
-    return SymbolizeCodeAddr2Line(addr);
   static const uptr kMaxAddrFrames = 16;
   InternalScopedBuffer<AddressInfo> addr_frames(kMaxAddrFrames);
   for (uptr i = 0; i < kMaxAddrFrames; i++)

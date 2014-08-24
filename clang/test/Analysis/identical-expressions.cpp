@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core,alpha.core.IdenticalExpr -verify %s
+// RUN: %clang_cc1 -analyze -analyzer-checker=core,alpha.core.IdenticalExpr -w -verify %s
 
 /* Only one expected warning per function allowed at the very end. */
 
@@ -1043,6 +1043,11 @@ void test_float() {
   a = a > 5 ? a : a; // expected-warning {{identical expressions on both sides of ':' in conditional expression}}
 }
 
+const char *test_string() {
+  float a = 0;
+  return a > 5 ? "abc" : "abc"; // expected-warning {{identical expressions on both sides of ':' in conditional expression}}
+}
+
 void test_unsigned_expr() {
   unsigned a = 0;
   unsigned b = 0;
@@ -1157,4 +1162,371 @@ void test_signed_nested_cond_expr() {
   int b = 1;
   int c = 3;
   a = a > 5 ? (b > 5 ? 1 : 4) : (b > 5 ? 4 : 4); // expected-warning {{identical expressions on both sides of ':' in conditional expression}}
+}
+
+void test_identical_branches1(bool b) {
+  int i = 0;
+  if (b) { // expected-warning {{true and false branches are identical}}
+    ++i;
+  } else {
+    ++i;
+  }
+}
+
+void test_identical_branches2(bool b) {
+  int i = 0;
+  if (b) { // expected-warning {{true and false branches are identical}}
+    ++i;
+  } else
+    ++i;
+}
+
+void test_identical_branches3(bool b) {
+  int i = 0;
+  if (b) { // no warning
+    ++i;
+  } else {
+    i++;
+  }
+}
+
+void test_identical_branches4(bool b) {
+  int i = 0;
+  if (b) { // expected-warning {{true and false branches are identical}}
+  } else {
+  }
+}
+
+void test_identical_branches_break(bool b) {
+  while (true) {
+    if (b) // expected-warning {{true and false branches are identical}}
+      break;
+    else
+      break;
+  }
+}
+
+void test_identical_branches_continue(bool b) {
+  while (true) {
+    if (b) // expected-warning {{true and false branches are identical}}
+      continue;
+    else
+      continue;
+  }
+}
+
+void test_identical_branches_func(bool b) {
+  if (b) // expected-warning {{true and false branches are identical}}
+    func();
+  else
+    func();
+}
+
+void test_identical_branches_func_arguments(bool b) {
+  if (b) // no-warning
+    funcParam(1);
+  else
+    funcParam(2);
+}
+
+void test_identical_branches_cast1(bool b) {
+  long v = -7;
+  if (b) // no-warning
+    v = (signed int) v;
+  else
+    v = (unsigned int) v;
+}
+
+void test_identical_branches_cast2(bool b) {
+  long v = -7;
+  if (b) // expected-warning {{true and false branches are identical}}
+    v = (signed int) v;
+  else
+    v = (signed int) v;
+}
+
+int test_identical_branches_return_int(bool b) {
+  int i = 0;
+  if (b) { // expected-warning {{true and false branches are identical}}
+    i++;
+    return i;
+  } else {
+    i++;
+    return i;
+  }
+}
+
+int test_identical_branches_return_func(bool b) {
+  if (b) { // expected-warning {{true and false branches are identical}}
+    return func();
+  } else {
+    return func();
+  }
+}
+
+void test_identical_branches_for(bool b) {
+  int i;
+  int j;
+  if (b) { // expected-warning {{true and false branches are identical}}
+    for (i = 0, j = 0; i < 10; i++)
+      j += 4;
+  } else {
+    for (i = 0, j = 0; i < 10; i++)
+      j += 4;
+  }
+}
+
+void test_identical_branches_while(bool b) {
+  int i = 10;
+  if (b) { // expected-warning {{true and false branches are identical}}
+    while (func())
+      i--;
+  } else {
+    while (func())
+      i--;
+  }
+}
+
+void test_identical_branches_while_2(bool b) {
+  int i = 10;
+  if (b) { // no-warning
+    while (func())
+      i--;
+  } else {
+    while (func())
+      i++;
+  }
+}
+
+void test_identical_branches_do_while(bool b) {
+  int i = 10;
+  if (b) { // expected-warning {{true and false branches are identical}}
+    do {
+      i--;
+    } while (func());
+  } else {
+    do {
+      i--;
+    } while (func());
+  }
+}
+
+void test_identical_branches_if(bool b, int i) {
+  if (b) { // expected-warning {{true and false branches are identical}}
+    if (i < 5)
+      i += 10;
+  } else {
+    if (i < 5)
+      i += 10;
+  }
+}
+
+void test_identical_bitwise1() {
+  int a = 5 | 5; // expected-warning {{identical expressions on both sides of bitwise operator}}
+}
+
+void test_identical_bitwise2() {
+  int a = 5;
+  int b = a | a; // expected-warning {{identical expressions on both sides of bitwise operator}}
+}
+
+void test_identical_bitwise3() {
+  int a = 5;
+  int b = (a | a); // expected-warning {{identical expressions on both sides of bitwise operator}}
+}
+
+void test_identical_bitwise4() {
+  int a = 4;
+  int b = a | 4; // no-warning
+}
+
+void test_identical_bitwise5() {
+  int a = 4;
+  int b = 4;
+  int c = a | b; // no-warning
+}
+
+void test_identical_bitwise6() {
+  int a = 5;
+  int b = a | 4 | a; // expected-warning {{identical expressions on both sides of bitwise operator}}
+}
+
+void test_identical_bitwise7() {
+  int a = 5;
+  int b = func() | func(); // no-warning
+}
+
+void test_identical_logical1(int a) {
+  if (a == 4 && a == 4) // expected-warning {{identical expressions on both sides of logical operator}}
+    ;
+}
+
+void test_identical_logical2(int a) {
+  if (a == 4 || a == 5 || a == 4) // expected-warning {{identical expressions on both sides of logical operator}}
+    ;
+}
+
+void test_identical_logical3(int a) {
+  if (a == 4 || a == 5 || a == 6) // no-warning
+    ;
+}
+
+void test_identical_logical4(int a) {
+  if (a == func() || a == func()) // no-warning
+    ;
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wlogical-op-parentheses"
+void test_identical_logical5(int x, int y) {
+  if (x == 4 && y == 5 || x == 4 && y == 6) // no-warning
+    ;
+}
+
+void test_identical_logical6(int x, int y) {
+  if (x == 4 && y == 5 || x == 4 && y == 5) // expected-warning {{identical expressions on both sides of logical operator}}
+    ;
+}
+
+void test_identical_logical7(int x, int y) {
+  // FIXME: We should warn here
+  if (x == 4 && y == 5 || x == 4)
+    ;
+}
+
+void test_identical_logical8(int x, int y) {
+  // FIXME: We should warn here
+  if (x == 4 || y == 5 && x == 4)
+    ;
+}
+
+void test_identical_logical9(int x, int y) {
+  // FIXME: We should warn here
+  if (x == 4 || x == 4 && y == 5)
+    ;
+}
+#pragma clang diagnostic pop
+
+void test_warn_chained_if_stmts_1(int x) {
+  if (x == 1)
+    ;
+  else if (x == 1) // expected-warning {{expression is identical to previous condition}}
+    ;
+}
+
+void test_warn_chained_if_stmts_2(int x) {
+  if (x == 1)
+    ;
+  else if (x == 1) // expected-warning {{expression is identical to previous condition}}
+    ;
+  else if (x == 1) // expected-warning {{expression is identical to previous condition}}
+    ;
+}
+
+void test_warn_chained_if_stmts_3(int x) {
+  if (x == 1)
+    ;
+  else if (x == 2)
+    ;
+  else if (x == 1) // expected-warning {{expression is identical to previous condition}}
+    ;
+}
+
+void test_warn_chained_if_stmts_4(int x) {
+  if (x == 1)
+    ;
+  else if (func())
+    ;
+  else if (x == 1) // expected-warning {{expression is identical to previous condition}}
+    ;
+}
+
+void test_warn_chained_if_stmts_5(int x) {
+  if (x & 1)
+    ;
+  else if (x & 1) // expected-warning {{expression is identical to previous condition}}
+    ;
+}
+
+void test_warn_chained_if_stmts_6(int x) {
+  if (x == 1)
+    ;
+  else if (x == 2)
+    ;
+  else if (x == 2) // expected-warning {{expression is identical to previous condition}}
+    ;
+  else if (x == 3)
+    ;
+}
+
+void test_warn_chained_if_stmts_7(int x) {
+  if (x == 1)
+    ;
+  else if (x == 2)
+    ;
+  else if (x == 3)
+    ;
+  else if (x == 2) // expected-warning {{expression is identical to previous condition}}
+    ;
+  else if (x == 5)
+    ;
+}
+
+void test_warn_chained_if_stmts_8(int x) {
+  if (x == 1)
+    ;
+  else if (x == 2)
+    ;
+  else if (x == 3)
+    ;
+  else if (x == 2) // expected-warning {{expression is identical to previous condition}}
+    ;
+  else if (x == 5)
+    ;
+  else if (x == 3) // expected-warning {{expression is identical to previous condition}}
+    ;
+  else if (x == 7)
+    ;
+}
+
+void test_nowarn_chained_if_stmts_1(int x) {
+  if (func())
+    ;
+  else if (func()) // no-warning
+    ;
+}
+
+void test_nowarn_chained_if_stmts_2(int x) {
+  if (func())
+    ;
+  else if (x == 1)
+    ;
+  else if (func()) // no-warning
+    ;
+}
+
+void test_nowarn_chained_if_stmts_3(int x) {
+  if (x++)
+    ;
+  else if (x++) // no-warning
+    ;
+}
+
+void test_warn_wchar() {
+  const wchar_t * a = 0 ? L"Warning" : L"Warning"; // expected-warning {{identical expressions on both sides of ':' in conditional expression}}
+}
+void test_nowarn_wchar() {
+  const wchar_t * a = 0 ? L"No" : L"Warning";
+}
+
+void test_nowarn_long() {
+  int a = 0, b = 0;
+  long c;
+  if (0) {
+    b -= a;
+    c = 0;
+  } else { // no-warning
+    b -= a;
+    c = 0LL;
+  }
 }

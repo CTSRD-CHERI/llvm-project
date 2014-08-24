@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Atoms.h"
+#include "MipsCtorsOrderPass.h"
 #include "MipsLinkingContext.h"
 #include "MipsRelocationPass.h"
 #include "MipsTargetHandler.h"
@@ -19,19 +20,24 @@ MipsLinkingContext::MipsLinkingContext(llvm::Triple triple)
     : ELFLinkingContext(triple, std::unique_ptr<TargetHandlerBase>(
                                     new MipsTargetHandler(*this))) {}
 
-MipsTargetLayout<Mips32ElELFType> &MipsLinkingContext::getTargetLayout() {
-  auto &layout = getTargetHandler<Mips32ElELFType>().targetLayout();
-  return static_cast<MipsTargetLayout<Mips32ElELFType> &>(layout);
-}
-
-const MipsTargetLayout<Mips32ElELFType> &
-MipsLinkingContext::getTargetLayout() const {
-  auto &layout = getTargetHandler<Mips32ElELFType>().targetLayout();
-  return static_cast<MipsTargetLayout<Mips32ElELFType> &>(layout);
-}
-
 bool MipsLinkingContext::isLittleEndian() const {
   return Mips32ElELFType::TargetEndianness == llvm::support::little;
+}
+
+uint64_t MipsLinkingContext::getBaseAddress() const {
+  if (_baseAddress == 0 && getOutputELFType() == llvm::ELF::ET_EXEC)
+    return 0x400000;
+  return _baseAddress;
+}
+
+StringRef MipsLinkingContext::entrySymbolName() const {
+  if (_outputELFType == elf::ET_EXEC && _entrySymbolName.empty())
+    return "__start";
+  return _entrySymbolName;
+}
+
+StringRef MipsLinkingContext::getDefaultInterpreter() const {
+  return "/lib/ld.so.1";
 }
 
 void MipsLinkingContext::addPasses(PassManager &pm) {
@@ -39,4 +45,35 @@ void MipsLinkingContext::addPasses(PassManager &pm) {
   if (pass)
     pm.add(std::move(pass));
   ELFLinkingContext::addPasses(pm);
+  pm.add(std::unique_ptr<Pass>(new elf::MipsCtorsOrderPass()));
+}
+
+bool MipsLinkingContext::isDynamicRelocation(const DefinedAtom &,
+                                             const Reference &r) const {
+  if (r.kindNamespace() != Reference::KindNamespace::ELF)
+    return false;
+  assert(r.kindArch() == Reference::KindArch::Mips);
+  switch (r.kindValue()) {
+  case llvm::ELF::R_MIPS_COPY:
+  case llvm::ELF::R_MIPS_REL32:
+  case llvm::ELF::R_MIPS_TLS_DTPMOD32:
+  case llvm::ELF::R_MIPS_TLS_DTPREL32:
+  case llvm::ELF::R_MIPS_TLS_TPREL32:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool MipsLinkingContext::isPLTRelocation(const DefinedAtom &,
+                                         const Reference &r) const {
+  if (r.kindNamespace() != Reference::KindNamespace::ELF)
+    return false;
+  assert(r.kindArch() == Reference::KindArch::Mips);
+  switch (r.kindValue()) {
+  case llvm::ELF::R_MIPS_JUMP_SLOT:
+    return true;
+  default:
+    return false;
+  }
 }

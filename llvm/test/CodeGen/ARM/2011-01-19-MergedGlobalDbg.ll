@@ -1,4 +1,4 @@
-; RUN: llc < %s | FileCheck %s
+; RUN: llc -filetype=obj < %s | llvm-dwarfdump -debug-dump=info - | FileCheck %s
 
 target datalayout = "e-p:32:32:32-i1:8:32-i8:8:32-i16:16:32-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:32:64-v128:32:128-a0:0:32-n32"
 target triple = "thumbv7-apple-darwin10"
@@ -11,22 +11,22 @@ target triple = "thumbv7-apple-darwin10"
 
 ; Check debug info output for merged global.
 ; DW_AT_location
-; DW_OP_addr
-; DW_OP_plus
-; .long __MergedGlobals
-; DW_OP_constu
-; offset
+; 0x03 DW_OP_addr
+; 0x.. .long __MergedGlobals
+; 0x10 DW_OP_constu
+; 0x.. offset
+; 0x22 DW_OP_plus
 
-;CHECK: .long Lset6
-;CHECK-NEXT:        @ DW_AT_type
-;CHECK-NEXT:        @ DW_AT_decl_file
-;CHECK-NEXT:        @ DW_AT_decl_line
-;CHECK-NEXT:        @ DW_AT_location
-;CHECK-NEXT:        .byte   3
-;CHECK-NEXT:        .long   __MergedGlobals
-;CHECK-NEXT:        .byte   16
-;CHECK-NEXT:        .byte   1
-;CHECK-NEXT:        .byte   34
+; CHECK: DW_TAG_variable
+; CHECK-NOT: DW_TAG
+; CHECK:    DW_AT_name {{.*}} "x1"
+; CHECK-NOT: {{DW_TAG|NULL}}
+; CHECK:    DW_AT_location [DW_FORM_exprloc]        (<0x8> 03 [[ADDR:.. .. .. ..]] 10 00 22  )
+; CHECK: DW_TAG_variable
+; CHECK-NOT: DW_TAG
+; CHECK:    DW_AT_name {{.*}} "x2"
+; CHECK-NOT: {{DW_TAG|NULL}}
+; CHECK:    DW_AT_location [DW_FORM_exprloc]        (<0x8> 03 [[ADDR]] 10 01 22  )
 
 define zeroext i8 @get1(i8 zeroext %a) nounwind optsize {
 entry:
@@ -80,7 +80,7 @@ entry:
 
 !0 = metadata !{i32 786478, metadata !47, metadata !1, metadata !"get1", metadata !"get1", metadata !"get1", i32 4, metadata !3, i1 false, i1 true, i32 0, i32 0, null, i32 256, i1 true, i8 (i8)* @get1, null, null, metadata !42, i32 4} ; [ DW_TAG_subprogram ]
 !1 = metadata !{i32 786473, metadata !47} ; [ DW_TAG_file_type ]
-!2 = metadata !{i32 786449, metadata !47, i32 1, metadata !"4.2.1 (Based on Apple Inc. build 5658) (LLVM build 2369.8)", i1 true, metadata !"", i32 0, metadata !48, metadata !48, metadata !40, metadata !41,  metadata !41, metadata !""} ; [ DW_TAG_compile_unit ]
+!2 = metadata !{i32 786449, metadata !47, i32 1, metadata !"4.2.1 (Based on Apple Inc. build 5658) (LLVM build 2369.8)", i1 true, metadata !"", i32 0, metadata !48, metadata !48, metadata !40, metadata !41,  metadata !48, metadata !""} ; [ DW_TAG_compile_unit ]
 !3 = metadata !{i32 786453, metadata !47, metadata !1, metadata !"", i32 0, i64 0, i64 0, i64 0, i32 0, null, metadata !4, i32 0, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
 !4 = metadata !{metadata !5, metadata !5}
 !5 = metadata !{i32 786468, metadata !47, metadata !1, metadata !"_Bool", i32 0, i64 8, i64 8, i64 0, i32 0, i32 2} ; [ DW_TAG_base_type ]
@@ -126,5 +126,5 @@ entry:
 !45 = metadata !{metadata !24, metadata !25}
 !46 = metadata !{metadata !27, metadata !28}
 !47 = metadata !{metadata !"foo.c", metadata !"/tmp/"}
-!48 = metadata !{i32 0}
+!48 = metadata !{}
 !49 = metadata !{i32 1, metadata !"Debug Info Version", i32 1}

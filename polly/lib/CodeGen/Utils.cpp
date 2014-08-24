@@ -12,8 +12,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/CodeGen/Utils.h"
+#include "polly/CodeGen/IRBuilder.h"
 #include "polly/ScopInfo.h"
-#include "llvm/IR/IRBuilder.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
@@ -22,9 +23,11 @@ using namespace llvm;
 BasicBlock *polly::executeScopConditionally(Scop &S, Pass *PassInfo) {
   BasicBlock *StartBlock, *SplitBlock, *NewBlock;
   Region &R = S.getRegion();
-  IRBuilder<> Builder(R.getEntry());
-  DominatorTree &DT = PassInfo->getAnalysis<DominatorTree>();
-  RegionInfo &RI = PassInfo->getAnalysis<RegionInfo>();
+  PollyIRBuilder Builder(R.getEntry());
+  DominatorTree &DT =
+      PassInfo->getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+  RegionInfo &RI = PassInfo->getAnalysis<RegionInfoPass>().getRegionInfo();
+  LoopInfo &LI = PassInfo->getAnalysis<LoopInfo>();
 
   // Split the entry edge of the region and generate a new basic block on this
   // edge. This function also updates ScopInfo and RegionInfo.
@@ -34,9 +37,9 @@ BasicBlock *polly::executeScopConditionally(Scop &S, Pass *PassInfo) {
     std::string OldName = OldBlock->getName();
 
     // Update ScopInfo.
-    for (Scop::iterator SI = S.begin(), SE = S.end(); SI != SE; ++SI)
-      if ((*SI)->getBasicBlock() == OldBlock) {
-        (*SI)->setBasicBlock(NewBlock);
+    for (ScopStmt *Stmt : S)
+      if (Stmt->getBasicBlock() == OldBlock) {
+        Stmt->setBasicBlock(NewBlock);
         break;
       }
 
@@ -57,6 +60,8 @@ BasicBlock *polly::executeScopConditionally(Scop &S, Pass *PassInfo) {
   SplitBlock->getTerminator()->eraseFromParent();
   Builder.SetInsertPoint(SplitBlock);
   Builder.CreateCondBr(Builder.getTrue(), StartBlock, R.getEntry());
+  if (Loop *L = LI.getLoopFor(SplitBlock))
+    L->addBasicBlockToLoop(StartBlock, LI.getBase());
   DT.addNewBlock(StartBlock, SplitBlock);
   Builder.SetInsertPoint(StartBlock);
 

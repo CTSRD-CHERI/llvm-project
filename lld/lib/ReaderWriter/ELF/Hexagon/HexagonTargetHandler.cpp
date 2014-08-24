@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "HexagonExecutableWriter.h"
+#include "HexagonDynamicLibraryWriter.h"
 #include "HexagonTargetHandler.h"
 #include "HexagonLinkingContext.h"
 
@@ -17,11 +19,28 @@ using namespace llvm::ELF;
 using llvm::makeArrayRef;
 
 HexagonTargetHandler::HexagonTargetHandler(HexagonLinkingContext &context)
-    : DefaultTargetHandler(context), _targetLayout(context),
-      _relocationHandler(context, *this, _targetLayout),
-      _hexagonRuntimeFile(new HexagonRuntimeFile<HexagonELFType>(context)) {}
+    : DefaultTargetHandler(context), _hexagonLinkingContext(context),
+      _hexagonRuntimeFile(new HexagonRuntimeFile<HexagonELFType>(context)),
+      _hexagonTargetLayout(new HexagonTargetLayout<HexagonELFType>(context)),
+      _hexagonRelocationHandler(
+          new HexagonTargetRelocationHandler(*_hexagonTargetLayout.get())) {}
 
-namespace {
+std::unique_ptr<Writer> HexagonTargetHandler::getWriter() {
+  switch (_hexagonLinkingContext.getOutputELFType()) {
+  case llvm::ELF::ET_EXEC:
+    return std::unique_ptr<Writer>(
+        new elf::HexagonExecutableWriter<HexagonELFType>(
+            _hexagonLinkingContext, *_hexagonTargetLayout.get()));
+  case llvm::ELF::ET_DYN:
+    return std::unique_ptr<Writer>(
+        new elf::HexagonDynamicLibraryWriter<HexagonELFType>(
+            _hexagonLinkingContext, *_hexagonTargetLayout.get()));
+  case llvm::ELF::ET_REL:
+    llvm_unreachable("TODO: support -r mode");
+  default:
+    llvm_unreachable("unsupported output type");
+  }
+}
 
 using namespace llvm::ELF;
 
@@ -54,33 +73,33 @@ class HexagonGOTAtom : public GOTAtom {
 public:
   HexagonGOTAtom(const File &f) : GOTAtom(f, ".got") {}
 
-  virtual ArrayRef<uint8_t> rawContent() const {
+  ArrayRef<uint8_t> rawContent() const override {
     return makeArrayRef(hexagonGotAtomContent);
   }
 
-  virtual Alignment alignment() const { return Alignment(2); }
+  Alignment alignment() const override { return Alignment(2); }
 };
 
 class HexagonGOTPLTAtom : public GOTAtom {
 public:
   HexagonGOTPLTAtom(const File &f) : GOTAtom(f, ".got.plt") {}
 
-  virtual ArrayRef<uint8_t> rawContent() const {
+  ArrayRef<uint8_t> rawContent() const override {
     return makeArrayRef(hexagonGotPltAtomContent);
   }
 
-  virtual Alignment alignment() const { return Alignment(2); }
+  Alignment alignment() const override { return Alignment(2); }
 };
 
 class HexagonGOTPLT0Atom : public GOTAtom {
 public:
   HexagonGOTPLT0Atom(const File &f) : GOTAtom(f, ".got.plt") {}
 
-  virtual ArrayRef<uint8_t> rawContent() const {
+  ArrayRef<uint8_t> rawContent() const override {
     return makeArrayRef(hexagonGotPlt0AtomContent);
   }
 
-  virtual Alignment alignment() const { return Alignment(3); }
+  Alignment alignment() const override { return Alignment(3); }
 };
 
 class HexagonPLT0Atom : public PLT0Atom {
@@ -91,7 +110,7 @@ public:
 #endif
   }
 
-  virtual ArrayRef<uint8_t> rawContent() const {
+  ArrayRef<uint8_t> rawContent() const override {
     return makeArrayRef(hexagonPlt0AtomContent);
   }
 };
@@ -101,7 +120,7 @@ class HexagonPLTAtom : public PLTAtom {
 public:
   HexagonPLTAtom(const File &f, StringRef secName) : PLTAtom(f, secName) {}
 
-  virtual ArrayRef<uint8_t> rawContent() const {
+  ArrayRef<uint8_t> rawContent() const override {
     return makeArrayRef(hexagonPltAtomContent);
   }
 };
@@ -161,7 +180,7 @@ public:
   ///
   /// After all references are handled, the atoms created during that are all
   /// added to mf.
-  virtual void perform(std::unique_ptr<MutableFile> &mf) {
+  void perform(std::unique_ptr<MutableFile> &mf) override {
     // Process all references.
     for (const auto &atom : mf->defined())
       for (const auto &ref : *atom)
@@ -216,7 +235,7 @@ protected:
   /// @}
 };
 
-class DynamicGOTPLTPass LLVM_FINAL : public GOTPLTPass<DynamicGOTPLTPass> {
+class DynamicGOTPLTPass final : public GOTPLTPass<DynamicGOTPLTPass> {
 public:
   DynamicGOTPLTPass(const elf::HexagonLinkingContext &ctx) : GOTPLTPass(ctx) {
     _got0 = new (_file._alloc) HexagonGOTPLT0Atom(_file);
@@ -282,22 +301,21 @@ public:
     return ga;
   }
 
-  error_code handleGOTREL(const Reference &ref) {
+  std::error_code handleGOTREL(const Reference &ref) {
     // Turn this so that the target is set to the GOT entry
     const_cast<Reference &>(ref).setTarget(getGOTEntry(ref.target()));
-    return error_code::success();
+    return std::error_code();
   }
 
-  error_code handlePLT32(const Reference &ref) {
+  std::error_code handlePLT32(const Reference &ref) {
     // Turn this into a PC32 to the PLT entry.
     assert(ref.kindNamespace() == Reference::KindNamespace::ELF);
     assert(ref.kindArch() == Reference::KindArch::Hexagon);
     const_cast<Reference &>(ref).setKindValue(R_HEX_B22_PCREL);
     const_cast<Reference &>(ref).setTarget(getPLTEntry(ref.target()));
-    return error_code::success();
+    return std::error_code();
   }
 };
-} // end anonymous namespace
 
 void elf::HexagonLinkingContext::addPasses(PassManager &pm) {
   if (isDynamic())

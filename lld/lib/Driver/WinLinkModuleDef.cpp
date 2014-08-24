@@ -19,46 +19,55 @@ namespace lld {
 namespace moduledef {
 
 Token Lexer::lex() {
-  _buffer = _buffer.trim();
-  if (_buffer.empty() || _buffer[0] == '\0')
-    return Token(Kind::eof, _buffer);
+  for (;;) {
+    _buffer = _buffer.trim();
+    if (_buffer.empty() || _buffer[0] == '\0')
+      return Token(Kind::eof, _buffer);
 
-  switch (_buffer[0]) {
-  case '=':
-    _buffer = _buffer.drop_front();
-    return Token(Kind::equal, "=");
-  case ',':
-    _buffer = _buffer.drop_front();
-    return Token(Kind::comma, ",");
-  case '"': {
-    size_t end = _buffer.find('"', 1);
-    Token ret;
-    if (end == _buffer.npos) {
-      ret = Token(Kind::identifier, _buffer.substr(1, end));
-      _buffer = "";
-    } else {
-      ret = Token(Kind::identifier, _buffer.substr(1, end - 1));
-      _buffer = _buffer.drop_front(end);
+    switch (_buffer[0]) {
+    case ';': {
+      size_t end = _buffer.find('\n');
+      _buffer = (end == _buffer.npos) ? "" : _buffer.drop_front(end);
+      continue;
     }
-    return ret;
-  }
-  default: {
-    size_t end = _buffer.find_first_not_of(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "0123456789_.*~+!@#$%^&*()/");
-    StringRef word = _buffer.substr(0, end);
-    Kind kind = llvm::StringSwitch<Kind>(word)
-                    .Case("BASE", Kind::kw_base)
-                    .Case("DATA", Kind::kw_data)
-                    .Case("EXPORTS", Kind::kw_exports)
-                    .Case("HEAPSIZE", Kind::kw_heapsize)
-                    .Case("NAME", Kind::kw_name)
-                    .Case("NONAME", Kind::kw_noname)
-                    .Case("VERSION", Kind::kw_version)
-                    .Default(Kind::identifier);
-    _buffer = (end == _buffer.npos) ? "" : _buffer.drop_front(end);
-    return Token(kind, word);
-  }
+    case '=':
+      _buffer = _buffer.drop_front();
+      return Token(Kind::equal, "=");
+    case ',':
+      _buffer = _buffer.drop_front();
+      return Token(Kind::comma, ",");
+    case '"': {
+      size_t end = _buffer.find('"', 1);
+      Token ret;
+      if (end == _buffer.npos) {
+        ret = Token(Kind::identifier, _buffer.substr(1, end));
+        _buffer = "";
+      } else {
+        ret = Token(Kind::identifier, _buffer.substr(1, end - 1));
+        _buffer = _buffer.drop_front(end + 1);
+      }
+      return ret;
+    }
+    default: {
+      size_t end = _buffer.find_first_not_of(
+          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+          "0123456789_.*~+!@#$%^&*()/");
+      StringRef word = _buffer.substr(0, end);
+      Kind kind = llvm::StringSwitch<Kind>(word)
+          .Case("BASE", Kind::kw_base)
+          .Case("DATA", Kind::kw_data)
+          .Case("EXPORTS", Kind::kw_exports)
+          .Case("HEAPSIZE", Kind::kw_heapsize)
+          .Case("LIBRARY", Kind::kw_library)
+          .Case("NAME", Kind::kw_name)
+          .Case("NONAME", Kind::kw_noname)
+          .Case("STACKSIZE", Kind::kw_stacksize)
+          .Case("VERSION", Kind::kw_version)
+          .Default(Kind::identifier);
+      _buffer = (end == _buffer.npos) ? "" : _buffer.drop_front(end);
+      return Token(kind, word);
+    }
+    }
   }
 }
 
@@ -102,10 +111,24 @@ void Parser::error(const Token &tok, Twine msg) {
       msg);
 }
 
-llvm::Optional<Directive *> Parser::parse() {
+bool Parser::parse(std::vector<Directive *> &ret) {
+  for (;;) {
+    Directive *dir = nullptr;
+    if (!parseOne(dir))
+      return false;
+    if (!dir)
+      return true;
+    ret.push_back(dir);
+  }
+}
+
+bool Parser::parseOne(Directive *&ret) {
   consumeToken();
-  // EXPORTS
-  if (_tok._kind == Kind::kw_exports) {
+  switch (_tok._kind) {
+  case Kind::eof:
+    return true;
+  case Kind::kw_exports: {
+    // EXPORTS
     std::vector<PECOFFLinkingContext::ExportDesc> exports;
     for (;;) {
       PECOFFLinkingContext::ExportDesc desc;
@@ -113,32 +136,57 @@ llvm::Optional<Directive *> Parser::parse() {
         break;
       exports.push_back(desc);
     }
-    return new (_alloc) Exports(exports);
+    ret = new (_alloc) Exports(exports);
+    return true;
   }
-  // HEAPSIZE
-  if (_tok._kind == Kind::kw_heapsize) {
+  case Kind::kw_heapsize: {
+    // HEAPSIZE
     uint64_t reserve, commit;
-    if (!parseHeapsize(reserve, commit))
-      return llvm::None;
-    return new (_alloc) Heapsize(reserve, commit);
+    if (!parseMemorySize(reserve, commit))
+      return false;
+    ret = new (_alloc) Heapsize(reserve, commit);
+    return true;
   }
-  // NAME
-  if (_tok._kind == Kind::kw_name) {
+  case Kind::kw_library: {
+    // LIBRARY
+    std::string name;
+    uint64_t baseaddr;
+    if (!parseName(name, baseaddr))
+      return false;
+    if (!StringRef(name).endswith_lower(".dll"))
+      name.append(".dll");
+    ret = new (_alloc) Library(name, baseaddr);
+    return true;
+  }
+  case Kind::kw_stacksize: {
+    // STACKSIZE
+    uint64_t reserve, commit;
+    if (!parseMemorySize(reserve, commit))
+      return false;
+    ret = new (_alloc) Stacksize(reserve, commit);
+    return true;
+  }
+  case Kind::kw_name: {
+    // NAME
     std::string outputPath;
     uint64_t baseaddr;
     if (!parseName(outputPath, baseaddr))
-      return llvm::None;
-    return new (_alloc) Name(outputPath, baseaddr);
+      return false;
+    ret = new (_alloc) Name(outputPath, baseaddr);
+    return true;
   }
-  // VERSION
-  if (_tok._kind == Kind::kw_version) {
+  case Kind::kw_version: {
+    // VERSION
     int major, minor;
     if (!parseVersion(major, minor))
-      return llvm::None;
-    return new (_alloc) Version(major, minor);
+      return false;
+    ret = new (_alloc) Version(major, minor);
+    return true;
   }
-  error(_tok, Twine("Unknown directive: ") + _tok._range);
-  return llvm::None;
+  default:
+    error(_tok, Twine("Unknown directive: ") + _tok._range);
+    return false;
+  }
 }
 
 bool Parser::parseExport(PECOFFLinkingContext::ExportDesc &result) {
@@ -148,6 +196,17 @@ bool Parser::parseExport(PECOFFLinkingContext::ExportDesc &result) {
     return false;
   }
   result.name = _tok._range;
+
+  consumeToken();
+  if (_tok._kind == Kind::equal) {
+    consumeToken();
+    if (_tok._kind != Kind::identifier)
+      return false;
+    result.externalName = result.name;
+    result.name = _tok._range;
+  } else {
+    ungetToken();
+  }
 
   for (;;) {
     consumeToken();
@@ -170,8 +229,8 @@ bool Parser::parseExport(PECOFFLinkingContext::ExportDesc &result) {
   }
 }
 
-// HEAPSIZE reserve [, commit]
-bool Parser::parseHeapsize(uint64_t &reserve, uint64_t &commit) {
+// HEAPSIZE/STACKSIZE reserve[,commit]
+bool Parser::parseMemorySize(uint64_t &reserve, uint64_t &commit) {
   if (!consumeTokenAsInt(reserve))
     return false;
 
@@ -192,16 +251,19 @@ bool Parser::parseName(std::string &outputPath, uint64_t &baseaddr) {
   consumeToken();
   if (_tok._kind == Kind::identifier) {
     outputPath = _tok._range;
-    consumeToken();
   } else {
     outputPath = "";
+    ungetToken();
+    return true;
   }
+  consumeToken();
   if (_tok._kind == Kind::kw_base) {
     if (!expectAndConsume(Kind::equal, "'=' expected"))
       return false;
     if (!consumeTokenAsInt(baseaddr))
       return false;
   } else {
+    ungetToken();
     baseaddr = 0;
   }
   return true;
@@ -213,7 +275,7 @@ bool Parser::parseVersion(int &major, int &minor) {
   if (_tok._kind != Kind::identifier)
     return false;
   StringRef v1, v2;
-  llvm::tie(v1, v2) = _tok._range.split('.');
+  std::tie(v1, v2) = _tok._range.split('.');
   if (v1.getAsInteger(10, major))
     return false;
   if (v2.empty()) {

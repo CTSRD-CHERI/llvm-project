@@ -23,7 +23,7 @@ class FastUnwindTest : public ::testing::Test {
   bool TryFastUnwind(uptr max_depth) {
     if (!StackTrace::WillUseFastUnwind(true))
       return false;
-    trace.Unwind(max_depth, start_pc, (uptr)&fake_stack[0], fake_top,
+    trace.Unwind(max_depth, start_pc, (uptr)&fake_stack[0], 0, fake_top,
                  fake_bottom, true);
     return true;
   }
@@ -100,6 +100,28 @@ TEST_F(FastUnwindTest, OneFrameStackTrace) {
   EXPECT_EQ(1U, trace.size);
   EXPECT_EQ(start_pc, trace.trace[0]);
   EXPECT_EQ((uptr)&fake_stack[0], trace.top_frame_bp);
+}
+
+TEST_F(FastUnwindTest, ZeroFramesStackTrace) {
+  if (!TryFastUnwind(0))
+    return;
+  EXPECT_EQ(0U, trace.size);
+  EXPECT_EQ(0U, trace.top_frame_bp);
+}
+
+TEST(SlowUnwindTest, ShortStackTrace) {
+  if (StackTrace::WillUseFastUnwind(false))
+    return;
+  StackTrace stack;
+  uptr pc = StackTrace::GetCurrentPc();
+  uptr bp = GET_CURRENT_FRAME();
+  stack.Unwind(0, pc, bp, 0, 0, 0, false);
+  EXPECT_EQ(0U, stack.size);
+  EXPECT_EQ(0U, stack.top_frame_bp);
+  stack.Unwind(1, pc, bp, 0, 0, 0, false);
+  EXPECT_EQ(1U, stack.size);
+  EXPECT_EQ(pc, stack.trace[0]);
+  EXPECT_EQ(bp, stack.top_frame_bp);
 }
 
 }  // namespace __sanitizer

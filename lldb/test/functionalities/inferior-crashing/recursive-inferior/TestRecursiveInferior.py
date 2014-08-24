@@ -3,6 +3,7 @@
 import os, time
 import unittest2
 import lldb, lldbutil
+import sys
 from lldbtest import *
 
 class CrashingRecursiveInferiorTestCase(TestBase):
@@ -54,7 +55,6 @@ class CrashingRecursiveInferiorTestCase(TestBase):
         self.buildDsym()
         self.recursive_inferior_crashing_step()
 
-    @skipIfFreeBSD # llvm.org/pr17232
     def test_recursive_inferior_crashing_step_dwarf(self):
         """Test that stepping after a crash behaves correctly."""
         self.buildDwarf()
@@ -67,6 +67,7 @@ class CrashingRecursiveInferiorTestCase(TestBase):
         self.recursive_inferior_crashing_step_after_break()
 
     @skipIfFreeBSD # llvm.org/pr16684
+    @expectedFailureLinux('llvm.org/pr16684')
     def test_recursive_inferior_crashing_step_after_break_dwarf(self):
         """Test that lldb functions correctly after stepping through a crash."""
         self.buildDwarf()
@@ -79,7 +80,7 @@ class CrashingRecursiveInferiorTestCase(TestBase):
         self.recursive_inferior_crashing_expr_step_expr()
 
     @expectedFailureFreeBSD('llvm.org/pr15989') # Couldn't allocate space for the stack frame
-    @expectedFailureLinux # llvm.org/pr15989 - Couldn't allocate space for the stack frame
+    @expectedFailureLinux('llvm.org/pr15989') # Couldn't allocate space for the stack frame
     def test_recursive_inferior_crashing_expr_step_and_expr_dwarf(self):
         """Test that lldb expressions work before and after stepping after a crash."""
         self.buildDwarf()

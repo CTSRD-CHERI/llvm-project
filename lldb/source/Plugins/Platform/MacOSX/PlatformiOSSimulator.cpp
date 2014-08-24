@@ -23,6 +23,7 @@
 #include "lldb/Core/StreamString.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostInfo.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 
@@ -68,7 +69,7 @@ PlatformiOSSimulator::CreateInstance (bool force, const ArchSpec *arch)
     {
         switch (arch->GetMachine())
         {
-        // Currently simulator is i386 only...
+        case llvm::Triple::x86_64:
         case llvm::Triple::x86:
             {
                 const llvm::Triple &triple = arch->GetTriple();
@@ -80,7 +81,7 @@ PlatformiOSSimulator::CreateInstance (bool force, const ArchSpec *arch)
                         
 #if defined(__APPLE__)
                     // Only accept "unknown" for the vendor if the host is Apple and
-                    // it "unknown" wasn't specified (it was just returned becasue it
+                    // it "unknown" wasn't specified (it was just returned because it
                     // was NOT specified)
                     case llvm::Triple::UnknownArch:
                         create = !arch->TripleVendorWasSpecified();
@@ -101,7 +102,7 @@ PlatformiOSSimulator::CreateInstance (bool force, const ArchSpec *arch)
                             
 #if defined(__APPLE__)
                         // Only accept "unknown" for the OS if the host is Apple and
-                        // it "unknown" wasn't specified (it was just returned becasue it
+                        // it "unknown" wasn't specified (it was just returned because it
                         // was NOT specified)
                         case llvm::Triple::UnknownOS:
                             create = !arch->TripleOSWasSpecified();
@@ -213,32 +214,42 @@ PlatformiOSSimulator::ResolveExecutable (const FileSpec &exe_file,
         ArchSpec platform_arch;
         for (uint32_t idx = 0; GetSupportedArchitectureAtIndex (idx, module_spec.GetArchitecture()); ++idx)
         {
-            
-            error = ModuleList::GetSharedModule (module_spec, 
-                                                 exe_module_sp, 
-                                                 NULL,
-                                                 NULL, 
-                                                 NULL);
-            // Did we find an executable using one of the 
-            if (error.Success())
+            // Only match x86 with x86 and x86_64 with x86_64...
+            if (!exe_arch.IsValid() || exe_arch.GetCore() == module_spec.GetArchitecture().GetCore())
             {
-                if (exe_module_sp && exe_module_sp->GetObjectFile())
-                    break;
-                else
-                    error.SetErrorToGenericError();
+                error = ModuleList::GetSharedModule (module_spec,
+                                                     exe_module_sp, 
+                                                     NULL,
+                                                     NULL, 
+                                                     NULL);
+                // Did we find an executable using one of the 
+                if (error.Success())
+                {
+                    if (exe_module_sp && exe_module_sp->GetObjectFile())
+                        break;
+                    else
+                        error.SetErrorToGenericError();
+                }
+                
+                if (idx > 0)
+                    arch_names.PutCString (", ");
+                arch_names.PutCString (platform_arch.GetArchitectureName());
             }
-            
-            if (idx > 0)
-                arch_names.PutCString (", ");
-            arch_names.PutCString (platform_arch.GetArchitectureName());
         }
         
         if (error.Fail() || !exe_module_sp)
         {
-            error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
-                                            exe_file.GetPath().c_str(),
-                                            GetPluginName().GetCString(),
-                                            arch_names.GetString().c_str());
+            if (exe_file.Readable())
+            {
+                error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
+                                                exe_file.GetPath().c_str(),
+                                                GetPluginName().GetCString(),
+                                                arch_names.GetString().c_str());
+            }
+            else
+            {
+                error.SetErrorStringWithFormat("'%s' is not readable", exe_file.GetPath().c_str());
+            }
         }
     }
     else
@@ -397,19 +408,66 @@ uint32_t
 PlatformiOSSimulator::FindProcesses (const ProcessInstanceInfoMatch &match_info,
                                      ProcessInstanceInfoList &process_infos)
 {
-    // TODO: if connected, send a packet to get the remote process infos by name
-    process_infos.Clear();
-    return 0;
+    ProcessInstanceInfoList all_osx_process_infos;
+    // First we get all OSX processes
+    const uint32_t n = Host::FindProcesses (match_info, all_osx_process_infos);
+
+    // Now we filter them down to only the iOS triples
+    for (uint32_t i=0; i<n; ++i)
+    {
+        const ProcessInstanceInfo &proc_info = all_osx_process_infos.GetProcessInfoAtIndex(i);
+        if (proc_info.GetArchitecture().GetTriple().getOS() == llvm::Triple::IOS) {
+            process_infos.Append(proc_info);
+        }
+    }
+    return process_infos.GetSize();
 }
 
 bool
 PlatformiOSSimulator::GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
+    static const ArchSpec platform_arch(HostInfo::GetArchitecture(HostInfo::eArchKindDefault));
+    static const ArchSpec platform_arch64(HostInfo::GetArchitecture(HostInfo::eArchKind64));
+
     if (idx == 0)
     {
-        // All iOS simulator binaries are currently i386
-        arch = Host::GetArchitecture (Host::eSystemDefaultArchitecture32);
-        return arch.IsValid();
+        arch = platform_arch;
+        if (arch.IsValid())
+        {
+            arch.GetTriple().setOS (llvm::Triple::IOS);
+            return true;
+        }
+    }
+    else
+    {
+        if (platform_arch.IsExactMatch(platform_arch64))
+        {
+            // This macosx platform supports both 32 and 64 bit.
+            if (idx == 1)
+            {
+                // 32/64: return "x86_64-apple-macosx" for architecture 1
+                arch = platform_arch64;
+                return true;
+            }
+            else if (idx == 2 || idx == 3)
+            {
+                arch = HostInfo::GetArchitecture(HostInfo::eArchKind32);
+                if (arch.IsValid())
+                {
+                    if (idx == 2)
+                        arch.GetTriple().setOS (llvm::Triple::IOS);
+                    // 32/64: return "i386-apple-ios" for architecture 2
+                    // 32/64: return "i386-apple-macosx" for architecture 3
+                    return true;
+                }
+            }
+        }
+        else if (idx == 1)
+        {
+            // This macosx platform supports only 32 bit, so return the *-apple-macosx version
+            arch = platform_arch;
+            return true;
+        }
     }
     return false;
 }

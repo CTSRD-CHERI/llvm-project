@@ -1,5 +1,42 @@
+//===----------------------------------------------------------------------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+
 #ifndef MIN_ALLOCATOR_H
 #define MIN_ALLOCATOR_H
+
+#include <cstddef>
+
+template <class T>
+class bare_allocator
+{
+public:
+    typedef T value_type;
+
+    bare_allocator() {}
+
+    template <class U>
+    bare_allocator(bare_allocator<U>) {}
+
+    T* allocate(std::size_t n)
+    {
+        return static_cast<T*>(::operator new(n*sizeof(T)));
+    }
+
+    void deallocate(T* p, std::size_t)
+    {
+        return ::operator delete(static_cast<void*>(p));
+    }
+
+    friend bool operator==(bare_allocator, bare_allocator) {return true;}
+    friend bool operator!=(bare_allocator x, bare_allocator y) {return !(x == y);}
+};
+
 
 #if __cplusplus >= 201103L
 
@@ -62,7 +99,7 @@ public:
     explicit min_pointer(min_pointer<void> p) : ptr_(static_cast<T*>(p.ptr_)) {}
 
     explicit operator bool() const {return ptr_ != nullptr;}
-    
+
     typedef std::ptrdiff_t difference_type;
     typedef T& reference;
     typedef T* pointer;

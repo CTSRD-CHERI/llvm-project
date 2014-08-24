@@ -18,6 +18,31 @@ class ObjectFilePECOFF :
     public lldb_private::ObjectFile
 {
 public:
+    typedef enum MachineType
+    {
+        MachineUnknown = 0x0,
+        MachineAm33 = 0x1d3,
+        MachineAmd64 = 0x8664,
+        MachineArm = 0x1c0,
+        MachineArmNt = 0x1c4,
+        MachineArm64 = 0xaa64,
+        MachineEbc = 0xebc,
+        MachineX86 = 0x14c,
+        MachineIA64 = 0x200,
+        MachineM32R = 0x9041,
+        MachineMips16 = 0x266,
+        MachineMipsFpu = 0x366,
+        MachineMipsFpu16 = 0x466,
+        MachinePowerPc = 0x1f0,
+        MachinePowerPcfp = 0x1f1,
+        MachineR4000 = 0x166,
+        MachineSh3 = 0x1a2,
+        MachineSh3dsp = 0x1a3,
+        MachineSh4 = 0x1a6,
+        MachineSh5 = 0x1a8,
+        MachineThumb = 0x1c2,
+        MachineWcemIpsv2 = 0x169
+    } MachineType;
     
     //------------------------------------------------------------------
     // Static Functions
@@ -73,6 +98,9 @@ public:
     virtual bool
     ParseHeader ();
     
+    virtual bool
+    SetLoadAddress(lldb_private::Target &target, lldb::addr_t value, bool value_is_offset);
+
     virtual lldb::ByteOrder
     GetByteOrder () const;
     
@@ -242,8 +270,8 @@ protected:
         uint32_t   address_of_name_ordinals;
     } export_directory_entry;
     
-	bool ParseDOSHeader ();
-	bool ParseCOFFHeader (lldb::offset_t *offset_ptr);
+	static bool ParseDOSHeader (lldb_private::DataExtractor &data, dos_header_t &dos_header);
+	static bool ParseCOFFHeader (lldb_private::DataExtractor &data, lldb::offset_t *offset_ptr, coff_header_t &coff_header);
 	bool ParseCOFFOptionalHeader (lldb::offset_t *offset_ptr);
 	bool ParseSectionHeaders (uint32_t offset);
 	
@@ -262,6 +290,7 @@ private:
 	coff_header_t		m_coff_header;
 	coff_opt_header_t	m_coff_header_opt;
 	SectionHeaderColl	m_sect_headers;
+    lldb::addr_t		m_image_base;
 };
 
 #endif  // #ifndef liblldb_ObjectFilePECOFF_h_

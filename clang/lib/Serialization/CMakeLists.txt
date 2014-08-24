@@ -5,8 +5,6 @@ set(LLVM_LINK_COMPONENTS
 
 
 add_clang_library(clangSerialization
-  ASTCommon.h
-  ASTReaderInternals.h
   ASTCommon.cpp
   ASTReader.cpp
   ASTReaderDecl.cpp
@@ -18,24 +16,12 @@ add_clang_library(clangSerialization
   GlobalModuleIndex.cpp
   Module.cpp
   ModuleManager.cpp
-  )
 
-add_dependencies(clangSerialization
-  ClangAttrClasses
-  ClangAttrList
-  ClangAttrParsedAttrList
-  ClangAttrPCHRead
-  ClangAttrPCHWrite
-  ClangCommentNodes
-  ClangDeclNodes
-  ClangDiagnosticCommon
-  ClangDiagnosticLex
-  ClangDiagnosticSema
-  ClangDiagnosticSerialization
-  ClangStmtNodes
-  )
+  ADDITIONAL_HEADERS
+  ASTCommon.h
+  ASTReaderInternals.h
 
-target_link_libraries(clangSerialization
+  LINK_LIBS
   clangAST
   clangBasic
   clangLex

@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Thumb1RegisterInfo.h"
-#include "ARM.h"
 #include "ARMBaseInstrInfo.h"
 #include "ARMMachineFunctionInfo.h"
 #include "ARMSubtarget.h"
@@ -30,7 +29,6 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetFrameLowering.h"
 #include "llvm/Target/TargetMachine.h"
 
@@ -69,7 +67,7 @@ Thumb1RegisterInfo::emitLoadConstPool(MachineBasicBlock &MBB,
                                       ARMCC::CondCodes Pred, unsigned PredReg,
                                       unsigned MIFlags) const {
   MachineFunction &MF = *MBB.getParent();
-  const TargetInstrInfo &TII = *MF.getTarget().getInstrInfo();
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineConstantPool *ConstantPool = MF.getConstantPool();
   const Constant *C = ConstantInt::get(
           Type::getInt32Ty(MBB.getParent()->getFunction()->getContext()), Val);
@@ -421,7 +419,7 @@ rewriteFrameIndex(MachineBasicBlock::iterator II, unsigned FrameRegIdx,
         MI.getOperand(FrameRegIdx+1).ChangeToImmediate(Mask);
       }
       Offset = (Offset - Mask * Scale);
-      MachineBasicBlock::iterator NII = llvm::next(II);
+      MachineBasicBlock::iterator NII = std::next(II);
       emitThumbRegPlusImmediate(MBB, NII, dl, DestReg, DestReg, Offset, TII,
                                 *this);
     } else {
@@ -484,13 +482,14 @@ rewriteFrameIndex(MachineBasicBlock::iterator II, unsigned FrameRegIdx,
   return Offset == 0;
 }
 
-void
-Thumb1RegisterInfo::resolveFrameIndex(MachineBasicBlock::iterator I,
-                                      unsigned BaseReg, int64_t Offset) const {
-  MachineInstr &MI = *I;
+void Thumb1RegisterInfo::resolveFrameIndex(MachineInstr &MI, unsigned BaseReg,
+                                           int64_t Offset) const {
   const ARMBaseInstrInfo &TII =
-    *static_cast<const ARMBaseInstrInfo*>(
-      MI.getParent()->getParent()->getTarget().getInstrInfo());
+      *static_cast<const ARMBaseInstrInfo *>(MI.getParent()
+                                                 ->getParent()
+                                                 ->getTarget()
+                                                 .getSubtargetImpl()
+                                                 ->getInstrInfo());
   int Off = Offset; // ARM doesn't need the general 64-bit offsets
   unsigned i = 0;
 
@@ -516,7 +515,7 @@ Thumb1RegisterInfo::saveScavengerRegister(MachineBasicBlock &MBB,
   // off the frame pointer (if, for example, there are alloca() calls in
   // the function, the offset will be negative. Use R12 instead since that's
   // a call clobbered register that we know won't be used in Thumb1 mode.
-  const TargetInstrInfo &TII = *MBB.getParent()->getTarget().getInstrInfo();
+  const TargetInstrInfo &TII = *MBB.getParent()->getSubtarget().getInstrInfo();
   DebugLoc DL;
   AddDefaultPred(BuildMI(MBB, I, DL, TII.get(ARM::tMOVr))
     .addReg(ARM::R12, RegState::Define)
@@ -563,7 +562,7 @@ Thumb1RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineBasicBlock &MBB = *MI.getParent();
   MachineFunction &MF = *MBB.getParent();
   const ARMBaseInstrInfo &TII =
-    *static_cast<const ARMBaseInstrInfo*>(MF.getTarget().getInstrInfo());
+      *static_cast<const ARMBaseInstrInfo *>(MF.getSubtarget().getInstrInfo());
   ARMFunctionInfo *AFI = MF.getInfo<ARMFunctionInfo>();
   DebugLoc dl = MI.getDebugLoc();
   MachineInstrBuilder MIB(*MBB.getParent(), &MI);
@@ -574,7 +573,7 @@ Thumb1RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                MF.getFrameInfo()->getStackSize() + SPAdj;
 
   if (MF.getFrameInfo()->hasVarSizedObjects()) {
-    assert(SPAdj == 0 && MF.getTarget().getFrameLowering()->hasFP(MF) &&
+    assert(SPAdj == 0 && MF.getSubtarget().getFrameLowering()->hasFP(MF) &&
            "Unexpected");
     // There are alloca()'s in this function, must reference off the frame
     // pointer or base pointer instead.
@@ -591,7 +590,10 @@ Thumb1RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // when !hasReservedCallFrame().
 #ifndef NDEBUG
   if (RS && FrameReg == ARM::SP && RS->isScavengingFrameIndex(FrameIndex)){
-    assert(MF.getTarget().getFrameLowering()->hasReservedCallFrame(MF) &&
+    assert(MF.getTarget()
+               .getSubtargetImpl()
+               ->getFrameLowering()
+               ->hasReservedCallFrame(MF) &&
            "Cannot use SP to access the emergency spill slot in "
            "functions without a reserved call frame");
     assert(!MF.getFrameInfo()->hasVarSizedObjects() &&

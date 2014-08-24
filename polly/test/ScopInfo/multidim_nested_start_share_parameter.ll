@@ -1,28 +1,26 @@
-; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze -polly-delinearize -polly-codegen-scev < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 
 ; void foo(long n, long m, long o, double A[n][m][o]) {
 ;
-;   for (long i = 0; i < n; i++)
-;     for (long j = 0; j < m; j++)
-;       for (long k = 0; k < o; k++) {
+;   for (long i = 0; i < n-13; i++)
+;     for (long j = 14; j < m; j++)
+;       for (long k = 0; k < o-17; k++) {
 ;         A[i+3][j-4][k+7] = 1.0;
 ;         A[i+13][j-14][k+17] = 11.0;
 ;       }
 ; }
 ;
-; Access function:
+; CHECK: Assumed Context:
+; CHECK:   {  :  }
+; CHECK: p0: %n
+; CHECK: p1: %m
+; CHECK: p2: %o
+; CHECK-NOT: p3
 ;
-;   {{{(56 + (8 * (-4 + (3 * %m)) * %o) + %A),+,(8 * %m * %o)}<%for.i>,+,
-;      (8 * %o)}<%for.j>,+,8}<%for.k>
-;   {{{(136 + (8 * (-14 + (13 * %m)) * %o) + %A),+,(8 * %m * %o)}<%for.i>,+,
-;      (8 * %o)}<%for.j>,+,8}<%for.k>
-;
-; They should share the following parameters:
-;     p1: {0,+,(8 * %o)}<%for.j>
-;     p2: {0,+,(8 * %m * %o)}<%for.i>
-;
+; CHECK:   [n, m, o] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[3 + i0, 10 + i1, 7 + i2] };
+; CHECK:   [n, m, o] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[13 + i0, i1, 17 + i2] };
 
 define void @foo(i64 %n, i64 %m, i64 %o, double* %A) {
 entry:
@@ -33,7 +31,7 @@ for.i:
   br label %for.j
 
 for.j:
-  %j = phi i64 [ 0, %for.i ], [ %j.inc, %for.j.inc ]
+  %j = phi i64 [ 14, %for.i ], [ %j.inc, %for.j.inc ]
   br label %for.k
 
 for.k:
@@ -63,7 +61,8 @@ for.k:
 
 for.k.inc:
   %k.inc = add nsw i64 %k, 1
-  %k.exitcond = icmp eq i64 %k.inc, %o
+  %osub = sub nsw i64 %o, 17
+  %k.exitcond = icmp eq i64 %k.inc, %osub
   br i1 %k.exitcond, label %for.j.inc, label %for.k
 
 for.j.inc:
@@ -73,20 +72,10 @@ for.j.inc:
 
 for.i.inc:
   %i.inc = add nsw i64 %i, 1
-  %i.exitcond = icmp eq i64 %i.inc, %n
+  %nsub = sub nsw i64 %n, 13
+  %i.exitcond = icmp eq i64 %i.inc, %nsub
   br i1 %i.exitcond, label %end, label %for.i
 
 end:
   ret void
 }
-
-; CHECK: p0: %o
-; CHECK: p1: {0,+,(8 * %o)}<%for.j>
-; CHECK: p2: {0,+,(8 * %m * %o)}<%for.i>
-; CHECK: p3: (8 * (-4 + (3 * %m)) * %o)
-; CHECK: p4: (8 * (-14 + (13 * %m)) * %o)
-; CHECK-NOT: p4
-
-; CHECK:   [o, p_1, p_2, p_3, p_4] -> { Stmt_for_k[i0] -> MemRef_A[o0] : 8o0 = 56 + p_1 + p_2 + p_3 + 8i0 };
-; CHECK:   [o, p_1, p_2, p_3, p_4] -> { Stmt_for_k[i0] -> MemRef_A[o0] : 8o0 = 136 + p_1 + p_2 + p_4 + 8i0 };
-

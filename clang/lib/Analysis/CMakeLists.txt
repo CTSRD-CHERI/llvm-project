@@ -1,5 +1,4 @@
 set(LLVM_LINK_COMPONENTS
-  MC
   Support
   )
 
@@ -13,6 +12,7 @@ add_clang_library(clangAnalysis
   CocoaConventions.cpp
   Consumed.cpp
   Dominators.cpp
+  DataflowWorklist.cpp
   FormatString.cpp
   LiveVariables.cpp
   ObjCNoReturn.cpp
@@ -23,20 +23,13 @@ add_clang_library(clangAnalysis
   ReachableCode.cpp
   ScanfFormatString.cpp
   ThreadSafety.cpp
+  ThreadSafetyCommon.cpp
+  ThreadSafetyLogical.cpp
+  ThreadSafetyTIL.cpp
   UninitializedValues.cpp
-  )
 
-add_dependencies(clangAnalysis
-  ClangAttrClasses
-  ClangAttrList
-  ClangCommentNodes
-  ClangDiagnosticCommon
-  ClangDeclNodes
-  ClangDiagnosticAnalysis
-  ClangStmtNodes
-  )
-
-target_link_libraries(clangAnalysis
-  clangBasic
+  LINK_LIBS
   clangAST
+  clangBasic
+  clangLex
   )

@@ -32,6 +32,12 @@ public:
     void
     SetGroupID (uint32_t gid);
     
+    lldb::SBFileSpec
+    GetExecutableFile ();
+    
+    void
+    SetExecutableFile (lldb::SBFileSpec exe_file, bool add_as_first_arg);
+
     uint32_t
     GetNumArguments ();
     
@@ -94,6 +100,19 @@ public:
     
     bool
     AddSuppressFileAction (int fd, bool read, bool write);
+
+    void
+    SetLaunchEventData (const char *data);
+    
+    const char *
+    GetLaunchEventData () const;
+    
+    bool
+    GetDetachOnError() const;
+    
+    void
+    SetDetachOnError(bool enable);
+    
 };
 
 class SBAttachInfo

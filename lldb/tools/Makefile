@@ -1,18 +1,34 @@
 ##===- source/Makefile -------------------------------------*- Makefile -*-===##
-# 
+#
 #                     The LLVM Compiler Infrastructure
 #
 # This file is distributed under the University of Illinois Open Source
 # License. See LICENSE.TXT for details.
-# 
+#
 ##===----------------------------------------------------------------------===##
 
 LLDB_LEVEL := ..
 include $(LLDB_LEVEL)/../../Makefile.config
 
-# tfiala test commit: will include lldb-gdbserver for linux x86_64 soon.
-ifneq ($(HOST_OS),MingW)
-DIRS := driver lldb-platform
+DIRS :=
+
+# enable lldb-gdbserver for supported platforms
+ifneq (,$(strip $(filter $(HOST_OS), FreeBSD Linux GNU/kFreeBSD)))
+DIRS += lldb-gdbserver
 endif
+
+ifneq ($(HOST_OS),MingW)
+DIRS += lldb-platform
+endif
+
+ifeq ($(HOST_OS),Darwin)
+DIRS += debugserver
+endif
+
+ifeq ($(HOST_OS),Linux)
+DIRS += lldb-mi
+endif
+
+DIRS += driver
 
 include $(LLDB_LEVEL)/Makefile

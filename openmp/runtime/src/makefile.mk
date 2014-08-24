@@ -73,6 +73,8 @@ OPTIMIZATION := $(call check_variable,OPTIMIZATION,off on)
 TARGET_COMPILER := $(call check_variable,TARGET_COMPILER,12 11)
 # Library version: 4 -- legacy, 5 -- compat.
 VERSION      := $(call check_variable,VERSION,5 4)
+# quad precision floating point
+HAVE_QUAD     = 1
 
 VPATH += $(src_dir)
 VPATH += $(src_dir)i18n/
@@ -162,8 +164,8 @@ ifeq "$(c)" "gcc"
 endif
 
 ifeq "$(c)" "clang"
-    c-flags += -Wno-unused-value -Wno-switch
-    cxx-flags += -Wno-unused-value -Wno-switch
+    c-flags += -Wno-unused-value -Wno-switch -Wno-deprecated-register
+    cxx-flags += -Wno-unused-value -Wno-switch -Wno-deprecated-register
     ifeq "$(arch)" "32"
         c-flags += -m32 -msse
         cxx-flags += -m32 -msse
@@ -171,6 +173,7 @@ ifeq "$(c)" "clang"
         ld-flags += -m32 -msse
         as-flags += -m32 -msse
     endif
+    HAVE_QUAD = 0
 endif
 
 ifeq "$(LINK_TYPE)" "dyna"
@@ -310,6 +313,9 @@ endif
 ifeq "$(CPLUSPLUS)" "on"
     ifeq "$(os)" "win"
         c-flags   += -TP
+    else ifeq "$(arch)" "ppc64"
+    # c++0x on ppc64 linux removes definition of preproc. macros, needed in .hs
+      c-flags   += -x c++ -std=gnu++0x
     else
         ifneq "$(filter gcc clang,$(c))" ""
             c-flags   += -x c++ -std=c++0x
@@ -355,10 +361,14 @@ ifeq "$(os)" "lin"
         # to remove dependency on libgcc_s:
         ifeq "$(c)" "gcc"
             ld-flags-dll += -static-libgcc
-            ld-flags-extra += -Wl,-ldl
+            ifneq "$(omp_os)" "freebsd"
+                ld-flags-extra += -Wl,-ldl
+            endif
         endif
         ifeq "$(c)" "clang"
-            ld-flags-extra += -Wl,-ldl
+            ifneq "$(omp_os)" "freebsd"
+                ld-flags-extra += -Wl,-ldl
+            endif
         endif
         ifeq "$(arch)" "32"
             ifeq "$(filter gcc clang,$(c))" ""
@@ -366,7 +376,7 @@ ifeq "$(os)" "lin"
             ld-flags-extra += -lirc_pic
             endif
         endif
-        ifeq "$(filter 32 32e 64,$(arch))" ""
+        ifeq "$(filter 32 32e 64 ppc64,$(arch))" ""
             ld-flags-extra += $(shell pkg-config --libs libffi)
         endif
     else
@@ -411,7 +421,9 @@ ifeq "$(os)" "lrb"
 endif
 
 ifeq "$(os)" "mac"
-    ld-flags += -no-intel-extensions
+    ifeq "$(c)" "icc"
+        ld-flags += -no-intel-extensions
+    endif
     ld-flags += -single_module
     ld-flags += -current_version $(VERSION).0 -compatibility_version $(VERSION).0
 endif
@@ -460,7 +472,14 @@ ifneq "$(os)" "win"
 endif
 cpp-flags += -D KMP_LIBRARY_FILE=\"$(lib_file)\"
 cpp-flags += -D KMP_VERSION_MAJOR=$(VERSION)
-cpp-flags += -D CACHE_LINE=64
+
+# customize ppc64 cache line size to 128, 64 otherwise
+ifeq "$(arch)" "ppc64"
+	cpp-flags += -D CACHE_LINE=128
+else 
+	cpp-flags += -D CACHE_LINE=64
+endif
+
 cpp-flags += -D KMP_ADJUST_BLOCKTIME=1
 cpp-flags += -D BUILD_PARALLEL_ORDERED
 cpp-flags += -D KMP_ASM_INTRINS
@@ -575,9 +594,12 @@ ifneq "$(os)" "win"
     ifeq "$(arch)" "arm"
         z_Linux_asm$(obj) : \
 		    cpp-flags += -D KMP_ARCH_ARM
-    else
+    else ifeq "$(arch)" "ppc64" 
         z_Linux_asm$(obj) : \
-            cpp-flags += -D KMP_ARCH_X86$(if $(filter 32e,$(arch)),_64)
+			cpp-flags += -D KMP_ARCH_PPC64		    
+    else
+    	z_Linux_asm$(obj) : \
+       		cpp-flags += -D KMP_ARCH_X86$(if $(filter 32e,$(arch)),_64)	
     endif
 endif
 
@@ -590,6 +612,9 @@ kmp_version$(obj) : cpp-flags += -D _KMP_BUILD_TIME="\"$(date)\""
 
 gd-flags += -D arch_$(arch)
 gd-flags += -D $(LIB_TYPE)
+ifeq "$(HAVE_QUAD)" "1"
+    gd-flags += -D HAVE_QUAD
+endif
 ifeq "$(OMP_VERSION)" "40"
     gd-flags += -D OMP_40 -D OMP_30
 else
@@ -723,7 +748,9 @@ endif
         else # 5
             lib_c_items += kmp_gsupport
         endif
+#        ifneq "$(arch)" "ppc64"
         lib_asm_items += z_Linux_asm
+#	     endif
     endif
 endif
 
@@ -1008,7 +1035,7 @@ endif
 
 # Copy object files, wiping out references to libirc library. Object files (ours and extracted
 # from libirc.lib) have "-defaultlib:libirc.lib" linker directive, so linker will require libirc.lib
-# regardless of absense of real dependency. Actually, this rule is required only on Windows* OS, but
+# regardless of absence of real dependency. Actually, this rule is required only on Windows* OS, but
 # there is no Windows* OS-specific commands, so I omit conditions to keep code shorter and be able test
 # the rule on Linux* OS.
 # Note: If we are not going to pick up objects from libirc, there is no point in wiping out
@@ -1227,7 +1254,7 @@ ifneq "$(os)" "lrb"
             tt-libs  += $(imp_file)
         endif
         ifneq "$(arch)" "32"
-            # To succesfully build with VS2008
+            # To successfully build with VS2008
             # tt-libs += bufferoverflowu.lib
             # Preventing "unresolved external symbol __security_cookie" (and
             # "... __security_check_cookie") linker errors on win_32e and win_64.
@@ -1245,7 +1272,7 @@ ifneq "$(os)" "lrb"
         # On Linux* OS and OS X* the test is good enough because GNU compiler knows nothing
         # about libirc and Intel compiler private lib directories, but we will grep verbose linker
         # output just in case.
-        tt-c        = gcc
+        tt-c        = cc
         ifeq "$(os)" "lin"    # GCC on OS X* does not recognize -pthread.
             tt-c-flags  += -pthread
         endif
@@ -1259,12 +1286,12 @@ ifneq "$(os)" "lrb"
             # Explicitly add dl library to avoid failure.
             tt-ld-flags += -ldl
         endif
-        ifeq "$(os)" "lin"
-            tt-ld-flags-v += -Wl,--verbose
-            tt-env        += LD_LIBRARY_PATH=".:$(LD_LIBRARY_PATH)"
-        else # mac
+        ifeq "$(os)" "mac"
             tt-ld-flags-v += -Wl,-t
             tt-env        += DYLD_LIBRARY_PATH=".:$(DYLD_LIBRARY_PATH)"
+        else # lin
+            tt-ld-flags-v += -Wl,--verbose
+            tt-env        += LD_LIBRARY_PATH=".:$(LD_LIBRARY_PATH)"
         endif
     endif
     tt-c-flags += $(tt-c-flags-rt)
@@ -1385,9 +1412,13 @@ ifneq "$(filter %-dyna win-%,$(os)-$(LINK_TYPE))" ""
             td_exp += libc.so.6
             td_exp += ld-linux-armhf.so.3
         endif
+        ifeq "$(arch)" "ppc64"
+            td_exp += libc.so.6
+            td_exp += ld64.so.1
+        endif
         td_exp += libdl.so.2
         td_exp += libgcc_s.so.1
-        ifeq "$(filter 32 32e 64,$(arch))" ""
+        ifeq "$(filter 32 32e 64 ppc64,$(arch))" ""
             td_exp += libffi.so.6
             td_exp += libffi.so.5
         endif
@@ -1427,6 +1458,12 @@ ifneq "$(filter %-dyna win-%,$(os)-$(LINK_TYPE))" ""
         else
             td_exp += uuid
         endif
+    endif
+    ifeq "$(omp_os)" "freebsd"
+        td_exp =
+        td_exp += libc.so.7
+        td_exp += libthr.so.3
+        td_exp += libunwind.so.5
     endif
 
     test-deps/.test : $(lib_file) $(tools_dir)check-depends.pl test-deps/.dir .rebuild

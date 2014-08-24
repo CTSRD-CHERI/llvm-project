@@ -46,8 +46,7 @@ int UseNullptrTransform::apply(const CompilationDatabase &Database,
   NullptrFixer Fixer(AcceptedChanges, MacroNames, /*Owner=*/ *this);
 
   Finder.addMatcher(makeCastSequenceMatcher(), &Fixer);
-
-  if (int result = UseNullptrTool.run(createActionFactory(Finder))) {
+  if (int result = UseNullptrTool.run(createActionFactory(Finder).get())) {
     llvm::errs() << "Error encountered during translation.\n";
     return result;
   }
@@ -65,7 +64,7 @@ struct UseNullptrFactory : TransformFactory {
     Since.Msvc = Version(10);
   }
 
-  Transform *createTransform(const TransformOptions &Opts) LLVM_OVERRIDE {
+  Transform *createTransform(const TransformOptions &Opts) override {
     return new UseNullptrTransform(Opts);
   }
 };

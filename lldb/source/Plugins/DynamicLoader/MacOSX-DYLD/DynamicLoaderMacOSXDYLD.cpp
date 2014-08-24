@@ -8,8 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 
-#include "llvm/Support/MachO.h"
-
 #include "lldb/Breakpoint/StoppointCallbackContext.h"
 #include "lldb/Core/DataBuffer.h"
 #include "lldb/Core/DataBufferHeap.h"
@@ -265,7 +263,7 @@ DynamicLoaderMacOSXDYLD::DidSetNotificationBreakpoint() const
 
 //----------------------------------------------------------------------
 // Try and figure out where dyld is by first asking the Process
-// if it knows (which currently calls down in the the lldb::Process
+// if it knows (which currently calls down in the lldb::Process
 // to get the DYLD info (available on SnowLeopard only). If that fails,
 // then check in the default addresses.
 //----------------------------------------------------------------------
@@ -328,7 +326,7 @@ DynamicLoaderMacOSXDYLD::LocateDYLD()
         {
             return ReadDYLDInfoFromMemoryAndSetNotificationCallback(0x7fff5fc00000ull);
         }
-        else if (exe_arch.GetMachine() == llvm::Triple::arm || exe_arch.GetMachine() == llvm::Triple::thumb)
+        else if (exe_arch.GetMachine() == llvm::Triple::arm || exe_arch.GetMachine() == llvm::Triple::thumb || exe_arch.GetMachine() == llvm::Triple::aarch64)
         {
             return ReadDYLDInfoFromMemoryAndSetNotificationCallback(0x2fe00000);
         }
@@ -348,7 +346,7 @@ DynamicLoaderMacOSXDYLD::FindTargetModuleForDYLDImageInfo (DYLDImageInfo &image_
     
     Target &target = m_process->GetTarget();
     const ModuleList &target_images = target.GetImages();
-    ModuleSpec module_spec (image_info.file_spec, image_info.GetArchitecture ());
+    ModuleSpec module_spec (image_info.file_spec);
     module_spec.GetUUID() = image_info.uuid;
     ModuleSP module_sp (target_images.FindFirstModule (module_spec));
     
@@ -635,11 +633,11 @@ DynamicLoaderMacOSXDYLD::NotifyBreakpointHit (void *baton,
         if (abi->GetArgumentValues (exe_ctx.GetThreadRef(), argument_values))
         {
             uint32_t dyld_mode = argument_values.GetValueAtIndex(0)->GetScalar().UInt (-1);
-            if (dyld_mode != -1)
+            if (dyld_mode != static_cast<uint32_t>(-1))
             {
                 // Okay the mode was right, now get the number of elements, and the array of new elements...
                 uint32_t image_infos_count = argument_values.GetValueAtIndex(1)->GetScalar().UInt (-1);
-                if (image_infos_count != -1)
+                if (image_infos_count != static_cast<uint32_t>(-1))
                 {
                     // Got the number added, now go through the array of added elements, putting out the mach header 
                     // address, and adding the image.
@@ -946,7 +944,7 @@ DynamicLoaderMacOSXDYLD::RemoveModulesUsingImageInfosAddress (lldb::addr_t image
             image_infos[idx].PutToLog (log);
         }
             
-        // Remove this image_infos from the m_all_image_infos.  We do the comparision by address
+        // Remove this image_infos from the m_all_image_infos.  We do the comparison by address
         // rather than by file spec because we can have many modules with the same "file spec" in the
         // case that they are modules loaded from memory.
         //
@@ -1362,7 +1360,7 @@ DynamicLoaderMacOSXDYLD::UpdateImageInfosHeaderAndLoadCommands(DYLDImageInfo::co
 // On Mac OS X libobjc (the Objective-C runtime) has several critical dispatch
 // functions written in hand-written assembly, and also have hand-written unwind
 // information in the eh_frame section.  Normally we prefer analyzing the 
-// assembly instructions of a curently executing frame to unwind from that frame --
+// assembly instructions of a currently executing frame to unwind from that frame --
 // but on hand-written functions this profiling can fail.  We should use the
 // eh_frame instructions for these functions all the time.
 //

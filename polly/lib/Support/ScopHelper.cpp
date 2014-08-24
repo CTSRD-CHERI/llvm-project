@@ -17,13 +17,13 @@
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
-#include "llvm/Support/CFG.h"
+#include "llvm/IR/CFG.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
-#define DEBUG_TYPE "polly-scop-helper"
-#include "llvm/Support/Debug.h"
-
 using namespace llvm;
+
+#define DEBUG_TYPE "polly-scop-helper"
 
 // Helper function for Scop
 // TODO: Add assertion to not allow parameter to be null
@@ -94,9 +94,9 @@ void polly::simplifyRegion(Scop *S, Pass *P) {
     BasicBlock *OldEntry = R->getEntry();
     BasicBlock *NewEntry = SplitBlock(OldEntry, OldEntry->begin(), P);
 
-    for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
-      if ((*SI)->getBasicBlock() == OldEntry) {
-        (*SI)->setBasicBlock(NewEntry);
+    for (ScopStmt *Stmt : *S)
+      if (Stmt->getBasicBlock() == OldEntry) {
+        Stmt->setBasicBlock(NewEntry);
         break;
       }
 
@@ -107,8 +107,8 @@ void polly::simplifyRegion(Scop *S, Pass *P) {
   if (!R->getExitingBlock()) {
     BasicBlock *NewExit = createSingleExitEdge(R, P);
 
-    for (Region::const_iterator RI = R->begin(), RE = R->end(); RI != RE; ++RI)
-      (*RI)->replaceExitRecursive(NewExit);
+    for (auto &&SubRegion : *R)
+      SubRegion->replaceExitRecursive(NewExit);
   }
 }
 
@@ -121,6 +121,6 @@ void polly::splitEntryBlockForAlloca(BasicBlock *EntryBlock, Pass *P) {
 
   // SplitBlock updates DT, DF and LI.
   BasicBlock *NewEntry = SplitBlock(EntryBlock, I, P);
-  if (RegionInfo *RI = P->getAnalysisIfAvailable<RegionInfo>())
-    RI->splitBlock(NewEntry, EntryBlock);
+  if (RegionInfoPass *RIP = P->getAnalysisIfAvailable<RegionInfoPass>())
+    RIP->getRegionInfo().splitBlock(NewEntry, EntryBlock);
 }

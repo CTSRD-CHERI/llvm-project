@@ -1,14 +1,12 @@
 set(LLVM_NO_RTTI 1)
 add_lldb_executable(lldb
   Driver.cpp
-  #DriverEvents.cpp
-  #DriverOptions.cpp
-  #DriverPosix.cpp
-  IOChannel.cpp
-  ELWrapper.cpp
   Platform.cpp
-  GetOptWrapper.cpp
   )
+
+if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
+add_definitions( -DIMPORT_LIBLLDB )
+endif()
 
 target_link_libraries(lldb liblldb)
 # TODO: why isn't this done by add_lldb_executable?

@@ -21,6 +21,8 @@
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/STLExtras.h"
 
+template class llvm::Registry<TransformFactory>;
+
 using namespace clang;
 
 llvm::cl::OptionCategory TransformsOptionsCategory("Transforms' options");
@@ -37,7 +39,7 @@ public:
   ActionFactory(MatchFinder &Finder, Transform &Owner)
   : Finder(Finder), Owner(Owner) {}
 
-  virtual FrontendAction *create() LLVM_OVERRIDE {
+  virtual FrontendAction *create() override {
     return new FactoryAdaptor(Finder, Owner);
   }
 
@@ -47,19 +49,20 @@ private:
     FactoryAdaptor(MatchFinder &Finder, Transform &Owner)
         : Finder(Finder), Owner(Owner) {}
 
-    ASTConsumer *CreateASTConsumer(CompilerInstance &, StringRef) {
+    std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &,
+                                                   StringRef) {
       return Finder.newASTConsumer();
     }
 
     virtual bool BeginSourceFileAction(CompilerInstance &CI,
-                                       StringRef Filename) LLVM_OVERRIDE {
+                                       StringRef Filename) override {
       if (!ASTFrontendAction::BeginSourceFileAction(CI, Filename))
         return false;
 
       return Owner.handleBeginSource(CI, Filename);
     }
 
-    virtual void EndSourceFileAction() LLVM_OVERRIDE {
+    virtual void EndSourceFileAction() override {
       Owner.handleEndSource();
       return ASTFrontendAction::EndSourceFileAction();
     }
@@ -126,18 +129,19 @@ Transform::addReplacementForCurrentTU(const clang::tooling::Replacement &R) {
   return true;
 }
 
-FrontendActionFactory *Transform::createActionFactory(MatchFinder &Finder) {
-  return new ActionFactory(Finder, /*Owner=*/ *this);
+std::unique_ptr<FrontendActionFactory>
+Transform::createActionFactory(MatchFinder &Finder) {
+  return llvm::make_unique<ActionFactory>(Finder, /*Owner=*/*this);
 }
 
 Version Version::getFromString(llvm::StringRef VersionStr) {
   llvm::StringRef MajorStr, MinorStr;
   Version V;
 
-  llvm::tie(MajorStr, MinorStr) = VersionStr.split('.');
+  std::tie(MajorStr, MinorStr) = VersionStr.split('.');
   if (!MinorStr.empty()) {
     llvm::StringRef Ignore;
-    llvm::tie(MinorStr, Ignore) = MinorStr.split('.');
+    std::tie(MinorStr, Ignore) = MinorStr.split('.');
     if (MinorStr.getAsInteger(10, V.Minor))
       return Version();
   }

@@ -1,0 +1,10 @@
+# RUN: yaml2obj %p/Inputs/reloc64-1.obj.yaml > %t1.obj
+# RUN: yaml2obj %p/Inputs/reloc64-2.obj.yaml > %t2.obj
+
+# RUN: lld -flavor link /out:%t.exe /subsystem:console /machine:x64 \
+# RUN:   /entry:fn1 -- %t1.obj %t2.obj
+# RUN: llvm-objdump -d %t.exe | FileCheck %s
+
+CHECK:      Disassembly of section .text:
+CHECK-NEXT: .text:
+CHECK-NEXT:   1000:  e8 15 00 00 00   callq 21

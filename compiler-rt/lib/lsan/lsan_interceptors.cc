@@ -34,19 +34,19 @@ int pthread_key_create(unsigned *key, void (*destructor)(void* v));
 int pthread_setspecific(unsigned key, const void *v);
 }
 
-#define GET_STACK_TRACE                                                      \
-  StackTrace stack;                                                          \
-  {                                                                          \
-    uptr stack_top = 0, stack_bottom = 0;                                    \
-    ThreadContext *t;                                                        \
-    bool fast = common_flags()->fast_unwind_on_malloc;                       \
-    if (fast && (t = CurrentThreadContext())) {                              \
-      stack_top = t->stack_end();                                            \
-      stack_bottom = t->stack_begin();                                       \
-    }                                                                        \
-    stack.Unwind(__sanitizer::common_flags()->malloc_context_size,           \
-                 StackTrace::GetCurrentPc(),                                 \
-                 GET_CURRENT_FRAME(), stack_top, stack_bottom, fast);        \
+#define GET_STACK_TRACE                                              \
+  StackTrace stack;                                                  \
+  {                                                                  \
+    uptr stack_top = 0, stack_bottom = 0;                            \
+    ThreadContext *t;                                                \
+    bool fast = common_flags()->fast_unwind_on_malloc;               \
+    if (fast && (t = CurrentThreadContext())) {                      \
+      stack_top = t->stack_end();                                    \
+      stack_bottom = t->stack_begin();                               \
+    }                                                                \
+    stack.Unwind(__sanitizer::common_flags()->malloc_context_size,   \
+                 StackTrace::GetCurrentPc(), GET_CURRENT_FRAME(), 0, \
+                 stack_top, stack_bottom, fast);                     \
   }
 
 #define ENSURE_LSAN_INITED do {   \
@@ -105,6 +105,12 @@ INTERCEPTOR(void*, memalign, uptr alignment, uptr size) {
   return Allocate(stack, size, alignment, kAlwaysClearMemory);
 }
 
+INTERCEPTOR(void*, aligned_alloc, uptr alignment, uptr size) {
+  ENSURE_LSAN_INITED;
+  GET_STACK_TRACE;
+  return Allocate(stack, size, alignment, kAlwaysClearMemory);
+}
+
 INTERCEPTOR(int, posix_memalign, void **memptr, uptr alignment, uptr size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE;
@@ -152,7 +158,7 @@ INTERCEPTOR(void*, pvalloc, uptr size) {
   return Allocate(stack, size, GetPageSizeCached(), kAlwaysClearMemory);
 }
 
-INTERCEPTOR(void, cfree, void *p) ALIAS("free");
+INTERCEPTOR(void, cfree, void *p) ALIAS(WRAPPER_NAME(free));
 
 #define OPERATOR_NEW_BODY                              \
   ENSURE_LSAN_INITED;                                  \
@@ -173,9 +179,9 @@ void *operator new[](uptr size, std::nothrow_t const&) { OPERATOR_NEW_BODY; }
   Deallocate(ptr);
 
 INTERCEPTOR_ATTRIBUTE
-void operator delete(void *ptr) { OPERATOR_DELETE_BODY; }
+void operator delete(void *ptr) throw() { OPERATOR_DELETE_BODY; }
 INTERCEPTOR_ATTRIBUTE
-void operator delete[](void *ptr) { OPERATOR_DELETE_BODY; }
+void operator delete[](void *ptr) throw() { OPERATOR_DELETE_BODY; }
 INTERCEPTOR_ATTRIBUTE
 void operator delete(void *ptr, std::nothrow_t const&) { OPERATOR_DELETE_BODY; }
 INTERCEPTOR_ATTRIBUTE
@@ -185,7 +191,8 @@ void operator delete[](void *ptr, std::nothrow_t const &) {
 
 // We need this to intercept the __libc_memalign calls that are used to
 // allocate dynamic TLS space in ld-linux.so.
-INTERCEPTOR(void *, __libc_memalign, uptr align, uptr s) ALIAS("memalign");
+INTERCEPTOR(void *, __libc_memalign, uptr align, uptr s)
+    ALIAS(WRAPPER_NAME(memalign));
 
 ///// Thread initialization and finalization. /////
 
@@ -238,7 +245,7 @@ INTERCEPTOR(int, pthread_create, void *th, void *attr,
     pthread_attr_init(&myattr);
     attr = &myattr;
   }
-  AdjustStackSizeLinux(attr);
+  AdjustStackSize(attr);
   int detached = 0;
   pthread_attr_getdetachstate(attr, &detached);
   ThreadParam p;

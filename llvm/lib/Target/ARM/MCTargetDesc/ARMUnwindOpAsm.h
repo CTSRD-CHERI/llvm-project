@@ -12,11 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ARM_UNWIND_OP_ASM_H
-#define ARM_UNWIND_OP_ASM_H
+#ifndef LLVM_LIB_TARGET_ARM_MCTARGETDESC_ARMUNWINDOPASM_H
+#define LLVM_LIB_TARGET_ARM_MCTARGETDESC_ARMUNWINDOPASM_H
 
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/ARMEHABI.h"
 #include "llvm/Support/DataTypes.h"
 
@@ -61,6 +60,12 @@ public:
   /// Emit unwind opcodes to add $sp with an offset.
   void EmitSPOffset(int64_t Offset);
 
+  /// Emit unwind raw opcodes
+  void EmitRaw(const SmallVectorImpl<uint8_t> &Opcodes) {
+    Ops.insert(Ops.end(), Opcodes.begin(), Opcodes.end());
+    OpBegins.push_back(OpBegins.back() + Opcodes.size());
+  }
+
   /// Finalize the unwind opcode sequence for EmitBytes()
   void Finalize(unsigned &PersonalityIndex,
                 SmallVectorImpl<uint8_t> &Result);
@@ -85,4 +90,4 @@ private:
 
 } // namespace llvm
 
-#endif // ARM_UNWIND_OP_ASM_H
+#endif

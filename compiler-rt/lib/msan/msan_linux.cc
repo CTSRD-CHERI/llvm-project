@@ -16,9 +16,11 @@
 #if SANITIZER_LINUX
 
 #include "msan.h"
+#include "msan_thread.h"
 
 #include <elf.h>
 #include <link.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -37,7 +39,7 @@ static const uptr kMemBeg     = 0x600000000000;
 static const uptr kMemEnd     = 0x7fffffffffff;
 static const uptr kShadowBeg  = MEM_TO_SHADOW(kMemBeg);
 static const uptr kShadowEnd  = MEM_TO_SHADOW(kMemEnd);
-static const uptr kBad1Beg    = 0x100000000;  // 4G
+static const uptr kBad1Beg    = 0;
 static const uptr kBad1End    = kShadowBeg - 1;
 static const uptr kBad2Beg    = kShadowEnd + 1;
 static const uptr kBad2End    = kMemBeg - 1;
@@ -59,7 +61,9 @@ bool InitShadow(bool prot1, bool prot2, bool map_shadow, bool init_origins) {
   VPrintf(1, "Bad1     : %p %p\n", kBad1Beg, kBad1End);
 
   if (!MemoryRangeIsAvailable(kShadowBeg,
-                              init_origins ? kOriginsEnd : kShadowEnd)) {
+                              init_origins ? kOriginsEnd : kShadowEnd) ||
+      (prot1 && !MemoryRangeIsAvailable(kBad1Beg, kBad1End)) ||
+      (prot2 && !MemoryRangeIsAvailable(kBad2Beg, kBad2End))) {
     Printf("FATAL: Shadow memory range is not available.\n");
     return false;
   }
@@ -80,19 +84,52 @@ bool InitShadow(bool prot1, bool prot2, bool map_shadow, bool init_origins) {
 }
 
 void MsanDie() {
+  if (death_callback)
+    death_callback();
   _exit(flags()->exit_code);
 }
 
 static void MsanAtExit(void) {
+  if (flags()->print_stats && (flags()->atexit || msan_report_count > 0))
+    ReportStats();
   if (msan_report_count > 0) {
     ReportAtExitStatistics();
-    if (flags()->exit_code)
-      _exit(flags()->exit_code);
+    if (flags()->exit_code) _exit(flags()->exit_code);
   }
 }
 
 void InstallAtExitHandler() {
   atexit(MsanAtExit);
+}
+
+// ---------------------- TSD ---------------- {{{1
+
+static pthread_key_t tsd_key;
+static bool tsd_key_inited = false;
+void MsanTSDInit(void (*destructor)(void *tsd)) {
+  CHECK(!tsd_key_inited);
+  tsd_key_inited = true;
+  CHECK_EQ(0, pthread_key_create(&tsd_key, destructor));
+}
+
+void *MsanTSDGet() {
+  CHECK(tsd_key_inited);
+  return pthread_getspecific(tsd_key);
+}
+
+void MsanTSDSet(void *tsd) {
+  CHECK(tsd_key_inited);
+  pthread_setspecific(tsd_key, tsd);
+}
+
+void MsanTSDDtor(void *tsd) {
+  MsanThread *t = (MsanThread*)tsd;
+  if (t->destructor_iterations_ > 1) {
+    t->destructor_iterations_--;
+    CHECK_EQ(0, pthread_setspecific(tsd_key, tsd));
+    return;
+  }
+  MsanThread::TSDDtor(tsd);
 }
 
 }  // namespace __msan
