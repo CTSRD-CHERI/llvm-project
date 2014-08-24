@@ -3011,20 +3011,7 @@ bool MipsAsmParser::parseDirectiveCPLoad(SMLoc Loc) {
 }
 
 bool MipsAsmParser::parseDirectiveCPReturn() {
-  MCInst Inst;
-  // Either restore the old $gp from a register or on the stack
-  if (SaveLocationIsRegister) {
-    Inst.setOpcode(Mips::DADDi);
-    Inst.addOperand(MCOperand::CreateReg(SaveLocation));
-    Inst.addOperand(MCOperand::CreateReg(getGPR(matchCPURegisterName("gp"))));
-    Inst.addOperand(MCOperand::CreateImm(0));
-  } else {
-    Inst.setOpcode(Mips::LD);
-    Inst.addOperand(MCOperand::CreateReg(getGPR(matchCPURegisterName("gp"))));
-    Inst.addOperand(MCOperand::CreateReg(getGPR(matchCPURegisterName("sp"))));
-    Inst.addOperand(MCOperand::CreateImm(SaveLocation));
-  }
-  getStreamer().EmitInstruction(Inst, STI);
+  getTargetStreamer().emitDirectiveCpreturn();
   return false;
 }
 

@@ -58,11 +58,11 @@ $BB0_4:
     .cpsetup $25, ((8 * 4) - 3 * 8), __cerror
 # CHECK: .cpsetup	$25, 8, __cerror
     .cpreturn
-# CHECK: ld	$gp, 8($sp)
+# CHECK: .cpreturn
     .cpsetup $25, $22, __cerror
 # CHECK: .cpsetup	$25, $22, __cerror
     .cpreturn
-# CHECK: daddi	$22, $gp, 0             # encoding: [0x63,0x96,0x00,0x00]
+# CHECK: .cpreturn
 
 # CHECK:    .set mips32r2
 # CHECK:    ldxc1   $f0, $zero($5)     # encoding: [0x4c,0xa0,0x00,0x01]

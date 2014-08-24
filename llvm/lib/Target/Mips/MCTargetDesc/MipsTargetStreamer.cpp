@@ -72,6 +72,7 @@ void MipsTargetStreamer::emitDirectiveSetMips64R2() { forbidModuleDirective(); }
 void MipsTargetStreamer::emitDirectiveSetMips64R6() { forbidModuleDirective(); }
 void MipsTargetStreamer::emitDirectiveSetDsp() { forbidModuleDirective(); }
 void MipsTargetStreamer::emitDirectiveCpload(unsigned RegNo) {}
+void MipsTargetStreamer::emitDirectiveCpreturn() {}
 void MipsTargetStreamer::emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                                               const MCSymbol &Sym, bool IsReg) {
 }
@@ -268,6 +269,10 @@ void MipsTargetAsmStreamer::emitDirectiveCpload(unsigned RegNo) {
   forbidModuleDirective();
 }
 
+void MipsTargetAsmStreamer::emitDirectiveCpreturn() {
+  OS << "\t.cpreturn\n";
+  forbidModuleDirective();
+}
 void MipsTargetAsmStreamer::emitDirectiveCpsetup(unsigned RegNo,
                                                  int RegOrOffset,
                                                  const MCSymbol &Sym,
@@ -630,6 +635,22 @@ void MipsTargetELFStreamer::emitDirectiveCpload(unsigned RegNo) {
   getStreamer().EmitInstruction(TmpInst, STI);
 
   forbidModuleDirective();
+}
+
+void MipsTargetELFStreamer::emitDirectiveCpreturn() {
+  MCInst Inst;
+  if (GPSaveIsReg) {
+    Inst.setOpcode(Mips::DADDi);
+    Inst.addOperand(MCOperand::CreateReg(GPSaveLocation));
+    Inst.addOperand(MCOperand::CreateReg(Mips::GP));
+    Inst.addOperand(MCOperand::CreateImm(0));
+  } else {
+    Inst.setOpcode(Mips::LD);
+    Inst.addOperand(MCOperand::CreateReg(Mips::GP));
+    Inst.addOperand(MCOperand::CreateReg(Mips::SP));
+    Inst.addOperand(MCOperand::CreateImm(GPSaveLocation));
+  }
+  getStreamer().EmitInstruction(Inst, STI);
 }
 
 void MipsTargetELFStreamer::emitDirectiveCpsetup(unsigned RegNo,

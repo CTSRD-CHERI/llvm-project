@@ -64,6 +64,7 @@ public:
 
   // PIC support
   virtual void emitDirectiveCpload(unsigned RegNo);
+  virtual void emitDirectiveCpreturn();
   virtual void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                                     const MCSymbol &Sym, bool IsReg);
 
@@ -164,6 +165,7 @@ public:
 
   // PIC support
   virtual void emitDirectiveCpload(unsigned RegNo);
+  void emitDirectiveCpreturn() override;
   void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                             const MCSymbol &Sym, bool IsReg) override;
 
@@ -180,6 +182,8 @@ class MipsTargetELFStreamer : public MipsTargetStreamer {
   bool MicroMipsEnabled;
   const MCSubtargetInfo &STI;
   bool Pic;
+  int GPSaveLocation;
+  bool GPSaveIsReg;
 
 public:
   bool isMicroMipsEnabled() const { return MicroMipsEnabled; }
@@ -210,6 +214,7 @@ public:
 
   // PIC support
   virtual void emitDirectiveCpload(unsigned RegNo);
+  void emitDirectiveCpreturn() override;
   void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                             const MCSymbol &Sym, bool IsReg) override;
 
