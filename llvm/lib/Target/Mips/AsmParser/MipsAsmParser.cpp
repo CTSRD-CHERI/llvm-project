@@ -1131,6 +1131,8 @@ bool MipsAsmParser::needsExpansion(MCInst &Inst) {
   case Mips::LoadImm32Reg:
   case Mips::LoadAddr32Imm:
   case Mips::LoadAddr32Reg:
+  case Mips::LoadAddr64Imm:
+  case Mips::LoadAddr64Reg:
   case Mips::LoadImm64Reg:
   case Mips::CLWC1:
   case Mips::CLDC1:
@@ -1197,8 +1199,10 @@ bool MipsAsmParser::expandInstruction(MCInst &Inst, SMLoc IDLoc,
     }
     return expandLoadImm(Inst, IDLoc, Instructions);
   case Mips::LoadAddr32Imm:
+  case Mips::LoadAddr64Imm:
     return expandLoadAddressImm(Inst, IDLoc, Instructions);
   case Mips::LoadAddr32Reg:
+  case Mips::LoadAddr64Reg:
     return expandLoadAddressReg(Inst, IDLoc, Instructions);
   case Mips::CLWC1:
     is64Bit = false;
@@ -1444,8 +1448,8 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
   // Sometimes the assembly parser will get the immediate expression as
   // a $zero + an immediate.
   if (Inst.getNumOperands() == 3) {
-    assert(Inst.getOperand(1).getReg() ==
-           (isGP64bit() ? Mips::ZERO_64 : Mips::ZERO));
+    assert((Inst.getOperand(1).getReg() == Mips::ZERO_64) ||
+           (Inst.getOperand(1).getReg() == Mips::ZERO));
     ExprOperandNo = 2;
   }
   const MCOperand &SymOp = Inst.getOperand(ExprOperandNo);

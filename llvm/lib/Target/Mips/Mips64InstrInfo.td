@@ -496,6 +496,8 @@ class LoadImm64< string instr_asm, Operand Od, RegisterOperand RO> :
   MipsAsmPseudoInst<(outs RO:$rt), (ins Od:$imm64),
                      !strconcat(instr_asm, "\t$rt, $imm64")> ;
 def LoadImm64Reg : LoadImm64<"dli", imm64, GPR64Opnd>;
+def LoadAddr64Reg : LoadAddress<"dla", mem, GPR64Opnd>;
+def LoadAddr64Imm : LoadAddressImm<"dla", uimm5, GPR64Opnd>;
 
 /// Move between CPU and coprocessor registers
 let DecoderNamespace = "Mips64", Predicates = [HasMips64] in {
