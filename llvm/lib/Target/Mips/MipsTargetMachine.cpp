@@ -179,6 +179,7 @@ void MipsPassConfig::addIRPasses() {
     addPass(createMips16HardFloat(getMipsTargetMachine()));
   if (getMipsSubtarget().isCheri()) {
     addPass(createCheriRangeChecker());
+    addPass(createCheriMemOpLowering());
     if (getMipsSubtarget().usesCheriStackCapabilityABI() &&
         !getMipsSubtarget().isCheriSandbox())
       addPass(createCheriStackHack());
