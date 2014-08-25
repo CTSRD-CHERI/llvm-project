@@ -115,6 +115,9 @@ static void EmitDeclDestroy(CodeGenFunction &CGF, const VarDecl &D,
 /// constant from this point onwards.
 static void EmitDeclInvariant(CodeGenFunction &CGF, const VarDecl &D,
                               llvm::Constant *Addr) {
+  // If the address space isn't 0, do we can't mark it as invariant
+  if (Addr->getType()->getPointerAddressSpace() != 0)
+    return;
   // Don't emit the intrinsic if we're not optimizing.
   if (!CGF.CGM.getCodeGenOpts().OptimizationLevel)
     return;
