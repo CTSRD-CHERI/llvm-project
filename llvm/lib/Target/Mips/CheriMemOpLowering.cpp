@@ -24,18 +24,33 @@ class CheriMemOpLowering : public FunctionPass,
   DataLayout *DL;
   Module *M;
   Constant *Memset_c;
+  Constant *Memcpy_c;
+  Constant *Memmove_c;
+  Type *CapTy;
+  Type *Int32Ty;
+  Type *Int64Ty;
+  Type *VoidTy;
   bool Modified;
 
   virtual const char *getPassName() const {
     return "CHERI memory operation lowering";
   }
+  Constant *getMemCpy_c() {
+    if (!Memcpy_c)
+      Memcpy_c = M->getOrInsertFunction("memcpy_c", CapTy, CapTy, CapTy,
+          Int64Ty, nullptr);
+    return Memcpy_c;
+  }
+  Constant *getMemMove_c() {
+    if (!Memmove_c)
+      Memmove_c = M->getOrInsertFunction("memmove_c", CapTy, CapTy, CapTy,
+          Int64Ty, nullptr);
+    return Memmove_c;
+  }
   Constant *getMemSet_c() {
-    if (!Memset_c) {
-      LLVMContext &C = M->getContext();
-      Memset_c = M->getOrInsertFunction("memset_c", Type::getVoidTy(C),
-          Type::getInt8PtrTy(C, 200), Type::getInt32Ty(C),
-          Type::getInt64Ty(C), nullptr);
-    }
+    if (!Memset_c)
+      Memset_c = M->getOrInsertFunction("memset_c", VoidTy, CapTy, Int32Ty,
+          Int64Ty, nullptr);
     return Memset_c;
   }
 
@@ -44,7 +59,14 @@ class CheriMemOpLowering : public FunctionPass,
     CheriMemOpLowering() : FunctionPass(ID) {}
     virtual bool doInitialization(Module &Mod) {
       M = &Mod;
+      LLVMContext &C = M->getContext();
+      CapTy = Type::getInt8PtrTy(C, 200);
+      VoidTy = Type::getVoidTy(C);
+      Int32Ty = Type::getInt32Ty(C);
+      Int64Ty = Type::getInt64Ty(C);
       Memset_c = nullptr;
+      Memcpy_c = nullptr;
+      Memmove_c = nullptr;
       DL = new DataLayout(M);
       return true;
     }
@@ -53,7 +75,7 @@ class CheriMemOpLowering : public FunctionPass,
       delete DL;
     }
     void visitCallInst(CallInst &CI) {
-      if (MemSetInst *MSI = dyn_cast<MemSetInst>(&CI))
+      if (MemSetInst *MSI = dyn_cast<MemSetInst>(&CI)) {
         if (MSI->getDestAddressSpace() == 200) {
           IRBuilder<> B(&CI);
           Modified = true;
@@ -67,6 +89,25 @@ class CheriMemOpLowering : public FunctionPass,
           Memset->setDebugLoc(CI.getDebugLoc());
           CI.eraseFromParent();
         }
+      } else if (MemTransferInst *MTI = dyn_cast<MemTransferInst>(&CI)) {
+        if (MTI->getDestAddressSpace() == 200 ||
+            MTI->getSourceAddressSpace() == 200) {
+          IRBuilder<> B(&CI);
+          Modified = true;
+          Value *Args[3];
+          Args[0] = CI.getOperand(0);
+          Args[1] = CI.getOperand(1);
+          Args[2] = CI.getOperand(2);
+          if (MTI->getDestAddressSpace() != 200)
+            Args[0] = B.CreateAddrSpaceCast(Args[0], CapTy);
+          if (MTI->getSourceAddressSpace() != 200)
+            Args[1] = B.CreateAddrSpaceCast(Args[1], CapTy);
+          Constant *Fn = isa<MemCpyInst>(CI) ? getMemCpy_c() : getMemMove_c();
+          CallInst *Memset = CallInst::Create(Fn, Args, CI.getName(), &CI);
+          Memset->setDebugLoc(CI.getDebugLoc());
+          CI.eraseFromParent();
+        }
+      }
     }
     virtual bool runOnFunction(Function &F) {
       Modified = false;
