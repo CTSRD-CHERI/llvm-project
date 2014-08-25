@@ -107,8 +107,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
   C.toCharUnitsFromBits(C.getTargetInfo().getPointerAlign(0)).getQuantity();
   IntTy = llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getIntWidth());
   IntPtrTy = llvm::IntegerType::get(LLVMContext, PointerWidthInBits);
-  Int8PtrTy = Int8Ty->getPointerTo(0);
-  Int8PtrPtrTy = Int8PtrTy->getPointerTo(0);
+  Int8PtrTy = Int8Ty->getPointerTo(C.getDefaultAS());
+  Int8PtrPtrTy = Int8PtrTy->getPointerTo(C.getDefaultAS());
 
   RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();
 
