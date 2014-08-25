@@ -137,6 +137,7 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM,
     setOperationAction(ISD::MUL,              MVT::i64, Custom);
 
   if (Subtarget.isGP64bit()) {
+    setOperationAction(ISD::MUL,              MVT::i32, Custom);
     setOperationAction(ISD::MULHS,            MVT::i64, Custom);
     setOperationAction(ISD::MULHU,            MVT::i64, Custom);
   }
