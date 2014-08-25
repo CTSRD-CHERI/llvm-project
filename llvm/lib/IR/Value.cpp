@@ -581,7 +581,12 @@ bool Value::isDereferenceablePointer(const DataLayout *DL) const {
   // information here.
   Type *Ty = getType()->getPointerElementType();
   if (Ty->isSized() && DL) {
-    APInt Offset(DL->getTypeStoreSizeInBits(getType()), 0);
+    unsigned Size;
+    if (PointerType *PT = dyn_cast<PointerType>(getType()))
+      Size = DL->getPointerBaseSizeInBits(PT->getAddressSpace());
+    else
+      Size = DL->getTypeStoreSizeInBits(getType());
+    APInt Offset(Size, 0);
     const Value *BV = stripAndAccumulateInBoundsConstantOffsets(*DL, Offset);
 
     APInt DerefBytes(Offset.getBitWidth(), 0);
