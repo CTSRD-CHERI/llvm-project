@@ -2302,6 +2302,12 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
         DEBUG(dbgs() << "Store is not simple! Can not evaluate.\n");
         return false;  // no volatile/atomic accesses.
       }
+
+      // FIXME: Really ugly hack that we won't need with a proper linker...
+      if (PointerType *PT = dyn_cast<PointerType>(SI->getOperand(0)->getType()))
+        if (PT->getPointerAddressSpace() == 200)
+          return false;
+
       Constant *Ptr = getVal(SI->getOperand(1));
       if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Ptr)) {
         DEBUG(dbgs() << "Folding constant ptr expression: " << *Ptr);
