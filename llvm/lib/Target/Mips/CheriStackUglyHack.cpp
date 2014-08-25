@@ -205,7 +205,7 @@ class CheriStackHack : public FunctionPass,
     // We're going to delete users as we go, so we need to make sure that we
     // finish iterating before we start deleting
     SmallVector<Value *, 16> Users;
-    for (auto U=Inst->use_begin(),E=Inst->use_end() ; U!=E ; ++U)
+    for (auto U=Inst->user_begin(),E=Inst->user_end() ; U!=E ; ++U)
       Users.push_back(*U);
     for (Value *U : Users) {
       if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(U))
