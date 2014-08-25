@@ -1872,9 +1872,18 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
   // Entry is now either a Function or GlobalVariable.
   auto *GV = dyn_cast<llvm::GlobalVariable>(Entry);
 
-  if (InitExpr && InitExpr->getType().isCapabilityType(getContext())) {
-    NeedsGlobalCtor = true;
-    Init = EmitNullConstant(D->getType());
+  if (InitExpr) {
+    QualType T = InitExpr->getType();
+    bool IsCapInit = false;
+    if (T.isCapabilityType(getContext()))
+      IsCapInit = true;
+    else if (T->isArrayType())
+      IsCapInit = T->castAsArrayTypeUnsafe()->getElementType()
+        .isCapabilityType(getContext());
+    if (IsCapInit) {
+      NeedsGlobalCtor = true;
+      Init = EmitNullConstant(D->getType());
+    }
   }
 
   // We have a definition after a declaration with the wrong type.
