@@ -1989,6 +1989,10 @@ public:
     return getTargetAddressSpace(Q.getAddressSpace());
   }
 
+  unsigned getDefaultAS() const {
+    return DefaultAS;
+  }
+
   unsigned getTargetAddressSpace(unsigned AS) const {
     if (AS == 0) {
       return DefaultAS;

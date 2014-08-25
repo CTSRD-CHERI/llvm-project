@@ -1108,7 +1108,7 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
   llvm::Constant *s = llvm::ConstantDataArray::getString(getLLVMContext(), Str);
   auto *gv = new llvm::GlobalVariable(getModule(), s->getType(),
     true, llvm::GlobalValue::PrivateLinkage, s, ".str", nullptr,
-    llvm::GlobalVariable::NotThreadLocal, Target.AddressSpaceForStack());
+    llvm::GlobalVariable::NotThreadLocal, getContext().getDefaultAS());
   gv->setSection(AnnotationSection);
   gv->setUnnamedAddr(true);
   AStr = gv;
@@ -2472,9 +2472,9 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
   // CFStrings writable. (See <rdar://problem/10657500>)
   auto GV =
     new llvm::GlobalVariable(getModule(), C->getType(), /*isConstant=*/true,
-                             llvm::GlobalValue::PrivateLinkage, C, ".str",
-                             nullptr, llvm::GlobalVariable::NotThreadLocal,
-                             Target.AddressSpaceForStack());
+                             llvm::GlobalValue::PrivateLinkage, C, ".str", nullptr,
+                             llvm::GlobalVariable::NotThreadLocal,
+                             getContext().getDefaultAS());
   GV->setUnnamedAddr(true);
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
@@ -2602,7 +2602,7 @@ CodeGenModule::GetAddrOfConstantString(const StringLiteral *Literal) {
   auto *GV = new llvm::GlobalVariable(getModule(), C->getType(), isConstant,
                                       Linkage, C, ".str", nullptr,
                                       llvm::GlobalVariable::NotThreadLocal,
-                                      Target.AddressSpaceForStack());
+                                      getContext().getDefaultAS());
   GV->setUnnamedAddr(true);
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
