@@ -221,14 +221,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
                           ? EmitScalarExpr(E->getArg(0))
                           : EmitVAListRef(E->getArg(0));
     llvm::Type *DestType = Int8PtrTy;
-    if (ArgValue->getType() != DestType) {
-      if (cast<llvm::PointerType>(ArgValue->getType())->getAddressSpace() != 0)
-        ArgValue = Builder.CreateAddrSpaceCast(ArgValue, DestType,
+    if (ArgValue->getType() != DestType)
+      ArgValue = Builder.CreatePointerBitCastOrAddrSpaceCast(ArgValue, DestType,
                                          ArgValue->getName().data());
-      else
-        ArgValue = Builder.CreateBitCast(ArgValue, DestType,
-                                         ArgValue->getName().data());
-    }
 
     Intrinsic::ID inst = (BuiltinID == Builtin::BI__builtin_va_end) ?
       Intrinsic::vaend : Intrinsic::vastart;
