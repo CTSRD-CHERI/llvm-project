@@ -229,7 +229,8 @@ static bool IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
                                        APInt &Offset, const DataLayout &TD) {
   // Trivial case, constant is the global.
   if ((GV = dyn_cast<GlobalValue>(C))) {
-    unsigned BitWidth = TD.getPointerTypeSizeInBits(GV->getType());
+    unsigned BitWidth =
+      TD.getPointerBaseSizeInBits(GV->getType()->getPointerAddressSpace());
     Offset = APInt(BitWidth, 0);
     return true;
   }
@@ -249,7 +250,8 @@ static bool IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
   if (!GEP)
     return false;
 
-  unsigned BitWidth = TD.getPointerTypeSizeInBits(GEP->getType());
+  unsigned BitWidth =
+    TD.getPointerBaseSizeInBits(GEP->getType()->getPointerAddressSpace());
   APInt TmpOffset(BitWidth, 0);
 
   // If the base isn't a global+constant, we aren't either.
