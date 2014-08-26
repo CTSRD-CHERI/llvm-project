@@ -220,7 +220,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Value *ArgValue = (BuiltinID == Builtin::BI__va_start)
                           ? EmitScalarExpr(E->getArg(0))
                           : EmitVAListRef(E->getArg(0));
-    llvm::Type *DestType = Int8PtrTy;
+    llvm::Type *DestType = Int8Ty->getPointerTo(0);
     if (ArgValue->getType() != DestType)
       ArgValue = Builder.CreatePointerBitCastOrAddrSpaceCast(ArgValue, DestType,
                                          ArgValue->getName().data());
