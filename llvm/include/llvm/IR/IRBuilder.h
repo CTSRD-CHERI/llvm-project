@@ -431,6 +431,7 @@ public:
 
 private:
   Value *getCastedInt8PtrValue(Value *Ptr);
+  Value *getCastedInt8PtrValue(Value *Ptr, unsigned AS);
 };
 
 /// \brief This provides a uniform API for creating instructions and inserting

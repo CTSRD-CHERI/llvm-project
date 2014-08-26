@@ -39,6 +39,24 @@ Type *IRBuilderBase::getCurrentFunctionReturnType() const {
   return BB->getParent()->getReturnType();
 }
 
+Value *IRBuilderBase::getCastedInt8PtrValue(Value *Ptr, unsigned TargetAS) {
+  PointerType *PT = cast<PointerType>(Ptr->getType());
+  unsigned AS = PT->getAddressSpace();
+  if (PT->getElementType()->isIntegerTy(8) && AS == TargetAS)
+    return Ptr;
+
+  // Otherwise, we need to insert a bitcast.
+  PT = getInt8PtrTy(TargetAS);
+  Instruction *I;
+  if (TargetAS == AS)
+    I = new BitCastInst(Ptr, PT, "");
+  else
+    I = new AddrSpaceCastInst(Ptr, PT, "");
+  BB->getInstList().insert(InsertPt, I);
+  SetInstDebugLocation(I);
+  return I;
+}
+
 Value *IRBuilderBase::getCastedInt8PtrValue(Value *Ptr) {
   PointerType *PT = cast<PointerType>(Ptr->getType());
   if (PT->getElementType()->isIntegerTy(8))
@@ -146,7 +164,7 @@ CreateMemMove(Value *Dst, Value *Src, Value *Size, unsigned Align,
 CallInst *IRBuilderBase::CreateLifetimeStart(Value *Ptr, ConstantInt *Size) {
   assert(isa<PointerType>(Ptr->getType()) &&
          "lifetime.start only applies to pointers.");
-  Ptr = getCastedInt8PtrValue(Ptr);
+  Ptr = getCastedInt8PtrValue(Ptr, 0);
   if (!Size)
     Size = getInt64(-1);
   else
@@ -161,7 +179,7 @@ CallInst *IRBuilderBase::CreateLifetimeStart(Value *Ptr, ConstantInt *Size) {
 CallInst *IRBuilderBase::CreateLifetimeEnd(Value *Ptr, ConstantInt *Size) {
   assert(isa<PointerType>(Ptr->getType()) &&
          "lifetime.end only applies to pointers.");
-  Ptr = getCastedInt8PtrValue(Ptr);
+  Ptr = getCastedInt8PtrValue(Ptr, 0);
   if (!Size)
     Size = getInt64(-1);
   else
