@@ -3423,7 +3423,7 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
       }
 
       // N = N + Idx * ElementSize;
-      APInt ElementSize = APInt(TLI->getPointerSizeInBits(AS),
+      APInt ElementSize = APInt(DL->getPointerBaseSizeInBits(AS),
                                 DL->getTypeAllocSize(Ty));
       SDValue IdxN = getValue(Idx);
 
