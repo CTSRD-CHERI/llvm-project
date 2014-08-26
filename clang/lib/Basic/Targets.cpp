@@ -5467,6 +5467,8 @@ public:
 
     if (IsCheri) {
       Builder.defineMacro("__CHERI__", Twine(1));
+      if (SandboxABI)
+        Builder.defineMacro("__CHERI_SANDBOX__", Twine(1));
 
       // Macros for use with the set and get permissions builtins.
       Builder.defineMacro("__CHERI_CAP_PERMISSION_NON_EPHEMERAL__", Twine(1<<0));
