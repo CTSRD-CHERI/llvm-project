@@ -1812,7 +1812,7 @@ CodeGenFunction::EmitPointerWithAlignment(const Expr *Addr) {
         ICE->getSubExpr()->getType()->isPointerType()) {
       std::pair<llvm::Value*, unsigned> Ptr =
           EmitPointerWithAlignment(ICE->getSubExpr());
-      Ptr.first = Builder.CreateBitCast(Ptr.first,
+      Ptr.first = Builder.CreatePointerBitCastOrAddrSpaceCast(Ptr.first,
                                         ConvertType(Addr->getType()));
       return Ptr;
     } else if (ICE->getCastKind() == CK_ArrayToPointerDecay) {
