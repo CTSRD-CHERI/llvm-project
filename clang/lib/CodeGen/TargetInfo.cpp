@@ -5600,9 +5600,10 @@ llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
     AddrTyped = CGF.Builder.CreateIntToPtr(Add, PTy);
     TypeAlign = Size;
   } else
-    AddrTyped = Builder.CreateBitCast(Addr, PTy);  
+    AddrTyped = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy);
 
-  llvm::Value *AlignedAddr = Builder.CreateBitCast(AddrTyped, BP);
+  llvm::Value *AlignedAddr =
+    Builder.CreatePointerBitCastOrAddrSpaceCast(AddrTyped, BP);
   uint64_t Offset = llvm::RoundUpToAlignment(Size, TypeAlign);
   llvm::Value *NextAddr =
     Builder.CreateGEP(AlignedAddr, llvm::ConstantInt::get(IntTy, Offset),
