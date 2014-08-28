@@ -5567,8 +5567,7 @@ public:
       return true;
     case 'C': // Capability register
       Info.setAllowsRegister();
-      // FIXME: False if not CHERI
-      return true;
+      return IsCheri;
     }
   }
 
