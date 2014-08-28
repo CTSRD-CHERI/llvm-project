@@ -1876,12 +1876,8 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
   if (InitExpr) {
     QualType T = InitExpr->getType();
     bool IsCapInit = false;
-    if (T.isCapabilityType(getContext()))
+    if (T.isCapabilityType(getContext()) || T->isCompoundType()) {
       IsCapInit = true;
-    else if (T->isArrayType())
-      IsCapInit = T->castAsArrayTypeUnsafe()->getElementType()
-        .isCapabilityType(getContext());
-    if (IsCapInit) {
       NeedsGlobalCtor = true;
       Init = EmitNullConstant(D->getType());
     }
