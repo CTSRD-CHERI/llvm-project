@@ -1873,7 +1873,8 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
   // Entry is now either a Function or GlobalVariable.
   auto *GV = dyn_cast<llvm::GlobalVariable>(Entry);
 
-  if (InitExpr) {
+  if (InitExpr && Target.SupportsCapabilities() && Context.getDefaultAS() != 0)
+  {
     QualType T = InitExpr->getType();
     bool IsCapInit = false;
     if (T.isCapabilityType(getContext()) || T->isCompoundType()) {
