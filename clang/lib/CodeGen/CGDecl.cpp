@@ -1126,7 +1126,8 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
                          alignment.getQuantity(), isVolatile);
     // Zero and undef don't require a stores.
     if (!constant->isNullValue() && !isa<llvm::UndefValue>(constant)) {
-      Loc = Builder.CreateBitCast(Loc, constant->getType()->getPointerTo());
+      Loc = Builder.CreateBitCast(Loc, constant->getType()->getPointerTo(
+            Loc->getType()->getPointerAddressSpace()));
       emitStoresForInitAfterMemset(constant, Loc, isVolatile, Builder);
     }
   } else {
