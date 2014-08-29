@@ -267,6 +267,14 @@ def CSCD : CheriFmtCSX<3, 1,
   let mayStore=1;
 }
 }
+def : InstAlias<"clldi $rd, ${offset}(${cb})",
+                (CLLD GPR64Opnd: $rd, ZERO_64, simm8: $offset, CheriOpnd: $cb), 1>;
+def : InstAlias<"clldr $rd, ${rt}(${cb})",
+                (CLLD GPR64Opnd: $rd, GPR64Opnd: $rt, 0, CheriOpnd: $cb), 1>;
+def : InstAlias<"cscdi $rd, ${offset}(${cb})",
+                (CSCD GPR64Opnd: $rd, ZERO_64, simm8: $offset, CheriOpnd: $cb), 1>;
+def : InstAlias<"cscdr $rd, ${rt}(${cb})",
+                (CSCD GPR64Opnd: $rd, GPR64Opnd: $rt, 0, CheriOpnd: $cb), 1>;
 multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
   def : Pat<(loadType CheriOpnd:$cb),
             (Op ZERO_64, (i64 0), CheriOpnd:$cb)>;
