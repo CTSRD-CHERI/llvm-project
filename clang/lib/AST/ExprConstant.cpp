@@ -4782,6 +4782,10 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
 
     if (Value.isInt()) {
       unsigned Size = Info.Ctx.getTypeSize(E->getType());
+      // FIXME: We should have a way of asking what the integer range of a
+      // pointer type is.
+      if (Size > 64)
+        Size = 64;
       uint64_t N = Value.getInt().extOrTrunc(Size).getZExtValue();
       Result.Base = (Expr*)nullptr;
       Result.Offset = CharUnits::fromQuantity(N);
