@@ -1131,13 +1131,17 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
       emitStoresForInitAfterMemset(constant, Loc, isVolatile, Builder);
     }
   } else {
+    unsigned AddrSpace = CGM.GetGlobalVarAddressSpace(&D,
+        CGM.getContext().getTargetAddressSpace(type));
     // Otherwise, create a temporary global with the initializer then
     // memcpy from the global to the alloca.
     std::string Name = GetStaticDeclName(*this, D);
     llvm::GlobalVariable *GV =
       new llvm::GlobalVariable(CGM.getModule(), constant->getType(), true,
                                llvm::GlobalValue::PrivateLinkage,
-                               constant, Name);
+                               constant, Name, nullptr,
+                               llvm::GlobalVariable::NotThreadLocal,
+                               AddrSpace);
     GV->setAlignment(alignment.getQuantity());
     GV->setUnnamedAddr(true);
 
