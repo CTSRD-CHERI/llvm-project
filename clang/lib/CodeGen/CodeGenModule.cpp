@@ -2317,13 +2317,14 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
                                       /*ForVTable=*/false);
   else
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
-                                    llvm::PointerType::getUnqual(DeclTy),
-                                    nullptr);
+                                    llvm::PointerType::get(DeclTy,
+                                      getContext().getDefaultAS()), nullptr);
 
   // Create the new alias itself, but don't set a name yet.
   auto *GA = llvm::GlobalAlias::create(
-      cast<llvm::PointerType>(Aliasee->getType())->getElementType(), 0,
-      llvm::Function::ExternalLinkage, "", Aliasee, &getModule());
+      cast<llvm::PointerType>(Aliasee->getType())->getElementType(),
+      getContext().getDefaultAS(), llvm::Function::ExternalLinkage, "",
+      Aliasee, &getModule());
 
   if (Entry) {
     if (GA->getAliasee() == Entry) {
