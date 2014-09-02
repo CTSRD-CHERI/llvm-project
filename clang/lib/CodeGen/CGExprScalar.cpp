@@ -2114,11 +2114,6 @@ Value *ScalarExprEmitter::VisitUnaryImag(const UnaryOperator *E) {
 //                           Binary Operators
 //===----------------------------------------------------------------------===//
 
-static Value *getCapabilityBase(CodeGenModule &CGM, CGBuilderTy &B, Value *Cap,
-    llvm::Type *IntPtrTy) {
-  return B.CreatePtrToInt(Cap, IntPtrTy);
-}
-
 BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
   TestAndClearIgnoreResultAssign();
   BinOpInfo Result;
@@ -2919,15 +2914,6 @@ Value *ScalarExprEmitter::EmitCompare(const BinaryOperator *E,unsigned UICmpOpc,
       Result = Builder.CreateCall3(F, CR6Param, FirstVecArg, SecondVecArg, "");
       return EmitScalarConversion(Result, CGF.getContext().BoolTy, E->getType());
     }
-
-    // If we're doing a comparison on a capability (including an __intcap_t)
-    // then we need to fudge it into an integer type first.
-    if (LHSTy.isCapabilityType(CGF.getContext())) {
-      // FIXME: Comparisons are broken for in-object comparisons between
-      // capabilities outside of C0
-      LHS = getCapabilityBase(CGF.CGM, Builder, LHS, CGF.IntPtrTy);
-      RHS = getCapabilityBase(CGF.CGM, Builder, RHS, CGF.IntPtrTy);
-    } 
 
     if (LHS->getType()->isFPOrFPVectorTy()) {
       Result = Builder.CreateFCmp((llvm::CmpInst::Predicate)FCmpOpc,
