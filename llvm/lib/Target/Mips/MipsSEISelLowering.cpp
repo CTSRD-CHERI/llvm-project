@@ -124,6 +124,7 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM,
     setLoadExtAction(ISD::EXTLOAD, MVT::i16, Custom);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i16, Custom);
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i16, Custom);
+    setOperationAction(ISD::SETCC, MVT::iFATPTR, Legal);
   }
 
   setOperationAction(ISD::SMUL_LOHI,          MVT::i32, Custom);
