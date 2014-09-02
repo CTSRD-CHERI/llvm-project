@@ -1338,14 +1338,6 @@ public:
 
   Value *CreateICmp(CmpInst::Predicate P, Value *LHS, Value *RHS,
                     const Twine &Name = "") {
-    // FIXME: This is a really ugly hack that needs removing once CHERI can
-    // sensibly do pointer compares on capabilities.
-    if (PointerType *LPT = dyn_cast<PointerType>(LHS->getType()))
-      if (LPT->getAddressSpace() == 200)
-        LHS = CreatePtrToInt(LHS, Type::getInt64Ty(Context));
-    if (PointerType *RPT = dyn_cast<PointerType>(RHS->getType()))
-      if (RPT->getAddressSpace() == 200)
-        RHS = CreatePtrToInt(RHS, Type::getInt64Ty(Context));
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateICmp(P, LC, RC), Name);
