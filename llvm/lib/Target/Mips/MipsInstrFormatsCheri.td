@@ -105,6 +105,22 @@ class CheriFmt3Caps<bits<5> op, dag outs, dag ins, string asmstr,
   let r2 = ct;
 }
 
+class CheriFmtPtrCmp<bits<2> cmp, string instr_asm, list<dag> pattern>:
+  MipsInst<(outs GPR64Opnd: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
+           !strconcat(instr_asm, "\t$rd, $cb, $ct"),
+           pattern, NoItinerary, FrmOther> {
+  bits<5>  rd;
+  bits<5>  cb;
+  bits<5>  ct;
+  let Opcode = 0x12;
+  let Inst{25-21} = 0x0e;
+  let Inst{20-16} = rd;
+  let Inst{15-11} = cb;
+  let Inst{10-6}  = ct;
+  let Inst{5-2}  = 0; // Reserved
+  let Inst{1-0}   = cmp;
+}
+
 class CheriFmt3CCall<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   CheriFmtRegs<op, 0, outs, ins, asmstr, pattern> {
@@ -114,7 +130,7 @@ class CheriFmt3CCall<bits<5> op, dag outs, dag ins, string asmstr,
   let r1 = cb;
   let r2 = 0;
 }
-class CheriFmt3CJMP<bits<5> op, dag outs, dag ins, string asmstr,
+class CheriFmt2CJMP<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   CheriFmtRegs<op, 0, outs, ins, asmstr, pattern> {
   bits<5>  cs;

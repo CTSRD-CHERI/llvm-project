@@ -38,14 +38,27 @@ def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbtu\t$cb, $offset",
                         [(MipsCBTU CheriOpnd:$cb, bb:$offset)]>;
 }
-def CJR : CheriFmt3CJMP<0x08, (outs), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
-                              "cjr\t${rt}(${cb})",
-                              []>;
+def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriOpnd:$cb),
+                              "cjr\t${cb}",
+                              []>
+{
+	bits<5> cb;
+	let r0 = 0;
+	let r1 = cb;
+	let r2 = 0;
+}
 }
 let isTerminator=1, isCall=1, hasDelaySlot=1 in {
-def CJALR : CheriFmt3CJMP<0x07, (outs), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
-                              "cjalr\t${rt}(${cb})",
-                              []>;
+def CJALR : CheriFmt3Caps<0x07, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb),
+                              "cjalr\t${cb}, ${cd}",
+                              []>
+{
+	bits<5> cb;
+	bits<5> cd;
+	let r0 = 0;
+	let r1 = cb;
+	let r2 = cd;
+}
 def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb),
                               "ccall\t${cs}, ${cb}",
                               []>;
@@ -57,6 +70,17 @@ def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
   let isReturn = 1;
   let hasDelaySlot = 1;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Capability-based pointer comparisons
+////////////////////////////////////////////////////////////////////////////////
+def CEQ : CheriFmtPtrCmp<0, "ceq", []>;
+def CLT : CheriFmtPtrCmp<1, "clt", []>;
+def CLE : CheriFmtPtrCmp<2, "cle", []>;
+def : InstAlias<"cgt $rd, $cb, $ct",
+                (CLE GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
+def : InstAlias<"cge $rd, $cb, $ct",
+                (CLT GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Capability manipulation
