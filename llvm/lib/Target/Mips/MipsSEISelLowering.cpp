@@ -125,6 +125,9 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM,
     setLoadExtAction(ISD::SEXTLOAD, MVT::i16, Custom);
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i16, Custom);
     setOperationAction(ISD::SETCC, MVT::iFATPTR, Legal);
+    setOperationAction(ISD::SELECT, MVT::iFATPTR, Legal);
+    setOperationAction(ISD::SELECT_CC, MVT::iFATPTR, Expand);
+    setOperationAction(ISD::BR_CC, MVT::iFATPTR, Expand);
   }
 
   setOperationAction(ISD::SMUL_LOHI,          MVT::i32, Custom);
@@ -1185,6 +1188,8 @@ MipsSETargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
     return emitCapFloat32Store(MI, BB);
   case Mips::CSDC1:
     return emitCapFloat64Store(MI, BB);
+  case Mips::CAP_SELECT:
+    return emitCapSelect(MI, BB);
   }
 }
 
@@ -3317,6 +3322,51 @@ MipsSETargetLowering::emitCapFloat32Store(MachineInstr *MI,
       .addReg(MI->getOperand(3).getReg());
   MI->eraseFromParent();
   return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapSelect(MachineInstr *MI,
+                                    MachineBasicBlock *BB) const {
+  const TargetInstrInfo *TII =
+      getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const BasicBlock *LLVM_BB = BB->getBasicBlock();
+  MachineFunction *F = BB->getParent();
+  MachineFunction::iterator It = BB;
+  ++It;
+  // Splice the current basic block.  We intend to transform:
+  //   CAP_SELECT dst, cond, trueCap, falseCap
+  // into the following sequence:
+  // bne cond, $zero, cont
+  // cmove dst, trueCap # delay slot
+  // cmove dst, falseCap 
+  // cont:
+  MachineBasicBlock *falseMBB = F->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *sinkMBB = F->CreateMachineBasicBlock(LLVM_BB);
+  DebugLoc dl = MI->getDebugLoc();
+  F->insert(It, falseMBB);
+  F->insert(It, sinkMBB);
+
+  // Transfer the remainder of BB and its successor edges to sinkMBB.
+  sinkMBB->splice(sinkMBB->begin(), BB,
+                  std::next(MachineBasicBlock::iterator(MI)), BB->end());
+  sinkMBB->transferSuccessorsAndUpdatePHIs(BB);
+
+  // Next, add the true and fallthrough blocks as its successors.
+  BB->addSuccessor(falseMBB);
+  BB->addSuccessor(sinkMBB);
+
+  BuildMI(BB, dl, TII->get(Mips::BNE64))
+    .addReg(MI->getOperand(1).getReg()).addReg(Mips::ZERO_64).addMBB(sinkMBB);
+  BuildMI(BB, dl, TII->get(Mips::CIncBase))
+    .addReg(MI->getOperand(0).getReg())
+    .addReg(MI->getOperand(2).getReg())
+    .addReg(Mips::ZERO_64);
+  BuildMI(falseMBB, dl, TII->get(Mips::CIncBase))
+    .addReg(MI->getOperand(0).getReg())
+    .addReg(MI->getOperand(3).getReg())
+    .addReg(Mips::ZERO_64);
+  falseMBB->addSuccessor(sinkMBB);
+  MI->eraseFromParent();
+  return sinkMBB;
 }
 MachineBasicBlock *
 MipsSETargetLowering::emitCapFloat64Store(MachineInstr *MI,

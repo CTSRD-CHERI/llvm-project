@@ -123,6 +123,9 @@ namespace llvm {
     /// \brief Emit the csdc1 pseudo instructions.
     MachineBasicBlock *emitCapFloat64Store(MachineInstr *MI,
                                      MachineBasicBlock *BB) const;
+    /// \brief Expand a capability-select into a compare and branch
+    MachineBasicBlock *emitCapSelect(MachineInstr *MI,
+                                     MachineBasicBlock *BB) const;
   };
 }
 

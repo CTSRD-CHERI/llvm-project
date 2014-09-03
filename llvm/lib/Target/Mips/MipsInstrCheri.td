@@ -92,6 +92,25 @@ def : Pat<(setgt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $ct, CheriOpn
 def : Pat<(setge CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : Pat<(setlt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $cb, CheriOpnd:$ct)>;
 def : Pat<(setle CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $cb, CheriOpnd:$ct)>;
+def : Pat<(setogt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $ct, CheriOpnd:$cb)>;
+def : Pat<(setoge CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $ct, CheriOpnd:$cb)>;
+def : Pat<(setolt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $cb, CheriOpnd:$ct)>;
+def : Pat<(setole CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $cb, CheriOpnd:$ct)>;
+
+// Pseudo instruction for capability cmov, expands to a branch sequence
+class CheriSelectPseudo<dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, Pseudo>
+{
+  let isPseudo = 1;
+  let usesCustomInserter = 1;
+}
+
+def CAP_SELECT : CheriSelectPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,
+                              CheriOpnd:$t, CheriOpnd:$f),
+                              "#CAP_SELECT",
+                              [(set CheriOpnd: $dst, (select GPR32Opnd:$cond, CheriOpnd:$t, CheriOpnd:$f))]>;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Capability manipulation
