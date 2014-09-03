@@ -5491,7 +5491,11 @@ public:
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR2C__", Twine(1<<14));
 
       Builder.defineMacro("_MIPS_SZCAP", Twine(getPointerWidth(200)));
-      Builder.defineMacro("__capability", Twine("__attribute__((address_space(200)))"));
+      if (SandboxABI)
+        Builder.defineMacro("__capability", "");
+      else
+        Builder.defineMacro("__capability",
+            Twine("__attribute__((address_space(200)))"));
     }
 
     Builder.defineMacro("_MIPS_SZPTR", Twine(getPointerWidth(0)));
