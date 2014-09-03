@@ -1,53 +1,45 @@
 // RUN: %clang %s -O1 -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
+// Check that we can actually compile this file...
+// RUN: %clang %s -O1 -target cheri-unknown-freebsd -o /dev/null -c
 
 // CHECK: c1
 int c1(__capability void* x, __capability void* y)
 {
-  // CHECK: ptrtoint i8 addrspace(200)* %x
   __intcap_t a = (__intcap_t)x;
-  // CHECK: ptrtoint i8 addrspace(200)* %y
   __intcap_t b = (__intcap_t)y;
-  // CHECK: icmp slt
+  // CHECK: icmp slt i8 addrspace(200)*
   return a < b;
 }
 // CHECK c2
 int c2(__capability void* x, __capability void* y)
 {
-  // CHECK: ptrtoint i8 addrspace(200)* %x
   __intcap_t a = (__intcap_t)x;
-  // CHECK: ptrtoint i8 addrspace(200)* %y
   __intcap_t b = (__intcap_t)y;
-  // CHECK: icmp eq
+  // CHECK: icmp eq i8 addrspace(200)*
   return a == b;
 }
 // CHECK: c3
 int c3(__capability void* x, __capability void* y)
 {
-  // CHECK: ptrtoint i8 addrspace(200)* %x
   __intcap_t a = (__intcap_t)x;
-  // CHECK: ptrtoint i8 addrspace(200)* %y
   __intcap_t b = (__intcap_t)y;
-  // CHECK: icmp sgt
+  // CHECK: icmp sgt i8 addrspace(200)*
   return a > b;
 }
 // CHECK: c4
 int c4(__capability void* x, __capability void* y)
 {
-  // CHECK: ptrtoint i8 addrspace(200)* %x
   __intcap_t a = (__intcap_t)x;
-  // CHECK: ptrtoint i8 addrspace(200)* %y
   __intcap_t b = (__intcap_t)y;
-  // CHECK: icmp sge
+  // CHECK: icmp sge i8 addrspace(200)*
   return a >= b;
 }
 // CHECK: c5
 int c5(__capability void* x, __capability void* y)
 {
-  // CHECK: ptrtoint i8 addrspace(200)* %x
   __intcap_t a = (__intcap_t)x;
-  // CHECK: ptrtoint i8 addrspace(200)* %y
   __intcap_t b = (__intcap_t)y;
-  // CHECK: icmp sle
+  // CHECK: icmp sle i8 addrspace(200)*
   return a <= b;
 }
 
@@ -100,7 +92,7 @@ int p1(void* x, void* y)
 {
   __intcap_t a = (__intcap_t)x;
   __intcap_t b = (__intcap_t)y;
-  // CHECK: icmp slt
+  // CHECK: icmp ult i8 addrspace(200)*
   return a < b;
 }
 
