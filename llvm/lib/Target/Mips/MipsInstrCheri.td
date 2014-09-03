@@ -55,9 +55,9 @@ def CJALR : CheriFmt3Caps<0x07, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb),
 {
 	bits<5> cb;
 	bits<5> cd;
-	let r0 = 0;
-	let r1 = cb;
-	let r2 = cd;
+	let r0 = cb;
+	let r1 = cd;
+	let r2 = 0;
 }
 def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb),
                               "ccall\t${cs}, ${cb}",
