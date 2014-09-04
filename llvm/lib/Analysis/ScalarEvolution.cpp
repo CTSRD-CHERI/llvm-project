@@ -3561,7 +3561,11 @@ ScalarEvolution::getSignedRange(const SCEV *S) {
   if (const SCEVConstant *C = dyn_cast<SCEVConstant>(S))
     return setSignedRange(C, ConstantRange(C->getValue()->getValue()));
 
-  unsigned BitWidth = getTypeSizeInBits(S->getType());
+  unsigned BitWidth;
+  if (PointerType *PT = dyn_cast<PointerType>(S->getType()))
+    BitWidth = DL->getPointerBaseSizeInBits(PT->getPointerAddressSpace());
+  else
+    BitWidth = getTypeSizeInBits(S->getType());
   ConstantRange ConservativeResult(BitWidth, /*isFullSet=*/true);
 
   // If the value has known zeros, the maximum signed value will have those
