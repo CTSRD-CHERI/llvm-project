@@ -2181,7 +2181,7 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
     EVT VT = Op.getValueType();
     // Ignore 32-bit loads.  
     if ((ISD::NON_EXTLOAD != LD->getExtensionType()) &&
-      Op.getValueType() == MVT::i32 &&
+      MemVT == MVT::i32 &&
       BasePtr->getValueType(0) == MVT::iFATPTR) {
       return Op;
     } else if ((MemVT == MVT::i16) && (LD->getAlignment() < 2)) {
