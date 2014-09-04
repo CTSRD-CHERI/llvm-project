@@ -10933,7 +10933,16 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
 
     Qualifiers lhq = SrcType->getPointeeType().getQualifiers();
     Qualifiers rhq = DstType->getPointeeType().getQualifiers();
-    if (lhq.getAddressSpace() != rhq.getAddressSpace()) {
+    // This is a slightly ugly hack caused by the fact that we need a mechanism
+    // to allow builtins to accept capabilities, but capabilities are either AS
+    // 0 or AS 200, depending on the ABI.
+    unsigned LAS = lhq.getAddressSpace();
+    unsigned RAS = rhq.getAddressSpace();
+    unsigned FudgedLAS = LAS ? LAS : Context.getDefaultAS();
+    unsigned FudgedRAS = RAS ? RAS : Context.getDefaultAS();
+    if ((LAS != RAS) && (FudgedRAS == FudgedLAS))
+      return false;
+    if (FudgedLAS != FudgedRAS) {
       DiagKind = diag::err_typecheck_incompatible_address_space;
       break;
 
