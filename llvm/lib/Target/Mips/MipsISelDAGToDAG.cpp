@@ -200,6 +200,7 @@ SDNode* MipsDAGToDAGISel::Select(SDNode *Node) {
   case ISD::GLOBAL_OFFSET_TABLE:
     return getGlobalBaseReg();
 
+#if 0
 #ifndef NDEBUG
   case ISD::LOAD:
   case ISD::STORE:
@@ -208,6 +209,7 @@ SDNode* MipsDAGToDAGISel::Select(SDNode *Node) {
             cast<MemSDNode>(Node)->getAlignment()) &&
            "Unexpected unaligned loads/stores.");
     break;
+#endif
 #endif
   }
 
