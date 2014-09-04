@@ -1481,6 +1481,8 @@ Instruction *InstCombiner::commonPointerCastTransforms(CastInst &CI) {
 
         if (isa<BitCastInst>(CI))
           return new BitCastInst(NGEP, CI.getType());
+        if (isa<AddrSpaceCastInst>(CI))
+          return new AddrSpaceCastInst(NGEP, CI.getType());
         assert(isa<PtrToIntInst>(CI));
         return new PtrToIntInst(NGEP, CI.getType());
       }
