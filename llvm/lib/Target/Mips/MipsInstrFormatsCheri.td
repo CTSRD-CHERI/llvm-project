@@ -107,7 +107,7 @@ class CheriFmt3Caps<bits<5> op, dag outs, dag ins, string asmstr,
 
 class CheriFmtPtrCmp<bits<3> cmp, RegisterOperand RC, string instr_asm,
                      list<dag> pattern>:
-  CheriFmtRegs<0x12, cmp, (outs RC: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
+  CheriFmtRegs<0x0e, cmp, (outs RC: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
            !strconcat(instr_asm, "\t$rd, $cb, $ct"),
            pattern> {
   bits<5>  rd;
