@@ -128,7 +128,6 @@ MipsSETargetLowering::MipsSETargetLowering(MipsTargetMachine &TM,
     setOperationAction(ISD::SELECT, MVT::iFATPTR, Legal);
     setOperationAction(ISD::SELECT_CC, MVT::iFATPTR, Expand);
     setOperationAction(ISD::BR_CC, MVT::iFATPTR, Expand);
-    setCondCodeAction(ISD::SETNE, MVT::iFATPTR, Expand);
   }
 
   setOperationAction(ISD::SMUL_LOHI,          MVT::i32, Custom);
