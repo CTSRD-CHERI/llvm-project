@@ -24,7 +24,7 @@ using namespace CodeGen;
 
 static void EmitDeclInit(CodeGenFunction &CGF, const VarDecl &D,
                          llvm::Constant *DeclPtr) {
-  assert(D.hasGlobalStorage() && "VarDecl must have global storage!");
+  //assert(D.hasGlobalStorage() && "VarDecl must have global storage!");
   assert(!D.getType()->isReferenceType() && 
          "Should not call EmitDeclInit on a reference!");
   
