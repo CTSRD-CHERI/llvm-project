@@ -108,7 +108,7 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
   Type *VTy = V->getType();
   assert((DL || !VTy->isPointerTy()) &&
          "SimplifyDemandedBits needs to know bit widths!");
-  assert((!DL || DL->getTypeSizeInBits(VTy->getScalarType()) == BitWidth) &&
+  assert((!DL || DL->getTypeIntegerRangeInBits(VTy->getScalarType()) == BitWidth) &&
          (!VTy->isIntOrIntVectorTy() ||
           VTy->getScalarSizeInBits() == BitWidth) &&
          KnownZero.getBitWidth() == BitWidth &&

@@ -6574,7 +6574,7 @@ unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
   int64_t GVOffset = 0;
   const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
   if (TLI->isGAPlusOffset(Ptr.getNode(), GV, GVOffset)) {
-    unsigned PtrWidth = TLI->getPointerTypeSizeInBits(GV->getType());
+    unsigned PtrWidth = TLI->getDataLayout()->getPointerBaseSizeInBits(GV->getType());
     APInt KnownZero(PtrWidth, 0), KnownOne(PtrWidth, 0);
     llvm::computeKnownBits(const_cast<GlobalValue*>(GV), KnownZero, KnownOne,
                            TLI->getDataLayout());

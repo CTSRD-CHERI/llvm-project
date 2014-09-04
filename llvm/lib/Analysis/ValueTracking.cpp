@@ -235,7 +235,7 @@ void llvm::computeKnownBits(Value *V, APInt &KnownZero, APInt &KnownOne,
           V->getType()->getScalarType()->isPointerTy()) &&
          "Not integer or pointer type!");
   assert((!TD ||
-          TD->getTypeSizeInBits(V->getType()->getScalarType()) == BitWidth) &&
+          TD->getTypeIntegerRangeInBits(V->getType()->getScalarType()) == BitWidth) &&
          (!V->getType()->isIntOrIntVectorTy() ||
           (V->getType()->isPointerTy() &&
            V->getType()->getScalarSizeInBits() >= BitWidth) ||
@@ -426,7 +426,7 @@ void llvm::computeKnownBits(Value *V, APInt &KnownZero, APInt &KnownOne,
     // Note that we handle pointer operands here because of inttoptr/ptrtoint
     // which fall through here.
     if(TD) {
-      SrcBitWidth = TD->getTypeSizeInBits(SrcTy->getScalarType());
+      SrcBitWidth = TD->getTypeIntegerRangeInBits(SrcTy->getScalarType());
     } else {
       SrcBitWidth = SrcTy->getScalarSizeInBits();
       if (!SrcBitWidth) break;

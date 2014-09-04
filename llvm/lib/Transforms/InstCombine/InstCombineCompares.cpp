@@ -2496,7 +2496,7 @@ Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
   if (Ty->isIntOrIntVectorTy())
     BitWidth = Ty->getScalarSizeInBits();
   else if (DL)  // Pointers require DL info to get their size.
-    BitWidth = DL->getTypeSizeInBits(Ty->getScalarType());
+    BitWidth = DL->getTypeIntegerRangeInBits(Ty->getScalarType());
 
   bool isSignBit = false;
 

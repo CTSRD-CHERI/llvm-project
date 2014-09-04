@@ -317,6 +317,9 @@ public:
   unsigned getPointerBaseSizeInBits(unsigned AS) const {
     return getPointerBaseSize(AS) * 8;
   }
+  unsigned getPointerBaseSizeInBits(Type *Ty) const {
+    return getPointerBaseSize(Ty->getPointerAddressSpace()) * 8;
+  }
 
   /// Layout pointer size
   /// FIXME: The defaults need to be removed once all of
@@ -339,6 +342,12 @@ public:
 
   unsigned getPointerTypeSize(Type *Ty) const {
     return getPointerTypeSizeInBits(Ty) / 8;
+  }
+
+  unsigned getTypeIntegerRangeInBits(Type *Ty) const {
+    if (isa<PointerType>(Ty))
+      return getPointerBaseSizeInBits(Ty->getPointerAddressSpace());
+    return getTypeSizeInBits(Ty);
   }
 
   /// Size examples:
