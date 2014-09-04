@@ -105,21 +105,17 @@ class CheriFmt3Caps<bits<5> op, dag outs, dag ins, string asmstr,
   let r2 = ct;
 }
 
-class CheriFmtPtrCmp<bits<2> cmp, RegisterOperand RC, string instr_asm,
+class CheriFmtPtrCmp<bits<3> cmp, RegisterOperand RC, string instr_asm,
                      list<dag> pattern>:
-  MipsInst<(outs RC: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
+  CheriFmtRegs<0x12, cmp, (outs RC: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
            !strconcat(instr_asm, "\t$rd, $cb, $ct"),
-           pattern, NoItinerary, FrmOther> {
+           pattern> {
   bits<5>  rd;
   bits<5>  cb;
   bits<5>  ct;
-  let Opcode = 0x12;
-  let Inst{25-21} = 0x0e;
-  let Inst{20-16} = rd;
-  let Inst{15-11} = cb;
-  let Inst{10-6}  = ct;
-  let Inst{5-2}  = 0; // Reserved
-  let Inst{1-0}   = cmp;
+  let r0 = rd;
+  let r1 = cb;
+  let r2 = ct;
 }
 
 class CheriFmt3CCall<bits<5> op, dag outs, dag ins, string asmstr,

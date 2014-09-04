@@ -75,23 +75,31 @@ def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
 // Capability-based pointer comparisons
 ////////////////////////////////////////////////////////////////////////////////
 def CEQ : CheriFmtPtrCmp<0, GPR64Opnd, "ceq", []>;
-def CLT : CheriFmtPtrCmp<1, GPR64Opnd, "clt", []>;
-def CLE : CheriFmtPtrCmp<2, GPR64Opnd, "cle", []>;
+def CNE : CheriFmtPtrCmp<1, GPR64Opnd, "neq", []>;
+def CLT : CheriFmtPtrCmp<2, GPR64Opnd, "clt", []>;
+def CLE : CheriFmtPtrCmp<3, GPR64Opnd, "cle", []>;
+def CLTU : CheriFmtPtrCmp<4, GPR64Opnd, "cltu", []>;
+def CLEU : CheriFmtPtrCmp<5, GPR64Opnd, "cleu", []>;
 def : InstAlias<"cgt $rd, $cb, $ct",
                 (CLE GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : InstAlias<"cge $rd, $cb, $ct",
                 (CLT GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
+def : InstAlias<"cgtu $rd, $cb, $ct",
+                (CLEU GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
+def : InstAlias<"cgeu $rd, $cb, $ct",
+                (CLTU GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 let isCodeGenOnly=1 in {
   def CEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "ceq", [(set GPR32Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
-  def CLT32 : CheriFmtPtrCmp<1, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setult CheriOpnd: $cb, CheriOpnd:$ct))]>;
-  def CLE32 : CheriFmtPtrCmp<2, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setule CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CNE32 : CheriFmtPtrCmp<1, GPR32Opnd, "ceq", [(set GPR32Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CLT32 : CheriFmtPtrCmp<2, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setlt CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CLE32 : CheriFmtPtrCmp<3, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setle CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CLTU32 : CheriFmtPtrCmp<2, GPR32Opnd, "cltu", [(set GPR32Opnd: $rd, (setult CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CLEU32 : CheriFmtPtrCmp<3, GPR32Opnd, "cleu", [(set GPR32Opnd: $rd, (setule CheriOpnd: $cb, CheriOpnd:$ct))]>;
 }
-def : Pat<(setugt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $ct, CheriOpnd:$cb)>;
-def : Pat<(setuge CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $ct, CheriOpnd:$cb)>;
+def : Pat<(setugt CheriOpnd: $cb, CheriOpnd:$ct), (CLEU32 CheriOpnd: $ct, CheriOpnd:$cb)>;
+def : Pat<(setuge CheriOpnd: $cb, CheriOpnd:$ct), (CLTU32 CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : Pat<(setgt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : Pat<(setge CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $ct, CheriOpnd:$cb)>;
-def : Pat<(setlt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $cb, CheriOpnd:$ct)>;
-def : Pat<(setle CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $cb, CheriOpnd:$ct)>;
 def : Pat<(setogt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : Pat<(setoge CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : Pat<(setolt CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $cb, CheriOpnd:$ct)>;
