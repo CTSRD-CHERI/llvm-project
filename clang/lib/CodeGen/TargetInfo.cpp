@@ -5403,9 +5403,8 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
        i != e; ++i, ++idx) {
     const QualType Ty = i->getType();
     const BuiltinType *BT = Ty->getAs<BuiltinType>();
-    const PointerType *PT = Ty->getAs<PointerType>();
 
-    if (PT && (PT->getPointeeType().getAddressSpace() == 200)) {
+    if (Ty.isCapabilityType(getContext())) {
       LastOffset = Layout.getFieldOffset(idx) + 256;
       ArgList.push_back(CGT.ConvertType(Ty));
       continue;
