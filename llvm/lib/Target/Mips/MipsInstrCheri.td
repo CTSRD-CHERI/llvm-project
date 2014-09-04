@@ -75,7 +75,7 @@ def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
 // Capability-based pointer comparisons
 ////////////////////////////////////////////////////////////////////////////////
 def CEQ : CheriFmtPtrCmp<0, GPR64Opnd, "ceq", []>;
-def CNE : CheriFmtPtrCmp<1, GPR64Opnd, "neq", []>;
+def CNE : CheriFmtPtrCmp<1, GPR64Opnd, "cne", []>;
 def CLT : CheriFmtPtrCmp<2, GPR64Opnd, "clt", []>;
 def CLE : CheriFmtPtrCmp<3, GPR64Opnd, "cle", []>;
 def CLTU : CheriFmtPtrCmp<4, GPR64Opnd, "cltu", []>;
@@ -90,7 +90,7 @@ def : InstAlias<"cgeu $rd, $cb, $ct",
                 (CLTU GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 let isCodeGenOnly=1 in {
   def CEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "ceq", [(set GPR32Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
-  def CNE32 : CheriFmtPtrCmp<1, GPR32Opnd, "ceq", [(set GPR32Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CNE32 : CheriFmtPtrCmp<1, GPR32Opnd, "cne", [(set GPR32Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLT32 : CheriFmtPtrCmp<2, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setlt CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLE32 : CheriFmtPtrCmp<3, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setle CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLTU32 : CheriFmtPtrCmp<2, GPR32Opnd, "cltu", [(set GPR32Opnd: $rd, (setult CheriOpnd: $cb, CheriOpnd:$ct))]>;
