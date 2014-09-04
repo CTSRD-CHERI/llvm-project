@@ -1113,11 +1113,13 @@ private:
   /// Emit the function that destroys C++ globals.
   void EmitCXXGlobalDtorFunc();
 
+public:
   /// Emit the function that initializes the specified global (if PerformInit is
   /// true) and registers its destructor.
   void EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
                                     llvm::GlobalVariable *Addr,
                                     bool PerformInit);
+private:
 
   void EmitPointerToInitFunc(const VarDecl *VD, llvm::GlobalVariable *Addr,
                              llvm::Function *InitFunc, InitSegAttr *ISA);

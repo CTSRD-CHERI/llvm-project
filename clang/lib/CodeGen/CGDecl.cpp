@@ -232,6 +232,17 @@ llvm::GlobalVariable *
 CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
                                                llvm::GlobalVariable *GV) {
   llvm::Constant *Init = CGM.EmitConstantInit(D, this);
+  if (Init && Target.SupportsCapabilities() &&
+      getContext().getDefaultAS() != 0) {
+    const VarDecl *InitDecl;
+    const Expr *InitExpr = D.getAnyInitializer(InitDecl);
+    QualType T = InitExpr->getType();
+    if (T.isCapabilityType(getContext()) || T->isCompoundType()) {
+      GV->setConstant(false);
+      CGM.EmitCXXGlobalVarDeclInitFunc(&D, GV, true);
+      return GV;
+    }
+  }
 
   // If constant emission failed, then this should be a C++ static
   // initializer.
