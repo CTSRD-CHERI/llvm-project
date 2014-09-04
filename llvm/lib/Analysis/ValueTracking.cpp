@@ -43,7 +43,7 @@ static unsigned getBitWidth(Type *Ty, const DataLayout *TD) {
   if (unsigned BitWidth = Ty->getScalarSizeInBits())
     return BitWidth;
 
-  return TD ? TD->getPointerTypeSizeInBits(Ty) : 0;
+  return TD ? TD->getPointerBaseSizeInBits(Ty) : 0;
 }
 
 static void computeKnownBitsAddSub(bool Add, Value *Op0, Value *Op1, bool NSW,
@@ -1134,8 +1134,7 @@ unsigned llvm::ComputeNumSignBits(Value *V, const DataLayout *TD,
          "ComputeNumSignBits requires a DataLayout object to operate "
          "on non-integer values!");
   Type *Ty = V->getType();
-  unsigned TyBits = TD ? TD->getTypeSizeInBits(V->getType()->getScalarType()) :
-                         Ty->getScalarSizeInBits();
+  unsigned TyBits = getBitWidth(Ty, TD);
   unsigned Tmp, Tmp2;
   unsigned FirstAnswer = 1;
 
