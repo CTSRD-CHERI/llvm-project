@@ -233,10 +233,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Value *DstPtr = EmitVAListRef(E->getArg(0));
     Value *SrcPtr = EmitVAListRef(E->getArg(1));
 
-    llvm::Type *Type = Int8PtrTy;
+    llvm::Type *Type = Int8Ty->getPointerTo(0);
 
-    DstPtr = Builder.CreateBitCast(DstPtr, Type);
-    SrcPtr = Builder.CreateBitCast(SrcPtr, Type);
+    DstPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(DstPtr, Type);
+    SrcPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(SrcPtr, Type);
     return RValue::get(Builder.CreateCall2(CGM.getIntrinsic(Intrinsic::vacopy),
                                            DstPtr, SrcPtr));
   }
