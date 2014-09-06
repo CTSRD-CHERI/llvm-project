@@ -3567,7 +3567,8 @@ ScalarEvolution::getSignedRange(const SCEV *S) {
 
   unsigned BitWidth;
   if (PointerType *PT = dyn_cast<PointerType>(S->getType()))
-    BitWidth = DL->getPointerBaseSizeInBits(PT->getPointerAddressSpace());
+    BitWidth = DL ? DL->getPointerBaseSizeInBits(PT->getPointerAddressSpace())
+      : getTypeSizeInBits(S->getType());
   else
     BitWidth = getTypeSizeInBits(S->getType());
   ConstantRange ConservativeResult(BitWidth, /*isFullSet=*/true);
