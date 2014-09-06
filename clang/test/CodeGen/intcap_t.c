@@ -92,7 +92,7 @@ int p1(void* x, void* y)
 {
   __intcap_t a = (__intcap_t)x;
   __intcap_t b = (__intcap_t)y;
-  // CHECK: icmp ult i8 addrspace(200)*
+  // CHECK: icmp slt i8 addrspace(200)*
   return a < b;
 }
 
