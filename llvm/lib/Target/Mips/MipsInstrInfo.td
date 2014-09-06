@@ -186,7 +186,7 @@ def InMips16Mode :    Predicate<"Subtarget->inMips16Mode()">,
                       AssemblerPredicate<"FeatureMips16">;
 def HasCnMips    :    Predicate<"Subtarget->hasCnMips()">,
                       AssemblerPredicate<"FeatureCnMips">;
-def RelocStatic :     Predicate<"TM.getRelocationModel() != Reloc::Static">;
+def RelocStatic :     Predicate<"TM.getRelocationModel() == Reloc::Static">;
 def RelocPIC    :     Predicate<"TM.getRelocationModel() == Reloc::PIC_">;
 def NoNaNsFPMath :    Predicate<"TM.Options.NoNaNsFPMath">;
 def HasStdEnc :       Predicate<"Subtarget->hasStandardEncoding()">,
