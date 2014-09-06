@@ -1899,6 +1899,7 @@ bool MipsAsmParser::ParseOperand(OperandVector &Operands, StringRef Mnemonic) {
   default:
     Error(Parser.getTok().getLoc(), "unexpected token in operand");
     return true;
+  case AsmToken::Identifier:
   case AsmToken::Dollar: {
     // Parse the register.
     SMLoc S = Parser.getTok().getLoc();
