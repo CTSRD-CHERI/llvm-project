@@ -874,75 +874,107 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
   default:
     llvm_unreachable("Unexpected instr type to insert");
   case Mips::ATOMIC_LOAD_ADD_I8:
+  case Mips::CAP_ATOMIC_LOAD_ADD_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::ADDu);
   case Mips::ATOMIC_LOAD_ADD_I16:
+  case Mips::CAP_ATOMIC_LOAD_ADD_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::ADDu);
   case Mips::ATOMIC_LOAD_ADD_I32:
+  case Mips::CAP_ATOMIC_LOAD_ADD_I32:
     return emitAtomicBinary(MI, BB, 4, Mips::ADDu);
   case Mips::ATOMIC_LOAD_ADD_I64:
+  case Mips::CAP_ATOMIC_LOAD_ADD_I64:
     return emitAtomicBinary(MI, BB, 8, Mips::DADDu);
 
   case Mips::ATOMIC_LOAD_AND_I8:
+  case Mips::CAP_ATOMIC_LOAD_AND_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::AND);
   case Mips::ATOMIC_LOAD_AND_I16:
+  case Mips::CAP_ATOMIC_LOAD_AND_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::AND);
   case Mips::ATOMIC_LOAD_AND_I32:
+  case Mips::CAP_ATOMIC_LOAD_AND_I32:
     return emitAtomicBinary(MI, BB, 4, Mips::AND);
   case Mips::ATOMIC_LOAD_AND_I64:
+  case Mips::CAP_ATOMIC_LOAD_AND_I64:
     return emitAtomicBinary(MI, BB, 8, Mips::AND64);
 
   case Mips::ATOMIC_LOAD_OR_I8:
+  case Mips::CAP_ATOMIC_LOAD_OR_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::OR);
   case Mips::ATOMIC_LOAD_OR_I16:
+  case Mips::CAP_ATOMIC_LOAD_OR_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::OR);
   case Mips::ATOMIC_LOAD_OR_I32:
+  case Mips::CAP_ATOMIC_LOAD_OR_I32:
     return emitAtomicBinary(MI, BB, 4, Mips::OR);
   case Mips::ATOMIC_LOAD_OR_I64:
+  case Mips::CAP_ATOMIC_LOAD_OR_I64:
     return emitAtomicBinary(MI, BB, 8, Mips::OR64);
 
   case Mips::ATOMIC_LOAD_XOR_I8:
+  case Mips::CAP_ATOMIC_LOAD_XOR_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I16:
+  case Mips::CAP_ATOMIC_LOAD_XOR_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I32:
+  case Mips::CAP_ATOMIC_LOAD_XOR_I32:
     return emitAtomicBinary(MI, BB, 4, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I64:
+  case Mips::CAP_ATOMIC_LOAD_XOR_I64:
     return emitAtomicBinary(MI, BB, 8, Mips::XOR64);
 
   case Mips::ATOMIC_LOAD_NAND_I8:
+  case Mips::CAP_ATOMIC_LOAD_NAND_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, 0, true);
   case Mips::ATOMIC_LOAD_NAND_I16:
+  case Mips::CAP_ATOMIC_LOAD_NAND_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, 0, true);
   case Mips::ATOMIC_LOAD_NAND_I32:
+  case Mips::CAP_ATOMIC_LOAD_NAND_I32:
     return emitAtomicBinary(MI, BB, 4, 0, true);
   case Mips::ATOMIC_LOAD_NAND_I64:
+  case Mips::CAP_ATOMIC_LOAD_NAND_I64:
     return emitAtomicBinary(MI, BB, 8, 0, true);
 
   case Mips::ATOMIC_LOAD_SUB_I8:
+  case Mips::CAP_ATOMIC_LOAD_SUB_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::SUBu);
   case Mips::ATOMIC_LOAD_SUB_I16:
+  case Mips::CAP_ATOMIC_LOAD_SUB_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::SUBu);
   case Mips::ATOMIC_LOAD_SUB_I32:
+  case Mips::CAP_ATOMIC_LOAD_SUB_I32:
     return emitAtomicBinary(MI, BB, 4, Mips::SUBu);
   case Mips::ATOMIC_LOAD_SUB_I64:
+  case Mips::CAP_ATOMIC_LOAD_SUB_I64:
     return emitAtomicBinary(MI, BB, 8, Mips::DSUBu);
 
   case Mips::ATOMIC_SWAP_I8:
+  case Mips::CAP_ATOMIC_SWAP_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, 0);
   case Mips::ATOMIC_SWAP_I16:
+  case Mips::CAP_ATOMIC_SWAP_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, 0);
   case Mips::ATOMIC_SWAP_I32:
+  case Mips::CAP_ATOMIC_SWAP_I32:
     return emitAtomicBinary(MI, BB, 4, 0);
   case Mips::ATOMIC_SWAP_I64:
+  case Mips::CAP_ATOMIC_SWAP_I64:
     return emitAtomicBinary(MI, BB, 8, 0);
 
   case Mips::ATOMIC_CMP_SWAP_I8:
+  case Mips::CAP_ATOMIC_CMP_SWAP_I8:
     return emitAtomicCmpSwapPartword(MI, BB, 1);
   case Mips::ATOMIC_CMP_SWAP_I16:
+  case Mips::CAP_ATOMIC_CMP_SWAP_I16:
     return emitAtomicCmpSwapPartword(MI, BB, 2);
   case Mips::ATOMIC_CMP_SWAP_I32:
+  case Mips::CAP_ATOMIC_CMP_SWAP_I32:
     return emitAtomicCmpSwap(MI, BB, 4);
   case Mips::ATOMIC_CMP_SWAP_I64:
+  case Mips::CAP_ATOMIC_CMP_SWAP_I64:
     return emitAtomicCmpSwap(MI, BB, 8);
   case Mips::PseudoSDIV:
   case Mips::PseudoUDIV:
@@ -1002,13 +1034,25 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
     BEQ = Mips::BEQ64;
   }
 
+
   unsigned OldVal = MI->getOperand(0).getReg();
   unsigned Ptr = MI->getOperand(1).getReg();
   unsigned Incr = MI->getOperand(2).getReg();
+  bool isCapOp = false;
 
   unsigned StoreVal = RegInfo.createVirtualRegister(RC);
   unsigned AndRes = RegInfo.createVirtualRegister(RC);
   unsigned Success = RegInfo.createVirtualRegister(RC);
+
+  // If this is a capability-relative atomic operation, then we should 
+  if (Subtarget.isCheri() &&
+      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
+    LL = Mips::CLLD;
+    SC = Mips::CSCD;
+    // Initialize Success to zero, so that we can use it as the offset.
+    BuildMI(BB, DL, TII->get(Mips::DADDi), Success).addReg(ZERO).addImm(0);
+    isCapOp = true;
+  }
 
   // insert new blocks after the current block
   const BasicBlock *LLVM_BB = BB->getBasicBlock();
@@ -1037,7 +1081,10 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
   //    sc success, storeval, 0(ptr)
   //    beq success, $0, loopMBB
   BB = loopMBB;
-  BuildMI(BB, DL, TII->get(LL), OldVal).addReg(Ptr).addImm(0);
+  if (isCapOp)
+    BuildMI(BB, DL, TII->get(LL), OldVal).addReg(ZERO).addImm(0).addReg(Ptr);
+  else
+    BuildMI(BB, DL, TII->get(LL), OldVal).addReg(Ptr).addImm(0);
   if (Nand) {
     //  and andres, oldval, incr
     //  nor storeval, $0, andres
@@ -1049,7 +1096,11 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
   } else {
     StoreVal = Incr;
   }
-  BuildMI(BB, DL, TII->get(SC), Success).addReg(StoreVal).addReg(Ptr).addImm(0);
+  if (isCapOp)
+    BuildMI(BB, DL, TII->get(SC),
+        Success).addReg(StoreVal).addReg(Success).addImm(0).addReg(Ptr);
+  else
+    BuildMI(BB, DL, TII->get(SC), Success).addReg(StoreVal).addReg(Ptr).addImm(0);
   BuildMI(BB, DL, TII->get(BEQ)).addReg(Success).addReg(ZERO).addMBB(loopMBB);
 
   MI->eraseFromParent(); // The instruction is gone now.
