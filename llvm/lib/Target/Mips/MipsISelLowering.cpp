@@ -1049,8 +1049,6 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
       RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
     LL = Mips::CLLD;
     SC = Mips::CSCD;
-    // Initialize Success to zero, so that we can use it as the offset.
-    BuildMI(BB, DL, TII->get(Mips::DADDi), Success).addReg(ZERO).addImm(0);
     isCapOp = true;
   }
 
@@ -1096,9 +1094,13 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
   } else {
     StoreVal = Incr;
   }
-  if (isCapOp)
+  if (isCapOp) {
+    // Initialize Success to zero, so that we can use it as the offset.
+    unsigned ZeroSuccess = RegInfo.createVirtualRegister(RC);
+    BuildMI(BB, DL, TII->get(Mips::DADDi), ZeroSuccess).addReg(ZERO).addImm(0);
     BuildMI(BB, DL, TII->get(SC),
-        Success).addReg(StoreVal).addReg(Success).addImm(0).addReg(Ptr);
+        Success).addReg(StoreVal).addReg(ZeroSuccess).addImm(0).addReg(Ptr);
+  }
   else
     BuildMI(BB, DL, TII->get(SC), Success).addReg(StoreVal).addReg(Ptr).addImm(0);
   BuildMI(BB, DL, TII->get(BEQ)).addReg(Success).addReg(ZERO).addMBB(loopMBB);
