@@ -602,12 +602,6 @@ static Constant *stripAndComputeConstantOffsets(const DataLayout *DL,
 
   Type *IntPtrTy = DL->getIntPtrType(V->getType())->getScalarType();
   APInt Offset = APInt::getNullValue(IntPtrTy->getIntegerBitWidth());
-  // FIXME: should be is-fat-pointer
-  unsigned AS = cast<PointerType>(V->getType()->getScalarType())->getAddressSpace();
-  if (AS == 200)
-  {
-    return 0;
-  }
 
   // Even though we don't look through PHI nodes, we could be called on an
   // instruction in an unreachable block, which may be on a cycle.
