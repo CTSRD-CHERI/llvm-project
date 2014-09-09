@@ -1634,6 +1634,8 @@ Constant *ConstantExpr::getFPCast(Constant *C, Type *Ty) {
 }
 
 Constant *ConstantExpr::getTrunc(Constant *C, Type *Ty, bool OnlyIfReduced) {
+  if (C->getType() == Ty)
+    return C;
 #ifndef NDEBUG
   bool fromVec = C->getType()->getTypeID() == Type::VectorTyID;
   bool toVec = Ty->getTypeID() == Type::VectorTyID;
