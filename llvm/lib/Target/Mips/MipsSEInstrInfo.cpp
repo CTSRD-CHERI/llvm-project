@@ -197,7 +197,8 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   unsigned Opc = 0;
 
-  if (RI.Subtarget.usesCheriStackCapabilityABI()) {
+  if (RI.Subtarget.usesCheriStackCapabilityABI() &&
+      !Mips::ACC64RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
       Opc = Mips::CAPSTORE32;
     else if (Mips::GPR64RegClass.hasSubClassEq(RC))
@@ -281,7 +282,8 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   MachineMemOperand *MMO = GetMemOperand(MBB, FI, MachineMemOperand::MOLoad);
   unsigned Opc = 0;
 
-  if (RI.Subtarget.usesCheriStackCapabilityABI()) {
+  if (RI.Subtarget.usesCheriStackCapabilityABI() &&
+      !Mips::ACC64RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
       Opc = Mips::CAPLOAD32;
     else if (Mips::GPR64RegClass.hasSubClassEq(RC))
