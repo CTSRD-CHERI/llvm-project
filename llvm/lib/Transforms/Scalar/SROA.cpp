@@ -2584,7 +2584,7 @@ private:
     unsigned OtherAS = OtherPtrTy->getPointerAddressSpace();
 
     // Compute the relative offset for the other pointer within the transfer.
-    unsigned IntPtrWidth = DL.getPointerSizeInBits(OtherAS);
+    unsigned IntPtrWidth = DL.getPointerBaseSizeInBits(OtherAS);
     APInt OtherOffset(IntPtrWidth, NewBeginOffset - BeginOffset);
     unsigned OtherAlign = MinAlign(II.getAlignment() ? II.getAlignment() : 1,
                                    OtherOffset.zextOrTrunc(64).getZExtValue());
