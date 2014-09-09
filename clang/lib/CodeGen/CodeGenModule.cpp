@@ -1858,6 +1858,18 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
     }
   }
 
+  if (InitExpr && Target.SupportsCapabilities() && Context.getDefaultAS() != 0)
+  {
+    QualType T = InitExpr->getType();
+    bool IsCapInit = false;
+    if (T.isCapabilityType(getContext()) || T->isCompoundType()) {
+      IsCapInit = true;
+      NeedsGlobalCtor = true;
+      Init = EmitNullConstant(D->getType());
+    }
+  }
+
+
   llvm::Type* InitType = Init->getType();
   llvm::Constant *Entry = GetAddrOfGlobalVar(D, InitType);
 
@@ -1872,17 +1884,6 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // Entry is now either a Function or GlobalVariable.
   auto *GV = dyn_cast<llvm::GlobalVariable>(Entry);
-
-  if (InitExpr && Target.SupportsCapabilities() && Context.getDefaultAS() != 0)
-  {
-    QualType T = InitExpr->getType();
-    bool IsCapInit = false;
-    if (T.isCapabilityType(getContext()) || T->isCompoundType()) {
-      IsCapInit = true;
-      NeedsGlobalCtor = true;
-      Init = EmitNullConstant(D->getType());
-    }
-  }
 
   // We have a definition after a declaration with the wrong type.
   // We must make a new GlobalVariable* and update everything that used OldGV
