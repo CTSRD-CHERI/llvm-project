@@ -950,7 +950,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
     if (!DidCallStackSave) {
       // Save the stack.
-      llvm::Value *Stack = CreateTempAlloca(Int8PtrTy, "saved_stack");
+      llvm::Value *Stack = CreateTempAlloca(Int8Ty->getPointerTo(0), "saved_stack");
 
       llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave);
       llvm::Value *V = Builder.CreateCall(F);
