@@ -1817,11 +1817,7 @@ def int_mips_clear_cap_tag  : GCCBuiltin<"__builtin_cheri_clear_cap_tag">,
               [llvm_fatptr_ty],
               [IntrNoMem]>;
 
-def int_mips_seal_cap_code  : GCCBuiltin<"__builtin_cheri_seal_cap_code">,
-    Intrinsic<[llvm_fatptr_ty],
-              [llvm_fatptr_ty],
-              [IntrNoMem]>;
-def int_mips_seal_cap_data  : GCCBuiltin<"__builtin_cheri_seal_cap_data">,
+def int_mips_seal_cap : GCCBuiltin<"__builtin_cheri_seal_cap">,
     Intrinsic<[llvm_fatptr_ty],
               [llvm_fatptr_ty, llvm_fatptr_ty],
               [IntrNoMem]>;

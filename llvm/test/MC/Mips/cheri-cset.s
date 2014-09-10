@@ -4,15 +4,12 @@
 # Check that the assembler is able to handle capability get instructions.
 #
 
-# CHECK: csealdata	$c1, $c2, $c3
+# CHECK: cseal	$c1, $c2, $c3
 # CHECK: encoding: [0x48,0x41,0x10,0xc0]
-	csealdata	$c1, $c2, $c3
+	cseal	$c1, $c2, $c3
 # CHECK: cunseal	$c1, $c2, $c3
 # CHECK: encoding: [0x48,0x61,0x10,0xc0]
 	cunseal		$c1, $c2, $c3
-# CHECK: csealcode	$c1, $c2
-# CHECK: encoding: [0x48,0x21,0x10,0x00]
-	csealcode	$c1, $c2
 # CHECK: candperm	$c1, $c2, $12
 # CHECK: encoding: [0x48,0x81,0x13,0x00]
 	candperm	$c1, $c2, $t0

@@ -174,13 +174,9 @@ def CGetType : CheriFmtGet<1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgettype $rd, $cb",
                            [(set GPR64Opnd:$rd, (int_mips_get_cap_type CheriOpnd:$cb))]>;
 
-def CSealData : CheriFmt3Caps<0x02, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs, CheriOpnd:$ct),
-                              "csealdata\t$cd, $cs, $ct",
-                              [(set CheriOpnd: $cd, (int_mips_seal_cap_data CheriOpnd:$cs, CheriOpnd:$ct))]>;
-
-def CSealCode : CheriFmt2Caps<0x01, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs),
-                              "csealcode\t$cd, $cs",
-                              [(set CheriOpnd: $cd, (int_mips_seal_cap_code CheriOpnd:$cs))]>;
+def CSeal : CheriFmt3Caps<0x02, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs, CheriOpnd:$ct),
+                              "cseal\t$cd, $cs, $ct",
+                              [(set CheriOpnd: $cd, (int_mips_seal_cap CheriOpnd:$cs, CheriOpnd:$ct))]>;
 
 def CUnseal   : CheriFmt3Caps<0x03, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs, CheriOpnd:$ct),
                               "cunseal\t$cd, $cs, $ct",
