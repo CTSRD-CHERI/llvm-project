@@ -434,6 +434,18 @@ ExpandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG,
   EVT VT = LD->getValueType(0);
   EVT LoadedVT = LD->getMemoryVT();
   SDLoc dl(LD);
+  // FIXME: This is a really ugly hack.  We should add a target hook to enable
+  // this...
+  // We assume that all memory containing capabilities is aligned and we just
+  // pass them through and get a trap at run time if we did it wrong.  There's
+  // no way to fix up a capability store if it's unaligned, because the tagged
+  // memory depends on the fact that they're aligned.
+  if (LD->getMemoryVT() == MVT::iFATPTR) {
+    if (LD->getAlignment() != 32)
+      DAG.getLoad(VT, dl, Chain, Ptr, LD->getPointerInfo(), LD->isVolatile(),
+          LD->isNonTemporal(), LD->isInvariant(), 32, LD->getAAInfo());
+    return;
+  }
   if (VT.isFloatingPoint() || VT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
     if (TLI.isTypeLegal(intVT) && TLI.isTypeLegal(LoadedVT)) {
