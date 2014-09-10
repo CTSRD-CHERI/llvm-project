@@ -887,6 +887,10 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
       // Otherwise, tell the initialization code that we're in this case.
       emission.IsConstantAggregate = true;
+      if (Target.SupportsCapabilities() &&
+          (getContext().getDefaultAS() != 0) &&
+          (Ty.isCapabilityType(getContext()) || Ty->isCompoundType()))
+        emission.IsConstantAggregate = false;
     }
 
     // A normal fixed sized variable becomes an alloca in the entry block,
