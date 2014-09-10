@@ -8824,8 +8824,7 @@ ShrinkLoadReplaceStoreWithStore(const std::pair<unsigned, unsigned> &MaskInfo,
 
   SDValue Ptr = St->getBasePtr();
   if (StOffset) {
-    Ptr = DAG.getNode(ISD::ADD, SDLoc(IVal), Ptr.getValueType(),
-                      Ptr, DAG.getConstant(StOffset, Ptr.getValueType()));
+    Ptr = DAG.getPointerAdd(SDLoc(IVal), Ptr, StOffset);
     NewAlign = MinAlign(NewAlign, StOffset);
   }
 
