@@ -1119,6 +1119,11 @@ static Value *GetStoreValueForLoad(Value *SrcVal, unsigned Offset,
 
   IRBuilder<> Builder(InsertPt->getParent(), InsertPt);
 
+  if ((LoadSize == StoreSize) && Offset == 0 &&
+      !SrcVal->getType()->isVectorTy() && !LoadTy->isVectorTy())
+    return CoerceAvailableValueToLoadType(Builder.CreateBitCast(SrcVal,
+          LoadTy), LoadTy, InsertPt, DL);
+
   // Compute which bits of the stored value are being used by the load.  Convert
   // to an integer type to start with.
   if (SrcVal->getType()->getScalarType()->isPointerTy())
