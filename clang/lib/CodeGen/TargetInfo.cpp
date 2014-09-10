@@ -5426,6 +5426,14 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
       ArgList.push_back(CGT.ConvertType(Ty));
       continue;
     }
+    if (const RecordType *FRT = Ty->getAs<RecordType>()) {
+      if (containsCapabilities(getContext(), FRT->getDecl())) {
+        uint64_t FieldSize = getContext().getTypeSize(Ty);
+        LastOffset = Layout.getFieldOffset(idx) + FieldSize;
+        ArgList.push_back(HandleAggregates(Ty, FieldSize));
+        continue;
+      }
+    }
 
     if (!BT || BT->getKind() != BuiltinType::Double)
       continue;
