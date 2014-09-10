@@ -1062,7 +1062,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
           // FIXME: Don't hard-code address space 200!
           // If this is CHERI, enforce this in hardware
           if (Ty->getPointeeType().getAddressSpace() == 200) {
-            llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::mips_seal_cap_data);
+            llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::mips_seal_cap);
             llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, 200);
             RetV = Builder.CreateCall2(F,
                 Builder.CreateBitCast(RetV, CapPtrTy),
