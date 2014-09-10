@@ -5368,6 +5368,18 @@ void MipsABIInfo::CoerceToIntArgs(uint64_t TySize,
     ArgList.push_back(llvm::IntegerType::get(getVMContext(), R));
 }
 
+static bool containsCapabilities(ASTContext &C, const RecordDecl *RD) {
+  for (auto i = RD->field_begin(), e = RD->field_end(); i != e; ++i) {
+    const QualType Ty = i->getType();
+    if (Ty.isCapabilityType(C))
+      return true;
+    if (const RecordType *RT = Ty->getAs<RecordType>())
+      if (containsCapabilities(C, RT->getDecl()))
+        return true;
+  }
+  return false;
+}
+
 // In N32/64, an aligned double precision floating point field is passed in
 // a register.
 llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
@@ -5382,6 +5394,11 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     return CGT.ConvertType(Ty);
 
   const RecordType *RT = Ty->getAs<RecordType>();
+
+  // On CHERI, we must pass unions containing capabilities in capability
+  // registers.  Otherwise, pass them as integers.
+  if (RT->isUnionType() && containsCapabilities(getContext(), RT->getDecl()))
+    return llvm::Type::getInt8Ty(getVMContext())->getPointerTo(200);
 
   // Unions/vectors are passed in integer registers.
   if (!RT || !RT->isStructureOrClassType()) {
