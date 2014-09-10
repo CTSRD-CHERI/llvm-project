@@ -300,6 +300,20 @@ static void ExpandUnalignedStore(StoreSDNode *ST, SelectionDAG &DAG,
   unsigned AS = ST->getAddressSpace();
 
   SDLoc dl(ST);
+
+  // FIXME: This is a really ugly hack.  We should add a target hook to enable
+  // this...
+  // We assume that all memory containing capabilities is aligned and we just
+  // pass them through and get a trap at run time if we did it wrong.  There's
+  // no way to fix up a capability store if it's unaligned, because the tagged
+  // memory depends on the fact that they're aligned.
+  if (ST->getMemoryVT() == MVT::iFATPTR) {
+    if (ST->getAlignment() != 32)
+      DAG.getStore(Chain, dl, Val, Ptr, ST->getPointerInfo(), ST->isVolatile(),
+          ST->isNonTemporal(), 32);
+    return;
+  }
+
   if (ST->getMemoryVT().isFloatingPoint() ||
       ST->getMemoryVT().isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
