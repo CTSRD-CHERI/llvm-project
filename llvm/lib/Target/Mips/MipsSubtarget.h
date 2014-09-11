@@ -281,7 +281,10 @@ public:
   /// MIPS32r6/MIPS64r6 require full unaligned access support but does not
   /// specify which component of the system provides it. Hardware, software, and
   /// hybrid implementations are all valid.
-  bool systemSupportsUnalignedAccess() const { return hasMips32r6(); }
+  /// CHERI is not MIPSr6, but provides a hybrid implementation where
+  /// in-cache-line unaligned accesses are handled in software and ones
+  /// spanning cache lines are emulated in the OS.
+  bool systemSupportsUnalignedAccess() const { return IsCheri || hasMips32r6(); }
 
   // Set helper classes
   void setHelperClassesMips16();
