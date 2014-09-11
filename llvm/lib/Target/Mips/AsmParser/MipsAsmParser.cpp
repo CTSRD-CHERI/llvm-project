@@ -1218,7 +1218,7 @@ bool MipsAsmParser::expandInstruction(MCInst &Inst, SMLoc IDLoc,
 }
 
 namespace {
-template <bool PerformShift>
+template <bool PerformShift, int OrOp=Mips::ORi>
 void createShiftOr(MCOperand Operand, unsigned RegNo, SMLoc IDLoc,
                    SmallVectorImpl<MCInst> &Instructions) {
   MCInst tmpInst;
@@ -1231,7 +1231,7 @@ void createShiftOr(MCOperand Operand, unsigned RegNo, SMLoc IDLoc,
     Instructions.push_back(tmpInst);
     tmpInst.clear();
   }
-  tmpInst.setOpcode(Mips::ORi);
+  tmpInst.setOpcode(OrOp);
   tmpInst.addOperand(MCOperand::CreateReg(RegNo));
   tmpInst.addOperand(MCOperand::CreateReg(RegNo));
   tmpInst.addOperand(Operand);
@@ -1483,12 +1483,12 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
     tmpInst.addOperand(MCOperand::CreateExpr(HighestExpr));
     Instructions.push_back(tmpInst);
 
-    createShiftOr<false>(MCOperand::CreateExpr(HigherExpr), RegNo, SMLoc(),
-                         Instructions);
-    createShiftOr<true>(MCOperand::CreateExpr(HiExpr), RegNo, SMLoc(),
-                        Instructions);
-    createShiftOr<true>(MCOperand::CreateExpr(LoExpr), RegNo, SMLoc(),
-                        Instructions);
+    createShiftOr<false, Mips::DADDiu>(MCOperand::CreateExpr(HigherExpr),
+        RegNo, SMLoc(), Instructions);
+    createShiftOr<true, Mips::DADDiu>(MCOperand::CreateExpr(HiExpr), RegNo,
+        SMLoc(), Instructions);
+    createShiftOr<true, Mips::DADDiu>(MCOperand::CreateExpr(LoExpr), RegNo,
+        SMLoc(), Instructions);
   } else {
     // Otherwise, expand to:
     // la d,sym => lui  d,hi16(sym)
@@ -1498,8 +1498,8 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
     tmpInst.addOperand(MCOperand::CreateExpr(HiExpr));
     Instructions.push_back(tmpInst);
 
-    createShiftOr<false>(MCOperand::CreateExpr(LoExpr), RegNo, SMLoc(),
-                         Instructions);
+    createShiftOr<false, Mips::ADDiu>(MCOperand::CreateExpr(LoExpr), RegNo,
+        SMLoc(), Instructions);
   }
 }
 
