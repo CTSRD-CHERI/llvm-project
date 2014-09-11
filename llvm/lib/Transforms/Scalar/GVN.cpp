@@ -1120,7 +1120,7 @@ static Value *GetStoreValueForLoad(Value *SrcVal, unsigned Offset,
   IRBuilder<> Builder(InsertPt->getParent(), InsertPt);
 
   if ((LoadSize == StoreSize) && Offset == 0 &&
-      !SrcVal->getType()->isVectorTy() && !LoadTy->isVectorTy())
+      SrcVal->getType()->isPointerTy() && LoadTy->isPointerTy())
     return CoerceAvailableValueToLoadType(Builder.CreateBitCast(SrcVal,
           LoadTy), LoadTy, InsertPt, DL);
 
