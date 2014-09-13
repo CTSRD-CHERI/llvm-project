@@ -1350,10 +1350,16 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
   if (Target.getTriple().getArch() == llvm::Triple::cheri) {
     if (ToAddrSpace != 200) return result;
     unsigned flags = 0xffff;
+#if 0
+    // XXXRW: We used to dynamically enforce 'const' here, but found that it
+    // broke too much code.  Disable for now; later we might want to introduce
+    // a new __input qualifier that corresponds to __output.
+    //
     // Clear the store and store-capability flags
     if (ToTy->getPointeeType().isConstQualified() &&
         !FromTy->getPointeeType().isConstQualified())
       flags &= 0xFFD7;
+#endif
     // Clear the load and load-capability flags
     if (ToTy->getPointeeType().getQualifiers().hasOutput() &&
         !FromTy->getPointeeType().getQualifiers().hasOutput())
