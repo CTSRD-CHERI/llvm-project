@@ -5649,13 +5649,14 @@ static bool IsOnlyUsedInZeroEqualityComparison(const Value *V) {
 static SDValue getMemCmpLoad(const Value *PtrVal, MVT LoadVT,
                              Type *LoadTy,
                              SelectionDAGBuilder &Builder) {
+  unsigned AS = PtrVal->getType()->getPointerAddressSpace();
 
   // Check to see if this load can be trivially constant folded, e.g. if the
   // input is from a string literal.
   if (const Constant *LoadInput = dyn_cast<Constant>(PtrVal)) {
     // Cast pointer to the type we really want to load.
     LoadInput = ConstantExpr::getBitCast(const_cast<Constant *>(LoadInput),
-                                         PointerType::getUnqual(LoadTy));
+                                         PointerType::get(LoadTy, AS));
 
     if (const Constant *LoadCst =
           ConstantFoldLoadFromConstPtr(const_cast<Constant *>(LoadInput),
