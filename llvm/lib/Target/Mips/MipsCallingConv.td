@@ -95,6 +95,15 @@ def CC_MipsN_VarArg : CallingConv<[
   CCIfType<[iFATPTR], CCAssignToReg<[C3, C4, C5, C6, C7, C8, C9, C10]>>,
   CCIfType<[iFATPTR], CCAssignToStack<32, 32>>
 ]>;
+// In sandbox mode, all variadic arguments are passed on the stack.
+def CC_MipsCheriSandbox_VarArg : CallingConv<[
+  // Promote i8/i16 arguments to i32.
+  CCIfType<[i8, i16], CCPromoteToType<i32>>,
+  // All stack parameter slots become 64-bit doublewords and are 8-byte aligned.
+  CCIfType<[i32, f32], CCAssignToStack<4, 8>>,
+  CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
+  CCIfType<[iFATPTR], CCAssignToStack<32, 32>>
+]>;
 
 def RetCC_MipsN : CallingConv<[
   // Capabilities are returned in C3
