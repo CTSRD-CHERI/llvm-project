@@ -205,6 +205,7 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::PCKEV:             return "MipsISD::PCKEV";
   case MipsISD::PCKOD:             return "MipsISD::PCKOD";
   case MipsISD::INSVE:             return "MipsISD::INSVE";
+  case MipsISD::STACKTOCAP:        return "MipsISD::STACKTOCAP";
   default:                         return nullptr;
   }
 }

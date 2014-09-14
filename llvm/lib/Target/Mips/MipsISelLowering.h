@@ -148,6 +148,8 @@ namespace llvm {
       CBTU,
       /// Capability branch if tag set
       CBTS,
+      /// Convert a stack pointer into a capability.
+      STACKTOCAP,
 
       // DSP shift nodes.
       SHLL_DSP,
