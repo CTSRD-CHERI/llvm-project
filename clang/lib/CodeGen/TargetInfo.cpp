@@ -21,6 +21,7 @@
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -5590,9 +5591,9 @@ void MipsABIInfo::computeInfo(CGFunctionInfo &FI) const {
 
 llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
                                     CodeGenFunction &CGF) const {
+  unsigned AS = getTarget().AddressSpaceForStack();
   llvm::Type *BP = CGF.Int8PtrTy;
-  llvm::Type *BPP = llvm::PointerType::get(BP,
-      getTarget().AddressSpaceForStack());
+  llvm::Type *BPP = llvm::PointerType::get(BP, AS);
   unsigned PtrWidth = getTarget().getPointerWidth(0);
   uint64_t Size = CGF.getContext().getTypeSize(Ty) / 8;
  
@@ -5600,19 +5601,32 @@ llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   llvm::Value *VAListAddrAsBPP = Builder.CreateBitCast(VAListAddr, BPP, "ap");
   llvm::Value *Addr = Builder.CreateLoad(VAListAddrAsBPP, "ap.cur");
   int64_t TypeAlign = getContext().getTypeAlign(Ty) / 8;
-  llvm::Type *PTy = llvm::PointerType::getUnqual(CGF.ConvertType(Ty));
+  llvm::Type *PTy = llvm::PointerType::get(CGF.ConvertType(Ty), AS);
   llvm::Value *AddrTyped;
   llvm::IntegerType *IntTy = (PtrWidth == 32) ? CGF.Int32Ty : CGF.Int64Ty;
   TypeAlign = std::max((unsigned)TypeAlign, MinABIStackAlignInBytes);
 
   if (TypeAlign > MinABIStackAlignInBytes) {
-    llvm::Value *AddrAsInt = CGF.Builder.CreatePtrToInt(Addr, IntTy);
+    llvm::Value *AddrAsInt;
+    if (AS == 200) {
+      llvm::Function *GetOffset =
+              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_get_offset);
+      AddrAsInt = Builder.CreateCall(GetOffset, Addr);
+      assert(IntTy == AddrAsInt->getType());
+    } else
+      AddrAsInt = CGF.Builder.CreatePtrToInt(Addr, IntTy);
     llvm::Value *Inc = llvm::ConstantInt::get(IntTy, TypeAlign - 1);
     llvm::Value *Mask = llvm::ConstantInt::get(IntTy, -TypeAlign);
     llvm::Value *Add = CGF.Builder.CreateAdd(AddrAsInt, Inc);
     llvm::Value *And = CGF.Builder.CreateAnd(Add, Mask);
-    AddrTyped = CGF.Builder.CreateIntToPtr(And, PTy);
-  } if (Ty->isIntegerType() &&
+    if (AS == 200) {
+      llvm::Function *SetOffset =
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
+      Addr = Builder.CreateCall2(SetOffset, Addr, And);
+    } else
+      Addr = CGF.Builder.CreateIntToPtr(And, PTy);
+  }
+  if (Ty->isIntegerType() &&
         CGF.CGM.getDataLayout().isBigEndian() &&
         Size < MinABIStackAlignInBytes) {
     // Integer types on a big-endian system are stored in word-sized stack
