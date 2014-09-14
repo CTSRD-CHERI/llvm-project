@@ -362,7 +362,8 @@ namespace llvm {
         Mips16RetHelperConv, NoSpecialCallingConv
       };
 
-      MipsCC(CallingConv::ID CallConv, bool IsO32, bool IsFP64, CCState &Info,
+      MipsCC(CallingConv::ID CallConv, bool IsO32, bool IsFP64,
+             bool IsSandbox, CCState &Info,
              SpecialCallingConvType SpecialCallingConv = NoSpecialCallingConv);
 
 
@@ -437,6 +438,7 @@ namespace llvm {
       CCState &CCInfo;
       CallingConv::ID CallConv;
       bool IsO32, IsFP64;
+      bool IsSandbox;
       SpecialCallingConvType SpecialCallingConv;
       SmallVector<ByValArgInfo, 2> ByValArgs;
     };

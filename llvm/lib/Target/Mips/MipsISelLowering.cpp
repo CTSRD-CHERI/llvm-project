@@ -1847,6 +1847,19 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
                                  getPointerTy());
 
+  if (Subtarget.isCheriSandbox()) {
+    // In the sandbox ABI, the va_start intrinsic will (to work around LLVM's
+    // assumption that allocas are all in AS0) be an address space cast of the
+    // alloca to AS 0.  We need to extract the original operands.
+    const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+    SV = cast<AddrSpaceCastInst>(SV)->getOperand(0);
+    SDValue CapAddr = Op.getOperand(1)->getOperand(0);
+    SDValue Chain = Op.getOperand(0);
+    FI = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, FI);
+    return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV), false,
+        false, 0);
+  }
+
   // vastart just stores the address of the VarArgsFrameIndex slot into the
   // memory location argument.
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
@@ -2600,6 +2613,9 @@ MipsTargetLowering::passArgOnStack(SDValue StackPtr, unsigned Offset,
   if (!IsTailCall) {
     SDValue PtrOff = DAG.getNode(ISD::ADD, DL, getPointerTy(), StackPtr,
                                  DAG.getIntPtrConstant(Offset));
+    if (Subtarget.isCheriSandbox()) {
+      PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, PtrOff);
+    }
     return DAG.getStore(Chain, DL, Arg, PtrOff, MachinePointerInfo(), false,
                         false, 0);
   }
@@ -2694,6 +2710,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   MipsCC::SpecialCallingConvType SpecialCallingConv =
     getSpecialCallingConv(Callee);
   MipsCC MipsCCInfo(CallConv, Subtarget.isABI_O32(), Subtarget.isFP64bit(),
+                    Subtarget.isCheriSandbox(),
                     CCInfo, SpecialCallingConv);
 
   MipsCCInfo.analyzeCallOperands(Outs, IsVarArg,
@@ -2924,6 +2941,7 @@ MipsTargetLowering::LowerCallResult(SDValue Chain, SDValue InFlag,
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), RVLocs,
                  *DAG.getContext());
   MipsCC MipsCCInfo(CallConv, Subtarget.isABI_O32(), Subtarget.isFP64bit(),
+                    Subtarget.isCheriSandbox(),
                     CCInfo);
 
   MipsCCInfo.analyzeCallResult(Ins, Subtarget.abiUsesSoftFloat(),
@@ -2972,6 +2990,7 @@ MipsTargetLowering::LowerFormalArguments(SDValue Chain,
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
                  *DAG.getContext());
   MipsCC MipsCCInfo(CallConv, Subtarget.isABI_O32(), Subtarget.isFP64bit(),
+                    Subtarget.isCheriSandbox(),
                     CCInfo);
   Function::const_arg_iterator FuncArg =
     DAG.getMachineFunction().getFunction()->arg_begin();
@@ -3123,6 +3142,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain,
   // CCState - Info about the registers and stack slot.
   CCState CCInfo(CallConv, IsVarArg, MF, RVLocs, *DAG.getContext());
   MipsCC MipsCCInfo(CallConv, Subtarget.isABI_O32(), Subtarget.isFP64bit(),
+                    Subtarget.isCheriSandbox(),
                     CCInfo);
 
   // Analyze return values.
@@ -3655,9 +3675,11 @@ MipsTargetLowering::MipsCC::SpecialCallingConvType
 }
 
 MipsTargetLowering::MipsCC::MipsCC(
-  CallingConv::ID CC, bool IsO32_, bool IsFP64_, CCState &Info,
+  CallingConv::ID CC, bool IsO32_, bool IsFP64_,
+  bool IsSandbox_, CCState &Info,
   MipsCC::SpecialCallingConvType SpecialCallingConv_)
   : CCInfo(Info), CallConv(CC), IsO32(IsO32_), IsFP64(IsFP64_),
+    IsSandbox(IsSandbox_),
     SpecialCallingConv(SpecialCallingConv_){
   // Pre-allocate reserved argument area.
   CCInfo.AllocateStack(reservedArgArea(), 1);
@@ -3818,6 +3840,8 @@ llvm::CCAssignFn *MipsTargetLowering::MipsCC::fixedArgFn() const {
 }
 
 llvm::CCAssignFn *MipsTargetLowering::MipsCC::varArgFn() const {
+  if (IsSandbox)
+    return CC_MipsCheriSandbox_VarArg;
   return IsO32 ? (IsFP64 ? CC_MipsO32_FP64 : CC_MipsO32_FP32) : CC_MipsN_VarArg;
 }
 
@@ -4007,6 +4031,10 @@ passByValArg(SDValue Chain, SDLoc DL,
 void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
                                          const MipsCC &CC, SDValue Chain,
                                          SDLoc DL, SelectionDAG &DAG) const {
+  // If we're in the sandbox ABI, no variadic arguments are passed in
+  // registers.
+  if (Subtarget.isCheriSandbox())
+    return;
   unsigned NumRegs = CC.numIntArgRegs();
   const MCPhysReg *ArgRegs = CC.intArgRegs();
   const CCState &CCInfo = CC.getCCInfo();
