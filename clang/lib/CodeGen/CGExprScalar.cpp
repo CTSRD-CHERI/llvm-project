@@ -454,9 +454,9 @@ public:
   Value *GetBinOpResult(BinOpInfo &Op, Value *LHS, Value *V) {
     if (!Op.E->getType().isCapabilityType(CGF.getContext()))
       return V;
-    llvm::Function *GetOffset =
+    llvm::Function *SetOffset =
       CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
-    return Builder.CreateCall2(GetOffset, LHS, V);
+    return Builder.CreateCall2(SetOffset, LHS, V);
   }
   // Common helper for getting how wide LHS of shift is.
   static Value *GetWidthMinusOneValue(Value* LHS,Value* RHS);
