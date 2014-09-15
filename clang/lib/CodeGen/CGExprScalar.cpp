@@ -793,6 +793,15 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       return Builder.CreateBitCast(Src, DstTy, "conv");
 
     assert(SrcType->isIntegerType() && "Not ptr->ptr or int->ptr conversion?");
+
+    if (DstType.isCapabilityType(CGF.getContext())) {
+      Value *Null =
+        Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstTy);
+      llvm::Function *SetOffset =
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
+      Src = Builder.CreateZExtOrTrunc(Src, CGF.Int64Ty);
+      return Builder.CreateCall2(SetOffset, Null, Src);
+    }
     // First, convert to the correct width so that we control the kind of
     // extension.
     llvm::Type *MiddleTy = CGF.IntPtrTy;
