@@ -21,9 +21,9 @@
 # CHECK: cgetunsealed	$12, $c1
 # CHECK: encoding: [0x48,0x0c,0x08,0x06]
 	cgetunsealed	$t0, $c1
-# CHECK: cgetpcc	$12($c1)
-# CHECK: encoding: [0x48,0x0c,0x08,0x07]
-	cgetpcc		$t0($c1)
+# CHECK: cgetpcc	$c1
+# CHECK: encoding: [0x48,0x00,0x08,0x07]
+	cgetpcc		$c1
 # CHECK: cgetcause	$12
 # CHECK: encoding: [0x48,0x0c,0x00,0x04]
 	cgetcause	$t0

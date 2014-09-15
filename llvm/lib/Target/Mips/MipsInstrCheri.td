@@ -189,14 +189,10 @@ def CUnseal   : CheriFmt3Caps<0x03, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs, Ch
 def CGetUnsealed : CheriFmtGet<6, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                           "cgetunsealed\t$rd, $cb",
                           [(set GPR64Opnd:$rd, (int_mips_get_cap_unsealed CheriOpnd:$cb))]>;
-def CGetPCC : CheriFmtGet<7, (outs GPR64Opnd:$rd, CheriOpnd:$cb), (ins),
-                          "cgetpcc\t${rd}(${cb})",
-                          []>;
-def CGetOnlyPCC : CheriFmtGet<7, (outs CheriOpnd:$cb), (ins),
+def CGetPCC : CheriFmtGet<7, (outs CheriOpnd:$cb), (ins),
                           "cgetpcc\t${cb}",
                           [(set CheriOpnd:$cb, (int_mips_get_pcc))]>
 {
-  let isCodeGenOnly=1;
   let rd = 0;
 }
 
