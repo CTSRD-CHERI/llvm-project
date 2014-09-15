@@ -66,7 +66,7 @@ def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriOpnd:$cb),
 	let r2 = 0;
 }
 }
-let isTerminator=1, isCall=1, hasDelaySlot=1 in {
+let isCall=1, hasDelaySlot=1 in {
 def CJALR : CheriFmt3Caps<0x07, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb),
                               "cjalr\t${cb}, ${cd}",
                               []>
@@ -526,6 +526,10 @@ let usesCustomInserter = 1 in {
   def CAP_ATOMIC_CMP_SWAP_I64  : CapAtomicCmpSwap<atomic_cmp_swap_64, GPR64>;
 
 }
+}
+////////////////////////////////////////////////////////////////////////////////
+// Helpers for capability-using calls and returns
+////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
 // ClearRegs
@@ -550,5 +554,25 @@ def  CCallPseudo : PseudoSE<(outs), (ins GPR64Opnd:$rs, uimm32: $mask),
   let Defs = [RA];
 }
 
+def MipsCodeToCap : SDNode<"MipsISD::CODETOCAP", SDT_MipsPtrToCap, []>;
+def CapFromPC : PseudoSE<(outs CheriRegs:$cap), (ins GPR64Opnd:$ptr),
+           [(set CheriRegs:$cap, (MipsCodeToCap GPR64Opnd:$ptr))]>;
 
+def SDT_MipsCapJmpLink      : SDTypeProfile<0, 1, [SDTCisVT<0, iFATPTR>]>;
+def CapJmpLink : SDNode<"MipsISD::CapJmpLink",SDT_MipsCapJmpLink,
+                         [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
+                          SDNPVariadic]>;
+let isCall=1, hasDelaySlot=1, Defs = [C17] in {
+def CapJumpLinkPseudo :
+  PseudoSE<(outs), (ins CheriOpnd: $rs), [(CapJmpLink CheriOpnd: $rs)], IIBranch>,
+  PseudoInstExpansion<(CJALR C17, CheriOpnd:$rs)>;
 }
+def CapRet : SDNode<"MipsISD::CapRet", SDTNone,
+                     [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+
+def PseudoReturnCap: PseudoReturnBase<CheriOpnd>;
+
+let isReturn=1, isTerminator=1, hasDelaySlot=1, isBarrier=1, hasCtrlDep=1 in
+def CapRetPseudo : PseudoSE<(outs), (ins), [(CapRet)]>;
+
+

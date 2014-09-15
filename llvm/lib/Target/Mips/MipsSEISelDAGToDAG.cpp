@@ -141,8 +141,16 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
   V1 = RegInfo.createVirtualRegister(RC);
 
   if (ABI.IsN64()) {
-    MF.getRegInfo().addLiveIn(Mips::T9_64);
-    MBB.addLiveIn(Mips::T9_64);
+    if (ABI.IsCheriSandbox()) {
+      MF.getRegInfo().addLiveIn(Mips::C12);
+      MBB.addLiveIn(Mips::C12);
+      BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))
+        .addReg(Mips::T9_64, RegState::Define)
+        .addReg(Mips::C12);
+    } else {
+      MF.getRegInfo().addLiveIn(Mips::T9_64);
+      MBB.addLiveIn(Mips::T9_64);
+    }
 
     // lui $v0, %hi(%neg(%gp_rel(fname)))
     // daddu $v1, $v0, $t9

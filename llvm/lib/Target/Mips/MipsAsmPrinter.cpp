@@ -111,6 +111,9 @@ void MipsAsmPrinter::emitPseudoIndirectBranch(MCStreamer &OutStreamer,
   } else if (Subtarget->inMicroMipsMode())
     // microMIPS should use (JR_MM $rs)
     TmpInst0.setOpcode(Mips::JR_MM);
+  else if (static_cast<MipsTargetMachine &>(TM).getABI().IsCheriSandbox())
+    // Everything else should use (JR $rs)
+    TmpInst0.setOpcode(Mips::CJR);
   else {
     // Everything else should use (JR $rs)
     TmpInst0.setOpcode(Mips::JR);
@@ -184,6 +187,7 @@ void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
     if (I->getOpcode() == Mips::PseudoReturn ||
         I->getOpcode() == Mips::PseudoReturn64 ||
+        I->getOpcode() == Mips::PseudoReturnCap ||
         I->getOpcode() == Mips::PseudoIndirectBranch ||
         I->getOpcode() == Mips::PseudoIndirectBranch64) {
       emitPseudoIndirectBranch(*OutStreamer, &*I);
