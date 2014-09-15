@@ -19,9 +19,9 @@ def MipsCBTS : SDNode<"MipsISD::CBTS", SDT_MipsCBT,
                           [SDNPHasChain, SDNPOptInGlue]>;
 def MipsCBTU : SDNode<"MipsISD::CBTU", SDT_MipsCBT,
                           [SDNPHasChain, SDNPOptInGlue]>;
-def SDT_MipsSTCT     : SDTypeProfile<1, 1, [SDTCisVT<0, iFATPTR>,
+def SDT_MipsPtrToCap     : SDTypeProfile<1, 1, [SDTCisVT<0, iFATPTR>,
                                             SDTCisVT<1, i64>]>;
-def MipsSTC : SDNode<"MipsISD::STACKTOCAP", SDT_MipsSTCT,
+def MipsSTC : SDNode<"MipsISD::STACKTOCAP", SDT_MipsPtrToCap,
                           [SDNPHasChain]>;
 
 // 11-bit immediate offset used by C[SL]CR
