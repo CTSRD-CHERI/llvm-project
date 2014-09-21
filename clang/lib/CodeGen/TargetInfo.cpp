@@ -5385,9 +5385,9 @@ bool MIPSTargetCodeGenInfo::containsCapabilities(QualType Ty) const {
   ASTContext &C = getABIInfo().getContext();
   if (Ty.isCapabilityType(C))
       return true;
-    if (Ty->isArrayType()) {
+  if (Ty->isArrayType()) {
     QualType ElTy = QualType(Ty->getBaseElementTypeUnsafe(), 0);
-    return ElTy.isCapabilityType(C);
+    return containsCapabilities(ElTy);
   }
   const RecordType *RT = Ty->getAs<RecordType>();
   if (!RT)
