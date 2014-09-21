@@ -15,6 +15,7 @@
 #include "CGDebugInfo.h"
 #include "CGOpenCLRuntime.h"
 #include "CodeGenModule.h"
+#include "TargetInfo.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/Decl.h"
@@ -237,7 +238,7 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
     const VarDecl *InitDecl;
     const Expr *InitExpr = D.getAnyInitializer(InitDecl);
     QualType T = InitExpr->getType();
-    if (T.isCapabilityType(getContext()) || T->isCompoundType()) {
+    if (getTargetHooks().containsCapabilities(T)) {
       GV->setConstant(false);
       CGM.EmitCXXGlobalVarDeclInitFunc(&D, GV, true);
       return GV;

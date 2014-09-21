@@ -5350,6 +5350,7 @@ public:
   unsigned getSizeOfUnwindException() const override {
     return SizeOfUnwindException;
   }
+  bool containsCapabilities(QualType Ty) const override;
 };
 }
 
@@ -5379,6 +5380,19 @@ static bool containsCapabilities(ASTContext &C, const RecordDecl *RD) {
         return true;
   }
   return false;
+}
+bool MIPSTargetCodeGenInfo::containsCapabilities(QualType Ty) const {
+  ASTContext &C = getABIInfo().getContext();
+  if (Ty.isCapabilityType(C))
+      return true;
+    if (Ty->isArrayType()) {
+    QualType ElTy = QualType(Ty->getBaseElementTypeUnsafe(), 0);
+    return ElTy.isCapabilityType(C);
+  }
+  const RecordType *RT = Ty->getAs<RecordType>();
+  if (!RT)
+    return false;
+  return ::containsCapabilities(C, RT->getDecl());
 }
 
 // In N32/64, an aligned double precision floating point field is passed in

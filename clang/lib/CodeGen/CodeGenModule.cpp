@@ -1862,7 +1862,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
   {
     QualType T = InitExpr->getType();
     bool IsCapInit = false;
-    if (T.isCapabilityType(getContext()) || T->isCompoundType()) {
+    if (TheTargetCodeGenInfo->containsCapabilities(T)) {
       IsCapInit = true;
       NeedsGlobalCtor = true;
       Init = EmitNullConstant(D->getType());
