@@ -1855,7 +1855,9 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     SV = cast<AddrSpaceCastInst>(SV)->getOperand(0);
     SDValue CapAddr = Op.getOperand(1)->getOperand(0);
     SDValue Chain = Op.getOperand(0);
+	CapAddr->dumpr();
     FI = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, FI);
+	FI->dumpr();
     return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV), false,
         false, 0);
   }
@@ -4031,10 +4033,6 @@ passByValArg(SDValue Chain, SDLoc DL,
 void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
                                          const MipsCC &CC, SDValue Chain,
                                          SDLoc DL, SelectionDAG &DAG) const {
-  // If we're in the sandbox ABI, no variadic arguments are passed in
-  // registers.
-  if (Subtarget.isCheriSandbox())
-    return;
   unsigned NumRegs = CC.numIntArgRegs();
   const MCPhysReg *ArgRegs = CC.intArgRegs();
   const CCState &CCInfo = CC.getCCInfo();
@@ -4048,6 +4046,12 @@ void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
 
   // Offset of the first variable argument from stack pointer.
   int VaArgOffset;
+
+  if (Subtarget.isCheriSandbox()) {
+    int FI = MFI->CreateFixedObject(RegSize, 0, true);
+    MipsFI->setVarArgsFrameIndex(FI);
+    return;
+  }
 
   if (NumRegs == Idx)
     VaArgOffset = RoundUpToAlignment(CCInfo.getNextStackOffset(), RegSize);
