@@ -1691,7 +1691,9 @@ struct PrintFOpt : public LibCallOptimization {
       // Create a string literal with no \n on it.  We expect the constant merge
       // pass to be run after this pass, to merge duplicate strings.
       FormatStr = FormatStr.drop_back();
+      Type *Ty = CI->getArgOperand(0)->getType();
       Value *GV = B.CreateGlobalString(FormatStr, "str");
+      GV = B.CreatePointerBitCastOrAddrSpaceCast(GV, Ty);
       Value *NewCI = EmitPutS(GV, B, DL, TLI);
       return (CI->use_empty() || !NewCI) ?
               NewCI :

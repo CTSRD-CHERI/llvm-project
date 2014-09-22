@@ -381,7 +381,7 @@ Value *llvm::EmitPutS(Value *Str, IRBuilder<> &B, const DataLayout *TD,
   Value *PutS = M->getOrInsertFunction("puts",
                                        AttributeSet::get(M->getContext(), AS),
                                        B.getInt32Ty(),
-                                       B.getInt8PtrTy(),
+                                       Str->getType(),
                                        NULL);
   CallInst *CI = B.CreateCall(PutS, CastToCStr(Str, B), "puts");
   if (const Function *F = dyn_cast<Function>(PutS->stripPointerCasts()))
