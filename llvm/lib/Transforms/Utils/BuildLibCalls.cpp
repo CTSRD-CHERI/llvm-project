@@ -46,13 +46,14 @@ Value *llvm::EmitStrLen(Value *Ptr, IRBuilder<> &B, const DataLayout *TD,
                             ArrayRef<Attribute::AttrKind>(AVs, 2));
 
   LLVMContext &Context = B.GetInsertBlock()->getContext();
+  Ptr = CastToCStr(Ptr, B);
   Constant *StrLen = M->getOrInsertFunction("strlen",
                                             AttributeSet::get(M->getContext(),
                                                               AS),
                                             TD->getIntPtrType(Context),
-                                            B.getInt8PtrTy(),
+                                            Ptr->getType(),
                                             NULL);
-  CallInst *CI = B.CreateCall(StrLen, CastToCStr(Ptr, B), "strlen");
+  CallInst *CI = B.CreateCall(StrLen, Ptr, "strlen");
   if (const Function *F = dyn_cast<Function>(StrLen->stripPointerCasts()))
     CI->setCallingConv(F->getCallingConv());
 
@@ -75,14 +76,15 @@ Value *llvm::EmitStrNLen(Value *Ptr, Value *MaxLen, IRBuilder<> &B,
                             ArrayRef<Attribute::AttrKind>(AVs, 2));
 
   LLVMContext &Context = B.GetInsertBlock()->getContext();
+  Ptr = CastToCStr(Ptr, B);
   Constant *StrNLen = M->getOrInsertFunction("strnlen",
                                              AttributeSet::get(M->getContext(),
                                                               AS),
                                              TD->getIntPtrType(Context),
-                                             B.getInt8PtrTy(),
+                                             Ptr->getType(),
                                              TD->getIntPtrType(Context),
                                              NULL);
-  CallInst *CI = B.CreateCall2(StrNLen, CastToCStr(Ptr, B), MaxLen, "strnlen");
+  CallInst *CI = B.CreateCall2(StrNLen, Ptr, MaxLen, "strnlen");
   if (const Function *F = dyn_cast<Function>(StrNLen->stripPointerCasts()))
     CI->setCallingConv(F->getCallingConv());
 
@@ -103,13 +105,14 @@ Value *llvm::EmitStrChr(Value *Ptr, char C, IRBuilder<> &B,
     AttributeSet::get(M->getContext(), AttributeSet::FunctionIndex,
                       ArrayRef<Attribute::AttrKind>(AVs, 2));
 
-  Type *I8Ptr = B.getInt8PtrTy();
+  Ptr = CastToCStr(Ptr, B);
+  Type *I8Ptr = Ptr->getType();
   Type *I32Ty = B.getInt32Ty();
   Constant *StrChr = M->getOrInsertFunction("strchr",
                                             AttributeSet::get(M->getContext(),
                                                              AS),
                                             I8Ptr, I8Ptr, I32Ty, NULL);
-  CallInst *CI = B.CreateCall2(StrChr, CastToCStr(Ptr, B),
+  CallInst *CI = B.CreateCall2(StrChr, Ptr,
                                ConstantInt::get(I32Ty, C), "strchr");
   if (const Function *F = dyn_cast<Function>(StrChr->stripPointerCasts()))
     CI->setCallingConv(F->getCallingConv());
@@ -132,14 +135,16 @@ Value *llvm::EmitStrNCmp(Value *Ptr1, Value *Ptr2, Value *Len,
                             ArrayRef<Attribute::AttrKind>(AVs, 2));
 
   LLVMContext &Context = B.GetInsertBlock()->getContext();
+  Ptr1 = CastToCStr(Ptr1, B);
+  Type *I8Ptr = Ptr1->getType();
   Value *StrNCmp = M->getOrInsertFunction("strncmp",
                                           AttributeSet::get(M->getContext(),
                                                            AS),
                                           B.getInt32Ty(),
-                                          B.getInt8PtrTy(),
-                                          B.getInt8PtrTy(),
+                                          I8Ptr,
+                                          I8Ptr,
                                           TD->getIntPtrType(Context), NULL);
-  CallInst *CI = B.CreateCall3(StrNCmp, CastToCStr(Ptr1, B),
+  CallInst *CI = B.CreateCall3(StrNCmp, Ptr1,
                                CastToCStr(Ptr2, B), Len, "strncmp");
 
   if (const Function *F = dyn_cast<Function>(StrNCmp->stripPointerCasts()))
@@ -161,11 +166,12 @@ Value *llvm::EmitStrCpy(Value *Dst, Value *Src, IRBuilder<> &B,
   AS[0] = AttributeSet::get(M->getContext(), 2, Attribute::NoCapture);
   AS[1] = AttributeSet::get(M->getContext(), AttributeSet::FunctionIndex,
                             Attribute::NoUnwind);
-  Type *I8Ptr = B.getInt8PtrTy();
+  Dst = CastToCStr(Dst, B);
+  Type *I8Ptr = Dst->getType();
   Value *StrCpy = M->getOrInsertFunction(Name,
                                          AttributeSet::get(M->getContext(), AS),
                                          I8Ptr, I8Ptr, I8Ptr, NULL);
-  CallInst *CI = B.CreateCall2(StrCpy, CastToCStr(Dst, B), CastToCStr(Src, B),
+  CallInst *CI = B.CreateCall2(StrCpy, Dst, CastToCStr(Src, B),
                                Name);
   if (const Function *F = dyn_cast<Function>(StrCpy->stripPointerCasts()))
     CI->setCallingConv(F->getCallingConv());
@@ -185,13 +191,14 @@ Value *llvm::EmitStrNCpy(Value *Dst, Value *Src, Value *Len,
   AS[0] = AttributeSet::get(M->getContext(), 2, Attribute::NoCapture);
   AS[1] = AttributeSet::get(M->getContext(), AttributeSet::FunctionIndex,
                             Attribute::NoUnwind);
-  Type *I8Ptr = B.getInt8PtrTy();
+  Dst = CastToCStr(Dst, B);
+  Type *I8Ptr = Dst->getType();
   Value *StrNCpy = M->getOrInsertFunction(Name,
                                           AttributeSet::get(M->getContext(),
                                                             AS),
                                           I8Ptr, I8Ptr, I8Ptr,
                                           Len->getType(), NULL);
-  CallInst *CI = B.CreateCall3(StrNCpy, CastToCStr(Dst, B), CastToCStr(Src, B),
+  CallInst *CI = B.CreateCall3(StrNCpy, Dst, CastToCStr(Src, B),
                                Len, "strncpy");
   if (const Function *F = dyn_cast<Function>(StrNCpy->stripPointerCasts()))
     CI->setCallingConv(F->getCallingConv());
@@ -212,15 +219,16 @@ Value *llvm::EmitMemCpyChk(Value *Dst, Value *Src, Value *Len, Value *ObjSize,
   AS = AttributeSet::get(M->getContext(), AttributeSet::FunctionIndex,
                          Attribute::NoUnwind);
   LLVMContext &Context = B.GetInsertBlock()->getContext();
-  Value *MemCpy = M->getOrInsertFunction("__memcpy_chk",
-                                         AttributeSet::get(M->getContext(), AS),
-                                         B.getInt8PtrTy(),
-                                         B.getInt8PtrTy(),
-                                         B.getInt8PtrTy(),
-                                         TD->getIntPtrType(Context),
-                                         TD->getIntPtrType(Context), NULL);
   Dst = CastToCStr(Dst, B);
   Src = CastToCStr(Src, B);
+  Type *I8Ptr = Dst->getType();
+  Value *MemCpy = M->getOrInsertFunction("__memcpy_chk",
+                                         AttributeSet::get(M->getContext(), AS),
+                                         I8Ptr,
+                                         I8Ptr,
+                                         I8Ptr,
+                                         TD->getIntPtrType(Context),
+                                         TD->getIntPtrType(Context), NULL);
   CallInst *CI = B.CreateCall4(MemCpy, Dst, Src, Len, ObjSize);
   if (const Function *F = dyn_cast<Function>(MemCpy->stripPointerCasts()))
     CI->setCallingConv(F->getCallingConv());
@@ -241,14 +249,16 @@ Value *llvm::EmitMemChr(Value *Ptr, Value *Val,
   AS = AttributeSet::get(M->getContext(), AttributeSet::FunctionIndex,
                          ArrayRef<Attribute::AttrKind>(AVs, 2));
   LLVMContext &Context = B.GetInsertBlock()->getContext();
+  Ptr = CastToCStr(Ptr, B);
+  Type *I8Ptr = Ptr->getType();
   Value *MemChr = M->getOrInsertFunction("memchr",
                                          AttributeSet::get(M->getContext(), AS),
-                                         B.getInt8PtrTy(),
-                                         B.getInt8PtrTy(),
+                                         I8Ptr,
+                                         I8Ptr,
                                          B.getInt32Ty(),
                                          TD->getIntPtrType(Context),
                                          NULL);
-  CallInst *CI = B.CreateCall3(MemChr, CastToCStr(Ptr, B), Val, Len, "memchr");
+  CallInst *CI = B.CreateCall3(MemChr, Ptr, Val, Len, "memchr");
 
   if (const Function *F = dyn_cast<Function>(MemChr->stripPointerCasts()))
     CI->setCallingConv(F->getCallingConv());
@@ -272,13 +282,15 @@ Value *llvm::EmitMemCmp(Value *Ptr1, Value *Ptr2,
                             ArrayRef<Attribute::AttrKind>(AVs, 2));
 
   LLVMContext &Context = B.GetInsertBlock()->getContext();
+  Ptr1 = CastToCStr(Ptr1, B);
+  Type *I8Ptr = Ptr1->getType();
   Value *MemCmp = M->getOrInsertFunction("memcmp",
                                          AttributeSet::get(M->getContext(), AS),
                                          B.getInt32Ty(),
-                                         B.getInt8PtrTy(),
-                                         B.getInt8PtrTy(),
+                                         I8Ptr,
+                                         I8Ptr,
                                          TD->getIntPtrType(Context), NULL);
-  CallInst *CI = B.CreateCall3(MemCmp, CastToCStr(Ptr1, B), CastToCStr(Ptr2, B),
+  CallInst *CI = B.CreateCall3(MemCmp, Ptr1, CastToCStr(Ptr2, B),
                                Len, "memcmp");
 
   if (const Function *F = dyn_cast<Function>(MemCmp->stripPointerCasts()))
@@ -441,11 +453,11 @@ Value *llvm::EmitFPutS(Value *Str, Value *File, IRBuilder<> &B,
     F = M->getOrInsertFunction(FPutsName,
                                AttributeSet::get(M->getContext(), AS),
                                B.getInt32Ty(),
-                               B.getInt8PtrTy(),
+                               Str->getType(),
                                File->getType(), NULL);
   else
     F = M->getOrInsertFunction(FPutsName, B.getInt32Ty(),
-                               B.getInt8PtrTy(),
+                               Str->getType(),
                                File->getType(), NULL);
   CallInst *CI = B.CreateCall2(F, CastToCStr(Str, B), File, "fputs");
 
@@ -475,13 +487,13 @@ Value *llvm::EmitFWrite(Value *Ptr, Value *Size, Value *File,
     F = M->getOrInsertFunction(FWriteName,
                                AttributeSet::get(M->getContext(), AS),
                                TD->getIntPtrType(Context),
-                               B.getInt8PtrTy(),
+                               Ptr->getType(),
                                TD->getIntPtrType(Context),
                                TD->getIntPtrType(Context),
                                File->getType(), NULL);
   else
     F = M->getOrInsertFunction(FWriteName, TD->getIntPtrType(Context),
-                               B.getInt8PtrTy(),
+                               Ptr->getType(),
                                TD->getIntPtrType(Context),
                                TD->getIntPtrType(Context),
                                File->getType(), NULL);
