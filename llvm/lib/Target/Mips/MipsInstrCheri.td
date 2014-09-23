@@ -129,7 +129,7 @@ def CAP_SELECT : CheriSelectPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,
 ////////////////////////////////////////////////////////////////////////////////
 def CIncBase : CheriFmtSet<2, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
                            "cincbase\t$cd, $cb, $rt",
-                         [(set CheriOpnd:$cd, (inttoptr (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb))))]> {
+                         []> {
   let hasSideEffects = 1;
 }
 def : InstAlias<"cgetdefault $dst",
@@ -229,7 +229,7 @@ def CCheckType : CheriFmtRegs<0x0b, 1, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb
 def CIncOffset : CheriFmtRegs<0x0d, 0, (outs CheriOpnd: $r0),
   (ins CheriOpnd: $r1, GPR64Opnd: $r2),
   "cincoffset\t$r0, $r1, $r2",
-  [(set CheriOpnd:$r0, (inttoptr (add (ptrtoint CheriOpnd:$r1), GPR64Opnd:$r2)))]>;
+  [(set CheriOpnd:$r0, (ptradd CheriOpnd:$r1, GPR64Opnd:$r2))]>;
 def : Pat<(int_mips_cap_inc_offset CheriOpnd: $r1, GPR64Opnd: $r2), (CIncOffset $r1, $r2)>;
 def CSetOffset : CheriFmtRegs<0x0d, 1, (outs CheriOpnd: $r0),
   (ins CheriOpnd: $r1, GPR64Opnd: $r2),

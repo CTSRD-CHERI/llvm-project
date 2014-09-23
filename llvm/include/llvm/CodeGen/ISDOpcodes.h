@@ -683,6 +683,7 @@ namespace ISD {
     /// address.
     PTRTOINT,
     INTTOPTR,
+    PTRADD,
 
     /// BUILTIN_OP_END - This must be the last enum value in this list.
     /// The target-specific pre-isel opcode values start here.

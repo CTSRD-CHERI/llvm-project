@@ -3451,12 +3451,9 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
     }
   }
 
-  if (FatPointer) {
-    SDValue Base = DAG.getNode(ISD::ADD, getCurSDLoc(), N.getValueType(), 
-        DAG.getNode(ISD::PTRTOINT, getCurSDLoc(), N.getValueType(),
-          OrigN), N);
-    N = DAG.getNode(ISD::INTTOPTR, getCurSDLoc(), OrigN.getValueType(), Base);
-  }
+  if (FatPointer)
+    N = DAG.getNode(ISD::PTRADD, getCurSDLoc(), OrigN.getValueType(), OrigN,
+        N);
   setValue(&I, N);
 }
 

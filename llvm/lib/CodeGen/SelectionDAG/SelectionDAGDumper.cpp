@@ -107,6 +107,7 @@ std::string SDNode::getOperationName(const SelectionDAG *G) const {
   case ISD::BlockAddress:               return "BlockAddress";
   case ISD::INTTOPTR:                   return "INTTOPTR";
   case ISD::PTRTOINT:                   return "PTRTOINT";
+  case ISD::PTRADD:                     return "PTRADD";
   case ISD::INTRINSIC_WO_CHAIN:
   case ISD::INTRINSIC_VOID:
   case ISD::INTRINSIC_W_CHAIN: {

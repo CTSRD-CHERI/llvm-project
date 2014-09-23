@@ -4220,10 +4220,8 @@ SDValue SelectionDAG::getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset) {
     // Assume that address space 0 has the range of any pointer.
     MVT IntPtrTy = MVT::getIntegerVT(
         TLI->getDataLayout()->getPointerSizeInBits(0));
-    SDValue SV = getNode(ISD::PTRTOINT, dl, IntPtrTy, Ptr);
-    SV = getNode(ISD::ADD, dl,
-                 IntPtrTy, SV, getConstant(Offset, IntPtrTy));
-    return getNode(ISD::INTTOPTR, dl, BasePtrVT, SV);
+    return getNode(ISD::PTRADD, dl, BasePtrVT, Ptr, getConstant(Offset,
+          IntPtrTy));
   }
   return getNode(ISD::ADD, dl, BasePtrVT, Ptr,
                  getConstant(Offset, BasePtrVT));
