@@ -56,7 +56,7 @@ entry:
 ; CHECK: gt:
 define i32 @gt(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
-  ; CHECK: cle	$2, $c4, $c3
+  ; CHECK: clt	$2, $c4, $c3
   %cmp = icmp sgt i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -66,7 +66,7 @@ entry:
 ; CHECK: ugt:
 define i32 @ugt(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
-  ; CHECK: cleu	$2, $c4, $c3
+  ; CHECK: cltu	$2, $c4, $c3
   %cmp = icmp ugt i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -76,7 +76,7 @@ entry:
 ; CHECK: ge:
 define i32 @ge(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
-  ; CHECK: clt	$2, $c4, $c3
+  ; CHECK: cle	$2, $c4, $c3
   %cmp = icmp sge i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -86,7 +86,7 @@ entry:
 ; CHECK: uge:
 define i32 @uge(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
-  ; CHECK: cltu	$2, $c4, $c3
+  ; CHECK: cleu	$2, $c4, $c3
   %cmp = icmp uge i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
