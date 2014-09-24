@@ -5603,6 +5603,32 @@ void MipsABIInfo::computeInfo(CGFunctionInfo &FI) const {
     I.info = classifyArgumentType(I.type, Offset);
 }
 
+static llvm::Value *getPointerInt(CodeGenFunction &CGF,
+                                  unsigned AS,
+                                  llvm::Value *V,
+                                  llvm::Type *IntTy) {
+  if (AS == 200) {
+    llvm::Function *GetOffset =
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_get_offset);
+    return CGF.Builder.CreateCall(GetOffset, V);
+  }
+  return CGF.Builder.CreatePtrToInt(V, IntTy);
+}
+static llvm::Value *setPointerInt(CodeGenFunction &CGF,
+                                  unsigned AS,
+                                  llvm::Value *Base,
+                                  llvm::Value *V,
+                                  llvm::Type *PTy){
+  if (AS == 200) {
+    llvm::Function *SetOffset =
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
+    llvm::Value *Addr = CGF.Builder.CreateCall2(SetOffset, Base, V);
+    return CGF.Builder.CreateBitCast(Addr, PTy);
+  }
+  return CGF.Builder.CreateIntToPtr(V, PTy);
+}
+
+
 llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
                                     CodeGenFunction &CGF) const {
   unsigned AS = getTarget().AddressSpaceForStack();
@@ -5622,37 +5648,26 @@ llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
 
   if (TypeAlign > MinABIStackAlignInBytes) {
     llvm::Value *AddrAsInt;
-    if (AS == 200) {
-      llvm::Function *GetOffset =
-              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_get_offset);
-      AddrAsInt = Builder.CreateCall(GetOffset, Addr);
-      assert(IntTy == AddrAsInt->getType());
-    } else
-      AddrAsInt = CGF.Builder.CreatePtrToInt(Addr, IntTy);
+    AddrAsInt = getPointerInt(CGF, AS, Addr, IntTy);
     llvm::Value *Inc = llvm::ConstantInt::get(IntTy, TypeAlign - 1);
     llvm::Value *Mask = llvm::ConstantInt::get(IntTy, -TypeAlign);
     llvm::Value *Add = CGF.Builder.CreateAdd(AddrAsInt, Inc);
     llvm::Value *And = CGF.Builder.CreateAnd(Add, Mask);
-    if (AS == 200) {
-      llvm::Function *SetOffset =
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
-      Addr = Builder.CreateCall2(SetOffset, Addr, And);
-    } else
-      Addr = CGF.Builder.CreateIntToPtr(And, PTy);
+    Addr = setPointerInt(CGF, AS, Addr, And, PTy);
   }
   if (Ty->isIntegerType() &&
-        CGF.CGM.getDataLayout().isBigEndian() &&
-        Size < MinABIStackAlignInBytes) {
+      (AS != 200) &&
+      CGF.CGM.getDataLayout().isBigEndian() &&
+      Size < MinABIStackAlignInBytes) {
     // Integer types on a big-endian system are stored in word-sized stack
     // slots and so an extra offset is needed.
-    llvm::Value *AddrAsInt = CGF.Builder.CreatePtrToInt(Addr, IntTy);
-    llvm::Value *Inc =
-      llvm::ConstantInt::get(IntTy, MinABIStackAlignInBytes - Size);
-    llvm::Value *Add = CGF.Builder.CreateAdd(AddrAsInt, Inc);
-    AddrTyped = CGF.Builder.CreateIntToPtr(Add, PTy);
+    llvm::Value *Offsets[] = {
+      llvm::ConstantInt::get(IntTy, MinABIStackAlignInBytes - Size)
+    };
+    Addr = CGF.Builder.CreateGEP(Addr, Offsets);
     TypeAlign = Size;
-  } else
-    AddrTyped = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy);
+  }
+  AddrTyped = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy);
 
   llvm::Value *AlignedAddr =
     Builder.CreatePointerBitCastOrAddrSpaceCast(AddrTyped, BP);
