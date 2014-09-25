@@ -1855,9 +1855,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     SV = cast<AddrSpaceCastInst>(SV)->getOperand(0);
     SDValue CapAddr = Op.getOperand(1)->getOperand(0);
     SDValue Chain = Op.getOperand(0);
-	CapAddr->dumpr();
     FI = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, FI);
-	FI->dumpr();
     return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV), false,
         false, 0);
   }
