@@ -611,8 +611,6 @@ static raw_ostream *GetOutputStream(CompilerInstance &CI,
 
 std::unique_ptr<ASTConsumer>
 CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
-  if (CI.hasTarget())
-    VMContext->setAllocaAddressSpace(CI.getTarget().AddressSpaceForStack());
 
   BackendAction BA = static_cast<BackendAction>(Act);
   std::unique_ptr<raw_ostream> OS(GetOutputStream(CI, InFile, BA));

@@ -5908,6 +5908,9 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
   virtual void setDescriptionString() {
     DescriptionString = "E-m:m-p200:256:256-i8:8:32-i16:16:32-i64:64"
                         "-n32:64-S128";
+    if (SandboxABI)
+      DescriptionString = "E-m:m-p200:256:256-i8:8:32-i16:16:32-i64:64"
+                          "-n32:64-S128-A200";
   }
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
     return (AddrSpace == 200) ? 256 : PointerWidth;
