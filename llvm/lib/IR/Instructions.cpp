@@ -831,9 +831,31 @@ static Value *getAISize(LLVMContext &Context, Value *Amt) {
   return Amt;
 }
 
+static unsigned getAS(BasicBlock *BB) {
+  if (BB == 0)
+    return 0;
+  const DataLayout *DL = BB->getDataLayout();
+  if (DL == 0)
+    return 0;
+  return DL->getAllocaAS();
+}
+
+static unsigned getAS(Instruction *I) {
+  return getAS(I->getParent());
+}
+
+AllocaInst::AllocaInst(Type *Ty, unsigned AS, Value *ArraySize,
+                       const Twine &Name, Instruction *InsertBefore)
+  : UnaryInstruction(PointerType::get(Ty, AS), Alloca,
+                     getAISize(Ty->getContext(), ArraySize), InsertBefore) {
+  setAlignment(0);
+  assert(!Ty->isVoidTy() && "Cannot allocate void!");
+  setName(Name);
+}
+
 AllocaInst::AllocaInst(Type *Ty, Value *ArraySize,
                        const Twine &Name, Instruction *InsertBefore)
-  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
+  : UnaryInstruction(PointerType::get(Ty, getAS(InsertBefore)), Alloca,
                      getAISize(Ty->getContext(), ArraySize), InsertBefore) {
   setAlignment(0);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -842,7 +864,7 @@ AllocaInst::AllocaInst(Type *Ty, Value *ArraySize,
 
 AllocaInst::AllocaInst(Type *Ty, Value *ArraySize,
                        const Twine &Name, BasicBlock *InsertAtEnd)
-  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
+  : UnaryInstruction(PointerType::get(Ty, getAS(InsertAtEnd)), Alloca,
                      getAISize(Ty->getContext(), ArraySize), InsertAtEnd) {
   setAlignment(0);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -851,16 +873,25 @@ AllocaInst::AllocaInst(Type *Ty, Value *ArraySize,
 
 AllocaInst::AllocaInst(Type *Ty, const Twine &Name,
                        Instruction *InsertBefore)
-  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
+  : UnaryInstruction(PointerType::get(Ty, getAS(InsertBefore)), Alloca,
                      getAISize(Ty->getContext(), nullptr), InsertBefore) {
   setAlignment(0);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
   setName(Name);
 }
 
+AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
+                       Twine const &Name, llvm::Instruction *InsertBefore)
+  : UnaryInstruction(PointerType::get(Ty, getAS(InsertBefore)), Alloca,
+                     getAISize(Ty->getContext(), ArraySize), InsertBefore) {
+  setAlignment(Align);
+  assert(!Ty->isVoidTy() && "Cannot allocate void!");
+  setName(Name);
+}
+
 AllocaInst::AllocaInst(Type *Ty, const Twine &Name,
                        BasicBlock *InsertAtEnd)
-  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
+  : UnaryInstruction(PointerType::get(Ty, getAS(InsertAtEnd)), Alloca,
                      getAISize(Ty->getContext(), nullptr), InsertAtEnd) {
   setAlignment(0);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -868,17 +899,8 @@ AllocaInst::AllocaInst(Type *Ty, const Twine &Name,
 }
 
 AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
-                       const Twine &Name, Instruction *InsertBefore)
-  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
-                     getAISize(Ty->getContext(), ArraySize), InsertBefore) {
-  setAlignment(Align);
-  assert(!Ty->isVoidTy() && "Cannot allocate void!");
-  setName(Name);
-}
-
-AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
                        const Twine &Name, BasicBlock *InsertAtEnd)
-  : UnaryInstruction(PointerType::getAllocaTy(Ty), Alloca,
+  : UnaryInstruction(PointerType::get(Ty, getAS(InsertAtEnd)), Alloca,
                      getAISize(Ty->getContext(), ArraySize), InsertAtEnd) {
   setAlignment(Align);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -3606,7 +3628,9 @@ InsertValueInst *InsertValueInst::clone_impl() const {
 
 AllocaInst *AllocaInst::clone_impl() const {
   AllocaInst *Result = new AllocaInst(getAllocatedType(),
-                                      (Value *)getOperand(0), getAlignment());
+                                      getType()->getPointerAddressSpace(),
+                                      (Value *)getOperand(0));
+  Result->setAlignment(getAlignment());
   Result->setUsedWithInAlloca(isUsedWithInAlloca());
   return Result;
 }

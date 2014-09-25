@@ -4326,7 +4326,10 @@ int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
   if (Size && !Size->getType()->isIntegerTy())
     return Error(SizeLoc, "element count must have integer type");
 
-  AllocaInst *AI = new AllocaInst(Ty, Size, Alignment);
+  const DataLayout *DL = M->getDataLayout();
+  unsigned AS = DL ? DL->getAllocaAS() : 0;
+  AllocaInst *AI = new AllocaInst(Ty, AS, Size);
+  AI->setAlignment(Alignment);
   AI->setUsedWithInAlloca(IsInAlloca);
   Inst = AI;
   return AteExtraComma ? InstExtraComma : InstNormal;

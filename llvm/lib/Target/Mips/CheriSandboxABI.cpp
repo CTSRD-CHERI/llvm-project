@@ -45,13 +45,17 @@ class CheriSandboxABI : public ModulePass,
       Allocas.push_back(&AI);
     }
     virtual bool runOnModule(Module &Mod) {
-      LLVMContext &C = Mod.getContext();
-      // Early abort if we aren't using capabilities on the stack
-      if (C.getAllocaAddressSpace() != 200)
-        return false;
-      C.setAllocaAddressSpace(0);
       M = &Mod;
       DL = new DataLayout(M);
+      // Early abort if we aren't using capabilities on the stack
+      if (DL->getAllocaAS() != 200)
+        return false;
+      // We're going to replace all allocas (in address space 200) with ones in
+      // AS 0, followed by an intrinsic that expands to a
+      // stack-capability-relative access and setting the length.  Make sure
+      // that the AS for new allocas is 0.
+      DL->setAllocaAS(0);
+      M->setDataLayout(DL);
       bool Modified = false;
       for (Function &F : Mod)
         Modified |= runOnFunction(F);
@@ -69,11 +73,6 @@ class CheriSandboxABI : public ModulePass,
       if (Allocas.empty())
         return false;
 
-      // We're going to replace these allocas (in address space 200) with ones
-      // in AS 0, followed by an intrinsic that expands to a
-      // stack-capability-relative access and setting the length)
-      C.setAllocaAddressSpace(0);
-
       Function *CastFn =
         Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
       Function *SetLenFun =
@@ -82,6 +81,7 @@ class CheriSandboxABI : public ModulePass,
       IRBuilder<> B(C);
 
       for (AllocaInst *AI : Allocas) {
+        assert(AI->getType()->getPointerAddressSpace() == 200);
         B.SetInsertPoint(AI->getParent(), AI);
 
         PointerType *AllocaTy = AI->getType();
@@ -89,6 +89,7 @@ class CheriSandboxABI : public ModulePass,
 
         // Create a new (AS 0) alloca
         Value *Alloca = B.CreateAlloca(AllocationTy, AI->getArraySize());
+        assert(Alloca->getType()->getPointerAddressSpace() == 0);
 
         // Convert the new alloca into a stack-cap relative capability
         Alloca = B.CreateBitCast(Alloca, Type::getInt8PtrTy(C, 0));

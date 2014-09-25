@@ -99,6 +99,7 @@ class DataLayout {
 private:
   bool          LittleEndian;          ///< Defaults to false
   unsigned      StackNaturalAlign;     ///< Stack natural alignment
+  unsigned      AllocaAS;              ///< Address space for allocas
 
   enum ManglingModeT {
     MM_None,
@@ -189,6 +190,7 @@ public:
   DataLayout &operator=(const DataLayout &DL) {
     clear();
     LittleEndian = DL.isLittleEndian();
+    AllocaAS = DL.AllocaAS;
     StackNaturalAlign = DL.StackNaturalAlign;
     ManglingMode = DL.ManglingMode;
     LegalIntWidths = DL.LegalIntWidths;
@@ -349,6 +351,11 @@ public:
       return getPointerBaseSizeInBits(Ty->getPointerAddressSpace());
     return getTypeSizeInBits(Ty);
   }
+
+  /// Returns the address space used for alloca instructions.
+  unsigned getAllocaAS() const { return AllocaAS; }
+  /// Sets the address space used for allocas
+  void setAllocaAS(unsigned AS) { AllocaAS = AS; }
 
   /// Size examples:
   ///

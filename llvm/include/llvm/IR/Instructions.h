@@ -76,17 +76,20 @@ class AllocaInst : public UnaryInstruction {
 protected:
   AllocaInst *clone_impl() const override;
 public:
-  explicit AllocaInst(Type *Ty, Value *ArraySize = nullptr,
+  explicit AllocaInst(Type *Ty, unsigned AS, Value *ArraySize = nullptr,
                       const Twine &Name = "",
                       Instruction *InsertBefore = nullptr);
+  explicit AllocaInst(Type *Ty, Value *ArraySize,
+                      const Twine &Name,
+                      Instruction *InsertBefore);
   AllocaInst(Type *Ty, Value *ArraySize,
              const Twine &Name, BasicBlock *InsertAtEnd);
 
-  AllocaInst(Type *Ty, const Twine &Name, Instruction *InsertBefore = nullptr);
+  AllocaInst(Type *Ty, const Twine &Name, Instruction *InsertBefore);
   AllocaInst(Type *Ty, const Twine &Name, BasicBlock *InsertAtEnd);
 
   AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
-             const Twine &Name = "", Instruction *InsertBefore = nullptr);
+             const Twine &Name, Instruction *InsertBefore);
   AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
              const Twine &Name, BasicBlock *InsertAtEnd);
 

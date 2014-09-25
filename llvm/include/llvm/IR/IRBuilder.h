@@ -912,7 +912,10 @@ public:
 
   AllocaInst *CreateAlloca(Type *Ty, Value *ArraySize = nullptr,
                            const Twine &Name = "") {
-    return Insert(new AllocaInst(Ty, ArraySize), Name);
+    unsigned AS = 0;
+    if (const DataLayout *DL = BB->getDataLayout())
+      AS = DL->getAllocaAS();
+    return Insert(new AllocaInst(Ty, AS, ArraySize), Name);
   }
   // \brief Provided to resolve 'CreateLoad(Ptr, "...")' correctly, instead of
   // converting the string to 'bool' for the isVolatile parameter.

@@ -114,6 +114,9 @@ static std::string computeDataLayout(const MipsSubtarget &ST) {
   else
     Ret += "-n32-S64";
 
+  if (ST.isCheriSandbox())
+    Ret += "-A200";
+
   return Ret;
 }
 

@@ -2992,7 +2992,10 @@ std::error_code BitcodeReader::ParseFunctionBody(Function *F) {
       unsigned Align = AlignRecord & ((1 << 5) - 1);
       if (!Ty || !Size)
         return Error(BitcodeError::InvalidRecord);
-      AllocaInst *AI = new AllocaInst(Ty->getElementType(), Size, (1 << Align) >> 1);
+      const DataLayout *DL = TheModule->getDataLayout();
+      unsigned AS = DL ? DL->getAllocaAS() : 0;
+      AllocaInst *AI = new AllocaInst(Ty->getElementType(), AS, Size);
+      AI->setAlignment((1 << Align) >> 1);
       AI->setUsedWithInAlloca(InAlloca);
       I = AI;
       InstructionList.push_back(I);

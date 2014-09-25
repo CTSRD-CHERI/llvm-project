@@ -1996,9 +1996,13 @@ void Verifier::visitStoreInst(StoreInst &SI) {
 void Verifier::visitAllocaInst(AllocaInst &AI) {
   SmallPtrSet<const Type*, 4> Visited;
   PointerType *PTy = AI.getType();
-  Assert1(PTy->getAddressSpace() == (unsigned)Context->getAllocaAddressSpace(),
+#ifndef NDEBUG
+  Assert1((!(AI.getParent()->getDataLayout()) ||
+          (PTy->getAddressSpace() ==
+          AI.getParent()->getDataLayout()->getAllocaAS())),
           "Allocation instruction pointer not in the stack address space!",
           &AI);
+#endif
   Assert1(PTy->getElementType()->isSized(&Visited), "Cannot allocate unsized type",
           &AI);
   Assert1(AI.getArraySize()->getType()->isIntegerTy(),

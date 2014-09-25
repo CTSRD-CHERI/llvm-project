@@ -181,6 +181,7 @@ void DataLayout::reset(StringRef Desc) {
   LayoutMap = nullptr;
   LittleEndian = false;
   StackNaturalAlign = 0;
+  AllocaAS = 0;
   ManglingMode = MM_None;
 
   // Default alignments
@@ -243,6 +244,9 @@ void DataLayout::parseSpecifier(StringRef Desc) {
       break;
     case 'e':
       LittleEndian = true;
+      break;
+    case 'A':
+      AllocaAS = getInt(Tok);
       break;
     case 'p': {
       // Address space.
@@ -577,6 +581,9 @@ std::string DataLayout::getStringRepresentation() const {
 
   if (StackNaturalAlign)
     OS << "-S" << StackNaturalAlign*8;
+
+  if (AllocaAS != 0)
+    OS << "-A" << AllocaAS;
 
   return OS.str();
 }

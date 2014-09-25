@@ -241,10 +241,3 @@ void LLVMContext::getMDKindNames(SmallVectorImpl<StringRef> &Names) const {
     Names[I->second] = I->first();
 }
 
-void LLVMContext::setAllocaAddressSpace(int AS) {
-  pImpl->AllocaAS = AS;
-}
-
-int LLVMContext::getAllocaAddressSpace() {
-  return pImpl->AllocaAS;
-}
