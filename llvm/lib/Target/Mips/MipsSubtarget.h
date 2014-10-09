@@ -243,6 +243,16 @@ public:
   bool isCheriSandbox() const { return IsCheriSandbox; }
   /// Uses the ABI where the stack pointer is relative to C11, not C0.
   bool usesCheriStackCapabilityABI() const;
+  /// This is a very ugly hack.  CodeGenPrepare can sink pointer arithmetic to
+  /// appear closer to load and store operations (because SelectionDAG only
+  /// looks at one basic block at a time).  Unfortunately, it defaults to using
+  /// ptrtoint / inttoptr pairs, which means that SelectionDAG doesn't generate
+  /// pointer addition nodes and instead just ends up producing CToPtr /
+  /// CFromPtr instruction pairs.  There is a command-line flag for preferring 
+  /// to sink GEPs instead, but no way for the subtarget to set this flag.
+  /// Claiming that you use AA also enables the GEP-sinking mode, so we claim
+  /// this for CHERI.
+  bool useAA() const override { return IsCheri; }
 
   bool hasStandardEncoding() const { return !inMips16Mode(); }
 
