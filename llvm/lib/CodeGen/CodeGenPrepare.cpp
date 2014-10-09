@@ -2707,7 +2707,7 @@ bool CodeGenPrepare::OptimizeMemoryInst(Instruction *MemoryInst, Value *Addr,
 	  // We need to add this separately from the scale above to help with
 	  // SDAG consecutive load/store merging.
           if (ResultPtr->getType() != I8PtrTy)
-            ResultPtr = Builder.CreateBitCast(ResultPtr, I8PtrTy);
+            ResultPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(ResultPtr, I8PtrTy);
           ResultPtr = Builder.CreateGEP(ResultPtr, ResultIndex, "sunkaddr");
         }
 
@@ -2718,7 +2718,7 @@ bool CodeGenPrepare::OptimizeMemoryInst(Instruction *MemoryInst, Value *Addr,
         SunkAddr = ResultPtr;
       } else {
         if (ResultPtr->getType() != I8PtrTy)
-          ResultPtr = Builder.CreateBitCast(ResultPtr, I8PtrTy);
+          ResultPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(ResultPtr, I8PtrTy);
         SunkAddr = Builder.CreateGEP(ResultPtr, ResultIndex, "sunkaddr");
       }
 
