@@ -3097,7 +3097,8 @@ MipsTargetLowering::LowerFormalArguments(SDValue Chain,
       unsigned Reg = MipsFI->getSRetReturnReg();
       if (!Reg) {
         Reg = MF.getRegInfo().createVirtualRegister(
-            getRegClassFor(Subtarget.isABI_N64() ? MVT::i64 : MVT::i32));
+            getRegClassFor(Subtarget.isCheriSandbox() ? MVT::iFATPTR :
+              (Subtarget.isABI_N64() ? MVT::i64 : MVT::i32)));
         MipsFI->setSRetReturnReg(Reg);
       }
       SDValue Copy = DAG.getCopyToReg(DAG.getEntryNode(), DL, Reg, InVals[i]);
@@ -3178,17 +3179,22 @@ MipsTargetLowering::LowerReturn(SDValue Chain,
   // a virtual register in the entry block, so now we copy the value out
   // and into $v0.
   if (MF.getFunction()->hasStructRetAttr()) {
+    EVT SRetTy = getPointerTy();
+    unsigned V0 = Subtarget.isABI_N64() ? Mips::V0_64 : Mips::V0;
+    if (Subtarget.isCheriSandbox()) {
+      V0 = Mips::C3;
+      SRetTy = MVT::iFATPTR;
+    }
     MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
     unsigned Reg = MipsFI->getSRetReturnReg();
 
     if (!Reg)
       llvm_unreachable("sret virtual register not created in the entry block");
-    SDValue Val = DAG.getCopyFromReg(Chain, DL, Reg, getPointerTy());
-    unsigned V0 = Subtarget.isABI_N64() ? Mips::V0_64 : Mips::V0;
+    SDValue Val = DAG.getCopyFromReg(Chain, DL, Reg, SRetTy);
 
     Chain = DAG.getCopyToReg(Chain, DL, V0, Val, Flag);
     Flag = Chain.getValue(1);
-    RetOps.push_back(DAG.getRegister(V0, getPointerTy()));
+    RetOps.push_back(DAG.getRegister(V0, SRetTy));
   }
 
   RetOps[0] = Chain;  // Update chain.
