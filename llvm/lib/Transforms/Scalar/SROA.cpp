@@ -1754,6 +1754,8 @@ static bool isIntegerWideningViableForSlice(const DataLayout &DL,
                                             uint64_t Size, AllocaSlices &S,
                                             AllocaSlices::const_iterator I,
                                             bool &WholeAllocaOp) {
+  if (Size*8 > DL.getLargestLegalIntTypeSize())
+    return false;
   uint64_t RelBegin = I->beginOffset() - AllocBeginOffset;
   uint64_t RelEnd = I->endOffset() - AllocBeginOffset;
 
