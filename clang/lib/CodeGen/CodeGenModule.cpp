@@ -2322,10 +2322,10 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
                                       getContext().getDefaultAS()), nullptr);
 
   // Create the new alias itself, but don't set a name yet.
+  llvm::PointerType *AliaseeTy = cast<llvm::PointerType>(Aliasee->getType());
   auto *GA = llvm::GlobalAlias::create(
-      cast<llvm::PointerType>(Aliasee->getType())->getElementType(),
-      getContext().getDefaultAS(), llvm::Function::ExternalLinkage, "",
-      Aliasee, &getModule());
+      AliaseeTy->getElementType(), AliaseeTy->getPointerAddressSpace(),
+      llvm::Function::ExternalLinkage, "", Aliasee, &getModule());
 
   if (Entry) {
     if (GA->getAliasee() == Entry) {
