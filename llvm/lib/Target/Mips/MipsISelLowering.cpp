@@ -1853,8 +1853,13 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     // alloca to AS 0.  We need to extract the original operands.
     const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
     SV = cast<AddrSpaceCastInst>(SV)->getOperand(0);
-    SDValue CapAddr = Op.getOperand(1)->getOperand(0);
     SDValue Chain = Op.getOperand(0);
+    SDValue CapAddr = Op.getOperand(1);
+    if (CapAddr->getOpcode() == ISD::ADDRSPACECAST)
+      CapAddr = CapAddr->getOperand(0);
+    else
+      CapAddr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain,
+          CapAddr);
     FI = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, FI);
     return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV), false,
         false, 0);
