@@ -1402,6 +1402,11 @@ QualType Sema::BuildPointerType(QualType T,
   if (getLangOpts().ObjCAutoRefCount)
     T = inferARCLifetimeForPointee(*this, T, Loc, /*reference*/ false);
 
+  // FIXME: Magic numbers!
+  if (PointerInterpretation == PIK_Capability)
+    T = Context.getAddrSpaceQualType(T, 200);
+  if (PointerInterpretation == PIK_Integer)
+    T = Context.getAddrSpaceQualType(T, 0);
   // Build the pointer type.
   return Context.getPointerType(T);
 }

@@ -167,6 +167,17 @@ struct PragmaUnrollHintHandler : public PragmaHandler {
                     Token &FirstToken) override;
 };
 
+
+struct PragmaPointerInterpretation : public PragmaHandler {
+public:
+  PragmaPointerInterpretation(Sema &Actions)
+    : PragmaHandler("pointer_interpretation"), Actions(Actions) {}
+  void HandlePragma(Preprocessor &PP, PragmaIntroducerKind Introducer,
+                            Token &FirstToken) override;
+private:
+  Sema &Actions;
+};
+
 }  // end namespace
 
 void Parser::initializePragmaHandlers() {
@@ -212,6 +223,9 @@ void Parser::initializePragmaHandlers() {
     OpenMPHandler.reset(new PragmaNoOpenMPHandler());
   PP.AddPragmaHandler(OpenMPHandler.get());
 
+  PointerInterpretationHandler.reset(new PragmaPointerInterpretation(Actions));
+  PP.AddPragmaHandler(PointerInterpretationHandler.get());
+
   if (getLangOpts().MicrosoftExt) {
     MSCommentHandler.reset(new PragmaCommentHandler(Actions));
     PP.AddPragmaHandler(MSCommentHandler.get());
@@ -256,6 +270,8 @@ void Parser::resetPragmaHandlers() {
   GCCVisibilityHandler.reset();
   PP.RemovePragmaHandler(OptionsHandler.get());
   OptionsHandler.reset();
+  PP.RemovePragmaHandler(PointerInterpretationHandler.get());
+  PointerInterpretationHandler.reset();
   PP.RemovePragmaHandler(PackHandler.get());
   PackHandler.reset();
   PP.RemovePragmaHandler(MSStructHandler.get());
@@ -2072,4 +2088,18 @@ void PragmaUnrollHintHandler::HandlePragma(Preprocessor &PP,
   TokenArray[0].setAnnotationValue(static_cast<void *>(Info));
   PP.EnterTokenStream(TokenArray, 1, /*DisableMacroExpansion=*/false,
                       /*OwnsTokens=*/true);
+}
+void PragmaPointerInterpretation::HandlePragma(Preprocessor &PP,
+                                           PragmaIntroducerKind Introducer,
+                                           Token &Tok) {
+  PP.Lex(Tok);
+  IdentifierInfo *Interpretation = Tok.getIdentifierInfo();
+  Sema::PointerInterpretationKind Mode =
+    llvm::StringSwitch<Sema::PointerInterpretationKind>(Interpretation->getName())
+      .Case("capability", Sema::PointerInterpretationKind::PIK_Capability)
+      .Case("integer", Sema::PointerInterpretationKind::PIK_Integer)
+      .Case("default", Sema::PointerInterpretationKind::PIK_Default)
+      .Default(Sema::PointerInterpretationKind::PIK_Invalid);
+  // FIXME: Error handling!
+  Actions.ActOnPragmaPointerInterpretation(Mode);
 }

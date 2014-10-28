@@ -265,6 +265,11 @@ void Sema::ActOnPragmaPack(PragmaPackKind Kind, IdentifierInfo *Name,
   }
 }
 
+void Sema::ActOnPragmaPointerInterpretation(PointerInterpretationKind K) {
+  assert(K != PIK_Invalid);
+  PointerInterpretation = K;
+}
+
 void Sema::ActOnPragmaMSStruct(PragmaMSStructKind Kind) { 
   MSStructPragmaOn = (Kind == PMSST_ON);
 }

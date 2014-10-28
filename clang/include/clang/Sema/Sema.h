@@ -7154,6 +7154,14 @@ public:
     PCK_User      // #pragma comment(user, ...)
   };
 
+  enum PointerInterpretationKind {
+    PIK_Capability,
+    PIK_Integer,
+    PIK_Default,
+    PIK_Invalid
+  } PointerInterpretation = PIK_Default;
+
+
   /// ActOnPragmaPack - Called on well formed \#pragma pack(...).
   void ActOnPragmaPack(PragmaPackKind Kind,
                        IdentifierInfo *Name,
@@ -7161,6 +7169,8 @@ public:
                        SourceLocation PragmaLoc,
                        SourceLocation LParenLoc,
                        SourceLocation RParenLoc);
+
+  void ActOnPragmaPointerInterpretation(PointerInterpretationKind K);
 
   /// ActOnPragmaMSStruct - Called on well formed \#pragma ms_struct [on|off].
   void ActOnPragmaMSStruct(PragmaMSStructKind Kind);
