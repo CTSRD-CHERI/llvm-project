@@ -5412,7 +5412,8 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
 
   // On CHERI, we must pass unions containing capabilities in capability
   // registers.  Otherwise, pass them as integers.
-  if (RT->isUnionType() && containsCapabilities(getContext(), RT->getDecl()))
+  if (RT &&
+      (RT->isUnionType() && containsCapabilities(getContext(), RT->getDecl())))
     return llvm::Type::getInt8Ty(getVMContext())->getPointerTo(200);
 
   // Unions/vectors are passed in integer registers.
