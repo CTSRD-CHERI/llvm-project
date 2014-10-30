@@ -2094,12 +2094,18 @@ void PragmaPointerInterpretation::HandlePragma(Preprocessor &PP,
                                            Token &Tok) {
   PP.Lex(Tok);
   IdentifierInfo *Interpretation = Tok.getIdentifierInfo();
-  Sema::PointerInterpretationKind Mode =
-    llvm::StringSwitch<Sema::PointerInterpretationKind>(Interpretation->getName())
-      .Case("capability", Sema::PointerInterpretationKind::PIK_Capability)
-      .Case("integer", Sema::PointerInterpretationKind::PIK_Integer)
-      .Case("default", Sema::PointerInterpretationKind::PIK_Default)
-      .Default(Sema::PointerInterpretationKind::PIK_Invalid);
-  // FIXME: Error handling!
-  Actions.ActOnPragmaPointerInterpretation(Mode);
+  if (Interpretation->getName() == "push")
+    Actions.ActOnPragmaPointerInterpretationPush();
+  else if (Interpretation->getName() == "pop")
+    Actions.ActOnPragmaPointerInterpretationPop();
+  else {
+    Sema::PointerInterpretationKind Mode =
+      llvm::StringSwitch<Sema::PointerInterpretationKind> (Interpretation->getName())
+        .Case("capability", Sema::PointerInterpretationKind::PIK_Capability)
+        .Case("integer", Sema::PointerInterpretationKind::PIK_Integer)
+        .Case("default", Sema::PointerInterpretationKind::PIK_Default)
+        .Default(Sema::PointerInterpretationKind::PIK_Invalid);
+    // FIXME: Error handling!
+    Actions.ActOnPragmaPointerInterpretation(Mode);
+  }
 }

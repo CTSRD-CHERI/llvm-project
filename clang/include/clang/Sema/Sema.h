@@ -7160,6 +7160,7 @@ public:
     PIK_Default,
     PIK_Invalid
   } PointerInterpretation = PIK_Default;
+  llvm::SmallVector<PointerInterpretationKind, 4> PointerInterpretationStack;
 
 
   /// ActOnPragmaPack - Called on well formed \#pragma pack(...).
@@ -7171,6 +7172,13 @@ public:
                        SourceLocation RParenLoc);
 
   void ActOnPragmaPointerInterpretation(PointerInterpretationKind K);
+  void ActOnPragmaPointerInterpretationPush() {
+    PointerInterpretationStack.push_back(PointerInterpretation);
+  }
+  void ActOnPragmaPointerInterpretationPop() {
+    PointerInterpretation = PointerInterpretationStack.back();
+    PointerInterpretationStack.pop_back();
+  }
 
   /// ActOnPragmaMSStruct - Called on well formed \#pragma ms_struct [on|off].
   void ActOnPragmaMSStruct(PragmaMSStructKind Kind);
