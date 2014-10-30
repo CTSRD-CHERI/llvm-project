@@ -1425,8 +1425,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Type *DstTy = ConvertType(DestTy);
     if (SrcTy->isPtrOrPtrVectorTy() && DstTy->isPtrOrPtrVectorTy() &&
         SrcTy->getPointerAddressSpace() != DstTy->getPointerAddressSpace()) {
-      llvm::Type *MidTy = CGF.CGM.getDataLayout().getIntPtrType(SrcTy);
-      return Builder.CreateIntToPtr(Builder.CreatePtrToInt(Src, MidTy), DstTy);
+      return Builder.CreatePointerBitCastOrAddrSpaceCast(Src, DstTy);
     }
     if (E->getType()->isPointerType() && DestTy->isPointerType())
       return CGF.EmitPointerCast(Src, E->getType(), DestTy);
