@@ -5269,6 +5269,9 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       !hasParsedAttr(S, D, AttributeList::AT_DLLExport))
     SC = SC_Extern;
 
+  if (R.getAddressSpace() == 0)
+    R = Context.getAddrSpaceQualType(R, Context.getDefaultAS());
+
   DeclContext *OriginalDC = DC;
   bool IsLocalExternDecl = SC == SC_Extern &&
                            adjustContextForLocalExternDecl(DC);
