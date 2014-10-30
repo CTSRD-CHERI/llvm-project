@@ -1994,9 +1994,6 @@ public:
   }
 
   unsigned getTargetAddressSpace(unsigned AS) const {
-    if (AS == 0) {
-      return DefaultAS;
-    }
     if (AS < LangAS::Offset || AS >= LangAS::Offset + LangAS::Count)
       return AS;
     else

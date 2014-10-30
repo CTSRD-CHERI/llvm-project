@@ -961,8 +961,6 @@ bool QualType::isCapabilityType(ASTContext &Context) const {
   const Type *T = CanonicalType.getTypePtr();
   if (const PointerType *PT = dyn_cast<PointerType>(T)) {
     int AS = PT->getPointeeType().getAddressSpace();
-    if (AS == 0)
-      AS = Context.getTargetInfo().AddressSpaceForStack();
     return AS == Context.getTargetInfo().AddressSpaceForCapabilities();
   }
   return false;
