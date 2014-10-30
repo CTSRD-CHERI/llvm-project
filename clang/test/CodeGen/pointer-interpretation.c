@@ -3,7 +3,7 @@
 struct test
 {
 	int *a,*b,*c;
-} t;
+};
 #pragma pointer_interpretation default
 struct test2
 {
@@ -14,6 +14,7 @@ struct test3
 {
 	int *a,*b,*c;
 } t3;
+struct test t;
 
 _Pragma("pointer_interpretation integer")
 _Pragma("pointer_interpretation capability")
