@@ -7732,6 +7732,8 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       if (End != Str && AddrSpace != 0) {
         Type = Context.getAddrSpaceQualType(Type, AddrSpace);
         Str = End;
+      } else {
+        Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
       }
       if (c == '*')
         Type = Context.getPointerType(Type);
