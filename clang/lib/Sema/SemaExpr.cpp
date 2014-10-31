@@ -1547,6 +1547,8 @@ Sema::ActOnStringLiteral(ArrayRef<Token> StringToks, Scope *UDLScope) {
   // OpenCL v1.1 s6.5.3: a string literal is in the constant address space.
   if (getLangOpts().OpenCL) {
     StrTy = Context.getAddrSpaceQualType(StrTy, LangAS::opencl_constant);
+  } else {
+    StrTy = Context.getAddrSpaceQualType(StrTy, Context.getDefaultAS());
   }
 
   // Pass &StringTokLocs[0], StringTokLocs.size() to factory!
