@@ -2940,6 +2940,7 @@ ExprResult Sema::BuildPredefinedExpr(SourceLocation Loc,
     else
       ResTy = Context.CharTy.withConst();
     ResTy = Context.getConstantArrayType(ResTy, LengthI, ArrayType::Normal, 0);
+    ResTy = Context.getAddrSpaceQualType(ResTy, Context.getDefaultAS());
   }
 
   return new (Context) PredefinedExpr(Loc, ResTy, IT);
