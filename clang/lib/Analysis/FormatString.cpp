@@ -334,7 +334,7 @@ bool ArgType::matchesType(ASTContext &C, QualType argTy) const {
       if (!PT)
         return false;
       QualType pointeeTy = PT->getPointeeType();
-      if (pointeeTy.getAddressSpace() != 0)
+      if (pointeeTy.getAddressSpace() != C.getDefaultAS())
         return false;
       if (const BuiltinType *BT = pointeeTy->getAs<BuiltinType>())
         switch (BT->getKind()) {
