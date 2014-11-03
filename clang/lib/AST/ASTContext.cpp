@@ -4304,7 +4304,7 @@ const ArrayType *ASTContext::getAsArrayType(QualType T) const {
 QualType ASTContext::getAdjustedParameterType(QualType T) const {
   if (T->isArrayType() || T->isFunctionType())
     return getDecayedType(T);
-  return T;
+  return getAddrSpaceQualType(T, DefaultAS);
 }
 
 QualType ASTContext::getSignatureParameterType(QualType T) const {
