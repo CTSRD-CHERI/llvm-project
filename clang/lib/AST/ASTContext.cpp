@@ -7701,6 +7701,7 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       Error = ASTContext::GE_Missing_stdio;
       return QualType();
     }
+    Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
     break;
   case 'J':
     if (Signed)
@@ -7712,6 +7713,7 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       Error = ASTContext::GE_Missing_setjmp;
       return QualType();
     }
+    Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
     break;
   case 'K':
     assert(HowLong == 0 && !Signed && !Unsigned && "Bad modifiers for 'K'!");
@@ -7721,9 +7723,11 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       Error = ASTContext::GE_Missing_ucontext;
       return QualType();
     }
+    Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
     break;
   case 'p':
     Type = Context.getProcessIDType();
+    Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
     break;
   }
 
