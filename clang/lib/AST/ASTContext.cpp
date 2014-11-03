@@ -7644,8 +7644,10 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
     assert(!Type.isNull() && "builtin va list type not initialized!");
     if (Type->isArrayType())
       Type = Context.getArrayDecayedType(Type);
-    else
+    else {
+      Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
       Type = Context.getLValueReferenceType(Type);
+    }
     break;
   case 'V': {
     char *End;
