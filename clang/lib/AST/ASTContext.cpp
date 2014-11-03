@@ -7727,7 +7727,6 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
     break;
   case 'p':
     Type = Context.getProcessIDType();
-    Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
     break;
   }
 
