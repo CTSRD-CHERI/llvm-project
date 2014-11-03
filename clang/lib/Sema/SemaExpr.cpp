@@ -10744,7 +10744,9 @@ ExprResult Sema::BuildVAArgExpr(SourceLocation BuiltinLoc,
   Expr *OrigExpr = E;
 
   // Get the va_list type
-  QualType VaListType = Context.getBuiltinVaListType();
+  QualType VaListType =
+      Context.getAddrSpaceQualType(Context.getBuiltinVaListType(),
+              Context.getDefaultAS());
   if (VaListType->isArrayType()) {
     // Deal with implicit array decay; for example, on x86-64,
     // va_list is an array, but it's supposed to decay to
