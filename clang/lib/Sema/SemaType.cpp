@@ -1402,7 +1402,7 @@ QualType Sema::BuildPointerType(QualType T,
   if (getLangOpts().ObjCAutoRefCount)
     T = inferARCLifetimeForPointee(*this, T, Loc, /*reference*/ false);
 
-  if (T.getAddressSpace() == 0) {
+  if (!T->isFunctionType() && (T.getAddressSpace() == 0)) {
     int AS;
     switch (PointerInterpretation) {
       case PIK_Capability:
