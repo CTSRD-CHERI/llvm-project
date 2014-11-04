@@ -946,6 +946,8 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
       QualType ret = FI.getReturnType();
       llvm::Type *ty = ConvertType(ret);
       unsigned addressSpace = Context.getTargetAddressSpace(ret);
+      if (addressSpace == 0)
+        addressSpace = Context.getDefaultAS();
       resultType = llvm::PointerType::get(ty, addressSpace);
     } else {
       resultType = llvm::Type::getVoidTy(getLLVMContext());
@@ -959,6 +961,8 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
     QualType ret = FI.getReturnType();
     llvm::Type *ty = ConvertType(ret);
     unsigned addressSpace = Context.getTargetAddressSpace(ret);
+    if (addressSpace == 0)
+      addressSpace = Context.getDefaultAS();
     argTypes.push_back(llvm::PointerType::get(ty, addressSpace));
 
     SwapThisWithSRet = retAI.isSRetAfterThis();
