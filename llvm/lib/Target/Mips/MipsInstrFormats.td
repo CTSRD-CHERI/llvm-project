@@ -894,15 +894,13 @@ class COP0_TLB_FM<bits<6> op> : StdArch {
 class CACHEOP_FM<bits<6> op> : StdArch {
   bits<21> addr;
   bits<5> hint;
-  bits<5> base = addr{20-16};
-  bits<16> offset = addr{15-0};
 
   bits<32> Inst;
 
   let Inst{31-26} = op;
-  let Inst{25-21} = base;
+  let Inst{25-21} = addr{20-16};
   let Inst{20-16} = hint;
-  let Inst{15-0}  = offset;
+  let Inst{15-0}  = addr{15-0};
 }
 
 
