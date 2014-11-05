@@ -5845,13 +5845,15 @@ ObjCInterfaceDecl *ASTContext::getObjCProtocolDecl() const {
 
 static TypedefDecl *CreateCharPtrBuiltinVaListDecl(const ASTContext *Context) {
   // typedef char* __builtin_va_list;
-  QualType T = Context->getPointerType(Context->CharTy);
+  QualType T = Context->getAddrSpaceQualType(Context->CharTy, Context->getDefaultAS());
+  T = Context->getPointerType(T);
   return Context->buildImplicitTypedef(T, "__builtin_va_list");
 }
 
 static TypedefDecl *CreateVoidPtrBuiltinVaListDecl(const ASTContext *Context) {
   // typedef void* __builtin_va_list;
-  QualType T = Context->getPointerType(Context->VoidTy);
+  QualType T = Context->getAddrSpaceQualType(Context->VoidTy, Context->getDefaultAS());
+  T = Context->getPointerType(T);
   return Context->buildImplicitTypedef(T, "__builtin_va_list");
 }
 
