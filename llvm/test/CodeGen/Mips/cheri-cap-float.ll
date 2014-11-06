@@ -4,7 +4,7 @@ target datalayout = "E-p200:256:256:256-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:
 target triple = "cheri-unknown-freebsd"
 
 ; Function Attrs: nounwind readonly
-; CHECK: load64
+; CHECK-LABEL: load64
 define double @load64(double addrspace(200)* nocapture readonly %x) #0 {
 entry:
   ; CHECK: cld
@@ -14,7 +14,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readonly
-; CHECK: load32
+; CHECK-LABEL: load32
 define float @load32(float addrspace(200)* nocapture readonly %x) #0 {
 entry:
   ; CHECK: clw
@@ -24,7 +24,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-; CHECK: store64
+; CHECK-LABEL: store64
 define void @store64(double addrspace(200)* nocapture %x, double %y) #1 {
 entry:
   ; CHECK: dmfc1
@@ -34,7 +34,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-; CHECK: store32
+; CHECK-LABEL: store32
 define void @store32(float addrspace(200)* nocapture %x, float %y) #1 {
 entry:
   ; CHECK: mfc1
