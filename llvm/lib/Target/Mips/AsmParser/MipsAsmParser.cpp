@@ -1611,12 +1611,12 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
                               MCSymbolRefExpr::VK_Mips_ABS_LO, getContext());
   if (isGP64bit()) {
     // If it's a 64-bit architecture, expand to:
-    // la d,sym => lui  d,highest(sym)
-    //             ori  d,d,higher(sym)
-    //             dsll d,d,16
-    //             ori  d,d,hi16(sym)
-    //             dsll d,d,16
-    //             ori  d,d,lo16(sym)
+    // la d,sym => lui     d,highest(sym)
+    //             daddiu  d,d,higher(sym)
+    //             dsll    d,d,16
+    //             daddiu  d,d,hi16(sym)
+    //             dsll    d,d,16
+    //             daddiu  d,d,lo16(sym)
     const MCSymbolRefExpr *HighestExpr =
         MCSymbolRefExpr::Create(Symbol->getSymbol().getName(),
                                 MCSymbolRefExpr::VK_Mips_HIGHEST, getContext());
@@ -1637,8 +1637,8 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
         SMLoc(), Instructions);
   } else {
     // Otherwise, expand to:
-    // la d,sym => lui  d,hi16(sym)
-    //             ori  d,d,lo16(sym)
+    // la d,sym => lui    d,hi16(sym)
+    //             addiu  d,d,lo16(sym)
     tmpInst.setOpcode(Mips::LUi);
     tmpInst.addOperand(MCOperand::CreateReg(RegNo));
     tmpInst.addOperand(MCOperand::CreateExpr(HiExpr));
