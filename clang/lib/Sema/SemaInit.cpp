@@ -1911,11 +1911,11 @@ InitListChecker::CheckDesignatedInitializer(const InitializedEntity &Entity,
 
         // Name lookup didn't find anything.
         // Determine whether this was a typo for another field name.
-        FieldInitializerValidatorCCC Validator(RT->getDecl());
         if (TypoCorrection Corrected = SemaRef.CorrectTypo(
                 DeclarationNameInfo(FieldName, D->getFieldLoc()),
                 Sema::LookupMemberName, /*Scope=*/nullptr, /*SS=*/nullptr,
-                Validator, Sema::CTK_ErrorRecovery, RT->getDecl())) {
+                llvm::make_unique<FieldInitializerValidatorCCC>(RT->getDecl()),
+                Sema::CTK_ErrorRecovery, RT->getDecl())) {
           SemaRef.diagnoseTypo(
               Corrected,
               SemaRef.PDiag(diag::err_field_designator_unknown_suggest)
@@ -1932,7 +1932,15 @@ InitListChecker::CheckDesignatedInitializer(const InitializedEntity &Entity,
       }
     }
 
-    unsigned FieldIndex = KnownField->getFieldIndex();
+    unsigned FieldIndex = 0;
+    for (auto *FI : RT->getDecl()->fields()) {
+      if (FI->isUnnamedBitfield())
+        continue;
+      if (KnownField == FI)
+        break;
+      ++FieldIndex;
+    }
+
     RecordDecl::field_iterator Field =
         RecordDecl::field_iterator(DeclContext::decl_iterator(KnownField));
 
@@ -6421,6 +6429,19 @@ static void diagnoseListInit(Sema &S, const InitializedEntity &Entity,
     InitializedEntity HiddenArray =
         InitializedEntity::InitializeTemporary(ArrayType);
     return diagnoseListInit(S, HiddenArray, InitList);
+  }
+
+  if (DestType->isReferenceType()) {
+    // A list-initialization failure for a reference means that we tried to
+    // create a temporary of the inner type (per [dcl.init.list]p3.6) and the
+    // inner initialization failed.
+    QualType T = DestType->getAs<ReferenceType>()->getPointeeType();
+    diagnoseListInit(S, InitializedEntity::InitializeTemporary(T), InitList);
+    SourceLocation Loc = InitList->getLocStart();
+    if (auto *D = Entity.getDecl())
+      Loc = D->getLocation();
+    S.Diag(Loc, diag::note_in_reference_temporary_list_initializer) << T;
+    return;
   }
 
   InitListChecker DiagnoseInitList(S, Entity, InitList, DestType,

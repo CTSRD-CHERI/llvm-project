@@ -72,9 +72,9 @@ def ThreadDocs : Documentation {
   let Content = [{
 The ``__declspec(thread)`` attribute declares a variable with thread local
 storage.  It is available under the ``-fms-extensions`` flag for MSVC
-compatibility.  Documentation for the Visual C++ attribute is available on MSDN_.
+compatibility.  See the documentation for `__declspec(thread)`_ on MSDN.
 
-.. _MSDN: http://msdn.microsoft.com/en-us/library/9w1sdazb.aspx
+.. _`__declspec(thread)`: http://msdn.microsoft.com/en-us/library/9w1sdazb.aspx
 
 In Clang, ``__declspec(thread)`` is generally equivalent in functionality to the
 GNU ``__thread`` keyword.  The variable must not have a destructor and must have
@@ -154,6 +154,30 @@ def ReleaseCapabilityDocs : Documentation {
 Marks a function as releasing a capability.
   }];
 }
+
+def AssumeAlignedDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+Use ``__attribute__((assume_aligned(<alignment>[,<offset>]))`` on a function
+declaration to specify that the return value of the function (which must be a
+pointer type) has the specified offset, in bytes, from an address with the
+specified alignment. The offset is taken to be zero if omitted.
+
+.. code-block:: c++
+
+  // The returned pointer value has 32-byte alignment.
+  void *a() __attribute__((assume_aligned (32)));
+
+  // The returned pointer value is 4 bytes greater than an address having
+  // 32-byte alignment.
+  void *b() __attribute__((assume_aligned (32, 4)));
+
+Note that this attribute provides information to the compiler regarding a
+condition that the code already ensures is true. It does not cause the compiler
+to enforce the provided alignment assumption.
+  }];
+}
+
 def EnableIfDocs : Documentation {
   let Category = DocCatFunction;
   let Content = [{
@@ -649,12 +673,117 @@ The semantics are as follows:
   }];
 }
 
-def PcsDocs : Documentation {
-  let Category = DocCatFunction;
+def DocCatCallingConvs : DocumentationCategory<"Calling Conventions"> {
   let Content = [{
-On ARM targets, this can attribute can be used to select calling conventions,
+Clang supports several different calling conventions, depending on the target
+platform and architecture. The calling convention used for a function determines
+how parameters are passed, how results are returned to the caller, and other
+low-level details of calling a function.
+  }];
+}
+
+def PcsDocs : Documentation {
+  let Category = DocCatCallingConvs;
+  let Content = [{
+On ARM targets, this attribute can be used to select calling conventions
 similar to ``stdcall`` on x86. Valid parameter values are "aapcs" and
 "aapcs-vfp".
+  }];
+}
+
+def RegparmDocs : Documentation {
+  let Category = DocCatCallingConvs;
+  let Content = [{
+On 32-bit x86 targets, the regparm attribute causes the compiler to pass
+the first three integer parameters in EAX, EDX, and ECX instead of on the
+stack. This attribute has no effect on variadic functions, and all parameters
+are passed via the stack as normal.
+  }];
+}
+
+def SysVABIDocs : Documentation {
+  let Category = DocCatCallingConvs;
+  let Content = [{
+On Windows x86_64 targets, this attribute changes the calling convention of a
+function to match the default convention used on Sys V targets such as Linux,
+Mac, and BSD. This attribute has no effect on other targets.
+  }];
+}
+
+def MSABIDocs : Documentation {
+  let Category = DocCatCallingConvs;
+  let Content = [{
+On non-Windows x86_64 targets, this attribute changes the calling convention of
+a function to match the default convention used on Windows x86_64. This
+attribute has no effect on Windows targets or non-x86_64 targets.
+  }];
+}
+
+def StdCallDocs : Documentation {
+  let Category = DocCatCallingConvs;
+  let Content = [{
+On 32-bit x86 targets, this attribute changes the calling convention of a
+function to clear parameters off of the stack on return. This convention does
+not support variadic calls or unprototyped functions in C, and has no effect on
+x86_64 targets. This calling convention is used widely by the Windows API and
+COM applications.  See the documentation for `__stdcall`_ on MSDN.
+
+.. _`__stdcall`: http://msdn.microsoft.com/en-us/library/zxk0tw93.aspx
+  }];
+}
+
+def FastCallDocs : Documentation {
+  let Category = DocCatCallingConvs;
+  let Content = [{
+On 32-bit x86 targets, this attribute changes the calling convention of a
+function to use ECX and EDX as register parameters and clear parameters off of
+the stack on return. This convention does not support variadic calls or
+unprototyped functions in C, and has no effect on x86_64 targets. This calling
+convention is supported primarily for compatibility with existing code. Users
+seeking register parameters should use the ``regparm`` attribute, which does
+not require callee-cleanup.  See the documentation for `__fastcall`_ on MSDN.
+
+.. _`__fastcall`: http://msdn.microsoft.com/en-us/library/6xa169sk.aspx
+  }];
+}
+
+def ThisCallDocs : Documentation {
+  let Category = DocCatCallingConvs;
+  let Content = [{
+On 32-bit x86 targets, this attribute changes the calling convention of a
+function to use ECX for the first parameter (typically the implicit ``this``
+parameter of C++ methods) and clear parameters off of the stack on return. This
+convention does not support variadic calls or unprototyped functions in C, and
+has no effect on x86_64 targets. See the documentation for `__thiscall`_ on
+MSDN.
+
+.. _`__thiscall`: http://msdn.microsoft.com/en-us/library/ek8tkfbw.aspx
+  }];
+}
+
+def VectorCallDocs : Documentation {
+  let Category = DocCatCallingConvs;
+  let Content = [{
+On 32-bit x86 *and* x86_64 targets, this attribute changes the calling
+convention of a function to pass vector parameters in SSE registers.
+
+On 32-bit x86 targets, this calling convention is similar to ``__fastcall``.
+The first two integer parameters are passed in ECX and EDX. Subsequent integer
+parameters are passed in memory, and callee clears the stack.  On x86_64
+targets, the callee does *not* clear the stack, and integer parameters are
+passed in RCX, RDX, R8, and R9 as is done for the default Windows x64 calling
+convention.
+
+On both 32-bit x86 and x86_64 targets, vector and floating point arguments are
+passed in XMM0-XMM5. Homogenous vector aggregates of up to four elements are
+passed in sequential SSE registers if enough are available. If AVX is enabled,
+256 bit vectors are passed in YMM0-YMM5. Any vector or aggregate type that
+cannot be passed in registers for any reason is passed by reference, which
+allows the caller to align the parameter memory.
+
+See the documentation for `__vectorcall`_ on MSDN for more details.
+
+.. _`__vectorcall`: http://msdn.microsoft.com/en-us/library/dn375768.aspx
   }];
 }
 
@@ -984,6 +1113,26 @@ Clang implements two kinds of checks with this attribute.
    In this case Clang does not warn because the format string ``s`` and
    the corresponding arguments are annotated.  If the arguments are
    incorrect, the caller of ``foo`` will receive a warning.
+  }];
+}
+
+def AlignValueDocs : Documentation {
+  let Category = DocCatType;
+  let Content = [{
+The align_value attribute can be added to the typedef of a pointer type or the
+declaration of a variable of pointer or reference type. It specifies that the
+pointer will point to, or the reference will bind to, only objects with at
+least the provided alignment. This alignment value must be some positive power
+of 2.
+
+   .. code-block:: c
+
+     typedef double * aligned_double_ptr __attribute__((align_value(64)));
+     void foo(double & x  __attribute__((align_value(128)),
+              aligned_double_ptr y) { ... }
+
+If the pointer value does not have the specified alignment at runtime, the
+behavior of the program is undefined.
   }];
 }
 

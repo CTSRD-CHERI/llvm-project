@@ -322,16 +322,26 @@ void OMPClauseProfiler::VisitOMPSeqCstClause(const OMPSeqCstClause *) {}
 
 template<typename T>
 void OMPClauseProfiler::VisitOMPClauseList(T *Node) {
-  for (auto *I : Node->varlists())
-    Profiler->VisitStmt(I);
+  for (auto *E : Node->varlists()) {
+    Profiler->VisitStmt(E);
+  }
 }
 
 void OMPClauseProfiler::VisitOMPPrivateClause(const OMPPrivateClause *C) {
   VisitOMPClauseList(C);
+  for (auto *E : C->private_copies()) {
+    Profiler->VisitStmt(E);
+  }
 }
-void OMPClauseProfiler::VisitOMPFirstprivateClause(
-                                         const OMPFirstprivateClause *C) {
+void
+OMPClauseProfiler::VisitOMPFirstprivateClause(const OMPFirstprivateClause *C) {
   VisitOMPClauseList(C);
+  for (auto *E : C->private_copies()) {
+    Profiler->VisitStmt(E);
+  }
+  for (auto *E : C->inits()) {
+    Profiler->VisitStmt(E);
+  }
 }
 void
 OMPClauseProfiler::VisitOMPLastprivateClause(const OMPLastprivateClause *C) {
@@ -394,6 +404,10 @@ void StmtProfiler::VisitOMPForDirective(const OMPForDirective *S) {
   VisitOMPLoopDirective(S);
 }
 
+void StmtProfiler::VisitOMPForSimdDirective(const OMPForSimdDirective *S) {
+  VisitOMPLoopDirective(S);
+}
+
 void StmtProfiler::VisitOMPSectionsDirective(const OMPSectionsDirective *S) {
   VisitOMPExecutableDirective(S);
 }
@@ -417,6 +431,11 @@ void StmtProfiler::VisitOMPCriticalDirective(const OMPCriticalDirective *S) {
 
 void
 StmtProfiler::VisitOMPParallelForDirective(const OMPParallelForDirective *S) {
+  VisitOMPLoopDirective(S);
+}
+
+void StmtProfiler::VisitOMPParallelForSimdDirective(
+    const OMPParallelForSimdDirective *S) {
   VisitOMPLoopDirective(S);
 }
 
@@ -450,6 +469,14 @@ void StmtProfiler::VisitOMPOrderedDirective(const OMPOrderedDirective *S) {
 }
 
 void StmtProfiler::VisitOMPAtomicDirective(const OMPAtomicDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTargetDirective(const OMPTargetDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTeamsDirective(const OMPTeamsDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 
@@ -1040,6 +1067,8 @@ StmtProfiler::VisitLambdaExpr(const LambdaExpr *S) {
       VisitDecl(C->getCapturedVar());
       ID.AddBoolean(C->isPackExpansion());
       break;
+    case LCK_VLAType:
+      llvm_unreachable("VLA type in explicit captures.");
     }
   }
   // Note: If we actually needed to be able to match lambda
@@ -1209,8 +1238,17 @@ void StmtProfiler::VisitMaterializeTemporaryExpr(
   VisitExpr(S);
 }
 
+void StmtProfiler::VisitCXXFoldExpr(const CXXFoldExpr *S) {
+  VisitExpr(S);
+  ID.AddInteger(S->getOperator());
+}
+
 void StmtProfiler::VisitOpaqueValueExpr(const OpaqueValueExpr *E) {
   VisitExpr(E);  
+}
+
+void StmtProfiler::VisitTypoExpr(const TypoExpr *E) {
+  VisitExpr(E);
 }
 
 void StmtProfiler::VisitObjCStringLiteral(const ObjCStringLiteral *S) {

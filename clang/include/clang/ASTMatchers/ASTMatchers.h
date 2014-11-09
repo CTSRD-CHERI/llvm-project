@@ -140,10 +140,7 @@ typedef internal::Matcher<NestedNameSpecifierLoc> NestedNameSpecifierLocMatcher;
 /// \endcode
 ///
 /// Usable as: Any Matcher
-inline internal::PolymorphicMatcherWithParam0<internal::TrueMatcher>
-anything() {
-  return internal::PolymorphicMatcherWithParam0<internal::TrueMatcher>();
-}
+inline internal::TrueMatcher anything() { return internal::TrueMatcher(); }
 
 /// \brief Matches declarations.
 ///
@@ -155,6 +152,17 @@ anything() {
 ///   };
 /// \endcode
 const internal::VariadicAllOfMatcher<Decl> decl;
+
+/// \brief Matches a declaration of a linkage specification.
+///
+/// Given
+/// \code
+///   extern "C" {}
+/// \endcode
+/// linkageSpecDecl()
+///   matches "extern "C" {}"
+const internal::VariadicDynCastAllOfMatcher<Decl, LinkageSpecDecl>
+    linkageSpecDecl;
 
 /// \brief Matches a declaration of anything that could have a name.
 ///
@@ -262,6 +270,17 @@ const internal::VariadicDynCastAllOfMatcher<
 ///   };
 /// \endcode
 const internal::VariadicAllOfMatcher<CXXCtorInitializer> ctorInitializer;
+
+/// \brief Matches template arguments.
+///
+/// Given
+/// \code
+///   template <typename T> struct C {};
+///   C<int> c;
+/// \endcode
+/// templateArgument()
+///   matches 'int' in C<int>.
+const internal::VariadicAllOfMatcher<TemplateArgument> templateArgument;
 
 /// \brief Matches public C++ declarations.
 ///
@@ -441,6 +460,23 @@ AST_POLYMORPHIC_MATCHER_P2(
   return InnerMatcher.matches(List[N], Finder, Builder);
 }
 
+/// \brief Matches if the number of template arguments equals \p N.
+///
+/// Given
+/// \code
+///   template<typename T> struct C {};
+///   C<int> c;
+/// \endcode
+/// classTemplateSpecializationDecl(templateArgumentCountIs(1))
+///   matches C<int>.
+AST_POLYMORPHIC_MATCHER_P(
+    templateArgumentCountIs,
+    AST_POLYMORPHIC_SUPPORTED_TYPES_2(ClassTemplateSpecializationDecl,
+                                      TemplateSpecializationType),
+    unsigned, N) {
+  return internal::getTemplateSpecializationArgs(Node).size() == N;
+}
+
 /// \brief Matches a TemplateArgument that refers to a certain type.
 ///
 /// Given
@@ -496,6 +532,68 @@ AST_MATCHER_P(TemplateArgument, isExpr, internal::Matcher<Expr>, InnerMatcher) {
     return InnerMatcher.matches(*Node.getAsExpr(), Finder, Builder);
   return false;
 }
+
+/// \brief Matches a TemplateArgument that is an integral value.
+///
+/// Given
+/// \code
+///   template<int T> struct A {};
+///   C<42> c;
+/// \endcode
+/// classTemplateSpecializationDecl(
+///   hasAnyTemplateArgument(isIntegral()))
+///   matches the implicit instantiation of C in C<42>
+///   with isIntegral() matching 42.
+AST_MATCHER(TemplateArgument, isIntegral) {
+  return Node.getKind() == TemplateArgument::Integral;
+}
+
+/// \brief Matches a TemplateArgument that referes to an integral type.
+///
+/// Given
+/// \code
+///   template<int T> struct A {};
+///   C<42> c;
+/// \endcode
+/// classTemplateSpecializationDecl(
+///   hasAnyTemplateArgument(refersToIntegralType(asString("int"))))
+///   matches the implicit instantiation of C in C<42>.
+AST_MATCHER_P(TemplateArgument, refersToIntegralType,
+              internal::Matcher<QualType>, InnerMatcher) {
+  if (Node.getKind() != TemplateArgument::Integral)
+    return false;
+  return InnerMatcher.matches(Node.getIntegralType(), Finder, Builder);
+}
+
+/// \brief Matches a TemplateArgument of integral type with a given value.
+///
+/// Note that 'Value' is a string as the template argument's value is
+/// an arbitrary precision integer. 'Value' must be euqal to the canonical
+/// representation of that integral value in base 10.
+///
+/// Given
+/// \code
+///   template<int T> struct A {};
+///   C<42> c;
+/// \endcode
+/// classTemplateSpecializationDecl(
+///   hasAnyTemplateArgument(equalsIntegralValue("42")))
+///   matches the implicit instantiation of C in C<42>.
+AST_MATCHER_P(TemplateArgument, equalsIntegralValue,
+              std::string, Value) {
+  if (Node.getKind() != TemplateArgument::Integral)
+    return false;
+  return Node.getAsIntegral().toString(10) == Value;
+}
+
+/// \brief Matches any value declaration.
+///
+/// Example matches A, B, C and F
+/// \code
+///   enum X { A, B, C };
+///   void F();
+/// \endcode
+const internal::VariadicDynCastAllOfMatcher<Decl, ValueDecl> valueDecl;
 
 /// \brief Matches C++ constructor declarations.
 ///
@@ -1502,16 +1600,8 @@ inline internal::Matcher<Stmt> sizeOfExpr(
 /// \code
 ///   namespace a { namespace b { class X; } }
 /// \endcode
-AST_MATCHER_P(NamedDecl, hasName, std::string, Name) {
-  assert(!Name.empty());
-  const std::string FullNameString = "::" + Node.getQualifiedNameAsString();
-  const StringRef FullName = FullNameString;
-  const StringRef Pattern = Name;
-  if (Pattern.startswith("::")) {
-    return FullName == Pattern;
-  } else {
-    return FullName.endswith(("::" + Pattern).str());
-  }
+inline internal::Matcher<NamedDecl> hasName(const std::string &Name) {
+  return internal::Matcher<NamedDecl>(new internal::HasNameMatcher(Name));
 }
 
 /// \brief Matches NamedDecl nodes whose fully qualified names contain
@@ -1558,7 +1648,7 @@ AST_MATCHER_P(NamedDecl, matchesName, std::string, RegExp) {
 inline internal::PolymorphicMatcherWithParam1<
     internal::HasOverloadedOperatorNameMatcher, StringRef,
     AST_POLYMORPHIC_SUPPORTED_TYPES_2(CXXOperatorCallExpr, FunctionDecl)>
-hasOverloadedOperatorName(const StringRef Name) {
+hasOverloadedOperatorName(StringRef Name) {
   return internal::PolymorphicMatcherWithParam1<
       internal::HasOverloadedOperatorNameMatcher, StringRef,
       AST_POLYMORPHIC_SUPPORTED_TYPES_2(CXXOperatorCallExpr, FunctionDecl)>(
@@ -2281,11 +2371,10 @@ AST_MATCHER(CXXCtorInitializer, isWritten) {
 AST_POLYMORPHIC_MATCHER_P(hasAnyArgument, AST_POLYMORPHIC_SUPPORTED_TYPES_2(
                                               CallExpr, CXXConstructExpr),
                           internal::Matcher<Expr>, InnerMatcher) {
-  for (unsigned I = 0; I < Node.getNumArgs(); ++I) {
+  for (const Expr *Arg : Node.arguments()) {
     BoundNodesTreeBuilder Result(*Builder);
-    if (InnerMatcher.matches(*Node.getArg(I)->IgnoreParenImpCasts(), Finder,
-                             &Result)) {
-      *Builder = Result;
+    if (InnerMatcher.matches(*Arg->IgnoreParenImpCasts(), Finder, &Result)) {
+      *Builder = std::move(Result);
       return true;
     }
   }
@@ -2967,6 +3056,46 @@ AST_POLYMORPHIC_MATCHER(
           TSK_ExplicitInstantiationDefinition);
 }
 
+/// \brief Matches declarations that are template instantiations or are inside
+/// template instantiations.
+///
+/// Given
+/// \code
+///   template<typename T> void A(T t) { T i; }
+///   A(0);
+///   A(0U);
+/// \endcode
+/// functionDecl(isInstantiated())
+///   matches 'A(int) {...};' and 'A(unsigned) {...}'.
+AST_MATCHER(Decl, isInstantiated) {
+  auto IsInstantiation = decl(anyOf(recordDecl(isTemplateInstantiation()),
+                                    functionDecl(isTemplateInstantiation())));
+  auto InnerMatcher =
+      decl(anyOf(IsInstantiation, hasAncestor(IsInstantiation)));
+  return InnerMatcher.matches(Node, Finder, Builder);
+}
+
+/// \brief Matches statements inside of a template instantiation.
+///
+/// Given
+/// \code
+///   int j;
+///   template<typename T> void A(T t) { T i; j += 42;}
+///   A(0);
+///   A(0U);
+/// \endcode
+/// declStmt(isInTemplateInstantiation())
+///   matches 'int i;' and 'unsigned i'.
+/// unless(stmt(isInTemplateInstantiation()))
+///   will NOT match j += 42; as it's shared between the template definition and
+///   instantiation.
+AST_MATCHER(Stmt, isInTemplateInstantiation) {
+  auto InnerMatcher =
+      stmt(hasAncestor(decl(anyOf(recordDecl(isTemplateInstantiation()),
+                                  functionDecl(isTemplateInstantiation())))));
+  return InnerMatcher.matches(Node, Finder, Builder);
+}
+
 /// \brief Matches explicit template specializations of function, class, or
 /// static member variable template instantiations.
 ///
@@ -3447,8 +3576,9 @@ AST_MATCHER_P(ElaboratedType, namesType, internal::Matcher<QualType>,
 /// \c recordDecl(hasDeclContext(namedDecl(hasName("M")))) matches the
 /// declaration of \c class \c D.
 AST_MATCHER_P(Decl, hasDeclContext, internal::Matcher<Decl>, InnerMatcher) {
-  return InnerMatcher.matches(*Decl::castFromDeclContext(Node.getDeclContext()),
-                              Finder, Builder);
+  const DeclContext *DC = Node.getDeclContext();
+  if (!DC) return false;
+  return InnerMatcher.matches(*Decl::castFromDeclContext(DC), Finder, Builder);
 }
 
 /// \brief Matches nested name specifiers.
@@ -3614,7 +3744,7 @@ AST_MATCHER_P(SwitchStmt, forEachSwitchCase, internal::Matcher<SwitchCase>,
       Result.addMatch(CaseBuilder);
     }
   }
-  *Builder = Result;
+  *Builder = std::move(Result);
   return Matched;
 }
 
@@ -3637,7 +3767,7 @@ AST_MATCHER_P(CXXConstructorDecl, forEachConstructorInitializer,
       Result.addMatch(InitBuilder);
     }
   }
-  *Builder = Result;
+  *Builder = std::move(Result);
   return Matched;
 }
 
@@ -3658,6 +3788,22 @@ AST_MATCHER_P(CaseStmt, hasCaseConstant, internal::Matcher<Expr>,
   return InnerMatcher.matches(*Node.getLHS(), Finder, Builder);
 }
 
+/// \brief Matches declaration that has a given attribute.
+///
+/// Given
+/// \code
+///   __attribute__((device)) void f() { ... }
+/// \endcode
+/// decl(hasAttr(clang::attr::CUDADevice)) matches the function declaration of
+/// f.
+AST_MATCHER_P(Decl, hasAttr, attr::Kind, AttrKind) {
+  for (const auto *Attr : Node.attrs()) {
+    if (Attr->getKind() == AttrKind)
+      return true;
+  }
+  return false;
+}
+
 /// \brief Matches CUDA kernel call expression.
 ///
 /// Example matches,
@@ -3666,39 +3812,6 @@ AST_MATCHER_P(CaseStmt, hasCaseConstant, internal::Matcher<Expr>,
 /// \endcode
 const internal::VariadicDynCastAllOfMatcher<Stmt, CUDAKernelCallExpr>
     CUDAKernelCallExpr;
-
-/// \brief Matches declaration that has CUDA device attribute.
-///
-/// Given
-/// \code
-///   __attribute__((device)) void f() { ... }
-/// \endcode
-/// matches the function declaration of f.
-AST_MATCHER(Decl, hasCudaDeviceAttr) {
-  return Node.hasAttr<clang::CUDADeviceAttr>();
-}
-
-/// \brief Matches declaration that has CUDA host attribute.
-///
-/// Given
-/// \code
-///   __attribute__((host)) void f() { ... }
-/// \endcode
-/// matches the function declaration of f.
-AST_MATCHER(Decl, hasCudaHostAttr) {
-  return Node.hasAttr<clang::CUDAHostAttr>();
-}
-
-/// \brief  Matches declaration that has CUDA global attribute.
-///
-/// Given
-/// \code
-///   __attribute__((global)) void f() { ... }
-/// \endcode
-/// matches the function declaration of f.
-AST_MATCHER(Decl, hasCudaGlobalAttr) {
-  return Node.hasAttr<clang::CUDAGlobalAttr>();
-}
 
 } // end namespace ast_matchers
 } // end namespace clang

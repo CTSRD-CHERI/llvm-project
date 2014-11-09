@@ -331,11 +331,11 @@ bool GenerateModuleAction::BeginSourceFileAction(CompilerInstance &CI,
     return false;
   }
 
-  llvm::MemoryBuffer *InputBuffer =
+  std::unique_ptr<llvm::MemoryBuffer> InputBuffer =
       llvm::MemoryBuffer::getMemBufferCopy(HeaderContents,
                                            Module::getModuleInputBufferName());
   // Ownership of InputBuffer will be transferred to the SourceManager.
-  setCurrentInput(FrontendInputFile(InputBuffer, getCurrentFileKind(),
+  setCurrentInput(FrontendInputFile(InputBuffer.release(), getCurrentFileKind(),
                                     Module->IsSystem));
   return true;
 }
@@ -431,8 +431,8 @@ namespace {
       Out.indent(2) << "Module map file: " << ModuleMapPath << "\n";
     }
 
-    bool ReadLanguageOptions(const LangOptions &LangOpts,
-                             bool Complain) override {
+    bool ReadLanguageOptions(const LangOptions &LangOpts, bool Complain,
+                             bool AllowCompatibleDifferences) override {
       Out.indent(2) << "Language options:\n";
 #define LANGOPT(Name, Bits, Default, Description) \
       DUMP_BOOLEAN(LangOpts.Name, Description);
@@ -534,9 +534,9 @@ void DumpModuleInfoAction::ExecuteAction() {
   std::unique_ptr<llvm::raw_fd_ostream> OutFile;
   StringRef OutputFileName = getCompilerInstance().getFrontendOpts().OutputFile;
   if (!OutputFileName.empty() && OutputFileName != "-") {
-    std::string ErrorInfo;
-    OutFile.reset(new llvm::raw_fd_ostream(OutputFileName.str().c_str(),
-                                           ErrorInfo, llvm::sys::fs::F_Text));
+    std::error_code EC;
+    OutFile.reset(new llvm::raw_fd_ostream(OutputFileName.str(), EC,
+                                           llvm::sys::fs::F_Text));
   }
   llvm::raw_ostream &Out = OutFile.get()? *OutFile.get() : llvm::outs();
 
@@ -681,14 +681,12 @@ void PrintPreambleAction::ExecuteAction() {
     // We can't do anything with these.
     return;
   }
-  
+
   CompilerInstance &CI = getCompilerInstance();
-  llvm::MemoryBuffer *Buffer
-      = CI.getFileManager().getBufferForFile(getCurrentFile());
+  auto Buffer = CI.getFileManager().getBufferForFile(getCurrentFile());
   if (Buffer) {
     unsigned Preamble =
-        Lexer::ComputePreamble(Buffer->getBuffer(), CI.getLangOpts()).first;
-    llvm::outs().write(Buffer->getBufferStart(), Preamble);
-    delete Buffer;
+        Lexer::ComputePreamble((*Buffer)->getBuffer(), CI.getLangOpts()).first;
+    llvm::outs().write((*Buffer)->getBufferStart(), Preamble);
   }
 }

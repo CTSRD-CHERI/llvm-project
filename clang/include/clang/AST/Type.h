@@ -2978,7 +2978,7 @@ public:
     return param_type_begin()[i];
   }
   ArrayRef<QualType> getParamTypes() const {
-    return ArrayRef<QualType>(param_type_begin(), param_type_end());
+    return llvm::makeArrayRef(param_type_begin(), param_type_end());
   }
 
   ExtProtoInfo getExtProtoInfo() const {
@@ -3441,6 +3441,7 @@ public:
     attr_stdcall,
     attr_thiscall,
     attr_pascal,
+    attr_vectorcall,
     attr_pnaclcall,
     attr_inteloclbicc,
     attr_ms_abi,

@@ -81,7 +81,7 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
 /// ConvertType in that it is used to convert to the memory representation for
 /// a type.  For example, the scalar representation for _Bool is i1, but the
 /// memory representation is usually i8 or i32, depending on the target.
-llvm::Type *CodeGenTypes::ConvertTypeForMem(QualType T){
+llvm::Type *CodeGenTypes::ConvertTypeForMem(QualType T) {
   llvm::Type *R = ConvertType(T);
 
   // If this is a non-bool type, don't map it.
@@ -368,9 +368,10 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
 
     case BuiltinType::Half:
       // Half FP can either be storage-only (lowered to i16) or native.
-      ResultType = getTypeForFormat(getLLVMContext(),
-          Context.getFloatTypeSemantics(T),
-          Context.getLangOpts().NativeHalfType);
+      ResultType =
+          getTypeForFormat(getLLVMContext(), Context.getFloatTypeSemantics(T),
+                           Context.getLangOpts().NativeHalfType ||
+                               Context.getLangOpts().HalfArgsAndReturns);
       break;
     case BuiltinType::Float:
     case BuiltinType::Double:
@@ -600,6 +601,8 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
   }
 
   case Type::MemberPointer: {
+    if (!getCXXABI().isMemberPointerConvertible(cast<MemberPointerType>(Ty)))
+      return llvm::StructType::create(getLLVMContext());
     ResultType = 
       getCXXABI().ConvertMemberPointerType(cast<MemberPointerType>(Ty));
     break;

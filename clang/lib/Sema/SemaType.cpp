@@ -108,6 +108,7 @@ static void diagnoseBadTypeAttribute(Sema &S, const AttributeList &attr,
     case AttributeList::AT_StdCall: \
     case AttributeList::AT_ThisCall: \
     case AttributeList::AT_Pascal: \
+    case AttributeList::AT_VectorCall: \
     case AttributeList::AT_MSABI: \
     case AttributeList::AT_SysVABI: \
     case AttributeList::AT_Regparm: \
@@ -673,6 +674,7 @@ static void maybeSynthesizeBlockSignature(TypeProcessingState &state,
                              /*RefQualifierLoc=*/NoLoc,
                              /*ConstQualifierLoc=*/NoLoc,
                              /*VolatileQualifierLoc=*/NoLoc,
+                             /*RestrictQualifierLoc=*/NoLoc,
                              /*MutableLoc=*/NoLoc,
                              EST_None,
                              /*ESpecLoc=*/NoLoc,
@@ -1769,7 +1771,7 @@ bool Sema::CheckFunctionReturnType(QualType T, SourceLocation Loc) {
   }
 
   // Functions cannot return half FP.
-  if (T->isHalfType()) {
+  if (T->isHalfType() && !getLangOpts().HalfArgsAndReturns) {
     Diag(Loc, diag::err_parameters_retval_cannot_have_fp16_type) << 1 <<
       FixItHint::CreateInsertion(Loc, "*");
     return true;
@@ -1799,7 +1801,7 @@ QualType Sema::BuildFunctionType(QualType T,
     if (ParamType->isVoidType()) {
       Diag(Loc, diag::err_param_with_void_type);
       Invalid = true;
-    } else if (ParamType->isHalfType()) {
+    } else if (ParamType->isHalfType() && !getLangOpts().HalfArgsAndReturns) {
       // Disallow half FP arguments.
       Diag(Loc, diag::err_parameters_retval_cannot_have_fp16_type) << 0 <<
         FixItHint::CreateInsertion(Loc, "*");
@@ -2774,7 +2776,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
             S.Diag(D.getIdentifierLoc(), diag::err_opencl_half_return) << T;
             D.setInvalidType(true);
           } 
-        } else {
+        } else if (!S.getLangOpts().HalfArgsAndReturns) {
           S.Diag(D.getIdentifierLoc(),
             diag::err_parameters_retval_cannot_have_fp16_type) << 1;
           D.setInvalidType(true);
@@ -2964,7 +2966,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                 D.setInvalidType();
                 Param->setInvalidDecl();
               }
-            } else {
+            } else if (!S.getLangOpts().HalfArgsAndReturns) {
               S.Diag(Param->getLocation(),
                 diag::err_parameters_retval_cannot_have_fp16_type) << 0;
               D.setInvalidType();
@@ -3044,6 +3046,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         case NestedNameSpecifier::Namespace:
         case NestedNameSpecifier::NamespaceAlias:
         case NestedNameSpecifier::Global:
+        case NestedNameSpecifier::Super:
           llvm_unreachable("Nested-name-specifier must name a type");
 
         case NestedNameSpecifier::TypeSpec:
@@ -3143,9 +3146,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
           RemovalLocs.push_back(Chunk.Fun.getConstQualifierLoc());
         if (Chunk.Fun.TypeQuals & Qualifiers::Volatile)
           RemovalLocs.push_back(Chunk.Fun.getVolatileQualifierLoc());
-        // FIXME: We do not track the location of the __restrict qualifier.
-        //if (Chunk.Fun.TypeQuals & Qualifiers::Restrict)
-        //  RemovalLocs.push_back(Chunk.Fun.getRestrictQualifierLoc());
+        if (Chunk.Fun.TypeQuals & Qualifiers::Restrict)
+          RemovalLocs.push_back(Chunk.Fun.getRestrictQualifierLoc());
         if (!RemovalLocs.empty()) {
           std::sort(RemovalLocs.begin(), RemovalLocs.end(),
                     BeforeThanCompare<SourceLocation>(S.getSourceManager()));
@@ -3440,6 +3442,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_ThisCall;
   case AttributedType::attr_pascal:
     return AttributeList::AT_Pascal;
+  case AttributedType::attr_vectorcall:
+    return AttributeList::AT_VectorCall;
   case AttributedType::attr_pcs:
   case AttributedType::attr_pcs_vfp:
     return AttributeList::AT_Pcs;
@@ -3742,6 +3746,7 @@ namespace {
       case NestedNameSpecifier::Namespace:
       case NestedNameSpecifier::NamespaceAlias:
       case NestedNameSpecifier::Global:
+      case NestedNameSpecifier::Super:
         llvm_unreachable("Nested-name-specifier must name a type");
       }
 
@@ -4457,6 +4462,8 @@ static AttributedType::Kind getCCTypeAttrKind(AttributeList &Attr) {
     return AttributedType::attr_thiscall;
   case AttributeList::AT_Pascal:
     return AttributedType::attr_pascal;
+  case AttributeList::AT_VectorCall:
+    return AttributedType::attr_vectorcall;
   case AttributeList::AT_Pcs: {
     // The attribute may have had a fixit applied where we treated an
     // identifier as a string literal.  The contents of the string are valid,
@@ -4576,7 +4583,7 @@ static bool handleFunctionTypeAttr(TypeProcessingState &state,
   }
 
   // Diagnose use of callee-cleanup calling convention on variadic functions.
-  if (isCalleeCleanup(CC)) {
+  if (!supportsVariadicCall(CC)) {
     const FunctionProtoType *FnP = dyn_cast<FunctionProtoType>(fn);
     if (FnP && FnP->isVariadic()) {
       unsigned DiagID = diag::err_cconv_varargs;
@@ -5110,31 +5117,9 @@ static bool hasVisibleDefinition(Sema &S, NamedDecl *D, NamedDecl **Suggested) {
 
   // If this definition was instantiated from a template, map back to the
   // pattern from which it was instantiated.
-  //
-  // FIXME: There must be a better place for this to live.
   if (auto *RD = dyn_cast<CXXRecordDecl>(D)) {
-    if (auto *TD = dyn_cast<ClassTemplateSpecializationDecl>(RD)) {
-      auto From = TD->getInstantiatedFrom();
-      if (auto *CTD = From.dyn_cast<ClassTemplateDecl*>()) {
-        while (auto *NewCTD = CTD->getInstantiatedFromMemberTemplate()) {
-          if (NewCTD->isMemberSpecialization())
-            break;
-          CTD = NewCTD;
-        }
-        RD = CTD->getTemplatedDecl();
-      } else if (auto *CTPSD = From.dyn_cast<
-                     ClassTemplatePartialSpecializationDecl *>()) {
-        while (auto *NewCTPSD = CTPSD->getInstantiatedFromMember()) {
-          if (NewCTPSD->isMemberSpecialization())
-            break;
-          CTPSD = NewCTPSD;
-        }
-        RD = CTPSD;
-      }
-    } else if (isTemplateInstantiation(RD->getTemplateSpecializationKind())) {
-      while (auto *NewRD = RD->getInstantiatedFromMemberClass())
-        RD = NewRD;
-    }
+    if (auto *Pattern = RD->getTemplateInstantiationPattern())
+      RD = Pattern;
     D = RD->getDefinition();
   } else if (auto *ED = dyn_cast<EnumDecl>(D)) {
     while (auto *NewED = ED->getInstantiatedFromMemberEnum())

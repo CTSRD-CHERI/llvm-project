@@ -5634,7 +5634,11 @@ Sema::AddOverloadCandidate(FunctionDecl *Function,
   // (CUDA B.1): Check for invalid calls between targets.
   if (getLangOpts().CUDA)
     if (const FunctionDecl *Caller = dyn_cast<FunctionDecl>(CurContext))
-      if (CheckCUDATarget(Caller, Function)) {
+      // Skip the check for callers that are implicit members, because in this
+      // case we may not yet know what the member's target is; the target is
+      // inferred for the member automatically, based on the bases and fields of
+      // the class.
+      if (!Caller->isImplicit() && CheckCUDATarget(Caller, Function)) {
         Candidate.Viable = false;
         Candidate.FailureKind = ovl_fail_bad_target;
         return;
@@ -5743,10 +5747,20 @@ ObjCMethodDecl *Sema::SelectBestMethod(Selector Sel, MultiExprArg Args,
           break;
         }
       }
-    } else
+    } else {
       // Check for extra arguments to non-variadic methods.
       if (Args.size() != NumNamedArgs)
         Match = false;
+      else if (Match && NumNamedArgs == 0 && Methods.size() > 1) {
+        // Special case when selectors have no argument. In this case, select
+        // one with the most general result type of 'id'.
+        for (unsigned b = 0, e = Methods.size(); b < e; b++) {
+          QualType ReturnT = Methods[b]->getReturnType();
+          if (ReturnT->isObjCIdType())
+            return Methods[b];
+        }
+      }
+    }
 
     if (Match)
       return Method;
@@ -5809,9 +5823,7 @@ EnableIfAttr *Sema::CheckEnableIf(FunctionDecl *Function, ArrayRef<Expr *> Args,
     APValue Result;
     EnableIfAttr *EIA = cast<EnableIfAttr>(*I);
     if (!EIA->getCond()->EvaluateWithSubstitution(
-            Result, Context, Function,
-            ArrayRef<const Expr*>(ConvertedArgs.data(),
-                                  ConvertedArgs.size())) ||
+            Result, Context, Function, llvm::makeArrayRef(ConvertedArgs)) ||
         !Result.isInt() || !Result.getInt().getBoolValue()) {
       return EIA;
     }
@@ -5968,6 +5980,15 @@ Sema::AddMethodCandidate(CXXMethodDecl *Method, DeclAccessPair FoundDecl,
       return;
     }
   }
+
+  // (CUDA B.1): Check for invalid calls between targets.
+  if (getLangOpts().CUDA)
+    if (const FunctionDecl *Caller = dyn_cast<FunctionDecl>(CurContext))
+      if (CheckCUDATarget(Caller, Method)) {
+        Candidate.Viable = false;
+        Candidate.FailureKind = ovl_fail_bad_target;
+        return;
+      }
 
   // Determine the implicit conversion sequences for each of the
   // arguments.
@@ -6304,7 +6325,7 @@ Sema::AddConversionCandidate(CXXConversionDecl *Conversion,
            "Can only end up with a standard conversion sequence or failure");
   }
 
-  if (EnableIfAttr *FailedAttr = CheckEnableIf(Conversion, ArrayRef<Expr*>())) {
+  if (EnableIfAttr *FailedAttr = CheckEnableIf(Conversion, None)) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_fail_enable_if;
     Candidate.DeductionFailure.Data = FailedAttr;
@@ -6457,7 +6478,7 @@ void Sema::AddSurrogateCandidate(CXXConversionDecl *Conversion,
     }
   }
 
-  if (EnableIfAttr *FailedAttr = CheckEnableIf(Conversion, ArrayRef<Expr*>())) {
+  if (EnableIfAttr *FailedAttr = CheckEnableIf(Conversion, None)) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_fail_enable_if;
     Candidate.DeductionFailure.Data = FailedAttr;
@@ -9119,7 +9140,47 @@ void DiagnoseBadTarget(Sema &S, OverloadCandidate *Cand) {
   OverloadCandidateKind FnKind = ClassifyOverloadCandidate(S, Callee, FnDesc);
 
   S.Diag(Callee->getLocation(), diag::note_ovl_candidate_bad_target)
-      << (unsigned) FnKind << CalleeTarget << CallerTarget;
+      << (unsigned)FnKind << CalleeTarget << CallerTarget;
+
+  // This could be an implicit constructor for which we could not infer the
+  // target due to a collsion. Diagnose that case.
+  CXXMethodDecl *Meth = dyn_cast<CXXMethodDecl>(Callee);
+  if (Meth != nullptr && Meth->isImplicit()) {
+    CXXRecordDecl *ParentClass = Meth->getParent();
+    Sema::CXXSpecialMember CSM;
+
+    switch (FnKind) {
+    default:
+      return;
+    case oc_implicit_default_constructor:
+      CSM = Sema::CXXDefaultConstructor;
+      break;
+    case oc_implicit_copy_constructor:
+      CSM = Sema::CXXCopyConstructor;
+      break;
+    case oc_implicit_move_constructor:
+      CSM = Sema::CXXMoveConstructor;
+      break;
+    case oc_implicit_copy_assignment:
+      CSM = Sema::CXXCopyAssignment;
+      break;
+    case oc_implicit_move_assignment:
+      CSM = Sema::CXXMoveAssignment;
+      break;
+    };
+
+    bool ConstRHS = false;
+    if (Meth->getNumParams()) {
+      if (const ReferenceType *RT =
+              Meth->getParamDecl(0)->getType()->getAs<ReferenceType>()) {
+        ConstRHS = RT->getPointeeType().isConstQualified();
+      }
+    }
+
+    S.inferCUDATargetForImplicitSpecialMember(ParentClass, CSM, Meth,
+                                              /* ConstRHS */ ConstRHS,
+                                              /* Diagnose */ true);
+  }
 }
 
 void DiagnoseFailedEnableIfAttr(Sema &S, OverloadCandidate *Cand) {
@@ -9860,7 +9921,7 @@ private:
     if (FunctionDecl *FunDecl = dyn_cast<FunctionDecl>(Fn)) {
       if (S.getLangOpts().CUDA)
         if (FunctionDecl *Caller = dyn_cast<FunctionDecl>(S.CurContext))
-          if (S.CheckCUDATarget(Caller, FunDecl))
+          if (!Caller->isImplicit() && S.CheckCUDATarget(Caller, FunDecl))
             return false;
 
       // If any candidate has a placeholder return type, trigger its deduction
@@ -10500,6 +10561,15 @@ public:
 
 }
 
+static std::unique_ptr<CorrectionCandidateCallback>
+MakeValidator(Sema &SemaRef, MemberExpr *ME, size_t NumArgs,
+              bool HasTemplateArgs, bool AllowTypoCorrection) {
+  if (!AllowTypoCorrection)
+    return llvm::make_unique<NoTypoCorrectionCCC>();
+  return llvm::make_unique<FunctionCallFilterCCC>(SemaRef, NumArgs,
+                                                  HasTemplateArgs, ME);
+}
+
 /// Attempts to recover from a call where no functions were found.
 ///
 /// Returns true if new candidates were found.
@@ -10533,19 +10603,15 @@ BuildRecoveryCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
 
   LookupResult R(SemaRef, ULE->getName(), ULE->getNameLoc(),
                  Sema::LookupOrdinaryName);
-  FunctionCallFilterCCC Validator(SemaRef, Args.size(),
-                                  ExplicitTemplateArgs != nullptr,
-                                  dyn_cast<MemberExpr>(Fn));
-  NoTypoCorrectionCCC RejectAll;
-  CorrectionCandidateCallback *CCC = AllowTypoCorrection ?
-      (CorrectionCandidateCallback*)&Validator :
-      (CorrectionCandidateCallback*)&RejectAll;
   if (!DiagnoseTwoPhaseLookup(SemaRef, Fn->getExprLoc(), SS, R,
                               OverloadCandidateSet::CSK_Normal,
                               ExplicitTemplateArgs, Args) &&
       (!EmptyLookup ||
-       SemaRef.DiagnoseEmptyLookup(S, SS, R, *CCC,
-                                   ExplicitTemplateArgs, Args)))
+       SemaRef.DiagnoseEmptyLookup(
+           S, SS, R,
+           MakeValidator(SemaRef, dyn_cast<MemberExpr>(Fn), Args.size(),
+                         ExplicitTemplateArgs != nullptr, AllowTypoCorrection),
+           ExplicitTemplateArgs, Args)))
     return ExprError();
 
   assert(!R.empty() && "lookup results empty despite recovery");
@@ -11023,10 +11089,13 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
   // Add operator candidates that are member functions.
   AddMemberOperatorCandidates(Op, OpLoc, Args, CandidateSet);
 
-  // Add candidates from ADL.
-  AddArgumentDependentLookupCandidates(OpName, OpLoc, Args,
-                                       /*ExplicitTemplateArgs*/ nullptr,
-                                       CandidateSet);
+  // Add candidates from ADL. Per [over.match.oper]p2, this lookup is not
+  // performed for an assignment operator (nor for operator[] nor operator->,
+  // which don't get here).
+  if (Opc != BO_Assign)
+    AddArgumentDependentLookupCandidates(OpName, OpLoc, Args,
+                                         /*ExplicitTemplateArgs*/ nullptr,
+                                         CandidateSet);
 
   // Add builtin operator candidates.
   AddBuiltinOperatorCandidates(Op, OpLoc, Args, CandidateSet);
@@ -11586,6 +11655,18 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
   CXXMemberCallExpr *TheCall =
     new (Context) CXXMemberCallExpr(Context, MemExprE, Args,
                                     ResultType, VK, RParenLoc);
+
+  // (CUDA B.1): Check for invalid calls between targets.
+  if (getLangOpts().CUDA) {
+    if (const FunctionDecl *Caller = dyn_cast<FunctionDecl>(CurContext)) {
+      if (CheckCUDATarget(Caller, Method)) {
+        Diag(MemExpr->getMemberLoc(), diag::err_ref_bad_target)
+            << IdentifyCUDATarget(Method) << Method->getIdentifier()
+            << IdentifyCUDATarget(Caller);
+        return ExprError();
+      }
+    }
+  }
 
   // Check for a valid return type.
   if (CheckCallReturnType(Method->getReturnType(), MemExpr->getMemberLoc(),

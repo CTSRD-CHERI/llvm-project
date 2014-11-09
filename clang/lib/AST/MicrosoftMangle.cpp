@@ -27,7 +27,6 @@
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/TargetInfo.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/ADT/StringMap.h"
 #include "llvm/Support/MathExtras.h"
 
 using namespace clang;
@@ -161,7 +160,7 @@ public:
     unsigned &discriminator = Uniquifier[ND];
     if (!discriminator)
       discriminator = ++Discriminator[std::make_pair(DC, ND->getIdentifier())];
-    disc = discriminator;
+    disc = discriminator + 1;
     return true;
   }
 
@@ -191,8 +190,8 @@ class MicrosoftCXXNameMangler {
   const NamedDecl *Structor;
   unsigned StructorType;
 
-  typedef llvm::StringMap<unsigned> BackRefMap;
-  BackRefMap NameBackReferences;
+  typedef llvm::SmallVector<std::string, 10> BackRefVec;
+  BackRefVec NameBackReferences;
 
   typedef llvm::DenseMap<void *, unsigned> ArgBackRefMap;
   ArgBackRefMap TypeBackReferences;
@@ -442,7 +441,7 @@ void MicrosoftCXXNameMangler::mangleVariableEncoding(const VarDecl *VD) {
       mangleQualifiers(Ty.getQualifiers(), false);
   } else {
     mangleType(Ty, SR, QMM_Drop);
-    mangleQualifiers(Ty.getLocalQualifiers(), false);
+    mangleQualifiers(Ty.getQualifiers(), false);
   }
 }
 
@@ -854,6 +853,8 @@ void MicrosoftCXXNameMangler::mangleCXXDtorType(CXXDtorType T) {
   // <operator-name> ::= ?_E # vector deleting destructor
   // FIXME: Add a vector deleting dtor type.  It goes in the vtable, so we need
   // it.
+  case Dtor_Comdat:
+    llvm_unreachable("not expecting a COMDAT");
   }
   llvm_unreachable("Unsupported dtor type?");
 }
@@ -992,22 +993,14 @@ void MicrosoftCXXNameMangler::mangleOperatorName(OverloadedOperatorKind OO,
 
 void MicrosoftCXXNameMangler::mangleSourceName(StringRef Name) {
   // <source name> ::= <identifier> @
-  BackRefMap::iterator Found;
-  if (NameBackReferences.size() < 10) {
-    size_t Size = NameBackReferences.size();
-    bool Inserted;
-    std::tie(Found, Inserted) =
-        NameBackReferences.insert(std::make_pair(Name, Size));
-    if (Inserted)
-      Found = NameBackReferences.end();
-  } else {
-    Found = NameBackReferences.find(Name);
-  }
-
+  BackRefVec::iterator Found =
+      std::find(NameBackReferences.begin(), NameBackReferences.end(), Name);
   if (Found == NameBackReferences.end()) {
+    if (NameBackReferences.size() < 10)
+      NameBackReferences.push_back(Name);
     Out << Name << '@';
   } else {
-    Out << Found->second;
+    Out << (Found - NameBackReferences.begin());
   }
 }
 
@@ -1023,7 +1016,7 @@ void MicrosoftCXXNameMangler::mangleTemplateInstantiationName(
 
   // Templates have their own context for back references.
   ArgBackRefMap OuterArgsContext;
-  BackRefMap OuterTemplateContext;
+  BackRefVec OuterTemplateContext;
   NameBackReferences.swap(OuterTemplateContext);
   TypeBackReferences.swap(OuterArgsContext);
 
@@ -1146,7 +1139,7 @@ void MicrosoftCXXNameMangler::mangleTemplateArg(const TemplateDecl *TD,
       else
         mangle(FD, "$1?");
     } else {
-      mangle(ND, TA.isDeclForReferenceParam() ? "$E?" : "$1?");
+      mangle(ND, TA.getParamTypeForDecl()->isReferenceType() ? "$E?" : "$1?");
     }
     break;
   }
@@ -1696,6 +1689,7 @@ void MicrosoftCXXNameMangler::mangleCallingConvention(const FunctionType *T) {
   //                      ::= H # __export __stdcall
   //                      ::= I # __fastcall
   //                      ::= J # __export __fastcall
+  //                      ::= Q # __vectorcall
   // The 'export' calling conventions are from a bygone era
   // (*cough*Win16*cough*) when functions were declared for export with
   // that keyword. (It didn't actually export them, it just made them so
@@ -1712,6 +1706,7 @@ void MicrosoftCXXNameMangler::mangleCallingConvention(const FunctionType *T) {
     case CC_X86ThisCall: Out << 'E'; break;
     case CC_X86StdCall: Out << 'G'; break;
     case CC_X86FastCall: Out << 'I'; break;
+    case CC_X86VectorCall: Out << 'Q'; break;
   }
 }
 void MicrosoftCXXNameMangler::mangleThrowSpecification(
@@ -2357,7 +2352,7 @@ void MicrosoftMangleContextImpl::mangleReferenceTemporary(const VarDecl *VD,
 
 void MicrosoftMangleContextImpl::mangleStaticGuardVariable(const VarDecl *VD,
                                                            raw_ostream &Out) {
-  // TODO: This is not correct, especially with respect to MSVC2013.  MSVC2013
+  // TODO: This is not correct, especially with respect to VS "14".  VS "14"
   // utilizes thread local variables to implement thread safe, re-entrant
   // initialization for statics.  They no longer differentiate between an
   // externally visible and non-externally visible static with respect to

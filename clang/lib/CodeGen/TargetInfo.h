@@ -15,6 +15,7 @@
 #ifndef LLVM_CLANG_LIB_CODEGEN_TARGETINFO_H
 #define LLVM_CLANG_LIB_CODEGEN_TARGETINFO_H
 
+#include "CGValue.h"
 #include "clang/AST/Type.h"
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/SmallString.h"
@@ -129,6 +130,14 @@ public:
     return Ty;
   }
 
+  /// Adds constraints and types for result registers.
+  virtual void addReturnRegisterOutputs(
+      CodeGen::CodeGenFunction &CGF, CodeGen::LValue ReturnValue,
+      std::string &Constraints, std::vector<llvm::Type *> &ResultRegTypes,
+      std::vector<llvm::Type *> &ResultTruncRegTypes,
+      std::vector<CodeGen::LValue> &ResultRegDests, std::string &AsmString,
+      unsigned NumOutputs) const {}
+
   /// doesReturnSlotInterfereWithArgs - Return true if the target uses an
   /// argument slot for an 'sret' type.
   virtual bool doesReturnSlotInterfereWithArgs() const { return true; }
@@ -213,6 +222,13 @@ public:
   /// Returns true if the type is a scalar type that is represented as a
   /// capability or an aggregate type that contains one or more capabilities.
   virtual bool containsCapabilities(QualType Ty) const { return false; }
+
+  /// Gets the target-specific default alignment used when an 'aligned' clause
+  /// is used with a 'simd' OpenMP directive without specifying a specific
+  /// alignment.
+  virtual unsigned getOpenMPSimdDefaultAlignment(QualType Type) const {
+    return 0;
+  }
 };
 }
 

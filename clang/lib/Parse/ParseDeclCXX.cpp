@@ -73,7 +73,15 @@ Decl *Parser::ParseNamespace(unsigned Context,
   std::vector<IdentifierInfo*> ExtraIdent;
   std::vector<SourceLocation> ExtraNamespaceLoc;
 
-  Token attrTok;
+  ParsedAttributesWithRange attrs(AttrFactory);
+  SourceLocation attrLoc;
+  if (getLangOpts().CPlusPlus11 && isCXX11AttributeSpecifier()) {
+    if (!getLangOpts().CPlusPlus1z)
+      Diag(Tok.getLocation(), diag::warn_cxx14_compat_attribute)
+          << 0 /*namespace*/;
+    attrLoc = Tok.getLocation();
+    ParseCXX11Attributes(attrs);
+  }
 
   if (Tok.is(tok::identifier)) {
     Ident = Tok.getIdentifierInfo();
@@ -85,10 +93,13 @@ Decl *Parser::ParseNamespace(unsigned Context,
     }
   }
 
+  // A nested namespace definition cannot have attributes.
+  if (!ExtraNamespaceLoc.empty() && attrLoc.isValid())
+    Diag(attrLoc, diag::err_unexpected_nested_namespace_attribute);
+
   // Read label attributes, if present.
-  ParsedAttributes attrs(AttrFactory);
   if (Tok.is(tok::kw___attribute)) {
-    attrTok = Tok;
+    attrLoc = Tok.getLocation();
     ParseGNUAttributes(attrs);
   }
 
@@ -99,8 +110,8 @@ Decl *Parser::ParseNamespace(unsigned Context,
       SkipUntil(tok::semi);
       return nullptr;
     }
-    if (!attrs.empty())
-      Diag(attrTok, diag::err_unexpected_namespace_attributes_alias);
+    if (attrLoc.isValid())
+      Diag(attrLoc, diag::err_unexpected_namespace_attributes_alias);
     if (InlineLoc.isValid())
       Diag(InlineLoc, diag::err_inline_namespace_alias)
           << FixItHint::CreateRemoval(InlineLoc);
@@ -110,39 +121,36 @@ Decl *Parser::ParseNamespace(unsigned Context,
 
   BalancedDelimiterTracker T(*this, tok::l_brace);
   if (T.consumeOpen()) {
-    if (!ExtraIdent.empty()) {
-      Diag(ExtraNamespaceLoc[0], diag::err_nested_namespaces_with_double_colon)
-          << SourceRange(ExtraNamespaceLoc.front(), ExtraIdentLoc.back());
-    }
-
     if (Ident)
       Diag(Tok, diag::err_expected) << tok::l_brace;
     else
       Diag(Tok, diag::err_expected_either) << tok::identifier << tok::l_brace;
-
     return nullptr;
   }
 
   if (getCurScope()->isClassScope() || getCurScope()->isTemplateParamScope() || 
       getCurScope()->isInObjcMethodScope() || getCurScope()->getBlockParent() || 
       getCurScope()->getFnParent()) {
-    if (!ExtraIdent.empty()) {
-      Diag(ExtraNamespaceLoc[0], diag::err_nested_namespaces_with_double_colon)
-          << SourceRange(ExtraNamespaceLoc.front(), ExtraIdentLoc.back());
-    }
     Diag(T.getOpenLocation(), diag::err_namespace_nonnamespace_scope);
     SkipUntil(tok::r_brace);
     return nullptr;
   }
 
-  if (!ExtraIdent.empty()) {
+  if (ExtraIdent.empty()) {
+    // Normal namespace definition, not a nested-namespace-definition.
+  } else if (InlineLoc.isValid()) {
+    Diag(InlineLoc, diag::err_inline_nested_namespace_definition);
+  } else if (getLangOpts().CPlusPlus1z) {
+    Diag(ExtraNamespaceLoc[0],
+         diag::warn_cxx14_compat_nested_namespace_definition);
+  } else {
     TentativeParsingAction TPA(*this);
     SkipUntil(tok::r_brace, StopBeforeMatch);
     Token rBraceToken = Tok;
     TPA.Revert();
 
     if (!rBraceToken.is(tok::r_brace)) {
-      Diag(ExtraNamespaceLoc[0], diag::err_nested_namespaces_with_double_colon)
+      Diag(ExtraNamespaceLoc[0], diag::ext_nested_namespace_definition)
           << SourceRange(ExtraNamespaceLoc.front(), ExtraIdentLoc.back());
     } else {
       std::string NamespaceFix;
@@ -156,7 +164,7 @@ Decl *Parser::ParseNamespace(unsigned Context,
       for (unsigned i = 0, e = ExtraIdent.size(); i != e; ++i)
         RBraces +=  "} ";
 
-      Diag(ExtraNamespaceLoc[0], diag::err_nested_namespaces_with_double_colon)
+      Diag(ExtraNamespaceLoc[0], diag::ext_nested_namespace_definition)
           << FixItHint::CreateReplacement(SourceRange(ExtraNamespaceLoc.front(),
                                                       ExtraIdentLoc.back()),
                                           NamespaceFix)
@@ -195,11 +203,11 @@ Decl *Parser::ParseNamespace(unsigned Context,
 }
 
 /// ParseInnerNamespace - Parse the contents of a namespace.
-void Parser::ParseInnerNamespace(std::vector<SourceLocation>& IdentLoc,
-                                 std::vector<IdentifierInfo*>& Ident,
-                                 std::vector<SourceLocation>& NamespaceLoc,
-                                 unsigned int index, SourceLocation& InlineLoc,
-                                 ParsedAttributes& attrs,
+void Parser::ParseInnerNamespace(std::vector<SourceLocation> &IdentLoc,
+                                 std::vector<IdentifierInfo *> &Ident,
+                                 std::vector<SourceLocation> &NamespaceLoc,
+                                 unsigned int index, SourceLocation &InlineLoc,
+                                 ParsedAttributes &attrs,
                                  BalancedDelimiterTracker &Tracker) {
   if (index == Ident.size()) {
     while (Tok.isNot(tok::r_brace) && !isEofOrEom()) {
@@ -216,7 +224,9 @@ void Parser::ParseInnerNamespace(std::vector<SourceLocation>& IdentLoc,
     return;
   }
 
-  // Parse improperly nested namespaces.
+  // Handle a nested namespace definition.
+  // FIXME: Preserve the source information through to the AST rather than
+  // desugaring it here.
   ParseScope NamespaceScope(this, Scope::DeclScope);
   Decl *NamespcDecl =
     Actions.ActOnStartNamespaceDef(getCurScope(), SourceLocation(),
@@ -492,6 +502,12 @@ Decl *Parser::ParseUsingDeclaration(unsigned Context,
   // FIXME: This is wrong; we should parse this as a typename-specifier.
   if (TryConsumeToken(tok::kw_typename, TypenameLoc))
     HasTypenameKeyword = true;
+
+  if (Tok.is(tok::kw___super)) {
+    Diag(Tok.getLocation(), diag::err_super_in_using_declaration);
+    SkipUntil(tok::semi);
+    return nullptr;
+  }
 
   // Parse nested-name-specifier.
   IdentifierInfo *LastII = nullptr;
@@ -903,8 +919,8 @@ void Parser::ParseUnderlyingTypeSpecifier(DeclSpec &DS) {
 /// In C++98, instead of base-type-specifier, we have:
 ///
 ///         ::[opt] nested-name-specifier[opt] class-name
-Parser::TypeResult Parser::ParseBaseTypeSpecifier(SourceLocation &BaseLoc,
-                                                  SourceLocation &EndLocation) {
+TypeResult Parser::ParseBaseTypeSpecifier(SourceLocation &BaseLoc,
+                                          SourceLocation &EndLocation) {
   // Ignore attempts to use typename
   if (Tok.is(tok::kw_typename)) {
     Diag(Tok, diag::err_expected_class_name_not_template)
@@ -1226,17 +1242,64 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
   // C++11 attributes
   SourceLocation AttrFixitLoc = Tok.getLocation();
 
-  // GNU libstdc++ and libc++ use certain intrinsic names as the
-  // name of struct templates, but some are keywords in GCC >= 4.3
-  // MSVC and Clang. For compatibility, convert the token to an identifier
-  // and issue a warning diagnostic.
-  if (TagType == DeclSpec::TST_struct && !Tok.is(tok::identifier) &&
-      !Tok.isAnnotation()) {
-    const IdentifierInfo *II = Tok.getIdentifierInfo();
-    // We rarely end up here so the following check is efficient.
-    if (II && II->getName().startswith("__is_"))
-      TryKeywordIdentFallback(true);
-  }
+  if (TagType == DeclSpec::TST_struct &&
+      !Tok.is(tok::identifier) &&
+      Tok.getIdentifierInfo() &&
+      (Tok.is(tok::kw___is_abstract) ||
+       Tok.is(tok::kw___is_arithmetic) ||
+       Tok.is(tok::kw___is_array) ||
+       Tok.is(tok::kw___is_base_of) ||
+       Tok.is(tok::kw___is_class) ||
+       Tok.is(tok::kw___is_complete_type) ||
+       Tok.is(tok::kw___is_compound) ||
+       Tok.is(tok::kw___is_const) ||
+       Tok.is(tok::kw___is_constructible) ||
+       Tok.is(tok::kw___is_convertible) ||
+       Tok.is(tok::kw___is_convertible_to) ||
+       Tok.is(tok::kw___is_destructible) ||
+       Tok.is(tok::kw___is_empty) ||
+       Tok.is(tok::kw___is_enum) ||
+       Tok.is(tok::kw___is_floating_point) ||
+       Tok.is(tok::kw___is_final) ||
+       Tok.is(tok::kw___is_function) ||
+       Tok.is(tok::kw___is_fundamental) ||
+       Tok.is(tok::kw___is_integral) ||
+       Tok.is(tok::kw___is_interface_class) ||
+       Tok.is(tok::kw___is_literal) ||
+       Tok.is(tok::kw___is_lvalue_expr) ||
+       Tok.is(tok::kw___is_lvalue_reference) ||
+       Tok.is(tok::kw___is_member_function_pointer) ||
+       Tok.is(tok::kw___is_member_object_pointer) ||
+       Tok.is(tok::kw___is_member_pointer) ||
+       Tok.is(tok::kw___is_nothrow_assignable) ||
+       Tok.is(tok::kw___is_nothrow_constructible) ||
+       Tok.is(tok::kw___is_nothrow_destructible) ||
+       Tok.is(tok::kw___is_object) ||
+       Tok.is(tok::kw___is_pod) ||
+       Tok.is(tok::kw___is_pointer) ||
+       Tok.is(tok::kw___is_polymorphic) ||
+       Tok.is(tok::kw___is_reference) ||
+       Tok.is(tok::kw___is_rvalue_expr) ||
+       Tok.is(tok::kw___is_rvalue_reference) ||
+       Tok.is(tok::kw___is_same) ||
+       Tok.is(tok::kw___is_scalar) ||
+       Tok.is(tok::kw___is_sealed) ||
+       Tok.is(tok::kw___is_signed) ||
+       Tok.is(tok::kw___is_standard_layout) ||
+       Tok.is(tok::kw___is_trivial) ||
+       Tok.is(tok::kw___is_trivially_assignable) ||
+       Tok.is(tok::kw___is_trivially_constructible) ||
+       Tok.is(tok::kw___is_trivially_copyable) ||
+       Tok.is(tok::kw___is_union) ||
+       Tok.is(tok::kw___is_unsigned) ||
+       Tok.is(tok::kw___is_void) ||
+       Tok.is(tok::kw___is_volatile)))
+    // GNU libstdc++ 4.2 and libc++ use certain intrinsic names as the
+    // name of struct templates, but some are keywords in GCC >= 4.3
+    // and Clang. Therefore, when we see the token sequence "struct
+    // X", make X into a normal identifier rather than a keyword, to
+    // allow libstdc++ 4.2 and libc++ to work properly.
+    TryKeywordIdentFallback(true);
 
   // Parse the (optional) nested-name-specifier.
   CXXScopeSpec &SS = DS.getTypeSpecScope();
@@ -1737,7 +1800,7 @@ void Parser::ParseBaseClause(Decl *ClassDecl) {
 ///                 base-type-specifier
 ///         attribute-specifier-seq[opt] access-specifier 'virtual'[opt]
 ///                 base-type-specifier
-Parser::BaseResult Parser::ParseBaseSpecifier(Decl *ClassDecl) {
+BaseResult Parser::ParseBaseSpecifier(Decl *ClassDecl) {
   bool IsVirtual = false;
   SourceLocation StartLoc = Tok.getLocation();
 
@@ -2054,7 +2117,8 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
   // Access declarations.
   bool MalformedTypeSpec = false;
   if (!TemplateInfo.Kind &&
-      (Tok.is(tok::identifier) || Tok.is(tok::coloncolon))) {
+      (Tok.is(tok::identifier) || Tok.is(tok::coloncolon) ||
+       Tok.is(tok::kw___super))) {
     if (TryAnnotateCXXScopeToken())
       MalformedTypeSpec = true;
 
@@ -2071,6 +2135,11 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
       CXXScopeSpec SS;
       ParseOptionalCXXScopeSpecifier(SS, ParsedType(), 
                                      /*EnteringContext=*/false);
+
+      if (SS.isInvalid()) {
+        SkipUntil(tok::semi);
+        return;
+      }
 
       // Try to parse an unqualified-id.
       SourceLocation TemplateKWLoc;
@@ -2618,13 +2687,43 @@ void Parser::ParseCXXMemberSpecification(SourceLocation RecordLoc,
 
   if (Tok.is(tok::colon)) {
     ParseBaseClause(TagDecl);
-
     if (!Tok.is(tok::l_brace)) {
-      Diag(Tok, diag::err_expected_lbrace_after_base_specifiers);
-
-      if (TagDecl)
-        Actions.ActOnTagDefinitionError(getCurScope(), TagDecl);
-      return;
+      bool SuggestFixIt = false;
+      SourceLocation BraceLoc = PP.getLocForEndOfToken(PrevTokLocation);
+      if (Tok.isAtStartOfLine()) {
+        switch (Tok.getKind()) {
+        case tok::kw_private:
+        case tok::kw_protected:
+        case tok::kw_public:
+          SuggestFixIt = NextToken().getKind() == tok::colon;
+          break;
+        case tok::kw_static_assert:
+        case tok::r_brace:
+        case tok::kw_using:
+        // base-clause can have simple-template-id; 'template' can't be there
+        case tok::kw_template:
+          SuggestFixIt = true;
+          break;
+        case tok::identifier:
+          SuggestFixIt = isConstructorDeclarator(true);
+          break;
+        default:
+          SuggestFixIt = isCXXSimpleDeclaration(/*AllowForRangeDecl=*/false);
+          break;
+        }
+      }
+      DiagnosticBuilder LBraceDiag =
+          Diag(BraceLoc, diag::err_expected_lbrace_after_base_specifiers);
+      if (SuggestFixIt) {
+        LBraceDiag << FixItHint::CreateInsertion(BraceLoc, " {");
+        // Try recovering from missing { after base-clause.
+        PP.EnterToken(Tok);
+        Tok.setKind(tok::l_brace);
+      } else {
+        if (TagDecl)
+          Actions.ActOnTagDefinitionError(getCurScope(), TagDecl);
+        return;
+      }
     }
   }
 
@@ -2887,7 +2986,7 @@ void Parser::ParseConstructorInitializer(Decl *ConstructorDecl) {
 /// [C++] mem-initializer-id:
 ///         '::'[opt] nested-name-specifier[opt] class-name
 ///         identifier
-Parser::MemInitResult Parser::ParseMemInitializer(Decl *ConstructorDecl) {
+MemInitResult Parser::ParseMemInitializer(Decl *ConstructorDecl) {
   // parse '::'[opt] nested-name-specifier[opt]
   CXXScopeSpec SS;
   ParseOptionalCXXScopeSpecifier(SS, ParsedType(), /*EnteringContext=*/false);

@@ -1,6 +1,7 @@
 // RUN: %clang_cc1 -std=c++98 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
 // RUN: %clang_cc1 -std=c++11 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
-// RUN: %clang_cc1 -std=c++1y %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
+// RUN: %clang_cc1 -std=c++14 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
+// RUN: %clang_cc1 -std=c++1z %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
 
 namespace dr300 { // dr300: yes
   template<typename R, typename A> void f(R (&)(A)) {}
@@ -181,9 +182,15 @@ namespace dr308 { // dr308: yes
 
 namespace dr311 { // dr311: yes
   namespace X { namespace Y {} }
-  namespace X::Y {} // expected-error {{must define each namespace separately}}
+  namespace X::Y {}
+#if __cplusplus <= 201402L
+  // expected-error@-2 {{define each namespace separately}}
+#endif
   namespace X {
-    namespace X::Y {} // expected-error {{must define each namespace separately}}
+    namespace X::Y {}
+#if __cplusplus <= 201402L
+  // expected-error@-2 {{define each namespace separately}}
+#endif
   }
   // FIXME: The diagnostics here are not very good.
   namespace ::dr311::X {} // expected-error 2+{{}} // expected-warning {{extra qual}}
@@ -366,7 +373,7 @@ namespace dr331 { // dr331: yes
   } const a, b(a); // expected-error {{no matching constructor}}
 }
 
-namespace dr332 { // dr332: dup 557
+namespace dr332 { // dr332: dup 577
   void f(volatile void); // expected-error {{'void' as parameter must not have type qualifiers}}
   void g(const void); // expected-error {{'void' as parameter must not have type qualifiers}}
   void h(int n, volatile void); // expected-error {{'void' must be the first and only parameter}}

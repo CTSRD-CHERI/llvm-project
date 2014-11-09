@@ -73,7 +73,7 @@ Basic Usage
 Intro to how to use a C compiler for newbies.
 
 compile + link compile then link debug info enabling optimizations
-picking a language to use, defaults to C99 by default. Autosenses based
+picking a language to use, defaults to C11 by default. Autosenses based
 on extension. using a makefile
 
 Command Line Options
@@ -481,7 +481,7 @@ TODO: Generate this from tblgen. Define one anchor per warning group.
    Warn about an unusable copy constructor when binding a reference to a
    temporary.
 
-   This option, which defaults to on, enables warnings about binding a
+   This option enables warnings about binding a
    reference to a temporary when the temporary doesn't have a usable
    copy constructor. For example:
 
@@ -977,6 +977,8 @@ are listed below.
    -  ``-fsanitize=function``: Indirect call of a function through a
       function pointer of the wrong type (Linux, C++ and x86/x86_64 only).
    -  ``-fsanitize=integer-divide-by-zero``: Integer division by zero.
+   -  ``-fsanitize=nonnull-attribute``: Passing null pointer as a function
+      parameter which is declared to never be null.
    -  ``-fsanitize=null``: Use of a null pointer or creation of a null
       reference.
    -  ``-fsanitize=object-size``: An attempt to use bytes which the
@@ -1472,9 +1474,12 @@ Differences between various standard modes
 ------------------------------------------
 
 clang supports the -std option, which changes what language mode clang
-uses. The supported modes for C are c89, gnu89, c94, c99, gnu99 and
-various aliases for those modes. If no -std option is specified, clang
-defaults to gnu99 mode.
+uses. The supported modes for C are c89, gnu89, c94, c99, gnu99, c11,
+gnu11, and various aliases for those modes. If no -std option is
+specified, clang defaults to gnu11 mode. Many C99 and C11 features are
+supported in earlier modes as a conforming extension, with a warning. Use
+``-pedantic-errors`` to request an error if a feature from a later standard
+revision is used in an earlier mode.
 
 Differences between all ``c*`` and ``gnu*`` modes:
 
@@ -1511,6 +1516,11 @@ Differences between ``*89`` and ``*99`` modes:
 -  Arrays which are not lvalues are not implicitly promoted to pointers
    in ``*89`` modes.
 -  Some warnings are different.
+
+Differences between ``*99`` and ``*11`` modes:
+
+-  Warnings for use of C11 features are disabled.
+-  ``__STDC_VERSION__`` is defined to ``201112L`` rather than ``199901L``.
 
 c94 mode is identical to c89 mode except that digraphs are enabled in
 c94 mode (FIXME: And ``__STDC_VERSION__`` should be defined!).

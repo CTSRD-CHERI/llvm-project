@@ -80,7 +80,7 @@
 // COMMON:#define __ORDER_LITTLE_ENDIAN__ 1234
 // COMMON:#define __ORDER_PDP_ENDIAN__ 3412
 // COMMON:#define __STDC_HOSTED__ 1
-// COMMON:#define __STDC_VERSION__
+// COMMON:#define __STDC_VERSION__ 201112L
 // COMMON:#define __STDC__ 1
 // COMMON:#define __VERSION__
 // COMMON:#define __clang__ 1
@@ -1764,12 +1764,13 @@
 // ARM-NETBSD:#define __arm 1
 // ARM-NETBSD:#define __arm__ 1
 
-// RUN: %clang -target arm -arch armv7s -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
-// RUN: %clang -target arm -arch armv6m -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
-// RUN: %clang -target arm -arch armv7m -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
-// RUN: %clang -target arm -arch armv7em -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
+// RUN: %clang -target arm-apple-darwin-eabi -arch armv7s -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
+// RUN: %clang -target arm-apple-darwin-eabi -arch armv6m -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-EABI %s
+// RUN: %clang -target arm-apple-darwin-eabi -arch armv7m -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-EABI %s
+// RUN: %clang -target arm-apple-darwin-eabi -arch armv7em -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-EABI %s
 // RUN: %clang -target thumbv7-apple-darwin-eabi -arch armv7 -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
 // ARM-DARWIN-NO-EABI-NOT: #define __ARM_EABI__ 1
+// ARM-DARWIN-EABI: #define __ARM_EABI__ 1
 
 // Check that -mhwdiv works properly for targets which don't have the hwdiv feature enabled by default.
 
@@ -2545,7 +2546,7 @@
 // MIPS32BE:#define __SIZE_TYPE__ unsigned int
 // MIPS32BE:#define __SIZE_WIDTH__ 32
 // MIPS32BE:#define __STDC_HOSTED__ 0
-// MIPS32BE:#define __STDC_VERSION__ 199901L
+// MIPS32BE:#define __STDC_VERSION__ 201112L
 // MIPS32BE:#define __STDC__ 1
 // MIPS32BE:#define __UINT16_C_SUFFIX__ {{$}}
 // MIPS32BE:#define __UINT16_MAX__ 65535
@@ -5457,7 +5458,7 @@
 // PPC-DARWIN:#define __SIZE_TYPE__ long unsigned int
 // PPC-DARWIN:#define __SIZE_WIDTH__ 32
 // PPC-DARWIN:#define __STDC_HOSTED__ 0
-// PPC-DARWIN:#define __STDC_VERSION__ 199901L
+// PPC-DARWIN:#define __STDC_VERSION__ 201112L
 // PPC-DARWIN:#define __STDC__ 1
 // PPC-DARWIN:#define __UINT16_C_SUFFIX__ {{$}}
 // PPC-DARWIN:#define __UINT16_MAX__ 65535

@@ -16,7 +16,6 @@
 
 #include "CGVTables.h"
 #include "CodeGenTypes.h"
-#include "SanitizerBlacklist.h"
 #include "SanitizerMetadata.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/DeclCXX.h"
@@ -26,6 +25,7 @@
 #include "clang/Basic/ABI.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/Module.h"
+#include "clang/Basic/SanitizerBlacklist.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -387,10 +387,11 @@ class CodeGenModule : public CodeGenTypeCache {
 
   /// \brief thread_local variables with initializers that need to run
   /// before any thread_local variable in this TU is odr-used.
-  std::vector<llvm::Constant*> CXXThreadLocalInits;
+  std::vector<llvm::Function *> CXXThreadLocalInits;
+  std::vector<llvm::GlobalVariable *> CXXThreadLocalInitVars;
 
   /// Global variables with initializers that need to run before main.
-  std::vector<llvm::Constant*> CXXGlobalInits;
+  std::vector<llvm::Function *> CXXGlobalInits;
 
   /// When a C++ decl with an initializer is deferred, null is
   /// appended to CXXGlobalInits, and the index of that null is placed
@@ -474,8 +475,6 @@ class CodeGenModule : public CodeGenTypeCache {
 
   GlobalDecl initializedGlobalDecl;
 
-  SanitizerBlacklist SanitizerBL;
-
   std::unique_ptr<SanitizerMetadata> SanitizerMD;
 
   /// @}
@@ -548,6 +547,10 @@ public:
     StaticLocalDeclMap[D] = C;
   }
 
+  llvm::Constant *
+  getOrCreateStaticVarDecl(const VarDecl &D,
+                           llvm::GlobalValue::LinkageTypes Linkage);
+
   llvm::GlobalVariable *getStaticLocalDeclGuardAddress(const VarDecl *D) {
     return StaticLocalDeclGuardMap[D];
   }
@@ -599,6 +602,9 @@ public:
   DiagnosticsEngine &getDiags() const { return Diags; }
   const llvm::DataLayout &getDataLayout() const { return TheDataLayout; }
   const TargetInfo &getTarget() const { return Target; }
+  const llvm::Triple &getTriple() const;
+  bool supportsCOMDAT() const;
+
   CGCXXABI &getCXXABI() const { return *ABI; }
   llvm::LLVMContext &getLLVMContext() { return VMContext; }
 
@@ -646,9 +652,9 @@ public:
   /// Set the visibility for the given LLVM GlobalValue.
   void setGlobalVisibility(llvm::GlobalValue *GV, const NamedDecl *D) const;
 
-  /// Set the TLS mode for the given LLVM GlobalVariable for the thread-local
+  /// Set the TLS mode for the given LLVM GlobalValue for the thread-local
   /// variable declaration D.
-  void setTLSMode(llvm::GlobalVariable *GV, const VarDecl &D) const;
+  void setTLSMode(llvm::GlobalValue *GV, const VarDecl &D) const;
 
   static llvm::GlobalValue::VisibilityTypes GetLLVMVisibility(Visibility V) {
     switch (V) {
@@ -661,11 +667,11 @@ public:
 
   llvm::Constant *GetAddrOfGlobal(GlobalDecl GD) {
     if (isa<CXXConstructorDecl>(GD.getDecl()))
-      return GetAddrOfCXXConstructor(cast<CXXConstructorDecl>(GD.getDecl()),
-                                     GD.getCtorType());
+      return getAddrOfCXXStructor(cast<CXXConstructorDecl>(GD.getDecl()),
+                                  getFromCtorType(GD.getCtorType()));
     else if (isa<CXXDestructorDecl>(GD.getDecl()))
-      return GetAddrOfCXXDestructor(cast<CXXDestructorDecl>(GD.getDecl()),
-                                     GD.getDtorType());
+      return getAddrOfCXXStructor(cast<CXXDestructorDecl>(GD.getDecl()),
+                                  getFromDtorType(GD.getDtorType()));
     else if (isa<FunctionDecl>(GD.getDecl()))
       return GetAddrOfFunction(GD);
     else
@@ -679,6 +685,11 @@ public:
   llvm::GlobalVariable *
   CreateOrReplaceCXXRuntimeVariable(StringRef Name, llvm::Type *Ty,
                                     llvm::GlobalValue::LinkageTypes Linkage);
+
+  llvm::Function *
+  CreateGlobalInitOrDestructFunction(llvm::FunctionType *ty, const Twine &name,
+                                     SourceLocation Loc = SourceLocation(),
+                                     bool TLS = false);
 
   /// Return the address space of the underlying global variable for D, as
   /// determined by its declaration. Normally this is the same as the address
@@ -773,7 +784,8 @@ public:
 
   /// Return a pointer to a constant array for the given string literal.
   llvm::GlobalVariable *
-  GetAddrOfConstantStringFromLiteral(const StringLiteral *S);
+  GetAddrOfConstantStringFromLiteral(const StringLiteral *S,
+                                     StringRef Name = ".str");
 
   /// Return a pointer to a constant array for the given ObjCEncodeExpr node.
   llvm::GlobalVariable *
@@ -801,20 +813,19 @@ public:
   /// \brief Retrieve the record type that describes the state of an
   /// Objective-C fast enumeration loop (for..in).
   QualType getObjCFastEnumerationStateType();
-  
-  /// Return the address of the constructor of the given type.
-  llvm::GlobalValue *
-  GetAddrOfCXXConstructor(const CXXConstructorDecl *ctor, CXXCtorType ctorType,
-                          const CGFunctionInfo *fnInfo = nullptr,
-                          bool DontDefer = false);
 
-  /// Return the address of the constructor of the given type.
+  // Produce code for this constructor/destructor. This method doesn't try
+  // to apply any ABI rules about which other constructors/destructors
+  // are needed or if they are alias to each other.
+  llvm::Function *codegenCXXStructor(const CXXMethodDecl *MD,
+                                     StructorType Type);
+
+  /// Return the address of the constructor/destructor of the given type.
   llvm::GlobalValue *
-  GetAddrOfCXXDestructor(const CXXDestructorDecl *dtor,
-                         CXXDtorType dtorType,
-                         const CGFunctionInfo *fnInfo = nullptr,
-                         llvm::FunctionType *fnType = nullptr,
-                         bool DontDefer = false);
+  getAddrOfCXXStructor(const CXXMethodDecl *MD, StructorType Type,
+                       const CGFunctionInfo *FnInfo = nullptr,
+                       llvm::FunctionType *FnType = nullptr,
+                       bool DontDefer = false);
 
   /// Given a builtin id for a function like "__builtin_fabsf", return a
   /// Function* for "fabsf".
@@ -1035,9 +1046,11 @@ public:
   /// annotations are emitted during finalization of the LLVM code.
   void AddGlobalAnnotations(const ValueDecl *D, llvm::GlobalValue *GV);
 
-  const SanitizerBlacklist &getSanitizerBlacklist() const {
-    return SanitizerBL;
-  }
+  bool isInSanitizerBlacklist(llvm::Function *Fn, SourceLocation Loc) const;
+
+  bool isInSanitizerBlacklist(llvm::GlobalVariable *GV, SourceLocation Loc,
+                              QualType Ty,
+                              StringRef Category = StringRef()) const;
 
   SanitizerMetadata *getSanitizerMetadata() {
     return SanitizerMD.get();
@@ -1051,17 +1064,15 @@ public:
   /// are emitted lazily.
   void EmitGlobal(GlobalDecl D);
 
-private:
+  bool TryEmitDefinitionAsAlias(GlobalDecl Alias, GlobalDecl Target,
+                                bool InEveryTU);
+  bool TryEmitBaseDestructorAsAlias(const CXXDestructorDecl *D);
+
+  /// Set attributes for a global definition.
+  void setFunctionDefinitionAttributes(const FunctionDecl *D,
+                                       llvm::Function *F);
+
   llvm::GlobalValue *GetGlobalValue(StringRef Ref);
-
-  llvm::Constant *
-  GetOrCreateLLVMFunction(StringRef MangledName, llvm::Type *Ty, GlobalDecl D,
-                          bool ForVTable, bool DontDefer = false,
-                          llvm::AttributeSet ExtraAttrs = llvm::AttributeSet());
-
-  llvm::Constant *GetOrCreateLLVMGlobal(StringRef MangledName,
-                                        llvm::PointerType *PTy,
-                                        const VarDecl *D);
 
   /// Set attributes which are common to any form of a global definition (alias,
   /// Objective-C method, function, global variable).
@@ -1069,16 +1080,29 @@ private:
   /// NOTE: This should only be called for definitions.
   void SetCommonAttributes(const Decl *D, llvm::GlobalValue *GV);
 
+  /// Set attributes which must be preserved by an alias. This includes common
+  /// attributes (i.e. it includes a call to SetCommonAttributes).
+  ///
+  /// NOTE: This should only be called for definitions.
+  void setAliasAttributes(const Decl *D, llvm::GlobalValue *GV);
+
+  void addReplacement(StringRef Name, llvm::Constant *C);
+private:
+  llvm::Constant *
+  GetOrCreateLLVMFunction(StringRef MangledName, llvm::Type *Ty, GlobalDecl D,
+                          bool ForVTable, bool DontDefer = false,
+                          bool IsThunk = false,
+                          llvm::AttributeSet ExtraAttrs = llvm::AttributeSet());
+
+  llvm::Constant *GetOrCreateLLVMGlobal(StringRef MangledName,
+                                        llvm::PointerType *PTy,
+                                        const VarDecl *D);
+
   void setNonAliasAttributes(const Decl *D, llvm::GlobalObject *GO);
 
-  /// Set attributes for a global definition.
-  void setFunctionDefinitionAttributes(const FunctionDecl *D,
-                                       llvm::Function *F);
-
   /// Set function attributes for a function declaration.
-  void SetFunctionAttributes(GlobalDecl GD,
-                             llvm::Function *F,
-                             bool IsIncompleteFunction);
+  void SetFunctionAttributes(GlobalDecl GD, llvm::Function *F,
+                             bool IsIncompleteFunction, bool IsThunk);
 
   void EmitGlobalDefinition(GlobalDecl D, llvm::GlobalValue *GV = nullptr);
 
@@ -1090,19 +1114,9 @@ private:
   
   // C++ related functions.
 
-  bool TryEmitDefinitionAsAlias(GlobalDecl Alias, GlobalDecl Target,
-                                bool InEveryTU);
-  bool TryEmitBaseDestructorAsAlias(const CXXDestructorDecl *D);
-
   void EmitNamespace(const NamespaceDecl *D);
   void EmitLinkageSpec(const LinkageSpecDecl *D);
   void CompleteDIClassType(const CXXMethodDecl* D);
-
-  /// Emit a single constructor with the given type from a C++ constructor Decl.
-  void EmitCXXConstructor(const CXXConstructorDecl *D, CXXCtorType Type);
-
-  /// Emit a single destructor with the given type from a C++ destructor Decl.
-  void EmitCXXDestructor(const CXXDestructorDecl *D, CXXDtorType Type);
 
   /// \brief Emit the function that initializes C++ thread_local variables.
   void EmitCXXThreadLocalInitFunc();
@@ -1171,7 +1185,7 @@ private:
   void EmitCoverageFile();
 
   /// Emits the initializer for a uuidof string.
-  llvm::Constant *EmitUuidofInitializer(StringRef uuidstr, QualType IIDType);
+  llvm::Constant *EmitUuidofInitializer(StringRef uuidstr);
 
   /// Determine if the given decl can be emitted lazily; this is only relevant
   /// for definitions. The given decl must be either a function or var decl.

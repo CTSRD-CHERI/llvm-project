@@ -19,6 +19,7 @@
 #include "clang/AST/EvaluatedExprVisitor.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/StmtCXX.h"
 #include "clang/AST/StmtObjC.h"
 #include "clang/AST/TypeLoc.h"
@@ -184,6 +185,12 @@ void Sema::DiagnoseUnusedExprResult(const Stmt *S) {
   const Expr *E = dyn_cast_or_null<Expr>(S);
   if (!E)
     return;
+
+  // If we are in an unevaluated expression context, then there can be no unused
+  // results because the results aren't expected to be used in the first place.
+  if (isUnevaluatedContext())
+    return;
+
   SourceLocation ExprLoc = E->IgnoreParens()->getExprLoc();
   // In most cases, we don't want to warn if the expression is written in a
   // macro body, or if the macro comes from a system header. If the offending
@@ -431,7 +438,11 @@ Sema::ActOnLabelStmt(SourceLocation IdentLoc, LabelDecl *TheDecl,
   TheDecl->setStmt(LS);
   if (!TheDecl->isGnuLocal()) {
     TheDecl->setLocStart(IdentLoc);
-    TheDecl->setLocation(IdentLoc);
+    if (!TheDecl->isMSAsmLabel()) {
+      // Don't update the location of MS ASM labels.  These will result in
+      // a diagnostic, and changing the location here will mess that up.
+      TheDecl->setLocation(IdentLoc);
+    }
   }
   return LS;
 }
@@ -2710,14 +2721,54 @@ Sema::ActOnCapScopeReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
   return Result;
 }
 
+namespace {
+/// \brief Marks all typedefs in all local classes in a type referenced.
+///
+/// In a function like
+/// auto f() {
+///   struct S { typedef int a; };
+///   return S();
+/// }
+///
+/// the local type escapes and could be referenced in some TUs but not in
+/// others. Pretend that all local typedefs are always referenced, to not warn
+/// on this. This isn't necessary if f has internal linkage, or the typedef
+/// is private.
+class LocalTypedefNameReferencer
+    : public RecursiveASTVisitor<LocalTypedefNameReferencer> {
+public:
+  LocalTypedefNameReferencer(Sema &S) : S(S) {}
+  bool VisitRecordType(const RecordType *RT);
+private:
+  Sema &S;
+};
+bool LocalTypedefNameReferencer::VisitRecordType(const RecordType *RT) {
+  auto *R = dyn_cast<CXXRecordDecl>(RT->getDecl());
+  if (!R || !R->isLocalClass() || !R->isLocalClass()->isExternallyVisible() ||
+      R->isDependentType())
+    return true;
+  for (auto *TmpD : R->decls())
+    if (auto *T = dyn_cast<TypedefNameDecl>(TmpD))
+      if (T->getAccess() != AS_private || R->hasFriends())
+        S.MarkAnyDeclReferenced(T->getLocation(), T, /*OdrUse=*/false);
+  return true;
+}
+}
+
+TypeLoc Sema::getReturnTypeLoc(FunctionDecl *FD) const {
+  TypeLoc TL = FD->getTypeSourceInfo()->getTypeLoc().IgnoreParens();
+  while (auto ATL = TL.getAs<AttributedTypeLoc>())
+    TL = ATL.getModifiedLoc().IgnoreParens();
+  return TL.castAs<FunctionProtoTypeLoc>().getReturnLoc();
+}
+
 /// Deduce the return type for a function from a returned expression, per
 /// C++1y [dcl.spec.auto]p6.
 bool Sema::DeduceFunctionTypeFromReturnExpr(FunctionDecl *FD,
                                             SourceLocation ReturnLoc,
                                             Expr *&RetExpr,
                                             AutoType *AT) {
-  TypeLoc OrigResultType = FD->getTypeSourceInfo()->getTypeLoc().
-    IgnoreParens().castAs<FunctionProtoTypeLoc>().getReturnLoc();
+  TypeLoc OrigResultType = getReturnTypeLoc(FD);
   QualType Deduced;
 
   if (RetExpr && isa<InitListExpr>(RetExpr)) {
@@ -2755,6 +2806,11 @@ bool Sema::DeduceFunctionTypeFromReturnExpr(FunctionDecl *FD,
 
     if (DAR != DAR_Succeeded)
       return true;
+
+    // If a local type is part of the returned type, mark its fields as
+    // referenced.
+    LocalTypedefNameReferencer Referencer(*this);
+    Referencer.TraverseType(RetExpr->getType());
   } else {
     //  In the case of a return with no operand, the initializer is considered
     //  to be void().
@@ -3329,6 +3385,7 @@ Sema::CreateCapturedStmtRecordDecl(CapturedDecl *&CD, SourceLocation Loc,
   else
     RD = RecordDecl::Create(Context, TTK_Struct, DC, Loc, Loc, /*Id=*/nullptr);
 
+  RD->setCapturedRecord();
   DC->addDecl(RD);
   RD->setImplicit();
   RD->startDefinition();
@@ -3351,6 +3408,11 @@ static void buildCapturedStmtCaptureList(
       Captures.push_back(CapturedStmt::Capture(Cap->getLocation(),
                                                CapturedStmt::VCK_This));
       CaptureInits.push_back(Cap->getInitExpr());
+      continue;
+    } else if (Cap->isVLATypeCapture()) {
+      Captures.push_back(
+          CapturedStmt::Capture(Cap->getLocation(), CapturedStmt::VCK_VLAType));
+      CaptureInits.push_back(nullptr);
       continue;
     }
 

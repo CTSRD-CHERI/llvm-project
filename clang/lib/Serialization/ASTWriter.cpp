@@ -51,6 +51,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/OnDiskHashTable.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/Process.h"
 #include <algorithm>
 #include <cstdio>
 #include <string.h>
@@ -862,6 +863,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   // Control Block.
   BLOCK(CONTROL_BLOCK);
   RECORD(METADATA);
+  RECORD(SIGNATURE);
   RECORD(MODULE_NAME);
   RECORD(MODULE_MAP_FILE);
   RECORD(IMPORTS);
@@ -1092,6 +1094,14 @@ adjustFilenameForRelocatablePCH(const char *Filename, StringRef isysroot) {
   return Filename + Pos;
 }
 
+static ASTFileSignature getSignature() {
+  while (1) {
+    if (ASTFileSignature S = llvm::sys::Process::GetRandomNumber())
+      return S;
+    // Rely on GetRandomNumber to eventually return non-zero...
+  }
+}
+
 /// \brief Write the control block.
 void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
                                   StringRef isysroot,
@@ -1120,6 +1130,11 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
   Record.push_back(ASTHasCompilerErrors);
   Stream.EmitRecordWithBlob(MetadataAbbrevCode, Record,
                             getClangFullRepositoryVersion());
+
+  // Signature
+  Record.clear();
+  Record.push_back(getSignature());
+  Stream.EmitRecord(SIGNATURE, Record);
 
   // Module name
   if (WritingModule) {
@@ -1173,6 +1188,7 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
       AddSourceLocation((*M)->ImportLoc, Record);
       Record.push_back((*M)->File->getSize());
       Record.push_back((*M)->File->getModificationTime());
+      Record.push_back((*M)->Signature);
       const std::string &FileName = (*M)->FileName;
       Record.push_back(FileName.size());
       Record.append(FileName.begin(), FileName.end());
@@ -1187,8 +1203,9 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
   Record.push_back(LangOpts.Name);
 #define ENUM_LANGOPT(Name, Type, Bits, Default, Description) \
   Record.push_back(static_cast<unsigned>(LangOpts.get##Name()));
-#include "clang/Basic/LangOptions.def"  
-#define SANITIZER(NAME, ID) Record.push_back(LangOpts.Sanitize.ID);
+#include "clang/Basic/LangOptions.def"
+#define SANITIZER(NAME, ID)                                                    \
+  Record.push_back(LangOpts.Sanitize.has(SanitizerKind::ID));
 #include "clang/Basic/Sanitizers.def"
 
   Record.push_back((unsigned) LangOpts.ObjCRuntime.getKind());
@@ -2354,7 +2371,7 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
   }
   
   // Enter the submodule description block.
-  Stream.EnterSubblock(SUBMODULE_BLOCK_ID, /*bits for abbreviations*/4);
+  Stream.EnterSubblock(SUBMODULE_BLOCK_ID, /*bits for abbreviations*/5);
   
   // Write the abbreviations needed for the submodules block.
   using namespace llvm;
@@ -2405,9 +2422,19 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
   unsigned ExcludedHeaderAbbrev = Stream.EmitAbbrev(Abbrev);
 
   Abbrev = new BitCodeAbbrev();
+  Abbrev->Add(BitCodeAbbrevOp(SUBMODULE_TEXTUAL_HEADER));
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // Name
+  unsigned TextualHeaderAbbrev = Stream.EmitAbbrev(Abbrev);
+
+  Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(SUBMODULE_PRIVATE_HEADER));
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // Name
   unsigned PrivateHeaderAbbrev = Stream.EmitAbbrev(Abbrev);
+
+  Abbrev = new BitCodeAbbrev();
+  Abbrev->Add(BitCodeAbbrevOp(SUBMODULE_PRIVATE_TEXTUAL_HEADER));
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // Name
+  unsigned PrivateTextualHeaderAbbrev = Stream.EmitAbbrev(Abbrev);
 
   Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(SUBMODULE_LINK_LIBRARY));
@@ -2481,35 +2508,27 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
       Stream.EmitRecordWithBlob(UmbrellaDirAbbrev, Record, 
                                 UmbrellaDir->getName());      
     }
-    
+
     // Emit the headers.
-    for (unsigned I = 0, N = Mod->NormalHeaders.size(); I != N; ++I) {
+    struct {
+      unsigned Kind;
+      unsigned Abbrev;
+      ArrayRef<const FileEntry*> Headers;
+    } HeaderLists[] = {
+      {SUBMODULE_HEADER, HeaderAbbrev, Mod->NormalHeaders},
+      {SUBMODULE_TEXTUAL_HEADER, TextualHeaderAbbrev, Mod->TextualHeaders},
+      {SUBMODULE_PRIVATE_HEADER, PrivateHeaderAbbrev, Mod->PrivateHeaders},
+      {SUBMODULE_PRIVATE_TEXTUAL_HEADER, PrivateTextualHeaderAbbrev,
+       Mod->PrivateTextualHeaders},
+      {SUBMODULE_EXCLUDED_HEADER, ExcludedHeaderAbbrev, Mod->ExcludedHeaders},
+      {SUBMODULE_TOPHEADER, TopHeaderAbbrev,
+       Mod->getTopHeaders(PP->getFileManager())}
+    };
+    for (auto &HL : HeaderLists) {
       Record.clear();
-      Record.push_back(SUBMODULE_HEADER);
-      Stream.EmitRecordWithBlob(HeaderAbbrev, Record, 
-                                Mod->NormalHeaders[I]->getName());
-    }
-    // Emit the excluded headers.
-    for (unsigned I = 0, N = Mod->ExcludedHeaders.size(); I != N; ++I) {
-      Record.clear();
-      Record.push_back(SUBMODULE_EXCLUDED_HEADER);
-      Stream.EmitRecordWithBlob(ExcludedHeaderAbbrev, Record, 
-                                Mod->ExcludedHeaders[I]->getName());
-    }
-    // Emit the private headers.
-    for (unsigned I = 0, N = Mod->PrivateHeaders.size(); I != N; ++I) {
-      Record.clear();
-      Record.push_back(SUBMODULE_PRIVATE_HEADER);
-      Stream.EmitRecordWithBlob(PrivateHeaderAbbrev, Record, 
-                                Mod->PrivateHeaders[I]->getName());
-    }
-    ArrayRef<const FileEntry *>
-      TopHeaders = Mod->getTopHeaders(PP->getFileManager());
-    for (unsigned I = 0, N = TopHeaders.size(); I != N; ++I) {
-      Record.clear();
-      Record.push_back(SUBMODULE_TOPHEADER);
-      Stream.EmitRecordWithBlob(TopHeaderAbbrev, Record,
-                                TopHeaders[I]->getName());
+      Record.push_back(HL.Kind);
+      for (auto *H : HL.Headers)
+        Stream.EmitRecordWithBlob(HL.Abbrev, Record, H->getName());
     }
 
     // Emit the imports. 
@@ -4284,6 +4303,11 @@ void ASTWriter::WriteASTCore(Sema &SemaRef,
     }
   }
 
+  // Build a record containing all of the UnusedLocalTypedefNameCandidates.
+  RecordData UnusedLocalTypedefNameCandidates;
+  for (const TypedefNameDecl *TD : SemaRef.UnusedLocalTypedefNameCandidates)
+    AddDeclRef(TD, UnusedLocalTypedefNameCandidates);
+
   // Build a record containing all of dynamic classes declarations.
   RecordData DynamicClasses;
   AddLazyVectorDecls(*this, SemaRef.DynamicClasses, DynamicClasses);
@@ -4450,25 +4474,36 @@ void ASTWriter::WriteASTCore(Sema &SemaRef,
     SmallString<2048> Buffer;
     {
       llvm::raw_svector_ostream Out(Buffer);
-      for (ModuleManager::ModuleConstIterator M = Chain->ModuleMgr.begin(),
-                                           MEnd = Chain->ModuleMgr.end();
-           M != MEnd; ++M) {
+      for (ModuleFile *M : Chain->ModuleMgr) {
         using namespace llvm::support;
         endian::Writer<little> LE(Out);
-        StringRef FileName = (*M)->FileName;
+        StringRef FileName = M->FileName;
         LE.write<uint16_t>(FileName.size());
         Out.write(FileName.data(), FileName.size());
 
+        // Note: if a base ID was uint max, it would not be possible to load
+        // another module after it or have more than one entity inside it.
+        uint32_t None = std::numeric_limits<uint32_t>::max();
+
+        auto writeBaseIDOrNone = [&](uint32_t BaseID, bool ShouldWrite) {
+          assert(BaseID < std::numeric_limits<uint32_t>::max() && "base id too high");
+          if (ShouldWrite)
+            LE.write<uint32_t>(BaseID);
+          else
+            LE.write<uint32_t>(None);
+        };
+
         // These values should be unique within a chain, since they will be read
         // as keys into ContinuousRangeMaps.
-        LE.write<uint32_t>((*M)->SLocEntryBaseOffset);
-        LE.write<uint32_t>((*M)->BaseIdentifierID);
-        LE.write<uint32_t>((*M)->BaseMacroID);
-        LE.write<uint32_t>((*M)->BasePreprocessedEntityID);
-        LE.write<uint32_t>((*M)->BaseSubmoduleID);
-        LE.write<uint32_t>((*M)->BaseSelectorID);
-        LE.write<uint32_t>((*M)->BaseDeclID);
-        LE.write<uint32_t>((*M)->BaseTypeIndex);
+        writeBaseIDOrNone(M->SLocEntryBaseOffset, M->LocalNumSLocEntries);
+        writeBaseIDOrNone(M->BaseIdentifierID, M->LocalNumIdentifiers);
+        writeBaseIDOrNone(M->BaseMacroID, M->LocalNumMacros);
+        writeBaseIDOrNone(M->BasePreprocessedEntityID,
+                          M->NumPreprocessedEntities);
+        writeBaseIDOrNone(M->BaseSubmoduleID, M->LocalNumSubmodules);
+        writeBaseIDOrNone(M->BaseSelectorID, M->LocalNumSelectors);
+        writeBaseIDOrNone(M->BaseDeclID, M->LocalNumDecls);
+        writeBaseIDOrNone(M->BaseTypeIndex, M->LocalNumTypes);
       }
     }
     Record.clear();
@@ -4561,6 +4596,11 @@ void ASTWriter::WriteASTCore(Sema &SemaRef,
   if (!DynamicClasses.empty())
     Stream.EmitRecord(DYNAMIC_CLASSES, DynamicClasses);
 
+  // Write the record containing potentially unused local typedefs.
+  if (!UnusedLocalTypedefNameCandidates.empty())
+    Stream.EmitRecord(UNUSED_LOCAL_TYPEDEF_NAME_CANDIDATES,
+                      UnusedLocalTypedefNameCandidates);
+
   // Write the record containing pending implicit instantiations.
   if (!PendingInstantiations.empty())
     Stream.EmitRecord(PENDING_IMPLICIT_INSTANTIATIONS, PendingInstantiations);
@@ -4607,10 +4647,13 @@ void ASTWriter::WriteASTCore(Sema &SemaRef,
       auto Cmp = [](const ModuleInfo &A, const ModuleInfo &B) {
         return A.ID < B.ID;
       };
+      auto Eq = [](const ModuleInfo &A, const ModuleInfo &B) {
+        return A.ID == B.ID;
+      };
 
       // Sort and deduplicate module IDs.
       std::sort(Imports.begin(), Imports.end(), Cmp);
-      Imports.erase(std::unique(Imports.begin(), Imports.end(), Cmp),
+      Imports.erase(std::unique(Imports.begin(), Imports.end(), Eq),
                     Imports.end());
 
       RecordData ImportedModules;
@@ -4720,8 +4763,8 @@ void ASTWriter::WriteDeclUpdatesBlocks(RecordDataImpl &OffsetsRecord) {
         // Instantiation may change attributes; write them all out afresh.
         Record.push_back(D->hasAttrs());
         if (Record.back())
-          WriteAttributes(ArrayRef<const Attr*>(D->getAttrs().begin(),
-                                                D->getAttrs().size()), Record);
+          WriteAttributes(llvm::makeArrayRef(D->getAttrs().begin(),
+                                             D->getAttrs().size()), Record);
 
         // FIXME: Ensure we don't get here for explicit instantiations.
         break;
@@ -5121,6 +5164,30 @@ void ASTWriter::AddDeclarationName(DeclarationName Name, RecordDataImpl &Record)
   }
 }
 
+unsigned ASTWriter::getAnonymousDeclarationNumber(const NamedDecl *D) {
+  assert(needsAnonymousDeclarationNumber(D) &&
+         "expected an anonymous declaration");
+
+  // Number the anonymous declarations within this context, if we've not
+  // already done so.
+  auto It = AnonymousDeclarationNumbers.find(D);
+  if (It == AnonymousDeclarationNumbers.end()) {
+    unsigned Index = 0;
+    for (Decl *LexicalD : D->getLexicalDeclContext()->decls()) {
+      auto *ND = dyn_cast<NamedDecl>(LexicalD);
+      if (!ND || !needsAnonymousDeclarationNumber(ND))
+        continue;
+      AnonymousDeclarationNumbers[ND] = Index++;
+    }
+
+    It = AnonymousDeclarationNumbers.find(D);
+    assert(It != AnonymousDeclarationNumbers.end() &&
+           "declaration not found within its lexical context");
+  }
+
+  return It->second;
+}
+
 void ASTWriter::AddDeclarationNameLoc(const DeclarationNameLoc &DNLoc,
                                      DeclarationName Name, RecordDataImpl &Record) {
   switch (Name.getNameKind()) {
@@ -5208,6 +5275,10 @@ void ASTWriter::AddNestedNameSpecifier(NestedNameSpecifier *NNS,
     case NestedNameSpecifier::Global:
       // Don't need to write an associated value.
       break;
+
+    case NestedNameSpecifier::Super:
+      AddDeclRef(NNS->getAsRecordDecl(), Record);
+      break;
     }
   }
 }
@@ -5256,6 +5327,11 @@ void ASTWriter::AddNestedNameSpecifierLoc(NestedNameSpecifierLoc NNS,
 
     case NestedNameSpecifier::Global:
       AddSourceLocation(NNS.getLocalSourceRange().getEnd(), Record);
+      break;
+
+    case NestedNameSpecifier::Super:
+      AddDeclRef(NNS.getNestedNameSpecifier()->getAsRecordDecl(), Record);
+      AddSourceRange(NNS.getLocalSourceRange(), Record);
       break;
     }
   }
@@ -5326,7 +5402,7 @@ void ASTWriter::AddTemplateArgument(const TemplateArgument &Arg,
     break;
   case TemplateArgument::Declaration:
     AddDeclRef(Arg.getAsDecl(), Record);
-    Record.push_back(Arg.isDeclForReferenceParam());
+    AddTypeRef(Arg.getParamTypeForDecl(), Record);
     break;
   case TemplateArgument::NullPtr:
     AddTypeRef(Arg.getNullPtrType(), Record);
@@ -5558,6 +5634,7 @@ void ASTWriter::AddCXXDefinitionData(const CXXRecordDecl *D, RecordDataImpl &Rec
       Record.push_back(Capture.getCaptureKind());
       switch (Capture.getCaptureKind()) {
       case LCK_This:
+      case LCK_VLAType:
         break;
       case LCK_ByCopy:
       case LCK_ByRef:
@@ -5661,8 +5738,6 @@ void ASTWriter::CompletedTagDefinition(const TagDecl *D) {
 }
 
 void ASTWriter::AddedVisibleDecl(const DeclContext *DC, const Decl *D) {
-  assert(!WritingAST && "Already writing the AST!");
-
   // TU and namespaces are handled elsewhere.
   if (isa<TranslationUnitDecl>(DC) || isa<NamespaceDecl>(DC))
     return;
@@ -5671,12 +5746,12 @@ void ASTWriter::AddedVisibleDecl(const DeclContext *DC, const Decl *D) {
     return; // Not a source decl added to a DeclContext from PCH.
 
   assert(!getDefinitiveDeclContext(DC) && "DeclContext not definitive!");
+  assert(!WritingAST && "Already writing the AST!");
   AddUpdatedDeclContext(DC);
   UpdatingVisibleDecls.push_back(D);
 }
 
 void ASTWriter::AddedCXXImplicitMember(const CXXRecordDecl *RD, const Decl *D) {
-  assert(!WritingAST && "Already writing the AST!");
   assert(D->isImplicit());
   if (!(!D->isFromASTFile() && RD->isFromASTFile()))
     return; // Not a source member added to a class from PCH.
@@ -5685,17 +5760,18 @@ void ASTWriter::AddedCXXImplicitMember(const CXXRecordDecl *RD, const Decl *D) {
 
   // A decl coming from PCH was modified.
   assert(RD->isCompleteDefinition());
+  assert(!WritingAST && "Already writing the AST!");
   DeclUpdates[RD].push_back(DeclUpdate(UPD_CXX_ADDED_IMPLICIT_MEMBER, D));
 }
 
 void ASTWriter::AddedCXXTemplateSpecialization(const ClassTemplateDecl *TD,
                                      const ClassTemplateSpecializationDecl *D) {
   // The specializations set is kept in the canonical template.
-  assert(!WritingAST && "Already writing the AST!");
   TD = TD->getCanonicalDecl();
   if (!(!D->isFromASTFile() && TD->isFromASTFile()))
     return; // Not a source specialization added to a template from PCH.
 
+  assert(!WritingAST && "Already writing the AST!");
   DeclUpdates[TD].push_back(DeclUpdate(UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION,
                                        D));
 }
@@ -5703,11 +5779,11 @@ void ASTWriter::AddedCXXTemplateSpecialization(const ClassTemplateDecl *TD,
 void ASTWriter::AddedCXXTemplateSpecialization(
     const VarTemplateDecl *TD, const VarTemplateSpecializationDecl *D) {
   // The specializations set is kept in the canonical template.
-  assert(!WritingAST && "Already writing the AST!");
   TD = TD->getCanonicalDecl();
   if (!(!D->isFromASTFile() && TD->isFromASTFile()))
     return; // Not a source specialization added to a template from PCH.
 
+  assert(!WritingAST && "Already writing the AST!");
   DeclUpdates[TD].push_back(DeclUpdate(UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION,
                                        D));
 }
@@ -5715,11 +5791,11 @@ void ASTWriter::AddedCXXTemplateSpecialization(
 void ASTWriter::AddedCXXTemplateSpecialization(const FunctionTemplateDecl *TD,
                                                const FunctionDecl *D) {
   // The specializations set is kept in the canonical template.
-  assert(!WritingAST && "Already writing the AST!");
   TD = TD->getCanonicalDecl();
   if (!(!D->isFromASTFile() && TD->isFromASTFile()))
     return; // Not a source specialization added to a template from PCH.
 
+  assert(!WritingAST && "Already writing the AST!");
   DeclUpdates[TD].push_back(DeclUpdate(UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION,
                                        D));
 }

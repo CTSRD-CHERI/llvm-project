@@ -495,10 +495,9 @@ namespace {
     void writeDump(raw_ostream &OS) const override {
     }
     void writeDumpChildren(raw_ostream &OS) const override {
-      OS << "    if (SA->is" << getUpperName() << "Expr()) {\n";
-      OS << "      lastChild();\n";
+      OS << "    if (SA->is" << getUpperName() << "Expr())\n";
       OS << "      dumpStmt(SA->get" << getUpperName() << "Expr());\n";
-      OS << "    } else\n";
+      OS << "    else\n";
       OS << "      dumpType(SA->get" << getUpperName()
          << "Type()->getType());\n";
     }
@@ -509,6 +508,12 @@ namespace {
 
   class VariadicArgument : public Argument {
     std::string Type, ArgName, ArgSizeName, RangeName;
+
+  protected:
+    // Assumed to receive a parameter: raw_ostream OS.
+    virtual void writeValueImpl(raw_ostream &OS) const {
+      OS << "    OS << Val;\n";
+    }
 
   public:
     VariadicArgument(const Record &Arg, StringRef Attr, std::string T)
@@ -589,9 +594,9 @@ namespace {
       OS << "  bool isFirst = true;\n"
          << "  for (const auto &Val : " << RangeName << "()) {\n"
          << "    if (isFirst) isFirst = false;\n"
-         << "    else OS << \", \";\n"
-         << "    OS << Val;\n"
-         << "  }\n";
+         << "    else OS << \", \";\n";
+      writeValueImpl(OS);
+      OS << "  }\n";
       OS << "  OS << \"";
     }
     void writeDump(raw_ostream &OS) const override {
@@ -678,7 +683,11 @@ namespace {
       OS << "Record.push_back(SA->get" << getUpperName() << "());\n";
     }
     void writeValue(raw_ostream &OS) const override {
-      OS << "\" << get" << getUpperName() << "() << \"";
+      // FIXME: this isn't 100% correct -- some enum arguments require printing
+      // as a string literal, while others require printing as an identifier.
+      // Tablegen currently does not distinguish between the two forms.
+      OS << "\\\"\" << " << getAttrName() << "Attr::Convert" << type << "ToStr(get"
+         << getUpperName() << "()) << \"\\\"";
     }
     void writeDump(raw_ostream &OS) const override {
       OS << "    switch(SA->get" << getUpperName() << "()) {\n";
@@ -703,13 +712,40 @@ namespace {
       OS << "    if (R) {\n";
       OS << "      Out = *R;\n      return true;\n    }\n";
       OS << "    return false;\n";
-      OS << "  }\n";
+      OS << "  }\n\n";
+
+      // Mapping from enumeration values back to enumeration strings isn't
+      // trivial because some enumeration values have multiple named
+      // enumerators, such as type_visibility(internal) and
+      // type_visibility(hidden) both mapping to TypeVisibilityAttr::Hidden.
+      OS << "  static const char *Convert" << type << "ToStr("
+         << type << " Val) {\n"
+         << "    switch(Val) {\n";
+      std::set<std::string> Uniques;
+      for (size_t I = 0; I < enums.size(); ++I) {
+        if (Uniques.insert(enums[I]).second)
+          OS << "    case " << getAttrName() << "Attr::" << enums[I]
+             << ": return \"" << values[I] << "\";\n";       
+      }
+      OS << "    }\n"
+         << "    llvm_unreachable(\"No enumerator with that value\");\n"
+         << "  }\n";
     }
   };
   
   class VariadicEnumArgument: public VariadicArgument {
     std::string type, QualifiedTypeName;
     std::vector<std::string> values, enums, uniques;
+
+  protected:
+    void writeValueImpl(raw_ostream &OS) const override {
+      // FIXME: this isn't 100% correct -- some enum arguments require printing
+      // as a string literal, while others require printing as an identifier.
+      // Tablegen currently does not distinguish between the two forms.
+      OS << "    OS << \"\\\"\" << " << getAttrName() << "Attr::Convert" << type
+         << "ToStr(Val)" << "<< \"\\\"\";\n";
+    }
+
   public:
     VariadicEnumArgument(const Record &Arg, StringRef Attr)
       : VariadicArgument(Arg, Attr, Arg.getValueAsString("Type")),
@@ -785,7 +821,20 @@ namespace {
       OS << "    if (R) {\n";
       OS << "      Out = *R;\n      return true;\n    }\n";
       OS << "    return false;\n";
-      OS << "  }\n";
+      OS << "  }\n\n";
+
+      OS << "  static const char *Convert" << type << "ToStr("
+        << type << " Val) {\n"
+        << "    switch(Val) {\n";
+      std::set<std::string> Uniques;
+      for (size_t I = 0; I < enums.size(); ++I) {
+        if (Uniques.insert(enums[I]).second)
+          OS << "    case " << getAttrName() << "Attr::" << enums[I]
+          << ": return \"" << values[I] << "\";\n";
+      }
+      OS << "    }\n"
+        << "    llvm_unreachable(\"No enumerator with that value\");\n"
+        << "  }\n";
     }
   };
 
@@ -871,7 +920,6 @@ namespace {
     void writeDump(raw_ostream &OS) const override {}
 
     void writeDumpChildren(raw_ostream &OS) const override {
-      OS << "    lastChild();\n";
       OS << "    dumpStmt(SA->get" << getUpperName() << "());\n";
     }
     void writeHasChildren(raw_ostream &OS) const override { OS << "true"; }
@@ -926,11 +974,8 @@ namespace {
     void writeDumpChildren(raw_ostream &OS) const override {
       OS << "    for (" << getAttrName() << "Attr::" << getLowerName()
          << "_iterator I = SA->" << getLowerName() << "_begin(), E = SA->"
-         << getLowerName() << "_end(); I != E; ++I) {\n";
-      OS << "      if (I + 1 == E)\n";
-      OS << "        lastChild();\n";
+         << getLowerName() << "_end(); I != E; ++I)\n";
       OS << "      dumpStmt(*I);\n";
-      OS << "    }\n";
     }
 
     void writeHasChildren(raw_ostream &OS) const override {
@@ -1619,8 +1664,16 @@ static void EmitAttrList(raw_ostream &OS, StringRef Class,
   }
 }
 
-namespace clang {
+// Determines if an attribute has a Pragma spelling.
+static bool AttrHasPragmaSpelling(const Record *R) {
+  std::vector<FlattenedSpelling> Spellings = GetFlattenedSpellings(*R);
+  return std::find_if(Spellings.begin(), Spellings.end(),
+                      [](const FlattenedSpelling &S) {
+           return S.variety() == "Pragma";
+         }) != Spellings.end();
+}
 
+namespace clang {
 // Emits the enumeration list for attributes.
 void EmitClangAttrList(RecordKeeper &Records, raw_ostream &OS) {
   emitSourceFileHeader("List of all attributes that Clang recognizes", OS);
@@ -1646,14 +1699,25 @@ void EmitClangAttrList(RecordKeeper &Records, raw_ostream &OS) {
         " INHERITABLE_PARAM_ATTR(NAME)\n";
   OS << "#endif\n\n";
 
+  OS << "#ifndef PRAGMA_SPELLING_ATTR\n";
+  OS << "#define PRAGMA_SPELLING_ATTR(NAME)\n";
+  OS << "#endif\n\n";
+
+  OS << "#ifndef LAST_PRAGMA_SPELLING_ATTR\n";
+  OS << "#define LAST_PRAGMA_SPELLING_ATTR(NAME) PRAGMA_SPELLING_ATTR(NAME)\n";
+  OS << "#endif\n\n";
+
   Record *InhClass = Records.getClass("InheritableAttr");
   Record *InhParamClass = Records.getClass("InheritableParamAttr");
-  std::vector<Record*> Attrs = Records.getAllDerivedDefinitions("Attr"),
-                       NonInhAttrs, InhAttrs, InhParamAttrs;
+  std::vector<Record *> Attrs = Records.getAllDerivedDefinitions("Attr"),
+                        NonInhAttrs, InhAttrs, InhParamAttrs, PragmaAttrs;
   for (auto *Attr : Attrs) {
     if (!Attr->getValueAsBit("ASTNode"))
       continue;
-    
+
+    if (AttrHasPragmaSpelling(Attr))
+      PragmaAttrs.push_back(Attr);
+
     if (Attr->isSubClassOf(InhParamClass))
       InhParamAttrs.push_back(Attr);
     else if (Attr->isSubClassOf(InhClass))
@@ -1662,6 +1726,7 @@ void EmitClangAttrList(RecordKeeper &Records, raw_ostream &OS) {
       NonInhAttrs.push_back(Attr);
   }
 
+  EmitAttrList(OS, "PRAGMA_SPELLING_ATTR", PragmaAttrs);
   EmitAttrList(OS, "INHERITABLE_PARAM_ATTR", InhParamAttrs);
   EmitAttrList(OS, "INHERITABLE_ATTR", InhAttrs);
   EmitAttrList(OS, "ATTR", NonInhAttrs);
@@ -1670,6 +1735,8 @@ void EmitClangAttrList(RecordKeeper &Records, raw_ostream &OS) {
   OS << "#undef INHERITABLE_ATTR\n";
   OS << "#undef LAST_INHERITABLE_ATTR\n";
   OS << "#undef LAST_INHERITABLE_PARAM_ATTR\n";
+  OS << "#undef LAST_PRAGMA_ATTR\n";
+  OS << "#undef PRAGMA_SPELLING_ATTR\n";
   OS << "#undef ATTR\n";
 }
 
@@ -2626,25 +2693,8 @@ void EmitClangAttrDump(RecordKeeper &Records, raw_ostream &OS) {
       for (const auto *Arg : Args)
         createArgument(*Arg, R.getName())->writeDump(OS);
 
-      // Code for detecting the last child.
-      OS << "    bool OldMoreChildren = hasMoreChildren();\n";
-      OS << "    bool MoreChildren;\n";
-
-      for (auto AI = Args.begin(), AE = Args.end(); AI != AE; ++AI) {
-        // More code for detecting the last child.
-        OS << "    MoreChildren = OldMoreChildren";
-        for (auto Next = AI + 1; Next != AE; ++Next) {
-          OS << " || ";
-          createArgument(**Next, R.getName())->writeHasChildren(OS);
-        }
-        OS << ";\n";
-        OS << "    setMoreChildren(MoreChildren);\n";
-
+      for (auto AI = Args.begin(), AE = Args.end(); AI != AE; ++AI)
         createArgument(**AI, R.getName())->writeDumpChildren(OS);
-      }
-
-      // Reset the last child.
-      OS << "    setMoreChildren(OldMoreChildren);\n";
     }
     OS <<
       "    break;\n"

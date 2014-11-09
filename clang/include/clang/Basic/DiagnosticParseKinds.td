@@ -197,11 +197,19 @@ def err_expected_semi_after_namespace_name : Error<
   "expected ';' after namespace name">;
 def err_unexpected_namespace_attributes_alias : Error<
   "attributes cannot be specified on namespace alias">;
+def err_unexpected_nested_namespace_attribute : Error<
+  "attributes cannot be specified on a nested namespace definition">;
 def err_inline_namespace_alias : Error<"namespace alias cannot be inline">;
 def err_namespace_nonnamespace_scope : Error<
   "namespaces can only be defined in global or namespace scope">;
-def err_nested_namespaces_with_double_colon : Error<
-  "nested namespace definition must define each namespace separately">;
+def ext_nested_namespace_definition : ExtWarn<
+  "nested namespace definition is a C++1z extension; "
+  "define each namespace separately">, InGroup<CXX1z>;
+def warn_cxx14_compat_nested_namespace_definition : Warning<
+  "nested namespace definition is incompatible with C++ standards before C++1z">,
+  InGroup<CXXPre1zCompat>, DefaultIgnore;
+def err_inline_nested_namespace_definition : Error<
+  "nested namespace definition cannot be 'inline'">;
 def err_expected_semi_after_attribute_list : Error<
   "expected ';' after attribute list">;
 def err_expected_semi_after_static_assert : Error<
@@ -341,6 +349,10 @@ def err_invalid_vector_decl_spec : Error<
   "cannot use '%0' with '__vector'">;
 def err_invalid_vector_bool_decl_spec : Error<
   "cannot use '%0' with '__vector bool'">;
+def err_invalid_vector_double_decl_spec : Error <
+  "use of 'double' with '__vector' requires VSX support to be enabled (available on the POWER7 or later)">;
+def err_invalid_vector_long_double_decl_spec : Error<
+  "cannot use 'long double' with '__vector'">;
 def warn_vector_long_decl_spec_combination : Warning<
   "Use of 'long' with '__vector' is deprecated">, InGroup<Deprecated>;
 def err_friend_invalid_in_context : Error<
@@ -368,6 +380,8 @@ def err_function_definition_not_allowed : Error<
   "function definition is not allowed here">;
 def err_expected_end_of_enumerator : Error<
   "expected '= constant-expression' or end of enumerator definition">;
+def err_expected_coloncolon_after_super : Error<
+  "expected '::' after '__super'">;
 
 /// Objective-C parser diagnostics
 def err_expected_minus_or_plus : Error<
@@ -492,6 +506,8 @@ def err_constructor_bad_name : Error<
   "missing return type for function %0; did you mean the constructor name %1?">;
 def err_destructor_tilde_identifier : Error<
   "expected a class name after '~' to name a destructor">;
+def err_destructor_tilde_scope : Error<
+  "'~' in destructor name should be after nested name specifier">;
 def err_destructor_template_id : Error<
   "destructor name %0 does not refer to a template">;
 def err_default_arg_unparsed : Error<
@@ -519,6 +535,8 @@ def ext_abstract_pack_declarator_parens : ExtWarn<
   InGroup<DiagGroup<"anonymous-pack-parens">>;
 def err_function_is_not_record : Error<
   "unexpected %0 in function call; perhaps remove the %0?">;
+def err_super_in_using_declaration : Error<
+  "'__super' cannot be used with a using declaration">;
 
 // C++ derived classes
 def err_dup_virtual : Error<"duplicate 'virtual' in base specifier">;
@@ -545,6 +563,10 @@ def warn_cxx98_compat_noexcept_expr : Warning<
 def warn_cxx98_compat_nullptr : Warning<
   "'nullptr' is incompatible with C++98">, InGroup<CXX98Compat>, DefaultIgnore;
 
+def warn_cxx14_compat_attribute : Warning<
+  "attributes on %select{a namespace|an enumerator}0 declaration are "
+  "incompatible with C++ standards before C++1z">,
+  InGroup<CXXPre1zCompat>, DefaultIgnore;
 def warn_cxx98_compat_alignas : Warning<"'alignas' is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
 def warn_cxx98_compat_attribute : Warning<
@@ -672,7 +694,18 @@ def err_explicit_spec_non_template : Error<
 def err_default_template_template_parameter_not_template : Error<
   "default template argument for a template template parameter must be a class "
   "template">;
-  
+
+def ext_fold_expression : ExtWarn<
+  "pack fold expression is a C++1z extension">,
+  InGroup<CXX1z>;
+def warn_cxx14_compat_fold_expression : Warning<
+  "pack fold expression is incompatible with C++ standards before C++1z">,
+  InGroup<CXXPre1zCompat>, DefaultIgnore;
+def err_expected_fold_operator : Error<
+  "expected a foldable binary operator in fold expression">;
+def err_fold_operator_mismatch : Error<
+  "operators in fold expression must be the same">;
+
 def err_ctor_init_missing_comma : Error<
   "missing ',' between base or member initializers">;
 
@@ -769,6 +802,9 @@ def err_lambda_missing_parens : Error<
 // Availability attribute
 def err_expected_version : Error<
   "expected a version of the form 'major[.minor[.subminor]]'">;
+def warn_expected_consistent_version_separator : Warning<
+  "use same version number separators '_' or '.'; as in "
+  "'major[.minor[.subminor]]'">, InGroup<Availability>;
 def err_zero_version : Error<
   "version number must have non-zero major, minor, or sub-minor version">;
 def err_availability_expected_platform : Error<
@@ -940,16 +976,15 @@ def err_omp_immediate_directive : Error<
 def err_omp_expected_identifier_for_critical : Error<
   "expected identifier specifying the name of the 'omp critical' directive">;
 
-// Pragma support.
-def err_pragma_invalid_keyword : Error<
-  "%select{invalid|missing}0 argument; expected '%select{enable|full}1' or 'disable'">;
-
 // Pragma loop support.
+def err_pragma_loop_missing_argument : Error<
+  "missing argument; expected %select{an integer value|"
+  "'%select{enable|full}1' or 'disable'}0">;
 def err_pragma_loop_invalid_option : Error<
   "%select{invalid|missing}0 option%select{ %1|}0; expected vectorize, "
   "vectorize_width, interleave, interleave_count, unroll, or unroll_count">;
-def err_pragma_loop_numeric_value : Error<
-  "invalid argument; expected a positive integer value">;
+def err_pragma_invalid_keyword : Error<
+  "invalid argument; expected '%select{enable|full}0' or 'disable'">;
 
 // Pragma unroll support.
 def warn_pragma_unroll_cuda_value_in_parens : Warning<

@@ -29,6 +29,7 @@
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Scope.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/MathExtras.h"
 using namespace clang;
 using namespace sema;
 
@@ -1125,32 +1126,39 @@ static void handleIBOutletCollection(Sema &S, Decl *D,
                                     Attr.getAttributeSpellingListIndex()));
 }
 
-static void possibleTransparentUnionPointerType(QualType &T) {
-  if (const RecordType *UT = T->getAsUnionType())
+bool Sema::isValidPointerAttrType(QualType T, bool RefOkay) {
+  if (RefOkay) {
+    if (T->isReferenceType())
+      return true;
+  } else {
+    T = T.getNonReferenceType();
+  }
+
+  // The nonnull attribute, and other similar attributes, can be applied to a
+  // transparent union that contains a pointer type.
+  if (const RecordType *UT = T->getAsUnionType()) {
     if (UT && UT->getDecl()->hasAttr<TransparentUnionAttr>()) {
       RecordDecl *UD = UT->getDecl();
       for (const auto *I : UD->fields()) {
         QualType QT = I->getType();
-        if (QT->isAnyPointerType() || QT->isBlockPointerType()) {
-          T = QT;
-          return;
-        }
+        if (QT->isAnyPointerType() || QT->isBlockPointerType())
+          return true;
       }
     }
+  }
+
+  return T->isAnyPointerType() || T->isBlockPointerType();
 }
 
 static bool attrNonNullArgCheck(Sema &S, QualType T, const AttributeList &Attr,
                                 SourceRange AttrParmRange,
-                                SourceRange NonNullTypeRange,
+                                SourceRange TypeRange,
                                 bool isReturnValue = false) {
-  T = T.getNonReferenceType();
-  possibleTransparentUnionPointerType(T);
-
-  if (!T->isAnyPointerType() && !T->isBlockPointerType()) {
+  if (!S.isValidPointerAttrType(T)) {
     S.Diag(Attr.getLoc(), isReturnValue
                               ? diag::warn_attribute_return_pointers_only
                               : diag::warn_attribute_pointers_only)
-        << Attr.getName() << AttrParmRange << NonNullTypeRange;
+        << Attr.getName() << AttrParmRange << TypeRange;
     return false;
   }
   return true;
@@ -1158,14 +1166,15 @@ static bool attrNonNullArgCheck(Sema &S, QualType T, const AttributeList &Attr,
 
 static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   SmallVector<unsigned, 8> NonNullArgs;
-  for (unsigned i = 0; i < Attr.getNumArgs(); ++i) {
-    Expr *Ex = Attr.getArgAsExpr(i);
+  for (unsigned I = 0; I < Attr.getNumArgs(); ++I) {
+    Expr *Ex = Attr.getArgAsExpr(I);
     uint64_t Idx;
-    if (!checkFunctionOrMethodParameterIndex(S, D, Attr, i + 1, Ex, Idx))
+    if (!checkFunctionOrMethodParameterIndex(S, D, Attr, I + 1, Ex, Idx))
       return;
 
     // Is the function argument a pointer type?
-    if (!attrNonNullArgCheck(S, getFunctionOrMethodParamType(D, Idx), Attr,
+    if (Idx < getFunctionOrMethodNumParams(D) &&
+        !attrNonNullArgCheck(S, getFunctionOrMethodParamType(D, Idx), Attr,
                              Ex->getSourceRange(),
                              getFunctionOrMethodParamRange(D, Idx)))
       continue;
@@ -1174,30 +1183,28 @@ static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   }
 
   // If no arguments were specified to __attribute__((nonnull)) then all pointer
-  // arguments have a nonnull attribute.
-  if (NonNullArgs.empty()) {
-    for (unsigned i = 0, e = getFunctionOrMethodNumParams(D); i != e; ++i) {
-      QualType T = getFunctionOrMethodParamType(D, i).getNonReferenceType();
-      possibleTransparentUnionPointerType(T);
-      if (T->isAnyPointerType() || T->isBlockPointerType())
-        NonNullArgs.push_back(i);
+  // arguments have a nonnull attribute; warn if there aren't any. Skip this
+  // check if the attribute came from a macro expansion or a template
+  // instantiation.
+  if (NonNullArgs.empty() && Attr.getLoc().isFileID() &&
+      S.ActiveTemplateInstantiations.empty()) {
+    bool AnyPointers = isFunctionOrMethodVariadic(D);
+    for (unsigned I = 0, E = getFunctionOrMethodNumParams(D);
+         I != E && !AnyPointers; ++I) {
+      QualType T = getFunctionOrMethodParamType(D, I);
+      if (T->isDependentType() || S.isValidPointerAttrType(T))
+        AnyPointers = true;
     }
 
-    // No pointer arguments?
-    if (NonNullArgs.empty()) {
-      // Warn the trivial case only if attribute is not coming from a
-      // macro instantiation.
-      if (Attr.getLoc().isFileID())
-        S.Diag(Attr.getLoc(), diag::warn_attribute_nonnull_no_pointers);
-      return;
-    }
+    if (!AnyPointers)
+      S.Diag(Attr.getLoc(), diag::warn_attribute_nonnull_no_pointers);
   }
 
-  unsigned *start = &NonNullArgs[0];
-  unsigned size = NonNullArgs.size();
-  llvm::array_pod_sort(start, start + size);
+  unsigned *Start = NonNullArgs.data();
+  unsigned Size = NonNullArgs.size();
+  llvm::array_pod_sort(Start, Start + Size);
   D->addAttr(::new (S.Context)
-             NonNullAttr(Attr.getRange(), S.Context, start, size,
+             NonNullAttr(Attr.getRange(), S.Context, Start, Size,
                          Attr.getAttributeSpellingListIndex()));
 }
 
@@ -1234,6 +1241,65 @@ static void handleReturnsNonNullAttr(Sema &S, Decl *D,
   D->addAttr(::new (S.Context)
             ReturnsNonNullAttr(Attr.getRange(), S.Context,
                                Attr.getAttributeSpellingListIndex()));
+}
+
+static void handleAssumeAlignedAttr(Sema &S, Decl *D,
+                                    const AttributeList &Attr) {
+  Expr *E = Attr.getArgAsExpr(0),
+       *OE = Attr.getNumArgs() > 1 ? Attr.getArgAsExpr(1) : nullptr;
+  S.AddAssumeAlignedAttr(Attr.getRange(), D, E, OE,
+                         Attr.getAttributeSpellingListIndex());
+}
+
+void Sema::AddAssumeAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E,
+                                Expr *OE, unsigned SpellingListIndex) {
+  QualType ResultType = getFunctionOrMethodResultType(D);
+  SourceRange SR = getFunctionOrMethodResultSourceRange(D);
+
+  AssumeAlignedAttr TmpAttr(AttrRange, Context, E, OE, SpellingListIndex);
+  SourceLocation AttrLoc = AttrRange.getBegin();
+
+  if (!isValidPointerAttrType(ResultType, /* RefOkay */ true)) {
+    Diag(AttrLoc, diag::warn_attribute_return_pointers_refs_only)
+      << &TmpAttr << AttrRange << SR;
+    return;
+  }
+
+  if (!E->isValueDependent()) {
+    llvm::APSInt I(64);
+    if (!E->isIntegerConstantExpr(I, Context)) {
+      if (OE)
+        Diag(AttrLoc, diag::err_attribute_argument_n_type)
+          << &TmpAttr << 1 << AANT_ArgumentIntegerConstant
+          << E->getSourceRange();
+      else
+        Diag(AttrLoc, diag::err_attribute_argument_type)
+          << &TmpAttr << AANT_ArgumentIntegerConstant
+          << E->getSourceRange();
+      return;
+    }
+
+    if (!I.isPowerOf2()) {
+      Diag(AttrLoc, diag::err_alignment_not_power_of_two)
+        << E->getSourceRange();
+      return;
+    }
+  }
+
+  if (OE) {
+    if (!OE->isValueDependent()) {
+      llvm::APSInt I(64);
+      if (!OE->isIntegerConstantExpr(I, Context)) {
+        Diag(AttrLoc, diag::err_attribute_argument_n_type)
+          << &TmpAttr << 2 << AANT_ArgumentIntegerConstant
+          << OE->getSourceRange();
+        return;
+      }
+    }
+  }
+
+  D->addAttr(::new (Context)
+            AssumeAlignedAttr(AttrRange, Context, E, OE, SpellingListIndex));
 }
 
 static void handleOwnershipAttr(Sema &S, Decl *D, const AttributeList &AL) {
@@ -2691,6 +2757,58 @@ static void handleAnnotateAttr(Sema &S, Decl *D, const AttributeList &Attr) {
                           Attr.getAttributeSpellingListIndex()));
 }
 
+static void handleAlignValueAttr(Sema &S, Decl *D,
+                                 const AttributeList &Attr) {
+  S.AddAlignValueAttr(Attr.getRange(), D, Attr.getArgAsExpr(0),
+                      Attr.getAttributeSpellingListIndex());
+}
+
+void Sema::AddAlignValueAttr(SourceRange AttrRange, Decl *D, Expr *E,
+                             unsigned SpellingListIndex) {
+  AlignValueAttr TmpAttr(AttrRange, Context, E, SpellingListIndex);
+  SourceLocation AttrLoc = AttrRange.getBegin();
+
+  QualType T;
+  if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(D))
+    T = TD->getUnderlyingType();
+  else if (ValueDecl *VD = dyn_cast<ValueDecl>(D))
+    T = VD->getType();
+  else
+    llvm_unreachable("Unknown decl type for align_value");
+
+  if (!T->isDependentType() && !T->isAnyPointerType() &&
+      !T->isReferenceType() && !T->isMemberPointerType()) {
+    Diag(AttrLoc, diag::warn_attribute_pointer_or_reference_only)
+      << &TmpAttr /*TmpAttr.getName()*/ << T << D->getSourceRange();
+    return;
+  }
+
+  if (!E->isValueDependent()) {
+    llvm::APSInt Alignment(32);
+    ExprResult ICE
+      = VerifyIntegerConstantExpression(E, &Alignment,
+          diag::err_align_value_attribute_argument_not_int,
+            /*AllowFold*/ false);
+    if (ICE.isInvalid())
+      return;
+
+    if (!Alignment.isPowerOf2()) {
+      Diag(AttrLoc, diag::err_alignment_not_power_of_two)
+        << E->getSourceRange();
+      return;
+    }
+
+    D->addAttr(::new (Context)
+               AlignValueAttr(AttrRange, Context, ICE.get(),
+               SpellingListIndex));
+    return;
+  }
+
+  // Save dependent expressions in the AST to be instantiated.
+  D->addAttr(::new (Context) AlignValueAttr(TmpAttr));
+  return;
+}
+
 static void handleAlignedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   // check the attribute arguments.
   if (Attr.getNumArgs() > 1) {
@@ -2785,7 +2903,7 @@ void Sema::AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E,
   //   An alignment specification of zero has no effect.
   if (!(TmpAttr.isAlignas() && !Alignment) &&
       !llvm::isPowerOf2_64(Alignment.getZExtValue())) {
-    Diag(AttrLoc, diag::err_attribute_aligned_not_power_of_two)
+    Diag(AttrLoc, diag::err_alignment_not_power_of_two)
       << E->getSourceRange();
     return;
   }
@@ -3051,7 +3169,7 @@ static void handleGlobalAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 
   D->addAttr(::new (S.Context)
               CUDAGlobalAttr(Attr.getRange(), S.Context,
-                            Attr.getAttributeSpellingListIndex()));
+                             Attr.getAttributeSpellingListIndex()));
 }
 
 
@@ -3125,6 +3243,11 @@ static void handleCallConvAttr(Sema &S, Decl *D, const AttributeList &Attr) {
                PascalAttr(Attr.getRange(), S.Context,
                           Attr.getAttributeSpellingListIndex()));
     return;
+  case AttributeList::AT_VectorCall:
+    D->addAttr(::new (S.Context)
+               VectorCallAttr(Attr.getRange(), S.Context,
+                              Attr.getAttributeSpellingListIndex()));
+    return;
   case AttributeList::AT_MSABI:
     D->addAttr(::new (S.Context)
                MSABIAttr(Attr.getRange(), S.Context,
@@ -3192,6 +3315,7 @@ bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC,
   case AttributeList::AT_StdCall: CC = CC_X86StdCall; break;
   case AttributeList::AT_ThisCall: CC = CC_X86ThisCall; break;
   case AttributeList::AT_Pascal: CC = CC_X86Pascal; break;
+  case AttributeList::AT_VectorCall: CC = CC_X86VectorCall; break;
   case AttributeList::AT_MSABI:
     CC = Context.getTargetInfo().getTriple().isOSWindows() ? CC_C :
                                                              CC_X86_64Win64;
@@ -3898,6 +4022,16 @@ static void handleDLLAttr(Sema &S, Decl *D, const AttributeList &A) {
     return;
   }
 
+  if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+    if (FD->isInlined() && A.getKind() == AttributeList::AT_DLLImport &&
+        !S.Context.getTargetInfo().getCXXABI().isMicrosoft()) {
+      // MinGW doesn't allow dllimport on inline functions.
+      S.Diag(A.getRange().getBegin(), diag::warn_attribute_ignored_on_inline)
+          << A.getName();
+      return;
+    }
+  }
+
   unsigned Index = A.getAttributeSpellingListIndex();
   Attr *NewAttr = A.getKind() == AttributeList::AT_DLLExport
                       ? (Attr *)S.mergeDLLExportAttr(D, A.getRange(), Index)
@@ -4138,6 +4272,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_Aligned:
     handleAlignedAttr(S, D, Attr);
     break;
+  case AttributeList::AT_AlignValue:
+    handleAlignValueAttr(S, D, Attr);
+    break;
   case AttributeList::AT_AlwaysInline:
     handleAlwaysInlineAttr(S, D, Attr);
     break;
@@ -4233,6 +4370,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case AttributeList::AT_ReturnsNonNull:
     handleReturnsNonNullAttr(S, D, Attr);
+    break;
+  case AttributeList::AT_AssumeAligned:
+    handleAssumeAlignedAttr(S, D, Attr);
     break;
   case AttributeList::AT_Overloadable:
     handleSimpleAttribute<OverloadableAttr>(S, D, Attr);
@@ -4432,6 +4572,7 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_FastCall:
   case AttributeList::AT_ThisCall:
   case AttributeList::AT_Pascal:
+  case AttributeList::AT_VectorCall:
   case AttributeList::AT_MSABI:
   case AttributeList::AT_SysVABI:
   case AttributeList::AT_Pcs:
@@ -4814,6 +4955,101 @@ static void handleDelayedForbiddenType(Sema &S, DelayedDiagnostic &diag,
   diag.Triggered = true;
 }
 
+
+static bool isDeclDeprecated(Decl *D) {
+  do {
+    if (D->isDeprecated())
+      return true;
+    // A category implicitly has the availability of the interface.
+    if (const ObjCCategoryDecl *CatD = dyn_cast<ObjCCategoryDecl>(D))
+      return CatD->getClassInterface()->isDeprecated();
+  } while ((D = cast_or_null<Decl>(D->getDeclContext())));
+  return false;
+}
+
+static bool isDeclUnavailable(Decl *D) {
+  do {
+    if (D->isUnavailable())
+      return true;
+    // A category implicitly has the availability of the interface.
+    if (const ObjCCategoryDecl *CatD = dyn_cast<ObjCCategoryDecl>(D))
+      return CatD->getClassInterface()->isUnavailable();
+  } while ((D = cast_or_null<Decl>(D->getDeclContext())));
+  return false;
+}
+
+static void DoEmitAvailabilityWarning(Sema &S, DelayedDiagnostic::DDKind K,
+                                      Decl *Ctx, const NamedDecl *D,
+                                      StringRef Message, SourceLocation Loc,
+                                      const ObjCInterfaceDecl *UnknownObjCClass,
+                                      const ObjCPropertyDecl *ObjCProperty,
+                                      bool ObjCPropertyAccess) {
+  // Diagnostics for deprecated or unavailable.
+  unsigned diag, diag_message, diag_fwdclass_message;
+
+  // Matches 'diag::note_property_attribute' options.
+  unsigned property_note_select;
+
+  // Matches diag::note_availability_specified_here.
+  unsigned available_here_select_kind;
+
+  // Don't warn if our current context is deprecated or unavailable.
+  switch (K) {
+  case DelayedDiagnostic::Deprecation:
+    if (isDeclDeprecated(Ctx))
+      return;
+    diag = !ObjCPropertyAccess ? diag::warn_deprecated
+                               : diag::warn_property_method_deprecated;
+    diag_message = diag::warn_deprecated_message;
+    diag_fwdclass_message = diag::warn_deprecated_fwdclass_message;
+    property_note_select = /* deprecated */ 0;
+    available_here_select_kind = /* deprecated */ 2;
+    break;
+
+  case DelayedDiagnostic::Unavailable:
+    if (isDeclUnavailable(Ctx))
+      return;
+    diag = !ObjCPropertyAccess ? diag::err_unavailable
+                               : diag::err_property_method_unavailable;
+    diag_message = diag::err_unavailable_message;
+    diag_fwdclass_message = diag::warn_unavailable_fwdclass_message;
+    property_note_select = /* unavailable */ 1;
+    available_here_select_kind = /* unavailable */ 0;
+    break;
+
+  default:
+    llvm_unreachable("Neither a deprecation or unavailable kind");
+  }
+
+  DeclarationName Name = D->getDeclName();
+  if (!Message.empty()) {
+    S.Diag(Loc, diag_message) << Name << Message;
+    if (ObjCProperty)
+      S.Diag(ObjCProperty->getLocation(), diag::note_property_attribute)
+          << ObjCProperty->getDeclName() << property_note_select;
+  } else if (!UnknownObjCClass) {
+    S.Diag(Loc, diag) << Name;
+    if (ObjCProperty)
+      S.Diag(ObjCProperty->getLocation(), diag::note_property_attribute)
+          << ObjCProperty->getDeclName() << property_note_select;
+  } else {
+    S.Diag(Loc, diag_fwdclass_message) << Name;
+    S.Diag(UnknownObjCClass->getLocation(), diag::note_forward_class);
+  }
+
+  S.Diag(D->getLocation(), diag::note_availability_specified_here)
+      << D << available_here_select_kind;
+}
+
+static void handleDelayedAvailabilityCheck(Sema &S, DelayedDiagnostic &DD,
+                                           Decl *Ctx) {
+  DD.Triggered = true;
+  DoEmitAvailabilityWarning(S, (DelayedDiagnostic::DDKind)DD.Kind, Ctx,
+                            DD.getDeprecationDecl(), DD.getDeprecationMessage(),
+                            DD.Loc, DD.getUnknownObjCClass(),
+                            DD.getObjCProperty(), false);
+}
+
 void Sema::PopParsingDeclaration(ParsingDeclState state, Decl *decl) {
   assert(DelayedDiagnostics.getCurrentPool());
   DelayedDiagnosticPool &poppedPool = *DelayedDiagnostics.getCurrentPool();
@@ -4846,7 +5082,7 @@ void Sema::PopParsingDeclaration(ParsingDeclState state, Decl *decl) {
         // Don't bother giving deprecation/unavailable diagnostics if
         // the decl is invalid.
         if (!decl->isInvalidDecl())
-          HandleDelayedAvailabilityCheck(diag, decl);
+          handleDelayedAvailabilityCheck(*this, diag, decl);
         break;
 
       case DelayedDiagnostic::Access:
@@ -4868,109 +5104,6 @@ void Sema::redelayDiagnostics(DelayedDiagnosticPool &pool) {
   DelayedDiagnosticPool *curPool = DelayedDiagnostics.getCurrentPool();
   assert(curPool && "re-emitting in undelayed context not supported");
   curPool->steal(pool);
-}
-
-static bool isDeclDeprecated(Decl *D) {
-  do {
-    if (D->isDeprecated())
-      return true;
-    // A category implicitly has the availability of the interface.
-    if (const ObjCCategoryDecl *CatD = dyn_cast<ObjCCategoryDecl>(D))
-      return CatD->getClassInterface()->isDeprecated();
-  } while ((D = cast_or_null<Decl>(D->getDeclContext())));
-  return false;
-}
-
-static bool isDeclUnavailable(Decl *D) {
-  do {
-    if (D->isUnavailable())
-      return true;
-    // A category implicitly has the availability of the interface.
-    if (const ObjCCategoryDecl *CatD = dyn_cast<ObjCCategoryDecl>(D))
-      return CatD->getClassInterface()->isUnavailable();
-  } while ((D = cast_or_null<Decl>(D->getDeclContext())));
-  return false;
-}
-
-static void
-DoEmitAvailabilityWarning(Sema &S,
-                          DelayedDiagnostic::DDKind K,
-                          Decl *Ctx,
-                          const NamedDecl *D,
-                          StringRef Message,
-                          SourceLocation Loc,
-                          const ObjCInterfaceDecl *UnknownObjCClass,
-                          const ObjCPropertyDecl *ObjCProperty,
-                          bool ObjCPropertyAccess) {
-
-  // Diagnostics for deprecated or unavailable.
-  unsigned diag, diag_message, diag_fwdclass_message;
-
-  // Matches 'diag::note_property_attribute' options.
-  unsigned property_note_select;
-
-  // Matches diag::note_availability_specified_here.
-  unsigned available_here_select_kind;
-
-  // Don't warn if our current context is deprecated or unavailable.
-  switch (K) {
-    case DelayedDiagnostic::Deprecation:
-      if (isDeclDeprecated(Ctx))
-        return;
-      diag = !ObjCPropertyAccess ? diag::warn_deprecated
-                                 : diag::warn_property_method_deprecated;
-      diag_message = diag::warn_deprecated_message;
-      diag_fwdclass_message = diag::warn_deprecated_fwdclass_message;
-      property_note_select = /* deprecated */ 0;
-      available_here_select_kind = /* deprecated */ 2;
-      break;
-
-    case DelayedDiagnostic::Unavailable:
-      if (isDeclUnavailable(Ctx))
-        return;
-      diag = !ObjCPropertyAccess ? diag::err_unavailable
-                                 : diag::err_property_method_unavailable;
-      diag_message = diag::err_unavailable_message;
-      diag_fwdclass_message = diag::warn_unavailable_fwdclass_message;
-      property_note_select = /* unavailable */ 1;
-      available_here_select_kind = /* unavailable */ 0;
-      break;
-
-    default:
-      llvm_unreachable("Neither a deprecation or unavailable kind");
-  }
-
-  DeclarationName Name = D->getDeclName();
-  if (!Message.empty()) {
-    S.Diag(Loc, diag_message) << Name << Message;
-    if (ObjCProperty)
-      S.Diag(ObjCProperty->getLocation(), diag::note_property_attribute)
-        << ObjCProperty->getDeclName() << property_note_select;
-  } else if (!UnknownObjCClass) {
-    S.Diag(Loc, diag) << Name;
-    if (ObjCProperty)
-      S.Diag(ObjCProperty->getLocation(), diag::note_property_attribute)
-        << ObjCProperty->getDeclName() << property_note_select;
-  } else {
-    S.Diag(Loc, diag_fwdclass_message) << Name;
-    S.Diag(UnknownObjCClass->getLocation(), diag::note_forward_class);
-  }
-
-  S.Diag(D->getLocation(), diag::note_availability_specified_here)
-    << D << available_here_select_kind;
-}
-
-void Sema::HandleDelayedAvailabilityCheck(DelayedDiagnostic &DD,
-                                          Decl *Ctx) {
-  DD.Triggered = true;
-  DoEmitAvailabilityWarning(*this,
-                            (DelayedDiagnostic::DDKind) DD.Kind,
-                            Ctx,
-                            DD.getDeprecationDecl(),
-                            DD.getDeprecationMessage(),
-                            DD.Loc,
-                            DD.getUnknownObjCClass(),
-                            DD.getObjCProperty(), false);
 }
 
 void Sema::EmitAvailabilityWarning(AvailabilityDiagnostic AD,

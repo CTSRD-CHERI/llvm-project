@@ -1048,6 +1048,7 @@ CanThrowResult Sema::canThrow(const Expr *E) {
   case Expr::CXXDependentScopeMemberExprClass:
   case Expr::CXXUnresolvedConstructExprClass:
   case Expr::DependentScopeDeclRefExprClass:
+  case Expr::CXXFoldExprClass:
     return CT_Dependent;
 
   case Expr::AsTypeExprClass:
@@ -1068,6 +1069,7 @@ CanThrowResult Sema::canThrow(const Expr *E) {
   case Expr::UnaryExprOrTypeTraitExprClass:
   case Expr::UnresolvedLookupExprClass:
   case Expr::UnresolvedMemberExprClass:
+  case Expr::TypoExprClass:
     // FIXME: Can any of the above throw?  If so, when?
     return CT_Cannot;
 

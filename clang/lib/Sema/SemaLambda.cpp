@@ -1049,8 +1049,8 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
       if (R.empty()) {
         // FIXME: Disable corrections that would add qualification?
         CXXScopeSpec ScopeSpec;
-        DeclFilterCCC<VarDecl> Validator;
-        if (DiagnoseEmptyLookup(CurScope, ScopeSpec, R, Validator))
+        if (DiagnoseEmptyLookup(CurScope, ScopeSpec, R,
+                                llvm::make_unique<DeclFilterCCC<VarDecl>>()))
           continue;
       }
 
@@ -1412,6 +1412,12 @@ ExprResult Sema::ActOnLambdaExpr(SourceLocation StartLoc, Stmt *Body,
         CaptureInits.push_back(new (Context) CXXThisExpr(From.getLocation(),
                                                          getCurrentThisType(),
                                                          /*isImplicit=*/true));
+        continue;
+      }
+      if (From.isVLATypeCapture()) {
+        Captures.push_back(
+            LambdaCapture(From.getLocation(), IsImplicit, LCK_VLAType));
+        CaptureInits.push_back(nullptr);
         continue;
       }
 

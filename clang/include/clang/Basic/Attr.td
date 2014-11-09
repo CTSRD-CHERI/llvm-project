@@ -354,6 +354,24 @@ def Aligned : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+def AlignValue : Attr {
+  let Spellings = [
+    // Unfortunately, this is semantically an assertion, not a directive
+    // (something else must ensure the alignment), so aligned_value is a
+    // probably a better name. We might want to add an aligned_value spelling in
+    // the future (and a corresponding C++ attribute), but this can be done
+    // later once we decide if we also want them to have slightly-different
+    // semantics than Intel's align_value.
+    GNU<"align_value">
+    // Intel's compiler on Windows also supports:
+    // , Declspec<"align_value">
+  ];
+  let Args = [ExprArgument<"Alignment">];
+  let Subjects = SubjectList<[Var, TypedefName], WarnDiag,
+                             "ExpectedVariableOrTypedef">;
+  let Documentation = [AlignValueDocs];
+}
+
 def AlignMac68k : InheritableAttr {
   // This attribute has no spellings as it is only ever created implicitly.
   let Spellings = [];
@@ -541,6 +559,13 @@ def CUDAHost : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+def CUDAInvalidTarget : InheritableAttr {
+  let Spellings = [];
+  let Subjects = SubjectList<[Function]>;
+  let LangOpts = [CUDA];
+  let Documentation = [Undocumented];
+}
+
 def CUDALaunchBounds : InheritableAttr {
   let Spellings = [GNU<"launch_bounds">];
   let Args = [IntArgument<"MaxThreads">, DefaultIntArgument<"MinBlocks", 0>];
@@ -655,7 +680,7 @@ def FastCall : InheritableAttr {
   let Spellings = [GCC<"fastcall">, Keyword<"__fastcall">,
                    Keyword<"_fastcall">];
 //  let Subjects = [Function, ObjCMethod];
-  let Documentation = [Undocumented];
+  let Documentation = [FastCallDocs];
 }
 
 def Final : InheritableAttr {
@@ -754,7 +779,7 @@ def MayAlias : InheritableAttr {
 def MSABI : InheritableAttr {
   let Spellings = [GCC<"ms_abi">];
 //  let Subjects = [Function, ObjCMethod];
-  let Documentation = [Undocumented];
+  let Documentation = [MSABIDocs];
 }
 
 def MSP430Interrupt : InheritableAttr, TargetSpecificAttr<TargetMSP430> {
@@ -810,7 +835,7 @@ def NoCommon : InheritableAttr {
 }
 
 def NoDebug : InheritableAttr {
-  let Spellings = [GNU<"nodebug">];
+  let Spellings = [GCC<"nodebug">];
   let Documentation = [Undocumented];
 }
 
@@ -845,11 +870,15 @@ def NonNull : InheritableAttr {
   let Args = [VariadicUnsignedArgument<"Args">];
   let AdditionalMembers =
 [{bool isNonNull(unsigned idx) const {
+    if (!args_size())
+      return true;
     for (const auto &V : args())
       if (V == idx)
         return true;
     return false;
   } }];
+  // FIXME: We should merge duplicates into a single nonnull attribute.
+  let DuplicatesAllowedWhileMerging = 1;
   let Documentation = [Undocumented];
 }
 
@@ -858,6 +887,13 @@ def ReturnsNonNull : InheritableAttr {
   let Subjects = SubjectList<[ObjCMethod, Function], WarnDiag,
                              "ExpectedFunctionOrMethod">;
   let Documentation = [Undocumented];
+}
+
+def AssumeAligned : InheritableAttr {
+  let Spellings = [GCC<"assume_aligned">];
+  let Subjects = SubjectList<[ObjCMethod, Function]>;
+  let Args = [ExprArgument<"Alignment">, ExprArgument<"Offset", 1>];
+  let Documentation = [AssumeAlignedDocs];
 }
 
 def NoReturn : InheritableAttr {
@@ -1073,7 +1109,7 @@ def Pure : InheritableAttr {
 def Regparm : TypeAttr {
   let Spellings = [GCC<"regparm">];
   let Args = [UnsignedArgument<"NumParams">];
-  let Documentation = [Undocumented];
+  let Documentation = [RegparmDocs];
 }
 
 def ReqdWorkGroupSize : InheritableAttr {
@@ -1126,7 +1162,7 @@ def Sensitive : InheritableAttr {
 def StdCall : InheritableAttr {
   let Spellings = [GCC<"stdcall">, Keyword<"__stdcall">, Keyword<"_stdcall">];
 //  let Subjects = [Function, ObjCMethod];
-  let Documentation = [Undocumented];
+  let Documentation = [StdCallDocs];
 }
 
 def SysVABI : InheritableAttr {
@@ -1139,7 +1175,14 @@ def ThisCall : InheritableAttr {
   let Spellings = [GCC<"thiscall">, Keyword<"__thiscall">,
                    Keyword<"_thiscall">];
 //  let Subjects = [Function, ObjCMethod];
-  let Documentation = [Undocumented];
+  let Documentation = [ThisCallDocs];
+}
+
+def VectorCall : InheritableAttr {
+  let Spellings = [GNU<"vectorcall">, Keyword<"__vectorcall">,
+                   Keyword<"_vectorcall">];
+//  let Subjects = [Function, ObjCMethod];
+  let Documentation = [VectorCallDocs];
 }
 
 def Pascal : InheritableAttr {
@@ -1820,7 +1863,7 @@ def LoopHint : Attr {
               EnumArgument<"State", "LoopHintState",
                            ["default", "enable", "disable"],
                            ["Default", "Enable", "Disable"]>,
-              DefaultIntArgument<"Value", 1>];
+              ExprArgument<"Value">];
 
   let AdditionalMembers = [{
   static const char *getOptionName(int Option) {
@@ -1860,7 +1903,7 @@ def LoopHint : Attr {
     OS << "(";
     if (option == VectorizeWidth || option == InterleaveCount ||
         option == UnrollCount)
-      OS << value;
+      value->printPretty(OS, nullptr, Policy);
     else if (state == Default)
       return "";
     else if (state == Enable)
@@ -1886,3 +1929,11 @@ def LoopHint : Attr {
 
   let Documentation = [LoopHintDocs, UnrollHintDocs];
 }
+
+def CapturedRecord : InheritableAttr {
+  // This attribute has no spellings as it is only ever created implicitly.
+  let Spellings = [];
+  let SemaHandler = 0;
+  let Documentation = [Undocumented];
+}
+

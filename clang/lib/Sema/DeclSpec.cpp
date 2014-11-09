@@ -18,6 +18,7 @@
 #include "clang/AST/NestedNameSpecifier.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Parse/ParseDiagnostic.h" // FIXME: remove this back-dependency!
 #include "clang/Sema/LocInfoType.h"
@@ -113,6 +114,18 @@ void CXXScopeSpec::MakeGlobal(ASTContext &Context,
          "NestedNameSpecifierLoc range computation incorrect");
 }
 
+void CXXScopeSpec::MakeSuper(ASTContext &Context, CXXRecordDecl *RD,
+                             SourceLocation SuperLoc,
+                             SourceLocation ColonColonLoc) {
+  Builder.MakeSuper(Context, RD, SuperLoc, ColonColonLoc);
+
+  Range.setBegin(SuperLoc);
+  Range.setEnd(ColonColonLoc);
+
+  assert(Range == Builder.getSourceRange() &&
+  "NestedNameSpecifierLoc range computation incorrect");
+}
+
 void CXXScopeSpec::MakeTrivial(ASTContext &Context, 
                                NestedNameSpecifier *Qualifier, SourceRange R) {
   Builder.MakeTrivial(Context, Qualifier, R);
@@ -159,6 +172,8 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
                                              SourceLocation ConstQualifierLoc,
                                              SourceLocation
                                                  VolatileQualifierLoc,
+                                             SourceLocation
+                                                 RestrictQualifierLoc,
                                              SourceLocation MutableLoc,
                                              ExceptionSpecificationType
                                                  ESpecType,
@@ -193,6 +208,7 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
   I.Fun.RefQualifierLoc         = RefQualifierLoc.getRawEncoding();
   I.Fun.ConstQualifierLoc       = ConstQualifierLoc.getRawEncoding();
   I.Fun.VolatileQualifierLoc    = VolatileQualifierLoc.getRawEncoding();
+  I.Fun.RestrictQualifierLoc    = RestrictQualifierLoc.getRawEncoding();
   I.Fun.MutableLoc              = MutableLoc.getRawEncoding();
   I.Fun.ExceptionSpecType       = ESpecType;
   I.Fun.ExceptionSpecLoc        = ESpecLoc.getRawEncoding();
@@ -553,12 +569,6 @@ bool DeclSpec::SetTypeSpecWidth(TSW W, SourceLocation Loc,
   else if (W != TSW_longlong || TypeSpecWidth != TSW_long)
     return BadSpecifier(W, (TSW)TypeSpecWidth, PrevSpec, DiagID);
   TypeSpecWidth = W;
-  if (TypeAltiVecVector && !TypeAltiVecBool &&
-      ((TypeSpecWidth == TSW_long) || (TypeSpecWidth == TSW_longlong))) {
-    PrevSpec = DeclSpec::getSpecifierName((TST) TypeSpecType, Policy);
-    DiagID = diag::warn_vector_long_decl_spec_combination;
-    return true;
-  }
   return false;
 }
 
@@ -680,11 +690,6 @@ bool DeclSpec::SetTypeSpecType(TST T, SourceLocation Loc,
   }
   TypeSpecType = T;
   TypeSpecOwned = false;
-  if (TypeAltiVecVector && !TypeAltiVecBool && (TypeSpecType == TST_double)) {
-    PrevSpec = DeclSpec::getSpecifierName((TST) TypeSpecType, Policy);
-    DiagID = diag::err_invalid_vector_decl_spec;
-    return true;
-  }
   return false;
 }
 
@@ -978,6 +983,16 @@ void DeclSpec::Finish(DiagnosticsEngine &D, Preprocessor &PP, const PrintingPoli
       if ((TypeSpecType == TST_char) || (TypeSpecType == TST_int) ||
           (TypeSpecWidth != TSW_unspecified))
         TypeSpecSign = TSS_unsigned;
+    } else if (TypeSpecType == TST_double) {
+      // vector long double and vector long long double are never allowed.
+      // vector double is OK for Power7 and later.
+      if (TypeSpecWidth == TSW_long || TypeSpecWidth == TSW_longlong)
+        Diag(D, TSWLoc, diag::err_invalid_vector_long_double_decl_spec);
+      else if (!PP.getTargetInfo().hasFeature("vsx"))
+        Diag(D, TSTLoc, diag::err_invalid_vector_double_decl_spec);
+    } else if (TypeSpecWidth == TSW_long) {
+      Diag(D, TSWLoc, diag::warn_vector_long_decl_spec_combination)
+        << getSpecifierName((TST)TypeSpecType, Policy);
     }
 
     if (TypeAltiVecPixel) {

@@ -1175,21 +1175,8 @@ static Module *getDefiningModule(Decl *Entity) {
     if (FunctionDecl *Pattern = FD->getTemplateInstantiationPattern())
       Entity = Pattern;
   } else if (CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(Entity)) {
-    // If it's a class template specialization, find the template or partial
-    // specialization from which it was instantiated.
-    if (ClassTemplateSpecializationDecl *SpecRD =
-            dyn_cast<ClassTemplateSpecializationDecl>(RD)) {
-      llvm::PointerUnion<ClassTemplateDecl*,
-                         ClassTemplatePartialSpecializationDecl*> From =
-          SpecRD->getInstantiatedFrom();
-      if (ClassTemplateDecl *FromTemplate = From.dyn_cast<ClassTemplateDecl*>())
-        Entity = FromTemplate->getTemplatedDecl();
-      else if (From)
-        Entity = From.get<ClassTemplatePartialSpecializationDecl*>();
-      // Otherwise, it's an explicit specialization.
-    } else if (MemberSpecializationInfo *MSInfo =
-                   RD->getMemberSpecializationInfo())
-      Entity = getInstantiatedFrom(RD, MSInfo);
+    if (CXXRecordDecl *Pattern = RD->getTemplateInstantiationPattern())
+      Entity = Pattern;
   } else if (EnumDecl *ED = dyn_cast<EnumDecl>(Entity)) {
     if (MemberSpecializationInfo *MSInfo = ED->getMemberSpecializationInfo())
       Entity = getInstantiatedFrom(ED, MSInfo);
@@ -1782,7 +1769,8 @@ bool Sema::LookupQualifiedName(LookupResult &R, DeclContext *LookupCtx,
 /// contexts that receive a name and an optional C++ scope specifier
 /// (e.g., "N::M::x"). It will then perform either qualified or
 /// unqualified name lookup (with LookupQualifiedName or LookupName,
-/// respectively) on the given name and return those results.
+/// respectively) on the given name and return those results. It will
+/// perform a special type of lookup for "__super::" scope specifier.
 ///
 /// @param S        The scope from which unqualified name lookup will
 /// begin.
@@ -1802,6 +1790,10 @@ bool Sema::LookupParsedName(LookupResult &R, Scope *S, CXXScopeSpec *SS,
   }
 
   if (SS && SS->isSet()) {
+    NestedNameSpecifier *NNS = SS->getScopeRep();
+    if (NNS->getKind() == NestedNameSpecifier::Super)
+      return LookupInSuper(R, NNS->getAsRecordDecl());
+
     if (DeclContext *DC = computeDeclContext(*SS, EnteringContext)) {
       // We have resolved the scope specifier to a particular declaration
       // contex, and will perform name lookup in that context.
@@ -1824,6 +1816,30 @@ bool Sema::LookupParsedName(LookupResult &R, Scope *S, CXXScopeSpec *SS,
   return LookupName(R, S, AllowBuiltinCreation);
 }
 
+/// \brief Perform qualified name lookup into all base classes of the given
+/// class.
+///
+/// \param R captures both the lookup criteria and any lookup results found.
+///
+/// \param Class The context in which qualified name lookup will
+/// search. Name lookup will search in all base classes merging the results.
+///
+/// @returns True if any decls were found (but possibly ambiguous)
+bool Sema::LookupInSuper(LookupResult &R, CXXRecordDecl *Class) {
+  for (const auto &BaseSpec : Class->bases()) {
+    CXXRecordDecl *RD = cast<CXXRecordDecl>(
+        BaseSpec.getType()->castAs<RecordType>()->getDecl());
+    LookupResult Result(*this, R.getLookupNameInfo(), R.getLookupKind());
+	Result.setBaseObjectType(Context.getRecordType(Class));
+    LookupQualifiedName(Result, RD);
+    for (auto *Decl : Result)
+      R.addDecl(Decl);
+  }
+
+  R.resolveKind();
+
+  return !R.empty();
+}
 
 /// \brief Produce a diagnostic describing the ambiguity that resulted
 /// from name lookup.
@@ -3262,6 +3278,49 @@ static void LookupPotentialTypoResult(Sema &SemaRef,
                                       bool isObjCIvarLookup,
                                       bool FindHidden);
 
+/// \brief Check whether the declarations found for a typo correction are
+/// visible, and if none of them are, convert the correction to an 'import
+/// a module' correction.
+static void checkCorrectionVisibility(Sema &SemaRef, TypoCorrection &TC) {
+  if (TC.begin() == TC.end())
+    return;
+
+  TypoCorrection::decl_iterator DI = TC.begin(), DE = TC.end();
+
+  for (/**/; DI != DE; ++DI)
+    if (!LookupResult::isVisible(SemaRef, *DI))
+      break;
+  // Nothing to do if all decls are visible.
+  if (DI == DE)
+    return;
+
+  llvm::SmallVector<NamedDecl*, 4> NewDecls(TC.begin(), DI);
+  bool AnyVisibleDecls = !NewDecls.empty();
+
+  for (/**/; DI != DE; ++DI) {
+    NamedDecl *VisibleDecl = *DI;
+    if (!LookupResult::isVisible(SemaRef, *DI))
+      VisibleDecl = findAcceptableDecl(SemaRef, *DI);
+
+    if (VisibleDecl) {
+      if (!AnyVisibleDecls) {
+        // Found a visible decl, discard all hidden ones.
+        AnyVisibleDecls = true;
+        NewDecls.clear();
+      }
+      NewDecls.push_back(VisibleDecl);
+    } else if (!AnyVisibleDecls && !(*DI)->isModulePrivate())
+      NewDecls.push_back(*DI);
+  }
+
+  if (NewDecls.empty())
+    TC = TypoCorrection();
+  else {
+    TC.setCorrectionDecls(NewDecls);
+    TC.setRequiresImport(!AnyVisibleDecls);
+  }
+}
+
 // Fill the supplied vector with the IdentifierInfo pointers for each piece of
 // the given NestedNameSpecifier (i.e. given a NestedNameSpecifier "foo::bar::",
 // fill the vector with the IdentifierInfo pointers for "foo" and "bar").
@@ -3296,162 +3355,12 @@ static void getNestedNameSpecifierIdentifiers(
     break;
 
   case NestedNameSpecifier::Global:
+  case NestedNameSpecifier::Super:
     return;
   }
 
   if (II)
     Identifiers.push_back(II);
-}
-
-namespace {
-
-static const unsigned MaxTypoDistanceResultSets = 5;
-
-class TypoCorrectionConsumer : public VisibleDeclConsumer {
-  typedef SmallVector<TypoCorrection, 1> TypoResultList;
-  typedef llvm::StringMap<TypoResultList> TypoResultsMap;
-  typedef std::map<unsigned, TypoResultsMap> TypoEditDistanceMap;
-
-public:
-  explicit TypoCorrectionConsumer(Sema &SemaRef,
-                                  const DeclarationNameInfo &TypoName,
-                                  Sema::LookupNameKind LookupKind,
-                                  Scope *S, CXXScopeSpec *SS,
-                                  CorrectionCandidateCallback &CCC,
-                                  DeclContext *MemberContext,
-                                  bool EnteringContext)
-      : Typo(TypoName.getName().getAsIdentifierInfo()), SemaRef(SemaRef), S(S),
-        SS(SS), CorrectionValidator(CCC), MemberContext(MemberContext),
-        Result(SemaRef, TypoName, LookupKind),
-        Namespaces(SemaRef.Context, SemaRef.CurContext, SS),
-        EnteringContext(EnteringContext), SearchNamespaces(false) {
-    Result.suppressDiagnostics();
-  }
-
-  bool includeHiddenDecls() const override { return true; }
-
-  // Methods for adding potential corrections to the consumer.
-  void FoundDecl(NamedDecl *ND, NamedDecl *Hiding, DeclContext *Ctx,
-                 bool InBaseClass) override;
-  void FoundName(StringRef Name);
-  void addKeywordResult(StringRef Keyword);
-  void addCorrection(TypoCorrection Correction);
-
-  bool empty() const { return CorrectionResults.empty(); }
-
-  /// \brief Return the list of TypoCorrections for the given identifier from
-  /// the set of corrections that have the closest edit distance, if any.
-  TypoResultList &operator[](StringRef Name) {
-    return CorrectionResults.begin()->second[Name];
-  }
-
-  /// \brief Return the edit distance of the corrections that have the
-  /// closest/best edit distance from the original typop.
-  unsigned getBestEditDistance(bool Normalized) {
-    if (CorrectionResults.empty())
-      return (std::numeric_limits<unsigned>::max)();
-
-    unsigned BestED = CorrectionResults.begin()->first;
-    return Normalized ? TypoCorrection::NormalizeEditDistance(BestED) : BestED;
-  }
-
-  /// \brief Set-up method to add to the consumer the set of namespaces to use
-  /// in performing corrections to nested name specifiers. This method also
-  /// implicitly adds all of the known classes in the current AST context to the
-  /// to the consumer for correcting nested name specifiers.
-  void
-  addNamespaces(const llvm::MapVector<NamespaceDecl *, bool> &KnownNamespaces);
-
-  /// \brief Return the next typo correction that passes all internal filters
-  /// and is deemed valid by the consumer's CorrectionCandidateCallback,
-  /// starting with the corrections that have the closest edit distance. An
-  /// empty TypoCorrection is returned once no more viable corrections remain
-  /// in the consumer.
-  TypoCorrection getNextCorrection();
-
-private:
-  class NamespaceSpecifierSet {
-    struct SpecifierInfo {
-      DeclContext* DeclCtx;
-      NestedNameSpecifier* NameSpecifier;
-      unsigned EditDistance;
-    };
-
-    typedef SmallVector<DeclContext*, 4> DeclContextList;
-    typedef SmallVector<SpecifierInfo, 16> SpecifierInfoList;
-
-    ASTContext &Context;
-    DeclContextList CurContextChain;
-    std::string CurNameSpecifier;
-    SmallVector<const IdentifierInfo*, 4> CurContextIdentifiers;
-    SmallVector<const IdentifierInfo*, 4> CurNameSpecifierIdentifiers;
-    bool isSorted;
-
-    SpecifierInfoList Specifiers;
-    llvm::SmallSetVector<unsigned, 4> Distances;
-    llvm::DenseMap<unsigned, SpecifierInfoList> DistanceMap;
-
-    /// \brief Helper for building the list of DeclContexts between the current
-    /// context and the top of the translation unit
-    static DeclContextList buildContextChain(DeclContext *Start);
-
-    void sortNamespaces();
-
-    unsigned buildNestedNameSpecifier(DeclContextList &DeclChain,
-                                      NestedNameSpecifier *&NNS);
-
-   public:
-    NamespaceSpecifierSet(ASTContext &Context, DeclContext *CurContext,
-                          CXXScopeSpec *CurScopeSpec);
-
-    /// \brief Add the DeclContext (a namespace or record) to the set, computing
-    /// the corresponding NestedNameSpecifier and its distance in the process.
-    void addNameSpecifier(DeclContext *Ctx);
-
-    typedef SpecifierInfoList::iterator iterator;
-    iterator begin() {
-      if (!isSorted) sortNamespaces();
-      return Specifiers.begin();
-    }
-    iterator end() { return Specifiers.end(); }
-  };
-
-  void addName(StringRef Name, NamedDecl *ND,
-               NestedNameSpecifier *NNS = nullptr, bool isKeyword = false);
-
-  /// \brief Find any visible decls for the given typo correction candidate.
-  /// If none are found, it to the set of candidates for which qualified lookups
-  /// will be performed to find possible nested name specifier changes.
-  bool resolveCorrection(TypoCorrection &Candidate);
-
-  /// \brief Perform qualified lookups on the queued set of typo correction
-  /// candidates and add the nested name specifier changes to each candidate if
-  /// a lookup succeeds (at which point the candidate will be returned to the
-  /// main pool of potential corrections).
-  void performQualifiedLookups();
-
-  /// \brief The name written that is a typo in the source.
-  IdentifierInfo *Typo;
-
-  /// \brief The results found that have the smallest edit distance
-  /// found (so far) with the typo name.
-  ///
-  /// The pointer value being set to the current DeclContext indicates
-  /// whether there is a keyword with this name.
-  TypoEditDistanceMap CorrectionResults;
-
-  Sema &SemaRef;
-  Scope *S;
-  CXXScopeSpec *SS;
-  CorrectionCandidateCallback &CorrectionValidator;
-  DeclContext *MemberContext;
-  LookupResult Result;
-  NamespaceSpecifierSet Namespaces;
-  SmallVector<TypoCorrection, 2> QualifiedResults;
-  bool EnteringContext;
-  bool SearchNamespaces;
-};
-
 }
 
 void TypoCorrectionConsumer::FoundDecl(NamedDecl *ND, NamedDecl *Hiding,
@@ -3508,6 +3417,8 @@ void TypoCorrectionConsumer::addName(StringRef Name, NamedDecl *ND,
   addCorrection(TC);
 }
 
+static const unsigned MaxTypoDistanceResultSets = 5;
+
 void TypoCorrectionConsumer::addCorrection(TypoCorrection Correction) {
   StringRef TypoStr = Typo->getName();
   StringRef Name = Correction.getCorrectionAsIdentifierInfo()->getName();
@@ -3520,9 +3431,11 @@ void TypoCorrectionConsumer::addCorrection(TypoCorrection Correction) {
     return;
 
   // If the correction is resolved but is not viable, ignore it.
-  if (Correction.isResolved() &&
-      !isCandidateViable(CorrectionValidator, Correction))
-    return;
+  if (Correction.isResolved()) {
+    checkCorrectionVisibility(SemaRef, Correction);
+    if (!Correction || !isCandidateViable(*CorrectionValidator, Correction))
+      return;
+  }
 
   TypoResultList &CList =
       CorrectionResults[Correction.getEditDistance(false)][Name];
@@ -3576,7 +3489,11 @@ void TypoCorrectionConsumer::addNamespaces(
   }
 }
 
-TypoCorrection TypoCorrectionConsumer::getNextCorrection() {
+const TypoCorrection &TypoCorrectionConsumer::getNextCorrection() {
+  if (++CurrentTCIndex < ValidatedCorrections.size())
+    return ValidatedCorrections[CurrentTCIndex];
+
+  CurrentTCIndex = ValidatedCorrections.size();
   while (!CorrectionResults.empty()) {
     auto DI = CorrectionResults.begin();
     if (DI->second.empty()) {
@@ -3592,20 +3509,24 @@ TypoCorrection TypoCorrectionConsumer::getNextCorrection() {
     }
 
     TypoCorrection TC = RI->second.pop_back_val();
-    if (TC.isResolved() || resolveCorrection(TC))
-      return TC;
+    if (TC.isResolved() || TC.requiresImport() || resolveCorrection(TC)) {
+      ValidatedCorrections.push_back(TC);
+      return ValidatedCorrections[CurrentTCIndex];
+    }
   }
-  return TypoCorrection();
+  return ValidatedCorrections[0];  // The empty correction.
 }
 
 bool TypoCorrectionConsumer::resolveCorrection(TypoCorrection &Candidate) {
   IdentifierInfo *Name = Candidate.getCorrectionAsIdentifierInfo();
   DeclContext *TempMemberContext = MemberContext;
-  CXXScopeSpec *TempSS = SS;
+  CXXScopeSpec *TempSS = SS.get();
+  if (Candidate.getCorrectionRange().isInvalid())
+    Candidate.setCorrectionRange(TempSS, Result.getLookupNameInfo());
 retry_lookup:
   LookupPotentialTypoResult(SemaRef, Result, Name, S, TempSS, TempMemberContext,
                             EnteringContext,
-                            CorrectionValidator.IsObjCIvarLookup,
+                            CorrectionValidator->IsObjCIvarLookup,
                             Name == Typo && !Candidate.WillReplaceSpecifier());
   switch (Result.getResultKind()) {
   case LookupResult::NotFound:
@@ -3619,7 +3540,7 @@ retry_lookup:
     }
     if (TempMemberContext) {
       if (SS && !TempSS)
-        TempSS = SS;
+        TempSS = SS.get();
       TempMemberContext = nullptr;
       goto retry_lookup;
     }
@@ -3636,7 +3557,8 @@ retry_lookup:
     // Store all of the Decls for overloaded symbols
     for (auto *TRD : Result)
       Candidate.addCorrectionDecl(TRD);
-    if (!isCandidateViable(CorrectionValidator, Candidate)) {
+    checkCorrectionVisibility(SemaRef, Candidate);
+    if (!isCandidateViable(*CorrectionValidator, Candidate)) {
       if (SearchNamespaces)
         QualifiedResults.push_back(Candidate);
       break;
@@ -3855,8 +3777,8 @@ void TypoCorrectionConsumer::NamespaceSpecifierSet::addNameSpecifier(
     SmallVector<const IdentifierInfo*, 4> NewNameSpecifierIdentifiers;
     getNestedNameSpecifierIdentifiers(NNS, NewNameSpecifierIdentifiers);
     NumSpecifiers = llvm::ComputeEditDistance(
-        ArrayRef<const IdentifierInfo *>(CurNameSpecifierIdentifiers),
-        ArrayRef<const IdentifierInfo *>(NewNameSpecifierIdentifiers));
+        llvm::makeArrayRef(CurNameSpecifierIdentifiers),
+        llvm::makeArrayRef(NewNameSpecifierIdentifiers));
   }
 
   isSorted = false;
@@ -4069,47 +3991,179 @@ static void AddKeywordsToConsumer(Sema &SemaRef,
   }
 }
 
-/// \brief Check whether the declarations found for a typo correction are
-/// visible, and if none of them are, convert the correction to an 'import
-/// a module' correction.
-static void checkCorrectionVisibility(Sema &SemaRef, TypoCorrection &TC) {
-  if (TC.begin() == TC.end())
-    return;
+std::unique_ptr<TypoCorrectionConsumer> Sema::makeTypoCorrectionConsumer(
+    const DeclarationNameInfo &TypoName, Sema::LookupNameKind LookupKind,
+    Scope *S, CXXScopeSpec *SS,
+    std::unique_ptr<CorrectionCandidateCallback> CCC,
+    DeclContext *MemberContext, bool EnteringContext,
+    const ObjCObjectPointerType *OPT, bool ErrorRecovery,
+    bool &IsUnqualifiedLookup) {
 
-  TypoCorrection::decl_iterator DI = TC.begin(), DE = TC.end();
+  if (Diags.hasFatalErrorOccurred() || !getLangOpts().SpellChecking ||
+      DisableTypoCorrection)
+    return nullptr;
 
-  for (/**/; DI != DE; ++DI)
-    if (!LookupResult::isVisible(SemaRef, *DI))
-      break;
-  // Nothing to do if all decls are visible.
-  if (DI == DE)
-    return;
+  // In Microsoft mode, don't perform typo correction in a template member
+  // function dependent context because it interferes with the "lookup into
+  // dependent bases of class templates" feature.
+  if (getLangOpts().MSVCCompat && CurContext->isDependentContext() &&
+      isa<CXXMethodDecl>(CurContext))
+    return nullptr;
 
-  llvm::SmallVector<NamedDecl*, 4> NewDecls(TC.begin(), DI);
-  bool AnyVisibleDecls = !NewDecls.empty();
+  // We only attempt to correct typos for identifiers.
+  IdentifierInfo *Typo = TypoName.getName().getAsIdentifierInfo();
+  if (!Typo)
+    return nullptr;
 
-  for (/**/; DI != DE; ++DI) {
-    NamedDecl *VisibleDecl = *DI;
-    if (!LookupResult::isVisible(SemaRef, *DI))
-      VisibleDecl = findAcceptableDecl(SemaRef, *DI);
+  // If the scope specifier itself was invalid, don't try to correct
+  // typos.
+  if (SS && SS->isInvalid())
+    return nullptr;
 
-    if (VisibleDecl) {
-      if (!AnyVisibleDecls) {
-        // Found a visible decl, discard all hidden ones.
-        AnyVisibleDecls = true;
-        NewDecls.clear();
+  // Never try to correct typos during template deduction or
+  // instantiation.
+  if (!ActiveTemplateInstantiations.empty())
+    return nullptr;
+
+  // Don't try to correct 'super'.
+  if (S && S->isInObjcMethodScope() && Typo == getSuperIdentifier())
+    return nullptr;
+
+  // Abort if typo correction already failed for this specific typo.
+  IdentifierSourceLocations::iterator locs = TypoCorrectionFailures.find(Typo);
+  if (locs != TypoCorrectionFailures.end() &&
+      locs->second.count(TypoName.getLoc()))
+    return nullptr;
+
+  // Don't try to correct the identifier "vector" when in AltiVec mode.
+  // TODO: Figure out why typo correction misbehaves in this case, fix it, and
+  // remove this workaround.
+  if (getLangOpts().AltiVec && Typo->isStr("vector"))
+    return nullptr;
+
+  // If we're handling a missing symbol error, using modules, and the
+  // special search all modules option is used, look for a missing import.
+  if (ErrorRecovery && getLangOpts().Modules &&
+      getLangOpts().ModulesSearchAll) {
+    // The following has the side effect of loading the missing module.
+    getModuleLoader().lookupMissingImports(Typo->getName(),
+                                           TypoName.getLocStart());
+  }
+
+  CorrectionCandidateCallback &CCCRef = *CCC;
+  auto Consumer = llvm::make_unique<TypoCorrectionConsumer>(
+      *this, TypoName, LookupKind, S, SS, std::move(CCC), MemberContext,
+      EnteringContext);
+
+  // If a callback object considers an empty typo correction candidate to be
+  // viable, assume it does not do any actual validation of the candidates.
+  TypoCorrection EmptyCorrection;
+  bool ValidatingCallback = !isCandidateViable(CCCRef, EmptyCorrection);
+
+  // Perform name lookup to find visible, similarly-named entities.
+  IsUnqualifiedLookup = false;
+  DeclContext *QualifiedDC = MemberContext;
+  if (MemberContext) {
+    LookupVisibleDecls(MemberContext, LookupKind, *Consumer);
+
+    // Look in qualified interfaces.
+    if (OPT) {
+      for (auto *I : OPT->quals())
+        LookupVisibleDecls(I, LookupKind, *Consumer);
+    }
+  } else if (SS && SS->isSet()) {
+    QualifiedDC = computeDeclContext(*SS, EnteringContext);
+    if (!QualifiedDC)
+      return nullptr;
+
+    // Provide a stop gap for files that are just seriously broken.  Trying
+    // to correct all typos can turn into a HUGE performance penalty, causing
+    // some files to take minutes to get rejected by the parser.
+    if (TyposCorrected + UnqualifiedTyposCorrected.size() >= 20)
+      return nullptr;
+    ++TyposCorrected;
+
+    LookupVisibleDecls(QualifiedDC, LookupKind, *Consumer);
+  } else {
+    IsUnqualifiedLookup = true;
+    UnqualifiedTyposCorrectedMap::iterator Cached
+      = UnqualifiedTyposCorrected.find(Typo);
+    if (Cached != UnqualifiedTyposCorrected.end()) {
+      // Add the cached value, unless it's a keyword or fails validation. In the
+      // keyword case, we'll end up adding the keyword below.
+      if (Cached->second) {
+        if (!Cached->second.isKeyword() &&
+            isCandidateViable(CCCRef, Cached->second)) {
+          // Do not use correction that is unaccessible in the given scope.
+          NamedDecl *CorrectionDecl = Cached->second.getCorrectionDecl();
+          DeclarationNameInfo NameInfo(CorrectionDecl->getDeclName(),
+                                       CorrectionDecl->getLocation());
+          LookupResult R(*this, NameInfo, LookupOrdinaryName);
+          if (LookupName(R, S))
+            Consumer->addCorrection(Cached->second);
+        }
+      } else {
+        // Only honor no-correction cache hits when a callback that will validate
+        // correction candidates is not being used.
+        if (!ValidatingCallback)
+          return nullptr;
       }
-      NewDecls.push_back(VisibleDecl);
-    } else if (!AnyVisibleDecls && !(*DI)->isModulePrivate())
-      NewDecls.push_back(*DI);
+    }
+    if (Cached == UnqualifiedTyposCorrected.end()) {
+      // Provide a stop gap for files that are just seriously broken.  Trying
+      // to correct all typos can turn into a HUGE performance penalty, causing
+      // some files to take minutes to get rejected by the parser.
+      if (TyposCorrected + UnqualifiedTyposCorrected.size() >= 20)
+        return nullptr;
+    }
   }
 
-  if (NewDecls.empty())
-    TC = TypoCorrection();
-  else {
-    TC.setCorrectionDecls(NewDecls);
-    TC.setRequiresImport(!AnyVisibleDecls);
+  // Determine whether we are going to search in the various namespaces for
+  // corrections.
+  bool SearchNamespaces
+    = getLangOpts().CPlusPlus &&
+      (IsUnqualifiedLookup || (SS && SS->isSet()));
+
+  if (IsUnqualifiedLookup || SearchNamespaces) {
+    // For unqualified lookup, look through all of the names that we have
+    // seen in this translation unit.
+    // FIXME: Re-add the ability to skip very unlikely potential corrections.
+    for (const auto &I : Context.Idents)
+      Consumer->FoundName(I.getKey());
+
+    // Walk through identifiers in external identifier sources.
+    // FIXME: Re-add the ability to skip very unlikely potential corrections.
+    if (IdentifierInfoLookup *External
+                            = Context.Idents.getExternalIdentifierLookup()) {
+      std::unique_ptr<IdentifierIterator> Iter(External->getIdentifiers());
+      do {
+        StringRef Name = Iter->Next();
+        if (Name.empty())
+          break;
+
+        Consumer->FoundName(Name);
+      } while (true);
+    }
   }
+
+  AddKeywordsToConsumer(*this, *Consumer, S, CCCRef, SS && SS->isNotEmpty());
+
+  // Build the NestedNameSpecifiers for the KnownNamespaces, if we're going
+  // to search those namespaces.
+  if (SearchNamespaces) {
+    // Load any externally-known namespaces.
+    if (ExternalSource && !LoadedExternalKnownNamespaces) {
+      SmallVector<NamespaceDecl *, 4> ExternalKnownNamespaces;
+      LoadedExternalKnownNamespaces = true;
+      ExternalSource->ReadKnownNamespaces(ExternalKnownNamespaces);
+      for (auto *N : ExternalKnownNamespaces)
+        KnownNamespaces[N] = true;
+    }
+
+    Consumer->addNamespaces(KnownNamespaces);
+  }
+
+  return Consumer;
 }
 
 /// \brief Try to "correct" a typo in the source code by finding
@@ -4146,206 +4200,61 @@ static void checkCorrectionVisibility(Sema &SemaRef, TypoCorrection &TC) {
 TypoCorrection Sema::CorrectTypo(const DeclarationNameInfo &TypoName,
                                  Sema::LookupNameKind LookupKind,
                                  Scope *S, CXXScopeSpec *SS,
-                                 CorrectionCandidateCallback &CCC,
+                                 std::unique_ptr<CorrectionCandidateCallback> CCC,
                                  CorrectTypoKind Mode,
                                  DeclContext *MemberContext,
                                  bool EnteringContext,
                                  const ObjCObjectPointerType *OPT,
                                  bool RecordFailure) {
+  assert(CCC && "CorrectTypo requires a CorrectionCandidateCallback");
+
   // Always let the ExternalSource have the first chance at correction, even
   // if we would otherwise have given up.
   if (ExternalSource) {
     if (TypoCorrection Correction = ExternalSource->CorrectTypo(
-        TypoName, LookupKind, S, SS, CCC, MemberContext, EnteringContext, OPT))
+        TypoName, LookupKind, S, SS, *CCC, MemberContext, EnteringContext, OPT))
       return Correction;
   }
 
-  if (Diags.hasFatalErrorOccurred() || !getLangOpts().SpellChecking ||
-      DisableTypoCorrection)
-    return TypoCorrection();
+  // Ugly hack equivalent to CTC == CTC_ObjCMessageReceiver;
+  // WantObjCSuper is only true for CTC_ObjCMessageReceiver and for
+  // some instances of CTC_Unknown, while WantRemainingKeywords is true
+  // for CTC_Unknown but not for CTC_ObjCMessageReceiver.
+  bool ObjCMessageReceiver = CCC->WantObjCSuper && !CCC->WantRemainingKeywords;
 
-  // In Microsoft mode, don't perform typo correction in a template member
-  // function dependent context because it interferes with the "lookup into
-  // dependent bases of class templates" feature.
-  if (getLangOpts().MSVCCompat && CurContext->isDependentContext() &&
-      isa<CXXMethodDecl>(CurContext))
-    return TypoCorrection();
-
-  // We only attempt to correct typos for identifiers.
-  IdentifierInfo *Typo = TypoName.getName().getAsIdentifierInfo();
-  if (!Typo)
-    return TypoCorrection();
-
-  // If the scope specifier itself was invalid, don't try to correct
-  // typos.
-  if (SS && SS->isInvalid())
-    return TypoCorrection();
-
-  // Never try to correct typos during template deduction or
-  // instantiation.
-  if (!ActiveTemplateInstantiations.empty())
-    return TypoCorrection();
-
-  // Don't try to correct 'super'.
-  if (S && S->isInObjcMethodScope() && Typo == getSuperIdentifier())
-    return TypoCorrection();
-
-  // Abort if typo correction already failed for this specific typo.
-  IdentifierSourceLocations::iterator locs = TypoCorrectionFailures.find(Typo);
-  if (locs != TypoCorrectionFailures.end() &&
-      locs->second.count(TypoName.getLoc()))
-    return TypoCorrection();
-
-  // Don't try to correct the identifier "vector" when in AltiVec mode.
-  // TODO: Figure out why typo correction misbehaves in this case, fix it, and
-  // remove this workaround.
-  if (getLangOpts().AltiVec && Typo->isStr("vector"))
-    return TypoCorrection();
-
-  // If we're handling a missing symbol error, using modules, and the
-  // special search all modules option is used, look for a missing import.
-  if ((Mode == CTK_ErrorRecovery) &&  getLangOpts().Modules &&
-      getLangOpts().ModulesSearchAll) {
-    // The following has the side effect of loading the missing module.
-    getModuleLoader().lookupMissingImports(Typo->getName(),
-                                           TypoName.getLocStart());
-  }
-
-  TypoCorrectionConsumer Consumer(*this, TypoName, LookupKind, S, SS, CCC,
-                                  MemberContext, EnteringContext);
-
-  // If a callback object considers an empty typo correction candidate to be
-  // viable, assume it does not do any actual validation of the candidates.
   TypoCorrection EmptyCorrection;
-  bool ValidatingCallback = !isCandidateViable(CCC, EmptyCorrection);
+  bool ValidatingCallback = !isCandidateViable(*CCC, EmptyCorrection);
 
-  // Perform name lookup to find visible, similarly-named entities.
+  IdentifierInfo *Typo = TypoName.getName().getAsIdentifierInfo();
   bool IsUnqualifiedLookup = false;
-  DeclContext *QualifiedDC = MemberContext;
-  if (MemberContext) {
-    LookupVisibleDecls(MemberContext, LookupKind, Consumer);
+  auto Consumer = makeTypoCorrectionConsumer(
+      TypoName, LookupKind, S, SS, std::move(CCC), MemberContext,
+      EnteringContext, OPT, Mode == CTK_ErrorRecovery, IsUnqualifiedLookup);
 
-    // Look in qualified interfaces.
-    if (OPT) {
-      for (auto *I : OPT->quals())
-        LookupVisibleDecls(I, LookupKind, Consumer);
-    }
-  } else if (SS && SS->isSet()) {
-    QualifiedDC = computeDeclContext(*SS, EnteringContext);
-    if (!QualifiedDC)
-      return TypoCorrection();
-
-    // Provide a stop gap for files that are just seriously broken.  Trying
-    // to correct all typos can turn into a HUGE performance penalty, causing
-    // some files to take minutes to get rejected by the parser.
-    if (TyposCorrected + UnqualifiedTyposCorrected.size() >= 20)
-      return TypoCorrection();
-    ++TyposCorrected;
-
-    LookupVisibleDecls(QualifiedDC, LookupKind, Consumer);
-  } else {
-    IsUnqualifiedLookup = true;
-    UnqualifiedTyposCorrectedMap::iterator Cached
-      = UnqualifiedTyposCorrected.find(Typo);
-    if (Cached != UnqualifiedTyposCorrected.end()) {
-      // Add the cached value, unless it's a keyword or fails validation. In the
-      // keyword case, we'll end up adding the keyword below.
-      if (Cached->second) {
-        if (!Cached->second.isKeyword() &&
-            isCandidateViable(CCC, Cached->second)) {
-          // Do not use correction that is unaccessible in the given scope.
-          NamedDecl *CorrectionDecl = Cached->second.getCorrectionDecl();
-          DeclarationNameInfo NameInfo(CorrectionDecl->getDeclName(),
-                                       CorrectionDecl->getLocation());
-          LookupResult R(*this, NameInfo, LookupOrdinaryName);
-          if (LookupName(R, S))
-            Consumer.addCorrection(Cached->second);
-        }
-      } else {
-        // Only honor no-correction cache hits when a callback that will validate
-        // correction candidates is not being used.
-        if (!ValidatingCallback)
-          return TypoCorrection();
-      }
-    }
-    if (Cached == UnqualifiedTyposCorrected.end()) {
-      // Provide a stop gap for files that are just seriously broken.  Trying
-      // to correct all typos can turn into a HUGE performance penalty, causing
-      // some files to take minutes to get rejected by the parser.
-      if (TyposCorrected + UnqualifiedTyposCorrected.size() >= 20)
-        return TypoCorrection();
-    }
-  }
-
-  // Determine whether we are going to search in the various namespaces for
-  // corrections.
-  bool SearchNamespaces
-    = getLangOpts().CPlusPlus &&
-      (IsUnqualifiedLookup || (SS && SS->isSet()));
-  // In a few cases we *only* want to search for corrections based on just
-  // adding or changing the nested name specifier.
-  unsigned TypoLen = Typo->getName().size();
-  bool AllowOnlyNNSChanges = TypoLen < 3;
-
-  if (IsUnqualifiedLookup || SearchNamespaces) {
-    // For unqualified lookup, look through all of the names that we have
-    // seen in this translation unit.
-    // FIXME: Re-add the ability to skip very unlikely potential corrections.
-    for (const auto &I : Context.Idents)
-      Consumer.FoundName(I.getKey());
-
-    // Walk through identifiers in external identifier sources.
-    // FIXME: Re-add the ability to skip very unlikely potential corrections.
-    if (IdentifierInfoLookup *External
-                            = Context.Idents.getExternalIdentifierLookup()) {
-      std::unique_ptr<IdentifierIterator> Iter(External->getIdentifiers());
-      do {
-        StringRef Name = Iter->Next();
-        if (Name.empty())
-          break;
-
-        Consumer.FoundName(Name);
-      } while (true);
-    }
-  }
-
-  AddKeywordsToConsumer(*this, Consumer, S, CCC, SS && SS->isNotEmpty());
+  if (!Consumer)
+    return TypoCorrection();
 
   // If we haven't found anything, we're done.
-  if (Consumer.empty())
+  if (Consumer->empty())
     return FailedCorrection(Typo, TypoName.getLoc(), RecordFailure,
                             IsUnqualifiedLookup);
 
   // Make sure the best edit distance (prior to adding any namespace qualifiers)
   // is not more that about a third of the length of the typo's identifier.
-  unsigned ED = Consumer.getBestEditDistance(true);
+  unsigned ED = Consumer->getBestEditDistance(true);
+  unsigned TypoLen = Typo->getName().size();
   if (ED > 0 && TypoLen / ED < 3)
     return FailedCorrection(Typo, TypoName.getLoc(), RecordFailure,
                             IsUnqualifiedLookup);
 
-  // Build the NestedNameSpecifiers for the KnownNamespaces, if we're going
-  // to search those namespaces.
-  if (SearchNamespaces) {
-    // Load any externally-known namespaces.
-    if (ExternalSource && !LoadedExternalKnownNamespaces) {
-      SmallVector<NamespaceDecl *, 4> ExternalKnownNamespaces;
-      LoadedExternalKnownNamespaces = true;
-      ExternalSource->ReadKnownNamespaces(ExternalKnownNamespaces);
-      for (auto *N : ExternalKnownNamespaces)
-        KnownNamespaces[N] = true;
-    }
-
-    Consumer.addNamespaces(KnownNamespaces);
-  }
-
-  TypoCorrection BestTC = Consumer.getNextCorrection();
-  TypoCorrection SecondBestTC = Consumer.getNextCorrection();
+  TypoCorrection BestTC = Consumer->getNextCorrection();
+  TypoCorrection SecondBestTC = Consumer->getNextCorrection();
   if (!BestTC)
     return FailedCorrection(Typo, TypoName.getLoc(), RecordFailure);
 
   ED = BestTC.getEditDistance();
 
-  if (!AllowOnlyNNSChanges && ED > 0 && TypoLen / ED < 3) {
+  if (TypoLen >= 3 && ED > 0 && TypoLen / ED < 3) {
     // If this was an unqualified lookup and we believe the callback
     // object wouldn't have filtered out possible corrections, note
     // that no correction was found.
@@ -4371,20 +4280,15 @@ TypoCorrection Sema::CorrectTypo(const DeclarationNameInfo &TypoName,
     TC.setCorrectionRange(SS, TypoName);
     checkCorrectionVisibility(*this, TC);
     return TC;
-  }
-  // Ugly hack equivalent to CTC == CTC_ObjCMessageReceiver;
-  // WantObjCSuper is only true for CTC_ObjCMessageReceiver and for
-  // some instances of CTC_Unknown, while WantRemainingKeywords is true
-  // for CTC_Unknown but not for CTC_ObjCMessageReceiver.
-  else if (SecondBestTC && CCC.WantObjCSuper && !CCC.WantRemainingKeywords) {
+  } else if (SecondBestTC && ObjCMessageReceiver) {
     // Prefer 'super' when we're completing in a message-receiver
     // context.
 
     if (BestTC.getCorrection().getAsString() != "super") {
       if (SecondBestTC.getCorrection().getAsString() == "super")
         BestTC = SecondBestTC;
-      else if (Consumer["super"].front().isKeyword())
-        BestTC = Consumer["super"].front();
+      else if ((*Consumer)["super"].front().isKeyword())
+        BestTC = (*Consumer)["super"].front();
     }
     // Don't correct to a keyword that's the same as the typo; the keyword
     // wasn't actually in scope.
@@ -4405,6 +4309,76 @@ TypoCorrection Sema::CorrectTypo(const DeclarationNameInfo &TypoName,
   // filter out possible corrections, also cache the failure for the typo.
   return FailedCorrection(Typo, TypoName.getLoc(), RecordFailure,
                           IsUnqualifiedLookup && !ValidatingCallback);
+}
+
+/// \brief Try to "correct" a typo in the source code by finding
+/// visible declarations whose names are similar to the name that was
+/// present in the source code.
+///
+/// \param TypoName the \c DeclarationNameInfo structure that contains
+/// the name that was present in the source code along with its location.
+///
+/// \param LookupKind the name-lookup criteria used to search for the name.
+///
+/// \param S the scope in which name lookup occurs.
+///
+/// \param SS the nested-name-specifier that precedes the name we're
+/// looking for, if present.
+///
+/// \param CCC A CorrectionCandidateCallback object that provides further
+/// validation of typo correction candidates. It also provides flags for
+/// determining the set of keywords permitted.
+///
+/// \param TDG A TypoDiagnosticGenerator functor that will be used to print
+/// diagnostics when the actual typo correction is attempted.
+///
+/// \param TRC A TypoRecoveryCallback functor that will be used to build an
+/// Expr from a typo correction candidate.
+///
+/// \param MemberContext if non-NULL, the context in which to look for
+/// a member access expression.
+///
+/// \param EnteringContext whether we're entering the context described by
+/// the nested-name-specifier SS.
+///
+/// \param OPT when non-NULL, the search for visible declarations will
+/// also walk the protocols in the qualified interfaces of \p OPT.
+///
+/// \returns a new \c TypoExpr that will later be replaced in the AST with an
+/// Expr representing the result of performing typo correction, or nullptr if
+/// typo correction is not possible. If nullptr is returned, no diagnostics will
+/// be emitted and it is the responsibility of the caller to emit any that are
+/// needed.
+TypoExpr *Sema::CorrectTypoDelayed(
+    const DeclarationNameInfo &TypoName, Sema::LookupNameKind LookupKind,
+    Scope *S, CXXScopeSpec *SS,
+    std::unique_ptr<CorrectionCandidateCallback> CCC,
+    TypoDiagnosticGenerator TDG, TypoRecoveryCallback TRC, CorrectTypoKind Mode,
+    DeclContext *MemberContext, bool EnteringContext,
+    const ObjCObjectPointerType *OPT) {
+  assert(CCC && "CorrectTypoDelayed requires a CorrectionCandidateCallback");
+
+  TypoCorrection Empty;
+  bool IsUnqualifiedLookup = false;
+  auto Consumer = makeTypoCorrectionConsumer(
+      TypoName, LookupKind, S, SS, std::move(CCC), MemberContext,
+      EnteringContext, OPT,
+      /*SearchModules=*/(Mode == CTK_ErrorRecovery) && getLangOpts().Modules &&
+          getLangOpts().ModulesSearchAll,
+      IsUnqualifiedLookup);
+
+  if (!Consumer || Consumer->empty())
+    return nullptr;
+
+  // Make sure the best edit distance (prior to adding any namespace qualifiers)
+  // is not more that about a third of the length of the typo's identifier.
+  unsigned ED = Consumer->getBestEditDistance(true);
+  IdentifierInfo *Typo = TypoName.getName().getAsIdentifierInfo();
+  if (ED > 0 && Typo->getName().size() / ED < 3)
+    return nullptr;
+
+  ExprEvalContexts.back().NumTypos++;
+  return createDelayedTypo(std::move(Consumer), std::move(TDG), std::move(TRC));
 }
 
 void TypoCorrection::addCorrectionDecl(NamedDecl *CDecl) {
@@ -4602,4 +4576,27 @@ void Sema::diagnoseTypo(const TypoCorrection &Correction,
   if (PrevNote.getDiagID() && ChosenDecl)
     Diag(ChosenDecl->getLocation(), PrevNote)
       << CorrectedQuotedStr << (ErrorRecovery ? FixItHint() : FixTypo);
+}
+
+TypoExpr *Sema::createDelayedTypo(std::unique_ptr<TypoCorrectionConsumer> TCC,
+                                  TypoDiagnosticGenerator TDG,
+                                  TypoRecoveryCallback TRC) {
+  assert(TCC && "createDelayedTypo requires a valid TypoCorrectionConsumer");
+  auto TE = new (Context) TypoExpr(Context.DependentTy);
+  auto &State = DelayedTypos[TE];
+  State.Consumer = std::move(TCC);
+  State.DiagHandler = std::move(TDG);
+  State.RecoveryHandler = std::move(TRC);
+  return TE;
+}
+
+const Sema::TypoExprState &Sema::getTypoExprState(TypoExpr *TE) const {
+  auto Entry = DelayedTypos.find(TE);
+  assert(Entry != DelayedTypos.end() &&
+         "Failed to get the state for a TypoExpr!");
+  return Entry->second;
+}
+
+void Sema::clearDelayedTypo(TypoExpr *TE) {
+  DelayedTypos.erase(TE);
 }

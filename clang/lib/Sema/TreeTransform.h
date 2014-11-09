@@ -327,6 +327,27 @@ public:
   /// \returns the transformed OpenMP clause.
   OMPClause *TransformOMPClause(OMPClause *S);
 
+  /// \brief Transform the given attribute.
+  ///
+  /// By default, this routine transforms a statement by delegating to the
+  /// appropriate TransformXXXAttr function to transform a specific kind
+  /// of attribute. Subclasses may override this function to transform
+  /// attributed statements using some other mechanism.
+  ///
+  /// \returns the transformed attribute
+  const Attr *TransformAttr(const Attr *S);
+
+/// \brief Transform the specified attribute.
+///
+/// Subclasses should override the transformation of attributes with a pragma
+/// spelling to transform expressions stored within the attribute.
+///
+/// \returns the transformed attribute.
+#define ATTR(X)
+#define PRAGMA_SPELLING_ATTR(X)                                                \
+  const X##Attr *Transform##X##Attr(const X##Attr *R) { return R; }
+#include "clang/Basic/AttrList.inc"
+
   /// \brief Transform the given expression.
   ///
   /// By default, this routine transforms an expression by delegating to the
@@ -1677,6 +1698,15 @@ public:
     return getSema().ActOnSEHFinallyBlock(Loc, Block);
   }
 
+  /// \brief Build a new predefined expression.
+  ///
+  /// By default, performs semantic analysis to build the new expression.
+  /// Subclasses may override this routine to provide different behavior.
+  ExprResult RebuildPredefinedExpr(SourceLocation Loc,
+                                   PredefinedExpr::IdentType IT) {
+    return getSema().BuildPredefinedExpr(Loc, IT);
+  }
+
   /// \brief Build a new expression that references a declaration.
   ///
   /// By default, performs semantic analysis to build the new expression.
@@ -2754,6 +2784,27 @@ public:
     return getSema().CheckPackExpansion(Pattern, EllipsisLoc, NumExpansions);
   }
 
+  /// \brief Build a new C++1z fold-expression.
+  ///
+  /// By default, performs semantic analysis in order to build a new fold
+  /// expression.
+  ExprResult RebuildCXXFoldExpr(SourceLocation LParenLoc, Expr *LHS,
+                                BinaryOperatorKind Operator,
+                                SourceLocation EllipsisLoc, Expr *RHS,
+                                SourceLocation RParenLoc) {
+    return getSema().BuildCXXFoldExpr(LParenLoc, LHS, Operator, EllipsisLoc,
+                                      RHS, RParenLoc);
+  }
+
+  /// \brief Build an empty C++1z fold-expression with the given operator.
+  ///
+  /// By default, produces the fallback value for the fold-expression, or
+  /// produce an error if there is no fallback value.
+  ExprResult RebuildEmptyCXXFoldExpr(SourceLocation EllipsisLoc,
+                                     BinaryOperatorKind Operator) {
+    return getSema().BuildEmptyCXXFoldExpr(EllipsisLoc, Operator);
+  }
+
   /// \brief Build a new atomic operation expression.
   ///
   /// By default, performs semantic analysis to build the new expression.
@@ -3099,6 +3150,14 @@ TreeTransform<Derived>::TransformNestedNameSpecifierLoc(
       // global scope.
       SS.MakeGlobal(SemaRef.Context, Q.getBeginLoc());
       break;
+
+    case NestedNameSpecifier::Super: {
+      CXXRecordDecl *RD =
+          cast_or_null<CXXRecordDecl>(getDerived().TransformDecl(
+              SourceLocation(), QNNS->getAsRecordDecl()));
+      SS.MakeSuper(SemaRef.Context, RD, Q.getBeginLoc(), Q.getEndLoc());
+      break;
+    }
 
     case NestedNameSpecifier::TypeSpecWithTemplate:
     case NestedNameSpecifier::TypeSpec: {
@@ -5526,19 +5585,43 @@ TreeTransform<Derived>::TransformLabelStmt(LabelStmt *S) {
                                        SubStmt.get());
 }
 
-template<typename Derived>
-StmtResult
-TreeTransform<Derived>::TransformAttributedStmt(AttributedStmt *S) {
+template <typename Derived>
+const Attr *TreeTransform<Derived>::TransformAttr(const Attr *R) {
+  if (!R)
+    return R;
+
+  switch (R->getKind()) {
+// Transform attributes with a pragma spelling by calling TransformXXXAttr.
+#define ATTR(X)
+#define PRAGMA_SPELLING_ATTR(X)                                                \
+  case attr::X:                                                                \
+    return getDerived().Transform##X##Attr(cast<X##Attr>(R));
+#include "clang/Basic/AttrList.inc"
+  default:
+    return R;
+  }
+}
+
+template <typename Derived>
+StmtResult TreeTransform<Derived>::TransformAttributedStmt(AttributedStmt *S) {
+  bool AttrsChanged = false;
+  SmallVector<const Attr *, 1> Attrs;
+
+  // Visit attributes and keep track if any are transformed.
+  for (const auto *I : S->getAttrs()) {
+    const Attr *R = getDerived().TransformAttr(I);
+    AttrsChanged |= (I != R);
+    Attrs.push_back(R);
+  }
+
   StmtResult SubStmt = getDerived().TransformStmt(S->getSubStmt());
   if (SubStmt.isInvalid())
     return StmtError();
 
-  // TODO: transform attributes
-  if (SubStmt.get() == S->getSubStmt() /* && attrs are the same */)
+  if (SubStmt.get() == S->getSubStmt() && !AttrsChanged)
     return S;
 
-  return getDerived().RebuildAttributedStmt(S->getAttrLoc(),
-                                            S->getAttrs(),
+  return getDerived().RebuildAttributedStmt(S->getAttrLoc(), Attrs,
                                             SubStmt.get());
 }
 
@@ -5821,7 +5904,8 @@ TreeTransform<Derived>::TransformBreakStmt(BreakStmt *S) {
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformReturnStmt(ReturnStmt *S) {
-  ExprResult Result = getDerived().TransformExpr(S->getRetValue());
+  ExprResult Result = getDerived().TransformInitializer(S->getRetValue(),
+                                                        /*NotCopyInit*/false);
   if (Result.isInvalid())
     return StmtError();
 
@@ -6500,6 +6584,17 @@ TreeTransform<Derived>::TransformOMPForDirective(OMPForDirective *D) {
 
 template <typename Derived>
 StmtResult
+TreeTransform<Derived>::TransformOMPForSimdDirective(OMPForSimdDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_for_simd, DirName, nullptr,
+                                             D->getLocStart());
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template <typename Derived>
+StmtResult
 TreeTransform<Derived>::TransformOMPSectionsDirective(OMPSectionsDirective *D) {
   DeclarationNameInfo DirName;
   getDerived().getSema().StartOpenMPDSABlock(OMPD_sections, DirName, nullptr,
@@ -6557,6 +6652,17 @@ StmtResult TreeTransform<Derived>::TransformOMPParallelForDirective(
     OMPParallelForDirective *D) {
   DeclarationNameInfo DirName;
   getDerived().getSema().StartOpenMPDSABlock(OMPD_parallel_for, DirName,
+                                             nullptr, D->getLocStart());
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template <typename Derived>
+StmtResult TreeTransform<Derived>::TransformOMPParallelForSimdDirective(
+    OMPParallelForSimdDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_parallel_for_simd, DirName,
                                              nullptr, D->getLocStart());
   StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
   getDerived().getSema().EndOpenMPDSABlock(Res.get());
@@ -6645,6 +6751,28 @@ StmtResult
 TreeTransform<Derived>::TransformOMPAtomicDirective(OMPAtomicDirective *D) {
   DeclarationNameInfo DirName;
   getDerived().getSema().StartOpenMPDSABlock(OMPD_atomic, DirName, nullptr,
+                                             D->getLocStart());
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template <typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformOMPTargetDirective(OMPTargetDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_target, DirName, nullptr,
+                                             D->getLocStart());
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template <typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformOMPTeamsDirective(OMPTeamsDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_teams, DirName, nullptr,
                                              D->getLocStart());
   StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
   getDerived().getSema().EndOpenMPDSABlock(Res.get());
@@ -6963,7 +7091,11 @@ OMPClause *TreeTransform<Derived>::TransformOMPFlushClause(OMPFlushClause *C) {
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformPredefinedExpr(PredefinedExpr *E) {
-  return E;
+  if (!E->isTypeDependent())
+    return E;
+
+  return getDerived().RebuildPredefinedExpr(E->getLocation(),
+                                            E->getIdentType());
 }
 
 template<typename Derived>
@@ -7207,6 +7339,12 @@ ExprResult
 TreeTransform<Derived>::TransformOpaqueValueExpr(OpaqueValueExpr *E) {
   assert(getDerived().AlreadyTransformed(E->getType()) &&
          "opaque value expression requires transformation");
+  return E;
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformTypoExpr(TypoExpr *E) {
   return E;
 }
 
@@ -9001,6 +9139,10 @@ TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
       getSema().CheckCXXThisCapture(C->getLocation(), C->isExplicit());
       continue;
     }
+    // Captured expression will be recaptured during captured variables
+    // rebuilding.
+    if (C->capturesVLAType())
+      continue;
 
     // Rebuild init-captures, including the implied field declaration.
     if (C->isInitCapture()) {
@@ -9080,7 +9222,7 @@ TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
     VarDecl *CapturedVar
       = cast_or_null<VarDecl>(getDerived().TransformDecl(C->getLocation(),
                                                          C->getCapturedVar()));
-    if (!CapturedVar) {
+    if (!CapturedVar || CapturedVar->isInvalidDecl()) {
       Invalid = true;
       continue;
     }
@@ -9441,6 +9583,128 @@ ExprResult
 TreeTransform<Derived>::TransformMaterializeTemporaryExpr(
                                                   MaterializeTemporaryExpr *E) {
   return getDerived().TransformExpr(E->GetTemporaryExpr());
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformCXXFoldExpr(CXXFoldExpr *E) {
+  Expr *Pattern = E->getPattern();
+
+  SmallVector<UnexpandedParameterPack, 2> Unexpanded;
+  getSema().collectUnexpandedParameterPacks(Pattern, Unexpanded);
+  assert(!Unexpanded.empty() && "Pack expansion without parameter packs?");
+
+  // Determine whether the set of unexpanded parameter packs can and should
+  // be expanded.
+  bool Expand = true;
+  bool RetainExpansion = false;
+  Optional<unsigned> NumExpansions;
+  if (getDerived().TryExpandParameterPacks(E->getEllipsisLoc(),
+                                           Pattern->getSourceRange(),
+                                           Unexpanded,
+                                           Expand, RetainExpansion,
+                                           NumExpansions))
+    return true;
+
+  if (!Expand) {
+    // Do not expand any packs here, just transform and rebuild a fold
+    // expression.
+    Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(getSema(), -1);
+
+    ExprResult LHS =
+        E->getLHS() ? getDerived().TransformExpr(E->getLHS()) : ExprResult();
+    if (LHS.isInvalid())
+      return true;
+
+    ExprResult RHS =
+        E->getRHS() ? getDerived().TransformExpr(E->getRHS()) : ExprResult();
+    if (RHS.isInvalid())
+      return true;
+
+    if (!getDerived().AlwaysRebuild() &&
+        LHS.get() == E->getLHS() && RHS.get() == E->getRHS())
+      return E;
+
+    return getDerived().RebuildCXXFoldExpr(
+        E->getLocStart(), LHS.get(), E->getOperator(), E->getEllipsisLoc(),
+        RHS.get(), E->getLocEnd());
+  }
+
+  // The transform has determined that we should perform an elementwise
+  // expansion of the pattern. Do so.
+  ExprResult Result = getDerived().TransformExpr(E->getInit());
+  if (Result.isInvalid())
+    return true;
+  bool LeftFold = E->isLeftFold();
+
+  // If we're retaining an expansion for a right fold, it is the innermost
+  // component and takes the init (if any).
+  if (!LeftFold && RetainExpansion) {
+    ForgetPartiallySubstitutedPackRAII Forget(getDerived());
+
+    ExprResult Out = getDerived().TransformExpr(Pattern);
+    if (Out.isInvalid())
+      return true;
+
+    Result = getDerived().RebuildCXXFoldExpr(
+        E->getLocStart(), Out.get(), E->getOperator(), E->getEllipsisLoc(),
+        Result.get(), E->getLocEnd());
+    if (Result.isInvalid())
+      return true;
+  }
+
+  for (unsigned I = 0; I != *NumExpansions; ++I) {
+    Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(
+        getSema(), LeftFold ? I : *NumExpansions - I - 1);
+    ExprResult Out = getDerived().TransformExpr(Pattern);
+    if (Out.isInvalid())
+      return true;
+
+    if (Out.get()->containsUnexpandedParameterPack()) {
+      // We still have a pack; retain a pack expansion for this slice.
+      Result = getDerived().RebuildCXXFoldExpr(
+          E->getLocStart(),
+          LeftFold ? Result.get() : Out.get(),
+          E->getOperator(), E->getEllipsisLoc(),
+          LeftFold ? Out.get() : Result.get(),
+          E->getLocEnd());
+    } else if (Result.isUsable()) {
+      // We've got down to a single element; build a binary operator.
+      Result = getDerived().RebuildBinaryOperator(
+          E->getEllipsisLoc(), E->getOperator(),
+          LeftFold ? Result.get() : Out.get(),
+          LeftFold ? Out.get() : Result.get());
+    } else
+      Result = Out;
+
+    if (Result.isInvalid())
+      return true;
+  }
+
+  // If we're retaining an expansion for a left fold, it is the outermost
+  // component and takes the complete expansion so far as its init (if any).
+  if (LeftFold && RetainExpansion) {
+    ForgetPartiallySubstitutedPackRAII Forget(getDerived());
+
+    ExprResult Out = getDerived().TransformExpr(Pattern);
+    if (Out.isInvalid())
+      return true;
+
+    Result = getDerived().RebuildCXXFoldExpr(
+        E->getLocStart(), Result.get(),
+        E->getOperator(), E->getEllipsisLoc(),
+        Out.get(), E->getLocEnd());
+    if (Result.isInvalid())
+      return true;
+  }
+
+  // If we had no init and an empty pack, and we're not retaining an expansion,
+  // then produce a fallback value or error.
+  if (Result.isUnset())
+    return getDerived().RebuildEmptyCXXFoldExpr(E->getEllipsisLoc(),
+                                                E->getOperator());
+
+  return Result;
 }
 
 template<typename Derived>
@@ -10339,7 +10603,7 @@ TreeTransform<Derived>::RebuildCXXOperatorCallExpr(OverloadedOperatorKind Op,
     SourceLocation RBrace;
 
     if (DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(Callee)) {
-        DeclarationNameLoc &NameLoc = DRE->getNameInfo().getInfo();
+        DeclarationNameLoc NameLoc = DRE->getNameInfo().getInfo();
         LBrace = SourceLocation::getFromRawEncoding(
                     NameLoc.CXXOperatorName.BeginOpNameLoc);
         RBrace = SourceLocation::getFromRawEncoding(
@@ -10395,9 +10659,16 @@ TreeTransform<Derived>::RebuildCXXPseudoDestructorExpr(Expr *Base,
 
   // The scope type is now known to be a valid nested name specifier
   // component. Tack it on to the end of the nested name specifier.
-  if (ScopeType)
-    SS.Extend(SemaRef.Context, SourceLocation(),
-              ScopeType->getTypeLoc(), CCLoc);
+  if (ScopeType) {
+    if (!ScopeType->getType()->getAs<TagType>()) {
+      getSema().Diag(ScopeType->getTypeLoc().getBeginLoc(),
+                     diag::err_expected_class_or_namespace)
+          << ScopeType->getType() << getSema().getLangOpts().CPlusPlus;
+      return ExprError();
+    }
+    SS.Extend(SemaRef.Context, SourceLocation(), ScopeType->getTypeLoc(),
+              CCLoc);
+  }
 
   SourceLocation TemplateKWLoc; // FIXME: retrieve it from caller.
   return getSema().BuildMemberReferenceExpr(Base, BaseType,
