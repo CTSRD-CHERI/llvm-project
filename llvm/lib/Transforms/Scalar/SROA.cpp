@@ -1890,7 +1890,10 @@ isIntegerWideningViable(const DataLayout &DL, Type *AllocaTy,
                         ArrayRef<AllocaSlices::iterator> SplitUses) {
   uint64_t SizeInBits = DL.getTypeSizeInBits(AllocaTy);
   // Don't create integer types larger than the maximum bitwidth.
-  if (SizeInBits*8 > DL.getLargestLegalIntTypeSize())
+  if (SizeInBits > IntegerType::MAX_INT_BITS)
+    return false;
+  if (AllocaTy->isPointerTy() &&
+      SizeInBits*8 > DL.getLargestLegalIntTypeSize())
     return false;
 
 
