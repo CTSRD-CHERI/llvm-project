@@ -1010,7 +1010,7 @@ void SCCPSolver::visitGetElementPtrInst(GetElementPtrInst &I) {
   }
 
   Constant *Ptr = Operands[0];
-  ArrayRef<Constant *> Indices(Operands.begin() + 1, Operands.end());
+  auto Indices = makeArrayRef(Operands.begin() + 1, Operands.end());
   markConstant(&I, ConstantExpr::getGetElementPtr(Ptr, Indices));
 }
 
@@ -1106,6 +1106,9 @@ CallOverdefined:
         assert(State.isConstant() && "Unknown state!");
         Operands.push_back(State.getConstant());
       }
+
+      if (getValueState(I).isOverdefined())
+        return;
 
       // If we can constant fold this, mark the result of the call as a
       // constant.

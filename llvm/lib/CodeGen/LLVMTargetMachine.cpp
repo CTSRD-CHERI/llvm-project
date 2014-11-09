@@ -201,9 +201,10 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
     if (!MCE || !MAB)
       return true;
 
-    AsmStreamer.reset(getTarget().createMCObjectStreamer(
-        getTargetTriple(), *Context, *MAB, Out, MCE, STI,
-        Options.MCOptions.MCRelaxAll, Options.MCOptions.MCNoExecStack));
+    AsmStreamer.reset(
+        getTarget()
+            .createMCObjectStreamer(getTargetTriple(), *Context, *MAB, Out, MCE,
+                                    STI, Options.MCOptions.MCRelaxAll));
     break;
   }
   case CGFT_Null:
@@ -224,26 +225,6 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
   PM.add(Printer);
 
   return false;
-}
-
-/// addPassesToEmitMachineCode - Add passes to the specified pass manager to
-/// get machine code emitted.  This uses a JITCodeEmitter object to handle
-/// actually outputting the machine code and resolving things like the address
-/// of functions.  This method should return true if machine code emission is
-/// not supported.
-///
-bool LLVMTargetMachine::addPassesToEmitMachineCode(PassManagerBase &PM,
-                                                   JITCodeEmitter &JCE,
-                                                   bool DisableVerify) {
-  // Add common CodeGen passes.
-  MCContext *Context = addPassesToGenerateCode(this, PM, DisableVerify, nullptr,
-                                               nullptr);
-  if (!Context)
-    return true;
-
-  addCodeEmitter(PM, JCE);
-
-  return false; // success!
 }
 
 /// addPassesToEmitMC - Add passes to the specified pass manager to get
@@ -275,9 +256,10 @@ bool LLVMTargetMachine::addPassesToEmitMC(PassManagerBase &PM,
     return true;
 
   std::unique_ptr<MCStreamer> AsmStreamer;
-  AsmStreamer.reset(getTarget().createMCObjectStreamer(
-      getTargetTriple(), *Ctx, *MAB, Out, MCE, STI,
-      Options.MCOptions.MCRelaxAll, Options.MCOptions.MCNoExecStack));
+  AsmStreamer.reset(getTarget()
+                        .createMCObjectStreamer(getTargetTriple(), *Ctx, *MAB,
+                                                Out, MCE, STI,
+                                                Options.MCOptions.MCRelaxAll));
 
   // Create the AsmPrinter, which takes ownership of AsmStreamer if successful.
   FunctionPass *Printer = getTarget().createAsmPrinter(*this, *AsmStreamer);

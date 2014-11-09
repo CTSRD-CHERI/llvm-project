@@ -31,13 +31,13 @@ class MCContext;
 
 namespace WinEH {
 enum class EncodingType {
-  ET_Invalid, /// Invalid
-  ET_Alpha,   /// Windows Alpha
-  ET_Alpha64, /// Windows AXP64
-  ET_ARM,     /// Windows NT (Windows on ARM)
-  ET_CE,      /// Windows CE ARM, PowerPC, SH3, SH4
-  ET_Itanium, /// Windows x64, Windows Itanium (IA-64)
-  ET_MIPS = ET_Alpha,
+  Invalid, /// Invalid
+  Alpha,   /// Windows Alpha
+  Alpha64, /// Windows AXP64
+  ARM,     /// Windows NT (Windows on ARM)
+  CE,      /// Windows CE ARM, PowerPC, SH3, SH4
+  Itanium, /// Windows x64, Windows Itanium (IA-64)
+  MIPS = Alpha,
 };
 }
 
@@ -87,15 +87,10 @@ protected:
   bool HasMachoTBSSDirective;
 
   /// True if the compiler should emit a ".reference .constructors_used" or
-  /// ".reference .destructors_used" directive after the a static ctor/dtor
+  /// ".reference .destructors_used" directive after the static ctor/dtor
   /// list.  This directive is only emitted in Static relocation model.  Default
   /// is false.
   bool HasStaticCtorDtorReferenceInStaticMode;
-
-  /// True if the linker has a bug and requires that the debug_line section be
-  /// of a minimum size. In practice such a linker requires a non-empty line
-  /// sequence if a file is present.  Default to false.
-  bool LinkerRequiresNonEmptyDwarfLines;
 
   /// This is the maximum possible length of an instruction, which is needed to
   /// compute the size of an inline asm.  Defaults to 4.
@@ -223,8 +218,12 @@ protected:
   /// This is the directive used to declare a global entity.  Defaults to NULL.
   const char *GlobalDirective;
 
-  /// True if the assembler supports the .set directive.  Defaults to true.
-  bool HasSetDirective;
+  /// True if the expression
+  ///   .long f - g
+  /// uses an relocation but it can be supressed by writting
+  ///   a = f - g
+  ///   .long a
+  bool SetDirectiveSuppressesReloc;
 
   /// False if the assembler requires that we use
   /// \code
@@ -401,9 +400,6 @@ public:
   bool hasStaticCtorDtorReferenceInStaticMode() const {
     return HasStaticCtorDtorReferenceInStaticMode;
   }
-  bool getLinkerRequiresNonEmptyDwarfLines() const {
-    return LinkerRequiresNonEmptyDwarfLines;
-  }
   unsigned getMaxInstLength() const { return MaxInstLength; }
   unsigned getMinInstAlignment() const { return MinInstAlignment; }
   bool getDollarIsPC() const { return DollarIsPC; }
@@ -442,7 +438,9 @@ public:
   bool getAlignmentIsInBytes() const { return AlignmentIsInBytes; }
   unsigned getTextAlignFillValue() const { return TextAlignFillValue; }
   const char *getGlobalDirective() const { return GlobalDirective; }
-  bool hasSetDirective() const { return HasSetDirective; }
+  bool doesSetDirectiveSuppressesReloc() const {
+    return SetDirectiveSuppressesReloc;
+  }
   bool hasAggressiveSymbolFolding() const { return HasAggressiveSymbolFolding; }
   bool getCOMMDirectiveAlignmentIsInBytes() const {
     return COMMDirectiveAlignmentIsInBytes;

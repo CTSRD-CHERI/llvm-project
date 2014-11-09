@@ -40,14 +40,14 @@ public:
     initializeSILowerI1CopiesPass(*PassRegistry::getPassRegistry());
   }
 
-  virtual bool runOnMachineFunction(MachineFunction &MF) override;
+  bool runOnMachineFunction(MachineFunction &MF) override;
 
-  virtual const char *getPassName() const override {
-    return "SI Lower il Copies";
+  const char *getPassName() const override {
+    return "SI Lower i1 Copies";
   }
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const override {
-  AU.addRequired<MachineDominatorTree>();
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.addRequired<MachineDominatorTree>();
     AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
@@ -56,10 +56,10 @@ public:
 } // End anonymous namespace.
 
 INITIALIZE_PASS_BEGIN(SILowerI1Copies, DEBUG_TYPE,
-                      "SI Lower il Copies", false, false)
+                      "SI Lower i1 Copies", false, false)
 INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
 INITIALIZE_PASS_END(SILowerI1Copies, DEBUG_TYPE,
-                    "SI Lower il Copies", false, false)
+                    "SI Lower i1 Copies", false, false)
 
 char SILowerI1Copies::ID = 0;
 
@@ -127,11 +127,7 @@ bool SILowerI1Copies::runOnMachineFunction(MachineFunction &MF) {
                 .addOperand(MI.getOperand(0))
                 .addImm(0)
                 .addImm(-1)
-                .addOperand(MI.getOperand(1))
-                .addImm(0)
-                .addImm(0)
-                .addImm(0)
-                .addImm(0);
+                .addOperand(MI.getOperand(1));
         MI.eraseFromParent();
       } else if (TRI->getCommonSubClass(DstRC, &AMDGPU::SGPR_64RegClass) &&
                  SrcRC == &AMDGPU::VReg_1RegClass) {

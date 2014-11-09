@@ -285,6 +285,7 @@ static void PrintCallingConv(unsigned cc, raw_ostream &Out) {
   case CallingConv::X86_StdCall:   Out << "x86_stdcallcc"; break;
   case CallingConv::X86_FastCall:  Out << "x86_fastcallcc"; break;
   case CallingConv::X86_ThisCall:  Out << "x86_thiscallcc"; break;
+  case CallingConv::X86_VectorCall:Out << "x86_vectorcallcc"; break;
   case CallingConv::Intel_OCL_BI:  Out << "intel_ocl_bicc"; break;
   case CallingConv::ARM_APCS:      Out << "arm_apcscc"; break;
   case CallingConv::ARM_AAPCS:     Out << "arm_aapcscc"; break;
@@ -545,7 +546,7 @@ public:
   /// plane.  If something is not in the SlotTracker, return -1.
   int getLocalSlot(const Value *V);
   int getGlobalSlot(const GlobalValue *V);
-  int getMetadataSlot(const MDNode *N);
+  int getMetadataSlot(const Value *MD);
   int getAttributeGroupSlot(AttributeSet AS);
 
   /// If you'd like to deal with a function instead of just a module, use
@@ -585,7 +586,7 @@ private:
   void CreateModuleSlot(const GlobalValue *V);
 
   /// CreateMetadataSlot - Insert the specified MDNode* into the slot table.
-  void CreateMetadataSlot(const MDNode *N);
+  void CreateMetadataSlot(const Value *MD);
 
   /// CreateFunctionSlot - Insert the specified Value* into the slot table.
   void CreateFunctionSlot(const Value *V);
@@ -718,7 +719,7 @@ void SlotTracker::processFunction() {
 
   ST_DEBUG("Inserting Instructions:\n");
 
-  SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+  SmallVector<std::pair<unsigned, Value *>, 4> MDForInst;
 
   // Add all of the basic blocks and instructions with no names.
   for (Function::const_iterator BB = TheFunction->begin(),
@@ -755,7 +756,7 @@ void SlotTracker::processFunction() {
       // Process metadata attached with this instruction.
       I->getAllMetadata(MDForInst);
       for (unsigned i = 0, e = MDForInst.size(); i != e; ++i)
-        CreateMetadataSlot(MDForInst[i].second);
+        CreateMetadataSlot(cast<MDNode>(MDForInst[i].second));
       MDForInst.clear();
     }
   }
@@ -786,13 +787,13 @@ int SlotTracker::getGlobalSlot(const GlobalValue *V) {
   return MI == mMap.end() ? -1 : (int)MI->second;
 }
 
-/// getMetadataSlot - Get the slot number of a MDNode.
-int SlotTracker::getMetadataSlot(const MDNode *N) {
+/// getMetadataSlot - Get the slot number of a metadata node.
+int SlotTracker::getMetadataSlot(const Value *MD) {
   // Check for uninitialized state and do lazy initialization.
   initialize();
 
   // Find the MDNode in the module map
-  mdn_iterator MI = mdnMap.find(N);
+  mdn_iterator MI = mdnMap.find(cast<MDNode>(MD));
   return MI == mdnMap.end() ? -1 : (int)MI->second;
 }
 
@@ -846,9 +847,10 @@ void SlotTracker::CreateFunctionSlot(const Value *V) {
            DestSlot << " [o]\n");
 }
 
-/// CreateModuleSlot - Insert the specified MDNode* into the slot table.
-void SlotTracker::CreateMetadataSlot(const MDNode *N) {
-  assert(N && "Can't insert a null Value into SlotTracker!");
+/// CreateModuleSlot - Insert the specified metadata into the slot table.
+void SlotTracker::CreateMetadataSlot(const Value *MD) {
+  assert(MD && "Can't insert a null Value into SlotTracker!");
+  const MDNode *N = cast<MDNode>(MD);
 
   // Don't insert if N is a function-local metadata, these are always printed
   // inline.
@@ -2175,6 +2177,14 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
         Out << ", ";
       writeParamOperand(CI->getArgOperand(op), PAL, op + 1);
     }
+
+    // Emit an ellipsis if this is a musttail call in a vararg function.  This
+    // is only to aid readability, musttail calls forward varargs by default.
+    if (CI->isMustTailCall() && CI->getParent() &&
+        CI->getParent()->getParent() &&
+        CI->getParent()->getParent()->isVarArg())
+      Out << ", ...";
+
     Out << ')';
     if (PAL.hasAttributes(AttributeSet::FunctionIndex))
       Out << " #" << Machine.getAttributeGroupSlot(PAL.getFnAttributes());
@@ -2307,7 +2317,7 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
   }
 
   // Print Metadata info.
-  SmallVector<std::pair<unsigned, MDNode*>, 4> InstMD;
+  SmallVector<std::pair<unsigned, Value *>, 4> InstMD;
   I.getAllMetadata(InstMD);
   if (!InstMD.empty()) {
     SmallVector<StringRef, 8> MDNames;
@@ -2320,8 +2330,8 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
          Out << ", !<unknown kind #" << Kind << ">";
        }
       Out << ' ';
-      WriteAsOperandInternal(Out, InstMD[i].second, &TypePrinter, &Machine,
-                             TheModule);
+      WriteAsOperandInternal(Out, cast<MDNode>(InstMD[i].second), &TypePrinter,
+                             &Machine, TheModule);
     }
   }
   printInfoComment(I);
@@ -2333,7 +2343,7 @@ static void WriteMDNodeComment(const MDNode *Node,
     return;
 
   Value *Op = Node->getOperand(0);
-  if (!Op || !isa<ConstantInt>(Op) || cast<ConstantInt>(Op)->getBitWidth() < 32)
+  if (!Op || !isa<MDString>(Op))
     return;
 
   DIDescriptor Desc(Node);

@@ -305,7 +305,7 @@ bool ObjCARCContract::doInitialization(Module &M) {
   if (NamedMDNode *NMD =
         M.getNamedMetadata("clang.arc.retainAutoreleasedReturnValueMarker"))
     if (NMD->getNumOperands() == 1) {
-      const MDNode *N = NMD->getOperand(0);
+      const MDNode *N = NMD->getOperandAsMDNode(0);
       if (N->getNumOperands() == 1)
         if (const MDString *S = dyn_cast<MDString>(N->getOperand(0)))
           RetainRVMarker = S;
@@ -508,9 +508,8 @@ bool ObjCARCContract::runOnFunction(Function &F) {
   // If this function has no escaping allocas or suspicious vararg usage,
   // objc_storeStrong calls can be marked with the "tail" keyword.
   if (TailOkForStoreStrongs)
-    for (SmallPtrSet<CallInst *, 8>::iterator I = StoreStrongCalls.begin(),
-         E = StoreStrongCalls.end(); I != E; ++I)
-      (*I)->setTailCall();
+    for (CallInst *CI : StoreStrongCalls)
+      CI->setTailCall();
   StoreStrongCalls.clear();
 
   return Changed;

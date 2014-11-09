@@ -259,22 +259,34 @@ void Module::eraseNamedMetadata(NamedMDNode *NMD) {
   NamedMDList.erase(NMD);
 }
 
+bool Module::isValidModFlagBehavior(Value *V, ModFlagBehavior &MFB) {
+  if (ConstantInt *Behavior = dyn_cast<ConstantInt>(V)) {
+    uint64_t Val = Behavior->getLimitedValue();
+    if (Val >= ModFlagBehaviorFirstVal && Val <= ModFlagBehaviorLastVal) {
+      MFB = static_cast<ModFlagBehavior>(Val);
+      return true;
+    }
+  }
+  return false;
+}
+
 /// getModuleFlagsMetadata - Returns the module flags in the provided vector.
 void Module::
 getModuleFlagsMetadata(SmallVectorImpl<ModuleFlagEntry> &Flags) const {
   const NamedMDNode *ModFlags = getModuleFlagsMetadata();
   if (!ModFlags) return;
 
-  for (const MDNode *Flag : ModFlags->operands()) {
-    if (Flag->getNumOperands() >= 3 && isa<ConstantInt>(Flag->getOperand(0)) &&
+  for (const Value *FlagMD : ModFlags->operands()) {
+    const MDNode *Flag = cast<MDNode>(FlagMD);
+    ModFlagBehavior MFB;
+    if (Flag->getNumOperands() >= 3 &&
+        isValidModFlagBehavior(Flag->getOperand(0), MFB) &&
         isa<MDString>(Flag->getOperand(1))) {
       // Check the operands of the MDNode before accessing the operands.
       // The verifier will actually catch these failures.
-      ConstantInt *Behavior = cast<ConstantInt>(Flag->getOperand(0));
       MDString *Key = cast<MDString>(Flag->getOperand(1));
       Value *Val = Flag->getOperand(2);
-      Flags.push_back(ModuleFlagEntry(ModFlagBehavior(Behavior->getZExtValue()),
-                                      Key, Val));
+      Flags.push_back(ModuleFlagEntry(MFB, Key, Val));
     }
   }
 }
@@ -378,28 +390,17 @@ void Module::setMaterializer(GVMaterializer *GVM) {
   Materializer.reset(GVM);
 }
 
-bool Module::isMaterializable(const GlobalValue *GV) const {
-  if (Materializer)
-    return Materializer->isMaterializable(GV);
-  return false;
-}
-
 bool Module::isDematerializable(const GlobalValue *GV) const {
   if (Materializer)
     return Materializer->isDematerializable(GV);
   return false;
 }
 
-bool Module::Materialize(GlobalValue *GV, std::string *ErrInfo) {
+std::error_code Module::materialize(GlobalValue *GV) {
   if (!Materializer)
-    return false;
+    return std::error_code();
 
-  std::error_code EC = Materializer->Materialize(GV);
-  if (!EC)
-    return false;
-  if (ErrInfo)
-    *ErrInfo = EC.message();
-  return true;
+  return Materializer->materialize(GV);
 }
 
 void Module::Dematerialize(GlobalValue *GV) {
@@ -413,12 +414,9 @@ std::error_code Module::materializeAll() {
   return Materializer->MaterializeModule(this);
 }
 
-std::error_code Module::materializeAllPermanently(bool ReleaseBuffer) {
+std::error_code Module::materializeAllPermanently() {
   if (std::error_code EC = materializeAll())
     return EC;
-
-  if (ReleaseBuffer)
-    Materializer->releaseBuffer();
 
   Materializer.reset();
   return std::error_code();
@@ -460,4 +458,17 @@ Comdat *Module::getOrInsertComdat(StringRef Name) {
       ComdatSymTab.GetOrCreateValue(Name, std::move(C));
   Entry.second.Name = &Entry;
   return &Entry.second;
+}
+
+PICLevel::Level Module::getPICLevel() const {
+  Value *Val = getModuleFlag("PIC Level");
+
+  if (Val == NULL)
+    return PICLevel::Default;
+
+  return static_cast<PICLevel::Level>(cast<ConstantInt>(Val)->getZExtValue());
+}
+
+void Module::setPICLevel(PICLevel::Level PL) {
+  addModuleFlag(ModFlagBehavior::Error, "PIC Level", PL);
 }

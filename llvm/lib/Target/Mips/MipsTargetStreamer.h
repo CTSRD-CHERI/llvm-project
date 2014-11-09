@@ -49,6 +49,7 @@ public:
   virtual void emitFMask(unsigned FPUBitmask, int FPUTopSavedRegOff);
 
   virtual void emitDirectiveSetArch(StringRef Arch);
+  virtual void emitDirectiveSetMips0();
   virtual void emitDirectiveSetMips1();
   virtual void emitDirectiveSetMips2();
   virtual void emitDirectiveSetMips3();
@@ -61,10 +62,13 @@ public:
   virtual void emitDirectiveSetMips64R2();
   virtual void emitDirectiveSetMips64R6();
   virtual void emitDirectiveSetDsp();
+  virtual void emitDirectiveSetNoDsp();
+  virtual void emitDirectiveSetPop();
+  virtual void emitDirectiveSetPush();
 
   // PIC support
-  virtual void emitDirectiveCpload(unsigned RegNo);
-  virtual void emitDirectiveCpreturn();
+  virtual void emitDirectiveCpreturn() {}
+  virtual void emitDirectiveCpLoad(unsigned RegNo);
   virtual void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                                     const MCSymbol &Sym, bool IsReg);
 
@@ -150,6 +154,7 @@ public:
   void emitFMask(unsigned FPUBitmask, int FPUTopSavedRegOff) override;
 
   void emitDirectiveSetArch(StringRef Arch) override;
+  void emitDirectiveSetMips0() override;
   void emitDirectiveSetMips1() override;
   void emitDirectiveSetMips2() override;
   void emitDirectiveSetMips3() override;
@@ -162,10 +167,13 @@ public:
   void emitDirectiveSetMips64R2() override;
   void emitDirectiveSetMips64R6() override;
   void emitDirectiveSetDsp() override;
+  void emitDirectiveSetNoDsp() override;
+  void emitDirectiveSetPop() override;
+  void emitDirectiveSetPush() override;
 
   // PIC support
-  virtual void emitDirectiveCpload(unsigned RegNo);
   void emitDirectiveCpreturn() override;
+  void emitDirectiveCpLoad(unsigned RegNo) override;
   void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                             const MCSymbol &Sym, bool IsReg) override;
 
@@ -213,8 +221,8 @@ public:
   void emitFMask(unsigned FPUBitmask, int FPUTopSavedRegOff) override;
 
   // PIC support
-  virtual void emitDirectiveCpload(unsigned RegNo);
   void emitDirectiveCpreturn() override;
+  void emitDirectiveCpLoad(unsigned RegNo) override;
   void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                             const MCSymbol &Sym, bool IsReg) override;
 

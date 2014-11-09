@@ -67,7 +67,7 @@ MachOUniversalBinary::ObjectForArch::ObjectForArch(
   }
 }
 
-ErrorOr<std::unique_ptr<ObjectFile>>
+ErrorOr<std::unique_ptr<MachOObjectFile>>
 MachOUniversalBinary::ObjectForArch::getAsObjectFile() const {
   if (Parent) {
     StringRef ParentData = Parent->getData();
@@ -97,14 +97,14 @@ std::error_code MachOUniversalBinary::ObjectForArch::getAsArchive(
 
 void MachOUniversalBinary::anchor() { }
 
-ErrorOr<MachOUniversalBinary *>
+ErrorOr<std::unique_ptr<MachOUniversalBinary>>
 MachOUniversalBinary::create(MemoryBufferRef Source) {
   std::error_code EC;
   std::unique_ptr<MachOUniversalBinary> Ret(
       new MachOUniversalBinary(Source, EC));
   if (EC)
     return EC;
-  return Ret.release();
+  return std::move(Ret);
 }
 
 MachOUniversalBinary::MachOUniversalBinary(MemoryBufferRef Source,
@@ -139,7 +139,7 @@ static bool getCTMForArch(Triple::ArchType Arch, MachO::CPUType &CTM) {
   }
 }
 
-ErrorOr<std::unique_ptr<ObjectFile>>
+ErrorOr<std::unique_ptr<MachOObjectFile>>
 MachOUniversalBinary::getObjectForArch(Triple::ArchType Arch) const {
   MachO::CPUType CTM;
   if (!getCTMForArch(Arch, CTM))

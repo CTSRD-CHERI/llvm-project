@@ -64,7 +64,7 @@ struct LTOCodeGenerator {
   ~LTOCodeGenerator();
 
   // Merge given module, return true on success.
-  bool addModule(struct LTOModule*, std::string &errMsg);
+  bool addModule(struct LTOModule *);
 
   void setTargetOptions(TargetOptions options);
   void setDebugInfo(lto_debug_model);
@@ -101,6 +101,7 @@ struct LTOCodeGenerator {
                        bool disableOpt,
                        bool disableInline,
                        bool disableGVNLoadPRE,
+                       bool disableVectorization,
                        std::string &errMsg);
 
   // As with compile_to_file(), this function compiles the merged module into
@@ -112,6 +113,7 @@ struct LTOCodeGenerator {
                       bool disableOpt,
                       bool disableInline,
                       bool disableGVNLoadPRE,
+                      bool disableVectorization,
                       std::string &errMsg);
 
   void setDiagnosticHandler(lto_diagnostic_handler_t, void *);
@@ -120,9 +122,10 @@ private:
   void initializeLTOPasses();
 
   bool generateObjectFile(raw_ostream &out, bool disableOpt, bool disableInline,
-                          bool disableGVNLoadPRE, std::string &errMsg);
+                          bool disableGVNLoadPRE, bool disableVectorization,
+                          std::string &errMsg);
   void applyScopeRestrictions();
-  void applyRestriction(GlobalValue &GV, const ArrayRef<StringRef> &Libcalls,
+  void applyRestriction(GlobalValue &GV, ArrayRef<StringRef> Libcalls,
                         std::vector<const char *> &MustPreserveList,
                         SmallPtrSetImpl<GlobalValue *> &AsmUsed,
                         Mangler &Mangler);
@@ -142,7 +145,7 @@ private:
   lto_codegen_model CodeModel;
   StringSet MustPreserveSymbols;
   StringSet AsmUndefinedRefs;
-  MemoryBuffer *NativeObjectFile;
+  std::unique_ptr<MemoryBuffer> NativeObjectFile;
   std::vector<char *> CodegenOptions;
   std::string MCpu;
   std::string MAttr;

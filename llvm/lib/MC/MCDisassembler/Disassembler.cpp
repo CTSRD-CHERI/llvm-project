@@ -21,7 +21,7 @@
 #include "llvm/MC/MCSymbolizer.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
-#include "llvm/Support/MemoryObject.h"
+#include "llvm/Support/StringRefMemoryObject.h"
 #include "llvm/Support/TargetRegistry.h"
 
 using namespace llvm;
@@ -33,10 +33,11 @@ using namespace llvm;
 // functions can all be passed as NULL.  If successful, this returns a
 // disassembler context.  If not, it returns NULL.
 //
-LLVMDisasmContextRef LLVMCreateDisasmCPU(const char *Triple, const char *CPU,
-                                         void *DisInfo, int TagType,
-                                         LLVMOpInfoCallback GetOpInfo,
-                                         LLVMSymbolLookupCallback SymbolLookUp){
+LLVMDisasmContextRef
+LLVMCreateDisasmCPUFeatures(const char *Triple, const char *CPU,
+                            const char *Features, void *DisInfo, int TagType,
+                            LLVMOpInfoCallback GetOpInfo,
+                            LLVMSymbolLookupCallback SymbolLookUp) {
   // Get the target.
   std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(Triple, Error);
@@ -56,11 +57,8 @@ LLVMDisasmContextRef LLVMCreateDisasmCPU(const char *Triple, const char *CPU,
   if (!MII)
     return nullptr;
 
-  // Package up features to be passed to target/subtarget
-  std::string FeaturesStr;
-
   const MCSubtargetInfo *STI = TheTarget->createMCSubtargetInfo(Triple, CPU,
-                                                                FeaturesStr);
+                                                                Features);
   if (!STI)
     return nullptr;
 
@@ -101,11 +99,19 @@ LLVMDisasmContextRef LLVMCreateDisasmCPU(const char *Triple, const char *CPU,
   return DC;
 }
 
+LLVMDisasmContextRef LLVMCreateDisasmCPU(const char *Triple, const char *CPU,
+                                         void *DisInfo, int TagType,
+                                         LLVMOpInfoCallback GetOpInfo,
+                                         LLVMSymbolLookupCallback SymbolLookUp){
+  return LLVMCreateDisasmCPUFeatures(Triple, CPU, "", DisInfo, TagType,
+                                     GetOpInfo, SymbolLookUp);
+}
+
 LLVMDisasmContextRef LLVMCreateDisasm(const char *Triple, void *DisInfo,
                                       int TagType, LLVMOpInfoCallback GetOpInfo,
                                       LLVMSymbolLookupCallback SymbolLookUp) {
-  return LLVMCreateDisasmCPU(Triple, "", DisInfo, TagType, GetOpInfo,
-                             SymbolLookUp);
+  return LLVMCreateDisasmCPUFeatures(Triple, "", "", DisInfo, TagType,
+                                     GetOpInfo, SymbolLookUp);
 }
 
 //
@@ -115,30 +121,6 @@ void LLVMDisasmDispose(LLVMDisasmContextRef DCR){
   LLVMDisasmContext *DC = (LLVMDisasmContext *)DCR;
   delete DC;
 }
-
-namespace {
-//
-// The memory object created by LLVMDisasmInstruction().
-//
-class DisasmMemoryObject : public MemoryObject {
-  uint8_t *Bytes;
-  uint64_t Size;
-  uint64_t BasePC;
-public:
-  DisasmMemoryObject(uint8_t *bytes, uint64_t size, uint64_t basePC) :
-                     Bytes(bytes), Size(size), BasePC(basePC) {}
-
-  uint64_t getBase() const override { return BasePC; }
-  uint64_t getExtent() const override { return Size; }
-
-  int readByte(uint64_t Addr, uint8_t *Byte) const override {
-    if (Addr - BasePC >= Size)
-      return -1;
-    *Byte = Bytes[Addr - BasePC];
-    return 0;
-  }
-};
-} // end anonymous namespace
 
 /// \brief Emits the comments that are stored in \p DC comment stream.
 /// Each comment in the comment stream must end with a newline.
@@ -202,19 +184,19 @@ static int getItineraryLatency(LLVMDisasmContext *DC, const MCInst &Inst) {
 static int getLatency(LLVMDisasmContext *DC, const MCInst &Inst) {
   // Try to compute scheduling information.
   const MCSubtargetInfo *STI = DC->getSubtargetInfo();
-  const MCSchedModel *SCModel = STI->getSchedModel();
+  const MCSchedModel SCModel = STI->getSchedModel();
   const int NoInformationAvailable = -1;
 
   // Check if we have a scheduling model for instructions.
-  if (!SCModel || !SCModel->hasInstrSchedModel())
-    // Try to fall back to the itinerary model if we do not have a
-    // scheduling model.
+  if (!SCModel.hasInstrSchedModel())
+    // Try to fall back to the itinerary model if the scheduling model doesn't
+    // have a scheduling table.  Note the default does not have a table.
     return getItineraryLatency(DC, Inst);
 
   // Get the scheduling class of the requested instruction.
   const MCInstrDesc& Desc = DC->getInstrInfo()->get(Inst.getOpcode());
   unsigned SCClass = Desc.getSchedClass();
-  const MCSchedClassDesc *SCDesc = SCModel->getSchedClassDesc(SCClass);
+  const MCSchedClassDesc *SCDesc = SCModel.getSchedClassDesc(SCClass);
   // Resolving the variant SchedClass requires an MI to pass to
   // SubTargetInfo::resolveSchedClass.
   if (!SCDesc || !SCDesc->isValid() || SCDesc->isVariant())
@@ -263,7 +245,8 @@ size_t LLVMDisasmInstruction(LLVMDisasmContextRef DCR, uint8_t *Bytes,
                              size_t OutStringSize){
   LLVMDisasmContext *DC = (LLVMDisasmContext *)DCR;
   // Wrap the pointer to the Bytes, BytesSize and PC in a MemoryObject.
-  DisasmMemoryObject MemoryObject(Bytes, BytesSize, PC);
+  StringRef Data((const char*) Bytes, BytesSize);
+  StringRefMemoryObject MemoryObject(Data, PC);
 
   uint64_t Size;
   MCInst Inst;

@@ -20,6 +20,9 @@ namespace llvm {
 class RuntimeDyldMachOAArch64
     : public RuntimeDyldMachOCRTPBase<RuntimeDyldMachOAArch64> {
 public:
+
+  typedef uint64_t TargetPtrT;
+
   RuntimeDyldMachOAArch64(RTDyldMemoryManager *MM)
       : RuntimeDyldMachOCRTPBase(MM) {}
 
@@ -274,14 +277,14 @@ public:
       "ARM64_RELOC_ADDEND and embedded addend in the instruction.");
     if (ExplicitAddend) {
       RE.Addend = ExplicitAddend;
-      Value.Addend = ExplicitAddend;
+      Value.Offset = ExplicitAddend;
     }
 
     bool IsExtern = Obj.getPlainRelocationExternal(RelInfo);
     if (!IsExtern && RE.IsPCRel)
       makeValueAddendPCRel(Value, ObjImg, RelI, 1 << RE.Size);
 
-    RE.Addend = Value.Addend;
+    RE.Addend = Value.Offset;
 
     if (RE.RelType == MachO::ARM64_RELOC_GOT_LOAD_PAGE21 ||
         RE.RelType == MachO::ARM64_RELOC_GOT_LOAD_PAGEOFF12)
@@ -296,7 +299,7 @@ public:
     return ++RelI;
   }
 
-  void resolveRelocation(const RelocationEntry &RE, uint64_t Value) {
+  void resolveRelocation(const RelocationEntry &RE, uint64_t Value) override {
     DEBUG(dumpRelocationToResolve(RE, Value));
 
     const SectionEntry &Section = Sections[RE.SectionID];
@@ -365,9 +368,9 @@ private:
     assert(RE.Size == 2);
     SectionEntry &Section = Sections[RE.SectionID];
     StubMap::const_iterator i = Stubs.find(Value);
-    uintptr_t Addr;
+    int64_t Offset;
     if (i != Stubs.end())
-      Addr = reinterpret_cast<uintptr_t>(Section.Address) + i->second;
+      Offset = static_cast<int64_t>(i->second);
     else {
       // FIXME: There must be a better way to do this then to check and fix the
       // alignment every time!!!
@@ -381,18 +384,18 @@ private:
       assert(((StubAddress % getStubAlignment()) == 0) &&
              "GOT entry not aligned");
       RelocationEntry GOTRE(RE.SectionID, StubOffset,
-                            MachO::ARM64_RELOC_UNSIGNED, Value.Addend,
+                            MachO::ARM64_RELOC_UNSIGNED, Value.Offset,
                             /*IsPCRel=*/false, /*Size=*/3);
       if (Value.SymbolName)
         addRelocationForSymbol(GOTRE, Value.SymbolName);
       else
         addRelocationForSection(GOTRE, Value.SectionID);
       Section.StubOffset = StubOffset + getMaxStubSize();
-      Addr = StubAddress;
+      Offset = static_cast<int64_t>(StubOffset);
     }
-    RelocationEntry TargetRE(RE.SectionID, RE.Offset, RE.RelType, /*Addend=*/0,
+    RelocationEntry TargetRE(RE.SectionID, RE.Offset, RE.RelType, Offset,
                              RE.IsPCRel, RE.Size);
-    resolveRelocation(TargetRE, static_cast<uint64_t>(Addr));
+    addRelocationForSection(TargetRE, RE.SectionID);
   }
 };
 }

@@ -193,6 +193,8 @@ namespace {
     Value *OptimizeMul(BinaryOperator *I, SmallVectorImpl<ValueEntry> &Ops);
     Value *RemoveFactorFromExpression(Value *V, Value *Factor);
     void EraseInst(Instruction *I);
+    void optimizeFAddNegExpr(ConstantFP *ConstOperand, Instruction *I,
+                             int OperandNr);
     void OptimizeInst(Instruction *I);
   };
 }
@@ -235,7 +237,9 @@ FunctionPass *llvm::createReassociatePass() { return new Reassociate(); }
 /// opcode and if it only has one use.
 static BinaryOperator *isReassociableOp(Value *V, unsigned Opcode) {
   if (V->hasOneUse() && isa<Instruction>(V) &&
-      cast<Instruction>(V)->getOpcode() == Opcode)
+      cast<Instruction>(V)->getOpcode() == Opcode &&
+      (!isa<FPMathOperator>(V) ||
+       cast<Instruction>(V)->hasUnsafeAlgebra()))
     return cast<BinaryOperator>(V);
   return nullptr;
 }
@@ -244,7 +248,9 @@ static BinaryOperator *isReassociableOp(Value *V, unsigned Opcode1,
                                         unsigned Opcode2) {
   if (V->hasOneUse() && isa<Instruction>(V) &&
       (cast<Instruction>(V)->getOpcode() == Opcode1 ||
-       cast<Instruction>(V)->getOpcode() == Opcode2))
+       cast<Instruction>(V)->getOpcode() == Opcode2) &&
+      (!isa<FPMathOperator>(V) ||
+       cast<Instruction>(V)->hasUnsafeAlgebra()))
     return cast<BinaryOperator>(V);
   return nullptr;
 }
@@ -660,7 +666,9 @@ static bool LinearizeExprTree(BinaryOperator *I,
       // expression.  This means that it can safely be modified.  See if we
       // can usefully morph it into an expression of the right kind.
       assert((!isa<Instruction>(Op) ||
-              cast<Instruction>(Op)->getOpcode() != Opcode) &&
+              cast<Instruction>(Op)->getOpcode() != Opcode
+              || (isa<FPMathOperator>(Op) &&
+                  !cast<Instruction>(Op)->hasUnsafeAlgebra())) &&
              "Should have been handled above!");
       assert(Op->hasOneUse() && "Has uses outside the expression tree!");
 
@@ -965,6 +973,10 @@ static bool ShouldBreakUpSubtract(Instruction *Sub) {
   if (BinaryOperator::isNeg(Sub) || BinaryOperator::isFNeg(Sub))
     return false;
 
+  // Don't breakup X - undef.
+  if (isa<UndefValue>(Sub->getOperand(1)))
+    return false;
+
   // Don't bother to break this up unless either the LHS is an associable add or
   // subtract or if this is only used by one.
   Value *V0 = Sub->getOperand(0);
@@ -1019,8 +1031,19 @@ static BinaryOperator *ConvertShiftToMul(Instruction *Shl) {
     BinaryOperator::CreateMul(Shl->getOperand(0), MulCst, "", Shl);
   Shl->setOperand(0, UndefValue::get(Shl->getType())); // Drop use of op.
   Mul->takeName(Shl);
+
+  // Everyone now refers to the mul instruction.
   Shl->replaceAllUsesWith(Mul);
   Mul->setDebugLoc(Shl->getDebugLoc());
+
+  // We can safely preserve the nuw flag in all cases.  It's also safe to turn a
+  // nuw nsw shl into a nuw nsw mul.  However, nsw in isolation requires special
+  // handling.
+  bool NSW = cast<BinaryOperator>(Shl)->hasNoSignedWrap();
+  bool NUW = cast<BinaryOperator>(Shl)->hasNoUnsignedWrap();
+  if (NSW && NUW)
+    Mul->setHasNoSignedWrap(true);
+  Mul->setHasNoUnsignedWrap(NUW);
   return Mul;
 }
 
@@ -1032,13 +1055,23 @@ static unsigned FindInOperandList(SmallVectorImpl<ValueEntry> &Ops, unsigned i,
                                   Value *X) {
   unsigned XRank = Ops[i].Rank;
   unsigned e = Ops.size();
-  for (unsigned j = i+1; j != e && Ops[j].Rank == XRank; ++j)
+  for (unsigned j = i+1; j != e && Ops[j].Rank == XRank; ++j) {
     if (Ops[j].Op == X)
       return j;
+    if (Instruction *I1 = dyn_cast<Instruction>(Ops[j].Op))
+      if (Instruction *I2 = dyn_cast<Instruction>(X))
+        if (I1->isIdenticalTo(I2))
+          return j;
+  }
   // Scan backwards.
-  for (unsigned j = i-1; j != ~0U && Ops[j].Rank == XRank; --j)
+  for (unsigned j = i-1; j != ~0U && Ops[j].Rank == XRank; --j) {
     if (Ops[j].Op == X)
       return j;
+    if (Instruction *I1 = dyn_cast<Instruction>(Ops[j].Op))
+      if (Instruction *I2 = dyn_cast<Instruction>(X))
+        if (I1->isIdenticalTo(I2))
+          return j;
+  }
   return i;
 }
 
@@ -1914,6 +1947,33 @@ void Reassociate::EraseInst(Instruction *I) {
     }
 }
 
+void Reassociate::optimizeFAddNegExpr(ConstantFP *ConstOperand, Instruction *I,
+                                      int OperandNr) {
+  // Change the sign of the constant.
+  APFloat Val = ConstOperand->getValueAPF();
+  Val.changeSign();
+  I->setOperand(0, ConstantFP::get(ConstOperand->getContext(), Val));
+
+  assert(I->hasOneUse() && "Only a single use can be replaced.");
+  Instruction *Parent = I->user_back();
+
+  Value *OtherOperand = Parent->getOperand(1 - OperandNr);
+
+  unsigned Opcode = Parent->getOpcode();
+  assert(Opcode == Instruction::FAdd ||
+         (Opcode == Instruction::FSub && Parent->getOperand(1) == I));
+
+  BinaryOperator *NI = Opcode == Instruction::FAdd
+                           ? BinaryOperator::CreateFSub(OtherOperand, I)
+                           : BinaryOperator::CreateFAdd(OtherOperand, I);
+  NI->setFastMathFlags(cast<FPMathOperator>(Parent)->getFastMathFlags());
+  NI->insertBefore(Parent);
+  NI->setName(Parent->getName() + ".repl");
+  Parent->replaceAllUsesWith(NI);
+  NI->setDebugLoc(I->getDebugLoc());
+  MadeChange = true;
+}
+
 /// OptimizeInst - Inspect and optimize the given instruction. Note that erasing
 /// instructions is not allowed.
 void Reassociate::OptimizeInst(Instruction *I) {
@@ -1940,8 +2000,8 @@ void Reassociate::OptimizeInst(Instruction *I) {
   if (I->getType()->isFloatingPointTy() || I->getType()->isVectorTy()) {
 
     // FAdd and FMul can be commuted.
-    if (I->getOpcode() == Instruction::FMul ||
-        I->getOpcode() == Instruction::FAdd) {
+    unsigned Opcode = I->getOpcode();
+    if (Opcode == Instruction::FMul || Opcode == Instruction::FAdd) {
       Value *LHS = I->getOperand(0);
       Value *RHS = I->getOperand(1);
       unsigned LHSRank = getRank(LHS);
@@ -1951,6 +2011,24 @@ void Reassociate::OptimizeInst(Instruction *I) {
       if (RHSRank < LHSRank) {
         I->setOperand(0, RHS);
         I->setOperand(1, LHS);
+      }
+    }
+
+    // Reassociate: x + -ConstantFP * y -> x - ConstantFP * y
+    // The FMul can also be an FDiv, and FAdd can be a FSub.
+    if (Opcode == Instruction::FMul || Opcode == Instruction::FDiv) {
+      if (ConstantFP *LHSConst = dyn_cast<ConstantFP>(I->getOperand(0))) {
+        if (LHSConst->isNegative() && I->hasOneUse()) {
+          Instruction *Parent = I->user_back();
+          if (Parent->getOpcode() == Instruction::FAdd) {
+            if (Parent->getOperand(0) == I)
+              optimizeFAddNegExpr(LHSConst, I, 0);
+            else if (Parent->getOperand(1) == I)
+              optimizeFAddNegExpr(LHSConst, I, 1);
+          } else if (Parent->getOpcode() == Instruction::FSub)
+            if (Parent->getOperand(1) == I)
+              optimizeFAddNegExpr(LHSConst, I, 1);
+        }
       }
     }
 

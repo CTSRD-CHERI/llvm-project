@@ -25,8 +25,6 @@
 namespace llvm {
 namespace object {
 
-class ObjectFile;
-
 class MachOUniversalBinary : public Binary {
   virtual void anchor();
 
@@ -58,7 +56,7 @@ public:
       return T.getArchName();
     }
 
-    ErrorOr<std::unique_ptr<ObjectFile>> getAsObjectFile() const;
+    ErrorOr<std::unique_ptr<MachOObjectFile>> getAsObjectFile() const;
 
     std::error_code getAsArchive(std::unique_ptr<Archive> &Result) const;
   };
@@ -85,7 +83,8 @@ public:
   };
 
   MachOUniversalBinary(MemoryBufferRef Souce, std::error_code &EC);
-  static ErrorOr<MachOUniversalBinary *> create(MemoryBufferRef Source);
+  static ErrorOr<std::unique_ptr<MachOUniversalBinary>>
+  create(MemoryBufferRef Source);
 
   object_iterator begin_objects() const {
     return ObjectForArch(this, 0);
@@ -101,7 +100,7 @@ public:
     return V->isMachOUniversalBinary();
   }
 
-  ErrorOr<std::unique_ptr<ObjectFile>>
+  ErrorOr<std::unique_ptr<MachOObjectFile>>
   getObjectForArch(Triple::ArchType Arch) const;
 };
 

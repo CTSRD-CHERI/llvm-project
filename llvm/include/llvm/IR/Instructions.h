@@ -138,7 +138,7 @@ public:
     return getSubclassDataFromInstruction() & 32;
   }
 
-  /// \brief Specify whether this alloca is used to represent a the arguments to
+  /// \brief Specify whether this alloca is used to represent the arguments to
   /// a call.
   void setUsedWithInAlloca(bool V) {
     setInstructionSubclassData((getSubclassDataFromInstruction() & ~32) |
@@ -244,7 +244,6 @@ public:
                                (xthread << 6));
   }
 
-  bool isAtomic() const { return getOrdering() != NotAtomic; }
   void setAtomic(AtomicOrdering Ordering,
                  SynchronizationScope SynchScope = CrossThread) {
     setOrdering(Ordering);
@@ -364,7 +363,6 @@ public:
                                (xthread << 6));
   }
 
-  bool isAtomic() const { return getOrdering() != NotAtomic; }
   void setAtomic(AtomicOrdering Ordering,
                  SynchronizationScope SynchScope = CrossThread) {
     setOrdering(Ordering);
@@ -656,7 +654,7 @@ public:
     Sub,
     /// *p = old & v
     And,
-    /// *p = ~old & v
+    /// *p = ~(old & v)
     Nand,
     /// *p = old | v
     Or,

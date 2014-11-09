@@ -141,30 +141,49 @@ public:
 
   /// getMetadata - Get the metadata of given kind attached to this Instruction.
   /// If the metadata is not found then return null.
-  MDNode *getMetadata(unsigned KindID) const {
+  Value *getMetadata(unsigned KindID) const {
     if (!hasMetadata()) return nullptr;
     return getMetadataImpl(KindID);
   }
 
   /// getMetadata - Get the metadata of given kind attached to this Instruction.
   /// If the metadata is not found then return null.
-  MDNode *getMetadata(StringRef Kind) const {
+  Value *getMetadata(StringRef Kind) const {
     if (!hasMetadata()) return nullptr;
     return getMetadataImpl(Kind);
+  }
+
+  /// Get the the metadata as an MDNode.
+  ///
+  /// \pre Any KindID metadata is implemented using \a MDNode.
+  MDNode *getMDNode(unsigned KindID) const {
+    if (!hasMetadata())
+      return nullptr;
+    return getMDNodeImpl(KindID);
+  }
+
+  /// Get the the metadata as an MDNode.
+  ///
+  /// \pre Any KindID metadata is implemented using \a MDNode.
+  MDNode *getMDNode(StringRef Kind) const {
+    if (!hasMetadata())
+      return nullptr;
+    return getMDNodeImpl(Kind);
   }
 
   /// getAllMetadata - Get all metadata attached to this Instruction.  The first
   /// element of each pair returned is the KindID, the second element is the
   /// metadata value.  This list is returned sorted by the KindID.
-  void getAllMetadata(SmallVectorImpl<std::pair<unsigned, MDNode*> > &MDs)const{
+  void
+  getAllMetadata(SmallVectorImpl<std::pair<unsigned, Value *>> &MDs) const {
     if (hasMetadata())
       getAllMetadataImpl(MDs);
   }
 
   /// getAllMetadataOtherThanDebugLoc - This does the same thing as
   /// getAllMetadata, except that it filters out the debug location.
-  void getAllMetadataOtherThanDebugLoc(SmallVectorImpl<std::pair<unsigned,
-                                       MDNode*> > &MDs) const {
+  void getAllMetadataOtherThanDebugLoc(
+      SmallVectorImpl<std::pair<unsigned, Value *>> &MDs) const {
     if (hasMetadataOtherThanDebugLoc())
       getAllMetadataOtherThanDebugLocImpl(MDs);
   }
@@ -176,16 +195,16 @@ public:
 
   /// setMetadata - Set the metadata of the specified kind to the specified
   /// node.  This updates/replaces metadata if already present, or removes it if
-  /// Node is null.
-  void setMetadata(unsigned KindID, MDNode *Node);
-  void setMetadata(StringRef Kind, MDNode *Node);
+  /// MD is null.
+  void setMetadata(unsigned KindID, Value *MD);
+  void setMetadata(StringRef Kind, Value *MD);
 
   /// \brief Drop unknown metadata.
   /// Passes are required to drop metadata they don't understand. This is a
   /// convenience method for passes to do so.
   void dropUnknownMetadata(ArrayRef<unsigned> KnownIDs);
   void dropUnknownMetadata() {
-    return dropUnknownMetadata(ArrayRef<unsigned>());
+    return dropUnknownMetadata(None);
   }
   void dropUnknownMetadata(unsigned ID1) {
     return dropUnknownMetadata(makeArrayRef(ID1));
@@ -230,10 +249,15 @@ public:
   /// this flag.
   void setHasAllowReciprocal(bool B);
 
-  /// Convenience function for setting all the fast-math flags on this
+  /// Convenience function for setting multiple fast-math flags on this
   /// instruction, which must be an operator which supports these flags. See
-  /// LangRef.html for the meaning of these flats.
+  /// LangRef.html for the meaning of these flags.
   void setFastMathFlags(FastMathFlags FMF);
+
+  /// Convenience function for transferring all fast-math flag values to this
+  /// instruction, which must be an operator which supports these flags. See
+  /// LangRef.html for the meaning of these flags.
+  void copyFastMathFlags(FastMathFlags FMF);
 
   /// Determine whether the unsafe-algebra flag is set.
   bool hasUnsafeAlgebra() const;
@@ -252,7 +276,7 @@ public:
 
   /// Convenience function for getting all the fast-math flags, which must be an
   /// operator which supports these flags. See LangRef.html for the meaning of
-  /// these flats.
+  /// these flags.
   FastMathFlags getFastMathFlags() const;
 
   /// Copy I's fast-math flags
@@ -266,11 +290,14 @@ private:
   }
 
   // These are all implemented in Metadata.cpp.
-  MDNode *getMetadataImpl(unsigned KindID) const;
-  MDNode *getMetadataImpl(StringRef Kind) const;
-  void getAllMetadataImpl(SmallVectorImpl<std::pair<unsigned,MDNode*> > &)const;
-  void getAllMetadataOtherThanDebugLocImpl(SmallVectorImpl<std::pair<unsigned,
-                                           MDNode*> > &) const;
+  Value *getMetadataImpl(unsigned KindID) const;
+  Value *getMetadataImpl(StringRef Kind) const;
+  MDNode *getMDNodeImpl(unsigned KindID) const;
+  MDNode *getMDNodeImpl(StringRef Kind) const;
+  void
+  getAllMetadataImpl(SmallVectorImpl<std::pair<unsigned, Value *>> &) const;
+  void getAllMetadataOtherThanDebugLocImpl(
+      SmallVectorImpl<std::pair<unsigned, Value *>> &) const;
   void clearMetadataHashEntries();
 public:
   //===--------------------------------------------------------------------===//
@@ -332,6 +359,11 @@ public:
   bool mayReadOrWriteMemory() const {
     return mayReadFromMemory() || mayWriteToMemory();
   }
+
+  /// isAtomic - Return true if this instruction has an
+  /// AtomicOrdering of unordered or higher.
+  ///
+  bool isAtomic() const;
 
   /// mayThrow - Return true if this instruction may throw an exception.
   ///

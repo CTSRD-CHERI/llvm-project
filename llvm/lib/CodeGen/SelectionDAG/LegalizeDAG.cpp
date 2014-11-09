@@ -1652,7 +1652,7 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
   Chain = SP.getValue(1);
   unsigned Align = cast<ConstantSDNode>(Tmp3)->getZExtValue();
   unsigned StackAlign =
-      TM.getSubtargetImpl()->getFrameLowering()->getStackAlignment();
+      DAG.getSubtarget().getFrameLowering()->getStackAlignment();
   Tmp1 = DAG.getNode(ISD::SUB, dl, VT, SP, Size);       // Value
   if (Align > StackAlign)
     Tmp1 = DAG.getNode(ISD::AND, dl, VT, Tmp1,
@@ -1906,7 +1906,8 @@ ExpandBVWithShuffles(SDNode *Node, SelectionDAG &DAG,
                                          ShuffleVec.data());
         else if (!TLI.isShuffleMaskLegal(ShuffleVec, VT))
           return false;
-        NewIntermedVals.push_back(std::make_pair(Shuffle, FinalIndices));
+        NewIntermedVals.push_back(
+            std::make_pair(Shuffle, std::move(FinalIndices)));
       }
 
       // If we had an odd number of defined values, then append the last
@@ -2811,7 +2812,7 @@ SDValue SelectionDAGLegalize::ExpandBitCount(unsigned Opc, SDValue Op,
     // x = x | (x >>32); // for 64-bit input
     // return popcount(~x);
     //
-    // but see also: http://www.hackersdelight.org/HDcode/nlz.cc
+    // Ref: "Hacker's Delight" by Henry Warren
     EVT VT = Op.getValueType();
     EVT ShVT = TLI.getShiftAmountTy(VT);
     unsigned len = VT.getSizeInBits();
@@ -2830,7 +2831,7 @@ SDValue SelectionDAGLegalize::ExpandBitCount(unsigned Opc, SDValue Op,
     // for now, we use: { return popcount(~x & (x - 1)); }
     // unless the target has ctlz but not ctpop, in which case we use:
     // { return 32 - nlz(~x & (x-1)); }
-    // see also http://www.hackersdelight.org/HDcode/ntz.cc
+    // Ref: "Hacker's Delight" by Henry Warren
     EVT VT = Op.getValueType();
     SDValue Tmp3 = DAG.getNode(ISD::AND, dl, VT,
                                DAG.getNOT(dl, Op, VT),
@@ -3424,6 +3425,16 @@ void SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     Results.push_back(Tmp1);
     break;
   }
+  case ISD::FMINNUM:
+    Results.push_back(ExpandFPLibCall(Node, RTLIB::FMIN_F32, RTLIB::FMIN_F64,
+                                      RTLIB::FMIN_F80, RTLIB::FMIN_F128,
+                                      RTLIB::FMIN_PPCF128));
+    break;
+  case ISD::FMAXNUM:
+    Results.push_back(ExpandFPLibCall(Node, RTLIB::FMAX_F32, RTLIB::FMAX_F64,
+                                      RTLIB::FMAX_F80, RTLIB::FMAX_F128,
+                                      RTLIB::FMAX_PPCF128));
+    break;
   case ISD::FSQRT:
     Results.push_back(ExpandFPLibCall(Node, RTLIB::SQRT_F32, RTLIB::SQRT_F64,
                                       RTLIB::SQRT_F80, RTLIB::SQRT_F128,
@@ -3542,6 +3553,16 @@ void SelectionDAGLegalize::ExpandNode(SDNode *Node) {
                                       RTLIB::FMA_F80, RTLIB::FMA_F128,
                                       RTLIB::FMA_PPCF128));
     break;
+  case ISD::FADD:
+    Results.push_back(ExpandFPLibCall(Node, RTLIB::ADD_F32, RTLIB::ADD_F64,
+                                      RTLIB::ADD_F80, RTLIB::ADD_F128,
+                                      RTLIB::ADD_PPCF128));
+    break;
+  case ISD::FMUL:
+    Results.push_back(ExpandFPLibCall(Node, RTLIB::MUL_F32, RTLIB::MUL_F64,
+                                      RTLIB::MUL_F80, RTLIB::MUL_F128,
+                                      RTLIB::MUL_PPCF128));
+    break;
   case ISD::FP16_TO_FP: {
     if (Node->getValueType(0) == MVT::f32) {
       Results.push_back(ExpandLibCall(RTLIB::FPEXT_F16_F32, Node, false));
@@ -3574,12 +3595,16 @@ void SelectionDAGLegalize::ExpandNode(SDNode *Node) {
   }
   case ISD::FSUB: {
     EVT VT = Node->getValueType(0);
-    assert(TLI.isOperationLegalOrCustom(ISD::FADD, VT) &&
-           TLI.isOperationLegalOrCustom(ISD::FNEG, VT) &&
-           "Don't know how to expand this FP subtraction!");
-    Tmp1 = DAG.getNode(ISD::FNEG, dl, VT, Node->getOperand(1));
-    Tmp1 = DAG.getNode(ISD::FADD, dl, VT, Node->getOperand(0), Tmp1);
-    Results.push_back(Tmp1);
+    if (TLI.isOperationLegalOrCustom(ISD::FADD, VT) &&
+        TLI.isOperationLegalOrCustom(ISD::FNEG, VT)) {
+      Tmp1 = DAG.getNode(ISD::FNEG, dl, VT, Node->getOperand(1));
+      Tmp1 = DAG.getNode(ISD::FADD, dl, VT, Node->getOperand(0), Tmp1);
+      Results.push_back(Tmp1);
+    } else {
+      Results.push_back(ExpandFPLibCall(Node, RTLIB::SUB_F32, RTLIB::SUB_F64,
+                                        RTLIB::SUB_F80, RTLIB::SUB_F128,
+                                        RTLIB::SUB_PPCF128));
+    }
     break;
   }
   case ISD::SUB: {

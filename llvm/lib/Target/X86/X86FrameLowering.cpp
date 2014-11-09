@@ -30,6 +30,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Support/Debug.h"
+#include <cstdlib>
 
 using namespace llvm;
 
@@ -53,7 +54,8 @@ bool X86FrameLowering::hasFP(const MachineFunction &MF) const {
           MFI->hasVarSizedObjects() ||
           MFI->isFrameAddressTaken() || MFI->hasInlineAsmWithSPAdjust() ||
           MF.getInfo<X86MachineFunctionInfo>()->getForceFramePointer() ||
-          MMI.callsUnwindInit() || MMI.callsEHReturn());
+          MMI.callsUnwindInit() || MMI.callsEHReturn() ||
+          MFI->hasStackMap() || MFI->hasPatchPoint());
 }
 
 static unsigned getSUBriOpcode(unsigned IsLP64, int64_t Imm) {
@@ -352,6 +354,23 @@ static bool usesTheStack(const MachineFunction &MF) {
   return false;
 }
 
+void X86FrameLowering::getStackProbeFunction(const X86Subtarget &STI,
+                                             unsigned &CallOp,
+                                             const char *&Symbol) {
+  CallOp = STI.is64Bit() ? X86::W64ALLOCA : X86::CALLpcrel32;
+
+  if (STI.is64Bit()) {
+    if (STI.isTargetCygMing()) {
+      Symbol = "___chkstk_ms";
+    } else {
+      Symbol = "__chkstk";
+    }
+  } else if (STI.isTargetCygMing())
+    Symbol = "_alloca";
+  else
+    Symbol = "_chkstk";
+}
+
 /// emitPrologue - Push callee-saved registers onto the stack, which
 /// automatically adjust the stack pointer. Adjust the stack pointer to allocate
 /// space for local variables. Also emit labels used by the exception handler to
@@ -485,6 +504,8 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
     X86FI->setCalleeSavedFrameSize(
       X86FI->getCalleeSavedFrameSize() - TailCallReturnAddrDelta);
 
+  bool UseStackProbe = (STI.isOSWindows() && !STI.isTargetMacho());
+  
   // If this is x86-64 and the Red Zone is not disabled, if we are a leaf
   // function, and use up to 128 bytes of stack space, don't have a frame
   // pointer, calls, or dynamic alloca then we do not need to adjust the
@@ -658,6 +679,8 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
 
   // Adjust stack pointer: ESP -= numbytes.
 
+  static const size_t PageSize = 4096;
+
   // Windows and cygwin/mingw require a prologue helper routine when allocating
   // more than 4K bytes on the stack.  Windows uses __chkstk and cygwin/mingw
   // uses __alloca.  __alloca and the 32-bit version of __chkstk will probe the
@@ -666,19 +689,11 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
   // responsible for adjusting the stack pointer.  Touching the stack at 4K
   // increments is necessary to ensure that the guard pages used by the OS
   // virtual memory manager are allocated in correct sequence.
-  if (NumBytes >= 4096 && STI.isOSWindows() && !STI.isTargetMacho()) {
+  if (NumBytes >= PageSize && UseStackProbe) {
     const char *StackProbeSymbol;
+    unsigned CallOp;
 
-    if (Is64Bit) {
-      if (STI.isTargetCygMing()) {
-        StackProbeSymbol = "___chkstk_ms";
-      } else {
-        StackProbeSymbol = "__chkstk";
-      }
-    } else if (STI.isTargetCygMing())
-      StackProbeSymbol = "_alloca";
-    else
-      StackProbeSymbol = "_chkstk";
+    getStackProbeFunction(STI, CallOp, StackProbeSymbol);
 
     // Check whether EAX is livein for this function.
     bool isEAXAlive = isEAXLiveIn(MF);
@@ -709,7 +724,7 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
     }
 
     BuildMI(MBB, MBBI, DL,
-            TII.get(Is64Bit ? X86::W64ALLOCA : X86::CALLpcrel32))
+            TII.get(CallOp))
       .addExternalSymbol(StackProbeSymbol)
       .addReg(StackPtr,    RegState::Define | RegState::Implicit)
       .addReg(X86::EFLAGS, RegState::Define | RegState::Implicit)
@@ -725,12 +740,12 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
         .setMIFlag(MachineInstr::FrameSetup);
     }
     if (isEAXAlive) {
-        // Restore EAX
-        MachineInstr *MI = addRegOffset(BuildMI(MF, DL, TII.get(X86::MOV32rm),
-                                                X86::EAX),
-                                        StackPtr, false, NumBytes - 4);
-        MI->setFlag(MachineInstr::FrameSetup);
-        MBB.insert(MBBI, MI);
+      // Restore EAX
+      MachineInstr *MI = addRegOffset(BuildMI(MF, DL, TII.get(X86::MOV32rm),
+                                              X86::EAX),
+                                      StackPtr, false, NumBytes - 4);
+      MI->setFlag(MachineInstr::FrameSetup);
+      MBB.insert(MBBI, MI);
     }
   } else if (NumBytes) {
     emitSPUpdate(MBB, MBBI, StackPtr, -(int64_t)NumBytes, Is64Bit, Uses64BitFramePtr,
@@ -749,7 +764,7 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
       // will restore SP to (BP - SEHFrameOffset)
       for (const CalleeSavedInfo &Info : MFI->getCalleeSavedInfo()) {
         int offset = MFI->getObjectOffset(Info.getFrameIdx());
-        SEHFrameOffset = std::max(SEHFrameOffset, abs(offset));
+        SEHFrameOffset = std::max(SEHFrameOffset, std::abs(offset));
       }
       SEHFrameOffset += SEHFrameOffset % 16; // ensure alignmant
 
@@ -1162,7 +1177,7 @@ bool X86FrameLowering::assignCalleeSavedSpillSlots(
 
     const TargetRegisterClass *RC = RegInfo->getMinimalPhysRegClass(Reg);
     // ensure alignment
-    SpillSlotOffset -= abs(SpillSlotOffset) % RC->getAlignment();
+    SpillSlotOffset -= std::abs(SpillSlotOffset) % RC->getAlignment();
     // spill into slot
     SpillSlotOffset -= RC->getSize();
     int SlotIndex =
@@ -1302,7 +1317,7 @@ HasNestArgument(const MachineFunction *MF) {
 /// and the properties of the function either one or two registers will be
 /// needed. Set primary to true for the first register, false for the second.
 static unsigned
-GetScratchRegister(bool Is64Bit, const MachineFunction &MF, bool Primary) {
+GetScratchRegister(bool Is64Bit, bool IsLP64, const MachineFunction &MF, bool Primary) {
   CallingConv::ID CallingConvention = MF.getFunction()->getCallingConv();
 
   // Erlang stuff.
@@ -1313,8 +1328,12 @@ GetScratchRegister(bool Is64Bit, const MachineFunction &MF, bool Primary) {
       return Primary ? X86::EBX : X86::EDI;
   }
 
-  if (Is64Bit)
-    return Primary ? X86::R11 : X86::R12;
+  if (Is64Bit) {
+    if (IsLP64)
+      return Primary ? X86::R11 : X86::R12;
+    else
+      return Primary ? X86::R11D : X86::R12D;
+  }
 
   bool IsNested = HasNestArgument(&MF);
 
@@ -1342,10 +1361,11 @@ X86FrameLowering::adjustForSegmentedStacks(MachineFunction &MF) const {
   uint64_t StackSize;
   const X86Subtarget &STI = MF.getTarget().getSubtarget<X86Subtarget>();
   bool Is64Bit = STI.is64Bit();
+  const bool IsLP64 = STI.isTarget64BitLP64();
   unsigned TlsReg, TlsOffset;
   DebugLoc DL;
 
-  unsigned ScratchReg = GetScratchRegister(Is64Bit, MF, true);
+  unsigned ScratchReg = GetScratchRegister(Is64Bit, IsLP64, MF, true);
   assert(!MF.getRegInfo().isLiveIn(ScratchReg) &&
          "Scratch register is live-in");
 
@@ -1383,7 +1403,7 @@ X86FrameLowering::adjustForSegmentedStacks(MachineFunction &MF) const {
   }
 
   if (IsNested)
-    allocMBB->addLiveIn(X86::R10);
+    allocMBB->addLiveIn(IsLP64 ? X86::R10 : X86::R10D);
 
   MF.push_front(allocMBB);
   MF.push_front(checkMBB);
@@ -1396,7 +1416,7 @@ X86FrameLowering::adjustForSegmentedStacks(MachineFunction &MF) const {
   if (Is64Bit) {
     if (STI.isTargetLinux()) {
       TlsReg = X86::FS;
-      TlsOffset = 0x70;
+      TlsOffset = IsLP64 ? 0x70 : 0x40;
     } else if (STI.isTargetDarwin()) {
       TlsReg = X86::GS;
       TlsOffset = 0x60 + 90*8; // See pthread_machdep.h. Steal TLS slot 90.
@@ -1411,12 +1431,12 @@ X86FrameLowering::adjustForSegmentedStacks(MachineFunction &MF) const {
     }
 
     if (CompareStackPointer)
-      ScratchReg = X86::RSP;
+      ScratchReg = IsLP64 ? X86::RSP : X86::ESP;
     else
-      BuildMI(checkMBB, DL, TII.get(X86::LEA64r), ScratchReg).addReg(X86::RSP)
+      BuildMI(checkMBB, DL, TII.get(IsLP64 ? X86::LEA64r : X86::LEA64_32r), ScratchReg).addReg(X86::RSP)
         .addImm(1).addReg(0).addImm(-StackSize).addReg(0);
 
-    BuildMI(checkMBB, DL, TII.get(X86::CMP64rm)).addReg(ScratchReg)
+    BuildMI(checkMBB, DL, TII.get(IsLP64 ? X86::CMP64rm : X86::CMP32rm)).addReg(ScratchReg)
       .addReg(0).addImm(1).addReg(0).addImm(TlsOffset).addReg(TlsReg);
   } else {
     if (STI.isTargetLinux()) {
@@ -1450,11 +1470,11 @@ X86FrameLowering::adjustForSegmentedStacks(MachineFunction &MF) const {
       bool SaveScratch2;
       if (CompareStackPointer) {
         // The primary scratch register is available for holding the TLS offset.
-        ScratchReg2 = GetScratchRegister(Is64Bit, MF, true);
+        ScratchReg2 = GetScratchRegister(Is64Bit, IsLP64, MF, true);
         SaveScratch2 = false;
       } else {
         // Need to use a second register to hold the TLS offset
-        ScratchReg2 = GetScratchRegister(Is64Bit, MF, false);
+        ScratchReg2 = GetScratchRegister(Is64Bit, IsLP64, MF, false);
 
         // Unfortunately, with fastcc the second scratch register may hold an
         // argument.
@@ -1492,15 +1512,21 @@ X86FrameLowering::adjustForSegmentedStacks(MachineFunction &MF) const {
     // Functions with nested arguments use R10, so it needs to be saved across
     // the call to _morestack
 
-    if (IsNested)
-      BuildMI(allocMBB, DL, TII.get(X86::MOV64rr), X86::RAX).addReg(X86::R10);
+    const unsigned RegAX = IsLP64 ? X86::RAX : X86::EAX;
+    const unsigned Reg10 = IsLP64 ? X86::R10 : X86::R10D;
+    const unsigned Reg11 = IsLP64 ? X86::R11 : X86::R11D;
+    const unsigned MOVrr = IsLP64 ? X86::MOV64rr : X86::MOV32rr;
+    const unsigned MOVri = IsLP64 ? X86::MOV64ri : X86::MOV32ri;
 
-    BuildMI(allocMBB, DL, TII.get(X86::MOV64ri), X86::R10)
+    if (IsNested)
+      BuildMI(allocMBB, DL, TII.get(MOVrr), RegAX).addReg(Reg10);
+
+    BuildMI(allocMBB, DL, TII.get(MOVri), Reg10)
       .addImm(StackSize);
-    BuildMI(allocMBB, DL, TII.get(X86::MOV64ri), X86::R11)
+    BuildMI(allocMBB, DL, TII.get(MOVri), Reg11)
       .addImm(X86FI->getArgumentStackSize());
-    MF.getRegInfo().setPhysRegUsed(X86::R10);
-    MF.getRegInfo().setPhysRegUsed(X86::R11);
+    MF.getRegInfo().setPhysRegUsed(Reg10);
+    MF.getRegInfo().setPhysRegUsed(Reg11);
   } else {
     BuildMI(allocMBB, DL, TII.get(X86::PUSHi32))
       .addImm(X86FI->getArgumentStackSize());
@@ -1554,6 +1580,7 @@ void X86FrameLowering::adjustForHiPEPrologue(MachineFunction &MF) const {
           ->getSlotSize();
   const X86Subtarget &STI = MF.getTarget().getSubtarget<X86Subtarget>();
   const bool Is64Bit = STI.is64Bit();
+  const bool IsLP64 = STI.isTarget64BitLP64();
   DebugLoc DL;
   // HiPE-specific values
   const unsigned HipeLeafWords = 24;
@@ -1647,7 +1674,7 @@ void X86FrameLowering::adjustForHiPEPrologue(MachineFunction &MF) const {
       SPLimitOffset = 0x4c;
     }
 
-    ScratchReg = GetScratchRegister(Is64Bit, MF, true);
+    ScratchReg = GetScratchRegister(Is64Bit, IsLP64, MF, true);
     assert(!MF.getRegInfo().isLiveIn(ScratchReg) &&
            "HiPE prologue scratch register is live-in");
 

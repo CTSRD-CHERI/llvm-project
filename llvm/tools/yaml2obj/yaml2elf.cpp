@@ -190,7 +190,7 @@ bool ELFState<ELFT>::initSectionHeaders(std::vector<Elf_Shdr> &SHeaders,
 
   for (const auto &Sec : Doc.Sections)
     DotShStrtab.add(Sec->Name);
-  DotShStrtab.finalize();
+  DotShStrtab.finalize(StringTableBuilder::ELF);
 
   for (const auto &Sec : Doc.Sections) {
     zero(SHeader);
@@ -261,7 +261,7 @@ void ELFState<ELFT>::initSymtabSectionHeader(Elf_Shdr &SHeader,
     DotStrtab.add(Sym.Name);
   for (const auto &Sym : Doc.Symbols.Weak)
     DotStrtab.add(Sym.Name);
-  DotStrtab.finalize();
+  DotStrtab.finalize(StringTableBuilder::ELF);
 
   addSymbols(Doc.Symbols.Local, Syms, ELF::STB_LOCAL);
   addSymbols(Doc.Symbols.Global, Syms, ELF::STB_GLOBAL);
@@ -304,7 +304,7 @@ void ELFState<ELFT>::addSymbols(const std::vector<ELFYAML::Symbol> &Symbols,
       Symbol.st_shndx = Index;
     } // else Symbol.st_shndex == SHN_UNDEF (== 0), since it was zero'd earlier.
     Symbol.st_value = Sym.Value;
-    Symbol.st_other = Sym.Visibility;
+    Symbol.st_other = Sym.Other;
     Symbol.st_size = Sym.Size;
     Syms.push_back(Symbol);
   }

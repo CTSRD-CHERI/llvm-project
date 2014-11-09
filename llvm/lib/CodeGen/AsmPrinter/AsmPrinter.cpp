@@ -14,6 +14,7 @@
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "DwarfDebug.h"
 #include "DwarfException.h"
+#include "Win64Exception.h"
 #include "WinCodeViewLineTables.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/Statistic.h"
@@ -172,7 +173,7 @@ bool AsmPrinter::doInitialization(Module &M) {
   const_cast<TargetLoweringObjectFile&>(getObjFileLowering())
     .Initialize(OutContext, TM);
 
-  OutStreamer.InitSections();
+  OutStreamer.InitSections(false);
 
   Mang = new Mangler(TM.getSubtargetImpl()->getDataLayout());
 
@@ -221,14 +222,12 @@ bool AsmPrinter::doInitialization(Module &M) {
   }
 
   if (MAI->doesSupportDebugInformation()) {
-    if (Triple(TM.getTargetTriple()).isKnownWindowsMSVCEnvironment()) {
+    if (Triple(TM.getTargetTriple()).isKnownWindowsMSVCEnvironment())
       Handlers.push_back(HandlerInfo(new WinCodeViewLineTables(this),
                                      DbgTimerName,
                                      CodeViewLineTablesGroupName));
-    } else {
-      DD = new DwarfDebug(this, &M);
-      Handlers.push_back(HandlerInfo(DD, DbgTimerName, DWARFGroupName));
-    }
+    DD = new DwarfDebug(this, &M);
+    Handlers.push_back(HandlerInfo(DD, DbgTimerName, DWARFGroupName));
   }
 
   EHStreamer *ES = nullptr;
@@ -243,7 +242,12 @@ bool AsmPrinter::doInitialization(Module &M) {
     ES = new ARMException(this);
     break;
   case ExceptionHandling::WinEH:
-    ES = new Win64Exception(this);
+    switch (MAI->getWinEHEncodingType()) {
+    default: llvm_unreachable("unsupported unwinding information encoding");
+    case WinEH::EncodingType::Itanium:
+      ES = new Win64Exception(this);
+      break;
+    }
     break;
   }
   if (ES)
@@ -608,24 +612,26 @@ static void emitKill(const MachineInstr *MI, AsmPrinter &AP) {
 /// of DBG_VALUE, returning true if it was able to do so.  A false return
 /// means the target will need to handle MI in EmitInstruction.
 static bool emitDebugValueComment(const MachineInstr *MI, AsmPrinter &AP) {
-  // This code handles only the 3-operand target-independent form.
-  if (MI->getNumOperands() != 3)
+  // This code handles only the 4-operand target-independent form.
+  if (MI->getNumOperands() != 4)
     return false;
 
   SmallString<128> Str;
   raw_svector_ostream OS(Str);
   OS << "DEBUG_VALUE: ";
 
-  DIVariable V(MI->getOperand(2).getMetadata());
+  DIVariable V = MI->getDebugVariable();
   if (V.getContext().isSubprogram()) {
     StringRef Name = DISubprogram(V.getContext()).getDisplayName();
     if (!Name.empty())
       OS << Name << ":";
   }
   OS << V.getName();
-  if (V.isVariablePiece())
-    OS << " [piece offset=" << V.getPieceOffset()
-       << " size="<<V.getPieceSize()<<"]";
+
+  DIExpression Expr = MI->getDebugExpression();
+  if (Expr.isVariablePiece())
+    OS << " [piece offset=" << Expr.getPieceOffset()
+       << " size=" << Expr.getPieceSize() << "]";
   OS << " <- ";
 
   // The second operand is only an offset if it's an immediate.
@@ -725,12 +731,10 @@ void AsmPrinter::EmitFunctionBody() {
 
   // Print out code for the function.
   bool HasAnyRealCode = false;
-  const MachineInstr *LastMI = nullptr;
   for (auto &MBB : *MF) {
     // Print a label for the basic block.
     EmitBasicBlockStart(MBB);
     for (auto &MI : MBB) {
-      LastMI = &MI;
 
       // Print the assembly for the instruction.
       if (!MI.isPosition() && !MI.isImplicitDef() && !MI.isKill() &&
@@ -791,24 +795,18 @@ void AsmPrinter::EmitFunctionBody() {
     EmitBasicBlockEnd(MBB);
   }
 
-  // If the last instruction was a prolog label, then we have a situation where
-  // we emitted a prolog but no function body. This results in the ending prolog
-  // label equaling the end of function label and an invalid "row" in the
-  // FDE. We need to emit a noop in this situation so that the FDE's rows are
-  // valid.
-  bool RequiresNoop = LastMI && LastMI->isCFIInstruction();
-
   // If the function is empty and the object file uses .subsections_via_symbols,
   // then we need to emit *something* to the function body to prevent the
   // labels from collapsing together.  Just emit a noop.
-  if ((MAI->hasSubsectionsViaSymbols() && !HasAnyRealCode) || RequiresNoop) {
+  if ((MAI->hasSubsectionsViaSymbols() && !HasAnyRealCode)) {
     MCInst Noop;
     TM.getSubtargetImpl()->getInstrInfo()->getNoopForMachoTarget(Noop);
-    if (Noop.getOpcode()) {
-      OutStreamer.AddComment("avoids zero-length function");
+    OutStreamer.AddComment("avoids zero-length function");
+
+    // Targets can opt-out of emitting the noop here by leaving the opcode
+    // unspecified.
+    if (Noop.getOpcode())
       OutStreamer.EmitInstruction(Noop, getSubtargetInfo());
-    } else  // Target not mc-ized yet.
-      OutStreamer.EmitRawText(StringRef("\tnop\n"));
   }
 
   const Function *F = MF->getFunction();
@@ -962,24 +960,21 @@ bool AsmPrinter::doFinalization(Module &M) {
     }
   }
 
-  if (MAI->hasSetDirective()) {
-    OutStreamer.AddBlankLine();
-    for (const auto &Alias : M.aliases()) {
-      MCSymbol *Name = getSymbol(&Alias);
+  OutStreamer.AddBlankLine();
+  for (const auto &Alias : M.aliases()) {
+    MCSymbol *Name = getSymbol(&Alias);
 
-      if (Alias.hasExternalLinkage() || !MAI->getWeakRefDirective())
-        OutStreamer.EmitSymbolAttribute(Name, MCSA_Global);
-      else if (Alias.hasWeakLinkage() || Alias.hasLinkOnceLinkage())
-        OutStreamer.EmitSymbolAttribute(Name, MCSA_WeakReference);
-      else
-        assert(Alias.hasLocalLinkage() && "Invalid alias linkage");
+    if (Alias.hasExternalLinkage() || !MAI->getWeakRefDirective())
+      OutStreamer.EmitSymbolAttribute(Name, MCSA_Global);
+    else if (Alias.hasWeakLinkage() || Alias.hasLinkOnceLinkage())
+      OutStreamer.EmitSymbolAttribute(Name, MCSA_WeakReference);
+    else
+      assert(Alias.hasLocalLinkage() && "Invalid alias linkage");
 
-      EmitVisibility(Name, Alias.getVisibility());
+    EmitVisibility(Name, Alias.getVisibility());
 
-      // Emit the directives as assignments aka .set:
-      OutStreamer.EmitAssignment(Name,
-                                 lowerConstant(Alias.getAliasee(), *this));
-    }
+    // Emit the directives as assignments aka .set:
+    OutStreamer.EmitAssignment(Name, lowerConstant(Alias.getAliasee(), *this));
   }
 
   GCModuleInfo *MI = getAnalysisIfAvailable<GCModuleInfo>();
@@ -1163,11 +1158,10 @@ void AsmPrinter::EmitJumpTableInfo() {
     // If this jump table was deleted, ignore it.
     if (JTBBs.empty()) continue;
 
-    // For the EK_LabelDifference32 entry, if the target supports .set, emit a
-    // .set directive for each unique entry.  This reduces the number of
-    // relocations the assembler will generate for the jump table.
+    // For the EK_LabelDifference32 entry, if using .set avoids a relocation,
+    /// emit a .set directive for each unique entry.
     if (MJTI->getEntryKind() == MachineJumpTableInfo::EK_LabelDifference32 &&
-        MAI->hasSetDirective()) {
+        MAI->doesSetDirectiveSuppressesReloc()) {
       SmallPtrSet<const MachineBasicBlock*, 16> EmittedSets;
       const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
       const MCExpr *Base = TLI->getPICJumpTableRelocBaseExpr(MF,JTI,OutContext);
@@ -1240,27 +1234,22 @@ void AsmPrinter::EmitJumpTableEntry(const MachineJumpTableInfo *MJTI,
   }
 
   case MachineJumpTableInfo::EK_LabelDifference32: {
-    // EK_LabelDifference32 - Each entry is the address of the block minus
-    // the address of the jump table.  This is used for PIC jump tables where
-    // gprel32 is not supported.  e.g.:
+    // Each entry is the address of the block minus the address of the jump
+    // table. This is used for PIC jump tables where gprel32 is not supported.
+    // e.g.:
     //      .word LBB123 - LJTI1_2
-    // If the .set directive is supported, this is emitted as:
+    // If the .set directive avoids relocations, this is emitted as:
     //      .set L4_5_set_123, LBB123 - LJTI1_2
     //      .word L4_5_set_123
-
-    // If we have emitted set directives for the jump table entries, print
-    // them rather than the entries themselves.  If we're emitting PIC, then
-    // emit the table entries as differences between two text section labels.
-    if (MAI->hasSetDirective()) {
-      // If we used .set, reference the .set's symbol.
+    if (MAI->doesSetDirectiveSuppressesReloc()) {
       Value = MCSymbolRefExpr::Create(GetJTSetSymbol(UID, MBB->getNumber()),
                                       OutContext);
       break;
     }
-    // Otherwise, use the difference as the jump table entry.
     Value = MCSymbolRefExpr::Create(MBB->getSymbol(), OutContext);
-    const MCExpr *JTI = MCSymbolRefExpr::Create(GetJTISymbol(UID), OutContext);
-    Value = MCBinaryExpr::CreateSub(Value, JTI, OutContext);
+    const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
+    const MCExpr *Base = TLI->getPICJumpTableRelocBaseExpr(MF, UID, OutContext);
+    Value = MCBinaryExpr::CreateSub(Value, Base, OutContext);
     break;
   }
   }
@@ -1410,7 +1399,7 @@ void AsmPrinter::EmitModuleIdents(Module &M) {
 
   if (const NamedMDNode *NMD = M.getNamedMetadata("llvm.ident")) {
     for (unsigned i = 0, e = NMD->getNumOperands(); i != e; ++i) {
-      const MDNode *N = NMD->getOperand(i);
+      const MDNode *N = NMD->getOperandAsMDNode(i);
       assert(N->getNumOperands() == 1 &&
              "llvm.ident metadata entry can have only one operand");
       const MDString *S = cast<MDString>(N->getOperand(0));
@@ -1441,9 +1430,9 @@ void AsmPrinter::EmitInt32(int Value) const {
   OutStreamer.EmitIntValue(Value, 4);
 }
 
-/// EmitLabelDifference - Emit something like ".long Hi-Lo" where the size
-/// in bytes of the directive is specified by Size and Hi/Lo specify the
-/// labels.  This implicitly uses .set if it is available.
+/// Emit something like ".long Hi-Lo" where the size in bytes of the directive
+/// is specified by Size and Hi/Lo specify the labels. This implicitly uses
+/// .set if it avoids relocations.
 void AsmPrinter::EmitLabelDifference(const MCSymbol *Hi, const MCSymbol *Lo,
                                      unsigned Size) const {
   // Get the Hi-Lo expression.
@@ -1452,7 +1441,7 @@ void AsmPrinter::EmitLabelDifference(const MCSymbol *Hi, const MCSymbol *Lo,
                             MCSymbolRefExpr::Create(Lo, OutContext),
                             OutContext);
 
-  if (!MAI->hasSetDirective()) {
+  if (!MAI->doesSetDirectiveSuppressesReloc()) {
     OutStreamer.EmitValue(Diff, Size);
     return;
   }
@@ -1461,36 +1450,6 @@ void AsmPrinter::EmitLabelDifference(const MCSymbol *Hi, const MCSymbol *Lo,
   MCSymbol *SetLabel = GetTempSymbol("set", SetCounter++);
   OutStreamer.EmitAssignment(SetLabel, Diff);
   OutStreamer.EmitSymbolValue(SetLabel, Size);
-}
-
-/// EmitLabelOffsetDifference - Emit something like ".long Hi+Offset-Lo"
-/// where the size in bytes of the directive is specified by Size and Hi/Lo
-/// specify the labels.  This implicitly uses .set if it is available.
-void AsmPrinter::EmitLabelOffsetDifference(const MCSymbol *Hi, uint64_t Offset,
-                                           const MCSymbol *Lo,
-                                           unsigned Size) const {
-
-  // Emit Hi+Offset - Lo
-  // Get the Hi+Offset expression.
-  const MCExpr *Plus =
-    MCBinaryExpr::CreateAdd(MCSymbolRefExpr::Create(Hi, OutContext),
-                            MCConstantExpr::Create(Offset, OutContext),
-                            OutContext);
-
-  // Get the Hi+Offset-Lo expression.
-  const MCExpr *Diff =
-    MCBinaryExpr::CreateSub(Plus,
-                            MCSymbolRefExpr::Create(Lo, OutContext),
-                            OutContext);
-
-  if (!MAI->hasSetDirective())
-    OutStreamer.EmitValue(Diff, Size);
-  else {
-    // Otherwise, emit with .set (aka assignment).
-    MCSymbol *SetLabel = GetTempSymbol("set", SetCounter++);
-    OutStreamer.EmitAssignment(SetLabel, Diff);
-    OutStreamer.EmitSymbolValue(SetLabel, Size);
-  }
 }
 
 /// EmitLabelPlusOffset - Emit something like ".long Label+Offset"

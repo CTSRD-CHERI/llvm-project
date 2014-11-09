@@ -80,7 +80,8 @@ public:
     return nullptr;
   }
 
-  virtual void addCodeGenPrepare();
+  void addIRPasses() override;
+  void addCodeGenPrepare() override;
   bool addPreISel() override;
   bool addInstSelector() override;
   bool addPreRegAlloc() override;
@@ -104,6 +105,19 @@ void AMDGPUTargetMachine::addAnalysisPasses(PassManagerBase &PM) {
   // appropriate.
   PM.add(createBasicTargetTransformInfoPass(this));
   PM.add(createAMDGPUTargetTransformInfoPass(this));
+}
+
+void AMDGPUPassConfig::addIRPasses() {
+  // Function calls are not supported, so make sure we inline everything.
+  addPass(createAMDGPUAlwaysInlinePass());
+  addPass(createAlwaysInlinerPass());
+  // We need to add the barrier noop pass, otherwise adding the function
+  // inlining pass will cause all of the PassConfigs passes to be run
+  // one function at a time, which means if we have a nodule with two
+  // functions, then we will generate code for the first function
+  // without ever running any passes on the second.
+  addPass(createBarrierNoopPass());
+  TargetPassConfig::addIRPasses();
 }
 
 void AMDGPUPassConfig::addCodeGenPrepare() {
@@ -148,9 +162,19 @@ bool AMDGPUPassConfig::addPreRegAlloc() {
     // SIFixSGPRCopies can generate a lot of duplicate instructions,
     // so we need to run MachineCSE afterwards.
     addPass(&MachineCSEID);
+
+    if (getOptLevel() > CodeGenOpt::None && ST.loadStoreOptEnabled()) {
+      // Don't do this with no optimizations since it throws away debug info by
+      // merging nonadjacent loads.
+
+      // This should be run after scheduling, but before register allocation. It
+      // also need extra copies to the address operand to be eliminated.
+      initializeSILoadStoreOptimizerPass(*PassRegistry::getPassRegistry());
+      insertPass(&MachineSchedulerID, &SILoadStoreOptimizerID);
+    }
+
     addPass(createSIShrinkInstructionsPass());
-    initializeSIFixSGPRLiveRangesPass(*PassRegistry::getPassRegistry());
-    insertPass(&RegisterCoalescerID, &SIFixSGPRLiveRangesID);
+    addPass(createSIFixSGPRLiveRangesPass());
   }
   return false;
 }

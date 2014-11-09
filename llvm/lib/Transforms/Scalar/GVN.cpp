@@ -24,6 +24,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/AssumptionTracker.h"
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/InstructionSimplify.h"
@@ -591,6 +592,7 @@ namespace {
     DominatorTree *DT;
     const DataLayout *DL;
     const TargetLibraryInfo *TLI;
+    AssumptionTracker *AT;
     SetVector<BasicBlock *> DeadBlocks;
 
     ValueTable VN;
@@ -680,6 +682,7 @@ namespace {
 
     // This transformation requires dominator postdominator info
     void getAnalysisUsage(AnalysisUsage &AU) const override {
+      AU.addRequired<AssumptionTracker>();
       AU.addRequired<DominatorTreeWrapperPass>();
       AU.addRequired<TargetLibraryInfo>();
       if (!NoLoads)
@@ -728,6 +731,7 @@ FunctionPass *llvm::createGVNPass(bool NoLoads) {
 }
 
 INITIALIZE_PASS_BEGIN(GVN, "gvn", "Global Value Numbering", false, false)
+INITIALIZE_PASS_DEPENDENCY(AssumptionTracker)
 INITIALIZE_PASS_DEPENDENCY(MemoryDependenceAnalysis)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfo)
@@ -1021,6 +1025,11 @@ static int AnalyzeLoadFromClobberingStore(Type *LoadTy, Value *LoadPtr,
   if (DepSI->getValueOperand()->getType()->isStructTy() ||
       DepSI->getValueOperand()->getType()->isArrayTy())
     return -1;
+  // If this is a pointer type that's larger than the largest integer that we
+  // support, then ignore it.
+  if (LoadTy->isPointerTy() &&
+      DL.getTypeSizeInBits(LoadTy) > DL.getLargestLegalIntTypeSize())
+    return -1;
 
   Value *StorePtr = DepSI->getPointerOperand();
   uint64_t StoreSize =DL.getTypeSizeInBits(DepSI->getValueOperand()->getType());
@@ -1064,6 +1073,11 @@ static int AnalyzeLoadFromClobberingMemInst(Type *LoadTy, Value *LoadPtr,
   // If the mem operation is a non-constant size, we can't handle it.
   ConstantInt *SizeCst = dyn_cast<ConstantInt>(MI->getLength());
   if (!SizeCst) return -1;
+  // If this is a pointer type that's larger than the largest integer that we
+  // support, then ignore it.
+  if (LoadTy->isPointerTy() &&
+      DL.getTypeSizeInBits(LoadTy) > DL.getLargestLegalIntTypeSize())
+    return -1;
   uint64_t MemSizeInBits = SizeCst->getZExtValue()*8;
 
   // If this is memset, we just need to see if the offset is valid in the size
@@ -1622,7 +1636,7 @@ bool GVN::PerformLoadPRE(LoadInst *LI, AvailValInBlkVect &ValuesPerBlock,
     // If all preds have a single successor, then we know it is safe to insert
     // the load on the pred (?!?), so we can insert code to materialize the
     // pointer if it is not available.
-    PHITransAddr Address(LI->getPointerOperand(), DL);
+    PHITransAddr Address(LI->getPointerOperand(), DL, AT);
     Value *LoadPtr = nullptr;
     LoadPtr = Address.PHITranslateWithInsertion(LoadBB, UnavailablePred,
                                                 *DT, NewInsts);
@@ -2215,7 +2229,7 @@ bool GVN::processInstruction(Instruction *I) {
   // to value numbering it.  Value numbering often exposes redundancies, for
   // example if it determines that %y is equal to %x then the instruction
   // "%z = and i32 %x, %y" becomes "%z = and i32 %x, %x" which we now simplify.
-  if (Value *V = SimplifyInstruction(I, DL, TLI, DT)) {
+  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AT)) {
     I->replaceAllUsesWith(V);
     if (MD && V->getType()->getScalarType()->isPointerTy())
       MD->invalidateCachedPointerInfo(V);
@@ -2335,6 +2349,7 @@ bool GVN::runOnFunction(Function& F) {
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
   DL = DLP ? &DLP->getDataLayout() : nullptr;
+  AT = &getAnalysis<AssumptionTracker>();
   TLI = &getAnalysis<TargetLibraryInfo>();
   VN.setAliasAnalysis(&getAnalysis<AliasAnalysis>());
   VN.setMemDep(MD);
@@ -2649,8 +2664,8 @@ bool GVN::iterateOnFunction(Function &F) {
   //
   std::vector<BasicBlock *> BBVect;
   BBVect.reserve(256);
-  for (DomTreeNode *x : depth_first(DT->getRootNode()))
-    BBVect.push_back(x->getBlock());
+  for (DomTreeNode *X : depth_first(DT->getRootNode()))
+    BBVect.push_back(X->getBlock());
 
   for (std::vector<BasicBlock *>::iterator I = BBVect.begin(), E = BBVect.end();
        I != E; I++)

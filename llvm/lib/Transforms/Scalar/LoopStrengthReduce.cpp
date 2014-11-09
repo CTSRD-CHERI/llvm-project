@@ -1337,10 +1337,9 @@ void LSRUse::RecomputeRegs(size_t LUIdx, RegUseTracker &RegUses) {
   }
 
   // Update the RegTracker.
-  for (SmallPtrSet<const SCEV *, 4>::iterator I = OldRegs.begin(),
-       E = OldRegs.end(); I != E; ++I)
-    if (!Regs.count(*I))
-      RegUses.DropRegister(*I, LUIdx);
+  for (const SCEV *S : OldRegs)
+    if (!Regs.count(S))
+      RegUses.DropRegister(S, LUIdx);
 }
 
 void LSRUse::print(raw_ostream &OS) const {
@@ -2226,13 +2225,12 @@ LSRInstance::OptimizeLoopTermCond() {
   // must dominate all the post-inc comparisons we just set up, and it must
   // dominate the loop latch edge.
   IVIncInsertPos = L->getLoopLatch()->getTerminator();
-  for (SmallPtrSet<Instruction *, 4>::const_iterator I = PostIncs.begin(),
-       E = PostIncs.end(); I != E; ++I) {
+  for (Instruction *Inst : PostIncs) {
     BasicBlock *BB =
       DT.findNearestCommonDominator(IVIncInsertPos->getParent(),
-                                    (*I)->getParent());
-    if (BB == (*I)->getParent())
-      IVIncInsertPos = *I;
+                                    Inst->getParent());
+    if (BB == Inst->getParent())
+      IVIncInsertPos = Inst;
     else if (BB != IVIncInsertPos->getParent())
       IVIncInsertPos = BB->getTerminator();
   }
@@ -2567,9 +2565,8 @@ isProfitableChain(IVChain &Chain, SmallPtrSetImpl<Instruction*> &Users,
 
   if (!Users.empty()) {
     DEBUG(dbgs() << "Chain: " << *Chain.Incs[0].UserInst << " users:\n";
-          for (SmallPtrSet<Instruction*, 4>::const_iterator I = Users.begin(),
-                 E = Users.end(); I != E; ++I) {
-            dbgs() << "  " << **I << "\n";
+          for (Instruction *Inst : Users) {
+            dbgs() << "  " << *Inst << "\n";
           });
     return false;
   }
@@ -3119,10 +3116,14 @@ bool LSRInstance::InsertFormula(LSRUse &LU, unsigned LUIdx, const Formula &F) {
 void
 LSRInstance::CollectLoopInvariantFixupsAndFormulae() {
   SmallVector<const SCEV *, 8> Worklist(RegUses.begin(), RegUses.end());
-  SmallPtrSet<const SCEV *, 8> Inserted;
+  SmallPtrSet<const SCEV *, 32> Visited;
 
   while (!Worklist.empty()) {
     const SCEV *S = Worklist.pop_back_val();
+
+    // Don't process the same SCEV twice
+    if (!Visited.insert(S))
+      continue;
 
     if (const SCEVNAryExpr *N = dyn_cast<SCEVNAryExpr>(S))
       Worklist.append(N->op_begin(), N->op_end());
@@ -3132,7 +3133,6 @@ LSRInstance::CollectLoopInvariantFixupsAndFormulae() {
       Worklist.push_back(D->getLHS());
       Worklist.push_back(D->getRHS());
     } else if (const SCEVUnknown *US = dyn_cast<SCEVUnknown>(S)) {
-      if (!Inserted.insert(US)) continue;
       const Value *V = US->getValue();
       if (const Instruction *Inst = dyn_cast<Instruction>(V)) {
         // Look for instructions defined outside the loop.
@@ -4302,10 +4302,9 @@ void LSRInstance::SolveRecurse(SmallVectorImpl<const Formula *> &Solution,
   // reference that register in order to be considered. This prunes out
   // unprofitable searching.
   SmallSetVector<const SCEV *, 4> ReqRegs;
-  for (SmallPtrSet<const SCEV *, 16>::const_iterator I = CurRegs.begin(),
-       E = CurRegs.end(); I != E; ++I)
-    if (LU.Regs.count(*I))
-      ReqRegs.insert(*I);
+  for (const SCEV *S : CurRegs)
+    if (LU.Regs.count(S))
+      ReqRegs.insert(S);
 
   SmallPtrSet<const SCEV *, 16> NewRegs;
   Cost NewCost;
@@ -4350,9 +4349,8 @@ void LSRInstance::SolveRecurse(SmallVectorImpl<const Formula *> &Solution,
       } else {
         DEBUG(dbgs() << "New best at "; NewCost.print(dbgs());
               dbgs() << ".\n Regs:";
-              for (SmallPtrSet<const SCEV *, 16>::const_iterator
-                   I = NewRegs.begin(), E = NewRegs.end(); I != E; ++I)
-                dbgs() << ' ' << **I;
+              for (const SCEV *S : NewRegs)
+                dbgs() << ' ' << *S;
               dbgs() << '\n');
 
         SolutionCost = NewCost;

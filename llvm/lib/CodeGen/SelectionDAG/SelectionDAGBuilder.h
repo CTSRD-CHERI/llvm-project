@@ -21,6 +21,7 @@
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetLowering.h"
 #include <vector>
 
 namespace llvm {
@@ -200,7 +201,7 @@ private:
     }
   };
 
-  size_t Clusterify(CaseVector &Cases, const SwitchInst &SI);
+  void Clusterify(CaseVector &Cases, const SwitchInst &SI);
 
   /// CaseBlock - This structure is used to communicate between
   /// SelectionDAGBuilder and SDISel for the code generation of additional basic
@@ -276,9 +277,9 @@ private:
     BitTestBlock(APInt F, APInt R, const Value* SV,
                  unsigned Rg, MVT RgVT, bool E,
                  MachineBasicBlock* P, MachineBasicBlock* D,
-                 const BitTestInfo& C):
+                 BitTestInfo C):
       First(F), Range(R), SValue(SV), Reg(Rg), RegVT(RgVT), Emitted(E),
-      Parent(P), Default(D), Cases(C) { }
+      Parent(P), Default(D), Cases(std::move(C)) { }
     APInt First;
     APInt Range;
     const Value *SValue;
@@ -633,17 +634,23 @@ public:
   void LowerCallTo(ImmutableCallSite CS, SDValue Callee, bool IsTailCall,
                    MachineBasicBlock *LandingPad = nullptr);
 
-  std::pair<SDValue, SDValue> LowerCallOperands(const CallInst &CI,
-                                                unsigned ArgIdx,
-                                                unsigned NumArgs,
-                                                SDValue Callee,
-                                                bool useVoidTy = false);
+  std::pair<SDValue, SDValue> lowerCallOperands(
+          ImmutableCallSite CS,
+          unsigned ArgIdx,
+          unsigned NumArgs,
+          SDValue Callee,
+          bool UseVoidTy = false,
+          MachineBasicBlock *LandingPad = nullptr);
 
   /// UpdateSplitBlock - When an MBB was split during scheduling, update the
   /// references that need to refer to the last resulting block.
   void UpdateSplitBlock(MachineBasicBlock *First, MachineBasicBlock *Last);
 
 private:
+  std::pair<SDValue, SDValue> lowerInvokable(
+          TargetLowering::CallLoweringInfo &CLI,
+          MachineBasicBlock *LandingPad);
+
   // Terminator instructions.
   void visitRet(const ReturnInst &I);
   void visitBr(const BranchInst &I);
@@ -665,7 +672,6 @@ private:
   bool handleBTSplitSwitchCase(CaseRec& CR,
                                CaseRecVector& WorkList,
                                const Value* SV,
-                               MachineBasicBlock* Default,
                                MachineBasicBlock *SwitchBB);
   bool handleBitTestsSwitchCase(CaseRec& CR,
                                 CaseRecVector& WorkList,
@@ -762,6 +768,7 @@ private:
   bool visitStrLenCall(const CallInst &I);
   bool visitStrNLenCall(const CallInst &I);
   bool visitUnaryFloatCall(const CallInst &I, unsigned Opcode);
+  bool visitBinaryFloatCall(const CallInst &I, unsigned Opcode);
   void visitAtomicLoad(const LoadInst &I);
   void visitAtomicStore(const StoreInst &I);
 
@@ -774,7 +781,8 @@ private:
   void visitVAEnd(const CallInst &I);
   void visitVACopy(const CallInst &I);
   void visitStackmap(const CallInst &I);
-  void visitPatchpoint(const CallInst &I);
+  void visitPatchpoint(ImmutableCallSite CS,
+                       MachineBasicBlock *LandingPad = nullptr);
 
   void visitUserOp1(const Instruction &I) {
     llvm_unreachable("UserOp1 should not exist at instruction selection time!");
@@ -791,7 +799,7 @@ private:
   /// EmitFuncArgumentDbgValue - If V is an function argument then create
   /// corresponding DBG_VALUE machine instruction for it now. At the end of
   /// instruction selection, they will be inserted to the entry BB.
-  bool EmitFuncArgumentDbgValue(const Value *V, MDNode *Variable,
+  bool EmitFuncArgumentDbgValue(const Value *V, MDNode *Variable, MDNode *Expr,
                                 int64_t Offset, bool IsIndirect,
                                 const SDValue &N);
 };

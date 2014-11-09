@@ -19,6 +19,7 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
@@ -74,6 +75,8 @@ private:
   bool showMatchError(SMLoc Loc, unsigned ErrCode);
 
   bool parseDirectiveWord(unsigned Size, SMLoc L);
+  bool parseDirectiveInst(SMLoc L);
+
   bool parseDirectiveTLSDescCall(SMLoc L);
 
   bool parseDirectiveLOH(StringRef LOH, SMLoc L);
@@ -2299,10 +2302,11 @@ AArch64AsmParser::tryParseOptionalShiftExtend(OperandVector &Operands) {
   if (Hash)
     Parser.Lex(); // Eat the '#'.
 
-  // Make sure we do actually have a number
-  if (!Parser.getTok().is(AsmToken::Integer)) {
-    Error(Parser.getTok().getLoc(),
-          "expected integer shift amount");
+  // Make sure we do actually have a number or a parenthesized expression.
+  SMLoc E = Parser.getTok().getLoc();
+  if (!Parser.getTok().is(AsmToken::Integer) &&
+      !Parser.getTok().is(AsmToken::LParen)) {
+    Error(E, "expected integer shift amount");
     return MatchOperand_ParseFail;
   }
 
@@ -2312,11 +2316,11 @@ AArch64AsmParser::tryParseOptionalShiftExtend(OperandVector &Operands) {
 
   const MCConstantExpr *MCE = dyn_cast<MCConstantExpr>(ImmVal);
   if (!MCE) {
-    TokError("expected #imm after shift specifier");
+    Error(E, "expected constant '#imm' after shift specifier");
     return MatchOperand_ParseFail;
   }
 
-  SMLoc E = SMLoc::getFromPointer(getLoc().getPointer() - 1);
+  E = SMLoc::getFromPointer(getLoc().getPointer() - 1);
   Operands.push_back(AArch64Operand::CreateShiftExtend(
       ShOp, MCE->getValue(), true, S, E, getContext()));
   return MatchOperand_Success;
@@ -3911,6 +3915,11 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 
 /// ParseDirective parses the arm specific directives
 bool AArch64AsmParser::ParseDirective(AsmToken DirectiveID) {
+  const MCObjectFileInfo::Environment Format =
+    getContext().getObjectFileInfo()->getObjectFileType();
+  bool IsMachO = Format == MCObjectFileInfo::IsMachO;
+  bool IsCOFF = Format == MCObjectFileInfo::IsCOFF;
+
   StringRef IDVal = DirectiveID.getIdentifier();
   SMLoc Loc = DirectiveID.getLoc();
   if (IDVal == ".hword")
@@ -3925,6 +3934,11 @@ bool AArch64AsmParser::ParseDirective(AsmToken DirectiveID) {
     return parseDirectiveLtorg(Loc);
   if (IDVal == ".unreq")
     return parseDirectiveUnreq(DirectiveID.getLoc());
+
+  if (!IsMachO && !IsCOFF) {
+    if (IDVal == ".inst")
+      return parseDirectiveInst(Loc);
+  }
 
   return parseDirectiveLOH(IDVal, Loc);
 }
@@ -3948,6 +3962,46 @@ bool AArch64AsmParser::parseDirectiveWord(unsigned Size, SMLoc L) {
         return Error(L, "unexpected token in directive");
       Parser.Lex();
     }
+  }
+
+  Parser.Lex();
+  return false;
+}
+
+/// parseDirectiveInst
+///  ::= .inst opcode [, ...]
+bool AArch64AsmParser::parseDirectiveInst(SMLoc Loc) {
+  if (getLexer().is(AsmToken::EndOfStatement)) {
+    Parser.eatToEndOfStatement();
+    Error(Loc, "expected expression following directive");
+    return false;
+  }
+
+  for (;;) {
+    const MCExpr *Expr;
+
+    if (getParser().parseExpression(Expr)) {
+      Error(Loc, "expected expression");
+      return false;
+    }
+
+    const MCConstantExpr *Value = dyn_cast_or_null<MCConstantExpr>(Expr);
+    if (!Value) {
+      Error(Loc, "expected constant expression");
+      return false;
+    }
+
+    getTargetStreamer().emitInst(Value->getValue());
+
+    if (getLexer().is(AsmToken::EndOfStatement))
+      break;
+
+    if (getLexer().isNot(AsmToken::Comma)) {
+      Error(Loc, "unexpected token in directive");
+      return false;
+    }
+
+    Parser.Lex(); // Eat comma.
   }
 
   Parser.Lex();
@@ -3985,10 +4039,9 @@ bool AArch64AsmParser::parseDirectiveLOH(StringRef IDVal, SMLoc Loc) {
     // We successfully get a numeric value for the identifier.
     // Check if it is valid.
     int64_t Id = getParser().getTok().getIntVal();
-    Kind = (MCLOHType)Id;
-    // Check that Id does not overflow MCLOHType.
-    if (!isValidMCLOHType(Kind) || Id != Kind)
+    if (Id <= -1U && !isValidMCLOHType(Id))
       return TokError("invalid numeric identifier in directive");
+    Kind = (MCLOHType)Id;
   } else {
     StringRef Name = getTok().getIdentifier();
     // We successfully parse an identifier.

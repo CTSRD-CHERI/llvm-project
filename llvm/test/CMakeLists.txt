@@ -30,8 +30,8 @@ set(LLVM_TEST_DEPENDS
           llvm-cov
           llvm-diff
           llvm-dis
-          llvm-extract
           llvm-dwarfdump
+          llvm-extract
           llvm-link
           llvm-lto
           llvm-mc
@@ -59,6 +59,14 @@ set(LLVM_TEST_DEPENDS
 if( LLVM_USE_INTEL_JITEVENTS )
   set(LLVM_TEST_DEPENDS ${LLVM_TEST_DEPENDS} llvm-jitlistener)
 endif( LLVM_USE_INTEL_JITEVENTS )
+
+if(TARGET LLVMgold)
+  set(LLVM_TEST_DEPENDS ${LLVM_TEST_DEPENDS} LLVMgold)
+endif()
+
+if(TARGET llvm-go)
+  set(LLVM_TEST_DEPENDS ${LLVM_TEST_DEPENDS} llvm-go)
+endif()
 
 add_lit_testsuite(check-llvm "Running the LLVM regression tests"
   ${CMAKE_CURRENT_BINARY_DIR}

@@ -23,10 +23,7 @@ entry:
   ; CHECK: clb
   %0 = load i8 addrspace(200)* %a, align 1, !tbaa !0
   %conv2 = zext i8 %0 to i32
-  ; CHECK: addiu
   %add = add nsw i32 %conv2, 12
-  ; CHECK: sll
-  ; CHECK: sra
   %conv1 = trunc i32 %add to i8
   ret i8 %conv1
 }

@@ -24,6 +24,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -234,7 +235,7 @@ bool Loop::isSafeToClone() const {
 MDNode *Loop::getLoopID() const {
   MDNode *LoopID = nullptr;
   if (isLoopSimplifyForm()) {
-    LoopID = getLoopLatch()->getTerminator()->getMetadata(LoopMDName);
+    LoopID = getLoopLatch()->getTerminator()->getMDNode(LoopMDName);
   } else {
     // Go through each predecessor of the loop header and check the
     // terminator for the metadata.
@@ -246,7 +247,7 @@ MDNode *Loop::getLoopID() const {
       // Check if this terminator branches to the loop header.
       for (unsigned i = 0, ie = TI->getNumSuccessors(); i != ie; ++i) {
         if (TI->getSuccessor(i) == H) {
-          MD = TI->getMetadata(LoopMDName);
+          MD = TI->getMDNode(LoopMDName);
           break;
         }
       }
@@ -307,7 +308,8 @@ bool Loop::isAnnotatedParallel() const {
       // directly or indirectly through another list metadata (in case of
       // nested parallel loops). The loop identifier metadata refers to
       // itself so we can check both cases with the same routine.
-      MDNode *loopIdMD = II->getMetadata("llvm.mem.parallel_loop_access");
+      MDNode *loopIdMD =
+          II->getMDNode(LLVMContext::MD_mem_parallel_loop_access);
 
       if (!loopIdMD)
         return false;

@@ -123,10 +123,10 @@ bool TempFile::init(const std::string &Ext) {
 
 bool TempFile::writeBitcode(const Module &M) const {
   DEBUG(dbgs() << " - write bitcode\n");
-  std::string ErrorInfo;
-  raw_fd_ostream OS(Filename.c_str(), ErrorInfo, sys::fs::F_None);
-  if (!ErrorInfo.empty()) {
-    DEBUG(dbgs() << "error: " << ErrorInfo << "\n");
+  std::error_code EC;
+  raw_fd_ostream OS(Filename, EC, sys::fs::F_None);
+  if (EC) {
+    DEBUG(dbgs() << "error: " << EC.message() << "\n");
     return true;
   }
 
@@ -136,10 +136,10 @@ bool TempFile::writeBitcode(const Module &M) const {
 
 bool TempFile::writeAssembly(const Module &M) const {
   DEBUG(dbgs() << " - write assembly\n");
-  std::string ErrorInfo;
-  raw_fd_ostream OS(Filename.c_str(), ErrorInfo, sys::fs::F_Text);
-  if (!ErrorInfo.empty()) {
-    DEBUG(dbgs() << "error: " << ErrorInfo << "\n");
+  std::error_code EC;
+  raw_fd_ostream OS(Filename, EC, sys::fs::F_Text);
+  if (EC) {
+    DEBUG(dbgs() << "error: " << EC.message() << "\n");
     return true;
   }
 
@@ -157,7 +157,8 @@ std::unique_ptr<Module> TempFile::readBitcode(LLVMContext &Context) const {
   }
 
   MemoryBuffer *Buffer = BufferOr.get().get();
-  ErrorOr<Module *> ModuleOr = parseBitcodeFile(Buffer, Context);
+  ErrorOr<Module *> ModuleOr =
+      parseBitcodeFile(Buffer->getMemBufferRef(), Context);
   if (!ModuleOr) {
     DEBUG(dbgs() << "error: " << ModuleOr.getError().message() << "\n");
     return nullptr;
@@ -520,8 +521,7 @@ int main(int argc, char **argv) {
   SMDiagnostic Err;
 
   // Load the input module...
-  std::unique_ptr<Module> M;
-  M.reset(ParseIRFile(InputFilename, Err, Context));
+  std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, Context);
 
   if (!M.get()) {
     Err.print(argv[0], errs());

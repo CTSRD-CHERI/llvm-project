@@ -29,7 +29,7 @@ class ObjectBuffer {
   virtual void anchor();
 public:
   ObjectBuffer() {}
-  ObjectBuffer(MemoryBuffer* Buf) : Buffer(Buf) {}
+  ObjectBuffer(std::unique_ptr<MemoryBuffer> Buf) : Buffer(std::move(Buf)) {}
   virtual ~ObjectBuffer() {}
 
   MemoryBufferRef getMemBuffer() const { return Buffer->getMemBufferRef(); }
@@ -62,9 +62,8 @@ public:
     OS.flush();
 
     // Make the data accessible via the ObjectBuffer::Buffer
-    Buffer.reset(MemoryBuffer::getMemBuffer(StringRef(SV.data(), SV.size()),
-                                            "",
-                                            false));
+    Buffer =
+        MemoryBuffer::getMemBuffer(StringRef(SV.data(), SV.size()), "", false);
   }
 
 protected:

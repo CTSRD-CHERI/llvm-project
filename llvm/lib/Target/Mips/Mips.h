@@ -27,8 +27,6 @@ namespace llvm {
   FunctionPass *createMipsOptimizePICCallPass(MipsTargetMachine &TM);
   FunctionPass *createMipsDelaySlotFillerPass(MipsTargetMachine &TM);
   FunctionPass *createMipsLongBranchPass(MipsTargetMachine &TM);
-  FunctionPass *createMipsJITCodeEmitterPass(MipsTargetMachine &TM,
-                                             JITCodeEmitter &JCE);
   FunctionPass *createMipsConstantIslandPass(MipsTargetMachine &tm);
 
   FunctionPass *createCheriInvalidatePass(MipsTargetMachine &TM);

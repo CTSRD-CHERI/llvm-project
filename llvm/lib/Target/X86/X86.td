@@ -182,6 +182,8 @@ def FeatureSlowLEA : SubtargetFeature<"slow-lea", "SlowLEA", "true",
                                    "LEA instruction with certain arguments is slow">;
 def FeatureSlowIncDec : SubtargetFeature<"slow-incdec", "SlowIncDec", "true",
                                    "INC and DEC instructions are slower than ADD and SUB">;
+def FeatureUseSqrtEst : SubtargetFeature<"use-sqrt-est", "UseSqrtEst", "true",
+                            "Use RSQRT* to optimize square root calculations">;
 
 //===----------------------------------------------------------------------===//
 // X86 processors supported.
@@ -341,35 +343,42 @@ def : Proc<"amdfam10",        [FeatureSSE4A,
 def : Proc<"btver1",          [FeatureSSSE3, FeatureSSE4A, FeatureCMPXCHG16B,
                                FeaturePRFCHW, FeatureLZCNT, FeaturePOPCNT,
                                FeatureSlowSHLD]>;
+
 // Jaguar
-def : Proc<"btver2",          [FeatureAVX, FeatureSSE4A, FeatureCMPXCHG16B,
-                               FeaturePRFCHW, FeatureAES, FeaturePCLMUL,
-                               FeatureBMI, FeatureF16C, FeatureMOVBE,
-                               FeatureLZCNT, FeaturePOPCNT, FeatureSlowSHLD]>;
+def : ProcessorModel<"btver2", BtVer2Model,
+                     [FeatureAVX, FeatureSSE4A, FeatureCMPXCHG16B,
+                      FeaturePRFCHW, FeatureAES, FeaturePCLMUL,
+                      FeatureBMI, FeatureF16C, FeatureMOVBE,
+                      FeatureLZCNT, FeaturePOPCNT, FeatureSlowSHLD,
+                      FeatureUseSqrtEst]>;
+
 // Bulldozer
 def : Proc<"bdver1",          [FeatureXOP, FeatureFMA4, FeatureCMPXCHG16B,
                                FeatureAES, FeaturePRFCHW, FeaturePCLMUL,
-                               FeatureLZCNT, FeaturePOPCNT, FeatureSlowSHLD]>;
+                               FeatureAVX, FeatureSSE4A, FeatureLZCNT,
+                               FeaturePOPCNT, FeatureSlowSHLD]>;
 // Piledriver
 def : Proc<"bdver2",          [FeatureXOP, FeatureFMA4, FeatureCMPXCHG16B,
                                FeatureAES, FeaturePRFCHW, FeaturePCLMUL,
-                               FeatureF16C, FeatureLZCNT,
-                               FeaturePOPCNT, FeatureBMI, FeatureTBM,
-                               FeatureFMA, FeatureSlowSHLD]>;
+                               FeatureAVX, FeatureSSE4A, FeatureF16C,
+                               FeatureLZCNT, FeaturePOPCNT, FeatureBMI,
+                               FeatureTBM, FeatureFMA, FeatureSlowSHLD]>;
 
 // Steamroller
 def : Proc<"bdver3",          [FeatureXOP, FeatureFMA4, FeatureCMPXCHG16B,
                                FeatureAES, FeaturePRFCHW, FeaturePCLMUL,
-                               FeatureF16C, FeatureLZCNT,
-                               FeaturePOPCNT, FeatureBMI,  FeatureTBM,
-                               FeatureFMA, FeatureFSGSBase]>;
+                               FeatureAVX, FeatureSSE4A, FeatureF16C,
+                               FeatureLZCNT, FeaturePOPCNT, FeatureBMI,
+                               FeatureTBM, FeatureFMA, FeatureSlowSHLD,
+                               FeatureFSGSBase]>;
 
 // Excavator
 def : Proc<"bdver4",          [FeatureAVX2, FeatureXOP, FeatureFMA4,
                                FeatureCMPXCHG16B, FeatureAES, FeaturePRFCHW,
                                FeaturePCLMUL, FeatureF16C, FeatureLZCNT,
                                FeaturePOPCNT, FeatureBMI, FeatureBMI2,
-                               FeatureTBM, FeatureFMA, FeatureFSGSBase]>;
+                               FeatureTBM, FeatureFMA, FeatureSSE4A,
+                               FeatureFSGSBase]>;
 
 def : Proc<"geode",           [Feature3DNowA]>;
 

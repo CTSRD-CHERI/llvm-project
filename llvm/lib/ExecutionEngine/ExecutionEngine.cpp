@@ -16,7 +16,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
-#include "llvm/ExecutionEngine/JITMemoryManager.h"
+#include "llvm/ExecutionEngine/ObjectBuffer.h"
 #include "llvm/ExecutionEngine/ObjectCache.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -48,17 +48,9 @@ void ObjectCache::anchor() {}
 void ObjectBuffer::anchor() {}
 void ObjectBufferStream::anchor() {}
 
-ExecutionEngine *(*ExecutionEngine::JITCtor)(
-  std::unique_ptr<Module> M,
-  std::string *ErrorStr,
-  JITMemoryManager *JMM,
-  bool GVsWithCode,
-  TargetMachine *TM) = nullptr;
 ExecutionEngine *(*ExecutionEngine::MCJITCtor)(
-  std::unique_ptr<Module >M,
-  std::string *ErrorStr,
-  RTDyldMemoryManager *MCJMM,
-  TargetMachine *TM) = nullptr;
+    std::unique_ptr<Module> M, std::string *ErrorStr,
+    RTDyldMemoryManager *MCJMM, std::unique_ptr<TargetMachine> TM) = nullptr;
 ExecutionEngine *(*ExecutionEngine::InterpCtor)(std::unique_ptr<Module> M,
                                                 std::string *ErrorStr) =nullptr;
 
@@ -99,8 +91,8 @@ public:
     Type *ElTy = GV->getType()->getElementType();
     size_t GVSize = (size_t)TD.getTypeAllocSize(ElTy);
     void *RawMemory = ::operator new(
-      DataLayout::RoundUpAlignment(sizeof(GVMemoryBlock),
-                                   TD.getPreferredAlignment(GV))
+      RoundUpToAlignment(sizeof(GVMemoryBlock),
+                         TD.getPreferredAlignment(GV))
       + GVSize);
     new(RawMemory) GVMemoryBlock(GV);
     return static_cast<char*>(RawMemory) + sizeof(GVMemoryBlock);
@@ -121,6 +113,11 @@ char *ExecutionEngine::getMemoryForGV(const GlobalVariable *GV) {
 }
 
 void ExecutionEngine::addObjectFile(std::unique_ptr<object::ObjectFile> O) {
+  llvm_unreachable("ExecutionEngine subclass doesn't implement addObjectFile.");
+}
+
+void
+ExecutionEngine::addObjectFile(object::OwningBinary<object::ObjectFile> O) {
   llvm_unreachable("ExecutionEngine subclass doesn't implement addObjectFile.");
 }
 
@@ -256,19 +253,9 @@ const GlobalValue *ExecutionEngine::getGlobalValueAtAddress(void *Addr) {
 
 namespace {
 class ArgvArray {
-  char *Array;
-  std::vector<char*> Values;
+  std::unique_ptr<char[]> Array;
+  std::vector<std::unique_ptr<char[]>> Values;
 public:
-  ArgvArray() : Array(nullptr) {}
-  ~ArgvArray() { clear(); }
-  void clear() {
-    delete[] Array;
-    Array = nullptr;
-    for (size_t I = 0, E = Values.size(); I != E; ++I) {
-      delete[] Values[I];
-    }
-    Values.clear();
-  }
   /// Turn a vector of strings into a nice argv style array of pointers to null
   /// terminated strings.
   void *reset(LLVMContext &C, ExecutionEngine *EE,
@@ -277,32 +264,33 @@ public:
 }  // anonymous namespace
 void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
                        const std::vector<std::string> &InputArgv) {
-  clear();  // Free the old contents.
+  Values.clear();  // Free the old contents.
+  Values.reserve(InputArgv.size());
   unsigned PtrSize = EE->getDataLayout()->getPointerSize();
-  Array = new char[(InputArgv.size()+1)*PtrSize];
+  Array = make_unique<char[]>((InputArgv.size()+1)*PtrSize);
 
-  DEBUG(dbgs() << "JIT: ARGV = " << (void*)Array << "\n");
+  DEBUG(dbgs() << "JIT: ARGV = " << (void*)Array.get() << "\n");
   Type *SBytePtr = Type::getInt8PtrTy(C);
 
   for (unsigned i = 0; i != InputArgv.size(); ++i) {
     unsigned Size = InputArgv[i].size()+1;
-    char *Dest = new char[Size];
-    Values.push_back(Dest);
-    DEBUG(dbgs() << "JIT: ARGV[" << i << "] = " << (void*)Dest << "\n");
+    auto Dest = make_unique<char[]>(Size);
+    DEBUG(dbgs() << "JIT: ARGV[" << i << "] = " << (void*)Dest.get() << "\n");
 
-    std::copy(InputArgv[i].begin(), InputArgv[i].end(), Dest);
+    std::copy(InputArgv[i].begin(), InputArgv[i].end(), Dest.get());
     Dest[Size-1] = 0;
 
     // Endian safe: Array[i] = (PointerTy)Dest;
-    EE->StoreValueToMemory(PTOGV(Dest), (GenericValue*)(Array+i*PtrSize),
-                           SBytePtr);
+    EE->StoreValueToMemory(PTOGV(Dest.get()),
+                           (GenericValue*)(&Array[i*PtrSize]), SBytePtr);
+    Values.push_back(std::move(Dest));
   }
 
   // Null terminate it
   EE->StoreValueToMemory(PTOGV(nullptr),
-                         (GenericValue*)(Array+InputArgv.size()*PtrSize),
+                         (GenericValue*)(&Array[InputArgv.size()*PtrSize]),
                          SBytePtr);
-  return Array;
+  return Array.get();
 }
 
 void ExecutionEngine::runStaticConstructorsDestructors(Module &module,
@@ -413,12 +401,9 @@ void EngineBuilder::InitEngine() {
   ErrorStr = nullptr;
   OptLevel = CodeGenOpt::Default;
   MCJMM = nullptr;
-  JMM = nullptr;
   Options = TargetOptions();
-  AllocateGVsWithCode = false;
   RelocModel = Reloc::Default;
   CMModel = CodeModel::JITDefault;
-  UseMCJIT = false;
 
 // IR module verification is enabled by default in debug builds, and disabled
 // by default in release builds.
@@ -436,13 +421,11 @@ ExecutionEngine *EngineBuilder::create(TargetMachine *TM) {
   // to the function tells DynamicLibrary to load the program, not a library.
   if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, ErrorStr))
     return nullptr;
-
-  assert(!(JMM && MCJMM));
   
   // If the user specified a memory manager but didn't specify which engine to
   // create, we assume they only want the JIT, and we fail if they only want
   // the interpreter.
-  if (JMM || MCJMM) {
+  if (MCJMM) {
     if (WhichEngine & EngineKind::JIT)
       WhichEngine = EngineKind::JIT;
     else {
@@ -450,14 +433,6 @@ ExecutionEngine *EngineBuilder::create(TargetMachine *TM) {
         *ErrorStr = "Cannot create an interpreter with a memory manager.";
       return nullptr;
     }
-  }
-  
-  if (MCJMM && ! UseMCJIT) {
-    if (ErrorStr)
-      *ErrorStr =
-        "Cannot create a legacy JIT with a runtime dyld memory "
-        "manager.";
-    return nullptr;
   }
 
   // Unless the interpreter was explicitly selected or the JIT is not linked,
@@ -471,13 +446,9 @@ ExecutionEngine *EngineBuilder::create(TargetMachine *TM) {
     }
 
     ExecutionEngine *EE = nullptr;
-    if (UseMCJIT && ExecutionEngine::MCJITCtor)
-      EE = ExecutionEngine::MCJITCtor(std::move(M), ErrorStr,
-                                      MCJMM ? MCJMM : JMM, TheTM.release());
-    else if (ExecutionEngine::JITCtor)
-      EE = ExecutionEngine::JITCtor(std::move(M), ErrorStr, JMM,
-                                    AllocateGVsWithCode, TheTM.release());
-
+    if (ExecutionEngine::MCJITCtor)
+      EE = ExecutionEngine::MCJITCtor(std::move(M), ErrorStr, MCJMM,
+                                      std::move(TheTM));
     if (EE) {
       EE->setVerifyModules(VerifyModules);
       return EE;
@@ -494,8 +465,7 @@ ExecutionEngine *EngineBuilder::create(TargetMachine *TM) {
     return nullptr;
   }
 
-  if ((WhichEngine & EngineKind::JIT) && !ExecutionEngine::JITCtor &&
-      !ExecutionEngine::MCJITCtor) {
+  if ((WhichEngine & EngineKind::JIT) && !ExecutionEngine::MCJITCtor) {
     if (ErrorStr)
       *ErrorStr = "JIT has not been linked in.";
   }
@@ -841,9 +811,6 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       Result = PTOGV(getPointerToFunctionOrStub(const_cast<Function*>(F)));
     else if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(C))
       Result = PTOGV(getOrEmitGlobalVariable(const_cast<GlobalVariable*>(GV)));
-    else if (const BlockAddress *BA = dyn_cast<BlockAddress>(C))
-      Result = PTOGV(getPointerToBasicBlock(const_cast<BasicBlock*>(
-                                                        BA->getBasicBlock())));
     else
       llvm_unreachable("Unknown constant pointer type!");
     break;

@@ -269,6 +269,8 @@ private:
                        SmallVectorImpl<const MDNode *> &Requirements);
   void visitFunction(const Function &F);
   void visitBasicBlock(BasicBlock &BB);
+  void visitRangeMetadata(Instruction& I, MDNode* Range, Type* Ty);
+
 
   // InstVisitor overrides...
   using InstVisitor<Verifier>::visit;
@@ -375,8 +377,8 @@ void Verifier::visit(Instruction &I) {
 
 
 void Verifier::visitGlobalValue(const GlobalValue &GV) {
-  Assert1(!GV.isDeclaration() || GV.isMaterializable() ||
-              GV.hasExternalLinkage() || GV.hasExternalWeakLinkage(),
+  Assert1(!GV.isDeclaration() || GV.hasExternalLinkage() ||
+              GV.hasExternalWeakLinkage(),
           "Global is external, but doesn't have external or weak linkage!",
           &GV);
 
@@ -553,7 +555,7 @@ void Verifier::visitGlobalAlias(const GlobalAlias &GA) {
 
 void Verifier::visitNamedMDNode(const NamedMDNode &NMD) {
   for (unsigned i = 0, e = NMD.getNumOperands(); i != e; ++i) {
-    MDNode *MD = NMD.getOperand(i);
+    MDNode *MD = NMD.getOperandAsMDNode(i);
     if (!MD)
       continue;
 
@@ -622,7 +624,7 @@ void Verifier::visitModuleIdents(const Module &M) {
   // llvm.ident takes a list of metadata entry. Each entry has only one string.
   // Scan each llvm.ident entry and make sure that this requirement is met.
   for (unsigned i = 0, e = Idents->getNumOperands(); i != e; ++i) {
-    const MDNode *N = Idents->getOperand(i);
+    const MDNode *N = Idents->getOperandAsMDNode(i);
     Assert1(N->getNumOperands() == 1,
             "incorrect number of operands in llvm.ident metadata", N);
     Assert1(isa<MDString>(N->getOperand(0)),
@@ -640,7 +642,7 @@ void Verifier::visitModuleFlags(const Module &M) {
   DenseMap<const MDString*, const MDNode*> SeenIDs;
   SmallVector<const MDNode*, 16> Requirements;
   for (unsigned I = 0, E = Flags->getNumOperands(); I != E; ++I) {
-    visitModuleFlag(Flags->getOperand(I), SeenIDs, Requirements);
+    visitModuleFlag(Flags->getOperandAsMDNode(I), SeenIDs, Requirements);
   }
 
   // Validate that the requirements in the module are valid.
@@ -673,24 +675,23 @@ Verifier::visitModuleFlag(const MDNode *Op,
   // constant int), the flag ID (an MDString), and the value.
   Assert1(Op->getNumOperands() == 3,
           "incorrect number of operands in module flag", Op);
-  ConstantInt *Behavior = dyn_cast<ConstantInt>(Op->getOperand(0));
+  Module::ModFlagBehavior MFB;
+  if (!Module::isValidModFlagBehavior(Op->getOperand(0), MFB)) {
+    Assert1(
+        dyn_cast<ConstantInt>(Op->getOperand(0)),
+        "invalid behavior operand in module flag (expected constant integer)",
+        Op->getOperand(0));
+    Assert1(false,
+            "invalid behavior operand in module flag (unexpected constant)",
+            Op->getOperand(0));
+  }
   MDString *ID = dyn_cast<MDString>(Op->getOperand(1));
-  Assert1(Behavior,
-          "invalid behavior operand in module flag (expected constant integer)",
-          Op->getOperand(0));
-  unsigned BehaviorValue = Behavior->getZExtValue();
   Assert1(ID,
           "invalid ID operand in module flag (expected metadata string)",
           Op->getOperand(1));
 
   // Sanity check the values for behaviors with additional requirements.
-  switch (BehaviorValue) {
-  default:
-    Assert1(false,
-            "invalid behavior operand in module flag (unexpected constant)",
-            Op->getOperand(0));
-    break;
-
+  switch (MFB) {
   case Module::Error:
   case Module::Warning:
   case Module::Override:
@@ -726,7 +727,7 @@ Verifier::visitModuleFlag(const MDNode *Op,
   }
 
   // Unless this is a "requires" flag, check the ID is unique.
-  if (BehaviorValue != Module::Require) {
+  if (MFB != Module::Require) {
     bool Inserted = SeenIDs.insert(std::make_pair(ID, Op)).second;
     Assert1(Inserted,
             "module flag identifiers must be unique (or of 'require' type)",
@@ -1055,20 +1056,19 @@ void Verifier::visitFunction(const Function &F) {
           "Attribute 'builtin' can only be applied to a callsite.", &F);
 
   // Check that this function meets the restrictions on this calling convention.
+  // Sometimes varargs is used for perfectly forwarding thunks, so some of these
+  // restrictions can be lifted.
   switch (F.getCallingConv()) {
   default:
-    break;
   case CallingConv::C:
     break;
   case CallingConv::Fast:
   case CallingConv::Cold:
-  case CallingConv::X86_FastCall:
-  case CallingConv::X86_ThisCall:
   case CallingConv::Intel_OCL_BI:
   case CallingConv::PTX_Kernel:
   case CallingConv::PTX_Device:
-    Assert1(!F.isVarArg(),
-            "Varargs functions must have C calling conventions!", &F);
+    Assert1(!F.isVarArg(), "Calling convention does not support varargs or "
+                           "perfect forwarding!", &F);
     break;
   }
 
@@ -1887,6 +1887,55 @@ static bool isContiguous(const ConstantRange &A, const ConstantRange &B) {
   return A.getUpper() == B.getLower() || A.getLower() == B.getUpper();
 }
 
+void Verifier::visitRangeMetadata(Instruction& I,
+                                  MDNode* Range, Type* Ty) {
+  assert(Range &&
+         Range == I.getMetadata(LLVMContext::MD_range) &&
+         "precondition violation");
+
+  unsigned NumOperands = Range->getNumOperands();
+  Assert1(NumOperands % 2 == 0, "Unfinished range!", Range);
+  unsigned NumRanges = NumOperands / 2;
+  Assert1(NumRanges >= 1, "It should have at least one range!", Range);
+  
+  ConstantRange LastRange(1); // Dummy initial value
+  for (unsigned i = 0; i < NumRanges; ++i) {
+    ConstantInt *Low = dyn_cast<ConstantInt>(Range->getOperand(2*i));
+    Assert1(Low, "The lower limit must be an integer!", Low);
+    ConstantInt *High = dyn_cast<ConstantInt>(Range->getOperand(2*i + 1));
+    Assert1(High, "The upper limit must be an integer!", High);
+    Assert1(High->getType() == Low->getType() &&
+            High->getType() == Ty, "Range types must match instruction type!",
+            &I);
+    
+    APInt HighV = High->getValue();
+    APInt LowV = Low->getValue();
+    ConstantRange CurRange(LowV, HighV);
+    Assert1(!CurRange.isEmptySet() && !CurRange.isFullSet(),
+            "Range must not be empty!", Range);
+    if (i != 0) {
+      Assert1(CurRange.intersectWith(LastRange).isEmptySet(),
+              "Intervals are overlapping", Range);
+      Assert1(LowV.sgt(LastRange.getLower()), "Intervals are not in order",
+              Range);
+      Assert1(!isContiguous(CurRange, LastRange), "Intervals are contiguous",
+              Range);
+    }
+    LastRange = ConstantRange(LowV, HighV);
+  }
+  if (NumRanges > 2) {
+    APInt FirstLow =
+      dyn_cast<ConstantInt>(Range->getOperand(0))->getValue();
+    APInt FirstHigh =
+      dyn_cast<ConstantInt>(Range->getOperand(1))->getValue();
+    ConstantRange FirstRange(FirstLow, FirstHigh);
+    Assert1(FirstRange.intersectWith(LastRange).isEmptySet(),
+            "Intervals are overlapping", Range);
+    Assert1(!isContiguous(FirstRange, LastRange), "Intervals are contiguous",
+            Range);
+  }
+}
+
 void Verifier::visitLoadInst(LoadInst &LI) {
   PointerType *PTy = dyn_cast<PointerType>(LI.getOperand(0)->getType());
   Assert1(PTy, "Load operand must be a pointer.", &LI);
@@ -1912,52 +1961,6 @@ void Verifier::visitLoadInst(LoadInst &LI) {
   } else {
     Assert1(LI.getSynchScope() == CrossThread,
             "Non-atomic load cannot have SynchronizationScope specified", &LI);
-  }
-
-  if (MDNode *Range = LI.getMetadata(LLVMContext::MD_range)) {
-    unsigned NumOperands = Range->getNumOperands();
-    Assert1(NumOperands % 2 == 0, "Unfinished range!", Range);
-    unsigned NumRanges = NumOperands / 2;
-    Assert1(NumRanges >= 1, "It should have at least one range!", Range);
-
-    ConstantRange LastRange(1); // Dummy initial value
-    for (unsigned i = 0; i < NumRanges; ++i) {
-      ConstantInt *Low = dyn_cast<ConstantInt>(Range->getOperand(2*i));
-      Assert1(Low, "The lower limit must be an integer!", Low);
-      ConstantInt *High = dyn_cast<ConstantInt>(Range->getOperand(2*i + 1));
-      Assert1(High, "The upper limit must be an integer!", High);
-      Assert1(High->getType() == Low->getType() &&
-              High->getType() == ElTy, "Range types must match load type!",
-              &LI);
-
-      APInt HighV = High->getValue();
-      APInt LowV = Low->getValue();
-      ConstantRange CurRange(LowV, HighV);
-      Assert1(!CurRange.isEmptySet() && !CurRange.isFullSet(),
-              "Range must not be empty!", Range);
-      if (i != 0) {
-        Assert1(CurRange.intersectWith(LastRange).isEmptySet(),
-                "Intervals are overlapping", Range);
-        Assert1(LowV.sgt(LastRange.getLower()), "Intervals are not in order",
-                Range);
-        Assert1(!isContiguous(CurRange, LastRange), "Intervals are contiguous",
-                Range);
-      }
-      LastRange = ConstantRange(LowV, HighV);
-    }
-    if (NumRanges > 2) {
-      APInt FirstLow =
-        dyn_cast<ConstantInt>(Range->getOperand(0))->getValue();
-      APInt FirstHigh =
-        dyn_cast<ConstantInt>(Range->getOperand(1))->getValue();
-      ConstantRange FirstRange(FirstLow, FirstHigh);
-      Assert1(FirstRange.intersectWith(LastRange).isEmptySet(),
-              "Intervals are overlapping", Range);
-      Assert1(!isContiguous(FirstRange, LastRange), "Intervals are contiguous",
-              Range);
-    }
-
-
   }
 
   visitInstruction(LI);
@@ -2218,11 +2221,15 @@ void Verifier::visitInstruction(Instruction &I) {
     if (Function *F = dyn_cast<Function>(I.getOperand(i))) {
       // Check to make sure that the "address of" an intrinsic function is never
       // taken.
-      Assert1(!F->isIntrinsic() || i == (isa<CallInst>(I) ? e-1 : 0),
+      Assert1(!F->isIntrinsic() || i == (isa<CallInst>(I) ? e-1 :
+                                         isa<InvokeInst>(I) ? e-3 : 0),
               "Cannot take the address of an intrinsic!", &I);
       Assert1(!F->isIntrinsic() || isa<CallInst>(I) ||
-              F->getIntrinsicID() == Intrinsic::donothing,
-              "Cannot invoke an intrinsinc other than donothing", &I);
+              F->getIntrinsicID() == Intrinsic::donothing ||
+              F->getIntrinsicID() == Intrinsic::experimental_patchpoint_void ||
+              F->getIntrinsicID() == Intrinsic::experimental_patchpoint_i64,
+              "Cannot invoke an intrinsinc other than"
+              " donothing or patchpoint", &I);
       Assert1(F->getParent() == M, "Referencing function in another module!",
               &I);
     } else if (BasicBlock *OpBB = dyn_cast<BasicBlock>(I.getOperand(i))) {
@@ -2264,7 +2271,7 @@ void Verifier::visitInstruction(Instruction &I) {
     }
   }
 
-  if (MDNode *MD = I.getMetadata(LLVMContext::MD_fpmath)) {
+  if (MDNode *MD = I.getMDNode(LLVMContext::MD_fpmath)) {
     Assert1(I.getType()->isFPOrFPVectorTy(),
             "fpmath requires a floating point result!", &I);
     Assert1(MD->getNumOperands() == 1, "fpmath takes one operand!", &I);
@@ -2278,9 +2285,19 @@ void Verifier::visitInstruction(Instruction &I) {
     }
   }
 
-  MDNode *MD = I.getMetadata(LLVMContext::MD_range);
-  Assert1(!MD || isa<LoadInst>(I) || isa<CallInst>(I) || isa<InvokeInst>(I),
-          "Ranges are only for loads, calls and invokes!", &I);
+  if (MDNode *Range = I.getMDNode(LLVMContext::MD_range)) {
+    Assert1(isa<LoadInst>(I) || isa<CallInst>(I) || isa<InvokeInst>(I),
+            "Ranges are only for loads, calls and invokes!", &I);
+    visitRangeMetadata(I, Range, I.getType());
+  }
+
+  if (I.getMetadata(LLVMContext::MD_nonnull)) {
+    Assert1(I.getType()->isPointerTy(),
+            "nonnull applies only to pointer types", &I);
+    Assert1(isa<LoadInst>(I),
+            "nonnull applies only to load instructions, use attributes"
+            " for calls or invokes", &I);
+  }
 
   InstsInThisBlock.insert(&I);
 }
@@ -2574,7 +2591,7 @@ void DebugInfoVerifier::verifyDebugInfo() {
 void DebugInfoVerifier::processInstructions(DebugInfoFinder &Finder) {
   for (const Function &F : *M)
     for (auto I = inst_begin(&F), E = inst_end(&F); I != E; ++I) {
-      if (MDNode *MD = I->getMetadata(LLVMContext::MD_dbg))
+      if (MDNode *MD = I->getMDNode(LLVMContext::MD_dbg))
         Finder.processLocation(*M, DILocation(MD));
       if (const CallInst *CI = dyn_cast<CallInst>(&*I))
         processCallInst(Finder, *CI);
@@ -2619,7 +2636,7 @@ bool llvm::verifyModule(const Module &M, raw_ostream *OS) {
 
   bool Broken = false;
   for (Module::const_iterator I = M.begin(), E = M.end(); I != E; ++I)
-    if (!I->isDeclaration())
+    if (!I->isDeclaration() && !I->isMaterializable())
       Broken |= !V.verify(*I);
 
   // Note that this function's return value is inverted from what you would

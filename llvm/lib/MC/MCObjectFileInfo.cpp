@@ -338,6 +338,8 @@ void MCObjectFileInfo::InitELFMCObjectFileInfo(Triple T) {
     break;
   case Triple::mips:
   case Triple::mipsel:
+  case Triple::mips64:
+  case Triple::mips64el:
     // MIPS uses indirect pointer to refer personality functions, so that the
     // eh_frame section can be read-only.  DW.ref.personality will be generated
     // for relocation.
@@ -595,9 +597,7 @@ void MCObjectFileInfo::InitELFMCObjectFileInfo(Triple T) {
 void MCObjectFileInfo::InitCOFFMCObjectFileInfo(Triple T) {
   bool IsWoA = T.getArch() == Triple::arm || T.getArch() == Triple::thumb;
 
-  // The object file format cannot represent common symbols with explicit
-  // alignments.
-  CommDirectiveSupportsAlignment = false;
+  CommDirectiveSupportsAlignment = true;
 
   // COFF
   BSSSection =

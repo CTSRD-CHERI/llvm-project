@@ -130,18 +130,13 @@ X86_64MCAsmInfoDarwin::getExprForPersonalitySymbol(const MCSymbol *Sym,
   return MCBinaryExpr::CreateAdd(Res, Four, Context);
 }
 
-const MCSection *X86ELFMCAsmInfo::
-getNonexecutableStackSection(MCContext &Ctx) const {
-  return Ctx.getELFSection(".note.GNU-stack", ELF::SHT_PROGBITS,
-                           0, SectionKind::getMetadata());
-}
-
 void X86MCAsmInfoMicrosoft::anchor() { }
 
 X86MCAsmInfoMicrosoft::X86MCAsmInfoMicrosoft(const Triple &Triple) {
   if (Triple.getArch() == Triple::x86_64) {
     PrivateGlobalPrefix = ".L";
     PointerSize = 8;
+    WinEHEncodingType = WinEH::EncodingType::Itanium;
     ExceptionsType = ExceptionHandling::WinEH;
   }
 
@@ -161,6 +156,7 @@ X86MCAsmInfoGNUCOFF::X86MCAsmInfoGNUCOFF(const Triple &Triple) {
   if (Triple.getArch() == Triple::x86_64) {
     PrivateGlobalPrefix = ".L";
     PointerSize = 8;
+    WinEHEncodingType = WinEH::EncodingType::Itanium;
     ExceptionsType = ExceptionHandling::WinEH;
   } else {
     ExceptionsType = ExceptionHandling::DwarfCFI;

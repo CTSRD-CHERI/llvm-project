@@ -27,6 +27,7 @@
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils/SymbolRewriter.h"
 
 using namespace llvm;
 
@@ -98,6 +99,10 @@ static cl::opt<bool> MISchedPostRA("misched-postra", cl::Hidden,
 // Experimental option to run live interval analysis early.
 static cl::opt<bool> EarlyLiveIntervals("early-live-intervals", cl::Hidden,
     cl::desc("Run live interval analysis earlier in the pipeline"));
+
+static cl::opt<bool> UseCFLAA("use-cfl-aa-in-codegen",
+  cl::init(false), cl::Hidden,
+  cl::desc("Enable the new, experimental CFL alias analysis in CodeGen"));
 
 /// Allow standard passes to be disabled by command line options. This supports
 /// simple binary flags that either suppress the pass or do nothing.
@@ -376,6 +381,8 @@ void TargetPassConfig::addIRPasses() {
   // Add TypeBasedAliasAnalysis before BasicAliasAnalysis so that
   // BasicAliasAnalysis wins if they disagree. This is intended to help
   // support "obvious" type-punning idioms.
+  if (UseCFLAA)
+    addPass(createCFLAliasAnalysisPass());
   addPass(createTypeBasedAliasAnalysisPass());
   addPass(createScopedNoAliasAAPass());
   addPass(createBasicAliasAnalysisPass());
@@ -439,6 +446,7 @@ void TargetPassConfig::addPassesToHandleExceptions() {
 void TargetPassConfig::addCodeGenPrepare() {
   if (getOptLevel() != CodeGenOpt::None && !DisableCGP)
     addPass(createCodeGenPreparePass(TM));
+  addPass(createRewriteSymbolsPass());
 }
 
 /// Add common passes that perform LLVM IR to IR transforms in preparation for
@@ -682,6 +690,12 @@ FunctionPass *TargetPassConfig::createRegAllocPass(bool Optimized) {
 
   // With no -regalloc= override, ask the target for a regalloc pass.
   return createTargetRegisterAllocator(Optimized);
+}
+
+/// Return true if the default global register allocator is in use and
+/// has not be overriden on the command line with '-regalloc=...'
+bool TargetPassConfig::usingDefaultRegAlloc() const {
+  return RegAlloc.getNumOccurrences() == 0;
 }
 
 /// Add the minimum set of target-independent passes that are required for

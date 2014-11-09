@@ -164,6 +164,10 @@ def SDTBr : SDTypeProfile<0, 1, [           // br
   SDTCisVT<0, OtherVT>
 ]>;
 
+def SDTBrCC : SDTypeProfile<0, 4, [       // brcc
+  SDTCisVT<0, OtherVT>, SDTCisSameAs<1, 2>, SDTCisVT<3, OtherVT>
+]>;
+
 def SDTBrcond : SDTypeProfile<0, 2, [       // brcond
   SDTCisInt<0>, SDTCisVT<1, OtherVT>
 ]>;
@@ -374,6 +378,8 @@ def fdiv       : SDNode<"ISD::FDIV"       , SDTFPBinOp>;
 def frem       : SDNode<"ISD::FREM"       , SDTFPBinOp>;
 def fma        : SDNode<"ISD::FMA"        , SDTFPTernaryOp>;
 def fabs       : SDNode<"ISD::FABS"       , SDTFPUnaryOp>;
+def fminnum    : SDNode<"ISD::FMINNUM"    , SDTFPBinOp>;
+def fmaxnum    : SDNode<"ISD::FMAXNUM"    , SDTFPBinOp>;
 def fgetsign   : SDNode<"ISD::FGETSIGN"   , SDTFPToIntOp>;
 def fneg       : SDNode<"ISD::FNEG"       , SDTFPUnaryOp>;
 def fsqrt      : SDNode<"ISD::FSQRT"      , SDTFPUnaryOp>;
@@ -405,6 +411,7 @@ def select     : SDNode<"ISD::SELECT"     , SDTSelect>;
 def vselect    : SDNode<"ISD::VSELECT"    , SDTVSelect>;
 def selectcc   : SDNode<"ISD::SELECT_CC"  , SDTSelectCC>;
 
+def brcc       : SDNode<"ISD::BR_CC"      , SDTBrCC,   [SDNPHasChain]>;
 def brcond     : SDNode<"ISD::BRCOND"     , SDTBrcond, [SDNPHasChain]>;
 def brind      : SDNode<"ISD::BRIND"      , SDTBrind,  [SDNPHasChain]>;
 def br         : SDNode<"ISD::BR"         , SDTBr,     [SDNPHasChain]>;

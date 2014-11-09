@@ -50,7 +50,7 @@ namespace {
       bool foundFunction = false;
       for (unsigned i=0 ; i<SensitiveFunctions->getNumOperands() ; i++) {
         Value *SensitiveFunction =
-          SensitiveFunctions->getOperand(i)->getOperand(0);
+          cast<MDNode>(SensitiveFunctions->getOperand(i))->getOperand(0);
         if (SensitiveFunction == IRFunction) {
           foundFunction = true;
           break;

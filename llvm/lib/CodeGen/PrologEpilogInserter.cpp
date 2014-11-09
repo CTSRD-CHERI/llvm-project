@@ -711,8 +711,7 @@ void PEI::replaceFrameIndices(MachineFunction &Fn) {
   SmallPtrSet<MachineBasicBlock*, 8> Reachable;
 
   // Iterate over the reachable blocks in DFS order.
-  for (df_ext_iterator<MachineFunction*, SmallPtrSet<MachineBasicBlock*, 8> >
-       DFI = df_ext_begin(&Fn, Reachable), DFE = df_ext_end(&Fn, Reachable);
+  for (auto DFI = df_ext_begin(&Fn, Reachable), DFE = df_ext_end(&Fn, Reachable);
        DFI != DFE; ++DFI) {
     int SPAdj = 0;
     // Check the exit state of the DFS stack predecessor.
@@ -739,12 +738,11 @@ void PEI::replaceFrameIndices(MachineFunction &Fn) {
 
 void PEI::replaceFrameIndices(MachineBasicBlock *BB, MachineFunction &Fn,
                               int &SPAdj) {
-  const TargetMachine &TM = Fn.getTarget();
-  assert(TM.getSubtargetImpl()->getRegisterInfo() &&
-         "TM::getRegisterInfo() must be implemented!");
+  assert(Fn.getSubtarget().getRegisterInfo() &&
+         "getRegisterInfo() must be implemented!");
   const TargetInstrInfo &TII = *Fn.getSubtarget().getInstrInfo();
-  const TargetRegisterInfo &TRI = *TM.getSubtargetImpl()->getRegisterInfo();
-  const TargetFrameLowering *TFI = TM.getSubtargetImpl()->getFrameLowering();
+  const TargetRegisterInfo &TRI = *Fn.getSubtarget().getRegisterInfo();
+  const TargetFrameLowering *TFI = Fn.getSubtarget().getFrameLowering();
   bool StackGrowsDown =
     TFI->getStackGrowthDirection() == TargetFrameLowering::StackGrowsDown;
   int FrameSetupOpcode   = TII.getCallFrameSetupOpcode();

@@ -88,6 +88,7 @@ namespace {
 
     const DataLayout *DL;
     TargetLibraryInfo *TLI;
+    SmallSet<const Comdat *, 8> NotDiscardableComdats;
   };
 }
 
@@ -1115,9 +1116,7 @@ static bool AllGlobalLoadUsesSimpleEnoughForHeapSRA(const GlobalVariable *GV,
   // that all inputs the to the PHI nodes are in the same equivalence sets.
   // Check to verify that all operands of the PHIs are either PHIS that can be
   // transformed, loads from GV, or MI itself.
-  for (SmallPtrSet<const PHINode*, 32>::const_iterator I = LoadUsingPHIs.begin()
-       , E = LoadUsingPHIs.end(); I != E; ++I) {
-    const PHINode *PN = *I;
+  for (const PHINode *PN : LoadUsingPHIs) {
     for (unsigned op = 0, e = PN->getNumIncomingValues(); op != e; ++op) {
       Value *InVal = PN->getIncomingValue(op);
 
@@ -1918,8 +1917,11 @@ bool GlobalOpt::OptimizeFunctions(Module &M) {
     // Functions without names cannot be referenced outside this module.
     if (!F->hasName() && !F->isDeclaration() && !F->hasLocalLinkage())
       F->setLinkage(GlobalValue::InternalLinkage);
+
+    const Comdat *C = F->getComdat();
+    bool inComdat = C && NotDiscardableComdats.count(C);
     F->removeDeadConstantUsers();
-    if (F->isDefTriviallyDead()) {
+    if ((!inComdat || F->hasLocalLinkage()) && F->isDefTriviallyDead()) {
       F->eraseFromParent();
       Changed = true;
       ++NumFnDeleted;
@@ -1951,12 +1953,6 @@ bool GlobalOpt::OptimizeFunctions(Module &M) {
 bool GlobalOpt::OptimizeGlobalVars(Module &M) {
   bool Changed = false;
 
-  SmallSet<const Comdat *, 8> NotDiscardableComdats;
-  for (const GlobalVariable &GV : M.globals())
-    if (const Comdat *C = GV.getComdat())
-      if (!GV.isDiscardableIfUnused())
-        NotDiscardableComdats.insert(C);
-
   for (Module::global_iterator GVI = M.global_begin(), E = M.global_end();
        GVI != E; ) {
     GlobalVariable *GV = GVI++;
@@ -1973,7 +1969,7 @@ bool GlobalOpt::OptimizeGlobalVars(Module &M) {
 
     if (GV->isDiscardableIfUnused()) {
       if (const Comdat *C = GV->getComdat())
-        if (NotDiscardableComdats.count(C))
+        if (NotDiscardableComdats.count(C) && !GV->hasLocalLinkage())
           continue;
       Changed |= ProcessGlobal(GV, GVI);
     }
@@ -2725,10 +2721,8 @@ static bool EvaluateStaticConstructor(Function *F, const DataLayout *DL,
            Eval.getMutatedMemory().begin(), E = Eval.getMutatedMemory().end();
          I != E; ++I)
       CommitValueTo(I->second, I->first);
-    for (SmallPtrSet<GlobalVariable*, 8>::const_iterator I =
-           Eval.getInvariants().begin(), E = Eval.getInvariants().end();
-         I != E; ++I)
-      (*I)->setConstant(true);
+    for (GlobalVariable *GV : Eval.getInvariants())
+      GV->setConstant(true);
   }
 
   return EvalSuccess;
@@ -2782,10 +2776,17 @@ public:
     CompilerUsedV = collectUsedGlobalVariables(M, CompilerUsed, true);
   }
   typedef SmallPtrSet<GlobalValue *, 8>::iterator iterator;
+  typedef iterator_range<iterator> used_iterator_range;
   iterator usedBegin() { return Used.begin(); }
   iterator usedEnd() { return Used.end(); }
+  used_iterator_range used() {
+    return used_iterator_range(usedBegin(), usedEnd());
+  }
   iterator compilerUsedBegin() { return CompilerUsed.begin(); }
   iterator compilerUsedEnd() { return CompilerUsed.end(); }
+  used_iterator_range compilerUsed() {
+    return used_iterator_range(compilerUsedBegin(), compilerUsedEnd());
+  }
   bool usedCount(GlobalValue *GV) const { return Used.count(GV); }
   bool compilerUsedCount(GlobalValue *GV) const {
     return CompilerUsed.count(GV);
@@ -2874,8 +2875,8 @@ bool GlobalOpt::OptimizeGlobalAliases(Module &M) {
   bool Changed = false;
   LLVMUsed Used(M);
 
-  for (LLVMUsed::iterator I = Used.usedBegin(), E = Used.usedEnd(); I != E; ++I)
-    Used.compilerUsedErase(*I);
+  for (GlobalValue *GV : Used.used())
+    Used.compilerUsedErase(GV);
 
   for (Module::alias_iterator I = M.alias_begin(), E = M.alias_end();
        I != E;) {
@@ -3057,6 +3058,20 @@ bool GlobalOpt::runOnModule(Module &M) {
   bool LocalChange = true;
   while (LocalChange) {
     LocalChange = false;
+
+    NotDiscardableComdats.clear();
+    for (const GlobalVariable &GV : M.globals())
+      if (const Comdat *C = GV.getComdat())
+        if (!GV.isDiscardableIfUnused() || !GV.use_empty())
+          NotDiscardableComdats.insert(C);
+    for (Function &F : M)
+      if (const Comdat *C = F.getComdat())
+        if (!F.isDefTriviallyDead())
+          NotDiscardableComdats.insert(C);
+    for (GlobalAlias &GA : M.aliases())
+      if (const Comdat *C = GA.getComdat())
+        if (!GA.isDiscardableIfUnused() || !GA.use_empty())
+          NotDiscardableComdats.insert(C);
 
     // Delete functions that are trivially dead, ccc -> fastcc
     LocalChange |= OptimizeFunctions(M);

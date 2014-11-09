@@ -22,9 +22,7 @@
 #include "llvm/CodeGen/LinkAllCodegenComponents.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
 #include "llvm/ExecutionEngine/Interpreter.h"
-#include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
-#include "llvm/ExecutionEngine/JITMemoryManager.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/ObjectCache.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
@@ -75,10 +73,6 @@ namespace {
   cl::opt<bool> ForceInterpreter("force-interpreter",
                                  cl::desc("Force interpretation: disable JIT"),
                                  cl::init(false));
-
-  cl::opt<bool> UseMCJIT(
-    "use-mcjit", cl::desc("Enable use of the MC-based JIT (if available)"),
-    cl::init(false));
 
   cl::opt<bool> DebugIR(
     "debug-ir", cl::desc("Generate debug information to allow debugging IR."),
@@ -268,13 +262,13 @@ public:
     std::string CacheName;
     if (!getCacheFilename(ModuleID, CacheName))
       return;
-    std::string errStr;
     if (!CacheDir.empty()) { // Create user-defined cache dir.
       SmallString<128> dir(CacheName);
       sys::path::remove_filename(dir);
       sys::fs::create_directories(Twine(dir));
     }
-    raw_fd_ostream outfile(CacheName.c_str(), errStr, sys::fs::F_None);
+    std::error_code EC;
+    raw_fd_ostream outfile(CacheName, EC, sys::fs::F_None);
     outfile.write(Obj.getBufferStart(), Obj.getBufferSize());
     outfile.close();
   }
@@ -294,8 +288,7 @@ public:
     // because the file has probably just been mmapped.  Instead we make
     // a copy.  The filed-based buffer will be released when it goes
     // out of scope.
-    return std::unique_ptr<MemoryBuffer>(
-        MemoryBuffer::getMemBufferCopy(IRObjectBuffer.get()->getBuffer()));
+    return MemoryBuffer::getMemBufferCopy(IRObjectBuffer.get()->getBuffer());
   }
 
 private:
@@ -399,7 +392,7 @@ int main(int argc, char **argv, char * const *envp) {
 
   // Load the bitcode...
   SMDiagnostic Err;
-  std::unique_ptr<Module> Owner(ParseIRFile(InputFile, Err, Context));
+  std::unique_ptr<Module> Owner = parseIRFile(InputFile, Err, Context);
   Module *Mod = Owner.get();
   if (!Mod) {
     Err.print(argv[0], errs());
@@ -407,12 +400,9 @@ int main(int argc, char **argv, char * const *envp) {
   }
 
   if (EnableCacheManager) {
-    if (UseMCJIT) {
-      std::string CacheName("file:");
-      CacheName.append(InputFile);
-      Mod->setModuleIdentifier(CacheName);
-    } else
-      errs() << "warning: -enable-cache-manager can only be used with MCJIT.";
+    std::string CacheName("file:");
+    CacheName.append(InputFile);
+    Mod->setModuleIdentifier(CacheName);
   }
 
   // If not jitting lazily, load the whole bitcode file eagerly too.
@@ -425,12 +415,6 @@ int main(int argc, char **argv, char * const *envp) {
   }
 
   if (DebugIR) {
-    if (!UseMCJIT) {
-      errs() << "warning: -debug-ir used without -use-mcjit. Only partial debug"
-        << " information will be emitted by the non-MC JIT engine. To see full"
-        << " source debug information, enable the flag '-use-mcjit'.\n";
-
-    }
     ModulePass *DebugIRPass = createDebugIRPass();
     DebugIRPass->runOnModule(*Mod);
   }
@@ -453,20 +437,16 @@ int main(int argc, char **argv, char * const *envp) {
 
   // Enable MCJIT if desired.
   RTDyldMemoryManager *RTDyldMM = nullptr;
-  if (UseMCJIT && !ForceInterpreter) {
-    builder.setUseMCJIT(true);
+  if (!ForceInterpreter) {
     if (RemoteMCJIT)
       RTDyldMM = new RemoteMemoryManager();
     else
       RTDyldMM = new SectionMemoryManager();
     builder.setMCJITMemoryManager(RTDyldMM);
-  } else {
-    if (RemoteMCJIT) {
-      errs() << "error: Remote process execution requires -use-mcjit\n";
-      exit(1);
-    }
-    builder.setJITMemoryManager(ForceInterpreter ? nullptr :
-                                JITMemoryManager::CreateDefaultMemManager());
+  } else if (RemoteMCJIT) {
+    errs() << "error: Remote process execution does not work with the "
+              "interpreter.\n";
+    exit(1);
   }
 
   CodeGenOpt::Level OLvl = CodeGenOpt::Default;
@@ -513,23 +493,19 @@ int main(int argc, char **argv, char * const *envp) {
 
   // Load any additional modules specified on the command line.
   for (unsigned i = 0, e = ExtraModules.size(); i != e; ++i) {
-    std::unique_ptr<Module> XMod(ParseIRFile(ExtraModules[i], Err, Context));
+    std::unique_ptr<Module> XMod = parseIRFile(ExtraModules[i], Err, Context);
     if (!XMod) {
       Err.print(argv[0], errs());
       return 1;
     }
     if (EnableCacheManager) {
-      if (UseMCJIT) {
-        std::string CacheName("file:");
-        CacheName.append(ExtraModules[i]);
-        XMod->setModuleIdentifier(CacheName);
-      }
-      // else, we already printed a warning above.
+      std::string CacheName("file:");
+      CacheName.append(ExtraModules[i]);
+      XMod->setModuleIdentifier(CacheName);
     }
     EE->addModule(std::move(XMod));
   }
 
-  std::vector<std::unique_ptr<MemoryBuffer>> Buffers;
   for (unsigned i = 0, e = ExtraObjects.size(); i != e; ++i) {
     ErrorOr<object::OwningBinary<object::ObjectFile>> Obj =
         object::ObjectFile::createObjectFile(ExtraObjects[i]);
@@ -538,8 +514,7 @@ int main(int argc, char **argv, char * const *envp) {
       return 1;
     }
     object::OwningBinary<object::ObjectFile> &O = Obj.get();
-    EE->addObjectFile(std::move(O.getBinary()));
-    Buffers.push_back(std::move(O.getBuffer()));
+    EE->addObjectFile(std::move(O));
   }
 
   for (unsigned i = 0, e = ExtraArchives.size(); i != e; ++i) {
@@ -621,19 +596,11 @@ int main(int argc, char **argv, char * const *envp) {
                                                       NULL);
 
     // Run static constructors.
-    if (UseMCJIT && !ForceInterpreter) {
+    if (!ForceInterpreter) {
       // Give MCJIT a chance to apply relocations and set page permissions.
       EE->finalizeObject();
     }
     EE->runStaticConstructorsDestructors(false);
-
-    if (!UseMCJIT && NoLazyCompilation) {
-      for (Module::iterator I = Mod->begin(), E = Mod->end(); I != E; ++I) {
-        Function *Fn = &*I;
-        if (Fn != EntryFn && !Fn->isDeclaration())
-          EE->getPointerToFunction(Fn);
-      }
-    }
 
     // Trigger compilation separately so code regions that need to be
     // invalidated will be known.

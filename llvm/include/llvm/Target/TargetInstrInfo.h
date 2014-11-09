@@ -16,7 +16,6 @@
 
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/CodeGen/DFAPacketizer.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineCombinerPattern.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -31,7 +30,7 @@ class MachineMemOperand;
 class MachineRegisterInfo;
 class MDNode;
 class MCInst;
-class MCSchedModel;
+struct MCSchedModel;
 class MCSymbolRefExpr;
 class SDNode;
 class ScheduleHazardRecognizer;
@@ -41,6 +40,7 @@ class TargetRegisterClass;
 class TargetRegisterInfo;
 class BranchProbability;
 class TargetSubtargetInfo;
+class DFAPacketizer;
 
 template<class T> class SmallVectorImpl;
 
@@ -688,7 +688,7 @@ public:
   }
 
   /// useMachineCombiner - return true when a target supports MachineCombiner
-  virtual bool useMachineCombiner(void) const { return false; }
+  virtual bool useMachineCombiner() const { return false; }
 
 protected:
   /// foldMemoryOperandImpl - Target-dependent implementation for
@@ -847,10 +847,8 @@ public:
                           MachineBasicBlock::iterator MI) const;
 
 
-  /// getNoopForMachoTarget - Return the noop instruction to use for a noop.
-  virtual void getNoopForMachoTarget(MCInst &NopInst) const {
-    // Default to just using 'nop' string.
-  }
+  /// Return the noop instruction to use for a noop.
+  virtual void getNoopForMachoTarget(MCInst &NopInst) const;
 
 
   /// isPredicated - Returns true if the instruction is already predicated.
@@ -954,6 +952,7 @@ public:
                                     const MachineRegisterInfo *MRI) const {
     return false;
   }
+  virtual bool optimizeCondBranch(MachineInstr *MI) const { return false; }
 
   /// optimizeLoadInstr - Try to remove the load by folding it to a register
   /// operand at the use. We fold the load instructions if and only if the
@@ -1032,7 +1031,7 @@ public:
                               SDNode *Node) const;
 
   /// Return the default expected latency for a def based on it's opcode.
-  unsigned defaultDefLatency(const MCSchedModel *SchedModel,
+  unsigned defaultDefLatency(const MCSchedModel &SchedModel,
                              const MachineInstr *DefMI) const;
 
   int computeDefOperandLatency(const InstrItineraryData *ItinData,
@@ -1187,9 +1186,23 @@ public:
                             const TargetRegisterInfo *TRI) const {}
 
   /// Create machine specific model for scheduling.
-  virtual DFAPacketizer*
-    CreateTargetScheduleState(const TargetMachine*, const ScheduleDAG*) const {
+  virtual DFAPacketizer *
+  CreateTargetScheduleState(const TargetSubtargetInfo &) const {
     return nullptr;
+  }
+
+  // areMemAccessesTriviallyDisjoint - Sometimes, it is possible for the target
+  // to tell, even without aliasing information, that two MIs access different
+  // memory addresses. This function returns true if two MIs access different
+  // memory addresses, and false otherwise.
+  virtual bool
+  areMemAccessesTriviallyDisjoint(MachineInstr *MIa, MachineInstr *MIb,
+                                  AliasAnalysis *AA = nullptr) const {
+    assert(MIa && (MIa->mayLoad() || MIa->mayStore()) &&
+           "MIa must load from or modify a memory location");
+    assert(MIb && (MIb->mayLoad() || MIb->mayStore()) &&
+           "MIb must load from or modify a memory location");
+    return false;
   }
 
 private:

@@ -27,14 +27,6 @@ using namespace llvm;
 // Wrapping the C bindings types.
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(GenericValue, LLVMGenericValueRef)
 
-inline TargetLibraryInfo *unwrap(LLVMTargetLibraryInfoRef P) {
-  return reinterpret_cast<TargetLibraryInfo*>(P);
-}
-
-inline LLVMTargetLibraryInfoRef wrap(const TargetLibraryInfo *P) {
-  TargetLibraryInfo *X = const_cast<TargetLibraryInfo*>(P);
-  return reinterpret_cast<LLVMTargetLibraryInfoRef>(X);
-}
 
 inline LLVMTargetMachineRef wrap(const TargetMachine *P) {
   return
@@ -192,7 +184,6 @@ LLVMBool LLVMCreateMCJITCompilerForModule(
   EngineBuilder builder(std::unique_ptr<Module>(unwrap(M)));
   builder.setEngineKind(EngineKind::JIT)
          .setErrorStr(&Error)
-         .setUseMCJIT(true)
          .setOptLevel((CodeGenOpt::Level)options.OptLevel)
          .setCodeModel(unwrap(options.CodeModel))
          .setTargetOptions(targetOptions);
@@ -275,7 +266,6 @@ LLVMGenericValueRef LLVMRunFunction(LLVMExecutionEngineRef EE, LLVMValueRef F,
 }
 
 void LLVMFreeMachineCodeForFunction(LLVMExecutionEngineRef EE, LLVMValueRef F) {
-  unwrap(EE)->freeMachineCodeForFunction(unwrap<Function>(F));
 }
 
 void LLVMAddModule(LLVMExecutionEngineRef EE, LLVMModuleRef M){
@@ -314,7 +304,7 @@ LLVMBool LLVMFindFunction(LLVMExecutionEngineRef EE, const char *Name,
 
 void *LLVMRecompileAndRelinkFunction(LLVMExecutionEngineRef EE,
                                      LLVMValueRef Fn) {
-  return unwrap(EE)->recompileAndRelinkFunction(unwrap<Function>(Fn));
+  return nullptr;
 }
 
 LLVMTargetDataRef LLVMGetExecutionEngineTargetData(LLVMExecutionEngineRef EE) {

@@ -573,9 +573,8 @@ void PMTopLevelManager::collectLastUses(SmallVectorImpl<Pass *> &LastUses,
     return;
 
   SmallPtrSet<Pass *, 8> &LU = DMI->second;
-  for (SmallPtrSet<Pass *, 8>::iterator I = LU.begin(),
-         E = LU.end(); I != E; ++I) {
-    LastUses.push_back(*I);
+  for (Pass *LUP : LU) {
+    LastUses.push_back(LUP);
   }
 
 }
@@ -1404,11 +1403,8 @@ void FunctionPassManager::add(Pass *P) {
 /// so, return true.
 ///
 bool FunctionPassManager::run(Function &F) {
-  if (F.isMaterializable()) {
-    std::string errstr;
-    if (F.Materialize(&errstr))
-      report_fatal_error("Error reading bitcode file: " + Twine(errstr));
-  }
+  if (std::error_code EC = F.materialize())
+    report_fatal_error("Error reading bitcode file: " + EC.message());
   return FPM->run(F);
 }
 

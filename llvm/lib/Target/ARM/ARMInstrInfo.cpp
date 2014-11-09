@@ -92,79 +92,45 @@ unsigned ARMInstrInfo::getUnindexedOpcode(unsigned Opc) const {
 
 void ARMInstrInfo::expandLoadStackGuard(MachineBasicBlock::iterator MI,
                                         Reloc::Model RM) const {
-  if (RM == Reloc::PIC_)
-    expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_pcrel, ARM::LDRi12, RM);
-  else
-    expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_abs, ARM::LDRi12, RM);
-}
+  MachineFunction &MF = *MI->getParent()->getParent();
+  const ARMSubtarget &Subtarget = MF.getTarget().getSubtarget<ARMSubtarget>();
 
-bool ARMInstrInfo::getRegSequenceLikeInputs(
-    const MachineInstr &MI, unsigned DefIdx,
-    SmallVectorImpl<RegSubRegPairAndIdx> &InputRegs) const {
-  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
-  assert(MI.isRegSequenceLike() && "Invalid kind of instruction");
-
-  switch (MI.getOpcode()) {
-  case ARM::VMOVDRR:
-    // dX = VMOVDRR rY, rZ
-    // is the same as:
-    // dX = REG_SEQUENCE rY, ssub_0, rZ, ssub_1
-    // Populate the InputRegs accordingly.
-    // rY
-    const MachineOperand *MOReg = &MI.getOperand(1);
-    InputRegs.push_back(
-        RegSubRegPairAndIdx(MOReg->getReg(), MOReg->getSubReg(), ARM::ssub_0));
-    // rZ
-    MOReg = &MI.getOperand(2);
-    InputRegs.push_back(
-        RegSubRegPairAndIdx(MOReg->getReg(), MOReg->getSubReg(), ARM::ssub_1));
-    return true;
+  if (!Subtarget.useMovt(MF)) {
+    if (RM == Reloc::PIC_)
+      expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_pcrel, ARM::LDRi12, RM);
+    else
+      expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_abs, ARM::LDRi12, RM);
+    return;
   }
-  llvm_unreachable("Target dependent opcode missing");
-}
 
-bool ARMInstrInfo::getExtractSubregLikeInputs(
-    const MachineInstr &MI, unsigned DefIdx,
-    RegSubRegPairAndIdx &InputReg) const {
-  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
-  assert(MI.isExtractSubregLike() && "Invalid kind of instruction");
-
-  switch (MI.getOpcode()) {
-  case ARM::VMOVRRD:
-    // rX, rY = VMOVRRD dZ
-    // is the same as:
-    // rX = EXTRACT_SUBREG dZ, ssub_0
-    // rY = EXTRACT_SUBREG dZ, ssub_1
-    const MachineOperand &MOReg = MI.getOperand(2);
-    InputReg.Reg = MOReg.getReg();
-    InputReg.SubReg = MOReg.getSubReg();
-    InputReg.SubIdx = DefIdx == 0 ? ARM::ssub_0 : ARM::ssub_1;
-    return true;
+  if (RM != Reloc::PIC_) {
+    expandLoadStackGuardBase(MI, ARM::MOVi32imm, ARM::LDRi12, RM);
+    return;
   }
-  llvm_unreachable("Target dependent opcode missing");
-}
 
-bool ARMInstrInfo::getInsertSubregLikeInputs(
-    const MachineInstr &MI, unsigned DefIdx, RegSubRegPair &BaseReg,
-    RegSubRegPairAndIdx &InsertedReg) const {
-  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
-  assert(MI.isInsertSubregLike() && "Invalid kind of instruction");
+  const GlobalValue *GV =
+      cast<GlobalValue>((*MI->memoperands_begin())->getValue());
 
-  switch (MI.getOpcode()) {
-  case ARM::VSETLNi32:
-    // dX = VSETLNi32 dY, rZ, imm
-    const MachineOperand &MOBaseReg = MI.getOperand(1);
-    const MachineOperand &MOInsertedReg = MI.getOperand(2);
-    const MachineOperand &MOIndex = MI.getOperand(3);
-    BaseReg.Reg = MOBaseReg.getReg();
-    BaseReg.SubReg = MOBaseReg.getSubReg();
-
-    InsertedReg.Reg = MOInsertedReg.getReg();
-    InsertedReg.SubReg = MOInsertedReg.getSubReg();
-    InsertedReg.SubIdx = MOIndex.getImm() == 0 ? ARM::ssub_0 : ARM::ssub_1;
-    return true;
+  if (!Subtarget.GVIsIndirectSymbol(GV, RM)) {
+    expandLoadStackGuardBase(MI, ARM::MOV_ga_pcrel, ARM::LDRi12, RM);
+    return;
   }
-  llvm_unreachable("Target dependent opcode missing");
+
+  MachineBasicBlock &MBB = *MI->getParent();
+  DebugLoc DL = MI->getDebugLoc();
+  unsigned Reg = MI->getOperand(0).getReg();
+  MachineInstrBuilder MIB;
+
+  MIB = BuildMI(MBB, MI, DL, get(ARM::MOV_ga_pcrel_ldr), Reg)
+            .addGlobalAddress(GV, 0, ARMII::MO_NONLAZY);
+  unsigned Flag = MachineMemOperand::MOLoad | MachineMemOperand::MOInvariant;
+  MachineMemOperand *MMO = MBB.getParent()->getMachineMemOperand(
+      MachinePointerInfo::getGOT(), Flag, 4, 4);
+  MIB.addMemOperand(MMO);
+  MIB = BuildMI(MBB, MI, DL, get(ARM::LDRi12), Reg);
+  MIB.addReg(Reg, RegState::Kill).addImm(0);
+  MIB.setMemRefs(MI->memoperands_begin(), MI->memoperands_end());
+  AddDefaultPred(MIB);
 }
 
 namespace {

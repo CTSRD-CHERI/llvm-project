@@ -665,6 +665,8 @@ def In32BitMode  : Predicate<"!PPCSubTarget->isPPC64()">;
 def In64BitMode  : Predicate<"PPCSubTarget->isPPC64()">;
 def IsBookE  : Predicate<"PPCSubTarget->isBookE()">;
 def IsNotBookE  : Predicate<"!PPCSubTarget->isBookE()">;
+def HasOnlyMSYNC : Predicate<"PPCSubTarget->hasOnlyMSYNC()">;
+def HasSYNC   : Predicate<"!PPCSubTarget->hasOnlyMSYNC()">;
 def IsPPC4xx  : Predicate<"PPCSubTarget->isPPC4xx()">;
 def IsPPC6xx  : Predicate<"PPCSubTarget->isPPC6xx()">;
 def IsE500  : Predicate<"PPCSubTarget->isE500()">;
@@ -1303,8 +1305,15 @@ def DCBZL  : DCB_Form<1014, 1, (outs), (ins memrr:$dst), "dcbzl $dst",
                       IIC_LdStDCBF, [(int_ppc_dcbzl xoaddr:$dst)]>,
                       PPC970_DGroup_Single;
 
+def ICBT  : XForm_icbt<31, 22, (outs), (ins u4imm:$CT, memrr:$src),
+                       "icbt $CT, $src", IIC_LdStLoad>, Requires<[IsBookE]>;
+
 def : Pat<(prefetch xoaddr:$dst, (i32 0), imm, (i32 1)),
-          (DCBT xoaddr:$dst)>;
+          (DCBT xoaddr:$dst)>;   // data prefetch for loads
+def : Pat<(prefetch xoaddr:$dst, (i32 1), imm, (i32 1)),
+          (DCBTST xoaddr:$dst)>; // data prefetch for stores
+def : Pat<(prefetch xoaddr:$dst, (i32 0), imm, (i32 0)),
+          (ICBT 0, xoaddr:$dst)>; // inst prefetch (for read)
 
 // Atomic operations
 let usesCustomInserter = 1 in {
@@ -1688,17 +1697,19 @@ def STMW : DForm_1<47, (outs), (ins gprc:$rS, memri:$dst),
                    "stmw $rS, $dst", IIC_LdStLMW, []>;
 
 def SYNC : XForm_24_sync<31, 598, (outs), (ins i32imm:$L),
-                        "sync $L", IIC_LdStSync, []>, Requires<[IsNotBookE]>;
+                        "sync $L", IIC_LdStSync, []>;
 
 let isCodeGenOnly = 1 in {
   def MSYNC : XForm_24_sync<31, 598, (outs), (ins),
-                           "msync", IIC_LdStSync, []>, Requires<[IsBookE]> {
+                           "msync", IIC_LdStSync, []> {
     let L = 0;
   }
 }
 
-def : Pat<(int_ppc_sync), (SYNC 0)>, Requires<[IsNotBookE]>;
-def : Pat<(int_ppc_sync), (MSYNC)>, Requires<[IsBookE]>;
+def : Pat<(int_ppc_sync),   (SYNC 0)>, Requires<[HasSYNC]>;
+def : Pat<(int_ppc_lwsync), (SYNC 1)>, Requires<[HasSYNC]>;
+def : Pat<(int_ppc_sync),   (MSYNC)>, Requires<[HasOnlyMSYNC]>;
+def : Pat<(int_ppc_lwsync), (MSYNC)>, Requires<[HasOnlyMSYNC]>;
 
 //===----------------------------------------------------------------------===//
 // PPC32 Arithmetic Instructions.
@@ -2538,8 +2549,15 @@ def : Pat<(f64 (extloadf32 xaddr:$src)),
 def : Pat<(f64 (fextend f32:$src)),
           (COPY_TO_REGCLASS $src, F8RC)>;
 
-def : Pat<(atomic_fence (imm), (imm)), (SYNC 0)>, Requires<[IsNotBookE]>;
-def : Pat<(atomic_fence (imm), (imm)), (MSYNC)>, Requires<[IsBookE]>;
+// Only seq_cst fences require the heavyweight sync (SYNC 0).
+// All others can use the lightweight sync (SYNC 1).
+// source: http://www.cl.cam.ac.uk/~pes20/cpp/cpp0xmappings.html
+// The rule for seq_cst is duplicated to work with both 64 bits and 32 bits
+// versions of Power.
+def : Pat<(atomic_fence (i64 7), (imm)), (SYNC 0)>, Requires<[HasSYNC]>;
+def : Pat<(atomic_fence (i32 7), (imm)), (SYNC 0)>, Requires<[HasSYNC]>;
+def : Pat<(atomic_fence (imm),   (imm)), (SYNC 1)>, Requires<[HasSYNC]>;
+def : Pat<(atomic_fence (imm), (imm)), (MSYNC)>, Requires<[HasOnlyMSYNC]>;
 
 // Additional FNMSUB patterns: -a*c + b == -(a*c - b)
 def : Pat<(fma (fneg f64:$A), f64:$C, f64:$B),
@@ -3237,10 +3255,10 @@ class PPCAsmPseudo<string asm, dag iops>
 
 def : InstAlias<"sc", (SC 0)>;
 
-def : InstAlias<"sync", (SYNC 0)>, Requires<[IsNotBookE]>;
-def : InstAlias<"msync", (SYNC 0)>, Requires<[IsNotBookE]>;
-def : InstAlias<"lwsync", (SYNC 1)>, Requires<[IsNotBookE]>;
-def : InstAlias<"ptesync", (SYNC 2)>, Requires<[IsNotBookE]>;
+def : InstAlias<"sync", (SYNC 0)>, Requires<[HasSYNC]>;
+def : InstAlias<"msync", (SYNC 0)>, Requires<[HasSYNC]>;
+def : InstAlias<"lwsync", (SYNC 1)>, Requires<[HasSYNC]>;
+def : InstAlias<"ptesync", (SYNC 2)>, Requires<[HasSYNC]>;
 
 def : InstAlias<"wait", (WAIT 0)>;
 def : InstAlias<"waitrsv", (WAIT 1)>;
@@ -3683,3 +3701,19 @@ defm : TrapExtendedMnemonic<"lgt", 1>;
 defm : TrapExtendedMnemonic<"lnl", 5>;
 defm : TrapExtendedMnemonic<"lng", 6>;
 defm : TrapExtendedMnemonic<"u", 31>;
+
+// Atomic loads
+def : Pat<(atomic_load_8  iaddr:$src), (LBZ  memri:$src)>;
+def : Pat<(atomic_load_16 iaddr:$src), (LHZ  memri:$src)>;
+def : Pat<(atomic_load_32 iaddr:$src), (LWZ  memri:$src)>;
+def : Pat<(atomic_load_8  xaddr:$src), (LBZX memrr:$src)>;
+def : Pat<(atomic_load_16 xaddr:$src), (LHZX memrr:$src)>;
+def : Pat<(atomic_load_32 xaddr:$src), (LWZX memrr:$src)>;
+
+// Atomic stores
+def : Pat<(atomic_store_8  iaddr:$ptr, i32:$val), (STB  gprc:$val, memri:$ptr)>;
+def : Pat<(atomic_store_16 iaddr:$ptr, i32:$val), (STH  gprc:$val, memri:$ptr)>;
+def : Pat<(atomic_store_32 iaddr:$ptr, i32:$val), (STW  gprc:$val, memri:$ptr)>;
+def : Pat<(atomic_store_8  xaddr:$ptr, i32:$val), (STBX gprc:$val, memrr:$ptr)>;
+def : Pat<(atomic_store_16 xaddr:$ptr, i32:$val), (STHX gprc:$val, memrr:$ptr)>;
+def : Pat<(atomic_store_32 xaddr:$ptr, i32:$val), (STWX gprc:$val, memrr:$ptr)>;

@@ -226,7 +226,7 @@ namespace llvm {
     }
     bool ParseOptionalVisibility(unsigned &Visibility);
     bool ParseOptionalDLLStorageClass(unsigned &DLLStorageClass);
-    bool ParseOptionalCallingConv(CallingConv::ID &CC);
+    bool ParseOptionalCallingConv(unsigned &CC);
     bool ParseOptionalAlignment(unsigned &Alignment);
     bool ParseOptionalDereferenceableBytes(uint64_t &Bytes);
     bool ParseScopeAndOrdering(bool isAtomic, SynchronizationScope &Scope,
@@ -372,7 +372,9 @@ namespace llvm {
         : Loc(loc), V(v), Attrs(attrs) {}
     };
     bool ParseParameterList(SmallVectorImpl<ParamInfo> &ArgList,
-                            PerFunctionState &PFS);
+                            PerFunctionState &PFS,
+                            bool IsMustTailCall = false,
+                            bool InVarArgsFunc = false);
 
     // Constant Parsing.
     bool ParseValID(ValID &ID, PerFunctionState *PFS = nullptr);

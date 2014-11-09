@@ -843,7 +843,7 @@ def MRSSystemRegisterOperand : AsmOperandClass {
   let ParserMethod = "tryParseSysReg";
   let DiagnosticType = "MRS";
 }
-// concatenation of 1, op0, op1, CRn, CRm, op2. 16-bit immediate.
+// concatenation of op0, op1, CRn, CRm, op2. 16-bit immediate.
 def mrs_sysreg_op : Operand<i32> {
   let ParserMatchClass = MRSSystemRegisterOperand;
   let DecoderMethod = "DecodeMRSSystemRegister";
@@ -863,9 +863,8 @@ def msr_sysreg_op : Operand<i32> {
 
 class MRSI : RtSystemI<1, (outs GPR64:$Rt), (ins mrs_sysreg_op:$systemreg),
                        "mrs", "\t$Rt, $systemreg"> {
-  bits<15> systemreg;
-  let Inst{20} = 1;
-  let Inst{19-5} = systemreg;
+  bits<16> systemreg;
+  let Inst{20-5} = systemreg;
 }
 
 // FIXME: Some of these def NZCV, others don't. Best way to model that?
@@ -873,9 +872,8 @@ class MRSI : RtSystemI<1, (outs GPR64:$Rt), (ins mrs_sysreg_op:$systemreg),
 // would do it, but feels like overkill at this point.
 class MSRI : RtSystemI<0, (outs), (ins msr_sysreg_op:$systemreg, GPR64:$Rt),
                        "msr", "\t$systemreg, $Rt"> {
-  bits<15> systemreg;
-  let Inst{20} = 1;
-  let Inst{19-5} = systemreg;
+  bits<16> systemreg;
+  let Inst{20-5} = systemreg;
 }
 
 def SystemPStateFieldOperand : AsmOperandClass {
@@ -5262,6 +5260,10 @@ multiclass SIMDZipVector<bits<3>opc, string asm,
   def v2i64  : BaseSIMDZipVector<0b111, opc, V128,
       asm, ".2d", OpNode, v2i64>;
 
+  def : Pat<(v4f16 (OpNode V64:$Rn, V64:$Rm)),
+        (!cast<Instruction>(NAME#"v4i16") V64:$Rn, V64:$Rm)>;
+  def : Pat<(v8f16 (OpNode V128:$Rn, V128:$Rm)),
+        (!cast<Instruction>(NAME#"v8i16") V128:$Rn, V128:$Rm)>;
   def : Pat<(v2f32 (OpNode V64:$Rn, V64:$Rm)),
         (!cast<Instruction>(NAME#"v2i32") V64:$Rn, V64:$Rm)>;
   def : Pat<(v4f32 (OpNode V128:$Rn, V128:$Rm)),

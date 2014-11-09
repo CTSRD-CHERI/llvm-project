@@ -1966,7 +1966,7 @@ def SETEND : AXI<(outs), (ins setend_op:$end), MiscFrm, NoItinerary,
 }
 
 def DBG : AI<(outs), (ins imm0_15:$opt), MiscFrm, NoItinerary, "dbg", "\t$opt",
-             []>, Requires<[IsARM, HasV7]> {
+             [(int_arm_dbg imm0_15:$opt)]>, Requires<[IsARM, HasV7]> {
   bits<4> opt;
   let Inst{27-4} = 0b001100100000111100001111;
   let Inst{3-0} = opt;
@@ -3426,7 +3426,8 @@ def : ARMPat<(ARMaddc GPR:$src, imm0_65535_neg:$imm),
 def : ARMPat<(ARMadde GPR:$src, so_imm_not:$imm, CPSR),
              (SBCri   GPR:$src, so_imm_not:$imm)>;
 def : ARMPat<(ARMadde GPR:$src, imm0_65535_neg:$imm, CPSR),
-             (SBCrr   GPR:$src, (MOVi16 (imm_not_XFORM imm:$imm)))>;
+             (SBCrr   GPR:$src, (MOVi16 (imm_not_XFORM imm:$imm)))>,
+             Requires<[IsARM, HasV6T2]>;
 
 // Note: These are implemented in C++ code, because they have to generate
 // ADD/SUBrs instructions, which use a complex pattern that a xform function
@@ -3941,14 +3942,12 @@ multiclass AI_smul<string opc, PatFrag opnode> {
 
   def WB : AMulxyI<0b0001001, 0b01, (outs GPR:$Rd), (ins GPR:$Rn, GPR:$Rm),
               IIC_iMUL16, !strconcat(opc, "wb"), "\t$Rd, $Rn, $Rm",
-              [(set GPR:$Rd, (sra (opnode GPR:$Rn,
-                                    (sext_inreg GPR:$Rm, i16)), (i32 16)))]>,
+              []>,
            Requires<[IsARM, HasV5TE]>;
 
   def WT : AMulxyI<0b0001001, 0b11, (outs GPR:$Rd), (ins GPR:$Rn, GPR:$Rm),
               IIC_iMUL16, !strconcat(opc, "wt"), "\t$Rd, $Rn, $Rm",
-              [(set GPR:$Rd, (sra (opnode GPR:$Rn,
-                                    (sra GPR:$Rm, (i32 16))), (i32 16)))]>,
+              []>,
             Requires<[IsARM, HasV5TE]>;
 }
 
@@ -3990,17 +3989,13 @@ multiclass AI_smla<string opc, PatFrag opnode> {
   def WB : AMulxyIa<0b0001001, 0b00, (outs GPRnopc:$Rd),
               (ins GPRnopc:$Rn, GPRnopc:$Rm, GPR:$Ra),
               IIC_iMAC16, !strconcat(opc, "wb"), "\t$Rd, $Rn, $Rm, $Ra",
-              [(set GPRnopc:$Rd,
-                    (add GPR:$Ra, (sra (opnode GPRnopc:$Rn,
-                                  (sext_inreg GPRnopc:$Rm, i16)), (i32 16))))]>,
+              []>,
            Requires<[IsARM, HasV5TE, UseMulOps]>;
 
   def WT : AMulxyIa<0b0001001, 0b10, (outs GPRnopc:$Rd),
               (ins GPRnopc:$Rn, GPRnopc:$Rm, GPR:$Ra),
               IIC_iMAC16, !strconcat(opc, "wt"), "\t$Rd, $Rn, $Rm, $Ra",
-              [(set GPRnopc:$Rd,
-                 (add GPR:$Ra, (sra (opnode GPRnopc:$Rn,
-                                    (sra GPRnopc:$Rm, (i32 16))), (i32 16))))]>,
+              []>,
             Requires<[IsARM, HasV5TE, UseMulOps]>;
   }
 }
@@ -5325,11 +5320,6 @@ def : ARMV5TEPat<(mul (sra GPR:$a, (i32 16)),
                  (SMULTB GPR:$a, GPR:$b)>;
 def : ARMV5TEPat<(mul (sra GPR:$a, (i32 16)), sext_16_node:$b),
                 (SMULTB GPR:$a, GPR:$b)>;
-def : ARMV5TEPat<(sra (mul GPR:$a, (sra (shl GPR:$b, (i32 16)), (i32 16))),
-                      (i32 16)),
-                 (SMULWB GPR:$a, GPR:$b)>;
-def : ARMV5TEPat<(sra (mul GPR:$a, sext_16_node:$b), (i32 16)),
-                 (SMULWB GPR:$a, GPR:$b)>;
 
 def : ARMV5MOPat<(add GPR:$acc,
                       (mul (sra (shl GPR:$a, (i32 16)), (i32 16)),
@@ -5352,13 +5342,6 @@ def : ARMV5MOPat<(add GPR:$acc,
 def : ARMV5MOPat<(add GPR:$acc,
                       (mul (sra GPR:$a, (i32 16)), sext_16_node:$b)),
                  (SMLATB GPR:$a, GPR:$b, GPR:$acc)>;
-def : ARMV5MOPat<(add GPR:$acc,
-                      (sra (mul GPR:$a, (sra (shl GPR:$b, (i32 16)), (i32 16))),
-                           (i32 16))),
-                 (SMLAWB GPR:$a, GPR:$b, GPR:$acc)>;
-def : ARMV5MOPat<(add GPR:$acc,
-                      (sra (mul GPR:$a, sext_16_node:$b), (i32 16))),
-                 (SMLAWB GPR:$a, GPR:$b, GPR:$acc)>;
 
 
 // Pre-v7 uses MCR for synchronization barriers.

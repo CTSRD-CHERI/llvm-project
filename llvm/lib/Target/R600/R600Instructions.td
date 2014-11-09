@@ -475,13 +475,13 @@ class ExportBufWord1 {
 multiclass ExportPattern<Instruction ExportInst, bits<8> cf_inst> {
   def : Pat<(int_R600_store_pixel_depth R600_Reg32:$reg),
     (ExportInst
-        (INSERT_SUBREG (v4f32 (IMPLICIT_DEF)), R600_Reg32:$reg, sub0),
+        (INSERT_SUBREG (v4f32 (IMPLICIT_DEF)), $reg, sub0),
         0, 61, 0, 7, 7, 7, cf_inst, 0)
   >;
 
   def : Pat<(int_R600_store_pixel_stencil R600_Reg32:$reg),
     (ExportInst
-        (INSERT_SUBREG (v4f32 (IMPLICIT_DEF)), R600_Reg32:$reg, sub0),
+        (INSERT_SUBREG (v4f32 (IMPLICIT_DEF)), $reg, sub0),
         0, 61, 7, 0, 7, 7, cf_inst, 0)
   >;
 
@@ -513,17 +513,17 @@ multiclass SteamOutputExportPattern<Instruction ExportInst,
 // Stream1
   def : Pat<(int_R600_store_stream_output (v4f32 R600_Reg128:$src),
       (i32 imm:$arraybase), (i32 1), (i32 imm:$mask)),
-      (ExportInst R600_Reg128:$src, 0, imm:$arraybase,
+      (ExportInst $src, 0, imm:$arraybase,
       4095, imm:$mask, buf1inst, 0)>;
 // Stream2
   def : Pat<(int_R600_store_stream_output (v4f32 R600_Reg128:$src),
       (i32 imm:$arraybase), (i32 2), (i32 imm:$mask)),
-      (ExportInst R600_Reg128:$src, 0, imm:$arraybase,
+      (ExportInst $src, 0, imm:$arraybase,
       4095, imm:$mask, buf2inst, 0)>;
 // Stream3
   def : Pat<(int_R600_store_stream_output (v4f32 R600_Reg128:$src),
       (i32 imm:$arraybase), (i32 3), (i32 imm:$mask)),
-      (ExportInst R600_Reg128:$src, 0, imm:$arraybase,
+      (ExportInst $src, 0, imm:$arraybase,
       4095, imm:$mask, buf3inst, 0)>;
 }
 
@@ -917,7 +917,7 @@ class MULADD_IEEE_Common <bits<5> inst> : R600_3OP <
 
 class FMA_Common <bits<5> inst> : R600_3OP <
   inst, "FMA",
-  [(set f32:$dst, (fma f32:$src0, f32:$src1, f32:$src2))]
+  [(set f32:$dst, (fma f32:$src0, f32:$src1, f32:$src2))], VecALU
 >;
 
 class CNDE_Common <bits<5> inst> : R600_3OP <
@@ -1141,9 +1141,12 @@ class TGSI_LIT_Z_Common <InstR600 mul_lit, InstR600 log_clamped, InstR600 exp_ie
 >;
 
 // FROUND pattern
-class FROUNDPat<Instruction CNDGE> : Pat <
+class FROUNDPat<Instruction CNDGE, Instruction CNDGT> : Pat <
   (AMDGPUround f32:$x),
-  (CNDGE (ADD (FNEG_R600 (f32 HALF)), (FRACT $x)), (CEIL $x), (FLOOR $x))
+  (CNDGE $x,
+  (CNDGE (ADD (FNEG_R600 (f32 HALF)), (FRACT $x)), (CEIL $x), (FLOOR $x)),
+  (CNDGT (ADD (FNEG_R600 (f32 HALF)), (FRACT $x)), (CEIL $x), (FLOOR $x))
+  )
 >;
 
 
@@ -1190,7 +1193,7 @@ let Predicates = [isR600] in {
   def : Pat<(fsqrt f32:$src), (MUL $src, (RECIPSQRT_CLAMPED_r600 $src))>;
   defm : RsqPat<RECIPSQRT_IEEE_r600, f32>;
 
-  def : FROUNDPat <CNDGE_r600>;
+  def : FROUNDPat <CNDGE_r600, CNDGT_r600>;
 
   def R600_ExportSwz : ExportSwzInst {
     let Word1{20-17} = 0; // BURST_COUNT

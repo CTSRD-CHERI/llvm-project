@@ -23,12 +23,12 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Support/CBindingWrapping.h"
 
 namespace llvm {
-  class MDNode;
 
 /// \brief This provides the default implementation of the IRBuilder
 /// 'InsertHelper' method that is called whenever an instruction is created by
@@ -429,6 +429,10 @@ public:
   /// If the pointer isn't i8* it will be converted.
   CallInst *CreateLifetimeEnd(Value *Ptr, ConstantInt *Size = nullptr);
 
+  /// \brief Create an assume intrinsic call that allows the optimizer to
+  /// assume that the provided condition will be true.
+  CallInst *CreateAssumption(Value *Cond);
+
 private:
   Value *getCastedInt8PtrValue(Value *Ptr);
   Value *getCastedInt8PtrValue(Value *Ptr, unsigned AS);
@@ -447,7 +451,7 @@ private:
 /// The first template argument handles whether or not to preserve names in the
 /// final instruction output. This defaults to on.  The second template argument
 /// specifies a class to use for creating constants.  This defaults to creating
-/// minimally folded constants.  The fourth template argument allows clients to
+/// minimally folded constants.  The third template argument allows clients to
 /// specify custom insertion hooks that are called on every newly created
 /// insertion.
 template<bool preserveNames = true, typename T = ConstantFolder,
@@ -588,8 +592,7 @@ public:
 
   InvokeInst *CreateInvoke(Value *Callee, BasicBlock *NormalDest,
                            BasicBlock *UnwindDest, const Twine &Name = "") {
-    return Insert(InvokeInst::Create(Callee, NormalDest, UnwindDest,
-                                     ArrayRef<Value *>()),
+    return Insert(InvokeInst::Create(Callee, NormalDest, UnwindDest, None),
                   Name);
   }
   InvokeInst *CreateInvoke(Value *Callee, BasicBlock *NormalDest,
@@ -1528,6 +1531,44 @@ public:
       V = CreateTrunc(V, ExtractedTy, Name + ".trunc");
     }
     return V;
+  }
+
+  /// \brief Create an assume intrinsic call that represents an alignment
+  /// assumption on the provided pointer.
+  ///
+  /// An optional offset can be provided, and if it is provided, the offset
+  /// must be subtracted from the provided pointer to get the pointer with the
+  /// specified alignment.
+  CallInst *CreateAlignmentAssumption(const DataLayout &DL, Value *PtrValue,
+                                      unsigned Alignment,
+                                      Value *OffsetValue = nullptr) {
+    assert(isa<PointerType>(PtrValue->getType()) &&
+           "trying to create an alignment assumption on a non-pointer?");
+
+    PointerType *PtrTy = cast<PointerType>(PtrValue->getType());
+    Type *IntPtrTy = getIntPtrTy(&DL, PtrTy->getAddressSpace());
+    Value *PtrIntValue = CreatePtrToInt(PtrValue, IntPtrTy, "ptrint");
+
+    Value *Mask = ConstantInt::get(IntPtrTy,
+      Alignment > 0 ? Alignment - 1 : 0);
+    if (OffsetValue) {
+      bool IsOffsetZero = false;
+      if (ConstantInt *CI = dyn_cast<ConstantInt>(OffsetValue))
+        IsOffsetZero = CI->isZero();
+
+      if (!IsOffsetZero) {
+        if (OffsetValue->getType() != IntPtrTy)
+          OffsetValue = CreateIntCast(OffsetValue, IntPtrTy, /*isSigned*/ true,
+                                      "offsetcast");
+        PtrIntValue = CreateSub(PtrIntValue, OffsetValue, "offsetptr");
+      }
+    }
+
+    Value *Zero = ConstantInt::get(IntPtrTy, 0);
+    Value *MaskedPtr = CreateAnd(PtrIntValue, Mask, "maskedptr");
+    Value *InvCond = CreateICmpEQ(MaskedPtr, Zero, "maskcond");
+
+    return CreateAssumption(InvCond);
   }
 };
 
