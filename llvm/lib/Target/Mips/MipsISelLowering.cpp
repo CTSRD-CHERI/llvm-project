@@ -3259,6 +3259,9 @@ MipsTargetLowering::LowerReturn(SDValue Chain,
 
   SDValue Flag;
   SmallVector<SDValue, 4> RetOps(1, Chain);
+  bool zeroV0 = true;
+  bool zeroV1 = true;
+  bool zeroC3 = true;
 
   // Copy the result values into the output registers.
   for (unsigned i = 0; i != RVLocs.size(); ++i) {
@@ -3304,10 +3307,43 @@ MipsTargetLowering::LowerReturn(SDValue Chain,
     }
 
     Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), Val, Flag);
+    switch (VA.getLocReg()) {
+      case Mips::V0_64:
+      case Mips::V0:
+        zeroV0 = false;
+        break;
+      case Mips::V1_64:
+      case Mips::V1:
+        zeroV1 = false;
+        break;
+      case Mips::C3:
+        zeroC3 = false;
+        break;
+    }
 
     // Guarantee that all emitted copies are stuck together with flags.
     Flag = Chain.getValue(1);
     RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
+  }
+  if(CallConv == CallingConv::CHERI_CCall) {
+    if (zeroV0) {
+      Chain = DAG.getCopyToReg(Chain, DL, Mips::V0_64,
+          DAG.getConstant(0, MVT::i64), Flag);
+      Flag = Chain.getValue(1);
+      RetOps.push_back(DAG.getRegister(Mips::V0_64, MVT::i64));
+    }
+    if (zeroV1) {
+      Chain = DAG.getCopyToReg(Chain, DL, Mips::V1_64,
+          DAG.getConstant(0, MVT::i64), Flag);
+      Flag = Chain.getValue(1);
+      RetOps.push_back(DAG.getRegister(Mips::V1_64, MVT::i64));
+    }
+    if (zeroC3) {
+      Chain = DAG.getCopyToReg(Chain, DL, Mips::C3,
+          DAG.getConstant(0, MVT::iFATPTR), Flag);
+      Flag = Chain.getValue(1);
+      RetOps.push_back(DAG.getRegister(Mips::C3, MVT::iFATPTR));
+    }
   }
 
   // The mips ABIs for returning structs by value requires that we copy
