@@ -9,7 +9,7 @@ entry:
   %call = tail call i8* @malloc(i64 %s) nounwind
   %0 = ptrtoint i8* %call to i64
   %1 = inttoptr i64 %0 to i8 addrspace(200)*
-  ; CSetLen
+  ; CHECK: csetlen
   %2 = tail call i8 addrspace(200)* @llvm.mips.set.cap.length(i8 addrspace(200)* %1, i64 %s)
   ret i8 addrspace(200)* %2
 }
@@ -18,7 +18,7 @@ declare noalias i8* @malloc(i64) nounwind
 
 declare i8 addrspace(200)* @llvm.mips.set.cap.length(i8 addrspace(200)*, i64) nounwind readnone
 
-; CHECK: addBase
+; CHECK-LABEL: addBase
 define i8 addrspace(200)* @addBase(i8 addrspace(200)* %p) nounwind readnone {
 entry:
   ; CHECK: cincoffset
@@ -26,7 +26,7 @@ entry:
   ret i8 addrspace(200)* %incdec.ptr
 }
 
-; CHECK: getLength
+; CHECK-LABEL: getLength
 define i64 @getLength(i8 addrspace(200)* %c) nounwind readnone {
 entry:
   ; CHECK: cgetlen
@@ -36,7 +36,7 @@ entry:
 
 declare i64 @llvm.mips.get.cap.length(i8 addrspace(200)*) nounwind readnone
 
-; CHECK: getPerms
+; CHECK-LABEL: getPerms
 define signext i16 @getPerms(i8 addrspace(200)* %c) nounwind readnone {
 entry:
   ; CHECK: cgetperm
@@ -47,7 +47,7 @@ entry:
 
 declare i64 @llvm.mips.get.cap.perms(i8 addrspace(200)*) nounwind readnone
 
-; CHECK: andPerms
+; CHECK-LABEL: andPerms
 define i8 addrspace(200)* @andPerms(i8 addrspace(200)* %c, i16 signext %perms) nounwind readnone {
 entry:
   ; CHECK: candperm
@@ -58,7 +58,7 @@ entry:
 
 declare i8 addrspace(200)* @llvm.mips.and.cap.perms(i8 addrspace(200)*, i64) nounwind readnone
 
-; CHECK: gettype
+; CHECK-LABEL: gettype
 define i64 @gettype(i8 addrspace(200)* %c) nounwind readnone {
 entry:
   ; CHECK: cgettype
@@ -68,10 +68,10 @@ entry:
 
 declare i64 @llvm.mips.get.cap.type(i8 addrspace(200)*) nounwind readnone
 
-; CHECK: setType
+; CHECK-LABEL: setType
 define i8 addrspace(200)* @setType(i8 addrspace(200)* %c, i64 %type) nounwind readnone {
 entry:
-  ; CHECK csettype
+  ; CHECK: csettype
   %0 = tail call i8 addrspace(200)* @llvm.mips.set.cap.type(i8 addrspace(200)* %c, i64 %type)
   ret i8 addrspace(200)* %0
 }
