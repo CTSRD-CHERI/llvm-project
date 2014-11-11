@@ -431,8 +431,6 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF) const {
 
   // No need to allocate space on the stack.
   if (StackSize == 0 && !MFI->adjustsStack()) return;
-  if (STI.isCheri() && (StackSize % 32))
-    StackSize += 32 - (StackSize % 32);
 
   MachineModuleInfo &MMI = MF.getMMI();
   const MCRegisterInfo *MRI = MMI.getContext().getRegisterInfo();
@@ -596,8 +594,6 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
   if (!StackSize)
     return;
 
-  if (STI.isCheri() && (StackSize % 32))
-    StackSize += 32 - (StackSize % 32);
   // Adjust stack.
   TII.adjustStackPtr(SP, StackSize, MBB, MBBI);
 }
