@@ -269,7 +269,9 @@ public:
   // really use them if in addition we are in mips16 mode
   static bool useConstantIslands();
 
-  unsigned stackAlignment() const { return hasMips64() ? 16 : 8; }
+  unsigned stackAlignment() const {
+    return isCheri() ? 32  : (isGP64bit() ? 16 : 8);
+  }
 
   // Grab relocation model
   Reloc::Model getRelocationModel() const;
