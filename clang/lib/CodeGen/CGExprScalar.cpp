@@ -3431,6 +3431,7 @@ Value *ScalarExprEmitter::VisitChooseExpr(ChooseExpr *E) {
 
 Value *ScalarExprEmitter::VisitVAArgExpr(VAArgExpr *VE) {
   QualType Ty = VE->getType();
+  llvm::Type *ArgTy = ConvertType(VE->getType());
   if (Ty->isVariablyModifiedType())
     CGF.EmitVariablyModifiedType(Ty);
 
@@ -3439,10 +3440,13 @@ Value *ScalarExprEmitter::VisitVAArgExpr(VAArgExpr *VE) {
 
   // If EmitVAArg fails, we fall back to the LLVM instruction.
   if (!ArgPtr)
-    return Builder.CreateVAArg(ArgValue, ConvertType(VE->getType()));
+    return Builder.CreateVAArg(ArgValue, ArgTy);
 
   // FIXME Volatility.
-  return Builder.CreateLoad(ArgPtr);
+  llvm::Value *Val = Builder.CreateLoad(ArgPtr);
+  if (ArgTy != Val->getType())
+    Val = Builder.CreateTrunc(Val, ArgTy);
+  return Val;
 }
 
 Value *ScalarExprEmitter::VisitBlockExpr(const BlockExpr *block) {
