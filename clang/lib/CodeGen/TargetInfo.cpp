@@ -5968,6 +5968,12 @@ static llvm::Value *setPointerInt(CodeGenFunction &CGF,
 
 llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
                                     CodeGenFunction &CGF) const {
+  if (Ty->isPromotableIntegerType()) {
+    if (Ty->isSignedIntegerType())
+      Ty = CGF.getContext().getIntPtrType();
+    else
+      Ty = CGF.getContext().getUIntPtrType();
+  }
   unsigned AS = getTarget().AddressSpaceForStack();
   llvm::Type *BP = CGF.Int8PtrTy;
   llvm::Type *BPP = llvm::PointerType::get(BP, AS);
