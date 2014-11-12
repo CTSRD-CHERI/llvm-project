@@ -5993,18 +5993,6 @@ llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
     llvm::Value *And = CGF.Builder.CreateAnd(Add, Mask);
     Addr = setPointerInt(CGF, AS, Addr, And, PTy);
   }
-  if (Ty->isIntegerType() &&
-      (AS != 200) &&
-      CGF.CGM.getDataLayout().isBigEndian() &&
-      Size < MinABIStackAlignInBytes) {
-    // Integer types on a big-endian system are stored in word-sized stack
-    // slots and so an extra offset is needed.
-    llvm::Value *Offsets[] = {
-      llvm::ConstantInt::get(IntTy, MinABIStackAlignInBytes - Size)
-    };
-    Addr = CGF.Builder.CreateGEP(Addr, Offsets);
-    TypeAlign = Size;
-  }
   AddrTyped = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy);
 
   llvm::Value *AlignedAddr =
