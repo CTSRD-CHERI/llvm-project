@@ -5968,7 +5968,7 @@ static llvm::Value *setPointerInt(CodeGenFunction &CGF,
 
 llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
                                     CodeGenFunction &CGF) const {
-  if (Ty->isPromotableIntegerType()) {
+  if (Ty->isIntegerType()) {
     if (Ty->isSignedIntegerType())
       Ty = CGF.getContext().getIntPtrType();
     else
@@ -5983,14 +5983,12 @@ llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   CGBuilderTy &Builder = CGF.Builder;
   llvm::Value *VAListAddrAsBPP = Builder.CreateBitCast(VAListAddr, BPP, "ap");
   llvm::Value *Addr = Builder.CreateLoad(VAListAddrAsBPP, "ap.cur");
-  int64_t TypeAlign =
-      std::min(getContext().getTypeAlign(Ty) / 8, StackAlignInBytes);
+  int64_t TypeAlign = getContext().getTypeAlign(Ty) / 8;
   llvm::Type *PTy = llvm::PointerType::get(CGF.ConvertType(Ty), AS);
   llvm::Value *AddrTyped;
   llvm::IntegerType *IntTy = (PtrWidth == 32) ? CGF.Int32Ty : CGF.Int64Ty;
-  TypeAlign = std::max((unsigned)TypeAlign, MinABIStackAlignInBytes);
 
-  if (TypeAlign > MinABIStackAlignInBytes) {
+  if (TypeAlign > (PtrWidth/8)) {
     llvm::Value *AddrAsInt;
     AddrAsInt = getPointerInt(CGF, AS, Addr, IntTy);
     llvm::Value *Inc = llvm::ConstantInt::get(IntTy, TypeAlign - 1);
