@@ -5556,7 +5556,7 @@ public:
         Builder.defineMacro("__CHERI_SANDBOX__", Twine(1));
 
       // Macros for use with the set and get permissions builtins.
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_NON_EPHEMERAL__", Twine(1<<0));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1<<0));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
               Twine(1<<1));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__", Twine(1<<2));
@@ -5565,10 +5565,9 @@ public:
               Twine(1<<4));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
               Twine(1<<5));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_EPHEMERAL__",
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__",
               Twine(1<<6));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<7));
-      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SET_TYPE__", Twine(1<<8));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_EPCC__", Twine(1<<10));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KDC__", Twine(1<<11));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KCC__", Twine(1<<12));
