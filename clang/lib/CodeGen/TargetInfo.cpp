@@ -5984,6 +5984,11 @@ llvm::Value* MipsABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   llvm::Value *VAListAddrAsBPP = Builder.CreateBitCast(VAListAddr, BPP, "ap");
   llvm::Value *Addr = Builder.CreateLoad(VAListAddrAsBPP, "ap.cur");
   int64_t TypeAlign = getContext().getTypeAlign(Ty) / 8;
+  // O32 is braindead and sometimes requires passing things with the wrong
+  // alignment.
+  if (IsO32)
+    TypeAlign = std::min(TypeAlign, (int64_t)StackAlignInBytes);
+
   llvm::Type *PTy = llvm::PointerType::get(CGF.ConvertType(Ty), AS);
   llvm::Value *AddrTyped;
   llvm::IntegerType *IntTy = (PtrWidth == 32) ? CGF.Int32Ty : CGF.Int64Ty;
