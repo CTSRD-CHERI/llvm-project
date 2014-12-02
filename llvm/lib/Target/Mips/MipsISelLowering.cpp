@@ -3560,6 +3560,8 @@ parseRegForInlineAsmConstraint(StringRef C, MVT VT) const {
     RC = TRI->getRegClass(Mips::FCCRegClassID);
   else if (Prefix == "$w") { // Parse $w0-$w31.
     RC = getRegClassFor((VT == MVT::Other) ? MVT::v16i8 : VT);
+  } else if (Prefix == "$c") { // Parse $c0-$c31.
+    RC = getRegClassFor(MVT::iFATPTR);
   } else { // Parse $0-$31.
     assert(Prefix == "$");
     RC = getRegClassFor((VT == MVT::Other) ? MVT::i32 : VT);
