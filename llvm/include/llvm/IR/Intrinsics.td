@@ -232,6 +232,11 @@ class GCCBuiltin<string name> {
   string GCCBuiltinName = name;
 }
 
+class GCCBuiltinAlias<string name> {
+  string GCCBuiltinAliasName = name;
+}
+
+
 class MSBuiltin<string name> {
   string MSBuiltinName = name;
 }

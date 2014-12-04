@@ -763,6 +763,15 @@ EmitIntrinsicToGCCBuiltinMap(const std::vector<CodeGenIntrinsic> &Ints,
         PrintFatalError("Intrinsic '" + Ints[i].TheDef->getName() +
               "': duplicate GCC builtin name!");
     }
+    if (!Ints[i].GCCBuiltinAliasName.empty()) {
+      // Get the map for this target prefix.
+      std::map<std::string, std::string> &BIM =BuiltinMap[Ints[i].TargetPrefix];
+
+      if (!BIM.insert(std::make_pair(Ints[i].GCCBuiltinAliasName,
+                                     Ints[i].EnumName)).second)
+        PrintFatalError("Intrinsic '" + Ints[i].TheDef->getName() +
+              "': duplicate GCC builtin name!");
+    }
   }
 
   OS << "// Get the LLVM intrinsic that corresponds to a GCC builtin.\n";
