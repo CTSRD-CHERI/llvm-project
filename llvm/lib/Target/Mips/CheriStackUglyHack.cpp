@@ -261,7 +261,7 @@ class CheriStackHack : public FunctionPass,
       Function *CastFn =
         Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
       Function *SetLenFun =
-        Intrinsic::getDeclaration(M, Intrinsic::mips_set_cap_length);
+        Intrinsic::getDeclaration(M, Intrinsic::mips_cap_length_set);
 
       IRBuilder<> B(C);
 

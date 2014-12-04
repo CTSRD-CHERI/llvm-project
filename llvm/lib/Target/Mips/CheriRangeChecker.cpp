@@ -173,7 +173,7 @@ namespace
 
         if (!(Casts.empty() && ConstantCasts.empty())) {
           SetLengthFn = Intrinsic::getDeclaration(M,
-              Intrinsic::mips_set_cap_length);
+              Intrinsic::mips_cap_length_set);
           Value *BitCast = 0;
 
           for (auto *i=Casts.begin(), *e=Casts.end() ; i!=e ; ++i) {

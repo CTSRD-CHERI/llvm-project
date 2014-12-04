@@ -1770,101 +1770,159 @@ def int_mips_xori_b : GCCBuiltin<"__builtin_msa_xori_b">,
   Intrinsic<[llvm_v16i8_ty], [llvm_v16i8_ty, llvm_i32_ty], [IntrNoMem]>;
 
 // Set the length of a capability
-def int_mips_set_cap_length : GCCBuiltin<"__builtin_cheri_set_cap_length">,
-    Intrinsic<[llvm_fatptr_ty],
-              [llvm_fatptr_ty, llvm_i64_ty],
-              [IntrNoMem]>;
-def int_mips_get_cap_length : GCCBuiltin<"__builtin_cheri_get_cap_length">,
-    Intrinsic<[llvm_i64_ty],
-              [llvm_fatptr_ty],
-              [IntrNoMem]>;
-def int_mips_inc_cap_base : GCCBuiltin<"__builtin_cheri_inc_cap_base">,
-    Intrinsic<[llvm_fatptr_ty],
-              [llvm_fatptr_ty, llvm_i64_ty],
-              [IntrNoMem]>;
-def int_mips_get_cap_base : GCCBuiltin<"__builtin_cheri_get_cap_base">,
-    Intrinsic<[llvm_i64_ty],
-              [llvm_fatptr_ty],
-              [IntrNoMem]>;
+def int_mips_cap_length_set :
+  GCCBuiltinAlias<"__builtin_cheri_set_cap_length">,
+  GCCBuiltin<"__builtin_memcap_length_set">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_i64_ty],
+            [IntrNoMem]>;
+def int_mips_cap_length_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_cap_length">,
+  GCCBuiltin<"__builtin_memcap_length_get">,
+  Intrinsic<[llvm_i64_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem]>;
+def int_mips_cap_base_increment :
+  GCCBuiltinAlias<"__builtin_cheri_inc_cap_base">,
+  GCCBuiltin<"__builtin_memcap_base_increment">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_i64_ty],
+            [IntrNoMem]>;
+def int_mips_cap_base_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_cap_base">,
+  GCCBuiltin<"__builtin_memcap_base_get">,
+  Intrinsic<[llvm_i64_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem]>;
 
-def int_mips_and_cap_perms : GCCBuiltin<"__builtin_cheri_and_cap_perms">,
-    Intrinsic<[llvm_fatptr_ty],
-              [llvm_fatptr_ty, llvm_i64_ty],
-              [IntrNoMem]>;
-def int_mips_get_cap_perms : GCCBuiltin<"__builtin_cheri_get_cap_perms">,
-    Intrinsic<[llvm_i64_ty],
-              [llvm_fatptr_ty],
-              [IntrNoMem]>;
-def int_mips_set_cap_type : GCCBuiltin<"__builtin_cheri_set_cap_type">,
-    Intrinsic<[llvm_fatptr_ty],
-              [llvm_fatptr_ty, llvm_i64_ty],
-              [IntrNoMem]>;
-def int_mips_get_cap_type : GCCBuiltin<"__builtin_cheri_get_cap_type">,
-    Intrinsic<[llvm_i64_ty],
-              [llvm_fatptr_ty],
-              [IntrNoMem]>;
-def int_mips_get_cap_tag  : GCCBuiltin<"__builtin_cheri_get_cap_tag">,
-    Intrinsic<[llvm_i64_ty],
-              [llvm_fatptr_ty],
-              [IntrNoMem]>;
-def int_mips_get_cap_unsealed  : GCCBuiltin<"__builtin_cheri_get_cap_unsealed">,
-    Intrinsic<[llvm_i64_ty],
-              [llvm_fatptr_ty],
-              [IntrNoMem]>;
+def int_mips_cap_perms_and :
+  GCCBuiltinAlias<"__builtin_cheri_and_cap_perms">,
+  GCCBuiltin<"__builtin_memcap_perms_and">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_i64_ty],
+            [IntrNoMem]>;
+def int_mips_cap_perms_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_cap_perms">,
+  GCCBuiltin<"__builtin_memcap_perms_get">,
+  Intrinsic<[llvm_i64_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem]>;
+def int_mips_cap_type_set :
+  GCCBuiltinAlias<"__builtin_cheri_set_cap_type">,
+  GCCBuiltin<"__builtin_memcap_type_set">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_i64_ty],
+            [IntrNoMem]>;
+def int_mips_cap_type_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_cap_type">,
+  GCCBuiltin<"__builtin_memcap_type_get">,
+  Intrinsic<[llvm_i64_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem]>;
+def int_mips_cap_tag_get  :
+  GCCBuiltinAlias<"__builtin_cheri_get_cap_tag">,
+  GCCBuiltin<"__builtin_memcap_tag_get">,
+  Intrinsic<[llvm_i64_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem]>;
+def int_mips_cap_unsealed_get  :
+  GCCBuiltinAlias<"__builtin_cheri_get_cap_unsealed">,
+  GCCBuiltin<"__builtin_memcap_unsealed_get">,
+  Intrinsic<[llvm_i64_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem]>;
 
-def int_mips_clear_cap_tag  : GCCBuiltin<"__builtin_cheri_clear_cap_tag">,
-    Intrinsic<[llvm_fatptr_ty],
-              [llvm_fatptr_ty],
-              [IntrNoMem]>;
+def int_mips_cap_tag_clear  :
+  GCCBuiltinAlias<"__builtin_cheri_clear_cap_tag">,
+  GCCBuiltin<"__builtin_memcap_tag_clear">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem]>;
 
-def int_mips_seal_cap : GCCBuiltin<"__builtin_cheri_seal_cap">,
-    Intrinsic<[llvm_fatptr_ty],
-              [llvm_fatptr_ty, llvm_fatptr_ty],
-              [IntrNoMem]>;
-def int_mips_unseal_cap  : GCCBuiltin<"__builtin_cheri_unseal_cap">,
-    Intrinsic<[llvm_fatptr_ty],
-              [llvm_fatptr_ty, llvm_fatptr_ty],
-              [IntrNoMem]>;
-def int_mips_get_cause : GCCBuiltin<"__builtin_cheri_get_cause">,
-    Intrinsic<[llvm_i64_ty], [], []>;
-def int_mips_set_cause : GCCBuiltin<"__builtin_cheri_set_cause">,
-    Intrinsic<[], [llvm_i64_ty], []>;
-def int_mips_check_perms : GCCBuiltin<"__builtin_cheri_check_perms">,
-    Intrinsic<[], [llvm_fatptr_ty, llvm_i64_ty], []>;
-def int_mips_check_type : GCCBuiltin<"__builtin_cheri_check_type">,
-    Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty], []>;
+def int_mips_cap_seal :
+  GCCBuiltinAlias<"__builtin_cheri_seal_cap">,
+  GCCBuiltin<"__builtin_memcap_seal">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_fatptr_ty],
+            [IntrNoMem]>;
+def int_mips_cap_unseal  :
+  GCCBuiltinAlias<"__builtin_cheri_unseal_cap">,
+  GCCBuiltin<"__builtin_memcap_unseal">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_fatptr_ty],
+            [IntrNoMem]>;
+def int_mips_cap_cause_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_cause">,
+  GCCBuiltin<"__builtin_cheri_cause_get">,
+  Intrinsic<[llvm_i64_ty], [], []>;
+def int_mips_cap_cause_set :
+  GCCBuiltinAlias<"__builtin_cheri_set_cause">,
+  GCCBuiltin<"__builtin_cheri_cause_set">,
+  Intrinsic<[], [llvm_i64_ty], []>;
+def int_mips_cap_perms_check :
+  GCCBuiltinAlias<"__builtin_cheri_check_perms">,
+  GCCBuiltin<"__builtin_memcap_perms_check">,
+  Intrinsic<[], [llvm_fatptr_ty, llvm_i64_ty], []>;
+def int_mips_cap_type_check :
+  GCCBuiltinAlias<"__builtin_cheri_check_type">,
+  GCCBuiltin<"__builtin_memcap_type_check">,
+  Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty], []>;
 
-def int_mips_get_c0 : GCCBuiltin<"__builtin_cheri_get_global_data_cap">,
-    Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
-def int_mips_get_pcc : GCCBuiltin<"__builtin_cheri_get_program_counter_cap">,
-    Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
-def int_mips_get_idc : GCCBuiltin<"__builtin_cheri_get_invoke_data_cap">,
-    Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
-def int_mips_get_kr1c : GCCBuiltin<"__builtin_cheri_get_kernel_cap1">,
-    Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
-def int_mips_get_kr2c : GCCBuiltin<"__builtin_cheri_get_kernel_cap2">,
-    Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
-def int_mips_get_kcc : GCCBuiltin<"__builtin_cheri_get_kernel_code_cap">,
-    Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
-def int_mips_get_kdc : GCCBuiltin<"__builtin_cheri_get_kernel_data_cap">,
-    Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
-def int_mips_get_epcc : GCCBuiltin<"__builtin_cheri_get_exception_program_counter_cap">,
-    Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+def int_mips_c0_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_global_data_cap">,
+  GCCBuiltin<"__builtin_memcap_global_data_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+def int_mips_pcc_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_program_counter_cap">,
+  GCCBuiltin<"__builtin_memcap_program_counter_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+def int_mips_idc_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_invoke_data_cap">,
+  GCCBuiltin<"__builtin_cheri_invoke_data_cap_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+def int_mips_kr1c_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_kernel_cap1">,
+  GCCBuiltin<"__builtin_cheri_kernel_cap1_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+def int_mips_kr2c_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_kernel_cap2">,
+  GCCBuiltin<"__builtin_cheri_kernel_cap2_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+def int_mips_kcc_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_kernel_code_cap">,
+  GCCBuiltin<"__builtin_cheri_kernel_code_cap_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+def int_mips_kdc_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_kernel_data_cap">,
+  GCCBuiltin<"__builtin_cheri_kernel_data_cap_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
+def int_mips_epcc_get :
+  GCCBuiltinAlias<"__builtin_cheri_get_exception_program_counter_cap">,
+  GCCBuiltin<"__builtin_cheri_exception_program_counter_cap_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
 
-def int_mips_stack_to_cap : Intrinsic<[llvm_fatptr_ty], [llvm_ptr_ty], [IntrNoMem]>;
+def int_mips_stack_to_cap :
+  Intrinsic<[llvm_fatptr_ty], [llvm_ptr_ty], [IntrNoMem]>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Offset-related intrinsics
 ////////////////////////////////////////////////////////////////////////////////
 
-def int_mips_cap_inc_offset: GCCBuiltin<"__builtin_cheri_cap_offset_increment">,
-    Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
-def int_mips_cap_set_offset: GCCBuiltin<"__builtin_cheri_cap_offset_set">,
-    Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
-def int_mips_cap_get_offset: GCCBuiltin<"__builtin_cheri_cap_offset_get">,
-    Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
-def int_mips_cap_inc_base_only : GCCBuiltin<"__builtin_cheri_cap_base_inc_only">,
-    Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
-
+def int_mips_cap_offset_increment:
+  GCCBuiltinAlias<"__builtin_cheri_cap_offset_increment">,
+  GCCBuiltin<"__builtin_memcap_offset_increment">,
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+def int_mips_cap_offset_set:
+  GCCBuiltinAlias<"__builtin_cheri_cap_offset_set">,
+  GCCBuiltin<"__builtin_memcap_offset_set">,
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+def int_mips_cap_offset_get:
+  GCCBuiltinAlias<"__builtin_cheri_cap_offset_get">,
+  GCCBuiltin<"__builtin_memcap_offset_get">,
+  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
+def int_mips_cap_base_only_increment :
+  GCCBuiltinAlias<"__builtin_cheri_cap_base_inc_only">,
+  GCCBuiltin<"__builtin_memcap_base_only_increment">,
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
 }
 
