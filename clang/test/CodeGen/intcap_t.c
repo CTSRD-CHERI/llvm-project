@@ -46,9 +46,9 @@ int c5(__capability void* x, __capability void* y)
 // CHECK: ca1
 int ca1(__capability void* x, __capability void* y)
 {
-  // CHECK: @llvm.mips.cap.get.offset(i8 addrspace(200)* %x)
+  // CHECK: @llvm.mips.cap.offset.get(i8 addrspace(200)* %x)
   __intcap_t a = (__intcap_t)x;
-  // CHECK: @llvm.mips.cap.get.offset(i8 addrspace(200)* %y)
+  // CHECK: @llvm.mips.cap.offset.get(i8 addrspace(200)* %y)
   __intcap_t b = (__intcap_t)y;
   // CHECK: sub
   return a - b;
@@ -57,9 +57,9 @@ int ca1(__capability void* x, __capability void* y)
 // CHECK: ca2
 int ca2(__capability void* x, __capability void* y)
 {
-  // CHECK: @llvm.mips.cap.get.offset(i8 addrspace(200)* %x)
+  // CHECK: @llvm.mips.cap.offset.get(i8 addrspace(200)* %x)
   __intcap_t a = (__intcap_t)x;
-  // CHECK: @llvm.mips.cap.get.offset(i8 addrspace(200)* %y)
+  // CHECK: @llvm.mips.cap.offset.get(i8 addrspace(200)* %y)
   __intcap_t b = (__intcap_t)y;
   // CHECK: add
   return a + b;
@@ -68,9 +68,9 @@ int ca2(__capability void* x, __capability void* y)
 // CHECK: ca3
 int ca3(__capability void* x, __capability void* y)
 {
-  // CHECK: @llvm.mips.cap.get.offset(i8 addrspace(200)* %x)
+  // CHECK: @llvm.mips.cap.offset.get(i8 addrspace(200)* %x)
   __intcap_t a = (__intcap_t)x;
-  // CHECK: @llvm.mips.cap.get.offset(i8 addrspace(200)* %y)
+  // CHECK: @llvm.mips.cap.offset.get(i8 addrspace(200)* %y)
   __intcap_t b = (__intcap_t)y;
   // CHECK: mul
   return a * b;
@@ -79,9 +79,9 @@ int ca3(__capability void* x, __capability void* y)
 // CHECK: ca4
 int ca4(__capability void* x, __capability void* y)
 {
-  // CHECK: @llvm.mips.cap.get.offset(i8 addrspace(200)* %x)
+  // CHECK: @llvm.mips.cap.offset.get(i8 addrspace(200)* %x)
   __intcap_t a = (__intcap_t)x;
-  // CHECK: @llvm.mips.cap.get.offset(i8 addrspace(200)* %y)
+  // CHECK: @llvm.mips.cap.offset.get(i8 addrspace(200)* %y)
   __intcap_t b = (__intcap_t)y;
   // CHECK: sdiv
   return a / b;

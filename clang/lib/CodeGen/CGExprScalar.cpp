@@ -491,14 +491,14 @@ public:
     // FIXME: Once more than one architecture supports capabilities, this
     // should be a generic intrinsic
     llvm::Function *GetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_get_offset);
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
     return Builder.CreateCall(GetOffset, V);
   }
   Value *GetBinOpResult(BinOpInfo &Op, Value *LHS, Value *V) {
     if (!Op.E->getType().isCapabilityType(CGF.getContext()))
       return V;
     llvm::Function *SetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
     return Builder.CreateCall2(SetOffset, LHS, V);
   }
   // Common helper for getting how wide LHS of shift is.
@@ -842,7 +842,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       Value *Null =
         Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstTy);
       llvm::Function *SetOffset =
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
       Src = Builder.CreateZExtOrTrunc(Src, CGF.Int64Ty);
       return Builder.CreateCall2(SetOffset, Null, Src);
     }
@@ -1420,7 +1420,7 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
       flags &= 0xFFEB;
 
     if (flags != 0xffff) {
-      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::mips_and_cap_perms);
+      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::mips_cap_perms_and);
       if (F->getFunctionType()->getParamType(0) != result->getType())
         result = Builder.CreateBitCast(result, F->getFunctionType()->getParamType(0));
       result = Builder.CreateCall2(F, result,

@@ -5946,7 +5946,7 @@ static llvm::Value *getPointerInt(CodeGenFunction &CGF,
                                   llvm::Type *IntTy) {
   if (AS == 200) {
     llvm::Function *GetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_get_offset);
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
     return CGF.Builder.CreateCall(GetOffset, V);
   }
   return CGF.Builder.CreatePtrToInt(V, IntTy);
@@ -5958,7 +5958,7 @@ static llvm::Value *setPointerInt(CodeGenFunction &CGF,
                                   llvm::Type *PTy){
   if (AS == 200) {
     llvm::Function *SetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_set_offset);
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
     llvm::Value *Addr = CGF.Builder.CreateCall2(SetOffset, Base, V);
     return CGF.Builder.CreateBitCast(Addr, PTy);
   }
