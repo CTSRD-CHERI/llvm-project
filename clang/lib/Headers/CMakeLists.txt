@@ -12,7 +12,6 @@ set(files
   avxintrin.h
   bmi2intrin.h
   bmiintrin.h
-  capabilities.h
   cpuid.h
   emmintrin.h
   f16cintrin.h
@@ -25,6 +24,7 @@ set(files
   iso646.h
   limits.h
   lzcntintrin.h
+  memcap.h
   mm3dnow.h
   mmintrin.h
   mm_malloc.h
