@@ -37,6 +37,16 @@
 
 using namespace llvm;
 
+static cl::opt<bool>
+Cheri16("cheri16", cl::NotHidden,
+        cl::desc("CHERI: Only use 16 capability registers."),
+        cl::init(false));
+
+static cl::opt<bool>
+Cheri8("cheri8", cl::NotHidden,
+       cl::desc("CHERI: Only use 8 capability registers."),
+       cl::init(false));
+
 #define DEBUG_TYPE "mips-reg-info"
 
 #define GET_REGINFO_TARGET_DESC
@@ -138,6 +148,18 @@ getReservedRegs(const MachineFunction &MF) const {
     Mips::C31
   };
 
+  // C1-C7, C11, C12, C17-C24 allowed
+  static const uint16_t ReservedCheri16Regs[] = {
+    Mips::C8, Mips::C9, Mips::C10, Mips::C13, Mips::C15, Mips::C16
+  };
+
+  // C1-C3, C11, C12, C17-C19 allowed
+  static const uint16_t ReservedCheri8Regs[] = {
+    Mips::C4, Mips::C5, Mips::C6, Mips::C7, Mips::C8, Mips::C9, Mips::C10,
+    Mips::C13, Mips::C15, Mips::C16, Mips::C17, Mips::C18, Mips::C19,
+    Mips::C20, Mips::C22
+  };
+
   BitVector Reserved(getNumRegs());
   typedef TargetRegisterClass::const_iterator RegIter;
 
@@ -177,6 +199,12 @@ getReservedRegs(const MachineFunction &MF) const {
       Reserved.set(ReservedCheriRegs[I]);
     if (Subtarget.usesCheriStackCapabilityABI())
       Reserved.set(Mips::C11);
+    if (Cheri8)
+      for (unsigned I = 0; I < array_lengthof(ReservedCheri8Regs); ++I)
+        Reserved.set(ReservedCheri8Regs[I]);
+    if (Cheri16)
+      for (unsigned I = 0; I < array_lengthof(ReservedCheri16Regs); ++I)
+        Reserved.set(ReservedCheri16Regs[I]);
   }
 
   // Reserve FP if this function should have a dedicated frame pointer register.
