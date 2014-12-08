@@ -1181,6 +1181,11 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     Quals.addOutput();
     Result = Context.getQualifiedType(Result, Quals);
   }
+  if (DS.HasInput()) {
+    Qualifiers Quals;
+    Quals.addInput();
+    Result = Context.getQualifiedType(Result, Quals);
+  }
 
   return Result;
 }

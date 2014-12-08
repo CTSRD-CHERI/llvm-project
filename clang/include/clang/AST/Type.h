@@ -264,6 +264,9 @@ public:
   bool hasOutput() const { return Mask & OMask; }
   void addOutput() { Mask |= OMask; }
   void removeOutput() { Mask &= ~OMask; }
+  bool hasInput() const { return Mask & IMask; }
+  void addInput() { Mask |= IMask; }
+  void removeInput() { Mask &= ~IMask; }
 
   bool hasObjCGCAttr() const { return Mask & GCAttrMask; }
   GC getObjCGCAttr() const { return GC((Mask & GCAttrMask) >> GCAttrShift); }
@@ -482,17 +485,18 @@ public:
 
 private:
 
-  // bits:     |0 1 2|3|4 .. 5|6  ..  8|9   ...   31|
-  //           |C R V|O|GCAttr|Lifetime|AddressSpace|
+  // bits:     |0 1 2|3|4|5 .. 6|7  ..  9|10  ...   31|
+  //           |C R V|O|I|GCAttr|Lifetime|AddressSpace|
   uint32_t Mask;
 
   static const uint32_t OMask = 0x8;
-  static const uint32_t GCAttrMask = 0x30;
-  static const uint32_t GCAttrShift = 4;
-  static const uint32_t LifetimeMask = 0x1C0;
-  static const uint32_t LifetimeShift = 6;
-  static const uint32_t AddressSpaceMask = ~(OMask|CVRMask|GCAttrMask|LifetimeMask);
-  static const uint32_t AddressSpaceShift = 9;
+  static const uint32_t IMask = 0x10;
+  static const uint32_t GCAttrMask = 0x60;
+  static const uint32_t GCAttrShift = 5;
+  static const uint32_t LifetimeMask = 0x380;
+  static const uint32_t LifetimeShift = 7;
+  static const uint32_t AddressSpaceMask = ~(IMask|OMask|CVRMask|GCAttrMask|LifetimeMask);
+  static const uint32_t AddressSpaceShift = 10;
 };
 
 /// A std::pair-like structure for storing a qualified type split

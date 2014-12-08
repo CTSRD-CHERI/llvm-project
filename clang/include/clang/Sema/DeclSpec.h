@@ -331,6 +331,7 @@ private:
   /*TSCS*/unsigned ThreadStorageClassSpec : 2;
   unsigned SCS_extern_in_linkage_spec : 1;
   unsigned TQ_output : 1;
+  unsigned TQ_input : 1;
 
   // type-specifier
   /*TSW*/unsigned TypeSpecWidth : 2;
@@ -423,6 +424,7 @@ public:
       ThreadStorageClassSpec(TSCS_unspecified),
       SCS_extern_in_linkage_spec(false),
       TQ_output(false),
+      TQ_input(false),
       TypeSpecWidth(TSW_unspecified),
       TypeSpecComplex(TSC_unspecified),
       TypeSpecSign(TSS_unspecified),
@@ -473,7 +475,9 @@ public:
     ThreadStorageClassSpecLoc  = SourceLocation();
   }
   bool HasOutput() const { return TQ_output; }
-  void SetOutput(bool O) { TQ_output = O; }
+  bool SetOutput(const char *&PrevSpec, unsigned &DiagID);
+  bool HasInput() const { return TQ_input; }
+  bool SetInput(const char *&PrevSpec, unsigned &DiagID);
 
   void ClearTypeSpecType() {
     TypeSpecType = DeclSpec::TST_unspecified;
