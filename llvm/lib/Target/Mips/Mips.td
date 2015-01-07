@@ -164,10 +164,15 @@ def FeatureCnMips     : SubtargetFeature<"cnmips", "HasCnMips",
 // Mips processors supported.
 //===----------------------------------------------------------------------===//
 
+include "MipsSchedBeri.td"
+
 class Proc<string Name, list<SubtargetFeature> Features>
  : Processor<Name, MipsGenericItineraries, Features>;
 
-def : Proc<"cheri", [FeatureMipsCheri, FeatureN64, FeatureMips4]>;
+def : ProcessorModel<"beri", BeriModel,
+                     [FeatureN64, FeatureMips4]>;
+def : ProcessorModel<"cheri", BeriModel,
+                     [FeatureMipsCheri, FeatureN64, FeatureMips4]>;
 def : Proc<"mips1", [FeatureMips1, FeatureO32]>;
 def : Proc<"mips2", [FeatureMips2, FeatureO32]>;
 def : Proc<"mips32", [FeatureMips32, FeatureO32]>;
