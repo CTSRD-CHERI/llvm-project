@@ -48,9 +48,6 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   %r25 = call i8 addrspace(200)* @llvm.mips.cap.perms.and(i8 addrspace(200)* %r24, i64 12)
   store i8 addrspace(200)* %r25, i8 addrspace(200)** getelementptr inbounds ([12 x i8 addrspace(200)*]* @results, i32 0, i64 1), align 32
   %r26 = load i8 addrspace(200)** %r1, align 32
-  ; This comes later, but the instruction scheduler puts it in here to avoid a
-  ; spill
-  ; CHECK: cgetunsealed
   ; CHECK: csettype
   %r27 = call i8 addrspace(200)* @llvm.mips.cap.type.set(i8 addrspace(200)* %r26, i64 35)
   store i8 addrspace(200)* %r27, i8 addrspace(200)** getelementptr inbounds ([12 x i8 addrspace(200)*]* @results, i32 0, i64 2), align 32
@@ -70,6 +67,9 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   ; CHECK: cgetcause
   %r37 = call i64 @llvm.mips.cap.cause.get()
   %r38 = and i64 %r36, %r37
+  ; This comes later, but the instruction scheduler puts it in here to avoid a
+  ; spill
+  ; CHECK: cgetunsealed
   %r39 = call i64 @llvm.mips.cap.unsealed.get(i8 addrspace(200)* %r16)
   %r40 = trunc i64 %r39 to i1
   %r41 = zext i1 %r40 to i64
