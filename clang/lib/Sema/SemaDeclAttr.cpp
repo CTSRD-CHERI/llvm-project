@@ -1703,6 +1703,32 @@ static void handleConstructorAttr(Sema &S, Decl *D, const AttributeList &Attr) {
                              Attr.getAttributeSpellingListIndex()));
 }
 
+static void handleCheriMethodClass(Sema &S, Decl *D, const AttributeList &Attr) {
+  D->addAttr(::new (S.Context)
+             CheriMethodClassAttr(Attr.getRange(), S.Context,
+               Attr.getArgAsIdent(0)->Ident,
+                                   Attr.getAttributeSpellingListIndex()));
+}
+
+static void handleCheriMethodNumber(Sema &S, Decl *D, const AttributeList &Attr) {
+  uint32_t number;
+  checkUInt32Argument(S, Attr, Attr.getArgAsExpr(0), number);
+
+  D->addAttr(::new (S.Context)
+             CheriMethodNumberAttr(Attr.getRange(), S.Context, number,
+                                   Attr.getAttributeSpellingListIndex()));
+}
+static void handleCheriMethodSuffix(Sema &S, Decl *D, const AttributeList &Attr) {
+  StringRef Str;
+  SourceLocation LiteralLoc;
+  if (!S.checkStringLiteralArgumentAttr(Attr, 0, Str, &LiteralLoc))
+    return;
+  D->addAttr(::new (S.Context)
+             CheriMethodSuffixAttr(Attr.getRange(), S.Context, Str,
+                                   Attr.getAttributeSpellingListIndex()));
+}
+
+
 static void handleDestructorAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   uint32_t priority = DestructorAttr::DefaultPriority;
   if (Attr.getNumArgs() &&
@@ -4579,6 +4605,15 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_PnaclCall:
   case AttributeList::AT_IntelOclBicc:
     handleCallConvAttr(S, D, Attr);
+    break;
+  case AttributeList::AT_CheriMethodNumber:
+    handleCheriMethodNumber(S, D, Attr);
+    break;
+  case AttributeList::AT_CheriMethodClass:
+    handleCheriMethodClass(S, D, Attr);
+    break;
+  case AttributeList::AT_CheriMethodSuffix:
+    handleCheriMethodSuffix(S, D, Attr);
     break;
   case AttributeList::AT_OpenCLKernel:
     handleSimpleAttribute<OpenCLKernelAttr>(S, D, Attr);

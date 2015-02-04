@@ -1086,6 +1086,23 @@ def CheriCCall : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+def CheriMethodNumber : InheritableAttr {
+  let Spellings = [GNU<"cheri_method_number">];
+  let Documentation = [Undocumented];
+  let Args = [IntArgument<"Number">];
+}
+
+def CheriMethodSuffix : InheritableAttr {
+  let Spellings = [GNU<"cheri_method_suffix">];
+  let Documentation = [Undocumented];
+  let Args = [StringArgument<"Suffix">];
+}
+def CheriMethodClass : InheritableAttr {
+  let Spellings = [GNU<"cheri_method_class">];
+  let Documentation = [Undocumented];
+  let Args = [IdentifierArgument<"DefaultClass">];
+}
+
 def IntelOclBicc : InheritableAttr {
   let Spellings = [GNU<"intel_ocl_bicc">];
 //  let Subjects = [Function, ObjCMethod];
