@@ -126,6 +126,7 @@ def CC_MipsN : CallingConv<[
 
 def CC_CHERI_CCall : CallingConv<[
   CCIfType<[iFATPTR], CCAssignToReg<[C1, C2, C3, C4, C5, C6, C7, C8, C9, C10]>>,
+  CCIfType<[i64], CCAssignToReg<[V0_64]>>,
   CCDelegateTo<CC_MipsN>
 ]>;
 
