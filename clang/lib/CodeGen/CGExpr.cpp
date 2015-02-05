@@ -3275,8 +3275,57 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
                E->arg_end(), E->getDirectCallee(), /*ParamsToSkip*/ 0,
                ForceColumnInfo);
 
+  bool CallCHERIInvoke = false;
+
+  // Note: It doesn't actually matter what the order of the number and class
+  // are, as they will be in a different category of register.
+  if (TargetDecl->hasAttr<CheriMethodNumberAttr>() ||
+    TargetDecl->hasAttr<CheriMethodClassAttr>()) {
+    CallCHERIInvoke = true;
+    CallArgList ModifiedArgs;
+    SmallVector<QualType, 16> NewParams;
+    if (CheriMethodClassAttr *Attr =
+        TargetDecl->getAttr<CheriMethodClassAttr>()) {
+      auto *TU = CGM.getContext().getTranslationUnitDecl();
+      // FIXME: We should do this lookup in Sema and warn if it fails.
+      DeclarationName DN(Attr->getDefaultClass());
+      auto Cls = cast<VarDecl>(TU->lookup(DN)[0]);
+      llvm::Value *V = CGM.GetAddrOfGlobalVar(Cls);
+      auto ClsTy = Cls->getType();
+      llvm::Type *RealVarTy = getTypes().ConvertTypeForMem(ClsTy);
+      V = EmitBitCastOfLValueToProperType(*this, V, RealVarTy);
+      CharUnits Alignment = getContext().getDeclAlign(Cls);
+      LValue LV = MakeAddrLValue(V, ClsTy, Alignment);
+      RValue RV = EmitLoadOfLValue(LV, E->getLocStart());
+      CallArg Arg(RV, ClsTy, false);
+      Args.insert(Args.begin(), Arg);
+      NewParams.push_back(ClsTy);
+    }
+    if (CheriMethodNumberAttr *Attr =
+        TargetDecl->getAttr<CheriMethodNumberAttr>()) {
+      auto NumTy = getContext().UnsignedLongLongTy;
+      CallArg Arg(RValue::get(llvm::ConstantInt::get(
+              ConvertType(NumTy),
+              Attr->getNumber()
+              )), NumTy, false);
+      // Insert into the args list after the class, irrespective of whether the
+      // class is explicit or implicit in the call.
+      Args.insert(Args.begin()+1, Arg);
+      NewParams.push_back(NumTy);
+    }
+    auto *FnPType = cast<FunctionProtoType>(FnType);
+    auto Params = FnPType->getParamTypes();
+    FunctionProtoType::ExtProtoInfo EPI = FnPType->getExtProtoInfo();
+    NewParams.insert(NewParams.end(), Params.begin(), Params.end());
+    FnType = getContext().getFunctionType(FnPType->getReturnType(),
+        NewParams, EPI)->getAs<FunctionType>();
+  }
   const CGFunctionInfo &FnInfo =
     CGM.getTypes().arrangeFreeFunctionCall(Args, FnType);
+
+  if (CallCHERIInvoke)
+    Callee = CGM.getModule().getOrInsertFunction("cheriinvoke",
+        getTypes().GetFunctionType(FnInfo));
 
   // C99 6.5.2.2p6:
   //   If the expression that denotes the called function has a type
