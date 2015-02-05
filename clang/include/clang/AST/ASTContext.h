@@ -252,6 +252,8 @@ class ASTContext : public RefCountedBase<ASTContext> {
   /// \brief The typedef declaration for the Objective-C "instancetype" type.
   TypedefDecl *ObjCInstanceTypeDecl;
   
+  mutable RecordDecl *CHERIClassDecl;
+
   /// \brief The type for the C FILE type.
   TypeDecl *FILEDecl;
 
@@ -1487,6 +1489,11 @@ public:
   /// pointer type, a pointer to a struct.
   QualType getObjCClassType() const { 
     return getTypeDeclType(getObjCClassDecl());
+  }
+
+  RecordDecl *getCHERIClassDecl() const;
+  QualType getCHERIClassType() const {
+    return getTypeDeclType(getCHERIClassDecl());
   }
 
   /// \brief Retrieve the Objective-C class declaration corresponding to 

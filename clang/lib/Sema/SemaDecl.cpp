@@ -6938,6 +6938,8 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   DeclContext *OriginalDC = DC;
   bool IsLocalExternDecl = adjustContextForLocalExternDecl(DC);
 
+
+
   FunctionDecl *NewFD = CreateNewFunctionDecl(*this, D, DC, R, TInfo, SC,
                                               isVirtualOkay);
   if (!NewFD) return nullptr;
@@ -7352,6 +7354,55 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   ProcessDeclAttributes(S, NewFD, D);
 
   QualType RetType = NewFD->getReturnType();
+
+  if (CheriMethodSuffixAttr *Attr = NewFD->getAttr<CheriMethodSuffixAttr>()) {
+    auto *TU = Context.getTranslationUnitDecl();
+    // Lookup the type of cheri_class, or generate it if it isn't specified.
+    QualType CHERIClassTy;
+    IdentifierInfo &ClassII = Context.Idents.get("cheri_class");
+    DeclarationName ClassDN(&ClassII);
+    auto Defs = TU->lookup(ClassDN);
+    for (NamedDecl *D : Defs)
+      if (RecordDecl *RD = dyn_cast<RecordDecl>(D))
+        CHERIClassTy = Context.getTypeDeclType(RD);
+    if (CHERIClassTy == QualType())
+      CHERIClassTy = Context.getCHERIClassType();
+    // Construct a new function prototype that is the same as the original,
+    // except that it has an extra struct cheri_class as the first argument.
+    const FunctionProtoType *OFT =
+      NewFD->getType()->getAs<FunctionProtoType>();
+    const ArrayRef<QualType> Params = OFT->getParamTypes();
+    SmallVector<QualType, 16> NewParams;
+    NewParams.push_back(CHERIClassTy);
+    NewParams.insert(NewParams.end(), Params.begin(), Params.end());
+    FunctionProtoType::ExtProtoInfo EPI = OFT->getExtProtoInfo();
+    QualType WrappedType = Context.getFunctionType(RetType, NewParams, EPI);
+    // Construct the new function name, taking the old one and adding the
+    // suffix.
+    std::string Name = (NewFD->getName() + Attr->getSuffix()).str();
+    IdentifierInfo &II = Context.Idents.get(Name);
+    DeclarationName DN(&II);
+    DeclarationNameInfo DNI(DN, SourceLocation());
+    // construct the function decl and its associated parameter decls
+    FunctionDecl *WrappedFD = FunctionDecl::Create(Context,
+        NewFD->getDeclContext(), NewFD->getTypeSpecStartLoc(), DNI,
+        WrappedType, TInfo, SC_Extern, false, true);
+    SmallVector<ParmVarDecl*, 16> Parms;
+    for (QualType Ty : NewParams) {
+      Parms.push_back(ParmVarDecl::Create(Context, NewFD, SourceLocation(),
+            SourceLocation(), nullptr, Ty, Context.getTrivialTypeSourceInfo(Ty,
+              SourceLocation()), SC_None, nullptr));
+    }
+    WrappedFD->setParams(Parms);
+    // Propagate the ccall number (the calling convention is copied automatically)
+    if (CheriMethodNumberAttr *Num = NewFD->getAttr<CheriMethodNumberAttr>())
+      WrappedFD->addAttr(Num->clone(Context));
+    // Make the new prototype visible.
+    TU->addDecl(WrappedFD);
+    S->AddDecl(WrappedFD);
+    IdResolver.AddDecl(WrappedFD);
+  }
+
   const CXXRecordDecl *Ret = RetType->isRecordType() ?
       RetType->getAsCXXRecordDecl() : RetType->getPointeeCXXRecordDecl();
   if (!NewFD->isInvalidDecl() && !NewFD->hasAttr<WarnUnusedResultAttr>() &&

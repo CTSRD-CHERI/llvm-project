@@ -734,6 +734,7 @@ ASTContext::ASTContext(LangOptions &LOpts, SourceManager &SM,
       BuiltinVaListDecl(nullptr), ObjCIdDecl(nullptr), ObjCSelDecl(nullptr),
       ObjCClassDecl(nullptr), ObjCProtocolClassDecl(nullptr), BOOLDecl(nullptr),
       CFConstantStringTypeDecl(nullptr), ObjCInstanceTypeDecl(nullptr),
+      CHERIClassDecl(nullptr),
       FILEDecl(nullptr), jmp_bufDecl(nullptr), sigjmp_bufDecl(nullptr),
       ucontext_tDecl(nullptr), BlockDescriptorType(nullptr),
       BlockDescriptorExtendedType(nullptr), cudaConfigureCallDecl(nullptr),
@@ -5846,6 +5847,34 @@ TypedefDecl *ASTContext::getObjCClassDecl() const {
     ObjCClassDecl = buildImplicitTypedef(T, "Class");
   }
   return ObjCClassDecl;
+}
+
+RecordDecl *ASTContext::getCHERIClassDecl() const {
+  if (!CHERIClassDecl) {
+    RecordDecl *RD;
+    RD = buildImplicitRecord("cheri_class");
+    RD->startDefinition();
+
+    // FIXME: Target AS for caps
+    QualType CapTy = getPointerType(getAddrSpaceQualType(VoidTy, 200));
+
+    QualType FieldTypes[] = { CapTy, CapTy };
+    static const char *const FieldNames[] = { "data", "code" };
+
+    for (size_t i = 0; i < 2; ++i) {
+      FieldDecl *Field = FieldDecl::Create(
+          *this, RD, SourceLocation(), SourceLocation(),
+          &Idents.get(FieldNames[i]), FieldTypes[i], /*TInfo=*/nullptr,
+          /*BitWidth=*/nullptr, /*Mutable=*/false, ICIS_NoInit);
+      Field->setAccess(AS_public);
+      RD->addDecl(Field);
+    }
+
+    RD->completeDefinition();
+    RD->setImplicit();
+    CHERIClassDecl = RD;
+  }
+  return CHERIClassDecl;
 }
 
 ObjCInterfaceDecl *ASTContext::getObjCProtocolDecl() const {
