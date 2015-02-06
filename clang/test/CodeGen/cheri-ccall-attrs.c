@@ -17,6 +17,7 @@ struct cheri_class other;
 CHERI_CCALL(1, "_cap", def)
 void foo(int, int);
 
+// CHECK: @__cheri_method_def_1 = unnamed_addr constant [4 x i8] c"foo\00", comdat $__cheri_method_def_1, align 1
 
 void bar(int a, int b)
 {
