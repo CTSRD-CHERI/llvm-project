@@ -3280,8 +3280,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
 
   // Note: It doesn't actually matter what the order of the number and class
   // are, as they will be in a different category of register.
-  if (TargetDecl->hasAttr<CheriMethodNumberAttr>() ||
-    TargetDecl->hasAttr<CheriMethodClassAttr>()) {
+  if (TargetDecl && (TargetDecl->hasAttr<CheriMethodNumberAttr>() ||
+    TargetDecl->hasAttr<CheriMethodClassAttr>())) {
     CallCHERIInvoke = true;
     CallArgList ModifiedArgs;
     SmallVector<QualType, 16> NewParams;
