@@ -27,6 +27,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/Type.h"
 #include "llvm/MC/MCSectionMachO.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <algorithm>
 #include <memory>
@@ -5987,24 +5988,36 @@ public:
   }
 };
 
+static llvm::cl::opt<bool>
+Cheri128("cheri128", llvm::cl::desc("CHERI capabilities are 128 bits"),
+    llvm::cl::NotHidden, llvm::cl::init(false));
+
 struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
+  int CapSize;
+  std::string Desc;
   MipsCheriTargetInfo(const llvm::Triple &Triple) :
       Mips64EBTargetInfo(Triple) {
     IsCheri = true;
-    setCPU("cheri");
+    if (Cheri128) {
+      Desc = "E-m:m-p200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+      CapSize = 128;
+      setCPU("cheri128");
+    } else {
+      Desc = "E-m:m-p200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+      CapSize = 256;
+      setCPU("cheri");
+    }
   }
   virtual void setDescriptionString() {
-    DescriptionString = "E-m:m-p200:256:256-i8:8:32-i16:16:32-i64:64"
-                        "-n32:64-S128";
     if (SandboxABI)
-      DescriptionString = "E-m:m-p200:256:256-i8:8:32-i16:16:32-i64:64"
-                          "-n32:64-S128-A200";
+      Desc += "-A200";
+    DescriptionString = Desc.c_str();
   }
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
-    return (AddrSpace == 200) ? 256 : PointerWidth;
+    return (AddrSpace == 200) ? CapSize : PointerWidth;
   }
   virtual uint64_t getPointerAlignV(unsigned AddrSpace) const {
-    return (AddrSpace == 200) ? 256 : PointerAlign;
+    return (AddrSpace == 200) ? CapSize : PointerAlign;
   }
 
   virtual bool SupportsCapabilities() const { return true; }
