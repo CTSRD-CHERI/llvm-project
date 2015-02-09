@@ -148,7 +148,11 @@ namespace CallingConv {
 
     /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
-    CHERI_CCall = 81
+    CHERI_CCall = 81,
+    /// CHERI_CCallee - Calling convention used for the callee of CHERI_CCall.
+    /// Ignores the first two capability arguments and the first integer
+    /// argument, zeroes all unused return registers on return.
+    CHERI_CCallee = 82
   };
 } // End CallingConv namespace
 

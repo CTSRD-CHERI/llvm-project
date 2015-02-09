@@ -3325,7 +3325,8 @@ MipsTargetLowering::LowerReturn(SDValue Chain,
     Flag = Chain.getValue(1);
     RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
   }
-  if(CallConv == CallingConv::CHERI_CCall) {
+  if (CallConv == CallingConv::CHERI_CCall ||
+      CallConv == CallingConv::CHERI_CCallee) {
     if (zeroV0) {
       Chain = DAG.getCopyToReg(Chain, DL, Mips::V0_64,
           DAG.getConstant(0, MVT::i64), Flag);
