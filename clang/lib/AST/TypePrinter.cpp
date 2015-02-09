@@ -700,6 +700,9 @@ void TypePrinter::printFunctionProtoAfter(const FunctionProtoType *T,
     case CC_CheriCCall:
       OS << " __attribute__((cheri_ccall))";
       break;
+    case CC_CheriCCallee:
+      OS << " __attribute__((cheri_ccallee))";
+      break;
     }
   }
 
@@ -1239,6 +1242,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
 
   case AttributedType::attr_cdecl: OS << "cdecl"; break;
   case AttributedType::attr_cheri_ccall: OS << "cheri_ccall"; break;
+  case AttributedType::attr_cheri_ccallee: OS << "cheri_ccallee"; break;
   case AttributedType::attr_fastcall: OS << "fastcall"; break;
   case AttributedType::attr_stdcall: OS << "stdcall"; break;
   case AttributedType::attr_thiscall: OS << "thiscall"; break;

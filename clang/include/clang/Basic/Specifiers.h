@@ -211,7 +211,8 @@ namespace clang {
     CC_AAPCS_VFP,   // __attribute__((pcs("aapcs-vfp")))
     CC_PnaclCall,   // __attribute__((pnaclcall))
     CC_IntelOclBicc,// __attribute__((intel_ocl_bicc))
-    CC_CheriCCall   // __attribute__((cheri_ccall))
+    CC_CheriCCall,  // __attribute__((cheri_ccall))
+    CC_CheriCCallee // __attribute__((cheri_ccallee))
   };
 
   /// \brief Checks whether the given calling convention supports variadic

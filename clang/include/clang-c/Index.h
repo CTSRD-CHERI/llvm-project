@@ -2856,6 +2856,7 @@ enum CXCallingConv {
   CXCallingConv_X86VectorCall = 12,
 
   CXCallingConv_CheriCCall = 80,
+  CXCallingConv_CheriCCallee = 81,
 
   CXCallingConv_Invalid = 100,
   CXCallingConv_Unexposed = 200

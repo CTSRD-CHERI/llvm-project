@@ -517,6 +517,7 @@ CXCallingConv clang_getFunctionTypeCallingConv(CXType X) {
     switch (FD->getCallConv()) {
       TCALLINGCONV(C);
       TCALLINGCONV(CheriCCall);
+      TCALLINGCONV(CheriCCallee);
       TCALLINGCONV(X86StdCall);
       TCALLINGCONV(X86FastCall);
       TCALLINGCONV(X86ThisCall);

@@ -104,6 +104,7 @@ static void diagnoseBadTypeAttribute(Sema &S, const AttributeList &attr,
     case AttributeList::AT_NoReturn: \
     case AttributeList::AT_CDecl: \
     case AttributeList::AT_CheriCCall: \
+    case AttributeList::AT_CheriCCallee: \
     case AttributeList::AT_FastCall: \
     case AttributeList::AT_StdCall: \
     case AttributeList::AT_ThisCall: \
@@ -3454,6 +3455,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_Pcs;
   case AttributedType::attr_cheri_ccall:
     return AttributeList::AT_CheriCCall;
+  case AttributedType::attr_cheri_ccallee:
+    return AttributeList::AT_CheriCCallee;
   case AttributedType::attr_pnaclcall:
     return AttributeList::AT_PnaclCall;
   case AttributedType::attr_inteloclbicc:
@@ -4484,6 +4487,8 @@ static AttributedType::Kind getCCTypeAttrKind(AttributeList &Attr) {
   }
   case AttributeList::AT_CheriCCall:
     return AttributedType::attr_cheri_ccall;
+  case AttributeList::AT_CheriCCallee:
+    return AttributedType::attr_cheri_ccallee;
   case AttributeList::AT_PnaclCall:
     return AttributedType::attr_pnaclcall;
   case AttributeList::AT_IntelOclBicc:
