@@ -3313,27 +3313,6 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
       // class is explicit or implicit in the call.
       Args.insert(Args.begin()+1, Arg);
       NewParams.push_back(NumTy);
-      // Emit a global variable with the mangled name if one doesn't exist
-      // already.
-      if (CheriMethodClassAttr *ClsAttr =
-          TargetDecl->getAttr<CheriMethodClassAttr>()) {
-        std::stringstream Num;
-        Num << Attr->getNumber();
-        std::string GlobalName = (StringRef("__cheri_method_") +
-            ClsAttr->getDefaultClass()->getName() + "_" +
-            Num.str()).str();
-        // FIXME: We need some error checking in sema.  This protects against
-        // doing the wrong thing between compilation units, but not across a
-        // single one.
-        if (!CGM.getModule().getNamedGlobal(GlobalName)) {
-          auto GlobalValue = cast<NamedDecl>(TargetDecl)->getName();
-          auto *Tag = CGM.GetAddrOfConstantCString(GlobalValue, GlobalName.c_str());
-          Tag->setLinkage(llvm::GlobalValue::ExternalLinkage);
-          auto *ComDat = CGM.getModule().getOrInsertComdat(GlobalName);
-          ComDat->setSelectionKind(llvm::Comdat::ExactMatch);
-          Tag->setComdat(ComDat);
-        }
-      }
     }
     auto *FnPType = cast<FunctionProtoType>(FnType);
     auto Params = FnPType->getParamTypes();
