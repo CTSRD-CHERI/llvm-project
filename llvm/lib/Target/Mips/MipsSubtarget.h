@@ -103,6 +103,9 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // HasMips5_32r2 - Has the subset of MIPS-V present in MIPS32r2
   bool HasMips5_32r2;
 
+  /// IsCheri128 - CHERI capabilities are 128 bits.
+  bool IsCheri128;
+
   /// IsCheri - Supports the CHERI capability extensions
   bool IsCheri;
 
@@ -233,6 +236,7 @@ public:
   bool isLinux() const { return IsLinux; }
   bool useSmallSection() const { return UseSmallSection; }
   bool isCheri() const { return IsCheri; }
+  bool isCheri128() const { return IsCheri128; }
   bool isCheriSandbox() const { return IsCheriSandbox; }
   /// Uses the ABI where the stack pointer is relative to C11, not C0.
   bool usesCheriStackCapabilityABI() const;

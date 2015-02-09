@@ -99,8 +99,12 @@ static std::string computeDataLayout(const MipsSubtarget &ST) {
 
   Ret += "-m:m";
 
-  if (ST.isCheri())
-    Ret += "-p200:256:256:256";
+  if (ST.isCheri()) {
+    if (ST.isCheri128())
+      Ret += "-p200:128:128:128";
+    else
+      Ret += "-p200:256:256:256";
+  }
 
   // Pointers are 32 bit on some ABIs.
   if (!ST.isABI_N64())
@@ -133,7 +137,7 @@ MipsSubtarget::MipsSubtarget(const std::string &TT, const std::string &CPU,
       IsNaN2008bit(false), IsGP64bit(false), HasVFPU(false), HasCnMips(false),
       IsLinux(true), HasMips3_32(false), HasMips3_32r2(false),
       HasMips4_32(false), HasMips4_32r2(false), HasMips5_32r2(false),
-      IsCheri(false), IsCheriSandbox(false),
+      IsCheri128(false), IsCheri(false), IsCheriSandbox(false),
       InMips16Mode(false), InMips16HardFloat(Mips16HardFloat),
       InMicroMipsMode(false), HasDSP(false), HasDSPR2(false),
       AllowMixed16_32(Mixed16_32 | Mips_Os16), Os16(Mips_Os16),

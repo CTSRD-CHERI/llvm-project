@@ -144,6 +144,9 @@ def FeatureMips64r6    : SubtargetFeature<"mips64r6", "MipsArchVersion",
 def FeatureMipsCheri   : SubtargetFeature<"cheri", "IsCheri", "true",
                                 "Supports the CHERI capability coprocessor",
                                 [FeatureGP64Bit]>;
+def FeatureMipsCheri128 : SubtargetFeature<"cheri128", "IsCheri128", "true",
+                                "Capabilities are 128 bits",
+                                []>;
 def FeatureMips16  : SubtargetFeature<"mips16", "InMips16Mode", "true",
                                       "Mips16 mode">;
 
@@ -173,6 +176,8 @@ def : ProcessorModel<"beri", BeriModel,
                      [FeatureN64, FeatureMips4]>;
 def : ProcessorModel<"cheri", BeriModel,
                      [FeatureMipsCheri, FeatureN64, FeatureMips4]>;
+def : ProcessorModel<"cheri128", BeriModel,
+                     [FeatureMipsCheri128, FeatureMipsCheri, FeatureN64, FeatureMips4]>;
 def : Proc<"mips1", [FeatureMips1, FeatureO32]>;
 def : Proc<"mips2", [FeatureMips2, FeatureO32]>;
 def : Proc<"mips32", [FeatureMips32, FeatureO32]>;
