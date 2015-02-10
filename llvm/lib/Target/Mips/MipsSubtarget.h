@@ -203,6 +203,7 @@ public:
     return MipsArchVersion == Mips64r2 || MipsArchVersion == Mips64r6;
   }
   bool hasMips64r6() const { return MipsArchVersion == Mips64r6; }
+  bool hasMips3_32() const { return hasMips3() || hasMips32(); }
 
   bool hasCnMips() const { return HasCnMips; }
 

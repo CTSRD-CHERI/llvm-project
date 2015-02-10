@@ -1208,7 +1208,7 @@ let DecoderNamespace = "COP3_" in {
              ISA_MIPS2;
 }
 
-def SYNC : MMRel, SYNC_FT<"sync">, SYNC_FM, ISA_MIPS32;
+def SYNC : MMRel, SYNC_FT<"sync">, SYNC_FM, INSN_MIPS3_32;
 
 def TEQ : MMRel, TEQ_FT<"teq", GPR32Opnd>, TEQ_FM<0x34>, ISA_MIPS2;
 def TGE : MMRel, TEQ_FT<"tge", GPR32Opnd>, TEQ_FM<0x30>, ISA_MIPS2;
