@@ -1710,14 +1710,6 @@ static void handleCheriMethodClass(Sema &S, Decl *D, const AttributeList &Attr) 
                                    Attr.getAttributeSpellingListIndex()));
 }
 
-static void handleCheriMethodNumber(Sema &S, Decl *D, const AttributeList &Attr) {
-  uint32_t number;
-  checkUInt32Argument(S, Attr, Attr.getArgAsExpr(0), number);
-
-  D->addAttr(::new (S.Context)
-             CheriMethodNumberAttr(Attr.getRange(), S.Context, number,
-                                   Attr.getAttributeSpellingListIndex()));
-}
 static void handleCheriMethodSuffix(Sema &S, Decl *D, const AttributeList &Attr) {
   StringRef Str;
   SourceLocation LiteralLoc;
@@ -4612,9 +4604,6 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_PnaclCall:
   case AttributeList::AT_IntelOclBicc:
     handleCallConvAttr(S, D, Attr);
-    break;
-  case AttributeList::AT_CheriMethodNumber:
-    handleCheriMethodNumber(S, D, Attr);
     break;
   case AttributeList::AT_CheriMethodClass:
     handleCheriMethodClass(S, D, Attr);

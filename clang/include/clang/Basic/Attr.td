@@ -1091,12 +1091,6 @@ def CheriCCallee : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
-def CheriMethodNumber : InheritableAttr {
-  let Spellings = [GNU<"cheri_method_number">];
-  let Documentation = [Undocumented];
-  let Args = [IntArgument<"Number">];
-}
-
 def CheriMethodSuffix : InheritableAttr {
   let Spellings = [GNU<"cheri_method_suffix">];
   let Documentation = [Undocumented];
