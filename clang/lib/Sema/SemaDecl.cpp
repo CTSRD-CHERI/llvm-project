@@ -7394,9 +7394,13 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
               SourceLocation()), SC_None, nullptr));
     }
     WrappedFD->setParams(Parms);
-    // Propagate the ccall number (the calling convention is copied automatically)
-    if (CheriMethodNumberAttr *Num = NewFD->getAttr<CheriMethodNumberAttr>())
-      WrappedFD->addAttr(Num->clone(Context));
+    // Propagate the default class (the calling convention is copied
+    // automatically).  This won't be used in the suffixed version, but is used
+    // to look up the method number.
+    if (CheriMethodClassAttr *Cls = NewFD->getAttr<CheriMethodClassAttr>())
+      WrappedFD->addAttr(Cls->clone(Context));
+    WrappedFD->addAttr(Attr->clone(Context));
+    Attr->setSuffix(Context, "");
     // Make the new prototype visible.
     TU->addDecl(WrappedFD);
     S->AddDecl(WrappedFD);

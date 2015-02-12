@@ -30,7 +30,6 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/Support/ConvertUTF.h"
-#include <sstream>
 
 using namespace clang;
 using namespace CodeGen;
@@ -3280,16 +3279,47 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
 
   // Note: It doesn't actually matter what the order of the number and class
   // are, as they will be in a different category of register.
-  if (TargetDecl && (TargetDecl->hasAttr<CheriMethodNumberAttr>() ||
-    TargetDecl->hasAttr<CheriMethodClassAttr>())) {
+  if (FnType->getCallConv() == CC_CheriCCall &&
+      TargetDecl->hasAttr<CheriMethodClassAttr>()) {
+    assert(TargetDecl);
+    StringRef Suffix =
+      TargetDecl->getAttr<CheriMethodSuffixAttr>()->getSuffix();
     CallCHERIInvoke = true;
     CallArgList ModifiedArgs;
     SmallVector<QualType, 16> NewParams;
-    if (CheriMethodClassAttr *Attr =
-        TargetDecl->getAttr<CheriMethodClassAttr>()) {
+    auto NumTy = getContext().UnsignedLongLongTy;
+    auto *ClsAttr = TargetDecl->getAttr<CheriMethodClassAttr>();
+    std::string FunctionBaseName = cast<NamedDecl>(TargetDecl)->getName().str();
+    FunctionBaseName = FunctionBaseName.substr(0, FunctionBaseName.size() -
+        Suffix.size());
+    // Emit a global of the form __cheri_method_{class}_{function}
+    auto GlobalName = (StringRef("__cheri_method.") +
+        ClsAttr->getDefaultClass()->getName() + "." + FunctionBaseName).str();
+
+    auto *MethodNumVar = CGM.getModule().getNamedGlobal(GlobalName);
+    if (!MethodNumVar) {
+      llvm::IntegerType *Ty = cast<llvm::IntegerType>(ConvertType(NumTy));
+      MethodNumVar = new llvm::GlobalVariable(CGM.getModule(), Ty,
+          /*isConstant*/false, llvm::GlobalValue::LinkOnceODRLinkage,
+          llvm::ConstantInt::get(Ty, 0), GlobalName);
+      MethodNumVar->setSection(".CHERI_CALLER");
+    }
+    // Load the global and use it in the call
+    auto *MethodNum = Builder.CreateLoad(MethodNumVar);
+    MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
+        llvm::MDNode::get(getLLVMContext(), None));
+    CallArg Arg(RValue::get(MethodNum), NumTy, false);
+    Args.insert(Args.begin()+1, Arg);
+    NewParams.push_back(NumTy);
+    // If we have a non-empty suffix, then we're not the version of the method
+    // that takes an explicit class, we're the version with the same explicit
+    // parameters and extra implicit ones for the default class, so add the
+    // default class.
+    if (Suffix.size() == 0) {
+      // FIXME: We should silently insert a common-linkage global if the class
+      // isn't declared.
+      DeclarationName DN(ClsAttr->getDefaultClass());
       auto *TU = CGM.getContext().getTranslationUnitDecl();
-      // FIXME: We should do this lookup in Sema and warn if it fails.
-      DeclarationName DN(Attr->getDefaultClass());
       auto Cls = cast<VarDecl>(TU->lookup(DN)[0]);
       llvm::Value *V = CGM.GetAddrOfGlobalVar(Cls);
       auto ClsTy = Cls->getType();
@@ -3301,33 +3331,6 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
       CallArg Arg(RV, ClsTy, false);
       Args.insert(Args.begin(), Arg);
       NewParams.push_back(ClsTy);
-    }
-    if (CheriMethodNumberAttr *Attr =
-        TargetDecl->getAttr<CheriMethodNumberAttr>()) {
-      auto NumTy = getContext().UnsignedLongLongTy;
-      CallArg Arg(RValue::get(llvm::ConstantInt::get(
-              ConvertType(NumTy),
-              Attr->getNumber()
-              )), NumTy, false);
-      // Insert into the args list after the class, irrespective of whether the
-      // class is explicit or implicit in the call.
-      Args.insert(Args.begin()+1, Arg);
-      NewParams.push_back(NumTy);
-      // Emit a global variable with the mangled name if one doesn't exist
-      // already.
-      if (CheriMethodClassAttr *ClsAttr =
-          TargetDecl->getAttr<CheriMethodClassAttr>()) {
-        std::stringstream Num;
-        Num << Attr->getNumber();
-        std::string GlobalName = (StringRef("__cheri_method_") +
-            ClsAttr->getDefaultClass()->getName() + "_" +
-            Num.str()).str();
-        if (!CGM.getModule().getNamedGlobal(GlobalName)) {
-          auto GlobalValue = cast<NamedDecl>(TargetDecl)->getName();
-          auto *Tag = CGM.GetAddrOfConstantCString(GlobalValue, GlobalName.c_str());
-          Tag->setLinkage(llvm::GlobalValue::LinkOnceODRLinkage);
-        }
-      }
     }
     auto *FnPType = cast<FunctionProtoType>(FnType);
     auto Params = FnPType->getParamTypes();
