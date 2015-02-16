@@ -210,7 +210,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::DMFC1), IntReg)
         .addReg(SrcReg);
       BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
-        .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+        .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
         .addReg(Mips::C11);
       return;
     }
@@ -225,7 +225,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       llvm_unreachable("Unexpected register type for CHERI!");
     }
     BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C11);
     return;
   }
@@ -263,7 +263,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     MachineFrameInfo *MFI = MBB.getParent()->getFrameInfo();
     MFI->setObjectAlignment(FI, 32);
     BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C0);
     return;
   }
@@ -293,7 +293,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
       unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
       BuildMI(MBB, I, DL, get(Mips::CAPLOAD64), IntReg)
-        .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+        .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
         .addReg(Mips::C11);
       BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
         .addReg(IntReg, getKillRegState(true));
@@ -303,7 +303,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       Opc = Mips::LOADCAP;
     }
     BuildMI(MBB, I, DL, get(Opc), DestReg)
-      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C11);
     return;
   }
@@ -336,7 +336,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
     Opc = Mips::LOADCAP;
     BuildMI(MBB, I, DL, get(Opc), DestReg)
-      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C0);
     return;
   }
