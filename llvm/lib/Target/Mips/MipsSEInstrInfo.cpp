@@ -197,8 +197,11 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   unsigned Opc = 0;
 
+  // The ACC64/128 registers are handled by STORE_ACC64/128 pseudos, which call this function again with more ordinary
+  // registers when they are lowered: so no special treatment for CHERI is required.
   if (RI.Subtarget.usesCheriStackCapabilityABI() &&
-      !Mips::ACC64RegClass.hasSubClassEq(RC)) {
+      !Mips::ACC64RegClass.hasSubClassEq(RC) &&
+      !Mips::ACC128RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
       Opc = Mips::CAPSTORE32;
     else if (Mips::GPR64RegClass.hasSubClassEq(RC))
@@ -282,8 +285,11 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   MachineMemOperand *MMO = GetMemOperand(MBB, FI, MachineMemOperand::MOLoad);
   unsigned Opc = 0;
 
+  // The ACC64/128 registers are handled by LOAD_ACC64/128 pseudos, which call this function again with more ordinary
+  // registers when they are lowered: so no special treatment for CHERI is required.
   if (RI.Subtarget.usesCheriStackCapabilityABI() &&
-      !Mips::ACC64RegClass.hasSubClassEq(RC)) {
+      !Mips::ACC64RegClass.hasSubClassEq(RC) &&
+      !Mips::ACC128RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
       Opc = Mips::CAPLOAD32;
     else if (Mips::GPR64RegClass.hasSubClassEq(RC))
