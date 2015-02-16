@@ -298,9 +298,10 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
         .addReg(IntReg, getKillRegState(true));
       return;
-    }
-    else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+    } else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
       Opc = Mips::LOADCAP;
+    } else {
+      llvm_unreachable("Unexpected register type for CHERI!");
     }
     BuildMI(MBB, I, DL, get(Opc), DestReg)
       .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
