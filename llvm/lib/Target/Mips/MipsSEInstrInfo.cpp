@@ -197,8 +197,11 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   unsigned Opc = 0;
 
+  // The ACC64/128 registers are handled by STORE_ACC64/128 pseudos, which call this function again with more ordinary
+  // registers when they are lowered: so no special treatment for CHERI is required.
   if (RI.Subtarget.usesCheriStackCapabilityABI() &&
-      !Mips::ACC64RegClass.hasSubClassEq(RC)) {
+      !Mips::ACC64RegClass.hasSubClassEq(RC) &&
+      !Mips::ACC128RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
       Opc = Mips::CAPSTORE32;
     else if (Mips::GPR64RegClass.hasSubClassEq(RC))
@@ -210,7 +213,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::DMFC1), IntReg)
         .addReg(SrcReg);
       BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
-        .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+        .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
         .addReg(Mips::C11);
       return;
     }
@@ -225,7 +228,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       llvm_unreachable("Unexpected register type for CHERI!");
     }
     BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C11);
     return;
   }
@@ -263,7 +266,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     MachineFrameInfo *MFI = MBB.getParent()->getFrameInfo();
     MFI->setObjectAlignment(FI, 32);
     BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C0);
     return;
   }
@@ -282,8 +285,11 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   MachineMemOperand *MMO = GetMemOperand(MBB, FI, MachineMemOperand::MOLoad);
   unsigned Opc = 0;
 
+  // The ACC64/128 registers are handled by LOAD_ACC64/128 pseudos, which call this function again with more ordinary
+  // registers when they are lowered: so no special treatment for CHERI is required.
   if (RI.Subtarget.usesCheriStackCapabilityABI() &&
-      !Mips::ACC64RegClass.hasSubClassEq(RC)) {
+      !Mips::ACC64RegClass.hasSubClassEq(RC) &&
+      !Mips::ACC128RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
       Opc = Mips::CAPLOAD32;
     else if (Mips::GPR64RegClass.hasSubClassEq(RC))
@@ -293,17 +299,18 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
       unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
       BuildMI(MBB, I, DL, get(Mips::CAPLOAD64), IntReg)
-        .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+        .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
         .addReg(Mips::C11);
       BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
         .addReg(IntReg, getKillRegState(true));
       return;
-    }
-    else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+    } else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
       Opc = Mips::LOADCAP;
+    } else {
+      llvm_unreachable("Unexpected register type for CHERI!");
     }
     BuildMI(MBB, I, DL, get(Opc), DestReg)
-      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C11);
     return;
   }
@@ -336,7 +343,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
     Opc = Mips::LOADCAP;
     BuildMI(MBB, I, DL, get(Opc), DestReg)
-      .addFrameIndex(FI).addImm(0).addMemOperand(MMO)
+      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C0);
     return;
   }
