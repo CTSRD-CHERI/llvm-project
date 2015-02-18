@@ -3343,7 +3343,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
     CGM.getTypes().arrangeFreeFunctionCall(Args, FnType);
 
   if (CallCHERIInvoke)
-    Callee = CGM.getModule().getOrInsertFunction("cheriinvoke",
+    Callee = CGM.getModule().getOrInsertFunction("cheri_invoke",
         getTypes().GetFunctionType(FnInfo));
 
   // C99 6.5.2.2p6:
