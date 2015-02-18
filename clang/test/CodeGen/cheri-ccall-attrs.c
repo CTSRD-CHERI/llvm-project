@@ -22,9 +22,9 @@ void foo(int, int);
 void bar(int a, int b)
 {
 	// CHECK: load i64* @__cheri_method.cls.foo, !invariant.load !1
-	// CHECK: call chericcallcc void @cheriinvoke(i8 addrspace(200)* inreg %3, i8 addrspace(200)* inreg %4, i64 zeroext %2, i32 signext %0, i32 signext %1)
+	// CHECK: call chericcallcc void @cheri_invoke(i8 addrspace(200)* inreg %3, i8 addrspace(200)* inreg %4, i64 zeroext %2, i32 signext %0, i32 signext %1)
 	foo_cap(other, a, b);
-	// CHECK: call chericcallcc void bitcast (void (i8 addrspace(200)*, i8 addrspace(200)*, i64, i32, i32)* @cheriinvoke to void (i8 addrspace(200)*, i8 addrspace(200)*, i32, i64, i32)*)(i8 addrspace(200)* inreg %11, i8 addrspace(200)* inreg %13, i32 signext %5, i64 zeroext %7, i32 signext %6)
+	// CHECK: call chericcallcc void bitcast (void (i8 addrspace(200)*, i8 addrspace(200)*, i64, i32, i32)* @cheri_invoke to void (i8 addrspace(200)*, i8 addrspace(200)*, i32, i64, i32)*)(i8 addrspace(200)* inreg %11, i8 addrspace(200)* inreg %13, i32 signext %5, i64 zeroext %7, i32 signext %6)
 	foo(a,b);
 }
 
