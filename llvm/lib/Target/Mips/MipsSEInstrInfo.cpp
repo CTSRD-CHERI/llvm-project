@@ -41,13 +41,9 @@ const MipsRegisterInfo &MipsSEInstrInfo::getRegisterInfo() const {
 unsigned MipsSEInstrInfo::
 isLoadFromStackSlot(const MachineInstr *MI, int &FrameIndex) const
 {
-  unsigned Opc = MI->getOpcode();
-
-  if ((Opc == Mips::LW)   || (Opc == Mips::LD)   || (Opc == Mips::LOADCAP) ||
-      (Opc == Mips::LWC1) || (Opc == Mips::LDC1) || (Opc == Mips::LDC164)) {
-    if ((MI->getOperand(1).isFI()) && // is a stack slot
-        (MI->getOperand(2).isImm()) &&  // the imm is zero
-        (isZeroImm(MI->getOperand(2)))) {
+  if (MI->mayLoad()) { // Is a load...
+    if (MI->getOperand(1).isFI() &&  // ... from a stack slot.
+        MI->getOperand(2).isImm()) {
       FrameIndex = MI->getOperand(1).getIndex();
       return MI->getOperand(0).getReg();
     }
@@ -64,17 +60,14 @@ isLoadFromStackSlot(const MachineInstr *MI, int &FrameIndex) const
 unsigned MipsSEInstrInfo::
 isStoreToStackSlot(const MachineInstr *MI, int &FrameIndex) const
 {
-  unsigned Opc = MI->getOpcode();
-
-  if ((Opc == Mips::SW)   || (Opc == Mips::SD)   || (Opc == Mips::STORECAP) ||
-      (Opc == Mips::SWC1) || (Opc == Mips::SDC1) || (Opc == Mips::SDC164)) {
-    if ((MI->getOperand(1).isFI()) && // is a stack slot
-        (MI->getOperand(2).isImm()) &&  // the imm is zero
-        (isZeroImm(MI->getOperand(2)))) {
+  if (MI->mayStore()) { // is a store...
+    if (MI->getOperand(1).isFI() && // ... to a stack slot
+        MI->getOperand(2).isImm()) {
       FrameIndex = MI->getOperand(1).getIndex();
       return MI->getOperand(0).getReg();
     }
   }
+
   return 0;
 }
 
