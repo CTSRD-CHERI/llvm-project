@@ -91,18 +91,13 @@ namespace {
               .addFrameIndex(FI).addImm(Store->getOperand(2).getImm())
               .addMemOperand(InstrInfo->GetMemOperand(MBB, FI, MachineMemOperand::MOStore));
             DEBUG(dbgs() << "Zeroing capability spill\n");
-          } else if ((Opc == Mips::SW)    ||
-                     (Opc == Mips::SD) ||
-                     (Opc == Mips::SWC1)   ||
-                     (Opc == Mips::SDC1)  ||
-                     (Opc == Mips::SDC164)) {
+          } else {
+            // For other stores, we do the same type of store as was used for the spill, now with zeros.
             BuildMI(MBB, Ret, Ret->getDebugLoc(), InstrInfo->get(Opc))
               .addReg(Mips::ZERO)
               .addFrameIndex(FI).addImm(Store->getOperand(2).getImm())
               .addMemOperand(InstrInfo->GetMemOperand(MBB, FI, MachineMemOperand::MOStore));
-            DEBUG(dbgs() << "Zeroing integer spill\n");
-          } else {
-            DEBUG(dbgs() << "Found unsupported stack spill type\n");
+            DEBUG(dbgs() << "Zeroing non-capability spill\n");
           }
         }
       }
