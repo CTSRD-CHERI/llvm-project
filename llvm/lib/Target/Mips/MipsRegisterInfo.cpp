@@ -148,16 +148,17 @@ getReservedRegs(const MachineFunction &MF) const {
     Mips::C31
   };
 
-  // C1-C7, C11, C12, C17-C24 allowed
+  // C1-C7, C11, C12, C17-C23 allowed
   static const uint16_t ReservedCheri16Regs[] = {
-    Mips::C8, Mips::C9, Mips::C10, Mips::C13, Mips::C15, Mips::C16
+    Mips::C8, Mips::C9, Mips::C10, Mips::C13, Mips::C14, Mips::C15, Mips::C16,
+    Mips::C24
   };
 
   // C1-C3, C11, C12, C17-C19 allowed
   static const uint16_t ReservedCheri8Regs[] = {
     Mips::C4, Mips::C5, Mips::C6, Mips::C7, Mips::C8, Mips::C9, Mips::C10,
-    Mips::C13, Mips::C15, Mips::C16, Mips::C17, Mips::C18, Mips::C19,
-    Mips::C20, Mips::C22
+    Mips::C13, Mips::C14, Mips::C15, Mips::C16, Mips::C20, Mips::C21,
+    Mips::C22, Mips::C23, Mips::C24
   };
 
   BitVector Reserved(getNumRegs());
