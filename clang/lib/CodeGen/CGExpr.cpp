@@ -3308,8 +3308,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
     auto *MethodNum = Builder.CreateLoad(MethodNumVar);
     MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
         llvm::MDNode::get(getLLVMContext(), None));
-    CallArg Arg(RValue::get(MethodNum), NumTy, false);
-    Args.insert(Args.begin()+1, Arg);
+    CallArg MethodNumArg(RValue::get(MethodNum), NumTy, false);
     NewParams.push_back(NumTy);
     // If we have a non-empty suffix, then we're not the version of the method
     // that takes an explicit class, we're the version with the same explicit
@@ -3329,8 +3328,13 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
       LValue LV = MakeAddrLValue(V, ClsTy, Alignment);
       RValue RV = EmitLoadOfLValue(LV, E->getLocStart());
       CallArg Arg(RV, ClsTy, false);
+      Args.insert(Args.begin(), MethodNumArg);
       Args.insert(Args.begin(), Arg);
       NewParams.push_back(ClsTy);
+    }
+    else
+    {
+      Args.insert(Args.begin()+1, MethodNumArg);
     }
     auto *FnPType = cast<FunctionProtoType>(FnType);
     auto Params = FnPType->getParamTypes();
