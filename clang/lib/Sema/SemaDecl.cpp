@@ -8235,6 +8235,8 @@ void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
           Context.hasSameType(QualType(qs.strip(PT->getPointeeType()), 0),
                               Context.CharTy)) {
         qs.removeConst();
+        if (Context.getDefaultAS() == qs.getAddressSpace())
+          qs.removeAddressSpace();
         mismatch = !qs.empty();
       }
     }
