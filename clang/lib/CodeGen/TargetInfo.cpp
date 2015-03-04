@@ -5645,6 +5645,7 @@ public:
 
 class MIPSTargetCodeGenInfo : public TargetCodeGenInfo {
   unsigned SizeOfUnwindException;
+  mutable llvm::DenseMap<void*, bool> ContainsCapabilities;
 public:
   MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32)
     : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32)),
@@ -5704,8 +5705,14 @@ static bool containsCapabilities(ASTContext &C, const RecordDecl *RD) {
   }
   return false;
 }
+
 bool MIPSTargetCodeGenInfo::containsCapabilities(QualType Ty) const {
+  // If we've already looked up this type, then return the cached value.
+  auto Cached = ContainsCapabilities.find(Ty.getAsOpaquePtr());
+  if (Cached != ContainsCapabilities.end())
+    return Cached->second;
   ASTContext &C = getABIInfo().getContext();
+  // Don't bother caching the trivial cases.
   if (Ty.isCapabilityType(C))
       return true;
   if (Ty->isArrayType()) {
@@ -5715,7 +5722,9 @@ bool MIPSTargetCodeGenInfo::containsCapabilities(QualType Ty) const {
   const RecordType *RT = Ty->getAs<RecordType>();
   if (!RT)
     return false;
-  return ::containsCapabilities(C, RT->getDecl());
+  bool Ret = ::containsCapabilities(C, RT->getDecl());
+  ContainsCapabilities[Ty.getAsOpaquePtr()] = Ret;
+  return Ret;
 }
 
 // In N32/64, an aligned double precision floating point field is passed in
