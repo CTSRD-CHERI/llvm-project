@@ -1704,9 +1704,46 @@ static void handleConstructorAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 }
 
 static void handleCheriMethodClass(Sema &S, Decl *D, const AttributeList &Attr) {
+  auto II = Attr.getArgAsIdent(0)->Ident;
+  DeclarationName DN(II);
+  auto *TU = S.Context.getTranslationUnitDecl();
+  auto Lookup = TU->lookup(DN);
+  if (!((Lookup.size() == 1) && isa<VarDecl>(Lookup[0]))) {
+    S.Diag(Attr.getLoc(), diag::err_cheri_method_class_must_exist)
+      << Attr.getName() << Attr.getRange();
+    return;
+  }
+  auto Cls = cast<VarDecl>(Lookup[0]);
+  auto ClsTy = Cls->getType().getDesugaredType(S.Context);
+  bool isValid = false;
+  // Check that this type is a struct containing exactly two capability fields
+  // and no others.
+  if (const RecordType *RT = dyn_cast<RecordType>(ClsTy))
+    if (const RecordDecl *RD = RT->getDecl()) {
+      unsigned Caps = 0;
+      for (const auto &F : RD->fields()) {
+        isValid = false;
+        if (F->getType().isCapabilityType(S.Context)) {
+          Caps++;
+          // The struct is correct, as long as no further fields are found.
+          if (Caps == 2)
+            isValid = true;
+          else if (Caps > 2)
+            break;
+        } else
+          // Bail out as soon as we hit a non-capability field.
+          break;
+      }
+    }
+  if (!isValid) {
+    S.Diag(Attr.getLoc(), diag::err_cheri_method_class_must_have_correct_type)
+      << Attr.getName() << Attr.getRange();
+    return;
+  }
+
+
   D->addAttr(::new (S.Context)
-             CheriMethodClassAttr(Attr.getRange(), S.Context,
-               Attr.getArgAsIdent(0)->Ident,
+             CheriMethodClassAttr(Attr.getRange(), S.Context, II,
                                    Attr.getAttributeSpellingListIndex()));
 }
 
