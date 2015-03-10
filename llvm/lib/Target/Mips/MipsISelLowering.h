@@ -221,6 +221,7 @@ namespace llvm {
 
   class MipsTargetLowering : public TargetLowering  {
     bool isMicroMips;
+    bool isAllCapABI;
   public:
     explicit MipsTargetLowering(const MipsTargetMachine &TM,
                                 const MipsSubtarget &STI);
@@ -303,6 +304,8 @@ namespace llvm {
       SDLoc DL(N);
       SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty),
                                 getTargetNode(N, Ty, DAG, Flag));
+      if (isAllCapABI)
+        Tgt = DAG.getNode(ISD::INTTOPTR, DL, MVT::iFATPTR, Tgt);
       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo, false, false, false, 0);
     }
 
