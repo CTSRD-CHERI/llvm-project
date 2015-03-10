@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -ast-dump | FileCheck %s
-#define CHERI_CCALL(n, suffix, class) \
+#define CHERI_CCALL(n, suffix, cls) \
 	__attribute__((cheri_ccall))\
 	__attribute__((cheri_method_suffix(suffix)))\
 	__attribute__((cheri_method_class(cls)))
