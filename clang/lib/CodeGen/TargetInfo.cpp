@@ -5761,6 +5761,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   uint64_t LastOffset = 0;
   unsigned idx = 0;
   llvm::IntegerType *I64 = llvm::IntegerType::get(getVMContext(), 64);
+  unsigned CapSize = getTarget().getPointerWidth(200);
 
   // Iterate over fields in the struct/class and check if there are any aligned
   // double fields.
@@ -5770,7 +5771,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     const BuiltinType *BT = Ty->getAs<BuiltinType>();
 
     if (Ty.isCapabilityType(getContext())) {
-      LastOffset = Layout.getFieldOffset(idx) + 256;
+      LastOffset = Layout.getFieldOffset(idx) + CapSize;
       ArgList.push_back(CGT.ConvertType(Ty));
       continue;
     }
