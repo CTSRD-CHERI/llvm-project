@@ -5852,14 +5852,14 @@ TypedefDecl *ASTContext::getObjCClassDecl() const {
 RecordDecl *ASTContext::getCHERIClassDecl() const {
   if (!CHERIClassDecl) {
     RecordDecl *RD;
-    RD = buildImplicitRecord("cheri_class");
+    RD = buildImplicitRecord("cheri_object");
     RD->startDefinition();
 
     // FIXME: Target AS for caps
     QualType CapTy = getPointerType(getAddrSpaceQualType(VoidTy, 200));
 
     QualType FieldTypes[] = { CapTy, CapTy };
-    static const char *const FieldNames[] = { "data", "code" };
+    static const char *const FieldNames[] = { "co_codecap", "co_datacap" };
 
     for (size_t i = 0; i < 2; ++i) {
       FieldDecl *Field = FieldDecl::Create(

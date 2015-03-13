@@ -7357,9 +7357,9 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 
   if (CheriMethodSuffixAttr *Attr = NewFD->getAttr<CheriMethodSuffixAttr>()) {
     auto *TU = Context.getTranslationUnitDecl();
-    // Lookup the type of cheri_class, or generate it if it isn't specified.
+    // Lookup the type of cheri_object, or generate it if it isn't specified.
     QualType CHERIClassTy;
-    IdentifierInfo &ClassII = Context.Idents.get("cheri_class");
+    IdentifierInfo &ClassII = Context.Idents.get("cheri_object");
     DeclarationName ClassDN(&ClassII);
     auto Defs = TU->lookup(ClassDN);
     for (NamedDecl *D : Defs)
@@ -7368,7 +7368,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     if (CHERIClassTy == QualType())
       CHERIClassTy = Context.getCHERIClassType();
     // Construct a new function prototype that is the same as the original,
-    // except that it has an extra struct cheri_class as the first argument.
+    // except that it has an extra struct cheri_object as the first argument.
     const FunctionProtoType *OFT =
       NewFD->getType()->getAs<FunctionProtoType>();
     const ArrayRef<QualType> Params = OFT->getParamTypes();

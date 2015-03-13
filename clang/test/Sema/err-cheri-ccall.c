@@ -1,18 +1,18 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s 
 
-struct cheri_class_wrong
+struct cheri_object_wrong
 {
 	__capability void *a, *b, *c;
 };
-struct cheri_class_wrong2
+struct cheri_object_wrong2
 {
 	__capability void *a, *b;
 	int c;
 };
 
 extern struct cheri_class def;
-struct cheri_class_wrong def2;
-struct cheri_class_wrong2 def3;
+struct cheri_object_wrong def2;
+struct cheri_object_wrong2 def3;
 
 
 __attribute__((cheri_ccall))

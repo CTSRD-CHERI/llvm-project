@@ -4,13 +4,13 @@
 	__attribute__((cheri_method_suffix(suffix)))\
 	__attribute__((cheri_method_class(cls)))
 
-struct cheri_class
+struct cheri_object
 {
 	__capability void *a, *b;
 };
 
-struct cheri_class cls;
-struct cheri_class other;
+struct cheri_object cls;
+struct cheri_object other;
 
 
 CHERI_CCALL("_cap", cls)

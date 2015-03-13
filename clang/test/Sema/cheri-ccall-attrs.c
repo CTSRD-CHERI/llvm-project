@@ -4,15 +4,15 @@
 	__attribute__((cheri_method_suffix(suffix)))\
 	__attribute__((cheri_method_class(cls)))
 
-// CHECK: used foo_cap 'void (struct cheri_class, int, int) __attribute__((cheri_ccall))' extern
+// CHECK: used foo_cap 'void (struct cheri_object, int, int) __attribute__((cheri_ccall))' extern
 // CHECK: used foo 'void (int, int) __attribute__((cheri_ccall))
-struct cheri_class
+struct cheri_object
 {
 	__capability void *a, *b;
 };
 
-struct cheri_class def;
-struct cheri_class other;
+struct cheri_object def;
+struct cheri_object other;
 
 
 CHERI_CCALL(1, "_cap", def)
