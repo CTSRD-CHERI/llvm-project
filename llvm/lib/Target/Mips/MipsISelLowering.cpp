@@ -2749,6 +2749,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   unsigned CapArgs = 0;
   unsigned IntArgs = 0;
+  int FirstOffset = -1;
+  int LastOffset;
 
   // Walk the register/memloc assignments, inserting copies/loads.
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
@@ -2847,10 +2849,22 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // Register can't get to this point...
     assert(VA.isMemLoc());
 
+    if (FirstOffset == -1)
+      FirstOffset = VA.getLocMemOffset();
+    LastOffset = VA.getLocMemOffset() + (Arg.getValueSizeInBits() / 8);
     // emit ISD::STORE whichs stores the
     // parameter value to a stack Location
     MemOpChains.push_back(passArgOnStack(StackPtr, VA.getLocMemOffset(),
                                          Chain, Arg, DL, IsTailCall, DAG));
+  }
+  if ((FirstOffset != -1) && Subtarget.isCheriSandbox()) {
+    SDValue PtrOff = DAG.getNode(ISD::ADD, DL, getPointerTy(), StackPtr,
+                                 DAG.getIntPtrConstant(FirstOffset));
+    PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, PtrOff);
+    PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+        DAG.getConstant(Intrinsic::mips_cap_length_set, MVT::i32), PtrOff,
+        DAG.getIntPtrConstant(LastOffset));
+    RegsToPass.push_back(std::make_pair(Mips::C12, PtrOff));
   }
   // If we're doing a CCall then any unused arg registers should be zero.
   if(CallConv == CallingConv::CHERI_CCall) {
