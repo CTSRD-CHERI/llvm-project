@@ -303,7 +303,7 @@ multiclass LoadViaCap<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC,
                              (outs RC:$rd),
                              (ins GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
                              !strconcat(instr_asm, "\t$rd, ${rt}, ${offset}(${cb})"),
-                           [(set RC:$rd, (loadType(add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset))))]>;
+                           [(set RC:$rd, (loadType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immSExt8:$offset))))))]>;
 }
 
 let DecoderNamespace="CHERI" in {
@@ -383,7 +383,7 @@ multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, P
                              (outs),
                              (ins RC:$rs, GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
                              !strconcat(instr_asm, "\t$rs, ${rt}, ${offset}(${cb})"),
-                           [(storeType (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd: $rt), (i64 immSExt8:$offset)), RC:$rs)]>;
+                           [(storeType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immSExt8:$offset)))), RC:$rs)]>;
 }
 multiclass StoreViaCap0<Instruction Op, RegisterOperand RC, PatFrag storeType> {
   def : Pat<(storeType RC:$rd, CheriOpnd:$cb),
