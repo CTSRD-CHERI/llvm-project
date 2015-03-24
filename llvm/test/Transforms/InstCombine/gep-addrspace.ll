@@ -20,13 +20,14 @@ ST:
 @array = internal addrspace(3) global [256 x float] zeroinitializer, align 4
 @scalar = internal addrspace(3) global float 0.000000e+00, align 4
 
+; Make sure that GEPs are not reordered to before addrspacecasts.
 define void @keep_necessary_addrspacecast(i64 %i, float** %out0, float** %out1) {
 entry:
 ; CHECK-LABEL: @keep_necessary_addrspacecast
   %0 = getelementptr [256 x float]* addrspacecast ([256 x float] addrspace(3)* @array to [256 x float]*), i64 0, i64 %i
-; CHECK: addrspacecast float addrspace(3)* %{{[0-9]+}} to float*
+; CHECK: getelementptr [256 x float]* addrspacecast ([256 x float] addrspace(3)* @array to [256 x float]*), i64 0, i64 %i
   %1 = getelementptr [0 x float]* addrspacecast (float addrspace(3)* @scalar to [0 x float]*), i64 0, i64 %i
-; CHECK: addrspacecast float addrspace(3)* %{{[0-9]+}} to float*
+; CHECK: getelementptr [0 x float]* addrspacecast ([0 x float] addrspace(3)* bitcast (float addrspace(3)* @scalar to [0 x float] addrspace(3)*) to [0 x float]*), i64 0, i64 %i
   store float* %0, float** %out0, align 4
   store float* %1, float** %out1, align 4
   ret void

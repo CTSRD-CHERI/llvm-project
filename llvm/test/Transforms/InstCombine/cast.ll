@@ -354,12 +354,14 @@ define i32* @test41(i32* %tmp1) {
 ; CHECK: ret i32* %tmp1
 }
 
+; Make sure that InstCombine does not try to reorder GEPs before
+; addrspacecasts, which can break the semantics.
 define i32 addrspace(1)* @test41_addrspacecast_smaller(i32* %tmp1) {
   %tmp64 = addrspacecast i32* %tmp1 to { i32 } addrspace(1)*
   %tmp65 = getelementptr { i32 } addrspace(1)* %tmp64, i32 0, i32 0
   ret i32 addrspace(1)* %tmp65
 ; CHECK-LABEL: @test41_addrspacecast_smaller(
-; CHECK: addrspacecast i32* %tmp1 to i32 addrspace(1)*
+; CHECK: getelementptr { i32 } addrspace(1)* %tmp64, i32 0, i32 0
 ; CHECK-NEXT: ret i32 addrspace(1)*
 }
 
@@ -368,7 +370,7 @@ define i32* @test41_addrspacecast_larger(i32 addrspace(1)* %tmp1) {
   %tmp65 = getelementptr { i32 }* %tmp64, i32 0, i32 0
   ret i32* %tmp65
 ; CHECK-LABEL: @test41_addrspacecast_larger(
-; CHECK: addrspacecast i32 addrspace(1)* %tmp1 to i32*
+; CHECK: getelementptr { i32 }* %tmp64, i64 0, i32 0
 ; CHECK-NEXT: ret i32*
 }
 
