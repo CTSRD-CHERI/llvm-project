@@ -68,7 +68,7 @@ Module::Module() {}
 // Destructor.
 Module::~Module() {
   // Free submodules.
-  while (SubModules.size()) {
+  while (!SubModules.empty()) {
     Module *last = SubModules.back();
     SubModules.pop_back();
     delete last;
@@ -129,7 +129,7 @@ Module *Module::findSubModule(llvm::StringRef SubName) {
 
 // Implementation functions:
 
-// Reserved keywords in module.map syntax.
+// Reserved keywords in module.modulemap syntax.
 // Keep in sync with keywords in module map parser in Lex/ModuleMap.cpp,
 // such as in ModuleMapParser::consumeToken().
 static const char *ReservedNames[] = {
@@ -175,7 +175,7 @@ static bool addModuleDescription(Module *RootModule,
   if (Count != 0) {
     llvm::errs() << "warning: " << FilePath
                  << " depends on other headers being included first,"
-                    " meaning the module.map won't compile."
+                    " meaning the module.modulemap won't compile."
                     "  This header will be omitted from the module map.\n";
     return true;
   }
@@ -247,11 +247,11 @@ static bool writeModuleMap(llvm::StringRef ModuleMapPath,
   }
 
   // Set up module map output file.
-  std::string Error;
-  llvm::tool_output_file Out(FilePath.c_str(), Error, llvm::sys::fs::F_Text);
-  if (!Error.empty()) {
-    llvm::errs() << Argv0 << ": error opening " << FilePath << ":" << Error
-                 << "\n";
+  std::error_code EC;
+  llvm::tool_output_file Out(FilePath, EC, llvm::sys::fs::F_Text);
+  if (EC) {
+    llvm::errs() << Argv0 << ": error opening " << FilePath << ":"
+                 << EC.message() << "\n";
     return false;
   }
 

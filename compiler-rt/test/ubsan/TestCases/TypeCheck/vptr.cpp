@@ -1,31 +1,38 @@
-// RUN: %clangxx -fsanitize=vptr -g %s -O3 -o %t
+// RUN: %clangxx -frtti -fsanitize=vptr -g %s -O3 -o %t
 // RUN: %run %t rT && %run %t mT && %run %t fT && %run %t cT
 // RUN: %run %t rU && %run %t mU && %run %t fU && %run %t cU
 // RUN: %run %t rS && %run %t rV && %run %t oV
-// RUN: UBSAN_OPTIONS=print_stacktrace=1 %run %t mS 2>&1 | FileCheck %s --check-prefix=CHECK-MEMBER --strict-whitespace
-// RUN: UBSAN_OPTIONS=print_stacktrace=1 %run %t fS 2>&1 | FileCheck %s --check-prefix=CHECK-MEMFUN --strict-whitespace
-// RUN: UBSAN_OPTIONS=print_stacktrace=1 %run %t cS 2>&1 | FileCheck %s --check-prefix=CHECK-DOWNCAST --strict-whitespace
-// RUN: UBSAN_OPTIONS=print_stacktrace=1 %run %t mV 2>&1 | FileCheck %s --check-prefix=CHECK-MEMBER --strict-whitespace
-// RUN: UBSAN_OPTIONS=print_stacktrace=1 %run %t fV 2>&1 | FileCheck %s --check-prefix=CHECK-MEMFUN --strict-whitespace
-// RUN: UBSAN_OPTIONS=print_stacktrace=1 %run %t cV 2>&1 | FileCheck %s --check-prefix=CHECK-DOWNCAST --strict-whitespace
-// RUN: UBSAN_OPTIONS=print_stacktrace=1 %run %t oU 2>&1 | FileCheck %s --check-prefix=CHECK-OFFSET --strict-whitespace
-// RUN: UBSAN_OPTIONS=print_stacktrace=1 %run %t m0 2>&1 | FileCheck %s --check-prefix=CHECK-NULL-MEMBER --strict-whitespace
+// RUN: %run %t mS 2>&1 | FileCheck %s --check-prefix=CHECK-MEMBER --strict-whitespace
+// RUN: %run %t fS 2>&1 | FileCheck %s --check-prefix=CHECK-MEMFUN --strict-whitespace
+// RUN: %run %t cS 2>&1 | FileCheck %s --check-prefix=CHECK-DOWNCAST --strict-whitespace
+// RUN: %run %t mV 2>&1 | FileCheck %s --check-prefix=CHECK-MEMBER --strict-whitespace
+// RUN: %run %t fV 2>&1 | FileCheck %s --check-prefix=CHECK-MEMFUN --strict-whitespace
+// RUN: %run %t cV 2>&1 | FileCheck %s --check-prefix=CHECK-DOWNCAST --strict-whitespace
+// RUN: %run %t oU 2>&1 | FileCheck %s --check-prefix=CHECK-OFFSET --strict-whitespace
+// RUN: %run %t m0 2>&1 | FileCheck %s --check-prefix=CHECK-NULL-MEMBER --strict-whitespace
 
-// RUN: %clangxx -fsanitize=vptr -fno-sanitize-recover -g %s -O3 -o %t
 // RUN: (echo "vptr_check:S"; echo "vptr_check:T"; echo "vptr_check:U") > %t.supp
-// RUN: ASAN_OPTIONS=suppressions=%t.supp UBSAN_OPTIONS=suppressions=%t.supp %run %t mS 2>&1
-// RUN: ASAN_OPTIONS=suppressions=%t.supp UBSAN_OPTIONS=suppressions=%t.supp %run %t fS 2>&1
-// RUN: ASAN_OPTIONS=suppressions=%t.supp UBSAN_OPTIONS=suppressions=%t.supp %run %t cS 2>&1
-// RUN: ASAN_OPTIONS=suppressions=%t.supp UBSAN_OPTIONS=suppressions=%t.supp %run %t mV 2>&1
-// RUN: ASAN_OPTIONS=suppressions=%t.supp UBSAN_OPTIONS=suppressions=%t.supp %run %t fV 2>&1
-// RUN: ASAN_OPTIONS=suppressions=%t.supp UBSAN_OPTIONS=suppressions=%t.supp %run %t cV 2>&1
-// RUN: ASAN_OPTIONS=suppressions=%t.supp UBSAN_OPTIONS=suppressions=%t.supp %run %t oU 2>&1
+// RUN: UBSAN_OPTIONS="suppressions='%t.supp':halt_on_error=1" %run %t mS 2>&1
+// RUN: UBSAN_OPTIONS="suppressions='%t.supp':halt_on_error=1" %run %t fS 2>&1
+// RUN: UBSAN_OPTIONS="suppressions='%t.supp':halt_on_error=1" %run %t cS 2>&1
+// RUN: UBSAN_OPTIONS="suppressions='%t.supp':halt_on_error=1" %run %t mV 2>&1
+// RUN: UBSAN_OPTIONS="suppressions='%t.supp':halt_on_error=1" %run %t fV 2>&1
+// RUN: UBSAN_OPTIONS="suppressions='%t.supp':halt_on_error=1" %run %t cV 2>&1
+// RUN: UBSAN_OPTIONS="suppressions='%t.supp':halt_on_error=1" %run %t oU 2>&1
 
 // RUN: echo "vptr_check:S" > %t.loc-supp
-// RUN: ASAN_OPTIONS=suppressions=%t.loc-supp UBSAN_OPTIONS=suppressions=%t.loc-supp not %run %t x- 2>&1 | FileCheck %s --check-prefix=CHECK-LOC-SUPPRESS
+// RUN: UBSAN_OPTIONS="suppressions='%t.loc-supp':halt_on_error=1" not %run %t x- 2>&1 | FileCheck %s --check-prefix=CHECK-LOC-SUPPRESS
 
 // FIXME: This test produces linker errors on Darwin.
 // XFAIL: darwin
+// REQUIRES: stable-runtime
+#include <new>
+
+extern "C" {
+const char *__ubsan_default_options() {
+  return "print_stacktrace=1";
+}
+}
 
 struct S {
   S() : a(0) {}
@@ -70,12 +77,15 @@ int main(int, char **argv) {
   (void)((T&)u).S::v();
 
   char Buffer[sizeof(U)] = {};
+  char TStorage[sizeof(T)];
   switch (argv[1][1]) {
   case '0':
     p = reinterpret_cast<T*>(Buffer);
     break;
   case 'S':
-    p = reinterpret_cast<T*>(new S);
+    // Make sure p points to the memory chunk of sufficient size to prevent ASan
+    // reports about out-of-bounds access.
+    p = reinterpret_cast<T*>(new(TStorage) S);
     break;
   case 'T':
     p = new T;

@@ -35,6 +35,8 @@ class TempEnvVar {
 #if HAVE_SETENV
     // Assume setenv and unsetenv come together.
     unsetenv(name);
+#else
+    (void)name; // Suppress -Wunused-private-field.
 #endif
   }
 
@@ -70,14 +72,14 @@ public:
 
 
 cl::OptionCategory TestCategory("Test Options", "Description");
-cl::opt<int> TestOption("test-option", cl::desc("old description"));
 TEST(CommandLineTest, ModifyExisitingOption) {
+  StackOption<int> TestOption("test-option", cl::desc("old description"));
+
   const char Description[] = "New description";
   const char ArgString[] = "new-test-option";
   const char ValueString[] = "Integer";
 
-  StringMap<cl::Option*> Map;
-  cl::getRegisteredOptions(Map);
+  StringMap<cl::Option *> &Map = cl::getRegisteredOptions();
 
   ASSERT_TRUE(Map.count("test-option") == 1) <<
     "Could not find option in map.";
@@ -153,14 +155,14 @@ class StrDupSaver : public cl::StringSaver {
 };
 
 typedef void ParserFunction(StringRef Source, llvm::cl::StringSaver &Saver,
-                            SmallVectorImpl<const char *> &NewArgv);
-
+                            SmallVectorImpl<const char *> &NewArgv,
+                            bool MarkEOLs);
 
 void testCommandLineTokenizer(ParserFunction *parse, const char *Input,
                               const char *const Output[], size_t OutputSize) {
   SmallVector<const char *, 0> Actual;
   StrDupSaver Saver;
-  parse(Input, Saver, Actual);
+  parse(Input, Saver, Actual, /*MarkEOLs=*/false);
   EXPECT_EQ(OutputSize, Actual.size());
   for (unsigned I = 0, E = Actual.size(); I != E; ++I) {
     if (I < OutputSize)
@@ -230,5 +232,44 @@ TEST(CommandLineTest, AliasRequired) {
   testAliasRequired(array_lengthof(opts2), opts2);
 }
 
+TEST(CommandLineTest, HideUnrelatedOptions) {
+  StackOption<int> TestOption1("hide-option-1");
+  StackOption<int> TestOption2("hide-option-2", cl::cat(TestCategory));
+
+  cl::HideUnrelatedOptions(TestCategory);
+
+  ASSERT_EQ(cl::ReallyHidden, TestOption1.getOptionHiddenFlag())
+      << "Failed to hide extra option.";
+  ASSERT_EQ(cl::NotHidden, TestOption2.getOptionHiddenFlag())
+      << "Hid extra option that should be visable.";
+
+  StringMap<cl::Option *> &Map = cl::getRegisteredOptions();
+  ASSERT_EQ(cl::NotHidden, Map["help"]->getOptionHiddenFlag())
+      << "Hid default option that should be visable.";
+}
+
+cl::OptionCategory TestCategory2("Test Options set 2", "Description");
+
+TEST(CommandLineTest, HideUnrelatedOptionsMulti) {
+  StackOption<int> TestOption1("multi-hide-option-1");
+  StackOption<int> TestOption2("multi-hide-option-2", cl::cat(TestCategory));
+  StackOption<int> TestOption3("multi-hide-option-3", cl::cat(TestCategory2));
+
+  const cl::OptionCategory *VisibleCategories[] = {&TestCategory,
+                                                   &TestCategory2};
+
+  cl::HideUnrelatedOptions(makeArrayRef(VisibleCategories));
+
+  ASSERT_EQ(cl::ReallyHidden, TestOption1.getOptionHiddenFlag())
+      << "Failed to hide extra option.";
+  ASSERT_EQ(cl::NotHidden, TestOption2.getOptionHiddenFlag())
+      << "Hid extra option that should be visable.";
+  ASSERT_EQ(cl::NotHidden, TestOption3.getOptionHiddenFlag())
+      << "Hid extra option that should be visable.";
+
+  StringMap<cl::Option *> &Map = cl::getRegisteredOptions();
+  ASSERT_EQ(cl::NotHidden, Map["help"]->getOptionHiddenFlag())
+      << "Hid default option that should be visable.";
+}
 
 }  // anonymous namespace

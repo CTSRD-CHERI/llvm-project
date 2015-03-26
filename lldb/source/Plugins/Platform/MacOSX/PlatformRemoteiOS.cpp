@@ -63,6 +63,8 @@ static uint32_t g_initialize_count = 0;
 void
 PlatformRemoteiOS::Initialize ()
 {
+    PlatformDarwin::Initialize ();
+
     if (g_initialize_count++ == 0)
     {
         PluginManager::RegisterPlugin (PlatformRemoteiOS::GetPluginNameStatic(),
@@ -81,9 +83,11 @@ PlatformRemoteiOS::Terminate ()
             PluginManager::UnregisterPlugin (PlatformRemoteiOS::CreateInstance);
         }
     }
+
+    PlatformDarwin::Terminate ();
 }
 
-Platform* 
+PlatformSP
 PlatformRemoteiOS::CreateInstance (bool force, const ArchSpec *arch)
 {
     bool create = force;
@@ -144,8 +148,8 @@ PlatformRemoteiOS::CreateInstance (bool force, const ArchSpec *arch)
     }
 
     if (create)
-        return new PlatformRemoteiOS ();
-    return NULL;
+        return lldb::PlatformSP(new PlatformRemoteiOS ());
+    return lldb::PlatformSP();
 }
 
 
@@ -172,7 +176,8 @@ PlatformRemoteiOS::PlatformRemoteiOS () :
     m_device_support_directory(),
     m_device_support_directory_for_os_version (),
     m_build_update(),
-    m_last_module_sdk_idx(UINT32_MAX)
+    m_last_module_sdk_idx (UINT32_MAX),
+    m_connected_module_sdk_idx (UINT32_MAX)
 {
 }
 
@@ -209,32 +214,24 @@ PlatformRemoteiOS::GetStatus (Stream &strm)
 
 
 Error
-PlatformRemoteiOS::ResolveExecutable (const FileSpec &exe_file,
-                                      const ArchSpec &exe_arch,
+PlatformRemoteiOS::ResolveExecutable (const ModuleSpec &ms,
                                       lldb::ModuleSP &exe_module_sp,
                                       const FileSpecList *module_search_paths_ptr)
 {
     Error error;
     // Nothing special to do here, just use the actual file and architecture
 
-    FileSpec resolved_exe_file (exe_file);
-    
-    // If we have "ls" as the exe_file, resolve the executable loation based on
-    // the current path variables
-    // TODO: resolve bare executables in the Platform SDK
-//    if (!resolved_exe_file.Exists())
-//        resolved_exe_file.ResolveExecutableLocation ();
+    ModuleSpec resolved_module_spec(ms);
 
     // Resolve any executable within a bundle on MacOSX
     // TODO: verify that this handles shallow bundles, if not then implement one ourselves
-    Host::ResolveExecutableInBundle (resolved_exe_file);
+    Host::ResolveExecutableInBundle (resolved_module_spec.GetFileSpec());
 
-    if (resolved_exe_file.Exists())
+    if (resolved_module_spec.GetFileSpec().Exists())
     {
-        if (exe_arch.IsValid())
+        if (resolved_module_spec.GetArchitecture().IsValid() || resolved_module_spec.GetUUID().IsValid())
         {
-            ModuleSpec module_spec (resolved_exe_file, exe_arch);
-            error = ModuleList::GetSharedModule (module_spec,
+            error = ModuleList::GetSharedModule (resolved_module_spec,
                                                  exe_module_sp, 
                                                  NULL,
                                                  NULL, 
@@ -248,11 +245,9 @@ PlatformRemoteiOS::ResolveExecutable (const FileSpec &exe_file,
         // found so ask the platform for the architectures that we should be
         // using (in the correct order) and see if we can find a match that way
         StreamString arch_names;
-        ArchSpec platform_arch;
-        for (uint32_t idx = 0; GetSupportedArchitectureAtIndex (idx, platform_arch); ++idx)
+        for (uint32_t idx = 0; GetSupportedArchitectureAtIndex (idx, resolved_module_spec.GetArchitecture()); ++idx)
         {
-            ModuleSpec module_spec (resolved_exe_file, platform_arch);
-            error = ModuleList::GetSharedModule (module_spec, 
+            error = ModuleList::GetSharedModule (resolved_module_spec,
                                                  exe_module_sp, 
                                                  NULL,
                                                  NULL, 
@@ -268,28 +263,28 @@ PlatformRemoteiOS::ResolveExecutable (const FileSpec &exe_file,
             
             if (idx > 0)
                 arch_names.PutCString (", ");
-            arch_names.PutCString (platform_arch.GetArchitectureName());
+            arch_names.PutCString (resolved_module_spec.GetArchitecture().GetArchitectureName());
         }
         
         if (error.Fail() || !exe_module_sp)
         {
-            if (exe_file.Readable())
+            if (resolved_module_spec.GetFileSpec().Readable())
             {
                 error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
-                                                exe_file.GetPath().c_str(),
+                                                resolved_module_spec.GetFileSpec().GetPath().c_str(),
                                                 GetPluginName().GetCString(),
                                                 arch_names.GetString().c_str());
             }
             else
             {
-                error.SetErrorStringWithFormat("'%s' is not readable", exe_file.GetPath().c_str());
+                error.SetErrorStringWithFormat("'%s' is not readable", resolved_module_spec.GetFileSpec().GetPath().c_str());
             }
         }
     }
     else
     {
         error.SetErrorStringWithFormat ("'%s' does not exist",
-                                        exe_file.GetPath().c_str());
+                                        resolved_module_spec.GetFileSpec().GetPath().c_str());
     }
 
     return error;
@@ -305,23 +300,46 @@ PlatformRemoteiOS::GetContainedFilesIntoVectorOfStringsCallback (void *baton,
 }
 
 bool
-PlatformRemoteiOS::UpdateSDKDirectoryInfosInNeeded()
+PlatformRemoteiOS::UpdateSDKDirectoryInfosIfNeeded()
 {
     if (m_sdk_directory_infos.empty())
     {
+        // A --sysroot option was supplied - add it to our list of SDKs to check
+        if (m_sdk_sysroot)
+        {
+            FileSpec sdk_sysroot_fspec(m_sdk_sysroot.GetCString(), true);
+            const SDKDirectoryInfo sdk_sysroot_directory_info(sdk_sysroot_fspec);
+            m_sdk_directory_infos.push_back(sdk_sysroot_directory_info);
+            return true;
+        }
         const char *device_support_dir = GetDeviceSupportDirectory();
         if (device_support_dir)
         {
             const bool find_directories = true;
             const bool find_files = false;
             const bool find_other = false;
+
+            SDKDirectoryInfoCollection builtin_sdk_directory_infos;
             FileSpec::EnumerateDirectory (m_device_support_directory.c_str(),
                                           find_directories,
                                           find_files,
                                           find_other,
                                           GetContainedFilesIntoVectorOfStringsCallback,
-                                          &m_sdk_directory_infos);
-            
+                                          &builtin_sdk_directory_infos);
+
+            // Only add SDK directories that have symbols in them, some SDKs only contain
+            // developer disk images and no symbols, so they aren't useful to us.
+            FileSpec sdk_symbols_symlink_fspec;
+            for (const auto &sdk_directory_info : builtin_sdk_directory_infos)
+            {
+                sdk_symbols_symlink_fspec = sdk_directory_info.directory;
+                sdk_symbols_symlink_fspec.AppendPathComponent("Symbols");
+                if (sdk_symbols_symlink_fspec.Exists())
+                {
+                    m_sdk_directory_infos.push_back(sdk_directory_info);
+                }
+            }
+
             const uint32_t num_installed = m_sdk_directory_infos.size();
             FileSpec local_sdk_cache("~/Library/Developer/Xcode/iOS DeviceSupport", true);
             if (local_sdk_cache.Exists())
@@ -352,7 +370,7 @@ const PlatformRemoteiOS::SDKDirectoryInfo *
 PlatformRemoteiOS::GetSDKDirectoryForCurrentOSVersion ()
 {
     uint32_t i;
-    if (UpdateSDKDirectoryInfosInNeeded())
+    if (UpdateSDKDirectoryInfosIfNeeded())
     {
         const uint32_t num_sdk_infos = m_sdk_directory_infos.size();
 
@@ -371,7 +389,7 @@ PlatformRemoteiOS::GetSDKDirectoryForCurrentOSVersion ()
         uint32_t major, minor, update;
         if (GetOSVersion(major, minor, update))
         {
-            if (UpdateSDKDirectoryInfosInNeeded())
+            if (UpdateSDKDirectoryInfosIfNeeded())
             {
                 // First try for an exact match of major, minor and update
                 for (i=0; i<num_sdk_infos; ++i)
@@ -426,7 +444,7 @@ const PlatformRemoteiOS::SDKDirectoryInfo *
 PlatformRemoteiOS::GetSDKDirectoryForLatestOSVersion ()
 {
     const PlatformRemoteiOS::SDKDirectoryInfo *result = NULL;
-    if (UpdateSDKDirectoryInfosInNeeded())
+    if (UpdateSDKDirectoryInfosIfNeeded())
     {
         const uint32_t num_sdk_infos = m_sdk_directory_infos.size();
         // First try for an exact match of major, minor and update
@@ -527,7 +545,7 @@ uint32_t
 PlatformRemoteiOS::FindFileInAllSDKs (const char *platform_file_path,
                                       FileSpecList &file_list)
 {
-    if (platform_file_path && platform_file_path[0] && UpdateSDKDirectoryInfosInNeeded())
+    if (platform_file_path && platform_file_path[0] && UpdateSDKDirectoryInfosIfNeeded())
     {
         const uint32_t num_sdk_infos = m_sdk_directory_infos.size();
         lldb_private::FileSpec local_file;
@@ -582,7 +600,7 @@ PlatformRemoteiOS::GetFileInSDKRoot (const char *platform_file_path,
         {
             ::snprintf (resolved_path, 
                         sizeof(resolved_path), 
-                        "%s/%s", 
+                        "%s%s",
                         sdkroot_path,
                         platform_file_path);
             
@@ -593,7 +611,7 @@ PlatformRemoteiOS::GetFileInSDKRoot (const char *platform_file_path,
             
         ::snprintf (resolved_path,
                     sizeof(resolved_path), 
-                    "%s/Symbols.Internal/%s", 
+                    "%s/Symbols.Internal%s",
                     sdkroot_path,
                     platform_file_path);
         
@@ -602,7 +620,7 @@ PlatformRemoteiOS::GetFileInSDKRoot (const char *platform_file_path,
             return true;
         ::snprintf (resolved_path,
                     sizeof(resolved_path), 
-                    "%s/Symbols/%s", 
+                    "%s/Symbols%s", 
                     sdkroot_path, 
                     platform_file_path);
         
@@ -686,89 +704,111 @@ PlatformRemoteiOS::GetSharedModule (const ModuleSpec &module_spec,
     // with the right UUID.
     const FileSpec &platform_file = module_spec.GetFileSpec();
 
-    FileSpec local_file;
-    const UUID *module_uuid_ptr = module_spec.GetUUIDPtr();
-    Error error (GetSymbolFile (platform_file, module_uuid_ptr, local_file));
-    if (error.Success())
+    Error error;
+    char platform_file_path[PATH_MAX];
+    
+    if (platform_file.GetPath(platform_file_path, sizeof(platform_file_path)))
     {
-        error = ResolveExecutable (local_file, module_spec.GetArchitecture(), module_sp, NULL);
-        if (module_sp && ((module_uuid_ptr == NULL) || (module_sp->GetUUID() == *module_uuid_ptr)))
+        ModuleSpec platform_module_spec(module_spec);
+
+        UpdateSDKDirectoryInfosIfNeeded();
+
+        const uint32_t num_sdk_infos = m_sdk_directory_infos.size();
+
+        // If we are connected we migth be able to correctly deduce the SDK directory
+        // using the OS build.
+        const uint32_t connected_sdk_idx = GetConnectedSDKIndex ();
+        if (connected_sdk_idx < num_sdk_infos)
         {
-            //printf ("found in user specified SDK\n");
-            error.Clear();
-            return error;
+            if (GetFileInSDK (platform_file_path, connected_sdk_idx, platform_module_spec.GetFileSpec()))
+            {
+                module_sp.reset();
+                error = ResolveExecutable (platform_module_spec,
+                                           module_sp,
+                                           NULL);
+                if (module_sp)
+                {
+                    m_last_module_sdk_idx = connected_sdk_idx;
+                    error.Clear();
+                    return error;
+                }
+            }
         }
 
-        char platform_file_path[PATH_MAX];
-        if (platform_file.GetPath(platform_file_path, sizeof(platform_file_path)))
+        // Try the last SDK index if it is set as most files from an SDK
+        // will tend to be valid in that same SDK.
+        if (m_last_module_sdk_idx < num_sdk_infos)
         {
-            FileSpec local_file;
-            const uint32_t num_sdk_infos = m_sdk_directory_infos.size();
-            // Try the last SDK index if it is set as most files from an SDK
-            // will tend to be valid in that same SDK.
-            if (m_last_module_sdk_idx < num_sdk_infos)
+            if (GetFileInSDK (platform_file_path, m_last_module_sdk_idx, platform_module_spec.GetFileSpec()))
             {
-                if (GetFileInSDK (platform_file_path, m_last_module_sdk_idx, local_file))
+                module_sp.reset();
+                error = ResolveExecutable (platform_module_spec,
+                                           module_sp,
+                                           NULL);
+                if (module_sp)
                 {
-                    //printf ("sdk[%u] last: '%s'\n", m_last_module_sdk_idx, local_file.GetPath().c_str());
-                    module_sp.reset();
-                    error = ResolveExecutable (local_file,
-                                               module_spec.GetArchitecture(),
-                                               module_sp,
-                                               NULL);
-                    if (module_sp && ((module_uuid_ptr == NULL) || (module_sp->GetUUID() == *module_uuid_ptr)))
-                    {
-                        //printf ("sdk[%u] last found\n", m_last_module_sdk_idx);
-                        error.Clear();
-                        return error;
-                    }
-                }
-            }
-            
-            // First try for an exact match of major, minor and update
-            for (uint32_t sdk_idx=0; sdk_idx<num_sdk_infos; ++sdk_idx)
-            {
-                if (m_last_module_sdk_idx == sdk_idx)
-                {
-                    // Skip the last module SDK index if we already searched
-                    // it above
-                    continue;
-                }
-                if (GetFileInSDK (platform_file_path, sdk_idx, local_file))
-                {
-                    //printf ("sdk[%u]: '%s'\n", sdk_idx, local_file.GetPath().c_str());
-                    
-                    error = ResolveExecutable (local_file,
-                                               module_spec.GetArchitecture(),
-                                               module_sp,
-                                               NULL);
-                    if (module_sp && ((module_uuid_ptr == NULL) || (module_sp->GetUUID() == *module_uuid_ptr)))
-                    {
-                        // Remember the index of the last SDK that we found a file
-                        // in in case the wrong SDK was selected.
-                        m_last_module_sdk_idx = sdk_idx;
-                        //printf ("sdk[%u]: found (setting last to %u)\n", sdk_idx, m_last_module_sdk_idx);
-                        error.Clear();
-                        return error;
-                    }
+                    error.Clear();
+                    return error;
                 }
             }
         }
-        // Not the module we are looking for... Nothing to see here...
-        module_sp.reset();
+        
+        // First try for an exact match of major, minor and update:
+        // If a particalar SDK version was specified via --version or --build, look for a match on disk.
+        const SDKDirectoryInfo *current_sdk_info = GetSDKDirectoryForCurrentOSVersion();
+        const uint32_t current_sdk_idx = GetSDKIndexBySDKDirectoryInfo(current_sdk_info);
+        if (current_sdk_idx < num_sdk_infos && current_sdk_idx != m_last_module_sdk_idx)
+        {
+            if (GetFileInSDK (platform_file_path, current_sdk_idx, platform_module_spec.GetFileSpec()))
+            {
+                module_sp.reset();
+                error = ResolveExecutable (platform_module_spec,
+                                           module_sp,
+                                           NULL);
+                if (module_sp)
+                {
+                    m_last_module_sdk_idx = current_sdk_idx;
+                    error.Clear();
+                    return error;
+                }
+            }
+        }
+
+        // Second try all SDKs that were found.
+        for (uint32_t sdk_idx=0; sdk_idx<num_sdk_infos; ++sdk_idx)
+        {
+            if (m_last_module_sdk_idx == sdk_idx)
+            {
+                // Skip the last module SDK index if we already searched
+                // it above
+                continue;
+            }
+            if (GetFileInSDK (platform_file_path, sdk_idx, platform_module_spec.GetFileSpec()))
+            {
+                //printf ("sdk[%u]: '%s'\n", sdk_idx, local_file.GetPath().c_str());
+                
+                error = ResolveExecutable (platform_module_spec, module_sp, NULL);
+                if (module_sp)
+                {
+                    // Remember the index of the last SDK that we found a file
+                    // in in case the wrong SDK was selected.
+                    m_last_module_sdk_idx = sdk_idx;
+                    error.Clear();
+                    return error;
+                }
+            }
+        }
     }
-    else
-    {
-        // This may not be an SDK-related module.  Try whether we can bring in the thing to our local cache.
-        error = GetSharedModuleWithLocalCache(module_spec, module_sp, module_search_paths_ptr, old_module_sp_ptr, did_create_ptr);
-        if (error.Success())
-            return error;
-        else
-            error.Clear(); // Clear the error and fall-through.
-    }
+    // Not the module we are looking for... Nothing to see here...
+    module_sp.reset();
+
+    // This may not be an SDK-related module.  Try whether we can bring in the thing to our local cache.
+    error = GetSharedModuleWithLocalCache(module_spec, module_sp, module_search_paths_ptr, old_module_sp_ptr, did_create_ptr);
+    if (error.Success())
+        return error;
 
     const bool always_create = false;
-    error = ModuleList::GetSharedModule (module_spec, 
+    error = ModuleList::GetSharedModule (module_spec,
                                          module_sp,
                                          module_search_paths_ptr,
                                          old_module_sp_ptr,
@@ -785,4 +825,44 @@ bool
 PlatformRemoteiOS::GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
     return ARMGetSupportedArchitectureAtIndex (idx, arch);
+}
+
+uint32_t
+PlatformRemoteiOS::GetConnectedSDKIndex ()
+{
+    if (IsConnected())
+    {
+        if (m_connected_module_sdk_idx == UINT32_MAX)
+        {
+            std::string build;
+            if (GetRemoteOSBuildString(build))
+            {
+                const uint32_t num_sdk_infos = m_sdk_directory_infos.size();
+                for (uint32_t i=0; i<num_sdk_infos; ++i)
+                {
+                    const SDKDirectoryInfo &sdk_dir_info = m_sdk_directory_infos[i];
+                    if (strstr(sdk_dir_info.directory.GetFilename().AsCString(""), build.c_str()))
+                    {
+                        m_connected_module_sdk_idx = i;
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        m_connected_module_sdk_idx = UINT32_MAX;
+    }
+    return m_connected_module_sdk_idx;
+}
+
+uint32_t
+PlatformRemoteiOS::GetSDKIndexBySDKDirectoryInfo (const SDKDirectoryInfo *sdk_info)
+{
+    if (sdk_info == NULL)
+    {
+        return UINT32_MAX;
+    }
+
+    return sdk_info - &m_sdk_directory_infos[0];
 }

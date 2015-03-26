@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly %defaultOpts -polly-ast -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-ast -analyze < %s | FileCheck %s
 
 ;#define N 20
 ;#include "limits.h"
@@ -51,7 +51,7 @@ entry:
 do.body:                                          ; preds = %do.cond, %entry
   %indvar = phi i64 [ %indvar.next, %do.cond ], [ 0, %entry ] ; <i64> [#uses=3]
   %tmp = mul i64 %indvar, 2                       ; <i64> [#uses=1]
-  %arrayidx = getelementptr [40 x i32]* @A, i64 0, i64 %tmp ; <i32*> [#uses=1]
+  %arrayidx = getelementptr [40 x i32], [40 x i32]* @A, i64 0, i64 %tmp ; <i32*> [#uses=1]
   %i.0 = trunc i64 %indvar to i32                 ; <i32> [#uses=1]
   br label %do.cond
 
@@ -69,10 +69,10 @@ do.end:                                           ; preds = %do.cond
 define i32 @main() nounwind {
 entry:
   call void @single_do_loop_scev_replace()
-  %tmp = load %struct._IO_FILE** @stdout          ; <%struct._IO_FILE*> [#uses=1]
-  %tmp1 = load i32* getelementptr inbounds ([40 x i32]* @A, i32 0, i32 0) ; <i32> [#uses=1]
-  %call = call i32 (%struct._IO_FILE*, i8*, ...)* @fprintf(%struct._IO_FILE* %tmp, i8* getelementptr inbounds ([11 x i8]* @.str, i32 0, i32 0), i32 %tmp1) ; <i32> [#uses=0]
-  %tmp2 = load i32* getelementptr inbounds ([40 x i32]* @A, i32 0, i64 38) ; <i32> [#uses=1]
+  %tmp = load %struct._IO_FILE*, %struct._IO_FILE** @stdout          ; <%struct._IO_FILE*> [#uses=1]
+  %tmp1 = load i32, i32* getelementptr inbounds ([40 x i32], [40 x i32]* @A, i32 0, i32 0) ; <i32> [#uses=1]
+  %call = call i32 (%struct._IO_FILE*, i8*, ...)* @fprintf(%struct._IO_FILE* %tmp, i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str, i32 0, i32 0), i32 %tmp1) ; <i32> [#uses=0]
+  %tmp2 = load i32, i32* getelementptr inbounds ([40 x i32], [40 x i32]* @A, i32 0, i64 38) ; <i32> [#uses=1]
   %cmp = icmp eq i32 %tmp2, 19                    ; <i1> [#uses=1]
   br i1 %cmp, label %if.then, label %if.else
 
@@ -89,7 +89,7 @@ return:                                           ; preds = %if.else, %if.then
 
 declare i32 @fprintf(%struct._IO_FILE*, i8*, ...)
 
-; CHECK: for (int c1 = 0; c1 <= 19; c1 += 1)
-; CHECK:   Stmt_do_cond(c1);
+; CHECK: for (int c0 = 0; c0 <= 19; c0 += 1)
+; CHECK:   Stmt_do_cond(c0);
 
 

@@ -18,39 +18,12 @@
 #include "clang/Basic/CommentOptions.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/ObjCRuntime.h"
+#include "clang/Basic/Sanitizers.h"
 #include "clang/Basic/Visibility.h"
 #include <string>
+#include <vector>
 
 namespace clang {
-
-enum class SanitizerKind {
-#define SANITIZER(NAME, ID) ID,
-#include "clang/Basic/Sanitizers.def"
-  Unknown
-};
-
-class SanitizerOptions {
-  /// \brief Bitmask of enabled sanitizers.
-  unsigned Kind;
-public:
-  SanitizerOptions();
-
-  /// \brief Check if a certain sanitizer is enabled.
-  bool has(SanitizerKind K) const;
-  /// \brief Enable or disable a certain sanitizer.
-  void set(SanitizerKind K, bool Value);
-
-  /// \brief Controls how agressive is asan field padding (0: none, 1: least
-  /// aggressive, 2: more aggressive).
-  unsigned SanitizeAddressFieldPadding : 2;
-
-  /// \brief Path to blacklist file specifying which objects
-  /// (files, functions, variables) should not be instrumented.
-  std::string BlacklistFile;
-
-  /// \brief Disable all sanitizers.
-  void clear();
-};
 
 /// Bitfields of LangOptions, split out from LangOptions in order to ensure that
 /// this large collection of bitfields is a trivial class type.
@@ -61,7 +34,6 @@ public:
 #define ENUM_LANGOPT(Name, Type, Bits, Default, Description)
 #include "clang/Basic/LangOptions.def"
 
-  SanitizerOptions Sanitize;
 protected:
   // Define language options of enumeration type. These are private, and will
   // have accessors (below).
@@ -96,6 +68,13 @@ public:
   enum AddrSpaceMapMangling { ASMM_Target, ASMM_On, ASMM_Off };
 
 public:
+  /// \brief Set of enabled sanitizers.
+  SanitizerSet Sanitize;
+
+  /// \brief Paths to blacklist files specifying which objects
+  /// (files, functions, variables) should not be instrumented.
+  std::vector<std::string> SanitizerBlacklistFiles;
+
   clang::ObjCRuntime ObjCRuntime;
 
   std::string ObjCConstantStringClass;
@@ -113,6 +92,10 @@ public:
   /// implementation of. Prevents semantic imports, but does not otherwise
   /// treat this as the CurrentModule.
   std::string ImplementationOfModule;
+
+  /// \brief The names of any features to enable in module 'requires' decls
+  /// in addition to the hard-coded list in Module.cpp and the target features.
+  std::vector<std::string> ModuleFeatures;
 
   /// \brief Options for parsing comments.
   CommentOptions CommentOpts;
@@ -133,6 +116,10 @@ public:
   bool isSubscriptPointerArithmetic() const {
     return ObjCRuntime.isSubscriptPointerArithmetic() &&
            !ObjCSubscriptingLegacyRuntime;
+  }
+
+  bool isCompatibleWithMSVC(unsigned MajorVersion) const {
+    return MSCompatibilityVersion >= MajorVersion * 10000000U;
   }
 
   /// \brief Reset all of the options that are not considered when building a

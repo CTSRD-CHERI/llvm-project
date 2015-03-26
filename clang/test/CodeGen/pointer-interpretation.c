@@ -27,23 +27,23 @@ _Pragma("pointer_interpretation default")
 // CHECK: define i32 @x()
 int x(void)
 {
-	// CHECK: load i32 addrspace(200)**
-	// CHECK: load i32 addrspace(200)*
+	// CHECK: load i32 addrspace(200)*, i32 addrspace(200)**
+	// CHECK: load i32, i32 addrspace(200)*
 	return *t.a;
 }
 
 // CHECK: define i32 @y()
 int y(void)
 {
-	// CHECK: load i32**
-	// CHECK: load i32*
+	// CHECK: load i32*, i32**
+	// CHECK: load i32, i32*
 	return *t2.a;
 }
 // CHECK: define i32 @z()
 int z(void)
 {
-	// CHECK: load i32**
-	// CHECK: load i32*
+	// CHECK: load i32*, i32**
+	// CHECK: load i32, i32*
 	return *t3.a;
 }
 

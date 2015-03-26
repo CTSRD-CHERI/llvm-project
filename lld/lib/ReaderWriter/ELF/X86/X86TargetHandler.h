@@ -12,36 +12,18 @@
 
 #include "DefaultTargetHandler.h"
 #include "TargetLayout.h"
-
-#include "lld/ReaderWriter/Reader.h"
+#include "X86ELFFile.h"
+#include "X86ELFReader.h"
+#include "X86RelocationHandler.h"
 
 namespace lld {
 namespace elf {
 
-typedef llvm::object::ELFType<llvm::support::little, 2, false> X86ELFType;
 class X86LinkingContext;
 
 template <class ELFT> class X86TargetLayout : public TargetLayout<ELFT> {
 public:
   X86TargetLayout(X86LinkingContext &context) : TargetLayout<ELFT>(context) {}
-};
-
-class X86TargetRelocationHandler final
-    : public TargetRelocationHandler<X86ELFType> {
-public:
-  X86TargetRelocationHandler(X86LinkingContext &context,
-                             X86TargetLayout<X86ELFType> &layout)
-      : _x86Context(context), _x86TargetLayout(layout) {}
-
-  std::error_code applyRelocation(ELFWriter &, llvm::FileOutputBuffer &,
-                                  const lld::AtomLayout &,
-                                  const Reference &) const override;
-
-  static const Registry::KindStrings kindStrings[];
-
-protected:
-  X86LinkingContext &_x86Context;
-  X86TargetLayout<X86ELFType> &_x86TargetLayout;
 };
 
 class X86TargetHandler final
@@ -57,6 +39,14 @@ public:
 
   const X86TargetRelocationHandler &getRelocationHandler() const override {
     return *(_x86RelocationHandler.get());
+  }
+
+  std::unique_ptr<Reader> getObjReader() override {
+    return std::unique_ptr<Reader>(new X86ELFObjectReader(_x86LinkingContext));
+  }
+
+  std::unique_ptr<Reader> getDSOReader() override {
+    return std::unique_ptr<Reader>(new X86ELFDSOReader(_x86LinkingContext));
   }
 
   std::unique_ptr<Writer> getWriter() override;

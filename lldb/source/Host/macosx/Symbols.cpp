@@ -730,7 +730,7 @@ Symbols::DownloadObjectAndSymbolFile (ModuleSpec &module_spec, bool force_lookup
             StreamString command;
             if (!uuid_str.empty())
                 command.Printf("%s --ignoreNegativeCache --copyExecutable %s", g_dsym_for_uuid_exe_path, uuid_str.c_str());
-            else if (file_path && file_path[0])
+            else if (file_path[0] != '\0')
                 command.Printf("%s --ignoreNegativeCache --copyExecutable %s", g_dsym_for_uuid_exe_path, file_path);
             
             if (!command.GetString().empty())
@@ -744,7 +744,7 @@ Symbols::DownloadObjectAndSymbolFile (ModuleSpec &module_spec, bool force_lookup
                                                      &signo,            // Signal int *
                                                      &command_output,   // Command output
                                                      30,                // Large timeout to allow for long dsym download times
-                                                     NULL);             // Don't run in a shell (we don't need shell expansion)
+                                                     false);            // Don't run in a shell (we don't need shell expansion)
                 if (error.Success() && exit_status == 0 && !command_output.empty())
                 {
                     CFCData data (CFDataCreateWithBytesNoCopy (NULL,

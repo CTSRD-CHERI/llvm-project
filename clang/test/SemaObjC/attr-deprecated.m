@@ -238,3 +238,60 @@ const char * func() {
   return [PID cString]; // expected-warning {{'cString' is deprecated: first deprecated in OS X 10.4}}
 }
 
+// rdar://18960378
+@interface NSObject
++ (instancetype)alloc;
+- (instancetype)init;
+@end
+
+@interface NSLocale
+- (instancetype)init __attribute__((unavailable));
+@end
+
+@interface PLBatteryProperties : NSObject
++ (id)properties;
+@end
+
+@implementation PLBatteryProperties
++ (id)properties {
+    return [[self alloc] init];
+}
+@end
+
+@implementation UndeclaredImpl // expected-warning{{cannot find interface declaration}}
+- (void)partiallyUnavailableMethod {}
+@end
+
+@interface InterfaceWithSameMethodAsUndeclaredImpl
+- (void)partiallyUnavailableMethod __attribute__((unavailable));
+@end
+
+void f(id a) {
+  [a partiallyUnavailableMethod]; // no warning, `a` could be an UndeclaredImpl.
+}
+
+@interface InterfaceWithImplementation
+- (void)anotherPartiallyUnavailableMethod;
+@end
+@implementation InterfaceWithImplementation
+- (void)anotherPartiallyUnavailableMethod {}
+@end
+
+@interface InterfaceWithSameMethodAsInterfaceWithImplementation
+- (void)anotherPartiallyUnavailableMethod __attribute__((unavailable));
+@end
+
+void g(id a) {
+  [a anotherPartiallyUnavailableMethod]; // no warning, `a` could be an InterfaceWithImplementation.
+}
+
+typedef struct {} S1 __attribute__((unavailable)); // expected-note2{{marked unavailable here}}
+typedef struct {} S2 __attribute__((deprecated)); // expected-note2{{marked deprecated here}}
+@interface ExtensionForMissingInterface() // expected-error{{cannot find interface declaration}}
+- (void)method1:(S1) x; // expected-error{{is unavailable}}
+- (void)method2:(S2) x; // expected-warning{{is deprecated}}
+@end
+@interface CategoryForMissingInterface(Cat) // expected-error{{cannot find interface declaration}}
+- (void)method1:(S1) x; // expected-error{{is unavailable}}
+- (void)method2:(S2) x; // expected-warning{{is deprecated}}
+@end

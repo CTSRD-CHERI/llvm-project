@@ -121,7 +121,11 @@ class MachineFrameInfo {
         isSpillSlot(isSS), Alloca(Val), PreAllocated(false), isAliased(A) {}
   };
 
-  const TargetMachine &TM;
+  /// StackAlignment - The alignment of the stack.
+  unsigned StackAlignment;
+
+  /// StackRealignable - Can the stack be realigned.
+  bool StackRealignable;
 
   /// Objects - The list of stack objects allocated...
   ///
@@ -236,10 +240,17 @@ class MachineFrameInfo {
   /// pointer.
   bool HasInlineAsmWithSPAdjust;
 
-  const TargetFrameLowering *getFrameLowering() const;
+  /// True if the function contains a call to the llvm.vastart intrinsic.
+  bool HasVAStart;
+
+  /// True if this is a varargs function that contains a musttail call.
+  bool HasMustTailInVarArgFunc;
+
 public:
-    explicit MachineFrameInfo(const TargetMachine &TM, bool RealignOpt)
-    : TM(TM), RealignOption(RealignOpt) {
+  explicit MachineFrameInfo(unsigned StackAlign, bool isStackRealign,
+                            bool RealignOpt)
+      : StackAlignment(StackAlign), StackRealignable(isStackRealign),
+        RealignOption(RealignOpt) {
     StackSize = NumFixedObjects = OffsetAdjustment = MaxAlignment = 0;
     HasVarSizedObjects = false;
     FrameAddressTaken = false;
@@ -256,6 +267,8 @@ public:
     LocalFrameMaxAlign = 0;
     UseLocalStackAllocationBlock = false;
     HasInlineAsmWithSPAdjust = false;
+    HasVAStart = false;
+    HasMustTailInVarArgFunc = false;
   }
 
   /// hasStackObjects - Return true if there are any stack objects in this
@@ -475,6 +488,14 @@ public:
   bool hasInlineAsmWithSPAdjust() const { return HasInlineAsmWithSPAdjust; }
   void setHasInlineAsmWithSPAdjust(bool B) { HasInlineAsmWithSPAdjust = B; }
 
+  /// Returns true if the function calls the llvm.va_start intrinsic.
+  bool hasVAStart() const { return HasVAStart; }
+  void setHasVAStart(bool B) { HasVAStart = B; }
+
+  /// Returns true if the function is variadic and contains a musttail call.
+  bool hasMustTailInVarArgFunc() const { return HasMustTailInVarArgFunc; }
+  void setHasMustTailInVarArgFunc(bool B) { HasMustTailInVarArgFunc = B; }
+
   /// getMaxCallFrameSize - Return the maximum size of a call frame that must be
   /// allocated for an outgoing function call.  This is only available if
   /// CallFrameSetup/Destroy pseudo instructions are used by the target, and
@@ -494,6 +515,10 @@ public:
   /// CreateFixedSpillStackObject - Create a spill slot at a fixed location
   /// on the stack.  Returns an index with a negative value.
   int CreateFixedSpillStackObject(uint64_t Size, int64_t SPOffset);
+
+  /// Allocates memory at a fixed, target-specific offset from the frame
+  /// pointer. Marks the function as having its frame address taken.
+  int CreateFrameAllocation(uint64_t Size);
 
   /// isFixedObjectIndex - Returns true if the specified index corresponds to a
   /// fixed stack object.

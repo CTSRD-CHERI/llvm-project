@@ -21,15 +21,17 @@
 #include "lldb/Core/ArchSpec.h"
 #include "lldb/lldb-types.h"
 #include "lldb/Host/Debug.h"
+#include "lldb/Host/HostThread.h"
 #include "lldb/Host/Mutex.h"
 #include "lldb/Target/MemoryRegionInfo.h"
 
-#include "Host/common/NativeProcessProtocol.h"
+#include "lldb/Host/common/NativeProcessProtocol.h"
 
 namespace lldb_private
 {
     class Error;
     class Module;
+    class ThreadStateCoordinator;
     class Scalar;
 
     /// @class NativeProcessLinux
@@ -43,9 +45,6 @@ namespace lldb_private
     {
     public:
 
-        // ---------------------------------------------------------------------
-        // Public Static Methods
-        // ---------------------------------------------------------------------
         static lldb_private::Error
         LaunchProcess (
             Module *exe_module,
@@ -58,12 +57,6 @@ namespace lldb_private
             lldb::pid_t pid,
             lldb_private::NativeProcessProtocol::NativeDelegate &native_delegate,
             NativeProcessProtocolSP &native_process_sp);
-
-        // ---------------------------------------------------------------------
-        // Public Instance Methods
-        // ---------------------------------------------------------------------
-
-        ~NativeProcessLinux() override;
 
         // ---------------------------------------------------------------------
         // NativeProcessProtocol Interface
@@ -79,6 +72,9 @@ namespace lldb_private
 
         Error
         Signal (int signo) override;
+
+        Error
+        Interrupt () override;
 
         Error
         Kill () override;
@@ -113,6 +109,9 @@ namespace lldb_private
         void
         DoStopIDBumped (uint32_t newBumpId) override;
 
+        void
+        Terminate () override;
+
         // ---------------------------------------------------------------------
         // Interface used by NativeRegisterContext-derived classes.
         // ---------------------------------------------------------------------
@@ -121,7 +120,7 @@ namespace lldb_private
         /// dependent) offset.
         ///
         /// This method is provided for use by RegisterContextLinux derivatives.
-        bool
+        Error
         ReadRegisterValue(lldb::tid_t tid, unsigned offset, const char *reg_name,
                           unsigned size, lldb_private::RegisterValue &value);
 
@@ -129,34 +128,34 @@ namespace lldb_private
         /// (architecture dependent) offset.
         ///
         /// This method is provided for use by RegisterContextLinux derivatives.
-        bool
+        Error
         WriteRegisterValue(lldb::tid_t tid, unsigned offset, const char *reg_name,
                            const lldb_private::RegisterValue &value);
 
         /// Reads all general purpose registers into the specified buffer.
-        bool
+        Error
         ReadGPR(lldb::tid_t tid, void *buf, size_t buf_size);
 
         /// Reads generic floating point registers into the specified buffer.
-        bool
+        Error
         ReadFPR(lldb::tid_t tid, void *buf, size_t buf_size);
 
         /// Reads the specified register set into the specified buffer.
         /// For instance, the extended floating-point register set.
-        bool
+        Error
         ReadRegisterSet(lldb::tid_t tid, void *buf, size_t buf_size, unsigned int regset);
 
         /// Writes all general purpose registers into the specified buffer.
-        bool
+        Error
         WriteGPR(lldb::tid_t tid, void *buf, size_t buf_size);
 
         /// Writes generic floating point registers into the specified buffer.
-        bool
+        Error
         WriteFPR(lldb::tid_t tid, void *buf, size_t buf_size);
 
         /// Writes the specified register set into the specified buffer.
         /// For instance, the extended floating-point register set.
-        bool
+        Error
         WriteRegisterSet(lldb::tid_t tid, void *buf, size_t buf_size, unsigned int regset);
         
     protected:
@@ -170,8 +169,8 @@ namespace lldb_private
 
         lldb_private::ArchSpec m_arch;
 
-        lldb::thread_t m_operation_thread;
-        lldb::thread_t m_monitor_thread;
+        HostThread m_operation_thread;
+        HostThread m_monitor_thread;
 
         // current operation which must be executed on the priviliged thread
         void *m_operation;
@@ -182,16 +181,12 @@ namespace lldb_private
         sem_t m_operation_pending;
         sem_t m_operation_done;
 
-        // Set of tids we're waiting to stop before we notify the delegate of
-        // the stopped state.  We only notify the delegate after all threads
-        // ordered to stop have signaled their stop.
-        std::unordered_set<lldb::tid_t> m_wait_for_stop_tids;
-        lldb_private::Mutex m_wait_for_stop_tids_mutex;
-
         lldb_private::LazyBool m_supports_mem_region;
         std::vector<MemoryRegionInfo> m_mem_region_cache;
         lldb_private::Mutex m_mem_region_cache_mutex;
 
+        std::unique_ptr<ThreadStateCoordinator> m_coordinator_up;
+        HostThread m_coordinator_thread;
 
         struct OperationArgs
         {
@@ -214,9 +209,9 @@ namespace lldb_private
                     lldb_private::Module *module,
                     char const **argv,
                     char const **envp,
-                    const char *stdin_path,
-                    const char *stdout_path,
-                    const char *stderr_path,
+                    const std::string &stdin_path,
+                    const std::string &stdout_path,
+                    const std::string &stderr_path,
                     const char *working_dir,
                     const lldb_private::ProcessLaunchInfo &launch_info);
 
@@ -225,9 +220,9 @@ namespace lldb_private
             lldb_private::Module *m_module; // The executable image to launch.
             char const **m_argv;            // Process arguments.
             char const **m_envp;            // Process environment.
-            const char *m_stdin_path;       // Redirect stdin or NULL.
-            const char *m_stdout_path;      // Redirect stdout or NULL.
-            const char *m_stderr_path;      // Redirect stderr or NULL.
+            const std::string &m_stdin_path;  // Redirect stdin if not empty.
+            const std::string &m_stdout_path; // Redirect stdout if not empty.
+            const std::string &m_stderr_path; // Redirect stderr if not empty.
             const char *m_working_dir;      // Working directory or NULL.
             const lldb_private::ProcessLaunchInfo &m_launch_info;
         };
@@ -254,15 +249,15 @@ namespace lldb_private
             Module *module,
             char const *argv[],
             char const *envp[],
-            const char *stdin_path,
-            const char *stdout_path,
-            const char *stderr_path,
+            const std::string &stdin_path,
+            const std::string &stdout_path,
+            const std::string &stderr_path,
             const char *working_dir,
             const lldb_private::ProcessLaunchInfo &launch_info,
             Error &error);
 
         /// Attaches to an existing process.  Forms the
-        /// implementation of Process::DoLaunch.
+        /// implementation of Process::DoAttach
         void
         AttachToInferior (lldb::pid_t pid, Error &error);
 
@@ -284,7 +279,7 @@ namespace lldb_private
         static bool
         Attach(AttachArgs *args);
 
-        static bool
+        static Error
         SetDefaultPtraceOpts(const lldb::pid_t);
 
         static void
@@ -299,6 +294,15 @@ namespace lldb_private
 
         void
         MonitorSIGTRAP(const siginfo_t *info, lldb::pid_t pid);
+
+        void
+        MonitorTrace(lldb::pid_t pid, NativeThreadProtocolSP thread_sp);
+
+        void
+        MonitorBreakpoint(lldb::pid_t pid, NativeThreadProtocolSP thread_sp);
+
+        void
+        MonitorWatchpoint(lldb::pid_t pid, NativeThreadProtocolSP thread_sp, uint32_t wp_index);
 
         void
         MonitorSignal(const siginfo_t *info, lldb::pid_t pid, bool exited);
@@ -322,11 +326,20 @@ namespace lldb_private
 
         /// Stops the child monitor thread.
         void
-        StopMonitoringChildProcess();
+        StopMonitorThread();
 
         /// Stops the operation thread used to attach/launch a process.
         void
         StopOpThread();
+
+        Error
+        StartCoordinatorThread ();
+
+        static void*
+        CoordinatorThread (void *arg);
+
+        void
+        StopCoordinatorThread ();
 
         /// Stops monitoring the child process thread.
         void
@@ -355,27 +368,52 @@ namespace lldb_private
 
         /// Writes a siginfo_t structure corresponding to the given thread ID to the
         /// memory region pointed to by @p siginfo.
-        bool
-        GetSignalInfo(lldb::tid_t tid, void *siginfo, int &ptrace_err);
+        Error
+        GetSignalInfo(lldb::tid_t tid, void *siginfo);
 
         /// Writes the raw event message code (vis-a-vis PTRACE_GETEVENTMSG)
         /// corresponding to the given thread ID to the memory pointed to by @p
         /// message.
-        bool
+        Error
         GetEventMessage(lldb::tid_t tid, unsigned long *message);
 
         /// Resumes the given thread.  If @p signo is anything but
         /// LLDB_INVALID_SIGNAL_NUMBER, deliver that signal to the thread.
-        bool
+        Error
         Resume(lldb::tid_t tid, uint32_t signo);
 
         /// Single steps the given thread.  If @p signo is anything but
         /// LLDB_INVALID_SIGNAL_NUMBER, deliver that signal to the thread.
-        bool
+        Error
         SingleStep(lldb::tid_t tid, uint32_t signo);
+
+        // ThreadStateCoordinator helper methods.
+        void
+        NotifyThreadCreateStopped (lldb::tid_t tid);
+
+        void
+        NotifyThreadCreateRunning (lldb::tid_t tid);
+
+        void
+        NotifyThreadDeath (lldb::tid_t tid);
+
+        void
+        NotifyThreadStop (lldb::tid_t tid);
+
+        void
+        CallAfterRunningThreadsStop (lldb::tid_t tid,
+                                     const std::function<void (lldb::tid_t tid)> &call_after_function);
+
+        void
+        CallAfterRunningThreadsStopWithSkipTID (lldb::tid_t deferred_signal_tid,
+                                                lldb::tid_t skip_stop_request_tid,
+                                                const std::function<void (lldb::tid_t tid)> &call_after_function);
 
         lldb_private::Error
         Detach(lldb::tid_t tid);
+
+        lldb_private::Error
+        RequestThreadStop (const lldb::pid_t pid, const lldb::tid_t tid);
     };
 } // End lldb_private namespace.
 

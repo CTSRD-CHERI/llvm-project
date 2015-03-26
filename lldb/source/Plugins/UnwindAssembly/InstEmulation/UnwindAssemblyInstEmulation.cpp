@@ -15,6 +15,7 @@
 #include "lldb/Core/DataExtractor.h"
 #include "lldb/Core/Disassembler.h"
 #include "lldb/Core/Error.h"
+#include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/Log.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/StreamString.h"
@@ -146,7 +147,9 @@ UnwindAssemblyInstEmulation::GetNonCallSiteUnwindPlanFromAssembly (AddressRange&
                         if (log && log->GetVerbose ())
                         {
                             StreamString strm;
-                            inst->Dump(&strm, inst_list.GetMaxOpcocdeByteSize (), show_address, show_bytes, NULL);
+                            lldb_private::FormatEntity::Entry format;
+                            FormatEntity::Parse("${frame.pc}: ", format);
+                            inst->Dump(&strm, inst_list.GetMaxOpcocdeByteSize (), show_address, show_bytes, NULL, NULL, NULL, &format, 0);
                             log->PutCString (strm.GetData());
                         }
 
@@ -281,6 +284,14 @@ UnwindAssemblyInstEmulation::GetNonCallSiteUnwindPlanFromAssembly (AddressRange&
         }
         return unwind_plan.GetRowCount() > 0;
     }
+    return false;
+}
+
+bool
+UnwindAssemblyInstEmulation::AugmentUnwindPlanFromCallSite (AddressRange& func,
+                                                            Thread& thread,
+                                                            UnwindPlan& unwind_plan)
+{
     return false;
 }
 
@@ -599,7 +610,6 @@ UnwindAssemblyInstEmulation::WriteRegister (EmulateInstruction *instruction,
         case EmulateInstruction::eContextRegisterPlusOffset:
         case EmulateInstruction::eContextAdjustPC:
         case EmulateInstruction::eContextRegisterStore:
-        case EmulateInstruction::eContextRegisterLoad:  
         case EmulateInstruction::eContextAbsoluteBranchRegister:
         case EmulateInstruction::eContextSupervisorCall:
         case EmulateInstruction::eContextTableBranchReadMemory:
@@ -621,6 +631,35 @@ UnwindAssemblyInstEmulation::WriteRegister (EmulateInstruction *instruction,
 //                    m_curr_row_modified = true;
 //                }
 //            }
+            break;
+
+        case EmulateInstruction::eContextRegisterLoad:
+            {
+                const uint32_t unwind_reg_kind = m_unwind_plan_ptr->GetRegisterKind();
+                const uint32_t reg_num = reg_info->kinds[unwind_reg_kind];
+                if (reg_num != LLDB_INVALID_REGNUM)
+                {
+                    m_curr_row->SetRegisterLocationToRegister (reg_num, reg_num, must_replace);
+                    m_curr_row_modified = true;
+                    m_curr_insn_restored_a_register = true;
+
+                    if (reg_info->kinds[eRegisterKindGeneric] == LLDB_REGNUM_GENERIC_RA)
+                    {
+                        // This load was restoring the return address register,
+                        // so this is also how we will unwind the PC...
+                        RegisterInfo pc_reg_info;
+                        if (instruction->GetRegisterInfo (eRegisterKindGeneric, LLDB_REGNUM_GENERIC_PC, pc_reg_info))
+                        {
+                            uint32_t pc_reg_num = pc_reg_info.kinds[unwind_reg_kind];
+                            if (pc_reg_num != LLDB_INVALID_REGNUM)
+                            {
+                                m_curr_row->SetRegisterLocationToRegister (pc_reg_num, reg_num, must_replace);
+                                m_curr_row_modified = true;
+                            }
+                        }
+                    }
+                }
+            }
             break;
 
         case EmulateInstruction::eContextRelativeBranchImmediate:
@@ -651,8 +690,8 @@ UnwindAssemblyInstEmulation::WriteRegister (EmulateInstruction *instruction,
                 m_cfa_reg_info = *reg_info;
                 const uint32_t cfa_reg_num = reg_info->kinds[m_unwind_plan_ptr->GetRegisterKind()];
                 assert (cfa_reg_num != LLDB_INVALID_REGNUM);
-                m_curr_row->SetCFARegister(cfa_reg_num);
-                m_curr_row->SetCFAOffset(m_initial_sp - reg_value.GetAsUInt64());
+                m_curr_row->GetCFAValue().SetIsRegisterPlusOffset(cfa_reg_num, m_initial_sp -
+                        reg_value.GetAsUInt64());
                 m_curr_row_modified = true;
             }
             break;
@@ -662,7 +701,9 @@ UnwindAssemblyInstEmulation::WriteRegister (EmulateInstruction *instruction,
             // subsequent adjustments to the stack pointer.
             if (!m_fp_is_cfa)
             {
-                m_curr_row->SetCFAOffset (m_initial_sp - reg_value.GetAsUInt64());
+                m_curr_row->GetCFAValue().SetIsRegisterPlusOffset(
+                        m_curr_row->GetCFAValue().GetRegisterNumber(),
+                        m_initial_sp - reg_value.GetAsUInt64());
                 m_curr_row_modified = true;
             }
             break;

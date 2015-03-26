@@ -104,14 +104,6 @@ void LexicalScopes::extractLexicalScopes(
   }
 }
 
-LexicalScope *LexicalScopes::findInlinedScope(DebugLoc DL) {
-  MDNode *Scope = nullptr;
-  MDNode *IA = nullptr;
-  DL.getScopeAndInlinedAt(Scope, IA, MF->getFunction()->getContext());
-  auto I = InlinedLexicalScopeMap.find(std::make_pair(Scope, IA));
-  return I != InlinedLexicalScopeMap.end() ? &I->second : nullptr;
-}
-
 /// findLexicalScope - Find lexical scope, either regular or inlined, for the
 /// given DebugLoc. Return NULL if not found.
 LexicalScope *LexicalScopes::findLexicalScope(DebugLoc DL) {
@@ -137,6 +129,8 @@ LexicalScope *LexicalScopes::findLexicalScope(DebugLoc DL) {
 /// getOrCreateLexicalScope - Find lexical scope for the given DebugLoc. If
 /// not available then create new lexical scope.
 LexicalScope *LexicalScopes::getOrCreateLexicalScope(DebugLoc DL) {
+  if (DL.isUnknown())
+    return nullptr;
   MDNode *Scope = nullptr;
   MDNode *InlinedAt = nullptr;
   DL.getScopeAndInlinedAt(Scope, InlinedAt, MF->getFunction()->getContext());
@@ -166,15 +160,17 @@ LexicalScope *LexicalScopes::getOrCreateRegularScope(MDNode *Scope) {
   LexicalScope *Parent = nullptr;
   if (D.isLexicalBlock())
     Parent = getOrCreateLexicalScope(DebugLoc::getFromDILexicalBlock(Scope));
-  // FIXME: Use forward_as_tuple instead of make_tuple, once MSVC2012
-  // compatibility is no longer required.
-  I = LexicalScopeMap.emplace(std::piecewise_construct, std::make_tuple(Scope),
-                              std::make_tuple(Parent, DIDescriptor(Scope),
-                                              nullptr, false)).first;
+  I = LexicalScopeMap.emplace(std::piecewise_construct,
+                              std::forward_as_tuple(Scope),
+                              std::forward_as_tuple(Parent, DIDescriptor(Scope),
+                                                    nullptr, false)).first;
 
-  if (!Parent && DIDescriptor(Scope).isSubprogram() &&
-      DISubprogram(Scope).describes(MF->getFunction()))
+  if (!Parent) {
+    assert(DIDescriptor(Scope).isSubprogram());
+    assert(DISubprogram(Scope).describes(MF->getFunction()));
+    assert(!CurrentFnLexicalScope);
     CurrentFnLexicalScope = &I->second;
+  }
 
   return &I->second;
 }
@@ -194,12 +190,11 @@ LexicalScope *LexicalScopes::getOrCreateInlinedScope(MDNode *ScopeNode,
   else
     Parent = getOrCreateInlinedScope(Scope.getContext(), InlinedAt);
 
-  // FIXME: Use forward_as_tuple instead of make_tuple, once MSVC2012
-  // compatibility is no longer required.
   I = InlinedLexicalScopeMap.emplace(std::piecewise_construct,
-                                     std::make_tuple(P),
-                                     std::make_tuple(Parent, Scope, InlinedAt,
-                                                     false)).first;
+                                     std::forward_as_tuple(P),
+                                     std::forward_as_tuple(Parent, Scope,
+                                                           InlinedAt, false))
+          .first;
   return &I->second;
 }
 

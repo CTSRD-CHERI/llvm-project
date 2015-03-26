@@ -1,4 +1,4 @@
-; RUN: opt -S %loadPolly -basicaa -polly-dependences-analysis-type=value-based -polly-dce -polly-dce-precise-steps=2 -polly-ast -analyze < %s | FileCheck %s -check-prefix=CHECK
+; RUN: opt -S %loadPolly -polly-detect-unprofitable -basicaa -polly-dependences-analysis-type=value-based -polly-dce -polly-dce-precise-steps=2 -polly-ast -analyze -polly-no-early-exit < %s | FileCheck %s -check-prefix=CHECK
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-pc-linux-gnu"
 ;
@@ -21,7 +21,7 @@ entry:
 
 for.body.1:
   %indvar.1 = phi i64 [ 0, %entry ], [ %indvar.next.1, %for.body.1 ]
-  %arrayidx.1 = getelementptr [200 x i32]* %A, i64 0, i64 %indvar.1
+  %arrayidx.1 = getelementptr [200 x i32], [200 x i32]* %A, i64 0, i64 %indvar.1
   store i32 2, i32* %arrayidx.1, align 4
   %indvar.next.1 = add i64 %indvar.1, 1
   %exitcond.1 = icmp ne i64 %indvar.next.1, 200
@@ -32,7 +32,7 @@ exit.1:
 
 for.body.2:
   %indvar.2 = phi i64 [ 0, %exit.1 ], [ %indvar.next.2, %for.body.2 ]
-  %arrayidx.2 = getelementptr [200 x i32]* %A, i64 0, i64 %indvar.2
+  %arrayidx.2 = getelementptr [200 x i32], [200 x i32]* %A, i64 0, i64 %indvar.2
   store i32 5, i32* %arrayidx.2, align 4
   %indvar.next.2 = add i64 %indvar.2, 1
   %exitcond.2 = icmp ne i64 %indvar.next.2, 50
@@ -43,8 +43,8 @@ exit.2:
 
 for.body.3:
   %indvar.3 = phi i64 [ 0, %exit.2 ], [ %indvar.next.3, %for.body.3 ]
-  %arrayidx.3 = getelementptr [200 x i32]* %A, i64 0, i64 %indvar.3
-  %val = load i32* %arrayidx.3, align 4
+  %arrayidx.3 = getelementptr [200 x i32], [200 x i32]* %A, i64 0, i64 %indvar.3
+  %val = load i32, i32* %arrayidx.3, align 4
   %add = add nsw i32 %val, 5
   store i32 %add, i32* %arrayidx.3, align 4
   %indvar.next.3 = add i64 %indvar.3, 1
@@ -58,7 +58,7 @@ for.body.4:
   %indvar.4 = phi i64 [ 0, %exit.3 ], [ %indvar.next.4, %for.body.4 ]
   %indvar.plus = add i64 %indvar.4, 100
   %trunc = trunc i64 %indvar.plus to i32
-  %arrayidx.4 = getelementptr [200 x i32]* %A, i64 0, i64 %indvar.plus
+  %arrayidx.4 = getelementptr [200 x i32], [200 x i32]* %A, i64 0, i64 %indvar.plus
   store i32 %trunc, i32* %arrayidx.4, align 4
   %indvar.next.4 = add i64 %indvar.4, 1
   %exitcond.4 = icmp ne i64 %indvar.next.4, 10

@@ -17,6 +17,12 @@
 
 using namespace lldb_private;
 
+uint32_t
+HostInfoFreeBSD::GetMaxThreadNameLength()
+{
+    return 16;
+}
+
 bool
 HostInfoFreeBSD::GetOSVersion(uint32_t &major, uint32_t &minor, uint32_t &update)
 {
@@ -63,4 +69,23 @@ HostInfoFreeBSD::GetOSKernelDescription(std::string &s)
     s.assign(un.version);
 
     return true;
+}
+
+FileSpec
+HostInfoFreeBSD::GetProgramFileSpec()
+{
+    static FileSpec g_program_filespec;
+    if (!g_program_filespec)
+    {
+        int exe_path_mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, getpid()};
+        size_t exe_path_size;
+        if (sysctl(exe_path_mib, 4, NULL, &exe_path_size, NULL, 0) == 0)
+        {
+            char *exe_path = new char[exe_path_size];
+            if (sysctl(exe_path_mib, 4, exe_path, &exe_path_size, NULL, 0) == 0)
+                g_program_filespec.SetFile(exe_path, false);
+            delete[] exe_path;
+        }
+    }
+    return g_program_filespec;
 }

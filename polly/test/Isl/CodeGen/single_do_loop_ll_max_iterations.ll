@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -polly-ast -analyze  -S < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-codegen-isl < %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-ast -analyze  -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen-isl < %s
 
 ;#define N 20
 ;#include "limits.h"
@@ -34,13 +34,13 @@ target triple = "x86_64-unknown-linux-gnu"
 
 define i32 @main() nounwind {
 entry:
-  store i64 0, i64* getelementptr inbounds ([20 x i64]* @A, i32 0, i32 0)
+  store i64 0, i64* getelementptr inbounds ([20 x i64], [20 x i64]* @A, i32 0, i32 0)
   fence seq_cst
   br label %do.body
 
 do.body:                                          ; preds = %do.cond, %entry
   %0 = phi i64 [ 0, %entry ], [ %inc, %do.cond ]  ; <i64> [#uses=2]
-  store i64 %0, i64* getelementptr inbounds ([20 x i64]* @A, i32 0, i32 0)
+  store i64 %0, i64* getelementptr inbounds ([20 x i64], [20 x i64]* @A, i32 0, i32 0)
   %inc = add nsw i64 %0, 1                        ; <i64> [#uses=2]
   br label %do.cond
 
@@ -50,7 +50,7 @@ do.cond:                                          ; preds = %do.body
 
 do.end:                                           ; preds = %do.cond
   fence seq_cst
-  %tmp3 = load i64* getelementptr inbounds ([20 x i64]* @A, i32 0, i32 0) ; <i64> [#uses=1]
+  %tmp3 = load i64, i64* getelementptr inbounds ([20 x i64], [20 x i64]* @A, i32 0, i32 0) ; <i64> [#uses=1]
   %cmp4 = icmp eq i64 %tmp3, 9223372036854775806  ; <i1> [#uses=1]
   br i1 %cmp4, label %if.then, label %if.else
 
@@ -65,5 +65,5 @@ return:                                           ; preds = %if.else, %if.then
   ret i32 %retval.0
 }
 
-; CHECK: for (int c1 = 0; c1 <= 9223372036854775806; c1 += 1)
-; CHECK:   Stmt_do_body(c1);
+; CHECK: for (int c0 = 0; c0 <= 9223372036854775806; c0 += 1)
+; CHECK:   Stmt_do_body(c0);

@@ -22,6 +22,7 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/StringConvert.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/Options.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
@@ -31,6 +32,7 @@
 #include "lldb/Target/StopInfo.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Target/UnixSignals.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -248,9 +250,7 @@ protected:
 
         if (launch_args.GetArgumentCount() == 0)
         {
-            Args target_setting_args;
-            if (target->GetRunArguments(target_setting_args))
-                m_options.launch_info.GetArguments().AppendArguments (target_setting_args);
+            m_options.launch_info.GetArguments().AppendArguments (target->GetProcessLaunchInfo().GetArguments());
         }
         else
         {
@@ -258,8 +258,9 @@ protected:
             // Save the arguments for subsequent runs in the current target.
             target->SetRunArguments (launch_args);
         }
-        
-        Error error = target->Launch(debugger.GetListener(), m_options.launch_info);
+
+        StreamString stream;
+        Error error = target->Launch(m_options.launch_info, &stream);
         
         if (error.Success())
         {
@@ -267,6 +268,9 @@ protected:
             ProcessSP process_sp (target->GetProcessSP());
             if (process_sp)
             {
+                const char *data = stream.GetData();
+                if (data && strlen(data) > 0)
+                    result.AppendMessage(stream.GetData());
                 result.AppendMessageWithFormat ("Process %" PRIu64 " launched: '%s' (%s)\n", process_sp->GetID(), exe_module_sp->GetFileSpec().GetPath().c_str(), archname);
                 result.SetStatus (eReturnStatusSuccessFinishResult);
                 result.SetDidChangeProcessState (true);
@@ -349,7 +353,7 @@ public:
 
                 case 'p':   
                     {
-                        lldb::pid_t pid = Args::StringToUInt32 (option_arg, LLDB_INVALID_PROCESS_ID, 0, &success);
+                        lldb::pid_t pid = StringConvert::ToUInt32 (option_arg, LLDB_INVALID_PROCESS_ID, 0, &success);
                         if (!success || pid == LLDB_INVALID_PROCESS_ID)
                         {
                             error.SetErrorStringWithFormat("invalid process ID '%s'", option_arg);
@@ -484,6 +488,8 @@ protected:
     DoExecute (Args& command,
              CommandReturnObject &result)
     {
+        PlatformSP platform_sp (m_interpreter.GetDebugger().GetPlatformList().GetSelectedPlatform());
+
         Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
         // N.B. The attach should be synchronous.  It doesn't help much to get the prompt back between initiating the attach
         // and the target actually stopping.  So even if the interpreter is set to be asynchronous, we wait for the stop
@@ -526,115 +532,75 @@ protected:
         {
             result.AppendErrorWithFormat("Invalid arguments for '%s'.\nUsage: %s\n", m_cmd_name.c_str(), m_cmd_syntax.c_str());
             result.SetStatus (eReturnStatusFailed);
+            return false;
+        }
+
+        m_interpreter.UpdateExecutionContext(nullptr);
+        StreamString stream;
+        const auto error = target->Attach(m_options.attach_info, &stream);
+        if (error.Success())
+        {
+            ProcessSP process_sp (target->GetProcessSP());
+            if (process_sp)
+            {
+                if (stream.GetData())
+                    result.AppendMessage(stream.GetData());
+                result.SetStatus (eReturnStatusSuccessFinishNoResult);
+                result.SetDidChangeProcessState (true);
+            }
+            else
+            {
+                result.AppendError("no error returned from Target::Attach, and target has no process");
+                result.SetStatus (eReturnStatusFailed);
+            }
         }
         else
         {
-            if (state != eStateConnected)
-            {
-                const char *plugin_name = m_options.attach_info.GetProcessPluginName();
-                process = target->CreateProcess (m_interpreter.GetDebugger().GetListener(), plugin_name, NULL).get();
-            }
-
-            if (process)
-            {
-                Error error;
-                // If no process info was specified, then use the target executable 
-                // name as the process to attach to by default
-                if (!m_options.attach_info.ProcessInfoSpecified ())
-                {
-                    if (old_exec_module_sp)
-                        m_options.attach_info.GetExecutableFile().GetFilename() = old_exec_module_sp->GetPlatformFileSpec().GetFilename();
-
-                    if (!m_options.attach_info.ProcessInfoSpecified ())
-                    {
-                        error.SetErrorString ("no process specified, create a target with a file, or specify the --pid or --name command option");
-                    }
-                }
-
-                if (error.Success())
-                {
-                    // Update the execution context so the current target and process are now selected
-                    // in case we interrupt
-                    m_interpreter.UpdateExecutionContext(NULL);
-                    ListenerSP listener_sp (new Listener("lldb.CommandObjectProcessAttach.DoExecute.attach.hijack"));
-                    m_options.attach_info.SetHijackListener(listener_sp);
-                    process->HijackProcessEvents(listener_sp.get());
-                    error = process->Attach (m_options.attach_info);
-                    
-                    if (error.Success())
-                    {
-                        result.SetStatus (eReturnStatusSuccessContinuingNoResult);
-                        StateType state = process->WaitForProcessToStop (NULL, NULL, false, listener_sp.get());
-
-                        process->RestoreProcessEvents();
-
-                        result.SetDidChangeProcessState (true);
-                        
-                        if (state == eStateStopped)
-                        {
-                            result.AppendMessageWithFormat ("Process %" PRIu64 " %s\n", process->GetID(), StateAsCString (state));
-                            result.SetStatus (eReturnStatusSuccessFinishNoResult);
-                        }
-                        else
-                        {
-                            const char *exit_desc = process->GetExitDescription();
-                            if (exit_desc)
-                                result.AppendErrorWithFormat ("attach failed: %s", exit_desc);
-                            else
-                                result.AppendError ("attach failed: process did not stop (no such process or permission problem?)");
-                            process->Destroy();
-                            result.SetStatus (eReturnStatusFailed);
-                        }
-                    }
-                    else
-                    {
-                        result.AppendErrorWithFormat ("attach failed: %s\n", error.AsCString());
-                        result.SetStatus (eReturnStatusFailed);
-                    }
-                }
-            }
+            result.AppendErrorWithFormat ("attach failed: %s\n", error.AsCString());
+            result.SetStatus (eReturnStatusFailed);
         }
-        
-        if (result.Succeeded())
+
+        if (!result.Succeeded())
+            return false;
+
+        // Okay, we're done.  Last step is to warn if the executable module has changed:
+        char new_path[PATH_MAX];
+        ModuleSP new_exec_module_sp (target->GetExecutableModule());
+        if (!old_exec_module_sp)
         {
-            // Okay, we're done.  Last step is to warn if the executable module has changed:
-            char new_path[PATH_MAX];
-            ModuleSP new_exec_module_sp (target->GetExecutableModule());
-            if (!old_exec_module_sp)
+            // We might not have a module if we attached to a raw pid...
+            if (new_exec_module_sp)
             {
-                // We might not have a module if we attached to a raw pid...
-                if (new_exec_module_sp)
-                {
-                    new_exec_module_sp->GetFileSpec().GetPath(new_path, PATH_MAX);
-                    result.AppendMessageWithFormat("Executable module set to \"%s\".\n", new_path);
-                }
+                new_exec_module_sp->GetFileSpec().GetPath(new_path, PATH_MAX);
+                result.AppendMessageWithFormat("Executable module set to \"%s\".\n", new_path);
             }
-            else if (old_exec_module_sp->GetFileSpec() != new_exec_module_sp->GetFileSpec())
-            {
-                char old_path[PATH_MAX];
-                
-                old_exec_module_sp->GetFileSpec().GetPath (old_path, PATH_MAX);
-                new_exec_module_sp->GetFileSpec().GetPath (new_path, PATH_MAX);
-                
-                result.AppendWarningWithFormat("Executable module changed from \"%s\" to \"%s\".\n",
-                                                    old_path, new_path);
-            }
-            
-            if (!old_arch_spec.IsValid())
-            {
-                result.AppendMessageWithFormat ("Architecture set to: %s.\n", target->GetArchitecture().GetTriple().getTriple().c_str());
-            }
-            else if (!old_arch_spec.IsExactMatch(target->GetArchitecture()))
-            {
-                result.AppendWarningWithFormat("Architecture changed from %s to %s.\n", 
-                                               old_arch_spec.GetTriple().getTriple().c_str(),
-                                               target->GetArchitecture().GetTriple().getTriple().c_str());
-            }
-
-            // This supports the use-case scenario of immediately continuing the process once attached.
-            if (m_options.attach_info.GetContinueOnceAttached())
-                m_interpreter.HandleCommand("process continue", eLazyBoolNo, result);
         }
+        else if (old_exec_module_sp->GetFileSpec() != new_exec_module_sp->GetFileSpec())
+        {
+            char old_path[PATH_MAX];
+
+            old_exec_module_sp->GetFileSpec().GetPath (old_path, PATH_MAX);
+            new_exec_module_sp->GetFileSpec().GetPath (new_path, PATH_MAX);
+
+            result.AppendWarningWithFormat("Executable module changed from \"%s\" to \"%s\".\n",
+                                                old_path, new_path);
+        }
+
+        if (!old_arch_spec.IsValid())
+        {
+            result.AppendMessageWithFormat ("Architecture set to: %s.\n", target->GetArchitecture().GetTriple().getTriple().c_str());
+        }
+        else if (!old_arch_spec.IsExactMatch(target->GetArchitecture()))
+        {
+            result.AppendWarningWithFormat("Architecture changed from %s to %s.\n",
+                                           old_arch_spec.GetTriple().getTriple().c_str(),
+                                           target->GetArchitecture().GetTriple().getTriple().c_str());
+        }
+
+        // This supports the use-case scenario of immediately continuing the process once attached.
+        if (m_options.attach_info.GetContinueOnceAttached())
+            m_interpreter.HandleCommand("process continue", eLazyBoolNo, result);
+
         return result.Succeeded();
     }
     
@@ -707,7 +673,7 @@ protected:
             switch (short_option)
             {
                 case 'i':
-                    m_ignore = Args::StringToUInt32 (option_arg, 0, 0, &success);
+                    m_ignore = StringConvert::ToUInt32 (option_arg, 0, 0, &success);
                     if (!success)
                         error.SetErrorStringWithFormat ("invalid value for ignore option: \"%s\", should be a number.", option_arg);
                     break;
@@ -791,7 +757,12 @@ protected:
                 }
             }
 
-            Error error(process->Resume());
+            StreamString stream;
+            Error error;
+            if (synchronous_execution)
+                error = process->ResumeSynchronous (&stream);
+            else
+                error = process->Resume ();
 
             if (error.Success())
             {
@@ -803,10 +774,11 @@ protected:
                 result.AppendMessageWithFormat ("Process %" PRIu64 " resuming\n", process->GetID());
                 if (synchronous_execution)
                 {
-                    state = process->WaitForProcessToStop (NULL);
+                    // If any state changed events had anything to say, add that to the result
+                    if (stream.GetData())
+                        result.AppendMessage(stream.GetData());
 
                     result.SetDidChangeProcessState (true);
-                    result.AppendMessageWithFormat ("Process %" PRIu64 " %s\n", process->GetID(), StateAsCString (state));
                     result.SetStatus (eReturnStatusSuccessFinishNoResult);
                 }
                 else
@@ -1284,7 +1256,7 @@ protected:
         for (uint32_t i=0; i<argc; ++i)
         {
             const char *image_token_cstr = command.GetArgumentAtIndex(i);
-            uint32_t image_token = Args::StringToUInt32(image_token_cstr, LLDB_INVALID_IMAGE_TOKEN, 0);
+            uint32_t image_token = StringConvert::ToUInt32(image_token_cstr, LLDB_INVALID_IMAGE_TOKEN, 0);
             if (image_token == LLDB_INVALID_IMAGE_TOKEN)
             {
                 result.AppendErrorWithFormat ("invalid image index argument '%s'", image_token_cstr);
@@ -1358,7 +1330,7 @@ protected:
             
             const char *signal_name = command.GetArgumentAtIndex(0);
             if (::isxdigit (signal_name[0]))
-                signo = Args::StringToSInt32(signal_name, LLDB_INVALID_SIGNAL_NUMBER, 0);
+                signo = StringConvert::ToSInt32(signal_name, LLDB_INVALID_SIGNAL_NUMBER, 0);
             else
                 signo = process->GetUnixSignals().GetSignalNumberFromName (signal_name);
             
@@ -1741,7 +1713,7 @@ public:
         else
         {
             // If the value isn't 'true' or 'false', it had better be 0 or 1.
-            real_value = Args::StringToUInt32 (option.c_str(), 3);
+            real_value = StringConvert::ToUInt32 (option.c_str(), 3);
             if (real_value != 0 && real_value != 1)
                 okay = false;
         }

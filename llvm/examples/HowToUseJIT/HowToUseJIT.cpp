@@ -34,9 +34,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
 #include "llvm/ExecutionEngine/Interpreter.h"
-#include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
@@ -127,7 +127,6 @@ int main() {
 
   // Import result of execution:
   outs() << "Result: " << gv.IntVal << "\n";
-  EE->freeMachineCodeForFunction(FooF);
   delete EE;
   llvm_shutdown();
   return 0;

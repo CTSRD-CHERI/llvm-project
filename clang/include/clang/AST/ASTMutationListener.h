@@ -16,9 +16,10 @@
 #include "clang/Basic/SourceLocation.h"
 
 namespace clang {
-  class CXXRecordDecl;
   class ClassTemplateDecl;
   class ClassTemplateSpecializationDecl;
+  class CXXDestructorDecl;
+  class CXXRecordDecl;
   class Decl;
   class DeclContext;
   class FunctionDecl;
@@ -72,6 +73,10 @@ public:
   /// \brief A function's return type has been deduced.
   virtual void DeducedReturnType(const FunctionDecl *FD, QualType ReturnType);
 
+  /// \brief A virtual destructor's operator delete has been resolved.
+  virtual void ResolvedOperatorDelete(const CXXDestructorDecl *DD,
+                                      const FunctionDecl *Delete) {}
+
   /// \brief An implicit member got a definition.
   virtual void CompletedImplicitDefinition(const FunctionDecl *D) {}
 
@@ -101,6 +106,12 @@ public:
   ///
   /// \param D the declaration marked used
   virtual void DeclarationMarkedUsed(const Decl *D) {}
+
+  /// \brief A declaration is marked as OpenMP threadprivate which was not
+  /// previously marked as threadprivate.
+  ///
+  /// \param D the declaration marked OpenMP threadprivate.
+  virtual void DeclarationMarkedOpenMPThreadPrivate(const Decl *D) {}
 
   // NOTE: If new methods are added they should also be added to
   // MultiplexASTMutationListener.

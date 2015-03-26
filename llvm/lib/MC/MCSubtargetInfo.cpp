@@ -17,8 +17,6 @@
 
 using namespace llvm;
 
-MCSchedModel MCSchedModel::DefaultSchedModel; // For unknown processors.
-
 /// InitMCProcessorInfo - Set or change the CPU (optionally supplemented
 /// with feature string). Recompute feature bits and scheduling model.
 void
@@ -33,11 +31,11 @@ MCSubtargetInfo::InitCPUSchedModel(StringRef CPU) {
   if (!CPU.empty())
     CPUSchedModel = getSchedModelForCPU(CPU);
   else
-    CPUSchedModel = &MCSchedModel::DefaultSchedModel;
+    CPUSchedModel = MCSchedModel::GetDefaultSchedModel();
 }
 
 void
-MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
+MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef C, StringRef FS,
                                      ArrayRef<SubtargetFeatureKV> PF,
                                      ArrayRef<SubtargetFeatureKV> PD,
                                      const SubtargetInfoKV *ProcSched,
@@ -48,6 +46,7 @@ MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
                                      const unsigned *OC,
                                      const unsigned *FP) {
   TargetTriple = TT;
+  CPU = C;
   ProcFeatures = PF;
   ProcDesc = PD;
   ProcSchedModels = ProcSched;
@@ -64,21 +63,26 @@ MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
 
 /// ToggleFeature - Toggle a feature and returns the re-computed feature
 /// bits. This version does not change the implied bits.
-uint64_t MCSubtargetInfo::ToggleFeature(uint64_t FB) {
+FeatureBitset MCSubtargetInfo::ToggleFeature(uint64_t FB) {
+  FeatureBits.flip(FB);
+  return FeatureBits;
+}
+
+FeatureBitset MCSubtargetInfo::ToggleFeature(const FeatureBitset &FB) {
   FeatureBits ^= FB;
   return FeatureBits;
 }
 
 /// ToggleFeature - Toggle a feature and returns the re-computed feature
 /// bits. This version will also change all implied bits.
-uint64_t MCSubtargetInfo::ToggleFeature(StringRef FS) {
+FeatureBitset MCSubtargetInfo::ToggleFeature(StringRef FS) {
   SubtargetFeatures Features;
   FeatureBits = Features.ToggleFeature(FeatureBits, FS, ProcFeatures);
   return FeatureBits;
 }
 
 
-const MCSchedModel *
+MCSchedModel
 MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
   assert(ProcSchedModels && "Processor machine model not available!");
 
@@ -97,15 +101,15 @@ MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
     errs() << "'" << CPU
            << "' is not a recognized processor for this target"
            << " (ignoring processor)\n";
-    return &MCSchedModel::DefaultSchedModel;
+    return MCSchedModel::GetDefaultSchedModel();
   }
   assert(Found->Value && "Missing processor SchedModel value");
-  return (const MCSchedModel *)Found->Value;
+  return *(const MCSchedModel *)Found->Value;
 }
 
 InstrItineraryData
 MCSubtargetInfo::getInstrItineraryForCPU(StringRef CPU) const {
-  const MCSchedModel *SchedModel = getSchedModelForCPU(CPU);
+  const MCSchedModel SchedModel = getSchedModelForCPU(CPU);
   return InstrItineraryData(SchedModel, Stages, OperandCycles, ForwardingPaths);
 }
 

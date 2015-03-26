@@ -16,11 +16,13 @@
 
 #include "ThreadElfCore.h"
 #include "ProcessElfCore.h"
-#include "RegisterContextLinux_x86_64.h"
-#include "RegisterContextFreeBSD_i386.h"
-#include "RegisterContextFreeBSD_mips64.h"
-#include "RegisterContextFreeBSD_x86_64.h"
+#include "Plugins/Process/Utility/RegisterContextLinux_x86_64.h"
+#include "Plugins/Process/Utility/RegisterContextFreeBSD_i386.h"
+#include "Plugins/Process/Utility/RegisterContextFreeBSD_mips64.h"
+#include "Plugins/Process/Utility/RegisterContextFreeBSD_powerpc.h"
+#include "Plugins/Process/Utility/RegisterContextFreeBSD_x86_64.h"
 #include "RegisterContextPOSIXCore_mips64.h"
+#include "RegisterContextPOSIXCore_powerpc.h"
 #include "RegisterContextPOSIXCore_x86_64.h"
 
 using namespace lldb;
@@ -36,7 +38,8 @@ ThreadElfCore::ThreadElfCore (Process &process, tid_t tid,
     m_thread_reg_ctx_sp (),
     m_signo(td.signo),
     m_gpregset_data(td.gpregset),
-    m_fpregset_data(td.fpregset)
+    m_fpregset_data(td.fpregset),
+    m_vregset_data(td.vregset)
 {
 }
 
@@ -94,6 +97,12 @@ ThreadElfCore::CreateRegisterContextForFrame (StackFrame *frame)
             {
                 switch (arch.GetMachine())
                 {
+                    case llvm::Triple::ppc:
+                        reg_interface = new RegisterContextFreeBSD_powerpc32(arch);
+                        break;
+                    case llvm::Triple::ppc64:
+                        reg_interface = new RegisterContextFreeBSD_powerpc64(arch);
+                        break;
                     case llvm::Triple::mips64:
                         reg_interface = new RegisterContextFreeBSD_mips64(arch);
                         break;
@@ -137,6 +146,10 @@ ThreadElfCore::CreateRegisterContextForFrame (StackFrame *frame)
         {
             case llvm::Triple::mips64:
                 m_thread_reg_ctx_sp.reset(new RegisterContextCorePOSIX_mips64 (*this, reg_interface, m_gpregset_data, m_fpregset_data));
+                break;
+            case llvm::Triple::ppc:
+            case llvm::Triple::ppc64:
+                m_thread_reg_ctx_sp.reset(new RegisterContextCorePOSIX_powerpc (*this, reg_interface, m_gpregset_data, m_fpregset_data, m_vregset_data));
                 break;
             case llvm::Triple::x86:
             case llvm::Triple::x86_64:

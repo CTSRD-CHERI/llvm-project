@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
 
 ; void f(int a[], int N) {
 ;   int i;
@@ -15,7 +15,7 @@ entry:
 
 bb:                                               ; preds = %bb, %entry
   %i = phi i64 [ 0, %entry ], [ %i.inc, %bb ]
-  %scevgep = getelementptr i64* %a, i64 %i
+  %scevgep = getelementptr i64, i64* %a, i64 %i
   store i64 %i, i64* %scevgep
   %i.inc = add nsw i64 %i, 1
   %exitcond = icmp eq i64 %i.inc, %N
@@ -32,6 +32,6 @@ return:                                           ; preds = %bb, %entry
 ; CHECK:        Domain :=
 ; CHECK:            [N] -> { Stmt_bb[i0] : i0 >= 0 and i0 <= -1 + N };
 ; CHECK:        Scattering :=
-; CHECK:            [N] -> { Stmt_bb[i0] -> scattering[0, i0, 0] };
+; CHECK:            [N] -> { Stmt_bb[i0] -> [i0] };
 ; CHECK:        MustWriteAccess := [Reduction Type: NONE]
 ; CHECK:            [N] -> { Stmt_bb[i0] -> MemRef_a[i0] };

@@ -16,27 +16,46 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
-#include "lldb/Core/ConnectionFileDescriptor.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Error.h"
 #include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h"
+#include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/StreamString.h"
+#include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostInfo.h"
+#include "lldb/Host/StringConvert.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
+
+#include "Utility/UriParser.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
 static bool g_initialized = false;
 
+static std::string MakeGdbServerUrl (const std::string &platform_hostname, uint16_t port)
+{
+    const char *override_hostname = getenv("LLDB_PLATFORM_REMOTE_GDB_SERVER_HOSTNAME");
+    const char *port_offset_c_str = getenv("LLDB_PLATFORM_REMOTE_GDB_SERVER_PORT_OFFSET");
+    int port_offset = port_offset_c_str ? ::atoi(port_offset_c_str) : 0;
+    lldb_private::StreamString result;
+    result.Printf("connect://%s:%u",
+            override_hostname ? override_hostname : platform_hostname.c_str(),
+            port + port_offset);
+    return result.GetString();
+}
+
 void
 PlatformRemoteGDBServer::Initialize ()
 {
+    Platform::Initialize ();
+
     if (g_initialized == false)
     {
         g_initialized = true;
@@ -54,9 +73,11 @@ PlatformRemoteGDBServer::Terminate ()
         g_initialized = false;
         PluginManager::UnregisterPlugin (PlatformRemoteGDBServer::CreateInstance);
     }
+
+    Platform::Terminate ();
 }
 
-Platform* 
+PlatformSP
 PlatformRemoteGDBServer::CreateInstance (bool force, const lldb_private::ArchSpec *arch)
 {
     bool create = force;
@@ -65,8 +86,8 @@ PlatformRemoteGDBServer::CreateInstance (bool force, const lldb_private::ArchSpe
         create = !arch->TripleVendorWasSpecified() && !arch->TripleOSWasSpecified();
     }
     if (create)
-        return new PlatformRemoteGDBServer ();
-    return NULL;
+        return PlatformSP(new PlatformRemoteGDBServer());
+    return PlatformSP();
 }
 
 
@@ -100,18 +121,155 @@ PlatformRemoteGDBServer::GetDescription ()
 }
 
 Error
-PlatformRemoteGDBServer::ResolveExecutable (const FileSpec &exe_file,
-                                            const ArchSpec &exe_arch,
+PlatformRemoteGDBServer::ResolveExecutable (const ModuleSpec &module_spec,
                                             lldb::ModuleSP &exe_module_sp,
                                             const FileSpecList *module_search_paths_ptr)
 {
+    // copied from PlatformRemoteiOS
+
     Error error;
-    //error.SetErrorString ("PlatformRemoteGDBServer::ResolveExecutable() is unimplemented");
-    if (m_gdb_client.GetFileExists(exe_file))
-        return error;
-    // TODO: get the remote end to somehow resolve this file
-    error.SetErrorString("file not found on remote end");
+    // Nothing special to do here, just use the actual file and architecture
+
+    ModuleSpec resolved_module_spec(module_spec);
+
+    // Resolve any executable within an apk on Android?
+    //Host::ResolveExecutableInBundle (resolved_module_spec.GetFileSpec());
+
+    if (resolved_module_spec.GetFileSpec().Exists())
+    {
+        if (resolved_module_spec.GetArchitecture().IsValid() || resolved_module_spec.GetUUID().IsValid())
+        {
+            error = ModuleList::GetSharedModule (resolved_module_spec,
+                                                 exe_module_sp,
+                                                 NULL,
+                                                 NULL,
+                                                 NULL);
+
+            if (exe_module_sp && exe_module_sp->GetObjectFile())
+                return error;
+            exe_module_sp.reset();
+        }
+        // No valid architecture was specified or the exact arch wasn't
+        // found so ask the platform for the architectures that we should be
+        // using (in the correct order) and see if we can find a match that way
+        StreamString arch_names;
+        for (uint32_t idx = 0; GetSupportedArchitectureAtIndex (idx, resolved_module_spec.GetArchitecture()); ++idx)
+        {
+            error = ModuleList::GetSharedModule (resolved_module_spec,
+                                                 exe_module_sp,
+                                                 NULL,
+                                                 NULL,
+                                                 NULL);
+            // Did we find an executable using one of the
+            if (error.Success())
+            {
+                if (exe_module_sp && exe_module_sp->GetObjectFile())
+                    break;
+                else
+                    error.SetErrorToGenericError();
+            }
+
+            if (idx > 0)
+                arch_names.PutCString (", ");
+            arch_names.PutCString (resolved_module_spec.GetArchitecture().GetArchitectureName());
+        }
+
+        if (error.Fail() || !exe_module_sp)
+        {
+            if (resolved_module_spec.GetFileSpec().Readable())
+            {
+                error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
+                                                resolved_module_spec.GetFileSpec().GetPath().c_str(),
+                                                GetPluginName().GetCString(),
+                                                arch_names.GetString().c_str());
+            }
+            else
+            {
+                error.SetErrorStringWithFormat("'%s' is not readable", resolved_module_spec.GetFileSpec().GetPath().c_str());
+            }
+        }
+    }
+    else
+    {
+        error.SetErrorStringWithFormat ("'%s' does not exist",
+                                        resolved_module_spec.GetFileSpec().GetPath().c_str());
+    }
+
     return error;
+}
+
+bool
+PlatformRemoteGDBServer::GetModuleSpec (const FileSpec& module_file_spec,
+                                        const ArchSpec& arch,
+                                        ModuleSpec &module_spec)
+{
+    Log *log = GetLogIfAnyCategoriesSet (LIBLLDB_LOG_PLATFORM);
+
+    const auto module_path = module_file_spec.GetPath ();
+
+    StringExtractorGDBRemote response;
+    if (!m_gdb_client.GetModuleInfo (module_path.c_str (), arch, response))
+    {
+        if (log)
+            log->Printf ("PlatformRemoteGDBServer::%s - failed to get module info for %s:%s",
+                         __FUNCTION__, module_path.c_str (), arch.GetTriple ().getTriple ().c_str ());
+        return false;
+    }
+
+    std::string name;
+    std::string value;
+    bool success;
+    StringExtractor extractor;
+
+    module_spec.Clear ();
+    module_spec.GetFileSpec () = module_file_spec;
+
+    while (response.GetNameColonValue (name, value))
+    {
+        if (name == "uuid" || name == "md5")
+        {
+            extractor.GetStringRef ().swap (value);
+            extractor.SetFilePos (0);
+            extractor.GetHexByteString (value);
+            module_spec.GetUUID().SetFromCString (value.c_str(), value.size() / 2);
+        }
+        else if (name == "triple")
+        {
+            extractor.GetStringRef ().swap (value);
+            extractor.SetFilePos (0);
+            extractor.GetHexByteString (value);
+            module_spec.GetArchitecture().SetTriple (value.c_str ());
+        }
+        else if (name == "file_offset")
+        {
+            const auto ival = StringConvert::ToUInt64 (value.c_str (), 0, 16, &success);
+            if (success)
+                module_spec.SetObjectOffset (ival);
+        }
+        else if (name == "file_size")
+        {
+            const auto ival = StringConvert::ToUInt64 (value.c_str (), 0, 16, &success);
+            if (success)
+                module_spec.SetObjectSize (ival);
+        }
+        else if (name == "file_path")
+        {
+            extractor.GetStringRef ().swap (value);
+            extractor.SetFilePos (0);
+            extractor.GetHexByteString (value);
+            module_spec.GetFileSpec () = FileSpec (value.c_str(), false);
+        }
+    }
+
+    if (log)
+    {
+        StreamString stream;
+        module_spec.Dump (stream);
+        log->Printf ("PlatformRemoteGDBServer::%s - got module info for (%s:%s) : %s",
+                     __FUNCTION__, module_path.c_str (), arch.GetTriple ().getTriple ().c_str (), stream.GetString ().c_str ());
+    }
+
+    return true;
 }
 
 Error
@@ -128,8 +286,8 @@ PlatformRemoteGDBServer::GetFileWithUUID (const FileSpec &platform_file,
 /// Default Constructor
 //------------------------------------------------------------------
 PlatformRemoteGDBServer::PlatformRemoteGDBServer () :
-    Platform(false), // This is a remote platform
-    m_gdb_client(true)
+    Platform (false), // This is a remote platform
+    m_gdb_client ()
 {
 }
 
@@ -146,6 +304,18 @@ PlatformRemoteGDBServer::~PlatformRemoteGDBServer()
 bool
 PlatformRemoteGDBServer::GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
+    ArchSpec remote_arch = m_gdb_client.GetSystemArchitecture();
+
+    if (idx == 0)
+    {
+        arch = remote_arch;
+        return arch.IsValid();
+    }
+    else if (idx == 1 && remote_arch.IsValid() && remote_arch.GetTriple().isArch64Bit())
+    {
+        arch.SetTriple(remote_arch.GetTriple().get32BitArchVariant());
+        return arch.IsValid();
+    }
     return false;
 }
 
@@ -252,6 +422,16 @@ PlatformRemoteGDBServer::ConnectRemote (Args& args)
         {
             const char *url = args.GetArgumentAtIndex(0);
             m_gdb_client.SetConnection (new ConnectionFileDescriptor());
+            // we're going to reuse the hostname when we connect to the debugserver
+            std::string scheme;
+            int port;
+            std::string path;
+            if ( !UriParser::Parse(url, scheme, m_platform_hostname, port, path) )
+            {
+                error.SetErrorString("invalid uri");
+                return error;
+            }
+
             const ConnectionStatus status = m_gdb_client.Connect(url, &error);
             if (status == eConnectionStatusSuccess)
             {
@@ -275,7 +455,6 @@ PlatformRemoteGDBServer::ConnectRemote (Args& args)
             error.SetErrorString ("\"platform connect\" takes a single argument: <connect-url>");
         }
     }
-
     return error;
 }
 
@@ -344,14 +523,30 @@ PlatformRemoteGDBServer::LaunchProcess (ProcessLaunchInfo &launch_info)
 {
     Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_PLATFORM));
     Error error;
-    lldb::pid_t pid = LLDB_INVALID_PROCESS_ID;
 
     if (log)
         log->Printf ("PlatformRemoteGDBServer::%s() called", __FUNCTION__);
 
-    m_gdb_client.SetSTDIN ("/dev/null");
-    m_gdb_client.SetSTDOUT ("/dev/null");
-    m_gdb_client.SetSTDERR ("/dev/null");
+    auto num_file_actions = launch_info.GetNumFileActions ();
+    for (decltype(num_file_actions) i = 0; i < num_file_actions; ++i)
+    {
+        const auto file_action = launch_info.GetFileActionAtIndex (i);
+        if (file_action->GetAction () != FileAction::eFileActionOpen)
+            continue;
+        switch(file_action->GetFD())
+        {
+        case STDIN_FILENO:
+            m_gdb_client.SetSTDIN (file_action->GetPath());
+            break;
+        case STDOUT_FILENO:
+            m_gdb_client.SetSTDOUT (file_action->GetPath());
+            break;
+        case STDERR_FILENO:
+            m_gdb_client.SetSTDERR (file_action->GetPath());
+            break;
+        }
+    }
+
     m_gdb_client.SetDisableASLR (launch_info.GetFlags().Test (eLaunchFlagDisableASLR));
     m_gdb_client.SetDetachOnError (launch_info.GetFlags().Test (eLaunchFlagDetachOnError));
     
@@ -381,15 +576,19 @@ PlatformRemoteGDBServer::LaunchProcess (ProcessLaunchInfo &launch_info)
     if (log)
         log->Printf ("PlatformRemoteGDBServer::%s() set launch architecture triple to '%s'", __FUNCTION__, arch_triple ? arch_triple : "<NULL>");
 
-    const uint32_t old_packet_timeout = m_gdb_client.SetPacketTimeout (5);
-    int arg_packet_err = m_gdb_client.SendArgumentsPacket (launch_info);
-    m_gdb_client.SetPacketTimeout (old_packet_timeout);
+    int arg_packet_err;
+    {
+        // Scope for the scoped timeout object
+        GDBRemoteCommunication::ScopedTimeout timeout(m_gdb_client, 5);
+        arg_packet_err = m_gdb_client.SendArgumentsPacket (launch_info);
+    }
+
     if (arg_packet_err == 0)
     {
         std::string error_str;
         if (m_gdb_client.GetLaunchSuccess (error_str))
         {
-            pid = m_gdb_client.GetCurrentProcessID ();
+            const auto pid = m_gdb_client.GetCurrentProcessID (false);
             if (pid != LLDB_INVALID_PROCESS_ID)
             {
                 launch_info.SetProcessID (pid);
@@ -400,7 +599,7 @@ PlatformRemoteGDBServer::LaunchProcess (ProcessLaunchInfo &launch_info)
             {
                 if (log)
                     log->Printf ("PlatformRemoteGDBServer::%s() launch succeeded but we didn't get a valid process id back!", __FUNCTION__);
-                // FIXME isn't this an error condition? Do we need to set an error here?  Check with Greg.
+                error.SetErrorString ("failed to get PID");
             }
         }
         else
@@ -417,11 +616,18 @@ PlatformRemoteGDBServer::LaunchProcess (ProcessLaunchInfo &launch_info)
     return error;
 }
 
+Error
+PlatformRemoteGDBServer::KillProcess (const lldb::pid_t pid)
+{
+    if (!KillSpawnedProcess(pid))
+        return Error("failed to kill remote spawned process");
+    return Error();
+}
+
 lldb::ProcessSP
 PlatformRemoteGDBServer::DebugProcess (lldb_private::ProcessLaunchInfo &launch_info,
                                        lldb_private::Debugger &debugger,
                                        lldb_private::Target *target,       // Can be NULL, if NULL create a new target, else use existing one
-                                       lldb_private::Listener &listener,
                                        lldb_private::Error &error)
 {
     lldb::ProcessSP process_sp;
@@ -430,22 +636,8 @@ PlatformRemoteGDBServer::DebugProcess (lldb_private::ProcessLaunchInfo &launch_i
         if (IsConnected())
         {
             lldb::pid_t debugserver_pid = LLDB_INVALID_PROCESS_ID;
-            ArchSpec remote_arch = GetRemoteSystemArchitecture();
-            llvm::Triple &remote_triple = remote_arch.GetTriple();
-            uint16_t port = 0;
-            if (remote_triple.getVendor() == llvm::Triple::Apple && remote_triple.getOS() == llvm::Triple::IOS)
-            {
-                // When remote debugging to iOS, we use a USB mux that always talks
-                // to localhost, so we will need the remote debugserver to accept connections
-                // only from localhost, no matter what our current hostname is
-                port = m_gdb_client.LaunchGDBserverAndGetPort(debugserver_pid, "127.0.0.1");
-            }
-            else
-            {
-                // All other hosts should use their actual hostname
-                port = m_gdb_client.LaunchGDBserverAndGetPort(debugserver_pid, NULL);
-            }
-            
+            uint16_t port = LaunchGDBserverAndGetPort(debugserver_pid);
+
             if (port == 0)
             {
                 error.SetErrorStringWithFormat ("unable to launch a GDB server on '%s'", GetHostname ());
@@ -473,25 +665,22 @@ PlatformRemoteGDBServer::DebugProcess (lldb_private::ProcessLaunchInfo &launch_i
                     
                     // The darwin always currently uses the GDB remote debugger plug-in
                     // so even when debugging locally we are debugging remotely!
-                    process_sp = target->CreateProcess (listener, "gdb-remote", NULL);
+                    process_sp = target->CreateProcess (launch_info.GetListenerForProcess(debugger), "gdb-remote", NULL);
                     
                     if (process_sp)
                     {
-                        char connect_url[256];
-                        const char *override_hostname = getenv("LLDB_PLATFORM_REMOTE_GDB_SERVER_HOSTNAME");
-                        const char *port_offset_c_str = getenv("LLDB_PLATFORM_REMOTE_GDB_SERVER_PORT_OFFSET");
-                        int port_offset = port_offset_c_str ? ::atoi(port_offset_c_str) : 0;
-                        const int connect_url_len = ::snprintf (connect_url,
-                                                                sizeof(connect_url),
-                                                                "connect://%s:%u",
-                                                                override_hostname ? override_hostname : GetHostname (),
-                                                                port + port_offset);
-                        assert (connect_url_len < (int)sizeof(connect_url));
-                        error = process_sp->ConnectRemote (NULL, connect_url);
+                        std::string connect_url = MakeGdbServerUrl(m_platform_hostname, port);
+                        error = process_sp->ConnectRemote (nullptr, connect_url.c_str());
+                        // Retry the connect remote one time...
+                        if (error.Fail())
+                            error = process_sp->ConnectRemote (nullptr, connect_url.c_str());
                         if (error.Success())
                             error = process_sp->Launch(launch_info);
                         else if (debugserver_pid != LLDB_INVALID_PROCESS_ID)
-                            m_gdb_client.KillSpawnedProcess(debugserver_pid);
+                        {
+                            printf ("error: connect remote failed (%s)\n", error.AsCString());
+                            KillSpawnedProcess(debugserver_pid);
+                        }
                     }
                 }
             }
@@ -502,14 +691,38 @@ PlatformRemoteGDBServer::DebugProcess (lldb_private::ProcessLaunchInfo &launch_i
         }
     }
     return process_sp;
-    
+
+}
+
+uint16_t
+PlatformRemoteGDBServer::LaunchGDBserverAndGetPort (lldb::pid_t &pid)
+{
+    ArchSpec remote_arch = GetRemoteSystemArchitecture ();
+    llvm::Triple &remote_triple = remote_arch.GetTriple ();
+    if (remote_triple.getVendor () == llvm::Triple::Apple && remote_triple.getOS () == llvm::Triple::IOS)
+    {
+        // When remote debugging to iOS, we use a USB mux that always talks
+        // to localhost, so we will need the remote debugserver to accept connections
+        // only from localhost, no matter what our current hostname is
+        return m_gdb_client.LaunchGDBserverAndGetPort (pid, "127.0.0.1");
+    }
+    else
+    {
+        // All other hosts should use their actual hostname
+        return m_gdb_client.LaunchGDBserverAndGetPort (pid, NULL);
+    }
+}
+
+bool
+PlatformRemoteGDBServer::KillSpawnedProcess (lldb::pid_t pid)
+{
+    return m_gdb_client.KillSpawnedProcess (pid);
 }
 
 lldb::ProcessSP
 PlatformRemoteGDBServer::Attach (lldb_private::ProcessAttachInfo &attach_info,
                                  Debugger &debugger,
                                  Target *target,       // Can be NULL, if NULL create a new target, else use existing one
-                                 Listener &listener, 
                                  Error &error)
 {
     lldb::ProcessSP process_sp;
@@ -518,22 +731,8 @@ PlatformRemoteGDBServer::Attach (lldb_private::ProcessAttachInfo &attach_info,
         if (IsConnected())
         {
             lldb::pid_t debugserver_pid = LLDB_INVALID_PROCESS_ID;
-            ArchSpec remote_arch = GetRemoteSystemArchitecture();
-            llvm::Triple &remote_triple = remote_arch.GetTriple();
-            uint16_t port = 0;
-            if (remote_triple.getVendor() == llvm::Triple::Apple && remote_triple.getOS() == llvm::Triple::IOS)
-            {
-                // When remote debugging to iOS, we use a USB mux that always talks
-                // to localhost, so we will need the remote debugserver to accept connections
-                // only from localhost, no matter what our current hostname is
-                port = m_gdb_client.LaunchGDBserverAndGetPort(debugserver_pid, "127.0.0.1");
-            }
-            else
-            {
-                // All other hosts should use their actual hostname
-                port = m_gdb_client.LaunchGDBserverAndGetPort(debugserver_pid, NULL);
-            }
-            
+            uint16_t port = LaunchGDBserverAndGetPort(debugserver_pid);
+
             if (port == 0)
             {
                 error.SetErrorStringWithFormat ("unable to launch a GDB server on '%s'", GetHostname ());
@@ -561,26 +760,23 @@ PlatformRemoteGDBServer::Attach (lldb_private::ProcessAttachInfo &attach_info,
                     
                     // The darwin always currently uses the GDB remote debugger plug-in
                     // so even when debugging locally we are debugging remotely!
-                    process_sp = target->CreateProcess (listener, "gdb-remote", NULL);
+                    process_sp = target->CreateProcess (attach_info.GetListenerForProcess(debugger), "gdb-remote", NULL);
                     
                     if (process_sp)
                     {
-                        char connect_url[256];
-                        const char *override_hostname = getenv("LLDB_PLATFORM_REMOTE_GDB_SERVER_HOSTNAME");
-                        const char *port_offset_c_str = getenv("LLDB_PLATFORM_REMOTE_GDB_SERVER_PORT_OFFSET");
-                        int port_offset = port_offset_c_str ? ::atoi(port_offset_c_str) : 0;
-                        const int connect_url_len = ::snprintf (connect_url, 
-                                                                sizeof(connect_url), 
-                                                                "connect://%s:%u", 
-                                                                override_hostname ? override_hostname : GetHostname (), 
-                                                                port + port_offset);
-                        assert (connect_url_len < (int)sizeof(connect_url));
-                        error = process_sp->ConnectRemote (NULL, connect_url);
+                        std::string connect_url = MakeGdbServerUrl(m_platform_hostname, port);
+                        error = process_sp->ConnectRemote(nullptr, connect_url.c_str());
                         if (error.Success())
-                            error = process_sp->Attach(attach_info);
-                        else if (debugserver_pid != LLDB_INVALID_PROCESS_ID)
                         {
-                            m_gdb_client.KillSpawnedProcess(debugserver_pid);
+                            auto listener = attach_info.GetHijackListener();
+                            if (listener != nullptr)
+                                process_sp->HijackProcessEvents(listener.get());
+                            error = process_sp->Attach(attach_info);
+                        }
+
+                        if (error.Fail() && debugserver_pid != LLDB_INVALID_PROCESS_ID)
+                        {
+                            KillSpawnedProcess(debugserver_pid);
                         }
                     }
                 }
@@ -718,4 +914,4 @@ void
 PlatformRemoteGDBServer::CalculateTrapHandlerSymbolNames ()
 {   
     m_trap_handlers.push_back (ConstString ("_sigtramp"));
-}   
+}

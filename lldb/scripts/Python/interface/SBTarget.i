@@ -9,206 +9,7 @@
 
 namespace lldb {
 
-class SBLaunchInfo
-{
-public:
-    SBLaunchInfo (const char **argv);
-    
-    uint32_t
-    GetUserID();
-    
-    uint32_t
-    GetGroupID();
-    
-    bool
-    UserIDIsValid ();
-    
-    bool
-    GroupIDIsValid ();
-    
-    void
-    SetUserID (uint32_t uid);
-    
-    void
-    SetGroupID (uint32_t gid);
-    
-    lldb::SBFileSpec
-    GetExecutableFile ();
-    
-    void
-    SetExecutableFile (lldb::SBFileSpec exe_file, bool add_as_first_arg);
 
-    uint32_t
-    GetNumArguments ();
-    
-    const char *
-    GetArgumentAtIndex (uint32_t idx);
-    
-    void
-    SetArguments (const char **argv, bool append);
-    
-    uint32_t
-    GetNumEnvironmentEntries ();
-    
-    const char *
-    GetEnvironmentEntryAtIndex (uint32_t idx);
-    
-    void
-    SetEnvironmentEntries (const char **envp, bool append);
-    
-    void
-    Clear ();
-    
-    const char *
-    GetWorkingDirectory () const;
-    
-    void
-    SetWorkingDirectory (const char *working_dir);
-    
-    uint32_t
-    GetLaunchFlags ();
-    
-    void
-    SetLaunchFlags (uint32_t flags);
-    
-    const char *
-    GetProcessPluginName ();
-    
-    void
-    SetProcessPluginName (const char *plugin_name);
-    
-    const char *
-    GetShell ();
-    
-    void
-    SetShell (const char * path);
-    
-    uint32_t
-    GetResumeCount ();
-    
-    void
-    SetResumeCount (uint32_t c);
-    
-    bool
-    AddCloseFileAction (int fd);
-    
-    bool
-    AddDuplicateFileAction (int fd, int dup_fd);
-    
-    bool
-    AddOpenFileAction (int fd, const char *path, bool read, bool write);
-    
-    bool
-    AddSuppressFileAction (int fd, bool read, bool write);
-
-    void
-    SetLaunchEventData (const char *data);
-    
-    const char *
-    GetLaunchEventData () const;
-    
-    bool
-    GetDetachOnError() const;
-    
-    void
-    SetDetachOnError(bool enable);
-    
-};
-
-class SBAttachInfo
-{
-public:
-    SBAttachInfo ();
-    
-    SBAttachInfo (lldb::pid_t pid);
-    
-    SBAttachInfo (const char *path, bool wait_for);
-    
-    SBAttachInfo (const lldb::SBAttachInfo &rhs);
-    
-    lldb::pid_t
-    GetProcessID ();
-    
-    void
-    SetProcessID (lldb::pid_t pid);
-    
-    void
-    SetExecutable (const char *path);
-    
-    void
-    SetExecutable (lldb::SBFileSpec exe_file);
-    
-    bool
-    GetWaitForLaunch ();
-    
-    void
-    SetWaitForLaunch (bool b);
-    
-    bool
-    GetIgnoreExisting ();
-    
-    void
-    SetIgnoreExisting (bool b);
-    
-    uint32_t
-    GetResumeCount ();
-    
-    void
-    SetResumeCount (uint32_t c);
-    
-    const char *
-    GetProcessPluginName ();
-    
-    void
-    SetProcessPluginName (const char *plugin_name);
-    
-    uint32_t
-    GetUserID();
-    
-    uint32_t
-    GetGroupID();
-    
-    bool
-    UserIDIsValid ();
-    
-    bool
-    GroupIDIsValid ();
-    
-    void
-    SetUserID (uint32_t uid);
-    
-    void
-    SetGroupID (uint32_t gid);
-
-    uint32_t
-    GetEffectiveUserID();
-    
-    uint32_t
-    GetEffectiveGroupID();
-    
-    bool
-    EffectiveUserIDIsValid ();
-    
-    bool
-    EffectiveGroupIDIsValid ();
-    
-    void
-    SetEffectiveUserID (uint32_t uid);
-    
-    void
-    SetEffectiveGroupID (uint32_t gid);
-    
-    lldb::pid_t
-    GetParentProcessID ();
-    
-    void
-    SetParentProcessID (lldb::pid_t pid);
-    
-    bool
-    ParentProcessIDIsValid();
-};
-    
-    
 %feature("docstring",
 "Represents the target program running under the debugger.
 
@@ -280,8 +81,35 @@ public:
     bool
     IsValid() const;
 
+    static bool
+    EventIsTargetEvent (const lldb::SBEvent &event);
+
+    static lldb::SBTarget
+    GetTargetFromEvent (const lldb::SBEvent &event);
+
+    static uint32_t
+    GetNumModulesFromEvent (const lldb::SBEvent &event);
+
+    static lldb::SBModule
+    GetModuleAtIndexFromEvent (const uint32_t idx, const lldb::SBEvent &event);
+
     lldb::SBProcess
     GetProcess ();
+
+
+    %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Return the platform object associated with the target.
+    ///
+    /// After return, the platform object should be checked for
+    /// validity.
+    ///
+    /// @return
+    ///     A platform object.
+    //------------------------------------------------------------------
+    ") GetPlatform;
+    lldb::SBPlatform
+    GetPlatform ();
 
     %feature("docstring", "
     //------------------------------------------------------------------
@@ -580,6 +408,30 @@ public:
     const char *
     GetTriple ();
 
+    %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Architecture data byte width accessor
+    ///
+    /// @return
+    /// The size in 8-bit (host) bytes of a minimum addressable
+    /// unit from the Architecture's data bus
+    //------------------------------------------------------------------
+    ") GetDataByteSize;
+    uint32_t
+    GetDataByteSize ();
+
+    %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Architecture code byte width accessor
+    ///
+    /// @return
+    /// The size in 8-bit (host) bytes of a minimum addressable
+    /// unit from the Architecture's code bus
+    //------------------------------------------------------------------
+    ") GetCodeByteSize;
+    uint32_t
+    GetCodeByteSize ();
+
     lldb::SBError
     SetSectionLoadAddress (lldb::SBSection section,
                            lldb::addr_t section_base_addr);
@@ -663,8 +515,32 @@ public:
     lldb::SBValue
     FindFirstGlobalVariable (const char* name);
 
+    
+    lldb::SBValueList
+    FindGlobalVariables(const char *name,
+                        uint32_t max_matches,
+                        MatchType matchtype);
+
+    lldb::SBSymbolContextList
+    FindGlobalFunctions(const char *name,
+                        uint32_t max_matches,
+                        MatchType matchtype);
+
     void
     Clear ();
+
+     %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Resolve a current file address into a section offset address.
+    ///
+    /// @param[in] file_addr
+    ///
+    /// @return
+    ///     An SBAddress which will be valid if...
+    //------------------------------------------------------------------
+    ") ResolveFileAddress;
+    lldb::SBAddress
+    ResolveFileAddress (lldb::addr_t file_addr);
 
     lldb::SBAddress
     ResolveLoadAddress (lldb::addr_t vm_addr);
@@ -675,6 +551,33 @@ public:
     SBSymbolContext
     ResolveSymbolContextForAddress (const SBAddress& addr, 
                                     uint32_t resolve_scope);
+
+     %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Read target memory. If a target process is running then memory  
+    /// is read from here. Otherwise the memory is read from the object
+    /// files. For a target whose bytes are sized as a multiple of host
+    /// bytes, the data read back will preserve the target's byte order.
+    ///
+    /// @param[in] addr
+    ///     A target address to read from. 
+    ///
+    /// @param[out] buf
+    ///     The buffer to read memory into. 
+    ///
+    /// @param[in] size
+    ///     The maximum number of host bytes to read in the buffer passed
+    ///     into this call
+    ///
+    /// @param[out] error
+    ///     Error information is written here if the memory read fails.
+    ///
+    /// @return
+    ///     The amount of data read in host bytes.
+    //------------------------------------------------------------------
+    ") ReadMemory;
+    size_t
+    ReadMemory (const SBAddress addr, void *buf, size_t size, lldb::SBError &error);
 
     lldb::SBBreakpoint
     BreakpointCreateByLocation (const char *file, uint32_t line);
@@ -703,6 +606,9 @@ public:
 
     lldb::SBBreakpoint
     BreakpointCreateBySourceRegex (const char *source_regex, const lldb::SBFileSpec &source_file, const char *module_name = NULL);
+
+    lldb::SBBreakpoint
+    BreakpointCreateBySourceRegex (const char *source_regex, const lldb::SBFileSpecList &module_list, const lldb::SBFileSpecList &file_list);
 
     lldb::SBBreakpoint
     BreakpointCreateForException  (lldb::LanguageType language,
@@ -767,16 +673,47 @@ public:
               
     lldb::SBValue
     CreateValueFromAddress (const char *name, lldb::SBAddress addr, lldb::SBType type);
-    
+
+    lldb::SBValue
+    CreateValueFromData (const char *name, lldb::SBData data, lldb::SBType type);
+  
+    lldb::SBValue
+    CreateValueFromExpression (const char *name, const char* expr);
+              
+    %feature("docstring", "
+    Disassemble a specified number of instructions starting at an address.
+    Parameters:
+       base_addr       -- the address to start disassembly from
+       count           -- the number of instructions to disassemble
+       flavor_string   -- may be 'intel' or 'att' on x86 targets to specify that style of disassembly
+    Returns an SBInstructionList.") 
+    ReadInstructions;
     lldb::SBInstructionList
     ReadInstructions (lldb::SBAddress base_addr, uint32_t count);    
 
     lldb::SBInstructionList
     ReadInstructions (lldb::SBAddress base_addr, uint32_t count, const char *flavor_string);
 
+    %feature("docstring", "
+    Disassemble the bytes in a buffer and return them in an SBInstructionList.
+    Parameters:
+       base_addr -- used for symbolicating the offsets in the byte stream when disassembling
+       buf       -- bytes to be disassembled
+       size      -- (C++) size of the buffer
+    Returns an SBInstructionList.") 
+    GetInstructions;
     lldb::SBInstructionList
     GetInstructions (lldb::SBAddress base_addr, const void *buf, size_t size);
-    
+
+    %feature("docstring", "
+    Disassemble the bytes in a buffer and return them in an SBInstructionList, with a supplied flavor.
+    Parameters:
+       base_addr -- used for symbolicating the offsets in the byte stream when disassembling
+       flavor    -- may be 'intel' or 'att' on x86 targets to specify that style of disassembly
+       buf       -- bytes to be disassembled
+       size      -- (C++) size of the buffer
+    Returns an SBInstructionList.") 
+    GetInstructionsWithFlavor;
     lldb::SBInstructionList
     GetInstructionsWithFlavor (lldb::SBAddress base_addr, const char *flavor_string, const void *buf, size_t size);
     
@@ -788,6 +725,12 @@ public:
     
     lldb::addr_t
     GetStackRedZoneSize();
+
+    lldb::SBLaunchInfo
+    GetLaunchInfo () const;
+
+    void
+    SetLaunchInfo (const lldb::SBLaunchInfo &launch_info);
 
     bool
     operator == (const lldb::SBTarget &rhs) const;
@@ -894,6 +837,15 @@ public:
         
         __swig_getmethods__["triple"] = GetTriple
         if _newclass: triple = property(GetTriple, None, doc='''A read only property that returns the target triple (arch-vendor-os) for this target as a string.''')
+
+        __swig_getmethods__["data_byte_size"] = GetDataByteSize
+        if _newclass: data_byte_size = property(GetDataByteSize, None, doc='''A read only property that returns the size in host bytes of a byte in the data address space for this target.''')
+
+        __swig_getmethods__["code_byte_size"] = GetCodeByteSize
+        if _newclass: code_byte_size = property(GetCodeByteSize, None, doc='''A read only property that returns the size in host bytes of a byte in the code address space for this target.''')
+
+        __swig_getmethods__["platform"] = GetPlatform
+        if _newclass: platform = property(GetPlatform, None, doc='''A read only property that returns the platform associated with with this target.''')
     %}
 
 };

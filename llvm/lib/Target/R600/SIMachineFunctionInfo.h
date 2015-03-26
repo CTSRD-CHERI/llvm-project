@@ -16,6 +16,7 @@
 #define LLVM_LIB_TARGET_R600_SIMACHINEFUNCTIONINFO_H
 
 #include "AMDGPUMachineFunction.h"
+#include "SIRegisterInfo.h"
 #include <map>
 
 namespace llvm {
@@ -26,6 +27,10 @@ class MachineRegisterInfo;
 /// tells the hardware which interpolation parameters to load.
 class SIMachineFunctionInfo : public AMDGPUMachineFunction {
   void anchor() override;
+
+  unsigned TIDReg;
+  bool HasSpilledVGPRs;
+
 public:
 
   struct SpilledReg {
@@ -36,30 +41,23 @@ public:
     bool hasLane() { return Lane != -1;}
   };
 
-  struct RegSpillTracker {
-  private:
-    unsigned CurrentLane;
-    std::map<unsigned, SpilledReg> SpilledRegisters;
-  public:
-    unsigned LaneVGPR;
-    RegSpillTracker() : CurrentLane(0), SpilledRegisters(), LaneVGPR(0) { }
-    /// \p NumRegs The number of consecutive registers what need to be spilled.
-    ///            This function will ensure that all registers are stored in
-    ///            the same VGPR.
-    /// \returns The lane to be used for storing the first register.
-    unsigned reserveLanes(MachineRegisterInfo &MRI, MachineFunction *MF,
-                          unsigned NumRegs = 1);
-    void addSpilledReg(unsigned FrameIndex, unsigned Reg, int Lane = -1);
-    const SpilledReg& getSpilledReg(unsigned FrameIndex);
-    bool programSpillsRegisters() { return !SpilledRegisters.empty(); }
-  };
-
   // SIMachineFunctionInfo definition
 
   SIMachineFunctionInfo(const MachineFunction &MF);
+  SpilledReg getSpilledReg(MachineFunction *MF, unsigned FrameIndex,
+                           unsigned SubIdx);
   unsigned PSInputAddr;
-  struct RegSpillTracker SpillTracker;
   unsigned NumUserSGPRs;
+  std::map<unsigned, unsigned> LaneVGPRs;
+  unsigned LDSWaveSpillSize;
+  unsigned ScratchOffsetReg;
+  bool hasCalculatedTID() const { return TIDReg != AMDGPU::NoRegister; };
+  unsigned getTIDReg() const { return TIDReg; };
+  void setTIDReg(unsigned Reg) { TIDReg = Reg; }
+  bool hasSpilledVGPRs() const { return HasSpilledVGPRs; }
+  void setHasSpilledVGPRs(bool Spill = true) { HasSpilledVGPRs = Spill; }
+
+  unsigned getMaximumWorkGroupSize(const MachineFunction &MF) const;
 };
 
 } // End namespace llvm

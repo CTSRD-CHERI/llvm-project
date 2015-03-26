@@ -200,12 +200,15 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
     LoadSDNode *LD = cast<LoadSDNode>(Op.getNode());
     ISD::LoadExtType ExtType = LD->getExtensionType();
     if (LD->getMemoryVT().isVector() && ExtType != ISD::NON_EXTLOAD)
-      switch (TLI.getLoadExtAction(LD->getExtensionType(), LD->getMemoryVT())) {
+      switch (TLI.getLoadExtAction(LD->getExtensionType(), LD->getValueType(0),
+                                   LD->getMemoryVT())) {
       default: llvm_unreachable("This action is not supported yet!");
       case TargetLowering::Legal:
         return TranslateLegalizeResults(Op, Result);
       case TargetLowering::Custom:
         if (SDValue Lowered = TLI.LowerOperation(Result, DAG)) {
+          if (Lowered == Result)
+            return TranslateLegalizeResults(Op, Lowered);
           Changed = true;
           if (Lowered->getNumValues() != Op->getNumValues()) {
             // This expanded to something other than the load. Assume the
@@ -231,9 +234,11 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
       default: llvm_unreachable("This action is not supported yet!");
       case TargetLowering::Legal:
         return TranslateLegalizeResults(Op, Result);
-      case TargetLowering::Custom:
-        Changed = true;
-        return TranslateLegalizeResults(Op, TLI.LowerOperation(Result, DAG));
+      case TargetLowering::Custom: {
+        SDValue Lowered = TLI.LowerOperation(Result, DAG);
+        Changed = Lowered != Result;
+        return TranslateLegalizeResults(Op, Lowered);
+      }
       case TargetLowering::Expand:
         Changed = true;
         return LegalizeOp(ExpandStore(Op));
@@ -290,6 +295,8 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
   case ISD::FP_TO_UINT:
   case ISD::FNEG:
   case ISD::FABS:
+  case ISD::FMINNUM:
+  case ISD::FMAXNUM:
   case ISD::FCOPYSIGN:
   case ISD::FSQRT:
   case ISD::FSIN:
@@ -370,9 +377,11 @@ SDValue VectorLegalizer::Promote(SDValue Op) {
     return PromoteFP_TO_INT(Op, Op->getOpcode() == ISD::FP_TO_SINT);
   }
 
-  // The rest of the time, vector "promotion" is basically just bitcasting and
-  // doing the operation in a different type.  For example, x86 promotes
-  // ISD::AND on v2i32 to v1i64.
+  // There are currently two cases of vector promotion:
+  // 1) Bitcasting a vector of integers to a different type to a vector of the
+  //    same overall length. For example, x86 promotes ISD::AND on v2i32 to v1i64.
+  // 2) Extending a vector of floats to a vector of the same number oflarger
+  //    floats. For example, AArch64 promotes ISD::FADD on v4f16 to v4f32.
   MVT VT = Op.getSimpleValueType();
   assert(Op.getNode()->getNumValues() == 1 &&
          "Can't promote a vector with multiple results!");
@@ -382,14 +391,25 @@ SDValue VectorLegalizer::Promote(SDValue Op) {
 
   for (unsigned j = 0; j != Op.getNumOperands(); ++j) {
     if (Op.getOperand(j).getValueType().isVector())
-      Operands[j] = DAG.getNode(ISD::BITCAST, dl, NVT, Op.getOperand(j));
+      if (Op.getOperand(j)
+              .getValueType()
+              .getVectorElementType()
+              .isFloatingPoint() &&
+          NVT.isVector() && NVT.getVectorElementType().isFloatingPoint())
+        Operands[j] = DAG.getNode(ISD::FP_EXTEND, dl, NVT, Op.getOperand(j));
+      else
+        Operands[j] = DAG.getNode(ISD::BITCAST, dl, NVT, Op.getOperand(j));
     else
       Operands[j] = Op.getOperand(j);
   }
 
   Op = DAG.getNode(Op.getOpcode(), dl, NVT, Operands);
-
-  return DAG.getNode(ISD::BITCAST, dl, VT, Op);
+  if ((VT.isFloatingPoint() && NVT.isFloatingPoint()) ||
+      (VT.isVector() && VT.getVectorElementType().isFloatingPoint() &&
+       NVT.isVector() && NVT.getVectorElementType().isFloatingPoint()))
+    return DAG.getNode(ISD::FP_ROUND, dl, VT, Op, DAG.getIntPtrConstant(0));
+  else
+    return DAG.getNode(ISD::BITCAST, dl, VT, Op);
 }
 
 SDValue VectorLegalizer::PromoteINT_TO_FP(SDValue Op) {
@@ -496,7 +516,8 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
         ScalarLoad = DAG.getLoad(WideVT, dl, Chain, BasePTR,
                                  LD->getPointerInfo().getWithOffset(Offset),
                                  LD->isVolatile(), LD->isNonTemporal(),
-                                 LD->isInvariant(), LD->getAlignment(),
+                                 LD->isInvariant(),
+                                 MinAlign(LD->getAlignment(), Offset),
                                  LD->getAAInfo());
       } else {
         EVT LoadVT = WideVT;
@@ -508,7 +529,8 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
                                     LD->getPointerInfo().getWithOffset(Offset),
                                     LoadVT, LD->isVolatile(),
                                     LD->isNonTemporal(), LD->isInvariant(),
-                                    LD->getAlignment(), LD->getAAInfo());
+                                    MinAlign(LD->getAlignment(), Offset),
+                                    LD->getAAInfo());
       }
 
       RemainingBytes -= LoadBytes;
@@ -540,9 +562,9 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
       BitOffset += SrcEltBits;
       if (BitOffset >= WideBits) {
         WideIdx++;
-        Offset -= WideBits;
-        if (Offset > 0) {
-          ShAmt = DAG.getConstant(SrcEltBits - Offset,
+        BitOffset -= WideBits;
+        if (BitOffset > 0) {
+          ShAmt = DAG.getConstant(SrcEltBits - BitOffset,
                                   TLI.getShiftAmountTy(WideVT));
           Hi = DAG.getNode(ISD::SHL, dl, WideVT, LoadVals[WideIdx], ShAmt);
           Hi = DAG.getNode(ISD::AND, dl, WideVT, Hi, SrcEltBitMask);
@@ -579,7 +601,7 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
                 Chain, BasePTR, LD->getPointerInfo().getWithOffset(Idx * Stride),
                 SrcVT.getScalarType(),
                 LD->isVolatile(), LD->isNonTemporal(), LD->isInvariant(),
-                LD->getAlignment(), LD->getAAInfo());
+                MinAlign(LD->getAlignment(), Idx * Stride), LD->getAAInfo());
 
       BasePTR = DAG.getNode(ISD::ADD, dl, BasePTR.getValueType(), BasePTR,
                          DAG.getConstant(Stride, BasePTR.getValueType()));
@@ -638,7 +660,8 @@ SDValue VectorLegalizer::ExpandStore(SDValue Op) {
     // This scalar TruncStore may be illegal, but we legalize it later.
     SDValue Store = DAG.getTruncStore(Chain, dl, Ex, BasePTR,
                ST->getPointerInfo().getWithOffset(Idx*Stride), MemSclVT,
-               isVolatile, isNonTemporal, Alignment, AAInfo);
+               isVolatile, isNonTemporal, MinAlign(Alignment, Idx*Stride),
+               AAInfo);
 
     BasePTR = DAG.getNode(ISD::ADD, dl, BasePTR.getValueType(), BasePTR,
                                DAG.getConstant(Stride, BasePTR.getValueType()));

@@ -1,7 +1,7 @@
-; RUN: opt %loadPolly -basicaa -polly-independent < %s -S | FileCheck %s
-; RUN: opt %loadPolly -basicaa -polly-independent -polly-codegen-scev < %s -S | FileCheck %s
-; RUN: opt %loadPolly -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array -S < %s | FileCheck %s -check-prefix=SCALARACCESS
-; RUN: opt %loadPolly -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array -polly-codegen-scev < %s -S | FileCheck %s -check-prefix=SCALARACCESS
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent < %s -S | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent < %s -S | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array -S < %s | FileCheck %s -check-prefix=SCALARACCESS
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array < %s -S | FileCheck %s -check-prefix=SCALARACCESS
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -47,7 +47,7 @@ for.cond:
   br i1 %exitcond, label %for.body, label %return
 
 for.body:
-  %arrayidx = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
+  %arrayidx = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
   %float = uitofp i64 %indvar to float
   store float %float, float* %arrayidx
   br label %for.inc
@@ -87,39 +87,39 @@ for.cond:
   br i1 %exitcond, label %for.body.a, label %return
 
 for.body.a:
-  %arrayidx = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
-  %scalar = load float* %arrayidx
+  %arrayidx = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
+  %scalar = load float, float* %arrayidx
   br label %for.body.b
 
 ; CHECK: for.body.a:
-; CHECK: %arrayidx = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
-; CHECK: %scalar = load float* %arrayidx
+; CHECK: %arrayidx = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
+; CHECK: %scalar = load float, float* %arrayidx
 ; CHECK: store float %scalar, float* %scalar.s2a
 ; CHECK: br label %for.body.b
 
 ; SCALARACCESS: for.body.a:
-; SCALARACCESS: %arrayidx = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
-; SCALARACCESS: %scalar = load float* %arrayidx
+; SCALARACCESS: %arrayidx = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
+; SCALARACCESS: %scalar = load float, float* %arrayidx
 ; SCALARACCESS-NOT: store
 ; SCALARACCESS: br label %for.body.b
 
 for.body.b:
-  %arrayidx2 = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
+  %arrayidx2 = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
   %float = uitofp i64 %indvar to float
   %sum = fadd float %scalar, %float
   store float %sum, float* %arrayidx2
   br label %for.inc
 
 ; CHECK: for.body.b:
-; CHECK: %arrayidx2 = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
+; CHECK: %arrayidx2 = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
 ; CHECK: %float = uitofp i64 %indvar to float
-; CHECK: %scalar.loadarray = load float* %scalar.s2a
+; CHECK: %scalar.loadarray = load float, float* %scalar.s2a
 ; CHECK: %sum = fadd float %scalar.loadarray, %float
 ; CHECK: store float %sum, float* %arrayidx2
 ; CHECK: br label %for.inc
 
 ; SCALARACCESS: for.body.b:
-; SCALARACCESS: %arrayidx2 = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
+; SCALARACCESS: %arrayidx2 = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
 ; SCALARACCESS: %float = uitofp i64 %indvar to float
 ; SCALARACCESS-NOT: load
 ; SCALARACCESS: %sum = fadd float %scalar, %float
@@ -159,16 +159,16 @@ for.head:
   br label %for.body
 
 for.body:
-  %arrayidx = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
-  %scalar = load float* %arrayidx
+  %arrayidx = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
+  %scalar = load float, float* %arrayidx
   br label %for.inc
 
 ; CHECK: for.body:
-; CHECK: %scalar = load float* %arrayidx
+; CHECK: %scalar = load float, float* %arrayidx
 ; CHECK: store float %scalar, float* %scalar.s2a
 
 ; SCALARACCESS: for.body:
-; SCALARACCESS: %scalar = load float* %arrayidx
+; SCALARACCESS: %scalar = load float, float* %arrayidx
 ; SCALARACCESS: store float %scalar, float* %scalar.s2a
 
 for.inc:
@@ -182,12 +182,12 @@ for.after:
   br label %return
 
 ; CHECK: for.after:
-; CHECK: %scalar.loadoutside = load float* %scalar.s2a
+; CHECK: %scalar.loadoutside = load float, float* %scalar.s2a
 ; CHECK: fence seq_cst
 ; CHECK: %return_value = fptosi float %scalar.loadoutside to i32
 
 ; SCALARACCESS: for.after:
-; SCALARACCESS: %scalar.loadoutside = load float* %scalar.s2a
+; SCALARACCESS: %scalar.loadoutside = load float, float* %scalar.s2a
 ; SCALARACCESS: fence seq_cst
 ; SCALARACCESS: %return_value = fptosi float %scalar.loadoutside to i32
 
@@ -219,7 +219,7 @@ for.cond:
   br i1 %exitcond, label %for.body, label %return
 
 for.body:
-  %arrayidx = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
+  %arrayidx = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
   store float %scalar, float* %arrayidx
   br label %for.inc
 
@@ -253,7 +253,7 @@ for.cond:
   br i1 %exitcond, label %for.body, label %return
 
 for.body:
-  %arrayidx = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
+  %arrayidx = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
   store float %scalar, float* %arrayidx
   br label %for.inc
 

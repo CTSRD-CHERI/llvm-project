@@ -217,13 +217,9 @@ namespace llvm {
   /// input dependences are unordered.
   class FullDependence : public Dependence {
   public:
-    FullDependence(Instruction *Src,
-                   Instruction *Dst,
-                   bool LoopIndependent,
+    FullDependence(Instruction *Src, Instruction *Dst, bool LoopIndependent,
                    unsigned Levels);
-    ~FullDependence() {
-      delete[] DV;
-    }
+    ~FullDependence() { delete[] DV; }
 
     /// isLoopIndependent - Returns true if this is a loop-independent
     /// dependence.
@@ -266,6 +262,7 @@ namespace llvm {
     /// if no subscript in the source or destination mention the induction
     /// variable associated with the loop at this level.
     bool isScalar(unsigned Level) const override;
+
   private:
     unsigned short Levels;
     bool LoopIndependent;
@@ -278,8 +275,8 @@ namespace llvm {
   /// DependenceAnalysis - This class is the main dependence-analysis driver.
   ///
   class DependenceAnalysis : public FunctionPass {
-    void operator=(const DependenceAnalysis &) LLVM_DELETED_FUNCTION;
-    DependenceAnalysis(const DependenceAnalysis &) LLVM_DELETED_FUNCTION;
+    void operator=(const DependenceAnalysis &) = delete;
+    DependenceAnalysis(const DependenceAnalysis &) = delete;
   public:
     /// depends - Tests for a dependence between the Src and Dst instructions.
     /// Returns NULL if no dependence; otherwise, returns a Dependence (or a
@@ -287,9 +284,9 @@ namespace llvm {
     /// The flag PossiblyLoopIndependent should be set by the caller
     /// if it appears that control flow can reach from Src to Dst
     /// without traversing a loop back edge.
-    Dependence *depends(Instruction *Src,
-                        Instruction *Dst,
-                        bool PossiblyLoopIndependent);
+    std::unique_ptr<Dependence> depends(Instruction *Src,
+                                        Instruction *Dst,
+                                        bool PossiblyLoopIndependent);
 
     /// getSplitIteration - Give a dependence that's splittable at some
     /// particular level, return the iteration that should be used to split
@@ -331,7 +328,7 @@ namespace llvm {
     ///
     /// breaks the dependence and allows us to vectorize/parallelize
     /// both loops.
-    const SCEV *getSplitIteration(const Dependence *Dep, unsigned Level);
+    const SCEV *getSplitIteration(const Dependence &Dep, unsigned Level);
 
   private:
     AliasAnalysis *AA;
@@ -522,6 +519,12 @@ namespace llvm {
     /// isLoopInvariant - Returns true if Expression is loop invariant
     /// in LoopNest.
     bool isLoopInvariant(const SCEV *Expression, const Loop *LoopNest) const;
+
+    /// Makes sure both subscripts (i.e. Pair->Src and Pair->Dst) share the same
+    /// integer type by sign-extending one of them when necessary.
+    /// Sign-extending a subscript is safe because getelementptr assumes the
+    /// array subscripts are signed.
+    void unifySubscriptType(Subscript *Pair);
 
     /// removeMatchingExtensions - Examines a subscript pair.
     /// If the source and destination are identically sign (or zero)
@@ -911,7 +914,7 @@ namespace llvm {
 
     bool tryDelinearize(const SCEV *SrcSCEV, const SCEV *DstSCEV,
                         SmallVectorImpl<Subscript> &Pair,
-                        const SCEV *ElementSize) const;
+                        const SCEV *ElementSize);
 
   public:
     static char ID; // Class identification, replacement for typeinfo

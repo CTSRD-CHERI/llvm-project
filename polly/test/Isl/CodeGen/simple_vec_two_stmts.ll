@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly %defaultOpts -polly-codegen-isl %vector-opt -dce -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-codegen-isl %vector-opt -dce -S < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 
@@ -12,19 +12,19 @@ bb0:
 
 bb1:
   %indvar = phi i64 [ %indvar.next, %bb4 ], [ 0, %bb0 ]
-  %scevgep = getelementptr [1024 x float]* @B, i64 0, i64 %indvar
-  %scevgep2 = getelementptr [1024 x float]* @C, i64 0, i64 %indvar
-  %scevgep1 = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
+  %scevgep = getelementptr [1024 x float], [1024 x float]* @B, i64 0, i64 %indvar
+  %scevgep2 = getelementptr [1024 x float], [1024 x float]* @C, i64 0, i64 %indvar
+  %scevgep1 = getelementptr [1024 x float], [1024 x float]* @A, i64 0, i64 %indvar
   %exitcond = icmp ne i64 %indvar, 4
   br i1 %exitcond, label %bb2a, label %bb5
 
 bb2a:
-  %tmp1 = load float* %scevgep1, align 4
+  %tmp1 = load float, float* %scevgep1, align 4
   store float %tmp1, float* %scevgep, align 4
   br label %bb2b
 
 bb2b:
-  %tmp2 = load float* %scevgep1, align 4
+  %tmp2 = load float, float* %scevgep1, align 4
   store float %tmp2, float* %scevgep2, align 4
   br label %bb4
 
@@ -38,13 +38,13 @@ bb5:
 
 define i32 @main() nounwind {
   call void @simple_vec_stride_one()
-  %1 = load float* getelementptr inbounds ([1024 x float]* @A, i64 0, i64 42), align 8
+  %1 = load float, float* getelementptr inbounds ([1024 x float], [1024 x float]* @A, i64 0, i64 42), align 8
   %2 = fptosi float %1 to i32
   ret i32 %2
 }
 
-; CHECK: [[LOAD1:%[a-zA-Z0-9_]+_full]] = load <4 x float>*
+; CHECK: [[LOAD1:%[a-zA-Z0-9_]+_full]] = load <4 x float>, <4 x float>*
 ; CHECK: store <4 x float> [[LOAD1]]
-; CHECK: [[LOAD2:%[a-zA-Z0-9_]+_full]] = load <4 x float>*
+; CHECK: [[LOAD2:%[a-zA-Z0-9_]+_full]] = load <4 x float>, <4 x float>*
 ; CHECK: store <4 x float> [[LOAD2]]
 

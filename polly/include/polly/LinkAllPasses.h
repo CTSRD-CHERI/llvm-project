@@ -26,20 +26,14 @@ class RegionPass;
 }
 
 namespace polly {
-#ifdef CLOOG_FOUND
-llvm::Pass *createCloogExporterPass();
-llvm::Pass *createCloogInfoPass();
-llvm::Pass *createCodeGenerationPass();
-#endif
 llvm::Pass *createCodePreparationPass();
 llvm::Pass *createDeadCodeElimPass();
-llvm::Pass *createDependencesPass();
+llvm::Pass *createDependenceInfoPass();
 llvm::Pass *createDOTOnlyPrinterPass();
 llvm::Pass *createDOTOnlyViewerPass();
 llvm::Pass *createDOTPrinterPass();
 llvm::Pass *createDOTViewerPass();
 llvm::Pass *createIndependentBlocksPass();
-llvm::Pass *createIndVarSimplifyPass();
 llvm::Pass *createJSONExporterPass();
 llvm::Pass *createJSONImporterPass();
 #ifdef PLUTO_FOUND
@@ -67,20 +61,14 @@ struct PollyForcePassLinking {
     if (std::getenv("bar") != (char *)-1)
       return;
 
-#ifdef CLOOG_FOUND
-    polly::createCloogExporterPass();
-    polly::createCloogInfoPass();
-    polly::createCodeGenerationPass();
-#endif
     polly::createCodePreparationPass();
     polly::createDeadCodeElimPass();
-    polly::createDependencesPass();
+    polly::createDependenceInfoPass();
     polly::createDOTOnlyPrinterPass();
     polly::createDOTOnlyViewerPass();
     polly::createDOTPrinterPass();
     polly::createDOTViewerPass();
     polly::createIndependentBlocksPass();
-    polly::createIndVarSimplifyPass();
     polly::createJSONExporterPass();
     polly::createJSONImporterPass();
     polly::createScopDetectionPass();
@@ -99,9 +87,6 @@ struct PollyForcePassLinking {
 
 namespace llvm {
 class PassRegistry;
-#ifdef CLOOG_FOUND
-void initializeCodeGenerationPass(llvm::PassRegistry &);
-#endif
 void initializeCodePreparationPass(llvm::PassRegistry &);
 void initializeDeadCodeElimPass(llvm::PassRegistry &);
 void initializeIndependentBlocksPass(llvm::PassRegistry &);
@@ -114,7 +99,6 @@ void initializeIslScheduleOptimizerPass(llvm::PassRegistry &);
 void initializePlutoOptimizerPass(llvm::PassRegistry &);
 #endif
 void initializePollyCanonicalizePass(llvm::PassRegistry &);
-void initializePollyIndVarSimplifyPass(llvm::PassRegistry &);
 }
 
 #endif

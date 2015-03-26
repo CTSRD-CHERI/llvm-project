@@ -26,6 +26,7 @@
 #include "lldb/Expression/ClangExpressionDeclMap.h"
 #include "lldb/Expression/ClangExpressionParser.h"
 #include "lldb/Expression/ClangFunction.h"
+#include "lldb/Expression/ClangPersistentVariables.h"
 #include "lldb/Expression/ClangUserExpression.h"
 #include "lldb/Expression/ExpressionSourceCode.h"
 #include "lldb/Expression/IRExecutionUnit.h"
@@ -619,15 +620,14 @@ GetObjectPointer (lldb::StackFrameSP frame_sp,
 
     valobj_sp = frame_sp->GetValueForVariableExpressionPath(object_name.AsCString(),
                                                             lldb::eNoDynamicValues,
-                                                            StackFrame::eExpressionPathOptionCheckPtrVsMember ||
-                                                            StackFrame::eExpressionPathOptionsAllowDirectIVarAccess ||
-                                                            StackFrame::eExpressionPathOptionsNoFragileObjcIvar ||
-                                                            StackFrame::eExpressionPathOptionsNoSyntheticChildren ||
+                                                            StackFrame::eExpressionPathOptionCheckPtrVsMember |
+                                                            StackFrame::eExpressionPathOptionsNoFragileObjcIvar |
+                                                            StackFrame::eExpressionPathOptionsNoSyntheticChildren |
                                                             StackFrame::eExpressionPathOptionsNoSyntheticArrayRange,
                                                             var_sp,
                                                             err);
 
-    if (!err.Success())
+    if (!err.Success() || !valobj_sp.get())
         return LLDB_INVALID_ADDRESS;
 
     lldb::addr_t ret = valobj_sp->GetValueAsUnsigned(LLDB_INVALID_ADDRESS);
@@ -800,7 +800,7 @@ lldb::ExpressionResults
 ClangUserExpression::Execute (Stream &error_stream,
                               ExecutionContext &exe_ctx,
                               const EvaluateExpressionOptions& options,
-                              ClangUserExpression::ClangUserExpressionSP &shared_ptr_to_me,
+                              lldb::ClangUserExpressionSP &shared_ptr_to_me,
                               lldb::ClangExpressionVariableSP &result)
 {
     // The expression log is quite verbose, and if you're just tracking the execution of the
@@ -885,16 +885,16 @@ ClangUserExpression::Execute (Stream &error_stream,
 
             args.push_back(struct_address);
          
-            ThreadPlanCallUserExpression *user_expression_plan = 
-                    new ThreadPlanCallUserExpression (exe_ctx.GetThreadRef(),
-                                                      wrapper_address, 
-                                                      args,
-                                                      options,
-                                                      shared_ptr_to_me);
-            lldb::ThreadPlanSP call_plan_sp(user_expression_plan);
+            lldb::ThreadPlanSP call_plan_sp(new ThreadPlanCallUserExpression (exe_ctx.GetThreadRef(),
+                                                                              wrapper_address,
+                                                                              args,
+                                                                              options,
+                                                                              shared_ptr_to_me));
 
             if (!call_plan_sp || !call_plan_sp->ValidatePlan (&error_stream))
                 return lldb::eExpressionSetupError;
+
+            ThreadPlanCallUserExpression *user_expression_plan = static_cast<ThreadPlanCallUserExpression *>(call_plan_sp.get());
 
             lldb::addr_t function_stack_pointer = user_expression_plan->GetFunctionStackPointer();
 
@@ -1009,7 +1009,7 @@ ClangUserExpression::Evaluate (ExecutionContext &exe_ctx,
     if (process == NULL || !process->CanJIT())
         execution_policy = eExecutionPolicyNever;
 
-    ClangUserExpressionSP user_expression_sp (new ClangUserExpression (expr_cstr, expr_prefix, language, desired_type));
+    lldb::ClangUserExpressionSP user_expression_sp (new ClangUserExpression (expr_cstr, expr_prefix, language, desired_type));
 
     StreamString error_stream;
 
@@ -1070,7 +1070,7 @@ ClangUserExpression::Evaluate (ExecutionContext &exe_ctx,
                                                              user_expression_sp,
                                                              expr_result);
 
-            if (options.GetResultIsInternal())
+            if (options.GetResultIsInternal() && expr_result && process)
             {
                 process->GetTarget().GetPersistentVariables().RemovePersistentVariable (expr_result);
             }

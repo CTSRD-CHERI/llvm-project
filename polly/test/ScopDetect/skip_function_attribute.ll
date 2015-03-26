@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-detect -analyze < %s | FileCheck %s
 ;
 ; Verify polly skips this function
 ;
@@ -24,11 +24,11 @@ for.body.preheader:                               ; preds = %entry.split
 
 for.body:                                         ; preds = %for.body.preheader, %for.body
   %i.02 = phi i32 [ %inc, %for.body ], [ 0, %for.body.preheader ]
-  %arrayidx = getelementptr inbounds i32* %A, i32 %i.02
-  %tmp = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %A, i32 %i.02
+  %tmp = load i32, i32* %arrayidx, align 4
   %mul = mul nsw i32 %tmp, %tmp
   %add = add nsw i32 %mul, %tmp
-  %arrayidx3 = getelementptr inbounds i32* %A, i32 %i.02
+  %arrayidx3 = getelementptr inbounds i32, i32* %A, i32 %i.02
   store i32 %add, i32* %arrayidx3, align 4
   %inc = add nsw i32 %i.02, 1
   %cmp = icmp slt i32 %inc, %N

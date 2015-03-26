@@ -111,7 +111,10 @@ private:
 
   /// \brief The module we're currently writing, if any.
   Module *WritingModule;
-                    
+
+  /// \brief The base directory for any relative paths we emit.
+  std::string BaseDirectory;
+
   /// \brief Indicates when the AST writing is actively performing
   /// serialization, rather than just queueing updates.
   bool WritingAST;
@@ -412,7 +415,7 @@ private:
   unsigned NumVisibleDeclContexts;
 
   /// \brief The offset of each CXXBaseSpecifier set within the AST.
-  SmallVector<uint32_t, 4> CXXBaseSpecifiersOffsets;
+  SmallVector<uint32_t, 16> CXXBaseSpecifiersOffsets;
 
   /// \brief The first ID number we can use for our own base specifiers.
   serialization::CXXBaseSpecifiersID FirstCXXBaseSpecifiersID;
@@ -440,6 +443,33 @@ private:
   /// in the order they should be written.
   SmallVector<QueuedCXXBaseSpecifiers, 2> CXXBaseSpecifiersToWrite;
 
+  /// \brief The offset of each CXXCtorInitializer list within the AST.
+  SmallVector<uint32_t, 16> CXXCtorInitializersOffsets;
+
+  /// \brief The first ID number we can use for our own ctor initializers.
+  serialization::CXXCtorInitializersID FirstCXXCtorInitializersID;
+
+  /// \brief The ctor initializers ID that will be assigned to the next new
+  /// list of C++ ctor initializers.
+  serialization::CXXCtorInitializersID NextCXXCtorInitializersID;
+
+  /// \brief A set of C++ ctor initializers that is queued to be written
+  /// into the AST file.
+  struct QueuedCXXCtorInitializers {
+    QueuedCXXCtorInitializers() : ID() {}
+
+    QueuedCXXCtorInitializers(serialization::CXXCtorInitializersID ID,
+                              ArrayRef<CXXCtorInitializer*> Inits)
+        : ID(ID), Inits(Inits) {}
+
+    serialization::CXXCtorInitializersID ID;
+    ArrayRef<CXXCtorInitializer*> Inits;
+  };
+
+  /// \brief Queue of C++ ctor initializers to be written to the AST file,
+  /// in the order they should be written.
+  SmallVector<QueuedCXXCtorInitializers, 2> CXXCtorInitializersToWrite;
+
   /// \brief A mapping from each known submodule to its ID number, which will
   /// be a positive integer.
   llvm::DenseMap<Module *, unsigned> SubmoduleIDs;
@@ -457,24 +487,26 @@ private:
                          StringRef isysroot, const std::string &OutputFile);
   void WriteInputFiles(SourceManager &SourceMgr,
                        HeaderSearchOptions &HSOpts,
-                       StringRef isysroot,
                        bool Modules);
   void WriteSourceManagerBlock(SourceManager &SourceMgr,
-                               const Preprocessor &PP,
-                               StringRef isysroot);
+                               const Preprocessor &PP);
   void WritePreprocessor(const Preprocessor &PP, bool IsModule);
-  void WriteHeaderSearch(const HeaderSearch &HS, StringRef isysroot);
+  void WriteHeaderSearch(const HeaderSearch &HS);
   void WritePreprocessorDetail(PreprocessingRecord &PPRec);
   void WriteSubmodules(Module *WritingModule);
                                         
   void WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag,
                                      bool isModule);
   void WriteCXXBaseSpecifiersOffsets();
+  void WriteCXXCtorInitializersOffsets();
 
   unsigned TypeExtQualAbbrev;
   unsigned TypeFunctionProtoAbbrev;
   void WriteTypeAbbrevs();
   void WriteType(QualType T);
+
+  template<typename Visitor>
+  void visitLocalLookupResults(const DeclContext *DC, Visitor AddLookupResult);
 
   uint32_t GenerateNameLookupTable(const DeclContext *DC,
                                    llvm::SmallVectorImpl<char> &LookupTable);
@@ -495,7 +527,6 @@ private:
   void WriteOpenCLExtensions(Sema &SemaRef);
   void WriteObjCCategories();
   void WriteRedeclarations();
-  void WriteMergedDecls();
   void WriteLateParsedTemplates(Sema &SemaRef);
   void WriteOptimizePragmaOptions(Sema &SemaRef);
 
@@ -530,6 +561,8 @@ public:
   ASTWriter(llvm::BitstreamWriter &Stream);
   ~ASTWriter();
 
+  const LangOptions &getLangOpts() const;
+
   /// \brief Write a precompiled header for the given semantic analysis.
   ///
   /// \param SemaRef a reference to the semantic analysis object that processed
@@ -539,7 +572,8 @@ public:
   /// writing a precompiled header.
   ///
   /// \param isysroot if non-empty, write a relocatable file whose headers
-  /// are relative to the given system root.
+  /// are relative to the given system root. If we're writing a module, its
+  /// build directory will be used in preference to this if both are available.
   void WriteAST(Sema &SemaRef,
                 const std::string &OutputFile,
                 Module *WritingModule, StringRef isysroot,
@@ -599,12 +633,6 @@ public:
 
   /// \brief Determine the type ID of an already-emitted type.
   serialization::TypeID getTypeID(QualType T) const;
-
-  /// \brief Force a type to be emitted and get its index.
-  serialization::TypeIdx GetOrCreateTypeIdx( QualType T);
-
-  /// \brief Determine the type index of an already-emitted type.
-  serialization::TypeIdx getTypeIdx(QualType T) const;
 
   /// \brief Emits a reference to a declarator info.
   void AddTypeSourceInfo(TypeSourceInfo *TInfo, RecordDataImpl &Record);
@@ -675,6 +703,11 @@ public:
   void AddCXXBaseSpecifier(const CXXBaseSpecifier &Base,
                            RecordDataImpl &Record);
 
+  /// \brief Emit the ID for a CXXCtorInitializer array and register the array
+  /// for later serialization.
+  void AddCXXCtorInitializersRef(ArrayRef<CXXCtorInitializer *> Inits,
+                                 RecordDataImpl &Record);
+
   /// \brief Emit a CXXCtorInitializer array.
   void AddCXXCtorInitializers(
                              const CXXCtorInitializer * const *CtorInitializers,
@@ -685,6 +718,17 @@ public:
 
   /// \brief Add a string to the given record.
   void AddString(StringRef Str, RecordDataImpl &Record);
+
+  /// \brief Convert a path from this build process into one that is appropriate
+  /// for emission in the module file.
+  bool PreparePathForOutput(SmallVectorImpl<char> &Path);
+
+  /// \brief Add a path to the given record.
+  void AddPath(StringRef Path, RecordDataImpl &Record);
+
+  /// \brief Emit the current record with the given path as a blob.
+  void EmitRecordWithPath(unsigned Abbrev, RecordDataImpl &Record,
+                          StringRef Path);
 
   /// \brief Add a version tuple to the given record
   void AddVersionTuple(const VersionTuple &Version, RecordDataImpl &Record);
@@ -735,6 +779,18 @@ public:
   /// \brief Flush all of the C++ base specifier sets that have been added
   /// via \c AddCXXBaseSpecifiersRef().
   void FlushCXXBaseSpecifiers();
+
+  /// \brief Flush all of the C++ constructor initializer lists that have been
+  /// added via \c AddCXXCtorInitializersRef().
+  void FlushCXXCtorInitializers();
+
+  /// \brief Flush all pending records that are tacked onto the end of
+  /// decl and decl update records.
+  void FlushPendingAfterDecl() {
+    FlushStmts();
+    FlushCXXBaseSpecifiers();
+    FlushCXXCtorInitializers();
+  }
 
   /// \brief Record an ID for the given switch-case statement.
   unsigned RecordSwitchCaseID(SwitchCase *S);
@@ -789,6 +845,8 @@ public:
                                       const FunctionDecl *D) override;
   void ResolvedExceptionSpec(const FunctionDecl *FD) override;
   void DeducedReturnType(const FunctionDecl *FD, QualType ReturnType) override;
+  void ResolvedOperatorDelete(const CXXDestructorDecl *DD,
+                              const FunctionDecl *Delete) override;
   void CompletedImplicitDefinition(const FunctionDecl *D) override;
   void StaticDataMemberInstantiated(const VarDecl *D) override;
   void FunctionDefinitionInstantiated(const FunctionDecl *D) override;
@@ -798,6 +856,7 @@ public:
                                     const ObjCPropertyDecl *OrigProp,
                                     const ObjCCategoryDecl *ClassExt) override;
   void DeclarationMarkedUsed(const Decl *D) override;
+  void DeclarationMarkedOpenMPThreadPrivate(const Decl *D) override;
 };
 
 /// \brief AST and semantic-analysis consumer that generates a

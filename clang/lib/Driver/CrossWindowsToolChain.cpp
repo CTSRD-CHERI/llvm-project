@@ -60,7 +60,7 @@ AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
   if (!DriverArgs.hasArg(options::OPT_nobuiltininc)) {
     SmallString<128> ResourceDir(D.ResourceDir);
     llvm::sys::path::append(ResourceDir, "include");
-    addSystemInclude(DriverArgs, CC1Args, ResourceDir.str());
+    addSystemInclude(DriverArgs, CC1Args, ResourceDir);
   }
   addExternCSystemInclude(DriverArgs, CC1Args, SysRoot + "/usr/include");
 }
@@ -81,7 +81,7 @@ AddClangCXXStdlibIncludeArgs(const llvm::opt::ArgList &DriverArgs,
     break;
 
   case ToolChain::CST_Libstdcxx:
-    addSystemInclude(DriverArgs, CC1Args, SysRoot + "/usr/incldue/c++");
+    addSystemInclude(DriverArgs, CC1Args, SysRoot + "/usr/include/c++");
     addSystemInclude(DriverArgs, CC1Args,
                      SysRoot + "/usr/include/c++/" + Triple.str());
     addSystemInclude(DriverArgs, CC1Args,

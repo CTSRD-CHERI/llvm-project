@@ -16,6 +16,7 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -48,10 +49,12 @@ MCStreamer::~MCStreamer() {
 }
 
 void MCStreamer::reset() {
+  DwarfFrameInfos.clear();
   for (unsigned i = 0; i < getNumWinFrameInfos(); ++i)
     delete WinFrameInfos[i];
   WinFrameInfos.clear();
   CurrentWinFrameInfo = nullptr;
+  SymbolOrdering.clear();
   SectionStack.clear();
   SectionStack.push_back(std::pair<MCSectionSubPair, MCSectionSubPair>());
 }
@@ -180,7 +183,7 @@ void MCStreamer::EmitEHSymAttributes(const MCSymbol *Symbol,
                                      MCSymbol *EHSymbol) {
 }
 
-void MCStreamer::InitSections() {
+void MCStreamer::InitSections(bool NoExecStack) {
   SwitchSection(getContext().getObjectFileInfo()->getTextSection());
 }
 
@@ -218,6 +221,16 @@ void MCStreamer::EmitCFIStartProc(bool IsSimple) {
   Frame.IsSimple = IsSimple;
   EmitCFIStartProcImpl(Frame);
 
+  const MCAsmInfo* MAI = Context.getAsmInfo();
+  if (MAI) {
+    for (const MCCFIInstruction& Inst : MAI->getInitialFrameState()) {
+      if (Inst.getOperation() == MCCFIInstruction::OpDefCfa ||
+          Inst.getOperation() == MCCFIInstruction::OpDefCfaRegister) {
+        Frame.CurrentCfaRegister = Inst.getRegister();
+      }
+    }
+  }
+
   DwarfFrameInfos.push_back(Frame);
 }
 
@@ -249,6 +262,7 @@ void MCStreamer::EmitCFIDefCfa(int64_t Register, int64_t Offset) {
     MCCFIInstruction::createDefCfa(Label, Register, Offset);
   MCDwarfFrameInfo *CurFrame = getCurrentDwarfFrameInfo();
   CurFrame->Instructions.push_back(Instruction);
+  CurFrame->CurrentCfaRegister = static_cast<unsigned>(Register);
 }
 
 void MCStreamer::EmitCFIDefCfaOffset(int64_t Offset) {
@@ -273,6 +287,7 @@ void MCStreamer::EmitCFIDefCfaRegister(int64_t Register) {
     MCCFIInstruction::createDefCfaRegister(Label, Register);
   MCDwarfFrameInfo *CurFrame = getCurrentDwarfFrameInfo();
   CurFrame->Instructions.push_back(Instruction);
+  CurFrame->CurrentCfaRegister = static_cast<unsigned>(Register);
 }
 
 void MCStreamer::EmitCFIOffset(int64_t Register, int64_t Offset) {
@@ -647,3 +662,30 @@ void MCStreamer::EmitBundleAlignMode(unsigned AlignPow2) {}
 void MCStreamer::EmitBundleLock(bool AlignToEnd) {}
 void MCStreamer::FinishImpl() {}
 void MCStreamer::EmitBundleUnlock() {}
+
+void MCStreamer::SwitchSection(const MCSection *Section,
+                               const MCExpr *Subsection) {
+  assert(Section && "Cannot switch to a null section!");
+  MCSectionSubPair curSection = SectionStack.back().first;
+  SectionStack.back().second = curSection;
+  if (MCSectionSubPair(Section, Subsection) != curSection) {
+    SectionStack.back().first = MCSectionSubPair(Section, Subsection);
+    assert(!Section->hasEnded() && "Section already ended");
+    ChangeSection(Section, Subsection);
+    MCSymbol *Sym = Section->getBeginSymbol();
+    if (Sym && !Sym->isInSection())
+      EmitLabel(Sym);
+  }
+}
+
+MCSymbol *MCStreamer::endSection(const MCSection *Section) {
+  // TODO: keep track of the last subsection so that this symbol appears in the
+  // correct place.
+  MCSymbol *Sym = Section->getEndSymbol(Context);
+  if (Sym->isInSection())
+    return Sym;
+
+  SwitchSection(Section);
+  EmitLabel(Sym);
+  return Sym;
+}

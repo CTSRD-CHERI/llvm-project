@@ -17,12 +17,10 @@
 #ifndef LLD_DRIVER_DRIVER_H
 #define LLD_DRIVER_DRIVER_H
 
-#include "lld/Core/InputGraph.h"
 #include "lld/Core/LLVM.h"
-
+#include "lld/Core/Node.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Support/raw_ostream.h"
-
 #include <memory>
 #include <set>
 #include <vector>
@@ -34,16 +32,22 @@ class MachOLinkingContext;
 class PECOFFLinkingContext;
 class ELFLinkingContext;
 
+typedef std::vector<std::unique_ptr<File>> FileVector;
+
+FileVector makeErrorFile(StringRef path, std::error_code ec);
+FileVector parseMemberFiles(FileVector &files);
+FileVector loadFile(LinkingContext &ctx, StringRef path, bool wholeArchive);
+
 /// Base class for all Drivers.
 class Driver {
 protected:
 
   /// Performs link using specified options
   static bool link(LinkingContext &context,
-                   raw_ostream &diagnostics = llvm::errs());
+                   raw_ostream &diag = llvm::errs());
 
 private:
-  Driver() LLVM_DELETED_FUNCTION;
+  Driver() = delete;
 };
 
 /// Driver for "universal" lld tool which can mimic any linker command line
@@ -52,10 +56,10 @@ class UniversalDriver : public Driver {
 public:
   /// Determine flavor and pass control to Driver for that flavor.
   static bool link(int argc, const char *argv[],
-                   raw_ostream &diagnostics = llvm::errs());
+                   raw_ostream &diag = llvm::errs());
 
 private:
-  UniversalDriver() LLVM_DELETED_FUNCTION;
+  UniversalDriver() = delete;
 };
 
 /// Driver for gnu/binutil 'ld' command line options.
@@ -64,24 +68,34 @@ public:
   /// Parses command line arguments same as gnu/binutils ld and performs link.
   /// Returns true iff an error occurred.
   static bool linkELF(int argc, const char *argv[],
-                  raw_ostream &diagnostics = llvm::errs());
+                      raw_ostream &diag = llvm::errs());
 
   /// Uses gnu/binutils style ld command line options to fill in options struct.
   /// Returns true iff there was an error.
   static bool parse(int argc, const char *argv[],
                     std::unique_ptr<ELFLinkingContext> &context,
-                    raw_ostream &diagnostics = llvm::errs());
+                    raw_ostream &diag = llvm::errs());
+
+  /// Parses a given memory buffer as a linker script and evaluate that.
+  /// Public function for testing.
+  static std::error_code evalLinkerScript(ELFLinkingContext &ctx,
+                                          std::unique_ptr<MemoryBuffer> mb,
+                                          raw_ostream &diag, bool nostdlib);
+
+  /// A factory method to create an instance of ELFLinkingContext.
+  static std::unique_ptr<ELFLinkingContext>
+  createELFLinkingContext(llvm::Triple triple);
 
 private:
   static llvm::Triple getDefaultTarget(const char *progName);
   static bool applyEmulation(llvm::Triple &triple,
                              llvm::opt::InputArgList &args,
-                             raw_ostream &diagnostics);
+                             raw_ostream &diag);
   static void addPlatformSearchDirs(ELFLinkingContext &ctx,
                                     llvm::Triple &triple,
                                     llvm::Triple &baseTriple);
 
-  GnuLdDriver() LLVM_DELETED_FUNCTION;
+  GnuLdDriver() = delete;
 };
 
 /// Driver for darwin/ld64 'ld' command line options.
@@ -90,15 +104,15 @@ public:
   /// Parses command line arguments same as darwin's ld and performs link.
   /// Returns true iff there was an error.
   static bool linkMachO(int argc, const char *argv[],
-                        raw_ostream &diagnostics = llvm::errs());
+                        raw_ostream &diag = llvm::errs());
 
   /// Uses darwin style ld command line options to update LinkingContext object.
   /// Returns true iff there was an error.
   static bool parse(int argc, const char *argv[], MachOLinkingContext &info,
-                    raw_ostream &diagnostics = llvm::errs());
+                    raw_ostream &diag = llvm::errs());
 
 private:
-  DarwinLdDriver() LLVM_DELETED_FUNCTION;
+  DarwinLdDriver() = delete;
 };
 
 /// Driver for Windows 'link.exe' command line options
@@ -107,35 +121,40 @@ public:
   /// Parses command line arguments same as Windows link.exe and performs link.
   /// Returns true iff there was an error.
   static bool linkPECOFF(int argc, const char *argv[],
-                         raw_ostream &diagnostics = llvm::errs());
+                         raw_ostream &diag = llvm::errs());
 
   /// Uses Windows style link command line options to fill in options struct.
   /// Returns true iff there was an error.
   static bool parse(int argc, const char *argv[], PECOFFLinkingContext &info,
-                    raw_ostream &diagnostics = llvm::errs(),
-                    bool isDirective = false,
-                    std::set<StringRef> *undefinedSymbols = nullptr);
+                    raw_ostream &diag = llvm::errs(),
+                    bool isDirective = false);
+
+  // Same as parse(), but restricted to the context of directives.
+  static bool parseDirectives(int argc, const char *argv[],
+                    PECOFFLinkingContext &info,
+                    raw_ostream &diag = llvm::errs()) {
+    return parse(argc, argv, info, diag, true);
+  }
 
 private:
-  WinLinkDriver() LLVM_DELETED_FUNCTION;
+  WinLinkDriver() = delete;
 };
 
 /// Driver for lld unit tests
 class CoreDriver : public Driver {
 public:
-
   /// Parses command line arguments same as lld-core and performs link.
   /// Returns true iff there was an error.
   static bool link(int argc, const char *argv[],
-                   raw_ostream &diagnostics = llvm::errs());
+                   raw_ostream &diag = llvm::errs());
 
   /// Uses lld-core command line options to fill in options struct.
   /// Returns true iff there was an error.
   static bool parse(int argc, const char *argv[], CoreLinkingContext &info,
-                    raw_ostream &diagnostics = llvm::errs());
+                    raw_ostream &diag = llvm::errs());
 
 private:
-  CoreDriver() LLVM_DELETED_FUNCTION;
+  CoreDriver() = delete;
 };
 
 } // end namespace lld

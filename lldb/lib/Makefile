@@ -29,22 +29,30 @@ USEDLIBS = lldbAPI.a \
 	lldbDataFormatters.a \
 	lldbExpression.a \
 	lldbHostCommon.a \
+	lldbInitialize.a \
 	lldbInitAndLog.a \
 	lldbInterpreter.a \
 	lldbPluginABIMacOSX_arm.a \
 	lldbPluginABIMacOSX_arm64.a \
 	lldbPluginABIMacOSX_i386.a \
+	lldbPluginABISysV_ppc.a \
+	lldbPluginABISysV_ppc64.a \
 	lldbPluginABISysV_x86_64.a \
 	lldbPluginABISysV_hexagon.a \
 	lldbPluginDisassemblerLLVM.a \
 	lldbPluginDynamicLoaderStatic.a \
 	lldbPluginDynamicLoaderPOSIX.a \
 	lldbPluginDynamicLoaderHexagon.a \
+	lldbPluginDynamicLoaderMacOSX.a \
 	lldbPluginEmulateInstructionARM.a \
 	lldbPluginEmulateInstructionARM64.a \
+        lldbPluginEmulateInstructionMIPS64.a \
+	lldbPluginInstrumentationRuntimeAddressSanitizer.a \
 	lldbPluginLanguageRuntimeCPlusPlusItaniumABI.a \
 	lldbPluginLanguageRuntimeObjCAppleObjCRuntime.a \
+	lldbPluginMemoryHistoryASan.a \
 	lldbPluginObjectContainerBSDArchive.a \
+	lldbPluginObjectContainerUniversalMachO.a \
 	lldbPluginObjectFileELF.a \
 	lldbPluginObjectFileJIT.a \
 	lldbPluginSymbolVendorELF.a \
@@ -54,6 +62,7 @@ USEDLIBS = lldbAPI.a \
 	lldbPluginProcessGDBRemote.a \
 	lldbPluginSymbolFileDWARF.a \
 	lldbPluginSymbolFileSymtab.a \
+	lldbPluginSystemRuntimeMacOSX.a \
 	lldbPluginUnwindAssemblyInstEmulation.a \
 	lldbPluginUnwindAssemblyx86.a \
 	lldbPluginUtility.a \
@@ -79,7 +88,8 @@ USEDLIBS = lldbAPI.a \
 	lldbPluginPlatformWindows.a \
 	lldbPluginPlatformFreeBSD.a \
 	lldbPluginPlatformPOSIX.a \
-	lldbPluginPlatformKalimba.a
+	lldbPluginPlatformKalimba.a \
+	lldbPluginPlatformAndroid.a
 
 # Because GCC requires RTTI enabled for lldbCore (see source/Core/Makefile) it is
 # necessary to also link the clang rewriter libraries so vtable references can
@@ -92,20 +102,17 @@ endif
 include $(LLDB_LEVEL)/../../Makefile.config
 
 LINK_COMPONENTS := $(TARGETS_TO_BUILD) asmparser bitreader bitwriter codegen \
-                   instrumentation ipo irreader selectiondag jit mc mcjit \
+                   instrumentation ipo irreader selectiondag mc mcjit \
                    linker option
 
 ifeq ($(HOST_OS),Darwin)
   USEDLIBS += lldbHostMacOSX.a \
               lldbHostPosix.a \
-              lldbPluginDynamicLoaderMacOSX.a \
               lldbPluginDynamicLoaderDarwinKernel.a \
-              lldbPluginObjectContainerUniversalMachO.a \
               lldbPluginObjectFileMachO.a \
               lldbPluginSymbolVendorMacOSX.a \
               lldbPluginProcessDarwin.a \
               lldbPluginProcessMachCore.a \
-              lldbPluginSystemRuntimeMacOSX.a \
               lldbPluginProcessElfCore.a \
               lldbPluginJITLoaderGDB.a
 endif
@@ -115,7 +122,6 @@ ifeq ($(HOST_OS),Linux)
               lldbHostPosix.a \
               lldbPluginProcessLinux.a \
               lldbPluginProcessPOSIX.a \
-              lldbPluginDynamicLoaderMacOSX.a \
               lldbPluginProcessElfCore.a \
               lldbPluginJITLoaderGDB.a
 endif

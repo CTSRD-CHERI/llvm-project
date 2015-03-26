@@ -15,8 +15,8 @@
 #
 # PLT-SYM:      Relocations [
 # PLT-SYM-NEXT:   Section (4) .rel.dyn {
-# PLT-SYM-NEXT:     0x2000 R_MIPS_REL32 T1 0x0
 # PLT-SYM-NEXT:     0x140 R_MIPS_REL32 T1 0x0
+# PLT-SYM-NEXT:     0x2000 R_MIPS_REL32 T1 0x0
 # PLT-SYM-NEXT:   }
 # PLT-SYM-NEXT: ]
 #
@@ -34,7 +34,7 @@ FileHeader: !FileHeader
   Data: ELFDATA2LSB
   Type: ET_REL
   Machine: EM_MIPS
-  Flags: [EF_MIPS_PIC, EF_MIPS_CPIC]
+  Flags: [EF_MIPS_PIC, EF_MIPS_CPIC, EF_MIPS_ABI_O32, EF_MIPS_ARCH_32]
 
 Sections:
 - Name: .text

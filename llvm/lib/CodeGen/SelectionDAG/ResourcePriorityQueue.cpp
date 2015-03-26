@@ -42,15 +42,12 @@ static cl::opt<signed> RegPressureThreshold(
   cl::desc("Track reg pressure and switch priority to in-depth"));
 
 ResourcePriorityQueue::ResourcePriorityQueue(SelectionDAGISel *IS)
-    : Picker(this), InstrItins(IS->getTargetLowering()
-                                   ->getTargetMachine()
-                                   .getSubtargetImpl()
-                                   ->getInstrItineraryData()) {
-  const TargetMachine &TM = (*IS->MF).getTarget();
-  TRI = TM.getSubtargetImpl()->getRegisterInfo();
-  TLI = IS->getTargetLowering();
-  TII = TM.getSubtargetImpl()->getInstrInfo();
-  ResourcesModel = TII->CreateTargetScheduleState(&TM, nullptr);
+    : Picker(this), InstrItins(IS->MF->getSubtarget().getInstrItineraryData()) {
+  const TargetSubtargetInfo &STI = IS->MF->getSubtarget();
+  TRI = STI.getRegisterInfo();
+  TLI = IS->TLI;
+  TII = STI.getInstrInfo();
+  ResourcesModel.reset(TII->CreateTargetScheduleState(STI));
   // This hard requirement could be relaxed, but for now
   // do not let it procede.
   assert(ResourcesModel && "Unimplemented CreateTargetScheduleState.");
@@ -320,7 +317,7 @@ void ResourcePriorityQueue::reserveResources(SUnit *SU) {
 
   // If packet is now full, reset the state so in the next cycle
   // we start fresh.
-  if (Packet.size() >= InstrItins->SchedModel->IssueWidth) {
+  if (Packet.size() >= InstrItins->SchedModel.IssueWidth) {
     ResourcesModel->clearResources();
     Packet.clear();
   }
@@ -640,17 +637,3 @@ void ResourcePriorityQueue::remove(SUnit *SU) {
 
   Queue.pop_back();
 }
-
-
-#ifdef NDEBUG
-void ResourcePriorityQueue::dump(ScheduleDAG *DAG) const {}
-#else
-void ResourcePriorityQueue::dump(ScheduleDAG *DAG) const {
-  ResourcePriorityQueue q = *this;
-  while (!q.empty()) {
-    SUnit *su = q.pop();
-    dbgs() << "Height " << su->getHeight() << ": ";
-    su->dump(DAG);
-  }
-}
-#endif

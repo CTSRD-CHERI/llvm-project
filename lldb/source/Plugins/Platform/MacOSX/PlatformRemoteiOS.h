@@ -25,7 +25,7 @@ public:
     //------------------------------------------------------------
     // Class Functions
     //------------------------------------------------------------
-    static lldb_private::Platform* 
+    static lldb::PlatformSP
     CreateInstance (bool force, const lldb_private::ArchSpec *arch);
 
     static void
@@ -51,14 +51,14 @@ public:
     //------------------------------------------------------------
     // lldb_private::PluginInterface functions
     //------------------------------------------------------------
-    virtual lldb_private::ConstString
-    GetPluginName()
+    lldb_private::ConstString
+    GetPluginName() override
     {
         return GetPluginNameStatic();
     }
     
-    virtual uint32_t
-    GetPluginVersion()
+    uint32_t
+    GetPluginVersion() override
     {
         return 1;
     }
@@ -66,36 +66,41 @@ public:
     //------------------------------------------------------------
     // lldb_private::Platform functions
     //------------------------------------------------------------
-    virtual lldb_private::Error
-    ResolveExecutable (const lldb_private::FileSpec &exe_file,
-                       const lldb_private::ArchSpec &arch,
+    lldb_private::Error
+    ResolveExecutable (const lldb_private::ModuleSpec &module_spec,
                        lldb::ModuleSP &module_sp,
-                       const lldb_private::FileSpecList *module_search_paths_ptr);
+                       const lldb_private::FileSpecList *module_search_paths_ptr) override;
 
-    virtual const char *
-    GetDescription ()
+    const char *
+    GetDescription () override
     {
         return GetDescriptionStatic();
     }
 
-    virtual void
-    GetStatus (lldb_private::Stream &strm);
+    void
+    GetStatus (lldb_private::Stream &strm) override;
 
     virtual lldb_private::Error
     GetSymbolFile (const lldb_private::FileSpec &platform_file, 
                    const lldb_private::UUID *uuid_ptr,
                    lldb_private::FileSpec &local_file);
 
-    virtual lldb_private::Error
+    lldb_private::Error
     GetSharedModule (const lldb_private::ModuleSpec &module_spec,
                      lldb::ModuleSP &module_sp,
                      const lldb_private::FileSpecList *module_search_paths_ptr,
                      lldb::ModuleSP *old_module_sp_ptr,
-                     bool *did_create_ptr);
+                     bool *did_create_ptr) override;
 
-    virtual bool
+    bool
     GetSupportedArchitectureAtIndex (uint32_t idx, 
-                                     lldb_private::ArchSpec &arch);
+                                     lldb_private::ArchSpec &arch) override;
+    
+    void
+    AddClangModuleCompilationOptions (lldb_private::Target *target, std::vector<std::string> &options) override
+    {
+        return PlatformDarwin::AddClangModuleCompilationOptionsForSDKType(target, options, PlatformDarwin::SDKType::iPhoneOS);
+    }
 
 protected:
     struct SDKDirectoryInfo
@@ -114,9 +119,10 @@ protected:
     std::string m_device_support_directory_for_os_version;
     std::string m_build_update;
     uint32_t m_last_module_sdk_idx;
+    uint32_t m_connected_module_sdk_idx;
 
     bool
-    UpdateSDKDirectoryInfosInNeeded();
+    UpdateSDKDirectoryInfosIfNeeded();
 
     const char *
     GetDeviceSupportDirectory();
@@ -153,6 +159,13 @@ protected:
     uint32_t
     FindFileInAllSDKs (const lldb_private::FileSpec &platform_file,
                        lldb_private::FileSpecList &file_list);
+
+    uint32_t
+    GetConnectedSDKIndex ();
+
+    // Get index of SDK in SDKDirectoryInfoCollection by its pointer and return UINT32_MAX if that SDK not found.
+    uint32_t
+    GetSDKIndexBySDKDirectoryInfo (const SDKDirectoryInfo *sdk_info);
 
 private:
     DISALLOW_COPY_AND_ASSIGN (PlatformRemoteiOS);

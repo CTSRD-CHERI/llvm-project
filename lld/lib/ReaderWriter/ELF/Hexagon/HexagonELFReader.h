@@ -16,14 +16,15 @@
 namespace lld {
 namespace elf {
 
+typedef llvm::object::ELFType<llvm::support::little, 2, false> HexagonELFType;
+
 struct HexagonDynamicFileCreateELFTraits {
   typedef llvm::ErrorOr<std::unique_ptr<lld::SharedLibraryFile>> result_type;
 
   template <class ELFT>
   static result_type create(std::unique_ptr<llvm::MemoryBuffer> mb,
-                            bool useUndefines) {
-    return lld::elf::HexagonDynamicFile<ELFT>::create(std::move(mb),
-                                                      useUndefines);
+                            HexagonLinkingContext &ctx) {
+    return lld::elf::HexagonDynamicFile<ELFT>::create(std::move(mb), ctx);
   }
 };
 
@@ -32,49 +33,27 @@ struct HexagonELFFileCreateELFTraits {
 
   template <class ELFT>
   static result_type create(std::unique_ptr<llvm::MemoryBuffer> mb,
-                            bool atomizeStrings) {
-    return lld::elf::HexagonELFFile<ELFT>::create(std::move(mb),
-                                                  atomizeStrings);
+                            HexagonLinkingContext &ctx) {
+    return lld::elf::HexagonELFFile<ELFT>::create(std::move(mb), ctx);
   }
 };
 
-class HexagonELFObjectReader : public ELFObjectReader {
+class HexagonELFObjectReader
+    : public ELFObjectReader<HexagonELFType, HexagonELFFileCreateELFTraits,
+                             HexagonLinkingContext> {
 public:
-  HexagonELFObjectReader(bool atomizeStrings)
-      : ELFObjectReader(atomizeStrings) {}
-
-  std::error_code
-  parseFile(std::unique_ptr<MemoryBuffer> &mb, const class Registry &,
-            std::vector<std::unique_ptr<File>> &result) const override {
-    std::size_t maxAlignment =
-        1ULL << llvm::countTrailingZeros(uintptr_t(mb->getBufferStart()));
-    auto f = createELF<HexagonELFFileCreateELFTraits>(
-        llvm::object::getElfArchType(mb->getBuffer()), maxAlignment,
-        std::move(mb), _atomizeStrings);
-    if (std::error_code ec = f.getError())
-      return ec;
-    result.push_back(std::move(*f));
-    return std::error_code();
-  }
+  HexagonELFObjectReader(HexagonLinkingContext &ctx)
+      : ELFObjectReader<HexagonELFType, HexagonELFFileCreateELFTraits,
+                        HexagonLinkingContext>(ctx, llvm::ELF::EM_HEXAGON) {}
 };
 
-class HexagonELFDSOReader : public ELFDSOReader {
+class HexagonELFDSOReader
+    : public ELFDSOReader<HexagonELFType, HexagonDynamicFileCreateELFTraits,
+                          HexagonLinkingContext> {
 public:
-  HexagonELFDSOReader(bool useUndefines) : ELFDSOReader(useUndefines) {}
-
-  std::error_code
-  parseFile(std::unique_ptr<MemoryBuffer> &mb, const class Registry &,
-            std::vector<std::unique_ptr<File>> &result) const override {
-    std::size_t maxAlignment =
-        1ULL << llvm::countTrailingZeros(uintptr_t(mb->getBufferStart()));
-    auto f = createELF<HexagonDynamicFileCreateELFTraits>(
-        llvm::object::getElfArchType(mb->getBuffer()), maxAlignment,
-        std::move(mb), _useUndefines);
-    if (std::error_code ec = f.getError())
-      return ec;
-    result.push_back(std::move(*f));
-    return std::error_code();
-  }
+  HexagonELFDSOReader(HexagonLinkingContext &ctx)
+      : ELFDSOReader<HexagonELFType, HexagonDynamicFileCreateELFTraits,
+                     HexagonLinkingContext>(ctx, llvm::ELF::EM_HEXAGON) {}
 };
 
 } // namespace elf

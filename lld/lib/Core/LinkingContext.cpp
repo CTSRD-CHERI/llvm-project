@@ -11,7 +11,7 @@
 #include "lld/Core/LinkingContext.h"
 #include "lld/Core/Resolver.h"
 #include "lld/Core/Simple.h"
-#include "lld/ReaderWriter/Writer.h"
+#include "lld/Core/Writer.h"
 #include "llvm/ADT/Triple.h"
 
 namespace lld {
@@ -38,7 +38,7 @@ std::error_code LinkingContext::writeFile(const File &linkedFile) const {
 }
 
 bool LinkingContext::createImplicitFiles(
-    std::vector<std::unique_ptr<File> > &result) const {
+    std::vector<std::unique_ptr<File> > &result) {
   return this->writer().createImplicitFiles(result);
 }
 

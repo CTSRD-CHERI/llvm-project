@@ -25,11 +25,12 @@ using namespace llvm::sys;
 using namespace clang::tooling;
 
 bool ReplacementHandling::findClangApplyReplacements(const char *Argv0) {
-  CARPath = FindProgramByName("clang-apply-replacements");
-
-  if (!CARPath.empty())
+  ErrorOr<std::string> CARPathOrErr =
+      findProgramByName("clang-apply-replacements");
+  if (!CARPathOrErr)
     return true;
 
+  CARPath = *CARPathOrErr;
   static int StaticSymbol;
   std::string ClangModernizePath = fs::getMainExecutable(Argv0, &StaticSymbol);
   SmallString<128> TestPath = path::parent_path(ClangModernizePath);
@@ -72,11 +73,10 @@ bool ReplacementHandling::serializeReplacements(
       continue;
     }
 
-    std::string ErrorInfo;
-    raw_fd_ostream ReplacementsFile(ReplacementsFileName.c_str(), ErrorInfo,
-                                    fs::F_None);
-    if (!ErrorInfo.empty()) {
-      errs() << "Error opening file: " << ErrorInfo << "\n";
+    std::error_code EC;
+    raw_fd_ostream ReplacementsFile(ReplacementsFileName, EC, fs::F_None);
+    if (EC) {
+      errs() << "Error opening file: " << EC.message() << "\n";
       Errors = true;
       continue;
     }

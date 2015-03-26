@@ -15,7 +15,6 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectVariable.h"
 #include "lldb/DataFormatters/ValueObjectPrinter.h"
@@ -24,6 +23,7 @@
 #include "lldb/Expression/ClangFunction.h"
 #include "lldb/Expression/DWARFExpression.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/StringConvert.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
@@ -119,7 +119,7 @@ CommandObjectExpression::CommandOptions::SetOptionValue (CommandInterpreter &int
         {
             bool success;
             uint32_t result;
-            result = Args::StringToUInt32(option_arg, 0, 0, &success);
+            result = StringConvert::ToUInt32(option_arg, 0, 0, &success);
             if (success)
                 timeout = result;
             else
@@ -281,7 +281,7 @@ CommandObjectExpression::EvaluateExpression
     Target *target = exe_ctx.GetTargetPtr();
     
     if (!target)
-        target = Host::GetDummyTarget(m_interpreter.GetDebugger()).get();
+        target = GetDummyTarget();
     
     if (target)
     {
@@ -425,11 +425,15 @@ CommandObjectExpression::GetMultilineExpression ()
     m_expr_line_count = 0;
     
     Debugger &debugger = GetCommandInterpreter().GetDebugger();
+    bool color_prompt = debugger.GetUseColor();
     const bool multiple_lines = true; // Get multiple lines
     IOHandlerSP io_handler_sp (new IOHandlerEditline (debugger,
+                                                      IOHandler::Type::Expression,
                                                       "lldb-expr",      // Name of input reader for history
                                                       NULL,             // No prompt
+                                                      NULL,             // Continuation prompt
                                                       multiple_lines,
+                                                      color_prompt,
                                                       1,                // Show line numbers starting at 1
                                                       *this));
     
@@ -483,7 +487,7 @@ CommandObjectExpression::DoExecute
 
         if (end_options)
         {
-            Args args (command, end_options - command);
+            Args args (llvm::StringRef(command, end_options - command));
             if (!ParseOptions (args, result))
                 return false;
             

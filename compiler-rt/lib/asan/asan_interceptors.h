@@ -15,7 +15,7 @@
 #define ASAN_INTERCEPTORS_H
 
 #include "asan_internal.h"
-#include "sanitizer_common/sanitizer_interception.h"
+#include "interception/interception.h"
 #include "sanitizer_common/sanitizer_platform_interceptors.h"
 
 // Use macro to describe if specific function should be
@@ -26,7 +26,6 @@
 # define ASAN_INTERCEPT_STRDUP 1
 # define ASAN_INTERCEPT_INDEX 1
 # define ASAN_INTERCEPT_PTHREAD_CREATE 1
-# define ASAN_INTERCEPT_MLOCKX 1
 # define ASAN_INTERCEPT_FORK 1
 #else
 # define ASAN_INTERCEPT_ATOLL_AND_STRTOLL 0
@@ -34,7 +33,6 @@
 # define ASAN_INTERCEPT_STRDUP 0
 # define ASAN_INTERCEPT_INDEX 0
 # define ASAN_INTERCEPT_PTHREAD_CREATE 0
-# define ASAN_INTERCEPT_MLOCKX 0
 # define ASAN_INTERCEPT_FORK 0
 #endif
 
@@ -86,7 +84,7 @@ DECLARE_REAL(int, memcmp, const void *a1, const void *a2, uptr size)
 DECLARE_REAL(void*, memcpy, void *to, const void *from, uptr size)
 DECLARE_REAL(void*, memset, void *block, int c, uptr size)
 DECLARE_REAL(char*, strchr, const char *str, int c)
-DECLARE_REAL(unsigned, strlen, const char *s)
+DECLARE_REAL(SIZE_T, strlen, const char *s)
 DECLARE_REAL(char*, strncpy, char *to, const char *from, uptr size)
 DECLARE_REAL(uptr, strnlen, const char *s, uptr maxlen)
 DECLARE_REAL(char*, strstr, const char *s1, const char *s2)
@@ -94,9 +92,21 @@ struct sigaction;
 DECLARE_REAL(int, sigaction, int signum, const struct sigaction *act,
                              struct sigaction *oldact)
 
+#if !SANITIZER_MAC
+#define ASAN_INTERCEPT_FUNC(name)                                        \
+  do {                                                                   \
+    if ((!INTERCEPT_FUNCTION(name) || !REAL(name)))                      \
+      VReport(1, "AddressSanitizer: failed to intercept '" #name "'\n"); \
+  } while (0)
+#else
+// OS X interceptors don't need to be initialized with INTERCEPT_FUNCTION.
+#define ASAN_INTERCEPT_FUNC(name)
+#endif  // SANITIZER_MAC
+
 namespace __asan {
 
 void InitializeAsanInterceptors();
+void InitializePlatformInterceptors();
 
 #define ENSURE_ASAN_INITED() do { \
   CHECK(!asan_init_is_running); \

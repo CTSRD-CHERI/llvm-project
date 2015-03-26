@@ -11,7 +11,6 @@
 #define LLD_READER_WRITER_ELF_HEXAGON_HEXAGON_LINKING_CONTEXT_H
 
 #include "lld/ReaderWriter/ELFLinkingContext.h"
-
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/ELF.h"
 
@@ -22,12 +21,12 @@ typedef llvm::object::ELFType<llvm::support::little, 2, false> HexagonELFType;
 
 class HexagonLinkingContext final : public ELFLinkingContext {
 public:
+  static std::unique_ptr<ELFLinkingContext> create(llvm::Triple);
   HexagonLinkingContext(llvm::Triple triple);
 
   void addPasses(PassManager &) override;
 
-  bool isDynamicRelocation(const DefinedAtom &,
-                           const Reference &r) const override {
+  bool isDynamicRelocation(const Reference &r) const override {
     if (r.kindNamespace() != Reference::KindNamespace::ELF)
       return false;
     switch (r.kindValue()) {
@@ -39,7 +38,7 @@ public:
     }
   }
 
-  bool isPLTRelocation(const DefinedAtom &, const Reference &r) const override {
+  bool isPLTRelocation(const Reference &r) const override {
     if (r.kindNamespace() != Reference::KindNamespace::ELF)
       return false;
     switch (r.kindValue()) {
@@ -62,10 +61,6 @@ public:
       return false;
     }
   }
-
-  /// \brief Create Internal files for Init/Fini
-  void createInternalFiles(
-      std::vector<std::unique_ptr<File>> &result) const override;
 };
 
 } // elf

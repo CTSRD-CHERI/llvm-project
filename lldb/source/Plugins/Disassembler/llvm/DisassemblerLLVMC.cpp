@@ -21,7 +21,6 @@
 #include "llvm/MC/MCRelocationInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/MemoryObject.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/ADT/SmallString.h"
@@ -372,7 +371,7 @@ public:
                 }
             }
 
-            static RegularExpression s_regex("[ \t]*([^ ^\t]+)[ \t]*([^ ^\t].*)?", REG_EXTENDED);
+            static RegularExpression s_regex("[ \t]*([^ ^\t]+)[ \t]*([^ ^\t].*)?");
 
             RegularExpression::Match matches(3);
 
@@ -458,7 +457,7 @@ DisassemblerLLVMC::LLVMCDisassembler::LLVMCDisassembler (const char *triple, uns
         std::unique_ptr<llvm::MCSymbolizer> symbolizer_up(curr_target->createMCSymbolizer(triple, NULL,
                        DisassemblerLLVMC::SymbolLookupCallback,
                        (void *) &owner,
-                       m_context_ap.get(), RelInfo.release()));
+                       m_context_ap.get(), std::move(RelInfo)));
         m_disasm_ap->setSymbolizer(std::move(symbolizer_up));
 
 
@@ -489,41 +488,19 @@ DisassemblerLLVMC::LLVMCDisassembler::~LLVMCDisassembler()
 {
 }
 
-namespace {
-    // This is the memory object we use in GetInstruction.
-    class LLDBDisasmMemoryObject : public llvm::MemoryObject {
-      const uint8_t *m_bytes;
-      uint64_t m_size;
-      uint64_t m_base_PC;
-    public:
-      LLDBDisasmMemoryObject(const uint8_t *bytes, uint64_t size, uint64_t basePC) :
-                         m_bytes(bytes), m_size(size), m_base_PC(basePC) {}
-
-      uint64_t getBase() const { return m_base_PC; }
-      uint64_t getExtent() const { return m_size; }
-
-      int readByte(uint64_t addr, uint8_t *byte) const {
-        if (addr - m_base_PC >= m_size)
-          return -1;
-        *byte = m_bytes[addr - m_base_PC];
-        return 0;
-      }
-    };
-} // End Anonymous Namespace
-
 uint64_t
 DisassemblerLLVMC::LLVMCDisassembler::GetMCInst (const uint8_t *opcode_data,
                                                  size_t opcode_data_len,
                                                  lldb::addr_t pc,
                                                  llvm::MCInst &mc_inst)
 {
-    LLDBDisasmMemoryObject memory_object (opcode_data, opcode_data_len, pc);
+    llvm::ArrayRef<uint8_t> data(opcode_data, opcode_data_len);
     llvm::MCDisassembler::DecodeStatus status;
 
     uint64_t new_inst_size;
     status = m_disasm_ap->getInstruction(mc_inst,
                                          new_inst_size,
-                                         memory_object,
+                                         data,
                                          pc,
                                          llvm::nulls(),
                                          llvm::nulls());
@@ -815,28 +792,74 @@ const char *DisassemblerLLVMC::SymbolLookup (uint64_t value,
             //std::string remove_this_prior_to_checkin;
             Target *target = m_exe_ctx ? m_exe_ctx->GetTargetPtr() : NULL;
             Address value_so_addr;
+            Address pc_so_addr;
             if (m_inst->UsingFileAddress())
             {
                 ModuleSP module_sp(m_inst->GetAddress().GetModule());
                 if (module_sp)
+                {
                     module_sp->ResolveFileAddress(value, value_so_addr);
+                    module_sp->ResolveFileAddress(pc, pc_so_addr);
+                }
             }
             else if (target && !target->GetSectionLoadList().IsEmpty())
             {
                 target->GetSectionLoadList().ResolveLoadAddress(value, value_so_addr);
+                target->GetSectionLoadList().ResolveLoadAddress(pc, pc_so_addr);
+            }
+
+            SymbolContext sym_ctx;
+            const uint32_t resolve_scope = eSymbolContextFunction | eSymbolContextSymbol;
+            if (pc_so_addr.IsValid() && pc_so_addr.GetModule())
+            {
+                pc_so_addr.GetModule()->ResolveSymbolContextForAddress (pc_so_addr, resolve_scope, sym_ctx);
             }
 
             if (value_so_addr.IsValid() && value_so_addr.GetSection())
             {
                 StreamString ss;
 
-                value_so_addr.Dump (&ss,
-                                    target,
-                                    Address::DumpStyleResolvedDescriptionNoModule,
-                                    Address::DumpStyleSectionNameOffset);
+                bool format_omitting_current_func_name = false;
+                if (sym_ctx.symbol || sym_ctx.function)
+                {
+                    AddressRange range;
+                    if (sym_ctx.GetAddressRange (resolve_scope, 0, false, range) 
+                        && range.GetBaseAddress().IsValid() 
+                        && range.ContainsLoadAddress (value_so_addr, target))
+                    {
+                        format_omitting_current_func_name = true;
+                    }
+                }
+                
+                // If the "value" address (the target address we're symbolicating)
+                // is inside the same SymbolContext as the current instruction pc
+                // (pc_so_addr), don't print the full function name - just print it
+                // with DumpStyleNoFunctionName style, e.g. "<+36>".
+                if (format_omitting_current_func_name)
+                {
+                    value_so_addr.Dump (&ss,
+                                        target,
+                                        Address::DumpStyleNoFunctionName,
+                                        Address::DumpStyleSectionNameOffset);
+                }
+                else
+                {
+                    value_so_addr.Dump (&ss,
+                                        target,
+                                        Address::DumpStyleResolvedDescriptionNoFunctionArguments,
+                                        Address::DumpStyleSectionNameOffset);
+                }
 
                 if (!ss.GetString().empty())
                 {
+                    // If Address::Dump returned a multi-line description, most commonly seen when we
+                    // have multiple levels of inlined functions at an address, only show the first line.
+                    std::string &str(ss.GetString());
+                    size_t first_eol_char = str.find_first_of ("\r\n");
+                    if (first_eol_char != std::string::npos)
+                    {
+                        str.erase (first_eol_char);
+                    }
                     m_inst->AppendComment(ss.GetString());
                 }
             }

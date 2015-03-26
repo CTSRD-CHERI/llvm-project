@@ -32,11 +32,15 @@
 #include <clc/workitem/get_group_id.h>
 
 /* 6.11.2 Math Functions */
+#include <clc/math/acos.h>
+#include <clc/math/asin.h>
 #include <clc/math/atan.h>
 #include <clc/math/atan2.h>
 #include <clc/math/copysign.h>
 #include <clc/math/cos.h>
+#include <clc/math/cospi.h>
 #include <clc/math/ceil.h>
+#include <clc/math/erfc.h>
 #include <clc/math/exp.h>
 #include <clc/math/exp10.h>
 #include <clc/math/exp2.h>
@@ -45,11 +49,14 @@
 #include <clc/math/fma.h>
 #include <clc/math/fmax.h>
 #include <clc/math/fmin.h>
+#include <clc/math/fmod.h>
+#include <clc/math/half_sqrt.h>
 #include <clc/math/hypot.h>
 #include <clc/math/log.h>
+#include <clc/math/log10.h>
+#include <clc/math/log1p.h>
 #include <clc/math/log2.h>
 #include <clc/math/mad.h>
-#include <clc/math/mix.h>
 #include <clc/math/nextafter.h>
 #include <clc/math/pow.h>
 #include <clc/math/pown.h>
@@ -58,6 +65,7 @@
 #include <clc/math/sin.h>
 #include <clc/math/sincos.h>
 #include <clc/math/sqrt.h>
+#include <clc/math/tan.h>
 #include <clc/math/trunc.h>
 #include <clc/math/native_cos.h>
 #include <clc/math/native_divide.h>
@@ -82,6 +90,7 @@
 #include <clc/integer/hadd.h>
 #include <clc/integer/mad24.h>
 #include <clc/integer/mad_hi.h>
+#include <clc/integer/mad_sat.h>
 #include <clc/integer/mul24.h>
 #include <clc/integer/mul_hi.h>
 #include <clc/integer/rhadd.h>
@@ -100,11 +109,19 @@
 #include <clc/shared/vstore.h>
 
 /* 6.11.4 Common Functions */
+#include <clc/common/degrees.h>
+#include <clc/common/radians.h>
+#include <clc/common/mix.h>
 #include <clc/common/sign.h>
+#include <clc/common/smoothstep.h>
+#include <clc/common/step.h>
 
 /* 6.11.5 Geometric Functions */
 #include <clc/geometric/cross.h>
+#include <clc/geometric/distance.h>
 #include <clc/geometric/dot.h>
+#include <clc/geometric/fast_distance.h>
+#include <clc/geometric/fast_length.h>
 #include <clc/geometric/length.h>
 #include <clc/geometric/normalize.h>
 
@@ -113,12 +130,18 @@
 #include <clc/relational/any.h>
 #include <clc/relational/bitselect.h>
 #include <clc/relational/isequal.h>
+#include <clc/relational/isfinite.h>
 #include <clc/relational/isgreater.h>
 #include <clc/relational/isgreaterequal.h>
+#include <clc/relational/isinf.h>
 #include <clc/relational/isless.h>
 #include <clc/relational/islessequal.h>
+#include <clc/relational/islessgreater.h>
 #include <clc/relational/isnan.h>
+#include <clc/relational/isnormal.h>
 #include <clc/relational/isnotequal.h>
+#include <clc/relational/isordered.h>
+#include <clc/relational/isunordered.h>
 #include <clc/relational/select.h>
 #include <clc/relational/signbit.h>
 
@@ -127,19 +150,53 @@
 #include <clc/synchronization/barrier.h>
 
 /* 6.11.10 Async Copy and Prefetch Functions */
+#include <clc/async/async_work_group_copy.h>
+#include <clc/async/async_work_group_strided_copy.h>
 #include <clc/async/prefetch.h>
+#include <clc/async/wait_group_events.h>
 
 /* 6.11.11 Atomic Functions */
 #include <clc/atomic/atomic_add.h>
+#include <clc/atomic/atomic_and.h>
+#include <clc/atomic/atomic_cmpxchg.h>
 #include <clc/atomic/atomic_dec.h>
 #include <clc/atomic/atomic_inc.h>
+#include <clc/atomic/atomic_max.h>
+#include <clc/atomic/atomic_min.h>
+#include <clc/atomic/atomic_or.h>
 #include <clc/atomic/atomic_sub.h>
+#include <clc/atomic/atomic_xchg.h>
+#include <clc/atomic/atomic_xor.h>
 
 /* cl_khr_global_int32_base_atomics Extension Functions */
 #include <clc/cl_khr_global_int32_base_atomics/atom_add.h>
+#include <clc/cl_khr_global_int32_base_atomics/atom_cmpxchg.h>
 #include <clc/cl_khr_global_int32_base_atomics/atom_dec.h>
 #include <clc/cl_khr_global_int32_base_atomics/atom_inc.h>
 #include <clc/cl_khr_global_int32_base_atomics/atom_sub.h>
+#include <clc/cl_khr_global_int32_base_atomics/atom_xchg.h>
+
+/* cl_khr_global_int32_extended_atomics Extension Functions */
+#include <clc/cl_khr_global_int32_extended_atomics/atom_and.h>
+#include <clc/cl_khr_global_int32_extended_atomics/atom_max.h>
+#include <clc/cl_khr_global_int32_extended_atomics/atom_min.h>
+#include <clc/cl_khr_global_int32_extended_atomics/atom_or.h>
+#include <clc/cl_khr_global_int32_extended_atomics/atom_xor.h>
+
+/* cl_khr_local_int32_base_atomics Extension Functions */
+#include <clc/cl_khr_local_int32_base_atomics/atom_add.h>
+#include <clc/cl_khr_local_int32_base_atomics/atom_cmpxchg.h>
+#include <clc/cl_khr_local_int32_base_atomics/atom_dec.h>
+#include <clc/cl_khr_local_int32_base_atomics/atom_inc.h>
+#include <clc/cl_khr_local_int32_base_atomics/atom_sub.h>
+#include <clc/cl_khr_local_int32_base_atomics/atom_xchg.h>
+
+/* cl_khr_local_int32_extended_atomics Extension Functions */
+#include <clc/cl_khr_local_int32_extended_atomics/atom_and.h>
+#include <clc/cl_khr_local_int32_extended_atomics/atom_max.h>
+#include <clc/cl_khr_local_int32_extended_atomics/atom_min.h>
+#include <clc/cl_khr_local_int32_extended_atomics/atom_or.h>
+#include <clc/cl_khr_local_int32_extended_atomics/atom_xor.h>
 
 /* libclc internal defintions */
 #ifdef __CLC_INTERNAL

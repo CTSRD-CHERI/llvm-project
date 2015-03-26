@@ -1,7 +1,5 @@
 /*
  * kmp_debug.h -- debug / assertion code for Assure library
- * $Revision: 42061 $
- * $Date: 2013-02-28 16:36:24 -0600 (Thu, 28 Feb 2013) $
  */
 
 

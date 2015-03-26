@@ -14,8 +14,10 @@
 // C Includes
 // C++ Includes
 // Other libraries and framework includes
+#include "clang/Basic/VersionTuple.h"
 // Project includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
+#include "lldb/Breakpoint/BreakpointSite.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Error.h"
 #include "lldb/Core/Log.h"
@@ -26,6 +28,7 @@
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Symbols.h"
+#include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Symbol/SymbolVendor.h"
@@ -67,6 +70,8 @@ PlatformDarwin::LocateExecutableScriptingResources (Target *target,
         // should not lose ".file" but GetFileNameStrippingExtension() will do precisely that.
         // Ideally, we should have a per-platform list of extensions (".exe", ".app", ".dSYM", ".framework")
         // which should be stripped while leaving "this.binary.file" as-is.
+        ScriptInterpreter *script_interpreter = target->GetDebugger().GetCommandInterpreter().GetScriptInterpreter();
+        
         FileSpec module_spec = module.GetFileSpec();
         
         if (module_spec)
@@ -87,6 +92,8 @@ PlatformDarwin::LocateExecutableScriptingResources (Target *target,
                             {
                                 std::string module_basename (module_spec.GetFilename().GetCString());
                                 std::string original_module_basename (module_basename);
+                                
+                                bool was_keyword = false;
 
                                 // FIXME: for Python, we cannot allow certain characters in module
                                 // filenames we import. Theoretically, different scripting languages may
@@ -97,7 +104,11 @@ PlatformDarwin::LocateExecutableScriptingResources (Target *target,
                                 std::replace(module_basename.begin(), module_basename.end(), '.', '_');
                                 std::replace(module_basename.begin(), module_basename.end(), ' ', '_');
                                 std::replace(module_basename.begin(), module_basename.end(), '-', '_');
-                                
+                                if (script_interpreter && script_interpreter->IsReservedWord(module_basename.c_str()))
+                                {
+                                    module_basename.insert(module_basename.begin(), '_');
+                                    was_keyword = true;
+                                }
 
                                 StreamString path_string;
                                 StreamString original_path_string;
@@ -115,19 +126,22 @@ PlatformDarwin::LocateExecutableScriptingResources (Target *target,
                                     if (module_basename != original_module_basename
                                         && orig_script_fspec.Exists())
                                     {
+                                        const char* reason_for_complaint = was_keyword ? "conflicts with a keyword" : "contains reserved characters";
                                         if (script_fspec.Exists())
                                             feedback_stream->Printf("warning: the symbol file '%s' contains a debug script. However, its name"
-                                                                    " '%s' contains reserved characters and as such cannot be loaded. LLDB will"
+                                                                    " '%s' %s and as such cannot be loaded. LLDB will"
                                                                     " load '%s' instead. Consider removing the file with the malformed name to"
                                                                     " eliminate this warning.\n",
                                                                     symfile_spec.GetPath().c_str(),
                                                                     original_path_string.GetData(),
+                                                                    reason_for_complaint,
                                                                     path_string.GetData());
                                         else
                                             feedback_stream->Printf("warning: the symbol file '%s' contains a debug script. However, its name"
-                                                                    " contains reserved characters and as such cannot be loaded. If you intend"
+                                                                    " %s and as such cannot be loaded. If you intend"
                                                                     " to have this script loaded, please rename '%s' to '%s' and retry.\n",
                                                                     symfile_spec.GetPath().c_str(),
+                                                                    reason_for_complaint,
                                                                     original_path_string.GetData(),
                                                                     path_string.GetData());
                                     }
@@ -157,8 +171,7 @@ PlatformDarwin::LocateExecutableScriptingResources (Target *target,
 }
 
 Error
-PlatformDarwin::ResolveExecutable (const FileSpec &exe_file,
-                                   const ArchSpec &exe_arch,
+PlatformDarwin::ResolveExecutable (const ModuleSpec &module_spec,
                                    lldb::ModuleSP &exe_module_sp,
                                    const FileSpecList *module_search_paths_ptr)
 {
@@ -166,69 +179,61 @@ PlatformDarwin::ResolveExecutable (const FileSpec &exe_file,
     // Nothing special to do here, just use the actual file and architecture
 
     char exe_path[PATH_MAX];
-    FileSpec resolved_exe_file (exe_file);
-    
+    ModuleSpec resolved_module_spec(module_spec);
+
     if (IsHost())
     {
         // If we have "ls" as the exe_file, resolve the executable loation based on
         // the current path variables
-        if (resolved_exe_file.Exists())
+        if (!resolved_module_spec.GetFileSpec().Exists())
         {
-            
-        }
-        else
-        {
-            exe_file.GetPath (exe_path, sizeof(exe_path));
-            resolved_exe_file.SetFile(exe_path, true);
+            module_spec.GetFileSpec().GetPath (exe_path, sizeof(exe_path));
+            resolved_module_spec.GetFileSpec().SetFile(exe_path, true);
         }
 
-        if (!resolved_exe_file.Exists())
-            resolved_exe_file.ResolveExecutableLocation ();
+        if (!resolved_module_spec.GetFileSpec().Exists())
+            resolved_module_spec.GetFileSpec().ResolveExecutableLocation ();
 
         // Resolve any executable within a bundle on MacOSX
-        Host::ResolveExecutableInBundle (resolved_exe_file);
+        Host::ResolveExecutableInBundle (resolved_module_spec.GetFileSpec());
         
-        if (resolved_exe_file.Exists())
+        if (resolved_module_spec.GetFileSpec().Exists())
             error.Clear();
         else
         {
-            const uint32_t permissions = resolved_exe_file.GetPermissions();
+            const uint32_t permissions = resolved_module_spec.GetFileSpec().GetPermissions();
             if (permissions && (permissions & eFilePermissionsEveryoneR) == 0)
-                error.SetErrorStringWithFormat ("executable '%s' is not readable", resolved_exe_file.GetPath().c_str());
+                error.SetErrorStringWithFormat ("executable '%s' is not readable", resolved_module_spec.GetFileSpec().GetPath().c_str());
             else
-                error.SetErrorStringWithFormat ("unable to find executable for '%s'", resolved_exe_file.GetPath().c_str());
+                error.SetErrorStringWithFormat ("unable to find executable for '%s'", resolved_module_spec.GetFileSpec().GetPath().c_str());
         }
     }
     else
     {
         if (m_remote_platform_sp)
         {
-            error = m_remote_platform_sp->ResolveExecutable (exe_file, 
-                                                             exe_arch,
-                                                             exe_module_sp,
-                                                             module_search_paths_ptr);
+            error = GetCachedExecutable (resolved_module_spec, exe_module_sp, module_search_paths_ptr, *m_remote_platform_sp);
         }
         else
         {
             // We may connect to a process and use the provided executable (Don't use local $PATH).
 
             // Resolve any executable within a bundle on MacOSX
-            Host::ResolveExecutableInBundle (resolved_exe_file);
+            Host::ResolveExecutableInBundle (resolved_module_spec.GetFileSpec());
 
-            if (resolved_exe_file.Exists())
+            if (resolved_module_spec.GetFileSpec().Exists())
                 error.Clear();
             else
-                error.SetErrorStringWithFormat("the platform is not currently connected, and '%s' doesn't exist in the system root.", resolved_exe_file.GetFilename().AsCString(""));
+                error.SetErrorStringWithFormat("the platform is not currently connected, and '%s' doesn't exist in the system root.", resolved_module_spec.GetFileSpec().GetFilename().AsCString(""));
         }
     }
     
 
     if (error.Success())
     {
-        ModuleSpec module_spec (resolved_exe_file, exe_arch);
-        if (module_spec.GetArchitecture().IsValid())
+        if (resolved_module_spec.GetArchitecture().IsValid())
         {
-            error = ModuleList::GetSharedModule (module_spec, 
+            error = ModuleList::GetSharedModule (resolved_module_spec,
                                                  exe_module_sp, 
                                                  module_search_paths_ptr,
                                                  NULL, 
@@ -238,8 +243,8 @@ PlatformDarwin::ResolveExecutable (const FileSpec &exe_file,
             {
                 exe_module_sp.reset();
                 error.SetErrorStringWithFormat ("'%s' doesn't contain the architecture %s",
-                                                exe_file.GetPath().c_str(),
-                                                exe_arch.GetArchitectureName());
+                                                resolved_module_spec.GetFileSpec().GetPath().c_str(),
+                                                resolved_module_spec.GetArchitecture().GetArchitectureName());
             }
         }
         else
@@ -248,9 +253,9 @@ PlatformDarwin::ResolveExecutable (const FileSpec &exe_file,
             // the architectures that we should be using (in the correct order)
             // and see if we can find a match that way
             StreamString arch_names;
-            for (uint32_t idx = 0; GetSupportedArchitectureAtIndex (idx, module_spec.GetArchitecture()); ++idx)
+            for (uint32_t idx = 0; GetSupportedArchitectureAtIndex (idx, resolved_module_spec.GetArchitecture()); ++idx)
             {
-                error = GetSharedModule (module_spec, 
+                error = GetSharedModule (resolved_module_spec,
                                          exe_module_sp, 
                                          module_search_paths_ptr,
                                          NULL, 
@@ -266,21 +271,21 @@ PlatformDarwin::ResolveExecutable (const FileSpec &exe_file,
                 
                 if (idx > 0)
                     arch_names.PutCString (", ");
-                arch_names.PutCString (module_spec.GetArchitecture().GetArchitectureName());
+                arch_names.PutCString (resolved_module_spec.GetArchitecture().GetArchitectureName());
             }
             
             if (error.Fail() || !exe_module_sp)
             {
-                if (exe_file.Readable())
+                if (resolved_module_spec.GetFileSpec().Readable())
                 {
                     error.SetErrorStringWithFormat ("'%s' doesn't contain any '%s' platform architectures: %s",
-                                                    exe_file.GetPath().c_str(),
+                                                    resolved_module_spec.GetFileSpec().GetPath().c_str(),
                                                     GetPluginName().GetCString(),
                                                     arch_names.GetString().c_str());
                 }
                 else
                 {
-                    error.SetErrorStringWithFormat("'%s' is not readable", exe_file.GetPath().c_str());
+                    error.SetErrorStringWithFormat("'%s' is not readable", resolved_module_spec.GetFileSpec().GetPath().c_str());
                 }
             }
         }
@@ -672,78 +677,8 @@ PlatformDarwin::FindProcesses (const ProcessInstanceInfoMatch &match_info,
     return match_count;    
 }
 
-Error
-PlatformDarwin::LaunchProcess (ProcessLaunchInfo &launch_info)
-{
-    Error error;
-    
-    if (IsHost())
-    {
-        error = Platform::LaunchProcess (launch_info);
-    }
-    else
-    {
-        if (m_remote_platform_sp)
-            error = m_remote_platform_sp->LaunchProcess (launch_info);
-        else
-            error.SetErrorString ("the platform is not currently connected");
-    }
-    return error;
-}
-
-lldb::ProcessSP
-PlatformDarwin::Attach (ProcessAttachInfo &attach_info,
-                        Debugger &debugger,
-                        Target *target,
-                        Listener &listener, 
-                        Error &error)
-{
-    lldb::ProcessSP process_sp;
-    
-    if (IsHost())
-    {
-        if (target == NULL)
-        {
-            TargetSP new_target_sp;
-            
-            error = debugger.GetTargetList().CreateTarget (debugger,
-                                                           NULL,
-                                                           NULL, 
-                                                           false,
-                                                           NULL,
-                                                           new_target_sp);
-            target = new_target_sp.get();
-        }
-        else
-            error.Clear();
-    
-        if (target && error.Success())
-        {
-            debugger.GetTargetList().SetSelectedTarget(target);
-
-            process_sp = target->CreateProcess (listener, attach_info.GetProcessPluginName(), NULL);
-            
-            if (process_sp)
-            {
-                ListenerSP listener_sp (new Listener("lldb.PlatformDarwin.attach.hijack"));
-                attach_info.SetHijackListener(listener_sp);
-                process_sp->HijackProcessEvents(listener_sp.get());
-                error = process_sp->Attach (attach_info);
-            }
-        }
-    }
-    else
-    {
-        if (m_remote_platform_sp)
-            process_sp = m_remote_platform_sp->Attach (attach_info, debugger, target, listener, error);
-        else
-            error.SetErrorString ("the platform is not currently connected");
-    }
-    return process_sp;
-}
-
 bool
-PlatformDarwin::ModuleIsExcludedForNonModuleSpecificSearches (lldb_private::Target &target, const lldb::ModuleSP &module_sp)
+PlatformDarwin::ModuleIsExcludedForUnconstrainedSearches (lldb_private::Target &target, const lldb::ModuleSP &module_sp)
 {
     if (!module_sp)
         return false;
@@ -1064,12 +999,13 @@ PlatformDarwin::ARMGetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch
 const char *
 PlatformDarwin::GetDeveloperDirectory()
 {
+    Mutex::Locker locker (m_mutex);
     if (m_developer_directory.empty())
     {
         bool developer_dir_path_valid = false;
         char developer_dir_path[PATH_MAX];
         FileSpec temp_file_spec;
-        if (Host::GetLLDBPath (ePathTypeLLDBShlibDir, temp_file_spec))
+        if (HostInfo::GetLLDBPath(ePathTypeLLDBShlibDir, temp_file_spec))
         {
             if (temp_file_spec.GetPath (developer_dir_path, sizeof(developer_dir_path)))
             {
@@ -1126,7 +1062,7 @@ PlatformDarwin::GetDeveloperDirectory()
                                                      &signo,
                                                      &command_output,
                                                      2,                                     // short timeout
-                                                     NULL);                                 // don't run in a shell
+                                                     false);                                // don't run in a shell
                 if (error.Success() && exit_status == 0 && !command_output.empty())
                 {
                     const char *cmd_output_ptr = command_output.c_str();
@@ -1212,28 +1148,18 @@ PlatformDarwin::SetThreadCreationBreakpoint (Target &target)
     return bp_sp;
 }
 
-size_t
-PlatformDarwin::GetEnvironment (StringList &env)
-{
-    if (IsRemote())
-    {
-        if (m_remote_platform_sp)
-            return m_remote_platform_sp->GetEnvironment(env);
-        return 0;
-    }
-    return Host::GetEnvironment(env);
-}
 
 int32_t
 PlatformDarwin::GetResumeCountForLaunchInfo (ProcessLaunchInfo &launch_info)
 {
-    const char *shell = launch_info.GetShell();
-    if (shell == NULL)
+    const FileSpec &shell = launch_info.GetShell();
+    if (!shell)
         return 1;
         
-    const char *shell_name = strrchr (shell, '/');
+    std::string shell_string = shell.GetPath();
+    const char *shell_name = strrchr (shell_string.c_str(), '/');
     if (shell_name == NULL)
-        shell_name = shell;
+        shell_name = shell_string.c_str();
     else
         shell_name++;
     
@@ -1268,4 +1194,331 @@ void
 PlatformDarwin::CalculateTrapHandlerSymbolNames ()
 {   
     m_trap_handlers.push_back (ConstString ("_sigtramp"));
-}   
+}
+
+
+static const char *const sdk_strings[] = {
+    "MacOSX",
+    "iPhoneSimulator",
+    "iPhoneOS",
+};
+
+static FileSpec
+GetXcodeContentsPath ()
+{
+    const char substr[] = ".app/Contents/";
+    
+    // First, try based on the current shlib's location
+    
+    {
+        FileSpec fspec;
+        
+        if (HostInfo::GetLLDBPath (lldb::ePathTypeLLDBShlibDir, fspec))
+        {
+            std::string path_to_shlib = fspec.GetPath();
+            size_t pos = path_to_shlib.rfind(substr);
+            if (pos != std::string::npos)
+            {
+                path_to_shlib.erase(pos + strlen(substr));
+                return FileSpec(path_to_shlib.c_str(), false);
+            }
+        }
+    }
+    
+    // Fall back to using xcrun
+    
+    {
+        int status = 0;
+        int signo = 0;
+        std::string output;
+        const char *command = "xcrun -sdk macosx --show-sdk-path";
+        lldb_private::Error error = Host::RunShellCommand (command,   // shell command to run
+                                                           NULL,      // current working directory
+                                                           &status,   // Put the exit status of the process in here
+                                                           &signo,    // Put the signal that caused the process to exit in here
+                                                           &output,   // Get the output from the command and place it in this string
+                                                           3);        // Timeout in seconds to wait for shell program to finish
+        if (status == 0 && !output.empty())
+        {
+            size_t first_non_newline = output.find_last_not_of("\r\n");
+            if (first_non_newline != std::string::npos)
+            {
+                output.erase(first_non_newline+1);
+            }
+            
+            size_t pos = output.rfind(substr);
+            if (pos != std::string::npos)
+            {
+                output.erase(pos + strlen(substr));
+                return FileSpec(output.c_str(), false);
+            }
+        }
+    }
+    
+    return FileSpec();
+}
+
+bool
+PlatformDarwin::SDKSupportsModules (SDKType sdk_type, uint32_t major, uint32_t minor, uint32_t micro)
+{
+    switch (sdk_type)
+    {
+        case SDKType::MacOSX:
+            if (major > 10 || (major == 10 && minor >= 10))
+                return true;
+            break;
+        case SDKType::iPhoneOS:
+        case SDKType::iPhoneSimulator:
+            if (major >= 8)
+                return true;
+            break;
+    }
+    
+    return false;
+}
+
+bool
+PlatformDarwin::SDKSupportsModules (SDKType desired_type, const FileSpec &sdk_path)
+{
+    ConstString last_path_component = sdk_path.GetLastPathComponent();
+    
+    if (last_path_component)
+    {
+        const llvm::StringRef sdk_name = last_path_component.GetStringRef();
+        
+        llvm::StringRef version_part;
+        
+        if (sdk_name.startswith(sdk_strings[(int)desired_type]))
+        {
+            version_part = sdk_name.drop_front(strlen(sdk_strings[(int)desired_type]));
+        }
+        else
+        {
+            return false;
+        }
+        
+        const size_t major_dot_offset = version_part.find('.');
+        if (major_dot_offset == llvm::StringRef::npos)
+            return false;
+        
+        const llvm::StringRef major_version = version_part.slice(0, major_dot_offset);
+        const llvm::StringRef minor_part = version_part.drop_front(major_dot_offset + 1);
+        
+        const size_t minor_dot_offset = minor_part.find('.');
+        if (minor_dot_offset == llvm::StringRef::npos)
+            return false;
+        
+        const llvm::StringRef minor_version = minor_part.slice(0, minor_dot_offset);
+        
+        unsigned int major = 0;
+        unsigned int minor = 0;
+        unsigned int micro = 0;
+        
+        if (major_version.getAsInteger(10, major))
+            return false;
+        
+        if (minor_version.getAsInteger(10, minor))
+            return false;
+        
+        return SDKSupportsModules(desired_type, major, minor, micro);
+    }
+    
+    return false;
+}
+
+FileSpec::EnumerateDirectoryResult
+PlatformDarwin::DirectoryEnumerator(void *baton,
+                                    FileSpec::FileType file_type,
+                                    const FileSpec &spec)
+{
+    SDKEnumeratorInfo *enumerator_info = static_cast<SDKEnumeratorInfo*>(baton);
+    
+    if (SDKSupportsModules(enumerator_info->sdk_type, spec))
+    {
+        enumerator_info->found_path = spec;
+        return FileSpec::EnumerateDirectoryResult::eEnumerateDirectoryResultNext;
+    }
+    
+    return FileSpec::EnumerateDirectoryResult::eEnumerateDirectoryResultNext;
+};
+
+FileSpec
+PlatformDarwin::FindSDKInXcodeForModules (SDKType sdk_type,
+                                          const FileSpec &sdks_spec)
+{
+    // Look inside Xcode for the required installed iOS SDK version
+    
+    if (!sdks_spec.IsDirectory())
+        return FileSpec();
+    
+    const bool find_directories = true;
+    const bool find_files = false;
+    const bool find_other = true; // include symlinks
+    
+    SDKEnumeratorInfo enumerator_info;
+    
+    enumerator_info.sdk_type = sdk_type;
+    
+    FileSpec::EnumerateDirectory(sdks_spec.GetPath().c_str(),
+                                 find_directories,
+                                 find_files,
+                                 find_other,
+                                 DirectoryEnumerator,
+                                 &enumerator_info);
+    
+    if (enumerator_info.found_path.IsDirectory())
+        return enumerator_info.found_path;
+    else
+        return FileSpec();
+}
+
+FileSpec
+PlatformDarwin::GetSDKDirectoryForModules (SDKType sdk_type)
+{
+    switch (sdk_type)
+    {
+        case SDKType::MacOSX:
+        case SDKType::iPhoneSimulator:
+        case SDKType::iPhoneOS:
+            break;
+    }
+    
+    FileSpec sdks_spec = GetXcodeContentsPath();
+    sdks_spec.AppendPathComponent("Developer");
+    sdks_spec.AppendPathComponent("Platforms");
+    
+    switch (sdk_type)
+    {
+        case SDKType::MacOSX:
+            sdks_spec.AppendPathComponent("MacOSX.platform");
+            break;
+        case SDKType::iPhoneSimulator:
+            sdks_spec.AppendPathComponent("iPhoneSimulator.platform");
+            break;
+        case SDKType::iPhoneOS:
+            sdks_spec.AppendPathComponent("iPhoneOS.platform");
+            break;
+    }
+    
+    sdks_spec.AppendPathComponent("Developer");
+    sdks_spec.AppendPathComponent("SDKs");
+    
+    if (sdk_type == SDKType::MacOSX)
+    {
+        uint32_t major = 0;
+        uint32_t minor = 0;
+        uint32_t micro = 0;
+        
+        if (HostInfo::GetOSVersion(major, minor, micro))
+        {
+            if (SDKSupportsModules(SDKType::MacOSX, major, minor, micro))
+            {
+                // We slightly prefer the exact SDK for this machine.  See if it is there.
+                
+                FileSpec native_sdk_spec = sdks_spec;
+                StreamString native_sdk_name;
+                native_sdk_name.Printf("MacOSX%u.%u.sdk", major, minor);
+                native_sdk_spec.AppendPathComponent(native_sdk_name.GetString().c_str());
+                
+                if (native_sdk_spec.Exists())
+                {
+                    return native_sdk_spec;
+                }
+            }
+        }
+    }
+    
+    return FindSDKInXcodeForModules(sdk_type, sdks_spec);
+}
+
+void
+PlatformDarwin::AddClangModuleCompilationOptionsForSDKType (Target *target, std::vector<std::string> &options, SDKType sdk_type)
+{
+    const std::vector<std::string> apple_arguments =
+    {
+        "-x", "objective-c++",
+        "-fobjc-arc",
+        "-fblocks",
+        "-D_ISO646_H",
+        "-D__ISO646_H"
+    };
+    
+    options.insert(options.end(),
+                   apple_arguments.begin(),
+                   apple_arguments.end());
+    
+    StreamString minimum_version_option;
+    uint32_t versions[3] = { 0, 0, 0 };
+    bool use_current_os_version = false;
+    switch (sdk_type)
+    {
+        case SDKType::iPhoneOS:
+#if defined (__arm__) || defined (__arm64__) || defined (__aarch64__)
+            use_current_os_version = true;
+#else
+            use_current_os_version = false;
+#endif
+            break;
+
+        case SDKType::iPhoneSimulator:
+            use_current_os_version = false;
+            break;
+
+        case SDKType::MacOSX:
+#if defined (__i386__) || defined (__x86_64__)
+            use_current_os_version = true;
+#else
+            use_current_os_version = false;
+#endif
+            break;
+    }
+
+    if (use_current_os_version)
+        GetOSVersion(versions[0], versions[1], versions[2]);
+    else if (target)
+    {
+        // Our OS doesn't match our executable so we need to get the min OS version from the object file
+        ModuleSP exe_module_sp = target->GetExecutableModule();
+        if (exe_module_sp)
+        {
+            ObjectFile *object_file = exe_module_sp->GetObjectFile();
+            if (object_file)
+                object_file->GetMinimumOSVersion(versions, 3);
+        }
+    }
+    // Only add the version-min options if we got a version from somewhere
+    if (versions[0])
+    {
+        if (versions[2] == UINT32_MAX)
+            versions[2] = 0; // FIXME who actually likes this behavior?
+        
+        switch (sdk_type)
+        {
+        case SDKType::iPhoneOS:
+            minimum_version_option.PutCString("-mios-version-min=");
+            minimum_version_option.PutCString(clang::VersionTuple(versions[0], versions[1], versions[2]).getAsString().c_str());
+            break;
+        case SDKType::iPhoneSimulator:
+            minimum_version_option.PutCString("-mios-simulator-version-min=");
+            minimum_version_option.PutCString(clang::VersionTuple(versions[0], versions[1], versions[2]).getAsString().c_str());
+            break;
+        case SDKType::MacOSX:
+            minimum_version_option.PutCString("-mmacosx-version-min=");
+            minimum_version_option.PutCString(clang::VersionTuple(versions[0], versions[1], versions[2]).getAsString().c_str());
+        }
+        options.push_back(minimum_version_option.GetString());
+    }
+
+    FileSpec sysroot_spec;
+    // Scope for mutex locker below
+    {
+        Mutex::Locker locker (m_mutex);
+        sysroot_spec = GetSDKDirectoryForModules(sdk_type);
+    }
+    
+    if (sysroot_spec.IsDirectory())
+    {
+        options.push_back("-isysroot");
+        options.push_back(sysroot_spec.GetPath());
+    }
+}

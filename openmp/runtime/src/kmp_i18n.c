@@ -1,7 +1,5 @@
 /*
  * kmp_i18n.c
- * $Revision: 42810 $
- * $Date: 2013-11-07 12:06:33 -0600 (Thu, 07 Nov 2013) $
  */
 
 
@@ -815,7 +813,7 @@ sys_error(
                 // not issue warning if strerror_r() returns `int' instead of expected `char *'.
             message = __kmp_str_format( "%s", err_msg );
 
-        #else // OS X*, FreeBSD etc.
+        #else // OS X*, FreeBSD* etc.
 
             // XSI version of strerror_r.
 

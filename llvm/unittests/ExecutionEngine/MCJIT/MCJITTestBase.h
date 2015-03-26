@@ -107,6 +107,15 @@ protected:
     return Result;
   }
 
+  // Inserts a declaration to a function defined elsewhere
+  template <typename FuncType>
+  Function *insertExternalReferenceToFunction(Module *M, StringRef Name) {
+    Function *Result = Function::Create(
+                         TypeBuilder<FuncType, false>::get(Context),
+                         GlobalValue::ExternalLinkage, Name, M);
+    return Result;
+  }
+
   // Inserts an declaration to a function defined elsewhere
   Function *insertExternalReferenceToFunction(Module *M, StringRef Name,
                                               FunctionType *FuncTy) {
@@ -316,11 +325,9 @@ protected:
     EngineBuilder EB(std::move(M));
     std::string Error;
     TheJIT.reset(EB.setEngineKind(EngineKind::JIT)
-                 .setUseMCJIT(true) /* can this be folded into the EngineKind enum? */
-                 .setMCJITMemoryManager(MM)
+                 .setMCJITMemoryManager(std::move(MM))
                  .setErrorStr(&Error)
                  .setOptLevel(CodeGenOpt::None)
-                 .setAllocateGVsWithCode(false) /*does this do anything?*/
                  .setCodeModel(CodeModel::JITDefault)
                  .setRelocationModel(Reloc::Default)
                  .setMArch(MArch)
@@ -337,7 +344,7 @@ protected:
   StringRef MArch;
   SmallVector<std::string, 1> MAttrs;
   std::unique_ptr<ExecutionEngine> TheJIT;
-  RTDyldMemoryManager *MM;
+  std::unique_ptr<RTDyldMemoryManager> MM;
 
   std::unique_ptr<Module> M;
 };

@@ -27,10 +27,9 @@
 /// to reduce MOV count.
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Support/Debug.h"
 #include "AMDGPU.h"
-#include "R600InstrInfo.h"
 #include "AMDGPUSubtarget.h"
+#include "R600InstrInfo.h"
 #include "llvm/CodeGen/DFAPacketizer.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -38,6 +37,7 @@
 #include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -280,9 +280,8 @@ bool R600VectorRegMerger::tryMergeUsingCommonSlot(RegSeqInfo &RSI,
       continue;
     if (PreviousRegSeqByReg[MOp->getReg()].empty())
       continue;
-    std::vector<MachineInstr *> MIs = PreviousRegSeqByReg[MOp->getReg()];
-    for (unsigned i = 0, e = MIs.size(); i < e; i++) {
-      CompatibleRSI = PreviousRegSeq[MIs[i]];
+    for (MachineInstr *MI : PreviousRegSeqByReg[MOp->getReg()]) {
+      CompatibleRSI = PreviousRegSeq[MI];
       if (RSI == CompatibleRSI)
         continue;
       if (tryMergeVector(&CompatibleRSI, &RSI, RemapChan))

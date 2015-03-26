@@ -7,19 +7,20 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_MISC_ARG_COMMENT_CHECK_H
-#define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_MISC_ARG_COMMENT_CHECK_H
+#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_MISC_ARGUMENTCOMMENTCHECK_H
+#define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_MISC_ARGUMENTCOMMENTCHECK_H
 
 #include "../ClangTidy.h"
 #include "llvm/Support/Regex.h"
 
 namespace clang {
 namespace tidy {
+namespace misc {
 
 /// \brief Checks that argument comments match parameter names.
 class ArgumentCommentCheck : public ClangTidyCheck {
 public:
-  ArgumentCommentCheck();
+  ArgumentCommentCheck(StringRef Name, ClangTidyContext *Context);
 
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
@@ -36,7 +37,8 @@ private:
                      llvm::ArrayRef<const Expr *> Args);
 };
 
+} // namespace misc
 } // namespace tidy
 } // namespace clang
 
-#endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_MISC_ARG_COMMENT_CHECK_H
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_MISC_ARGUMENTCOMMENTCHECK_H

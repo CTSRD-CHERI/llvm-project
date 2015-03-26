@@ -1,7 +1,5 @@
 /*
  * z_Windows_NT_util.c -- platform specific routines.
- * $Revision: 42816 $
- * $Date: 2013-11-11 15:33:37 -0600 (Mon, 11 Nov 2013) $
  */
 
 
@@ -19,14 +17,15 @@
 #include "kmp_itt.h"
 #include "kmp_i18n.h"
 #include "kmp_io.h"
+#include "kmp_wait_release.h"
 
 
 
 /* ----------------------------------------------------------------------------------- */
 /* ----------------------------------------------------------------------------------- */
 
-/* This code is related to NtQuerySystemInformation() function. This function 
-   is used in the Load balance algorithm for OMP_DYNAMIC=true to find the 
+/* This code is related to NtQuerySystemInformation() function. This function
+   is used in the Load balance algorithm for OMP_DYNAMIC=true to find the
    number of running threads in the system. */
 
 #include <ntstatus.h>
@@ -133,38 +132,12 @@ HMODULE ntdll = NULL;
 
 /* End of NtQuerySystemInformation()-related code */
 
-#if KMP_ARCH_X86_64
+#if KMP_GROUP_AFFINITY
 static HMODULE kernel32 = NULL;
-#endif /* KMP_ARCH_X86_64 */
+#endif /* KMP_GROUP_AFFINITY */
 
 /* ----------------------------------------------------------------------------------- */
 /* ----------------------------------------------------------------------------------- */
-
-
-// Why do we have multiple copies of __kmp_static_delay() and __kmp_static_yield() in many files?
-#ifdef KMP_DEBUG
-
-static void
-__kmp_static_delay( int arg ) {
-    /* Work around weird code-gen bug that causes assert to trip */
-    #if KMP_ARCH_X86_64 && KMP_OS_LINUX
-        KMP_ASSERT( arg != 0 );
-    #else
-        KMP_ASSERT( arg >= 0 );
-    #endif
-}
-
-#else
-
-    #define __kmp_static_delay( arg )     /* nothing to do */
-
-#endif /* KMP_DEBUG */
-
-static void
-__kmp_static_yield( int arg )
-{
-    __kmp_yield( arg );
-}
 
 #if KMP_HANDLE_SIGNALS
     typedef void    (* sig_func_t )( int );
@@ -367,62 +340,50 @@ __kmp_suspend_uninitialize_thread( kmp_info_t *th )
     }
 }
 
-/*
- * This routine puts the calling thread to sleep after setting the
- * sleep bit for the indicated spin variable to true.
+/* This routine puts the calling thread to sleep after setting the
+ * sleep bit for the indicated flag variable to true.
  */
-
-void
-__kmp_suspend( int th_gtid, volatile kmp_uint *spinner, kmp_uint checker )
+template <class C>
+static inline void __kmp_suspend_template( int th_gtid, C *flag )
 {
     kmp_info_t *th = __kmp_threads[th_gtid];
     int status;
-    kmp_uint old_spin;
+    typename C::flag_t old_spin;
 
-    KF_TRACE( 30, ("__kmp_suspend: T#%d enter for spin = %p\n", th_gtid, spinner ) );
+    KF_TRACE( 30, ("__kmp_suspend_template: T#%d enter for flag's loc(%p)\n", th_gtid, flag->get() ) );
 
     __kmp_suspend_initialize_thread( th );
-
     __kmp_win32_mutex_lock( &th->th.th_suspend_mx );
 
-    KF_TRACE( 10, ( "__kmp_suspend: T#%d setting sleep bit for spin(%p)\n",
-                    th_gtid, spinner ) );
+    KF_TRACE( 10, ( "__kmp_suspend_template: T#%d setting sleep bit for flag's loc(%p)\n",
+                    th_gtid, flag->get() ) );
 
     /* TODO: shouldn't this use release semantics to ensure that __kmp_suspend_initialize_thread
        gets called first?
     */
-    old_spin = KMP_TEST_THEN_OR32( (volatile kmp_int32 *) spinner,
-                                     KMP_BARRIER_SLEEP_STATE );
+    old_spin = flag->set_sleeping();
 
-    KF_TRACE( 5, ( "__kmp_suspend: T#%d set sleep bit for spin(%p)==%d\n",
-                                   th_gtid, spinner, *spinner ) );
+    KF_TRACE( 5, ( "__kmp_suspend_template: T#%d set sleep bit for flag's loc(%p)==%d\n",
+                   th_gtid, flag->get(), *(flag->get()) ) );
 
-    if ( old_spin == checker ) {
-        KMP_TEST_THEN_AND32( (volatile kmp_int32 *) spinner, ~(KMP_BARRIER_SLEEP_STATE) );
-
-        KF_TRACE( 5, ( "__kmp_suspend: T#%d false alarm, reset sleep bit for spin(%p)\n",
-                       th_gtid, spinner) );
+    if ( flag->done_check_val(old_spin) ) {
+        old_spin = flag->unset_sleeping();
+        KF_TRACE( 5, ( "__kmp_suspend_template: T#%d false alarm, reset sleep bit for flag's loc(%p)\n",
+                       th_gtid, flag->get()) );
     } else {
 #ifdef DEBUG_SUSPEND
         __kmp_suspend_count++;
 #endif
-
         /* Encapsulate in a loop as the documentation states that this may
          * "with low probability" return when the condition variable has
          * not been signaled or broadcast
          */
         int deactivated = FALSE;
-        TCW_PTR(th->th.th_sleep_loc, spinner);
-        while ( TCR_4( *spinner ) & KMP_BARRIER_SLEEP_STATE ) {
-
-            KF_TRACE( 15, ("__kmp_suspend: T#%d about to perform kmp_win32_cond_wait()\n",
+        TCW_PTR(th->th.th_sleep_loc, (void *)flag);
+        while ( flag->is_sleeping() ) {
+            KF_TRACE( 15, ("__kmp_suspend_template: T#%d about to perform kmp_win32_cond_wait()\n",
                      th_gtid ) );
-
-
-            //
-            // Mark the thread as no longer active
-            // (only in the first iteration of the loop).
-            //
+            // Mark the thread as no longer active (only in the first iteration of the loop).
             if ( ! deactivated ) {
                 th->th.th_active = FALSE;
                 if ( th->th.th_active_in_pool ) {
@@ -441,17 +402,14 @@ __kmp_suspend( int th_gtid, volatile kmp_uint *spinner, kmp_uint checker )
             }
 
 #ifdef KMP_DEBUG
-            if( (*spinner) & KMP_BARRIER_SLEEP_STATE ) {
-                KF_TRACE( 100, ("__kmp_suspend: T#%d spurious wakeup\n", th_gtid ));
+            if( flag->is_sleeping() ) {
+                KF_TRACE( 100, ("__kmp_suspend_template: T#%d spurious wakeup\n", th_gtid ));
             }
 #endif /* KMP_DEBUG */
 
-	} // while
+        } // while
 
-        //
-        // Mark the thread as active again
-        // (if it was previous marked as inactive)
-        //
+        // Mark the thread as active again (if it was previous marked as inactive)
         if ( deactivated ) {
             th->th.th_active = TRUE;
             if ( TCR_4(th->th.th_in_pool) ) {
@@ -465,65 +423,81 @@ __kmp_suspend( int th_gtid, volatile kmp_uint *spinner, kmp_uint checker )
 
     __kmp_win32_mutex_unlock( &th->th.th_suspend_mx );
 
-    KF_TRACE( 30, ("__kmp_suspend: T#%d exit\n", th_gtid ) );
+    KF_TRACE( 30, ("__kmp_suspend_template: T#%d exit\n", th_gtid ) );
 }
 
+void __kmp_suspend_32(int th_gtid, kmp_flag_32 *flag) {
+    __kmp_suspend_template(th_gtid, flag);
+}
+void __kmp_suspend_64(int th_gtid, kmp_flag_64 *flag) {
+    __kmp_suspend_template(th_gtid, flag);
+}
+void __kmp_suspend_oncore(int th_gtid, kmp_flag_oncore *flag) {
+    __kmp_suspend_template(th_gtid, flag);
+}
+
+
 /* This routine signals the thread specified by target_gtid to wake up
- * after setting the sleep bit indicated by the spin argument to FALSE
+ * after setting the sleep bit indicated by the flag argument to FALSE
  */
-void
-__kmp_resume( int target_gtid, volatile kmp_uint *spin )
+template <class C>
+static inline void __kmp_resume_template( int target_gtid, C *flag )
 {
     kmp_info_t *th = __kmp_threads[target_gtid];
     int status;
-    kmp_uint32 old_spin;
 
 #ifdef KMP_DEBUG
     int gtid = TCR_4(__kmp_init_gtid) ? __kmp_get_gtid() : -1;
 #endif
 
-    KF_TRACE( 30, ( "__kmp_resume: T#%d wants to wakeup T#%d enter\n",
-                     gtid, target_gtid ) );
+    KF_TRACE( 30, ( "__kmp_resume_template: T#%d wants to wakeup T#%d enter\n", gtid, target_gtid ) );
 
     __kmp_suspend_initialize_thread( th );
-
     __kmp_win32_mutex_lock( &th->th.th_suspend_mx );
 
-    if ( spin == NULL ) {
-        spin = (volatile kmp_uint *)TCR_PTR(th->th.th_sleep_loc);
-        if ( spin == NULL ) {
-            KF_TRACE( 5, ( "__kmp_resume: T#%d exiting, thread T#%d already awake -  spin(%p)\n",
-                       gtid, target_gtid, spin ) );
+    if (!flag) {
+        flag = (C *)th->th.th_sleep_loc;
+    }
 
+    if (!flag) {
+        KF_TRACE( 5, ( "__kmp_resume_template: T#%d exiting, thread T#%d already awake: flag's loc(%p)\n",
+                       gtid, target_gtid, NULL ) );
+        __kmp_win32_mutex_unlock( &th->th.th_suspend_mx );
+        return;
+    }
+    else {
+        typename C::flag_t old_spin = flag->unset_sleeping();
+        if ( !flag->is_sleeping_val(old_spin) ) {
+            KF_TRACE( 5, ( "__kmp_resume_template: T#%d exiting, thread T#%d already awake: flag's loc(%p): "
+                           "%u => %u\n",
+                           gtid, target_gtid, flag->get(), old_spin, *(flag->get()) ) );
             __kmp_win32_mutex_unlock( &th->th.th_suspend_mx );
             return;
         }
     }
-
-    TCW_PTR(th->th.th_sleep_loc, NULL);
-    old_spin = KMP_TEST_THEN_AND32( (kmp_int32 volatile *) spin, ~( KMP_BARRIER_SLEEP_STATE ) );
-
-    if ( ( old_spin & KMP_BARRIER_SLEEP_STATE ) == 0 ) {
-        KF_TRACE( 5, ( "__kmp_resume: T#%d exiting, thread T#%d already awake - spin(%p): "
-                   "%u => %u\n",
-                   gtid, target_gtid, spin, old_spin, *spin ) );
-
-        __kmp_win32_mutex_unlock( &th->th.th_suspend_mx );
-        return;
-    }
     TCW_PTR(th->th.th_sleep_loc, NULL);
 
-    KF_TRACE( 5, ( "__kmp_resume: T#%d about to wakeup T#%d, reset sleep bit for spin(%p)\n",
-                    gtid, target_gtid, spin) );
+    KF_TRACE( 5, ( "__kmp_resume_template: T#%d about to wakeup T#%d, reset sleep bit for flag's loc(%p)\n",
+                   gtid, target_gtid, flag->get() ) );
 
 
     __kmp_win32_cond_signal(  &th->th.th_suspend_cv );
-
     __kmp_win32_mutex_unlock( &th->th.th_suspend_mx );
 
-    KF_TRACE( 30, ( "__kmp_resume: T#%d exiting after signaling wake up for T#%d\n",
+    KF_TRACE( 30, ( "__kmp_resume_template: T#%d exiting after signaling wake up for T#%d\n",
                     gtid, target_gtid ) );
 }
+
+void __kmp_resume_32(int target_gtid, kmp_flag_32 *flag) {
+    __kmp_resume_template(target_gtid, flag);
+}
+void __kmp_resume_64(int target_gtid, kmp_flag_64 *flag) {
+    __kmp_resume_template(target_gtid, flag);
+}
+void __kmp_resume_oncore(int target_gtid, kmp_flag_oncore *flag) {
+    __kmp_resume_template(target_gtid, flag);
+}
+
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
@@ -571,7 +545,7 @@ __kmp_gtid_get_specific()
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
-#if KMP_ARCH_X86_64
+#if KMP_GROUP_AFFINITY
 
 //
 // Only 1 DWORD in the mask should have any procs set.
@@ -582,7 +556,6 @@ __kmp_get_proc_group( kmp_affin_mask_t const *mask )
 {
     int i;
     int group = -1;
-    struct GROUP_AFFINITY new_ga, prev_ga;
     for (i = 0; i < __kmp_num_proc_groups; i++) {
         if (mask[i] == 0) {
             continue;
@@ -595,19 +568,19 @@ __kmp_get_proc_group( kmp_affin_mask_t const *mask )
     return group;
 }
 
-#endif /* KMP_ARCH_X86_64 */
+#endif /* KMP_GROUP_AFFINITY */
 
 int
 __kmp_set_system_affinity( kmp_affin_mask_t const *mask, int abort_on_error )
 {
 
-#if KMP_ARCH_X86_64
+#if KMP_GROUP_AFFINITY
 
     if (__kmp_num_proc_groups > 1) {
         //
         // Check for a valid mask.
         //
-        struct GROUP_AFFINITY ga;
+        GROUP_AFFINITY ga;
         int group = __kmp_get_proc_group( mask );
         if (group < 0) {
             if (abort_on_error) {
@@ -620,9 +593,9 @@ __kmp_set_system_affinity( kmp_affin_mask_t const *mask, int abort_on_error )
         // Transform the bit vector into a GROUP_AFFINITY struct
         // and make the system call to set affinity.
         //
-        ga.group = group;
-        ga.mask = mask[group];
-        ga.reserved[0] = ga.reserved[1] = ga.reserved[2] = 0;
+        ga.Group = group;
+        ga.Mask = mask[group];
+        ga.Reserved[0] = ga.Reserved[1] = ga.Reserved[2] = 0;
 
         KMP_DEBUG_ASSERT(__kmp_SetThreadGroupAffinity != NULL);
         if (__kmp_SetThreadGroupAffinity(GetCurrentThread(), &ga, NULL) == 0) {
@@ -640,7 +613,7 @@ __kmp_set_system_affinity( kmp_affin_mask_t const *mask, int abort_on_error )
     }
     else
 
-#endif /* KMP_ARCH_X86_64 */
+#endif /* KMP_GROUP_AFFINITY */
 
     {
         if (!SetThreadAffinityMask( GetCurrentThread(), *mask )) {
@@ -663,11 +636,11 @@ int
 __kmp_get_system_affinity( kmp_affin_mask_t *mask, int abort_on_error )
 {
 
-#if KMP_ARCH_X86_64
+#if KMP_GROUP_AFFINITY
 
     if (__kmp_num_proc_groups > 1) {
         KMP_CPU_ZERO(mask);
-        struct GROUP_AFFINITY ga;
+        GROUP_AFFINITY ga;
         KMP_DEBUG_ASSERT(__kmp_GetThreadGroupAffinity != NULL);
 
         if (__kmp_GetThreadGroupAffinity(GetCurrentThread(), &ga) == 0) {
@@ -683,16 +656,16 @@ __kmp_get_system_affinity( kmp_affin_mask_t *mask, int abort_on_error )
             return error;
         }
 
-        if ((ga.group < 0) || (ga.group > __kmp_num_proc_groups)
-          || (ga.mask == 0)) {
+        if ((ga.Group < 0) || (ga.Group > __kmp_num_proc_groups)
+          || (ga.Mask == 0)) {
             return -1;
         }
 
-        mask[ga.group] = ga.mask;
+        mask[ga.Group] = ga.Mask;
     }
     else
 
-#endif /* KMP_ARCH_X86_64 */
+#endif /* KMP_GROUP_AFFINITY */
 
     {
         kmp_affin_mask_t newMask, sysMask, retval;
@@ -743,19 +716,19 @@ void
 __kmp_affinity_bind_thread( int proc )
 {
 
-#if KMP_ARCH_X86_64
+#if KMP_GROUP_AFFINITY
 
     if (__kmp_num_proc_groups > 1) {
         //
         // Form the GROUP_AFFINITY struct directly, rather than filling
         // out a bit vector and calling __kmp_set_system_affinity().
         //
-        struct GROUP_AFFINITY ga;
+        GROUP_AFFINITY ga;
         KMP_DEBUG_ASSERT((proc >= 0) && (proc < (__kmp_num_proc_groups
            * CHAR_BIT * sizeof(DWORD_PTR))));
-        ga.group = proc / (CHAR_BIT * sizeof(DWORD_PTR));
-        ga.mask = 1 << (proc % (CHAR_BIT * sizeof(DWORD_PTR)));
-        ga.reserved[0] = ga.reserved[1] = ga.reserved[2] = 0;
+        ga.Group = proc / (CHAR_BIT * sizeof(DWORD_PTR));
+        ga.Mask = (unsigned long long)1 << (proc % (CHAR_BIT * sizeof(DWORD_PTR)));
+        ga.Reserved[0] = ga.Reserved[1] = ga.Reserved[2] = 0;
 
         KMP_DEBUG_ASSERT(__kmp_SetThreadGroupAffinity != NULL);
         if (__kmp_SetThreadGroupAffinity(GetCurrentThread(), &ga, NULL) == 0) {
@@ -772,7 +745,7 @@ __kmp_affinity_bind_thread( int proc )
     }
     else
 
-#endif /* KMP_ARCH_X86_64 */
+#endif /* KMP_GROUP_AFFINITY */
 
     {
         kmp_affin_mask_t mask;
@@ -789,10 +762,10 @@ __kmp_affinity_determine_capable( const char *env_var )
     // All versions of Windows* OS (since Win '95) support SetThreadAffinityMask().
     //
 
-#if KMP_ARCH_X86_64
-    __kmp_affin_mask_size = __kmp_num_proc_groups * sizeof(kmp_affin_mask_t);
+#if KMP_GROUP_AFFINITY
+    KMP_AFFINITY_ENABLE(__kmp_num_proc_groups*sizeof(kmp_affin_mask_t));
 #else
-    __kmp_affin_mask_size = sizeof(kmp_affin_mask_t);
+    KMP_AFFINITY_ENABLE(sizeof(kmp_affin_mask_t));
 #endif
 
     KA_TRACE( 10, (
@@ -862,6 +835,21 @@ __kmp_runtime_initialize( void )
         return;
     };
 
+#if GUIDEDLL_EXPORTS
+    /* Pin dynamic library for the lifetime of application */
+    {
+        // First, turn off error message boxes
+        UINT err_mode = SetErrorMode (SEM_FAILCRITICALERRORS);
+        HMODULE h;
+        BOOL ret = GetModuleHandleEx( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                                     |GET_MODULE_HANDLE_EX_FLAG_PIN,
+                                     (LPCTSTR)&__kmp_serial_initialize, &h);
+        KMP_DEBUG_ASSERT2(h && ret, "OpenMP RTL cannot find itself loaded");
+        SetErrorMode (err_mode);   // Restore error mode
+        KA_TRACE( 10, ("__kmp_runtime_initialize: dynamic library pinned\n") );
+    }
+#endif
+
     InitializeCriticalSection( & __kmp_win32_section );
 #if USE_ITT_BUILD
     __kmp_itt_system_object_created( & __kmp_win32_section, "Critical Section" );
@@ -875,7 +863,7 @@ __kmp_runtime_initialize( void )
     #endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
 
     /* Set up minimum number of threads to switch to TLS gtid */
-    #if KMP_OS_WINDOWS && ! defined GUIDEDLL_EXPORTS 
+    #if KMP_OS_WINDOWS && ! defined GUIDEDLL_EXPORTS
         // Windows* OS, static library.
         /*
             New thread may use stack space previously used by another thread, currently terminated.
@@ -945,7 +933,7 @@ __kmp_runtime_initialize( void )
     }
     KMP_DEBUG_ASSERT( NtQuerySystemInformation != NULL );
 
-#if KMP_ARCH_X86_64
+#if KMP_GROUP_AFFINITY
     //
     // Load kernel32.dll.
     // Same caveat - must use full system path name.
@@ -962,6 +950,7 @@ __kmp_runtime_initialize( void )
         // Load kernel32.dll using full path.
         //
         kernel32 = GetModuleHandle( path.str );
+        KA_TRACE( 10, ("__kmp_runtime_initialize: kernel32.dll = %s\n", path.str ) );
 
         //
         // Load the function pointers to kernel32.dll routines
@@ -973,11 +962,17 @@ __kmp_runtime_initialize( void )
             __kmp_GetThreadGroupAffinity = (kmp_GetThreadGroupAffinity_t) GetProcAddress( kernel32, "GetThreadGroupAffinity" );
             __kmp_SetThreadGroupAffinity = (kmp_SetThreadGroupAffinity_t) GetProcAddress( kernel32, "SetThreadGroupAffinity" );
 
+            KA_TRACE( 10, ("__kmp_runtime_initialize: __kmp_GetActiveProcessorCount = %p\n", __kmp_GetActiveProcessorCount ) );
+            KA_TRACE( 10, ("__kmp_runtime_initialize: __kmp_GetActiveProcessorGroupCount = %p\n", __kmp_GetActiveProcessorGroupCount ) );
+            KA_TRACE( 10, ("__kmp_runtime_initialize:__kmp_GetThreadGroupAffinity = %p\n", __kmp_GetThreadGroupAffinity ) );
+            KA_TRACE( 10, ("__kmp_runtime_initialize: __kmp_SetThreadGroupAffinity = %p\n", __kmp_SetThreadGroupAffinity ) );
+            KA_TRACE( 10, ("__kmp_runtime_initialize: sizeof(kmp_affin_mask_t) = %d\n", sizeof(kmp_affin_mask_t) ) );
+
             //
             // See if group affinity is supported on this system.
             // If so, calculate the #groups and #procs.
             //
-            // Group affinity was introduced with Windows* 7 OS and 
+            // Group affinity was introduced with Windows* 7 OS and
             // Windows* Server 2008 R2 OS.
             //
             if ( ( __kmp_GetActiveProcessorCount != NULL )
@@ -998,8 +993,11 @@ __kmp_runtime_initialize( void )
                 for ( i = 0; i < __kmp_num_proc_groups; i++ ) {
                     DWORD size = __kmp_GetActiveProcessorCount( i );
                     __kmp_xproc += size;
-                    KA_TRACE( 20, ("__kmp_runtime_initialize: proc group %d size = %d\n", i, size ) );
+                    KA_TRACE( 10, ("__kmp_runtime_initialize: proc group %d size = %d\n", i, size ) );
                 }
+                }
+            else {
+                KA_TRACE( 10, ("__kmp_runtime_initialize: %d processor groups detected\n", __kmp_num_proc_groups ) );
             }
         }
     }
@@ -1010,7 +1008,7 @@ __kmp_runtime_initialize( void )
 #else
     GetSystemInfo( & info );
     __kmp_xproc = info.dwNumberOfProcessors;
-#endif // KMP_ARCH_X86_64
+#endif /* KMP_GROUP_AFFINITY */
 
     //
     // If the OS said there were 0 procs, take a guess and use a value of 2.
@@ -1153,46 +1151,6 @@ __kmp_read_system_time( double *delta )
     * __kmp_win32_tick;
     }
 }
-
-/* ------------------------------------------------------------------------ */
-/* ------------------------------------------------------------------------ */
-
-/*
- * Change thread to the affinity mask pointed to by affin_mask argument
- * and return a pointer to the old value in the old_mask argument, if argument
- * is non-NULL.
- */
-
-void
-__kmp_change_thread_affinity_mask( int gtid, kmp_affin_mask_t *new_mask,
-                                   kmp_affin_mask_t *old_mask )
-{
-    kmp_info_t  *th = __kmp_threads[ gtid ];
-
-    KMP_DEBUG_ASSERT( *new_mask != 0 );
-
-    if ( old_mask != NULL ) {
-        *old_mask = SetThreadAffinityMask( th -> th.th_info.ds.ds_thread, *new_mask );
-
-        if (! *old_mask ) {
-            DWORD error = GetLastError();
-            __kmp_msg(
-                kmp_ms_fatal,
-                KMP_MSG( CantSetThreadAffMask ),
-                KMP_ERR( error ),
-                __kmp_msg_null
-            );
-        }
-    }
-    if (__kmp_affinity_verbose)
-            KMP_INFORM( ChangeAffMask, "KMP_AFFINITY (Bind)", gtid, *old_mask, *new_mask );
-
-    /* Make sure old value is correct in thread data structures */
-    KMP_DEBUG_ASSERT( old_mask != NULL && *old_mask == *(th -> th.th_affin_mask ));
-
-    KMP_CPU_COPY(th -> th.th_affin_mask, new_mask);
-}
-
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
@@ -1368,11 +1326,11 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
 {
     kmp_thread_t   handle;
     DWORD          idThread;
-    
+
     KA_TRACE( 10, ("__kmp_create_worker: try to create thread (%d)\n", gtid ) );
-    
+
     th->th.th_info.ds.ds_gtid = gtid;
-    
+
     if ( KMP_UBER_GTID(gtid) ) {
         int     stack_data;
 
@@ -1411,12 +1369,12 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
         /* Set stack size for this thread now. */
         KA_TRACE( 10, ( "__kmp_create_worker: stack_size = %" KMP_SIZE_T_SPEC
                         " bytes\n", stack_size ) );
-        
+
         stack_size += gtid * __kmp_stkoffset;
-        
+
         TCW_PTR(th->th.th_info.ds.ds_stacksize, stack_size);
         TCW_4(th->th.th_info.ds.ds_stackgrow, FALSE);
-        
+
         KA_TRACE( 10, ( "__kmp_create_worker: (before) stack_size = %"
                         KMP_SIZE_T_SPEC
                         " bytes, &__kmp_launch_worker = %p, th = %p, "
@@ -1424,13 +1382,13 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
                         (SIZE_T) stack_size,
                         (LPTHREAD_START_ROUTINE) & __kmp_launch_worker,
                         (LPVOID) th, &idThread ) );
-        
+
             {
                 handle = CreateThread( NULL, (SIZE_T) stack_size,
                                        (LPTHREAD_START_ROUTINE) __kmp_launch_worker,
                                        (LPVOID) th, STACK_SIZE_PARAM_IS_A_RESERVATION, &idThread );
             }
-        
+
         KA_TRACE( 10, ( "__kmp_create_worker: (after) stack_size = %"
                         KMP_SIZE_T_SPEC
                         " bytes, &__kmp_launch_worker = %p, th = %p, "
@@ -1438,7 +1396,7 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
                         (SIZE_T) stack_size,
                         (LPTHREAD_START_ROUTINE) & __kmp_launch_worker,
                         (LPVOID) th, idThread, handle ) );
-        
+
             {
                 if ( handle == 0 ) {
                     DWORD error = GetLastError();
@@ -1454,7 +1412,7 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
             }
         KMP_MB();       /* Flush all pending memory write invalidates.  */
     }
-    
+
     KA_TRACE( 10, ("__kmp_create_worker: done creating thread (%d)\n", gtid ) );
 }
 
@@ -1601,7 +1559,6 @@ __kmp_reap_common( kmp_info_t * th )
             KMP_FSYNC_SPIN_PREPARE( obj );
 #endif /* USE_ITT_BUILD */
             __kmp_is_thread_alive( th, &exit_val );
-            __kmp_static_delay( TRUE );
             KMP_YIELD( TCR_4(__kmp_nth) > __kmp_avail_proc );
             KMP_YIELD_SPIN( spins );
         } while ( exit_val == STILL_ACTIVE && TCR_4( th->th.th_info.ds.ds_alive ) );

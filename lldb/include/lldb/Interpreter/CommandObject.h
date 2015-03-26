@@ -98,7 +98,7 @@ public:
         return m_interpreter;
     }
 
-    const char *
+    virtual const char *
     GetHelp ();
 
     virtual const char *
@@ -113,6 +113,9 @@ public:
     void
     SetHelp (const char * str);
 
+    void
+    SetHelp (std::string str);
+    
     void
     SetHelpLong (const char * str);
 
@@ -525,6 +528,11 @@ protected:
         return "invalid frame, no registers";
     }
 
+    // This is for use in the command interpreter, when you either want the selected target, or if no target
+    // is present you want to prime the dummy target with entities that will be copied over to new targets.
+    Target *GetSelectedOrDummyTarget(bool prefer_dummy = false);
+    Target *GetDummyTarget();
+
     //------------------------------------------------------------------
     /// Check the command to make sure anything required by this
     /// command is available.
@@ -605,7 +613,7 @@ public:
     
     virtual bool
     Execute (const char *args_string, CommandReturnObject &result);
-    
+
 protected:    
     virtual bool
     DoExecute (const char *command, CommandReturnObject &result) = 0;

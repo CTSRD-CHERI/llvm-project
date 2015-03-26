@@ -1,8 +1,6 @@
 #if USE_ITT_BUILD
 /*
  * kmp_itt.inl -- Inline functions of ITT Notify.
- * $Revision: 42866 $
- * $Date: 2013-12-10 15:15:58 -0600 (Tue, 10 Dec 2013) $
  */
 
 
@@ -63,6 +61,8 @@
 #endif
 #endif
 
+static kmp_bootstrap_lock_t  metadata_lock = KMP_BOOTSTRAP_LOCK_INITIALIZER( metadata_lock );
+
 /*
     ------------------------------------------------------------------------------------------------
     Parallel region reporting.
@@ -89,12 +89,10 @@
 // -------------------------------------------------------------------------------------------------
 
 LINKAGE void
-__kmp_itt_region_forking( int gtid, int serialized ) {
+__kmp_itt_region_forking( int gtid, int team_size, int barriers, int serialized ) {
 #if USE_ITT_NOTIFY
     kmp_team_t *      team = __kmp_team_from_gtid( gtid );
-#if OMP_30_ENABLED
     if (team->t.t_active_level + serialized > 1)
-#endif
     {
         // The frame notifications are only supported for the outermost teams.
         return;
@@ -105,40 +103,81 @@ __kmp_itt_region_forking( int gtid, int serialized ) {
         // Assume that reserved_2 contains zero initially.  Since zero is special
         // value here, store the index into domain array increased by 1.
         if (loc->reserved_2 == 0) {
-            if (__kmp_frame_domain_count < KMP_MAX_FRAME_DOMAINS) {
-                int frm = KMP_TEST_THEN_INC32( & __kmp_frame_domain_count ); // get "old" value
+            if (__kmp_region_domain_count < KMP_MAX_FRAME_DOMAINS) {
+                int frm = KMP_TEST_THEN_INC32( & __kmp_region_domain_count ); // get "old" value
                 if (frm >= KMP_MAX_FRAME_DOMAINS) {
-                    KMP_TEST_THEN_DEC32( & __kmp_frame_domain_count );       // revert the count
+                    KMP_TEST_THEN_DEC32( & __kmp_region_domain_count );       // revert the count
                     return;                      // loc->reserved_2 is still 0
                 }
                 //if (!KMP_COMPARE_AND_STORE_ACQ32( &loc->reserved_2, 0, frm + 1 )) {
                 //    frm = loc->reserved_2 - 1;   // get value saved by other thread for same loc
                 //} // AC: this block is to replace next unsynchronized line
-                loc->reserved_2 = frm + 1;                                   // save "new" value
+
+                // We need to save indexes for both region and barrier frames. We'll use loc->reserved_2
+                // field but put region index to the low two bytes and barrier indexes to the high
+                // two bytes. It is OK because KMP_MAX_FRAME_DOMAINS = 512.
+                loc->reserved_2 |= (frm + 1);                                    // save "new" value
 
                 // Transform compiler-generated region location into the format
                 // that the tools more or less standardized on:
                 //                               "<func>$omp$parallel@[file:]<line>[:<col>]"
                 const char * buff = NULL;
                 kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
-                buff = __kmp_str_format("%s$omp$parallel@%s:%d:%d",
-                                        str_loc.func, str_loc.file,
+                buff = __kmp_str_format("%s$omp$parallel:%d@%s:%d:%d",
+                                        str_loc.func, team_size, str_loc.file,
                                         str_loc.line, str_loc.col);
-                __kmp_str_loc_free( &str_loc );
 
                 __itt_suppress_push(__itt_suppress_memory_errors);
-                __kmp_itt_domains[ frm ] = __itt_domain_create( buff );
+                __kmp_itt_region_domains[ frm ] = __itt_domain_create( buff );
                 __itt_suppress_pop();
 
                 __kmp_str_free( &buff );
-                __itt_frame_begin_v3(__kmp_itt_domains[ frm ], NULL);
+                if( barriers ) {
+                    if (__kmp_barrier_domain_count < KMP_MAX_FRAME_DOMAINS) {
+                        int frm = KMP_TEST_THEN_INC32( & __kmp_barrier_domain_count ); // get "old" value
+                        if (frm >= KMP_MAX_FRAME_DOMAINS) {
+                            KMP_TEST_THEN_DEC32( & __kmp_barrier_domain_count );       // revert the count
+                            return;                      // loc->reserved_2 is still 0
+                        }
+                        const char * buff = NULL;
+                        buff = __kmp_str_format("%s$omp$barrier@%s:%d",
+                                                str_loc.func, str_loc.file, str_loc.col);
+                        __itt_suppress_push(__itt_suppress_memory_errors);
+                        __kmp_itt_barrier_domains[ frm ] = __itt_domain_create( buff );
+                        __itt_suppress_pop();
+                        __kmp_str_free( &buff );
+                        // Save the barrier frame index to the high two bytes.
+                        loc->reserved_2 |= (frm + 1) << 16;
+                    }
+                }
+                __kmp_str_loc_free( &str_loc );
+                __itt_frame_begin_v3(__kmp_itt_region_domains[ frm ], NULL);
             }
-        } else { // if it is not 0 then it should be <= KMP_MAX_FRAME_DOMAINS
-            __itt_frame_begin_v3(__kmp_itt_domains[loc->reserved_2 - 1], NULL);
+        } else { // Region domain exists for this location
+            // Check if team size was changed. Then create new region domain for this location
+            int frm = (loc->reserved_2 & 0x0000FFFF) - 1;
+            if( __kmp_itt_region_team_size[frm] != team_size ) {
+                const char * buff = NULL;
+                kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
+                buff = __kmp_str_format("%s$omp$parallel:%d@%s:%d:%d",
+                                        str_loc.func, team_size, str_loc.file,
+                                        str_loc.line, str_loc.col);
+
+                __itt_suppress_push(__itt_suppress_memory_errors);
+                __kmp_itt_region_domains[ frm ] = __itt_domain_create( buff );
+                __itt_suppress_pop();
+
+                __kmp_str_free( &buff );
+                __kmp_str_loc_free( &str_loc );
+                __kmp_itt_region_team_size[frm] = team_size;
+                __itt_frame_begin_v3(__kmp_itt_region_domains[frm], NULL);
+            } else { // Team size was not changed. Use existing domain.
+                __itt_frame_begin_v3(__kmp_itt_region_domains[frm], NULL);
+            }
         }
         KMP_ITT_DEBUG_LOCK();
-        KMP_ITT_DEBUG_PRINT( "[frm beg] gtid=%d, idx=%d, serialized:%d, loc:%p\n",
-                         gtid, loc->reserved_2 - 1, serialized, loc );
+        KMP_ITT_DEBUG_PRINT( "[frm beg] gtid=%d, idx=%x, serialized:%d, loc:%p\n",
+                         gtid, loc->reserved_2, serialized, loc );
     }
 #endif
 } // __kmp_itt_region_forking
@@ -146,47 +185,210 @@ __kmp_itt_region_forking( int gtid, int serialized ) {
 // -------------------------------------------------------------------------------------------------
 
 LINKAGE void
-__kmp_itt_frame_submit( int gtid, __itt_timestamp begin, __itt_timestamp end, int imbalance, ident_t * loc ) {
+__kmp_itt_frame_submit( int gtid, __itt_timestamp begin, __itt_timestamp end, int imbalance, ident_t * loc, int team_size, int region ) {
 #if USE_ITT_NOTIFY
+    if( region ) {
+        kmp_team_t *      team = __kmp_team_from_gtid( gtid );
+        int serialized = ( region == 2 ? 1 : 0 );
+        if (team->t.t_active_level + serialized > 1)
+        {
+            // The frame notifications are only supported for the outermost teams.
+            return;
+        }
+         //Check region domain has not been created before. It's index is saved in the low two bytes.
+         if ((loc->reserved_2 & 0x0000FFFF) == 0) {
+             if (__kmp_region_domain_count < KMP_MAX_FRAME_DOMAINS) {
+                 int frm = KMP_TEST_THEN_INC32( & __kmp_region_domain_count ); // get "old" value
+                 if (frm >= KMP_MAX_FRAME_DOMAINS) {
+                     KMP_TEST_THEN_DEC32( & __kmp_region_domain_count );       // revert the count
+                     return;                      // loc->reserved_2 is still 0
+                 }
+
+                 // We need to save indexes for both region and barrier frames. We'll use loc->reserved_2
+                 // field but put region index to the low two bytes and barrier indexes to the high
+                 // two bytes. It is OK because KMP_MAX_FRAME_DOMAINS = 512.
+                 loc->reserved_2 |= (frm + 1);                                 // save "new" value
+
+                 // Transform compiler-generated region location into the format
+                 // that the tools more or less standardized on:
+                 //                               "<func>$omp$parallel:team_size@[file:]<line>[:<col>]"
+                 const char * buff = NULL;
+                 kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
+                 buff = __kmp_str_format("%s$omp$parallel:%d@%s:%d:%d",
+                                         str_loc.func, team_size, str_loc.file,
+                                         str_loc.line, str_loc.col);
+
+                 __itt_suppress_push(__itt_suppress_memory_errors);
+                 __kmp_itt_region_domains[ frm ] = __itt_domain_create( buff );
+                 __itt_suppress_pop();
+
+                 __kmp_str_free( &buff );
+                 __kmp_str_loc_free( &str_loc );
+                 __kmp_itt_region_team_size[frm] = team_size;
+                 __itt_frame_submit_v3(__kmp_itt_region_domains[ frm ], NULL, begin, end );
+             }
+         } else { // Region domain exists for this location
+             // Check if team size was changed. Then create new region domain for this location
+             int frm = (loc->reserved_2 & 0x0000FFFF) - 1;
+             if( __kmp_itt_region_team_size[frm] != team_size ) {
+                 const char * buff = NULL;
+                 kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
+                 buff = __kmp_str_format("%s$omp$parallel:%d@%s:%d:%d",
+                                         str_loc.func, team_size, str_loc.file,
+                                         str_loc.line, str_loc.col);
+
+                 __itt_suppress_push(__itt_suppress_memory_errors);
+                 __kmp_itt_region_domains[ frm ] = __itt_domain_create( buff );
+                 __itt_suppress_pop();
+
+                 __kmp_str_free( &buff );
+                 __kmp_str_loc_free( &str_loc );
+                 __kmp_itt_region_team_size[frm] = team_size;
+                 __itt_frame_submit_v3(__kmp_itt_region_domains[ frm ], NULL, begin, end );
+             } else { // Team size was not changed. Use existing domain.
+                 __itt_frame_submit_v3(__kmp_itt_region_domains[ frm ], NULL, begin, end );
+             }
+         }
+         KMP_ITT_DEBUG_LOCK();
+         KMP_ITT_DEBUG_PRINT( "[reg sub] gtid=%d, idx=%x, region:%d, loc:%p, beg:%llu, end:%llu\n",
+                          gtid, loc->reserved_2, region, loc, begin, end );
+         return;
+    } else { // called for barrier reporting
         if (loc) {
-            if (loc->reserved_2 == 0) {
-                if (__kmp_frame_domain_count < KMP_MAX_FRAME_DOMAINS) {
-                    int frm = KMP_TEST_THEN_INC32( & __kmp_frame_domain_count ); // get "old" value
+            if ((loc->reserved_2 & 0xFFFF0000) == 0) {
+                if (__kmp_barrier_domain_count < KMP_MAX_FRAME_DOMAINS) {
+                    int frm = KMP_TEST_THEN_INC32( & __kmp_barrier_domain_count ); // get "old" value
                     if (frm >= KMP_MAX_FRAME_DOMAINS) {
-                        KMP_TEST_THEN_DEC32( & __kmp_frame_domain_count );       // revert the count
+                        KMP_TEST_THEN_DEC32( & __kmp_barrier_domain_count );       // revert the count
                         return;                      // loc->reserved_2 is still 0
                     }
-                    // Should it be synchronized? See the comment in __kmp_itt_region_forking
-                    loc->reserved_2 = frm + 1;                                   // save "new" value
+                    // Save the barrier frame index to the high two bytes.
+                    loc->reserved_2 |= (frm + 1) << 16;                          // save "new" value
 
                     // Transform compiler-generated region location into the format
                     // that the tools more or less standardized on:
                     //                               "<func>$omp$frame@[file:]<line>[:<col>]"
-                    const char * buff = NULL;
                     kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
                     if( imbalance ) {
-                        buff = __kmp_str_format("%s$omp$barrier-imbalance@%s:%d",
-                                                str_loc.func, str_loc.file, str_loc.col);
+                        const char * buff_imb = NULL;
+                        buff_imb = __kmp_str_format("%s$omp$barrier-imbalance:%d@%s:%d",
+                                                str_loc.func, team_size, str_loc.file, str_loc.col);
+                        __itt_suppress_push(__itt_suppress_memory_errors);
+                        __kmp_itt_imbalance_domains[ frm ] = __itt_domain_create( buff_imb );
+                        __itt_suppress_pop();
+                        __itt_frame_submit_v3(__kmp_itt_imbalance_domains[ frm ], NULL, begin, end );
+                        __kmp_str_free( &buff_imb );
                     } else {
+                        const char * buff = NULL;
                         buff = __kmp_str_format("%s$omp$barrier@%s:%d",
                                                 str_loc.func, str_loc.file, str_loc.col);
+                        __itt_suppress_push(__itt_suppress_memory_errors);
+                        __kmp_itt_barrier_domains[ frm ] = __itt_domain_create( buff );
+                        __itt_suppress_pop();
+                        __itt_frame_submit_v3(__kmp_itt_barrier_domains[ frm ], NULL, begin, end );
+                        __kmp_str_free( &buff );
                     }
                     __kmp_str_loc_free( &str_loc );
-
-                    __itt_suppress_push(__itt_suppress_memory_errors);
-                    __kmp_itt_domains[ frm ] = __itt_domain_create( buff );
-                    __itt_suppress_pop();
-
-                    __kmp_str_free( &buff );
-                    __itt_frame_submit_v3(__kmp_itt_domains[ frm ], NULL, begin, end );
                 }
             } else { // if it is not 0 then it should be <= KMP_MAX_FRAME_DOMAINS
-                __itt_frame_submit_v3(__kmp_itt_domains[loc->reserved_2 - 1], NULL, begin, end );
+                if( imbalance ) {
+                    __itt_frame_submit_v3(__kmp_itt_imbalance_domains[ (loc->reserved_2 >> 16) - 1 ], NULL, begin, end );
+                } else {
+                    __itt_frame_submit_v3(__kmp_itt_barrier_domains[(loc->reserved_2 >> 16) - 1], NULL, begin, end );
+                }
             }
+            KMP_ITT_DEBUG_LOCK();
+            KMP_ITT_DEBUG_PRINT( "[frm sub] gtid=%d, idx=%x, loc:%p, beg:%llu, end:%llu\n",
+                             gtid, loc->reserved_2, loc, begin, end );
+        }
     }
-
 #endif
 } // __kmp_itt_frame_submit
+
+// -------------------------------------------------------------------------------------------------
+
+LINKAGE void
+__kmp_itt_metadata_imbalance( int gtid, kmp_uint64 begin, kmp_uint64 end, kmp_uint64 imbalance, kmp_uint64 reduction ) {
+#if USE_ITT_NOTIFY
+    if( metadata_domain == NULL) {
+        __kmp_acquire_bootstrap_lock( & metadata_lock );
+        if( metadata_domain == NULL) {
+            __itt_suppress_push(__itt_suppress_memory_errors);
+            metadata_domain = __itt_domain_create( "OMP Metadata" );
+            __itt_suppress_pop();
+        }
+        __kmp_release_bootstrap_lock( & metadata_lock );
+    }
+
+    __itt_string_handle * string_handle = __itt_string_handle_create( "omp_metadata_imbalance");
+
+    kmp_uint64 imbalance_data[ 4 ];
+    imbalance_data[ 0 ] = begin;
+    imbalance_data[ 1 ] = end;
+    imbalance_data[ 2 ] = imbalance;
+    imbalance_data[ 3 ] = reduction;
+
+    __itt_metadata_add(metadata_domain, __itt_null, string_handle, __itt_metadata_u64, 4, imbalance_data);
+#endif
+} // __kmp_itt_metadata_imbalance
+
+// -------------------------------------------------------------------------------------------------
+
+LINKAGE void
+__kmp_itt_metadata_loop( ident_t * loc, kmp_uint64 sched_type, kmp_uint64 iterations, kmp_uint64 chunk ) {
+#if USE_ITT_NOTIFY
+    if( metadata_domain == NULL) {
+        __kmp_acquire_bootstrap_lock( & metadata_lock );
+        if( metadata_domain == NULL) {
+            __itt_suppress_push(__itt_suppress_memory_errors);
+            metadata_domain = __itt_domain_create( "OMP Metadata" );
+            __itt_suppress_pop();
+        }
+        __kmp_release_bootstrap_lock( & metadata_lock );
+    }
+
+    __itt_string_handle * string_handle = __itt_string_handle_create( "omp_metadata_loop");
+    kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
+
+    kmp_uint64 loop_data[ 5 ];
+    loop_data[ 0 ] = str_loc.line;
+    loop_data[ 1 ] = str_loc.col;
+    loop_data[ 2 ] = sched_type;
+    loop_data[ 3 ] = iterations;
+    loop_data[ 4 ] = chunk;
+
+    __kmp_str_loc_free( &str_loc );
+
+    __itt_metadata_add(metadata_domain, __itt_null, string_handle, __itt_metadata_u64, 5, loop_data);
+#endif
+} // __kmp_itt_metadata_loop
+
+// -------------------------------------------------------------------------------------------------
+
+LINKAGE void
+__kmp_itt_metadata_single( ident_t * loc ) {
+#if USE_ITT_NOTIFY
+    if( metadata_domain == NULL) {
+        __kmp_acquire_bootstrap_lock( & metadata_lock );
+        if( metadata_domain == NULL) {
+            __itt_suppress_push(__itt_suppress_memory_errors);
+            metadata_domain = __itt_domain_create( "OMP Metadata" );
+            __itt_suppress_pop();
+        }
+        __kmp_release_bootstrap_lock( & metadata_lock );
+    }
+
+    __itt_string_handle * string_handle = __itt_string_handle_create( "omp_metadata_single");
+    kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
+    kmp_uint64 single_data[ 2 ];
+    single_data[ 0 ] = str_loc.line;
+    single_data[ 1 ] = str_loc.col;
+
+    __kmp_str_loc_free( &str_loc );
+
+    __itt_metadata_add(metadata_domain, __itt_null, string_handle, __itt_metadata_u64, 2, single_data);
+#endif
+} // __kmp_itt_metadata_single
 
 // -------------------------------------------------------------------------------------------------
 
@@ -210,19 +412,21 @@ LINKAGE void
 __kmp_itt_region_joined( int gtid, int serialized ) {
 #if USE_ITT_NOTIFY
     kmp_team_t *      team = __kmp_team_from_gtid( gtid );
-#if OMP_30_ENABLED
     if (team->t.t_active_level + serialized > 1)
-#endif
     {
         // The frame notifications are only supported for the outermost teams.
         return;
     }
     ident_t *         loc  = __kmp_thread_from_gtid( gtid )->th.th_ident;
-    if (loc && loc->reserved_2 && loc->reserved_2 <= KMP_MAX_FRAME_DOMAINS) {
-        KMP_ITT_DEBUG_LOCK();
-        __itt_frame_end_v3(__kmp_itt_domains[loc->reserved_2 - 1], NULL);
-        KMP_ITT_DEBUG_PRINT( "[frm end] gtid=%d, idx=%d, serialized:%d, loc:%p\n",
-                         gtid, loc->reserved_2 - 1, serialized, loc );
+    if (loc && loc->reserved_2)
+    {
+        int frm = (loc->reserved_2 & 0x0000FFFF) - 1;
+        if(frm < KMP_MAX_FRAME_DOMAINS) {
+            KMP_ITT_DEBUG_LOCK();
+            __itt_frame_end_v3(__kmp_itt_region_domains[frm], NULL);
+            KMP_ITT_DEBUG_PRINT( "[frm end] gtid=%d, idx=%x, serialized:%d, loc:%p\n",
+                         gtid, loc->reserved_2, serialized, loc );
+        }
     }
 #endif
 } // __kmp_itt_region_joined
@@ -409,8 +613,6 @@ __kmp_itt_barrier_finished( int gtid, void * object ) {
 #endif
 } // __kmp_itt_barrier_finished
 
-#if OMP_30_ENABLED
-
 /*
     ------------------------------------------------------------------------------------------------
     Taskwait reporting.
@@ -507,8 +709,6 @@ __kmp_itt_task_finished(
 
 // -------------------------------------------------------------------------------------------------
 
-#endif /* OMP_30_ENABLED */
-
 /*
     ------------------------------------------------------------------------------------------------
     Lock reporting.
@@ -534,6 +734,21 @@ __kmp_itt_task_finished(
 
 // -------------------------------------------------------------------------------------------------
 
+#if KMP_USE_DYNAMIC_LOCK
+// Takes location information directly
+__kmp_inline
+void
+___kmp_itt_lock_init( kmp_user_lock_p lock, char const *type, const ident_t *loc ) {
+#if USE_ITT_NOTIFY
+    if ( __itt_sync_create_ptr ) {
+        char const *    src = ( loc == NULL ? NULL : loc->psource );
+        KMP_ITT_DEBUG_LOCK();
+        __itt_sync_create( lock, type, src, 0 );
+        KMP_ITT_DEBUG_PRINT( "[lck ini] scre( %p, \"%s\", \"%s\", 0 )\n", lock, type, src );
+    }
+#endif
+}
+#else // KMP_USE_DYNAMIC_LOCK
 // Internal guts -- common code for locks and critical sections, do not call directly.
 __kmp_inline
 void
@@ -550,6 +765,7 @@ ___kmp_itt_lock_init( kmp_user_lock_p lock, char const * type ) {
     }; // if
 #endif
 } // ___kmp_itt_lock_init
+#endif // KMP_USE_DYNAMIC_LOCK
 
 // Internal guts -- common code for locks and critical sections, do not call directly.
 __kmp_inline
@@ -565,29 +781,82 @@ ___kmp_itt_lock_fini( kmp_user_lock_p lock, char const * type ) {
 
 // -------------------------------------------------------------------------------------------------
 
+#if KMP_USE_DYNAMIC_LOCK
+void
+__kmp_itt_lock_creating( kmp_user_lock_p lock, const ident_t *loc ) {
+    ___kmp_itt_lock_init( lock, "OMP Lock", loc );
+}
+#else
 void
 __kmp_itt_lock_creating( kmp_user_lock_p lock ) {
     ___kmp_itt_lock_init( lock, "OMP Lock" );
 } // __kmp_itt_lock_creating
+#endif
 
 void
 __kmp_itt_lock_acquiring( kmp_user_lock_p lock ) {
+#if KMP_USE_DYNAMIC_LOCK && USE_ITT_NOTIFY
+    // postpone lock object access
+    if ( __itt_sync_prepare_ptr ) {
+        if ( DYNA_EXTRACT_D_TAG(lock) == 0 ) {
+            kmp_indirect_lock_t *ilk = DYNA_LOOKUP_I_LOCK(lock);
+            __itt_sync_prepare( ilk->lock );
+        } else {
+            __itt_sync_prepare( lock );
+        }
+    }
+#else
     __itt_sync_prepare( lock );
+#endif
 } // __kmp_itt_lock_acquiring
 
 void
 __kmp_itt_lock_acquired( kmp_user_lock_p lock ) {
+#if KMP_USE_DYNAMIC_LOCK && USE_ITT_NOTIFY
+    // postpone lock object access
+    if ( __itt_sync_acquired_ptr ) {
+        if ( DYNA_EXTRACT_D_TAG(lock) == 0 ) {
+            kmp_indirect_lock_t *ilk = DYNA_LOOKUP_I_LOCK(lock);
+            __itt_sync_acquired( ilk->lock );
+        } else {
+            __itt_sync_acquired( lock );
+        }
+    }
+#else
     __itt_sync_acquired( lock );
+#endif
 } // __kmp_itt_lock_acquired
 
 void
 __kmp_itt_lock_releasing( kmp_user_lock_p lock ) {
+#if KMP_USE_DYNAMIC_LOCK && USE_ITT_NOTIFY
+    if ( __itt_sync_releasing_ptr ) {
+        if ( DYNA_EXTRACT_D_TAG(lock) == 0 ) {
+            kmp_indirect_lock_t *ilk = DYNA_LOOKUP_I_LOCK(lock);
+            __itt_sync_releasing( ilk->lock );
+        } else {
+            __itt_sync_releasing( lock );
+        }
+    }
+#else
     __itt_sync_releasing( lock );
+#endif
 } // __kmp_itt_lock_releasing
 
 void
 __kmp_itt_lock_cancelled( kmp_user_lock_p lock ) {
+#if KMP_USE_DYNAMIC_LOCK && USE_ITT_NOTIFY
+    if ( __itt_sync_cancel_ptr ) {
+        if ( DYNA_EXTRACT_D_TAG(lock) == 0 ) {
+            kmp_indirect_lock_t *ilk = DYNA_LOOKUP_I_LOCK(lock);
+            __itt_sync_cancel( ilk->lock );
+        } else {
+            __itt_sync_cancel( lock );
+        }
+    }
+#else
     __itt_sync_cancel( lock );
+#endif
 } // __kmp_itt_lock_cancelled
 
 void
@@ -602,11 +871,17 @@ __kmp_itt_lock_destroyed( kmp_user_lock_p lock ) {
     Critical sections are treated exactly as locks (but have different object type).
     ------------------------------------------------------------------------------------------------
 */
-
+#if KMP_USE_DYNAMIC_LOCK
+void
+__kmp_itt_critical_creating( kmp_user_lock_p lock, const ident_t *loc ) {
+    ___kmp_itt_lock_init( lock, "OMP Critical", loc);
+}
+#else
 void
 __kmp_itt_critical_creating( kmp_user_lock_p lock ) {
     ___kmp_itt_lock_init( lock, "OMP Critical" );
 } // __kmp_itt_critical_creating
+#endif
 
 void
 __kmp_itt_critical_acquiring( kmp_user_lock_p lock ) {
@@ -757,7 +1032,11 @@ __kmp_itt_thread_name( int gtid ) {
     if ( __itt_thr_name_set_ptr ) {
         kmp_str_buf_t name;
         __kmp_str_buf_init( & name );
-        __kmp_str_buf_print( & name, "OMP Worker Thread #%d", gtid );
+        if( KMP_MASTER_GTID(gtid) ) {
+            __kmp_str_buf_print( & name, "OMP Master Thread #%d", gtid );
+        } else {
+            __kmp_str_buf_print( & name, "OMP Worker Thread #%d", gtid );
+        }
         KMP_ITT_DEBUG_LOCK();
         __itt_thr_name_set( name.str, name.used );
         KMP_ITT_DEBUG_PRINT( "[thr nam] name( \"%s\")\n", name.str );

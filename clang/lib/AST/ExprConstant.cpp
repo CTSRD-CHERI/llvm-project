@@ -1406,7 +1406,7 @@ static bool CheckConstantExpression(EvalInfo &Info, SourceLocation DiagLoc,
   return true;
 }
 
-const ValueDecl *GetLValueBaseDecl(const LValue &LVal) {
+static const ValueDecl *GetLValueBaseDecl(const LValue &LVal) {
   return LVal.Base.dyn_cast<const ValueDecl*>();
 }
 
@@ -1420,6 +1420,17 @@ static bool IsLiteralLValue(const LValue &Value) {
 static bool IsWeakLValue(const LValue &Value) {
   const ValueDecl *Decl = GetLValueBaseDecl(Value);
   return Decl && Decl->isWeak();
+}
+
+static bool isZeroSized(const LValue &Value) {
+  const ValueDecl *Decl = GetLValueBaseDecl(Value);
+  if (Decl && isa<VarDecl>(Decl)) {
+    QualType Ty = Decl->getType();
+    if (Ty->isArrayType())
+      return Ty->isIncompleteType() ||
+             Decl->getASTContext().getTypeSize(Ty) == 0;
+  }
+  return false;
 }
 
 static bool EvalPointerValueAsBool(const APValue &Value, bool &Result) {
@@ -2162,7 +2173,7 @@ struct CompleteObject {
     assert(Value && "missing value for complete object");
   }
 
-  LLVM_EXPLICIT operator bool() const { return Value; }
+  explicit operator bool() const { return Value; }
 };
 
 /// Find the designated sub-object of an rvalue.
@@ -2491,8 +2502,9 @@ static bool AreElementsOfSameArray(QualType ObjType,
 }
 
 /// Find the complete object to which an LValue refers.
-CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E, AccessKinds AK,
-                                  const LValue &LVal, QualType LValType) {
+static CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E,
+                                         AccessKinds AK, const LValue &LVal,
+                                         QualType LValType) {
   if (!LVal.Base) {
     Info.Diag(E, diag::note_constexpr_access_null) << AK;
     return CompleteObject();
@@ -3657,6 +3669,22 @@ static bool CheckConstexprFunction(EvalInfo &Info, SourceLocation CallLoc,
   return false;
 }
 
+/// Determine if a class has any fields that might need to be copied by a
+/// trivial copy or move operation.
+static bool hasFields(const CXXRecordDecl *RD) {
+  if (!RD || RD->isEmpty())
+    return false;
+  for (auto *FD : RD->fields()) {
+    if (FD->isUnnamedBitfield())
+      continue;
+    return true;
+  }
+  for (auto &Base : RD->bases())
+    if (hasFields(Base.getType()->getAsCXXRecordDecl()))
+      return true;
+  return false;
+}
+
 namespace {
 typedef SmallVector<APValue, 8> ArgVector;
 }
@@ -3695,8 +3723,12 @@ static bool HandleFunctionCall(SourceLocation CallLoc,
   // For a trivial copy or move assignment, perform an APValue copy. This is
   // essential for unions, where the operations performed by the assignment
   // operator cannot be represented as statements.
+  //
+  // Skip this for non-union classes with no fields; in that case, the defaulted
+  // copy/move does not actually read the object.
   const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Callee);
-  if (MD && MD->isDefaulted() && MD->isTrivial()) {
+  if (MD && MD->isDefaulted() && MD->isTrivial() &&
+      (MD->getParent()->isUnion() || hasFields(MD->getParent()))) {
     assert(This &&
            (MD->isCopyAssignmentOperator() || MD->isMoveAssignmentOperator()));
     LValue RHS;
@@ -3753,11 +3785,18 @@ static bool HandleConstructorCall(SourceLocation CallLoc, const LValue &This,
   }
 
   // For a trivial copy or move constructor, perform an APValue copy. This is
-  // essential for unions, where the operations performed by the constructor
-  // cannot be represented by ctor-initializers.
+  // essential for unions (or classes with anonymous union members), where the
+  // operations performed by the constructor cannot be represented by
+  // ctor-initializers.
+  //
+  // Skip this for empty non-union classes; we should not perform an
+  // lvalue-to-rvalue conversion on them because their copy constructor does not
+  // actually read them.
   if (Definition->isDefaulted() &&
       ((Definition->isCopyConstructor() && Definition->isTrivial()) ||
-       (Definition->isMoveConstructor() && Definition->isTrivial()))) {
+       (Definition->isMoveConstructor() && Definition->isTrivial())) &&
+      (Definition->getParent()->isUnion() ||
+       hasFields(Definition->getParent()))) {
     LValue RHS;
     RHS.setFrom(Info.Ctx, ArgValues[0]);
     return handleLValueToRValueConversion(Info, Args[0], Args[0]->getType(),
@@ -4802,6 +4841,7 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
   case CK_CPointerToObjCPointerCast:
   case CK_BlockPointerToObjCPointerCast:
   case CK_AnyPointerToBlockPointerCast:
+  case CK_AddressSpaceConversion:
     if (!Visit(SubExpr))
       return false;
     // Bitcasts to cv void* are static_casts, not reinterpret_casts, so are
@@ -5437,6 +5477,9 @@ public:
     return VisitConstructExpr(E);
   }
   bool VisitCallExpr(const CallExpr *E) {
+    return VisitConstructExpr(E);
+  }
+  bool VisitCXXStdInitializerListExpr(const CXXStdInitializerListExpr *E) {
     return VisitConstructExpr(E);
   }
 };
@@ -6796,7 +6839,7 @@ void DataRecursiveIntBinOpEvaluator::process(EvalResult &Result) {
 }
 
 bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
-  if (E->isAssignmentOp())
+  if (!Info.keepEvaluatingAfterFailure() && E->isAssignmentOp())
     return Error(E);
 
   if (DataRecursiveIntBinOpEvaluator::shouldEnqueue(E))
@@ -6808,7 +6851,11 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   if (LHSTy->isAnyComplexType() || RHSTy->isAnyComplexType()) {
     ComplexValue LHS, RHS;
     bool LHSOK;
-    if (E->getLHS()->getType()->isRealFloatingType()) {
+    if (E->isAssignmentOp()) {
+      LValue LV;
+      EvaluateLValue(E->getLHS(), LV, Info);
+      LHSOK = false;
+    } else if (LHSTy->isRealFloatingType()) {
       LHSOK = EvaluateFloat(E->getLHS(), LHS.FloatReal, Info);
       if (LHSOK) {
         LHS.makeComplexFloat();
@@ -6954,6 +7001,11 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
              isOnePastTheEndOfCompleteObject(Info.Ctx, RHSValue)) ||
             (RHSValue.Base && RHSValue.Offset.isZero() &&
              isOnePastTheEndOfCompleteObject(Info.Ctx, LHSValue)))
+          return Error(E);
+        // We can't tell whether an object is at the same address as another
+        // zero sized object.
+        if ((RHSValue.Base && isZeroSized(LHSValue)) ||
+            (LHSValue.Base && isZeroSized(RHSValue)))
           return Error(E);
         // Pointers with different bases cannot represent the same object.
         // (Note that clang defaults to -fmerge-all-constants, which can
@@ -7543,10 +7595,23 @@ static bool TryEvaluateBuiltinNaN(const ASTContext &Context,
   else if (S->getString().getAsInteger(0, fill))
     return false;
 
-  if (SNaN)
-    Result = llvm::APFloat::getSNaN(Sem, false, &fill);
-  else
-    Result = llvm::APFloat::getQNaN(Sem, false, &fill);
+  if (Context.getTargetInfo().isNan2008()) {
+    if (SNaN)
+      Result = llvm::APFloat::getSNaN(Sem, false, &fill);
+    else
+      Result = llvm::APFloat::getQNaN(Sem, false, &fill);
+  } else {
+    // Prior to IEEE 754-2008, architectures were allowed to choose whether
+    // the first bit of their significand was set for qNaN or sNaN. MIPS chose
+    // a different encoding to what became a standard in 2008, and for pre-
+    // 2008 revisions, MIPS interpreted sNaN-2008 as qNan and qNaN-2008 as
+    // sNaN. This is now known as "legacy NaN" encoding.
+    if (SNaN)
+      Result = llvm::APFloat::getQNaN(Sem, false, &fill);
+    else
+      Result = llvm::APFloat::getSNaN(Sem, false, &fill);
+  }
+
   return true;
 }
 
@@ -8975,7 +9040,11 @@ static bool EvaluateCPlusPlus11IntegralConstantExpr(const ASTContext &Ctx,
   if (!E->isCXX11ConstantExpr(Ctx, &Result, Loc))
     return false;
 
-  assert(Result.isInt() && "pointer cast to int is not an ICE");
+  if (!Result.isInt()) {
+    if (Loc) *Loc = E->getExprLoc();
+    return false;
+  }
+
   if (Value) *Value = Result.getInt();
   return true;
 }
@@ -9044,7 +9113,8 @@ bool Expr::EvaluateWithSubstitution(APValue &Value, ASTContext &Ctx,
   ArgVector ArgValues(Args.size());
   for (ArrayRef<const Expr*>::iterator I = Args.begin(), E = Args.end();
        I != E; ++I) {
-    if (!Evaluate(ArgValues[I - Args.begin()], Info, *I))
+    if ((*I)->isValueDependent() ||
+        !Evaluate(ArgValues[I - Args.begin()], Info, *I))
       // If evaluation fails, throw away the argument entirely.
       ArgValues[I - Args.begin()] = APValue();
     if (Info.EvalStatus.HasSideEffects)

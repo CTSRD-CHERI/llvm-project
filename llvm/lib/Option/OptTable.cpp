@@ -84,15 +84,11 @@ static inline bool operator<(const OptTable::Info &I, const char *Name) {
 
 OptSpecifier::OptSpecifier(const Option *Opt) : ID(Opt->getID()) {}
 
-OptTable::OptTable(const Info *_OptionInfos, unsigned _NumOptionInfos,
-                   bool _IgnoreCase)
-  : OptionInfos(_OptionInfos),
-    NumOptionInfos(_NumOptionInfos),
-    IgnoreCase(_IgnoreCase),
-    TheInputOptionID(0),
-    TheUnknownOptionID(0),
-    FirstSearchableIndex(0)
-{
+OptTable::OptTable(const Info *OptionInfos, unsigned NumOptionInfos,
+                   bool IgnoreCase)
+    : OptionInfos(OptionInfos), NumOptionInfos(NumOptionInfos),
+      IgnoreCase(IgnoreCase), TheInputOptionID(0), TheUnknownOptionID(0),
+      FirstSearchableIndex(0) {
   // Explicitly zero initialize the error to work around a bug in array
   // value-initialization on MinGW with gcc 4.3.5.
 
@@ -264,6 +260,11 @@ InputArgList *OptTable::ParseArgs(const char *const *ArgBegin,
   MissingArgIndex = MissingArgCount = 0;
   unsigned Index = 0, End = ArgEnd - ArgBegin;
   while (Index < End) {
+    // Ingore nullptrs, they are response file's EOL markers
+    if (Args->getArgString(Index) == nullptr) {
+      ++Index;
+      continue;
+    }
     // Ignore empty arguments (other things may still take them as arguments).
     StringRef Str = Args->getArgString(Index);
     if (Str == "") {

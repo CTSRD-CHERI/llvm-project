@@ -1,7 +1,5 @@
 /*
  * kmp_environment.c -- Handle environment variables OS-independently.
- * $Revision: 42263 $
- * $Date: 2013-04-04 11:03:19 -0500 (Thu, 04 Apr 2013) $
  */
 
 

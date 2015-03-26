@@ -48,9 +48,12 @@
 #define POLLY_SCOP_DETECTION_H
 
 #include "llvm/Pass.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/Analysis/AliasSetTracker.h"
 
 #include "polly/ScopDetectionDiagnostic.h"
+
+#include "llvm/ADT/SetVector.h"
 
 #include <set>
 #include <map>
@@ -100,13 +103,15 @@ struct MemAcc {
 };
 
 typedef std::map<const Instruction *, MemAcc *> MapInsnToMemAcc;
-typedef std::pair<const Instruction *, const SCEVAddRecExpr *> PairInsnAddRec;
-typedef std::vector<PairInsnAddRec> AFs;
+typedef std::pair<const Instruction *, const SCEV *> PairInstSCEV;
+typedef std::vector<PairInstSCEV> AFs;
 typedef std::map<const SCEVUnknown *, AFs> BaseToAFs;
 typedef std::map<const SCEVUnknown *, const SCEV *> BaseToElSize;
 
+extern bool PollyModelPHINodes;
 extern bool PollyTrackFailures;
 extern bool PollyDelinearize;
+extern bool PollyUseRuntimeAliasChecks;
 
 /// @brief A function attribute which will cause Polly to skip the function
 extern llvm::StringRef PollySkipFnAttr;
@@ -115,9 +120,13 @@ extern llvm::StringRef PollySkipFnAttr;
 /// @brief Pass to detect the maximal static control parts (Scops) of a
 /// function.
 class ScopDetection : public FunctionPass {
+public:
+  typedef SetVector<const Region *> RegionSet;
+
+private:
   //===--------------------------------------------------------------------===//
-  ScopDetection(const ScopDetection &) LLVM_DELETED_FUNCTION;
-  const ScopDetection &operator=(const ScopDetection &) LLVM_DELETED_FUNCTION;
+  ScopDetection(const ScopDetection &) = delete;
+  const ScopDetection &operator=(const ScopDetection &) = delete;
 
   /// @brief Analysis passes used.
   //@{
@@ -127,6 +136,12 @@ class ScopDetection : public FunctionPass {
   AliasAnalysis *AA;
   //@}
 
+  /// @brief Set to remember non-affine branches in regions.
+  using NonAffineSubRegionSetTy = RegionSet;
+  using NonAffineSubRegionMapTy =
+      DenseMap<const Region *, NonAffineSubRegionSetTy>;
+  NonAffineSubRegionMapTy NonAffineSubRegionMap;
+
   /// @brief Context variables for SCoP detection.
   struct DetectionContext {
     Region &CurRegion;   // The region to check.
@@ -134,16 +149,35 @@ class ScopDetection : public FunctionPass {
     bool Verifying;      // If we are in the verification phase?
     RejectLog Log;
 
-    // Map a base pointer to all access functions accessing it.
-    BaseToAFs NonAffineAccesses, AffineAccesses;
+    /// @brief Map a base pointer to all access functions accessing it.
+    ///
+    /// This map is indexed by the base pointer. Each element of the map
+    /// is a list of memory accesses that reference this base pointer.
+    BaseToAFs Accesses;
+
+    /// @brief The set of base pointers with non-affine accesses.
+    ///
+    /// This set contains all base pointers which are used in memory accesses
+    /// that can not be detected as affine accesses.
+    SetVector<const SCEVUnknown *> NonAffineAccesses;
     BaseToElSize ElementSize;
 
-    DetectionContext(Region &R, AliasAnalysis &AA, bool Verify)
-        : CurRegion(R), AST(AA), Verifying(Verify), Log(&R) {}
+    /// @brief The region has at least one load instruction.
+    bool hasLoads;
+
+    /// @brief The region has at least one store instruction.
+    bool hasStores;
+
+    /// @brief The set of non-affine subregions in the region we analyze.
+    NonAffineSubRegionSetTy &NonAffineSubRegionSet;
+
+    DetectionContext(Region &R, AliasAnalysis &AA,
+                     NonAffineSubRegionSetTy &NABS, bool Verify)
+        : CurRegion(R), AST(AA), Verifying(Verify), Log(&R), hasLoads(false),
+          hasStores(false), NonAffineSubRegionSet(NABS) {}
   };
 
   // Remember the valid regions
-  typedef std::set<const Region *> RegionSet;
   RegionSet ValidRegions;
 
   // Remember a list of errors for every region.
@@ -183,13 +217,6 @@ class ScopDetection : public FunctionPass {
   ///
   /// @return True if R is a Scop, false otherwise.
   bool isValidRegion(DetectionContext &Context) const;
-
-  /// @brief Check if a region is a Scop.
-  ///
-  /// @param Context The context of scop detection.
-  ///
-  /// @return True if R is a Scop, false otherwise.
-  bool isValidRegion(Region &R) const;
 
   /// @brief Check if a call instruction can be part of a Scop.
   ///
@@ -267,7 +294,7 @@ class ScopDetection : public FunctionPass {
 
 public:
   static char ID;
-  explicit ScopDetection() : FunctionPass(ID) {}
+  explicit ScopDetection();
 
   /// @brief Get the RegionInfo stored in this pass.
   ///
@@ -282,6 +309,9 @@ public:
   ///
   /// @return Return true if R is the maximum Region in a Scop, false otherwise.
   bool isMaxRegionInScop(const Region &R, bool Verify = true) const;
+
+  /// @brief Return true if @p SubR is a non-affine subregion in @p ScopR.
+  bool isNonAffineSubRegion(const Region *SubR, const Region *ScopR) const;
 
   /// @brief Get a message why a region is invalid
   ///

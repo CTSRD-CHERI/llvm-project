@@ -23,13 +23,7 @@
 #define LIBUNWIND_UNAVAIL
 #endif
 
-// FIXME: This is also in cxxabi.h and libunwind.h, can we consolidate?
-#if !defined(__USING_SJLJ_EXCEPTIONS__) && defined(__arm__) && \
-    !defined(__ARM_DWARF_EH__) && !defined(__APPLE__)
-#define LIBCXXABI_ARM_EHABI 1
-#else
-#define LIBCXXABI_ARM_EHABI 0
-#endif
+#include <__cxxabi_config.h>
 
 typedef enum {
   _URC_NO_REASON = 0,
@@ -63,6 +57,8 @@ typedef uint32_t _Unwind_State;
 static const _Unwind_State _US_VIRTUAL_UNWIND_FRAME   = 0;
 static const _Unwind_State _US_UNWIND_FRAME_STARTING  = 1;
 static const _Unwind_State _US_UNWIND_FRAME_RESUME    = 2;
+/* Undocumented flag for force unwinding. */
+static const _Unwind_State _US_FORCE_UNWIND           = 8;
 
 typedef uint32_t _Unwind_EHT_Header;
 
@@ -125,10 +121,10 @@ struct _Unwind_Exception {
                             _Unwind_Exception *exc);
   uintptr_t private_1; // non-zero means forced unwind
   uintptr_t private_2; // holds sp that phase1 found for phase2 to use
-#if !__LP64__
+#ifndef __LP64__
   // The gcc implementation of _Unwind_Exception used attribute mode on the
-  // above fields which had the side effect of causing this whole struct to 
-  // round up to 32 bytes in size. To be more explicit, we add pad fields 
+  // above fields which had the side effect of causing this whole struct to
+  // round up to 32 bytes in size. To be more explicit, we add pad fields
   // added for binary compatibility.
   uint32_t reserved[3];
 #endif
@@ -157,7 +153,7 @@ extern "C" {
 //
 // The following are the base functions documented by the C++ ABI
 //
-#if __USING_SJLJ_EXCEPTIONS__
+#ifdef __USING_SJLJ_EXCEPTIONS__
 extern _Unwind_Reason_Code
     _Unwind_SjLj_RaiseException(_Unwind_Exception *exception_object);
 extern void _Unwind_SjLj_Resume(_Unwind_Exception *exception_object);
@@ -206,46 +202,18 @@ extern _Unwind_VRS_Result
 _Unwind_VRS_Pop(_Unwind_Context *context, _Unwind_VRS_RegClass regclass,
                 uint32_t discriminator,
                 _Unwind_VRS_DataRepresentation representation);
+#endif
 
-extern _Unwind_Reason_Code _Unwind_VRS_Interpret(_Unwind_Context *context,
-                                                 uint32_t *data, size_t offset,
-                                                 size_t len);
-
-static inline uintptr_t _Unwind_GetGR(struct _Unwind_Context* context,
-                                      int index) {
-  uintptr_t value = 0;
-  _Unwind_VRS_Get(context, _UVRSC_CORE, (uint32_t)index, _UVRSD_UINT32, &value);
-  return value;
-}
-
-static inline void _Unwind_SetGR(struct _Unwind_Context* context, int index,
-                                 uintptr_t new_value) {
-  _Unwind_VRS_Set(context, _UVRSC_CORE, (uint32_t)index,
-                  _UVRSD_UINT32, &new_value);
-}
-
-static inline uintptr_t _Unwind_GetIP(struct _Unwind_Context* context) {
-  // remove the thumb-bit before returning
-  return (_Unwind_GetGR(context, 15) & (~(uintptr_t)0x1));
-}
-
-static inline void _Unwind_SetIP(struct _Unwind_Context* context,
-                                 uintptr_t new_value) {
-  uintptr_t thumb_bit = _Unwind_GetGR(context, 15) & ((uintptr_t)0x1);
-  _Unwind_SetGR(context, 15, new_value | thumb_bit);
-}
-#else
 extern uintptr_t _Unwind_GetGR(struct _Unwind_Context *context, int index);
 extern void _Unwind_SetGR(struct _Unwind_Context *context, int index,
                           uintptr_t new_value);
 extern uintptr_t _Unwind_GetIP(struct _Unwind_Context *context);
 extern void _Unwind_SetIP(struct _Unwind_Context *, uintptr_t new_value);
-#endif
 
 extern uintptr_t _Unwind_GetRegionStart(struct _Unwind_Context *context);
 extern uintptr_t
     _Unwind_GetLanguageSpecificData(struct _Unwind_Context *context);
-#if __USING_SJLJ_EXCEPTIONS__
+#ifdef __USING_SJLJ_EXCEPTIONS__
 extern _Unwind_Reason_Code
     _Unwind_SjLj_ForcedUnwind(_Unwind_Exception *exception_object,
                               _Unwind_Stop_Fn stop, void *stop_parameter);
@@ -255,7 +223,7 @@ extern _Unwind_Reason_Code
                          _Unwind_Stop_Fn stop, void *stop_parameter);
 #endif
 
-#if __USING_SJLJ_EXCEPTIONS__
+#ifdef __USING_SJLJ_EXCEPTIONS__
 typedef struct _Unwind_FunctionContext *_Unwind_FunctionContext_t;
 extern void _Unwind_SjLj_Register(_Unwind_FunctionContext_t fc);
 extern void _Unwind_SjLj_Unregister(_Unwind_FunctionContext_t fc);
@@ -268,7 +236,7 @@ extern void _Unwind_SjLj_Unregister(_Unwind_FunctionContext_t fc);
 //
 //  called by __cxa_rethrow().
 //
-#if __USING_SJLJ_EXCEPTIONS__
+#ifdef __USING_SJLJ_EXCEPTIONS__
 extern _Unwind_Reason_Code
     _Unwind_SjLj_Resume_or_Rethrow(_Unwind_Exception *exception_object);
 #else
@@ -284,7 +252,7 @@ typedef _Unwind_Reason_Code (*_Unwind_Trace_Fn)(struct _Unwind_Context *,
 extern _Unwind_Reason_Code _Unwind_Backtrace(_Unwind_Trace_Fn, void *);
 
 // _Unwind_GetCFA is a gcc extension that can be called from within a
-// personality handler to get the CFA (stack pointer before call) of 
+// personality handler to get the CFA (stack pointer before call) of
 // current frame.
 extern uintptr_t _Unwind_GetCFA(struct _Unwind_Context *);
 
@@ -301,17 +269,17 @@ extern uintptr_t _Unwind_GetIPInfo(struct _Unwind_Context *context,
 
 // __register_frame() is used with dynamically generated code to register the
 // FDE for a generated (JIT) code.  The FDE must use pc-rel addressing to point
-// to its function and optional LSDA.  
-// __register_frame() has existed in all versions of Mac OS X, but in 10.4 and 
-// 10.5 it was buggy and did not actually register the FDE with the unwinder.  
+// to its function and optional LSDA.
+// __register_frame() has existed in all versions of Mac OS X, but in 10.4 and
+// 10.5 it was buggy and did not actually register the FDE with the unwinder.
 // In 10.6 and later it does register properly.
 extern void __register_frame(const void *fde);
 extern void __deregister_frame(const void *fde);
 
 // _Unwind_Find_FDE() will locate the FDE if the pc is in some function that has
 // an associated FDE. Note, Mac OS X 10.6 and later, introduces "compact unwind
-// info" which the runtime uses in preference to dwarf unwind info.  This 
-// function will only work if the target function has an FDE but no compact 
+// info" which the runtime uses in preference to dwarf unwind info.  This
+// function will only work if the target function has an FDE but no compact
 // unwind info.
 struct dwarf_eh_bases {
   uintptr_t tbase;
@@ -336,7 +304,7 @@ extern uintptr_t _Unwind_GetTextRelBase(struct _Unwind_Context *context)
     LIBUNWIND_UNAVAIL;
 
 // Mac OS X 10.4 and 10.5 had implementations of these functions in
-// libgcc_s.dylib, but they never worked.  
+// libgcc_s.dylib, but they never worked.
 /// These functions are no longer available on Mac OS X.
 extern void __register_frame_info_bases(const void *fde, void *ob, void *tb,
                                         void *db) LIBUNWIND_UNAVAIL;

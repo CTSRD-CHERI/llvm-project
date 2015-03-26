@@ -32,13 +32,13 @@ namespace {
 class SparcDAGToDAGISel : public SelectionDAGISel {
   /// Subtarget - Keep a pointer to the Sparc Subtarget around so that we can
   /// make the right decision when generating code for different targets.
-  const SparcSubtarget &Subtarget;
-  SparcTargetMachine &TM;
+  const SparcSubtarget *Subtarget;
 public:
-  explicit SparcDAGToDAGISel(SparcTargetMachine &tm)
-    : SelectionDAGISel(tm),
-      Subtarget(tm.getSubtarget<SparcSubtarget>()),
-      TM(tm) {
+  explicit SparcDAGToDAGISel(SparcTargetMachine &tm) : SelectionDAGISel(tm) {}
+
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    Subtarget = &MF.getSubtarget<SparcSubtarget>();
+    return SelectionDAGISel::runOnMachineFunction(MF);
   }
 
   SDNode *Select(SDNode *N) override;
@@ -50,7 +50,7 @@ public:
   /// SelectInlineAsmMemoryOperand - Implement addressing mode selection for
   /// inline asm expressions.
   bool SelectInlineAsmMemoryOperand(const SDValue &Op,
-                                    char ConstraintCode,
+                                    unsigned ConstraintID,
                                     std::vector<SDValue> &OutOps) override;
 
   const char *getPassName() const override {
@@ -66,17 +66,14 @@ private:
 }  // end anonymous namespace
 
 SDNode* SparcDAGToDAGISel::getGlobalBaseReg() {
-  unsigned GlobalBaseReg =
-      TM.getSubtargetImpl()->getInstrInfo()->getGlobalBaseReg(MF);
-  return CurDAG->getRegister(GlobalBaseReg,
-                             getTargetLowering()->getPointerTy()).getNode();
+  unsigned GlobalBaseReg = Subtarget->getInstrInfo()->getGlobalBaseReg(MF);
+  return CurDAG->getRegister(GlobalBaseReg, TLI->getPointerTy()).getNode();
 }
 
 bool SparcDAGToDAGISel::SelectADDRri(SDValue Addr,
                                      SDValue &Base, SDValue &Offset) {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
-    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(),
-                                       getTargetLowering()->getPointerTy());
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), TLI->getPointerTy());
     Offset = CurDAG->getTargetConstant(0, MVT::i32);
     return true;
   }
@@ -91,8 +88,8 @@ bool SparcDAGToDAGISel::SelectADDRri(SDValue Addr,
         if (FrameIndexSDNode *FIN =
                 dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
           // Constant offset from frame ref.
-          Base = CurDAG->getTargetFrameIndex(FIN->getIndex(),
-                                           getTargetLowering()->getPointerTy());
+          Base =
+              CurDAG->getTargetFrameIndex(FIN->getIndex(), TLI->getPointerTy());
         } else {
           Base = Addr.getOperand(0);
         }
@@ -136,7 +133,7 @@ bool SparcDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &R1, SDValue &R2) {
   }
 
   R1 = Addr;
-  R2 = CurDAG->getRegister(SP::G0, getTargetLowering()->getPointerTy());
+  R2 = CurDAG->getRegister(SP::G0, TLI->getPointerTy());
   return true;
 }
 
@@ -198,12 +195,13 @@ SDNode *SparcDAGToDAGISel::Select(SDNode *N) {
 /// inline asm expressions.
 bool
 SparcDAGToDAGISel::SelectInlineAsmMemoryOperand(const SDValue &Op,
-                                                char ConstraintCode,
+                                                unsigned ConstraintID,
                                                 std::vector<SDValue> &OutOps) {
   SDValue Op0, Op1;
-  switch (ConstraintCode) {
+  switch (ConstraintID) {
   default: return true;
-  case 'm':   // memory
+  case InlineAsm::Constraint_i:
+  case InlineAsm::Constraint_m: // memory
    if (!SelectADDRrr(Op, Op0, Op1))
      SelectADDRri(Op, Op0, Op1);
    break;

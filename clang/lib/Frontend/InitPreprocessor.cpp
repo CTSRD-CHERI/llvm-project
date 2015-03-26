@@ -133,6 +133,7 @@ static void DefineFloatMacros(MacroBuilder &Builder, StringRef Prefix,
                      "4.94065645841246544176568792868221e-324",
                      "6.47517511943802511092443895822764655e-4966");
   int Digits = PickFP(Sem, 6, 15, 18, 31, 33);
+  int DecimalDigits = PickFP(Sem, 9, 17, 21, 33, 36);
   Epsilon = PickFP(Sem, "1.19209290e-7", "2.2204460492503131e-16",
                    "1.08420217248550443401e-19",
                    "4.94065645841246544176568792868221e-324",
@@ -159,6 +160,7 @@ static void DefineFloatMacros(MacroBuilder &Builder, StringRef Prefix,
   Builder.defineMacro(DefPrefix + "DENORM_MIN__", Twine(DenormMin)+Ext);
   Builder.defineMacro(DefPrefix + "HAS_DENORM__");
   Builder.defineMacro(DefPrefix + "DIG__", Twine(Digits));
+  Builder.defineMacro(DefPrefix + "DECIMAL_DIG__", Twine(DecimalDigits));
   Builder.defineMacro(DefPrefix + "EPSILON__", Twine(Epsilon)+Ext);
   Builder.defineMacro(DefPrefix + "HAS_INFINITY__");
   Builder.defineMacro(DefPrefix + "HAS_QUIET_NAN__");
@@ -409,6 +411,12 @@ static void InitializeStandardPredefinedMacros(const TargetInfo &TI,
 /// ISO/IEC JTC1/SC22/WG21 (C++) SD-6: "SG10 Feature Test Recommendations".
 static void InitializeCPlusPlusFeatureTestMacros(const LangOptions &LangOpts,
                                                  MacroBuilder &Builder) {
+  // C++98 features.
+  if (LangOpts.RTTI)
+    Builder.defineMacro("__cpp_rtti", "199711");
+  if (LangOpts.CXXExceptions)
+    Builder.defineMacro("__cpp_exceptions", "199711");
+
   // C++11 features.
   if (LangOpts.CPlusPlus11) {
     Builder.defineMacro("__cpp_unicode_characters", "200704");
@@ -418,16 +426,24 @@ static void InitializeCPlusPlusFeatureTestMacros(const LangOptions &LangOpts,
     Builder.defineMacro("__cpp_lambdas", "200907");
     Builder.defineMacro("__cpp_constexpr",
                         LangOpts.CPlusPlus14 ? "201304" : "200704");
+    Builder.defineMacro("__cpp_range_based_for", "200907");
     Builder.defineMacro("__cpp_static_assert", "200410");
     Builder.defineMacro("__cpp_decltype", "200707");
     Builder.defineMacro("__cpp_attributes", "200809");
     Builder.defineMacro("__cpp_rvalue_references", "200610");
     Builder.defineMacro("__cpp_variadic_templates", "200704");
+    Builder.defineMacro("__cpp_initializer_lists", "200806");
+    Builder.defineMacro("__cpp_delegating_constructors", "200604");
+    Builder.defineMacro("__cpp_nsdmi", "200809");
+    Builder.defineMacro("__cpp_inheriting_constructors", "200802");
+    Builder.defineMacro("__cpp_ref_qualifiers", "200710");
+    Builder.defineMacro("__cpp_alias_templates", "200704");
   }
 
   // C++14 features.
   if (LangOpts.CPlusPlus14) {
     Builder.defineMacro("__cpp_binary_literals", "201304");
+    Builder.defineMacro("__cpp_digit_separators", "201309");
     Builder.defineMacro("__cpp_init_captures", "201304");
     Builder.defineMacro("__cpp_generic_lambdas", "201304");
     Builder.defineMacro("__cpp_decltype_auto", "201304");
@@ -435,6 +451,8 @@ static void InitializeCPlusPlusFeatureTestMacros(const LangOptions &LangOpts,
     Builder.defineMacro("__cpp_aggregate_nsdmi", "201304");
     Builder.defineMacro("__cpp_variable_templates", "201304");
   }
+  if (LangOpts.SizedDeallocation)
+    Builder.defineMacro("__cpp_sized_deallocation", "201309");
 }
 
 static void InitializePredefinedMacros(const TargetInfo &TI,
@@ -556,8 +574,6 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     Builder.defineMacro("__GXX_RTTI");
   if (LangOpts.SjLjExceptions)
     Builder.defineMacro("__USING_SJLJ_EXCEPTIONS__");
-  if (LangOpts.SEHExceptions)
-    Builder.defineMacro("__SEH__");
 
   if (LangOpts.Deprecated)
     Builder.defineMacro("__DEPRECATED");
@@ -691,6 +707,10 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   Builder.defineMacro("__POINTER_WIDTH__",
                       Twine((int)TI.getPointerWidth(0)));
 
+  // Define __BIGGEST_ALIGNMENT__ to be compatible with gcc.
+  Builder.defineMacro("__BIGGEST_ALIGNMENT__",
+                      Twine(TI.getSuitableAlign() / TI.getCharWidth()) );
+
   if (!LangOpts.CharIsSigned)
     Builder.defineMacro("__CHAR_UNSIGNED__");
 
@@ -817,8 +837,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   // Macros to control C99 numerics and <float.h>
   Builder.defineMacro("__FLT_EVAL_METHOD__", Twine(TI.getFloatEvalMethod()));
   Builder.defineMacro("__FLT_RADIX__", "2");
-  int Dig = PickFP(&TI.getLongDoubleFormat(), -1/*FIXME*/, 17, 21, 33, 36);
-  Builder.defineMacro("__DECIMAL_DIG__", Twine(Dig));
+  Builder.defineMacro("__DECIMAL_DIG__", "__LDBL_DECIMAL_DIG__");
 
   if (LangOpts.getStackProtector() == LangOptions::SSPOn)
     Builder.defineMacro("__SSP__");
@@ -854,6 +873,13 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     //   yyyy and mm are the year and the month designations of the
     //   version of the OpenMP API that the implementation support.
     Builder.defineMacro("_OPENMP", "201307");
+  }
+
+  // CUDA device path compilaton
+  if (LangOpts.CUDAIsDevice) {
+    // The CUDA_ARCH value is set for the GPU target specified in the NVPTX
+    // backend's target defines.
+    Builder.defineMacro("__CUDA_ARCH__");
   }
 
   // Get other target #defines.

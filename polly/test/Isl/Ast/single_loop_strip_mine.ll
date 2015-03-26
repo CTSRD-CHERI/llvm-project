@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -basicaa -polly-ast -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-import-jscop-dir=%S -basicaa -polly-import-jscop -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s -check-prefix=CHECK-VECTOR
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-ast -analyze -polly-no-early-exit < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-import-jscop-dir=%S -basicaa -polly-import-jscop -polly-ast -polly-ast-detect-parallel -analyze -polly-no-early-exit < %s | FileCheck %s -check-prefix=CHECK-VECTOR
 
 ; for (i = 0; i < 1024; i++)
 ;   A[i] = B[i];
@@ -17,10 +17,10 @@ for.cond:                                         ; preds = %for.body, %entry
   br i1 %cmp, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
-  %arrayidx = getelementptr inbounds i16* %B, i64 0
-  %load = load i16* %arrayidx
+  %arrayidx = getelementptr inbounds i16, i16* %B, i64 0
+  %load = load i16, i16* %arrayidx
   %add10 = add nsw i16 %load, 1
-  %arrayidx13 = getelementptr inbounds i16* %A, i64 %indvar
+  %arrayidx13 = getelementptr inbounds i16, i16* %A, i64 %indvar
   store i16 %add10, i16* %arrayidx13, align 2
   %inc = add nsw i64 %indvar, 1
   br label %for.cond
@@ -29,10 +29,10 @@ for.end:                                          ; preds = %for.cond
   ret void
 }
 
-; CHECK: for (int c1 = 0; c1 <= 1023; c1 += 1)
-; CHECK:     Stmt_for_body(c1);
+; CHECK: for (int c0 = 0; c0 <= 1023; c0 += 1)
+; CHECK:     Stmt_for_body(c0);
 
-; CHECK-VECTOR: #pragma omp parallel for
+; CHECK-VECTOR: #pragma known-parallel
 ; CHECK-VECTOR: for (int c0 = 0; c0 <= 1023; c0 += 4)
 ; CHECK-VECTOR:     #pragma simd
 ; CHECK-VECTOR:     for (int c1 = c0; c1 <= c0 + 3; c1 += 1)

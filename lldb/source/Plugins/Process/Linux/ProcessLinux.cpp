@@ -20,13 +20,25 @@
 #include "lldb/Target/Target.h"
 
 #include "ProcessLinux.h"
-#include "ProcessPOSIXLog.h"
+#include "Plugins/Platform/Linux/PlatformLinux.h"
+#include "Plugins/Process/POSIX/ProcessPOSIXLog.h"
 #include "Plugins/Process/Utility/InferiorCallPOSIX.h"
+#include "Plugins/Process/Utility/LinuxSignals.h"
 #include "ProcessMonitor.h"
 #include "LinuxThread.h"
 
 using namespace lldb;
 using namespace lldb_private;
+
+namespace
+{
+    UnixSignalsSP&
+    GetStaticLinuxSignalsSP ()
+    {
+        static UnixSignalsSP s_unix_signals_sp (new process_linux::LinuxSignals ());
+        return s_unix_signals_sp;
+    }
+}
 
 //------------------------------------------------------------------------------
 // Static functions.
@@ -48,15 +60,7 @@ ProcessLinux::Initialize()
         PluginManager::RegisterPlugin(GetPluginNameStatic(),
                                       GetPluginDescriptionStatic(),
                                       CreateInstance);
-
-        Log::Callbacks log_callbacks = {
-            ProcessPOSIXLog::DisableLog,
-            ProcessPOSIXLog::EnableLog,
-            ProcessPOSIXLog::ListLogCategories
-        };
-        
-        Log::RegisterLogChannel (ProcessLinux::GetPluginNameStatic(), log_callbacks);
-        ProcessPOSIXLog::RegisterPluginName(GetPluginNameStatic());
+        ProcessPOSIXLog::Initialize(GetPluginNameStatic());
     }
 }
 
@@ -64,7 +68,7 @@ ProcessLinux::Initialize()
 // Constructors and destructors.
 
 ProcessLinux::ProcessLinux(Target& target, Listener &listener, FileSpec *core_file)
-    : ProcessPOSIX(target, listener), m_core_file(core_file), m_stopping_threads(false)
+    : ProcessPOSIX(target, listener, GetStaticLinuxSignalsSP ()), m_core_file(core_file), m_stopping_threads(false)
 {
 #if 0
     // FIXME: Putting this code in the ctor and saving the byte order in a
@@ -216,6 +220,11 @@ ProcessLinux::CanDebug(Target &target, bool plugin_specified_by_name)
 
     /* If core file is specified then let elf-core plugin handle it */
     if (m_core_file)
+        return false;
+
+    // If we're using llgs for local debugging, we must not say that this process
+    // is used for debugging.
+    if (PlatformLinux::UseLlgsForLocalDebugging ())
         return false;
 
     return ProcessPOSIX::CanDebug(target, plugin_specified_by_name);

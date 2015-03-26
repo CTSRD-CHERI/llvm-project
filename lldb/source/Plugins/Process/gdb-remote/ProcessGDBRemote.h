@@ -25,6 +25,8 @@
 #include "lldb/Core/StringList.h"
 #include "lldb/Core/StructuredData.h"
 #include "lldb/Core/ThreadSafeValue.h"
+#include "lldb/Host/HostThread.h"
+#include "lldb/lldb-private-forward.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Thread.h"
 
@@ -71,153 +73,150 @@ public:
     //------------------------------------------------------------------
     // Check if a given Process
     //------------------------------------------------------------------
-    virtual bool
+    bool
     CanDebug (lldb_private::Target &target,
-              bool plugin_specified_by_name);
+              bool plugin_specified_by_name) override;
 
-    virtual lldb_private::CommandObject *
-    GetPluginCommandObject();
+    lldb_private::CommandObject *
+    GetPluginCommandObject() override;
 
     //------------------------------------------------------------------
     // Creating a new process, or attaching to an existing one
     //------------------------------------------------------------------
-    virtual lldb_private::Error
-    WillLaunch (lldb_private::Module* module);
+    lldb_private::Error
+    WillLaunch (lldb_private::Module* module) override;
 
-    virtual lldb_private::Error
+    lldb_private::Error
     DoLaunch (lldb_private::Module *exe_module, 
-              lldb_private::ProcessLaunchInfo &launch_info);
+              lldb_private::ProcessLaunchInfo &launch_info) override;
 
-    virtual void
-    DidLaunch ();
+    void
+    DidLaunch () override;
 
-    lldb_private::UnixSignals&
-    GetUnixSignals () override;
+    lldb_private::Error
+    WillAttachToProcessWithID (lldb::pid_t pid) override;
 
-    virtual lldb_private::Error
-    WillAttachToProcessWithID (lldb::pid_t pid);
+    lldb_private::Error
+    WillAttachToProcessWithName (const char *process_name, bool wait_for_launch) override;
 
-    virtual lldb_private::Error
-    WillAttachToProcessWithName (const char *process_name, bool wait_for_launch);
-
-    virtual lldb_private::Error
-    DoConnectRemote (lldb_private::Stream *strm, const char *remote_url);
+    lldb_private::Error
+    DoConnectRemote (lldb_private::Stream *strm, const char *remote_url) override;
     
     lldb_private::Error
     WillLaunchOrAttach ();
 
-    virtual lldb_private::Error
-    DoAttachToProcessWithID (lldb::pid_t pid);
+    lldb_private::Error
+    DoAttachToProcessWithID (lldb::pid_t pid) override;
     
-    virtual lldb_private::Error
-    DoAttachToProcessWithID (lldb::pid_t pid, const lldb_private::ProcessAttachInfo &attach_info);
+    lldb_private::Error
+    DoAttachToProcessWithID (lldb::pid_t pid, const lldb_private::ProcessAttachInfo &attach_info) override;
     
-    virtual lldb_private::Error
+    lldb_private::Error
     DoAttachToProcessWithName (const char *process_name,
-                               const lldb_private::ProcessAttachInfo &attach_info);
+                               const lldb_private::ProcessAttachInfo &attach_info) override;
 
-    virtual void
-    DidAttach (lldb_private::ArchSpec &process_arch);
+    void
+    DidAttach (lldb_private::ArchSpec &process_arch) override;
 
     //------------------------------------------------------------------
     // PluginInterface protocol
     //------------------------------------------------------------------
-    virtual lldb_private::ConstString
-    GetPluginName();
+    lldb_private::ConstString
+    GetPluginName() override;
 
-    virtual uint32_t
-    GetPluginVersion();
+    uint32_t
+    GetPluginVersion() override;
 
     //------------------------------------------------------------------
     // Process Control
     //------------------------------------------------------------------
-    virtual lldb_private::Error
-    WillResume ();
+    lldb_private::Error
+    WillResume () override;
 
-    virtual lldb_private::Error
-    DoResume ();
+    lldb_private::Error
+    DoResume () override;
 
-    virtual lldb_private::Error
-    DoHalt (bool &caused_stop);
+    lldb_private::Error
+    DoHalt (bool &caused_stop) override;
 
-    virtual lldb_private::Error
-    DoDetach (bool keep_stopped);
+    lldb_private::Error
+    DoDetach (bool keep_stopped) override;
     
-    virtual bool
-    DetachRequiresHalt() { return true; }
+    bool
+    DetachRequiresHalt() override { return true; }
 
-    virtual lldb_private::Error
-    DoSignal (int signal);
+    lldb_private::Error
+    DoSignal (int signal) override;
 
-    virtual lldb_private::Error
-    DoDestroy ();
+    lldb_private::Error
+    DoDestroy () override;
 
-    virtual void
-    RefreshStateAfterStop();
+    void
+    RefreshStateAfterStop() override;
 
     //------------------------------------------------------------------
     // Process Queries
     //------------------------------------------------------------------
-    virtual bool
-    IsAlive ();
+    bool
+    IsAlive () override;
 
-    virtual lldb::addr_t
-    GetImageInfoAddress();
+    lldb::addr_t
+    GetImageInfoAddress() override;
 
     //------------------------------------------------------------------
     // Process Memory
     //------------------------------------------------------------------
-    virtual size_t
-    DoReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error);
+    size_t
+    DoReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error) override;
 
-    virtual size_t
-    DoWriteMemory (lldb::addr_t addr, const void *buf, size_t size, lldb_private::Error &error);
+    size_t
+    DoWriteMemory (lldb::addr_t addr, const void *buf, size_t size, lldb_private::Error &error) override;
 
-    virtual lldb::addr_t
-    DoAllocateMemory (size_t size, uint32_t permissions, lldb_private::Error &error);
+    lldb::addr_t
+    DoAllocateMemory (size_t size, uint32_t permissions, lldb_private::Error &error) override;
 
-    virtual lldb_private::Error
+    lldb_private::Error
     GetMemoryRegionInfo (lldb::addr_t load_addr, 
-                         lldb_private::MemoryRegionInfo &region_info);
+                         lldb_private::MemoryRegionInfo &region_info) override;
     
-    virtual lldb_private::Error
-    DoDeallocateMemory (lldb::addr_t ptr);
+    lldb_private::Error
+    DoDeallocateMemory (lldb::addr_t ptr) override;
 
     //------------------------------------------------------------------
     // Process STDIO
     //------------------------------------------------------------------
-    virtual size_t
-    PutSTDIN (const char *buf, size_t buf_size, lldb_private::Error &error);
+    size_t
+    PutSTDIN (const char *buf, size_t buf_size, lldb_private::Error &error) override;
 
     //----------------------------------------------------------------------
     // Process Breakpoints
     //----------------------------------------------------------------------
-    virtual lldb_private::Error
-    EnableBreakpointSite (lldb_private::BreakpointSite *bp_site);
+    lldb_private::Error
+    EnableBreakpointSite (lldb_private::BreakpointSite *bp_site) override;
 
-    virtual lldb_private::Error
-    DisableBreakpointSite (lldb_private::BreakpointSite *bp_site);
+    lldb_private::Error
+    DisableBreakpointSite (lldb_private::BreakpointSite *bp_site) override;
 
     //----------------------------------------------------------------------
     // Process Watchpoints
     //----------------------------------------------------------------------
-    virtual lldb_private::Error
-    EnableWatchpoint (lldb_private::Watchpoint *wp, bool notify = true);
+    lldb_private::Error
+    EnableWatchpoint (lldb_private::Watchpoint *wp, bool notify = true) override;
 
-    virtual lldb_private::Error
-    DisableWatchpoint (lldb_private::Watchpoint *wp, bool notify = true);
+    lldb_private::Error
+    DisableWatchpoint (lldb_private::Watchpoint *wp, bool notify = true) override;
 
-    virtual lldb_private::Error
-    GetWatchpointSupportInfo (uint32_t &num);
+    lldb_private::Error
+    GetWatchpointSupportInfo (uint32_t &num) override;
     
-    virtual lldb_private::Error
-    GetWatchpointSupportInfo (uint32_t &num, bool& after);
+    lldb_private::Error
+    GetWatchpointSupportInfo (uint32_t &num, bool& after) override;
     
-    virtual bool
-    StartNoticingNewThreads();    
+    bool
+    StartNoticingNewThreads() override;
 
-    virtual bool
-    StopNoticingNewThreads();    
+    bool
+    StopNoticingNewThreads() override;
 
     GDBRemoteCommunicationClient &
     GetGDBRemote()
@@ -225,14 +224,14 @@ public:
         return m_gdb_comm;
     }
     
-    virtual lldb_private::Error
-    SendEventData(const char *data);
+    lldb_private::Error
+    SendEventData(const char *data) override;
 
     //----------------------------------------------------------------------
     // Override SetExitStatus so we can disconnect from the remote GDB server
     //----------------------------------------------------------------------
-    virtual bool
-    SetExitStatus (int exit_status, const char *cstr);
+    bool
+    SetExitStatus (int exit_status, const char *cstr) override;
 
     void
     SetUserSpecifiedMaxMemoryTransferSize (uint64_t user_specified_max);
@@ -286,9 +285,9 @@ protected:
         return m_flags;
     }
 
-    virtual bool
+    bool
     UpdateThreadList (lldb_private::ThreadList &old_thread_list, 
-                      lldb_private::ThreadList &new_thread_list);
+                      lldb_private::ThreadList &new_thread_list) override;
 
     lldb_private::Error
     LaunchAndConnectToDebugserver (const lldb_private::ProcessInfo &process_info);
@@ -304,9 +303,6 @@ protected:
 
     bool
     ParsePythonTargetDefinition(const lldb_private::FileSpec &target_definition_fspec);
-    
-    bool
-    ParseRegisters(lldb_private::ScriptInterpreterObject *registers_array);
 
     const lldb::DataBufferSP
     GetAuxvData() override;
@@ -326,23 +322,15 @@ protected:
         eBroadcastBitAsyncThreadShouldExit          = (1 << 1),
         eBroadcastBitAsyncThreadDidExit             = (1 << 2)
     };
-
-    typedef enum AsyncThreadState
-    {
-        eAsyncThreadNotStarted,
-        eAsyncThreadRunning,
-        eAsyncThreadDone
-    } AsyncThreadState;
     
     lldb_private::Flags m_flags;            // Process specific flags (see eFlags enums)
     GDBRemoteCommunicationClient m_gdb_comm;
-    lldb::pid_t m_debugserver_pid;
+    std::atomic<lldb::pid_t> m_debugserver_pid;
     StringExtractorGDBRemote m_last_stop_packet;
     lldb_private::Mutex m_last_stop_packet_mutex;
     GDBRemoteDynamicRegisterInfo m_register_info;
     lldb_private::Broadcaster m_async_broadcaster;
-    lldb::thread_t m_async_thread;
-    AsyncThreadState m_async_thread_state;
+    lldb_private::HostThread m_async_thread;
     lldb_private::Mutex m_async_thread_state_mutex;
     typedef std::vector<lldb::tid_t> tid_collection;
     typedef std::vector< std::pair<lldb::tid_t,int> > tid_sig_collection;
@@ -360,8 +348,6 @@ protected:
     bool m_destroy_tried_resuming;
     lldb::CommandObjectSP m_command_sp;
     int64_t m_breakpoint_pc_offset;
-    std::shared_ptr<lldb_private::UnixSignals> m_unix_signals_sp;
-
 
     bool
     StartAsyncThread ();
@@ -399,7 +385,7 @@ protected:
                                    std::string &dispatch_queue_name);
 
     lldb_private::DynamicLoader *
-    GetDynamicLoader ();
+    GetDynamicLoader () override;
 
 private:
     //------------------------------------------------------------------

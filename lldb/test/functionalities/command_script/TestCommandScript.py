@@ -40,6 +40,7 @@ class CmdPythonTestCase(TestBase):
             self.runCmd('command script delete tell_async', check=False)
             self.runCmd('command script delete tell_curr', check=False)
             self.runCmd('command script delete bug11569', check=False)
+            self.runCmd('command script delete takes_exe_ctx', check=False)
 
         # Execute the cleanup function during test case tear down.
         self.addTearDownHook(cleanup)
@@ -59,16 +60,15 @@ class CmdPythonTestCase(TestBase):
                                'A command that says hello to LLDB users'])
 
         self.expect("help",
-                    substrs = ['Run Python function welcome.welcome_impl',
+                    substrs = ['For more information run',
                                'welcome'])
 
         self.expect("help -a",
-                    substrs = ['Run Python function welcome.welcome_impl',
+                    substrs = ['For more information run',
                                'welcome'])
 
         self.expect("help -u", matching=False,
-                    substrs = ['Run Python function welcome.welcome_impl',
-                               'welcome'])
+                    substrs = ['For more information run'])
 
         self.runCmd("command script delete welcome");
 
@@ -83,12 +83,11 @@ class CmdPythonTestCase(TestBase):
 
         self.expect('command script list',
             substrs = ['targetname',
-                       'Run Python function welcome.target_name_impl'])
+                       'For more information run'])
 
         self.expect("help targetname",
-                    substrs = ['Run Python function welcome.target_name_imp',
-                               'This command takes','\'raw\' input',
-                               'quote stuff'])
+                    substrs = ['This', 'command', 'takes', '\'raw\'', 'input',
+                               'quote', 'stuff'])
 
         self.expect("longwait",
                     substrs = ['Done; if you saw the delays I am doing OK'])
@@ -110,14 +109,17 @@ class CmdPythonTestCase(TestBase):
                     substrs = ['running async'])
         self.expect("tell_curr",
                     substrs = ['I am running sync'])
+                    
+# check that the execution context is passed in to commands that ask for it
+        self.expect("takes_exe_ctx", substrs = ["a.out"])
 
         # Test that a python command can redefine itself
-        self.expect('command script add -f foobar welcome')
-
+        self.expect('command script add -f foobar welcome -h "just some help"')
+        
         self.runCmd("command script clear")
 
         # Test that re-defining an existing command works
-        self.runCmd('command script add my_command --function welcome.welcome_impl')
+        self.runCmd('command script add my_command --class welcome.WelcomeCommand')
         self.expect('my_command Blah', substrs = ['Hello Blah, welcome to LLDB'])
 
         self.runCmd('command script add my_command --function welcome.target_name_impl')

@@ -10,8 +10,15 @@
 #include "lldb/Host/FileSystem.h"
 
 // C includes
+#include <sys/mount.h>
+#include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef __linux__
+#include <sys/statfs.h>
+#include <sys/mount.h>
+#include <linux/magic.h>
+#endif
 
 // lldb Includes
 #include "lldb/Core/Error.h"
@@ -173,29 +180,30 @@ FileSystem::Readlink(const char *path, char *buf, size_t buf_len)
     return error;
 }
 
-bool
-FileSystem::CalculateMD5(const FileSpec &file_spec, uint64_t &low, uint64_t &high)
+static bool IsLocal(const struct statfs& info)
 {
-#if defined(__APPLE__)
-    StreamString md5_cmd_line;
-    md5_cmd_line.Printf("md5 -q '%s'", file_spec.GetPath().c_str());
-    std::string hash_string;
-    Error err = Host::RunShellCommand(md5_cmd_line.GetData(), NULL, NULL, NULL, &hash_string, 60);
-    if (err.Fail())
+#ifdef __linux__
+    #define CIFS_MAGIC_NUMBER 0xFF534D42
+    switch (info.f_type)
+    {
+    case NFS_SUPER_MAGIC:
+    case SMB_SUPER_MAGIC:
+    case CIFS_MAGIC_NUMBER:
         return false;
-    // a correctly formed MD5 is 16-bytes, that is 32 hex digits
-    // if the output is any other length it is probably wrong
-    if (hash_string.size() != 32)
-        return false;
-    std::string part1(hash_string, 0, 16);
-    std::string part2(hash_string, 16);
-    const char *part1_cstr = part1.c_str();
-    const char *part2_cstr = part2.c_str();
-    high = ::strtoull(part1_cstr, NULL, 16);
-    low = ::strtoull(part2_cstr, NULL, 16);
-    return true;
+    default:
+        return true;
+    }
 #else
-    // your own MD5 implementation here
-    return false;
+    return (info.f_flags & MNT_LOCAL) != 0;
 #endif
+}
+
+bool
+FileSystem::IsLocal(const FileSpec &spec)
+{
+    struct statfs statfs_info;
+    std::string path (spec.GetPath());
+    if (statfs(path.c_str(), &statfs_info) == 0)
+        return ::IsLocal(statfs_info);
+    return false;
 }

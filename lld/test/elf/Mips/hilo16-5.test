@@ -1,3 +1,6 @@
+# Check that linker shows a warning when
+# there is orphaned R_MIPS_HI16 relocation.
+
 # RUN: yaml2obj -format=elf -o %t-so.o -docnum 1 %s
 # RUN: lld -flavor gnu -target mipsel -shared -o %t.so %t-so.o
 # RUN: yaml2obj -format=elf -o %t-o.o -docnum 2 %s
@@ -18,7 +21,7 @@ FileHeader:
   Data:    ELFDATA2LSB
   Type:    ET_REL
   Machine: EM_MIPS
-  Flags:   [EF_MIPS_PIC, EF_MIPS_CPIC]
+  Flags:   [EF_MIPS_PIC, EF_MIPS_CPIC, EF_MIPS_ABI_O32, EF_MIPS_ARCH_32]
 
 Sections:
   - Name:         .data
@@ -47,7 +50,7 @@ FileHeader:
   Data: ELFDATA2LSB
   Type: ET_REL
   Machine: EM_MIPS
-  Flags: [EF_MIPS_CPIC]
+  Flags: [EF_MIPS_CPIC, EF_MIPS_ABI_O32, EF_MIPS_ARCH_32]
 
 Sections:
 - Name: .text

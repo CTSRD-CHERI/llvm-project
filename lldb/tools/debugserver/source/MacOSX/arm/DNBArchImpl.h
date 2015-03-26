@@ -53,8 +53,8 @@ public:
     static const DNBRegisterSetInfo *
     GetRegisterSetInfo(nub_size_t *num_reg_sets);
 
-    virtual bool            GetRegisterValue(int set, int reg, DNBRegisterValue *value);
-    virtual bool            SetRegisterValue(int set, int reg, const DNBRegisterValue *value);
+    virtual bool            GetRegisterValue(uint32_t set, uint32_t reg, DNBRegisterValue *value);
+    virtual bool            SetRegisterValue(uint32_t set, uint32_t reg, const DNBRegisterValue *value);
     virtual nub_size_t      GetRegisterContext (void *buf, nub_size_t buf_len);
     virtual nub_size_t      SetRegisterContext (const void *buf, nub_size_t buf_len);
     virtual uint32_t        SaveRegisterState ();
@@ -109,17 +109,14 @@ protected:
 #endif
     void                    EvaluateNextInstructionForSoftwareBreakpointSetup(nub_addr_t currentPC, uint32_t cpsr, bool currentPCIsThumb, nub_addr_t *nextPC, bool *nextPCIsThumb);
 
+
     typedef enum RegisterSetTag
     {
         e_regSetALL = REGISTER_SET_ALL,
-        e_regSetGPR = ARM_THREAD_STATE,
-        e_regSetVFP = ARM_VFP_STATE,
-        e_regSetEXC = ARM_EXCEPTION_STATE,
-#if defined (ARM_DEBUG_STATE32) && (defined (__arm64__) || defined (__aarch64__))
-        e_regSetDBG = ARM_DEBUG_STATE32,
-#else
-        e_regSetDBG = ARM_DEBUG_STATE,
-#endif
+        e_regSetGPR, // ARM_THREAD_STATE
+        e_regSetVFP, // ARM_VFP_STATE (ARM_NEON_STATE if defined __arm64__)
+        e_regSetEXC, // ARM_EXCEPTION_STATE
+        e_regSetDBG, // ARM_DEBUG_STATE (ARM_DEBUG_STATE32 if defined __arm64__)
         kNumRegisterSets
     } RegisterSet;
 
@@ -131,7 +128,11 @@ protected:
     };
     
     typedef arm_thread_state_t GPR;
+#if defined (__arm64__) || defined (__aarch64__)
+    typedef arm_neon_state_t FPU;
+#else
     typedef arm_vfp_state_t FPU;
+#endif
     typedef arm_exception_state_t EXC;
 
     static const DNBRegisterInfo g_gpr_registers[];

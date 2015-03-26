@@ -19,7 +19,6 @@
 #include "lldb/Core/StreamString.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Target/Target.h"
-#include "lldb/lldb-private-log.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -93,5 +92,12 @@ void
 BreakpointResolverFileRegex::Dump (Stream *s) const
 {
 
+}
+
+lldb::BreakpointResolverSP
+BreakpointResolverFileRegex::CopyForBreakpoint (Breakpoint &breakpoint)
+{
+    lldb::BreakpointResolverSP ret_sp(new BreakpointResolverFileRegex(&breakpoint, m_regex));
+    return ret_sp;
 }
 

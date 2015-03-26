@@ -14,6 +14,7 @@
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/Regex.h"
 
 using namespace llvm;
@@ -245,7 +246,7 @@ const AArch64NamedImmMapper::Mapping AArch64SysReg::MRSMapper::MRSPairs[] = {
   {"ich_elsr_el2", ICH_ELSR_EL2}
 };
 
-AArch64SysReg::MRSMapper::MRSMapper(uint64_t FeatureBits)
+AArch64SysReg::MRSMapper::MRSMapper(const FeatureBitset &FeatureBits)
   : SysRegMapper(FeatureBits) {
     InstPairs = &MRSPairs[0];
     NumInstPairs = llvm::array_lengthof(MRSPairs);
@@ -269,7 +270,7 @@ const AArch64NamedImmMapper::Mapping AArch64SysReg::MSRMapper::MSRPairs[] = {
   {"icc_sgi0r_el1", ICC_SGI0R_EL1}
 };
 
-AArch64SysReg::MSRMapper::MSRMapper(uint64_t FeatureBits)
+AArch64SysReg::MSRMapper::MSRMapper(const FeatureBitset &FeatureBits)
   : SysRegMapper(FeatureBits) {
     InstPairs = &MSRPairs[0];
     NumInstPairs = llvm::array_lengthof(MSRPairs);
@@ -773,7 +774,7 @@ AArch64SysReg::SysRegMapper::fromString(StringRef Name, bool &Valid) const {
   }
 
   // Next search for target specific registers
-  if (FeatureBits & AArch64::ProcCyclone) {
+  if (FeatureBits[AArch64::ProcCyclone]) {
     for (unsigned i = 0; i < array_lengthof(CycloneSysRegPairs); ++i) {
       if (CycloneSysRegPairs[i].Name == NameLower) {
         Valid = true;
@@ -791,22 +792,22 @@ AArch64SysReg::SysRegMapper::fromString(StringRef Name, bool &Valid) const {
     }
   }
 
-  // Try to parse an S<op0>_<op1>_<Cn>_<Cm>_<op2> register name, where the bits
-  // are: 11 xxx 1x11 xxxx xxx
-  Regex GenericRegPattern("^s3_([0-7])_c(1[15])_c([0-9]|1[0-5])_([0-7])$");
+  // Try to parse an S<op0>_<op1>_<Cn>_<Cm>_<op2> register name
+  Regex GenericRegPattern("^s([0-3])_([0-7])_c([0-9]|1[0-5])_c([0-9]|1[0-5])_([0-7])$");
 
-  SmallVector<StringRef, 4> Ops;
+  SmallVector<StringRef, 5> Ops;
   if (!GenericRegPattern.match(NameLower, &Ops)) {
     Valid = false;
     return -1;
   }
 
-  uint32_t Op0 = 3, Op1 = 0, CRn = 0, CRm = 0, Op2 = 0;
+  uint32_t Op0 = 0, Op1 = 0, CRn = 0, CRm = 0, Op2 = 0;
   uint32_t Bits;
-  Ops[1].getAsInteger(10, Op1);
-  Ops[2].getAsInteger(10, CRn);
-  Ops[3].getAsInteger(10, CRm);
-  Ops[4].getAsInteger(10, Op2);
+  Ops[1].getAsInteger(10, Op0);
+  Ops[2].getAsInteger(10, Op1);
+  Ops[3].getAsInteger(10, CRn);
+  Ops[4].getAsInteger(10, CRm);
+  Ops[5].getAsInteger(10, Op2);
   Bits = (Op0 << 14) | (Op1 << 11) | (CRn << 7) | (CRm << 3) | Op2;
 
   Valid = true;
@@ -814,20 +815,18 @@ AArch64SysReg::SysRegMapper::fromString(StringRef Name, bool &Valid) const {
 }
 
 std::string
-AArch64SysReg::SysRegMapper::toString(uint32_t Bits, bool &Valid) const {
+AArch64SysReg::SysRegMapper::toString(uint32_t Bits) const {
   // First search the registers shared by all
   for (unsigned i = 0; i < array_lengthof(SysRegPairs); ++i) {
     if (SysRegPairs[i].Value == Bits) {
-      Valid = true;
       return SysRegPairs[i].Name;
     }
   }
 
   // Next search for target specific registers
-  if (FeatureBits & AArch64::ProcCyclone) {
+  if (FeatureBits[AArch64::ProcCyclone]) {
     for (unsigned i = 0; i < array_lengthof(CycloneSysRegPairs); ++i) {
       if (CycloneSysRegPairs[i].Value == Bits) {
-        Valid = true;
         return CycloneSysRegPairs[i].Name;
       }
     }
@@ -837,28 +836,18 @@ AArch64SysReg::SysRegMapper::toString(uint32_t Bits, bool &Valid) const {
   // write-only).
   for (unsigned i = 0; i < NumInstPairs; ++i) {
     if (InstPairs[i].Value == Bits) {
-      Valid = true;
       return InstPairs[i].Name;
     }
   }
 
+  assert(Bits < 0x10000);
   uint32_t Op0 = (Bits >> 14) & 0x3;
   uint32_t Op1 = (Bits >> 11) & 0x7;
   uint32_t CRn = (Bits >> 7) & 0xf;
   uint32_t CRm = (Bits >> 3) & 0xf;
   uint32_t Op2 = Bits & 0x7;
 
-  // Only combinations matching: 11 xxx 1x11 xxxx xxx are valid for a generic
-  // name.
-  if (Op0 != 3 || (CRn != 11 && CRn != 15)) {
-      Valid = false;
-      return "";
-  }
-
-  assert(Op0 == 3 && (CRn == 11 || CRn == 15) && "Invalid generic sysreg");
-
-  Valid = true;
-  return "s3_" + utostr(Op1) + "_c" + utostr(CRn)
+  return "s" + utostr(Op0)+ "_" + utostr(Op1) + "_c" + utostr(CRn)
                + "_c" + utostr(CRm) + "_" + utostr(Op2);
 }
 

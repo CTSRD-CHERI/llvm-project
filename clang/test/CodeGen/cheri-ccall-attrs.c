@@ -21,7 +21,7 @@ void foo(int, int);
 
 void bar(int a, int b)
 {
-	// CHECK: load i64* @__cheri_method.cls.foo, !invariant.load !1
+	// CHECK: load i64, i64* @__cheri_method.cls.foo, !invariant.load !1
 	// CHECK: call chericcallcc void @cheri_invoke(i8 addrspace(200)* inreg %3, i8 addrspace(200)* inreg %4, i64 zeroext %2, i32 signext %0, i32 signext %1)
 	foo_cap(other, a, b);
 	// CHECK: call chericcallcc void @cheri_invoke(i8 addrspace(200)* inreg %11, i8 addrspace(200)* inreg %13, i64 zeroext %7, i32 signext %5, i32 signext %6)

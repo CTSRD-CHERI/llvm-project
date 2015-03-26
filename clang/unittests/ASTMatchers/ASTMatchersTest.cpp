@@ -379,6 +379,21 @@ TEST(DeclarationMatcher, hasDeclContext) {
   EXPECT_TRUE(matches("class D{};", decl(hasDeclContext(decl()))));
 }
 
+TEST(DeclarationMatcher, translationUnitDecl) {
+  const std::string Code = "int MyVar1;\n"
+                           "namespace NameSpace {\n"
+                           "int MyVar2;\n"
+                           "}  // namespace NameSpace\n";
+  EXPECT_TRUE(matches(
+      Code, varDecl(hasName("MyVar1"), hasDeclContext(translationUnitDecl()))));
+  EXPECT_FALSE(matches(
+      Code, varDecl(hasName("MyVar2"), hasDeclContext(translationUnitDecl()))));
+  EXPECT_TRUE(matches(
+      Code,
+      varDecl(hasName("MyVar2"),
+              hasDeclContext(decl(hasDeclContext(translationUnitDecl()))))));
+}
+
 TEST(DeclarationMatcher, LinkageSpecification) {
   EXPECT_TRUE(matches("extern \"C\" { void foo() {}; }", linkageSpecDecl()));
   EXPECT_TRUE(notMatches("void foo() {};", linkageSpecDecl()));
@@ -1775,6 +1790,9 @@ TEST(Matcher, MatchesOverridingMethod) {
        methodDecl(isOverride())));
   EXPECT_TRUE(notMatches("class X { int f(); int f(int); }; ",
        methodDecl(isOverride())));
+  EXPECT_TRUE(
+      matches("template <typename Base> struct Y : Base { void f() override;};",
+              methodDecl(isOverride(), hasName("::Y::f"))));
 }
 
 TEST(Matcher, ConstructorCall) {
@@ -2104,8 +2122,16 @@ TEST(Matcher, FloatLiterals) {
   EXPECT_TRUE(matches("double i = 10.0;", HasFloatLiteral));
   EXPECT_TRUE(matches("double i = 10.0L;", HasFloatLiteral));
   EXPECT_TRUE(matches("double i = 1e10;", HasFloatLiteral));
+  EXPECT_TRUE(matches("double i = 5.0;", floatLiteral(equals(5.0))));
+  EXPECT_TRUE(matches("double i = 5.0;", floatLiteral(equals(5.0f))));
+  EXPECT_TRUE(
+      matches("double i = 5.0;", floatLiteral(equals(llvm::APFloat(5.0)))));
 
   EXPECT_TRUE(notMatches("float i = 10;", HasFloatLiteral));
+  EXPECT_TRUE(notMatches("double i = 5.0;", floatLiteral(equals(6.0))));
+  EXPECT_TRUE(notMatches("double i = 5.0;", floatLiteral(equals(6.0f))));
+  EXPECT_TRUE(
+      notMatches("double i = 5.0;", floatLiteral(equals(llvm::APFloat(6.0)))));
 }
 
 TEST(Matcher, NullPtrLiteral) {
@@ -2515,10 +2541,9 @@ TEST(AstMatcherPMacro, Works) {
       HasClassB, new VerifyIdIsBoundTo<Decl>("b")));
 }
 
-AST_POLYMORPHIC_MATCHER_P(
-    polymorphicHas,
-    AST_POLYMORPHIC_SUPPORTED_TYPES_2(Decl, Stmt),
-    internal::Matcher<Decl>, AMatcher) {
+AST_POLYMORPHIC_MATCHER_P(polymorphicHas,
+                          AST_POLYMORPHIC_SUPPORTED_TYPES(Decl, Stmt),
+                          internal::Matcher<Decl>, AMatcher) {
   return Finder->matchesChildOf(
       Node, AMatcher, Builder,
       ASTMatchFinder::TK_IgnoreImplicitCastsAndParentheses,
@@ -3136,6 +3161,12 @@ TEST(InitListExpression, MatchesInitListExpression) {
                       initListExpr(hasType(asString("int [2]")))));
   EXPECT_TRUE(matches("struct B { int x, y; }; B b = { 5, 6 };",
                       initListExpr(hasType(recordDecl(hasName("B"))))));
+  EXPECT_TRUE(matches("struct S { S(void (*a)()); };"
+                      "void f();"
+                      "S s[1] = { &f };",
+                      declRefExpr(to(functionDecl(hasName("f"))))));
+  EXPECT_TRUE(
+      matches("int i[1] = {42, [0] = 43};", integerLiteral(equals(42))));
 }
 
 TEST(UsingDeclaration, MatchesUsingDeclarations) {
@@ -3855,6 +3886,11 @@ TEST(HasParent, NoDuplicateParents) {
 
 TEST(TypeMatching, MatchesTypes) {
   EXPECT_TRUE(matches("struct S {};", qualType().bind("loc")));
+}
+
+TEST(TypeMatching, MatchesVoid) {
+  EXPECT_TRUE(
+      matches("struct S { void func(); };", methodDecl(returns(voidType()))));
 }
 
 TEST(TypeMatching, MatchesArrayTypes) {
@@ -4623,6 +4659,104 @@ TEST(EqualsBoundNodeMatcher, UnlessDescendantsOfAncestorsMatch) {
               callee(methodDecl(anyOf(hasName("size"), hasName("length")))),
               on(declRefExpr(to(varDecl(equalsBoundNode("var")))))))))))
           .bind("data")));
+}
+
+TEST(TypeDefDeclMatcher, Match) {
+  EXPECT_TRUE(matches("typedef int typedefDeclTest;",
+                      typedefDecl(hasName("typedefDeclTest"))));
+}
+
+// FIXME: Figure out how to specify paths so the following tests pass on Windows.
+#ifndef LLVM_ON_WIN32
+
+TEST(Matcher, IsExpansionInMainFileMatcher) {
+  EXPECT_TRUE(matches("class X {};",
+                      recordDecl(hasName("X"), isExpansionInMainFile())));
+  EXPECT_TRUE(notMatches("", recordDecl(isExpansionInMainFile())));
+  FileContentMappings M;
+  M.push_back(std::make_pair("/other", "class X {};"));
+  EXPECT_TRUE(matchesConditionally("#include <other>\n",
+                                   recordDecl(isExpansionInMainFile()), false,
+                                   "-isystem/", M));
+}
+
+TEST(Matcher, IsExpansionInSystemHeader) {
+  FileContentMappings M;
+  M.push_back(std::make_pair("/other", "class X {};"));
+  EXPECT_TRUE(matchesConditionally(
+      "#include \"other\"\n", recordDecl(isExpansionInSystemHeader()), true,
+      "-isystem/", M));
+  EXPECT_TRUE(matchesConditionally("#include \"other\"\n",
+                                   recordDecl(isExpansionInSystemHeader()),
+                                   false, "-I/", M));
+  EXPECT_TRUE(notMatches("class X {};",
+                         recordDecl(isExpansionInSystemHeader())));
+  EXPECT_TRUE(notMatches("", recordDecl(isExpansionInSystemHeader())));
+}
+
+TEST(Matcher, IsExpansionInFileMatching) {
+  FileContentMappings M;
+  M.push_back(std::make_pair("/foo", "class A {};"));
+  M.push_back(std::make_pair("/bar", "class B {};"));
+  EXPECT_TRUE(matchesConditionally(
+      "#include <foo>\n"
+      "#include <bar>\n"
+      "class X {};",
+      recordDecl(isExpansionInFileMatching("b.*"), hasName("B")), true,
+      "-isystem/", M));
+  EXPECT_TRUE(matchesConditionally(
+      "#include <foo>\n"
+      "#include <bar>\n"
+      "class X {};",
+      recordDecl(isExpansionInFileMatching("f.*"), hasName("X")), false,
+      "-isystem/", M));
+}
+
+#endif // LLVM_ON_WIN32
+
+  
+TEST(ObjCMessageExprMatcher, SimpleExprs) {
+  // don't find ObjCMessageExpr where none are present
+  EXPECT_TRUE(notMatchesObjC("", objcMessageExpr(anything())));
+ 
+  std::string Objc1String =
+  "@interface Str "
+  " - (Str *)uppercaseString:(Str *)str;"
+  "@end "
+  "@interface foo "
+  "- (void)meth:(Str *)text;"
+  "@end "
+  " "
+  "@implementation foo "
+  "- (void) meth:(Str *)text { "
+  "  [self contents];"
+  "  Str *up = [text uppercaseString];"
+  "} "
+  "@end ";
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(anything())));
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(hasSelector("contents"))));
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(matchesSelector("cont*"))));
+  EXPECT_FALSE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(matchesSelector("?cont*"))));
+  EXPECT_TRUE(notMatchesObjC(
+      Objc1String,
+      objcMessageExpr(hasSelector("contents"), hasNullSelector())));
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(hasSelector("contents"), hasUnarySelector())));
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(matchesSelector("uppercase*"),
+                      argumentCountIs(0)
+                      )));
+  
 }
 
 } // end namespace ast_matchers

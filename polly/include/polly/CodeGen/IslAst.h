@@ -31,6 +31,7 @@ namespace llvm {
 class raw_ostream;
 }
 
+struct isl_pw_aff;
 struct isl_ast_node;
 struct isl_ast_expr;
 struct isl_ast_build;
@@ -52,7 +53,7 @@ public:
     IslAstUserPayload()
         : IsInnermost(false), IsInnermostParallel(false),
           IsOutermostParallel(false), IsReductionParallel(false),
-          Build(nullptr) {}
+          MinimalDependenceDistance(nullptr), Build(nullptr) {}
 
     /// @brief Cleanup all isl structs on destruction.
     ~IslAstUserPayload();
@@ -68,6 +69,9 @@ public:
 
     /// @brief Flag to mark parallel loops which break reductions.
     bool IsReductionParallel;
+
+    /// @brief The minimal dependence distance for non parallel loops.
+    isl_pw_aff *MinimalDependenceDistance;
 
     /// @brief The build environment at the time this node was constructed.
     isl_ast_build *Build;
@@ -88,7 +92,7 @@ public:
   bool runOnScop(Scop &S);
 
   /// @brief Print a source code representation of the program.
-  void printScop(llvm::raw_ostream &OS) const;
+  void printScop(llvm::raw_ostream &OS, Scop &S) const;
 
   /// @brief Return a copy of the AST root node.
   __isl_give isl_ast_node *getAst() const;
@@ -123,8 +127,15 @@ public:
   /// @brief Is this loop a reduction parallel loop?
   static bool isReductionParallel(__isl_keep isl_ast_node *Node);
 
+  /// @brief Will the loop be run as thread parallel?
+  static bool isExecutedInParallel(__isl_keep isl_ast_node *Node);
+
   /// @brief Get the nodes schedule or a nullptr if not available.
   static __isl_give isl_union_map *getSchedule(__isl_keep isl_ast_node *Node);
+
+  /// @brief Get minimal dependence distance or nullptr if not available.
+  static __isl_give isl_pw_aff *
+  getMinimalDependenceDistance(__isl_keep isl_ast_node *Node);
 
   /// @brief Get the nodes broken reductions or a nullptr if not available.
   static MemoryAccessSet *getBrokenReductions(__isl_keep isl_ast_node *Node);

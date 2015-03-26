@@ -25,10 +25,9 @@ class DynamicLibraryWriter;
 template<class ELFT>
 class DynamicLibraryWriter : public OutputELFWriter<ELFT> {
 public:
-  DynamicLibraryWriter(const ELFLinkingContext &context,
-                       TargetLayout<ELFT> &layout)
+  DynamicLibraryWriter(ELFLinkingContext &context, TargetLayout<ELFT> &layout)
       : OutputELFWriter<ELFT>(context, layout),
-        _runtimeFile(new CRuntimeFile<ELFT>(context)) {}
+        _runtimeFile(new RuntimeFile<ELFT>(context, "C runtime")) {}
 
 protected:
   virtual void buildDynamicSymbolTable(const File &file);
@@ -37,7 +36,7 @@ protected:
   virtual void finalizeDefaultAtomValues();
 
 protected:
-  std::unique_ptr<CRuntimeFile<ELFT> > _runtimeFile;
+  std::unique_ptr<RuntimeFile<ELFT> > _runtimeFile;
 };
 
 //===----------------------------------------------------------------------===//
@@ -52,7 +51,7 @@ void DynamicLibraryWriter<ELFT>::buildDynamicSymbolTable(const File &file) {
     if (auto section = dyn_cast<AtomSection<ELFT>>(sec))
       for (const auto &atom : section->atoms()) {
         const DefinedAtom *da = dyn_cast<const DefinedAtom>(atom->_atom);
-        if (da && (da->scope() != DefinedAtom::scopeTranslationUnit))
+        if (da && (da->scope() == DefinedAtom::scopeGlobal))
           this->_dynamicSymbolTable->addSymbol(atom->_atom, section->ordinal(),
                                                atom->_virtualAddr, atom);
       }

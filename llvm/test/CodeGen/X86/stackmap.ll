@@ -1,4 +1,4 @@
-; RUN: llc < %s -mtriple=x86_64-apple-darwin -mcpu=corei7 -disable-fp-elim | FileCheck %s
+; RUN: llc < %s -mtriple=x86_64-apple-darwin -mcpu=corei7 | FileCheck %s
 ;
 ; Note: Print verbose stackmaps using -debug-only=stackmaps.
 
@@ -321,7 +321,7 @@ bb1:
   unreachable
 
 bb2:
-  %tmp = load i64* inttoptr (i64 140685446136880 to i64*)
+  %tmp = load i64, i64* inttoptr (i64 140685446136880 to i64*)
   br i1 undef, label %bb16, label %bb17
 
 bb16:

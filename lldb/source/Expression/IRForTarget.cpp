@@ -16,8 +16,9 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
-#include "llvm/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/IPO.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/ValueSymbolTable.h"
 
 #include "clang/AST/ASTContext.h"
@@ -58,7 +59,8 @@ IRForTarget::FunctionValueCache::~FunctionValueCache()
 {
 }
 
-llvm::Value *IRForTarget::FunctionValueCache::GetValue(llvm::Function *function)
+llvm::Value *
+IRForTarget::FunctionValueCache::GetValue(llvm::Function *function)
 {
     if (!m_values.count(function))
     {
@@ -69,7 +71,8 @@ llvm::Value *IRForTarget::FunctionValueCache::GetValue(llvm::Function *function)
     return m_values[function];
 }
 
-lldb::addr_t IRForTarget::StaticDataAllocator::Allocate()
+lldb::addr_t
+IRForTarget::StaticDataAllocator::Allocate()
 {
     lldb_private::Error err;
 
@@ -84,7 +87,14 @@ lldb::addr_t IRForTarget::StaticDataAllocator::Allocate()
     return m_allocation;
 }
 
-static llvm::Value *FindEntryInstruction (llvm::Function *function)
+lldb::TargetSP
+IRForTarget::StaticDataAllocator::GetTarget()
+{
+    return m_execution_unit.GetTarget();
+}
+
+static llvm::Value *
+FindEntryInstruction (llvm::Function *function)
 {
     if (function->empty())
         return NULL;
@@ -403,18 +413,17 @@ IRForTarget::DeclForGlobal (const GlobalValue *global_val, Module *module)
          node_index < num_nodes;
          ++node_index)
     {
-        MDNode *metadata_node = named_metadata->getOperand(node_index);
-
+        llvm::MDNode *metadata_node = dyn_cast<llvm::MDNode>(named_metadata->getOperand(node_index));
         if (!metadata_node)
             return NULL;
 
         if (metadata_node->getNumOperands() != 2)
             continue;
 
-        if (metadata_node->getOperand(0) != global_val)
+        if (mdconst::dyn_extract_or_null<GlobalValue>(metadata_node->getOperand(0)) != global_val)
             continue;
 
-        ConstantInt *constant_int = dyn_cast<ConstantInt>(metadata_node->getOperand(1));
+        ConstantInt *constant_int = mdconst::dyn_extract<ConstantInt>(metadata_node->getOperand(1));
 
         if (!constant_int)
             return NULL;
@@ -590,7 +599,10 @@ IRForTarget::CreateResultVariable (llvm::Function &llvm_function)
                                                      &result_decl->getASTContext());
     }
 
-    if (m_result_type.GetBitSize() == 0)
+
+    lldb::TargetSP target_sp (m_data_allocator.GetTarget());
+    lldb_private::ExecutionContext exe_ctx (target_sp, true);
+    if (m_result_type.GetBitSize(exe_ctx.GetBestExecutionContextScope()) == 0)
     {
         lldb_private::StreamString type_desc_stream;
         m_result_type.DumpTypeDescription(&type_desc_stream);
@@ -617,7 +629,7 @@ IRForTarget::CreateResultVariable (llvm::Function &llvm_function)
     if (log)
         log->Printf("Creating a new result global: \"%s\" with size 0x%" PRIx64,
                     m_result_name.GetCString(),
-                    m_result_type.GetByteSize());
+                    m_result_type.GetByteSize(nullptr));
 
     // Construct a new result global and set up its metadata
 
@@ -639,11 +651,11 @@ IRForTarget::CreateResultVariable (llvm::Function &llvm_function)
                                                      reinterpret_cast<uint64_t>(result_decl),
                                                      false);
 
-    llvm::Value* values[2];
-    values[0] = new_result_global;
-    values[1] = new_constant_int;
+    llvm::Metadata *values[2];
+    values[0] = ConstantAsMetadata::get(new_result_global);
+    values[1] = ConstantAsMetadata::get(new_constant_int);
 
-    ArrayRef<Value*> value_ref(values, 2);
+    ArrayRef<Metadata *> value_ref(values, 2);
 
     MDNode *persistent_global_md = MDNode::get(m_module->getContext(), value_ref);
     NamedMDNode *named_metadata = m_module->getNamedMetadata("clang.global.decl.ptrs");
@@ -1037,7 +1049,7 @@ static bool IsObjCSelectorRef (Value *value)
 {
     GlobalVariable *global_variable = dyn_cast<GlobalVariable>(value);
 
-    if (!global_variable || !global_variable->hasName() || !global_variable->getName().startswith("\01L_OBJC_SELECTOR_REFERENCES_"))
+    if (!global_variable || !global_variable->hasName() || !global_variable->getName().startswith("OBJC_SELECTOR_REFERENCES_"))
         return false;
 
     return true;
@@ -1056,12 +1068,12 @@ IRForTarget::RewriteObjCSelector (Instruction* selector_load)
 
     // Unpack the message name from the selector.  In LLVM IR, an objc_msgSend gets represented as
     //
-    // %tmp     = load i8** @"\01L_OBJC_SELECTOR_REFERENCES_" ; <i8*>
+    // %tmp     = load i8** @"OBJC_SELECTOR_REFERENCES_" ; <i8*>
     // %call    = call i8* (i8*, i8*, ...)* @objc_msgSend(i8* %obj, i8* %tmp, ...) ; <i8*>
     //
     // where %obj is the object pointer and %tmp is the selector.
     //
-    // @"\01L_OBJC_SELECTOR_REFERENCES_" is a pointer to a character array called @"\01L_OBJC_llvm_moduleETH_VAR_NAllvm_moduleE_".
+    // @"OBJC_SELECTOR_REFERENCES_" is a pointer to a character array called @"\01L_OBJC_llvm_moduleETH_VAR_NAllvm_moduleE_".
     // @"\01L_OBJC_llvm_moduleETH_VAR_NAllvm_moduleE_" contains the string.
 
     // Find the pointer's initializer (a ConstantExpr with opcode GetElementPtr) and get the string from its target
@@ -1215,7 +1227,7 @@ IRForTarget::RewritePersistentAlloc (llvm::Instruction *persistent_alloc)
     if (!alloc_md || !alloc_md->getNumOperands())
         return false;
 
-    ConstantInt *constant_int = dyn_cast<ConstantInt>(alloc_md->getOperand(0));
+    ConstantInt *constant_int = mdconst::dyn_extract<ConstantInt>(alloc_md->getOperand(0));
 
     if (!constant_int)
         return false;
@@ -1246,11 +1258,11 @@ IRForTarget::RewritePersistentAlloc (llvm::Instruction *persistent_alloc)
 
     NamedMDNode *named_metadata = m_module->getOrInsertNamedMetadata("clang.global.decl.ptrs");
 
-    llvm::Value* values[2];
-    values[0] = persistent_global;
-    values[1] = constant_int;
+    llvm::Metadata *values[2];
+    values[0] = ConstantAsMetadata::get(persistent_global);
+    values[1] = ConstantAsMetadata::get(constant_int);
 
-    ArrayRef<llvm::Value*> value_ref(values, 2);
+    ArrayRef<llvm::Metadata *> value_ref(values, 2);
 
     MDNode *persistent_global_md = MDNode::get(m_module->getContext(), value_ref);
     named_metadata->addOperand(persistent_global_md);
@@ -1518,7 +1530,7 @@ IRForTarget::MaybeHandleVariable (Value *llvm_value_ptr)
             value_type = global_variable->getType();
         }
 
-        const uint64_t value_size = clang_type.GetByteSize();
+        const uint64_t value_size = clang_type.GetByteSize(nullptr);
         lldb::offset_t value_alignment = (clang_type.GetTypeBitAlign() + 7ull) / 8ull;
 
         if (log)
@@ -2043,8 +2055,12 @@ static bool isGuardVariableRef(Value *V)
 
     GlobalVariable *GV = dyn_cast<GlobalVariable>(Old);
 
-    if (!GV || !GV->hasName() || !GV->getName().startswith("_ZGV"))
+    if (!GV || !GV->hasName() ||
+        (!GV->getName().startswith("_ZGV") && // Itanium ABI guard variable
+         !GV->getName().endswith("@4IA")))    // Microsoft ABI guard variable
+    {
         return false;
+    }
 
     return true;
 }
@@ -2052,20 +2068,8 @@ static bool isGuardVariableRef(Value *V)
 void
 IRForTarget::TurnGuardLoadIntoZero(llvm::Instruction* guard_load)
 {
-    Constant* zero(ConstantInt::get(Type::getInt8Ty(m_module->getContext()), 0, true));
-
-    for (llvm::User *u : guard_load->users())
-    {
-        if (isa<Constant>(u))
-        {
-            // do nothing for the moment
-        }
-        else
-        {
-            u->replaceUsesOfWith(guard_load, zero);
-        }
-    }
-
+    Constant *zero(Constant::getNullValue(guard_load->getType()));
+    guard_load->replaceAllUsesWith(zero);
     guard_load->eraseFromParent();
 }
 
@@ -2202,7 +2206,7 @@ IRForTarget::UnfoldConstant(Constant *old_constant,
 
                             ArrayRef <Value*> indices(index_vector);
 
-                            return GetElementPtrInst::Create(ptr, indices, "", llvm::cast<Instruction>(entry_instruction_finder.GetValue(function)));
+                            return GetElementPtrInst::Create(nullptr, ptr, indices, "", llvm::cast<Instruction>(entry_instruction_finder.GetValue(function)));
                         });
 
                         if (!UnfoldConstant(constant_expr, get_element_pointer_maker, entry_instruction_finder))
@@ -2389,7 +2393,8 @@ IRForTarget::ReplaceVariables (Function &llvm_function)
                 llvm::Instruction *entry_instruction = llvm::cast<Instruction>(m_entry_instruction_finder.GetValue(function));
 
                 ConstantInt *offset_int(ConstantInt::get(offset_type, offset, true));
-                GetElementPtrInst *get_element_ptr = GetElementPtrInst::Create(argument,
+                GetElementPtrInst *get_element_ptr = GetElementPtrInst::Create(nullptr,
+                                                                               argument,
                                                                                offset_int,
                                                                                "",
                                                                                entry_instruction);

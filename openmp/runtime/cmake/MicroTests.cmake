@@ -1,3 +1,14 @@
+#
+#//===----------------------------------------------------------------------===//
+#//
+#//                     The LLVM Compiler Infrastructure
+#//
+#// This file is dual licensed under the MIT and the University of Illinois Open
+#// Source Licenses. See LICENSE.txt for details.
+#//
+#//===----------------------------------------------------------------------===//
+#
+
 ######################################################
 # MICRO TESTS
 # The following micro-tests are small tests to perform on 
@@ -146,7 +157,7 @@ endif()
 
 # test-relo 
 add_custom_target(test-relo DEPENDS test-relo/.success)
-if((${LINUX} OR ${MIC}) AND ${test_relo} AND ${tests})
+if(${LINUX} AND ${test_relo} AND ${tests})
     file(MAKE_DIRECTORY ${build_dir}/test-relo)
     add_custom_command(
         OUTPUT  test-relo/.success
@@ -173,7 +184,7 @@ if(${LINUX} AND ${test_execstack} AND ${tests})
     file(MAKE_DIRECTORY ${build_dir}/test-execstack)
     add_custom_command(
         OUTPUT  test-execstack/.success
-        COMMAND ${PERL_EXECUTABLE} ${tools_dir}/check-execstack.pl ${build_dir}/${lib_file}
+        COMMAND ${PERL_EXECUTABLE} ${tools_dir}/check-execstack.pl ${oa_opts} ${build_dir}/${lib_file}
         COMMAND ${CMAKE_COMMAND} -E touch test-execstack/.success
         DEPENDS ${build_dir}/${lib_file}
     )
@@ -195,7 +206,7 @@ if(${MIC} AND ${test_instr} AND ${tests})
     file(MAKE_DIRECTORY ${build_dir}/test-instr)
     add_custom_command(
         OUTPUT  test-instr/.success
-        COMMAND ${PERL_EXECUTABLE} ${tools_dir}/check-instruction-set.pl ${oa_opts} --show --mic-arch=${mic_arch} --mic-os=${mic_os} ${build_dir}/${lib_file}
+        COMMAND ${PERL_EXECUTABLE} ${tools_dir}/check-instruction-set.pl ${oa_opts} --show --mic-arch=${mic_arch} ${build_dir}/${lib_file}
         COMMAND ${CMAKE_COMMAND} -E touch test-instr/.success
         DEPENDS ${build_dir}/${lib_file} ${tools_dir}/check-instruction-set.pl
     )
@@ -217,26 +228,12 @@ if(${test_deps} AND ${tests})
     set(td_exp)
     if(${FREEBSD})
         set(td_exp libc.so.7 libthr.so.3 libunwind.so.5)
+    elseif(${MAC})
+        set(td_exp /usr/lib/libSystem.B.dylib)
+    elseif(${WINDOWS})
+        set(td_exp kernel32.dll)
     elseif(${LINUX})
-        set(td_exp libdl.so.2,libgcc_s.so.1)
-        if(NOT ${IA32} AND NOT ${INTEL64})
-            set(td_exp ${td_exp},libffi.so.6,libffi.so.5)
-        endif()
-        if(${IA32})
-            set(td_exp ${td_exp},libc.so.6,ld-linux.so.2)  
-        elseif(${INTEL64})
-            set(td_exp ${td_exp},libc.so.6,ld-linux-x86-64.so.2)  
-        elseif(${ARM})
-            set(td_exp ${td_exp},libc.so.6,ld-linux-armhf.so.3)  
-        endif()
-        if(${STD_CPP_LIB})
-            set(td_exp ${td_exp},libstdc++.so.6)
-        endif()
-        if(NOT ${STUBS_LIBRARY})
-            set(td_exp ${td_exp},libpthread.so.0)
-        endif()
-    elseif(${MIC})
-        if("${mic_os}" STREQUAL "lin")
+        if(${MIC})
             set(td_exp libc.so.6,libpthread.so.0,libdl.so.2)
             if(${STD_CPP_LIB})
                 set(td_exp ${td_exp},libstdc++.so.6)
@@ -246,13 +243,24 @@ if(${test_deps} AND ${tests})
             elseif("${mic_arch}" STREQUAL "knc")
                 set(td_exp ${td_exp},ld-linux-k1om.so.2)
             endif()
-        elseif("${mic_os}" STREQUAL "bsd")
-            set(td_exp libc.so.7,libthr.so.3,libunwind.so.5)
+        else()
+        set(td_exp libdl.so.2,libgcc_s.so.1)
+        if(${IA32})
+            set(td_exp ${td_exp},libc.so.6,ld-linux.so.2)  
+        elseif(${INTEL64})
+            set(td_exp ${td_exp},libc.so.6,ld-linux-x86-64.so.2)  
+        elseif(${ARM})
+            set(td_exp ${td_exp},libffi.so.6,libffi.so.5,libc.so.6,ld-linux-armhf.so.3)  
+        elseif(${PPC64})
+            set(td_exp ${td_exp},libc.so.6,ld64.so.1)  
         endif()
-    elseif(${MAC})
-        set(td_exp /usr/lib/libSystem.B.dylib)
-    elseif(${WINDOWS})
-        set(td_exp kernel32.dll)
+        if(${STD_CPP_LIB})
+            set(td_exp ${td_exp},libstdc++.so.6)
+        endif()
+        if(NOT ${STUBS_LIBRARY})
+            set(td_exp ${td_exp},libpthread.so.0)
+        endif()
+            endif()
     endif()
 
     file(MAKE_DIRECTORY ${build_dir}/test-deps)

@@ -18,8 +18,7 @@ namespace elf {
 
 class HexagonTargetHandler;
 
-class HexagonTargetRelocationHandler final :
-    public TargetRelocationHandler<HexagonELFType> {
+class HexagonTargetRelocationHandler final : public TargetRelocationHandler {
 public:
   HexagonTargetRelocationHandler(HexagonTargetLayout<HexagonELFType> &layout)
       : _hexagonTargetLayout(layout) {}

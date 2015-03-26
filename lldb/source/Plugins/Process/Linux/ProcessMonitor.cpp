@@ -15,13 +15,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <sys/personality.h>
-#include <sys/ptrace.h>
-#include <sys/socket.h>
-#include <sys/syscall.h>
-#include <sys/types.h>
-#include <sys/user.h>
-#include <sys/wait.h>
+#include <elf.h>
 
 // C++ Includes
 // Other libraries and framework includes
@@ -30,14 +24,36 @@
 #include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Scalar.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostNativeThread.h"
+#include "lldb/Host/HostThread.h"
+#include "lldb/Host/ThreadLauncher.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/RegisterContext.h"
+#include "lldb/Target/UnixSignals.h"
 #include "lldb/Utility/PseudoTerminal.h"
 
-#include "POSIXThread.h"
+#include "Plugins/Process/POSIX/CrashReason.h"
+#include "Plugins/Process/POSIX/POSIXThread.h"
 #include "ProcessLinux.h"
-#include "ProcessPOSIXLog.h"
+#include "Plugins/Process/POSIX/ProcessPOSIXLog.h"
 #include "ProcessMonitor.h"
+#include "Procfs.h"
+
+// System includes - They have to be included after framework includes because they define some
+// macros which collide with variable names in other modules
+#include <sys/personality.h>
+#include <sys/ptrace.h>
+#include <sys/socket.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/user.h>
+#include <sys/wait.h>
+
+#ifdef __ANDROID__
+#define __ptrace_request int
+#define PT_DETACH PTRACE_DETACH
+#endif
 
 #define DEBUG_PTRACE_MAXBYTES 20
 
@@ -63,6 +79,8 @@
 
 #define LLDB_PERSONALITY_GET_CURRENT_SETTINGS  0xffffffff
 
+#define LLDB_PTRACE_NT_ARM_TLS  0x401           // ARM TLS register
+
 // Support hardware breakpoints in case it has not been defined
 #ifndef TRAP_HWBKPT
   #define TRAP_HWBKPT 4
@@ -70,9 +88,12 @@
 
 // Try to define a macro to encapsulate the tgkill syscall
 // fall back on kill() if tgkill isn't available
-#define tgkill(pid, tid, sig)  syscall(SYS_tgkill, pid, tid, sig)
+#define tgkill(pid, tid, sig) \
+    syscall(SYS_tgkill, static_cast<::pid_t>(pid), static_cast<::pid_t>(tid), sig)
 
 using namespace lldb_private;
+
+static Operation* EXIT_OPERATION = nullptr;
 
 // FIXME: this code is host-dependent with respect to types and
 // endianness and needs to be fixed.  For example, lldb::addr_t is
@@ -124,15 +145,13 @@ static void PtraceDisplayBytes(int &req, void *data, size_t data_size)
                 verbose_log->Printf("PTRACE_POKEUSER %s", buf.GetData());
                 break;
             }
-#ifdef PT_SETREGS
+#if !defined (__arm64__) && !defined (__aarch64__)
         case PTRACE_SETREGS:
             {
                 DisplayBytes(buf, data, data_size);
                 verbose_log->Printf("PTRACE_SETREGS %s", buf.GetData());
                 break;
             }
-#endif
-#ifdef PT_SETFPREGS
         case PTRACE_SETFPREGS:
             {
                 DisplayBytes(buf, data, data_size);
@@ -493,6 +512,48 @@ private:
 void
 ReadRegOperation::Execute(ProcessMonitor *monitor)
 {
+#if defined (__arm64__) || defined (__aarch64__)
+    if (m_offset > sizeof(struct user_pt_regs))
+    {
+        uintptr_t offset = m_offset - sizeof(struct user_pt_regs);
+        if (offset > sizeof(struct user_fpsimd_state))
+        {
+            m_result = false;
+        }
+        else
+        {
+            elf_fpregset_t regs;
+            int regset = NT_FPREGSET;
+            struct iovec ioVec;
+
+            ioVec.iov_base = &regs;
+            ioVec.iov_len = sizeof regs;
+            if (PTRACE(PTRACE_GETREGSET, m_tid, &regset, &ioVec, sizeof regs) < 0)
+                m_result = false;
+            else
+            {
+                m_result = true;
+                m_value.SetBytes((void *)(((unsigned char *)(&regs)) + offset), 16, monitor->GetProcess().GetByteOrder());
+            }
+        }
+    }
+    else
+    {
+        elf_gregset_t regs;
+        int regset = NT_PRSTATUS;
+        struct iovec ioVec;
+
+        ioVec.iov_base = &regs;
+        ioVec.iov_len = sizeof regs;
+        if (PTRACE(PTRACE_GETREGSET, m_tid, &regset, &ioVec, sizeof regs) < 0)
+            m_result = false;
+        else
+        {
+            m_result = true;
+            m_value.SetBytes((void *)(((unsigned char *)(regs)) + m_offset), 8, monitor->GetProcess().GetByteOrder());
+        }
+    }
+#else
     Log *log (ProcessPOSIXLog::GetLogIfAllCategoriesSet (POSIX_LOG_REGISTERS));
 
     // Set errno to zero so that we can detect a failed peek.
@@ -508,6 +569,7 @@ ReadRegOperation::Execute(ProcessMonitor *monitor)
     if (log)
         log->Printf ("ProcessMonitor::%s() reg %s: 0x%" PRIx64, __FUNCTION__,
                      m_reg_name, data);
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -535,6 +597,54 @@ private:
 void
 WriteRegOperation::Execute(ProcessMonitor *monitor)
 {
+#if defined (__arm64__) || defined (__aarch64__)
+    if (m_offset > sizeof(struct user_pt_regs))
+    {
+        uintptr_t offset = m_offset - sizeof(struct user_pt_regs);
+        if (offset > sizeof(struct user_fpsimd_state))
+        {
+            m_result = false;
+        }
+        else
+        {
+            elf_fpregset_t regs;
+            int regset = NT_FPREGSET;
+            struct iovec ioVec;
+
+            ioVec.iov_base = &regs;
+            ioVec.iov_len = sizeof regs;
+            if (PTRACE(PTRACE_GETREGSET, m_tid, &regset, &ioVec, sizeof regs) < 0)
+                m_result = false;
+            else
+            {
+                ::memcpy((void *)(((unsigned char *)(&regs)) + offset), m_value.GetBytes(), 16);
+                if (PTRACE(PTRACE_SETREGSET, m_tid, &regset, &ioVec, sizeof regs) < 0)
+                    m_result = false;
+                else
+                    m_result = true;
+            }
+        }
+    }
+    else
+    {
+        elf_gregset_t regs;
+        int regset = NT_PRSTATUS;
+        struct iovec ioVec;
+
+        ioVec.iov_base = &regs;
+        ioVec.iov_len = sizeof regs;
+        if (PTRACE(PTRACE_GETREGSET, m_tid, &regset, &ioVec, sizeof regs) < 0)
+            m_result = false;
+        else
+        {
+            ::memcpy((void *)(((unsigned char *)(&regs)) + m_offset), m_value.GetBytes(), 8);
+            if (PTRACE(PTRACE_SETREGSET, m_tid, &regset, &ioVec, sizeof regs) < 0)
+                m_result = false;
+            else
+                m_result = true;
+        }
+    }
+#else
     void* buf;
     Log *log (ProcessPOSIXLog::GetLogIfAllCategoriesSet (POSIX_LOG_REGISTERS));
 
@@ -546,6 +656,7 @@ WriteRegOperation::Execute(ProcessMonitor *monitor)
         m_result = false;
     else
         m_result = true;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -570,13 +681,21 @@ private:
 void
 ReadGPROperation::Execute(ProcessMonitor *monitor)
 {
-#ifdef PT_GETREGS
-    if (PTRACE(PTRACE_GETREGS, m_tid, NULL, m_buf, m_buf_size) < 0)
+#if defined (__arm64__) || defined (__aarch64__)
+    int regset = NT_PRSTATUS;
+    struct iovec ioVec;
+
+    ioVec.iov_base = m_buf;
+    ioVec.iov_len = m_buf_size;
+    if (PTRACE(PTRACE_GETREGSET, m_tid, &regset, &ioVec, m_buf_size) < 0)
         m_result = false;
     else
         m_result = true;
 #else
-    m_result = false;
+    if (PTRACE(PTRACE_GETREGS, m_tid, NULL, m_buf, m_buf_size) < 0)
+        m_result = false;
+    else
+        m_result = true;
 #endif
 }
 
@@ -602,13 +721,21 @@ private:
 void
 ReadFPROperation::Execute(ProcessMonitor *monitor)
 {
-#ifdef PT_GETFPREGS
-    if (PTRACE(PTRACE_GETFPREGS, m_tid, NULL, m_buf, m_buf_size) < 0)
+#if defined (__arm64__) || defined (__aarch64__)
+    int regset = NT_FPREGSET;
+    struct iovec ioVec;
+
+    ioVec.iov_base = m_buf;
+    ioVec.iov_len = m_buf_size;
+    if (PTRACE(PTRACE_GETREGSET, m_tid, &regset, &ioVec, m_buf_size) < 0)
         m_result = false;
     else
         m_result = true;
 #else
-    m_result = false;
+    if (PTRACE(PTRACE_GETFPREGS, m_tid, NULL, m_buf, m_buf_size) < 0)
+        m_result = false;
+    else
+        m_result = true;
 #endif
 }
 
@@ -663,13 +790,21 @@ private:
 void
 WriteGPROperation::Execute(ProcessMonitor *monitor)
 {
-#ifdef PT_SETREGS
-    if (PTRACE(PTRACE_SETREGS, m_tid, NULL, m_buf, m_buf_size) < 0)
+#if defined (__arm64__) || defined (__aarch64__)
+    int regset = NT_PRSTATUS;
+    struct iovec ioVec;
+
+    ioVec.iov_base = m_buf;
+    ioVec.iov_len = m_buf_size;
+    if (PTRACE(PTRACE_SETREGSET, m_tid, &regset, &ioVec, m_buf_size) < 0)
         m_result = false;
     else
         m_result = true;
 #else
-    m_result = false;
+    if (PTRACE(PTRACE_SETREGS, m_tid, NULL, m_buf, m_buf_size) < 0)
+        m_result = false;
+    else
+        m_result = true;
 #endif
 }
 
@@ -695,13 +830,21 @@ private:
 void
 WriteFPROperation::Execute(ProcessMonitor *monitor)
 {
-#ifdef PT_SETFPREGS
-    if (PTRACE(PTRACE_SETFPREGS, m_tid, NULL, m_buf, m_buf_size) < 0)
+#if defined (__arm64__) || defined (__aarch64__)
+    int regset = NT_FPREGSET;
+    struct iovec ioVec;
+
+    ioVec.iov_base = m_buf;
+    ioVec.iov_len = m_buf_size;
+    if (PTRACE(PTRACE_SETREGSET, m_tid, &regset, &ioVec, m_buf_size) < 0)
         m_result = false;
     else
         m_result = true;
 #else
-    m_result = false;
+    if (PTRACE(PTRACE_SETFPREGS, m_tid, NULL, m_buf, m_buf_size) < 0)
+        m_result = false;
+    else
+        m_result = true;
 #endif
 }
 
@@ -766,6 +909,19 @@ ReadThreadPointerOperation::Execute(ProcessMonitor *monitor)
     const ArchSpec& arch = monitor->GetProcess().GetTarget().GetArchitecture();
     switch(arch.GetMachine())
     {
+    case llvm::Triple::aarch64:
+    {
+         int regset = LLDB_PTRACE_NT_ARM_TLS;
+         struct iovec ioVec;
+
+         ioVec.iov_base = m_addr;
+         ioVec.iov_len = sizeof(lldb::addr_t);
+         if (PTRACE(PTRACE_GETREGSET, m_tid, &regset, &ioVec, ioVec.iov_len) < 0)
+           m_result = false;
+         else
+           m_result = true;
+         break;
+    }
 #if defined(__i386__) || defined(__x86_64__)
     // Note that struct user below has a field named i387 which is x86-specific.
     // Therefore, this case should be compiled only for x86-based systems.
@@ -1057,7 +1213,7 @@ WAIT_AGAIN:
     // Finally, start monitoring the child process for change in state.
     m_monitor_thread = Host::StartMonitoringChildProcess(
         ProcessMonitor::MonitorCallback, this, GetPID(), true);
-    if (!IS_VALID_LLDB_HOST_THREAD(m_monitor_thread))
+    if (!m_monitor_thread.IsJoinable())
     {
         error.SetErrorToGenericError();
         error.SetErrorString("Process launch failed.");
@@ -1108,7 +1264,7 @@ WAIT_AGAIN:
     // Finally, start monitoring the child process for change in state.
     m_monitor_thread = Host::StartMonitoringChildProcess(
         ProcessMonitor::MonitorCallback, this, GetPID(), true);
-    if (!IS_VALID_LLDB_HOST_THREAD(m_monitor_thread))
+    if (!m_monitor_thread.IsJoinable())
     {
         error.SetErrorToGenericError();
         error.SetErrorString("Process attach failed.");
@@ -1128,11 +1284,10 @@ ProcessMonitor::StartLaunchOpThread(LaunchArgs *args, Error &error)
 {
     static const char *g_thread_name = "lldb.process.linux.operation";
 
-    if (IS_VALID_LLDB_HOST_THREAD(m_operation_thread))
+    if (m_operation_thread.IsJoinable())
         return;
 
-    m_operation_thread =
-        Host::ThreadCreate(g_thread_name, LaunchOpThread, args, &error);
+    m_operation_thread = ThreadLauncher::LaunchThread(g_thread_name, LaunchOpThread, args, &error);
 }
 
 void *
@@ -1202,6 +1357,11 @@ ProcessMonitor::Launch(LaunchArgs *args)
         if (PTRACE(PTRACE_TRACEME, 0, NULL, NULL, 0) < 0)
             exit(ePtraceFailed);
 
+        // terminal has already dupped the tty descriptors to stdin/out/err.
+        // This closes original fd from which they were copied (and avoids
+        // leaking descriptors to the debugged process.
+        terminal.CloseSlaveFileDescriptor();
+
         // Do not inherit setgid powers.
         if (setgid(getgid()) != 0)
             exit(eSetGidFailed);
@@ -1251,7 +1411,7 @@ ProcessMonitor::Launch(LaunchArgs *args)
                 else
                 {
                     if (log)
-                        log->Printf ("ProcessMonitor::%s disbling ASLR: SUCCESS", __FUNCTION__);
+                        log->Printf ("ProcessMonitor::%s disabling ASLR: SUCCESS", __FUNCTION__);
 
                 }
             }
@@ -1352,11 +1512,10 @@ ProcessMonitor::StartAttachOpThread(AttachArgs *args, lldb_private::Error &error
 {
     static const char *g_thread_name = "lldb.process.linux.operation";
 
-    if (IS_VALID_LLDB_HOST_THREAD(m_operation_thread))
+    if (m_operation_thread.IsJoinable())
         return;
 
-    m_operation_thread =
-        Host::ThreadCreate(g_thread_name, AttachOpThread, args, &error);
+    m_operation_thread = ThreadLauncher::LaunchThread(g_thread_name, AttachOpThread, args, &error);
 }
 
 void *
@@ -1684,27 +1843,14 @@ ProcessMonitor::MonitorSignal(ProcessMonitor *monitor,
     if (log)
         log->Printf ("ProcessMonitor::%s() received signal %s", __FUNCTION__, monitor->m_process->GetUnixSignals().GetSignalAsCString (signo));
 
-    if (signo == SIGSEGV) {
+    switch (signo)
+    {
+    case SIGSEGV:
+    case SIGILL:
+    case SIGFPE:
+    case SIGBUS:
         lldb::addr_t fault_addr = reinterpret_cast<lldb::addr_t>(info->si_addr);
-        ProcessMessage::CrashReason reason = GetCrashReasonForSIGSEGV(info);
-        return ProcessMessage::Crash(pid, reason, signo, fault_addr);
-    }
-
-    if (signo == SIGILL) {
-        lldb::addr_t fault_addr = reinterpret_cast<lldb::addr_t>(info->si_addr);
-        ProcessMessage::CrashReason reason = GetCrashReasonForSIGILL(info);
-        return ProcessMessage::Crash(pid, reason, signo, fault_addr);
-    }
-
-    if (signo == SIGFPE) {
-        lldb::addr_t fault_addr = reinterpret_cast<lldb::addr_t>(info->si_addr);
-        ProcessMessage::CrashReason reason = GetCrashReasonForSIGFPE(info);
-        return ProcessMessage::Crash(pid, reason, signo, fault_addr);
-    }
-
-    if (signo == SIGBUS) {
-        lldb::addr_t fault_addr = reinterpret_cast<lldb::addr_t>(info->si_addr);
-        ProcessMessage::CrashReason reason = GetCrashReasonForSIGBUS(info);
+        const auto reason = GetCrashReason(*info);
         return ProcessMessage::Crash(pid, reason, signo, fault_addr);
     }
 
@@ -1962,147 +2108,6 @@ ProcessMonitor::StopThread(lldb::tid_t tid)
     return false;
 }
 
-ProcessMessage::CrashReason
-ProcessMonitor::GetCrashReasonForSIGSEGV(const siginfo_t *info)
-{
-    ProcessMessage::CrashReason reason;
-    assert(info->si_signo == SIGSEGV);
-
-    reason = ProcessMessage::eInvalidCrashReason;
-
-    switch (info->si_code)
-    {
-    default:
-        assert(false && "unexpected si_code for SIGSEGV");
-        break;
-    case SI_KERNEL:
-        // Linux will occasionally send spurious SI_KERNEL codes.
-        // (this is poorly documented in sigaction)
-        // One way to get this is via unaligned SIMD loads.
-        reason = ProcessMessage::eInvalidAddress; // for lack of anything better
-        break;
-    case SEGV_MAPERR:
-        reason = ProcessMessage::eInvalidAddress;
-        break;
-    case SEGV_ACCERR:
-        reason = ProcessMessage::ePrivilegedAddress;
-        break;
-    }
-
-    return reason;
-}
-
-ProcessMessage::CrashReason
-ProcessMonitor::GetCrashReasonForSIGILL(const siginfo_t *info)
-{
-    ProcessMessage::CrashReason reason;
-    assert(info->si_signo == SIGILL);
-
-    reason = ProcessMessage::eInvalidCrashReason;
-
-    switch (info->si_code)
-    {
-    default:
-        assert(false && "unexpected si_code for SIGILL");
-        break;
-    case ILL_ILLOPC:
-        reason = ProcessMessage::eIllegalOpcode;
-        break;
-    case ILL_ILLOPN:
-        reason = ProcessMessage::eIllegalOperand;
-        break;
-    case ILL_ILLADR:
-        reason = ProcessMessage::eIllegalAddressingMode;
-        break;
-    case ILL_ILLTRP:
-        reason = ProcessMessage::eIllegalTrap;
-        break;
-    case ILL_PRVOPC:
-        reason = ProcessMessage::ePrivilegedOpcode;
-        break;
-    case ILL_PRVREG:
-        reason = ProcessMessage::ePrivilegedRegister;
-        break;
-    case ILL_COPROC:
-        reason = ProcessMessage::eCoprocessorError;
-        break;
-    case ILL_BADSTK:
-        reason = ProcessMessage::eInternalStackError;
-        break;
-    }
-
-    return reason;
-}
-
-ProcessMessage::CrashReason
-ProcessMonitor::GetCrashReasonForSIGFPE(const siginfo_t *info)
-{
-    ProcessMessage::CrashReason reason;
-    assert(info->si_signo == SIGFPE);
-
-    reason = ProcessMessage::eInvalidCrashReason;
-
-    switch (info->si_code)
-    {
-    default:
-        assert(false && "unexpected si_code for SIGFPE");
-        break;
-    case FPE_INTDIV:
-        reason = ProcessMessage::eIntegerDivideByZero;
-        break;
-    case FPE_INTOVF:
-        reason = ProcessMessage::eIntegerOverflow;
-        break;
-    case FPE_FLTDIV:
-        reason = ProcessMessage::eFloatDivideByZero;
-        break;
-    case FPE_FLTOVF:
-        reason = ProcessMessage::eFloatOverflow;
-        break;
-    case FPE_FLTUND:
-        reason = ProcessMessage::eFloatUnderflow;
-        break;
-    case FPE_FLTRES:
-        reason = ProcessMessage::eFloatInexactResult;
-        break;
-    case FPE_FLTINV:
-        reason = ProcessMessage::eFloatInvalidOperation;
-        break;
-    case FPE_FLTSUB:
-        reason = ProcessMessage::eFloatSubscriptRange;
-        break;
-    }
-
-    return reason;
-}
-
-ProcessMessage::CrashReason
-ProcessMonitor::GetCrashReasonForSIGBUS(const siginfo_t *info)
-{
-    ProcessMessage::CrashReason reason;
-    assert(info->si_signo == SIGBUS);
-
-    reason = ProcessMessage::eInvalidCrashReason;
-
-    switch (info->si_code)
-    {
-    default:
-        assert(false && "unexpected si_code for SIGBUS");
-        break;
-    case BUS_ADRALN:
-        reason = ProcessMessage::eIllegalAlignment;
-        break;
-    case BUS_ADRERR:
-        reason = ProcessMessage::eIllegalAddress;
-        break;
-    case BUS_OBJERR:
-        reason = ProcessMessage::eHardwareError;
-        break;
-    }
-
-    return reason;
-}
-
 void
 ProcessMonitor::ServeOperation(OperationArgs *args)
 {
@@ -2320,19 +2325,19 @@ ProcessMonitor::DupDescriptor(const char *path, int fd, int flags)
     if (target_fd == -1)
         return false;
 
-    return (dup2(target_fd, fd) == -1) ? false : true;
+    if (dup2(target_fd, fd) == -1)
+        return false;
+
+    return (close(target_fd) == -1) ? false : true;
 }
 
 void
 ProcessMonitor::StopMonitoringChildProcess()
 {
-    lldb::thread_result_t thread_result;
-
-    if (IS_VALID_LLDB_HOST_THREAD(m_monitor_thread))
+    if (m_monitor_thread.IsJoinable())
     {
-        Host::ThreadCancel(m_monitor_thread, NULL);
-        Host::ThreadJoin(m_monitor_thread, &thread_result, NULL);
-        m_monitor_thread = LLDB_INVALID_HOST_THREAD;
+        ::pthread_kill(m_monitor_thread.GetNativeThread().GetSystemHandle(), SIGUSR1);
+        m_monitor_thread.Join(nullptr);
     }
 }
 
@@ -2343,22 +2348,18 @@ ProcessMonitor::StopMonitor()
     StopOpThread();
     sem_destroy(&m_operation_pending);
     sem_destroy(&m_operation_done);
-
-    // Note: ProcessPOSIX passes the m_terminal_fd file descriptor to
-    // Process::SetSTDIOFileDescriptor, which in turn transfers ownership of
-    // the descriptor to a ConnectionFileDescriptor object.  Consequently
-    // even though still has the file descriptor, we shouldn't close it here.
+    if (m_terminal_fd >= 0) {
+        close(m_terminal_fd);
+        m_terminal_fd = -1;
+    }
 }
 
 void
 ProcessMonitor::StopOpThread()
 {
-    lldb::thread_result_t result;
-
-    if (!IS_VALID_LLDB_HOST_THREAD(m_operation_thread))
+    if (!m_operation_thread.IsJoinable())
         return;
 
-    Host::ThreadCancel(m_operation_thread, NULL);
-    Host::ThreadJoin(m_operation_thread, &result, NULL);
-    m_operation_thread = LLDB_INVALID_HOST_THREAD;
+    DoOperation(EXIT_OPERATION);
+    m_operation_thread.Join(nullptr);
 }

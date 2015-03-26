@@ -34,7 +34,7 @@
 # "No rule to build .\kmp_i18n.inc". Using "./" solves the problem.
 cpp-flags += -I ./
 # For non-x86 architecture
-ifeq "$(filter 32 32e 64,$(arch))" ""
+ifeq "$(filter 32 32e 64 mic,$(arch))" ""
     cpp-flags += $(shell pkg-config --cflags libffi)
 endif
 # Add all VPATH directories to path for searching include files.
@@ -48,11 +48,16 @@ ifeq "$(OPTIMIZATION)" "on"
     cpp-flags += -D NDEBUG
 else
     cpp-flags += -D _DEBUG -D BUILD_DEBUG
+    ifeq "$(os)" "win"
+        # This is forced since VS2010 tool produces inconsistent directives
+        # between objects, resulting in a link failure.
+        cpp-flags += -D _ITERATOR_DEBUG_LEVEL=0
+    endif
 endif
 
 # --- Linux* OS, Intel(R) Many Integrated Core Architecture and OS X* definitions ---
 
-ifneq "$(filter lin lrb mac,$(os))" ""
+ifneq "$(filter lin mac,$(os))" ""
     # --- C/C++ ---
     ifeq "$(c)" ""
         c = icc
@@ -80,11 +85,9 @@ ifneq "$(filter lin lrb mac,$(os))" ""
     ifneq "$(CPLUSPLUS)" "on"
         c-flags += -std=gnu99
     endif
-    # Generate position-independent code (a must for shared objects).
-    ifeq "$(LINK_TYPE)" "dyna"
-        c-flags   += -fPIC
-        cxx-flags += -fPIC
-    endif
+    # Generate position-independent code (SDL requirements).
+    c-flags   += -fPIC
+    cxx-flags += -fPIC
     # Emit debugging information.
     ifeq "$(DEBUG_INFO)" "on"
         c-flags   += -g
@@ -155,8 +158,9 @@ endif
 # --- Linux* OS definitions ---
 
 ifeq "$(os)" "lin"
+ifneq "$(arch)" "mic"
     # --- C/C++ ---
-    # On lin_32, we want to maintain stack alignment to be conpatible with GNU binaries built with
+    # On lin_32, we want to maintain stack alignment to be compatible with GNU binaries built with
     # compiler.
     ifeq "$(c)" "icc"
         ifeq "$(arch)" "32"
@@ -193,29 +197,42 @@ ifeq "$(os)" "lin"
             ld-flags += -m elf_x86_64
         endif
         ld-flags     += -x -lc -ldl
+	# SDL (Security Development Lifecycle) flags:
+	# -z noexecstack - Stack execution protection.
+	# -z relro -z now - Data relocation and protection.
+        ld-flags     += -z relro -z now
         ld-flags     += -z noexecstack
         ld-flags-dll += -soname=$(@F)
     endif
     ifeq "$(ld)" "$(c)"
         ld-out    = $(c-out)
+	# SDL (Security Development Lifecycle) flags:
+	# -z noexecstack - Stack execution protection.
+	# -z relro -z now - Data relocation and protection.
+        ld-flags     += -Wl,-z,relro -Wl,-z,now
         ld-flags += -Wl,-z,noexecstack
         ld-flags-dll += -Wl,-soname=$(@F)
     endif
     ifeq "$(ld)" "$(cxx)"
         ld-out    = $(cxx-out)
+	# SDL (Security Development Lifecycle) flags:
+	# -z noexecstack - Stack execution protection.
+	# -z relro -z now - Data relocation and protection.
+        ld-flags     += -Wl,-z,relro -Wl,-z,now
         ld-flags += -Wl,-z,noexecstack
         ld-flags-dll += -Wl,-soname=$(@F)
     endif
 endif
+endif
 
 # --- Intel(R) Many Integrated Core Architecture definitions ---
 
-ifeq "$(os)" "lrb"
+ifeq "$(arch)" "mic"
     # --- C/C++ ---
     # Intel(R) Many Integrated Core Architecture specific options, need clarification for purpose:
     #c-flags     += -mmic -mP2OPT_intrin_disable_name=memcpy -mP2OPT_intrin_disable_name=memset -mGLOB_freestanding -mGLOB_nonstandard_lib -nostdlib -fno-builtin
     #cxx-flags   += -mmic -mP2OPT_intrin_disable_name=memcpy -mP2OPT_intrin_disable_name=memset -mGLOB_freestanding -mGLOB_nonstandard_lib -nostdlib -fno-builtin
-    # icc for lrb has a bug: it generates dependencies for target like file.obj, while real object
+    # icc for mic has a bug: it generates dependencies for target like file.obj, while real object
     # files are named file.o. -MT is a workaround for the problem.
     c-flags-m   += -MT $(basename $@).o
     cxx-flags-m += -MT $(basename $@).o
@@ -232,6 +249,11 @@ ifeq "$(os)" "lrb"
         ld-out   = -o$(space)
         ld-flags += -m elf_l1om_fbsd
         ld-flags-dll += -shared -x -lc
+	# SDL (Security Development Lifecycle) flags:
+	# -z noexecstack - Stack execution protection.
+	# -z relro -z now - Data relocation and protection.
+        ld-flags     += -z noexecstack
+        ld-flags     += -z relro -z now
         ld-flags-dll += -soname=$(@F)
         # Now find out path to libraries.
             ld-flags-L := $(shell $(c) -Wl,-v -\# 2>&1 | grep -e "-L")
@@ -247,10 +269,20 @@ ifeq "$(os)" "lrb"
     ifeq "$(ld)" "$(c)"
         ld-out        = $(c-out)
         ld-flags-dll += -shared -Wl,-x -Wl,-soname=$(@F)
+	# SDL (Security Development Lifecycle) flags:
+	# -z noexecstack - Stack execution protection.
+	# -z relro -z now - Data relocation and protection.
+        ld-flags     += -Wl,-z,noexecstack
+        ld-flags     += -Wl,-z,relro -Wl,-z,now
     endif
     ifeq "$(ld)" "$(cxx)"
         ld-out        = $(cxx-out)
         ld-flags-dll += -shared -Wl,-x -Wl,-soname=$(@F)
+	# SDL (Security Development Lifecycle) flags:
+	# -z noexecstack - Stack execution protection.
+	# -z relro -z now - Data relocation and protection.
+        ld-flags     += -Wl,-z,noexecstack
+        ld-flags     += -Wl,-z,relro -Wl,-z,now
     endif
 endif
 
@@ -372,6 +404,11 @@ ifeq "$(os)" "win"
         c-flags   += -RTC1
         cxx-flags += -RTC1
     endif
+    # SDL (Security Development Lifecycle) flags:
+    #   GS - Stack-based Buffer Overrun Detection
+    #   DynamicBase - Image Randomization
+    c-flags   += -GS -DynamicBase  
+    cxx-flags += -GS -DynamicBase  
     # --- Assembler ---
     ifeq "$(arch)" "32"
         as   = ml
@@ -385,12 +422,19 @@ ifeq "$(os)" "win"
     ifneq "$(filter ml ml64,$(as))" ""
         as-out   = -Fo
         as-flags += -nologo -c
+        # SDL (Security Development Lifecycle) flags:
+        #   DynamicBase - Image Randomization
+	as-flags += -DynamicBase 
     endif
     # --- Fortran ---
     fort        = ifort
     fort-out    = -o$(space)
     fort-flags += -nologo
     fort-flags += -c
+    # SDL (Security Development Lifecycle) flags:
+    #   GS - Stack-based Buffer Overrun Detection
+    #   DynamicBase - Image Randomization
+    fort-flags += -GS -DynamicBase 
     # --- Librarian ---
     ar     = link.exe
     ar-out = -out:
@@ -433,6 +477,9 @@ ifeq "$(os)" "win"
         as-flags += -safeseh
         ld-flags += -safeseh
     endif
+    # SDL (Security Development Lifecycle) flags:
+    #   NXCompat - Data Execution Prevention
+    ld-flags += -NXCompat -DynamicBase
 endif
 
 # end of file #

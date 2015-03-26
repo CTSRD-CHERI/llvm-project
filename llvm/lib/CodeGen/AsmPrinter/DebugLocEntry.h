@@ -9,47 +9,54 @@
 
 #ifndef LLVM_LIB_CODEGEN_ASMPRINTER_DEBUGLOCENTRY_H
 #define LLVM_LIB_CODEGEN_ASMPRINTER_DEBUGLOCENTRY_H
+#include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfo.h"
-#include "llvm/MC/MachineLocation.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MachineLocation.h"
 
 namespace llvm {
+class AsmPrinter;
 class MDNode;
 /// \brief This struct describes location entries emitted in the .debug_loc
 /// section.
 class DebugLocEntry {
-  // Begin and end symbols for the address range that this location is valid.
+  /// Begin and end symbols for the address range that this location is valid.
   const MCSymbol *Begin;
   const MCSymbol *End;
 
 public:
-  /// A single location or constant.
+  /// \brief A single location or constant.
   struct Value {
-    Value(const MDNode *Var, int64_t i)
-      : Variable(Var), EntryKind(E_Integer) {
+    Value(const MDNode *Var, const MDNode *Expr, int64_t i)
+        : Variable(Var), Expression(Expr), EntryKind(E_Integer) {
       Constant.Int = i;
     }
-    Value(const MDNode *Var, const ConstantFP *CFP)
-      : Variable(Var), EntryKind(E_ConstantFP) {
+    Value(const MDNode *Var, const MDNode *Expr, const ConstantFP *CFP)
+        : Variable(Var), Expression(Expr), EntryKind(E_ConstantFP) {
       Constant.CFP = CFP;
     }
-    Value(const MDNode *Var, const ConstantInt *CIP)
-      : Variable(Var), EntryKind(E_ConstantInt) {
+    Value(const MDNode *Var, const MDNode *Expr, const ConstantInt *CIP)
+        : Variable(Var), Expression(Expr), EntryKind(E_ConstantInt) {
       Constant.CIP = CIP;
     }
-    Value(const MDNode *Var, MachineLocation Loc)
-      : Variable(Var), EntryKind(E_Location), Loc(Loc) {
+    Value(const MDNode *Var, const MDNode *Expr, MachineLocation Loc)
+        : Variable(Var), Expression(Expr), EntryKind(E_Location), Loc(Loc) {
+      assert(DIVariable(Var).Verify());
+      assert(DIExpression(Expr)->isValid());
     }
 
-    // The variable to which this location entry corresponds.
+    /// The variable to which this location entry corresponds.
     const MDNode *Variable;
 
-    // Type of entry that this represents.
+    /// Any complex address location expression for this Value.
+    const MDNode *Expression;
+
+    /// Type of entry that this represents.
     enum EntryType { E_Location, E_Integer, E_ConstantFP, E_ConstantInt };
     enum EntryType EntryKind;
 
-    // Either a constant,
+    /// Either a constant,
     union {
       int64_t Int;
       const ConstantFP *CFP;
@@ -69,7 +76,8 @@ public:
     MachineLocation getLoc() const { return Loc; }
     const MDNode *getVariableNode() const { return Variable; }
     DIVariable getVariable() const { return DIVariable(Variable); }
-    bool isVariablePiece() const { return getVariable().isVariablePiece(); }
+    bool isBitPiece() const { return getExpression().isBitPiece(); }
+    DIExpression getExpression() const { return DIExpression(Expression); }
     friend bool operator==(const Value &, const Value &);
     friend bool operator<(const Value &, const Value &);
   };
@@ -78,6 +86,8 @@ private:
   /// A nonempty list of locations/constants belonging to this entry,
   /// sorted by offset.
   SmallVector<Value, 1> Values;
+  SmallString<8> DWARFBytes;
+  SmallVector<std::string, 1> Comments;
 
 public:
   DebugLocEntry(const MCSymbol *B, const MCSymbol *E, Value Val)
@@ -86,15 +96,17 @@ public:
   }
 
   /// \brief If this and Next are describing different pieces of the same
-  // variable, merge them by appending Next's values to the current
-  // list of values.
-  // Return true if the merge was successful.
+  /// variable, merge them by appending Next's values to the current
+  /// list of values.
+  /// Return true if the merge was successful.
   bool MergeValues(const DebugLocEntry &Next) {
-    if (Begin == Next.Begin && Values.size() > 0 && Next.Values.size() > 0) {
+    if (Begin == Next.Begin) {
+      DIExpression Expr(Values[0].Expression);
       DIVariable Var(Values[0].Variable);
+      DIExpression NextExpr(Next.Values[0].Expression);
       DIVariable NextVar(Next.Values[0].Variable);
-      if (Var.getName() == NextVar.getName() &&
-          Var.isVariablePiece() && NextVar.isVariablePiece()) {
+      if (Var == NextVar && Expr.isBitPiece() &&
+          NextExpr.isBitPiece()) {
         addValues(Next.Values);
         End = Next.End;
         return true;
@@ -118,33 +130,47 @@ public:
 
   const MCSymbol *getBeginSym() const { return Begin; }
   const MCSymbol *getEndSym() const { return End; }
-  const ArrayRef<Value> getValues() const { return Values; }
+  ArrayRef<Value> getValues() const { return Values; }
   void addValues(ArrayRef<DebugLocEntry::Value> Vals) {
     Values.append(Vals.begin(), Vals.end());
     sortUniqueValues();
     assert(std::all_of(Values.begin(), Values.end(), [](DebugLocEntry::Value V){
-          return V.isVariablePiece();
+          return V.isBitPiece();
         }) && "value must be a piece");
   }
 
-  // Sort the pieces by offset.
+  // \brief Sort the pieces by offset.
   // Remove any duplicate entries by dropping all but the first.
   void sortUniqueValues() {
     std::sort(Values.begin(), Values.end());
     Values.erase(std::unique(Values.begin(), Values.end(),
                              [](const Value &A, const Value &B) {
-                               return A.getVariable() == B.getVariable();
-                               }), Values.end());
+                   return A.getVariable() == B.getVariable() &&
+                          A.getExpression() == B.getExpression();
+                 }),
+                 Values.end());
   }
+
+  /// \brief Lower this entry into a DWARF expression.
+  void finalize(const AsmPrinter &AP,
+                const DITypeIdentifierMap &TypeIdentifierMap);
+
+  /// \brief Return the lowered DWARF expression.
+  StringRef getDWARFBytes() const { return DWARFBytes; }
+  /// \brief Return the assembler comments for the lowered DWARF expression.
+  const SmallVectorImpl<std::string> &getComments() const { return Comments; }
 };
 
-/// Compare two Values for equality.
+/// \brief Compare two Values for equality.
 inline bool operator==(const DebugLocEntry::Value &A,
                        const DebugLocEntry::Value &B) {
   if (A.EntryKind != B.EntryKind)
     return false;
 
-  if (A.getVariable() != B.getVariable())
+  if (A.Expression != B.Expression)
+    return false;
+
+  if (A.Variable != B.Variable)
     return false;
 
   switch (A.EntryKind) {
@@ -160,10 +186,11 @@ inline bool operator==(const DebugLocEntry::Value &A,
   llvm_unreachable("unhandled EntryKind");
 }
 
-/// Compare two pieces based on their offset.
+/// \brief Compare two pieces based on their offset.
 inline bool operator<(const DebugLocEntry::Value &A,
                       const DebugLocEntry::Value &B) {
-  return A.getVariable().getPieceOffset() < B.getVariable().getPieceOffset();
+  return A.getExpression().getBitPieceOffset() <
+         B.getExpression().getBitPieceOffset();
 }
 
 }

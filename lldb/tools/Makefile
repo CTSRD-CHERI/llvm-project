@@ -14,18 +14,14 @@ DIRS :=
 
 # enable lldb-gdbserver for supported platforms
 ifneq (,$(strip $(filter $(HOST_OS), FreeBSD Linux GNU/kFreeBSD)))
-DIRS += lldb-gdbserver
-endif
-
-ifneq ($(HOST_OS),MingW)
-DIRS += lldb-platform
+DIRS += lldb-server
 endif
 
 ifeq ($(HOST_OS),Darwin)
 DIRS += debugserver
 endif
 
-ifeq ($(HOST_OS),Linux)
+ifeq ($(ENABLE_WERROR),0)
 DIRS += lldb-mi
 endif
 

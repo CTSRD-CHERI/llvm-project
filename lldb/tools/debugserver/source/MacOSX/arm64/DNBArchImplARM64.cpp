@@ -1376,8 +1376,8 @@ DNBArchMachARM64::g_gpr_registers[] =
     DEFINE_GPR_IDX ( 3,  x3, "arg4", GENERIC_REGNUM_ARG4  ),
     DEFINE_GPR_IDX ( 4,  x4, "arg5", GENERIC_REGNUM_ARG5  ),
     DEFINE_GPR_IDX ( 5,  x5, "arg6", GENERIC_REGNUM_ARG6  ),
-    DEFINE_GPR_IDX ( 6,  x6,   NULL, INVALID_NUB_REGNUM   ),
-    DEFINE_GPR_IDX ( 7,  x7,   NULL, INVALID_NUB_REGNUM   ),
+    DEFINE_GPR_IDX ( 6,  x6, "arg7", GENERIC_REGNUM_ARG7  ),
+    DEFINE_GPR_IDX ( 7,  x7, "arg8", GENERIC_REGNUM_ARG8  ),
     DEFINE_GPR_IDX ( 8,  x8,   NULL, INVALID_NUB_REGNUM   ),
     DEFINE_GPR_IDX ( 9,  x9,   NULL, INVALID_NUB_REGNUM   ),
     DEFINE_GPR_IDX (10, x10,   NULL, INVALID_NUB_REGNUM   ),
@@ -1674,7 +1674,7 @@ DNBArchMachARM64::GetRegisterSetInfo(nub_size_t *num_reg_sets)
 }
 
 bool
-DNBArchMachARM64::FixGenericRegisterNumber (int &set, int &reg)
+DNBArchMachARM64::FixGenericRegisterNumber (uint32_t &set, uint32_t &reg)
 {
     if (set == REGISTER_SET_GENERIC)
     {
@@ -1722,7 +1722,7 @@ DNBArchMachARM64::FixGenericRegisterNumber (int &set, int &reg)
     return true;
 }
 bool
-DNBArchMachARM64::GetRegisterValue(int set, int reg, DNBRegisterValue *value)
+DNBArchMachARM64::GetRegisterValue(uint32_t set, uint32_t reg, DNBRegisterValue *value)
 {
     if (!FixGenericRegisterNumber (set, reg))
         return false;
@@ -1821,7 +1821,7 @@ DNBArchMachARM64::GetRegisterValue(int set, int reg, DNBRegisterValue *value)
 }
 
 bool
-DNBArchMachARM64::SetRegisterValue(int set, int reg, const DNBRegisterValue *value)
+DNBArchMachARM64::SetRegisterValue(uint32_t set, uint32_t reg, const DNBRegisterValue *value)
 {
     if (!FixGenericRegisterNumber (set, reg))
         return false;

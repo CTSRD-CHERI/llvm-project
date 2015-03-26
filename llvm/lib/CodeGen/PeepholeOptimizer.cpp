@@ -76,6 +76,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
@@ -94,7 +95,7 @@ DisablePeephole("disable-peephole", cl::Hidden, cl::init(false),
                 cl::desc("Disable the peephole optimizer"));
 
 static cl::opt<bool>
-DisableAdvCopyOpt("disable-adv-copy-opt", cl::Hidden, cl::init(true),
+DisableAdvCopyOpt("disable-adv-copy-opt", cl::Hidden, cl::init(false),
                   cl::desc("Disable advanced copy optimization"));
 
 STATISTIC(NumReuse,      "Number of extension results reused");
@@ -107,8 +108,8 @@ STATISTIC(NumRewrittenCopies, "Number of copies rewritten");
 
 namespace {
   class PeepholeOptimizer : public MachineFunctionPass {
-    const TargetMachine   *TM;
     const TargetInstrInfo *TII;
+    const TargetRegisterInfo *TRI;
     MachineRegisterInfo   *MRI;
     MachineDominatorTree  *DT;  // Machine dominator tree
 
@@ -133,7 +134,9 @@ namespace {
     bool optimizeCmpInstr(MachineInstr *MI, MachineBasicBlock *MBB);
     bool optimizeExtInstr(MachineInstr *MI, MachineBasicBlock *MBB,
                           SmallPtrSetImpl<MachineInstr*> &LocalMIs);
-    bool optimizeSelect(MachineInstr *MI);
+    bool optimizeSelect(MachineInstr *MI,
+                        SmallPtrSetImpl<MachineInstr *> &LocalMIs);
+    bool optimizeCondBranch(MachineInstr *MI);
     bool optimizeCopyOrBitcast(MachineInstr *MI);
     bool optimizeCoalescableCopy(MachineInstr *MI);
     bool optimizeUncoalescableCopy(MachineInstr *MI,
@@ -327,8 +330,7 @@ optimizeExtInstr(MachineInstr *MI, MachineBasicBlock *MBB,
   // Ensure DstReg can get a register class that actually supports
   // sub-registers. Don't change the class until we commit.
   const TargetRegisterClass *DstRC = MRI->getRegClass(DstReg);
-  DstRC = TM->getSubtargetImpl()->getRegisterInfo()->getSubClassWithSubReg(
-      DstRC, SubIdx);
+  DstRC = TRI->getSubClassWithSubReg(DstRC, SubIdx);
   if (!DstRC)
     return false;
 
@@ -338,8 +340,7 @@ optimizeExtInstr(MachineInstr *MI, MachineBasicBlock *MBB,
   // If UseSrcSubIdx is Set, SubIdx also applies to SrcReg, and only uses of
   // SrcReg:SubIdx should be replaced.
   bool UseSrcSubIdx =
-      TM->getSubtargetImpl()->getRegisterInfo()->getSubClassWithSubReg(
-          MRI->getRegClass(SrcReg), SubIdx) != nullptr;
+      TRI->getSubClassWithSubReg(MRI->getRegClass(SrcReg), SubIdx) != nullptr;
 
   // The source has other uses. See if we can replace the other uses with use of
   // the result of the extension.
@@ -411,8 +412,7 @@ optimizeExtInstr(MachineInstr *MI, MachineBasicBlock *MBB,
 
   if (ExtendLife && !ExtendedUses.empty())
     // Extend the liveness of the extension result.
-    std::copy(ExtendedUses.begin(), ExtendedUses.end(),
-              std::back_inserter(Uses));
+    Uses.append(ExtendedUses.begin(), ExtendedUses.end());
 
   // Now replace all uses.
   bool Changed = false;
@@ -483,7 +483,8 @@ bool PeepholeOptimizer::optimizeCmpInstr(MachineInstr *MI,
 }
 
 /// Optimize a select instruction.
-bool PeepholeOptimizer::optimizeSelect(MachineInstr *MI) {
+bool PeepholeOptimizer::optimizeSelect(MachineInstr *MI,
+                            SmallPtrSetImpl<MachineInstr *> &LocalMIs) {
   unsigned TrueOp = 0;
   unsigned FalseOp = 0;
   bool Optimizable = false;
@@ -492,11 +493,17 @@ bool PeepholeOptimizer::optimizeSelect(MachineInstr *MI) {
     return false;
   if (!Optimizable)
     return false;
-  if (!TII->optimizeSelect(MI))
+  if (!TII->optimizeSelect(MI, LocalMIs))
     return false;
   MI->eraseFromParent();
   ++NumSelects;
   return true;
+}
+
+/// \brief Check if a simpler conditional branch can be
+// generated
+bool PeepholeOptimizer::optimizeCondBranch(MachineInstr *MI) {
+  return TII->optimizeCondBranch(MI);
 }
 
 /// \brief Check if the registers defined by the pair (RegisterClass, SubReg)
@@ -548,7 +555,6 @@ bool PeepholeOptimizer::findNextSource(unsigned &Reg, unsigned &SubReg) {
   unsigned Src;
   unsigned SrcSubReg;
   bool ShouldRewrite = false;
-  const TargetRegisterInfo &TRI = *TM->getSubtargetImpl()->getRegisterInfo();
 
   // Follow the chain of copies until we reach the top of the use-def chain
   // or find a more suitable source.
@@ -571,7 +577,7 @@ bool PeepholeOptimizer::findNextSource(unsigned &Reg, unsigned &SubReg) {
     const TargetRegisterClass *SrcRC = MRI->getRegClass(Src);
 
     // If this source does not incur a cross register bank copy, use it.
-    ShouldRewrite = shareSameRegisterFile(TRI, DefRC, DefSubReg, SrcRC,
+    ShouldRewrite = shareSameRegisterFile(*TRI, DefRC, DefSubReg, SrcRC,
                                           SrcSubReg);
   } while (!ShouldRewrite);
 
@@ -899,14 +905,18 @@ bool PeepholeOptimizer::optimizeCoalescableCopy(MachineInstr *MI) {
     if (!findNextSource(NewSrc, NewSubReg) || SrcReg == NewSrc)
       continue;
     // Rewrite source.
-    Changed |= CpyRewriter->RewriteCurrentSource(NewSrc, NewSubReg);
+    if (CpyRewriter->RewriteCurrentSource(NewSrc, NewSubReg)) {
+      // We may have extended the live-range of NewSrc, account for that.
+      MRI->clearKillFlags(NewSrc);
+      Changed = true;
+    }
   }
   // TODO: We could have a clean-up method to tidy the instruction.
   // E.g., v0 = INSERT_SUBREG v1, v1.sub0, sub0
   // => v0 = COPY v1
   // Currently we haven't seen motivating example for that and we
   // want to avoid untested code.
-  NumRewrittenCopies += Changed == true;
+  NumRewrittenCopies += Changed;
   return Changed;
 }
 
@@ -1053,8 +1063,8 @@ bool PeepholeOptimizer::runOnMachineFunction(MachineFunction &MF) {
   if (DisablePeephole)
     return false;
 
-  TM  = &MF.getTarget();
-  TII = TM->getSubtargetImpl()->getInstrInfo();
+  TII = MF.getSubtarget().getInstrInfo();
+  TRI = MF.getSubtarget().getRegisterInfo();
   MRI = &MF.getRegInfo();
   DT  = Aggressive ? &getAnalysis<MachineDominatorTree>() : nullptr;
 
@@ -1064,6 +1074,13 @@ bool PeepholeOptimizer::runOnMachineFunction(MachineFunction &MF) {
     MachineBasicBlock *MBB = &*I;
 
     bool SeenMoveImm = false;
+
+    // During this forward scan, at some point it needs to answer the question
+    // "given a pointer to an MI in the current BB, is it located before or
+    // after the current instruction".
+    // To perform this, the following set keeps track of the MIs already seen
+    // during the scan, if a MI is not in the set, it is assumed to be located
+    // after. Newly created MIs have to be inserted in the set as well.
     SmallPtrSet<MachineInstr*, 16> LocalMIs;
     SmallSet<unsigned, 4> ImmDefRegs;
     DenseMap<unsigned, MachineInstr*> ImmDefMIs;
@@ -1094,9 +1111,14 @@ bool PeepholeOptimizer::runOnMachineFunction(MachineFunction &MF) {
       if ((isUncoalescableCopy(*MI) &&
            optimizeUncoalescableCopy(MI, LocalMIs)) ||
           (MI->isCompare() && optimizeCmpInstr(MI, MBB)) ||
-          (MI->isSelect() && optimizeSelect(MI))) {
+          (MI->isSelect() && optimizeSelect(MI, LocalMIs))) {
         // MI is deleted.
         LocalMIs.erase(MI);
+        Changed = true;
+        continue;
+      }
+
+      if (MI->isConditionalBranch() && optimizeCondBranch(MI)) {
         Changed = true;
         continue;
       }

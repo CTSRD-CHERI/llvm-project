@@ -22,6 +22,7 @@
 #include "lldb/lldb-private.h"
 #include "lldb/Core/ConstString.h"
 #include "lldb/Core/Flags.h"
+#include "lldb/Core/Logging.h"
 #include "lldb/Core/PluginInterface.h"
 
 //----------------------------------------------------------------------
@@ -46,6 +47,7 @@
 #define LLDB_LOG_OPTION_PREPEND_PROC_AND_THREAD (1u << 5)
 #define LLDB_LOG_OPTION_PREPEND_THREAD_NAME     (1U << 6)
 #define LLDB_LOG_OPTION_BACKTRACE               (1U << 7)
+#define LLDB_LOG_OPTION_APPEND                  (1U << 8)
 
 //----------------------------------------------------------------------
 // Logging Functions

@@ -11,6 +11,8 @@
 #define LLVM_MC_MCASSEMBLER_H
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/ilist.h"
@@ -45,8 +47,8 @@ class MCAsmBackend;
 class MCFragment : public ilist_node<MCFragment> {
   friend class MCAsmLayout;
 
-  MCFragment(const MCFragment&) LLVM_DELETED_FUNCTION;
-  void operator=(const MCFragment&) LLVM_DELETED_FUNCTION;
+  MCFragment(const MCFragment&) = delete;
+  void operator=(const MCFragment&) = delete;
 
 public:
   enum FragmentType {
@@ -86,7 +88,7 @@ private:
   /// @}
 
 protected:
-  MCFragment(FragmentType _Kind, MCSectionData *_Parent = nullptr);
+  MCFragment(FragmentType Kind, MCSectionData *Parent = nullptr);
 
 public:
   // Only for sentinel.
@@ -305,11 +307,9 @@ class MCRelaxableFragment : public MCEncodedFragmentWithFixups {
   SmallVector<MCFixup, 1> Fixups;
 
 public:
-  MCRelaxableFragment(const MCInst &_Inst,
-                      const MCSubtargetInfo &_STI,
+  MCRelaxableFragment(const MCInst &Inst, const MCSubtargetInfo &STI,
                       MCSectionData *SD = nullptr)
-    : MCEncodedFragmentWithFixups(FT_Relaxable, SD), Inst(_Inst), STI(_STI) {
-  }
+      : MCEncodedFragmentWithFixups(FT_Relaxable, SD), Inst(Inst), STI(STI) {}
 
   SmallVectorImpl<char> &getContents() override { return Contents; }
   const SmallVectorImpl<char> &getContents() const override { return Contents; }
@@ -362,11 +362,10 @@ class MCAlignFragment : public MCFragment {
   bool EmitNops : 1;
 
 public:
-  MCAlignFragment(unsigned _Alignment, int64_t _Value, unsigned _ValueSize,
-                  unsigned _MaxBytesToEmit, MCSectionData *SD = nullptr)
-    : MCFragment(FT_Align, SD), Alignment(_Alignment),
-      Value(_Value),ValueSize(_ValueSize),
-      MaxBytesToEmit(_MaxBytesToEmit), EmitNops(false) {}
+  MCAlignFragment(unsigned Alignment, int64_t Value, unsigned ValueSize,
+                  unsigned MaxBytesToEmit, MCSectionData *SD = nullptr)
+      : MCFragment(FT_Align, SD), Alignment(Alignment), Value(Value),
+        ValueSize(ValueSize), MaxBytesToEmit(MaxBytesToEmit), EmitNops(false) {}
 
   /// @name Accessors
   /// @{
@@ -403,10 +402,10 @@ class MCFillFragment : public MCFragment {
   uint64_t Size;
 
 public:
-  MCFillFragment(int64_t _Value, unsigned _ValueSize, uint64_t _Size,
+  MCFillFragment(int64_t Value, unsigned ValueSize, uint64_t Size,
                  MCSectionData *SD = nullptr)
-    : MCFragment(FT_Fill, SD),
-      Value(_Value), ValueSize(_ValueSize), Size(_Size) {
+      : MCFragment(FT_Fill, SD), Value(Value), ValueSize(ValueSize),
+        Size(Size) {
     assert((!ValueSize || (Size % ValueSize) == 0) &&
            "Fill size must be a multiple of the value size!");
   }
@@ -437,10 +436,8 @@ class MCOrgFragment : public MCFragment {
   int8_t Value;
 
 public:
-  MCOrgFragment(const MCExpr &_Offset, int8_t _Value,
-                MCSectionData *SD = nullptr)
-    : MCFragment(FT_Org, SD),
-      Offset(&_Offset), Value(_Value) {}
+  MCOrgFragment(const MCExpr &Offset, int8_t Value, MCSectionData *SD = nullptr)
+      : MCFragment(FT_Org, SD), Offset(&Offset), Value(Value) {}
 
   /// @name Accessors
   /// @{
@@ -503,10 +500,11 @@ class MCDwarfLineAddrFragment : public MCFragment {
   SmallString<8> Contents;
 
 public:
-  MCDwarfLineAddrFragment(int64_t _LineDelta, const MCExpr &_AddrDelta,
-                      MCSectionData *SD = nullptr)
-    : MCFragment(FT_Dwarf, SD),
-      LineDelta(_LineDelta), AddrDelta(&_AddrDelta) { Contents.push_back(0); }
+  MCDwarfLineAddrFragment(int64_t LineDelta, const MCExpr &AddrDelta,
+                          MCSectionData *SD = nullptr)
+      : MCFragment(FT_Dwarf, SD), LineDelta(LineDelta), AddrDelta(&AddrDelta) {
+    Contents.push_back(0);
+  }
 
   /// @name Accessors
   /// @{
@@ -535,10 +533,10 @@ class MCDwarfCallFrameFragment : public MCFragment {
   SmallString<8> Contents;
 
 public:
-  MCDwarfCallFrameFragment(const MCExpr &_AddrDelta,
-                           MCSectionData *SD = nullptr)
-    : MCFragment(FT_DwarfFrame, SD),
-      AddrDelta(&_AddrDelta) { Contents.push_back(0); }
+  MCDwarfCallFrameFragment(const MCExpr &AddrDelta, MCSectionData *SD = nullptr)
+      : MCFragment(FT_DwarfFrame, SD), AddrDelta(&AddrDelta) {
+    Contents.push_back(0);
+  }
 
   /// @name Accessors
   /// @{
@@ -561,8 +559,8 @@ public:
 class MCSectionData : public ilist_node<MCSectionData> {
   friend class MCAsmLayout;
 
-  MCSectionData(const MCSectionData&) LLVM_DELETED_FUNCTION;
-  void operator=(const MCSectionData&) LLVM_DELETED_FUNCTION;
+  MCSectionData(const MCSectionData&) = delete;
+  void operator=(const MCSectionData&) = delete;
 
 public:
   typedef iplist<MCFragment> FragmentListType;
@@ -593,7 +591,10 @@ private:
   unsigned Alignment;
 
   /// \brief Keeping track of bundle-locked state.
-  BundleLockStateType BundleLockState; 
+  BundleLockStateType BundleLockState;
+
+  /// \brief Current nesting depth of bundle_lock directives.
+  unsigned BundleLockNestingDepth;
 
   /// \brief We've seen a bundle_lock directive but not its first instruction
   /// yet.
@@ -665,9 +666,7 @@ public:
     return BundleLockState;
   }
 
-  void setBundleLockState(BundleLockStateType NewState) {
-    BundleLockState = NewState;
-  }
+  void setBundleLockState(BundleLockStateType NewState);
 
   bool isBundleGroupBeforeFirstInst() const {
     return BundleGroupBeforeFirstInst;
@@ -684,34 +683,27 @@ public:
 
 // FIXME: Same concerns as with SectionData.
 class MCSymbolData : public ilist_node<MCSymbolData> {
-public:
   const MCSymbol *Symbol;
 
-  /// Fragment - The fragment this symbol's value is relative to, if any.
-  MCFragment *Fragment;
+  /// Fragment - The fragment this symbol's value is relative to, if any. Also
+  /// stores if this symbol is visible outside this translation unit (bit 0) or
+  /// if it is private extern (bit 1).
+  PointerIntPair<MCFragment *, 2> Fragment;
 
-  /// Offset - The offset to apply to the fragment address to form this symbol's
-  /// value.
-  uint64_t Offset;
+  union {
+    /// Offset - The offset to apply to the fragment address to form this
+    /// symbol's value.
+    uint64_t Offset;
 
-  /// IsExternal - True if this symbol is visible outside this translation
-  /// unit.
-  unsigned IsExternal : 1;
-
-  /// IsPrivateExtern - True if this symbol is private extern.
-  unsigned IsPrivateExtern : 1;
-
-  /// CommonSize - The size of the symbol, if it is 'common', or 0.
-  //
-  // FIXME: Pack this in with other fields? We could put it in offset, since a
-  // common symbol can never get a definition.
-  uint64_t CommonSize;
+    /// CommonSize - The size of the symbol, if it is 'common'.
+    uint64_t CommonSize;
+  };
 
   /// SymbolSize - An expression describing how to calculate the size of
   /// a symbol. If a symbol has no size this field will be NULL.
   const MCExpr *SymbolSize;
 
-  /// CommonAlign - The alignment of the symbol, if it is 'common'.
+  /// CommonAlign - The alignment of the symbol, if it is 'common', or -1.
   //
   // FIXME: Pack this in with other fields?
   unsigned CommonAlign;
@@ -726,7 +718,7 @@ public:
 public:
   // Only for use as sentinel.
   MCSymbolData();
-  MCSymbolData(const MCSymbol &_Symbol, MCFragment *_Fragment, uint64_t _Offset,
+  MCSymbolData(const MCSymbol &Symbol, MCFragment *Fragment, uint64_t Offset,
                MCAssembler *A = nullptr);
 
   /// @name Accessors
@@ -734,30 +726,41 @@ public:
 
   const MCSymbol &getSymbol() const { return *Symbol; }
 
-  MCFragment *getFragment() const { return Fragment; }
-  void setFragment(MCFragment *Value) { Fragment = Value; }
+  MCFragment *getFragment() const { return Fragment.getPointer(); }
+  void setFragment(MCFragment *Value) { Fragment.setPointer(Value); }
 
-  uint64_t getOffset() const { return Offset; }
-  void setOffset(uint64_t Value) { Offset = Value; }
+  uint64_t getOffset() const {
+    assert(!isCommon());
+    return Offset;
+  }
+  void setOffset(uint64_t Value) {
+    assert(!isCommon());
+    Offset = Value;
+  }
 
   /// @}
   /// @name Symbol Attributes
   /// @{
 
-  bool isExternal() const { return IsExternal; }
-  void setExternal(bool Value) { IsExternal = Value; }
+  bool isExternal() const { return Fragment.getInt() & 1; }
+  void setExternal(bool Value) {
+    Fragment.setInt((Fragment.getInt() & ~1) | unsigned(Value));
+  }
 
-  bool isPrivateExtern() const { return IsPrivateExtern; }
-  void setPrivateExtern(bool Value) { IsPrivateExtern = Value; }
+  bool isPrivateExtern() const { return Fragment.getInt() & 2; }
+  void setPrivateExtern(bool Value) {
+    Fragment.setInt((Fragment.getInt() & ~2) | (unsigned(Value) << 1));
+  }
 
   /// isCommon - Is this a 'common' symbol.
-  bool isCommon() const { return CommonSize != 0; }
+  bool isCommon() const { return CommonAlign != -1U; }
 
   /// setCommon - Mark this symbol as being 'common'.
   ///
   /// \param Size - The size of the symbol.
   /// \param Align - The alignment of the symbol.
   void setCommon(uint64_t Size, unsigned Align) {
+    assert(getOffset() == 0);
     CommonSize = Size;
     CommonAlign = Align;
   }
@@ -858,8 +861,8 @@ public:
     unsigned Update;
   } VersionMinInfoType;
 private:
-  MCAssembler(const MCAssembler&) LLVM_DELETED_FUNCTION;
-  void operator=(const MCAssembler&) LLVM_DELETED_FUNCTION;
+  MCAssembler(const MCAssembler&) = delete;
+  void operator=(const MCAssembler&) = delete;
 
   MCContext &Context;
 
@@ -874,6 +877,8 @@ private:
   iplist<MCSectionData> Sections;
 
   iplist<MCSymbolData> Symbols;
+
+  DenseSet<const MCSymbol *> LocalsUsedInReloc;
 
   /// The map of sections to their associated assembler backend data.
   //
@@ -910,7 +915,6 @@ private:
   unsigned BundleAlignSize;
 
   unsigned RelaxAll : 1;
-  unsigned NoExecStack : 1;
   unsigned SubsectionsViaSymbols : 1;
 
   /// ELF specific e_header flags
@@ -975,6 +979,9 @@ private:
                                         MCFragment &F, const MCFixup &Fixup);
 
 public:
+  void addLocalUsedInReloc(const MCSymbol &Sym);
+  bool isLocalUsedInReloc(const MCSymbol &Sym) const;
+
   /// Compute the effective fragment size assuming it is laid out at the given
   /// \p SectionAddress and \p FragmentOffset.
   uint64_t computeFragmentSize(const MCAsmLayout &Layout,
@@ -1055,9 +1062,6 @@ public:
 
   bool getRelaxAll() const { return RelaxAll; }
   void setRelaxAll(bool Value) { RelaxAll = Value; }
-
-  bool getNoExecStack() const { return NoExecStack; }
-  void setNoExecStack(bool Value) { NoExecStack = Value; }
 
   bool isBundlingEnabled() const {
     return BundleAlignSize != 0;

@@ -1,5 +1,4 @@
-; RUN: opt %loadPolly -basicaa -polly-detect -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -basicaa -polly-detect -analyze -polly-codegen-scev < %s | FileCheck -check-prefix=CHECK-SCEV %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-detect -analyze  < %s | FileCheck %s
 
 ; void f(long A[], long N, long *init_ptr) {
 ;   long i, j;
@@ -28,13 +27,13 @@ for.i:
   br label %entry.next
 
 entry.next:
-  %init = load i64* %init_ptr
+  %init = load i64, i64* %init_ptr
   br label %for.j
 
 for.j:
   %indvar.j = phi i64 [ 0, %entry.next ], [ %indvar.j.next, %for.j ]
   %indvar.j.non_canonical = phi i64 [ %init, %entry.next ], [ %indvar.j.non_canonical.next, %for.j ]
-  %scevgep = getelementptr i64* %A, i64 %indvar.j
+  %scevgep = getelementptr i64, i64* %A, i64 %indvar.j
   store i64 %indvar.j.non_canonical, i64* %scevgep
   %indvar.j.next = add nsw i64 %indvar.j, 1
   %indvar.j.non_canonical.next = add nsw i64 %indvar.j.non_canonical, 1
@@ -49,5 +48,4 @@ return:
   ret void
 }
 
-; CHECK-NOT: Valid Region for Scop
-; CHECK-SCEV: Valid Region for Scop: for.j => for.i.end
+; CHECK: Valid Region for Scop: for.j => for.i.end

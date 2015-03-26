@@ -23,6 +23,7 @@ function(append_cpp_flags input_cpp_flags)
     append_definitions("-D BUILD_I8")
     append_definitions("-D KMP_LIBRARY_FILE=\\\\\"${lib_file}\\\\\"") # yes... you need 5 backslashes...
     append_definitions("-D KMP_VERSION_MAJOR=${version}")
+    append_definitions("-D KMP_NESTED_HOT_TEAMS")
     
     # customize to 128 bytes for ppc64
     if(${PPC64})
@@ -41,6 +42,10 @@ function(append_cpp_flags input_cpp_flags)
         append_definitions("-D INTEL_NO_ITTNOTIFY_API")
     endif()
     append_definitions("-D INTEL_ITTNOTIFY_PREFIX=__kmp_itt_")
+
+    if(${USE_VERSION_SYMBOLS})
+        append_definitions("-D KMP_USE_VERSION_SYMBOLS")
+    endif()
 
     #####################
     # Windows definitions
@@ -65,11 +70,8 @@ function(append_cpp_flags input_cpp_flags)
         endif()
     endif()
 
-    #######################################
-    # Intel(R) MIC Architecture definitions
-    if(${MIC})
-        append_definitions("-D KMP_TDATA_GTID")
-    else() # Other than Intel(R) MIC Architecture...
+    # Any architecture other than Intel(R) MIC Architecture
+    if(NOT ${MIC}) 
         append_definitions("-D USE_LOAD_BALANCE")
     endif()
 
@@ -132,6 +134,11 @@ function(append_cpp_flags input_cpp_flags)
     else()
         append_definitions("-D KMP_USE_ADAPTIVE_LOCKS=0")
         append_definitions("-D KMP_DEBUG_ADAPTIVE_LOCKS=0")
+    endif()
+    if(${USE_INTERNODE_ALIGNMENT})
+        append_definitions("-D KMP_USE_INTERNODE_ALIGNMENT=1")
+    else()
+        append_definitions("-D KMP_USE_INTERNODE_ALIGNMENT=0")
     endif()
     set(${input_cpp_flags} "${${input_cpp_flags}}" "${local_cpp_flags}" "${USER_CPP_FLAGS}" "$ENV{CPPFLAGS}" PARENT_SCOPE)
 endfunction()

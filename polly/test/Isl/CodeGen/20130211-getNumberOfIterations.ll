@@ -1,5 +1,4 @@
-; RUN: opt %loadPolly -polly-codegen-isl -polly-vectorizer=polly < %s
-; RUN: opt %loadPolly -polly-codegen-isl -polly-vectorizer=bb < %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-codegen-isl -polly-vectorizer=polly < %s
 
 ; This test case checks that the polly vectorizer does not crash when
 ; calculating the number of iterations.
@@ -18,7 +17,7 @@ for.cond:                                         ; preds = %for.body, %entry
   br i1 %cmp, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
-  %arrayidx = getelementptr inbounds [2048 x i64]* @b, i64 0, i64 %indvar
+  %arrayidx = getelementptr inbounds [2048 x i64], [2048 x i64]* @b, i64 0, i64 %indvar
   store i64 1, i64* %arrayidx
   %inc = add nsw i64 %indvar, 1
   br label %for.cond

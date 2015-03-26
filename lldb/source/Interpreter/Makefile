@@ -13,12 +13,16 @@ BUILD_ARCHIVE = 1
 include $(LLDB_LEVEL)/../../Makefile.config
 
 ifneq ($(HOST_OS),MingW)
+ifeq (,$(findstring -DLLDB_DISABLE_PYTHON,$(CXXFLAGS)))
+DO_BUILD_LLDBWrapPython = 1
 BUILT_SOURCES := LLDBWrapPython.cpp
+endif
 endif
 
 include $(LLDB_LEVEL)/Makefile
 -include $(PROJ_OBJ_DIR)/LLDBWrapPython.cpp.d
 
+ifeq ($(DO_BUILD_LLDBWrapPython),1)
 # Drop -Wfour-char-constants,  which we are not currently clean with.
 EXTRA_OPTIONS += -Wno-four-char-constants
 
@@ -29,8 +33,11 @@ EXTRA_OPTIONS += -Wno-missing-field-initializers -Wno-self-assign -Wno-sometimes
 
 PYTHON_DIR := $(PROJ_OBJ_ROOT)/$(BuildMode)
 
+SWIG_SOURCES := $(shell find $(PROJ_SRC_DIR)/$(LLDB_LEVEL)/scripts -type f -name '*.swig' -print)
+
 LLDBWrapPython.cpp lldb.py: $(PROJ_SRC_DIR)/$(LLDB_LEVEL)/scripts/Python/modify-python-lldb.py \
-                            $(wildcard $(PROJ_SRC_DIR)/$(LLDB_LEVEL)/scripts/Python/interface/*.i)
+                            $(wildcard $(PROJ_SRC_DIR)/$(LLDB_LEVEL)/scripts/Python/interface/*.i) \
+                            ${SWIG_SOURCES}
 	$(Echo) Generating LLDBWrapPython.cpp
 	$(Verb) "$(PROJ_SRC_DIR)/$(LLDB_LEVEL)/scripts/build-swig-wrapper-classes.sh" "$(PROJ_SRC_DIR)/$(LLDB_LEVEL)" "$(PROJ_OBJ_DIR)" "$(PROJ_OBJ_DIR)" "$(PYTHON_DIR)" -m $(if $(DISABLE_AUTO_DEPENDENCIES),,-M)
 	$(Verb) "$(PROJ_SRC_DIR)/$(LLDB_LEVEL)/scripts/finish-swig-wrapper-classes.sh" "$(PROJ_SRC_DIR)/$(LLDB_LEVEL)" "$(PROJ_OBJ_DIR)" "$(PROJ_OBJ_DIR)" "$(PYTHON_DIR)" -m
@@ -41,3 +48,4 @@ install-local:: lldb.py
 
 clean-local::
 	$(Verb) $(RM) -f LLDBWrapPython.cpp lldb.py
+endif

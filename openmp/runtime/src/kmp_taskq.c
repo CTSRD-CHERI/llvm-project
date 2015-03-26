@@ -1,7 +1,5 @@
 /*
  * kmp_taskq.c -- TASKQ support for OpenMP.
- * $Revision: 42582 $
- * $Date: 2013-08-09 06:30:22 -0500 (Fri, 09 Aug 2013) $
  */
 
 
@@ -33,23 +31,6 @@
 
 #define THREAD_ALLOC_FOR_TASKQ
 
-static void
-__kmp_static_delay( int arg )
-{
-/* Work around weird code-gen bug that causes assert to trip */
-#if KMP_ARCH_X86_64 && KMP_OS_LINUX
-    KMP_ASSERT( arg != 0 );
-#else
-    KMP_ASSERT( arg >= 0 );
-#endif
-}
-
-static void
-__kmp_static_yield( int arg )
-{
-    __kmp_yield( arg );
-}
-
 static int
 in_parallel_context( kmp_team_t *team )
 {
@@ -67,7 +48,11 @@ __kmp_taskq_eo( int *gtid_ref, int *cid_ref, ident_t *loc_ref )
     kmp_taskq_t       *tq   = & __kmp_threads[gtid] -> th.th_team -> t.t_taskq;
 
     if ( __kmp_env_consistency_check )
+#if KMP_USE_DYNAMIC_LOCK
+        __kmp_push_sync( gtid, ct_ordered_in_taskq, loc_ref, NULL, 0 );
+#else
         __kmp_push_sync( gtid, ct_ordered_in_taskq, loc_ref, NULL );
+#endif
 
     if ( ! __kmp_threads[ gtid ]-> th.th_team -> t.t_serialized ) {
         KMP_MB();       /* Flush all pending memory write invalidates.  */
@@ -790,7 +775,7 @@ __kmp_dequeue_task (kmp_int32 global_tid, kmpc_task_queue_t *queue, int in_paral
  * 1.  Walk up the task queue tree from the current queue's parent and look
  *      on the way up (for loop, below).
  * 2.  Do a depth-first search back down the tree from the root and
- *      look (find_task_in_descandent_queue()).
+ *      look (find_task_in_descendant_queue()).
  *
  * Here are the rules for deciding which task to take from a queue
  * (__kmp_find_task_in_queue ()):
@@ -1608,7 +1593,6 @@ __kmpc_end_taskq(ident_t *loc, kmp_int32 global_tid, kmpc_thunk_t *taskq_thunk)
                  && (! __kmp_taskq_has_any_children(queue) )
                  && (! (queue->tq_flags & TQF_ALL_TASKS_QUEUED) )
                   ) {
-                __kmp_static_delay( 1 );
                 KMP_YIELD_WHEN( TRUE, spins );
             }
 

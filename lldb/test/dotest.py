@@ -116,6 +116,12 @@ dont_do_python_api_test = False
 # By default, both command line and Python API tests are performed.
 just_do_python_api_test = False
 
+# By default, lldb-mi tests are performed if lldb-mi can be found.
+# Use @lldbmi_test decorator, defined in lldbtest.py, to mark a test as
+# a lldb-mi test.
+dont_do_lldbmi_test = False
+just_do_lldbmi_test = False
+
 # By default, benchmarks tests are not run.
 just_do_benchmarks_test = False
 
@@ -130,7 +136,7 @@ dont_do_dwarf_test = False
 # Something for Windows here?
 dont_do_debugserver_test = "linux" in sys.platform or "freebsd" in sys.platform
 
-# Don't do lldb-gdbserver (llgs) tests on anything except Linux.
+# Don't do lldb-server (llgs) tests on anything except Linux.
 dont_do_llgs_test = not ("linux" in sys.platform)
 
 # The blacklist is optional (-b blacklistFile) and allows a central place to skip
@@ -415,7 +421,7 @@ def setupCrashInfoHook():
             return
         dylib_src = os.path.join(test_dir,"crashinfo.c")
         dylib_dst = os.path.join(test_dir,"crashinfo.so")
-        cmd = "xcrun clang %s -o %s -framework Python -Xlinker -dylib -iframework /System/Library/Frameworks/ -Xlinker -F /System/Library/Frameworks/" % (dylib_src,dylib_dst)
+        cmd = "SDKROOT= xcrun clang %s -o %s -framework Python -Xlinker -dylib -iframework /System/Library/Frameworks/ -Xlinker -F /System/Library/Frameworks/" % (dylib_src,dylib_dst)
         if subprocess.call(cmd,shell=True) == 0 and os.path.exists(dylib_dst):
             setCrashInfoHook = setCrashInfoHook_Mac
     else:
@@ -429,6 +435,8 @@ def parseOptionsAndInitTestdirs():
 
     global dont_do_python_api_test
     global just_do_python_api_test
+    global dont_do_lldbmi_test
+    global just_do_lldbmi_test
     global just_do_benchmarks_test
     global dont_do_dsym_test
     global dont_do_dwarf_test
@@ -471,6 +479,9 @@ def parseOptionsAndInitTestdirs():
 
     do_help = False
 
+    platform_system = platform.system()
+    platform_machine = platform.machine()
+
     parser = argparse.ArgumentParser(description='description', prefix_chars='+-', add_help=False)
     group = None
 
@@ -484,6 +495,8 @@ def parseOptionsAndInitTestdirs():
     group = parser.add_argument_group('Toolchain options')
     group.add_argument('-A', '--arch', metavar='arch', action='append', dest='archs', help=textwrap.dedent('''Specify the architecture(s) to test. This option can be specified more than once'''))
     group.add_argument('-C', '--compiler', metavar='compiler', dest='compilers', action='append', help=textwrap.dedent('''Specify the compiler(s) used to build the inferior executables. The compiler path can be an executable basename or a full path to a compiler executable. This option can be specified multiple times.'''))
+    if platform_system == 'Darwin':
+        group.add_argument('--apple-sdk', metavar='apple_sdk', dest='apple_sdk', help=textwrap.dedent('''Specify the name of the Apple SDK (macosx, macosx.internal, iphoneos, iphoneos.internal, or path to SDK) and use the appropriate tools from that SDK's toolchain.'''))
     # FIXME? This won't work for different extra flags according to each arch.
     group.add_argument('-E', metavar='extra-flags', help=textwrap.dedent('''Specify the extra flags to be passed to the toolchain when building the inferior programs to be debugged
                                                            suggestions: do not lump the "-A arch1 -A arch2" together such that the -E option applies to only one of the architectures'''))
@@ -493,12 +506,14 @@ def parseOptionsAndInitTestdirs():
     group = parser.add_argument_group('Test filtering options')
     group.add_argument('-N', choices=['dwarf', 'dsym'], help="Don't do test cases marked with the @dsym decorator by passing 'dsym' as the option arg, or don't do test cases marked with the @dwarf decorator by passing 'dwarf' as the option arg")
     X('-a', "Don't do lldb Python API tests")
-    X('+a', "Just do lldb Python API tests. Do not specify along with '+a'", dest='plus_a')
+    X('+a', "Just do lldb Python API tests. Do not specify along with '-a'", dest='plus_a')
     X('+b', 'Just do benchmark tests', dest='plus_b')
     group.add_argument('-b', metavar='blacklist', help='Read a blacklist file specified after this option')
     group.add_argument('-f', metavar='filterspec', action='append', help='Specify a filter, which consists of the test class name, a dot, followed by the test method, to only admit such test into the test suite')  # FIXME: Example?
     X('-g', 'If specified, the filterspec by -f is not exclusive, i.e., if a test module does not match the filterspec (testclass.testmethod), the whole module is still admitted to the test suite')
     X('-l', "Don't skip long running tests")
+    X('-m', "Don't do lldb-mi tests")
+    X('+m', "Just do lldb-mi tests. Do not specify along with '-m'", dest='plus_m')
     group.add_argument('-p', metavar='pattern', help='Specify a regexp filename pattern for inclusion in the test suite')
     group.add_argument('-X', metavar='directory', help="Exclude a directory from consideration for test discovery. -X types => if 'types' appear in the pathname components of a potential testfile, it will be ignored")
     group.add_argument('-G', '--category', metavar='category', action='append', dest='categoriesList', help=textwrap.dedent('''Specify categories of test cases of interest. Can be specified more than once.'''))
@@ -536,9 +551,14 @@ def parseOptionsAndInitTestdirs():
     X('-S', "Skip the build and cleanup while running the test. Use this option with care as you would need to build the inferior(s) by hand and build the executable(s) with the correct name(s). This can be used with '-# n' to stress test certain test cases for n number of times")
     X('-t', 'Turn on tracing of lldb command and other detailed test executions')
     group.add_argument('-u', dest='unset_env_varnames', metavar='variable', action='append', help='Specify an environment variable to unset before running the test cases. e.g., -u DYLD_INSERT_LIBRARIES -u MallocScribble')
+    group.add_argument('--env', dest='set_env_vars', metavar='variable', action='append', help='Specify an environment variable to set to the given value before running the test cases e.g.: --env CXXFLAGS=-O3 --env DYLD_INSERT_LIBRARIES')
     X('-v', 'Do verbose mode of unittest framework (print out each test case invocation)')
     X('-w', 'Insert some wait time (currently 0.5 sec) between consecutive test cases')
     X('-T', 'Obtain and dump svn information for this checkout of LLDB (off by default)')
+    group.add_argument('--enable-crash-dialog', dest='disable_crash_dialog', action='store_false', help='(Windows only) When LLDB crashes, display the Windows crash dialog.')
+    group.add_argument('--show-inferior-console', dest='hide_inferior_console', action='store_false', help='(Windows only) When launching an inferior, dont hide its console window.')
+    group.set_defaults(disable_crash_dialog=True)
+    group.set_defaults(hide_inferior_console=True)
 
     # Remove the reference to our helper function
     del X
@@ -547,8 +567,6 @@ def parseOptionsAndInitTestdirs():
     group.add_argument('args', metavar='test-dir', nargs='*', help='Specify a list of directory names to search for test modules named after Test*.py (test discovery). If empty, search from the current working directory instead.')
 
     args = parse_args(parser)
-    platform_system = platform.system()
-    platform_machine = platform.machine()
     
     if args.unset_env_varnames:
         for env_var in args.unset_env_varnames:
@@ -557,7 +575,15 @@ def parseOptionsAndInitTestdirs():
                 # is automatically translated into a corresponding call to unsetenv().
                 del os.environ[env_var]
                 #os.unsetenv(env_var)
-    
+
+    if args.set_env_vars:
+        for env_var in args.set_env_vars:
+            parts = env_var.split('=', 1)
+            if len(parts) == 1:
+                os.environ[parts[0]] = ""
+            else:
+                os.environ[parts[0]] = parts[1]
+
     # only print the args if being verbose (and parsable is off)
     if args.v and not args.q:
         print sys.argv
@@ -568,13 +594,23 @@ def parseOptionsAndInitTestdirs():
     if args.compilers:
         compilers = args.compilers
     else:
-        compilers = ['clang']
+        # Use a compiler appropriate appropriate for the Apple SDK if one was specified
+        if platform_system == 'Darwin' and args.apple_sdk:
+            compilers = [commands.getoutput('xcrun -sdk "%s" -find clang 2> /dev/null' % (args.apple_sdk))]
+        else:
+            compilers = ['clang']
+
+    # Set SDKROOT if we are using an Apple SDK
+    if platform_system == 'Darwin' and args.apple_sdk:
+        os.environ['SDKROOT'] = commands.getoutput('xcrun --sdk "%s" --show-sdk-path 2> /dev/null' % (args.apple_sdk))
 
     if args.archs:
         archs = args.archs
         for arch in archs:
-            if arch.startswith('arm') and platform_system == 'Darwin':
-                os.environ['SDKROOT'] = commands.getoutput('xcodebuild -version -sdk iphoneos.internal Path')
+            if arch.startswith('arm') and platform_system == 'Darwin' and not args.apple_sdk:
+                os.environ['SDKROOT'] = commands.getoutput('xcrun --sdk iphoneos.internal --show-sdk-path 2> /dev/null')
+                if not os.path.exists(os.environ['SDKROOT']):
+                    os.environ['SDKROOT'] = commands.getoutput('xcrun --sdk iphoneos --show-sdk-path 2> /dev/null')
     else:
         archs = [platform_machine]
 
@@ -663,6 +699,15 @@ def parseOptionsAndInitTestdirs():
     if args.l:
         skip_long_running_test = False
 
+    if args.m:
+        dont_do_lldbmi_test = True
+
+    if args.plus_m:
+        if dont_do_lldbmi_test:
+            print "Warning: -m and +m can't both be specified! Using only -m"
+        else:
+            just_do_lldbmi_test = True
+
     if args.framework:
         lldbFrameworkPath = args.framework
 
@@ -743,11 +788,19 @@ def parseOptionsAndInitTestdirs():
     if args.sharp:
         count = args.sharp
 
+    if sys.platform.startswith('win32'):
+        os.environ['LLDB_DISABLE_CRASH_DIALOG'] = str(args.disable_crash_dialog)
+        os.environ['LLDB_LAUNCH_INFERIORS_WITHOUT_CONSOLE'] = str(args.hide_inferior_console)
+
     if do_help == True:
         usage(parser)
 
     # Do not specify both '-a' and '+a' at the same time.
     if dont_do_python_api_test and just_do_python_api_test:
+        usage(parser)
+
+    # Do not specify both '-m' and '+m' at the same time.
+    if dont_do_lldbmi_test and just_do_lldbmi_test:
         usage(parser)
 
     if args.lldb_platform_name:
@@ -879,14 +932,20 @@ def setupSysPath():
 
     pluginPath = os.path.join(scriptPath, 'plugins')
     pexpectPath = os.path.join(scriptPath, 'pexpect-2.4')
+    toolsLLDBMIPath = os.path.join(scriptPath, 'tools', 'lldb-mi')
+    toolsLLDBServerPath = os.path.join(scriptPath, 'tools', 'lldb-server')
 
     # Put embedded pexpect at front of the load path so we ensure we
     # use that version.
     sys.path.insert(0, pexpectPath)
 
-    # Append script dir and plugin dir to the sys.path.
+    # Append script dir, plugin dir, lldb-mi dir and lldb-server dir to the sys.path.
     sys.path.append(scriptPath)
     sys.path.append(pluginPath)
+    sys.path.append(toolsLLDBMIPath)     # Adding test/tools/lldb-mi to the path makes it easy
+                                         # to "import lldbmi_testcase" from the MI tests
+    sys.path.append(toolsLLDBServerPath) # Adding test/tools/lldb-server to the path makes it easy
+                                         # to "import lldbgdbserverutils" from the lldb-server tests
 
     # This is our base name component.
     base = os.path.abspath(os.path.join(scriptPath, os.pardir))
@@ -904,13 +963,14 @@ def setupSysPath():
     # We'll try to locate the appropriate executable right here.
 
     lldbExec = None
+    lldbMiExec = None
+    lldbHere = None
     if lldbExecutablePath:
         if is_exe(lldbExecutablePath):
             lldbExec = lldbExecutablePath
             lldbHere = lldbExec
         else:
-            print lldbExecutablePath + " is not an executable"
-            sys.exit(-1)
+            print lldbExecutablePath + " is not an executable, lldb tests will fail."
     else:
         # First, you can define an environment variable LLDB_EXEC specifying the
         # full pathname of the lldb executable.
@@ -930,7 +990,6 @@ def setupSysPath():
         baiExec2 = os.path.join(base, *(xcode4_build_dir + bai + executable))
     
         # The 'lldb' executable built here in the source tree.
-        lldbHere = None
         if is_exe(dbgExec):
             lldbHere = dbgExec
         elif is_exe(dbgExec2):
@@ -971,6 +1030,20 @@ def setupSysPath():
         os.environ["LLDB_EXEC"] = lldbExec
         #print "The 'lldb' from PATH env variable", lldbExec
 
+    # Assume lldb-mi is in same place as lldb
+    # If not found, disable the lldb-mi tests
+    global dont_do_lldbmi_test
+    if lldbExec and is_exe(lldbExec + "-mi"):
+        lldbMiExec = lldbExec + "-mi"
+    if not lldbMiExec:
+        dont_do_lldbmi_test = True
+        if just_do_lldbmi_test:
+            print "The 'lldb-mi' executable cannot be located.  The lldb-mi tests can not be run as a result."
+        else:
+            print "The 'lldb-mi' executable cannot be located.  Some of the tests may not be run as a result."
+    else:
+        os.environ["LLDBMI_EXEC"] = lldbMiExec
+
     # Skip printing svn/git information when running in parsable (lit-test compatibility) mode
     if not svn_silent and not parsable:
         if os.path.isdir(os.path.join(base, '.svn')) and which("svn") is not None:
@@ -1009,6 +1082,18 @@ def setupSysPath():
         if lldb_dash_p_result and not lldb_dash_p_result.startswith(("<", "lldb: invalid option:")) \
 							  and not lldb_dash_p_result.startswith("Traceback"):
             lines = lldb_dash_p_result.splitlines()
+
+            # Workaround for readline vs libedit issue on FreeBSD.  If stdout
+            # is not a terminal Python executes
+            #     rl_variable_bind ("enable-meta-key", "off");
+            # This produces a warning with FreeBSD's libedit because the
+            # enable-meta-key variable is unknown.  Not an issue on Apple
+            # because cpython commit f0ab6f9f0603 added a #ifndef __APPLE__
+            # around the call.  See http://bugs.python.org/issue19884 for more
+            # information.  For now we just discard the warning output.
+            if len(lines) >= 1 and lines[0].startswith("bind: Invalid command"):
+                lines.pop(0)
+
             if len(lines) >= 1 and os.path.isfile(os.path.join(lines[0], init_in_python_dir)):
                 lldbPath = lines[0]
                 if "freebsd" in sys.platform or "linux" in sys.platform:
@@ -1043,24 +1128,24 @@ def setupSysPath():
 
         if not lldbPath:
             print 'This script requires lldb.py to be in either ' + dbgPath + ',',
-            print relPath + ', or ' + baiPath
-            sys.exit(-1)
+            print relPath + ', or ' + baiPath + '. Some tests might fail.'
 
-    # Some of the code that uses this path assumes it hasn't resolved the Versions... link.  
-    # If the path we've constructed looks like that, then we'll strip out the Versions/A part.
-    (before, frameWithVersion, after) = lldbPath.rpartition("LLDB.framework/Versions/A")
-    if frameWithVersion != "" :
-        lldbPath = before + "LLDB.framework" + after
+    if lldbPath:
+        # Some of the code that uses this path assumes it hasn't resolved the Versions... link.  
+        # If the path we've constructed looks like that, then we'll strip out the Versions/A part.
+        (before, frameWithVersion, after) = lldbPath.rpartition("LLDB.framework/Versions/A")
+        if frameWithVersion != "" :
+            lldbPath = before + "LLDB.framework" + after
 
-    lldbPath = os.path.abspath(lldbPath)
+        lldbPath = os.path.abspath(lldbPath)
 
-    # If tests need to find LLDB_FRAMEWORK, now they can do it
-    os.environ["LLDB_FRAMEWORK"] = os.path.dirname(os.path.dirname(lldbPath))
+        # If tests need to find LLDB_FRAMEWORK, now they can do it
+        os.environ["LLDB_FRAMEWORK"] = os.path.dirname(os.path.dirname(lldbPath))
 
-    # This is to locate the lldb.py module.  Insert it right after sys.path[0].
-    sys.path[1:1] = [lldbPath]
-    if dumpSysPath:
-        print "sys.path:", sys.path
+        # This is to locate the lldb.py module.  Insert it right after sys.path[0].
+        sys.path[1:1] = [lldbPath]
+        if dumpSysPath:
+            print "sys.path:", sys.path
 
 def visit(prefix, dir, names):
     """Visitor function for os.path.walk(path, visit, arg)."""
@@ -1133,6 +1218,13 @@ def visit(prefix, dir, names):
                 # doesn't make sense.
                 suite.addTests(unittest2.defaultTestLoader.loadTestsFromName(base))
 
+
+def disabledynamics():
+    ci = lldb.DBG.GetCommandInterpreter()
+    res = lldb.SBCommandReturnObject()
+    ci.HandleCommand("setting set target.prefer-dynamic-value no-dynamic-values", res, False)    
+    if not res.Succeeded():
+        raise Exception('disabling dynamic type support failed')
 
 def lldbLoggings():
     """Check and do lldb loggings if necessary."""
@@ -1301,6 +1393,8 @@ lldb.lldbtest_remote_shell_template = lldbtest_remote_shell_template
 # Put all these test decorators in the lldb namespace.
 lldb.dont_do_python_api_test = dont_do_python_api_test
 lldb.just_do_python_api_test = just_do_python_api_test
+lldb.dont_do_lldbmi_test = dont_do_lldbmi_test
+lldb.just_do_lldbmi_test = just_do_lldbmi_test
 lldb.just_do_benchmarks_test = just_do_benchmarks_test
 lldb.dont_do_dsym_test = dont_do_dsym_test
 lldb.dont_do_dwarf_test = dont_do_dwarf_test
@@ -1320,6 +1414,9 @@ lldb.runHooks = runHooks
 
 # Turn on lldb loggings if necessary.
 lldbLoggings()
+
+# Disable default dynamic types for testing purposes
+disabledynamics()
 
 # Install the control-c handler.
 unittest2.signals.installHandler()
@@ -1737,4 +1834,4 @@ if ("LLDB_TESTSUITE_FORCE_FINISH" in os.environ):
     subprocess.Popen(["/bin/sh", "-c", "kill %s; exit 0" % (os.getpid())])
 
 # Exiting.
-exitTestSuite()
+exitTestSuite(failed)

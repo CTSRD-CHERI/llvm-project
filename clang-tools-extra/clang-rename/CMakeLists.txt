@@ -1,20 +1,16 @@
 set(LLVM_LINK_COMPONENTS support)
 
-add_clang_executable(clang-rename
-  ClangRename.cpp
+add_clang_library(clangRename
   USRFinder.cpp
   USRFindingAction.cpp
   USRLocFinder.cpp
   RenamingAction.cpp
-  )
 
-target_link_libraries(clang-rename
+  LINK_LIBS
   clangAST
   clangBasic
-  clangFrontend
   clangIndex
-  clangRewrite
-  clangTooling
+  clangToolingCore
   )
 
-install(TARGETS clang-rename RUNTIME DESTINATION bin)
+add_subdirectory(tool)

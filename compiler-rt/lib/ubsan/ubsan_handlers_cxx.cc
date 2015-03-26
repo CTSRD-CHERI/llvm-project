@@ -29,22 +29,21 @@ namespace __ubsan {
 
 static void HandleDynamicTypeCacheMiss(
     DynamicTypeCacheMissData *Data, ValueHandle Pointer, ValueHandle Hash,
-    bool Abort, uptr pc, uptr bp) {
+    ReportOptions Opts) {
   if (checkDynamicType((void*)Pointer, Data->TypeInfo, Hash))
     // Just a cache miss. The type matches after all.
     return;
 
   // Check if error report should be suppressed.
   DynamicTypeInfo DTI = getDynamicTypeInfo((void*)Pointer);
-  if (DTI.isValid() &&
-      MatchSuppression(DTI.getMostDerivedTypeName(), SuppressionVptrCheck))
+  if (DTI.isValid() && IsVptrCheckSuppressed(DTI.getMostDerivedTypeName()))
     return;
 
   SourceLocation Loc = Data->Loc.acquire();
   if (Loc.isDisabled())
     return;
 
-  ScopedReport R(Abort);
+  ScopedReport R(Opts, Loc);
 
   Diag(Loc, DL_Error,
        "%0 address %1 which does not point to an object of type %2")
@@ -68,17 +67,15 @@ static void HandleDynamicTypeCacheMiss(
         << MangledName(DTI.getSubobjectTypeName())
         << Range(Pointer, Pointer + sizeof(uptr),
                  "vptr for %2 base class of %1");
-
-  MaybePrintStackTrace(pc, bp);
 }
 
 void __ubsan::__ubsan_handle_dynamic_type_cache_miss(
     DynamicTypeCacheMissData *Data, ValueHandle Pointer, ValueHandle Hash) {
-  GET_CALLER_PC_BP;
-  HandleDynamicTypeCacheMiss(Data, Pointer, Hash, false, pc, bp);
+  GET_REPORT_OPTIONS(false);
+  HandleDynamicTypeCacheMiss(Data, Pointer, Hash, Opts);
 }
 void __ubsan::__ubsan_handle_dynamic_type_cache_miss_abort(
     DynamicTypeCacheMissData *Data, ValueHandle Pointer, ValueHandle Hash) {
-  GET_CALLER_PC_BP;
-  HandleDynamicTypeCacheMiss(Data, Pointer, Hash, true, pc, bp);
+  GET_REPORT_OPTIONS(true);
+  HandleDynamicTypeCacheMiss(Data, Pointer, Hash, Opts);
 }

@@ -10,30 +10,34 @@ set(LLVM_TARGET_DEFINITIONS WinLinkOptions.td)
 tablegen(LLVM WinLinkOptions.inc -gen-opt-parser-defs)
 add_public_tablegen_target(DriverOptionsTableGen)
 
-add_lld_library(lldDriver
+add_llvm_library(lldDriver
   CoreDriver.cpp
   DarwinLdDriver.cpp
   Driver.cpp
   GnuLdDriver.cpp
-  GnuLdInputGraph.cpp
   UniversalDriver.cpp
   WinLinkDriver.cpp
-  WinLinkInputGraph.cpp
   WinLinkModuleDef.cpp
+  LINK_LIBS
+    lldConfig
+    lldMachO
+    lldPECOFF
+    lldELF
+    lldAArch64ELFTarget
+    lldARMELFTarget
+    lldHexagonELFTarget
+    lldMipsELFTarget
+    lldX86ELFTarget
+    lldExampleSubTarget
+    lldX86_64ELFTarget
+    lldCore
+    lldNative
+    lldReaderWriter
+    lldYAML
+    LLVMObject
+    LLVMOption
+    LLVMSupport
   )
 
 add_dependencies(lldDriver DriverOptionsTableGen)
 
-target_link_libraries(lldDriver
-  lldPasses
-  lldMachO
-  lldPECOFF
-  lldELF
-  lldCore
-  lldNative
-  lldReaderWriter
-  lldYAML
-  LLVMObject
-  LLVMOption
-  LLVMSupport
-  )

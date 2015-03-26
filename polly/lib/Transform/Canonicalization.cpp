@@ -20,8 +20,7 @@
 using namespace llvm;
 using namespace polly;
 
-void polly::registerCanonicalicationPasses(llvm::PassManagerBase &PM,
-                                           bool SCEVCodegen) {
+void polly::registerCanonicalicationPasses(llvm::legacy::PassManagerBase &PM) {
   PM.add(llvm::createPromoteMemoryToRegisterPass());
   PM.add(llvm::createInstructionCombiningPass());
   PM.add(llvm::createCFGSimplificationPass());
@@ -30,18 +29,13 @@ void polly::registerCanonicalicationPasses(llvm::PassManagerBase &PM,
   PM.add(llvm::createReassociatePass());
   PM.add(llvm::createLoopRotatePass());
   PM.add(llvm::createInstructionCombiningPass());
-
-  if (!SCEVCodegen)
-    PM.add(polly::createIndVarSimplifyPass());
-
   PM.add(polly::createCodePreparationPass());
 }
 
 namespace {
 class PollyCanonicalize : public ModulePass {
-  PollyCanonicalize(const PollyCanonicalize &) LLVM_DELETED_FUNCTION;
-  const PollyCanonicalize &
-  operator=(const PollyCanonicalize &) LLVM_DELETED_FUNCTION;
+  PollyCanonicalize(const PollyCanonicalize &) = delete;
+  const PollyCanonicalize &operator=(const PollyCanonicalize &) = delete;
 
 public:
   static char ID;
@@ -66,7 +60,7 @@ void PollyCanonicalize::getAnalysisUsage(AnalysisUsage &AU) const {}
 void PollyCanonicalize::releaseMemory() {}
 
 bool PollyCanonicalize::runOnModule(Module &M) {
-  PassManager PM;
+  legacy::PassManager PM;
   registerCanonicalicationPasses(PM);
   PM.run(M);
 

@@ -1,7 +1,5 @@
 /*
  * kmp_ftn_stdcall.c -- Fortran __stdcall linkage support for OpenMP.
- * $Revision: 42061 $
- * $Date: 2013-02-28 16:36:24 -0600 (Thu, 28 Feb 2013) $
  */
 
 

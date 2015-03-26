@@ -67,6 +67,44 @@ public:
 protected:
     std::unique_ptr<lldb_private::TypeMemberImpl> m_opaque_ap;
 };
+             
+class SBTypeMemberFunction
+{
+public:
+    SBTypeMemberFunction ();
+    
+    SBTypeMemberFunction (const lldb::SBTypeMemberFunction& rhs);
+    
+    ~SBTypeMemberFunction();
+    
+    bool
+    IsValid() const;
+    
+    const char *
+    GetName ();
+    
+    lldb::SBType
+    GetType ();
+    
+    lldb::SBType
+    GetReturnType ();
+    
+    uint32_t
+    GetNumberOfArguments ();
+    
+    lldb::SBType
+    GetArgumentTypeAtIndex (uint32_t);
+    
+    lldb::MemberFunctionKind
+    GetKind();
+    
+    bool
+    GetDescription (lldb::SBStream &description,
+                    lldb::DescriptionLevel description_level);
+    
+protected:
+    lldb::TypeMemberFunctionImplSP m_opaque_sp;
+};
 
 %feature("docstring",
 "Represents a data type in lldb.  The FindFirstType() method of SBTarget/SBModule
@@ -168,6 +206,15 @@ public:
     bool
     IsPolymorphicClass ();
     
+    bool
+    IsArrayType ();
+    
+    bool
+    IsVectorType ();
+    
+    bool
+    IsTypedefType ();
+    
     lldb::SBType
     GetPointerType();
 
@@ -188,6 +235,12 @@ public:
     
     lldb::SBType
     GetCanonicalType();
+    
+    lldb::SBType
+    GetArrayElementType ();
+    
+    lldb::SBType
+    GetVectorElementType ();
 
     lldb::BasicType
     GetBasicType();
@@ -239,9 +292,18 @@ public:
     
     lldb::SBTypeList
     GetFunctionArgumentTypes ();
+    
+    uint32_t
+    GetNumberOfMemberFunctions ();
+    
+    lldb::SBTypeMemberFunction
+    GetMemberFunctionAtIndex (uint32_t idx);
 
     bool
     IsTypeComplete ();
+    
+    uint32_t
+    GetTypeFlags ();
 
     %pythoncode %{
         def template_arg_array(self):

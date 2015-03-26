@@ -36,8 +36,8 @@ I386-NEXT:     Type: PT_LOAD (0x1)
 I386-NEXT:     Offset: 0x0
 I386-NEXT:     VirtualAddress: 0x0
 I386-NEXT:     PhysicalAddress: 0x0
-I386-NEXT:     FileSize: 572
-I386-NEXT:     MemSize: 572
+I386-NEXT:     FileSize: 556
+I386-NEXT:     MemSize: 556
 I386-NEXT:     Flags [ (0x5)
 I386-NEXT:       PF_R (0x4)
 I386-NEXT:       PF_X (0x1)
@@ -50,7 +50,7 @@ I386-NEXT:     Offset: 0x1000
 I386-NEXT:     VirtualAddress: 0x1000
 I386-NEXT:     PhysicalAddress: 0x1000
 I386-NEXT:     FileSize: 260
-I386-NEXT:     MemSize: 4
+I386-NEXT:     MemSize: 260
 I386-NEXT:     Flags [ (0x6)
 I386-NEXT:       PF_R (0x4)
 I386-NEXT:       PF_W (0x2)
@@ -63,12 +63,24 @@ I386-NEXT:     Offset: 0x4000
 I386-NEXT:     VirtualAddress: 0x4000
 I386-NEXT:     PhysicalAddress: 0x4000
 I386-NEXT:     FileSize: 4
-I386-NEXT:     MemSize: 16392
+I386-NEXT:     MemSize: 8
 I386-NEXT:     Flags [ (0x6)
 I386-NEXT:       PF_R (0x4)
 I386-NEXT:       PF_W (0x2)
 I386-NEXT:     ]
-I386-NEXT:     Alignment: 4096
+I386-NEXT:     Alignment: 16384
+I386-NEXT:   }
+I386-NEXT:   ProgramHeader {
+I386-NEXT:     Type: PT_DYNAMIC (0x2)
+I386-NEXT:     Offset: 0x1FC
+I386-NEXT:     VirtualAddress: 0x1FC
+I386-NEXT:     PhysicalAddress: 0x1FC
+I386-NEXT:     FileSize: 48
+I386-NEXT:     MemSize: 48
+I386-NEXT:     Flags [ (0x4)
+I386-NEXT:       PF_R (0x4)
+I386-NEXT:     ]
+I386-NEXT:     Alignment: 4
 I386-NEXT:   }
 I386-NEXT:   ProgramHeader {
 I386-NEXT:     Type: PT_GNU_EH_FRAME (0x6474E550)
@@ -81,18 +93,6 @@ I386-NEXT:     Flags [ (0x4)
 I386-NEXT:       PF_R (0x4)
 I386-NEXT:     ]
 I386-NEXT:     Alignment: 4
-I386-NEXT:   }
-I386-NEXT:   ProgramHeader {
-I386-NEXT:     Type: PT_DYNAMIC (0x2)
-I386-NEXT:     Offset: 0x1FC
-I386-NEXT:     VirtualAddress: 0x1FC
-I386-NEXT:     PhysicalAddress: 0x1FC
-I386-NEXT:     FileSize: 64
-I386-NEXT:     MemSize: 64
-I386-NEXT:     Flags [ (0x4)
-I386-NEXT:       PF_R (0x4)
-I386-NEXT:     ]
-I386-NEXT:     Alignment: 2
 I386-NEXT:   }
 
 X86_64: LOAD off    0x0000000000000000

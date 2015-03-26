@@ -9,8 +9,9 @@
 #ifndef AARCH64_DYNAMIC_LIBRARY_WRITER_H
 #define AARCH64_DYNAMIC_LIBRARY_WRITER_H
 
-#include "DynamicLibraryWriter.h"
 #include "AArch64LinkingContext.h"
+#include "AArch64TargetHandler.h"
+#include "DynamicLibraryWriter.h"
 
 namespace lld {
 namespace elf {
@@ -57,7 +58,6 @@ bool AArch64DynamicLibraryWriter<ELFT>::createImplicitFiles(
     std::vector<std::unique_ptr<File>> &result) {
   DynamicLibraryWriter<ELFT>::createImplicitFiles(result);
   _gotFile->addAtom(*new (_gotFile->_alloc) GLOBAL_OFFSET_TABLEAtom(*_gotFile));
-  _gotFile->addAtom(*new (_gotFile->_alloc) TLSGETADDRAtom(*_gotFile));
   _gotFile->addAtom(*new (_gotFile->_alloc) DYNAMICAtom(*_gotFile));
   result.push_back(std::move(_gotFile));
   return true;

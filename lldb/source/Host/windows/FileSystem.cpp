@@ -27,7 +27,7 @@ FileSystem::MakeDirectory(const char *path, uint32_t file_permissions)
     // On Win32, the mode parameter is ignored, as Windows files and directories support a
     // different permission model than POSIX.
     Error error;
-    if (!::CreateDirectory(path, NULL))
+    if (!::CreateDirectory(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
         error.SetError(::GetLastError(), lldb::eErrorTypeWin32);
     return error;
 }
@@ -140,7 +140,13 @@ FileSystem::Readlink(const char *path, char *buf, size_t buf_len)
 }
 
 bool
-FileSystem::CalculateMD5(const FileSpec &file_spec, uint64_t &low, uint64_t &high)
+FileSystem::IsLocal(const FileSpec &spec)
 {
+    if (spec)
+    {
+        // TODO: return true if the file is on a locally mounted file system
+        return true;
+    }
+
     return false;
 }

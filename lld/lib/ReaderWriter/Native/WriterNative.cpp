@@ -7,9 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lld/ReaderWriter/Writer.h"
 #include "NativeFileFormat.h"
 #include "lld/Core/File.h"
+#include "lld/Core/LinkingContext.h"
+#include "lld/Core/Writer.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
@@ -27,8 +28,6 @@ namespace native {
 ///
 class Writer : public lld::Writer {
 public:
-  Writer(const LinkingContext &context) {}
-
   std::error_code writeFile(const lld::File &file, StringRef outPath) override {
     // reserve first byte for unnamed atoms
     _stringPool.push_back('\0');
@@ -66,11 +65,10 @@ public:
     // construct file header based on atom information accumulated
     this->makeHeader();
 
-    std::string errorInfo;
-    llvm::raw_fd_ostream out(outPath.data(), errorInfo,
-                             llvm::sys::fs::F_None);
-    if (!errorInfo.empty())
-      return std::error_code(); // FIXME
+    std::error_code ec;
+    llvm::raw_fd_ostream out(outPath, ec, llvm::sys::fs::F_None);
+    if (ec)
+      return ec;
 
     this->write(out);
 
@@ -128,6 +126,7 @@ private:
     ivar.referencesCount = refsCount;
     ivar.contentOffset = getContentOffset(atom);
     ivar.contentSize = atom.size();
+    ivar.sectionSize = atom.sectionSize();
     _definedAtomIvars.push_back(ivar);
   }
 
@@ -423,10 +422,10 @@ private:
     attrs.interposable      = atom.interposable();
     attrs.merge             = atom.merge();
     attrs.contentType       = atom.contentType();
-    attrs.sectionChoiceAndPosition
-                          = atom.sectionChoice() << 4 | atom.sectionPosition();
+    attrs.sectionChoice     = atom.sectionChoice();
     attrs.deadStrip         = atom.deadStrip();
     attrs.dynamicExport     = atom.dynamicExport();
+    attrs.codeModel         = atom.codeModel();
     attrs.permissions       = atom.permissions();
     return attrs;
   }
@@ -449,6 +448,7 @@ private:
       nref.kindValue = ref->kindValue();
       nref.targetIndex = this->getTargetIndex(ref->target());
       nref.addend = ref->addend();
+      nref.tag = ref->tag();
       _referencesV2.push_back(nref);
     }
     refsCount = _referencesV2.size() - startRefSize;
@@ -560,7 +560,7 @@ private:
 };
 } // end namespace native
 
-std::unique_ptr<Writer> createWriterNative(const LinkingContext &context) {
-  return std::unique_ptr<Writer>(new native::Writer(context));
+std::unique_ptr<Writer> createWriterNative() {
+  return std::unique_ptr<Writer>(new native::Writer());
 }
 } // end namespace lld

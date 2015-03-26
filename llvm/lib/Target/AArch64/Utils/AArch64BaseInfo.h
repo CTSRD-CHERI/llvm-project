@@ -26,6 +26,8 @@
 
 namespace llvm {
 
+class FeatureBitset;
+
 inline static unsigned getWRegFromXReg(unsigned Reg) {
   switch (Reg) {
   case AArch64::X0: return AArch64::W0;
@@ -1139,21 +1141,21 @@ namespace AArch64SysReg {
 
     const AArch64NamedImmMapper::Mapping *InstPairs;
     size_t NumInstPairs;
-    uint64_t FeatureBits;
+    const FeatureBitset &FeatureBits;
 
-    SysRegMapper(uint64_t FeatureBits) : FeatureBits(FeatureBits) { }
+    SysRegMapper(const FeatureBitset &FeatureBits) : FeatureBits(FeatureBits) { }
     uint32_t fromString(StringRef Name, bool &Valid) const;
-    std::string toString(uint32_t Bits, bool &Valid) const;
+    std::string toString(uint32_t Bits) const;
   };
 
   struct MSRMapper : SysRegMapper {
     static const AArch64NamedImmMapper::Mapping MSRPairs[];
-    MSRMapper(uint64_t FeatureBits);
+    MSRMapper(const FeatureBitset &FeatureBits);
   };
 
   struct MRSMapper : SysRegMapper {
     static const AArch64NamedImmMapper::Mapping MRSPairs[];
-    MRSMapper(uint64_t FeatureBits);
+    MRSMapper(const FeatureBitset &FeatureBits);
   };
 
   uint32_t ParseGenericRegister(StringRef Name, bool &Valid);
@@ -1229,7 +1231,7 @@ namespace AArch64II {
 
     MO_NO_FLAG,
 
-    MO_FRAGMENT = 0x7,
+    MO_FRAGMENT = 0xf,
 
     /// MO_PAGE - A symbol operand with this flag represents the pc-relative
     /// offset of the 4K page containing the symbol.  This is used with the
@@ -1257,21 +1259,31 @@ namespace AArch64II {
     /// 0-15 of a 64-bit address, used in a MOVZ or MOVK instruction
     MO_G0 = 6,
 
+    /// MO_HI12 - This flag indicates that a symbol operand represents the bits
+    /// 13-24 of a 64-bit address, used in a arithmetic immediate-shifted-left-
+    /// by-12-bits instruction.
+    MO_HI12 = 7,
+
     /// MO_GOT - This flag indicates that a symbol operand represents the
     /// address of the GOT entry for the symbol, rather than the address of
     /// the symbol itself.
-    MO_GOT = 8,
+    MO_GOT = 0x10,
 
     /// MO_NC - Indicates whether the linker is expected to check the symbol
     /// reference for overflow. For example in an ADRP/ADD pair of relocations
     /// the ADRP usually does check, but not the ADD.
-    MO_NC = 0x10,
+    MO_NC = 0x20,
 
     /// MO_TLS - Indicates that the operand being accessed is some kind of
     /// thread-local symbol. On Darwin, only one type of thread-local access
     /// exists (pre linker-relaxation), but on ELF the TLSModel used for the
     /// referee will affect interpretation.
-    MO_TLS = 0x20
+    MO_TLS = 0x40,
+
+    /// MO_CONSTPOOL - This flag indicates that a symbol operand represents
+    /// the address of a constant pool entry for the symbol, rather than the
+    /// address of the symbol itself.
+    MO_CONSTPOOL = 0x80
   };
 } // end namespace AArch64II
 

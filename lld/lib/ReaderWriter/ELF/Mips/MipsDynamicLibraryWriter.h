@@ -17,6 +17,8 @@
 namespace lld {
 namespace elf {
 
+template <typename ELFT> class MipsSymbolTable;
+template <typename ELFT> class MipsDynamicSymbolTable;
 template <typename ELFT> class MipsTargetLayout;
 
 template <class ELFT>
@@ -37,29 +39,22 @@ protected:
     return std::error_code();
   }
 
-  bool isDynSymEntryRequired(const SharedLibraryAtom *sla) const override {
-    return _writeHelper.isDynSymEntryRequired(sla);
-  }
+  unique_bump_ptr<SymbolTable<ELFT>> createSymbolTable() override;
+  unique_bump_ptr<DynamicTable<ELFT>> createDynamicTable() override;
 
-  bool isNeededTagRequired(const SharedLibraryAtom *sla) const override {
-    return _writeHelper.isNeededTagRequired(sla);
-  }
-
-  LLD_UNIQUE_BUMP_PTR(DynamicTable<ELFT>) createDynamicTable();
-
-  LLD_UNIQUE_BUMP_PTR(DynamicSymbolTable<ELFT>) createDynamicSymbolTable();
+  unique_bump_ptr<DynamicSymbolTable<ELFT>>
+      createDynamicSymbolTable() override;
 
 private:
   MipsELFWriter<ELFT> _writeHelper;
-  MipsLinkingContext &_mipsContext;
-  MipsTargetLayout<Mips32ElELFType> &_mipsTargetLayout;
+  MipsTargetLayout<ELFT> &_mipsTargetLayout;
 };
 
 template <class ELFT>
 MipsDynamicLibraryWriter<ELFT>::MipsDynamicLibraryWriter(
     MipsLinkingContext &ctx, MipsTargetLayout<ELFT> &layout)
     : DynamicLibraryWriter<ELFT>(ctx, layout), _writeHelper(ctx, layout),
-      _mipsContext(ctx), _mipsTargetLayout(layout) {}
+      _mipsTargetLayout(layout) {}
 
 template <class ELFT>
 bool MipsDynamicLibraryWriter<ELFT>::createImplicitFiles(
@@ -76,21 +71,28 @@ void MipsDynamicLibraryWriter<ELFT>::finalizeDefaultAtomValues() {
   _writeHelper.finalizeMipsRuntimeAtomValues();
 }
 
+template <class ELFT>
+unique_bump_ptr<SymbolTable<ELFT>>
+    MipsDynamicLibraryWriter<ELFT>::createSymbolTable() {
+  return unique_bump_ptr<SymbolTable<ELFT>>(new (
+      this->_alloc) MipsSymbolTable<ELFT>(this->_context));
+}
+
 /// \brief create dynamic table
 template <class ELFT>
-LLD_UNIQUE_BUMP_PTR(DynamicTable<ELFT>)
+unique_bump_ptr<DynamicTable<ELFT>>
     MipsDynamicLibraryWriter<ELFT>::createDynamicTable() {
-  return LLD_UNIQUE_BUMP_PTR(DynamicTable<ELFT>)(new (
-      this->_alloc) MipsDynamicTable<ELFT>(_mipsContext, _mipsTargetLayout));
+  return unique_bump_ptr<DynamicTable<ELFT>>(new (
+      this->_alloc) MipsDynamicTable<ELFT>(this->_context, _mipsTargetLayout));
 }
 
 /// \brief create dynamic symbol table
 template <class ELFT>
-LLD_UNIQUE_BUMP_PTR(DynamicSymbolTable<ELFT>)
+unique_bump_ptr<DynamicSymbolTable<ELFT>>
     MipsDynamicLibraryWriter<ELFT>::createDynamicSymbolTable() {
-  return LLD_UNIQUE_BUMP_PTR(
-      DynamicSymbolTable<ELFT>)(new (this->_alloc) MipsDynamicSymbolTable<ELFT>(
-      _mipsContext, _mipsTargetLayout));
+  return unique_bump_ptr<DynamicSymbolTable<ELFT>>(
+      new (this->_alloc) MipsDynamicSymbolTable<ELFT>(
+          this->_context, _mipsTargetLayout));
 }
 
 } // namespace elf

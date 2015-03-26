@@ -1,6 +1,6 @@
-; RUN: opt %loadPolly -polly-ast -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-codegen-isl -S < %s | FileCheck %s -check-prefix=CODEGEN
-; RUN: opt %loadPolly -polly-codegen-isl -loops -analyze < %s | FileCheck %s -check-prefix=LOOPS
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-ast -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen-isl  -S < %s | FileCheck %s -check-prefix=CODEGEN
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen-isl -loops -analyze < %s | FileCheck %s -check-prefix=LOOPS
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-pc-linux-gnu"
 
@@ -14,7 +14,7 @@ start:
 
 loop.header:
   %i = phi i64 [ 0, %start ], [ %i.next, %loop.backedge ]
-  %scevgep = getelementptr [1024 x i32]* @A, i64 0, i64 %i
+  %scevgep = getelementptr [1024 x i32], [1024 x i32]* @A, i64 0, i64 %i
   %exitcond = icmp ne i64 %i, %n_plus_one
   br i1 %exitcond, label %loop.body, label %ret
 
@@ -31,8 +31,8 @@ ret:
   ret void
 }
 
-; CHECK: for (int c1 = 0; c1 <= n; c1 += 1)
-; CHECK:   Stmt_loop_body(c1)
+; CHECK: for (int c0 = 0; c0 <= n; c0 += 1)
+; CHECK:   Stmt_loop_body(c0)
 
 ; CODEGEN: polly.start:
 ; CODEGEN:   br label %polly.loop_if
@@ -49,8 +49,8 @@ ret:
 ; CODEGEN:   br label %polly.stmt.loop.body
 
 ; CODEGEN: polly.stmt.loop.body:
-; CODEGEN:   %p_scevgep.moved.to.loop.body = getelementptr [1024 x i32]* @A, i64 0, i64 %polly.indvar
-; CODEGEN:   store i32 1, i32* %p_scevgep.moved.to.loop.body
+; CODEGEN:   [[PTR:%[a-zA-Z0-9_\.]+]] = getelementptr [1024 x i32], [1024 x i32]* @A, i64 0, i64 %polly.indvar
+; CODEGEN:   store i32 1, i32* [[PTR]]
 ; CODEGEN:   %polly.indvar_next = add nsw i64 %polly.indvar, 1
 ; CODEGEN:   %polly.adjust_ub = sub i64 %n, 1
 ; CODEGEN:   %polly.loop_cond = icmp sle i64 %polly.indvar, %polly.adjust_ub

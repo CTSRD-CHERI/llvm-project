@@ -1,9 +1,9 @@
-; RUN: opt %loadPolly -basicaa -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
 ;
 ; CHECK: #pragma simd reduction (+ : sum{{[1,2]}}, sum{{[1,2]}}) reduction (* : prod) reduction (| : or) reduction (& : and)
-; CHECK: #pragma omp parallel for reduction (+ : sum{{[1,2]}}, sum{{[1,2]}}) reduction (* : prod) reduction (| : or) reduction (& : and)
-; CHECK: for (int c1 = 0; c1 < N; c1 += 1)
-; CHECK:   Stmt_for_body(c1);
+; CHECK: #pragma known-parallel reduction (+ : sum{{[1,2]}}, sum{{[1,2]}}) reduction (* : prod) reduction (| : or) reduction (& : and)
+; CHECK: for (int c0 = 0; c0 < N; c0 += 1)
+; CHECK:   Stmt_for_body(c0);
 ;
 ;    void f(int N, int *restrict sum1, int *restrict sum2, int *restrict prod,
 ;           int *restrict and, int *restrict or ) {
@@ -28,20 +28,20 @@ for.cond:                                         ; preds = %for.inc, %entry
   br i1 %cmp, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
-  %tmp = load i32* %sum1, align 4
+  %tmp = load i32, i32* %sum1, align 4
   %add = add nsw i32 %tmp, %i.0
   store i32 %add, i32* %sum1, align 4
   %add1 = add nsw i32 %i.0, 1
-  %tmp1 = load i32* %sum2, align 4
+  %tmp1 = load i32, i32* %sum2, align 4
   %add2 = add nsw i32 %tmp1, %add1
   store i32 %add2, i32* %sum2, align 4
-  %tmp2 = load i32* %prod, align 4
+  %tmp2 = load i32, i32* %prod, align 4
   %mul = mul nsw i32 %tmp2, %i.0
   store i32 %mul, i32* %prod, align 4
-  %tmp3 = load i32* %and, align 4
+  %tmp3 = load i32, i32* %and, align 4
   %and3 = and i32 %tmp3, %i.0
   store i32 %and3, i32* %and, align 4
-  %tmp4 = load i32* %or, align 4
+  %tmp4 = load i32, i32* %or, align 4
   %or4 = or i32 %tmp4, %i.0
   store i32 %or4, i32* %or, align 4
   br label %for.inc

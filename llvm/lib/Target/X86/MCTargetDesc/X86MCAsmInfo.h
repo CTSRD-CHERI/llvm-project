@@ -23,7 +23,8 @@ namespace llvm {
   class Triple;
 
   class X86MCAsmInfoDarwin : public MCAsmInfoDarwin {
-    void anchor() override;
+    virtual void anchor();
+
   public:
     explicit X86MCAsmInfoDarwin(const Triple &Triple);
   };
@@ -39,8 +40,6 @@ namespace llvm {
     void anchor() override;
   public:
     explicit X86ELFMCAsmInfo(const Triple &Triple);
-    const MCSection *
-    getNonexecutableStackSection(MCContext &Ctx) const override;
   };
 
   class X86MCAsmInfoMicrosoft : public MCAsmInfoMicrosoft {

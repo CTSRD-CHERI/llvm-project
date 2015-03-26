@@ -1,5 +1,4 @@
-; RUN: opt %loadPolly -polly-detect -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-detect -analyze -polly-codegen-scev < %s | FileCheck %s -check-prefix=CHECK-SCEV 
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-detect -analyze  < %s | FileCheck %s -check-prefix=CHECK
 
 ; void f(long A[], long N) {
 ;   long i;
@@ -25,7 +24,7 @@ for.i:
   %indvar.p2 = phi i64 [ 0, %pre ], [ %indvar.p2.next, %for.i ]
   %sum = add i64 %indvar, %indvar.p1
   %sum2 = sub i64 %sum, %indvar.p2
-  %scevgep = getelementptr i64* %A, i64 %indvar
+  %scevgep = getelementptr i64, i64* %A, i64 %indvar
   store i64 %indvar, i64* %scevgep
   %indvar.next = add nsw i64 %indvar, 1
   %indvar.p1.next = add nsw i64 %indvar.p1, %p_tmp
@@ -41,5 +40,4 @@ return:
   ret void
 }
 
-; CHECK-NOT: Valid Region for Scop
-; CHECK-SCEV: Valid Region for Scop: for.i => then
+; CHECK: Valid Region for Scop: for.i => then

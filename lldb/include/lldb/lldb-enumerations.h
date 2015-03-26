@@ -49,8 +49,10 @@ namespace lldb {
         eLaunchFlagLaunchInSeparateProcessGroup = (1u << 7), ///< Launch the process in a separate process group
         eLaunchFlagDontSetExitStatus = (1u << 8), ///< If you are going to hand the process off (e.g. to debugserver)
                                                    ///< set this flag so lldb & the handee don't race to set its exit status.
-        eLaunchFlagDetachOnError = (1u << 9)      ///< If set, then the client stub should detach rather than killing the debugee
+        eLaunchFlagDetachOnError = (1u << 9),     ///< If set, then the client stub should detach rather than killing the debugee
                                                    ///< if it loses connection with lldb.
+        eLaunchFlagShellExpandArguments  = (1u << 10),       ///< Perform shell-style argument expansion
+        eLaunchFlagCloseTTYOnExit = (1u << 11),    ///< Close the open TTY on exit
     } LaunchFlags;
         
     //----------------------------------------------------------------------
@@ -157,13 +159,16 @@ namespace lldb {
 
     //----------------------------------------------------------------------
     // Register numbering types
+    // See RegisterContext::ConvertRegisterKindToRegisterNumber to convert
+    // any of these to the lldb internal register numbering scheme 
+    // (eRegisterKindLLDB).
     //----------------------------------------------------------------------
     typedef enum RegisterKind
     {
         eRegisterKindGCC = 0,    // the register numbers seen in eh_frame
         eRegisterKindDWARF,      // the register numbers seen DWARF
         eRegisterKindGeneric,    // insn ptr reg, stack ptr reg, etc not specific to any particular target
-        eRegisterKindGDB,        // the register numbers gdb uses (matches stabs numbers?)
+        eRegisterKindGDB,        // the register numbers gdb uses (matches stabs numbers)
         eRegisterKindLLDB,       // lldb's internal register numbers
         kNumRegisterKinds
     } RegisterKind;
@@ -182,7 +187,8 @@ namespace lldb {
         eStopReasonException,
         eStopReasonExec,        // Program was re-exec'ed
         eStopReasonPlanComplete,
-        eStopReasonThreadExiting
+        eStopReasonThreadExiting,
+        eStopReasonInstrumentation
     } StopReason;
 
     //----------------------------------------------------------------------
@@ -286,7 +292,11 @@ namespace lldb {
         eSymbolContextBlock      = (1u << 4), ///< Set when the deepest \a block is requested from a query, or was located in query results
         eSymbolContextLineEntry  = (1u << 5), ///< Set when \a line_entry is requested from a query, or was located in query results
         eSymbolContextSymbol     = (1u << 6), ///< Set when \a symbol is requested from a query, or was located in query results
-        eSymbolContextEverything = ((eSymbolContextSymbol << 1) - 1u)  ///< Indicates to try and lookup everything up during a query.
+        eSymbolContextEverything = ((eSymbolContextSymbol << 1) - 1u),  ///< Indicates to try and lookup everything up during a routine symbol context query.
+        eSymbolContextVariable   = (1u << 7)  ///< Set when \a global or static variable is requested from a query, or was located in query results.
+                                              ///< eSymbolContextVariable is potentially expensive to lookup so it isn't included in
+                                              ///< eSymbolContextEverything which stops it from being used during frame PC lookups and
+                                              ///< many other potential address to symbol context lookups.
     } SymbolContextItem;
 
     typedef enum Permissions
@@ -370,6 +380,8 @@ namespace lldb {
         eLanguageTypeUPC             = 0x0012,   ///< Unified Parallel C.
         eLanguageTypeD               = 0x0013,   ///< D.
         eLanguageTypePython          = 0x0014,   ///< Python.
+        // NOTE: The below are DWARF5 constants, subject to change upon
+        // completion of the DWARF5 specification
         eLanguageTypeOpenCL          = 0x0015,   ///< OpenCL.
         eLanguageTypeGo              = 0x0016,   ///< Go.
         eLanguageTypeModula3         = 0x0017,   ///< Modula 3.
@@ -379,8 +391,19 @@ namespace lldb {
         eLanguageTypeOCaml           = 0x001b,   ///< OCaml.
         eLanguageTypeRust            = 0x001c,   ///< Rust.
         eLanguageTypeC11             = 0x001d,   ///< ISO C:2011.
+        eLanguageTypeSwift           = 0x001e,   ///< Swift.
+        eLanguageTypeJulia           = 0x001f,   ///< Julia.
+        eLanguageTypeDylan           = 0x0020,   ///< Dylan.
+        eLanguageTypeC_plus_plus_14  = 0x0021,   ///< ISO C++:2014.
+        eLanguageTypeFortran03       = 0x0022,   ///< ISO Fortran 2003.
+        eLanguageTypeFortran08       = 0x0023,   ///< ISO Fortran 2008.
         eNumLanguageTypes
     } LanguageType;
+    
+    typedef enum InstrumentationRuntimeType {
+        eInstrumentationRuntimeTypeAddressSanitizer = 0x0000,
+        eNumInstrumentationRuntimeTypes
+    } InstrumentationRuntimeType;
 
     typedef enum DynamicValueType
     {
@@ -408,6 +431,7 @@ namespace lldb {
         eArgTypeBoolean,
         eArgTypeBreakpointID,
         eArgTypeBreakpointIDRange,
+        eArgTypeBreakpointName,
         eArgTypeByteSize,
         eArgTypeClassName,
         eArgTypeCommandName,
@@ -426,6 +450,7 @@ namespace lldb {
         eArgTypeFunctionName,
         eArgTypeFunctionOrSymbol,
         eArgTypeGDBFormat,
+        eArgTypeHelpText,
         eArgTypeIndex,
         eArgTypeLanguage,
         eArgTypeLineNum,
@@ -557,6 +582,7 @@ namespace lldb {
         eSectionTypeELFRelocationEntries, // Elf SHT_REL or SHT_REL section
         eSectionTypeELFDynamicLinkInfo,   // Elf SHT_DYNAMIC section
         eSectionTypeEHFrame,
+        eSectionTypeCompactUnwind,        // compact unwind section in Mach-O, __TEXT,__unwind_info
         eSectionTypeOther
         
     } SectionType;
@@ -834,15 +860,75 @@ namespace lldb {
     //----------------------------------------------------------------------
     typedef enum PathType
     {
-        ePathTypeLLDBShlibDir,          // The directory where the lldb.so (unix) or LLDB mach-o file in LLDB.framework (MacOSX) exists
-        ePathTypeSupportExecutableDir,  // Find LLDB support executable directory (debugserver, etc)
-        ePathTypeHeaderDir,             // Find LLDB header file directory
-        ePathTypePythonDir,             // Find Python modules (PYTHONPATH) directory
-        ePathTypeLLDBSystemPlugins,     // System plug-ins directory
-        ePathTypeLLDBUserPlugins,       // User plug-ins directory
-        ePathTypeLLDBTempSystemDir      // The LLDB temp directory for this system that will be cleaned up on exit
-        
+        ePathTypeLLDBShlibDir,            // The directory where the lldb.so (unix) or LLDB mach-o file in LLDB.framework (MacOSX) exists
+        ePathTypeSupportExecutableDir,    // Find LLDB support executable directory (debugserver, etc)
+        ePathTypeHeaderDir,               // Find LLDB header file directory
+        ePathTypePythonDir,               // Find Python modules (PYTHONPATH) directory
+        ePathTypeLLDBSystemPlugins,       // System plug-ins directory
+        ePathTypeLLDBUserPlugins,         // User plug-ins directory
+        ePathTypeLLDBTempSystemDir,       // The LLDB temp directory for this system that will be cleaned up on exit
+        ePathTypeGlobalLLDBTempSystemDir, // The LLDB temp directory for this system, NOT cleaned up on a process exit.
+        ePathTypeClangDir                 // Find path to Clang builtin headers
     } PathType;
+    
+    //----------------------------------------------------------------------
+    // Kind of member function
+    // Used by the type system
+    //----------------------------------------------------------------------
+    typedef enum MemberFunctionKind
+    {
+        eMemberFunctionKindUnknown = 0,     // Not sure what the type of this is
+        eMemberFunctionKindConstructor,     // A function used to create instances
+        eMemberFunctionKindDestructor,      // A function used to tear down existing instances
+        eMemberFunctionKindInstanceMethod,  // A function that applies to a specific instance
+        eMemberFunctionKindStaticMethod     // A function that applies to a type rather than any instance
+    } MemberFunctionKind;
+
+
+    //----------------------------------------------------------------------
+    // String matching algorithm used by SBTarget
+    //----------------------------------------------------------------------
+    typedef enum MatchType {
+        eMatchTypeNormal,
+        eMatchTypeRegex,
+        eMatchTypeStartsWith
+    } MatchType;
+    
+    //----------------------------------------------------------------------
+    // Bitmask that describes details about a type
+    //----------------------------------------------------------------------
+    typedef enum TypeFlags {
+        eTypeHasChildren        = (1u <<  0),
+        eTypeHasValue           = (1u <<  1),
+        eTypeIsArray            = (1u <<  2),
+        eTypeIsBlock            = (1u <<  3),
+        eTypeIsBuiltIn          = (1u <<  4),
+        eTypeIsClass            = (1u <<  5),
+        eTypeIsCPlusPlus        = (1u <<  6),
+        eTypeIsEnumeration      = (1u <<  7),
+        eTypeIsFuncPrototype    = (1u <<  8),
+        eTypeIsMember           = (1u <<  9),
+        eTypeIsObjC             = (1u << 10),
+        eTypeIsPointer          = (1u << 11),
+        eTypeIsReference        = (1u << 12),
+        eTypeIsStructUnion      = (1u << 13),
+        eTypeIsTemplate         = (1u << 14),
+        eTypeIsTypedef          = (1u << 15),
+        eTypeIsVector           = (1u << 16),
+        eTypeIsScalar           = (1u << 17),
+        eTypeIsInteger          = (1u << 18),
+        eTypeIsFloat            = (1u << 19),
+        eTypeIsComplex          = (1u << 20),
+        eTypeIsSigned           = (1u << 21)
+    } TypeFlags;
+    
+    //----------------------------------------------------------------------
+    // Whether a summary should cap how much data it returns to users or not
+    //----------------------------------------------------------------------
+    typedef enum TypeSummaryCapping {
+        eTypeSummaryCapped = true,
+        eTypeSummaryUncapped = false
+    } TypeSummaryCapping;
 
 } // namespace lldb
 

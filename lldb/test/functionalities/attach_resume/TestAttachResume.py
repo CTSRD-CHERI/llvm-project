@@ -15,6 +15,7 @@ class AttachResumeTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @expectedFailureFreeBSD('llvm.org/pr19310')
+    @skipIfRemote
     @dwarf_test
     def test_attach_continue_interrupt_detach(self):
         """Test attach/continue/interrupt/detach"""
@@ -22,6 +23,7 @@ class AttachResumeTestCase(TestBase):
         self.process_attach_continue_interrupt_detach()
 
     @expectedFailureLinux('llvm.org/pr19478')
+    @skipIfRemote
     def process_attach_continue_interrupt_detach(self):
         """Test attach/continue/interrupt/detach"""
 
@@ -70,7 +72,7 @@ class AttachResumeTestCase(TestBase):
             'Process not stopped after interrupt')
 
         # check that this breakpoint is auto-cleared on detach (r204752)
-        self.runCmd("br set -f main.cpp -l 12")
+        self.runCmd("br set -f main.cpp -l %u" % (line_number('main.cpp', '// Set breakpoint here')))
 
         self.runCmd("c")
         self.assertTrue(wait_for_state(lldb.eStateRunning),
@@ -78,8 +80,12 @@ class AttachResumeTestCase(TestBase):
 
         self.assertTrue(wait_for_state(lldb.eStateStopped),
             'Process not stopped after breakpoint')
+        # This test runs a bunch of threads in the same little function with this
+        # breakpoint.  We want to make sure the breakpoint got hit at least once,
+        # but more than one thread may hit it at a time.  So we really only care
+        # that is isn't 0 times, not how many times it is.
         self.expect('br list', 'Breakpoint not hit',
-            patterns = ['hit count = 1'])
+            patterns = ['hit count = [1-9]'])
 
         self.runCmd("c")
         self.assertTrue(wait_for_state(lldb.eStateRunning),

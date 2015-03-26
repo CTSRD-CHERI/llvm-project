@@ -19,14 +19,12 @@
 
 #include "Pass.h"
 #include "LoadConfigPass.h"
-
 #include "lld/Core/File.h"
 #include "lld/Core/Pass.h"
 #include "lld/Core/Simple.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Path.h"
-
 #include <climits>
 #include <ctime>
 #include <utility>
@@ -42,8 +40,9 @@ LoadConfigAtom::LoadConfigAtom(VirtualFile &file, const DefinedAtom *sxdata,
     : COFFLinkerInternalAtom(
           file, file.getNextOrdinal(),
           std::vector<uint8_t>(sizeof(coff_load_configuration32))) {
-  addDir32Reloc(this, sxdata, offsetof(llvm::object::coff_load_configuration32,
-                                       SEHandlerTable));
+  addDir32Reloc(
+      this, sxdata, llvm::COFF::IMAGE_FILE_MACHINE_I386,
+      offsetof(llvm::object::coff_load_configuration32, SEHandlerTable));
   auto *data = getContents<llvm::object::coff_load_configuration32>();
   data->SEHandlerCount = count;
 }

@@ -14,57 +14,11 @@
 #include "lld/Core/Simple.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/COFF.h"
-
 #include <vector>
 
 namespace lld {
 namespace pecoff {
 class COFFDefinedAtom;
-
-/// A COFFReference represents relocation information for an atom. For
-/// example, if atom X has a reference to atom Y with offsetInAtom=8, that
-/// means that the address starting at 8th byte of the content of atom X needs
-/// to be fixed up so that the address points to atom Y's address.
-class COFFReference final : public Reference {
-public:
-  COFFReference(const Atom *target, uint32_t offsetInAtom, uint16_t relocType,
-                Reference::KindNamespace ns = Reference::KindNamespace::COFF,
-                Reference::KindArch arch = Reference::KindArch::x86)
-      : Reference(ns, arch, relocType), _target(target),
-        _offsetInAtom(offsetInAtom) {}
-
-  const Atom *target() const override { return _target; }
-  void setTarget(const Atom *newAtom) override { _target = newAtom; }
-
-  // Addend is a value to be added to the relocation target. For example, if
-  // target=AtomX and addend=4, the relocation address will become the address
-  // of AtomX + 4. COFF does not support that sort of relocation, thus addend
-  // is always zero.
-  Addend addend() const override { return 0; }
-  void setAddend(Addend) override {}
-  uint64_t offsetInAtom() const override { return _offsetInAtom; }
-
-private:
-  const Atom *_target;
-  uint32_t _offsetInAtom;
-};
-
-class COFFAbsoluteAtom : public AbsoluteAtom {
-public:
-  COFFAbsoluteAtom(const File &f, StringRef name, Scope scope, uint64_t value)
-      : _owningFile(f), _name(name), _scope(scope), _value(value) {}
-
-  const File &file() const override { return _owningFile; }
-  Scope scope() const override { return _scope; }
-  StringRef name() const override { return _name; }
-  uint64_t value() const override { return _value; }
-
-private:
-  const File &_owningFile;
-  StringRef _name;
-  Scope _scope;
-  uint64_t _value;
-};
 
 class COFFUndefinedAtom : public UndefinedAtom {
 public:
@@ -99,16 +53,12 @@ public:
   Interposable interposable() const override { return interposeNo; }
   Merge merge() const override { return mergeNo; }
   Alignment alignment() const override { return Alignment(0); }
-  SectionChoice sectionChoice() const = 0;
   StringRef customSectionName() const override { return ""; }
-  SectionPosition sectionPosition() const override {
-    return sectionPositionAny;
-  }
   DeadStripKind deadStrip() const override { return deadStripNormal; }
 
   Kind getKind() const { return _kind; }
 
-  void addReference(std::unique_ptr<COFFReference> reference) {
+  void addReference(std::unique_ptr<SimpleReference> reference) {
     _references.push_back(std::move(reference));
   }
 
@@ -139,7 +89,7 @@ private:
   const File &_file;
   StringRef _name;
   Kind _kind;
-  std::vector<std::unique_ptr<COFFReference> > _references;
+  std::vector<std::unique_ptr<SimpleReference>> _references;
 };
 
 /// This is the root class of the atom read from a file. This class have two
@@ -147,11 +97,12 @@ private:
 class COFFDefinedFileAtom : public COFFBaseDefinedAtom {
 public:
   COFFDefinedFileAtom(const File &file, StringRef name, StringRef sectionName,
-                      Scope scope, ContentType contentType,
-                      ContentPermissions perms, uint64_t ordinal)
+                      uint64_t sectionSize, Scope scope,
+                      ContentType contentType, ContentPermissions perms,
+                      uint64_t ordinal)
       : COFFBaseDefinedAtom(file, name, Kind::File), _sectionName(sectionName),
-        _scope(scope), _contentType(contentType), _permissions(perms),
-        _ordinal(ordinal), _alignment(0) {}
+        _sectionSize(sectionSize), _scope(scope), _contentType(contentType),
+        _permissions(perms), _ordinal(ordinal), _alignment(0) {}
 
   static bool classof(const COFFBaseDefinedAtom *atom) {
     return atom->getKind() == Kind::File;
@@ -160,6 +111,7 @@ public:
   void setAlignment(Alignment val) { _alignment = val; }
   SectionChoice sectionChoice() const override { return sectionCustomRequired; }
   StringRef customSectionName() const override { return _sectionName; }
+  uint64_t sectionSize() const override { return _sectionSize; }
   Scope scope() const override { return _scope; }
   ContentType contentType() const override { return _contentType; }
   ContentPermissions permissions() const override { return _permissions; }
@@ -167,31 +119,32 @@ public:
   Alignment alignment() const override { return _alignment; }
 
   void addAssociate(const DefinedAtom *other) {
-    auto *ref = new COFFReference(other, 0, lld::Reference::kindAssociate,
-                                  Reference::KindNamespace::all,
-                                  Reference::KindArch::all);
-    addReference(std::unique_ptr<COFFReference>(ref));
+    auto *ref = new SimpleReference(Reference::KindNamespace::all,
+                                    Reference::KindArch::all,
+                                    lld::Reference::kindAssociate, 0, other, 0);
+    addReference(std::unique_ptr<SimpleReference>(ref));
   }
 
 private:
   StringRef _sectionName;
+  uint64_t _sectionSize;
   Scope _scope;
   ContentType _contentType;
   ContentPermissions _permissions;
   uint64_t _ordinal;
   Alignment _alignment;
-  std::vector<std::unique_ptr<COFFReference> > _references;
+  std::vector<std::unique_ptr<SimpleReference>> _references;
 };
 
 // A COFFDefinedAtom represents an atom read from a file and has contents.
 class COFFDefinedAtom : public COFFDefinedFileAtom {
 public:
   COFFDefinedAtom(const File &file, StringRef name, StringRef sectionName,
-                  Scope scope, ContentType type, bool isComdat,
-                  ContentPermissions perms, Merge merge, ArrayRef<uint8_t> data,
-                  uint64_t ordinal)
-      : COFFDefinedFileAtom(file, name, sectionName, scope, type, perms,
-                            ordinal),
+                  uint64_t sectionSize, Scope scope, ContentType type,
+                  bool isComdat, ContentPermissions perms, Merge merge,
+                  ArrayRef<uint8_t> data, uint64_t ordinal)
+      : COFFDefinedFileAtom(file, name, sectionName, sectionSize,
+                            scope, type, perms, ordinal),
         _isComdat(isComdat), _merge(merge), _dataref(data) {}
 
   Merge merge() const override { return _merge; }
@@ -215,8 +168,8 @@ public:
   COFFBSSAtom(const File &file, StringRef name, Scope scope,
               ContentPermissions perms, Merge merge, uint32_t size,
               uint64_t ordinal)
-      : COFFDefinedFileAtom(file, name, ".bss", scope, typeZeroFill, perms,
-                            ordinal),
+      : COFFDefinedFileAtom(file, name, ".bss", 0, scope, typeZeroFill,
+                            perms, ordinal),
         _merge(merge), _size(size) {}
 
   Merge merge() const override { return _merge; }
@@ -347,33 +300,10 @@ private:
 
 template <typename T, typename U>
 void addLayoutEdge(T *a, U *b, uint32_t which) {
-  auto ref = new COFFReference(nullptr, 0, which, Reference::KindNamespace::all,
-                               Reference::KindArch::all);
-  ref->setTarget(b);
-  a->addReference(std::unique_ptr<COFFReference>(ref));
-}
-
-template <typename T, typename U> void connectWithLayoutEdge(T *a, U *b) {
-  addLayoutEdge(a, b, lld::Reference::kindLayoutAfter);
-  addLayoutEdge(b, a, lld::Reference::kindLayoutBefore);
-}
-
-/// Connect atoms with layout-{before,after} edges. It usually serves two
-/// purposes.
-///
-///   - To prevent atoms from being GC'ed (aka dead-stripped) if there is a
-///     reference to one of the atoms. In that case we want to emit all the
-///     atoms appeared in the same section, because the referenced "live" atom
-///     may reference other atoms in the same section. If we don't add layout
-///     edges between atoms, unreferenced atoms in the same section would be
-///     GC'ed.
-///   - To preserve the order of atmos. We want to emit the atoms in the
-///     same order as they appeared in the input object file.
-template <typename T> void connectAtomsWithLayoutEdge(std::vector<T *> &atoms) {
-  if (atoms.size() < 2)
-    return;
-  for (auto it = atoms.begin(), e = atoms.end(); it + 1 != e; ++it)
-    connectWithLayoutEdge(*it, *(it + 1));
+  auto ref = new SimpleReference(Reference::KindNamespace::all,
+                                 Reference::KindArch::all,
+                                 which, 0, b, 0);
+  a->addReference(std::unique_ptr<SimpleReference>(ref));
 }
 
 } // namespace pecoff

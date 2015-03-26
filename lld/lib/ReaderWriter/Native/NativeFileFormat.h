@@ -10,9 +10,8 @@
 #ifndef LLD_READER_WRITER_NATIVE_NATIVE_FILE_FORMAT_H
 #define LLD_READER_WRITER_NATIVE_NATIVE_FILE_FORMAT_H
 
-#include <cstdint>
-
 #include "llvm/Support/DataTypes.h"
+#include <cstdint>
 
 namespace lld {
 
@@ -137,6 +136,7 @@ struct NativeDefinedAtomIvarsV1 {
   uint32_t  referencesCount;
   uint32_t  contentOffset;
   uint32_t  contentSize;
+  uint64_t  sectionSize;
 };
 
 
@@ -151,11 +151,12 @@ struct NativeAtomAttributesV1 {
   uint8_t   interposable;
   uint8_t   merge;
   uint8_t   contentType;
-  uint8_t   sectionChoiceAndPosition; // high nibble is choice, low is position
+  uint8_t   sectionChoice;
   uint8_t   deadStrip;
   uint8_t   dynamicExport;
   uint8_t   permissions;
   uint8_t   alias;
+  uint8_t   codeModel;
 };
 
 
@@ -215,7 +216,7 @@ struct NativeReferenceIvarsV1 {
 // The NCS_ReferencesArrayV2 chunk contains an array of these structs
 //
 struct NativeReferenceIvarsV2 {
-  enum {
+  enum : unsigned {
     noTarget = UINT32_MAX
   };
   uint64_t  offsetInAtom;
@@ -224,6 +225,7 @@ struct NativeReferenceIvarsV2 {
   uint8_t   kindNamespace;
   uint8_t   kindArch;
   uint32_t  targetIndex;
+  uint32_t  tag;
 };
 
 

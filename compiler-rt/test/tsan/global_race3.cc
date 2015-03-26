@@ -1,8 +1,5 @@
 // RUN: %clangxx_tsan -O1 %s -o %t && %deflake %run %t | FileCheck %s
-#include <pthread.h>
-#include <stdio.h>
-#include <stddef.h>
-#include <unistd.h>
+#include "test.h"
 
 namespace XXX {
   struct YYY {
@@ -12,16 +9,20 @@ namespace XXX {
 }
 
 void *Thread(void *a) {
-  sleep(1);
+  barrier_wait(&barrier);
   XXX::YYY::ZZZ[0] = 1;
   return 0;
 }
 
 int main() {
-  fprintf(stderr, "addr3=%p\n", XXX::YYY::ZZZ);
+  barrier_init(&barrier, 2);
+  fprintf(stderr, "addr3=");
+  print_address(XXX::YYY::ZZZ);
+  fprintf(stderr, "\n");
   pthread_t t;
   pthread_create(&t, 0, Thread, 0);
   XXX::YYY::ZZZ[0] = 0;
+  barrier_wait(&barrier);
   pthread_join(t, 0);
 }
 

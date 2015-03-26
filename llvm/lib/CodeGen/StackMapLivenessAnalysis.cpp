@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/StackMapLivenessAnalysis.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
@@ -60,18 +61,18 @@ void StackMapLiveness::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 /// Calculate the liveness information for the given machine function.
-bool StackMapLiveness::runOnMachineFunction(MachineFunction &_MF) {
+bool StackMapLiveness::runOnMachineFunction(MachineFunction &MF) {
   if (!EnablePatchPointLiveness)
     return false;
 
-  DEBUG(dbgs() << "********** COMPUTING STACKMAP LIVENESS: "
-               << _MF.getName() << " **********\n");
-  MF = &_MF;
-  TRI = MF->getSubtarget().getRegisterInfo();
+  DEBUG(dbgs() << "********** COMPUTING STACKMAP LIVENESS: " << MF.getName()
+               << " **********\n");
+  this->MF = &MF;
+  TRI = MF.getSubtarget().getRegisterInfo();
   ++NumStackMapFuncVisited;
 
   // Skip this function if there are no patchpoints to process.
-  if (!MF->getFrameInfo()->hasPatchPoint()) {
+  if (!MF.getFrameInfo()->hasPatchPoint()) {
     ++NumStackMapFuncSkipped;
     return false;
   }
@@ -123,5 +124,7 @@ uint32_t *StackMapLiveness::createRegisterMask() const {
   for (LivePhysRegs::const_iterator RI = LiveRegs.begin(), RE = LiveRegs.end();
        RI != RE; ++RI)
     Mask[*RI / 32] |= 1U << (*RI % 32);
+
+  TRI->adjustStackMapLiveOutMask(Mask);
   return Mask;
 }

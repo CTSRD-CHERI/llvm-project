@@ -7,15 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANG_TIDY_DIAGNOSTIC_CONSUMER_H
-#define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANG_TIDY_DIAGNOSTIC_CONSUMER_H
+#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANGTIDYDIAGNOSTICCONSUMER_H
+#define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANGTIDYDIAGNOSTICCONSUMER_H
 
 #include "ClangTidyOptions.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Tooling/Refactoring.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Regex.h"
+#include "llvm/Support/Timer.h"
 
 namespace clang {
 
@@ -105,7 +107,12 @@ struct ClangTidyStats {
   }
 };
 
-/// \brief Every \c ClangTidyCheck reports errors through a \c DiagnosticEngine
+/// \brief Container for clang-tidy profiling data.
+struct ProfileData {
+  llvm::StringMap<llvm::TimeRecord> Records;
+};
+
+/// \brief Every \c ClangTidyCheck reports errors through a \c DiagnosticsEngine
 /// provided by this context.
 ///
 /// A \c ClangTidyCheck always has access to the active context to report
@@ -117,9 +124,7 @@ struct ClangTidyStats {
 class ClangTidyContext {
 public:
   /// \brief Initializes \c ClangTidyContext instance.
-  ///
-  /// Takes ownership of the \c OptionsProvider.
-  ClangTidyContext(ClangTidyOptionsProvider *OptionsProvider);
+  ClangTidyContext(std::unique_ptr<ClangTidyOptionsProvider> OptionsProvider);
 
   /// \brief Report any errors detected using this method.
   ///
@@ -164,6 +169,13 @@ public:
   /// \brief Clears collected errors.
   void clearErrors() { Errors.clear(); }
 
+  /// \brief Set the output struct for profile data.
+  ///
+  /// Setting a non-null pointer here will enable profile collection in
+  /// clang-tidy.
+  void setCheckProfileData(ProfileData* Profile);
+  ProfileData* getCheckProfileData() const { return Profile; }
+
 private:
   // Calls setDiagnosticsEngine() and storeError().
   friend class ClangTidyDiagnosticConsumer;
@@ -180,11 +192,14 @@ private:
   std::unique_ptr<ClangTidyOptionsProvider> OptionsProvider;
 
   std::string CurrentFile;
+  ClangTidyOptions CurrentOptions;
   std::unique_ptr<GlobList> CheckFilter;
 
   ClangTidyStats Stats;
 
   llvm::DenseMap<unsigned, std::string> CheckNamesByDiagnosticID;
+
+  ProfileData *Profile;
 };
 
 /// \brief A diagnostic consumer that turns each \c Diagnostic into a
@@ -228,4 +243,4 @@ private:
 } // end namespace tidy
 } // end namespace clang
 
-#endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANG_TIDY_DIAGNOSTIC_CONSUMER_H
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANGTIDYDIAGNOSTICCONSUMER_H

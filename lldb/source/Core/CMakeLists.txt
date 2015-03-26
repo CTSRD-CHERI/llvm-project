@@ -11,7 +11,6 @@ add_lldb_library(lldbCore
   Broadcaster.cpp
   Communication.cpp
   Connection.cpp
-  ConnectionFileDescriptor.cpp
   ConnectionMachPort.cpp
   ConnectionSharedMemory.cpp
   ConstString.cpp
@@ -28,11 +27,13 @@ add_lldb_library(lldbCore
   FastDemangle.cpp
   FileLineResolver.cpp
   FileSpecList.cpp
+  FormatEntity.cpp
   History.cpp
   IOHandler.cpp
   Language.cpp
   Listener.cpp
   Log.cpp
+  Logging.cpp
   Mangled.cpp
   Module.cpp
   ModuleChild.cpp

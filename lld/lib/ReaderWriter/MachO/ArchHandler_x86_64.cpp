@@ -10,11 +10,10 @@
 #include "ArchHandler.h"
 #include "Atoms.h"
 #include "MachONormalizedFileBinaryUtils.h"
-
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
-
+#include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm::MachO;
@@ -22,6 +21,12 @@ using namespace lld::mach_o::normalized;
 
 namespace lld {
 namespace mach_o {
+
+using llvm::support::ulittle32_t;
+using llvm::support::ulittle64_t;
+
+using llvm::support::little32_t;
+using llvm::support::little64_t;
 
 class ArchHandler_x86_64 : public ArchHandler {
 public:
@@ -46,6 +51,9 @@ public:
     case ripRel32Got:
       canBypassGOT = false;
       return true;
+    case imageOffsetGot:
+      canBypassGOT = false;
+      return true;
     default:
       return false;
     }
@@ -55,42 +63,87 @@ public:
   void updateReferenceToGOT(const Reference *ref, bool targetNowGOT) override {
     assert(ref->kindNamespace() == Reference::KindNamespace::mach_o);
     assert(ref->kindArch() == Reference::KindArch::x86_64);
-    const_cast<Reference *>(ref)
+
+    switch (ref->kindValue()) {
+    case ripRel32Got:
+      assert(targetNowGOT && "target must be GOT");
+    case ripRel32GotLoad:
+      const_cast<Reference *>(ref)
         ->setKindValue(targetNowGOT ? ripRel32 : ripRel32GotLoadNowLea);
+      break;
+    case imageOffsetGot:
+      const_cast<Reference *>(ref)->setKindValue(imageOffset);
+      break;
+    default:
+      llvm_unreachable("unknown GOT reference kind");
+    }
+  }
+
+  bool needsCompactUnwind() override {
+    return true;
+  }
+  Reference::KindValue imageOffsetKind() override {
+    return imageOffset;
+  }
+  Reference::KindValue imageOffsetKindIndirect() override {
+    return imageOffsetGot;
+  }
+
+  Reference::KindValue unwindRefToCIEKind() override {
+    return negDelta32;
+  }
+
+  Reference::KindValue unwindRefToFunctionKind() override{
+    return unwindFDEToFunction;
+  }
+
+  Reference::KindValue unwindRefToEhFrameKind() override {
+    return unwindInfoToEhFrame;
+  }
+
+  uint32_t dwarfCompactUnwindType() override {
+    return 0x04000000U;
   }
 
   const StubInfo &stubInfo() override { return _sStubInfo; }
 
+  bool isNonCallBranch(const Reference &) override {
+    return false;
+  }
+
   bool isCallSite(const Reference &) override;
   bool isPointer(const Reference &) override;
   bool isPairedReloc(const normalized::Relocation &) override;
+
   std::error_code getReferenceInfo(const normalized::Relocation &reloc,
                                    const DefinedAtom *inAtom,
                                    uint32_t offsetInAtom,
                                    uint64_t fixupAddress, bool swap,
                                    FindAtomBySectionAndAddress atomFromAddress,
                                    FindAtomBySymbolIndex atomFromSymbolIndex,
-                                   Reference::KindValue *kind, 
-                                   const lld::Atom **target, 
+                                   Reference::KindValue *kind,
+                                   const lld::Atom **target,
                                    Reference::Addend *addend) override;
-  std::error_code 
+  std::error_code
       getPairReferenceInfo(const normalized::Relocation &reloc1,
                            const normalized::Relocation &reloc2,
                            const DefinedAtom *inAtom,
                            uint32_t offsetInAtom,
-                           uint64_t fixupAddress, bool swap,
+                           uint64_t fixupAddress, bool swap, bool scatterable,
                            FindAtomBySectionAndAddress atomFromAddress,
                            FindAtomBySymbolIndex atomFromSymbolIndex,
-                           Reference::KindValue *kind, 
-                           const lld::Atom **target, 
+                           Reference::KindValue *kind,
+                           const lld::Atom **target,
                            Reference::Addend *addend) override;
 
-  virtual bool needsLocalSymbolInRelocatableFile(const DefinedAtom *atom) {
+  bool needsLocalSymbolInRelocatableFile(const DefinedAtom *atom) override {
     return (atom->contentType() == DefinedAtom::typeCString);
   }
 
   void generateAtomContent(const DefinedAtom &atom, bool relocatable,
                            FindAddressForAtom findAddress,
+                           FindAddressForAtom findSectionAddress,
+                           uint64_t imageBase,
                            uint8_t *atomContentBuffer) override;
 
   void appendSectionRelocations(const DefinedAtom &atom,
@@ -105,9 +158,9 @@ private:
   static const Registry::KindStrings _sKindStrings[];
   static const StubInfo              _sStubInfo;
 
-  enum : Reference::KindValue {
+  enum X86_64Kind: Reference::KindValue {
     invalid,               /// for error condition
-    
+
     // Kinds found in mach-o .o files:
     branch32,              /// ex: call _foo
     ripRel32,              /// ex: movq _foo(%rip), %rax
@@ -123,13 +176,22 @@ private:
     delta32,               /// ex: .long _foo - .
     delta64Anon,           /// ex: .quad L1 - .
     delta32Anon,           /// ex: .long L1 - .
-    
+    negDelta32,            /// ex: .long . - _foo
+
     // Kinds introduced by Passes:
-    ripRel32GotLoadNowLea, /// Target of GOT load is in linkage unit so 
+    ripRel32GotLoadNowLea, /// Target of GOT load is in linkage unit so
                            ///  "movq  _foo@GOTPCREL(%rip), %rax" can be changed
                            /// to "leaq _foo(%rip), %rax
     lazyPointer,           /// Location contains a lazy pointer.
     lazyImmediateLocation, /// Location contains immediate value used in stub.
+
+    imageOffset,           /// Location contains offset of atom in final image
+    imageOffsetGot,        /// Location contains offset of GOT entry for atom in
+                           /// final image (typically personality function).
+    unwindFDEToFunction,   /// Nearly delta64, but cannot be rematerialized in
+                           /// relocatable object (yay for implicit contracts!).
+    unwindInfoToEhFrame,   /// Fix low 24 bits of compact unwind encoding to
+                           /// refer to __eh_frame entry.
   };
 
   Reference::KindValue kindFromReloc(const normalized::Relocation &reloc);
@@ -138,19 +200,17 @@ private:
 
   void applyFixupFinal(const Reference &ref, uint8_t *location,
                        uint64_t fixupAddress, uint64_t targetAddress,
-                       uint64_t inAtomAddress);
+                       uint64_t inAtomAddress, uint64_t imageBaseAddress,
+                       FindAddressForAtom findSectionAddress);
 
   void applyFixupRelocatable(const Reference &ref, uint8_t *location,
                              uint64_t fixupAddress,
                              uint64_t targetAddress,
                              uint64_t inAtomAddress);
-
-  const bool _swap;
 };
 
 
-ArchHandler_x86_64::ArchHandler_x86_64() :
-  _swap(!MachOLinkingContext::isHostEndian(MachOLinkingContext::arch_x86_64)) {}
+ArchHandler_x86_64::ArchHandler_x86_64() { }
 
 ArchHandler_x86_64::~ArchHandler_x86_64() { }
 
@@ -165,34 +225,39 @@ const Registry::KindStrings ArchHandler_x86_64::_sKindStrings[] = {
   LLD_KIND_STRING_ENTRY(pointer64), LLD_KIND_STRING_ENTRY(pointer64Anon),
   LLD_KIND_STRING_ENTRY(delta32), LLD_KIND_STRING_ENTRY(delta64),
   LLD_KIND_STRING_ENTRY(delta32Anon), LLD_KIND_STRING_ENTRY(delta64Anon),
+  LLD_KIND_STRING_ENTRY(negDelta32),
+  LLD_KIND_STRING_ENTRY(imageOffset), LLD_KIND_STRING_ENTRY(imageOffsetGot),
+  LLD_KIND_STRING_ENTRY(unwindFDEToFunction),
+  LLD_KIND_STRING_ENTRY(unwindInfoToEhFrame),
   LLD_KIND_STRING_END
 };
 
 const ArchHandler::StubInfo ArchHandler_x86_64::_sStubInfo = {
   "dyld_stub_binder",
 
-  // Lazy pointer references 
+  // Lazy pointer references
   { Reference::KindArch::x86_64, pointer64, 0, 0 },
   { Reference::KindArch::x86_64, lazyPointer, 0, 0 },
-  
+
   // GOT pointer to dyld_stub_binder
   { Reference::KindArch::x86_64, pointer64, 0, 0 },
 
   // x86_64 code alignment 2^1
-  1, 
-  
+  1,
+
   // Stub size and code
-  6, 
+  6,
   { 0xff, 0x25, 0x00, 0x00, 0x00, 0x00 },       // jmp *lazyPointer
   { Reference::KindArch::x86_64, ripRel32, 2, 0 },
-  
+  { false, 0, 0, 0 },
+
   // Stub Helper size and code
   10,
   { 0x68, 0x00, 0x00, 0x00, 0x00,               // pushq $lazy-info-offset
     0xE9, 0x00, 0x00, 0x00, 0x00 },             // jmp helperhelper
   { Reference::KindArch::x86_64, lazyImmediateLocation, 1, 0 },
   { Reference::KindArch::x86_64, branch32, 6, 0 },
-  
+
   // Stub Helper-Common size and code
   16,
   { 0x4C, 0x8D, 0x1D, 0x00, 0x00, 0x00, 0x00,   // leaq cache(%rip),%r11
@@ -200,8 +265,10 @@ const ArchHandler::StubInfo ArchHandler_x86_64::_sStubInfo = {
     0xFF, 0x25, 0x00, 0x00, 0x00, 0x00,         // jmp *binder(%rip)
     0x90 },                                     // nop
   { Reference::KindArch::x86_64, ripRel32, 3, 0 },
-  { Reference::KindArch::x86_64, ripRel32, 11, 0 }
-  
+  { false, 0, 0, 0 },
+  { Reference::KindArch::x86_64, ripRel32, 11, 0 },
+  { false, 0, 0, 0 }
+
 };
 
 bool ArchHandler_x86_64::isCallSite(const Reference &ref) {
@@ -251,15 +318,15 @@ ArchHandler_x86_64::kindFromReloc(const Relocation &reloc) {
   }
 }
 
-std::error_code 
+std::error_code
 ArchHandler_x86_64::getReferenceInfo(const Relocation &reloc,
                                     const DefinedAtom *inAtom,
                                     uint32_t offsetInAtom,
                                     uint64_t fixupAddress, bool swap,
                                     FindAtomBySectionAndAddress atomFromAddress,
                                     FindAtomBySymbolIndex atomFromSymbolIndex,
-                                    Reference::KindValue *kind, 
-                                    const lld::Atom **target, 
+                                    Reference::KindValue *kind,
+                                    const lld::Atom **target,
                                     Reference::Addend *addend) {
   typedef std::error_code E;
   *kind = kindFromReloc(reloc);
@@ -272,39 +339,39 @@ ArchHandler_x86_64::getReferenceInfo(const Relocation &reloc,
   case ripRel32:
     if (E ec = atomFromSymbolIndex(reloc.symbol, target))
       return ec;
-    *addend = readS32(swap, fixupContent);
+    *addend = *(const little32_t *)fixupContent;
     return std::error_code();
   case ripRel32Minus1:
     if (E ec = atomFromSymbolIndex(reloc.symbol, target))
       return ec;
-    *addend = readS32(swap, fixupContent) + 1;
+    *addend = (int32_t)*(const little32_t *)fixupContent + 1;
     return std::error_code();
   case ripRel32Minus2:
     if (E ec = atomFromSymbolIndex(reloc.symbol, target))
       return ec;
-    *addend = readS32(swap, fixupContent) + 2;
+    *addend = (int32_t)*(const little32_t *)fixupContent + 2;
     return std::error_code();
   case ripRel32Minus4:
     if (E ec = atomFromSymbolIndex(reloc.symbol, target))
       return ec;
-    *addend = readS32(swap, fixupContent) + 4;
+    *addend = (int32_t)*(const little32_t *)fixupContent + 4;
     return std::error_code();
   case ripRel32Anon:
-    targetAddress = fixupAddress + 4 + readS32(swap, fixupContent);
+    targetAddress = fixupAddress + 4 + *(const little32_t *)fixupContent;
     return atomFromAddress(reloc.symbol, targetAddress, target, addend);
   case ripRel32GotLoad:
   case ripRel32Got:
     if (E ec = atomFromSymbolIndex(reloc.symbol, target))
       return ec;
-    *addend = 0;
+    *addend = *(const little32_t *)fixupContent;
     return std::error_code();
   case pointer64:
     if (E ec = atomFromSymbolIndex(reloc.symbol, target))
       return ec;
-    *addend = readS64(swap, fixupContent);
+    *addend = *(const little64_t *)fixupContent;
     return std::error_code();
   case pointer64Anon:
-    targetAddress = readS64(swap, fixupContent);
+    targetAddress = *(const little64_t *)fixupContent;
     return atomFromAddress(reloc.symbol, targetAddress, target, addend);
   default:
     llvm_unreachable("bad reloc kind");
@@ -338,10 +405,11 @@ ArchHandler_x86_64::getPairReferenceInfo(const normalized::Relocation &reloc1,
                                    const DefinedAtom *inAtom,
                                    uint32_t offsetInAtom,
                                    uint64_t fixupAddress, bool swap,
+                                   bool scatterable,
                                    FindAtomBySectionAndAddress atomFromAddress,
                                    FindAtomBySymbolIndex atomFromSymbolIndex,
-                                   Reference::KindValue *kind, 
-                                   const lld::Atom **target, 
+                                   Reference::KindValue *kind,
+                                   const lld::Atom **target,
                                    Reference::Addend *addend) {
   *kind = kindFromRelocPair(reloc1, reloc2);
   if (*kind == invalid)
@@ -358,28 +426,28 @@ ArchHandler_x86_64::getPairReferenceInfo(const normalized::Relocation &reloc1,
   case delta64:
     if (E ec = atomFromSymbolIndex(reloc2.symbol, target))
       return ec;
-    *addend = readS64(swap, fixupContent) + offsetInAtom;
+    *addend = (int64_t)*(const little64_t *)fixupContent + offsetInAtom;
     return std::error_code();
   case delta32:
     if (E ec = atomFromSymbolIndex(reloc2.symbol, target))
       return ec;
-    *addend = readS32(swap, fixupContent) + offsetInAtom;
+    *addend = (int32_t)*(const little32_t *)fixupContent + offsetInAtom;
     return std::error_code();
   case delta64Anon:
-    targetAddress = offsetInAtom + readS64(swap, fixupContent);
+    targetAddress = offsetInAtom + (int64_t)*(const little64_t *)fixupContent;
     return atomFromAddress(reloc2.symbol, targetAddress, target, addend);
   case delta32Anon:
-    targetAddress = offsetInAtom + readS32(swap, fixupContent);
+    targetAddress = offsetInAtom + (int32_t)*(const little32_t *)fixupContent;
     return atomFromAddress(reloc2.symbol, targetAddress, target, addend);
   default:
     llvm_unreachable("bad reloc pair kind");
   }
 }
 
-void ArchHandler_x86_64::generateAtomContent(const DefinedAtom &atom,
-                                             bool relocatable,
-                                             FindAddressForAtom findAddress,
-                                             uint8_t *atomContentBuffer) {
+void ArchHandler_x86_64::generateAtomContent(
+    const DefinedAtom &atom, bool relocatable, FindAddressForAtom findAddress,
+    FindAddressForAtom findSectionAddress, uint64_t imageBaseAddress,
+    uint8_t *atomContentBuffer) {
   // Copy raw bytes.
   memcpy(atomContentBuffer, atom.rawContent().data(), atom.size());
   // Apply fix-ups.
@@ -397,119 +465,154 @@ void ArchHandler_x86_64::generateAtomContent(const DefinedAtom &atom,
                                         atomAddress);
     } else {
       applyFixupFinal(*ref, &atomContentBuffer[offset],
-                                  fixupAddress, targetAddress,
-                                  atomAddress);
+                      fixupAddress, targetAddress,
+                      atomAddress, imageBaseAddress, findSectionAddress);
     }
   }
 }
 
-void ArchHandler_x86_64::applyFixupFinal(const Reference &ref,
-                                         uint8_t *location,
-                                         uint64_t fixupAddress,
-                                         uint64_t targetAddress,
-                                         uint64_t inAtomAddress) {
+void ArchHandler_x86_64::applyFixupFinal(
+    const Reference &ref, uint8_t *loc, uint64_t fixupAddress,
+    uint64_t targetAddress, uint64_t inAtomAddress, uint64_t imageBaseAddress,
+    FindAddressForAtom findSectionAddress) {
   if (ref.kindNamespace() != Reference::KindNamespace::mach_o)
     return;
   assert(ref.kindArch() == Reference::KindArch::x86_64);
-  int32_t *loc32 = reinterpret_cast<int32_t *>(location);
-  uint64_t *loc64 = reinterpret_cast<uint64_t *>(location);
-  switch (ref.kindValue()) {
+  ulittle32_t *loc32 = reinterpret_cast<ulittle32_t *>(loc);
+  ulittle64_t *loc64 = reinterpret_cast<ulittle64_t *>(loc);
+  switch (static_cast<X86_64Kind>(ref.kindValue())) {
   case branch32:
   case ripRel32:
+  case ripRel32Anon:
   case ripRel32Got:
   case ripRel32GotLoad:
-    write32(*loc32, _swap, (targetAddress - (fixupAddress + 4)) + ref.addend());
-    break;
+    *loc32 = targetAddress - (fixupAddress + 4) + ref.addend();
+    return;
   case pointer64:
   case pointer64Anon:
-    write64(*loc64, _swap, targetAddress + ref.addend());
-    break;
+    *loc64 = targetAddress + ref.addend();
+    return;
   case ripRel32Minus1:
-    write32(*loc32, _swap, (targetAddress - (fixupAddress + 5)) + ref.addend());
-    break;
+    *loc32 = targetAddress - (fixupAddress + 5) + ref.addend();
+    return;
   case ripRel32Minus2:
-    write32(*loc32, _swap, (targetAddress - (fixupAddress + 6)) + ref.addend());
-    break;
+    *loc32 = targetAddress - (fixupAddress + 6) + ref.addend();
+    return;
   case ripRel32Minus4:
-    write32(*loc32, _swap, (targetAddress - (fixupAddress + 8)) + ref.addend());
-    break;
+    *loc32 = targetAddress - (fixupAddress + 8) + ref.addend();
+    return;
   case delta32:
   case delta32Anon:
-    write32(*loc32, _swap, (targetAddress - fixupAddress) + ref.addend());
-    break;
+    *loc32 = targetAddress - fixupAddress + ref.addend();
+    return;
   case delta64:
   case delta64Anon:
-    write64(*loc64, _swap, (targetAddress - fixupAddress) + ref.addend());
-    break;
+  case unwindFDEToFunction:
+    *loc64 = targetAddress - fixupAddress + ref.addend();
+    return;
   case ripRel32GotLoadNowLea:
     // Change MOVQ to LEA
-    assert(location[-2] == 0x8B);
-    location[-2] = 0x8D;
-    write32(*loc32, _swap, (targetAddress - (fixupAddress + 4)) + ref.addend());
-    break;
+    assert(loc[-2] == 0x8B);
+    loc[-2] = 0x8D;
+    *loc32 = targetAddress - (fixupAddress + 4) + ref.addend();
+    return;
+  case negDelta32:
+    *loc32 = fixupAddress - targetAddress + ref.addend();
+    return;
   case lazyPointer:
+    // Do nothing
+    return;
   case lazyImmediateLocation:
-    // do nothing
-    break;
-  default:
-    llvm_unreachable("invalid x86_64 Reference Kind");
+    *loc32 = ref.addend();
+    return;
+  case imageOffset:
+  case imageOffsetGot:
+    *loc32 = (targetAddress - imageBaseAddress) + ref.addend();
+    return;
+  case unwindInfoToEhFrame: {
+    uint64_t val = targetAddress - findSectionAddress(*ref.target()) + ref.addend();
+    assert(val < 0xffffffU && "offset in __eh_frame too large");
+    *loc32 = (*loc32 & 0xff000000U) | val;
+    return;
+  }
+  case invalid:
+    // Fall into llvm_unreachable().
     break;
   }
+  llvm_unreachable("invalid x86_64 Reference Kind");
 }
 
 
 void ArchHandler_x86_64::applyFixupRelocatable(const Reference &ref,
-                                               uint8_t *location,
+                                               uint8_t *loc,
                                                uint64_t fixupAddress,
                                                uint64_t targetAddress,
                                                uint64_t inAtomAddress)  {
-  int32_t *loc32 = reinterpret_cast<int32_t *>(location);
-  uint64_t *loc64 = reinterpret_cast<uint64_t *>(location);
-  switch (ref.kindValue()) {
+  if (ref.kindNamespace() != Reference::KindNamespace::mach_o)
+    return;
+  assert(ref.kindArch() == Reference::KindArch::x86_64);
+  ulittle32_t *loc32 = reinterpret_cast<ulittle32_t *>(loc);
+  ulittle64_t *loc64 = reinterpret_cast<ulittle64_t *>(loc);
+  switch (static_cast<X86_64Kind>(ref.kindValue())) {
   case branch32:
   case ripRel32:
   case ripRel32Got:
   case ripRel32GotLoad:
-    write32(*loc32, _swap, ref.addend());
-    break;
+    *loc32 = ref.addend();
+    return;
+  case ripRel32Anon:
+    *loc32 = (targetAddress - (fixupAddress + 4)) + ref.addend();
+    return;
   case pointer64:
-    write64(*loc64, _swap, ref.addend());
-    break;
+    *loc64 = ref.addend();
+    return;
   case pointer64Anon:
-    write64(*loc64, _swap, targetAddress + ref.addend());
-    break;
+    *loc64 = targetAddress + ref.addend();
+    return;
   case ripRel32Minus1:
-    write32(*loc32, _swap, ref.addend() - 1);
-    break;
+    *loc32 = ref.addend() - 1;
+    return;
   case ripRel32Minus2:
-    write32(*loc32, _swap, ref.addend() - 2);
-    break;
+    *loc32 = ref.addend() - 2;
+    return;
   case ripRel32Minus4:
-    write32(*loc32, _swap, ref.addend() - 4);
-    break;
+    *loc32 = ref.addend() - 4;
+    return;
   case delta32:
-    write32(*loc32, _swap, ref.addend() + inAtomAddress - fixupAddress);
-    break;
+    *loc32 = ref.addend() + inAtomAddress - fixupAddress;
+    return;
   case delta32Anon:
-    write32(*loc32, _swap, (targetAddress - fixupAddress) + ref.addend());
-    break;
+    *loc32 = (targetAddress - fixupAddress) + ref.addend();
+    return;
   case delta64:
-    write64(*loc64, _swap, ref.addend() + inAtomAddress - fixupAddress);
-    break;
+    *loc64 = ref.addend() + inAtomAddress - fixupAddress;
+    return;
   case delta64Anon:
-    write64(*loc64, _swap, (targetAddress - fixupAddress) + ref.addend());
-    break;
+    *loc64 = (targetAddress - fixupAddress) + ref.addend();
+    return;
+  case negDelta32:
+    *loc32 = fixupAddress - targetAddress + ref.addend();
+    return;
   case ripRel32GotLoadNowLea:
     llvm_unreachable("ripRel32GotLoadNowLea implies GOT pass was run");
-    break;
+    return;
   case lazyPointer:
   case lazyImmediateLocation:
     llvm_unreachable("lazy reference kind implies Stubs pass was run");
-    break;
-  default:
-    llvm_unreachable("unknown x86_64 Reference Kind");
+    return;
+  case imageOffset:
+  case imageOffsetGot:
+  case unwindInfoToEhFrame:
+    llvm_unreachable("fixup implies __unwind_info");
+    return;
+  case unwindFDEToFunction:
+    // Do nothing for now
+    return;
+  case invalid:
+    // Fall into llvm_unreachable().
     break;
   }
+  llvm_unreachable("unknown x86_64 Reference Kind");
 }
 
 void ArchHandler_x86_64::appendSectionRelocations(
@@ -524,78 +627,91 @@ void ArchHandler_x86_64::appendSectionRelocations(
     return;
   assert(ref.kindArch() == Reference::KindArch::x86_64);
   uint32_t sectionOffset = atomSectionOffset + ref.offsetInAtom();
-  switch (ref.kindValue()) {
+  switch (static_cast<X86_64Kind>(ref.kindValue())) {
   case branch32:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_BRANCH | rPcRel | rExtern | rLength4);
-    break;
+    return;
   case ripRel32:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_SIGNED | rPcRel | rExtern | rLength4 );
-    break;
+    return;
+  case ripRel32Anon:
+    appendReloc(relocs, sectionOffset, sectionIndexForAtom(*ref.target()), 0,
+                X86_64_RELOC_SIGNED | rPcRel          | rLength4 );
+    return;
   case ripRel32Got:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_GOT | rPcRel | rExtern | rLength4 );
-    break;
+    return;
   case ripRel32GotLoad:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_GOT_LOAD | rPcRel | rExtern | rLength4 );
-    break;
+    return;
   case pointer64:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_UNSIGNED  | rExtern | rLength8);
-    break;
+    return;
   case pointer64Anon:
     appendReloc(relocs, sectionOffset, sectionIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_UNSIGNED | rLength8);
-    break;
+    return;
   case ripRel32Minus1:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_SIGNED_1 | rPcRel | rExtern | rLength4 );
-    break;
+    return;
   case ripRel32Minus2:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_SIGNED_2 | rPcRel | rExtern | rLength4 );
-    break;
+    return;
   case ripRel32Minus4:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_SIGNED_4 | rPcRel | rExtern | rLength4 );
-    break;
+    return;
   case delta32:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(atom), 0,
                 X86_64_RELOC_SUBTRACTOR | rExtern | rLength4 );
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_UNSIGNED   | rExtern | rLength4 );
-    break;
+    return;
   case delta32Anon:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(atom), 0,
                 X86_64_RELOC_SUBTRACTOR | rExtern | rLength4 );
     appendReloc(relocs, sectionOffset, sectionIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_UNSIGNED             | rLength4 );
-    break;
+    return;
   case delta64:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(atom), 0,
                 X86_64_RELOC_SUBTRACTOR | rExtern | rLength8 );
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_UNSIGNED   | rExtern | rLength8 );
-    break;
+    return;
   case delta64Anon:
     appendReloc(relocs, sectionOffset, symbolIndexForAtom(atom), 0,
                 X86_64_RELOC_SUBTRACTOR | rExtern | rLength8 );
     appendReloc(relocs, sectionOffset, sectionIndexForAtom(*ref.target()), 0,
                 X86_64_RELOC_UNSIGNED             | rLength8 );
-    break;
+    return;
+  case unwindFDEToFunction:
+  case unwindInfoToEhFrame:
+  case negDelta32:
+    return;
   case ripRel32GotLoadNowLea:
     llvm_unreachable("ripRel32GotLoadNowLea implies GOT pass was run");
-    break;
+    return;
   case lazyPointer:
   case lazyImmediateLocation:
     llvm_unreachable("lazy reference kind implies Stubs pass was run");
-    break;
-  default:
-    llvm_unreachable("unknown x86_64 Reference Kind");
+    return;
+  case imageOffset:
+  case imageOffsetGot:
+    llvm_unreachable("__unwind_info references should have been resolved");
+    return;
+  case invalid:
+    // Fall into llvm_unreachable().
     break;
   }
+  llvm_unreachable("unknown x86_64 Reference Kind");
 }
 
 
