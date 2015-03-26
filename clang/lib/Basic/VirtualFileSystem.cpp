@@ -11,10 +11,10 @@
 
 #include "clang/Basic/VirtualFileSystem.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
@@ -296,7 +296,7 @@ class OverlayFSDirIterImpl : public clang::vfs::detail::DirIterImpl {
       }
       CurrentEntry = *CurrentDirIter;
       StringRef Name = llvm::sys::path::filename(CurrentEntry.getName());
-      if (SeenNames.insert(Name))
+      if (SeenNames.insert(Name).second)
         return EC; // name not seen before
     }
     llvm_unreachable("returned above");
@@ -1134,7 +1134,7 @@ VFSFromYamlDirIterImpl::VFSFromYamlDirIterImpl(const Twine &_Path,
   if (Current != End) {
     SmallString<128> PathStr(Dir);
     llvm::sys::path::append(PathStr, (*Current)->getName());
-    llvm::ErrorOr<vfs::Status> S = FS.status(PathStr.str());
+    llvm::ErrorOr<vfs::Status> S = FS.status(PathStr);
     if (S)
       CurrentEntry = *S;
     else
@@ -1147,7 +1147,7 @@ std::error_code VFSFromYamlDirIterImpl::increment() {
   if (++Current != End) {
     SmallString<128> PathStr(Dir);
     llvm::sys::path::append(PathStr, (*Current)->getName());
-    llvm::ErrorOr<vfs::Status> S = FS.status(PathStr.str());
+    llvm::ErrorOr<vfs::Status> S = FS.status(PathStr);
     if (!S)
       return S.getError();
     CurrentEntry = *S;

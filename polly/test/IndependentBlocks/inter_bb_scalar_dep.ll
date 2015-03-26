@@ -1,7 +1,7 @@
-; RUN: opt %loadPolly -basicaa -polly-independent -S < %s | FileCheck %s
-; RUN: opt %loadPolly -basicaa -polly-independent -polly-codegen-scev -S < %s | FileCheck %s
-; RUN: opt %loadPolly -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array -S < %s | FileCheck %s -check-prefix=SCALARACCESS
-; RUN: opt %loadPolly -basicaa -polly-independent -polly-codegen-scev -disable-polly-intra-scop-scalar-to-array -S < %s | FileCheck %s -check-prefix=SCALARACCESS
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array -S < %s | FileCheck %s -check-prefix=SCALARACCESS
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array -S < %s | FileCheck %s -check-prefix=SCALARACCESS
 
 ; void f(long A[], int N, int *init_ptr) {
 ;   long i, j;
@@ -33,17 +33,17 @@ for.i:
   br label %entry.next
 
 entry.next:
-  %init = load i64* %init_ptr
+  %init = load i64, i64* %init_ptr
 ; SCALARACCESS-NOT: store
   br label %for.j
 
 for.j:
   %indvar.j = phi i64 [ 0, %entry.next ], [ %indvar.j.next, %for.j ]
   %init_plus_two = add i64 %init, 2
-; CHECK: %init.loadarray = load i64* %init.s2a
+; CHECK: %init.loadarray = load i64, i64* %init.s2a
 ; CHECK: %init_plus_two = add i64 %init.loadarray, 2
 ; SCALARACCESS: %init_plus_two = add i64 %init, 2
-  %scevgep = getelementptr i64* %A, i64 %indvar.j
+  %scevgep = getelementptr i64, i64* %A, i64 %indvar.j
   store i64 %init_plus_two, i64* %scevgep
   %indvar.j.next = add nsw i64 %indvar.j, 1
   %exitcond.j = icmp eq i64 %indvar.j.next, %N

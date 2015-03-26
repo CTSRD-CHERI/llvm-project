@@ -1,7 +1,6 @@
-add_lld_library(lldYAML
+add_llvm_library(lldYAML
   ReaderWriterYAML.cpp
-  )
-
-target_link_libraries(lldYAML
-  lldReaderWriter
+  LINK_LIBS
+    lldCore
+    LLVMSupport
   )

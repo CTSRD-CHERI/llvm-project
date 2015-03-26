@@ -123,7 +123,7 @@ class SettingsCommandTestCase(TestBase):
 
         self.runCmd("settings show frame-format")
         m = re.match(
-                '^frame-format \(string\) = "(.*)\"$',
+                '^frame-format \(format-string\) = "(.*)\"$',
                 self.res.GetOutput())
         self.assertTrue(m, "Bad settings string")
         self.format_string = m.group(1)
@@ -212,7 +212,6 @@ class SettingsCommandTestCase(TestBase):
         self.buildDwarf()
         self.pass_run_args_and_env_vars()
 
-    @not_remote_testsuite_ready
     def pass_run_args_and_env_vars(self):
         """Test that run-args and env-vars are passed to the launched process."""
         exe = os.path.join(os.getcwd(), "a.out")
@@ -230,6 +229,8 @@ class SettingsCommandTestCase(TestBase):
         self.runCmd("run", RUN_SUCCEEDED)
 
         # Read the output file produced by running the program.
+        if lldb.remote_platform:
+            self.runCmd('platform get-file "output2.txt" "output2.txt"')
         with open('output2.txt', 'r') as f:
             output = f.read()
 
@@ -239,7 +240,7 @@ class SettingsCommandTestCase(TestBase):
                        "argv[3] matches",
                        "Environment variable 'MY_ENV_VAR' successfully passed."])
 
-    @not_remote_testsuite_ready
+    @skipIfRemote # it doesn't make sense to send host env to remote target
     def test_pass_host_env_vars(self):
         """Test that the host env vars are passed to the launched process."""
         self.buildDefault()
@@ -264,6 +265,8 @@ class SettingsCommandTestCase(TestBase):
         self.runCmd("run", RUN_SUCCEEDED)
 
         # Read the output file produced by running the program.
+        if lldb.remote_platform:
+            self.runCmd('platform get-file "output1.txt" "output1.txt"')
         with open('output1.txt', 'r') as f:
             output = f.read()
 
@@ -271,7 +274,6 @@ class SettingsCommandTestCase(TestBase):
             substrs = ["The host environment variable 'MY_HOST_ENV_VAR1' successfully passed.",
                        "The host environment variable 'MY_HOST_ENV_VAR2' successfully passed."])
 
-    @not_remote_testsuite_ready
     def test_set_error_output_path(self):
         """Test that setting target.error/output-path for the launched process works."""
         self.buildDefault()
@@ -290,13 +292,18 @@ class SettingsCommandTestCase(TestBase):
 
         self.expect("settings show target.error-path",
                     SETTING_MSG("target.error-path"),
-                    substrs = ['target.error-path (file) = ', 'stderr.txt"'])
+                    substrs = ['target.error-path (file) = "stderr.txt"'])
 
         self.expect("settings show target.output-path",
                     SETTING_MSG("target.output-path"),
-                    substrs = ['target.output-path (file) = ', 'stdout.txt"'])
+                    substrs = ['target.output-path (file) = "stdout.txt"'])
 
         self.runCmd("run", RUN_SUCCEEDED)
+
+        if lldb.remote_platform:
+            self.runCmd('platform get-file "stderr.txt" "stderr.txt"')
+            self.runCmd('platform get-file "stdout.txt" "stdout.txt"')
+
 
         # The 'stderr.txt' file should now exist.
         self.assertTrue(os.path.isfile("stderr.txt"),
@@ -373,10 +380,14 @@ class SettingsCommandTestCase(TestBase):
             startstr = 'target.arg0 (string) = "cde"')
         self.runCmd("settings clear target.arg0", check=False)
         # file
-        self.runCmd ("settings set target.output-path /bin/ls")   # Set to known value
-        self.runCmd ("settings set target.output-path /bin/cat ") # Set to new value with trailing whitespaces
+        path1 = os.path.join(os.getcwd(), "path1.txt")
+        path2 = os.path.join(os.getcwd(), "path2.txt")
+        self.runCmd ("settings set target.output-path %s" % path1)   # Set to known value
         self.expect ("settings show target.output-path", SETTING_MSG("target.output-path"),
-            startstr = 'target.output-path (file) = ', substrs=['/bin/cat"'])
+            startstr = 'target.output-path (file) = ', substrs=[path1])
+        self.runCmd ("settings set target.output-path %s " % path2) # Set to new value with trailing whitespaces
+        self.expect ("settings show target.output-path", SETTING_MSG("target.output-path"),
+            startstr = 'target.output-path (file) = ', substrs=[path2])
         self.runCmd("settings clear target.output-path", check=False)
         # enum
         self.runCmd ("settings set stop-disassembly-display never")   # Set to known value
@@ -392,6 +403,13 @@ class SettingsCommandTestCase(TestBase):
                         '[0]: "3"', 
                         '[1]: "4"',
                         '[2]: "5"' ])
+        self.runCmd ("settings set target.run-args 1 2 3")  # Set to known value
+        self.runCmd ("settings set target.run-args 3 \  \ ") # Set to new value with trailing whitespaces
+        self.expect ("settings show target.run-args", SETTING_MSG("target.run-args"),
+            substrs = [ 'target.run-args (arguments) =',
+                        '[0]: "3"',
+                        '[1]: " "',
+                        '[2]: " "' ])
         self.runCmd("settings clear target.run-args", check=False)        
         # dictionaries
         self.runCmd ("settings clear target.env-vars")  # Set to known value
@@ -401,6 +419,20 @@ class SettingsCommandTestCase(TestBase):
                         'A=B', 
                         'C=D'])
         self.runCmd("settings clear target.env-vars", check=False)        
+        # regex
+        self.runCmd ("settings clear target.process.thread.step-avoid-regexp")  # Set to known value
+        self.runCmd ("settings set target.process.thread.step-avoid-regexp foo\\ ") # Set to new value with trailing whitespaces
+        self.expect ("settings show target.process.thread.step-avoid-regexp",
+                SETTING_MSG("target.process.thread.step-avoid-regexp"),
+                substrs = [ 'target.process.thread.step-avoid-regexp (regex) = foo\\ '])
+        self.runCmd("settings clear target.process.thread.step-avoid-regexp", check=False)
+        # format-string
+        self.runCmd ("settings clear disassembly-format")  # Set to known value
+        self.runCmd ("settings set disassembly-format foo ") # Set to new value with trailing whitespaces
+        self.expect ("settings show disassembly-format",
+                SETTING_MSG("disassembly-format"),
+                substrs = [ 'disassembly-format (format-string) = "foo "'])
+        self.runCmd("settings clear disassembly-format", check=False)
         
     def test_all_settings_exist (self):
         self.expect ("settings show",

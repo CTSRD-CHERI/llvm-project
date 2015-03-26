@@ -15,6 +15,7 @@
 #include "clang/Basic/IdentifierTable.h"
 #include "lldb/Symbol/ClangExternalASTSourceCommon.h"
 #include "lldb/Symbol/ClangASTImporter.h"
+#include "lldb/Symbol/ClangASTType.h"
 #include "lldb/Target/Target.h"
 
 #include "llvm/ADT/SmallSet.h"
@@ -513,7 +514,7 @@ struct NameSearchContext {
     ///     The DeclContextLookupResult, usually returned as the result
     ///     of querying a DeclContext.
     //------------------------------------------------------------------
-    void AddLookupResult (clang::DeclContextLookupConstResult result);
+    void AddLookupResult (clang::DeclContextLookupResult result);
     
     //------------------------------------------------------------------
     /// Add a NamedDecl to the list of results.

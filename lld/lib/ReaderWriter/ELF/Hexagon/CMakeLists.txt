@@ -1,9 +1,11 @@
-add_lld_library(lldHexagonELFTarget
+add_llvm_library(lldHexagonELFTarget
   HexagonLinkingContext.cpp
   HexagonRelocationHandler.cpp
   HexagonTargetHandler.cpp
-  )
-
-target_link_libraries(lldHexagonELFTarget
-  lldCore
+  LINK_LIBS
+    lldELF
+    lldReaderWriter
+    lldCore
+    LLVMObject
+    LLVMSupport
   )

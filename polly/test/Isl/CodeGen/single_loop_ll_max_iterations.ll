@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly %defaultOpts -polly-ast -analyze  -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-ast -analyze  -S < %s | FileCheck %s
 
 ;#include "limits.h"
 ;#define N 20
@@ -28,8 +28,8 @@ target triple = "x86_64-unknown-linux-gnu"
 define i32 @main() nounwind {
 entry:
   %A = alloca [20 x i64], align 8                 ; <[20 x i64]*> [#uses=3]
-  %arraydecay = getelementptr inbounds [20 x i64]* %A, i32 0, i32 0 ; <i64*> [#uses=1]
-  %arrayidx = getelementptr inbounds i64* %arraydecay, i64 0 ; <i64*> [#uses=1]
+  %arraydecay = getelementptr inbounds [20 x i64], [20 x i64]* %A, i32 0, i32 0 ; <i64*> [#uses=1]
+  %arrayidx = getelementptr inbounds i64, i64* %arraydecay, i64 0 ; <i64*> [#uses=1]
   store i64 0, i64* %arrayidx
   fence seq_cst
   br label %for.cond
@@ -40,8 +40,8 @@ for.cond:                                         ; preds = %for.inc, %entry
   br i1 %exitcond, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
-  %arraydecay2 = getelementptr inbounds [20 x i64]* %A, i32 0, i32 0 ; <i64*> [#uses=1]
-  %arrayidx3 = getelementptr inbounds i64* %arraydecay2, i64 0 ; <i64*> [#uses=1]
+  %arraydecay2 = getelementptr inbounds [20 x i64], [20 x i64]* %A, i32 0, i32 0 ; <i64*> [#uses=1]
+  %arrayidx3 = getelementptr inbounds i64, i64* %arraydecay2, i64 0 ; <i64*> [#uses=1]
   store i64 %0, i64* %arrayidx3
   br label %for.inc
 
@@ -51,9 +51,9 @@ for.inc:                                          ; preds = %for.body
 
 for.end:                                          ; preds = %for.cond
   fence seq_cst
-  %arraydecay5 = getelementptr inbounds [20 x i64]* %A, i32 0, i32 0 ; <i64*> [#uses=1]
-  %arrayidx6 = getelementptr inbounds i64* %arraydecay5, i64 0 ; <i64*> [#uses=1]
-  %tmp7 = load i64* %arrayidx6                    ; <i64> [#uses=1]
+  %arraydecay5 = getelementptr inbounds [20 x i64], [20 x i64]* %A, i32 0, i32 0 ; <i64*> [#uses=1]
+  %arrayidx6 = getelementptr inbounds i64, i64* %arraydecay5, i64 0 ; <i64*> [#uses=1]
+  %tmp7 = load i64, i64* %arrayidx6                    ; <i64> [#uses=1]
   %cmp8 = icmp eq i64 %tmp7, 9223372036854775806  ; <i1> [#uses=1]
   br i1 %cmp8, label %if.then, label %if.else
 
@@ -68,5 +68,5 @@ return:                                           ; preds = %if.else, %if.then
   ret i32 %retval.0
 }
 
-; CHECK: for (int c1 = 0; c1 <= 9223372036854775806; c1 += 1)
-; CHECK:   Stmt_for_body(c1);
+; CHECK: for (int c0 = 0; c0 <= 9223372036854775806; c0 += 1)
+; CHECK:   Stmt_for_body(c0);

@@ -504,6 +504,48 @@ drwxrwxr-x  5 username groupname    4096 Aug 15 21:36 source.cpp
 -rw-r--r--  1 username groupname    3190 Aug 12 16:46 Makefile
 
 //----------------------------------------------------------------------
+// "qPlatform_mkdir"
+//
+// BRIEF
+//  Creates a new directory on the connected remote machine.
+//
+// PRIORITY TO IMPLEMENT
+//  Low. This command allows LLDB clients to create new directories on
+//  a remote host.
+//
+/----------------------------------------------------------------------
+
+Request:
+    qPlatform_mkdir:<hex-file-mode>,<ascii-hex-path>
+
+Reply:
+    F<mkdir-return-code>
+        mkdir called successfully and returned with the given return code
+    Exx
+        An error occurred
+
+//----------------------------------------------------------------------
+// "qPlatform_chmod"
+//
+// BRIEF
+//  Creates a new directory on the connected remote machine.
+//
+// PRIORITY TO IMPLEMENT
+//  Low. This command allows LLDB clients to change the permissions of
+//  a file on the remote host.
+//
+/----------------------------------------------------------------------
+
+Request:
+    qPlatform_chmod:<hex-file-mode>,<ascii-hex-path>
+
+Reply:
+    F<chmod-return-code>
+        chmod called successfully and returned with the given return code
+    Exx
+        An error occurred
+
+//----------------------------------------------------------------------
 // "qHostInfo"
 //
 // BRIEF
@@ -946,6 +988,21 @@ for this region.
 //----------------------------------------------------------------------
 
 //----------------------------------------------------------------------
+// qModuleInfo:<module_path>;<arch triple>
+//
+// BRIEF
+//  Get information for a module by given module path and architecture.
+//
+// RESPONSE
+//  "(uuid|md5):...;triple:...;file_offset:...;file_size...;"
+//  "EXX" - for any errors
+//
+// PRIORITY TO IMPLEMENT
+//  Optional, required if dynamic loader cannot fetch module's information like
+//  UUID directly from inferior's memory.
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
 // Stop reply packet extensions
 //
 // BRIEF
@@ -988,7 +1045,7 @@ for this region.
 //  "O<ascii-hex-string>"
 //  "O" means STDOUT has data that was written to its console and is
 //  being delivered to the debugger. This packet happens asynchronously
-//  and the debugger is expected to continue to way for another stop reply
+//  and the debugger is expected to continue to wait for another stop reply
 //  packet.
 //
 // LLDB EXTENSIONS

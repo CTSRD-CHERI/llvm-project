@@ -30,8 +30,7 @@
 using namespace llvm;
 
 ARMInstrInfo::ARMInstrInfo(const ARMSubtarget &STI)
-  : ARMBaseInstrInfo(STI), RI(STI) {
-}
+    : ARMBaseInstrInfo(STI), RI() {}
 
 /// getNoopForMachoTarget - Return the noop instruction to use for a noop.
 void ARMInstrInfo::getNoopForMachoTarget(MCInst &NopInst) const {
@@ -92,79 +91,45 @@ unsigned ARMInstrInfo::getUnindexedOpcode(unsigned Opc) const {
 
 void ARMInstrInfo::expandLoadStackGuard(MachineBasicBlock::iterator MI,
                                         Reloc::Model RM) const {
-  if (RM == Reloc::PIC_)
-    expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_pcrel, ARM::LDRi12, RM);
-  else
-    expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_abs, ARM::LDRi12, RM);
-}
+  MachineFunction &MF = *MI->getParent()->getParent();
+  const ARMSubtarget &Subtarget = MF.getSubtarget<ARMSubtarget>();
 
-bool ARMInstrInfo::getRegSequenceLikeInputs(
-    const MachineInstr &MI, unsigned DefIdx,
-    SmallVectorImpl<RegSubRegPairAndIdx> &InputRegs) const {
-  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
-  assert(MI.isRegSequenceLike() && "Invalid kind of instruction");
-
-  switch (MI.getOpcode()) {
-  case ARM::VMOVDRR:
-    // dX = VMOVDRR rY, rZ
-    // is the same as:
-    // dX = REG_SEQUENCE rY, ssub_0, rZ, ssub_1
-    // Populate the InputRegs accordingly.
-    // rY
-    const MachineOperand *MOReg = &MI.getOperand(1);
-    InputRegs.push_back(
-        RegSubRegPairAndIdx(MOReg->getReg(), MOReg->getSubReg(), ARM::ssub_0));
-    // rZ
-    MOReg = &MI.getOperand(2);
-    InputRegs.push_back(
-        RegSubRegPairAndIdx(MOReg->getReg(), MOReg->getSubReg(), ARM::ssub_1));
-    return true;
+  if (!Subtarget.useMovt(MF)) {
+    if (RM == Reloc::PIC_)
+      expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_pcrel, ARM::LDRi12, RM);
+    else
+      expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_abs, ARM::LDRi12, RM);
+    return;
   }
-  llvm_unreachable("Target dependent opcode missing");
-}
 
-bool ARMInstrInfo::getExtractSubregLikeInputs(
-    const MachineInstr &MI, unsigned DefIdx,
-    RegSubRegPairAndIdx &InputReg) const {
-  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
-  assert(MI.isExtractSubregLike() && "Invalid kind of instruction");
-
-  switch (MI.getOpcode()) {
-  case ARM::VMOVRRD:
-    // rX, rY = VMOVRRD dZ
-    // is the same as:
-    // rX = EXTRACT_SUBREG dZ, ssub_0
-    // rY = EXTRACT_SUBREG dZ, ssub_1
-    const MachineOperand &MOReg = MI.getOperand(2);
-    InputReg.Reg = MOReg.getReg();
-    InputReg.SubReg = MOReg.getSubReg();
-    InputReg.SubIdx = DefIdx == 0 ? ARM::ssub_0 : ARM::ssub_1;
-    return true;
+  if (RM != Reloc::PIC_) {
+    expandLoadStackGuardBase(MI, ARM::MOVi32imm, ARM::LDRi12, RM);
+    return;
   }
-  llvm_unreachable("Target dependent opcode missing");
-}
 
-bool ARMInstrInfo::getInsertSubregLikeInputs(
-    const MachineInstr &MI, unsigned DefIdx, RegSubRegPair &BaseReg,
-    RegSubRegPairAndIdx &InsertedReg) const {
-  assert(DefIdx < MI.getDesc().getNumDefs() && "Invalid definition index");
-  assert(MI.isInsertSubregLike() && "Invalid kind of instruction");
+  const GlobalValue *GV =
+      cast<GlobalValue>((*MI->memoperands_begin())->getValue());
 
-  switch (MI.getOpcode()) {
-  case ARM::VSETLNi32:
-    // dX = VSETLNi32 dY, rZ, imm
-    const MachineOperand &MOBaseReg = MI.getOperand(1);
-    const MachineOperand &MOInsertedReg = MI.getOperand(2);
-    const MachineOperand &MOIndex = MI.getOperand(3);
-    BaseReg.Reg = MOBaseReg.getReg();
-    BaseReg.SubReg = MOBaseReg.getSubReg();
-
-    InsertedReg.Reg = MOInsertedReg.getReg();
-    InsertedReg.SubReg = MOInsertedReg.getSubReg();
-    InsertedReg.SubIdx = MOIndex.getImm() == 0 ? ARM::ssub_0 : ARM::ssub_1;
-    return true;
+  if (!Subtarget.GVIsIndirectSymbol(GV, RM)) {
+    expandLoadStackGuardBase(MI, ARM::MOV_ga_pcrel, ARM::LDRi12, RM);
+    return;
   }
-  llvm_unreachable("Target dependent opcode missing");
+
+  MachineBasicBlock &MBB = *MI->getParent();
+  DebugLoc DL = MI->getDebugLoc();
+  unsigned Reg = MI->getOperand(0).getReg();
+  MachineInstrBuilder MIB;
+
+  MIB = BuildMI(MBB, MI, DL, get(ARM::MOV_ga_pcrel_ldr), Reg)
+            .addGlobalAddress(GV, 0, ARMII::MO_NONLAZY);
+  unsigned Flag = MachineMemOperand::MOLoad | MachineMemOperand::MOInvariant;
+  MachineMemOperand *MMO = MBB.getParent()->getMachineMemOperand(
+      MachinePointerInfo::getGOT(), Flag, 4, 4);
+  MIB.addMemOperand(MMO);
+  MIB = BuildMI(MBB, MI, DL, get(ARM::LDRi12), Reg);
+  MIB.addReg(Reg, RegState::Kill).addImm(0);
+  MIB.setMemRefs(MI->memoperands_begin(), MI->memoperands_end());
+  AddDefaultPred(MIB);
 }
 
 namespace {
@@ -178,21 +143,24 @@ namespace {
       ARMFunctionInfo *AFI = MF.getInfo<ARMFunctionInfo>();
       if (AFI->getGlobalBaseReg() == 0)
         return false;
+      const ARMSubtarget &STI =
+          static_cast<const ARMSubtarget &>(MF.getSubtarget());
+      // Don't do this for Thumb1.
+      if (STI.isThumb1Only())
+	return false;
 
-      const ARMTargetMachine *TM =
-        static_cast<const ARMTargetMachine *>(&MF.getTarget());
-      if (TM->getRelocationModel() != Reloc::PIC_)
+      const TargetMachine &TM = MF.getTarget();
+      if (TM.getRelocationModel() != Reloc::PIC_)
         return false;
 
       LLVMContext *Context = &MF.getFunction()->getContext();
       unsigned ARMPCLabelIndex = AFI->createPICLabelUId();
-      unsigned PCAdj = TM->getSubtarget<ARMSubtarget>().isThumb() ? 4 : 8;
+      unsigned PCAdj = STI.isThumb() ? 4 : 8;
       ARMConstantPoolValue *CPV = ARMConstantPoolSymbol::Create(
           *Context, "_GLOBAL_OFFSET_TABLE_", ARMPCLabelIndex, PCAdj);
 
-      unsigned Align =
-          TM->getSubtargetImpl()->getDataLayout()->getPrefTypeAlignment(
-              Type::getInt32PtrTy(*Context));
+      unsigned Align = TM.getDataLayout()->getPrefTypeAlignment(
+          Type::getInt32PtrTy(*Context));
       unsigned Idx = MF.getConstantPool()->getConstantPoolIndex(CPV, Align);
 
       MachineBasicBlock &FirstMBB = MF.front();
@@ -200,9 +168,8 @@ namespace {
       DebugLoc DL = FirstMBB.findDebugLoc(MBBI);
       unsigned TempReg =
           MF.getRegInfo().createVirtualRegister(&ARM::rGPRRegClass);
-      unsigned Opc = TM->getSubtarget<ARMSubtarget>().isThumb2() ?
-                     ARM::t2LDRpci : ARM::LDRcp;
-      const TargetInstrInfo &TII = *TM->getSubtargetImpl()->getInstrInfo();
+      unsigned Opc = STI.isThumb2() ? ARM::t2LDRpci : ARM::LDRcp;
+      const TargetInstrInfo &TII = *STI.getInstrInfo();
       MachineInstrBuilder MIB = BuildMI(FirstMBB, MBBI, DL,
                                         TII.get(Opc), TempReg)
                                 .addConstantPoolIndex(Idx);
@@ -212,14 +179,12 @@ namespace {
 
       // Fix the GOT address by adding pc.
       unsigned GlobalBaseReg = AFI->getGlobalBaseReg();
-      Opc = TM->getSubtarget<ARMSubtarget>().isThumb2() ? ARM::tPICADD
-                                                        : ARM::PICADD;
+      Opc = STI.isThumb2() ? ARM::tPICADD : ARM::PICADD;
       MIB = BuildMI(FirstMBB, MBBI, DL, TII.get(Opc), GlobalBaseReg)
                 .addReg(TempReg)
                 .addImm(ARMPCLabelIndex);
       if (Opc == ARM::PICADD)
         AddDefaultPred(MIB);
-
 
       return true;
     }

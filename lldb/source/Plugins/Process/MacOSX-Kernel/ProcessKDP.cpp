@@ -13,22 +13,24 @@
 
 // C++ Includes
 // Other libraries and framework includes
-#include "lldb/Core/ConnectionFileDescriptor.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/State.h"
 #include "lldb/Core/UUID.h"
+#include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/Symbols.h"
 #include "lldb/Host/Socket.h"
+#include "lldb/Host/ThreadLauncher.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Interpreter/CommandObjectMultiword.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Interpreter/OptionGroupString.h"
 #include "lldb/Interpreter/OptionGroupUInt64.h"
+#include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Target.h"
@@ -176,7 +178,6 @@ ProcessKDP::ProcessKDP(Target& target, Listener &listener) :
     Process (target, listener),
     m_comm("lldb.process.kdp-remote.communication"),
     m_async_broadcaster (NULL, "lldb.process.kdp-remote.async-broadcaster"),
-    m_async_thread (LLDB_INVALID_HOST_THREAD),
     m_dyld_plugin_name (),
     m_kernel_load_addr (LLDB_INVALID_ADDRESS),
     m_command_sp(),
@@ -274,7 +275,7 @@ ProcessKDP::DoConnectRemote (Stream *strm, const char *remote_url)
     if (conn_ap->IsConnected())
     {
         const Socket& socket = static_cast<const Socket&>(*conn_ap->GetReadObject());
-        const uint16_t reply_port = socket.GetPortNumber();
+        const uint16_t reply_port = socket.GetLocalPortNumber();
 
         if (reply_port != 0)
         {
@@ -439,7 +440,12 @@ ProcessKDP::DidAttach (ArchSpec &process_arch)
         log->Printf ("ProcessKDP::DidAttach()");
     if (GetID() != LLDB_INVALID_PROCESS_ID)
     {
-        // TODO: figure out the register context that we will use
+        uint32_t cpu = m_comm.GetCPUType();
+        if (cpu)
+        {
+            uint32_t sub = m_comm.GetCPUSubtype();
+            process_arch.SetArchitecture(eArchTypeMachO, cpu, sub);
+        }
     }
 }
 
@@ -469,8 +475,8 @@ ProcessKDP::DoResume ()
     Error error;
     Log *log (ProcessKDPLog::GetLogIfAllCategoriesSet (KDP_LOG_PROCESS));
     // Only start the async thread if we try to do any process control
-    if (!IS_VALID_LLDB_HOST_THREAD(m_async_thread))
-        StartAsyncThread ();
+    if (!m_async_thread.IsJoinable())
+        StartAsyncThread();
 
     bool resume = false;
     
@@ -869,12 +875,12 @@ ProcessKDP::StartAsyncThread ()
     
     if (log)
         log->Printf ("ProcessKDP::StartAsyncThread ()");
-    
-    if (IS_VALID_LLDB_HOST_THREAD(m_async_thread))
+
+    if (m_async_thread.IsJoinable())
         return true;
 
-    m_async_thread = Host::ThreadCreate ("<lldb.process.kdp-remote.async>", ProcessKDP::AsyncThread, this, NULL);
-    return IS_VALID_LLDB_HOST_THREAD(m_async_thread);
+    m_async_thread = ThreadLauncher::LaunchThread("<lldb.process.kdp-remote.async>", ProcessKDP::AsyncThread, this, NULL);
+    return m_async_thread.IsJoinable();
 }
 
 void
@@ -888,11 +894,8 @@ ProcessKDP::StopAsyncThread ()
     m_async_broadcaster.BroadcastEvent (eBroadcastBitAsyncThreadShouldExit);
     
     // Stop the stdio thread
-    if (IS_VALID_LLDB_HOST_THREAD(m_async_thread))
-    {
-        Host::ThreadJoin (m_async_thread, NULL, NULL);
-        m_async_thread = LLDB_INVALID_HOST_THREAD;
-    }
+    if (m_async_thread.IsJoinable())
+        m_async_thread.Join(nullptr);
 }
 
 
@@ -1003,8 +1006,8 @@ ProcessKDP::AsyncThread (void *arg)
         log->Printf ("ProcessKDP::AsyncThread (arg = %p, pid = %" PRIu64 ") thread exiting...",
                      arg,
                      pid);
-    
-    process->m_async_thread = LLDB_INVALID_HOST_THREAD;
+
+    process->m_async_thread.Reset();
     return NULL;
 }
 

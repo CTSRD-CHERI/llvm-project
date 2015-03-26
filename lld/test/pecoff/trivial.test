@@ -48,7 +48,7 @@ FILE-NEXT:   MinorSubsystemVersion: 11
 FILE-NEXT:   SizeOfImage: 8192
 FILE-NEXT:   SizeOfHeaders: 512
 FILE-NEXT:   Subsystem: IMAGE_SUBSYSTEM_WINDOWS_CUI (0x3)
-FILE-NEXT:   Subsystem [ (0x8540)
+FILE-NEXT:   Characteristics [ (0x8540)
 FILE-NEXT:     IMAGE_DLL_CHARACTERISTICS_DYNAMIC_BASE (0x40)
 FILE-NEXT:     IMAGE_DLL_CHARACTERISTICS_NO_SEH (0x400)
 FILE-NEXT:     IMAGE_DLL_CHARACTERISTICS_NX_COMPAT (0x100)
@@ -59,6 +59,25 @@ FILE-NEXT:   SizeOfStackCommit: 4096
 FILE-NEXT:   SizeOfHeapReserve: 1048576
 FILE-NEXT:   SizeOfHeapCommit: 4096
 FILE-NEXT:   NumberOfRvaAndSize: 16
+FILE:      DOSHeader {
+FILE-NEXT:   Magic: MZ
+FILE-NEXT:   UsedBytesInTheLastPage: 0
+FILE-NEXT:   FileSizeInPages: 0
+FILE-NEXT:   NumberOfRelocationItems: 0
+FILE-NEXT:   HeaderSizeInParagraphs: 0
+FILE-NEXT:   MinimumExtraParagraphs: 0
+FILE-NEXT:   MaximumExtraParagraphs: 0
+FILE-NEXT:   InitialRelativeSS: 0
+FILE-NEXT:   InitialSP: 0
+FILE-NEXT:   Checksum: 0
+FILE-NEXT:   InitialIP: 0
+FILE-NEXT:   InitialRelativeCS: 0
+FILE-NEXT:   AddressOfRelocationTable: 64
+FILE-NEXT:   OverlayNumber: 0
+FILE-NEXT:   OEMid: 0
+FILE-NEXT:   OEMinfo: 0
+FILE-NEXT:   AddressOfNewExeHeader: 128
+FILE-NEXT: }
 
 SECTIONS:      Format: COFF-i386
 SECTIONS-NEXT: Arch: i386

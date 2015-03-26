@@ -6,8 +6,7 @@ namespace clang {
 namespace tidy {
 namespace test {
 
-#define EXPECT_NO_CHANGES(Check, Code)                                         \
-  EXPECT_EQ(Code, runCheckOnCode<Check>(Code))
+using misc::ArgumentCommentCheck;
 
 TEST(ArgumentCommentCheckTest, CorrectComments) {
   EXPECT_NO_CHANGES(ArgumentCommentCheck,

@@ -21,6 +21,7 @@ class InlinedBreakpointsTestCase(TestBase):
         self.buildDsym()
         self.inlined_breakpoints()
 
+    @expectedFailureFreeBSD("llvm.org/pr21142")
     @dwarf_test
     def test_with_dwarf_and_run_command(self):
         """Test 'b basic_types.cpp:176' does break (where int.cpp includes basic_type.cpp)."""
@@ -38,6 +39,9 @@ class InlinedBreakpointsTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
+        # With the inline-breakpoint-strategy, our file+line breakpoint should not resolve to a location.
+        self.runCmd('settings set target.inline-breakpoint-strategy headers')
+
         # Set a breakpoint and fail because it is in an inlined source implemenation file
         lldbutil.run_break_set_by_file_and_line (self, "basic_type.cpp", self.line, num_expected_locations=0)
 
@@ -45,7 +49,7 @@ class InlinedBreakpointsTestCase(TestBase):
         self.runCmd('settings set target.inline-breakpoint-strategy always')
         # And add hooks to restore the settings during tearDown().
         self.addTearDownHook(
-            lambda: self.runCmd("settings set target.inline-breakpoint-strategy headers"))
+            lambda: self.runCmd("settings set target.inline-breakpoint-strategy always"))
 
         lldbutil.run_break_set_by_file_and_line (self, "basic_type.cpp", self.line, num_expected_locations=1, loc_exact=True)
 

@@ -9873,12 +9873,14 @@ EmulateInstructionARM::EmulateSTREX (const uint32_t opcode, const ARMEncoding en
             if (!WriteRegisterUnsigned (context, eRegisterKindDWARF, dwarf_r0 + t, 0))
                 return false;
         }
+#if 0 // unreachable because if true
         else
         {
             // R[d] = 1;
             if (!WriteRegisterUnsigned (context, eRegisterKindDWARF, dwarf_r0 + t, 1))
                 return false;
         }
+#endif // unreachable because if true
     }
     return true;
 }
@@ -13641,7 +13643,7 @@ EmulateInstructionARM::CreateFunctionEntryUnwind (UnwindPlan &unwind_plan)
     UnwindPlan::RowSP row(new UnwindPlan::Row);
 
     // Our previous Call Frame Address is the stack pointer
-    row->SetCFARegister (dwarf_sp);
+    row->GetCFAValue().SetIsRegisterPlusOffset (dwarf_sp, 0);
     
     // Our previous PC is in the LR
     row->SetRegisterLocationToRegister(dwarf_pc, dwarf_lr, true);

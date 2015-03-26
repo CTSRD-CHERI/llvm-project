@@ -112,6 +112,7 @@ RegisterContextLinux_i386::GetRegisterInfo() const
     switch (m_target_arch.GetMachine())
     {
         case llvm::Triple::x86:            
+        case llvm::Triple::x86_64:
             return g_register_infos_i386;
         default:
             assert(false && "Unhandled target architecture.");
@@ -125,3 +126,8 @@ RegisterContextLinux_i386::GetRegisterCount () const
     return static_cast<uint32_t> (sizeof (g_register_infos_i386) / sizeof (g_register_infos_i386 [0]));
 }
 
+uint32_t
+RegisterContextLinux_i386::GetUserRegisterCount () const
+{
+    return static_cast<uint32_t> (k_num_user_registers_i386);
+}

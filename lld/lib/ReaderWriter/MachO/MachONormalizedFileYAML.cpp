@@ -25,6 +25,7 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/MachO.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
@@ -129,6 +130,7 @@ struct ScalarEnumerationTraits<lld::MachOLinkingContext::Arch> {
     io.enumCase(value, "armv6",  lld::MachOLinkingContext::arch_armv6);
     io.enumCase(value, "armv7",  lld::MachOLinkingContext::arch_armv7);
     io.enumCase(value, "armv7s", lld::MachOLinkingContext::arch_armv7s);
+    io.enumCase(value, "arm64",  lld::MachOLinkingContext::arch_arm64);
   }
 };
 
@@ -400,6 +402,30 @@ struct ScalarEnumerationTraits<RelocationInfoType> {
       io.enumCase(value, "ARM_RELOC_HALF_SECTDIFF",
                                   llvm::MachO::ARM_RELOC_HALF_SECTDIFF);
       break;
+    case lld::MachOLinkingContext::arch_arm64:
+      io.enumCase(value, "ARM64_RELOC_UNSIGNED",
+                                  llvm::MachO::ARM64_RELOC_UNSIGNED);
+      io.enumCase(value, "ARM64_RELOC_SUBTRACTOR",
+                                  llvm::MachO::ARM64_RELOC_SUBTRACTOR);
+      io.enumCase(value, "ARM64_RELOC_BRANCH26",
+                                  llvm::MachO::ARM64_RELOC_BRANCH26);
+      io.enumCase(value, "ARM64_RELOC_PAGE21",
+                                  llvm::MachO::ARM64_RELOC_PAGE21);
+      io.enumCase(value, "ARM64_RELOC_PAGEOFF12",
+                                  llvm::MachO::ARM64_RELOC_PAGEOFF12);
+      io.enumCase(value, "ARM64_RELOC_GOT_LOAD_PAGE21",
+                                  llvm::MachO::ARM64_RELOC_GOT_LOAD_PAGE21);
+      io.enumCase(value, "ARM64_RELOC_GOT_LOAD_PAGEOFF12",
+                                  llvm::MachO::ARM64_RELOC_GOT_LOAD_PAGEOFF12);
+      io.enumCase(value, "ARM64_RELOC_POINTER_TO_GOT",
+                                  llvm::MachO::ARM64_RELOC_POINTER_TO_GOT);
+      io.enumCase(value, "ARM64_RELOC_TLVP_LOAD_PAGE21",
+                                  llvm::MachO::ARM64_RELOC_TLVP_LOAD_PAGE21);
+      io.enumCase(value, "ARM64_RELOC_TLVP_LOAD_PAGEOFF12",
+                                  llvm::MachO::ARM64_RELOC_TLVP_LOAD_PAGEOFF12);
+      io.enumCase(value, "ARM64_RELOC_ADDEND",
+                                  llvm::MachO::ARM64_RELOC_ADDEND);
+      break;
     default:
       llvm_unreachable("unknown architecture");
     }
@@ -504,8 +530,13 @@ struct ScalarEnumerationTraits<LoadCommandType> {
 template <>
 struct MappingTraits<DependentDylib> {
   static void mapping(IO &io, DependentDylib& dylib) {
-    io.mapRequired("path",    dylib.path);
-    io.mapOptional("kind",    dylib.kind,       llvm::MachO::LC_LOAD_DYLIB);
+    io.mapRequired("path",            dylib.path);
+    io.mapOptional("kind",            dylib.kind,
+                                      llvm::MachO::LC_LOAD_DYLIB);
+    io.mapOptional("compat-version",  dylib.compatVersion,
+                                      PackedVersion(0x10000));
+    io.mapOptional("current-version", dylib.currentVersion,
+                                      PackedVersion(0x10000));
   }
 };
 
@@ -566,8 +597,10 @@ struct ScalarEnumerationTraits<ExportSymbolKind> {
   static void enumeration(IO &io, ExportSymbolKind &value) {
     io.enumCase(value, "EXPORT_SYMBOL_FLAGS_KIND_REGULAR",
                         llvm::MachO::EXPORT_SYMBOL_FLAGS_KIND_REGULAR);
-    io.enumCase(value, "EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCALl",
+    io.enumCase(value, "EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL",
                         llvm::MachO::EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL);
+    io.enumCase(value, "EXPORT_SYMBOL_FLAGS_KIND_ABSOLUTE",
+                        llvm::MachO::EXPORT_SYMBOL_FLAGS_KIND_ABSOLUTE);
   }
 };
 
@@ -588,11 +621,12 @@ template <>
 struct MappingTraits<Export> {
   static void mapping(IO &io, Export &exp) {
     io.mapRequired("name",         exp.name);
-    io.mapRequired("offset",       exp.offset);
+    io.mapOptional("offset",       exp.offset);
     io.mapOptional("kind",         exp.kind,
                                 llvm::MachO::EXPORT_SYMBOL_FLAGS_KIND_REGULAR);
-    io.mapOptional("flags",        exp.flags);
-    io.mapOptional("other-offset", exp.otherOffset, Hex32(0));
+    if (!io.outputting() || exp.flags)
+      io.mapOptional("flags",      exp.flags);
+    io.mapOptional("other",        exp.otherOffset, Hex32(0));
     io.mapOptional("other-name",   exp.otherName, StringRef());
   }
 };
@@ -622,6 +656,24 @@ struct MappingTraits<DataInCode> {
   }
 };
 
+template <>
+struct ScalarTraits<PackedVersion> {
+  static void output(const PackedVersion &value, void*, raw_ostream &out) {
+    out << llvm::format("%d.%d", (value >> 16), (value >> 8) & 0xFF);
+    if (value & 0xFF) {
+      out << llvm::format(".%d", (value & 0xFF));
+    }
+  }
+  static StringRef input(StringRef scalar, void*, PackedVersion &result) {
+    uint32_t value;
+    if (lld::MachOLinkingContext::parsePackedVersion(scalar, value))
+      return "malformed version number";
+    result = value;
+    // Return the empty string on success,
+    return StringRef();
+  }
+  static bool mustQuote(StringRef) { return false; }
+};
 
 template <>
 struct MappingTraits<NormalizedFile> {
@@ -631,18 +683,21 @@ struct MappingTraits<NormalizedFile> {
     io.mapOptional("flags",            file.flags);
     io.mapOptional("dependents",       file.dependentDylibs);
     io.mapOptional("install-name",     file.installName,    StringRef());
+    io.mapOptional("compat-version",   file.compatVersion,  PackedVersion(0x10000));
+    io.mapOptional("current-version",  file.currentVersion, PackedVersion(0x10000));
     io.mapOptional("has-UUID",         file.hasUUID,        true);
     io.mapOptional("rpaths",           file.rpaths);
     io.mapOptional("entry-point",      file.entryAddress,   Hex64(0));
     io.mapOptional("source-version",   file.sourceVersion,  Hex64(0));
     io.mapOptional("OS",               file.os);
-    io.mapOptional("min-os-version",   file.minOSverson,    Hex32(0));
-    io.mapOptional("sdk-version",      file.sdkVersion,     Hex32(0));
+    io.mapOptional("min-os-version",   file.minOSverson,    PackedVersion(0));
+    io.mapOptional("sdk-version",      file.sdkVersion,     PackedVersion(0));
     io.mapOptional("segments",         file.segments);
     io.mapOptional("sections",         file.sections);
     io.mapOptional("local-symbols",    file.localSymbols);
     io.mapOptional("global-symbols",   file.globalSymbols);
     io.mapOptional("undefined-symbols",file.undefinedSymbols);
+    io.mapOptional("page-size",        file.pageSize,       Hex32(4096));
     io.mapOptional("rebasings",        file.rebasingInfo);
     io.mapOptional("bindings",         file.bindingInfo);
     io.mapOptional("weak-bindings",    file.weakBindingInfo);

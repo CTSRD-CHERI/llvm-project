@@ -1,4 +1,4 @@
-//===- lib/ReaderWriter/MachO/NormalizedFile.h ----------------------===//
+//===- lib/ReaderWriter/MachO/MachONormalizedFile.h -----------------------===//
 //
 //                             The LLVM Linker
 //
@@ -42,7 +42,6 @@
 #include "lld/Core/Error.h"
 #include "lld/Core/LLVM.h"
 #include "lld/ReaderWriter/MachOLinkingContext.h"
-
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Allocator.h"
@@ -146,6 +145,9 @@ struct Symbol {
 /// A typedef so that YAML I/O can (de/en)code the protection bits of a segment.
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, VMProtect)
 
+/// A typedef to hold verions X.Y.X packed into 32-bit xxxx.yy.zz
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, PackedVersion)
+
 /// Segments are only used in normalized final linked images (not in relocatable
 /// object files). They specify how a range of the file is loaded.
 struct Segment {
@@ -160,6 +162,8 @@ struct Segment {
 struct DependentDylib {
   StringRef       path;
   LoadCommandType kind;
+  PackedVersion   compatVersion;
+  PackedVersion   currentVersion;
 };
 
 /// A normalized rebasing entry.  Only used in normalized final linked images.
@@ -204,7 +208,6 @@ struct DataInCode {
 /// A typedef so that YAML I/O can encode/decode mach_header.flags.
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, FileFlags)
 
-
 ///
 struct NormalizedFile {
   NormalizedFile() : arch(MachOLinkingContext::arch_unknown),
@@ -226,16 +229,19 @@ struct NormalizedFile {
 
   // Maps to load commands with no LINKEDIT content (final linked images only).
   std::vector<DependentDylib> dependentDylibs;
-  StringRef                   installName;
+  StringRef                   installName;      // dylibs only
+  PackedVersion               compatVersion;    // dylibs only
+  PackedVersion               currentVersion;   // dylibs only
   bool                        hasUUID;
   std::vector<StringRef>      rpaths;
   Hex64                       entryAddress;
   MachOLinkingContext::OS     os;
   Hex64                       sourceVersion;
-  Hex32                       minOSverson;
-  Hex32                       sdkVersion;
+  PackedVersion               minOSverson;
+  PackedVersion               sdkVersion;
 
   // Maps to load commands with LINKEDIT content (final linked images only).
+  Hex32                       pageSize;
   std::vector<RebaseLocation> rebasingInfo;
   std::vector<BindLocation>   bindingInfo;
   std::vector<BindLocation>   weakBindingInfo;
@@ -252,6 +258,14 @@ struct NormalizedFile {
   BumpPtrAllocator            ownedAllocations;
 };
 
+/// Tests if a file is a non-fat mach-o object file.
+bool isThinObjectFile(StringRef path, MachOLinkingContext::Arch &arch);
+
+/// If the buffer is a fat file with the request arch, then this function
+/// returns true with 'offset' and 'size' set to location of the arch slice
+/// within the buffer.  Otherwise returns false;
+bool sliceFromFatFile(const MemoryBuffer &mb, MachOLinkingContext::Arch arch,
+                       uint32_t &offset, uint32_t &size);
 
 /// Reads a mach-o file and produces an in-memory normalized view.
 ErrorOr<std::unique_ptr<NormalizedFile>>
@@ -270,6 +284,16 @@ readYaml(std::unique_ptr<MemoryBuffer> &mb);
 
 /// Writes a yaml encoded mach-o files given an in-memory normalized view.
 std::error_code writeYaml(const NormalizedFile &file, raw_ostream &out);
+
+std::error_code
+normalizedObjectToAtoms(MachOFile *file,
+                        const NormalizedFile &normalizedFile,
+                        bool copyRefs);
+
+std::error_code
+normalizedDylibToAtoms(MachODylibFile *file,
+                       const NormalizedFile &normalizedFile,
+                       bool copyRefs);
 
 /// Takes in-memory normalized dylib or object and parses it into lld::File
 ErrorOr<std::unique_ptr<lld::File>>

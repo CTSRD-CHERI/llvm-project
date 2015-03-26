@@ -25,9 +25,7 @@ bool baseRegNeedsLoadStoreMask(unsigned Reg);
 MCELFStreamer *createMipsNaClELFStreamer(MCContext &Context, MCAsmBackend &TAB,
                                          raw_ostream &OS,
                                          MCCodeEmitter *Emitter,
-                                         const MCSubtargetInfo &STI,
-                                         bool RelaxAll, bool NoExecStack);
-
+                                         bool RelaxAll);
 }
 
 #endif

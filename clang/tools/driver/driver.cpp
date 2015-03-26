@@ -18,8 +18,8 @@
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
-#include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/ChainedDiagnosticConsumer.h"
+#include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/SerializedDiagnosticPrinter.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
@@ -451,8 +451,7 @@ int main(int argc_, const char **argv_) {
         clang::serialized_diags::create(DiagOpts->DiagnosticSerializationFile,
                                         &*DiagOpts, /*MergeChildRecords=*/true);
     Diags.setClient(new ChainedDiagnosticConsumer(
-        std::unique_ptr<DiagnosticConsumer>(Diags.takeClient()),
-        std::move(SerializedConsumer)));
+        Diags.takeClient(), std::move(SerializedConsumer)));
   }
 
   ProcessWarningOptions(Diags, *DiagOpts, /*ReportDiags=*/false);

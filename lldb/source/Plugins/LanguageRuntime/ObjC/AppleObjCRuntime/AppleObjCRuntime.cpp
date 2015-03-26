@@ -42,11 +42,11 @@ using namespace lldb_private;
 bool
 AppleObjCRuntime::GetObjectDescription (Stream &str, ValueObject &valobj)
 {
+    ClangASTType clang_type(valobj.GetClangType());
     bool is_signed;
-    // ObjC objects can only be pointers, but we extend this to integer types because an expression might just
-    // result in an address, and we should try that to see if the address is an ObjC object.
-    
-    if (!(valobj.IsPointerType() || valobj.IsIntegerType(is_signed)))
+    // ObjC objects can only be pointers (or numbers that actually represents pointers
+    // but haven't been typecast, because reasons..)
+    if (!clang_type.IsIntegerType (is_signed) && !clang_type.IsPointerType ())
         return false;
     
     // Make the argument list: we pass one arg, the address of our pointer, to the print function.

@@ -673,6 +673,66 @@ The semantics are as follows:
   }];
 }
 
+def DocCatAMDGPURegisterAttributes :
+  DocumentationCategory<"AMD GPU Register Attributes"> {
+  let Content = [{
+Clang supports attributes for controlling register usage on AMD GPU
+targets. These attributes may be attached to a kernel function
+definition and is an optimization hint to the backend for the maximum
+number of registers to use. This is useful in cases where register
+limited occupancy is known to be an important factor for the
+performance for the kernel.
+
+The semantics are as follows:
+
+- The backend will attempt to limit the number of used registers to
+  the specified value, but the exact number used is not
+  guaranteed. The number used may be rounded up to satisfy the
+  allocation requirements or ABI constraints of the subtarget. For
+  example, on Southern Islands VGPRs may only be allocated in
+  increments of 4, so requesting a limit of 39 VGPRs will really
+  attempt to use up to 40. Requesting more registers than the
+  subtarget supports will truncate to the maximum allowed. The backend
+  may also use fewer registers than requested whenever possible.
+
+- 0 implies the default no limit on register usage.
+
+- Ignored on older VLIW subtargets which did not have separate scalar
+  and vector registers, R600 through Northern Islands.
+
+}];
+}
+
+
+def AMDGPUNumVGPRDocs : Documentation {
+  let Category = DocCatAMDGPURegisterAttributes;
+  let Content = [{
+Clang supports the
+``__attribute__((amdgpu_num_vgpr(<num_registers>)))`` attribute on AMD
+Southern Islands GPUs and later for controlling the number of vector
+registers. A typical value would be between 4 and 256 in increments
+of 4.
+}];
+}
+
+def AMDGPUNumSGPRDocs : Documentation {
+  let Category = DocCatAMDGPURegisterAttributes;
+  let Content = [{
+
+Clang supports the
+``__attribute__((amdgpu_num_sgpr(<num_registers>)))`` attribute on AMD
+Southern Islands GPUs and later for controlling the number of scalar
+registers. A typical value would be between 8 and 104 in increments of
+8.
+
+Due to common instruction constraints, an additional 2-4 SGPRs are
+typically required for internal use depending on features used. This
+value is a hint for the total number of SGPRs to use, and not the
+number of user SGPRs, so no special consideration needs to be given
+for these.
+}];
+}
+
 def DocCatCallingConvs : DocumentationCategory<"Calling Conventions"> {
   let Content = [{
 Clang supports several different calling conventions, depending on the target
@@ -1136,6 +1196,16 @@ behavior of the program is undefined.
   }];
 }
 
+def FlagEnumDocs : Documentation {
+  let Category = DocCatType;
+  let Content = [{
+This attribute can be added to an enumerator to signal to the compiler that it
+is intended to be used as a flag type. This will cause the compiler to assume
+that the range of the type includes all of the values that you can get by
+manipulating bits of the enumerator when issuing warnings.
+  }];
+}
+
 def MSInheritanceDocs : Documentation {
   let Category = DocCatType;
   let Heading = "__single_inhertiance, __multiple_inheritance, __virtual_inheritance";
@@ -1183,6 +1253,15 @@ an error:
 }];
 }
 
+def MSNoVTableDocs : Documentation {
+  let Category = DocCatType;
+  let Content = [{
+This attribute can be added to a class declaration or definition to signal to
+the compiler that constructors and destructors will not reference the virtual
+function table.
+  }];
+}
+
 def OptnoneDocs : Documentation {
   let Category = DocCatFunction;
   let Content = [{
@@ -1194,7 +1273,8 @@ entire application without optimization.  Avoiding optimization on the
 specified function can improve the quality of the debugging information
 for that function.
 
-This attribute is incompatible with the ``always_inline`` attribute.
+This attribute is incompatible with the ``always_inline`` and ``minsize``
+attributes.
   }];
 }
 
@@ -1265,3 +1345,88 @@ for further details including limitations of the unroll hints.
   }];
 }
 
+def DocOpenCLAddressSpaces : DocumentationCategory<"OpenCL Address Spaces"> {
+  let Content = [{
+The address space qualifier may be used to specify the region of memory that is
+used to allocate the object. OpenCL supports the following address spaces:
+__generic(generic), __global(global), __local(local), __private(private),
+__constant(constant).
+
+  .. code-block:: c
+
+    __constant int c = ...;
+
+    __generic int* foo(global int* g) {
+      __local int* l;
+      private int p;
+      ...
+      return l;
+    }
+
+More details can be found in the OpenCL C language Spec v2.0, Section 6.5.
+  }];
+}
+
+def OpenCLAddressSpaceGenericDocs : Documentation {
+  let Category = DocOpenCLAddressSpaces;
+  let Heading = "__generic(generic)";
+  let Content = [{
+The generic address space attribute is only available with OpenCL v2.0 and later.
+It can be used with pointer types. Variables in global and local scope and
+function parameters in non-kernel functions can have the generic address space
+type attribute. It is intended to be a placeholder for any other address space
+except for '__constant' in OpenCL code which can be used with multiple address
+spaces.
+  }];
+}
+
+def OpenCLAddressSpaceConstantDocs : Documentation {
+  let Category = DocOpenCLAddressSpaces;
+  let Heading = "__constant(constant)";
+  let Content = [{
+The constant address space attribute signals that an object is located in
+a constant (non-modifiable) memory region. It is available to all work items.
+Any type can be annotated with the constant address space attribute. Objects
+with the constant address space qualifier can be declared in any scope and must
+have an initializer.
+  }];
+}
+
+def OpenCLAddressSpaceGlobalDocs : Documentation {
+  let Category = DocOpenCLAddressSpaces;
+  let Heading = "__global(global)";
+  let Content = [{
+The global address space attribute specifies that an object is allocated in
+global memory, which is accessible by all work items. The content stored in this
+memory area persists between kernel executions. Pointer types to the global
+address space are allowed as function parameters or local variables. Starting
+with OpenCL v2.0, the global address space can be used with global (program
+scope) variables and static local variable as well.
+  }];
+}
+
+def OpenCLAddressSpaceLocalDocs : Documentation {
+  let Category = DocOpenCLAddressSpaces;
+  let Heading = "__local(local)";
+  let Content = [{
+The local address space specifies that an object is allocated in the local (work
+group) memory area, which is accessible to all work items in the same work
+group. The content stored in this memory region is not accessible after
+the kernel execution ends. In a kernel function scope, any variable can be in
+the local address space. In other scopes, only pointer types to the local address
+space are allowed. Local address space variables cannot have an initializer.
+  }];
+}
+
+def OpenCLAddressSpacePrivateDocs : Documentation {
+  let Category = DocOpenCLAddressSpaces;
+  let Heading = "__private(private)";
+  let Content = [{
+The private address space specifies that an object is allocated in the private
+(work item) memory. Other work items cannot access the same memory area and its
+content is destroyed after work item execution ends. Local variables can be
+declared in the private address space. Function arguments are always in the
+private address space. Kernel function arguments of a pointer or an array type
+cannot point to the private address space.
+  }];
+}

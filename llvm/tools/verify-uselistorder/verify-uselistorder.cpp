@@ -47,6 +47,7 @@
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/SystemUtils.h"
+#include "llvm/Support/raw_ostream.h"
 #include <random>
 #include <vector>
 
@@ -123,10 +124,10 @@ bool TempFile::init(const std::string &Ext) {
 
 bool TempFile::writeBitcode(const Module &M) const {
   DEBUG(dbgs() << " - write bitcode\n");
-  std::string ErrorInfo;
-  raw_fd_ostream OS(Filename.c_str(), ErrorInfo, sys::fs::F_None);
-  if (!ErrorInfo.empty()) {
-    DEBUG(dbgs() << "error: " << ErrorInfo << "\n");
+  std::error_code EC;
+  raw_fd_ostream OS(Filename, EC, sys::fs::F_None);
+  if (EC) {
+    DEBUG(dbgs() << "error: " << EC.message() << "\n");
     return true;
   }
 
@@ -136,10 +137,10 @@ bool TempFile::writeBitcode(const Module &M) const {
 
 bool TempFile::writeAssembly(const Module &M) const {
   DEBUG(dbgs() << " - write assembly\n");
-  std::string ErrorInfo;
-  raw_fd_ostream OS(Filename.c_str(), ErrorInfo, sys::fs::F_Text);
-  if (!ErrorInfo.empty()) {
-    DEBUG(dbgs() << "error: " << ErrorInfo << "\n");
+  std::error_code EC;
+  raw_fd_ostream OS(Filename, EC, sys::fs::F_Text);
+  if (EC) {
+    DEBUG(dbgs() << "error: " << EC.message() << "\n");
     return true;
   }
 
@@ -157,7 +158,8 @@ std::unique_ptr<Module> TempFile::readBitcode(LLVMContext &Context) const {
   }
 
   MemoryBuffer *Buffer = BufferOr.get().get();
-  ErrorOr<Module *> ModuleOr = parseBitcodeFile(Buffer, Context);
+  ErrorOr<Module *> ModuleOr =
+      parseBitcodeFile(Buffer->getMemBufferRef(), Context);
   if (!ModuleOr) {
     DEBUG(dbgs() << "error: " << ModuleOr.getError().message() << "\n");
     return nullptr;
@@ -196,9 +198,12 @@ ValueMapping::ValueMapping(const Module &M) {
       map(G.getInitializer());
   for (const GlobalAlias &A : M.aliases())
     map(A.getAliasee());
-  for (const Function &F : M)
+  for (const Function &F : M) {
     if (F.hasPrefixData())
       map(F.getPrefixData());
+    if (F.hasPrologueData())
+      map(F.getPrologueData());
+  }
 
   // Function bodies.
   for (const Function &F : M) {
@@ -462,9 +467,12 @@ static void changeUseLists(Module &M, Changer changeValueUseList) {
       changeValueUseList(G.getInitializer());
   for (GlobalAlias &A : M.aliases())
     changeValueUseList(A.getAliasee());
-  for (Function &F : M)
+  for (Function &F : M) {
     if (F.hasPrefixData())
       changeValueUseList(F.getPrefixData());
+    if (F.hasPrologueData())
+      changeValueUseList(F.getPrologueData());
+  }
 
   // Function bodies.
   for (Function &F : M) {
@@ -520,8 +528,7 @@ int main(int argc, char **argv) {
   SMDiagnostic Err;
 
   // Load the input module...
-  std::unique_ptr<Module> M;
-  M.reset(ParseIRFile(InputFilename, Err, Context));
+  std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, Context);
 
   if (!M.get()) {
     Err.print(argv[0], errs());

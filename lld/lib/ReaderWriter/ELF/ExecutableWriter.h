@@ -25,27 +25,62 @@ class ExecutableWriter;
 template<class ELFT>
 class ExecutableWriter : public OutputELFWriter<ELFT> {
 public:
-  ExecutableWriter(const ELFLinkingContext &context, TargetLayout<ELFT> &layout)
+  ExecutableWriter(ELFLinkingContext &context, TargetLayout<ELFT> &layout)
       : OutputELFWriter<ELFT>(context, layout),
-        _runtimeFile(new CRuntimeFile<ELFT>(context)) {}
+        _runtimeFile(new RuntimeFile<ELFT>(context, "C runtime")) {}
 
 protected:
+  virtual void buildDynamicSymbolTable(const File &file);
   virtual void addDefaultAtoms();
   virtual bool createImplicitFiles(std::vector<std::unique_ptr<File> > &);
   virtual void finalizeDefaultAtomValues();
   virtual void createDefaultSections();
-  LLD_UNIQUE_BUMP_PTR(InterpSection<ELFT>) _interpSection;
-  std::unique_ptr<CRuntimeFile<ELFT> > _runtimeFile;
+
+  virtual bool isNeededTagRequired(const SharedLibraryAtom *sla) const {
+    return this->_layout.isCopied(sla);
+  }
+
+  unique_bump_ptr<InterpSection<ELFT>> _interpSection;
+  std::unique_ptr<RuntimeFile<ELFT> > _runtimeFile;
 };
 
 //===----------------------------------------------------------------------===//
 //  ExecutableWriter
 //===----------------------------------------------------------------------===//
+template<class ELFT>
+void ExecutableWriter<ELFT>::buildDynamicSymbolTable(const File &file) {
+  for (auto sec : this->_layout.sections())
+    if (auto section = dyn_cast<AtomSection<ELFT>>(sec))
+      for (const auto &atom : section->atoms()) {
+        const DefinedAtom *da = dyn_cast<const DefinedAtom>(atom->_atom);
+        if (!da)
+          continue;
+        if (da->dynamicExport() != DefinedAtom::dynamicExportAlways &&
+            !this->_context.isDynamicallyExportedSymbol(da->name()) &&
+            !(this->_context.shouldExportDynamic() &&
+              da->scope() == Atom::Scope::scopeGlobal))
+          continue;
+        this->_dynamicSymbolTable->addSymbol(atom->_atom, section->ordinal(),
+                                             atom->_virtualAddr, atom);
+      }
+
+  // Put weak symbols in the dynamic symbol table.
+  if (this->_context.isDynamic()) {
+    for (const UndefinedAtom *a : file.undefined()) {
+      if (this->_layout.isReferencedByDefinedAtom(a) &&
+          a->canBeNull() != UndefinedAtom::canBeNullNever)
+        this->_dynamicSymbolTable->addSymbol(a, ELF::SHN_UNDEF);
+    }
+  }
+
+  OutputELFWriter<ELFT>::buildDynamicSymbolTable(file);
+}
 
 /// \brief Add absolute symbols by default. These are linker added
 /// absolute symbols
 template<class ELFT>
 void ExecutableWriter<ELFT>::addDefaultAtoms() {
+  OutputELFWriter<ELFT>::addDefaultAtoms();
   _runtimeFile->addUndefinedAtom(this->_context.entrySymbolName());
   _runtimeFile->addAbsoluteAtom("__bss_start");
   _runtimeFile->addAbsoluteAtom("__bss_end");
@@ -90,18 +125,15 @@ template <class ELFT> void ExecutableWriter<ELFT>::createDefaultSections() {
 /// Finalize the value of all the absolute symbols that we
 /// created
 template <class ELFT> void ExecutableWriter<ELFT>::finalizeDefaultAtomValues() {
+  OutputELFWriter<ELFT>::finalizeDefaultAtomValues();
   auto bssStartAtomIter = this->_layout.findAbsoluteAtom("__bss_start");
   auto bssEndAtomIter = this->_layout.findAbsoluteAtom("__bss_end");
   auto underScoreEndAtomIter = this->_layout.findAbsoluteAtom("_end");
   auto endAtomIter = this->_layout.findAbsoluteAtom("end");
 
   auto startEnd = [&](StringRef sym, StringRef sec) -> void {
-    // TODO: This looks like a good place to use Twine...
-    std::string start("__"), end("__");
-    start += sym;
-    start += "_start";
-    end += sym;
-    end += "_end";
+    std::string start = ("__" + sym + "_start").str();
+    std::string end = ("__" + sym + "_end").str();
     auto s = this->_layout.findAbsoluteAtom(start);
     auto e = this->_layout.findAbsoluteAtom(end);
     auto section = this->_layout.findOutputSection(sec);

@@ -11,7 +11,6 @@
 #define LLD_CORE_REFERENCES_H
 
 #include "lld/Core/LLVM.h"
-
 #include "llvm/ADT/StringSwitch.h"
 
 namespace lld {
@@ -57,16 +56,7 @@ public:
   void setKindNamespace(KindNamespace ns) { _kindNamespace = (uint8_t)ns; }
 
   // Which architecture the kind value is for.
-  enum class KindArch {
-    all     = 0,
-    x86_64  = 1,
-    x86     = 2,
-    ARM     = 3,
-    PowerPC = 4,
-    Hexagon = 5,
-    Mips    = 6,
-    AArch64 = 7
-  };
+  enum class KindArch { all, AArch64, ARM, Hexagon, Mips, x86, x86_64 };
 
   KindArch kindArch() const { return (KindArch)_kindArch; }
   void setKindArch(KindArch a) { _kindArch = (uint8_t)a; }
@@ -83,16 +73,12 @@ public:
 
   /// KindValues used with KindNamespace::all and KindArch::all.
   enum {
-    kindInGroup = 1,
     // kindLayoutAfter is treated as a bidirected edge by the dead-stripping
     // pass.
-    kindLayoutAfter = 2,
-    // kindLayoutBefore is currently used only by PECOFF port, and will
-    // be removed soon. To enforce layout, use kindLayoutAfter instead.
-    kindLayoutBefore = 3,
+    kindLayoutAfter = 1,
     // kindGroupChild is treated as a bidirected edge too.
-    kindGroupChild = 4,
-    kindAssociate = 5,
+    kindGroupChild,
+    kindAssociate,
   };
 
   // A value to be added to the value of a target
@@ -114,6 +100,9 @@ public:
 
   /// During linking, some optimzations may change addend value.
   virtual void setAddend(Addend) = 0;
+
+  /// Returns target specific attributes of the reference.
+  virtual uint32_t tag() const { return 0; }
 
 protected:
   /// Reference is an abstract base class.  Only subclasses can use constructor.

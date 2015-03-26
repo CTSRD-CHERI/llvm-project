@@ -38,6 +38,8 @@ def subsystem : P<"subsystem", "Specify subsystem">;
 def stub    : P<"stub", "Specify DOS stub file">;
 def opt     : P<"opt", "Control optimizations">;
 def implib  : P<"implib", "Import library name">;
+def delayload : P<"delayload", "Delay loaded DLL name">;
+def pdb : P<"pdb", "PDB file path">;
 
 def manifest : F<"manifest">;
 def manifest_colon : P<"manifest", "Create manifest file">;
@@ -78,6 +80,7 @@ defm allowisolation : B<"allowisolation", "Set NO_ISOLATION bit">;
 defm dynamicbase : B<"dynamicbase",
      "Disable address space layout randomization">;
 defm safeseh : B<"safeseh", "Produce an image with Safe Exception Handler">;
+defm highentropyva : B<"highentropyva", "Set HIGH_ENTROPY_VA bit">;
 
 def help : F<"help">;
 def help_q : Flag<["/?", "-?"], "">, Alias<help>;
@@ -105,11 +108,10 @@ def no_incremental : F<"incremental:no">;
 def nologo : F<"nologo">;
 
 def delay : QF<"delay">;
-def delayload : QF<"delayload">;
 def errorreport : QF<"errorreport">;
 def idlout : QF<"idlout">;
 def ignore : QF<"ignore">;
-def pdb : QF<"pdb">;
+def maxilksize : QF<"maxilksize">;
 def pdbaltpath : QF<"pdbaltpath">;
 def tlbid : QF<"tlbid">;
 def tlbout : QF<"tlbout">;

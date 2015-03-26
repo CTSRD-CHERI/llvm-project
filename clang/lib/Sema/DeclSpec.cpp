@@ -182,6 +182,7 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
                                              SourceRange *ExceptionRanges,
                                              unsigned NumExceptions,
                                              Expr *NoexceptExpr,
+                                             CachedTokens *ExceptionSpecTokens,
                                              SourceLocation LocalRangeBegin,
                                              SourceLocation LocalRangeEnd,
                                              Declarator &TheDeclarator,
@@ -219,6 +220,9 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
                                   TrailingReturnType.isInvalid();
   I.Fun.TrailingReturnType      = TrailingReturnType.get();
 
+  assert(I.Fun.TypeQuals == TypeQuals && "bitfield overflow");
+  assert(I.Fun.ExceptionSpecType == ESpecType && "bitfield overflow");
+
   // new[] a parameter array if needed.
   if (NumParams) {
     // If the 'InlineParams' in Declarator is unused and big enough, put our
@@ -254,6 +258,10 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
 
   case EST_ComputedNoexcept:
     I.Fun.NoexceptExpr = NoexceptExpr;
+    break;
+
+  case EST_Unparsed:
+    I.Fun.ExceptionSpecTokens = ExceptionSpecTokens;
     break;
   }
   return I;
@@ -500,14 +508,14 @@ bool DeclSpec::SetStorageClassSpec(Sema &S, SCS SC, SourceLocation Loc,
     case SCS_private_extern:
     case SCS_static:
         if (S.getLangOpts().OpenCLVersion < 120) {
-          DiagID   = diag::err_not_opencl_storage_class_specifier;
+          DiagID   = diag::err_opencl_unknown_type_specifier;
           PrevSpec = getSpecifierName(SC);
           return true;
         }
         break;
     case SCS_auto:
     case SCS_register:
-      DiagID   = diag::err_not_opencl_storage_class_specifier;
+      DiagID   = diag::err_opencl_unknown_type_specifier;
       PrevSpec = getSpecifierName(SC);
       return true;
     default:
@@ -992,10 +1000,17 @@ void DeclSpec::Finish(DiagnosticsEngine &D, Preprocessor &PP, const PrintingPoli
                                  getSpecifierName((TST)TypeSpecType, Policy));
       }
 
-      // Only 'short' is valid with vector bool. (PIM 2.1)
-      if ((TypeSpecWidth != TSW_unspecified) && (TypeSpecWidth != TSW_short))
+      // Only 'short' and 'long long' are valid with vector bool. (PIM 2.1)
+      if ((TypeSpecWidth != TSW_unspecified) && (TypeSpecWidth != TSW_short) &&
+          (TypeSpecWidth != TSW_longlong))
         Diag(D, TSWLoc, diag::err_invalid_vector_bool_decl_spec)
           << getSpecifierName((TSW)TypeSpecWidth);
+
+      // vector bool long long requires VSX support.
+      if ((TypeSpecWidth == TSW_longlong) &&
+          (!PP.getTargetInfo().hasFeature("vsx")) &&
+          (!PP.getTargetInfo().hasFeature("power8-vector")))
+        Diag(D, TSTLoc, diag::err_invalid_vector_long_long_decl_spec);
 
       // Elements of vector bool are interpreted as unsigned. (PIM 2.1)
       if ((TypeSpecType == TST_char) || (TypeSpecType == TST_int) ||

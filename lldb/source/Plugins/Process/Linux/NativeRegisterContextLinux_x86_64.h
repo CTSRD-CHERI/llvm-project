@@ -11,9 +11,9 @@
 #ifndef lldb_NativeRegisterContextLinux_x86_64_h
 #define lldb_NativeRegisterContextLinux_x86_64_h
 
-#include "lldb/Target/NativeRegisterContextRegisterInfo.h"
-#include "RegisterContext_x86.h"
-#include "lldb-x86-register-enums.h"
+#include "lldb/Host/common/NativeRegisterContextRegisterInfo.h"
+#include "Plugins/Process/Utility/RegisterContext_x86.h"
+#include "Plugins/Process/Utility/lldb-x86-register-enums.h"
 
 namespace lldb_private
 {
@@ -30,6 +30,9 @@ namespace lldb_private
         const RegisterSet *
         GetRegisterSet (uint32_t set_index) const override;
 
+        uint32_t
+        GetUserRegisterCount() const override;
+
         Error
         ReadRegister (const RegisterInfo *reg_info, RegisterValue &reg_value) override;
 
@@ -41,6 +44,35 @@ namespace lldb_private
 
         Error
         WriteAllRegisterValues (const lldb::DataBufferSP &data_sp) override;
+
+        Error
+        IsWatchpointHit(uint32_t wp_index, bool &is_hit) override;
+
+        Error
+        GetWatchpointHitIndex(uint32_t &wp_index) override;
+
+        Error
+        IsWatchpointVacant(uint32_t wp_index, bool &is_vacant) override;
+
+        bool
+        ClearHardwareWatchpoint(uint32_t wp_index) override;
+
+        Error
+        ClearAllHardwareWatchpoints () override;
+
+        Error
+        SetHardwareWatchpointWithIndex(lldb::addr_t addr, size_t size,
+                uint32_t watch_flags, uint32_t wp_index);
+
+        uint32_t
+        SetHardwareWatchpoint(lldb::addr_t addr, size_t size,
+                uint32_t watch_flags) override;
+
+        lldb::addr_t
+        GetWatchpointAddress(uint32_t wp_index) override;
+
+        uint32_t
+        NumSupportedHardwareWatchpoints() override;
 
     private:
 

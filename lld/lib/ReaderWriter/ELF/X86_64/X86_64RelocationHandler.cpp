@@ -7,57 +7,58 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "X86_64TargetHandler.h"
 #include "X86_64LinkingContext.h"
+#include "X86_64TargetHandler.h"
+#include "llvm/Support/Endian.h"
 
 using namespace lld;
-using namespace elf;
+using namespace lld::elf;
+using namespace llvm::support::endian;
 
 /// \brief R_X86_64_64 - word64: S + A
 static void reloc64(uint8_t *location, uint64_t P, uint64_t S, int64_t A) {
   uint64_t result = S + A;
-  *reinterpret_cast<llvm::support::ulittle64_t *>(location) =
-      result |
-      (uint64_t) * reinterpret_cast<llvm::support::ulittle64_t *>(location);
+  write64le(location, result | read64le(location));
 }
 
 /// \brief R_X86_64_PC32 - word32: S + A - P
 static void relocPC32(uint8_t *location, uint64_t P, uint64_t S, int64_t A) {
   uint32_t result = (uint32_t)((S + A) - P);
-  *reinterpret_cast<llvm::support::ulittle32_t *>(location) =
-      result +
-      (uint32_t) * reinterpret_cast<llvm::support::ulittle32_t *>(location);
+  write32le(location, result + read32le(location));
 }
 
 /// \brief R_X86_64_32 - word32:  S + A
 static void reloc32(uint8_t *location, uint64_t P, uint64_t S, int64_t A) {
   int32_t result = (uint32_t)(S + A);
-  *reinterpret_cast<llvm::support::ulittle32_t *>(location) =
-      result |
-      (uint32_t) * reinterpret_cast<llvm::support::ulittle32_t *>(location);
+  write32le(location, result | read32le(location));
   // TODO: Make sure that the result zero extends to the 64bit value.
 }
 
 /// \brief R_X86_64_32S - word32:  S + A
 static void reloc32S(uint8_t *location, uint64_t P, uint64_t S, int64_t A) {
   int32_t result = (int32_t)(S + A);
-  *reinterpret_cast<llvm::support::little32_t *>(location) =
-      result |
-      (int32_t) * reinterpret_cast<llvm::support::little32_t *>(location);
+  write32le(location, result | read32le(location));
   // TODO: Make sure that the result sign extends to the 64bit value.
 }
 
-int64_t X86_64TargetRelocationHandler::relocAddend(const Reference &ref) const {
-  if (ref.kindNamespace() != Reference::KindNamespace::ELF)
-    return false;
-  assert(ref.kindArch() == Reference::KindArch::x86_64);
-  switch (ref.kindValue()) {
-  case R_X86_64_PC32:
-    return 4;
-  default:
-    return 0;
-  }
-  return 0;
+/// \brief R_X86_64_16 - word16:  S + A
+static void reloc16(uint8_t *location, uint64_t P, uint64_t S, int64_t A) {
+  uint16_t result = (uint16_t)(S + A);
+  write16le(location, result | read16le(location));
+  // TODO: Check for overflow.
+}
+
+/// \brief R_X86_64_PC16 - word16: S + A - P
+static void relocPC16(uint8_t *location, uint64_t P, uint64_t S, int64_t A) {
+  uint16_t result = (uint16_t)((S + A) - P);
+  write16le(location, result | read16le(location));
+  // TODO: Check for overflow.
+}
+
+/// \brief R_X86_64_PC64 - word64: S + A - P
+static void relocPC64(uint8_t *location, uint64_t P, uint64_t S, uint64_t A) {
+  int64_t result = (uint64_t)((S + A) - P);
+  write64le(location, result | read64le(location));
 }
 
 std::error_code X86_64TargetRelocationHandler::applyRelocation(
@@ -87,18 +88,26 @@ std::error_code X86_64TargetRelocationHandler::applyRelocation(
   case R_X86_64_32S:
     reloc32S(location, relocVAddress, targetVAddress, ref.addend());
     break;
+  case R_X86_64_16:
+    reloc16(location, relocVAddress, targetVAddress, ref.addend());
+    break;
+  case R_X86_64_PC16:
+    relocPC16(location, relocVAddress, targetVAddress, ref.addend());
+    break;
   case R_X86_64_TPOFF64:
   case R_X86_64_DTPOFF32:
   case R_X86_64_TPOFF32: {
     _tlsSize = _x86_64Layout.getTLSSize();
     if (ref.kindValue() == R_X86_64_TPOFF32 ||
         ref.kindValue() == R_X86_64_DTPOFF32) {
-      int32_t result = (int32_t)(targetVAddress - _tlsSize);
-      *reinterpret_cast<llvm::support::little32_t *>(location) = result;
+      write32le(location, targetVAddress - _tlsSize);
     } else {
-      int64_t result = (int64_t)(targetVAddress - _tlsSize);
-      *reinterpret_cast<llvm::support::little64_t *>(location) = result;
+      write64le(location, targetVAddress - _tlsSize);
     }
+    break;
+  }
+  case R_X86_64_TLSGD: {
+    relocPC32(location, relocVAddress, targetVAddress, ref.addend());
     break;
   }
   case R_X86_64_TLSLD: {
@@ -109,6 +118,9 @@ std::error_code X86_64TargetRelocationHandler::applyRelocation(
     std::memcpy(location - 3, instr, sizeof(instr));
     break;
   }
+  case R_X86_64_PC64:
+    relocPC64(location, relocVAddress, targetVAddress, ref.addend());
+    break;
   case LLD_R_X86_64_GOTRELINDEX: {
     const DefinedAtom *target = cast<const DefinedAtom>(ref.target());
     for (const Reference *r : *target) {
@@ -128,16 +140,11 @@ std::error_code X86_64TargetRelocationHandler::applyRelocation(
   case R_X86_64_IRELATIVE:
   case R_X86_64_JUMP_SLOT:
   case R_X86_64_GLOB_DAT:
+  case R_X86_64_DTPMOD64:
+  case R_X86_64_DTPOFF64:
     break;
-  default: {
-    std::string str;
-    llvm::raw_string_ostream s(str);
-    s << "Unhandled relocation: " << atom._atom->file().path() << ":"
-      << atom._atom->name() << "@" << ref.offsetInAtom() << " "
-      << "#" << ref.kindValue();
-    s.flush();
-    llvm_unreachable(str.c_str());
-  }
+  default:
+    return make_unhandled_reloc_error();
   }
 
   return std::error_code();

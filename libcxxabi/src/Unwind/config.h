@@ -28,7 +28,7 @@
 #endif
 
 // Platform specific configuration defines.
-#if __APPLE__
+#ifdef __APPLE__
   #include <Availability.h>
   #ifdef __cplusplus
     extern "C" {
@@ -39,15 +39,18 @@
     }
   #endif
 
-  #define _LIBUNWIND_BUILD_ZERO_COST_APIS (__i386__ || __x86_64__ || __arm64__)
-  #define _LIBUNWIND_BUILD_SJLJ_APIS      (__arm__)
-  #define _LIBUNWIND_SUPPORT_FRAME_APIS   (__i386__ || __x86_64__)
+  #define _LIBUNWIND_BUILD_ZERO_COST_APIS (defined(__i386__) || \
+                                           defined(__x86_64__) || \
+                                           defined(__arm64__))
+  #define _LIBUNWIND_BUILD_SJLJ_APIS      defined(__arm__)
+  #define _LIBUNWIND_SUPPORT_FRAME_APIS   (defined(__i386__) || \
+                                           defined(__x86_64__))
   #define _LIBUNWIND_EXPORT               __attribute__((visibility("default")))
   #define _LIBUNWIND_HIDDEN               __attribute__((visibility("hidden")))
   #define _LIBUNWIND_LOG(msg, ...) fprintf(stderr, "libuwind: " msg, __VA_ARGS__)
   #define _LIBUNWIND_ABORT(msg) __assert_rtn(__func__, __FILE__, __LINE__, msg)
 
-  #if FOR_DYLD
+  #if defined(FOR_DYLD)
     #define _LIBUNWIND_SUPPORT_COMPACT_UNWIND 1
     #define _LIBUNWIND_SUPPORT_DWARF_UNWIND   0
     #define _LIBUNWIND_SUPPORT_DWARF_INDEX    0
@@ -67,17 +70,21 @@
     abort();
   }
 
-  #define _LIBUNWIND_BUILD_ZERO_COST_APIS (__i386__ || __x86_64__ || __arm64__ || __arm__)
+  #define _LIBUNWIND_BUILD_ZERO_COST_APIS (defined(__i386__) || \
+                                           defined(__x86_64__) || \
+                                           defined(__arm__))
   #define _LIBUNWIND_BUILD_SJLJ_APIS      0
-  #define _LIBUNWIND_SUPPORT_FRAME_APIS   (__i386__ || __x86_64__)
+  #define _LIBUNWIND_SUPPORT_FRAME_APIS   (defined(__i386__) || \
+                                           defined(__x86_64__))
   #define _LIBUNWIND_EXPORT               __attribute__((visibility("default")))
   #define _LIBUNWIND_HIDDEN               __attribute__((visibility("hidden")))
   #define _LIBUNWIND_LOG(msg, ...) fprintf(stderr, "libuwind: " msg, __VA_ARGS__)
   #define _LIBUNWIND_ABORT(msg) assert_rtn(__func__, __FILE__, __LINE__, msg)
 
   #define _LIBUNWIND_SUPPORT_COMPACT_UNWIND 0
-  #define _LIBUNWIND_SUPPORT_DWARF_UNWIND   0
-  #define _LIBUNWIND_SUPPORT_DWARF_INDEX    0
+  #define _LIBUNWIND_SUPPORT_DWARF_UNWIND !defined(__arm__) || \
+                                          defined(__ARM_DWARF_EH__)
+  #define _LIBUNWIND_SUPPORT_DWARF_INDEX _LIBUNWIND_SUPPORT_DWARF_UNWIND
 #endif
 
 

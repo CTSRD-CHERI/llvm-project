@@ -91,6 +91,13 @@ namespace llvm {
 
     iterator end() const { return Data + Length; }
 
+    const unsigned char *bytes_begin() const {
+      return reinterpret_cast<const unsigned char *>(begin());
+    }
+    const unsigned char *bytes_end() const {
+      return reinterpret_cast<const unsigned char *>(end());
+    }
+
     /// @}
     /// @name String Operations
     /// @{
@@ -118,7 +125,7 @@ namespace llvm {
     }
 
     // copy - Allocate copy in Allocator and return StringRef to it.
-    template <typename Allocator> StringRef copy(Allocator &A) {
+    template <typename Allocator> StringRef copy(Allocator &A) const {
       char *S = A.template Allocate<char>(Length);
       std::copy(begin(), end(), S);
       return StringRef(S, Length);
@@ -231,9 +238,12 @@ namespace llvm {
     /// \returns The index of the first occurrence of \p C, or npos if not
     /// found.
     size_t find(char C, size_t From = 0) const {
-      for (size_t i = std::min(From, Length), e = Length; i != e; ++i)
-        if (Data[i] == C)
-          return i;
+      size_t FindBegin = std::min(From, Length);
+      if (FindBegin < Length) { // Avoid calling memchr with nullptr.
+        // Just forward to memchr, which is faster than a hand-rolled loop.
+        if (const void *P = ::memchr(Data + FindBegin, C, Length - FindBegin))
+          return static_cast<const char *>(P) - Data;
+      }
       return npos;
     }
 
@@ -347,8 +357,11 @@ namespace llvm {
     typename std::enable_if<!std::numeric_limits<T>::is_signed, bool>::type
     getAsInteger(unsigned Radix, T &Result) const {
       unsigned long long ULLVal;
+      // The additional cast to unsigned long long is required to avoid the
+      // Visual C++ warning C4805: '!=' : unsafe mix of type 'bool' and type
+      // 'unsigned __int64' when instantiating getAsInteger with T = bool.
       if (getAsUnsignedInteger(*this, Radix, ULLVal) ||
-            static_cast<T>(ULLVal) != ULLVal)
+          static_cast<unsigned long long>(static_cast<T>(ULLVal)) != ULLVal)
         return true;
       Result = ULLVal;
       return false;

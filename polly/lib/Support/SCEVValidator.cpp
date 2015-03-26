@@ -82,7 +82,7 @@ public:
   std::vector<const SCEV *> getParameters() { return Parameters; }
 
   /// @brief Add the parameters of Source to this result.
-  void addParamsFrom(class ValidatorResult &Source) {
+  void addParamsFrom(const ValidatorResult &Source) {
     Parameters.insert(Parameters.end(), Source.Parameters.begin(),
                       Source.Parameters.end());
   }
@@ -91,7 +91,7 @@ public:
   ///
   /// This means to merge the parameters and to set the Type to the most
   /// specific Type that matches both.
-  void merge(class ValidatorResult &ToMerge) {
+  void merge(const ValidatorResult &ToMerge) {
     Type = std::max(Type, ToMerge.Type);
     addParamsFrom(ToMerge);
   }
@@ -326,18 +326,35 @@ public:
     return ValidatorResult(SCEVType::PARAM, Expr);
   }
 
+  ValidatorResult visitGenericInst(Instruction *I, const SCEV *S) {
+    if (R->contains(I)) {
+      DEBUG(dbgs() << "INVALID: UnknownExpr references an instruction "
+                      "within the region\n");
+      return ValidatorResult(SCEVType::INVALID);
+    }
+
+    return ValidatorResult(SCEVType::PARAM, S);
+  }
+
+  ValidatorResult visitSDivInstruction(Instruction *SDiv, const SCEV *S) {
+    assert(SDiv->getOpcode() == Instruction::SDiv &&
+           "Assumed SDiv instruction!");
+
+    auto *Divisor = SDiv->getOperand(1);
+    auto *CI = dyn_cast<ConstantInt>(Divisor);
+    if (!CI)
+      return visitGenericInst(SDiv, S);
+
+    auto *Dividend = SDiv->getOperand(0);
+    auto *DividendSCEV = SE.getSCEV(Dividend);
+    return visit(DividendSCEV);
+  }
+
   ValidatorResult visitUnknown(const SCEVUnknown *Expr) {
     Value *V = Expr->getValue();
 
-    // We currently only support integer types. It may be useful to support
-    // pointer types, e.g. to support code like:
-    //
-    //   if (A)
-    //     A[i] = 1;
-    //
-    // See test/CodeGen/20120316-InvalidCast.ll
-    if (!Expr->getType()->isIntegerTy()) {
-      DEBUG(dbgs() << "INVALID: UnknownExpr is not an integer type");
+    if (!(Expr->getType()->isIntegerTy() || Expr->getType()->isPointerTy())) {
+      DEBUG(dbgs() << "INVALID: UnknownExpr is not an integer or pointer type");
       return ValidatorResult(SCEVType::INVALID);
     }
 
@@ -346,16 +363,18 @@ public:
       return ValidatorResult(SCEVType::INVALID);
     }
 
-    if (Instruction *I = dyn_cast<Instruction>(Expr->getValue()))
-      if (R->contains(I)) {
-        DEBUG(dbgs() << "INVALID: UnknownExpr references an instruction "
-                        "within the region\n");
-        return ValidatorResult(SCEVType::INVALID);
-      }
-
     if (BaseAddress == V) {
       DEBUG(dbgs() << "INVALID: UnknownExpr references BaseAddress\n");
       return ValidatorResult(SCEVType::INVALID);
+    }
+
+    if (Instruction *I = dyn_cast<Instruction>(Expr->getValue())) {
+      switch (I->getOpcode()) {
+      case Instruction::SDiv:
+        return visitSDivInstruction(I, Expr);
+      default:
+        return visitGenericInst(I, Expr);
+      }
     }
 
     return ValidatorResult(SCEVType::PARAM, Expr);
@@ -461,6 +480,48 @@ private:
 };
 
 namespace polly {
+/// Find all loops referenced in SCEVAddRecExprs.
+class SCEVFindLoops {
+  SetVector<const Loop *> &Loops;
+
+public:
+  SCEVFindLoops(SetVector<const Loop *> &Loops) : Loops(Loops) {}
+
+  bool follow(const SCEV *S) {
+    if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(S))
+      Loops.insert(AddRec->getLoop());
+    return true;
+  }
+  bool isDone() { return false; }
+};
+
+void findLoops(const SCEV *Expr, SetVector<const Loop *> &Loops) {
+  SCEVFindLoops FindLoops(Loops);
+  SCEVTraversal<SCEVFindLoops> ST(FindLoops);
+  ST.visitAll(Expr);
+}
+
+/// Find all values referenced in SCEVUnknowns.
+class SCEVFindValues {
+  SetVector<Value *> &Values;
+
+public:
+  SCEVFindValues(SetVector<Value *> &Values) : Values(Values) {}
+
+  bool follow(const SCEV *S) {
+    if (const SCEVUnknown *Unknown = dyn_cast<SCEVUnknown>(S))
+      Values.insert(Unknown->getValue());
+    return true;
+  }
+  bool isDone() { return false; }
+};
+
+void findValues(const SCEV *Expr, SetVector<Value *> &Values) {
+  SCEVFindValues FindValues(Values);
+  SCEVTraversal<SCEVFindValues> ST(FindValues);
+  ST.visitAll(Expr);
+}
+
 bool hasScalarDepsInsideRegion(const SCEV *Expr, const Region *R) {
   return SCEVInRegionDependences::hasDependences(Expr, R);
 }
@@ -471,12 +532,20 @@ bool isAffineExpr(const Region *R, const SCEV *Expr, ScalarEvolution &SE,
     return false;
 
   SCEVValidator Validator(R, SE, BaseAddress);
-  DEBUG(dbgs() << "\n"; dbgs() << "Expr: " << *Expr << "\n";
-        dbgs() << "Region: " << R->getNameStr() << "\n"; dbgs() << " -> ");
+  DEBUG({
+    dbgs() << "\n";
+    dbgs() << "Expr: " << *Expr << "\n";
+    dbgs() << "Region: " << R->getNameStr() << "\n";
+    dbgs() << " -> ";
+  });
 
   ValidatorResult Result = Validator.visit(Expr);
 
-  DEBUG(if (Result.isValid()) dbgs() << "VALID\n"; dbgs() << "\n";);
+  DEBUG({
+    if (Result.isValid())
+      dbgs() << "VALID\n";
+    dbgs() << "\n";
+  });
 
   return Result.isValid();
 }

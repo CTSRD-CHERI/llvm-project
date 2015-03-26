@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "PPC.h"
-#include "PPCSubtarget.h"
 #include "MCTargetDesc/PPCMCExpr.h"
+#include "PPCSubtarget.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/CodeGen/AsmPrinter.h"
@@ -38,9 +38,9 @@ static MachineModuleInfoMachO &getMachOMMI(AsmPrinter &AP) {
 static MCSymbol *GetSymbolFromOperand(const MachineOperand &MO, AsmPrinter &AP){
   const TargetMachine &TM = AP.TM;
   Mangler *Mang = AP.Mang;
-  const DataLayout *DL = TM.getSubtargetImpl()->getDataLayout();
+  const DataLayout *DL = TM.getDataLayout();
   MCContext &Ctx = AP.OutContext;
-  bool isDarwin = TM.getSubtarget<PPCSubtarget>().isDarwin();
+  bool isDarwin = Triple(TM.getTargetTriple()).isOSDarwin();
 
   SmallString<128> Name;
   StringRef Suffix;
@@ -184,6 +184,9 @@ void llvm::LowerPPCMachineInstrToMCInst(const MachineInstr *MI, MCInst &OutMI,
       llvm_unreachable("unknown operand type");
     case MachineOperand::MO_Register:
       assert(!MO.getSubReg() && "Subregs should be eliminated!");
+      assert(MO.getReg() > PPC::NoRegister &&
+             MO.getReg() < PPC::NUM_TARGET_REGS &&
+             "Invalid register for this target!");
       MCOp = MCOperand::CreateReg(MO.getReg());
       break;
     case MachineOperand::MO_Immediate:

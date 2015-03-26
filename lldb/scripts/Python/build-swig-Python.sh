@@ -79,6 +79,7 @@ HEADER_FILES="${SRC_ROOT}/include/lldb/lldb.h"\
 " ${SRC_ROOT}/include/lldb/lldb-forward-rtti.h"\
 " ${SRC_ROOT}/include/lldb/lldb-types.h"\
 " ${SRC_ROOT}/include/lldb/API/SBAddress.h"\
+" ${SRC_ROOT}/include/lldb/API/SBAttachInfo.h"\
 " ${SRC_ROOT}/include/lldb/API/SBBlock.h"\
 " ${SRC_ROOT}/include/lldb/API/SBBreakpoint.h"\
 " ${SRC_ROOT}/include/lldb/API/SBBreakpointLocation.h"\
@@ -91,6 +92,7 @@ HEADER_FILES="${SRC_ROOT}/include/lldb/lldb.h"\
 " ${SRC_ROOT}/include/lldb/API/SBDebugger.h"\
 " ${SRC_ROOT}/include/lldb/API/SBError.h"\
 " ${SRC_ROOT}/include/lldb/API/SBEvent.h"\
+" ${SRC_ROOT}/include/lldb/API/SBExecutionContext.h"\
 " ${SRC_ROOT}/include/lldb/API/SBExpressionOptions.h"\
 " ${SRC_ROOT}/include/lldb/API/SBFileSpec.h"\
 " ${SRC_ROOT}/include/lldb/API/SBFrame.h"\
@@ -98,6 +100,7 @@ HEADER_FILES="${SRC_ROOT}/include/lldb/lldb.h"\
 " ${SRC_ROOT}/include/lldb/API/SBHostOS.h"\
 " ${SRC_ROOT}/include/lldb/API/SBInstruction.h"\
 " ${SRC_ROOT}/include/lldb/API/SBInstructionList.h"\
+" ${SRC_ROOT}/include/lldb/API/SBLaunchInfo.h"\
 " ${SRC_ROOT}/include/lldb/API/SBLineEntry.h"\
 " ${SRC_ROOT}/include/lldb/API/SBListener.h"\
 " ${SRC_ROOT}/include/lldb/API/SBModule.h"\
@@ -113,6 +116,8 @@ HEADER_FILES="${SRC_ROOT}/include/lldb/lldb.h"\
 " ${SRC_ROOT}/include/lldb/API/SBSymbolContextList.h"\
 " ${SRC_ROOT}/include/lldb/API/SBTarget.h"\
 " ${SRC_ROOT}/include/lldb/API/SBThread.h"\
+" ${SRC_ROOT}/include/lldb/API/SBThreadCollection.h"\
+" ${SRC_ROOT}/include/lldb/API/SBThreadPlan.h"\
 " ${SRC_ROOT}/include/lldb/API/SBType.h"\
 " ${SRC_ROOT}/include/lldb/API/SBTypeCategory.h"\
 " ${SRC_ROOT}/include/lldb/API/SBTypeFilter.h"\
@@ -122,10 +127,12 @@ HEADER_FILES="${SRC_ROOT}/include/lldb/lldb.h"\
 " ${SRC_ROOT}/include/lldb/API/SBTypeSynthetic.h"\
 " ${SRC_ROOT}/include/lldb/API/SBValue.h"\
 " ${SRC_ROOT}/include/lldb/API/SBValueList.h"\
+" ${SRC_ROOT}/include/lldb/API/SBVariablesOptions.h"\
 " ${SRC_ROOT}/include/lldb/API/SBWatchpoint.h"\
 " ${SRC_ROOT}/include/lldb/API/SBUnixSignals.h"
 
 INTERFACE_FILES="${SRC_ROOT}/scripts/Python/interface/SBAddress.i"\
+" ${SRC_ROOT}/scripts/Python/interface/SBAttachInfo.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBBlock.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBBreakpoint.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBBreakpointLocation.i"\
@@ -139,6 +146,7 @@ INTERFACE_FILES="${SRC_ROOT}/scripts/Python/interface/SBAddress.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBDeclaration.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBError.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBEvent.i"\
+" ${SRC_ROOT}/scripts/Python/interface/SBExecutionContext.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBExpressionOptions.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBFileSpec.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBFrame.i"\
@@ -146,6 +154,7 @@ INTERFACE_FILES="${SRC_ROOT}/scripts/Python/interface/SBAddress.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBHostOS.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBInstruction.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBInstructionList.i"\
+" ${SRC_ROOT}/scripts/Python/interface/SBLaunchInfo.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBLineEntry.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBListener.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBModule.i"\
@@ -161,6 +170,8 @@ INTERFACE_FILES="${SRC_ROOT}/scripts/Python/interface/SBAddress.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBSymbolContext.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBTarget.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBThread.i"\
+" ${SRC_ROOT}/scripts/Python/interface/SBThreadCollection.i"\
+" ${SRC_ROOT}/scripts/Python/interface/SBThreadPlan.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBType.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBTypeCategory.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBTypeFilter.i"\
@@ -170,6 +181,7 @@ INTERFACE_FILES="${SRC_ROOT}/scripts/Python/interface/SBAddress.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBTypeSynthetic.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBValue.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBValueList.i"\
+" ${SRC_ROOT}/scripts/Python/interface/SBVariablesOptions.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBWatchpoint.i"\
 " ${SRC_ROOT}/scripts/Python/interface/SBUnixSignals.i"
 

@@ -57,6 +57,7 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
     void emitShadowPadding(MCStreamer &OutStreamer, const MCSubtargetInfo &STI);
   private:
     TargetMachine &TM;
+    const MachineFunction *MF;
     std::unique_ptr<MCCodeEmitter> CodeEmitter;
     bool InShadow;
 
@@ -85,10 +86,9 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
   void LowerTlsAddr(X86MCInstLower &MCInstLowering, const MachineInstr &MI);
 
  public:
-  explicit X86AsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
-    : AsmPrinter(TM, Streamer), SM(*this), SMShadowTracker(TM) {
-    Subtarget = &TM.getSubtarget<X86Subtarget>();
-  }
+   explicit X86AsmPrinter(TargetMachine &TM,
+                          std::unique_ptr<MCStreamer> Streamer)
+       : AsmPrinter(TM, std::move(Streamer)), SM(*this), SMShadowTracker(TM) {}
 
   const char *getPassName() const override {
     return "X86 Assembly / Object Emitter";
@@ -115,6 +115,12 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
 
   /// \brief Return the symbol for the specified constant pool entry.
   MCSymbol *GetCPISymbol(unsigned CPID) const override;
+
+  bool doInitialization(Module &M) override {
+    SMShadowTracker.reset(0);
+    SM.reset();
+    return AsmPrinter::doInitialization(M);
+  }
 
   bool runOnMachineFunction(MachineFunction &F) override;
 };

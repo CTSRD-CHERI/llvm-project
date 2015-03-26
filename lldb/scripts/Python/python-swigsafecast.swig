@@ -45,6 +45,13 @@ SBTypeToSWIGWrapper (unsigned int* c_int)
 
 template <>
 PyObject*
+SBTypeToSWIGWrapper (lldb::SBEvent* event_sb)
+{
+    return SWIG_NewPointerObj((void *) event_sb, SWIGTYPE_p_lldb__SBEvent, 0);
+}
+
+template <>
+PyObject*
 SBTypeToSWIGWrapper (lldb::SBProcess* process_sb)
 {
     return SWIG_NewPointerObj((void *) process_sb, SWIGTYPE_p_lldb__SBProcess, 0);
@@ -55,6 +62,13 @@ PyObject*
 SBTypeToSWIGWrapper (lldb::SBThread* thread_sb)
 {
     return SWIG_NewPointerObj((void *) thread_sb, SWIGTYPE_p_lldb__SBThread, 0);
+}
+
+template <>
+PyObject*
+SBTypeToSWIGWrapper (lldb::SBThreadPlan* thread_plan_sb)
+{
+    return SWIG_NewPointerObj((void *) thread_plan_sb, SWIGTYPE_p_lldb__SBThreadPlan, 0);
 }
 
 template <>
@@ -111,4 +125,18 @@ PyObject*
 SBTypeToSWIGWrapper (lldb::SBCommandReturnObject* cmd_ret_obj_sb)
 {
     return SWIG_NewPointerObj((void *) cmd_ret_obj_sb, SWIGTYPE_p_lldb__SBCommandReturnObject, 0);
+}
+
+template <>
+PyObject*
+SBTypeToSWIGWrapper (lldb::SBExecutionContext* ctx_sb)
+{
+    return SWIG_NewPointerObj((void *) ctx_sb, SWIGTYPE_p_lldb__SBExecutionContext, 0);
+}
+
+template <>
+PyObject*
+SBTypeToSWIGWrapper (lldb::SBTypeSummaryOptions* summary_options_sb)
+{
+    return SWIG_NewPointerObj((void *) summary_options_sb, SWIGTYPE_p_lldb__SBTypeSummaryOptions, 0);
 }

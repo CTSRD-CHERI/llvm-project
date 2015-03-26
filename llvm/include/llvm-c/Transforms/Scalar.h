@@ -35,6 +35,12 @@ extern "C" {
 /** See llvm::createAggressiveDCEPass function. */
 void LLVMAddAggressiveDCEPass(LLVMPassManagerRef PM);
 
+/** See llvm::createBitTrackingDCEPass function. */
+void LLVMAddBitTrackingDCEPass(LLVMPassManagerRef PM);
+
+/** See llvm::createAlignmentFromAssumptionsPass function. */
+void LLVMAddAlignmentFromAssumptionsPass(LLVMPassManagerRef PM);
+
 /** See llvm::createCFGSimplificationPass function. */
 void LLVMAddCFGSimplificationPass(LLVMPassManagerRef PM);
 
@@ -85,6 +91,9 @@ void LLVMAddMemCpyOptPass(LLVMPassManagerRef PM);
 
 /** See llvm::createPartiallyInlineLibCallsPass function. */
 void LLVMAddPartiallyInlineLibCallsPass(LLVMPassManagerRef PM);
+
+/** See llvm::createLowerSwitchPass function. */
+void LLVMAddLowerSwitchPass(LLVMPassManagerRef PM);
 
 /** See llvm::createPromoteMemoryToRegisterPass function. */
 void LLVMAddPromoteMemoryToRegisterPass(LLVMPassManagerRef PM);

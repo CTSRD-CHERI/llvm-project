@@ -30,9 +30,8 @@ class TargetInstrInfo;
 
 struct AMDGPURegisterInfo : public AMDGPUGenRegisterInfo {
   static const MCPhysReg CalleeSavedReg;
-  const AMDGPUSubtarget &ST;
 
-  AMDGPURegisterInfo(const AMDGPUSubtarget &st);
+  AMDGPURegisterInfo();
 
   BitVector getReservedRegs(const MachineFunction &MF) const override {
     assert(!"Unimplemented");  return BitVector();
@@ -51,7 +50,7 @@ struct AMDGPURegisterInfo : public AMDGPUGenRegisterInfo {
   unsigned getSubRegFromChannel(unsigned Channel) const;
 
   const MCPhysReg* getCalleeSavedRegs(const MachineFunction *MF) const override;
-  virtual void eliminateFrameIndex(MachineBasicBlock::iterator MI, int SPAdj,
+  void eliminateFrameIndex(MachineBasicBlock::iterator MI, int SPAdj,
                            unsigned FIOperandNum,
                            RegScavenger *RS) const override;
   unsigned getFrameRegister(const MachineFunction &MF) const override;

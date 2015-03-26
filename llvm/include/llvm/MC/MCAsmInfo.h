@@ -31,13 +31,13 @@ class MCContext;
 
 namespace WinEH {
 enum class EncodingType {
-  ET_Invalid, /// Invalid
-  ET_Alpha,   /// Windows Alpha
-  ET_Alpha64, /// Windows AXP64
-  ET_ARM,     /// Windows NT (Windows on ARM)
-  ET_CE,      /// Windows CE ARM, PowerPC, SH3, SH4
-  ET_Itanium, /// Windows x64, Windows Itanium (IA-64)
-  ET_MIPS = ET_Alpha,
+  Invalid, /// Invalid
+  Alpha,   /// Windows Alpha
+  Alpha64, /// Windows AXP64
+  ARM,     /// Windows NT (Windows on ARM)
+  CE,      /// Windows CE ARM, PowerPC, SH3, SH4
+  Itanium, /// Windows x64, Windows Itanium (IA-64)
+  MIPS = Alpha,
 };
 }
 
@@ -87,15 +87,10 @@ protected:
   bool HasMachoTBSSDirective;
 
   /// True if the compiler should emit a ".reference .constructors_used" or
-  /// ".reference .destructors_used" directive after the a static ctor/dtor
+  /// ".reference .destructors_used" directive after the static ctor/dtor
   /// list.  This directive is only emitted in Static relocation model.  Default
   /// is false.
   bool HasStaticCtorDtorReferenceInStaticMode;
-
-  /// True if the linker has a bug and requires that the debug_line section be
-  /// of a minimum size. In practice such a linker requires a non-empty line
-  /// sequence if a file is present.  Default to false.
-  bool LinkerRequiresNonEmptyDwarfLines;
 
   /// This is the maximum possible length of an instruction, which is needed to
   /// compute the size of an inline asm.  Defaults to 4.
@@ -123,10 +118,17 @@ protected:
   // Print the EH begin symbol with an assignment. Defaults to false.
   bool UseAssignmentForEHBegin;
 
+  // Do we need to create a local symbol for .size?
+  bool NeedsLocalForSize;
+
   /// This prefix is used for globals like constant pool entries that are
   /// completely private to the .s file and should not have names in the .o
   /// file.  Defaults to "L"
   const char *PrivateGlobalPrefix;
+
+  /// This prefix is used for labels for basic blocks. Defaults to the same as
+  /// PrivateGlobalPrefix.
+  const char *PrivateLabelPrefix;
 
   /// This prefix is used for symbols that should be passed through the
   /// assembler but be removed by the linker.  This is 'l' on Darwin, currently
@@ -220,11 +222,16 @@ protected:
 
   //===--- Global Variable Emission Directives --------------------------===//
 
-  /// This is the directive used to declare a global entity.  Defaults to NULL.
+  /// This is the directive used to declare a global entity. Defaults to
+  /// ".globl".
   const char *GlobalDirective;
 
-  /// True if the assembler supports the .set directive.  Defaults to true.
-  bool HasSetDirective;
+  /// True if the expression
+  ///   .long f - g
+  /// uses an relocation but it can be supressed by writting
+  ///   a = f - g
+  ///   .long a
+  bool SetDirectiveSuppressesReloc;
 
   /// False if the assembler requires that we use
   /// \code
@@ -249,6 +256,10 @@ protected:
   /// argument and how it is interpreted.  Defaults to NoAlignment.
   LCOMM::LCOMMType LCOMMDirectiveAlignmentType;
 
+  // True if the target allows .align directives on funtions. This is true for
+  // most targets, so defaults to true.
+  bool HasFunctionAlignment;
+
   /// True if the target has .type and .size directives, this is true for most
   /// ELF targets.  Defaults to true.
   bool HasDotTypeDotSizeDirective;
@@ -264,6 +275,9 @@ protected:
   /// True if this target supports the MachO .no_dead_strip directive.  Defaults
   /// to false.
   bool HasNoDeadStrip;
+
+  /// Used to declare a global as being a weak symbol. Defaults to ".weak".
+  const char *WeakDirective;
 
   /// This directive, if non-null, is used to declare a global as being a weak
   /// undefined symbol.  Defaults to NULL.
@@ -374,6 +388,12 @@ public:
     return nullptr;
   }
 
+  /// \brief True if the section is atomized using the symbols in it.
+  /// This is false if the section is not atomized at all (most ELF sections) or
+  /// if it is atomized based on its contents (MachO' __TEXT,__cstring for
+  /// example).
+  virtual bool isSectionAtomizableBySymbols(const MCSection &Section) const;
+
   virtual const MCExpr *getExprForPersonalitySymbol(const MCSymbol *Sym,
                                                     unsigned Encoding,
                                                     MCStreamer &Streamer) const;
@@ -401,9 +421,6 @@ public:
   bool hasStaticCtorDtorReferenceInStaticMode() const {
     return HasStaticCtorDtorReferenceInStaticMode;
   }
-  bool getLinkerRequiresNonEmptyDwarfLines() const {
-    return LinkerRequiresNonEmptyDwarfLines;
-  }
   unsigned getMaxInstLength() const { return MaxInstLength; }
   unsigned getMinInstAlignment() const { return MinInstAlignment; }
   bool getDollarIsPC() const { return DollarIsPC; }
@@ -417,7 +434,9 @@ public:
   const char *getLabelSuffix() const { return LabelSuffix; }
 
   bool useAssignmentForEHBegin() const { return UseAssignmentForEHBegin; }
+  bool needsLocalForSize() const { return NeedsLocalForSize; }
   const char *getPrivateGlobalPrefix() const { return PrivateGlobalPrefix; }
+  const char *getPrivateLabelPrefix() const { return PrivateLabelPrefix; }
   bool hasLinkerPrivateGlobalPrefix() const {
     return LinkerPrivateGlobalPrefix[0] != '\0';
   }
@@ -442,7 +461,9 @@ public:
   bool getAlignmentIsInBytes() const { return AlignmentIsInBytes; }
   unsigned getTextAlignFillValue() const { return TextAlignFillValue; }
   const char *getGlobalDirective() const { return GlobalDirective; }
-  bool hasSetDirective() const { return HasSetDirective; }
+  bool doesSetDirectiveSuppressesReloc() const {
+    return SetDirectiveSuppressesReloc;
+  }
   bool hasAggressiveSymbolFolding() const { return HasAggressiveSymbolFolding; }
   bool getCOMMDirectiveAlignmentIsInBytes() const {
     return COMMDirectiveAlignmentIsInBytes;
@@ -450,10 +471,12 @@ public:
   LCOMM::LCOMMType getLCOMMDirectiveAlignmentType() const {
     return LCOMMDirectiveAlignmentType;
   }
+  bool hasFunctionAlignment() const { return HasFunctionAlignment; }
   bool hasDotTypeDotSizeDirective() const { return HasDotTypeDotSizeDirective; }
   bool hasSingleParameterDotFile() const { return HasSingleParameterDotFile; }
   bool hasIdentDirective() const { return HasIdentDirective; }
   bool hasNoDeadStrip() const { return HasNoDeadStrip; }
+  const char *getWeakDirective() const { return WeakDirective; }
   const char *getWeakRefDirective() const { return WeakRefDirective; }
   bool hasWeakDefDirective() const { return HasWeakDefDirective; }
   bool hasWeakDefCanBeHiddenDirective() const {
@@ -474,12 +497,19 @@ public:
   }
   ExceptionHandling getExceptionHandlingType() const { return ExceptionsType; }
   WinEH::EncodingType getWinEHEncodingType() const { return WinEHEncodingType; }
-  bool isExceptionHandlingDwarf() const {
+
+  /// Returns true if the exception handling method for the platform uses call
+  /// frame information to unwind.
+  bool usesCFIForEH() const {
     return (ExceptionsType == ExceptionHandling::DwarfCFI ||
             ExceptionsType == ExceptionHandling::ARM ||
-            // Windows handler data still uses DWARF LSDA encoding.
             ExceptionsType == ExceptionHandling::WinEH);
   }
+
+  bool usesWindowsCFI() const {
+    return ExceptionsType == ExceptionHandling::WinEH;
+  }
+
   bool doesDwarfUseRelocationsAcrossSections() const {
     return DwarfUsesRelocationsAcrossSections;
   }

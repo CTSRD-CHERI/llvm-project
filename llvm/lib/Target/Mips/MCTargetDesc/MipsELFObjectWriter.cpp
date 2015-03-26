@@ -11,6 +11,7 @@
 #include "MCTargetDesc/MipsFixupKinds.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
 #include "llvm/MC/MCAssembler.h"
+#include "llvm/MC/MCELF.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCSection.h"
@@ -53,9 +54,11 @@ unsigned MipsELFObjectWriter::GetRelocType(const MCValue &Target,
   switch (Kind) {
   default:
     llvm_unreachable("invalid fixup kind!");
+  case Mips::fixup_Mips_32:
   case FK_Data_4:
     Type = ELF::R_MIPS_32;
     break;
+  case Mips::fixup_Mips_64:
   case FK_Data_8:
     Type = ELF::R_MIPS_64;
     break;
@@ -161,6 +164,12 @@ unsigned MipsELFObjectWriter::GetRelocType(const MCValue &Target,
   case Mips::fixup_MICROMIPS_GOT16:
     Type = ELF::R_MICROMIPS_GOT16;
     break;
+  case Mips::fixup_MICROMIPS_PC7_S1:
+    Type = ELF::R_MICROMIPS_PC7_S1;
+    break;
+  case Mips::fixup_MICROMIPS_PC10_S1:
+    Type = ELF::R_MICROMIPS_PC10_S1;
+    break;
   case Mips::fixup_MICROMIPS_PC16_S1:
     Type = ELF::R_MICROMIPS_PC16_S1;
     break;
@@ -219,7 +228,7 @@ unsigned MipsELFObjectWriter::GetRelocType(const MCValue &Target,
 bool
 MipsELFObjectWriter::needsRelocateWithSymbol(const MCSymbolData &SD,
                                              unsigned Type) const {
-  // FIXME: This is extremelly conservative. This really needs to use a
+  // FIXME: This is extremely conservative. This really needs to use a
   // whitelist with a clear explanation for why each realocation needs to
   // point to the symbol, not to the section.
   switch (Type) {
@@ -244,8 +253,11 @@ MipsELFObjectWriter::needsRelocateWithSymbol(const MCSymbolData &SD,
   case ELF::R_MICROMIPS_LO16:
     return true;
 
-  case ELF::R_MIPS_26:
   case ELF::R_MIPS_32:
+    if (MCELF::getOther(SD) & (ELF::STO_MIPS_MICROMIPS >> 2))
+      return true;
+    // falltrough
+  case ELF::R_MIPS_26:
   case ELF::R_MIPS_64:
   case ELF::R_MIPS_GPREL16:
     return false;

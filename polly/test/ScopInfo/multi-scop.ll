@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -polly-detect -analyze -polly-codegen-scev < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-scops -analyze -polly-codegen-scev < %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-detect -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 
@@ -24,7 +24,7 @@ for.body81:                                       ; preds = %for.body81, %for.en
   %j.19 = phi i32 [ %shl, %for.end ], [ %add169, %for.body81 ]
   %add13710 = or i32 %j.19, 1
   %idxprom138 = sext i32 %add13710 to i64
-  %arrayidx139 = getelementptr inbounds double* %a, i64 %idxprom138
+  %arrayidx139 = getelementptr inbounds double, double* %a, i64 %idxprom138
   store double undef, double* %arrayidx139, align 8
   %add169 = add nsw i32 %j.19, 2
   br i1 false, label %for.body81, label %for.end170
@@ -33,6 +33,6 @@ for.end170:                                       ; preds = %for.body81
   ret void
 }
 
-; CHECK: Valid Region for Scop: for.body81 => for.end170
 ; CHECK: Valid Region for Scop: entry.split => for.end
+; CHECK: Valid Region for Scop: for.body81 => for.end170
 

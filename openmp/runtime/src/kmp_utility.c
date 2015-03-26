@@ -1,7 +1,5 @@
 /*
  * kmp_utility.c -- Utility routines for the OpenMP support library.
- * $Revision: 42588 $
- * $Date: 2013-08-13 01:26:00 -0500 (Tue, 13 Aug 2013) $
  */
 
 
@@ -234,16 +232,9 @@ __kmp_query_cpuid( kmp_cpuinfo_t *p )
         }
 #endif /* KMP_DEBUG */
 
-        __kmp_ht_capable = FALSE;
         if ( (buf.edx >> 28) & 1 ) {
-
-            /* HT - Processor is HT Enabled (formerly JT) */
-            __kmp_ht_capable = TRUE;
-
             /* Bits 23-16: Logical Processors per Physical Processor (1 for P4) */
             log_per_phy = data[ 2 ];
-            __kmp_ht_log_per_phy = log_per_phy;
-
             p->apic_id     = data[ 3 ]; /* Bits 31-24: Processor Initial APIC ID (X) */
             KA_TRACE( trace_level, (" HT(%d TPUs)", log_per_phy ) );
 

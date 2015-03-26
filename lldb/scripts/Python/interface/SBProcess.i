@@ -389,6 +389,12 @@ public:
     const char *
     GetExtendedBacktraceTypeAtIndex (uint32_t idx);
 
+    lldb::SBThreadCollection
+    GetHistoryThreads (addr_t addr);
+             
+    bool
+    IsInstrumentationRuntimePresent(lldb::InstrumentationRuntimeType type);
+
     %pythoncode %{
         def __get_is_alive__(self):
             '''Returns "True" if the process is currently alive, "False" otherwise'''

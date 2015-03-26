@@ -437,6 +437,19 @@ SymbolVendor::GetCompileUnitAtIndex(size_t idx)
     return cu_sp;
 }
 
+FileSpec
+SymbolVendor::GetMainFileSpec() const
+{
+    if (m_sym_file_ap.get())
+    {
+        const ObjectFile *symfile_objfile = m_sym_file_ap->GetObjectFile();
+        if (symfile_objfile)
+            return symfile_objfile->GetFileSpec();
+    }
+
+    return FileSpec();
+}
+
 Symtab *
 SymbolVendor::GetSymtab ()
 {
@@ -464,6 +477,27 @@ SymbolVendor::ClearSymtab()
         {
             // Clear symbol table from unified section list.
             objfile->ClearSymtab ();
+        }
+    }
+}
+
+void
+SymbolVendor::SectionFileAddressesChanged ()
+{
+    ModuleSP module_sp(GetModule());
+    if (module_sp)
+    {
+        ObjectFile *module_objfile = module_sp->GetObjectFile ();
+        if (m_sym_file_ap.get())
+        {
+            ObjectFile *symfile_objfile = m_sym_file_ap->GetObjectFile ();
+            if (symfile_objfile != module_objfile)
+                symfile_objfile->SectionFileAddressesChanged ();
+        }
+        Symtab *symtab = GetSymtab ();
+        if (symtab)
+        {
+            symtab->SectionFileAddressesChanged ();
         }
     }
 }

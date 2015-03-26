@@ -13,24 +13,22 @@
 #include "lld/Core/DefinedAtom.h"
 #include "lld/Core/File.h"
 #include "lld/Core/LLVM.h"
+#include "lld/Core/LinkingContext.h"
 #include "lld/Core/Resolver.h"
 #include "lld/Core/SharedLibraryAtom.h"
-#include "lld/Core/LinkingContext.h"
 #include "lld/Core/UndefinedAtom.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
 #include <vector>
 
 namespace lld {
-SymbolTable::SymbolTable(const LinkingContext &context) : _context(context) {}
+SymbolTable::SymbolTable(LinkingContext &context) : _context(context) {}
 
 bool SymbolTable::add(const UndefinedAtom &atom) { return addByName(atom); }
 
@@ -135,43 +133,12 @@ static MergeResolution mergeSelect(DefinedAtom::Merge first,
   return mergeCases[first][second];
 }
 
-static const DefinedAtom *followReference(const DefinedAtom *atom,
-                                          uint32_t kind) {
-  for (const Reference *r : *atom)
-    if (r->kindNamespace() == Reference::KindNamespace::all &&
-        r->kindArch() == Reference::KindArch::all &&
-        r->kindValue() == kind)
-      return cast<const DefinedAtom>(r->target());
-  return nullptr;
-}
-
-static uint64_t getSizeFollowReferences(const DefinedAtom *atom,
-                                        uint32_t kind) {
-  uint64_t size = 0;
-  for (;;) {
-    atom = followReference(atom, kind);
-    if (!atom)
-      return size;
-    size += atom->size();
-  }
-}
-
-// Returns the size of the section containing the given atom. Atoms in the same
-// section are connected by layout-before and layout-after edges, so this
-// function traverses them to get the total size of atoms in the same section.
-static uint64_t sectionSize(const DefinedAtom *atom) {
-  return atom->size()
-      + getSizeFollowReferences(atom, lld::Reference::kindLayoutBefore)
-      + getSizeFollowReferences(atom, lld::Reference::kindLayoutAfter);
-}
-
 bool SymbolTable::addByName(const Atom &newAtom) {
   StringRef name = newAtom.name();
   assert(!name.empty());
   const Atom *existing = findByName(name);
   if (existing == nullptr) {
     // Name is not in symbol table yet, add it associate with this atom.
-    _context.notifySymbolTableAdd(&newAtom);
     _nameTable[name] = &newAtom;
     return true;
   }
@@ -189,11 +156,10 @@ bool SymbolTable::addByName(const Atom &newAtom) {
   case NCR_Second:
     useNew = true;
     break;
-  case NCR_DupDef:
-    assert(existing->definition() == Atom::definitionRegular);
-    assert(newAtom.definition() == Atom::definitionRegular);
-    switch (mergeSelect(((DefinedAtom*)existing)->merge(),
-                        ((DefinedAtom*)&newAtom)->merge())) {
+  case NCR_DupDef: {
+    const auto *existingDef = cast<DefinedAtom>(existing);
+    const auto *newDef = cast<DefinedAtom>(&newAtom);
+    switch (mergeSelect(existingDef->merge(), newDef->merge())) {
     case MCR_First:
       useNew = false;
       break;
@@ -201,14 +167,14 @@ bool SymbolTable::addByName(const Atom &newAtom) {
       useNew = true;
       break;
     case MCR_Largest: {
-      uint64_t existingSize = sectionSize((DefinedAtom*)existing);
-      uint64_t newSize = sectionSize((DefinedAtom*)&newAtom);
+      uint64_t existingSize = existingDef->sectionSize();
+      uint64_t newSize = newDef->sectionSize();
       useNew = (newSize >= existingSize);
       break;
     }
     case MCR_SameSize: {
-      uint64_t existingSize = sectionSize((DefinedAtom*)existing);
-      uint64_t newSize = sectionSize((DefinedAtom*)&newAtom);
+      uint64_t existingSize = existingDef->sectionSize();
+      uint64_t newSize = newDef->sectionSize();
       if (existingSize == newSize) {
         useNew = true;
         break;
@@ -235,6 +201,7 @@ bool SymbolTable::addByName(const Atom &newAtom) {
       break;
     }
     break;
+  }
   case NCR_DupUndef: {
     const UndefinedAtom* existingUndef = cast<UndefinedAtom>(existing);
     const UndefinedAtom* newUndef = cast<UndefinedAtom>(&newAtom);
@@ -339,6 +306,12 @@ bool SymbolTable::AtomMappingInfo::isEqual(const DefinedAtom * const l,
     return false;
   if (l->size() != r->size())
     return false;
+  if (l->sectionChoice() != r->sectionChoice())
+    return false;
+  if (l->sectionChoice() == DefinedAtom::sectionCustomRequired) {
+    if (!l->customSectionName().equals(r->customSectionName()))
+      return false;
+  }
   ArrayRef<uint8_t> lc = l->rawContent();
   ArrayRef<uint8_t> rc = r->rawContent();
   return memcmp(lc.data(), rc.data(), lc.size()) == 0;
@@ -365,7 +338,7 @@ const Atom *SymbolTable::findByName(StringRef sym) {
 
 bool SymbolTable::isDefined(StringRef sym) {
   if (const Atom *atom = findByName(sym))
-    return atom->definition() != Atom::definitionUndefined;
+    return !isa<UndefinedAtom>(atom);
   return false;
 }
 
@@ -389,21 +362,14 @@ bool SymbolTable::isCoalescedAway(const Atom *atom) {
   return _replacedAtoms.count(atom) > 0;
 }
 
-unsigned int SymbolTable::size() {
-  return _nameTable.size();
-}
-
 std::vector<const UndefinedAtom *> SymbolTable::undefines() {
   std::vector<const UndefinedAtom *> ret;
   for (auto it : _nameTable) {
     const Atom *atom = it.second;
     assert(atom != nullptr);
-    if (const auto undef = dyn_cast<const UndefinedAtom>(atom)) {
-      AtomToAtom::iterator pos = _replacedAtoms.find(undef);
-      if (pos != _replacedAtoms.end())
-        continue;
-      ret.push_back(undef);
-    }
+    if (const auto *undef = dyn_cast<const UndefinedAtom>(atom))
+      if (_replacedAtoms.count(undef) == 0)
+        ret.push_back(undef);
   }
   return ret;
 }

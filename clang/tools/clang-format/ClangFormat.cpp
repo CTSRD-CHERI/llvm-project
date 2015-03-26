@@ -76,7 +76,7 @@ static cl::opt<std::string>
 AssumeFilename("assume-filename",
                cl::desc("When reading from stdin, clang-format assumes this\n"
                         "filename to look for a style config file (with\n"
-                        "-style=file)."),
+                        "-style=file) and to determine the language."),
                cl::cat(ClangFormatCategory));
 
 static cl::opt<bool> Inplace("i",
@@ -229,6 +229,10 @@ static bool format(StringRef FileName) {
   if (OutputXML) {
     llvm::outs()
         << "<?xml version='1.0'?>\n<replacements xml:space='preserve'>\n";
+    if (Cursor.getNumOccurrences() != 0)
+      llvm::outs() << "<cursor>"
+                   << tooling::shiftedCodePosition(Replaces, Cursor)
+                   << "</cursor>\n";
     for (tooling::Replacements::const_iterator I = Replaces.begin(),
                                                E = Replaces.end();
          I != E; ++I) {
@@ -266,15 +270,7 @@ static void PrintVersion() {
 int main(int argc, const char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal();
 
-  // Hide unrelated options.
-  StringMap<cl::Option*> Options;
-  cl::getRegisteredOptions(Options);
-  for (StringMap<cl::Option *>::iterator I = Options.begin(), E = Options.end();
-       I != E; ++I) {
-    if (I->second->Category != &ClangFormatCategory && I->first() != "help" &&
-        I->first() != "version")
-      I->second->setHiddenFlag(cl::ReallyHidden);
-  }
+  cl::HideUnrelatedOptions(ClangFormatCategory);
 
   cl::SetVersionPrinter(PrintVersion);
   cl::ParseCommandLineOptions(

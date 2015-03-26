@@ -1,7 +1,5 @@
 /*
  * kmp_os.h -- KPTS runtime header file.
- * $Revision: 42820 $
- * $Date: 2013-11-13 16:53:44 -0600 (Wed, 13 Nov 2013) $
  */
 
 
@@ -69,13 +67,18 @@
 #define KMP_OS_LINUX    0
 #define KMP_OS_FREEBSD  0
 #define KMP_OS_DARWIN   0
-#define KMP_OS_WINDOWS    0
+#define KMP_OS_WINDOWS  0
 #define KMP_OS_CNK      0
 #define KMP_OS_UNIX     0  /* disjunction of KMP_OS_LINUX, KMP_OS_DARWIN etc. */
 
 #define KMP_ARCH_X86        0
-#define KMP_ARCH_X86_64	    0
-#define KMP_ARCH_PPC64      0
+#define KMP_ARCH_X86_64     0
+#define KMP_ARCH_AARCH64    0
+#define KMP_ARCH_PPC64_BE   0
+#define KMP_ARCH_PPC64_LE   0
+
+#define KMP_ARCH_PPC64 (KMP_ARCH_PPC64_LE || KMP_ARCH_PPC64_BE)
+
 
 #ifdef _WIN32
 # undef KMP_OS_WINDOWS
@@ -134,9 +137,17 @@
 #  undef KMP_ARCH_X86
 #  define KMP_ARCH_X86 1
 # elif defined __powerpc64__
-#  undef KMP_ARCH_PPC64
-#  define KMP_ARCH_PPC64 1
-# endif
+#  if defined __LITTLE_ENDIAN__
+#   undef KMP_ARCH_PPC64_LE
+#   define KMP_ARCH_PPC64_LE 1
+#  else
+#   undef KMP_ARCH_PPC64_BE
+#   define KMP_ARCH_PPC64_BE 1
+#  endif
+# elif defined __aarch64__           
+#  undef KMP_ARCH_AARCH64          
+#  define KMP_ARCH_AARCH64 1  
+# endif        
 #endif
 
 #if defined(__ARM_ARCH_7__)   || defined(__ARM_ARCH_7R__)  || \
@@ -175,8 +186,21 @@
 # define KMP_ARCH_ARM 1
 #endif
 
-#if (1 != KMP_ARCH_X86 + KMP_ARCH_X86_64 + KMP_ARCH_ARM + KMP_ARCH_PPC64)
+// TODO: Fixme - This is clever, but really fugly 
+#if (1 != KMP_ARCH_X86 + KMP_ARCH_X86_64 + KMP_ARCH_ARM + KMP_ARCH_PPC64 + KMP_ARCH_AARCH64)
 # error Unknown or unsupported architecture
+#endif
+
+#if (KMP_OS_LINUX || KMP_OS_WINDOWS) && !KMP_OS_CNK && !KMP_ARCH_PPC64
+# define KMP_AFFINITY_SUPPORTED 1
+# if KMP_OS_WINDOWS && KMP_ARCH_X86_64
+#  define KMP_GROUP_AFFINITY    1
+# else
+#  define KMP_GROUP_AFFINITY    0
+# endif
+#else
+# define KMP_AFFINITY_SUPPORTED 0
+# define KMP_GROUP_AFFINITY     0
 #endif
 
 /* Check for quad-precision extension. */
@@ -253,7 +277,7 @@
 
 #if KMP_ARCH_X86 || KMP_ARCH_ARM
 # define KMP_SIZE_T_SPEC KMP_UINT32_SPEC
-#elif KMP_ARCH_X86_64 || KMP_ARCH_PPC64
+#elif KMP_ARCH_X86_64 || KMP_ARCH_PPC64 || KMP_ARCH_AARCH64
 # define KMP_SIZE_T_SPEC KMP_UINT64_SPEC
 #else
 # error "Can't determine size_t printf format specifier."
@@ -356,6 +380,8 @@ typedef double  kmp_real64;
 extern "C" {
 #endif // __cplusplus
 
+#define INTERNODE_CACHE_LINE 4096 /* for multi-node systems */
+
 /* Define the default size of the cache line */
 #ifndef CACHE_LINE
     #define CACHE_LINE                  128         /* cache line size in bytes */
@@ -366,16 +392,6 @@ extern "C" {
     #endif
 #endif /* CACHE_LINE */
 
-/* SGI's cache padding improvements using align decl specs (Ver 19) */
-#if !defined KMP_PERF_V19
-# define KMP_PERF_V19			KMP_ON
-#endif
-
-/* SGI's improvements for inline argv (Ver 106) */
-#if !defined KMP_PERF_V106
-# define KMP_PERF_V106			KMP_ON
-#endif
-
 #define KMP_CACHE_PREFETCH(ADDR) 	/* nothing */
 
 /* Temporary note: if performance testing of this passes, we can remove
@@ -383,10 +399,12 @@ extern "C" {
 #if KMP_OS_UNIX && defined(__GNUC__)
 # define KMP_DO_ALIGN(bytes)  __attribute__((aligned(bytes)))
 # define KMP_ALIGN_CACHE      __attribute__((aligned(CACHE_LINE)))
+# define KMP_ALIGN_CACHE_INTERNODE __attribute__((aligned(INTERNODE_CACHE_LINE)))
 # define KMP_ALIGN(bytes)     __attribute__((aligned(bytes)))
 #else
 # define KMP_DO_ALIGN(bytes)  __declspec( align(bytes) )
 # define KMP_ALIGN_CACHE      __declspec( align(CACHE_LINE) )
+# define KMP_ALIGN_CACHE_INTERNODE      __declspec( align(INTERNODE_CACHE_LINE) )
 # define KMP_ALIGN(bytes)     __declspec( align(bytes) )
 #endif
 
@@ -440,6 +458,9 @@ enum kmp_mem_fence_type {
 # define KMP_TEST_THEN_DEC_ACQ32(p)             InterlockedExchangeAdd( (volatile long *)(p), -1 )
 # define KMP_TEST_THEN_ADD32(p, v)              InterlockedExchangeAdd( (volatile long *)(p), (v) )
 
+extern kmp_int8 __kmp_test_then_add8( volatile kmp_int8 *p, kmp_int8 v );
+extern kmp_int8 __kmp_test_then_or8( volatile kmp_int8 *p, kmp_int8 v );
+extern kmp_int8 __kmp_test_then_and8( volatile kmp_int8 *p, kmp_int8 v );
 # define KMP_COMPARE_AND_STORE_RET32(p, cv, sv) InterlockedCompareExchange( (volatile long *)(p),(long)(sv),(long)(cv) )
 
 # define KMP_XCHG_FIXED32(p, v)                 InterlockedExchange( (volatile long *)(p), (long)(v) )
@@ -476,8 +497,11 @@ extern kmp_int32 __kmp_xchg_fixed32( volatile kmp_int32 *p, kmp_int32 v );
 extern kmp_int64 __kmp_xchg_fixed64( volatile kmp_int64 *p, kmp_int64 v );
 extern kmp_real32 __kmp_xchg_real32( volatile kmp_real32 *p, kmp_real32 v );
 extern kmp_real64 __kmp_xchg_real64( volatile kmp_real64 *p, kmp_real64 v );
+# define KMP_TEST_THEN_ADD8(p, v)              __kmp_test_then_add8( (p), (v) )
 
 //# define KMP_TEST_THEN_INC32(p)                 __kmp_test_then_add32( (p), 1 )
+# define KMP_TEST_THEN_OR8(p, v)               __kmp_test_then_or8( (p), (v) )
+# define KMP_TEST_THEN_AND8(p, v)              __kmp_test_then_and8( (p), (v) )
 //# define KMP_TEST_THEN_INC_ACQ32(p)             __kmp_test_then_add32( (p), 1 )
 # define KMP_TEST_THEN_INC64(p)                 __kmp_test_then_add64( (p), 1LL )
 # define KMP_TEST_THEN_INC_ACQ64(p)             __kmp_test_then_add64( (p), 1LL )
@@ -525,10 +549,13 @@ extern kmp_real64 __kmp_xchg_real64( volatile kmp_real64 *p, kmp_real64 v );
 # define KMP_XCHG_REAL64(p, v)                  __kmp_xchg_real64( (p), (v) );
 
 
-#elif (KMP_ASM_INTRINS && (KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_DARWIN)) || !(KMP_ARCH_X86 || KMP_ARCH_X86_64)
+#elif (KMP_ASM_INTRINS && KMP_OS_UNIX) || !(KMP_ARCH_X86 || KMP_ARCH_X86_64)
+# define KMP_TEST_THEN_ADD8(p, v)               __sync_fetch_and_add( (kmp_int8 *)(p), (v) )
 
 /* cast p to correct type so that proper intrinsic will be used */
 # define KMP_TEST_THEN_INC32(p)                 __sync_fetch_and_add( (kmp_int32 *)(p), 1 )
+# define KMP_TEST_THEN_OR8(p, v)                __sync_fetch_and_or( (kmp_int8 *)(p), (v) )
+# define KMP_TEST_THEN_AND8(p, v)               __sync_fetch_and_and( (kmp_int8 *)(p), (v) )
 # define KMP_TEST_THEN_INC_ACQ32(p)             __sync_fetch_and_add( (kmp_int32 *)(p), 1 )
 # define KMP_TEST_THEN_INC64(p)                 __sync_fetch_and_add( (kmp_int64 *)(p), 1LL )
 # define KMP_TEST_THEN_INC_ACQ64(p)             __sync_fetch_and_add( (kmp_int64 *)(p), 1LL )
@@ -568,6 +595,9 @@ extern kmp_real64 __kmp_xchg_real64( volatile kmp_real64 *p, kmp_real64 v );
 #define KMP_XCHG_FIXED32(p, v)                  __sync_lock_test_and_set( (volatile kmp_uint32 *)(p), (kmp_uint32)(v) )
 #define KMP_XCHG_FIXED64(p, v)                  __sync_lock_test_and_set( (volatile kmp_uint64 *)(p), (kmp_uint64)(v) )
 
+extern kmp_int8 __kmp_test_then_add8( volatile kmp_int8 *p, kmp_int8 v );
+extern kmp_int8 __kmp_test_then_or8( volatile kmp_int8 *p, kmp_int8 v );
+extern kmp_int8 __kmp_test_then_and8( volatile kmp_int8 *p, kmp_int8 v );
 inline kmp_real32 KMP_XCHG_REAL32( volatile kmp_real32 *p, kmp_real32 v)
 {
     kmp_int32 tmp = __sync_lock_test_and_set( (kmp_int32*)p, *(kmp_int32*)&v);
@@ -603,9 +633,12 @@ extern kmp_int16 __kmp_xchg_fixed16( volatile kmp_int16 *p, kmp_int16 v );
 extern kmp_int32 __kmp_xchg_fixed32( volatile kmp_int32 *p, kmp_int32 v );
 extern kmp_int64 __kmp_xchg_fixed64( volatile kmp_int64 *p, kmp_int64 v );
 extern kmp_real32 __kmp_xchg_real32( volatile kmp_real32 *p, kmp_real32 v );
+# define KMP_TEST_THEN_ADD8(p, v)               __kmp_test_then_add8( (p), (v) )
 extern kmp_real64 __kmp_xchg_real64( volatile kmp_real64 *p, kmp_real64 v );
 
 # define KMP_TEST_THEN_INC32(p)                 __kmp_test_then_add32( (p), 1 )
+# define KMP_TEST_THEN_OR8(p, v)                __kmp_test_then_or8( (p), (v) )
+# define KMP_TEST_THEN_AND8(p, v)               __kmp_test_then_and8( (p), (v) )
 # define KMP_TEST_THEN_INC_ACQ32(p)             __kmp_test_then_add32( (p), 1 )
 # define KMP_TEST_THEN_INC64(p)                 __kmp_test_then_add64( (p), 1LL )
 # define KMP_TEST_THEN_INC_ACQ64(p)             __kmp_test_then_add64( (p), 1LL )
@@ -654,17 +687,6 @@ extern kmp_real64 __kmp_xchg_real64( volatile kmp_real64 *p, kmp_real64 v );
 
 #endif /* KMP_ASM_INTRINS */
 
-# if !KMP_MIC
-//
-// no routines for floating addition on MIC
-// no intrinsic support for floating addition on UNIX
-//
-extern kmp_real32 __kmp_test_then_add_real32 ( volatile kmp_real32 *p, kmp_real32 v );
-extern kmp_real64 __kmp_test_then_add_real64 ( volatile kmp_real64 *p, kmp_real64 v );
-#  define KMP_TEST_THEN_ADD_REAL32(p, v)        __kmp_test_then_add_real32( (p), (v) )
-#  define KMP_TEST_THEN_ADD_REAL64(p, v)        __kmp_test_then_add_real64( (p), (v) )
-# endif
-
 
 /* ------------- relaxed consistency memory model stuff ------------------ */
 
@@ -678,7 +700,7 @@ extern kmp_real64 __kmp_test_then_add_real64 ( volatile kmp_real64 *p, kmp_real6
 # endif
 #endif /* KMP_OS_WINDOWS */
 
-#if KMP_ARCH_PPC64
+#if KMP_ARCH_PPC64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64
 # define KMP_MB()       __sync_synchronize()
 #endif
 
@@ -706,6 +728,8 @@ extern kmp_real64 __kmp_test_then_add_real64 ( volatile kmp_real64 *p, kmp_real6
 # define KMP_LD_ACQ64(A)        ( *(A) )
 #endif
 
+#define TCR_1(a)            (a)
+#define TCW_1(a,b)          (a) = (b)
 /* ------------------------------------------------------------------------ */
 //
 // FIXME - maybe this should this be
@@ -732,7 +756,7 @@ extern kmp_real64 __kmp_test_then_add_real64 ( volatile kmp_real64 *p, kmp_real6
 #define TCX_SYNC_8(a,b,c)   KMP_COMPARE_AND_STORE_REL64((volatile kmp_int64 *)(volatile void *)&(a), (kmp_int64)(b), (kmp_int64)(c))
 
 #if KMP_ARCH_X86
-
+// What about ARM?
     #define TCR_PTR(a)          ((void *)TCR_4(a))
     #define TCW_PTR(a,b)        TCW_4((a),(b))
     #define TCR_SYNC_PTR(a)     ((void *)TCR_SYNC_4(a))
@@ -806,6 +830,11 @@ typedef void    (*microtask_t)( int *gtid, int *npr, ... );
 #endif
 #ifndef USE_CMPXCHG_FIX
 # define USE_CMPXCHG_FIX 1
+#endif
+
+// Enable dynamic user lock
+#ifndef KMP_USE_DYNAMIC_LOCK
+# define KMP_USE_DYNAMIC_LOCK 0
 #endif
 
 // Warning levels

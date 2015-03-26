@@ -10,6 +10,7 @@
 //
 
 #include "AMDGPU.h"
+#include "AMDGPUMCInstLower.h"
 #include "AMDGPUSubtarget.h"
 #include "SIInstrInfo.h"
 #include "llvm/ADT/Statistic.h"
@@ -17,9 +18,10 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 
 #define DEBUG_TYPE "si-shrink-instructions"
@@ -45,13 +47,13 @@ public:
   SIShrinkInstructions() : MachineFunctionPass(ID) {
   }
 
-  virtual bool runOnMachineFunction(MachineFunction &MF) override;
+  bool runOnMachineFunction(MachineFunction &MF) override;
 
-  virtual const char *getPassName() const override {
+  const char *getPassName() const override {
     return "SI Shrink Instructions";
   }
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const override {
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
@@ -87,6 +89,11 @@ static bool canShrink(MachineInstr &MI, const SIInstrInfo *TII,
 
   const MachineOperand *Src2 = TII->getNamedOperand(MI, AMDGPU::OpName::src2);
   // Can't shrink instruction with three operands.
+  // FIXME: v_cndmask_b32 has 3 operands and is shrinkable, but we need to add
+  // a special case for it.  It can only be shrunk if the third operand
+  // is vcc.  We should handle this the same way we handle vopc, by addding
+  // a register allocation hint pre-regalloc and then do the shrining
+  // post-regalloc.
   if (Src2)
     return false;
 
@@ -97,20 +104,19 @@ static bool canShrink(MachineInstr &MI, const SIInstrInfo *TII,
   if (Src1 && (!isVGPR(Src1, TRI, MRI) || (Src1Mod && Src1Mod->getImm() != 0)))
     return false;
 
-  // We don't need to check src0, all input types are legal, so just make
-  // sure src0 isn't using any modifiers.
-  const MachineOperand *Src0Mod =
-      TII->getNamedOperand(MI, AMDGPU::OpName::src0_modifiers);
-  if (Src0Mod && Src0Mod->getImm() != 0)
+  // We don't need to check src0, all input types are legal, so just make sure
+  // src0 isn't using any modifiers.
+  if (TII->hasModifiersSet(MI, AMDGPU::OpName::src0_modifiers))
     return false;
 
   // Check output modifiers
-  const MachineOperand *Omod = TII->getNamedOperand(MI, AMDGPU::OpName::omod);
-  if (Omod && Omod->getImm() != 0)
+  if (TII->hasModifiersSet(MI, AMDGPU::OpName::omod))
     return false;
 
-  const MachineOperand *Clamp = TII->getNamedOperand(MI, AMDGPU::OpName::clamp);
-  return !Clamp || Clamp->getImm() == 0;
+  if (TII->hasModifiersSet(MI, AMDGPU::OpName::clamp))
+    return false;
+
+  return true;
 }
 
 /// \brief This function checks \p MI for operands defined by a move immediate
@@ -127,38 +133,32 @@ static void foldImmediates(MachineInstr &MI, const SIInstrInfo *TII,
          TII->isVOPC(MI.getOpcode()));
 
   const SIRegisterInfo &TRI = TII->getRegisterInfo();
-  MachineOperand *Src0 = TII->getNamedOperand(MI, AMDGPU::OpName::src0);
+  int Src0Idx = AMDGPU::getNamedOperandIdx(MI.getOpcode(), AMDGPU::OpName::src0);
+  MachineOperand &Src0 = MI.getOperand(Src0Idx);
 
   // Only one literal constant is allowed per instruction, so if src0 is a
   // literal constant then we can't do any folding.
-  if (Src0->isImm() && TII->isLiteralConstant(*Src0))
+  if (Src0.isImm() &&
+      TII->isLiteralConstant(Src0, TII->getOpSize(MI, Src0Idx)))
     return;
-
 
   // Literal constants and SGPRs can only be used in Src0, so if Src0 is an
   // SGPR, we cannot commute the instruction, so we can't fold any literal
   // constants.
-  if (Src0->isReg() && !isVGPR(Src0, TRI, MRI))
+  if (Src0.isReg() && !isVGPR(&Src0, TRI, MRI))
     return;
 
   // Try to fold Src0
-  if (Src0->isReg()) {
-    unsigned Reg = Src0->getReg();
+  if (Src0.isReg()) {
+    unsigned Reg = Src0.getReg();
     MachineInstr *Def = MRI.getUniqueVRegDef(Reg);
     if (Def && Def->isMoveImmediate()) {
       MachineOperand &MovSrc = Def->getOperand(1);
       bool ConstantFolded = false;
 
       if (MovSrc.isImm() && isUInt<32>(MovSrc.getImm())) {
-        Src0->ChangeToImmediate(MovSrc.getImm());
+        Src0.ChangeToImmediate(MovSrc.getImm());
         ConstantFolded = true;
-      } else if (MovSrc.isFPImm()) {
-        const APFloat &APF = MovSrc.getFPImm()->getValueAPF();
-        if (&APF.getSemantics() == &APFloat::IEEEsingle) {
-          MRI.removeRegOperandFromUseList(Src0);
-          Src0->ChangeToImmediate(APF.bitcastToAPInt().getZExtValue());
-          ConstantFolded = true;
-        }
       }
       if (ConstantFolded) {
         if (MRI.use_empty(Reg))
@@ -191,40 +191,51 @@ bool SIShrinkInstructions::runOnMachineFunction(MachineFunction &MF) {
       Next = std::next(I);
       MachineInstr &MI = *I;
 
+      // Try to use S_MOVK_I32, which will save 4 bytes for small immediates.
+      if (MI.getOpcode() == AMDGPU::S_MOV_B32) {
+        const MachineOperand &Src = MI.getOperand(1);
+
+        if (Src.isImm()) {
+          if (isInt<16>(Src.getImm()) && !TII->isInlineConstant(Src, 4))
+            MI.setDesc(TII->get(AMDGPU::S_MOVK_I32));
+        }
+
+        continue;
+      }
+
       if (!TII->hasVALU32BitEncoding(MI.getOpcode()))
         continue;
 
       if (!canShrink(MI, TII, TRI, MRI)) {
-        // Try commtuing the instruction and see if that enables us to shrink
+        // Try commuting the instruction and see if that enables us to shrink
         // it.
         if (!MI.isCommutable() || !TII->commuteInstruction(&MI) ||
             !canShrink(MI, TII, TRI, MRI))
           continue;
       }
 
-      int Op32 = AMDGPU::getVOPe32(MI.getOpcode());
-
-      // Op32 could be -1 here if we started with an instruction that had a
+      // getVOPe32 could be -1 here if we started with an instruction that had
       // a 32-bit encoding and then commuted it to an instruction that did not.
-      if (Op32 == -1)
+      if (!TII->hasVALU32BitEncoding(MI.getOpcode()))
         continue;
+
+      int Op32 = AMDGPU::getVOPe32(MI.getOpcode());
 
       if (TII->isVOPC(Op32)) {
         unsigned DstReg = MI.getOperand(0).getReg();
         if (TargetRegisterInfo::isVirtualRegister(DstReg)) {
           // VOPC instructions can only write to the VCC register.  We can't
-          // force them to use VCC here, because the register allocator
-          // has trouble with sequences like this, which cause the allocator
-          // to run out of registes if vreg0 and vreg1 belong to the VCCReg
-          // register class:
+          // force them to use VCC here, because the register allocator has
+          // trouble with sequences like this, which cause the allocator to run
+          // out of registers if vreg0 and vreg1 belong to the VCCReg register
+          // class:
           // vreg0 = VOPC;
           // vreg1 = VOPC;
           // S_AND_B64 vreg0, vreg1
           //
-          // So, instead of forcing the instruction to write to VCC, we provide a
-          // hint to the register allocator to use VCC and then we
-          // we will run this pass again after RA and shrink it if it outpus to
-          // VCC.
+          // So, instead of forcing the instruction to write to VCC, we provide
+          // a hint to the register allocator to use VCC and then we we will run
+          // this pass again after RA and shrink it if it outputs to VCC.
           MRI.setRegAllocationHint(MI.getOperand(0).getReg(), 0, AMDGPU::VCC);
           continue;
         }

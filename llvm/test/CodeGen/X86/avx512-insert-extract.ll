@@ -1,31 +1,34 @@
-; RUN: llc < %s -march=x86-64 -mtriple=x86_64-apple-darwin -mcpu=knl | FileCheck %s
+; RUN: llc < %s -march=x86-64 -mtriple=x86_64-apple-darwin -mcpu=knl | FileCheck --check-prefix=KNL --check-prefix=CHECK %s
+; RUN: llc < %s -march=x86-64 -mtriple=x86_64-apple-darwin -mcpu=skx | FileCheck --check-prefix=SKX --check-prefix=CHECK %s
 
 ;CHECK-LABEL: test1:
 ;CHECK: vinsertps
 ;CHECK: vinsertf32x4
 ;CHECK: ret
 define <16 x float> @test1(<16 x float> %x, float* %br, float %y) nounwind {
-  %rrr = load float* %br
+  %rrr = load float, float* %br
   %rrr2 = insertelement <16 x float> %x, float %rrr, i32 1
   %rrr3 = insertelement <16 x float> %rrr2, float %y, i32 14
   ret <16 x float> %rrr3
 }
 
 ;CHECK-LABEL: test2:
-;CHECK: vinsertf32x4
-;CHECK: vextractf32x4
-;CHECK: vinsertf32x4
+;KNL: vinsertf32x4 $0
+;SKX: vinsertf64x2 $0
+;CHECK: vextractf32x4 $3
+;KNL: vinsertf32x4 $3
+;SKX: vinsertf64x2 $3
 ;CHECK: ret
 define <8 x double> @test2(<8 x double> %x, double* %br, double %y) nounwind {
-  %rrr = load double* %br
+  %rrr = load double, double* %br
   %rrr2 = insertelement <8 x double> %x, double %rrr, i32 1
   %rrr3 = insertelement <8 x double> %rrr2, double %y, i32 6
   ret <8 x double> %rrr3
 }
 
 ;CHECK-LABEL: test3:
-;CHECK: vextractf32x4
-;CHECK: vinsertf32x4
+;CHECK: vextractf32x4 $1
+;CHECK: vinsertf32x4 $0
 ;CHECK: ret
 define <16 x float> @test3(<16 x float> %x) nounwind {
   %eee = extractelement <16 x float> %x, i32 4
@@ -34,8 +37,9 @@ define <16 x float> @test3(<16 x float> %x) nounwind {
 }
 
 ;CHECK-LABEL: test4:
-;CHECK: vextracti32x4
-;CHECK: vinserti32x4
+;CHECK: vextracti32x4 $2
+;KNL: vinserti32x4 $0
+;SKX: vinserti64x2 $0
 ;CHECK: ret
 define <8 x i64> @test4(<8 x i64> %x) nounwind {
   %eee = extractelement <8 x i64> %x, i32 4
@@ -102,7 +106,7 @@ define i32 @test10(<16 x i32> %x, i32 %ind) nounwind {
 ;CHECK: vpcmpltud
 ;CHECK: kshiftlw $11
 ;CHECK: kshiftrw $15
-;CHECK: kortestw
+;CHECK: testb
 ;CHECK: je
 ;CHECK: ret
 ;CHECK: ret
@@ -121,7 +125,7 @@ define <16 x i32> @test11(<16 x i32>%a, <16 x i32>%b) {
 ;CHECK: vpcmpgtq
 ;CHECK: kshiftlw $15
 ;CHECK: kshiftrw $15
-;CHECK: kortestw
+;CHECK: testb
 ;CHECK: ret
 
 define i64 @test12(<16 x i64>%a, <16 x i64>%b, i64 %a1, i64 %b1) {
@@ -146,9 +150,12 @@ define i16 @test13(i32 %a, i32 %b) {
 
 ;CHECK-LABEL: test14
 ;CHECK: vpcmpgtq
-;CHECK: kshiftlw $11
-;CHECK: kshiftrw $15
-;CHECK: kortestw
+;KNL: kshiftlw $11
+;KNL: kshiftrw $15
+;KNL: testb
+;SKX: kshiftlb $3
+;SKX: kshiftrb $7
+;SKX: testb
 ;CHECK: ret
 
 define i64 @test14(<8 x i64>%a, <8 x i64>%b, i64 %a1, i64 %b1) {
@@ -164,7 +171,7 @@ define i64 @test14(<8 x i64>%a, <8 x i64>%b, i64 %a1, i64 %b1) {
 ;CHECK: kmovw
 ;CHECK: ret
 define i16 @test15(i1 *%addr) {
-  %x = load i1 * %addr, align 128
+  %x = load i1 , i1 * %addr, align 128
   %x1 = insertelement <16 x i1> undef, i1 %x, i32 10
   %x2 = bitcast <16 x i1>%x1 to i16
   ret i16 %x2
@@ -176,7 +183,7 @@ define i16 @test15(i1 *%addr) {
 ;CHECK: korw
 ;CHECK: ret
 define i16 @test16(i1 *%addr, i16 %a) {
-  %x = load i1 * %addr, align 128
+  %x = load i1 , i1 * %addr, align 128
   %a1 = bitcast i16 %a to <16 x i1>
   %x1 = insertelement <16 x i1> %a1, i1 %x, i32 10
   %x2 = bitcast <16 x i1>%x1 to i16
@@ -184,14 +191,17 @@ define i16 @test16(i1 *%addr, i16 %a) {
 }
 
 ;CHECK-LABEL: test17
-;CHECK: kshiftlw
-;CHECK: kshiftrw
-;CHECK: korw
+;KNL: kshiftlw
+;KNL: kshiftrw
+;KNL: korw
+;SKX: kshiftlb
+;SKX: kshiftrb
+;SKX: korb
 ;CHECK: ret
 define i8 @test17(i1 *%addr, i8 %a) {
-  %x = load i1 * %addr, align 128
+  %x = load i1 , i1 * %addr, align 128
   %a1 = bitcast i8 %a to <8 x i1>
-  %x1 = insertelement <8 x i1> %a1, i1 %x, i32 10
+  %x1 = insertelement <8 x i1> %a1, i1 %x, i32 4
   %x2 = bitcast <8 x i1>%x1 to i8
   ret i8 %x2
 }

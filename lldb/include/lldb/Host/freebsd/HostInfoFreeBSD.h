@@ -10,6 +10,7 @@
 #ifndef lldb_Host_freebsd_HostInfoFreeBSD_h_
 #define lldb_Host_freebsd_HostInfoFreeBSD_h_
 
+#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/posix/HostInfoPosix.h"
 
 namespace lldb_private
@@ -18,9 +19,11 @@ namespace lldb_private
 class HostInfoFreeBSD : public HostInfoPosix
 {
   public:
+    static uint32_t GetMaxThreadNameLength();
     static bool GetOSVersion(uint32_t &major, uint32_t &minor, uint32_t &update);
     static bool GetOSBuildString(std::string &s);
     static bool GetOSKernelDescription(std::string &s);
+    static FileSpec GetProgramFileSpec();
 };
 }
 

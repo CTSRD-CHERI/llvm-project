@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-ast -polly-parallel -analyze < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-pc-linux-gnu"
 
@@ -23,7 +23,7 @@ loop.j:
   br i1 %exitcond.j, label %loop.body, label %loop.i.backedge
 
 loop.body:
-  %scevgep = getelementptr [1024 x [1024 x i32] ]* @A, i64 0, i64 %j, i64 %i
+  %scevgep = getelementptr [1024 x [1024 x i32] ], [1024 x [1024 x i32] ]* @A, i64 0, i64 %j, i64 %i
   store i32 1, i32* %scevgep
   br label %loop.j.backedge
 
@@ -44,9 +44,9 @@ ret:
 ; annotations.
 
 ; CHECK:     #pragma omp parallel for
-; CHECK:     for (int c1 = 0; c1 <= 1023; c1 += 1)
+; CHECK:     for (int c0 = 0; c0 <= 1023; c0 += 1)
 ; CHECK-NOT:   #pragma omp parallel for
 ; CHECK:       #pragma simd
 ; CHECK-NOT:   #pragma omp parallel for
-; CHECK:       for (int c3 = 0; c3 <= 1023; c3 += 1)
-; CHECK:         Stmt_loop_body(c1, c3);
+; CHECK:       for (int c1 = 0; c1 <= 1023; c1 += 1)
+; CHECK:         Stmt_loop_body(c0, c1);

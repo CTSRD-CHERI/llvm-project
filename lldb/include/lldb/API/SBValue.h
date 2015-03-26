@@ -19,7 +19,7 @@ class ValueLocker;
 
 namespace lldb {
 
-class SBValue
+class LLDB_API SBValue
 {
 friend class ValueLocker;
 
@@ -84,6 +84,7 @@ public:
     ValueType
     GetValueType ();
 
+    // If you call this on a newly created ValueObject, it will always return false.
     bool
     GetValueDidChange ();
 
@@ -91,7 +92,14 @@ public:
     GetSummary ();
     
     const char *
+    GetSummary (lldb::SBStream& stream,
+                lldb::SBTypeSummaryOptions& options);
+    
+    const char *
     GetObjectDescription ();
+    
+    const char *
+    GetTypeValidatorResult ();
     
     lldb::SBValue
     GetDynamicValue (lldb::DynamicValueType use_dynamic);
@@ -152,6 +160,7 @@ public:
     lldb::SBValue
     CreateChildAtOffset (const char *name, uint32_t offset, lldb::SBType type);
     
+    // Deprecated - use the expression evaluator to perform type casting
     lldb::SBValue
     Cast (lldb::SBType type);
     
@@ -318,6 +327,9 @@ public:
     //------------------------------------------------------------------
     bool
     MightHaveChildren ();
+    
+    bool
+    IsRuntimeSupportValue ();
 
     uint32_t
     GetNumChildren ();
@@ -345,6 +357,9 @@ public:
     
     lldb::SBType
     GetType();
+    
+    lldb::SBValue
+    Persist ();
 
     bool
     GetDescription (lldb::SBStream &description);

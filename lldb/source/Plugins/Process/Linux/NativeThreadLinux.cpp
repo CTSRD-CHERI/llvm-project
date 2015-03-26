@@ -10,18 +10,29 @@
 #include "NativeThreadLinux.h"
 
 #include <signal.h>
+#include <sstream>
 
 #include "NativeProcessLinux.h"
+#include "NativeRegisterContextLinux_arm64.h"
 #include "NativeRegisterContextLinux_x86_64.h"
+#include "NativeRegisterContextLinux_mips64.h"
 
 #include "lldb/Core/Log.h"
 #include "lldb/Core/State.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
+#include "lldb/Host/HostNativeThread.h"
+#include "lldb/Utility/LLDBAssert.h"
 #include "lldb/lldb-enumerations.h"
-#include "lldb/lldb-private-log.h"
+
+#include "llvm/ADT/SmallString.h"
+
+#include "Plugins/Process/POSIX/CrashReason.h"
+
+#include "Plugins/Process/Utility/RegisterContextLinux_arm64.h"
 #include "Plugins/Process/Utility/RegisterContextLinux_i386.h"
 #include "Plugins/Process/Utility/RegisterContextLinux_x86_64.h"
+#include "Plugins/Process/Utility/RegisterContextLinux_mips64.h"
 #include "Plugins/Process/Utility/RegisterInfoInterface.h"
 
 using namespace lldb;
@@ -33,14 +44,38 @@ namespace
     {
         switch (stop_info.reason)
         {
+            case eStopReasonNone:
+                log.Printf ("%s: %s no stop reason", __FUNCTION__, header);
+                return;
+            case eStopReasonTrace:
+                log.Printf ("%s: %s trace, stopping signal 0x%" PRIx32, __FUNCTION__, header, stop_info.details.signal.signo);
+                return;
+            case eStopReasonBreakpoint:
+                log.Printf ("%s: %s breakpoint, stopping signal 0x%" PRIx32, __FUNCTION__, header, stop_info.details.signal.signo);
+                return;
+            case eStopReasonWatchpoint:
+                log.Printf ("%s: %s watchpoint, stopping signal 0x%" PRIx32, __FUNCTION__, header, stop_info.details.signal.signo);
+                return;
             case eStopReasonSignal:
-                log.Printf ("%s: %s: signal 0x%" PRIx32, __FUNCTION__, header, stop_info.details.signal.signo);
+                log.Printf ("%s: %s signal 0x%02" PRIx32, __FUNCTION__, header, stop_info.details.signal.signo);
                 return;
             case eStopReasonException:
-                log.Printf ("%s: %s: exception type 0x%" PRIx64, __FUNCTION__, header, stop_info.details.exception.type);
+                log.Printf ("%s: %s exception type 0x%02" PRIx64, __FUNCTION__, header, stop_info.details.exception.type);
+                return;
+            case eStopReasonExec:
+                log.Printf ("%s: %s exec, stopping signal 0x%" PRIx32, __FUNCTION__, header, stop_info.details.signal.signo);
+                return;
+            case eStopReasonPlanComplete:
+                log.Printf ("%s: %s plan complete", __FUNCTION__, header);
+                return;
+            case eStopReasonThreadExiting:
+                log.Printf ("%s: %s thread exiting", __FUNCTION__, header);
+                return;
+            case eStopReasonInstrumentation:
+                log.Printf ("%s: %s instrumentation", __FUNCTION__, header);
                 return;
             default:
-                log.Printf ("%s: %s: invalid stop reason %" PRIu32, __FUNCTION__, header, static_cast<uint32_t> (stop_info.reason));
+                log.Printf ("%s: %s invalid stop reason %" PRIu32, __FUNCTION__, header, static_cast<uint32_t> (stop_info.reason));
         }
     }
 }
@@ -49,11 +84,12 @@ NativeThreadLinux::NativeThreadLinux (NativeProcessLinux *process, lldb::tid_t t
     NativeThreadProtocol (process, tid),
     m_state (StateType::eStateInvalid),
     m_stop_info (),
-    m_reg_context_sp ()
+    m_reg_context_sp (),
+    m_stop_description ()
 {
 }
 
-const char *
+std::string
 NativeThreadLinux::GetName()
 {
     NativeProcessProtocolSP process_sp = m_process_wp.lock ();
@@ -61,7 +97,9 @@ NativeThreadLinux::GetName()
         return "<unknown: no process>";
 
     // const NativeProcessLinux *const process = reinterpret_cast<NativeProcessLinux*> (process_sp->get ());
-    return Host::GetThreadName (process_sp->GetID (), GetID ()).c_str ();
+    llvm::SmallString<32> thread_name;
+    HostNativeThread::GetName(GetID(), thread_name);
+    return thread_name.c_str();
 }
 
 lldb::StateType
@@ -72,9 +110,12 @@ NativeThreadLinux::GetState ()
 
 
 bool
-NativeThreadLinux::GetStopReason (ThreadStopInfo &stop_info)
+NativeThreadLinux::GetStopReason (ThreadStopInfo &stop_info, std::string& description)
 {
     Log *log (GetLogIfAllCategoriesSet (LIBLLDB_LOG_THREAD));
+
+    description.clear();
+
     switch (m_state)
     {
     case eStateStopped:
@@ -83,10 +124,20 @@ NativeThreadLinux::GetStopReason (ThreadStopInfo &stop_info)
     case eStateSuspended:
     case eStateUnloaded:
         if (log)
-            LogThreadStopInfo (*log, m_stop_info, "m_stop_info in thread: ");
+            LogThreadStopInfo (*log, m_stop_info, "m_stop_info in thread:");
         stop_info = m_stop_info;
+        switch (m_stop_info.reason)
+        {
+            case StopReason::eStopReasonException:
+            case StopReason::eStopReasonBreakpoint:
+            case StopReason::eStopReasonWatchpoint:
+                description = m_stop_description;
+            default:
+                break;
+        }
         if (log)
-            LogThreadStopInfo (*log, stop_info, "returned stop_info: ");
+            LogThreadStopInfo (*log, stop_info, "returned stop_info:");
+
         return true;
 
     case eStateInvalid:
@@ -96,7 +147,6 @@ NativeThreadLinux::GetStopReason (ThreadStopInfo &stop_info)
     case eStateRunning:
     case eStateStepping:
     case eStateDetached:
-    default:
         if (log)
         {
             log->Printf ("NativeThreadLinux::%s tid %" PRIu64 " in state %s cannot answer stop reason",
@@ -104,6 +154,7 @@ NativeThreadLinux::GetStopReason (ThreadStopInfo &stop_info)
         }
         return false;
     }
+    llvm_unreachable("unhandled StateType!");
 }
 
 lldb_private::NativeRegisterContextSP
@@ -128,6 +179,10 @@ NativeThreadLinux::GetRegisterContext ()
         case llvm::Triple::Linux:
             switch (target_arch.GetMachine())
             {
+            case llvm::Triple::aarch64:
+                assert((HostInfo::GetArchitecture ().GetAddressByteSize() == 8) && "Register setting path assumes this is a 64-bit host");
+                reg_interface = static_cast<RegisterInfoInterface*>(new RegisterContextLinux_arm64(target_arch));
+                break;
             case llvm::Triple::x86:
             case llvm::Triple::x86_64:
                 if (HostInfo::GetArchitecture().GetAddressByteSize() == 4)
@@ -142,6 +197,12 @@ NativeThreadLinux::GetRegisterContext ()
                     // X86_64 hosts know how to work with 64-bit and 32-bit EXEs using the x86_64 register context.
                     reg_interface = static_cast<RegisterInfoInterface*> (new RegisterContextLinux_x86_64 (target_arch));
                 }
+                break;
+            case llvm::Triple::mips64:
+            case llvm::Triple::mips64el:
+                assert((HostInfo::GetArchitecture ().GetAddressByteSize() == 8)
+                    && "Register setting path assumes this is a 64-bit host");
+                reg_interface = static_cast<RegisterInfoInterface*>(new RegisterContextLinux_mips64 (target_arch));
                 break;
             default:
                 break;
@@ -167,9 +228,20 @@ NativeThreadLinux::GetRegisterContext ()
             break;
         }
 #endif
-#if 0
+        case llvm::Triple::mips64:
+        case llvm::Triple::mips64el:
+        {
+            const uint32_t concrete_frame_idx = 0;
+            m_reg_context_sp.reset (new NativeRegisterContextLinux_mips64 (*this, concrete_frame_idx, reg_interface));
+            break;
+        }
+        case llvm::Triple::aarch64:
+        {
+            const uint32_t concrete_frame_idx = 0;
+            m_reg_context_sp.reset (new NativeRegisterContextLinux_arm64(*this, concrete_frame_idx, reg_interface));
+            break;
+        }
         case llvm::Triple::x86:
-#endif
         case llvm::Triple::x86_64:
         {
             const uint32_t concrete_frame_idx = 0;
@@ -186,15 +258,32 @@ NativeThreadLinux::GetRegisterContext ()
 Error
 NativeThreadLinux::SetWatchpoint (lldb::addr_t addr, size_t size, uint32_t watch_flags, bool hardware)
 {
-    // TODO implement
-    return Error ("not implemented");
+    if (!hardware)
+        return Error ("not implemented");
+    if (m_state == eStateLaunching)
+        return Error ();
+    Error error = RemoveWatchpoint(addr);
+    if (error.Fail()) return error;
+    NativeRegisterContextSP reg_ctx = GetRegisterContext ();
+    uint32_t wp_index =
+        reg_ctx->SetHardwareWatchpoint (addr, size, watch_flags);
+    if (wp_index == LLDB_INVALID_INDEX32)
+        return Error ("Setting hardware watchpoint failed.");
+    m_watchpoint_index_map.insert({addr, wp_index});
+    return Error ();
 }
 
 Error
 NativeThreadLinux::RemoveWatchpoint (lldb::addr_t addr)
 {
-    // TODO implement
-    return Error ("not implemented");
+    auto wp = m_watchpoint_index_map.find(addr);
+    if (wp == m_watchpoint_index_map.end())
+        return Error ();
+    uint32_t wp_index = wp->second;
+    m_watchpoint_index_map.erase(wp);
+    if (GetRegisterContext()->ClearHardwareWatchpoint(wp_index))
+        return Error ();
+    return Error ("Clearing hardware watchpoint failed.");
 }
 
 void
@@ -219,6 +308,25 @@ NativeThreadLinux::SetRunning ()
     m_state = new_state;
 
     m_stop_info.reason = StopReason::eStopReasonNone;
+    m_stop_description.clear();
+
+    // If watchpoints have been set, but none on this thread,
+    // then this is a new thread. So set all existing watchpoints.
+    if (m_watchpoint_index_map.empty())
+    {
+        const auto process_sp = GetProcess();
+        if (process_sp)
+        {
+            const auto &watchpoint_map = process_sp->GetWatchpointMap();
+            if (watchpoint_map.empty()) return;
+            GetRegisterContext()->ClearAllHardwareWatchpoints();
+            for (const auto &pair : watchpoint_map)
+            {
+                const auto& wp = pair.second;
+                SetWatchpoint(wp.m_addr, wp.m_size, wp.m_watch_flags, wp.m_hardware);
+            }
+        }
+    }
 }
 
 void
@@ -236,7 +344,7 @@ NativeThreadLinux::SetStoppedBySignal (uint32_t signo)
 {
     Log *log (GetLogIfAllCategoriesSet (LIBLLDB_LOG_THREAD));
     if (log)
-        log->Printf ("NativeThreadLinux::%s called with signal 0x%" PRIx32, __FUNCTION__, signo);
+        log->Printf ("NativeThreadLinux::%s called with signal 0x%02" PRIx32, __FUNCTION__, signo);
 
     const StateType new_state = StateType::eStateStopped;
     MaybeLogStateChange (new_state);
@@ -246,6 +354,40 @@ NativeThreadLinux::SetStoppedBySignal (uint32_t signo)
     m_stop_info.details.signal.signo = signo;
 }
 
+bool
+NativeThreadLinux::IsStopped (int *signo)
+{
+    if (!StateIsStoppedState (m_state, false))
+        return false;
+
+    // If we are stopped by a signal, return the signo.
+    if (signo &&
+        m_state == StateType::eStateStopped &&
+        m_stop_info.reason == StopReason::eStopReasonSignal)
+    {
+        *signo = m_stop_info.details.signal.signo;
+    }
+
+    // Regardless, we are stopped.
+    return true;
+}
+
+
+void
+NativeThreadLinux::SetStoppedByExec ()
+{
+    Log *log (GetLogIfAllCategoriesSet (LIBLLDB_LOG_THREAD));
+    if (log)
+        log->Printf ("NativeThreadLinux::%s()", __FUNCTION__);
+
+    const StateType new_state = StateType::eStateStopped;
+    MaybeLogStateChange (new_state);
+    m_state = new_state;
+
+    m_stop_info.reason = StopReason::eStopReasonExec;
+    m_stop_info.details.signal.signo = SIGSTOP;
+}
+
 void
 NativeThreadLinux::SetStoppedByBreakpoint ()
 {
@@ -253,35 +395,69 @@ NativeThreadLinux::SetStoppedByBreakpoint ()
     MaybeLogStateChange (new_state);
     m_state = new_state;
 
-    m_stop_info.reason = StopReason::eStopReasonSignal;
+    m_stop_info.reason = StopReason::eStopReasonBreakpoint;
+    m_stop_info.details.signal.signo = SIGTRAP;
+    m_stop_description.clear();
+}
+
+void
+NativeThreadLinux::SetStoppedByWatchpoint (uint32_t wp_index)
+{
+    const StateType new_state = StateType::eStateStopped;
+    MaybeLogStateChange (new_state);
+    m_state = new_state;
+    m_stop_description.clear ();
+
+    lldbassert(wp_index != LLDB_INVALID_INDEX32 &&
+               "wp_index cannot be invalid");
+
+    std::ostringstream ostr;
+    ostr << GetRegisterContext()->GetWatchpointAddress(wp_index) << " ";
+    ostr << wp_index;
+    m_stop_description = ostr.str();
+
+    m_stop_info.reason = StopReason::eStopReasonWatchpoint;
     m_stop_info.details.signal.signo = SIGTRAP;
 }
 
 bool
 NativeThreadLinux::IsStoppedAtBreakpoint ()
 {
-    // Are we stopped? If not, this can't be a breakpoint.
-    if (GetState () != StateType::eStateStopped)
-        return false;
+    return GetState () == StateType::eStateStopped &&
+        m_stop_info.reason == StopReason::eStopReasonBreakpoint;
+}
 
-    // Was the stop reason a signal with signal number SIGTRAP? If not, not a breakpoint.
-    return (m_stop_info.reason == StopReason::eStopReasonSignal) &&
-            (m_stop_info.details.signal.signo == SIGTRAP);
+bool
+NativeThreadLinux::IsStoppedAtWatchpoint ()
+{
+    return GetState () == StateType::eStateStopped &&
+        m_stop_info.reason == StopReason::eStopReasonWatchpoint;
 }
 
 void
-NativeThreadLinux::SetCrashedWithException (uint64_t exception_type, lldb::addr_t exception_addr)
+NativeThreadLinux::SetStoppedByTrace ()
+{
+    const StateType new_state = StateType::eStateStopped;
+    MaybeLogStateChange (new_state);
+    m_state = new_state;
+
+    m_stop_info.reason = StopReason::eStopReasonTrace;
+    m_stop_info.details.signal.signo = SIGTRAP;
+}
+
+void
+NativeThreadLinux::SetCrashedWithException (const siginfo_t& info)
 {
     const StateType new_state = StateType::eStateCrashed;
     MaybeLogStateChange (new_state);
     m_state = new_state;
 
     m_stop_info.reason = StopReason::eStopReasonException;
-    m_stop_info.details.exception.type = exception_type;
-    m_stop_info.details.exception.data_count = 1;
-    m_stop_info.details.exception.data[0] = exception_addr;
-}
+    m_stop_info.details.signal.signo = info.si_signo;
 
+    const auto reason = GetCrashReason (info);
+    m_stop_description = GetCrashReasonString (reason, reinterpret_cast<lldb::addr_t> (info.si_addr));
+}
 
 void
 NativeThreadLinux::SetSuspended ()
@@ -323,44 +499,3 @@ NativeThreadLinux::MaybeLogStateChange (lldb::StateType new_state)
     // Log it.
     log->Printf ("NativeThreadLinux: thread (pid=%" PRIu64 ", tid=%" PRIu64 ") changing from state %s to %s", pid, GetID (), StateAsCString (old_state), StateAsCString (new_state));
 }
-
-static
-uint32_t MaybeTranslateHostSignoToGdbSigno (uint32_t host_signo)
-{
-    switch (host_signo)
-    {
-        case SIGSEGV: return eGdbSignalBadAccess;
-        case SIGILL:  return eGdbSignalBadInstruction;
-        case SIGFPE:  return eGdbSignalArithmetic;
-        // NOTE: debugserver sends SIGTRAP through unmodified.  Do the same here.
-        // case SIGTRAP: return eGdbSignalBreakpoint;
-
-        // Nothing for eGdbSignalSoftware (0x95).
-        // Nothing for eGdbSignalEmulation (0x94).
-
-        default:
-            // No translations.
-            return host_signo;
-    }
-}
-
-uint32_t
-NativeThreadLinux::TranslateStopInfoToGdbSignal (const ThreadStopInfo &stop_info) const
-{
-    switch (stop_info.reason)
-    {
-        case eStopReasonSignal:
-            return MaybeTranslateHostSignoToGdbSigno (stop_info.details.signal.signo);
-            break;
-
-        case eStopReasonException:
-            // FIXME verify how we handle exception type.
-            return MaybeTranslateHostSignoToGdbSigno (static_cast<uint32_t> (stop_info.details.exception.type));
-            break;
-
-        default:
-            assert (0 && "unexpected stop_info.reason found");
-            return 0;
-    }
-}
-

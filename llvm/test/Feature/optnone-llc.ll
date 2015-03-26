@@ -17,7 +17,7 @@ entry:
   br label %while.cond
 
 while.cond:                                       ; preds = %while.body, %entry
-  %0 = load i32* %x.addr, align 4
+  %0 = load i32, i32* %x.addr, align 4
   %dec = add nsw i32 %0, -1
   store i32 %dec, i32* %x.addr, align 4
   %tobool = icmp ne i32 %0, 0
@@ -46,7 +46,7 @@ attributes #0 = { optnone noinline }
 ; LLC-Ox-DAG: Skipping pass 'Merge disjoint stack slots'
 ; LLC-Ox-DAG: Skipping pass 'Optimize machine instruction PHIs'
 ; LLC-Ox-DAG: Skipping pass 'Peephole Optimizations'
-; LLC-Ox-DAG: Skipping pass 'Post RA top-down list latency scheduler'
+; LLC-Ox-DAG: Skipping pass 'Post{{.*}}RA{{.*}}{{[Ss]}}cheduler'
 ; LLC-Ox-DAG: Skipping pass 'Remove dead machine instructions'
 ; LLC-Ox-DAG: Skipping pass 'Tail Duplication'
 

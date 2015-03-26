@@ -31,6 +31,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetFrameLowering.h"
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetLowering.h"
@@ -56,59 +57,71 @@ static bool isUsedOutsideOfDefiningBlock(const Instruction *I) {
   return false;
 }
 
+static ISD::NodeType getPreferredExtendForValue(const Value *V) {
+  // For the users of the source value being used for compare instruction, if
+  // the number of signed predicate is greater than unsigned predicate, we
+  // prefer to use SIGN_EXTEND.
+  //
+  // With this optimization, we would be able to reduce some redundant sign or
+  // zero extension instruction, and eventually more machine CSE opportunities
+  // can be exposed.
+  ISD::NodeType ExtendKind = ISD::ANY_EXTEND;
+  unsigned NumOfSigned = 0, NumOfUnsigned = 0;
+  for (const User *U : V->users()) {
+    if (const auto *CI = dyn_cast<CmpInst>(U)) {
+      NumOfSigned += CI->isSigned();
+      NumOfUnsigned += CI->isUnsigned();
+    }
+  }
+  if (NumOfSigned > NumOfUnsigned)
+    ExtendKind = ISD::SIGN_EXTEND;
+
+  return ExtendKind;
+}
+
 void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf,
                                SelectionDAG *DAG) {
-  const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
-
   Fn = &fn;
   MF = &mf;
+  TLI = MF->getSubtarget().getTargetLowering();
   RegInfo = &MF->getRegInfo();
 
   // Check whether the function can return without sret-demotion.
   SmallVector<ISD::OutputArg, 4> Outs;
   GetReturnInfo(Fn->getReturnType(), Fn->getAttributes(), Outs, *TLI);
   CanLowerReturn = TLI->CanLowerReturn(Fn->getCallingConv(), *MF,
-                                       Fn->isVarArg(),
-                                       Outs, Fn->getContext());
+                                       Fn->isVarArg(), Outs, Fn->getContext());
 
   // Initialize the mapping of values to registers.  This is only set up for
   // instruction values that are used outside of the block that defines
   // them.
   Function::const_iterator BB = Fn->begin(), EB = Fn->end();
-  for (BasicBlock::const_iterator I = BB->begin(), E = BB->end(); I != E; ++I)
-    if (const AllocaInst *AI = dyn_cast<AllocaInst>(I)) {
-      // Don't fold inalloca allocas or other dynamic allocas into the initial
-      // stack frame allocation, even if they are in the entry block.
-      if (!AI->isStaticAlloca())
-        continue;
-
-      if (const ConstantInt *CUI = dyn_cast<ConstantInt>(AI->getArraySize())) {
-        Type *Ty = AI->getAllocatedType();
-        uint64_t TySize = TLI->getDataLayout()->getTypeAllocSize(Ty);
-        unsigned Align =
-          std::max((unsigned)TLI->getDataLayout()->getPrefTypeAlignment(Ty),
-                   AI->getAlignment());
-
-        TySize *= CUI->getZExtValue();   // Get total allocated size.
-        if (TySize == 0) TySize = 1; // Don't create zero-sized stack objects.
-
-        StaticAllocaMap[AI] =
-          MF->getFrameInfo()->CreateStackObject(TySize, Align, false, AI);
-      }
-    }
-
   for (; BB != EB; ++BB)
     for (BasicBlock::const_iterator I = BB->begin(), E = BB->end();
          I != E; ++I) {
-      // Look for dynamic allocas.
       if (const AllocaInst *AI = dyn_cast<AllocaInst>(I)) {
-        if (!AI->isStaticAlloca()) {
+        // Static allocas can be folded into the initial stack frame adjustment.
+        if (AI->isStaticAlloca()) {
+          const ConstantInt *CUI = cast<ConstantInt>(AI->getArraySize());
+          Type *Ty = AI->getAllocatedType();
+          uint64_t TySize = TLI->getDataLayout()->getTypeAllocSize(Ty);
+          unsigned Align =
+              std::max((unsigned)TLI->getDataLayout()->getPrefTypeAlignment(Ty),
+                       AI->getAlignment());
+
+          TySize *= CUI->getZExtValue();   // Get total allocated size.
+          if (TySize == 0) TySize = 1; // Don't create zero-sized stack objects.
+
+          StaticAllocaMap[AI] =
+            MF->getFrameInfo()->CreateStackObject(TySize, Align, false, AI);
+
+        } else {
           unsigned Align = std::max(
               (unsigned)TLI->getDataLayout()->getPrefTypeAlignment(
                 AI->getAllocatedType()),
               AI->getAlignment());
           unsigned StackAlign =
-              TM.getSubtargetImpl()->getFrameLowering()->getStackAlignment();
+              MF->getSubtarget().getFrameLowering()->getStackAlignment();
           if (Align <= StackAlign)
             Align = 0;
           // Inform the Frame Information that we have variable-sized objects.
@@ -121,21 +134,37 @@ void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf,
         ImmutableCallSite CS(I);
         if (isa<InlineAsm>(CS.getCalledValue())) {
           unsigned SP = TLI->getStackPointerRegisterToSaveRestore();
+          const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
           std::vector<TargetLowering::AsmOperandInfo> Ops =
-            TLI->ParseConstraints(CS);
+              TLI->ParseConstraints(TRI, CS);
           for (size_t I = 0, E = Ops.size(); I != E; ++I) {
             TargetLowering::AsmOperandInfo &Op = Ops[I];
             if (Op.Type == InlineAsm::isClobber) {
               // Clobbers don't have SDValue operands, hence SDValue().
               TLI->ComputeConstraintToUse(Op, SDValue(), DAG);
-              std::pair<unsigned, const TargetRegisterClass*> PhysReg =
-                TLI->getRegForInlineAsmConstraint(Op.ConstraintCode,
-                                                  Op.ConstraintVT);
+              std::pair<unsigned, const TargetRegisterClass *> PhysReg =
+                  TLI->getRegForInlineAsmConstraint(TRI, Op.ConstraintCode,
+                                                    Op.ConstraintVT);
               if (PhysReg.first == SP)
                 MF->getFrameInfo()->setHasInlineAsmWithSPAdjust(true);
             }
           }
         }
+      }
+
+      // Look for calls to the @llvm.va_start intrinsic. We can omit some
+      // prologue boilerplate for variadic functions that don't examine their
+      // arguments.
+      if (const auto *II = dyn_cast<IntrinsicInst>(I)) {
+        if (II->getIntrinsicID() == Intrinsic::vastart)
+          MF->getFrameInfo()->setHasVAStart(true);
+      }
+
+      // If we have a musttail call in a variadic funciton, we need to ensure we
+      // forward implicit register parameters.
+      if (const auto *CI = dyn_cast<CallInst>(I)) {
+        if (CI->isMustTailCall() && Fn->isVarArg())
+          MF->getFrameInfo()->setHasMustTailInVarArgFunc(true);
       }
 
       // Mark values used outside their block as exported, by allocating
@@ -168,13 +197,16 @@ void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf,
                 StaticAllocaMap.find(AI);
               if (SI != StaticAllocaMap.end()) { // Check for VLAs.
                 int FI = SI->second;
-                MMI.setVariableDbgInfo(DI->getVariable(),
+                MMI.setVariableDbgInfo(DI->getVariable(), DI->getExpression(),
                                        FI, DI->getDebugLoc());
               }
             }
           }
         }
       }
+
+      // Decide the preferred extend type for a value.
+      PreferredExtendType[I] = getPreferredExtendForValue(I);
     }
 
   // Create an initial MachineBasicBlock for each LLVM BasicBlock in F.  This
@@ -243,12 +275,14 @@ void FunctionLoweringInfo::clear() {
   ArgDbgValues.clear();
   ByValArgFrameIndexMap.clear();
   RegFixups.clear();
+  StatepointStackSlots.clear();
+  PreferredExtendType.clear();
 }
 
 /// CreateReg - Allocate a single virtual register for the given type.
 unsigned FunctionLoweringInfo::CreateReg(MVT VT) {
   return RegInfo->createVirtualRegister(
-      TM.getSubtargetImpl()->getTargetLowering()->getRegClassFor(VT));
+      MF->getSubtarget().getTargetLowering()->getRegClassFor(VT));
 }
 
 /// CreateRegs - Allocate the appropriate number of virtual registers of
@@ -259,7 +293,7 @@ unsigned FunctionLoweringInfo::CreateReg(MVT VT) {
 /// will assign registers for each member or element.
 ///
 unsigned FunctionLoweringInfo::CreateRegs(Type *Ty) {
-  const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
+  const TargetLowering *TLI = MF->getSubtarget().getTargetLowering();
 
   SmallVector<EVT, 4> ValueVTs;
   ComputeValueVTs(*TLI, Ty, ValueVTs);
@@ -307,8 +341,6 @@ void FunctionLoweringInfo::ComputePHILiveOutRegInfo(const PHINode *PN) {
   Type *Ty = PN->getType();
   if (!Ty->isIntegerTy() || Ty->isVectorTy())
     return;
-
-  const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
 
   SmallVector<EVT, 1> ValueVTs;
   ComputeValueVTs(*TLI, Ty, ValueVTs);
@@ -441,60 +473,6 @@ void llvm::ComputeUsesVAFloatArgument(const CallInst &I,
   }
 }
 
-/// AddCatchInfo - Extract the personality and type infos from an eh.selector
-/// call, and add them to the specified machine basic block.
-void llvm::AddCatchInfo(const CallInst &I, MachineModuleInfo *MMI,
-                        MachineBasicBlock *MBB) {
-  // Inform the MachineModuleInfo of the personality for this landing pad.
-  const ConstantExpr *CE = cast<ConstantExpr>(I.getArgOperand(1));
-  assert(CE->getOpcode() == Instruction::BitCast &&
-         isa<Function>(CE->getOperand(0)) &&
-         "Personality should be a function");
-  MMI->addPersonality(MBB, cast<Function>(CE->getOperand(0)));
-
-  // Gather all the type infos for this landing pad and pass them along to
-  // MachineModuleInfo.
-  std::vector<const GlobalVariable *> TyInfo;
-  unsigned N = I.getNumArgOperands();
-
-  for (unsigned i = N - 1; i > 1; --i) {
-    if (const ConstantInt *CI = dyn_cast<ConstantInt>(I.getArgOperand(i))) {
-      unsigned FilterLength = CI->getZExtValue();
-      unsigned FirstCatch = i + FilterLength + !FilterLength;
-      assert(FirstCatch <= N && "Invalid filter length");
-
-      if (FirstCatch < N) {
-        TyInfo.reserve(N - FirstCatch);
-        for (unsigned j = FirstCatch; j < N; ++j)
-          TyInfo.push_back(ExtractTypeInfo(I.getArgOperand(j)));
-        MMI->addCatchTypeInfo(MBB, TyInfo);
-        TyInfo.clear();
-      }
-
-      if (!FilterLength) {
-        // Cleanup.
-        MMI->addCleanup(MBB);
-      } else {
-        // Filter.
-        TyInfo.reserve(FilterLength - 1);
-        for (unsigned j = i + 1; j < FirstCatch; ++j)
-          TyInfo.push_back(ExtractTypeInfo(I.getArgOperand(j)));
-        MMI->addFilterTypeInfo(MBB, TyInfo);
-        TyInfo.clear();
-      }
-
-      N = i;
-    }
-  }
-
-  if (N > 2) {
-    TyInfo.reserve(N - 2);
-    for (unsigned j = 2; j < N; ++j)
-      TyInfo.push_back(ExtractTypeInfo(I.getArgOperand(j)));
-    MMI->addCatchTypeInfo(MBB, TyInfo);
-  }
-}
-
 /// AddLandingPadInfo - Extract the exception handling information from the
 /// landingpad instruction and add them to the specified machine module info.
 void llvm::AddLandingPadInfo(const LandingPadInst &I, MachineModuleInfo &MMI,
@@ -512,14 +490,14 @@ void llvm::AddLandingPadInfo(const LandingPadInst &I, MachineModuleInfo &MMI,
     Value *Val = I.getClause(i - 1);
     if (I.isCatch(i - 1)) {
       MMI.addCatchTypeInfo(MBB,
-                           dyn_cast<GlobalVariable>(Val->stripPointerCasts()));
+                           dyn_cast<GlobalValue>(Val->stripPointerCasts()));
     } else {
       // Add filters in a list.
       Constant *CVal = cast<Constant>(Val);
-      SmallVector<const GlobalVariable*, 4> FilterList;
+      SmallVector<const GlobalValue*, 4> FilterList;
       for (User::op_iterator
              II = CVal->op_begin(), IE = CVal->op_end(); II != IE; ++II)
-        FilterList.push_back(cast<GlobalVariable>((*II)->stripPointerCasts()));
+        FilterList.push_back(cast<GlobalValue>((*II)->stripPointerCasts()));
 
       MMI.addFilterTypeInfo(MBB, FilterList);
     }

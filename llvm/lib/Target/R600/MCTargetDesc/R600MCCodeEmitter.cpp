@@ -30,8 +30,8 @@ using namespace llvm;
 namespace {
 
 class R600MCCodeEmitter : public AMDGPUMCCodeEmitter {
-  R600MCCodeEmitter(const R600MCCodeEmitter &) LLVM_DELETED_FUNCTION;
-  void operator=(const R600MCCodeEmitter &) LLVM_DELETED_FUNCTION;
+  R600MCCodeEmitter(const R600MCCodeEmitter &) = delete;
+  void operator=(const R600MCCodeEmitter &) = delete;
   const MCInstrInfo &MCII;
   const MCRegisterInfo &MRI;
 
@@ -81,8 +81,8 @@ enum FCInstr {
 };
 
 MCCodeEmitter *llvm::createR600MCCodeEmitter(const MCInstrInfo &MCII,
-                                           const MCRegisterInfo &MRI,
-                                           const MCSubtargetInfo &STI) {
+                                             const MCRegisterInfo &MRI,
+					     MCContext &Ctx) {
   return new R600MCCodeEmitter(MCII, MRI);
 }
 
@@ -99,7 +99,7 @@ void R600MCCodeEmitter::EncodeInstruction(const MCInst &MI, raw_ostream &OS,
   } else if (IS_VTX(Desc)) {
     uint64_t InstWord01 = getBinaryCodeForInstr(MI, Fixups, STI);
     uint32_t InstWord2 = MI.getOperand(2).getImm(); // Offset
-    if (!(STI.getFeatureBits() & AMDGPU::FeatureCaymanISA)) {
+    if (!(STI.getFeatureBits()[AMDGPU::FeatureCaymanISA])) {
       InstWord2 |= 1 << 19; // Mega-Fetch bit
     }
 
@@ -132,7 +132,7 @@ void R600MCCodeEmitter::EncodeInstruction(const MCInst &MI, raw_ostream &OS,
       Emit((uint32_t) 0, OS);
   } else {
     uint64_t Inst = getBinaryCodeForInstr(MI, Fixups, STI);
-    if ((STI.getFeatureBits() & AMDGPU::FeatureR600ALUInst) &&
+    if ((STI.getFeatureBits()[AMDGPU::FeatureR600ALUInst]) &&
        ((Desc.TSFlags & R600_InstFlag::OP1) ||
          Desc.TSFlags & R600_InstFlag::OP2)) {
       uint64_t ISAOpCode = Inst & (0x3FFULL << 39);

@@ -23,9 +23,7 @@
 @end
 
 @interface InheritContainer : InternalDefiner 
-{
-}
-
+@property (nonatomic, strong) NSMutableArray *filteredDataSource;
 -(id)init;
 @end
 
@@ -35,6 +33,7 @@
 {
     if (self = [super initWithFoo:2 andBar:3])
     {
+        self.filteredDataSource = [NSMutableArray arrayWithObjects:@"hello", @"world", nil];
     }
     return self;
 }
@@ -43,13 +42,12 @@
 
 int main(int argc, const char * argv[])
 {
-
     @autoreleasepool {
         Container *j = [[Container alloc] init];
         InheritContainer *k = [[InheritContainer alloc] init];
 
-        printf("ivar value = %u\n", (unsigned)j->_definer->foo); // Set breakpoint 0 here.
-        printf("ivar value = %u\n", (unsigned)k->foo);           // Set breakpoint 1 here.
+        printf("ivar value = %u\n", (unsigned)j->_definer->foo); // breakpoint1
+        printf("ivar value = %u\n", (unsigned)k->foo);
     }   
     return 0;
 }

@@ -1,12 +1,12 @@
-; RUN: opt %loadPolly -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
 ;
 ; Verify that we won't privatize anything in the outer dimension
 ;
-; CHECK:    #pragma omp parallel for
-; CHECK:    for (int c1 = 0; c1 < 2 * n; c1 += 1)
+; CHECK:    #pragma known-parallel
+; CHECK:    for (int c0 = 0; c0 < 2 * n; c0 += 1)
 ; CHECK:      #pragma simd reduction
-; CHECK:      for (int c3 = 0; c3 <= 1023; c3 += 1)
-; CHECK:        Stmt_for_body3(c1, c3);
+; CHECK:      for (int c1 = 0; c1 <= 1023; c1 += 1)
+; CHECK:        Stmt_for_body3(c0, c1);
 ;
 ;    void foo(int *A, long n) {
 ;      for (long i = 0; i < 2 * n; i++)
@@ -35,8 +35,8 @@ for.cond1:                                        ; preds = %for.inc, %for.body
   br i1 %exitcond, label %for.body3, label %for.end
 
 for.body3:                                        ; preds = %for.cond1
-  %arrayidx = getelementptr inbounds i32* %A, i32 %i.0
-  %tmp = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %A, i32 %i.0
+  %tmp = load i32, i32* %arrayidx, align 4
   %add = add nsw i32 %tmp, %i.0
   store i32 %add, i32* %arrayidx, align 4
   br label %for.inc

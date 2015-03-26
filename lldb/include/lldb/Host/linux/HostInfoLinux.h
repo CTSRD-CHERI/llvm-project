@@ -10,7 +10,9 @@
 #ifndef lldb_Host_linux_HostInfoLinux_h_
 #define lldb_Host_linux_HostInfoLinux_h_
 
+#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/posix/HostInfoPosix.h"
+
 #include "llvm/ADT/StringRef.h"
 
 #include <string>
@@ -28,16 +30,20 @@ class HostInfoLinux : public HostInfoPosix
     ~HostInfoLinux();
 
   public:
+    static void Initialize();
+    static uint32_t GetMaxThreadNameLength();
+
     static bool GetOSVersion(uint32_t &major, uint32_t &minor, uint32_t &update);
+    static bool GetOSBuildString(std::string &s);
+    static bool GetOSKernelDescription(std::string &s);
     static llvm::StringRef GetDistributionId();
+    static FileSpec GetProgramFileSpec();
 
   protected:
+    static bool ComputeSharedLibraryDirectory(FileSpec &file_spec);
+    static bool ComputeSystemPluginsDirectory(FileSpec &file_spec);
+    static bool ComputeUserPluginsDirectory(FileSpec &file_spec);
     static void ComputeHostArchitectureSupport(ArchSpec &arch_32, ArchSpec &arch_64);
-
-    static std::string m_distribution_id;
-    static uint32_t m_os_major;
-    static uint32_t m_os_minor;
-    static uint32_t m_os_update;
 };
 }
 

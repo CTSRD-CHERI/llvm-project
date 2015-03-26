@@ -1,7 +1,5 @@
 /*
  * kmp_ftn_os.h -- KPTS Fortran defines header file.
- * $Revision: 42745 $
- * $Date: 2013-10-14 17:02:04 -0500 (Mon, 14 Oct 2013) $
  */
 
 
@@ -81,6 +79,10 @@
     #define FTN_GET_TEAM_NUM                     omp_get_team_num
 #endif
     #define FTN_INIT_LOCK                        omp_init_lock
+#if KMP_USE_DYNAMIC_LOCK
+    #define FTN_INIT_LOCK_HINTED                 kmp_init_lock_hinted
+    #define FTN_INIT_NEST_LOCK_HINTED            kmp_init_nest_lock_hinted
+#endif
     #define FTN_DESTROY_LOCK                     omp_destroy_lock
     #define FTN_SET_LOCK                         omp_set_lock
     #define FTN_UNSET_LOCK                       omp_unset_lock
@@ -103,6 +105,7 @@
     #define FTN_SET_DEFAULT_DEVICE               omp_set_default_device
     #define FTN_GET_NUM_DEVICES                  omp_get_num_devices
 #endif
+    #define FTN_IS_INITIAL_DEVICE                omp_is_initial_device
 #endif
 
 #if OMP_40_ENABLED
@@ -172,6 +175,10 @@
     #define FTN_GET_TEAM_NUM                     omp_get_team_num_
 #endif
     #define FTN_INIT_LOCK                        omp_init_lock_
+#if KMP_USE_DYNAMIC_LOCK
+    #define FTN_INIT_LOCK_HINTED                 kmp_init_lock_hinted_
+    #define FTN_INIT_NEST_LOCK_HINTED            kmp_init_nest_lock_hinted_
+#endif
     #define FTN_DESTROY_LOCK                     omp_destroy_lock_
     #define FTN_SET_LOCK                         omp_set_lock_
     #define FTN_UNSET_LOCK                       omp_unset_lock_
@@ -194,6 +201,7 @@
     #define FTN_SET_DEFAULT_DEVICE               omp_set_default_device_
     #define FTN_GET_NUM_DEVICES                  omp_get_num_devices_
 #endif
+    #define FTN_IS_INITIAL_DEVICE                omp_is_initial_device_
 #endif
 
 
@@ -264,6 +272,10 @@
     #define FTN_GET_TEAM_NUM                     OMP_GET_TEAM_NUM
 #endif
     #define FTN_INIT_LOCK                        OMP_INIT_LOCK
+#if KMP_USE_DYNAMIC_LOCK
+    #define FTN_INIT_LOCK_HINTED                 KMP_INIT_LOCK_HINTED
+    #define FTN_INIT_NEST_LOCK_HINTED            KMP_INIT_NEST_LOCK_HINTED
+#endif
     #define FTN_DESTROY_LOCK                     OMP_DESTROY_LOCK
     #define FTN_SET_LOCK                         OMP_SET_LOCK
     #define FTN_UNSET_LOCK                       OMP_UNSET_LOCK
@@ -286,6 +298,7 @@
     #define FTN_SET_DEFAULT_DEVICE               OMP_SET_DEFAULT_DEVICE
     #define FTN_GET_NUM_DEVICES                  OMP_GET_NUM_DEVICES
 #endif
+    #define FTN_IS_INITIAL_DEVICE                OMP_IS_INITIAL_DEVICE
 #endif
 
 
@@ -356,6 +369,10 @@
     #define FTN_GET_TEAM_NUM                     OMP_GET_TEAM_NUM_
 #endif
     #define FTN_INIT_LOCK                        OMP_INIT_LOCK_
+#if KMP_USE_DYNAMIC_LOCK
+    #define FTN_INIT_LOCK_HINTED                 KMP_INIT_LOCK_HINTED_
+    #define FTN_INIT_NEST_LOCK_HINTED            KMP_INIT_NEST_LOCK_HINTED_
+#endif
     #define FTN_DESTROY_LOCK                     OMP_DESTROY_LOCK_
     #define FTN_SET_LOCK                         OMP_SET_LOCK_
     #define FTN_UNSET_LOCK                       OMP_UNSET_LOCK_
@@ -378,6 +395,7 @@
     #define FTN_SET_DEFAULT_DEVICE               OMP_SET_DEFAULT_DEVICE_
     #define FTN_GET_NUM_DEVICES                  OMP_GET_NUM_DEVICES_
 #endif
+    #define FTN_IS_INITIAL_DEVICE                OMP_IS_INITIAL_DEVICE_
 #endif
 
 
@@ -472,14 +490,14 @@
 #define KMP_API_NAME_GOMP_TASKGROUP_START                GOMP_taskgroup_start
 #define KMP_API_NAME_GOMP_TASKGROUP_END                  GOMP_taskgroup_end
 /* Target functions should be taken care of by liboffload */
-//#define KMP_API_NAME_GOMP_TARGET                       GOMP_target
-//#define KMP_API_NAME_GOMP_TARGET_DATA                  GOMP_target_data
-//#define KMP_API_NAME_GOMP_TARGET_END_DATA              GOMP_target_end_data
-//#define KMP_API_NAME_GOMP_TARGET_UPDATE                GOMP_target_update
+#define KMP_API_NAME_GOMP_TARGET                         GOMP_target
+#define KMP_API_NAME_GOMP_TARGET_DATA                    GOMP_target_data
+#define KMP_API_NAME_GOMP_TARGET_END_DATA                GOMP_target_end_data
+#define KMP_API_NAME_GOMP_TARGET_UPDATE                  GOMP_target_update
 #define KMP_API_NAME_GOMP_TEAMS                          GOMP_teams
 
-#if KMP_OS_LINUX && !KMP_OS_CNK && !KMP_ARCH_PPC64
-    #define xstr(x) str(x) 
+#ifdef KMP_USE_VERSION_SYMBOLS
+    #define xstr(x) str(x)
     #define str(x) #x
 
     // If Linux, xexpand prepends __kmp_api_ to the real API name
@@ -494,7 +512,7 @@
     __asm__(".symver " xstr(__kmp_api_##api_name##_##version_num##_alias) "," xstr(api_name) "@" version_str "\n\t"); \
     __asm__(".symver " xstr(__kmp_api_##api_name) "," xstr(api_name) "@@" default_ver "\n\t")
 
-#else /* KMP_OS_LINUX */
+#else // KMP_USE_VERSION_SYMBOLS
     #define xstr(x) /* Nothing */
     #define str(x)  /* Nothing */
 
@@ -508,7 +526,7 @@
     #define xversionify(api_name, version_num, version_str) /* Nothing */
     #define versionify(api_name, version_num, version_str, default_ver) /* Nothing */
 
-#endif /* KMP_OS_LINUX */
+#endif // KMP_USE_VERSION_SYMBOLS
 
 #endif /* KMP_FTN_OS_H */
 

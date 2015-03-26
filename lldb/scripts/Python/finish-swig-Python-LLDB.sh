@@ -167,6 +167,47 @@ else
     fi
 fi
 
+# Make symlink for darwin-debug on Darwin
+if [ ${OS_NAME} = "Darwin" ] && [ $MakefileCalled -ne 0 ]
+then
+    # We are being built by CMake on Darwin
+
+    if [ ! -L "${framework_python_dir}/darwin-debug" ]
+    then
+        if [ $Debug -eq 1 ]
+        then
+            echo "Creating symlink for darwin-debug"
+        fi
+        cd "${framework_python_dir}"
+        ln -s "../../../../bin/lldb-launcher" darwin-debug
+    else
+        if [ $Debug -eq 1 ]
+        then
+            echo "${framework_python_dir}/darwin-debug already exists."
+        fi
+    fi
+fi
+
+# Make symlink for argdumper on any platform
+if [ $MakefileCalled -ne 0 ]
+then
+    # We are being built by CMake
+
+    if [ ! -L "${framework_python_dir}/argdumper" ]
+    then
+        if [ $Debug -eq 1 ]
+        then
+            echo "Creating symlink for argdumper"
+        fi
+        cd "${framework_python_dir}"
+        ln -s "../../../../bin/argdumper" argdumper
+    else
+        if [ $Debug -eq 1 ]
+        then
+            echo "${framework_python_dir}/argdumper already exists."
+        fi
+    fi
+fi
 
 create_python_package () {
     package_dir="${framework_python_dir}$1"

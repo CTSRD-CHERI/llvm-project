@@ -44,8 +44,8 @@ public:
 private:
   ExprKind Kind;
 
-  MCExpr(const MCExpr&) LLVM_DELETED_FUNCTION;
-  void operator=(const MCExpr&) LLVM_DELETED_FUNCTION;
+  MCExpr(const MCExpr&) = delete;
+  void operator=(const MCExpr&) = delete;
 
   bool EvaluateAsAbsolute(int64_t &Res, const MCAssembler *Asm,
                           const MCAsmLayout *Layout,
@@ -56,7 +56,7 @@ private:
                           const SectionAddrMap *Addrs, bool InSet) const;
 
 protected:
-  explicit MCExpr(ExprKind _Kind) : Kind(_Kind) {}
+  explicit MCExpr(ExprKind Kind) : Kind(Kind) {}
 
   bool EvaluateAsRelocatableImpl(MCValue &Res, const MCAssembler *Asm,
                                  const MCAsmLayout *Layout,
@@ -133,8 +133,8 @@ inline raw_ostream &operator<<(raw_ostream &OS, const MCExpr &E) {
 class MCConstantExpr : public MCExpr {
   int64_t Value;
 
-  explicit MCConstantExpr(int64_t _Value)
-    : MCExpr(MCExpr::Constant), Value(_Value) {}
+  explicit MCConstantExpr(int64_t Value)
+      : MCExpr(MCExpr::Constant), Value(Value) {}
 
 public:
   /// @name Construction
@@ -188,12 +188,14 @@ public:
     VK_GOTPAGE,
     VK_GOTPAGEOFF,
     VK_SECREL,
+    VK_SIZE,      // symbol@SIZE
     VK_WEAKREF,   // The link between the symbols in .weakref foo, bar
 
     VK_ARM_NONE,
     VK_ARM_TARGET1,
     VK_ARM_TARGET2,
     VK_ARM_PREL31,
+    VK_ARM_SBREL,          // symbol(sbrel)
     VK_ARM_TLSLDO,         // symbol(tlsldo)
     VK_ARM_TLSCALL,        // symbol(tlscall)
     VK_ARM_TLSDESC,        // symbol(tlsdesc)
@@ -250,6 +252,7 @@ public:
     VK_PPC_GOT_TLSLD_HI,   // symbol@got@tlsld@h
     VK_PPC_GOT_TLSLD_HA,   // symbol@got@tlsld@ha
     VK_PPC_TLSLD,          // symbol@tlsld
+    VK_PPC_LOCAL,          // symbol@local
 
     VK_Mips_GPREL,
     VK_Mips_GOT_CALL,
@@ -282,21 +285,20 @@ public:
   };
 
 private:
+  /// The symbol reference modifier.
+  const unsigned Kind : 16;
+
+  /// Specifies how the variant kind should be printed.
+  const unsigned UseParensForSymbolVariant : 1;
+
+  // FIXME: Remove this bit.
+  const unsigned HasSubsectionsViaSymbols : 1;
+
   /// The symbol being referenced.
   const MCSymbol *Symbol;
 
-  /// The symbol reference modifier.
-  const VariantKind Kind;
-
-  /// MCAsmInfo that is used to print symbol variants correctly.
-  const MCAsmInfo *MAI;
-
-  explicit MCSymbolRefExpr(const MCSymbol *_Symbol, VariantKind _Kind,
-                           const MCAsmInfo *_MAI)
-    : MCExpr(MCExpr::SymbolRef), Symbol(_Symbol), Kind(_Kind), MAI(_MAI) {
-    assert(Symbol);
-    assert(MAI);
-  }
+  explicit MCSymbolRefExpr(const MCSymbol *Symbol, VariantKind Kind,
+                           const MCAsmInfo *MAI);
 
 public:
   /// @name Construction
@@ -316,9 +318,12 @@ public:
   /// @{
 
   const MCSymbol &getSymbol() const { return *Symbol; }
-  const MCAsmInfo &getMCAsmInfo() const { return *MAI; }
 
-  VariantKind getKind() const { return Kind; }
+  VariantKind getKind() const { return static_cast<VariantKind>(Kind); }
+
+  void printVariantKind(raw_ostream &OS) const;
+
+  bool hasSubsectionsViaSymbols() const { return HasSubsectionsViaSymbols; }
 
   /// @}
   /// @name Static Utility Functions
@@ -349,8 +354,8 @@ private:
   Opcode Op;
   const MCExpr *Expr;
 
-  MCUnaryExpr(Opcode _Op, const MCExpr *_Expr)
-    : MCExpr(MCExpr::Unary), Op(_Op), Expr(_Expr) {}
+  MCUnaryExpr(Opcode Op, const MCExpr *Expr)
+      : MCExpr(MCExpr::Unary), Op(Op), Expr(Expr) {}
 
 public:
   /// @name Construction
@@ -420,8 +425,8 @@ private:
   Opcode Op;
   const MCExpr *LHS, *RHS;
 
-  MCBinaryExpr(Opcode _Op, const MCExpr *_LHS, const MCExpr *_RHS)
-    : MCExpr(MCExpr::Binary), Op(_Op), LHS(_LHS), RHS(_RHS) {}
+  MCBinaryExpr(Opcode Op, const MCExpr *LHS, const MCExpr *RHS)
+      : MCExpr(MCExpr::Binary), Op(Op), LHS(LHS), RHS(RHS) {}
 
 public:
   /// @name Construction

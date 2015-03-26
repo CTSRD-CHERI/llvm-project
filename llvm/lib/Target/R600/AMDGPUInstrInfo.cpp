@@ -31,7 +31,7 @@ using namespace llvm;
 void AMDGPUInstrInfo::anchor() {}
 
 AMDGPUInstrInfo::AMDGPUInstrInfo(const AMDGPUSubtarget &st)
-  : AMDGPUGenInstrInfo(-1,-1), RI(st), ST(st) { }
+    : AMDGPUGenInstrInfo(-1, -1), ST(st) {}
 
 const AMDGPURegisterInfo &AMDGPUInstrInfo::getRegisterInfo() const {
   return RI;
@@ -85,21 +85,6 @@ AMDGPUInstrInfo::convertToThreeAddress(MachineFunction::iterator &MFI,
                                       LiveVariables *LV) const {
 // TODO: Implement this function
   return nullptr;
-}
-bool AMDGPUInstrInfo::getNextBranchInstr(MachineBasicBlock::iterator &iter,
-                                        MachineBasicBlock &MBB) const {
-  while (iter != MBB.end()) {
-    switch (iter->getOpcode()) {
-    default:
-      break;
-    case AMDGPU::BRANCH_COND_i32:
-    case AMDGPU::BRANCH_COND_f32:
-    case AMDGPU::BRANCH:
-      return true;
-    };
-    ++iter;
-  }
-  return false;
 }
 
 void
@@ -167,26 +152,22 @@ bool AMDGPUInstrInfo::expandPostRAPseudo (MachineBasicBlock::iterator MI) const 
   return true;
 }
 
-
-MachineInstr *
-AMDGPUInstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
-                                      MachineInstr *MI,
-                                      const SmallVectorImpl<unsigned> &Ops,
-                                      int FrameIndex) const {
+MachineInstr *AMDGPUInstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
+                                                     MachineInstr *MI,
+                                                     ArrayRef<unsigned> Ops,
+                                                     int FrameIndex) const {
 // TODO: Implement this function
   return nullptr;
 }
-MachineInstr*
-AMDGPUInstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
-                                      MachineInstr *MI,
-                                      const SmallVectorImpl<unsigned> &Ops,
-                                      MachineInstr *LoadMI) const {
+MachineInstr *
+AMDGPUInstrInfo::foldMemoryOperandImpl(MachineFunction &MF, MachineInstr *MI,
+                                       ArrayRef<unsigned> Ops,
+                                       MachineInstr *LoadMI) const {
   // TODO: Implement this function
   return nullptr;
 }
-bool
-AMDGPUInstrInfo::canFoldMemoryOperand(const MachineInstr *MI,
-                                     const SmallVectorImpl<unsigned> &Ops) const {
+bool AMDGPUInstrInfo::canFoldMemoryOperand(const MachineInstr *MI,
+                                           ArrayRef<unsigned> Ops) const {
   // TODO: Implement this function
   return false;
 }
@@ -334,10 +315,7 @@ int AMDGPUInstrInfo::getIndirectIndexEnd(const MachineFunction &MF) const {
     return -1;
   }
 
-  Offset = MF.getTarget()
-               .getSubtargetImpl()
-               ->getFrameLowering()
-               ->getFrameIndexOffset(MF, -1);
+  Offset = MF.getSubtarget().getFrameLowering()->getFrameIndexOffset(MF, -1);
 
   return getIndirectIndexBegin(MF) + Offset;
 }
@@ -352,12 +330,43 @@ int AMDGPUInstrInfo::getMaskedMIMGOp(uint16_t Opcode, unsigned Channels) const {
 }
 
 // Wrapper for Tablegen'd function.  enum Subtarget is not defined in any
-// header files, so we need to wrap it in a function that takes unsigned 
+// header files, so we need to wrap it in a function that takes unsigned
 // instead.
 namespace llvm {
 namespace AMDGPU {
-int getMCOpcode(uint16_t Opcode, unsigned Gen) {
-  return getMCOpcode(Opcode);
+static int getMCOpcode(uint16_t Opcode, unsigned Gen) {
+  return getMCOpcodeGen(Opcode, (enum Subtarget)Gen);
 }
 }
+}
+
+// This must be kept in sync with the SISubtarget class in SIInstrInfo.td
+enum SISubtarget {
+  SI = 0,
+  VI = 1
+};
+
+static enum SISubtarget AMDGPUSubtargetToSISubtarget(unsigned Gen) {
+  switch (Gen) {
+  default:
+    return SI;
+  case AMDGPUSubtarget::VOLCANIC_ISLANDS:
+    return VI;
+  }
+}
+
+int AMDGPUInstrInfo::pseudoToMCOpcode(int Opcode) const {
+  int MCOp = AMDGPU::getMCOpcode(
+      Opcode, AMDGPUSubtargetToSISubtarget(ST.getGeneration()));
+
+  // -1 means that Opcode is already a native instruction.
+  if (MCOp == -1)
+    return Opcode;
+
+  // (uint16_t)-1 means that Opcode is a pseudo instruction that has
+  // no encoding in the given subtarget generation.
+  if (MCOp == (uint16_t)-1)
+    return -1;
+
+  return MCOp;
 }

@@ -15,13 +15,24 @@
 #include "asan_poisoning.h"
 #include "asan_report.h"
 #include "asan_stack.h"
+#include "sanitizer_common/sanitizer_atomic.h"
 #include "sanitizer_common/sanitizer_libc.h"
 #include "sanitizer_common/sanitizer_flags.h"
 
 namespace __asan {
 
+static atomic_uint8_t can_poison_memory;
+
+void SetCanPoisonMemory(bool value) {
+  atomic_store(&can_poison_memory, value, memory_order_release);
+}
+
+bool CanPoisonMemory() {
+  return atomic_load(&can_poison_memory, memory_order_acquire);
+}
+
 void PoisonShadow(uptr addr, uptr size, u8 value) {
-  if (!flags()->poison_heap) return;
+  if (!CanPoisonMemory()) return;
   CHECK(AddrIsAlignedByGranularity(addr));
   CHECK(AddrIsInMem(addr));
   CHECK(AddrIsAlignedByGranularity(addr + size));
@@ -34,7 +45,7 @@ void PoisonShadowPartialRightRedzone(uptr addr,
                                      uptr size,
                                      uptr redzone_size,
                                      u8 value) {
-  if (!flags()->poison_heap) return;
+  if (!CanPoisonMemory()) return;
   CHECK(AddrIsAlignedByGranularity(addr));
   CHECK(AddrIsInMem(addr));
   FastPoisonShadowPartialRightRedzone(addr, size, redzone_size, value);
@@ -61,6 +72,27 @@ void FlushUnneededASanShadowMemory(uptr p, uptr size) {
     FlushUnneededShadowMemory(shadow_beg, shadow_end - shadow_beg);
 }
 
+void AsanPoisonOrUnpoisonIntraObjectRedzone(uptr ptr, uptr size, bool poison) {
+  uptr end = ptr + size;
+  if (Verbosity()) {
+    Printf("__asan_%spoison_intra_object_redzone [%p,%p) %zd\n",
+           poison ? "" : "un", ptr, end, size);
+    if (Verbosity() >= 2)
+      PRINT_CURRENT_STACK();
+  }
+  CHECK(size);
+  CHECK_LE(size, 4096);
+  CHECK(IsAligned(end, SHADOW_GRANULARITY));
+  if (!IsAligned(ptr, SHADOW_GRANULARITY)) {
+    *(u8 *)MemToShadow(ptr) =
+        poison ? static_cast<u8>(ptr % SHADOW_GRANULARITY) : 0;
+    ptr |= SHADOW_GRANULARITY - 1;
+    ptr++;
+  }
+  for (; ptr < end; ptr += SHADOW_GRANULARITY)
+    *(u8*)MemToShadow(ptr) = poison ? kAsanIntraObjectRedzone : 0;
+}
+
 }  // namespace __asan
 
 // ---------------------- Interface ---------------- {{{1
@@ -80,7 +112,7 @@ void __asan_poison_memory_region(void const volatile *addr, uptr size) {
   if (!flags()->allow_user_poisoning || size == 0) return;
   uptr beg_addr = (uptr)addr;
   uptr end_addr = beg_addr + size;
-  VPrintf(1, "Trying to poison memory region [%p, %p)\n", (void *)beg_addr,
+  VPrintf(3, "Trying to poison memory region [%p, %p)\n", (void *)beg_addr,
           (void *)end_addr);
   ShadowSegmentEndpoint beg(beg_addr);
   ShadowSegmentEndpoint end(end_addr);
@@ -120,7 +152,7 @@ void __asan_unpoison_memory_region(void const volatile *addr, uptr size) {
   if (!flags()->allow_user_poisoning || size == 0) return;
   uptr beg_addr = (uptr)addr;
   uptr end_addr = beg_addr + size;
-  VPrintf(1, "Trying to unpoison memory region [%p, %p)\n", (void *)beg_addr,
+  VPrintf(3, "Trying to unpoison memory region [%p, %p)\n", (void *)beg_addr,
           (void *)end_addr);
   ShadowSegmentEndpoint beg(beg_addr);
   ShadowSegmentEndpoint end(end_addr);
@@ -186,7 +218,7 @@ uptr __asan_region_is_poisoned(uptr beg, uptr size) {
         __asan::AddressIsPoisoned(__p + __size - 1))) {       \
       GET_CURRENT_PC_BP_SP;                                   \
       uptr __bad = __asan_region_is_poisoned(__p, __size);    \
-      __asan_report_error(pc, bp, sp, __bad, isWrite, __size);\
+      __asan_report_error(pc, bp, sp, __bad, isWrite, __size, 0);\
     }                                                         \
   } while (false);                                            \
 
@@ -232,7 +264,29 @@ void __asan_poison_cxx_array_cookie(uptr p) {
   if (SANITIZER_WORDSIZE != 64) return;
   if (!flags()->poison_array_cookie) return;
   uptr s = MEM_TO_SHADOW(p);
-  *reinterpret_cast<u8*>(s) = 0xac;
+  *reinterpret_cast<u8*>(s) = kAsanArrayCookieMagic;
+}
+
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+uptr __asan_load_cxx_array_cookie(uptr *p) {
+  if (SANITIZER_WORDSIZE != 64) return *p;
+  if (!flags()->poison_array_cookie) return *p;
+  uptr s = MEM_TO_SHADOW(reinterpret_cast<uptr>(p));
+  u8 sval = *reinterpret_cast<u8*>(s);
+  if (sval == kAsanArrayCookieMagic) return *p;
+  // If sval is not kAsanArrayCookieMagic it can only be freed memory,
+  // which means that we are going to get double-free. So, return 0 to avoid
+  // infinite loop of destructors. We don't want to report a double-free here
+  // though, so print a warning just in case.
+  // CHECK_EQ(sval, kAsanHeapFreeMagic);
+  if (sval == kAsanHeapFreeMagic) {
+    Report("AddressSanitizer: loaded array cookie from free-d memory; "
+           "expect a double-free report\n");
+    return 0;
+  }
+  // The cookie may remain unpoisoned if e.g. it comes from a custom
+  // operator new defined inside a class.
+  return *p;
 }
 
 // This is a simplified version of __asan_(un)poison_memory_region, which
@@ -353,6 +407,17 @@ int __sanitizer_verify_contiguous_container(const void *beg_p,
       return 0;
   return 1;
 }
+
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+void __asan_poison_intra_object_redzone(uptr ptr, uptr size) {
+  AsanPoisonOrUnpoisonIntraObjectRedzone(ptr, size, true);
+}
+
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+void __asan_unpoison_intra_object_redzone(uptr ptr, uptr size) {
+  AsanPoisonOrUnpoisonIntraObjectRedzone(ptr, size, false);
+}
+
 // --- Implementation of LSan-specific functions --- {{{1
 namespace __lsan {
 bool WordIsPoisoned(uptr addr) {

@@ -23,6 +23,7 @@
 #include "lldb/Core/State.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Host/Symbols.h"
+#include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/StackFrame.h"
@@ -256,21 +257,24 @@ DynamicLoaderDarwinKernel::SearchForKernelWithDebugHints (Process *process)
     if (process->GetTarget().GetArchitecture().GetAddressByteSize() == 8)
     {
         addr = process->ReadUnsignedIntegerFromMemory (0xffffff8000002010ULL, 8, LLDB_INVALID_ADDRESS, read_err);
+        if (CheckForKernelImageAtAddress (addr, process).IsValid())
+        {
+            return addr;
+        }
+        addr = process->ReadUnsignedIntegerFromMemory (0xffffff8000004010ULL, 8, LLDB_INVALID_ADDRESS, read_err);
+        if (CheckForKernelImageAtAddress (addr, process).IsValid())
+        {
+            return addr;
+        }
     }
     else
     {
         addr = process->ReadUnsignedIntegerFromMemory (0xffff0110, 4, LLDB_INVALID_ADDRESS, read_err);
-    }
-
-    if (addr == 0)
-        addr = LLDB_INVALID_ADDRESS;
-
-    if (addr != LLDB_INVALID_ADDRESS)
-    {
         if (CheckForKernelImageAtAddress (addr, process).IsValid())
+        {
             return addr;
+        }
     }
-
     return LLDB_INVALID_ADDRESS;
 }
 
@@ -467,7 +471,8 @@ DynamicLoaderDarwinKernel::DynamicLoaderDarwinKernel (Process* process, lldb::ad
     m_mutex(Mutex::eMutexTypeRecursive),
     m_break_id (LLDB_INVALID_BREAK_ID)
 {
-    PlatformSP platform_sp(Platform::FindPlugin (process, PlatformDarwinKernel::GetPluginNameStatic ()));
+    Error error;
+    PlatformSP platform_sp(Platform::Create(PlatformDarwinKernel::GetPluginNameStatic(), error));
     // Only select the darwin-kernel Platform if we've been asked to load kexts.
     // It can take some time to scan over all of the kext info.plists and that
     // shouldn't be done if kext loading is explicitly disabled.
@@ -719,19 +724,20 @@ DynamicLoaderDarwinKernel::KextImageInfo::ReadMemoryModule (Process *process)
         }
         if (m_uuid.IsValid())
         {
-            Module* exe_module = process->GetTarget().GetExecutableModulePointer();
-            if (exe_module && exe_module->GetUUID().IsValid())
+            ModuleSP exe_module_sp = process->GetTarget().GetExecutableModule();
+            if (exe_module_sp.get() && exe_module_sp->GetUUID().IsValid())
             {
-                if (m_uuid != exe_module->GetUUID())
+                if (m_uuid != exe_module_sp->GetUUID())
                 {
-                    Stream *s = process->GetTarget().GetDebugger().GetOutputFile().get();
-                    if (s)
-                    {
-                        s->Printf ("warning: Host-side kernel file has Mach-O UUID of %s but remote kernel has a UUID of %s -- a mismatched kernel file will result in a poor debugger experience.\n", 
-                                   exe_module->GetUUID().GetAsString().c_str(),
-                                   m_uuid.GetAsString().c_str());
-                        s->Flush ();
-                    }
+                    // The user specified a kernel binary that has a different UUID than
+                    // the kernel actually running in memory.  This never ends well; 
+                    // clear the user specified kernel binary from the Target.
+
+                    m_module_sp.reset();
+
+                    ModuleList user_specified_kernel_list;
+                    user_specified_kernel_list.Append (exe_module_sp);
+                    process->GetTarget().GetImages().Remove (user_specified_kernel_list);
                 }
             }
         }

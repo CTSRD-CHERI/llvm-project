@@ -17,7 +17,7 @@
 #define __has_include(inc) 0
 #endif
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(LIBCXXRT)
     #include <cxxabi.h>
 
     #ifndef _LIBCPPABI_VERSION
@@ -133,9 +133,23 @@ operator delete(void* ptr, const std::nothrow_t&) _NOEXCEPT
 
 _LIBCPP_WEAK _LIBCPP_NEW_DELETE_VIS
 void
+operator delete(void* ptr, size_t) _NOEXCEPT
+{
+    ::operator delete(ptr);
+}
+
+_LIBCPP_WEAK _LIBCPP_NEW_DELETE_VIS
+void
+operator delete(void* ptr, size_t, const std::nothrow_t& nt) _NOEXCEPT
+{
+    ::operator delete(ptr, nt);
+}
+
+_LIBCPP_WEAK _LIBCPP_NEW_DELETE_VIS
+void
 operator delete[] (void* ptr) _NOEXCEPT
 {
-    ::operator delete (ptr);
+    ::operator delete(ptr);
 }
 
 _LIBCPP_WEAK _LIBCPP_NEW_DELETE_VIS
@@ -143,6 +157,20 @@ void
 operator delete[] (void* ptr, const std::nothrow_t&) _NOEXCEPT
 {
     ::operator delete[](ptr);
+}
+
+_LIBCPP_WEAK _LIBCPP_NEW_DELETE_VIS
+void
+operator delete[] (void* ptr, size_t) _NOEXCEPT
+{
+    ::operator delete[](ptr);
+}
+
+_LIBCPP_WEAK _LIBCPP_NEW_DELETE_VIS
+void
+operator delete[] (void* ptr, size_t, const std::nothrow_t& nt) _NOEXCEPT
+{
+    ::operator delete[](ptr, nt);
 }
 
 #endif // !__GLIBCXX__
@@ -192,8 +220,6 @@ bad_alloc::what() const _NOEXCEPT
 
 #endif // !__GLIBCXX__
 
-#endif //LIBCXXRT
-
 bad_array_new_length::bad_array_new_length() _NOEXCEPT
 {
 }
@@ -201,6 +227,14 @@ bad_array_new_length::bad_array_new_length() _NOEXCEPT
 bad_array_new_length::~bad_array_new_length() _NOEXCEPT
 {
 }
+
+const char*
+bad_array_new_length::what() const _NOEXCEPT
+{
+    return "bad_array_new_length";
+}
+
+#endif //LIBCXXRT
 
 const char*
 bad_array_length::what() const _NOEXCEPT
@@ -214,12 +248,6 @@ bad_array_length::bad_array_length() _NOEXCEPT
 
 bad_array_length::~bad_array_length() _NOEXCEPT
 {
-}
-
-const char*
-bad_array_new_length::what() const _NOEXCEPT
-{
-    return "bad_array_new_length";
 }
 
 #endif // _LIBCPPABI_VERSION

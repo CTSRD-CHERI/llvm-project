@@ -1,8 +1,10 @@
-; RUN: opt %loadPolly -polly-opt-isl -analyze -polly-no-tiling=0 -polly-ast -polly-tile-sizes=1,64 %s
-; CHECK: c0 += 1
-; CHECK: c1 += 64
-; CHECK: c1 <= c1 + 63
-; ModuleID = 'line-tiling-2.ll'
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-opt-isl -analyze -polly-no-tiling=0 -polly-ast -polly-tile-sizes=1,64 < %s | FileCheck %s
+
+; CHECK: for (int c0 = 0; c0 <= 1023; c0 += 1)
+; CHECK:   for (int c1 = 0; c1 <= 511; c1 += 64)
+; CHECK:     for (int c3 = 0; c3 <= 63; c3 += 1)
+; CHECK:       Stmt_for_body3(c0, c1 + c3);
+
 target datalayout = "e-m:e-p:32:32-i64:64-v128:64:128-n32-S64"
 
 ; Function Attrs: nounwind
@@ -21,7 +23,7 @@ for.body3:                                        ; preds = %for.body3.lr.ph, %f
   %j.0 = phi i32 [ 0, %for.body3.lr.ph ], [ %inc, %for.body3 ]
   %mul = mul nsw i32 %j.0, %i.0
   %rem = srem i32 %mul, 42
-  %arrayidx4 = getelementptr inbounds [512 x i32]* %A, i32 %i.0, i32 %j.0
+  %arrayidx4 = getelementptr inbounds [512 x i32], [512 x i32]* %A, i32 %i.0, i32 %j.0
   store i32 %rem, i32* %arrayidx4, align 4
   %inc = add nsw i32 %j.0, 1
   %cmp2 = icmp slt i32 %inc, 512

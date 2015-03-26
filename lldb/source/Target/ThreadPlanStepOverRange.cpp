@@ -13,8 +13,6 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-
-#include "lldb/lldb-private-log.h"
 #include "lldb/Core/Log.h"
 #include "lldb/Core/Stream.h"
 #include "lldb/Symbol/Block.h"
@@ -62,12 +60,26 @@ void
 ThreadPlanStepOverRange::GetDescription (Stream *s, lldb::DescriptionLevel level)
 {
     if (level == lldb::eDescriptionLevelBrief)
-        s->Printf("step over");
-    else
     {
-        s->Printf ("stepping through range (stepping over functions): ");
-        DumpRanges(s);    
+        s->Printf("step over");
+        return;
     }
+    s->Printf ("Stepping over");
+    bool printed_line_info = false;
+    if (m_addr_context.line_entry.IsValid())
+    {
+        s->Printf (" line ");
+        m_addr_context.line_entry.DumpStopContext (s, false);
+        printed_line_info = true;
+    }
+
+    if (!printed_line_info || level == eDescriptionLevelVerbose)
+    {
+        s->Printf (" using ranges: ");
+        DumpRanges(s);
+    }
+
+    s->PutChar('.');
 }
 
 void
@@ -317,11 +329,15 @@ ThreadPlanStepOverRange::ShouldStop (Event *event_ptr)
     {
         new_plan_sp = CheckShouldStopHereAndQueueStepOut (frame_order);
     }
-    
+
     if (!new_plan_sp)
         m_no_more_plans = true;
     else
+    {
+        // Any new plan will be an implementation plan, so mark it private:
+        new_plan_sp->SetPrivate(true);
         m_no_more_plans = false;
+    }
 
     if (!new_plan_sp)
     {

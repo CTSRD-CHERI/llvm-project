@@ -14,7 +14,6 @@
 #include "polly/LinkAllPasses.h"
 #include "polly/Options.h"
 #include "polly/CodeGen/BlockGenerators.h"
-#include "polly/CodeGen/Cloog.h"
 #include "polly/ScopDetection.h"
 #include "polly/Support/ScopHelper.h"
 #include "llvm/Analysis/DominanceFrontier.h"
@@ -22,6 +21,7 @@
 #include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -256,7 +256,8 @@ bool IndependentBlocks::createIndependentBlocks(BasicBlock *BB,
   Instruction *InsertPos = BB->getFirstNonPHIOrDbg();
 
   for (Instruction *Inst : WorkList)
-    moveOperandTree(Inst, R, ReplacedMap, InsertPos);
+    if (!isa<PHINode>(Inst))
+      moveOperandTree(Inst, R, ReplacedMap, InsertPos);
 
   // The BB was changed if we replaced any operand.
   return !ReplacedMap.empty();
@@ -277,7 +278,7 @@ bool IndependentBlocks::eliminateDeadCode(const Region *R) {
   // Find all trivially dead instructions.
   for (BasicBlock *BB : R->blocks())
     for (Instruction &Inst : *BB)
-      if (isInstructionTriviallyDead(&Inst))
+      if (!isIgnoredIntrinsic(&Inst) && isInstructionTriviallyDead(&Inst))
         WorkList.push_back(&Inst);
 
   if (WorkList.empty())
@@ -369,6 +370,8 @@ bool IndependentBlocks::translateScalarToArray(Instruction *Inst,
                                                const Region *R) {
   if (canSynthesize(Inst, LI, SE, R) && onlyUsedInRegion(Inst, R))
     return false;
+  if (isIgnoredIntrinsic(Inst))
+    return false;
 
   SmallVector<Instruction *, 4> LoadInside, LoadOutside;
   for (User *U : Inst->users())
@@ -425,6 +428,7 @@ bool IndependentBlocks::translateScalarToArray(Instruction *Inst,
     U->replaceUsesOfWith(Inst, L);
   }
 
+  SE->forgetValue(Inst);
   return true;
 }
 
@@ -449,6 +453,8 @@ bool IndependentBlocks::isIndependentBlock(const Region *R,
   for (Instruction &Inst : *BB) {
     if (canSynthesize(&Inst, LI, SE, R))
       continue;
+    if (isIgnoredIntrinsic(&Inst))
+      continue;
 
     // A value inside the Scop is referenced outside.
     for (User *U : Inst.users()) {
@@ -465,6 +471,8 @@ bool IndependentBlocks::isIndependentBlock(const Region *R,
       continue;
 
     for (Value *Op : Inst.operands()) {
+      if (isIgnoredIntrinsic(Op))
+        continue;
       if (isEscapeOperand(Op, BB, R)) {
         DEBUG(dbgs() << "Instruction in function '";
               BB->getParent()->printAsOperand(dbgs(), false);
@@ -498,22 +506,20 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<PostDominatorTree>();
   AU.addRequired<RegionInfoPass>();
   AU.addPreserved<RegionInfoPass>();
-  AU.addRequired<LoopInfo>();
-  AU.addPreserved<LoopInfo>();
+  AU.addRequired<LoopInfoWrapperPass>();
+  AU.addPreserved<LoopInfoWrapperPass>();
   AU.addRequired<ScalarEvolution>();
   AU.addPreserved<ScalarEvolution>();
   AU.addRequired<ScopDetection>();
   AU.addPreserved<ScopDetection>();
-#ifdef CLOOG_FOUND
-  AU.addPreserved<CloogInfo>();
-#endif
 }
 
 bool IndependentBlocks::runOnFunction(llvm::Function &F) {
+
   bool Changed = false;
 
   RI = &getAnalysis<RegionInfoPass>().getRegionInfo();
-  LI = &getAnalysis<LoopInfo>();
+  LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   SD = &getAnalysis<ScopDetection>();
   SE = &getAnalysis<ScalarEvolution>();
 
@@ -525,14 +531,16 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
     Changed |= createIndependentBlocks(R);
     Changed |= eliminateDeadCode(R);
     // This may change the RegionTree.
-    Changed |= splitExitBlock(const_cast<Region *>(R));
+    if (!DisableIntraScopScalarToArray || !PollyModelPHINodes)
+      Changed |= splitExitBlock(const_cast<Region *>(R));
   }
 
   DEBUG(dbgs() << "Before Scalar to Array------->\n");
   DEBUG(F.dump());
 
-  for (const Region *R : *SD)
-    Changed |= translateScalarToArray(R);
+  if (!DisableIntraScopScalarToArray || !PollyModelPHINodes)
+    for (const Region *R : *SD)
+      Changed |= translateScalarToArray(R);
 
   DEBUG(dbgs() << "After Independent Blocks------------->\n");
   DEBUG(F.dump());
@@ -543,6 +551,9 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
 }
 
 void IndependentBlocks::verifyAnalysis() const {
+  if (DisableIntraScopScalarToArray && PollyModelPHINodes)
+    return;
+
   for (const Region *R : *SD)
     verifyScop(R);
 }
@@ -558,7 +569,7 @@ Pass *polly::createIndependentBlocksPass() { return new IndependentBlocks(); }
 
 INITIALIZE_PASS_BEGIN(IndependentBlocks, "polly-independent",
                       "Polly - Create independent blocks", false, false);
-INITIALIZE_PASS_DEPENDENCY(LoopInfo);
+INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass);
 INITIALIZE_PASS_DEPENDENCY(RegionInfoPass);
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolution);
 INITIALIZE_PASS_DEPENDENCY(ScopDetection);

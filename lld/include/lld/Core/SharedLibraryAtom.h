@@ -38,14 +38,14 @@ public:
 
   virtual uint64_t size() const = 0;
 
-  static inline bool classof(const Atom *a) {
+  static bool classof(const Atom *a) {
     return a->definition() == definitionSharedLibrary;
   }
+
   static inline bool classof(const SharedLibraryAtom *) { return true; }
 
 protected:
   SharedLibraryAtom() : Atom(definitionSharedLibrary) {}
-  virtual ~SharedLibraryAtom() {}
 };
 
 } // namespace lld

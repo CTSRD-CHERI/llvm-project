@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly %defaultOpts -polly-codegen-isl %vector-opt -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-codegen-isl %vector-opt -S < %s | FileCheck %s
 
 ;#define N 1024
 ;float A[N];
@@ -28,12 +28,12 @@ define void @simple_vec_const() nounwind {
 
 ; <label>:1                                       ; preds = %4, %0
   %indvar = phi i64 [ %indvar.next, %4 ], [ 0, %0 ]
-  %scevgep = getelementptr [1024 x float]* @B, i64 0, i64 %indvar
+  %scevgep = getelementptr [1024 x float], [1024 x float]* @B, i64 0, i64 %indvar
   %exitcond = icmp ne i64 %indvar, 4
   br i1 %exitcond, label %2, label %5
 
 ; <label>:2                                       ; preds = %1
-  %3 = load float* getelementptr inbounds ([1024 x float]* @A, i64 0, i64 0), align 16
+  %3 = load float, float* getelementptr inbounds ([1024 x float], [1024 x float]* @A, i64 0, i64 0), align 16
   store float %3, float* %scevgep, align 4
   br label %4
 
@@ -47,11 +47,11 @@ define void @simple_vec_const() nounwind {
 
 define i32 @main() nounwind {
   call void @simple_vec_const()
-  %1 = load float* getelementptr inbounds ([1024 x float]* @A, i64 0, i64 42), align 8
+  %1 = load float, float* getelementptr inbounds ([1024 x float], [1024 x float]* @A, i64 0, i64 42), align 8
   %2 = fptosi float %1 to i32
   ret i32 %2
 }
 
 
-; CHECK: load <1 x float>* bitcast ([1024 x float]* @A to <1 x float>*)
+; CHECK: load <1 x float>, <1 x float>* bitcast ([1024 x float]* @A to <1 x float>*)
 ; CHECK: shufflevector <1 x float> {{.*}}, <1 x float> {{.*}} <4 x i32> zeroinitializer

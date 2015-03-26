@@ -30,7 +30,7 @@ public:
     //------------------------------------------------------------
     // Class Functions
     //------------------------------------------------------------
-    static lldb_private::Platform*
+    static lldb::PlatformSP
     CreateInstance (bool force, const lldb_private::ArchSpec *arch);
 
     static void
@@ -59,14 +59,14 @@ public:
     //------------------------------------------------------------
     // lldb_private::PluginInterface functions
     //------------------------------------------------------------
-    virtual lldb_private::ConstString
-    GetPluginName()
+    lldb_private::ConstString
+    GetPluginName() override
     {
         return GetPluginNameStatic();
     }
 
     virtual uint32_t
-    GetPluginVersion()
+    GetPluginVersion() override
     {
         return 1;
     }
@@ -74,25 +74,31 @@ public:
     //------------------------------------------------------------
     // lldb_private::Platform functions
     //------------------------------------------------------------
-    virtual const char *
-    GetDescription ()
+    const char *
+    GetDescription () override
     {
         return GetDescriptionStatic();
     }
 
-    virtual void
-    GetStatus (lldb_private::Stream &strm);
+    void
+    GetStatus (lldb_private::Stream &strm) override;
 
-    virtual lldb_private::Error
+    lldb_private::Error
     GetSharedModule (const lldb_private::ModuleSpec &module_spec,
                      lldb::ModuleSP &module_sp,
                      const lldb_private::FileSpecList *module_search_paths_ptr,
                      lldb::ModuleSP *old_module_sp_ptr,
-                     bool *did_create_ptr);
+                     bool *did_create_ptr) override;
 
-    virtual bool
+    bool
     GetSupportedArchitectureAtIndex (uint32_t idx, 
-                                     lldb_private::ArchSpec &arch);
+                                     lldb_private::ArchSpec &arch) override;
+    
+    bool
+    SupportsModules() override { return false; }
+
+    void
+    CalculateTrapHandlerSymbolNames () override;
 
 protected:
 
@@ -101,6 +107,7 @@ protected:
     typedef std::multimap<lldb_private::ConstString, lldb_private::FileSpec> BundleIDToKextMap;
     typedef BundleIDToKextMap::iterator BundleIDToKextIterator;
 
+    typedef std::vector<lldb_private::FileSpec> KernelBinaryCollection;
     
     // Array of directories that were searched for kext bundles (used only for reporting to user)
     typedef std::vector<lldb_private::FileSpec> DirectoriesSearchedCollection;
@@ -117,8 +124,9 @@ protected:
                          lldb_private::FileSpec::FileType file_type,
                          const lldb_private::FileSpec &file_spec);
 
+    // Populate m_search_directories vector of directories
     void
-    SearchForKexts();
+    CollectKextAndKernelDirectories ();
 
     // Directories where we may find iOS SDKs with kext bundles in them
     void
@@ -148,6 +156,13 @@ protected:
     void
     GetUserSpecifiedDirectoriesToSearch (std::vector<lldb_private::FileSpec> &directories);
 
+    void
+    GetCurrentDirectoryToSearch (std::vector<lldb_private::FileSpec> &directories);
+
+    // Directories where we may find kernels exclusively
+    void
+    GetKernelDirectoriesToSearch (std::vector<lldb_private::FileSpec> &directories);
+
     // Search through a vector of SDK FileSpecs, add any directories that may contain kexts
     // to the vector of kext dir FileSpecs
     void
@@ -156,19 +171,28 @@ protected:
     // Search through all of the directories passed in, find all .kext bundles in those directories,
     // get the CFBundleIDs out of the Info.plists and add the bundle ID and kext path to m_name_to_kext_path_map.
     void
-    IndexKextsInDirectories (std::vector<lldb_private::FileSpec> kext_dirs);
+    IndexKextsInDirectories ();
+
+    // Search through all of the directories passed in, find all kernel binaries in those directories
+    // (look for "kernel*", "mach.*", assume those are kernels.  False positives aren't a huge problem.)
+    void
+    IndexKernelsInDirectories ();
+
+    // Callback which iterates over all the files in a given directory, looking for kernel binaries
+    static lldb_private::FileSpec::EnumerateDirectoryResult 
+    GetKernelsInDirectory (void *baton,
+                         lldb_private::FileSpec::FileType file_type,
+                         const lldb_private::FileSpec &file_spec);
 
     lldb_private::Error
     ExamineKextForMatchingUUID (const lldb_private::FileSpec &kext_bundle_path, const lldb_private::UUID &uuid, const lldb_private::ArchSpec &arch, lldb::ModuleSP &exe_module_sp);
 
-    virtual void
-    CalculateTrapHandlerSymbolNames ();
-
 private:
 
-    BundleIDToKextMap m_name_to_kext_path_map; 
-    DirectoriesSearchedCollection m_directories_searched;
-    lldb_private::LazyBool m_ios_debug_session;
+    BundleIDToKextMap             m_name_to_kext_path_map; // multimap of CFBundleID to FileSpec on local filesystem
+    DirectoriesSearchedCollection m_search_directories;    // list of directories we search for kexts/kernels
+    KernelBinaryCollection        m_kernel_binaries;       // list of kernel binaries we found on local filesystem
+    lldb_private::LazyBool        m_ios_debug_session;
 
     DISALLOW_COPY_AND_ASSIGN (PlatformDarwinKernel);
 

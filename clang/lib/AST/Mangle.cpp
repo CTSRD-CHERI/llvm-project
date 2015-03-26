@@ -234,17 +234,23 @@ void MangleContext::mangleBlock(const DeclContext *DC, const BlockDecl *BD,
     if (isa<BlockDecl>(DC))
       for (; DC && isa<BlockDecl>(DC); DC = DC->getParent())
         (void) getBlockId(cast<BlockDecl>(DC), true);
-    assert(isa<NamedDecl>(DC) && "expected a NamedDecl");
-    const NamedDecl *ND = cast<NamedDecl>(DC);
-    if (!shouldMangleDeclName(ND) && ND->getIdentifier())
-      Stream << ND->getIdentifier()->getName();
-    else {
-      // FIXME: We were doing a mangleUnqualifiedName() before, but that's
-      // a private member of a class that will soon itself be private to the
-      // Itanium C++ ABI object. What should we do now? Right now, I'm just
-      // calling the mangleName() method on the MangleContext; is there a
-      // better way?
-      mangleName(ND, Stream);
+    assert((isa<TranslationUnitDecl>(DC) || isa<NamedDecl>(DC)) &&
+           "expected a TranslationUnitDecl or a NamedDecl");
+    if (const auto *CD = dyn_cast<CXXConstructorDecl>(DC))
+      mangleCtorBlock(CD, /*CT*/ Ctor_Complete, BD, Out);
+    else if (const auto *DD = dyn_cast<CXXDestructorDecl>(DC))
+      mangleDtorBlock(DD, /*DT*/ Dtor_Complete, BD, Out);
+    else if (auto ND = dyn_cast<NamedDecl>(DC)) {
+      if (!shouldMangleDeclName(ND) && ND->getIdentifier())
+        Stream << ND->getIdentifier()->getName();
+      else {
+        // FIXME: We were doing a mangleUnqualifiedName() before, but that's
+        // a private member of a class that will soon itself be private to the
+        // Itanium C++ ABI object. What should we do now? Right now, I'm just
+        // calling the mangleName() method on the MangleContext; is there a
+        // better way?
+        mangleName(ND, Stream);
+      }
     }
   }
   Stream.flush();

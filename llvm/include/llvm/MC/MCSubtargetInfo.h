@@ -28,6 +28,7 @@ class StringRef;
 ///
 class MCSubtargetInfo {
   std::string TargetTriple;            // Target triple
+  std::string CPU; // CPU being targeted.
   ArrayRef<SubtargetFeatureKV> ProcFeatures;  // Processor feature list
   ArrayRef<SubtargetFeatureKV> ProcDesc;  // Processor descriptions
 
@@ -36,12 +37,12 @@ class MCSubtargetInfo {
   const MCWriteProcResEntry *WriteProcResTable;
   const MCWriteLatencyEntry *WriteLatencyTable;
   const MCReadAdvanceEntry *ReadAdvanceTable;
-  const MCSchedModel *CPUSchedModel;
+  MCSchedModel CPUSchedModel;
 
   const InstrStage *Stages;            // Instruction itinerary stages
   const unsigned *OperandCycles;       // Itinerary operand cycles
   const unsigned *ForwardingPaths;     // Forwarding paths
-  uint64_t FeatureBits;                // Feature bits for current CPU + FS
+  FeatureBitset FeatureBits;           // Feature bits for current CPU + FS
 
 public:
   void InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
@@ -59,15 +60,20 @@ public:
     return TargetTriple;
   }
 
+  /// getCPU - Return the CPU string.
+  StringRef getCPU() const {
+    return CPU;
+  }
+
   /// getFeatureBits - Return the feature bits.
   ///
-  uint64_t getFeatureBits() const {
+  const FeatureBitset& getFeatureBits() const {
     return FeatureBits;
   }
 
   /// setFeatureBits - Set the feature bits.
   ///
-  void setFeatureBits(uint64_t FeatureBits_) { FeatureBits = FeatureBits_; }
+  void setFeatureBits(FeatureBitset& FeatureBits_) { FeatureBits = FeatureBits_; }
 
   /// InitMCProcessorInfo - Set or change the CPU (optionally supplemented with
   /// feature string). Recompute feature bits and scheduling model.
@@ -78,19 +84,23 @@ public:
 
   /// ToggleFeature - Toggle a feature and returns the re-computed feature
   /// bits. This version does not change the implied bits.
-  uint64_t ToggleFeature(uint64_t FB);
+  FeatureBitset ToggleFeature(uint64_t FB);
 
   /// ToggleFeature - Toggle a feature and returns the re-computed feature
-  /// bits. This version will also change all implied bits.
-  uint64_t ToggleFeature(StringRef FS);
+  /// bits. This version does not change the implied bits.
+  FeatureBitset ToggleFeature(const FeatureBitset& FB);
+
+  /// ToggleFeature - Toggle a set of features and returns the re-computed
+  /// feature bits. This version will also change all implied bits.
+  FeatureBitset ToggleFeature(StringRef FS);
 
   /// getSchedModelForCPU - Get the machine model of a CPU.
   ///
-  const MCSchedModel *getSchedModelForCPU(StringRef CPU) const;
+  MCSchedModel getSchedModelForCPU(StringRef CPU) const;
 
   /// getSchedModel - Get the machine model for this subtarget's CPU.
   ///
-  const MCSchedModel *getSchedModel() const { return CPUSchedModel; }
+  const MCSchedModel &getSchedModel() const { return CPUSchedModel; }
 
   /// Return an iterator at the first process resource consumed by the given
   /// scheduling class.
@@ -136,6 +146,15 @@ public:
 
   /// Initialize an InstrItineraryData instance.
   void initInstrItins(InstrItineraryData &InstrItins) const;
+
+  /// Check whether the CPU string is valid.
+  bool isCPUStringValid(StringRef CPU) {
+    auto Found = std::find_if(ProcDesc.begin(), ProcDesc.end(),
+                              [=](const SubtargetFeatureKV &KV) {
+                                return CPU == KV.Key; 
+                              });
+    return Found != ProcDesc.end();
+  }
 };
 
 } // End llvm namespace

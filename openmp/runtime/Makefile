@@ -18,12 +18,12 @@ default: omp
 all: omp stubs
 
 omp: info mkdir
-	@echo $(omp_root)/tools/build.pl $(build_args) --arch=$(arch) --mode=$(mode) lib inc common
-	$(omp_root)/tools/build.pl $(build_args) --arch=$(arch) --mode=$(mode) lib inc common
+	@echo $(omp_root)/tools/build.pl $(build_args) --arch=$(arch) --mode=$(mode) lib inc common -- -j$(jobs)
+	$(omp_root)/tools/build.pl $(build_args) --arch=$(arch) --mode=$(mode) lib inc common -- -j$(jobs)
 
 stubs: mkdir
-	@echo $(omp_root)/tools/build.pl $(build_args) --arch=$(arch) --mode=$(mode) --stubs lib inc common 
-	$(omp_root)/tools/build.pl $(build_args) --arch=$(arch) --mode=$(mode) --stubs lib inc common
+	@echo $(omp_root)/tools/build.pl $(build_args) --arch=$(arch) --mode=$(mode) --stubs lib inc common -- -j$(jobs)
+	$(omp_root)/tools/build.pl $(build_args) --arch=$(arch) --mode=$(mode) --stubs lib inc common -- -j$(jobs)
 
 .PHONY: clean info
 
@@ -39,7 +39,11 @@ info:
 	@echo omp_root=$(omp_root)
 	@echo omp_os=$(omp_os)
 	@echo arch=$(arch)
+ifeq "$(arch)" "mic"
+	@echo mic_arch=$(mic_arch)	
+endif
 	@echo compiler=$(compiler)	
 	@echo mic=$(mic)
 	@echo mode=$(mode)
+	@echo jobs=$(jobs)
 

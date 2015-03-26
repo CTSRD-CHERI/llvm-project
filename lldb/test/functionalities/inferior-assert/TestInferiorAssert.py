@@ -16,8 +16,9 @@ class AssertingInferiorTestCase(TestBase):
         self.buildDsym()
         self.inferior_asserting()
 
-    @expectedFailurei386 # llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly'
+    @expectedFailurei386("llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly")
     @expectedFailureDarwin("rdar://15367233")
+    @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
     def test_inferior_asserting_dwarf(self):
         """Test that lldb reliably catches the inferior asserting (command)."""
         self.buildDwarf()
@@ -29,20 +30,23 @@ class AssertingInferiorTestCase(TestBase):
         self.buildDsym()
         self.inferior_asserting_registers()
 
+    @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
     def test_inferior_asserting_register_dwarf(self):
         """Test that lldb reliably reads registers from the inferior after asserting (command)."""
         self.buildDwarf()
         self.inferior_asserting_registers()
 
-    @expectedFailurei386 # llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly
-    @expectedFailureFreeBSD('llvm.org/pr18533') # PC in __assert frame is outside of function
-    @expectedFailureLinux('') # PC in __GI___assert_fail frame is just after the function (this is a no-return so there is no epilogue afterwards)
+    @expectedFailurei386("llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly")
+    @expectedFailureFreeBSD('llvm.org/pr18533 - PC in __assert frame is outside of function')
+    @expectedFailureLinux("PC in __GI___assert_fail frame is just after the function (this is a no-return so there is no epilogue afterwards)")
+    @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
     def test_inferior_asserting_disassemble(self):
         """Test that lldb reliably disassembles frames after asserting (command)."""
         self.buildDefault()
         self.inferior_asserting_disassemble()
 
     @python_api_test
+    @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
     def test_inferior_asserting_python(self):
         """Test that lldb reliably catches the inferior asserting (Python API)."""
         self.buildDefault()
@@ -50,28 +54,30 @@ class AssertingInferiorTestCase(TestBase):
 
     @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
     @unittest2.expectedFailure("rdar://15367233")
-    def test_inferior_asserting_expr(self):
+    def test_inferior_asserting_expr_dsym(self):
         """Test that the lldb expression interpreter can read from the inferior after asserting (command)."""
         self.buildDsym()
         self.inferior_asserting_expr()
 
-    @expectedFailurei386 # llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly
+    @expectedFailurei386('llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly')
     @unittest2.expectedFailure("rdar://15367233")
-    def test_inferior_asserting_expr(self):
+    @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
+    def test_inferior_asserting_expr_dwarf(self):
         """Test that the lldb expression interpreter can read from the inferior after asserting (command)."""
         self.buildDwarf()
         self.inferior_asserting_expr()
 
     @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
     @unittest2.expectedFailure("rdar://15367233")
-    def test_inferior_asserting_step(self):
+    def test_inferior_asserting_step_dsym(self):
         """Test that lldb functions correctly after stepping through a call to assert()."""
         self.buildDsym()
         self.inferior_asserting_step()
 
-    @expectedFailurei386 # llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly
+    @expectedFailurei386("llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly")
     @expectedFailureDarwin("rdar://15367233")
-    def test_inferior_asserting_step(self):
+    @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
+    def test_inferior_asserting_step_dwarf(self):
         """Test that lldb functions correctly after stepping through a call to assert()."""
         self.buildDwarf()
         self.inferior_asserting_step()
@@ -176,8 +182,11 @@ class AssertingInferiorTestCase(TestBase):
             # of the function and in the next function. We also can't back the PC up
             # because we don't know how much to back it up by on targets with opcodes
             # that have differing sizes
-            self.expect("disassemble -a %s" % frame.GetPC(),
-                substrs = ['->'])
+            pc_backup_offset = 1
+            if frame.GetFrameID() == 0:
+                pc_backup_offset = 0
+            self.expect("disassemble -a %s" % (frame.GetPC() - pc_backup_offset),
+                    substrs = ['<+0>: '])
 
     def check_expr_in_main(self, thread):
         depth = thread.GetNumFrames()

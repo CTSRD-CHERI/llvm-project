@@ -32,16 +32,16 @@ target triple = "x86_64-apple-macosx10.9.0"
 ; Function Attrs: nounwind ssp uwtable
 define i32 @foo(i64 %s.coerce0, i32 %s.coerce1) #0 {
 entry:
-  call void @llvm.dbg.value(metadata !{i64 %s.coerce0}, i64 0, metadata !20), !dbg !21
-  call void @llvm.dbg.value(metadata !{i32 %s.coerce1}, i64 0, metadata !22), !dbg !21
+  call void @llvm.dbg.value(metadata i64 %s.coerce0, i64 0, metadata !20, metadata !24), !dbg !21
+  call void @llvm.dbg.value(metadata i32 %s.coerce1, i64 0, metadata !22, metadata !27), !dbg !21
   ret i32 %s.coerce1, !dbg !23
 }
 
 ; Function Attrs: nounwind readnone
-declare void @llvm.dbg.declare(metadata, metadata) #1
+declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
 ; Function Attrs: nounwind readnone
-declare void @llvm.dbg.value(metadata, i64, metadata) #1
+declare void @llvm.dbg.value(metadata, i64, metadata, metadata) #1
 
 attributes #0 = { nounwind ssp uwtable "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" }
 attributes #1 = { nounwind readnone }
@@ -50,30 +50,30 @@ attributes #1 = { nounwind readnone }
 !llvm.module.flags = !{!17, !18}
 !llvm.ident = !{!19}
 
-!0 = metadata !{i32 786449, metadata !1, i32 12, metadata !"clang version 3.5 ", i1 true, metadata !"", i32 0, metadata !2, metadata !2, metadata !3, metadata !2, metadata !2, metadata !"", i32 1} ; [ DW_TAG_compile_unit ]
-!1 = metadata !{metadata !"pieces.c", metadata !""}
-!2 = metadata !{}
-!3 = metadata !{metadata !4}
-!4 = metadata !{i32 786478, metadata !1, metadata !5, metadata !"foo", metadata !"foo", metadata !"", i32 3, metadata !6, i1 false, i1 true, i32 0, i32 0, null, i32 256, i1 true, i32 (i64, i32)* @foo, null, null, metadata !15, i32 3} ; [ DW_TAG_subprogram ] [line 3] [def] [foo]
-!5 = metadata !{i32 786473, metadata !1}          ; [ DW_TAG_file_type ] [/pieces.c]
-!6 = metadata !{i32 786453, i32 0, null, metadata !"", i32 0, i64 0, i64 0, i64 0, i32 0, null, metadata !7, i32 0, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!7 = metadata !{metadata !8, metadata !9}
-!8 = metadata !{i32 786468, null, null, metadata !"int", i32 0, i64 32, i64 32, i64 0, i32 0, i32 5} ; [ DW_TAG_base_type ] [int] [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
-!9 = metadata !{i32 786454, metadata !1, null, metadata !"S", i32 1, i64 0, i64 0, i64 0, i32 0, metadata !10} ; [ DW_TAG_typedef ] [S] [line 1, size 0, align 0, offset 0] [from ]
-!10 = metadata !{i32 786451, metadata !1, null, metadata !"", i32 1, i64 128, i64 64, i32 0, i32 0, null, metadata !11, i32 0, null, null, null} ; [ DW_TAG_structure_type ] [line 1, size 128, align 64, offset 0] [def] [from ]
-!11 = metadata !{metadata !12, metadata !14}
-!12 = metadata !{i32 786445, metadata !1, metadata !10, metadata !"a", i32 1, i64 64, i64 64, i64 0, i32 0, metadata !13} ; [ DW_TAG_member ] [a] [line 1, size 64, align 64, offset 0] [from long int]
-!13 = metadata !{i32 786468, null, null, metadata !"long int", i32 0, i64 64, i64 64, i64 0, i32 0, i32 5} ; [ DW_TAG_base_type ] [long int] [line 0, size 64, align 64, offset 0, enc DW_ATE_signed]
-!14 = metadata !{i32 786445, metadata !1, metadata !10, metadata !"b", i32 1, i64 32, i64 32, i64 64, i32 0, metadata !8} ; [ DW_TAG_member ] [b] [line 1, size 32, align 32, offset 64] [from int]
-!15 = metadata !{metadata !16}
-!16 = metadata !{i32 786689, metadata !4, metadata !"s", metadata !5, i32 16777219, metadata !9, i32 0, i32 0} ; [ DW_TAG_arg_variable ] [s] [line 3]
-!17 = metadata !{i32 2, metadata !"Dwarf Version", i32 4}
-!18 = metadata !{i32 1, metadata !"Debug Info Version", i32 1}
-!19 = metadata !{metadata !"clang version 3.5 "}
-!20 = metadata !{i32 786689, metadata !4, metadata !"s", metadata !5, i32 16777219, metadata !9, i32 0, i32 0, metadata !24} ; [ DW_TAG_arg_variable ] [s] [line 3] [piece, size 8, offset 0]
-!21 = metadata !{i32 3, i32 0, metadata !4, null}
-!22 = metadata !{i32 786689, metadata !4, metadata !"s", metadata !5, i32 16777219, metadata !9, i32 0, i32 0, metadata !27} ; [ DW_TAG_arg_variable ] [s] [line 3] [piece, size 4, offset 8]
-!23 = metadata !{i32 4, i32 0, metadata !4, null}
-!24 = metadata !{i64 3, i64 0, i64 8}
-!25 = metadata !{}
-!27 = metadata !{i64 3, i64 8, i64 4}
+!0 = !MDCompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: true, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!1 = !MDFile(filename: "pieces.c", directory: "")
+!2 = !{}
+!3 = !{!4}
+!4 = !MDSubprogram(name: "foo", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 3, file: !1, scope: !5, type: !6, function: i32 (i64, i32)* @foo, variables: !15)
+!5 = !MDFile(filename: "pieces.c", directory: "")
+!6 = !MDSubroutineType(types: !7)
+!7 = !{!8, !9}
+!8 = !MDBasicType(tag: DW_TAG_base_type, name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!9 = !MDDerivedType(tag: DW_TAG_typedef, name: "S", line: 1, file: !1, baseType: !10)
+!10 = !MDCompositeType(tag: DW_TAG_structure_type, line: 1, size: 128, align: 64, file: !1, elements: !11)
+!11 = !{!12, !14}
+!12 = !MDDerivedType(tag: DW_TAG_member, name: "a", line: 1, size: 64, align: 64, file: !1, scope: !10, baseType: !13)
+!13 = !MDBasicType(tag: DW_TAG_base_type, name: "long int", size: 64, align: 64, encoding: DW_ATE_signed)
+!14 = !MDDerivedType(tag: DW_TAG_member, name: "b", line: 1, size: 32, align: 32, offset: 64, file: !1, scope: !10, baseType: !8)
+!15 = !{!16}
+!16 = !MDLocalVariable(tag: DW_TAG_arg_variable, name: "s", line: 3, arg: 1, scope: !4, file: !5, type: !9)
+!17 = !{i32 2, !"Dwarf Version", i32 4}
+!18 = !{i32 1, !"Debug Info Version", i32 3}
+!19 = !{!"clang version 3.5 "}
+!20 = !MDLocalVariable(tag: DW_TAG_arg_variable, name: "s", line: 3, arg: 1, scope: !4, file: !5, type: !9)
+!21 = !MDLocation(line: 3, scope: !4)
+!22 = !MDLocalVariable(tag: DW_TAG_arg_variable, name: "s", line: 3, arg: 1, scope: !4, file: !5, type: !9)
+!23 = !MDLocation(line: 4, scope: !4)
+!24 = !MDExpression(DW_OP_bit_piece, 0, 64)
+!25 = !{}
+!27 = !MDExpression(DW_OP_bit_piece, 64, 32)

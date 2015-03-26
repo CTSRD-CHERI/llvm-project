@@ -1,4 +1,4 @@
-//===-- ProcessLaunchInfo.h -------------------------------------*- C++ -*-===//
+//===-- FileAction.h --------------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -55,6 +55,9 @@ class FileAction
     }
 
     const char *GetPath() const;
+
+    void
+    Dump (Stream &stream) const;
 
   protected:
     Action m_action;    // The action for this file

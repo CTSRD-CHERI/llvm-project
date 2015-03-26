@@ -53,34 +53,30 @@ void ilist_traits<MachineBasicBlock>::deleteNode(MachineBasicBlock *MBB) {
 }
 
 MachineFunction::MachineFunction(const Function *F, const TargetMachine &TM,
-                                 unsigned FunctionNum, MachineModuleInfo &mmi,
-                                 GCModuleInfo *gmi)
-    : Fn(F), Target(TM), STI(TM.getSubtargetImpl()), Ctx(mmi.getContext()),
-      MMI(mmi), GMI(gmi) {
-  if (TM.getSubtargetImpl()->getRegisterInfo())
+                                 unsigned FunctionNum, MachineModuleInfo &mmi)
+    : Fn(F), Target(TM), STI(TM.getSubtargetImpl(*F)), Ctx(mmi.getContext()),
+      MMI(mmi) {
+  if (STI->getRegisterInfo())
     RegInfo = new (Allocator) MachineRegisterInfo(this);
   else
     RegInfo = nullptr;
 
   MFInfo = nullptr;
-  FrameInfo =
-    new (Allocator) MachineFrameInfo(TM,!F->hasFnAttribute("no-realign-stack"));
+  FrameInfo = new (Allocator)
+      MachineFrameInfo(STI->getFrameLowering()->getStackAlignment(),
+                       STI->getFrameLowering()->isStackRealignable(),
+                       !F->hasFnAttribute("no-realign-stack"));
 
-  if (Fn->getAttributes().hasAttribute(AttributeSet::FunctionIndex,
-                                       Attribute::StackAlignment))
-    FrameInfo->ensureMaxAlignment(Fn->getAttributes().
-                                getStackAlignment(AttributeSet::FunctionIndex));
+  if (Fn->hasFnAttribute(Attribute::StackAlignment))
+    FrameInfo->ensureMaxAlignment(Fn->getFnStackAlignment());
 
   ConstantPool = new (Allocator) MachineConstantPool(TM);
-  Alignment =
-      TM.getSubtargetImpl()->getTargetLowering()->getMinFunctionAlignment();
+  Alignment = STI->getTargetLowering()->getMinFunctionAlignment();
 
   // FIXME: Shouldn't use pref alignment if explicit alignment is set on Fn.
-  if (!Fn->getAttributes().hasAttribute(AttributeSet::FunctionIndex,
-                                        Attribute::OptimizeForSize))
-    Alignment = std::max(
-        Alignment,
-        TM.getSubtargetImpl()->getTargetLowering()->getPrefFunctionAlignment());
+  if (!Fn->hasFnAttribute(Attribute::OptimizeForSize))
+    Alignment = std::max(Alignment,
+                         STI->getTargetLowering()->getPrefFunctionAlignment());
 
   FunctionNumber = FunctionNum;
   JumpTableInfo = nullptr;
@@ -247,12 +243,12 @@ MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
                MachineMemOperand(MachinePointerInfo(MMO->getValue(),
                                                     MMO->getOffset()+Offset),
                                  MMO->getFlags(), Size,
-                                 MMO->getBaseAlignment(), nullptr);
+                                 MMO->getBaseAlignment());
   return new (Allocator)
              MachineMemOperand(MachinePointerInfo(MMO->getPseudoValue(),
                                                   MMO->getOffset()+Offset),
                                MMO->getFlags(), Size,
-                               MMO->getBaseAlignment(), nullptr);
+                               MMO->getBaseAlignment());
 }
 
 MachineInstr::mmo_iterator
@@ -463,7 +459,7 @@ unsigned MachineFunction::addLiveIn(unsigned PReg,
 /// normal 'L' label is returned.
 MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx,
                                         bool isLinkerPrivate) const {
-  const DataLayout *DL = getSubtarget().getDataLayout();
+  const DataLayout *DL = getTarget().getDataLayout();
   assert(JumpTableInfo && "No jump tables");
   assert(JTI < JumpTableInfo->getJumpTables().size() && "Invalid JTI!");
 
@@ -478,7 +474,7 @@ MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx,
 /// getPICBaseSymbol - Return a function-local symbol to represent the PIC
 /// base.
 MCSymbol *MachineFunction::getPICBaseSymbol() const {
-  const DataLayout *DL = getSubtarget().getDataLayout();
+  const DataLayout *DL = getTarget().getDataLayout();
   return Ctx.GetOrCreateSymbol(Twine(DL->getPrivateGlobalPrefix())+
                                Twine(getFunctionNumber())+"$pb");
 }
@@ -487,15 +483,11 @@ MCSymbol *MachineFunction::getPICBaseSymbol() const {
 //  MachineFrameInfo implementation
 //===----------------------------------------------------------------------===//
 
-const TargetFrameLowering *MachineFrameInfo::getFrameLowering() const {
-  return TM.getSubtargetImpl()->getFrameLowering();
-}
-
 /// ensureMaxAlignment - Make sure the function is at least Align bytes
 /// aligned.
 void MachineFrameInfo::ensureMaxAlignment(unsigned Align) {
-  if (!getFrameLowering()->isStackRealignable() || !RealignOption)
-    assert(Align <= getFrameLowering()->getStackAlignment() &&
+  if (!StackRealignable || !RealignOption)
+    assert(Align <= StackAlignment &&
            "For targets without stack realignment, Align is out of limit!");
   if (MaxAlignment < Align) MaxAlignment = Align;
 }
@@ -517,10 +509,8 @@ static inline unsigned clampStackAlignment(bool ShouldClamp, unsigned Align,
 int MachineFrameInfo::CreateStackObject(uint64_t Size, unsigned Alignment,
                       bool isSS, const AllocaInst *Alloca) {
   assert(Size != 0 && "Cannot allocate zero size stack objects!");
-  Alignment =
-    clampStackAlignment(!getFrameLowering()->isStackRealignable() ||
-                          !RealignOption,
-                        Alignment, getFrameLowering()->getStackAlignment());
+  Alignment = clampStackAlignment(!StackRealignable || !RealignOption,
+                                  Alignment, StackAlignment);
   Objects.push_back(StackObject(Size, Alignment, 0, false, isSS, Alloca,
                                 !isSS));
   int Index = (int)Objects.size() - NumFixedObjects - 1;
@@ -535,9 +525,8 @@ int MachineFrameInfo::CreateStackObject(uint64_t Size, unsigned Alignment,
 ///
 int MachineFrameInfo::CreateSpillStackObject(uint64_t Size,
                                              unsigned Alignment) {
-  Alignment = clampStackAlignment(
-      !getFrameLowering()->isStackRealignable() || !RealignOption, Alignment,
-      getFrameLowering()->getStackAlignment());
+  Alignment = clampStackAlignment(!StackRealignable || !RealignOption,
+                                  Alignment, StackAlignment);
   CreateStackObject(Size, Alignment, true);
   int Index = (int)Objects.size() - NumFixedObjects - 1;
   ensureMaxAlignment(Alignment);
@@ -552,9 +541,8 @@ int MachineFrameInfo::CreateSpillStackObject(uint64_t Size,
 int MachineFrameInfo::CreateVariableSizedObject(unsigned Alignment,
                                                 const AllocaInst *Alloca) {
   HasVarSizedObjects = true;
-  Alignment = clampStackAlignment(
-      !getFrameLowering()->isStackRealignable() || !RealignOption, Alignment,
-      getFrameLowering()->getStackAlignment());
+  Alignment = clampStackAlignment(!StackRealignable || !RealignOption,
+                                  Alignment, StackAlignment);
   Objects.push_back(StackObject(0, Alignment, 0, false, false, Alloca, true));
   ensureMaxAlignment(Alignment);
   return (int)Objects.size()-NumFixedObjects-1;
@@ -572,11 +560,9 @@ int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
   // the incoming frame position.  If the frame object is at offset 32 and
   // the stack is guaranteed to be 16-byte aligned, then we know that the
   // object is 16-byte aligned.
-  unsigned StackAlign = getFrameLowering()->getStackAlignment();
-  unsigned Align = MinAlign(SPOffset, StackAlign);
-  Align = clampStackAlignment(!getFrameLowering()->isStackRealignable() ||
-                                  !RealignOption,
-                              Align, getFrameLowering()->getStackAlignment());
+  unsigned Align = MinAlign(SPOffset, StackAlignment);
+  Align = clampStackAlignment(!StackRealignable || !RealignOption, Align,
+                              StackAlignment);
   Objects.insert(Objects.begin(), StackObject(Size, Align, SPOffset, Immutable,
                                               /*isSS*/   false,
                                               /*Alloca*/ nullptr, isAliased));
@@ -587,11 +573,9 @@ int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
 /// on the stack.  Returns an index with a negative value.
 int MachineFrameInfo::CreateFixedSpillStackObject(uint64_t Size,
                                                   int64_t SPOffset) {
-  unsigned StackAlign = getFrameLowering()->getStackAlignment();
-  unsigned Align = MinAlign(SPOffset, StackAlign);
-  Align = clampStackAlignment(!getFrameLowering()->isStackRealignable() ||
-                                  !RealignOption,
-                              Align, getFrameLowering()->getStackAlignment());
+  unsigned Align = MinAlign(SPOffset, StackAlignment);
+  Align = clampStackAlignment(!StackRealignable || !RealignOption, Align,
+                              StackAlignment);
   Objects.insert(Objects.begin(), StackObject(Size, Align, SPOffset,
                                               /*Immutable*/ true,
                                               /*isSS*/ true,
@@ -600,13 +584,20 @@ int MachineFrameInfo::CreateFixedSpillStackObject(uint64_t Size,
   return -++NumFixedObjects;
 }
 
+int MachineFrameInfo::CreateFrameAllocation(uint64_t Size) {
+  // Force the use of a frame pointer. The intention is that this intrinsic be
+  // used in conjunction with unwind mechanisms that leak the frame pointer.
+  setFrameAddressIsTaken(true);
+  Size = RoundUpToAlignment(Size, StackAlignment);
+  return CreateStackObject(Size, StackAlignment, false);
+}
+
 BitVector
 MachineFrameInfo::getPristineRegs(const MachineBasicBlock *MBB) const {
   assert(MBB && "MBB must be valid");
   const MachineFunction *MF = MBB->getParent();
   assert(MF && "MBB must be part of a MachineFunction");
-  const TargetMachine &TM = MF->getTarget();
-  const TargetRegisterInfo *TRI = TM.getSubtargetImpl()->getRegisterInfo();
+  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
   BitVector BV(TRI->getNumRegs());
 
   // Before CSI is calculated, no registers are considered pristine. They can be
@@ -826,7 +817,7 @@ void MachineJumpTableInfo::dump() const { print(dbgs()); }
 void MachineConstantPoolValue::anchor() { }
 
 const DataLayout *MachineConstantPool::getDataLayout() const {
-  return TM.getSubtargetImpl()->getDataLayout();
+  return TM.getDataLayout();
 }
 
 Type *MachineConstantPoolEntry::getType() const {
@@ -848,13 +839,13 @@ MachineConstantPoolEntry::getSectionKind(const DataLayout *DL) const {
   switch (getRelocationInfo()) {
   default:
     llvm_unreachable("Unknown section kind");
-  case 2:
+  case Constant::GlobalRelocations:
     Kind = SectionKind::getReadOnlyWithRel();
     break;
-  case 1:
+  case Constant::LocalRelocation:
     Kind = SectionKind::getReadOnlyWithRelLocal();
     break;
-  case 0:
+  case Constant::NoRelocation:
     switch (DL->getTypeAllocSize(getType())) {
     case 4:
       Kind = SectionKind::getMergeableConst4();
@@ -866,7 +857,7 @@ MachineConstantPoolEntry::getSectionKind(const DataLayout *DL) const {
       Kind = SectionKind::getMergeableConst16();
       break;
     default:
-      Kind = SectionKind::getMergeableConst();
+      Kind = SectionKind::getReadOnly();
       break;
     }
   }
@@ -912,16 +903,16 @@ static bool CanShareConstantPoolEntry(const Constant *A, const Constant *B,
   // DataLayout.
   if (isa<PointerType>(A->getType()))
     A = ConstantFoldInstOperands(Instruction::PtrToInt, IntTy,
-                                 const_cast<Constant*>(A), TD);
+                                 const_cast<Constant *>(A), *TD);
   else if (A->getType() != IntTy)
     A = ConstantFoldInstOperands(Instruction::BitCast, IntTy,
-                                 const_cast<Constant*>(A), TD);
+                                 const_cast<Constant *>(A), *TD);
   if (isa<PointerType>(B->getType()))
     B = ConstantFoldInstOperands(Instruction::PtrToInt, IntTy,
-                                 const_cast<Constant*>(B), TD);
+                                 const_cast<Constant *>(B), *TD);
   else if (B->getType() != IntTy)
     B = ConstantFoldInstOperands(Instruction::BitCast, IntTy,
-                                 const_cast<Constant*>(B), TD);
+                                 const_cast<Constant *>(B), *TD);
 
   return A == B;
 }

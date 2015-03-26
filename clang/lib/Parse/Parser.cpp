@@ -634,8 +634,7 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
     HandlePragmaOpenCLExtension();
     return DeclGroupPtrTy();
   case tok::annot_pragma_openmp:
-    ParseOpenMPDeclarativeDirective();
-    return DeclGroupPtrTy();
+    return ParseOpenMPDeclarativeDirective();
   case tok::annot_pragma_ms_pointers_to_members:
     HandlePragmaMSPointersToMembers();
     return DeclGroupPtrTy();
@@ -891,7 +890,7 @@ Parser::ParseDeclOrFunctionDefInternal(ParsedAttributesWithRange &attrs,
     return Actions.ConvertDeclToDeclGroup(TheDecl);
   }
 
-  return ParseDeclGroup(DS, Declarator::FileContext, true);
+  return ParseDeclGroup(DS, Declarator::FileContext);
 }
 
 Parser::DeclGroupPtrTy
@@ -928,7 +927,7 @@ Parser::ParseDeclarationOrFunctionDefinition(ParsedAttributesWithRange &attrs,
 Decl *Parser::ParseFunctionDefinition(ParsingDeclarator &D,
                                       const ParsedTemplateInfo &TemplateInfo,
                                       LateParsedAttrList *LateParsedAttrs) {
-  // Poison the SEH identifiers so they are flagged as illegal in function bodies
+  // Poison SEH identifiers so they are flagged as illegal in function bodies.
   PoisonSEHIdentifiersRAIIObject PoisonSEHIdentifiers(*this, true);
   const DeclaratorChunk::FunctionTypeInfo &FTI = D.getFunctionTypeInfo();
 
@@ -1049,7 +1048,6 @@ Decl *Parser::ParseFunctionDefinition(ParsingDeclarator &D,
 
   if (TryConsumeToken(tok::equal)) {
     assert(getLangOpts().CPlusPlus && "Only C++ function definitions have '='");
-    Actions.ActOnFinishFunctionBody(Res, nullptr, false);
 
     bool Delete = false;
     SourceLocation KWLoc;
@@ -1077,6 +1075,8 @@ Decl *Parser::ParseFunctionDefinition(ParsingDeclarator &D,
       SkipUntil(tok::semi);
     }
 
+    Stmt *GeneratedBody = Res ? Res->getBody() : nullptr;
+    Actions.ActOnFinishFunctionBody(Res, GeneratedBody, false);
     return Res;
   }
 
@@ -1225,26 +1225,23 @@ void Parser::ParseKNRParamDeclarations(Declarator &D) {
 ///         string-literal
 ///
 ExprResult Parser::ParseAsmStringLiteral() {
-  switch (Tok.getKind()) {
-    case tok::string_literal:
-      break;
-    case tok::utf8_string_literal:
-    case tok::utf16_string_literal:
-    case tok::utf32_string_literal:
-    case tok::wide_string_literal: {
-      SourceLocation L = Tok.getLocation();
-      Diag(Tok, diag::err_asm_operand_wide_string_literal)
-        << (Tok.getKind() == tok::wide_string_literal)
-        << SourceRange(L, L);
-      return ExprError();
-    }
-    default:
-      Diag(Tok, diag::err_expected_string_literal)
-        << /*Source='in...'*/0 << "'asm'";
-      return ExprError();
+  if (!isTokenStringLiteral()) {
+    Diag(Tok, diag::err_expected_string_literal)
+      << /*Source='in...'*/0 << "'asm'";
+    return ExprError();
   }
 
-  return ParseStringLiteralExpression();
+  ExprResult AsmString(ParseStringLiteralExpression());
+  if (!AsmString.isInvalid()) {
+    const auto *SL = cast<StringLiteral>(AsmString.get());
+    if (!SL->isAscii()) {
+      Diag(Tok, diag::err_asm_operand_wide_string_literal)
+        << SL->isWide()
+        << SL->getSourceRange();
+      return ExprError();
+    }
+  }
+  return AsmString;
 }
 
 /// ParseSimpleAsm
@@ -1729,7 +1726,8 @@ SourceLocation Parser::handleUnexpectedCodeCompletionToken() {
 
   for (Scope *S = getCurScope(); S; S = S->getParent()) {
     if (S->getFlags() & Scope::FnScope) {
-      Actions.CodeCompleteOrdinaryName(getCurScope(), Sema::PCC_RecoveryInFunction);
+      Actions.CodeCompleteOrdinaryName(getCurScope(),
+                                       Sema::PCC_RecoveryInFunction);
       cutOffParsing();
       return PrevTokLocation;
     }
@@ -1767,7 +1765,7 @@ void Parser::CodeCompletePreprocessorExpression() {
 void Parser::CodeCompleteMacroArgument(IdentifierInfo *Macro,
                                        MacroInfo *MacroInfo,
                                        unsigned ArgumentIndex) {
-  Actions.CodeCompletePreprocessorMacroArgument(getCurScope(), Macro, MacroInfo, 
+  Actions.CodeCompletePreprocessorMacroArgument(getCurScope(), Macro, MacroInfo,
                                                 ArgumentIndex);
 }
 
@@ -1789,8 +1787,9 @@ bool Parser::ParseMicrosoftIfExistsCondition(IfExistsCondition& Result) {
   }
   
   // Parse nested-name-specifier.
-  ParseOptionalCXXScopeSpecifier(Result.SS, ParsedType(), 
-                                 /*EnteringContext=*/false);
+  if (getLangOpts().CPlusPlus)
+    ParseOptionalCXXScopeSpecifier(Result.SS, ParsedType(),
+                                   /*EnteringContext=*/false);
 
   // Check nested-name specifier.
   if (Result.SS.isInvalid()) {
@@ -1811,7 +1810,7 @@ bool Parser::ParseMicrosoftIfExistsCondition(IfExistsCondition& Result) {
   
   // Check if the symbol exists.
   switch (Actions.CheckMicrosoftIfExistsSymbol(getCurScope(), Result.KeywordLoc,
-                                               Result.IsIfExists, Result.SS, 
+                                               Result.IsIfExists, Result.SS,
                                                Result.Name)) {
   case Sema::IER_Exists:
     Result.Behavior = Result.IsIfExists ? IEB_Parse : IEB_Skip;

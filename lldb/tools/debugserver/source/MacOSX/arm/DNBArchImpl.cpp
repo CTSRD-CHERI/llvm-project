@@ -63,8 +63,9 @@
 // I'm seeing this, instead.
 #define WATCHPOINT_OCCURRED     ((uint32_t)(10u))
 
-static const uint8_t g_arm_breakpoint_opcode[] = { 0xFE, 0xDE, 0xFF, 0xE7 };
-static const uint8_t g_thumb_breakpoint_opcode[] = { 0xFE, 0xDE };
+// 0xE120BE70
+static const uint8_t g_arm_breakpoint_opcode[] = { 0x70, 0xBE, 0x20, 0xE1 };
+static const uint8_t g_thumb_breakpoint_opcode[] = { 0x70, 0xBE };
 
 // A watchpoint may need to be implemented using two watchpoint registers.
 // e.g. watching an 8-byte region when the device can only watch 4-bytes.
@@ -105,6 +106,15 @@ static uint32_t LoHi[16] = { 0 };
 #define MNEMONIC_STRING_SIZE 32
 #define OPERAND_STRING_SIZE 128
 
+// Returns true if the first 16 bit opcode of a thumb instruction indicates
+// the instruction will be a 32 bit thumb opcode
+static bool
+IsThumb32Opcode (uint16_t opcode)
+{
+    if (((opcode & 0xE000) == 0xE000) && (opcode & 0x1800))
+        return true;
+    return false;
+}
 
 void
 DNBArchMachARM::Initialize()
@@ -224,9 +234,63 @@ DNBArchMachARM::GetVFPState(bool force)
     if (!force && m_state.GetError(set, Read) == KERN_SUCCESS)
         return KERN_SUCCESS;
 
+    kern_return_t kret;
+
+#if defined (__arm64__) || defined (__aarch64__)
+    // Read the registers from our thread
+    mach_msg_type_number_t count = ARM_NEON_STATE_COUNT;
+    kret = ::thread_get_state(m_thread->MachPortNumber(), ARM_NEON_STATE, (thread_state_t)&m_state.context.vfp, &count);
+    if (DNBLogEnabledForAny (LOG_THREAD))
+    {
+        DNBLogThreaded("thread_get_state(0x%4.4x, %u, &vfp, %u) => 0x%8.8x (count = %u) regs"
+                       "\n   q0  = 0x%16.16llx%16.16llx"
+                       "\n   q1  = 0x%16.16llx%16.16llx"
+                       "\n   q2  = 0x%16.16llx%16.16llx"
+                       "\n   q3  = 0x%16.16llx%16.16llx"
+                       "\n   q4  = 0x%16.16llx%16.16llx"
+                       "\n   q5  = 0x%16.16llx%16.16llx"
+                       "\n   q6  = 0x%16.16llx%16.16llx"
+                       "\n   q7  = 0x%16.16llx%16.16llx"
+                       "\n   q8  = 0x%16.16llx%16.16llx"
+                       "\n   q9  = 0x%16.16llx%16.16llx"
+                       "\n   q10 = 0x%16.16llx%16.16llx"
+                       "\n   q11 = 0x%16.16llx%16.16llx"
+                       "\n   q12 = 0x%16.16llx%16.16llx"
+                       "\n   q13 = 0x%16.16llx%16.16llx"
+                       "\n   q14 = 0x%16.16llx%16.16llx"
+                       "\n   q15 = 0x%16.16llx%16.16llx"
+                       "\n  fpsr = 0x%8.8x"
+                       "\n  fpcr = 0x%8.8x\n\n",
+                       m_thread->MachPortNumber(),
+                       ARM_NEON_STATE,
+                       ARM_NEON_STATE_COUNT,
+                       kret,
+                       count,
+                       ((uint64_t *)&m_state.context.vfp.__v[0])[0] , ((uint64_t *)&m_state.context.vfp.__v[0])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[1])[0] , ((uint64_t *)&m_state.context.vfp.__v[1])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[2])[0] , ((uint64_t *)&m_state.context.vfp.__v[2])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[3])[0] , ((uint64_t *)&m_state.context.vfp.__v[3])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[4])[0] , ((uint64_t *)&m_state.context.vfp.__v[4])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[5])[0] , ((uint64_t *)&m_state.context.vfp.__v[5])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[6])[0] , ((uint64_t *)&m_state.context.vfp.__v[6])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[7])[0] , ((uint64_t *)&m_state.context.vfp.__v[7])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[8])[0] , ((uint64_t *)&m_state.context.vfp.__v[8])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[9])[0] , ((uint64_t *)&m_state.context.vfp.__v[9])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[10])[0], ((uint64_t *)&m_state.context.vfp.__v[10])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[11])[0], ((uint64_t *)&m_state.context.vfp.__v[11])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[12])[0], ((uint64_t *)&m_state.context.vfp.__v[12])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[13])[0], ((uint64_t *)&m_state.context.vfp.__v[13])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[14])[0], ((uint64_t *)&m_state.context.vfp.__v[14])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[15])[0], ((uint64_t *)&m_state.context.vfp.__v[15])[1],
+                       m_state.context.vfp.__fpsr,
+                       m_state.context.vfp.__fpcr);
+
+    }
+#else
     // Read the registers from our thread
     mach_msg_type_number_t count = ARM_VFP_STATE_COUNT;
-    kern_return_t kret = ::thread_get_state(m_thread->MachPortNumber(), ARM_VFP_STATE, (thread_state_t)&m_state.context.vfp, &count);
+    kret = ::thread_get_state(m_thread->MachPortNumber(), ARM_VFP_STATE, (thread_state_t)&m_state.context.vfp, &count);
+
     if (DNBLogEnabledForAny (LOG_THREAD))
     {
         uint32_t *r = &m_state.context.vfp.__r[0];
@@ -245,6 +309,8 @@ DNBArchMachARM::GetVFPState(bool force)
         DNBLogThreaded("  s48=%8.8x s49=%8.8x s50=%8.8x s51=%8.8x s52=%8.8x s53=%8.8x s54=%8.8x s55=%8.8x",r[48],r[49],r[50],r[51],r[52],r[53],r[54],r[55]);
         DNBLogThreaded("  s56=%8.8x s57=%8.8x s58=%8.8x s59=%8.8x s60=%8.8x s61=%8.8x s62=%8.8x s63=%8.8x fpscr=%8.8x",r[56],r[57],r[58],r[59],r[60],r[61],r[62],r[63],r[64]);
     }
+
+#endif
     m_state.SetError(set, Read, kret);
     return kret;
 }
@@ -312,7 +378,84 @@ kern_return_t
 DNBArchMachARM::SetVFPState()
 {
     int set = e_regSetVFP;
-    kern_return_t kret = ::thread_set_state (m_thread->MachPortNumber(), ARM_VFP_STATE, (thread_state_t)&m_state.context.vfp, ARM_VFP_STATE_COUNT);
+    kern_return_t kret;
+    mach_msg_type_number_t count;
+
+#if defined (__arm64__) || defined (__aarch64__)
+    count = ARM_NEON_STATE_COUNT;
+    kret = ::thread_set_state (m_thread->MachPortNumber(), ARM_NEON_STATE, (thread_state_t)&m_state.context.vfp, count);
+#else
+    count = ARM_VFP_STATE_COUNT;
+    kret = ::thread_set_state (m_thread->MachPortNumber(), ARM_VFP_STATE, (thread_state_t)&m_state.context.vfp, count);
+#endif
+
+#if defined (__arm64__) || defined (__aarch64__)
+    if (DNBLogEnabledForAny (LOG_THREAD))
+    {
+        DNBLogThreaded("thread_set_state(0x%4.4x, %u, &vfp, %u) => 0x%8.8x (count = %u) regs"
+                       "\n   q0  = 0x%16.16llx%16.16llx"
+                       "\n   q1  = 0x%16.16llx%16.16llx"
+                       "\n   q2  = 0x%16.16llx%16.16llx"
+                       "\n   q3  = 0x%16.16llx%16.16llx"
+                       "\n   q4  = 0x%16.16llx%16.16llx"
+                       "\n   q5  = 0x%16.16llx%16.16llx"
+                       "\n   q6  = 0x%16.16llx%16.16llx"
+                       "\n   q7  = 0x%16.16llx%16.16llx"
+                       "\n   q8  = 0x%16.16llx%16.16llx"
+                       "\n   q9  = 0x%16.16llx%16.16llx"
+                       "\n   q10 = 0x%16.16llx%16.16llx"
+                       "\n   q11 = 0x%16.16llx%16.16llx"
+                       "\n   q12 = 0x%16.16llx%16.16llx"
+                       "\n   q13 = 0x%16.16llx%16.16llx"
+                       "\n   q14 = 0x%16.16llx%16.16llx"
+                       "\n   q15 = 0x%16.16llx%16.16llx"
+                       "\n  fpsr = 0x%8.8x"
+                       "\n  fpcr = 0x%8.8x\n\n",
+                       m_thread->MachPortNumber(),
+                       ARM_NEON_STATE,
+                       ARM_NEON_STATE_COUNT,
+                       kret,
+                       count,
+                       ((uint64_t *)&m_state.context.vfp.__v[0])[0] , ((uint64_t *)&m_state.context.vfp.__v[0])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[1])[0] , ((uint64_t *)&m_state.context.vfp.__v[1])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[2])[0] , ((uint64_t *)&m_state.context.vfp.__v[2])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[3])[0] , ((uint64_t *)&m_state.context.vfp.__v[3])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[4])[0] , ((uint64_t *)&m_state.context.vfp.__v[4])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[5])[0] , ((uint64_t *)&m_state.context.vfp.__v[5])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[6])[0] , ((uint64_t *)&m_state.context.vfp.__v[6])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[7])[0] , ((uint64_t *)&m_state.context.vfp.__v[7])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[8])[0] , ((uint64_t *)&m_state.context.vfp.__v[8])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[9])[0] , ((uint64_t *)&m_state.context.vfp.__v[9])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[10])[0], ((uint64_t *)&m_state.context.vfp.__v[10])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[11])[0], ((uint64_t *)&m_state.context.vfp.__v[11])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[12])[0], ((uint64_t *)&m_state.context.vfp.__v[12])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[13])[0], ((uint64_t *)&m_state.context.vfp.__v[13])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[14])[0], ((uint64_t *)&m_state.context.vfp.__v[14])[1],
+                       ((uint64_t *)&m_state.context.vfp.__v[15])[0], ((uint64_t *)&m_state.context.vfp.__v[15])[1],
+                       m_state.context.vfp.__fpsr,
+                       m_state.context.vfp.__fpcr);
+    }
+#else
+    if (DNBLogEnabledForAny (LOG_THREAD))
+    {
+        uint32_t *r = &m_state.context.vfp.__r[0];
+        DNBLogThreaded ("thread_get_state(0x%4.4x, %u, &gpr, %u) => 0x%8.8x (count => %u)",
+                        m_thread->MachPortNumber(), 
+                        ARM_THREAD_STATE, 
+                        ARM_THREAD_STATE_COUNT, 
+                        kret,
+                        count);
+        DNBLogThreaded("   s0=%8.8x  s1=%8.8x  s2=%8.8x  s3=%8.8x  s4=%8.8x  s5=%8.8x  s6=%8.8x  s7=%8.8x",r[ 0],r[ 1],r[ 2],r[ 3],r[ 4],r[ 5],r[ 6],r[ 7]);
+        DNBLogThreaded("   s8=%8.8x  s9=%8.8x s10=%8.8x s11=%8.8x s12=%8.8x s13=%8.8x s14=%8.8x s15=%8.8x",r[ 8],r[ 9],r[10],r[11],r[12],r[13],r[14],r[15]);
+        DNBLogThreaded("  s16=%8.8x s17=%8.8x s18=%8.8x s19=%8.8x s20=%8.8x s21=%8.8x s22=%8.8x s23=%8.8x",r[16],r[17],r[18],r[19],r[20],r[21],r[22],r[23]);
+        DNBLogThreaded("  s24=%8.8x s25=%8.8x s26=%8.8x s27=%8.8x s28=%8.8x s29=%8.8x s30=%8.8x s31=%8.8x",r[24],r[25],r[26],r[27],r[28],r[29],r[30],r[31]);
+        DNBLogThreaded("  s32=%8.8x s33=%8.8x s34=%8.8x s35=%8.8x s36=%8.8x s37=%8.8x s38=%8.8x s39=%8.8x",r[32],r[33],r[34],r[35],r[36],r[37],r[38],r[39]);
+        DNBLogThreaded("  s40=%8.8x s41=%8.8x s42=%8.8x s43=%8.8x s44=%8.8x s45=%8.8x s46=%8.8x s47=%8.8x",r[40],r[41],r[42],r[43],r[44],r[45],r[46],r[47]);
+        DNBLogThreaded("  s48=%8.8x s49=%8.8x s50=%8.8x s51=%8.8x s52=%8.8x s53=%8.8x s54=%8.8x s55=%8.8x",r[48],r[49],r[50],r[51],r[52],r[53],r[54],r[55]);
+        DNBLogThreaded("  s56=%8.8x s57=%8.8x s58=%8.8x s59=%8.8x s60=%8.8x s61=%8.8x s62=%8.8x s63=%8.8x fpscr=%8.8x",r[56],r[57],r[58],r[59],r[60],r[61],r[62],r[63],r[64]);
+    }
+#endif
+
     m_state.SetError(set, Write, kret);         // Set the current write error for this register set
     m_state.InvalidateRegisterSetState(set);    // Invalidate the current register state in case registers are read back differently
     return kret;                                // Return the error code
@@ -584,7 +727,7 @@ DNBArchMachARM::EnableHardwareSingleStep (bool enable)
             uint16_t opcode;
             if (sizeof(opcode) == m_thread->Process()->Task().ReadMemory(m_state.context.gpr.__pc, sizeof(opcode), &opcode))
             {
-                if (((opcode & 0xE000) == 0xE000) && opcode & 0x1800)
+                if (IsThumb32Opcode(opcode))
                 {
                     // 32 bit thumb opcode...
                     if (m_state.context.gpr.__pc & 2)
@@ -1356,7 +1499,12 @@ enum
     vfp_q13,
     vfp_q14,
     vfp_q15,
+#if defined (__arm64__) || defined (__aarch64__)
+    vfp_fpsr,
+    vfp_fpcr,
+#else
     vfp_fpscr
+#endif
 };
 
 enum
@@ -1541,7 +1689,12 @@ DNBArchMachARM::g_vfp_registers[] =
     { DEFINE_VFP_Q_IDX (14),  NULL,           g_invalidate_q14 },
     { DEFINE_VFP_Q_IDX (15),  NULL,           g_invalidate_q15 },
 
+#if defined (__arm64__) || defined (__aarch64__)
+    { e_regSetVFP, vfp_fpsr, "fpsr", NULL, Uint, Hex, 4, VFP_OFFSET_NAME(fpsr), INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, NULL, NULL },
+    { e_regSetVFP, vfp_fpcr, "fpcr", NULL, Uint, Hex, 4, VFP_OFFSET_NAME(fpcr), INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, NULL, NULL }
+#else
     { e_regSetVFP, vfp_fpscr, "fpscr", NULL, Uint, Hex, 4, VFP_OFFSET_NAME(fpscr), INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, INVALID_NUB_REGNUM, NULL, NULL }
+#endif
 };
 
 // Exception registers
@@ -1585,7 +1738,7 @@ DNBArchMachARM::GetRegisterSetInfo(nub_size_t *num_reg_sets)
 }
 
 bool
-DNBArchMachARM::GetRegisterValue(int set, int reg, DNBRegisterValue *value)
+DNBArchMachARM::GetRegisterValue(uint32_t set, uint32_t reg, DNBRegisterValue *value)
 {
     if (set == REGISTER_SET_GENERIC)
     {
@@ -1644,28 +1797,55 @@ DNBArchMachARM::GetRegisterValue(int set, int reg, DNBRegisterValue *value)
             // in the enumerated values for case statement below.
             if (reg >= vfp_s0 && reg <= vfp_s31)
             {
+#if defined (__arm64__) || defined (__aarch64__)
+                uint32_t *s_reg = ((uint32_t *) &m_state.context.vfp.__v[0]) + (reg - vfp_s0);
+                memcpy (&value->value.v_uint8, s_reg, 4);
+#else
                 value->value.uint32 = m_state.context.vfp.__r[reg];
+#endif
                 return true;
             }
             else if (reg >= vfp_d0 && reg <= vfp_d31)
             {
+#if defined (__arm64__) || defined (__aarch64__)
+                uint64_t *d_reg = ((uint64_t *) &m_state.context.vfp.__v[0]) + (reg - vfp_d0);
+                memcpy (&value->value.v_uint8, d_reg, 8);
+#else
                 uint32_t d_reg_idx = reg - vfp_d0;
                 uint32_t s_reg_idx = d_reg_idx * 2;
                 value->value.v_sint32[0] = m_state.context.vfp.__r[s_reg_idx + 0];
                 value->value.v_sint32[1] = m_state.context.vfp.__r[s_reg_idx + 1];
+#endif
                 return true;
             }
             else if (reg >= vfp_q0 && reg <= vfp_q15)
             {
+#if defined (__arm64__) || defined (__aarch64__)
+                memcpy (&value->value.v_uint8, (uint8_t *) &m_state.context.vfp.__v[reg - vfp_q0], 16);
+#else
                 uint32_t s_reg_idx = (reg - vfp_q0) * 4;
                 memcpy (&value->value.v_uint8, (uint8_t *) &m_state.context.vfp.__r[s_reg_idx], 16);
+#endif
                 return true;
             }
+#if defined (__arm64__) || defined (__aarch64__)
+            else if (reg == vfp_fpsr)
+            {
+                value->value.uint32 = m_state.context.vfp.__fpsr;
+                return true;
+            }
+            else if (reg == vfp_fpcr)
+            {
+                value->value.uint32 = m_state.context.vfp.__fpcr;
+                return true;
+            }
+#else
             else if (reg == vfp_fpscr)
             {
                 value->value.uint32 = m_state.context.vfp.__fpscr;
                 return true;
             }
+#endif
             break;
 
         case e_regSetEXC:
@@ -1681,7 +1861,7 @@ DNBArchMachARM::GetRegisterValue(int set, int reg, DNBRegisterValue *value)
 }
 
 bool
-DNBArchMachARM::SetRegisterValue(int set, int reg, const DNBRegisterValue *value)
+DNBArchMachARM::SetRegisterValue(uint32_t set, uint32_t reg, const DNBRegisterValue *value)
 {
     if (set == REGISTER_SET_GENERIC)
     {
@@ -1740,28 +1920,55 @@ DNBArchMachARM::SetRegisterValue(int set, int reg, const DNBRegisterValue *value
             // in the enumerated values for case statement below.
             if (reg >= vfp_s0 && reg <= vfp_s31)
             {
+#if defined (__arm64__) || defined (__aarch64__)
+                uint32_t *s_reg = ((uint32_t *) &m_state.context.vfp.__v[0]) + (reg - vfp_s0);
+                memcpy (s_reg, &value->value.v_uint8, 4);
+#else
                 m_state.context.vfp.__r[reg] = value->value.uint32;
+#endif
                 success = true;
             }
             else if (reg >= vfp_d0 && reg <= vfp_d31)
             {
+#if defined (__arm64__) || defined (__aarch64__)
+                uint64_t *d_reg = ((uint64_t *) &m_state.context.vfp.__v[0]) + (reg - vfp_d0);
+                memcpy (d_reg, &value->value.v_uint8, 8);
+#else
                 uint32_t d_reg_idx = reg - vfp_d0;
                 uint32_t s_reg_idx = d_reg_idx * 2;
                 m_state.context.vfp.__r[s_reg_idx + 0] = value->value.v_sint32[0];
                 m_state.context.vfp.__r[s_reg_idx + 1] = value->value.v_sint32[1];
+#endif
                 success = true;
             }
             else if (reg >= vfp_q0 && reg <= vfp_q15)
             {
+#if defined (__arm64__) || defined (__aarch64__)
+                memcpy ((uint8_t *) &m_state.context.vfp.__v[reg - vfp_q0], &value->value.v_uint8, 16);
+#else
                 uint32_t s_reg_idx = (reg - vfp_q0) * 4;
                 memcpy ((uint8_t *) &m_state.context.vfp.__r[s_reg_idx], &value->value.v_uint8, 16);
-                return true;
+#endif
+                success = true;
             }
+#if defined (__arm64__) || defined (__aarch64__)
+            else if (reg == vfp_fpsr)
+            {
+                m_state.context.vfp.__fpsr = value->value.uint32;
+                success = true;
+            }
+            else if (reg == vfp_fpcr)
+            {
+                m_state.context.vfp.__fpcr = value->value.uint32;
+                success = true;
+            }
+#else
             else if (reg == vfp_fpscr)
             {
                 m_state.context.vfp.__fpscr = value->value.uint32;
                 success = true;
             }
+#endif
             break;
 
         case e_regSetEXC:

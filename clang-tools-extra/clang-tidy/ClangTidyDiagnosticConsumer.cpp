@@ -160,8 +160,10 @@ bool GlobList::contains(StringRef S, bool Contains) {
   return Contains;
 }
 
-ClangTidyContext::ClangTidyContext(ClangTidyOptionsProvider *OptionsProvider)
-    : DiagEngine(nullptr), OptionsProvider(OptionsProvider) {
+ClangTidyContext::ClangTidyContext(
+    std::unique_ptr<ClangTidyOptionsProvider> OptionsProvider)
+    : DiagEngine(nullptr), OptionsProvider(std::move(OptionsProvider)),
+      Profile(nullptr) {
   // Before the first translation unit we can get errors related to command-line
   // parsing, use empty string for the file name in this case.
   setCurrentFile("");
@@ -202,7 +204,10 @@ void ClangTidyContext::setSourceManager(SourceManager *SourceMgr) {
 
 void ClangTidyContext::setCurrentFile(StringRef File) {
   CurrentFile = File;
-  CheckFilter.reset(new GlobList(getOptions().Checks));
+  // Safeguard against options with unset values.
+  CurrentOptions = ClangTidyOptions::getDefaults().mergeWith(
+      OptionsProvider->getOptions(CurrentFile));
+  CheckFilter.reset(new GlobList(*getOptions().Checks));
 }
 
 void ClangTidyContext::setASTContext(ASTContext *Context) {
@@ -214,7 +219,11 @@ const ClangTidyGlobalOptions &ClangTidyContext::getGlobalOptions() const {
 }
 
 const ClangTidyOptions &ClangTidyContext::getOptions() const {
-  return OptionsProvider->getOptions(CurrentFile);
+  return CurrentOptions;
+}
+
+void ClangTidyContext::setCheckProfileData(ProfileData *P) {
+  Profile = P;
 }
 
 GlobList &ClangTidyContext::getChecksFilter() {
@@ -268,6 +277,9 @@ void ClangTidyDiagnosticConsumer::finalizeLastError() {
 
 void ClangTidyDiagnosticConsumer::HandleDiagnostic(
     DiagnosticsEngine::Level DiagLevel, const Diagnostic &Info) {
+  // Count warnings/errors.
+  DiagnosticConsumer::HandleDiagnostic(DiagLevel, Info);
+
   if (DiagLevel == DiagnosticsEngine::Note) {
     assert(!Errors.empty() &&
            "A diagnostic note can only be appended to a message.");
@@ -328,7 +340,7 @@ void ClangTidyDiagnosticConsumer::BeginSourceFile(const LangOptions &LangOpts,
                                                   const Preprocessor *PP) {
   // Before the first translation unit we don't need HeaderFilter, as we
   // shouldn't get valid source locations in diagnostics.
-  HeaderFilter.reset(new llvm::Regex(Context.getOptions().HeaderFilterRegex));
+  HeaderFilter.reset(new llvm::Regex(*Context.getOptions().HeaderFilterRegex));
 }
 
 bool ClangTidyDiagnosticConsumer::passesLineFilter(StringRef FileName,
@@ -358,7 +370,8 @@ void ClangTidyDiagnosticConsumer::checkFilters(SourceLocation Location) {
   }
 
   const SourceManager &Sources = Diags->getSourceManager();
-  if (Sources.isInSystemHeader(Location))
+  if (!*Context.getOptions().SystemHeaders &&
+      Sources.isInSystemHeader(Location))
     return;
 
   // FIXME: We start with a conservative approach here, but the actual type of

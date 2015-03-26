@@ -21,13 +21,11 @@
 
 #include "Atoms.h"
 #include "WriterImportLibrary.h"
-
 #include "lld/Core/DefinedAtom.h"
 #include "lld/Core/File.h"
+#include "lld/Core/Writer.h"
 #include "lld/ReaderWriter/AtomLayout.h"
 #include "lld/ReaderWriter/PECOFFLinkingContext.h"
-#include "lld/ReaderWriter/Writer.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/COFF.h"
@@ -37,7 +35,6 @@
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/Format.h"
-
 #include <algorithm>
 #include <cstdlib>
 #include <map>
@@ -45,6 +42,8 @@
 #include <vector>
 
 #define DEBUG_TYPE "WriterPECOFF"
+
+using namespace llvm::support::endian;
 
 using llvm::COFF::DataDirectoryIndex;
 using llvm::object::coff_runtime_function_x64;
@@ -68,6 +67,7 @@ public:
   enum Kind {
     kindHeader,
     kindSection,
+    kindStringTable,
     kindAtomChunk
   };
 
@@ -115,6 +115,7 @@ public:
     ArrayRef<uint8_t> array = _context.getDosStub();
     std::memcpy(buffer, array.data(), array.size());
     auto *header = reinterpret_cast<llvm::object::dos_header *>(buffer);
+    header->AddressOfRelocationTable = sizeof(llvm::object::dos_header);
     header->AddressOfNewExeHeader = _size;
   }
 
@@ -149,9 +150,14 @@ public:
   }
 
   void setNumberOfSections(uint32_t num) { _coffHeader.NumberOfSections = num; }
+  void setNumberOfSymbols(uint32_t num) { _coffHeader.NumberOfSymbols = num; }
 
   void setAddressOfEntryPoint(uint32_t address) {
     _peHeader.AddressOfEntryPoint = address;
+  }
+
+  void setPointerToSymbolTable(uint32_t rva) {
+    _coffHeader.PointerToSymbolTable = rva;
   }
 
 private:
@@ -174,6 +180,49 @@ private:
   std::vector<SectionChunk *> _sections;
 };
 
+class StringTableChunk : public Chunk {
+public:
+  StringTableChunk() : Chunk(kindStringTable) {}
+
+  static bool classof(const Chunk *c) {
+    return c->getKind() == kindStringTable;
+  }
+
+  uint32_t addSectionName(StringRef sectionName) {
+    if (_stringTable.empty()) {
+      // The string table immediately follows the symbol table.
+      // We don't really need a symbol table, but some tools (e.g. dumpbin)
+      // don't like zero-length symbol table.
+      // Make room for the empty symbol slot, which occupies 18 byte.
+      // We also need to reserve 4 bytes for the string table header.
+      int size = sizeof(llvm::object::coff_symbol16) + 4;
+      _stringTable.insert(_stringTable.begin(), size, 0);
+      // Set the name of the dummy symbol to the first string table entry.
+      // It's better than letting dumpbin print out a garabage as a symbol name.
+      char *off = _stringTable.data() + 4;
+      write32le(off, 4);
+    }
+    uint32_t offset = _stringTable.size();
+    _stringTable.insert(_stringTable.end(), sectionName.begin(),
+                        sectionName.end());
+    _stringTable.push_back('\0');
+    return offset - sizeof(llvm::object::coff_symbol16);
+  }
+
+  uint64_t size() const override { return _stringTable.size(); }
+
+  void write(uint8_t *buffer) override {
+    if (_stringTable.empty())
+      return;
+    char *off = _stringTable.data() + sizeof(llvm::object::coff_symbol16);
+    write32le(off, _stringTable.size());
+    std::memcpy(buffer, _stringTable.data(), _stringTable.size());
+  }
+
+private:
+  std::vector<char> _stringTable;
+};
+
 class SectionChunk : public Chunk {
 public:
   uint64_t onDiskSize() const override {
@@ -185,6 +234,7 @@ public:
   uint64_t align() const override { return SECTOR_SIZE; }
   uint32_t getCharacteristics() const { return _characteristics; }
   StringRef getSectionName() const { return _sectionName; }
+  virtual uint64_t memAlign() const { return _memAlign; }
 
   static bool classof(const Chunk *c) {
     Kind kind = c->getKind();
@@ -194,15 +244,28 @@ public:
   uint64_t getVirtualAddress() { return _virtualAddress; }
   virtual void setVirtualAddress(uint32_t rva) { _virtualAddress = rva; }
 
+  uint32_t getStringTableOffset() const { return _stringTableOffset; }
+  void setStringTableOffset(uint32_t offset) { _stringTableOffset = offset; }
+
 protected:
-  SectionChunk(Kind kind, StringRef sectionName, uint32_t characteristics)
+  SectionChunk(Kind kind, StringRef sectionName, uint32_t characteristics,
+               const PECOFFLinkingContext &ctx)
       : Chunk(kind), _sectionName(sectionName),
-        _characteristics(characteristics), _virtualAddress(0) {}
+        _characteristics(characteristics), _virtualAddress(0),
+        _stringTableOffset(0), _memAlign(ctx.getPageSize()) {}
 
 private:
   StringRef _sectionName;
   const uint32_t _characteristics;
   uint64_t _virtualAddress;
+  uint32_t _stringTableOffset;
+  uint64_t _memAlign;
+};
+
+struct BaseReloc {
+  BaseReloc(uint64_t a, llvm::COFF::BaseRelocationType t) : addr(a), type(t) {}
+  uint64_t addr;
+  llvm::COFF::BaseRelocationType type;
 };
 
 /// An AtomChunk represents a section containing atoms.
@@ -213,20 +276,25 @@ public:
 
   void write(uint8_t *buffer) override;
 
+  uint64_t memAlign() const override;
   void appendAtom(const DefinedAtom *atom);
   void buildAtomRvaMap(std::map<const Atom *, uint64_t> &atomRva) const;
 
-  void applyRelocations32(uint8_t *buffer,
-                          std::map<const Atom *, uint64_t> &atomRva,
-                          std::vector<uint64_t> &sectionRva,
-                          uint64_t imageBaseAddress);
-  void applyRelocations64(uint8_t *buffer,
-                          std::map<const Atom *, uint64_t> &atomRva,
-                          std::vector<uint64_t> &sectionRva,
-                          uint64_t imageBaseAddress);
+  void applyRelocationsARM(uint8_t *buffer,
+                           std::map<const Atom *, uint64_t> &atomRva,
+                           std::vector<uint64_t> &sectionRva,
+                           uint64_t imageBaseAddress);
+  void applyRelocationsX86(uint8_t *buffer,
+                           std::map<const Atom *, uint64_t> &atomRva,
+                           std::vector<uint64_t> &sectionRva,
+                           uint64_t imageBaseAddress);
+  void applyRelocationsX64(uint8_t *buffer,
+                           std::map<const Atom *, uint64_t> &atomRva,
+                           std::vector<uint64_t> &sectionRva,
+                           uint64_t imageBaseAddress);
 
   void printAtomAddresses(uint64_t baseAddr) const;
-  void addBaseRelocations(std::vector<uint64_t> &relocSites) const;
+  void addBaseRelocations(std::vector<BaseReloc> &relocSites) const;
 
   void setVirtualAddress(uint32_t rva) override;
   uint64_t getAtomVirtualAddress(StringRef name) const;
@@ -249,6 +317,8 @@ private:
       StringRef name, const std::vector<const DefinedAtom *> &atoms) const;
 
   mutable llvm::BumpPtrAllocator _alloc;
+  llvm::COFF::MachineTypes _machineType;
+  const PECOFFLinkingContext &_ctx;
 };
 
 /// A DataDirectoryChunk represents data directory entries that follows the PE
@@ -286,11 +356,10 @@ private:
 /// executable.
 class BaseRelocChunk : public SectionChunk {
   typedef std::vector<std::unique_ptr<Chunk> > ChunkVectorT;
-  typedef std::map<uint64_t, std::vector<uint16_t> > PageOffsetT;
 
 public:
   BaseRelocChunk(ChunkVectorT &chunks, const PECOFFLinkingContext &ctx)
-      : SectionChunk(kindSection, ".reloc", characteristics),
+      : SectionChunk(kindSection, ".reloc", characteristics, ctx),
         _ctx(ctx), _contents(createContents(chunks)) {}
 
   void write(uint8_t *buffer) override {
@@ -310,15 +379,12 @@ private:
 
   // Returns a list of RVAs that needs to be relocated if the binary is loaded
   // at an address different from its preferred one.
-  std::vector<uint64_t> listRelocSites(ChunkVectorT &chunks) const;
-
-  // Divide the given RVAs into blocks.
-  PageOffsetT groupByPage(const std::vector<uint64_t> &relocSites) const;
+  std::vector<BaseReloc> listRelocSites(ChunkVectorT &chunks) const;
 
   // Create the content of a relocation block.
   std::vector<uint8_t>
-  createBaseRelocBlock(uint64_t pageAddr,
-                       const std::vector<uint16_t> &offsets) const;
+  createBaseRelocBlock(uint64_t pageAddr, const BaseReloc *begin,
+                       const BaseReloc *end) const;
 
   const PECOFFLinkingContext &_ctx;
   std::vector<uint8_t> _contents;
@@ -354,10 +420,6 @@ PEHeaderChunk<PEHeader>::PEHeaderChunk(const PECOFFLinkingContext &ctx)
 
   _peHeader.Magic = ctx.is64Bit() ? llvm::COFF::PE32Header::PE32_PLUS
                                   : llvm::COFF::PE32Header::PE32;
-
-  // The address of entry point relative to ImageBase. Windows executable
-  // usually starts at address 0x401000.
-  _peHeader.AddressOfEntryPoint = 0x1000;
 
   // The address of the executable when loaded into memory. The default for
   // DLLs is 0x10000000. The default for executables is 0x400000.
@@ -406,6 +468,8 @@ PEHeaderChunk<PEHeader>::PEHeaderChunk(const PECOFFLinkingContext &ctx)
     dllCharacteristics |= llvm::COFF::IMAGE_DLL_CHARACTERISTICS_NO_BIND;
   if (!ctx.getAllowIsolation())
     dllCharacteristics |= llvm::COFF::IMAGE_DLL_CHARACTERISTICS_NO_ISOLATION;
+  if (ctx.getHighEntropyVA() && ctx.is64Bit())
+    dllCharacteristics |= llvm::COFF::IMAGE_DLL_CHARACTERISTICS_HIGH_ENTROPY_VA;
   _peHeader.DLLCharacteristics = dllCharacteristics;
 
   _peHeader.SizeOfStackReserve = ctx.getStackReserve();
@@ -443,8 +507,8 @@ void PEHeaderChunk<PEHeader>::write(uint8_t *buffer) {
 AtomChunk::AtomChunk(const PECOFFLinkingContext &ctx, StringRef sectionName,
                      const std::vector<const DefinedAtom *> &atoms)
     : SectionChunk(kindAtomChunk, sectionName,
-                   computeCharacteristics(ctx, sectionName, atoms)),
-      _virtualAddress(0) {
+                   computeCharacteristics(ctx, sectionName, atoms), ctx),
+      _virtualAddress(0), _machineType(ctx.getMachineType()), _ctx(ctx) {
   for (auto *a : atoms)
     appendAtom(a);
 }
@@ -492,18 +556,102 @@ static int getSectionIndex(uint64_t targetAddr,
 
 static uint32_t getSectionStartAddr(uint64_t targetAddr,
                                     const std::vector<uint64_t> &sectionRva) {
+  // Scan the list of section start addresses to find the section start address
+  // for the given RVA.
   for (int i = 0, e = sectionRva.size(); i < e; ++i)
-    if (i == e - 1 || (sectionRva[i] <= targetAddr && targetAddr <= sectionRva[i + 1]))
+    if (i == e - 1 || (sectionRva[i] <= targetAddr && targetAddr < sectionRva[i + 1]))
       return sectionRva[i];
   llvm_unreachable("Section missing");
 }
 
-void AtomChunk::applyRelocations32(uint8_t *buffer,
-                                   std::map<const Atom *, uint64_t> &atomRva,
-                                   std::vector<uint64_t> &sectionRva,
-                                   uint64_t imageBaseAddress) {
+static void applyThumbMoveImmediate(ulittle16_t *mov, uint16_t imm) {
+  // MOVW(T3): |11110|i|10|0|1|0|0|imm4|0|imm3|Rd|imm8|
+  //            imm32 = zext imm4:i:imm3:imm8
+  // MOVT(T1): |11110|i|10|1|1|0|0|imm4|0|imm3|Rd|imm8|
+  //            imm16 = imm4:i:imm3:imm8
+  mov[0] =
+      mov[0] | (((imm & 0x0800) >> 11) << 10) | (((imm & 0xf000) >> 12) << 0);
+  mov[1] =
+      mov[1] | (((imm & 0x0700) >> 8) << 12) | (((imm & 0x00ff) >> 0) << 0);
+}
+
+static void applyThumbBranchImmediate(ulittle16_t *bl, int32_t imm) {
+  // BL(T1):  |11110|S|imm10|11|J1|1|J2|imm11|
+  //          imm32 = sext S:I1:I2:imm10:imm11:'0'
+  // B.W(T4): |11110|S|imm10|10|J1|1|J2|imm11|
+  //          imm32 = sext S:I1:I2:imm10:imm11:'0'
+  //
+  //          I1 = ~(J1 ^ S), I2 = ~(J2 ^ S)
+
+  assert((~abs(imm) & (-1 << 24)) && "bl/b.w out of range");
+
+  uint32_t S = (imm < 0 ? 1 : 0);
+  uint32_t J1 = ((~imm & 0x00800000) >> 23) ^ S;
+  uint32_t J2 = ((~imm & 0x00400000) >> 22) ^ S;
+
+  bl[0] = bl[0] | (((imm & 0x003ff000) >> 12) << 0) | (S << 10);
+  bl[1] = bl[1] | (((imm & 0x00000ffe) >>  1) << 0) | (J2 << 11) | (J1 << 13);
+}
+
+void AtomChunk::applyRelocationsARM(uint8_t *Buffer,
+                                    std::map<const Atom *, uint64_t> &AtomRVA,
+                                    std::vector<uint64_t> &SectionRVA,
+                                    uint64_t ImageBase) {
+  Buffer = Buffer + _fileOffset;
+  parallel_for_each(_atomLayouts.begin(), _atomLayouts.end(),
+                    [&](const AtomLayout *layout) {
+    const DefinedAtom *Atom = cast<DefinedAtom>(layout->_atom);
+    for (const Reference *R : *Atom) {
+      if (R->kindNamespace() != Reference::KindNamespace::COFF)
+        continue;
+
+      bool AssumeTHUMBCode = false;
+      if (auto Target = dyn_cast<DefinedAtom>(R->target()))
+        AssumeTHUMBCode = Target->permissions() == DefinedAtom::permR_X ||
+                          Target->permissions() == DefinedAtom::permRWX;
+
+      const auto AtomOffset = R->offsetInAtom();
+      const auto FileOffset = layout->_fileOffset;
+      const auto TargetAddr = AtomRVA[R->target()] | (AssumeTHUMBCode ? 1 : 0);
+      auto RelocSite16 =
+          reinterpret_cast<ulittle16_t *>(Buffer + FileOffset + AtomOffset);
+      auto RelocSite32 =
+          reinterpret_cast<ulittle32_t *>(Buffer + FileOffset + AtomOffset);
+
+      switch (R->kindValue()) {
+      default: llvm_unreachable("unsupported relocation type");
+      case llvm::COFF::IMAGE_REL_ARM_ADDR32:
+        *RelocSite32 = *RelocSite32 + TargetAddr + ImageBase;
+        break;
+      case llvm::COFF::IMAGE_REL_ARM_ADDR32NB:
+        *RelocSite32 = *RelocSite32 + TargetAddr;
+        break;
+      case llvm::COFF::IMAGE_REL_ARM_MOV32T:
+        applyThumbMoveImmediate(&RelocSite16[0], (TargetAddr + ImageBase) >>  0);
+        applyThumbMoveImmediate(&RelocSite16[2], (TargetAddr + ImageBase) >> 16);
+        break;
+      case llvm::COFF::IMAGE_REL_ARM_BRANCH24T:
+        // NOTE: the thumb bit will implicitly be truncated properly
+        applyThumbBranchImmediate(RelocSite16,
+                                  TargetAddr - AtomRVA[Atom] - AtomOffset - 4);
+        break;
+      case llvm::COFF::IMAGE_REL_ARM_BLX23T:
+        // NOTE: the thumb bit will implicitly be truncated properly
+        applyThumbBranchImmediate(RelocSite16,
+                                  TargetAddr - AtomRVA[Atom] - AtomOffset - 4);
+        break;
+      }
+    }
+  });
+}
+
+void AtomChunk::applyRelocationsX86(uint8_t *buffer,
+                                    std::map<const Atom *, uint64_t> &atomRva,
+                                    std::vector<uint64_t> &sectionRva,
+                                    uint64_t imageBaseAddress) {
   buffer += _fileOffset;
-  for (const auto *layout : _atomLayouts) {
+  parallel_for_each(_atomLayouts.begin(), _atomLayouts.end(),
+                    [&](const AtomLayout *layout) {
     const DefinedAtom *atom = cast<DefinedAtom>(layout->_atom);
     for (const Reference *ref : *atom) {
       // Skip if this reference is not for COFF relocation.
@@ -512,51 +660,56 @@ void AtomChunk::applyRelocations32(uint8_t *buffer,
       auto relocSite32 = reinterpret_cast<ulittle32_t *>(
           buffer + layout->_fileOffset + ref->offsetInAtom());
       auto relocSite16 = reinterpret_cast<ulittle16_t *>(relocSite32);
-      uint64_t targetAddr = atomRva[ref->target()];
+      const Atom *target = ref->target();
+      uint64_t targetAddr = atomRva[target];
       // Also account for whatever offset is already stored at the relocation
       // site.
-      targetAddr += *relocSite32;
       switch (ref->kindValue()) {
       case llvm::COFF::IMAGE_REL_I386_ABSOLUTE:
         // This relocation is no-op.
         break;
       case llvm::COFF::IMAGE_REL_I386_DIR32:
         // Set target's 32-bit VA.
-        *relocSite32 = targetAddr + imageBaseAddress;
+        if (auto *abs = dyn_cast<AbsoluteAtom>(target))
+          *relocSite32 += abs->value();
+        else
+          *relocSite32 += targetAddr + imageBaseAddress;
         break;
       case llvm::COFF::IMAGE_REL_I386_DIR32NB:
         // Set target's 32-bit RVA.
-        *relocSite32 = targetAddr;
+        *relocSite32 += targetAddr;
         break;
       case llvm::COFF::IMAGE_REL_I386_REL32: {
         // Set 32-bit relative address of the target. This relocation is
         // usually used for relative branch or call instruction.
         uint32_t disp = atomRva[atom] + ref->offsetInAtom() + 4;
-        *relocSite32 = targetAddr - disp;
+        *relocSite32 += targetAddr - disp;
         break;
       }
       case llvm::COFF::IMAGE_REL_I386_SECTION:
         // The 16-bit section index that contains the target symbol.
-        *relocSite16 = getSectionIndex(targetAddr, sectionRva);
+        *relocSite16 += getSectionIndex(targetAddr, sectionRva);
         break;
       case llvm::COFF::IMAGE_REL_I386_SECREL:
         // The 32-bit relative address from the beginning of the section that
         // contains the target symbol.
-        *relocSite32 = targetAddr - getSectionStartAddr(targetAddr, sectionRva);
+        *relocSite32 +=
+            targetAddr - getSectionStartAddr(targetAddr, sectionRva);
         break;
       default:
-        llvm_unreachable("Unsupported relocation kind");
+        llvm::report_fatal_error("Unsupported relocation kind");
       }
     }
-  }
+  });
 }
 
-void AtomChunk::applyRelocations64(uint8_t *buffer,
-                                   std::map<const Atom *, uint64_t> &atomRva,
-                                   std::vector<uint64_t> &sectionRva,
-                                   uint64_t imageBase) {
+void AtomChunk::applyRelocationsX64(uint8_t *buffer,
+                                    std::map<const Atom *, uint64_t> &atomRva,
+                                    std::vector<uint64_t> &sectionRva,
+                                    uint64_t imageBase) {
   buffer += _fileOffset;
-  for (const auto *layout : _atomLayouts) {
+  parallel_for_each(_atomLayouts.begin(), _atomLayouts.end(),
+                    [&](const AtomLayout *layout) {
     const DefinedAtom *atom = cast<DefinedAtom>(layout->_atom);
     for (const Reference *ref : *atom) {
       if (ref->kindNamespace() != Reference::KindNamespace::COFF)
@@ -570,43 +723,45 @@ void AtomChunk::applyRelocations64(uint8_t *buffer,
 
       switch (ref->kindValue()) {
       case llvm::COFF::IMAGE_REL_AMD64_ADDR64:
-        *relocSite64 = targetAddr;
+        *relocSite64 += targetAddr + imageBase;
         break;
       case llvm::COFF::IMAGE_REL_AMD64_ADDR32:
-        *relocSite32 = targetAddr + imageBase;
+        *relocSite32 += targetAddr + imageBase;
         break;
       case llvm::COFF::IMAGE_REL_AMD64_ADDR32NB:
-        *relocSite32 = targetAddr;
+        *relocSite32 += targetAddr;
         break;
       case llvm::COFF::IMAGE_REL_AMD64_REL32:
-        *relocSite32 = targetAddr - atomRva[atom] + ref->offsetInAtom() + 4;
+        *relocSite32 += targetAddr - atomRva[atom] - ref->offsetInAtom() - 4;
         break;
-
-#define REL32(x)                                                             \
-      case llvm::COFF::IMAGE_REL_AMD64_REL32_ ## x: {                        \
-        uint32_t off = targetAddr - atomRva[atom] + ref->offsetInAtom() + 4; \
-        *relocSite32 = off + x;                                              \
-      }
-      REL32(1);
-      REL32(2);
-      REL32(3);
-      REL32(4);
-      REL32(5);
-#undef CASE
-
+      case llvm::COFF::IMAGE_REL_AMD64_REL32_1:
+        *relocSite32 += targetAddr - atomRva[atom] - ref->offsetInAtom() - 5;
+        break;
+      case llvm::COFF::IMAGE_REL_AMD64_REL32_2:
+        *relocSite32 += targetAddr - atomRva[atom] - ref->offsetInAtom() - 6;
+        break;
+      case llvm::COFF::IMAGE_REL_AMD64_REL32_3:
+        *relocSite32 += targetAddr - atomRva[atom] - ref->offsetInAtom() - 7;
+        break;
+      case llvm::COFF::IMAGE_REL_AMD64_REL32_4:
+        *relocSite32 += targetAddr - atomRva[atom] - ref->offsetInAtom() - 8;
+        break;
+      case llvm::COFF::IMAGE_REL_AMD64_REL32_5:
+        *relocSite32 += targetAddr - atomRva[atom] - ref->offsetInAtom() - 9;
+        break;
       case llvm::COFF::IMAGE_REL_AMD64_SECTION:
-        *relocSite16 = getSectionIndex(targetAddr, sectionRva);
+        *relocSite16 += getSectionIndex(targetAddr, sectionRva) - 1;
         break;
       case llvm::COFF::IMAGE_REL_AMD64_SECREL:
-        *relocSite32 = targetAddr - getSectionStartAddr(targetAddr, sectionRva);
+        *relocSite32 +=
+            targetAddr - getSectionStartAddr(targetAddr, sectionRva);
         break;
-
       default:
         llvm::errs() << "Kind: " << (int)ref->kindValue() << "\n";
-        llvm_unreachable("Unsupported relocation kind");
+        llvm::report_fatal_error("Unsupported relocation kind");
       }
     }
-  }
+  });
 }
 
 /// Print atom VAs. Used only for debugging.
@@ -624,18 +779,44 @@ void AtomChunk::printAtomAddresses(uint64_t baseAddr) const {
 /// to be fixed up if image base is relocated. The only relocation type that
 /// needs to be fixed is DIR32 on i386. REL32 is not (and should not be)
 /// fixed up because it's PC-relative.
-void AtomChunk::addBaseRelocations(std::vector<uint64_t> &relocSites) const {
-  // TODO: llvm-objdump doesn't support parsing the base relocation table, so
-  // we can't really test this at the moment. As a temporary solution, we
-  // should output debug messages with atom names and addresses so that we
-  // can inspect relocations, and fix the tests (base-reloc.test, maybe
-  // others) to use those messages.
+void AtomChunk::addBaseRelocations(std::vector<BaseReloc> &relocSites) const {
   for (const auto *layout : _atomLayouts) {
     const DefinedAtom *atom = cast<DefinedAtom>(layout->_atom);
-    for (const Reference *ref : *atom)
-      if ((ref->kindNamespace() == Reference::KindNamespace::COFF) &&
-          (ref->kindValue() == llvm::COFF::IMAGE_REL_I386_DIR32))
-        relocSites.push_back(layout->_virtualAddr + ref->offsetInAtom());
+    for (const Reference *ref : *atom) {
+      if (ref->kindNamespace() != Reference::KindNamespace::COFF)
+        continue;
+
+      // An absolute symbol points to a fixed location in memory. Their
+      // address should not be fixed at load time. One exception is ImageBase
+      // because that's relative to run-time image base address.
+      if (auto *abs = dyn_cast<AbsoluteAtom>(ref->target()))
+        if (!abs->name().equals("__ImageBase") &&
+            !abs->name().equals("___ImageBase"))
+          continue;
+
+      uint64_t address = layout->_virtualAddr + ref->offsetInAtom();
+      switch (_machineType) {
+      default: llvm_unreachable("unsupported machine type");
+      case llvm::COFF::IMAGE_FILE_MACHINE_I386:
+        if (ref->kindValue() == llvm::COFF::IMAGE_REL_I386_DIR32)
+          relocSites.push_back(
+              BaseReloc(address, llvm::COFF::IMAGE_REL_BASED_HIGHLOW));
+        break;
+      case llvm::COFF::IMAGE_FILE_MACHINE_AMD64:
+        if (ref->kindValue() == llvm::COFF::IMAGE_REL_AMD64_ADDR64)
+          relocSites.push_back(
+              BaseReloc(address, llvm::COFF::IMAGE_REL_BASED_DIR64));
+        break;
+      case llvm::COFF::IMAGE_FILE_MACHINE_ARMNT:
+        if (ref->kindValue() == llvm::COFF::IMAGE_REL_ARM_ADDR32)
+          relocSites.push_back(
+              BaseReloc(address, llvm::COFF::IMAGE_REL_BASED_HIGHLOW));
+        else if (ref->kindValue() == llvm::COFF::IMAGE_REL_ARM_MOV32T)
+          relocSites.push_back(
+              BaseReloc(address, llvm::COFF::IMAGE_REL_BASED_ARM_MOV32T));
+        break;
+      }
+    }
   }
 }
 
@@ -661,6 +842,19 @@ void DataDirectoryChunk::setField(DataDirectoryIndex index, uint32_t addr,
 
 void DataDirectoryChunk::write(uint8_t *buffer) {
   std::memcpy(buffer, &_data[0], size());
+}
+
+uint64_t AtomChunk::memAlign() const {
+  // ReaderCOFF propagated the section alignment to the first atom in
+  // the section. We restore that here.
+  if (_atomLayouts.empty())
+    return _ctx.getPageSize();
+  int align = _ctx.getPageSize();
+  for (auto atomLayout : _atomLayouts) {
+    auto *atom = cast<const DefinedAtom>(atomLayout->_atom);
+    align = std::max(align, 1 << atom->alignment().powerOf2);
+  }
+  return align;
 }
 
 void AtomChunk::appendAtom(const DefinedAtom *atom) {
@@ -726,15 +920,15 @@ llvm::object::coff_section
 SectionHeaderTableChunk::createSectionHeader(SectionChunk *chunk) {
   llvm::object::coff_section header;
 
-  // Section name must be equal to or less than 8 characters in the
-  // executable. Longer names will be truncated.
+  // We have extended the COFF specification by allowing section names to be
+  // greater than eight characters.  We achieve this by adding the section names
+  // to the string table.  Binutils' linker, ld, performs the same trick.
   StringRef sectionName = chunk->getSectionName();
-
-  // Name field must be NUL-padded. If the name is exactly 8 byte long,
-  // there's no terminating NUL.
-  std::memset(header.Name, 0, sizeof(header.Name));
-  std::strncpy(header.Name, sectionName.data(),
-               std::min(sizeof(header.Name), sectionName.size()));
+  std::memset(header.Name, 0, llvm::COFF::NameSize);
+  if (uint32_t stringTableOffset = chunk->getStringTableOffset())
+    sprintf(header.Name, "/%u", stringTableOffset);
+  else
+    std::strncpy(header.Name, sectionName.data(), sectionName.size());
 
   uint32_t characteristics = chunk->getCharacteristics();
   header.VirtualSize = chunk->size();
@@ -766,12 +960,25 @@ SectionHeaderTableChunk::createSectionHeader(SectionChunk *chunk) {
 std::vector<uint8_t>
 BaseRelocChunk::createContents(ChunkVectorT &chunks) const {
   std::vector<uint8_t> contents;
-  std::vector<uint64_t> relocSites = listRelocSites(chunks);
-  PageOffsetT blocks = groupByPage(relocSites);
-  for (auto &i : blocks) {
-    uint64_t pageAddr = i.first;
-    const std::vector<uint16_t> &offsetsInPage = i.second;
-    std::vector<uint8_t> block = createBaseRelocBlock(pageAddr, offsetsInPage);
+  std::vector<BaseReloc> relocSites = listRelocSites(chunks);
+
+  uint64_t mask = _ctx.getPageSize() - 1;
+  parallel_sort(relocSites.begin(), relocSites.end(),
+                [=](const BaseReloc &a, const BaseReloc &b) {
+                  return (a.addr & ~mask) < (b.addr & ~mask);
+                });
+
+  // Base relocations for the same memory page are grouped together
+  // and passed to createBaseRelocBlock.
+  for (auto it = relocSites.begin(), e = relocSites.end(); it != e;) {
+    auto beginIt = it;
+    uint64_t pageAddr = (beginIt->addr & ~mask);
+    for (++it; it != e; ++it)
+      if ((it->addr & ~mask) != pageAddr)
+        break;
+    const BaseReloc *begin = &*beginIt;
+    const BaseReloc *end = begin + (it - beginIt);
+    std::vector<uint8_t> block = createBaseRelocBlock(pageAddr, begin, end);
     contents.insert(contents.end(), block.begin(), block.end());
   }
   return contents;
@@ -779,50 +986,40 @@ BaseRelocChunk::createContents(ChunkVectorT &chunks) const {
 
 // Returns a list of RVAs that needs to be relocated if the binary is loaded
 // at an address different from its preferred one.
-std::vector<uint64_t>
+std::vector<BaseReloc>
 BaseRelocChunk::listRelocSites(ChunkVectorT &chunks) const {
-  std::vector<uint64_t> ret;
+  std::vector<BaseReloc> ret;
   for (auto &cp : chunks)
     if (AtomChunk *chunk = dyn_cast<AtomChunk>(&*cp))
       chunk->addBaseRelocations(ret);
   return ret;
 }
 
-// Divide the given RVAs into blocks.
-BaseRelocChunk::PageOffsetT
-BaseRelocChunk::groupByPage(const std::vector<uint64_t> &relocSites) const {
-  PageOffsetT blocks;
-  uint64_t mask = _ctx.getPageSize() - 1;
-  for (uint64_t addr : relocSites)
-    blocks[addr & ~mask].push_back(addr & mask);
-  return blocks;
-}
-
 // Create the content of a relocation block.
-std::vector<uint8_t> BaseRelocChunk::createBaseRelocBlock(
-    uint64_t pageAddr, const std::vector<uint16_t> &offsets) const {
+std::vector<uint8_t>
+BaseRelocChunk::createBaseRelocBlock(uint64_t pageAddr,
+                                     const BaseReloc *begin,
+                                     const BaseReloc *end) const {
   // Relocation blocks should be padded with IMAGE_REL_I386_ABSOLUTE to be
   // aligned to a DWORD size boundary.
   uint32_t size = llvm::RoundUpToAlignment(
-      sizeof(ulittle32_t) * 2 + sizeof(ulittle16_t) * offsets.size(),
+      sizeof(ulittle32_t) * 2 + sizeof(ulittle16_t) * (end - begin),
       sizeof(ulittle32_t));
   std::vector<uint8_t> contents(size);
   uint8_t *ptr = &contents[0];
 
   // The first four bytes is the page RVA.
-  *reinterpret_cast<ulittle32_t *>(ptr) = pageAddr;
+  write32le(ptr, pageAddr);
   ptr += sizeof(ulittle32_t);
 
   // The second four bytes is the size of the block, including the the page
   // RVA and this size field.
-  *reinterpret_cast<ulittle32_t *>(ptr) = size;
+  write32le(ptr, size);
   ptr += sizeof(ulittle32_t);
 
-  // The rest of the block consists of offsets in the page.
-  for (uint16_t offset : offsets) {
-    assert(offset < _ctx.getPageSize());
-    uint16_t val = (llvm::COFF::IMAGE_REL_BASED_HIGHLOW << 12) | offset;
-    *reinterpret_cast<ulittle16_t *>(ptr) = val;
+  uint64_t mask = _ctx.getPageSize() - 1;
+  for (const BaseReloc *i = begin; i < end; ++i) {
+    write16le(ptr, (i->type << 12) | (i->addr & mask));
     ptr += sizeof(ulittle16_t);
   }
   return contents;
@@ -847,7 +1044,9 @@ private:
   void reorderSEHTableEntriesX64(uint8_t *bufferStart);
 
   void addChunk(Chunk *chunk);
-  void addSectionChunk(SectionChunk *chunk, SectionHeaderTableChunk *table);
+  void addSectionChunk(std::unique_ptr<SectionChunk> chunk,
+                       SectionHeaderTableChunk *table,
+                       StringTableChunk *stringTable);
   void setImageSizeOnDisk();
   uint64_t
   calcSectionSize(llvm::COFF::SectionCharacteristics sectionType) const;
@@ -877,6 +1076,9 @@ private:
   // The size of the image on disk. This is basically the sum of all chunks in
   // the output file with paddings between them.
   uint32_t _imageSizeOnDisk;
+
+  // The map from atom to its relative virtual address.
+  std::map<const Atom *, uint64_t> _atomRva;
 };
 
 StringRef customSectionName(const DefinedAtom *atom) {
@@ -903,7 +1105,7 @@ StringRef chooseSectionByContent(const DefinedAtom *atom) {
   }
   llvm::errs() << "Atom: contentType=" << atom->contentType()
                << " permission=" << atom->permissions() << "\n";
-  llvm_unreachable("Failed to choose section based on content");
+  llvm::report_fatal_error("Failed to choose section based on content");
 }
 
 typedef std::map<StringRef, std::vector<const DefinedAtom *> > AtomVectorMap;
@@ -925,6 +1127,15 @@ void groupAtoms(const PECOFFLinkingContext &ctx, const File &file,
   }
 }
 
+static const DefinedAtom *findTLSUsedSymbol(const PECOFFLinkingContext &ctx,
+                                            const File &file) {
+  StringRef sym = ctx.decorateSymbol("_tls_used");
+  for (const DefinedAtom *atom : file.defined())
+    if (atom->name() == sym)
+      return atom;
+  return nullptr;
+}
+
 // Create all chunks that consist of the output file.
 template <class PEHeader>
 void PECOFFWriter::build(const File &linkedFile) {
@@ -936,33 +1147,47 @@ void PECOFFWriter::build(const File &linkedFile) {
   auto *peHeader = new PEHeaderChunk<PEHeader>(_ctx);
   auto *dataDirectory = new DataDirectoryChunk();
   auto *sectionTable = new SectionHeaderTableChunk();
+  auto *stringTable = new StringTableChunk();
   addChunk(dosStub);
   addChunk(peHeader);
   addChunk(dataDirectory);
   addChunk(sectionTable);
+  addChunk(stringTable);
 
+  // Create sections and add the atoms to them.
   for (auto i : atoms) {
     StringRef sectionName = i.first;
     std::vector<const DefinedAtom *> &contents = i.second;
-    auto *section = new AtomChunk(_ctx, sectionName, contents);
+    std::unique_ptr<SectionChunk> section(
+        new AtomChunk(_ctx, sectionName, contents));
     if (section->size() > 0)
-      addSectionChunk(section, sectionTable);
+      addSectionChunk(std::move(section), sectionTable, stringTable);
   }
 
-  // Now that we know the addresses of all defined atoms that needs to be
-  // relocated. So we can create the ".reloc" section which contains all the
-  // relocation sites.
+  // Build atom to its RVA map.
+  for (std::unique_ptr<Chunk> &cp : _chunks)
+    if (AtomChunk *chunk = dyn_cast<AtomChunk>(&*cp))
+      chunk->buildAtomRvaMap(_atomRva);
+
+  // We know the addresses of all defined atoms that needs to be
+  // relocated. So we can create the ".reloc" section which contains
+  // all the relocation sites.
   if (_ctx.getBaseRelocationEnabled()) {
-    BaseRelocChunk *baseReloc = new BaseRelocChunk(_chunks, _ctx);
+    std::unique_ptr<SectionChunk> baseReloc(new BaseRelocChunk(_chunks, _ctx));
     if (baseReloc->size()) {
-      addSectionChunk(baseReloc, sectionTable);
+      SectionChunk &ref = *baseReloc;
+      addSectionChunk(std::move(baseReloc), sectionTable, stringTable);
       dataDirectory->setField(DataDirectoryIndex::BASE_RELOCATION_TABLE,
-                              baseReloc->getVirtualAddress(),
-                              baseReloc->size());
+                              ref.getVirtualAddress(), ref.size());
     }
   }
 
   setImageSizeOnDisk();
+
+  if (stringTable->size()) {
+    peHeader->setPointerToSymbolTable(stringTable->fileOffset());
+    peHeader->setNumberOfSymbols(1);
+  }
 
   for (std::unique_ptr<Chunk> &chunk : _chunks) {
     SectionChunk *section = dyn_cast<SectionChunk>(chunk.get());
@@ -975,35 +1200,44 @@ void PECOFFWriter::build(const File &linkedFile) {
       // says that entry point for dll images is optional, in which case it must
       // be set to 0.
       if (_ctx.hasEntry()) {
+        AtomChunk *atom = cast<AtomChunk>(section);
         uint64_t entryPointAddress =
-            dyn_cast<AtomChunk>(section)
-                ->getAtomVirtualAddress(_ctx.getEntrySymbolName());
-        if (entryPointAddress != 0)
+            atom->getAtomVirtualAddress(_ctx.getEntrySymbolName());
+
+        if (entryPointAddress) {
+          // NOTE: ARM NT assumes a pure THUMB execution, so adjust the entry
+          // point accordingly
+          if (_ctx.getMachineType() == llvm::COFF::IMAGE_FILE_MACHINE_ARMNT)
+            entryPointAddress |= 1;
           peHeader->setAddressOfEntryPoint(entryPointAddress);
+        }
       } else {
         peHeader->setAddressOfEntryPoint(0);
       }
     }
-    if (section->getSectionName() == ".data")
+    StringRef name = section->getSectionName();
+    if (name == ".data") {
       peHeader->setBaseOfData(section->getVirtualAddress());
-    if (section->getSectionName() == ".pdata")
-      dataDirectory->setField(DataDirectoryIndex::EXCEPTION_TABLE,
-                              section->getVirtualAddress(), section->size());
-    if (section->getSectionName() == ".rsrc")
-      dataDirectory->setField(DataDirectoryIndex::RESOURCE_TABLE,
-                              section->getVirtualAddress(), section->size());
-    if (section->getSectionName() == ".idata.a")
-      dataDirectory->setField(DataDirectoryIndex::IAT,
-                              section->getVirtualAddress(), section->size());
-    if (section->getSectionName() == ".idata.d")
-      dataDirectory->setField(DataDirectoryIndex::IMPORT_TABLE,
-                              section->getVirtualAddress(), section->size());
-    if (section->getSectionName() == ".edata")
-      dataDirectory->setField(DataDirectoryIndex::EXPORT_TABLE,
-                              section->getVirtualAddress(), section->size());
-    if (section->getSectionName() == ".loadcfg")
-      dataDirectory->setField(DataDirectoryIndex::LOAD_CONFIG_TABLE,
-                              section->getVirtualAddress(), section->size());
+      continue;
+    }
+    DataDirectoryIndex ignore = DataDirectoryIndex(-1);
+    DataDirectoryIndex idx = llvm::StringSwitch<DataDirectoryIndex>(name)
+        .Case(".pdata", DataDirectoryIndex::EXCEPTION_TABLE)
+        .Case(".rsrc", DataDirectoryIndex::RESOURCE_TABLE)
+        .Case(".idata.a", DataDirectoryIndex::IAT)
+        .Case(".idata.d", DataDirectoryIndex::IMPORT_TABLE)
+        .Case(".edata", DataDirectoryIndex::EXPORT_TABLE)
+        .Case(".loadcfg", DataDirectoryIndex::LOAD_CONFIG_TABLE)
+        .Case(".didat.d", DataDirectoryIndex::DELAY_IMPORT_DESCRIPTOR)
+        .Default(ignore);
+    if (idx == ignore)
+      continue;
+    dataDirectory->setField(idx, section->getVirtualAddress(), section->size());
+  }
+
+  if (const DefinedAtom *atom = findTLSUsedSymbol(_ctx, linkedFile)) {
+    dataDirectory->setField(DataDirectoryIndex::TLS_TABLE, _atomRva[atom],
+                            0x18);
   }
 
   // Now that we know the size and file offset of sections. Set the file
@@ -1049,27 +1283,27 @@ std::error_code PECOFFWriter::writeFile(const File &linkedFile,
 /// address. In the second pass, we visit all relocation references to fix
 /// up addresses in the buffer.
 void PECOFFWriter::applyAllRelocations(uint8_t *bufferStart) {
-  std::map<const Atom *, uint64_t> atomRva;
+  // Create the list of section start addresses. It's needed for
+  // relocations of SECREL type.
   std::vector<uint64_t> sectionRva;
-
-  // Create the list of section start addresses.
   for (auto &cp : _chunks)
     if (SectionChunk *section = dyn_cast<SectionChunk>(&*cp))
       sectionRva.push_back(section->getVirtualAddress());
 
-  // Pass 1
-  for (auto &cp : _chunks)
-    if (AtomChunk *chunk = dyn_cast<AtomChunk>(&*cp))
-      chunk->buildAtomRvaMap(atomRva);
-
-  // Pass 2
   uint64_t base = _ctx.getBaseAddress();
   for (auto &cp : _chunks) {
     if (AtomChunk *chunk = dyn_cast<AtomChunk>(&*cp)) {
-      if (_ctx.is64Bit()) {
-        chunk->applyRelocations64(bufferStart, atomRva, sectionRva, base);
-      } else {
-        chunk->applyRelocations32(bufferStart, atomRva, sectionRva, base);
+      switch (_ctx.getMachineType()) {
+      default: llvm_unreachable("unsupported machine type");
+      case llvm::COFF::IMAGE_FILE_MACHINE_ARMNT:
+        chunk->applyRelocationsARM(bufferStart, _atomRva, sectionRva, base);
+        break;
+      case llvm::COFF::IMAGE_FILE_MACHINE_I386:
+        chunk->applyRelocationsX86(bufferStart, _atomRva, sectionRva, base);
+        break;
+      case llvm::COFF::IMAGE_FILE_MACHINE_AMD64:
+        chunk->applyRelocationsX64(bufferStart, _atomRva, sectionRva, base);
+        break;
       }
     }
   }
@@ -1131,18 +1365,27 @@ void PECOFFWriter::addChunk(Chunk *chunk) {
   _chunks.push_back(std::unique_ptr<Chunk>(chunk));
 }
 
-void PECOFFWriter::addSectionChunk(SectionChunk *chunk,
-                                   SectionHeaderTableChunk *table) {
-  _chunks.push_back(std::unique_ptr<Chunk>(chunk));
-  table->addSection(chunk);
+void PECOFFWriter::addSectionChunk(std::unique_ptr<SectionChunk> chunk,
+                                   SectionHeaderTableChunk *table,
+                                   StringTableChunk *stringTable) {
+  table->addSection(chunk.get());
   _numSections++;
+
+  StringRef sectionName = chunk->getSectionName();
+  if (sectionName.size() > llvm::COFF::NameSize) {
+    uint32_t stringTableOffset = stringTable->addSectionName(sectionName);
+    chunk->setStringTableOffset(stringTableOffset);
+  }
 
   // Compute and set the starting address of sections when loaded in
   // memory. They are different from positions on disk because sections need
   // to be sector-aligned on disk but page-aligned in memory.
+  _imageSizeInMemory = llvm::RoundUpToAlignment(
+      _imageSizeInMemory, chunk->memAlign());
   chunk->setVirtualAddress(_imageSizeInMemory);
   _imageSizeInMemory = llvm::RoundUpToAlignment(
       _imageSizeInMemory + chunk->size(), _ctx.getPageSize());
+  _chunks.push_back(std::move(chunk));
 }
 
 void PECOFFWriter::setImageSizeOnDisk() {

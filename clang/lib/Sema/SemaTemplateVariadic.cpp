@@ -244,7 +244,7 @@ Sema::DiagnoseUnexpandedParameterPacks(SourceLocation Loc,
     else
       Name = Unexpanded[I].first.get<NamedDecl *>()->getIdentifier();
 
-    if (Name && NamesKnown.insert(Name))
+    if (Name && NamesKnown.insert(Name).second)
       Names.push_back(Name);
 
     if (Unexpanded[I].second.isValid())
@@ -782,11 +782,11 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
                  Chunk.Fun.NoexceptExpr->containsUnexpandedParameterPack())
         return true;
 
-      if (Chunk.Fun.hasTrailingReturnType() &&
-          Chunk.Fun.getTrailingReturnType()
-              .get()
-              ->containsUnexpandedParameterPack())
-        return true;
+      if (Chunk.Fun.hasTrailingReturnType()) {
+        QualType T = Chunk.Fun.getTrailingReturnType().get();
+	if (!T.isNull() && T->containsUnexpandedParameterPack())
+	  return true;
+      }
       break;
 
     case DeclaratorChunk::MemberPointer:

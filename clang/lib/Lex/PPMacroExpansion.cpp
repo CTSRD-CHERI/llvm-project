@@ -96,6 +96,9 @@ void Preprocessor::RegisterBuiltinMacros() {
   Ident__COUNTER__ = RegisterBuiltinMacro(*this, "__COUNTER__");
   Ident_Pragma  = RegisterBuiltinMacro(*this, "_Pragma");
 
+  // C++ Standing Document Extensions.
+  Ident__has_cpp_attribute = RegisterBuiltinMacro(*this, "__has_cpp_attribute");
+
   // GCC Extensions.
   Ident__BASE_FILE__     = RegisterBuiltinMacro(*this, "__BASE_FILE__");
   Ident__INCLUDE_LEVEL__ = RegisterBuiltinMacro(*this, "__INCLUDE_LEVEL__");
@@ -115,6 +118,7 @@ void Preprocessor::RegisterBuiltinMacros() {
   Ident__has_extension    = RegisterBuiltinMacro(*this, "__has_extension");
   Ident__has_builtin      = RegisterBuiltinMacro(*this, "__has_builtin");
   Ident__has_attribute    = RegisterBuiltinMacro(*this, "__has_attribute");
+  Ident__has_declspec = RegisterBuiltinMacro(*this, "__has_declspec_attribute");
   Ident__has_include      = RegisterBuiltinMacro(*this, "__has_include");
   Ident__has_include_next = RegisterBuiltinMacro(*this, "__has_include_next");
   Ident__has_warning      = RegisterBuiltinMacro(*this, "__has_warning");
@@ -594,7 +598,7 @@ MacroArgs *Preprocessor::ReadFunctionLikeMacroArgs(Token &MacroName,
         // If this is a comment token in the argument list and we're just in
         // -C mode (not -CC mode), discard the comment.
         continue;
-      } else if (Tok.getIdentifierInfo() != nullptr) {
+      } else if (!Tok.isAnnotation() && Tok.getIdentifierInfo() != nullptr) {
         // Reading macro arguments can cause macros that we are currently
         // expanding from to be popped off the expansion stack.  Doing so causes
         // them to be reenabled for expansion.  Here we record whether any
@@ -864,6 +868,7 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
       .Case("attribute_analyzer_noreturn", true)
       .Case("attribute_availability", true)
       .Case("attribute_availability_with_message", true)
+      .Case("attribute_availability_app_extension", true)
       .Case("attribute_cf_returns_not_retained", true)
       .Case("attribute_cf_returns_retained", true)
       .Case("attribute_deprecated_with_message", true)
@@ -908,8 +913,11 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
       .Case("objc_dictionary_literals", LangOpts.ObjC2)
       .Case("objc_boxed_expressions", LangOpts.ObjC2)
       .Case("arc_cf_code_audited", true)
+      .Case("objc_bridge_id", true)
+      .Case("objc_bridge_id_on_typedefs", true)
       // C11 features
       .Case("c_alignas", LangOpts.C11)
+      .Case("c_alignof", LangOpts.C11)
       .Case("c_atomic", LangOpts.C11)
       .Case("c_generic_selections", LangOpts.C11)
       .Case("c_static_assert", LangOpts.C11)
@@ -919,6 +927,7 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
       .Case("cxx_access_control_sfinae", LangOpts.CPlusPlus11)
       .Case("cxx_alias_templates", LangOpts.CPlusPlus11)
       .Case("cxx_alignas", LangOpts.CPlusPlus11)
+      .Case("cxx_alignof", LangOpts.CPlusPlus11)
       .Case("cxx_atomic", LangOpts.CPlusPlus11)
       .Case("cxx_attributes", LangOpts.CPlusPlus11)
       .Case("cxx_auto_type", LangOpts.CPlusPlus11)
@@ -1029,6 +1038,7 @@ static bool HasExtension(const Preprocessor &PP, const IdentifierInfo *II) {
   return llvm::StringSwitch<bool>(Extension)
            // C11 features supported by other languages as extensions.
            .Case("c_alignas", true)
+           .Case("c_alignof", true)
            .Case("c_atomic", true)
            .Case("c_generic_selections", true)
            .Case("c_static_assert", true)
@@ -1123,7 +1133,7 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
       Tok.setKind(tok::eod);
       return false;   // Found <eod> but no ">"?  Diagnostic already emitted.
     }
-    Filename = FilenameBuffer.str();
+    Filename = FilenameBuffer;
     break;
   default:
     PP.Diag(Tok.getLocation(), diag::err_pp_expects_filename);
@@ -1173,7 +1183,7 @@ static bool EvaluateHasIncludeNext(Token &Tok,
   // __has_include_next is like __has_include, except that we start
   // searching after the current found directory.  If we can't do this,
   // issue a diagnostic.
-  // FIXME: Factor out duplication wiht
+  // FIXME: Factor out duplication with 
   // Preprocessor::HandleIncludeNextDirective.
   const DirectoryLookup *Lookup = PP.GetCurDirLookup();
   const FileEntry *LookupFromFile = nullptr;
@@ -1306,7 +1316,7 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
     if (PLoc.isValid()) {
       FN += PLoc.getFilename();
       Lexer::Stringify(FN);
-      OS << '"' << FN.str() << '"';
+      OS << '"' << FN << '"';
     }
     Tok.setKind(tok::string_literal);
   } else if (II == Ident__DATE__) {
@@ -1376,12 +1386,15 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
              II == Ident__has_extension ||
              II == Ident__has_builtin   ||
              II == Ident__is_identifier ||
-             II == Ident__has_attribute) {
+             II == Ident__has_attribute ||
+             II == Ident__has_declspec  ||
+             II == Ident__has_cpp_attribute) {
     // The argument to these builtins should be a parenthesized identifier.
     SourceLocation StartLoc = Tok.getLocation();
 
     bool IsValid = false;
     IdentifierInfo *FeatureII = nullptr;
+    IdentifierInfo *ScopeII = nullptr;
 
     // Read the '('.
     LexUnexpandedToken(Tok);
@@ -1389,14 +1402,30 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
       // Read the identifier
       LexUnexpandedToken(Tok);
       if ((FeatureII = Tok.getIdentifierInfo())) {
-        // Read the ')'.
+        // If we're checking __has_cpp_attribute, it is possible to receive a
+        // scope token. Read the "::", if it's available.
         LexUnexpandedToken(Tok);
-        if (Tok.is(tok::r_paren))
+        bool IsScopeValid = true;
+        if (II == Ident__has_cpp_attribute && Tok.is(tok::coloncolon)) {
+          LexUnexpandedToken(Tok);
+          // The first thing we read was not the feature, it was the scope.
+          ScopeII = FeatureII;
+          if ((FeatureII = Tok.getIdentifierInfo()))
+            LexUnexpandedToken(Tok);
+          else
+            IsScopeValid = false;          
+        }
+        // Read the closing paren.
+        if (IsScopeValid && Tok.is(tok::r_paren))
           IsValid = true;
       }
+      // Eat tokens until ')'.
+      while (Tok.isNot(tok::r_paren) && Tok.isNot(tok::eod) &&
+             Tok.isNot(tok::eof))
+        LexUnexpandedToken(Tok);
     }
 
-    bool Value = false;
+    int Value = 0;
     if (!IsValid)
       Diag(StartLoc, diag::err_feature_check_malformed);
     else if (II == Ident__is_identifier)
@@ -1405,7 +1434,13 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
       // Check for a builtin is trivial.
       Value = FeatureII->getBuiltinID() != 0;
     } else if (II == Ident__has_attribute)
-      Value = hasAttribute(AttrSyntax::Generic, nullptr, FeatureII,
+      Value = hasAttribute(AttrSyntax::GNU, nullptr, FeatureII,
+                           getTargetInfo().getTriple(), getLangOpts());
+    else if (II == Ident__has_cpp_attribute)
+      Value = hasAttribute(AttrSyntax::CXX, ScopeII, FeatureII,
+                           getTargetInfo().getTriple(), getLangOpts());
+    else if (II == Ident__has_declspec)
+      Value = hasAttribute(AttrSyntax::Declspec, nullptr, FeatureII,
                            getTargetInfo().getTriple(), getLangOpts());
     else if (II == Ident__has_extension)
       Value = HasExtension(*this, FeatureII);
@@ -1414,9 +1449,10 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
       Value = HasFeature(*this, FeatureII);
     }
 
-    OS << (int)Value;
-    if (IsValid)
-      Tok.setKind(tok::numeric_constant);
+    if (!IsValid)
+      return;
+    OS << Value;
+    Tok.setKind(tok::numeric_constant);
   } else if (II == Ident__has_include ||
              II == Ident__has_include_next) {
     // The argument to these two builtins should be a parenthesized
@@ -1480,9 +1516,10 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
                               WarningName.substr(2), Diags);
     } while (false);
 
+    if (!IsValid)
+      return;
     OS << (int)Value;
-    if (IsValid)
-      Tok.setKind(tok::numeric_constant);
+    Tok.setKind(tok::numeric_constant);
   } else if (II == Ident__building_module) {
     // The argument to this builtin should be an identifier. The
     // builtin evaluates to 1 when that identifier names the module we are

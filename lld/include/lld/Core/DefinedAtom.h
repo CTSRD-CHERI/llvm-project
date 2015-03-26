@@ -135,12 +135,15 @@ public:
     typeObjCClassPtr,       // pointer to ObjC class [Darwin]
     typeObjC2CategoryList,  // pointers to ObjC category [Darwin]
     typeDTraceDOF,          // runtime data for Dtrace [Darwin]
+    typeInterposingTuples,  // tuples of interposing info for dyld [Darwin]
     typeTempLTO,            // temporary atom for bitcode reader
     typeCompactUnwindInfo,  // runtime data for unwinder [Darwin]
+    typeProcessedUnwindInfo,// compressed compact unwind info [Darwin]
     typeThunkTLV,           // thunk used to access a TLV [Darwin]
     typeTLVInitialData,     // initial data for a TLV [Darwin]
     typeTLVInitialZeroFill, // TLV initial zero fill data [Darwin]
     typeTLVInitializerPtr,  // pointer to thread local initializer [Darwin]
+    typeMachHeader,         // atom representing mach_header [Darwin]
     typeThreadZeroFill,     // Uninitialized thread local data(TBSS) [ELF]
     typeThreadData,         // Initialized thread local data(TDATA) [ELF]
     typeRONote,             // Identifies readonly note sections [ELF]
@@ -170,13 +173,6 @@ public:
     sectionCustomRequired   // linker must place in specific section
   };
 
-  enum SectionPosition {
-    sectionPositionStart,   // atom must be at start of section (and zero size)
-    sectionPositionEarly,   // atom should be near start of section
-    sectionPositionAny,     // atom can be anywhere in section
-    sectionPositionEnd      // atom must be at end of section (and zero size)
-  };
-
   enum DeadStripKind {
     deadStripNormal,        // linker may dead strip this atom
     deadStripNever,         // linker must never dead strip this atom
@@ -189,6 +185,16 @@ public:
     dynamicExportNormal,
     /// \brief The linker will always export this atom dynamically.
     dynamicExportAlways,
+  };
+
+  // Attributes describe a code model used by the atom.
+  enum CodeModel {
+    codeNA,           // no specific code model
+    codeMipsPIC,      // PIC function in a PIC / non-PIC mixed file
+    codeMipsMicro,    // microMIPS instruction encoding
+    codeMipsMicroPIC, // microMIPS instruction encoding + PIC
+    codeMips16,       // MIPS-16 instruction encoding
+    codeARMThumb,     // ARM Thumb instruction set
   };
 
   struct Alignment {
@@ -220,6 +226,13 @@ public:
   ///
   /// For a function atom, it is the number of bytes of code in the function.
   virtual uint64_t size() const = 0;
+
+  /// \brief The size of the section from which the atom is instantiated.
+  ///
+  /// Merge::mergeByLargestSection is defined in terms of section size
+  /// and not in terms of atom size, so we need this function separate
+  /// from size().
+  virtual uint64_t sectionSize() const { return 0; }
 
   /// \brief The visibility of this atom to other atoms.
   ///
@@ -253,15 +266,15 @@ public:
   virtual StringRef customSectionName() const = 0;
 
   /// \brief constraints on whether the linker may dead strip away this atom.
-  virtual SectionPosition sectionPosition() const = 0;
-
-  /// \brief constraints on whether the linker may dead strip away this atom.
   virtual DeadStripKind deadStrip() const = 0;
 
   /// \brief Under which conditions should this atom be dynamically exported.
   virtual DynamicExport dynamicExport() const {
     return dynamicExportNormal;
   }
+
+  /// \brief Code model used by the atom.
+  virtual CodeModel codeModel() const { return codeNA; }
 
   /// \brief Returns the OS memory protections required for this atom's content
   /// at runtime.
@@ -309,7 +322,7 @@ public:
   /// \brief Returns an iterator to the end of this Atom's References.
   virtual reference_iterator end() const = 0;
 
-  static inline bool classof(const Atom *a) {
+  static bool classof(const Atom *a) {
     return a->definition() == definitionRegular;
   }
 
@@ -317,7 +330,7 @@ public:
   static ContentPermissions permissions(ContentType type);
 
   /// Utility function to check if the atom occupies file space
-  virtual bool occupiesDiskSpace() const {
+  bool occupiesDiskSpace() const {
     ContentType atomContentType = contentType();
     return !(atomContentType == DefinedAtom::typeZeroFill ||
              atomContentType == DefinedAtom::typeZeroFillFast ||
@@ -333,16 +346,14 @@ public:
             atomContentType == DefinedAtom::typeGnuLinkOnce);
   }
 
+  // Returns true if lhs should be placed before rhs in the final output.
+  static bool compareByPosition(const DefinedAtom *lhs,
+                                const DefinedAtom *rhs);
+
 protected:
   // DefinedAtom is an abstract base class. Only subclasses can access
   // constructor.
   DefinedAtom() : Atom(definitionRegular) { }
-
-  // The memory for DefinedAtom objects is always managed by the owning File
-  // object.  Therefore, no one but the owning File object should call delete on
-  // an Atom.  In fact, some File objects may bulk allocate an array of Atoms,
-  // so they cannot be individually deleted by anyone.
-  virtual ~DefinedAtom() {}
 
   /// \brief Returns a pointer to the Reference object that the abstract
   /// iterator "points" to.

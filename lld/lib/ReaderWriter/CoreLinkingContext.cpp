@@ -7,14 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lld/ReaderWriter/CoreLinkingContext.h"
-
+#include "lld/Core/DefinedAtom.h"
+#include "lld/Core/File.h"
 #include "lld/Core/Pass.h"
 #include "lld/Core/PassManager.h"
 #include "lld/Core/Simple.h"
-#include "lld/Passes/LayoutPass.h"
-#include "lld/Passes/RoundTripYAMLPass.h"
-
+#include "lld/ReaderWriter/CoreLinkingContext.h"
 #include "llvm/ADT/ArrayRef.h"
 
 using namespace lld;
@@ -52,8 +50,6 @@ public:
   }
 
   StringRef customSectionName() const override { return StringRef(); }
-
-  SectionPosition sectionPosition() const override { return sectionPositionAny; }
 
   DeadStripKind deadStrip() const override {
     return DefinedAtom::deadStripNormal;
@@ -116,8 +112,6 @@ public:
 
   StringRef customSectionName() const override { return StringRef(); }
 
-  SectionPosition sectionPosition() const override { return sectionPositionAny; }
-
   DeadStripKind deadStrip() const override {
     return DefinedAtom::deadStripNormal;
   }
@@ -147,43 +141,14 @@ private:
   uint32_t _ordinal;
 };
 
-class TestingPassFile : public SimpleFile {
+class OrderPass : public Pass {
 public:
-  TestingPassFile(const LinkingContext &ctx) : SimpleFile("Testing pass") {}
-
-  void addAtom(const Atom &atom) override {
-    if (const DefinedAtom *defAtom = dyn_cast<DefinedAtom>(&atom))
-      _definedAtoms._atoms.push_back(defAtom);
-    else
-      llvm_unreachable("atom has unknown definition kind");
+  /// Sorts atoms by position
+  void perform(std::unique_ptr<MutableFile> &file) override {
+    MutableFile::DefinedAtomRange defined = file->definedAtoms();
+    std::sort(defined.begin(), defined.end(), DefinedAtom::compareByPosition);
   }
-
-  DefinedAtomRange definedAtoms() override {
-    return range<std::vector<const DefinedAtom *>::iterator>(
-        _definedAtoms._atoms.begin(), _definedAtoms._atoms.end());
-  }
-
-  const atom_collection<DefinedAtom> &defined() const override {
-    return _definedAtoms;
-  }
-  const atom_collection<UndefinedAtom> &undefined() const override {
-    return _undefinedAtoms;
-  }
-  const atom_collection<SharedLibraryAtom> &sharedLibrary() const override {
-    return _sharedLibraryAtoms;
-  }
-  const atom_collection<AbsoluteAtom> &absolute() const override {
-    return _absoluteAtoms;
-  }
-
-private:
-  atom_collection_vector<DefinedAtom> _definedAtoms;
-  atom_collection_vector<UndefinedAtom> _undefinedAtoms;
-  atom_collection_vector<SharedLibraryAtom> _sharedLibraryAtoms;
-  atom_collection_vector<AbsoluteAtom> _absoluteAtoms;
 };
-
-
 
 } // anonymous namespace
 
@@ -196,8 +161,8 @@ bool CoreLinkingContext::validateImpl(raw_ostream &) {
 
 void CoreLinkingContext::addPasses(PassManager &pm) {
   for (StringRef name : _passNames) {
-    if (name.equals("layout"))
-      pm.add(std::unique_ptr<Pass>(new LayoutPass(registry())));
+    if (name.equals("order"))
+      pm.add(std::unique_ptr<Pass>(new OrderPass()));
     else
       llvm_unreachable("bad pass name");
   }

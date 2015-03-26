@@ -9,13 +9,11 @@
 
 #include "Pass.h"
 #include "EdataPass.h"
-
 #include "lld/Core/File.h"
 #include "lld/Core/Pass.h"
 #include "lld/Core/Simple.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Path.h"
-
 #include <climits>
 #include <ctime>
 #include <utility>
@@ -28,48 +26,66 @@ using llvm::object::export_directory_table_entry;
 namespace lld {
 namespace pecoff {
 
-static bool compare(const TableEntry &a, const TableEntry &b) {
-  return a.exportName.compare(b.exportName) < 0;
+typedef PECOFFLinkingContext::ExportDesc ExportDesc;
+
+// dedupExports removes duplicate export entries. If two exports are
+// referring the same symbol, they are considered duplicates.
+// This could happen if the same symbol name is specified as an argument
+// to /export more than once, or an unmangled and mangled name of the
+// same symbol are given to /export. In the latter case, we choose
+// unmangled (shorter) name.
+static void dedupExports(PECOFFLinkingContext &ctx) {
+  std::vector<ExportDesc> &exports = ctx.getDllExports();
+  // Pass 1: find duplicate entries
+  std::set<const ExportDesc *> dup;
+  std::map<StringRef, ExportDesc *> map;
+  for (ExportDesc &exp : exports) {
+    if (!exp.externalName.empty())
+      continue;
+    StringRef symbol = exp.getRealName();
+    auto it = map.find(symbol);
+    if (it == map.end()) {
+      map[symbol] = &exp;
+    } else if (symbol.size() < it->second->getRealName().size()) {
+      map[symbol] = &exp;
+      dup.insert(it->second);
+    } else {
+      dup.insert(&exp);
+    }
+  }
+  // Pass 2: remove duplicate entries
+  auto pred = [&](const ExportDesc &exp) {
+    return dup.count(&exp) == 1;
+  };
+  exports.erase(std::remove_if(exports.begin(), exports.end(), pred),
+                exports.end());
 }
 
 static void assignOrdinals(PECOFFLinkingContext &ctx) {
-  std::set<PECOFFLinkingContext::ExportDesc> exports;
+  std::vector<ExportDesc> &exports = ctx.getDllExports();
   int maxOrdinal = -1;
-  for (const PECOFFLinkingContext::ExportDesc &desc : ctx.getDllExports())
+  for (ExportDesc &desc : exports)
     maxOrdinal = std::max(maxOrdinal, desc.ordinal);
+
+  std::sort(exports.begin(), exports.end(),
+            [](const ExportDesc &a, const ExportDesc &b) {
+    return a.getExternalName().compare(b.getExternalName()) < 0;
+  });
+
   int nextOrdinal = (maxOrdinal == -1) ? 1 : (maxOrdinal + 1);
-  for (PECOFFLinkingContext::ExportDesc desc : ctx.getDllExports()) {
+  for (ExportDesc &desc : exports)
     if (desc.ordinal == -1)
       desc.ordinal = nextOrdinal++;
-    exports.insert(desc);
-  }
-  ctx.getDllExports().swap(exports);
-}
-
-static StringRef removeStdcallSuffix(StringRef sym) {
-  if (!sym.startswith("_"))
-    return sym;
-  StringRef trimmed = sym.rtrim("0123456789");
-  if (sym.size() != trimmed.size() && trimmed.endswith("@"))
-    return trimmed.drop_back();
-  return sym;
-}
-
-static StringRef removeLeadingUnderscore(StringRef sym) {
-  if (sym.startswith("_"))
-    return sym.substr(1);
-  return sym;
 }
 
 static bool getExportedAtoms(PECOFFLinkingContext &ctx, MutableFile *file,
                              std::vector<TableEntry> &ret) {
   std::map<StringRef, const DefinedAtom *> definedAtoms;
   for (const DefinedAtom *atom : file->defined())
-    definedAtoms[removeStdcallSuffix(atom->name())] = atom;
+    definedAtoms[atom->name()] = atom;
 
-  std::set<PECOFFLinkingContext::ExportDesc> exports;
-  for (PECOFFLinkingContext::ExportDesc desc : ctx.getDllExports()) {
-    auto it = definedAtoms.find(desc.name);
+  for (PECOFFLinkingContext::ExportDesc &desc : ctx.getDllExports()) {
+    auto it = definedAtoms.find(desc.getRealName());
     if (it == definedAtoms.end()) {
       llvm::errs() << "Symbol <" << desc.name
                    << "> is exported but not defined.\n";
@@ -80,16 +96,14 @@ static bool getExportedAtoms(PECOFFLinkingContext &ctx, MutableFile *file,
     // One can export a symbol with a different name than the symbol
     // name used in DLL. If such name is specified, use it in the
     // .edata section.
-    StringRef exportName =
-        desc.externalName.empty() ? desc.name : desc.externalName;
-    ret.push_back(TableEntry(exportName, desc.ordinal, atom, desc.noname));
-
-    if (desc.externalName.empty())
-      desc.externalName = removeLeadingUnderscore(atom->name());
-    exports.insert(desc);
+    ret.push_back(TableEntry(ctx.undecorateSymbol(desc.getExternalName()),
+                             desc.ordinal, atom, desc.noname));
   }
-  ctx.getDllExports().swap(exports);
-  std::sort(ret.begin(), ret.end(), compare);
+  std::sort(ret.begin(), ret.end(),
+            [](const TableEntry &a, const TableEntry &b) {
+    return a.exportName.compare(b.exportName) < 0;
+  });
+
   return true;
 }
 
@@ -113,7 +127,7 @@ EdataPass::createAddressTable(const std::vector<TableEntry> &entries,
   for (const TableEntry &e : entries) {
     int index = e.ordinal - ordinalBase;
     size_t offset = index * sizeof(export_address_table_entry);
-    addDir32NBReloc(addressTable, e.atom, offset);
+    addDir32NBReloc(addressTable, e.atom, _ctx.getMachineType(), offset);
   }
   return addressTable;
 }
@@ -128,9 +142,9 @@ EdataPass::createNamePointerTable(const PECOFFLinkingContext &ctx,
   size_t offset = 0;
   for (const TableEntry &e : entries) {
     auto *stringAtom = new (_alloc) COFFStringAtom(
-        _file, _stringOrdinal++, ".edata", ctx.undecorateSymbol(e.exportName));
+        _file, _stringOrdinal++, ".edata", e.exportName);
     file->addAtom(*stringAtom);
-    addDir32NBReloc(table, stringAtom, offset);
+    addDir32NBReloc(table, stringAtom, _ctx.getMachineType(), offset);
     offset += sizeof(uint32_t);
   }
   return table;
@@ -162,6 +176,7 @@ EdataPass::createOrdinalTable(const std::vector<TableEntry> &entries,
 }
 
 void EdataPass::perform(std::unique_ptr<MutableFile> &file) {
+  dedupExports(_ctx);
   assignOrdinals(_ctx);
 
   std::vector<TableEntry> entries;
@@ -186,24 +201,25 @@ void EdataPass::perform(std::unique_ptr<MutableFile> &file) {
       new (_alloc) COFFStringAtom(_file, _stringOrdinal++, ".edata",
                                   llvm::sys::path::filename(_ctx.outputPath()));
   file->addAtom(*dllName);
-  addDir32NBReloc(table, dllName,
+  addDir32NBReloc(table, dllName, _ctx.getMachineType(),
                   offsetof(export_directory_table_entry, NameRVA));
 
   EdataAtom *addressTable =
       createAddressTable(entries, ordinalBase, maxOrdinal);
   file->addAtom(*addressTable);
-  addDir32NBReloc(table, addressTable, offsetof(export_directory_table_entry,
-                                                ExportAddressTableRVA));
+  addDir32NBReloc(
+      table, addressTable, _ctx.getMachineType(),
+      offsetof(export_directory_table_entry, ExportAddressTableRVA));
 
   EdataAtom *namePointerTable =
       createNamePointerTable(_ctx, namedEntries, file.get());
   file->addAtom(*namePointerTable);
-  addDir32NBReloc(table, namePointerTable,
+  addDir32NBReloc(table, namePointerTable, _ctx.getMachineType(),
                   offsetof(export_directory_table_entry, NamePointerRVA));
 
   EdataAtom *ordinalTable = createOrdinalTable(namedEntries, ordinalBase);
   file->addAtom(*ordinalTable);
-  addDir32NBReloc(table, ordinalTable,
+  addDir32NBReloc(table, ordinalTable, _ctx.getMachineType(),
                   offsetof(export_directory_table_entry, OrdinalTableRVA));
 }
 

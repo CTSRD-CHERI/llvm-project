@@ -7,24 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-//++
-// File:		MIUtilTermios.h
-//
-// Overview:	Terminal setting termios functions.
-//
-// Environment:	Compilers:	Visual C++ 12.
-//							gcc (Ubuntu/Linaro 4.8.1-10ubuntu9) 4.8.1
-//				Libraries:	See MIReadmetxt. 
-//
-// Copyright:	None.
-//--
-
 #pragma once
 
 namespace MIUtilTermios
 {
 
-extern void StdinTermiosReset( void );
-extern void StdinTermiosSet( void );
+extern void StdinTermiosReset(void);
+extern void StdinTermiosSet(void);
 
 } // MIUtilTermios

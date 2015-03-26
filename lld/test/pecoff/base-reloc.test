@@ -1,23 +1,50 @@
-# RUN: yaml2obj %p/Inputs/hello.obj.yaml > %t.obj
+# RUN: yaml2obj %p/Inputs/basereloc.obj.yaml > %t.obj
 #
-# RUN: lld -flavor link /out:%t1.exe /subsystem:console /force /opt:noref \
+# RUN: lld -flavor link /out:%t.exe /subsystem:console /force /opt:noref \
 # RUN:   -- %t.obj
-# RUN: llvm-objdump -s %t1.exe | FileCheck %s --check-prefix=BASEREL-SECTION
+# RUN: llvm-readobj -coff-basereloc %t.exe | FileCheck %s --check-prefix=BASEREL
 #
 # RUN: lld -flavor link /out:%t2.exe /subsystem:console /force /fixed \
 # RUN:   /opt:noref -- %t.obj
-# RUN: llvm-objdump -s %t2.exe | FileCheck %s --check-prefix=NOBASEREL-SECTION
+# RUN: llvm-readobj -coff-basereloc %t2.exe | FileCheck %s --check-prefix=NOBASEREL
 
-# Because llvm-objdump cannot pretty-print the contents of .reloc section, we
-# have no choice other than comparing the result with this binary blob.
-#
-# TODO: Improve llvm-objdump to pretty print .reloc section as GNU binutil
-# objdump does.
+BASEREL:      BaseReloc [
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: HIGHLOW
+BASEREL-NEXT:     Address: 0x2007
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: HIGHLOW
+BASEREL-NEXT:     Address: 0x200C
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: HIGHLOW
+BASEREL-NEXT:     Address: 0x201E
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: ABSOLUTE
+BASEREL-NEXT:     Address: 0x2000
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: HIGHLOW
+BASEREL-NEXT:     Address: 0x3007
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: HIGHLOW
+BASEREL-NEXT:     Address: 0x300C
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: HIGHLOW
+BASEREL-NEXT:     Address: 0x301E
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: ABSOLUTE
+BASEREL-NEXT:     Address: 0x3000
+BASEREL-NEXT:   }
+BASEREL-NEXT: ]
 
-BASEREL-SECTION: Contents of section .reloc:
-BASEREL-SECTION-NEXT:  3000 00200000 0c000000 07300c30
-
-NOBASEREL-SECTION-NOT: Contents of section .reloc:
+NOBASEREL:      BaseReloc [
+NOBASEREL-NEXT: ]
 
 # RUN: lld -flavor link /out:%t3.exe /subsystem:console /force /opt:noref \
 # RUN:   -- %t.obj
@@ -33,13 +60,13 @@ BASEREL-HEADER-NOT: IMAGE_FILE_RELOCS_STRIPPED
 
 NOBASEREL-HEADER: IMAGE_FILE_RELOCS_STRIPPED
 
-BASEREL-HEADER:     BaseRelocationTableRVA: 0x3000
-BASEREL-HEADER:     BaseRelocationTableSize: 0xC
+BASEREL-HEADER:     BaseRelocationTableRVA: 0x4000
+BASEREL-HEADER:     BaseRelocationTableSize: 0x20
 BASEREL-HEADER:     Name: .reloc (2E 72 65 6C 6F 63 00 00)
-BASEREL-HEADER-NEXT:     VirtualSize: 0xC
-BASEREL-HEADER-NEXT:     VirtualAddress: 0x3000
+BASEREL-HEADER-NEXT:     VirtualSize: 0x20
+BASEREL-HEADER-NEXT:     VirtualAddress: 0x4000
 BASEREL-HEADER-NEXT:     RawDataSize: 512
-BASEREL-HEADER-NEXT:     PointerToRawData: 0x600
+BASEREL-HEADER-NEXT:     PointerToRawData: 0xA00
 BASEREL-HEADER-NEXT:     PointerToRelocations: 0x0
 BASEREL-HEADER-NEXT:     PointerToLineNumbers: 0x0
 BASEREL-HEADER-NEXT:     RelocationCount: 0

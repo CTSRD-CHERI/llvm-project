@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -polly-detect-scops-in-regions-without-loops -polly-detect-scops-in-functions-without-loops -polly-detect -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-detect-scops-in-regions-without-loops -polly-detect-scops-in-functions-without-loops -polly-detect -polly-codegen-scev -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-detect-scops-in-regions-without-loops -polly-detect-scops-in-functions-without-loops -polly-detect -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-detect-scops-in-regions-without-loops -polly-detect-scops-in-functions-without-loops -polly-detect -analyze < %s | FileCheck %s
 
 
 ;  foo(float *A, long n, long k) {
@@ -18,7 +18,7 @@ for.j:
 
 if.then:
   %mul = mul nsw i64 %n, %k
-  %arrayidx = getelementptr float* %A, i64 %mul
+  %arrayidx = getelementptr float, float* %A, i64 %mul
   store float 0.000000e+00, float* %arrayidx
   br label %return
 

@@ -246,7 +246,7 @@ public:
     Compare (const FileSpec& lhs, const FileSpec& rhs, bool full);
 
     static bool
-    Equal (const FileSpec& a, const FileSpec& b, bool full);
+    Equal (const FileSpec& a, const FileSpec& b, bool full, bool remove_backups = false);
 
     //------------------------------------------------------------------
     /// Dump this object to a Stream.
@@ -530,6 +530,45 @@ public:
     lldb::DataBufferSP
     MemoryMapFileContents (off_t offset = 0, size_t length = SIZE_MAX) const;
 
+
+    //------------------------------------------------------------------
+    /// Memory map part of, or the entire contents of, a file only if
+    /// the file is local (not on a network mount).
+    ///
+    /// Returns a shared pointer to a data buffer that contains all or
+    /// part of the contents of a file. The data will be memory mapped
+    /// if the file is local and will lazily page in data from the file
+    /// as memory is accessed. If the data is memory mapped, the data
+    /// that is mapped will start \a offset bytes into the file, and
+    /// \a length bytes will be mapped. If \a length is
+    /// greater than the number of bytes available in the file starting
+    /// at \a offset, the number of bytes will be appropriately
+    /// truncated. The final number of bytes that get mapped can be
+    /// verified using the DataBuffer::GetByteSize() function on the return
+    /// shared data pointer object contents.
+    ///
+    /// If the file is on a network mount the data will be read into a
+    /// heap buffer immediately so that accesses to the data won't later
+    /// cause a crash if we touch a page that isn't paged in and the
+    /// network mount has been disconnected or gone away.
+    ///
+    /// @param[in] offset
+    ///     The offset in bytes from the beginning of the file where
+    ///     memory mapping should begin.
+    ///
+    /// @param[in] length
+    ///     The size in bytes that should be mapped starting \a offset
+    ///     bytes into the file. If \a length is \c SIZE_MAX, map
+    ///     as many bytes as possible.
+    ///
+    /// @return
+    ///     A shared pointer to the memory mapped data. This shared
+    ///     pointer can contain a NULL DataBuffer pointer, so the contained
+    ///     pointer must be checked prior to using it.
+    //------------------------------------------------------------------
+    lldb::DataBufferSP
+    MemoryMapFileContentsIfLocal(off_t file_offset, size_t file_size) const;
+
     //------------------------------------------------------------------
     /// Read part of, or the entire contents of, a file into a heap based data buffer.
     ///
@@ -581,6 +620,20 @@ public:
 
     static void Normalize(llvm::SmallVectorImpl<char> &path, PathSyntax syntax = ePathSyntaxHostNative);
     static void DeNormalize(llvm::SmallVectorImpl<char> &path, PathSyntax syntax = ePathSyntaxHostNative);
+
+
+    //------------------------------------------------------------------
+    /// Run through the input string, replaying the effect of any ".." and produce
+    /// the resultant path.  The input path is not required to be in the host file system
+    /// format, but it is required to be normalized to that system.
+    ///
+    /// @param[in] input
+    ///     The input path to analyze.
+    ///
+    /// @param[out] result
+    ///     The backup-resolved path will be written here.
+    //------------------------------------------------------------------
+    static void RemoveBackupDots (const ConstString &input_const_str, ConstString &result_const_str);
 
     //------------------------------------------------------------------
     /// Change the file specified with a new path.

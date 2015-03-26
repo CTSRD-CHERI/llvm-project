@@ -423,9 +423,11 @@ StopInfoMachException::CreateStopReasonWithMachException
                                 wp_sp->SetHardwareIndex((uint32_t)exc_sub_sub_code);
                             return StopInfo::CreateStopReasonWithWatchpointID(thread, wp_sp->GetID());
                         }
-                        // EXC_ARM_DA_DEBUG seems to be reused for EXC_BREAKPOINT as well as EXC_BAD_ACCESS
-                        if (thread.GetTemporaryResumeState() == eStateStepping)
-                            return StopInfo::CreateStopReasonToTrace(thread);
+                        else
+                        {
+                            is_actual_breakpoint = true;
+                            is_trace_if_actual_breakpoint_missing = true;
+                        }
                     }
                     else if (exc_code == 1) // EXC_ARM_BREAKPOINT
                     {
@@ -468,6 +470,7 @@ StopInfoMachException::CreateStopReasonWithMachException
                     // It looks like exc_sub_code has the 4 bytes of the instruction that triggered the 
                     // exception, i.e. our breakpoint opcode
                     is_actual_breakpoint = exc_code == 1;
+                    break;
                 }
 
                 default:

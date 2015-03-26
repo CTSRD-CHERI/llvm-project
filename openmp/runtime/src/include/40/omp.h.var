@@ -1,7 +1,5 @@
 /*
  * include/40/omp.h.var
- * $Revision: 41674 $
- * $Date: 2012-06-05 08:33:35 -0500 (Tue, 05 Jun 2012) $
  */
 
 
@@ -86,6 +84,20 @@
     extern void   __KAI_KMPC_CONVENTION  omp_destroy_nest_lock (omp_nest_lock_t *);
     extern int    __KAI_KMPC_CONVENTION  omp_test_nest_lock    (omp_nest_lock_t *);
 
+    /* lock hint type for dynamic user lock */
+    typedef enum kmp_lock_hint_t {
+        kmp_lock_hint_none = 0,
+        kmp_lock_hint_contended,
+        kmp_lock_hint_uncontended,
+        kmp_lock_hint_nonspeculative,
+        kmp_lock_hint_speculative,
+        kmp_lock_hint_adaptive,
+    } kmp_lock_hint_t;
+
+    /* hinted lock initializers */
+    extern void __KAI_KMPC_CONVENTION kmp_init_lock_hinted(omp_lock_t *, kmp_lock_hint_t);
+    extern void __KAI_KMPC_CONVENTION kmp_init_nest_lock_hinted(omp_nest_lock_t *, kmp_lock_hint_t);
+
     /* time API functions */
     extern double __KAI_KMPC_CONVENTION  omp_get_wtime (void);
     extern double __KAI_KMPC_CONVENTION  omp_get_wtick (void);
@@ -93,6 +105,7 @@
     /* OpenMP 4.0 */
     extern int  __KAI_KMPC_CONVENTION  omp_get_default_device (void);
     extern void __KAI_KMPC_CONVENTION  omp_set_default_device (int);
+    extern int  __KAI_KMPC_CONVENTION  omp_is_initial_device (void);
     extern int  __KAI_KMPC_CONVENTION  omp_get_num_devices (void);
     extern int  __KAI_KMPC_CONVENTION  omp_get_num_teams (void);
     extern int  __KAI_KMPC_CONVENTION  omp_get_team_num (void);

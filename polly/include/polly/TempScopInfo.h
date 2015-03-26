@@ -42,7 +42,8 @@ public:
   // The type of the scev affine function
   enum TypeKind {
     READ = 0x1,
-    WRITE = 0x2,
+    MUST_WRITE = 0x2,
+    MAY_WRITE = 0x3,
   };
 
 private:
@@ -52,6 +53,11 @@ private:
 
 public:
   SmallVector<const SCEV *, 4> Subscripts, Sizes;
+
+  explicit IRAccess(TypeKind Type, Value *BaseAddress, const SCEV *Offset,
+                    unsigned elemBytes, bool Affine)
+      : BaseAddress(BaseAddress), Offset(Offset), ElemBytes(elemBytes),
+        Type(Type), IsAffine(Affine) {}
 
   explicit IRAccess(TypeKind Type, Value *BaseAddress, const SCEV *Offset,
                     unsigned elemBytes, bool Affine,
@@ -72,7 +78,11 @@ public:
 
   bool isRead() const { return Type == READ; }
 
-  bool isWrite() const { return Type == WRITE; }
+  bool isWrite() const { return Type == MUST_WRITE; }
+
+  void setMayWrite() { Type = MAY_WRITE; }
+
+  bool isMayWrite() const { return Type == MAY_WRITE; }
 
   bool isScalar() const { return Subscripts.size() == 0; }
 
@@ -124,22 +134,17 @@ class TempScop {
   // The Region.
   Region &R;
 
-  // The max loop depth of this Scop
-  unsigned MaxLoopDepth;
-
   // Remember the bounds of loops, to help us build iteration domain of BBs.
-  const LoopBoundMapType &LoopBounds;
   const BBCondMapType &BBConds;
 
   // Access function of bbs.
-  const AccFuncMapType &AccFuncMap;
+  AccFuncMapType &AccFuncMap;
 
   friend class TempScopInfo;
 
-  explicit TempScop(Region &r, LoopBoundMapType &loopBounds,
-                    BBCondMapType &BBCmps, AccFuncMapType &accFuncMap)
-      : R(r), MaxLoopDepth(0), LoopBounds(loopBounds), BBConds(BBCmps),
-        AccFuncMap(accFuncMap) {}
+  explicit TempScop(Region &r, BBCondMapType &BBCmps,
+                    AccFuncMapType &accFuncMap)
+      : R(r), BBConds(BBCmps), AccFuncMap(accFuncMap) {}
 
 public:
   ~TempScop();
@@ -148,23 +153,6 @@ public:
   ///
   /// @return The maximum Region contained by this Scop.
   Region &getMaxRegion() const { return R; }
-
-  /// @brief Get the maximum loop depth of Region R.
-  ///
-  /// @return The maximum loop depth of Region R.
-  unsigned getMaxLoopDepth() const { return MaxLoopDepth; }
-
-  /// @brief Get the loop bounds of the given loop.
-  ///
-  /// @param L The loop to get the bounds.
-  ///
-  /// @return The bounds of the loop L in { Lower bound, Upper bound } form.
-  ///
-  const SCEV *getLoopBound(const Loop *L) const {
-    LoopBoundMapType::const_iterator at = LoopBounds.find(L);
-    assert(at != LoopBounds.end() && "Bound for loop not available!");
-    return at->second;
-  }
 
   /// @brief Get the condition from entry block of the Scop to a BasicBlock
   ///
@@ -183,8 +171,8 @@ public:
   ///
   /// @return All access functions in BB
   ///
-  const AccFuncSetType *getAccessFunctions(const BasicBlock *BB) const {
-    AccFuncMapType::const_iterator at = AccFuncMap.find(BB);
+  AccFuncSetType *getAccessFunctions(const BasicBlock *BB) {
+    AccFuncMapType::iterator at = AccFuncMap.find(BB);
     return at != AccFuncMap.end() ? &(at->second) : 0;
   }
   //@}
@@ -213,8 +201,8 @@ typedef std::map<const Region *, TempScop *> TempScopMapType;
 ///
 class TempScopInfo : public FunctionPass {
   //===-------------------------------------------------------------------===//
-  TempScopInfo(const TempScopInfo &) LLVM_DELETED_FUNCTION;
-  const TempScopInfo &operator=(const TempScopInfo &) LLVM_DELETED_FUNCTION;
+  TempScopInfo(const TempScopInfo &) = delete;
+  const TempScopInfo &operator=(const TempScopInfo &) = delete;
 
   // The ScalarEvolution to help building Scop.
   ScalarEvolution *SE;
@@ -235,9 +223,6 @@ class TempScopInfo : public FunctionPass {
   // Target data for element size computing.
   const DataLayout *TD;
 
-  // Remember the bounds of loops, to help us build iteration domain of BBs.
-  LoopBoundMapType LoopBounds;
-
   // And also Remember the constrains for BBs
   BBCondMapType BBConds;
 
@@ -256,10 +241,9 @@ class TempScopInfo : public FunctionPass {
 
   /// @brief Build condition constrains to BBs in a valid Scop.
   ///
-  /// @param BB           The BasicBlock to build condition constrains
-  /// @param RegionEntry  The entry block of the Smallest Region that containing
-  ///                     BB
-  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry);
+  /// @param BB The BasicBlock to build condition constrains
+  /// @param R  The region for the current TempScop.
+  void buildCondition(BasicBlock *BB, Region &R);
 
   // Build the affine function of the given condition
   void buildAffineCondition(Value &V, bool inverted, Comparison **Comp) const;
@@ -285,16 +269,37 @@ class TempScopInfo : public FunctionPass {
   /// @brief Analyze and extract the cross-BB scalar dependences (or,
   ///        dataflow dependencies) of an instruction.
   ///
-  /// @param Inst The instruction to be analyzed
-  /// @param R    The SCoP region
+  /// @param Inst               The instruction to be analyzed
+  /// @param R                  The SCoP region
+  /// @param NonAffineSubRegion The non affine sub-region @p Inst is in.
   ///
   /// @return     True if the Instruction is used in other BB and a scalar write
   ///             Access is required.
-  bool buildScalarDependences(Instruction *Inst, Region *R);
+  bool buildScalarDependences(Instruction *Inst, Region *R,
+                              Region *NonAffineSubRegio);
 
-  void buildAccessFunctions(Region &RefRegion, BasicBlock &BB);
+  /// @brief Create IRAccesses for the given PHI node in the given region.
+  ///
+  /// @param PHI                The PHI node to be handled
+  /// @param R                  The SCoP region
+  /// @param Functions          The access functions of the current BB
+  /// @param NonAffineSubRegion The non affine sub-region @p PHI is in.
+  void buildPHIAccesses(PHINode *PHI, Region &R, AccFuncSetType &Functions,
+                        Region *NonAffineSubRegion);
 
-  void buildLoopBounds(TempScop &Scop);
+  /// @brief Build the access functions for the subregion @p SR.
+  ///
+  /// @param R  The SCoP region.
+  /// @param SR A subregion of @p R.
+  void buildAccessFunctions(Region &R, Region &SR);
+
+  /// @brief Build the access functions for the basic block @p BB
+  ///
+  /// @param R                  The SCoP region.
+  /// @param BB                 A basic block in @p R.
+  /// @param NonAffineSubRegion The non affine sub-region @p BB is in.
+  void buildAccessFunctions(Region &R, BasicBlock &BB,
+                            Region *NonAffineSubRegion = nullptr);
 
 public:
   static char ID;

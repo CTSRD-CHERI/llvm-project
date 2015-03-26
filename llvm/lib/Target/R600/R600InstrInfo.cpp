@@ -29,9 +29,7 @@ using namespace llvm;
 #include "AMDGPUGenDFAPacketizer.inc"
 
 R600InstrInfo::R600InstrInfo(const AMDGPUSubtarget &st)
-  : AMDGPUInstrInfo(st),
-    RI(st)
-  { }
+    : AMDGPUInstrInfo(st), RI() {}
 
 const R600RegisterInfo &R600InstrInfo::getRegisterInfo() const {
   return RI;
@@ -268,9 +266,8 @@ int R600InstrInfo::getSrcIdx(unsigned Opcode, unsigned SrcNum) const {
   return getOperandIdx(Opcode, OpTable[SrcNum]);
 }
 
-#define SRC_SEL_ROWS 11
 int R600InstrInfo::getSelIdx(unsigned Opcode, unsigned SrcIdx) const {
-  static const unsigned SrcSelTable[SRC_SEL_ROWS][2] = {
+  static const unsigned SrcSelTable[][2] = {
     {AMDGPU::OpName::src0, AMDGPU::OpName::src0_sel},
     {AMDGPU::OpName::src1, AMDGPU::OpName::src1_sel},
     {AMDGPU::OpName::src2, AMDGPU::OpName::src2_sel},
@@ -284,14 +281,13 @@ int R600InstrInfo::getSelIdx(unsigned Opcode, unsigned SrcIdx) const {
     {AMDGPU::OpName::src1_W, AMDGPU::OpName::src1_sel_W}
   };
 
-  for (unsigned i = 0; i < SRC_SEL_ROWS; ++i) {
-    if (getOperandIdx(Opcode, SrcSelTable[i][0]) == (int)SrcIdx) {
-      return getOperandIdx(Opcode, SrcSelTable[i][1]);
+  for (const auto &Row : SrcSelTable) {
+    if (getOperandIdx(Opcode, Row[0]) == (int)SrcIdx) {
+      return getOperandIdx(Opcode, Row[1]);
     }
   }
   return -1;
 }
-#undef SRC_SEL_ROWS
 
 SmallVector<std::pair<MachineOperand *, int64_t>, 3>
 R600InstrInfo::getSrcs(MachineInstr *MI) const {
@@ -571,7 +567,7 @@ R600InstrInfo::fitsReadPortLimitations(const std::vector<MachineInstr *> &IG,
   if (!isLastAluTrans)
     return FindSwizzleForVectorSlot(IGSrcs, ValidSwizzle, TransOps, TransBS);
 
-  TransOps = IGSrcs.back();
+  TransOps = std::move(IGSrcs.back());
   IGSrcs.pop_back();
   ValidSwizzle.pop_back();
 
@@ -654,11 +650,10 @@ R600InstrInfo::fitsConstReadLimitations(const std::vector<MachineInstr *> &MIs)
   return fitsConstReadLimitations(Consts);
 }
 
-DFAPacketizer *R600InstrInfo::CreateTargetScheduleState(const TargetMachine *TM,
-    const ScheduleDAG *DAG) const {
-  const InstrItineraryData *II =
-      TM->getSubtargetImpl()->getInstrItineraryData();
-  return TM->getSubtarget<AMDGPUSubtarget>().createDFAPacketizer(II);
+DFAPacketizer *
+R600InstrInfo::CreateTargetScheduleState(const TargetSubtargetInfo &STI) const {
+  const InstrItineraryData *II = STI.getInstrItineraryData();
+  return static_cast<const AMDGPUSubtarget &>(STI).createDFAPacketizer(II);
 }
 
 static bool

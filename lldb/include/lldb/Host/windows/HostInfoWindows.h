@@ -11,12 +11,15 @@
 #define lldb_Host_windows_HostInfoWindows_h_
 
 #include "lldb/Host/HostInfoBase.h"
+#include "lldb/Host/FileSpec.h"
 
 namespace lldb_private
 {
 
 class HostInfoWindows : public HostInfoBase
 {
+    friend class HostInfoBase;
+
   private:
     // Static class, unconstructable.
     HostInfoWindows();
@@ -29,6 +32,14 @@ class HostInfoWindows : public HostInfoBase
     static bool GetOSBuildString(std::string &s);
     static bool GetOSKernelDescription(std::string &s);
     static bool GetHostname(std::string &s);
+    static FileSpec GetProgramFileSpec();
+    static FileSpec GetDefaultShell();
+
+  protected:
+    static bool ComputePythonDirectory(FileSpec &file_spec);
+
+  private:
+    static FileSpec m_program_filespec;
 };
 }
 

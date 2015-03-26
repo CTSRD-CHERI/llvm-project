@@ -1,7 +1,5 @@
 /*
  * kmp_ftn_cdecl.c -- Fortran __cdecl linkage support for OpenMP.
- * $Revision: 42757 $
- * $Date: 2013-10-18 08:20:57 -0500 (Fri, 18 Oct 2013) $
  */
 
 

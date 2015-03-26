@@ -15,6 +15,7 @@
 #include "lldb/Core/Timer.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Symbol/ClangASTContext.h"
+#include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Symbol/Type.h"
 #include "lldb/Symbol/TypeList.h"
 #include "lldb/Target/ObjCLanguageRuntime.h"
@@ -34,9 +35,14 @@ ObjCLanguageRuntime::~ObjCLanguageRuntime()
 
 ObjCLanguageRuntime::ObjCLanguageRuntime (Process *process) :
     LanguageRuntime (process),
+    m_impl_cache(),
     m_has_new_literals_and_indexing (eLazyBoolCalculate),
     m_isa_to_descriptor(),
-    m_isa_to_descriptor_stop_id (UINT32_MAX)
+    m_hash_to_isa_map(),
+    m_type_size_cache(),
+    m_isa_to_descriptor_stop_id (UINT32_MAX),
+    m_complete_class_cache(),
+    m_negative_complete_class_cache()
 {
 
 }
@@ -603,20 +609,20 @@ ObjCLanguageRuntime::GetNonKVOClassDescriptor (ObjCISA isa)
 
 
 ClangASTType
-ObjCLanguageRuntime::EncodingToType::RealizeType (const char* name, bool allow_unknownanytype)
+ObjCLanguageRuntime::EncodingToType::RealizeType (const char* name, bool for_expression)
 {
     if (m_scratch_ast_ctx_ap)
-        return RealizeType(*m_scratch_ast_ctx_ap, name, allow_unknownanytype);
+        return RealizeType(*m_scratch_ast_ctx_ap, name, for_expression);
     return ClangASTType();
 }
 
 ClangASTType
-ObjCLanguageRuntime::EncodingToType::RealizeType (ClangASTContext& ast_ctx, const char* name, bool allow_unknownanytype)
+ObjCLanguageRuntime::EncodingToType::RealizeType (ClangASTContext& ast_ctx, const char* name, bool for_expression)
 {
     clang::ASTContext *clang_ast = ast_ctx.getASTContext();
     if (!clang_ast)
         return ClangASTType();
-    return RealizeType(*clang_ast, name, allow_unknownanytype);
+    return RealizeType(*clang_ast, name, for_expression);
 }
 
 ObjCLanguageRuntime::EncodingToType::~EncodingToType() {}
@@ -625,4 +631,43 @@ ObjCLanguageRuntime::EncodingToTypeSP
 ObjCLanguageRuntime::GetEncodingToType ()
 {
     return nullptr;
+}
+
+bool
+ObjCLanguageRuntime::GetTypeBitSize (const ClangASTType& clang_type,
+                                     uint64_t &size)
+{
+    void *opaque_ptr = clang_type.GetQualType().getAsOpaquePtr();
+    size = m_type_size_cache.Lookup(opaque_ptr);
+    // an ObjC object will at least have an ISA, so 0 is definitely not OK
+    if (size > 0)
+        return true;
+    
+    ClassDescriptorSP class_descriptor_sp = GetClassDescriptorFromClassName(clang_type.GetTypeName());
+    if (!class_descriptor_sp)
+        return false;
+    
+    int32_t max_offset = INT32_MIN;
+    uint64_t sizeof_max = 0;
+    bool found = false;
+    
+    for (size_t idx = 0;
+         idx < class_descriptor_sp->GetNumIVars();
+         idx++)
+    {
+        const auto& ivar = class_descriptor_sp->GetIVarAtIndex(idx);
+        int32_t cur_offset = ivar.m_offset;
+        if (cur_offset > max_offset)
+        {
+            max_offset = cur_offset;
+            sizeof_max = ivar.m_size;
+            found = true;
+        }
+    }
+    
+    size = 8 * (max_offset + sizeof_max);
+    if (found)
+        m_type_size_cache.Insert(opaque_ptr, size);
+    
+    return found;
 }

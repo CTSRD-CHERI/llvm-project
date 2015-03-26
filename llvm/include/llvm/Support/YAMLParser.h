@@ -38,7 +38,6 @@
 #ifndef LLVM_SUPPORT_YAMLPARSER_H
 #define LLVM_SUPPORT_YAMLPARSER_H
 
-#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/SMLoc.h"
@@ -47,10 +46,10 @@
 #include <utility>
 
 namespace llvm {
-class MemoryBuffer;
+class MemoryBufferRef;
 class SourceMgr;
-class raw_ostream;
 class Twine;
+class raw_ostream;
 
 namespace yaml {
 
@@ -79,7 +78,7 @@ public:
   /// \brief This keeps a reference to the string referenced by \p Input.
   Stream(StringRef Input, SourceMgr &);
 
-  Stream(std::unique_ptr<MemoryBuffer> InputBuffer, SourceMgr &);
+  Stream(MemoryBufferRef InputBuffer, SourceMgr &);
   ~Stream();
 
   document_iterator begin();

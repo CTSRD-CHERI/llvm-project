@@ -115,8 +115,9 @@ isSafeToConvert(const RecordDecl *RD, CodeGenTypes &CGT,
                 llvm::SmallPtrSet<const RecordDecl*, 16> &AlreadyChecked) {
   // If we have already checked this type (maybe the same type is used by-value
   // multiple times in multiple structure fields, don't check again.
-  if (!AlreadyChecked.insert(RD)) return true;
-  
+  if (!AlreadyChecked.insert(RD).second)
+    return true;
+
   const Type *Key = CGT.getContext().getTagDeclType(RD).getTypePtr();
   
   // If this type is already laid out, converting it is a noop.
@@ -415,7 +416,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm_unreachable("Unexpected undeduced auto type!");
   case Type::Complex: {
     llvm::Type *EltTy = ConvertType(cast<ComplexType>(Ty)->getElementType());
-    ResultType = llvm::StructType::get(EltTy, EltTy, NULL);
+    ResultType = llvm::StructType::get(EltTy, EltTy, nullptr);
     break;
   }
   case Type::LValueReference:
@@ -514,7 +515,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // While we're converting the parameter types for a function, we don't want
     // to recursively convert any pointed-to structs.  Converting directly-used
     // structs is ok though.
-    if (!RecordsBeingLaidOut.insert(Ty)) {
+    if (!RecordsBeingLaidOut.insert(Ty).second) {
       ResultType = llvm::StructType::get(getLLVMContext());
       
       SkippedLayout = true;
@@ -670,7 +671,8 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
   }
 
   // Okay, this is a definition of a type.  Compile the implementation now.
-  bool InsertResult = RecordsBeingLaidOut.insert(Key); (void)InsertResult;
+  bool InsertResult = RecordsBeingLaidOut.insert(Key).second;
+  (void)InsertResult;
   assert(InsertResult && "Recursively compiling a struct?");
   
   // Force conversion of non-virtual base classes recursively.

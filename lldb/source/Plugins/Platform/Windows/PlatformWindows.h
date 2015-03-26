@@ -37,7 +37,7 @@ public:
     //------------------------------------------------------------
     // lldb_private::PluginInterface functions
     //------------------------------------------------------------
-    static lldb_private::Platform*
+    static lldb::PlatformSP
     CreateInstance (bool force, const lldb_private::ArchSpec *arch);
 
 
@@ -59,9 +59,13 @@ public:
     //------------------------------------------------------------
     // lldb_private::Platform functions
     //------------------------------------------------------------
+    virtual bool
+    GetModuleSpec (const lldb_private::FileSpec& module_file_spec,
+                   const lldb_private::ArchSpec& arch,
+                   lldb_private::ModuleSpec &module_spec);
+
     virtual Error
-    ResolveExecutable(const FileSpec &exe_file,
-                      const ArchSpec &arch,
+    ResolveExecutable(const lldb_private::ModuleSpec &module_spec,
                       lldb::ModuleSP &module_sp,
                       const FileSpecList *module_search_paths_ptr);
 
@@ -121,7 +125,6 @@ public:
     Attach(lldb_private::ProcessAttachInfo &attach_info,
            lldb_private::Debugger &debugger,
            lldb_private::Target *target,
-           lldb_private::Listener &listener,
            lldb_private::Error &error);
 
     virtual lldb_private::Error

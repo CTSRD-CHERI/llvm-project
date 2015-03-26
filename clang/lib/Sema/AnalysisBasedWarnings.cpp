@@ -117,6 +117,7 @@ static void CheckUnreachable(Sema &S, AnalysisDeclContext &AC) {
   reachable_code::FindUnreachableCode(AC, S.getPreprocessor(), UC);
 }
 
+namespace {
 /// \brief Warn on logical operator errors in CFGBuilder
 class LogicalErrorHandler : public CFGCallback {
   Sema &S;
@@ -156,7 +157,7 @@ public:
         << DiagRange << isAlwaysTrue;
   }
 };
-
+} // namespace
 
 //===----------------------------------------------------------------------===//
 // Check for infinite self-recursion in functions
@@ -916,7 +917,7 @@ namespace {
       // issue a warn_fallthrough_attr_unreachable for them.
       for (const auto *B : *Cfg) {
         const Stmt *L = B->getLabel();
-        if (L && isa<SwitchCase>(L) && ReachableBlocks.insert(B))
+        if (L && isa<SwitchCase>(L) && ReachableBlocks.insert(B).second)
           BlockQueue.push_back(B);
       }
 
@@ -926,7 +927,7 @@ namespace {
         for (CFGBlock::const_succ_iterator I = P->succ_begin(),
                                            E = P->succ_end();
              I != E; ++I) {
-          if (*I && ReachableBlocks.insert(*I))
+          if (*I && ReachableBlocks.insert(*I).second)
             BlockQueue.push_back(*I);
         }
       }
@@ -1438,7 +1439,7 @@ struct SortDiagBySourceLocation {
 //===----------------------------------------------------------------------===//
 namespace clang {
 namespace threadSafety {
-
+namespace {
 class ThreadSafetyReporter : public clang::threadSafety::ThreadSafetyHandler {
   Sema &S;
   DiagList Warnings;
@@ -1679,6 +1680,22 @@ class ThreadSafetyReporter : public clang::threadSafety::ThreadSafetyHandler {
     Warnings.push_back(DelayedDiag(Warning, getNotes()));
   }
 
+
+  virtual void handleLockAcquiredBefore(StringRef Kind, Name L1Name,
+                                        Name L2Name, SourceLocation Loc)
+      override {
+    PartialDiagnosticAt Warning(Loc,
+      S.PDiag(diag::warn_acquired_before) << Kind << L1Name << L2Name);
+    Warnings.push_back(DelayedDiag(Warning, getNotes()));
+  }
+
+  virtual void handleBeforeAfterCycle(Name L1Name, SourceLocation Loc)
+      override {
+    PartialDiagnosticAt Warning(Loc,
+      S.PDiag(diag::warn_acquired_before_after_cycle) << L1Name);
+    Warnings.push_back(DelayedDiag(Warning, getNotes()));
+  }
+
   void enterFunction(const FunctionDecl* FD) override {
     CurrentFunction = FD;
   }
@@ -1687,9 +1704,9 @@ class ThreadSafetyReporter : public clang::threadSafety::ThreadSafetyHandler {
     CurrentFunction = 0;
   }
 };
-
-}
-}
+} // namespace
+} // namespace threadSafety
+} // namespace clang
 
 //===----------------------------------------------------------------------===//
 // -Wconsumed
@@ -1704,7 +1721,7 @@ class ConsumedWarningsHandler : public ConsumedWarningsHandlerBase {
   DiagList Warnings;
   
 public:
-  
+
   ConsumedWarningsHandler(Sema &S) : S(S) {}
 
   void emitDiagnostics() override {
@@ -1981,7 +1998,8 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
     if (!Diags.isIgnored(diag::warn_thread_safety_verbose, D->getLocStart()))
       Reporter.setVerbose(true);
 
-    threadSafety::runThreadSafetyAnalysis(AC, Reporter);
+    threadSafety::runThreadSafetyAnalysis(AC, Reporter,
+                                          &S.ThreadSafetyDeclCache);
     Reporter.emitDiagnostics();
   }
 

@@ -86,13 +86,12 @@ enum RejectReasonKind {
   rrkUndefBasePtr,
   rrkVariantBasePtr,
   rrkNonAffineAccess,
+  rrkDifferentElementSize,
   rrkLastAffFunc,
 
   // IndVar
   rrkIndVar,
   rrkPhiNodeRefInRegion,
-  rrkNonCanonicalPhiNode,
-  rrkLoopHeader,
   rrkLastIndVar,
 
   rrkIndEdge,
@@ -112,6 +111,7 @@ enum RejectReasonKind {
   rrkUnknownInst,
   rrkPHIinExit,
   rrkEntry,
+  rrkUnprofitable,
   rrkLastOther
 };
 
@@ -515,6 +515,30 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
+/// @brief Report array accesses with differing element size.
+class ReportDifferentArrayElementSize : public ReportAffFunc {
+  //===--------------------------------------------------------------------===//
+
+  // The base pointer of the memory access.
+  const Value *BaseValue;
+
+public:
+  ReportDifferentArrayElementSize(const Instruction *Inst, const Value *V)
+      : ReportAffFunc(rrkDifferentElementSize, Inst), BaseValue(V) {}
+
+  /// @name LLVM-RTTI interface
+  //@{
+  static bool classof(const RejectReason *RR);
+  //@}
+
+  /// @name RejectReason interface
+  //@{
+  virtual std::string getMessage() const override;
+  virtual std::string getEndUserMessage() const override;
+  //@}
+};
+
+//===----------------------------------------------------------------------===//
 /// @brief Base class for reject reasons related to induction variables.
 ///
 //  ReportIndVar reject reasons are generated when the ScopDetection finds
@@ -535,52 +559,6 @@ class ReportPhiNodeRefInRegion : public ReportIndVar {
 
 public:
   ReportPhiNodeRefInRegion(Instruction *Inst);
-
-  /// @name LLVM-RTTI interface
-  //@{
-  static bool classof(const RejectReason *RR);
-  //@}
-
-  /// @name RejectReason interface
-  //@{
-  virtual std::string getMessage() const override;
-  virtual const DebugLoc &getDebugLoc() const override;
-  //@}
-};
-
-//===----------------------------------------------------------------------===//
-/// @brief Captures a non canonical phi node.
-class ReportNonCanonicalPhiNode : public ReportIndVar {
-  //===--------------------------------------------------------------------===//
-
-  // The offending instruction.
-  Instruction *Inst;
-
-public:
-  ReportNonCanonicalPhiNode(Instruction *Inst);
-
-  /// @name LLVM-RTTI interface
-  //@{
-  static bool classof(const RejectReason *RR);
-  //@}
-
-  /// @name RejectReason interface
-  //@{
-  virtual std::string getMessage() const override;
-  virtual const DebugLoc &getDebugLoc() const override;
-  //@}
-};
-
-//===----------------------------------------------------------------------===//
-/// @brief Captures a non canonical induction variable in the loop header.
-class ReportLoopHeader : public ReportIndVar {
-  //===--------------------------------------------------------------------===//
-
-  // The offending loop.
-  Loop *L;
-
-public:
-  ReportLoopHeader(Loop *L);
 
   /// @name LLVM-RTTI interface
   //@{
@@ -849,6 +827,28 @@ public:
   /// @name RejectReason interface
   //@{
   virtual std::string getMessage() const override;
+  virtual const DebugLoc &getDebugLoc() const override;
+  //@}
+};
+
+//===----------------------------------------------------------------------===//
+/// @brief Report regions that seem not profitable to be optimized.
+class ReportUnprofitable : public ReportOther {
+  //===--------------------------------------------------------------------===//
+  Region *R;
+
+public:
+  ReportUnprofitable(Region *R);
+
+  /// @name LLVM-RTTI interface
+  //@{
+  static bool classof(const RejectReason *RR);
+  //@}
+
+  /// @name RejectReason interface
+  //@{
+  virtual std::string getMessage() const override;
+  virtual std::string getEndUserMessage() const override;
   virtual const DebugLoc &getDebugLoc() const override;
   //@}
 };

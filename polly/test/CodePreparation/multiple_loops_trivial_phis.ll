@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -S -polly-prepare < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -S -polly-prepare < %s | FileCheck %s
 ; ModuleID = 'multiple_loops_trivial_phis.ll'
 ;
 ; int f(int * __restrict__ A) {
@@ -30,8 +30,8 @@ for.inc:                                          ; preds = %for.body, %for.inc
   %sum.12 = phi i32 [ %mul, %for.body ], [ %add4, %for.inc ]
   %indvars.iv1 = phi i64 [ 0, %for.body ], [ %1, %for.inc ]
   %0 = add i64 %indvars.iv23, %indvars.iv1
-  %arrayidx = getelementptr i32* %A, i64 %0
-  %tmp5 = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr i32, i32* %A, i64 %0
+  %tmp5 = load i32, i32* %arrayidx, align 4
   %add4 = add nsw i32 %tmp5, %sum.12
   %1 = add nuw nsw i64 %indvars.iv1, 1
   %exitcond5 = icmp eq i64 %1, 100

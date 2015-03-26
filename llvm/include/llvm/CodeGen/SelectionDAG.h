@@ -115,8 +115,8 @@ class SDDbgInfo {
   typedef DenseMap<const SDNode*, SmallVector<SDDbgValue*, 2> > DbgValMapType;
   DbgValMapType DbgValMap;
 
-  void operator=(const SDDbgInfo&) LLVM_DELETED_FUNCTION;
-  SDDbgInfo(const SDDbgInfo&) LLVM_DELETED_FUNCTION;
+  void operator=(const SDDbgInfo&) = delete;
+  SDDbgInfo(const SDDbgInfo&) = delete;
 public:
   SDDbgInfo() {}
 
@@ -127,6 +127,10 @@ public:
     if (Node)
       DbgValMap[Node].push_back(V);
   }
+
+  /// \brief Invalidate all DbgValues attached to the node and remove
+  /// it from the Node-to-DbgValues map.
+  void erase(const SDNode *Node);
 
   void clear() {
     DbgValMap.clear();
@@ -258,8 +262,8 @@ private:
                               DenseSet<SDNode *> &visited,
                               int level, bool &printed);
 
-  void operator=(const SelectionDAG&) LLVM_DELETED_FUNCTION;
-  SelectionDAG(const SelectionDAG&) LLVM_DELETED_FUNCTION;
+  void operator=(const SelectionDAG&) = delete;
+  SelectionDAG(const SelectionDAG&) = delete;
 
 public:
   explicit SelectionDAG(const TargetMachine &TM, llvm::CodeGenOpt::Level);
@@ -268,7 +272,7 @@ public:
   /// init - Prepare this SelectionDAG to process code in the given
   /// MachineFunction.
   ///
-  void init(MachineFunction &mf, const TargetLowering *TLI);
+  void init(MachineFunction &mf);
 
   /// clear - Clear state and free memory necessary to make this
   /// SelectionDAG ready to process a new block.
@@ -749,7 +753,7 @@ public:
                    SDValue SV, unsigned Align);
 
   /// getAtomicCmpSwap - Gets a node for an atomic cmpxchg op. There are two
-  /// valid Opcodes. ISD::ATOMIC_CMO_SWAP produces a the value loaded and a
+  /// valid Opcodes. ISD::ATOMIC_CMO_SWAP produces the value loaded and a
   /// chain result. ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS produces the value loaded,
   /// a success flag (initially i1), and a chain.
   SDValue getAtomicCmpSwap(unsigned Opcode, SDLoc dl, EVT MemVT, SDVTList VTs,
@@ -862,6 +866,12 @@ public:
   SDValue getIndexedStore(SDValue OrigStoe, SDLoc dl, SDValue Base,
                            SDValue Offset, ISD::MemIndexedMode AM);
 
+  SDValue getMaskedLoad(EVT VT, SDLoc dl, SDValue Chain, SDValue Ptr,
+                        SDValue Mask, SDValue Src0, EVT MemVT,
+                        MachineMemOperand *MMO, ISD::LoadExtType);
+  SDValue getMaskedStore(SDValue Chain, SDLoc dl, SDValue Val,
+                         SDValue Ptr, SDValue Mask, EVT MemVT,
+                         MachineMemOperand *MMO, bool IsTrunc);
   /// getSrcValue - Construct a node to track a Value* through the backend.
   SDValue getSrcValue(const Value *v);
 
@@ -984,15 +994,18 @@ public:
 
   /// getDbgValue - Creates a SDDbgValue node.
   ///
-  SDDbgValue *getDbgValue(MDNode *MDPtr, SDNode *N, unsigned R,
-			  bool IsIndirect, uint64_t Off,
-                          DebugLoc DL, unsigned O);
-  /// Constant.
-  SDDbgValue *getConstantDbgValue(MDNode *MDPtr, const Value *C, uint64_t Off,
-				  DebugLoc DL, unsigned O);
-  /// Frame index.
-  SDDbgValue *getFrameIndexDbgValue(MDNode *MDPtr, unsigned FI, uint64_t Off,
-				    DebugLoc DL, unsigned O);
+  /// SDNode
+  SDDbgValue *getDbgValue(MDNode *Var, MDNode *Expr, SDNode *N, unsigned R,
+                          bool IsIndirect, uint64_t Off, DebugLoc DL,
+                          unsigned O);
+
+  /// Constant
+  SDDbgValue *getConstantDbgValue(MDNode *Var, MDNode *Expr, const Value *C,
+                                  uint64_t Off, DebugLoc DL, unsigned O);
+
+  /// FrameIndex
+  SDDbgValue *getFrameIndexDbgValue(MDNode *Var, MDNode *Expr, unsigned FI,
+                                    uint64_t Off, DebugLoc DL, unsigned O);
 
   /// RemoveDeadNode - Remove the specified node from the system. If any of its
   /// operands then becomes dead, remove them as well. Inform UpdateListener
@@ -1064,7 +1077,10 @@ public:
     case ISD::SADDO:
     case ISD::UADDO:
     case ISD::ADDC:
-    case ISD::ADDE: return true;
+    case ISD::ADDE:
+    case ISD::FMINNUM:
+    case ISD::FMAXNUM:
+      return true;
     default: return false;
     }
   }

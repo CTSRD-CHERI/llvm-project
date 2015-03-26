@@ -1,12 +1,12 @@
-; RUN: opt %loadPolly -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
 ;
-; CHECK-NOT:#pragma omp parallel for reduction
-; CHECK:    #pragma omp parallel for
-; CHECK:    for (int c1 = 0; c1 <= 2047; c1 += 1)
-; CHECK:      for (int c3 = 0; c3 <= 1023; c3 += 1)
+; CHECK-NOT:#pragma known-parallel reduction
+; CHECK:    #pragma known-parallel
+; CHECK:    for (int c0 = 0; c0 <= 2047; c0 += 1)
+; CHECK:      for (int c1 = 0; c1 <= 1023; c1 += 1)
 ; CHECK:        #pragma simd reduction
-; CHECK:        for (int c5 = 0; c5 <= 511; c5 += 1)
-; CHECK:          Stmt_for_body6(c1, c3, c5);
+; CHECK:        for (int c2 = 0; c2 <= 511; c2 += 1)
+; CHECK:          Stmt_for_body6(c0, c1, c2);
 ;
 ;    void rmd(int *A) {
 ;      for (long i = 0; i < 2048; i++)
@@ -43,8 +43,8 @@ for.cond4:                                        ; preds = %for.inc, %for.body3
   br i1 %exitcond, label %for.body6, label %for.end
 
 for.body6:                                        ; preds = %for.cond4
-  %arrayidx = getelementptr inbounds i32* %A, i32 %i.0
-  %tmp = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %A, i32 %i.0
+  %tmp = load i32, i32* %arrayidx, align 4
   %add = add nsw i32 %tmp, %i.0
   store i32 %add, i32* %arrayidx, align 4
   br label %for.inc

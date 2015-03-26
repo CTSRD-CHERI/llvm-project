@@ -17,10 +17,8 @@
 
 // Other libraries and framework includes
 #include "lldb/Target/Process.h"
-#include "ProcessMessage.h"
-#include "ProcessPOSIX.h"
-
-#include "Plugins/Process/Utility/LinuxSignals.h"
+#include "Plugins/Process/POSIX/ProcessMessage.h"
+#include "Plugins/Process/POSIX/ProcessPOSIX.h"
 
 class ProcessMonitor;
 
@@ -84,15 +82,6 @@ public:
     EnablePluginLogging(lldb_private::Stream *strm,
                         lldb_private::Args &command);
 
-    //------------------------------------------------------------------
-    // Plug-in process overrides
-    //------------------------------------------------------------------
-    virtual lldb_private::UnixSignals &
-    GetUnixSignals ()
-    {
-        return m_linux_signals;
-    }
-
     virtual bool
     CanDebug(lldb_private::Target &target, bool plugin_specified_by_name);
 
@@ -106,9 +95,6 @@ public:
     CreateNewPOSIXThread(lldb_private::Process &process, lldb::tid_t tid);
 
 private:
-
-    /// Linux-specific signal set.
-    process_linux::LinuxSignals m_linux_signals;
 
     lldb_private::FileSpec *m_core_file;
 

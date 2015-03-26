@@ -1,7 +1,5 @@
-; RUN: llc < %s -march=arm64 -mcpu=cyclone -enable-misched=false | FileCheck %s
-; RUN: llc < %s -O0 | FileCheck -check-prefix=FAST %s
-; REQUIRES: asserts
-target triple = "arm64-apple-darwin"
+; RUN: llc     -mtriple=arm64-apple-darwin -mcpu=cyclone -enable-misched=false < %s | FileCheck %s
+; RUN: llc -O0 -mtriple=arm64-apple-darwin                                     < %s | FileCheck --check-prefix=FAST %s
 
 ; rdar://9932559
 define i64 @i8i16callee(i64 %a1, i64 %a2, i64 %a3, i8 signext %a4, i16 signext %a5, i64 %a6, i64 %a7, i64 %a8, i8 signext %b1, i16 signext %b2, i8 signext %b3, i8 signext %b4) nounwind readnone noinline {
@@ -81,7 +79,7 @@ entry:
 ; FAST: sub sp, sp
 ; FAST: mov x[[ADDR:[0-9]+]], sp
 ; FAST: str [[REG_1:q[0-9]+]], [x[[ADDR]], #16]
-  %0 = load <4 x i32>* %in, align 16
+  %0 = load <4 x i32>, <4 x i32>* %in, align 16
   %call = tail call double @args_vec_4i(double 3.000000e+00, <4 x i32> %0, <4 x i32> %0, <4 x i32> %0, <4 x i32> %0, <4 x i32> %0, <4 x i32> %0, <4 x i32> %0, double 3.000000e+00, <4 x i32> %0, i8 signext 3)
   ret double %call
 }
@@ -135,7 +133,7 @@ entry:
 ; FAST: sub sp, sp, #32
 ; FAST: mov x[[ADDR:[0-9]+]], sp
 ; FAST: str [[REG_1:d[0-9]+]], [x[[ADDR]], #8]
-  %0 = load <2 x i32>* %in, align 8
+  %0 = load <2 x i32>, <2 x i32>* %in, align 8
   %call = tail call double @args_vec_2i(double 3.000000e+00, <2 x i32> %0,
           <2 x i32> %0, <2 x i32> %0, <2 x i32> %0, <2 x i32> %0, <2 x i32> %0,
           <2 x i32> %0, float 3.000000e+00, <2 x i32> %0, i8 signext 3)
@@ -150,7 +148,7 @@ entry:
 ; CHECK: str [[REG_1:d[0-9]+]], [sp, #8]
 ; CHECK: str [[REG_2:w[0-9]+]], [sp]
 ; CHECK: orr w0, wzr, #0x3
-  %0 = load double* %in, align 8
+  %0 = load double, double* %in, align 8
   %call = tail call double @args_f64(double 3.000000e+00, double %0, double %0,
           double %0, double %0, double %0, double %0, double %0,
           float 3.000000e+00, double %0, i8 signext 3)
@@ -165,7 +163,7 @@ entry:
 ; CHECK: strb [[REG_3:w[0-9]+]], [sp, #16]
 ; CHECK: str [[REG_1:x[0-9]+]], [sp, #8]
 ; CHECK: str [[REG_2:w[0-9]+]], [sp]
-  %0 = load i64* %in, align 8
+  %0 = load i64, i64* %in, align 8
   %call = tail call i64 @args_i64(i64 3, i64 %0, i64 %0, i64 %0, i64 %0, i64 %0,
                          i64 %0, i64 %0, i32 3, i64 %0, i8 signext 3)
   ret i64 %call
@@ -179,7 +177,7 @@ entry:
 ; CHECK: strb [[REG_2:w[0-9]+]], [sp, #8]
 ; CHECK: str [[REG_1:s[0-9]+]], [sp, #4]
 ; CHECK: strh [[REG_3:w[0-9]+]], [sp]
-  %0 = load float* %in, align 4
+  %0 = load float, float* %in, align 4
   %call = tail call i32 @args_f32(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6,
           i32 7, i32 8, float 1.0, float 2.0, float 3.0, float 4.0, float 5.0,
           float 6.0, float 7.0, float 8.0, i16 signext 3, float %0,
@@ -196,7 +194,7 @@ entry:
 ; CHECK: strb [[REG_2:w[0-9]+]], [sp, #8]
 ; CHECK: str [[REG_1:w[0-9]+]], [sp, #4]
 ; CHECK: strh [[REG_3:w[0-9]+]], [sp]
-  %0 = load i32* %in, align 4
+  %0 = load i32, i32* %in, align 4
   %call = tail call i32 @args_i32(i32 3, i32 %0, i32 %0, i32 %0, i32 %0, i32 %0,
                          i32 %0, i32 %0, i16 signext 3, i32 %0, i8 signext 4)
   ret i32 %call

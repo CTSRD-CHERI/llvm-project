@@ -11,7 +11,6 @@
 #define LLD_READER_WRITER_ELF_TARGET_LAYOUT_H
 
 #include "DefaultLayout.h"
-
 #include "lld/Core/LLVM.h"
 
 namespace lld {
@@ -19,10 +18,9 @@ namespace elf {
 /// \brief The target can override certain functions in the DefaultLayout
 /// class so that the order, the name of the section and the segment type could
 /// be changed in the final layout
-template <class ELFT> class TargetLayout : public ScriptLayout<ELFT> {
+template <class ELFT> class TargetLayout : public DefaultLayout<ELFT> {
 public:
-  TargetLayout(const ELFLinkingContext &context)
-      : ScriptLayout<ELFT>(context) {}
+  TargetLayout(ELFLinkingContext &context) : DefaultLayout<ELFT>(context) {}
 };
 } // end namespace elf
 } // end namespace lld

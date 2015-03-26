@@ -31,7 +31,7 @@
 // PTRS: define zeroext i1 @memcap_unsealed_get(i8* nocapture readnone %__cap)
 // PTRS: ret i1 false
 // PTRS: define i8* @memcap_offset_increment(i8* readnone %__cap, i32 %__offset)
-// PTRS: %add.ptr = getelementptr inbounds i8* %__cap, i32 %__offset
+// PTRS: %add.ptr = getelementptr inbounds i8, i8* %__cap, i32 %__offset
 // PTRS: ret i8* %add.ptr
 // PTRS: define i8* @memcap_base_only_increment(i8* readnone %__cap, i32 %__offset)
 // PTRS: ret i8* %__cap

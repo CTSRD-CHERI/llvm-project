@@ -40,12 +40,14 @@ static uint32_t g_initialize_count = 0;
 void
 PlatformMacOSX::Initialize ()
 {
+    PlatformDarwin::Initialize ();
+
     if (g_initialize_count++ == 0)
     {
 #if defined (__APPLE__)
         PlatformSP default_platform_sp (new PlatformMacOSX(true));
         default_platform_sp->SetSystemArchitecture(HostInfo::GetArchitecture());
-        Platform::SetDefaultPlatform (default_platform_sp);
+        Platform::SetHostPlatform (default_platform_sp);
 #endif        
         PluginManager::RegisterPlugin (PlatformMacOSX::GetPluginNameStatic(false),
                                        PlatformMacOSX::GetDescriptionStatic(false),
@@ -64,9 +66,11 @@ PlatformMacOSX::Terminate ()
             PluginManager::UnregisterPlugin (PlatformMacOSX::CreateInstance);
         }
     }
+
+    PlatformDarwin::Terminate ();
 }
 
-Platform* 
+PlatformSP
 PlatformMacOSX::CreateInstance (bool force, const ArchSpec *arch)
 {
     // The only time we create an instance is when we are creating a remote
@@ -117,8 +121,8 @@ PlatformMacOSX::CreateInstance (bool force, const ArchSpec *arch)
         }
     }
     if (create)
-        return new PlatformMacOSX (is_host);
-    return NULL;
+        return PlatformSP(new PlatformMacOSX (is_host));
+    return PlatformSP();
 }
 
 lldb_private::ConstString
@@ -178,7 +182,7 @@ PlatformMacOSX::GetSDKDirectory (lldb_private::Target &target)
             uint32_t versions[2];
             if (objfile->GetSDKVersion(versions, sizeof(versions)))
             {
-                if (Host::GetLLDBPath (ePathTypeLLDBShlibDir, fspec))
+                if (HostInfo::GetLLDBPath(ePathTypeLLDBShlibDir, fspec))
                 {
                     std::string path;
                     xcode_contents_path = fspec.GetPath();

@@ -17,13 +17,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "AArch64RelocationPass.h"
-
-#include "lld/Core/Simple.h"
-
-#include "llvm/ADT/DenseMap.h"
-
-#include "Atoms.h"
 #include "AArch64LinkingContext.h"
+#include "Atoms.h"
+#include "lld/Core/Simple.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Debug.h"
 
 using namespace lld;
@@ -78,11 +76,7 @@ public:
 
 class AArch64PLT0Atom : public PLT0Atom {
 public:
-  AArch64PLT0Atom(const File &f) : PLT0Atom(f) {
-#ifndef NDEBUG
-    _name = ".PLT0";
-#endif
-  }
+  AArch64PLT0Atom(const File &f) : PLT0Atom(f) {}
   ArrayRef<uint8_t> rawContent() const override {
     return ArrayRef<uint8_t>(AArch64Plt0AtomContent, 32);
   }
@@ -159,8 +153,6 @@ template <class Derived> class AArch64RelocationPass : public Pass {
     case R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC:
       static_cast<Derived *>(this)->handleGOT(ref);
       break;
-    default:
-      llvm_unreachable("Unhandled type in handleReference");
     }
   }
 
@@ -413,6 +405,7 @@ public:
     _PLT0->addReferenceELF_AArch64(R_AARCH64_LD64_GOT_LO12_NC, 8, _got1, 0);
     _PLT0->addReferenceELF_AArch64(ADD_AARCH64_GOTRELINDEX, 12, _got1, 0);
 #ifndef NDEBUG
+    _PLT0->_name = "__PLT0";
     _got0->_name = "__got0";
     _got1->_name = "__got1";
 #endif
@@ -432,7 +425,7 @@ public:
     pa->addReferenceELF_AArch64(R_AARCH64_NONE, 12, getPLT0(), 0);
     // Set the starting address of the got entry to the first instruction in
     // the plt0 entry.
-    ga->addReferenceELF_AArch64(R_AARCH64_ABS32, 0, pa, 0);
+    ga->addReferenceELF_AArch64(R_AARCH64_ABS32, 0, getPLT0(), 0);
 #ifndef NDEBUG
     ga->_name = "__got_";
     ga->_name += a->name();
@@ -492,7 +485,7 @@ public:
   const GOTAtom *getSharedGOT(const SharedLibraryAtom *sla) {
     auto got = _gotMap.find(sla);
     if (got == _gotMap.end()) {
-      auto g = new (_file._alloc) AArch64GOTAtom(_file, ".got.dyn");
+      auto g = new (_file._alloc) AArch64GOTAtom(_file, ".got");
       g->addReferenceELF_AArch64(R_AARCH64_GLOB_DAT, 0, sla, 0);
 #ifndef NDEBUG
       g->_name = "__got_";
@@ -522,13 +515,12 @@ lld::elf::createAArch64RelocationPass(const AArch64LinkingContext &ctx) {
   switch (ctx.getOutputELFType()) {
   case llvm::ELF::ET_EXEC:
     if (ctx.isDynamic())
-      return std::unique_ptr<Pass>(new AArch64DynamicRelocationPass(ctx));
-    else
-      return std::unique_ptr<Pass>(new AArch64StaticRelocationPass(ctx));
+      return llvm::make_unique<AArch64DynamicRelocationPass>(ctx);
+    return llvm::make_unique<AArch64StaticRelocationPass>(ctx);
   case llvm::ELF::ET_DYN:
-    return std::unique_ptr<Pass>(new AArch64DynamicRelocationPass(ctx));
+    return llvm::make_unique<AArch64DynamicRelocationPass>(ctx);
   case llvm::ELF::ET_REL:
-    return std::unique_ptr<Pass>();
+    return nullptr;
   default:
     llvm_unreachable("Unhandled output file type");
   }

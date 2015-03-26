@@ -19,7 +19,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
@@ -58,6 +57,10 @@ bool DeadMachineInstructionElim::isDead(const MachineInstr *MI) const {
   // be deleted. But there is so much bad inline asm code out there, we should
   // let them be.
   if (MI->isInlineAsm())
+    return false;
+
+  // Don't delete frame allocation labels.
+  if (MI->getOpcode() == TargetOpcode::FRAME_ALLOC)
     return false;
 
   // Don't delete instructions with side effects.

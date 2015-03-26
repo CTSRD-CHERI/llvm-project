@@ -19,6 +19,8 @@
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Target.h"
 
+#include "llvm/Support/FileSystem.h"
+
 using namespace lldb;
 using namespace lldb_private;
 
@@ -87,7 +89,7 @@ Symbols::LocateExecutableSymbolFile (const ModuleSpec &module_spec)
             const std::string &filename = files[idx_file];
             FileSpec file_spec (filename.c_str(), true);
 
-            if (file_spec == module_spec.GetFileSpec())
+            if (llvm::sys::fs::equivalent (file_spec.GetPath(), module_spec.GetFileSpec().GetPath()))
                 continue;
 
             if (file_spec.Exists())

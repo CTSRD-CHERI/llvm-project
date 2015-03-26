@@ -29,6 +29,26 @@ X86SelectionDAGInfo::X86SelectionDAGInfo(const DataLayout &DL)
 
 X86SelectionDAGInfo::~X86SelectionDAGInfo() {}
 
+bool X86SelectionDAGInfo::isBaseRegConflictPossible(
+    SelectionDAG &DAG, ArrayRef<unsigned> ClobberSet) const {
+  // We cannot use TRI->hasBasePointer() until *after* we select all basic
+  // blocks.  Legalization may introduce new stack temporaries with large
+  // alignment requirements.  Fall back to generic code if there are any
+  // dynamic stack adjustments (hopefully rare) and the base pointer would
+  // conflict if we had to use it.
+  MachineFrameInfo *MFI = DAG.getMachineFunction().getFrameInfo();
+  if (!MFI->hasVarSizedObjects() && !MFI->hasInlineAsmWithSPAdjust())
+    return false;
+
+  const X86RegisterInfo *TRI = static_cast<const X86RegisterInfo *>(
+      DAG.getSubtarget().getRegisterInfo());
+  unsigned BaseReg = TRI->getBaseRegister();
+  for (unsigned R : ClobberSet)
+    if (BaseReg == R)
+      return true;
+  return false;
+}
+
 SDValue
 X86SelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, SDLoc dl,
                                              SDValue Chain,
@@ -37,7 +57,15 @@ X86SelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, SDLoc dl,
                                              bool isVolatile,
                                          MachinePointerInfo DstPtrInfo) const {
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
-  const X86Subtarget &Subtarget = DAG.getTarget().getSubtarget<X86Subtarget>();
+  const X86Subtarget &Subtarget =
+      DAG.getMachineFunction().getSubtarget<X86Subtarget>();
+
+#ifndef NDEBUG
+  // If the base register might conflict with our physical registers, bail out.
+  const unsigned ClobberSet[] = {X86::RCX, X86::RAX, X86::RDI,
+                                 X86::ECX, X86::EAX, X86::EDI};
+  assert(!isBaseRegConflictPossible(DAG, ClobberSet));
+#endif
 
   // If to a segment-relative address space, use the default lowering.
   if (DstPtrInfo.getAddrSpace() >= 256)
@@ -172,17 +200,15 @@ X86SelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, SDLoc dl,
   return Chain;
 }
 
-SDValue
-X86SelectionDAGInfo::EmitTargetCodeForMemcpy(SelectionDAG &DAG, SDLoc dl,
-                                        SDValue Chain, SDValue Dst, SDValue Src,
-                                        SDValue Size, unsigned Align,
-                                        bool isVolatile, bool AlwaysInline,
-                                         MachinePointerInfo DstPtrInfo,
-                                         MachinePointerInfo SrcPtrInfo) const {
+SDValue X86SelectionDAGInfo::EmitTargetCodeForMemcpy(
+    SelectionDAG &DAG, SDLoc dl, SDValue Chain, SDValue Dst, SDValue Src,
+    SDValue Size, unsigned Align, bool isVolatile, bool AlwaysInline,
+    MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
   // This requires the copy size to be a constant, preferably
   // within a subtarget-specific limit.
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
-  const X86Subtarget &Subtarget = DAG.getTarget().getSubtarget<X86Subtarget>();
+  const X86Subtarget &Subtarget =
+      DAG.getMachineFunction().getSubtarget<X86Subtarget>();
   if (!ConstantSize)
     return SDValue();
   uint64_t SizeVal = ConstantSize->getZExtValue();
@@ -201,12 +227,10 @@ X86SelectionDAGInfo::EmitTargetCodeForMemcpy(SelectionDAG &DAG, SDLoc dl,
       SrcPtrInfo.getAddrSpace() >= 256)
     return SDValue();
 
-  // ESI might be used as a base pointer, in that case we can't simply overwrite
-  // the register.  Fall back to generic code.
-  const X86RegisterInfo *TRI = static_cast<const X86RegisterInfo *>(
-      DAG.getSubtarget().getRegisterInfo());
-  if (TRI->hasBasePointer(DAG.getMachineFunction()) &&
-      TRI->getBaseRegister() == X86::ESI)
+  // If the base register might conflict with our physical registers, bail out.
+  const unsigned ClobberSet[] = {X86::RCX, X86::RSI, X86::RDI,
+                                 X86::ECX, X86::ESI, X86::EDI};
+  if (isBaseRegConflictPossible(DAG, ClobberSet))
     return SDValue();
 
   MVT AVT;

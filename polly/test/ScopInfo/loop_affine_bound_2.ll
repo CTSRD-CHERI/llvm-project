@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
 
 ; void f(long a[][128], long N, long M) {
 ;   long i, j;
@@ -46,7 +46,7 @@ bb:                                               ; preds = %bb3, %bb.nph8
 bb1:                                              ; preds = %bb1, %bb
   %indvar = phi i64 [ 0, %bb ], [ %indvar.next, %bb1 ]
   %tmp16 = add i64 %indvar, %tmp15
-  %scevgep = getelementptr [128 x i64]* %a, i64 %tmp16, i64 %tmp17
+  %scevgep = getelementptr [128 x i64], [128 x i64]* %a, i64 %tmp16, i64 %tmp17
   store i64 0, i64* %scevgep
   %indvar.next = add i64 %indvar, 1
   %exitcond = icmp eq i64 %indvar.next, %tmp13
@@ -68,7 +68,7 @@ return:                                           ; preds = %bb3, %entry
 ; CHECK:         Domain :=
 ; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] : i0 >= 0 and i0 <= 2 + 4N + 7M and i1 >= 0 and i1 <= 10 + 5N - 6M - 4i0 and 4i0 <= 10 + 5N - 6M };
 ; CHECK:         Scattering :=
-; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] -> scattering[0, i0, 0, i1, 0] };
+; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] -> [i0, i1] };
 ; CHECK:         MustWriteAccess := [Reduction Type: NONE]
 ; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] -> MemRef_a[-1152 + 768M + 897i0 + 128i1] };
 ; CHECK: }

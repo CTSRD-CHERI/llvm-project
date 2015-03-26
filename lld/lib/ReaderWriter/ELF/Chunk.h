@@ -11,7 +11,6 @@
 #define LLD_READER_WRITER_ELF_CHUNKS_H
 
 #include "lld/Core/LLVM.h"
-
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/Allocator.h"
@@ -19,7 +18,6 @@
 #include "llvm/Support/ELF.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileOutputBuffer.h"
-
 #include <memory>
 
 namespace lld {
@@ -41,22 +39,24 @@ public:
                        SectionHeader, ///< Section header
                        ELFSegment,    ///< Segment
                        ELFSection,    ///< Section
-                       AtomSection    ///< A section containing atoms.
+                       AtomSection,   ///< A section containing atoms.
+                       Expression     ///< A linker script expression
   };
   /// \brief the ContentType of the chunk
   enum ContentType : uint8_t{ Unknown, Header, Code, Data, Note, TLS };
 
   Chunk(StringRef name, Kind kind, const ELFLinkingContext &context)
-      : _name(name), _kind(kind), _fsize(0), _msize(0), _align2(0), _order(0),
+      : _name(name), _kind(kind), _fsize(0), _msize(0), _alignment(0), _order(0),
         _ordinal(1), _start(0), _fileoffset(0), _context(context) {}
   virtual ~Chunk() {}
   // The name of the chunk
   StringRef name() const { return _name; }
   // Kind of chunk
   Kind kind() const { return _kind; }
-  uint64_t        fileSize() const { return _fsize; }
-  void            setAlign(uint64_t align) { _align2 = align; }
-  uint64_t        align2() const { return _align2; }
+  virtual uint64_t fileSize() const { return _fsize; }
+  virtual void setFileSize(uint64_t sz) { _fsize = sz; }
+  virtual void setAlign(uint64_t align) { _alignment = align; }
+  virtual uint64_t alignment() const { return _alignment; }
 
   // The ordinal value of the chunk
   uint64_t            ordinal() const { return _ordinal;}
@@ -68,8 +68,8 @@ public:
   uint64_t            fileOffset() const { return _fileoffset; }
   void               setFileOffset(uint64_t offset) { _fileoffset = offset; }
   // Output start address of the chunk
-  void               setVAddr(uint64_t start) { _start = start; }
-  uint64_t            virtualAddr() const { return _start; }
+  virtual void setVirtualAddr(uint64_t start) { _start = start; }
+  virtual uint64_t virtualAddr() const { return _start; }
   // Memory size of the chunk
   uint64_t memSize() const { return _msize; }
   void setMemSize(uint64_t msize) { _msize = msize; }
@@ -88,7 +88,7 @@ protected:
   Kind _kind;
   uint64_t _fsize;
   uint64_t _msize;
-  uint64_t _align2;
+  uint64_t _alignment;
   uint32_t _order;
   uint64_t _ordinal;
   uint64_t _start;

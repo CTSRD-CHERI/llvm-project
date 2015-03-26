@@ -291,6 +291,24 @@ bool ReportVariantBasePtr::classof(const RejectReason *RR) {
 }
 
 //===----------------------------------------------------------------------===//
+// ReportDifferentArrayElementSize
+
+std::string ReportDifferentArrayElementSize::getMessage() const {
+  return "Access to one array through data types of different size";
+}
+
+bool ReportDifferentArrayElementSize::classof(const RejectReason *RR) {
+  return RR->getKind() == rrkDifferentElementSize;
+}
+
+std::string ReportDifferentArrayElementSize::getEndUserMessage() const {
+  llvm::StringRef BaseName = BaseValue->getName();
+  std::string Name = (BaseName.size() > 0) ? BaseName : "UNKNOWN";
+  return "The array \"" + Name + "\" is accessed through elements that differ "
+                                 "in size";
+}
+
+//===----------------------------------------------------------------------===//
 // ReportNonAffineAccess.
 
 std::string ReportNonAffineAccess::getMessage() const {
@@ -330,43 +348,6 @@ const DebugLoc &ReportPhiNodeRefInRegion::getDebugLoc() const {
 
 bool ReportPhiNodeRefInRegion::classof(const RejectReason *RR) {
   return RR->getKind() == rrkPhiNodeRefInRegion;
-}
-
-//===----------------------------------------------------------------------===//
-// ReportNonCanonicalPhiNode.
-
-ReportNonCanonicalPhiNode::ReportNonCanonicalPhiNode(Instruction *Inst)
-    : ReportIndVar(rrkNonCanonicalPhiNode), Inst(Inst) {}
-
-std::string ReportNonCanonicalPhiNode::getMessage() const {
-  return "Non canonical PHI node: " + *Inst;
-}
-
-const DebugLoc &ReportNonCanonicalPhiNode::getDebugLoc() const {
-  return Inst->getDebugLoc();
-}
-
-bool ReportNonCanonicalPhiNode::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkNonCanonicalPhiNode;
-}
-
-//===----------------------------------------------------------------------===//
-// ReportLoopHeader.
-
-ReportLoopHeader::ReportLoopHeader(Loop *L)
-    : ReportIndVar(rrkLoopHeader), L(L) {}
-
-std::string ReportLoopHeader::getMessage() const {
-  return ("No canonical IV at loop header: " + L->getHeader()->getName()).str();
-}
-
-const DebugLoc &ReportLoopHeader::getDebugLoc() const {
-  BasicBlock *BB = L->getHeader();
-  return BB->getTerminator()->getDebugLoc();
-}
-
-bool ReportLoopHeader::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkLoopHeader;
 }
 
 //===----------------------------------------------------------------------===//
@@ -430,7 +411,7 @@ const DebugLoc &ReportFuncCall::getDebugLoc() const {
 }
 
 std::string ReportFuncCall::getEndUserMessage() const {
-  return "This function call cannot be handeled. "
+  return "This function call cannot be handled. "
          "Try to inline it.";
 }
 
@@ -456,8 +437,6 @@ std::string ReportAlias::formatInvalidAlias(std::string Prefix,
   raw_string_ostream OS(Message);
 
   OS << Prefix;
-
-  std::sort(Pointers.begin(), Pointers.end());
 
   for (PointerSnapshotTy::const_iterator PI = Pointers.begin(),
                                          PE = Pointers.end();
@@ -611,5 +590,33 @@ const DebugLoc &ReportEntry::getDebugLoc() const {
 
 bool ReportEntry::classof(const RejectReason *RR) {
   return RR->getKind() == rrkEntry;
+}
+
+//===----------------------------------------------------------------------===//
+// ReportUnprofitable.
+ReportUnprofitable::ReportUnprofitable(Region *R)
+    : ReportOther(rrkUnprofitable), R(R) {}
+
+std::string ReportUnprofitable::getMessage() const {
+  return "Region can not profitably be optimized!";
+}
+
+std::string ReportUnprofitable::getEndUserMessage() const {
+  return "No profitable polyhedral optimization found";
+}
+
+const DebugLoc &ReportUnprofitable::getDebugLoc() const {
+  for (const BasicBlock *BB : R->blocks())
+    for (const Instruction &Inst : *BB) {
+      const DebugLoc &DL = Inst.getDebugLoc();
+      if (!DL.isUnknown())
+        return DL;
+    }
+
+  return R->getEntry()->getTerminator()->getDebugLoc();
+}
+
+bool ReportUnprofitable::classof(const RejectReason *RR) {
+  return RR->getKind() == rrkUnprofitable;
 }
 } // namespace polly

@@ -10,7 +10,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <unwind.h>
+#include "Unwind-EHABI.h"
+
+#if LIBCXXABI_ARM_EHABI
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -18,18 +20,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <type_traits>
+
 #include "config.h"
 #include "libunwind.h"
+#include "libunwind_ext.h"
 #include "unwind.h"
 #include "../private_typeinfo.h"
 
-#if LIBCXXABI_ARM_EHABI
 namespace {
 
 // Strange order: take words in order, but inside word, take from most to least
 // signinficant byte.
-uint8_t getByte(uint32_t* data, size_t offset) {
-  uint8_t* byteData = reinterpret_cast<uint8_t*>(data);
+uint8_t getByte(const uint32_t* data, size_t offset) {
+  const uint8_t* byteData = reinterpret_cast<const uint8_t*>(data);
   return byteData[(offset & ~(size_t)0x03) + (3 - (offset & (size_t)0x03))];
 }
 
@@ -43,28 +47,24 @@ const char* getNextNibble(const char* data, uint32_t* out) {
   return data + 2;
 }
 
-static inline uint32_t signExtendPrel31(uint32_t data) {
-  return data | ((data & 0x40000000u) << 1);
-}
-
 struct Descriptor {
-   // See # 9.2
-   typedef enum {
-     SU16 = 0, // Short descriptor, 16-bit entries
-     LU16 = 1, // Long descriptor,  16-bit entries
-     LU32 = 3, // Long descriptor,  32-bit entries
-     RESERVED0 =  4, RESERVED1 =  5, RESERVED2  = 6,  RESERVED3  =  7,
-     RESERVED4 =  8, RESERVED5 =  9, RESERVED6  = 10, RESERVED7  = 11,
-     RESERVED8 = 12, RESERVED9 = 13, RESERVED10 = 14, RESERVED11 = 15
-   } Format;
+  // See # 9.2
+  typedef enum {
+    SU16 = 0, // Short descriptor, 16-bit entries
+    LU16 = 1, // Long descriptor,  16-bit entries
+    LU32 = 3, // Long descriptor,  32-bit entries
+    RESERVED0 =  4, RESERVED1 =  5, RESERVED2  = 6,  RESERVED3  =  7,
+    RESERVED4 =  8, RESERVED5 =  9, RESERVED6  = 10, RESERVED7  = 11,
+    RESERVED8 = 12, RESERVED9 = 13, RESERVED10 = 14, RESERVED11 = 15
+  } Format;
 
-   // See # 9.2
-   typedef enum {
-     CLEANUP = 0x0,
-     FUNC    = 0x1,
-     CATCH   = 0x2,
-     INVALID = 0x4
-   } Kind;
+  // See # 9.2
+  typedef enum {
+    CLEANUP = 0x0,
+    FUNC    = 0x1,
+    CATCH   = 0x2,
+    INVALID = 0x4
+  } Kind;
 };
 
 _Unwind_Reason_Code ProcessDescriptors(
@@ -134,7 +134,7 @@ _Unwind_Reason_Code ProcessDescriptors(
           landing_pad = signExtendPrel31(landing_pad & ~0x80000000);
           if (landing_pad == 0xffffffff) {
             return _URC_HANDLER_FOUND;
-          } else if (landing_pad == 0xfffffffe ) {
+          } else if (landing_pad == 0xfffffffe) {
             return _URC_FAILURE;
           } else {
             /*
@@ -153,7 +153,7 @@ _Unwind_Reason_Code ProcessDescriptors(
       }
       default:
         _LIBUNWIND_ABORT("Invalid descriptor kind found.");
-    };
+    }
 
     getNextWord(descriptor, &descriptorWord);
   }
@@ -161,30 +161,19 @@ _Unwind_Reason_Code ProcessDescriptors(
   return _URC_CONTINUE_UNWIND;
 }
 
-_Unwind_Reason_Code unwindOneFrame(
-    _Unwind_State state,
-    _Unwind_Control_Block* ucbp,
-    struct _Unwind_Context* context) {
+static _Unwind_Reason_Code unwindOneFrame(_Unwind_State state,
+                                          _Unwind_Control_Block* ucbp,
+                                          struct _Unwind_Context* context) {
   // Read the compact model EHT entry's header # 6.3
-  uint32_t* unwindingData = ucbp->pr_cache.ehtp;
-  uint32_t unwindInfo = *unwindingData;
-  assert((unwindInfo & 0xf0000000) == 0x80000000 && "Must be a compact entry");
+  const uint32_t* unwindingData = ucbp->pr_cache.ehtp;
+  assert((*unwindingData & 0xf0000000) == 0x80000000 && "Must be a compact entry");
   Descriptor::Format format =
-      static_cast<Descriptor::Format>((unwindInfo & 0x0f000000) >> 24);
+      static_cast<Descriptor::Format>((*unwindingData & 0x0f000000) >> 24);
   size_t len = 0;
-  size_t startOffset = 0;
-  switch (format) {
-    case Descriptor::SU16:
-      len = 4;
-      startOffset = 1;
-      break;
-    case Descriptor::LU16:
-    case Descriptor::LU32:
-      len = 4 + 4 * ((unwindInfo & 0x00ff0000) >> 16);
-      startOffset = 2;
-      break;
-    default:
-      return _URC_FAILURE;
+  size_t off = 0;
+  unwindingData = decode_eht_entry(unwindingData, &off, &len);
+  if (unwindingData == nullptr) {
+    return _URC_FAILURE;
   }
 
   // Handle descriptors before unwinding so they are processed in the context
@@ -198,7 +187,7 @@ _Unwind_Reason_Code unwindOneFrame(
   if (result != _URC_CONTINUE_UNWIND)
     return result;
 
-  return _Unwind_VRS_Interpret(context, unwindingData, startOffset, len);
+  return _Unwind_VRS_Interpret(context, unwindingData, off, len);
 }
 
 // Generates mask discriminator for _Unwind_VRS_Pop, e.g. for _UVRSC_CORE /
@@ -215,9 +204,43 @@ uint32_t RegisterRange(uint8_t start, uint8_t count_minus_one) {
 
 } // end anonymous namespace
 
+/**
+ * Decodes an EHT entry.
+ *
+ * @param data Pointer to EHT.
+ * @param[out] off Offset from return value (in bytes) to begin interpretation.
+ * @param[out] len Number of bytes in unwind code.
+ * @return Pointer to beginning of unwind code.
+ */
+extern "C" const uint32_t*
+decode_eht_entry(const uint32_t* data, size_t* off, size_t* len) {
+  assert((*data & 0x80000000) != 0 &&
+         "decode_eht_entry() does not support user-defined personality");
+
+  // 6.3: ARM Compact Model
+  // EHT entries here correspond to the __aeabi_unwind_cpp_pr[012] PRs indeded
+  // by format:
+  Descriptor::Format format =
+      static_cast<Descriptor::Format>((*data & 0x0f000000) >> 24);
+  switch (format) {
+    case Descriptor::SU16:
+      *len = 4;
+      *off = 1;
+      break;
+    case Descriptor::LU16:
+    case Descriptor::LU32:
+      *len = 4 + 4 * ((*data & 0x00ff0000) >> 16);
+      *off = 2;
+      break;
+    default:
+      return nullptr;
+  }
+  return data;
+}
+
 _Unwind_Reason_Code _Unwind_VRS_Interpret(
     _Unwind_Context* context,
-    uint32_t* data,
+    const uint32_t* data,
     size_t offset,
     size_t len) {
   bool wrotePC = false;
@@ -303,7 +326,8 @@ _Unwind_Reason_Code _Unwind_VRS_Interpret(
             case 0xb3: {
               uint8_t v = getByte(data, offset++);
               _Unwind_VRS_Pop(context, _UVRSC_VFP,
-                              RegisterRange(v >> 4, v & 0x0f), _UVRSD_VFPX);
+                              RegisterRange(static_cast<uint8_t>(v >> 4),
+                                            v & 0x0f), _UVRSD_VFPX);
               break;
             }
             case 0xb4:
@@ -331,7 +355,7 @@ _Unwind_Reason_Code _Unwind_VRS_Interpret(
               break;
             case 0xc6: {
               uint8_t v = getByte(data, offset++);
-              uint8_t start = v >> 4;
+              uint8_t start = static_cast<uint8_t>(v >> 4);
               uint8_t count_minus_one = v & 0xf;
               if (start + count_minus_one >= 16)
                 return _URC_FAILURE;
@@ -350,7 +374,8 @@ _Unwind_Reason_Code _Unwind_VRS_Interpret(
             case 0xc8:
             case 0xc9: {
               uint8_t v = getByte(data, offset++);
-              uint8_t start = ((byte == 0xc8) ? 16 : 0) + (v >> 4);
+              uint8_t start =
+                  static_cast<uint8_t>(((byte == 0xc8) ? 16 : 0) + (v >> 4));
               uint8_t count_minus_one = v & 0xf;
               if (start + count_minus_one >= 32)
                 return _URC_FAILURE;
@@ -424,13 +449,13 @@ unwind_phase1(unw_context_t *uc, _Unwind_Exception *exception_object) {
     int stepResult = unw_step(&cursor1);
     if (stepResult == 0) {
       _LIBUNWIND_TRACE_UNWINDING("unwind_phase1(ex_ojb=%p): unw_step() reached "
-                            "bottom => _URC_END_OF_STACK\n",
-                            exception_object);
+                                 "bottom => _URC_END_OF_STACK\n",
+                                 static_cast<void *>(exception_object));
       return _URC_END_OF_STACK;
     } else if (stepResult < 0) {
       _LIBUNWIND_TRACE_UNWINDING("unwind_phase1(ex_ojb=%p): unw_step failed => "
-                            "_URC_FATAL_PHASE1_ERROR\n",
-                            exception_object);
+                                 "_URC_FATAL_PHASE1_ERROR\n",
+                                 static_cast<void *>(exception_object));
       return _URC_FATAL_PHASE1_ERROR;
     }
 
@@ -438,26 +463,28 @@ unwind_phase1(unw_context_t *uc, _Unwind_Exception *exception_object) {
     unw_proc_info_t frameInfo;
     if (unw_get_proc_info(&cursor1, &frameInfo) != UNW_ESUCCESS) {
       _LIBUNWIND_TRACE_UNWINDING("unwind_phase1(ex_ojb=%p): unw_get_proc_info "
-                            "failed => _URC_FATAL_PHASE1_ERROR\n",
-                            exception_object);
+                                 "failed => _URC_FATAL_PHASE1_ERROR\n",
+                                 static_cast<void *>(exception_object));
       return _URC_FATAL_PHASE1_ERROR;
     }
 
     // When tracing, print state information.
     if (_LIBUNWIND_TRACING_UNWINDING) {
-      char functionName[512];
+      char functionBuf[512];
+      const char *functionName = functionBuf;
       unw_word_t offset;
-      if ((unw_get_proc_name(&cursor1, functionName, 512, &offset) !=
-           UNW_ESUCCESS) || (frameInfo.start_ip + offset > frameInfo.end_ip))
-        strcpy(functionName, ".anonymous.");
+      if ((unw_get_proc_name(&cursor1, functionBuf, sizeof(functionBuf),
+                             &offset) != UNW_ESUCCESS) ||
+          (frameInfo.start_ip + offset > frameInfo.end_ip))
+        functionName = ".anonymous.";
       unw_word_t pc;
       unw_get_reg(&cursor1, UNW_REG_IP, &pc);
       _LIBUNWIND_TRACE_UNWINDING(
           "unwind_phase1(ex_ojb=%p): pc=0x%llX, start_ip=0x%llX, func=%s, "
           "lsda=0x%llX, personality=0x%llX\n",
-          exception_object, (long long)pc, (long long)frameInfo.start_ip,
-          functionName, (long long)frameInfo.lsda,
-          (long long)frameInfo.handler);
+          static_cast<void *>(exception_object), (long long)pc,
+          (long long)frameInfo.start_ip, functionName,
+          (long long)frameInfo.lsda, (long long)frameInfo.handler);
     }
 
     // If there is a personality routine, ask it if it will want to stop at
@@ -467,7 +494,8 @@ unwind_phase1(unw_context_t *uc, _Unwind_Exception *exception_object) {
           (__personality_routine)(long)(frameInfo.handler);
       _LIBUNWIND_TRACE_UNWINDING(
           "unwind_phase1(ex_ojb=%p): calling personality function %p\n",
-          exception_object, p);
+          static_cast<void *>(exception_object),
+          reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(p)));
       struct _Unwind_Context *context = (struct _Unwind_Context *)(&cursor1);
       exception_object->pr_cache.fnstart = frameInfo.start_ip;
       exception_object->pr_cache.ehtp =
@@ -476,10 +504,11 @@ unwind_phase1(unw_context_t *uc, _Unwind_Exception *exception_object) {
       _Unwind_Reason_Code personalityResult =
           (*p)(_US_VIRTUAL_UNWIND_FRAME, exception_object, context);
       _LIBUNWIND_TRACE_UNWINDING(
-          "unwind_phase1(ex_ojb=%p): personality result %d "
-          "start_ip %x ehtp %p additional %x\n",
-          exception_object, personalityResult,
-          exception_object->pr_cache.fnstart, exception_object->pr_cache.ehtp,
+          "unwind_phase1(ex_ojb=%p): personality result %d start_ip %x ehtp %p "
+          "additional %x\n",
+          static_cast<void *>(exception_object), personalityResult,
+          exception_object->pr_cache.fnstart,
+          static_cast<void *>(exception_object->pr_cache.ehtp),
           exception_object->pr_cache.additional);
       switch (personalityResult) {
       case _URC_HANDLER_FOUND:
@@ -487,15 +516,15 @@ unwind_phase1(unw_context_t *uc, _Unwind_Exception *exception_object) {
         // stop search and remember stack pointer at the frame
         handlerNotFound = false;
         // p should have initialized barrier_cache. EHABI #7.3.5
-        _LIBUNWIND_TRACE_UNWINDING("unwind_phase1(ex_ojb=%p): "
-                                   "_URC_HANDLER_FOUND \n",
-                                   exception_object);
+        _LIBUNWIND_TRACE_UNWINDING(
+            "unwind_phase1(ex_ojb=%p): _URC_HANDLER_FOUND \n",
+            static_cast<void *>(exception_object));
         return _URC_NO_REASON;
 
       case _URC_CONTINUE_UNWIND:
         _LIBUNWIND_TRACE_UNWINDING(
             "unwind_phase1(ex_ojb=%p): _URC_CONTINUE_UNWIND\n",
-            exception_object);
+            static_cast<void *>(exception_object));
         // continue unwinding
         break;
 
@@ -507,7 +536,7 @@ unwind_phase1(unw_context_t *uc, _Unwind_Exception *exception_object) {
         // something went wrong
         _LIBUNWIND_TRACE_UNWINDING(
             "unwind_phase1(ex_ojb=%p): _URC_FATAL_PHASE1_ERROR\n",
-            exception_object);
+            static_cast<void *>(exception_object));
         return _URC_FATAL_PHASE1_ERROR;
       }
     }
@@ -522,7 +551,8 @@ static _Unwind_Reason_Code unwind_phase2(unw_context_t *uc,
   unw_cursor_t cursor2;
   unw_init_local(&cursor2, uc);
 
-  _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p)\n", exception_object);
+  _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p)\n",
+                             static_cast<void *>(exception_object));
   int frame_count = 0;
 
   // Walk each frame until we reach where search phase said to stop.
@@ -549,13 +579,13 @@ static _Unwind_Reason_Code unwind_phase2(unw_context_t *uc,
     int stepResult = unw_step(&cursor2);
     if (stepResult == 0) {
       _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): unw_step() reached "
-                            "bottom => _URC_END_OF_STACK\n",
-                            exception_object);
+                                 "bottom => _URC_END_OF_STACK\n",
+                                 static_cast<void *>(exception_object));
       return _URC_END_OF_STACK;
     } else if (stepResult < 0) {
       _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): unw_step failed => "
-                            "_URC_FATAL_PHASE1_ERROR\n",
-                            exception_object);
+                                 "_URC_FATAL_PHASE1_ERROR\n",
+                                 static_cast<void *>(exception_object));
       return _URC_FATAL_PHASE2_ERROR;
     }
 
@@ -565,23 +595,25 @@ static _Unwind_Reason_Code unwind_phase2(unw_context_t *uc,
     unw_get_reg(&cursor2, UNW_REG_SP, &sp);
     if (unw_get_proc_info(&cursor2, &frameInfo) != UNW_ESUCCESS) {
       _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): unw_get_proc_info "
-                            "failed => _URC_FATAL_PHASE1_ERROR\n",
-                            exception_object);
+                                 "failed => _URC_FATAL_PHASE1_ERROR\n",
+                                 static_cast<void *>(exception_object));
       return _URC_FATAL_PHASE2_ERROR;
     }
 
     // When tracing, print state information.
     if (_LIBUNWIND_TRACING_UNWINDING) {
-      char functionName[512];
+      char functionBuf[512];
+      const char *functionName = functionBuf;
       unw_word_t offset;
-      if ((unw_get_proc_name(&cursor2, functionName, 512, &offset) !=
-           UNW_ESUCCESS) || (frameInfo.start_ip + offset > frameInfo.end_ip))
-        strcpy(functionName, ".anonymous.");
+      if ((unw_get_proc_name(&cursor2, functionBuf, sizeof(functionBuf),
+                             &offset) != UNW_ESUCCESS) ||
+          (frameInfo.start_ip + offset > frameInfo.end_ip))
+        functionName = ".anonymous.";
       _LIBUNWIND_TRACE_UNWINDING(
           "unwind_phase2(ex_ojb=%p): start_ip=0x%llX, func=%s, sp=0x%llX, "
           "lsda=0x%llX, personality=0x%llX\n",
-          exception_object, (long long)frameInfo.start_ip, functionName,
-          (long long)sp, (long long)frameInfo.lsda,
+          static_cast<void *>(exception_object), (long long)frameInfo.start_ip,
+          functionName, (long long)sp, (long long)frameInfo.lsda,
           (long long)frameInfo.handler);
     }
 
@@ -602,7 +634,7 @@ static _Unwind_Reason_Code unwind_phase2(unw_context_t *uc,
         // Continue unwinding
         _LIBUNWIND_TRACE_UNWINDING(
             "unwind_phase2(ex_ojb=%p): _URC_CONTINUE_UNWIND\n",
-            exception_object);
+            static_cast<void *>(exception_object));
         // EHABI #7.2
         if (sp == exception_object->barrier_cache.sp) {
           // Phase 1 said we would stop at this frame, but we did not...
@@ -613,17 +645,17 @@ static _Unwind_Reason_Code unwind_phase2(unw_context_t *uc,
       case _URC_INSTALL_CONTEXT:
         _LIBUNWIND_TRACE_UNWINDING(
             "unwind_phase2(ex_ojb=%p): _URC_INSTALL_CONTEXT\n",
-            exception_object);
+            static_cast<void *>(exception_object));
         // Personality routine says to transfer control to landing pad.
         // We may get control back if landing pad calls _Unwind_Resume().
         if (_LIBUNWIND_TRACING_UNWINDING) {
           unw_word_t pc;
           unw_get_reg(&cursor2, UNW_REG_IP, &pc);
           unw_get_reg(&cursor2, UNW_REG_SP, &sp);
-          _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): re-entering  "
+          _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): re-entering "
                                      "user code with ip=0x%llX, sp=0x%llX\n",
-                                     exception_object, (long long)pc,
-                                     (long long)sp);
+                                     static_cast<void *>(exception_object),
+                                     (long long)pc, (long long)sp);
         }
 
         {
@@ -660,7 +692,7 @@ static _Unwind_Reason_Code unwind_phase2(unw_context_t *uc,
 _LIBUNWIND_EXPORT _Unwind_Reason_Code
 _Unwind_RaiseException(_Unwind_Exception *exception_object) {
   _LIBUNWIND_TRACE_API("_Unwind_RaiseException(ex_obj=%p)\n",
-                             exception_object);
+                       static_cast<void *>(exception_object));
   unw_context_t uc;
   unw_getcontext(&uc);
 
@@ -696,7 +728,8 @@ _LIBUNWIND_EXPORT void _Unwind_Complete(_Unwind_Exception* exception_object) {
 /// in turn calls _Unwind_Resume_or_Rethrow().
 _LIBUNWIND_EXPORT void
 _Unwind_Resume(_Unwind_Exception *exception_object) {
-  _LIBUNWIND_TRACE_API("_Unwind_Resume(ex_obj=%p)\n", exception_object);
+  _LIBUNWIND_TRACE_API("_Unwind_Resume(ex_obj=%p)\n",
+                       static_cast<void *>(exception_object));
   unw_context_t uc;
   unw_getcontext(&uc);
 
@@ -717,8 +750,9 @@ _Unwind_GetLanguageSpecificData(struct _Unwind_Context *context) {
   uintptr_t result = 0;
   if (unw_get_proc_info(cursor, &frameInfo) == UNW_ESUCCESS)
     result = (uintptr_t)frameInfo.lsda;
-  _LIBUNWIND_TRACE_API("_Unwind_GetLanguageSpecificData(context=%p)"
-                       "=> 0x%llx\n", context, (long long)result);
+  _LIBUNWIND_TRACE_API(
+      "_Unwind_GetLanguageSpecificData(context=%p) => 0x%llx\n",
+      static_cast<void *>(context), (long long)result);
   if (result != 0) {
     if (*((uint8_t *)result) != 0xFF)
       _LIBUNWIND_DEBUG_LOG("lsda at 0x%llx does not start with 0xFF\n",
@@ -745,15 +779,14 @@ static uint64_t ValueAsBitPattern(_Unwind_VRS_DataRepresentation representation,
   return value;
 }
 
-_Unwind_VRS_Result _Unwind_VRS_Set(
-    _Unwind_Context *context,
-    _Unwind_VRS_RegClass regclass,
-    uint32_t regno,
-    _Unwind_VRS_DataRepresentation representation,
-    void *valuep) {
+_Unwind_VRS_Result
+_Unwind_VRS_Set(_Unwind_Context *context, _Unwind_VRS_RegClass regclass,
+                uint32_t regno, _Unwind_VRS_DataRepresentation representation,
+                void *valuep) {
   _LIBUNWIND_TRACE_API("_Unwind_VRS_Set(context=%p, regclass=%d, reg=%d, "
-                       "rep=%d, value=0x%llX)\n", context, regclass,
-                       regno, representation,
+                       "rep=%d, value=0x%llX)\n",
+                       static_cast<void *>(context), regclass, regno,
+                       representation,
                        ValueAsBitPattern(representation, valuep));
   unw_cursor_t *cursor = (unw_cursor_t *)context;
   switch (regclass) {
@@ -795,14 +828,14 @@ _Unwind_VRS_Result _Unwind_VRS_Set(
                  ? _UVRSR_OK
                  : _UVRSR_FAILED;
   }
+  _LIBUNWIND_ABORT("unsupported register class");
 }
 
-static _Unwind_VRS_Result _Unwind_VRS_Get_Internal(
-    _Unwind_Context *context,
-    _Unwind_VRS_RegClass regclass,
-    uint32_t regno,
-    _Unwind_VRS_DataRepresentation representation,
-    void *valuep) {
+static _Unwind_VRS_Result
+_Unwind_VRS_Get_Internal(_Unwind_Context *context,
+                         _Unwind_VRS_RegClass regclass, uint32_t regno,
+                         _Unwind_VRS_DataRepresentation representation,
+                         void *valuep) {
   unw_cursor_t *cursor = (unw_cursor_t *)context;
   switch (regclass) {
     case _UVRSC_CORE:
@@ -843,6 +876,7 @@ static _Unwind_VRS_Result _Unwind_VRS_Get_Internal(
                  ? _UVRSR_OK
                  : _UVRSR_FAILED;
   }
+  _LIBUNWIND_ABORT("unsupported register class");
 }
 
 _Unwind_VRS_Result _Unwind_VRS_Get(
@@ -856,19 +890,20 @@ _Unwind_VRS_Result _Unwind_VRS_Get(
                                valuep);
   _LIBUNWIND_TRACE_API("_Unwind_VRS_Get(context=%p, regclass=%d, reg=%d, "
                        "rep=%d, value=0x%llX, result = %d)\n",
-                       context, regclass, regno, representation,
+                       static_cast<void *>(context), regclass, regno,
+                       representation,
                        ValueAsBitPattern(representation, valuep), result);
   return result;
 }
 
-_Unwind_VRS_Result _Unwind_VRS_Pop(
-    _Unwind_Context *context,
-    _Unwind_VRS_RegClass regclass,
-    uint32_t discriminator,
-    _Unwind_VRS_DataRepresentation representation) {
+_Unwind_VRS_Result
+_Unwind_VRS_Pop(_Unwind_Context *context, _Unwind_VRS_RegClass regclass,
+                uint32_t discriminator,
+                _Unwind_VRS_DataRepresentation representation) {
   _LIBUNWIND_TRACE_API("_Unwind_VRS_Pop(context=%p, regclass=%d, "
                        "discriminator=%d, representation=%d)\n",
-                        context, regclass, discriminator, representation);
+                       static_cast<void *>(context), regclass, discriminator,
+                       representation);
   switch (regclass) {
     case _UVRSC_CORE:
     case _UVRSC_WMMXC: {
@@ -883,7 +918,7 @@ _Unwind_VRS_Result _Unwind_VRS_Pop(
         return _UVRSR_FAILED;
       }
       for (uint32_t i = 0; i < 16; ++i) {
-        if (!(discriminator & (1 << i)))
+        if (!(discriminator & static_cast<uint32_t>(1 << i)))
           continue;
         uint32_t value = *sp++;
         if (regclass == _UVRSC_CORE && i == 13)
@@ -926,7 +961,8 @@ _Unwind_VRS_Result _Unwind_VRS_Pop(
       return _Unwind_VRS_Set(context, _UVRSC_CORE, UNW_ARM_SP, _UVRSD_UINT32,
                              &sp);
     }
-  };
+  }
+  _LIBUNWIND_ABORT("unsupported register class");
 }
 
 /// Called by personality handler during phase 2 to find the start of the
@@ -939,7 +975,7 @@ _Unwind_GetRegionStart(struct _Unwind_Context *context) {
   if (unw_get_proc_info(cursor, &frameInfo) == UNW_ESUCCESS)
     result = (uintptr_t)frameInfo.start_ip;
   _LIBUNWIND_TRACE_API("_Unwind_GetRegionStart(context=%p) => 0x%llX\n",
-                             context, (long long)result);
+                       static_cast<void *>(context), (long long)result);
   return result;
 }
 
@@ -949,7 +985,7 @@ _Unwind_GetRegionStart(struct _Unwind_Context *context) {
 _LIBUNWIND_EXPORT void
 _Unwind_DeleteException(_Unwind_Exception *exception_object) {
   _LIBUNWIND_TRACE_API("_Unwind_DeleteException(ex_obj=%p)\n",
-                              exception_object);
+                       static_cast<void *>(exception_object));
   if (exception_object->exception_cleanup != NULL)
     (*exception_object->exception_cleanup)(_URC_FOREIGN_EXCEPTION_CAUGHT,
                                            exception_object);

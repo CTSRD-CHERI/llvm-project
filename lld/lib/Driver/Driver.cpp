@@ -7,18 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lld/Driver/Driver.h"
-
-#include "lld/Core/LLVM.h"
+#include "lld/Core/ArchiveLibraryFile.h"
+#include "lld/Core/File.h"
 #include "lld/Core/Instrumentation.h"
-#include "lld/Core/PassManager.h"
+#include "lld/Core/LLVM.h"
 #include "lld/Core/Parallel.h"
+#include "lld/Core/PassManager.h"
+#include "lld/Core/Reader.h"
 #include "lld/Core/Resolver.h"
-#include "lld/ReaderWriter/Reader.h"
-#include "lld/ReaderWriter/Writer.h"
-#include "lld/Passes/RoundTripNativePass.h"
-#include "lld/Passes/RoundTripYAMLPass.h"
-
+#include "lld/Core/Writer.h"
+#include "lld/Driver/Driver.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Option/Arg.h"
@@ -27,10 +26,41 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/raw_ostream.h"
-
 #include <mutex>
 
 namespace lld {
+
+FileVector makeErrorFile(StringRef path, std::error_code ec) {
+  std::vector<std::unique_ptr<File>> result;
+  result.push_back(llvm::make_unique<ErrorFile>(path, ec));
+  return result;
+}
+
+FileVector parseMemberFiles(FileVector &files) {
+  std::vector<std::unique_ptr<File>> members;
+  for (std::unique_ptr<File> &file : files) {
+    if (auto *archive = dyn_cast<ArchiveLibraryFile>(file.get())) {
+      if (std::error_code ec = archive->parseAllMembers(members))
+        return makeErrorFile(file->path(), ec);
+    } else {
+      members.push_back(std::move(file));
+    }
+  }
+  return members;
+}
+
+FileVector loadFile(LinkingContext &ctx, StringRef path, bool wholeArchive) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> mb
+      = MemoryBuffer::getFileOrSTDIN(path);
+  if (std::error_code ec = mb.getError())
+    return makeErrorFile(path, ec);
+  std::vector<std::unique_ptr<File>> files;
+  if (std::error_code ec = ctx.registry().loadFile(std::move(mb.get()), files))
+    return makeErrorFile(path, ec);
+  if (wholeArchive)
+    return parseMemberFiles(files);
+  return files;
+}
 
 /// This is where the link is actually performed.
 bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
@@ -44,64 +74,32 @@ bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
     args[numArgs + 1] = 0;
     llvm::cl::ParseCommandLineOptions(numArgs + 1, args);
   }
-  InputGraph &inputGraph = context.getInputGraph();
-  if (!inputGraph.size())
-    return false;
-  inputGraph.normalize();
-
-  bool fail = false;
-
-  // Read inputs
-  ScopedTask readTask(getDefaultDomain(), "Read Args");
-  TaskGroup tg;
-  std::mutex diagnosticsMutex;
-  for (std::unique_ptr<InputElement> &ie : inputGraph.inputElements()) {
-    tg.spawn([&] {
-      // Writes to the same output stream is not guaranteed to be thread-safe.
-      // We buffer the diagnostics output to a separate string-backed output
-      // stream, acquire the lock, and then print it out.
-      std::string buf;
-      llvm::raw_string_ostream stream(buf);
-
-      if (std::error_code ec = ie->parse(context, stream)) {
-        if (FileNode *fileNode = dyn_cast<FileNode>(ie.get()))
-          stream << fileNode->errStr(ec) << "\n";
-        else if (dyn_cast<Group>(ie.get()))
-          // FIXME: We need a better diagnostics here
-          stream << "Cannot parse group input element\n";
-        else
-          llvm_unreachable("Unknown type of input element");
-        fail = true;
-      }
-
-      stream.flush();
-      if (!buf.empty()) {
-        std::lock_guard<std::mutex> lock(diagnosticsMutex);
-        diagnostics << buf;
-      }
-    });
-  }
-  tg.sync();
-  readTask.end();
-
-  if (fail)
+  if (context.getNodes().empty())
     return false;
 
-  std::unique_ptr<SimpleFileNode> fileNode(
-      new SimpleFileNode("Internal Files"));
+  for (std::unique_ptr<Node> &ie : context.getNodes())
+    if (FileNode *node = dyn_cast<FileNode>(ie.get()))
+      context.getTaskGroup().spawn([node] { node->getFile()->parse(); });
 
-  InputGraph::FileVectorT internalFiles;
+  std::vector<std::unique_ptr<File>> internalFiles;
   context.createInternalFiles(internalFiles);
-
-  if (internalFiles.size())
-    fileNode->addFiles(std::move(internalFiles));
+  for (auto i = internalFiles.rbegin(), e = internalFiles.rend(); i != e; ++i) {
+    auto &members = context.getNodes();
+    members.insert(members.begin(), llvm::make_unique<FileNode>(std::move(*i)));
+  }
 
   // Give target a chance to add files.
-  InputGraph::FileVectorT implicitFiles;
+  std::vector<std::unique_ptr<File>> implicitFiles;
   context.createImplicitFiles(implicitFiles);
-  if (implicitFiles.size())
-    fileNode->addFiles(std::move(implicitFiles));
-  context.getInputGraph().addInputElementFront(std::move(fileNode));
+  for (auto i = implicitFiles.rbegin(), e = implicitFiles.rend(); i != e; ++i) {
+    auto &members = context.getNodes();
+    members.insert(members.begin(), llvm::make_unique<FileNode>(std::move(*i)));
+  }
+
+  // Give target a chance to postprocess input files.
+  // Mach-O uses this chance to move all object files before library files.
+  // ELF adds specific undefined symbols resolver.
+  context.finalizeInputFiles();
 
   // Do core linking.
   ScopedTask resolveTask(getDefaultDomain(), "Resolve");
@@ -115,15 +113,6 @@ bool Driver::link(LinkingContext &context, raw_ostream &diagnostics) {
   ScopedTask passTask(getDefaultDomain(), "Passes");
   PassManager pm;
   context.addPasses(pm);
-
-#ifndef NDEBUG
-  llvm::Optional<std::string> env = llvm::sys::Process::GetEnv("LLD_RUN_ROUNDTRIP_TEST");
-  if (env.hasValue() && !env.getValue().empty()) {
-    pm.add(std::unique_ptr<Pass>(new RoundTripYAMLPass(context)));
-    pm.add(std::unique_ptr<Pass>(new RoundTripNativePass(context)));
-  }
-#endif
-
   pm.runOnFile(merged);
   passTask.end();
 

@@ -24,10 +24,6 @@ inline bool isImmSExti32i8Value(uint64_t Value) {
           (0xFFFFFFFFFFFFFF80ULL <= Value && Value <= 0xFFFFFFFFFFFFFFFFULL));
 }
 
-inline bool isImmZExtu32u8Value(uint64_t Value) {
-    return (Value <= 0x00000000000000FFULL);
-}
-
 inline bool isImmSExti64i8Value(uint64_t Value) {
   return ((                                  Value <= 0x000000000000007FULL)||
           (0xFFFFFFFFFFFFFF80ULL <= Value && Value <= 0xFFFFFFFFFFFFFFFFULL));
@@ -36,6 +32,11 @@ inline bool isImmSExti64i8Value(uint64_t Value) {
 inline bool isImmSExti64i32Value(uint64_t Value) {
   return ((                                  Value <= 0x000000007FFFFFFFULL)||
           (0xFFFFFFFF80000000ULL <= Value && Value <= 0xFFFFFFFFFFFFFFFFULL));
+}
+
+inline bool isImmUnsignedi8Value(uint64_t Value) {
+  return ((                                  Value <= 0x00000000000000FFULL)||
+          (0xFFFFFFFFFFFFFF80ULL <= Value && Value <= 0xFFFFFFFFFFFFFFFFULL));
 }
 
 } // End of namespace llvm

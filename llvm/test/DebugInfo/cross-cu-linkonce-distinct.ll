@@ -52,14 +52,14 @@
 define linkonce_odr i32 @_Z4funci(i32 %i) #0 {
   %1 = alloca i32, align 4
   store i32 %i, i32* %1, align 4
-  call void @llvm.dbg.declare(metadata !{i32* %1}, metadata !22), !dbg !23
-  %2 = load i32* %1, align 4, !dbg !24
+  call void @llvm.dbg.declare(metadata i32* %1, metadata !22, metadata !MDExpression()), !dbg !23
+  %2 = load i32, i32* %1, align 4, !dbg !24
   %3 = mul nsw i32 %2, 2, !dbg !24
   ret i32 %3, !dbg !24
 }
 
 ; Function Attrs: nounwind readnone
-declare void @llvm.dbg.declare(metadata, metadata) #1
+declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
 attributes #0 = { inlinehint nounwind uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind readnone }
@@ -68,28 +68,28 @@ attributes #1 = { nounwind readnone }
 !llvm.module.flags = !{!19, !20}
 !llvm.ident = !{!21, !21}
 
-!0 = metadata !{i32 786449, metadata !1, i32 4, metadata !"clang version 3.5.0 ", i1 false, metadata !"", i32 0, metadata !2, metadata !2, metadata !3, metadata !9, metadata !2, metadata !"", i32 1} ; [ DW_TAG_compile_unit ] [/tmp/dbginfo/a.cpp] [DW_LANG_C_plus_plus]
-!1 = metadata !{metadata !"a.cpp", metadata !"/tmp/dbginfo"}
-!2 = metadata !{}
-!3 = metadata !{metadata !4}
-!4 = metadata !{i32 786478, metadata !1, metadata !5, metadata !"func", metadata !"func", metadata !"_Z4funci", i32 1, metadata !6, i1 false, i1 true, i32 0, i32 0, null, i32 256, i1 false, i32 (i32)* @_Z4funci, null, null, metadata !2, i32 1} ; [ DW_TAG_subprogram ] [line 1] [def] [func]
-!5 = metadata !{i32 786473, metadata !1}          ; [ DW_TAG_file_type ] [/tmp/dbginfo/a.cpp]
-!6 = metadata !{i32 786453, i32 0, null, metadata !"", i32 0, i64 0, i64 0, i64 0, i32 0, null, metadata !7, i32 0, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!7 = metadata !{metadata !8, metadata !8}
-!8 = metadata !{i32 786468, null, null, metadata !"int", i32 0, i64 32, i64 32, i64 0, i32 0, i32 5} ; [ DW_TAG_base_type ] [int] [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
-!9 = metadata !{metadata !10}
-!10 = metadata !{i32 786484, i32 0, null, metadata !"x", metadata !"x", metadata !"", metadata !5, i32 4, metadata !11, i32 0, i32 1, i32 (i32)** @x, null} ; [ DW_TAG_variable ] [x] [line 4] [def]
-!11 = metadata !{i32 786447, null, null, metadata !"", i32 0, i64 64, i64 64, i64 0, i32 0, metadata !6} ; [ DW_TAG_pointer_type ] [line 0, size 64, align 64, offset 0] [from ]
-!12 = metadata !{i32 786449, metadata !13, i32 4, metadata !"clang version 3.5.0 ", i1 false, metadata !"", i32 0, metadata !2, metadata !2, metadata !14, metadata !17, metadata !2, metadata !"", i32 1} ; [ DW_TAG_compile_unit ] [/tmp/dbginfo/b.cpp] [DW_LANG_C_plus_plus]
-!13 = metadata !{metadata !"b.cpp", metadata !"/tmp/dbginfo"}
-!14 = metadata !{metadata !15}
-!15 = metadata !{i32 786478, metadata !13, metadata !16, metadata !"func", metadata !"func", metadata !"_Z4funci", i32 1, metadata !6, i1 false, i1 true, i32 0, i32 0, null, i32 256, i1 false, i32 (i32)* @_Z4funci, null, null, metadata !2, i32 1} ; [ DW_TAG_subprogram ] [line 1] [def] [func]
-!16 = metadata !{i32 786473, metadata !13}        ; [ DW_TAG_file_type ] [/tmp/dbginfo/b.cpp]
-!17 = metadata !{metadata !18}
-!18 = metadata !{i32 786484, i32 0, null, metadata !"y", metadata !"y", metadata !"", metadata !16, i32 4, metadata !11, i32 0, i32 1, i32 (i32)** @y, null} ; [ DW_TAG_variable ] [y] [line 4] [def]
-!19 = metadata !{i32 2, metadata !"Dwarf Version", i32 4}
-!20 = metadata !{i32 1, metadata !"Debug Info Version", i32 1}
-!21 = metadata !{metadata !"clang version 3.5.0 "}
-!22 = metadata !{i32 786689, metadata !4, metadata !"i", metadata !5, i32 16777217, metadata !8, i32 0, i32 0} ; [ DW_TAG_arg_variable ] [i] [line 1]
-!23 = metadata !{i32 1, i32 0, metadata !4, null}
-!24 = metadata !{i32 2, i32 0, metadata !4, null}
+!0 = !MDCompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.5.0 ", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !9, imports: !2)
+!1 = !MDFile(filename: "a.cpp", directory: "/tmp/dbginfo")
+!2 = !{}
+!3 = !{!4}
+!4 = !MDSubprogram(name: "func", linkageName: "_Z4funci", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !1, scope: !5, type: !6, function: i32 (i32)* @_Z4funci, variables: !2)
+!5 = !MDFile(filename: "a.cpp", directory: "/tmp/dbginfo")
+!6 = !MDSubroutineType(types: !7)
+!7 = !{!8, !8}
+!8 = !MDBasicType(tag: DW_TAG_base_type, name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!9 = !{!10}
+!10 = !MDGlobalVariable(name: "x", line: 4, isLocal: false, isDefinition: true, scope: null, file: !5, type: !11, variable: i32 (i32)** @x)
+!11 = !MDDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !6)
+!12 = !MDCompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.5.0 ", isOptimized: false, emissionKind: 1, file: !13, enums: !2, retainedTypes: !2, subprograms: !14, globals: !17, imports: !2)
+!13 = !MDFile(filename: "b.cpp", directory: "/tmp/dbginfo")
+!14 = !{!15}
+!15 = !MDSubprogram(name: "func", linkageName: "_Z4funci", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !13, scope: !16, type: !6, function: i32 (i32)* @_Z4funci, variables: !2)
+!16 = !MDFile(filename: "b.cpp", directory: "/tmp/dbginfo")
+!17 = !{!18}
+!18 = !MDGlobalVariable(name: "y", line: 4, isLocal: false, isDefinition: true, scope: null, file: !16, type: !11, variable: i32 (i32)** @y)
+!19 = !{i32 2, !"Dwarf Version", i32 4}
+!20 = !{i32 1, !"Debug Info Version", i32 3}
+!21 = !{!"clang version 3.5.0 "}
+!22 = !MDLocalVariable(tag: DW_TAG_arg_variable, name: "i", line: 1, arg: 1, scope: !4, file: !5, type: !8)
+!23 = !MDLocation(line: 1, scope: !4)
+!24 = !MDLocation(line: 2, scope: !4)

@@ -37,8 +37,6 @@ if test ${srcdir} != "." ; then
   fi
 fi
 
-AC_DEFINE([CLOOG_INT_GMP], [1], [Use gmp for isl])
-
 dnl **************************************************************************
 dnl * Determine which system we are building on
 dnl **************************************************************************
@@ -74,26 +72,10 @@ dnl **************************************************************************
 dnl **************************************************************************
 dnl * Set the location of various third-party software packages
 dnl **************************************************************************
-dnl Find Gmp
-find_lib_and_headers([gmp], [gmp.h], [gmp])
-
-dnl Find Isl
-saved_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS"
-find_lib_and_headers([isl], [isl/val.h], [isl], [required])
-CXXFLAGS=$saved_CXXFLAGS
-
-dnl Check that we have cloog.
-saved_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS $gmp_inc $isl_inc"
-find_lib_and_headers([cloog], [cloog/isl/cloog.h], [cloog-isl])
-CXXFLAGS=$saved_CXXFLAGS
-AS_IF([test "x$cloog_found" = "xyes"],
-  [AC_DEFINE([CLOOG_FOUND],[1],[Define if cloog found])])
 
 dnl Check that we have libpluto.
 saved_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS $gmp_inc $isl_inc"
+CXXFLAGS="$CXXFLAGS"
 find_lib_and_headers([pluto], [pluto/libpluto.h], [pluto])
 CXXFLAGS=$saved_CXXFLAGS
 AS_IF([test "x$pluto_found" = "xyes"],

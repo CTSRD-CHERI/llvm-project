@@ -723,7 +723,7 @@ namespace {
 class AArch64ConditionalCompares : public MachineFunctionPass {
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  const MCSchedModel *SchedModel;
+  MCSchedModel SchedModel;
   // Does the proceeded function has Oz attribute.
   bool MinSize;
   MachineRegisterInfo *MRI;
@@ -845,7 +845,7 @@ bool AArch64ConditionalCompares::shouldConvert() {
   // the cost of a misprediction.
   //
   // Set a limit on the delay we will accept.
-  unsigned DelayLimit = SchedModel->MispredictPenalty * 3 / 4;
+  unsigned DelayLimit = SchedModel.MispredictPenalty * 3 / 4;
 
   // Instruction depths can be computed for all trace instructions above CmpBB.
   unsigned HeadDepth =
@@ -893,15 +893,13 @@ bool AArch64ConditionalCompares::runOnMachineFunction(MachineFunction &MF) {
                << "********** Function: " << MF.getName() << '\n');
   TII = MF.getSubtarget().getInstrInfo();
   TRI = MF.getSubtarget().getRegisterInfo();
-  SchedModel =
-      MF.getTarget().getSubtarget<TargetSubtargetInfo>().getSchedModel();
+  SchedModel = MF.getSubtarget().getSchedModel();
   MRI = &MF.getRegInfo();
   DomTree = &getAnalysis<MachineDominatorTree>();
   Loops = getAnalysisIfAvailable<MachineLoopInfo>();
   Traces = &getAnalysis<MachineTraceMetrics>();
   MinInstr = nullptr;
-  MinSize = MF.getFunction()->getAttributes().hasAttribute(
-      AttributeSet::FunctionIndex, Attribute::MinSize);
+  MinSize = MF.getFunction()->hasFnAttribute(Attribute::MinSize);
 
   bool Changed = false;
   CmpConv.runOnMachineFunction(MF);

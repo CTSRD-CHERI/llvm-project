@@ -15,6 +15,7 @@
 #include "lsan_allocator.h"
 
 #include "sanitizer_common/sanitizer_allocator.h"
+#include "sanitizer_common/sanitizer_allocator_interface.h"
 #include "sanitizer_common/sanitizer_internal_defs.h"
 #include "sanitizer_common/sanitizer_stackdepot.h"
 #include "sanitizer_common/sanitizer_stacktrace.h"
@@ -24,10 +25,6 @@ extern "C" void *memset(void *ptr, int value, uptr num);
 
 namespace __lsan {
 
-static const uptr kMaxAllowedMallocSize = 8UL << 30;
-static const uptr kAllocatorSpace = 0x600000000000ULL;
-static const uptr kAllocatorSize  =  0x40000000000ULL;  // 4T.
-
 struct ChunkMetadata {
   bool allocated : 8;  // Must be first.
   ChunkTag tag : 2;
@@ -35,8 +32,22 @@ struct ChunkMetadata {
   u32 stack_trace_id;
 };
 
+#if defined(__mips64)
+static const uptr kMaxAllowedMallocSize = 4UL << 30;
+static const uptr kRegionSizeLog = 20;
+static const uptr kNumRegions = SANITIZER_MMAP_RANGE_SIZE >> kRegionSizeLog;
+typedef TwoLevelByteMap<(kNumRegions >> 12), 1 << 12> ByteMap;
+typedef CompactSizeClassMap SizeClassMap;
+typedef SizeClassAllocator32<0, SANITIZER_MMAP_RANGE_SIZE,
+    sizeof(ChunkMetadata), SizeClassMap, kRegionSizeLog, ByteMap>
+    PrimaryAllocator;
+#else
+static const uptr kMaxAllowedMallocSize = 8UL << 30;
+static const uptr kAllocatorSpace = 0x600000000000ULL;
+static const uptr kAllocatorSize = 0x40000000000ULL; // 4T.
 typedef SizeClassAllocator64<kAllocatorSpace, kAllocatorSize,
         sizeof(ChunkMetadata), DefaultSizeClassMap> PrimaryAllocator;
+#endif
 typedef SizeClassAllocatorLocalCache<PrimaryAllocator> AllocatorCache;
 typedef LargeMmapAllocator<> SecondaryAllocator;
 typedef CombinedAllocator<PrimaryAllocator, AllocatorCache,
@@ -46,14 +57,14 @@ static Allocator allocator;
 static THREADLOCAL AllocatorCache cache;
 
 void InitializeAllocator() {
-  allocator.Init();
+  allocator.InitLinkerInitialized(common_flags()->allocator_may_return_null);
 }
 
 void AllocatorThreadFinish() {
   allocator.SwallowCache(&cache);
 }
 
-static ChunkMetadata *Metadata(void *p) {
+static ChunkMetadata *Metadata(const void *p) {
   return reinterpret_cast<ChunkMetadata *>(allocator.GetMetaData(p));
 }
 
@@ -62,7 +73,7 @@ static void RegisterAllocation(const StackTrace &stack, void *p, uptr size) {
   ChunkMetadata *m = Metadata(p);
   CHECK(m);
   m->tag = DisabledInThisThread() ? kIgnored : kDirectlyLeaked;
-  m->stack_trace_id = StackDepotPut(stack.trace, stack.size);
+  m->stack_trace_id = StackDepotPut(stack);
   m->requested_size = size;
   atomic_store(reinterpret_cast<atomic_uint8_t *>(m), 1, memory_order_relaxed);
 }
@@ -87,10 +98,12 @@ void *Allocate(const StackTrace &stack, uptr size, uptr alignment,
   if (cleared && allocator.FromPrimary(p))
     memset(p, 0, size);
   RegisterAllocation(stack, p, size);
+  if (&__sanitizer_malloc_hook) __sanitizer_malloc_hook(p, size);
   return p;
 }
 
 void Deallocate(void *p) {
+  if (&__sanitizer_free_hook) __sanitizer_free_hook(p);
   RegisterDeallocation(p);
   allocator.Deallocate(&cache, p);
 }
@@ -113,7 +126,7 @@ void GetAllocatorCacheRange(uptr *begin, uptr *end) {
   *end = *begin + sizeof(cache);
 }
 
-uptr GetMallocUsableSize(void *p) {
+uptr GetMallocUsableSize(const void *p) {
   ChunkMetadata *m = Metadata(p);
   if (!m) return 0;
   return m->requested_size;
@@ -200,3 +213,38 @@ IgnoreObjectResult IgnoreObjectLocked(const void *p) {
   }
 }
 }  // namespace __lsan
+
+using namespace __lsan;
+
+extern "C" {
+SANITIZER_INTERFACE_ATTRIBUTE
+uptr __sanitizer_get_current_allocated_bytes() {
+  uptr stats[AllocatorStatCount];
+  allocator.GetStats(stats);
+  return stats[AllocatorStatAllocated];
+}
+
+SANITIZER_INTERFACE_ATTRIBUTE
+uptr __sanitizer_get_heap_size() {
+  uptr stats[AllocatorStatCount];
+  allocator.GetStats(stats);
+  return stats[AllocatorStatMapped];
+}
+
+SANITIZER_INTERFACE_ATTRIBUTE
+uptr __sanitizer_get_free_bytes() { return 0; }
+
+SANITIZER_INTERFACE_ATTRIBUTE
+uptr __sanitizer_get_unmapped_bytes() { return 0; }
+
+SANITIZER_INTERFACE_ATTRIBUTE
+uptr __sanitizer_get_estimated_allocated_size(uptr size) { return size; }
+
+SANITIZER_INTERFACE_ATTRIBUTE
+int __sanitizer_get_ownership(const void *p) { return Metadata(p) != 0; }
+
+SANITIZER_INTERFACE_ATTRIBUTE
+uptr __sanitizer_get_allocated_size(const void *p) {
+  return GetMallocUsableSize(p);
+}
+}  // extern "C"

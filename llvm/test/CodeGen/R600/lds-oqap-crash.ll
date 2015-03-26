@@ -9,10 +9,10 @@
 ; because the LDS instructions are pseudo instructions and the OQAP
 ; reads and writes are bundled together in the same instruction.
 
-; CHECK: @lds_crash
+; CHECK: {{^}}lds_crash:
 define void @lds_crash(i32 addrspace(1)* %out, i32 addrspace(3)* %in, i32 %a, i32 %b, i32 %c) {
 entry:
-  %0 = load i32 addrspace(3)* %in
+  %0 = load i32, i32 addrspace(3)* %in
   ; This block needs to be > 115 ISA instructions to hit the bug,
   ; so we'll use udiv instructions.
   %div0 = udiv i32 %0, %b
