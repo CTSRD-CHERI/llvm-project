@@ -30,7 +30,30 @@ void bar(int a, int b)
 
 __attribute__((cheri_ccallee))
 __attribute__((cheri_method_class(cls)))
+__attribute__((cheri_method_suffix("_cap")))
 void fish(void)
 {
 	// CHECK: define chericcallcce void @fish
+}
+
+__attribute__((cheri_method_suffix("_cap")))
+__attribute__((cheri_method_class(cls)))
+void flibble(void);
+
+// CHECK: define void @call()
+void call(void)
+{
+	// CHECK: call chericcallcce void @fish()
+	fish();
+	// Check that we get a ccall to cheri_invoke with the correct method number
+	// CHECK: load i64, i64* @__cheri_method.cls.fish, !invariant.load !1
+	// CHECK: call chericcallcc void
+	// CHECK: @cheri_invoke
+	fish_cap(other);
+	// CHECK: call void @flibble()
+	flibble();
+	// CHECK: load i64, i64* @__cheri_method.cls.flibble, !invariant.load !1
+	// CHECK: call chericcallcc void
+	// CHECK: @cheri_invoke
+	flibble_cap(other);
 }

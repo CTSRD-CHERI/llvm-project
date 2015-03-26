@@ -7487,6 +7487,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     NewParams.push_back(CHERIClassTy);
     NewParams.insert(NewParams.end(), Params.begin(), Params.end());
     FunctionProtoType::ExtProtoInfo EPI = OFT->getExtProtoInfo();
+    EPI.ExtInfo = EPI.ExtInfo.withCallingConv(CC_CheriCCall);
     QualType WrappedType = Context.getFunctionType(RetType, NewParams, EPI);
     // Construct the new function name, taking the old one and adding the
     // suffix.
