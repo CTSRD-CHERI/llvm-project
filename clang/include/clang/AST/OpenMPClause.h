@@ -135,10 +135,10 @@ public:
 
   /// \brief Fetches list of all variables in the clause.
   ArrayRef<const Expr *> getVarRefs() const {
-    return ArrayRef<const Expr *>(
+    return llvm::makeArrayRef(
         reinterpret_cast<const Expr *const *>(
             reinterpret_cast<const char *>(this) +
-            llvm::RoundUpToAlignment(sizeof(T), llvm::alignOf<Expr *>())),
+            llvm::RoundUpToAlignment(sizeof(T), llvm::alignOf<const Expr *>())),
         NumVars);
   }
 };
@@ -926,6 +926,7 @@ public:
 /// with the variables 'a' and 'b'.
 ///
 class OMPPrivateClause : public OMPVarListClause<OMPPrivateClause> {
+  friend class OMPClauseReader;
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param StartLoc Starting location of the clause.
@@ -947,6 +948,20 @@ class OMPPrivateClause : public OMPVarListClause<OMPPrivateClause> {
                                            SourceLocation(), SourceLocation(),
                                            N) {}
 
+  /// \brief Sets the list of references to private copies with initializers for
+  /// new private variables.
+  /// \param VL List of references.
+  void setPrivateCopies(ArrayRef<Expr *> VL);
+
+  /// \brief Gets the list of references to private copies with initializers for
+  /// new private variables.
+  MutableArrayRef<Expr *> getPrivateCopies() {
+    return MutableArrayRef<Expr *>(varlist_end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getPrivateCopies() const {
+    return llvm::makeArrayRef(varlist_end(), varlist_size());
+  }
+
 public:
   /// \brief Creates clause with a list of variables \a VL.
   ///
@@ -955,16 +970,33 @@ public:
   /// \param LParenLoc Location of '('.
   /// \param EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
+  /// \param PrivateVL List of references to private copies with initializers.
   ///
   static OMPPrivateClause *Create(const ASTContext &C, SourceLocation StartLoc,
                                   SourceLocation LParenLoc,
-                                  SourceLocation EndLoc, ArrayRef<Expr *> VL);
+                                  SourceLocation EndLoc, ArrayRef<Expr *> VL,
+                                  ArrayRef<Expr *> PrivateVL);
   /// \brief Creates an empty clause with the place for \a N variables.
   ///
   /// \param C AST context.
   /// \param N The number of variables.
   ///
   static OMPPrivateClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  typedef MutableArrayRef<Expr *>::iterator private_copies_iterator;
+  typedef ArrayRef<const Expr *>::iterator private_copies_const_iterator;
+  typedef llvm::iterator_range<private_copies_iterator> private_copies_range;
+  typedef llvm::iterator_range<private_copies_const_iterator>
+      private_copies_const_range;
+
+  private_copies_range private_copies() {
+    return private_copies_range(getPrivateCopies().begin(),
+                                getPrivateCopies().end());
+  }
+  private_copies_const_range private_copies() const {
+    return private_copies_const_range(getPrivateCopies().begin(),
+                                      getPrivateCopies().end());
+  }
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
@@ -986,6 +1018,8 @@ public:
 /// with the variables 'a' and 'b'.
 ///
 class OMPFirstprivateClause : public OMPVarListClause<OMPFirstprivateClause> {
+  friend class OMPClauseReader;
+
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param StartLoc Starting location of the clause.
@@ -1006,6 +1040,33 @@ class OMPFirstprivateClause : public OMPVarListClause<OMPFirstprivateClause> {
       : OMPVarListClause<OMPFirstprivateClause>(
             OMPC_firstprivate, SourceLocation(), SourceLocation(),
             SourceLocation(), N) {}
+  /// \brief Sets the list of references to private copies with initializers for
+  /// new private variables.
+  /// \param VL List of references.
+  void setPrivateCopies(ArrayRef<Expr *> VL);
+
+  /// \brief Gets the list of references to private copies with initializers for
+  /// new private variables.
+  MutableArrayRef<Expr *> getPrivateCopies() {
+    return MutableArrayRef<Expr *>(varlist_end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getPrivateCopies() const {
+    return llvm::makeArrayRef(varlist_end(), varlist_size());
+  }
+
+  /// \brief Sets the list of references to initializer variables for new
+  /// private variables.
+  /// \param VL List of references.
+  void setInits(ArrayRef<Expr *> VL);
+
+  /// \brief Gets the list of references to initializer variables for new
+  /// private variables.
+  MutableArrayRef<Expr *> getInits() {
+    return MutableArrayRef<Expr *>(getPrivateCopies().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getInits() const {
+    return llvm::makeArrayRef(getPrivateCopies().end(), varlist_size());
+  }
 
 public:
   /// \brief Creates clause with a list of variables \a VL.
@@ -1014,17 +1075,49 @@ public:
   /// \param StartLoc Starting location of the clause.
   /// \param LParenLoc Location of '('.
   /// \param EndLoc Ending location of the clause.
-  /// \param VL List of references to the variables.
+  /// \param VL List of references to the original variables.
+  /// \param PrivateVL List of references to private copies with initializers.
+  /// \param InitVL List of references to auto generated variables used for
+  /// initialization of a single array element. Used if firstprivate variable is
+  /// of array type.
   ///
   static OMPFirstprivateClause *
   Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation LParenLoc,
-         SourceLocation EndLoc, ArrayRef<Expr *> VL);
+         SourceLocation EndLoc, ArrayRef<Expr *> VL, ArrayRef<Expr *> PrivateVL,
+         ArrayRef<Expr *> InitVL);
   /// \brief Creates an empty clause with the place for \a N variables.
   ///
   /// \param C AST context.
   /// \param N The number of variables.
   ///
   static OMPFirstprivateClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  typedef MutableArrayRef<Expr *>::iterator private_copies_iterator;
+  typedef ArrayRef<const Expr *>::iterator private_copies_const_iterator;
+  typedef llvm::iterator_range<private_copies_iterator> private_copies_range;
+  typedef llvm::iterator_range<private_copies_const_iterator>
+      private_copies_const_range;
+
+  private_copies_range private_copies() {
+    return private_copies_range(getPrivateCopies().begin(),
+                                getPrivateCopies().end());
+  }
+  private_copies_const_range private_copies() const {
+    return private_copies_const_range(getPrivateCopies().begin(),
+                                      getPrivateCopies().end());
+  }
+
+  typedef MutableArrayRef<Expr *>::iterator inits_iterator;
+  typedef ArrayRef<const Expr *>::iterator inits_const_iterator;
+  typedef llvm::iterator_range<inits_iterator> inits_range;
+  typedef llvm::iterator_range<inits_const_iterator> inits_const_range;
+
+  inits_range inits() {
+    return inits_range(getInits().begin(), getInits().end());
+  }
+  inits_const_range inits() const {
+    return inits_const_range(getInits().begin(), getInits().end());
+  }
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
@@ -1263,7 +1356,10 @@ class OMPLinearClause : public OMPVarListClause<OMPLinearClause> {
   SourceLocation ColonLoc;
 
   /// \brief Sets the linear step for clause.
-  void setStep(Expr *Step) { *varlist_end() = Step; }
+  void setStep(Expr *Step) { *(getFinals().end()) = Step; }
+
+  /// \brief Sets the expression to calculate linear step for clause.
+  void setCalcStep(Expr *CalcStep) { *(getFinals().end() + 1) = CalcStep; }
 
   /// \brief Build 'linear' clause with given number of variables \a NumVars.
   ///
@@ -1290,6 +1386,46 @@ class OMPLinearClause : public OMPVarListClause<OMPLinearClause> {
                                           NumVars),
         ColonLoc(SourceLocation()) {}
 
+  /// \brief Gets the list of initial values for linear variables.
+  ///
+  /// There are NumVars expressions with initial values allocated after the
+  /// varlist, they are followed by NumVars update expressions (used to update
+  /// the linear variable's value on current iteration) and they are followed by
+  /// NumVars final expressions (used to calculate the linear variable's
+  /// value after the loop body). After these lists, there are 2 helper
+  /// expressions - linear step and a helper to calculate it before the
+  /// loop body (used when the linear step is not constant):
+  ///
+  /// { Vars[] /* in OMPVarListClause */; Inits[]; Updates[]; Finals[];
+  ///   Step; CalcStep; }
+  ///
+  MutableArrayRef<Expr *> getInits() {
+    return MutableArrayRef<Expr *>(varlist_end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getInits() const {
+    return llvm::makeArrayRef(varlist_end(), varlist_size());
+  }
+
+  /// \brief Sets the list of update expressions for linear variables.
+  MutableArrayRef<Expr *> getUpdates() {
+    return MutableArrayRef<Expr *>(getInits().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getUpdates() const {
+    return llvm::makeArrayRef(getInits().end(), varlist_size());
+  }
+
+  /// \brief Sets the list of final update expressions for linear variables.
+  MutableArrayRef<Expr *> getFinals() {
+    return MutableArrayRef<Expr *>(getUpdates().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getFinals() const {
+    return llvm::makeArrayRef(getUpdates().end(), varlist_size());
+  }
+
+  /// \brief Sets the list of the initial values for linear variables.
+  /// \param IL List of expressions.
+  void setInits(ArrayRef<Expr *> IL);
+
 public:
   /// \brief Creates clause with a list of variables \a VL and a linear step
   /// \a Step.
@@ -1300,11 +1436,14 @@ public:
   /// \param ColonLoc Location of ':'.
   /// \param EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
+  /// \param IL List of initial values for the variables.
   /// \param Step Linear step.
+  /// \param CalcStep Calculation of the linear step.
   static OMPLinearClause *Create(const ASTContext &C, SourceLocation StartLoc,
                                  SourceLocation LParenLoc,
                                  SourceLocation ColonLoc, SourceLocation EndLoc,
-                                 ArrayRef<Expr *> VL, Expr *Step);
+                                 ArrayRef<Expr *> VL, ArrayRef<Expr *> IL,
+                                 Expr *Step, Expr *CalcStep);
 
   /// \brief Creates an empty clause with the place for \a NumVars variables.
   ///
@@ -1319,13 +1458,61 @@ public:
   SourceLocation getColonLoc() const { return ColonLoc; }
 
   /// \brief Returns linear step.
-  Expr *getStep() { return *varlist_end(); }
+  Expr *getStep() { return *(getFinals().end()); }
   /// \brief Returns linear step.
-  const Expr *getStep() const { return *varlist_end(); }
+  const Expr *getStep() const { return *(getFinals().end()); }
+  /// \brief Returns expression to calculate linear step.
+  Expr *getCalcStep() { return *(getFinals().end() + 1); }
+  /// \brief Returns expression to calculate linear step.
+  const Expr *getCalcStep() const { return *(getFinals().end() + 1); }
+
+  /// \brief Sets the list of update expressions for linear variables.
+  /// \param UL List of expressions.
+  void setUpdates(ArrayRef<Expr *> UL);
+
+  /// \brief Sets the list of final update expressions for linear variables.
+  /// \param FL List of expressions.
+  void setFinals(ArrayRef<Expr *> FL);
+
+  typedef MutableArrayRef<Expr *>::iterator inits_iterator;
+  typedef ArrayRef<const Expr *>::iterator inits_const_iterator;
+  typedef llvm::iterator_range<inits_iterator> inits_range;
+  typedef llvm::iterator_range<inits_const_iterator> inits_const_range;
+
+  inits_range inits() {
+    return inits_range(getInits().begin(), getInits().end());
+  }
+  inits_const_range inits() const {
+    return inits_const_range(getInits().begin(), getInits().end());
+  }
+
+  typedef MutableArrayRef<Expr *>::iterator updates_iterator;
+  typedef ArrayRef<const Expr *>::iterator updates_const_iterator;
+  typedef llvm::iterator_range<updates_iterator> updates_range;
+  typedef llvm::iterator_range<updates_const_iterator> updates_const_range;
+
+  updates_range updates() {
+    return updates_range(getUpdates().begin(), getUpdates().end());
+  }
+  updates_const_range updates() const {
+    return updates_const_range(getUpdates().begin(), getUpdates().end());
+  }
+
+  typedef MutableArrayRef<Expr *>::iterator finals_iterator;
+  typedef ArrayRef<const Expr *>::iterator finals_const_iterator;
+  typedef llvm::iterator_range<finals_iterator> finals_range;
+  typedef llvm::iterator_range<finals_const_iterator> finals_const_range;
+
+  finals_range finals() {
+    return finals_range(getFinals().begin(), getFinals().end());
+  }
+  finals_const_range finals() const {
+    return finals_const_range(getFinals().begin(), getFinals().end());
+  }
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
-                     reinterpret_cast<Stmt **>(varlist_end() + 1));
+                     reinterpret_cast<Stmt **>(getFinals().end() + 2));
   }
 
   static bool classof(const OMPClause *T) {
@@ -1487,6 +1674,7 @@ public:
 /// with the variables 'a' and 'b'.
 ///
 class OMPCopyprivateClause : public OMPVarListClause<OMPCopyprivateClause> {
+  friend class OMPClauseReader;
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param StartLoc Starting location of the clause.
@@ -1508,6 +1696,46 @@ class OMPCopyprivateClause : public OMPVarListClause<OMPCopyprivateClause> {
             OMPC_copyprivate, SourceLocation(), SourceLocation(),
             SourceLocation(), N) {}
 
+  /// \brief Set list of helper expressions, required for proper codegen of the
+  /// clause. These expressions represent source expression in the final
+  /// assignment statement performed by the copyprivate clause.
+  void setSourceExprs(ArrayRef<Expr *> SrcExprs);
+
+  /// \brief Get the list of helper source expressions.
+  MutableArrayRef<Expr *> getSourceExprs() {
+    return MutableArrayRef<Expr *>(varlist_end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getSourceExprs() const {
+    return llvm::makeArrayRef(varlist_end(), varlist_size());
+  }
+
+  /// \brief Set list of helper expressions, required for proper codegen of the
+  /// clause. These expressions represent destination expression in the final
+  /// assignment statement performed by the copyprivate clause.
+  void setDestinationExprs(ArrayRef<Expr *> DstExprs);
+
+  /// \brief Get the list of helper destination expressions.
+  MutableArrayRef<Expr *> getDestinationExprs() {
+    return MutableArrayRef<Expr *>(getSourceExprs().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getDestinationExprs() const {
+    return llvm::makeArrayRef(getSourceExprs().end(), varlist_size());
+  }
+
+  /// \brief Set list of helper assignment expressions, required for proper
+  /// codegen of the clause. These expressions are assignment expressions that
+  /// assign source helper expressions to destination helper expressions
+  /// correspondingly.
+  void setAssignmentOps(ArrayRef<Expr *> AssignmentOps);
+
+  /// \brief Get the list of helper assignment expressions.
+  MutableArrayRef<Expr *> getAssignmentOps() {
+    return MutableArrayRef<Expr *>(getDestinationExprs().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getAssignmentOps() const {
+    return llvm::makeArrayRef(getDestinationExprs().end(), varlist_size());
+  }
+
 public:
   /// \brief Creates clause with a list of variables \a VL.
   ///
@@ -1516,16 +1744,60 @@ public:
   /// \param LParenLoc Location of '('.
   /// \param EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
+  /// \param SrcExprs List of helper expressions for proper generation of
+  /// assignment operation required for copyprivate clause. This list represents
+  /// sources.
+  /// \param DstExprs List of helper expressions for proper generation of
+  /// assignment operation required for copyprivate clause. This list represents
+  /// destinations.
+  /// \param AssignmentOps List of helper expressions that represents assignment
+  /// operation:
+  /// \code
+  /// DstExprs = SrcExprs;
+  /// \endcode
+  /// Required for proper codegen of final assignment performed by the
+  /// copyprivate clause.
   ///
   static OMPCopyprivateClause *
   Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation LParenLoc,
-         SourceLocation EndLoc, ArrayRef<Expr *> VL);
+         SourceLocation EndLoc, ArrayRef<Expr *> VL, ArrayRef<Expr *> SrcExprs,
+         ArrayRef<Expr *> DstExprs, ArrayRef<Expr *> AssignmentOps);
   /// \brief Creates an empty clause with \a N variables.
   ///
   /// \param C AST context.
   /// \param N The number of variables.
   ///
   static OMPCopyprivateClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  typedef MutableArrayRef<Expr *>::iterator helper_expr_iterator;
+  typedef ArrayRef<const Expr *>::iterator helper_expr_const_iterator;
+  typedef llvm::iterator_range<helper_expr_iterator> helper_expr_range;
+  typedef llvm::iterator_range<helper_expr_const_iterator>
+      helper_expr_const_range;
+
+  helper_expr_const_range source_exprs() const {
+    return helper_expr_const_range(getSourceExprs().begin(),
+                                   getSourceExprs().end());
+  }
+  helper_expr_range source_exprs() {
+    return helper_expr_range(getSourceExprs().begin(), getSourceExprs().end());
+  }
+  helper_expr_const_range destination_exprs() const {
+    return helper_expr_const_range(getDestinationExprs().begin(),
+                                   getDestinationExprs().end());
+  }
+  helper_expr_range destination_exprs() {
+    return helper_expr_range(getDestinationExprs().begin(),
+                             getDestinationExprs().end());
+  }
+  helper_expr_const_range assignment_ops() const {
+    return helper_expr_const_range(getAssignmentOps().begin(),
+                                   getAssignmentOps().end());
+  }
+  helper_expr_range assignment_ops() {
+    return helper_expr_range(getAssignmentOps().begin(),
+                             getAssignmentOps().end());
+  }
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),

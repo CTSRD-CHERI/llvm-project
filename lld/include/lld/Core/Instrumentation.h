@@ -16,7 +16,6 @@
 #define LLD_CORE_INSTRUMENTATION_H
 
 #include "llvm/Support/Compiler.h"
-
 #include <utility>
 
 #ifdef LLD_HAS_VTUNE
@@ -65,8 +64,8 @@ public:
 class ScopedTask {
   __itt_domain *_domain;
 
-  ScopedTask(const ScopedTask &) LLVM_DELETED_FUNCTION;
-  ScopedTask &operator=(const ScopedTask &) LLVM_DELETED_FUNCTION;
+  ScopedTask(const ScopedTask &) = delete;
+  ScopedTask &operator=(const ScopedTask &) = delete;
 
 public:
   /// \brief Create a task in Domain \p d named \p s.

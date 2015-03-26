@@ -12,6 +12,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAsmLayout.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
@@ -20,6 +21,7 @@
 #include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSection.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/Debug.h"
@@ -27,7 +29,6 @@
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/MC/MCSectionELF.h"
 #include <tuple>
 using namespace llvm;
 
@@ -200,7 +201,17 @@ const MCSymbol *MCAsmLayout::getBaseSymbol(const MCSymbol &Symbol) const {
   if (!A)
     return nullptr;
 
-  return &A->getSymbol();
+  const MCSymbol &ASym = A->getSymbol();
+  const MCAssembler &Asm = getAssembler();
+  const MCSymbolData &ASD = Asm.getSymbolData(ASym);
+  if (ASD.isCommon()) {
+    // FIXME: we should probably add a SMLoc to MCExpr.
+    Asm.getContext().FatalError(SMLoc(),
+                                "Common symbol " + ASym.getName() +
+                                    " cannot be used in assignment expr");
+  }
+
+  return &ASym;
 }
 
 uint64_t MCAsmLayout::getSectionAddressSize(const MCSectionData *SD) const {
@@ -266,9 +277,8 @@ MCFragment::MCFragment() : Kind(FragmentType(~0)) {
 MCFragment::~MCFragment() {
 }
 
-MCFragment::MCFragment(FragmentType _Kind, MCSectionData *_Parent)
-  : Kind(_Kind), Parent(_Parent), Atom(nullptr), Offset(~UINT64_C(0))
-{
+MCFragment::MCFragment(FragmentType Kind, MCSectionData *Parent)
+    : Kind(Kind), Parent(Parent), Atom(nullptr), Offset(~UINT64_C(0)) {
   if (Parent)
     Parent->getFragmentList().push_back(this);
 }
@@ -287,15 +297,10 @@ MCEncodedFragmentWithFixups::~MCEncodedFragmentWithFixups() {
 
 MCSectionData::MCSectionData() : Section(nullptr) {}
 
-MCSectionData::MCSectionData(const MCSection &_Section, MCAssembler *A)
-  : Section(&_Section),
-    Ordinal(~UINT32_C(0)),
-    Alignment(1),
-    BundleLockState(NotBundleLocked),
-    BundleLockNestingDepth(0),
-    BundleGroupBeforeFirstInst(false),
-    HasInstructions(false)
-{
+MCSectionData::MCSectionData(const MCSection &Section, MCAssembler *A)
+    : Section(&Section), Ordinal(~UINT32_C(0)), Alignment(1),
+      BundleLockState(NotBundleLocked), BundleLockNestingDepth(0),
+      BundleGroupBeforeFirstInst(false), HasInstructions(false) {
   if (A)
     A->getSectionList().push_back(this);
 }
@@ -353,10 +358,10 @@ void MCSectionData::setBundleLockState(BundleLockStateType NewState) {
 
 MCSymbolData::MCSymbolData() : Symbol(nullptr) {}
 
-MCSymbolData::MCSymbolData(const MCSymbol &_Symbol, MCFragment *_Fragment,
-                           uint64_t _Offset, MCAssembler *A)
-    : Symbol(&_Symbol), Fragment(_Fragment), Offset(_Offset),
-      SymbolSize(nullptr), CommonAlign(-1U), Flags(0), Index(0) {
+MCSymbolData::MCSymbolData(const MCSymbol &Symbol, MCFragment *Fragment,
+                           uint64_t Offset, MCAssembler *A)
+    : Symbol(&Symbol), Fragment(Fragment), Offset(Offset), SymbolSize(nullptr),
+      CommonAlign(-1U), Flags(0), Index(0) {
   if (A)
     A->getSymbolList().push_back(this);
 }
@@ -424,6 +429,16 @@ bool MCAssembler::isThumbFunc(const MCSymbol *Symbol) const {
   return true;
 }
 
+void MCAssembler::addLocalUsedInReloc(const MCSymbol &Sym) {
+  assert(Sym.isTemporary());
+  LocalsUsedInReloc.insert(&Sym);
+}
+
+bool MCAssembler::isLocalUsedInReloc(const MCSymbol &Sym) const {
+  assert(Sym.isTemporary());
+  return LocalsUsedInReloc.count(&Sym);
+}
+
 bool MCAssembler::isSymbolLinkerVisible(const MCSymbol &Symbol) const {
   // Non-temporary labels should always be visible to the linker.
   if (!Symbol.isTemporary())
@@ -433,8 +448,10 @@ bool MCAssembler::isSymbolLinkerVisible(const MCSymbol &Symbol) const {
   if (!Symbol.isInSection())
     return false;
 
-  // Otherwise, check if the section requires symbols even for temporary labels.
-  return getBackend().doesSectionRequireSymbols(Symbol.getSection());
+  if (isLocalUsedInReloc(Symbol))
+    return true;
+
+  return false;
 }
 
 const MCSymbolData *MCAssembler::getAtom(const MCSymbolData *SD) const {
@@ -448,8 +465,8 @@ const MCSymbolData *MCAssembler::getAtom(const MCSymbolData *SD) const {
 
   // Non-linker visible symbols in sections which can't be atomized have no
   // defining atom.
-  if (!getBackend().isSectionAtomizable(
-        SD->getFragment()->getParent()->getSection()))
+  if (!getContext().getAsmInfo()->isSectionAtomizableBySymbols(
+          SD->getFragment()->getParent()->getSection()))
     return nullptr;
 
   // Otherwise, return the atom for the containing fragment.
@@ -772,7 +789,7 @@ static void writeFragment(const MCAssembler &Asm, const MCAsmLayout &Layout,
 
   case MCFragment::FT_LEB: {
     const MCLEBFragment &LF = cast<MCLEBFragment>(F);
-    OW->WriteBytes(LF.getContents().str());
+    OW->WriteBytes(LF.getContents());
     break;
   }
 
@@ -788,12 +805,12 @@ static void writeFragment(const MCAssembler &Asm, const MCAsmLayout &Layout,
 
   case MCFragment::FT_Dwarf: {
     const MCDwarfLineAddrFragment &OF = cast<MCDwarfLineAddrFragment>(F);
-    OW->WriteBytes(OF.getContents().str());
+    OW->WriteBytes(OF.getContents());
     break;
   }
   case MCFragment::FT_DwarfFrame: {
     const MCDwarfCallFrameFragment &CF = cast<MCDwarfCallFrameFragment>(F);
-    OW->WriteBytes(CF.getContents().str());
+    OW->WriteBytes(CF.getContents());
     break;
   }
   }

@@ -15,8 +15,8 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/WindowsError.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cstdio>
 #include <fcntl.h>
 #include <io.h>
@@ -39,13 +39,13 @@ ErrorOr<std::string> sys::findProgramByName(StringRef Name,
   if (Name.find_first_of("/\\") != StringRef::npos)
     return std::string(Name);
 
-  const char16_t *Path = nullptr;
-  std::u16string PathStorage;
+  const wchar_t *Path = nullptr;
+  std::wstring PathStorage;
   if (!Paths.empty()) {
     PathStorage.reserve(Paths.size() * MAX_PATH);
     for (unsigned i = 0; i < Paths.size(); ++i) {
       if (i)
-        PathStorage.push_back(';');
+        PathStorage.push_back(L';');
       StringRef P = Paths[i];
       SmallVector<wchar_t, MAX_PATH> TmpPath;
       if (std::error_code EC = windows::UTF8ToUTF16(P, TmpPath))
@@ -62,7 +62,8 @@ ErrorOr<std::string> sys::findProgramByName(StringRef Name,
   SmallVector<StringRef, 12> PathExts;
   PathExts.push_back("");
   PathExts.push_back(".exe"); // FIXME: This must be in %PATHEXT%.
-  SplitString(std::getenv("PATHEXT"), PathExts, ";");
+  if (const char *PathExtEnv = std::getenv("PATHEXT"))
+    SplitString(PathExtEnv, PathExts, ";");
 
   SmallVector<wchar_t, MAX_PATH> U16Result;
   DWORD Len = MAX_PATH;
@@ -73,7 +74,7 @@ ErrorOr<std::string> sys::findProgramByName(StringRef Name,
 
     do {
       U16Result.reserve(Len);
-      Len = ::SearchPathW((const wchar_t *)Path, c_str(U16Name),
+      Len = ::SearchPathW(Path, c_str(U16Name),
                           U16Ext.empty() ? nullptr : c_str(U16Ext),
                           U16Result.capacity(), U16Result.data(), nullptr);
     } while (Len > U16Result.capacity());
@@ -117,14 +118,19 @@ static HANDLE RedirectIO(const StringRef *path, int fd, std::string* ErrMsg) {
   sa.bInheritHandle = TRUE;
 
   SmallVector<wchar_t, 128> fnameUnicode;
-  if (windows::UTF8ToUTF16(fname, fnameUnicode))
-    return INVALID_HANDLE_VALUE;
-
+  if (path->empty()) {
+    // Don't play long-path tricks on "NUL".
+    if (windows::UTF8ToUTF16(fname, fnameUnicode))
+      return INVALID_HANDLE_VALUE;
+  } else {
+    if (path::widenPath(fname, fnameUnicode))
+      return INVALID_HANDLE_VALUE;
+  }
   h = CreateFileW(fnameUnicode.data(), fd ? GENERIC_WRITE : GENERIC_READ,
                   FILE_SHARE_READ, &sa, fd == 0 ? OPEN_EXISTING : CREATE_ALWAYS,
                   FILE_ATTRIBUTE_NORMAL, NULL);
   if (h == INVALID_HANDLE_VALUE) {
-    MakeErrMsg(ErrMsg, std::string(fname) + ": Can't open file for " +
+    MakeErrMsg(ErrMsg, fname + ": Can't open file for " +
         (fd ? "input: " : "output: "));
   }
 
@@ -322,7 +328,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
   fflush(stderr);
 
   SmallVector<wchar_t, MAX_PATH> ProgramUtf16;
-  if (std::error_code ec = windows::UTF8ToUTF16(Program, ProgramUtf16)) {
+  if (std::error_code ec = path::widenPath(Program, ProgramUtf16)) {
     SetLastError(ec.value());
     MakeErrMsg(ErrMsg,
                std::string("Unable to convert application name to UTF-16"));

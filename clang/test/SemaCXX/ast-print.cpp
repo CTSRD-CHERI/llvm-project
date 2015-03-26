@@ -53,7 +53,7 @@ void test6() {
     test6fn((int&)y);
 }
 
-// CHECK: S s( 1, 2 );
+// CHECK: S s(1, 2);
 
 template <class S> void test7()
 {
@@ -208,3 +208,14 @@ void test(int i) {
   }
 }
 }
+
+namespace {
+// CHECK: struct {{\[\[gnu::visibility\(\"hidden\"\)\]\]}} S;
+struct [[gnu::visibility("hidden")]] S;
+}
+
+// CHECK: struct CXXFunctionalCastExprPrint fce = CXXFunctionalCastExprPrint{};
+struct CXXFunctionalCastExprPrint {} fce = CXXFunctionalCastExprPrint{};
+
+// CHECK: struct CXXTemporaryObjectExprPrint toe = CXXTemporaryObjectExprPrint{};
+struct CXXTemporaryObjectExprPrint { CXXTemporaryObjectExprPrint(); } toe = CXXTemporaryObjectExprPrint{};

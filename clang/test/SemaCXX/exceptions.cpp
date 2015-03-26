@@ -35,37 +35,37 @@ void throws() {
 void jumps() {
 l1:
   goto l5;
-  goto l4; // expected-error {{goto into protected scope}}
-  goto l3; // expected-error {{goto into protected scope}}
-  goto l2; // expected-error {{goto into protected scope}}
+  goto l4; // expected-error {{cannot jump}}
+  goto l3; // expected-error {{cannot jump}}
+  goto l2; // expected-error {{cannot jump}}
   goto l1;
   try { // expected-note 4 {{jump bypasses initialization of try block}}
   l2:
     goto l5;
-    goto l4; // expected-error {{goto into protected scope}}
-    goto l3; // expected-error {{goto into protected scope}}
+    goto l4; // expected-error {{cannot jump}}
+    goto l3; // expected-error {{cannot jump}}
     goto l2;
     goto l1;
   } catch(int) { // expected-note 4 {{jump bypasses initialization of catch block}}
   l3:
     goto l5;
-    goto l4; // expected-error {{goto into protected scope}}
+    goto l4; // expected-error {{cannot jump}}
     goto l3;
-    goto l2; // expected-error {{goto into protected scope}}
+    goto l2; // expected-error {{cannot jump}}
     goto l1;
   } catch(...) { // expected-note 4 {{jump bypasses initialization of catch block}}
   l4:
     goto l5;
     goto l4;
-    goto l3; // expected-error {{goto into protected scope}}
-    goto l2; // expected-error {{goto into protected scope}}
+    goto l3; // expected-error {{cannot jump}}
+    goto l2; // expected-error {{cannot jump}}
     goto l1;
   }
 l5:
   goto l5;
-  goto l4; // expected-error {{goto into protected scope}}
-  goto l3; // expected-error {{goto into protected scope}}
-  goto l2; // expected-error {{goto into protected scope}}
+  goto l4; // expected-error {{cannot jump}}
+  goto l3; // expected-error {{cannot jump}}
+  goto l2; // expected-error {{cannot jump}}
   goto l1;
 }
 
@@ -145,3 +145,35 @@ namespace Decay {
 }
 
 void rval_ref() throw (int &&); // expected-error {{rvalue reference type 'int &&' is not allowed in exception specification}} expected-warning {{C++11}}
+
+namespace ConstVolatileThrow {
+struct S {
+  S() {}         // expected-note{{candidate constructor not viable}}
+  S(const S &s); // expected-note{{candidate constructor not viable}}
+};
+
+typedef const volatile S CVS;
+
+void f() {
+  throw CVS(); // expected-error{{no matching constructor for initialization}}
+}
+}
+
+namespace ConstVolatileCatch {
+struct S {
+  S() {}
+  S(const volatile S &s);
+
+private:
+  S(const S &s); // expected-note {{declared private here}}
+};
+
+void f();
+
+void g() {
+  try {
+    f();
+  } catch (volatile S s) { // expected-error {{calling a private constructor}}
+  }
+}
+}

@@ -1,6 +1,6 @@
-; RUN: opt %loadPolly -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
 ;
-; CHECK: #pragma omp parallel for reduction (^ : sum)
+; CHECK: #pragma known-parallel reduction (^ : sum)
 ;        void f(int N, int M, int *sum) {
 ;          for (int i = 0; i < N; i++)
 ; CHECK:    #pragma simd
@@ -28,8 +28,8 @@ for.cond1:                                        ; preds = %for.inc, %for.body
   br i1 %cmp2, label %for.body3, label %for.end
 
 for.body3:                                        ; preds = %for.cond1
-  %arrayidx = getelementptr inbounds i32* %sum, i32 %j.0
-  %tmp = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %sum, i32 %j.0
+  %tmp = load i32, i32* %arrayidx, align 4
   %xor = xor i32 %tmp, %j.0
   store i32 %xor, i32* %arrayidx, align 4
   br label %for.inc

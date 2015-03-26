@@ -35,15 +35,13 @@
 #include "ArchHandler.h"
 #include "File.h"
 #include "MachOPasses.h"
-
 #include "lld/Core/DefinedAtom.h"
 #include "lld/Core/File.h"
 #include "lld/Core/LLVM.h"
 #include "lld/Core/Reference.h"
 #include "lld/Core/Simple.h"
-
 #include "llvm/ADT/DenseMap.h"
-
+#include "llvm/ADT/STLExtras.h"
 
 namespace lld {
 namespace mach_o {
@@ -54,8 +52,8 @@ namespace mach_o {
 //
 class GOTEntryAtom : public SimpleDefinedAtom {
 public:
-  GOTEntryAtom(const File &file, bool is64) 
-    : SimpleDefinedAtom(file), _is64(is64) { }
+  GOTEntryAtom(const File &file, bool is64, StringRef name)
+    : SimpleDefinedAtom(file), _is64(is64), _name(name) { }
 
   ContentType contentType() const override {
     return DefinedAtom::typeGOT;
@@ -79,18 +77,23 @@ public:
     return llvm::makeArrayRef(zeros, size());
   }
 
+  StringRef slotName() const {
+    return _name;
+  }
+
 private:
   const bool _is64;
+  StringRef _name;
 };
 
 
 /// Pass for instantiating and optimizing GOT slots.
-/// 
+///
 class GOTPass : public Pass {
 public:
   GOTPass(const MachOLinkingContext &context)
     : _context(context), _archHandler(_context.archHandler()),
-      _file("<mach-o GOT Pass>") { } 
+      _file("<mach-o GOT Pass>") { }
 
 private:
 
@@ -118,14 +121,22 @@ private:
       }
     }
 
-    // add all created GOT Atoms to master file
+    // Sort and add all created GOT Atoms to master file
+    std::vector<const GOTEntryAtom *> entries;
+    entries.reserve(_targetToGOT.size());
     for (auto &it : _targetToGOT)
-      mergedFile->addAtom(*it.second);
+      entries.push_back(it.second);
+    std::sort(entries.begin(), entries.end(),
+              [](const GOTEntryAtom *left, const GOTEntryAtom *right) {
+      return (left->slotName().compare(right->slotName()) < 0);
+    });
+    for (const GOTEntryAtom *slot : entries)
+      mergedFile->addAtom(*slot);
   }
 
   bool shouldReplaceTargetWithGOTAtom(const Atom *target, bool canBypassGOT) {
     // Accesses to shared library symbols must go through GOT.
-    if (target->definition() == Atom::definitionSharedLibrary)
+    if (isa<SharedLibraryAtom>(target))
       return true;
     // Accesses to interposable symbols in same linkage unit must also go
     // through GOT.
@@ -139,12 +150,12 @@ private:
     // by-passed, do that optimization and don't create GOT entry.
     return !canBypassGOT;
   }
-  
+
   const DefinedAtom *makeGOTEntry(const Atom *target) {
     auto pos = _targetToGOT.find(target);
     if (pos == _targetToGOT.end()) {
-      GOTEntryAtom *gotEntry = new (_file.allocator()) 
-                                        GOTEntryAtom(_file, _context.is64Bit());
+      GOTEntryAtom *gotEntry = new (_file.allocator())
+          GOTEntryAtom(_file, _context.is64Bit(), target->name());
       _targetToGOT[target] = gotEntry;
       const ArchHandler::ReferenceInfo &nlInfo = _archHandler.stubInfo().
                                                 nonLazyPointerReferenceToBinder;
@@ -155,7 +166,7 @@ private:
     return pos->second;
   }
 
-  
+
   const MachOLinkingContext                       &_context;
   mach_o::ArchHandler                             &_archHandler;
   MachOFile                                        _file;
@@ -166,9 +177,9 @@ private:
 
 void addGOTPass(PassManager &pm, const MachOLinkingContext &ctx) {
   assert(ctx.needsGOTPass());
-  pm.add(std::unique_ptr<Pass>(new GOTPass(ctx)));
+  pm.add(llvm::make_unique<GOTPass>(ctx));
 }
-  
+
 
 } // end namesapce mach_o
 } // end namesapce lld

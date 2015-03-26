@@ -27,6 +27,7 @@
 #include "lldb/DataFormatters/DataVisualization.h"
 #include "lldb/DataFormatters/ValueObjectPrinter.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/StringConvert.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
@@ -119,7 +120,7 @@ public:
             switch (short_option)
             {
             case 'r':   
-                relative_frame_offset = Args::StringToSInt32 (option_arg, INT32_MIN, 0, &success);
+                relative_frame_offset = StringConvert::ToSInt32 (option_arg, INT32_MIN, 0, &success);
                 if (!success)
                     error.SetErrorStringWithFormat ("invalid frame offset argument '%s'", option_arg);
                 break;
@@ -246,7 +247,7 @@ protected:
             {
                 const char *frame_idx_cstr = command.GetArgumentAtIndex(0);
                 bool success = false;
-                frame_idx = Args::StringToUInt32 (frame_idx_cstr, UINT32_MAX, 0, &success);
+                frame_idx = StringConvert::ToUInt32 (frame_idx_cstr, UINT32_MAX, 0, &success);
                 if (!success)
                 {
                     result.AppendErrorWithFormat ("invalid frame index argument '%s'", frame_idx_cstr);
@@ -521,30 +522,31 @@ protected:
                     {
                         var_sp = variable_list->GetVariableAtIndex(i);
                         bool dump_variable = true;
+                        std::string scope_string;
                         switch (var_sp->GetScope())
                         {
                             case eValueTypeVariableGlobal:
                                 dump_variable = m_option_variable.show_globals;
                                 if (dump_variable && m_option_variable.show_scope)
-                                    s.PutCString("GLOBAL: ");
+                                    scope_string = "GLOBAL: ";
                                 break;
 
                             case eValueTypeVariableStatic:
                                 dump_variable = m_option_variable.show_globals;
                                 if (dump_variable && m_option_variable.show_scope)
-                                    s.PutCString("STATIC: ");
+                                    scope_string = "STATIC: ";
                                 break;
 
                             case eValueTypeVariableArgument:
                                 dump_variable = m_option_variable.show_args;
                                 if (dump_variable && m_option_variable.show_scope)
-                                    s.PutCString("   ARG: ");
+                                    scope_string = "   ARG: ";
                                 break;
 
                             case eValueTypeVariableLocal:
                                 dump_variable = m_option_variable.show_locals;
                                 if (dump_variable && m_option_variable.show_scope)
-                                    s.PutCString(" LOCAL: ");
+                                    scope_string = " LOCAL: ";
                                 break;
 
                             default:
@@ -567,6 +569,13 @@ protected:
                                 // that are not in scope to avoid extra unneeded output
                                 if (valobj_sp->IsInScope ())
                                 {
+                                    if (false == valobj_sp->GetTargetSP()->GetDisplayRuntimeSupportValues() &&
+                                        true == valobj_sp->IsRuntimeSupportValue())
+                                        continue;
+                                    
+                                    if (!scope_string.empty())
+                                        s.PutCString(scope_string.c_str());
+                                    
                                     if (m_option_variable.show_decl && var_sp->GetDeclaration ().GetFile())
                                     {
                                         var_sp->GetDeclaration ().DumpStopContext (&s, false);

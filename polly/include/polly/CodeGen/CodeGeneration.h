@@ -20,12 +20,16 @@
 namespace polly {
 enum VectorizerChoice {
   VECTORIZER_NONE,
+  VECTORIZER_STRIPMINE,
   VECTORIZER_POLLY,
-  VECTORIZER_UNROLL_ONLY,
-  VECTORIZER_FIRST_NEED_GROUPED_UNROLL = VECTORIZER_UNROLL_ONLY,
-  VECTORIZER_BB
 };
 extern VectorizerChoice PollyVectorizerChoice;
+
+enum CodeGenChoice { CODEGEN_ISL, CODEGEN_NONE };
+extern CodeGenChoice PollyCodeGenChoice;
+
+/// @brief Flag to turn on/off annotation of alias scopes.
+extern bool PollyAnnotateAliasScopes;
 
 static inline int getNumberOfIterations(__isl_take isl_set *Domain) {
   int Dim = isl_set_dim(Domain, isl_dim_set);
@@ -39,6 +43,8 @@ static inline int getNumberOfIterations(__isl_take isl_set *Domain) {
   isl_map *Identity = isl_map_identity(Space);
   Identity = isl_map_add_dims(Identity, isl_dim_in, 1);
   Identity = isl_map_add_dims(Identity, isl_dim_out, 1);
+
+  Domain = isl_set_reset_tuple_id(Domain);
 
   isl_map *Map =
       isl_map_from_domain_and_range(isl_set_copy(Domain), isl_set_copy(Domain));

@@ -238,6 +238,7 @@
 // RUN: -fno-expensive-optimizations                                          \
 // RUN: -fno-defer-pop                                                        \
 // RUN: -finline-functions                                                    \
+// RUN: -fkeep-inline-functions                                               \
 // RUN: -fno-keep-inline-functions                                            \
 // RUN: -freorder-blocks                                                      \
 // RUN: -fprofile-dir=/rand/dir                                               \
@@ -298,6 +299,8 @@
 // RUN: -ftree-dce                                                            \
 // RUN: -ftree-ter                                                            \
 // RUN: -ftree-vrp                                                            \
+// RUN: -fno-devirtualize                                                     \
+// RUN: -fno-devirtualize-speculatively                                       \
 // RUN: %s 2>&1 | FileCheck --check-prefix=CHECK-WARNING %s
 // CHECK-WARNING-DAG: optimization flag '-finline-limit=1000' is not supported
 // CHECK-WARNING-DAG: optimization flag '-finline-limit' is not supported
@@ -305,6 +308,7 @@
 // CHECK-WARNING-DAG: optimization flag '-fno-expensive-optimizations' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fno-defer-pop' is not supported
 // CHECK-WARNING-DAG: optimization flag '-finline-functions' is not supported
+// CHECK-WARNING-DAG: optimization flag '-fkeep-inline-functions' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fno-keep-inline-functions' is not supported
 // CHECK-WARNING-DAG: optimization flag '-freorder-blocks' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fprofile-dir=/rand/dir' is not supported
@@ -365,6 +369,8 @@
 // CHECK-WARNING-DAG: optimization flag '-ftree-dce' is not supported
 // CHECK-WARNING-DAG: optimization flag '-ftree-ter' is not supported
 // CHECK-WARNING-DAG: optimization flag '-ftree-vrp' is not supported
+// CHECK-WARNING-DAG: optimization flag '-fno-devirtualize' is not supported
+// CHECK-WARNING-DAG: optimization flag '-fno-devirtualize-speculatively' is not supported
 
 // Test that we mute the warning on these
 // RUN: %clang -### -finline-limit=1000 -Wno-invalid-command-line-argument              \
@@ -378,9 +384,13 @@
 // CHECK-NO-WARNING2-NOT: optimization flag '-finline-limit' is not supported
 
 
-// RUN: %clang -### -fshort-wchar -fno-short-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-WCHAR1 %s
-// RUN: %clang -### -fno-short-wchar -fshort-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-WCHAR2 %s
+// RUN: %clang -### -fshort-wchar -fno-short-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-WCHAR1 -check-prefix=DELIMITERS %s
+// RUN: %clang -### -fno-short-wchar -fshort-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-WCHAR2 -check-prefix=DELIMITERS %s
+// Make sure we don't match the -NOT lines with the linker invocation.
+// Delimiters match the start of the cc1 and the start of the linker lines
+// DELIMITERS: {{^ *"}}
 // CHECK-WCHAR1: -fno-short-wchar
 // CHECK-WCHAR1-NOT: -fshort-wchar
 // CHECK-WCHAR2: -fshort-wchar
 // CHECK-WCHAR2-NOT: -fno-short-wchar
+// DELIMITERS: {{^ *"}}

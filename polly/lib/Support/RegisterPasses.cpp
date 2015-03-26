@@ -21,17 +21,15 @@
 
 #include "polly/RegisterPasses.h"
 #include "polly/Canonicalization.h"
-#include "polly/CodeGen/BlockGenerators.h"
-#include "polly/CodeGen/Cloog.h"
 #include "polly/CodeGen/CodeGeneration.h"
-#include "polly/Dependences.h"
+#include "polly/DependenceInfo.h"
 #include "polly/LinkAllPasses.h"
 #include "polly/Options.h"
 #include "polly/ScopDetection.h"
 #include "polly/ScopInfo.h"
 #include "polly/TempScopInfo.h"
 #include "llvm/Analysis/CFGPrinter.h"
-#include "llvm/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Vectorize.h"
@@ -66,42 +64,25 @@ static cl::opt<OptimizerChoice> Optimizer(
     cl::Hidden, cl::init(OPTIMIZER_ISL), cl::ZeroOrMore,
     cl::cat(PollyCategory));
 
-enum CodeGenChoice {
-#ifdef CLOOG_FOUND
-  CODEGEN_CLOOG,
-#endif
-  CODEGEN_ISL,
-  CODEGEN_NONE
-};
-
-#ifdef CLOOG_FOUND
-enum CodeGenChoice DefaultCodeGen = CODEGEN_CLOOG;
-#else
-enum CodeGenChoice DefaultCodeGen = CODEGEN_ISL;
-#endif
-
-static cl::opt<CodeGenChoice> CodeGenerator(
+CodeGenChoice polly::PollyCodeGenChoice;
+static cl::opt<CodeGenChoice, true> XCodeGenerator(
     "polly-code-generator", cl::desc("Select the code generator"),
-    cl::values(
-#ifdef CLOOG_FOUND
-        clEnumValN(CODEGEN_CLOOG, "cloog", "CLooG"),
-#endif
-        clEnumValN(CODEGEN_ISL, "isl", "isl code generator"),
-        clEnumValN(CODEGEN_NONE, "none", "no code generation"), clEnumValEnd),
-    cl::Hidden, cl::init(DefaultCodeGen), cl::ZeroOrMore,
-    cl::cat(PollyCategory));
+    cl::values(clEnumValN(CODEGEN_ISL, "isl", "isl code generator"),
+               clEnumValN(CODEGEN_NONE, "none", "no code generation"),
+               clEnumValEnd),
+    cl::Hidden, cl::location(PollyCodeGenChoice), cl::init(CODEGEN_ISL),
+    cl::ZeroOrMore, cl::cat(PollyCategory));
 
 VectorizerChoice polly::PollyVectorizerChoice;
 static cl::opt<polly::VectorizerChoice, true> Vectorizer(
     "polly-vectorizer", cl::desc("Select the vectorization strategy"),
-    cl::values(clEnumValN(polly::VECTORIZER_NONE, "none", "No Vectorization"),
-               clEnumValN(polly::VECTORIZER_POLLY, "polly",
-                          "Polly internal vectorizer"),
-               clEnumValN(polly::VECTORIZER_UNROLL_ONLY, "unroll-only",
-                          "Only grouped unroll the vectorize candidate loops"),
-               clEnumValN(polly::VECTORIZER_BB, "bb",
-                          "The Basic Block vectorizer driven by Polly"),
-               clEnumValEnd),
+    cl::values(
+        clEnumValN(polly::VECTORIZER_NONE, "none", "No Vectorization"),
+        clEnumValN(polly::VECTORIZER_POLLY, "polly",
+                   "Polly internal vectorizer"),
+        clEnumValN(polly::VECTORIZER_STRIPMINE, "stripmine",
+                   "Strip-mine outer loops for the loop-vectorizer to trigger"),
+        clEnumValEnd),
     cl::location(PollyVectorizerChoice), cl::init(polly::VECTORIZER_NONE),
     cl::ZeroOrMore, cl::cat(PollyCategory));
 
@@ -117,7 +98,7 @@ static cl::opt<bool> ExportJScop(
 
 static cl::opt<bool> DeadCodeElim("polly-run-dce",
                                   cl::desc("Run the dead code elimination"),
-                                  cl::Hidden, cl::init(true), cl::ZeroOrMore,
+                                  cl::Hidden, cl::init(false), cl::ZeroOrMore,
                                   cl::cat(PollyCategory));
 
 static cl::opt<bool> PollyViewer(
@@ -148,22 +129,24 @@ static cl::opt<bool>
                cl::desc("Show the Polly CFG right after code generation"),
                cl::Hidden, cl::init(false), cl::cat(PollyCategory));
 
+bool polly::PollyAnnotateAliasScopes;
+static cl::opt<bool, true> XPollyAnnotateAliasScopes(
+    "polly-annotate-alias-scopes",
+    cl::desc("Annotate memory instructions with alias scopes"),
+    cl::location(PollyAnnotateAliasScopes), cl::init(true), cl::ZeroOrMore,
+    cl::cat(PollyCategory));
+
 namespace polly {
 void initializePollyPasses(PassRegistry &Registry) {
-#ifdef CLOOG_FOUND
-  initializeCloogInfoPass(Registry);
-  initializeCodeGenerationPass(Registry);
-#endif
   initializeIslCodeGenerationPass(Registry);
   initializeCodePreparationPass(Registry);
   initializeDeadCodeElimPass(Registry);
-  initializeDependencesPass(Registry);
+  initializeDependenceInfoPass(Registry);
   initializeIndependentBlocksPass(Registry);
   initializeJSONExporterPass(Registry);
   initializeJSONImporterPass(Registry);
   initializeIslAstInfoPass(Registry);
   initializeIslScheduleOptimizerPass(Registry);
-  initializePollyIndVarSimplifyPass(Registry);
   initializePollyCanonicalizePass(Registry);
   initializeScopDetectionPass(Registry);
   initializeScopInfoPass(Registry);
@@ -197,11 +180,9 @@ void initializePollyPasses(PassRegistry &Registry) {
 /// provided to analyze the run and compile time changes caused by the
 /// scheduling optimizer.
 ///
-/// Polly supports both CLooG (http://www.cloog.org) as well as the isl internal
-/// code generator. For the moment, the CLooG code generator is enabled by
-/// default.
-static void registerPollyPasses(llvm::PassManagerBase &PM) {
-  registerCanonicalicationPasses(PM, SCEVCodegen);
+/// Polly supports the isl internal code generator.
+void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
+  registerCanonicalicationPasses(PM);
 
   PM.add(polly::createScopInfoPass());
 
@@ -238,17 +219,7 @@ static void registerPollyPasses(llvm::PassManagerBase &PM) {
   if (ExportJScop)
     PM.add(polly::createJSONExporterPass());
 
-  switch (CodeGenerator) {
-#ifdef CLOOG_FOUND
-  case CODEGEN_CLOOG:
-    PM.add(polly::createCodeGenerationPass());
-    if (PollyVectorizerChoice == VECTORIZER_BB) {
-      VectorizeConfig C;
-      C.FastDep = true;
-      PM.add(createBBVectorizePass(C));
-    }
-    break;
-#endif
+  switch (PollyCodeGenChoice) {
   case CODEGEN_ISL:
     PM.add(polly::createIslCodeGenerationPass());
     break;
@@ -273,7 +244,7 @@ static bool shouldEnablePolly() {
 
 static void
 registerPollyEarlyAsPossiblePasses(const llvm::PassManagerBuilder &Builder,
-                                   llvm::PassManagerBase &PM) {
+                                   llvm::legacy::PassManagerBase &PM) {
   if (!polly::shouldEnablePolly())
     return;
 

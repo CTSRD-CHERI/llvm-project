@@ -74,7 +74,7 @@
 #  if ITT_PLATFORM==ITT_PLATFORM_WIN
 #    define CDECL __cdecl
 #  else /* ITT_PLATFORM==ITT_PLATFORM_WIN */
-#    if defined _M_IX86 || defined __i386__
+#    if defined _M_IX86 || defined __i386__ 
 #      define CDECL __attribute__ ((cdecl))
 #    else  /* _M_IX86 || __i386__ */
 #      define CDECL /* actual only on x86 platform */
@@ -87,7 +87,7 @@
 #    define STDCALL __stdcall
 #  else /* ITT_PLATFORM==ITT_PLATFORM_WIN */
 #    if defined _M_IX86 || defined __i386__
-#      define STDCALL __attribute__ ((stdcall))
+#      define STDCALL __attribute__ ((stdcall)) 
 #    else  /* _M_IX86 || __i386__ */
 #      define STDCALL /* supported only on x86 platform */
 #    endif /* _M_IX86 || __i386__ */
@@ -128,6 +128,11 @@
 #  define ITT_ARCH_IA32E 2
 #endif /* ITT_ARCH_IA32E */
 
+/* Was there a magical reason we didn't have 3 here before? */
+#ifndef ITT_ARCH_AARCH64
+#  define ITT_ARCH_AARCH64  3
+#endif /* ITT_ARCH_AARCH64 */
+
 #ifndef ITT_ARCH_ARM
 #  define ITT_ARCH_ARM  4
 #endif /* ITT_ARCH_ARM */
@@ -148,6 +153,8 @@
 #    define ITT_ARCH ITT_ARCH_ARM
 #  elif defined __powerpc64__
 #    define ITT_ARCH ITT_ARCH_PPC64
+#  elif defined __aarch64__
+#    define ITT_ARCH ITT_ARCH_AARCH64
 #  endif
 #endif
 
@@ -267,7 +274,7 @@ ITT_INLINE long __itt_interlocked_increment(volatile long* ptr)
 #ifdef __INTEL_COMPILER
 #define __TBB_machine_fetchadd4(addr, val) __fetchadd4_acq((void *)addr, val)
 #else  /* __INTEL_COMPILER */
-/* TODO: Add Support for not Intel compilers for IA-64 architecture */
+/* TODO: Add Support for not Intel compilers for IA-64 */
 #endif /* __INTEL_COMPILER */
 #elif ITT_ARCH==ITT_ARCH_IA32 || ITT_ARCH==ITT_ARCH_IA32E /* ITT_ARCH!=ITT_ARCH_IA64 */
 ITT_INLINE long
@@ -281,7 +288,7 @@ ITT_INLINE long __TBB_machine_fetchadd4(volatile void* ptr, long addend)
                           : "memory");
     return result;
 }
-#elif ITT_ARCH==ITT_ARCH_ARM || ITT_ARCH==ITT_ARCH_PPC64
+#elif ITT_ARCH==ITT_ARCH_ARM || ITT_ARCH==ITT_ARCH_PPC64 || ITT_ARCH==ITT_ARCH_AARCH64
 #define __TBB_machine_fetchadd4(addr, val) __sync_fetch_and_add(addr, val)
 #endif /* ITT_ARCH==ITT_ARCH_IA64 */
 #ifndef ITT_SIMPLE_INIT

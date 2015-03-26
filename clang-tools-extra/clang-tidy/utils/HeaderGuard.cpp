@@ -109,17 +109,29 @@ public:
           EndIfs[Ifndefs[MacroEntry.first.getIdentifierInfo()].first];
 
       // If the macro Name is not equal to what we can compute, correct it in
-      // the
-      // #ifndef and #define.
+      // the #ifndef and #define.
       StringRef CurHeaderGuard =
           MacroEntry.first.getIdentifierInfo()->getName();
-      std::string NewGuard =
-          checkHeaderGuardDefinition(Ifndef, Define, FileName, CurHeaderGuard);
+      std::vector<FixItHint> FixIts;
+      std::string NewGuard = checkHeaderGuardDefinition(
+          Ifndef, Define, EndIf, FileName, CurHeaderGuard, FixIts);
 
       // Now look at the #endif. We want a comment with the header guard. Fix it
       // at the slightest deviation.
-      if (Check->shouldSuggestEndifComment(FileName))
-        checkEndifComment(EndIf, NewGuard);
+      checkEndifComment(FileName, EndIf, NewGuard, FixIts);
+
+      // Bundle all fix-its into one warning. The message depends on whether we
+      // changed the header guard or not.
+      if (!FixIts.empty()) {
+        if (CurHeaderGuard != NewGuard) {
+          Check->diag(Ifndef, "header guard does not follow preferred style")
+              << FixIts;
+        } else {
+          Check->diag(EndIf, "#endif for a header guard should reference the "
+                             "guard macro in a comment")
+              << FixIts;
+        }
+      }
     }
 
     // Emit warnings for headers that are missing guards.
@@ -132,26 +144,59 @@ public:
     EndIfs.clear();
   }
 
+  bool wouldFixEndifComment(StringRef FileName, SourceLocation EndIf,
+                            StringRef HeaderGuard,
+                            size_t *EndIfLenPtr = nullptr) {
+    if (!EndIf.isValid())
+      return false;
+    const char *EndIfData = PP->getSourceManager().getCharacterData(EndIf);
+    size_t EndIfLen = std::strcspn(EndIfData, "\r\n");
+    if (EndIfLenPtr)
+      *EndIfLenPtr = EndIfLen;
+
+    StringRef EndIfStr(EndIfData, EndIfLen);
+    EndIfStr = EndIfStr.substr(EndIfStr.find_first_not_of("#endif \t"));
+
+    // Give up if there's an escaped newline.
+    size_t FindEscapedNewline = EndIfStr.find_last_not_of(' ');
+    if (FindEscapedNewline != StringRef::npos &&
+        EndIfStr[FindEscapedNewline] == '\\')
+      return false;
+
+    if (!Check->shouldSuggestEndifComment(FileName) &&
+        !(EndIfStr.startswith("//") ||
+          (EndIfStr.startswith("/*") && EndIfStr.endswith("*/"))))
+      return false;
+
+    return (EndIfStr != "// " + HeaderGuard.str()) &&
+           (EndIfStr != "/* " + HeaderGuard.str() + " */");
+  }
+
   /// \brief Look for header guards that don't match the preferred style. Emit
   /// fix-its and return the suggested header guard (or the original if no
   /// change was made.
   std::string checkHeaderGuardDefinition(SourceLocation Ifndef,
                                          SourceLocation Define,
+                                         SourceLocation EndIf,
                                          StringRef FileName,
-                                         StringRef CurHeaderGuard) {
+                                         StringRef CurHeaderGuard,
+                                         std::vector<FixItHint> &FixIts) {
     std::string CPPVar = Check->getHeaderGuard(FileName, CurHeaderGuard);
-    std::string CPPVarUnder = CPPVar + '_'; // Allow a trailing underscore.
+    std::string CPPVarUnder = CPPVar + '_';
+
+    // Allow a trailing underscore iff we don't have to change the endif comment
+    // too.
     if (Ifndef.isValid() && CurHeaderGuard != CPPVar &&
-        CurHeaderGuard != CPPVarUnder) {
-      Check->diag(Ifndef, "header guard does not follow preferred style")
-          << FixItHint::CreateReplacement(
-                 CharSourceRange::getTokenRange(
-                     Ifndef, Ifndef.getLocWithOffset(CurHeaderGuard.size())),
-                 CPPVar)
-          << FixItHint::CreateReplacement(
-                 CharSourceRange::getTokenRange(
-                     Define, Define.getLocWithOffset(CurHeaderGuard.size())),
-                 CPPVar);
+        (CurHeaderGuard != CPPVarUnder ||
+         wouldFixEndifComment(FileName, EndIf, CurHeaderGuard))) {
+      FixIts.push_back(FixItHint::CreateReplacement(
+          CharSourceRange::getTokenRange(
+              Ifndef, Ifndef.getLocWithOffset(CurHeaderGuard.size())),
+          CPPVar));
+      FixIts.push_back(FixItHint::CreateReplacement(
+          CharSourceRange::getTokenRange(
+              Define, Define.getLocWithOffset(CurHeaderGuard.size())),
+          CPPVar));
       return CPPVar;
     }
     return CurHeaderGuard;
@@ -159,20 +204,15 @@ public:
 
   /// \brief Checks the comment after the #endif of a header guard and fixes it
   /// if it doesn't match \c HeaderGuard.
-  void checkEndifComment(SourceLocation EndIf, StringRef HeaderGuard) {
-    const char *EndIfData = PP->getSourceManager().getCharacterData(EndIf);
-    size_t EndIfLen = std::strcspn(EndIfData, "\r\n");
-
-    StringRef EndIfStr(EndIfData, EndIfLen);
-    if (EndIf.isValid() && !EndIfStr.endswith("// " + HeaderGuard.str()) &&
-        !EndIfStr.endswith("/* " + HeaderGuard.str() + " */")) {
-      std::string Correct = "endif  // " + HeaderGuard.str();
-      Check->diag(EndIf, "#endif for a header guard should reference the "
-                         "guard macro in a comment")
-          << FixItHint::CreateReplacement(
-              CharSourceRange::getCharRange(EndIf,
-                                            EndIf.getLocWithOffset(EndIfLen)),
-              Correct);
+  void checkEndifComment(StringRef FileName, SourceLocation EndIf,
+                         StringRef HeaderGuard,
+                         std::vector<FixItHint> &FixIts) {
+    size_t EndIfLen;
+    if (wouldFixEndifComment(FileName, EndIf, HeaderGuard, &EndIfLen)) {
+      FixIts.push_back(FixItHint::CreateReplacement(
+          CharSourceRange::getCharRange(EndIf,
+                                        EndIf.getLocWithOffset(EndIfLen)),
+          Check->formatEndIf(HeaderGuard)));
     }
   }
 
@@ -222,7 +262,7 @@ public:
           << FixItHint::CreateInsertion(
                  SM.getLocForEndOfFile(FID),
                  Check->shouldSuggestEndifComment(FileName)
-                     ? "\n#endif  // " + CPPVar + "\n"
+                     ? "\n#" + Check->formatEndIf(CPPVar) + "\n"
                      : "\n#endif\n");
     }
   }
@@ -241,7 +281,8 @@ private:
 
 void HeaderGuardCheck::registerPPCallbacks(CompilerInstance &Compiler) {
   Compiler.getPreprocessor().addPPCallbacks(
-      new HeaderGuardPPCallbacks(&Compiler.getPreprocessor(), this));
+      llvm::make_unique<HeaderGuardPPCallbacks>(&Compiler.getPreprocessor(),
+                                                this));
 }
 
 bool HeaderGuardCheck::shouldSuggestEndifComment(StringRef FileName) {
@@ -252,6 +293,10 @@ bool HeaderGuardCheck::shouldFixHeaderGuard(StringRef FileName) { return true; }
 
 bool HeaderGuardCheck::shouldSuggestToAddHeaderGuard(StringRef FileName) {
   return FileName.endswith(".h");
+}
+
+std::string HeaderGuardCheck::formatEndIf(StringRef HeaderGuard) {
+  return "endif // " + HeaderGuard.str();
 }
 
 } // namespace tidy

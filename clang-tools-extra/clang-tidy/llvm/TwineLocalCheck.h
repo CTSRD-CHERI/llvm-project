@@ -14,16 +14,19 @@
 
 namespace clang {
 namespace tidy {
+namespace llvm {
 
 /// \brief Looks for local Twine variables which are prone to use after frees
 /// and should be generally avoided.
 class TwineLocalCheck : public ClangTidyCheck {
 public:
-  TwineLocalCheck();
+  TwineLocalCheck(StringRef Name, ClangTidyContext *Context)
+      : ClangTidyCheck(Name, Context) {}
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
 };
 
+} // namespace llvm
 } // namespace tidy
 } // namespace clang
 

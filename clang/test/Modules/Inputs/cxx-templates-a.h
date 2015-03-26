@@ -85,3 +85,22 @@ template<typename T> struct PartiallyInstantiatePartialSpec<T*> {
   static T *bar() { return reinterpret_cast<T*>(0); }
 };
 typedef PartiallyInstantiatePartialSpec<int*> PartiallyInstantiatePartialSpecHelper;
+
+void InstantiateWithAliasTemplate(WithAliasTemplate<int>::X<char>);
+inline int InstantiateWithAnonymousDeclsA(WithAnonymousDecls<int> x) { return (x.k ? x.a : x.b) + (x.k ? x.s.c : x.s.d) + x.e; }
+inline int InstantiateWithAnonymousDeclsB2(WithAnonymousDecls<char> x);
+
+
+template<typename T1 = int>
+struct MergeAnonUnionMember {
+  MergeAnonUnionMember() { (void)values.t1; }
+  union { int t1; } values;
+};
+inline MergeAnonUnionMember<> maum_a() { return {}; }
+
+template<typename T> struct DontWalkPreviousDeclAfterMerging { struct Inner { typedef T type; }; };
+
+namespace TestInjectedClassName {
+  template<typename T> struct X { X(); };
+  typedef X<char[1]> A;
+}

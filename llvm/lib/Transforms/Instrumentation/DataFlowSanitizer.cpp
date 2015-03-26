@@ -49,6 +49,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/DebugInfo.h"
@@ -82,14 +83,14 @@ static cl::opt<bool> ClPreserveAlignment(
     cl::desc("respect alignment requirements provided by input IR"), cl::Hidden,
     cl::init(false));
 
-// The ABI list file controls how shadow parameters are passed.  The pass treats
+// The ABI list files control how shadow parameters are passed. The pass treats
 // every function labelled "uninstrumented" in the ABI list file as conforming
 // to the "native" (i.e. unsanitized) ABI.  Unless the ABI list contains
 // additional annotations for those functions, a call to one of those functions
 // will produce a warning message, as the labelling behaviour of the function is
 // unknown.  The other supported annotations are "functional" and "discard",
 // which are described below under DataFlowSanitizer::WrapperKind.
-static cl::opt<std::string> ClABIListFile(
+static cl::list<std::string> ClABIListFiles(
     "dfsan-abilist",
     cl::desc("File listing native ABI functions and how the pass treats them"),
     cl::Hidden);
@@ -140,7 +141,9 @@ class DFSanABIList {
   std::unique_ptr<SpecialCaseList> SCL;
 
  public:
-  DFSanABIList(std::unique_ptr<SpecialCaseList> SCL) : SCL(std::move(SCL)) {}
+  DFSanABIList() {}
+
+  void set(std::unique_ptr<SpecialCaseList> List) { SCL = std::move(List); }
 
   /// Returns whether either this function or its source file are listed in the
   /// given category.
@@ -214,7 +217,6 @@ class DataFlowSanitizer : public ModulePass {
     WK_Custom
   };
 
-  const DataLayout *DL;
   Module *Mod;
   LLVMContext *Ctx;
   IntegerType *ShadowTy;
@@ -263,9 +265,9 @@ class DataFlowSanitizer : public ModulePass {
   Constant *getOrBuildTrampolineFunction(FunctionType *FT, StringRef FName);
 
  public:
-  DataFlowSanitizer(StringRef ABIListFile = StringRef(),
-                    void *(*getArgTLS)() = nullptr,
-                    void *(*getRetValTLS)() = nullptr);
+  DataFlowSanitizer(
+      const std::vector<std::string> &ABIListFiles = std::vector<std::string>(),
+      void *(*getArgTLS)() = nullptr, void *(*getRetValTLS)() = nullptr);
   static char ID;
   bool doInitialization(Module &M) override;
   bool runOnModule(Module &M) override;
@@ -350,25 +352,26 @@ char DataFlowSanitizer::ID;
 INITIALIZE_PASS(DataFlowSanitizer, "dfsan",
                 "DataFlowSanitizer: dynamic data flow analysis.", false, false)
 
-ModulePass *llvm::createDataFlowSanitizerPass(StringRef ABIListFile,
-                                              void *(*getArgTLS)(),
-                                              void *(*getRetValTLS)()) {
-  return new DataFlowSanitizer(ABIListFile, getArgTLS, getRetValTLS);
+ModulePass *
+llvm::createDataFlowSanitizerPass(const std::vector<std::string> &ABIListFiles,
+                                  void *(*getArgTLS)(),
+                                  void *(*getRetValTLS)()) {
+  return new DataFlowSanitizer(ABIListFiles, getArgTLS, getRetValTLS);
 }
 
-DataFlowSanitizer::DataFlowSanitizer(StringRef ABIListFile,
-                                     void *(*getArgTLS)(),
-                                     void *(*getRetValTLS)())
-    : ModulePass(ID), GetArgTLSPtr(getArgTLS), GetRetvalTLSPtr(getRetValTLS),
-      ABIList(SpecialCaseList::createOrDie(ABIListFile.empty() ? ClABIListFile
-                                                               : ABIListFile)) {
+DataFlowSanitizer::DataFlowSanitizer(
+    const std::vector<std::string> &ABIListFiles, void *(*getArgTLS)(),
+    void *(*getRetValTLS)())
+    : ModulePass(ID), GetArgTLSPtr(getArgTLS), GetRetvalTLSPtr(getRetValTLS) {
+  std::vector<std::string> AllABIListFiles(std::move(ABIListFiles));
+  AllABIListFiles.insert(AllABIListFiles.end(), ClABIListFiles.begin(),
+                         ClABIListFiles.end());
+  ABIList.set(SpecialCaseList::createOrDie(AllABIListFiles));
 }
 
 FunctionType *DataFlowSanitizer::getArgsFunctionType(FunctionType *T) {
-  llvm::SmallVector<Type *, 4> ArgTypes;
-  std::copy(T->param_begin(), T->param_end(), std::back_inserter(ArgTypes));
-  for (unsigned i = 0, e = T->getNumParams(); i != e; ++i)
-    ArgTypes.push_back(ShadowTy);
+  llvm::SmallVector<Type *, 4> ArgTypes(T->param_begin(), T->param_end());
+  ArgTypes.append(T->getNumParams(), ShadowTy);
   if (T->isVarArg())
     ArgTypes.push_back(ShadowPtrTy);
   Type *RetType = T->getReturnType();
@@ -381,9 +384,8 @@ FunctionType *DataFlowSanitizer::getTrampolineFunctionType(FunctionType *T) {
   assert(!T->isVarArg());
   llvm::SmallVector<Type *, 4> ArgTypes;
   ArgTypes.push_back(T->getPointerTo());
-  std::copy(T->param_begin(), T->param_end(), std::back_inserter(ArgTypes));
-  for (unsigned i = 0, e = T->getNumParams(); i != e; ++i)
-    ArgTypes.push_back(ShadowTy);
+  ArgTypes.append(T->param_begin(), T->param_end());
+  ArgTypes.append(T->getNumParams(), ShadowTy);
   Type *RetType = T->getReturnType();
   if (!RetType->isVoidTy())
     ArgTypes.push_back(ShadowPtrTy);
@@ -414,19 +416,26 @@ FunctionType *DataFlowSanitizer::getCustomFunctionType(FunctionType *T) {
 }
 
 bool DataFlowSanitizer::doInitialization(Module &M) {
-  DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
-  if (!DLP)
-    report_fatal_error("data layout missing");
-  DL = &DLP->getDataLayout();
+  llvm::Triple TargetTriple(M.getTargetTriple());
+  bool IsX86_64 = TargetTriple.getArch() == llvm::Triple::x86_64;
+  bool IsMIPS64 = TargetTriple.getArch() == llvm::Triple::mips64 ||
+                  TargetTriple.getArch() == llvm::Triple::mips64el;
+
+  const DataLayout &DL = M.getDataLayout();
 
   Mod = &M;
   Ctx = &M.getContext();
   ShadowTy = IntegerType::get(*Ctx, ShadowWidth);
   ShadowPtrTy = PointerType::getUnqual(ShadowTy);
-  IntptrTy = DL->getIntPtrType(*Ctx);
+  IntptrTy = DL.getIntPtrType(*Ctx);
   ZeroShadow = ConstantInt::getSigned(ShadowTy, 0);
-  ShadowPtrMask = ConstantInt::getSigned(IntptrTy, ~0x700000000000LL);
   ShadowPtrMul = ConstantInt::getSigned(IntptrTy, ShadowWidth / 8);
+  if (IsX86_64)
+    ShadowPtrMask = ConstantInt::getSigned(IntptrTy, ~0x700000000000LL);
+  else if (IsMIPS64)
+    ShadowPtrMask = ConstantInt::getSigned(IntptrTy, ~0xF000000000LL);
+  else
+    report_fatal_error("unsupported triple");
 
   Type *DFSanUnionArgs[2] = { ShadowTy, ShadowTy };
   DFSanUnionFnTy =
@@ -580,9 +589,6 @@ Constant *DataFlowSanitizer::getOrBuildTrampolineFunction(FunctionType *FT,
 }
 
 bool DataFlowSanitizer::runOnModule(Module &M) {
-  if (!DL)
-    return false;
-
   if (ABIList.isIn(M, "skip"))
     return false;
 
@@ -1043,7 +1049,7 @@ Value *DFSanFunction::loadShadow(Value *Addr, uint64_t Size, uint64_t Align,
 
   uint64_t ShadowAlign = Align * DFS.ShadowWidth / 8;
   SmallVector<Value *, 2> Objs;
-  GetUnderlyingObjects(Addr, Objs, DFS.DL);
+  GetUnderlyingObjects(Addr, Objs, Pos->getModule()->getDataLayout());
   bool AllConstants = true;
   for (SmallVector<Value *, 2>::iterator i = Objs.begin(), e = Objs.end();
        i != e; ++i) {
@@ -1144,7 +1150,8 @@ Value *DFSanFunction::loadShadow(Value *Addr, uint64_t Size, uint64_t Align,
 }
 
 void DFSanVisitor::visitLoadInst(LoadInst &LI) {
-  uint64_t Size = DFSF.DFS.DL->getTypeStoreSize(LI.getType());
+  auto &DL = LI.getModule()->getDataLayout();
+  uint64_t Size = DL.getTypeStoreSize(LI.getType());
   if (Size == 0) {
     DFSF.setShadow(&LI, DFSF.DFS.ZeroShadow);
     return;
@@ -1154,7 +1161,7 @@ void DFSanVisitor::visitLoadInst(LoadInst &LI) {
   if (ClPreserveAlignment) {
     Align = LI.getAlignment();
     if (Align == 0)
-      Align = DFSF.DFS.DL->getABITypeAlignment(LI.getType());
+      Align = DL.getABITypeAlignment(LI.getType());
   } else {
     Align = 1;
   }
@@ -1222,8 +1229,8 @@ void DFSanFunction::storeShadow(Value *Addr, uint64_t Size, uint64_t Align,
 }
 
 void DFSanVisitor::visitStoreInst(StoreInst &SI) {
-  uint64_t Size =
-      DFSF.DFS.DL->getTypeStoreSize(SI.getValueOperand()->getType());
+  auto &DL = SI.getModule()->getDataLayout();
+  uint64_t Size = DL.getTypeStoreSize(SI.getValueOperand()->getType());
   if (Size == 0)
     return;
 
@@ -1231,7 +1238,7 @@ void DFSanVisitor::visitStoreInst(StoreInst &SI) {
   if (ClPreserveAlignment) {
     Align = SI.getAlignment();
     if (Align == 0)
-      Align = DFSF.DFS.DL->getABITypeAlignment(SI.getValueOperand()->getType());
+      Align = DL.getABITypeAlignment(SI.getValueOperand()->getType());
   } else {
     Align = 1;
   }
@@ -1521,7 +1528,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
         Next = II->getNormalDest()->begin();
       } else {
         BasicBlock *NewBB =
-            SplitEdge(II->getParent(), II->getNormalDest(), &DFSF.DFS);
+            SplitEdge(II->getParent(), II->getNormalDest(), &DFSF.DT);
         Next = NewBB->begin();
       }
     } else {

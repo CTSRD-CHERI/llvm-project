@@ -10,11 +10,11 @@
 #ifndef LLVM_CLANG_FRONTEND_COMPILERINSTANCE_H_
 #define LLVM_CLANG_FRONTEND_COMPILERINSTANCE_H_
 
+#include "clang/AST/ASTConsumer.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/Utils.h"
-#include "clang/AST/ASTConsumer.h"
 #include "clang/Lex/ModuleLoader.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -117,7 +117,14 @@ class CompilerInstance : public ModuleLoader {
   /// \brief The set of top-level modules that has already been loaded,
   /// along with the module map
   llvm::DenseMap<const IdentifierInfo *, Module *> KnownModules;
-  
+
+  /// \brief Module names that have an override for the target file.
+  llvm::StringMap<std::string> ModuleFileOverrides;
+
+  /// \brief Module files that we've explicitly loaded via \ref loadModuleFile,
+  /// and their dependencies.
+  llvm::StringSet<> ExplicitlyLoadedModuleFiles;
+
   /// \brief The location of the module-import keyword for the last module
   /// import. 
   SourceLocation LastModuleImportLoc;
@@ -154,8 +161,8 @@ class CompilerInstance : public ModuleLoader {
   /// The list of active output files.
   std::list<OutputFile> OutputFiles;
 
-  CompilerInstance(const CompilerInstance &) LLVM_DELETED_FUNCTION;
-  void operator=(const CompilerInstance &) LLVM_DELETED_FUNCTION;
+  CompilerInstance(const CompilerInstance &) = delete;
+  void operator=(const CompilerInstance &) = delete;
 public:
   explicit CompilerInstance(bool BuildingModule = false);
   ~CompilerInstance();
@@ -247,6 +254,9 @@ public:
     return Invocation->getDiagnosticOpts();
   }
 
+  FileSystemOptions &getFileSystemOpts() {
+    return Invocation->getFileSystemOpts();
+  }
   const FileSystemOptions &getFileSystemOpts() const {
     return Invocation->getFileSystemOpts();
   }
@@ -461,7 +471,7 @@ public:
   }
 
   std::unique_ptr<Sema> takeSema();
-  void resetAndLeakSema() { BuryPointer(TheSema.release()); }
+  void resetAndLeakSema();
 
   /// }
   /// @name Module Management
@@ -569,6 +579,8 @@ public:
   /// and replace any existing one with it.
   void createPreprocessor(TranslationUnitKind TUKind);
 
+  std::string getSpecificModuleCachePath();
+
   /// Create the AST context.
   void createASTContext();
 
@@ -582,7 +594,7 @@ public:
   /// Create an external AST source to read a PCH file.
   ///
   /// \return - The new object on success, or null on failure.
-  static ExternalASTSource *createPCHExternalASTSource(
+  static IntrusiveRefCntPtr<ASTReader> createPCHExternalASTSource(
       StringRef Path, const std::string &Sysroot, bool DisablePCHValidation,
       bool AllowPCHWithCompilerErrors, Preprocessor &PP, ASTContext &Context,
       void *DeserializationListener, bool OwnDeserializationListener,
@@ -641,7 +653,7 @@ public:
   /// renamed to \p OutputPath in the end.
   ///
   /// \param OutputPath - If given, the path to the output file.
-  /// \param Error [out] - On failure, the error message.
+  /// \param Error [out] - On failure, the error.
   /// \param BaseInput - If \p OutputPath is empty, the input path name to use
   /// for deriving the output path.
   /// \param Extension - The extension to use for derived output names.
@@ -658,13 +670,10 @@ public:
   /// \param TempPathName [out] - If given, the temporary file path name
   /// will be stored here on success.
   static llvm::raw_fd_ostream *
-  createOutputFile(StringRef OutputPath, std::string &Error,
-                   bool Binary, bool RemoveFileOnSignal,
-                   StringRef BaseInput,
-                   StringRef Extension,
-                   bool UseTemporary,
-                   bool CreateMissingDirectories,
-                   std::string *ResultPathName,
+  createOutputFile(StringRef OutputPath, std::error_code &Error, bool Binary,
+                   bool RemoveFileOnSignal, StringRef BaseInput,
+                   StringRef Extension, bool UseTemporary,
+                   bool CreateMissingDirectories, std::string *ResultPathName,
                    std::string *TempPathName);
 
   llvm::raw_null_ostream *createNullOutputFile();
@@ -693,6 +702,8 @@ public:
 
   // Create module manager.
   void createModuleManager();
+
+  bool loadModuleFile(StringRef FileName);
 
   ModuleLoadResult loadModule(SourceLocation ImportLoc, ModuleIdPath Path,
                               Module::NameVisibilityKind Visibility,

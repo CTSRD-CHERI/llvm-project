@@ -13,48 +13,137 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/CodeGen/IRBuilder.h"
-#include "llvm/Analysis/LoopInfo.h"
+
+#include "polly/ScopInfo.h"
+#include "polly/Support/ScopHelper.h"
+
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/Debug.h"
 
 using namespace llvm;
 using namespace polly;
 
-llvm::MDNode *polly::PollyLoopInfo::GetLoopID() const {
-  if (LoopID)
-    return LoopID;
+/// @brief Get a self referencing id metadata node.
+///
+/// The MDNode looks like this (if arg0/arg1 are not null):
+///
+///    '!n = metadata !{metadata !n, arg0, arg1}'
+///
+/// @return The self referencing id metadata node.
+static MDNode *getID(LLVMContext &Ctx, Metadata *arg0 = nullptr,
+                     Metadata *arg1 = nullptr) {
+  MDNode *ID;
+  SmallVector<Metadata *, 3> Args;
+  // Use a temporary node to safely create a unique pointer for the first arg.
+  auto TempNode = MDNode::getTemporary(Ctx, None);
+  // Reserve operand 0 for loop id self reference.
+  Args.push_back(TempNode.get());
 
-  llvm::Value *Args[] = {0};
-  LoopID = llvm::MDNode::get(Header->getContext(), Args);
-  LoopID->replaceOperandWith(0, LoopID);
-  return LoopID;
+  if (arg0)
+    Args.push_back(arg0);
+  if (arg1)
+    Args.push_back(arg1);
+
+  ID = MDNode::get(Ctx, Args);
+  ID->replaceOperandWith(0, ID);
+  return ID;
 }
 
-void polly::LoopAnnotator::Begin(llvm::BasicBlock *Header) {
-  Active.push_back(PollyLoopInfo(Header));
-}
+ScopAnnotator::ScopAnnotator() : SE(nullptr), AliasScopeDomain(nullptr) {}
 
-void polly::LoopAnnotator::End() { Active.pop_back(); }
+void ScopAnnotator::buildAliasScopes(Scop &S) {
+  SE = S.getSE();
 
-void polly::LoopAnnotator::SetCurrentParallel() {
-  Active.back().SetParallel(true);
-}
+  LLVMContext &Ctx = SE->getContext();
+  AliasScopeDomain = getID(Ctx, MDString::get(Ctx, "polly.alias.scope.domain"));
 
-void polly::LoopAnnotator::Annotate(llvm::Instruction *Inst) {
-  if (Active.empty())
-    return;
+  AliasScopeMap.clear();
+  OtherAliasScopeListMap.clear();
 
-  const PollyLoopInfo &L = Active.back();
-  if (!L.IsParallel())
-    return;
+  SetVector<Value *> BasePtrs;
+  for (ScopStmt *Stmt : S)
+    for (MemoryAccess *MA : *Stmt)
+      BasePtrs.insert(MA->getBaseAddr());
 
-  if (TerminatorInst *TI = dyn_cast<llvm::TerminatorInst>(Inst)) {
-    for (unsigned i = 0, ie = TI->getNumSuccessors(); i != ie; ++i)
-      if (TI->getSuccessor(i) == L.GetHeader()) {
-        TI->setMetadata("llvm.loop", L.GetLoopID());
-        break;
-      }
-  } else if (Inst->mayReadOrWriteMemory()) {
-    Inst->setMetadata("llvm.mem.parallel_loop_access", L.GetLoopID());
+  std::string AliasScopeStr = "polly.alias.scope.";
+  for (Value *BasePtr : BasePtrs)
+    AliasScopeMap[BasePtr] = getID(
+        Ctx, AliasScopeDomain,
+        MDString::get(Ctx, (AliasScopeStr + BasePtr->getName()).str().c_str()));
+
+  for (Value *BasePtr : BasePtrs) {
+    MDNode *AliasScopeList = MDNode::get(Ctx, {});
+    for (const auto &AliasScopePair : AliasScopeMap) {
+      if (BasePtr == AliasScopePair.first)
+        continue;
+
+      Metadata *Args = {AliasScopePair.second};
+      AliasScopeList =
+          MDNode::concatenate(AliasScopeList, MDNode::get(Ctx, Args));
+    }
+
+    OtherAliasScopeListMap[BasePtr] = AliasScopeList;
   }
+}
+
+void ScopAnnotator::pushLoop(Loop *L, bool IsParallel) {
+
+  ActiveLoops.push_back(L);
+  if (!IsParallel)
+    return;
+
+  BasicBlock *Header = L->getHeader();
+  MDNode *Id = getID(Header->getContext());
+  assert(Id->getOperand(0) == Id && "Expected Id to be a self-reference");
+  assert(Id->getNumOperands() == 1 && "Unexpected extra operands in Id");
+  MDNode *Ids = ParallelLoops.empty()
+                    ? Id
+                    : MDNode::concatenate(ParallelLoops.back(), Id);
+  ParallelLoops.push_back(Ids);
+}
+
+void ScopAnnotator::popLoop(bool IsParallel) {
+  ActiveLoops.pop_back();
+  if (!IsParallel)
+    return;
+
+  assert(!ParallelLoops.empty() && "Expected a parallel loop to pop");
+  ParallelLoops.pop_back();
+}
+
+void ScopAnnotator::annotateLoopLatch(BranchInst *B, Loop *L,
+                                      bool IsParallel) const {
+  if (!IsParallel)
+    return;
+
+  assert(!ParallelLoops.empty() && "Expected a parallel loop to annotate");
+  MDNode *Ids = ParallelLoops.back();
+  MDNode *Id = cast<MDNode>(Ids->getOperand(Ids->getNumOperands() - 1));
+  B->setMetadata("llvm.loop", Id);
+}
+
+void ScopAnnotator::annotate(Instruction *Inst) {
+  if (!Inst->mayReadOrWriteMemory())
+    return;
+
+  // TODO: Use the ScopArrayInfo once available here.
+  if (AliasScopeDomain) {
+    Value *BasePtr = nullptr;
+    if (isa<StoreInst>(Inst) || isa<LoadInst>(Inst)) {
+      const SCEV *PtrSCEV = SE->getSCEV(getPointerOperand(*Inst));
+      const SCEV *BaseSCEV = SE->getPointerBase(PtrSCEV);
+      if (const SCEVUnknown *SU = dyn_cast<SCEVUnknown>(BaseSCEV))
+        BasePtr = SU->getValue();
+    }
+
+    if (BasePtr) {
+      Inst->setMetadata("alias.scope", AliasScopeMap[BasePtr]);
+      Inst->setMetadata("noalias", OtherAliasScopeListMap[BasePtr]);
+    }
+  }
+
+  if (ParallelLoops.empty())
+    return;
+
+  Inst->setMetadata("llvm.mem.parallel_loop_access", ParallelLoops.back());
 }

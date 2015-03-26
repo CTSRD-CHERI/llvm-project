@@ -10,16 +10,15 @@
 #ifndef LLD_READER_WRITER_ELF_AARCH64_AARCH64_TARGET_HANDLER_H
 #define LLD_READER_WRITER_ELF_AARCH64_AARCH64_TARGET_HANDLER_H
 
-#include "DefaultTargetHandler.h"
-#include "ELFFile.h"
+#include "AArch64ELFFile.h"
+#include "AArch64ELFReader.h"
 #include "AArch64RelocationHandler.h"
+#include "DefaultTargetHandler.h"
 #include "TargetLayout.h"
-
 #include "lld/Core/Simple.h"
 
 namespace lld {
 namespace elf {
-typedef llvm::object::ELFType<llvm::support::little, 2, true> AArch64ELFType;
 class AArch64LinkingContext;
 
 template <class ELFT> class AArch64TargetLayout : public TargetLayout<ELFT> {
@@ -40,6 +39,14 @@ public:
 
   const AArch64TargetRelocationHandler &getRelocationHandler() const override {
     return *(_AArch64RelocationHandler.get());
+  }
+
+  std::unique_ptr<Reader> getObjReader() override {
+    return std::unique_ptr<Reader>(new AArch64ELFObjectReader(_context));
+  }
+
+  std::unique_ptr<Reader> getDSOReader() override {
+    return std::unique_ptr<Reader>(new AArch64ELFDSOReader(_context));
   }
 
   std::unique_ptr<Writer> getWriter() override;

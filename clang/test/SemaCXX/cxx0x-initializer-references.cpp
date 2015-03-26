@@ -105,16 +105,23 @@ namespace inner_init {
   B b2 { { 0 } };
   B b3 { { { 0 } } }; // expected-warning {{braces around scalar init}}
 
-  struct C { C(int); };
+  struct C { C(int); };   // expected-note 2{{candidate constructor (the implicit}} \
+                          // expected-note {{candidate constructor not viable: cannot convert initializer list argument to 'int'}}
   struct D { C &&r; };
   D d1 { 0 }; // ok, 0 implicitly converts to C
   D d2 { { 0 } }; // ok, { 0 } calls C(0)
-  D d3 { { { 0 } } }; // ok, { { 0 } } calls C({ 0 })
-  D d4 { { { { 0 } } } }; // expected-warning {{braces around scalar init}}
+  D d3 { { { 0 } } }; // ok, { { 0 } } calls C({ 0 }), expected-warning {{braces around scalar init}}
+  D d4 { { { { 0 } } } }; // expected-error {{no matching constructor for initialization of 'inner_init::C &&'}}
 
   struct E { explicit E(int); }; // expected-note 2{{here}}
   struct F { E &&r; };
   F f1 { 0 }; // expected-error {{could not bind to an rvalue of type 'int'}}
   F f2 { { 0 } }; // expected-error {{chosen constructor is explicit}}
   F f3 { { { 0 } } }; // expected-error {{chosen constructor is explicit}}
+}
+
+namespace PR20844 {
+  struct A {};
+  struct B { operator A&(); } b;
+  A &a{b}; // expected-error {{excess elements}} expected-note {{in initialization of temporary of type 'PR20844::A'}}
 }

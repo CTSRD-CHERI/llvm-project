@@ -28,7 +28,28 @@ namespace {
 /// \brief Numbers things which need to correspond across multiple TUs.
 /// Typically these are things like static locals, lambdas, or blocks.
 class MicrosoftNumberingContext : public MangleNumberingContext {
+  llvm::DenseMap<const Type *, unsigned> ManglingNumbers;
+  unsigned LambdaManglingNumber;
+  unsigned StaticLocalNumber;
+
 public:
+  MicrosoftNumberingContext()
+      : MangleNumberingContext(), LambdaManglingNumber(0),
+        StaticLocalNumber(0) {}
+
+  unsigned getManglingNumber(const CXXMethodDecl *CallOperator) override {
+    return ++LambdaManglingNumber;
+  }
+
+  unsigned getManglingNumber(const BlockDecl *BD) override {
+    const Type *Ty = nullptr;
+    return ++ManglingNumbers[Ty];
+  }
+
+  unsigned getStaticLocalNumber(const VarDecl *VD) override {
+    return ++StaticLocalNumber;
+  }
+
   unsigned getManglingNumber(const VarDecl *VD,
                              unsigned MSLocalManglingNumber) override {
     return MSLocalManglingNumber;
@@ -42,6 +63,10 @@ public:
 
 class MicrosoftCXXABI : public CXXABI {
   ASTContext &Context;
+  llvm::SmallDenseMap<CXXRecordDecl *, CXXConstructorDecl *> RecordToCopyCtor;
+  llvm::SmallDenseMap<std::pair<const CXXConstructorDecl *, unsigned>, Expr *>
+      CtorToDefaultArgExpr;
+
 public:
   MicrosoftCXXABI(ASTContext &Ctx) : Context(Ctx) { }
 
@@ -61,13 +86,36 @@ public:
       return false;
 
     const ASTRecordLayout &Layout = Context.getASTRecordLayout(RD);
-    
+
     // In the Microsoft ABI, classes can have one or two vtable pointers.
-    CharUnits PointerSize = 
-      Context.toCharUnitsFromBits(Context.getTargetInfo().getPointerWidth(0));
+    CharUnits PointerSize =
+        Context.toCharUnitsFromBits(Context.getTargetInfo().getPointerWidth(0));
     return Layout.getNonVirtualSize() == PointerSize ||
       Layout.getNonVirtualSize() == PointerSize * 2;
-  }    
+  }
+
+  void addDefaultArgExprForConstructor(const CXXConstructorDecl *CD,
+                                       unsigned ParmIdx, Expr *DAE) override {
+    CtorToDefaultArgExpr[std::make_pair(CD, ParmIdx)] = DAE;
+  }
+
+  Expr *getDefaultArgExprForConstructor(const CXXConstructorDecl *CD,
+                                        unsigned ParmIdx) override {
+    return CtorToDefaultArgExpr[std::make_pair(CD, ParmIdx)];
+  }
+
+  const CXXConstructorDecl *
+  getCopyConstructorForExceptionObject(CXXRecordDecl *RD) override {
+    return RecordToCopyCtor[RD];
+  }
+
+  void
+  addCopyConstructorForExceptionObject(CXXRecordDecl *RD,
+                                       CXXConstructorDecl *CD) override {
+    assert(CD != nullptr);
+    assert(RecordToCopyCtor[RD] == nullptr || RecordToCopyCtor[RD] == CD);
+    RecordToCopyCtor[RD] = CD;
+  }
 
   MangleNumberingContext *createMangleNumberingContext() const override {
     return new MicrosoftNumberingContext();

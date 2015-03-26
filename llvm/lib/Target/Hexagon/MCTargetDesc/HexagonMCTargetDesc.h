@@ -30,9 +30,10 @@ class raw_ostream;
 
 extern Target TheHexagonTarget;
 
+MCInstrInfo *createHexagonMCInstrInfo();
+
 MCCodeEmitter *createHexagonMCCodeEmitter(MCInstrInfo const &MCII,
                                           MCRegisterInfo const &MRI,
-                                          MCSubtargetInfo const &MST,
                                           MCContext &MCT);
 
 MCAsmBackend *createHexagonAsmBackend(Target const &T,

@@ -20,9 +20,11 @@
 #include "lldb/Target/Process.h"
 
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostInfo.h"
 #include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/DataExtractor.h"
 #include "lldb/Core/StreamFile.h"
+#include "lldb/Core/StructuredData.h"
 
 // Windows includes
 #include <TlHelp32.h>
@@ -96,24 +98,10 @@ namespace
     }
 }
 
-Error
-Host::LaunchProcess (ProcessLaunchInfo &launch_info)
-{
-    Error error;
-    assert(!"Not implemented yet!!!");
-    return error;
-}
-
 lldb::DataBufferSP
 Host::GetAuxvData(lldb_private::Process *process)
 {
     return 0;
-}
-
-std::string
-Host::GetThreadName (lldb::pid_t pid, lldb::tid_t tid)
-{
-    return std::string();
 }
 
 lldb::tid_t
@@ -126,26 +114,6 @@ lldb::thread_t
 Host::GetCurrentThread ()
 {
     return lldb::thread_t(::GetCurrentThread());
-}
-
-bool
-Host::ThreadCancel (lldb::thread_t thread, Error *error)
-{
-    int err = ::TerminateThread((HANDLE)thread, 0);
-    return err == 0;
-}
-
-bool
-Host::ThreadDetach (lldb::thread_t thread, Error *error)
-{
-    return ThreadCancel(thread, error);
-}
-
-bool
-Host::ThreadJoin (lldb::thread_t thread, thread_result_t *thread_result_ptr, Error *error)
-{
-    WaitForSingleObject((HANDLE) thread, INFINITE);
-    return true;
 }
 
 lldb::thread_key_t
@@ -164,19 +132,6 @@ void
 Host::ThreadLocalStorageSet(lldb::thread_key_t key, void *value)
 {
    ::TlsSetValue (key, value);
-}
-
-bool
-Host::SetThreadName (lldb::pid_t pid, lldb::tid_t tid, const char *name)
-{
-    return false;
-}
-
-bool
-Host::SetShortThreadName (lldb::pid_t pid, lldb::tid_t tid,
-                          const char *thread_name, size_t len)
-{
-    return false;
 }
 
 void
@@ -211,68 +166,6 @@ Host::GetModuleFileSpecForHostAddress (const void *host_addr)
 
     module_filespec.SetFile(&buffer[0], false);
     return module_filespec;
-}
-
-void *
-Host::DynamicLibraryOpen(const FileSpec &file_spec, uint32_t options, Error &error)
-{
-    error.SetErrorString("not implemented");
-    return NULL;
-}
-
-Error
-Host::DynamicLibraryClose (void *opaque)
-{
-    Error error;
-    error.SetErrorString("not implemented");
-    return error;
-}
-
-void *
-Host::DynamicLibraryGetSymbol(void *opaque, const char *symbol_name, Error &error)
-{
-    error.SetErrorString("not implemented");
-    return NULL;
-}
-
-const char *
-Host::GetUserName (uint32_t uid, std::string &user_name)
-{
-    return NULL;
-}
-
-const char *
-Host::GetGroupName (uint32_t gid, std::string &group_name)
-{
-    llvm_unreachable("Windows does not support group name");
-    return NULL;
-}
-
-uint32_t
-Host::GetUserID ()
-{
-    llvm_unreachable("Windows does not support uid");
-}
-
-uint32_t
-Host::GetGroupID ()
-{
-    llvm_unreachable("Windows does not support gid");
-    return 0;
-}
-
-uint32_t
-Host::GetEffectiveUserID ()
-{
-    llvm_unreachable("Windows does not support euid");
-    return 0;
-}
-
-uint32_t
-Host::GetEffectiveGroupID ()
-{
-    llvm_unreachable("Windows does not support egid");
-    return 0;
 }
 
 uint32_t
@@ -322,14 +215,94 @@ Host::GetProcessInfo (lldb::pid_t pid, ProcessInstanceInfo &process_info)
     return true;
 }
 
-lldb::thread_t
-Host::StartMonitoringChildProcess
-(
-    Host::MonitorChildProcessCallback callback,
-    void *callback_baton,
-    lldb::pid_t pid,
-    bool monitor_signals
-)
+HostThread
+Host::StartMonitoringChildProcess(Host::MonitorChildProcessCallback callback, void *callback_baton, lldb::pid_t pid, bool monitor_signals)
 {
-    return LLDB_INVALID_HOST_THREAD;
+    return HostThread();
+}
+
+Error
+Host::ShellExpandArguments (ProcessLaunchInfo &launch_info)
+{
+    Error error;
+    if (launch_info.GetFlags().Test(eLaunchFlagShellExpandArguments))
+    {
+        FileSpec expand_tool_spec;
+        if (!HostInfo::GetLLDBPath(lldb::ePathTypeSupportExecutableDir, expand_tool_spec))
+        {
+            error.SetErrorString("could not find argdumper tool");
+            return error;
+        }
+        expand_tool_spec.AppendPathComponent("argdumper.exe");
+        if (!expand_tool_spec.Exists())
+        {
+            error.SetErrorString("could not find argdumper tool");
+            return error;
+        }
+        
+        std::string quoted_cmd_string;
+        launch_info.GetArguments().GetQuotedCommandString(quoted_cmd_string);
+        std::replace(quoted_cmd_string.begin(), quoted_cmd_string.end(), '\\', '/');
+        StreamString expand_command;
+        
+        expand_command.Printf("%s %s",
+                              expand_tool_spec.GetPath().c_str(),
+                              quoted_cmd_string.c_str());
+        
+        int status;
+        std::string output;
+        RunShellCommand(expand_command.GetData(), launch_info.GetWorkingDirectory(), &status, nullptr, &output, 10);
+        
+        if (status != 0)
+        {
+            error.SetErrorStringWithFormat("argdumper exited with error %d", status);
+            return error;
+        }
+        
+        auto data_sp = StructuredData::ParseJSON(output);
+        if (!data_sp)
+        {
+            error.SetErrorString("invalid JSON");
+            return error;
+        }
+        
+        auto dict_sp = data_sp->GetAsDictionary();
+        if (!data_sp)
+        {
+            error.SetErrorString("invalid JSON");
+            return error;
+        }
+        
+        auto args_sp = dict_sp->GetObjectForDotSeparatedPath("arguments");
+        if (!args_sp)
+        {
+            error.SetErrorString("invalid JSON");
+            return error;
+        }
+        
+        auto args_array_sp = args_sp->GetAsArray();
+        if (!args_array_sp)
+        {
+            error.SetErrorString("invalid JSON");
+            return error;
+        }
+        
+        launch_info.GetArguments().Clear();
+        
+        for (size_t i = 0;
+             i < args_array_sp->GetSize();
+             i++)
+        {
+            auto item_sp = args_array_sp->GetItemAtIndex(i);
+            if (!item_sp)
+                continue;
+            auto str_sp = item_sp->GetAsString();
+            if (!str_sp)
+                continue;
+            
+            launch_info.GetArguments().AppendArgument(str_sp->GetValue().c_str());
+        }
+    }
+    
+    return error;
 }

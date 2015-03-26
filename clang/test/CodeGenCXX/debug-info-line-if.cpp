@@ -26,6 +26,30 @@ int main() {
 
   // CHECK: br label
   // CHECK: br label {{.*}}, !dbg [[DBG2:!.*]]
-  // CHECK: [[DBG1]] = metadata !{i32 100, i32 0, metadata !{{.*}}, null}
-  // CHECK: [[DBG2]] = metadata !{i32 200, i32 0, metadata !{{.*}}, null}
+
+#line 300
+  for (; a; )
+    if (b)
+      ++b; // CHECK: add nsw{{.*}}, 1
+    else
+      ++a; // CHECK: add nsw{{.*}}, 1
+
+  // CHECK: br label
+  // CHECK: br label {{.*}}, !dbg [[DBG3:!.*]]
+
+#line 400
+  int x[] = {1, 2};
+  for (int y : x)
+    if (b)
+      ++b; // CHECK: add nsw{{.*}}, 1
+    else
+      ++a; // CHECK: add nsw{{.*}}, 1
+
+  // CHECK: br label
+  // CHECK: br label {{.*}}, !dbg [[DBG4:!.*]]
+
+  // CHECK: [[DBG1]] = !MDLocation(line: 100, scope: !{{.*}})
+  // CHECK: [[DBG2]] = !MDLocation(line: 200, scope: !{{.*}})
+  // CHECK: [[DBG3]] = !MDLocation(line: 300, scope: !{{.*}})
+  // CHECK: [[DBG4]] = !MDLocation(line: 401, scope: !{{.*}})
 }

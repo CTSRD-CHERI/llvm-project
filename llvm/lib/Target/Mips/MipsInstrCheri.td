@@ -11,8 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-def FeatureSandbox     : SubtargetFeature<"sandbox", "IsCheriSandbox", "true",
-                                "Uses the sandbox ABI.">;
 
 def SDT_MipsCBT      : SDTypeProfile<0, 2, [SDTCisVT<0, iFATPTR>]>;
 def MipsCBTS : SDNode<"MipsISD::CBTS", SDT_MipsCBT,

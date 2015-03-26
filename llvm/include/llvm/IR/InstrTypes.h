@@ -83,7 +83,7 @@ public:
 //===----------------------------------------------------------------------===//
 
 class UnaryInstruction : public Instruction {
-  void *operator new(size_t, unsigned) LLVM_DELETED_FUNCTION;
+  void *operator new(size_t, unsigned) = delete;
 
 protected:
   UnaryInstruction(Type *Ty, unsigned iType, Value *V,
@@ -132,7 +132,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(UnaryInstruction, Value)
 //===----------------------------------------------------------------------===//
 
 class BinaryOperator : public Instruction {
-  void *operator new(size_t, unsigned) LLVM_DELETED_FUNCTION;
+  void *operator new(size_t, unsigned) = delete;
 protected:
   void init(BinaryOps iType);
   BinaryOperator(BinaryOps iType, Value *S1, Value *S2, Type *Ty,
@@ -489,6 +489,19 @@ public:
     Instruction *InsertBefore = 0 ///< Place to insert the instruction
   );
 
+  /// @brief Create a BitCast, a PtrToInt, or an IntToPTr cast instruction.
+  ///
+  /// If the value is a pointer type and the destination an integer type,
+  /// creates a PtrToInt cast. If the value is an integer type and the
+  /// destination a pointer type, creates an IntToPtr cast. Otherwise, creates
+  /// a bitcast.
+  static CastInst *CreateBitOrPointerCast(
+    Value *S,                ///< The pointer value to be casted (operand 0)
+    Type *Ty,          ///< The type to which cast should be made
+    const Twine &Name = "", ///< Name for the instruction
+    Instruction *InsertBefore = 0 ///< Place to insert the instruction
+  );
+
   /// @brief Create a ZExt, BitCast, or Trunc for int -> int casts.
   static CastInst *CreateIntegerCast(
     Value *S,                ///< The pointer value to be casted (operand 0)
@@ -551,6 +564,16 @@ public:
     Type *DestTy ///< The Type to which the value should be cast.
   );
 
+  /// @brief Check whether a bitcast, inttoptr, or ptrtoint cast between these
+  /// types is valid and a no-op.
+  ///
+  /// This ensures that any pointer<->integer cast has enough bits in the
+  /// integer and any other cast is a bitcast.
+  static bool isBitOrNoopPointerCastable(
+      Type *SrcTy,  ///< The Type from which the value should be cast.
+      Type *DestTy, ///< The Type to which the value should be cast.
+      const DataLayout &DL);
+
   /// Returns the opcode necessary to cast Val into Ty using usual casting
   /// rules.
   /// @brief Infer the opcode for cast operand and type
@@ -597,9 +620,9 @@ public:
   ) const;
 
   /// @brief Determine if this cast is a no-op cast.
-  bool isNoopCast(
-    const DataLayout *DL ///< DataLayout to get the Int Ptr type from.
-  ) const;
+  ///
+  /// \param DL is the DataLayout to get the Int Ptr type from.
+  bool isNoopCast(const DataLayout &DL) const;
 
   /// Determine how a pair of casts can be eliminated, if they can be at all.
   /// This is a helper function for both CastInst and ConstantExpr.
@@ -650,8 +673,8 @@ public:
 /// This class is the base class for the comparison instructions.
 /// @brief Abstract base class of comparison instructions.
 class CmpInst : public Instruction {
-  void *operator new(size_t, unsigned) LLVM_DELETED_FUNCTION;
-  CmpInst() LLVM_DELETED_FUNCTION;
+  void *operator new(size_t, unsigned) = delete;
+  CmpInst() = delete;
 protected:
   CmpInst(Type *ty, Instruction::OtherOps op, unsigned short pred,
           Value *LHS, Value *RHS, const Twine &Name = "",

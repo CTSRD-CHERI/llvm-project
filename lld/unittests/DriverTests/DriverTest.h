@@ -7,13 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <stdarg.h>
-
-#include "gtest/gtest.h"
-
 #include "lld/Driver/Driver.h"
-
 #include "llvm/Support/raw_ostream.h"
+#include "gtest/gtest.h"
+#include <stdarg.h>
 
 namespace {
 
@@ -29,27 +26,16 @@ protected:
   std::string &errorMessage() { return  _errorMessage; }
 
   // Convenience method for getting number of input files.
-  int inputFileCount() { return linkingContext()->getInputGraph().size(); }
-
-  // Convenience method for getting i'th input files name.
-  std::string inputFile(int index) {
-    const InputElement &inputElement =
-        *linkingContext()->getInputGraph().inputElements()[index];
-    if (inputElement.kind() == InputElement::Kind::File)
-      return *cast<FileNode>(&inputElement)->getPath(*linkingContext());
-    llvm_unreachable("not handling other types of input files");
+  int inputFileCount() {
+    return linkingContext()->getNodes().size();
   }
 
   // Convenience method for getting i'th input files name.
-  std::string inputFile(int index1, int index2) {
-    Group *group = dyn_cast<Group>(
-        linkingContext()->getInputGraph().inputElements()[index1].get());
-    if (!group)
-      llvm_unreachable("not handling other types of input files");
-    FileNode *file = dyn_cast<FileNode>(group->elements()[index2].get());
-    if (!file)
-      llvm_unreachable("not handling other types of input files");
-    return *file->getPath(*linkingContext());
+  std::string inputFile(int index) {
+    Node &node = *linkingContext()->getNodes()[index];
+    if (node.kind() == Node::Kind::File)
+      return cast<FileNode>(&node)->getFile()->path();
+    llvm_unreachable("not handling other types of input files");
   }
 
   // For unit tests to call driver with various command lines.
@@ -65,10 +51,10 @@ protected:
 
     // Call the parser.
     raw_string_ostream os(_errorMessage);
-    return D::parse(vec.size(), &vec[0], _context, os);
+    return D::parse(vec.size(), &vec[0], _ctx, os);
   }
 
-  T _context;
+  T _ctx;
   std::string _errorMessage;
 };
 

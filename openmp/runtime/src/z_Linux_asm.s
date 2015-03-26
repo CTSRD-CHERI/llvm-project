@@ -1,7 +1,5 @@
 //  z_Linux_asm.s:  - microtasking routines specifically
 //                    written for Intel platforms running Linux* OS
-// $Revision: 42810 $
-// $Date: 2013-11-07 12:06:33 -0600 (Thu, 07 Nov 2013) $
 
 //
 ////===----------------------------------------------------------------------===//
@@ -47,6 +45,15 @@
 
 # if defined __APPLE__ && defined __MACH__
 #  define KMP_PREFIX_UNDERSCORE(x) _##x  // extra underscore for OS X* symbols
+#  define KMP_LABEL(x) L_##x             // form the name of label
+.macro KMP_CFI_DEF_OFFSET
+.endmacro
+.macro KMP_CFI_OFFSET
+.endmacro
+.macro KMP_CFI_REGISTER
+.endmacro
+.macro KMP_CFI_DEF
+.endmacro
 .macro ALIGN
 	.align $0
 .endmacro
@@ -62,10 +69,18 @@ KMP_PREFIX_UNDERSCORE($0):
 .endmacro
 # else // defined __APPLE__ && defined __MACH__
 #  define KMP_PREFIX_UNDERSCORE(x) x  // no extra underscore for Linux* OS symbols
+// Format labels so that they don't override function names in gdb's backtraces
+// MIC assembler doesn't accept .L syntax, the L works fine there (as well as on OS X*)
+# if __MIC__ || __MIC2__
+#  define KMP_LABEL(x) L_##x          // local label
+# else
+#  define KMP_LABEL(x) .L_##x         // local label hidden from backtraces
+# endif // __MIC__ || __MIC2__
 .macro ALIGN size
 	.align 1<<(\size)
 .endm
 .macro DEBUG_INFO proc
+	.cfi_endproc
 // Not sure why we need .type and .size for the functions
 	.align 16
 	.type  \proc,@function
@@ -75,6 +90,19 @@ KMP_PREFIX_UNDERSCORE($0):
 	ALIGN  4
         .globl KMP_PREFIX_UNDERSCORE(\proc)
 KMP_PREFIX_UNDERSCORE(\proc):
+	.cfi_startproc
+.endm
+.macro KMP_CFI_DEF_OFFSET sz
+	.cfi_def_cfa_offset	\sz
+.endm
+.macro KMP_CFI_OFFSET reg, sz
+	.cfi_offset	\reg,\sz
+.endm
+.macro KMP_CFI_REGISTER reg
+	.cfi_def_cfa_register	\reg
+.endm
+.macro KMP_CFI_DEF reg, sz
+	.cfi_def_cfa	\reg,\sz
 .endm
 # endif // defined __APPLE__ && defined __MACH__
 #endif // KMP_ARCH_X86 || KMP_ARCH_x86_64
@@ -489,118 +517,6 @@ __kmp_unnamed_critical_addr:
 
 //------------------------------------------------------------------------
 //
-// FUNCTION __kmp_test_then_add_real32
-//
-// kmp_real32
-// __kmp_test_then_add_real32( volatile kmp_real32 *addr, kmp_real32 data );
-//
-
-        PROC  __kmp_test_then_add_real32
-
-_addr = 8
-_data = 12
-_old_value = -4
-_new_value = -8
-
-        pushl   %ebp
-        movl    %esp, %ebp
-        subl    $8, %esp
-        pushl   %esi
-        pushl   %ebx
-        movl    _addr(%ebp), %esi
-L22:
-        flds    (%esi)
-                        // load <addr>
-        fsts    _old_value(%ebp)
-                        // store into old_value
-        fadds   _data(%ebp)
-        fstps   _new_value(%ebp)
-                        // new_value = old_value + data
-
-        movl    _old_value(%ebp), %eax
-                        // load old_value
-        movl    _new_value(%ebp), %ebx
-                        // load new_value
-
-	lock
-	cmpxchgl %ebx,(%esi)
-                        // Compare %EAX with <addr>.  If equal set
-                        // ZF and load %EBX into <addr>.  Else, clear
-                        // ZF and load <addr> into %EAX.
-        jnz     L22
-
-
-        flds    _old_value(%ebp)
-                        // return old_value
-        popl    %ebx
-        popl    %esi
-        movl    %ebp, %esp
-        popl    %ebp
-        ret
-
-        DEBUG_INFO __kmp_test_then_add_real32
-
-//------------------------------------------------------------------------
-//
-// FUNCTION __kmp_test_then_add_real64
-//
-// kmp_real64
-// __kmp_test_then_add_real64( volatile kmp_real64 *addr, kmp_real64 data );
-//
-        PROC  __kmp_test_then_add_real64
-
-_addr = 8
-_data = 12
-_old_value = -8
-_new_value = -16
-
-        pushl   %ebp
-        movl    %esp, %ebp
-        subl    $16, %esp
-        pushl   %esi
-        pushl   %ebx
-        pushl   %ecx
-        pushl   %edx
-        movl    _addr(%ebp), %esi
-L44:
-        fldl    (%esi)
-                        // load <addr>
-        fstl    _old_value(%ebp)
-                        // store into old_value
-        faddl   _data(%ebp)
-        fstpl   _new_value(%ebp)
-                        // new_value = old_value + data
-
-        movl    _old_value+4(%ebp), %edx
-        movl    _old_value(%ebp), %eax
-                        // load old_value
-        movl    _new_value+4(%ebp), %ecx
-        movl    _new_value(%ebp), %ebx
-                        // load new_value
-
-	lock
-	cmpxchg8b (%esi)
-                        // Compare %EDX:%EAX with <addr>.  If equal set
-                        // ZF and load %ECX:%EBX into <addr>.  Else, clear
-                        // ZF and load <addr> into %EDX:%EAX.
-        jnz     L44
-
-
-        fldl    _old_value(%ebp)
-                        // return old_value
-        popl    %edx
-        popl    %ecx
-        popl    %ebx
-        popl    %esi
-        movl    %ebp, %esp
-        popl    %ebp
-        ret
-
-        DEBUG_INFO __kmp_test_then_add_real64
-
-
-//------------------------------------------------------------------------
-//
 // FUNCTION __kmp_load_x87_fpu_control_word
 //
 // void
@@ -672,14 +588,16 @@ L44:
 	PROC  __kmp_invoke_microtask
 
 	pushl %ebp
+	KMP_CFI_DEF_OFFSET 8
+	KMP_CFI_OFFSET ebp,-8
 	movl %esp,%ebp		// establish the base pointer for this routine.
+	KMP_CFI_REGISTER ebp
 	subl $8,%esp		// allocate space for two local variables.
 				// These varibales are:
 				//	argv: -4(%ebp)
 				//	temp: -8(%ebp)
 				//
 	pushl %ebx		// save %ebx to use during this routine
-				//
 	movl 20(%ebp),%ebx	// Stack alignment - # args
 	addl $2,%ebx		// #args +2  Always pass at least 2 args (gtid and tid)
 	shll $2,%ebx		// Number of bytes used on stack: (#args+2)*4
@@ -697,21 +615,21 @@ L44:
 	movl 20(%ebp),%ebx	// argc is 20(%ebp)
 	shll $2,%ebx
 
-.invoke_2:
+KMP_LABEL(invoke_2):
 	cmpl $0,%ebx
-	jg  .invoke_4
-	jmp .invoke_3
+	jg  KMP_LABEL(invoke_4)
+	jmp KMP_LABEL(invoke_3)
 	ALIGN 2
-.invoke_4:
+KMP_LABEL(invoke_4):
 	movl -4(%ebp),%eax
 	subl $4,%ebx			// decrement argc.
 	addl %ebx,%eax			// index into argv.
 	movl (%eax),%edx
 	pushl %edx
 
-	jmp .invoke_2
+	jmp KMP_LABEL(invoke_2)
 	ALIGN 2
-.invoke_3:
+KMP_LABEL(invoke_3):
 	leal 16(%ebp),%eax		// push & tid
 	pushl %eax
 
@@ -725,6 +643,7 @@ L44:
 
 	movl -12(%ebp),%ebx		// restore %ebx
 	leave
+	KMP_CFI_DEF esp,4
 	ret
 
 	DEBUG_INFO __kmp_invoke_microtask
@@ -758,30 +677,7 @@ L44:
 	.data
 	ALIGN 4
 
-// AC: The following #if hiden the .text thus moving the rest of code into .data section on MIC.
-// To prevent this in future .text added to every routine definition for x86_64.
-# if __MIC__ || __MIC2__
-
-# else
-
-//------------------------------------------------------------------------
-//
-// FUNCTION __kmp_x86_pause
-//
-// void
-// __kmp_x86_pause( void );
-//
-
-        .text
-        PROC  __kmp_x86_pause
-
-        pause_op
-        ret
-
-        DEBUG_INFO __kmp_x86_pause
-
-# endif // __MIC__ || __MIC2__
-
+// To prevent getting our code into .data section .text added to every routine definition for x86_64.
 //------------------------------------------------------------------------
 //
 // FUNCTION __kmp_x86_cpuid
@@ -1176,79 +1072,6 @@ L44:
 
 # if ! (__MIC__ || __MIC2__)
 
-//------------------------------------------------------------------------
-//
-// FUNCTION __kmp_test_then_add_real32
-//
-// kmp_real32
-// __kmp_test_then_add_real32( volatile kmp_real32 *addr, kmp_real32 data );
-//
-// parameters:
-// 	addr:	%rdi
-// 	data:	%xmm0 (lower 4 bytes)
-//
-// return:	%xmm0 (lower 4 bytes)
-
-        .text
-        PROC  __kmp_test_then_add_real32
-1:
-	movss   (%rdi), %xmm1	// load value of <addr>
-	movd	%xmm1, %eax	// save old value of <addr>
-
-	addss	%xmm0, %xmm1	// new value = old value + <data>
-	movd	%xmm1, %ecx	// move new value to GP reg.
-
-	lock
-	cmpxchgl %ecx, (%rdi)	// Compare %EAX with <addr>.  If equal set
-                             	// ZF and exchange %ECX with <addr>.  Else,
-                                // clear ZF and load <addr> into %EAX.
-        jz      2f
-	pause_op
-	jmp	1b
-2:
-	movd	%eax, %xmm0	// load old value into return register
-        ret
-
-        DEBUG_INFO __kmp_test_then_add_real32
-
-
-//------------------------------------------------------------------------
-//
-// FUNCTION __kmp_test_then_add_real64
-//
-// kmp_real64
-// __kmp_test_then_add_real64( volatile kmp_real64 *addr, kmp_real64 data );
-//
-// parameters:
-//      addr:   %rdi
-//      data:   %xmm0 (lower 8 bytes)
-//      return: %xmm0 (lower 8 bytes)
-//
-
-        .text
-        PROC  __kmp_test_then_add_real64
-1:
-        movlpd	(%rdi), %xmm1	// load value of <addr>
-	movd	%xmm1, %rax	// save old value of <addr>
-
-	addsd	%xmm0, %xmm1	// new value = old value + <data>
-	movd	%xmm1, %rcx	// move new value to GP reg.
-
-	lock
-	cmpxchgq  %rcx, (%rdi) 	// Compare %RAX with <addr>.  If equal set
-				// ZF and exchange %RCX with <addr>.  Else,
-				// clear ZF and load <addr> into %RAX.
-        jz      2f
-	pause_op
-	jmp     1b
-
-2:
-	movd	%rax, %xmm0	// load old value into return register
-        ret
-
-        DEBUG_INFO __kmp_test_then_add_real64
-
-
 # if !KMP_ASM_INTRINS
 
 //------------------------------------------------------------------------
@@ -1382,7 +1205,7 @@ L44:
 // typedef void	(*microtask_t)( int *gtid, int *tid, ... );
 //
 // int
-// __kmp_invoke_microtask( void (*pkfn) (int *gtid, int *tid, ...),
+// __kmp_invoke_microtask( void (*pkfn) (int gtid, int tid, ...),
 //		           int gtid, int tid,
 //                         int argc, void *p_argv[] ) {
 //    (*pkfn)( & gtid, & tid, argv[0], ... );
@@ -1423,9 +1246,11 @@ __tid = -24
 	PROC  __kmp_invoke_microtask
 
 	pushq 	%rbp		// save base pointer
+	KMP_CFI_DEF_OFFSET 16
+	KMP_CFI_OFFSET rbp,-16
 	movq 	%rsp,%rbp	// establish the base pointer for this routine.
+	KMP_CFI_REGISTER rbp
 	pushq 	%rbx		// %rbx is callee-saved register
-
 	pushq	%rsi		// Put gtid on stack so can pass &tgid to pkfn
 	pushq	%rdx		// Put tid on stack so can pass &tid to pkfn
 
@@ -1433,11 +1258,11 @@ __tid = -24
 	movq	$0, %rbx	// constant for cmovs later
 	subq	$4, %rax	// subtract four args passed in registers to pkfn
 #if __MIC__ || __MIC2__
-	js	L_kmp_0		// jump to movq
-	jmp	L_kmp_0_exit	// jump ahead
-L_kmp_0:
+	js	KMP_LABEL(kmp_0)	// jump to movq
+	jmp	KMP_LABEL(kmp_0_exit)	// jump ahead
+KMP_LABEL(kmp_0):
 	movq	%rbx, %rax	// zero negative value in %rax <- max(0, argc-4)
-L_kmp_0_exit:
+KMP_LABEL(kmp_0_exit):
 #else
 	cmovsq	%rbx, %rax	// zero negative value in %rax <- max(0, argc-4)
 #endif // __MIC__ || __MIC2__
@@ -1458,14 +1283,15 @@ L_kmp_0_exit:
 				// setup pkfn parameter reg and stack
 	movq	%rcx, %rax	// argc -> %rax
 	cmpq	$0, %rsi
-	je	L_kmp_invoke_pass_parms	// jump ahead if no parms to push
+	je	KMP_LABEL(kmp_invoke_pass_parms)	// jump ahead if no parms to push
 	shlq	$3, %rcx	// argc*8 -> %rcx
 	movq 	%r8, %rdx	// p_argv -> %rdx
 	addq	%rcx, %rdx	// &p_argv[argc] -> %rdx
 
 	movq	%rsi, %rcx	// max (0, argc-4) -> %rcx
 
-L_kmp_invoke_push_parms:	// push nth - 7th parms to pkfn on stack
+KMP_LABEL(kmp_invoke_push_parms):
+	// push nth - 7th parms to pkfn on stack
 	subq	$8, %rdx	// decrement p_argv pointer to previous parm
 	movq	(%rdx), %rsi	// p_argv[%rcx-1] -> %rsi
 	pushq	%rsi		// push p_argv[%rcx-1] onto stack (reverse order)
@@ -1476,11 +1302,10 @@ L_kmp_invoke_push_parms:	// push nth - 7th parms to pkfn on stack
 //	   Apple's linker does not support 1-byte length relocation;
 //         Resolution: replace all .labelX entries with L_labelX.
 
-	jecxz   L_kmp_invoke_pass_parms  // stop when four p_argv[] parms left
-	jmp	L_kmp_invoke_push_parms
-
+	jecxz   KMP_LABEL(kmp_invoke_pass_parms)  // stop when four p_argv[] parms left
+	jmp	KMP_LABEL(kmp_invoke_push_parms)
 	ALIGN 3
-L_kmp_invoke_pass_parms:	// put 1st - 6th parms to pkfn in registers.
+KMP_LABEL(kmp_invoke_pass_parms):	// put 1st - 6th parms to pkfn in registers.
 				// order here is important to avoid trashing
 				// registers used for both input and output parms!
 	movq	%rdi, %rbx	// pkfn -> %rbx
@@ -1491,32 +1316,32 @@ L_kmp_invoke_pass_parms:	// put 1st - 6th parms to pkfn in registers.
 
 #if __MIC__ || __MIC2__
 	cmpq	$4, %rax	// argc >= 4?
-	jns	L_kmp_4		// jump to movq
-	jmp	L_kmp_4_exit    // jump ahead
-L_kmp_4:
+	jns	KMP_LABEL(kmp_4)	// jump to movq
+	jmp	KMP_LABEL(kmp_4_exit)	// jump ahead
+KMP_LABEL(kmp_4):
 	movq	24(%r11), %r9	// p_argv[3] -> %r9 (store 6th parm to pkfn)
-L_kmp_4_exit:
+KMP_LABEL(kmp_4_exit):
 
 	cmpq	$3, %rax	// argc >= 3?
-	jns	L_kmp_3		// jump to movq
-	jmp	L_kmp_3_exit    // jump ahead
-L_kmp_3:
+	jns	KMP_LABEL(kmp_3)	// jump to movq
+	jmp	KMP_LABEL(kmp_3_exit)	// jump ahead
+KMP_LABEL(kmp_3):
 	movq	16(%r11), %r8	// p_argv[2] -> %r8 (store 5th parm to pkfn)
-L_kmp_3_exit:
+KMP_LABEL(kmp_3_exit):
 
 	cmpq	$2, %rax	// argc >= 2?
-	jns	L_kmp_2		// jump to movq
-	jmp	L_kmp_2_exit    // jump ahead
-L_kmp_2:
+	jns	KMP_LABEL(kmp_2)	// jump to movq
+	jmp	KMP_LABEL(kmp_2_exit)	// jump ahead
+KMP_LABEL(kmp_2):
 	movq	8(%r11), %rcx	// p_argv[1] -> %rcx (store 4th parm to pkfn)
-L_kmp_2_exit:
+KMP_LABEL(kmp_2_exit):
 
 	cmpq	$1, %rax	// argc >= 1?
-	jns	L_kmp_1		// jump to movq
-	jmp	L_kmp_1_exit    // jump ahead
-L_kmp_1:
+	jns	KMP_LABEL(kmp_1)	// jump to movq
+	jmp	KMP_LABEL(kmp_1_exit)	// jump ahead
+KMP_LABEL(kmp_1):
 	movq	(%r11), %rdx	// p_argv[0] -> %rdx (store 3rd parm to pkfn)
-L_kmp_1_exit:
+KMP_LABEL(kmp_1_exit):
 #else
 	cmpq	$4, %rax	// argc >= 4?
 	cmovnsq	24(%r11), %r9	// p_argv[3] -> %r9 (store 6th parm to pkfn)
@@ -1537,6 +1362,7 @@ L_kmp_1_exit:
 	movq	-8(%rbp), %rbx	// restore %rbx	using %rbp since %rsp was modified
 	movq 	%rbp, %rsp	// restore stack pointer
 	popq 	%rbp		// restore frame pointer
+	KMP_CFI_DEF rsp,8
 	ret
 
 	DEBUG_INFO __kmp_invoke_microtask
@@ -1585,7 +1411,7 @@ __kmp_unnamed_critical_addr:
     .size __kmp_unnamed_critical_addr,4
 #endif /* KMP_ARCH_ARM */
 
-#if KMP_ARCH_PPC64
+#if KMP_ARCH_PPC64 || KMP_ARCH_AARCH64
     .data
     .comm .gomp_critical_user_,32,8
     .data
@@ -1594,8 +1420,12 @@ __kmp_unnamed_critical_addr:
 __kmp_unnamed_critical_addr:
     .8byte .gomp_critical_user_
     .size __kmp_unnamed_critical_addr,8
-#endif /* KMP_ARCH_PPC64 */
+#endif /* KMP_ARCH_PPC64 || KMP_ARCH_AARCH64 */
 
 #if defined(__linux__)
+# if KMP_ARCH_ARM
+.section .note.GNU-stack,"",%progbits
+# else
 .section .note.GNU-stack,"",@progbits
+# endif
 #endif

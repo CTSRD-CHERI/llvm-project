@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 // C Includes
 #include <stdio.h>
 #include <stdarg.h>
@@ -20,15 +18,20 @@
 
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/Debugger.h"
 #include "lldb/Core/Log.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/StreamString.h"
 #include "lldb/Host/Host.h"
-#include "lldb/Host/TimeValue.h"
 #include "lldb/Host/Mutex.h"
+#include "lldb/Host/ThisThread.h"
+#include "lldb/Host/TimeValue.h"
 #include "lldb/Interpreter/Args.h"
+#include "lldb/Utility/NameMatches.h"
+
+#include "llvm/ADT/SmallString.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Signals.h"
 using namespace lldb;
 using namespace lldb_private;
 
@@ -113,7 +116,8 @@ Log::PrintfWithFlagsVarArg (uint32_t flags, const char *format, va_list args)
         // Add the thread name if requested
         if (m_options.Test (LLDB_LOG_OPTION_PREPEND_THREAD_NAME))
         {
-            std::string thread_name (Host::GetThreadName (getpid(), Host::GetCurrentThreadID()));
+            llvm::SmallString<32> thread_name;
+            ThisThread::GetName(thread_name);
             if (!thread_name.empty())
                 header.Printf ("%s ", thread_name.c_str());
         }
@@ -121,8 +125,13 @@ Log::PrintfWithFlagsVarArg (uint32_t flags, const char *format, va_list args)
         header.PrintfVarArg (format, args);
         stream_sp->Printf("%s\n", header.GetData());
         
-        if (m_options.Test (LLDB_LOG_OPTION_BACKTRACE))
-            Host::Backtrace (*stream_sp, 1024);
+        if (m_options.Test(LLDB_LOG_OPTION_BACKTRACE)) 
+        {
+            std::string back_trace;
+            llvm::raw_string_ostream stream(back_trace);
+            llvm::sys::PrintStackTrace(stream);
+            stream_sp->PutCString(back_trace.c_str());
+        }
         stream_sp->Flush();
     }
 }
@@ -214,7 +223,6 @@ Log::LogIf (uint32_t bits, const char *format, ...)
         va_end (args);
     }
 }
-
 
 //----------------------------------------------------------------------
 // Printing of errors that are not fatal.

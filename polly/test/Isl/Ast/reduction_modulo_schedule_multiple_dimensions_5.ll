@@ -1,8 +1,8 @@
-; RUN: opt %loadPolly -polly-import-jscop-dir=%S -polly-import-jscop -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-import-jscop-dir=%S -polly-import-jscop -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
 ;
 ; Verify that only the outer dimension needs privatization
 ;
-; CHECK:    #pragma omp parallel for reduction
+; CHECK:    #pragma known-parallel reduction
 ; CHECK:    for (int c1 = 0; c1 <= 1023; c1 += 1) {
 ; CHECK:      if (c1 % 2 == 0) {
 ; CHECK-NOT:    #pragma simd reduction
@@ -43,8 +43,8 @@ for.cond1:                                        ; preds = %for.inc, %for.body
   br i1 %exitcond, label %for.body3, label %for.end
 
 for.body3:                                        ; preds = %for.cond1
-  %arrayidx = getelementptr inbounds i32* %A, i32 %i.0
-  %tmp = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %A, i32 %i.0
+  %tmp = load i32, i32* %arrayidx, align 4
   %add = add nsw i32 %tmp, %i.0
   store i32 %add, i32* %arrayidx, align 4
   br label %for.inc

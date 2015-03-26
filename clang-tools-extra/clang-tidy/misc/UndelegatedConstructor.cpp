@@ -46,6 +46,7 @@ AST_MATCHER_P(CXXRecordDecl, baseOfBoundNode, std::string, ID) {
 } // namespace ast_matchers
 
 namespace tidy {
+namespace misc {
 
 void UndelegatedConstructorCheck::registerMatchers(MatchFinder *Finder) {
   // We look for calls to constructors of the same type in constructors. To do
@@ -60,9 +61,7 @@ void UndelegatedConstructorCheck::registerMatchers(MatchFinder *Finder) {
               constructExpr(hasDeclaration(constructorDecl(ofClass(
                                 recordDecl(baseOfBoundNode("parent"))))))
                   .bind("construct"))),
-          unless(hasAncestor(decl(
-              anyOf(recordDecl(ast_matchers::isTemplateInstantiation()),
-                    functionDecl(ast_matchers::isTemplateInstantiation())))))),
+          unless(isInTemplateInstantiation())),
       this);
 }
 
@@ -72,5 +71,6 @@ void UndelegatedConstructorCheck::check(const MatchFinder::MatchResult &Result) 
                          "A temporary object is created here instead");
 }
 
+} // namespace misc
 } // namespace tidy
 } // namespace clang

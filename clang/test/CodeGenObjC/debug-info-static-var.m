@@ -2,7 +2,9 @@
 // Radar 8801045
 // Do not emit AT_MIPS_linkage_name for static variable i
 
-// CHECK: metadata !"i", metadata !"i", metadata !""
+// CHECK: !MDGlobalVariable(name: "i"
+// CHECK-NOT:               linkageName:
+// CHECK-SAME:              ){{$}}
 
 @interface A {
 }

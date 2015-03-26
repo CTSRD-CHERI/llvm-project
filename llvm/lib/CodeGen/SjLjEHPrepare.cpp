@@ -99,7 +99,7 @@ bool SjLjEHPrepare::doInitialization(Module &M) {
                                       VoidPtrTy, // __personality
                                       VoidPtrTy, // __lsda
                                       ArrayType::get(VoidPtrTy, 5), // __jbuf
-                                      NULL);
+                                      nullptr);
   RegisterFn = M.getOrInsertFunction(
       "_Unwind_SjLj_Register", Type::getVoidTy(M.getContext()),
       PointerType::getUnqual(FunctionContextTy), (Type *)nullptr);
@@ -140,7 +140,7 @@ void SjLjEHPrepare::insertCallSiteStore(Instruction *I, int Number) {
 /// we reach blocks we've already seen.
 static void MarkBlocksLiveIn(BasicBlock *BB,
                              SmallPtrSetImpl<BasicBlock *> &LiveBBs) {
-  if (!LiveBBs.insert(BB))
+  if (!LiveBBs.insert(BB).second)
     return; // already been here.
 
   for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI)
@@ -191,7 +191,7 @@ Value *SjLjEHPrepare::setupFunctionContext(Function &F,
   // Create an alloca for the incoming jump buffer ptr and the new jump buffer
   // that needs to be restored on all exits from the function. This is an alloca
   // because the value needs to be added to the global context list.
-  const TargetLowering *TLI = TM->getSubtargetImpl()->getTargetLowering();
+  const TargetLowering *TLI = TM->getSubtargetImpl(F)->getTargetLowering();
   unsigned Align =
       TLI->getDataLayout()->getPrefTypeAlignment(FunctionContextTy);
   FuncCtx = new AllocaInst(FunctionContextTy, nullptr, Align, "fn_context",

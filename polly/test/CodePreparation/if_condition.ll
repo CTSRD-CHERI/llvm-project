@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -polly-prepare -S < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-prepare -S -polly-codegen-scev < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-prepare -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-prepare -S < %s | FileCheck %s
 
 ; void f(long A[], long N) {
 ;   long i;
@@ -20,7 +20,7 @@ entry:
 
 for.i:
   %indvar = phi i64 [ 0, %entry ], [ %indvar.next, %merge ]
-  %scevgep = getelementptr i64* %A, i64 %indvar
+  %scevgep = getelementptr i64, i64* %A, i64 %indvar
   %cmp = icmp eq i64 %indvar, 3
   br i1 %cmp, label %then, label %else
 

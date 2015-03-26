@@ -90,7 +90,7 @@ void ARMInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
     case 3: O << "\twfi"; break;
     case 4: O << "\tsev"; break;
     case 5:
-      if ((getAvailableFeatures() & ARM::HasV8Ops)) {
+      if (getAvailableFeatures()[ARM::HasV8Ops]) {
         O << "\tsevl";
         break;
       } // Fallthrough for non-v8
@@ -269,7 +269,7 @@ void ARMInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
   // expressed as a GPRPair, so we have to manually merge them.
   // FIXME: We would really like to be able to tablegen'erate this.
   case ARM::LDREXD: case ARM::STREXD:
-  case ARM::LDAEXD: case ARM::STLEXD:
+  case ARM::LDAEXD: case ARM::STLEXD: {
     const MCRegisterClass& MRC = MRI.getRegClass(ARM::GPRRegClassID);
     bool isStore = Opcode == ARM::STREXD || Opcode == ARM::STLEXD;
     unsigned Reg = MI->getOperand(isStore ? 1 : 0).getReg();
@@ -290,6 +290,23 @@ void ARMInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
       printInstruction(&NewMI, O);
       return;
     }
+    break;
+  }
+    // B9.3.3 ERET (Thumb)
+    // For a target that has Virtualization Extensions, ERET is the preferred
+    // disassembly of SUBS PC, LR, #0
+  case ARM::t2SUBS_PC_LR: {
+    if (MI->getNumOperands() == 3 &&
+        MI->getOperand(0).isImm() &&
+        MI->getOperand(0).getImm() == 0 &&
+        getAvailableFeatures()[ARM::FeatureVirtualization]) {
+      O << "\teret";
+      printPredicateOperand(MI, 1, O);
+      printAnnotation(O, Annot);
+      return;
+    }
+    break;
+  }
   }
 
   printInstruction(MI, O);
@@ -681,7 +698,7 @@ void ARMInstPrinter::printBitfieldInvMaskImmOperand(const MCInst *MI,
 void ARMInstPrinter::printMemBOption(const MCInst *MI, unsigned OpNum,
                                      raw_ostream &O) {
   unsigned val = MI->getOperand(OpNum).getImm();
-  O << ARM_MB::MemBOptToString(val, (getAvailableFeatures() & ARM::HasV8Ops));
+  O << ARM_MB::MemBOptToString(val, getAvailableFeatures()[ARM::HasV8Ops]);
 }
 
 void ARMInstPrinter::printInstSyncBOption(const MCInst *MI, unsigned OpNum,
@@ -779,14 +796,14 @@ void ARMInstPrinter::printMSRMaskOperand(const MCInst *MI, unsigned OpNum,
   const MCOperand &Op = MI->getOperand(OpNum);
   unsigned SpecRegRBit = Op.getImm() >> 4;
   unsigned Mask = Op.getImm() & 0xf;
-  uint64_t FeatureBits = getAvailableFeatures();
+  const FeatureBitset &FeatureBits = getAvailableFeatures();
 
-  if (FeatureBits & ARM::FeatureMClass) {
+  if (FeatureBits[ARM::FeatureMClass]) {
     unsigned SYSm = Op.getImm();
     unsigned Opcode = MI->getOpcode();
 
     // For writes, handle extended mask bits if the DSP extension is present.
-    if (Opcode == ARM::t2MSR_M && (FeatureBits & ARM::FeatureDSPThumb2)) {
+    if (Opcode == ARM::t2MSR_M && FeatureBits[ARM::FeatureDSPThumb2]) {
       switch (SYSm) {
       case 0x400: O << "apsr_g"; return;
       case 0xc00: O << "apsr_nzcvqg"; return;
@@ -802,7 +819,7 @@ void ARMInstPrinter::printMSRMaskOperand(const MCInst *MI, unsigned OpNum,
     // Handle the basic 8-bit mask.
     SYSm &= 0xff;
 
-    if (Opcode == ARM::t2MSR_M && (FeatureBits & ARM::HasV7Ops)) {
+    if (Opcode == ARM::t2MSR_M && FeatureBits [ARM::HasV7Ops]) {
       // ARMv7-M deprecates using MSR APSR without a _<bits> qualifier as an
       // alias for MSR APSR_nzcvq.
       switch (SYSm) {
@@ -1299,6 +1316,52 @@ void ARMInstPrinter::printRotImmOperand(const MCInst *MI, unsigned OpNum,
   case 3: O << "24"; break;
   }
   O << markup(">");
+}
+
+void ARMInstPrinter::printModImmOperand(const MCInst *MI, unsigned OpNum,
+                                        raw_ostream &O) {
+  MCOperand Op = MI->getOperand(OpNum);
+
+  // Support for fixups (MCFixup)
+  if (Op.isExpr())
+    return printOperand(MI, OpNum, O);
+
+  unsigned Bits = Op.getImm() & 0xFF;
+  unsigned Rot = (Op.getImm() & 0xF00) >> 7;
+
+  bool  PrintUnsigned = false;
+  switch (MI->getOpcode()){
+  case ARM::MOVi:
+    // Movs to PC should be treated unsigned
+    PrintUnsigned = (MI->getOperand(OpNum - 1).getReg() == ARM::PC);
+    break;
+  case ARM::MSRi:
+    // Movs to special registers should be treated unsigned
+    PrintUnsigned = true;
+    break;
+  }
+
+  int32_t Rotated = ARM_AM::rotr32(Bits, Rot);
+  if (ARM_AM::getSOImmVal(Rotated) == Op.getImm()) {
+    // #rot has the least possible value
+    O << "#" << markup("<imm:");
+    if (PrintUnsigned)
+      O << static_cast<uint32_t>(Rotated);
+    else
+      O << Rotated;
+    O << markup(">");
+    return;
+  }
+
+  // Explicit #bits, #rot implied
+  O << "#"
+    << markup("<imm:")
+    << Bits
+    << markup(">")
+    << ", #"
+    << markup("<imm:")
+    << Rot
+    << markup(">");
 }
 
 void ARMInstPrinter::printFBits16(const MCInst *MI, unsigned OpNum,

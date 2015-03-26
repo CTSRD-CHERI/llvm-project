@@ -19,7 +19,6 @@
 #include "lldb/Core/StreamString.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/Function.h"
-#include "lldb/lldb-private-log.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -110,3 +109,14 @@ BreakpointResolverFileLine::Dump (Stream *s) const
 
 }
 
+lldb::BreakpointResolverSP
+BreakpointResolverFileLine::CopyForBreakpoint (Breakpoint &breakpoint)
+{
+    lldb::BreakpointResolverSP ret_sp(new BreakpointResolverFileLine(&breakpoint,
+                                                                     m_file_spec,
+                                                                     m_line_number,
+                                                                     m_inlines,
+                                                                     m_skip_prologue));
+
+    return ret_sp;
+}

@@ -4,18 +4,17 @@ add_subdirectory(Native)
 add_subdirectory(PECOFF)
 add_subdirectory(YAML)
 
-set(LLVM_LINK_COMPONENTS object)
+if (MSVC)
+  add_definitions(-wd4062) # Suppress 'warning C4062: Enumerator has no associated handler in a switch statement.'
+endif()
 
-add_lld_library(lldReaderWriter
+add_llvm_library(lldReaderWriter
   CoreLinkingContext.cpp
   FileArchive.cpp
   LinkerScript.cpp
-  Reader.cpp
-  Writer.cpp
-  FileArchive.cpp
-  )
-
-target_link_libraries(lldReaderWriter ${cmake_2_8_12_INTERFACE}
-  lldCore
-  lldPasses
+  LINK_LIBS
+    lldCore
+    lldYAML
+    LLVMObject
+    LLVMSupport
   )

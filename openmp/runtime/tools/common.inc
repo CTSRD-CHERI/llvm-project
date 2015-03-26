@@ -37,12 +37,20 @@ endif # !omp_os
 
 # Compiling for the Intel(R) Many Integrated Core architecture is non-trivial at the next layer
 # of script down, but we can make it consistent here.
-ifeq "$(arch)" "mic"
+ifneq "$(filter knf knc knl, $(arch))" ""
     # I really do mean this...
-    override arch:=32e
+    # have top-level arch=mic and then mic_arch = flavor of mic
+    override mic_arch:=$(arch)
+    override arch:=mic
     override mic:=yes
 else
-    override mic:=no
+    ifeq "$(arch)" "mic"
+        # default flavor of mic is knc
+        mic_arch?=knc
+        override mic:=yes
+    else
+        override mic:=no
+    endif
 endif
 
 ifeq (,$(wildcard $(omp_root)/tools/$(omp_os).inc))
@@ -59,7 +67,7 @@ endif
 # Setting defaults
 mode?=release
 
-ifeq "$(filter 32 32e 64,$(arch))" ""
+ifeq "$(filter 32 32e 64 mic,$(arch))" ""
     compiler?=gcc
 else
     ifeq "$(omp_os)" "windows"
@@ -71,27 +79,30 @@ endif
 
 ifneq "$(mic)" "no"
     ifeq "$(compiler)" "gcc"
-	$(error Compiling the runtime with gcc is not supported on Intel\(R\) Many Integrated Core Architecture)
+        $(error Compiling the runtime with gcc is not supported on Intel(R) Many Integrated Core Architecture)
     endif
 
-    # Magic flags for the build script!
-    build_args += --os=lrb --mic-arch=knc --mic-os=lin --mic-comp=offload
+    # Add Intel(R) Many Integrated Core Architecture kind (knf, knc, knl, etc.)
+    build_args += --mic-arch=$(mic_arch)
 
     # Check that the binutils for Intel(R) Many Integrated Core Architecture are available
     # First we see whether the objdump on the user's path supports the k1om architecture.
-    hask1om = $(shell if (objdump --help | grep -s k1om); then echo OK; else echo KO; fi)
+    hask1om = $(shell if (x86_64-k1om-linux-objdump --help | grep -s k1om); then echo OK; else echo KO; fi)
     ifneq "$(hask1om)" "OK"
         # Appropriate binutils are not already set up, so try to add them from the default place.
-        micBinPath = /usr/linux-k1om-4.7/x86_64-k1om-linux/bin
+        micBinPath = /usr/linux-k1om-4.7/bin
         micBinPresent = $(shell if test -d $(micBinPath); then echo OK; else echo KO; fi)
         ifneq "$(micBinPresent)" "OK"
             # We can't find them in the normal place, so complain.
-            $(error Compiling for Intel\(R\) Many Integrated Core Architecture requires that the cross-hosted binutils are available in $(micBinPath).\
+            $(error Compiling for Intel(R) Many Integrated Core Architecture requires that the cross-hosted binutils are available in $(micBinPath).\
 See the Tools tab at http://software.intel.com/mic-developer)
         endif
         export PATH := $(micBinPath):${PATH}
     endif
 endif
+
+# number of parallel build jobs
+jobs?=1
 
 export BUILD_COMPILER := $(compiler)
 

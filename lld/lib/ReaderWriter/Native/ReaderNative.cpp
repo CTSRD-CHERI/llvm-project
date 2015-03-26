@@ -8,13 +8,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "NativeFileFormat.h"
-
 #include "lld/Core/Atom.h"
 #include "lld/Core/Error.h"
 #include "lld/Core/File.h"
+#include "lld/Core/Reader.h"
 #include "lld/Core/Simple.h"
-#include "lld/ReaderWriter/Reader.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Debug.h"
@@ -22,7 +20,6 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
-
 #include <memory>
 #include <vector>
 
@@ -48,9 +45,9 @@ public:
 
   StringRef name() const override;
 
-  uint64_t size() const override {
-    return _ivarData->contentSize;
-  }
+  uint64_t size() const override { return _ivarData->contentSize; }
+
+  uint64_t sectionSize() const override { return _ivarData->sectionSize; }
 
   DefinedAtom::Scope scope() const override {
     return (DefinedAtom::Scope)(attributes().scope);
@@ -74,16 +71,10 @@ public:
   }
 
   DefinedAtom::SectionChoice sectionChoice() const override {
-    return (DefinedAtom::SectionChoice)(
-        attributes().sectionChoiceAndPosition >> 4);
+    return (DefinedAtom::SectionChoice)(attributes().sectionChoice);
   }
 
   StringRef customSectionName() const override;
-
-  SectionPosition sectionPosition() const override {
-     return (DefinedAtom::SectionPosition)(
-        attributes().sectionChoiceAndPosition & 0xF);
-  }
 
   DefinedAtom::DeadStripKind deadStrip() const override {
      return (DefinedAtom::DeadStripKind)(attributes().deadStrip);
@@ -91,6 +82,10 @@ public:
 
   DynamicExport dynamicExport() const override {
     return (DynamicExport)attributes().dynamicExport;
+  }
+
+  DefinedAtom::CodeModel codeModel() const override {
+    return DefinedAtom::CodeModel(attributes().codeModel);
   }
 
   DefinedAtom::ContentPermissions permissions() const override {
@@ -246,6 +241,7 @@ public:
   Addend addend() const override;
   void setTarget(const Atom* newAtom) override;
   void setAddend(Addend a) override;
+  uint32_t tag() const override;
 
 private:
   const File                    *_file;
@@ -258,14 +254,21 @@ private:
 //
 class File : public lld::File {
 public:
+  File(std::unique_ptr<MemoryBuffer> mb)
+      : lld::File(mb->getBufferIdentifier(), kindObject),
+        _mb(std::move(mb)), // Reader now takes ownership of buffer
+        _header(nullptr), _targetsTable(nullptr), _targetsTableCount(0),
+        _strings(nullptr), _stringsMaxOffset(0), _addends(nullptr),
+        _addendsMaxIndex(0), _contentStart(nullptr), _contentEnd(nullptr) {
+    _header =
+        reinterpret_cast<const NativeFileHeader *>(_mb->getBufferStart());
+  }
 
-  /// Instantiates a File object from a native object file.  Ownership
-  /// of the MemoryBuffer is transferred to the resulting File object.
-  static std::error_code make(std::unique_ptr<MemoryBuffer> mb,
-                              std::vector<std::unique_ptr<lld::File>> &result) {
+  /// Parses a File object from a native object file.
+  std::error_code doParse() override {
     const uint8_t *const base =
-        reinterpret_cast<const uint8_t *>(mb->getBufferStart());
-    StringRef path(mb->getBufferIdentifier());
+        reinterpret_cast<const uint8_t *>(_mb->getBufferStart());
+    StringRef path(_mb->getBufferIdentifier());
     const NativeFileHeader *const header =
         reinterpret_cast<const NativeFileHeader *>(base);
     const NativeChunk *const chunks =
@@ -276,7 +279,7 @@ public:
       return make_error_code(NativeReaderError::unknown_file_format);
 
     // make sure mapped file contains all needed data
-    const size_t fileSize = mb->getBufferSize();
+    const size_t fileSize = _mb->getBufferSize();
     if (header->fileSize > fileSize)
       return make_error_code(NativeReaderError::file_too_short);
 
@@ -284,9 +287,6 @@ public:
                     llvm::dbgs() << " Native File Header:" << " fileSize="
                                  << header->fileSize << " chunkCount="
                                  << header->chunkCount << "\n");
-
-    // instantiate NativeFile object and add values to it as found
-    std::unique_ptr<File> file(new File(std::move(mb), path));
 
     // process each chunk
     for (uint32_t i = 0; i < header->chunkCount; ++i) {
@@ -300,40 +300,40 @@ public:
       // process chunk, based on signature
       switch ( chunk->signature ) {
         case NCS_DefinedAtomsV1:
-          ec = file->processDefinedAtomsV1(base, chunk);
+          ec = processDefinedAtomsV1(base, chunk);
           break;
         case NCS_AttributesArrayV1:
-          ec = file->processAttributesV1(base, chunk);
+          ec = processAttributesV1(base, chunk);
           break;
         case NCS_UndefinedAtomsV1:
-          ec = file->processUndefinedAtomsV1(base, chunk);
+          ec = processUndefinedAtomsV1(base, chunk);
           break;
         case NCS_SharedLibraryAtomsV1:
-          ec = file->processSharedLibraryAtomsV1(base, chunk);
+          ec = processSharedLibraryAtomsV1(base, chunk);
           break;
         case NCS_AbsoluteAtomsV1:
-          ec = file->processAbsoluteAtomsV1(base, chunk);
+          ec = processAbsoluteAtomsV1(base, chunk);
           break;
         case NCS_AbsoluteAttributesV1:
-          ec = file->processAbsoluteAttributesV1(base, chunk);
+          ec = processAbsoluteAttributesV1(base, chunk);
           break;
         case NCS_ReferencesArrayV1:
-          ec = file->processReferencesV1(base, chunk);
+          ec = processReferencesV1(base, chunk);
           break;
         case NCS_ReferencesArrayV2:
-          ec = file->processReferencesV2(base, chunk);
+          ec = processReferencesV2(base, chunk);
           break;
         case NCS_TargetsTable:
-          ec = file->processTargetsTable(base, chunk);
+          ec = processTargetsTable(base, chunk);
           break;
         case NCS_AddendsTable:
-          ec = file->processAddendsTable(base, chunk);
+          ec = processAddendsTable(base, chunk);
           break;
         case NCS_Content:
-          ec = file->processContent(base, chunk);
+          ec = processContent(base, chunk);
           break;
         case NCS_Strings:
-          ec = file->processStrings(base, chunk);
+          ec = processStrings(base, chunk);
           break;
         default:
           return make_error_code(NativeReaderError::unknown_chunk_type);
@@ -346,7 +346,7 @@ public:
 
     DEBUG_WITH_TYPE("ReaderNative", {
       llvm::dbgs() << " ReaderNative DefinedAtoms:\n";
-      for (const DefinedAtom *a : file->defined()) {
+      for (const DefinedAtom *a : defined()) {
         llvm::dbgs() << llvm::format("    0x%09lX", a)
                      << ", name=" << a->name()
                      << ", size=" << a->size() << "\n";
@@ -358,12 +358,11 @@ public:
         }
       }
     });
-    result.push_back(std::move(file));
     return make_error_code(NativeReaderError::success);
   }
 
   virtual ~File() {
-    // _buffer is automatically deleted because of std::unique_ptr<>
+    // _mb is automatically deleted because of std::unique_ptr<>
 
     // All other ivar pointers are pointers into the MemoryBuffer, except
     // the _definedAtoms array which was allocated to contain an array
@@ -784,17 +783,6 @@ private:
     _targetsTable[index] = newAtom;
   }
 
-  // private constructor, only called by make()
-  File(std::unique_ptr<MemoryBuffer> mb, StringRef path)
-      : lld::File(path, kindObject),
-        _buffer(std::move(mb)), // Reader now takes ownership of buffer
-        _header(nullptr), _targetsTable(nullptr), _targetsTableCount(0),
-        _strings(nullptr), _stringsMaxOffset(0), _addends(nullptr),
-        _addendsMaxIndex(0), _contentStart(nullptr), _contentEnd(nullptr) {
-    _header =
-        reinterpret_cast<const NativeFileHeader *>(_buffer->getBufferStart());
-  }
-
   template <typename T>
   class AtomArray : public File::atom_collection<T> {
   public:
@@ -835,7 +823,7 @@ private:
     uint32_t           elementCount;
   };
 
-  std::unique_ptr<MemoryBuffer>   _buffer;
+  std::unique_ptr<MemoryBuffer>   _mb;
   const NativeFileHeader*         _header;
   AtomArray<DefinedAtom>          _definedAtoms;
   AtomArray<UndefinedAtom>        _undefinedAtoms;
@@ -991,6 +979,8 @@ inline void NativeReferenceV2::setAddend(Addend a) {
   llvm_unreachable("setAddend() not supported");
 }
 
+uint32_t NativeReferenceV2::tag() const { return _ivarData->tag; }
+
 } // end namespace native
 
 namespace {
@@ -1006,12 +996,14 @@ public:
   }
 
   virtual std::error_code
-  parseFile(std::unique_ptr<MemoryBuffer> &mb, const class Registry &,
-            std::vector<std::unique_ptr<File>> &result) const override {
-    return lld::native::File::make(std::move(mb), result);
+  loadFile(std::unique_ptr<MemoryBuffer> mb, const class Registry &,
+           std::vector<std::unique_ptr<File>> &result) const override {
+    auto *file = new lld::native::File(std::move(mb));
+    result.push_back(std::unique_ptr<File>(file));
     return std::error_code();
   }
 };
+
 }
 
 void Registry::addSupportNativeObjects() {

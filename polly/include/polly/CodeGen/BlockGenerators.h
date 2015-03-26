@@ -33,8 +33,6 @@ class ScalarEvolution;
 }
 
 namespace polly {
-extern bool SCEVCodegen;
-
 using namespace llvm;
 class ScopStmt;
 class MemoryAccess;
@@ -60,48 +58,88 @@ typedef std::vector<ValueMapT> VectorValueMapT;
 bool canSynthesize(const llvm::Instruction *I, const llvm::LoopInfo *LI,
                    llvm::ScalarEvolution *SE, const llvm::Region *R);
 
+/// @brief Return true iff @p V is an intrinsic that we ignore during code
+///        generation.
+bool isIgnoredIntrinsic(const llvm::Value *V);
+
 /// @brief Generate a new basic block for a polyhedral statement.
-///
-/// The only public function exposed is generate().
 class BlockGenerator {
 public:
-  /// @brief Generate a new BasicBlock for a ScopStmt.
+  /// @brief Create a generator for basic blocks.
   ///
-  /// @param Builder   The LLVM-IR Builder used to generate the statement. The
-  ///                  code is generated at the location, the Builder points to.
-  /// @param Stmt      The statement to code generate.
-  /// @param GlobalMap A map that defines for certain Values referenced from the
-  ///                  original code new Values they should be replaced with.
-  /// @param P         A reference to the pass this function is called from.
-  ///                  The pass is needed to update other analysis.
-  /// @param LI        The loop info for the current function
-  /// @param SE        The scalar evolution info for the current function
-  /// @param Build       The AST build with the new schedule.
+  /// @param Builder     The LLVM-IR Builder used to generate the statement. The
+  ///                    code is generated at the location, the Builder points
+  ///                    to.
+  /// @param LI          The loop info for the current function
+  /// @param SE          The scalar evolution info for the current function
+  /// @param DT          The dominator tree of this function.
   /// @param ExprBuilder An expression builder to generate new access functions.
-  static void generate(PollyIRBuilder &Builder, ScopStmt &Stmt,
-                       ValueMapT &GlobalMap, LoopToScevMapT &LTS, Pass *P,
-                       LoopInfo &LI, ScalarEvolution &SE,
-                       __isl_keep isl_ast_build *Build = nullptr,
-                       IslExprBuilder *ExprBuilder = nullptr) {
-    BlockGenerator Generator(Builder, Stmt, P, LI, SE, Build, ExprBuilder);
-    Generator.copyBB(GlobalMap, LTS);
-  }
+  BlockGenerator(PollyIRBuilder &Builder, LoopInfo &LI, ScalarEvolution &SE,
+                 DominatorTree &DT, IslExprBuilder *ExprBuilder = nullptr);
+
+  /// @brief Copy the basic block.
+  ///
+  /// This copies the entire basic block and updates references to old values
+  /// with references to new values, as defined by GlobalMap.
+  ///
+  /// @param Stmt      The block statement to code generate.
+  /// @param GlobalMap A mapping from old values to their new values
+  ///                  (for values recalculated in the new ScoP, but not
+  ///                  within this basic block).
+  /// @param LTS       A map from old loops to new induction variables as SCEVs.
+  void copyStmt(ScopStmt &Stmt, ValueMapT &GlobalMap, LoopToScevMapT &LTS);
 
 protected:
   PollyIRBuilder &Builder;
-  ScopStmt &Statement;
-  Pass *P;
   LoopInfo &LI;
   ScalarEvolution &SE;
-  isl_ast_build *Build;
   IslExprBuilder *ExprBuilder;
 
-  BlockGenerator(PollyIRBuilder &B, ScopStmt &Stmt, Pass *P, LoopInfo &LI,
-                 ScalarEvolution &SE, __isl_keep isl_ast_build *Build,
-                 IslExprBuilder *ExprBuilder);
+  /// @brief The dominator tree of this function.
+  DominatorTree &DT;
 
-  /// @brief Get the new version of a Value.
+  /// @brief Split @p BB to create a new one we can use to clone @p BB in.
+  BasicBlock *splitBB(BasicBlock *BB);
+
+  /// @brief Copy the given basic block.
   ///
+  /// @param Stmt      The statement to code generate.
+  /// @param BB        The basic block to code generate.
+  /// @param BBMap     A mapping from old values to their new values in this
+  /// block.
+  /// @param GlobalMap A mapping from old values to their new values
+  ///                  (for values recalculated in the new ScoP, but not
+  ///                  within this basic block).
+  /// @param LTS       A map from old loops to new induction variables as SCEVs.
+  ///
+  /// @returns The copy of the basic block.
+  BasicBlock *copyBB(ScopStmt &Stmt, BasicBlock *BB, ValueMapT &BBMap,
+                     ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+
+  /// @brief Copy the given basic block.
+  ///
+  /// @param Stmt      The statement to code generate.
+  /// @param BB        The basic block to code generate.
+  /// @param BBCopy    The new basic block to generate code in.
+  /// @param BBMap     A mapping from old values to their new values in this
+  /// block.
+  /// @param GlobalMap A mapping from old values to their new values
+  ///                  (for values recalculated in the new ScoP, but not
+  ///                  within this basic block).
+  /// @param LTS       A map from old loops to new induction variables as SCEVs.
+  void copyBB(ScopStmt &Stmt, BasicBlock *BB, BasicBlock *BBCopy,
+              ValueMapT &BBMap, ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+
+  /// @brief Get the new version of a value.
+  ///
+  /// Given an old value, we first check if a new version of this value is
+  /// available in the BBMap or GlobalMap. In case it is not and the value can
+  /// be recomputed using SCEV, we do so. If we can not recompute a value
+  /// using SCEV, but we understand that the value is constant within the scop,
+  /// we return the old value.  If the value can still not be derived, this
+  /// function will assert.
+  ///
+  /// @param Stmt      The statement to code generate.
   /// @param Old       The old Value.
   /// @param BBMap     A mapping from old values to their new values
   ///                  (for values recalculated within this basic block).
@@ -119,23 +157,10 @@ protected:
   /// @returns  o The old value, if it is still valid.
   ///           o The new value, if available.
   ///           o NULL, if no value is found.
-  Value *getNewValue(const Value *Old, ValueMapT &BBMap, ValueMapT &GlobalMap,
-                     LoopToScevMapT &LTS, Loop *L);
+  Value *getNewValue(ScopStmt &Stmt, const Value *Old, ValueMapT &BBMap,
+                     ValueMapT &GlobalMap, LoopToScevMapT &LTS, Loop *L) const;
 
-  /// @brief Get the new version of a Value if it is available.
-  ///
-  /// @param Old       The old Value.
-  /// @param BBMap     A mapping from old values to their new values
-  ///                  (for values recalculated within this basic block).
-  /// @param GlobalMap A mapping from old values to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                   within this basic block).
-  ///
-  /// @returns  The new value, if available.
-  Value *lookupAvailableValue(const Value *Old, ValueMapT &BBMap,
-                              ValueMapT &GlobalMap) const;
-
-  void copyInstScalar(const Instruction *Inst, ValueMapT &BBMap,
+  void copyInstScalar(ScopStmt &Stmt, const Instruction *Inst, ValueMapT &BBMap,
                       ValueMapT &GlobalMap, LoopToScevMapT &LTS);
 
   /// @brief Get the innermost loop that surrounds an instruction.
@@ -145,41 +170,40 @@ protected:
   Loop *getLoopForInst(const Instruction *Inst);
 
   /// @brief Get the new operand address according to access relation of @p MA.
-  Value *getNewAccessOperand(const MemoryAccess &MA);
+  Value *getNewAccessOperand(ScopStmt &Stmt, const MemoryAccess &MA);
 
   /// @brief Generate the operand address
-  Value *generateLocationAccessed(const Instruction *Inst, const Value *Pointer,
-                                  ValueMapT &BBMap, ValueMapT &GlobalMap,
-                                  LoopToScevMapT &LTS);
+  Value *generateLocationAccessed(ScopStmt &Stmt, const Instruction *Inst,
+                                  const Value *Pointer, ValueMapT &BBMap,
+                                  ValueMapT &GlobalMap, LoopToScevMapT &LTS);
 
-  Value *generateScalarLoad(const LoadInst *load, ValueMapT &BBMap,
-                            ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+  Value *generateScalarLoad(ScopStmt &Stmt, const LoadInst *load,
+                            ValueMapT &BBMap, ValueMapT &GlobalMap,
+                            LoopToScevMapT &LTS);
 
-  Value *generateScalarStore(const StoreInst *store, ValueMapT &BBMap,
-                             ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+  Value *generateScalarStore(ScopStmt &Stmt, const StoreInst *store,
+                             ValueMapT &BBMap, ValueMapT &GlobalMap,
+                             LoopToScevMapT &LTS);
 
   /// @brief Copy a single Instruction.
   ///
   /// This copies a single Instruction and updates references to old values
   /// with references to new values, as defined by GlobalMap and BBMap.
   ///
+  /// @param Stmt      The statement to code generate.
+  /// @param Inst      The instruction to copy.
   /// @param BBMap     A mapping from old values to their new values
   ///                  (for values recalculated within this basic block).
   /// @param GlobalMap A mapping from old values to their new values
   ///                  (for values recalculated in the new ScoP, but not
   ///                  within this basic block).
-  void copyInstruction(const Instruction *Inst, ValueMapT &BBMap,
-                       ValueMapT &GlobalMap, LoopToScevMapT &LTS);
-
-  /// @brief Copy the basic block.
-  ///
-  /// This copies the entire basic block and updates references to old values
-  /// with references to new values, as defined by GlobalMap.
-  ///
-  /// @param GlobalMap A mapping from old values to their new values
+  /// @param LTS       A mapping from loops virtual canonical induction
+  ///                  variable to their new values
   ///                  (for values recalculated in the new ScoP, but not
-  ///                  within this basic block).
-  void copyBB(ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+  ///                   within this basic block).
+  void copyInstruction(ScopStmt &Stmt, const Instruction *Inst,
+                       ValueMapT &BBMap, ValueMapT &GlobalMap,
+                       LoopToScevMapT &LTS);
 };
 
 /// @brief Generate a new vector basic block for a polyhedral statement.
@@ -195,6 +219,7 @@ public:
   /// instructions, but e.g. for address calculation instructions we currently
   /// generate scalar instructions for each vector lane.
   ///
+  /// @param BlockGen   A block generator object used as parent.
   /// @param Stmt       The statement to code generate.
   /// @param GlobalMaps A vector of maps that define for certain Values
   ///                   referenced from the original code new Values they should
@@ -202,21 +227,19 @@ public:
   ///                   used for one vector lane. The number of elements in the
   ///                   vector defines the width of the generated vector
   ///                   instructions.
+  /// @param VLTS       A mapping from loops virtual canonical induction
+  ///                   variable to their new values
+  ///                   (for values recalculated in the new ScoP, but not
+  ///                    within this basic block), one for each lane.
   /// @param Schedule   A map from the statement to a schedule where the
   ///                   innermost dimension is the dimension of the innermost
   ///                   loop containing the statemenet.
-  /// @param P          A reference to the pass this function is called from.
-  ///                   The pass is needed to update other analysis.
-  /// @param LI        The loop info for the current function
-  /// @param SE        The scalar evolution info for the current function
-  static void generate(PollyIRBuilder &B, ScopStmt &Stmt,
+  static void generate(BlockGenerator &BlockGen, ScopStmt &Stmt,
                        VectorValueMapT &GlobalMaps,
                        std::vector<LoopToScevMapT> &VLTS,
-                       __isl_keep isl_map *Schedule, Pass *P, LoopInfo &LI,
-                       ScalarEvolution &SE) {
-    VectorBlockGenerator Generator(B, GlobalMaps, VLTS, Stmt, Schedule, P, LI,
-                                   SE);
-    Generator.copyBB();
+                       __isl_keep isl_map *Schedule) {
+    VectorBlockGenerator Generator(BlockGen, GlobalMaps, VLTS, Schedule);
+    Generator.copyStmt(Stmt);
   }
 
 private:
@@ -249,14 +272,13 @@ private:
   // dimension of the innermost loop containing the statemenet.
   isl_map *Schedule;
 
-  VectorBlockGenerator(PollyIRBuilder &B, VectorValueMapT &GlobalMaps,
-                       std::vector<LoopToScevMapT> &VLTS, ScopStmt &Stmt,
-                       __isl_keep isl_map *Schedule, Pass *P, LoopInfo &LI,
-                       ScalarEvolution &SE);
+  VectorBlockGenerator(BlockGenerator &BlockGen, VectorValueMapT &GlobalMaps,
+                       std::vector<LoopToScevMapT> &VLTS,
+                       __isl_keep isl_map *Schedule);
 
   int getVectorWidth();
 
-  Value *getVectorValue(const Value *Old, ValueMapT &VectorMap,
+  Value *getVectorValue(ScopStmt &Stmt, const Value *Old, ValueMapT &VectorMap,
                         VectorValueMapT &ScalarMaps, Loop *L);
 
   Type *getVectorPtrTy(const Value *V, int Width);
@@ -269,13 +291,14 @@ private:
   /// %vector_ptr= bitcast double* %p to <4 x double>*
   /// %vec_full = load <4 x double>* %vector_ptr
   ///
+  /// @param Stmt           The statement to code generate.
   /// @param NegativeStride This is used to indicate a -1 stride. In such
   ///                       a case we load the end of a base address and
   ///                       shuffle the accesses in reverse order into the
   ///                       vector. By default we would do only positive
   ///                       strides.
   ///
-  Value *generateStrideOneLoad(const LoadInst *Load,
+  Value *generateStrideOneLoad(ScopStmt &Stmt, const LoadInst *Load,
                                VectorValueMapT &ScalarMaps,
                                bool NegativeStride);
 
@@ -289,7 +312,8 @@ private:
   /// %splat = shufflevector <1 x double> %splat_one, <1 x
   ///       double> %splat_one, <4 x i32> zeroinitializer
   ///
-  Value *generateStrideZeroLoad(const LoadInst *Load, ValueMapT &BBMap);
+  Value *generateStrideZeroLoad(ScopStmt &Stmt, const LoadInst *Load,
+                                ValueMapT &BBMap);
 
   /// @brief Load a vector from scalars distributed in memory
   ///
@@ -302,33 +326,62 @@ private:
   /// %scalar 2 = load double* %p_2
   /// %vec_2 = insertelement <2 x double> %vec_1, double %scalar_1, i32 1
   ///
-  Value *generateUnknownStrideLoad(const LoadInst *Load,
+  Value *generateUnknownStrideLoad(ScopStmt &Stmt, const LoadInst *Load,
                                    VectorValueMapT &ScalarMaps);
 
-  void generateLoad(const LoadInst *Load, ValueMapT &VectorMap,
+  void generateLoad(ScopStmt &Stmt, const LoadInst *Load, ValueMapT &VectorMap,
                     VectorValueMapT &ScalarMaps);
 
-  void copyUnaryInst(const UnaryInstruction *Inst, ValueMapT &VectorMap,
-                     VectorValueMapT &ScalarMaps);
+  void copyUnaryInst(ScopStmt &Stmt, const UnaryInstruction *Inst,
+                     ValueMapT &VectorMap, VectorValueMapT &ScalarMaps);
 
-  void copyBinaryInst(const BinaryOperator *Inst, ValueMapT &VectorMap,
-                      VectorValueMapT &ScalarMaps);
+  void copyBinaryInst(ScopStmt &Stmt, const BinaryOperator *Inst,
+                      ValueMapT &VectorMap, VectorValueMapT &ScalarMaps);
 
-  void copyStore(const StoreInst *Store, ValueMapT &VectorMap,
+  void copyStore(ScopStmt &Stmt, const StoreInst *Store, ValueMapT &VectorMap,
                  VectorValueMapT &ScalarMaps);
 
-  void copyInstScalarized(const Instruction *Inst, ValueMapT &VectorMap,
-                          VectorValueMapT &ScalarMaps);
+  void copyInstScalarized(ScopStmt &Stmt, const Instruction *Inst,
+                          ValueMapT &VectorMap, VectorValueMapT &ScalarMaps);
 
   bool extractScalarValues(const Instruction *Inst, ValueMapT &VectorMap,
                            VectorValueMapT &ScalarMaps);
 
   bool hasVectorOperands(const Instruction *Inst, ValueMapT &VectorMap);
 
-  void copyInstruction(const Instruction *Inst, ValueMapT &VectorMap,
-                       VectorValueMapT &ScalarMaps);
+  void copyInstruction(ScopStmt &Stmt, const Instruction *Inst,
+                       ValueMapT &VectorMap, VectorValueMapT &ScalarMaps);
 
-  void copyBB();
+  void copyStmt(ScopStmt &Stmt);
+};
+
+/// @brief Generator for new versions of polyhedral region statements.
+class RegionGenerator : public BlockGenerator {
+public:
+  /// @brief Create a generator for regions.
+  ///
+  /// @param BlockGen A generator for basic blocks.
+  RegionGenerator(BlockGenerator &BlockGen) : BlockGenerator(BlockGen) {}
+
+  /// @brief Copy the region statement @p Stmt.
+  ///
+  /// This copies the entire region represented by @p Stmt and updates
+  /// references to old values with references to new values, as defined by
+  /// GlobalMap.
+  ///
+  /// @param Stmt      The statement to code generate.
+  /// @param GlobalMap A mapping from old values to their new values
+  ///                  (for values recalculated in the new ScoP, but not
+  ///                  within this basic block).
+  /// @param LTS       A map from old loops to new induction variables as SCEVs.
+  void copyStmt(ScopStmt &Stmt, ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+
+private:
+  /// @brief Repair the dominance tree after we created a copy block for @p BB.
+  ///
+  /// @returns The immediate dominator in the DT for @p BBCopy if in the region.
+  BasicBlock *repairDominance(BasicBlock *BB, BasicBlock *BBCopy,
+                              DenseMap<BasicBlock *, BasicBlock *> &BlockMap);
 };
 }
 #endif

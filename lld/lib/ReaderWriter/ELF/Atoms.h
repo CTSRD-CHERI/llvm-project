@@ -11,13 +11,10 @@
 #define LLD_READER_WRITER_ELF_ATOMS_H
 
 #include "TargetHandler.h"
-
 #include "lld/Core/LLVM.h"
 #include "lld/Core/Simple.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringSwitch.h"
-
 #include <memory>
 #include <vector>
 
@@ -38,15 +35,17 @@ template <typename ELFT> class ELFFile;
 template <class ELFT> class ELFReference : public Reference {
   typedef llvm::object::Elf_Rel_Impl<ELFT, false> Elf_Rel;
   typedef llvm::object::Elf_Rel_Impl<ELFT, true> Elf_Rela;
+  typedef llvm::object::Elf_Sym_Impl<ELFT> Elf_Sym;
+
 public:
   ELFReference(const Elf_Rela *rela, uint64_t off, Reference::KindArch arch,
-               uint16_t relocType, uint32_t idx)
+               Reference::KindValue relocType, uint32_t idx)
       : Reference(Reference::KindNamespace::ELF, arch, relocType),
         _target(nullptr), _targetSymbolIndex(idx), _offsetInAtom(off),
         _addend(rela->r_addend) {}
 
-  ELFReference(const Elf_Rel *rel, uint64_t off, Reference::KindArch arch,
-               uint16_t relocType, uint32_t idx)
+  ELFReference(uint64_t off, Reference::KindArch arch,
+               Reference::KindValue relocType, uint32_t idx)
       : Reference(Reference::KindNamespace::ELF, arch, relocType),
         _target(nullptr), _targetSymbolIndex(idx), _offsetInAtom(off),
         _addend(0) {}
@@ -95,12 +94,11 @@ public:
   const ELFFile<ELFT> &file() const override { return _owningFile; }
 
   Scope scope() const override {
-    if (_symbol->st_other == llvm::ELF::STV_HIDDEN)
+    if (_symbol->getVisibility() == llvm::ELF::STV_HIDDEN)
       return scopeLinkageUnit;
     if (_symbol->getBinding() == llvm::ELF::STB_LOCAL)
       return scopeTranslationUnit;
-    else
-      return scopeGlobal;
+    return scopeGlobal;
   }
 
   StringRef name() const override { return _name; }
@@ -127,14 +125,12 @@ public:
 
   StringRef name() const override { return _name; }
 
-  // FIXME: What distinguishes a symbol in ELF that can help decide if the
-  // symbol is undefined only during build and not runtime? This will make us
-  // choose canBeNullAtBuildtime and canBeNullAtRuntime.
+  // A symbol in ELF can be undefined at build time if the symbol is a undefined
+  // weak symbol.
   CanBeNull canBeNull() const override {
     if (_symbol->getBinding() == llvm::ELF::STB_WEAK)
       return CanBeNull::canBeNullAtBuildtime;
-    else
-      return CanBeNull::canBeNullNever;
+    return CanBeNull::canBeNullNever;
   }
 
 private:
@@ -176,27 +172,30 @@ public:
   uint64_t size() const override {
     // Common symbols are not allocated in object files,
     // so use st_size to tell how many bytes are required.
-    if ((_symbol->getType() == llvm::ELF::STT_COMMON) ||
-        _symbol->st_shndx == llvm::ELF::SHN_COMMON)
+    if (_symbol && (_symbol->getType() == llvm::ELF::STT_COMMON ||
+                    _symbol->st_shndx == llvm::ELF::SHN_COMMON))
       return (uint64_t) _symbol->st_size;
 
     return _contentData.size();
   }
 
   Scope scope() const override {
-    if (_symbol->st_other == llvm::ELF::STV_HIDDEN)
-      return scopeLinkageUnit;
-    else if (_symbol->getBinding() != llvm::ELF::STB_LOCAL)
+    if (!_symbol)
       return scopeGlobal;
-    else
-      return scopeTranslationUnit;
+    if (_symbol->getVisibility() == llvm::ELF::STV_HIDDEN)
+      return scopeLinkageUnit;
+    if (_symbol->getBinding() != llvm::ELF::STB_LOCAL)
+      return scopeGlobal;
+    return scopeTranslationUnit;
   }
 
   // FIXME: Need to revisit this in future.
   Interposable interposable() const override { return interposeNo; }
 
-  // FIXME: What ways can we determine this in ELF?
   Merge merge() const override {
+    if (!_symbol)
+      return mergeNo;
+
     if (_symbol->getBinding() == llvm::ELF::STB_WEAK)
       return mergeAsWeak;
 
@@ -213,6 +212,12 @@ public:
 
     ContentType ret = typeUnknown;
     uint64_t flags = _section->sh_flags;
+
+    if (_section->sh_type == llvm::ELF::SHT_GROUP)
+      return typeGroupComdat;
+
+    if (!_symbol && _sectionName.startswith(".gnu.linkonce"))
+      return typeGnuLinkOnce;
 
     if (!(flags & llvm::ELF::SHF_ALLOC))
       return _contentType = typeNoAlloc;
@@ -284,14 +289,24 @@ public:
   }
 
   Alignment alignment() const override {
+    if (!_symbol)
+      return Alignment(0);
+
+    // Obtain proper value of st_value field.
+    const auto symValue = getSymbolValue(_symbol);
+
     // Unallocated common symbols specify their alignment constraints in
     // st_value.
     if ((_symbol->getType() == llvm::ELF::STT_COMMON) ||
         _symbol->st_shndx == llvm::ELF::SHN_COMMON) {
-      return Alignment(llvm::Log2_64(_symbol->st_value));
+      return Alignment(llvm::Log2_64(symValue));
+    }
+    if (_section->sh_addralign == 0) {
+      // sh_addralign of 0 means no alignment
+      return Alignment(0, symValue);
     }
     return Alignment(llvm::Log2_64(_section->sh_addralign),
-                     _symbol->st_value % _section->sh_addralign);
+                     symValue % _section->sh_addralign);
   }
 
   // Do we have a choice for ELF?  All symbols live in explicit sections.
@@ -315,13 +330,9 @@ public:
 
   StringRef customSectionName() const override {
     if ((contentType() == typeZeroFill) ||
-        (_symbol->st_shndx == llvm::ELF::SHN_COMMON))
+        (_symbol && _symbol->st_shndx == llvm::ELF::SHN_COMMON))
       return ".bss";
     return _sectionName;
-  }
-
-  SectionPosition sectionPosition() const override {
-    return sectionPositionAny;
   }
 
   // It isn't clear that __attribute__((used)) is transmitted to the ELF object
@@ -416,6 +427,13 @@ public:
   virtual void setOrdinal(uint64_t ord) { _ordinal = ord; }
 
 protected:
+  /// Returns correct st_value for the symbol depending on the architecture.
+  /// For most architectures it's just a regular st_value with no changes.
+  virtual uint64_t getSymbolValue(const Elf_Sym *symbol) const {
+    return symbol->st_value;
+  }
+
+protected:
   const ELFFile<ELFT> &_owningFile;
   StringRef _symbolName;
   StringRef _sectionName;
@@ -474,15 +492,9 @@ public:
 
   StringRef customSectionName() const override { return _sectionName; }
 
-  SectionPosition sectionPosition() const override {
-    return sectionPositionAny;
-  }
-
   DeadStripKind deadStrip() const override { return deadStripNormal; }
 
   ContentPermissions permissions() const override { return permR__; }
-
-  virtual bool isThumb() const { return false; }
 
   ArrayRef<uint8_t> rawContent() const override { return _contentData; }
 
@@ -536,12 +548,11 @@ public:
   uint64_t size() const override { return _symbol->st_size; }
 
   Scope scope() const override {
-    if (_symbol->st_other == llvm::ELF::STV_HIDDEN)
+    if (_symbol->getVisibility() == llvm::ELF::STV_HIDDEN)
       return scopeLinkageUnit;
-    else if (_symbol->getBinding() != llvm::ELF::STB_LOCAL)
+    if (_symbol->getBinding() != llvm::ELF::STB_LOCAL)
       return scopeGlobal;
-    else
-      return scopeTranslationUnit;
+    return scopeTranslationUnit;
   }
 
   Interposable interposable() const override { return interposeNo; }
@@ -557,10 +568,6 @@ public:
   SectionChoice sectionChoice() const override { return sectionBasedOnContent; }
 
   StringRef customSectionName() const override { return ".bss"; }
-
-  SectionPosition sectionPosition() const override {
-    return sectionPositionAny;
-  }
 
   DeadStripKind deadStrip() const override { return deadStripNormal; }
 
@@ -579,10 +586,8 @@ public:
     const void *it = reinterpret_cast<const void *>(index);
     return reference_iterator(*this, it);
   }
+
 protected:
-
-  virtual ~ELFCommonAtom() {}
-
   const Reference *derefIterator(const void *iter) const override {
     return nullptr;
   }
@@ -611,12 +616,11 @@ public:
   StringRef name() const override { return _symbolName; }
 
   virtual Scope scope() const {
-    if (_symbol->st_other == llvm::ELF::STV_HIDDEN)
+    if (_symbol->getVisibility() == llvm::ELF::STV_HIDDEN)
       return scopeLinkageUnit;
-    else if (_symbol->getBinding() != llvm::ELF::STB_LOCAL)
+    if (_symbol->getBinding() != llvm::ELF::STB_LOCAL)
       return scopeGlobal;
-    else
-      return scopeTranslationUnit;
+    return scopeTranslationUnit;
   }
 
   StringRef loadName() const override { return _loadName; }
@@ -653,36 +657,36 @@ class SimpleELFDefinedAtom : public SimpleDefinedAtom {
 public:
   SimpleELFDefinedAtom(const File &f) : SimpleDefinedAtom(f) {}
 
-  void addReferenceELF(Reference::KindArch arch, uint16_t kindValue,
+  void addReferenceELF(Reference::KindArch arch, Reference::KindValue kindValue,
                        uint64_t off, const Atom *target,
                        Reference::Addend addend) {
     this->addReference(Reference::KindNamespace::ELF, arch, kindValue, off,
                        target, addend);
   }
 
-  void addReferenceELF_Hexagon(uint16_t relocType, uint64_t off, const Atom *t,
-                               Reference::Addend a) {
+  void addReferenceELF_Hexagon(Reference::KindValue relocType, uint64_t off,
+                               const Atom *t, Reference::Addend a) {
     this->addReferenceELF(Reference::KindArch::Hexagon, relocType, off, t, a);
   }
 
-  void addReferenceELF_x86_64(uint16_t relocType, uint64_t off, const Atom *t,
-                              Reference::Addend a) {
+  void addReferenceELF_x86_64(Reference::KindValue relocType, uint64_t off,
+                              const Atom *t, Reference::Addend a) {
     this->addReferenceELF(Reference::KindArch::x86_64, relocType, off, t, a);
   }
 
-  void addReferenceELF_PowerPC(uint16_t relocType, uint64_t off, const Atom *t,
-                               Reference::Addend a) {
-    this->addReferenceELF(Reference::KindArch::PowerPC, relocType, off, t, a);
-  }
-
-  void addReferenceELF_Mips(uint16_t relocType, uint64_t off, const Atom *t,
-                            Reference::Addend a) {
+  void addReferenceELF_Mips(Reference::KindValue relocType, uint64_t off,
+                            const Atom *t, Reference::Addend a) {
     this->addReferenceELF(Reference::KindArch::Mips, relocType, off, t, a);
   }
 
-  void addReferenceELF_AArch64(uint16_t relocType, uint64_t off, const Atom *t,
-                               Reference::Addend a) {
+  void addReferenceELF_AArch64(Reference::KindValue relocType, uint64_t off,
+                               const Atom *t, Reference::Addend a) {
     this->addReferenceELF(Reference::KindArch::AArch64, relocType, off, t, a);
+  }
+
+  void addReferenceELF_ARM(Reference::KindValue relocType, uint64_t off,
+                           const Atom *t, Reference::Addend a) {
+    this->addReferenceELF(Reference::KindArch::ARM, relocType, off, t, a);
   }
 };
 
@@ -736,8 +740,6 @@ public:
 
   ContentPermissions permissions() const override { return permRW_; }
 
-  virtual ArrayRef<uint8_t> rawContent() const = 0;
-
   Alignment alignment() const override {
     // The alignment should be 8 byte aligned
     return Alignment(3);
@@ -770,8 +772,6 @@ public:
 
   ContentPermissions permissions() const override { return permR_X; }
 
-  virtual ArrayRef<uint8_t> rawContent() const = 0;
-
   Alignment alignment() const override {
     return Alignment(4); // 16
   }
@@ -785,7 +785,6 @@ public:
 };
 
 class PLT0Atom : public PLTAtom {
-
 public:
   PLT0Atom(const File &f) : PLTAtom(f, ".plt") {
 #ifndef NDEBUG
@@ -800,7 +799,7 @@ public:
 
   StringRef name() const override { return "_GLOBAL_OFFSET_TABLE_"; }
 
-  Scope scope() const override { return scopeGlobal; }
+  Scope scope() const override { return scopeLinkageUnit; }
 
   SectionChoice sectionChoice() const override { return sectionCustomRequired; }
 
@@ -816,31 +815,6 @@ public:
     // Needs 8 byte alignment
     return Alignment(3);
   }
-
-  ArrayRef<uint8_t> rawContent() const override { return ArrayRef<uint8_t>(); }
-};
-
-class TLSGETADDRAtom : public SimpleELFDefinedAtom {
-public:
-  TLSGETADDRAtom(const File &f) : SimpleELFDefinedAtom(f) {}
-
-  StringRef name() const override { return "__tls_get_addr"; }
-
-  Scope scope() const override { return scopeGlobal; }
-
-  Merge merge() const override { return mergeAsWeak; }
-
-  SectionChoice sectionChoice() const override { return sectionCustomRequired; }
-
-  StringRef customSectionName() const override { return ".text"; }
-
-  ContentType contentType() const override { return typeCode; }
-
-  uint64_t size() const override { return 0; }
-
-  ContentPermissions permissions() const override { return permR_X; }
-
-  Alignment alignment() const override { return Alignment(0); }
 
   ArrayRef<uint8_t> rawContent() const override { return ArrayRef<uint8_t>(); }
 };
@@ -869,38 +843,6 @@ public:
 
   ArrayRef<uint8_t> rawContent() const override { return ArrayRef<uint8_t>(); }
 };
-
-class InitFiniAtom : public SimpleELFDefinedAtom {
-  StringRef _section;
-
-public:
-  InitFiniAtom(const File &f, StringRef secName)
-      : SimpleELFDefinedAtom(f), _section(secName) {}
-
-  Scope scope() const override { return scopeGlobal; }
-
-  SectionChoice sectionChoice() const override { return sectionCustomRequired; }
-
-  StringRef customSectionName() const override { return _section; }
-
-  ContentType contentType() const override { return typeData; }
-
-  uint64_t size() const override { return rawContent().size(); }
-
-  ContentPermissions permissions() const override { return permRW_; }
-
-  virtual ArrayRef<uint8_t> rawContent() const = 0;
-
-  Alignment alignment() const override { return size(); }
-
-#ifndef NDEBUG
-  StringRef name() const override { return _name; }
-  std::string _name;
-#else
-  StringRef name() const override { return ""; }
-#endif
-};
-
 } // end namespace elf
 } // end namespace lld
 

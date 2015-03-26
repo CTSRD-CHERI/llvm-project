@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly %defaultOpts  -polly-codegen-isl -disable-output %s
+; RUN: opt %loadPolly -polly-detect-unprofitable  -polly-codegen-isl -disable-output < %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 
@@ -11,12 +11,12 @@ bb:                                               ; preds = %bb4
   br label %bb2
 
 bb1:                                              ; preds = %bb2
-  %1 = getelementptr inbounds double** %A, i64 0  ; <double**> [#uses=0]
-  %2 = getelementptr inbounds double** %A, i64 0  ; <double**> [#uses=0]
-  %3 = getelementptr inbounds double** %A, i64 0  ; <double**> [#uses=0]
+  %1 = getelementptr inbounds double*, double** %A, i64 0  ; <double**> [#uses=0]
+  %2 = getelementptr inbounds double*, double** %A, i64 0  ; <double**> [#uses=0]
+  %3 = getelementptr inbounds double*, double** %A, i64 0  ; <double**> [#uses=0]
   %4 = sext i32 %j.0 to i64                       ; <i64> [#uses=1]
-  %5 = getelementptr inbounds double** %A, i64 %4 ; <double**> [#uses=1]
-  %6 = load double** %5, align 8                  ; <double*> [#uses=0]
+  %5 = getelementptr inbounds double*, double** %A, i64 %4 ; <double**> [#uses=1]
+  %6 = load double*, double** %5, align 8                  ; <double*> [#uses=0]
   %7 = add nsw i32 %j.0, 1                        ; <i32> [#uses=1]
   br label %bb2
 

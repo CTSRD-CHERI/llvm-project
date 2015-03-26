@@ -11,7 +11,7 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK: set
 define void @set(%struct.node addrspace(200)* %h) #0 {
 ; CHECK: clc
-  %1 = load %struct.node addrspace(200)* addrspace(200)** @n, align 32
+  %1 = load %struct.node addrspace(200)* addrspace(200)*, %struct.node addrspace(200)* addrspace(200)** @n, align 32
 ; CHECK: csc
   store %struct.node addrspace(200)* %h, %struct.node addrspace(200)* addrspace(200)* %1, align 32
   ret void

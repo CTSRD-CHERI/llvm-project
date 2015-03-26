@@ -84,6 +84,7 @@ private:
   void CheckJump(Stmt *From, Stmt *To, SourceLocation DiagLoc,
                  unsigned JumpDiag, unsigned JumpDiagWarning,
                  unsigned JumpDiagCXX98Compat);
+  void CheckGotoStmt(GotoStmt *GS);
 
   unsigned GetDeepestCommonScope(unsigned A, unsigned B);
 };
@@ -337,6 +338,36 @@ void JumpScopeChecker::BuildScopeInformation(Stmt *S, unsigned &origParentScope)
     return;
   }
 
+  case Stmt::SEHTryStmtClass: {
+    SEHTryStmt *TS = cast<SEHTryStmt>(S);
+    unsigned newParentScope;
+    Scopes.push_back(GotoScope(ParentScope,
+                               diag::note_protected_by_seh_try,
+                               diag::note_exits_seh_try,
+                               TS->getSourceRange().getBegin()));
+    if (Stmt *TryBlock = TS->getTryBlock())
+      BuildScopeInformation(TryBlock, (newParentScope = Scopes.size()-1));
+
+    // Jump from __except or __finally into the __try are not allowed either.
+    if (SEHExceptStmt *Except = TS->getExceptHandler()) {
+      Scopes.push_back(GotoScope(ParentScope,
+                                 diag::note_protected_by_seh_except,
+                                 diag::note_exits_seh_except,
+                                 Except->getSourceRange().getBegin()));
+      BuildScopeInformation(Except->getBlock(), 
+                            (newParentScope = Scopes.size()-1));
+    } else if (SEHFinallyStmt *Finally = TS->getFinallyHandler()) {
+      Scopes.push_back(GotoScope(ParentScope,
+                                 diag::note_protected_by_seh_finally,
+                                 diag::note_exits_seh_finally,
+                                 Finally->getSourceRange().getBegin()));
+      BuildScopeInformation(Finally->getBlock(), 
+                            (newParentScope = Scopes.size()-1));
+    }
+
+    return;
+  }
+
   default:
     break;
   }
@@ -416,7 +447,8 @@ void JumpScopeChecker::BuildScopeInformation(Stmt *S, unsigned &origParentScope)
     unsigned newParentScope;
     // Disallow jumps into the protected statement of an @synchronized, but
     // allow jumps into the object expression it protects.
-    if (ObjCAtSynchronizedStmt *AS = dyn_cast<ObjCAtSynchronizedStmt>(SubStmt)){
+    if (ObjCAtSynchronizedStmt *AS =
+            dyn_cast<ObjCAtSynchronizedStmt>(SubStmt)) {
       // Recursively walk the AST for the @synchronized object expr, it is
       // evaluated in the normal scope.
       BuildScopeInformation(AS->getSynchExpr(), ParentScope);
@@ -433,14 +465,16 @@ void JumpScopeChecker::BuildScopeInformation(Stmt *S, unsigned &origParentScope)
     }
 
     // Disallow jumps into the protected statement of an @autoreleasepool.
-    if (ObjCAutoreleasePoolStmt *AS = dyn_cast<ObjCAutoreleasePoolStmt>(SubStmt)){
-      // Recursively walk the AST for the @autoreleasepool part, protected by a new
-      // scope.
+    if (ObjCAutoreleasePoolStmt *AS =
+            dyn_cast<ObjCAutoreleasePoolStmt>(SubStmt)) {
+      // Recursively walk the AST for the @autoreleasepool part, protected by a
+      // new scope.
       Scopes.push_back(GotoScope(ParentScope,
                                  diag::note_protected_by_objc_autoreleasepool,
                                  diag::note_exits_objc_autoreleasepool,
                                  AS->getAtLoc()));
-      BuildScopeInformation(AS->getSubStmt(), (newParentScope = Scopes.size()-1));
+      BuildScopeInformation(AS->getSubStmt(),
+                            (newParentScope = Scopes.size() - 1));
       continue;
     }
 
@@ -489,10 +523,14 @@ void JumpScopeChecker::VerifyJumps() {
 
     // With a goto,
     if (GotoStmt *GS = dyn_cast<GotoStmt>(Jump)) {
-      CheckJump(GS, GS->getLabel()->getStmt(), GS->getGotoLoc(),
-                diag::err_goto_into_protected_scope,
-                diag::ext_goto_into_protected_scope,
-                diag::warn_cxx98_compat_goto_into_protected_scope);
+      // The label may not have a statement if it's coming from inline MS ASM.
+      if (GS->getLabel()->getStmt()) {
+        CheckJump(GS, GS->getLabel()->getStmt(), GS->getGotoLoc(),
+                  diag::err_goto_into_protected_scope,
+                  diag::ext_goto_into_protected_scope,
+                  diag::warn_cxx98_compat_goto_into_protected_scope);
+      }
+      CheckGotoStmt(GS);
       continue;
     }
 
@@ -751,6 +789,18 @@ void JumpScopeChecker::CheckJump(Stmt *From, Stmt *To, SourceLocation DiagLoc,
   // Common case: exactly the same scope, which is fine.
   if (FromScope == ToScope) return;
 
+  // Warn on gotos out of __finally blocks.
+  if (isa<GotoStmt>(From) || isa<IndirectGotoStmt>(From)) {
+    // If FromScope > ToScope, FromScope is more nested and the jump goes to a
+    // less nested scope.  Check if it crosses a __finally along the way.
+    for (unsigned I = FromScope; I > ToScope; I = Scopes[I].ParentScope) {
+      if (Scopes[I].InDiag == diag::note_protected_by_seh_finally) {
+        S.Diag(From->getLocStart(), diag::warn_jump_out_of_seh_finally);
+        break;
+      }
+    }
+  }
+
   unsigned CommonScope = GetDeepestCommonScope(FromScope, ToScope);
 
   // It's okay to jump out from a nested scope.
@@ -786,6 +836,15 @@ void JumpScopeChecker::CheckJump(Stmt *From, Stmt *To, SourceLocation DiagLoc,
   if (ToScopesError.empty() && !ToScopesCXX98Compat.empty()) {
     S.Diag(DiagLoc, JumpDiagCXX98Compat);
     NoteJumpIntoScopes(ToScopesCXX98Compat);
+  }
+}
+
+void JumpScopeChecker::CheckGotoStmt(GotoStmt *GS) {
+  if (GS->getLabel()->isMSAsmLabel()) {
+    S.Diag(GS->getGotoLoc(), diag::err_goto_ms_asm_label)
+        << GS->getLabel()->getIdentifier();
+    S.Diag(GS->getLabel()->getLocation(), diag::note_goto_ms_asm_label)
+        << GS->getLabel()->getIdentifier();
   }
 }
 

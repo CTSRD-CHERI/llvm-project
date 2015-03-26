@@ -44,11 +44,12 @@ namespace MCOI {
 
   /// Operand Type - Operands are tagged with one of the values of this enum.
   enum OperandType {
-    OPERAND_UNKNOWN,
-    OPERAND_IMMEDIATE,
-    OPERAND_REGISTER,
-    OPERAND_MEMORY,
-    OPERAND_PCREL
+    OPERAND_UNKNOWN      = 0,
+    OPERAND_IMMEDIATE    = 1,
+    OPERAND_REGISTER     = 2,
+    OPERAND_MEMORY       = 3,
+    OPERAND_PCREL        = 4,
+    OPERAND_FIRST_TARGET = 5
   };
 }
 
@@ -149,7 +150,7 @@ public:
   const uint16_t *ImplicitUses;  // Registers implicitly read by this instr
   const uint16_t *ImplicitDefs;  // Registers implicitly defined by this instr
   const MCOperandInfo *OpInfo;   // 'NumOperands' entries about operands
-  uint64_t DeprecatedFeatureMask;// Feature bits that this is deprecated on, if any
+  FeatureBitset   DeprecatedFeatureMask; // Feature bits that this is deprecated on, if any
   // A complex method to determine is a certain is deprecated or not, and return
   // the reason for deprecation.
   bool (*ComplexDeprecationInfo)(MCInst &, MCSubtargetInfo &, std::string &);
@@ -172,7 +173,7 @@ public:
                          std::string &Info) const {
     if (ComplexDeprecationInfo)
       return ComplexDeprecationInfo(MI, STI, Info);
-    if ((DeprecatedFeatureMask & STI.getFeatureBits()) != 0) {
+    if ((STI.getFeatureBits() & DeprecatedFeatureMask).any()) {
       // FIXME: it would be nice to include the subtarget feature here.
       Info = "deprecated";
       return true;

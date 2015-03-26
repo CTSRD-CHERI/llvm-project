@@ -9,13 +9,10 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK: x
 define i32 @x(i64 addrspace(200)* nocapture %capmem) #0 {
 entry:
-  %0 = load i64 addrspace(200)* %capmem, align 8, !tbaa !0
+  %0 = load i64, i64 addrspace(200)* %capmem, align 8
   %conv = trunc i64 %0 to i32
   ret i32 %conv
 }
 
 attributes #0 = { nounwind readonly "target-cpu"="cheri" "target-features"="+n64,+cheri" }
 
-!0 = metadata !{metadata !"long long", metadata !1}
-!1 = metadata !{metadata !"omnipotent char", metadata !2}
-!2 = metadata !{metadata !"Simple C/C++ TBAA"}

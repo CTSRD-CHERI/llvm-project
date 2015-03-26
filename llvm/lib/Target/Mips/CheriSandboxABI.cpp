@@ -55,7 +55,7 @@ class CheriSandboxABI : public ModulePass,
       // stack-capability-relative access and setting the length.  Make sure
       // that the AS for new allocas is 0.
       DL->setAllocaAS(0);
-      M->setDataLayout(DL);
+      M->setDataLayout(*DL);
       bool Modified = false;
       for (Function &F : Mod)
         Modified |= runOnFunction(F);

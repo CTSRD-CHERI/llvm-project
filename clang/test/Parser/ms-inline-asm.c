@@ -1,5 +1,7 @@
 // REQUIRES: x86-registered-target
 // RUN: %clang_cc1 %s -triple i386-apple-darwin10 -verify -fasm-blocks
+// Disabling gnu inline assembly should have no effect on this testcase
+// RUN: %clang_cc1 %s -triple i386-apple-darwin10 -verify -fasm-blocks -fno-gnu-inline-asm
 
 #define M __asm int 0x2c
 #define M2 int
@@ -47,6 +49,9 @@ void t10() {
 }
 void t11() {
   do { __asm mov eax, 0 __asm { __asm mov edx, 1 } } while(0);
+}
+void t12() {
+  __asm jmp label // expected-error {{use of undeclared label 'label'}}
 }
 int t_fail() { // expected-note {{to match this}}
   __asm 

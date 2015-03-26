@@ -7,13 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_GOOGLE_USING_NAMESPACE_CHECK_H
-#define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_GOOGLE_USING_NAMESPACE_CHECK_H
+#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_GOOGLE_USINGNAMESPACEDIRECTIVECHECK_H
+#define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_GOOGLE_USINGNAMESPACEDIRECTIVECHECK_H
 
 #include "../ClangTidy.h"
 
 namespace clang {
 namespace tidy {
+namespace google {
 namespace build {
 
 /// \brief Finds using namespace directives.
@@ -22,12 +23,15 @@ namespace build {
 /// Corresponding cpplint.py check name: 'build/namespaces'.
 class UsingNamespaceDirectiveCheck : public ClangTidyCheck {
 public:
+  UsingNamespaceDirectiveCheck(StringRef Name, ClangTidyContext *Context)
+      : ClangTidyCheck(Name, Context) {}
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
 };
 
 } // namespace build
+} // namespace google
 } // namespace tidy
 } // namespace clang
 
-#endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_GOOGLE_USING_NAMESPACE_CHECK_H
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_GOOGLE_USINGNAMESPACEDIRECTIVECHECK_H

@@ -36,6 +36,12 @@ int main()
     }
 }
 // Verify that the debug type for both variables is 'id'.
-// CHECK: metadata !{i32 {{[0-9]+}}, metadata !{{[0-9]+}}, metadata !"bad_carrier", null, i32 {{[0-9]+}}, metadata ![[IDTYPE:[0-9]+]], i32 0, i32 0} ; [ DW_TAG_arg_variable ] [bad_carrier] [line 0]
-// CHECK: metadata !{i32 {{[0-9]+}}, metadata !{{[0-9]+}}, metadata !"good_carrier", null, i32 {{[0-9]+}}, metadata !{{.*}}[[IDTYPE]], i32 0, i32 0} ; [ DW_TAG_arg_variable ] [good_carrier] [line 0]
-// CHECK !{{.*}}[[IDTYPE]] = metadata !{i32 {{[0-9]+}}, null, metadata !"id", metadata !{{[0-9]+}}, i32 !{{[0-9]+}}, i64 0, i64 0, i64 0, i32 0, metadata !{{[0-9]+}}} ; [ DW_TAG_typedef ] [id]
+// CHECK:  ![[IDTYPE:[0-9]+]] = !MDDerivedType(tag: DW_TAG_typedef, name: "id"
+//
+// CHECK:  !MDLocalVariable(tag: DW_TAG_arg_variable, name: "bad_carrier"
+// CHECK-NOT:               line:
+// CHECK-SAME:              type: ![[IDTYPE]]
+//
+// CHECK:  !MDLocalVariable(tag: DW_TAG_arg_variable, name: "good_carrier"
+// CHECK-NOT:               line:
+// CHECK-SAME:              type: ![[IDTYPE]]

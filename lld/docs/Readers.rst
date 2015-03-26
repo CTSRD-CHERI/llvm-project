@@ -10,8 +10,8 @@ The purpose of a "Reader" is to take an object file in a particular format
 and create an `lld::File`:cpp:class: (which is a graph of Atoms)
 representing the object file.  A Reader inherits from
 `lld::Reader`:cpp:class: which lives in
-:file:`include/lld/ReaderWriter/Reader.h` and
-:file:`lib/ReaderWriter/Reader.cpp`.
+:file:`include/lld/Core/Reader.h` and
+:file:`lib/Core/Reader.cpp`.
 
 The Reader infrastructure for an object format ``Foo`` requires the
 following pieces in order to fit into lld:
@@ -66,7 +66,7 @@ Readers are factories
 ---------------------
 
 The linker will usually only instantiate your Reader once.  That one Reader will
-have its parseFile() method called many times with different input files.
+have its loadFile() method called many times with different input files.
 To support multithreaded linking, the Reader may be parsing multiple input
 files in parallel. Therefore, there should be no parsing state in you Reader
 object.  Any parsing state should be in ivars of your File subclass or in
@@ -74,8 +74,8 @@ some temporary object.
 
 The key method to implement in a reader is::
 
-  virtual error_code parseFile(LinkerInput &input,
-                               std::vector<std::unique_ptr<File>> &result);
+  virtual error_code loadFile(LinkerInput &input,
+                              std::vector<std::unique_ptr<File>> &result);
 
 It takes a memory buffer (which contains the contents of the object file
 being read) and returns an instantiated lld::File object which is

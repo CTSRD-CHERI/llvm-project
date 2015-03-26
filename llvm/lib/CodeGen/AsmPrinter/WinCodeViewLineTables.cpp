@@ -190,7 +190,17 @@ void WinCodeViewLineTables::emitDebugInfoForFunction(const Function *GV) {
     return;
   assert(FI.End && "Don't know where the function ends?");
 
-  const StringRef FuncName = getDISubprogram(GV).getDisplayName();
+  StringRef GVName = GV->getName();
+  StringRef FuncName;
+  if (DISubprogram SP = getDISubprogram(GV))
+    FuncName = SP.getDisplayName();
+
+  // FIXME Clang currently sets DisplayName to "bar" for a C++
+  // "namespace_foo::bar" function, see PR21528.  Luckily, dbghelp.dll is trying
+  // to demangle display names anyways, so let's just put a mangled name into
+  // the symbols subsection until Clang gives us what we need.
+  if (GVName.startswith("\01?"))
+    FuncName = GVName.substr(1);
   // Emit a symbol subsection, required by VS2012+ to find function boundaries.
   MCSymbol *SymbolsBegin = Asm->MMI->getContext().CreateTempSymbol(),
            *SymbolsEnd = Asm->MMI->getContext().CreateTempSymbol();
@@ -215,7 +225,7 @@ void WinCodeViewLineTables::emitDebugInfoForFunction(const Function *GV) {
     Asm->OutStreamer.EmitCOFFSecRel32(Fn);
     Asm->OutStreamer.EmitCOFFSectionIndex(Fn);
     Asm->EmitInt8(0);
-    // Emit the function name as a null-terminated string.
+    // Emit the function display name as a null-terminated string.
     Asm->OutStreamer.EmitBytes(FuncName);
     Asm->EmitInt8(0);
     Asm->OutStreamer.EmitLabel(ProcSegmentEnd);
@@ -357,10 +367,7 @@ void WinCodeViewLineTables::endFunction(const MachineFunction *MF) {
     FnDebugInfo.erase(GV);
     VisitedFunctions.pop_back();
   } else {
-    // Define end label for subprogram.
-    MCSymbol *FunctionEndSym = Asm->OutStreamer.getContext().CreateTempSymbol();
-    Asm->OutStreamer.EmitLabel(FunctionEndSym);
-    CurFn->End = FunctionEndSym;
+    CurFn->End = Asm->getFunctionEnd();
   }
   CurFn = nullptr;
 }

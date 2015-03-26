@@ -108,6 +108,40 @@ class ADDIUR2_FM_MM16 {
   let Inst{0}     = 0;
 }
 
+class LOAD_STORE_FM_MM16<bits<6> op> {
+  bits<3> rt;
+  bits<7> addr;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = op;
+  let Inst{9-7}   = rt;
+  let Inst{6-4}   = addr{6-4};
+  let Inst{3-0}   = addr{3-0};
+}
+
+class LOAD_STORE_SP_FM_MM16<bits<6> op> {
+  bits<5> rt;
+  bits<5> offset;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = op;
+  let Inst{9-5}   = rt;
+  let Inst{4-0}   = offset;
+}
+
+class LOAD_GP_FM_MM16<bits<6> op> {
+  bits<3> rt;
+  bits<7> offset;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = op;
+  let Inst{9-7} = rt;
+  let Inst{6-0} = offset;
+}
+
 class ADDIUS5_FM_MM16 {
   bits<5> rd;
   bits<4> imm;
@@ -193,6 +227,49 @@ class ADDIUR1SP_FM_MM16 {
   let Inst{9-7}   = rd;
   let Inst{6-1}   = imm;
   let Inst{0}     = 1;
+}
+
+class BRKSDBBP16_FM_MM<bits<6> op> {
+  bits<4> code_;
+  bits<16> Inst;
+
+  let Inst{15-10} = 0x11;
+  let Inst{9-4}   = op;
+  let Inst{3-0}   = code_;
+}
+
+class BEQNEZ_FM_MM16<bits<6> op> {
+  bits<3> rs;
+  bits<7> offset;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = op;
+  let Inst{9-7}   = rs;
+  let Inst{6-0}   = offset;
+}
+
+class B16_FM {
+  bits<10> offset;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = 0x33;
+  let Inst{9-0}   = offset;
+}
+
+class MOVEP_FM_MM16 {
+  bits<3> dst_regs;
+  bits<3> rt;
+  bits<3> rs;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = 0x21;
+  let Inst{9-7}   = dst_regs;
+  let Inst{6-4}   = rt;
+  let Inst{3-1}   = rs;
+  let Inst{0}     = 0;
 }
 
 //===----------------------------------------------------------------------===//
@@ -764,4 +841,105 @@ class COP0_TLB_FM_MM<bits<10> op> : MMArch {
   let Inst{25-16} = 0x0;
   let Inst{15-6}  = op;
   let Inst{5-0}   = 0x3c;
+}
+
+class SDBBP_FM_MM : MMArch {
+  bits<10> code_;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x0;
+  let Inst{25-16} = code_;
+  let Inst{15-6}  = 0x36d;
+  let Inst{5-0}   = 0x3c;
+}
+
+class RDHWR_FM_MM : MMArch {
+  bits<5> rt;
+  bits<5> rd;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x0;
+  let Inst{25-21} = rt;
+  let Inst{20-16} = rd;
+  let Inst{15-6}  = 0x1ac;
+  let Inst{5-0}   = 0x3c;
+}
+
+class LWXS_FM_MM<bits<10> funct> {
+  bits<5> rd;
+  bits<5> base;
+  bits<5> index;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x0;
+  let Inst{25-21} = index;
+  let Inst{20-16} = base;
+  let Inst{15-11} = rd;
+  let Inst{10}    = 0;
+  let Inst{9-0}   = funct;
+}
+
+class LWM_FM_MM<bits<4> funct> : MMArch {
+  bits<5> rt;
+  bits<21> addr;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x8;
+  let Inst{25-21} = rt;
+  let Inst{20-16} = addr{20-16};
+  let Inst{15-12} = funct;
+  let Inst{11-0}  = addr{11-0};
+}
+
+class LWM_FM_MM16<bits<4> funct> : MMArch {
+  bits<2> rt;
+  bits<4> addr;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = 0x11;
+  let Inst{9-6}   = funct;
+  let Inst{5-4}   = rt;
+  let Inst{3-0}   = addr;
+}
+
+class CACHE_PREF_FM_MM<bits<6> op, bits<4> funct> : MMArch {
+  bits<21> addr;
+  bits<5> hint;
+  bits<5> base = addr{20-16};
+  bits<12> offset = addr{11-0};
+
+  bits<32> Inst;
+
+  let Inst{31-26} = op;
+  let Inst{25-21} = hint;
+  let Inst{20-16} = base;
+  let Inst{15-12} = funct;
+  let Inst{11-0}  = offset;
+}
+
+class BARRIER_FM_MM<bits<5> op> : MMArch {
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x0;
+  let Inst{25-21} = 0x0;
+  let Inst{20-16} = 0x0;
+  let Inst{15-11} = op;
+  let Inst{10-6}  = 0x0;
+  let Inst{5-0}   = 0x0;
+}
+
+class ADDIUPC_FM_MM {
+  bits<3> rs;
+  bits<23> imm;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x1e;
+  let Inst{25-23} = rs;
+  let Inst{22-0} = imm;
 }

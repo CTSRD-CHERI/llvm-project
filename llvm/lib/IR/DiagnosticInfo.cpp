@@ -96,9 +96,10 @@ DiagnosticInfoInlineAsm::DiagnosticInfoInlineAsm(const Instruction &I,
                                                  DiagnosticSeverity Severity)
     : DiagnosticInfo(DK_InlineAsm, Severity), LocCookie(0), MsgStr(MsgStr),
       Instr(&I) {
-  if (const MDNode *SrcLoc = I.getMDNode("srcloc")) {
+  if (const MDNode *SrcLoc = I.getMetadata("srcloc")) {
     if (SrcLoc->getNumOperands() != 0)
-      if (const ConstantInt *CI = dyn_cast<ConstantInt>(SrcLoc->getOperand(0)))
+      if (const auto *CI =
+              mdconst::dyn_extract<ConstantInt>(SrcLoc->getOperand(0)))
         LocCookie = CI->getZExtValue();
   }
 }
@@ -128,7 +129,7 @@ void DiagnosticInfoSampleProfile::print(DiagnosticPrinter &DP) const {
 }
 
 bool DiagnosticInfoOptimizationBase::isLocationAvailable() const {
-  return getDebugLoc().isUnknown() == false;
+  return !getDebugLoc().isUnknown();
 }
 
 void DiagnosticInfoOptimizationBase::getLocation(StringRef *Filename,

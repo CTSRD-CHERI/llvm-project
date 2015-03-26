@@ -1,7 +1,5 @@
 /*
  * kmp_io.c -- RTL IO
- * $Revision: 42150 $
- * $Date: 2013-03-15 15:40:38 -0500 (Fri, 15 Mar 2013) $
  */
 
 
@@ -171,7 +169,7 @@ __kmp_vprintf( enum kmp_io __kmp_io, char const * format, va_list ap )
         int chars = 0;
 
         #ifdef KMP_DEBUG_PIDS
-            chars = sprintf( db, "pid=%d: ", getpid() );
+            chars = sprintf( db, "pid=%d: ", (kmp_int32)getpid() );
         #endif
         chars += vsprintf( db, format, ap );
 
@@ -200,7 +198,8 @@ __kmp_vprintf( enum kmp_io __kmp_io, char const * format, va_list ap )
         #if KMP_OS_WINDOWS
             DWORD count;
             #ifdef KMP_DEBUG_PIDS
-                __kmp_str_buf_print( &__kmp_console_buf, "pid=%d: ", getpid() );
+                __kmp_str_buf_print( &__kmp_console_buf, "pid=%d: ",
+                  (kmp_int32)getpid() );
             #endif
             __kmp_str_buf_vprint( &__kmp_console_buf, format, ap );
             WriteFile(
@@ -213,7 +212,7 @@ __kmp_vprintf( enum kmp_io __kmp_io, char const * format, va_list ap )
             __kmp_str_buf_clear( &__kmp_console_buf );
         #else
             #ifdef KMP_DEBUG_PIDS
-                fprintf( __kmp_stderr, "pid=%d: ", getpid() );
+                fprintf( __kmp_stderr, "pid=%d: ", (kmp_int32)getpid() );
             #endif
             vfprintf( __kmp_stderr, format, ap );
             fflush( __kmp_stderr );

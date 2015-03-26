@@ -11,8 +11,8 @@ entry:
   %idxprom = sext i32 %x to i64
   ; Check that we convert the index to an offset by multiplying by 16:
   ; CHECK: dsll	$2, $4, 4
-  %arrayidx = getelementptr inbounds [2 x i8 addrspace(200)*]* @array, i64 0, i64 %idxprom
-  %0 = load i8 addrspace(200)** %arrayidx, align 16, !tbaa !1
+  %arrayidx = getelementptr inbounds [2 x i8 addrspace(200)*], [2 x i8 addrspace(200)*]* @array, i64 0, i64 %idxprom
+  %0 = load i8 addrspace(200)*, i8 addrspace(200)** %arrayidx, align 16
   ret i8 addrspace(200)* %0
 }
 
@@ -20,8 +20,4 @@ attributes #0 = { nounwind readonly "less-precise-fpmad"="false" "no-frame-point
 
 !llvm.ident = !{!0}
 
-!0 = metadata !{metadata !"clang version 3.6.0 "}
-!1 = metadata !{metadata !2, metadata !2, i64 0}
-!2 = metadata !{metadata !"any pointer", metadata !3, i64 0}
-!3 = metadata !{metadata !"omnipotent char", metadata !4, i64 0}
-!4 = metadata !{metadata !"Simple C/C++ TBAA"}
+!0 = !{!"clang version 3.6.0 "}

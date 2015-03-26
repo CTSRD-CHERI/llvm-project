@@ -240,9 +240,8 @@ static bool visitPreprocessedEntitiesInRange(SourceRange R,
       FID = FileID();
   }
 
-  std::pair<PreprocessingRecord::iterator, PreprocessingRecord::iterator>
-    Entities = PPRec.getPreprocessedEntitiesInRange(R);
-  return Visitor.visitPreprocessedEntities(Entities.first, Entities.second,
+  const auto &Entities = PPRec.getPreprocessedEntitiesInRange(R);
+  return Visitor.visitPreprocessedEntities(Entities.begin(), Entities.end(),
                                            PPRec, FID);
 }
 
@@ -1260,6 +1259,7 @@ bool CursorVisitor::VisitNestedNameSpecifier(NestedNameSpecifier *NNS,
   case NestedNameSpecifier::TypeSpecWithTemplate:
   case NestedNameSpecifier::Global:
   case NestedNameSpecifier::Identifier:
+  case NestedNameSpecifier::Super:
     break;      
   }
   
@@ -1301,6 +1301,7 @@ CursorVisitor::VisitNestedNameSpecifierLoc(NestedNameSpecifierLoc Qualifier) {
         
     case NestedNameSpecifier::Global:
     case NestedNameSpecifier::Identifier:
+    case NestedNameSpecifier::Super:
       break;              
     }
   }
@@ -1717,7 +1718,7 @@ public:
     return VJ->getKind() == DeclVisitKind;
   }
   const Decl *get() const { return static_cast<const Decl *>(data[0]); }
-  bool isFirst() const { return data[1] ? true : false; }
+  bool isFirst() const { return data[1] != nullptr; }
 };
 class TypeLocVisit : public VisitorJob {
 public:
@@ -1832,6 +1833,7 @@ public:
   void VisitCXXUnresolvedConstructExpr(const CXXUnresolvedConstructExpr *E);
   void VisitCXXUuidofExpr(const CXXUuidofExpr *E);
   void VisitCXXCatchStmt(const CXXCatchStmt *S);
+  void VisitCXXForRangeStmt(const CXXForRangeStmt *S);
   void VisitDeclRefExpr(const DeclRefExpr *D);
   void VisitDeclStmt(const DeclStmt *S);
   void VisitDependentScopeDeclRefExpr(const DependentScopeDeclRefExpr *E);
@@ -1864,12 +1866,14 @@ public:
   void VisitOMPParallelDirective(const OMPParallelDirective *D);
   void VisitOMPSimdDirective(const OMPSimdDirective *D);
   void VisitOMPForDirective(const OMPForDirective *D);
+  void VisitOMPForSimdDirective(const OMPForSimdDirective *D);
   void VisitOMPSectionsDirective(const OMPSectionsDirective *D);
   void VisitOMPSectionDirective(const OMPSectionDirective *D);
   void VisitOMPSingleDirective(const OMPSingleDirective *D);
   void VisitOMPMasterDirective(const OMPMasterDirective *D);
   void VisitOMPCriticalDirective(const OMPCriticalDirective *D);
   void VisitOMPParallelForDirective(const OMPParallelForDirective *D);
+  void VisitOMPParallelForSimdDirective(const OMPParallelForSimdDirective *D);
   void VisitOMPParallelSectionsDirective(const OMPParallelSectionsDirective *D);
   void VisitOMPTaskDirective(const OMPTaskDirective *D);
   void VisitOMPTaskyieldDirective(const OMPTaskyieldDirective *D);
@@ -1878,6 +1882,8 @@ public:
   void VisitOMPFlushDirective(const OMPFlushDirective *D);
   void VisitOMPOrderedDirective(const OMPOrderedDirective *D);
   void VisitOMPAtomicDirective(const OMPAtomicDirective *D);
+  void VisitOMPTargetDirective(const OMPTargetDirective *D);
+  void VisitOMPTeamsDirective(const OMPTeamsDirective *D);
 
 private:
   void AddDeclarationNameInfo(const Stmt *S);
@@ -1998,12 +2004,16 @@ void OMPClauseEnqueue::VisitOMPSeqCstClause(const OMPSeqCstClause *) {}
 
 template<typename T>
 void OMPClauseEnqueue::VisitOMPClauseList(T *Node) {
-  for (const auto *I : Node->varlists())
+  for (const auto *I : Node->varlists()) {
     Visitor->AddStmt(I);
+  }
 }
 
 void OMPClauseEnqueue::VisitOMPPrivateClause(const OMPPrivateClause *C) {
   VisitOMPClauseList(C);
+  for (const auto *E : C->private_copies()) {
+    Visitor->AddStmt(E);
+  }
 }
 void OMPClauseEnqueue::VisitOMPFirstprivateClause(
                                         const OMPFirstprivateClause *C) {
@@ -2021,7 +2031,17 @@ void OMPClauseEnqueue::VisitOMPReductionClause(const OMPReductionClause *C) {
 }
 void OMPClauseEnqueue::VisitOMPLinearClause(const OMPLinearClause *C) {
   VisitOMPClauseList(C);
+  for (const auto *E : C->inits()) {
+    Visitor->AddStmt(E);
+  }
+  for (const auto *E : C->updates()) {
+    Visitor->AddStmt(E);
+  }
+  for (const auto *E : C->finals()) {
+    Visitor->AddStmt(E);
+  }
   Visitor->AddStmt(C->getStep());
+  Visitor->AddStmt(C->getCalcStep());
 }
 void OMPClauseEnqueue::VisitOMPAlignedClause(const OMPAlignedClause *C) {
   VisitOMPClauseList(C);
@@ -2033,6 +2053,15 @@ void OMPClauseEnqueue::VisitOMPCopyinClause(const OMPCopyinClause *C) {
 void
 OMPClauseEnqueue::VisitOMPCopyprivateClause(const OMPCopyprivateClause *C) {
   VisitOMPClauseList(C);
+  for (auto *E : C->source_exprs()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->destination_exprs()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->assignment_ops()) {
+    Visitor->AddStmt(E);
+  }
 }
 void OMPClauseEnqueue::VisitOMPFlushClause(const OMPFlushClause *C) {
   VisitOMPClauseList(C);
@@ -2144,6 +2173,12 @@ void EnqueueVisitor::VisitCXXCatchStmt(const CXXCatchStmt *S) {
   AddDecl(S->getExceptionDecl());
 }
 
+void EnqueueVisitor::VisitCXXForRangeStmt(const CXXForRangeStmt *S) {
+  AddStmt(S->getBody());
+  AddStmt(S->getRangeInit());
+  AddDecl(S->getLoopVariable());
+}
+
 void EnqueueVisitor::VisitDeclRefExpr(const DeclRefExpr *DR) {
   if (DR->hasExplicitTemplateArgs()) {
     AddExplicitTemplateArgs(&DR->getExplicitTemplateArgs());
@@ -2222,8 +2257,21 @@ void EnqueueVisitor::VisitMemberExpr(const MemberExpr *M) {
   // visit it.
   // FIXME: If we ever want to show these implicit accesses, this will be
   // unfortunate. However, clang_getCursor() relies on this behavior.
-  if (!M->isImplicitAccess())
-    AddStmt(M->getBase());
+  if (M->isImplicitAccess())
+    return;
+
+  // Ignore base anonymous struct/union fields, otherwise they will shadow the
+  // real field that that we are interested in.
+  if (auto *SubME = dyn_cast<MemberExpr>(M->getBase())) {
+    if (auto *FD = dyn_cast_or_null<FieldDecl>(SubME->getMemberDecl())) {
+      if (FD->isAnonymousStructOrUnion()) {
+        AddStmt(SubME->getBase());
+        return;
+      }
+    }
+  }
+
+  AddStmt(M->getBase());
 }
 void EnqueueVisitor::VisitObjCEncodeExpr(const ObjCEncodeExpr *E) {
   AddTypeLoc(E->getEncodedTypeSourceInfo());
@@ -2342,6 +2390,10 @@ void EnqueueVisitor::VisitOMPForDirective(const OMPForDirective *D) {
   VisitOMPLoopDirective(D);
 }
 
+void EnqueueVisitor::VisitOMPForSimdDirective(const OMPForSimdDirective *D) {
+  VisitOMPLoopDirective(D);
+}
+
 void EnqueueVisitor::VisitOMPSectionsDirective(const OMPSectionsDirective *D) {
   VisitOMPExecutableDirective(D);
 }
@@ -2365,6 +2417,11 @@ void EnqueueVisitor::VisitOMPCriticalDirective(const OMPCriticalDirective *D) {
 
 void
 EnqueueVisitor::VisitOMPParallelForDirective(const OMPParallelForDirective *D) {
+  VisitOMPLoopDirective(D);
+}
+
+void EnqueueVisitor::VisitOMPParallelForSimdDirective(
+    const OMPParallelForSimdDirective *D) {
   VisitOMPLoopDirective(D);
 }
 
@@ -2399,6 +2456,14 @@ void EnqueueVisitor::VisitOMPOrderedDirective(const OMPOrderedDirective *D) {
 }
 
 void EnqueueVisitor::VisitOMPAtomicDirective(const OMPAtomicDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void EnqueueVisitor::VisitOMPTargetDirective(const OMPTargetDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void EnqueueVisitor::VisitOMPTeamsDirective(const OMPTeamsDirective *D) {
   VisitOMPExecutableDirective(D);
 }
 
@@ -2784,7 +2849,8 @@ enum CXErrorCode clang_createTranslationUnit2(CXIndex CIdx,
   CIndexer *CXXIdx = static_cast<CIndexer *>(CIdx);
   FileSystemOptions FileSystemOpts;
 
-  IntrusiveRefCntPtr<DiagnosticsEngine> Diags;
+  IntrusiveRefCntPtr<DiagnosticsEngine> Diags =
+      CompilerInstance::createDiagnostics(new DiagnosticOptions());
   std::unique_ptr<ASTUnit> AU = ASTUnit::LoadFromASTFile(
       ast_filename, Diags, FileSystemOpts, CXXIdx->getOnlyLocalDecls(), None,
       /*CaptureDiagnostics=*/true,
@@ -2876,9 +2942,9 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
     std::vector<ASTUnit::RemappedFile> > RemappedCleanup(RemappedFiles.get());
 
   for (auto &UF : PTUI->unsaved_files) {
-    llvm::MemoryBuffer *MB =
+    std::unique_ptr<llvm::MemoryBuffer> MB =
         llvm::MemoryBuffer::getMemBufferCopy(getContents(UF), UF.Filename);
-    RemappedFiles->push_back(std::make_pair(UF.Filename, MB));
+    RemappedFiles->push_back(std::make_pair(UF.Filename, MB.release()));
   }
 
   std::unique_ptr<std::vector<const char *>> Args(
@@ -3160,9 +3226,9 @@ static void clang_reparseTranslationUnit_Impl(void *UserData) {
     std::vector<ASTUnit::RemappedFile> > RemappedCleanup(RemappedFiles.get());
 
   for (auto &UF : RTUI->unsaved_files) {
-    llvm::MemoryBuffer *MB =
+    std::unique_ptr<llvm::MemoryBuffer> MB =
         llvm::MemoryBuffer::getMemBufferCopy(getContents(UF), UF.Filename);
-    RemappedFiles->push_back(std::make_pair(UF.Filename, MB));
+    RemappedFiles->push_back(std::make_pair(UF.Filename, MB.release()));
   }
 
   if (!CXXUnit->Reparse(*RemappedFiles.get()))
@@ -3669,6 +3735,18 @@ CXSourceRange clang_Cursor_getSpellingNameRange(CXCursor C,
     return clang_getNullRange();
   }
 
+  if (C.kind == CXCursor_CXXMethod || C.kind == CXCursor_Destructor ||
+      C.kind == CXCursor_ConversionFunction) {
+    if (pieceIndex > 0)
+      return clang_getNullRange();
+    if (const FunctionDecl *FD =
+            dyn_cast_or_null<FunctionDecl>(getCursorDecl(C))) {
+      DeclarationNameInfo FunctionName = FD->getNameInfo();
+      return cxloc::translateSourceRange(Ctx, FunctionName.getSourceRange());
+    }
+    return clang_getNullRange();
+  }
+
   // FIXME: A CXCursor_InclusionDirective should give the location of the
   // filename, but we don't keep track of this.
 
@@ -4125,6 +4203,8 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPSimdDirective");
   case CXCursor_OMPForDirective:
     return cxstring::createRef("OMPForDirective");
+  case CXCursor_OMPForSimdDirective:
+    return cxstring::createRef("OMPForSimdDirective");
   case CXCursor_OMPSectionsDirective:
     return cxstring::createRef("OMPSectionsDirective");
   case CXCursor_OMPSectionDirective:
@@ -4137,6 +4217,8 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPCriticalDirective");
   case CXCursor_OMPParallelForDirective:
     return cxstring::createRef("OMPParallelForDirective");
+  case CXCursor_OMPParallelForSimdDirective:
+    return cxstring::createRef("OMPParallelForSimdDirective");
   case CXCursor_OMPParallelSectionsDirective:
     return cxstring::createRef("OMPParallelSectionsDirective");
   case CXCursor_OMPTaskDirective:
@@ -4153,6 +4235,12 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPOrderedDirective");
   case CXCursor_OMPAtomicDirective:
     return cxstring::createRef("OMPAtomicDirective");
+  case CXCursor_OMPTargetDirective:
+    return cxstring::createRef("OMPTargetDirective");
+  case CXCursor_OMPTeamsDirective:
+    return cxstring::createRef("OMPTeamsDirective");
+  case CXCursor_OverloadCandidate:
+      return cxstring::createRef("OverloadCandidate");
   }
 
   llvm_unreachable("Unhandled CXCursorKind");
@@ -4895,6 +4983,7 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
   // nonetheless harmless.
   case Decl::Empty:
   case Decl::TranslationUnit:
+  case Decl::ExternCContext:
     break;
 
   // Declaration kinds for which the definition is not resolvable.
@@ -6374,6 +6463,40 @@ static const Decl *maybeGetTemplateCursor(const Decl *D) {
   return D;
 }
 
+
+enum CX_StorageClass clang_Cursor_getStorageClass(CXCursor C) {
+  StorageClass sc = SC_None;
+  const Decl *D = getCursorDecl(C);
+  if (D) {
+    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+      sc = FD->getStorageClass();
+    } else if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
+      sc = VD->getStorageClass();
+    } else {
+      return CX_SC_Invalid;
+    }
+  } else {
+    return CX_SC_Invalid;
+  }
+  switch (sc) {
+  case SC_None:
+    return CX_SC_None;
+  case SC_Extern:
+    return CX_SC_Extern;
+  case SC_Static:
+    return CX_SC_Static;
+  case SC_PrivateExtern:
+    return CX_SC_PrivateExtern;
+  case SC_OpenCLWorkGroupLocal:
+    return CX_SC_OpenCLWorkGroupLocal;
+  case SC_Auto:
+    return CX_SC_Auto;
+  case SC_Register:
+    return CX_SC_Register;
+  }
+  llvm_unreachable("Unhandled storage class!");
+}
+
 CXCursor clang_getCursorSemanticParent(CXCursor cursor) {
   if (clang_isDeclaration(cursor.kind)) {
     if (const Decl *D = getCursorDecl(cursor)) {
@@ -6568,11 +6691,7 @@ CXModule clang_getModuleForFile(CXTranslationUnit TU, CXFile File) {
   HeaderSearch &HS = Unit.getPreprocessor().getHeaderSearchInfo();
   ModuleMap::KnownHeader Header = HS.findModuleForHeader(FE);
   
-  if (Module *Mod = Header.getModule()) {
-    if (Header.getRole() != ModuleMap::ExcludedHeader)
-      return Mod;
-  }
-  return nullptr;
+  return Header.getModule();
 }
 
 CXFile clang_Module_getASTFile(CXModule CXMod) {
@@ -6858,7 +6977,7 @@ CXTUResourceUsage clang_getCXTUResourceUsage(CXTranslationUnit TU) {
 
   CXTUResourceUsage usage = { (void*) entries.get(),
                             (unsigned) entries->size(),
-                            entries->size() ? &(*entries)[0] : nullptr };
+                            !entries->empty() ? &(*entries)[0] : nullptr };
   entries.release();
   return usage;
 }
@@ -7181,10 +7300,10 @@ cxindex::Logger::~Logger() {
 
   llvm::TimeRecord TR = llvm::TimeRecord::getCurrentTime();
   OS << llvm::format("%7.4f] ", TR.getWallTime() - sBeginTR.getWallTime());
-  OS << Msg.str() << '\n';
+  OS << Msg << '\n';
 
   if (Trace) {
-    llvm::sys::PrintStackTrace(stderr);
+    llvm::sys::PrintStackTrace(OS);
     OS << "--------------------------------------------------\n";
   }
 }

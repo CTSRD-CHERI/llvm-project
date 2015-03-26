@@ -14,6 +14,16 @@
 }
 @end
 
-// CHECK: metadata !{i32 {{.*}}, metadata ![[CTOR:.*]], metadata !"self", null, i32 16777216, metadata !{{.*}}, i32 1088, i32 0} ; [ DW_TAG_arg_variable ] [self] [line 0]
-// CHECK: metadata !{i32 {{.*}}, metadata ![[CTOR]], metadata !"_cmd", null, i32 33554432, metadata !{{.*}}, i32 64, i32 0} ; [ DW_TAG_arg_variable ] [_cmd] [line 0]
-// CHECK: metadata !{i32 {{.*}}, metadata ![[CTOR]], metadata !"myarg", metadata !{{.*}}, i32 50331659, metadata !{{.*}}, i32 0, i32 0} ; [ DW_TAG_arg_variable ] [myarg] [line 11]
+// CHECK: !MDLocalVariable(tag: DW_TAG_arg_variable, name: "self", arg: 1,
+// CHECK-SAME:             scope: ![[CTOR:[0-9]+]]
+// CHECK-NOT:              line:
+// CHECK-SAME:             flags: DIFlagArtificial | DIFlagObjectPointer{{[,)]}}
+// CHECK: !MDLocalVariable(tag: DW_TAG_arg_variable, name: "_cmd", arg: 2,
+// CHECK-SAME:             scope: ![[CTOR]]
+// CHECK-NOT:              line:
+// CHECK-SAME:             flags: DIFlagArtificial{{[,)]}}
+// CHECK: !MDLocalVariable(tag: DW_TAG_arg_variable, name: "myarg", arg: 3,
+// CHECK-SAME:             scope: ![[CTOR]]
+// CHECK-SAME:             line: 11
+// CHECK-NOT:              flags:
+// CHECK-SAME:             ){{$}}

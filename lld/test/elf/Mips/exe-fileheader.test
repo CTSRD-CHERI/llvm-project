@@ -26,7 +26,7 @@
 # CHECK:   Type: Executable (0x2)
 # CHECK:   Machine: EM_MIPS (0x8)
 # CHECK:   Version: 1
-# CHECK:   Entry: 0x4001A0
+# CHECK:   Entry: 0x400190
 # CHECK:   ProgramHeaderOffset: 0x34
 # CHECK:   SectionHeaderOffset: 0x2280
 # CHECK:   Flags [ (0x70001005)
@@ -50,7 +50,8 @@ FileHeader:
   Data:    ELFDATA2LSB
   Type:    ET_REL
   Machine: EM_MIPS
-  Flags:   [EF_MIPS_PIC, EF_MIPS_CPIC]
+  Flags:   [EF_MIPS_NOREORDER, EF_MIPS_PIC, EF_MIPS_CPIC,
+            EF_MIPS_ABI_O32, EF_MIPS_ARCH_32R2]
 
 Sections:
 - Name:         .text
@@ -74,7 +75,7 @@ FileHeader:
   Data:            ELFDATA2LSB
   Type:            ET_REL
   Machine:         EM_MIPS
-  Flags:           [ EF_MIPS_PIC, EF_MIPS_CPIC,
+  Flags:           [ EF_MIPS_NOREORDER, EF_MIPS_CPIC,
                      EF_MIPS_ABI_O32, EF_MIPS_ARCH_32 ]
 Sections:
   - Name:            .text

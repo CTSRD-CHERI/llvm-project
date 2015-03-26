@@ -10,83 +10,37 @@
 #define LLD_READER_WRITER_ELF_MIPS_MIPS_TARGET_HANDLER_H
 
 #include "DefaultTargetHandler.h"
+#include "MipsDynamicLibraryWriter.h"
 #include "MipsELFReader.h"
+#include "MipsExecutableWriter.h"
 #include "MipsLinkingContext.h"
 #include "MipsRelocationHandler.h"
 #include "MipsSectionChunks.h"
 #include "TargetLayout.h"
-
 #include "llvm/ADT/DenseSet.h"
 
 namespace lld {
 namespace elf {
 
 /// \brief TargetLayout for Mips
-template <class ELFType>
-class MipsTargetLayout final : public TargetLayout<ELFType> {
+template <class ELFT> class MipsTargetLayout final : public TargetLayout<ELFT> {
 public:
-  MipsTargetLayout(const MipsLinkingContext &ctx)
-      : TargetLayout<ELFType>(ctx),
-        _gotSection(new (_alloc) MipsGOTSection<ELFType>(ctx)),
-        _pltSection(new (_alloc) MipsPLTSection<ELFType>(ctx)) {}
+  MipsTargetLayout(MipsLinkingContext &ctx)
+      : TargetLayout<ELFT>(ctx),
+        _gotSection(new (this->_allocator) MipsGOTSection<ELFT>(ctx)),
+        _pltSection(new (this->_allocator) MipsPLTSection<ELFT>(ctx)) {}
 
-  const MipsGOTSection<ELFType> &getGOTSection() const { return *_gotSection; }
-  const MipsPLTSection<ELFType> &getPLTSection() const { return *_pltSection; }
+  const MipsGOTSection<ELFT> &getGOTSection() const { return *_gotSection; }
+  const MipsPLTSection<ELFT> &getPLTSection() const { return *_pltSection; }
 
-  AtomSection<ELFType> *
-  createSection(StringRef name, int32_t type,
-                DefinedAtom::ContentPermissions permissions,
-                Layout::SectionOrder order) override {
+  AtomSection<ELFT> *createSection(StringRef name, int32_t type,
+                                   DefinedAtom::ContentPermissions permissions,
+                                   Layout::SectionOrder order) override {
     if (type == DefinedAtom::typeGOT && name == ".got")
       return _gotSection;
     if (type == DefinedAtom::typeStub && name == ".plt")
       return _pltSection;
-    return DefaultLayout<ELFType>::createSection(name, type, permissions,
-                                                 order);
-  }
-
-  StringRef getSectionName(const DefinedAtom *da) const override {
-    return llvm::StringSwitch<StringRef>(da->customSectionName())
-        .StartsWith(".ctors", ".ctors")
-        .StartsWith(".dtors", ".dtors")
-        .Default(TargetLayout<ELFType>::getSectionName(da));
-  }
-
-  Layout::SegmentType getSegmentType(Section<ELFType> *section) const override {
-    switch (section->order()) {
-    case DefaultLayout<ELFType>::ORDER_CTORS:
-    case DefaultLayout<ELFType>::ORDER_DTORS:
-      return llvm::ELF::PT_LOAD;
-    default:
-      return TargetLayout<ELFType>::getSegmentType(section);
-    }
-  }
-
-  ErrorOr<const lld::AtomLayout &> addAtom(const Atom *atom) override {
-    // Maintain:
-    // 1. Set of shared library atoms referenced by regular defined atoms.
-    // 2. Set of shared library atoms have corresponding R_MIPS_COPY copies.
-    if (const auto *da = dyn_cast<DefinedAtom>(atom))
-      for (const Reference *ref : *da) {
-        if (const auto *sla = dyn_cast<SharedLibraryAtom>(ref->target()))
-          _referencedDynAtoms.insert(sla);
-
-        if (ref->kindNamespace() == lld::Reference::KindNamespace::ELF) {
-          assert(ref->kindArch() == Reference::KindArch::Mips);
-          if (ref->kindValue() == llvm::ELF::R_MIPS_COPY)
-            _copiedDynSymNames.insert(atom->name());
-        }
-      }
-
-    return TargetLayout<ELFType>::addAtom(atom);
-  }
-
-  bool isReferencedByDefinedAtom(const SharedLibraryAtom *sla) const {
-    return _referencedDynAtoms.count(sla);
-  }
-
-  bool isCopied(const SharedLibraryAtom *sla) const {
-    return _copiedDynSymNames.count(sla->name());
+    return DefaultLayout<ELFT>::createSection(name, type, permissions, order);
   }
 
   /// \brief GP offset relative to .got section.
@@ -110,57 +64,141 @@ public:
     return *_gpDispAtom;
   }
 
+  /// \brief Return the section order for a input section
+  Layout::SectionOrder getSectionOrder(StringRef name, int32_t contentType,
+                                       int32_t contentPermissions) override {
+    if ((contentType == DefinedAtom::typeStub) && (name.startswith(".text")))
+      return DefaultLayout<ELFT>::ORDER_TEXT;
+
+    return DefaultLayout<ELFT>::getSectionOrder(name, contentType,
+                                                contentPermissions);
+  }
+
+protected:
+  unique_bump_ptr<RelocationTable<ELFT>>
+  createRelocationTable(StringRef name, int32_t order) override {
+    return unique_bump_ptr<RelocationTable<ELFT>>(
+        new (this->_allocator)
+            MipsRelocationTable<ELFT>(this->_context, name, order));
+  }
+
 private:
-  llvm::BumpPtrAllocator _alloc;
-  MipsGOTSection<ELFType> *_gotSection;
-  MipsPLTSection<ELFType> *_pltSection;
+  MipsGOTSection<ELFT> *_gotSection;
+  MipsPLTSection<ELFT> *_pltSection;
   llvm::Optional<AtomLayout *> _gpAtom;
   llvm::Optional<AtomLayout *> _gpDispAtom;
-  llvm::DenseSet<const SharedLibraryAtom *> _referencedDynAtoms;
-  llvm::StringSet<> _copiedDynSymNames;
 };
 
 /// \brief Mips Runtime file.
-template <class ELFType>
-class MipsRuntimeFile final : public CRuntimeFile<ELFType> {
+template <class ELFT> class MipsRuntimeFile final : public RuntimeFile<ELFT> {
 public:
-  MipsRuntimeFile(const MipsLinkingContext &ctx)
-      : CRuntimeFile<ELFType>(ctx, "Mips runtime file") {}
+  MipsRuntimeFile(MipsLinkingContext &ctx)
+      : RuntimeFile<ELFT>(ctx, "Mips runtime file") {}
+};
+
+/// \brief Auxiliary class holds relocation's names table.
+class MipsRelocationStringTable {
+  static const Registry::KindStrings kindStrings[];
+
+public:
+  static void registerTable(Registry &registry);
 };
 
 /// \brief TargetHandler for Mips
-class MipsTargetHandler final : public DefaultTargetHandler<Mips32ElELFType> {
+template <class ELFT>
+class MipsTargetHandler final : public DefaultTargetHandler<ELFT> {
 public:
-  MipsTargetHandler(MipsLinkingContext &ctx);
+  MipsTargetHandler(MipsLinkingContext &ctx)
+      : _ctx(ctx), _runtimeFile(new MipsRuntimeFile<ELFT>(ctx)),
+        _targetLayout(new MipsTargetLayout<ELFT>(ctx)),
+        _relocationHandler(createMipsRelocationHandler<ELFT>(ctx)) {}
 
-  MipsTargetLayout<Mips32ElELFType> &getTargetLayout() override {
-    return *_targetLayout;
+  MipsTargetLayout<ELFT> &getTargetLayout() override { return *_targetLayout; }
+
+  std::unique_ptr<Reader> getObjReader() override {
+    return std::unique_ptr<Reader>(new MipsELFObjectReader<ELFT>(_ctx));
   }
 
-  std::unique_ptr<Reader> getObjReader(bool atomizeStrings) override {
-    return std::unique_ptr<Reader>(new MipsELFObjectReader(atomizeStrings));
+  std::unique_ptr<Reader> getDSOReader() override {
+    return std::unique_ptr<Reader>(new MipsELFDSOReader<ELFT>(_ctx));
   }
 
-  const MipsTargetRelocationHandler &getRelocationHandler() const override {
+  const TargetRelocationHandler &getRelocationHandler() const override {
     return *_relocationHandler;
   }
 
-  std::unique_ptr<Writer> getWriter() override;
+  std::unique_ptr<Writer> getWriter() override {
+    switch (_ctx.getOutputELFType()) {
+    case llvm::ELF::ET_EXEC:
+      return std::unique_ptr<Writer>(
+          new MipsExecutableWriter<ELFT>(_ctx, *_targetLayout));
+    case llvm::ELF::ET_DYN:
+      return std::unique_ptr<Writer>(
+          new MipsDynamicLibraryWriter<ELFT>(_ctx, *_targetLayout));
+    case llvm::ELF::ET_REL:
+      llvm_unreachable("TODO: support -r mode");
+    default:
+      llvm_unreachable("unsupported output type");
+    }
+  }
 
-  void registerRelocationNames(Registry &registry) override;
+  void registerRelocationNames(Registry &registry) override {
+    MipsRelocationStringTable::registerTable(registry);
+  }
 
 private:
-  static const Registry::KindStrings kindStrings[];
   MipsLinkingContext &_ctx;
-  std::unique_ptr<MipsRuntimeFile<Mips32ElELFType>> _runtimeFile;
-  std::unique_ptr<MipsTargetLayout<Mips32ElELFType>> _targetLayout;
-  std::unique_ptr<MipsTargetRelocationHandler> _relocationHandler;
+  std::unique_ptr<MipsRuntimeFile<ELFT>> _runtimeFile;
+  std::unique_ptr<MipsTargetLayout<ELFT>> _targetLayout;
+  std::unique_ptr<TargetRelocationHandler> _relocationHandler;
+};
+
+template <class ELFT> class MipsSymbolTable : public SymbolTable<ELFT> {
+public:
+  typedef llvm::object::Elf_Sym_Impl<ELFT> Elf_Sym;
+
+  MipsSymbolTable(const ELFLinkingContext &ctx)
+      : SymbolTable<ELFT>(ctx, ".symtab",
+                          DefaultLayout<ELFT>::ORDER_SYMBOL_TABLE) {}
+
+  void addDefinedAtom(Elf_Sym &sym, const DefinedAtom *da,
+                      int64_t addr) override {
+    SymbolTable<ELFT>::addDefinedAtom(sym, da, addr);
+
+    switch (da->codeModel()) {
+    case DefinedAtom::codeMipsMicro:
+      sym.st_other |= llvm::ELF::STO_MIPS_MICROMIPS;
+      break;
+    case DefinedAtom::codeMipsMicroPIC:
+      sym.st_other |= llvm::ELF::STO_MIPS_MICROMIPS | llvm::ELF::STO_MIPS_PIC;
+      break;
+    default:
+      break;
+    }
+  }
+
+  void finalize(bool sort) override {
+    SymbolTable<ELFT>::finalize(sort);
+
+    for (auto &ste : this->_symbolTable) {
+      if (!ste._atom)
+        continue;
+      if (const auto *da = dyn_cast<DefinedAtom>(ste._atom)) {
+        if (da->codeModel() == DefinedAtom::codeMipsMicro ||
+            da->codeModel() == DefinedAtom::codeMipsMicroPIC) {
+          // Adjust dynamic microMIPS symbol value. That allows a dynamic
+          // linker to recognize and handle this symbol correctly.
+          ste._symbol.st_value = ste._symbol.st_value | 1;
+        }
+      }
+    }
+  }
 };
 
 template <class ELFT>
 class MipsDynamicSymbolTable : public DynamicSymbolTable<ELFT> {
 public:
-  MipsDynamicSymbolTable(const MipsLinkingContext &ctx,
+  MipsDynamicSymbolTable(const ELFLinkingContext &ctx,
                          MipsTargetLayout<ELFT> &layout)
       : DynamicSymbolTable<ELFT>(ctx, layout, ".dynsym",
                                  DefaultLayout<ELFT>::ORDER_DYNAMIC_SYMBOLS),
@@ -179,23 +217,34 @@ public:
   }
 
   void finalize() override {
+    DynamicSymbolTable<ELFT>::finalize();
+
     const auto &pltSection = _targetLayout.getPLTSection();
 
-    // Under some conditions a dynamic symbol table record should hold a symbol
-    // value of the corresponding PLT entry. For details look at the PLT entry
-    // creation code in the class MipsRelocationPass. Let's update atomLayout
-    // fields for such symbols.
     for (auto &ste : this->_symbolTable) {
-      if (!ste._atom || ste._atomLayout)
+      const Atom *a = ste._atom;
+      if (!a)
         continue;
-      auto *layout = pltSection.findPLTLayout(ste._atom);
-      if (layout) {
+      if (auto *layout = pltSection.findPLTLayout(a)) {
+        a = layout->_atom;
+        // Under some conditions a dynamic symbol table record should hold
+        // a symbol value of the corresponding PLT entry. For details look
+        // at the PLT entry creation code in the class MipsRelocationPass.
+        // Let's update atomLayout fields for such symbols.
+        assert(!ste._atomLayout);
         ste._symbol.st_value = layout->_virtualAddr;
         ste._symbol.st_other |= ELF::STO_MIPS_PLT;
       }
-    }
 
-    DynamicSymbolTable<Mips32ElELFType>::finalize();
+      if (const auto *da = dyn_cast<DefinedAtom>(a)) {
+        if (da->codeModel() == DefinedAtom::codeMipsMicro ||
+            da->codeModel() == DefinedAtom::codeMipsMicroPIC) {
+          // Adjust dynamic microMIPS symbol value. That allows a dynamic
+          // linker to recognize and handle this symbol correctly.
+          ste._symbol.st_value = ste._symbol.st_value | 1;
+        }
+      }
+    }
   }
 
 private:

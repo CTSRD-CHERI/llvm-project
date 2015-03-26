@@ -1,4 +1,5 @@
 set(LLVM_LINK_COMPONENTS
+  Analysis
   BitReader
   BitWriter
   Core
@@ -12,9 +13,17 @@ set(LLVM_LINK_COMPONENTS
   ProfileData
   ScalarOpts
   Support
-  Target
   TransformUtils
   )
+
+# In a standard Clang+LLVM build, we need to generate intrinsics before
+# building codegen. In a standalone build, LLVM is already built and we don't
+# need this dependency. Furthermore, LLVM doesn't export it so we can't have
+# this dependency.
+set(codegen_deps intrinsics_gen)
+if (CLANG_BUILT_STANDALONE)
+  set(codegen_deps)
+endif()
 
 add_clang_library(clangCodeGen
   BackendUtil.cpp
@@ -61,12 +70,11 @@ add_clang_library(clangCodeGen
   ItaniumCXXABI.cpp
   MicrosoftCXXABI.cpp
   ModuleBuilder.cpp
-  SanitizerBlacklist.cpp
   SanitizerMetadata.cpp
   TargetInfo.cpp
 
   DEPENDS
-  intrinsics_gen
+  ${codegen_deps}
 
   LINK_LIBS
   clangAST

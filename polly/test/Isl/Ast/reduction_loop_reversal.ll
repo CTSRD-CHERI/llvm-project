@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-import-jscop-dir=%S -polly-import-jscop -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-import-jscop-dir=%S -polly-import-jscop -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
 ;
 ; CHECK-NOT: #pragma simd{{\s*$}}
 ; CHECK: #pragma simd reduction
@@ -29,7 +29,7 @@ for.body:                                         ; preds = %for.cond
   br label %S0
 
 S0:                                               ; preds = %for.body
-  %tmp = load i32* %A, align 4
+  %tmp = load i32, i32* %A, align 4
   %add = add nsw i32 %tmp, %i.0
   store i32 %add, i32* %A, align 4
   br label %for.inc
@@ -52,7 +52,7 @@ for.body5:                                        ; preds = %for.cond2
 
 S1:                                               ; preds = %for.body5
   %add6 = add nsw i32 %i1.0, 1
-  %arrayidx7 = getelementptr inbounds i32* %A, i32 %add6
+  %arrayidx7 = getelementptr inbounds i32, i32* %A, i32 %add6
   store i32 1, i32* %arrayidx7, align 4
   br label %for.inc8
 

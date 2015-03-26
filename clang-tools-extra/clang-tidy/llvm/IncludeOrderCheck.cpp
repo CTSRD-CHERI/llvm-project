@@ -14,6 +14,7 @@
 
 namespace clang {
 namespace tidy {
+namespace llvm {
 
 namespace {
 class IncludeOrderPPCallbacks : public PPCallbacks {
@@ -46,7 +47,8 @@ private:
 
 void IncludeOrderCheck::registerPPCallbacks(CompilerInstance &Compiler) {
   Compiler.getPreprocessor().addPPCallbacks(
-      new IncludeOrderPPCallbacks(*this, Compiler.getSourceManager()));
+      ::llvm::make_unique<IncludeOrderPPCallbacks>(
+          *this, Compiler.getSourceManager()));
 }
 
 static int getPriority(StringRef Filename, bool IsAngled, bool IsMainModule) {
@@ -162,5 +164,6 @@ void IncludeOrderPPCallbacks::EndOfMainFile() {
   IncludeDirectives.clear();
 }
 
+} // namespace llvm
 } // namespace tidy
 } // namespace clang

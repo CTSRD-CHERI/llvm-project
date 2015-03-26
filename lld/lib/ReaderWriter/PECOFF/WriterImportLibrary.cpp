@@ -30,11 +30,25 @@ createModuleDefinitionFile(const PECOFFLinkingContext &ctx) {
      << "EXPORTS\n";
 
   for (const PECOFFLinkingContext::ExportDesc &desc : ctx.getDllExports()) {
-    os << "  " << desc.externalName << " @" << desc.ordinal;
+    // Symbol names in a module-definition file will be mangled by lib.exe,
+    // so we need to demangle them before writing to a .def file.
+    os << "  ";
+    if (!desc.externalName.empty()) {
+      os << desc.externalName;
+    } else if (!desc.mangledName.empty()) {
+      os << ctx.undecorateSymbol(desc.mangledName);
+    } else {
+      os << ctx.undecorateSymbol(desc.name);
+    }
+
+    if (!desc.isPrivate)
+      os << " @" << desc.ordinal;
     if (desc.noname)
       os << " NONAME";
     if (desc.isData)
       os << " DATA";
+    if (desc.isPrivate)
+      os << " PRIVATE";
     os << "\n";
   }
   os.flush();
@@ -65,30 +79,33 @@ static void writeTo(StringRef path, StringRef contents) {
 
 /// Creates a .def file and runs lib.exe on it to create an import library.
 void writeImportLibrary(const PECOFFLinkingContext &ctx) {
-  std::string program = "lib.exe";
-  std::string programPath = llvm::sys::FindProgramByName(program);
-
   std::string fileContents = createModuleDefinitionFile(ctx);
-  std::string defPath = writeToTempFile(fileContents);
-  llvm::FileRemover tmpFile(defPath);
 
-  std::string defArg = "/def:";
-  defArg.append(defPath);
-  std::string outputArg = "/out:";
-  outputArg.append(ctx.getOutputImportLibraryPath());
-
-  std::vector<const char *> args;
-  args.push_back(programPath.c_str());
-  args.push_back("/nologo");
-  args.push_back("/machine:x86");
-  args.push_back(defArg.c_str());
-  args.push_back(outputArg.c_str());
-  args.push_back(nullptr);
-
-  if (programPath.empty()) {
+  std::string program = "lib.exe";
+  ErrorOr<std::string> programPathOrErr = llvm::sys::findProgramByName(program);
+  if (!programPathOrErr) {
     llvm::errs() << "Unable to find " << program << " in PATH\n";
-  } else if (llvm::sys::ExecuteAndWait(programPath.c_str(), &args[0]) != 0) {
-    llvm::errs() << program << " failed\n";
+  } else {
+    const std::string &programPath = *programPathOrErr;
+
+    std::string defPath = writeToTempFile(fileContents);
+    llvm::FileRemover tmpFile(defPath);
+
+    std::string defArg = "/def:";
+    defArg.append(defPath);
+    std::string outputArg = "/out:";
+    outputArg.append(ctx.getOutputImportLibraryPath());
+
+    std::vector<const char *> args;
+    args.push_back(programPath.c_str());
+    args.push_back("/nologo");
+    args.push_back(ctx.is64Bit() ? "/machine:x64" : "/machine:x86");
+    args.push_back(defArg.c_str());
+    args.push_back(outputArg.c_str());
+    args.push_back(nullptr);
+
+    if (llvm::sys::ExecuteAndWait(programPath.c_str(), &args[0]) != 0)
+      llvm::errs() << program << " failed\n";
   }
 
   // If /lldmoduledeffile:<filename> is given, make a copy of the

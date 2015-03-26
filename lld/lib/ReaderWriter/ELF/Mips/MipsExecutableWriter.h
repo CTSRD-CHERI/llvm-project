@@ -31,36 +31,43 @@ protected:
   bool createImplicitFiles(std::vector<std::unique_ptr<File>> &) override;
 
   void finalizeDefaultAtomValues() override;
+  std::error_code setELFHeader() override;
 
-  std::error_code setELFHeader() override {
-    ExecutableWriter<ELFT>::setELFHeader();
-    _writeHelper.setELFHeader(*this->_elfHeader);
-    return std::error_code();
-  }
+  unique_bump_ptr<SymbolTable<ELFT>> createSymbolTable() override;
+  unique_bump_ptr<DynamicTable<ELFT>> createDynamicTable() override;
 
-  bool isDynSymEntryRequired(const SharedLibraryAtom *sla) const override {
-    return _writeHelper.isDynSymEntryRequired(sla);
-  }
-
-  bool isNeededTagRequired(const SharedLibraryAtom *sla) const override {
-    return _writeHelper.isNeededTagRequired(sla);
-  }
-
-  LLD_UNIQUE_BUMP_PTR(DynamicTable<ELFT>) createDynamicTable();
-
-  LLD_UNIQUE_BUMP_PTR(DynamicSymbolTable<ELFT>) createDynamicSymbolTable();
+  unique_bump_ptr<DynamicSymbolTable<ELFT>>
+      createDynamicSymbolTable() override;
 
 private:
   MipsELFWriter<ELFT> _writeHelper;
-  MipsLinkingContext &_mipsContext;
-  MipsTargetLayout<Mips32ElELFType> &_mipsTargetLayout;
+  MipsTargetLayout<ELFT> &_mipsTargetLayout;
 };
 
 template <class ELFT>
 MipsExecutableWriter<ELFT>::MipsExecutableWriter(MipsLinkingContext &ctx,
                                                  MipsTargetLayout<ELFT> &layout)
     : ExecutableWriter<ELFT>(ctx, layout), _writeHelper(ctx, layout),
-      _mipsContext(ctx), _mipsTargetLayout(layout) {}
+      _mipsTargetLayout(layout) {}
+
+template <class ELFT>
+std::error_code MipsExecutableWriter<ELFT>::setELFHeader() {
+  std::error_code ec = ExecutableWriter<ELFT>::setELFHeader();
+  if (ec)
+    return ec;
+
+  StringRef entryName = this->_context.entrySymbolName();
+  if (const AtomLayout *al = this->_layout.findAtomLayoutByName(entryName)) {
+    const auto *ea = cast<DefinedAtom>(al->_atom);
+    if (ea->codeModel() == DefinedAtom::codeMipsMicro ||
+        ea->codeModel() == DefinedAtom::codeMipsMicroPIC)
+      // Adjust entry symbol value if this symbol is microMIPS encoded.
+      this->_elfHeader->e_entry(al->_virtualAddr | 1);
+  }
+
+  _writeHelper.setELFHeader(*this->_elfHeader);
+  return std::error_code();
+}
 
 template <class ELFT>
 void MipsExecutableWriter<ELFT>::buildDynamicSymbolTable(const File &file) {
@@ -69,9 +76,24 @@ void MipsExecutableWriter<ELFT>::buildDynamicSymbolTable(const File &file) {
   for (auto sec : this->_layout.sections())
     if (auto section = dyn_cast<AtomSection<ELFT>>(sec))
       for (const auto &atom : section->atoms()) {
-        if (_writeHelper.hasGlobalGOTEntry(atom->_atom))
+        if (_writeHelper.hasGlobalGOTEntry(atom->_atom)) {
           this->_dynamicSymbolTable->addSymbol(atom->_atom, section->ordinal(),
                                                atom->_virtualAddr, atom);
+          continue;
+        }
+
+        const DefinedAtom *da = dyn_cast<const DefinedAtom>(atom->_atom);
+        if (!da)
+          continue;
+
+        if (da->dynamicExport() != DefinedAtom::dynamicExportAlways &&
+            !this->_context.isDynamicallyExportedSymbol(da->name()) &&
+            !(this->_context.shouldExportDynamic() &&
+              da->scope() == Atom::Scope::scopeGlobal))
+          continue;
+
+        this->_dynamicSymbolTable->addSymbol(atom->_atom, section->ordinal(),
+                                             atom->_virtualAddr, atom);
       }
 
   for (const UndefinedAtom *a : file.undefined())
@@ -81,7 +103,10 @@ void MipsExecutableWriter<ELFT>::buildDynamicSymbolTable(const File &file) {
     if (_writeHelper.hasGlobalGOTEntry(a))
       this->_dynamicSymbolTable->addSymbol(a, ELF::SHN_UNDEF);
 
-  ExecutableWriter<ELFT>::buildDynamicSymbolTable(file);
+  // Skip our immediate parent class method
+  // ExecutableWriter<ELFT>::buildDynamicSymbolTable because we replaced it
+  // with our own version. Call OutputELFWriter directly.
+  OutputELFWriter<ELFT>::buildDynamicSymbolTable(file);
 }
 
 template <class ELFT>
@@ -99,21 +124,28 @@ void MipsExecutableWriter<ELFT>::finalizeDefaultAtomValues() {
   _writeHelper.finalizeMipsRuntimeAtomValues();
 }
 
+template <class ELFT>
+unique_bump_ptr<SymbolTable<ELFT>>
+    MipsExecutableWriter<ELFT>::createSymbolTable() {
+  return unique_bump_ptr<SymbolTable<ELFT>>(new (
+      this->_alloc) MipsSymbolTable<ELFT>(this->_context));
+}
+
 /// \brief create dynamic table
 template <class ELFT>
-LLD_UNIQUE_BUMP_PTR(DynamicTable<ELFT>)
+unique_bump_ptr<DynamicTable<ELFT>>
     MipsExecutableWriter<ELFT>::createDynamicTable() {
-  return LLD_UNIQUE_BUMP_PTR(DynamicTable<ELFT>)(new (
-      this->_alloc) MipsDynamicTable<ELFT>(_mipsContext, _mipsTargetLayout));
+  return unique_bump_ptr<DynamicTable<ELFT>>(new (
+      this->_alloc) MipsDynamicTable<ELFT>(this->_context, _mipsTargetLayout));
 }
 
 /// \brief create dynamic symbol table
 template <class ELFT>
-LLD_UNIQUE_BUMP_PTR(DynamicSymbolTable<ELFT>)
+unique_bump_ptr<DynamicSymbolTable<ELFT>>
     MipsExecutableWriter<ELFT>::createDynamicSymbolTable() {
-  return LLD_UNIQUE_BUMP_PTR(
-      DynamicSymbolTable<ELFT>)(new (this->_alloc) MipsDynamicSymbolTable<ELFT>(
-      _mipsContext, _mipsTargetLayout));
+  return unique_bump_ptr<DynamicSymbolTable<ELFT>>(
+      new (this->_alloc) MipsDynamicSymbolTable<ELFT>(
+          this->_context, _mipsTargetLayout));
 }
 
 } // namespace elf

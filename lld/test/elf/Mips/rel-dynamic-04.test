@@ -86,16 +86,7 @@
 # PLT-NEXT:     Section: Undefined (0x0)
 # PLT-NEXT:   }
 # PLT-NEXT:   Symbol {
-# PLT-NEXT:     Name: T3@ (1)
-# PLT-NEXT:     Value: 0x4010F0
-# PLT-NEXT:     Size: 0
-# PLT-NEXT:     Binding: Global (0x1)
-# PLT-NEXT:     Type: Function (0x2)
-# PLT-NEXT:     Other: 8
-# PLT-NEXT:     Section: Undefined (0x0)
-# PLT-NEXT:   }
-# PLT-NEXT:   Symbol {
-# PLT-NEXT:     Name: T2@ (7)
+# PLT-NEXT:     Name: T2@ (4)
 # PLT-NEXT:     Value: 0x4010E0
 # PLT-NEXT:     Size: 0
 # PLT-NEXT:     Binding: Global (0x1)
@@ -104,7 +95,16 @@
 # PLT-NEXT:     Section: Undefined (0x0)
 # PLT-NEXT:   }
 # PLT-NEXT:   Symbol {
-# PLT-NEXT:     Name: T1@ (4)
+# PLT-NEXT:     Name: T3@ (7)
+# PLT-NEXT:     Value: 0x4010F0
+# PLT-NEXT:     Size: 0
+# PLT-NEXT:     Binding: Global (0x1)
+# PLT-NEXT:     Type: Function (0x2)
+# PLT-NEXT:     Other: 8
+# PLT-NEXT:     Section: Undefined (0x0)
+# PLT-NEXT:   }
+# PLT-NEXT:   Symbol {
+# PLT-NEXT:     Name: T1@ (1)
 # PLT-NEXT:     Value: 0x0
 # PLT-NEXT:     Size: 0
 # PLT-NEXT:     Binding: Global (0x1)
@@ -121,7 +121,7 @@ FileHeader:
   Data:    ELFDATA2LSB
   Type:    ET_REL
   Machine: EM_MIPS
-  Flags:   [EF_MIPS_PIC, EF_MIPS_CPIC]
+  Flags:   [EF_MIPS_PIC, EF_MIPS_CPIC, EF_MIPS_ABI_O32, EF_MIPS_ARCH_32]
 
 Sections:
 - Name:         .text
@@ -155,7 +155,7 @@ FileHeader: !FileHeader
   Data: ELFDATA2LSB
   Type: ET_REL
   Machine: EM_MIPS
-  Flags: [EF_MIPS_CPIC]
+  Flags: [EF_MIPS_CPIC, EF_MIPS_ABI_O32, EF_MIPS_ARCH_32]
 
 Sections:
 - Name: .text

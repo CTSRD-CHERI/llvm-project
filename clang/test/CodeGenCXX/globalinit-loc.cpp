@@ -6,8 +6,11 @@
 //
 // CHECK: define internal void @_GLOBAL__sub_I_globalinit_loc.cpp
 // CHECK: !dbg ![[DBG:.*]]
-// CHECK: "_GLOBAL__sub_I_globalinit_loc.cpp", i32 0, {{.*}}, i32 0} ; [ DW_TAG_subprogram ] [line 0] [local] [def]
-// CHECK: ![[DBG]] = metadata !{i32 0, i32 0,
+// CHECK: !MDSubprogram(linkageName: "_GLOBAL__sub_I_globalinit_loc.cpp"
+// CHECK-NOT:           line:
+// CHECK-SAME:          isLocal: true
+// CHECK-SAME:          isDefinition: true
+// CHECK: ![[DBG]] = !MDLocation(line: 0,
 # 99 "someheader.h"
 class A {
 public:

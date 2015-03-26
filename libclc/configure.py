@@ -5,8 +5,8 @@ def c_compiler_rule(b, name, description, compiler, flags):
   b.rule(name, command, description + " $out", depfile="$out.d")
 
 version_major = 0;
-version_minor = 0;
-version_patch = 1;
+version_minor = 1;
+version_patch = 0;
 
 from optparse import OptionParser
 import os
@@ -64,14 +64,17 @@ def llvm_config(args):
     sys.exit(1)
 
 llvm_version = string.split(string.replace(llvm_config(['--version']), 'svn', ''), '.')
-llvm_system_libs = ''
-if (int(llvm_version[0]) == 3 and int(llvm_version[1]) >= 5) or int(llvm_version[0]) > 3:
-    llvm_system_libs = llvm_config(['--system-libs'])
+if (int(llvm_version[0]) != 3 and int(llvm_version[1]) != 6):
+    print "libclc requires LLVM 3.6"
+    sys.exit(1)
+
+llvm_system_libs = llvm_config(['--system-libs'])
 llvm_bindir = llvm_config(['--bindir'])
 llvm_core_libs = llvm_config(['--libs', 'core', 'bitreader', 'bitwriter']) + ' ' + \
                  llvm_system_libs + ' ' + \
                  llvm_config(['--ldflags'])
 llvm_cxxflags = llvm_config(['--cxxflags']) + ' -fno-exceptions -fno-rtti'
+llvm_libdir = llvm_config(['--libdir'])
 
 llvm_clang = os.path.join(llvm_bindir, 'clang')
 llvm_link = os.path.join(llvm_bindir, 'llvm-link')
@@ -86,15 +89,16 @@ available_targets = {
                [{'gpu' : 'cedar',   'aliases' : ['palm', 'sumo', 'sumo2', 'redwood', 'juniper']},
                 {'gpu' : 'cypress', 'aliases' : ['hemlock']},
                 {'gpu' : 'barts',   'aliases' : ['turks', 'caicos']},
-                {'gpu' : 'cayman',  'aliases' : ['aruba']},
-                {'gpu' : 'tahiti',  'aliases' : ['pitcairn', 'verde', 'oland', 'hainan', 'bonaire', 'kabini', 'kaveri', 'hawaii','mullins']}]},
-  'nvptx--'   : { 'devices' : [{'gpu' : '', 'aliases' : []}] },
+                {'gpu' : 'cayman',  'aliases' : ['aruba']}]},
+  'amdgcn--': { 'devices' :
+                [{'gpu' : 'tahiti',  'aliases' : ['pitcairn', 'verde', 'oland', 'hainan', 'bonaire', 'kabini', 'kaveri', 'hawaii','mullins']}]},
+  'nvptx--'   : { 'devices' : [{'gpu' : '', 'aliases' : []}]},
   'nvptx64--'   : { 'devices' : [{'gpu' : '', 'aliases' : []}] },
   'nvptx--nvidiacl'   : { 'devices' : [{'gpu' : '', 'aliases' : []}] },
   'nvptx64--nvidiacl' : { 'devices' : [{'gpu' : '', 'aliases' : []}] }
 }
 
-default_targets = ['nvptx--nvidiacl', 'nvptx64--nvidiacl', 'r600--']
+default_targets = ['nvptx--nvidiacl', 'nvptx64--nvidiacl', 'r600--', 'amdgcn--']
 
 targets = args
 if not targets:
@@ -110,7 +114,7 @@ b.rule("OPT", command = llvm_opt + " -O3 -o $out $in",
        description = 'OPT $out')
 
 c_compiler_rule(b, "LLVM_TOOL_CXX", 'CXX', cxx_compiler, llvm_cxxflags)
-b.rule("LLVM_TOOL_LINK", cxx_compiler + " -o $out $in %s" % llvm_core_libs, 'LINK $out')
+b.rule("LLVM_TOOL_LINK", cxx_compiler + " -o $out $in %s" % llvm_core_libs + " -Wl,-rpath %s" % llvm_libdir, 'LINK $out')
 
 prepare_builtins = os.path.join('utils', 'prepare-builtins')
 b.build(os.path.join('utils', 'prepare-builtins.o'), "LLVM_TOOL_CXX",
@@ -147,6 +151,8 @@ for target in targets:
     subdirs.append("%s-%s-%s" % (arch, t_vendor, t_os))
     subdirs.append("%s-%s" % (arch, t_os))
     subdirs.append(arch)
+    if arch == 'amdgcn':
+        subdirs.append('r600')
 
   incdirs = filter(os.path.isdir,
                [os.path.join(srcdir, subdir, 'include') for subdir in subdirs])

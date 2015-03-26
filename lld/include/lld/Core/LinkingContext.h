@@ -11,16 +11,14 @@
 #define LLD_CORE_LINKING_CONTEXT_H
 
 #include "lld/Core/Error.h"
-#include "lld/Core/InputGraph.h"
 #include "lld/Core/LLVM.h"
-#include "lld/Core/range.h"
+#include "lld/Core/Node.h"
+#include "lld/Core/Parallel.h"
 #include "lld/Core/Reference.h"
-
-#include "lld/ReaderWriter/Reader.h"
-
+#include "lld/Core/range.h"
+#include "lld/Core/Reader.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/raw_ostream.h"
-
 #include <string>
 #include <vector>
 
@@ -28,8 +26,7 @@ namespace lld {
 class PassManager;
 class File;
 class Writer;
-class InputGraph;
-class InputElement;
+class Node;
 class SharedLibraryFile;
 
 /// \brief The LinkingContext class encapsulates "what and how" to link.
@@ -65,24 +62,19 @@ public:
   /// should be marked live (along with all Atoms they reference).  Usually
   /// this method returns false for main executables, but true for dynamic
   /// shared libraries.
-  bool globalsAreDeadStripRoots() const {
-    assert(_deadStrip && "only applicable when deadstripping enabled");
-    return _globalsAreDeadStripRoots;
-  }
+  bool globalsAreDeadStripRoots() const { return _globalsAreDeadStripRoots; };
 
   /// Only used if deadStrip() returns true.  This method returns the names
   /// of DefinedAtoms that should be marked live (along with all Atoms they
   /// reference). Only Atoms with scope scopeLinkageUnit or scopeGlobal can
   /// be kept live using this method.
   const std::vector<StringRef> &deadStripRoots() const {
-    assert(_deadStrip && "only applicable when deadstripping enabled");
     return _deadStripRoots;
   }
 
   /// Add the given symbol name to the dead strip root set. Only used if
   /// deadStrip() returns true.
   void addDeadStripRoot(StringRef symbolName) {
-    assert(_deadStrip && "only applicable when deadstripping enabled");
     assert(!symbolName.empty() && "Empty symbol cannot be a dead strip root");
     _deadStripRoots.push_back(symbolName);
   }
@@ -219,24 +211,15 @@ public:
     return _aliasSymbols;
   }
 
-  void setInputGraph(std::unique_ptr<InputGraph> inputGraph) {
-    _inputGraph = std::move(inputGraph);
-  }
-  InputGraph &getInputGraph() const { return *_inputGraph; }
-
-  /// Notify the LinkingContext when an atom is added to the symbol table.
-  /// This is an opportunity for flavor specific work to be done.
-  virtual void notifySymbolTableAdd(const Atom *atom) const {
-  }
+  std::vector<std::unique_ptr<Node>> &getNodes() { return _nodes; }
+  const std::vector<std::unique_ptr<Node>> &getNodes() const { return _nodes; }
 
   /// Notify the LinkingContext when the symbol table found a name collision.
   /// The useNew parameter specifies which the symbol table plans to keep,
   /// but that can be changed by the LinkingContext.  This is also an
   /// opportunity for flavor specific processing.
   virtual void notifySymbolTableCoalesce(const Atom *existingAtom,
-                                         const Atom *newAtom,
-                                         bool &useNew) const {
-  }
+                                         const Atom *newAtom, bool &useNew) {}
 
   /// This method adds undefined symbols specified by the -u option to the to
   /// the list of undefined symbols known to the linker. This option essentially
@@ -272,6 +255,11 @@ public:
   /// \returns true if there is an error with the current settings.
   bool validate(raw_ostream &diagnostics);
 
+  /// Formats symbol name for use in error messages.
+  virtual std::string demangle(StringRef symbolName) const {
+    return symbolName;
+  }
+
   /// @}
   /// \name Methods used by Driver::link()
   /// @{
@@ -304,7 +292,7 @@ public:
   /// This method is called by core linking to give the Writer a chance
   /// to add file format specific "files" to set of files to be linked. This is
   /// how file format specific atoms can be added to the link.
-  virtual bool createImplicitFiles(std::vector<std::unique_ptr<File> > &) const;
+  virtual bool createImplicitFiles(std::vector<std::unique_ptr<File> > &);
 
   /// This method is called by core linking to build the list of Passes to be
   /// run on the merged/linked graph of all input files.
@@ -318,8 +306,13 @@ public:
   /// Return the next ordinal and Increment it.
   virtual uint64_t getNextOrdinalAndIncrement() const { return _nextOrdinal++; }
 
-  /// @}
+  // This function is called just before the Resolver kicks in.
+  // Derived classes may use it to change the list of input files.
+  virtual void finalizeInputFiles() {}
 
+  TaskGroup &getTaskGroup() { return _taskGroup; }
+
+  /// @}
 protected:
   LinkingContext(); // Must be subclassed
 
@@ -355,7 +348,7 @@ protected:
   std::map<std::string, std::string> _aliasSymbols;
   std::vector<const char *> _llvmOptions;
   StringRefVector _initialUndefinedSymbols;
-  std::unique_ptr<InputGraph> _inputGraph;
+  std::vector<std::unique_ptr<Node>> _nodes;
   mutable llvm::BumpPtrAllocator _allocator;
   mutable uint64_t _nextOrdinal;
   Registry _registry;
@@ -363,6 +356,7 @@ protected:
 private:
   /// Validate the subclass bits. Only called by validate.
   virtual bool validateImpl(raw_ostream &diagnostics) = 0;
+  TaskGroup _taskGroup;
 };
 
 } // end namespace lld

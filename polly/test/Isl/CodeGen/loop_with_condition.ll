@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly %defaultOpts -polly-ast -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -basicaa -polly-ast -analyze < %s | FileCheck %s
 
 ;#include <string.h>
 ;#define N 1024
@@ -52,8 +52,8 @@ define void @loop_with_condition() nounwind {
 
 ; <label>:1                                       ; preds = %7, %0
   %indvar = phi i64 [ %indvar.next, %7 ], [ 0, %0 ] ; <i64> [#uses=5]
-  %scevgep = getelementptr [1024 x i32]* @A, i64 0, i64 %indvar ; <i32*> [#uses=2]
-  %scevgep1 = getelementptr [1024 x i32]* @B, i64 0, i64 %indvar ; <i32*> [#uses=1]
+  %scevgep = getelementptr [1024 x i32], [1024 x i32]* @A, i64 0, i64 %indvar ; <i32*> [#uses=2]
+  %scevgep1 = getelementptr [1024 x i32], [1024 x i32]* @B, i64 0, i64 %indvar ; <i32*> [#uses=1]
   %i.0 = trunc i64 %indvar to i32                 ; <i32> [#uses=1]
   %exitcond = icmp ne i64 %indvar, 1024           ; <i1> [#uses=1]
   br i1 %exitcond, label %2, label %8
@@ -92,13 +92,13 @@ define i32 @main() nounwind {
 
 ; <label>:1                                       ; preds = %8, %0
   %indvar1 = phi i64 [ %indvar.next2, %8 ], [ 0, %0 ] ; <i64> [#uses=3]
-  %scevgep3 = getelementptr [1024 x i32]* @B, i64 0, i64 %indvar1 ; <i32*> [#uses=1]
+  %scevgep3 = getelementptr [1024 x i32], [1024 x i32]* @B, i64 0, i64 %indvar1 ; <i32*> [#uses=1]
   %i.0 = trunc i64 %indvar1 to i32                ; <i32> [#uses=1]
   %2 = icmp slt i32 %i.0, 1024                    ; <i1> [#uses=1]
   br i1 %2, label %3, label %9
 
 ; <label>:3                                       ; preds = %1
-  %4 = load i32* %scevgep3                        ; <i32> [#uses=1]
+  %4 = load i32, i32* %scevgep3                        ; <i32> [#uses=1]
   %5 = icmp ne i32 %4, 3                          ; <i1> [#uses=1]
   br i1 %5, label %6, label %7
 
@@ -117,7 +117,7 @@ define i32 @main() nounwind {
 
 ; <label>:10                                      ; preds = %26, %9
   %indvar = phi i64 [ %indvar.next, %26 ], [ 0, %9 ] ; <i64> [#uses=3]
-  %scevgep = getelementptr [1024 x i32]* @A, i64 0, i64 %indvar ; <i32*> [#uses=2]
+  %scevgep = getelementptr [1024 x i32], [1024 x i32]* @A, i64 0, i64 %indvar ; <i32*> [#uses=2]
   %i.1 = trunc i64 %indvar to i32                 ; <i32> [#uses=3]
   %11 = icmp slt i32 %i.1, 1024                   ; <i1> [#uses=1]
   br i1 %11, label %12, label %27
@@ -127,7 +127,7 @@ define i32 @main() nounwind {
   br i1 %13, label %14, label %18
 
 ; <label>:14                                      ; preds = %12
-  %15 = load i32* %scevgep                        ; <i32> [#uses=1]
+  %15 = load i32, i32* %scevgep                        ; <i32> [#uses=1]
   %16 = icmp ne i32 %15, 1                        ; <i1> [#uses=1]
   br i1 %16, label %17, label %18
 
@@ -139,7 +139,7 @@ define i32 @main() nounwind {
   br i1 %19, label %20, label %24
 
 ; <label>:20                                      ; preds = %18
-  %21 = load i32* %scevgep                        ; <i32> [#uses=1]
+  %21 = load i32, i32* %scevgep                        ; <i32> [#uses=1]
   %22 = icmp ne i32 %21, 2                        ; <i1> [#uses=1]
   br i1 %22, label %23, label %24
 
@@ -166,10 +166,10 @@ define i32 @main() nounwind {
 
 declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1) nounwind
 
-; CHECK: for (int c1 = 0; c1 <= 1023; c1 += 1) {
-; CHECK:   if (c1 >= 513) {
-; CHECK:     Stmt_5(c1);
+; CHECK: for (int c0 = 0; c0 <= 1023; c0 += 1) {
+; CHECK:   if (c0 >= 513) {
+; CHECK:     Stmt_5(c0);
 ; CHECK:   } else
-; CHECK:     Stmt_4(c1);
-; CHECK:   Stmt_6(c1);
+; CHECK:     Stmt_4(c0);
+; CHECK:   Stmt_6(c0);
 ; CHECK: }

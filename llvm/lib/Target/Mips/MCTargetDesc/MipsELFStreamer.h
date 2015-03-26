@@ -34,10 +34,10 @@ class MipsELFStreamer : public MCELFStreamer {
 
 public:
   MipsELFStreamer(MCContext &Context, MCAsmBackend &MAB, raw_ostream &OS,
-                  MCCodeEmitter *Emitter, const MCSubtargetInfo &STI)
+                  MCCodeEmitter *Emitter)
       : MCELFStreamer(Context, MAB, OS, Emitter) {
 
-    RegInfoRecord = new MipsRegInfoRecord(this, Context, STI);
+    RegInfoRecord = new MipsRegInfoRecord(this, Context);
     MipsOptionRecords.push_back(
         std::unique_ptr<MipsRegInfoRecord>(RegInfoRecord));
   }
@@ -69,6 +69,6 @@ public:
 
 MCELFStreamer *createMipsELFStreamer(MCContext &Context, MCAsmBackend &MAB,
                                      raw_ostream &OS, MCCodeEmitter *Emitter,
-                                     const MCSubtargetInfo &STI, bool RelaxAll);
+                                     bool RelaxAll);
 } // namespace llvm.
 #endif

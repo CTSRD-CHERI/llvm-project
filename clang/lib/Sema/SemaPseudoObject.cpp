@@ -406,6 +406,10 @@ PseudoOpBuilder::buildAssignmentOperation(Scope *Sc, SourceLocation opcLoc,
                                           BinaryOperatorKind opcode,
                                           Expr *LHS, Expr *RHS) {
   assert(BinaryOperator::isAssignmentOp(opcode));
+  
+  // Recover from user error
+  if (isa<UnresolvedLookupExpr>(RHS))
+    return ExprError();
 
   Expr *syntacticLHS = rebuildAndCaptureObject(LHS);
   OpaqueValueExpr *capturedRHS = capture(RHS);
@@ -615,7 +619,7 @@ bool ObjCPropertyOpBuilder::findSetter(bool warn) {
     if (setter->isPropertyAccessor() && warn)
       if (const ObjCInterfaceDecl *IFace =
           dyn_cast<ObjCInterfaceDecl>(setter->getDeclContext())) {
-        const StringRef thisPropertyName(prop->getName());
+        StringRef thisPropertyName = prop->getName();
         // Try flipping the case of the first character.
         char front = thisPropertyName.front();
         front = isLowercase(front) ? toUppercase(front) : toLowercase(front);
@@ -1022,7 +1026,8 @@ Sema::ObjCSubscriptKind
   // If we don't have a class type in C++, there's no way we can get an
   // expression of integral or enumeration type.
   const RecordType *RecordTy = T->getAs<RecordType>();
-  if (!RecordTy && T->isObjCObjectPointerType())
+  if (!RecordTy &&
+      (T->isObjCObjectPointerType() || T->isVoidPointerType()))
     // All other scalar cases are assumed to be dictionary indexing which
     // caller handles, with diagnostics if needed.
     return OS_Dictionary;
@@ -1046,17 +1051,13 @@ Sema::ObjCSubscriptKind
   
   // Look for a conversion to an integral, enumeration type, or
   // objective-C pointer type.
-  std::pair<CXXRecordDecl::conversion_iterator,
-            CXXRecordDecl::conversion_iterator> Conversions
-    = cast<CXXRecordDecl>(RecordTy->getDecl())->getVisibleConversionFunctions();
-  
   int NoIntegrals=0, NoObjCIdPointers=0;
   SmallVector<CXXConversionDecl *, 4> ConversionDecls;
-    
-  for (CXXRecordDecl::conversion_iterator
-         I = Conversions.first, E = Conversions.second; I != E; ++I) {
-    if (CXXConversionDecl *Conversion
-        = dyn_cast<CXXConversionDecl>((*I)->getUnderlyingDecl())) {
+
+  for (NamedDecl *D : cast<CXXRecordDecl>(RecordTy->getDecl())
+                          ->getVisibleConversionFunctions()) {
+    if (CXXConversionDecl *Conversion =
+            dyn_cast<CXXConversionDecl>(D->getUnderlyingDecl())) {
       QualType CT = Conversion->getConversionType().getNonReferenceType();
       if (CT->isIntegralOrEnumerationType()) {
         ++NoIntegrals;
@@ -1441,7 +1442,7 @@ ExprResult MSPropertyOpBuilder::buildGet() {
   ExprResult GetterExpr = S.ActOnMemberAccessExpr(
     S.getCurScope(), RefExpr->getBaseExpr(), SourceLocation(),
     RefExpr->isArrow() ? tok::arrow : tok::period, SS, SourceLocation(),
-    GetterName, nullptr, true);
+    GetterName, nullptr);
   if (GetterExpr.isInvalid()) {
     S.Diag(RefExpr->getMemberLoc(),
            diag::error_cannot_find_suitable_accessor) << 0 /* getter */
@@ -1471,7 +1472,7 @@ ExprResult MSPropertyOpBuilder::buildSet(Expr *op, SourceLocation sl,
   ExprResult SetterExpr = S.ActOnMemberAccessExpr(
     S.getCurScope(), RefExpr->getBaseExpr(), SourceLocation(),
     RefExpr->isArrow() ? tok::arrow : tok::period, SS, SourceLocation(),
-    SetterName, nullptr, true);
+    SetterName, nullptr);
   if (SetterExpr.isInvalid()) {
     S.Diag(RefExpr->getMemberLoc(),
            diag::error_cannot_find_suitable_accessor) << 1 /* setter */

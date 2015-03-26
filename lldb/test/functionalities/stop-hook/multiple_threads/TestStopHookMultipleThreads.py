@@ -22,6 +22,7 @@ class StopHookForMultipleThreadsTestCase(TestBase):
     @dwarf_test
     @expectedFailureFreeBSD("llvm.org/pr15037")
     @expectedFailureLinux("llvm.org/pr15037") # stop hooks sometimes fail to fire on Linux
+    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_stop_hook_multiple_threads_with_dwarf(self):
         """Test that lldb stop-hook works for multiple threads."""
         self.buildDwarf(dictionary=self.d)
@@ -62,8 +63,10 @@ class StopHookForMultipleThreadsTestCase(TestBase):
 
         # Now run the program, expect to stop at the the first breakpoint which is within the stop-hook range.
         child.sendline('run')
+        child.expect_exact("Process")   # 'Process 2415 launched', 'Process 2415 stopped'
         child.expect_exact(prompt)
         child.sendline('target stop-hook add -o "frame variable --show-globals g_val"')
+        child.expect_exact("Stop hook") # 'Stop hook #1 added.'
         child.expect_exact(prompt)
 
         # Continue and expect to find the output emitted by the firing of our stop hook.

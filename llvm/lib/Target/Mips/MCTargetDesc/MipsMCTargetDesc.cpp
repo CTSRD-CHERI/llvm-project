@@ -42,8 +42,7 @@ using namespace llvm;
 #include "MipsGenRegisterInfo.inc"
 
 /// Select the Mips CPU for the given triple and cpu name.
-/// FIXME: Merge with the copy in MipsSubtarget.cpp
-static inline StringRef selectMipsCPU(StringRef TT, StringRef CPU) {
+StringRef MIPS_MC::selectMipsCPU(StringRef TT, StringRef CPU) {
   if (CPU.empty() || CPU == "generic") {
     Triple TheTriple(TT);
     if (TheTriple.getArch() == Triple::mips ||
@@ -71,7 +70,7 @@ static MCRegisterInfo *createMipsMCRegisterInfo(StringRef TT) {
 
 static MCSubtargetInfo *createMipsMCSubtargetInfo(StringRef TT, StringRef CPU,
                                                   StringRef FS) {
-  CPU = selectMipsCPU(TT, CPU);
+  CPU = MIPS_MC::selectMipsCPU(TT, CPU);
   MCSubtargetInfo *X = new MCSubtargetInfo();
   InitMipsMCSubtargetInfo(X, TT, CPU, FS);
   return X;
@@ -108,68 +107,83 @@ static MCInstPrinter *createMipsMCInstPrinter(const Target &T,
   return new MipsInstPrinter(MAI, MII, MRI);
 }
 
-static MCStreamer *createMCStreamer(const Target &T, StringRef TT,
-                                    MCContext &Context, MCAsmBackend &MAB,
-                                    raw_ostream &OS, MCCodeEmitter *Emitter,
-                                    const MCSubtargetInfo &STI, bool RelaxAll) {
+static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
+                                    MCAsmBackend &MAB, raw_ostream &OS,
+                                    MCCodeEmitter *Emitter, bool RelaxAll) {
   MCStreamer *S;
-  if (!Triple(TT).isOSNaCl())
-    S = createMipsELFStreamer(Context, MAB, OS, Emitter, STI, RelaxAll);
+  if (!T.isOSNaCl())
+    S = createMipsELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
   else
-    S = createMipsNaClELFStreamer(Context, MAB, OS, Emitter, STI, RelaxAll);
-  new MipsTargetELFStreamer(*S, STI);
+    S = createMipsNaClELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
   return S;
 }
 
-static MCStreamer *
-createMCAsmStreamer(MCContext &Ctx, formatted_raw_ostream &OS,
-                    bool isVerboseAsm, bool useDwarfDirectory,
-                    MCInstPrinter *InstPrint, MCCodeEmitter *CE,
-                    MCAsmBackend *TAB, bool ShowInst) {
-  MCStreamer *S = llvm::createAsmStreamer(
-      Ctx, OS, isVerboseAsm, useDwarfDirectory, InstPrint, CE, TAB, ShowInst);
-  new MipsTargetAsmStreamer(*S, OS);
-  return S;
+static MCTargetStreamer *createMipsAsmTargetStreamer(MCStreamer &S,
+                                                     formatted_raw_ostream &OS,
+                                                     MCInstPrinter *InstPrint,
+                                                     bool isVerboseAsm) {
+  return new MipsTargetAsmStreamer(S, OS);
 }
 
-static MCStreamer *createMipsNullStreamer(MCContext &Ctx) {
-  MCStreamer *S = llvm::createNullStreamer(Ctx);
-  new MipsTargetStreamer(*S);
-  return S;
+static MCTargetStreamer *createMipsNullTargetStreamer(MCStreamer &S) {
+  return new MipsTargetStreamer(S);
 }
 
-static void registerTarget(Target &T, bool isBigEndian, bool is64Bit) {
-  // Register the MC asm info.
-  RegisterMCAsmInfoFn AsmInfo(T, createMipsMCAsmInfo);
-  // Register the MC codegen info.
-  TargetRegistry::RegisterMCCodeGenInfo(T, createMipsMCCodeGenInfo);
-  // Register the MC instruction info.
-  TargetRegistry::RegisterMCInstrInfo(T, createMipsMCInstrInfo);
-  // Register the MC register info.
-  TargetRegistry::RegisterMCRegInfo(T, createMipsMCRegisterInfo);
-  // Register the MC Code Emitter
-  TargetRegistry::RegisterMCCodeEmitter(T,
-      isBigEndian ?  createMipsMCCodeEmitterEB : createMipsMCCodeEmitterEL);
-  // Register the object streamer.
-  TargetRegistry::RegisterMCObjectStreamer(T, createMCStreamer);
-  // Register the asm streamer.
-  TargetRegistry::RegisterAsmStreamer(T, createMCAsmStreamer);
-  TargetRegistry::RegisterNullStreamer(T, createMipsNullStreamer);
-  // Register the asm backend.
-  TargetRegistry::RegisterMCAsmBackend(T,
-   is64Bit ?
-     (isBigEndian ? createMipsAsmBackendEB64 : createMipsAsmBackendEL64) :
-     (isBigEndian ? createMipsAsmBackendEB32 : createMipsAsmBackendEL32));
-  // Register the MC subtarget info.
-  TargetRegistry::RegisterMCSubtargetInfo(T, createMipsMCSubtargetInfo);
-  // Register the MCInstPrinter.
-  TargetRegistry::RegisterMCInstPrinter(T, createMipsMCInstPrinter);
+static MCTargetStreamer *
+createMipsObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
+  return new MipsTargetELFStreamer(S, STI);
 }
 
 extern "C" void LLVMInitializeMipsTargetMC() {
-  registerTarget(TheMipsTarget, /* isBigEndian */true, /*is64Bit*/false);
-  registerTarget(TheMipselTarget, /* isBigEndian */false, /*is64Bit*/false);
-  registerTarget(TheMips64Target, /* isBigEndian */true, /*is64Bit*/true);
-  registerTarget(TheMips64elTarget, /* isBigEndian */false, /*is64Bit*/true);
-  registerTarget(TheMipsCheriTarget, /* isBigEndian */true, /*is64Bit*/true);
+  for (Target *T : {&TheMipsTarget, &TheMipselTarget, &TheMips64Target,
+                    &TheMips64elTarget, &TheMipsCheriTarget}) {
+    // Register the MC asm info.
+    RegisterMCAsmInfoFn X(*T, createMipsMCAsmInfo);
+
+    // Register the MC codegen info.
+    TargetRegistry::RegisterMCCodeGenInfo(*T, createMipsMCCodeGenInfo);
+
+    // Register the MC instruction info.
+    TargetRegistry::RegisterMCInstrInfo(*T, createMipsMCInstrInfo);
+
+    // Register the MC register info.
+    TargetRegistry::RegisterMCRegInfo(*T, createMipsMCRegisterInfo);
+
+    // Register the elf streamer.
+    TargetRegistry::RegisterELFStreamer(*T, createMCStreamer);
+
+    // Register the asm target streamer.
+    TargetRegistry::RegisterAsmTargetStreamer(*T, createMipsAsmTargetStreamer);
+
+    TargetRegistry::RegisterNullTargetStreamer(*T,
+                                               createMipsNullTargetStreamer);
+
+    // Register the MC subtarget info.
+    TargetRegistry::RegisterMCSubtargetInfo(*T, createMipsMCSubtargetInfo);
+
+    // Register the MCInstPrinter.
+    TargetRegistry::RegisterMCInstPrinter(*T, createMipsMCInstPrinter);
+
+    TargetRegistry::RegisterObjectTargetStreamer(
+        *T, createMipsObjectTargetStreamer);
+  }
+
+  for (Target *T : {&TheMipsTarget, &TheMips64Target, &TheMipsCheriTarget})
+    TargetRegistry::RegisterMCCodeEmitter(*T, createMipsMCCodeEmitterEB);
+
+  for (Target *T : {&TheMipselTarget, &TheMips64elTarget})
+    TargetRegistry::RegisterMCCodeEmitter(*T, createMipsMCCodeEmitterEL);
+
+  // Register the asm backend.
+  TargetRegistry::RegisterMCAsmBackend(TheMipsTarget,
+                                       createMipsAsmBackendEB32);
+  TargetRegistry::RegisterMCAsmBackend(TheMipselTarget,
+                                       createMipsAsmBackendEL32);
+  TargetRegistry::RegisterMCAsmBackend(TheMips64Target,
+                                       createMipsAsmBackendEB64);
+  TargetRegistry::RegisterMCAsmBackend(TheMips64elTarget,
+                                       createMipsAsmBackendEL64);
+  TargetRegistry::RegisterMCAsmBackend(TheMipsCheriTarget,
+                                       createMipsAsmBackendEB64);
+
 }

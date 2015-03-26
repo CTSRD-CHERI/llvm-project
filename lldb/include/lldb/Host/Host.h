@@ -17,9 +17,11 @@
 #include <string>
 
 #include "lldb/lldb-private.h"
+#include "lldb/lldb-private-forward.h"
 #include "lldb/Core/StringList.h"
 #include "lldb/Host/File.h"
 #include "lldb/Host/FileSpec.h"
+#include "lldb/Host/HostThread.h"
 
 namespace lldb_private {
 
@@ -36,9 +38,6 @@ class ProcessLaunchInfo;
 class Host
 {
 public:
-
-    /// A value of std::numeric_limits<uint32_t>::max() is used if there is no practical limit.
-    static const uint32_t MAX_THREAD_NAME_LENGTH;
 
     typedef bool (*MonitorChildProcessCallback) (void *callback_baton,
                                                  lldb::pid_t pid,
@@ -85,30 +84,8 @@ public:
     ///
     /// @see static void Host::StopMonitoringChildProcess (uint32_t)
     //------------------------------------------------------------------
-    static lldb::thread_t
-    StartMonitoringChildProcess (MonitorChildProcessCallback callback,
-                                 void *callback_baton,
-                                 lldb::pid_t pid,
-                                 bool monitor_signals);
-
-    static const char *
-    GetUserName (uint32_t uid, std::string &user_name);
-    
-    static const char *
-    GetGroupName (uint32_t gid, std::string &group_name);
-    
-    static uint32_t
-    GetUserID ();
-    
-    static uint32_t
-    GetGroupID ();
-
-    static uint32_t
-    GetEffectiveUserID ();
-
-    static uint32_t
-    GetEffectiveGroupID ();
-
+    static HostThread StartMonitoringChildProcess(MonitorChildProcessCallback callback, void *callback_baton, lldb::pid_t pid,
+                                                  bool monitor_signals);
 
     enum SystemLogType
     {
@@ -156,39 +133,6 @@ public:
     static const char *
     GetSignalAsCString (int signo);
 
-    static void
-    WillTerminate ();
-    //------------------------------------------------------------------
-    /// Host specific thread created function call.
-    ///
-    /// This function call lets the current host OS do any thread
-    /// specific initialization that it needs, including naming the
-    /// thread. No cleanup routine is expected to be called
-    ///
-    /// @param[in] name
-    ///     The current thread's name in the current process.
-    //------------------------------------------------------------------
-    static void
-    ThreadCreated (const char *name);
-
-    static lldb::thread_t
-    ThreadCreate (const char *name,
-                  lldb::thread_func_t function,
-                  lldb::thread_arg_t thread_arg,
-                  Error *err);
-
-    static bool
-    ThreadCancel (lldb::thread_t thread,
-                  Error *error);
-
-    static bool
-    ThreadDetach (lldb::thread_t thread,
-                  Error *error);
-    static bool
-    ThreadJoin (lldb::thread_t thread,
-                lldb::thread_result_t *thread_result_ptr,
-                Error *error);
-
     typedef void (*ThreadLocalStorageCleanupCallback) (void *p);
 
     static lldb::thread_key_t
@@ -200,86 +144,6 @@ public:
     static void
     ThreadLocalStorageSet(lldb::thread_key_t key, void *value);
 
-    //------------------------------------------------------------------
-    /// Gets the name of a thread in a process.
-    ///
-    /// This function will name a thread in a process using it's own
-    /// thread name pool, and also will attempt to set a thread name
-    /// using any supported host OS APIs.
-    ///
-    /// @param[in] pid
-    ///     The process ID in which we are trying to get the name of
-    ///     a thread.
-    ///
-    /// @param[in] tid
-    ///     The thread ID for which we are trying retrieve the name of.
-    ///
-    /// @return
-    ///     A std::string containing the thread name.
-    //------------------------------------------------------------------
-    static std::string
-    GetThreadName (lldb::pid_t pid, lldb::tid_t tid);
-
-    //------------------------------------------------------------------
-    /// Sets the name of a thread in the current process.
-    ///
-    /// @param[in] pid
-    ///     The process ID in which we are trying to name a thread.
-    ///
-    /// @param[in] tid
-    ///     The thread ID which we are trying to name.
-    ///
-    /// @param[in] name
-    ///     The current thread's name in the current process to \a name.
-    ///
-    /// @return
-    ///     \b true if the thread name was able to be set, \b false
-    ///     otherwise.
-    //------------------------------------------------------------------
-    static bool
-    SetThreadName (lldb::pid_t pid, lldb::tid_t tid, const char *name);
-
-    //------------------------------------------------------------------
-    /// Sets a shortened name of a thread in the current process.
-    ///
-    /// @param[in] pid
-    ///     The process ID in which we are trying to name a thread.
-    ///
-    /// @param[in] tid
-    ///     The thread ID which we are trying to name.
-    ///
-    /// @param[in] name
-    ///     The current thread's name in the current process to \a name.
-    ///
-    /// @param[in] len
-    ///     The maximum length for the thread's shortened name.
-    ///
-    /// @return
-    ///     \b true if the thread name was able to be set, \b false
-    ///     otherwise.
-    static bool
-    SetShortThreadName (lldb::pid_t pid, lldb::tid_t tid, const char *name, size_t len);
-
-    //------------------------------------------------------------------
-    /// Gets the FileSpec of the user profile directory.  On Posix-platforms
-    /// this is ~, and on windows this is generally something like
-    /// C:\Users\Alice.
-    ///
-    /// @return
-    ///     \b A file spec with the path to the user's home directory.
-    //------------------------------------------------------------------
-    static FileSpec
-    GetUserProfileFileSpec ();
-
-    //------------------------------------------------------------------
-    /// Gets the FileSpec of the current process (the process that
-    /// that is running the LLDB code).
-    ///
-    /// @return
-    ///     \b A file spec with the program name.
-    //------------------------------------------------------------------
-    static FileSpec
-    GetProgramFileSpec ();
 
     //------------------------------------------------------------------
     /// Given an address in the current process (the process that
@@ -298,8 +162,6 @@ public:
     //------------------------------------------------------------------
     static FileSpec
     GetModuleFileSpecForHostAddress (const void *host_addr);
-
-
     
     //------------------------------------------------------------------
     /// If you have an executable that is in a bundle and want to get
@@ -341,28 +203,6 @@ public:
     ResolveExecutableInBundle (FileSpec &file);
 
     //------------------------------------------------------------------
-    /// Find a resource files that are related to LLDB.
-    ///
-    /// Operating systems have different ways of storing shared 
-    /// libraries and related resources. This function abstracts the
-    /// access to these paths.
-    ///
-    /// @param[in] path_type
-    ///     The type of LLDB resource path you are looking for. If the
-    ///     enumeration ends with "Dir", then only the \a file_spec's 
-    ///     directory member gets filled in.
-    ///
-    /// @param[in] file_spec
-    ///     A file spec that gets filled in with the appropriate path.
-    ///
-    /// @return
-    ///     \b true if \a resource_path was resolved, \a false otherwise.
-    //------------------------------------------------------------------
-    static bool
-    GetLLDBPath (lldb::PathType path_type,
-                 FileSpec &file_spec);
-
-    //------------------------------------------------------------------
     /// Set a string that can be displayed if host application crashes.
     ///
     /// Some operating systems have the ability to print a description
@@ -393,21 +233,33 @@ public:
     GetProcessInfo (lldb::pid_t pid, ProcessInstanceInfo &proc_info);
 
 #if defined (__APPLE__) || defined (__linux__) || defined (__FreeBSD__) || defined (__GLIBC__) || defined (__NetBSD__)
-    static short
-    GetPosixspawnFlags (ProcessLaunchInfo &launch_info);
+#if !defined(__ANDROID__) && !defined(__ANDROID_NDK__)
 
-    static Error
-    LaunchProcessPosixSpawn (const char *exe_path, ProcessLaunchInfo &launch_info, ::pid_t &pid);
+    static short GetPosixspawnFlags(const ProcessLaunchInfo &launch_info);
+
+    static Error LaunchProcessPosixSpawn(const char *exe_path, const ProcessLaunchInfo &launch_info, lldb::pid_t &pid);
 
     static bool AddPosixSpawnFileAction(void *file_actions, const FileAction *info, Log *log, Error &error);
-#endif
 
-    static lldb::pid_t
-    LaunchApplication (const FileSpec &app_file_spec);
+#endif // !defined(__ANDROID__) && !defined(__ANDROID_NDK__)
+#endif // defined (__APPLE__) || defined (__linux__) || defined (__FreeBSD__) || defined (__GLIBC__) || defined(__NetBSD__)
+
+    static const lldb_private::UnixSignalsSP&
+    GetUnixSignals ();
 
     static Error
     LaunchProcess (ProcessLaunchInfo &launch_info);
 
+    //------------------------------------------------------------------
+    /// Perform expansion of the command-line for this launch info
+    /// This can potentially involve wildcard expansion
+    //  environment variable replacement, and whatever other
+    //  argument magic the platform defines as part of its typical
+    //  user experience
+    //------------------------------------------------------------------
+    static Error
+    ShellExpandArguments (ProcessLaunchInfo &launch_info);
+    
     static Error
     RunShellCommand (const char *command,           // Shouldn't be NULL
                      const char *working_dir,       // Pass NULL to use the current working directory
@@ -415,7 +267,7 @@ public:
                      int *signo_ptr,                // Pass NULL if you don't want the signal that caused the process to exit
                      std::string *command_output,   // Pass NULL if you don't want the command output
                      uint32_t timeout_sec,
-                     const char *shell = LLDB_DEFAULT_SHELL);
+                     bool run_in_default_shell = true);
     
     static lldb::DataBufferSP
     GetAuxvData (lldb_private::Process *process);
@@ -423,37 +275,12 @@ public:
     static lldb::DataBufferSP
     GetAuxvData (lldb::pid_t pid);
 
-    static lldb::TargetSP
-    GetDummyTarget (Debugger &debugger);
-    
     static bool
     OpenFileInExternalEditor (const FileSpec &file_spec, 
                               uint32_t line_no);
-
-    static void
-    Backtrace (Stream &strm, uint32_t max_frames);
     
     static size_t
     GetEnvironment (StringList &env);
-
-    enum DynamicLibraryOpenOptions 
-    {
-        eDynamicLibraryOpenOptionLazy           = (1u << 0),  // Lazily resolve symbols in this dynamic library
-        eDynamicLibraryOpenOptionLocal          = (1u << 1),  // Only open a shared library with local access (hide it from the global symbol namespace)
-        eDynamicLibraryOpenOptionLimitGetSymbol = (1u << 2)   // DynamicLibraryGetSymbol calls on this handle will only return matches from this shared library
-    };
-    static void *
-    DynamicLibraryOpen (const FileSpec &file_spec, 
-                        uint32_t options,
-                        Error &error);
-
-    static Error
-    DynamicLibraryClose (void *dynamic_library_handle);
-
-    static void *
-    DynamicLibraryGetSymbol (void *dynamic_library_handle, 
-                             const char *symbol_name, 
-                             Error &error);
 };
 
 } // namespace lldb_private

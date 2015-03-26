@@ -14,6 +14,7 @@ class StdVBoolDataFormatterTestCase(TestBase):
 
     @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
     @dsym_test
+    @skipIfDarwin
     def test_with_dsym_and_run_command(self):
         """Test data formatter commands."""
         self.buildDsym()
@@ -21,6 +22,8 @@ class StdVBoolDataFormatterTestCase(TestBase):
 
     @expectedFailureFreeBSD("llvm.org/pr20548") # fails to build on lab.llvm.org buildbot
     @dwarf_test
+    @skipIfWindows # http://llvm.org/pr21800
+    @skipIfDarwin
     def test_with_dwarf_and_run_command(self):
         """Test data formatter commands."""
         self.buildDwarf()
@@ -32,7 +35,6 @@ class StdVBoolDataFormatterTestCase(TestBase):
         # Find the line number to break at.
         self.line = line_number('main.cpp', '// Set break point at this line.')
 
-    @expectedFailureGcc # llvm.org/pr15301: lldb does not print the correct sizes of STL containers when building with GCC
     @expectedFailureIcc # llvm.org/pr15301: lldb does not print the correct sizes of STL containers when building with ICC
     def data_formatter_commands(self):
         """Test that that file and class static variables display correctly."""

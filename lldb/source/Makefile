@@ -8,7 +8,7 @@
 ##===----------------------------------------------------------------------===##
 
 LLDB_LEVEL := ..
-DIRS := API Breakpoint Commands Core DataFormatters Expression Host Interpreter Plugins Symbol Target Utility
+PARALLEL_DIRS := API Initialization Breakpoint Commands Core DataFormatters Expression Host Interpreter Plugins Symbol Target Utility
 LIBRARYNAME := lldbInitAndLog
 BUILD_ARCHIVE = 1
 
@@ -19,7 +19,7 @@ ifeq (Darwin,$(shell uname -s))
 BUILT_SOURCES = LLDB_vers.c
 endif
 
-SOURCES := lldb-log.cpp lldb.cpp
+SOURCES := lldb.cpp
 
 include $(LLDB_LEVEL)/Makefile
 

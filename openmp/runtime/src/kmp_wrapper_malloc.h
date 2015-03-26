@@ -1,8 +1,6 @@
 /*
  * kmp_wrapper_malloc.h -- Wrappers for memory allocation routines
  *                         (malloc(), free(), and others).
- * $Revision: 42181 $
- * $Date: 2013-03-26 15:04:45 -0500 (Tue, 26 Mar 2013) $
  */
 
 

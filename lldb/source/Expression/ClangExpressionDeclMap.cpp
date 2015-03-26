@@ -22,6 +22,7 @@
 #include "lldb/Core/ValueObjectVariable.h"
 #include "lldb/Expression/ASTDumper.h"
 #include "lldb/Expression/ClangASTSource.h"
+#include "lldb/Expression/ClangModulesDeclVendor.h"
 #include "lldb/Expression/ClangPersistentVariables.h"
 #include "lldb/Expression/Materializer.h"
 #include "lldb/Host/Endian.h"
@@ -36,6 +37,7 @@
 #include "lldb/Symbol/TypeList.h"
 #include "lldb/Symbol/Variable.h"
 #include "lldb/Symbol/VariableList.h"
+#include "lldb/Target/CPPLanguageRuntime.h"
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/ObjCLanguageRuntime.h"
 #include "lldb/Target/Process.h"
@@ -491,32 +493,55 @@ FindCodeSymbolInContext
     SymbolContextList &sc_list
 )
 {
+    sc_list.Clear();
     SymbolContextList temp_sc_list;
     if (sym_ctx.module_sp)
-        sym_ctx.module_sp->FindSymbolsWithNameAndType(name, eSymbolTypeAny, temp_sc_list);
+        sym_ctx.module_sp->FindFunctions(name,
+                                         NULL,
+                                         eFunctionNameTypeAuto,
+                                         true,  // include_symbols
+                                         false, // include_inlines
+                                         true,  // append
+                                         temp_sc_list);
+    if (temp_sc_list.GetSize() == 0)
+    {
+        if (sym_ctx.target_sp)
+            sym_ctx.target_sp->GetImages().FindFunctions(name,
+                                                         eFunctionNameTypeAuto,
+                                                         true,  // include_symbols
+                                                         false, // include_inlines
+                                                         true,  // append
+                                                         temp_sc_list);
+    }
 
-    if (!sc_list.GetSize() && sym_ctx.target_sp)
-        sym_ctx.target_sp->GetImages().FindSymbolsWithNameAndType(name, eSymbolTypeAny, temp_sc_list);
-
+    SymbolContextList internal_symbol_sc_list;
     unsigned temp_sc_list_size = temp_sc_list.GetSize();
     for (unsigned i = 0; i < temp_sc_list_size; i++)
     {
-        SymbolContext sym_ctx;
-        temp_sc_list.GetContextAtIndex(i, sym_ctx);
-        if (sym_ctx.symbol)
+        SymbolContext sc;
+        temp_sc_list.GetContextAtIndex(i, sc);
+        if (sc.function)
         {
-            switch (sym_ctx.symbol->GetType())
+            sc_list.Append(sc);
+        }
+        else if (sc.symbol)
+        {
+            if (sc.symbol->IsExternal())
             {
-                case eSymbolTypeCode:
-                case eSymbolTypeResolver:
-                case eSymbolTypeReExported:
-                    sc_list.Append(sym_ctx);
-                    break;
-
-                default:
-                    break;
+                sc_list.Append(sc);
+            }
+            else
+            {
+                internal_symbol_sc_list.Append(sc);
             }
         }
+    }
+
+    // If we had internal symbols and we didn't find any external symbols or
+    // functions in debug info, then fallback to the internal symbols
+    if (sc_list.GetSize() == 0 && internal_symbol_sc_list.GetSize())
+    {
+        sc_list = internal_symbol_sc_list;
     }
 }
 
@@ -543,6 +568,7 @@ ClangExpressionDeclMap::GetFunctionAddress
     FindCodeSymbolInContext(name, m_parser_vars->m_sym_ctx, sc_list);
 
     uint32_t sc_list_size = sc_list.GetSize();
+    
     if (sc_list_size == 0)
     {
         // We occasionally get debug information in which a const function is reported
@@ -562,11 +588,33 @@ ClangExpressionDeclMap::GetFunctionAddress
             sc_list_size = sc_list.GetSize();
         }
     }
+    
+    if (sc_list_size == 0)
+    {
+        // Sometimes we get a mangled name for a global function that actually should be "extern C."
+        // This is a hack to compensate.
+        
+        const bool is_mangled = true;
+        Mangled mangled(name, is_mangled);
+                
+        CPPLanguageRuntime::MethodName method_name(mangled.GetDemangledName());
+        
+        llvm::StringRef basename = method_name.GetBasename();
+        
+        if (!basename.empty())
+        {
+            FindCodeSymbolInContext(ConstString(basename), m_parser_vars->m_sym_ctx, sc_list);
+            sc_list_size = sc_list.GetSize();
+        }
+    }
+
+    lldb::addr_t intern_callable_load_addr = LLDB_INVALID_ADDRESS;
 
     for (uint32_t i=0; i<sc_list_size; ++i)
     {
         SymbolContext sym_ctx;
         sc_list.GetContextAtIndex(i, sym_ctx);
+
 
         lldb::addr_t callable_load_addr = LLDB_INVALID_ADDRESS;
 
@@ -580,7 +628,13 @@ ClangExpressionDeclMap::GetFunctionAddress
         }
         else if (sym_ctx.symbol)
         {
-            callable_load_addr = sym_ctx.symbol->ResolveCallableAddress(*target);
+            if (sym_ctx.symbol->IsExternal())
+                callable_load_addr = sym_ctx.symbol->ResolveCallableAddress(*target);
+            else
+            {
+                if (intern_callable_load_addr == LLDB_INVALID_ADDRESS)
+                    intern_callable_load_addr = sym_ctx.symbol->ResolveCallableAddress(*target);
+            }
         }
 
         if (callable_load_addr != LLDB_INVALID_ADDRESS)
@@ -589,6 +643,14 @@ ClangExpressionDeclMap::GetFunctionAddress
             return true;
         }
     }
+
+    // See if we found an internal symbol
+    if (intern_callable_load_addr != LLDB_INVALID_ADDRESS)
+    {
+        func_addr = intern_callable_load_addr;
+        return true;
+    }
+
     return false;
 }
 
@@ -1274,10 +1336,9 @@ ClangExpressionDeclMap::FindExternalVisibleDecls (NameSearchContext &context,
         {
             valobj = frame->GetValueForVariableExpressionPath(name_unique_cstr,
                                                               eNoDynamicValues,
-                                                              StackFrame::eExpressionPathOptionCheckPtrVsMember ||
-                                                              StackFrame::eExpressionPathOptionsAllowDirectIVarAccess ||
-                                                              StackFrame::eExpressionPathOptionsNoFragileObjcIvar ||
-                                                              StackFrame::eExpressionPathOptionsNoSyntheticChildren ||
+                                                              StackFrame::eExpressionPathOptionCheckPtrVsMember |
+                                                              StackFrame::eExpressionPathOptionsNoFragileObjcIvar |
+                                                              StackFrame::eExpressionPathOptionsNoSyntheticChildren |
                                                               StackFrame::eExpressionPathOptionsNoSyntheticArrayRange,
                                                               var,
                                                               err);
@@ -1305,6 +1366,16 @@ ClangExpressionDeclMap::FindExternalVisibleDecls (NameSearchContext &context,
                 AddOneVariable(context, var, valobj, current_id);
                 context.m_found.variable = true;
                 return;
+            }
+        }
+        
+        std::vector<clang::NamedDecl *> decls_from_modules;
+        
+        if (target)
+        {
+            if (ClangModulesDeclVendor *decl_vendor = target->GetClangModulesDeclVendor())
+            {
+                decl_vendor->FindDecls(name, false, UINT32_MAX, decls_from_modules);
             }
         }
 
@@ -1382,6 +1453,19 @@ ClangExpressionDeclMap::FindExternalVisibleDecls (NameSearchContext &context,
                             extern_symbol = sym_ctx.symbol;
                         else
                             non_extern_symbol = sym_ctx.symbol;
+                    }
+                }
+                
+                if (!context.m_found.function_with_type_info)
+                {
+                    for (clang::NamedDecl *decl : decls_from_modules)
+                    {
+                        if (llvm::isa<clang::FunctionDecl>(decl))
+                        {
+                            clang::NamedDecl *copied_decl = llvm::cast<FunctionDecl>(m_ast_importer->CopyDecl(m_ast_context, &decl->getASTContext(), decl));
+                            context.AddNamedDecl(copied_decl);
+                            context.m_found.function_with_type_info = true;
+                        }
                     }
                 }
 

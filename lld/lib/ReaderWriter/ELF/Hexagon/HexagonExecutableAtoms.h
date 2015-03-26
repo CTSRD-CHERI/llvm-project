@@ -18,10 +18,10 @@ typedef llvm::object::ELFType<llvm::support::little, 2, false> HexagonELFType;
 class HexagonLinkingContext;
 
 template <class HexagonELFType> class HexagonRuntimeFile
-  : public CRuntimeFile<HexagonELFType> {
+  : public RuntimeFile<HexagonELFType> {
 public:
-  HexagonRuntimeFile(const HexagonLinkingContext &context)
-      : CRuntimeFile<HexagonELFType>(context, "Hexagon runtime file") {}
+  HexagonRuntimeFile(HexagonLinkingContext &context)
+      : RuntimeFile<HexagonELFType>(context, "Hexagon runtime file") {}
 };
 } // elf
 } // lld

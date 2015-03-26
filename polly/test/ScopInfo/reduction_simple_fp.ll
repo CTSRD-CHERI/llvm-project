@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
 ;
 ; CHECK: Function: f_no_fast_math
 ; CHECK: Reduction Type: NONE
@@ -24,7 +24,7 @@ for.body:                                         ; preds = %for.cond
   %conv = sitofp i32 %i.0 to float
   %pi = fptrunc double 3.41 to float
   %mul = fmul float %conv, %pi
-  %tmp = load float* %sum, align 4
+  %tmp = load float, float* %sum, align 4
   %add = fadd float %tmp, %mul
   store float %add, float* %sum, align 4
   br label %for.inc
@@ -50,7 +50,7 @@ for.body:                                         ; preds = %for.cond
   %conv = sitofp i32 %i.0 to float
   %pi = fptrunc double 3.41 to float
   %mul = fmul fast float %conv, %pi
-  %tmp = load float* %sum, align 4
+  %tmp = load float, float* %sum, align 4
   %add = fadd fast float %tmp, %mul
   store float %add, float* %sum, align 4
   br label %for.inc

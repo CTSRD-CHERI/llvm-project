@@ -18,6 +18,15 @@
 #include "sanitizer_internal_defs.h"
 #include "sanitizer_platform.h"
 
+#if SANITIZER_FREEBSD
+// FreeBSD's dlopen() returns a pointer to an Obj_Entry structure that
+// incroporates the map structure.
+# define GET_LINK_MAP_BY_DLOPEN_HANDLE(handle) \
+    ((link_map*)((handle) == nullptr ? nullptr : ((char*)(handle) + 544)))
+#else
+# define GET_LINK_MAP_BY_DLOPEN_HANDLE(handle) ((link_map*)(handle))
+#endif  // !SANITIZER_FREEBSD
+
 namespace __sanitizer {
   extern unsigned struct_utsname_sz;
   extern unsigned struct_stat_sz;
@@ -169,7 +178,7 @@ namespace __sanitizer {
     unsigned __seq;
     u64 __unused1;
     u64 __unused2;
-#elif defined(__mips__)
+#elif defined(__mips__) || defined(__aarch64__)
     unsigned int mode;
     unsigned short __seq;
     unsigned short __pad1;
@@ -472,7 +481,7 @@ namespace __sanitizer {
   typedef long __sanitizer___kernel_off_t;
 #endif
 
-#if defined(__powerpc__) || defined(__aarch64__) || defined(__mips__)
+#if defined(__powerpc__) || defined(__mips__)
   typedef unsigned int __sanitizer___kernel_old_uid_t;
   typedef unsigned int __sanitizer___kernel_old_gid_t;
 #else
@@ -538,6 +547,10 @@ namespace __sanitizer {
 
 #if SANITIZER_FREEBSD
   typedef __sanitizer_sigset_t __sanitizer_kernel_sigset_t;
+#elif defined(__mips__)
+  struct __sanitizer_kernel_sigset_t {
+    u8 sig[16];
+  };
 #else
   struct __sanitizer_kernel_sigset_t {
     u8 sig[8];
@@ -686,7 +699,7 @@ namespace __sanitizer {
 #endif
 
 #if SANITIZER_LINUX && !SANITIZER_ANDROID && \
-    (defined(__i386) || defined(__x86_64))
+  (defined(__i386) || defined(__x86_64) || defined(__mips64))
   extern unsigned struct_user_regs_struct_sz;
   extern unsigned struct_user_fpregs_struct_sz;
   extern unsigned struct_user_fpxregs_struct_sz;
@@ -861,7 +874,7 @@ struct __sanitizer_obstack {
 
   // A special value to mark ioctls that are not present on the target platform,
   // when it can not be determined without including any system headers.
-  extern unsigned IOCTL_NOT_PRESENT;
+  extern const unsigned IOCTL_NOT_PRESENT;
 
   extern unsigned IOCTL_FIOASYNC;
   extern unsigned IOCTL_FIOCLEX;

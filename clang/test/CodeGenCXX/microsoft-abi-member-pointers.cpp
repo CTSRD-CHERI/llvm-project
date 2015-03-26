@@ -1,9 +1,29 @@
-// RUN: %clang_cc1 -std=c++11 -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 -fms-extensions | FileCheck %s
-// RUN: %clang_cc1 -std=c++11 -fno-rtti -emit-llvm %s -o - -triple=x86_64-pc-win32 -fms-extensions | FileCheck %s -check-prefix=X64
-// RUN: %clang_cc1 -std=c++11 -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 -DINCOMPLETE_VIRTUAL -fms-extensions -verify
-// RUN: %clang_cc1 -std=c++11 -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 -DINCOMPLETE_VIRTUAL -DMEMFUN -fms-extensions -verify
-// FIXME: Test x86_64 member pointers when codegen no longer asserts on records
-// with virtual bases.
+// RUN: %clang_cc1 -std=c++11 -Wno-uninitialized -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 -fms-extensions | FileCheck %s
+// RUN: %clang_cc1 -std=c++11 -Wno-uninitialized -fno-rtti -emit-llvm %s -o - -triple=x86_64-pc-win32 -fms-extensions | FileCheck %s -check-prefix=X64
+// RUN: %clang_cc1 -std=c++11 -Wno-uninitialized -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 -DINCOMPLETE_VIRTUAL -fms-extensions -verify
+// RUN: %clang_cc1 -std=c++11 -Wno-uninitialized -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 -DINCOMPLETE_VIRTUAL -DMEMFUN -fms-extensions -verify
+
+namespace PR20947 {
+struct A;
+int A::**a = nullptr;
+// CHECK: %[[opaque0:.*]] = type opaque
+// CHECK: %[[opaque1:.*]] = type opaque
+// CHECK: @"\01?a@PR20947@@3PAPQA@1@HA" = global %[[opaque0]]* null, align 4
+
+struct B;
+int B::*&b = b;
+// CHECK: @"\01?b@PR20947@@3AAPQB@1@HA" = global %[[opaque1]]* null, align 4
+}
+
+namespace PR20017 {
+template <typename T>
+struct A {
+  int T::*m_fn1() { return nullptr; }
+};
+struct B;
+auto a = &A<B>::m_fn1;
+// CHECK-DAG: @"\01?a@PR20017@@3P8?$A@UB@PR20017@@@1@AEPQB@1@HXZQ21@" = global i8* bitcast ({ i32, i32, i32 } ({{.*}}*)* @"\01?m_fn1@?$A@UB@PR20017@@@PR20017@@QAEPQB@2@HXZ" to i8*), align 4
+}
 
 #ifndef INCOMPLETE_VIRTUAL
 struct B1 {
@@ -192,7 +212,7 @@ void podMemPtrs() {
 // CHECK:        %[[memptr:.*]] = alloca i32, align 4
 // CHECK-NEXT:   store i32 0, i32* %[[memptr]], align 4
 // CHECK-NEXT:   store i32 4, i32* %[[memptr]], align 4
-// CHECK-NEXT:   %[[memptr_val:.*]] = load i32* %[[memptr]], align 4
+// CHECK-NEXT:   %[[memptr_val:.*]] = load i32, i32* %[[memptr]], align 4
 // CHECK-NEXT:   %{{.*}} = icmp ne i32 %[[memptr_val]], -1
 // CHECK-NEXT:   br i1 %{{.*}}, label %{{.*}}, label %{{.*}}
 // CHECK:        store i32 -1, i32* %[[memptr]], align 4
@@ -212,7 +232,7 @@ void polymorphicMemPtrs() {
 // CHECK:        %[[memptr:.*]] = alloca i32, align 4
 // CHECK-NEXT:   store i32 4, i32* %[[memptr]], align 4
 // CHECK-NEXT:   store i32 8, i32* %[[memptr]], align 4
-// CHECK-NEXT:   %[[memptr_val:.*]] = load i32* %[[memptr]], align 4
+// CHECK-NEXT:   %[[memptr_val:.*]] = load i32, i32* %[[memptr]], align 4
 // CHECK-NEXT:   %{{.*}} = icmp ne i32 %[[memptr_val]], 0
 // CHECK-NEXT:   br i1 %{{.*}}, label %{{.*}}, label %{{.*}}
 // CHECK:        store i32 0, i32* %[[memptr]], align 4
@@ -223,9 +243,9 @@ void polymorphicMemPtrs() {
 bool nullTestDataUnspecified(int Unspecified::*mp) {
   return mp;
 // CHECK: define zeroext i1 @"\01?nullTestDataUnspecified@@YA_NPQUnspecified@@H@Z"{{.*}} {
-// CHECK:   %{{.*}} = load { i32, i32, i32 }* %{{.*}}, align 8
+// CHECK:   %{{.*}} = load { i32, i32, i32 }, { i32, i32, i32 }* %{{.*}}, align 8
 // CHECK:   store { i32, i32, i32 } {{.*}} align 8
-// CHECK:   %[[mp:.*]] = load { i32, i32, i32 }* %{{.*}}, align 8
+// CHECK:   %[[mp:.*]] = load { i32, i32, i32 }, { i32, i32, i32 }* %{{.*}}, align 8
 // CHECK:   %[[mp0:.*]] = extractvalue { i32, i32, i32 } %[[mp]], 0
 // CHECK:   %[[cmp0:.*]] = icmp ne i32 %[[mp0]], 0
 // CHECK:   %[[mp1:.*]] = extractvalue { i32, i32, i32 } %[[mp]], 1
@@ -245,9 +265,9 @@ bool nullTestDataUnspecified(int Unspecified::*mp) {
 bool nullTestFunctionUnspecified(void (Unspecified::*mp)()) {
   return mp;
 // CHECK: define zeroext i1 @"\01?nullTestFunctionUnspecified@@YA_NP8Unspecified@@AEXXZ@Z"{{.*}} {
-// CHECK:   %{{.*}} = load { i8*, i32, i32, i32 }* %{{.*}}, align 8
+// CHECK:   %{{.*}} = load { i8*, i32, i32, i32 }, { i8*, i32, i32, i32 }* %{{.*}}, align 8
 // CHECK:   store { i8*, i32, i32, i32 } {{.*}} align 8
-// CHECK:   %[[mp:.*]] = load { i8*, i32, i32, i32 }* %{{.*}}, align 8
+// CHECK:   %[[mp:.*]] = load { i8*, i32, i32, i32 }, { i8*, i32, i32, i32 }* %{{.*}}, align 8
 // CHECK:   %[[mp0:.*]] = extractvalue { i8*, i32, i32, i32 } %[[mp]], 0
 // CHECK:   %[[cmp0:.*]] = icmp ne i8* %[[mp0]], null
 // CHECK:   ret i1 %[[cmp0]]
@@ -259,21 +279,21 @@ int loadDataMemberPointerVirtual(Virtual *o, int Virtual::*memptr) {
 // Test that we can unpack this aggregate member pointer and load the member
 // data pointer.
 // CHECK: define i32 @"\01?loadDataMemberPointerVirtual@@YAHPAUVirtual@@PQ1@H@Z"{{.*}} {
-// CHECK:   %[[o:.*]] = load %{{.*}}** %{{.*}}, align 4
-// CHECK:   %[[memptr:.*]] = load { i32, i32 }* %{{.*}}, align 8
+// CHECK:   %[[o:.*]] = load %{{.*}}*, %{{.*}}** %{{.*}}, align 4
+// CHECK:   %[[memptr:.*]] = load { i32, i32 }, { i32, i32 }* %{{.*}}, align 8
 // CHECK:   %[[memptr0:.*]] = extractvalue { i32, i32 } %[[memptr:.*]], 0
 // CHECK:   %[[memptr1:.*]] = extractvalue { i32, i32 } %[[memptr:.*]], 1
 // CHECK:   %[[v6:.*]] = bitcast %{{.*}}* %[[o]] to i8*
-// CHECK:   %[[vbptr:.*]] = getelementptr inbounds i8* %[[v6]], i32 0
-// CHECK:   %[[vbptr_a:.*]] = bitcast i8* %[[vbptr]] to i8**
-// CHECK:   %[[vbtable:.*]] = load i8** %[[vbptr_a:.*]]
-// CHECK:   %[[v7:.*]] = getelementptr inbounds i8* %[[vbtable]], i32 %[[memptr1]]
-// CHECK:   %[[v8:.*]] = bitcast i8* %[[v7]] to i32*
-// CHECK:   %[[vbase_offs:.*]] = load i32* %[[v8]]
-// CHECK:   %[[v10:.*]] = getelementptr inbounds i8* %[[vbptr]], i32 %[[vbase_offs]]
-// CHECK:   %[[offset:.*]] = getelementptr inbounds i8* %[[v10]], i32 %[[memptr0]]
+// CHECK:   %[[vbptr:.*]] = getelementptr inbounds i8, i8* %[[v6]], i32 0
+// CHECK:   %[[vbptr_a:.*]] = bitcast i8* %[[vbptr]] to i32**
+// CHECK:   %[[vbtable:.*]] = load i32*, i32** %[[vbptr_a:.*]]
+// CHECK:   %[[memptr1_shr:.*]] = ashr exact i32 %[[memptr1]], 2
+// CHECK:   %[[v7:.*]] = getelementptr inbounds i32, i32* %[[vbtable]], i32 %[[memptr1_shr]]
+// CHECK:   %[[vbase_offs:.*]] = load i32, i32* %[[v7]]
+// CHECK:   %[[v10:.*]] = getelementptr inbounds i8, i8* %[[vbptr]], i32 %[[vbase_offs]]
+// CHECK:   %[[offset:.*]] = getelementptr inbounds i8, i8* %[[v10]], i32 %[[memptr0]]
 // CHECK:   %[[v11:.*]] = bitcast i8* %[[offset]] to i32*
-// CHECK:   %[[v12:.*]] = load i32* %[[v11]]
+// CHECK:   %[[v12:.*]] = load i32, i32* %[[v11]]
 // CHECK:   ret i32 %[[v12]]
 // CHECK: }
 
@@ -288,8 +308,8 @@ int loadDataMemberPointerUnspecified(Unspecified *o, int Unspecified::*memptr) {
 // Test that we can unpack this aggregate member pointer and load the member
 // data pointer.
 // CHECK: define i32 @"\01?loadDataMemberPointerUnspecified@@YAHPAUUnspecified@@PQ1@H@Z"{{.*}} {
-// CHECK:   %[[o:.*]] = load %{{.*}}** %{{.*}}, align 4
-// CHECK:   %[[memptr:.*]] = load { i32, i32, i32 }* %{{.*}}, align 8
+// CHECK:   %[[o:.*]] = load %{{.*}}*, %{{.*}}** %{{.*}}, align 4
+// CHECK:   %[[memptr:.*]] = load { i32, i32, i32 }, { i32, i32, i32 }* %{{.*}}, align 8
 // CHECK:   %[[memptr0:.*]] = extractvalue { i32, i32, i32 } %[[memptr:.*]], 0
 // CHECK:   %[[memptr1:.*]] = extractvalue { i32, i32, i32 } %[[memptr:.*]], 1
 // CHECK:   %[[memptr2:.*]] = extractvalue { i32, i32, i32 } %[[memptr:.*]], 2
@@ -298,19 +318,19 @@ int loadDataMemberPointerUnspecified(Unspecified *o, int Unspecified::*memptr) {
 // CHECK:   br i1 %[[is_vbase]], label %[[vadjust:.*]], label %[[skip:.*]]
 //
 // CHECK: [[vadjust]]
-// CHECK:   %[[vbptr:.*]] = getelementptr inbounds i8* %[[base]], i32 %[[memptr1]]
-// CHECK:   %[[vbptr_a:.*]] = bitcast i8* %[[vbptr]] to i8**
-// CHECK:   %[[vbtable:.*]] = load i8** %[[vbptr_a:.*]]
-// CHECK:   %[[v7:.*]] = getelementptr inbounds i8* %[[vbtable]], i32 %[[memptr2]]
-// CHECK:   %[[v8:.*]] = bitcast i8* %[[v7]] to i32*
-// CHECK:   %[[vbase_offs:.*]] = load i32* %[[v8]]
-// CHECK:   %[[base_adj:.*]] = getelementptr inbounds i8* %[[vbptr]], i32 %[[vbase_offs]]
+// CHECK:   %[[vbptr:.*]] = getelementptr inbounds i8, i8* %[[base]], i32 %[[memptr1]]
+// CHECK:   %[[vbptr_a:.*]] = bitcast i8* %[[vbptr]] to i32**
+// CHECK:   %[[vbtable:.*]] = load i32*, i32** %[[vbptr_a:.*]]
+// CHECK:   %[[memptr2_shr:.*]] = ashr exact i32 %[[memptr2]], 2
+// CHECK:   %[[v7:.*]] = getelementptr inbounds i32, i32* %[[vbtable]], i32 %[[memptr2_shr]]
+// CHECK:   %[[vbase_offs:.*]] = load i32, i32* %[[v7]]
+// CHECK:   %[[base_adj:.*]] = getelementptr inbounds i8, i8* %[[vbptr]], i32 %[[vbase_offs]]
 //
 // CHECK: [[skip]]
 // CHECK:   %[[new_base:.*]] = phi i8* [ %[[base]], %{{.*}} ], [ %[[base_adj]], %[[vadjust]] ]
-// CHECK:   %[[offset:.*]] = getelementptr inbounds i8* %[[new_base]], i32 %[[memptr0]]
+// CHECK:   %[[offset:.*]] = getelementptr inbounds i8, i8* %[[new_base]], i32 %[[memptr0]]
 // CHECK:   %[[v11:.*]] = bitcast i8* %[[offset]] to i32*
-// CHECK:   %[[v12:.*]] = load i32* %[[v11]]
+// CHECK:   %[[v12:.*]] = load i32, i32* %[[v11]]
 // CHECK:   ret i32 %[[v12]]
 // CHECK: }
 }
@@ -334,7 +354,7 @@ void callMemberPointerMultiple(Multiple *o, void (Multiple::*memptr)()) {
 // CHECK: define void @"\01?callMemberPointerMultiple@@{{.*}} {
 // CHECK:   %[[memptr0:.*]] = extractvalue { i8*, i32 } %{{.*}}, 0
 // CHECK:   %[[memptr1:.*]] = extractvalue { i8*, i32 } %{{.*}}, 1
-// CHECK:   %[[this_adjusted:.*]] = getelementptr inbounds i8* %{{.*}}, i32 %[[memptr1]]
+// CHECK:   %[[this_adjusted:.*]] = getelementptr inbounds i8, i8* %{{.*}}, i32 %[[memptr1]]
 // CHECK:   %[[this:.*]] = bitcast i8* %[[this_adjusted]] to {{.*}}
 // CHECK:   %[[fptr:.*]] = bitcast i8* %[[memptr0]] to {{.*}}
 // CHECK:   call x86_thiscallcc void %[[fptr]](%{{.*}} %[[this]])
@@ -349,14 +369,14 @@ void callMemberPointerVirtualBase(Virtual *o, void (Virtual::*memptr)()) {
 // CHECK:   %[[memptr0:.*]] = extractvalue { i8*, i32, i32 } %{{.*}}, 0
 // CHECK:   %[[memptr1:.*]] = extractvalue { i8*, i32, i32 } %{{.*}}, 1
 // CHECK:   %[[memptr2:.*]] = extractvalue { i8*, i32, i32 } %{{.*}}, 2
-// CHECK:   %[[vbptr:.*]] = getelementptr inbounds i8* %{{.*}}, i32 0
-// CHECK:   %[[vbptr_a:.*]] = bitcast i8* %[[vbptr]] to i8**
-// CHECK:   %[[vbtable:.*]] = load i8** %[[vbptr_a:.*]]
-// CHECK:   %[[v7:.*]] = getelementptr inbounds i8* %[[vbtable]], i32 %[[memptr2]]
-// CHECK:   %[[v8:.*]] = bitcast i8* %[[v7]] to i32*
-// CHECK:   %[[vbase_offs:.*]] = load i32* %[[v8]]
-// CHECK:   %[[v10:.*]] = getelementptr inbounds i8* %[[vbptr]], i32 %[[vbase_offs]]
-// CHECK:   %[[this_adjusted:.*]] = getelementptr inbounds i8* %[[v10]], i32 %[[memptr1]]
+// CHECK:   %[[vbptr:.*]] = getelementptr inbounds i8, i8* %{{.*}}, i32 0
+// CHECK:   %[[vbptr_a:.*]] = bitcast i8* %[[vbptr]] to i32**
+// CHECK:   %[[vbtable:.*]] = load i32*, i32** %[[vbptr_a:.*]]
+// CHECK:   %[[memptr2_shr:.*]] = ashr exact i32 %[[memptr2]], 2
+// CHECK:   %[[v7:.*]] = getelementptr inbounds i32, i32* %[[vbtable]], i32 %[[memptr2_shr]]
+// CHECK:   %[[vbase_offs:.*]] = load i32, i32* %[[v7]]
+// CHECK:   %[[v10:.*]] = getelementptr inbounds i8, i8* %[[vbptr]], i32 %[[vbase_offs]]
+// CHECK:   %[[this_adjusted:.*]] = getelementptr inbounds i8, i8* %[[v10]], i32 %[[memptr1]]
 // CHECK:   %[[fptr:.*]] = bitcast i8* %[[memptr0]] to void ({{.*}})
 // CHECK:   %[[this:.*]] = bitcast i8* %[[this_adjusted]] to {{.*}}
 // CHECK:   call x86_thiscallcc void %[[fptr]](%{{.*}} %[[this]])
@@ -465,7 +485,7 @@ void (Multiple::*convertB2FuncToMultiple(void (B2::*mp)()))() {
   return mp;
 // CHECK: define i64 @"\01?convertB2FuncToMultiple@@YAP8Multiple@@AEXXZP8B2@@AEXXZ@Z"{{.*}} {
 // CHECK:   store
-// CHECK:   %[[mp:.*]] = load i8** %{{.*}}, align 4
+// CHECK:   %[[mp:.*]] = load i8*, i8** %{{.*}}, align 4
 // CHECK:   icmp ne i8* %[[mp]], null
 // CHECK:   br i1 %{{.*}} label %{{.*}}, label %{{.*}}
 //
@@ -489,7 +509,7 @@ void (B2::*convertMultipleFuncToB2(void (Multiple::*mp)()))() {
 //
 // CHECK: define i32 @"\01?convertMultipleFuncToB2@@YAP8B2@@AEXXZP8Multiple@@AEXXZ@Z"{{.*}} {
 // CHECK:   store
-// CHECK:   %[[src:.*]] = load { i8*, i32 }* %{{.*}}, align 8
+// CHECK:   %[[src:.*]] = load { i8*, i32 }, { i8*, i32 }* %{{.*}}, align 8
 // CHECK:   extractvalue { i8*, i32 } %[[src]], 0
 // CHECK:   icmp ne i8* %{{.*}}, null
 // CHECK:   br i1 %{{.*}}, label %{{.*}}, label %{{.*}}
@@ -514,7 +534,7 @@ void (D::*convertCToD(void (C::*mp)()))() {
   return mp;
 // CHECK: define void @"\01?convertCToD@Test1@@YAP8D@1@AEXXZP8C@1@AEXXZ@Z"{{.*}} {
 // CHECK:   store
-// CHECK:   load { i8*, i32, i32 }* %{{.*}}, align 8
+// CHECK:   load { i8*, i32, i32 }, { i8*, i32, i32 }* %{{.*}}, align 8
 // CHECK:   extractvalue { i8*, i32, i32 } %{{.*}}, 0
 // CHECK:   icmp ne i8* %{{.*}}, null
 // CHECK:   br i1 %{{.*}}, label %{{.*}}, label %{{.*}}
@@ -557,7 +577,7 @@ int A::*reinterpret(int B::*mp) {
 int A::*reinterpret(int C::*mp) {
   return reinterpret_cast<int A::*>(mp);
 // CHECK: define i32 @"\01?reinterpret@Test2@@YAPQA@1@HPQC@1@H@Z"{{.*}}  {
-// CHECK:   %[[mp:.*]] = load i32*
+// CHECK:   %[[mp:.*]] = load i32, i32*
 // CHECK:   %[[cmp:.*]] = icmp ne i32 %[[mp]], 0
 // CHECK:   select i1 %[[cmp]], i32 %[[mp]], i32 -1
 // CHECK: }
@@ -576,10 +596,10 @@ struct A {
 int *load_data(A *a, int A::*mp) {
   return &(a->*mp);
 // CHECK-LABEL: define i32* @"\01?load_data@Test3@@YAPAHPAUA@1@PQ21@H@Z"{{.*}}  {
-// CHECK:    %[[a:.*]] = load %"struct.Test3::A"** %{{.*}}, align 4
-// CHECK:    %[[mp:.*]] = load i32* %{{.*}}, align 4
+// CHECK:    %[[a:.*]] = load %"struct.Test3::A"*, %"struct.Test3::A"** %{{.*}}, align 4
+// CHECK:    %[[mp:.*]] = load i32, i32* %{{.*}}, align 4
 // CHECK:    %[[a_i8:.*]] = bitcast %"struct.Test3::A"* %[[a]] to i8*
-// CHECK:    getelementptr inbounds i8* %[[a_i8]], i32 %[[mp]]
+// CHECK:    getelementptr inbounds i8, i8* %[[a_i8]], i32 %[[mp]]
 // CHECK: }
 }
 
@@ -595,15 +615,15 @@ void (C::*getmp())() {
   return &C::g;
 }
 // CHECK-LABEL: define i64 @"\01?getmp@Test4@@YAP8C@1@AEXXZXZ"()
-// CHECK: store { i8*, i32 } { i8* bitcast (void (i8*)* @"\01??_9C@Test4@@$BA@AE" to i8*), i32 4 }, { i8*, i32 }* %{{.*}}
+// CHECK: store { i8*, i32 } { i8* bitcast (void (%"struct.Test4::C"*, ...)* @"\01??_9C@Test4@@$BA@AE" to i8*), i32 4 }, { i8*, i32 }* %{{.*}}
 //
 
-// CHECK-LABEL: define linkonce_odr x86_thiscallcc void @"\01??_9C@Test4@@$BA@AE"(i8*)
+// CHECK-LABEL: define linkonce_odr x86_thiscallcc void @"\01??_9C@Test4@@$BA@AE"(%"struct.Test4::C"* %this, ...) {{.*}} comdat
 // CHECK-NOT:  getelementptr
-// CHECK:  load void (i8*)*** %{{.*}}
-// CHECK:  getelementptr inbounds void (i8*)** %{{.*}}, i64 0
+// CHECK:  load void (%"struct.Test4::C"*, ...)**, void (%"struct.Test4::C"*, ...)*** %{{.*}}
+// CHECK:  getelementptr inbounds void (%"struct.Test4::C"*, ...)*, void (%"struct.Test4::C"*, ...)** %{{.*}}, i64 0
 // CHECK-NOT:  getelementptr
-// CHECK:  call x86_thiscallcc void %
+// CHECK:  musttail call x86_thiscallcc void (%"struct.Test4::C"*, ...)* %
 
 }
 

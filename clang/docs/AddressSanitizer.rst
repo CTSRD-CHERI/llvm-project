@@ -23,8 +23,7 @@ Typical slowdown introduced by AddressSanitizer is **2x**.
 How to build
 ============
 
-Follow the `clang build instructions <../get_started.html>`_. CMake build is
-supported.
+Build LLVM/Clang with `CMake <http://llvm.org/docs/CMake.html>`_.
 
 Usage
 =====
@@ -165,9 +164,9 @@ problems happening in certain source files or with certain global variables.
     # Disable out-of-bound checks for global:
     global:bad_array
     # Disable out-of-bound checks for global instances of a given class ...
-    type:class.Namespace::BadClassName
+    type:Namespace::BadClassName
     # ... or a given struct. Use wildcard to deal with anonymous namespace.
-    type:struct.Namespace2::*::BadStructName
+    type:Namespace2::*::BadStructName
     # Disable initialization-order checks for globals:
     global:bad_init_global=init
     type:*BadInitClassSubstring*=init
@@ -187,6 +186,7 @@ AddressSanitizer is supported on
 * Linux i386/x86\_64 (tested on Ubuntu 12.04);
 * MacOS 10.6 - 10.9 (i386/x86\_64).
 * Android ARM
+* FreeBSD i386/x86\_64 (tested on FreeBSD 11-current)
 
 Ports to various other platforms are in progress.
 

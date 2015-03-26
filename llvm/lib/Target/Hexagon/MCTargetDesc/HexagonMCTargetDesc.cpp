@@ -13,7 +13,7 @@
 
 #include "HexagonMCTargetDesc.h"
 #include "HexagonMCAsmInfo.h"
-#include "InstPrinter/HexagonInstPrinter.h"
+#include "MCTargetDesc/HexagonInstPrinter.h"
 #include "llvm/MC/MCCodeGenInfo.h"
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -35,7 +35,7 @@ using namespace llvm;
 #define GET_REGINFO_MC_DESC
 #include "HexagonGenRegisterInfo.inc"
 
-static MCInstrInfo *createHexagonMCInstrInfo() {
+MCInstrInfo *llvm::createHexagonMCInstrInfo() {
   MCInstrInfo *X = new MCInstrInfo();
   InitHexagonMCInstrInfo(X);
   return X;
@@ -46,15 +46,6 @@ static MCRegisterInfo *createHexagonMCRegisterInfo(StringRef TT) {
   InitHexagonMCRegisterInfo(X, Hexagon::R0);
   return X;
 }
-
-static MCStreamer *
-createHexagonELFStreamer(MCContext &Context, MCAsmBackend &MAB,
-                         raw_ostream &OS, MCCodeEmitter *CE,
-                         bool RelaxAll) {
-  MCELFStreamer *ES = new MCELFStreamer(Context, MAB, OS, CE);
-  return ES;
-}
-
 
 static MCSubtargetInfo *
 createHexagonMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS) {
@@ -74,16 +65,6 @@ static MCAsmInfo *createHexagonMCAsmInfo(const MCRegisterInfo &MRI,
 
   return MAI;
 }
-
-static MCStreamer *createMCStreamer(Target const &T, StringRef TT,
-                                    MCContext &Context, MCAsmBackend &MAB,
-                                    raw_ostream &OS, MCCodeEmitter *Emitter,
-                                    MCSubtargetInfo const &STI, bool RelaxAll) {
-  MCStreamer *ES = createHexagonELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
-  new MCTargetStreamer(*ES);
-  return ES;
-}
-
 
 static MCCodeGenInfo *createHexagonMCCodeGenInfo(StringRef TT, Reloc::Model RM,
                                                  CodeModel::Model CM,
@@ -135,7 +116,4 @@ extern "C" void LLVMInitializeHexagonTargetMC() {
   // Register the asm backend
   TargetRegistry::RegisterMCAsmBackend(TheHexagonTarget,
                                        createHexagonAsmBackend);
-
-  // Register the obj streamer
-  TargetRegistry::RegisterMCObjectStreamer(TheHexagonTarget, createMCStreamer);
 }

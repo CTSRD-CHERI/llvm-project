@@ -15,7 +15,6 @@ class ObjCDataFormatterTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
-    @expectedFailureDarwin("llvm.org/pr20260")
     @dsym_test
     def test_plain_objc_with_dsym_and_run_command(self):
         """Test basic ObjC formatting behavior."""
@@ -23,7 +22,6 @@ class ObjCDataFormatterTestCase(TestBase):
         self.plain_data_formatter_commands()
 
     @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
-    @expectedFailureDarwin("llvm.org/pr20260")
     @dwarf_test
     def test_plain_objc_with_dwarf_and_run_command(self):
         """Test basic ObjC formatting behavior."""
@@ -315,7 +313,7 @@ class ObjCDataFormatterTestCase(TestBase):
         self.expect('frame variable myclass',
                     substrs = ['(Class) myclass = NSValue'])
         self.expect('frame variable myclass2',
-                    substrs = ['(Class) myclass2 = NS','String'])
+                    substrs = ['(Class) myclass2 = ','NS','String'])
         self.expect('frame variable myclass3',
                     substrs = ['(Class) myclass3 = Molecule'])
         self.expect('frame variable myclass4',
@@ -474,7 +472,7 @@ class ObjCDataFormatterTestCase(TestBase):
 
     def nsdate_data_formatter_commands(self):
         self.expect('frame variable date1 date2',
-                    substrs = ['1985-04','2011-01'])
+                    patterns = ['(1985-04-10|1985-04-11)','(2011-01-01|2010-12-31)'])
 
         # this test might fail if we hit the breakpoint late on December 31st of some given year
         # and midnight comes between hitting the breakpoint and running this line of code
@@ -576,16 +574,14 @@ class ObjCDataFormatterTestCase(TestBase):
         self.runCmd("log timers enable")
         expect_strings = ['(CFGregorianUnits) cf_greg_units = 1 years, 3 months, 5 days, 12 hours, 5 minutes 7 seconds',
          '(CFRange) cf_range = location=4 length=4',
-         '(NSPoint) ns_point = (x=4, y=4)',
+         '(NSPoint) ns_point = (x = 4, y = 4)',
          '(NSRange) ns_range = location=4, length=4',
-         '(NSRect *) ns_rect_ptr = (x=1, y=1), (width=5, height=5)',
-         '(NSRect) ns_rect = (x=1, y=1), (width=5, height=5)',
-         '(NSRectArray) ns_rect_arr = ((x=1, y=1), (width=5, height=5)), ...',
-         '(NSSize) ns_size = (width=5, height=7)',
-         '(NSSize *) ns_size_ptr = (width=5, height=7)',
-         '(CGSize) cg_size = (width=1, height=6)',
-         '(CGPoint) cg_point = (x=2, y=7)',
-         '(CGRect) cg_rect = origin=(x=1, y=2) size=(width=7, height=7)',
+         '(NSRect) ns_rect = (origin = (x = 1, y = 1), size = (width = 5, height = 5))',
+         '(NSRectArray) ns_rect_arr = ((x = 1, y = 1), (width = 5, height = 5)), ...',
+         '(NSSize) ns_size = (width = 5, height = 7)',
+         '(CGSize) cg_size = (width = 1, height = 6)',
+         '(CGPoint) cg_point = (x = 2, y = 7)',
+         '(CGRect) cg_rect = (origin = (x = 1, y = 2), size = (width = 7, height = 7))',
          '(Rect) rect = (t=4, l=8, b=4, r=7)',
          '(Rect *) rect_ptr = (t=4, l=8, b=4, r=7)',
          '(Point) point = (v=7, h=12)',
@@ -596,7 +592,7 @@ class ObjCDataFormatterTestCase(TestBase):
          
         if self.getArchitecture() in ['i386', 'x86_64']:
             expect_strings.append('(HIPoint) hi_point = (x=7, y=12)')
-            expect_strings.append('(HIRect) hi_rect = origin=(x=3, y=5) size=(width=4, height=6)')
+            expect_strings.append('(HIRect) hi_rect = origin=(x = 3, y = 5) size=(width = 4, height = 6)')
             expect_strings.append('(RGBColor) rgb_color = red=3 green=56 blue=35')
             expect_strings.append('(RGBColor *) rgb_color_ptr = red=3 green=56 blue=35')
             

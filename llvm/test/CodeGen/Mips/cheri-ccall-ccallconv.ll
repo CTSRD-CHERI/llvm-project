@@ -25,4 +25,4 @@ attributes #2 = { nounwind }
 
 !llvm.ident = !{!0}
 
-!0 = metadata !{metadata !"clang version 3.4 "}
+!0 = !{!"clang version 3.4 "}

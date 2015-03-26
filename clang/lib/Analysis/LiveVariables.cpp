@@ -14,10 +14,11 @@
 #include "clang/Analysis/Analyses/LiveVariables.h"
 #include "clang/AST/Stmt.h"
 #include "clang/AST/StmtVisitor.h"
-#include "clang/Analysis/Analyses/DataflowWorklist.h"
+#include "clang/Analysis/Analyses/PostOrderCFGView.h"
 #include "clang/Analysis/AnalysisContext.h"
 #include "clang/Analysis/CFG.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <vector>
@@ -25,10 +26,62 @@
 using namespace clang;
 
 namespace {
+
+class DataflowWorklist {
+  SmallVector<const CFGBlock *, 20> worklist;
+  llvm::BitVector enqueuedBlocks;
+  PostOrderCFGView *POV;
+public:
+  DataflowWorklist(const CFG &cfg, AnalysisDeclContext &Ctx)
+    : enqueuedBlocks(cfg.getNumBlockIDs()),
+      POV(Ctx.getAnalysis<PostOrderCFGView>()) {}
+  
+  void enqueueBlock(const CFGBlock *block);
+  void enqueuePredecessors(const CFGBlock *block);
+
+  const CFGBlock *dequeue();
+
+  void sortWorklist();
+};
+
+}
+
+void DataflowWorklist::enqueueBlock(const clang::CFGBlock *block) {
+  if (block && !enqueuedBlocks[block->getBlockID()]) {
+    enqueuedBlocks[block->getBlockID()] = true;
+    worklist.push_back(block);
+  }
+}
+
+void DataflowWorklist::enqueuePredecessors(const clang::CFGBlock *block) {
+  const unsigned OldWorklistSize = worklist.size();
+  for (CFGBlock::const_pred_iterator I = block->pred_begin(),
+       E = block->pred_end(); I != E; ++I) {
+    enqueueBlock(*I);
+  }
+  
+  if (OldWorklistSize == 0 || OldWorklistSize == worklist.size())
+    return;
+
+  sortWorklist();
+}
+
+void DataflowWorklist::sortWorklist() {
+  std::sort(worklist.begin(), worklist.end(), POV->getComparator());
+}
+
+const CFGBlock *DataflowWorklist::dequeue() {
+  if (worklist.empty())
+    return nullptr;
+  const CFGBlock *b = worklist.pop_back_val();
+  enqueuedBlocks[b->getBlockID()] = false;
+  return b;
+}
+
+namespace {
 class LiveVariablesImpl {
 public:  
   AnalysisDeclContext &analysisContext;
-  std::vector<LiveVariables::LivenessValues> cfgBlockValues;
   llvm::ImmutableSet<const Stmt *>::Factory SSetFact;
   llvm::ImmutableSet<const VarDecl *>::Factory DSetFact;
   llvm::DenseMap<const CFGBlock *, LiveVariables::LivenessValues> blocksEndToLiveness;
@@ -303,11 +356,8 @@ void TransferFunctions::VisitBinaryOperator(BinaryOperator *B) {
 }
 
 void TransferFunctions::VisitBlockExpr(BlockExpr *BE) {
-  AnalysisDeclContext::referenced_decls_iterator I, E;
-  std::tie(I, E) =
-    LV.analysisContext.getReferencedBlockVars(BE->getBlockDecl());
-  for ( ; I != E ; ++I) {
-    const VarDecl *VD = *I;
+  for (const VarDecl *VD :
+       LV.analysisContext.getReferencedBlockVars(BE->getBlockDecl())) {
     if (isAlwaysAlive(VD))
       continue;
     val.liveDecls = LV.DSetFact.add(val.liveDecls, VD);
@@ -448,18 +498,21 @@ LiveVariables::computeLiveness(AnalysisDeclContext &AC,
 
   LiveVariablesImpl *LV = new LiveVariablesImpl(AC, killAtAssign);
 
-  // Construct the backward dataflow worklist.
-  BackwardDataflowWorklist worklist(*cfg, AC);
+  // Construct the dataflow worklist.  Enqueue the exit block as the
+  // start of the analysis.
+  DataflowWorklist worklist(*cfg, AC);
   llvm::BitVector everAnalyzedBlock(cfg->getNumBlockIDs());
-  llvm::BitVector scannedForAssignments(cfg->getNumBlockIDs());
 
-  while (const CFGBlock *block = worklist.dequeue()) {
+  // FIXME: we should enqueue using post order.
+  for (CFG::const_iterator it = cfg->begin(), ei = cfg->end(); it != ei; ++it) {
+    const CFGBlock *block = *it;
+    worklist.enqueueBlock(block);
     
     // FIXME: Scan for DeclRefExprs using in the LHS of an assignment.
     // We need to do this because we lack context in the reverse analysis
     // to determine if a DeclRefExpr appears in such a context, and thus
     // doesn't constitute a "use".
-    if (killAtAssign && !scannedForAssignments[block->getBlockID()]) {
+    if (killAtAssign)
       for (CFGBlock::const_iterator bi = block->begin(), be = block->end();
            bi != be; ++bi) {
         if (Optional<CFGStmt> cs = bi->getAs<CFGStmt>()) {
@@ -474,9 +527,11 @@ LiveVariables::computeLiveness(AnalysisDeclContext &AC,
           }
         }
       }
-      scannedForAssignments[block->getBlockID()] = true;
-    }
+  }
   
+  worklist.sortWorklist();
+  
+  while (const CFGBlock *block = worklist.dequeue()) {
     // Determine if the block's end value has changed.  If not, we
     // have nothing left to do for this block.
     LivenessValues &prevVal = LV->blocksEndToLiveness[block];

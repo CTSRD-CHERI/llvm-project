@@ -100,8 +100,8 @@ enum CPUArch {
   v5TEJ    = 5,   // e.g. ARM926EJ_S
   v6       = 6,   // e.g. ARM1136J_S
   v6KZ     = 7,   // e.g. ARM1176JZ_S
-  v6T2     = 8,   // e.g. ARM1156T2F_S
-  v6K      = 9,   // e.g. ARM1136J_S
+  v6T2     = 8,   // e.g. ARM1156T2_S
+  v6K      = 9,   // e.g. ARM1176JZ_S
   v7       = 10,  // e.g. Cortex A8, Cortex M3
   v6_M     = 11,  // e.g. Cortex M1
   v6S_M    = 12,  // v6_M with the System extensions
@@ -171,6 +171,8 @@ enum {
   WCharWidth4Bytes = 4, // sizeof(wchar_t) == 4
 
   // Tag_ABI_FP_denormal, (=20), uleb128
+  PositiveZero = 0,
+  IEEEDenormals = 1,
   PreserveFPSign = 2, // sign when flushed-to-zero is preserved
 
   // Tag_ABI_FP_number_model, (=23), uleb128
@@ -197,6 +199,9 @@ enum {
 
   // Tag_FP_HP_extension, (=36), uleb128
   AllowHPFP = 1, // Allow use of Half Precision FP
+
+  // Tag_FP_16bit_format, (=38), uleb128
+  FP16FormatIEEE = 1,
 
   // Tag_MPextension_use, (=42), uleb128
   AllowMP = 1, // Allow use of MP extensions

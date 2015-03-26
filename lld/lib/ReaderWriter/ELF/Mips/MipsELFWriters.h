@@ -15,6 +15,8 @@
 namespace lld {
 namespace elf {
 
+template <class ELFT> class MipsRuntimeFile;
+
 template <class ELFT> class MipsTargetLayout;
 
 template <typename ELFT> class MipsELFWriter {
@@ -31,13 +33,7 @@ public:
     else
       elfHeader.e_ident(llvm::ELF::EI_ABIVERSION, 0);
 
-    // FIXME (simon): Read elf flags from all inputs, check compatibility,
-    // merge them and write result here.
-    uint32_t flags = llvm::ELF::EF_MIPS_NOREORDER | llvm::ELF::EF_MIPS_ABI_O32 |
-                     llvm::ELF::EF_MIPS_CPIC | llvm::ELF::EF_MIPS_ARCH_32R2;
-    if (_ctx.getOutputELFType() == llvm::ELF::ET_DYN)
-      flags |= EF_MIPS_PIC;
-    elfHeader.e_flags(flags);
+    elfHeader.e_flags(_ctx.getMergedELFFlags());
   }
 
   void finalizeMipsRuntimeAtomValues() {
@@ -67,15 +63,6 @@ public:
       file->addAbsoluteAtom("__gnu_local_gp");
     }
     return file;
-  }
-
-  bool isDynSymEntryRequired(const SharedLibraryAtom *sla) const {
-    return _targetLayout.isReferencedByDefinedAtom(sla);
-  }
-
-  bool isNeededTagRequired(const SharedLibraryAtom *sla) const {
-    return _targetLayout.isReferencedByDefinedAtom(sla) ||
-           _targetLayout.isCopied(sla);
   }
 
 private:

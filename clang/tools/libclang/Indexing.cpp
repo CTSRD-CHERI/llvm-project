@@ -425,12 +425,12 @@ public:
 
     IndexCtx.setASTContext(CI.getASTContext());
     Preprocessor &PP = CI.getPreprocessor();
-    PP.addPPCallbacks(new IndexPPCallbacks(PP, IndexCtx));
+    PP.addPPCallbacks(llvm::make_unique<IndexPPCallbacks>(PP, IndexCtx));
     IndexCtx.setPreprocessor(PP);
 
     if (SKData) {
       auto *PPRec = new PPConditionalDirectiveRecord(PP.getSourceManager());
-      PP.addPPCallbacks(PPRec);
+      PP.addPPCallbacks(std::unique_ptr<PPCallbacks>(PPRec));
       SKCtrl = llvm::make_unique<TUSkipBodyControl>(*SKData, *PPRec, PP);
     }
 
@@ -575,10 +575,10 @@ static void clang_indexSourceFile_Impl(void *UserData) {
       BufOwner.get());
 
   for (auto &UF : ITUI->unsaved_files) {
-    llvm::MemoryBuffer *MB =
+    std::unique_ptr<llvm::MemoryBuffer> MB =
         llvm::MemoryBuffer::getMemBufferCopy(getContents(UF), UF.Filename);
-    BufOwner->push_back(std::unique_ptr<llvm::MemoryBuffer>(MB));
-    CInvok->getPreprocessorOpts().addRemappedFile(UF.Filename, MB);
+    CInvok->getPreprocessorOpts().addRemappedFile(UF.Filename, MB.get());
+    BufOwner->push_back(std::move(MB));
   }
 
   // Since libclang is primarily used by batch tools dealing with
@@ -697,13 +697,8 @@ static void indexPreprocessingRecord(ASTUnit &Unit, IndexingContext &IdxCtx) {
 
   // FIXME: Only deserialize inclusion directives.
 
-  PreprocessingRecord::iterator I, E;
-  std::tie(I, E) = Unit.getLocalPreprocessingEntities();
-
   bool isModuleFile = Unit.isModuleFile();
-  for (; I != E; ++I) {
-    PreprocessedEntity *PPE = *I;
-
+  for (PreprocessedEntity *PPE : Unit.getLocalPreprocessingEntities()) {
     if (InclusionDirective *ID = dyn_cast<InclusionDirective>(PPE)) {
       SourceLocation Loc = ID->getSourceRange().getBegin();
       // Modules have synthetic main files as input, give an invalid location

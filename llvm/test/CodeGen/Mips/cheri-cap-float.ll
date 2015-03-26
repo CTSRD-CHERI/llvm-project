@@ -9,7 +9,7 @@ define double @load64(double addrspace(200)* nocapture readonly %x) #0 {
 entry:
   ; CHECK: cld
   ; CHECK: dmtc1
-  %0 = load double addrspace(200)* %x, align 8
+  %0 = load double, double addrspace(200)* %x, align 8
   ret double %0
 }
 
@@ -19,7 +19,7 @@ define float @load32(float addrspace(200)* nocapture readonly %x) #0 {
 entry:
   ; CHECK: clw
   ; CHECK: mtc1
-  %0 = load float addrspace(200)* %x, align 4
+  %0 = load float, float addrspace(200)* %x, align 4
   ret float %0
 }
 
@@ -48,4 +48,4 @@ attributes #1 = { nounwind "less-precise-fpmad"="false" "no-frame-pointer-elim"=
 
 !llvm.ident = !{!0}
 
-!0 = metadata !{metadata !"clang version 3.4 "}
+!0 = !{!"clang version 3.4 "}

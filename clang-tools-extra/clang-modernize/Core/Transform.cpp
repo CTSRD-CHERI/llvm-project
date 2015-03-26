@@ -39,7 +39,7 @@ public:
   ActionFactory(MatchFinder &Finder, Transform &Owner)
   : Finder(Finder), Owner(Owner) {}
 
-  virtual FrontendAction *create() override {
+  FrontendAction *create() override {
     return new FactoryAdaptor(Finder, Owner);
   }
 
@@ -50,7 +50,7 @@ private:
         : Finder(Finder), Owner(Owner) {}
 
     std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &,
-                                                   StringRef) {
+                                                   StringRef) override {
       return Finder.newASTConsumer();
     }
 
@@ -62,7 +62,7 @@ private:
       return Owner.handleBeginSource(CI, Filename);
     }
 
-    virtual void EndSourceFileAction() override {
+    void EndSourceFileAction() override {
       Owner.handleEndSource();
       return ASTFrontendAction::EndSourceFileAction();
     }

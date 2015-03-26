@@ -25,7 +25,7 @@
 #include "lldb/Host/Symbols.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/ScriptInterpreter.h"
-#include "lldb/lldb-private-log.h"
+#include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/SymbolContext.h"
@@ -38,6 +38,9 @@
 #include "lldb/Symbol/SymbolFile.h"
 
 #include "Plugins/ObjectFile/JIT/ObjectFileJIT.h"
+
+#include "llvm/Support/raw_os_ostream.h"
+#include "llvm/Support/Signals.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -145,14 +148,13 @@ Module::Module (const ModuleSpec &module_spec) :
     m_object_mod_time (),
     m_objfile_sp (),
     m_symfile_ap (),
-    m_ast (),
+    m_ast (new ClangASTContext),
     m_source_mappings (),
     m_sections_ap(),
     m_did_load_objfile (false),
     m_did_load_symbol_vendor (false),
     m_did_parse_uuid (false),
     m_did_init_ast (false),
-    m_is_dynamic_loader_module (false),
     m_file_has_changed (false),
     m_first_file_changed_log (false)
 {
@@ -250,14 +252,13 @@ Module::Module(const FileSpec& file_spec,
     m_object_mod_time (),
     m_objfile_sp (),
     m_symfile_ap (),
-    m_ast (),
+    m_ast (new ClangASTContext),
     m_source_mappings (),
     m_sections_ap(),
     m_did_load_objfile (false),
     m_did_load_symbol_vendor (false),
     m_did_parse_uuid (false),
     m_did_init_ast (false),
-    m_is_dynamic_loader_module (false),
     m_file_has_changed (false),
     m_first_file_changed_log (false)
 {
@@ -297,14 +298,13 @@ Module::Module () :
     m_object_mod_time (),
     m_objfile_sp (),
     m_symfile_ap (),
-    m_ast (),
+    m_ast (new ClangASTContext),
     m_source_mappings (),
     m_sections_ap(),
     m_did_load_objfile (false),
     m_did_load_symbol_vendor (false),
     m_did_parse_uuid (false),
     m_did_init_ast (false),
-    m_is_dynamic_loader_module (false),
     m_file_has_changed (false),
     m_first_file_changed_log (false)
 {
@@ -443,10 +443,10 @@ Module::GetClangASTContext ()
                     object_arch.GetTriple().setOS(llvm::Triple::MacOSX);
                 }
             }
-            m_ast.SetArchitecture (object_arch);
+            m_ast->SetArchitecture (object_arch);
         }
     }
-    return m_ast;
+    return *m_ast;
 }
 
 void
@@ -1236,7 +1236,12 @@ Module::LogMessageVerboseBacktrace (Log *log, const char *format, ...)
         log_message.PrintfVarArg (format, args);
         va_end (args);
         if (log->GetVerbose())
-            Host::Backtrace (log_message, 1024);
+        {
+            std::string back_trace;
+            llvm::raw_string_ostream stream(back_trace);
+            llvm::sys::PrintStackTrace(stream);
+            log_message.PutCString(back_trace.c_str());
+        }
         log->PutCString(log_message.GetString().c_str());
     }
 }
@@ -1304,10 +1309,18 @@ Module::GetObjectFile()
                                                    data_offset);
             if (m_objfile_sp)
             {
-                // Once we get the object file, update our module with the object file's 
+                // Once we get the object file, update our module with the object file's
                 // architecture since it might differ in vendor/os if some parts were
-                // unknown.
-                m_objfile_sp->GetArchitecture (m_arch);
+                // unknown.  But since the matching arch might already be more specific
+                // than the generic COFF architecture, only merge in those values that
+                // overwrite unspecified unknown values.
+                ArchSpec new_arch;
+                m_objfile_sp->GetArchitecture(new_arch);
+                m_arch.MergeFrom(new_arch);
+            }
+            else
+            {
+                ReportError ("failed to load objfile for %s", GetFileSpec().GetPath().c_str());
             }
         }
     }
@@ -1325,6 +1338,17 @@ Module::GetSectionList()
             obj_file->CreateSections(*GetUnifiedSectionList());
     }
     return m_sections_ap.get();
+}
+
+void
+Module::SectionFileAddressesChanged ()
+{
+    ObjectFile *obj_file = GetObjectFile ();
+    if (obj_file)
+        obj_file->SectionFileAddressesChanged ();
+    SymbolVendor* sym_vendor = GetSymbolVendor();
+    if (sym_vendor)
+        sym_vendor->SectionFileAddressesChanged ();
 }
 
 SectionList *
@@ -1592,7 +1616,7 @@ Module::SetArchitecture (const ArchSpec &new_arch)
         m_arch = new_arch;
         return true;
     }    
-    return m_arch.IsExactMatch(new_arch);
+    return m_arch.IsCompatibleMatch(new_arch);
 }
 
 bool 
@@ -1695,8 +1719,9 @@ Module::PrepareForFunctionNameLookup (const ConstString &name,
     const char *name_cstr = name.GetCString();
     lookup_name_type_mask = eFunctionNameTypeNone;
     match_name_after_lookup = false;
-    const char *base_name_start = NULL;
-    const char *base_name_end = NULL;
+
+    llvm::StringRef basename;
+    llvm::StringRef context;
     
     if (name_type_mask & eFunctionNameTypeAuto)
     {
@@ -1710,16 +1735,16 @@ Module::PrepareForFunctionNameLookup (const ConstString &name,
                 lookup_name_type_mask |= eFunctionNameTypeSelector;
             
             CPPLanguageRuntime::MethodName cpp_method (name);
-            llvm::StringRef basename (cpp_method.GetBasename());
+            basename = cpp_method.GetBasename();
             if (basename.empty())
             {
-                if (CPPLanguageRuntime::StripNamespacesFromVariableName (name_cstr, base_name_start, base_name_end))
+                if (CPPLanguageRuntime::ExtractContextAndIdentifier (name_cstr, context, basename))
                     lookup_name_type_mask |= (eFunctionNameTypeMethod | eFunctionNameTypeBase);
+                else
+                    lookup_name_type_mask |= eFunctionNameTypeFull;
             }
             else
             {
-                base_name_start = basename.data();
-                base_name_end = base_name_start + basename.size();
                 lookup_name_type_mask |= (eFunctionNameTypeMethod | eFunctionNameTypeBase);
             }
         }
@@ -1734,9 +1759,7 @@ Module::PrepareForFunctionNameLookup (const ConstString &name,
             CPPLanguageRuntime::MethodName cpp_method (name);
             if (cpp_method.IsValid())
             {
-                llvm::StringRef basename (cpp_method.GetBasename());
-                base_name_start = basename.data();
-                base_name_end = base_name_start + basename.size();
+                basename = cpp_method.GetBasename();
 
                 if (!cpp_method.GetQualifiers().empty())
                 {
@@ -1749,12 +1772,9 @@ Module::PrepareForFunctionNameLookup (const ConstString &name,
             }
             else
             {
-                if (!CPPLanguageRuntime::StripNamespacesFromVariableName (name_cstr, base_name_start, base_name_end))
-                {
-                    lookup_name_type_mask &= ~(eFunctionNameTypeMethod | eFunctionNameTypeBase);
-                    if (lookup_name_type_mask == eFunctionNameTypeNone)
-                        return;
-                }
+                // If the CPP method parser didn't manage to chop this up, try to fill in the base name if we can.
+                // If a::b::c is passed in, we need to just look up "c", and then we'll filter the result later.
+                CPPLanguageRuntime::ExtractContextAndIdentifier (name_cstr, context, basename);
             }
         }
         
@@ -1769,16 +1789,13 @@ Module::PrepareForFunctionNameLookup (const ConstString &name,
         }
     }
     
-    if (base_name_start &&
-        base_name_end &&
-        base_name_start != name_cstr &&
-        base_name_start < base_name_end)
+    if (!basename.empty())
     {
         // The name supplied was a partial C++ path like "a::count". In this case we want to do a
         // lookup on the basename "count" and then make sure any matching results contain "a::count"
         // so that it would match "b::a::count" and "a::count". This is why we set "match_name_after_lookup"
         // to true
-        lookup_name.SetCStringWithLength(base_name_start, base_name_end - base_name_start);
+        lookup_name.SetString(basename);
         match_name_after_lookup = true;
     }
     else
@@ -1813,3 +1830,13 @@ Module::CreateJITModule (const lldb::ObjectFileJITDelegateSP &delegate_sp)
     return ModuleSP();
 }
 
+bool
+Module::GetIsDynamicLinkEditor()
+{
+    ObjectFile * obj_file = GetObjectFile ();
+
+    if (obj_file)
+        return obj_file->GetIsDynamicLinkEditor();
+
+    return false;
+}

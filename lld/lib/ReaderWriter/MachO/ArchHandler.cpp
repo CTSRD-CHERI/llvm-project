@@ -11,11 +11,9 @@
 #include "ArchHandler.h"
 #include "Atoms.h"
 #include "MachONormalizedFileBinaryUtils.h"
-
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
-
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm::MachO;
@@ -42,6 +40,8 @@ std::unique_ptr<mach_o::ArchHandler> ArchHandler::create(
   case MachOLinkingContext::arch_armv7:
   case MachOLinkingContext::arch_armv7s:
     return create_arm();
+  case MachOLinkingContext::arch_arm64:
+    return create_arm64();
   default:
     llvm_unreachable("Unknown arch");
   }
@@ -124,20 +124,45 @@ void ArchHandler::appendReloc(normalized::Relocations &relocs, uint32_t offset,
 }
 
 
-int16_t ArchHandler::readS16(bool swap, const uint8_t *addr) {
-  return read16(swap, *reinterpret_cast<const uint16_t*>(addr));
+int16_t ArchHandler::readS16(const uint8_t *addr, bool isBig) {
+    return read16(addr, isBig);
 }
 
-int32_t ArchHandler::readS32(bool swap, const uint8_t *addr) {
-  return read32(swap, *reinterpret_cast<const uint32_t*>(addr));
+int32_t ArchHandler::readS32(const uint8_t *addr, bool isBig) {
+  return read32(addr, isBig);
 }
 
-uint32_t ArchHandler::readU32(bool swap, const uint8_t *addr) {
-  return read32(swap, *reinterpret_cast<const uint32_t*>(addr));
+uint32_t ArchHandler::readU32(const uint8_t *addr, bool isBig) {
+  return read32(addr, isBig);
 }
 
-int64_t ArchHandler::readS64(bool swap, const uint8_t *addr) {
-  return read64(swap, *reinterpret_cast<const uint64_t*>(addr));
+  int64_t ArchHandler::readS64(const uint8_t *addr, bool isBig) {
+  return read64(addr, isBig);
+}
+
+bool ArchHandler::isDwarfCIE(bool isBig, const DefinedAtom *atom) {
+  assert(atom->contentType() == DefinedAtom::typeCFI);
+  if (atom->rawContent().size() < sizeof(uint32_t))
+    return false;
+  uint32_t size = read32(atom->rawContent().data(), isBig);
+
+  uint32_t idOffset = sizeof(uint32_t);
+  if (size == 0xffffffffU)
+    idOffset += sizeof(uint64_t);
+
+  return read32(atom->rawContent().data() + idOffset, isBig) == 0;
+}
+
+const Atom *ArchHandler::fdeTargetFunction(const DefinedAtom *fde) {
+  for (auto ref : *fde) {
+    if (ref->kindNamespace() == Reference::KindNamespace::mach_o &&
+        ref->kindValue() == unwindRefToFunctionKind()) {
+      assert(ref->kindArch() == kindArch() && "unexpected Reference arch");
+      return ref->target();
+    }
+  }
+
+  return nullptr;
 }
 
 } // namespace mach_o

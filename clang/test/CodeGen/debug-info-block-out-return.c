@@ -11,8 +11,8 @@
 // out of order or not at all (the latter would occur if they were both assigned
 // the same argument number by mistake).
 
-// CHECK: metadata !".block_descriptor", metadata !{{[0-9]*}}, i32 16777218, {{.*}} ; [ DW_TAG_arg_variable ] [.block_descriptor]
-// CHECK: metadata !"param", metadata !{{[0-9]*}}, i32 33554434, {{.*}} ; [ DW_TAG_arg_variable ] [param]
+// CHECK: !MDLocalVariable(tag: DW_TAG_arg_variable, name: ".block_descriptor", arg: 1,{{.*}}line: 2,
+// CHECK: !MDLocalVariable(tag: DW_TAG_arg_variable, name: "param", arg: 2,{{.*}}line: 2,
 
 // Line directive so we don't have to worry about how many lines preceed the
 // test code (as the line number is mangled in with the argument number as shown

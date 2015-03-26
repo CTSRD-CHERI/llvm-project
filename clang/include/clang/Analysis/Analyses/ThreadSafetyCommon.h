@@ -27,7 +27,6 @@
 #include "clang/Analysis/Analyses/ThreadSafetyTraverse.h"
 #include "clang/Analysis/AnalysisContext.h"
 #include "clang/Basic/OperatorKinds.h"
-
 #include <memory>
 #include <ostream>
 #include <sstream>
@@ -142,7 +141,7 @@ public:
     if (!dyn_cast_or_null<NamedDecl>(AC.getDecl()))
       return false;
 
-    SortedGraph = AC.getAnalysis<ReversePostOrderCFGView>();
+    SortedGraph = AC.getAnalysis<PostOrderCFGView>();
     if (!SortedGraph)
       return false;
 
@@ -287,6 +286,14 @@ public:
             sx::partiallyMatches(CapExpr, other.CapExpr);
   }
 
+  const ValueDecl* valueDecl() const {
+    if (Negated)
+      return nullptr;
+    if (auto *P = dyn_cast<til::Project>(CapExpr))
+      return P->clangDecl();
+    return nullptr;
+  }
+
   std::string toString() const {
     if (Negated)
       return "!" + sx::toString(CapExpr);
@@ -423,8 +430,8 @@ private:
     }
 
   private:
-    BlockInfo(const BlockInfo &) LLVM_DELETED_FUNCTION;
-    void operator=(const BlockInfo &) LLVM_DELETED_FUNCTION;
+    BlockInfo(const BlockInfo &) = delete;
+    void operator=(const BlockInfo &) = delete;
   };
 
   // We implement the CFGVisitor API
@@ -477,9 +484,9 @@ private:
                                            // Indexed by clang BlockID.
 
   LVarDefinitionMap CurrentLVarMap;
-  std::vector<til::Variable*> CurrentArguments;
-  std::vector<til::Variable*> CurrentInstructions;
-  std::vector<til::Variable*> IncompleteArgs;
+  std::vector<til::Phi*>   CurrentArguments;
+  std::vector<til::SExpr*> CurrentInstructions;
+  std::vector<til::Phi*>   IncompleteArgs;
   til::BasicBlock *CurrentBB;
   BlockInfo *CurrentBlockInfo;
 };

@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -polly-codegen-isl -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-codegen-isl -S < %s | FileCheck %s -check-prefix=CHECK-CODE
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen-isl -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen-isl -S < %s | FileCheck %s -check-prefix=CHECK-CODE
 
 ; void f(long A[], long N) {
 ;   long i;
@@ -21,7 +21,7 @@ next:
 
 for.i:
   %indvar = phi i64 [ 0, %next], [ %indvar.next, %for.i ]
-  %scevgep = getelementptr i64* %A, i64 %indvar
+  %scevgep = getelementptr i64, i64* %A, i64 %indvar
   store i64 %indvar, i64* %scevgep
   %indvar.next = add nsw i64 %indvar, 1
   %exitcond = icmp eq i64 %indvar.next, %N

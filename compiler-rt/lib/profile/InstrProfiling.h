@@ -50,15 +50,12 @@ uint64_t __llvm_profile_get_size_for_buffer(void);
  */
 int __llvm_profile_write_buffer(char *Buffer);
 
-const __llvm_profile_data *__llvm_profile_data_begin(void);
-const __llvm_profile_data *__llvm_profile_data_end(void);
-const char *__llvm_profile_names_begin(void);
-const char *__llvm_profile_names_end(void);
-uint64_t *__llvm_profile_counters_begin(void);
-uint64_t *__llvm_profile_counters_end(void);
-
-#define PROFILE_RANGE_SIZE(Range) \
-  (__llvm_profile_ ## Range ## _end() - __llvm_profile_ ## Range ## _begin())
+const __llvm_profile_data *__llvm_profile_begin_data(void);
+const __llvm_profile_data *__llvm_profile_end_data(void);
+const char *__llvm_profile_begin_names(void);
+const char *__llvm_profile_end_names(void);
+uint64_t *__llvm_profile_begin_counters(void);
+uint64_t *__llvm_profile_end_counters(void);
 
 /*!
  * \brief Write instrumentation data to the current file.

@@ -76,7 +76,7 @@ ObjectFilePECOFF::CreateInstance (const lldb::ModuleSP &module_sp,
 {
     if (!data_sp)
     {
-        data_sp = file->MemoryMapFileContents(file_offset, length);
+        data_sp = file->MemoryMapFileContentsIfLocal(file_offset, length);
         data_offset = 0;
     }
 
@@ -84,7 +84,7 @@ ObjectFilePECOFF::CreateInstance (const lldb::ModuleSP &module_sp,
     {
         // Update the data to contain the entire file if it doesn't already
         if (data_sp->GetByteSize() < length)
-            data_sp = file->MemoryMapFileContents(file_offset, length);
+            data_sp = file->MemoryMapFileContentsIfLocal(file_offset, length);
         std::unique_ptr<ObjectFile> objfile_ap(new ObjectFilePECOFF (module_sp, data_sp, data_offset, file, file_offset, length));
         if (objfile_ap.get() && objfile_ap->ParseHeader())
             return objfile_ap.release();
@@ -130,10 +130,17 @@ ObjectFilePECOFF::GetModuleSpecifications (const lldb_private::FileSpec& file,
             {
                 ArchSpec spec;
                 if (coff_header.machine == MachineAmd64)
+                {
                     spec.SetTriple("x86_64-pc-windows");
+                    specs.Append(ModuleSpec(file, spec));
+                }
                 else if (coff_header.machine == MachineX86)
+                {
                     spec.SetTriple("i386-pc-windows");
-                specs.Append(ModuleSpec(file, spec));
+                    specs.Append(ModuleSpec(file, spec));
+                    spec.SetTriple("i686-pc-windows");
+                    specs.Append(ModuleSpec(file, spec));
+                }
             }
         }
     }

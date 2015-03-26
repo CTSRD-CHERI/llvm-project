@@ -12,6 +12,7 @@ class AbbreviationsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
+    @expectedFailureFreeBSD("llvm.org/pr22611 thread race condition breaks prompt setting")
     @unittest2.skipIf(sys.platform.startswith("win32"), "one-shot script commands deadlock on Windows.")
     def test_nonrunning_command_abbreviations (self):
         self.expect("ap script",
@@ -34,7 +35,7 @@ class AbbreviationsTestCase(TestBase):
 
         # Only one matching command: execute it.
         self.expect("h",
-                    startstr = "The following is a list of built-in, permanent debugger commands:")
+                    startstr = "Debugger commands:")
 
         # Execute cleanup function during test tear down
         def cleanup():
@@ -84,6 +85,7 @@ class AbbreviationsTestCase(TestBase):
         self.running_abbreviations ()
 
     @dwarf_test
+    @expectedFailureLinux # not related to abbreviations, "dis -f" output has int3 in it
     def test_with_dwarf (self):
         self.buildDwarf ()
         self.running_abbreviations ()
@@ -148,12 +150,18 @@ class AbbreviationsTestCase(TestBase):
                                  "stop reason = breakpoint 2.1" ])
 
         # ARCH, if not specified, defaults to x86_64.
+        self.runCmd("dis -f")
+        disassembly = self.res.GetOutput()
         if self.getArchitecture() in ["", 'x86_64', 'i386']:
-            self.expect("dis -f",
+            # hey! we shouldn't have a software breakpoint in here
+            self.assertFalse("int3" in disassembly)
+            self.expect(disassembly, exe=False,
                         startstr = "a.out`sum(int, int)",
                         substrs = [' mov',
                                    ' addl ',
                                    'ret'])
+        else:
+            self.fail('unimplemented for arch = "{arch}"'.format(arch=self.getArchitecture()))
 
         self.expect("i d l main.cpp",
                     patterns = ["Line table for .*main.cpp in `a.out"])

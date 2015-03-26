@@ -15,6 +15,7 @@
 #define POLLY_SUPPORT_IRHELPER_H
 
 namespace llvm {
+class Type;
 class Instruction;
 class LoopInfo;
 class Loop;
@@ -52,13 +53,17 @@ bool hasInvokeEdge(const llvm::PHINode *PN);
 llvm::Value *getPointerOperand(llvm::Instruction &Inst);
 llvm::BasicBlock *createSingleExitEdge(llvm::Region *R, llvm::Pass *P);
 
-/// @brief Simplify the region in a scop to have a single entry edge
-///        and a single exit edge.
+/// @brief Return the type of the access.
+llvm::Type *getAccessInstType(llvm::Instruction *AccInst);
+
+/// @brief Simplify the region in a SCoP to have a single unconditional entry
+///        edge and a single exit edge.
 ///
-/// @param S  The scop that is simplified.
+/// @param S  The SCoP that is simplified.
 /// @param P  The pass that is currently running.
 ///
-void simplifyRegion(polly::Scop *S, llvm::Pass *P);
+/// @return The unique entering block for the region.
+llvm::BasicBlock *simplifyRegion(polly::Scop *S, llvm::Pass *P);
 
 /// @brief Split the entry block of a function to store the newly inserted
 ///        allocations outside of all Scops.

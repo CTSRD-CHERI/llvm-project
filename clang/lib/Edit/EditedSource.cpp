@@ -135,7 +135,7 @@ bool EditedSource::commitInsertFromRange(SourceLocation OrigLoc,
     StrVec += text;
   }
 
-  return commitInsert(OrigLoc, Offs, StrVec.str(), beforePreviousInsertions);
+  return commitInsert(OrigLoc, Offs, StrVec, beforePreviousInsertions);
 }
 
 void EditedSource::commitRemove(SourceLocation OrigLoc,
@@ -280,6 +280,12 @@ static void adjustRemoval(const SourceManager &SM, const LangOptions &LangOpts,
   unsigned begin = offs.getOffset();
   unsigned end = begin + len;
 
+  // Do not try to extend the removal if we're at the end of the buffer already.
+  if (end == buffer.size())
+    return;
+
+  assert(begin < buffer.size() && end < buffer.size() && "Invalid range!");
+
   // FIXME: Remove newline.
 
   if (begin == 0) {
@@ -354,14 +360,14 @@ void EditedSource::applyRewrites(EditsReceiver &receiver) {
       continue;
     }
 
-    applyRewrite(receiver, StrVec.str(), CurOffs, CurLen, SourceMgr, LangOpts);
+    applyRewrite(receiver, StrVec, CurOffs, CurLen, SourceMgr, LangOpts);
     CurOffs = offs;
     StrVec = act.Text;
     CurLen = act.RemoveLen;
     CurEnd = CurOffs.getWithOffset(CurLen);
   }
 
-  applyRewrite(receiver, StrVec.str(), CurOffs, CurLen, SourceMgr, LangOpts);
+  applyRewrite(receiver, StrVec, CurOffs, CurLen, SourceMgr, LangOpts);
 }
 
 void EditedSource::clearRewrites() {

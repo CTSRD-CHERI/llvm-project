@@ -29,7 +29,7 @@ public:
     static void
     Terminate ();
     
-    static lldb_private::Platform* 
+    static lldb::PlatformSP
     CreateInstance (bool force, const lldb_private::ArchSpec *arch);
 
     static lldb_private::ConstString
@@ -64,10 +64,14 @@ public:
     // lldb_private::Platform functions
     //------------------------------------------------------------
     virtual lldb_private::Error
-    ResolveExecutable (const lldb_private::FileSpec &exe_file,
-                       const lldb_private::ArchSpec &arch,
+    ResolveExecutable (const lldb_private::ModuleSpec &module_spec,
                        lldb::ModuleSP &module_sp,
                        const lldb_private::FileSpecList *module_search_paths_ptr);
+
+    virtual bool
+    GetModuleSpec (const lldb_private::FileSpec& module_file_spec,
+                   const lldb_private::ArchSpec& arch,
+                   lldb_private::ModuleSpec &module_spec);
 
     virtual const char *
     GetDescription ();
@@ -87,19 +91,20 @@ public:
 
     virtual lldb_private::Error
     LaunchProcess (lldb_private::ProcessLaunchInfo &launch_info);
-    
+
+    virtual lldb_private::Error
+    KillProcess (const lldb::pid_t pid);
+
     virtual lldb::ProcessSP
     DebugProcess (lldb_private::ProcessLaunchInfo &launch_info,
                   lldb_private::Debugger &debugger,
                   lldb_private::Target *target,       // Can be NULL, if NULL create a new target, else use existing one
-                  lldb_private::Listener &listener,
                   lldb_private::Error &error);
 
     virtual lldb::ProcessSP
     Attach (lldb_private::ProcessAttachInfo &attach_info,
             lldb_private::Debugger &debugger,
             lldb_private::Target *target,       // Can be NULL, if NULL create a new target, else use existing one
-            lldb_private::Listener &listener,
             lldb_private::Error &error);
 
     virtual bool
@@ -127,7 +132,6 @@ public:
     
     virtual bool
     SetRemoteWorkingDirectory(const lldb_private::ConstString &path);
-    
 
     // Remote subclasses should override this and return a valid instance
     // name if connected.
@@ -215,6 +219,16 @@ public:
 protected:
     GDBRemoteCommunicationClient m_gdb_client;
     std::string m_platform_description; // After we connect we can get a more complete description of what we are connected to
+    std::string m_platform_hostname;
+
+    // Launch the lldb-gdbserver on the remote host and return the port it is listening on or 0 on
+    // failure. Subclasses should override this method if they want to do extra actions before or
+    // after launching the lldb-gdbserver.
+    virtual uint16_t
+    LaunchGDBserverAndGetPort (lldb::pid_t &pid);
+
+    virtual bool
+    KillSpawnedProcess (lldb::pid_t pid);
 
 private:
     DISALLOW_COPY_AND_ASSIGN (PlatformRemoteGDBServer);

@@ -8,7 +8,7 @@ target triple = "cheri-unknown-freebsd"
 define zeroext i8 @loadFromPtr1U(i8 addrspace(200)* nocapture %a) nounwind readonly {
 entry:
   ; CHECK: clb
-  %0 = load i8 addrspace(200)* %a, align 1, !tbaa !0
+  %0 = load i8, i8 addrspace(200)* %a, align 1
   ; CHECK: addiu
   %conv = zext i8 %0 to i32
   %add = add nsw i32 %conv, 12
@@ -21,7 +21,7 @@ entry:
 define signext i8 @loadFromPtr1(i8 addrspace(200)* nocapture %a) nounwind readonly {
 entry:
   ; CHECK: clb
-  %0 = load i8 addrspace(200)* %a, align 1, !tbaa !0
+  %0 = load i8, i8 addrspace(200)* %a, align 1
   %conv2 = zext i8 %0 to i32
   %add = add nsw i32 %conv2, 12
   %conv1 = trunc i32 %add to i8
@@ -32,7 +32,7 @@ entry:
 define zeroext i16 @loadFromPtr2U(i16 addrspace(200)* nocapture %a) nounwind readonly {
 entry:
   ; CHECK: clh
-  %0 = load i16 addrspace(200)* %a, align 2, !tbaa !2
+  %0 = load i16, i16 addrspace(200)* %a, align 2
   %conv = zext i16 %0 to i32
   %add = add nsw i32 %conv, 12
   %conv1 = trunc i32 %add to i16
@@ -43,7 +43,7 @@ entry:
 define signext i16 @loadFromPtr2(i16 addrspace(200)* nocapture %a) nounwind readonly {
 entry:
   ; CHECK: clh
-  %0 = load i16 addrspace(200)* %a, align 2, !tbaa !2
+  %0 = load i16, i16 addrspace(200)* %a, align 2
   %conv2 = zext i16 %0 to i32
   %add = add nsw i32 %conv2, 12
   %conv1 = trunc i32 %add to i16
@@ -54,7 +54,7 @@ entry:
 define i32 @loadFromPtr4U(i32 addrspace(200)* nocapture %a) nounwind readonly {
 entry:
   ; CHECK: clw
-  %0 = load i32 addrspace(200)* %a, align 4, !tbaa !3
+  %0 = load i32, i32 addrspace(200)* %a, align 4
   %add = add i32 %0, 12
   ret i32 %add
 }
@@ -63,7 +63,7 @@ entry:
 define i32 @loadFromPtr4(i32 addrspace(200)* nocapture %a) nounwind readonly {
 entry:
   ; CHECK: clw
-  %0 = load i32 addrspace(200)* %a, align 4, !tbaa !3
+  %0 = load i32, i32 addrspace(200)* %a, align 4
   %add = add nsw i32 %0, 12
   ret i32 %add
 }
@@ -72,7 +72,7 @@ entry:
 define i64 @loadFromPtr8U(i64 addrspace(200)* nocapture %a) nounwind readonly {
 entry:
   ; CHECK: cld
-  %0 = load i64 addrspace(200)* %a, align 8, !tbaa !4
+  %0 = load i64, i64 addrspace(200)* %a, align 8
   %add = add i64 %0, 12
   ret i64 %add
 }
@@ -81,13 +81,7 @@ entry:
 define i64 @loadFromPtr8(i64 addrspace(200)* nocapture %a) nounwind readonly {
 entry:
   ; CHECK: cld
-  %0 = load i64 addrspace(200)* %a, align 8, !tbaa !4
+  %0 = load i64, i64 addrspace(200)* %a, align 8
   %add = add nsw i64 %0, 12
   ret i64 %add
 }
-
-!0 = metadata !{metadata !"omnipotent char", metadata !1}
-!1 = metadata !{metadata !"Simple C/C++ TBAA"}
-!2 = metadata !{metadata !"short", metadata !0}
-!3 = metadata !{metadata !"int", metadata !0}
-!4 = metadata !{metadata !"long long", metadata !0}

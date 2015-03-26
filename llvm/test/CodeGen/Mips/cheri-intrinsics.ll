@@ -22,7 +22,7 @@ declare i8 addrspace(200)* @llvm.mips.cap.length.set(i8 addrspace(200)*, i64) no
 define i8 addrspace(200)* @addBase(i8 addrspace(200)* %p) nounwind readnone {
 entry:
   ; CHECK: cincoffset
-  %incdec.ptr = getelementptr inbounds i8 addrspace(200)* %p, i64 1
+  %incdec.ptr = getelementptr inbounds i8, i8 addrspace(200)* %p, i64 1
   ret i8 addrspace(200)* %incdec.ptr
 }
 

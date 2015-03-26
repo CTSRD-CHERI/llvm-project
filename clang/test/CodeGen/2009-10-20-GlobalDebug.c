@@ -6,5 +6,11 @@ int main() {
   return 0;
 }
 
-// CHECK: metadata !{i32 {{.*}}, i32 0, metadata !{{.*}}, metadata !"localstatic", metadata !"localstatic", metadata !"", metadata !{{.*}}, i32 5, metadata !{{.*}}, i32 1, i32 1, i32* @main.localstatic, null} ; [ DW_TAG_variable ]
-// CHECK: metadata !{i32 {{.*}}, i32 0, null, metadata !"global", metadata !"global", metadata !"", metadata !{{.*}}, i32 3, metadata !{{.*}}, i32 0, i32 1, i32* @global, null} ; [ DW_TAG_variable ]
+// CHECK: !MDGlobalVariable(name: "localstatic"
+// CHECK-NOT:               linkageName:
+// CHECK-SAME:              line: 5,
+// CHECK-SAME:              variable: i32* @main.localstatic
+// CHECK: !MDGlobalVariable(name: "global"
+// CHECK-NOT:               linkageName:
+// CHECK-SAME:              line: 3,
+// CHECK-SAME:              variable: i32* @global

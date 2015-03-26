@@ -80,10 +80,6 @@ static inline std::string stringFromIslObjInternal(__isl_keep ISLTy *isl_obj,
   return string;
 }
 
-static inline isl_ctx *schedule_get_ctx(__isl_keep isl_schedule *schedule) {
-  return isl_union_map_get_ctx(isl_schedule_get_map(schedule));
-}
-
 std::string polly::stringFromIslObj(__isl_keep isl_map *map) {
   return stringFromIslObjInternal(map, isl_map_get_ctx, isl_printer_print_map);
 }
@@ -103,7 +99,7 @@ std::string polly::stringFromIslObj(__isl_keep isl_union_set *uset) {
 }
 
 std::string polly::stringFromIslObj(__isl_keep isl_schedule *schedule) {
-  return stringFromIslObjInternal(schedule, schedule_get_ctx,
+  return stringFromIslObjInternal(schedule, isl_schedule_get_ctx,
                                   isl_printer_print_schedule);
 }
 
@@ -140,15 +136,22 @@ static void makeIslCompatible(std::string &str) {
   replace(str, "\"", "_");
 }
 
-std::string polly::getIslCompatibleName(std::string Prefix, const Value *Val,
-                                        std::string Suffix) {
+std::string polly::getIslCompatibleName(const std::string &Prefix,
+                                        const std::string &Middle,
+                                        const std::string &Suffix) {
+  std::string S = Prefix + Middle + Suffix;
+  makeIslCompatible(S);
+  return S;
+}
+
+std::string polly::getIslCompatibleName(const std::string &Prefix,
+                                        const Value *Val,
+                                        const std::string &Suffix) {
   std::string ValStr;
   raw_string_ostream OS(ValStr);
   Val->printAsOperand(OS, false);
   ValStr = OS.str();
   // Remove the leading %
   ValStr.erase(0, 1);
-  ValStr = Prefix + ValStr + Suffix;
-  makeIslCompatible(ValStr);
-  return ValStr;
+  return getIslCompatibleName(Prefix, ValStr, Suffix);
 }

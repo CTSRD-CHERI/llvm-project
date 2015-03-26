@@ -127,9 +127,14 @@ namespace opts {
   cl::opt<bool> ExpandRelocs("expand-relocs",
     cl::desc("Expand each shown relocation to multiple lines"));
 
-  // -codeview-linetables
-  cl::opt<bool> CodeViewLineTables("codeview-linetables",
-    cl::desc("Display CodeView line table information"));
+  // -codeview
+  cl::opt<bool> CodeView("codeview",
+                         cl::desc("Display CodeView debug information"));
+
+  // -codeview-subsection-bytes
+  cl::opt<bool> CodeViewSubsectionBytes(
+      "codeview-subsection-bytes",
+      cl::desc("Dump raw contents of codeview debug sections and records"));
 
   // -arm-attributes, -a
   cl::opt<bool> ARMAttributes("arm-attributes",
@@ -146,10 +151,19 @@ namespace opts {
   cl::opt<bool>
   COFFImports("coff-imports", cl::desc("Display the PE/COFF import table"));
 
+  // -coff-exports
+  cl::opt<bool>
+  COFFExports("coff-exports", cl::desc("Display the PE/COFF export table"));
+
   // -coff-directives
   cl::opt<bool>
   COFFDirectives("coff-directives",
-                 cl::desc("Display the contents PE/COFF .drectve section"));
+                 cl::desc("Display the PE/COFF .drectve section"));
+
+  // -coff-basereloc
+  cl::opt<bool>
+  COFFBaseRelocs("coff-basereloc",
+                 cl::desc("Display the PE/COFF .reloc section"));
 } // namespace opts
 
 static int ReturnValue = EXIT_SUCCESS;
@@ -168,8 +182,8 @@ bool error(std::error_code EC) {
 
 bool relocAddressLess(RelocationRef a, RelocationRef b) {
   uint64_t a_addr, b_addr;
-  if (error(a.getOffset(a_addr))) return false;
-  if (error(b.getOffset(b_addr))) return false;
+  if (error(a.getOffset(a_addr))) exit(ReturnValue);
+  if (error(b.getOffset(b_addr))) exit(ReturnValue);
   return a_addr < b_addr;
 }
 
@@ -277,8 +291,12 @@ static void dumpObject(const ObjectFile *Obj) {
       Dumper->printMipsPLTGOT();
   if (opts::COFFImports)
     Dumper->printCOFFImports();
+  if (opts::COFFExports)
+    Dumper->printCOFFExports();
   if (opts::COFFDirectives)
     Dumper->printCOFFDirectives();
+  if (opts::COFFBaseRelocs)
+    Dumper->printCOFFBaseReloc();
 }
 
 

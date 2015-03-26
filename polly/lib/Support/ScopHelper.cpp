@@ -13,6 +13,7 @@
 
 #include "polly/Support/ScopHelper.h"
 #include "polly/ScopInfo.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
@@ -66,6 +67,14 @@ Value *polly::getPointerOperand(Instruction &Inst) {
   return 0;
 }
 
+Type *polly::getAccessInstType(Instruction *AccInst) {
+  if (StoreInst *Store = dyn_cast<StoreInst>(AccInst))
+    return Store->getValueOperand()->getType();
+  if (BranchInst *Branch = dyn_cast<BranchInst>(AccInst))
+    return Branch->getCondition()->getType();
+  return AccInst->getType();
+}
+
 bool polly::hasInvokeEdge(const PHINode *PN) {
   for (unsigned i = 0, e = PN->getNumIncomingValues(); i < e; ++i)
     if (InvokeInst *II = dyn_cast<InvokeInst>(PN->getIncomingValue(i)))
@@ -83,33 +92,90 @@ BasicBlock *polly::createSingleExitEdge(Region *R, Pass *P) {
     if (R->contains(*PI))
       Preds.push_back(*PI);
 
-  return SplitBlockPredecessors(BB, Preds, ".region", P);
+  auto *AA = P->getAnalysisIfAvailable<AliasAnalysis>();
+  auto *DTWP = P->getAnalysisIfAvailable<DominatorTreeWrapperPass>();
+  auto *DT = DTWP ? &DTWP->getDomTree() : nullptr;
+  auto *LIWP = P->getAnalysisIfAvailable<LoopInfoWrapperPass>();
+  auto *LI = LIWP ? &LIWP->getLoopInfo() : nullptr;
+
+  return SplitBlockPredecessors(BB, Preds, ".region", AA, DT, LI);
 }
 
-void polly::simplifyRegion(Scop *S, Pass *P) {
+static void replaceScopAndRegionEntry(polly::Scop *S, BasicBlock *OldEntry,
+                                      BasicBlock *NewEntry) {
+  if (polly::ScopStmt *Stmt = S->getStmtForBasicBlock(OldEntry))
+    Stmt->setBasicBlock(NewEntry);
+
+  S->getRegion().replaceEntryRecursive(NewEntry);
+}
+
+BasicBlock *polly::simplifyRegion(Scop *S, Pass *P) {
   Region *R = &S->getRegion();
 
+  // The entering block for the region.
+  BasicBlock *EnteringBB = R->getEnteringBlock();
+  BasicBlock *OldEntry = R->getEntry();
+  BasicBlock *NewEntry = nullptr;
+
+  auto *DTWP = P->getAnalysisIfAvailable<DominatorTreeWrapperPass>();
+  auto *DT = DTWP ? &DTWP->getDomTree() : nullptr;
+  auto *LIWP = P->getAnalysisIfAvailable<LoopInfoWrapperPass>();
+  auto *LI = LIWP ? &LIWP->getLoopInfo() : nullptr;
+
   // Create single entry edge if the region has multiple entry edges.
-  if (!R->getEnteringBlock()) {
-    BasicBlock *OldEntry = R->getEntry();
-    BasicBlock *NewEntry = SplitBlock(OldEntry, OldEntry->begin(), P);
-
-    for (ScopStmt *Stmt : *S)
-      if (Stmt->getBasicBlock() == OldEntry) {
-        Stmt->setBasicBlock(NewEntry);
-        break;
-      }
-
-    R->replaceEntryRecursive(NewEntry);
+  if (!EnteringBB) {
+    NewEntry = SplitBlock(OldEntry, OldEntry->begin(), DT, LI);
+    EnteringBB = OldEntry;
   }
+
+  // Create an unconditional entry edge.
+  if (EnteringBB->getTerminator()->getNumSuccessors() != 1) {
+    BasicBlock *EntryBB = NewEntry ? NewEntry : OldEntry;
+    BasicBlock *SplitEdgeBB = SplitEdge(EnteringBB, EntryBB, DT, LI);
+
+    // Once the edge between EnteringBB and EntryBB is split, two cases arise.
+    // The first is simple. The new block is inserted between EnteringBB and
+    // EntryBB. In this case no further action is needed. However it might
+    // happen (if the splitted edge is not critical) that the new block is
+    // inserted __after__ EntryBB causing the following situation:
+    //
+    // EnteringBB
+    //    _|_
+    //    | |
+    //    |  \-> some_other_BB_not_in_R
+    //    V
+    // EntryBB
+    //    |
+    //    V
+    // SplitEdgeBB
+    //
+    // In this case we need to swap the role of EntryBB and SplitEdgeBB.
+
+    // Check which case SplitEdge produced:
+    if (SplitEdgeBB->getTerminator()->getSuccessor(0) == EntryBB) {
+      // First (simple) case.
+      EnteringBB = SplitEdgeBB;
+    } else {
+      // Second (complicated) case.
+      NewEntry = SplitEdgeBB;
+      EnteringBB = EntryBB;
+    }
+
+    EnteringBB->setName("polly.entering.block");
+  }
+
+  if (NewEntry)
+    replaceScopAndRegionEntry(S, OldEntry, NewEntry);
 
   // Create single exit edge if the region has multiple exit edges.
   if (!R->getExitingBlock()) {
-    BasicBlock *NewExit = createSingleExitEdge(R, P);
-
-    for (auto &&SubRegion : *R)
-      SubRegion->replaceExitRecursive(NewExit);
+    BasicBlock *NewExiting = createSingleExitEdge(R, P);
+    (void)NewExiting;
+    assert(NewExiting == R->getExitingBlock() &&
+           "Did not create a single exiting block");
   }
+
+  return EnteringBB;
 }
 
 void polly::splitEntryBlockForAlloca(BasicBlock *EntryBlock, Pass *P) {
@@ -119,8 +185,13 @@ void polly::splitEntryBlockForAlloca(BasicBlock *EntryBlock, Pass *P) {
   while (isa<AllocaInst>(I))
     ++I;
 
+  auto *DTWP = P->getAnalysisIfAvailable<DominatorTreeWrapperPass>();
+  auto *DT = DTWP ? &DTWP->getDomTree() : nullptr;
+  auto *LIWP = P->getAnalysisIfAvailable<LoopInfoWrapperPass>();
+  auto *LI = LIWP ? &LIWP->getLoopInfo() : nullptr;
+
   // SplitBlock updates DT, DF and LI.
-  BasicBlock *NewEntry = SplitBlock(EntryBlock, I, P);
+  BasicBlock *NewEntry = SplitBlock(EntryBlock, I, DT, LI);
   if (RegionInfoPass *RIP = P->getAnalysisIfAvailable<RegionInfoPass>())
     RIP->getRegionInfo().splitBlock(NewEntry, EntryBlock);
 }

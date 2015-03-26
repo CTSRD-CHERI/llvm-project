@@ -43,6 +43,7 @@ protected:
   Selector GetExternalSelector(uint32_t ID) override;
   uint32_t GetNumExternalSelectors() override;
   Stmt *GetExternalDeclStmt(uint64_t Offset) override;
+  CXXCtorInitializer **GetExternalCXXCtorInitializers(uint64_t Offset) override;
   CXXBaseSpecifier *GetExternalCXXBaseSpecifiers(uint64_t Offset) override;
   bool FindExternalVisibleDeclsByName(const DeclContext *DC,
                                       DeclarationName Name) override;
@@ -176,8 +177,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
       // TODO: Pass through the existing MemoryBuffer instances instead of
       // allocating new ones.
       for (auto &SB : SerialBufs)
-        Bufs.push_back(std::unique_ptr<llvm::MemoryBuffer>(
-            llvm::MemoryBuffer::getMemBuffer(SB->getBuffer())));
+        Bufs.push_back(llvm::MemoryBuffer::getMemBuffer(SB->getBuffer()));
       std::string pchName = includes[i-1];
       llvm::raw_string_ostream os(pchName);
       os << ".pch" << i-1;
@@ -198,8 +198,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
 
     ParseAST(Clang->getSema());
     Clang->getDiagnosticClient().EndSourceFile();
-    SerialBufs.push_back(std::unique_ptr<llvm::MemoryBuffer>(
-        llvm::MemoryBuffer::getMemBufferCopy(OS.str())));
+    SerialBufs.push_back(llvm::MemoryBuffer::getMemBufferCopy(OS.str()));
     source->CIs.push_back(Clang.release());
   }
 
@@ -233,6 +232,10 @@ Stmt *ChainedIncludesSource::GetExternalDeclStmt(uint64_t Offset) {
 CXXBaseSpecifier *
 ChainedIncludesSource::GetExternalCXXBaseSpecifiers(uint64_t Offset) {
   return getFinalReader().GetExternalCXXBaseSpecifiers(Offset);
+}
+CXXCtorInitializer **
+ChainedIncludesSource::GetExternalCXXCtorInitializers(uint64_t Offset) {
+  return getFinalReader().GetExternalCXXCtorInitializers(Offset);
 }
 bool
 ChainedIncludesSource::FindExternalVisibleDeclsByName(const DeclContext *DC,

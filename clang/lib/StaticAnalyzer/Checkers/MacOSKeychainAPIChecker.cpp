@@ -270,7 +270,7 @@ void MacOSKeychainAPIChecker::
   os << "Deallocator doesn't match the allocator: '"
      << FunctionsToTrack[PDeallocIdx].Name << "' should be used.";
   BugReport *Report = new BugReport(*BT, os.str(), N);
-  Report->addVisitor(new SecKeychainBugVisitor(AP.first));
+  Report->addVisitor(llvm::make_unique<SecKeychainBugVisitor>(AP.first));
   Report->addRange(ArgExpr->getSourceRange());
   markInteresting(Report, AP);
   C.emitReport(Report);
@@ -292,7 +292,11 @@ void MacOSKeychainAPIChecker::checkPreStmt(const CallExpr *CE,
   // If it is a call to an allocator function, it could be a double allocation.
   idx = getTrackedFunctionIndex(funName, true);
   if (idx != InvalidIdx) {
-    const Expr *ArgExpr = CE->getArg(FunctionsToTrack[idx].Param);
+    unsigned paramIdx = FunctionsToTrack[idx].Param;
+    if (CE->getNumArgs() <= paramIdx)
+      return;
+
+    const Expr *ArgExpr = CE->getArg(paramIdx);
     if (SymbolRef V = getAsPointeeSymbol(ArgExpr, C))
       if (const AllocationState *AS = State->get<AllocatedData>(V)) {
         if (!definitelyReturnedError(AS->Region, State, C.getSValBuilder())) {
@@ -311,7 +315,7 @@ void MacOSKeychainAPIChecker::checkPreStmt(const CallExpr *CE,
               << FunctionsToTrack[DIdx].Name
               << "'.";
           BugReport *Report = new BugReport(*BT, os.str(), N);
-          Report->addVisitor(new SecKeychainBugVisitor(V));
+          Report->addVisitor(llvm::make_unique<SecKeychainBugVisitor>(V));
           Report->addRange(ArgExpr->getSourceRange());
           Report->markInteresting(AS->Region);
           C.emitReport(Report);
@@ -325,8 +329,12 @@ void MacOSKeychainAPIChecker::checkPreStmt(const CallExpr *CE,
   if (idx == InvalidIdx)
     return;
 
+  unsigned paramIdx = FunctionsToTrack[idx].Param;
+  if (CE->getNumArgs() <= paramIdx)
+    return;
+
   // Check the argument to the deallocator.
-  const Expr *ArgExpr = CE->getArg(FunctionsToTrack[idx].Param);
+  const Expr *ArgExpr = CE->getArg(paramIdx);
   SVal ArgSVal = State->getSVal(ArgExpr, C.getLocationContext());
 
   // Undef is reported by another checker.
@@ -430,7 +438,7 @@ void MacOSKeychainAPIChecker::checkPreStmt(const CallExpr *CE,
     initBugType();
     BugReport *Report = new BugReport(*BT,
         "Only call free if a valid (non-NULL) buffer was returned.", N);
-    Report->addVisitor(new SecKeychainBugVisitor(ArgSM));
+    Report->addVisitor(llvm::make_unique<SecKeychainBugVisitor>(ArgSM));
     Report->addRange(ArgExpr->getSourceRange());
     Report->markInteresting(AS->Region);
     C.emitReport(Report);
@@ -499,9 +507,11 @@ MacOSKeychainAPIChecker::getAllocationNode(const ExplodedNode *N,
   while (N) {
     if (!N->getState()->get<AllocatedData>(Sym))
       break;
-    // Allocation node, is the last node in the current context in which the
-    // symbol was tracked.
-    if (N->getLocationContext() == LeakContext)
+    // Allocation node, is the last node in the current or parent context in
+    // which the symbol was tracked.
+    const LocationContext *NContext = N->getLocationContext();
+    if (NContext == LeakContext ||
+        NContext->isParentOf(LeakContext))
       AllocNode = N;
     N = N->pred_empty() ? nullptr : *(N->pred_begin());
   }
@@ -540,7 +550,7 @@ BugReport *MacOSKeychainAPIChecker::
   BugReport *Report = new BugReport(*BT, os.str(), N, LocUsedForUniqueing,
                                    AllocNode->getLocationContext()->getDecl());
 
-  Report->addVisitor(new SecKeychainBugVisitor(AP.first));
+  Report->addVisitor(llvm::make_unique<SecKeychainBugVisitor>(AP.first));
   markInteresting(Report, AP);
   return Report;
 }

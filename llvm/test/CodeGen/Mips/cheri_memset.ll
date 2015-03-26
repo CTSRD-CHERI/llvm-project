@@ -19,11 +19,11 @@ entry:
   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob to i8 addrspace(200)*), i8 0, i64 40, i32 4, i1 false)
 ; CHECK: memcpy_c
 ; CHECK: jalr
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob2 to i8 addrspace(200)*), i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob to i8 addrspace(200)*), i64 40, i32 4, i1 false), !tbaa.struct !1
+  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob2 to i8 addrspace(200)*), i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob to i8 addrspace(200)*), i64 40, i32 4, i1 false)
 
 ; CHECK: memmove_c
 ; CHECK: jalr
-  tail call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob2 to i8 addrspace(200)*), i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob to i8 addrspace(200)*), i64 40, i32 4, i1 false), !tbaa.struct !1
+  tail call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob2 to i8 addrspace(200)*), i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob to i8 addrspace(200)*), i64 40, i32 4, i1 false)
   ret void
 }
 
@@ -44,9 +44,4 @@ attributes #1 = { nounwind }
 
 !llvm.ident = !{!0}
 
-!0 = metadata !{metadata !"clang version 3.6.0 "}
-!1 = metadata !{i64 0, i64 4, metadata !2, i64 4, i64 4, metadata !2, i64 8, i64 4, metadata !2, i64 12, i64 4, metadata !2, i64 16, i64 4, metadata !2, i64 20, i64 4, metadata !2, i64 24, i64 4, metadata !2, i64 28, i64 4, metadata !2, i64 32, i64 4, metadata !2, i64 36, i64 4, metadata !2}
-!2 = metadata !{metadata !3, metadata !3, i64 0}
-!3 = metadata !{metadata !"int", metadata !4, i64 0}
-!4 = metadata !{metadata !"omnipotent char", metadata !5, i64 0}
-!5 = metadata !{metadata !"Simple C/C++ TBAA"}
+!0 = !{!"clang version 3.6.0 "}

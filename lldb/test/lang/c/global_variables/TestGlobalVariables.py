@@ -17,6 +17,7 @@ class GlobalVariablesTestCase(TestBase):
         self.buildDsym()
         self.global_variables()
 
+    @expectedFailureFreeBSD("llvm.org/21599 fails after editline rework")
     @dwarf_test
     def test_with_dwarf(self):
         """Test 'frame variable --scope --no-args' which omits args and shows scopes."""
@@ -27,26 +28,25 @@ class GlobalVariablesTestCase(TestBase):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break inside main().
-        self.line = line_number('main.c', '// Set break point at this line.')
-        if sys.platform.startswith("freebsd") or sys.platform.startswith("linux"):
-            # LD_LIBRARY_PATH must be set so the shared libraries are found on startup
-            if "LD_LIBRARY_PATH" in os.environ:
-                self.runCmd("settings set target.env-vars " + self.dylibPath + "=" + os.environ["LD_LIBRARY_PATH"] + ":" + os.getcwd())
-            else:
-                self.runCmd("settings set target.env-vars " + self.dylibPath + "=" + os.getcwd())
-            self.addTearDownHook(lambda: self.runCmd("settings remove target.env-vars " + self.dylibPath))
+        self.source = 'main.c'
+        self.line = line_number(self.source, '// Set break point at this line.')
+        self.shlib_names = ["a"]
 
     def global_variables(self):
         """Test 'frame variable --scope --no-args' which omits args and shows scopes."""
-        exe = os.path.join(os.getcwd(), "a.out")
-        self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
+        # Create a target by the debugger.
+        target = self.dbg.CreateTarget("a.out")
+        self.assertTrue(target, VALID_TARGET)
 
         # Break inside the main.
-        lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
+        lldbutil.run_break_set_by_file_and_line (self, self.source, self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        # Register our shared libraries for remote targets so they get automatically uploaded
+        environment = self.registerSharedLibrariesWithTarget(target, self.shlib_names)
 
-        self.runCmd("process status", "Get process status")
+        # Now launch the process, and do not stop at entry point.
+        process = target.LaunchSimple (None, environment, self.get_process_working_directory())
+        self.assertTrue(process, PROCESS_IS_VALID)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

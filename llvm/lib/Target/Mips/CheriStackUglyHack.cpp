@@ -11,6 +11,7 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/InstVisitor.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/Local.h"
 
 #include <string>
@@ -61,34 +62,12 @@ class CheriStackHack : public FunctionPass,
       Idxs.push_back(I->get());
     Value *NewGEP;
     Instruction *NewGEPAsPtr;
-
-    APInt Offset(64, 0, true);
-    if (GEP->accumulateConstantOffset(*DL, Offset) && Offset.isNegative()) {
-      // If the GEP is negative then a capability offset will fail.  We must
-      // re-derive the capability version from the pointer.
-      // FIXME: This becomes obsolete with cursors.
-      NewGEPAsPtr = GetElementPtrInst::Create(R.Ptr, Idxs, GEP->getName(),
-          GEP);
-
-      LLVMContext &C = M->getContext();
-      IRBuilder<> B(C);
-      ilist_iterator<Instruction> I(NewGEPAsPtr);
-      B.SetInsertPoint(GEP->getParent(), ++I);
-
-      Function *CastFn =
-        Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
-      Value *I8GEP = B.CreateBitCast(NewGEPAsPtr, Type::getInt8PtrTy(C, 0));
-      Value *I8CapGEP  = B.CreateCall(CastFn, I8GEP);
-      NewGEP = B.CreateBitCast(I8CapGEP,
-          getCapType(cast<PointerType>(NewGEPAsPtr->getType())));
-    } else {
-      // The result of a GEP is another pointer, so we must do the replacement
-      // here.
-      NewGEP = GetElementPtrInst::Create(R.Cap, Idxs, GEP->getName(), GEP);
-      NewGEPAsPtr = new AddrSpaceCastInst(NewGEP, GEP->getType(),
+    // The result of a GEP is another pointer, so we must do the replacement
+    // here.
+    NewGEP = GetElementPtrInst::Create(GEP->getSourceElementType(), R.Cap,
+            Idxs, GEP->getName(), GEP);
+    NewGEPAsPtr = new AddrSpaceCastInst(NewGEP, GEP->getType(),
           GEP->getName(), GEP);
-    }
-
 
     Replacement GEPR = { GEP, NewGEP, NewGEPAsPtr };
     replaceUsers(GEP, GEPR);
@@ -301,7 +280,7 @@ class CheriStackHack : public FunctionPass,
           }
       }
       for (BasicBlock &BB : F) {
-        SimplifyInstructionsInBlock(&BB, DL);
+        SimplifyInstructionsInBlock(&BB, &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI());
       }
       removeUnreachableBlocks(F);
 #ifndef NDEBUG
@@ -309,6 +288,10 @@ class CheriStackHack : public FunctionPass,
 #endif
       return true;
     }
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+      AU.addRequired<TargetLibraryInfoWrapperPass>();
+    }
+
 };
 
 } // anonymous namespace

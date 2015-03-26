@@ -11,6 +11,7 @@
 
 #include "ELFReader.h"
 #include "MipsLinkingContext.h"
+#include "MipsRelocationHandler.h"
 
 namespace llvm {
 namespace object {
@@ -23,15 +24,26 @@ struct Elf_RegInfo<ELFType<TargetEndianness, MaxAlign, false>> {
   LLVM_ELF_IMPORT_TYPES(TargetEndianness, MaxAlign, false)
   Elf_Word ri_gprmask;     // bit-mask of used general registers
   Elf_Word ri_cprmask[4];  // bit-mask of used co-processor registers
-  Elf_Sword ri_gp_value;   // gp register value
+  Elf_Addr ri_gp_value;    // gp register value
 };
 
 template <llvm::support::endianness TargetEndianness, std::size_t MaxAlign>
 struct Elf_RegInfo<ELFType<TargetEndianness, MaxAlign, true>> {
   LLVM_ELF_IMPORT_TYPES(TargetEndianness, MaxAlign, true)
   Elf_Word ri_gprmask;     // bit-mask of used general registers
+  Elf_Word ri_pad;         // unused padding field
   Elf_Word ri_cprmask[4];  // bit-mask of used co-processor registers
-  Elf_Sword ri_gp_value;   // gp register value
+  Elf_Addr ri_gp_value;    // gp register value
+};
+
+template <class ELFT> struct Elf_Mips_Options {
+  LLVM_ELF_IMPORT_TYPES(ELFT::TargetEndianness, ELFT::MaxAlignment,
+                        ELFT::Is64Bits)
+  uint8_t kind;     // Determines interpretation of variable part of descriptor
+  uint8_t size;     // Byte size of descriptor, including this header
+  Elf_Half section; // Section header index of section affected,
+                    // or 0 for global options
+  Elf_Word info;    // Kind-specific information
 };
 
 } // end namespace object.
@@ -60,54 +72,59 @@ public:
   const MipsELFFile<ELFT>& file() const override {
     return static_cast<const MipsELFFile<ELFT> &>(this->_owningFile);
   }
+
+  DefinedAtom::CodeModel codeModel() const override {
+    switch (this->_symbol->st_other & llvm::ELF::STO_MIPS_MIPS16) {
+    case llvm::ELF::STO_MIPS_MIPS16:
+      return DefinedAtom::codeMips16;
+    case llvm::ELF::STO_MIPS_PIC:
+      return DefinedAtom::codeMipsPIC;
+    case llvm::ELF::STO_MIPS_MICROMIPS:
+      return DefinedAtom::codeMipsMicro;
+    case llvm::ELF::STO_MIPS_MICROMIPS | llvm::ELF::STO_MIPS_PIC:
+      return DefinedAtom::codeMipsMicroPIC;
+    default:
+      return DefinedAtom::codeNA;
+    }
+  }
+};
+
+template <class ELFT> class MipsELFReference : public ELFReference<ELFT> {
+  typedef llvm::object::Elf_Rel_Impl<ELFT, false> Elf_Rel;
+  typedef llvm::object::Elf_Rel_Impl<ELFT, true> Elf_Rela;
+
+  static const bool _isMips64EL =
+      ELFT::Is64Bits && ELFT::TargetEndianness == llvm::support::little;
+
+public:
+  MipsELFReference(uint64_t symValue, const Elf_Rela &rel)
+      : ELFReference<ELFT>(
+            &rel, rel.r_offset - symValue, Reference::KindArch::Mips,
+            rel.getType(_isMips64EL) & 0xff, rel.getSymbol(_isMips64EL)),
+        _tag(rel.getType(_isMips64EL) >> 8) {}
+
+  MipsELFReference(uint64_t symValue, const Elf_Rel &rel)
+      : ELFReference<ELFT>(rel.r_offset - symValue, Reference::KindArch::Mips,
+                           rel.getType(_isMips64EL) & 0xff,
+                           rel.getSymbol(_isMips64EL)),
+        _tag(rel.getType(_isMips64EL) >> 8) {}
+
+  uint32_t tag() const override { return _tag; }
+  void setTag(uint32_t tag) { _tag = tag; }
+
+private:
+  uint32_t _tag;
 };
 
 template <class ELFT> class MipsELFFile : public ELFFile<ELFT> {
 public:
-  MipsELFFile(StringRef name, bool atomizeStrings)
-      : ELFFile<ELFT>(name, atomizeStrings) {}
-
-  MipsELFFile(std::unique_ptr<MemoryBuffer> mb, bool atomizeStrings,
-              std::error_code &ec)
-      : ELFFile<ELFT>(std::move(mb), atomizeStrings, ec) {}
+  MipsELFFile(std::unique_ptr<MemoryBuffer> mb, MipsLinkingContext &ctx)
+      : ELFFile<ELFT>(std::move(mb), ctx) {}
 
   static ErrorOr<std::unique_ptr<MipsELFFile>>
-  create(std::unique_ptr<MemoryBuffer> mb, bool atomizeStrings) {
-    std::error_code ec;
-    std::unique_ptr<MipsELFFile<ELFT>> file(
-        new MipsELFFile<ELFT>(mb->getBufferIdentifier(), atomizeStrings));
-
-    file->_objFile.reset(
-        new llvm::object::ELFFile<ELFT>(mb.release()->getBuffer(), ec));
-
-    if (ec)
-      return ec;
-
-    // Read input sections from the input file that need to be converted to
-    // atoms
-    if ((ec = file->createAtomizableSections()))
-      return ec;
-
-    // For mergeable strings, we would need to split the section into various
-    // atoms
-    if ((ec = file->createMergeableAtoms()))
-      return ec;
-
-    // Create the necessary symbols that are part of the section that we
-    // created in createAtomizableSections function
-    if ((ec = file->createSymbolsFromAtomizableSections()))
-      return ec;
-
-    // Create the appropriate atoms from the file
-    if ((ec = file->createAtoms()))
-      return ec;
-
-    // Retrieve some auxiliary data like GP value, TLS section address etc
-    // from the object file.
-    if ((ec = file->readAuxData()))
-      return ec;
-
-    return std::move(file);
+  create(std::unique_ptr<MemoryBuffer> mb, MipsLinkingContext &ctx) {
+    return std::unique_ptr<MipsELFFile<ELFT>>(
+        new MipsELFFile<ELFT>(std::move(mb), ctx));
   }
 
   bool isPIC() const {
@@ -115,19 +132,32 @@ public:
   }
 
   /// \brief gp register value stored in the .reginfo section.
-  int64_t getGP0() const { return *_gp0; }
+  int64_t getGP0() const { return _gp0 ? *_gp0 : 0; }
 
   /// \brief .tdata section address plus fixed offset.
   uint64_t getTPOffset() const { return *_tpOff; }
   uint64_t getDTPOffset() const { return *_dtpOff; }
+
+protected:
+  std::error_code doParse() override {
+    if (std::error_code ec = ELFFile<ELFT>::doParse())
+      return ec;
+    // Retrieve some auxiliary data like GP value, TLS section address etc
+    // from the object file.
+    return readAuxData();
+  }
 
 private:
   typedef llvm::object::Elf_Sym_Impl<ELFT> Elf_Sym;
   typedef llvm::object::Elf_Shdr_Impl<ELFT> Elf_Shdr;
   typedef llvm::object::Elf_Rel_Impl<ELFT, false> Elf_Rel;
   typedef typename llvm::object::ELFFile<ELFT>::Elf_Rel_Iter Elf_Rel_Iter;
+  typedef typename llvm::object::ELFFile<ELFT>::Elf_Rela_Iter Elf_Rela_Iter;
 
   enum { TP_OFFSET = 0x7000, DTP_OFFSET = 0x8000 };
+
+  static const bool _isMips64EL =
+      ELFT::Is64Bits && ELFT::TargetEndianness == llvm::support::little;
 
   llvm::Optional<int64_t> _gp0;
   llvm::Optional<uint64_t> _tpOff;
@@ -143,46 +173,94 @@ private:
         referenceStart, referenceEnd, referenceList);
   }
 
+  const Elf_Shdr *findSectionByType(uint64_t type) {
+    for (const Elf_Shdr &section : this->_objFile->sections())
+      if (section.sh_type == type)
+        return &section;
+    return nullptr;
+  }
+
+  const Elf_Shdr *findSectionByFlags(uint64_t flags) {
+    for (const Elf_Shdr &section : this->_objFile->sections())
+      if (section.sh_flags & flags)
+        return &section;
+    return nullptr;
+  }
+
   std::error_code readAuxData() {
+    using namespace llvm::ELF;
+    if (const Elf_Shdr *sec = findSectionByFlags(SHF_TLS)) {
+      _tpOff = sec->sh_addr + TP_OFFSET;
+      _dtpOff = sec->sh_addr + DTP_OFFSET;
+    }
+
     typedef llvm::object::Elf_RegInfo<ELFT> Elf_RegInfo;
+    typedef llvm::object::Elf_Mips_Options<ELFT> Elf_Mips_Options;
 
-    for (const Elf_Shdr &section : this->_objFile->sections()) {
-      if (!_gp0.hasValue() && section.sh_type == llvm::ELF::SHT_MIPS_REGINFO) {
-        auto contents = this->getSectionContents(&section);
-        if (std::error_code ec = contents.getError())
-          return ec;
+    if (const Elf_Shdr *sec = findSectionByType(SHT_MIPS_OPTIONS)) {
+      auto contents = this->getSectionContents(sec);
+      if (std::error_code ec = contents.getError())
+        return ec;
 
-        ArrayRef<uint8_t> raw = contents.get();
+      ArrayRef<uint8_t> raw = contents.get();
+      while (!raw.empty()) {
+        if (raw.size() < sizeof(Elf_Mips_Options))
+          return make_dynamic_error_code(
+              StringRef("Invalid size of MIPS_OPTIONS section"));
 
-        // FIXME (simon): Show error in case of invalid section size.
-        assert(raw.size() == sizeof(Elf_RegInfo) &&
-               "Invalid size of RegInfo section");
-        _gp0 = reinterpret_cast<const Elf_RegInfo *>(raw.data())->ri_gp_value;
-      } else if (!_tpOff.hasValue() && section.sh_flags & llvm::ELF::SHF_TLS) {
-        _tpOff = section.sh_addr + TP_OFFSET;
-        _dtpOff = section.sh_addr + DTP_OFFSET;
+        const auto *opt = reinterpret_cast<const Elf_Mips_Options *>(raw.data());
+        if (opt->kind == ODK_REGINFO) {
+          _gp0 = reinterpret_cast<const Elf_RegInfo *>(opt + 1)->ri_gp_value;
+          break;
+        }
+        raw = raw.slice(opt->size);
       }
+    } else if (const Elf_Shdr *sec = findSectionByType(SHT_MIPS_REGINFO)) {
+      auto contents = this->getSectionContents(sec);
+      if (std::error_code ec = contents.getError())
+        return ec;
+
+      ArrayRef<uint8_t> raw = contents.get();
+      if (raw.size() != sizeof(Elf_RegInfo))
+        return make_dynamic_error_code(
+            StringRef("Invalid size of MIPS_REGINFO section"));
+
+      _gp0 = reinterpret_cast<const Elf_RegInfo *>(raw.data())->ri_gp_value;
     }
     return std::error_code();
   }
 
-  void createRelocationReferences(const Elf_Sym &symbol,
+  void createRelocationReferences(const Elf_Sym *symbol,
+                                  ArrayRef<uint8_t> content,
+                                  range<Elf_Rela_Iter> rels) override {
+    const auto value = this->getSymbolValue(symbol);
+    for (const auto &rel : rels) {
+      if (rel.r_offset < value || value + content.size() <= rel.r_offset)
+        continue;
+      auto r = new (this->_readerStorage) MipsELFReference<ELFT>(value, rel);
+      this->addReferenceToSymbol(r, symbol);
+      this->_references.push_back(r);
+    }
+  }
+
+  void createRelocationReferences(const Elf_Sym *symbol,
                                   ArrayRef<uint8_t> symContent,
                                   ArrayRef<uint8_t> secContent,
                                   range<Elf_Rel_Iter> rels) override {
+    const auto value = this->getSymbolValue(symbol);
     for (Elf_Rel_Iter rit = rels.begin(), eit = rels.end(); rit != eit; ++rit) {
-      if (rit->r_offset < symbol.st_value ||
-          symbol.st_value + symContent.size() <= rit->r_offset)
+      if (rit->r_offset < value || value + symContent.size() <= rit->r_offset)
         continue;
 
-      this->_references.push_back(new (this->_readerStorage) ELFReference<ELFT>(
-          &*rit, rit->r_offset - symbol.st_value, this->kindArch(),
-          rit->getType(isMips64EL()), rit->getSymbol(isMips64EL())));
+      auto r = new (this->_readerStorage) MipsELFReference<ELFT>(value, *rit);
+      this->addReferenceToSymbol(r, symbol);
+      this->_references.push_back(r);
 
       auto addend = readAddend(*rit, secContent);
-      if (needsMatchingRelocation(*rit)) {
+      auto pairRelType = getPairRelocation(*rit);
+      if (pairRelType != llvm::ELF::R_MIPS_NONE) {
         addend <<= 16;
-        auto mit = findMatchingRelocation(rit, eit);
+        auto mit = findMatchingRelocation(pairRelType, rit, eit);
         if (mit != eit)
           addend += int16_t(readAddend(*mit, secContent));
         else
@@ -195,50 +273,56 @@ private:
 
   Reference::Addend readAddend(const Elf_Rel &ri,
                                const ArrayRef<uint8_t> content) const {
-    const uint8_t *ap = content.data() + ri.r_offset;
-    switch (ri.getType(isMips64EL())) {
-    case llvm::ELF::R_MIPS_32:
-    case llvm::ELF::R_MIPS_GPREL32:
-    case llvm::ELF::R_MIPS_PC32:
-      return *(int32_t *)ap;
-    case llvm::ELF::R_MIPS_26:
-      return *(int32_t *)ap & 0x3ffffff;
+    const auto &rh =
+        this->_ctx.template getTargetHandler<ELFT>().getRelocationHandler();
+    return static_cast<const MipsRelocationHandler &>(rh)
+        .readAddend(getPrimaryType(ri), content.data() + ri.r_offset);
+  }
+
+  uint32_t getPairRelocation(const Elf_Rel &rel) const {
+    switch (getPrimaryType(rel)) {
     case llvm::ELF::R_MIPS_HI16:
-    case llvm::ELF::R_MIPS_LO16:
+      return llvm::ELF::R_MIPS_LO16;
+    case llvm::ELF::R_MIPS_PCHI16:
+      return llvm::ELF::R_MIPS_PCLO16;
     case llvm::ELF::R_MIPS_GOT16:
-    case llvm::ELF::R_MIPS_TLS_GD:
-    case llvm::ELF::R_MIPS_TLS_LDM:
-    case llvm::ELF::R_MIPS_TLS_GOTTPREL:
-    case llvm::ELF::R_MIPS_TLS_DTPREL_HI16:
-    case llvm::ELF::R_MIPS_TLS_DTPREL_LO16:
-    case llvm::ELF::R_MIPS_TLS_TPREL_HI16:
-    case llvm::ELF::R_MIPS_TLS_TPREL_LO16:
-      return *(int16_t *)ap;
+      if (isLocalBinding(rel))
+        return llvm::ELF::R_MIPS_LO16;
+      break;
+    case llvm::ELF::R_MICROMIPS_HI16:
+      return llvm::ELF::R_MICROMIPS_LO16;
+    case llvm::ELF::R_MICROMIPS_GOT16:
+      if (isLocalBinding(rel))
+        return llvm::ELF::R_MICROMIPS_LO16;
+      break;
     default:
-      return 0;
+      // Nothing to do.
+      break;
     }
+    return llvm::ELF::R_MIPS_NONE;
   }
 
-  bool needsMatchingRelocation(const Elf_Rel &rel) {
-    auto rType = rel.getType(isMips64EL());
-    if (rType == llvm::ELF::R_MIPS_HI16)
-      return true;
-    if (rType == llvm::ELF::R_MIPS_GOT16) {
-      const Elf_Sym *symbol =
-          this->_objFile->getSymbol(rel.getSymbol(isMips64EL()));
-      return symbol->getBinding() == llvm::ELF::STB_LOCAL;
-    }
-    return false;
-  }
-
-  Elf_Rel_Iter findMatchingRelocation(Elf_Rel_Iter rit, Elf_Rel_Iter eit) {
+  Elf_Rel_Iter findMatchingRelocation(uint32_t pairRelType, Elf_Rel_Iter rit,
+                                      Elf_Rel_Iter eit) const {
     return std::find_if(rit, eit, [&](const Elf_Rel &rel) {
-      return rel.getType(isMips64EL()) == llvm::ELF::R_MIPS_LO16 &&
-             rel.getSymbol(isMips64EL()) == rit->getSymbol(isMips64EL());
+      return getPrimaryType(rel) == pairRelType &&
+             rel.getSymbol(_isMips64EL) == rit->getSymbol(_isMips64EL);
     });
   }
 
-  bool isMips64EL() const { return this->_objFile->isMips64EL(); }
+  static uint8_t getPrimaryType(const Elf_Rel &rel) {
+    return rel.getType(_isMips64EL) & 0xff;
+  }
+  bool isLocalBinding(const Elf_Rel &rel) const {
+    return this->_objFile->getSymbol(rel.getSymbol(_isMips64EL))
+               ->getBinding() == llvm::ELF::STB_LOCAL;
+  }
+};
+
+template <class ELFT> class MipsDynamicFile : public DynamicFile<ELFT> {
+public:
+  MipsDynamicFile(const MipsLinkingContext &context, StringRef name)
+      : DynamicFile<ELFT>(context, name) {}
 };
 
 } // elf

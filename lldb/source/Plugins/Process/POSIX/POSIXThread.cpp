@@ -20,25 +20,30 @@
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/State.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostNativeThread.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/StopInfo.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/ThreadSpec.h"
+#include "llvm/ADT/SmallString.h"
 #include "POSIXStopInfo.h"
 #include "POSIXThread.h"
 #include "ProcessPOSIX.h"
 #include "ProcessPOSIXLog.h"
-#include "ProcessMonitor.h"
+#include "Plugins/Process/Linux/ProcessMonitor.h"
+#include "RegisterContextPOSIXProcessMonitor_arm64.h"
 #include "RegisterContextPOSIXProcessMonitor_mips64.h"
+#include "RegisterContextPOSIXProcessMonitor_powerpc.h"
 #include "RegisterContextPOSIXProcessMonitor_x86.h"
-#include "RegisterContextLinux_i386.h"
-#include "RegisterContextLinux_x86_64.h"
-#include "RegisterContextFreeBSD_i386.h"
-#include "RegisterContextFreeBSD_mips64.h"
-#include "RegisterContextFreeBSD_x86_64.h"
-
-#include "UnwindLLDB.h"
+#include "Plugins/Process/Utility/RegisterContextLinux_arm64.h"
+#include "Plugins/Process/Utility/RegisterContextLinux_i386.h"
+#include "Plugins/Process/Utility/RegisterContextLinux_x86_64.h"
+#include "Plugins/Process/Utility/RegisterContextFreeBSD_i386.h"
+#include "Plugins/Process/Utility/RegisterContextFreeBSD_mips64.h"
+#include "Plugins/Process/Utility/RegisterContextFreeBSD_powerpc.h"
+#include "Plugins/Process/Utility/RegisterContextFreeBSD_x86_64.h"
+#include "Plugins/Process/Utility/UnwindLLDB.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -138,7 +143,9 @@ POSIXThread::GetName ()
 {
     if (!m_thread_name_valid)
     {
-        SetName(Host::GetThreadName(GetProcess()->GetID(), GetID()).c_str());
+        llvm::SmallString<32> thread_name;
+        HostNativeThread::GetName(GetID(), thread_name);
+        m_thread_name = thread_name.c_str();
         m_thread_name_valid = true;
     }
 
@@ -162,6 +169,14 @@ POSIXThread::GetRegisterContext()
             case llvm::Triple::FreeBSD:
                 switch (target_arch.GetMachine())
                 {
+                    case llvm::Triple::ppc:
+#ifndef __powerpc64__
+                        reg_interface = new RegisterContextFreeBSD_powerpc32(target_arch);
+                        break;
+#endif
+                    case llvm::Triple::ppc64:
+                        reg_interface = new RegisterContextFreeBSD_powerpc64(target_arch);
+                        break;
                     case llvm::Triple::mips64:
                         reg_interface = new RegisterContextFreeBSD_mips64(target_arch);
                         break;
@@ -179,6 +194,10 @@ POSIXThread::GetRegisterContext()
             case llvm::Triple::Linux:
                 switch (target_arch.GetMachine())
                 {
+                    case llvm::Triple::aarch64:
+                        assert((HostInfo::GetArchitecture().GetAddressByteSize() == 8) && "Register setting path assumes this is a 64-bit host");
+                        reg_interface = static_cast<RegisterInfoInterface*>(new RegisterContextLinux_arm64(target_arch));
+                        break;
                     case llvm::Triple::x86:
                     case llvm::Triple::x86_64:
                         if (HostInfo::GetArchitecture().GetAddressByteSize() == 4)
@@ -206,9 +225,24 @@ POSIXThread::GetRegisterContext()
 
         switch (target_arch.GetMachine())
         {
+            case llvm::Triple::aarch64:
+                {
+                    RegisterContextPOSIXProcessMonitor_arm64 *reg_ctx = new RegisterContextPOSIXProcessMonitor_arm64(*this, 0, reg_interface);
+                    m_posix_thread = reg_ctx;
+                    m_reg_context_sp.reset(reg_ctx);
+                    break;
+                }
             case llvm::Triple::mips64:
                 {
                     RegisterContextPOSIXProcessMonitor_mips64 *reg_ctx = new RegisterContextPOSIXProcessMonitor_mips64(*this, 0, reg_interface);
+                    m_posix_thread = reg_ctx;
+                    m_reg_context_sp.reset(reg_ctx);
+                    break;
+                }
+            case llvm::Triple::ppc:
+            case llvm::Triple::ppc64:
+                {
+                    RegisterContextPOSIXProcessMonitor_powerpc *reg_ctx = new RegisterContextPOSIXProcessMonitor_powerpc(*this, 0, reg_interface);
                     m_posix_thread = reg_ctx;
                     m_reg_context_sp.reset(reg_ctx);
                     break;
@@ -606,7 +640,10 @@ POSIXThread::GetRegisterIndexFromOffset(unsigned offset)
         llvm_unreachable("CPU type not supported!");
         break;
 
+    case llvm::Triple::aarch64:
     case llvm::Triple::mips64:
+    case llvm::Triple::ppc:
+    case llvm::Triple::ppc64:
     case llvm::Triple::x86:
     case llvm::Triple::x86_64:
         {
@@ -636,7 +673,10 @@ POSIXThread::GetRegisterName(unsigned reg)
         assert(false && "CPU type not supported!");
         break;
 
+    case llvm::Triple::aarch64:
     case llvm::Triple::mips64:
+    case llvm::Triple::ppc:
+    case llvm::Triple::ppc64:
     case llvm::Triple::x86:
     case llvm::Triple::x86_64:
         name = GetRegisterContext()->GetRegisterName(reg);

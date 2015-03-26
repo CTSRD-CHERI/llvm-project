@@ -68,64 +68,52 @@ public:
     //------------------------------------------------------------------
     virtual bool
     CanDebug (lldb_private::Target &target,
-              bool plugin_specified_by_name);
+              bool plugin_specified_by_name) override;
 
     //------------------------------------------------------------------
     // Creating a new process, or attaching to an existing one
     //------------------------------------------------------------------
     virtual lldb_private::Error
-    DoLoadCore ();
+    DoLoadCore () override;
 
     virtual lldb_private::DynamicLoader *
-    GetDynamicLoader ();
+    GetDynamicLoader () override;
 
     //------------------------------------------------------------------
     // PluginInterface protocol
     //------------------------------------------------------------------
     virtual lldb_private::ConstString
-    GetPluginName();
+    GetPluginName() override;
 
     virtual uint32_t
-    GetPluginVersion();
+    GetPluginVersion() override;
 
     //------------------------------------------------------------------
     // Process Control
     //------------------------------------------------------------------
     virtual lldb_private::Error
-    DoDestroy ();
+    DoDestroy () override;
 
     virtual void
-    RefreshStateAfterStop();
+    RefreshStateAfterStop() override;
 
     //------------------------------------------------------------------
     // Process Queries
     //------------------------------------------------------------------
     virtual bool
-    IsAlive ();
-
-    //------------------------------------------------------------------
-    // Process Signals
-    //------------------------------------------------------------------
-    virtual lldb_private::UnixSignals &
-    GetUnixSignals()
-    {
-        if (m_signals_sp)
-            return *m_signals_sp;
-        else
-            return Process::GetUnixSignals();
-    }
+    IsAlive () override;
 
     //------------------------------------------------------------------
     // Process Memory
     //------------------------------------------------------------------
     virtual size_t
-    ReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error);
+    ReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error) override;
 
     virtual size_t
-    DoReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error);
+    DoReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error) override;
 
     virtual lldb::addr_t
-    GetImageInfoAddress ();
+    GetImageInfoAddress () override;
 
     lldb_private::ArchSpec
     GetArchitecture();
@@ -140,7 +128,7 @@ protected:
 
     virtual bool
     UpdateThreadList (lldb_private::ThreadList &old_thread_list,
-                      lldb_private::ThreadList &new_thread_list);
+                      lldb_private::ThreadList &new_thread_list) override;
 
 private:
     //------------------------------------------------------------------
@@ -155,7 +143,6 @@ private:
     DISALLOW_COPY_AND_ASSIGN (ProcessElfCore);
 
     llvm::Triple::OSType m_os;
-    std::shared_ptr<lldb_private::UnixSignals> m_signals_sp;
 
     // True if m_thread_contexts contains valid entries
     bool m_thread_data_valid;

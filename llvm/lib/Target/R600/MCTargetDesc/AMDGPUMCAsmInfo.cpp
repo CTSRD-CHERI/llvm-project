@@ -14,10 +14,10 @@ using namespace llvm;
 AMDGPUMCAsmInfo::AMDGPUMCAsmInfo(StringRef &TT) : MCAsmInfoELF() {
   HasSingleParameterDotFile = false;
   //===------------------------------------------------------------------===//
-  HasSubsectionsViaSymbols = true;
   MaxInstLength = 16;
   SeparatorString = "\n";
   CommentString = ";";
+  PrivateLabelPrefix = "";
   InlineAsmStart = ";#ASMSTART";
   InlineAsmEnd = ";#ASMEND";
 

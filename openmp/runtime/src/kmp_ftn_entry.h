@@ -1,7 +1,5 @@
 /*
  * kmp_ftn_entry.h -- Fortran entry linkage support for OpenMP.
- * $Revision: 42798 $
- * $Date: 2013-10-30 16:39:54 -0500 (Wed, 30 Oct 2013) $
  */
 
 
@@ -217,8 +215,6 @@ FTN_GET_LIBRARY (void)
     #endif
 }
 
-#if OMP_30_ENABLED
-
 int FTN_STDCALL
 FTN_SET_AFFINITY( void **mask )
 {
@@ -261,11 +257,11 @@ FTN_GET_AFFINITY_MAX_PROC( void )
             return 0;
         }
 
-    #if KMP_OS_WINDOWS && KMP_ARCH_X86_64
-        if ( __kmp_num_proc_groups <= 1 ) {
+    #if KMP_GROUP_AFFINITY
+        if ( __kmp_num_proc_groups > 1 ) {
             return (int)KMP_CPU_SETSIZE;
         }
-    #endif /* KMP_OS_WINDOWS && KMP_ARCH_X86_64 */
+    #endif /* KMP_GROUP_AFFINITY */
         return __kmp_xproc;
     #endif
 }
@@ -348,8 +344,6 @@ FTN_GET_AFFINITY_MASK_PROC( int KMP_DEREF proc, void **mask )
     #endif
 }
 
-#endif /* OMP_30_ENABLED */
-
 
 /* ------------------------------------------------------------------------ */
 
@@ -391,12 +385,8 @@ xexpand(FTN_GET_MAX_THREADS)( void )
         }
         gtid   = __kmp_entry_gtid();
         thread = __kmp_threads[ gtid ];
-        #if OMP_30_ENABLED
         //return thread -> th.th_team -> t.t_current_task[ thread->th.th_info.ds.ds_tid ] -> icvs.nproc;
 	return thread -> th.th_current_task -> td_icvs.nproc;
-        #else
-        return thread -> th.th_team -> t.t_set_nproc[ thread->th.th_info.ds.ds_tid ];
-        #endif
     #endif
 }
 
@@ -533,7 +523,7 @@ xexpand(FTN_IN_PARALLEL)( void )
     #else
         kmp_info_t *th = __kmp_entry_thread();
 #if OMP_40_ENABLED
-        if ( th->th.th_team_microtask ) {
+        if ( th->th.th_teams_microtask ) {
             // AC: r_in_parallel does not work inside teams construct
             //     where real parallel is inactive, but all threads have same root,
             //     so setting it in one team affects other teams.
@@ -545,8 +535,6 @@ xexpand(FTN_IN_PARALLEL)( void )
             return ( th->th.th_root->r.r_in_parallel ? FTN_TRUE : FTN_FALSE );
     #endif
 }
-
-#if OMP_30_ENABLED
 
 void FTN_STDCALL
 xexpand(FTN_SET_SCHEDULE)( kmp_sched_t KMP_DEREF kind, int KMP_DEREF modifier )
@@ -667,8 +655,6 @@ xexpand(FTN_IN_FINAL)( void )
     #endif
 }
 
-#endif // OMP_30_ENABLED
-
 #if OMP_40_ENABLED
 
 
@@ -689,7 +675,7 @@ xexpand(FTN_GET_NUM_TEAMS)( void )
         return 1;
     #else
         kmp_info_t *thr = __kmp_entry_thread();
-        if ( thr->th.th_team_microtask ) {
+        if ( thr->th.th_teams_microtask ) {
             kmp_team_t *team = thr->th.th_team;
             int tlevel = thr->th.th_teams_level;
             int ii = team->t.t_level;            // the level of the teams construct
@@ -728,7 +714,7 @@ xexpand(FTN_GET_TEAM_NUM)( void )
         return 0;
     #else
         kmp_info_t *thr = __kmp_entry_thread();
-        if ( thr->th.th_team_microtask ) {
+        if ( thr->th.th_teams_microtask ) {
             kmp_team_t *team = thr->th.th_team;
             int tlevel = thr->th.th_teams_level; // the level of the teams construct
             int ii = team->t.t_level;
@@ -784,11 +770,59 @@ FTN_GET_NUM_DEVICES( void )
 
 #endif // KMP_MIC || KMP_OS_DARWIN
 
+#if ! KMP_OS_LINUX
+
+int FTN_STDCALL
+FTN_IS_INITIAL_DEVICE( void )
+{
+    return 1;
+}
+
+#else
+
+// This internal function is used when the entry from the offload library
+// is not found.
+int _Offload_get_device_number( void )  __attribute__((weak));
+
+int FTN_STDCALL
+xexpand(FTN_IS_INITIAL_DEVICE)( void )
+{
+    if( _Offload_get_device_number ) {
+        return _Offload_get_device_number() == -1;
+    } else {
+        return 1;
+    }
+}
+
+#endif // ! KMP_OS_LINUX
+
 #endif // OMP_40_ENABLED
 
 #ifdef KMP_STUB
 typedef enum { UNINIT = -1, UNLOCKED, LOCKED } kmp_stub_lock_t;
 #endif /* KMP_STUB */
+
+#if KMP_USE_DYNAMIC_LOCK
+void FTN_STDCALL
+FTN_INIT_LOCK_HINTED( void **user_lock, int KMP_DEREF hint )
+{
+    #ifdef KMP_STUB
+        *((kmp_stub_lock_t *)user_lock) = UNLOCKED;
+    #else
+        __kmp_init_lock_hinted( user_lock, KMP_DEREF hint );
+    #endif
+}
+
+void FTN_STDCALL
+FTN_INIT_NEST_LOCK_HINTED( void **user_lock, int KMP_DEREF hint )
+{
+    #ifdef KMP_STUB
+        *((kmp_stub_lock_t *)user_lock) = UNLOCKED;
+    #else
+        __kmp_init_nest_lock_hinted( user_lock, KMP_DEREF hint );
+    #endif
+}
+#endif
 
 /* initialize the lock */
 void FTN_STDCALL
@@ -1048,19 +1082,19 @@ FTN_GET_CANCELLATION_STATUS(int cancel_kind) {
 #endif // OMP_40_ENABLED
 
 // GCC compatibility (versioned symbols)
-#if KMP_OS_LINUX
+#ifdef KMP_USE_VERSION_SYMBOLS
 
 /*
     These following sections create function aliases (dummy symbols) for the omp_* routines.
-    These aliases will then be versioned according to how libgomp ``versions'' its 
-    symbols (OMP_1.0, OMP_2.0, OMP_3.0, ...) while also retaining the 
+    These aliases will then be versioned according to how libgomp ``versions'' its
+    symbols (OMP_1.0, OMP_2.0, OMP_3.0, ...) while also retaining the
     default version which libiomp5 uses: VERSION (defined in exports_so.txt)
-    If you want to see the versioned symbols for libgomp.so.1 then just type: 
+    If you want to see the versioned symbols for libgomp.so.1 then just type:
 
     objdump -T /path/to/libgomp.so.1 | grep omp_
 
     Example:
-    Step 1)  Create __kmp_api_omp_set_num_threads_10_alias 
+    Step 1)  Create __kmp_api_omp_set_num_threads_10_alias
              which is alias of __kmp_api_omp_set_num_threads
     Step 2)  Set __kmp_api_omp_set_num_threads_10_alias to version: omp_set_num_threads@OMP_1.0
     Step 2B) Set __kmp_api_omp_set_num_threads to default version : omp_set_num_threads@@VERSION
@@ -1092,7 +1126,6 @@ xaliasify(FTN_TEST_NEST_LOCK,    10);
 xaliasify(FTN_GET_WTICK, 20);
 xaliasify(FTN_GET_WTIME, 20);
 
-#if OMP_30_ENABLED
 // OMP_3.0 aliases
 xaliasify(FTN_SET_SCHEDULE,            30);
 xaliasify(FTN_GET_SCHEDULE,            30);
@@ -1116,7 +1149,6 @@ xaliasify(FTN_TEST_NEST_LOCK,          30);
 
 // OMP_3.1 aliases
 xaliasify(FTN_IN_FINAL, 31);
-#endif /* OMP_30_ENABLED */
 
 #if OMP_40_ENABLED
 // OMP_4.0 aliases
@@ -1124,6 +1156,7 @@ xaliasify(FTN_GET_PROC_BIND, 40);
 xaliasify(FTN_GET_NUM_TEAMS, 40);
 xaliasify(FTN_GET_TEAM_NUM, 40);
 xaliasify(FTN_GET_CANCELLATION, 40);
+xaliasify(FTN_IS_INITIAL_DEVICE, 40);
 #endif /* OMP_40_ENABLED */
 
 #if OMP_41_ENABLED
@@ -1160,7 +1193,6 @@ xversionify(FTN_TEST_NEST_LOCK,    10, "OMP_1.0");
 xversionify(FTN_GET_WTICK,         20, "OMP_2.0");
 xversionify(FTN_GET_WTIME,         20, "OMP_2.0");
 
-#if OMP_30_ENABLED
 // OMP_3.0 versioned symbols
 xversionify(FTN_SET_SCHEDULE,      30, "OMP_3.0");
 xversionify(FTN_GET_SCHEDULE,      30, "OMP_3.0");
@@ -1186,7 +1218,6 @@ xversionify(FTN_TEST_NEST_LOCK,    30, "OMP_3.0");
 
 // OMP_3.1 versioned symbol
 xversionify(FTN_IN_FINAL,          31, "OMP_3.1");
-#endif /* OMP_30_ENABLED */
 
 #if OMP_40_ENABLED
 // OMP_4.0 versioned symbols
@@ -1194,6 +1225,7 @@ xversionify(FTN_GET_PROC_BIND,     40, "OMP_4.0");
 xversionify(FTN_GET_NUM_TEAMS,     40, "OMP_4.0");
 xversionify(FTN_GET_TEAM_NUM,      40, "OMP_4.0");
 xversionify(FTN_GET_CANCELLATION,  40, "OMP_4.0");
+xversionify(FTN_IS_INITIAL_DEVICE, 40, "OMP_4.0");
 #endif /* OMP_40_ENABLED */
 
 #if OMP_41_ENABLED
@@ -1204,7 +1236,7 @@ xversionify(FTN_GET_CANCELLATION,  40, "OMP_4.0");
 // OMP_5.0 versioned symbols
 #endif
 
-#endif /* KMP_OS_LINUX */
+#endif // KMP_USE_VERSION_SYMBOLS
 
 #ifdef __cplusplus
     } //extern "C"

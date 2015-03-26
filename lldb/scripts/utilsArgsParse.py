@@ -9,10 +9,6 @@
 					Also give help information on arguments required by the
 					program.
 									
-	Environment:	OS:			Windows/LINUX/OSX
-					IDE: 	    Visual Studio 2013 Plugin Python Tools (PTVS)
-					Script:		Python 2.6 x64 
-
 	Gotchas:		None.
 
 	Copyright:		None.
@@ -67,7 +63,7 @@ def parse( vArgv, vstrListArgs, vListLongArgs, vDictArgReq, vstrHelpInfo ):
 			
 	# Validate parameters above and error on not recognised
 	try:
-		dictOptsNeeded, dictArgsLeftOver = getopt.getopt( vArgv, 
+		dictOptsNeeded, dictArgsLeftOver = getopt.getopt( vArgv,
 														  vstrListArgs, 
 														  vListLongArgs );
 	except getopt.GetoptError:
@@ -143,4 +139,3 @@ def parse( vArgv, vstrListArgs, vListLongArgs, vDictArgReq, vstrHelpInfo ):
 		return (-2, dictDummy, strMsg);
 
 	return (0, dictArgs, strDummy);
-	

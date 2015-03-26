@@ -14,9 +14,13 @@
 
 #include "polly/CodeGen/IRBuilder.h"
 
+#include "llvm/ADT/MapVector.h"
+
 #include "isl/ast.h"
 
-#include <map>
+namespace llvm {
+class SCEVExpander;
+}
 
 namespace polly {
 
@@ -76,6 +80,9 @@ namespace polly {
 /// enough).
 class IslExprBuilder {
 public:
+  /// @brief A map from isl_ids to llvm::Values.
+  typedef llvm::MapVector<isl_id *, llvm::Value *> IDToValueTy;
+
   /// @brief Construct an IslExprBuilder.
   ///
   /// @param Builder The IRBuilder used to construct the isl_ast_expr[ession].
@@ -86,9 +93,13 @@ public:
   ///                  variables (identified by an isl_id). The IDTOValue map
   ///                  specifies the LLVM-IR Values that correspond to these
   ///                  parameters and variables.
-  IslExprBuilder(PollyIRBuilder &Builder,
-                 std::map<isl_id *, llvm::Value *> &IDToValue)
-      : Builder(Builder), IDToValue(IDToValue) {}
+  /// @param Expander  A SCEVExpander to create the indices for multi
+  ///                  dimensional accesses.
+  IslExprBuilder(PollyIRBuilder &Builder, IDToValueTy &IDToValue,
+                 llvm::SCEVExpander &Expander, llvm::DominatorTree &DT,
+                 llvm::LoopInfo &LI)
+      : Builder(Builder), IDToValue(IDToValue), Expander(Expander), DT(DT),
+        LI(LI) {}
 
   /// @brief Create LLVM-IR for an isl_ast_expr[ession].
   ///
@@ -116,7 +127,13 @@ public:
 
 private:
   PollyIRBuilder &Builder;
-  std::map<isl_id *, llvm::Value *> &IDToValue;
+  IDToValueTy &IDToValue;
+
+  /// @brief A SCEVExpander to translate dimension sizes to llvm values.
+  llvm::SCEVExpander &Expander;
+
+  llvm::DominatorTree &DT;
+  llvm::LoopInfo &LI;
 
   llvm::Value *createOp(__isl_take isl_ast_expr *Expr);
   llvm::Value *createOpUnary(__isl_take isl_ast_expr *Expr);
@@ -126,8 +143,11 @@ private:
   llvm::Value *createOpSelect(__isl_take isl_ast_expr *Expr);
   llvm::Value *createOpICmp(__isl_take isl_ast_expr *Expr);
   llvm::Value *createOpBoolean(__isl_take isl_ast_expr *Expr);
+  llvm::Value *createOpBooleanConditional(__isl_take isl_ast_expr *Expr);
   llvm::Value *createId(__isl_take isl_ast_expr *Expr);
   llvm::Value *createInt(__isl_take isl_ast_expr *Expr);
+  llvm::Value *createOpAddressOf(__isl_take isl_ast_expr *Expr);
+  llvm::Value *createAccessAddress(__isl_take isl_ast_expr *Expr);
 };
 }
 

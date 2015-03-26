@@ -102,6 +102,19 @@ public:
     
     virtual lldb::SearchFilterSP
     CreateExceptionSearchFilter ();
+    
+    virtual bool
+    GetTypeBitSize (const ClangASTType& clang_type,
+                    uint64_t &size)
+    {
+        return false;
+    }
+    
+    virtual bool
+    IsRuntimeSupportValue (ValueObject& valobj)
+    {
+        return false;
+    }
 
 protected:
     //------------------------------------------------------------------

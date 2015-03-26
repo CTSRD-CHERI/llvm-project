@@ -11,9 +11,9 @@
 # SYM-NEXT: Value: 0x408FF0
 
 # SEC:      Contents of section .text:
-# SEC-NEXT:  4001a0 41000000 f08f0000 64001000  A.......d...
+# SEC-NEXT:  400190 41000000 f08f0000 60001000
 # SEC:      Contents of section .got:
-# SEC-NEXT:  401000 00000000 00000080           ........
+# SEC-NEXT:  401000 00000000 00000080
 
 # so.o
 ---
@@ -22,7 +22,7 @@ FileHeader:
   Data:    ELFDATA2LSB
   Type:    ET_REL
   Machine: EM_MIPS
-  Flags:   [EF_MIPS_PIC, EF_MIPS_CPIC]
+  Flags:   [EF_MIPS_PIC, EF_MIPS_CPIC, EF_MIPS_ABI_O32, EF_MIPS_ARCH_32]
 
 Sections:
   - Name:         .text

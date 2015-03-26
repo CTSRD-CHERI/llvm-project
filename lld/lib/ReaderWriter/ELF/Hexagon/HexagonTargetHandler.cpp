@@ -9,8 +9,8 @@
 
 #include "HexagonExecutableWriter.h"
 #include "HexagonDynamicLibraryWriter.h"
-#include "HexagonTargetHandler.h"
 #include "HexagonLinkingContext.h"
+#include "HexagonTargetHandler.h"
 
 using namespace lld;
 using namespace elf;
@@ -19,11 +19,11 @@ using namespace llvm::ELF;
 using llvm::makeArrayRef;
 
 HexagonTargetHandler::HexagonTargetHandler(HexagonLinkingContext &context)
-    : DefaultTargetHandler(context), _hexagonLinkingContext(context),
+    : _hexagonLinkingContext(context),
       _hexagonRuntimeFile(new HexagonRuntimeFile<HexagonELFType>(context)),
       _hexagonTargetLayout(new HexagonTargetLayout<HexagonELFType>(context)),
-      _hexagonRelocationHandler(
-          new HexagonTargetRelocationHandler(*_hexagonTargetLayout.get())) {}
+      _hexagonRelocationHandler(new HexagonTargetRelocationHandler(
+          *_hexagonTargetLayout.get())) {}
 
 std::unique_ptr<Writer> HexagonTargetHandler::getWriter() {
   switch (_hexagonLinkingContext.getOutputELFType()) {
@@ -104,11 +104,7 @@ public:
 
 class HexagonPLT0Atom : public PLT0Atom {
 public:
-  HexagonPLT0Atom(const File &f) : PLT0Atom(f) {
-#ifndef NDEBUG
-    _name = ".PLT0";
-#endif
-  }
+  HexagonPLT0Atom(const File &f) : PLT0Atom(f) {}
 
   ArrayRef<uint8_t> rawContent() const override {
     return makeArrayRef(hexagonPlt0AtomContent);
@@ -319,7 +315,7 @@ public:
 
 void elf::HexagonLinkingContext::addPasses(PassManager &pm) {
   if (isDynamic())
-    pm.add(std::unique_ptr<Pass>(new DynamicGOTPLTPass(*this)));
+    pm.add(llvm::make_unique<DynamicGOTPLTPass>(*this));
   ELFLinkingContext::addPasses(pm);
 }
 
@@ -328,98 +324,11 @@ void HexagonTargetHandler::registerRelocationNames(Registry &registry) {
                         Reference::KindArch::Hexagon, kindStrings);
 }
 
+#define ELF_RELOC(name, value) LLD_KIND_STRING_ENTRY(name),
+
 const Registry::KindStrings HexagonTargetHandler::kindStrings[] = {
-  LLD_KIND_STRING_ENTRY(R_HEX_NONE),
-  LLD_KIND_STRING_ENTRY(R_HEX_B22_PCREL),
-  LLD_KIND_STRING_ENTRY(R_HEX_B15_PCREL),
-  LLD_KIND_STRING_ENTRY(R_HEX_B7_PCREL),
-  LLD_KIND_STRING_ENTRY(R_HEX_LO16),
-  LLD_KIND_STRING_ENTRY(R_HEX_HI16),
-  LLD_KIND_STRING_ENTRY(R_HEX_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_16),
-  LLD_KIND_STRING_ENTRY(R_HEX_8),
-  LLD_KIND_STRING_ENTRY(R_HEX_GPREL16_0),
-  LLD_KIND_STRING_ENTRY(R_HEX_GPREL16_1),
-  LLD_KIND_STRING_ENTRY(R_HEX_GPREL16_2),
-  LLD_KIND_STRING_ENTRY(R_HEX_GPREL16_3),
-  LLD_KIND_STRING_ENTRY(R_HEX_HL16),
-  LLD_KIND_STRING_ENTRY(R_HEX_B13_PCREL),
-  LLD_KIND_STRING_ENTRY(R_HEX_B9_PCREL),
-  LLD_KIND_STRING_ENTRY(R_HEX_B32_PCREL_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_B22_PCREL_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_B15_PCREL_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_B13_PCREL_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_B9_PCREL_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_B7_PCREL_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_12_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_11_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_10_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_9_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_8_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_7_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_32_PCREL),
-  LLD_KIND_STRING_ENTRY(R_HEX_COPY),
-  LLD_KIND_STRING_ENTRY(R_HEX_GLOB_DAT),
-  LLD_KIND_STRING_ENTRY(R_HEX_JMP_SLOT),
-  LLD_KIND_STRING_ENTRY(R_HEX_RELATIVE),
-  LLD_KIND_STRING_ENTRY(R_HEX_PLT_B22_PCREL),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOTREL_LO16),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOTREL_HI16),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOTREL_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOT_LO16),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOT_HI16),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOT_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOT_16),
-  LLD_KIND_STRING_ENTRY(R_HEX_DTPMOD_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_DTPREL_LO16),
-  LLD_KIND_STRING_ENTRY(R_HEX_DTPREL_HI16),
-  LLD_KIND_STRING_ENTRY(R_HEX_DTPREL_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_DTPREL_16),
-  LLD_KIND_STRING_ENTRY(R_HEX_GD_PLT_B22_PCREL),
-  LLD_KIND_STRING_ENTRY(R_HEX_GD_GOT_LO16),
-  LLD_KIND_STRING_ENTRY(R_HEX_GD_GOT_HI16),
-  LLD_KIND_STRING_ENTRY(R_HEX_GD_GOT_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_GD_GOT_16),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_LO16),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_HI16),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_LO16),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_HI16),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_16),
-  LLD_KIND_STRING_ENTRY(R_HEX_TPREL_LO16),
-  LLD_KIND_STRING_ENTRY(R_HEX_TPREL_HI16),
-  LLD_KIND_STRING_ENTRY(R_HEX_TPREL_32),
-  LLD_KIND_STRING_ENTRY(R_HEX_TPREL_16),
-  LLD_KIND_STRING_ENTRY(R_HEX_6_PCREL_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOTREL_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOTREL_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOTREL_11_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOT_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOT_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GOT_11_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_DTPREL_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_DTPREL_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_DTPREL_11_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GD_GOT_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GD_GOT_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_GD_GOT_11_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_11_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_IE_GOT_11_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_TPREL_32_6_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_TPREL_16_X),
-  LLD_KIND_STRING_ENTRY(R_HEX_TPREL_11_X),
+#include "llvm/Support/ELFRelocs/Hexagon.def"
   LLD_KIND_STRING_END
 };
+
+#undef ELF_RELOC

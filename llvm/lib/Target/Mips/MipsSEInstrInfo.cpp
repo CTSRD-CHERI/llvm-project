@@ -27,7 +27,7 @@ using namespace llvm;
 MipsSEInstrInfo::MipsSEInstrInfo(const MipsSubtarget &STI)
     : MipsInstrInfo(STI, STI.getRelocationModel() == Reloc::PIC_ ? Mips::B
                                                                  : Mips::J),
-      RI(STI), IsN64(STI.isABI_N64()) {}
+      RI() {}
 
 const MipsRegisterInfo &MipsSEInstrInfo::getRegisterInfo() const {
   return RI;
@@ -38,12 +38,12 @@ const MipsRegisterInfo &MipsSEInstrInfo::getRegisterInfo() const {
 /// the destination along with the FrameIndex of the loaded stack slot.  If
 /// not, return 0.  This predicate must return 0 if the instruction has
 /// any side effects other than loading from the stack slot.
-unsigned MipsSEInstrInfo::
-isLoadFromStackSlot(const MachineInstr *MI, int &FrameIndex) const
-{
+unsigned MipsSEInstrInfo::isLoadFromStackSlot(const MachineInstr *MI,
+                                              int &FrameIndex) const {
   if (MI->mayLoad()) { // Is a load...
-    if (MI->getOperand(1).isFI() &&  // ... from a stack slot.
-        MI->getOperand(2).isImm()) {
+    if ((MI->getOperand(1).isFI()) && // is a stack slot
+        (MI->getOperand(2).isImm()) &&  // the imm is zero
+        (isZeroImm(MI->getOperand(2)))) {
       FrameIndex = MI->getOperand(1).getIndex();
       return MI->getOperand(0).getReg();
     }
@@ -57,12 +57,12 @@ isLoadFromStackSlot(const MachineInstr *MI, int &FrameIndex) const
 /// the source reg along with the FrameIndex of the loaded stack slot.  If
 /// not, return 0.  This predicate must return 0 if the instruction has
 /// any side effects other than storing to the stack slot.
-unsigned MipsSEInstrInfo::
-isStoreToStackSlot(const MachineInstr *MI, int &FrameIndex) const
-{
+unsigned MipsSEInstrInfo::isStoreToStackSlot(const MachineInstr *MI,
+                                             int &FrameIndex) const {
   if (MI->mayStore()) { // is a store...
-    if (MI->getOperand(1).isFI() && // ... to a stack slot
-        MI->getOperand(2).isImm()) {
+    if ((MI->getOperand(1).isFI()) && // is a stack slot
+        (MI->getOperand(2).isImm()) &&  // the imm is zero
+        (isZeroImm(MI->getOperand(2)))) {
       FrameIndex = MI->getOperand(1).getIndex();
       return MI->getOperand(0).getReg();
     }
@@ -192,7 +192,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   // The ACC64/128 registers are handled by STORE_ACC64/128 pseudos, which call this function again with more ordinary
   // registers when they are lowered: so no special treatment for CHERI is required.
-  if (RI.Subtarget.usesCheriStackCapabilityABI() &&
+  if (Subtarget.usesCheriStackCapabilityABI() &&
       !Mips::ACC64RegClass.hasSubClassEq(RC) &&
       !Mips::ACC128RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
@@ -280,7 +280,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   // The ACC64/128 registers are handled by LOAD_ACC64/128 pseudos, which call this function again with more ordinary
   // registers when they are lowered: so no special treatment for CHERI is required.
-  if (RI.Subtarget.usesCheriStackCapabilityABI() &&
+  if (Subtarget.usesCheriStackCapabilityABI() &&
       !Mips::ACC64RegClass.hasSubClassEq(RC) &&
       !Mips::ACC128RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
@@ -439,6 +439,8 @@ unsigned MipsSEInstrInfo::getOppositeBranchOpc(unsigned Opc) const {
   case Mips::BLEZ64: return Mips::BGTZ64;
   case Mips::BC1T:   return Mips::BC1F;
   case Mips::BC1F:   return Mips::BC1T;
+  case Mips::BEQZC_MM: return Mips::BNEZC_MM;
+  case Mips::BNEZC_MM: return Mips::BEQZC_MM;
   }
 }
 
@@ -509,7 +511,7 @@ unsigned MipsSEInstrInfo::getAnalyzableBrOpc(unsigned Opc) const {
           Opc == Mips::BEQ64  || Opc == Mips::BNE64  || Opc == Mips::BGTZ64 ||
           Opc == Mips::BGEZ64 || Opc == Mips::BLTZ64 || Opc == Mips::BLEZ64 ||
           Opc == Mips::BC1T   || Opc == Mips::BC1F   || Opc == Mips::B      ||
-          Opc == Mips::J) ?
+          Opc == Mips::J || Opc == Mips::BEQZC_MM || Opc == Mips::BNEZC_MM) ?
          Opc : 0;
 }
 
@@ -707,18 +709,13 @@ void MipsSEInstrInfo::expandEhReturn(MachineBasicBlock &MBB,
   // jr   $ra (via RetRA)
   const TargetMachine &TM = MBB.getParent()->getTarget();
   if (TM.getRelocationModel() == Reloc::PIC_)
-    BuildMI(MBB, I, I->getDebugLoc(),
-            TM.getSubtargetImpl()->getInstrInfo()->get(ADDU), T9)
+    BuildMI(MBB, I, I->getDebugLoc(), get(ADDU), T9)
         .addReg(TargetReg)
         .addReg(ZERO);
-  BuildMI(MBB, I, I->getDebugLoc(),
-          TM.getSubtargetImpl()->getInstrInfo()->get(ADDU), RA)
+  BuildMI(MBB, I, I->getDebugLoc(), get(ADDU), RA)
       .addReg(TargetReg)
       .addReg(ZERO);
-  BuildMI(MBB, I, I->getDebugLoc(),
-          TM.getSubtargetImpl()->getInstrInfo()->get(ADDU), SP)
-      .addReg(SP)
-      .addReg(OffsetReg);
+  BuildMI(MBB, I, I->getDebugLoc(), get(ADDU), SP).addReg(SP).addReg(OffsetReg);
   expandRetRA(MBB, I);
 }
 
@@ -727,14 +724,13 @@ void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,
   unsigned GP = I->getOperand(0).getReg();
   assert(GP != Mips::T9_64);
   DebugLoc DL = I->getDebugLoc();
-  const TargetMachine &TM = MBB.getParent()->getTarget();
-  const TargetInstrInfo &TII = *TM.getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   const GlobalValue *FName = MBB.getParent()->getFunction();
-  BuildMI(MBB, I, DL, TII.get(Mips::LUi64), GP)
+  BuildMI(MBB, I, DL, TII->get(Mips::LUi64), GP)
     .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
-  BuildMI(MBB, I, DL, TII.get(Mips::DADDu), GP).addReg(GP)
+  BuildMI(MBB, I, DL, TII->get(Mips::DADDu), GP).addReg(GP)
     .addReg(Mips::T9_64);
-  BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), GP).addReg(GP)
+  BuildMI(MBB, I, DL, TII->get(Mips::DADDiu), GP).addReg(GP)
     .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
 }
 

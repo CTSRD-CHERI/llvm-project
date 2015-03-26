@@ -15,8 +15,7 @@ TEST(ParseLineFilter, EmptyFilter) {
 
 TEST(ParseLineFilter, InvalidFilter) {
   ClangTidyGlobalOptions Options;
-  // TODO: Figure out why parsing succeeds here.
-  EXPECT_FALSE(parseLineFilter("asdf", Options));
+  EXPECT_TRUE(!!parseLineFilter("asdf", Options));
   EXPECT_TRUE(Options.LineFilter.empty());
 
   EXPECT_TRUE(!!parseLineFilter("[{}]", Options));
@@ -55,15 +54,16 @@ TEST(ParseLineFilter, ValidFilter) {
 }
 
 TEST(ParseConfiguration, ValidConfiguration) {
-  ClangTidyOptions Options;
-  std::error_code Error = parseConfiguration("Checks: \"-*,misc-*\"\n"
-                                             "HeaderFilterRegex: \".*\"\n"
-                                             "AnalyzeTemporaryDtors: true\n",
-                                             Options);
-  EXPECT_FALSE(Error);
-  EXPECT_EQ("-*,misc-*", Options.Checks);
-  EXPECT_EQ(".*", Options.HeaderFilterRegex);
-  EXPECT_TRUE(Options.AnalyzeTemporaryDtors);
+  llvm::ErrorOr<ClangTidyOptions> Options =
+      parseConfiguration("Checks: \"-*,misc-*\"\n"
+                         "HeaderFilterRegex: \".*\"\n"
+                         "AnalyzeTemporaryDtors: true\n"
+                         "User: some.user");
+  EXPECT_TRUE(!!Options);
+  EXPECT_EQ("-*,misc-*", *Options->Checks);
+  EXPECT_EQ(".*", *Options->HeaderFilterRegex);
+  EXPECT_TRUE(*Options->AnalyzeTemporaryDtors);
+  EXPECT_EQ("some.user", *Options->User);
 }
 
 } // namespace test

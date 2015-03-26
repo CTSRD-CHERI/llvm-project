@@ -49,7 +49,32 @@ bool ArgKind::isConvertibleTo(ArgKind To, unsigned *Specificity) const {
   return true;
 }
 
-VariantMatcher::MatcherOps::~MatcherOps() {}
+bool
+VariantMatcher::MatcherOps::canConstructFrom(const DynTypedMatcher &Matcher,
+                                             bool &IsExactMatch) const {
+  IsExactMatch = Matcher.getSupportedKind().isSame(NodeKind);
+  return Matcher.canConvertTo(NodeKind);
+}
+
+llvm::Optional<DynTypedMatcher>
+VariantMatcher::MatcherOps::constructVariadicOperator(
+    DynTypedMatcher::VariadicOperator Op,
+    ArrayRef<VariantMatcher> InnerMatchers) const {
+  std::vector<DynTypedMatcher> DynMatchers;
+  for (const auto &InnerMatcher : InnerMatchers) {
+    // Abort if any of the inner matchers can't be converted to
+    // Matcher<T>.
+    if (!InnerMatcher.Value)
+      return llvm::None;
+    llvm::Optional<DynTypedMatcher> Inner =
+        InnerMatcher.Value->getTypedMatcher(*this);
+    if (!Inner)
+      return llvm::None;
+    DynMatchers.push_back(*Inner);
+  }
+  return DynTypedMatcher::constructVariadic(Op, DynMatchers);
+}
+
 VariantMatcher::Payload::~Payload() {}
 
 class VariantMatcher::SinglePayload : public VariantMatcher::Payload {
@@ -65,10 +90,12 @@ public:
         .str();
   }
 
-  void makeTypedMatcher(MatcherOps &Ops) const override {
+  llvm::Optional<DynTypedMatcher>
+  getTypedMatcher(const MatcherOps &Ops) const override {
     bool Ignore;
     if (Ops.canConstructFrom(Matcher, Ignore))
-      Ops.constructFrom(Matcher);
+      return Matcher;
+    return llvm::None;
   }
 
   bool isConvertibleTo(ast_type_traits::ASTNodeKind Kind,
@@ -104,7 +131,8 @@ public:
     return (Twine("Matcher<") + Inner + ">").str();
   }
 
-  void makeTypedMatcher(MatcherOps &Ops) const override {
+  llvm::Optional<DynTypedMatcher>
+  getTypedMatcher(const MatcherOps &Ops) const override {
     bool FoundIsExact = false;
     const DynTypedMatcher *Found = nullptr;
     int NumFound = 0;
@@ -124,7 +152,8 @@ public:
     }
     // We only succeed if we found exactly one, or if we found an exact match.
     if (Found && (FoundIsExact || NumFound == 1))
-      Ops.constructFrom(*Found);
+      return *Found;
+    return llvm::None;
   }
 
   bool isConvertibleTo(ast_type_traits::ASTNodeKind Kind,
@@ -147,9 +176,9 @@ public:
 
 class VariantMatcher::VariadicOpPayload : public VariantMatcher::Payload {
 public:
-  VariadicOpPayload(ast_matchers::internal::VariadicOperatorFunction Func,
+  VariadicOpPayload(DynTypedMatcher::VariadicOperator Op,
                     std::vector<VariantMatcher> Args)
-      : Func(Func), Args(std::move(Args)) {}
+      : Op(Op), Args(std::move(Args)) {}
 
   llvm::Optional<DynTypedMatcher> getSingleMatcher() const override {
     return llvm::Optional<DynTypedMatcher>();
@@ -165,8 +194,9 @@ public:
     return Inner;
   }
 
-  void makeTypedMatcher(MatcherOps &Ops) const override {
-    Ops.constructVariadicOperator(Func, Args);
+  llvm::Optional<DynTypedMatcher>
+  getTypedMatcher(const MatcherOps &Ops) const override {
+    return Ops.constructVariadicOperator(Op, Args);
   }
 
   bool isConvertibleTo(ast_type_traits::ASTNodeKind Kind,
@@ -179,7 +209,7 @@ public:
   }
 
 private:
-  const ast_matchers::internal::VariadicOperatorFunction Func;
+  const DynTypedMatcher::VariadicOperator Op;
   const std::vector<VariantMatcher> Args;
 };
 
@@ -195,9 +225,9 @@ VariantMatcher::PolymorphicMatcher(std::vector<DynTypedMatcher> Matchers) {
 }
 
 VariantMatcher VariantMatcher::VariadicOperatorMatcher(
-    ast_matchers::internal::VariadicOperatorFunction Func,
+    DynTypedMatcher::VariadicOperator Op,
     std::vector<VariantMatcher> Args) {
-  return VariantMatcher(new VariadicOpPayload(Func, std::move(Args)));
+  return VariantMatcher(new VariadicOpPayload(Op, std::move(Args)));
 }
 
 llvm::Optional<DynTypedMatcher> VariantMatcher::getSingleMatcher() const {

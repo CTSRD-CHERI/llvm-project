@@ -431,9 +431,6 @@ val create_module : llcontext -> string -> llmodule
     [llvm::Module::~Module]. *)
 val dispose_module : llmodule -> unit
 
-(** [clone_module m] returns an exact copy of module [m]. *)
-val clone_module : llmodule -> llmodule
-
 (** [target_triple m] is the target specifier for the module [m], something like
     [i686-apple-darwin8]. See the method [llvm::Module::getTargetTriple]. *)
 val target_triple: llmodule -> string
@@ -821,6 +818,9 @@ val mdstring : llcontext -> string -> llvalue
     context [c].
     See the method [llvm::MDNode::get]. *)
 val mdnode : llcontext -> llvalue array -> llvalue
+
+(** [mdnull c ] returns a null MDNode in context [c].  *)
+val mdnull : llcontext -> llvalue
 
 (** [get_mdstring v] returns the MDString.
     See the method [llvm::MDString::getString] *)
@@ -2421,6 +2421,12 @@ val build_fcmp : Fcmp.t -> llvalue -> llvalue -> string ->
     See the method [llvm::LLVMBuilder::CreatePHI]. *)
 val build_phi : (llvalue * llbasicblock) list -> string -> llbuilder ->
                      llvalue
+
+(** [build_empty_phi ty name b] creates a
+    [%name = phi %ty] instruction at the position specified by
+    the instruction builder [b]. [ty] is the type of the instruction.
+    See the method [llvm::LLVMBuilder::CreatePHI]. *)
+val build_empty_phi : lltype -> string -> llbuilder -> llvalue
 
 (** [build_call fn args name b] creates a
     [%name = call %fn(args...)]

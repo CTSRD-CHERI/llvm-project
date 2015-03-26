@@ -73,7 +73,7 @@ Basic Usage
 Intro to how to use a C compiler for newbies.
 
 compile + link compile then link debug info enabling optimizations
-picking a language to use, defaults to C99 by default. Autosenses based
+picking a language to use, defaults to C11 by default. Autosenses based
 on extension. using a makefile
 
 Command Line Options
@@ -481,7 +481,7 @@ TODO: Generate this from tblgen. Define one anchor per warning group.
    Warn about an unusable copy constructor when binding a reference to a
    temporary.
 
-   This option, which defaults to on, enables warnings about binding a
+   This option enables warnings about binding a
    reference to a temporary when the temporary doesn't have a usable
    copy constructor. For example:
 
@@ -637,7 +637,7 @@ Diagnostics <cl_diag_formatting>`.
 Diagnostic Mappings
 ^^^^^^^^^^^^^^^^^^^
 
-All diagnostics are mapped into one of these 5 classes:
+All diagnostics are mapped into one of these 6 classes:
 
 -  Ignored
 -  Note
@@ -957,6 +957,8 @@ are listed below.
       ``unsigned-integer-overflow`` and ``vptr``.
    -  ``-fsanitize=dataflow``: :doc:`DataFlowSanitizer`, a general data
       flow analysis.
+   -  ``-fsanitize=cfi``: :doc:`control flow integrity <ControlFlowIntegrity>`
+      checks. Implies ``-flto``.
 
    The following more fine-grained checks are also available:
 
@@ -966,6 +968,14 @@ are listed below.
       ``true`` nor ``false``.
    -  ``-fsanitize=bounds``: Out of bounds array indexing, in cases
       where the array bound can be statically determined.
+   -  ``-fsanitize=cfi-cast-strict``: Enables :ref:`strict cast checks
+      <cfi-strictness>`.
+   -  ``-fsanitize=cfi-derived-cast``: Base-to-derived cast to the wrong
+      dynamic type. Implies ``-flto``.
+   -  ``-fsanitize=cfi-unrelated-cast``: Cast from ``void*`` or another
+      unrelated type to the wrong dynamic type. Implies ``-flto``.
+   -  ``-fsanitize=cfi-vptr``: Use of an object whose vptr is of the
+      wrong dynamic type. Implies ``-flto``.
    -  ``-fsanitize=enum``: Load of a value of an enumerated type which
       is not in the range of representable values for that enumerated
       type.
@@ -977,6 +987,8 @@ are listed below.
    -  ``-fsanitize=function``: Indirect call of a function through a
       function pointer of the wrong type (Linux, C++ and x86/x86_64 only).
    -  ``-fsanitize=integer-divide-by-zero``: Integer division by zero.
+   -  ``-fsanitize=nonnull-attribute``: Passing null pointer as a function
+      parameter which is declared to never be null.
    -  ``-fsanitize=null``: Use of a null pointer or creation of a null
       reference.
    -  ``-fsanitize=object-size``: An attempt to use bytes which the
@@ -992,7 +1004,9 @@ are listed below.
       greater or equal to the promoted bit-width of the left hand side
       or less than zero, or where the left hand side is negative. For a
       signed left shift, also checks for signed overflow in C, and for
-      unsigned overflow in C++.
+      unsigned overflow in C++. You can use ``-fsanitize=shift-base`` or
+      ``-fsanitize=shift-exponent`` to check only left-hand side or
+      right-hand side of shift operation, respectively.
    -  ``-fsanitize=signed-integer-overflow``: Signed integer overflow,
       including all the checks added by ``-ftrapv``, and checking for
       overflow in signed division (``INT_MIN / -1``).
@@ -1024,17 +1038,14 @@ are listed below.
       uninitialized bits came from. Slows down execution by additional
       1.5x-2x.
 
-      Possible values for level are 0 (off), 1 (default), 2. Level 2 adds more
-      sections to MemorySanitizer reports describing the order of memory stores
-      the uninitialized value went through. Beware, this mode may use a lot of
-      extra memory.
+      Possible values for level are 0 (off), 1, 2 (default). Level 2
+      adds more sections to MemorySanitizer reports describing the
+      order of memory stores the uninitialized value went
+      through. This mode may use extra memory in programs that copy
+      uninitialized memory a lot.
 
    Extra features of UndefinedBehaviorSanitizer:
 
-   -  ``-fno-sanitize-recover``: By default, after a sanitizer diagnoses
-      an issue, it will attempt to continue executing the program if there
-      is a reasonable behavior it can give to the faulting operation. This
-      option causes the program to abort instead.
    -  ``-fsanitize-undefined-trap-on-error``: Causes traps to be emitted
       rather than calls to runtime libraries when a problem is detected.
       This option is intended for use in cases where the sanitizer runtime
@@ -1051,8 +1062,19 @@ are listed below.
 
    It is not possible to combine more than one of the ``-fsanitize=address``,
    ``-fsanitize=thread``, and ``-fsanitize=memory`` checkers in the same
-   program. The ``-fsanitize=undefined`` checks can be combined with other
-   sanitizers.
+   program. The ``-fsanitize=undefined`` checks can only be combined with
+   ``-fsanitize=address``.
+
+**-f[no-]sanitize-recover=check1,check2,...**
+
+   Controls which checks enabled by ``-fsanitize=`` flag are non-fatal.
+   If the check is fatal, program will halt after the first error
+   of this kind is detected and error report is printed.
+
+   By default, non-fatal checks are those enabled by UndefinedBehaviorSanitizer,
+   except for ``-fsanitize=return`` and ``-fsanitize=unreachable``. Some
+   sanitizers (e.g. :doc:`AddressSanitizer`) may not support recovery,
+   and always crash the program after the issue is detected.
 
 .. option:: -fno-assume-sane-operator-new
 
@@ -1472,9 +1494,12 @@ Differences between various standard modes
 ------------------------------------------
 
 clang supports the -std option, which changes what language mode clang
-uses. The supported modes for C are c89, gnu89, c94, c99, gnu99 and
-various aliases for those modes. If no -std option is specified, clang
-defaults to gnu99 mode.
+uses. The supported modes for C are c89, gnu89, c94, c99, gnu99, c11,
+gnu11, and various aliases for those modes. If no -std option is
+specified, clang defaults to gnu11 mode. Many C99 and C11 features are
+supported in earlier modes as a conforming extension, with a warning. Use
+``-pedantic-errors`` to request an error if a feature from a later standard
+revision is used in an earlier mode.
 
 Differences between all ``c*`` and ``gnu*`` modes:
 
@@ -1511,6 +1536,11 @@ Differences between ``*89`` and ``*99`` modes:
 -  Arrays which are not lvalues are not implicitly promoted to pointers
    in ``*89`` modes.
 -  Some warnings are different.
+
+Differences between ``*99`` and ``*11`` modes:
+
+-  Warnings for use of C11 features are disabled.
+-  ``__STDC_VERSION__`` is defined to ``201112L`` rather than ``199901L``.
 
 c94 mode is identical to c89 mode except that digraphs are enabled in
 c94 mode (FIXME: And ``__STDC_VERSION__`` should be defined!).

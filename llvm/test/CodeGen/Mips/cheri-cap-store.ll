@@ -7,7 +7,7 @@ target triple = "cheri-unknown-freebsd"
 define void @storeToPtr1(i8 addrspace(200)* nocapture %a, i8 signext %v) nounwind {
 entry:
   ; CHECK: csb
-  store i8 %v, i8 addrspace(200)* %a, align 1, !tbaa !0
+  store i8 %v, i8 addrspace(200)* %a, align 1
   ret void
 }
 
@@ -15,7 +15,7 @@ entry:
 define void @storeToPtr2(i16 addrspace(200)* nocapture %a, i16 signext %v) nounwind {
 entry:
   ; CHECK: csh
-  store i16 %v, i16 addrspace(200)* %a, align 2, !tbaa !2
+  store i16 %v, i16 addrspace(200)* %a, align 2
   ret void
 }
 
@@ -23,7 +23,7 @@ entry:
 define void @storeToPtr4(i32 addrspace(200)* nocapture %a, i32 %v) nounwind {
 entry:
   ; CHECK: csw
-  store i32 %v, i32 addrspace(200)* %a, align 4, !tbaa !3
+  store i32 %v, i32 addrspace(200)* %a, align 4
   ret void
 }
 
@@ -31,12 +31,7 @@ entry:
 define void @storeToPtr8(i64 addrspace(200)* nocapture %a, i64 %v) nounwind {
 entry:
   ; CHECK: csd
-  store i64 %v, i64 addrspace(200)* %a, align 8, !tbaa !4
+  store i64 %v, i64 addrspace(200)* %a, align 8
   ret void
 }
 
-!0 = metadata !{metadata !"omnipotent char", metadata !1}
-!1 = metadata !{metadata !"Simple C/C++ TBAA"}
-!2 = metadata !{metadata !"short", metadata !0}
-!3 = metadata !{metadata !"int", metadata !0}
-!4 = metadata !{metadata !"long long", metadata !0}

@@ -8,36 +8,23 @@
 //===----------------------------------------------------------------------===//
 
 #include "X86TargetHandler.h"
+#include "X86DynamicLibraryWriter.h"
+#include "X86ExecutableWriter.h"
 #include "X86LinkingContext.h"
+#include "X86RelocationHandler.h"
 
 using namespace lld;
 using namespace elf;
 
 using namespace llvm::ELF;
 
-/// \brief R_386_32 - word32:  S + A
-static int reloc32(uint8_t *location, uint64_t P, uint64_t S, uint64_t A) {
-  int32_t result = (uint32_t)(S + A);
-  *reinterpret_cast<llvm::support::ulittle32_t *>(location) = result |
-            (uint32_t)*reinterpret_cast<llvm::support::ulittle32_t *>(location);
-  return 0;
-}
-
-/// \brief R_386_PC32 - word32: S + A - P
-static int relocPC32(uint8_t *location, uint64_t P, uint64_t S, uint64_t A) {
-  uint32_t result = (uint32_t)((S + A) - P);
-  *reinterpret_cast<llvm::support::ulittle32_t *>(location) = result +
-            (uint32_t)*reinterpret_cast<llvm::support::ulittle32_t *>(location);
-  return 0;
-}
-
 std::unique_ptr<Writer> X86TargetHandler::getWriter() {
   switch (_x86LinkingContext.getOutputELFType()) {
   case llvm::ELF::ET_EXEC:
-    return std::unique_ptr<Writer>(new elf::ExecutableWriter<X86ELFType>(
+    return std::unique_ptr<Writer>(new X86ExecutableWriter<X86ELFType>(
         _x86LinkingContext, *_x86TargetLayout.get()));
   case llvm::ELF::ET_DYN:
-    return std::unique_ptr<Writer>(new elf::DynamicLibraryWriter<X86ELFType>(
+    return std::unique_ptr<Writer>(new X86DynamicLibraryWriter<X86ELFType>(
         _x86LinkingContext, *_x86TargetLayout.get()));
   case llvm::ELF::ET_REL:
     llvm_unreachable("TODO: support -r mode");
@@ -46,88 +33,21 @@ std::unique_ptr<Writer> X86TargetHandler::getWriter() {
   }
 }
 
+#define ELF_RELOC(name, value) LLD_KIND_STRING_ENTRY(name),
+
 const Registry::KindStrings X86TargetHandler::kindStrings[] = {
-  LLD_KIND_STRING_ENTRY(R_386_NONE),
-  LLD_KIND_STRING_ENTRY(R_386_32),
-  LLD_KIND_STRING_ENTRY(R_386_PC32),
-  LLD_KIND_STRING_ENTRY(R_386_GOT32),
-  LLD_KIND_STRING_ENTRY(R_386_PLT32),
-  LLD_KIND_STRING_ENTRY(R_386_COPY),
-  LLD_KIND_STRING_ENTRY(R_386_GLOB_DAT),
-  LLD_KIND_STRING_ENTRY(R_386_JUMP_SLOT),
-  LLD_KIND_STRING_ENTRY(R_386_RELATIVE),
-  LLD_KIND_STRING_ENTRY(R_386_GOTOFF),
-  LLD_KIND_STRING_ENTRY(R_386_GOTPC),
-  LLD_KIND_STRING_ENTRY(R_386_32PLT),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_TPOFF),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_IE),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_GOTIE),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_LE),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_GD),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_LDM),
-  LLD_KIND_STRING_ENTRY(R_386_16),
-  LLD_KIND_STRING_ENTRY(R_386_PC16),
-  LLD_KIND_STRING_ENTRY(R_386_8),
-  LLD_KIND_STRING_ENTRY(R_386_PC8),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_GD_32),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_GD_PUSH),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_GD_CALL),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_GD_POP),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_LDM_32),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_LDM_PUSH),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_LDM_CALL),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_LDM_POP),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_LDO_32),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_IE_32),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_LE_32),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_DTPMOD32),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_DTPOFF32),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_TPOFF32),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_GOTDESC),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_DESC_CALL),
-  LLD_KIND_STRING_ENTRY(R_386_TLS_DESC),
-  LLD_KIND_STRING_ENTRY(R_386_IRELATIVE),
-  LLD_KIND_STRING_ENTRY(R_386_NUM),
+#include "llvm/Support/ELFRelocs/i386.def"
   LLD_KIND_STRING_END
 };
+
+#undef ELF_RELOC
 
 void X86TargetHandler::registerRelocationNames(Registry &registry) {
   registry.addKindTable(Reference::KindNamespace::ELF, Reference::KindArch::x86,
                         kindStrings);
 }
 
-std::error_code X86TargetRelocationHandler::applyRelocation(
-    ELFWriter &writer, llvm::FileOutputBuffer &buf, const lld::AtomLayout &atom,
-    const Reference &ref) const {
-  uint8_t *atomContent = buf.getBufferStart() + atom._fileOffset;
-  uint8_t *location = atomContent + ref.offsetInAtom();
-  uint64_t targetVAddress = writer.addressOfAtom(ref.target());
-  uint64_t relocVAddress = atom._virtualAddr + ref.offsetInAtom();
-
-  if (ref.kindNamespace() != Reference::KindNamespace::ELF)
-    return std::error_code();
-  assert(ref.kindArch() == Reference::KindArch::x86);
-  switch (ref.kindValue()) {
-  case R_386_32:
-    reloc32(location, relocVAddress, targetVAddress, ref.addend());
-    break;
-  case R_386_PC32:
-    relocPC32(location, relocVAddress, targetVAddress, ref.addend());
-    break;
-  default : {
-    std::string str;
-    llvm::raw_string_ostream s(str);
-    s << "Unhandled I386 relocation # " << ref.kindValue();
-    s.flush();
-    llvm_unreachable(str.c_str());
-  }
-  }
-
-  return std::error_code();
-}
-
 X86TargetHandler::X86TargetHandler(X86LinkingContext &context)
-    : DefaultTargetHandler(context), _x86LinkingContext(context),
+    : _x86LinkingContext(context),
       _x86TargetLayout(new X86TargetLayout<X86ELFType>(context)),
-      _x86RelocationHandler(
-          new X86TargetRelocationHandler(context, *_x86TargetLayout.get())) {}
+      _x86RelocationHandler(new X86TargetRelocationHandler()) {}

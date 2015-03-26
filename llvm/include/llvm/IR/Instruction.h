@@ -31,8 +31,8 @@ template<typename ValueSubClass, typename ItemParentClass>
   class SymbolTableListTraits;
 
 class Instruction : public User, public ilist_node<Instruction> {
-  void operator=(const Instruction &) LLVM_DELETED_FUNCTION;
-  Instruction(const Instruction &) LLVM_DELETED_FUNCTION;
+  void operator=(const Instruction &) = delete;
+  Instruction(const Instruction &) = delete;
 
   BasicBlock *Parent;
   DebugLoc DbgLoc;                         // 'dbg' Metadata cache.
@@ -54,7 +54,12 @@ public:
   inline const BasicBlock *getParent() const { return Parent; }
   inline       BasicBlock *getParent()       { return Parent; }
 
-  const DataLayout *getDataLayout() const;
+  /// \brief Return the module owning the function this instruction belongs to
+  /// or nullptr it the function does not have a module.
+  ///
+  /// Note: this is undefined behavior if the instruction does not have a
+  /// parent, or the parent basic block does not have a parent function.
+  const Module *getModule() const;
 
   /// removeFromParent - This method unlinks 'this' from the containing basic
   /// block, but does not delete it.
@@ -141,41 +146,23 @@ public:
 
   /// getMetadata - Get the metadata of given kind attached to this Instruction.
   /// If the metadata is not found then return null.
-  Value *getMetadata(unsigned KindID) const {
+  MDNode *getMetadata(unsigned KindID) const {
     if (!hasMetadata()) return nullptr;
     return getMetadataImpl(KindID);
   }
 
   /// getMetadata - Get the metadata of given kind attached to this Instruction.
   /// If the metadata is not found then return null.
-  Value *getMetadata(StringRef Kind) const {
+  MDNode *getMetadata(StringRef Kind) const {
     if (!hasMetadata()) return nullptr;
     return getMetadataImpl(Kind);
-  }
-
-  /// Get the the metadata as an MDNode.
-  ///
-  /// \pre Any KindID metadata is implemented using \a MDNode.
-  MDNode *getMDNode(unsigned KindID) const {
-    if (!hasMetadata())
-      return nullptr;
-    return getMDNodeImpl(KindID);
-  }
-
-  /// Get the the metadata as an MDNode.
-  ///
-  /// \pre Any KindID metadata is implemented using \a MDNode.
-  MDNode *getMDNode(StringRef Kind) const {
-    if (!hasMetadata())
-      return nullptr;
-    return getMDNodeImpl(Kind);
   }
 
   /// getAllMetadata - Get all metadata attached to this Instruction.  The first
   /// element of each pair returned is the KindID, the second element is the
   /// metadata value.  This list is returned sorted by the KindID.
   void
-  getAllMetadata(SmallVectorImpl<std::pair<unsigned, Value *>> &MDs) const {
+  getAllMetadata(SmallVectorImpl<std::pair<unsigned, MDNode *>> &MDs) const {
     if (hasMetadata())
       getAllMetadataImpl(MDs);
   }
@@ -183,7 +170,7 @@ public:
   /// getAllMetadataOtherThanDebugLoc - This does the same thing as
   /// getAllMetadata, except that it filters out the debug location.
   void getAllMetadataOtherThanDebugLoc(
-      SmallVectorImpl<std::pair<unsigned, Value *>> &MDs) const {
+      SmallVectorImpl<std::pair<unsigned, MDNode *>> &MDs) const {
     if (hasMetadataOtherThanDebugLoc())
       getAllMetadataOtherThanDebugLocImpl(MDs);
   }
@@ -195,9 +182,9 @@ public:
 
   /// setMetadata - Set the metadata of the specified kind to the specified
   /// node.  This updates/replaces metadata if already present, or removes it if
-  /// MD is null.
-  void setMetadata(unsigned KindID, Value *MD);
-  void setMetadata(StringRef Kind, Value *MD);
+  /// Node is null.
+  void setMetadata(unsigned KindID, MDNode *Node);
+  void setMetadata(StringRef Kind, MDNode *Node);
 
   /// \brief Drop unknown metadata.
   /// Passes are required to drop metadata they don't understand. This is a
@@ -219,7 +206,7 @@ public:
   void setAAMetadata(const AAMDNodes &N);
 
   /// setDebugLoc - Set the debug location information for this instruction.
-  void setDebugLoc(const DebugLoc &Loc) { DbgLoc = Loc; }
+  void setDebugLoc(DebugLoc Loc) { DbgLoc = std::move(Loc); }
 
   /// getDebugLoc - Return the debug location for this node as a DebugLoc.
   const DebugLoc &getDebugLoc() const { return DbgLoc; }
@@ -290,14 +277,12 @@ private:
   }
 
   // These are all implemented in Metadata.cpp.
-  Value *getMetadataImpl(unsigned KindID) const;
-  Value *getMetadataImpl(StringRef Kind) const;
-  MDNode *getMDNodeImpl(unsigned KindID) const;
-  MDNode *getMDNodeImpl(StringRef Kind) const;
+  MDNode *getMetadataImpl(unsigned KindID) const;
+  MDNode *getMetadataImpl(StringRef Kind) const;
   void
-  getAllMetadataImpl(SmallVectorImpl<std::pair<unsigned, Value *>> &) const;
+  getAllMetadataImpl(SmallVectorImpl<std::pair<unsigned, MDNode *>> &) const;
   void getAllMetadataOtherThanDebugLocImpl(
-      SmallVectorImpl<std::pair<unsigned, Value *>> &) const;
+      SmallVectorImpl<std::pair<unsigned, MDNode *>> &) const;
   void clearMetadataHashEntries();
 public:
   //===--------------------------------------------------------------------===//

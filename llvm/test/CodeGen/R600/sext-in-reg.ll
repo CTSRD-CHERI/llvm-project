@@ -1,7 +1,8 @@
-; RUN: llc -march=r600 -mcpu=SI -verify-machineinstrs < %s | FileCheck -check-prefix=SI -check-prefix=FUNC %s
+; RUN: llc -march=amdgcn -mcpu=SI -verify-machineinstrs < %s | FileCheck -check-prefix=SI -check-prefix=FUNC %s
 ; RUN: llc -march=r600 -mcpu=cypress -verify-machineinstrs < %s | FileCheck -check-prefix=EG -check-prefix=FUNC %s
 
 declare i32 @llvm.AMDGPU.imax(i32, i32) nounwind readnone
+declare i32 @llvm.r600.read.tidig.x() nounwind readnone
 
 
 ; FUNC-LABEL: {{^}}sext_in_reg_i1_i32:
@@ -75,12 +76,13 @@ define void @sext_in_reg_i8_to_v1i32(<1 x i32> addrspace(1)* %out, <1 x i32> %a,
 }
 
 ; FUNC-LABEL: {{^}}sext_in_reg_i1_to_i64:
-; SI: s_mov_b32 {{s[0-9]+}}, -1
-; SI: s_add_i32 [[VAL:s[0-9]+]],
-; SI: s_bfe_i32 s{{[0-9]+}}, s{{[0-9]+}}, 0x10000
-; SI: buffer_store_dwordx2
+; SI: s_lshl_b64 [[VAL:s\[[0-9]+:[0-9]+\]]]
+; SI-DAG: s_bfe_i64 s{{\[}}[[SLO:[0-9]+]]:[[SHI:[0-9]+]]{{\]}}, [[VAL]], 0x10000
+; SI-DAG: v_mov_b32_e32 v[[VLO:[0-9]+]], s[[SLO]]
+; SI-DAG: v_mov_b32_e32 v[[VHI:[0-9]+]], s[[SHI]]
+; SI: buffer_store_dwordx2 v{{\[}}[[VLO]]:[[VHI]]{{\]}}
 define void @sext_in_reg_i1_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) nounwind {
-  %c = add i64 %a, %b
+  %c = shl i64 %a, %b
   %shl = shl i64 %c, 63
   %ashr = ashr i64 %shl, 63
   store i64 %ashr, i64 addrspace(1)* %out, align 8
@@ -88,15 +90,16 @@ define void @sext_in_reg_i1_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) nounw
 }
 
 ; FUNC-LABEL: {{^}}sext_in_reg_i8_to_i64:
-; SI: s_mov_b32 {{s[0-9]+}}, -1
-; SI: s_add_i32 [[VAL:s[0-9]+]],
-; SI: s_sext_i32_i8 [[EXTRACT:s[0-9]+]], [[VAL]]
-; SI: buffer_store_dwordx2
+; SI: s_lshl_b64 [[VAL:s\[[0-9]+:[0-9]+\]]]
+; SI-DAG: s_bfe_i64 s{{\[}}[[SLO:[0-9]+]]:[[SHI:[0-9]+]]{{\]}}, [[VAL]], 0x80000
+; SI-DAG: v_mov_b32_e32 v[[VLO:[0-9]+]], s[[SLO]]
+; SI-DAG: v_mov_b32_e32 v[[VHI:[0-9]+]], s[[SHI]]
+; SI: buffer_store_dwordx2 v{{\[}}[[VLO]]:[[VHI]]{{\]}}
 
 ; EG: MEM_{{.*}} STORE_{{.*}} [[RES_LO:T[0-9]+\.[XYZW]]], [[ADDR_LO:T[0-9]+.[XYZW]]]
 ; EG: MEM_{{.*}} STORE_{{.*}} [[RES_HI:T[0-9]+\.[XYZW]]], [[ADDR_HI:T[0-9]+.[XYZW]]]
-; EG: ADD_INT
-; EG-NEXT: BFE_INT {{\*?}} [[RES_LO]], {{.*}}, 0.0, literal
+; EG: LSHL
+; EG: BFE_INT {{\*?}} [[RES_LO]], {{.*}}, 0.0, literal
 ; EG: ASHR [[RES_HI]]
 ; EG-NOT: BFE_INT
 ; EG: LSHR
@@ -104,7 +107,7 @@ define void @sext_in_reg_i1_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) nounw
 ;; TODO Check address computation, using | with variables in {{}} does not work,
 ;; also the _LO/_HI order might be different
 define void @sext_in_reg_i8_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) nounwind {
-  %c = add i64 %a, %b
+  %c = shl i64 %a, %b
   %shl = shl i64 %c, 56
   %ashr = ashr i64 %shl, 56
   store i64 %ashr, i64 addrspace(1)* %out, align 8
@@ -112,15 +115,16 @@ define void @sext_in_reg_i8_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) nounw
 }
 
 ; FUNC-LABEL: {{^}}sext_in_reg_i16_to_i64:
-; SI: s_mov_b32 {{s[0-9]+}}, -1
-; SI: s_add_i32 [[VAL:s[0-9]+]],
-; SI: s_sext_i32_i16 [[EXTRACT:s[0-9]+]], [[VAL]]
-; SI: buffer_store_dwordx2
+; SI: s_lshl_b64 [[VAL:s\[[0-9]+:[0-9]+\]]]
+; SI-DAG: s_bfe_i64 s{{\[}}[[SLO:[0-9]+]]:[[SHI:[0-9]+]]{{\]}}, [[VAL]], 0x100000
+; SI-DAG: v_mov_b32_e32 v[[VLO:[0-9]+]], s[[SLO]]
+; SI-DAG: v_mov_b32_e32 v[[VHI:[0-9]+]], s[[SHI]]
+; SI: buffer_store_dwordx2 v{{\[}}[[VLO]]:[[VHI]]{{\]}}
 
 ; EG: MEM_{{.*}} STORE_{{.*}} [[RES_LO:T[0-9]+\.[XYZW]]], [[ADDR_LO:T[0-9]+.[XYZW]]]
 ; EG: MEM_{{.*}} STORE_{{.*}} [[RES_HI:T[0-9]+\.[XYZW]]], [[ADDR_HI:T[0-9]+.[XYZW]]]
-; EG: ADD_INT
-; EG-NEXT: BFE_INT {{\*?}} [[RES_LO]], {{.*}}, 0.0, literal
+; EG: LSHL
+; EG: BFE_INT {{\*?}} [[RES_LO]], {{.*}}, 0.0, literal
 ; EG: ASHR [[RES_HI]]
 ; EG-NOT: BFE_INT
 ; EG: LSHR
@@ -128,7 +132,7 @@ define void @sext_in_reg_i8_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) nounw
 ;; TODO Check address computation, using | with variables in {{}} does not work,
 ;; also the _LO/_HI order might be different
 define void @sext_in_reg_i16_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) nounwind {
-  %c = add i64 %a, %b
+  %c = shl i64 %a, %b
   %shl = shl i64 %c, 48
   %ashr = ashr i64 %shl, 48
   store i64 %ashr, i64 addrspace(1)* %out, align 8
@@ -136,24 +140,24 @@ define void @sext_in_reg_i16_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) noun
 }
 
 ; FUNC-LABEL: {{^}}sext_in_reg_i32_to_i64:
-; SI: s_load_dword
-; SI: s_load_dword
-; SI: s_add_i32 [[ADD:s[0-9]+]],
-; SI: s_ashr_i32 s{{[0-9]+}}, [[ADD]], 31
-; SI: buffer_store_dwordx2
+; SI: s_lshl_b64 [[VAL:s\[[0-9]+:[0-9]+\]]]
+; SI-DAG: s_bfe_i64 s{{\[}}[[SLO:[0-9]+]]:[[SHI:[0-9]+]]{{\]}}, [[VAL]], 0x200000
+; SI-DAG: v_mov_b32_e32 v[[VLO:[0-9]+]], s[[SLO]]
+; SI-DAG: v_mov_b32_e32 v[[VHI:[0-9]+]], s[[SHI]]
+; SI: buffer_store_dwordx2 v{{\[}}[[VLO]]:[[VHI]]{{\]}}
 
 ; EG: MEM_{{.*}} STORE_{{.*}} [[RES_LO:T[0-9]+\.[XYZW]]], [[ADDR_LO:T[0-9]+.[XYZW]]]
 ; EG: MEM_{{.*}} STORE_{{.*}} [[RES_HI:T[0-9]+\.[XYZW]]], [[ADDR_HI:T[0-9]+.[XYZW]]]
 ; EG-NOT: BFE_INT
-; EG: ADD_INT {{\*?}} [[RES_LO]]
+
 ; EG: ASHR [[RES_HI]]
-; EG: ADD_INT
+
 ; EG: LSHR
 ; EG: LSHR
 ;; TODO Check address computation, using | with variables in {{}} does not work,
 ;; also the _LO/_HI order might be different
 define void @sext_in_reg_i32_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) nounwind {
-  %c = add i64 %a, %b
+  %c = shl i64 %a, %b
   %shl = shl i64 %c, 32
   %ashr = ashr i64 %shl, 32
   store i64 %ashr, i64 addrspace(1)* %out, align 8
@@ -174,6 +178,89 @@ define void @sext_in_reg_i32_to_i64(i64 addrspace(1)* %out, i64 %a, i64 %b) noun
 ;   store <1 x i64> %ashr, <1 x i64> addrspace(1)* %out, align 8
 ;   ret void
 ; }
+
+; FUNC-LABEL: {{^}}v_sext_in_reg_i1_to_i64:
+; SI: buffer_load_dwordx2
+; SI: v_lshl_b64 v{{\[}}[[VAL_LO:[0-9]+]]:[[VAL_HI:[0-9]+]]{{\]}}
+; SI: v_bfe_i32 v[[LO:[0-9]+]], v[[VAL_LO]], 0, 1
+; SI: v_ashrrev_i32_e32 v[[HI:[0-9]+]], 31, v[[LO]]
+; SI: buffer_store_dwordx2 v{{\[}}[[LO]]:[[HI]]{{\]}}
+define void @v_sext_in_reg_i1_to_i64(i64 addrspace(1)* %out, i64 addrspace(1)* %aptr, i64 addrspace(1)* %bptr) nounwind {
+  %tid = call i32 @llvm.r600.read.tidig.x()
+  %a.gep = getelementptr i64, i64 addrspace(1)* %aptr, i32 %tid
+  %b.gep = getelementptr i64, i64 addrspace(1)* %aptr, i32 %tid
+  %out.gep = getelementptr i64, i64 addrspace(1)* %out, i32 %tid
+  %a = load i64, i64 addrspace(1)* %a.gep, align 8
+  %b = load i64, i64 addrspace(1)* %b.gep, align 8
+
+  %c = shl i64 %a, %b
+  %shl = shl i64 %c, 63
+  %ashr = ashr i64 %shl, 63
+  store i64 %ashr, i64 addrspace(1)* %out.gep, align 8
+  ret void
+}
+
+; FUNC-LABEL: {{^}}v_sext_in_reg_i8_to_i64:
+; SI: buffer_load_dwordx2
+; SI: v_lshl_b64 v{{\[}}[[VAL_LO:[0-9]+]]:[[VAL_HI:[0-9]+]]{{\]}}
+; SI: v_bfe_i32 v[[LO:[0-9]+]], v[[VAL_LO]], 0, 8
+; SI: v_ashrrev_i32_e32 v[[HI:[0-9]+]], 31, v[[LO]]
+; SI: buffer_store_dwordx2 v{{\[}}[[LO]]:[[HI]]{{\]}}
+define void @v_sext_in_reg_i8_to_i64(i64 addrspace(1)* %out, i64 addrspace(1)* %aptr, i64 addrspace(1)* %bptr) nounwind {
+  %tid = call i32 @llvm.r600.read.tidig.x()
+  %a.gep = getelementptr i64, i64 addrspace(1)* %aptr, i32 %tid
+  %b.gep = getelementptr i64, i64 addrspace(1)* %aptr, i32 %tid
+  %out.gep = getelementptr i64, i64 addrspace(1)* %out, i32 %tid
+  %a = load i64, i64 addrspace(1)* %a.gep, align 8
+  %b = load i64, i64 addrspace(1)* %b.gep, align 8
+
+  %c = shl i64 %a, %b
+  %shl = shl i64 %c, 56
+  %ashr = ashr i64 %shl, 56
+  store i64 %ashr, i64 addrspace(1)* %out.gep, align 8
+  ret void
+}
+
+; FUNC-LABEL: {{^}}v_sext_in_reg_i16_to_i64:
+; SI: buffer_load_dwordx2
+; SI: v_lshl_b64 v{{\[}}[[VAL_LO:[0-9]+]]:[[VAL_HI:[0-9]+]]{{\]}}
+; SI: v_bfe_i32 v[[LO:[0-9]+]], v[[VAL_LO]], 0, 16
+; SI: v_ashrrev_i32_e32 v[[HI:[0-9]+]], 31, v[[LO]]
+; SI: buffer_store_dwordx2 v{{\[}}[[LO]]:[[HI]]{{\]}}
+define void @v_sext_in_reg_i16_to_i64(i64 addrspace(1)* %out, i64 addrspace(1)* %aptr, i64 addrspace(1)* %bptr) nounwind {
+  %tid = call i32 @llvm.r600.read.tidig.x()
+  %a.gep = getelementptr i64, i64 addrspace(1)* %aptr, i32 %tid
+  %b.gep = getelementptr i64, i64 addrspace(1)* %aptr, i32 %tid
+  %out.gep = getelementptr i64, i64 addrspace(1)* %out, i32 %tid
+  %a = load i64, i64 addrspace(1)* %a.gep, align 8
+  %b = load i64, i64 addrspace(1)* %b.gep, align 8
+
+  %c = shl i64 %a, %b
+  %shl = shl i64 %c, 48
+  %ashr = ashr i64 %shl, 48
+  store i64 %ashr, i64 addrspace(1)* %out.gep, align 8
+  ret void
+}
+
+; FUNC-LABEL: {{^}}v_sext_in_reg_i32_to_i64:
+; SI: buffer_load_dwordx2
+; SI: v_lshl_b64 v{{\[}}[[LO:[0-9]+]]:[[HI:[0-9]+]]{{\]}},
+; SI: v_ashrrev_i32_e32 v[[SHR:[0-9]+]], 31, v[[LO]]
+; SI: buffer_store_dwordx2 v{{\[}}[[LO]]:[[SHR]]{{\]}}
+define void @v_sext_in_reg_i32_to_i64(i64 addrspace(1)* %out, i64 addrspace(1)* %aptr, i64 addrspace(1)* %bptr) nounwind {
+  %tid = call i32 @llvm.r600.read.tidig.x()
+  %a.gep = getelementptr i64, i64 addrspace(1)* %aptr, i32 %tid
+  %b.gep = getelementptr i64, i64 addrspace(1)* %aptr, i32 %tid
+  %out.gep = getelementptr i64, i64 addrspace(1)* %out, i32 %tid
+  %a = load i64, i64 addrspace(1)* %a.gep, align 8
+  %b = load i64, i64 addrspace(1)* %b.gep, align 8
+
+  %c = shl i64 %a, %b
+  %shl = shl i64 %c, 32
+  %ashr = ashr i64 %shl, 32
+  store i64 %ashr, i64 addrspace(1)* %out.gep, align 8
+  ret void
+}
 
 ; FUNC-LABEL: {{^}}sext_in_reg_i1_in_i32_other_amount:
 ; SI-NOT: {{[^@]}}bfe
@@ -341,8 +428,8 @@ define void @testcase_3(i8 addrspace(1)* %out, i8 %a) nounwind {
 ; SI: v_bfe_i32 [[EXTRACT:v[0-9]+]], {{v[0-9]+}}, 0, 8
 ; SI: v_bfe_i32 [[EXTRACT:v[0-9]+]], {{v[0-9]+}}, 0, 8
 define void @vgpr_sext_in_reg_v4i8_to_v4i32(<4 x i32> addrspace(1)* %out, <4 x i32> addrspace(1)* %a, <4 x i32> addrspace(1)* %b) nounwind {
-  %loada = load <4 x i32> addrspace(1)* %a, align 16
-  %loadb = load <4 x i32> addrspace(1)* %b, align 16
+  %loada = load <4 x i32>, <4 x i32> addrspace(1)* %a, align 16
+  %loadb = load <4 x i32>, <4 x i32> addrspace(1)* %b, align 16
   %c = add <4 x i32> %loada, %loadb ; add to prevent folding into extload
   %shl = shl <4 x i32> %c, <i32 24, i32 24, i32 24, i32 24>
   %ashr = ashr <4 x i32> %shl, <i32 24, i32 24, i32 24, i32 24>
@@ -354,8 +441,8 @@ define void @vgpr_sext_in_reg_v4i8_to_v4i32(<4 x i32> addrspace(1)* %out, <4 x i
 ; SI: v_bfe_i32 [[EXTRACT:v[0-9]+]], {{v[0-9]+}}, 0, 16
 ; SI: v_bfe_i32 [[EXTRACT:v[0-9]+]], {{v[0-9]+}}, 0, 16
 define void @vgpr_sext_in_reg_v4i16_to_v4i32(<4 x i32> addrspace(1)* %out, <4 x i32> addrspace(1)* %a, <4 x i32> addrspace(1)* %b) nounwind {
-  %loada = load <4 x i32> addrspace(1)* %a, align 16
-  %loadb = load <4 x i32> addrspace(1)* %b, align 16
+  %loada = load <4 x i32>, <4 x i32> addrspace(1)* %a, align 16
+  %loadb = load <4 x i32>, <4 x i32> addrspace(1)* %b, align 16
   %c = add <4 x i32> %loada, %loadb ; add to prevent folding into extload
   %shl = shl <4 x i32> %c, <i32 16, i32 16, i32 16, i32 16>
   %ashr = ashr <4 x i32> %shl, <i32 16, i32 16, i32 16, i32 16>
@@ -372,7 +459,7 @@ define void @vgpr_sext_in_reg_v4i16_to_v4i32(<4 x i32> addrspace(1)* %out, <4 x 
 ; SI: v_bfe_i32
 ; SI: buffer_store_short
 define void @sext_in_reg_to_illegal_type(i16 addrspace(1)* nocapture %out, i8 addrspace(1)* nocapture %src) nounwind {
-  %tmp5 = load i8 addrspace(1)* %src, align 1
+  %tmp5 = load i8, i8 addrspace(1)* %src, align 1
   %tmp2 = sext i8 %tmp5 to i32
   %tmp3 = tail call i32 @llvm.AMDGPU.imax(i32 %tmp2, i32 0) nounwind readnone
   %tmp4 = trunc i32 %tmp3 to i8
@@ -387,7 +474,7 @@ declare i32 @llvm.AMDGPU.bfe.i32(i32, i32, i32) nounwind readnone
 ; SI-NOT: {{[^@]}}bfe
 ; SI: s_endpgm
 define void @bfe_0_width(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) nounwind {
-  %load = load i32 addrspace(1)* %ptr, align 4
+  %load = load i32, i32 addrspace(1)* %ptr, align 4
   %bfe = call i32 @llvm.AMDGPU.bfe.i32(i32 %load, i32 8, i32 0) nounwind readnone
   store i32 %bfe, i32 addrspace(1)* %out, align 4
   ret void
@@ -398,7 +485,7 @@ define void @bfe_0_width(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) nounwin
 ; SI-NOT: {{[^@]}}bfe
 ; SI: s_endpgm
 define void @bfe_8_bfe_8(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) nounwind {
-  %load = load i32 addrspace(1)* %ptr, align 4
+  %load = load i32, i32 addrspace(1)* %ptr, align 4
   %bfe0 = call i32 @llvm.AMDGPU.bfe.i32(i32 %load, i32 0, i32 8) nounwind readnone
   %bfe1 = call i32 @llvm.AMDGPU.bfe.i32(i32 %bfe0, i32 0, i32 8) nounwind readnone
   store i32 %bfe1, i32 addrspace(1)* %out, align 4
@@ -409,7 +496,7 @@ define void @bfe_8_bfe_8(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) nounwin
 ; SI: v_bfe_i32 v{{[0-9]+}}, v{{[0-9]+}}, 0, 8
 ; SI: s_endpgm
 define void @bfe_8_bfe_16(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) nounwind {
-  %load = load i32 addrspace(1)* %ptr, align 4
+  %load = load i32, i32 addrspace(1)* %ptr, align 4
   %bfe0 = call i32 @llvm.AMDGPU.bfe.i32(i32 %load, i32 0, i32 8) nounwind readnone
   %bfe1 = call i32 @llvm.AMDGPU.bfe.i32(i32 %bfe0, i32 0, i32 16) nounwind readnone
   store i32 %bfe1, i32 addrspace(1)* %out, align 4
@@ -422,7 +509,7 @@ define void @bfe_8_bfe_16(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) nounwi
 ; SI-NOT: {{[^@]}}bfe
 ; SI: s_endpgm
 define void @bfe_16_bfe_8(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) nounwind {
-  %load = load i32 addrspace(1)* %ptr, align 4
+  %load = load i32, i32 addrspace(1)* %ptr, align 4
   %bfe0 = call i32 @llvm.AMDGPU.bfe.i32(i32 %load, i32 0, i32 16) nounwind readnone
   %bfe1 = call i32 @llvm.AMDGPU.bfe.i32(i32 %bfe0, i32 0, i32 8) nounwind readnone
   store i32 %bfe1, i32 addrspace(1)* %out, align 4
@@ -458,7 +545,7 @@ define void @sext_in_reg_i8_to_i32_bfe_wrong(i32 addrspace(1)* %out, i32 %a, i32
 ; SI-NOT: {{[^@]}}bfe
 ; SI: s_endpgm
 define void @sextload_i8_to_i32_bfe(i32 addrspace(1)* %out, i8 addrspace(1)* %ptr) nounwind {
-  %load = load i8 addrspace(1)* %ptr, align 1
+  %load = load i8, i8 addrspace(1)* %ptr, align 1
   %sext = sext i8 %load to i32
   %bfe = call i32 @llvm.AMDGPU.bfe.i32(i32 %sext, i32 0, i32 8) nounwind readnone
   %shl = shl i32 %bfe, 24
@@ -467,12 +554,12 @@ define void @sextload_i8_to_i32_bfe(i32 addrspace(1)* %out, i8 addrspace(1)* %pt
   ret void
 }
 
-; FUNC-LABEL: {{^}}sextload_i8_to_i32_bfe_0:
 ; SI: .text
+; FUNC-LABEL: {{^}}sextload_i8_to_i32_bfe_0:{{.*$}}
 ; SI-NOT: {{[^@]}}bfe
 ; SI: s_endpgm
 define void @sextload_i8_to_i32_bfe_0(i32 addrspace(1)* %out, i8 addrspace(1)* %ptr) nounwind {
-  %load = load i8 addrspace(1)* %ptr, align 1
+  %load = load i8, i8 addrspace(1)* %ptr, align 1
   %sext = sext i8 %load to i32
   %bfe = call i32 @llvm.AMDGPU.bfe.i32(i32 %sext, i32 8, i32 0) nounwind readnone
   %shl = shl i32 %bfe, 24
@@ -487,7 +574,7 @@ define void @sextload_i8_to_i32_bfe_0(i32 addrspace(1)* %out, i8 addrspace(1)* %
 ; SI: v_bfe_i32 v{{[0-9]+}}, v{{[0-9]+}}, 0, 1
 ; SI: s_endpgm
 define void @sext_in_reg_i1_bfe_offset_0(i32 addrspace(1)* %out, i32 addrspace(1)* %in) nounwind {
-  %x = load i32 addrspace(1)* %in, align 4
+  %x = load i32, i32 addrspace(1)* %in, align 4
   %shl = shl i32 %x, 31
   %shr = ashr i32 %shl, 31
   %bfe = call i32 @llvm.AMDGPU.bfe.i32(i32 %shr, i32 0, i32 1)
@@ -502,7 +589,7 @@ define void @sext_in_reg_i1_bfe_offset_0(i32 addrspace(1)* %out, i32 addrspace(1
 ; SI: v_bfe_i32 v{{[0-9]+}}, v{{[0-9]+}}, 1, 1
 ; SI: s_endpgm
 define void @sext_in_reg_i1_bfe_offset_1(i32 addrspace(1)* %out, i32 addrspace(1)* %in) nounwind {
-  %x = load i32 addrspace(1)* %in, align 4
+  %x = load i32, i32 addrspace(1)* %in, align 4
   %shl = shl i32 %x, 30
   %shr = ashr i32 %shl, 30
   %bfe = call i32 @llvm.AMDGPU.bfe.i32(i32 %shr, i32 1, i32 1)
@@ -517,7 +604,7 @@ define void @sext_in_reg_i1_bfe_offset_1(i32 addrspace(1)* %out, i32 addrspace(1
 ; SI: v_bfe_i32 v{{[0-9]+}}, v{{[0-9]+}}, 1, 2
 ; SI: s_endpgm
 define void @sext_in_reg_i2_bfe_offset_1(i32 addrspace(1)* %out, i32 addrspace(1)* %in) nounwind {
-  %x = load i32 addrspace(1)* %in, align 4
+  %x = load i32, i32 addrspace(1)* %in, align 4
   %shl = shl i32 %x, 30
   %shr = ashr i32 %shl, 30
   %bfe = call i32 @llvm.AMDGPU.bfe.i32(i32 %shr, i32 1, i32 2)

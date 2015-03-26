@@ -95,7 +95,7 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
-    AU.addRequired<LoopInfo>();
+    AU.addRequired<LoopInfoWrapperPass>();
     AU.addRequired<DominatorTreeWrapperPass>();
     AU.addRequired<PostDominatorTree>();
   }
@@ -217,6 +217,9 @@ void SampleProfileLoader::printBlockWeight(raw_ostream &OS, BasicBlock *BB) {
 /// \returns The profiled weight of I.
 unsigned SampleProfileLoader::getInstWeight(Instruction &Inst) {
   DebugLoc DLoc = Inst.getDebugLoc();
+  if (DLoc.isUnknown())
+    return 0;
+
   unsigned Lineno = DLoc.getLine();
   if (Lineno < HeaderLineno)
     return 0;
@@ -305,7 +308,7 @@ void SampleProfileLoader::findEquivalencesFor(
   for (auto *BB2 : Descendants) {
     bool IsDomParent = DomTree->dominates(BB2, BB1);
     bool IsInSameLoop = LI->getLoopFor(BB1) == LI->getLoopFor(BB2);
-    if (BB1 != BB2 && VisitedBlocks.insert(BB2) && IsDomParent &&
+    if (BB1 != BB2 && VisitedBlocks.insert(BB2).second && IsDomParent &&
         IsInSameLoop) {
       EquivalenceClass[BB2] = BB1;
 
@@ -494,7 +497,7 @@ bool SampleProfileLoader::propagateThroughEdges(Function &F) {
                          << " known. Set weight for block: ";
                   printBlockWeight(dbgs(), BB););
           }
-          if (VisitedBlocks.insert(BB))
+          if (VisitedBlocks.insert(BB).second)
             Changed = true;
         } else if (NumUnknownEdges == 1 && VisitedBlocks.count(BB)) {
           // If there is a single unknown edge and the block has been
@@ -540,7 +543,7 @@ void SampleProfileLoader::buildEdges(Function &F) {
       llvm_unreachable("Found a stale predecessors list in a basic block.");
     for (pred_iterator PI = pred_begin(B1), PE = pred_end(B1); PI != PE; ++PI) {
       BasicBlock *B2 = *PI;
-      if (Visited.insert(B2))
+      if (Visited.insert(B2).second)
         Predecessors[B1].push_back(B2);
     }
 
@@ -550,7 +553,7 @@ void SampleProfileLoader::buildEdges(Function &F) {
       llvm_unreachable("Found a stale successors list in a basic block.");
     for (succ_iterator SI = succ_begin(B1), SE = succ_end(B1); SI != SE; ++SI) {
       BasicBlock *B2 = *SI;
-      if (Visited.insert(B2))
+      if (Visited.insert(B2).second)
         Successors[B1].push_back(B2);
     }
   }
@@ -731,7 +734,7 @@ INITIALIZE_PASS_BEGIN(SampleProfileLoader, "sample-profile",
                       "Sample Profile loader", false, false)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(PostDominatorTree)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
+INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(AddDiscriminators)
 INITIALIZE_PASS_END(SampleProfileLoader, "sample-profile",
                     "Sample Profile loader", false, false)
@@ -762,7 +765,7 @@ bool SampleProfileLoader::runOnFunction(Function &F) {
 
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   PDT = &getAnalysis<PostDominatorTree>();
-  LI = &getAnalysis<LoopInfo>();
+  LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   Ctx = &F.getParent()->getContext();
   Samples = Reader->getSamplesFor(F);
   if (!Samples->empty())

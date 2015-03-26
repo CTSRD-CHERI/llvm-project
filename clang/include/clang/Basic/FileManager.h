@@ -59,7 +59,7 @@ public:
 /// If the 'File' member is valid, then this FileEntry has an open file
 /// descriptor for the file.
 class FileEntry {
-  std::string Name;           // Name of the file.
+  const char *Name;           // Name of the file.
   off_t Size;                 // File size in bytes.
   time_t ModTime;             // Modification time of file.
   const DirectoryEntry *Dir;  // Directory file lives in.
@@ -73,11 +73,7 @@ class FileEntry {
   mutable std::unique_ptr<vfs::File> File;
   friend class FileManager;
 
-  void closeFile() const {
-    File.reset(); // rely on destructor to close File
-  }
-
-  void operator=(const FileEntry &) LLVM_DELETED_FUNCTION;
+  void operator=(const FileEntry &) = delete;
 
 public:
   FileEntry()
@@ -93,7 +89,7 @@ public:
     assert(!isValid() && "Cannot copy an initialized FileEntry");
   }
 
-  const char *getName() const { return Name.c_str(); }
+  const char *getName() const { return Name; }
   bool isValid() const { return IsValid; }
   off_t getSize() const { return Size; }
   unsigned getUID() const { return UID; }
@@ -109,6 +105,10 @@ public:
   /// \brief Check whether the file is a named pipe (and thus can't be opened by
   /// the native FileManager methods).
   bool isNamedPipe() const { return IsNamedPipe; }
+
+  void closeFile() const {
+    File.reset(); // rely on destructor to close File
+  }
 };
 
 struct FileData;
@@ -241,12 +241,11 @@ public:
 
   /// \brief Open the specified file as a MemoryBuffer, returning a new
   /// MemoryBuffer if successful, otherwise returning null.
-  llvm::MemoryBuffer *getBufferForFile(const FileEntry *Entry,
-                                       std::string *ErrorStr = nullptr,
-                                       bool isVolatile = false,
-                                       bool ShouldCloseOpenFile = true);
-  llvm::MemoryBuffer *getBufferForFile(StringRef Filename,
-                                       std::string *ErrorStr = nullptr);
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>>
+  getBufferForFile(const FileEntry *Entry, bool isVolatile = false,
+                   bool ShouldCloseOpenFile = true);
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>>
+  getBufferForFile(StringRef Filename);
 
   /// \brief Get the 'stat' information for the given \p Path.
   ///
@@ -274,6 +273,9 @@ public:
   /// FileEntry. Use with caution.
   static void modifyFileEntry(FileEntry *File, off_t Size,
                               time_t ModificationTime);
+
+  /// \brief Remove any './' components from a path.
+  static bool removeDotPaths(SmallVectorImpl<char> &Path);
 
   /// \brief Retrieve the canonical name for a given directory.
   ///

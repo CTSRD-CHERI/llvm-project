@@ -10,17 +10,17 @@ entry:
   %c.addr = alloca i8 addrspace(200)*, align 32
   store i8 addrspace(200)* %b, i8 addrspace(200)** %b.addr, align 32
   store i8 addrspace(200)* %c, i8 addrspace(200)** %c.addr, align 32
-  %0 = load i8 addrspace(200)** %b.addr, align 32
-  %1 = load i8 addrspace(200)** %c.addr, align 32
+  %0 = load i8 addrspace(200)*, i8 addrspace(200)** %b.addr, align 32
+  %1 = load i8 addrspace(200)*, i8 addrspace(200)** %c.addr, align 32
   %cmp = icmp ult i8 addrspace(200)* %0, %1
   br i1 %cmp, label %cond.true, label %cond.false
 
 cond.true:                                        ; preds = %entry
-  %2 = load i8 addrspace(200)** %b.addr, align 32
+  %2 = load i8 addrspace(200)*, i8 addrspace(200)** %b.addr, align 32
   br label %cond.end
 
 cond.false:                                       ; preds = %entry
-  %3 = load i8 addrspace(200)** %c.addr, align 32
+  %3 = load i8 addrspace(200)*, i8 addrspace(200)** %c.addr, align 32
   br label %cond.end
 
 cond.end:                                         ; preds = %cond.false, %cond.true
@@ -32,4 +32,4 @@ attributes #0 = { nounwind "less-precise-fpmad"="false" "no-frame-pointer-elim"=
 
 !llvm.ident = !{!0}
 
-!0 = metadata !{metadata !"clang version 3.6.0 "}
+!0 = !{!"clang version 3.6.0 "}

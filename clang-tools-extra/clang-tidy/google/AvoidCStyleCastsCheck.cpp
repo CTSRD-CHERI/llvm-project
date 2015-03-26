@@ -17,6 +17,7 @@ using namespace clang::ast_matchers;
 
 namespace clang {
 namespace tidy {
+namespace google {
 namespace readability {
 
 void
@@ -28,14 +29,11 @@ AvoidCStyleCastsCheck::registerMatchers(ast_matchers::MatchFinder *Finder) {
           // FIXME: Remove this once this is fixed in the AST.
           unless(hasParent(substNonTypeTemplateParmExpr())),
           // Avoid matches in template instantiations.
-          unless(hasAncestor(decl(
-              anyOf(recordDecl(ast_matchers::isTemplateInstantiation()),
-                    functionDecl(ast_matchers::isTemplateInstantiation()))))))
-          .bind("cast"),
+          unless(isInTemplateInstantiation())).bind("cast"),
       this);
 }
 
-bool needsConstCast(QualType SourceType, QualType DestType) {
+static bool needsConstCast(QualType SourceType, QualType DestType) {
   SourceType = SourceType.getNonReferenceType();
   DestType = DestType.getNonReferenceType();
   while (SourceType->isPointerType() && DestType->isPointerType()) {
@@ -47,7 +45,7 @@ bool needsConstCast(QualType SourceType, QualType DestType) {
   return false;
 }
 
-bool pointedTypesAreEqual(QualType SourceType, QualType DestType) {
+static bool pointedTypesAreEqual(QualType SourceType, QualType DestType) {
   SourceType = SourceType.getNonReferenceType();
   DestType = DestType.getNonReferenceType();
   while (SourceType->isPointerType() && DestType->isPointerType()) {
@@ -71,23 +69,44 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
   if (CastExpr->getTypeAsWritten()->isVoidType())
     return;
 
-  QualType SourceType =
-      CastExpr->getSubExprAsWritten()->getType().getCanonicalType();
-  QualType DestType = CastExpr->getTypeAsWritten().getCanonicalType();
+  QualType SourceType = CastExpr->getSubExprAsWritten()->getType();
+  QualType DestType = CastExpr->getTypeAsWritten();
 
   if (SourceType == DestType) {
-    diag(CastExpr->getLocStart(), "Redundant cast to the same type.")
+    diag(CastExpr->getLocStart(), "redundant cast to the same type")
         << FixItHint::CreateRemoval(ParenRange);
     return;
   }
+  SourceType = SourceType.getCanonicalType();
+  DestType = DestType.getCanonicalType();
+  if (SourceType == DestType) {
+    diag(CastExpr->getLocStart(),
+         "possibly redundant cast between typedefs of the same type");
+    return;
+  }
 
-  std::string DestTypeString = CastExpr->getTypeAsWritten().getAsString();
+
+  // The rest of this check is only relevant to C++.
+  if (!Result.Context->getLangOpts().CPlusPlus)
+    return;
+  // Ignore code inside extern "C" {} blocks.
+  if (!match(expr(hasAncestor(linkageSpecDecl())), *CastExpr, *Result.Context)
+           .empty())
+    return;
+
+  // Leave type spelling exactly as it was (unlike
+  // getTypeAsWritten().getAsString() which would spell enum types 'enum X').
+  StringRef DestTypeString = Lexer::getSourceText(
+      CharSourceRange::getTokenRange(
+          CastExpr->getLParenLoc().getLocWithOffset(1),
+          CastExpr->getRParenLoc().getLocWithOffset(-1)),
+      *Result.SourceManager, Result.Context->getLangOpts());
 
   auto diag_builder =
       diag(CastExpr->getLocStart(), "C-style casts are discouraged. %0");
 
   auto ReplaceWithCast = [&](StringRef CastType) {
-    diag_builder << ("Use " + CastType + ".").str();
+    diag_builder << ("Use " + CastType).str();
 
     const Expr *SubExpr = CastExpr->getSubExprAsWritten()->IgnoreImpCasts();
     std::string CastText = (CastType + "<" + DestTypeString + ">").str();
@@ -101,6 +120,7 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
     }
     diag_builder << FixItHint::CreateReplacement(ParenRange, CastText);
   };
+
   // Suggest appropriate C++ cast. See [expr.cast] for cast notation semantics.
   switch (CastExpr->getCastKind()) {
   case CK_NoOp:
@@ -116,7 +136,13 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
       ReplaceWithCast("const_cast");
       return;
     }
-    if (SourceType->isBuiltinType() && DestType->isBuiltinType()) {
+    // FALLTHROUGH
+  case clang::CK_IntegralCast:
+    // Convert integral and no-op casts between builtin types and enums to
+    // static_cast. A cast from enum to integer may be unnecessary, but it's
+    // still retained.
+    if ((SourceType->isBuiltinType() || SourceType->isEnumeralType()) &&
+        (DestType->isBuiltinType() || DestType->isEnumeralType())) {
       ReplaceWithCast("static_cast");
       return;
     }
@@ -132,9 +158,10 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
     break;
   }
 
-  diag_builder << "Use static_cast/const_cast/reinterpret_cast.";
+  diag_builder << "Use static_cast/const_cast/reinterpret_cast";
 }
 
 } // namespace readability
+} // namespace google
 } // namespace tidy
 } // namespace clang

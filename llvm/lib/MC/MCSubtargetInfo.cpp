@@ -35,7 +35,7 @@ MCSubtargetInfo::InitCPUSchedModel(StringRef CPU) {
 }
 
 void
-MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
+MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef C, StringRef FS,
                                      ArrayRef<SubtargetFeatureKV> PF,
                                      ArrayRef<SubtargetFeatureKV> PD,
                                      const SubtargetInfoKV *ProcSched,
@@ -46,6 +46,7 @@ MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
                                      const unsigned *OC,
                                      const unsigned *FP) {
   TargetTriple = TT;
+  CPU = C;
   ProcFeatures = PF;
   ProcDesc = PD;
   ProcSchedModels = ProcSched;
@@ -62,14 +63,19 @@ MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
 
 /// ToggleFeature - Toggle a feature and returns the re-computed feature
 /// bits. This version does not change the implied bits.
-uint64_t MCSubtargetInfo::ToggleFeature(uint64_t FB) {
+FeatureBitset MCSubtargetInfo::ToggleFeature(uint64_t FB) {
+  FeatureBits.flip(FB);
+  return FeatureBits;
+}
+
+FeatureBitset MCSubtargetInfo::ToggleFeature(const FeatureBitset &FB) {
   FeatureBits ^= FB;
   return FeatureBits;
 }
 
 /// ToggleFeature - Toggle a feature and returns the re-computed feature
 /// bits. This version will also change all implied bits.
-uint64_t MCSubtargetInfo::ToggleFeature(StringRef FS) {
+FeatureBitset MCSubtargetInfo::ToggleFeature(StringRef FS) {
   SubtargetFeatures Features;
   FeatureBits = Features.ToggleFeature(FeatureBits, FS, ProcFeatures);
   return FeatureBits;

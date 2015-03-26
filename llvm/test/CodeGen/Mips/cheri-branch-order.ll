@@ -18,7 +18,7 @@ entry:
   %y.addr = alloca i8 addrspace(200)* addrspace(200)*, align 32
   %slot = alloca i8 addrspace(200)**, align 8
   store i8 addrspace(200)* addrspace(200)* %y, i8 addrspace(200)* addrspace(200)** %y.addr, align 32
-  %0 = load i8 addrspace(200)* addrspace(200)** %y.addr, align 32
+  %0 = load i8 addrspace(200)* addrspace(200)*, i8 addrspace(200)* addrspace(200)** %y.addr, align 32
   %1 = bitcast i8 addrspace(200)* addrspace(200)* %0 to i8 addrspace(200)*
   %2 = call i64 @llvm.mips.cap.tag.get(i8 addrspace(200)* %1)
   %tobool = icmp ne i64 %2, 0
@@ -29,18 +29,18 @@ if.then:                                          ; preds = %entry
   br label %return
 
 if.end:                                           ; preds = %entry
-  %3 = load i8 addrspace(200)* addrspace(200)** %y.addr, align 32
+  %3 = load i8 addrspace(200)* addrspace(200)*, i8 addrspace(200)* addrspace(200)** %y.addr, align 32
   %4 = addrspacecast i8 addrspace(200)* addrspace(200)* %3 to i8 addrspace(200)**
   store i8 addrspace(200)** %4, i8 addrspace(200)*** %slot, align 8
-  %5 = load i8 addrspace(200)*** %slot, align 8
-  %call = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([20 x i8]* @.str, i32 0, i32 0), i8 addrspace(200)** %5)
-  %6 = load i8 addrspace(200)*** %slot, align 8
+  %5 = load i8 addrspace(200)**, i8 addrspace(200)*** %slot, align 8
+  %call = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str, i32 0, i32 0), i8 addrspace(200)** %5)
+  %6 = load i8 addrspace(200)**, i8 addrspace(200)*** %slot, align 8
   %7 = bitcast i8 addrspace(200)** %6 to i8*
   store i8* %7, i8** %retval
   br label %return
 
 return:                                           ; preds = %if.end, %if.then
-  %8 = load i8** %retval
+  %8 = load i8*, i8** %retval
   ret i8* %8
 }
 
@@ -55,4 +55,4 @@ attributes #2 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "n
 
 !llvm.ident = !{!0}
 
-!0 = metadata !{metadata !"clang version 3.5 "}
+!0 = !{!"clang version 3.5 "}

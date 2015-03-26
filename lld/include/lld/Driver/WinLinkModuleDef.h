@@ -19,7 +19,6 @@
 #include "lld/ReaderWriter/PECOFFLinkingContext.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/Support/Allocator.h"
-
 #include <vector>
 
 namespace lld {
@@ -38,6 +37,7 @@ enum class Kind {
   kw_library,
   kw_name,
   kw_noname,
+  kw_private,
   kw_stacksize,
   kw_version,
 };
@@ -54,7 +54,7 @@ public:
 class Lexer {
 public:
   explicit Lexer(std::unique_ptr<MemoryBuffer> mb) : _buffer(mb->getBuffer()) {
-    _sourceManager.AddNewSourceBuffer(mb.release(), llvm::SMLoc());
+    _sourceManager.AddNewSourceBuffer(std::move(mb), llvm::SMLoc());
   }
 
   Token lex();

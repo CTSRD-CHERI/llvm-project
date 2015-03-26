@@ -156,7 +156,7 @@ public:
       return !(*this == rhs);
     }
 
-    LLVM_EXPLICIT operator bool() const {
+    explicit operator bool() const {
       return *this != const_iterator();
     }
 
@@ -349,7 +349,7 @@ public:
       cachedEntry(nullptr), lastLookup(nullptr) {}
 
   // buildCFG - Used by external clients to construct the CFG.
-  CFG* buildCFG(const Decl *D, Stmt *Statement);
+  std::unique_ptr<CFG> buildCFG(const Decl *D, Stmt *Statement);
 
   bool alwaysAdd(const Stmt *stmt);
   
@@ -841,12 +841,12 @@ private:
             // must be false.
             llvm::APSInt IntVal;
             if (Bop->getLHS()->EvaluateAsInt(IntVal, *Context)) {
-              if (IntVal.getBoolValue() == false) {
+              if (!IntVal.getBoolValue()) {
                 return TryResult(false);
               }
             }
             if (Bop->getRHS()->EvaluateAsInt(IntVal, *Context)) {
-              if (IntVal.getBoolValue() == false) {
+              if (!IntVal.getBoolValue()) {
                 return TryResult(false);
               }
             }
@@ -971,7 +971,7 @@ static const VariableArrayType *FindVA(const Type *t) {
 ///  body (compound statement).  The ownership of the returned CFG is
 ///  transferred to the caller.  If CFG construction fails, this method returns
 ///  NULL.
-CFG* CFGBuilder::buildCFG(const Decl *D, Stmt *Statement) {
+std::unique_ptr<CFG> CFGBuilder::buildCFG(const Decl *D, Stmt *Statement) {
   assert(cfg.get());
   if (!Statement)
     return nullptr;
@@ -1043,7 +1043,7 @@ CFG* CFGBuilder::buildCFG(const Decl *D, Stmt *Statement) {
   // Create an empty entry block that has no predecessors.
   cfg->setEntry(createBlock());
 
-  return cfg.release();
+  return std::move(cfg);
 }
 
 /// createBlock - Used to lazily create blocks that are connected
@@ -3775,10 +3775,9 @@ CFGBlock *CFG::createBlock() {
   return &back();
 }
 
-/// buildCFG - Constructs a CFG from an AST.  Ownership of the returned
-///  CFG is returned to the caller.
-CFG* CFG::buildCFG(const Decl *D, Stmt *Statement, ASTContext *C,
-    const BuildOptions &BO) {
+/// buildCFG - Constructs a CFG from an AST.
+std::unique_ptr<CFG> CFG::buildCFG(const Decl *D, Stmt *Statement,
+                                   ASTContext *C, const BuildOptions &BO) {
   CFGBuilder Builder(C, BO);
   return Builder.buildCFG(D, Statement);
 }

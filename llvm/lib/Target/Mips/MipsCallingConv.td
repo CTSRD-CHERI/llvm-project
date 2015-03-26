@@ -20,6 +20,29 @@ class CCIfSubtarget<string F, CCAction A, string Invert = "">
 // The inverse of CCIfSubtarget
 class CCIfSubtargetNot<string F, CCAction A> : CCIfSubtarget<F, A, "!">;
 
+/// Match if the original argument (before lowering) was a float.
+/// For example, this is true for i32's that were lowered from soft-float.
+class CCIfOrigArgWasNotFloat<CCAction A>
+    : CCIf<"!static_cast<MipsCCState *>(&State)->WasOriginalArgFloat(ValNo)",
+           A>;
+
+/// Match if the original argument (before lowering) was a 128-bit float (i.e.
+/// long double).
+class CCIfOrigArgWasF128<CCAction A>
+    : CCIf<"static_cast<MipsCCState *>(&State)->WasOriginalArgF128(ValNo)", A>;
+
+/// Match if this specific argument is a vararg.
+/// This is slightly different fro CCIfIsVarArg which matches if any argument is
+/// a vararg.
+class CCIfArgIsVarArg<CCAction A>
+    : CCIf<"!static_cast<MipsCCState *>(&State)->IsCallOperandFixed(ValNo)", A>;
+
+
+/// Match if the special calling conv is the specified value.
+class CCIfSpecialCallingConv<string CC, CCAction A>
+    : CCIf<"static_cast<MipsCCState *>(&State)->getSpecialCallingConv() == "
+               "MipsCCState::" # CC, A>;
+
 // For soft-float, f128 values are returned in A0_64 rather than V1_64.
 def RetCC_F128SoftFloat : CallingConv<[
   CCAssignToReg<[V0_64, A0_64]>
@@ -50,6 +73,19 @@ def RetCC_F128 : CallingConv<[
 //===----------------------------------------------------------------------===//
 // Mips O32 Calling Convention
 //===----------------------------------------------------------------------===//
+
+def CC_MipsO32 : CallingConv<[
+  // Promote i8/i16 arguments to i32.
+  CCIfType<[i1, i8, i16], CCPromoteToType<i32>>,
+
+  // Integer values get stored in stack slots that are 4 bytes in
+  // size and 4-byte aligned.
+  CCIfType<[i32, f32], CCAssignToStack<4, 4>>,
+
+  // Integer values get stored in stack slots that are 8 bytes in
+  // size and 8-byte aligned.
+  CCIfType<[f64], CCAssignToStack<8, 8>>
+]>;
 
 // Only the return rules are defined here for O32. The rules for argument
 // passing are defined in MipsISelLowering.cpp.
@@ -87,14 +123,12 @@ def CC_MipsN_SoftFloat : CallingConv<[
 ]>;
 
 def CC_MipsN : CallingConv<[
-  CCIfType<[i8, i16, i32],
+  CCIfType<[i8, i16, i32, i64],
       CCIfSubtargetNot<"isLittle()",
           CCIfInReg<CCPromoteToUpperBitsInType<i64>>>>,
 
   // All integers (except soft-float integers) are promoted to 64-bit.
-  CCIfType<[i8, i16, i32],
-     CCIf<"!static_cast<MipsCCState *>(&State)->WasOriginalArgFloat(ValNo)",
-          CCPromoteToType<i64>>>,
+  CCIfType<[i8, i16, i32], CCIfOrigArgWasNotFloat<CCPromoteToType<i64>>>,
 
   // The only i32's we have left are soft-float arguments.
   CCIfSubtarget<"abiUsesSoftFloat()", CCIfType<[i32], CCDelegateTo<CC_MipsN_SoftFloat>>>,
@@ -133,6 +167,10 @@ def CC_CHERI_CCall : CallingConv<[
 // N32/64 variable arguments.
 // All arguments are passed in integer registers.
 def CC_MipsN_VarArg : CallingConv<[
+  CCIfType<[i8, i16, i32, i64],
+      CCIfSubtargetNot<"isLittle()",
+          CCIfInReg<CCPromoteToUpperBitsInType<i64>>>>,
+
   // All integers are promoted to 64-bit.
   CCIfType<[i8, i16, i32], CCPromoteToType<i64>>,
 
@@ -167,9 +205,7 @@ def RetCC_MipsN : CallingConv<[
   //
   // f128 should only occur for the N64 ABI where long double is 128-bit. On
   // N32, long double is equivalent to double.
-  CCIfType<[i64],
-      CCIf<"static_cast<MipsCCState *>(&State)->WasOriginalArgF128(ValNo)",
-           CCDelegateTo<RetCC_F128>>>,
+  CCIfType<[i64], CCIfOrigArgWasF128<CCDelegateTo<RetCC_F128>>>,
 
   // Aggregate returns are positioned at the lowest address in the slot for
   // both little and big-endian targets. When passing in registers, this
@@ -341,8 +377,7 @@ def CC_Mips16RetHelper : CallingConv<[
 def CC_Mips_FixedArg : CallingConv<[
   // Mips16 needs special handling on some functions.
   CCIf<"State.getCallingConv() != CallingConv::Fast",
-      CCIf<"static_cast<MipsCCState *>(&State)->getSpecialCallingConv() == "
-               "MipsCCState::Mips16RetHelperConv",
+      CCIfSpecialCallingConv<"Mips16RetHelperConv",
            CCDelegateTo<CC_Mips16RetHelper>>>,
   CCIf<"State.getCallingConv() == CallingConv::CHERI_CCall",
        CCDelegateTo<CC_CHERI_CCall>>,
@@ -361,8 +396,7 @@ def CC_Mips_FixedArg : CallingConv<[
   // N32, long double is equivalent to double.
   CCIfType<[i64],
       CCIfSubtargetNot<"abiUsesSoftFloat()",
-          CCIf<"static_cast<MipsCCState *>(&State)->WasOriginalArgF128(ValNo)",
-              CCBitConvertToType<f64>>>>,
+          CCIfOrigArgWasF128<CCBitConvertToType<f64>>>>,
 
   CCIfCC<"CallingConv::Fast", CCDelegateTo<CC_Mips_FastCC>>,
 
@@ -375,7 +409,7 @@ def CC_Mips_FixedArg : CallingConv<[
 def CC_Mips_VarArg : CallingConv<[
   // If this is the CHERI sandbox ABI then we need to pass everything on the
   // stack for variadic functions.
-  CCIfSubtarget<"isCheriSandbox()", CCDelegateTo<CC_MipsCheriSandbox_VarArg>>,
+  CCIfSubtarget<"isABI_CheriSandbox()", CCDelegateTo<CC_MipsCheriSandbox_VarArg>>,
   CCIfByVal<CCDelegateTo<CC_Mips_ByVal>>,
 
   // FIXME: There wasn't an EABI case in the original code and it seems unlikely
@@ -385,9 +419,7 @@ def CC_Mips_VarArg : CallingConv<[
 ]>;
 
 def CC_Mips : CallingConv<[
-  CCIfVarArg<
-      CCIf<"!static_cast<MipsCCState *>(&State)->IsCallOperandFixed(ValNo)",
-          CCDelegateTo<CC_Mips_VarArg>>>,
+  CCIfVarArg<CCIfArgIsVarArg<CCDelegateTo<CC_Mips_VarArg>>>,
   CCDelegateTo<CC_Mips_FixedArg>
 ]>;
 

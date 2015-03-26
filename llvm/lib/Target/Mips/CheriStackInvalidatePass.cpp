@@ -42,6 +42,10 @@ namespace {
     }
 
     virtual bool runOnMachineFunction(MachineFunction &F) {
+// Metadata nodes are no longer allowed to refer to functions, so we need
+// another mechanism for identifying them.  We should do it properly by adding
+// a function attribute.
+#if 0
       const Function *IRFunction = F.getFunction();
       const Module *Mod = IRFunction->getParent();
       NamedMDNode *SensitiveFunctions =
@@ -103,6 +107,9 @@ namespace {
       }
 
       return true;
+#else
+      return false;
+#endif
     }
   };
 }

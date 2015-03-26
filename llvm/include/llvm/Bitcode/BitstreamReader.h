@@ -17,14 +17,12 @@
 
 #include "llvm/Bitcode/BitCodes.h"
 #include "llvm/Support/Endian.h"
-#include "llvm/Support/StreamableMemoryObject.h"
+#include "llvm/Support/StreamingMemoryObject.h"
 #include <climits>
 #include <string>
 #include <vector>
 
 namespace llvm {
-
-class Deserializer;
 
 /// This class is used to read from an LLVM bitcode stream, maintaining
 /// information that is global to decoding the entire file. While a file is
@@ -42,7 +40,7 @@ public:
     std::vector<std::pair<unsigned, std::string> > RecordNames;
   };
 private:
-  std::unique_ptr<StreamableMemoryObject> BitcodeBytes;
+  std::unique_ptr<MemoryObject> BitcodeBytes;
 
   std::vector<BlockInfo> BlockInfoRecords;
 
@@ -50,8 +48,8 @@ private:
   /// information in the BlockInfo block. Only llvm-bcanalyzer uses this.
   bool IgnoreBlockInfoNames;
 
-  BitstreamReader(const BitstreamReader&) LLVM_DELETED_FUNCTION;
-  void operator=(const BitstreamReader&) LLVM_DELETED_FUNCTION;
+  BitstreamReader(const BitstreamReader&) = delete;
+  void operator=(const BitstreamReader&) = delete;
 public:
   BitstreamReader() : IgnoreBlockInfoNames(true) {
   }
@@ -61,9 +59,8 @@ public:
     init(Start, End);
   }
 
-  BitstreamReader(StreamableMemoryObject *bytes) : IgnoreBlockInfoNames(true) {
-    BitcodeBytes.reset(bytes);
-  }
+  BitstreamReader(std::unique_ptr<MemoryObject> BitcodeBytes)
+      : BitcodeBytes(std::move(BitcodeBytes)), IgnoreBlockInfoNames(true) {}
 
   BitstreamReader(BitstreamReader &&Other) {
     *this = std::move(Other);
@@ -82,7 +79,7 @@ public:
     BitcodeBytes.reset(getNonStreamedMemoryObject(Start, End));
   }
 
-  StreamableMemoryObject &getBitcodeBytes() { return *BitcodeBytes; }
+  MemoryObject &getBitcodeBytes() { return *BitcodeBytes; }
 
   /// This is called by clients that want block/record name information.
   void CollectBlockInfoNames() { IgnoreBlockInfoNames = false; }
@@ -165,20 +162,22 @@ struct BitstreamEntry {
 /// Unlike iterators, BitstreamCursors are heavy-weight objects that should not
 /// be passed by value.
 class BitstreamCursor {
-  friend class Deserializer;
   BitstreamReader *BitStream;
   size_t NextChar;
+
+  // The size of the bicode. 0 if we don't know it yet.
+  size_t Size;
 
   /// This is the current data we have pulled from the stream but have not
   /// returned to the client. This is specifically and intentionally defined to
   /// follow the word size of the host machine for efficiency. We use word_t in
   /// places that are aware of this to make it perfectly explicit what is going
   /// on.
-  typedef uint32_t word_t;
+  typedef size_t word_t;
   word_t CurWord;
 
   /// This is the number of bits in CurWord that are valid. This is always from
-  /// [0...31/63] inclusive (depending on word size).
+  /// [0...bits_of(size_t)-1] inclusive.
   unsigned BitsInCurWord;
 
   // This is the declared size of code values used for the current block, in
@@ -199,30 +198,21 @@ class BitstreamCursor {
 
 
 public:
-  BitstreamCursor() : BitStream(nullptr), NextChar(0) {}
+  BitstreamCursor() { init(nullptr); }
 
-  explicit BitstreamCursor(BitstreamReader &R) : BitStream(&R) {
-    NextChar = 0;
-    CurWord = 0;
-    BitsInCurWord = 0;
-    CurCodeSize = 2;
-  }
+  explicit BitstreamCursor(BitstreamReader &R) { init(&R); }
 
-  void init(BitstreamReader &R) {
+  void init(BitstreamReader *R) {
     freeState();
 
-    BitStream = &R;
+    BitStream = R;
     NextChar = 0;
-    CurWord = 0;
+    Size = 0;
     BitsInCurWord = 0;
     CurCodeSize = 2;
   }
 
   void freeState();
-
-  bool isEndPos(size_t pos) {
-    return BitStream->getBitcodeBytes().isObjectEnd(static_cast<uint64_t>(pos));
-  }
 
   bool canSkipToPos(size_t pos) const {
     // pos can be skipped to if it is a valid address or one byte past the end.
@@ -230,14 +220,13 @@ public:
         static_cast<uint64_t>(pos - 1));
   }
 
-  uint32_t getWord(size_t pos) {
-    uint8_t buf[4] = { 0xFF, 0xFF, 0xFF, 0xFF };
-    BitStream->getBitcodeBytes().readBytes(pos, sizeof(buf), buf);
-    return *reinterpret_cast<support::ulittle32_t *>(buf);
-  }
-
   bool AtEndOfStream() {
-    return BitsInCurWord == 0 && isEndPos(NextChar);
+    if (BitsInCurWord != 0)
+      return false;
+    if (Size != 0)
+      return Size == NextChar;
+    fillCurWord();
+    return BitsInCurWord == 0;
   }
 
   /// Return the number of bits used to encode an abbrev #.
@@ -266,8 +255,8 @@ public:
     AF_DontAutoprocessAbbrevs = 2
   };
 
-      /// Advance the current bitstream, returning the next entry in the stream.
-      BitstreamEntry advance(unsigned Flags = 0) {
+  /// Advance the current bitstream, returning the next entry in the stream.
+  BitstreamEntry advance(unsigned Flags = 0) {
     while (1) {
       unsigned Code = ReadCode();
       if (Code == bitc::END_BLOCK) {
@@ -309,82 +298,80 @@ public:
 
   /// Reset the stream to the specified bit number.
   void JumpToBit(uint64_t BitNo) {
-    uintptr_t ByteNo = uintptr_t(BitNo/8) & ~(sizeof(word_t)-1);
+    size_t ByteNo = size_t(BitNo/8) & ~(sizeof(word_t)-1);
     unsigned WordBitNo = unsigned(BitNo & (sizeof(word_t)*8-1));
     assert(canSkipToPos(ByteNo) && "Invalid location");
 
     // Move the cursor to the right word.
     NextChar = ByteNo;
     BitsInCurWord = 0;
-    CurWord = 0;
 
     // Skip over any bits that are already consumed.
-    if (WordBitNo) {
-      if (sizeof(word_t) > 4)
-        Read64(WordBitNo);
-      else
-        Read(WordBitNo);
-    }
+    if (WordBitNo)
+      Read(WordBitNo);
   }
 
-
-  uint32_t Read(unsigned NumBits) {
-    assert(NumBits && NumBits <= 32 &&
-           "Cannot return zero or more than 32 bits!");
-
-    // If the field is fully contained by CurWord, return it quickly.
-    if (BitsInCurWord >= NumBits) {
-      uint32_t R = uint32_t(CurWord) & (~0U >> (32-NumBits));
-      CurWord >>= NumBits;
-      BitsInCurWord -= NumBits;
-      return R;
-    }
-
-    // If we run out of data, stop at the end of the stream.
-    if (isEndPos(NextChar)) {
-      CurWord = 0;
-      BitsInCurWord = 0;
-      return 0;
-    }
-
-    uint32_t R = uint32_t(CurWord);
+  void fillCurWord() {
+    if (Size != 0 && NextChar >= Size)
+      report_fatal_error("Unexpected end of file");
 
     // Read the next word from the stream.
     uint8_t Array[sizeof(word_t)] = {0};
 
-    BitStream->getBitcodeBytes().readBytes(NextChar, sizeof(Array), Array);
+    uint64_t BytesRead =
+        BitStream->getBitcodeBytes().readBytes(Array, sizeof(Array), NextChar);
 
-    // Handle big-endian byte-swapping if necessary.
-    support::detail::packed_endian_specific_integral
-      <word_t, support::little, support::unaligned> EndianValue;
-    memcpy(&EndianValue, Array, sizeof(Array));
+    // If we run out of data, stop at the end of the stream.
+    if (BytesRead == 0) {
+      Size = NextChar;
+      return;
+    }
 
-    CurWord = EndianValue;
-
-    NextChar += sizeof(word_t);
-
-    // Extract NumBits-BitsInCurWord from what we just read.
-    unsigned BitsLeft = NumBits-BitsInCurWord;
-
-    // Be careful here, BitsLeft is in the range [1..32]/[1..64] inclusive.
-    R |= uint32_t((CurWord & (word_t(~0ULL) >> (sizeof(word_t)*8-BitsLeft)))
-                    << BitsInCurWord);
-
-    // BitsLeft bits have just been used up from CurWord.  BitsLeft is in the
-    // range [1..32]/[1..64] so be careful how we shift.
-    if (BitsLeft != sizeof(word_t)*8)
-      CurWord >>= BitsLeft;
-    else
-      CurWord = 0;
-    BitsInCurWord = sizeof(word_t)*8-BitsLeft;
-    return R;
+    CurWord =
+        support::endian::read<word_t, support::little, support::unaligned>(
+            Array);
+    NextChar += BytesRead;
+    BitsInCurWord = BytesRead * 8;
   }
 
-  uint64_t Read64(unsigned NumBits) {
-    if (NumBits <= 32) return Read(NumBits);
+  word_t Read(unsigned NumBits) {
+    static const unsigned BitsInWord = sizeof(word_t) * 8;
 
-    uint64_t V = Read(32);
-    return V | (uint64_t)Read(NumBits-32) << 32;
+    assert(NumBits && NumBits <= BitsInWord &&
+           "Cannot return zero or more than BitsInWord bits!");
+
+    static const unsigned Mask = sizeof(word_t) > 4 ? 0x3f : 0x1f;
+
+    // If the field is fully contained by CurWord, return it quickly.
+    if (BitsInCurWord >= NumBits) {
+      word_t R = CurWord & (~word_t(0) >> (BitsInWord - NumBits));
+
+      // Use a mask to avoid undefined behavior.
+      CurWord >>= (NumBits & Mask);
+
+      BitsInCurWord -= NumBits;
+      return R;
+    }
+
+    word_t R = BitsInCurWord ? CurWord : 0;
+    unsigned BitsLeft = NumBits - BitsInCurWord;
+
+    fillCurWord();
+
+    // If we run out of data, stop at the end of the stream.
+    if (BitsLeft > BitsInCurWord)
+      return 0;
+
+    word_t R2 = CurWord & (~word_t(0) >> (BitsInWord - BitsLeft));
+
+    // Use a mask to avoid undefined behavior.
+    CurWord >>= (BitsLeft & Mask);
+
+    BitsInCurWord -= BitsLeft;
+
+    R |= R2 << (NumBits - BitsLeft);
+
+    return R;
   }
 
   uint32_t ReadVBR(unsigned NumBits) {
@@ -437,7 +424,6 @@ private:
     }
 
     BitsInCurWord = 0;
-    CurWord = 0;
   }
 public:
 
@@ -501,19 +487,12 @@ private:
   // Record Processing
   //===--------------------------------------------------------------------===//
 
-private:
-  void readAbbreviatedLiteral(const BitCodeAbbrevOp &Op,
-                              SmallVectorImpl<uint64_t> &Vals);
-  void readAbbreviatedField(const BitCodeAbbrevOp &Op,
-                            SmallVectorImpl<uint64_t> &Vals);
-  void skipAbbreviatedField(const BitCodeAbbrevOp &Op);
-
 public:
-
   /// Return the abbreviation for the specified AbbrevId.
   const BitCodeAbbrev *getAbbrev(unsigned AbbrevID) {
-    unsigned AbbrevNo = AbbrevID-bitc::FIRST_APPLICATION_ABBREV;
-    assert(AbbrevNo < CurAbbrevs.size() && "Invalid abbrev #!");
+    unsigned AbbrevNo = AbbrevID - bitc::FIRST_APPLICATION_ABBREV;
+    if (AbbrevNo >= CurAbbrevs.size())
+      report_fatal_error("Invalid abbrev number");
     return CurAbbrevs[AbbrevNo].get();
   }
 

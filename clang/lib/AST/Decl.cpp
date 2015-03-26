@@ -29,6 +29,7 @@
 #include "clang/Basic/Module.h"
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Frontend/FrontendDiagnostic.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <algorithm>
 
@@ -36,6 +37,11 @@ using namespace clang;
 
 Decl *clang::getPrimaryMergedDecl(Decl *D) {
   return D->getASTContext().getPrimaryMergedDecl(D);
+}
+
+// Defined here so that it can be inlined into its direct callers.
+bool Decl::isOutOfLine() const {
+  return !getLexicalDeclContext()->Equals(getDeclContext());
 }
 
 //===----------------------------------------------------------------------===//
@@ -613,9 +619,12 @@ static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D,
     // Explicitly declared static.
     if (Function->getCanonicalDecl()->getStorageClass() == SC_Static)
       return LinkageInfo(InternalLinkage, DefaultVisibility, false);
+  } else if (const auto *IFD = dyn_cast<IndirectFieldDecl>(D)) {
+    //   - a data member of an anonymous union.
+    const VarDecl *VD = IFD->getVarDecl();
+    assert(VD && "Expected a VarDecl in this IndirectFieldDecl!");
+    return getLVForNamespaceScopeDecl(VD, computation);
   }
-  //   - a data member of an anonymous union.
-  assert(!isa<IndirectFieldDecl>(D) && "Didn't expect an IndirectFieldDecl!");
   assert(!isa<FieldDecl>(D) && "Didn't expect a FieldDecl!");
 
   if (D->isInAnonymousNamespace()) {
@@ -996,6 +1005,19 @@ bool NamedDecl::isLinkageValid() const {
          getCachedLinkage();
 }
 
+ObjCStringFormatFamily NamedDecl::getObjCFStringFormattingFamily() const {
+  StringRef name = getName();
+  if (name.empty()) return SFF_None;
+  
+  if (name.front() == 'C')
+    if (name == "CFStringCreateWithFormat" ||
+        name == "CFStringCreateWithFormatAndArguments" ||
+        name == "CFStringAppendFormat" ||
+        name == "CFStringAppendFormatAndArguments")
+      return SFF_CFString;
+  return SFF_None;
+}
+
 Linkage NamedDecl::getLinkageInternal() const {
   // We don't care about visibility here, so ask for the cheapest
   // possible visibility analysis.
@@ -1170,7 +1192,7 @@ static LinkageInfo getLVForLocalDecl(const NamedDecl *D,
   } else {
     const FunctionDecl *FD = cast<FunctionDecl>(OuterD);
     if (!FD->isInlined() &&
-        FD->getTemplateSpecializationKind() == TSK_Undeclared)
+        !isTemplateInstantiation(FD->getTemplateSpecializationKind()))
       return LinkageInfo::none();
 
     LV = getLVForDecl(FD, computation);
@@ -1423,74 +1445,127 @@ void NamedDecl::getNameForDiagnostic(raw_ostream &OS,
     printName(OS);
 }
 
-bool NamedDecl::declarationReplaces(NamedDecl *OldD) const {
+static bool isKindReplaceableBy(Decl::Kind OldK, Decl::Kind NewK) {
+  // For method declarations, we never replace.
+  if (ObjCMethodDecl::classofKind(NewK))
+    return false;
+
+  if (OldK == NewK)
+    return true;
+
+  // A compatibility alias for a class can be replaced by an interface.
+  if (ObjCCompatibleAliasDecl::classofKind(OldK) &&
+      ObjCInterfaceDecl::classofKind(NewK))
+    return true;
+
+  // A typedef-declaration, alias-declaration, or Objective-C class declaration
+  // can replace another declaration of the same type. Semantic analysis checks
+  // that we have matching types.
+  if ((TypedefNameDecl::classofKind(OldK) ||
+       ObjCInterfaceDecl::classofKind(OldK)) &&
+      (TypedefNameDecl::classofKind(NewK) ||
+       ObjCInterfaceDecl::classofKind(NewK)))
+    return true;
+
+  // Otherwise, a kind mismatch implies that the declaration is not replaced.
+  return false;
+}
+
+template<typename T> static bool isRedeclarableImpl(Redeclarable<T> *) {
+  return true;
+}
+static bool isRedeclarableImpl(...) { return false; }
+static bool isRedeclarable(Decl::Kind K) {
+  switch (K) {
+#define DECL(Type, Base) \
+  case Decl::Type: \
+    return isRedeclarableImpl((Type##Decl *)nullptr);
+#define ABSTRACT_DECL(DECL)
+#include "clang/AST/DeclNodes.inc"
+  }
+  llvm_unreachable("unknown decl kind");
+}
+
+bool NamedDecl::declarationReplaces(NamedDecl *OldD, bool IsKnownNewer) const {
   assert(getDeclName() == OldD->getDeclName() && "Declaration name mismatch");
 
-  // UsingDirectiveDecl's are not really NamedDecl's, and all have same name.
-  // We want to keep it, unless it nominates same namespace.
-  if (getKind() == Decl::UsingDirective) {
-    return cast<UsingDirectiveDecl>(this)->getNominatedNamespace()
-             ->getOriginalNamespace() ==
-           cast<UsingDirectiveDecl>(OldD)->getNominatedNamespace()
-             ->getOriginalNamespace();
-  }
+  // Never replace one imported declaration with another; we need both results
+  // when re-exporting.
+  if (OldD->isFromASTFile() && isFromASTFile())
+    return false;
+
+  if (!isKindReplaceableBy(OldD->getKind(), getKind()))
+    return false;
+
+  // Inline namespaces can give us two declarations with the same
+  // name and kind in the same scope but different contexts; we should
+  // keep both declarations in this case.
+  if (!this->getDeclContext()->getRedeclContext()->Equals(
+          OldD->getDeclContext()->getRedeclContext()))
+    return false;
 
   if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(this))
     // For function declarations, we keep track of redeclarations.
-    return FD->getPreviousDecl() == OldD;
+    // FIXME: This returns false for functions that should in fact be replaced.
+    // Instead, perform some kind of type check?
+    if (FD->getPreviousDecl() != OldD)
+      return false;
 
   // For function templates, the underlying function declarations are linked.
-  if (const FunctionTemplateDecl *FunctionTemplate
-        = dyn_cast<FunctionTemplateDecl>(this))
-    if (const FunctionTemplateDecl *OldFunctionTemplate
-          = dyn_cast<FunctionTemplateDecl>(OldD))
-      return FunctionTemplate->getTemplatedDecl()
-               ->declarationReplaces(OldFunctionTemplate->getTemplatedDecl());
+  if (const FunctionTemplateDecl *FunctionTemplate =
+          dyn_cast<FunctionTemplateDecl>(this))
+    return FunctionTemplate->getTemplatedDecl()->declarationReplaces(
+        cast<FunctionTemplateDecl>(OldD)->getTemplatedDecl());
 
-  // For method declarations, we keep track of redeclarations.
-  if (isa<ObjCMethodDecl>(this))
-    return false;
+  // Using shadow declarations can be overloaded on their target declarations
+  // if they introduce functions.
+  // FIXME: If our target replaces the old target, can we replace the old
+  //        shadow declaration?
+  if (auto *USD = dyn_cast<UsingShadowDecl>(this))
+    if (USD->getTargetDecl() != cast<UsingShadowDecl>(OldD)->getTargetDecl())
+      return false;
 
-  // FIXME: Is this correct if one of the decls comes from an inline namespace?
-  if (isa<ObjCInterfaceDecl>(this) && isa<ObjCCompatibleAliasDecl>(OldD))
-    return true;
-
-  if (isa<UsingShadowDecl>(this) && isa<UsingShadowDecl>(OldD))
-    return cast<UsingShadowDecl>(this)->getTargetDecl() ==
-           cast<UsingShadowDecl>(OldD)->getTargetDecl();
-
-  if (isa<UsingDecl>(this) && isa<UsingDecl>(OldD)) {
+  // Using declarations can be overloaded if they introduce functions.
+  if (auto *UD = dyn_cast<UsingDecl>(this)) {
     ASTContext &Context = getASTContext();
-    return Context.getCanonicalNestedNameSpecifier(
-                                     cast<UsingDecl>(this)->getQualifier()) ==
+    return Context.getCanonicalNestedNameSpecifier(UD->getQualifier()) ==
            Context.getCanonicalNestedNameSpecifier(
-                                        cast<UsingDecl>(OldD)->getQualifier());
+               cast<UsingDecl>(OldD)->getQualifier());
   }
-
-  if (isa<UnresolvedUsingValueDecl>(this) &&
-      isa<UnresolvedUsingValueDecl>(OldD)) {
+  if (auto *UUVD = dyn_cast<UnresolvedUsingValueDecl>(this)) {
     ASTContext &Context = getASTContext();
-    return Context.getCanonicalNestedNameSpecifier(
-                      cast<UnresolvedUsingValueDecl>(this)->getQualifier()) ==
+    return Context.getCanonicalNestedNameSpecifier(UUVD->getQualifier()) ==
            Context.getCanonicalNestedNameSpecifier(
                         cast<UnresolvedUsingValueDecl>(OldD)->getQualifier());
   }
 
-  // A typedef of an Objective-C class type can replace an Objective-C class
-  // declaration or definition, and vice versa.
-  // FIXME: Is this correct if one of the decls comes from an inline namespace?
-  if ((isa<TypedefNameDecl>(this) && isa<ObjCInterfaceDecl>(OldD)) ||
-      (isa<ObjCInterfaceDecl>(this) && isa<TypedefNameDecl>(OldD)))
-    return true;
+  // UsingDirectiveDecl's are not really NamedDecl's, and all have same name.
+  // We want to keep it, unless it nominates same namespace.
+  if (auto *UD = dyn_cast<UsingDirectiveDecl>(this))
+    return UD->getNominatedNamespace()->getOriginalNamespace() ==
+           cast<UsingDirectiveDecl>(OldD)->getNominatedNamespace()
+               ->getOriginalNamespace();
 
-  // For non-function declarations, if the declarations are of the
-  // same kind and have the same parent then this must be a redeclaration,
-  // or semantic analysis would not have given us the new declaration.
-  // Note that inline namespaces can give us two declarations with the same
-  // name and kind in the same scope but different contexts.
-  return this->getKind() == OldD->getKind() &&
-         this->getDeclContext()->getRedeclContext()->Equals(
-             OldD->getDeclContext()->getRedeclContext());
+  if (!IsKnownNewer && isRedeclarable(getKind())) {
+    // Check whether this is actually newer than OldD. We want to keep the
+    // newer declaration. This loop will usually only iterate once, because
+    // OldD is usually the previous declaration.
+    for (auto D : redecls()) {
+      if (D == OldD)
+        break;
+
+      // If we reach the canonical declaration, then OldD is not actually older
+      // than this one.
+      //
+      // FIXME: In this case, we should not add this decl to the lookup table.
+      if (D->isCanonicalDecl())
+        return false;
+    }
+  }
+
+  // It's a newer declaration of the same kind of declaration in the same scope,
+  // and not an overload: we want this decl instead of the existing one.
+  return true;
 }
 
 bool NamedDecl::hasLinkage() const {
@@ -2438,39 +2513,6 @@ bool FunctionDecl::isReplaceableGlobalAllocationFunction() const {
   return RD && isNamed(RD, "nothrow_t") && RD->isInStdNamespace();
 }
 
-FunctionDecl *
-FunctionDecl::getCorrespondingUnsizedGlobalDeallocationFunction() const {
-  ASTContext &Ctx = getASTContext();
-  if (!Ctx.getLangOpts().SizedDeallocation)
-    return nullptr;
-
-  if (getDeclName().getNameKind() != DeclarationName::CXXOperatorName)
-    return nullptr;
-  if (getDeclName().getCXXOverloadedOperator() != OO_Delete &&
-      getDeclName().getCXXOverloadedOperator() != OO_Array_Delete)
-    return nullptr;
-  if (isa<CXXRecordDecl>(getDeclContext()))
-    return nullptr;
-
-  if (!getDeclContext()->getRedeclContext()->isTranslationUnit())
-    return nullptr;
-
-  if (getNumParams() != 2 || isVariadic() ||
-      !Ctx.hasSameType(getType()->castAs<FunctionProtoType>()->getParamType(1),
-                       Ctx.getSizeType()))
-    return nullptr;
-
-  // This is a sized deallocation function. Find the corresponding unsized
-  // deallocation function.
-  lookup_const_result R = getDeclContext()->lookup(getDeclName());
-  for (lookup_const_result::iterator RI = R.begin(), RE = R.end(); RI != RE;
-       ++RI)
-    if (FunctionDecl *FD = dyn_cast<FunctionDecl>(*RI))
-      if (FD->getNumParams() == 1 && !FD->isVariadic())
-        return FD;
-  return nullptr;
-}
-
 LanguageLinkage FunctionDecl::getLanguageLinkage() const {
   return getDeclLanguageLinkage(*this);
 }
@@ -2559,7 +2601,14 @@ unsigned FunctionDecl::getBuiltinID() const {
     // extern "C".
     // FIXME: A recognised library function may not be directly in an extern "C"
     // declaration, for instance "extern "C" { namespace std { decl } }".
-    if (!LinkageDecl || LinkageDecl->getLanguage() != LinkageSpecDecl::lang_c)
+    if (!LinkageDecl) {
+      if (BuiltinID == Builtin::BI__GetExceptionInfo &&
+          Context.getTargetInfo().getCXXABI().isMicrosoft() &&
+          isInStdNamespace())
+        return Builtin::BI__GetExceptionInfo;
+      return 0;
+    }
+    if (LinkageDecl->getLanguage() != LinkageSpecDecl::lang_c)
       return 0;
   }
 
@@ -2609,7 +2658,7 @@ void FunctionDecl::setDeclsInPrototypeScope(ArrayRef<NamedDecl *> NewDecls) {
   if (!NewDecls.empty()) {
     NamedDecl **A = new (getASTContext()) NamedDecl*[NewDecls.size()];
     std::copy(NewDecls.begin(), NewDecls.end(), A);
-    DeclsInPrototypeScope = ArrayRef<NamedDecl *>(A, NewDecls.size());
+    DeclsInPrototypeScope = llvm::makeArrayRef(A, NewDecls.size());
     // Move declarations introduced in prototype to the function context.
     for (auto I : NewDecls) {
       DeclContext *DC = I->getDeclContext();
@@ -2652,7 +2701,8 @@ bool FunctionDecl::isMSExternInline() const {
   if (!Context.getLangOpts().MSVCCompat && !hasAttr<DLLExportAttr>())
     return false;
 
-  for (const FunctionDecl *FD = this; FD; FD = FD->getPreviousDecl())
+  for (const FunctionDecl *FD = getMostRecentDecl(); FD;
+       FD = FD->getPreviousDecl())
     if (FD->getStorageClass() == SC_Extern)
       return true;
 
@@ -3170,8 +3220,11 @@ unsigned FunctionDecl::getMemoryFunctionKind() const {
     return Builtin::BImemmove;
 
   case Builtin::BIstrlcpy:
+  case Builtin::BI__builtin___strlcpy_chk:
     return Builtin::BIstrlcpy;
+
   case Builtin::BIstrlcat:
+  case Builtin::BI__builtin___strlcat_chk:
     return Builtin::BIstrlcat;
 
   case Builtin::BI__builtin_memcmp:
@@ -3263,7 +3316,7 @@ bool FieldDecl::isAnonymousStructOrUnion() const {
 
 unsigned FieldDecl::getBitWidthValue(const ASTContext &Ctx) const {
   assert(isBitField() && "not a bitfield");
-  Expr *BitWidth = InitializerOrBitWidth.getPointer();
+  Expr *BitWidth = static_cast<Expr *>(InitStorage.getPointer());
   return BitWidth->EvaluateKnownConstInt(Ctx).getZExtValue();
 }
 
@@ -3277,30 +3330,39 @@ unsigned FieldDecl::getFieldIndex() const {
   unsigned Index = 0;
   const RecordDecl *RD = getParent();
 
-  for (RecordDecl::field_iterator I = RD->field_begin(), E = RD->field_end();
-       I != E; ++I, ++Index)
-    I->getCanonicalDecl()->CachedFieldIndex = Index + 1;
+  for (auto *Field : RD->fields()) {
+    Field->getCanonicalDecl()->CachedFieldIndex = Index + 1;
+    ++Index;
+  }
 
   assert(CachedFieldIndex && "failed to find field in parent");
   return CachedFieldIndex - 1;
 }
 
 SourceRange FieldDecl::getSourceRange() const {
-  if (const Expr *E = InitializerOrBitWidth.getPointer())
-    return SourceRange(getInnerLocStart(), E->getLocEnd());
-  return DeclaratorDecl::getSourceRange();
+  switch (InitStorage.getInt()) {
+  // All three of these cases store an optional Expr*.
+  case ISK_BitWidthOrNothing:
+  case ISK_InClassCopyInit:
+  case ISK_InClassListInit:
+    if (const Expr *E = static_cast<const Expr *>(InitStorage.getPointer()))
+      return SourceRange(getInnerLocStart(), E->getLocEnd());
+    // FALLTHROUGH
+
+  case ISK_CapturedVLAType:
+    return DeclaratorDecl::getSourceRange();
+  }
+  llvm_unreachable("bad init storage kind");
 }
 
-void FieldDecl::setBitWidth(Expr *Width) {
-  assert(!InitializerOrBitWidth.getPointer() && !hasInClassInitializer() &&
-         "bit width or initializer already set");
-  InitializerOrBitWidth.setPointer(Width);
-}
-
-void FieldDecl::setInClassInitializer(Expr *Init) {
-  assert(!InitializerOrBitWidth.getPointer() && hasInClassInitializer() &&
-         "bit width or initializer already set");
-  InitializerOrBitWidth.setPointer(Init);
+void FieldDecl::setCapturedVLAType(const VariableArrayType *VLAType) {
+  assert((getParent()->isLambda() || getParent()->isCapturedRecord()) &&
+         "capturing type in non-lambda or captured record.");
+  assert(InitStorage.getInt() == ISK_BitWidthOrNothing &&
+         InitStorage.getPointer() == nullptr &&
+         "bit width, initializer or captured type already set");
+  InitStorage.setPointerAndInt(const_cast<VariableArrayType *>(VLAType),
+                               ISK_CapturedVLAType);
 }
 
 //===----------------------------------------------------------------------===//
@@ -3523,6 +3585,20 @@ bool RecordDecl::isInjectedClassName() const {
     cast<RecordDecl>(getDeclContext())->getDeclName() == getDeclName();
 }
 
+bool RecordDecl::isLambda() const {
+  if (auto RD = dyn_cast<CXXRecordDecl>(this))
+    return RD->isLambda();
+  return false;
+}
+
+bool RecordDecl::isCapturedRecord() const {
+  return hasAttr<CapturedRecordAttr>();
+}
+
+void RecordDecl::setCapturedRecord() {
+  addAttr(CapturedRecordAttr::CreateImplicit(getASTContext()));
+}
+
 RecordDecl::field_iterator RecordDecl::field_begin() const {
   if (hasExternalLexicalStorage() && !LoadedFieldsFromExternalStorage)
     LoadFieldsFromExternalStorage();
@@ -3541,7 +3617,7 @@ void RecordDecl::completeDefinition() {
 /// This which can be turned on with an attribute, pragma, or the
 /// -mms-bitfields command-line option.
 bool RecordDecl::isMsStruct(const ASTContext &C) const {
-  return hasAttr<MsStructAttr>() || C.getLangOpts().MSBitfields == 1;
+  return hasAttr<MSStructAttr>() || C.getLangOpts().MSBitfields == 1;
 }
 
 static bool isFieldOrIndirectField(Decl::Kind K) {
@@ -3579,6 +3655,64 @@ void RecordDecl::LoadFieldsFromExternalStorage() const {
   std::tie(FirstDecl, LastDecl) = BuildDeclChain(Decls,
                                                  /*FieldsAlreadyLoaded=*/false);
 }
+
+bool RecordDecl::mayInsertExtraPadding(bool EmitRemark) const {
+  ASTContext &Context = getASTContext();
+  if (!Context.getLangOpts().Sanitize.has(SanitizerKind::Address) ||
+      !Context.getLangOpts().SanitizeAddressFieldPadding)
+    return false;
+  const auto &Blacklist = Context.getSanitizerBlacklist();
+  const CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(this);
+  // We may be able to relax some of these requirements.
+  int ReasonToReject = -1;
+  if (!CXXRD || CXXRD->isExternCContext())
+    ReasonToReject = 0;  // is not C++.
+  else if (CXXRD->hasAttr<PackedAttr>())
+    ReasonToReject = 1;  // is packed.
+  else if (CXXRD->isUnion())
+    ReasonToReject = 2;  // is a union.
+  else if (CXXRD->isTriviallyCopyable())
+    ReasonToReject = 3;  // is trivially copyable.
+  else if (CXXRD->hasTrivialDestructor())
+    ReasonToReject = 4;  // has trivial destructor.
+  else if (CXXRD->isStandardLayout())
+    ReasonToReject = 5;  // is standard layout.
+  else if (Blacklist.isBlacklistedLocation(getLocation(), "field-padding"))
+    ReasonToReject = 6;  // is in a blacklisted file.
+  else if (Blacklist.isBlacklistedType(getQualifiedNameAsString(),
+                                       "field-padding"))
+    ReasonToReject = 7;  // is blacklisted.
+
+  if (EmitRemark) {
+    if (ReasonToReject >= 0)
+      Context.getDiagnostics().Report(
+          getLocation(),
+          diag::remark_sanitize_address_insert_extra_padding_rejected)
+          << getQualifiedNameAsString() << ReasonToReject;
+    else
+      Context.getDiagnostics().Report(
+          getLocation(),
+          diag::remark_sanitize_address_insert_extra_padding_accepted)
+          << getQualifiedNameAsString();
+  }
+  return ReasonToReject < 0;
+}
+
+const FieldDecl *RecordDecl::findFirstNamedDataMember() const {
+  for (const auto *I : fields()) {
+    if (I->getIdentifier())
+      return I;
+
+    if (const RecordType *RT = I->getType()->getAs<RecordType>())
+      if (const FieldDecl *NamedDataMember =
+          RT->getDecl()->findFirstNamedDataMember())
+        return NamedDataMember;
+  }
+
+  // We didn't find a named data member.
+  return nullptr;
+}
+
 
 //===----------------------------------------------------------------------===//
 // BlockDecl Implementation
@@ -3640,6 +3774,13 @@ TranslationUnitDecl *TranslationUnitDecl::Create(ASTContext &C) {
   return new (C, (DeclContext *)nullptr) TranslationUnitDecl(C);
 }
 
+void ExternCContextDecl::anchor() { }
+
+ExternCContextDecl *ExternCContextDecl::Create(const ASTContext &C,
+                                               TranslationUnitDecl *DC) {
+  return new (C, DC) ExternCContextDecl(DC);
+}
+
 void LabelDecl::anchor() { }
 
 LabelDecl *LabelDecl::Create(ASTContext &C, DeclContext *DC,
@@ -3657,6 +3798,13 @@ LabelDecl *LabelDecl::Create(ASTContext &C, DeclContext *DC,
 LabelDecl *LabelDecl::CreateDeserialized(ASTContext &C, unsigned ID) {
   return new (C, ID) LabelDecl(nullptr, SourceLocation(), nullptr, nullptr,
                                SourceLocation());
+}
+
+void LabelDecl::setMSAsmLabel(StringRef Name) {
+  char *Buffer = new (getASTContext(), 1) char[Name.size() + 1];
+  memcpy(Buffer, Name.data(), Name.size());
+  Buffer[Name.size()] = '\0';
+  MSAsmName = Buffer;
 }
 
 void ValueDecl::anchor() { }
@@ -3894,8 +4042,8 @@ ArrayRef<SourceLocation> ImportDecl::getIdentifierLocs() const {
 
   const SourceLocation *StoredLocs
     = reinterpret_cast<const SourceLocation *>(this + 1);
-  return ArrayRef<SourceLocation>(StoredLocs, 
-                                  getNumModuleIdentifiers(getImportedModule()));
+  return llvm::makeArrayRef(StoredLocs,
+                            getNumModuleIdentifiers(getImportedModule()));
 }
 
 SourceRange ImportDecl::getSourceRange() const {

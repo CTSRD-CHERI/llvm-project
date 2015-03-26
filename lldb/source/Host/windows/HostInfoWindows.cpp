@@ -9,11 +9,15 @@
 
 #include "lldb/Host/windows/windows.h"
 
+#include <mutex> // std::once
+
 #include "lldb/Host/windows/HostInfoWindows.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace lldb_private;
+
+FileSpec HostInfoWindows::m_program_filespec;
 
 size_t
 HostInfoWindows::GetPageSize()
@@ -76,5 +80,38 @@ HostInfoWindows::GetHostname(std::string &s)
         return false;
 
     s.assign(buffer, buffer + dwSize);
+    return true;
+}
+
+FileSpec
+HostInfoWindows::GetProgramFileSpec()
+{
+    static std::once_flag g_once_flag;
+    std::call_once(g_once_flag,  []() {
+        char buffer[PATH_MAX];
+        ::GetModuleFileName(NULL, buffer, sizeof(buffer));
+        m_program_filespec.SetFile(buffer, false);
+    });
+    return m_program_filespec;
+}
+
+FileSpec
+HostInfoWindows::GetDefaultShell()
+{
+    return FileSpec(::getenv("ComSpec"), false);
+}
+
+bool
+HostInfoWindows::ComputePythonDirectory(FileSpec &file_spec)
+{
+    FileSpec lldb_file_spec;
+    if (!GetLLDBPath(lldb::ePathTypeLLDBShlibDir, lldb_file_spec))
+        return false;
+
+    char raw_path[PATH_MAX];
+    lldb_file_spec.AppendPathComponent("../lib/site-packages");
+    lldb_file_spec.GetPath(raw_path, sizeof(raw_path));
+
+    file_spec.GetDirectory().SetCString(raw_path);
     return true;
 }

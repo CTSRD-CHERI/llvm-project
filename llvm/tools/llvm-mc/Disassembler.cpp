@@ -22,7 +22,6 @@
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/StringRefMemoryObject.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
@@ -37,9 +36,7 @@ static bool PrintInsts(const MCDisassembler &DisAsm,
                        SourceMgr &SM, raw_ostream &Out,
                        MCStreamer &Streamer, bool InAtomicBlock,
                        const MCSubtargetInfo &STI) {
-  // Wrap the vector in a MemoryObject.
-  StringRef Data((const char*)Bytes.first.data(), Bytes.first.size());
-  StringRefMemoryObject memoryObject(Data);
+  ArrayRef<uint8_t> Data(Bytes.first.data(), Bytes.first.size());
 
   // Disassemble it to strings.
   uint64_t Size;
@@ -49,7 +46,7 @@ static bool PrintInsts(const MCDisassembler &DisAsm,
     MCInst Inst;
 
     MCDisassembler::DecodeStatus S;
-    S = DisAsm.getInstruction(Inst, Size, memoryObject, Index,
+    S = DisAsm.getInstruction(Inst, Size, Data.slice(Index), Index,
                               /*REMOVE*/ nulls(), nulls());
     switch (S) {
     case MCDisassembler::Fail:
@@ -81,29 +78,23 @@ static bool PrintInsts(const MCDisassembler &DisAsm,
 }
 
 static bool SkipToToken(StringRef &Str) {
-  while (!Str.empty() && Str.find_first_not_of(" \t\r\n#,") != 0) {
-    // Strip horizontal whitespace and commas.
-    if (size_t Pos = Str.find_first_not_of(" \t\r,")) {
-      Str = Str.substr(Pos);
-    }
+  for (;;) {
+    if (Str.empty())
+      return false;
 
-    // If this is the end of a line or start of a comment, remove the rest of
-    // the line.
-    if (Str[0] == '\n' || Str[0] == '#') {
-      // Strip to the end of line if we already processed any bytes on this
-      // line.  This strips the comment and/or the \n.
-      if (Str[0] == '\n') {
-        Str = Str.substr(1);
-      } else {
-        Str = Str.substr(Str.find_first_of('\n'));
-        if (!Str.empty())
-          Str = Str.substr(1);
-      }
+    // Strip horizontal whitespace and commas.
+    if (size_t Pos = Str.find_first_not_of(" \t\r\n,")) {
+      Str = Str.substr(Pos);
       continue;
     }
-  }
 
-  return !Str.empty();
+    // If this is the start of a comment, remove the rest of the line.
+    if (Str[0] == '#') {
+        Str = Str.substr(Str.find_first_of('\n'));
+      continue;
+    }
+    return true;
+  }
 }
 
 

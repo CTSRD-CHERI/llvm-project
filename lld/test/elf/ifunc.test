@@ -1,3 +1,5 @@
+# REQUIRES: x86
+
 # This test checks that IRELATIVE relocations are created for symbols that
 # need relocation even for static links.
 RUN: lld -flavor gnu -target x86_64-linux --output-filetype=yaml -r \
@@ -19,12 +21,6 @@ RUN: | FileCheck %s --check-prefix=SHARED
 
 PLT: defined-atoms:
 
-// Make sure there's a got entry with a IRELATIVE relocation.
-PLT: type: got
-PLT: references:
-PLT:  kind: R_X86_64_IRELATIVE
-PLT:  target: hey
-
 PLT: name:  plt
 PLT: scope: global
 PLT: references:
@@ -45,6 +41,12 @@ PLT: type: stub
 PLT: references
 PLT:   kind: R_X86_64_PC32
 
+// Make sure there's a got entry with a IRELATIVE relocation.
+PLT: type: got
+PLT: references:
+PLT:  kind: R_X86_64_IRELATIVE
+PLT:  target: hey
+
 CHECK: name: hey
 CHECK: scope: global
 CHECK: type: resolver
@@ -58,7 +60,7 @@ BIN-NEXT: {{[0-9a-f]+}} 00000000 00000000
 
 RELATIVEADDEND:      Relocations [
 RELATIVEADDEND-NEXT:   Section (1) .rela.plt {
-RELATIVEADDEND-NEXT:     0x401000 R_X86_64_IRELATIVE - 0x400120
+RELATIVEADDEND-NEXT:     0x401000 R_X86_64_IRELATIVE - 0x400110
 RELATIVEADDEND-NEXT:   }
 RELATIVEADDEND-NEXT: ]
 

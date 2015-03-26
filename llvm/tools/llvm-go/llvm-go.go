@@ -30,6 +30,7 @@ type pkg struct {
 
 var packages = []pkg{
 	{"bindings/go/llvm", "llvm.org/llvm/bindings/go/llvm"},
+	{"tools/llgo", "llvm.org/llgo"},
 }
 
 type compilerFlags struct {
@@ -45,7 +46,7 @@ var components = []string{
 	"bitwriter",
 	"codegen",
 	"core",
-	"debuginfo",
+	"debuginfodwarf",
 	"executionengine",
 	"instrumentation",
 	"interpreter",
@@ -136,7 +137,7 @@ type (run_build_sh int)
 `, flags.cpp, flags.cxx, flags.ld)
 }
 
-func runGoWithLLVMEnv(args []string, cc, cxx, cppflags, cxxflags, ldflags string) {
+func runGoWithLLVMEnv(args []string, cc, cxx, gocmd, llgo, cppflags, cxxflags, ldflags string) {
 	args = addTag(args, "byollvm")
 
 	srcdir := llvmConfig("--src-root")
@@ -159,6 +160,8 @@ func runGoWithLLVMEnv(args []string, cc, cxx, cppflags, cxxflags, ldflags string
 		}
 	}
 
+	newpath := os.Getenv("PATH")
+
 	newgopathlist := []string{tmpgopath}
 	newgopathlist = append(newgopathlist, filepath.SplitList(os.Getenv("GOPATH"))...)
 	newgopath := strings.Join(newgopathlist, string(filepath.ListSeparator))
@@ -172,24 +175,31 @@ func runGoWithLLVMEnv(args []string, cc, cxx, cppflags, cxxflags, ldflags string
 		"CGO_CXXFLAGS=" + flags.cxx + " " + cxxflags,
 		"CGO_LDFLAGS=" + flags.ld + " " + ldflags,
 		"GOPATH=" + newgopath,
+		"PATH=" + newpath,
 	}
+	if llgo != "" {
+		newenv = append(newenv, "GCCGO=" + llgo)
+	}
+
 	for _, v := range os.Environ() {
 		if !strings.HasPrefix(v, "CC=") &&
 			!strings.HasPrefix(v, "CXX=") &&
 			!strings.HasPrefix(v, "CGO_CPPFLAGS=") &&
 			!strings.HasPrefix(v, "CGO_CXXFLAGS=") &&
 			!strings.HasPrefix(v, "CGO_LDFLAGS=") &&
-			!strings.HasPrefix(v, "GOPATH=") {
+			!strings.HasPrefix(v, "GCCGO=") &&
+			!strings.HasPrefix(v, "GOPATH=") &&
+			!strings.HasPrefix(v, "PATH=") {
 			newenv = append(newenv, v)
 		}
 	}
 
-	gocmdpath, err := exec.LookPath("go")
+	gocmdpath, err := exec.LookPath(gocmd)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	proc, err := os.StartProcess(gocmdpath, append([]string{"go"}, args...),
+	proc, err := os.StartProcess(gocmdpath, append([]string{gocmd}, args...),
 		&os.ProcAttr{
 			Env:   newenv,
 			Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
@@ -222,6 +232,8 @@ func main() {
 	cppflags := os.Getenv("CGO_CPPFLAGS")
 	cxxflags := os.Getenv("CGO_CXXFLAGS")
 	ldflags := os.Getenv("CGO_LDFLAGS")
+	gocmd := "go"
+	llgo := ""
 
 	args := os.Args[1:]
 	DONE: for {
@@ -233,6 +245,12 @@ func main() {
 			args = args[1:]
 		case strings.HasPrefix(args[0], "cxx="):
 			cxx = args[0][4:]
+			args = args[1:]
+		case strings.HasPrefix(args[0], "go="):
+			gocmd = args[0][3:]
+			args = args[1:]
+		case strings.HasPrefix(args[0], "llgo="):
+			llgo = args[0][5:]
 			args = args[1:]
 		case strings.HasPrefix(args[0], "cppflags="):
 			cppflags = args[0][9:]
@@ -250,7 +268,7 @@ func main() {
 
 	switch args[0] {
 	case "build", "get", "install", "run", "test":
-		runGoWithLLVMEnv(args, cc, cxx, cppflags, cxxflags, ldflags)
+		runGoWithLLVMEnv(args, cc, cxx, gocmd, llgo, cppflags, cxxflags, ldflags)
 	case "print-components":
 		printComponents()
 	case "print-config":

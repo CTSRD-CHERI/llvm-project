@@ -14,7 +14,9 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <fcntl.h>
+#ifndef __ANDROID__
 #include <execinfo.h>
+#endif
 
 // C++ Includes
 // Other libraries and framework includes
@@ -24,12 +26,17 @@
 #include "lldb/Target/Process.h"
 
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostInfo.h"
+#ifdef __ANDROID_NDK__
+#include "lldb/Host/android/Android.h"
+#endif
 #include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/DataExtractor.h"
 
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "Plugins/Process/Linux/ProcFileReader.h"
+#include "Plugins/Process/Utility/LinuxSignals.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -316,6 +323,7 @@ GetProcessAndStatInfo (lldb::pid_t pid, ProcessInstanceInfo &process_info, Proce
 
     process_info.SetProcessID(pid);
     process_info.GetExecutableFile().SetFile(exe_path, false);
+    process_info.GetArchitecture().MergeFrom(HostInfo::GetArchitecture());
 
     lldb::DataBufferSP buf_sp;
 
@@ -371,49 +379,6 @@ Host::GetProcessInfo (lldb::pid_t pid, ProcessInstanceInfo &process_info)
     return GetProcessAndStatInfo (pid, process_info, stat_info, tracerpid);
 }
 
-void
-Host::ThreadCreated (const char *thread_name)
-{
-    if (!Host::SetThreadName (LLDB_INVALID_PROCESS_ID, LLDB_INVALID_THREAD_ID, thread_name))
-    {
-        Host::SetShortThreadName (LLDB_INVALID_PROCESS_ID, LLDB_INVALID_THREAD_ID, thread_name, 16);
-    }
-}
-
-std::string
-Host::GetThreadName (lldb::pid_t pid, lldb::tid_t tid)
-{
-    assert(pid != LLDB_INVALID_PROCESS_ID);
-    assert(tid != LLDB_INVALID_THREAD_ID);
-
-    // Read /proc/$TID/comm file.
-    lldb::DataBufferSP buf_sp = ProcFileReader::ReadIntoDataBuffer (tid, "comm");
-    const char *comm_str = (const char *)buf_sp->GetBytes();
-    const char *cr_str = ::strchr(comm_str, '\n');
-    size_t length = cr_str ? (cr_str - comm_str) : strlen(comm_str);
-
-    std::string thread_name(comm_str, length);
-    return thread_name;
-}
-
-void
-Host::Backtrace (Stream &strm, uint32_t max_frames)
-{
-    if (max_frames > 0)
-    {
-        std::vector<void *> frame_buffer (max_frames, NULL);
-        int num_frames = ::backtrace (&frame_buffer[0], frame_buffer.size());
-        char** strs = ::backtrace_symbols (&frame_buffer[0], num_frames);
-        if (strs)
-        {
-            // Start at 1 to skip the "Host::Backtrace" frame
-            for (int i = 1; i < num_frames; ++i)
-                strm.Printf("%s\n", strs[i]);
-            ::free (strs);
-        }
-    }
-}
-
 size_t
 Host::GetEnvironment (StringList &env)
 {
@@ -423,4 +388,17 @@ Host::GetEnvironment (StringList &env)
     for (i=0; (env_entry = host_env[i]) != NULL; ++i)
         env.AppendString(env_entry);
     return i;
+}
+
+const lldb_private::UnixSignalsSP&
+Host::GetUnixSignals ()
+{
+    static const lldb_private::UnixSignalsSP s_unix_signals_sp (new process_linux::LinuxSignals ());
+    return s_unix_signals_sp;
+}
+
+Error
+Host::ShellExpandArguments (ProcessLaunchInfo &launch_info)
+{
+    return Error("unimplemented");
 }

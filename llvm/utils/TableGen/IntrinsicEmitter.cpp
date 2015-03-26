@@ -258,7 +258,10 @@ enum IIT_Info {
   IIT_V1   = 27,
   IIT_VARARG = 28,
   IIT_HALF_VEC_ARG = 29,
-  IIT_IFATPTR = 30
+  IIT_SAME_VEC_WIDTH_ARG = 30,
+  IIT_PTR_TO_ARG = 31,
+  IIT_VEC_OF_PTRS_TO_ELT = 32,
+  IIT_IFATPTR = 33
 };
 
 
@@ -291,7 +294,7 @@ static void EncodeFixedValueType(MVT::SimpleValueType VT,
   }
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma optimize("",off) // MSVC 2010 optimizer can't deal with this function.
 #endif
 
@@ -307,9 +310,20 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
       Sig.push_back(IIT_TRUNC_ARG);
     else if (R->isSubClassOf("LLVMHalfElementsVectorType"))
       Sig.push_back(IIT_HALF_VEC_ARG);
+    else if (R->isSubClassOf("LLVMVectorSameWidth")) {
+      Sig.push_back(IIT_SAME_VEC_WIDTH_ARG);
+      Sig.push_back((Number << 3) | ArgCodes[Number]);
+      MVT::SimpleValueType VT = getValueType(R->getValueAsDef("ElTy"));
+      EncodeFixedValueType(VT, Sig);
+      return;
+    }
+    else if (R->isSubClassOf("LLVMPointerTo"))
+      Sig.push_back(IIT_PTR_TO_ARG);
+    else if (R->isSubClassOf("LLVMVectorOfPointersToElt"))
+      Sig.push_back(IIT_VEC_OF_PTRS_TO_ELT);
     else
       Sig.push_back(IIT_ARG);
-    return Sig.push_back((Number << 2) | ArgCodes[Number]);
+    return Sig.push_back((Number << 3) | ArgCodes[Number]);
   }
 
   MVT::SimpleValueType VT = getValueType(R->getValueAsDef("VT"));
@@ -320,7 +334,8 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
   case MVT::iPTRAny: ++Tmp; // FALL THROUGH.
   case MVT::vAny: ++Tmp; // FALL THROUGH.
   case MVT::fAny: ++Tmp; // FALL THROUGH.
-  case MVT::iAny: {
+  case MVT::iAny: ++Tmp; // FALL THROUGH.
+  case MVT::Any: {
     // If this is an "any" valuetype, then the type is the type of the next
     // type in the list specified to getIntrinsic().
     Sig.push_back(IIT_ARG);
@@ -329,8 +344,8 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
     unsigned ArgNo = ArgCodes.size();
     ArgCodes.push_back(Tmp);
 
-    // Encode what sort of argument it must be in the low 2 bits of the ArgNo.
-    return Sig.push_back((ArgNo << 2) | Tmp);
+    // Encode what sort of argument it must be in the low 3 bits of the ArgNo.
+    return Sig.push_back((ArgNo << 3) | Tmp);
   }
 
   case MVT::iPTR: {
@@ -373,7 +388,7 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
   EncodeFixedValueType(VT, Sig);
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma optimize("",on)
 #endif
 

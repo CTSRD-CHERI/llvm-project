@@ -18,10 +18,10 @@ for.body:                                         ; preds = %entry, %for.body
   %i.011 = phi i32 [ %inc, %for.body ], [ 0, %entry ]
   %sum.010 = phi i32 [ %add, %for.body ], [ 0, %entry ]
   %0 = sext i32 %i.011 to i256
-  %arrayidx = getelementptr inbounds i32 addrspace(200)* %x, i256 %0
-  %1 = load i32 addrspace(200)* %arrayidx, align 4, !tbaa !0
+  %arrayidx = getelementptr inbounds i32, i32 addrspace(200)* %x, i256 %0
+  %1 = load i32, i32 addrspace(200)* %arrayidx, align 4
   %add = add nsw i32 %1, %sum.010
-  store i32 %add, i32 addrspace(200)* %arrayidx, align 4, !tbaa !0
+  store i32 %add, i32 addrspace(200)* %arrayidx, align 4
   %inc = add nsw i32 %i.011, 1
   %exitcond = icmp eq i32 %inc, %len
   br i1 %exitcond, label %for.end, label %for.body
@@ -33,6 +33,3 @@ for.end:                                          ; preds = %for.body, %entry
 
 attributes #0 = { nounwind "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf"="true" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "unsafe-fp-math"="false" "use-soft-float"="false" }
 
-!0 = metadata !{metadata !"int", metadata !1}
-!1 = metadata !{metadata !"omnipotent char", metadata !2}
-!2 = metadata !{metadata !"Simple C/C++ TBAA"}

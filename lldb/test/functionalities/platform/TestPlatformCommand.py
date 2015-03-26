@@ -20,7 +20,7 @@ class PlatformCommandTestCase(TestBase):
 
     def test_process_list(self):
         self.expect("platform process list",
-            substrs = ['PID', 'ARCH', 'NAME'])
+            substrs = ['PID', 'TRIPLE', 'NAME'])
 
     def test_process_info_with_no_arg(self):
         """This is expected to fail and to return a proper error message."""
@@ -33,8 +33,13 @@ class PlatformCommandTestCase(TestBase):
 
     def test_shell(self):
         """ Test that the platform shell command can invoke ls. """
-        self.expect("platform shell ls /",
-            substrs = ["dev", "tmp", "usr"])
+        triple = self.dbg.GetSelectedPlatform().GetTriple()
+        if re.match(".*-.*-windows", triple):
+          self.expect("platform shell dir c:\\", substrs = ["Windows", "Program Files"])
+        elif re.match(".*-.*-.*-android", triple):
+          self.expect("platform shell ls /", substrs = ["cache", "dev", "system"])
+        else:
+          self.expect("platform shell ls /", substrs = ["dev", "tmp", "usr"])
 
     def test_shell_builtin(self):
         """ Test a shell built-in command (echo) """

@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-scops -analyze -disable-polly-intra-scop-scalar-to-array < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze -disable-polly-intra-scop-scalar-to-array < %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128"
 target triple = "x86_64-unknown-linux-gnu"
@@ -12,12 +12,12 @@ for:
   br label %S1
 
 S1:
-  %scevgep1 = getelementptr i64* %a, i64 %indvar
-  %val = load i64* %scevgep1, align 8
+  %scevgep1 = getelementptr i64, i64* %a, i64 %indvar
+  %val = load i64, i64* %scevgep1, align 8
   br label %S2
 
 S2:
-  %scevgep2 = getelementptr i64* %a, i64 %indvar
+  %scevgep2 = getelementptr i64, i64* %a, i64 %indvar
   store i64 %val, i64* %scevgep2, align 8
   br label %for.backedge
 
@@ -34,7 +34,7 @@ return:
 ; CHECK:       Domain :=
 ; CHECK:           [N] -> { Stmt_S1[i0] : i0 >= 0 and i0 <= -1 + N };
 ; CHECK:       Scattering :=
-; CHECK:           [N] -> { Stmt_S1[i0] -> scattering[0, i0, 0] };
+; CHECK:           [N] -> { Stmt_S1[i0] -> [i0, 0] };
 ; CHECK:       ReadAccess :=
 ; CHECK:           [N] -> { Stmt_S1[i0] -> MemRef_a[i0] };
 ; CHECK:       MustWriteAccess :=
@@ -43,7 +43,7 @@ return:
 ; CHECK:       Domain :=
 ; CHECK:           [N] -> { Stmt_S2[i0] : i0 >= 0 and i0 <= -1 + N };
 ; CHECK:       Scattering :=
-; CHECK:           [N] -> { Stmt_S2[i0] -> scattering[0, i0, 1] };
+; CHECK:           [N] -> { Stmt_S2[i0] -> [i0, 1] };
 ; CHECK:       ReadAccess :=
 ; CHECK:           [N] -> { Stmt_S2[i0] -> MemRef_val[] };
 ; CHECK:       MustWriteAccess :=

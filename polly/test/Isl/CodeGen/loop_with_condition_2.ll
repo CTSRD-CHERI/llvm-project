@@ -1,15 +1,15 @@
-; RUN: opt %loadPolly %defaultOpts -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-ast -polly-ast-detect-parallel -analyze < %s | FileCheck %s
 
 ; Verify that we actually detect this loop as the innermost loop even though
 ; there is a conditional inside.
 
 ; CHECK: #pragma simd
-; CHECK: for (int c1 = 0; c1 <= 1023; c1 += 1) {
-; CHECK:   if (c1 >= m + 1025) {
-; CHECK:     Stmt_if_else(c1);
+; CHECK: for (int c0 = 0; c0 <= 1023; c0 += 1) {
+; CHECK:   if (c0 >= m + 1025) {
+; CHECK:     Stmt_if_else(c0);
 ; CHECK:   } else
-; CHECK:     Stmt_if_then(c1);
-; CHECK:   Stmt_if_end(c1);
+; CHECK:     Stmt_if_then(c0);
+; CHECK:   Stmt_if_end(c0);
 ; CHECK: }
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
@@ -27,8 +27,8 @@ entry:
 
 for.cond:                                         ; preds = %for.inc, %entry
   %indvar = phi i64 [ %indvar.next, %for.inc ], [ 0, %entry ]
-  %arrayidx = getelementptr [1024 x i32]* @A, i64 0, i64 %indvar
-  %arrayidx10 = getelementptr [1024 x i32]* @B, i64 0, i64 %indvar
+  %arrayidx = getelementptr [1024 x i32], [1024 x i32]* @A, i64 0, i64 %indvar
+  %arrayidx10 = getelementptr [1024 x i32], [1024 x i32]* @B, i64 0, i64 %indvar
   %tmp2 = add i64 %tmp1, %indvar
   %sub = trunc i64 %tmp2 to i32
   %exitcond = icmp ne i64 %indvar, 1024
@@ -68,13 +68,13 @@ entry:
 
 for.cond:                                         ; preds = %for.inc, %entry
   %indvar1 = phi i64 [ %indvar.next2, %for.inc ], [ 0, %entry ]
-  %arrayidx = getelementptr [1024 x i32]* @B, i64 0, i64 %indvar1
+  %arrayidx = getelementptr [1024 x i32], [1024 x i32]* @B, i64 0, i64 %indvar1
   %i.0 = trunc i64 %indvar1 to i32
   %cmp = icmp slt i32 %i.0, 1024
   br i1 %cmp, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
-  %tmp3 = load i32* %arrayidx
+  %tmp3 = load i32, i32* %arrayidx
   %cmp4 = icmp ne i32 %tmp3, 3
   br i1 %cmp4, label %if.then, label %if.end
 
@@ -91,9 +91,9 @@ for.inc:                                          ; preds = %if.end
 for.end:                                          ; preds = %for.cond
   br label %for.cond6
 
-for.cond6:                                        ; preds = %for.inc32, %for.end
-  %indvar = phi i64 [ %indvar.next, %for.inc32 ], [ 0, %for.end ]
-  %arrayidx15 = getelementptr [1024 x i32]* @A, i64 0, i64 %indvar
+for.cond6:                                        ; preds = %for.inc12, %for.end
+  %indvar = phi i64 [ %indvar.next, %for.inc12 ], [ 0, %for.end ]
+  %arrayidx15 = getelementptr [1024 x i32], [1024 x i32]* @A, i64 0, i64 %indvar
   %i.1 = trunc i64 %indvar to i32
   %cmp8 = icmp slt i32 %i.1, 1024
   br i1 %cmp8, label %for.body9, label %for.end35
@@ -102,7 +102,7 @@ for.body9:                                        ; preds = %for.cond6
   br i1 true, label %land.lhs.true, label %if.else
 
 land.lhs.true:                                    ; preds = %for.body9
-  %tmp16 = load i32* %arrayidx15
+  %tmp16 = load i32, i32* %arrayidx15
   %cmp17 = icmp ne i32 %tmp16, 1
   br i1 %cmp17, label %if.then18, label %if.else
 
@@ -113,7 +113,7 @@ if.else:                                          ; preds = %land.lhs.true, %for
   br i1 false, label %land.lhs.true23, label %if.end30
 
 land.lhs.true23:                                  ; preds = %if.else
-  %tmp27 = load i32* %arrayidx15
+  %tmp27 = load i32, i32* %arrayidx15
   %cmp28 = icmp ne i32 %tmp27, 2
   br i1 %cmp28, label %if.then29, label %if.end30
 
@@ -124,9 +124,9 @@ if.end30:                                         ; preds = %land.lhs.true23, %i
   br label %if.end31
 
 if.end31:                                         ; preds = %if.end30
-  br label %for.inc32
+  br label %for.inc12
 
-for.inc32:                                        ; preds = %if.end31
+for.inc12:                                        ; preds = %if.end31
   %indvar.next = add i64 %indvar, 1
   br label %for.cond6
 

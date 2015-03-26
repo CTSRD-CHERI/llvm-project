@@ -11,6 +11,7 @@
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 
 #define DEBUG_TYPE "hexagon-elf-writer"
 
@@ -21,20 +22,20 @@ namespace {
 
 class HexagonELFObjectWriter : public MCELFObjectTargetWriter {
 private:
-  StringRef _CPU;
+  StringRef CPU;
 
 public:
-  HexagonELFObjectWriter(uint8_t OSABI, StringRef CPU);
+  HexagonELFObjectWriter(uint8_t OSABI, StringRef C);
 
   virtual unsigned GetRelocType(MCValue const &Target, MCFixup const &Fixup,
                                 bool IsPCRel) const override;
 };
 }
 
-HexagonELFObjectWriter::HexagonELFObjectWriter(uint8_t OSABI, StringRef CPU)
+HexagonELFObjectWriter::HexagonELFObjectWriter(uint8_t OSABI, StringRef C)
     : MCELFObjectTargetWriter(/*Is64bit*/ false, OSABI, ELF::EM_HEXAGON,
                               /*HasRelocationAddend*/ true),
-      _CPU(CPU) {}
+      CPU(C) {}
 
 unsigned HexagonELFObjectWriter::GetRelocType(MCValue const &/*Target*/,
                                               MCFixup const &Fixup,

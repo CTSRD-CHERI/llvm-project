@@ -1,7 +1,5 @@
 /*
  * kmp_global.c -- KPTS global variables for runtime support library
- * $Revision: 42816 $
- * $Date: 2013-11-11 15:33:37 -0600 (Mon, 11 Nov 2013) $
  */
 
 
@@ -25,6 +23,20 @@ kmp_key_t __kmp_gtid_threadprivate_key;
 
 kmp_cpuinfo_t   __kmp_cpuinfo = { 0 }; // Not initialized
 
+#if KMP_STATS_ENABLED
+#include "kmp_stats.h"
+// lock for modifying the global __kmp_stats_list
+kmp_tas_lock_t __kmp_stats_lock = KMP_TAS_LOCK_INITIALIZER(__kmp_stats_lock);
+
+// global list of per thread stats, the head is a sentinel node which accumulates all stats produced before __kmp_create_worker is called.
+kmp_stats_list __kmp_stats_list;
+
+// thread local pointer to stats node within list
+__thread kmp_stats_list* __kmp_stats_thread_ptr = &__kmp_stats_list;
+
+// gives reference tick for all events (considered the 0 tick)
+tsc_tick_count __kmp_stats_start_time;
+#endif
 
 /* ----------------------------------------------------- */
 /* INITIALIZATION VARIABLES */
@@ -53,6 +65,7 @@ unsigned int __kmp_next_wait = KMP_DEFAULT_NEXT_WAIT;   /* susequent number of s
 size_t      __kmp_stksize         = KMP_DEFAULT_STKSIZE;
 size_t      __kmp_monitor_stksize = 0;  // auto adjust
 size_t      __kmp_stkoffset       = KMP_DEFAULT_STKOFFSET;
+int         __kmp_stkpadding      = KMP_MIN_STKPADDING;
 
 size_t    __kmp_malloc_pool_incr  = KMP_DEFAULT_MALLOC_POOL_INCR;
 
@@ -94,7 +107,7 @@ char const *__kmp_barrier_type_name           [ bs_last_barrier ] =
                                     , "reduction"
                                 #endif // KMP_FAST_REDUCTION_BARRIER
                             };
-char const *__kmp_barrier_pattern_name [ bp_last_bar ] = { "linear", "tree", "hyper" };
+char const *__kmp_barrier_pattern_name [ bp_last_bar ] = { "linear", "tree", "hyper", "hierarchical" };
 
 
 int       __kmp_allThreadsSpecified = 0;
@@ -114,26 +127,26 @@ int      __kmp_dflt_team_nth_ub = 0;
 int           __kmp_tp_capacity = 0;
 int             __kmp_tp_cached = 0;
 int           __kmp_dflt_nested = FALSE;
-#if OMP_30_ENABLED
 int __kmp_dflt_max_active_levels = KMP_MAX_ACTIVE_LEVELS_LIMIT; /* max_active_levels limit */
-#endif // OMP_30_ENABLED
+#if KMP_NESTED_HOT_TEAMS
+int __kmp_hot_teams_mode         = 0; /* 0 - free extra threads when reduced */
+                                      /* 1 - keep extra threads when reduced */
+int __kmp_hot_teams_max_level    = 1; /* nesting level of hot teams */
+#endif
 enum library_type __kmp_library = library_none;
 enum sched_type     __kmp_sched = kmp_sch_default;  /* scheduling method for runtime scheduling */
 enum sched_type    __kmp_static = kmp_sch_static_greedy; /* default static scheduling method */
 enum sched_type    __kmp_guided = kmp_sch_guided_iterative_chunked; /* default guided scheduling method */
-#if OMP_30_ENABLED
 enum sched_type      __kmp_auto = kmp_sch_guided_analytical_chunked; /* default auto scheduling method */
-#endif // OMP_30_ENABLED
 int        __kmp_dflt_blocktime = KMP_DEFAULT_BLOCKTIME;
 int       __kmp_monitor_wakeups = KMP_MIN_MONITOR_WAKEUPS;
 int          __kmp_bt_intervals = KMP_INTERVALS_FROM_BLOCKTIME( KMP_DEFAULT_BLOCKTIME, KMP_MIN_MONITOR_WAKEUPS );
 #ifdef KMP_ADJUST_BLOCKTIME
 int               __kmp_zero_bt = FALSE;
 #endif /* KMP_ADJUST_BLOCKTIME */
-int            __kmp_ht_capable = FALSE;
-int            __kmp_ht_enabled = FALSE;
-int        __kmp_ht_log_per_phy = 1;
+#ifdef KMP_DFLT_NTH_CORES
 int                __kmp_ncores = 0;
+#endif
 int                 __kmp_chunk = 0;
 int           __kmp_abort_delay = 0;
 #if KMP_OS_LINUX && defined(KMP_TDATA_GTID)
@@ -199,9 +212,13 @@ enum clock_function_type __kmp_clock_function;
 int __kmp_clock_function_param;
 #endif /* KMP_OS_LINUX */
 
+#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+enum mic_type __kmp_mic_type = non_mic;
+#endif
+
 #if KMP_AFFINITY_SUPPORTED
 
-# if KMP_OS_WINDOWS && KMP_ARCH_X86_64
+# if KMP_GROUP_AFFINITY
 
 int __kmp_num_proc_groups = 1;
 
@@ -210,7 +227,7 @@ kmp_GetActiveProcessorGroupCount_t __kmp_GetActiveProcessorGroupCount = NULL;
 kmp_GetThreadGroupAffinity_t __kmp_GetThreadGroupAffinity = NULL;
 kmp_SetThreadGroupAffinity_t __kmp_SetThreadGroupAffinity = NULL;
 
-# endif /* KMP_OS_WINDOWS && KMP_ARCH_X86_64 */
+# endif /* KMP_GROUP_AFFINITY */
 
 size_t   __kmp_affin_mask_size = 0;
 enum affinity_type __kmp_affinity_type = affinity_default;
@@ -236,13 +253,10 @@ kmp_nested_proc_bind_t __kmp_nested_proc_bind = { NULL, 0, 0 };
 int __kmp_affinity_num_places = 0;
 #endif
 
-#if KMP_MIC
-unsigned int __kmp_place_num_cores = 0;
-unsigned int __kmp_place_num_threads_per_core = 0;
-unsigned int __kmp_place_core_offset = 0;
-#endif
+int __kmp_place_num_cores = 0;
+int __kmp_place_num_threads_per_core = 0;
+int __kmp_place_core_offset = 0;
 
-#if OMP_30_ENABLED
 kmp_tasking_mode_t __kmp_tasking_mode = tskm_task_teams;
 
 /* This check ensures that the compiler is passing the correct data type
@@ -254,8 +268,6 @@ kmp_tasking_mode_t __kmp_tasking_mode = tskm_task_teams;
 KMP_BUILD_ASSERT( sizeof(kmp_tasking_flags_t) == 4 );
 
 kmp_int32 __kmp_task_stealing_constraint = 1;   /* Constrain task stealing by default */
-
-#endif /* OMP_30_ENABLED */
 
 #ifdef DEBUG_SUSPEND
 int         __kmp_suspend_count = 0;
@@ -364,6 +376,29 @@ kmp_global_t __kmp_global = {{ 0 }};
 /* ----------------------------------------------- */
 /* GLOBAL SYNCHRONIZATION LOCKS */
 /* TODO verify the need for these locks and if they need to be global */
+
+#if KMP_USE_INTERNODE_ALIGNMENT
+/* Multinode systems have larger cache line granularity which can cause
+ * false sharing if the alignment is not large enough for these locks */
+KMP_ALIGN_CACHE_INTERNODE
+
+kmp_bootstrap_lock_t __kmp_initz_lock   = KMP_BOOTSTRAP_LOCK_INITIALIZER( __kmp_initz_lock   ); /* Control initializations */
+KMP_ALIGN_CACHE_INTERNODE
+kmp_bootstrap_lock_t __kmp_forkjoin_lock; /* control fork/join access */
+KMP_ALIGN_CACHE_INTERNODE
+kmp_bootstrap_lock_t __kmp_exit_lock;   /* exit() is not always thread-safe */
+KMP_ALIGN_CACHE_INTERNODE
+kmp_bootstrap_lock_t __kmp_monitor_lock; /* control monitor thread creation */
+KMP_ALIGN_CACHE_INTERNODE
+kmp_bootstrap_lock_t __kmp_tp_cached_lock; /* used for the hack to allow threadprivate cache and __kmp_threads expansion to co-exist */
+
+KMP_ALIGN_CACHE_INTERNODE
+kmp_lock_t __kmp_global_lock;           /* Control OS/global access */
+KMP_ALIGN_CACHE_INTERNODE
+kmp_queuing_lock_t __kmp_dispatch_lock;         /* Control dispatch access  */
+KMP_ALIGN_CACHE_INTERNODE
+kmp_lock_t __kmp_debug_lock;            /* Control I/O access for KMP_DEBUG */
+#else
 KMP_ALIGN_CACHE
 
 kmp_bootstrap_lock_t __kmp_initz_lock   = KMP_BOOTSTRAP_LOCK_INITIALIZER( __kmp_initz_lock   ); /* Control initializations */
@@ -378,6 +413,7 @@ KMP_ALIGN(128)
 kmp_queuing_lock_t __kmp_dispatch_lock;         /* Control dispatch access  */
 KMP_ALIGN(128)
 kmp_lock_t __kmp_debug_lock;            /* Control I/O access for KMP_DEBUG */
+#endif
 
 /* ----------------------------------------------- */
 

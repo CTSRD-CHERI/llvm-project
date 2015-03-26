@@ -9,6 +9,7 @@
 #ifndef LLD_READER_WRITER_ELF_MIPS_MIPS_LINKING_CONTEXT_H
 #define LLD_READER_WRITER_ELF_MIPS_MIPS_LINKING_CONTEXT_H
 
+#include "MipsELFFlagsMerger.h"
 #include "lld/ReaderWriter/ELFLinkingContext.h"
 
 namespace lld {
@@ -27,27 +28,38 @@ enum {
   /// \brief Setup low 16 bits using the symbol this reference refers to.
   LLD_R_MIPS_LO16 = 1028,
   /// \brief Represents a reference between PLT and dynamic symbol.
-  LLD_R_MIPS_STO_PLT = 1029
+  LLD_R_MIPS_STO_PLT = 1029,
+  /// \brief The same as R_MICROMIPS_26_S1 but for global symbols.
+  LLD_R_MICROMIPS_GLOBAL_26_S1 = 1030,
+  /// \brief Apply high 32+16 bits of symbol + addend.
+  LLD_R_MIPS_64_HI16 = 1031,
 };
 
-typedef llvm::object::ELFType<llvm::support::little, 2, false> Mips32ElELFType;
-
-template <class ELFType> class MipsTargetLayout;
+typedef llvm::object::ELFType<llvm::support::little, 2, false> Mips32ELType;
+typedef llvm::object::ELFType<llvm::support::little, 2, true> Mips64ELType;
+typedef llvm::object::ELFType<llvm::support::big, 2, false> Mips32BEType;
+typedef llvm::object::ELFType<llvm::support::big, 2, true> Mips64BEType;
 
 class MipsLinkingContext final : public ELFLinkingContext {
 public:
+  static std::unique_ptr<ELFLinkingContext> create(llvm::Triple);
   MipsLinkingContext(llvm::Triple triple);
 
+  uint32_t getMergedELFFlags() const;
+  MipsELFFlagsMerger &getELFFlagsMerger();
+
   // ELFLinkingContext
-  bool isLittleEndian() const override;
   uint64_t getBaseAddress() const override;
   StringRef entrySymbolName() const override;
   StringRef getDefaultInterpreter() const override;
   void addPasses(PassManager &pm) override;
   bool isRelaOutputFormat() const override { return false; }
-  bool isDynamicRelocation(const DefinedAtom &,
-                           const Reference &r) const override;
-  bool isPLTRelocation(const DefinedAtom &, const Reference &r) const override;
+  bool isDynamicRelocation(const Reference &r) const override;
+  bool isCopyRelocation(const Reference &r) const override;
+  bool isPLTRelocation(const Reference &r) const override;
+
+private:
+  MipsELFFlagsMerger _flagsMerger;
 };
 
 } // elf
