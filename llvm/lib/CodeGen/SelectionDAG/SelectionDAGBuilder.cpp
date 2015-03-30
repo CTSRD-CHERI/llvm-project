@@ -3413,8 +3413,8 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
       Ty = StTy->getElementType(Field);
     } else {
       Ty = cast<SequentialType>(Ty)->getElementType();
-      MVT PtrTy = DAG.getTargetLoweringInfo().getPointerTy(AS);
-      unsigned PtrSize = PtrTy.getSizeInBits();
+      unsigned PtrSize = DAG.getTargetLoweringInfo().getDataLayout()
+          ->getPointerBaseSizeInBits(AS);
       APInt ElementSize(PtrSize, DL->getTypeAllocSize(Ty));
 
       // If this is a constant subscript, handle it quickly.
