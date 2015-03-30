@@ -8471,7 +8471,8 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
     }
     if (LCanPointeeTy != RCanPointeeTy) {
       const PointerType *lhsPtr = LHSType->getAs<PointerType>();
-      if (!lhsPtr->isAddressSpaceOverlapping(*RHSType->getAs<PointerType>())) {
+      if (!LHSIsNull && !RHSIsNull &&
+          !lhsPtr->isAddressSpaceOverlapping(*RHSType->getAs<PointerType>())) {
         Diag(Loc,
              diag::err_typecheck_op_on_nonoverlapping_address_space_pointers)
             << LHSType << RHSType << 0 /* comparison */
