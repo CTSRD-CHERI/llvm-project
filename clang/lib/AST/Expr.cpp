@@ -3202,7 +3202,11 @@ Expr::isNullPointerConstant(ASTContext &Ctx,
       // Check that it is a cast to void*.
       if (const PointerType *PT = CE->getType()->getAs<PointerType>()) {
         QualType Pointee = PT->getPointeeType();
-        if (!Pointee.hasQualifiers() &&
+        // Check that the only qualifiers are AS qualifiers
+        QualType Unqual = Pointee.getUnqualifiedType();
+        QualType ASQual = Ctx.getAddrSpaceQualType(Unqual, Pointee.getAddressSpace());
+        if (!Unqual.hasQualifiers() &&
+            (Pointee == ASQual) &&
             Pointee->isVoidType() &&                              // to void*
             CE->getSubExpr()->getType()->isIntegerType())         // from int.
           return CE->getSubExpr()->isNullPointerConstant(Ctx, NPC);

@@ -7467,7 +7467,15 @@ static bool checkArithmeticBinOpPointerOperands(Sema &S, SourceLocation Loc,
   if (isLHSPointer && isRHSPointer) {
     const PointerType *lhsPtr = LHSExpr->getType()->getAs<PointerType>();
     const PointerType *rhsPtr = RHSExpr->getType()->getAs<PointerType>();
-    if (!lhsPtr->isAddressSpaceOverlapping(*rhsPtr)) {
+    ASTContext &Context = S.getASTContext();
+    const Expr::NullPointerConstantKind LHSNullKind =
+        LHSExpr->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+    const Expr::NullPointerConstantKind RHSNullKind =
+        RHSExpr->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+    bool LHSIsNull = LHSNullKind != Expr::NPCK_NotNull;
+    bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
+    if (!RHSIsNull && !LHSIsNull &&
+        !lhsPtr->isAddressSpaceOverlapping(*rhsPtr)) {
       S.Diag(Loc,
              diag::err_typecheck_op_on_nonoverlapping_address_space_pointers)
           << LHSExpr->getType() << RHSExpr->getType() << 1 /*arithmetic op*/
