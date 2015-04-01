@@ -1145,6 +1145,11 @@ def Packed : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+def PointerInterpretationCaps : InheritableAttr {
+  let Spellings = [GNU<"pointer_interpretation_capabilities">];
+  let Documentation = [Undocumented];
+}
+
 def CheriCCall : InheritableAttr {
   let Spellings = [GNU<"cheri_ccall">];
   let Documentation = [Undocumented];

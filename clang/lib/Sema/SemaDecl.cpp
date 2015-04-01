@@ -7464,6 +7464,27 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   // Handle attributes.
   ProcessDeclAttributes(S, NewFD, D);
 
+  if (NewFD->hasAttr<PointerInterpretationCapsAttr>()) {
+    // FIXME: This will assert on failure - it should print a nice error.
+    const FunctionProtoType *FPT =
+      NewFD->getType()->getAs<FunctionProtoType>();
+    ArrayRef<QualType> OldParams = FPT->getParamTypes();
+    llvm::SmallVector<QualType, 8> NewParams;
+    for (QualType T : OldParams) {
+      if (const PointerType *PT = T->getAs<PointerType>())
+        NewParams.push_back(Context.getPointerType(
+              Context.getAddrSpaceQualType(PT->getPointeeType(), 200)));
+      else
+        NewParams.push_back(T);
+    }
+    QualType RetTy = FPT->getReturnType();
+    if (const PointerType *PT = RetTy->getAs<PointerType>())
+      RetTy = Context.getPointerType(Context.getAddrSpaceQualType(
+            PT->getPointeeType(), 200));
+    NewFD->setType(Context.getFunctionType(RetTy, NewParams,
+          FPT->getExtProtoInfo()));
+  }
+
   QualType RetType = NewFD->getReturnType();
 
   if (CheriMethodSuffixAttr *Attr = NewFD->getAttr<CheriMethodSuffixAttr>()) {

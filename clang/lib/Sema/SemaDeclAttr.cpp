@@ -4797,6 +4797,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_CheriMethodSuffix:
     handleCheriMethodSuffix(S, D, Attr);
     break;
+  case AttributeList::AT_PointerInterpretationCaps:
+    handleSimpleAttribute<PointerInterpretationCapsAttr>(S, D, Attr);
+    break;
   case AttributeList::AT_OpenCLKernel:
     handleSimpleAttribute<OpenCLKernelAttr>(S, D, Attr);
     break;
