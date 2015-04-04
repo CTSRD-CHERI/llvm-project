@@ -1868,6 +1868,9 @@ def int_mips_cap_type_check :
   GCCBuiltin<"__builtin_memcap_type_check">,
   Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty], []>;
 
+def int_mips_stack_cap_get :
+  GCCBuiltin<"__builtin_memcap_stack_get">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
 def int_mips_c0_get :
   GCCBuiltinAlias<"__builtin_cheri_get_global_data_cap">,
   GCCBuiltin<"__builtin_memcap_global_data_get">,

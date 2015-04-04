@@ -442,6 +442,7 @@ def : Pat<(int_mips_kr2c_get), (CIncOffset C28, ZERO_64)>;
 def : Pat<(int_mips_kcc_get), (CIncOffset C29, ZERO_64)>;
 def : Pat<(int_mips_kdc_get), (CIncOffset C30, ZERO_64)>;
 def : Pat<(int_mips_epcc_get), (CIncOffset C31, ZERO_64)>;
+def : Pat<(int_mips_stack_cap_get), (CIncOffset C11, ZERO_64)>;
 
 def : Pat<(int_mips_cap_base_increment CheriOpnd:$cb, GPR64Opnd:$rd), (CIncBase $cb, $rd)>;
 def : Pat<(int_mips_stack_to_cap GPR64Opnd:$addr), (CFromPtr C11, $addr)>;
