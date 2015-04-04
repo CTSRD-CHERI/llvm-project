@@ -3620,7 +3620,6 @@ void SelectionDAGBuilder::visitStore(const StoreInst &I) {
   SDValue Root = getRoot();
   SmallVector<SDValue, 4> Chains(std::min(unsigned(MaxParallelChains),
                                           NumValues));
-  EVT PtrVT = Ptr.getValueType();
   bool isVolatile = I.isVolatile();
   bool isNonTemporal = I.getMetadata(LLVMContext::MD_nontemporal) != nullptr;
   unsigned Alignment = I.getAlignment();
@@ -3638,8 +3637,8 @@ void SelectionDAGBuilder::visitStore(const StoreInst &I) {
       ChainI = 0;
     }
     // FIXME:
-    SDValue Add = Offsets[i] ? DAG.getNode(ISD::ADD, getCurSDLoc(), PtrVT, Ptr,
-                              DAG.getConstant(Offsets[i], PtrVT)) : Ptr;
+    SDValue Add = Offsets[i] ? DAG.getPointerAdd(getCurSDLoc(), Ptr,
+                                                 Offsets[i]) : Ptr;
     SDValue St = DAG.getStore(Root, getCurSDLoc(),
                               SDValue(Src.getNode(), Src.getResNo() + i),
                               Add, MachinePointerInfo(PtrV, Offsets[i]),
