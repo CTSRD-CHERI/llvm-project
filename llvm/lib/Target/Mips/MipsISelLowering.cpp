@@ -1881,9 +1881,9 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     if (CapAddr->getOpcode() == ISD::ADDRSPACECAST)
       CapAddr = CapAddr->getOperand(0);
     else
-      CapAddr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain,
+      CapAddr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR,
           CapAddr);
-    FI = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, FI);
+    FI = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, FI);
     return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV), false,
         false, 0);
   }
@@ -2656,7 +2656,7 @@ MipsTargetLowering::passArgOnStack(SDValue StackPtr, unsigned Offset,
     SDValue PtrOff = DAG.getNode(ISD::ADD, DL, getPointerTy(), StackPtr,
                                  DAG.getIntPtrConstant(Offset));
     if (ABI.IsCheriSandbox()) {
-      PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, PtrOff);
+      PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
     }
     return DAG.getStore(Chain, DL, Arg, PtrOff, MachinePointerInfo(), false,
                         false, 0);
@@ -2910,7 +2910,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if ((FirstOffset != -1) && ABI.IsCheriSandbox()) {
     SDValue PtrOff = DAG.getNode(ISD::ADD, DL, getPointerTy(), StackPtr,
                                  DAG.getIntPtrConstant(FirstOffset));
-    PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, Chain, PtrOff);
+    PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
     PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
         DAG.getConstant(Intrinsic::mips_cap_length_set, MVT::i32), PtrOff,
         DAG.getIntPtrConstant(LastOffset));
