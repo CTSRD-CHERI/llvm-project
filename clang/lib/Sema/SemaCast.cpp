@@ -1715,6 +1715,7 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
                                   const Expr *SrcExpr, QualType DestType,
                                   Sema &Self) {
   QualType SrcType = SrcExpr->getType();
+  unsigned AS = DestType->getPointeeType().getAddressSpace();
 
   // Not warning on reinterpret_cast, boolean, constant expressions, etc
   // are not explicit design choices, but consistent with GCC's behavior.
@@ -1723,7 +1724,7 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
       && !SrcType->isBooleanType()
       && !SrcType->isEnumeralType()
       && !SrcExpr->isIntegerConstantExpr(Self.Context)
-      && Self.Context.getTypeSize(DestType) >
+      && Self.Context.getTargetInfo().getPointerRange(AS) >
          Self.Context.getTypeSize(SrcType)) {
     // Separate between casts to void* and non-void* pointers.
     // Some APIs use (abuse) void* for something like a user context,

@@ -6294,6 +6294,9 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
   virtual uint64_t getPointerAlignV(unsigned AddrSpace) const {
     return (AddrSpace == 200) ? CapSize : PointerAlign;
   }
+  uint64_t getPointerRangeV(unsigned) const {
+    return 64;
+  }
 
   virtual bool SupportsCapabilities() const { return true; }
 

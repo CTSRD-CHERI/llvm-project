@@ -271,6 +271,12 @@ public:
   uint64_t getPointerWidth(unsigned AddrSpace) const {
     return AddrSpace == 0 ? PointerWidth : getPointerWidthV(AddrSpace);
   }
+  /// \brief Returns the integer range for the pointer.  For architectures
+  /// where pointers are integers, this will be the same as the size.
+  uint64_t getPointerRange(unsigned AddrSpace) const {
+    // Eventually we may want to special case AS0.
+    return getPointerRangeV(AddrSpace);
+  }
   uint64_t getPointerAlign(unsigned AddrSpace) const {
     return AddrSpace == 0 ? PointerAlign : getPointerAlignV(AddrSpace);
   }
@@ -885,6 +891,9 @@ public:
 protected:
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
     return PointerWidth;
+  }
+  virtual uint64_t getPointerRangeV(unsigned AddrSpace) const {
+    return getPointerWidthV(AddrSpace);
   }
   virtual uint64_t getPointerAlignV(unsigned AddrSpace) const {
     return PointerAlign;
