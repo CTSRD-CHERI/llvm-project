@@ -3359,11 +3359,11 @@ MipsSETargetLowering::emitCapSelect(MachineInstr *MI,
 
   BuildMI(BB, dl, TII->get(Mips::BNE64))
     .addReg(MI->getOperand(1).getReg()).addReg(Mips::ZERO_64).addMBB(sinkMBB);
-  BuildMI(BB, dl, TII->get(Mips::CIncOffset))
+  BuildMI(BB, dl, TII->get(Mips::CIncBase))
     .addReg(MI->getOperand(0).getReg())
     .addReg(MI->getOperand(2).getReg())
     .addReg(Mips::ZERO_64);
-  BuildMI(falseMBB, dl, TII->get(Mips::CIncOffset))
+  BuildMI(falseMBB, dl, TII->get(Mips::CIncBase))
     .addReg(MI->getOperand(0).getReg())
     .addReg(MI->getOperand(3).getReg())
     .addReg(Mips::ZERO_64);

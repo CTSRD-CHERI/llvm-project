@@ -29,16 +29,16 @@
 # Check for correct encoding of explicit set / get default and deprecated
 # direct access to C0
 
-# CHECK: cmove	$c0, $c1
-# CHECK: encoding: [0x49,0xa0,0x08,0x00]
+# CHECK: csetdefault	$c1
+# CHECK: encoding: [0x48,0x80,0x08,0x02]
 	CSetDefault	$c1
-# CHECK: cmove	$c1, $c0
-# CHECK: encoding: [0x49,0xa1,0x00,0x00]
+# CHECK: cgetdefault	$c1
+# CHECK: encoding: [0x48,0x81,0x00,0x02]
 	CGetDefault	$c1
 # WARN: warning: Direct access to c0 is deprecated.
 # WARN-NEXT: CIncBase $c0, $c1, $0
 # WARN-NEXT:           ^
-# CHECK: cincbase	$c0, $c1, $zero
+# CHECK: csetdefault	 $c1
 # CHECK: encoding: [0x48,0x80,0x08,0x02]
 	CIncBase	$c0, $c1, $0
 
