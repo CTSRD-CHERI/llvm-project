@@ -2444,10 +2444,9 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Arg
       llvm::sys::fs::exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
   else if (Triple.getArch() == llvm::Triple::cheri &&
-      tools::mips::hasMipsAbiArg(Args, "sandbox")) {
+      tools::mips::hasMipsAbiArg(Args, "sandbox"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
-    getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
-  } else
+  else
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
 }
 
