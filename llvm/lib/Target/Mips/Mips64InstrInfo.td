@@ -421,7 +421,7 @@ def VMULU : ArithLogicR<"vmulu", GPR64Opnd, 0, II_DMUL>,
 }
 
 /// Move between CPU and coprocessor registers
-let DecoderNamespace = "Mips64", Predicates = [HasMips64] in {
+let DecoderNamespace = "Mips64", Predicates = [IsGP64bit] in {
 def DMFC0 : MFC3OP<"dmfc0", GPR64Opnd>, MFC3OP_FM<0x10, 1>;
 def DMTC0 : MFC3OP<"dmtc0", GPR64Opnd>, MFC3OP_FM<0x10, 5>, ISA_MIPS3;
 def DMFC2 : MFC3OP<"dmfc2", GPR64Opnd>, MFC3OP_FM<0x12, 1>, ISA_MIPS3;
