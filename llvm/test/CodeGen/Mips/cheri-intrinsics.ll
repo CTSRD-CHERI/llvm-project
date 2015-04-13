@@ -68,12 +68,3 @@ entry:
 
 declare i64 @llvm.mips.cap.type.get(i8 addrspace(200)*) nounwind readnone
 
-; CHECK-LABEL: setType
-define i8 addrspace(200)* @setType(i8 addrspace(200)* %c, i64 %type) nounwind readnone {
-entry:
-  ; CHECK: csettype
-  %0 = tail call i8 addrspace(200)* @llvm.mips.cap.type.set(i8 addrspace(200)* %c, i64 %type)
-  ret i8 addrspace(200)* %0
-}
-
-declare i8 addrspace(200)* @llvm.mips.cap.type.set(i8 addrspace(200)*, i64) nounwind readnone

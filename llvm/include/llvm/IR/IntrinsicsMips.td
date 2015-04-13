@@ -1807,12 +1807,6 @@ def int_mips_cap_perms_get :
   Intrinsic<[llvm_i64_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
-def int_mips_cap_type_set :
-  GCCBuiltinAlias<"__builtin_cheri_set_cap_type">,
-  GCCBuiltin<"__builtin_memcap_type_set">,
-  Intrinsic<[llvm_fatptr_ty],
-            [llvm_fatptr_ty, llvm_i64_ty],
-            [IntrNoMem]>;
 def int_mips_cap_type_get :
   GCCBuiltinAlias<"__builtin_cheri_get_cap_type">,
   GCCBuiltin<"__builtin_memcap_type_get">,

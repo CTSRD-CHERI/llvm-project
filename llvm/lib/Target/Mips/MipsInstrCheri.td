@@ -164,9 +164,6 @@ def CGetPerm : CheriFmtGet<0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgetperm $rd, $cb",
                            [(set GPR64Opnd:$rd, (int_mips_cap_perms_get CheriOpnd:$cb))]>;
 
-def CSetType : CheriFmtSet<1, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
-                           "csettype\t$cd, $cb, $rt",
-                           [(set CheriOpnd:$cd, (int_mips_cap_type_set CheriOpnd:$cb, GPR64Opnd:$rt))]>;
 
 def CGetType : CheriFmtGet<1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgettype $rd, $cb",
