@@ -149,9 +149,8 @@ def CGetTag : CheriFmtGet<5, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
 
 def CSetLength : CheriFmtSet<3, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
                              "csetlen\t$cd, $cb, $rt",
-                             [(set CheriOpnd:$cd, (int_mips_cap_length_set CheriOpnd:$cb, GPR64Opnd:$rt))]> {
-  let hasSideEffects = 1;
-}
+                             [(set CheriOpnd:$cd, (int_mips_cap_length_set CheriOpnd:$cb, GPR64Opnd:$rt))]>;
+
 
 def CGetLength : CheriFmtGet<3, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                              "cgetlen $rd, $cb",
