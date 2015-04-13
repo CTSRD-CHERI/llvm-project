@@ -11,7 +11,6 @@ long long testDeprecated(__capability void* foo)
 	// CHECK: call i64 @llvm.mips.cap.unsealed.get
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.length.set
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.perms.and
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.type.set
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.seal
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.unseal
 	// CHECK: call void @llvm.mips.cap.cause.set(i64 42)
@@ -25,7 +24,6 @@ long long testDeprecated(__capability void* foo)
 	x &= __builtin_cheri_get_cap_unsealed(foo);
 	results[0] = __builtin_cheri_set_cap_length(foo, 42);
 	results[1] = __builtin_cheri_and_cap_perms(foo, 12);
-	results[2] = __builtin_cheri_set_cap_type(foo, 0x23);
 	results[4] = __builtin_cheri_seal_cap(foo, foo);
 	results[5] = __builtin_cheri_unseal_cap(foo, foo);
 	__builtin_cheri_set_cause(42);
@@ -43,7 +41,6 @@ long long test(__capability void* foo)
 	// CHECK: call i64 @llvm.mips.cap.unsealed.get
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.length.set
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.perms.and
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.type.set
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.seal
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.unseal
 	// CHECK: call void @llvm.mips.cap.cause.set(i64 42)
@@ -57,7 +54,6 @@ long long test(__capability void* foo)
 	x &= __builtin_memcap_unsealed_get(foo);
 	results[0] = __builtin_memcap_length_set(foo, 42);
 	results[1] = __builtin_memcap_perms_and(foo, 12);
-	results[2] = __builtin_memcap_type_set(foo, 0x23);
 	results[4] = __builtin_memcap_seal(foo, foo);
 	results[5] = __builtin_memcap_unseal(foo, foo);
 	__builtin_cheri_cause_set(42);

@@ -69,7 +69,7 @@ typedef __INTPTR_TYPE__ uintcap_t;
 __MEMCAP_ACCESSOR(length, __SIZE_TYPE__, _set, _get, __SIZE_MAX__)
 __MEMCAP_ACCESSOR(base, __SIZE_TYPE__, _increment, _get, __SIZE_MAX__)
 __MEMCAP_ACCESSOR(offset, __SIZE_TYPE__, _set, _get, __SIZE_MAX__)
-__MEMCAP_ACCESSOR(type, memcap_type_t, _set, _get, 0)
+__MEMCAP_GET(type, memcap_type_t, _get, 0)
 __MEMCAP_ACCESSOR(perms, memcap_perms_t, _and, _get, 0)
 __MEMCAP_GET(tag, _Bool, _get, 0)
 __MEMCAP_GET(unsealed, _Bool, _get, 0)

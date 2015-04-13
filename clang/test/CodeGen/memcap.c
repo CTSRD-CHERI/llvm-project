@@ -20,8 +20,6 @@
 // PTRS: ret i8* %__cap
 // PTRS: define i32 @memcap_type_get(i8* nocapture readnone %__cap)
 // PTRS: ret i32 0
-// PTRS: define i8* @memcap_type_set(i8* readnone %__cap, i32  %__val)
-// PTRS: ret i8* %__cap
 // PTRS: define  zeroext i16 @memcap_perms_get(i8* nocapture readnone %__cap)
 // PTRS: ret i16 0
 // PTRS: define i8* @memcap_perms_and(i8* readnone %__cap, i16 zeroext  %__val)
@@ -64,8 +62,6 @@
 // CAPS: call i8 addrspace(200)* @llvm.mips.cap.offset.set(i8 addrspace(200)* %__cap, i64 %__val)
 // CAPS: define i32 @memcap_type_get(i8 addrspace(200)* %__cap)
 // CAPS: call i64 @llvm.mips.cap.type.get(i8 addrspace(200)* %__cap)
-// CAPS: define i8 addrspace(200)* @memcap_type_set(i8 addrspace(200)* readnone %__cap, i32 zeroext %__val)
-// CAPS: call i8 addrspace(200)* @llvm.mips.cap.type.set(i8 addrspace(200)* %__cap, i64 %conv)
 // CAPS: define zeroext i16 @memcap_perms_get(i8 addrspace(200)* %__cap)
 // CAPS: call i64 @llvm.mips.cap.perms.get(i8 addrspace(200)* %__cap)
 // CAPS: define i8 addrspace(200)* @memcap_perms_and(i8 addrspace(200)* readnone %__cap, i16 zeroext %__val)
