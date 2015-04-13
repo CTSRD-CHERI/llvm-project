@@ -2908,11 +2908,13 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                          Chain, Arg, DL, IsTailCall, DAG));
   }
   if ((FirstOffset != -1) && ABI.IsCheriSandbox()) {
+    Intrinsic::ID SetLength = Subtarget.isCheri128() ?
+      Intrinsic::mips_cap_bounds_set : Intrinsic::mips_cap_length_set;
     SDValue PtrOff = DAG.getNode(ISD::ADD, DL, getPointerTy(), StackPtr,
                                  DAG.getIntPtrConstant(FirstOffset));
     PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
     PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
-        DAG.getConstant(Intrinsic::mips_cap_length_set, MVT::i32), PtrOff,
+        DAG.getConstant(SetLength, MVT::i64), PtrOff,
         DAG.getIntPtrConstant(LastOffset));
     RegsToPass.push_back(std::make_pair(Mips::C12, PtrOff));
   }
