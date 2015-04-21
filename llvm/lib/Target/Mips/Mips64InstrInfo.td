@@ -212,11 +212,24 @@ def SCD : SCBase<"scd", GPR64Opnd>, LW_FM<0x3c>, ISA_MIPS3_NOT_32R6_64R6;
 let isCodeGenOnly = 1 in {
   def JR64   : IndirectBranch<"jr", GPR64Opnd>, MTLO_FM<8>;
   def BEQ64  : CBranch<"beq", brtarget, seteq, GPR64Opnd>, BEQ_FM<4>;
+  def BEQL64 : CBranch<"beql", brtarget, seteq, GPR64Opnd, 0>,
+               BEQ_FM<20>, ISA_MIPS2_NOT_32R6_64R6;
   def BNE64  : CBranch<"bne", brtarget, setne, GPR64Opnd>, BEQ_FM<5>;
+  def BNEL64 : CBranch<"bnel", brtarget, setne, GPR64Opnd, 0>,
+               BEQ_FM<21>, ISA_MIPS2_NOT_32R6_64R6;
   def BGEZ64 : CBranchZero<"bgez", brtarget, setge, GPR64Opnd>, BGEZ_FM<1, 1>;
+  def BGEZL64: CBranchZero<"bgezl", brtarget, setge, GPR64Opnd, 0>,
+               BGEZ_FM<1, 3>, ISA_MIPS2_NOT_32R6_64R6;
+
   def BGTZ64 : CBranchZero<"bgtz", brtarget, setgt, GPR64Opnd>, BGEZ_FM<7, 0>;
+  def BGTZL64: CBranchZero<"bgtzl", brtarget, setgt, GPR64Opnd, 0>,
+               BGEZ_FM<23, 0>, ISA_MIPS2_NOT_32R6_64R6;
   def BLEZ64 : CBranchZero<"blez", brtarget, setle, GPR64Opnd>, BGEZ_FM<6, 0>;
+  def BLEZL64: CBranchZero<"blezl", brtarget, setle, GPR64Opnd, 0>,
+               BGEZ_FM<22, 0>, ISA_MIPS2_NOT_32R6_64R6;
   def BLTZ64 : CBranchZero<"bltz", brtarget, setlt, GPR64Opnd>, BGEZ_FM<1, 0>;
+  def BLTZL64: CBranchZero<"bltzl", brtarget, setlt, GPR64Opnd, 0>,
+               BGEZ_FM<1, 2>, ISA_MIPS2_NOT_32R6_64R6;
   def JALR64 : JumpLinkReg<"jalr", GPR64Opnd>, JALR_FM;
   def JALR64Pseudo : JumpLinkRegPseudo<GPR64Opnd, JALR, RA, GPR32Opnd>;
   def TAILCALL64_R : TailCallReg<GPR64Opnd, JR, GPR32Opnd>;
@@ -589,6 +602,15 @@ def : MipsInstAlias<"dsrl $rd, $rt, $rs",
                     ISA_MIPS3;
 def LoadAddr64Reg : LoadAddressFromReg32<"dla", mem, GPR64Opnd>;
 def LoadAddr64Imm : LoadAddressFromImm32<"dla", uimm5, GPR64Opnd>;
+
+def : MipsInstAlias<"bnez $rs,$offset",
+                    (BNE64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
+def : MipsInstAlias<"bnezl $rs,$offset",
+                    (BNEL64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
+def : MipsInstAlias<"beqz $rs,$offset",
+                    (BEQ64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
+def : MipsInstAlias<"beqzl $rs,$offset",
+                    (BEQL64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
 
 // Two operand (implicit 0 selector) versions:
 def : MipsInstAlias<"dmfc0 $rt, $rd", (DMFC0 GPR64Opnd:$rt, GPR64Opnd:$rd, 0), 0>;
