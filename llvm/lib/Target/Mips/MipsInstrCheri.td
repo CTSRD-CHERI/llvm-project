@@ -164,9 +164,9 @@ def CGetPerm : CheriFmtGet<0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgetperm $rd, $cb",
                            [(set GPR64Opnd:$rd, (int_mips_cap_perms_get CheriOpnd:$cb))]>;
 
-def CSetBounds : CheriFmtSet<1, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
-                           "csetbounds\t$cd, $cb, $rt",
-                           [(set CheriOpnd:$cd, (int_mips_cap_bounds_set CheriOpnd:$cb, GPR64Opnd:$rt))]>;
+def CSetBounds : CheriFmtRegs<1, 0, (outs CheriOpnd:$r0), (ins CheriOpnd:$r1, GPR64Opnd:$r2),
+                           "csetbounds\t$r0, $r1, $r2",
+                           [(set CheriOpnd:$r0, (int_mips_cap_bounds_set CheriOpnd:$r1, GPR64Opnd:$r2))]>;
 
 def CGetType : CheriFmtGet<1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgettype $rd, $cb",
