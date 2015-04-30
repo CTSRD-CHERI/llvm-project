@@ -3858,7 +3858,10 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
     unsigned Align = std::min(SrcAlign, DstAlign);
     switch (Align) {
       case 32: return MVT::iFATPTR;
-      case 16: case 8: return MVT::i64;
+      case 16:
+        if (Subtarget.isCheri128())
+          return MVT::iFATPTR;
+      case 8: return MVT::i64;
       case 4: return MVT::i32;
       default: return MVT::i8;
     }
