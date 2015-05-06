@@ -6288,6 +6288,9 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
       Desc += "-A200";
     DescriptionString = Desc.c_str();
   }
+  unsigned getIntCapWidth() const override { return Cheri128 ? 128 : 256; }
+  unsigned getIntCapAlign() const override { return Cheri128 ? 128 : 256; }
+
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
     return (AddrSpace == 200) ? CapSize : PointerWidth;
   }

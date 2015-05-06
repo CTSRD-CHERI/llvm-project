@@ -1603,8 +1603,8 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       break;
     case BuiltinType::IntCap:
     case BuiltinType::UIntCap:
-      Width = 256;
-      Align = 256;
+      Width = Target->getIntCapWidth();
+      Align = Target->getIntCapAlign();
       break;
     case BuiltinType::Int128:
     case BuiltinType::UInt128:

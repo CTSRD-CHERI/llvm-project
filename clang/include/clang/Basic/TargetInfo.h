@@ -303,6 +303,11 @@ public:
   unsigned getIntWidth() const { return IntWidth; }
   unsigned getIntAlign() const { return IntAlign; }
 
+  /// getIntWidth/Align - Return the size of '__intcap_t' and '__uintcap_t' for
+  /// this target, in bits.
+  virtual unsigned getIntCapWidth() const { return LongWidth; }
+  virtual unsigned getIntCapAlign() const { return LongAlign; }
+
   /// getLongWidth/Align - Return the size of 'signed long' and 'unsigned long'
   /// for this target, in bits.
   unsigned getLongWidth() const { return LongWidth; }
