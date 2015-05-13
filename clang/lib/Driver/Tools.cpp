@@ -1870,6 +1870,7 @@ static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+  case llvm::Triple::cheri:
     getMIPSTargetFeatures(D, Triple, Args, Features);
     break;
 
