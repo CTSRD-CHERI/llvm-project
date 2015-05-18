@@ -391,6 +391,9 @@ multiclass StoreViaCap0<Instruction Op, RegisterOperand RC, PatFrag storeType> {
 defm CAPSTORE8      : StoreViaCap<0, 0, "csb", GPR64Opnd, truncstorei8>;
 defm CAPSTORE16     : StoreViaCap<1, 0, "csh", GPR64Opnd, truncstorei16>;
 defm CAPSTORE32     : StoreViaCap<2, 0, "csw", GPR32Opnd, store>;
+let isCodeGenOnly=1 in {
+  defm CAPSTORE3264     : StoreViaCap<2, 0, "csw", GPR64Opnd, truncstorei32>;
+}
 defm CAPSTORE64     : StoreViaCap<3, 0, "csd", GPR64Opnd, store>;
 //def : Pat<(truncstorei8 (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd: $rt), (i64 immSExt8:$offset)),
           
@@ -410,6 +413,7 @@ def : Pat<(MipsSTC i64:$addr), (CIncOffset C11, $addr)>;
 defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR64Opnd, truncstorei8>;
 defm CAP0STORE16    : StoreViaCap0<CAPSTORE16, GPR64Opnd, truncstorei16>;
 defm CAP0STORE32    : StoreViaCap0<CAPSTORE32, GPR32Opnd, store>;
+defm CAP0STORE3264  : StoreViaCap0<CAPSTORE3264, GPR64Opnd, truncstorei32>;
 defm CAP0STORE64    : StoreViaCap0<CAPSTORE64, GPR64Opnd, store>;
 
 class CheriFPUMemPseudo<dag outs, dag ins, string asmstr,
