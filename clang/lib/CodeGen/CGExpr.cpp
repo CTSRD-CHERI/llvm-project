@@ -2678,7 +2678,7 @@ LValue CodeGenFunction::EmitLValueForField(LValue base,
     // Get the access type.
     llvm::Type *PtrTy = llvm::Type::getIntNPtrTy(
       getLLVMContext(), Info.StorageSize,
-      CGM.getContext().getTargetAddressSpace(base.getType()));
+      Addr->getType()->getPointerAddressSpace());
     if (Addr->getType() != PtrTy)
       Addr = Builder.CreateBitCast(Addr, PtrTy);
 
