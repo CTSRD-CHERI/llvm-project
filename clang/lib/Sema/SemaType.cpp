@@ -2678,6 +2678,10 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         D.setInvalidType(true);
         // Build the type anyway.
       }
+      // Make sure that array elements are in the correct AS so that array to
+      // pointer decay works correctly.
+      if ((T.getAddressSpace() == 0) && (Context.getDefaultAS() != 0))
+        T = Context.getAddrSpaceQualType(T, Context.getDefaultAS());
       DeclaratorChunk::ArrayTypeInfo &ATI = DeclType.Arr;
       Expr *ArraySize = static_cast<Expr*>(ATI.NumElts);
       ArrayType::ArraySizeModifier ASM;
