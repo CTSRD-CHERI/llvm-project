@@ -10204,7 +10204,8 @@ ParmVarDecl *Sema::CheckParameter(DeclContext *DC, SourceLocation StartLoc,
   // duration shall not be qualified by an address-space qualifier."
   // Since all parameters have automatic store duration, they can not have
   // an address space.
-  if (T.getAddressSpace() != 0) {
+  if ((T.getAddressSpace() != 0) &&
+      (T.getAddressSpace() != Context.getDefaultAS())) {
     // OpenCL allows function arguments declared to be an array of a type
     // to be qualified with an address space.
     if (!(getLangOpts().OpenCL && T->isArrayType())) {
