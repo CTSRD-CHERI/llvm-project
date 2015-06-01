@@ -4045,6 +4045,13 @@ static bool SwitchToLookupTable(SwitchInst *SI, IRBuilder<> &Builder,
   if (!TTI.shouldBuildLookupTables())
     return false;
 
+  // FIXME: This is a work-around for the lack of linker support in CHERI: We
+  // can't construct jump tables if we're using the pure-cap ABI because we
+  // don't have a way of statically generating all of the constant GEPs to jump
+  // table entries.
+  if (DL.getAllocaAS() != 0)
+    return false;
+
   // FIXME: If the switch is too sparse for a lookup table, perhaps we could
   // split off a dense part and build a lookup table for that.
 
