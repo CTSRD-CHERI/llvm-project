@@ -26,7 +26,7 @@
 // PTRS: ret i8* %__cap
 // PTRS: define zeroext i1 @memcap_tag_get(i8* nocapture readnone %__cap)
 // PTRS: ret i1 false
-// PTRS: define zeroext i1 @memcap_unsealed_get(i8* nocapture readnone %__cap)
+// PTRS: define zeroext i1 @memcap_sealed_get(i8* nocapture readnone %__cap)
 // PTRS: ret i1 false
 // PTRS: define i8* @memcap_offset_increment(i8* readnone %__cap, i32 %__offset)
 // PTRS: %add.ptr = getelementptr inbounds i8, i8* %__cap, i32 %__offset
@@ -68,8 +68,8 @@
 // CAPS: call i8 addrspace(200)* @llvm.mips.cap.perms.and(i8 addrspace(200)* %__cap, i64 %conv)
 // CAPS: define zeroext i1 @memcap_tag_get(i8 addrspace(200)* readnone %__cap)
 // CAPS: call i64 @llvm.mips.cap.tag.get(i8 addrspace(200)* %__cap)
-// CAPS: define zeroext i1 @memcap_unsealed_get(i8 addrspace(200)* readnone %__cap)
-// CAPS: call i64 @llvm.mips.cap.unsealed.get(i8 addrspace(200)* %__cap)
+// CAPS: define zeroext i1 @memcap_sealed_get(i8 addrspace(200)* readnone %__cap)
+// CAPS: call i64 @llvm.mips.cap.sealed.get(i8 addrspace(200)* %__cap)
 // CAPS: define i8 addrspace(200)* @memcap_offset_increment(i8 addrspace(200)* readnone %__cap, i64 signext %__offset)
 // CAPS: call i8 addrspace(200)* @llvm.mips.cap.offset.increment(i8 addrspace(200)* %__cap, i64 %__offset)
 // CAPS: define i8 addrspace(200)* @memcap_base_only_increment(i8 addrspace(200)* readnone %__cap, i64 signext %__offset)
