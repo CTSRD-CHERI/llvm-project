@@ -7122,8 +7122,10 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
       }
 
       // The comparison here must be unsigned, and performed with the same
-      // width as the pointer.
-      unsigned PtrSize = Info.Ctx.getTypeSize(LHSTy);
+      // width as a pointer offset.
+      auto &TI = Info.Ctx.getTargetInfo();
+      unsigned AS = LHSTy->getPointeeType().getAddressSpace();
+      unsigned PtrSize = TI.getTypeWidth(TI.getPtrDiffType(AS));
       uint64_t CompareLHS = LHSOffset.getQuantity();
       uint64_t CompareRHS = RHSOffset.getQuantity();
       assert(PtrSize <= 64 && "Unexpected pointer width");
