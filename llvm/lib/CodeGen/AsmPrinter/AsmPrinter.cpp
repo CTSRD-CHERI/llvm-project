@@ -1681,7 +1681,7 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV) {
     const DataLayout &DL = *TM.getDataLayout();
 
     // Generate a symbolic expression for the byte address
-    APInt OffsetAI(DL.getPointerTypeSizeInBits(CE->getType()), 0);
+    APInt OffsetAI(DL.getPointerBaseSizeInBits(CE->getType()), 0);
     cast<GEPOperator>(CE)->accumulateConstantOffset(DL, OffsetAI);
 
     const MCExpr *Base = lowerConstant(CE->getOperand(0));
