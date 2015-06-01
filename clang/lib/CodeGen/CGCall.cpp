@@ -1056,7 +1056,8 @@ static void CreateCoercedStore(llvm::Value *Src,
     // to that information.
     llvm::Value *Tmp = CGF.CreateTempAlloca(SrcTy);
     CGF.Builder.CreateStore(Src, Tmp);
-    llvm::Type *I8PtrTy = CGF.Builder.getInt8PtrTy();
+    llvm::Type *I8PtrTy =
+      CGF.Builder.getInt8PtrTy(CGF.CGM.getContext().getDefaultAS());
     llvm::Value *Casted = CGF.Builder.CreateBitCast(Tmp, I8PtrTy);
     llvm::Value *DstCasted = CGF.Builder.CreateBitCast(DstPtr, I8PtrTy);
     // FIXME: Use better alignment.
