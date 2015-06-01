@@ -18,9 +18,9 @@
 # CHECK: cgettag	$12, $c1
 # CHECK: encoding: [0x48,0x0c,0x08,0x05]
 	cgettag		$t0, $c1
-# CHECK: cgetunsealed	$12, $c1
+# CHECK: cgetsealed	$12, $c1
 # CHECK: encoding: [0x48,0x0c,0x08,0x06]
-	cgetunsealed	$t0, $c1
+	cgetsealed	$t0, $c1
 # CHECK: cgetpcc	$c1
 # CHECK: encoding: [0x48,0x00,0x08,0x07]
 	cgetpcc		$c1

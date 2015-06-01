@@ -181,8 +181,8 @@ def CUnseal   : CheriFmt3Caps<0x03, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs, Ch
                               [(set CheriOpnd: $cd, (int_mips_cap_unseal CheriOpnd:$cs, CheriOpnd:$ct))]>;
 
 def CGetUnsealed : CheriFmtGet<6, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
-                          "cgetunsealed\t$rd, $cb",
-                          [(set GPR64Opnd:$rd, (int_mips_cap_unsealed_get CheriOpnd:$cb))]>;
+                          "cgetsealed\t$rd, $cb",
+                          [(set GPR64Opnd:$rd, (int_mips_cap_sealed_get CheriOpnd:$cb))]>;
 def CGetPCC : CheriFmtGet<7, (outs CheriOpnd:$cb), (ins),
                           "cgetpcc\t${cb}",
                           [(set CheriOpnd:$cb, (int_mips_pcc_get))]>

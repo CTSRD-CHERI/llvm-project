@@ -66,8 +66,8 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   %r38 = and i64 %r36, %r37
   ; This comes later, but the instruction scheduler puts it in here to avoid a
   ; spill
-  ; CHECK: cgetunsealed
-  %r39 = call i64 @llvm.mips.cap.unsealed.get(i8 addrspace(200)* %r16)
+  ; CHECK: cgetsealed
+  %r39 = call i64 @llvm.mips.cap.sealed.get(i8 addrspace(200)* %r16)
   %r40 = trunc i64 %r39 to i1
   %r41 = zext i1 %r40 to i64
   %r42 = and i64 %r41, %r38
@@ -89,7 +89,7 @@ declare i64 @llvm.mips.cap.perms.get(i8 addrspace(200)*) #1
 declare i64 @llvm.mips.cap.type.get(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.mips.cap.unsealed.get(i8 addrspace(200)*) #1
+declare i64 @llvm.mips.cap.sealed.get(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
 declare i64 @llvm.mips.cap.tag.get(i8 addrspace(200)*) #1

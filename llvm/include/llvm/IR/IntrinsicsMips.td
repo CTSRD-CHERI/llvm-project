@@ -1824,9 +1824,9 @@ def int_mips_cap_tag_get  :
   Intrinsic<[llvm_i64_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
-def int_mips_cap_unsealed_get  :
-  GCCBuiltinAlias<"__builtin_cheri_get_cap_unsealed">,
-  GCCBuiltin<"__builtin_memcap_unsealed_get">,
+def int_mips_cap_sealed_get  :
+  GCCBuiltinAlias<"__builtin_cheri_get_cap_sealed">,
+  GCCBuiltin<"__builtin_memcap_sealed_get">,
   Intrinsic<[llvm_i64_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
