@@ -838,8 +838,7 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
 
           // Store the remaining ExtraWidth bits.
           IncrementSize = RoundWidth / 8;
-          Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                            DAG.getConstant(IncrementSize, Ptr.getValueType()));
+          Ptr = DAG.getPointerAdd(dl, Ptr, IncrementSize);
           Lo = DAG.getTruncStore(Chain, dl, Value, Ptr,
                               ST->getPointerInfo().getWithOffset(IncrementSize),
                                  ExtraVT, isVolatile, isNonTemporal,
