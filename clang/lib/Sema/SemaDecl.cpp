@@ -12352,8 +12352,10 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
 
   // TR 18037 does not allow fields to be declared with address spaces.
   if (T.getQualifiers().hasAddressSpace()) {
-    Diag(Loc, diag::err_field_with_address_space);
-    D.setInvalidType();
+    if (T.getAddressSpace() != Context.getDefaultAS()) {
+      Diag(Loc, diag::err_field_with_address_space);
+      D.setInvalidType();
+    }
   }
 
   // OpenCL 1.2 spec, s6.9 r:
