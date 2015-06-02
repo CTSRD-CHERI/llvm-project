@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -triple cheri-unknown-freebsd %s -verify
+// RUN: %clang_cc1 "-target-abi" "sandbox" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
 // expected-no-diagnostics
 void
 foo(void)
