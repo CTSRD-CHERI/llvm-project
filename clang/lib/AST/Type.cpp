@@ -955,10 +955,12 @@ bool QualType::isCapabilityType(ASTContext &Context) const {
     return BT->getKind() == BuiltinType::IntCap ||
            BT->getKind() == BuiltinType::UIntCap;
   const Type *T = CanonicalType.getTypePtr();
+  unsigned CapAS = Context.getTargetInfo().AddressSpaceForCapabilities();
   if (const PointerType *PT = dyn_cast<PointerType>(T)) {
-    int AS = PT->getPointeeType().getAddressSpace();
-    return AS == Context.getTargetInfo().AddressSpaceForCapabilities();
-  }
+    unsigned AS = PT->getPointeeType().getAddressSpace();
+    return AS == CapAS;
+  } else if (T->isArrayType())
+    return CanonicalType.getAddressSpace() == CapAS;
   return false;
 }
 
