@@ -1311,14 +1311,8 @@ Sema::ActOnGenericSelectionExpr(SourceLocation KeyLoc,
 
   TypeSourceInfo **Types = new TypeSourceInfo*[NumAssocs];
   for (unsigned i = 0; i < NumAssocs; ++i) {
-    if (ArgTypes[i]) {
+    if (ArgTypes[i])
       (void) GetTypeFromParser(ArgTypes[i], &Types[i]);
-      // Unqualified types should be in 
-      unsigned AS = Context.getDefaultAS();
-      if ((AS != 0) && (Types[i]->getType().getAddressSpace() == 0))
-        Types[i]->overrideType(
-            Context.getAddrSpaceQualType(Types[i]->getType(), AS));
-    }
     else
       Types[i] = nullptr;
   }
