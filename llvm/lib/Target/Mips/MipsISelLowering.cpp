@@ -1875,7 +1875,8 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     // assumption that allocas are all in AS0) be an address space cast of the
     // alloca to AS 0.  We need to extract the original operands.
     const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
-    SV = cast<AddrSpaceCastInst>(SV)->getOperand(0);
+    SV = SV->stripPointerCasts();
+    assert(SV->getType()->getPointerAddressSpace() == 200);
     SDValue Chain = Op.getOperand(0);
     SDValue CapAddr = Op.getOperand(1);
     if (CapAddr->getOpcode() == ISD::ADDRSPACECAST)
