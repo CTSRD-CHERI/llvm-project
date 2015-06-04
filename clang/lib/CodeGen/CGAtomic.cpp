@@ -930,10 +930,15 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E, llvm::Value *Dest) {
   llvm::Value *OrigDest = GetDest();
   Ptr = Builder.CreateBitCast(
       Ptr, ITy->getPointerTo(Ptr->getType()->getPointerAddressSpace()));
-  if (Val1) Val1 = Builder.CreateBitCast(Val1, ITy->getPointerTo());
-  if (Val2) Val2 = Builder.CreateBitCast(Val2, ITy->getPointerTo());
+  if (Val1)
+    Val1 = Builder.CreateBitCast(Val1,
+        ITy->getPointerTo(Val1->getType()->getPointerAddressSpace()));
+  if (Val2)
+    Val2 = Builder.CreateBitCast(Val2,
+        ITy->getPointerTo(Val2->getType()->getPointerAddressSpace()));
   if (Dest && !E->isCmpXChg())
-    Dest = Builder.CreateBitCast(Dest, ITy->getPointerTo());
+    Dest = Builder.CreateBitCast(Dest,
+        ITy->getPointerTo(Dest->getType()->getPointerAddressSpace()));
 
   if (isa<llvm::ConstantInt>(Order)) {
     int ord = cast<llvm::ConstantInt>(Order)->getZExtValue();

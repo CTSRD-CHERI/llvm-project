@@ -967,7 +967,8 @@ static llvm::Value *CreateCoercedLoad(llvm::Value *SrcPtr,
   // Otherwise do coercion through memory. This is stupid, but
   // simple.
   llvm::Value *Tmp = CGF.CreateTempAlloca(Ty);
-  llvm::Type *I8PtrTy = CGF.Builder.getInt8PtrTy();
+  llvm::Type *I8PtrTy =
+    CGF.Builder.getInt8PtrTy(CGF.CGM.getContext().getDefaultAS());
   llvm::Value *Casted = CGF.Builder.CreateBitCast(Tmp, I8PtrTy);
   llvm::Value *SrcCasted = CGF.Builder.CreateBitCast(SrcPtr, I8PtrTy);
   // FIXME: Use better alignment.
