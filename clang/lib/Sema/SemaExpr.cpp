@@ -1412,12 +1412,21 @@ Sema::CreateGenericSelectionExpr(SourceLocation KeyLoc,
 
   SmallVector<unsigned, 1> CompatIndices;
   unsigned DefaultIndex = -1U;
+  unsigned DefaultAS = Context.getDefaultAS();
   for (unsigned i = 0; i < NumAssocs; ++i) {
+    QualType ControllingType = ControllingExpr->getType();
     if (!Types[i])
       DefaultIndex = i;
-    else if (Context.typesAreCompatible(ControllingExpr->getType(),
+    else if (Context.typesAreCompatible(ControllingType,
                                         Types[i]->getType()))
       CompatIndices.push_back(i);
+    else if (ControllingType.getAddressSpace() == DefaultAS &&
+             Types[i]->getType().getAddressSpace() == 0) {
+      QualType ASTy = Context.getAddrSpaceQualType(Types[i]->getType(),
+              DefaultAS);
+      if (Context.typesAreCompatible(ControllingType, ASTy))
+        CompatIndices.push_back(i);
+    }
   }
 
   // C11 6.5.1.1p2 "The controlling expression of a generic selection shall have
