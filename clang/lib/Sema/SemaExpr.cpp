@@ -5038,6 +5038,12 @@ Sema::BuildCompoundLiteralExpr(SourceLocation LParenLoc, TypeSourceInfo *TInfo,
   // In C, compound literals are l-values for some reason.
   ExprValueKind VK = getLangOpts().CPlusPlus ? VK_RValue : VK_LValue;
 
+  unsigned AS = Context.getDefaultAS();
+  if ((AS != 0) && (literalType.getAddressSpace() == 0)) {
+    literalType = Context.getAddrSpaceQualType(literalType, AS);
+    TInfo->overrideType(literalType);
+  }
+
   return MaybeBindToTemporary(
            new (Context) CompoundLiteralExpr(LParenLoc, TInfo, literalType,
                                              VK, LiteralExpr, isFileScope));

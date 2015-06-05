@@ -6,3 +6,13 @@ foo(void)
 	int *b = (int[]){0,1,2};
 	int c[2] = {1,2};
 }
+
+int
+a(void *p);
+
+int
+b(void)
+{
+	return (a(&(int){1}));
+}
+
