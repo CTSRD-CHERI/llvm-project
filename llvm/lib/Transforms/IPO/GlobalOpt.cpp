@@ -2387,9 +2387,18 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
       DEBUG(dbgs() << "Found a CmpInst! Simplifying: " << *InstResult
             << "\n");
     } else if (CastInst *CI = dyn_cast<CastInst>(CurInst)) {
-      InstResult = ConstantExpr::getCast(CI->getOpcode(),
-                                         getVal(CI->getOperand(0)),
-                                         CI->getType());
+			// We aren't always able to use the cast kind of the instruction, as we
+			// may lose some address space qualifiers in getVal
+      auto CK = CI->getOpcode();
+      Constant *Src = getVal(CI->getOperand(0));
+      Type *DstTy = CI->getType();
+      if (CK == AddrSpaceCastInst::AddrSpaceCast || CK ==
+          AddrSpaceCastInst::BitCast) {
+        CK = (Src->getType()->getPointerAddressSpace() ==
+            DstTy->getPointerAddressSpace()) ? AddrSpaceCastInst::BitCast :
+          AddrSpaceCastInst::AddrSpaceCast;
+			}
+      InstResult = ConstantExpr::getCast(CK, Src, DstTy);
       DEBUG(dbgs() << "Found a Cast! Simplifying: " << *InstResult
             << "\n");
     } else if (SelectInst *SI = dyn_cast<SelectInst>(CurInst)) {
