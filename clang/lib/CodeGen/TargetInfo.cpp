@@ -5585,7 +5585,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     const QualType Ty = i->getType();
     const BuiltinType *BT = Ty->getAs<BuiltinType>();
 
-    if (Ty.isCapabilityType(getContext())) {
+    if (!Ty->isConstantArrayType() && Ty.isCapabilityType(getContext())) {
       LastOffset = Layout.getFieldOffset(idx) + CapSize;
       ArgList.push_back(CGT.ConvertType(Ty));
       continue;
