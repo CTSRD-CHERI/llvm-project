@@ -5584,8 +5584,12 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
        i != e; ++i, ++idx) {
     const QualType Ty = i->getType();
     const BuiltinType *BT = Ty->getAs<BuiltinType>();
+    uint64_t Offset = Layout.getFieldOffset(idx);
 
     if (!Ty->isConstantArrayType() && Ty.isCapabilityType(getContext())) {
+      // Add ((Offset - LastOffset) / 64) args of type i64.
+      for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
+        ArgList.push_back(I64);
       LastOffset = Layout.getFieldOffset(idx) + CapSize;
       ArgList.push_back(CGT.ConvertType(Ty));
       continue;
@@ -5602,7 +5606,6 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     if (!BT || BT->getKind() != BuiltinType::Double)
       continue;
 
-    uint64_t Offset = Layout.getFieldOffset(idx);
     if (Offset % 64) // Ignore doubles that are not aligned.
       continue;
 

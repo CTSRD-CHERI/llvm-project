@@ -18,3 +18,21 @@ void *f(void *a, struct thingy b)
 	render_char((struct thingy){1,{2,3,4,5,6}});
 	return render_char(b);
 }
+
+typedef struct heim_octet_string {
+	long length;
+	void *data;
+} heim_octet_string;
+
+// This is a bit ugly, as we're copying the struct padding in registers, but
+// that's probably needed for stable memcmpy anyway.  This won't be as bad on
+// CHERI128.
+// CHECK: declare void @h(i64 inreg, i64 inreg, i64 inreg, i64 inreg, i8 addrspace(200)* inreg)
+void h(heim_octet_string str);
+
+void g(void)
+{
+	char buf[42];
+	h((heim_octet_string){42, buf});
+}
+
