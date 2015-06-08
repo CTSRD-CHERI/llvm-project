@@ -2024,12 +2024,12 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
     }
   }
 
+  bool OptimizeCtor = true;
   if (InitExpr && Target.SupportsCapabilities() && Context.getDefaultAS() != 0)
   {
     QualType T = InitExpr->getType();
-    bool IsCapInit = false;
     if (TheTargetCodeGenInfo->containsCapabilities(T)) {
-      IsCapInit = true;
+      OptimizeCtor = false;
       NeedsGlobalCtor = true;
       Init = EmitNullConstant(D->getType());
     }
@@ -2136,7 +2136,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // Emit the initializer function if necessary.
   if (NeedsGlobalCtor || NeedsGlobalDtor)
-    EmitCXXGlobalVarDeclInitFunc(D, GV, NeedsGlobalCtor);
+    EmitCXXGlobalVarDeclInitFunc(D, GV, NeedsGlobalCtor, OptimizeCtor);
 
   SanitizerMD->reportGlobalToASan(GV, *D, NeedsGlobalCtor);
 

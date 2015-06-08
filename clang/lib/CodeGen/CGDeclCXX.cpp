@@ -277,7 +277,8 @@ void CodeGenModule::EmitPointerToInitFunc(const VarDecl *D,
 void
 CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
                                             llvm::GlobalVariable *Addr,
-                                            bool PerformInit) {
+                                            bool PerformInit,
+                                            bool Optimize) {
   llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, false);
   SmallString<256> FnName;
   {
@@ -288,6 +289,14 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
   // Create a variable initialization function.
   llvm::Function *Fn =
       CreateGlobalInitOrDestructFunction(FTy, FnName.str(), D->getLocation());
+
+  // CHERI generates global init functions that end up being huge and really
+  // stress alias analysis.  They're only called once, so save a huge amount of
+  // compilation time at the expense of a bit of run time.
+  if (!Optimize) {
+    Fn->addFnAttr(llvm::Attribute::OptimizeNone);
+    Fn->addFnAttr(llvm::Attribute::NoInline);
+  }
 
   auto *ISA = D->getAttr<InitSegAttr>();
   CodeGenFunction(*this).GenerateCXXGlobalVarDeclInitFunc(Fn, D, Addr,

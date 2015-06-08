@@ -1156,10 +1156,13 @@ private:
 
 public:
   /// Emit the function that initializes the specified global (if PerformInit is
-  /// true) and registers its destructor.
+  /// true) and registers its destructor.  If Optimize is false, then disable
+  /// optimization for this initializer.
   void EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
                                     llvm::GlobalVariable *Addr,
-                                    bool PerformInit);
+                                    bool PerformInit,
+                                    bool Optimize=true);
+
 private:
 
   void EmitPointerToInitFunc(const VarDecl *VD, llvm::GlobalVariable *Addr,
