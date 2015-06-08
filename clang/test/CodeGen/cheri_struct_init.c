@@ -1,7 +1,6 @@
 // RUN: %clang_cc1 "-cc1" "-triple" "cheri-unknown-freebsd" "-emit-llvm" "-target-abi" "sandbox" "-o" "-" %s | FileCheck %s
-// CHECK: Function Attrs: noinline nounwind optnone
-// CHECK-NEXT: define internal void @__cxx_global_var_init()
-// Check that this generates an initialiser and that initializers have optimization disabled
+// CHECK: __cxx_global_var_init
+// Check that this generates an initialiser
 #define NULL (void*)0
 const struct {
 	const char magic[8];

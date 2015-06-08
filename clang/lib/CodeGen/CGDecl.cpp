@@ -285,7 +285,7 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
     QualType T = InitExpr->getType();
     if (getTargetHooks().containsCapabilities(T)) {
       GV->setConstant(false);
-      CGM.EmitCXXGlobalVarDeclInitFunc(&D, GV, true, false);
+      CGM.EmitCXXGlobalVarDeclInitFunc(&D, GV, true);
       return GV;
     }
   }
