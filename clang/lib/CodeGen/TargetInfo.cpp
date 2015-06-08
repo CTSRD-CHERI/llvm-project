@@ -5438,7 +5438,17 @@ void MSP430TargetCodeGenInfo::SetTargetAttributes(const Decl *D,
 //===----------------------------------------------------------------------===//
 
 namespace {
-class MipsABIInfo : public ABIInfo {
+
+class CheriCapClassifier {
+  ASTContext &C;
+  mutable llvm::DenseMap<void*, bool> ContainsCapabilities;
+public:
+  CheriCapClassifier(ASTContext &Ctx) : C(Ctx) {}
+  bool containsCapabilities(ASTContext &C, const RecordDecl *RD) const;
+  bool containsCapabilities(QualType Ty) const;
+};
+
+class MipsABIInfo : public ABIInfo, CheriCapClassifier {
   bool IsO32;
   unsigned MinABIStackAlignInBytes, StackAlignInBytes;
   void CoerceToIntArgs(uint64_t TySize,
@@ -5448,7 +5458,8 @@ class MipsABIInfo : public ABIInfo {
   llvm::Type* getPaddingType(uint64_t Align, uint64_t Offset) const;
 public:
   MipsABIInfo(CodeGenTypes &CGT, bool _IsO32) :
-    ABIInfo(CGT), IsO32(_IsO32), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
+    ABIInfo(CGT), CheriCapClassifier(CGT.getContext()),
+    IsO32(_IsO32), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
     StackAlignInBytes(IsO32 ? 8 : 16) {}
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
@@ -5458,12 +5469,13 @@ public:
                          CodeGenFunction &CGF) const override;
 };
 
-class MIPSTargetCodeGenInfo : public TargetCodeGenInfo {
+class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
+                              CheriCapClassifier {
   unsigned SizeOfUnwindException;
-  mutable llvm::DenseMap<void*, bool> ContainsCapabilities;
 public:
   MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32)
     : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32)),
+      CheriCapClassifier(CGT.getContext()),
       SizeOfUnwindException(IsO32 ? 24 : 32) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const override {
@@ -5489,7 +5501,9 @@ public:
   unsigned getSizeOfUnwindException() const override {
     return SizeOfUnwindException;
   }
-  bool containsCapabilities(QualType Ty) const override;
+  bool containsCapabilities(QualType Ty) const override {
+    return CheriCapClassifier::containsCapabilities(Ty);
+  }
 };
 }
 
@@ -5509,7 +5523,8 @@ void MipsABIInfo::CoerceToIntArgs(uint64_t TySize,
     ArgList.push_back(llvm::IntegerType::get(getVMContext(), R));
 }
 
-static bool containsCapabilities(ASTContext &C, const RecordDecl *RD) {
+bool CheriCapClassifier::containsCapabilities(ASTContext &C,
+                                              const RecordDecl *RD) const {
   for (auto i = RD->field_begin(), e = RD->field_end(); i != e; ++i) {
     const QualType Ty = i->getType();
     if (Ty.isCapabilityType(C))
@@ -5517,16 +5532,17 @@ static bool containsCapabilities(ASTContext &C, const RecordDecl *RD) {
     if (const RecordType *RT = Ty->getAs<RecordType>())
       if (containsCapabilities(C, RT->getDecl()))
         return true;
+    if (Ty->isArrayType() && containsCapabilities(Ty))
+      return true;
   }
   return false;
 }
 
-bool MIPSTargetCodeGenInfo::containsCapabilities(QualType Ty) const {
+bool CheriCapClassifier::containsCapabilities(QualType Ty) const {
   // If we've already looked up this type, then return the cached value.
   auto Cached = ContainsCapabilities.find(Ty.getAsOpaquePtr());
   if (Cached != ContainsCapabilities.end())
     return Cached->second;
-  ASTContext &C = getABIInfo().getContext();
   // Don't bother caching the trivial cases.
   if (Ty.isCapabilityType(C))
       return true;
@@ -5537,7 +5553,7 @@ bool MIPSTargetCodeGenInfo::containsCapabilities(QualType Ty) const {
   const RecordType *RT = Ty->getAs<RecordType>();
   if (!RT)
     return false;
-  bool Ret = ::containsCapabilities(C, RT->getDecl());
+  bool Ret = containsCapabilities(C, RT->getDecl());
   ContainsCapabilities[Ty.getAsOpaquePtr()] = Ret;
   return Ret;
 }

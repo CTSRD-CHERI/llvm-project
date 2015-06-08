@@ -959,7 +959,7 @@ bool QualType::isCapabilityType(ASTContext &Context) const {
   if (const PointerType *PT = dyn_cast<PointerType>(T)) {
     unsigned AS = PT->getPointeeType().getAddressSpace();
     return AS == CapAS;
-  } else if (T->isArrayType())
+  } else if (T->isArrayType() && !T->isConstantArrayType())
     return CanonicalType.getAddressSpace() == CapAS;
   return false;
 }
