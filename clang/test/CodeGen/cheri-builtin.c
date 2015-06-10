@@ -43,6 +43,7 @@ long long test(__capability void* foo)
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.perms.and
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.seal
 	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.unseal
+	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.bounds.set
 	// CHECK: call void @llvm.mips.cap.cause.set(i64 42)
 	// CHECK: call void @llvm.mips.cap.perms.check
 	// CHECK: call void @llvm.mips.cap.type.check
@@ -56,6 +57,7 @@ long long test(__capability void* foo)
 	results[1] = __builtin_memcap_perms_and(foo, 12);
 	results[4] = __builtin_memcap_seal(foo, foo);
 	results[5] = __builtin_memcap_unseal(foo, foo);
+	results[6] = __builtin_memcap_bounds_set(foo, 42);
 	__builtin_cheri_cause_set(42);
 	__builtin_memcap_perms_check(foo, 12);
 	__builtin_memcap_type_check(foo, results[0]);

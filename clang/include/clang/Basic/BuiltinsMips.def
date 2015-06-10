@@ -930,6 +930,7 @@ BUILTIN(__builtin_cheri_cap_offset_get, "zvC*200", "nc")
 BUILTIN(__builtin_cheri_cap_base_inc_only, "v*200vC*200z", "nc")
 
 BUILTIN(__builtin_memcap_length_set, "v*200vC*200z", "nc")
+BUILTIN(__builtin_memcap_bounds_set, "v*200vC*200z", "nc")
 BUILTIN(__builtin_memcap_length_get, "zvC*200", "nc")
 BUILTIN(__builtin_memcap_base_increment, "v*200vC*200z", "nc")
 BUILTIN(__builtin_memcap_base_get, "zvC*200", "nc")
