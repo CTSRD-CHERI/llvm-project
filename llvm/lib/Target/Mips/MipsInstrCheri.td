@@ -418,7 +418,7 @@ def : Pat<(int_mips_epcc_get), (CIncBase C31, ZERO_64)>;
 def : Pat<(int_mips_stack_cap_get), (CIncBase C11, ZERO_64)>;
 
 def : Pat<(int_mips_cap_base_increment CheriOpnd:$cb, GPR64Opnd:$rd), (CIncBase $cb, $rd)>;
-def : Pat<(int_mips_stack_to_cap GPR64Opnd:$addr), (CFromPtr C11, $addr)>;
+def : Pat<(int_mips_stack_to_cap GPR64Opnd:$addr), (CSetOffset C11, $addr)>;
 def : Pat<(int_mips_stack_to_cap_incbase GPR64Opnd:$addr), (CIncBase C11, $addr)>;
 def : Pat<(MipsSTC i64:$addr), (CIncOffset C11, $addr)>;
 
