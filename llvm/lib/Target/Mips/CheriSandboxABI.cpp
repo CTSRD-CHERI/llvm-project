@@ -73,10 +73,12 @@ class CheriSandboxABI : public ModulePass,
       if (Allocas.empty())
         return false;
 
-      Intrinsic::ID SetLength = DL->getPointerSizeInBits(200) == 128 ?
+      bool IsCheri128 = DL->getPointerSizeInBits(200) == 128;
+      Intrinsic::ID SetLength = IsCheri128 ?
         Intrinsic::mips_cap_bounds_set : Intrinsic::mips_cap_length_set;
-      Function *CastFn =
-        Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
+      Function *CastFn = IsCheri128 ?
+        Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap) :
+        Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap_incbase);
       Function *SetLenFun = Intrinsic::getDeclaration(M, SetLength);
 
 
