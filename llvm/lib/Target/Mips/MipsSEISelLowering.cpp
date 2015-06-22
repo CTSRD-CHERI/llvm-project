@@ -1196,6 +1196,8 @@ MipsSETargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
     return emitCapFloat64Store(MI, BB);
   case Mips::CAP_SELECT:
     return emitCapSelect(MI, BB);
+  case Mips::CMove:
+    return emitCapMove(MI, BB);
   }
 }
 
@@ -3324,6 +3326,18 @@ MipsSETargetLowering::emitCapFloat32Store(MachineInstr *MI,
       .addReg(MI->getOperand(1).getReg())
       .addImm(MI->getOperand(2).getImm())
       .addReg(MI->getOperand(3).getReg());
+  MI->eraseFromParent();
+  return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapMove(MachineInstr *MI,
+                                  MachineBasicBlock *BB) const {
+  auto MoveInst = Subtarget.isCheri128() ? Mips::CIncOffset : Mips::CIncBase;
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  BuildMI(*BB, MI, MI->getDebugLoc(), TII->get(MoveInst))
+      .addReg(MI->getOperand(0).getReg())
+      .addImm(MI->getOperand(1).getImm())
+      .addReg(Mips::ZERO_64);
   MI->eraseFromParent();
   return BB;
 }

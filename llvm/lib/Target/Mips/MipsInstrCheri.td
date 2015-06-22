@@ -142,9 +142,6 @@ def : InstAlias<"cgetepcc $dst",
 def : InstAlias<"csetepcc $src",
                 (CIncBase C31, CheriOpnd:$src, ZERO_64), 1>;
 
-def : InstAlias<"cmove $dst, $src",
-                (CIncBase CheriOpnd:$dst, CheriOpnd:$src,ZERO_64), 1>;
-
 def CGetBase : CheriFmtGet<2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgetbase $rd, $cb",
                            [(set GPR64Opnd:$rd, (int_mips_cap_base_get CheriOpnd:$cb))]>;
@@ -249,6 +246,18 @@ def CIncBase2  : CheriFmtRegs<0x0d, 3, (outs CheriOpnd: $r0),
   "cincbase2\t$r0, $r1, $r2",
   [(set CheriOpnd: $r0, (int_mips_cap_base_only_increment CheriOpnd: $r1, GPR64Opnd: $r2))]>;
 
+class CheriMovePseudo<dag outs, dag ins, string asmstr,
+                list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, Pseudo>
+{
+  let isPseudo = 1;
+  let usesCustomInserter = 1;
+}
+
+def CMove : CheriMovePseudo<(outs CheriOpnd: $cd),
+  (ins CheriOpnd:$cs),
+  "cmove\t$cd,  $cs",
+  []>;
 
 // Casting:
 

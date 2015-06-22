@@ -197,6 +197,8 @@ class MipsAsmParser : public MCTargetAsmParser {
                        SmallVectorImpl<MCInst> &Instructions);
   void expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
                         SmallVectorImpl<MCInst> &Instructions);
+  void expandCapMove(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
+                        SmallVectorImpl<MCInst> &Instructions);
 
   bool expandLoadStoreMultiple(MCInst &Inst, SMLoc IDLoc,
                                SmallVectorImpl<MCInst> &Instructions);
@@ -1652,10 +1654,24 @@ bool MipsAsmParser::needsExpansion(MCInst &Inst) {
   case Mips::CLDC1: 
   case Mips::CSWC1:
   case Mips::CSDC1:
+  case Mips::CMove:
     return true;
   default:
     return false;
   }
+}
+
+void MipsAsmParser::expandCapMove(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
+                                    SmallVectorImpl<MCInst> &Instructions) {
+  bool IsCheri128 = STI.getFeatureBits()[llvm::Mips::FeatureMipsCheri128];
+  auto MoveInst = IsCheri128 ? Mips::CIncOffset : Mips::CIncBase;
+  MCInst tmpInst;
+  tmpInst.setOpcode(MoveInst);
+  tmpInst.addOperand(MCOperand::CreateReg(Inst.getOperand(0).getReg()));
+  tmpInst.addOperand(MCOperand::CreateReg(Inst.getOperand(1).getReg()));
+  tmpInst.addOperand(MCOperand::CreateReg(Mips::ZERO));
+  tmpInst.setLoc(IDLoc);
+  Instructions.push_back(tmpInst);
 }
 
 void MipsAsmParser::expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
@@ -1726,6 +1742,9 @@ bool MipsAsmParser::expandInstruction(MCInst &Inst, SMLoc IDLoc,
     is64Bit = false;
   case Mips::CSDC1:
     expandCapStoreC1(Inst, IDLoc, is64Bit, Instructions);
+    return false;
+  case Mips::CMove:
+    expandCapMove(Inst, IDLoc, is64Bit, Instructions);
     return false;
   case Mips::B_MM_Pseudo:
     return expandUncondBranchMMPseudo(Inst, IDLoc, Instructions);
