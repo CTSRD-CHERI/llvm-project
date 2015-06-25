@@ -127,21 +127,6 @@ def CAP_SELECT : CheriSelectPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,
 ////////////////////////////////////////////////////////////////////////////////
 def CIncBase : CheriFmtSet<2, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
                            "cincbase\t$cd, $cb, $rt", []>;
-def : InstAlias<"cgetdefault $dst",
-                (CIncBase CheriOpnd:$dst, C0, ZERO_64), 1>;
-def : InstAlias<"csetdefault $src",
-                (CIncBase C0, CheriOpnd:$src, ZERO_64), 1>;
-
-def : InstAlias<"cgetkcc $dst",
-                (CIncBase CheriOpnd:$dst, C29, ZERO_64), 1>;
-def : InstAlias<"csetkcc $src",
-                (CIncBase C29, CheriOpnd:$src, ZERO_64), 1>;
-
-def : InstAlias<"cgetepcc $dst",
-                (CIncBase CheriOpnd:$dst, C31, ZERO_64), 1>;
-def : InstAlias<"csetepcc $src",
-                (CIncBase C31, CheriOpnd:$src, ZERO_64), 1>;
-
 def CGetBase : CheriFmtGet<2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgetbase $rd, $cb",
                            [(set GPR64Opnd:$rd, (int_mips_cap_base_get CheriOpnd:$cb))]>;
@@ -417,14 +402,14 @@ let isCodeGenOnly=1 in {
 defm CAPSTORE64     : StoreViaCap<3, 0, "csd", GPR64Opnd, store>;
 //def : Pat<(truncstorei8 (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd: $rt), (i64 immSExt8:$offset)),
           
-def : Pat<(int_mips_c0_get), (CIncBase C0, ZERO_64)>;
-def : Pat<(int_mips_idc_get), (CIncBase C26, ZERO_64)>;
-def : Pat<(int_mips_kr1c_get), (CIncBase C27, ZERO_64)>;
-def : Pat<(int_mips_kr2c_get), (CIncBase C28, ZERO_64)>;
-def : Pat<(int_mips_kcc_get), (CIncBase C29, ZERO_64)>;
-def : Pat<(int_mips_kdc_get), (CIncBase C30, ZERO_64)>;
-def : Pat<(int_mips_epcc_get), (CIncBase C31, ZERO_64)>;
-def : Pat<(int_mips_stack_cap_get), (CIncBase C11, ZERO_64)>;
+def : Pat<(int_mips_c0_get), (CIncOffset C0, ZERO_64)>;
+def : Pat<(int_mips_idc_get), (CIncOffset C26, ZERO_64)>;
+def : Pat<(int_mips_kr1c_get), (CIncOffset C27, ZERO_64)>;
+def : Pat<(int_mips_kr2c_get), (CIncOffset C28, ZERO_64)>;
+def : Pat<(int_mips_kcc_get), (CIncOffset C29, ZERO_64)>;
+def : Pat<(int_mips_kdc_get), (CIncOffset C30, ZERO_64)>;
+def : Pat<(int_mips_epcc_get), (CIncOffset C31, ZERO_64)>;
+def : Pat<(int_mips_stack_cap_get), (CIncOffset C11, ZERO_64)>;
 
 def : Pat<(int_mips_cap_base_increment CheriOpnd:$cb, GPR64Opnd:$rd), (CIncBase $cb, $rd)>;
 def : Pat<(int_mips_stack_to_cap GPR64Opnd:$addr), (CSetOffset C11, $addr)>;
@@ -470,6 +455,25 @@ defm : LoadViaCap0<CLWC1, load>;
 defm : LoadViaCap0<CLDC1, load>;
 defm : StoreViaCap0<CSWC1, FGR32Opnd, store>;
 defm : StoreViaCap0<CSDC1, FGR64Opnd, store>;
+
+////////////////////////////////////////////////////////////////////////////////
+// Accessor pseudos
+////////////////////////////////////////////////////////////////////////////////
+def : InstAlias<"cgetdefault $dst",
+                (CIncOffset CheriOpnd:$dst, C0, ZERO_64), 1>;
+def : InstAlias<"csetdefault $src",
+                (CIncOffset C0, CheriOpnd:$src, ZERO_64), 1>;
+
+def : InstAlias<"cgetkcc $dst",
+                (CIncOffset CheriOpnd:$dst, C29, ZERO_64), 1>;
+def : InstAlias<"csetkcc $src",
+                (CIncOffset C29, CheriOpnd:$src, ZERO_64), 1>;
+
+def : InstAlias<"cgetepcc $dst",
+                (CIncOffset CheriOpnd:$dst, C31, ZERO_64), 1>;
+def : InstAlias<"csetepcc $src",
+                (CIncOffset C31, CheriOpnd:$src, ZERO_64), 1>;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Atomic operations.

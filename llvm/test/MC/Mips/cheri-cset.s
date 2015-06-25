@@ -30,15 +30,15 @@
 # direct access to C0
 
 # CHECK: csetdefault	$c1
-# CHECK: encoding: [0x48,0x80,0x08,0x02]
+# CHECK: encoding: [0x49,0xa0,0x08,0x00]
 	CSetDefault	$c1
 # CHECK: cgetdefault	$c1
-# CHECK: encoding: [0x48,0x81,0x00,0x02]
+# CHECK: encoding: [0x49,0xa1,0x00,0x00]
 	CGetDefault	$c1
 # WARN: warning: Direct access to c0 is deprecated.
-# WARN-NEXT: CIncBase $c0, $c1, $0
+# WARN-NEXT: CIncOffset $c0, $c1, $0
 # WARN-NEXT:           ^
 # CHECK: csetdefault	 $c1
-# CHECK: encoding: [0x48,0x80,0x08,0x02]
-	CIncBase	$c0, $c1, $0
+# CHECK: encoding: [0x49,0xa0,0x08,0x00]
+	CIncOffset	$c0, $c1, $0
 
