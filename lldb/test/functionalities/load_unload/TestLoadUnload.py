@@ -24,11 +24,48 @@ class LoadUnloadTestCase(TestBase):
                                 '// Set break point at this line for test_lldb_process_load_and_unload_commands().')
         self.line_d_function = line_number('d.c',
                                            '// Find this line number within d_dunction().')
-        if not sys.platform.startswith("darwin"):
-            if "LD_LIBRARY_PATH" in os.environ:
+        if not self.platformIsDarwin():
+            if not lldb.remote_platform and "LD_LIBRARY_PATH" in os.environ:
                 self.runCmd("settings set target.env-vars " + self.dylibPath + "=" + os.environ["LD_LIBRARY_PATH"] + ":" + os.getcwd())
             else:
-                self.runCmd("settings set target.env-vars " + self.dylibPath + "=" + os.getcwd())
+                if lldb.remote_platform:
+                    wd = lldb.remote_platform.GetWorkingDirectory()
+                else:
+                    wd = os.getcwd()
+                self.runCmd("settings set target.env-vars " + self.dylibPath + "=" + wd)
+
+    def copy_shlibs_to_remote(self, hidden_dir=False):
+        """ Copies the shared libs required by this test suite to remote.
+        Does nothing in case of non-remote platforms.
+        """
+        if lldb.remote_platform:
+            cwd = os.getcwd()
+            shlibs = ['libloadunload_a.so', 'libloadunload_b.so',
+                      'libloadunload_c.so', 'libloadunload_d.so']
+            wd = lldb.remote_platform.GetWorkingDirectory()
+            for f in shlibs:
+                err = lldb.remote_platform.Put(
+                    lldb.SBFileSpec(os.path.join(cwd, f)),
+                    lldb.SBFileSpec(os.path.join(wd, f)))
+                if err.Fail():
+                    raise RuntimeError(
+                        "Unable copy '%s' to '%s'.\n>>> %s" %
+                        (f, wd, err.GetCString()))
+            if hidden_dir:
+                shlib = 'libloadunload_d.so'
+                hidden_dir = os.path.join(wd, 'hidden')
+                hidden_file = os.path.join(hidden_dir, shlib)
+                err = lldb.remote_platform.MakeDirectory(hidden_dir)
+                if err.Fail():
+                    raise RuntimeError(
+                        "Unable to create a directory '%s'." % hidden_dir)
+                err = lldb.remote_platform.Put(
+                    lldb.SBFileSpec(os.path.join(cwd, 'hidden', shlib)),
+                    lldb.SBFileSpec(hidden_file))
+                if err.Fail():
+                    raise RuntimeError(
+                        "Unable copy 'libloadunload_d.so' to '%s'.\n>>> %s" %
+                        (wd, err.GetCString()))
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
     @not_remote_testsuite_ready
@@ -38,7 +75,7 @@ class LoadUnloadTestCase(TestBase):
         # Invoke the default build rule.
         self.buildDefault()
 
-        if sys.platform.startswith("darwin"):
+        if self.platformIsDarwin():
             dylibName = 'libloadunload_d.dylib'
         else:
             dylibName = 'libloadunload_d.so'
@@ -58,10 +95,6 @@ class LoadUnloadTestCase(TestBase):
         #    patterns = ["%s-[^-]*-[^-]*" % self.getArchitecture()])
         # Add an image search path substitution pair.
         self.runCmd("target modules search-paths add %s %s" % (os.getcwd(), new_dir))
-        # Add teardown hook to clear image-search-paths after the test.
-        # rdar://problem/10501020
-        # Uncomment the following to reproduce 10501020.
-        self.addTearDownHook(lambda: self.runCmd("target modules search-paths clear"))
 
         self.expect("target modules search-paths list",
             substrs = [os.getcwd(), new_dir])
@@ -79,7 +112,7 @@ class LoadUnloadTestCase(TestBase):
         self.runCmd("settings show target.env-vars")
 
         remove_dyld_path_cmd = "settings remove target.env-vars " + self.dylibPath
-        self.addTearDownHook(lambda: self.runCmd(remove_dyld_path_cmd))
+        self.addTearDownHook(lambda: self.dbg.HandleCommand(remove_dyld_path_cmd))
 
         self.runCmd("run")
 
@@ -87,17 +120,18 @@ class LoadUnloadTestCase(TestBase):
             substrs = [new_dylib])
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
-    @not_remote_testsuite_ready
+    @skipUnlessListedRemote(['android'])
     def test_dyld_library_path(self):
         """Test (DY)LD_LIBRARY_PATH after moving libd.dylib, which defines d_function, somewhere else."""
 
         # Invoke the default build rule.
         self.buildDefault()
+        self.copy_shlibs_to_remote(hidden_dir=True)
 
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
-        if sys.platform.startswith("darwin"):
+        if self.platformIsDarwin():
             dylibName = 'libloadunload_d.dylib'
             dsymName = 'libloadunload_d.dylib.dSYM'
         else:
@@ -105,53 +139,49 @@ class LoadUnloadTestCase(TestBase):
 
         # The directory to relocate the dynamic library and its debugging info.
         special_dir = "hidden"
-        new_dir = os.path.join(os.getcwd(), special_dir)
+        if lldb.remote_platform:
+            wd = lldb.remote_platform.GetWorkingDirectory()
+        else:
+            wd = os.getcwd()
 
-        old_dylib = os.path.join(os.getcwd(), dylibName)
-        new_dylib = os.path.join(new_dir, dylibName)
-
-        #system(["ls", "-lR", "."])
-
-        # Try running with the (DY)LD_LIBRARY_PATH environment variable set, make sure
-        # we pick up the hidden dylib.
-
-        env_cmd_string = "settings set target.env-vars " + self.dylibPath + "=" + new_dir
-        if not sys.platform.startswith("darwin"):
-            env_cmd_string += ":" + os.getcwd()
-
-        if self.TraceOn():
-            print "Set environment to: ", env_cmd_string
-        self.runCmd(env_cmd_string)
-        self.runCmd("settings show target.env-vars")
+        old_dir = wd
+        new_dir = os.path.join(wd, special_dir)
+        old_dylib = os.path.join(old_dir, dylibName)
 
         remove_dyld_path_cmd = "settings remove target.env-vars " + self.dylibPath
-        self.addTearDownHook(lambda: self.runCmd(remove_dyld_path_cmd))
-
-        lldbutil.run_break_set_by_file_and_line (self, "d.c", self.line_d_function, num_expected_locations=1, loc_exact=True)
+        self.addTearDownHook(lambda: self.dbg.HandleCommand(remove_dyld_path_cmd))
 
         # For now we don't track (DY)LD_LIBRARY_PATH, so the old library will be in
         # the modules list.
         self.expect("target modules list",
-            substrs = [os.path.basename(old_dylib)],
-            matching=True)
+                    substrs = [os.path.basename(old_dylib)],
+                    matching=True)
 
-        self.runCmd("run")
-        self.expect("thread backtrace", STOPPED_DUE_TO_BREAKPOINT,
-            patterns = ["frame #0.*d_function.*at d.c:%d" % self.line_d_function])
+        lldbutil.run_break_set_by_file_and_line (self, "d.c", self.line_d_function, num_expected_locations=1)
+        # After run, make sure the non-hidden library is picked up.
+        self.expect("run", substrs=["return", "700"])
 
-        # After run, make sure the hidden library is present, and the one we didn't 
-        # load is not.
-        self.expect("target modules list",
-            substrs = [special_dir, os.path.basename(new_dylib)])
+        self.runCmd("continue")
+
+        # Add the hidden directory first in the search path.
+        env_cmd_string = ("settings set target.env-vars %s=%s" %
+                          (self.dylibPath, new_dir))
+        if not self.platformIsDarwin():
+            env_cmd_string += ":" + wd
+        self.runCmd(env_cmd_string)
+
+        # This time, the hidden library should be picked up.
+        self.expect("run", substrs=["return", "12345"])
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
-    @not_remote_testsuite_ready
+    @skipUnlessListedRemote(['android'])
     @unittest2.expectedFailure("rdar://15367406")
     def test_lldb_process_load_and_unload_commands(self):
         """Test that lldb process load/unload command work correctly."""
 
         # Invoke the default build rule.
         self.buildDefault()
+        self.copy_shlibs_to_remote()
 
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
@@ -161,14 +191,20 @@ class LoadUnloadTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
+        if lldb.remote_platform:
+            shlib_dir = lldb.remote_platform.GetWorkingDirectory()
+        else:
+            shlib_dir = self.mydir
         # Make sure that a_function does not exist at this point.
         self.expect("image lookup -n a_function", "a_function should not exist yet",
                     error=True, matching=False,
-            patterns = ["1 match found .* %s" % self.mydir])
+            patterns = ["1 match found .* %s" % shlib_dir])
 
-        if sys.platform.startswith("darwin"):
+        if lldb.remote_platform:
+            dylibName = os.path.join(shlib_dir, 'libloadunload_a.so')
+        elif self.platformIsDarwin():
             dylibName = 'libloadunload_a.dylib'
         else:
             dylibName = 'libloadunload_a.so'
@@ -190,7 +226,7 @@ class LoadUnloadTestCase(TestBase):
 
         # Now we should have an entry for a_function.
         self.expect("image lookup -n a_function", "a_function should now exist",
-            patterns = ["1 match found .*%s" % self.mydir])
+            patterns = ["1 match found .*%s" % shlib_dir])
 
         # Use lldb 'process unload' to unload the dylib.
         self.expect("process unload %s" % index, "%s unloaded correctly" % dylibName,
@@ -199,12 +235,13 @@ class LoadUnloadTestCase(TestBase):
         self.runCmd("process continue")
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
-    @not_remote_testsuite_ready
+    @skipUnlessListedRemote(['android'])
     def test_load_unload(self):
         """Test breakpoint by name works correctly with dlopen'ing."""
 
         # Invoke the default build rule.
         self.buildDefault()
+        self.copy_shlibs_to_remote()
 
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
@@ -212,7 +249,7 @@ class LoadUnloadTestCase(TestBase):
         # Break by function name a_function (not yet loaded).
         lldbutil.run_break_set_by_symbol (self, "a_function", num_expected_locations=0)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint and at a_function.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -240,12 +277,13 @@ class LoadUnloadTestCase(TestBase):
             substrs = [' resolved, hit count = 2'])
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
-    @not_remote_testsuite_ready
+    @skipUnlessListedRemote(['android'])
     def test_step_over_load (self):
         """Test stepping over code that loads a shared library works correctly."""
 
         # Invoke the default build rule.
         self.buildDefault()
+        self.copy_shlibs_to_remote()
 
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
@@ -253,7 +291,7 @@ class LoadUnloadTestCase(TestBase):
         # Break by function name a_function (not yet loaded).
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint and at a_function.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

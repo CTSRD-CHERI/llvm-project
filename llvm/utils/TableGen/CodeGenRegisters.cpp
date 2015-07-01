@@ -543,7 +543,7 @@ struct TupleExpander : SetTheory::Expander {
     std::vector<Record*> Indices = Def->getValueAsListOfDefs("SubRegIndices");
     unsigned Dim = Indices.size();
     ListInit *SubRegs = Def->getValueAsListInit("SubRegs");
-    if (Dim != SubRegs->getSize())
+    if (Dim != SubRegs->size())
       PrintFatalError(Def->getLoc(), "SubRegIndices and SubRegs size mismatch");
     if (Dim < 2)
       PrintFatalError(Def->getLoc(),
@@ -711,6 +711,10 @@ CodeGenRegisterClass::CodeGenRegisterClass(CodeGenRegBank &RegBank, Record *R)
   CopyCost = R->getValueAsInt("CopyCost");
   Allocatable = R->getValueAsBit("isAllocatable");
   AltOrderSelect = R->getValueAsString("AltOrderSelect");
+  int AllocationPriority = R->getValueAsInt("AllocationPriority");
+  if (AllocationPriority < 0 || AllocationPriority > 63)
+    PrintFatalError(R->getLoc(), "AllocationPriority out of range [0,63]");
+  this->AllocationPriority = AllocationPriority;
 }
 
 // Create an inferred register class that was missing from the .td files.
@@ -726,7 +730,8 @@ CodeGenRegisterClass::CodeGenRegisterClass(CodeGenRegBank &RegBank,
     SpillSize(Props.SpillSize),
     SpillAlignment(Props.SpillAlignment),
     CopyCost(0),
-    Allocatable(true) {
+    Allocatable(true),
+    AllocationPriority(0) {
   for (const auto R : Members)
     TopoSigs.set(R->getTopoSig());
 }
@@ -746,6 +751,7 @@ void CodeGenRegisterClass::inheritProperties(CodeGenRegBank &RegBank) {
   CopyCost = Super.CopyCost;
   Allocatable = Super.Allocatable;
   AltOrderSelect = Super.AltOrderSelect;
+  AllocationPriority = Super.AllocationPriority;
 
   // Copy all allocation orders, filter out foreign registers from the larger
   // super-class.
@@ -918,7 +924,7 @@ CodeGenRegBank::CodeGenRegBank(RecordKeeper &Records) {
   // Configure register Sets to understand register classes and tuples.
   Sets.addFieldExpander("RegisterClass", "MemberList");
   Sets.addFieldExpander("CalleeSavedRegs", "SaveList");
-  Sets.addExpander("RegisterTuples", new TupleExpander());
+  Sets.addExpander("RegisterTuples", llvm::make_unique<TupleExpander>());
 
   // Read in the user-defined (named) sub-register indices.
   // More indices will be synthesized later.
@@ -988,7 +994,7 @@ CodeGenRegBank::CodeGenRegBank(RecordKeeper &Records) {
 
   // Allocate user-defined register classes.
   for (auto *RC : RCs) {
-    RegClasses.push_back(CodeGenRegisterClass(*this, RC));
+    RegClasses.emplace_back(*this, RC);
     addToMaps(&RegClasses.back());
   }
 
@@ -1050,7 +1056,7 @@ CodeGenRegBank::getOrCreateSubClass(const CodeGenRegisterClass *RC,
     return FoundI->second;
 
   // Sub-class doesn't exist, create a new one.
-  RegClasses.push_back(CodeGenRegisterClass(*this, Name, K));
+  RegClasses.emplace_back(*this, Name, K);
   addToMaps(&RegClasses.back());
   return &RegClasses.back();
 }
@@ -1774,7 +1780,7 @@ void CodeGenRegBank::computeRegUnitLaneMasks() {
       const CodeGenRegister *SubRegister = S->second;
       unsigned LaneMask = SubRegIndex->LaneMask;
       // Distribute LaneMask to Register Units touched.
-      for (const auto &SUI : SubRegister->getRegUnits()) {
+      for (unsigned SUI : SubRegister->getRegUnits()) {
         bool Found = false;
         unsigned u = 0;
         for (unsigned RU : RegUnits) {

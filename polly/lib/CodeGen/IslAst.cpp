@@ -26,16 +26,14 @@
 #include "polly/Options.h"
 #include "polly/ScopInfo.h"
 #include "polly/Support/GICHelper.h"
-
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Support/Debug.h"
-
-#include "isl/union_map.h"
-#include "isl/list.h"
-#include "isl/ast_build.h"
-#include "isl/set.h"
-#include "isl/map.h"
 #include "isl/aff.h"
+#include "isl/ast_build.h"
+#include "isl/list.h"
+#include "isl/map.h"
+#include "isl/set.h"
+#include "isl/union_map.h"
 
 #define DEBUG_TYPE "polly-ast"
 
@@ -556,6 +554,9 @@ void IslAstInfo::printScop(raw_ostream &OS, Scop &S) const {
   OS << AstStr << "\n";
   OS << "else\n";
   OS << "    {  /* original code */ }\n\n";
+
+  free(RtCStr);
+  free(AstStr);
 
   isl_ast_expr_free(RunCondition);
   isl_union_map_free(Schedule);

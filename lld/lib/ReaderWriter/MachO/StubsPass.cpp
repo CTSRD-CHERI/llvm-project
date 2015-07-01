@@ -44,7 +44,7 @@ public:
   }
 
   Alignment alignment() const override {
-    return Alignment(_is64 ? 3 : 2);
+    return _is64 ? 8 : 4;
   }
 
   uint64_t size() const override {
@@ -79,7 +79,7 @@ public:
   }
 
   Alignment alignment() const override {
-    return Alignment(_is64 ? 3 : 2);
+    return _is64 ? 8 : 4;
   }
 
   uint64_t size() const override {
@@ -115,7 +115,7 @@ public:
   }
 
   Alignment alignment() const override {
-    return Alignment(_stubInfo.codeAlignment);
+    return 1 << _stubInfo.codeAlignment;
   }
 
   uint64_t size() const override {
@@ -148,7 +148,7 @@ public:
   }
 
   Alignment alignment() const override {
-    return Alignment(_stubInfo.codeAlignment);
+    return 1 << _stubInfo.codeAlignment;
   }
 
   uint64_t size() const override {
@@ -182,7 +182,7 @@ public:
   }
 
   Alignment alignment() const override {
-    return Alignment(_stubInfo.codeAlignment);
+    return 1 << _stubInfo.codeAlignment;
   }
 
   uint64_t size() const override {
@@ -206,17 +206,16 @@ private:
 class StubsPass : public Pass {
 public:
   StubsPass(const MachOLinkingContext &context)
-    : _context(context), _archHandler(_context.archHandler()),
-    _stubInfo(_archHandler.stubInfo()), _file("<mach-o Stubs pass>") { }
+      : _ctx(context), _archHandler(_ctx.archHandler()),
+        _stubInfo(_archHandler.stubInfo()), _file("<mach-o Stubs pass>") {}
 
-
-  void perform(std::unique_ptr<MutableFile> &mergedFile) override {
+  std::error_code perform(SimpleFile &mergedFile) override {
     // Skip this pass if output format uses text relocations instead of stubs.
     if (!this->noTextRelocs())
-      return;
+      return std::error_code();
 
     // Scan all references in all atoms.
-    for (const DefinedAtom *atom : mergedFile->defined()) {
+    for (const DefinedAtom *atom : mergedFile.defined()) {
       for (const Reference *ref : *atom) {
         // Look at call-sites.
         if (!this->isCallSite(*ref))
@@ -240,15 +239,15 @@ public:
 
     // Exit early if no stubs needed.
     if (_targetToUses.empty())
-      return;
+      return std::error_code();
 
     // First add help-common and GOT slots used by lazy binding.
     SimpleDefinedAtom *helperCommonAtom =
         new (_file.allocator()) StubHelperCommonAtom(_file, _stubInfo);
     SimpleDefinedAtom *helperCacheNLPAtom =
-        new (_file.allocator()) NonLazyPointerAtom(_file, _context.is64Bit());
+        new (_file.allocator()) NonLazyPointerAtom(_file, _ctx.is64Bit());
     SimpleDefinedAtom *helperBinderNLPAtom =
-        new (_file.allocator()) NonLazyPointerAtom(_file, _context.is64Bit());
+        new (_file.allocator()) NonLazyPointerAtom(_file, _ctx.is64Bit());
     addReference(helperCommonAtom, _stubInfo.stubHelperCommonReferenceToCache,
                  helperCacheNLPAtom);
     addOptReference(
@@ -259,17 +258,18 @@ public:
     addOptReference(
         helperCommonAtom, _stubInfo.stubHelperCommonReferenceToBinder,
         _stubInfo.optStubHelperCommonReferenceToBinder, helperBinderNLPAtom);
-    mergedFile->addAtom(*helperCommonAtom);
-    mergedFile->addAtom(*helperBinderNLPAtom);
-    mergedFile->addAtom(*helperCacheNLPAtom);
+    mergedFile.addAtom(*helperCommonAtom);
+    mergedFile.addAtom(*helperBinderNLPAtom);
+    mergedFile.addAtom(*helperCacheNLPAtom);
 
     // Add reference to dyld_stub_binder in libSystem.dylib
     auto I = std::find_if(
-        mergedFile->sharedLibrary().begin(), mergedFile->sharedLibrary().end(),
+        mergedFile.sharedLibrary().begin(), mergedFile.sharedLibrary().end(),
         [&](const SharedLibraryAtom *atom) {
           return atom->name().equals(_stubInfo.binderSymbolName);
         });
-    assert(I != mergedFile->sharedLibrary().end() && "dyld_stub_binder not found");
+    assert(I != mergedFile.sharedLibrary().end() &&
+           "dyld_stub_binder not found");
     addReference(helperBinderNLPAtom, _stubInfo.nonLazyPointerReferenceToBinder, *I);
 
     // Sort targets by name, so stubs and lazy pointers are consistent
@@ -286,7 +286,7 @@ public:
     for (const Atom *target : targetsNeedingStubs) {
       StubAtom *stub = new (_file.allocator()) StubAtom(_file, _stubInfo);
       LazyPointerAtom *lp =
-          new (_file.allocator()) LazyPointerAtom(_file, _context.is64Bit());
+          new (_file.allocator()) LazyPointerAtom(_file, _ctx.is64Bit());
       StubHelperAtom *helper =
           new (_file.allocator()) StubHelperAtom(_file, _stubInfo);
 
@@ -301,9 +301,9 @@ public:
       addReference(helper, _stubInfo.stubHelperReferenceToHelperCommon,
                    helperCommonAtom);
 
-      mergedFile->addAtom(*stub);
-      mergedFile->addAtom(*lp);
-      mergedFile->addAtom(*helper);
+      mergedFile.addAtom(*stub);
+      mergedFile.addAtom(*lp);
+      mergedFile.addAtom(*helper);
 
       // Update each reference to use stub.
       for (const Reference *ref : _targetToUses[target]) {
@@ -315,6 +315,8 @@ public:
       // Calculate new offset
       lazyOffset += target->name().size() + 12;
     }
+
+    return std::error_code();
   }
 
 private:
@@ -356,7 +358,7 @@ private:
   typedef llvm::DenseMap<const Atom*,
                          llvm::SmallVector<const Reference *, 8>> TargetToUses;
 
-  const MachOLinkingContext                      &_context;
+  const MachOLinkingContext &_ctx;
   mach_o::ArchHandler                            &_archHandler;
   const ArchHandler::StubInfo                    &_stubInfo;
   MachOFile                                       _file;

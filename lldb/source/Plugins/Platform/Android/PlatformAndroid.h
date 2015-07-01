@@ -12,13 +12,17 @@
 
 // C Includes
 // C++ Includes
+
+#include <string>
+
 // Other libraries and framework includes
 // Project includes
 #include "Plugins/Platform/Linux/PlatformLinux.h"
 
 namespace lldb_private {
+namespace platform_android {
 
-    class PlatformAndroid : public PlatformLinux
+    class PlatformAndroid : public platform_linux::PlatformLinux
     {
     public:
         static void
@@ -36,15 +40,15 @@ namespace lldb_private {
         // lldb_private::PluginInterface functions
         //------------------------------------------------------------
         static lldb::PlatformSP
-        CreateInstance (bool force, const lldb_private::ArchSpec *arch);
+        CreateInstance (bool force, const ArchSpec *arch);
 
-        static lldb_private::ConstString
+        static ConstString
         GetPluginNameStatic (bool is_host);
 
         static const char *
         GetPluginDescriptionStatic (bool is_host);
 
-        lldb_private::ConstString
+        ConstString
         GetPluginName() override;
         
         uint32_t
@@ -57,12 +61,35 @@ namespace lldb_private {
         // lldb_private::Platform functions
         //------------------------------------------------------------
 
-        lldb_private::Error
-        ConnectRemote (lldb_private::Args& args) override;
+        Error
+        ConnectRemote (Args& args) override;
+
+        Error
+        GetFile (const FileSpec& source,
+                 const FileSpec& destination) override;
+
+        Error
+        PutFile (const FileSpec& source,
+                 const FileSpec& destination,
+                 uint32_t uid = UINT32_MAX,
+                 uint32_t gid = UINT32_MAX) override;
+
+     protected:
+        const char *
+        GetCacheHostname () override;
+
+        Error
+        DownloadModuleSlice (const FileSpec &src_file_spec,
+                             const uint64_t src_offset,
+                             const uint64_t src_size,
+                             const FileSpec &dst_file_spec) override;
 
     private:
+        std::string m_device_id;
         DISALLOW_COPY_AND_ASSIGN (PlatformAndroid);
     };
+
+} // namespace platofor_android
 } // namespace lldb_private
 
 #endif  // liblldb_PlatformAndroid_h_

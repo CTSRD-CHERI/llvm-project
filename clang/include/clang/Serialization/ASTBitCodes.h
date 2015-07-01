@@ -543,9 +543,7 @@ namespace clang {
       /// macro definition.
       MACRO_OFFSET = 47,
 
-      /// \brief Mapping table from the identifier ID to the offset of the
-      /// macro directive history for the identifier.
-      MACRO_TABLE = 48,
+      // ID 48 used to be a table of macros.
 
       /// \brief Record code for undefined but used functions and variables that
       /// need a definition in this TU.
@@ -563,6 +561,9 @@ namespace clang {
       /// \brief Record code for the table of offsets to CXXCtorInitializers
       /// lists.
       CXX_CTOR_INITIALIZERS_OFFSETS = 53,
+
+      /// \brief Delete expressions that will be analyzed later.
+      DELETE_EXPRS_TO_ANALYZE = 54
     };
 
     /// \brief Record types used within a source manager block.
@@ -602,7 +603,11 @@ namespace clang {
       PP_TOKEN = 3,
 
       /// \brief The macro directives history for a particular identifier.
-      PP_MACRO_DIRECTIVE_HISTORY = 4
+      PP_MACRO_DIRECTIVE_HISTORY = 4,
+
+      /// \brief A macro directive exported by a module.
+      /// [PP_MODULE_MACRO, SubmoduleID, MacroID, (Overridden SubmoduleID)*]
+      PP_MODULE_MACRO = 5,
     };
 
     /// \brief Record types used within a preprocessor detail block.
@@ -1210,8 +1215,12 @@ namespace clang {
       EXPR_INIT_LIST,
       /// \brief A DesignatedInitExpr record.
       EXPR_DESIGNATED_INIT,
+      /// \brief A DesignatedInitUpdateExpr record.
+      EXPR_DESIGNATED_INIT_UPDATE,
       /// \brief An ImplicitValueInitExpr record.
       EXPR_IMPLICIT_VALUE_INIT,
+      /// \brief An NoInitExpr record.
+      EXPR_NO_INIT,
       /// \brief A VAArgExpr record.
       EXPR_VA_ARG,
       /// \brief An AddrLabelExpr record.
@@ -1391,6 +1400,8 @@ namespace clang {
       STMT_OMP_ATOMIC_DIRECTIVE,
       STMT_OMP_TARGET_DIRECTIVE,
       STMT_OMP_TEAMS_DIRECTIVE,
+      STMT_OMP_TASKGROUP_DIRECTIVE,
+      STMT_OMP_CANCELLATION_POINT_DIRECTIVE,
 
       // ARC
       EXPR_OBJC_BRIDGED_CAST,     // ObjCBridgedCastExpr

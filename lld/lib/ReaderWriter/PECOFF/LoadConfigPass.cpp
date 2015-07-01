@@ -49,14 +49,14 @@ LoadConfigAtom::LoadConfigAtom(VirtualFile &file, const DefinedAtom *sxdata,
 
 } // namespace loadcfg
 
-void LoadConfigPass::perform(std::unique_ptr<MutableFile> &file) {
+std::error_code LoadConfigPass::perform(SimpleFile &file) {
   if (_ctx.noSEH())
-    return;
+    return std::error_code();
 
   // Find the first atom in .sxdata section.
   const DefinedAtom *sxdata = nullptr;
   int sectionSize = 0;
-  for (const DefinedAtom *atom : file->defined()) {
+  for (const DefinedAtom *atom : file.defined()) {
     if (atom->customSectionName() == ".sxdata") {
       if (!sxdata)
         sxdata = atom;
@@ -64,11 +64,13 @@ void LoadConfigPass::perform(std::unique_ptr<MutableFile> &file) {
     }
   }
   if (!sxdata)
-    return;
+    return std::error_code();
 
   auto *loadcfg = new (_alloc)
       loadcfg::LoadConfigAtom(_file, sxdata, sectionSize / sizeof(uint32_t));
-  file->addAtom(*loadcfg);
+  file.addAtom(*loadcfg);
+
+  return std::error_code();
 }
 
 } // namespace pecoff

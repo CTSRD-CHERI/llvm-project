@@ -1,7 +1,6 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-prepare -polly-scops -analyze  < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-scops -analyze < %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
-target triple = "x86_64-linux-gnu"
 
 ;long f(long a[], long n) {
 ;  long i, k;
@@ -49,33 +48,23 @@ bb2:                                              ; preds = %bb, %entry
 ; CHECK: Context:
 ; CHECK: [n] -> { : }
 ; CHECK:     Statements {
-; CHECK:     	Stmt_bb_nph
-; CHECK:             Domain :=
-; CHECK:                 [n] -> { Stmt_bb_nph[] : n >= 2 };
-; CHECK:             Scattering :=
-; CHECK:                 [n] -> { Stmt_bb_nph[] -> [0, 0] };
-; CHECK:             ReadAccess :=
-; CHECK:                 [n] -> { Stmt_bb_nph[] -> MemRef_a[0] };
-; CHECK:             MustWriteAccess :=
-; CHECK:                 [n] -> { Stmt_bb_nph[] -> MemRef_k_05_reg2mem[0] };
-; CHECK:             MustWriteAccess :=
-; CHECK:                 [n] -> { Stmt_bb_nph[] -> MemRef__reg2mem[0] };
 ; CHECK:     	Stmt_bb
 ; CHECK:             Domain :=
-; CHECK:                 [n] -> { Stmt_bb[i0] : i0 >= 0 and i0 <= -2 + n and n >= 2 };
-; CHECK:             Scattering :=
-; CHECK:                 [n] -> { Stmt_bb[i0] -> [1, i0] };
-; CHECK:             ReadAccess :=
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef__reg2mem[0] };
-; CHECK:             ReadAccess :=
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_k_05_reg2mem[0] };
-; CHECK:             MustWriteAccess :=
+; CHECK:                 [n] -> { Stmt_bb[i0] : i0 >= 0 and i0 <= -2 + n };
+; CHECK:             Schedule :=
+; CHECK:                 [n] -> { Stmt_bb[i0] -> [i0] };
+; CHECK:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
+; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_1[] };
+; CHECK:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
+; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_k_05[] };
+; CHECK:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 1]
+; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_1[] };
+; CHECK:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 1]
+; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_k_05[] };
+; CHECK:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
 ; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_a[1 + i0] };
-; CHECK:             ReadAccess :=
+; CHECK:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 0]
 ; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_a[2 + 2i0] };
-; CHECK:             ReadAccess :=
+; CHECK:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 0]
 ; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_a[4 + i0] };
-; CHECK:             MustWriteAccess :=
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_k_05_reg2mem[0] };
-; CHECK:             MustWriteAccess :=
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef__reg2mem[0] };
+

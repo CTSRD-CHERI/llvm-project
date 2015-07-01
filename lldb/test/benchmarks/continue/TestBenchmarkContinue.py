@@ -13,7 +13,7 @@ class TestBenchmarkContinue(BenchBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @benchmarks_test
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Benchmark different ways to continue a process"""
@@ -21,7 +21,6 @@ class TestBenchmarkContinue(BenchBase):
         self.data_formatter_commands()
 
     @benchmarks_test
-    @skipIfLinux # No standard locations for libc++ on Linux, so skip for now 
     @dwarf_test
     def test_with_dwarf_and_run_command(self):
         """Benchmark different ways to continue a process"""
@@ -38,7 +37,7 @@ class TestBenchmarkContinue(BenchBase):
 
         bkpt = self.target().FindBreakpointByID(lldbutil.run_break_set_by_source_regexp (self, "// break here"))
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

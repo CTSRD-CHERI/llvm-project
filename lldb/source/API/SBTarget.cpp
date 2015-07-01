@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include "lldb/API/SBTarget.h"
 
 #include "lldb/lldb-public.h"
@@ -345,7 +343,11 @@ SBTarget::Launch
         if (getenv("LLDB_LAUNCH_FLAG_DISABLE_STDIO"))
             launch_flags |= eLaunchFlagDisableSTDIO;
 
-        ProcessLaunchInfo launch_info (stdin_path, stdout_path, stderr_path, working_directory, launch_flags);
+        ProcessLaunchInfo launch_info(FileSpec{stdin_path, false},
+                                      FileSpec{stdout_path, false},
+                                      FileSpec{stderr_path, false},
+                                      FileSpec{working_directory, false},
+                                      launch_flags);
 
         Module *exe_module = target_sp->GetExecutableModulePointer();
         if (exe_module)
@@ -808,7 +810,8 @@ SBTarget::BreakpointCreateByLocation (const SBFileSpec &sb_file_spec,
         const LazyBool skip_prologue = eLazyBoolCalculate;
         const bool internal = false;
         const bool hardware = false;
-        *sb_bp = target_sp->CreateBreakpoint (NULL, *sb_file_spec, line, check_inlines, skip_prologue, internal, hardware);
+        const LazyBool move_to_nearest_code = eLazyBoolCalculate;
+        *sb_bp = target_sp->CreateBreakpoint (NULL, *sb_file_spec, line, check_inlines, skip_prologue, internal, hardware, move_to_nearest_code);
     }
 
     if (log)
@@ -1055,6 +1058,7 @@ SBTarget::BreakpointCreateBySourceRegex (const char *source_regex,
         RegularExpression regexp(source_regex);
         FileSpecList source_file_spec_list;
         const bool hardware = false;
+        const LazyBool move_to_nearest_code = eLazyBoolCalculate;
         source_file_spec_list.Append (source_file.ref());
 
         if (module_name && module_name[0])
@@ -1062,11 +1066,11 @@ SBTarget::BreakpointCreateBySourceRegex (const char *source_regex,
             FileSpecList module_spec_list;
             module_spec_list.Append (FileSpec (module_name, false));
 
-            *sb_bp = target_sp->CreateSourceRegexBreakpoint (&module_spec_list, &source_file_spec_list, regexp, false, hardware);
+            *sb_bp = target_sp->CreateSourceRegexBreakpoint (&module_spec_list, &source_file_spec_list, regexp, false, hardware, move_to_nearest_code);
         }
         else
         {
-            *sb_bp = target_sp->CreateSourceRegexBreakpoint (NULL, &source_file_spec_list, regexp, false, hardware);
+            *sb_bp = target_sp->CreateSourceRegexBreakpoint (NULL, &source_file_spec_list, regexp, false, hardware, move_to_nearest_code);
         }
     }
 
@@ -1095,8 +1099,9 @@ SBTarget::BreakpointCreateBySourceRegex (const char *source_regex,
     {
         Mutex::Locker api_locker (target_sp->GetAPIMutex());
         const bool hardware = false;
+        const LazyBool move_to_nearest_code = eLazyBoolCalculate;
         RegularExpression regexp(source_regex);
-        *sb_bp = target_sp->CreateSourceRegexBreakpoint (module_list.get(), source_file_list.get(), regexp, false, hardware);
+        *sb_bp = target_sp->CreateSourceRegexBreakpoint (module_list.get(), source_file_list.get(), regexp, false, hardware, move_to_nearest_code);
     }
 
     if (log)

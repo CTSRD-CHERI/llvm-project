@@ -17,7 +17,8 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Config/config.h"
-#include "llvm/DebugInfo/DWARF/DIContext.h"
+#include "llvm/DebugInfo/DIContext.h"
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDisassembler.h"
@@ -66,10 +67,6 @@ static cl::opt<bool> FullLeadingAddr("full-leading-addr",
 static cl::opt<bool> NoLeadingAddr("no-leading-addr",
                                    cl::desc("Print no leading address"));
 
-static cl::opt<bool>
-    PrintImmHex("print-imm-hex",
-                cl::desc("Use hex format for immediate values"));
-
 cl::opt<bool> llvm::UniversalHeaders("universal-headers",
                                      cl::desc("Print Mach-O universal headers "
                                               "(requires -macho)"));
@@ -78,6 +75,12 @@ cl::opt<bool>
     llvm::ArchiveHeaders("archive-headers",
                          cl::desc("Print archive headers for Mach-O archives "
                                   "(requires -macho)"));
+
+cl::opt<bool>
+    ArchiveMemberOffsets("archive-member-offsets",
+                         cl::desc("Print the offset to each archive member for "
+                                  "Mach-O archives (requires -macho and "
+                                  "-archive-headers)"));
 
 cl::opt<bool>
     llvm::IndirectSymbols("indirect-symbols",
@@ -99,6 +102,9 @@ cl::list<std::string>
                        cl::desc("Prints the specified segment,section for "
                                 "Mach-O objects (requires -macho)"));
 
+cl::opt<bool> llvm::Raw("raw",
+                        cl::desc("Have -section dump the raw binary contents"));
+
 cl::opt<bool>
     llvm::InfoPlist("info-plist",
                     cl::desc("Print the info plist section as strings for "
@@ -119,6 +125,11 @@ cl::opt<bool>
                      cl::desc("Print the info for Mach-O objects in "
                               "non-verbose or numeric form (requires -macho)"));
 
+cl::opt<bool>
+    llvm::ObjcMetaData("objc-meta-data",
+                       cl::desc("Print the Objective-C runtime meta data for "
+                                "Mach-O files (requires -macho)"));
+
 cl::opt<std::string> llvm::DisSymName(
     "dis-symname",
     cl::desc("disassemble just this symbol's instructions (requires -macho"));
@@ -126,7 +137,6 @@ cl::opt<std::string> llvm::DisSymName(
 static cl::opt<bool> NoSymbolicOperands(
     "no-symbolic-operands",
     cl::desc("do not symbolic operands when disassembling (requires -macho)"));
-
 
 static cl::list<std::string>
     ArchFlags("arch", cl::desc("architecture(s) from a Mach-O file to dump"),
@@ -168,9 +178,8 @@ static const Target *GetTarget(const MachOObjectFile *MachOObj,
 
 struct SymbolSorter {
   bool operator()(const SymbolRef &A, const SymbolRef &B) {
-    SymbolRef::Type AType, BType;
-    A.getType(AType);
-    B.getType(BType);
+    SymbolRef::Type AType = A.getType();
+    SymbolRef::Type BType = B.getType();
 
     uint64_t AAddr, BAddr;
     if (AType != SymbolRef::ST_Function)
@@ -214,19 +223,19 @@ static uint64_t DumpDataInCode(const uint8_t *bytes, uint64_t Length,
   case MachO::DICE_KIND_DATA:
     if (Length >= 4) {
       if (!NoShowRawInsn)
-        DumpBytes(ArrayRef<uint8_t>(bytes, 4));
+        dumpBytes(ArrayRef<uint8_t>(bytes, 4), outs());
       Value = bytes[3] << 24 | bytes[2] << 16 | bytes[1] << 8 | bytes[0];
       outs() << "\t.long " << Value;
       Size = 4;
     } else if (Length >= 2) {
       if (!NoShowRawInsn)
-        DumpBytes(ArrayRef<uint8_t>(bytes, 2));
+        dumpBytes(ArrayRef<uint8_t>(bytes, 2), outs());
       Value = bytes[1] << 8 | bytes[0];
       outs() << "\t.short " << Value;
       Size = 2;
     } else {
       if (!NoShowRawInsn)
-        DumpBytes(ArrayRef<uint8_t>(bytes, 2));
+        dumpBytes(ArrayRef<uint8_t>(bytes, 2), outs());
       Value = bytes[0];
       outs() << "\t.byte " << Value;
       Size = 1;
@@ -238,14 +247,14 @@ static uint64_t DumpDataInCode(const uint8_t *bytes, uint64_t Length,
     break;
   case MachO::DICE_KIND_JUMP_TABLE8:
     if (!NoShowRawInsn)
-      DumpBytes(ArrayRef<uint8_t>(bytes, 1));
+      dumpBytes(ArrayRef<uint8_t>(bytes, 1), outs());
     Value = bytes[0];
     outs() << "\t.byte " << format("%3u", Value) << "\t@ KIND_JUMP_TABLE8\n";
     Size = 1;
     break;
   case MachO::DICE_KIND_JUMP_TABLE16:
     if (!NoShowRawInsn)
-      DumpBytes(ArrayRef<uint8_t>(bytes, 2));
+      dumpBytes(ArrayRef<uint8_t>(bytes, 2), outs());
     Value = bytes[1] << 8 | bytes[0];
     outs() << "\t.short " << format("%5u", Value & 0xffff)
            << "\t@ KIND_JUMP_TABLE16\n";
@@ -254,7 +263,7 @@ static uint64_t DumpDataInCode(const uint8_t *bytes, uint64_t Length,
   case MachO::DICE_KIND_JUMP_TABLE32:
   case MachO::DICE_KIND_ABS_JUMP_TABLE32:
     if (!NoShowRawInsn)
-      DumpBytes(ArrayRef<uint8_t>(bytes, 4));
+      dumpBytes(ArrayRef<uint8_t>(bytes, 4), outs());
     Value = bytes[3] << 24 | bytes[2] << 16 | bytes[1] << 8 | bytes[0];
     outs() << "\t.long " << Value;
     if (Kind == MachO::DICE_KIND_JUMP_TABLE32)
@@ -267,8 +276,7 @@ static uint64_t DumpDataInCode(const uint8_t *bytes, uint64_t Length,
   return Size;
 }
 
-static void getSectionsAndSymbols(const MachO::mach_header Header,
-                                  MachOObjectFile *MachOObj,
+static void getSectionsAndSymbols(MachOObjectFile *MachOObj,
                                   std::vector<SectionRef> &Sections,
                                   std::vector<SymbolRef> &Symbols,
                                   SmallVectorImpl<uint64_t> &FoundFns,
@@ -286,10 +294,8 @@ static void getSectionsAndSymbols(const MachO::mach_header Header,
     Sections.push_back(Section);
   }
 
-  MachOObjectFile::LoadCommandInfo Command =
-      MachOObj->getFirstLoadCommandInfo();
   bool BaseSegmentAddressSet = false;
-  for (unsigned i = 0;; ++i) {
+  for (const auto &Command : MachOObj->load_commands()) {
     if (Command.C.cmd == MachO::LC_FUNCTION_STARTS) {
       // We found a function starts segment, parse the addresses for later
       // consumption.
@@ -305,11 +311,6 @@ static void getSectionsAndSymbols(const MachO::mach_header Header,
         BaseSegmentAddress = SLC.vmaddr;
       }
     }
-
-    if (i == Header.ncmds - 1)
-      break;
-    else
-      Command = MachOObj->getNextLoadCommandInfo(Command);
   }
 }
 
@@ -372,9 +373,7 @@ static void PrintIndirectSymbolTable(MachOObjectFile *O, bool verbose,
 }
 
 static void PrintIndirectSymbols(MachOObjectFile *O, bool verbose) {
-  uint32_t LoadCommandCount = O->getHeader().ncmds;
-  MachOObjectFile::LoadCommandInfo Load = O->getFirstLoadCommandInfo();
-  for (unsigned I = 0;; ++I) {
+  for (const auto &Load : O->load_commands()) {
     if (Load.C.cmd == MachO::LC_SEGMENT_64) {
       MachO::segment_command_64 Seg = O->getSegment64LoadCommand(Load);
       for (unsigned J = 0; J < Seg.nsects; ++J) {
@@ -432,10 +431,6 @@ static void PrintIndirectSymbols(MachOObjectFile *O, bool verbose) {
         }
       }
     }
-    if (I == LoadCommandCount - 1)
-      break;
-    else
-      Load = O->getNextLoadCommandInfo(Load);
   }
 }
 
@@ -539,9 +534,8 @@ static void PrintLinkOptHints(MachOObjectFile *O) {
 }
 
 static void PrintDylibs(MachOObjectFile *O, bool JustId) {
-  uint32_t LoadCommandCount = O->getHeader().ncmds;
-  MachOObjectFile::LoadCommandInfo Load = O->getFirstLoadCommandInfo();
-  for (unsigned I = 0;; ++I) {
+  unsigned Index = 0;
+  for (const auto &Load : O->load_commands()) {
     if ((JustId && Load.C.cmd == MachO::LC_ID_DYLIB) ||
         (!JustId && (Load.C.cmd == MachO::LC_ID_DYLIB ||
                      Load.C.cmd == MachO::LC_LOAD_DYLIB ||
@@ -581,13 +575,9 @@ static void PrintDylibs(MachOObjectFile *O, bool JustId) {
           outs() << "LC_LOAD_UPWARD_DYLIB ";
         else
           outs() << "LC_??? ";
-        outs() << "command " << I << "\n";
+        outs() << "command " << Index++ << "\n";
       }
     }
-    if (I == LoadCommandCount - 1)
-      break;
-    else
-      Load = O->getNextLoadCommandInfo(Load);
   }
 }
 
@@ -597,15 +587,15 @@ static void CreateSymbolAddressMap(MachOObjectFile *O,
                                    SymbolAddressMap *AddrMap) {
   // Create a map of symbol addresses to symbol names.
   for (const SymbolRef &Symbol : O->symbols()) {
-    SymbolRef::Type ST;
-    Symbol.getType(ST);
+    SymbolRef::Type ST = Symbol.getType();
     if (ST == SymbolRef::ST_Function || ST == SymbolRef::ST_Data ||
         ST == SymbolRef::ST_Other) {
       uint64_t Address;
       Symbol.getAddress(Address);
       StringRef SymName;
       Symbol.getName(SymName);
-      (*AddrMap)[Address] = SymName;
+      if (!SymName.startswith(".objc"))
+        (*AddrMap)[Address] = SymName;
     }
   }
 }
@@ -796,7 +786,7 @@ static void DumpLiteralPointerSection(MachOObjectFile *O,
   // Set the size of the literal pointer.
   uint32_t lp_size = O->is64Bit() ? 8 : 4;
 
-  // Collect the external relocation symbols for the the literal pointers.
+  // Collect the external relocation symbols for the literal pointers.
   std::vector<std::pair<uint64_t, SymbolRef>> Relocs;
   for (const RelocationRef &Reloc : Section.relocations()) {
     DataRefImpl Rel;
@@ -806,8 +796,7 @@ static void DumpLiteralPointerSection(MachOObjectFile *O,
     RE = O->getRelocation(Rel);
     isExtern = O->getPlainRelocationExternal(RE);
     if (isExtern) {
-      uint64_t RelocOffset;
-      Reloc.getOffset(RelocOffset);
+      uint64_t RelocOffset = Reloc.getOffset();
       symbol_iterator RelocSym = Reloc.getSymbol();
       Relocs.push_back(std::make_pair(RelocOffset, *RelocSym));
     }
@@ -1017,6 +1006,8 @@ static void DumpRawSectionContents(MachOObjectFile *O, const char *sect,
 
 static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
                              StringRef DisSegName, StringRef DisSectName);
+static void DumpProtocolSection(MachOObjectFile *O, const char *sect,
+                                uint32_t size, uint32_t addr);
 
 static void DumpSectionContents(StringRef Filename, MachOObjectFile *O,
                                 bool verbose) {
@@ -1043,8 +1034,7 @@ static void DumpSectionContents(StringRef Filename, MachOObjectFile *O,
       StringRef SegName = O->getSectionFinalSegmentName(Ref);
       if ((DumpSegName.empty() || SegName == DumpSegName) &&
           (SectName == DumpSectName)) {
-        outs() << "Contents of (" << SegName << "," << SectName
-               << ") section\n";
+
         uint32_t section_flags;
         if (O->is64Bit()) {
           const MachO::section_64 Sec = O->getSection64(Ref);
@@ -1062,6 +1052,14 @@ static void DumpSectionContents(StringRef Filename, MachOObjectFile *O,
         uint32_t sect_size = BytesStr.size();
         uint64_t sect_addr = Section.getAddress();
 
+        if (Raw) {
+          outs().write(BytesStr.data(), BytesStr.size());
+          continue;
+        }
+
+        outs() << "Contents of (" << SegName << "," << SectName
+               << ") section\n";
+
         if (verbose) {
           if ((section_flags & MachO::S_ATTR_PURE_INSTRUCTIONS) ||
               (section_flags & MachO::S_ATTR_SOME_INSTRUCTIONS)) {
@@ -1070,6 +1068,10 @@ static void DumpSectionContents(StringRef Filename, MachOObjectFile *O,
           }
           if (SegName == "__TEXT" && SectName == "__info_plist") {
             outs() << sect;
+            continue;
+          }
+          if (SegName == "__OBJC" && SectName == "__protocol") {
+            DumpProtocolSection(O, sect, sect_size, sect_addr);
             continue;
           }
           switch (section_type) {
@@ -1089,8 +1091,8 @@ static void DumpSectionContents(StringRef Filename, MachOObjectFile *O,
             DumpLiteral8Section(O, sect, sect_size, sect_addr, !NoLeadingAddr);
             break;
           case MachO::S_16BYTE_LITERALS:
-	    DumpLiteral16Section(O, sect, sect_size, sect_addr, !NoLeadingAddr);
-	    break;
+            DumpLiteral16Section(O, sect, sect_size, sect_addr, !NoLeadingAddr);
+            break;
           case MachO::S_LITERAL_POINTERS:
             DumpLiteralPointerSection(O, Section, sect, sect_size, sect_addr,
                                       !NoLeadingAddr);
@@ -1169,6 +1171,8 @@ static bool checkMachOAndArchFlags(ObjectFile *O, StringRef Filename) {
   return true;
 }
 
+static void printObjcMetaData(MachOObjectFile *O, bool verbose);
+
 // ProcessMachO() is passed a single opened Mach-O file, which may be an
 // archive member and or in a slice of a universal file.  It prints the
 // the file name and header info and then processes it according to the
@@ -1181,7 +1185,8 @@ static void ProcessMachO(StringRef Filename, MachOObjectFile *MachOOF,
   // UniversalHeaders or ArchiveHeaders.
   if (Disassemble || PrivateHeaders || ExportsTrie || Rebase || Bind ||
       LazyBind || WeakBind || IndirectSymbols || DataInCode || LinkOptHints ||
-      DylibsUsed || DylibId || DumpSections.size() != 0) {
+      DylibsUsed || DylibId || ObjcMetaData ||
+      (DumpSections.size() != 0 && !Raw)) {
     outs() << Filename;
     if (!ArchiveMemberName.empty())
       outs() << '(' << ArchiveMemberName << ')';
@@ -1218,6 +1223,8 @@ static void ProcessMachO(StringRef Filename, MachOObjectFile *MachOOF,
     printMachOUnwindInfo(MachOOF);
   if (PrivateHeaders)
     printMachOFileHeader(MachOOF);
+  if (ObjcMetaData)
+    printObjcMetaData(MachOOF, !NonVerbose);
   if (ExportsTrie)
     printExportsTrie(MachOOF);
   if (Rebase)
@@ -1532,7 +1539,7 @@ void llvm::ParseInputMachO(StringRef Filename) {
   if (Archive *A = dyn_cast<Archive>(&Bin)) {
     outs() << "Archive : " << Filename << "\n";
     if (ArchiveHeaders)
-      printArchiveHeaders(A, true, false);
+      printArchiveHeaders(A, !NonVerbose, ArchiveMemberOffsets);
     for (Archive::child_iterator I = A->child_begin(), E = A->child_end();
          I != E; ++I) {
       ErrorOr<std::unique_ptr<Binary>> ChildOrErr = I->getAsBinary();
@@ -1579,7 +1586,7 @@ void llvm::ParseInputMachO(StringRef Filename) {
                 outs() << " (architecture " << ArchitectureName << ")";
               outs() << "\n";
               if (ArchiveHeaders)
-                printArchiveHeaders(A.get(), true, false);
+                printArchiveHeaders(A.get(), !NonVerbose, ArchiveMemberOffsets);
               for (Archive::child_iterator AI = A->child_begin(),
                                            AE = A->child_end();
                    AI != AE; ++AI) {
@@ -1621,7 +1628,7 @@ void llvm::ParseInputMachO(StringRef Filename) {
             std::unique_ptr<Archive> &A = *AOrErr;
             outs() << "Archive : " << Filename << "\n";
             if (ArchiveHeaders)
-              printArchiveHeaders(A.get(), true, false);
+              printArchiveHeaders(A.get(), !NonVerbose, ArchiveMemberOffsets);
             for (Archive::child_iterator AI = A->child_begin(),
                                          AE = A->child_end();
                  AI != AE; ++AI) {
@@ -1658,7 +1665,7 @@ void llvm::ParseInputMachO(StringRef Filename) {
           outs() << " (architecture " << ArchitectureName << ")";
         outs() << "\n";
         if (ArchiveHeaders)
-          printArchiveHeaders(A.get(), true, false);
+          printArchiveHeaders(A.get(), !NonVerbose, ArchiveMemberOffsets);
         for (Archive::child_iterator AI = A->child_begin(), AE = A->child_end();
              AI != AE; ++AI) {
           ErrorOr<std::unique_ptr<Binary>> ChildOrErr = AI->getAsBinary();
@@ -1755,8 +1762,7 @@ static int SymbolizerGetOpInfo(void *DisInfo, uint64_t Pc, uint64_t Offset,
     bool r_scattered = false;
     uint32_t r_value, pair_r_value, r_type;
     for (const RelocationRef &Reloc : info->S.relocations()) {
-      uint64_t RelocOffset;
-      Reloc.getOffset(RelocOffset);
+      uint64_t RelocOffset = Reloc.getOffset();
       if (RelocOffset == sect_offset) {
         Rel = Reloc.getRawDataRefImpl();
         RE = info->O->getRelocation(Rel);
@@ -1833,8 +1839,7 @@ static int SymbolizerGetOpInfo(void *DisInfo, uint64_t Pc, uint64_t Offset,
     bool isExtern = false;
     SymbolRef Symbol;
     for (const RelocationRef &Reloc : info->S.relocations()) {
-      uint64_t RelocOffset;
-      Reloc.getOffset(RelocOffset);
+      uint64_t RelocOffset = Reloc.getOffset();
       if (RelocOffset == sect_offset) {
         Rel = Reloc.getRawDataRefImpl();
         RE = info->O->getRelocation(Rel);
@@ -1903,8 +1908,7 @@ static int SymbolizerGetOpInfo(void *DisInfo, uint64_t Pc, uint64_t Offset,
     auto Reloc =
         std::find_if(info->S.relocations().begin(), info->S.relocations().end(),
                      [&](const RelocationRef &Reloc) {
-                       uint64_t RelocOffset;
-                       Reloc.getOffset(RelocOffset);
+                       uint64_t RelocOffset = Reloc.getOffset();
                        return RelocOffset == sect_offset;
                      });
 
@@ -2030,8 +2034,7 @@ static int SymbolizerGetOpInfo(void *DisInfo, uint64_t Pc, uint64_t Offset,
     auto Reloc =
         std::find_if(info->S.relocations().begin(), info->S.relocations().end(),
                      [&](const RelocationRef &Reloc) {
-                       uint64_t RelocOffset;
-                       Reloc.getOffset(RelocOffset);
+                       uint64_t RelocOffset = Reloc.getOffset();
                        return RelocOffset == sect_offset;
                      });
 
@@ -2099,9 +2102,7 @@ static int SymbolizerGetOpInfo(void *DisInfo, uint64_t Pc, uint64_t Offset,
 // it returns a pointer to that string.  Else it returns nullptr.
 static const char *GuessCstringPointer(uint64_t ReferenceValue,
                                        struct DisassembleInfo *info) {
-  uint32_t LoadCommandCount = info->O->getHeader().ncmds;
-  MachOObjectFile::LoadCommandInfo Load = info->O->getFirstLoadCommandInfo();
-  for (unsigned I = 0;; ++I) {
+  for (const auto &Load : info->O->load_commands()) {
     if (Load.C.cmd == MachO::LC_SEGMENT_64) {
       MachO::segment_command_64 Seg = info->O->getSegment64LoadCommand(Load);
       for (unsigned J = 0; J < Seg.nsects; ++J) {
@@ -2145,10 +2146,6 @@ static const char *GuessCstringPointer(uint64_t ReferenceValue,
         }
       }
     }
-    if (I == LoadCommandCount - 1)
-      break;
-    else
-      Load = info->O->getNextLoadCommandInfo(Load);
   }
   return nullptr;
 }
@@ -2159,11 +2156,9 @@ static const char *GuessCstringPointer(uint64_t ReferenceValue,
 // symbol name being referenced by the stub or pointer.
 static const char *GuessIndirectSymbol(uint64_t ReferenceValue,
                                        struct DisassembleInfo *info) {
-  uint32_t LoadCommandCount = info->O->getHeader().ncmds;
-  MachOObjectFile::LoadCommandInfo Load = info->O->getFirstLoadCommandInfo();
   MachO::dysymtab_command Dysymtab = info->O->getDysymtabLoadCommand();
   MachO::symtab_command Symtab = info->O->getSymtabLoadCommand();
-  for (unsigned I = 0;; ++I) {
+  for (const auto &Load : info->O->load_commands()) {
     if (Load.C.cmd == MachO::LC_SEGMENT_64) {
       MachO::segment_command_64 Seg = info->O->getSegment64LoadCommand(Load);
       for (unsigned J = 0; J < Seg.nsects; ++J) {
@@ -2233,10 +2228,6 @@ static const char *GuessIndirectSymbol(uint64_t ReferenceValue,
         }
       }
     }
-    if (I == LoadCommandCount - 1)
-      break;
-    else
-      Load = info->O->getNextLoadCommandInfo(Load);
   }
   return nullptr;
 }
@@ -2323,9 +2314,7 @@ static uint64_t GuessPointerPointer(uint64_t ReferenceValue,
   selref = false;
   msgref = false;
   cfstring = false;
-  uint32_t LoadCommandCount = info->O->getHeader().ncmds;
-  MachOObjectFile::LoadCommandInfo Load = info->O->getFirstLoadCommandInfo();
-  for (unsigned I = 0;; ++I) {
+  for (const auto &Load : info->O->load_commands()) {
     if (Load.C.cmd == MachO::LC_SEGMENT_64) {
       MachO::segment_command_64 Seg = info->O->getSegment64LoadCommand(Load);
       for (unsigned J = 0; J < Seg.nsects; ++J) {
@@ -2370,10 +2359,6 @@ static uint64_t GuessPointerPointer(uint64_t ReferenceValue,
       }
     }
     // TODO: Look for LC_SEGMENT for 32-bit Mach-O files.
-    if (I == LoadCommandCount - 1)
-      break;
-    else
-      Load = info->O->getNextLoadCommandInfo(Load);
   }
   return 0;
 }
@@ -2385,13 +2370,22 @@ static uint64_t GuessPointerPointer(uint64_t ReferenceValue,
 // section nullptr is returned.
 static const char *get_pointer_64(uint64_t Address, uint32_t &offset,
                                   uint32_t &left, SectionRef &S,
-                                  DisassembleInfo *info) {
+                                  DisassembleInfo *info,
+                                  bool objc_only = false) {
   offset = 0;
   left = 0;
   S = SectionRef();
   for (unsigned SectIdx = 0; SectIdx != info->Sections->size(); SectIdx++) {
     uint64_t SectAddress = ((*(info->Sections))[SectIdx]).getAddress();
     uint64_t SectSize = ((*(info->Sections))[SectIdx]).getSize();
+    if (objc_only) {
+      StringRef SectName;
+      ((*(info->Sections))[SectIdx]).getName(SectName);
+      DataRefImpl Ref = ((*(info->Sections))[SectIdx]).getRawDataRefImpl();
+      StringRef SegName = info->O->getSectionFinalSegmentName(Ref);
+      if (SegName != "__OBJC" && SectName != "__cstring")
+        continue;
+    }
     if (Address >= SectAddress && Address < SectAddress + SectSize) {
       S = (*(info->Sections))[SectIdx];
       offset = Address - SectAddress;
@@ -2404,11 +2398,21 @@ static const char *get_pointer_64(uint64_t Address, uint32_t &offset,
   return nullptr;
 }
 
+static const char *get_pointer_32(uint32_t Address, uint32_t &offset,
+                                  uint32_t &left, SectionRef &S,
+                                  DisassembleInfo *info,
+                                  bool objc_only = false) {
+  return get_pointer_64(Address, offset, left, S, info, objc_only);
+}
+
 // get_symbol_64() returns the name of a symbol (or nullptr) and the address of
 // the symbol indirectly through n_value. Based on the relocation information
 // for the specified section offset in the specified section reference.
+// If no relocation information is found and a non-zero ReferenceValue for the
+// symbol is passed, look up that address in the info's AddrMap.
 static const char *get_symbol_64(uint32_t sect_offset, SectionRef S,
-                                 DisassembleInfo *info, uint64_t &n_value) {
+                                 DisassembleInfo *info, uint64_t &n_value,
+                                 uint64_t ReferenceValue = UnknownAddress) {
   n_value = 0;
   if (!info->verbose)
     return nullptr;
@@ -2420,8 +2424,7 @@ static const char *get_symbol_64(uint32_t sect_offset, SectionRef S,
   bool isExtern = false;
   SymbolRef Symbol;
   for (const RelocationRef &Reloc : S.relocations()) {
-    uint64_t RelocOffset;
-    Reloc.getOffset(RelocOffset);
+    uint64_t RelocOffset = Reloc.getOffset();
     if (RelocOffset == sect_offset) {
       Rel = Reloc.getRawDataRefImpl();
       RE = info->O->getRelocation(Rel);
@@ -2442,6 +2445,8 @@ static const char *get_symbol_64(uint32_t sect_offset, SectionRef S,
   const char *SymbolName = nullptr;
   if (reloc_found && isExtern) {
     Symbol.getAddress(n_value);
+    if (n_value == UnknownAddress)
+      n_value = 0;
     StringRef name;
     Symbol.getName(name);
     if (!name.empty()) {
@@ -2459,15 +2464,19 @@ static const char *get_symbol_64(uint32_t sect_offset, SectionRef S,
   //
   // NOTE: need add passing the database_offset to this routine.
 
-  // TODO: We did not find an external relocation entry so look up the
-  // ReferenceValue as an address of a symbol and if found return that symbol's
-  // name.
-  //
-  // NOTE: need add passing the ReferenceValue to this routine.  Then that code
-  // would simply be this:
-  // SymbolName = GuessSymbolName(ReferenceValue, info->AddrMap);
+  // We did not find an external relocation entry so look up the ReferenceValue
+  // as an address of a symbol and if found return that symbol's name.
+  if (ReferenceValue != UnknownAddress)
+    SymbolName = GuessSymbolName(ReferenceValue, info->AddrMap);
 
   return SymbolName;
+}
+
+static const char *get_symbol_32(uint32_t sect_offset, SectionRef S,
+                                 DisassembleInfo *info,
+                                 uint32_t ReferenceValue) {
+  uint64_t n_value64;
+  return get_symbol_64(sect_offset, S, info, n_value64, ReferenceValue);
 }
 
 // These are structs in the Objective-C meta data and read to produce the
@@ -2491,6 +2500,14 @@ struct class64_t {
   uint64_t data;       // class_ro64_t * (64-bit pointer)
 };
 
+struct class32_t {
+  uint32_t isa;        /* class32_t * (32-bit pointer) */
+  uint32_t superclass; /* class32_t * (32-bit pointer) */
+  uint32_t cache;      /* Cache (32-bit pointer) */
+  uint32_t vtable;     /* IMP * (32-bit pointer) */
+  uint32_t data;       /* class_ro32_t * (32-bit pointer) */
+};
+
 struct class_ro64_t {
   uint32_t flags;
   uint32_t instanceStart;
@@ -2505,6 +2522,276 @@ struct class_ro64_t {
   uint64_t baseProperties; // const struct objc_property_list (64-bit pointer)
 };
 
+struct class_ro32_t {
+  uint32_t flags;
+  uint32_t instanceStart;
+  uint32_t instanceSize;
+  uint32_t ivarLayout;     /* const uint8_t * (32-bit pointer) */
+  uint32_t name;           /* const char * (32-bit pointer) */
+  uint32_t baseMethods;    /* const method_list_t * (32-bit pointer) */
+  uint32_t baseProtocols;  /* const protocol_list_t * (32-bit pointer) */
+  uint32_t ivars;          /* const ivar_list_t * (32-bit pointer) */
+  uint32_t weakIvarLayout; /* const uint8_t * (32-bit pointer) */
+  uint32_t baseProperties; /* const struct objc_property_list *
+                                                   (32-bit pointer) */
+};
+
+/* Values for class_ro{64,32}_t->flags */
+#define RO_META (1 << 0)
+#define RO_ROOT (1 << 1)
+#define RO_HAS_CXX_STRUCTORS (1 << 2)
+
+struct method_list64_t {
+  uint32_t entsize;
+  uint32_t count;
+  /* struct method64_t first;  These structures follow inline */
+};
+
+struct method_list32_t {
+  uint32_t entsize;
+  uint32_t count;
+  /* struct method32_t first;  These structures follow inline */
+};
+
+struct method64_t {
+  uint64_t name;  /* SEL (64-bit pointer) */
+  uint64_t types; /* const char * (64-bit pointer) */
+  uint64_t imp;   /* IMP (64-bit pointer) */
+};
+
+struct method32_t {
+  uint32_t name;  /* SEL (32-bit pointer) */
+  uint32_t types; /* const char * (32-bit pointer) */
+  uint32_t imp;   /* IMP (32-bit pointer) */
+};
+
+struct protocol_list64_t {
+  uint64_t count; /* uintptr_t (a 64-bit value) */
+  /* struct protocol64_t * list[0];  These pointers follow inline */
+};
+
+struct protocol_list32_t {
+  uint32_t count; /* uintptr_t (a 32-bit value) */
+  /* struct protocol32_t * list[0];  These pointers follow inline */
+};
+
+struct protocol64_t {
+  uint64_t isa;                     /* id * (64-bit pointer) */
+  uint64_t name;                    /* const char * (64-bit pointer) */
+  uint64_t protocols;               /* struct protocol_list64_t *
+                                                    (64-bit pointer) */
+  uint64_t instanceMethods;         /* method_list_t * (64-bit pointer) */
+  uint64_t classMethods;            /* method_list_t * (64-bit pointer) */
+  uint64_t optionalInstanceMethods; /* method_list_t * (64-bit pointer) */
+  uint64_t optionalClassMethods;    /* method_list_t * (64-bit pointer) */
+  uint64_t instanceProperties;      /* struct objc_property_list *
+                                                       (64-bit pointer) */
+};
+
+struct protocol32_t {
+  uint32_t isa;                     /* id * (32-bit pointer) */
+  uint32_t name;                    /* const char * (32-bit pointer) */
+  uint32_t protocols;               /* struct protocol_list_t *
+                                                    (32-bit pointer) */
+  uint32_t instanceMethods;         /* method_list_t * (32-bit pointer) */
+  uint32_t classMethods;            /* method_list_t * (32-bit pointer) */
+  uint32_t optionalInstanceMethods; /* method_list_t * (32-bit pointer) */
+  uint32_t optionalClassMethods;    /* method_list_t * (32-bit pointer) */
+  uint32_t instanceProperties;      /* struct objc_property_list *
+                                                       (32-bit pointer) */
+};
+
+struct ivar_list64_t {
+  uint32_t entsize;
+  uint32_t count;
+  /* struct ivar64_t first;  These structures follow inline */
+};
+
+struct ivar_list32_t {
+  uint32_t entsize;
+  uint32_t count;
+  /* struct ivar32_t first;  These structures follow inline */
+};
+
+struct ivar64_t {
+  uint64_t offset; /* uintptr_t * (64-bit pointer) */
+  uint64_t name;   /* const char * (64-bit pointer) */
+  uint64_t type;   /* const char * (64-bit pointer) */
+  uint32_t alignment;
+  uint32_t size;
+};
+
+struct ivar32_t {
+  uint32_t offset; /* uintptr_t * (32-bit pointer) */
+  uint32_t name;   /* const char * (32-bit pointer) */
+  uint32_t type;   /* const char * (32-bit pointer) */
+  uint32_t alignment;
+  uint32_t size;
+};
+
+struct objc_property_list64 {
+  uint32_t entsize;
+  uint32_t count;
+  /* struct objc_property64 first;  These structures follow inline */
+};
+
+struct objc_property_list32 {
+  uint32_t entsize;
+  uint32_t count;
+  /* struct objc_property32 first;  These structures follow inline */
+};
+
+struct objc_property64 {
+  uint64_t name;       /* const char * (64-bit pointer) */
+  uint64_t attributes; /* const char * (64-bit pointer) */
+};
+
+struct objc_property32 {
+  uint32_t name;       /* const char * (32-bit pointer) */
+  uint32_t attributes; /* const char * (32-bit pointer) */
+};
+
+struct category64_t {
+  uint64_t name;               /* const char * (64-bit pointer) */
+  uint64_t cls;                /* struct class_t * (64-bit pointer) */
+  uint64_t instanceMethods;    /* struct method_list_t * (64-bit pointer) */
+  uint64_t classMethods;       /* struct method_list_t * (64-bit pointer) */
+  uint64_t protocols;          /* struct protocol_list_t * (64-bit pointer) */
+  uint64_t instanceProperties; /* struct objc_property_list *
+                                  (64-bit pointer) */
+};
+
+struct category32_t {
+  uint32_t name;               /* const char * (32-bit pointer) */
+  uint32_t cls;                /* struct class_t * (32-bit pointer) */
+  uint32_t instanceMethods;    /* struct method_list_t * (32-bit pointer) */
+  uint32_t classMethods;       /* struct method_list_t * (32-bit pointer) */
+  uint32_t protocols;          /* struct protocol_list_t * (32-bit pointer) */
+  uint32_t instanceProperties; /* struct objc_property_list *
+                                  (32-bit pointer) */
+};
+
+struct objc_image_info64 {
+  uint32_t version;
+  uint32_t flags;
+};
+struct objc_image_info32 {
+  uint32_t version;
+  uint32_t flags;
+};
+struct imageInfo_t {
+  uint32_t version;
+  uint32_t flags;
+};
+/* masks for objc_image_info.flags */
+#define OBJC_IMAGE_IS_REPLACEMENT (1 << 0)
+#define OBJC_IMAGE_SUPPORTS_GC (1 << 1)
+
+struct message_ref64 {
+  uint64_t imp; /* IMP (64-bit pointer) */
+  uint64_t sel; /* SEL (64-bit pointer) */
+};
+
+struct message_ref32 {
+  uint32_t imp; /* IMP (32-bit pointer) */
+  uint32_t sel; /* SEL (32-bit pointer) */
+};
+
+// Objective-C 1 (32-bit only) meta data structs.
+
+struct objc_module_t {
+  uint32_t version;
+  uint32_t size;
+  uint32_t name;   /* char * (32-bit pointer) */
+  uint32_t symtab; /* struct objc_symtab * (32-bit pointer) */
+};
+
+struct objc_symtab_t {
+  uint32_t sel_ref_cnt;
+  uint32_t refs; /* SEL * (32-bit pointer) */
+  uint16_t cls_def_cnt;
+  uint16_t cat_def_cnt;
+  // uint32_t defs[1];        /* void * (32-bit pointer) variable size */
+};
+
+struct objc_class_t {
+  uint32_t isa;         /* struct objc_class * (32-bit pointer) */
+  uint32_t super_class; /* struct objc_class * (32-bit pointer) */
+  uint32_t name;        /* const char * (32-bit pointer) */
+  int32_t version;
+  int32_t info;
+  int32_t instance_size;
+  uint32_t ivars;       /* struct objc_ivar_list * (32-bit pointer) */
+  uint32_t methodLists; /* struct objc_method_list ** (32-bit pointer) */
+  uint32_t cache;       /* struct objc_cache * (32-bit pointer) */
+  uint32_t protocols;   /* struct objc_protocol_list * (32-bit pointer) */
+};
+
+#define CLS_GETINFO(cls, infomask) ((cls)->info & (infomask))
+// class is not a metaclass
+#define CLS_CLASS 0x1
+// class is a metaclass
+#define CLS_META 0x2
+
+struct objc_category_t {
+  uint32_t category_name;    /* char * (32-bit pointer) */
+  uint32_t class_name;       /* char * (32-bit pointer) */
+  uint32_t instance_methods; /* struct objc_method_list * (32-bit pointer) */
+  uint32_t class_methods;    /* struct objc_method_list * (32-bit pointer) */
+  uint32_t protocols;        /* struct objc_protocol_list * (32-bit ptr) */
+};
+
+struct objc_ivar_t {
+  uint32_t ivar_name; /* char * (32-bit pointer) */
+  uint32_t ivar_type; /* char * (32-bit pointer) */
+  int32_t ivar_offset;
+};
+
+struct objc_ivar_list_t {
+  int32_t ivar_count;
+  // struct objc_ivar_t ivar_list[1];          /* variable length structure */
+};
+
+struct objc_method_list_t {
+  uint32_t obsolete; /* struct objc_method_list * (32-bit pointer) */
+  int32_t method_count;
+  // struct objc_method_t method_list[1];      /* variable length structure */
+};
+
+struct objc_method_t {
+  uint32_t method_name;  /* SEL, aka struct objc_selector * (32-bit pointer) */
+  uint32_t method_types; /* char * (32-bit pointer) */
+  uint32_t method_imp;   /* IMP, aka function pointer, (*IMP)(id, SEL, ...)
+                            (32-bit pointer) */
+};
+
+struct objc_protocol_list_t {
+  uint32_t next; /* struct objc_protocol_list * (32-bit pointer) */
+  int32_t count;
+  // uint32_t list[1];   /* Protocol *, aka struct objc_protocol_t *
+  //                        (32-bit pointer) */
+};
+
+struct objc_protocol_t {
+  uint32_t isa;              /* struct objc_class * (32-bit pointer) */
+  uint32_t protocol_name;    /* char * (32-bit pointer) */
+  uint32_t protocol_list;    /* struct objc_protocol_list * (32-bit pointer) */
+  uint32_t instance_methods; /* struct objc_method_description_list *
+                                (32-bit pointer) */
+  uint32_t class_methods;    /* struct objc_method_description_list *
+                                (32-bit pointer) */
+};
+
+struct objc_method_description_list_t {
+  int32_t count;
+  // struct objc_method_description_t list[1];
+};
+
+struct objc_method_description_t {
+  uint32_t name;  /* SEL, aka struct objc_selector * (32-bit pointer) */
+  uint32_t types; /* char * (32-bit pointer) */
+};
+
 inline void swapStruct(struct cfstring64_t &cfs) {
   sys::swapByteOrder(cfs.isa);
   sys::swapByteOrder(cfs.flags);
@@ -2513,6 +2800,14 @@ inline void swapStruct(struct cfstring64_t &cfs) {
 }
 
 inline void swapStruct(struct class64_t &c) {
+  sys::swapByteOrder(c.isa);
+  sys::swapByteOrder(c.superclass);
+  sys::swapByteOrder(c.cache);
+  sys::swapByteOrder(c.vtable);
+  sys::swapByteOrder(c.data);
+}
+
+inline void swapStruct(struct class32_t &c) {
   sys::swapByteOrder(c.isa);
   sys::swapByteOrder(c.superclass);
   sys::swapByteOrder(c.cache);
@@ -2532,6 +2827,238 @@ inline void swapStruct(struct class_ro64_t &cro) {
   sys::swapByteOrder(cro.ivars);
   sys::swapByteOrder(cro.weakIvarLayout);
   sys::swapByteOrder(cro.baseProperties);
+}
+
+inline void swapStruct(struct class_ro32_t &cro) {
+  sys::swapByteOrder(cro.flags);
+  sys::swapByteOrder(cro.instanceStart);
+  sys::swapByteOrder(cro.instanceSize);
+  sys::swapByteOrder(cro.ivarLayout);
+  sys::swapByteOrder(cro.name);
+  sys::swapByteOrder(cro.baseMethods);
+  sys::swapByteOrder(cro.baseProtocols);
+  sys::swapByteOrder(cro.ivars);
+  sys::swapByteOrder(cro.weakIvarLayout);
+  sys::swapByteOrder(cro.baseProperties);
+}
+
+inline void swapStruct(struct method_list64_t &ml) {
+  sys::swapByteOrder(ml.entsize);
+  sys::swapByteOrder(ml.count);
+}
+
+inline void swapStruct(struct method_list32_t &ml) {
+  sys::swapByteOrder(ml.entsize);
+  sys::swapByteOrder(ml.count);
+}
+
+inline void swapStruct(struct method64_t &m) {
+  sys::swapByteOrder(m.name);
+  sys::swapByteOrder(m.types);
+  sys::swapByteOrder(m.imp);
+}
+
+inline void swapStruct(struct method32_t &m) {
+  sys::swapByteOrder(m.name);
+  sys::swapByteOrder(m.types);
+  sys::swapByteOrder(m.imp);
+}
+
+inline void swapStruct(struct protocol_list64_t &pl) {
+  sys::swapByteOrder(pl.count);
+}
+
+inline void swapStruct(struct protocol_list32_t &pl) {
+  sys::swapByteOrder(pl.count);
+}
+
+inline void swapStruct(struct protocol64_t &p) {
+  sys::swapByteOrder(p.isa);
+  sys::swapByteOrder(p.name);
+  sys::swapByteOrder(p.protocols);
+  sys::swapByteOrder(p.instanceMethods);
+  sys::swapByteOrder(p.classMethods);
+  sys::swapByteOrder(p.optionalInstanceMethods);
+  sys::swapByteOrder(p.optionalClassMethods);
+  sys::swapByteOrder(p.instanceProperties);
+}
+
+inline void swapStruct(struct protocol32_t &p) {
+  sys::swapByteOrder(p.isa);
+  sys::swapByteOrder(p.name);
+  sys::swapByteOrder(p.protocols);
+  sys::swapByteOrder(p.instanceMethods);
+  sys::swapByteOrder(p.classMethods);
+  sys::swapByteOrder(p.optionalInstanceMethods);
+  sys::swapByteOrder(p.optionalClassMethods);
+  sys::swapByteOrder(p.instanceProperties);
+}
+
+inline void swapStruct(struct ivar_list64_t &il) {
+  sys::swapByteOrder(il.entsize);
+  sys::swapByteOrder(il.count);
+}
+
+inline void swapStruct(struct ivar_list32_t &il) {
+  sys::swapByteOrder(il.entsize);
+  sys::swapByteOrder(il.count);
+}
+
+inline void swapStruct(struct ivar64_t &i) {
+  sys::swapByteOrder(i.offset);
+  sys::swapByteOrder(i.name);
+  sys::swapByteOrder(i.type);
+  sys::swapByteOrder(i.alignment);
+  sys::swapByteOrder(i.size);
+}
+
+inline void swapStruct(struct ivar32_t &i) {
+  sys::swapByteOrder(i.offset);
+  sys::swapByteOrder(i.name);
+  sys::swapByteOrder(i.type);
+  sys::swapByteOrder(i.alignment);
+  sys::swapByteOrder(i.size);
+}
+
+inline void swapStruct(struct objc_property_list64 &pl) {
+  sys::swapByteOrder(pl.entsize);
+  sys::swapByteOrder(pl.count);
+}
+
+inline void swapStruct(struct objc_property_list32 &pl) {
+  sys::swapByteOrder(pl.entsize);
+  sys::swapByteOrder(pl.count);
+}
+
+inline void swapStruct(struct objc_property64 &op) {
+  sys::swapByteOrder(op.name);
+  sys::swapByteOrder(op.attributes);
+}
+
+inline void swapStruct(struct objc_property32 &op) {
+  sys::swapByteOrder(op.name);
+  sys::swapByteOrder(op.attributes);
+}
+
+inline void swapStruct(struct category64_t &c) {
+  sys::swapByteOrder(c.name);
+  sys::swapByteOrder(c.cls);
+  sys::swapByteOrder(c.instanceMethods);
+  sys::swapByteOrder(c.classMethods);
+  sys::swapByteOrder(c.protocols);
+  sys::swapByteOrder(c.instanceProperties);
+}
+
+inline void swapStruct(struct category32_t &c) {
+  sys::swapByteOrder(c.name);
+  sys::swapByteOrder(c.cls);
+  sys::swapByteOrder(c.instanceMethods);
+  sys::swapByteOrder(c.classMethods);
+  sys::swapByteOrder(c.protocols);
+  sys::swapByteOrder(c.instanceProperties);
+}
+
+inline void swapStruct(struct objc_image_info64 &o) {
+  sys::swapByteOrder(o.version);
+  sys::swapByteOrder(o.flags);
+}
+
+inline void swapStruct(struct objc_image_info32 &o) {
+  sys::swapByteOrder(o.version);
+  sys::swapByteOrder(o.flags);
+}
+
+inline void swapStruct(struct imageInfo_t &o) {
+  sys::swapByteOrder(o.version);
+  sys::swapByteOrder(o.flags);
+}
+
+inline void swapStruct(struct message_ref64 &mr) {
+  sys::swapByteOrder(mr.imp);
+  sys::swapByteOrder(mr.sel);
+}
+
+inline void swapStruct(struct message_ref32 &mr) {
+  sys::swapByteOrder(mr.imp);
+  sys::swapByteOrder(mr.sel);
+}
+
+inline void swapStruct(struct objc_module_t &module) {
+  sys::swapByteOrder(module.version);
+  sys::swapByteOrder(module.size);
+  sys::swapByteOrder(module.name);
+  sys::swapByteOrder(module.symtab);
+}
+
+inline void swapStruct(struct objc_symtab_t &symtab) {
+  sys::swapByteOrder(symtab.sel_ref_cnt);
+  sys::swapByteOrder(symtab.refs);
+  sys::swapByteOrder(symtab.cls_def_cnt);
+  sys::swapByteOrder(symtab.cat_def_cnt);
+}
+
+inline void swapStruct(struct objc_class_t &objc_class) {
+  sys::swapByteOrder(objc_class.isa);
+  sys::swapByteOrder(objc_class.super_class);
+  sys::swapByteOrder(objc_class.name);
+  sys::swapByteOrder(objc_class.version);
+  sys::swapByteOrder(objc_class.info);
+  sys::swapByteOrder(objc_class.instance_size);
+  sys::swapByteOrder(objc_class.ivars);
+  sys::swapByteOrder(objc_class.methodLists);
+  sys::swapByteOrder(objc_class.cache);
+  sys::swapByteOrder(objc_class.protocols);
+}
+
+inline void swapStruct(struct objc_category_t &objc_category) {
+  sys::swapByteOrder(objc_category.category_name);
+  sys::swapByteOrder(objc_category.class_name);
+  sys::swapByteOrder(objc_category.instance_methods);
+  sys::swapByteOrder(objc_category.class_methods);
+  sys::swapByteOrder(objc_category.protocols);
+}
+
+inline void swapStruct(struct objc_ivar_list_t &objc_ivar_list) {
+  sys::swapByteOrder(objc_ivar_list.ivar_count);
+}
+
+inline void swapStruct(struct objc_ivar_t &objc_ivar) {
+  sys::swapByteOrder(objc_ivar.ivar_name);
+  sys::swapByteOrder(objc_ivar.ivar_type);
+  sys::swapByteOrder(objc_ivar.ivar_offset);
+}
+
+inline void swapStruct(struct objc_method_list_t &method_list) {
+  sys::swapByteOrder(method_list.obsolete);
+  sys::swapByteOrder(method_list.method_count);
+}
+
+inline void swapStruct(struct objc_method_t &method) {
+  sys::swapByteOrder(method.method_name);
+  sys::swapByteOrder(method.method_types);
+  sys::swapByteOrder(method.method_imp);
+}
+
+inline void swapStruct(struct objc_protocol_list_t &protocol_list) {
+  sys::swapByteOrder(protocol_list.next);
+  sys::swapByteOrder(protocol_list.count);
+}
+
+inline void swapStruct(struct objc_protocol_t &protocol) {
+  sys::swapByteOrder(protocol.isa);
+  sys::swapByteOrder(protocol.protocol_name);
+  sys::swapByteOrder(protocol.protocol_list);
+  sys::swapByteOrder(protocol.instance_methods);
+  sys::swapByteOrder(protocol.class_methods);
+}
+
+inline void swapStruct(struct objc_method_description_list_t &mdl) {
+  sys::swapByteOrder(mdl.count);
+}
+
+inline void swapStruct(struct objc_method_description_t &md) {
+  sys::swapByteOrder(md.name);
+  sys::swapByteOrder(md.types);
 }
 
 static const char *get_dyld_bind_info_symbolname(uint64_t ReferenceValue,
@@ -2642,6 +3169,2411 @@ static uint64_t get_objc2_64bit_selref(uint64_t ReferenceValue,
   return n_value;
 }
 
+static const SectionRef get_section(MachOObjectFile *O, const char *segname,
+                                    const char *sectname) {
+  for (const SectionRef &Section : O->sections()) {
+    StringRef SectName;
+    Section.getName(SectName);
+    DataRefImpl Ref = Section.getRawDataRefImpl();
+    StringRef SegName = O->getSectionFinalSegmentName(Ref);
+    if (SegName == segname && SectName == sectname)
+      return Section;
+  }
+  return SectionRef();
+}
+
+static void
+walk_pointer_list_64(const char *listname, const SectionRef S,
+                     MachOObjectFile *O, struct DisassembleInfo *info,
+                     void (*func)(uint64_t, struct DisassembleInfo *info)) {
+  if (S == SectionRef())
+    return;
+
+  StringRef SectName;
+  S.getName(SectName);
+  DataRefImpl Ref = S.getRawDataRefImpl();
+  StringRef SegName = O->getSectionFinalSegmentName(Ref);
+  outs() << "Contents of (" << SegName << "," << SectName << ") section\n";
+
+  StringRef BytesStr;
+  S.getContents(BytesStr);
+  const char *Contents = reinterpret_cast<const char *>(BytesStr.data());
+
+  for (uint32_t i = 0; i < S.getSize(); i += sizeof(uint64_t)) {
+    uint32_t left = S.getSize() - i;
+    uint32_t size = left < sizeof(uint64_t) ? left : sizeof(uint64_t);
+    uint64_t p = 0;
+    memcpy(&p, Contents + i, size);
+    if (i + sizeof(uint64_t) > S.getSize())
+      outs() << listname << " list pointer extends past end of (" << SegName
+             << "," << SectName << ") section\n";
+    outs() << format("%016" PRIx64, S.getAddress() + i) << " ";
+
+    if (O->isLittleEndian() != sys::IsLittleEndianHost)
+      sys::swapByteOrder(p);
+
+    uint64_t n_value = 0;
+    const char *name = get_symbol_64(i, S, info, n_value, p);
+    if (name == nullptr)
+      name = get_dyld_bind_info_symbolname(S.getAddress() + i, info);
+
+    if (n_value != 0) {
+      outs() << format("0x%" PRIx64, n_value);
+      if (p != 0)
+        outs() << " + " << format("0x%" PRIx64, p);
+    } else
+      outs() << format("0x%" PRIx64, p);
+    if (name != nullptr)
+      outs() << " " << name;
+    outs() << "\n";
+
+    p += n_value;
+    if (func)
+      func(p, info);
+  }
+}
+
+static void
+walk_pointer_list_32(const char *listname, const SectionRef S,
+                     MachOObjectFile *O, struct DisassembleInfo *info,
+                     void (*func)(uint32_t, struct DisassembleInfo *info)) {
+  if (S == SectionRef())
+    return;
+
+  StringRef SectName;
+  S.getName(SectName);
+  DataRefImpl Ref = S.getRawDataRefImpl();
+  StringRef SegName = O->getSectionFinalSegmentName(Ref);
+  outs() << "Contents of (" << SegName << "," << SectName << ") section\n";
+
+  StringRef BytesStr;
+  S.getContents(BytesStr);
+  const char *Contents = reinterpret_cast<const char *>(BytesStr.data());
+
+  for (uint32_t i = 0; i < S.getSize(); i += sizeof(uint32_t)) {
+    uint32_t left = S.getSize() - i;
+    uint32_t size = left < sizeof(uint32_t) ? left : sizeof(uint32_t);
+    uint32_t p = 0;
+    memcpy(&p, Contents + i, size);
+    if (i + sizeof(uint32_t) > S.getSize())
+      outs() << listname << " list pointer extends past end of (" << SegName
+             << "," << SectName << ") section\n";
+    uint32_t Address = S.getAddress() + i;
+    outs() << format("%08" PRIx32, Address) << " ";
+
+    if (O->isLittleEndian() != sys::IsLittleEndianHost)
+      sys::swapByteOrder(p);
+    outs() << format("0x%" PRIx32, p);
+
+    const char *name = get_symbol_32(i, S, info, p);
+    if (name != nullptr)
+      outs() << " " << name;
+    outs() << "\n";
+
+    if (func)
+      func(p, info);
+  }
+}
+
+static void print_layout_map(const char *layout_map, uint32_t left) {
+  outs() << "                layout map: ";
+  do {
+    outs() << format("0x%02" PRIx32, (*layout_map) & 0xff) << " ";
+    left--;
+    layout_map++;
+  } while (*layout_map != '\0' && left != 0);
+  outs() << "\n";
+}
+
+static void print_layout_map64(uint64_t p, struct DisassembleInfo *info) {
+  uint32_t offset, left;
+  SectionRef S;
+  const char *layout_map;
+
+  if (p == 0)
+    return;
+  layout_map = get_pointer_64(p, offset, left, S, info);
+  print_layout_map(layout_map, left);
+}
+
+static void print_layout_map32(uint32_t p, struct DisassembleInfo *info) {
+  uint32_t offset, left;
+  SectionRef S;
+  const char *layout_map;
+
+  if (p == 0)
+    return;
+  layout_map = get_pointer_32(p, offset, left, S, info);
+  print_layout_map(layout_map, left);
+}
+
+static void print_method_list64_t(uint64_t p, struct DisassembleInfo *info,
+                                  const char *indent) {
+  struct method_list64_t ml;
+  struct method64_t m;
+  const char *r;
+  uint32_t offset, xoffset, left, i;
+  SectionRef S, xS;
+  const char *name, *sym_name;
+  uint64_t n_value;
+
+  r = get_pointer_64(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&ml, '\0', sizeof(struct method_list64_t));
+  if (left < sizeof(struct method_list64_t)) {
+    memcpy(&ml, r, left);
+    outs() << "   (method_list_t entends past the end of the section)\n";
+  } else
+    memcpy(&ml, r, sizeof(struct method_list64_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(ml);
+  outs() << indent << "\t\t   entsize " << ml.entsize << "\n";
+  outs() << indent << "\t\t     count " << ml.count << "\n";
+
+  p += sizeof(struct method_list64_t);
+  offset += sizeof(struct method_list64_t);
+  for (i = 0; i < ml.count; i++) {
+    r = get_pointer_64(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&m, '\0', sizeof(struct method64_t));
+    if (left < sizeof(struct method64_t)) {
+      memcpy(&ml, r, left);
+      outs() << indent << "   (method_t entends past the end of the section)\n";
+    } else
+      memcpy(&m, r, sizeof(struct method64_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(m);
+
+    outs() << indent << "\t\t      name ";
+    sym_name = get_symbol_64(offset + offsetof(struct method64_t, name), S,
+                             info, n_value, m.name);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (m.name != 0)
+        outs() << " + " << format("0x%" PRIx64, m.name);
+    } else
+      outs() << format("0x%" PRIx64, m.name);
+    name = get_pointer_64(m.name + n_value, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << indent << "\t\t     types ";
+    sym_name = get_symbol_64(offset + offsetof(struct method64_t, types), S,
+                             info, n_value, m.types);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (m.types != 0)
+        outs() << " + " << format("0x%" PRIx64, m.types);
+    } else
+      outs() << format("0x%" PRIx64, m.types);
+    name = get_pointer_64(m.types + n_value, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << indent << "\t\t       imp ";
+    name = get_symbol_64(offset + offsetof(struct method64_t, imp), S, info,
+                         n_value, m.imp);
+    if (info->verbose && name == nullptr) {
+      if (n_value != 0) {
+        outs() << format("0x%" PRIx64, n_value) << " ";
+        if (m.imp != 0)
+          outs() << "+ " << format("0x%" PRIx64, m.imp) << " ";
+      } else
+        outs() << format("0x%" PRIx64, m.imp) << " ";
+    }
+    if (name != nullptr)
+      outs() << name;
+    outs() << "\n";
+
+    p += sizeof(struct method64_t);
+    offset += sizeof(struct method64_t);
+  }
+}
+
+static void print_method_list32_t(uint64_t p, struct DisassembleInfo *info,
+                                  const char *indent) {
+  struct method_list32_t ml;
+  struct method32_t m;
+  const char *r, *name;
+  uint32_t offset, xoffset, left, i;
+  SectionRef S, xS;
+
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&ml, '\0', sizeof(struct method_list32_t));
+  if (left < sizeof(struct method_list32_t)) {
+    memcpy(&ml, r, left);
+    outs() << "   (method_list_t entends past the end of the section)\n";
+  } else
+    memcpy(&ml, r, sizeof(struct method_list32_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(ml);
+  outs() << indent << "\t\t   entsize " << ml.entsize << "\n";
+  outs() << indent << "\t\t     count " << ml.count << "\n";
+
+  p += sizeof(struct method_list32_t);
+  offset += sizeof(struct method_list32_t);
+  for (i = 0; i < ml.count; i++) {
+    r = get_pointer_32(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&m, '\0', sizeof(struct method32_t));
+    if (left < sizeof(struct method32_t)) {
+      memcpy(&ml, r, left);
+      outs() << indent << "   (method_t entends past the end of the section)\n";
+    } else
+      memcpy(&m, r, sizeof(struct method32_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(m);
+
+    outs() << indent << "\t\t      name " << format("0x%" PRIx32, m.name);
+    name = get_pointer_32(m.name, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << indent << "\t\t     types " << format("0x%" PRIx32, m.types);
+    name = get_pointer_32(m.types, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << indent << "\t\t       imp " << format("0x%" PRIx32, m.imp);
+    name = get_symbol_32(offset + offsetof(struct method32_t, imp), S, info,
+                         m.imp);
+    if (name != nullptr)
+      outs() << " " << name;
+    outs() << "\n";
+
+    p += sizeof(struct method32_t);
+    offset += sizeof(struct method32_t);
+  }
+}
+
+static bool print_method_list(uint32_t p, struct DisassembleInfo *info) {
+  uint32_t offset, left, xleft;
+  SectionRef S;
+  struct objc_method_list_t method_list;
+  struct objc_method_t method;
+  const char *r, *methods, *name, *SymbolName;
+  int32_t i;
+
+  r = get_pointer_32(p, offset, left, S, info, true);
+  if (r == nullptr)
+    return true;
+
+  outs() << "\n";
+  if (left > sizeof(struct objc_method_list_t)) {
+    memcpy(&method_list, r, sizeof(struct objc_method_list_t));
+  } else {
+    outs() << "\t\t objc_method_list extends past end of the section\n";
+    memset(&method_list, '\0', sizeof(struct objc_method_list_t));
+    memcpy(&method_list, r, left);
+  }
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(method_list);
+
+  outs() << "\t\t         obsolete "
+         << format("0x%08" PRIx32, method_list.obsolete) << "\n";
+  outs() << "\t\t     method_count " << method_list.method_count << "\n";
+
+  methods = r + sizeof(struct objc_method_list_t);
+  for (i = 0; i < method_list.method_count; i++) {
+    if ((i + 1) * sizeof(struct objc_method_t) > left) {
+      outs() << "\t\t remaining method's extend past the of the section\n";
+      break;
+    }
+    memcpy(&method, methods + i * sizeof(struct objc_method_t),
+           sizeof(struct objc_method_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(method);
+
+    outs() << "\t\t      method_name "
+           << format("0x%08" PRIx32, method.method_name);
+    if (info->verbose) {
+      name = get_pointer_32(method.method_name, offset, xleft, S, info, true);
+      if (name != nullptr)
+        outs() << format(" %.*s", xleft, name);
+      else
+        outs() << " (not in an __OBJC section)";
+    }
+    outs() << "\n";
+
+    outs() << "\t\t     method_types "
+           << format("0x%08" PRIx32, method.method_types);
+    if (info->verbose) {
+      name = get_pointer_32(method.method_types, offset, xleft, S, info, true);
+      if (name != nullptr)
+        outs() << format(" %.*s", xleft, name);
+      else
+        outs() << " (not in an __OBJC section)";
+    }
+    outs() << "\n";
+
+    outs() << "\t\t       method_imp "
+           << format("0x%08" PRIx32, method.method_imp) << " ";
+    if (info->verbose) {
+      SymbolName = GuessSymbolName(method.method_imp, info->AddrMap);
+      if (SymbolName != nullptr)
+        outs() << SymbolName;
+    }
+    outs() << "\n";
+  }
+  return false;
+}
+
+static void print_protocol_list64_t(uint64_t p, struct DisassembleInfo *info) {
+  struct protocol_list64_t pl;
+  uint64_t q, n_value;
+  struct protocol64_t pc;
+  const char *r;
+  uint32_t offset, xoffset, left, i;
+  SectionRef S, xS;
+  const char *name, *sym_name;
+
+  r = get_pointer_64(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&pl, '\0', sizeof(struct protocol_list64_t));
+  if (left < sizeof(struct protocol_list64_t)) {
+    memcpy(&pl, r, left);
+    outs() << "   (protocol_list_t entends past the end of the section)\n";
+  } else
+    memcpy(&pl, r, sizeof(struct protocol_list64_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(pl);
+  outs() << "                      count " << pl.count << "\n";
+
+  p += sizeof(struct protocol_list64_t);
+  offset += sizeof(struct protocol_list64_t);
+  for (i = 0; i < pl.count; i++) {
+    r = get_pointer_64(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    q = 0;
+    if (left < sizeof(uint64_t)) {
+      memcpy(&q, r, left);
+      outs() << "   (protocol_t * entends past the end of the section)\n";
+    } else
+      memcpy(&q, r, sizeof(uint64_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      sys::swapByteOrder(q);
+
+    outs() << "\t\t      list[" << i << "] ";
+    sym_name = get_symbol_64(offset, S, info, n_value, q);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (q != 0)
+        outs() << " + " << format("0x%" PRIx64, q);
+    } else
+      outs() << format("0x%" PRIx64, q);
+    outs() << " (struct protocol_t *)\n";
+
+    r = get_pointer_64(q + n_value, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&pc, '\0', sizeof(struct protocol64_t));
+    if (left < sizeof(struct protocol64_t)) {
+      memcpy(&pc, r, left);
+      outs() << "   (protocol_t entends past the end of the section)\n";
+    } else
+      memcpy(&pc, r, sizeof(struct protocol64_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(pc);
+
+    outs() << "\t\t\t      isa " << format("0x%" PRIx64, pc.isa) << "\n";
+
+    outs() << "\t\t\t     name ";
+    sym_name = get_symbol_64(offset + offsetof(struct protocol64_t, name), S,
+                             info, n_value, pc.name);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (pc.name != 0)
+        outs() << " + " << format("0x%" PRIx64, pc.name);
+    } else
+      outs() << format("0x%" PRIx64, pc.name);
+    name = get_pointer_64(pc.name + n_value, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << "\t\t\tprotocols " << format("0x%" PRIx64, pc.protocols) << "\n";
+
+    outs() << "\t\t  instanceMethods ";
+    sym_name =
+        get_symbol_64(offset + offsetof(struct protocol64_t, instanceMethods),
+                      S, info, n_value, pc.instanceMethods);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (pc.instanceMethods != 0)
+        outs() << " + " << format("0x%" PRIx64, pc.instanceMethods);
+    } else
+      outs() << format("0x%" PRIx64, pc.instanceMethods);
+    outs() << " (struct method_list_t *)\n";
+    if (pc.instanceMethods + n_value != 0)
+      print_method_list64_t(pc.instanceMethods + n_value, info, "\t");
+
+    outs() << "\t\t     classMethods ";
+    sym_name =
+        get_symbol_64(offset + offsetof(struct protocol64_t, classMethods), S,
+                      info, n_value, pc.classMethods);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (pc.classMethods != 0)
+        outs() << " + " << format("0x%" PRIx64, pc.classMethods);
+    } else
+      outs() << format("0x%" PRIx64, pc.classMethods);
+    outs() << " (struct method_list_t *)\n";
+    if (pc.classMethods + n_value != 0)
+      print_method_list64_t(pc.classMethods + n_value, info, "\t");
+
+    outs() << "\t  optionalInstanceMethods "
+           << format("0x%" PRIx64, pc.optionalInstanceMethods) << "\n";
+    outs() << "\t     optionalClassMethods "
+           << format("0x%" PRIx64, pc.optionalClassMethods) << "\n";
+    outs() << "\t       instanceProperties "
+           << format("0x%" PRIx64, pc.instanceProperties) << "\n";
+
+    p += sizeof(uint64_t);
+    offset += sizeof(uint64_t);
+  }
+}
+
+static void print_protocol_list32_t(uint32_t p, struct DisassembleInfo *info) {
+  struct protocol_list32_t pl;
+  uint32_t q;
+  struct protocol32_t pc;
+  const char *r;
+  uint32_t offset, xoffset, left, i;
+  SectionRef S, xS;
+  const char *name;
+
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&pl, '\0', sizeof(struct protocol_list32_t));
+  if (left < sizeof(struct protocol_list32_t)) {
+    memcpy(&pl, r, left);
+    outs() << "   (protocol_list_t entends past the end of the section)\n";
+  } else
+    memcpy(&pl, r, sizeof(struct protocol_list32_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(pl);
+  outs() << "                      count " << pl.count << "\n";
+
+  p += sizeof(struct protocol_list32_t);
+  offset += sizeof(struct protocol_list32_t);
+  for (i = 0; i < pl.count; i++) {
+    r = get_pointer_32(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    q = 0;
+    if (left < sizeof(uint32_t)) {
+      memcpy(&q, r, left);
+      outs() << "   (protocol_t * entends past the end of the section)\n";
+    } else
+      memcpy(&q, r, sizeof(uint32_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      sys::swapByteOrder(q);
+    outs() << "\t\t      list[" << i << "] " << format("0x%" PRIx32, q)
+           << " (struct protocol_t *)\n";
+    r = get_pointer_32(q, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&pc, '\0', sizeof(struct protocol32_t));
+    if (left < sizeof(struct protocol32_t)) {
+      memcpy(&pc, r, left);
+      outs() << "   (protocol_t entends past the end of the section)\n";
+    } else
+      memcpy(&pc, r, sizeof(struct protocol32_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(pc);
+    outs() << "\t\t\t      isa " << format("0x%" PRIx32, pc.isa) << "\n";
+    outs() << "\t\t\t     name " << format("0x%" PRIx32, pc.name);
+    name = get_pointer_32(pc.name, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+    outs() << "\t\t\tprotocols " << format("0x%" PRIx32, pc.protocols) << "\n";
+    outs() << "\t\t  instanceMethods "
+           << format("0x%" PRIx32, pc.instanceMethods)
+           << " (struct method_list_t *)\n";
+    if (pc.instanceMethods != 0)
+      print_method_list32_t(pc.instanceMethods, info, "\t");
+    outs() << "\t\t     classMethods " << format("0x%" PRIx32, pc.classMethods)
+           << " (struct method_list_t *)\n";
+    if (pc.classMethods != 0)
+      print_method_list32_t(pc.classMethods, info, "\t");
+    outs() << "\t  optionalInstanceMethods "
+           << format("0x%" PRIx32, pc.optionalInstanceMethods) << "\n";
+    outs() << "\t     optionalClassMethods "
+           << format("0x%" PRIx32, pc.optionalClassMethods) << "\n";
+    outs() << "\t       instanceProperties "
+           << format("0x%" PRIx32, pc.instanceProperties) << "\n";
+    p += sizeof(uint32_t);
+    offset += sizeof(uint32_t);
+  }
+}
+
+static void print_indent(uint32_t indent) {
+  for (uint32_t i = 0; i < indent;) {
+    if (indent - i >= 8) {
+      outs() << "\t";
+      i += 8;
+    } else {
+      for (uint32_t j = i; j < indent; j++)
+        outs() << " ";
+      return;
+    }
+  }
+}
+
+static bool print_method_description_list(uint32_t p, uint32_t indent,
+                                          struct DisassembleInfo *info) {
+  uint32_t offset, left, xleft;
+  SectionRef S;
+  struct objc_method_description_list_t mdl;
+  struct objc_method_description_t md;
+  const char *r, *list, *name;
+  int32_t i;
+
+  r = get_pointer_32(p, offset, left, S, info, true);
+  if (r == nullptr)
+    return true;
+
+  outs() << "\n";
+  if (left > sizeof(struct objc_method_description_list_t)) {
+    memcpy(&mdl, r, sizeof(struct objc_method_description_list_t));
+  } else {
+    print_indent(indent);
+    outs() << " objc_method_description_list extends past end of the section\n";
+    memset(&mdl, '\0', sizeof(struct objc_method_description_list_t));
+    memcpy(&mdl, r, left);
+  }
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(mdl);
+
+  print_indent(indent);
+  outs() << "        count " << mdl.count << "\n";
+
+  list = r + sizeof(struct objc_method_description_list_t);
+  for (i = 0; i < mdl.count; i++) {
+    if ((i + 1) * sizeof(struct objc_method_description_t) > left) {
+      print_indent(indent);
+      outs() << " remaining list entries extend past the of the section\n";
+      break;
+    }
+    print_indent(indent);
+    outs() << "        list[" << i << "]\n";
+    memcpy(&md, list + i * sizeof(struct objc_method_description_t),
+           sizeof(struct objc_method_description_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(md);
+
+    print_indent(indent);
+    outs() << "             name " << format("0x%08" PRIx32, md.name);
+    if (info->verbose) {
+      name = get_pointer_32(md.name, offset, xleft, S, info, true);
+      if (name != nullptr)
+        outs() << format(" %.*s", xleft, name);
+      else
+        outs() << " (not in an __OBJC section)";
+    }
+    outs() << "\n";
+
+    print_indent(indent);
+    outs() << "            types " << format("0x%08" PRIx32, md.types);
+    if (info->verbose) {
+      name = get_pointer_32(md.types, offset, xleft, S, info, true);
+      if (name != nullptr)
+        outs() << format(" %.*s", xleft, name);
+      else
+        outs() << " (not in an __OBJC section)";
+    }
+    outs() << "\n";
+  }
+  return false;
+}
+
+static bool print_protocol_list(uint32_t p, uint32_t indent,
+                                struct DisassembleInfo *info);
+
+static bool print_protocol(uint32_t p, uint32_t indent,
+                           struct DisassembleInfo *info) {
+  uint32_t offset, left;
+  SectionRef S;
+  struct objc_protocol_t protocol;
+  const char *r, *name;
+
+  r = get_pointer_32(p, offset, left, S, info, true);
+  if (r == nullptr)
+    return true;
+
+  outs() << "\n";
+  if (left >= sizeof(struct objc_protocol_t)) {
+    memcpy(&protocol, r, sizeof(struct objc_protocol_t));
+  } else {
+    print_indent(indent);
+    outs() << "            Protocol extends past end of the section\n";
+    memset(&protocol, '\0', sizeof(struct objc_protocol_t));
+    memcpy(&protocol, r, left);
+  }
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(protocol);
+
+  print_indent(indent);
+  outs() << "              isa " << format("0x%08" PRIx32, protocol.isa)
+         << "\n";
+
+  print_indent(indent);
+  outs() << "    protocol_name "
+         << format("0x%08" PRIx32, protocol.protocol_name);
+  if (info->verbose) {
+    name = get_pointer_32(protocol.protocol_name, offset, left, S, info, true);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    else
+      outs() << " (not in an __OBJC section)";
+  }
+  outs() << "\n";
+
+  print_indent(indent);
+  outs() << "    protocol_list "
+         << format("0x%08" PRIx32, protocol.protocol_list);
+  if (print_protocol_list(protocol.protocol_list, indent + 4, info))
+    outs() << " (not in an __OBJC section)\n";
+
+  print_indent(indent);
+  outs() << " instance_methods "
+         << format("0x%08" PRIx32, protocol.instance_methods);
+  if (print_method_description_list(protocol.instance_methods, indent, info))
+    outs() << " (not in an __OBJC section)\n";
+
+  print_indent(indent);
+  outs() << "    class_methods "
+         << format("0x%08" PRIx32, protocol.class_methods);
+  if (print_method_description_list(protocol.class_methods, indent, info))
+    outs() << " (not in an __OBJC section)\n";
+
+  return false;
+}
+
+static bool print_protocol_list(uint32_t p, uint32_t indent,
+                                struct DisassembleInfo *info) {
+  uint32_t offset, left, l;
+  SectionRef S;
+  struct objc_protocol_list_t protocol_list;
+  const char *r, *list;
+  int32_t i;
+
+  r = get_pointer_32(p, offset, left, S, info, true);
+  if (r == nullptr)
+    return true;
+
+  outs() << "\n";
+  if (left > sizeof(struct objc_protocol_list_t)) {
+    memcpy(&protocol_list, r, sizeof(struct objc_protocol_list_t));
+  } else {
+    outs() << "\t\t objc_protocol_list_t extends past end of the section\n";
+    memset(&protocol_list, '\0', sizeof(struct objc_protocol_list_t));
+    memcpy(&protocol_list, r, left);
+  }
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(protocol_list);
+
+  print_indent(indent);
+  outs() << "         next " << format("0x%08" PRIx32, protocol_list.next)
+         << "\n";
+  print_indent(indent);
+  outs() << "        count " << protocol_list.count << "\n";
+
+  list = r + sizeof(struct objc_protocol_list_t);
+  for (i = 0; i < protocol_list.count; i++) {
+    if ((i + 1) * sizeof(uint32_t) > left) {
+      outs() << "\t\t remaining list entries extend past the of the section\n";
+      break;
+    }
+    memcpy(&l, list + i * sizeof(uint32_t), sizeof(uint32_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      sys::swapByteOrder(l);
+
+    print_indent(indent);
+    outs() << "      list[" << i << "] " << format("0x%08" PRIx32, l);
+    if (print_protocol(l, indent, info))
+      outs() << "(not in an __OBJC section)\n";
+  }
+  return false;
+}
+
+static void print_ivar_list64_t(uint64_t p, struct DisassembleInfo *info) {
+  struct ivar_list64_t il;
+  struct ivar64_t i;
+  const char *r;
+  uint32_t offset, xoffset, left, j;
+  SectionRef S, xS;
+  const char *name, *sym_name, *ivar_offset_p;
+  uint64_t ivar_offset, n_value;
+
+  r = get_pointer_64(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&il, '\0', sizeof(struct ivar_list64_t));
+  if (left < sizeof(struct ivar_list64_t)) {
+    memcpy(&il, r, left);
+    outs() << "   (ivar_list_t entends past the end of the section)\n";
+  } else
+    memcpy(&il, r, sizeof(struct ivar_list64_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(il);
+  outs() << "                    entsize " << il.entsize << "\n";
+  outs() << "                      count " << il.count << "\n";
+
+  p += sizeof(struct ivar_list64_t);
+  offset += sizeof(struct ivar_list64_t);
+  for (j = 0; j < il.count; j++) {
+    r = get_pointer_64(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&i, '\0', sizeof(struct ivar64_t));
+    if (left < sizeof(struct ivar64_t)) {
+      memcpy(&i, r, left);
+      outs() << "   (ivar_t entends past the end of the section)\n";
+    } else
+      memcpy(&i, r, sizeof(struct ivar64_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(i);
+
+    outs() << "\t\t\t   offset ";
+    sym_name = get_symbol_64(offset + offsetof(struct ivar64_t, offset), S,
+                             info, n_value, i.offset);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (i.offset != 0)
+        outs() << " + " << format("0x%" PRIx64, i.offset);
+    } else
+      outs() << format("0x%" PRIx64, i.offset);
+    ivar_offset_p = get_pointer_64(i.offset + n_value, xoffset, left, xS, info);
+    if (ivar_offset_p != nullptr && left >= sizeof(*ivar_offset_p)) {
+      memcpy(&ivar_offset, ivar_offset_p, sizeof(ivar_offset));
+      if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+        sys::swapByteOrder(ivar_offset);
+      outs() << " " << ivar_offset << "\n";
+    } else
+      outs() << "\n";
+
+    outs() << "\t\t\t     name ";
+    sym_name = get_symbol_64(offset + offsetof(struct ivar64_t, name), S, info,
+                             n_value, i.name);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (i.name != 0)
+        outs() << " + " << format("0x%" PRIx64, i.name);
+    } else
+      outs() << format("0x%" PRIx64, i.name);
+    name = get_pointer_64(i.name + n_value, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << "\t\t\t     type ";
+    sym_name = get_symbol_64(offset + offsetof(struct ivar64_t, type), S, info,
+                             n_value, i.name);
+    name = get_pointer_64(i.type + n_value, xoffset, left, xS, info);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (i.type != 0)
+        outs() << " + " << format("0x%" PRIx64, i.type);
+    } else
+      outs() << format("0x%" PRIx64, i.type);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << "\t\t\talignment " << i.alignment << "\n";
+    outs() << "\t\t\t     size " << i.size << "\n";
+
+    p += sizeof(struct ivar64_t);
+    offset += sizeof(struct ivar64_t);
+  }
+}
+
+static void print_ivar_list32_t(uint32_t p, struct DisassembleInfo *info) {
+  struct ivar_list32_t il;
+  struct ivar32_t i;
+  const char *r;
+  uint32_t offset, xoffset, left, j;
+  SectionRef S, xS;
+  const char *name, *ivar_offset_p;
+  uint32_t ivar_offset;
+
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&il, '\0', sizeof(struct ivar_list32_t));
+  if (left < sizeof(struct ivar_list32_t)) {
+    memcpy(&il, r, left);
+    outs() << "   (ivar_list_t entends past the end of the section)\n";
+  } else
+    memcpy(&il, r, sizeof(struct ivar_list32_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(il);
+  outs() << "                    entsize " << il.entsize << "\n";
+  outs() << "                      count " << il.count << "\n";
+
+  p += sizeof(struct ivar_list32_t);
+  offset += sizeof(struct ivar_list32_t);
+  for (j = 0; j < il.count; j++) {
+    r = get_pointer_32(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&i, '\0', sizeof(struct ivar32_t));
+    if (left < sizeof(struct ivar32_t)) {
+      memcpy(&i, r, left);
+      outs() << "   (ivar_t entends past the end of the section)\n";
+    } else
+      memcpy(&i, r, sizeof(struct ivar32_t));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(i);
+
+    outs() << "\t\t\t   offset " << format("0x%" PRIx32, i.offset);
+    ivar_offset_p = get_pointer_32(i.offset, xoffset, left, xS, info);
+    if (ivar_offset_p != nullptr && left >= sizeof(*ivar_offset_p)) {
+      memcpy(&ivar_offset, ivar_offset_p, sizeof(ivar_offset));
+      if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+        sys::swapByteOrder(ivar_offset);
+      outs() << " " << ivar_offset << "\n";
+    } else
+      outs() << "\n";
+
+    outs() << "\t\t\t     name " << format("0x%" PRIx32, i.name);
+    name = get_pointer_32(i.name, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << "\t\t\t     type " << format("0x%" PRIx32, i.type);
+    name = get_pointer_32(i.type, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << "\t\t\talignment " << i.alignment << "\n";
+    outs() << "\t\t\t     size " << i.size << "\n";
+
+    p += sizeof(struct ivar32_t);
+    offset += sizeof(struct ivar32_t);
+  }
+}
+
+static void print_objc_property_list64(uint64_t p,
+                                       struct DisassembleInfo *info) {
+  struct objc_property_list64 opl;
+  struct objc_property64 op;
+  const char *r;
+  uint32_t offset, xoffset, left, j;
+  SectionRef S, xS;
+  const char *name, *sym_name;
+  uint64_t n_value;
+
+  r = get_pointer_64(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&opl, '\0', sizeof(struct objc_property_list64));
+  if (left < sizeof(struct objc_property_list64)) {
+    memcpy(&opl, r, left);
+    outs() << "   (objc_property_list entends past the end of the section)\n";
+  } else
+    memcpy(&opl, r, sizeof(struct objc_property_list64));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(opl);
+  outs() << "                    entsize " << opl.entsize << "\n";
+  outs() << "                      count " << opl.count << "\n";
+
+  p += sizeof(struct objc_property_list64);
+  offset += sizeof(struct objc_property_list64);
+  for (j = 0; j < opl.count; j++) {
+    r = get_pointer_64(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&op, '\0', sizeof(struct objc_property64));
+    if (left < sizeof(struct objc_property64)) {
+      memcpy(&op, r, left);
+      outs() << "   (objc_property entends past the end of the section)\n";
+    } else
+      memcpy(&op, r, sizeof(struct objc_property64));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(op);
+
+    outs() << "\t\t\t     name ";
+    sym_name = get_symbol_64(offset + offsetof(struct objc_property64, name), S,
+                             info, n_value, op.name);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (op.name != 0)
+        outs() << " + " << format("0x%" PRIx64, op.name);
+    } else
+      outs() << format("0x%" PRIx64, op.name);
+    name = get_pointer_64(op.name + n_value, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << "\t\t\tattributes ";
+    sym_name =
+        get_symbol_64(offset + offsetof(struct objc_property64, attributes), S,
+                      info, n_value, op.attributes);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (op.attributes != 0)
+        outs() << " + " << format("0x%" PRIx64, op.attributes);
+    } else
+      outs() << format("0x%" PRIx64, op.attributes);
+    name = get_pointer_64(op.attributes + n_value, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    p += sizeof(struct objc_property64);
+    offset += sizeof(struct objc_property64);
+  }
+}
+
+static void print_objc_property_list32(uint32_t p,
+                                       struct DisassembleInfo *info) {
+  struct objc_property_list32 opl;
+  struct objc_property32 op;
+  const char *r;
+  uint32_t offset, xoffset, left, j;
+  SectionRef S, xS;
+  const char *name;
+
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&opl, '\0', sizeof(struct objc_property_list32));
+  if (left < sizeof(struct objc_property_list32)) {
+    memcpy(&opl, r, left);
+    outs() << "   (objc_property_list entends past the end of the section)\n";
+  } else
+    memcpy(&opl, r, sizeof(struct objc_property_list32));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(opl);
+  outs() << "                    entsize " << opl.entsize << "\n";
+  outs() << "                      count " << opl.count << "\n";
+
+  p += sizeof(struct objc_property_list32);
+  offset += sizeof(struct objc_property_list32);
+  for (j = 0; j < opl.count; j++) {
+    r = get_pointer_32(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&op, '\0', sizeof(struct objc_property32));
+    if (left < sizeof(struct objc_property32)) {
+      memcpy(&op, r, left);
+      outs() << "   (objc_property entends past the end of the section)\n";
+    } else
+      memcpy(&op, r, sizeof(struct objc_property32));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(op);
+
+    outs() << "\t\t\t     name " << format("0x%" PRIx32, op.name);
+    name = get_pointer_32(op.name, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    outs() << "\t\t\tattributes " << format("0x%" PRIx32, op.attributes);
+    name = get_pointer_32(op.attributes, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    p += sizeof(struct objc_property32);
+    offset += sizeof(struct objc_property32);
+  }
+}
+
+static void print_class_ro64_t(uint64_t p, struct DisassembleInfo *info,
+                               bool &is_meta_class) {
+  struct class_ro64_t cro;
+  const char *r;
+  uint32_t offset, xoffset, left;
+  SectionRef S, xS;
+  const char *name, *sym_name;
+  uint64_t n_value;
+
+  r = get_pointer_64(p, offset, left, S, info);
+  if (r == nullptr || left < sizeof(struct class_ro64_t))
+    return;
+  memset(&cro, '\0', sizeof(struct class_ro64_t));
+  if (left < sizeof(struct class_ro64_t)) {
+    memcpy(&cro, r, left);
+    outs() << "   (class_ro_t entends past the end of the section)\n";
+  } else
+    memcpy(&cro, r, sizeof(struct class_ro64_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(cro);
+  outs() << "                    flags " << format("0x%" PRIx32, cro.flags);
+  if (cro.flags & RO_META)
+    outs() << " RO_META";
+  if (cro.flags & RO_ROOT)
+    outs() << " RO_ROOT";
+  if (cro.flags & RO_HAS_CXX_STRUCTORS)
+    outs() << " RO_HAS_CXX_STRUCTORS";
+  outs() << "\n";
+  outs() << "            instanceStart " << cro.instanceStart << "\n";
+  outs() << "             instanceSize " << cro.instanceSize << "\n";
+  outs() << "                 reserved " << format("0x%" PRIx32, cro.reserved)
+         << "\n";
+  outs() << "               ivarLayout " << format("0x%" PRIx64, cro.ivarLayout)
+         << "\n";
+  print_layout_map64(cro.ivarLayout, info);
+
+  outs() << "                     name ";
+  sym_name = get_symbol_64(offset + offsetof(struct class_ro64_t, name), S,
+                           info, n_value, cro.name);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (cro.name != 0)
+      outs() << " + " << format("0x%" PRIx64, cro.name);
+  } else
+    outs() << format("0x%" PRIx64, cro.name);
+  name = get_pointer_64(cro.name + n_value, xoffset, left, xS, info);
+  if (name != nullptr)
+    outs() << format(" %.*s", left, name);
+  outs() << "\n";
+
+  outs() << "              baseMethods ";
+  sym_name = get_symbol_64(offset + offsetof(struct class_ro64_t, baseMethods),
+                           S, info, n_value, cro.baseMethods);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (cro.baseMethods != 0)
+      outs() << " + " << format("0x%" PRIx64, cro.baseMethods);
+  } else
+    outs() << format("0x%" PRIx64, cro.baseMethods);
+  outs() << " (struct method_list_t *)\n";
+  if (cro.baseMethods + n_value != 0)
+    print_method_list64_t(cro.baseMethods + n_value, info, "");
+
+  outs() << "            baseProtocols ";
+  sym_name =
+      get_symbol_64(offset + offsetof(struct class_ro64_t, baseProtocols), S,
+                    info, n_value, cro.baseProtocols);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (cro.baseProtocols != 0)
+      outs() << " + " << format("0x%" PRIx64, cro.baseProtocols);
+  } else
+    outs() << format("0x%" PRIx64, cro.baseProtocols);
+  outs() << "\n";
+  if (cro.baseProtocols + n_value != 0)
+    print_protocol_list64_t(cro.baseProtocols + n_value, info);
+
+  outs() << "                    ivars ";
+  sym_name = get_symbol_64(offset + offsetof(struct class_ro64_t, ivars), S,
+                           info, n_value, cro.ivars);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (cro.ivars != 0)
+      outs() << " + " << format("0x%" PRIx64, cro.ivars);
+  } else
+    outs() << format("0x%" PRIx64, cro.ivars);
+  outs() << "\n";
+  if (cro.ivars + n_value != 0)
+    print_ivar_list64_t(cro.ivars + n_value, info);
+
+  outs() << "           weakIvarLayout ";
+  sym_name =
+      get_symbol_64(offset + offsetof(struct class_ro64_t, weakIvarLayout), S,
+                    info, n_value, cro.weakIvarLayout);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (cro.weakIvarLayout != 0)
+      outs() << " + " << format("0x%" PRIx64, cro.weakIvarLayout);
+  } else
+    outs() << format("0x%" PRIx64, cro.weakIvarLayout);
+  outs() << "\n";
+  print_layout_map64(cro.weakIvarLayout + n_value, info);
+
+  outs() << "           baseProperties ";
+  sym_name =
+      get_symbol_64(offset + offsetof(struct class_ro64_t, baseProperties), S,
+                    info, n_value, cro.baseProperties);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (cro.baseProperties != 0)
+      outs() << " + " << format("0x%" PRIx64, cro.baseProperties);
+  } else
+    outs() << format("0x%" PRIx64, cro.baseProperties);
+  outs() << "\n";
+  if (cro.baseProperties + n_value != 0)
+    print_objc_property_list64(cro.baseProperties + n_value, info);
+
+  is_meta_class = (cro.flags & RO_META) ? true : false;
+}
+
+static void print_class_ro32_t(uint32_t p, struct DisassembleInfo *info,
+                               bool &is_meta_class) {
+  struct class_ro32_t cro;
+  const char *r;
+  uint32_t offset, xoffset, left;
+  SectionRef S, xS;
+  const char *name;
+
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&cro, '\0', sizeof(struct class_ro32_t));
+  if (left < sizeof(struct class_ro32_t)) {
+    memcpy(&cro, r, left);
+    outs() << "   (class_ro_t entends past the end of the section)\n";
+  } else
+    memcpy(&cro, r, sizeof(struct class_ro32_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(cro);
+  outs() << "                    flags " << format("0x%" PRIx32, cro.flags);
+  if (cro.flags & RO_META)
+    outs() << " RO_META";
+  if (cro.flags & RO_ROOT)
+    outs() << " RO_ROOT";
+  if (cro.flags & RO_HAS_CXX_STRUCTORS)
+    outs() << " RO_HAS_CXX_STRUCTORS";
+  outs() << "\n";
+  outs() << "            instanceStart " << cro.instanceStart << "\n";
+  outs() << "             instanceSize " << cro.instanceSize << "\n";
+  outs() << "               ivarLayout " << format("0x%" PRIx32, cro.ivarLayout)
+         << "\n";
+  print_layout_map32(cro.ivarLayout, info);
+
+  outs() << "                     name " << format("0x%" PRIx32, cro.name);
+  name = get_pointer_32(cro.name, xoffset, left, xS, info);
+  if (name != nullptr)
+    outs() << format(" %.*s", left, name);
+  outs() << "\n";
+
+  outs() << "              baseMethods "
+         << format("0x%" PRIx32, cro.baseMethods)
+         << " (struct method_list_t *)\n";
+  if (cro.baseMethods != 0)
+    print_method_list32_t(cro.baseMethods, info, "");
+
+  outs() << "            baseProtocols "
+         << format("0x%" PRIx32, cro.baseProtocols) << "\n";
+  if (cro.baseProtocols != 0)
+    print_protocol_list32_t(cro.baseProtocols, info);
+  outs() << "                    ivars " << format("0x%" PRIx32, cro.ivars)
+         << "\n";
+  if (cro.ivars != 0)
+    print_ivar_list32_t(cro.ivars, info);
+  outs() << "           weakIvarLayout "
+         << format("0x%" PRIx32, cro.weakIvarLayout) << "\n";
+  print_layout_map32(cro.weakIvarLayout, info);
+  outs() << "           baseProperties "
+         << format("0x%" PRIx32, cro.baseProperties) << "\n";
+  if (cro.baseProperties != 0)
+    print_objc_property_list32(cro.baseProperties, info);
+  is_meta_class = (cro.flags & RO_META) ? true : false;
+}
+
+static void print_class64_t(uint64_t p, struct DisassembleInfo *info) {
+  struct class64_t c;
+  const char *r;
+  uint32_t offset, left;
+  SectionRef S;
+  const char *name;
+  uint64_t isa_n_value, n_value;
+
+  r = get_pointer_64(p, offset, left, S, info);
+  if (r == nullptr || left < sizeof(struct class64_t))
+    return;
+  memset(&c, '\0', sizeof(struct class64_t));
+  if (left < sizeof(struct class64_t)) {
+    memcpy(&c, r, left);
+    outs() << "   (class_t entends past the end of the section)\n";
+  } else
+    memcpy(&c, r, sizeof(struct class64_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(c);
+
+  outs() << "           isa " << format("0x%" PRIx64, c.isa);
+  name = get_symbol_64(offset + offsetof(struct class64_t, isa), S, info,
+                       isa_n_value, c.isa);
+  if (name != nullptr)
+    outs() << " " << name;
+  outs() << "\n";
+
+  outs() << "    superclass " << format("0x%" PRIx64, c.superclass);
+  name = get_symbol_64(offset + offsetof(struct class64_t, superclass), S, info,
+                       n_value, c.superclass);
+  if (name != nullptr)
+    outs() << " " << name;
+  outs() << "\n";
+
+  outs() << "         cache " << format("0x%" PRIx64, c.cache);
+  name = get_symbol_64(offset + offsetof(struct class64_t, cache), S, info,
+                       n_value, c.cache);
+  if (name != nullptr)
+    outs() << " " << name;
+  outs() << "\n";
+
+  outs() << "        vtable " << format("0x%" PRIx64, c.vtable);
+  name = get_symbol_64(offset + offsetof(struct class64_t, vtable), S, info,
+                       n_value, c.vtable);
+  if (name != nullptr)
+    outs() << " " << name;
+  outs() << "\n";
+
+  name = get_symbol_64(offset + offsetof(struct class64_t, data), S, info,
+                       n_value, c.data);
+  outs() << "          data ";
+  if (n_value != 0) {
+    if (info->verbose && name != nullptr)
+      outs() << name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (c.data != 0)
+      outs() << " + " << format("0x%" PRIx64, c.data);
+  } else
+    outs() << format("0x%" PRIx64, c.data);
+  outs() << " (struct class_ro_t *)";
+
+  // This is a Swift class if some of the low bits of the pointer are set.
+  if ((c.data + n_value) & 0x7)
+    outs() << " Swift class";
+  outs() << "\n";
+  bool is_meta_class;
+  print_class_ro64_t((c.data + n_value) & ~0x7, info, is_meta_class);
+
+  if (is_meta_class == false) {
+    outs() << "Meta Class\n";
+    print_class64_t(c.isa + isa_n_value, info);
+  }
+}
+
+static void print_class32_t(uint32_t p, struct DisassembleInfo *info) {
+  struct class32_t c;
+  const char *r;
+  uint32_t offset, left;
+  SectionRef S;
+  const char *name;
+
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&c, '\0', sizeof(struct class32_t));
+  if (left < sizeof(struct class32_t)) {
+    memcpy(&c, r, left);
+    outs() << "   (class_t entends past the end of the section)\n";
+  } else
+    memcpy(&c, r, sizeof(struct class32_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(c);
+
+  outs() << "           isa " << format("0x%" PRIx32, c.isa);
+  name =
+      get_symbol_32(offset + offsetof(struct class32_t, isa), S, info, c.isa);
+  if (name != nullptr)
+    outs() << " " << name;
+  outs() << "\n";
+
+  outs() << "    superclass " << format("0x%" PRIx32, c.superclass);
+  name = get_symbol_32(offset + offsetof(struct class32_t, superclass), S, info,
+                       c.superclass);
+  if (name != nullptr)
+    outs() << " " << name;
+  outs() << "\n";
+
+  outs() << "         cache " << format("0x%" PRIx32, c.cache);
+  name = get_symbol_32(offset + offsetof(struct class32_t, cache), S, info,
+                       c.cache);
+  if (name != nullptr)
+    outs() << " " << name;
+  outs() << "\n";
+
+  outs() << "        vtable " << format("0x%" PRIx32, c.vtable);
+  name = get_symbol_32(offset + offsetof(struct class32_t, vtable), S, info,
+                       c.vtable);
+  if (name != nullptr)
+    outs() << " " << name;
+  outs() << "\n";
+
+  name =
+      get_symbol_32(offset + offsetof(struct class32_t, data), S, info, c.data);
+  outs() << "          data " << format("0x%" PRIx32, c.data)
+         << " (struct class_ro_t *)";
+
+  // This is a Swift class if some of the low bits of the pointer are set.
+  if (c.data & 0x3)
+    outs() << " Swift class";
+  outs() << "\n";
+  bool is_meta_class;
+  print_class_ro32_t(c.data & ~0x3, info, is_meta_class);
+
+  if (is_meta_class == false) {
+    outs() << "Meta Class\n";
+    print_class32_t(c.isa, info);
+  }
+}
+
+static void print_objc_class_t(struct objc_class_t *objc_class,
+                               struct DisassembleInfo *info) {
+  uint32_t offset, left, xleft;
+  const char *name, *p, *ivar_list;
+  SectionRef S;
+  int32_t i;
+  struct objc_ivar_list_t objc_ivar_list;
+  struct objc_ivar_t ivar;
+
+  outs() << "\t\t      isa " << format("0x%08" PRIx32, objc_class->isa);
+  if (info->verbose && CLS_GETINFO(objc_class, CLS_META)) {
+    name = get_pointer_32(objc_class->isa, offset, left, S, info, true);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    else
+      outs() << " (not in an __OBJC section)";
+  }
+  outs() << "\n";
+
+  outs() << "\t      super_class "
+         << format("0x%08" PRIx32, objc_class->super_class);
+  if (info->verbose) {
+    name = get_pointer_32(objc_class->super_class, offset, left, S, info, true);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    else
+      outs() << " (not in an __OBJC section)";
+  }
+  outs() << "\n";
+
+  outs() << "\t\t     name " << format("0x%08" PRIx32, objc_class->name);
+  if (info->verbose) {
+    name = get_pointer_32(objc_class->name, offset, left, S, info, true);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    else
+      outs() << " (not in an __OBJC section)";
+  }
+  outs() << "\n";
+
+  outs() << "\t\t  version " << format("0x%08" PRIx32, objc_class->version)
+         << "\n";
+
+  outs() << "\t\t     info " << format("0x%08" PRIx32, objc_class->info);
+  if (info->verbose) {
+    if (CLS_GETINFO(objc_class, CLS_CLASS))
+      outs() << " CLS_CLASS";
+    else if (CLS_GETINFO(objc_class, CLS_META))
+      outs() << " CLS_META";
+  }
+  outs() << "\n";
+
+  outs() << "\t    instance_size "
+         << format("0x%08" PRIx32, objc_class->instance_size) << "\n";
+
+  p = get_pointer_32(objc_class->ivars, offset, left, S, info, true);
+  outs() << "\t\t    ivars " << format("0x%08" PRIx32, objc_class->ivars);
+  if (p != nullptr) {
+    if (left > sizeof(struct objc_ivar_list_t)) {
+      outs() << "\n";
+      memcpy(&objc_ivar_list, p, sizeof(struct objc_ivar_list_t));
+    } else {
+      outs() << " (entends past the end of the section)\n";
+      memset(&objc_ivar_list, '\0', sizeof(struct objc_ivar_list_t));
+      memcpy(&objc_ivar_list, p, left);
+    }
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(objc_ivar_list);
+    outs() << "\t\t       ivar_count " << objc_ivar_list.ivar_count << "\n";
+    ivar_list = p + sizeof(struct objc_ivar_list_t);
+    for (i = 0; i < objc_ivar_list.ivar_count; i++) {
+      if ((i + 1) * sizeof(struct objc_ivar_t) > left) {
+        outs() << "\t\t remaining ivar's extend past the of the section\n";
+        break;
+      }
+      memcpy(&ivar, ivar_list + i * sizeof(struct objc_ivar_t),
+             sizeof(struct objc_ivar_t));
+      if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+        swapStruct(ivar);
+
+      outs() << "\t\t\tivar_name " << format("0x%08" PRIx32, ivar.ivar_name);
+      if (info->verbose) {
+        name = get_pointer_32(ivar.ivar_name, offset, xleft, S, info, true);
+        if (name != nullptr)
+          outs() << format(" %.*s", xleft, name);
+        else
+          outs() << " (not in an __OBJC section)";
+      }
+      outs() << "\n";
+
+      outs() << "\t\t\tivar_type " << format("0x%08" PRIx32, ivar.ivar_type);
+      if (info->verbose) {
+        name = get_pointer_32(ivar.ivar_type, offset, xleft, S, info, true);
+        if (name != nullptr)
+          outs() << format(" %.*s", xleft, name);
+        else
+          outs() << " (not in an __OBJC section)";
+      }
+      outs() << "\n";
+
+      outs() << "\t\t      ivar_offset "
+             << format("0x%08" PRIx32, ivar.ivar_offset) << "\n";
+    }
+  } else {
+    outs() << " (not in an __OBJC section)\n";
+  }
+
+  outs() << "\t\t  methods " << format("0x%08" PRIx32, objc_class->methodLists);
+  if (print_method_list(objc_class->methodLists, info))
+    outs() << " (not in an __OBJC section)\n";
+
+  outs() << "\t\t    cache " << format("0x%08" PRIx32, objc_class->cache)
+         << "\n";
+
+  outs() << "\t\tprotocols " << format("0x%08" PRIx32, objc_class->protocols);
+  if (print_protocol_list(objc_class->protocols, 16, info))
+    outs() << " (not in an __OBJC section)\n";
+}
+
+static void print_objc_objc_category_t(struct objc_category_t *objc_category,
+                                       struct DisassembleInfo *info) {
+  uint32_t offset, left;
+  const char *name;
+  SectionRef S;
+
+  outs() << "\t       category name "
+         << format("0x%08" PRIx32, objc_category->category_name);
+  if (info->verbose) {
+    name = get_pointer_32(objc_category->category_name, offset, left, S, info,
+                          true);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    else
+      outs() << " (not in an __OBJC section)";
+  }
+  outs() << "\n";
+
+  outs() << "\t\t  class name "
+         << format("0x%08" PRIx32, objc_category->class_name);
+  if (info->verbose) {
+    name =
+        get_pointer_32(objc_category->class_name, offset, left, S, info, true);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    else
+      outs() << " (not in an __OBJC section)";
+  }
+  outs() << "\n";
+
+  outs() << "\t    instance methods "
+         << format("0x%08" PRIx32, objc_category->instance_methods);
+  if (print_method_list(objc_category->instance_methods, info))
+    outs() << " (not in an __OBJC section)\n";
+
+  outs() << "\t       class methods "
+         << format("0x%08" PRIx32, objc_category->class_methods);
+  if (print_method_list(objc_category->class_methods, info))
+    outs() << " (not in an __OBJC section)\n";
+}
+
+static void print_category64_t(uint64_t p, struct DisassembleInfo *info) {
+  struct category64_t c;
+  const char *r;
+  uint32_t offset, xoffset, left;
+  SectionRef S, xS;
+  const char *name, *sym_name;
+  uint64_t n_value;
+
+  r = get_pointer_64(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&c, '\0', sizeof(struct category64_t));
+  if (left < sizeof(struct category64_t)) {
+    memcpy(&c, r, left);
+    outs() << "   (category_t entends past the end of the section)\n";
+  } else
+    memcpy(&c, r, sizeof(struct category64_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(c);
+
+  outs() << "              name ";
+  sym_name = get_symbol_64(offset + offsetof(struct category64_t, name), S,
+                           info, n_value, c.name);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (c.name != 0)
+      outs() << " + " << format("0x%" PRIx64, c.name);
+  } else
+    outs() << format("0x%" PRIx64, c.name);
+  name = get_pointer_64(c.name + n_value, xoffset, left, xS, info);
+  if (name != nullptr)
+    outs() << format(" %.*s", left, name);
+  outs() << "\n";
+
+  outs() << "               cls ";
+  sym_name = get_symbol_64(offset + offsetof(struct category64_t, cls), S, info,
+                           n_value, c.cls);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (c.cls != 0)
+      outs() << " + " << format("0x%" PRIx64, c.cls);
+  } else
+    outs() << format("0x%" PRIx64, c.cls);
+  outs() << "\n";
+  if (c.cls + n_value != 0)
+    print_class64_t(c.cls + n_value, info);
+
+  outs() << "   instanceMethods ";
+  sym_name =
+      get_symbol_64(offset + offsetof(struct category64_t, instanceMethods), S,
+                    info, n_value, c.instanceMethods);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (c.instanceMethods != 0)
+      outs() << " + " << format("0x%" PRIx64, c.instanceMethods);
+  } else
+    outs() << format("0x%" PRIx64, c.instanceMethods);
+  outs() << "\n";
+  if (c.instanceMethods + n_value != 0)
+    print_method_list64_t(c.instanceMethods + n_value, info, "");
+
+  outs() << "      classMethods ";
+  sym_name = get_symbol_64(offset + offsetof(struct category64_t, classMethods),
+                           S, info, n_value, c.classMethods);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (c.classMethods != 0)
+      outs() << " + " << format("0x%" PRIx64, c.classMethods);
+  } else
+    outs() << format("0x%" PRIx64, c.classMethods);
+  outs() << "\n";
+  if (c.classMethods + n_value != 0)
+    print_method_list64_t(c.classMethods + n_value, info, "");
+
+  outs() << "         protocols ";
+  sym_name = get_symbol_64(offset + offsetof(struct category64_t, protocols), S,
+                           info, n_value, c.protocols);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (c.protocols != 0)
+      outs() << " + " << format("0x%" PRIx64, c.protocols);
+  } else
+    outs() << format("0x%" PRIx64, c.protocols);
+  outs() << "\n";
+  if (c.protocols + n_value != 0)
+    print_protocol_list64_t(c.protocols + n_value, info);
+
+  outs() << "instanceProperties ";
+  sym_name =
+      get_symbol_64(offset + offsetof(struct category64_t, instanceProperties),
+                    S, info, n_value, c.instanceProperties);
+  if (n_value != 0) {
+    if (info->verbose && sym_name != nullptr)
+      outs() << sym_name;
+    else
+      outs() << format("0x%" PRIx64, n_value);
+    if (c.instanceProperties != 0)
+      outs() << " + " << format("0x%" PRIx64, c.instanceProperties);
+  } else
+    outs() << format("0x%" PRIx64, c.instanceProperties);
+  outs() << "\n";
+  if (c.instanceProperties + n_value != 0)
+    print_objc_property_list64(c.instanceProperties + n_value, info);
+}
+
+static void print_category32_t(uint32_t p, struct DisassembleInfo *info) {
+  struct category32_t c;
+  const char *r;
+  uint32_t offset, left;
+  SectionRef S, xS;
+  const char *name;
+
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&c, '\0', sizeof(struct category32_t));
+  if (left < sizeof(struct category32_t)) {
+    memcpy(&c, r, left);
+    outs() << "   (category_t entends past the end of the section)\n";
+  } else
+    memcpy(&c, r, sizeof(struct category32_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(c);
+
+  outs() << "              name " << format("0x%" PRIx32, c.name);
+  name = get_symbol_32(offset + offsetof(struct category32_t, name), S, info,
+                       c.name);
+  if (name != NULL)
+    outs() << " " << name;
+  outs() << "\n";
+
+  outs() << "               cls " << format("0x%" PRIx32, c.cls) << "\n";
+  if (c.cls != 0)
+    print_class32_t(c.cls, info);
+  outs() << "   instanceMethods " << format("0x%" PRIx32, c.instanceMethods)
+         << "\n";
+  if (c.instanceMethods != 0)
+    print_method_list32_t(c.instanceMethods, info, "");
+  outs() << "      classMethods " << format("0x%" PRIx32, c.classMethods)
+         << "\n";
+  if (c.classMethods != 0)
+    print_method_list32_t(c.classMethods, info, "");
+  outs() << "         protocols " << format("0x%" PRIx32, c.protocols) << "\n";
+  if (c.protocols != 0)
+    print_protocol_list32_t(c.protocols, info);
+  outs() << "instanceProperties " << format("0x%" PRIx32, c.instanceProperties)
+         << "\n";
+  if (c.instanceProperties != 0)
+    print_objc_property_list32(c.instanceProperties, info);
+}
+
+static void print_message_refs64(SectionRef S, struct DisassembleInfo *info) {
+  uint32_t i, left, offset, xoffset;
+  uint64_t p, n_value;
+  struct message_ref64 mr;
+  const char *name, *sym_name;
+  const char *r;
+  SectionRef xS;
+
+  if (S == SectionRef())
+    return;
+
+  StringRef SectName;
+  S.getName(SectName);
+  DataRefImpl Ref = S.getRawDataRefImpl();
+  StringRef SegName = info->O->getSectionFinalSegmentName(Ref);
+  outs() << "Contents of (" << SegName << "," << SectName << ") section\n";
+  offset = 0;
+  for (i = 0; i < S.getSize(); i += sizeof(struct message_ref64)) {
+    p = S.getAddress() + i;
+    r = get_pointer_64(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&mr, '\0', sizeof(struct message_ref64));
+    if (left < sizeof(struct message_ref64)) {
+      memcpy(&mr, r, left);
+      outs() << "   (message_ref entends past the end of the section)\n";
+    } else
+      memcpy(&mr, r, sizeof(struct message_ref64));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(mr);
+
+    outs() << "  imp ";
+    name = get_symbol_64(offset + offsetof(struct message_ref64, imp), S, info,
+                         n_value, mr.imp);
+    if (n_value != 0) {
+      outs() << format("0x%" PRIx64, n_value) << " ";
+      if (mr.imp != 0)
+        outs() << "+ " << format("0x%" PRIx64, mr.imp) << " ";
+    } else
+      outs() << format("0x%" PRIx64, mr.imp) << " ";
+    if (name != nullptr)
+      outs() << " " << name;
+    outs() << "\n";
+
+    outs() << "  sel ";
+    sym_name = get_symbol_64(offset + offsetof(struct message_ref64, sel), S,
+                             info, n_value, mr.sel);
+    if (n_value != 0) {
+      if (info->verbose && sym_name != nullptr)
+        outs() << sym_name;
+      else
+        outs() << format("0x%" PRIx64, n_value);
+      if (mr.sel != 0)
+        outs() << " + " << format("0x%" PRIx64, mr.sel);
+    } else
+      outs() << format("0x%" PRIx64, mr.sel);
+    name = get_pointer_64(mr.sel + n_value, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << format(" %.*s", left, name);
+    outs() << "\n";
+
+    offset += sizeof(struct message_ref64);
+  }
+}
+
+static void print_message_refs32(SectionRef S, struct DisassembleInfo *info) {
+  uint32_t i, left, offset, xoffset, p;
+  struct message_ref32 mr;
+  const char *name, *r;
+  SectionRef xS;
+
+  if (S == SectionRef())
+    return;
+
+  StringRef SectName;
+  S.getName(SectName);
+  DataRefImpl Ref = S.getRawDataRefImpl();
+  StringRef SegName = info->O->getSectionFinalSegmentName(Ref);
+  outs() << "Contents of (" << SegName << "," << SectName << ") section\n";
+  offset = 0;
+  for (i = 0; i < S.getSize(); i += sizeof(struct message_ref64)) {
+    p = S.getAddress() + i;
+    r = get_pointer_32(p, offset, left, S, info);
+    if (r == nullptr)
+      return;
+    memset(&mr, '\0', sizeof(struct message_ref32));
+    if (left < sizeof(struct message_ref32)) {
+      memcpy(&mr, r, left);
+      outs() << "   (message_ref entends past the end of the section)\n";
+    } else
+      memcpy(&mr, r, sizeof(struct message_ref32));
+    if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(mr);
+
+    outs() << "  imp " << format("0x%" PRIx32, mr.imp);
+    name = get_symbol_32(offset + offsetof(struct message_ref32, imp), S, info,
+                         mr.imp);
+    if (name != nullptr)
+      outs() << " " << name;
+    outs() << "\n";
+
+    outs() << "  sel " << format("0x%" PRIx32, mr.sel);
+    name = get_pointer_32(mr.sel, xoffset, left, xS, info);
+    if (name != nullptr)
+      outs() << " " << name;
+    outs() << "\n";
+
+    offset += sizeof(struct message_ref32);
+  }
+}
+
+static void print_image_info64(SectionRef S, struct DisassembleInfo *info) {
+  uint32_t left, offset, swift_version;
+  uint64_t p;
+  struct objc_image_info64 o;
+  const char *r;
+
+  StringRef SectName;
+  S.getName(SectName);
+  DataRefImpl Ref = S.getRawDataRefImpl();
+  StringRef SegName = info->O->getSectionFinalSegmentName(Ref);
+  outs() << "Contents of (" << SegName << "," << SectName << ") section\n";
+  p = S.getAddress();
+  r = get_pointer_64(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&o, '\0', sizeof(struct objc_image_info64));
+  if (left < sizeof(struct objc_image_info64)) {
+    memcpy(&o, r, left);
+    outs() << "   (objc_image_info entends past the end of the section)\n";
+  } else
+    memcpy(&o, r, sizeof(struct objc_image_info64));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(o);
+  outs() << "  version " << o.version << "\n";
+  outs() << "    flags " << format("0x%" PRIx32, o.flags);
+  if (o.flags & OBJC_IMAGE_IS_REPLACEMENT)
+    outs() << " OBJC_IMAGE_IS_REPLACEMENT";
+  if (o.flags & OBJC_IMAGE_SUPPORTS_GC)
+    outs() << " OBJC_IMAGE_SUPPORTS_GC";
+  swift_version = (o.flags >> 8) & 0xff;
+  if (swift_version != 0) {
+    if (swift_version == 1)
+      outs() << " Swift 1.0";
+    else if (swift_version == 2)
+      outs() << " Swift 1.1";
+    else
+      outs() << " unknown future Swift version (" << swift_version << ")";
+  }
+  outs() << "\n";
+}
+
+static void print_image_info32(SectionRef S, struct DisassembleInfo *info) {
+  uint32_t left, offset, swift_version, p;
+  struct objc_image_info32 o;
+  const char *r;
+
+  StringRef SectName;
+  S.getName(SectName);
+  DataRefImpl Ref = S.getRawDataRefImpl();
+  StringRef SegName = info->O->getSectionFinalSegmentName(Ref);
+  outs() << "Contents of (" << SegName << "," << SectName << ") section\n";
+  p = S.getAddress();
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&o, '\0', sizeof(struct objc_image_info32));
+  if (left < sizeof(struct objc_image_info32)) {
+    memcpy(&o, r, left);
+    outs() << "   (objc_image_info entends past the end of the section)\n";
+  } else
+    memcpy(&o, r, sizeof(struct objc_image_info32));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(o);
+  outs() << "  version " << o.version << "\n";
+  outs() << "    flags " << format("0x%" PRIx32, o.flags);
+  if (o.flags & OBJC_IMAGE_IS_REPLACEMENT)
+    outs() << " OBJC_IMAGE_IS_REPLACEMENT";
+  if (o.flags & OBJC_IMAGE_SUPPORTS_GC)
+    outs() << " OBJC_IMAGE_SUPPORTS_GC";
+  swift_version = (o.flags >> 8) & 0xff;
+  if (swift_version != 0) {
+    if (swift_version == 1)
+      outs() << " Swift 1.0";
+    else if (swift_version == 2)
+      outs() << " Swift 1.1";
+    else
+      outs() << " unknown future Swift version (" << swift_version << ")";
+  }
+  outs() << "\n";
+}
+
+static void print_image_info(SectionRef S, struct DisassembleInfo *info) {
+  uint32_t left, offset, p;
+  struct imageInfo_t o;
+  const char *r;
+
+  StringRef SectName;
+  S.getName(SectName);
+  DataRefImpl Ref = S.getRawDataRefImpl();
+  StringRef SegName = info->O->getSectionFinalSegmentName(Ref);
+  outs() << "Contents of (" << SegName << "," << SectName << ") section\n";
+  p = S.getAddress();
+  r = get_pointer_32(p, offset, left, S, info);
+  if (r == nullptr)
+    return;
+  memset(&o, '\0', sizeof(struct imageInfo_t));
+  if (left < sizeof(struct imageInfo_t)) {
+    memcpy(&o, r, left);
+    outs() << " (imageInfo entends past the end of the section)\n";
+  } else
+    memcpy(&o, r, sizeof(struct imageInfo_t));
+  if (info->O->isLittleEndian() != sys::IsLittleEndianHost)
+    swapStruct(o);
+  outs() << "  version " << o.version << "\n";
+  outs() << "    flags " << format("0x%" PRIx32, o.flags);
+  if (o.flags & 0x1)
+    outs() << "  F&C";
+  if (o.flags & 0x2)
+    outs() << " GC";
+  if (o.flags & 0x4)
+    outs() << " GC-only";
+  else
+    outs() << " RR";
+  outs() << "\n";
+}
+
+static void printObjc2_64bit_MetaData(MachOObjectFile *O, bool verbose) {
+  SymbolAddressMap AddrMap;
+  if (verbose)
+    CreateSymbolAddressMap(O, &AddrMap);
+
+  std::vector<SectionRef> Sections;
+  for (const SectionRef &Section : O->sections()) {
+    StringRef SectName;
+    Section.getName(SectName);
+    Sections.push_back(Section);
+  }
+
+  struct DisassembleInfo info;
+  // Set up the block of info used by the Symbolizer call backs.
+  info.verbose = verbose;
+  info.O = O;
+  info.AddrMap = &AddrMap;
+  info.Sections = &Sections;
+  info.class_name = nullptr;
+  info.selector_name = nullptr;
+  info.method = nullptr;
+  info.demangled_name = nullptr;
+  info.bindtable = nullptr;
+  info.adrp_addr = 0;
+  info.adrp_inst = 0;
+
+  const SectionRef CL = get_section(O, "__OBJC2", "__class_list");
+  if (CL != SectionRef()) {
+    info.S = CL;
+    walk_pointer_list_64("class", CL, O, &info, print_class64_t);
+  } else {
+    const SectionRef CL = get_section(O, "__DATA", "__objc_classlist");
+    info.S = CL;
+    walk_pointer_list_64("class", CL, O, &info, print_class64_t);
+  }
+
+  const SectionRef CR = get_section(O, "__OBJC2", "__class_refs");
+  if (CR != SectionRef()) {
+    info.S = CR;
+    walk_pointer_list_64("class refs", CR, O, &info, nullptr);
+  } else {
+    const SectionRef CR = get_section(O, "__DATA", "__objc_classrefs");
+    info.S = CR;
+    walk_pointer_list_64("class refs", CR, O, &info, nullptr);
+  }
+
+  const SectionRef SR = get_section(O, "__OBJC2", "__super_refs");
+  if (SR != SectionRef()) {
+    info.S = SR;
+    walk_pointer_list_64("super refs", SR, O, &info, nullptr);
+  } else {
+    const SectionRef SR = get_section(O, "__DATA", "__objc_superrefs");
+    info.S = SR;
+    walk_pointer_list_64("super refs", SR, O, &info, nullptr);
+  }
+
+  const SectionRef CA = get_section(O, "__OBJC2", "__category_list");
+  if (CA != SectionRef()) {
+    info.S = CA;
+    walk_pointer_list_64("category", CA, O, &info, print_category64_t);
+  } else {
+    const SectionRef CA = get_section(O, "__DATA", "__objc_catlist");
+    info.S = CA;
+    walk_pointer_list_64("category", CA, O, &info, print_category64_t);
+  }
+
+  const SectionRef PL = get_section(O, "__OBJC2", "__protocol_list");
+  if (PL != SectionRef()) {
+    info.S = PL;
+    walk_pointer_list_64("protocol", PL, O, &info, nullptr);
+  } else {
+    const SectionRef PL = get_section(O, "__DATA", "__objc_protolist");
+    info.S = PL;
+    walk_pointer_list_64("protocol", PL, O, &info, nullptr);
+  }
+
+  const SectionRef MR = get_section(O, "__OBJC2", "__message_refs");
+  if (MR != SectionRef()) {
+    info.S = MR;
+    print_message_refs64(MR, &info);
+  } else {
+    const SectionRef MR = get_section(O, "__DATA", "__objc_msgrefs");
+    info.S = MR;
+    print_message_refs64(MR, &info);
+  }
+
+  const SectionRef II = get_section(O, "__OBJC2", "__image_info");
+  if (II != SectionRef()) {
+    info.S = II;
+    print_image_info64(II, &info);
+  } else {
+    const SectionRef II = get_section(O, "__DATA", "__objc_imageinfo");
+    info.S = II;
+    print_image_info64(II, &info);
+  }
+
+  if (info.bindtable != nullptr)
+    delete info.bindtable;
+}
+
+static void printObjc2_32bit_MetaData(MachOObjectFile *O, bool verbose) {
+  SymbolAddressMap AddrMap;
+  if (verbose)
+    CreateSymbolAddressMap(O, &AddrMap);
+
+  std::vector<SectionRef> Sections;
+  for (const SectionRef &Section : O->sections()) {
+    StringRef SectName;
+    Section.getName(SectName);
+    Sections.push_back(Section);
+  }
+
+  struct DisassembleInfo info;
+  // Set up the block of info used by the Symbolizer call backs.
+  info.verbose = verbose;
+  info.O = O;
+  info.AddrMap = &AddrMap;
+  info.Sections = &Sections;
+  info.class_name = nullptr;
+  info.selector_name = nullptr;
+  info.method = nullptr;
+  info.demangled_name = nullptr;
+  info.bindtable = nullptr;
+  info.adrp_addr = 0;
+  info.adrp_inst = 0;
+
+  const SectionRef CL = get_section(O, "__OBJC2", "__class_list");
+  if (CL != SectionRef()) {
+    info.S = CL;
+    walk_pointer_list_32("class", CL, O, &info, print_class32_t);
+  } else {
+    const SectionRef CL = get_section(O, "__DATA", "__objc_classlist");
+    info.S = CL;
+    walk_pointer_list_32("class", CL, O, &info, print_class32_t);
+  }
+
+  const SectionRef CR = get_section(O, "__OBJC2", "__class_refs");
+  if (CR != SectionRef()) {
+    info.S = CR;
+    walk_pointer_list_32("class refs", CR, O, &info, nullptr);
+  } else {
+    const SectionRef CR = get_section(O, "__DATA", "__objc_classrefs");
+    info.S = CR;
+    walk_pointer_list_32("class refs", CR, O, &info, nullptr);
+  }
+
+  const SectionRef SR = get_section(O, "__OBJC2", "__super_refs");
+  if (SR != SectionRef()) {
+    info.S = SR;
+    walk_pointer_list_32("super refs", SR, O, &info, nullptr);
+  } else {
+    const SectionRef SR = get_section(O, "__DATA", "__objc_superrefs");
+    info.S = SR;
+    walk_pointer_list_32("super refs", SR, O, &info, nullptr);
+  }
+
+  const SectionRef CA = get_section(O, "__OBJC2", "__category_list");
+  if (CA != SectionRef()) {
+    info.S = CA;
+    walk_pointer_list_32("category", CA, O, &info, print_category32_t);
+  } else {
+    const SectionRef CA = get_section(O, "__DATA", "__objc_catlist");
+    info.S = CA;
+    walk_pointer_list_32("category", CA, O, &info, print_category32_t);
+  }
+
+  const SectionRef PL = get_section(O, "__OBJC2", "__protocol_list");
+  if (PL != SectionRef()) {
+    info.S = PL;
+    walk_pointer_list_32("protocol", PL, O, &info, nullptr);
+  } else {
+    const SectionRef PL = get_section(O, "__DATA", "__objc_protolist");
+    info.S = PL;
+    walk_pointer_list_32("protocol", PL, O, &info, nullptr);
+  }
+
+  const SectionRef MR = get_section(O, "__OBJC2", "__message_refs");
+  if (MR != SectionRef()) {
+    info.S = MR;
+    print_message_refs32(MR, &info);
+  } else {
+    const SectionRef MR = get_section(O, "__DATA", "__objc_msgrefs");
+    info.S = MR;
+    print_message_refs32(MR, &info);
+  }
+
+  const SectionRef II = get_section(O, "__OBJC2", "__image_info");
+  if (II != SectionRef()) {
+    info.S = II;
+    print_image_info32(II, &info);
+  } else {
+    const SectionRef II = get_section(O, "__DATA", "__objc_imageinfo");
+    info.S = II;
+    print_image_info32(II, &info);
+  }
+}
+
+static bool printObjc1_32bit_MetaData(MachOObjectFile *O, bool verbose) {
+  uint32_t i, j, p, offset, xoffset, left, defs_left, def;
+  const char *r, *name, *defs;
+  struct objc_module_t module;
+  SectionRef S, xS;
+  struct objc_symtab_t symtab;
+  struct objc_class_t objc_class;
+  struct objc_category_t objc_category;
+
+  outs() << "Objective-C segment\n";
+  S = get_section(O, "__OBJC", "__module_info");
+  if (S == SectionRef())
+    return false;
+
+  SymbolAddressMap AddrMap;
+  if (verbose)
+    CreateSymbolAddressMap(O, &AddrMap);
+
+  std::vector<SectionRef> Sections;
+  for (const SectionRef &Section : O->sections()) {
+    StringRef SectName;
+    Section.getName(SectName);
+    Sections.push_back(Section);
+  }
+
+  struct DisassembleInfo info;
+  // Set up the block of info used by the Symbolizer call backs.
+  info.verbose = verbose;
+  info.O = O;
+  info.AddrMap = &AddrMap;
+  info.Sections = &Sections;
+  info.class_name = nullptr;
+  info.selector_name = nullptr;
+  info.method = nullptr;
+  info.demangled_name = nullptr;
+  info.bindtable = nullptr;
+  info.adrp_addr = 0;
+  info.adrp_inst = 0;
+
+  for (i = 0; i < S.getSize(); i += sizeof(struct objc_module_t)) {
+    p = S.getAddress() + i;
+    r = get_pointer_32(p, offset, left, S, &info, true);
+    if (r == nullptr)
+      return true;
+    memset(&module, '\0', sizeof(struct objc_module_t));
+    if (left < sizeof(struct objc_module_t)) {
+      memcpy(&module, r, left);
+      outs() << "   (module extends past end of __module_info section)\n";
+    } else
+      memcpy(&module, r, sizeof(struct objc_module_t));
+    if (O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(module);
+
+    outs() << "Module " << format("0x%" PRIx32, p) << "\n";
+    outs() << "    version " << module.version << "\n";
+    outs() << "       size " << module.size << "\n";
+    outs() << "       name ";
+    name = get_pointer_32(module.name, xoffset, left, xS, &info, true);
+    if (name != nullptr)
+      outs() << format("%.*s", left, name);
+    else
+      outs() << format("0x%08" PRIx32, module.name)
+             << "(not in an __OBJC section)";
+    outs() << "\n";
+
+    r = get_pointer_32(module.symtab, xoffset, left, xS, &info, true);
+    if (module.symtab == 0 || r == nullptr) {
+      outs() << "     symtab " << format("0x%08" PRIx32, module.symtab)
+             << " (not in an __OBJC section)\n";
+      continue;
+    }
+    outs() << "     symtab " << format("0x%08" PRIx32, module.symtab) << "\n";
+    memset(&symtab, '\0', sizeof(struct objc_symtab_t));
+    defs_left = 0;
+    defs = nullptr;
+    if (left < sizeof(struct objc_symtab_t)) {
+      memcpy(&symtab, r, left);
+      outs() << "\tsymtab extends past end of an __OBJC section)\n";
+    } else {
+      memcpy(&symtab, r, sizeof(struct objc_symtab_t));
+      if (left > sizeof(struct objc_symtab_t)) {
+        defs_left = left - sizeof(struct objc_symtab_t);
+        defs = r + sizeof(struct objc_symtab_t);
+      }
+    }
+    if (O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(symtab);
+
+    outs() << "\tsel_ref_cnt " << symtab.sel_ref_cnt << "\n";
+    r = get_pointer_32(symtab.refs, xoffset, left, xS, &info, true);
+    outs() << "\trefs " << format("0x%08" PRIx32, symtab.refs);
+    if (r == nullptr)
+      outs() << " (not in an __OBJC section)";
+    outs() << "\n";
+    outs() << "\tcls_def_cnt " << symtab.cls_def_cnt << "\n";
+    outs() << "\tcat_def_cnt " << symtab.cat_def_cnt << "\n";
+    if (symtab.cls_def_cnt > 0)
+      outs() << "\tClass Definitions\n";
+    for (j = 0; j < symtab.cls_def_cnt; j++) {
+      if ((j + 1) * sizeof(uint32_t) > defs_left) {
+        outs() << "\t(remaining class defs entries entends past the end of the "
+               << "section)\n";
+        break;
+      }
+      memcpy(&def, defs + j * sizeof(uint32_t), sizeof(uint32_t));
+      if (O->isLittleEndian() != sys::IsLittleEndianHost)
+        sys::swapByteOrder(def);
+
+      r = get_pointer_32(def, xoffset, left, xS, &info, true);
+      outs() << "\tdefs[" << j << "] " << format("0x%08" PRIx32, def);
+      if (r != nullptr) {
+        if (left > sizeof(struct objc_class_t)) {
+          outs() << "\n";
+          memcpy(&objc_class, r, sizeof(struct objc_class_t));
+        } else {
+          outs() << " (entends past the end of the section)\n";
+          memset(&objc_class, '\0', sizeof(struct objc_class_t));
+          memcpy(&objc_class, r, left);
+        }
+        if (O->isLittleEndian() != sys::IsLittleEndianHost)
+          swapStruct(objc_class);
+        print_objc_class_t(&objc_class, &info);
+      } else {
+        outs() << "(not in an __OBJC section)\n";
+      }
+
+      if (CLS_GETINFO(&objc_class, CLS_CLASS)) {
+        outs() << "\tMeta Class";
+        r = get_pointer_32(objc_class.isa, xoffset, left, xS, &info, true);
+        if (r != nullptr) {
+          if (left > sizeof(struct objc_class_t)) {
+            outs() << "\n";
+            memcpy(&objc_class, r, sizeof(struct objc_class_t));
+          } else {
+            outs() << " (entends past the end of the section)\n";
+            memset(&objc_class, '\0', sizeof(struct objc_class_t));
+            memcpy(&objc_class, r, left);
+          }
+          if (O->isLittleEndian() != sys::IsLittleEndianHost)
+            swapStruct(objc_class);
+          print_objc_class_t(&objc_class, &info);
+        } else {
+          outs() << "(not in an __OBJC section)\n";
+        }
+      }
+    }
+    if (symtab.cat_def_cnt > 0)
+      outs() << "\tCategory Definitions\n";
+    for (j = 0; j < symtab.cat_def_cnt; j++) {
+      if ((j + symtab.cls_def_cnt + 1) * sizeof(uint32_t) > defs_left) {
+        outs() << "\t(remaining category defs entries entends past the end of "
+               << "the section)\n";
+        break;
+      }
+      memcpy(&def, defs + (j + symtab.cls_def_cnt) * sizeof(uint32_t),
+             sizeof(uint32_t));
+      if (O->isLittleEndian() != sys::IsLittleEndianHost)
+        sys::swapByteOrder(def);
+
+      r = get_pointer_32(def, xoffset, left, xS, &info, true);
+      outs() << "\tdefs[" << j + symtab.cls_def_cnt << "] "
+             << format("0x%08" PRIx32, def);
+      if (r != nullptr) {
+        if (left > sizeof(struct objc_category_t)) {
+          outs() << "\n";
+          memcpy(&objc_category, r, sizeof(struct objc_category_t));
+        } else {
+          outs() << " (entends past the end of the section)\n";
+          memset(&objc_category, '\0', sizeof(struct objc_category_t));
+          memcpy(&objc_category, r, left);
+        }
+        if (O->isLittleEndian() != sys::IsLittleEndianHost)
+          swapStruct(objc_category);
+        print_objc_objc_category_t(&objc_category, &info);
+      } else {
+        outs() << "(not in an __OBJC section)\n";
+      }
+    }
+  }
+  const SectionRef II = get_section(O, "__OBJC", "__image_info");
+  if (II != SectionRef())
+    print_image_info(II, &info);
+
+  return true;
+}
+
+static void DumpProtocolSection(MachOObjectFile *O, const char *sect,
+                                uint32_t size, uint32_t addr) {
+  SymbolAddressMap AddrMap;
+  CreateSymbolAddressMap(O, &AddrMap);
+
+  std::vector<SectionRef> Sections;
+  for (const SectionRef &Section : O->sections()) {
+    StringRef SectName;
+    Section.getName(SectName);
+    Sections.push_back(Section);
+  }
+
+  struct DisassembleInfo info;
+  // Set up the block of info used by the Symbolizer call backs.
+  info.verbose = true;
+  info.O = O;
+  info.AddrMap = &AddrMap;
+  info.Sections = &Sections;
+  info.class_name = nullptr;
+  info.selector_name = nullptr;
+  info.method = nullptr;
+  info.demangled_name = nullptr;
+  info.bindtable = nullptr;
+  info.adrp_addr = 0;
+  info.adrp_inst = 0;
+
+  const char *p;
+  struct objc_protocol_t protocol;
+  uint32_t left, paddr;
+  for (p = sect; p < sect + size; p += sizeof(struct objc_protocol_t)) {
+    memset(&protocol, '\0', sizeof(struct objc_protocol_t));
+    left = size - (p - sect);
+    if (left < sizeof(struct objc_protocol_t)) {
+      outs() << "Protocol extends past end of __protocol section\n";
+      memcpy(&protocol, p, left);
+    } else
+      memcpy(&protocol, p, sizeof(struct objc_protocol_t));
+    if (O->isLittleEndian() != sys::IsLittleEndianHost)
+      swapStruct(protocol);
+    paddr = addr + (p - sect);
+    outs() << "Protocol " << format("0x%" PRIx32, paddr);
+    if (print_protocol(paddr, 0, &info))
+      outs() << "(not in an __OBJC section)\n";
+  }
+}
+
+static void printObjcMetaData(MachOObjectFile *O, bool verbose) {
+  if (O->is64Bit())
+    printObjc2_64bit_MetaData(O, verbose);
+  else {
+    MachO::mach_header H;
+    H = O->getHeader();
+    if (H.cputype == MachO::CPU_TYPE_ARM)
+      printObjc2_32bit_MetaData(O, verbose);
+    else {
+      // This is the 32-bit non-arm cputype case.  Which is normally
+      // the first Objective-C ABI.  But it may be the case of a
+      // binary for the iOS simulator which is the second Objective-C
+      // ABI.  In that case printObjc1_32bit_MetaData() will determine that
+      // and return false.
+      if (printObjc1_32bit_MetaData(O, verbose) == false)
+        printObjc2_32bit_MetaData(O, verbose);
+    }
+  }
+}
+
 // GuessLiteralPointer returns a string which for the item in the Mach-O file
 // for the address passed in as ReferenceValue for printing as a comment with
 // the instruction and also returns the corresponding type of that item
@@ -2673,8 +5605,7 @@ static const char *GuessLiteralPointer(uint64_t ReferenceValue,
   bool isExtern = false;
   SymbolRef Symbol;
   for (const RelocationRef &Reloc : info->S.relocations()) {
-    uint64_t RelocOffset;
-    Reloc.getOffset(RelocOffset);
+    uint64_t RelocOffset = Reloc.getOffset();
     if (RelocOffset == sect_offset) {
       Rel = Reloc.getRawDataRefImpl();
       RE = info->O->getRelocation(Rel);
@@ -3022,7 +5953,7 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
   }
   int AsmPrinterVariant = AsmInfo->getAssemblerDialect();
   std::unique_ptr<MCInstPrinter> IP(TheTarget->createMCInstPrinter(
-      AsmPrinterVariant, *AsmInfo, *InstrInfo, *MRI, *STI));
+      Triple(TripleName), AsmPrinterVariant, *AsmInfo, *InstrInfo, *MRI));
   // Set the display preference for hex vs. decimal immediates.
   IP->setPrintImmHex(PrintImmHex);
   // Comment stream and backing vector.
@@ -3070,8 +6001,8 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
     }
     int ThumbAsmPrinterVariant = ThumbAsmInfo->getAssemblerDialect();
     ThumbIP.reset(ThumbTarget->createMCInstPrinter(
-        ThumbAsmPrinterVariant, *ThumbAsmInfo, *ThumbInstrInfo, *ThumbMRI,
-        *ThumbSTI));
+        Triple(ThumbTripleName), ThumbAsmPrinterVariant, *ThumbAsmInfo,
+        *ThumbInstrInfo, *ThumbMRI));
     // Set the display preference for hex vs. decimal immediates.
     ThumbIP->setPrintImmHex(PrintImmHex);
   }
@@ -3093,7 +6024,7 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
   SmallVector<uint64_t, 8> FoundFns;
   uint64_t BaseSegmentAddress;
 
-  getSectionsAndSymbols(Header, MachOOF, Sections, Symbols, FoundFns,
+  getSectionsAndSymbols(MachOOF, Sections, Symbols, FoundFns,
                         BaseSegmentAddress);
 
   // Sort the symbols by address, just in case they didn't come in that way.
@@ -3140,7 +6071,7 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
     }
 
     // Setup the DIContext
-    diContext.reset(DIContext::getDWARFContext(*DbgObj));
+    diContext.reset(new DWARFContextInMemory(*DbgObj));
   }
 
   if (DumpSections.size() == 0)
@@ -3168,8 +6099,7 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
     // Parse relocations.
     std::vector<std::pair<uint64_t, SymbolRef>> Relocs;
     for (const RelocationRef &Reloc : Sections[SectIdx].relocations()) {
-      uint64_t RelocOffset;
-      Reloc.getOffset(RelocOffset);
+      uint64_t RelocOffset = Reloc.getOffset();
       uint64_t SectionAddress = Sections[SectIdx].getAddress();
       RelocOffset -= SectionAddress;
 
@@ -3184,8 +6114,7 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
     SymbolAddressMap AddrMap;
     bool DisSymNameFound = false;
     for (const SymbolRef &Symbol : MachOOF->symbols()) {
-      SymbolRef::Type ST;
-      Symbol.getType(ST);
+      SymbolRef::Type ST = Symbol.getType();
       if (ST == SymbolRef::ST_Function || ST == SymbolRef::ST_Data ||
           ST == SymbolRef::ST_Other) {
         uint64_t Address;
@@ -3233,8 +6162,7 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
       StringRef SymName;
       Symbols[SymIdx].getName(SymName);
 
-      SymbolRef::Type ST;
-      Symbols[SymIdx].getType(ST);
+      SymbolRef::Type ST = Symbols[SymIdx].getType();
       if (ST != SymbolRef::ST_Function)
         continue;
 
@@ -3259,8 +6187,7 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
       uint64_t NextSym = 0;
       uint64_t NextSymIdx = SymIdx + 1;
       while (Symbols.size() > NextSymIdx) {
-        SymbolRef::Type NextSymType;
-        Symbols[NextSymIdx].getType(NextSymType);
+        SymbolRef::Type NextSymType = Symbols[NextSymIdx].getType();
         if (NextSymType == SymbolRef::ST_Function) {
           containsNextSym =
               Sections[SectIdx].containsSymbol(Symbols[NextSymIdx]);
@@ -3331,15 +6258,15 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
                                            DebugOut, Annotations);
         if (gotInst) {
           if (!NoShowRawInsn) {
-            DumpBytes(ArrayRef<uint8_t>(Bytes.data() + Index, Size));
+            dumpBytes(ArrayRef<uint8_t>(Bytes.data() + Index, Size), outs());
           }
           formatted_raw_ostream FormattedOS(outs());
           Annotations.flush();
           StringRef AnnotationsStr = Annotations.str();
           if (isThumb)
-            ThumbIP->printInst(&Inst, FormattedOS, AnnotationsStr);
+            ThumbIP->printInst(&Inst, FormattedOS, AnnotationsStr, *ThumbSTI);
           else
-            IP->printInst(&Inst, FormattedOS, AnnotationsStr);
+            IP->printInst(&Inst, FormattedOS, AnnotationsStr, *STI);
           emitComments(CommentStream, CommentsToEmit, FormattedOS, *AsmInfo);
 
           // Print debug info.
@@ -3396,9 +6323,9 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
           }
           if (!NoShowRawInsn) {
             outs() << "\t";
-            DumpBytes(ArrayRef<uint8_t>(Bytes.data() + Index, InstSize));
+            dumpBytes(ArrayRef<uint8_t>(Bytes.data() + Index, InstSize), outs());
           }
-          IP->printInst(&Inst, outs(), "");
+          IP->printInst(&Inst, outs(), "", *STI);
           outs() << "\n";
         } else {
           unsigned int Arch = MachOOF->getArch();
@@ -3502,7 +6429,7 @@ static void findUnwindRelocNameAddend(const MachOObjectFile *Obj,
   }
 
   auto RE = Obj->getRelocation(Reloc.getRawDataRefImpl());
-  SectionRef RelocSection = Obj->getRelocationSection(RE);
+  SectionRef RelocSection = Obj->getAnyRelocationSection(RE);
 
   uint64_t SectionAddr = RelocSection.getAddress();
 
@@ -3539,7 +6466,7 @@ static void printUnwindRelocDest(const MachOObjectFile *Obj,
   StringRef Name;
   uint64_t Addend;
 
-  if (!Reloc.getObjectFile())
+  if (!Reloc.getObject())
     return;
 
   findUnwindRelocNameAddend(Obj, Symbols, Reloc, Addr, Name, Addend);
@@ -3575,8 +6502,7 @@ printMachOCompactUnwindSection(const MachOObjectFile *Obj,
   // Next we need to look at the relocations to find out what objects are
   // actually being referred to.
   for (const RelocationRef &Reloc : CompactUnwind.relocations()) {
-    uint64_t RelocAddress;
-    Reloc.getOffset(RelocAddress);
+    uint64_t RelocAddress = Reloc.getOffset();
 
     uint32_t EntryIdx = RelocAddress / EntrySize;
     uint32_t OffsetInEntry = RelocAddress - EntryIdx * EntrySize;
@@ -3612,7 +6538,7 @@ printMachOCompactUnwindSection(const MachOObjectFile *Obj,
            << format("0x%08" PRIx32, Entry.CompactEncoding) << '\n';
 
     // 4. The personality function, if present.
-    if (Entry.PersonalityReloc.getObjectFile()) {
+    if (Entry.PersonalityReloc.getObject()) {
       outs() << "    personality function: "
              << format("0x%" PRIx64, Entry.PersonalityAddr) << ' ';
       printUnwindRelocDest(Obj, Symbols, Entry.PersonalityReloc,
@@ -3621,7 +6547,7 @@ printMachOCompactUnwindSection(const MachOObjectFile *Obj,
     }
 
     // 5. This entry's language-specific data area.
-    if (Entry.LSDAReloc.getObjectFile()) {
+    if (Entry.LSDAReloc.getObject()) {
       outs() << "    LSDA:                 " << format("0x%" PRIx64,
                                                        Entry.LSDAAddr) << ' ';
       printUnwindRelocDest(Obj, Symbols, Entry.LSDAReloc, Entry.LSDAAddr);
@@ -5385,15 +8311,12 @@ static void PrintLinkEditDataCommand(MachO::linkedit_data_command ld,
     outs() << "\n";
 }
 
-static void PrintLoadCommands(const MachOObjectFile *Obj, uint32_t ncmds,
-                              uint32_t filetype, uint32_t cputype,
-                              bool verbose) {
-  if (ncmds == 0)
-    return;
+static void PrintLoadCommands(const MachOObjectFile *Obj, uint32_t filetype,
+                              uint32_t cputype, bool verbose) {
   StringRef Buf = Obj->getData();
-  MachOObjectFile::LoadCommandInfo Command = Obj->getFirstLoadCommandInfo();
-  for (unsigned i = 0;; ++i) {
-    outs() << "Load command " << i << "\n";
+  unsigned Index = 0;
+  for (const auto &Command : Obj->load_commands()) {
+    outs() << "Load command " << Index++ << "\n";
     if (Command.C.cmd == MachO::LC_SEGMENT) {
       MachO::segment_command SLC = Obj->getSegmentLoadCommand(Command);
       const char *sg_segname = SLC.segname;
@@ -5512,14 +8435,10 @@ static void PrintLoadCommands(const MachOObjectFile *Obj, uint32_t ncmds,
       // TODO: get and print the raw bytes of the load command.
     }
     // TODO: print all the other kinds of load commands.
-    if (i == ncmds - 1)
-      break;
-    else
-      Command = Obj->getNextLoadCommandInfo(Command);
   }
 }
 
-static void getAndPrintMachHeader(const MachOObjectFile *Obj, uint32_t &ncmds,
+static void getAndPrintMachHeader(const MachOObjectFile *Obj,
                                   uint32_t &filetype, uint32_t &cputype,
                                   bool verbose) {
   if (Obj->is64Bit()) {
@@ -5527,7 +8446,6 @@ static void getAndPrintMachHeader(const MachOObjectFile *Obj, uint32_t &ncmds,
     H_64 = Obj->getHeader64();
     PrintMachHeader(H_64.magic, H_64.cputype, H_64.cpusubtype, H_64.filetype,
                     H_64.ncmds, H_64.sizeofcmds, H_64.flags, verbose);
-    ncmds = H_64.ncmds;
     filetype = H_64.filetype;
     cputype = H_64.cputype;
   } else {
@@ -5535,7 +8453,6 @@ static void getAndPrintMachHeader(const MachOObjectFile *Obj, uint32_t &ncmds,
     H = Obj->getHeader();
     PrintMachHeader(H.magic, H.cputype, H.cpusubtype, H.filetype, H.ncmds,
                     H.sizeofcmds, H.flags, verbose);
-    ncmds = H.ncmds;
     filetype = H.filetype;
     cputype = H.cputype;
   }
@@ -5543,11 +8460,10 @@ static void getAndPrintMachHeader(const MachOObjectFile *Obj, uint32_t &ncmds,
 
 void llvm::printMachOFileHeader(const object::ObjectFile *Obj) {
   const MachOObjectFile *file = dyn_cast<const MachOObjectFile>(Obj);
-  uint32_t ncmds = 0;
   uint32_t filetype = 0;
   uint32_t cputype = 0;
-  getAndPrintMachHeader(file, ncmds, filetype, cputype, !NonVerbose);
-  PrintLoadCommands(file, ncmds, filetype, cputype, !NonVerbose);
+  getAndPrintMachHeader(file, filetype, cputype, !NonVerbose);
+  PrintLoadCommands(file, filetype, cputype, !NonVerbose);
 }
 
 //===----------------------------------------------------------------------===//

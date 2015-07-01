@@ -21,7 +21,8 @@ class TestGdbRemoteAbort(gdbremote_testcase.GdbRemoteTestCaseBase):
 
         hex_exit_code = context.get("hex_exit_code")
         self.assertIsNotNone(hex_exit_code)
-        self.assertEquals(int(hex_exit_code, 16), signal.SIGABRT)
+        self.assertEquals(int(hex_exit_code, 16),
+                          lldbutil.get_signal_number('SIGABRT'))
 
     @debugserver_test
     @dsym_test
@@ -32,6 +33,7 @@ class TestGdbRemoteAbort(gdbremote_testcase.GdbRemoteTestCaseBase):
 
     @llgs_test
     @dwarf_test
+    @skipIfTargetAndroid(api_levels=[16]) # abort() on API 16 raises SIGSEGV!
     def test_inferior_abort_received_llgs_dwarf(self):
         self.init_llgs_test()
         self.buildDwarf()

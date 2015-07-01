@@ -130,16 +130,13 @@ static bool getARMLoadDeprecationInfo(MCInst &MI, MCSubtargetInfo &STI,
 #define GET_SUBTARGETINFO_MC_DESC
 #include "ARMGenSubtargetInfo.inc"
 
-
-std::string ARM_MC::ParseARMTriple(StringRef TT, StringRef CPU) {
-  Triple triple(TT);
-
-  bool isThumb = triple.getArch() == Triple::thumb ||
-                 triple.getArch() == Triple::thumbeb;
+std::string ARM_MC::ParseARMTriple(const Triple &TT, StringRef CPU) {
+  bool isThumb =
+      TT.getArch() == Triple::thumb || TT.getArch() == Triple::thumbeb;
 
   bool NoCPU = CPU == "generic" || CPU.empty();
   std::string ARMArchFeature;
-  switch (triple.getSubArch()) {
+  switch (TT.getSubArch()) {
   default:
     llvm_unreachable("invalid sub-architecture for ARM");
   case Triple::ARMSubArch_v8:
@@ -152,6 +149,17 @@ std::string ARM_MC::ParseARMTriple(StringRef TT, StringRef CPU) {
     else
       // Use CPU to figure out the exact features
       ARMArchFeature = "+v8";
+    break;
+  case Triple::ARMSubArch_v8_1a:
+    if (NoCPU)
+      // v8.1a: FeatureDB, FeatureFPARMv8, FeatureNEON, FeatureDSPThumb2,
+      //      FeatureMP, FeatureHWDiv, FeatureHWDivARM, FeatureTrustZone,
+      //      FeatureT2XtPk, FeatureCrypto, FeatureCRC, FeatureV8_1a
+      ARMArchFeature = "+v8.1a,+db,+fp-armv8,+neon,+t2dsp,+mp,+hwdiv,+hwdiv-arm,"
+                       "+trustzone,+t2xtpk,+crypto,+crc";
+    else
+      // Use CPU to figure out the exact features
+      ARMArchFeature = "+v8.1a";
     break;
   case Triple::ARMSubArch_v7m:
     isThumb = true;
@@ -166,7 +174,7 @@ std::string ARM_MC::ParseARMTriple(StringRef TT, StringRef CPU) {
     if (NoCPU)
       // v7em: FeatureNoARM, FeatureDB, FeatureHWDiv, FeatureDSPThumb2,
       //       FeatureT2XtPk, FeatureMClass
-      ARMArchFeature = "+v7,+noarm,+db,+hwdiv,+t2dsp,t2xtpk,+mclass";
+      ARMArchFeature = "+v7,+noarm,+db,+hwdiv,+t2dsp,+t2xtpk,+mclass";
     else
       // Use CPU to figure out the exact features.
       ARMArchFeature = "+v7";
@@ -229,7 +237,7 @@ std::string ARM_MC::ParseARMTriple(StringRef TT, StringRef CPU) {
       ARMArchFeature += ",+thumb-mode";
   }
 
-  if (triple.isOSNaCl()) {
+  if (TT.isOSNaCl()) {
     if (ARMArchFeature.empty())
       ARMArchFeature = "+nacl-trap";
     else
@@ -239,12 +247,12 @@ std::string ARM_MC::ParseARMTriple(StringRef TT, StringRef CPU) {
   return ARMArchFeature;
 }
 
-MCSubtargetInfo *ARM_MC::createARMMCSubtargetInfo(StringRef TT, StringRef CPU,
-                                                  StringRef FS) {
+MCSubtargetInfo *ARM_MC::createARMMCSubtargetInfo(const Triple &TT,
+                                                  StringRef CPU, StringRef FS) {
   std::string ArchFS = ARM_MC::ParseARMTriple(TT, CPU);
   if (!FS.empty()) {
     if (!ArchFS.empty())
-      ArchFS = ArchFS + "," + FS.str();
+      ArchFS = (Twine(ArchFS) + "," + FS).str();
     else
       ArchFS = FS;
   }
@@ -266,18 +274,17 @@ static MCRegisterInfo *createARMMCRegisterInfo(StringRef Triple) {
   return X;
 }
 
-static MCAsmInfo *createARMMCAsmInfo(const MCRegisterInfo &MRI, StringRef TT) {
-  Triple TheTriple(TT);
-
+static MCAsmInfo *createARMMCAsmInfo(const MCRegisterInfo &MRI,
+                                     const Triple &TheTriple) {
   MCAsmInfo *MAI;
   if (TheTriple.isOSDarwin() || TheTriple.isOSBinFormatMachO())
-    MAI = new ARMMCAsmInfoDarwin(TT);
+    MAI = new ARMMCAsmInfoDarwin(TheTriple);
   else if (TheTriple.isWindowsItaniumEnvironment())
     MAI = new ARMCOFFMCAsmInfoGNU();
   else if (TheTriple.isWindowsMSVCEnvironment())
     MAI = new ARMCOFFMCAsmInfoMicrosoft();
   else
-    MAI = new ARMELFMCAsmInfo(TT);
+    MAI = new ARMELFMCAsmInfo(TheTriple);
 
   unsigned Reg = MRI.getDwarfRegNum(ARM::SP, true);
   MAI->addInitialFrameState(MCCFIInstruction::createDefCfa(nullptr, Reg, 0));
@@ -294,39 +301,37 @@ static MCCodeGenInfo *createARMMCCodeGenInfo(StringRef TT, Reloc::Model RM,
     // Default relocation model on Darwin is PIC, not DynamicNoPIC.
     RM = TheTriple.isOSDarwin() ? Reloc::PIC_ : Reloc::DynamicNoPIC;
   }
-  X->InitMCCodeGenInfo(RM, CM, OL);
+  X->initMCCodeGenInfo(RM, CM, OL);
   return X;
 }
 
 static MCStreamer *createELFStreamer(const Triple &T, MCContext &Ctx,
-                                     MCAsmBackend &MAB, raw_ostream &OS,
+                                     MCAsmBackend &MAB, raw_pwrite_stream &OS,
                                      MCCodeEmitter *Emitter, bool RelaxAll) {
   return createARMELFStreamer(Ctx, MAB, OS, Emitter, false,
                               T.getArch() == Triple::thumb);
 }
 
 static MCStreamer *createARMMachOStreamer(MCContext &Ctx, MCAsmBackend &MAB,
-                                          raw_ostream &OS,
+                                          raw_pwrite_stream &OS,
                                           MCCodeEmitter *Emitter, bool RelaxAll,
                                           bool DWARFMustBeAtTheEnd) {
   return createMachOStreamer(Ctx, MAB, OS, Emitter, false, DWARFMustBeAtTheEnd);
 }
 
-static MCInstPrinter *createARMMCInstPrinter(const Target &T,
+static MCInstPrinter *createARMMCInstPrinter(const Triple &T,
                                              unsigned SyntaxVariant,
                                              const MCAsmInfo &MAI,
                                              const MCInstrInfo &MII,
-                                             const MCRegisterInfo &MRI,
-                                             const MCSubtargetInfo &STI) {
+                                             const MCRegisterInfo &MRI) {
   if (SyntaxVariant == 0)
-    return new ARMInstPrinter(MAI, MII, MRI, STI);
+    return new ARMInstPrinter(MAI, MII, MRI);
   return nullptr;
 }
 
-static MCRelocationInfo *createARMMCRelocationInfo(StringRef TT,
+static MCRelocationInfo *createARMMCRelocationInfo(const Triple &TT,
                                                    MCContext &Ctx) {
-  Triple TheTriple(TT);
-  if (TheTriple.isOSBinFormatMachO())
+  if (TT.isOSBinFormatMachO())
     return createARMMachORelocationInfo(Ctx);
   // Default to the stock relocation info.
   return llvm::createMCRelocationInfo(TT, Ctx);

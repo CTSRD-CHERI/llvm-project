@@ -318,7 +318,7 @@ ABISysV_x86_64::PrepareTrivialCall (Thread &thread,
                     (uint64_t)return_addr);
 
         for (size_t i = 0; i < args.size(); ++i)
-            s.Printf (", arg%zd = 0x%" PRIx64, i + 1, args[i]);
+            s.Printf (", arg%" PRIu64 " = 0x%" PRIx64, static_cast<uint64_t>(i + 1), args[i]);
         s.PutCString (")");
         log->PutCString(s.GetString().c_str());
     }
@@ -336,7 +336,7 @@ ABISysV_x86_64::PrepareTrivialCall (Thread &thread,
     {
         reg_info = reg_ctx->GetRegisterInfo(eRegisterKindGeneric, LLDB_REGNUM_GENERIC_ARG1 + i);
         if (log)
-            log->Printf("About to write arg%zd (0x%" PRIx64 ") into %s", i + 1, args[i], reg_info->name);
+            log->Printf("About to write arg%" PRIu64 " (0x%" PRIx64 ") into %s", static_cast<uint64_t>(i + 1), args[i], reg_info->name);
         if (!reg_ctx->WriteRegisterFromUnsigned(reg_info, args[i]))
             return false;
     }
@@ -871,6 +871,10 @@ ABISysV_x86_64::GetReturnValueObjectImpl (Thread &thread, ClangASTType &return_c
                 ClangASTType field_clang_type = return_clang_type.GetFieldAtIndex (idx, name, &field_bit_offset, NULL, NULL);
                 const size_t field_bit_width = field_clang_type.GetBitSize(&thread);
 
+                // if we don't know the size of the field (e.g. invalid type), just bail out
+                if (field_bit_width == 0)
+                    break;
+                
                 // If there are any unaligned fields, this is stored in memory.
                 if (field_bit_offset % field_bit_width != 0)
                 {

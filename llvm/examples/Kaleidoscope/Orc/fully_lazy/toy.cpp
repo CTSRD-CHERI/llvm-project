@@ -1,6 +1,7 @@
 #include "llvm/Analysis/Passes.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
 #include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/Orc/OrcTargetSupport.h"
@@ -1167,12 +1168,9 @@ public:
 
   KaleidoscopeJIT(SessionContext &Session)
     : Session(Session),
-      Mang(Session.getTarget().getDataLayout()),
-      ObjectLayer(
-        [](){ return llvm::make_unique<SectionMemoryManager>(); }),
       CompileLayer(ObjectLayer, SimpleCompiler(Session.getTarget())),
       LazyEmitLayer(CompileLayer),
-      CompileCallbacks(LazyEmitLayer, Session.getLLVMContext(),
+      CompileCallbacks(LazyEmitLayer, CCMgrMemMgr, Session.getLLVMContext(),
                        reinterpret_cast<uintptr_t>(EarthShatteringKaboom),
                        64) {}
 
@@ -1180,7 +1178,8 @@ public:
     std::string MangledName;
     {
       raw_string_ostream MangledNameStream(MangledName);
-      Mang.getNameWithPrefix(MangledNameStream, Name);
+      Mangler::getNameWithPrefix(MangledNameStream, Name,
+                                 *Session.getTarget().getDataLayout());
     }
     return MangledName;
   }
@@ -1194,30 +1193,32 @@ public:
     // We need a memory manager to allocate memory and resolve symbols for this
     // new module. Create one that resolves symbols by looking back into the
     // JIT.
-    auto MM = createLookasideRTDyldMM<SectionMemoryManager>(
-                [&](const std::string &Name) {
-                  // First try to find 'Name' within the JIT.
-                  if (auto Symbol = findSymbol(Name))
-                    return Symbol.getAddress();
+    auto Resolver = createLambdaResolver(
+                      [&](const std::string &Name) {
+                        // First try to find 'Name' within the JIT.
+                        if (auto Symbol = findSymbol(Name))
+                          return RuntimeDyld::SymbolInfo(Symbol.getAddress(),
+                                                         Symbol.getFlags());
 
-                  // If we don't already have a definition of 'Name' then search
-                  // the ASTs.
-                  return searchFunctionASTs(Name);
-                },
-                [](const std::string &S) { return 0; } );
+                        // If we don't already have a definition of 'Name' then search
+                        // the ASTs.
+                        return searchFunctionASTs(Name);
+                      },
+                      [](const std::string &S) { return nullptr; } );
 
     return LazyEmitLayer.addModuleSet(singletonSet(std::move(M)),
-                                      std::move(MM));
+                                      make_unique<SectionMemoryManager>(),
+                                      std::move(Resolver));
   }
 
   void removeModule(ModuleHandleT H) { LazyEmitLayer.removeModuleSet(H); }
 
   JITSymbol findSymbol(const std::string &Name) {
-    return LazyEmitLayer.findSymbol(Name, true);
+    return LazyEmitLayer.findSymbol(Name, false);
   }
 
   JITSymbol findSymbolIn(ModuleHandleT H, const std::string &Name) {
-    return LazyEmitLayer.findSymbolIn(H, Name, true);
+    return LazyEmitLayer.findSymbolIn(H, Name, false);
   }
 
   JITSymbol findUnmangledSymbol(const std::string &Name) {
@@ -1232,7 +1233,7 @@ private:
 
   // This method searches the FunctionDefs map for a definition of 'Name'. If it
   // finds one it generates a stub for it and returns the address of the stub.
-  TargetAddress searchFunctionASTs(const std::string &Name) {
+  RuntimeDyld::SymbolInfo searchFunctionASTs(const std::string &Name) {
     auto DefI = FunctionDefs.find(Name);
     if (DefI == FunctionDefs.end())
       return 0;
@@ -1244,7 +1245,8 @@ private:
 
     // IRGen the AST, add it to the JIT, and return the address for it.
     auto H = irGenStub(std::move(FnAST));
-    return findSymbolIn(H, Name).getAddress();
+    auto Sym = findSymbolIn(H, Name);
+    return RuntimeDyld::SymbolInfo(Sym.getAddress(), Sym.getFlags());
   }
 
   // This method will take the AST for a function definition and IR-gen a stub
@@ -1261,18 +1263,20 @@ private:
     //         compile and update actions for the callback, and get a pointer to
     //         the jit trampoline that we need to call to trigger those actions.
     auto CallbackInfo =
-      CompileCallbacks.getCompileCallback(*F->getFunctionType());
+      CompileCallbacks.getCompileCallback(F->getContext());
 
     // Step 3) Create a stub that will indirectly call the body of this
     //         function once it is compiled. Initially, set the function
     //         pointer for the indirection to point at the trampoline.
     std::string BodyPtrName = (F->getName() + "$address").str();
     GlobalVariable *FunctionBodyPointer =
-      createImplPointer(*F, BodyPtrName, CallbackInfo.getAddress());
+      createImplPointer(*F->getType(), *F->getParent(), BodyPtrName,
+                        createIRTypedAddress(*F->getFunctionType(),
+                                             CallbackInfo.getAddress()));
     makeStub(*F, *FunctionBodyPointer);
 
     // Step 4) Add the module containing the stub to the JIT.
-    auto H = addModule(C.takeM());
+    auto StubH = addModule(C.takeM());
 
     // Step 5) Set the compile and update actions.
     //
@@ -1285,18 +1289,24 @@ private:
     //   The update action will update FunctionBodyPointer to point at the newly
     // compiled function.
     std::shared_ptr<FunctionAST> Fn = std::move(FnAST);
-    CallbackInfo.setCompileAction([this, Fn]() {
+    CallbackInfo.setCompileAction([this, Fn, BodyPtrName, StubH]() {
       auto H = addModule(IRGen(Session, *Fn));
-      return findUnmangledSymbolIn(H, Fn->Proto->Name).getAddress();
+      auto BodySym = findUnmangledSymbolIn(H, Fn->Proto->Name);
+      auto BodyPtrSym = findUnmangledSymbolIn(StubH, BodyPtrName);
+      assert(BodySym && "Missing function body.");
+      assert(BodyPtrSym && "Missing function pointer.");
+      auto BodyAddr = BodySym.getAddress();
+      auto BodyPtr = reinterpret_cast<void*>(
+                       static_cast<uintptr_t>(BodyPtrSym.getAddress()));
+      memcpy(BodyPtr, &BodyAddr, sizeof(uintptr_t));
+      return BodyAddr;
     });
-    CallbackInfo.setUpdateAction(
-      CompileCallbacks.getLocalFPUpdater(H, mangle(BodyPtrName)));
 
-    return H;
+    return StubH;
   }
 
   SessionContext &Session;
-  Mangler Mang;
+  SectionMemoryManager CCMgrMemMgr;
   ObjLayerT ObjectLayer;
   CompileLayerT CompileLayer;
   LazyEmitLayerT LazyEmitLayer;

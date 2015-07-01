@@ -40,7 +40,7 @@ public:
   VerifyMatch(BoundNodesCallback *FindResultVerifier, bool *Verified)
       : Verified(Verified), FindResultReviewer(FindResultVerifier) {}
 
-  virtual void run(const MatchFinder::MatchResult &Result) override {
+  void run(const MatchFinder::MatchResult &Result) override {
     if (FindResultReviewer != nullptr) {
       *Verified |= FindResultReviewer->run(&Result.Nodes, Result.Context);
     } else {
@@ -80,6 +80,7 @@ testing::AssertionResult matchesConditionally(
   Args.push_back("-frtti");
   Args.push_back("-fexceptions");
   if (!runToolOnCodeWithArgs(Factory->create(), Code, Args, Filename,
+                             std::make_shared<RawPCHContainerOperations>(),
                              VirtualMappedFiles)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }

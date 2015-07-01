@@ -18,6 +18,21 @@
 #include "llvm/MC/MCInstrInfo.h"
 
 namespace llvm {
+class HexagonAsmInstPrinter : public MCInstPrinter {
+public:
+  HexagonAsmInstPrinter(MCInstPrinter *RawPrinter);
+  void printInst(MCInst const *MI, raw_ostream &O, StringRef Annot,
+                 MCSubtargetInfo const &STI) override;
+  void printRegName(raw_ostream &O, unsigned RegNo) const override;
+  std::unique_ptr<MCInstPrinter> RawPrinter;
+};
+/// Prints bundles as a newline separated list of individual instructions
+/// Duplexes are separated by a vertical tab \v character
+/// A trailing line includes bundle properties such as endloop0/1
+///
+/// r0 = add(r1, r2)
+/// r0 = #0 \v jump 0x0
+/// :endloop0 :endloop1
   class HexagonInstPrinter : public MCInstPrinter {
   public:
     explicit HexagonInstPrinter(MCAsmInfo const &MAI,
@@ -25,10 +40,11 @@ namespace llvm {
                                 MCRegisterInfo const &MRI)
       : MCInstPrinter(MAI, MII, MRI), MII(MII) {}
 
-    void printInst(MCInst const *MI, raw_ostream &O, StringRef Annot) override;
+    void printInst(MCInst const *MI, raw_ostream &O, StringRef Annot,
+                   const MCSubtargetInfo &STI) override;
     virtual StringRef getOpcodeName(unsigned Opcode) const;
     void printInstruction(const MCInst *MI, raw_ostream &O);
-    StringRef getRegName(unsigned RegNo) const;
+    void printRegName(raw_ostream &OS, unsigned RegNo) const override;
     static const char *getRegisterName(unsigned RegNo);
 
     void printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O) const;
@@ -55,6 +71,7 @@ namespace llvm {
     void printGlobalOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O)
            const;
     void printJumpTable(const MCInst *MI, unsigned OpNo, raw_ostream &O) const;
+    void printExtBrtarget(const MCInst *MI, unsigned OpNo, raw_ostream &O) const;
 
     void printConstantPool(const MCInst *MI, unsigned OpNo,
                            raw_ostream &O) const;
@@ -72,11 +89,11 @@ namespace llvm {
     void printSymbol(const MCInst *MI, unsigned OpNo, raw_ostream &O, bool hi)
            const;
 
-    static const char PacketPadding;
-
   private:
     const MCInstrInfo &MII;
 
+    bool HasExtender;
+    void setExtender(MCInst const &MCI);
   };
 
 } // end namespace llvm

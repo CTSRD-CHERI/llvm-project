@@ -19,7 +19,7 @@ class CommandLineCompletionTestCase(TestBase):
         cls.RemoveTempFile("child_send2.txt")
         cls.RemoveTempFile("child_read2.txt")
 
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @expectedFailureHostWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_stty_dash_a_before_and_afetr_invoking_lldb_command(self):
         """Test that 'stty -a' displays the same output before and after running the lldb command."""
         import pexpect
@@ -40,7 +40,7 @@ class CommandLineCompletionTestCase(TestBase):
         if self.TraceOn():
             child.logfile = sys.stdout
 
-        if sys.platform.startswith("darwin"):
+        if self.platformIsDarwin():
             child.sendline('set env(TERM) xterm')
         else:
             child.sendline('set env(TERM) vt100')
@@ -63,7 +63,7 @@ class CommandLineCompletionTestCase(TestBase):
         child.logfile_read = None
 
         # Invoke the lldb command.
-        child.sendline('%s %s' % (self.lldbHere, self.lldbOption))
+        child.sendline('%s %s' % (lldbtest_config.lldbExec, self.lldbOption))
         child.expect_exact(lldb_prompt)
 
         # Immediately quit.

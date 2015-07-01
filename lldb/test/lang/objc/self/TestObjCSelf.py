@@ -9,14 +9,14 @@ class ObjCSelfTestCase(TestBase):
     
     mydir = TestBase.compute_mydir(__file__)
     
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Test that the appropriate member variables are available when stopped in Objective-C class and instance methods"""
         self.buildDsym()
         self.self_commands()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dwarf_test
     def test_with_dwarf_and_run_command(self):
         """Test that the appropriate member variables are available when stopped in Objective-C class and instance methods"""
@@ -36,7 +36,7 @@ class ObjCSelfTestCase(TestBase):
         self.set_breakpoint(line_number('main.m', '// breakpoint 1'))
         self.set_breakpoint(line_number('main.m', '// breakpoint 2'))
 
-        self.runCmd("process launch", RUN_SUCCEEDED)
+        self.runCmd("process launch", RUN_FAILED)
 
         self.expect("expression -- m_a = 2",
                     startstr = "(int) $0 = 2")

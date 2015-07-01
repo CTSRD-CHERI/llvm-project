@@ -10,7 +10,7 @@ class FunctionTypesTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym(self):
         """Test 'callback' has function ptr type, then break on the function."""
@@ -23,7 +23,7 @@ class FunctionTypesTestCase(TestBase):
         self.buildDwarf()
         self.function_types()
     
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_pointers_with_dsym(self):
         """Test that a function pointer to 'printf' works and can be called."""
@@ -49,7 +49,7 @@ class FunctionTypesTestCase(TestBase):
         # Break inside the main.
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
         
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
         
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -86,7 +86,7 @@ class FunctionTypesTestCase(TestBase):
         self.expect("expr string_not_empty",
                     substrs = ['(int (*)(const char *)) $0 = ', '(a.out`'])
 
-        if sys.platform.startswith("darwin"):
+        if self.platformIsDarwin():
             regexps = ['lib.*\.dylib`printf']
         else:
             regexps = ['printf']

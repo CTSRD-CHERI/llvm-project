@@ -15,7 +15,7 @@ class DriverBatchModeTest (TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @unittest2.expectedFailure("<rdar://problem/18684124>, lldb doesn't reliably print the prompt when run under pexpect")
     @dsym_test
     def test_driver_batch_mode_with_dsym(self):
@@ -55,7 +55,7 @@ class DriverBatchModeTest (TestBase):
 
         # First time through, pass CRASH so the process will crash and stop in batch mode.
         run_commands = ' -b -o "break set -n main" -o "run" -o "continue" -k "frame var touch_me_not"'
-        self.child = pexpect.spawn('%s %s %s %s -- CRASH' % (self.lldbHere, self.lldbOption, run_commands, exe))
+        self.child = pexpect.spawn('%s %s %s %s -- CRASH' % (lldbtest_config.lldbExec, self.lldbOption, run_commands, exe))
         child = self.child
         # Turn on logging for what the child sends back.
         if self.TraceOn():
@@ -78,7 +78,7 @@ class DriverBatchModeTest (TestBase):
 
         # Now do it again, and see make sure if we don't crash, we quit:
         run_commands = ' -b -o "break set -n main" -o "run" -o "continue" '
-        self.child = pexpect.spawn('%s %s %s %s -- NOCRASH' % (self.lldbHere, self.lldbOption, run_commands, exe))
+        self.child = pexpect.spawn('%s %s %s %s -- NOCRASH' % (lldbtest_config.lldbExec, self.lldbOption, run_commands, exe))
         child = self.child
         # Turn on logging for what the child sends back.
         if self.TraceOn():

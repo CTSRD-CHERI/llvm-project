@@ -12,7 +12,7 @@ class ThreadAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_get_process_with_dsym(self):
@@ -27,7 +27,7 @@ class ThreadAPITestCase(TestBase):
         self.buildDwarf()
         self.get_process()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_get_stop_description_with_dsym(self):
@@ -42,7 +42,7 @@ class ThreadAPITestCase(TestBase):
         self.buildDwarf()
         self.get_stop_description()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_run_to_address_with_dsym(self):
@@ -63,7 +63,7 @@ class ThreadAPITestCase(TestBase):
         self.setTearDownCleanup(dictionary=d)
         self.run_to_address(self.exe_name)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_step_out_of_malloc_into_function_b_with_dsym(self):
@@ -75,7 +75,6 @@ class ThreadAPITestCase(TestBase):
         self.step_out_of_malloc_into_function_b(self.exe_name)
 
     @expectedFailureFreeBSD # llvm.org/pr20476
-    @expectedFailureLinux # llvm.org/pr14416
     @python_api_test
     @dwarf_test
     def test_step_out_of_malloc_into_function_b_with_dwarf(self):
@@ -86,7 +85,7 @@ class ThreadAPITestCase(TestBase):
         self.setTearDownCleanup(dictionary=d)
         self.step_out_of_malloc_into_function_b(self.exe_name)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_step_over_3_times_with_dsym(self):
@@ -175,7 +174,6 @@ class ThreadAPITestCase(TestBase):
 
         breakpoint = target.BreakpointCreateByName('malloc')
         self.assertTrue(breakpoint, VALID_BREAKPOINT)
-        self.runCmd("breakpoint list")
 
         # Launch the process, and do not stop at the entry point.
         process = target.LaunchSimple (None, None, self.get_process_working_directory())
@@ -184,7 +182,6 @@ class ThreadAPITestCase(TestBase):
             thread = get_stopped_thread(process, lldb.eStopReasonBreakpoint)
             self.assertTrue(thread.IsValid(), "There should be a thread stopped due to breakpoint")
             caller_symbol = get_caller_symbol(thread)
-            #print "caller symbol of malloc:", caller_symbol
             if not caller_symbol:
                 self.fail("Test failed: could not locate the caller symbol of malloc")
 
@@ -198,13 +195,14 @@ class ThreadAPITestCase(TestBase):
 
             if caller_symbol == "b(int)":
                 break
-            #self.runCmd("thread backtrace")
-            #self.runCmd("process status")           
             process.Continue()
+
+        # On Linux malloc calls itself in some case. Remove the breakpoint because we don't want
+        # to hit it during step-out.
+        target.BreakpointDelete(breakpoint.GetID())
 
         thread.StepOut()
         self.runCmd("thread backtrace")
-        #self.runCmd("process status")           
         self.assertTrue(thread.GetFrameAtIndex(0).GetLineEntry().GetLine() == self.step_out_of_malloc,
                         "step out of malloc into function b is successful")
 

@@ -19,15 +19,16 @@ class ExprCommandWithTimeoutsTestCase(TestBase):
         self.main_source_spec = lldb.SBFileSpec (self.main_source)
 
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
+    @expectedFailureDarwin # failed 1/134 runs, line 83, value.IsValid() 
     def test_with_dsym(self):
         """Test calling std::String member function."""
         self.buildDsym()
         self.call_function()
 
     @expectedFailureFreeBSD("llvm.org/pr19605") # fails on buildbot
-    @expectedFailureLinux("llvm.org/pr20275") # fails intermittently on Linux
+    @expectedFlakeyLinux("llvm.org/pr20275")
     @dwarf_test
     def test_with_dwarf(self):
         """Test calling std::String member function."""

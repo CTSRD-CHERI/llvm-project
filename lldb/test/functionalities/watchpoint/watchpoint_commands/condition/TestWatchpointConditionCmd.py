@@ -25,7 +25,7 @@ class WatchpointConditionCmdTestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_watchpoint_cond_with_dsym(self):
         """Test watchpoint condition."""
@@ -49,7 +49,7 @@ class WatchpointConditionCmdTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.

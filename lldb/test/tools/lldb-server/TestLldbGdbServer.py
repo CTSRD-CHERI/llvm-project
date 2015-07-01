@@ -19,6 +19,8 @@ from lldbtest import *
 
 class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
 
+    mydir = TestBase.compute_mydir(__file__)
+
     @debugserver_test
     def test_exe_starts_debugserver(self):
         self.init_debugserver_test()
@@ -93,8 +95,7 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
         exe_path = os.path.abspath('a.out')
         if not lldb.remote_platform:
             return [exe_path]
-        remote_work_dir = lldb.remote_platform.GetWorkingDirectory()
-        remote_path = os.path.join(remote_work_dir, os.path.basename(exe_path))
+        remote_path = lldbutil.append_to_process_working_directory(os.path.basename(exe_path))
         remote_file_spec = lldb.SBFileSpec(remote_path, False)
         err = lldb.remote_platform.Install(lldb.SBFileSpec(exe_path, True), remote_file_spec)
         if err.Fail():
@@ -475,10 +476,10 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
         self.qRegisterInfo_contains_at_least_one_register_set()
 
     def targetHasAVX(self):
-        # TODO we should be asking for targetGetSystem() 
-        # instead of platform.system()
+        triple = self.dbg.GetSelectedPlatform().GetTriple()
+
         # TODO other platforms, please implement this function
-        if platform.system() in ['Linux']:
+        if not re.match(".*-.*-linux", triple):
             return True
 
         # Need to do something different for non-Linux/Android targets
@@ -824,8 +825,8 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
                  # Continue sending the signal number to the continue thread.
                  # The commented out packet is a way to do this same operation without using
                  # a $Hc (but this test is testing $Hc, so we'll stick with the former).
-                 "read packet: $C{0:x}#00".format(signal.SIGUSR1),
-                 # "read packet: $vCont;C{0:x}:{1:x};c#00".format(signal.SIGUSR1, thread_id),
+                 "read packet: $C{0:x}#00".format(lldbutil.get_signal_number('SIGUSR1')),
+                 # "read packet: $vCont;C{0:x}:{1:x};c#00".format(lldbutil.get_signal_number('SIGUSR1'), thread_id),
 
                  # FIXME: Linux does not report the thread stop on the delivered signal (SIGUSR1 here).  MacOSX debugserver does.
                  # But MacOSX debugserver isn't guaranteeing the thread the signal handler runs on, so currently its an XFAIL.
@@ -844,8 +845,8 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
             # Ensure the stop signal is the signal we delivered.
             # stop_signo = context.get("stop_signo")
             # self.assertIsNotNone(stop_signo)
-            # self.assertEquals(int(stop_signo,16), signal.SIGUSR1)
-            
+            # self.assertEquals(int(stop_signo,16), lldbutil.get_signal_number('SIGUSR1'))
+
             # Ensure the stop thread is the thread to which we delivered the signal.
             # stop_thread_id = context.get("stop_thread_id")
             # self.assertIsNotNone(stop_thread_id)
@@ -878,12 +879,11 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
 
     @llgs_test
     @dwarf_test
-    @expectedFailureLinux('llvm.org/pr22928') # failed once on builder x86_64-ubuntu-14.04-cmake over 34 builds
     def test_Hc_then_Csignal_signals_correct_thread_launch_llgs_dwarf(self):
         self.init_llgs_test()
         self.buildDwarf()
         self.set_inferior_startup_launch()
-        self.Hc_then_Csignal_signals_correct_thread(signal.SIGSEGV)
+        self.Hc_then_Csignal_signals_correct_thread(lldbutil.get_signal_number('SIGSEGV'))
 
     def m_packet_reads_memory(self):
         # This is the memory we will write into the inferior and then ensure we can read back with $m.
@@ -1204,8 +1204,11 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
         function_address = int(context.get("function_address"), 16)
 
         # Set the breakpoint.
-        # Note this might need to be switched per platform (ARM, mips, etc.).
-        BREAKPOINT_KIND = 1
+        if self.getArchitecture() == "arm":
+            # TODO: Handle case when setting breakpoint in thumb code
+            BREAKPOINT_KIND = 4
+        else:
+            BREAKPOINT_KIND = 1
         self.reset_test_sequence()
         self.add_set_breakpoint_packets(function_address, do_continue=True, breakpoint_kind=BREAKPOINT_KIND)
 
@@ -1216,7 +1219,7 @@ class LldbGdbServerTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
         # Verify the stop signal reported was the breakpoint signal number.
         stop_signo = context.get("stop_signo")
         self.assertIsNotNone(stop_signo)
-        self.assertEquals(int(stop_signo,16), signal.SIGTRAP)
+        self.assertEquals(int(stop_signo,16), lldbutil.get_signal_number('SIGTRAP'))
 
         # Ensure we did not receive any output.  If the breakpoint was not set, we would
         # see output (from a launched process with captured stdio) printing a hello, world message.

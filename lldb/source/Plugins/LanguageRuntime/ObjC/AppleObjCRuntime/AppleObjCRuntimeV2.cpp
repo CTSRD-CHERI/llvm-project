@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include <string>
 #include <vector>
 #include <stdint.h>
@@ -32,12 +30,17 @@
 #include "lldb/Core/ValueObjectVariable.h"
 #include "lldb/Expression/ClangFunction.h"
 #include "lldb/Expression/ClangUtilityFunction.h"
+#include "lldb/Host/StringConvert.h"
+#include "lldb/Interpreter/CommandObject.h"
+#include "lldb/Interpreter/CommandObjectMultiword.h"
+#include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Symbol/TypeList.h"
 #include "lldb/Symbol/VariableList.h"
 #include "lldb/Target/ExecutionContext.h"
+#include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Target.h"
@@ -51,6 +54,8 @@
 
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclObjC.h"
+
+#include "Plugins/Platform/MacOSX/PlatformiOSSimulator.h"
 
 #include <vector>
 
@@ -316,9 +321,9 @@ ExtractRuntimeGlobalSymbol (Process* process,
     if (!byte_size)
         byte_size = process->GetAddressByteSize();
     const Symbol *symbol = module_sp->FindFirstSymbolWithNameAndType(name, lldb::eSymbolTypeData);
-    if (symbol)
+    if (symbol && symbol->ValueIsAddress())
     {
-        lldb::addr_t symbol_load_addr = symbol->GetAddress().GetLoadAddress(&process->GetTarget());
+        lldb::addr_t symbol_load_addr = symbol->GetAddressRef().GetLoadAddress(&process->GetTarget());
         if (symbol_load_addr != LLDB_INVALID_ADDRESS)
         {
             if (read_value)
@@ -357,7 +362,7 @@ AppleObjCRuntimeV2::AppleObjCRuntimeV2 (Process *process,
     m_has_object_getClass (false),
     m_loaded_objc_opt (false),
     m_non_pointer_isa_cache_ap(NonPointerISACache::CreateInstance(*this,objc_module_sp)),
-    m_tagged_pointer_vendor_ap(TaggedPointerVendor::CreateInstance(*this,objc_module_sp)),
+    m_tagged_pointer_vendor_ap(TaggedPointerVendorV2::CreateInstance(*this,objc_module_sp)),
     m_encoding_to_type_sp(),
     m_noclasses_warning_emitted(false)
 {
@@ -442,12 +447,233 @@ AppleObjCRuntimeV2::CreateInstance (Process *process, LanguageType language)
         return NULL;
 }
 
+class CommandObjectObjC_ClassTable_Dump : public CommandObjectParsed
+{
+public:
+    
+    CommandObjectObjC_ClassTable_Dump (CommandInterpreter &interpreter) :
+    CommandObjectParsed (interpreter,
+                         "dump",
+                         "Dump information on Objective-C classes known to the current process.",
+                         "language objc class-table dump",
+                         eCommandRequiresProcess       |
+                         eCommandProcessMustBeLaunched |
+                         eCommandProcessMustBePaused   )
+    {
+    }
+    
+    ~CommandObjectObjC_ClassTable_Dump ()
+    {
+    }
+    
+protected:
+    bool
+    DoExecute (Args& command, CommandReturnObject &result)
+    {
+        Process *process = m_exe_ctx.GetProcessPtr();
+        ObjCLanguageRuntime *objc_runtime = process->GetObjCLanguageRuntime();
+        if (objc_runtime)
+        {
+            auto iterators_pair = objc_runtime->GetDescriptorIteratorPair();
+            auto iterator = iterators_pair.first;
+            for(; iterator != iterators_pair.second; iterator++)
+            {
+                result.GetOutputStream().Printf("isa = 0x%" PRIx64, iterator->first);
+                if (iterator->second)
+                {
+                    result.GetOutputStream().Printf(" name = %s", iterator->second->GetClassName().AsCString("<unknown>"));
+                    result.GetOutputStream().Printf(" instance size = %" PRIu64, iterator->second->GetInstanceSize());
+                    result.GetOutputStream().Printf(" num ivars = %" PRIuPTR, (uintptr_t)iterator->second->GetNumIVars());
+                    if (auto superclass = iterator->second->GetSuperclass())
+                    {
+                        result.GetOutputStream().Printf(" superclass = %s", superclass->GetClassName().AsCString("<unknown>"));
+                    }
+                    result.GetOutputStream().Printf("\n");
+                }
+                else
+                {
+                    result.GetOutputStream().Printf(" has no associated class.\n");
+                }
+            }
+            result.SetStatus(lldb::eReturnStatusSuccessFinishResult);
+            return true;
+        }
+        else
+        {
+            result.AppendError("current process has no Objective-C runtime loaded");
+            result.SetStatus(lldb::eReturnStatusFailed);
+            return false;
+        }
+    }
+};
+
+class CommandObjectMultiwordObjC_TaggedPointer_Info : public CommandObjectParsed
+{
+public:
+    
+    CommandObjectMultiwordObjC_TaggedPointer_Info (CommandInterpreter &interpreter) :
+    CommandObjectParsed (interpreter,
+                         "info",
+                         "Dump information on a tagged pointer.",
+                         "language objc tagged-pointer info",
+                         eCommandRequiresProcess       |
+                         eCommandProcessMustBeLaunched |
+                         eCommandProcessMustBePaused   )
+    {
+        CommandArgumentEntry arg;
+        CommandArgumentData index_arg;
+        
+        // Define the first (and only) variant of this arg.
+        index_arg.arg_type = eArgTypeAddress;
+        index_arg.arg_repetition = eArgRepeatPlus;
+        
+        // There is only one variant this argument could be; put it into the argument entry.
+        arg.push_back (index_arg);
+        
+        // Push the data for the first argument into the m_arguments vector.
+        m_arguments.push_back (arg);
+    }
+    
+    ~CommandObjectMultiwordObjC_TaggedPointer_Info ()
+    {
+    }
+    
+protected:
+    bool
+    DoExecute (Args& command, CommandReturnObject &result)
+    {
+        if (command.GetArgumentCount() == 0)
+        {
+            result.AppendError("this command requires arguments");
+            result.SetStatus(lldb::eReturnStatusFailed);
+            return false;
+        }
+        
+        Process *process = m_exe_ctx.GetProcessPtr();
+        ExecutionContext exe_ctx(process);
+        ObjCLanguageRuntime *objc_runtime = process->GetObjCLanguageRuntime();
+        if (objc_runtime)
+        {
+            ObjCLanguageRuntime::TaggedPointerVendor *tagged_ptr_vendor = objc_runtime->GetTaggedPointerVendor();
+            if (tagged_ptr_vendor)
+            {
+                for (size_t i = 0;
+                     i < command.GetArgumentCount();
+                     i++)
+                {
+                    const char *arg_str = command.GetArgumentAtIndex(i);
+                    if (!arg_str)
+                        continue;
+                    Error error;
+                    lldb::addr_t arg_addr = Args::StringToAddress(&exe_ctx, arg_str, LLDB_INVALID_ADDRESS, &error);
+                    if (arg_addr == 0 || arg_addr == LLDB_INVALID_ADDRESS || error.Fail())
+                        continue;
+                    auto descriptor_sp = tagged_ptr_vendor->GetClassDescriptor(arg_addr);
+                    if (!descriptor_sp)
+                        continue;
+                    uint64_t info_bits = 0;
+                    uint64_t value_bits = 0;
+                    uint64_t payload = 0;
+                    if (descriptor_sp->GetTaggedPointerInfo(&info_bits, &value_bits, &payload))
+                    {
+                        result.GetOutputStream().Printf("0x%" PRIx64 " is tagged.\n\tpayload = 0x%" PRIx64 "\n\tvalue = 0x%" PRIx64 "\n\tinfo bits = 0x%" PRIx64 "\n\tclass = %s\n",
+                                                        (uint64_t)arg_addr,
+                                                        payload,
+                                                        value_bits,
+                                                        info_bits,
+                                                        descriptor_sp->GetClassName().AsCString("<unknown>"));
+                    }
+                    else
+                    {
+                        result.GetOutputStream().Printf("0x%" PRIx64 " is not tagged.\n", (uint64_t)arg_addr);
+                    }
+                }
+            }
+            else
+            {
+                result.AppendError("current process has no tagged pointer support");
+                result.SetStatus(lldb::eReturnStatusFailed);
+                return false;
+            }
+            result.SetStatus(lldb::eReturnStatusSuccessFinishResult);
+            return true;
+        }
+        else
+        {
+            result.AppendError("current process has no Objective-C runtime loaded");
+            result.SetStatus(lldb::eReturnStatusFailed);
+            return false;
+        }
+    }
+};
+
+class CommandObjectMultiwordObjC_ClassTable : public CommandObjectMultiword
+{
+public:
+    
+    CommandObjectMultiwordObjC_ClassTable (CommandInterpreter &interpreter) :
+    CommandObjectMultiword (interpreter,
+                            "class-table",
+                            "A set of commands for operating on the Objective-C class table.",
+                            "class-table <subcommand> [<subcommand-options>]")
+    {
+        LoadSubCommand ("dump",   CommandObjectSP (new CommandObjectObjC_ClassTable_Dump (interpreter)));
+    }
+    
+    virtual
+    ~CommandObjectMultiwordObjC_ClassTable ()
+    {
+    }
+};
+
+class CommandObjectMultiwordObjC_TaggedPointer : public CommandObjectMultiword
+{
+public:
+    
+    CommandObjectMultiwordObjC_TaggedPointer (CommandInterpreter &interpreter) :
+    CommandObjectMultiword (interpreter,
+                            "tagged-pointer",
+                            "A set of commands for operating on Objective-C tagged pointers.",
+                            "class-table <subcommand> [<subcommand-options>]")
+    {
+        LoadSubCommand ("info",   CommandObjectSP (new CommandObjectMultiwordObjC_TaggedPointer_Info (interpreter)));
+    }
+    
+    virtual
+    ~CommandObjectMultiwordObjC_TaggedPointer ()
+    {
+    }
+};
+
+class CommandObjectMultiwordObjC : public CommandObjectMultiword
+{
+public:
+    
+    CommandObjectMultiwordObjC (CommandInterpreter &interpreter) :
+    CommandObjectMultiword (interpreter,
+                            "objc",
+                            "A set of commands for operating on the Objective-C Language Runtime.",
+                            "objc <subcommand> [<subcommand-options>]")
+    {
+        LoadSubCommand ("class-table",   CommandObjectSP (new CommandObjectMultiwordObjC_ClassTable (interpreter)));
+        LoadSubCommand ("tagged-pointer",   CommandObjectSP (new CommandObjectMultiwordObjC_TaggedPointer (interpreter)));
+    }
+    
+    virtual
+    ~CommandObjectMultiwordObjC ()
+    {
+    }
+};
+
 void
 AppleObjCRuntimeV2::Initialize()
 {
     PluginManager::RegisterPlugin (GetPluginNameStatic(),
                                    "Apple Objective C Language Runtime - Version 2",
-                                   CreateInstance);    
+                                   CreateInstance,
+                                   [] (CommandInterpreter& interpreter) -> lldb::CommandObjectSP {
+                                       return CommandObjectSP(new CommandObjectMultiwordObjC(interpreter));
+                                   });
 }
 
 void
@@ -589,7 +815,7 @@ AppleObjCRuntimeV2::GetByteOffsetForIvar (ClangASTType &parent_ast_type, const c
         if (sc_list.GetSize() == 1 && sc_list.GetContextAtIndex(0, ivar_offset_symbol))
         {
             if (ivar_offset_symbol.symbol)
-                ivar_offset_address = ivar_offset_symbol.symbol->GetAddress().GetLoadAddress (&target);
+                ivar_offset_address = ivar_offset_symbol.symbol->GetLoadAddress (&target);
         }
 
         //----------------------------------------------------------------------
@@ -962,10 +1188,10 @@ AppleObjCRuntimeV2::GetISAHashTablePointer ()
 
         static ConstString g_gdb_objc_realized_classes("gdb_objc_realized_classes");
         
-        const Symbol *symbol = objc_module_sp->FindFirstSymbolWithNameAndType(g_gdb_objc_realized_classes, lldb::eSymbolTypeData);
+        const Symbol *symbol = objc_module_sp->FindFirstSymbolWithNameAndType(g_gdb_objc_realized_classes, lldb::eSymbolTypeAny);
         if (symbol)
         {
-            lldb::addr_t gdb_objc_realized_classes_ptr = symbol->GetAddress().GetLoadAddress(&process->GetTarget());
+            lldb::addr_t gdb_objc_realized_classes_ptr = symbol->GetLoadAddress(&process->GetTarget());
             
             if (gdb_objc_realized_classes_ptr != LLDB_INVALID_ADDRESS)
             {
@@ -1577,11 +1803,21 @@ AppleObjCRuntimeV2::WarnIfNoClassesCached ()
     if (m_noclasses_warning_emitted)
         return;
     
+    if (m_process &&
+        m_process->GetTarget().GetPlatform() &&
+        m_process->GetTarget().GetPlatform()->GetPluginName() == PlatformiOSSimulator::GetPluginNameStatic())
+    {
+        // the iOS simulator does not have the objc_opt_ro class table
+        // so don't actually complain to the user
+        m_noclasses_warning_emitted = true;
+        return;
+    }
+    
     Debugger &debugger(GetProcess()->GetTarget().GetDebugger());
     
     if (debugger.GetAsyncOutputStream())
     {
-        debugger.GetAsyncOutputStream()->PutCString("warning: could not load any Objective-C class information from the dyld shared cache. This will signficantly reduce the quality of type information available.\n");
+        debugger.GetAsyncOutputStream()->PutCString("warning: could not load any Objective-C class information from the dyld shared cache. This will significantly reduce the quality of type information available.\n");
         m_noclasses_warning_emitted = true;
     }
 }
@@ -1729,8 +1965,8 @@ AppleObjCRuntimeV2::NonPointerISACache::CreateInstance (AppleObjCRuntimeV2& runt
                                   objc_debug_isa_magic_value);
 }
 
-AppleObjCRuntimeV2::TaggedPointerVendor*
-AppleObjCRuntimeV2::TaggedPointerVendor::CreateInstance (AppleObjCRuntimeV2& runtime, const lldb::ModuleSP& objc_module_sp)
+AppleObjCRuntimeV2::TaggedPointerVendorV2*
+AppleObjCRuntimeV2::TaggedPointerVendorV2::CreateInstance (AppleObjCRuntimeV2& runtime, const lldb::ModuleSP& objc_module_sp)
 {
     Process* process(runtime.GetProcess());
     
@@ -1873,7 +2109,7 @@ AppleObjCRuntimeV2::TaggedPointerVendorRuntimeAssisted::TaggedPointerVendorRunti
                                                                                             uint32_t objc_debug_taggedpointer_payload_lshift,
                                                                                             uint32_t objc_debug_taggedpointer_payload_rshift,
                                                                                             lldb::addr_t objc_debug_taggedpointer_classes) :
-TaggedPointerVendor(runtime),
+TaggedPointerVendorV2(runtime),
 m_cache(),
 m_objc_debug_taggedpointer_mask(objc_debug_taggedpointer_mask),
 m_objc_debug_taggedpointer_slot_shift(objc_debug_taggedpointer_slot_shift),

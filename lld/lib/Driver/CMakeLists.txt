@@ -21,6 +21,7 @@ add_llvm_library(lldDriver
   LINK_LIBS
     lldConfig
     lldMachO
+    lldCOFF
     lldPECOFF
     lldELF
     lldAArch64ELFTarget
@@ -31,7 +32,6 @@ add_llvm_library(lldDriver
     lldExampleSubTarget
     lldX86_64ELFTarget
     lldCore
-    lldNative
     lldReaderWriter
     lldYAML
     LLVMObject

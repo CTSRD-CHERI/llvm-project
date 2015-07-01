@@ -74,7 +74,7 @@ function(append_compiler_specific_c_and_cxx_flags input_c_flags input_cxx_flags)
             endif()
         endif()
     endif()
-    # CMake prefers the /MD flags when compiling Windows sources, but libiomp5 needs to use /MT instead
+    # CMake prefers the /MD flags when compiling Windows sources, but libomp needs to use /MT instead
     # So we replace these /MD instances with /MT within the CMAKE_*_FLAGS variables and put that out to the CACHE.
     # replace_md_with_mt() is in HelperFunctions.cmake
     if(${WINDOWS})
@@ -104,7 +104,7 @@ function(append_compiler_specific_linker_flags input_ld_flags input_ld_flags_lib
         append_linker_flags("-dll") 
         append_linker_flags("-WX:NO")
         append_linker_flags("-incremental:no")
-        append_linker_flags("-version:${version}.0")
+        append_linker_flags("-version:${LIBOMP_VERSION}.0")
         append_linker_flags("-NXCompat")
         append_linker_flags("-DynamicBase") # This option modifies the header of an executable to indicate 
                                                # whether the application should be randomly rebased at load time.
@@ -138,7 +138,7 @@ function(append_compiler_specific_linker_flags input_ld_flags input_ld_flags_lib
             append_linker_flags_library("-pthread") # link in pthread library
             append_linker_flags_library("-ldl") # link in libdl (dynamic loader library)
         endif()
-        if(${STATS_GATHERING})
+        if(${LIBOMP_STATS})
             append_linker_flags_library("-Wl,-lstdc++") # link in standard c++ library (stats-gathering needs it)
         endif()
     else()

@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-allow-nonaffine -polly-detect-unprofitable -disable-polly-intra-scop-scalar-to-array -polly-model-phi-nodes -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-allow-nonaffine -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
 ;
 ; Verify only the incoming scalar x is modeled as a read in the non-affine
 ; region.
@@ -31,7 +31,7 @@
 ; CHECK:       Stmt_(bb10 => bb18)
 ; CHECK-NEXT:        Domain :=
 ; CHECK-NEXT:            [b] -> { Stmt_(bb10 => bb18)[i0] : i0 >= 0 and i0 <= 1023 };
-; CHECK-NEXT:        Scattering :=
+; CHECK-NEXT:        Schedule :=
 ; CHECK-NEXT:            [b] -> { Stmt_(bb10 => bb18)[i0] -> [i0, 3] };
 ; CHECK-NEXT:        ReadAccess := [Reduction Type: NONE] [Scalar: 1]
 ; CHECK-NEXT:            [b] -> { Stmt_(bb10 => bb18)[i0] -> MemRef_x_1[] }

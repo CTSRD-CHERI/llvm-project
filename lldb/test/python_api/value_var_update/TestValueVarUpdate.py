@@ -10,7 +10,7 @@ class HelloWorldTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_with_dsym_and_process_launch_api(self):
@@ -19,7 +19,6 @@ class HelloWorldTestCase(TestBase):
         self.setTearDownCleanup(dictionary=self.d)
         self.do_test()
 
-    @expectedFailureLinux # non-core functionality, need to reenable and fix later (DES 2014.11.07)
     @expectedFailureFreeBSD("llvm.org/pr21620 GetValueDidChange() wrong")
     @python_api_test
     @dwarf_test
@@ -43,7 +42,7 @@ class HelloWorldTestCase(TestBase):
 
         breakpoint = target.BreakpointCreateBySourceRegex("break here", lldb.SBFileSpec("main.c"))
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
         
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

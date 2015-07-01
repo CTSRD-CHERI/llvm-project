@@ -284,10 +284,10 @@ public:
   /// MacroUndefined - This hook is called whenever a macro #undef is seen.
   /// MI is released immediately following this callback.
   void MacroUndefined(const Token &MacroNameTok,
-                      const MacroDirective *MD) override {}
+                      const MacroDefinition &MD) override {}
 
   /// MacroExpands - This is called by when a macro invocation is found.
-  void MacroExpands(const Token &MacroNameTok, const MacroDirective *MD,
+  void MacroExpands(const Token &MacroNameTok, const MacroDefinition &MD,
                     SourceRange Range, const MacroArgs *Args) override {}
 
   /// SourceRangeSkipped - This hook is called when a source range is skipped.
@@ -590,8 +590,7 @@ static void clang_indexSourceFile_Impl(void *UserData) {
   if (index_options & CXIndexOpt_SuppressWarnings)
     CInvok->getDiagnosticOpts().IgnoreWarnings = true;
 
-  ASTUnit *Unit = ASTUnit::create(CInvok.get(), Diags,
-                                  CaptureDiagnostics,
+  ASTUnit *Unit = ASTUnit::create(CInvok.get(), Diags, CaptureDiagnostics,
                                   /*UserFilesAreVolatile=*/true);
   if (!Unit) {
     ITUI->result = CXError_InvalidArguments;
@@ -644,17 +643,13 @@ static void clang_indexSourceFile_Impl(void *UserData) {
     PPOpts.DetailedRecord = false;
 
   DiagnosticErrorTrap DiagTrap(*Diags);
-  bool Success = ASTUnit::LoadFromCompilerInvocationAction(CInvok.get(), Diags,
-                                                       IndexAction.get(),
-                                                       Unit,
-                                                       Persistent,
-                                                CXXIdx->getClangResourcesPath(),
-                                                       OnlyLocalDecls,
-                                                       CaptureDiagnostics,
-                                                       PrecompilePreamble,
-                                                    CacheCodeCompletionResults,
-                                 /*IncludeBriefCommentsInCodeCompletion=*/false,
-                                                 /*UserFilesAreVolatile=*/true);
+  bool Success = ASTUnit::LoadFromCompilerInvocationAction(
+      CInvok.get(), CXXIdx->getPCHContainerOperations(), Diags,
+      IndexAction.get(), Unit, Persistent, CXXIdx->getClangResourcesPath(),
+      OnlyLocalDecls, CaptureDiagnostics, PrecompilePreamble,
+      CacheCodeCompletionResults,
+      /*IncludeBriefCommentsInCodeCompletion=*/false,
+      /*UserFilesAreVolatile=*/true);
   if (DiagTrap.hasErrorOccurred() && CXXIdx->getDisplayDiagnostics())
     printDiagsToStderr(Unit);
 

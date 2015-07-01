@@ -6,23 +6,24 @@
 
 ; Magic ARM pair hints works best with linearscan / fast.
 
-; Cortex-M3 errata 602117: LDRD with base in list may result in incorrect base
-; register when interrupted or faulted.
-
 @b = external global i64*
 
-define i64 @t(i64 %a) nounwind readonly {
-entry:
-; A8-LABEL: t:
-; A8:   ldrd r2, r3, [r2]
+; We use the following two to force values into specific registers.
+declare i64* @get_ptr()
+declare void @use_i64(i64 %v)
 
-; M3-LABEL: t:
-; M3-NOT: ldrd
-
-	%0 = load i64*, i64** @b, align 4
-	%1 = load i64, i64* %0, align 4
-	%2 = mul i64 %1, %a
-	ret i64 %2
+define void @test_ldrd(i64 %a) nounwind readonly {
+; CHECK-LABEL: test_ldrd:
+; CHECK: bl{{x?}} _get_ptr
+; A8: ldrd r0, r1, [r0]
+; Cortex-M3 errata 602117: LDRD with base in list may result in incorrect base
+; register when interrupted or faulted.
+; M3-NOT: ldrd r[[REGNUM:[0-9]+]], {{r[0-9]+}}, [r[[REGNUM]]]
+; CHECK: bl{{x?}} _use_i64
+  %ptr = call i64* @get_ptr()
+  %v = load i64, i64* %ptr, align 8
+  call void @use_i64(i64 %v)
+  ret void
 }
 
 ; rdar://10435045 mixed LDRi8/LDRi12
@@ -92,6 +93,22 @@ entry:
   ret void
 }
 
+declare void @extfunc(i32, i32, i32, i32)
+
+; CHECK-LABEL: Func2:
+; A8: ldrd
+; A8: blx
+; A8: pop
+define void @Func2(i32* %p) {
+entry:
+  %addr0 = getelementptr i32, i32* %p, i32 0
+  %addr1 = getelementptr i32, i32* %p, i32 1
+  %v0 = load i32, i32* %addr0
+  %v1 = load i32, i32* %addr1
+  ; try to force %v0/%v1 into non-adjacent registers
+  call void @extfunc(i32 %v0, i32 0, i32 0, i32 %v1)
+  ret void
+}
 
 declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind

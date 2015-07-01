@@ -11,7 +11,7 @@
 
 # CHECK:      defined-atoms:
 # CHECK-NEXT:   - type:            data
-# CHECK-NEXT:     alignment:       2^2
+# CHECK-NEXT:     alignment:       4
 # CHECK-NEXT:     section-choice:  custom-required
 # CHECK-NEXT:     section-name:    .ctors
 # CHECK-NEXT:     references:
@@ -21,22 +21,22 @@
 # CHECK-NEXT:   - name:            __CTOR_LIST__
 # CHECK-NEXT:     type:            data
 # CHECK-NEXT:     content:         [ FF, FF, FF, FF ]
-# CHECK-NEXT:     alignment:       2^2
+# CHECK-NEXT:     alignment:       4
 # CHECK-NEXT:     section-choice:  custom-required
 # CHECK-NEXT:     section-name:    .ctors
 # CHECK-NEXT:   - type:            data
 # CHECK-NEXT:     content:         [ 11, 11, 11, 11 ]
-# CHECK-NEXT:     alignment:       2^2
+# CHECK-NEXT:     alignment:       4
 # CHECK-NEXT:     section-choice:  custom-required
 # CHECK-NEXT:     section-name:    .ctors.1
 # CHECK-NEXT:   - type:            data
 # CHECK-NEXT:     content:         [ 22, 22, 22, 22 ]
-# CHECK-NEXT:     alignment:       2^2
+# CHECK-NEXT:     alignment:       4
 # CHECK-NEXT:     section-choice:  custom-required
 # CHECK-NEXT:     section-name:    .ctors.2
-# CHECK-NEXT:   - ref-name:        L003
+# CHECK-NEXT:   - ref-name:        L004
 # CHECK-NEXT:     type:            data
-# CHECK-NEXT:     alignment:       2^2
+# CHECK-NEXT:     alignment:       4
 # CHECK-NEXT:     section-choice:  custom-required
 # CHECK-NEXT:     section-name:    .ctors
 # CHECK-NEXT:     references:
@@ -46,12 +46,13 @@
 # CHECK-NEXT:   - name:            __CTOR_END__
 # CHECK-NEXT:     type:            data
 # CHECK-NEXT:     content:         [ 00, 00, 00, 00 ]
-# CHECK-NEXT:     alignment:       2^2
+# CHECK-NEXT:     alignment:       4
 # CHECK-NEXT:     section-choice:  custom-required
 # CHECK-NEXT:     section-name:    .ctors
 
 # RAW:      Contents of section .ctors:
 # RAW-NEXT: 1000 ffffffff 11111111 22222222 00000000
+
 # crtbeginS.o
 ---
 FileHeader:
@@ -100,13 +101,13 @@ Sections:
     Relocations:
       - Offset:          0x00
         Symbol:          .ctors
-        Type:            R_MIPS_HI16
+        Type:            R_MIPS_GOT16
       - Offset:          0x04
         Symbol:          .ctors
         Type:            R_MIPS_LO16
       - Offset:          0x08
         Symbol:          .ctors
-        Type:            R_MIPS_HI16
+        Type:            R_MIPS_GOT16
       - Offset:          0x0C
         Symbol:          .ctors
         Type:            R_MIPS_LO16

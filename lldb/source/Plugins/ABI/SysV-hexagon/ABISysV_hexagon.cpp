@@ -263,13 +263,12 @@ ABISysV_hexagon::PrepareTrivialCall ( Thread &thread,
 
         // update the argument with the target pointer
         //XXX: This is a gross hack for getting around the const
-        *((size_t*)(&arg.value)) = sp;
+        *const_cast<lldb::addr_t*>(&arg.value) = sp;
     }
-
 
 #if HEX_ABI_DEBUG
     // print the original stack pointer
-    printf( "sp : %04lx \n", sp );
+    printf( "sp : %04" PRIx64 " \n", sp );
 #endif
 
     // make sure number of parameters matches prototype
@@ -337,7 +336,7 @@ ABISysV_hexagon::PrepareTrivialCall ( Thread &thread,
         uint32_t data = 0;
         lldb::addr_t addr = sp + i * 4;
         proc->ReadMemory( addr, (void*)&data, sizeof( data ), error );
-        printf( "\n0x%04lx 0x%08x ", addr, data );
+        printf( "\n0x%04" PRIx64 " 0x%08x ", addr, data );
         if ( i == 0 ) printf( "<<-- sp" );
     }
     printf( "\n" );

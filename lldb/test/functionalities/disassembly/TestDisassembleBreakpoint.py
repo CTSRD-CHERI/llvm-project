@@ -12,14 +12,13 @@ class DisassemblyTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym (self):
         self.buildDsym ()
         self.disassemble_breakpoint ()
 
     @dwarf_test
-    @expectedFailureLinux # llgs Handle_m returns target memory with breakpoints
     def test_with_dwarf (self):
         self.buildDwarf ()
         self.disassemble_breakpoint ()

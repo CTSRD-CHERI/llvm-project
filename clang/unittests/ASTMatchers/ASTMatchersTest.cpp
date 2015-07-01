@@ -747,12 +747,12 @@ public:
     Name.clear();
   }
 
-  ~VerifyIdIsBoundTo() {
+  ~VerifyIdIsBoundTo() override {
     EXPECT_EQ(0, Count);
     EXPECT_EQ("", Name);
   }
 
-  virtual bool run(const BoundNodes *Nodes) override {
+  bool run(const BoundNodes *Nodes) override {
     const BoundNodes::IDToNodeMap &M = Nodes->getMap();
     if (Nodes->getNodeAs<T>(Id)) {
       ++Count;
@@ -774,7 +774,7 @@ public:
     return false;
   }
 
-  virtual bool run(const BoundNodes *Nodes, ASTContext *Context) override {
+  bool run(const BoundNodes *Nodes, ASTContext *Context) override {
     return run(Nodes);
   }
 
@@ -1398,6 +1398,12 @@ TEST(Callee, MatchesDeclarations) {
 
   EXPECT_TRUE(matches("class Y { void x() { x(); } };", CallMethodX));
   EXPECT_TRUE(notMatches("class Y { void x() {} };", CallMethodX));
+
+  CallMethodX = callExpr(callee(conversionDecl()));
+  EXPECT_TRUE(
+      matches("struct Y { operator int() const; }; int i = Y();", CallMethodX));
+  EXPECT_TRUE(notMatches("struct Y { operator int() const; }; Y y = Y();",
+                         CallMethodX));
 }
 
 TEST(Callee, MatchesMemberExpressions) {
@@ -1587,6 +1593,13 @@ TEST(IsDeleted, MatchesDeletedFunctionDeclarations) {
       notMatches("void Func();", functionDecl(hasName("Func"), isDeleted())));
   EXPECT_TRUE(matches("void Func() = delete;",
                       functionDecl(hasName("Func"), isDeleted())));
+}
+
+TEST(isConstexpr, MatchesConstexprDeclarations) {
+  EXPECT_TRUE(matches("constexpr int foo = 42;",
+                      varDecl(hasName("foo"), isConstexpr())));
+  EXPECT_TRUE(matches("constexpr int bar();",
+                      functionDecl(hasName("bar"), isConstexpr())));
 }
 
 TEST(HasAnyParameter, DoesntMatchIfInnerMatcherDoesntMatch) {
@@ -2136,6 +2149,10 @@ TEST(Matcher, FloatLiterals) {
 
 TEST(Matcher, NullPtrLiteral) {
   EXPECT_TRUE(matches("int* i = nullptr;", nullPtrLiteralExpr()));
+}
+
+TEST(Matcher, GNUNullExpr) {
+  EXPECT_TRUE(matches("int* i = __null;", gnuNullExpr()));
 }
 
 TEST(Matcher, AsmStatement) {
@@ -4379,9 +4396,9 @@ public:
       : Id(Id), InnerMatcher(InnerMatcher), InnerId(InnerId) {
   }
 
-  virtual bool run(const BoundNodes *Nodes) { return false; }
+  bool run(const BoundNodes *Nodes) override { return false; }
 
-  virtual bool run(const BoundNodes *Nodes, ASTContext *Context) {
+  bool run(const BoundNodes *Nodes, ASTContext *Context) override {
     const T *Node = Nodes->getNodeAs<T>(Id);
     return selectFirst<T>(InnerId, match(InnerMatcher, *Node, *Context)) !=
            nullptr;
@@ -4430,9 +4447,9 @@ TEST(MatchFinder, CanMatchSingleNodesRecursively) {
 template <typename T>
 class VerifyAncestorHasChildIsEqual : public BoundNodesCallback {
 public:
-  virtual bool run(const BoundNodes *Nodes) { return false; }
+  bool run(const BoundNodes *Nodes) override { return false; }
 
-  virtual bool run(const BoundNodes *Nodes, ASTContext *Context) {
+  bool run(const BoundNodes *Nodes, ASTContext *Context) override {
     const T *Node = Nodes->getNodeAs<T>("");
     return verify(*Nodes, *Context, Node);
   }
@@ -4488,12 +4505,10 @@ TEST(MatchFinder, CheckProfiling) {
 class VerifyStartOfTranslationUnit : public MatchFinder::MatchCallback {
 public:
   VerifyStartOfTranslationUnit() : Called(false) {}
-  virtual void run(const MatchFinder::MatchResult &Result) {
+  void run(const MatchFinder::MatchResult &Result) override {
     EXPECT_TRUE(Called);
   }
-  virtual void onStartOfTranslationUnit() {
-    Called = true;
-  }
+  void onStartOfTranslationUnit() override { Called = true; }
   bool Called;
 };
 
@@ -4516,12 +4531,10 @@ TEST(MatchFinder, InterceptsStartOfTranslationUnit) {
 class VerifyEndOfTranslationUnit : public MatchFinder::MatchCallback {
 public:
   VerifyEndOfTranslationUnit() : Called(false) {}
-  virtual void run(const MatchFinder::MatchResult &Result) {
+  void run(const MatchFinder::MatchResult &Result) override {
     EXPECT_FALSE(Called);
   }
-  virtual void onEndOfTranslationUnit() {
-    Called = true;
-  }
+  void onEndOfTranslationUnit() override { Called = true; }
   bool Called;
 };
 

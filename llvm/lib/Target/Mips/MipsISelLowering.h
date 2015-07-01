@@ -27,7 +27,7 @@
 
 namespace llvm {
   namespace MipsISD {
-    enum NodeType {
+    enum NodeType : unsigned {
       // Start the numbering from where ISD NodeType finishes.
       FIRST_NUMBER = ISD::BUILTIN_OP_END,
 
@@ -507,11 +507,15 @@ namespace llvm {
 
     unsigned getInlineAsmMemConstraint(
         const std::string &ConstraintCode) const override {
-      // FIXME: Map different constraints differently.
-      return InlineAsm::Constraint_m;
+      if (ConstraintCode == "R")
+        return InlineAsm::Constraint_R;
+      else if (ConstraintCode == "ZC")
+        return InlineAsm::Constraint_ZC;
+      return TargetLowering::getInlineAsmMemConstraint(ConstraintCode);
     }
 
-    bool isLegalAddressingMode(const AddrMode &AM, Type *Ty) const override;
+    bool isLegalAddressingMode(const AddrMode &AM, Type *Ty,
+                               unsigned AS) const override;
 
     bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
@@ -527,6 +531,7 @@ namespace llvm {
     bool isFPImmLegal(const APFloat &Imm, EVT VT) const override;
 
     unsigned getJumpTableEncoding() const override;
+    bool useSoftFloat() const override;
 
     /// Emit a sign-extension using sll/sra, seb, or seh appropriately.
     MachineBasicBlock *emitSignExtendToI32InReg(MachineInstr *MI,

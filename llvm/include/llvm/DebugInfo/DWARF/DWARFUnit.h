@@ -46,7 +46,7 @@ protected:
                          const DWARFDebugAbbrev *DA, StringRef RS, StringRef SS,
                          StringRef SOS, StringRef AOS, bool isLittleEndian) = 0;
 
-  ~DWARFUnitSectionBase() {}
+  ~DWARFUnitSectionBase() = default;
 };
 
 /// Concrete instance of DWARFUnitSection, specialized for one Unit type.
@@ -195,9 +195,8 @@ public:
     BaseAddr = base_addr;
   }
 
-  const DWARFDebugInfoEntryMinimal *
-  getCompileUnitDIE(bool extract_cu_die_only = true) {
-    extractDIEsIfNeeded(extract_cu_die_only);
+  const DWARFDebugInfoEntryMinimal *getUnitDIE(bool ExtractUnitDIEOnly = true) {
+    extractDIEsIfNeeded(ExtractUnitDIEOnly);
     return DieArray.empty() ? nullptr : &DieArray[0];
   }
 
@@ -226,8 +225,7 @@ public:
   /// It is illegal to call this method with a DIE that hasn't be
   /// created by this unit. In other word, it's illegal to call this
   /// method on a DIE that isn't accessible by following
-  /// children/sibling links starting from this unit's
-  /// getCompileUnitDIE().
+  /// children/sibling links starting from this unit's getUnitDIE().
   uint32_t getDIEIndex(const DWARFDebugInfoEntryMinimal *DIE) {
     assert(!DieArray.empty() && DIE >= &DieArray[0] &&
            DIE < &DieArray[0] + DieArray.size());

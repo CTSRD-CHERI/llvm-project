@@ -19,13 +19,13 @@ target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-windows-msvc"
 
 ; The function entry in this case remains unchanged.
-; CHECK: define void @_Z4testv() #0 {
+; CHECK: define void @_Z4testv()
 ; CHECK: entry:
 ; CHECK:   invoke void @_Z9may_throwv()
-; CHECK:           to label %invoke.cont unwind label %[[LPAD_LABEL:lpad[0-9]+]]
+; CHECK:           to label %invoke.cont unwind label %[[LPAD_LABEL:lpad[0-9]*]]
 
 ; Function Attrs: uwtable
-define void @_Z4testv() #0 {
+define void @_Z4testv() #0 personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to i8*) {
 entry:
   %exn.slot = alloca i8*
   %ehselector.slot = alloca i32
@@ -36,13 +36,13 @@ invoke.cont:                                      ; preds = %entry
   br label %try.cont
 
 ; CHECK: [[LPAD_LABEL]]:{{[ ]+}}; preds = %entry
-; CHECK:   landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to i8*)
+; CHECK:   landingpad { i8*, i32 }
 ; CHECK-NEXT:           catch i8* null
-; CHECK-NEXT:   [[RECOVER:\%.+]] = call i8* (...)* @llvm.eh.actions(i32 1, i8* null, i8* null, i8* (i8*, i8*)* @_Z4testv.catch)
+; CHECK-NEXT:   [[RECOVER:\%.+]] = call i8* (...) @llvm.eh.actions(i32 1, i8* null, i32 -1, i8* (i8*, i8*)* @_Z4testv.catch)
 ; CHECK-NEXT:   indirectbr i8* [[RECOVER]], [label %try.cont]
 
 lpad:                                             ; preds = %entry
-  %tmp = landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to i8*)
+  %tmp = landingpad { i8*, i32 }
           catch i8* null
   %tmp1 = extractvalue { i8*, i32 } %tmp, 0
   store i8* %tmp1, i8** %exn.slot
@@ -70,7 +70,7 @@ try.cont:                                         ; preds = %invoke.cont2, %invo
 ; CHECK: }
 }
 
-; CHECK: define internal i8* @_Z4testv.catch(i8*, i8*) {
+; CHECK: define internal i8* @_Z4testv.catch(i8*, i8*)
 ; CHECK: entry:
 ; CHECK:   call void @_Z16handle_exceptionv()
 ; CHECK:   ret i8* blockaddress(@_Z4testv, %try.cont)

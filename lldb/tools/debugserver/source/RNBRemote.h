@@ -1,4 +1,4 @@
-//===-- RNBRemote.h ---------------------------------------------*- C++ -*-===//
+
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -29,6 +29,8 @@ class RNBContext;
 class PThreadEvents;
 
 enum event_loop_mode { debug_nub, gdb_remote_protocol, done };
+
+enum class compression_types { zlib_deflate, lz4, lzma, lzfse, none };
 
 class RNBRemote
 {
@@ -83,12 +85,13 @@ public:
         query_monitor,                  // 'qRcmd'
         query_current_thread_id,        // 'qC'
         query_get_pid,                  // 'qGetPid'
+        query_echo,                     // 'qEcho'
         query_thread_ids_first,         // 'qfThreadInfo'
         query_thread_ids_subsequent,    // 'qsThreadInfo'
         query_thread_extra_info,        // 'qThreadExtraInfo'
         query_thread_stop_info,         // 'qThreadStopInfo'
         query_image_offsets,            // 'qOffsets'
-        query_symbol_lookup,            // 'gSymbols'
+        query_symbol_lookup,            // 'qSymbol'
         query_launch_success,           // 'qLaunchSuccess'
         query_register_info,            // 'qRegisterInfo'
         query_shlib_notify_info_addr,   // 'qShlibInfoAddr'
@@ -100,6 +103,7 @@ public:
         query_gdb_server_version,       // 'qGDBServerVersion'
         query_process_info,             // 'qProcessInfo'
         json_query_thread_extended_info,// 'jThreadExtendedInfo'
+        json_query_threads_info,        // 'jThreadsInfo'
         pass_signals_to_inferior,       // 'QPassSignals'
         start_noack_mode,               // 'QStartNoAckMode'
         prefix_reg_packets_with_tid,    // 'QPrefixRegisterPacketsWithThreadID
@@ -119,6 +123,7 @@ public:
         memory_region_info,             // 'qMemoryRegionInfo:'
         get_profile_data,               // 'qGetProfileData'
         set_enable_profiling,           // 'QSetEnableAsyncProfiling'
+        enable_compression,             // 'QEnableCompression:'
         watchpoint_support_info,        // 'qWatchpointSupportInfo:'
         allocate_memory,                // '_M'
         deallocate_memory,              // '_m'
@@ -127,6 +132,7 @@ public:
         restore_register_state,         // '_G'
         speed_test,                     // 'qSpeedTest:'
         set_detach_on_error,            // 'QSetDetachOnError:'
+        query_transfer,                 // 'qXfer:'
         unknown_type
     } PacketEnum;
 
@@ -176,6 +182,7 @@ public:
     rnb_err_t HandlePacket_qC (const char *p);
     rnb_err_t HandlePacket_qRcmd (const char *p);
     rnb_err_t HandlePacket_qGetPid (const char *p);
+    rnb_err_t HandlePacket_qEcho (const char *p);
     rnb_err_t HandlePacket_qLaunchSuccess (const char *p);
     rnb_err_t HandlePacket_qRegisterInfo (const char *p);
     rnb_err_t HandlePacket_qShlibInfoAddr (const char *p);
@@ -184,11 +191,13 @@ public:
     rnb_err_t HandlePacket_qSyncThreadStateSupported (const char *p);
     rnb_err_t HandlePacket_qThreadInfo (const char *p);
     rnb_err_t HandlePacket_jThreadExtendedInfo (const char *p);
+    rnb_err_t HandlePacket_jThreadsInfo (const char *p);
     rnb_err_t HandlePacket_qThreadExtraInfo (const char *p);
     rnb_err_t HandlePacket_qThreadStopInfo (const char *p);
     rnb_err_t HandlePacket_qHostInfo (const char *p);
     rnb_err_t HandlePacket_qGDBServerVersion (const char *p);
     rnb_err_t HandlePacket_qProcessInfo (const char *p);
+    rnb_err_t HandlePacket_qSymbol (const char *p);
     rnb_err_t HandlePacket_QStartNoAckMode (const char *p);
     rnb_err_t HandlePacket_QThreadSuffixSupported (const char *p);
     rnb_err_t HandlePacket_QSetLogging (const char *p);
@@ -232,8 +241,10 @@ public:
     rnb_err_t HandlePacket_MemoryRegionInfo (const char *p);
     rnb_err_t HandlePacket_GetProfileData(const char *p);
     rnb_err_t HandlePacket_SetEnableAsyncProfiling(const char *p);
+    rnb_err_t HandlePacket_QEnableCompression(const char *p);
     rnb_err_t HandlePacket_WatchpointSupportInfo (const char *p);
     rnb_err_t HandlePacket_qSpeedTest (const char *p);
+    rnb_err_t HandlePacket_qXfer (const char *p);
     rnb_err_t HandlePacket_stop_process (const char *p);
     rnb_err_t HandlePacket_QSetDetachOnError (const char *p);
 
@@ -303,8 +314,71 @@ protected:
         }
     };
 
+
+    struct DispatchQueueOffsets
+    {
+        uint16_t dqo_version;
+        uint16_t dqo_label;
+        uint16_t dqo_label_size;
+        uint16_t dqo_flags;
+        uint16_t dqo_flags_size;
+        uint16_t dqo_serialnum;
+        uint16_t dqo_serialnum_size;
+        uint16_t dqo_width;
+        uint16_t dqo_width_size;
+        uint16_t dqo_running;
+        uint16_t dqo_running_size;
+        uint16_t dqo_suspend_cnt;         // version 5 and later, starting with Mac OS X 10.10/iOS 8
+        uint16_t dqo_suspend_cnt_size;    // version 5 and later, starting with Mac OS X 10.10/iOS 8
+        uint16_t dqo_target_queue;        // version 5 and later, starting with Mac OS X 10.10/iOS 8
+        uint16_t dqo_target_queue_size;   // version 5 and later, starting with Mac OS X 10.10/iOS 8
+        uint16_t dqo_priority;            // version 5 and later, starting with Mac OS X 10.10/iOS 8
+        uint16_t dqo_priority_size;       // version 5 and later, starting with Mac OS X 10.10/iOS 8
+
+        DispatchQueueOffsets ()
+        {
+            Clear();
+        }
+
+        void
+        Clear()
+        {
+            dqo_version = UINT16_MAX;
+            dqo_label = UINT16_MAX;
+            dqo_label_size = UINT16_MAX;
+            dqo_flags = UINT16_MAX;
+            dqo_flags_size = UINT16_MAX;
+            dqo_serialnum = UINT16_MAX;
+            dqo_serialnum_size = UINT16_MAX;
+            dqo_width = UINT16_MAX;
+            dqo_width_size = UINT16_MAX;
+            dqo_running = UINT16_MAX;
+            dqo_running_size = UINT16_MAX;
+            dqo_suspend_cnt = UINT16_MAX;
+            dqo_suspend_cnt_size = UINT16_MAX;
+            dqo_target_queue = UINT16_MAX;
+            dqo_target_queue_size = UINT16_MAX;
+            dqo_priority = UINT16_MAX;
+            dqo_priority_size = UINT16_MAX;
+        }
+
+        bool
+        IsValid () const
+        {
+            return dqo_version != UINT16_MAX;
+        }
+
+        void
+        GetThreadQueueInfo (nub_process_t pid,
+                            nub_addr_t dispatch_qaddr,
+                            std::string &queue_name,
+                            uint64_t &queue_width,
+                            uint64_t &queue_serialnum) const;
+    };
+
     rnb_err_t       GetPacket (std::string &packet_data, RNBRemote::Packet& packet_info, bool wait);
     rnb_err_t       SendPacket (const std::string &);
+    std::string     CompressString (const std::string &);
 
     void CreatePacketTable ();
     rnb_err_t GetPacketPayload (std::string &);
@@ -312,12 +386,24 @@ protected:
     nub_thread_t
     ExtractThreadIDFromThreadSuffix (const char *p);
 
+    void
+    EnableCompressionNextSendPacket (compression_types);
+
+    compression_types
+    GetCompressionType ();
+
+    const DispatchQueueOffsets *
+    GetDispatchQueueOffsets();
+
     RNBContext      m_ctx;              // process context
     RNBSocket       m_comm;             // communication port
     std::string     m_arch;
     nub_thread_t    m_continue_thread;  // thread to continue; 0 for any, -1 for all
     nub_thread_t    m_thread;           // thread for other ops; 0 for any, -1 for all
     PThreadMutex    m_mutex;            // Mutex that protects
+    DispatchQueueOffsets m_dispatch_queue_offsets;
+    nub_addr_t      m_dispatch_queue_offsets_addr;
+    uint32_t        m_qSymbol_index;
     uint32_t        m_packets_recvd;
     Packet::collection m_packets;
     std::deque<std::string> m_rx_packets;
@@ -332,6 +418,11 @@ protected:
                                                                 // "$g;thread:TTTT" instead of "$g"
                                                                 // "$GVVVVVVVVVVVVVV;thread:TTTT;#00 instead of "$GVVVVVVVVVVVVVV"
     bool            m_list_threads_in_stop_reply;
+
+    size_t          m_compression_minsize;                      // only packets larger than this size will be compressed
+    bool            m_enable_compression_next_send_packet;
+
+    compression_types m_compression_mode;
 };
 
 /* We translate the /usr/include/mach/exception_types.h exception types

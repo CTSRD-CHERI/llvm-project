@@ -222,6 +222,73 @@ CMICmnLLDBDebugger::GetDriver(void) const
 }
 
 //++ ------------------------------------------------------------------------------------
+// Details: Wait until all events have been handled.
+//          This function works in pair with CMICmnLLDBDebugger::MonitorSBListenerEvents
+//          that handles events from queue. When all events were handled and queue is
+//          empty the MonitorSBListenerEvents notifies this function that it's ready to
+//          go on. To synchronize them the m_mutexEventQueue and
+//          m_conditionEventQueueEmpty are used.
+// Type:    Method.
+// Args:    None.
+// Return:  None.
+// Throws:  None.
+//--
+void
+CMICmnLLDBDebugger::WaitForHandleEvent(void)
+{
+    std::unique_lock<std::mutex> lock(m_mutexEventQueue);
+
+    lldb::SBEvent event;
+    if (ThreadIsActive() && m_lldbListener.PeekAtNextEvent(event))
+        m_conditionEventQueueEmpty.wait(lock);
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: Check if need to rebroadcast stop event. This function will return true if
+//          debugger is in synchronouse mode. In such case the
+//          CMICmnLLDBDebugger::RebroadcastStopEvent should be called to rebroadcast
+//          a new stop event (if any).
+// Type:    Method.
+// Args:    None.
+// Return:  bool    - True = Need to rebroadcast stop event, false = otherwise.
+// Throws:  None.
+//--
+bool
+CMICmnLLDBDebugger::CheckIfNeedToRebroadcastStopEvent(void)
+{
+    CMICmnLLDBDebugSessionInfo &rSessionInfo(CMICmnLLDBDebugSessionInfo::Instance());
+    if (!rSessionInfo.GetDebugger().GetAsync())
+    {
+        const bool include_expression_stops = false;
+        m_nLastStopId = CMICmnLLDBDebugSessionInfo::Instance().GetProcess().GetStopID(include_expression_stops);
+        return true;
+    }
+
+    return false;
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: Rebroadcast stop event if needed. This function should be called only if the
+//          CMICmnLLDBDebugger::CheckIfNeedToRebroadcastStopEvent() returned true.
+// Type:    Method.
+// Args:    None.
+// Return:  None.
+// Throws:  None.
+//--
+void
+CMICmnLLDBDebugger::RebroadcastStopEvent(void)
+{
+    lldb::SBProcess process = CMICmnLLDBDebugSessionInfo::Instance().GetProcess();
+    const bool include_expression_stops = false;
+    const uint32_t nStopId = process.GetStopID(include_expression_stops);
+    if (m_nLastStopId != nStopId)
+    {
+        lldb::SBEvent event = process.GetStopEventForStopID(nStopId);
+        process.GetBroadcaster().BroadcastEvent(event);
+    }
+}
+
+//++ ------------------------------------------------------------------------------------
 // Details: Initialize the LLDB Debugger object.
 // Type:    Method.
 // Args:    None.
@@ -267,7 +334,7 @@ CMICmnLLDBDebugger::InitStdStreams(void)
 }
 
 //++ ------------------------------------------------------------------------------------
-// Details: Set up the events from the SBDebugger's we would to listent to.
+// Details: Set up the events from the SBDebugger's we would like to listen to.
 // Type:    Method.
 // Args:    None.
 // Return:  MIstatus::success - Functionality succeeded.
@@ -620,7 +687,7 @@ CMICmnLLDBDebugger::ClientGetTheirMask(const CMIUtilString &vClientName, const C
         vwEventMask = (*it).second;
     }
 
-    SetErrorDescription(CMIUtilString::Format(MIRSRC(IDS_LLDBDEBUGGER_ERR_CLIENTNOTREGISTERD), vClientName.c_str()));
+    SetErrorDescription(CMIUtilString::Format(MIRSRC(IDS_LLDBDEBUGGER_ERR_CLIENTNOTREGISTERED), vClientName.c_str()));
 
     return MIstatus::failure;
 }
@@ -629,7 +696,7 @@ CMICmnLLDBDebugger::ClientGetTheirMask(const CMIUtilString &vClientName, const C
 // Details: Momentarily wait for an events being broadcast and inspect those that do
 //          come this way. Check if the target should exit event if so start shutting
 //          down this thread and the application. Any other events pass on to the
-//          Out-of-band handler to futher determine what kind of event arrived.
+//          Out-of-band handler to further determine what kind of event arrived.
 //          This function runs in the thread "MI debugger event".
 // Type:    Method.
 // Args:    vrbIsAlive  - (W) False = yes exit event monitoring thread, true = continue.
@@ -642,39 +709,48 @@ CMICmnLLDBDebugger::MonitorSBListenerEvents(bool &vrbIsAlive)
 {
     vrbIsAlive = true;
 
+    // Lock the mutex of event queue
+    // Note that it should be locked while we are in CMICmnLLDBDebugger::MonitorSBListenerEvents to
+    // avoid a race condition with CMICmnLLDBDebugger::WaitForHandleEvent
+    std::unique_lock<std::mutex> lock(m_mutexEventQueue);
+
     lldb::SBEvent event;
     const bool bGotEvent = m_lldbListener.GetNextEvent(event);
-    if (!bGotEvent || !event.IsValid())
+    if (!bGotEvent)
     {
+        // Notify that we are finished and unlock the mutex of event queue before sleeping
+        m_conditionEventQueueEmpty.notify_one();
+        lock.unlock();
+
+        // Wait a bit to reduce CPU load
         const std::chrono::milliseconds time(1);
         std::this_thread::sleep_for(time);
         return MIstatus::success;
     }
-    if (!event.GetBroadcaster().IsValid())
-        return MIstatus::success;
+    assert(event.IsValid());
+    assert(event.GetBroadcaster().IsValid());
 
     // Debugging
     m_pLog->WriteLog(CMIUtilString::Format("##### An event occurred: %s", event.GetBroadcasterClass()));
 
     bool bHandledEvent = false;
-
     bool bOk = false;
     {
         // Lock Mutex before handling events so that we don't disturb a running cmd
         CMIUtilThreadLock lock(CMICmnLLDBDebugSessionInfo::Instance().GetSessionMutex());
         bOk = CMICmnLLDBDebuggerHandleEvents::Instance().HandleEvent(event, bHandledEvent);
     }
+
     if (!bHandledEvent)
     {
         const CMIUtilString msg(CMIUtilString::Format(MIRSRC(IDS_LLDBDEBUGGER_WRN_UNKNOWN_EVENT), event.GetBroadcasterClass()));
         m_pLog->WriteLog(msg);
     }
-    if (!bOk)
-    {
-        m_pLog->WriteLog(CMICmnLLDBDebuggerHandleEvents::Instance().GetErrorDescription());
-    }
 
-    return bOk;
+    if (!bOk)
+        m_pLog->WriteLog(CMICmnLLDBDebuggerHandleEvents::Instance().GetErrorDescription());
+
+    return MIstatus::success;
 }
 
 //++ ------------------------------------------------------------------------------------

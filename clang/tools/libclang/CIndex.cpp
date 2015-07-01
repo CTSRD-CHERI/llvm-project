@@ -454,14 +454,14 @@ bool CursorVisitor::visitPreprocessedEntities(InputIterator First,
     if (MacroExpansion *ME = dyn_cast<MacroExpansion>(PPE)) {
       if (Visit(MakeMacroExpansionCursor(ME, TU)))
         return true;
-      
+
       continue;
     }
-    
-    if (MacroDefinition *MD = dyn_cast<MacroDefinition>(PPE)) {
+
+    if (MacroDefinitionRecord *MD = dyn_cast<MacroDefinitionRecord>(PPE)) {
       if (Visit(MakeMacroDefinitionCursor(MD, TU)))
         return true;
-      
+
       continue;
     }
     
@@ -568,8 +568,8 @@ bool CursorVisitor::VisitChildren(CXCursor Cursor) {
     SourceLocation Loc = AU->mapLocationToPreamble(BeginLoc);
     const MacroInfo *MI =
         getMacroInfo(cxcursor::getCursorMacroDefinition(Cursor), TU);
-    if (MacroDefinition *MacroDef =
-          checkForMacroInMacroDefinition(MI, Loc, TU))
+    if (MacroDefinitionRecord *MacroDef =
+            checkForMacroInMacroDefinition(MI, Loc, TU))
       return Visit(cxcursor::MakeMacroExpansionCursor(MacroDef, BeginLoc, TU));
   }
 
@@ -1879,6 +1879,9 @@ public:
   void VisitOMPTaskyieldDirective(const OMPTaskyieldDirective *D);
   void VisitOMPBarrierDirective(const OMPBarrierDirective *D);
   void VisitOMPTaskwaitDirective(const OMPTaskwaitDirective *D);
+  void VisitOMPTaskgroupDirective(const OMPTaskgroupDirective *D);
+  void
+  VisitOMPCancellationPointDirective(const OMPCancellationPointDirective *D);
   void VisitOMPFlushDirective(const OMPFlushDirective *D);
   void VisitOMPOrderedDirective(const OMPOrderedDirective *D);
   void VisitOMPAtomicDirective(const OMPAtomicDirective *D);
@@ -1982,6 +1985,7 @@ void OMPClauseEnqueue::VisitOMPProcBindClause(const OMPProcBindClause *C) { }
 
 void OMPClauseEnqueue::VisitOMPScheduleClause(const OMPScheduleClause *C) {
   Visitor->AddStmt(C->getChunkSize());
+  Visitor->AddStmt(C->getHelperChunkSize());
 }
 
 void OMPClauseEnqueue::VisitOMPOrderedClause(const OMPOrderedClause *) {}
@@ -2022,12 +2026,33 @@ void OMPClauseEnqueue::VisitOMPFirstprivateClause(
 void OMPClauseEnqueue::VisitOMPLastprivateClause(
                                         const OMPLastprivateClause *C) {
   VisitOMPClauseList(C);
+  for (auto *E : C->private_copies()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->source_exprs()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->destination_exprs()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->assignment_ops()) {
+    Visitor->AddStmt(E);
+  }
 }
 void OMPClauseEnqueue::VisitOMPSharedClause(const OMPSharedClause *C) {
   VisitOMPClauseList(C);
 }
 void OMPClauseEnqueue::VisitOMPReductionClause(const OMPReductionClause *C) {
   VisitOMPClauseList(C);
+  for (auto *E : C->lhs_exprs()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->rhs_exprs()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->reduction_ops()) {
+    Visitor->AddStmt(E);
+  }
 }
 void OMPClauseEnqueue::VisitOMPLinearClause(const OMPLinearClause *C) {
   VisitOMPClauseList(C);
@@ -2049,6 +2074,15 @@ void OMPClauseEnqueue::VisitOMPAlignedClause(const OMPAlignedClause *C) {
 }
 void OMPClauseEnqueue::VisitOMPCopyinClause(const OMPCopyinClause *C) {
   VisitOMPClauseList(C);
+  for (auto *E : C->source_exprs()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->destination_exprs()) {
+    Visitor->AddStmt(E);
+  }
+  for (auto *E : C->assignment_ops()) {
+    Visitor->AddStmt(E);
+  }
 }
 void
 OMPClauseEnqueue::VisitOMPCopyprivateClause(const OMPCopyprivateClause *C) {
@@ -2064,6 +2098,9 @@ OMPClauseEnqueue::VisitOMPCopyprivateClause(const OMPCopyprivateClause *C) {
   }
 }
 void OMPClauseEnqueue::VisitOMPFlushClause(const OMPFlushClause *C) {
+  VisitOMPClauseList(C);
+}
+void OMPClauseEnqueue::VisitOMPDependClause(const OMPDependClause *C) {
   VisitOMPClauseList(C);
 }
 }
@@ -2447,6 +2484,11 @@ void EnqueueVisitor::VisitOMPTaskwaitDirective(const OMPTaskwaitDirective *D) {
   VisitOMPExecutableDirective(D);
 }
 
+void EnqueueVisitor::VisitOMPTaskgroupDirective(
+    const OMPTaskgroupDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
 void EnqueueVisitor::VisitOMPFlushDirective(const OMPFlushDirective *D) {
   VisitOMPExecutableDirective(D);
 }
@@ -2464,6 +2506,11 @@ void EnqueueVisitor::VisitOMPTargetDirective(const OMPTargetDirective *D) {
 }
 
 void EnqueueVisitor::VisitOMPTeamsDirective(const OMPTeamsDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void EnqueueVisitor::VisitOMPCancellationPointDirective(
+    const OMPCancellationPointDirective *D) {
   VisitOMPExecutableDirective(D);
 }
 
@@ -2852,7 +2899,8 @@ enum CXErrorCode clang_createTranslationUnit2(CXIndex CIdx,
   IntrusiveRefCntPtr<DiagnosticsEngine> Diags =
       CompilerInstance::createDiagnostics(new DiagnosticOptions());
   std::unique_ptr<ASTUnit> AU = ASTUnit::LoadFromASTFile(
-      ast_filename, Diags, FileSystemOpts, CXXIdx->getOnlyLocalDecls(), None,
+      ast_filename, CXXIdx->getPCHContainerOperations(), Diags, FileSystemOpts,
+      CXXIdx->getOnlyLocalDecls(), None,
       /*CaptureDiagnostics=*/true,
       /*AllowPCHWithCompilerErrors=*/true,
       /*UserFilesAreVolatile=*/true);
@@ -2990,7 +3038,8 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
   unsigned NumErrors = Diags->getClient()->getNumErrors();
   std::unique_ptr<ASTUnit> ErrUnit;
   std::unique_ptr<ASTUnit> Unit(ASTUnit::LoadFromCommandLine(
-      Args->data(), Args->data() + Args->size(), Diags,
+      Args->data(), Args->data() + Args->size(),
+      CXXIdx->getPCHContainerOperations(), Diags,
       CXXIdx->getClangResourcesPath(), CXXIdx->getOnlyLocalDecls(),
       /*CaptureDiagnostics=*/true, *RemappedFiles.get(),
       /*RemappedFilesKeepOriginalName=*/true, PrecompilePreamble, TUKind,
@@ -3231,7 +3280,8 @@ static void clang_reparseTranslationUnit_Impl(void *UserData) {
     RemappedFiles->push_back(std::make_pair(UF.Filename, MB.release()));
   }
 
-  if (!CXXUnit->Reparse(*RemappedFiles.get()))
+  if (!CXXUnit->Reparse(CXXIdx->getPCHContainerOperations(),
+                        *RemappedFiles.get()))
     RTUI->result = CXError_Success;
   else if (isASTReadError(CXXUnit))
     RTUI->result = CXError_ASTReadError;
@@ -3787,12 +3837,11 @@ CXString clang_Cursor_getMangling(CXCursor C) {
   // Now apply backend mangling.
   std::unique_ptr<llvm::DataLayout> DL(
       new llvm::DataLayout(Ctx.getTargetInfo().getTargetDescription()));
-  llvm::Mangler BackendMangler(DL.get());
 
   std::string FinalBuf;
   llvm::raw_string_ostream FinalBufOS(FinalBuf);
-  BackendMangler.getNameWithPrefix(FinalBufOS,
-                                   llvm::Twine(FrontendBufOS.str()));
+  llvm::Mangler::getNameWithPrefix(FinalBufOS, llvm::Twine(FrontendBufOS.str()),
+                                   *DL);
 
   return cxstring::createDup(FinalBufOS.str());
 }
@@ -4229,6 +4278,8 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPBarrierDirective");
   case CXCursor_OMPTaskwaitDirective:
     return cxstring::createRef("OMPTaskwaitDirective");
+  case CXCursor_OMPTaskgroupDirective:
+    return cxstring::createRef("OMPTaskgroupDirective");
   case CXCursor_OMPFlushDirective:
     return cxstring::createRef("OMPFlushDirective");
   case CXCursor_OMPOrderedDirective:
@@ -4239,6 +4290,8 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPTargetDirective");
   case CXCursor_OMPTeamsDirective:
     return cxstring::createRef("OMPTeamsDirective");
+  case CXCursor_OMPCancellationPointDirective:
+    return cxstring::createRef("OMPCancellationPointDirective");
   case CXCursor_OverloadCandidate:
       return cxstring::createRef("OverloadCandidate");
   }
@@ -4857,9 +4910,10 @@ CXCursor clang_getCursorReferenced(CXCursor C) {
 
     return clang_getNullCursor();
   }
-  
+
   if (C.kind == CXCursor_MacroExpansion) {
-    if (const MacroDefinition *Def = getCursorMacroExpansion(C).getDefinition())
+    if (const MacroDefinitionRecord *Def =
+            getCursorMacroExpansion(C).getDefinition())
       return MakeMacroDefinitionCursor(Def, tu);
   }
 
@@ -6034,11 +6088,12 @@ static void annotatePreprocessorTokens(CXTranslationUnit TU,
         if (MI) {
           SourceLocation SaveLoc = Tok.getLocation();
           Tok.setLocation(CXXUnit->mapLocationToPreamble(SaveLoc));
-          MacroDefinition *MacroDef = checkForMacroInMacroDefinition(MI,Tok,TU);
+          MacroDefinitionRecord *MacroDef =
+              checkForMacroInMacroDefinition(MI, Tok, TU);
           Tok.setLocation(SaveLoc);
           if (MacroDef)
-            Cursors[NextIdx-1] = MakeMacroExpansionCursor(MacroDef,
-                                                         Tok.getLocation(), TU);
+            Cursors[NextIdx - 1] =
+                MakeMacroExpansionCursor(MacroDef, Tok.getLocation(), TU);
         }
       } while (!Tok.isAtStartOfLine());
 
@@ -7114,7 +7169,7 @@ MacroInfo *cxindex::getMacroInfo(const IdentifierInfo &II,
 
   ASTUnit *Unit = cxtu::getASTUnit(TU);
   Preprocessor &PP = Unit->getPreprocessor();
-  MacroDirective *MD = PP.getMacroDirectiveHistory(&II);
+  MacroDirective *MD = PP.getLocalMacroDirectiveHistory(&II);
   if (MD) {
     for (MacroDirective::DefInfo
            Def = MD->getDefinition(); Def; Def = Def.getPreviousDefinition()) {
@@ -7126,7 +7181,7 @@ MacroInfo *cxindex::getMacroInfo(const IdentifierInfo &II,
   return nullptr;
 }
 
-const MacroInfo *cxindex::getMacroInfo(const MacroDefinition *MacroDef,
+const MacroInfo *cxindex::getMacroInfo(const MacroDefinitionRecord *MacroDef,
                                        CXTranslationUnit TU) {
   if (!MacroDef || !TU)
     return nullptr;
@@ -7137,9 +7192,9 @@ const MacroInfo *cxindex::getMacroInfo(const MacroDefinition *MacroDef,
   return getMacroInfo(*II, MacroDef->getLocation(), TU);
 }
 
-MacroDefinition *cxindex::checkForMacroInMacroDefinition(const MacroInfo *MI,
-                                                         const Token &Tok,
-                                                         CXTranslationUnit TU) {
+MacroDefinitionRecord *
+cxindex::checkForMacroInMacroDefinition(const MacroInfo *MI, const Token &Tok,
+                                        CXTranslationUnit TU) {
   if (!MI || !TU)
     return nullptr;
   if (Tok.isNot(tok::raw_identifier))
@@ -7171,16 +7226,16 @@ MacroDefinition *cxindex::checkForMacroInMacroDefinition(const MacroInfo *MI,
   if (std::find(MI->arg_begin(), MI->arg_end(), &II) != MI->arg_end())
     return nullptr;
 
-  MacroDirective *InnerMD = PP.getMacroDirectiveHistory(&II);
+  MacroDirective *InnerMD = PP.getLocalMacroDirectiveHistory(&II);
   if (!InnerMD)
     return nullptr;
 
   return PPRec->findMacroDefinition(InnerMD->getMacroInfo());
 }
 
-MacroDefinition *cxindex::checkForMacroInMacroDefinition(const MacroInfo *MI,
-                                                         SourceLocation Loc,
-                                                         CXTranslationUnit TU) {
+MacroDefinitionRecord *
+cxindex::checkForMacroInMacroDefinition(const MacroInfo *MI, SourceLocation Loc,
+                                        CXTranslationUnit TU) {
   if (Loc.isInvalid() || !MI || !TU)
     return nullptr;
 

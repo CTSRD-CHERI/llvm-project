@@ -12,6 +12,7 @@
 
 // C Includes
 // C++ Includes
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -26,6 +27,7 @@
 #include "lldb/Core/PluginInterface.h"
 #include "lldb/Core/UserSettingsController.h"
 #include "lldb/Interpreter/Options.h"
+#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Mutex.h"
 
 // TODO pull NativeDelegate class out of NativeProcessProtocol so we
@@ -35,6 +37,11 @@
 namespace lldb_private {
 
 class ModuleCache;
+
+    enum MmapFlags {
+      eMmapFlagsPrivate = 1,
+      eMmapFlagsAnon = 2
+    };
 
     class PlatformProperties : public Properties
     {
@@ -310,15 +317,15 @@ class ModuleCache;
         {
             return ArchSpec(); // Return an invalid architecture
         }
-        
-        virtual ConstString
+
+        virtual FileSpec
         GetRemoteWorkingDirectory()
         {
             return m_working_dir;
         }
         
         virtual bool
-        SetRemoteWorkingDirectory(const ConstString &path);
+        SetRemoteWorkingDirectory(const FileSpec &working_dir);
 
         virtual const char *
         GetUserName (uint32_t uid);
@@ -369,9 +376,10 @@ class ModuleCache;
         LocateExecutableScriptingResources (Target *target,
                                             Module &module,
                                             Stream* feedback_stream);
-        
+
         virtual Error
-        GetSharedModule (const ModuleSpec &module_spec, 
+        GetSharedModule (const ModuleSpec &module_spec,
+                         Process* process,
                          lldb::ModuleSP &module_sp,
                          const FileSpecList *module_search_paths_ptr,
                          lldb::ModuleSP *old_module_sp_ptr,
@@ -625,12 +633,12 @@ class ModuleCache;
         virtual void
         AddClangModuleCompilationOptions (Target *target, std::vector<std::string> &options);
 
-        ConstString
-        GetWorkingDirectory ();
-        
+        FileSpec
+        GetWorkingDirectory();
+
         bool
-        SetWorkingDirectory (const ConstString &path);
-        
+        SetWorkingDirectory(const FileSpec &working_dir);
+
         // There may be modules that we don't want to find by default for operations like "setting breakpoint by name".
         // The platform will return "true" from this call if the passed in module happens to be one of these.
         
@@ -641,13 +649,13 @@ class ModuleCache;
         }
         
         virtual Error
-        MakeDirectory (const char *path, uint32_t permissions);
-        
-        virtual Error
-        GetFilePermissions (const char *path, uint32_t &file_permissions);
+        MakeDirectory(const FileSpec &file_spec, uint32_t permissions);
 
         virtual Error
-        SetFilePermissions (const char *path, uint32_t file_permissions);
+        GetFilePermissions(const FileSpec &file_spec, uint32_t &file_permissions);
+
+        virtual Error
+        SetFilePermissions(const FileSpec &file_spec, uint32_t file_permissions);
 
         virtual lldb::user_id_t
         OpenFile (const FileSpec& file_spec,
@@ -704,8 +712,8 @@ class ModuleCache;
                  uint32_t gid = UINT32_MAX);
 
         virtual Error
-        CreateSymlink (const char *src, // The name of the link is in src
-                       const char *dst);// The symlink points to dst
+        CreateSymlink(const FileSpec &src,  // The name of the link is in src
+                      const FileSpec &dst); // The symlink points to dst
 
         //----------------------------------------------------------------------
         /// Install a file or directory to the remote system.
@@ -741,7 +749,10 @@ class ModuleCache;
         GetFileExists (const lldb_private::FileSpec& file_spec);
         
         virtual Error
-        Unlink (const char *path);
+        Unlink(const FileSpec &file_spec);
+
+        virtual uint64_t
+        ConvertMmapFlagsToPlatform(const ArchSpec &arch, unsigned flags);
 
         virtual bool
         GetSupportsRSync ()
@@ -822,13 +833,13 @@ class ModuleCache;
         }
         
         virtual lldb_private::Error
-        RunShellCommand (const char *command,           // Shouldn't be NULL
-                         const char *working_dir,       // Pass NULL to use the current working directory
-                         int *status_ptr,               // Pass NULL if you don't want the process exit status
-                         int *signo_ptr,                // Pass NULL if you don't want the signal that caused the process to exit
-                         std::string *command_output,   // Pass NULL if you don't want the command output
-                         uint32_t timeout_sec);         // Timeout in seconds to wait for shell program to finish
-        
+        RunShellCommand(const char *command,           // Shouldn't be NULL
+                        const FileSpec &working_dir,   // Pass empty FileSpec to use the current working directory
+                        int *status_ptr,               // Pass NULL if you don't want the process exit status
+                        int *signo_ptr,                // Pass NULL if you don't want the signal that caused the process to exit
+                        std::string *command_output,   // Pass NULL if you don't want the command output
+                        uint32_t timeout_sec);         // Timeout in seconds to wait for shell program to finish
+
         virtual void
         SetLocalCacheDirectory (const char* local);
         
@@ -998,7 +1009,7 @@ class ModuleCache;
         bool m_system_arch_set_while_connected;
         ConstString m_sdk_sysroot; // the root location of where the SDK files are all located
         ConstString m_sdk_build;
-        ConstString m_working_dir; // The working directory which is used when installing modules that have no install path set
+        FileSpec m_working_dir; // The working directory which is used when installing modules that have no install path set
         std::string m_remote_url;
         std::string m_name;
         uint32_t m_major_os_version;
@@ -1129,28 +1140,38 @@ class ModuleCache;
                              const FileSpecList *module_search_paths_ptr,
                              Platform &remote_platform);
 
-        bool
-        GetCachedSharedModule (const ModuleSpec &module_spec,
-                               lldb::ModuleSP &module_sp);
-
-        Error
+        virtual Error
         DownloadModuleSlice (const FileSpec& src_file_spec,
                              const uint64_t src_offset,
                              const uint64_t src_size,
                              const FileSpec& dst_file_spec);
 
-        bool
-        GetModuleFromLocalCache (const ModuleSpec& module_spec,
-                                 lldb::ModuleSP &module_sp);
-
-        FileSpec GetModuleCacheRoot ();
+        virtual const char *
+        GetCacheHostname ();
 
     private:
+        typedef std::function<Error (const ModuleSpec &)> ModuleResolver;
+
+        Error
+        GetRemoteSharedModule (const ModuleSpec &module_spec,
+                               Process* process,
+                               lldb::ModuleSP &module_sp,
+                               const ModuleResolver &module_resolver,
+                               bool *did_create_ptr);
+
+        bool
+        GetCachedSharedModule (const ModuleSpec& module_spec,
+                               lldb::ModuleSP &module_sp,
+                               bool *did_create_ptr);
+
         Error
         LoadCachedExecutable (const ModuleSpec &module_spec,
                               lldb::ModuleSP &module_sp,
                               const FileSpecList *module_search_paths_ptr,
                               Platform &remote_platform);
+
+        FileSpec
+        GetModuleCacheRoot ();
 
         DISALLOW_COPY_AND_ASSIGN (Platform);
     };

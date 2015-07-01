@@ -1160,20 +1160,8 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
     return ReplaceInstUsesWith(I, V);
 
   // A+B --> A|B iff A and B have no bits set in common.
-  if (IntegerType *IT = dyn_cast<IntegerType>(I.getType())) {
-    APInt LHSKnownOne(IT->getBitWidth(), 0);
-    APInt LHSKnownZero(IT->getBitWidth(), 0);
-    computeKnownBits(LHS, LHSKnownZero, LHSKnownOne, 0, &I);
-    if (LHSKnownZero != 0) {
-      APInt RHSKnownOne(IT->getBitWidth(), 0);
-      APInt RHSKnownZero(IT->getBitWidth(), 0);
-      computeKnownBits(RHS, RHSKnownZero, RHSKnownOne, 0, &I);
-
-      // No bits in common -> bitwise or.
-      if ((LHSKnownZero|RHSKnownZero).isAllOnesValue())
-        return BinaryOperator::CreateOr(LHS, RHS);
-    }
-  }
+  if (haveNoCommonBitsSet(LHS, RHS, DL, AC, &I, DT))
+    return BinaryOperator::CreateOr(LHS, RHS);
 
   if (Constant *CRHS = dyn_cast<Constant>(RHS)) {
     Value *X;
@@ -1586,6 +1574,19 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
           CI->getValue() == I.getType()->getPrimitiveSizeInBits() - 1)
         return BinaryOperator::CreateLShr(X, CI);
     }
+
+    // Turn this into a xor if LHS is 2^n-1 and the remaining bits are known
+    // zero.
+    APInt IntVal = C->getValue();
+    if ((IntVal + 1).isPowerOf2()) {
+      unsigned BitWidth = I.getType()->getScalarSizeInBits();
+      APInt KnownZero(BitWidth, 0);
+      APInt KnownOne(BitWidth, 0);
+      computeKnownBits(&I, KnownZero, KnownOne, 0, &I);
+      if ((IntVal | KnownZero).isAllOnesValue()) {
+        return BinaryOperator::CreateXor(Op1, C);
+      }
+    }
   }
 
 
@@ -1608,6 +1609,32 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
         (match(Op0, m_Or(m_Specific(A), m_Specific(B))) ||
          match(Op0, m_Or(m_Specific(B), m_Specific(A)))))
       return BinaryOperator::CreateAnd(A, B);
+  }
+
+  // (sub (select (a, c, b)), (select (a, d, b))) -> (select (a, (sub c, d), 0))
+  // (sub (select (a, b, c)), (select (a, b, d))) -> (select (a, 0, (sub c, d)))
+  if (auto *SI0 = dyn_cast<SelectInst>(Op0)) {
+    if (auto *SI1 = dyn_cast<SelectInst>(Op1)) {
+      if (SI0->getCondition() == SI1->getCondition()) {
+        if (Value *V = SimplifySubInst(
+                SI0->getFalseValue(), SI1->getFalseValue(), I.hasNoSignedWrap(),
+                I.hasNoUnsignedWrap(), DL, TLI, DT, AC))
+          return SelectInst::Create(
+              SI0->getCondition(),
+              Builder->CreateSub(SI0->getTrueValue(), SI1->getTrueValue(), "",
+                                 /*HasNUW=*/I.hasNoUnsignedWrap(),
+                                 /*HasNSW=*/I.hasNoSignedWrap()),
+              V);
+        if (Value *V = SimplifySubInst(SI0->getTrueValue(), SI1->getTrueValue(),
+                                       I.hasNoSignedWrap(),
+                                       I.hasNoUnsignedWrap(), DL, TLI, DT, AC))
+          return SelectInst::Create(
+              SI0->getCondition(), V,
+              Builder->CreateSub(SI0->getFalseValue(), SI1->getFalseValue(), "",
+                                 /*HasNUW=*/I.hasNoUnsignedWrap(),
+                                 /*HasNSW=*/I.hasNoSignedWrap()));
+      }
+    }
   }
 
   if (Op0->hasOneUse()) {

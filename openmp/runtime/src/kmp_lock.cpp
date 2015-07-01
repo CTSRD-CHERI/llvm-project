@@ -171,7 +171,7 @@ __kmp_test_tas_lock_with_checks( kmp_tas_lock_t *lck, kmp_int32 gtid )
     return __kmp_test_tas_lock( lck, gtid );
 }
 
-void
+int
 __kmp_release_tas_lock( kmp_tas_lock_t *lck, kmp_int32 gtid )
 {
     KMP_MB();       /* Flush all pending memory write invalidates.  */
@@ -182,9 +182,10 @@ __kmp_release_tas_lock( kmp_tas_lock_t *lck, kmp_int32 gtid )
 
     KMP_YIELD( TCR_4( __kmp_nth ) > ( __kmp_avail_proc ? __kmp_avail_proc :
       __kmp_xproc ) );
+    return KMP_LOCK_RELEASED;
 }
 
-static void
+static int
 __kmp_release_tas_lock_with_checks( kmp_tas_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_lock";
@@ -200,7 +201,7 @@ __kmp_release_tas_lock_with_checks( kmp_tas_lock_t *lck, kmp_int32 gtid )
       && ( __kmp_get_tas_lock_owner( lck ) != gtid ) ) {
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
-    __kmp_release_tas_lock( lck, gtid );
+    return __kmp_release_tas_lock( lck, gtid );
 }
 
 void
@@ -294,7 +295,7 @@ __kmp_test_nested_tas_lock_with_checks( kmp_tas_lock_t *lck, kmp_int32 gtid )
     return __kmp_test_nested_tas_lock( lck, gtid );
 }
 
-void
+int
 __kmp_release_nested_tas_lock( kmp_tas_lock_t *lck, kmp_int32 gtid )
 {
     KMP_DEBUG_ASSERT( gtid >= 0 );
@@ -302,10 +303,12 @@ __kmp_release_nested_tas_lock( kmp_tas_lock_t *lck, kmp_int32 gtid )
     KMP_MB();
     if ( --(lck->lk.depth_locked) == 0 ) {
         __kmp_release_tas_lock( lck, gtid );
+        return KMP_LOCK_RELEASED;
     }
+    return KMP_LOCK_STILL_HELD;
 }
 
-static void
+static int
 __kmp_release_nested_tas_lock_with_checks( kmp_tas_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_nest_lock";
@@ -319,7 +322,7 @@ __kmp_release_nested_tas_lock_with_checks( kmp_tas_lock_t *lck, kmp_int32 gtid )
     if ( __kmp_get_tas_lock_owner( lck ) != gtid ) {
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
-    __kmp_release_nested_tas_lock( lck, gtid );
+    return __kmp_release_nested_tas_lock( lck, gtid );
 }
 
 void
@@ -497,7 +500,7 @@ __kmp_test_futex_lock_with_checks( kmp_futex_lock_t *lck, kmp_int32 gtid )
     return __kmp_test_futex_lock( lck, gtid );
 }
 
-void
+int
 __kmp_release_futex_lock( kmp_futex_lock_t *lck, kmp_int32 gtid )
 {
     KMP_MB();       /* Flush all pending memory write invalidates.  */
@@ -525,9 +528,10 @@ __kmp_release_futex_lock( kmp_futex_lock_t *lck, kmp_int32 gtid )
 
     KMP_YIELD( TCR_4( __kmp_nth ) > ( __kmp_avail_proc ? __kmp_avail_proc :
       __kmp_xproc ) );
+    return KMP_LOCK_RELEASED;
 }
 
-static void
+static int
 __kmp_release_futex_lock_with_checks( kmp_futex_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_lock";
@@ -543,7 +547,7 @@ __kmp_release_futex_lock_with_checks( kmp_futex_lock_t *lck, kmp_int32 gtid )
       && ( __kmp_get_futex_lock_owner( lck ) != gtid ) ) {
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
-    __kmp_release_futex_lock( lck, gtid );
+    return __kmp_release_futex_lock( lck, gtid );
 }
 
 void
@@ -637,7 +641,7 @@ __kmp_test_nested_futex_lock_with_checks( kmp_futex_lock_t *lck, kmp_int32 gtid 
     return __kmp_test_nested_futex_lock( lck, gtid );
 }
 
-void
+int
 __kmp_release_nested_futex_lock( kmp_futex_lock_t *lck, kmp_int32 gtid )
 {
     KMP_DEBUG_ASSERT( gtid >= 0 );
@@ -645,10 +649,12 @@ __kmp_release_nested_futex_lock( kmp_futex_lock_t *lck, kmp_int32 gtid )
     KMP_MB();
     if ( --(lck->lk.depth_locked) == 0 ) {
         __kmp_release_futex_lock( lck, gtid );
+        return KMP_LOCK_RELEASED;
     }
+    return KMP_LOCK_STILL_HELD;
 }
 
-static void
+static int
 __kmp_release_nested_futex_lock_with_checks( kmp_futex_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_nest_lock";
@@ -662,7 +668,7 @@ __kmp_release_nested_futex_lock_with_checks( kmp_futex_lock_t *lck, kmp_int32 gt
     if ( __kmp_get_futex_lock_owner( lck ) != gtid ) {
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
-    __kmp_release_nested_futex_lock( lck, gtid );
+    return __kmp_release_nested_futex_lock( lck, gtid );
 }
 
 void
@@ -809,7 +815,7 @@ __kmp_test_ticket_lock_with_checks( kmp_ticket_lock_t *lck, kmp_int32 gtid )
     return retval;
 }
 
-void
+int
 __kmp_release_ticket_lock( kmp_ticket_lock_t *lck, kmp_int32 gtid )
 {
     kmp_uint32  distance;
@@ -825,9 +831,10 @@ __kmp_release_ticket_lock( kmp_ticket_lock_t *lck, kmp_int32 gtid )
 
     KMP_YIELD( distance
       > (kmp_uint32) (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc) );
+    return KMP_LOCK_RELEASED;
 }
 
-static void
+static int
 __kmp_release_ticket_lock_with_checks( kmp_ticket_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_lock";
@@ -846,7 +853,7 @@ __kmp_release_ticket_lock_with_checks( kmp_ticket_lock_t *lck, kmp_int32 gtid )
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
     lck->lk.owner_id = 0;
-    __kmp_release_ticket_lock( lck, gtid );
+    return __kmp_release_ticket_lock( lck, gtid );
 }
 
 void
@@ -964,7 +971,7 @@ __kmp_test_nested_ticket_lock_with_checks( kmp_ticket_lock_t *lck,
     return __kmp_test_nested_ticket_lock( lck, gtid );
 }
 
-void
+int
 __kmp_release_nested_ticket_lock( kmp_ticket_lock_t *lck, kmp_int32 gtid )
 {
     KMP_DEBUG_ASSERT( gtid >= 0 );
@@ -974,10 +981,12 @@ __kmp_release_nested_ticket_lock( kmp_ticket_lock_t *lck, kmp_int32 gtid )
         KMP_MB();
         lck->lk.owner_id = 0;
         __kmp_release_ticket_lock( lck, gtid );
+        return KMP_LOCK_RELEASED;
     }
+    return KMP_LOCK_STILL_HELD;
 }
 
-static void
+static int
 __kmp_release_nested_ticket_lock_with_checks( kmp_ticket_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_nest_lock";
@@ -994,7 +1003,7 @@ __kmp_release_nested_ticket_lock_with_checks( kmp_ticket_lock_t *lck, kmp_int32 
     if ( __kmp_get_ticket_lock_owner( lck ) != gtid ) {
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
-    __kmp_release_nested_ticket_lock( lck, gtid );
+    return __kmp_release_nested_ticket_lock( lck, gtid );
 }
 
 void
@@ -1130,9 +1139,9 @@ __kmp_set_ticket_lock_flags( kmp_ticket_lock_t *lck, kmp_lock_flags_t flags )
 #define TRACE_BUF_ELE	1024
 static char traces[TRACE_BUF_ELE][128] = { 0 }
 static int tc = 0;
-#define TRACE_LOCK(X,Y)          sprintf( traces[tc++ % TRACE_BUF_ELE], "t%d at %s\n", X, Y );
-#define TRACE_LOCK_T(X,Y,Z)      sprintf( traces[tc++ % TRACE_BUF_ELE], "t%d at %s%d\n", X,Y,Z );
-#define TRACE_LOCK_HT(X,Y,Z,Q)   sprintf( traces[tc++ % TRACE_BUF_ELE], "t%d at %s %d,%d\n", X, Y, Z, Q );
+#define TRACE_LOCK(X,Y)          KMP_SNPRINTF( traces[tc++ % TRACE_BUF_ELE], 128,  "t%d at %s\n", X, Y );
+#define TRACE_LOCK_T(X,Y,Z)      KMP_SNPRINTF( traces[tc++ % TRACE_BUF_ELE], 128, "t%d at %s%d\n", X,Y,Z );
+#define TRACE_LOCK_HT(X,Y,Z,Q)   KMP_SNPRINTF( traces[tc++ % TRACE_BUF_ELE], 128, "t%d at %s %d,%d\n", X, Y, Z, Q );
 
 static void
 __kmp_dump_queuing_lock( kmp_info_t *this_thr, kmp_int32 gtid,
@@ -1196,6 +1205,10 @@ __kmp_acquire_queuing_lock_timed_template( kmp_queuing_lock_t *lck,
     volatile kmp_int32  *tail_id_p   = & lck->lk.tail_id;
     volatile kmp_uint32 *spin_here_p;
     kmp_int32 need_mf = 1;
+
+#if OMPT_SUPPORT
+    ompt_state_t prev_state = ompt_state_undefined;
+#endif
 
     KA_TRACE( 1000, ("__kmp_acquire_queuing_lock: lck:%p, T#%d entering\n", lck, gtid ));
 
@@ -1300,6 +1313,16 @@ __kmp_acquire_queuing_lock_timed_template( kmp_queuing_lock_t *lck,
 #ifdef DEBUG_QUEUING_LOCKS
                     TRACE_LOCK_HT( gtid+1, "acq exit: ", head, 0 );
 #endif
+
+#if OMPT_SUPPORT
+                    if ((ompt_status & ompt_status_track) &&
+                        prev_state != ompt_state_undefined) {
+                        /* change the state before clearing wait_id */
+                        this_thr->th.ompt_thread_info.state = prev_state;
+                        this_thr->th.ompt_thread_info.wait_id = 0;
+                    }
+#endif
+
                     KMP_FSYNC_ACQUIRED( lck );
                     return; /* lock holder cannot be on queue */
                 }
@@ -1307,6 +1330,16 @@ __kmp_acquire_queuing_lock_timed_template( kmp_queuing_lock_t *lck,
             }
             break;
         }
+
+#if OMPT_SUPPORT
+        if ((ompt_status & ompt_status_track) &&
+            prev_state == ompt_state_undefined) {
+            /* this thread will spin; set wait_id before entering wait state */
+            prev_state = this_thr->th.ompt_thread_info.state;
+            this_thr->th.ompt_thread_info.wait_id = (uint64_t) lck;
+            this_thr->th.ompt_thread_info.state = ompt_state_wait_lock;
+        }
+#endif
 
         if ( enqueued ) {
             if ( tail > 0 ) {
@@ -1337,6 +1370,13 @@ __kmp_acquire_queuing_lock_timed_template( kmp_queuing_lock_t *lck,
 #ifdef DEBUG_QUEUING_LOCKS
             TRACE_LOCK( gtid+1, "acq exit 2" );
 #endif
+
+#if OMPT_SUPPORT
+            /* change the state before clearing wait_id */
+            this_thr->th.ompt_thread_info.state = prev_state;
+            this_thr->th.ompt_thread_info.wait_id = 0;
+#endif
+
             /* got lock, we were dequeued by the thread that released lock */
             return;
         }
@@ -1435,7 +1475,7 @@ __kmp_test_queuing_lock_with_checks( kmp_queuing_lock_t *lck, kmp_int32 gtid )
     return retval;
 }
 
-void
+int
 __kmp_release_queuing_lock( kmp_queuing_lock_t *lck, kmp_int32 gtid )
 {
     register kmp_info_t *this_thr;
@@ -1482,7 +1522,12 @@ __kmp_release_queuing_lock( kmp_queuing_lock_t *lck, kmp_int32 gtid )
 #ifdef DEBUG_QUEUING_LOCKS
                 TRACE_LOCK_HT( gtid+1, "rel exit: ", 0, 0 );
 #endif
-                return;
+
+#if OMPT_SUPPORT
+                /* nothing to do - no other thread is trying to shift blame */
+#endif
+
+                return KMP_LOCK_RELEASED;
             }
             dequeued = FALSE;
 
@@ -1556,7 +1601,7 @@ __kmp_release_queuing_lock( kmp_queuing_lock_t *lck, kmp_int32 gtid )
 #ifdef DEBUG_QUEUING_LOCKS
             TRACE_LOCK( gtid+1, "rel exit 2" );
 #endif
-            return;
+            return KMP_LOCK_RELEASED;
         }
         /* KMP_CPU_PAUSE( );  don't want to make releasing thread hold up acquiring threads */
 
@@ -1566,9 +1611,10 @@ __kmp_release_queuing_lock( kmp_queuing_lock_t *lck, kmp_int32 gtid )
 
     } /* while */
     KMP_ASSERT2( 0, "should not get here" );
+    return KMP_LOCK_RELEASED;
 }
 
-static void
+static int
 __kmp_release_queuing_lock_with_checks( kmp_queuing_lock_t *lck,
   kmp_int32 gtid )
 {
@@ -1587,7 +1633,7 @@ __kmp_release_queuing_lock_with_checks( kmp_queuing_lock_t *lck,
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
     lck->lk.owner_id = 0;
-    __kmp_release_queuing_lock( lck, gtid );
+    return __kmp_release_queuing_lock( lck, gtid );
 }
 
 void
@@ -1711,7 +1757,7 @@ __kmp_test_nested_queuing_lock_with_checks( kmp_queuing_lock_t *lck,
     return __kmp_test_nested_queuing_lock( lck, gtid );
 }
 
-void
+int
 __kmp_release_nested_queuing_lock( kmp_queuing_lock_t *lck, kmp_int32 gtid )
 {
     KMP_DEBUG_ASSERT( gtid >= 0 );
@@ -1721,10 +1767,12 @@ __kmp_release_nested_queuing_lock( kmp_queuing_lock_t *lck, kmp_int32 gtid )
         KMP_MB();
         lck->lk.owner_id = 0;
         __kmp_release_queuing_lock( lck, gtid );
+        return KMP_LOCK_RELEASED;
     }
+    return KMP_LOCK_STILL_HELD;
 }
 
-static void
+static int
 __kmp_release_nested_queuing_lock_with_checks( kmp_queuing_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_nest_lock";
@@ -1741,7 +1789,7 @@ __kmp_release_nested_queuing_lock_with_checks( kmp_queuing_lock_t *lck, kmp_int3
     if ( __kmp_get_queuing_lock_owner( lck ) != gtid ) {
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
-    __kmp_release_nested_queuing_lock( lck, gtid );
+    return __kmp_release_nested_queuing_lock( lck, gtid );
 }
 
 void
@@ -2035,9 +2083,9 @@ FILE * __kmp_open_stats_file()
     if (strcmp (__kmp_speculative_statsfile, "-") == 0)
         return stdout;
 
-    size_t buffLen = strlen( __kmp_speculative_statsfile ) + 20;
+    size_t buffLen = KMP_STRLEN( __kmp_speculative_statsfile ) + 20;
     char buffer[buffLen];
-    snprintf (&buffer[0], buffLen, __kmp_speculative_statsfile,
+    KMP_SNPRINTF (&buffer[0], buffLen, __kmp_speculative_statsfile,
       (kmp_int32)getpid());
     FILE * result = fopen(&buffer[0], "w");
 
@@ -2312,7 +2360,7 @@ __kmp_acquire_adaptive_lock_with_checks( kmp_adaptive_lock_t *lck, kmp_int32 gti
     lck->lk.qlk.owner_id = gtid + 1;
 }
 
-static void
+static int
 __kmp_release_adaptive_lock( kmp_adaptive_lock_t *lck, kmp_int32 gtid )
 {
     if ( __kmp_is_unlocked_queuing_lock( GET_QLK_PTR(lck) ) )
@@ -2327,9 +2375,10 @@ __kmp_release_adaptive_lock( kmp_adaptive_lock_t *lck, kmp_int32 gtid )
         // so should use the underlying lock's release scheme.
         __kmp_release_queuing_lock( GET_QLK_PTR(lck), gtid );
     }
+    return KMP_LOCK_RELEASED;
 }
 
-static void
+static int
 __kmp_release_adaptive_lock_with_checks( kmp_adaptive_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_lock";
@@ -2345,6 +2394,7 @@ __kmp_release_adaptive_lock_with_checks( kmp_adaptive_lock_t *lck, kmp_int32 gti
     }
     lck->lk.qlk.owner_id = 0;
     __kmp_release_adaptive_lock( lck, gtid );
+    return KMP_LOCK_RELEASED;
 }
 
 static void
@@ -2655,7 +2705,7 @@ __kmp_test_drdpa_lock_with_checks( kmp_drdpa_lock_t *lck, kmp_int32 gtid )
     return retval;
 }
 
-void
+int
 __kmp_release_drdpa_lock( kmp_drdpa_lock_t *lck, kmp_int32 gtid )
 {
     //
@@ -2672,9 +2722,10 @@ __kmp_release_drdpa_lock( kmp_drdpa_lock_t *lck, kmp_int32 gtid )
        ticket - 1, lck));
     KMP_FSYNC_RELEASING(lck);
     KMP_ST_REL64(&(polls[ticket & mask].poll), ticket); // volatile store
+    return KMP_LOCK_RELEASED;
 }
 
-static void
+static int
 __kmp_release_drdpa_lock_with_checks( kmp_drdpa_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_lock";
@@ -2693,7 +2744,7 @@ __kmp_release_drdpa_lock_with_checks( kmp_drdpa_lock_t *lck, kmp_int32 gtid )
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
     lck->lk.owner_id = 0;
-    __kmp_release_drdpa_lock( lck, gtid );
+    return __kmp_release_drdpa_lock( lck, gtid );
 }
 
 void
@@ -2829,7 +2880,7 @@ __kmp_test_nested_drdpa_lock_with_checks( kmp_drdpa_lock_t *lck, kmp_int32 gtid 
     return __kmp_test_nested_drdpa_lock( lck, gtid );
 }
 
-void
+int
 __kmp_release_nested_drdpa_lock( kmp_drdpa_lock_t *lck, kmp_int32 gtid )
 {
     KMP_DEBUG_ASSERT( gtid >= 0 );
@@ -2839,10 +2890,12 @@ __kmp_release_nested_drdpa_lock( kmp_drdpa_lock_t *lck, kmp_int32 gtid )
         KMP_MB();
         lck->lk.owner_id = 0;
         __kmp_release_drdpa_lock( lck, gtid );
+        return KMP_LOCK_RELEASED;
     }
+    return KMP_LOCK_STILL_HELD;
 }
 
-static void
+static int
 __kmp_release_nested_drdpa_lock_with_checks( kmp_drdpa_lock_t *lck, kmp_int32 gtid )
 {
     char const * const func = "omp_unset_nest_lock";
@@ -2859,7 +2912,7 @@ __kmp_release_nested_drdpa_lock_with_checks( kmp_drdpa_lock_t *lck, kmp_int32 gt
     if ( __kmp_get_drdpa_lock_owner( lck ) != gtid ) {
         KMP_FATAL( LockUnsettingSetByAnother, func );
     }
-    __kmp_release_nested_drdpa_lock( lck, gtid );
+    return __kmp_release_nested_drdpa_lock( lck, gtid );
 }
 
 void
@@ -3147,7 +3200,7 @@ __kmp_insert_indirect_lock(kmp_indirect_lock_t *lck)
         kmp_lock_index_t size = __kmp_indirect_lock_table_size;
         kmp_indirect_lock_t **old_table = __kmp_indirect_lock_table;
         __kmp_indirect_lock_table = (kmp_indirect_lock_t **)__kmp_allocate(2*next*sizeof(kmp_indirect_lock_t *));
-        memcpy(__kmp_indirect_lock_table, old_table, next*sizeof(kmp_indirect_lock_t *));
+        KMP_MEMCPY(__kmp_indirect_lock_table, old_table, next*sizeof(kmp_indirect_lock_t *));
         __kmp_free(old_table);
         __kmp_indirect_lock_table_size = 2*next;
     }
@@ -3519,14 +3572,14 @@ kmp_int32 ( *__kmp_get_user_lock_owner_ )( kmp_user_lock_p lck ) = NULL;
 void ( *__kmp_acquire_user_lock_with_checks_ )( kmp_user_lock_p lck, kmp_int32 gtid ) = NULL;
 
 int ( *__kmp_test_user_lock_with_checks_ )( kmp_user_lock_p lck, kmp_int32 gtid ) = NULL;
-void ( *__kmp_release_user_lock_with_checks_ )( kmp_user_lock_p lck, kmp_int32 gtid ) = NULL;
+int ( *__kmp_release_user_lock_with_checks_ )( kmp_user_lock_p lck, kmp_int32 gtid ) = NULL;
 void ( *__kmp_init_user_lock_with_checks_ )( kmp_user_lock_p lck ) = NULL;
 void ( *__kmp_destroy_user_lock_ )( kmp_user_lock_p lck ) = NULL;
 void ( *__kmp_destroy_user_lock_with_checks_ )( kmp_user_lock_p lck ) = NULL;
 void ( *__kmp_acquire_nested_user_lock_with_checks_ )( kmp_user_lock_p lck, kmp_int32 gtid ) = NULL;
 
 int ( *__kmp_test_nested_user_lock_with_checks_ )( kmp_user_lock_p lck, kmp_int32 gtid ) = NULL;
-void ( *__kmp_release_nested_user_lock_with_checks_ )( kmp_user_lock_p lck, kmp_int32 gtid ) = NULL;
+int ( *__kmp_release_nested_user_lock_with_checks_ )( kmp_user_lock_p lck, kmp_int32 gtid ) = NULL;
 void ( *__kmp_init_nested_user_lock_with_checks_ )( kmp_user_lock_p lck ) = NULL;
 void ( *__kmp_destroy_nested_user_lock_with_checks_ )( kmp_user_lock_p lck ) = NULL;
 
@@ -3817,7 +3870,6 @@ __kmp_lock_table_insert( kmp_user_lock_p lck )
     if ( __kmp_user_lock_table.used >= __kmp_user_lock_table.allocated ) {
         kmp_lock_index_t size;
         kmp_user_lock_p *table;
-        kmp_lock_index_t i;
         // Reallocate lock table.
         if ( __kmp_user_lock_table.allocated == 0 ) {
             size = 1024;
@@ -3826,9 +3878,9 @@ __kmp_lock_table_insert( kmp_user_lock_p lck )
             size = __kmp_user_lock_table.allocated * 2;
         }
         table = (kmp_user_lock_p *)__kmp_allocate( sizeof( kmp_user_lock_p ) * size );
-        memcpy( table + 1, __kmp_user_lock_table.table + 1, sizeof( kmp_user_lock_p ) * ( __kmp_user_lock_table.used - 1 ) );
+        KMP_MEMCPY( table + 1, __kmp_user_lock_table.table + 1, sizeof( kmp_user_lock_p ) * ( __kmp_user_lock_table.used - 1 ) );
         table[ 0 ] = (kmp_user_lock_p)__kmp_user_lock_table.table;
-            // We cannot free the previos table now, sinse it may be in use by other
+            // We cannot free the previous table now, since it may be in use by other
             // threads. So save the pointer to the previous table in in the first element of the
             // new table. All the tables will be organized into a list, and could be freed when
             // library shutting down.
@@ -3926,8 +3978,6 @@ __kmp_user_lock_allocate( void **user_lock, kmp_int32 gtid,
 void
 __kmp_user_lock_free( void **user_lock, kmp_int32 gtid, kmp_user_lock_p lck )
 {
-    kmp_lock_pool_t * lock_pool;
-
     KMP_DEBUG_ASSERT( user_lock != NULL );
     KMP_DEBUG_ASSERT( lck != NULL );
 

@@ -15,6 +15,7 @@ add_host_subdirectory(common
   common/HostProcess.cpp
   common/HostThread.cpp
   common/IOObject.cpp
+  common/LockFileBase.cpp
   common/Mutex.cpp
   common/MonitoringProcessLauncher.cpp
   common/NativeBreakpoint.cpp
@@ -36,6 +37,7 @@ add_host_subdirectory(common
   common/ThisThread.cpp
   common/ThreadLauncher.cpp
   common/TimeValue.cpp
+  common/XML.cpp
   )
 
 if (NOT LLDB_DISABLE_LIBEDIT)
@@ -58,6 +60,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     windows/HostInfoWindows.cpp
     windows/HostProcessWindows.cpp
     windows/HostThreadWindows.cpp
+    windows/LockFileWindows.cpp
     windows/Mutex.cpp
     windows/PipeWindows.cpp
     windows/ProcessLauncherWindows.cpp
@@ -72,6 +75,7 @@ else()
     posix/HostInfoPosix.cpp
     posix/HostProcessPosix.cpp
     posix/HostThreadPosix.cpp
+    posix/LockFilePosix.cpp
     posix/PipePosix.cpp
     )
 
@@ -101,10 +105,12 @@ else()
     if (__ANDROID_NDK__)
       add_host_subdirectory(android
         android/HostInfoAndroid.cpp
+        android/LibcGlue.cpp
         android/ProcessLauncherAndroid.cpp
         linux/Host.cpp
         linux/HostInfoLinux.cpp
         linux/HostThreadLinux.cpp
+        linux/LibcGlue.cpp
         linux/ThisThread.cpp
         )
     else()
@@ -112,6 +118,7 @@ else()
         linux/Host.cpp
         linux/HostInfoLinux.cpp
         linux/HostThreadLinux.cpp
+        linux/LibcGlue.cpp
         linux/ThisThread.cpp
         )
     endif()

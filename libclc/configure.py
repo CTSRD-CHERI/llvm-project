@@ -34,6 +34,8 @@ p.add_option('--pkgconfigdir', metavar='PATH',
              help='install clc.pc to given dir')
 p.add_option('-g', metavar='GENERATOR', default='make',
              help='use given generator (default: make)')
+p.add_option('--enable-runtime-subnormal', action="store_true", default=False,
+             help='Allow runtimes to choose subnormal support')
 (options, args) = p.parse_args()
 
 llvm_config_exe = options.with_llvm_config or "llvm-config"
@@ -67,6 +69,8 @@ llvm_version = string.split(string.replace(llvm_config(['--version']), 'svn', ''
 if (int(llvm_version[0]) != 3 and int(llvm_version[1]) != 6):
     print "libclc requires LLVM 3.6"
     sys.exit(1)
+
+llvm_string_version = 'LLVM' + llvm_version[0] + '.' + llvm_version[1]
 
 llvm_system_libs = llvm_config(['--system-libs'])
 llvm_bindir = llvm_config(['--bindir'])
@@ -133,6 +137,16 @@ manifest_deps = set([sys.argv[0], os.path.join(srcdir, 'build', 'metabuild.py'),
 install_files_bc = []
 install_deps = []
 
+# Create rules for subnormal helper objects
+for src in ['subnormal_disable.ll', 'subnormal_use_default.ll']:
+  obj_name = src[:-2] + 'bc'
+  obj = os.path.join('generic--', 'lib', obj_name)
+  src_file = os.path.join('generic', 'lib', src)
+  b.build(obj, 'LLVM_AS', src_file)
+  b.default(obj)
+  install_files_bc.append((obj, obj))
+  install_deps.append(obj)
+
 # Create libclc.pc
 clc = open('libclc.pc', 'w')
 clc.write('includedir=%(inc)s\nlibexecdir=%(lib)s\n\nName: libclc\nDescription: Library requirements of the OpenCL C programming language\nVersion: %(maj)s.%(min)s.%(pat)s\nCflags: -I${includedir}\nLibs: -L${libexecdir}' %
@@ -177,6 +191,7 @@ for target in targets:
 
     objects = []
     sources_seen = set()
+    compats_seen = set()
 
     if device['gpu'] == '':
       full_target_name = target
@@ -189,6 +204,14 @@ for target in targets:
       subdir_list_file = os.path.join(libdir, 'SOURCES')
       manifest_deps.add(subdir_list_file)
       override_list_file = os.path.join(libdir, 'OVERRIDES')
+      compat_list_file = os.path.join(libdir,
+        'SOURCES_' + llvm_string_version)
+
+      # Build compat list
+      if os.path.exists(compat_list_file):
+        for compat in open(compat_list_file).readlines():
+          compat = compat.rstrip()
+          compats_seen.add(compat)
 
       # Add target overrides
       if os.path.exists(override_list_file):
@@ -202,12 +225,19 @@ for target in targets:
           sources_seen.add(src)
           obj = os.path.join(target, 'lib', src + obj_suffix + '.bc')
           objects.append(obj)
-          src_file = os.path.join(libdir, src)
+          src_path = libdir
+          if src in compats_seen:
+            src_path = os.path.join(libdir, llvm_string_version)
+          src_file = os.path.join(src_path, src)
           ext = os.path.splitext(src)[1]
           if ext == '.ll':
             b.build(obj, 'LLVM_AS', src_file)
           else:
             b.build(obj, clang_bc_rule, src_file)
+
+    obj = os.path.join('generic--', 'lib', 'subnormal_use_default.bc')
+    if  not options.enable_runtime_subnormal:
+      objects.append(obj)
 
     builtins_link_bc = os.path.join(target, 'lib', 'builtins.link' + obj_suffix + '.bc')
     builtins_opt_bc = os.path.join(target, 'lib', 'builtins.opt' + obj_suffix + '.bc')

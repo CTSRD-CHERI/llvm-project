@@ -14,7 +14,7 @@ class LaunchWithShellExpandTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
         
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym (self):
         self.buildDsym()
@@ -62,6 +62,48 @@ class LaunchWithShellExpandTestCase(TestBase):
         self.expect("frame variable argv[3]", substrs=['file3.txt'])
         self.expect("frame variable argv[4]", substrs=['file4.txy'])
         self.expect("frame variable argv[5]", substrs=['file5.tyx'], matching=False)
+
+        self.runCmd("process kill")
+
+        self.runCmd('process launch -X true -w %s -- "foo bar"' % (os.getcwd()))
+        
+        process = self.process()
+
+        self.assertTrue(process.GetState() == lldb.eStateStopped,
+                        STOPPED_DUE_TO_BREAKPOINT)
+
+        thread = process.GetThreadAtIndex (0)
+
+        self.assertTrue (thread.IsValid(),
+                         "Process stopped at 'main' should have a valid thread");
+
+        stop_reason = thread.GetStopReason()
+        
+        self.assertTrue (stop_reason == lldb.eStopReasonBreakpoint,
+                         "Thread in process stopped in 'main' should have a stop reason of eStopReasonBreakpoint");
+        
+        self.expect("frame variable argv[1]", substrs=['foo bar'])
+
+        self.runCmd("process kill")
+
+        self.runCmd('process launch -X true -w %s -- foo\ bar' % (os.getcwd()))
+        
+        process = self.process()
+
+        self.assertTrue(process.GetState() == lldb.eStateStopped,
+                        STOPPED_DUE_TO_BREAKPOINT)
+
+        thread = process.GetThreadAtIndex (0)
+
+        self.assertTrue (thread.IsValid(),
+                         "Process stopped at 'main' should have a valid thread");
+
+        stop_reason = thread.GetStopReason()
+        
+        self.assertTrue (stop_reason == lldb.eStopReasonBreakpoint,
+                         "Thread in process stopped in 'main' should have a stop reason of eStopReasonBreakpoint");
+        
+        self.expect("frame variable argv[1]", substrs=['foo bar'])
 
 if __name__ == '__main__':
     import atexit

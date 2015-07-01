@@ -34,6 +34,7 @@ module Clang_Basic {
   textual header "Basic/BuiltinsNVPTX.def"
   textual header "Basic/BuiltinsPPC.def"
   textual header "Basic/BuiltinsR600.def"
+  textual header "Basic/BuiltinsSystemZ.def"
   textual header "Basic/BuiltinsX86.def"
   textual header "Basic/BuiltinsXCore.def"
   textual header "Basic/DiagnosticOptions.def"
@@ -119,4 +120,11 @@ module Clang_StaticAnalyzer_Frontend {
   module * { export * }
 }
 
-module Clang_Tooling { requires cplusplus umbrella "Tooling" module * { export * } }
+module Clang_Tooling {
+  requires cplusplus umbrella "Tooling" module * { export * }
+  // FIXME: Exclude this header to avoid pulling all of the AST matchers
+  // library into clang-format. Due to inline key functions in the headers,
+  // importing the AST matchers library gives a link dependency on the AST
+  // matchers (and thus the AST), which clang-format should not have.
+  exclude header "Tooling/RefactoringCallbacks.h"
+}

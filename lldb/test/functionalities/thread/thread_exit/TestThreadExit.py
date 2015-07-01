@@ -12,7 +12,7 @@ class ThreadExitTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
     @dsym_test
     def test_with_dsym(self):
@@ -50,13 +50,13 @@ class ThreadExitTestCase(TestBase):
 
         # The breakpoint list should show 1 locations.
         self.expect("breakpoint list -f", "Breakpoint location shown correctly",
-            substrs = ["1: file = 'main.cpp', line = %d, locations = 1" % self.break_1,
-                       "2: file = 'main.cpp', line = %d, locations = 1" % self.break_2,
-                       "3: file = 'main.cpp', line = %d, locations = 1" % self.break_3,
-                       "4: file = 'main.cpp', line = %d, locations = 1" % self.break_4])
+            substrs = ["1: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" % self.break_1,
+                       "2: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" % self.break_2,
+                       "3: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" % self.break_3,
+                       "4: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" % self.break_4])
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint 1.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT + " 1",

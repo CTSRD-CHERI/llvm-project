@@ -190,8 +190,7 @@ namespace clang {
         assert(D->isCanonicalDecl() && "non-canonical decl in set");
         Writer.AddDeclRef(D, Record);
       }
-      for (DeclID ID : LazySpecializations)
-        Record.push_back(ID);
+      Record.append(LazySpecializations.begin(), LazySpecializations.end());
     }
   };
 }
@@ -243,7 +242,7 @@ void ASTDeclWriter::VisitDecl(Decl *D) {
     while (auto *NS = dyn_cast<NamespaceDecl>(DC->getRedeclContext())) {
       if (!NS->isFromASTFile())
         break;
-      Writer.AddUpdatedDeclContext(NS->getPrimaryContext());
+      Writer.UpdatedDeclContexts.insert(NS->getPrimaryContext());
       if (!NS->isInlineNamespace())
         break;
       DC = NS->getParent();
@@ -543,7 +542,7 @@ void ASTDeclWriter::VisitObjCMethodDecl(ObjCMethodDecl *D) {
 
   // FIXME: stable encoding for @required/@optional
   Record.push_back(D->getImplementationControl());
-  // FIXME: stable encoding for in/out/inout/bycopy/byref/oneway
+  // FIXME: stable encoding for in/out/inout/bycopy/byref/oneway/nullability
   Record.push_back(D->getObjCDeclQualifier());
   Record.push_back(D->hasRelatedResultType());
   Writer.AddTypeRef(D->getReturnType(), Record);
@@ -679,6 +678,7 @@ void ASTDeclWriter::VisitObjCPropertyDecl(ObjCPropertyDecl *D) {
   VisitNamedDecl(D);
   Writer.AddSourceLocation(D->getAtLoc(), Record);
   Writer.AddSourceLocation(D->getLParenLoc(), Record);
+  Writer.AddTypeRef(D->getType(), Record);
   Writer.AddTypeSourceInfo(D->getTypeSourceInfo(), Record);
   // FIXME: stable encoding
   Record.push_back((unsigned)D->getPropertyAttributes());
@@ -790,13 +790,15 @@ void ASTDeclWriter::VisitVarDecl(VarDecl *D) {
   Record.push_back(D->getStorageClass());
   Record.push_back(D->getTSCSpec());
   Record.push_back(D->getInitStyle());
-  Record.push_back(D->isExceptionVariable());
-  Record.push_back(D->isNRVOVariable());
-  Record.push_back(D->isCXXForRangeDecl());
-  Record.push_back(D->isARCPseudoStrong());
-  Record.push_back(D->isConstexpr());
-  Record.push_back(D->isInitCapture());
-  Record.push_back(D->isPreviousDeclInSameBlockScope());
+  if (!isa<ParmVarDecl>(D)) {
+    Record.push_back(D->isExceptionVariable());
+    Record.push_back(D->isNRVOVariable());
+    Record.push_back(D->isCXXForRangeDecl());
+    Record.push_back(D->isARCPseudoStrong());
+    Record.push_back(D->isConstexpr());
+    Record.push_back(D->isInitCapture());
+    Record.push_back(D->isPreviousDeclInSameBlockScope());
+  }
   Record.push_back(D->getLinkageInternal());
 
   if (D->getInit()) {
@@ -978,17 +980,34 @@ void ASTDeclWriter::VisitNamespaceDecl(NamespaceDecl *D) {
   if (Writer.hasChain() && !D->isOriginalNamespace() &&
       D->getOriginalNamespace()->isFromASTFile()) {
     NamespaceDecl *NS = D->getOriginalNamespace();
-    Writer.AddUpdatedDeclContext(NS);
+    Writer.UpdatedDeclContexts.insert(NS);
 
-    // Make sure all visible decls are written. They will be recorded later.
-    if (StoredDeclsMap *Map = NS->buildLookup()) {
-      for (StoredDeclsMap::iterator D = Map->begin(), DEnd = Map->end();
-           D != DEnd; ++D) {
-        DeclContext::lookup_result R = D->second.getLookupResult();
-        for (DeclContext::lookup_iterator I = R.begin(), E = R.end(); I != E;
-             ++I)
-          Writer.GetDeclRef(*I);
+    // Make sure all visible decls are written. They will be recorded later. We
+    // do this using a side data structure so we can sort the names into
+    // a deterministic order.
+    StoredDeclsMap *Map = NS->buildLookup();
+    SmallVector<std::pair<DeclarationName, DeclContext::lookup_result>, 16>
+        LookupResults;
+    LookupResults.reserve(Map->size());
+    for (auto &Entry : *Map)
+      LookupResults.push_back(
+          std::make_pair(Entry.first, Entry.second.getLookupResult()));
+
+    std::sort(LookupResults.begin(), LookupResults.end(), llvm::less_first());
+    for (auto &NameAndResult : LookupResults) {
+      DeclarationName Name = NameAndResult.first;
+      DeclContext::lookup_result Result = NameAndResult.second;
+      if (Name.getNameKind() == DeclarationName::CXXConstructorName ||
+          Name.getNameKind() == DeclarationName::CXXConversionFunctionName) {
+        // We have to work around a name lookup bug here where negative lookup
+        // results for these names get cached in namespace lookup tables.
+        assert(Result.empty() && "Cannot have a constructor or conversion "
+                                 "function name in a namespace!");
+        continue;
       }
+
+      for (NamedDecl *ND : Result)
+        Writer.GetDeclRef(ND);
     }
   }
 
@@ -1361,8 +1380,12 @@ void ASTDeclWriter::VisitTemplateTypeParmDecl(TemplateTypeParmDecl *D) {
   VisitTypeDecl(D);
 
   Record.push_back(D->wasDeclaredWithTypename());
-  Record.push_back(D->defaultArgumentWasInherited());
-  Writer.AddTypeSourceInfo(D->getDefaultArgumentInfo(), Record);
+
+  bool OwnsDefaultArg = D->hasDefaultArgument() &&
+                        !D->defaultArgumentWasInherited();
+  Record.push_back(OwnsDefaultArg);
+  if (OwnsDefaultArg)
+    Writer.AddTypeSourceInfo(D->getDefaultArgumentInfo(), Record);
 
   Code = serialization::DECL_TEMPLATE_TYPE_PARM;
 }
@@ -1389,11 +1412,11 @@ void ASTDeclWriter::VisitNonTypeTemplateParmDecl(NonTypeTemplateParmDecl *D) {
   } else {
     // Rest of NonTypeTemplateParmDecl.
     Record.push_back(D->isParameterPack());
-    Record.push_back(D->getDefaultArgument() != nullptr);
-    if (D->getDefaultArgument()) {
+    bool OwnsDefaultArg = D->hasDefaultArgument() &&
+                          !D->defaultArgumentWasInherited();
+    Record.push_back(OwnsDefaultArg);
+    if (OwnsDefaultArg)
       Writer.AddStmt(D->getDefaultArgument());
-      Record.push_back(D->defaultArgumentWasInherited());
-    }
     Code = serialization::DECL_NON_TYPE_TEMPLATE_PARM;
   }
 }
@@ -1418,9 +1441,12 @@ void ASTDeclWriter::VisitTemplateTemplateParmDecl(TemplateTemplateParmDecl *D) {
     Code = serialization::DECL_EXPANDED_TEMPLATE_TEMPLATE_PARM_PACK;
   } else {
     // Rest of TemplateTemplateParmDecl.
-    Writer.AddTemplateArgumentLoc(D->getDefaultArgument(), Record);
-    Record.push_back(D->defaultArgumentWasInherited());
     Record.push_back(D->isParameterPack());
+    bool OwnsDefaultArg = D->hasDefaultArgument() &&
+                          !D->defaultArgumentWasInherited();
+    Record.push_back(OwnsDefaultArg);
+    if (OwnsDefaultArg)
+      Writer.AddTemplateArgumentLoc(D->getDefaultArgument(), Record);
     Code = serialization::DECL_TEMPLATE_TEMPLATE_PARM;
   }
 }
@@ -1721,13 +1747,6 @@ void ASTWriter::WriteDeclAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(0));                       // StorageClass
   Abv->Add(BitCodeAbbrevOp(0));                       // getTSCSpec
   Abv->Add(BitCodeAbbrevOp(0));                       // hasCXXDirectInitializer
-  Abv->Add(BitCodeAbbrevOp(0));                       // isExceptionVariable
-  Abv->Add(BitCodeAbbrevOp(0));                       // isNRVOVariable
-  Abv->Add(BitCodeAbbrevOp(0));                       // isCXXForRangeDecl
-  Abv->Add(BitCodeAbbrevOp(0));                       // isARCPseudoStrong
-  Abv->Add(BitCodeAbbrevOp(0));                       // isConstexpr
-  Abv->Add(BitCodeAbbrevOp(0));                       // isInitCapture
-  Abv->Add(BitCodeAbbrevOp(0));                       // isPrevDeclInSameScope
   Abv->Add(BitCodeAbbrevOp(0));                       // Linkage
   Abv->Add(BitCodeAbbrevOp(0));                       // HasInit
   Abv->Add(BitCodeAbbrevOp(0));                   // HasMemberSpecializationInfo

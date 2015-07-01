@@ -31,7 +31,7 @@
 #include "llvm/Linker/Linker.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Object/IRObjectFile.h"
-#include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -739,7 +739,7 @@ static void saveBCFile(StringRef Path, Module &M) {
   raw_fd_ostream OS(Path, EC, sys::fs::OpenFlags::F_None);
   if (EC)
     message(LDPL_FATAL, "Failed to write the output file.");
-  WriteBitcodeToFile(&M, OS);
+  WriteBitcodeToFile(&M, OS, /* ShouldPreserveUseListOrder */ true);
 }
 
 static void codegen(Module &M) {
@@ -787,15 +787,20 @@ static void codegen(Module &M) {
   legacy::PassManager CodeGenPasses;
 
   SmallString<128> Filename;
+  if (!options::obj_path.empty())
+    Filename = options::obj_path;
+  else if (options::TheOutputType == options::OT_SAVE_TEMPS)
+    Filename = output_name + ".o";
+
   int FD;
-  if (options::obj_path.empty()) {
+  bool TempOutFile = Filename.empty();
+  if (TempOutFile) {
     std::error_code EC =
         sys::fs::createTemporaryFile("lto-llvm", "o", FD, Filename);
     if (EC)
       message(LDPL_FATAL, "Could not create temporary file: %s",
               EC.message().c_str());
   } else {
-    Filename = options::obj_path;
     std::error_code EC =
         sys::fs::openFileForWrite(Filename.c_str(), FD, sys::fs::F_None);
     if (EC)
@@ -804,9 +809,8 @@ static void codegen(Module &M) {
 
   {
     raw_fd_ostream OS(FD, true);
-    formatted_raw_ostream FOS(OS);
 
-    if (TM->addPassesToEmitFile(CodeGenPasses, FOS,
+    if (TM->addPassesToEmitFile(CodeGenPasses, OS,
                                 TargetMachine::CGFT_ObjectFile))
       message(LDPL_FATAL, "Failed to setup codegen");
     CodeGenPasses.run(M);
@@ -817,7 +821,7 @@ static void codegen(Module &M) {
             "Unable to add .o file to the link. File left behind in: %s",
             Filename.c_str());
 
-  if (options::obj_path.empty())
+  if (TempOutFile)
     Cleanup.push_back(Filename.c_str());
 }
 

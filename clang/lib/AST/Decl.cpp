@@ -44,6 +44,12 @@ bool Decl::isOutOfLine() const {
   return !getLexicalDeclContext()->Equals(getDeclContext());
 }
 
+TranslationUnitDecl::TranslationUnitDecl(ASTContext &ctx)
+    : Decl(TranslationUnit, nullptr, SourceLocation()),
+      DeclContext(TranslationUnit), Ctx(ctx), AnonymousNamespace(nullptr) {
+  Hidden = Ctx.getLangOpts().ModulesLocalVisibility;
+}
+
 //===----------------------------------------------------------------------===//
 // NamedDecl Implementation
 //===----------------------------------------------------------------------===//
@@ -894,13 +900,13 @@ static LinkageInfo getLVForClassMember(const NamedDecl *D,
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(D)) {
     // If the type of the function uses a type with unique-external
     // linkage, it's not legally usable from outside this translation unit.
-    // But only look at the type-as-written. If this function has an auto-deduced
-    // return type, we can't compute the linkage of that type because it could
-    // require looking at the linkage of this function, and we don't need this
-    // for correctness because the type is not part of the function's
-    // signature.
-    // FIXME: This is a hack. We should be able to solve this circularity and the
-    // one in getLVForNamespaceScopeDecl for Functions some other way.
+    // But only look at the type-as-written. If this function has an
+    // auto-deduced return type, we can't compute the linkage of that type
+    // because it could require looking at the linkage of this function, and we
+    // don't need this for correctness because the type is not part of the
+    // function's signature.
+    // FIXME: This is a hack. We should be able to solve this circularity and
+    // the one in getLVForNamespaceScopeDecl for Functions some other way.
     {
       QualType TypeAsWritten = MD->getType();
       if (TypeSourceInfo *TSI = MD->getTypeSourceInfo())
@@ -1737,8 +1743,7 @@ QualifierInfo::setTemplateParameterListsInfo(ASTContext &Context,
   if (NumTPLists > 0) {
     TemplParamLists = new (Context) TemplateParameterList*[NumTPLists];
     NumTemplParamLists = NumTPLists;
-    for (unsigned i = NumTPLists; i-- > 0; )
-      TemplParamLists[i] = TPLists[i];
+    std::copy(TPLists, TPLists + NumTPLists, TemplParamLists);
   }
 }
 
@@ -1770,6 +1775,8 @@ VarDecl::VarDecl(Kind DK, ASTContext &C, DeclContext *DC,
                 "VarDeclBitfields too large!");
   static_assert(sizeof(ParmVarDeclBitfields) <= sizeof(unsigned),
                 "ParmVarDeclBitfields too large!");
+  static_assert(sizeof(NonParmVarDeclBitfields) <= sizeof(unsigned),
+                "NonParmVarDeclBitfields too large!");
   AllBits = 0;
   VarDeclBits.SClass = SC;
   // Everything else is implicitly initialized to false.
@@ -1796,9 +1803,12 @@ void VarDecl::setStorageClass(StorageClass SC) {
 VarDecl::TLSKind VarDecl::getTLSKind() const {
   switch (VarDeclBits.TSCSpec) {
   case TSCS_unspecified:
-    if (hasAttr<ThreadAttr>())
-      return TLS_Static;
-    return TLS_None;
+    if (!hasAttr<ThreadAttr>())
+      return TLS_None;
+    return getASTContext().getLangOpts().isCompatibleWithMSVC(
+               LangOptions::MSVC2015)
+               ? TLS_Dynamic
+               : TLS_Static;
   case TSCS___thread: // Fall through.
   case TSCS__Thread_local:
       return TLS_Static;
@@ -1878,9 +1888,8 @@ bool VarDecl::isInExternCXXContext() const {
 
 VarDecl *VarDecl::getCanonicalDecl() { return getFirstDecl(); }
 
-VarDecl::DefinitionKind VarDecl::isThisDeclarationADefinition(
-  ASTContext &C) const
-{
+VarDecl::DefinitionKind
+VarDecl::isThisDeclarationADefinition(ASTContext &C) const {
   // C++ [basic.def]p2:
   //   A declaration is a definition unless [...] it contains the 'extern'
   //   specifier or a linkage-specification and neither an initializer [...],
@@ -1919,6 +1928,10 @@ VarDecl::DefinitionKind VarDecl::isThisDeclarationADefinition(
 
   if (hasAttr<AliasAttr>())
     return Definition;
+
+  if (const auto *SAA = getAttr<SelectAnyAttr>())
+    if (!SAA->isInherited())
+      return Definition;
 
   // A variable template specialization (other than a static data member
   // template or an explicit specialization) is a declaration until we
@@ -2570,10 +2583,6 @@ FunctionDecl::setPreviousDeclaration(FunctionDecl *PrevDecl) {
     IsInline = true;
 }
 
-const FunctionDecl *FunctionDecl::getCanonicalDecl() const {
-  return getFirstDecl();
-}
-
 FunctionDecl *FunctionDecl::getCanonicalDecl() { return getFirstDecl(); }
 
 /// \brief Returns a value indicating whether this function
@@ -2821,6 +2830,18 @@ SourceRange FunctionDecl::getReturnTypeSourceRange() const {
     return SourceRange();
 
   return RTRange;
+}
+
+bool FunctionDecl::hasUnusedResultAttr() const {
+  QualType RetType = getReturnType();
+  if (RetType->isRecordType()) {
+    const CXXRecordDecl *Ret = RetType->getAsCXXRecordDecl();
+    const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(this);
+    if (Ret && Ret->hasAttr<WarnUnusedResultAttr>() &&
+        !(MD && MD->getCorrespondingMethodInClass(Ret, true)))
+      return true;
+  }
+  return hasAttr<WarnUnusedResultAttr>();
 }
 
 /// \brief For an inline function definition in C, or for a gnu_inline function
@@ -3104,6 +3125,8 @@ DependentFunctionTemplateSpecializationInfo::
 DependentFunctionTemplateSpecializationInfo(const UnresolvedSetImpl &Ts,
                                       const TemplateArgumentListInfo &TArgs)
   : AngleLocs(TArgs.getLAngleLoc(), TArgs.getRAngleLoc()) {
+  static_assert(sizeof(*this) % llvm::AlignOf<void *>::Alignment == 0,
+                "Trailing data is unaligned!");
 
   d.NumTemplates = Ts.size();
   d.NumArgs = TArgs.size();
@@ -3658,7 +3681,8 @@ void RecordDecl::LoadFieldsFromExternalStorage() const {
 
 bool RecordDecl::mayInsertExtraPadding(bool EmitRemark) const {
   ASTContext &Context = getASTContext();
-  if (!Context.getLangOpts().Sanitize.has(SanitizerKind::Address) ||
+  if (!Context.getLangOpts().Sanitize.hasOneOf(
+          SanitizerKind::Address | SanitizerKind::KernelAddress) ||
       !Context.getLangOpts().SanitizeAddressFieldPadding)
     return false;
   const auto &Blacklist = Context.getSanitizerBlacklist();
@@ -3918,6 +3942,21 @@ TypedefDecl *TypedefDecl::Create(ASTContext &C, DeclContext *DC,
 }
 
 void TypedefNameDecl::anchor() { }
+
+TagDecl *TypedefNameDecl::getAnonDeclWithTypedefName(bool AnyRedecl) const {
+  if (auto *TT = getTypeSourceInfo()->getType()->getAs<TagType>()) {
+    auto *OwningTypedef = TT->getDecl()->getTypedefNameForAnonDecl();
+    auto *ThisTypedef = this;
+    if (AnyRedecl && OwningTypedef) {
+      OwningTypedef = OwningTypedef->getCanonicalDecl();
+      ThisTypedef = ThisTypedef->getCanonicalDecl();
+    }
+    if (OwningTypedef == ThisTypedef)
+      return TT->getDecl();
+  }
+
+  return nullptr;
+}
 
 TypedefDecl *TypedefDecl::CreateDeserialized(ASTContext &C, unsigned ID) {
   return new (C, ID) TypedefDecl(C, nullptr, SourceLocation(), SourceLocation(),

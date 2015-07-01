@@ -1576,6 +1576,7 @@ public:
   bool isRecordType() const;
   bool isClassType() const;
   bool isStructureType() const;
+  bool isObjCBoxableRecordType() const;
   bool isInterfaceType() const;
   bool isStructureOrClassType() const;
   bool isUnionType() const;
@@ -1587,6 +1588,7 @@ public:
   bool isObjCLifetimeType() const;              // (array of)* retainable type
   bool isObjCIndirectLifetimeType() const;      // (pointer to)* lifetime type
   bool isObjCNSObjectType() const;              // __attribute__((NSObject))
+  bool isObjCIndependentClassType() const;      // __attribute__((objc_independent_class))
   // FIXME: change this to 'raw' interface type, so we can used 'interface' type
   // for the common case.
   bool isObjCObjectType() const;                // NSString or typeof(*(id)0)
@@ -1828,6 +1830,19 @@ public:
   /// \brief True if the computed linkage is valid. Used for consistency
   /// checking. Should always return true.
   bool isLinkageValid() const;
+
+  /// Determine the nullability of the given type.
+  ///
+  /// Note that nullability is only captured as sugar within the type
+  /// system, not as part of the canonical type, so nullability will
+  /// be lost by canonicalization and desugaring.
+  Optional<NullabilityKind> getNullability(const ASTContext &context) const;
+
+  /// Determine whether the given type can have a nullability
+  /// specifier applied to it, i.e., if it is any kind of pointer type
+  /// or a dependent type that could instantiate to any kind of
+  /// pointer type.
+  bool canHaveNullability() const;
 
   const char *getTypeClassName() const;
 
@@ -3492,7 +3507,10 @@ public:
     attr_ptr32,
     attr_ptr64,
     attr_sptr,
-    attr_uptr
+    attr_uptr,
+    attr_nonnull,
+    attr_nullable,
+    attr_null_unspecified,
   };
 
 private:
@@ -3525,6 +3543,35 @@ public:
   bool isMSTypeSpec() const;
 
   bool isCallingConv() const;
+
+  llvm::Optional<NullabilityKind> getImmediateNullability() const;
+
+  /// Retrieve the attribute kind corresponding to the given
+  /// nullability kind.
+  static Kind getNullabilityAttrKind(NullabilityKind kind) {
+    switch (kind) {
+    case NullabilityKind::NonNull:
+      return attr_nonnull;
+     
+    case NullabilityKind::Nullable:
+      return attr_nullable;
+
+    case NullabilityKind::Unspecified:
+      return attr_null_unspecified;
+    }
+    llvm_unreachable("Unknown nullability kind.");
+  }
+
+  /// Strip off the top-level nullability annotation on the given
+  /// type, if it's there.
+  ///
+  /// \param T The type to strip. If the type is exactly an
+  /// AttributedType specifying nullability (without looking through
+  /// type sugar), the nullability is returned and this type changed
+  /// to the underlying modified type.
+  ///
+  /// \returns the top-level nullability, if present.
+  static Optional<NullabilityKind> stripOuterNullability(QualType &T);
 
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getAttrKind(), ModifiedType, EquivalentType);

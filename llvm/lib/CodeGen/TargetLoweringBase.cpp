@@ -420,6 +420,14 @@ static void InitLibcallNames(const char **Names, const Triple &TT) {
     // These are generally not available.
     Names[RTLIB::STACKPROTECTOR_CHECK_FAIL] = nullptr;
   }
+
+  // For f16/f32 conversions, Darwin uses the standard naming scheme, instead
+  // of the gnueabi-style __gnu_*_ieee.
+  // FIXME: What about other targets?
+  if (TT.isOSDarwin()) {
+    Names[RTLIB::FPEXT_F16_F32] = "__extendhfsf2";
+    Names[RTLIB::FPROUND_F32_F16] = "__truncsfhf2";
+  }
 }
 
 /// InitLibcallCallingConvs - Set default libcall CallingConvs.
@@ -770,7 +778,7 @@ TargetLoweringBase::TargetLoweringBase(const TargetMachine &tm) : TM(tm) {
   InsertFencesForAtomic = false;
   MinimumJumpTableEntries = 4;
 
-  InitLibcallNames(LibcallRoutineNames, Triple(TM.getTargetTriple()));
+  InitLibcallNames(LibcallRoutineNames, TM.getTargetTriple());
   InitCmpLibcallCCs(CmpLibcallCCs);
   InitLibcallCallingConvs(LibcallCallingConvs);
 }
@@ -803,6 +811,18 @@ void TargetLoweringBase::initActions() {
     setOperationAction(ISD::FMINNUM, VT, Expand);
     setOperationAction(ISD::FMAXNUM, VT, Expand);
     setOperationAction(ISD::FMAD, VT, Expand);
+    setOperationAction(ISD::SMIN, VT, Expand);
+    setOperationAction(ISD::SMAX, VT, Expand);
+    setOperationAction(ISD::UMIN, VT, Expand);
+    setOperationAction(ISD::UMAX, VT, Expand);
+
+    // Overflow operations default to expand
+    setOperationAction(ISD::SADDO, VT, Expand);
+    setOperationAction(ISD::SSUBO, VT, Expand);
+    setOperationAction(ISD::UADDO, VT, Expand);
+    setOperationAction(ISD::USUBO, VT, Expand);
+    setOperationAction(ISD::SMULO, VT, Expand);
+    setOperationAction(ISD::UMULO, VT, Expand);
 
     // These library functions default to expand.
     setOperationAction(ISD::FROUND, VT, Expand);
@@ -829,58 +849,21 @@ void TargetLoweringBase::initActions() {
   setOperationAction(ISD::ConstantFP, MVT::f128, Expand);
 
   // These library functions default to expand.
-  setOperationAction(ISD::FLOG ,  MVT::f16, Expand);
-  setOperationAction(ISD::FLOG2,  MVT::f16, Expand);
-  setOperationAction(ISD::FLOG10, MVT::f16, Expand);
-  setOperationAction(ISD::FEXP ,  MVT::f16, Expand);
-  setOperationAction(ISD::FEXP2,  MVT::f16, Expand);
-  setOperationAction(ISD::FFLOOR, MVT::f16, Expand);
-  setOperationAction(ISD::FMINNUM, MVT::f16, Expand);
-  setOperationAction(ISD::FMAXNUM, MVT::f16, Expand);
-  setOperationAction(ISD::FNEARBYINT, MVT::f16, Expand);
-  setOperationAction(ISD::FCEIL,  MVT::f16, Expand);
-  setOperationAction(ISD::FRINT,  MVT::f16, Expand);
-  setOperationAction(ISD::FTRUNC, MVT::f16, Expand);
-  setOperationAction(ISD::FROUND, MVT::f16, Expand);
-  setOperationAction(ISD::FLOG ,  MVT::f32, Expand);
-  setOperationAction(ISD::FLOG2,  MVT::f32, Expand);
-  setOperationAction(ISD::FLOG10, MVT::f32, Expand);
-  setOperationAction(ISD::FEXP ,  MVT::f32, Expand);
-  setOperationAction(ISD::FEXP2,  MVT::f32, Expand);
-  setOperationAction(ISD::FFLOOR, MVT::f32, Expand);
-  setOperationAction(ISD::FMINNUM, MVT::f32, Expand);
-  setOperationAction(ISD::FMAXNUM, MVT::f32, Expand);
-  setOperationAction(ISD::FNEARBYINT, MVT::f32, Expand);
-  setOperationAction(ISD::FCEIL,  MVT::f32, Expand);
-  setOperationAction(ISD::FRINT,  MVT::f32, Expand);
-  setOperationAction(ISD::FTRUNC, MVT::f32, Expand);
-  setOperationAction(ISD::FROUND, MVT::f32, Expand);
-  setOperationAction(ISD::FLOG ,  MVT::f64, Expand);
-  setOperationAction(ISD::FLOG2,  MVT::f64, Expand);
-  setOperationAction(ISD::FLOG10, MVT::f64, Expand);
-  setOperationAction(ISD::FEXP ,  MVT::f64, Expand);
-  setOperationAction(ISD::FEXP2,  MVT::f64, Expand);
-  setOperationAction(ISD::FFLOOR, MVT::f64, Expand);
-  setOperationAction(ISD::FMINNUM, MVT::f64, Expand);
-  setOperationAction(ISD::FMAXNUM, MVT::f64, Expand);
-  setOperationAction(ISD::FNEARBYINT, MVT::f64, Expand);
-  setOperationAction(ISD::FCEIL,  MVT::f64, Expand);
-  setOperationAction(ISD::FRINT,  MVT::f64, Expand);
-  setOperationAction(ISD::FTRUNC, MVT::f64, Expand);
-  setOperationAction(ISD::FROUND, MVT::f64, Expand);
-  setOperationAction(ISD::FLOG ,  MVT::f128, Expand);
-  setOperationAction(ISD::FLOG2,  MVT::f128, Expand);
-  setOperationAction(ISD::FLOG10, MVT::f128, Expand);
-  setOperationAction(ISD::FEXP ,  MVT::f128, Expand);
-  setOperationAction(ISD::FEXP2,  MVT::f128, Expand);
-  setOperationAction(ISD::FFLOOR, MVT::f128, Expand);
-  setOperationAction(ISD::FMINNUM, MVT::f128, Expand);
-  setOperationAction(ISD::FMAXNUM, MVT::f128, Expand);
-  setOperationAction(ISD::FNEARBYINT, MVT::f128, Expand);
-  setOperationAction(ISD::FCEIL,  MVT::f128, Expand);
-  setOperationAction(ISD::FRINT,  MVT::f128, Expand);
-  setOperationAction(ISD::FTRUNC, MVT::f128, Expand);
-  setOperationAction(ISD::FROUND, MVT::f128, Expand);
+  for (MVT VT : {MVT::f32, MVT::f64, MVT::f128}) {
+    setOperationAction(ISD::FLOG ,      VT, Expand);
+    setOperationAction(ISD::FLOG2,      VT, Expand);
+    setOperationAction(ISD::FLOG10,     VT, Expand);
+    setOperationAction(ISD::FEXP ,      VT, Expand);
+    setOperationAction(ISD::FEXP2,      VT, Expand);
+    setOperationAction(ISD::FFLOOR,     VT, Expand);
+    setOperationAction(ISD::FMINNUM,    VT, Expand);
+    setOperationAction(ISD::FMAXNUM,    VT, Expand);
+    setOperationAction(ISD::FNEARBYINT, VT, Expand);
+    setOperationAction(ISD::FCEIL,      VT, Expand);
+    setOperationAction(ISD::FRINT,      VT, Expand);
+    setOperationAction(ISD::FTRUNC,     VT, Expand);
+    setOperationAction(ISD::FROUND,     VT, Expand);
+  }
 
   // Default ISD::TRAP to expand (which turns it into abort).
   setOperationAction(ISD::TRAP, MVT::Other, Expand);
@@ -1283,27 +1266,29 @@ void TargetLoweringBase::computeRegisterProperties(
     ValueTypeActions.setTypeAction(MVT::f64, TypeSoftenFloat);
   }
 
-  // Decide how to handle f32. If the target does not have native support for
-  // f32, promote it to f64 if it is legal. Otherwise, expand it to i32.
+  // Decide how to handle f32. If the target does not have native f32 support,
+  // expand it to i32 and we will be generating soft float library calls.
   if (!isTypeLegal(MVT::f32)) {
-    if (isTypeLegal(MVT::f64)) {
-      NumRegistersForVT[MVT::f32] = NumRegistersForVT[MVT::f64];
-      RegisterTypeForVT[MVT::f32] = RegisterTypeForVT[MVT::f64];
-      TransformToType[MVT::f32] = MVT::f64;
-      ValueTypeActions.setTypeAction(MVT::f32, TypePromoteInteger);
-    } else {
-      NumRegistersForVT[MVT::f32] = NumRegistersForVT[MVT::i32];
-      RegisterTypeForVT[MVT::f32] = RegisterTypeForVT[MVT::i32];
-      TransformToType[MVT::f32] = MVT::i32;
-      ValueTypeActions.setTypeAction(MVT::f32, TypeSoftenFloat);
-    }
+    NumRegistersForVT[MVT::f32] = NumRegistersForVT[MVT::i32];
+    RegisterTypeForVT[MVT::f32] = RegisterTypeForVT[MVT::i32];
+    TransformToType[MVT::f32] = MVT::i32;
+    ValueTypeActions.setTypeAction(MVT::f32, TypeSoftenFloat);
   }
 
   if (!isTypeLegal(MVT::f16)) {
-    NumRegistersForVT[MVT::f16] = NumRegistersForVT[MVT::i16];
-    RegisterTypeForVT[MVT::f16] = RegisterTypeForVT[MVT::i16];
-    TransformToType[MVT::f16] = MVT::i16;
-    ValueTypeActions.setTypeAction(MVT::f16, TypeSoftenFloat);
+    // If the target has native f32 support, promote f16 operations to f32.  If
+    // f32 is not supported, generate soft float library calls.
+    if (isTypeLegal(MVT::f32)) {
+      NumRegistersForVT[MVT::f16] = NumRegistersForVT[MVT::f32];
+      RegisterTypeForVT[MVT::f16] = RegisterTypeForVT[MVT::f32];
+      TransformToType[MVT::f16] = MVT::f32;
+      ValueTypeActions.setTypeAction(MVT::f16, TypePromoteFloat);
+    } else {
+      NumRegistersForVT[MVT::f16] = NumRegistersForVT[MVT::i16];
+      RegisterTypeForVT[MVT::f16] = RegisterTypeForVT[MVT::i16];
+      TransformToType[MVT::f16] = MVT::i16;
+      ValueTypeActions.setTypeAction(MVT::f16, TypeSoftenFloat);
+    }
   }
 
   // Loop over all of the vector value types to see which need transformations.
@@ -1647,7 +1632,8 @@ TargetLoweringBase::getTypeLegalizationCost(Type *Ty) const {
 /// isLegalAddressingMode - Return true if the addressing mode represented
 /// by AM is legal for this target, for a load/store of the specified type.
 bool TargetLoweringBase::isLegalAddressingMode(const AddrMode &AM,
-                                           Type *Ty) const {
+                                               Type *Ty,
+                                               unsigned AS) const {
   // The default implementation of this implements a conservative RISCy, r+r and
   // r+i addr mode.
 

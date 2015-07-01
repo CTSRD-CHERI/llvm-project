@@ -45,7 +45,7 @@ static MCRegisterInfo *createNVPTXMCRegisterInfo(StringRef TT) {
 }
 
 static MCSubtargetInfo *
-createNVPTXMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS) {
+createNVPTXMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
   MCSubtargetInfo *X = new MCSubtargetInfo();
   InitNVPTXMCSubtargetInfo(X, TT, CPU, FS);
   return X;
@@ -54,18 +54,20 @@ createNVPTXMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS) {
 static MCCodeGenInfo *createNVPTXMCCodeGenInfo(
     StringRef TT, Reloc::Model RM, CodeModel::Model CM, CodeGenOpt::Level OL) {
   MCCodeGenInfo *X = new MCCodeGenInfo();
-  X->InitMCCodeGenInfo(RM, CM, OL);
+
+  // The default relocation model is used regardless of what the client has
+  // specified, as it is the only relocation model currently supported.
+  X->initMCCodeGenInfo(Reloc::Default, CM, OL);
   return X;
 }
 
-static MCInstPrinter *createNVPTXMCInstPrinter(const Target &T,
+static MCInstPrinter *createNVPTXMCInstPrinter(const Triple &T,
                                                unsigned SyntaxVariant,
                                                const MCAsmInfo &MAI,
                                                const MCInstrInfo &MII,
-                                               const MCRegisterInfo &MRI,
-                                               const MCSubtargetInfo &STI) {
+                                               const MCRegisterInfo &MRI) {
   if (SyntaxVariant == 0)
-    return new NVPTXInstPrinter(MAI, MII, MRI, STI);
+    return new NVPTXInstPrinter(MAI, MII, MRI);
   return nullptr;
 }
 

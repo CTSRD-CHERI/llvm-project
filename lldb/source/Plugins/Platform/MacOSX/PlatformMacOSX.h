@@ -63,6 +63,7 @@ public:
     
     lldb_private::Error
     GetSharedModule (const lldb_private::ModuleSpec &module_spec,
+                     lldb_private::Process* process,
                      lldb::ModuleSP &module_sp,
                      const lldb_private::FileSpecList *module_search_paths_ptr,
                      lldb::ModuleSP *old_module_sp_ptr,
@@ -90,14 +91,11 @@ public:
     GetFileWithUUID (const lldb_private::FileSpec &platform_file, 
                      const lldb_private::UUID *uuid_ptr,
                      lldb_private::FileSpec &local_file) override;
-    
-    virtual bool
-    GetSupportedArchitectureAtIndex (uint32_t idx, 
-                                     lldb_private::ArchSpec &arch) override;
 
-    virtual lldb_private::ConstString
-    GetSDKDirectory (lldb_private::Target &target) override;
-    
+    bool GetSupportedArchitectureAtIndex(uint32_t idx, lldb_private::ArchSpec &arch) override;
+
+    lldb_private::ConstString GetSDKDirectory(lldb_private::Target &target) override;
+
     void
     AddClangModuleCompilationOptions (lldb_private::Target *target, std::vector<std::string> &options) override
     {

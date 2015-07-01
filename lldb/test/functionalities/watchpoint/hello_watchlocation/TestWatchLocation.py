@@ -1,5 +1,5 @@
 """
-Test lldb watchpoint that uses '-x size' to watch a pointed location with size.
+Test lldb watchpoint that uses '-s size' to watch a pointed location with size.
 """
 
 import os, time
@@ -13,10 +13,10 @@ class HelloWatchLocationTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_hello_watchlocation_with_dsym(self):
-        """Test watching a location with '-x size' option."""
+        """Test watching a location with '-s size' option."""
         self.buildDsym(dictionary=self.d)
         self.setTearDownCleanup(dictionary=self.d)
         self.hello_watchlocation()
@@ -24,7 +24,7 @@ class HelloWatchLocationTestCase(TestBase):
     @expectedFailureFreeBSD("llvm.org/pr18832")
     @dwarf_test
     def test_hello_watchlocation_with_dwarf(self):
-        """Test watching a location with '-x size' option."""
+        """Test watching a location with '-s size' option."""
         self.buildDwarf(dictionary=self.d)
         self.setTearDownCleanup(dictionary=self.d)
         self.hello_watchlocation()
@@ -43,7 +43,7 @@ class HelloWatchLocationTestCase(TestBase):
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
     def hello_watchlocation(self):
-        """Test watching a location with '-x size' option."""
+        """Test watching a location with '-s size' option."""
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -51,7 +51,7 @@ class HelloWatchLocationTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1, loc_exact=False)
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -63,7 +63,7 @@ class HelloWatchLocationTestCase(TestBase):
         # The main.cpp, by design, misbehaves by not following the agreed upon
         # protocol of using a mutex while accessing the global pool and by not
         # incrmenting the global pool by 2.
-        self.expect("watchpoint set expression -w write -x 1 -- g_char_ptr", WATCHPOINT_CREATED,
+        self.expect("watchpoint set expression -w write -s 1 -- g_char_ptr", WATCHPOINT_CREATED,
             substrs = ['Watchpoint created', 'size = 1', 'type = w'])
         # Get a hold of the watchpoint id just created, it is used later on to
         # match the watchpoint id which is expected to be fired.
@@ -77,7 +77,7 @@ class HelloWatchLocationTestCase(TestBase):
         self.expect(self.res.GetOutput().splitlines()[0], exe=False,
             endstr = ' = 0')
 
-        self.runCmd("watchpoint set expression -w write -x 4 -- &threads[0]")
+        self.runCmd("watchpoint set expression -w write -s 4 -- &threads[0]")
 
         # Use the '-v' option to do verbose listing of the watchpoint.
         # The hit count should be 0 initially.

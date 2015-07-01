@@ -14,7 +14,6 @@
 #include "polly/CodeGen/Utils.h"
 #include "polly/CodeGen/IRBuilder.h"
 #include "polly/ScopInfo.h"
-
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Support/Debug.h"
@@ -38,9 +37,9 @@ BasicBlock *polly::executeScopConditionally(Scop &S, Pass *P, Value *RTC) {
     std::string OldName = OldBlock->getName();
 
     // Update ScopInfo.
-    for (ScopStmt *Stmt : S)
-      if (Stmt->getBasicBlock() == OldBlock) {
-        Stmt->setBasicBlock(NewBlock);
+    for (ScopStmt &Stmt : S)
+      if (Stmt.getBasicBlock() == OldBlock) {
+        Stmt.setBasicBlock(NewBlock);
         break;
       }
 

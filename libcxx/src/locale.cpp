@@ -27,7 +27,7 @@
 #include "cwctype"
 #include "__sso_allocator"
 #if defined(_LIBCPP_MSVCRT) || defined(__MINGW32__)
-#include <support/win32/locale_win32.h>
+#include "support/win32/locale_win32.h"
 #elif !defined(__ANDROID__)
 #include <langinfo.h>
 #endif
@@ -1657,7 +1657,7 @@ codecvt<wchar_t, char, mbstate_t>::do_in(state_type& st,
             frm_nxt = frm;
             return frm_nxt == frm_end ? ok : partial;
         }
-        if (n == (size_t)-1)
+        if (n == size_t(-1))
             return error;
         to_nxt += n;
         if (to_nxt == to_end)

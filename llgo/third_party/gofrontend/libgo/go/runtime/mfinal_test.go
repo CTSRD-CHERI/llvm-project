@@ -24,6 +24,9 @@ func TestFinalizerType(t *testing.T) {
 	if runtime.GOARCH != "amd64" {
 		t.Skipf("Skipping on non-amd64 machine")
 	}
+	if runtime.Compiler == "gccgo" {
+		t.Skip("skipping for gccgo")
+	}
 
 	ch := make(chan bool, 10)
 	finalize := func(x *int) {
@@ -44,10 +47,17 @@ func TestFinalizerType(t *testing.T) {
 		{func(x *int) interface{} { return (*Tint)(x) }, func(v Tinter) { finalize((*int)(v.(*Tint))) }},
 	}
 
-	for _, tt := range finalizerTests {
+	for i, tt := range finalizerTests {
 		done := make(chan bool, 1)
 		go func() {
-			v := new(int)
+			// allocate struct with pointer to avoid hitting tinyalloc.
+			// Otherwise we can't be sure when the allocation will
+			// be freed.
+			type T struct {
+				v int
+				p unsafe.Pointer
+			}
+			v := &new(T).v
 			*v = 97531
 			runtime.SetFinalizer(tt.convert(v), tt.finalizer)
 			v = nil
@@ -55,10 +65,11 @@ func TestFinalizerType(t *testing.T) {
 		}()
 		<-done
 		runtime.GC()
+		runtime.GC()
 		select {
 		case <-ch:
 		case <-time.After(time.Second * 4):
-			t.Errorf("finalizer for type %T didn't run", tt.finalizer)
+			t.Errorf("#%d: finalizer for type %T didn't run", i, tt.finalizer)
 		}
 	}
 }
@@ -72,6 +83,9 @@ type bigValue struct {
 func TestFinalizerInterfaceBig(t *testing.T) {
 	if runtime.GOARCH != "amd64" {
 		t.Skipf("Skipping on non-amd64 machine")
+	}
+	if runtime.Compiler == "gccgo" {
+		t.Skip("skipping for gccgo")
 	}
 	ch := make(chan bool)
 	done := make(chan bool, 1)
@@ -166,6 +180,9 @@ func adjChunks() (*objtype, *objtype) {
 func TestEmptySlice(t *testing.T) {
 	if true { // disable until bug 7564 is fixed.
 		return
+	}
+	if runtime.Compiler == "gccgo" {
+		t.Skip("skipping for gccgo")
 	}
 	x, y := adjChunks()
 

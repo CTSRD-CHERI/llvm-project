@@ -39,6 +39,7 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
+#include "clang/AST/DeclTemplate.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/Stmt.h"
@@ -209,7 +210,7 @@ public:
 template <typename T>
 class MatcherInterface : public DynMatcherInterface {
 public:
-  virtual ~MatcherInterface() {}
+  ~MatcherInterface() override {}
 
   /// \brief Returns true if 'Node' can be matched.
   ///

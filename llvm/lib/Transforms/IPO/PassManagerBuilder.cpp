@@ -59,6 +59,10 @@ static cl::opt<bool>
 RunLoopRerolling("reroll-loops", cl::Hidden,
                  cl::desc("Run the loop rerolling pass"));
 
+static cl::opt<bool>
+RunFloat2Int("float-to-int", cl::Hidden, cl::init(true),
+             cl::desc("Run the float2int (float demotion) pass"));
+
 static cl::opt<bool> RunLoadCombine("combine-loads", cl::init(false),
                                     cl::Hidden,
                                     cl::desc("Run the load combining pass"));
@@ -81,12 +85,15 @@ static cl::opt<bool> EnableLoopInterchange(
     "enable-loopinterchange", cl::init(false), cl::Hidden,
     cl::desc("Enable the new, experimental LoopInterchange Pass"));
 
+static cl::opt<bool> EnableLoopDistribute(
+    "enable-loop-distribute", cl::init(false), cl::Hidden,
+    cl::desc("Enable the new, experimental LoopDistribution Pass"));
+
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
     LibraryInfo = nullptr;
     Inliner = nullptr;
-    DisableTailCalls = false;
     DisableUnitAtATime = false;
     DisableUnrollLoops = false;
     BBVectorize = RunBBVectorization;
@@ -230,8 +237,7 @@ void PassManagerBuilder::populateModulePassManager(
   MPM.add(createInstructionCombiningPass());  // Combine silly seq's
   addExtensionsToPM(EP_Peephole, MPM);
 
-  if (!DisableTailCalls)
-    MPM.add(createTailCallEliminationPass()); // Eliminate tail calls
+  MPM.add(createTailCallEliminationPass()); // Eliminate tail calls
   MPM.add(createCFGSimplificationPass());     // Merge & remove BBs
   MPM.add(createReassociatePass());           // Reassociate expressions
   // Rotate Loop - disable header duplication at -Oz
@@ -242,9 +248,10 @@ void PassManagerBuilder::populateModulePassManager(
   MPM.add(createIndVarSimplifyPass());        // Canonicalize indvars
   MPM.add(createLoopIdiomPass());             // Recognize idioms like memset.
   MPM.add(createLoopDeletionPass());          // Delete dead loops
-  if (EnableLoopInterchange)
+  if (EnableLoopInterchange) {
     MPM.add(createLoopInterchangePass()); // Interchange loops
-
+    MPM.add(createCFGSimplificationPass());
+  }
   if (!DisableUnrollLoops)
     MPM.add(createSimpleLoopUnrollPass());    // Unroll small loops
   addExtensionsToPM(EP_LoopOptimizerEnd, MPM);
@@ -307,10 +314,18 @@ void PassManagerBuilder::populateModulePassManager(
   // we must insert a no-op module pass to reset the pass manager.
   MPM.add(createBarrierNoopPass());
 
+  if (RunFloat2Int)
+    MPM.add(createFloat2IntPass());
+
   // Re-rotate loops in all our loop nests. These may have fallout out of
   // rotated form due to GVN or other transformations, and the vectorizer relies
   // on the rotated form.
   MPM.add(createLoopRotatePass());
+
+  // Distribute loops to allow partial vectorization.  I.e. isolate dependences
+  // into separate loop that would otherwise inhibit vectorization.
+  if (EnableLoopDistribute)
+    MPM.add(createLoopDistributePass());
 
   MPM.add(createLoopVectorizePass(DisableUnrollLoops, LoopVectorize));
   // FIXME: Because of #pragma vectorize enable, the passes below are always
@@ -365,9 +380,8 @@ void PassManagerBuilder::populateModulePassManager(
   if (!DisableUnrollLoops) {
     MPM.add(createLoopUnrollPass());    // Unroll small loops
 
-    // This is a barrier pass to avoid combine LICM pass and loop unroll pass
-    // within same loop pass manager.
-    MPM.add(createInstructionSimplifierPass());
+    // LoopUnroll may generate some redundency to cleanup.
+    MPM.add(createInstructionCombiningPass());
 
     // Runtime unrolling will introduce runtime check in loop prologue. If the
     // unrolled loop is a inner loop, then the prologue will be inside the

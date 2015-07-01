@@ -29,6 +29,7 @@
 namespace llvm {
 class GlobalValue;
 class StringRef;
+class Triple;
 
 class AArch64Subtarget : public AArch64GenSubtargetInfo {
 protected:
@@ -36,6 +37,8 @@ protected:
 
   /// ARMProcFamily - ARM processor family: Cortex-A53, Cortex-A57, and others.
   ARMProcFamilyEnum ARMProcFamily;
+
+  bool HasV8_1aOps;
 
   bool HasFPARMv8;
   bool HasNEON;
@@ -69,7 +72,7 @@ private:
 public:
   /// This constructor initializes the data members to match that
   /// of the specified triple.
-  AArch64Subtarget(const std::string &TT, const std::string &CPU,
+  AArch64Subtarget(const Triple &TT, const std::string &CPU,
                    const std::string &FS, const TargetMachine &TM,
                    bool LittleEndian);
 
@@ -88,9 +91,11 @@ public:
   }
   const Triple &getTargetTriple() const { return TargetTriple; }
   bool enableMachineScheduler() const override { return true; }
-  bool enablePostMachineScheduler() const override {
+  bool enablePostRAScheduler() const override {
     return isCortexA53() || isCortexA57();
   }
+
+  bool hasV8_1aOps() const { return HasV8_1aOps; }
 
   bool hasZeroCycleRegMove() const { return HasZeroCycleRegMove; }
 

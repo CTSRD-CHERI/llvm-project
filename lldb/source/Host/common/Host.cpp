@@ -423,17 +423,6 @@ Host::GetSignalAsCString (int signo)
 
 #endif
 
-#if !defined (__APPLE__) && !defined (__FreeBSD__) && !defined (__FreeBSD_kernel__) && !defined (__linux__) // see macosx/Host.mm
-
-size_t
-Host::GetEnvironment (StringList &env)
-{
-    // TODO: Is there a way to the host environment for this process on other systems?
-    return 0;
-}
-
-#endif // #if !defined (__APPLE__) && !defined (__FreeBSD__) && !defined (__FreeBSD_kernel__) && !defined (__linux__)
-
 #ifndef _WIN32
 
 lldb::thread_key_t
@@ -487,8 +476,6 @@ Host::GetModuleFileSpecForHostAddress (const void *host_addr)
         if (info.dli_fname)
             module_filespec.SetFile(info.dli_fname, true);
     }
-#else
-    assert(false && "dladdr() not supported on Android");
 #endif
     return module_filespec;
 }
@@ -546,13 +533,25 @@ MonitorShellCommand (void *callback_baton,
 }
 
 Error
-Host::RunShellCommand (const char *command,
-                       const char *working_dir,
-                       int *status_ptr,
-                       int *signo_ptr,
-                       std::string *command_output_ptr,
-                       uint32_t timeout_sec,
-                       bool run_in_default_shell)
+Host::RunShellCommand(const char *command,
+                      const FileSpec &working_dir,
+                      int *status_ptr,
+                      int *signo_ptr,
+                      std::string *command_output_ptr,
+                      uint32_t timeout_sec,
+                      bool run_in_default_shell)
+{
+    return RunShellCommand(Args(command), working_dir, status_ptr, signo_ptr, command_output_ptr, timeout_sec, run_in_default_shell);
+}
+
+Error
+Host::RunShellCommand(const Args &args,
+                      const FileSpec &working_dir,
+                      int *status_ptr,
+                      int *signo_ptr,
+                      std::string *command_output_ptr,
+                      uint32_t timeout_sec,
+                      bool run_in_default_shell)
 {
     Error error;
     ProcessLaunchInfo launch_info;
@@ -561,10 +560,10 @@ Host::RunShellCommand (const char *command,
     {
         // Run the command in a shell
         launch_info.SetShell(HostInfo::GetDefaultShell());
-        launch_info.GetArguments().AppendArgument(command);
+        launch_info.GetArguments().AppendArguments(args);
         const bool localhost = true;
         const bool will_debug = false;
-        const bool first_arg_is_full_shell_command = true;
+        const bool first_arg_is_full_shell_command = false;
         launch_info.ConvertArgumentsForLaunchingInShell (error,
                                                          localhost,
                                                          will_debug,
@@ -574,7 +573,6 @@ Host::RunShellCommand (const char *command,
     else
     {
         // No shell, just run it
-        Args args (command);
         const bool first_arg_is_executable = true;
         launch_info.SetArguments(args, first_arg_is_executable);
     }
@@ -582,7 +580,7 @@ Host::RunShellCommand (const char *command,
     if (working_dir)
         launch_info.SetWorkingDirectory(working_dir);
     llvm::SmallString<PATH_MAX> output_file_path;
-
+    
     if (command_output_ptr)
     {
         // Create a temporary file to get the stdout/stderr and redirect the
@@ -599,11 +597,13 @@ Host::RunShellCommand (const char *command,
             llvm::sys::fs::createTemporaryFile("lldb-shell-output.%%%%%%", "", output_file_path);
         }
     }
-    
+
+    FileSpec output_file_spec{output_file_path.c_str(), false};
+
     launch_info.AppendSuppressFileAction (STDIN_FILENO, true, false);
-    if (!output_file_path.empty())
+    if (output_file_spec)
     {
-        launch_info.AppendOpenFileAction(STDOUT_FILENO, output_file_path.c_str(), false, true);
+        launch_info.AppendOpenFileAction(STDOUT_FILENO, output_file_spec, false, true);
         launch_info.AppendDuplicateFileAction(STDOUT_FILENO, STDERR_FILENO);
     }
     else
@@ -620,10 +620,10 @@ Host::RunShellCommand (const char *command,
     
     error = LaunchProcess (launch_info);
     const lldb::pid_t pid = launch_info.GetProcessID();
-
+    
     if (error.Success() && pid == LLDB_INVALID_PROCESS_ID)
         error.SetErrorString("failed to get process ID");
-
+    
     if (error.Success())
     {
         // The process successfully launched, so we can defer ownership of
@@ -642,7 +642,7 @@ Host::RunShellCommand (const char *command,
         if (timed_out)
         {
             error.SetErrorString("timed out waiting for shell command to complete");
-
+            
             // Kill the process since it didn't complete within the timeout specified
             Kill (pid, SIGKILL);
             // Wait for the monitor callback to get the message
@@ -655,15 +655,14 @@ Host::RunShellCommand (const char *command,
         {
             if (status_ptr)
                 *status_ptr = shell_info->status;
-
+            
             if (signo_ptr)
                 *signo_ptr = shell_info->signo;
-
+            
             if (command_output_ptr)
             {
                 command_output_ptr->clear();
-                FileSpec file_spec(output_file_path.c_str(), File::eOpenOptionRead);
-                uint64_t file_size = file_spec.GetByteSize();
+                uint64_t file_size = output_file_spec.GetByteSize();
                 if (file_size > 0)
                 {
                     if (file_size > command_output_ptr->max_size())
@@ -672,8 +671,10 @@ Host::RunShellCommand (const char *command,
                     }
                     else
                     {
-                        command_output_ptr->resize(file_size);
-                        file_spec.ReadFileContents(0, &((*command_output_ptr)[0]), command_output_ptr->size(), &error);
+                        std::vector<char> command_output(file_size);
+                        output_file_spec.ReadFileContents(0, command_output.data(), file_size, &error);
+                        if (error.Success())
+                            command_output_ptr->assign(command_output.data(), file_size);
                     }
                 }
             }
@@ -681,15 +682,13 @@ Host::RunShellCommand (const char *command,
         shell_info->can_delete.SetValue(true, eBroadcastAlways);
     }
 
-    FileSpec output_file_spec(output_file_path.c_str(), false);
     if (FileSystem::GetFileExists(output_file_spec))
-        FileSystem::Unlink(output_file_path.c_str());
+        FileSystem::Unlink(output_file_spec);
     // Handshake with the monitor thread, or just let it know in advance that
     // it can delete "shell_info" in case we timed out and were not able to kill
     // the process...
     return error;
 }
-
 
 // LaunchProcessPosixSpawn for Apple, Linux, FreeBSD and other GLIBC
 // systems
@@ -835,16 +834,18 @@ Host::LaunchProcessPosixSpawn(const char *exe_path, const ProcessLaunchInfo &lau
     current_dir[0] = '\0';
 #endif
 
-    const char *working_dir = launch_info.GetWorkingDirectory();
+    FileSpec working_dir{launch_info.GetWorkingDirectory()};
     if (working_dir)
     {
 #if defined (__APPLE__)
         // Set the working directory on this thread only
-        if (__pthread_chdir (working_dir) < 0) {
+        if (__pthread_chdir(working_dir.GetCString()) < 0) {
             if (errno == ENOENT) {
-                error.SetErrorStringWithFormat("No such file or directory: %s", working_dir);
+                error.SetErrorStringWithFormat("No such file or directory: %s",
+                        working_dir.GetCString());
             } else if (errno == ENOTDIR) {
-                error.SetErrorStringWithFormat("Path doesn't name a directory: %s", working_dir);
+                error.SetErrorStringWithFormat("Path doesn't name a directory: %s",
+                        working_dir.GetCString());
             } else {
                 error.SetErrorStringWithFormat("An unknown error occurred when changing directory for process execution.");
             }
@@ -858,10 +859,11 @@ Host::LaunchProcessPosixSpawn(const char *exe_path, const ProcessLaunchInfo &lau
             return error;
         }
 
-        if (::chdir(working_dir) == -1)
+        if (::chdir(working_dir.GetCString()) == -1)
         {
             error.SetError(errno, eErrorTypePOSIX);
-            error.LogIfError(log, "unable to change working directory to %s", working_dir);
+            error.LogIfError(log, "unable to change working directory to %s",
+                    working_dir.GetCString());
             return error;
         }
 #endif

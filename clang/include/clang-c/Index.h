@@ -32,7 +32,7 @@
  * compatible, thus CINDEX_VERSION_MAJOR is expected to remain stable.
  */
 #define CINDEX_VERSION_MAJOR 0
-#define CINDEX_VERSION_MINOR 29
+#define CINDEX_VERSION_MINOR 30
 
 #define CINDEX_VERSION_ENCODE(major, minor) ( \
       ((major) * 10000)                       \
@@ -2225,7 +2225,15 @@ enum CXCursorKind {
    */
   CXCursor_OMPTeamsDirective             = 253,
 
-  CXCursor_LastStmt                      = CXCursor_OMPTeamsDirective,
+  /** \brief OpenMP taskgroup directive.
+   */
+  CXCursor_OMPTaskgroupDirective          = 254,
+
+  /** \brief OpenMP cancellation point directive.
+   */
+  CXCursor_OMPCancellationPointDirective  = 255,
+
+  CXCursor_LastStmt                    = CXCursor_OMPCancellationPointDirective,
 
   /**
    * \brief Cursor that represents the translation unit itself.
@@ -3283,6 +3291,28 @@ CINDEX_LINKAGE long long clang_Type_getSizeOf(CXType T);
  *   CXTypeLayoutError_InvalidFieldName is returned.
  */
 CINDEX_LINKAGE long long clang_Type_getOffsetOf(CXType T, const char *S);
+
+/**
+ * \brief Return the offset of the field represented by the Cursor.
+ *
+ * If the cursor is not a field declaration, -1 is returned.
+ * If the cursor semantic parent is not a record field declaration,
+ *   CXTypeLayoutError_Invalid is returned.
+ * If the field's type declaration is an incomplete type,
+ *   CXTypeLayoutError_Incomplete is returned.
+ * If the field's type declaration is a dependent type,
+ *   CXTypeLayoutError_Dependent is returned.
+ * If the field's name S is not found,
+ *   CXTypeLayoutError_InvalidFieldName is returned.
+ */
+CINDEX_LINKAGE long long clang_Cursor_getOffsetOfField(CXCursor C);
+
+/**
+ * \brief Determine whether the given cursor represents an anonymous record
+ * declaration.
+ */
+CINDEX_LINKAGE unsigned clang_Cursor_isAnonymous(CXCursor C);
+
 
 enum CXRefQualifierKind {
   /** \brief No ref-qualifier was provided. */
@@ -5609,7 +5639,7 @@ typedef enum {
  * reused after indexing is finished. Set to \c NULL if you do not require it.
  *
  * \returns 0 on success or if there were errors from which the compiler could
- * recover.  If there is a failure from which the there is no recovery, returns
+ * recover.  If there is a failure from which there is no recovery, returns
  * a non-zero \c CXErrorCode.
  *
  * The rest of the parameters are the same as #clang_parseTranslationUnit.
@@ -5640,7 +5670,7 @@ CINDEX_LINKAGE int clang_indexSourceFile(CXIndexAction,
  *
  * The parameters are the same as #clang_indexSourceFile.
  * 
- * \returns If there is a failure from which the there is no recovery, returns
+ * \returns If there is a failure from which there is no recovery, returns
  * non-zero, otherwise returns 0.
  */
 CINDEX_LINKAGE int clang_indexTranslationUnit(CXIndexAction,
@@ -5672,15 +5702,50 @@ CINDEX_LINKAGE
 CXSourceLocation clang_indexLoc_getCXSourceLocation(CXIdxLoc loc);
 
 /**
+ * \brief Visitor invoked for each field found by a traversal.
+ *
+ * This visitor function will be invoked for each field found by
+ * \c clang_Type_visitFields. Its first argument is the cursor being
+ * visited, its second argument is the client data provided to
+ * \c clang_Type_visitFields.
+ *
+ * The visitor should return one of the \c CXVisitorResult values
+ * to direct \c clang_Type_visitFields.
+ */
+typedef enum CXVisitorResult (*CXFieldVisitor)(CXCursor C,
+                                               CXClientData client_data);
+
+/**
+ * \brief Visit the fields of a particular type.
+ *
+ * This function visits all the direct fields of the given cursor,
+ * invoking the given \p visitor function with the cursors of each
+ * visited field. The traversal may be ended prematurely, if
+ * the visitor returns \c CXFieldVisit_Break.
+ *
+ * \param T the record type whose field may be visited.
+ *
+ * \param visitor the visitor function that will be invoked for each
+ * field of \p T.
+ *
+ * \param client_data pointer data supplied by the client, which will
+ * be passed to the visitor each time it is invoked.
+ *
+ * \returns a non-zero value if the traversal was terminated
+ * prematurely by the visitor returning \c CXFieldVisit_Break.
+ */
+CINDEX_LINKAGE unsigned clang_Type_visitFields(CXType T,
+                                               CXFieldVisitor visitor,
+                                               CXClientData client_data);
+
+
+/**
  * @}
  */
 
 /**
  * @}
  */
-
-/* Include the comment API for compatibility. This will eventually go away. */
-#include "clang-c/Documentation.h"
 
 #ifdef __cplusplus
 }

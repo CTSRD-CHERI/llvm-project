@@ -282,6 +282,10 @@ let RenderMethod = "addMemOperands" in {
   def X86MemVX64Operand : AsmOperandClass { let Name = "MemVX64"; }
   def X86MemVY64Operand : AsmOperandClass { let Name = "MemVY64"; }
   def X86MemVZ64Operand : AsmOperandClass { let Name = "MemVZ64"; }
+  def X86MemVX32XOperand : AsmOperandClass { let Name = "MemVX32X"; }
+  def X86MemVY32XOperand : AsmOperandClass { let Name = "MemVY32X"; }
+  def X86MemVX64XOperand : AsmOperandClass { let Name = "MemVX64X"; }
+  def X86MemVY64XOperand : AsmOperandClass { let Name = "MemVY64X"; }
 }
 
 def X86AbsMemAsmOperand : AsmOperandClass {
@@ -332,7 +336,11 @@ def vx32mem  : X86VMemOperand<VR128,  "printi32mem", X86MemVX32Operand>;
 def vy32mem  : X86VMemOperand<VR256,  "printi32mem", X86MemVY32Operand>;
 def vx64mem  : X86VMemOperand<VR128,  "printi64mem", X86MemVX64Operand>;
 def vy64mem  : X86VMemOperand<VR256,  "printi64mem", X86MemVY64Operand>;
-def vy64xmem : X86VMemOperand<VR256X, "printi64mem", X86MemVY64Operand>;
+
+def vx32xmem : X86VMemOperand<VR128X, "printi32mem", X86MemVX32XOperand>;
+def vx64xmem : X86VMemOperand<VR128X, "printi32mem", X86MemVX64XOperand>;
+def vy32xmem : X86VMemOperand<VR256X, "printi32mem", X86MemVY32XOperand>;
+def vy64xmem : X86VMemOperand<VR256X, "printi64mem", X86MemVY64XOperand>;
 def vz32mem  : X86VMemOperand<VR512,  "printi32mem", X86MemVZ32Operand>;
 def vz64mem  : X86VMemOperand<VR512,  "printi64mem", X86MemVZ64Operand>;
 
@@ -716,6 +724,8 @@ def tls64addr : ComplexPattern<i64, 5, "SelectTLSADDRAddr",
 def tls64baseaddr : ComplexPattern<i64, 5, "SelectTLSADDRAddr",
                                [tglobaltlsaddr], []>;
 
+def vectoraddr : ComplexPattern<iPTR, 5, "SelectVectorAddr", [],[SDNPWantParent]>;
+
 //===----------------------------------------------------------------------===//
 // X86 Instruction Predicate Definitions.
 def HasCMov      : Predicate<"Subtarget->hasCMov()">;
@@ -786,6 +796,7 @@ def HasRDSEED    : Predicate<"Subtarget->hasRDSEED()">;
 def HasPrefetchW : Predicate<"Subtarget->hasPRFCHW()">;
 def FPStackf32   : Predicate<"!Subtarget->hasSSE1()">;
 def FPStackf64   : Predicate<"!Subtarget->hasSSE2()">;
+def HasMPX       : Predicate<"Subtarget->hasMPX()">;
 def HasCmpxchg16b: Predicate<"Subtarget->hasCmpxchg16b()">;
 def Not64BitMode : Predicate<"!Subtarget->is64Bit()">,
                              AssemblerPredicate<"!Mode64Bit", "Not 64-bit mode">;
@@ -2223,7 +2234,7 @@ let Predicates = [HasBMI2], Defs = [EFLAGS] in {
 
 def CountTrailingOnes : SDNodeXForm<imm, [{
   // Count the trailing ones in the immediate.
-  return getI8Imm(countTrailingOnes(N->getZExtValue()));
+  return getI8Imm(countTrailingOnes(N->getZExtValue()), SDLoc(N));
 }]>;
 
 def BZHIMask : ImmLeaf<i64, [{
@@ -2453,6 +2464,9 @@ include "X86InstrSSE.td"
 include "X86InstrAVX512.td"
 include "X86InstrMMX.td"
 include "X86Instr3DNow.td"
+
+// MPX instructions
+include "X86InstrMPX.td"
 
 include "X86InstrVMX.td"
 include "X86InstrSVM.td"

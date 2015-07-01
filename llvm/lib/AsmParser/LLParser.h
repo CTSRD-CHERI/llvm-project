@@ -37,6 +37,7 @@ namespace llvm {
   class Comdat;
   class MDString;
   class MDNode;
+  struct SlotMapping;
   class StructType;
 
   /// ValID - Represents a reference of a definition of some sort with no type.
@@ -87,6 +88,7 @@ namespace llvm {
     LLVMContext &Context;
     LLLexer Lex;
     Module *M;
+    SlotMapping *Slots;
 
     // Instruction metadata resolution.  Each instruction can have a list of
     // MDRef info associated with them.
@@ -135,9 +137,10 @@ namespace llvm {
     std::map<unsigned, AttrBuilder> NumberedAttrBuilders;
 
   public:
-    LLParser(StringRef F, SourceMgr &SM, SMDiagnostic &Err, Module *m)
-        : Context(m->getContext()), Lex(F, SM, Err, m->getContext()), M(m),
-          BlockAddressPFS(nullptr) {}
+    LLParser(StringRef F, SourceMgr &SM, SMDiagnostic &Err, Module *M,
+             SlotMapping *Slots = nullptr)
+        : Context(M->getContext()), Lex(F, SM, Err, M->getContext()), M(M),
+          Slots(Slots), BlockAddressPFS(nullptr) {}
     bool Run();
 
     LLVMContext &getContext() { return Context; }
@@ -223,7 +226,7 @@ namespace llvm {
     bool ParseOptionalDLLStorageClass(unsigned &DLLStorageClass);
     bool ParseOptionalCallingConv(unsigned &CC);
     bool ParseOptionalAlignment(unsigned &Alignment);
-    bool ParseOptionalDereferenceableBytes(uint64_t &Bytes);
+    bool ParseOptionalDerefAttrBytes(lltok::Kind AttrKind, uint64_t &Bytes);
     bool ParseScopeAndOrdering(bool isAtomic, SynchronizationScope &Scope,
                                AtomicOrdering &Ordering);
     bool ParseOrdering(AtomicOrdering &Ordering);
@@ -392,7 +395,9 @@ namespace llvm {
     bool ParseMDNode(MDNode *&MD);
     bool ParseMDNodeTail(MDNode *&MD);
     bool ParseMDNodeVector(SmallVectorImpl<Metadata *> &MDs);
-    bool ParseInstructionMetadata(Instruction *Inst, PerFunctionState *PFS);
+    bool ParseMetadataAttachment(unsigned &Kind, MDNode *&MD);
+    bool ParseInstructionMetadata(Instruction &Inst);
+    bool ParseOptionalFunctionMetadata(Function &F);
 
     template <class FieldTy>
     bool ParseMDField(LocTy Loc, StringRef Name, FieldTy &Result);

@@ -72,7 +72,7 @@ public:
   bool validateImpl(raw_ostream &diagnostics) override;
   std::string demangle(StringRef symbolName) const override;
 
-  bool createImplicitFiles(std::vector<std::unique_ptr<File>> &) override;
+  void createImplicitFiles(std::vector<std::unique_ptr<File>> &) override;
 
   uint32_t getCPUType() const;
   uint32_t getCPUSubType() const;
@@ -128,6 +128,9 @@ public:
   const StringRefVector &sysLibRoots() const { return _syslibRoots; }
   bool PIE() const { return _pie; }
   void setPIE(bool pie) { _pie = pie; }
+
+  uint64_t stackSize() const { return _stackSize; }
+  void setStackSize(uint64_t stackSize) { _stackSize = stackSize; }
 
   uint64_t baseAddress() const { return _baseAddress; }
   void setBaseAddress(uint64_t baseAddress) { _baseAddress = baseAddress; }
@@ -228,10 +231,10 @@ public:
   const StringRefVector &rpaths() const { return _rpaths; }
 
   /// Add section alignment constraint on final layout.
-  void addSectionAlignment(StringRef seg, StringRef sect, uint8_t align2);
+  void addSectionAlignment(StringRef seg, StringRef sect, uint16_t align);
 
   /// Returns true if specified section had alignment constraints.
-  bool sectionAligned(StringRef seg, StringRef sect, uint8_t &align2) const;
+  bool sectionAligned(StringRef seg, StringRef sect, uint16_t &align) const;
 
   StringRef dyldPath() const { return "/usr/lib/dyld"; }
 
@@ -240,6 +243,9 @@ public:
 
   // GOT creation Pass should be run.
   bool needsGOTPass() const;
+
+  /// Pass to add TLV sections.
+  bool needsTLVPass() const;
 
   /// Pass to transform __compact_unwind into __unwind_info should be run.
   bool needsCompactUnwindPass() const;
@@ -271,8 +277,7 @@ public:
 
   /// If the memoryBuffer is a fat file with a slice for the current arch,
   /// this method will return the offset and size of that slice.
-  bool sliceFromFatFile(const MemoryBuffer &mb, uint32_t &offset,
-                        uint32_t &size);
+  bool sliceFromFatFile(MemoryBufferRef mb, uint32_t &offset, uint32_t &size);
 
   /// Returns if a command line option specified dylib is an upward link.
   bool isUpwardDylib(StringRef installName) const;
@@ -312,7 +317,7 @@ private:
   struct SectionAlign {
     StringRef segmentName;
     StringRef sectionName;
-    uint8_t   align2;
+    uint16_t  align;
   };
 
   struct OrderFileNode {
@@ -339,6 +344,7 @@ private:
   uint64_t _pageZeroSize;
   uint64_t _pageSize;
   uint64_t _baseAddress;
+  uint64_t _stackSize;
   uint32_t _compatibilityVersion;
   uint32_t _currentVersion;
   StringRef _installName;
@@ -356,6 +362,7 @@ private:
   mutable std::set<mach_o::MachODylibFile*> _allDylibs;
   mutable std::set<mach_o::MachODylibFile*> _upwardDylibs;
   mutable std::vector<std::unique_ptr<File>> _indirectDylibs;
+  mutable std::mutex _dylibsMutex;
   ExportMode _exportMode;
   llvm::StringSet<> _exportedSymbols;
   DebugInfoMode _debugInfoMode;

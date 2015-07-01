@@ -97,11 +97,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${POLLY_SOURCE_DIR}/cmake")
 
 SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-FIND_PACKAGE(Pluto)
-if(PLUTO_FOUND)
-  set(POLLY_LINK_LIBS ${POLLY_LINK_LIBS} ${PLUTO_LIBRARY})
-endif(PLUTO_FOUND)
-
 option(POLLY_ENABLE_GPGPU_CODEGEN "Enable GPGPU code generation feature" OFF)
 if (POLLY_ENABLE_GPGPU_CODEGEN)
   # Do not require CUDA, as GPU code generation test cases can be run without
@@ -109,14 +104,6 @@ if (POLLY_ENABLE_GPGPU_CODEGEN)
   FIND_PACKAGE(CUDA)
   set(GPU_CODEGEN TRUE)
 endif(POLLY_ENABLE_GPGPU_CODEGEN)
-
-if (PLUTO_FOUND)
-  INCLUDE_DIRECTORIES( ${PLUTO_INCLUDE_DIR} )
-endif(PLUTO_FOUND)
-INCLUDE_DIRECTORIES( ${ISL_INCLUDE_DIR} )
-if (GMP_FOUND)
-  INCLUDE_DIRECTORIES( ${GMP_INCLUDE_DIR} )
-endif(GMP_FOUND)
 
 # Support GPGPU code generation if the library is available.
 if (CUDALIB_FOUND)
@@ -127,6 +114,8 @@ include_directories(
   BEFORE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/lib/JSON/include
+  ${CMAKE_CURRENT_BINARY_DIR}/lib/External/isl/include
+  ${CMAKE_CURRENT_BINARY_DIR}/lib/External/isl
   ${CMAKE_CURRENT_SOURCE_DIR}/lib/External/isl/include
   ${CMAKE_CURRENT_SOURCE_DIR}/lib/External/isl/imath
   ${CMAKE_CURRENT_SOURCE_DIR}/lib/External/isl

@@ -33,6 +33,7 @@
 
 using namespace lldb;
 using namespace lldb_private;
+using namespace lldb_private::process_gdb_remote;
 
 //----------------------------------------------------------------------
 // GDBRemoteCommunicationServerPlatform constructor
@@ -116,7 +117,7 @@ GDBRemoteCommunicationServerPlatform::Handle_qLaunchGDBServer (StringExtractorGD
     if (hostname.empty())
         hostname = "127.0.0.1";
     if (log)
-        log->Printf("Launching debugserver with: %s:%u...\n", hostname.c_str(), port);
+        log->Printf("Launching debugserver with: %s:%u...", hostname.c_str(), port);
 
     // Do not run in a new session so that it can not linger after the
     // platform closes.
@@ -216,15 +217,10 @@ GDBRemoteCommunicationServerPlatform::Handle_QSetWorkingDir (StringExtractorGDBR
     std::string path;
     packet.GetHexByteString (path);
 
-#ifdef _WIN32
-    // Not implemented on Windows
-    return SendUnimplementedResponse ("GDBRemoteCommunicationServerPlatform::Handle_QSetWorkingDir unimplemented");
-#else
     // If this packet is sent to a platform, then change the current working directory
     if (::chdir(path.c_str()) != 0)
         return SendErrorResponse (errno);
     return SendOKResponse ();
-#endif
 }
 
 GDBRemoteCommunication::PacketResult
@@ -275,11 +271,11 @@ GDBRemoteCommunicationServerPlatform::ReapDebugserverProcess (void *callback_bat
     return true;
 }
 
-lldb_private::Error
+Error
 GDBRemoteCommunicationServerPlatform::LaunchProcess ()
 {
     if (!m_process_launch_info.GetArguments ().GetArgumentCount ())
-        return lldb_private::Error ("%s: no process command line specified to launch", __FUNCTION__);
+        return Error ("%s: no process command line specified to launch", __FUNCTION__);
 
     // specify the process monitor if not already set.  This should
     // generally be what happens since we need to reap started
@@ -287,7 +283,7 @@ GDBRemoteCommunicationServerPlatform::LaunchProcess ()
     if (!m_process_launch_info.GetMonitorProcessCallback ())
         m_process_launch_info.SetMonitorProcessCallback(ReapDebugserverProcess, this, false);
 
-    lldb_private::Error error = m_platform_sp->LaunchProcess (m_process_launch_info);
+    Error error = m_platform_sp->LaunchProcess (m_process_launch_info);
     if (!error.Success ())
     {
         fprintf (stderr, "%s: failed to launch executable %s", __FUNCTION__, m_process_launch_info.GetArguments ().GetArgumentAtIndex (0));

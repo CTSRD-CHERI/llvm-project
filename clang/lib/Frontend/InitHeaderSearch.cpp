@@ -65,7 +65,7 @@ public:
   /// AddSystemHeaderPrefix - Add the specified prefix to the system header
   /// prefix list.
   void AddSystemHeaderPrefix(StringRef Prefix, bool IsSystemHeader) {
-    SystemHeaderPrefixes.push_back(std::make_pair(Prefix, IsSystemHeader));
+    SystemHeaderPrefixes.emplace_back(Prefix, IsSystemHeader);
   }
 
   /// AddGnuCPlusPlusIncludePaths - Add the necessary paths to support a gnu
@@ -232,6 +232,7 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     case llvm::Triple::NetBSD:
     case llvm::Triple::OpenBSD:
     case llvm::Triple::Bitrig:
+    case llvm::Triple::NaCl:
       break;
     default:
       // FIXME: temporary hack: hard-coded paths.
@@ -352,6 +353,7 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
   switch (os) {
   case llvm::Triple::CloudABI:
   case llvm::Triple::RTEMS:
+  case llvm::Triple::NaCl:
     break;
   default:
     AddPath("/usr/include", ExternCSystem, false);

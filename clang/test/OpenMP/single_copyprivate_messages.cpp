@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -verify -fopenmp=libiomp5 %s
+// RUN: %clang_cc1 -verify -fopenmp %s
 
 void foo() {
 }
@@ -105,6 +105,19 @@ T tmain(T argc, C **argv) {
   return T();
 }
 
+void bar(S4 a[2], int n, int b[n]) {
+#pragma omp single copyprivate(a, b)
+    foo();
+}
+
+namespace A {
+double x;
+#pragma omp threadprivate(x)
+}
+namespace B {
+using A::x;
+}
+
 int main(int argc, char **argv) {
   int i;
   static int intA;
@@ -121,7 +134,7 @@ int main(int argc, char **argv) {
 #pragma omp parallel
 #pragma omp single copyprivate(argc > 0 ? argv[1] : argv[2]) // expected-error {{expected variable name}}
 #pragma omp parallel
-#pragma omp single copyprivate(l) // expected-error {{'operator=' is a private member of 'S4'}}
+#pragma omp single copyprivate(l, B::x) // expected-error {{'operator=' is a private member of 'S4'}}
 #pragma omp parallel
 #pragma omp single copyprivate(S1) // expected-error {{'S1' does not refer to a value}}
 #pragma omp parallel

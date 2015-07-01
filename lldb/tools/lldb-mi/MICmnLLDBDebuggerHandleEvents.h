@@ -63,16 +63,16 @@ class CMICmnLLDBDebuggerHandleEvents : public CMICmnBase, public MI::ISingleton<
     bool HandleProcessEventBroadcastBitStateChanged(const lldb::SBEvent &vEvent);
     bool HandleProcessEventStateRunning(void);
     bool HandleProcessEventStateExited(void);
-    bool HandleProcessEventStateStopped(bool &vwrbShouldBrk);
+    bool HandleProcessEventStateStopped(const lldb::SBEvent &vrEvent, bool &vwrbShouldBrk);
     bool HandleProcessEventStopReasonTrace(void);
     bool HandleProcessEventStopReasonBreakpoint(void);
-    bool HandleProcessEventStopSignal(bool &vwrbShouldBrk);
+    bool HandleProcessEventStopSignal(const lldb::SBEvent &vrEvent);
     bool HandleProcessEventStopException(void);
     bool HandleProcessEventStateSuspended(const lldb::SBEvent &vEvent);
     bool HandleTargetEventBroadcastBitModulesLoaded(const lldb::SBEvent &vEvent);
     bool HandleTargetEventBroadcastBitModulesUnloaded(const lldb::SBEvent &vEvent);
-    bool MiHelpGetModuleInfo(const lldb::SBModule &vModule, const MIuint nModuleNum,
-                             CMICmnMIValueList &vwrMiValueList);
+    bool MiHelpGetModuleInfo(const lldb::SBModule &vModule, const bool vbWithExtraFields,
+                             CMICmnMIOutOfBandRecord &vwrMiOutOfBandRecord);
     bool MiHelpGetCurrentThreadFrame(CMICmnMIValueTuple &vwrMiValueTuple);
     bool MiResultRecordToStdout(const CMICmnMIResultRecord &vrMiResultRecord);
     bool MiOutOfBandRecordToStdout(const CMICmnMIOutOfBandRecord &vrMiResultRecord);

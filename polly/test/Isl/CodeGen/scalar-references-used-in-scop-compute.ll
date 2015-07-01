@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen-isl -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen -S < %s | FileCheck %s
 
 ; Test the code generation in the presence of a scalar out-of-scop value being
 ; used from within the SCoP.
@@ -8,7 +8,6 @@
 
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-unknown-linux-gnu"
 
 define void @scalar-function-argument(float* %A, float %sqrinv) {
 entry:

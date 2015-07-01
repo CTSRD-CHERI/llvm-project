@@ -64,10 +64,9 @@ GetFlattenedSpellings(const Record &Attr) {
   for (const auto &Spelling : Spellings) {
     if (Spelling->getValueAsString("Variety") == "GCC") {
       // Gin up two new spelling objects to add into the list.
-      Ret.push_back(FlattenedSpelling("GNU", Spelling->getValueAsString("Name"),
-                                      "", true));
-      Ret.push_back(FlattenedSpelling(
-          "CXX11", Spelling->getValueAsString("Name"), "gnu", true));
+      Ret.emplace_back("GNU", Spelling->getValueAsString("Name"), "", true);
+      Ret.emplace_back("CXX11", Spelling->getValueAsString("Name"), "gnu",
+                       true);
     } else
       Ret.push_back(FlattenedSpelling(*Spelling));
   }
@@ -82,6 +81,7 @@ static std::string ReadPCHRecord(StringRef type) {
     .Case("TypeSourceInfo *", "GetTypeSourceInfo(F, Record, Idx)")
     .Case("Expr *", "ReadExpr(F)")
     .Case("IdentifierInfo *", "GetIdentifierInfo(F, Record, Idx)")
+    .Case("std::string", "ReadString(Record, Idx)")
     .Default("Record[Idx++]");
 }
 
@@ -95,6 +95,7 @@ static std::string WritePCHRecord(StringRef type, StringRef name) {
     .Case("Expr *", "AddStmt(" + std::string(name) + ");\n")
     .Case("IdentifierInfo *", 
           "AddIdentifierRef(" + std::string(name) + ", Record);\n")
+    .Case("std::string", "AddString(" + std::string(name) + ", Record);\n")
     .Default("Record.push_back(" + std::string(name) + ");\n");
 }
 
@@ -115,11 +116,7 @@ static StringRef NormalizeAttrName(StringRef AttrName) {
 // This is different from NormalizeAttrName in that it also handles names like
 // _pascal and __pascal.
 static StringRef NormalizeNameForSpellingComparison(StringRef Name) {
-  while (Name.startswith("_"))
-    Name = Name.substr(1, Name.size());
-  while (Name.endswith("_"))
-    Name = Name.substr(0, Name.size() - 1);
-  return Name;
+  return Name.trim("_");
 }
 
 // Normalize attribute spelling only if the spelling has both leading
@@ -417,15 +414,14 @@ namespace {
       // FIXME: Do not do the calculation here
       // FIXME: Handle types correctly
       // A null pointer means maximum alignment
-      // FIXME: Load the platform-specific maximum alignment, rather than
-      //        16, the x86 max.
       OS << "unsigned " << getAttrName() << "Attr::get" << getUpperName()
          << "(ASTContext &Ctx) const {\n";
       OS << "  assert(!is" << getUpperName() << "Dependent());\n";
       OS << "  if (is" << getLowerName() << "Expr)\n";
-      OS << "    return (" << getLowerName() << "Expr ? " << getLowerName()
-         << "Expr->EvaluateKnownConstInt(Ctx).getZExtValue() : 16)"
-         << "* Ctx.getCharWidth();\n";
+      OS << "    return " << getLowerName() << "Expr ? " << getLowerName()
+         << "Expr->EvaluateKnownConstInt(Ctx).getZExtValue()"
+         << " * Ctx.getCharWidth() : "
+         << "Ctx.getTargetDefaultAlignForAttributeAligned();\n";
       OS << "  else\n";
       OS << "    return 0; // FIXME\n";
       OS << "}\n";
@@ -988,6 +984,16 @@ namespace {
     }
   };
 
+  class VariadicStringArgument : public VariadicArgument {
+  public:
+    VariadicStringArgument(const Record &Arg, StringRef Attr)
+      : VariadicArgument(Arg, Attr, "std::string")
+    {}
+    void writeValueImpl(raw_ostream &OS) const override {
+      OS << "    OS << \"\\\"\" << Val << \"\\\"\";\n";
+    }
+  };
+
   class TypeArgument : public SimpleArgument {
   public:
     TypeArgument(const Record &Arg, StringRef Attr)
@@ -1049,6 +1055,8 @@ createArgument(const Record &Arg, StringRef Attr,
     Ptr = llvm::make_unique<SimpleArgument>(Arg, Attr, "unsigned");
   else if (ArgName == "VariadicUnsignedArgument")
     Ptr = llvm::make_unique<VariadicArgument>(Arg, Attr, "unsigned");
+  else if (ArgName == "VariadicStringArgument")
+    Ptr = llvm::make_unique<VariadicStringArgument>(Arg, Attr);
   else if (ArgName == "VariadicEnumArgument")
     Ptr = llvm::make_unique<VariadicEnumArgument>(Arg, Attr);
   else if (ArgName == "VariadicExprArgument")
@@ -2713,7 +2721,8 @@ void EmitClangAttrParsedAttrKinds(RecordKeeper &Records, raw_ostream &OS) {
   StringMatcher("Name", Declspec, OS).Emit();
   OS << "  } else if (AttributeList::AS_CXX11 == Syntax) {\n";
   StringMatcher("Name", CXX11, OS).Emit();
-  OS << "  } else if (AttributeList::AS_Keyword == Syntax) {\n";
+  OS << "  } else if (AttributeList::AS_Keyword == Syntax || ";
+  OS << "AttributeList::AS_ContextSensitiveKeyword == Syntax) {\n";
   StringMatcher("Name", Keywords, OS).Emit();
   OS << "  } else if (AttributeList::AS_Pragma == Syntax) {\n";
   StringMatcher("Name", Pragma, OS).Emit();
@@ -2787,17 +2796,9 @@ static void WriteCategoryHeader(const Record *DocCategory,
 
   // If there is content, print that as well.
   std::string ContentStr = DocCategory->getValueAsString("Content");
-  if (!ContentStr.empty()) {
-    // Trim leading and trailing newlines and spaces.
-    StringRef Content(ContentStr);
-    while (Content.startswith("\r") || Content.startswith("\n") ||
-           Content.startswith(" ") || Content.startswith("\t"))
-           Content = Content.substr(1);
-    while (Content.endswith("\r") || Content.endswith("\n") ||
-           Content.endswith(" ") || Content.endswith("\t"))
-           Content = Content.substr(0, Content.size() - 1);
-    OS << Content;
-  }
+  // Trim leading and trailing newlines and spaces.
+  OS << StringRef(ContentStr).trim();
+
   OS << "\n\n";
 }
 
@@ -2919,14 +2920,7 @@ static void WriteDocumentation(const DocumentationData &Doc,
 
   std::string ContentStr = Doc.Documentation->getValueAsString("Content");
   // Trim leading and trailing newlines and spaces.
-  StringRef Content(ContentStr);
-  while (Content.startswith("\r") || Content.startswith("\n") ||
-         Content.startswith(" ") || Content.startswith("\t"))
-    Content = Content.substr(1);
-  while (Content.endswith("\r") || Content.endswith("\n") ||
-         Content.endswith(" ") || Content.endswith("\t"))
-    Content = Content.substr(0, Content.size() - 1);
-  OS << Content;
+  OS << StringRef(ContentStr).trim();
 
   OS << "\n\n\n";
 }

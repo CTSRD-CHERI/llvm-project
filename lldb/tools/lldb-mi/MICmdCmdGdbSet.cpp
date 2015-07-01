@@ -21,7 +21,9 @@
 // Instantiations:
 const CMICmdCmdGdbSet::MapGdbOptionNameToFnGdbOptionPtr_t CMICmdCmdGdbSet::ms_mapGdbOptionNameToFnGdbOptionPtr = {
     {"target-async", &CMICmdCmdGdbSet::OptionFnTargetAsync},
+    {"print", &CMICmdCmdGdbSet::OptionFnPrint},
     // { "auto-solib-add", &CMICmdCmdGdbSet::OptionFnAutoSolibAdd },    // Example code if need to implement GDB set other options
+    {"output-radix", &CMICmdCmdGdbSet::OptionFnOutputRadix},
     {"solib-search-path", &CMICmdCmdGdbSet::OptionFnSolibSearchPath},
     {"fallback", &CMICmdCmdGdbSet::OptionFnFallback}};
 
@@ -93,7 +95,8 @@ CMICmdCmdGdbSet::Execute(void)
     CMICMDBASE_GETOPTION(pArgGdbOption, ListOfN, m_constStrArgNamedGdbOption);
     const CMICmdArgValListBase::VecArgObjPtr_t &rVecWords(pArgGdbOption->GetExpectedOptions());
 
-    // Get the gdb-set option to carry out
+    // Get the gdb-set option to carry out. This option will be used as an action
+    // which should be done. Further arguments will be used as parameters for it.
     CMICmdArgValListBase::VecArgObjPtr_t::const_iterator it = rVecWords.begin();
     const CMICmdArgValString *pOption = static_cast<const CMICmdArgValString *>(*it);
     const CMIUtilString strOption(pOption->GetValue());
@@ -221,7 +224,7 @@ CMICmdCmdGdbSet::GetOptionFn(const CMIUtilString &vrPrintFnName, FnGdbOptionPtr 
 bool
 CMICmdCmdGdbSet::OptionFnTargetAsync(const CMIUtilString::VecString_t &vrWords)
 {
-    bool bAsyncMode;
+    bool bAsyncMode = false;
     bool bOk = true;
 
     if (vrWords.size() > 1)
@@ -249,6 +252,54 @@ CMICmdCmdGdbSet::OptionFnTargetAsync(const CMIUtilString::VecString_t &vrWords)
     // Turn async mode on/off.
     CMICmnLLDBDebugSessionInfo &rSessionInfo(CMICmnLLDBDebugSessionInfo::Instance());
     rSessionInfo.GetDebugger().SetAsync(bAsyncMode);
+
+    return MIstatus::success;
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: Carry out work to complete the GDB set option 'print-char-array-as-string' to
+//          prepare and send back information asked for.
+// Type:    Method.
+// Args:    vrWords - (R) List of additional parameters used by this option.
+// Return:  MIstatus::success - Function succeeded.
+//          MIstatus::failure - Function failed.
+// Throws:  None.
+//--
+bool
+CMICmdCmdGdbSet::OptionFnPrint(const CMIUtilString::VecString_t &vrWords)
+{
+    const bool bAllArgs(vrWords.size() == 2);
+    const bool bArgOn(bAllArgs && (CMIUtilString::Compare(vrWords[1], "on") || CMIUtilString::Compare(vrWords[1], "1")));
+    const bool bArgOff(bAllArgs && (CMIUtilString::Compare(vrWords[1], "off") || CMIUtilString::Compare(vrWords[1], "0")));
+    if (!bAllArgs || (!bArgOn && !bArgOff))
+    {
+        m_bGbbOptionFnHasError = true;
+        m_strGdbOptionFnError = MIRSRC(IDS_CMD_ERR_GDBSET_OPT_PRINT_BAD_ARGS);
+        return MIstatus::failure;
+    }
+
+    const CMIUtilString strOption(vrWords[0]);
+    CMIUtilString strOptionKey;
+    if (CMIUtilString::Compare(strOption, "char-array-as-string"))
+        strOptionKey = m_rLLDBDebugSessionInfo.m_constStrPrintCharArrayAsString;
+    else if (CMIUtilString::Compare(strOption, "expand-aggregates"))
+        strOptionKey = m_rLLDBDebugSessionInfo.m_constStrPrintExpandAggregates;
+    else if (CMIUtilString::Compare(strOption, "aggregate-field-names"))
+        strOptionKey = m_rLLDBDebugSessionInfo.m_constStrPrintAggregateFieldNames;
+    else
+    {
+        m_bGbbOptionFnHasError = true;
+        m_strGdbOptionFnError = CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_GDBSET_OPT_PRINT_UNKNOWN_OPTION), strOption.c_str());
+        return MIstatus::failure;
+    }
+
+    const bool bOptionValue(bArgOn);
+    if (!m_rLLDBDebugSessionInfo.SharedDataAdd<bool>(strOptionKey, bOptionValue))
+    {
+        m_bGbbOptionFnHasError = false;
+        SetError(CMIUtilString::Format(MIRSRC(IDS_DBGSESSION_ERR_SHARED_DATA_ADD), m_cmdData.strMiCmd.c_str(), strOptionKey.c_str()));
+        return MIstatus::failure;
+    }
 
     return MIstatus::success;
 }
@@ -283,6 +334,58 @@ CMICmdCmdGdbSet::OptionFnSolibSearchPath(const CMIUtilString::VecString_t &vrWor
         return MIstatus::failure;
     }
 
+    return MIstatus::success;
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: Carry out work to complete the GDB set option 'output-radix' to prepare
+//          and send back information asked for.
+// Type:    Method.
+// Args:    vrWords - (R) List of additional parameters used by this option.
+// Return:  MIstatus::success - Functional succeeded.
+//          MIstatus::failure - Functional failed.
+// Throws:  None.
+//--
+bool
+CMICmdCmdGdbSet::OptionFnOutputRadix(const CMIUtilString::VecString_t &vrWords)
+{
+    // Check we have at least one argument
+    if (vrWords.size() < 1)
+    {
+        m_bGbbOptionFnHasError = true;
+        m_strGdbOptionFnError = MIRSRC(IDS_CMD_ERR_GDBSET_OPT_SOLIBSEARCHPATH);
+        return MIstatus::failure;
+    }
+    const CMIUtilString &rStrValOutputRadix(vrWords[0]);
+    
+    CMICmnLLDBDebugSessionInfoVarObj::varFormat_e  format = CMICmnLLDBDebugSessionInfoVarObj::eVarFormat_Invalid;
+    MIint64 radix;
+    if (rStrValOutputRadix.ExtractNumber(radix))
+    {
+        switch (radix)
+        {
+        case 8:
+            format = CMICmnLLDBDebugSessionInfoVarObj::eVarFormat_Octal;
+            break;
+        case 10:
+            format = CMICmnLLDBDebugSessionInfoVarObj::eVarFormat_Natural;
+            break;
+        case 16:
+            format = CMICmnLLDBDebugSessionInfoVarObj::eVarFormat_Hex;
+            break;
+        default:
+            format = CMICmnLLDBDebugSessionInfoVarObj::eVarFormat_Invalid;
+            break;
+        }
+    }
+    if (format == CMICmnLLDBDebugSessionInfoVarObj::eVarFormat_Invalid)
+    {
+        m_bGbbOptionFnHasError = false;
+        SetError(CMIUtilString::Format(MIRSRC(IDS_DBGSESSION_ERR_SHARED_DATA_ADD), m_cmdData.strMiCmd.c_str(), "Output Radix"));
+        return MIstatus::failure;
+    }
+    CMICmnLLDBDebugSessionInfoVarObj::VarObjSetFormat(format);
+    
     return MIstatus::success;
 }
 

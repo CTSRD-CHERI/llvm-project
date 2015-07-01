@@ -23,8 +23,6 @@
 #include "kmp_i18n.h"
 #include "kmp_io.h"
 
-
-static int __kmp_env_isDefined( char const * name );
 static int __kmp_env_toPrint( char const * name, int flag );
 
 bool __kmp_env_format = 0; // 0 - old format; 1 - new format
@@ -37,13 +35,14 @@ __kmp_convert_to_double( char const * s )
 {
     double result;
 
-    if ( sscanf( s, "%lf", &result ) < 1 ) {
+    if ( KMP_SSCANF( s, "%lf", &result ) < 1 ) {
         result = 0.0;
     }
 
     return result;
 }
 
+#ifdef KMP_DEBUG
 static unsigned int
 __kmp_readstr_with_sentinel(char *dest, char const * src, size_t len, char sentinel) {
     unsigned int i;
@@ -56,6 +55,7 @@ __kmp_readstr_with_sentinel(char *dest, char const * src, size_t len, char senti
     *dest = '\0';
     return i;
 }
+#endif
 
 static int
 __kmp_match_with_sentinel( char const * a, char const * b, size_t len, char sentinel ) {
@@ -133,21 +133,6 @@ __kmp_match_str( char const *token, char const *buf, const char **end) {
     return TRUE;
 }
 
-static char *
-__kmp_strip_quotes( char *target, int len) {
-    char *end = target + len - 1;
-
-    while(*target == '"' || *target == '\'') {
-        if(end <= target || (*end != '"' && *end != '\''))
-            return NULL;
-        *end = 0;
-        --end;
-        *target = 0;
-        ++target;
-    }
-    return target;
-}
-
 
 static size_t
 __kmp_round4k( size_t size ) {
@@ -161,48 +146,6 @@ __kmp_round4k( size_t size ) {
     return size;
 } // __kmp_round4k
 
-
-static int
-__kmp_convert_to_seconds( char const * data )
-{
-    int nvalues, value, factor;
-    char mult, extra;
-
-    if (data == NULL) return (0);
-    value = 0;
-    mult = '\0';
-    nvalues = sscanf (data, "%d%c%c", &value, &mult, &extra);
-    if (nvalues < 1) return (0);
-    if (nvalues == 1) mult = '\0';
-    if (nvalues == 3) return (-1);
-
-    switch (mult) {
-    case 's': case 'S':
-        factor = 1;
-        break;
-    case '\0':
-        factor = 60;
-        break;
-    case 'm': case 'M':
-        factor = 60;
-        break;
-    case 'h': case 'H':
-        factor = 60 * 60;
-        break;
-    case 'd': case 'D':
-        factor = 24 * 60 * 60;
-        break;
-    default:
-        return (-1);
-    }
-
-    if (value > (INT_MAX / factor))
-        value = INT_MAX;
-    else
-        value *= factor;
-
-    return value;
-}
 
 /*
     Here, multipliers are like __kmp_convert_to_seconds, but floating-point
@@ -221,7 +164,7 @@ __kmp_convert_to_milliseconds( char const * data )
     if ( __kmp_str_match( "infinit", -1, data)) return (INT_MAX);
     value = (double) 0.0;
     mult = '\0';
-    nvalues = sscanf (data, "%lf%c%c", &value, &mult, &extra);
+    nvalues = KMP_SSCANF (data, "%lf%c%c", &value, &mult, &extra);
     if (nvalues < 1) return (-1);
     if (nvalues == 1) mult = '\0';
     if (nvalues == 3) return (-1);
@@ -256,58 +199,6 @@ __kmp_convert_to_milliseconds( char const * data )
 
     return ret;
 }
-
-static kmp_uint64
-__kmp_convert_to_nanoseconds(         // R: Time in nanoseconds, or ~0 in case of error.
-    char const * str                  // I: String representing time.
-) {
-
-    double     value;    // Parsed value.
-    char       unit;     // Unit: 's', 'm', 'u', or 'n'.
-    char       extra;    // Buffer for extra character (if any).
-    int        rc;       // Return code of sscanf().
-    double     factor;   // Numeric factor corresponding to unit.
-    kmp_uint64 result;
-
-    if ( str == NULL || str[ 0 ] == 0 ) {    // No string or empty string.
-        return 0;                            // Default value.
-    }; // if
-    rc = sscanf( str, "%lf%c%c", &value, &unit, &extra );
-    switch ( rc ) {
-        case 0: {             // Value is not parsed.
-            return ~ 0;
-        } break;
-        case 1: {             // One value parsed, no unit is specified.
-            unit = 's';       // Use default unit.
-        } break;
-        case 2: {             // Value and unit are parsed.
-            // Do nothing.
-        } break;
-        case 3: {             // Extra characters is specified.
-            return ~ 0;
-        } break;
-    }; // switch
-    switch ( unit ) {
-        case 's': {
-            factor = 1.0E+9;
-        } break;
-        case 'm': {
-            factor = 1.0E+6;
-        } break;
-        case 'u': {
-            factor = 1.0E+3;
-        } break;
-        case 'n': {
-            factor = 1.0;
-        } break;
-        default: {                           // Illegal unit.
-            return ~ 0;                      // Return error.
-        } break;
-    }; // switch
-    result = (kmp_uint64)( value * factor );
-    return result;
-
-}; // func __kmp_convert_to_nanoseconds
 
 
 static int
@@ -460,6 +351,7 @@ __kmp_stg_parse_size(
     }; // if
 } // __kmp_stg_parse_size
 
+#if KMP_AFFINITY_SUPPORTED
 static void
 __kmp_stg_parse_str(
     char const *      name,
@@ -469,7 +361,7 @@ __kmp_stg_parse_str(
     KMP_INTERNAL_FREE( (void *) * out );
     * out = __kmp_str_format( "%s", value );
 } // __kmp_stg_parse_str
-
+#endif
 
 static void
 __kmp_stg_parse_int(
@@ -513,6 +405,7 @@ __kmp_stg_parse_int(
 } // __kmp_stg_parse_int
 
 
+#if KMP_DEBUG_ADAPTIVE_LOCKS
 static void
 __kmp_stg_parse_file(
     char const * name,
@@ -531,6 +424,7 @@ __kmp_stg_parse_file(
     KMP_INTERNAL_FREE(t);
     * out = __kmp_str_format( "%s", buffer );
 } // __kmp_stg_parse_file
+#endif
 
 #ifdef KMP_DEBUG
 static char * par_range_to_print = NULL;
@@ -545,9 +439,9 @@ __kmp_stg_parse_par_range(
     int *        out_lb,
     int *        out_ub
 ) {
-    size_t len = strlen( value + 1 );
+    size_t len = KMP_STRLEN( value + 1 );
     par_range_to_print = (char *) KMP_INTERNAL_MALLOC( len +1 );
-    strncpy( par_range_to_print, value, len + 1);
+    KMP_STRNCPY_S( par_range_to_print, len + 1, value, len + 1);
     __kmp_par_range = +1;
     __kmp_par_range_lb = 0;
     __kmp_par_range_ub = INT_MAX;
@@ -585,7 +479,7 @@ __kmp_stg_parse_par_range(
         if (( ! __kmp_strcasecmp_with_sentinel( "range", value, '=' ))
           || ( ! __kmp_strcasecmp_with_sentinel( "incl_range", value, '=' ))) {
             value = strchr( value, '=' ) + 1;
-            if ( sscanf( value, "%d:%d", out_lb, out_ub ) != 2 ) {
+            if ( KMP_SSCANF( value, "%d:%d", out_lb, out_ub ) != 2 ) {
                 goto par_range_error;
             }
             *out_range = +1;
@@ -597,7 +491,7 @@ __kmp_stg_parse_par_range(
         }
         if ( ! __kmp_strcasecmp_with_sentinel( "excl_range", value, '=' )) {
             value = strchr( value, '=' ) + 1;
-            if ( sscanf( value, "%d:%d", out_lb, out_ub) != 2 ) {
+            if ( KMP_SSCANF( value, "%d:%d", out_lb, out_ub) != 2 ) {
                 goto par_range_error;
             }
             *out_range = -1;
@@ -1688,7 +1582,6 @@ static void
 __kmp_stg_print_force_reduction( kmp_str_buf_t * buffer, char const * name, void * data ) {
 
     kmp_stg_fr_data_t * reduction = (kmp_stg_fr_data_t *) data;
-    char const *        value = NULL;
     if ( reduction->force ) {
         if( __kmp_force_reduction_method == critical_reduce_block) {
             __kmp_stg_print_str( buffer, name, "critical");
@@ -1972,7 +1865,7 @@ __kmp_parse_affinity_proc_id_list( const char *var, const char *env,
     {
         int len = next - env;
         char *retlist = (char *)__kmp_allocate((len + 1) * sizeof(char));
-        memcpy(retlist, env, len * sizeof(char));
+        KMP_MEMCPY_S(retlist, (len+1)*sizeof(char), env, len * sizeof(char));
         retlist[len] = '\0';
         *proclist = retlist;
     }
@@ -2833,7 +2726,7 @@ __kmp_parse_place_list( const char *var, const char *env, char **place_list )
     {
         int len = scan - env;
         char *retlist = (char *)__kmp_allocate((len + 1) * sizeof(char));
-        memcpy(retlist, env, len * sizeof(char));
+        KMP_MEMCPY_S(retlist, (len+1)*sizeof(char), env, len * sizeof(char));
         retlist[len] = '\0';
         *place_list = retlist;
     }
@@ -3507,7 +3400,7 @@ static void
 __kmp_stg_parse_schedule( char const * name, char const * value, void * data ) {
 
     if ( value != NULL ) {
-        size_t length = strlen( value );
+        size_t length = KMP_STRLEN( value );
         if ( length > INT_MAX ) {
             KMP_WARNING( LongValue, name );
         } else {
@@ -3581,7 +3474,7 @@ __kmp_stg_parse_omp_schedule( char const * name, char const * value, void * data
 {
     size_t      length;
     if( value ) {
-        length = strlen( value );
+        length = KMP_STRLEN( value );
         if( length ) {
             char *comma = (char *) strchr( value, ',' );
             if( value[ length - 1 ] == '"' || value[ length -1 ] == '\'')
@@ -4104,7 +3997,6 @@ __kmp_stg_parse_adaptive_lock_props( const char *name, const char *value, void *
     int max_badness = 0;
 
     const char *next = value;
-    const char *scan = next;
 
     int total = 0;          // Count elements that were set. It'll be used as an array size
     int prev_comma = FALSE; // For correct processing sequential commas
@@ -4869,17 +4761,6 @@ __kmp_stg_check_rivals(          // 0 -- Ok, 1 -- errors found.
 }; // __kmp_stg_check_rivals
 
 
-
-static int
-__kmp_env_isDefined( char const * name ) {
-    int rc = 0;
-    kmp_setting_t * setting = __kmp_stg_find( name );
-    if ( setting != NULL ) {
-        rc = setting->set;
-    }; // if
-    return rc;
-}
-
 static int
 __kmp_env_toPrint( char const * name, int flag ) {
     int rc = 0;
@@ -5315,7 +5196,7 @@ __kmp_env_print() {
         char const * name  = block.vars[ i ].name;
         char const * value = block.vars[ i ].value;
         if (
-            ( strlen( name ) > 4 && strncmp( name, "KMP_", 4 ) == 0 )
+            ( KMP_STRLEN( name ) > 4 && strncmp( name, "KMP_", 4 ) == 0 )
             || strncmp( name, "OMP_", 4 ) == 0
             #ifdef KMP_GOMP_COMPAT
                 || strncmp( name, "GOMP_", 5 ) == 0
@@ -5349,7 +5230,6 @@ void
 __kmp_env_print_2() {
 
     kmp_env_blk_t block;
-    int           i;
     kmp_str_buf_t buffer;
 
     __kmp_env_format = 1;

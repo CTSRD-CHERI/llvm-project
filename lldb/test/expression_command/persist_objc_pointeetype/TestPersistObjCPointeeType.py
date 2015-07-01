@@ -17,15 +17,17 @@ class PersistObjCPointeeType(TestBase):
         # Find the line number to break for main.cpp.
         self.line = line_number('main.m','// break here')
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
+    @expectedFailureDarwin('http://llvm.org/pr23504') # can't compile inferior with Xcode 6.1.1 or 6.2
     def test_with_dsym(self):
         """Test that we can p *objcObject"""
         self.buildDsym()
         self.do_my_test()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin due to ObjC test case")
+    @skipUnlessDarwin
     @dwarf_test
+    @expectedFailureDarwin('http://llvm.org/pr23504') # can't compile inferior with Xcode 6.1.1 or 6.2
     def test_with_dwarf(self):
         """Test that we can p *objcObject"""
         self.buildDwarf()
@@ -42,7 +44,7 @@ class PersistObjCPointeeType(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.m", self.line, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
         
         self.expect("p *self", substrs=['_sc_name = nil',
         '_sc_name2 = nil',

@@ -29,11 +29,20 @@
 #include "DNBDataRef.h"
 #include "DNBLog.h"
 #include "DNBThreadResumeActions.h"
+#include "JSONGenerator.h"
 #include "RNBContext.h"
 #include "RNBServices.h"
 #include "RNBSocket.h"
 #include "Utility/StringExtractor.h"
 #include "MacOSX/Genealogy.h"
+
+#if defined (HAVE_LIBCOMPRESSION)
+#include <compression.h>
+#endif
+
+#if defined (HAVE_LIBZ)
+#include <zlib.h>
+#endif
 
 #include <iomanip>
 #include <sstream>
@@ -66,14 +75,81 @@
 #define INDENT_WITH_TABS(iword_idx)     std::setfill('\t') << std::setw((iword_idx)) << ""
 // Class to handle communications via gdb remote protocol.
 
+
+//----------------------------------------------------------------------
+// Decode a single hex character and return the hex value as a number or
+// -1 if "ch" is not a hex character.
+//----------------------------------------------------------------------
+static inline int
+xdigit_to_sint (char ch)
+{
+    if (ch >= 'a' && ch <= 'f')
+        return 10 + ch - 'a';
+    if (ch >= 'A' && ch <= 'F')
+        return 10 + ch - 'A';
+    if (ch >= '0' && ch <= '9')
+        return ch - '0';
+    return -1;
+}
+
+//----------------------------------------------------------------------
+// Decode a single hex ASCII byte. Return -1 on failure, a value 0-255
+// on success.
+//----------------------------------------------------------------------
+static inline int
+decoded_hex_ascii_char(const char *p)
+{
+    const int hi_nibble = xdigit_to_sint(p[0]);
+    if (hi_nibble == -1)
+        return -1;
+    const int lo_nibble = xdigit_to_sint(p[1]);
+    if (lo_nibble == -1)
+        return -1;
+    return (uint8_t)((hi_nibble << 4) + lo_nibble);
+}
+
+//----------------------------------------------------------------------
+// Decode a hex ASCII string back into a string
+//----------------------------------------------------------------------
+static std::string
+decode_hex_ascii_string(const char *p, uint32_t max_length = UINT32_MAX)
+{
+    std::string arg;
+    if (p)
+    {
+        for (const char *c = p; ((c - p)/2) < max_length; c += 2)
+        {
+            int ch = decoded_hex_ascii_char(c);
+            if (ch == -1)
+                break;
+            else
+                arg.push_back(ch);
+        }
+    }
+    return arg;
+}
+
+uint64_t
+decode_uint64 (const char *p, int base, char **end = nullptr, uint64_t fail_value = 0)
+{
+    nub_addr_t addr = strtoull (p, end, 16);
+    if (addr == 0 && errno != 0)
+        return fail_value;
+    return addr;
+}
+
 extern void ASLLogCallback(void *baton, uint32_t flags, const char *format, va_list args);
 
 RNBRemote::RNBRemote () :
     m_ctx (),
     m_comm (),
+    m_arch (),
     m_continue_thread(-1),
     m_thread(-1),
     m_mutex(),
+    m_dispatch_queue_offsets (),
+    m_dispatch_queue_offsets_addr (INVALID_NUB_ADDRESS),
+    m_qSymbol_index (UINT32_MAX),
     m_packets_recvd(0),
     m_packets(),
     m_rx_packets(),
@@ -83,7 +159,10 @@ RNBRemote::RNBRemote () :
     m_extended_mode(false),
     m_noack_mode(false),
     m_thread_suffix_supported (false),
-    m_list_threads_in_stop_reply (false)
+    m_list_threads_in_stop_reply (false),
+    m_compression_minsize (384),
+    m_enable_compression_next_send_packet (false),
+    m_compression_mode (compression_types::none)
 {
     DNBLogThreadedIf (LOG_RNB_REMOTE, "%s", __PRETTY_FUNCTION__);
     CreatePacketTable ();
@@ -163,6 +242,7 @@ RNBRemote::CreatePacketTable  ()
     t.push_back (Packet (remove_access_watch_bp,        &RNBRemote::HandlePacket_z,             NULL, "z4", "Remove access watchpoint"));
     t.push_back (Packet (query_monitor,                 &RNBRemote::HandlePacket_qRcmd,          NULL, "qRcmd", "Monitor command"));
     t.push_back (Packet (query_current_thread_id,       &RNBRemote::HandlePacket_qC,            NULL, "qC", "Query current thread ID"));
+    t.push_back (Packet (query_echo,                    &RNBRemote::HandlePacket_qEcho,         NULL, "qEcho:", "Echo the packet back to allow the debugger to sync up with this server"));
     t.push_back (Packet (query_get_pid,                 &RNBRemote::HandlePacket_qGetPid,       NULL, "qGetPid", "Query process id"));
     t.push_back (Packet (query_thread_ids_first,        &RNBRemote::HandlePacket_qThreadInfo,   NULL, "qfThreadInfo", "Get list of active threads (first req)"));
     t.push_back (Packet (query_thread_ids_subsequent,   &RNBRemote::HandlePacket_qThreadInfo,   NULL, "qsThreadInfo", "Get list of active threads (subsequent req)"));
@@ -178,11 +258,12 @@ RNBRemote::CreatePacketTable  ()
     t.push_back (Packet (query_step_packet_supported,   &RNBRemote::HandlePacket_qStepPacketSupported,NULL, "qStepPacketSupported", "Replys with OK if the 's' packet is supported."));
     t.push_back (Packet (query_vattachorwait_supported, &RNBRemote::HandlePacket_qVAttachOrWaitSupported,NULL, "qVAttachOrWaitSupported", "Replys with OK if the 'vAttachOrWait' packet is supported."));
     t.push_back (Packet (query_sync_thread_state_supported, &RNBRemote::HandlePacket_qSyncThreadStateSupported,NULL, "qSyncThreadStateSupported", "Replys with OK if the 'QSyncThreadState:' packet is supported."));
-    t.push_back (Packet (query_host_info,               &RNBRemote::HandlePacket_qHostInfo,     NULL, "qHostInfo", "Replies with multiple 'key:value;' tuples appended to each other."));
-    t.push_back (Packet (query_gdb_server_version,      &RNBRemote::HandlePacket_qGDBServerVersion,       NULL, "qGDBServerVersion", "Replies with multiple 'key:value;' tuples appended to each other."));
-    t.push_back (Packet (query_process_info,            &RNBRemote::HandlePacket_qProcessInfo,     NULL, "qProcessInfo", "Replies with multiple 'key:value;' tuples appended to each other."));
-//  t.push_back (Packet (query_symbol_lookup,           &RNBRemote::HandlePacket_UNIMPLEMENTED, NULL, "qSymbol", "Notify that host debugger is ready to do symbol lookups"));
-    t.push_back (Packet (json_query_thread_extended_info,          &RNBRemote::HandlePacket_jThreadExtendedInfo,     NULL, "jThreadExtendedInfo", "Replies with JSON data of thread extended information."));
+    t.push_back (Packet (query_host_info,               &RNBRemote::HandlePacket_qHostInfo              , NULL, "qHostInfo", "Replies with multiple 'key:value;' tuples appended to each other."));
+    t.push_back (Packet (query_gdb_server_version,      &RNBRemote::HandlePacket_qGDBServerVersion      , NULL, "qGDBServerVersion", "Replies with multiple 'key:value;' tuples appended to each other."));
+    t.push_back (Packet (query_process_info,            &RNBRemote::HandlePacket_qProcessInfo           , NULL, "qProcessInfo", "Replies with multiple 'key:value;' tuples appended to each other."));
+    t.push_back (Packet (query_symbol_lookup,           &RNBRemote::HandlePacket_qSymbol                , NULL, "qSymbol:", "Notify that host debugger is ready to do symbol lookups"));
+    t.push_back (Packet (json_query_thread_extended_info,&RNBRemote::HandlePacket_jThreadExtendedInfo   , NULL, "jThreadExtendedInfo", "Replies with JSON data of thread extended information."));
+    //t.push_back (Packet (json_query_threads_info,       &RNBRemote::HandlePacket_jThreadsInfo           , NULL, "jThreadsInfo", "Replies with JSON data with information about all threads."));
     t.push_back (Packet (start_noack_mode,              &RNBRemote::HandlePacket_QStartNoAckMode        , NULL, "QStartNoAckMode", "Request that " DEBUGSERVER_PROGRAM_NAME " stop acking remote protocol packets"));
     t.push_back (Packet (prefix_reg_packets_with_tid,   &RNBRemote::HandlePacket_QThreadSuffixSupported , NULL, "QThreadSuffixSupported", "Check if thread specific packets (register packets 'g', 'G', 'p', and 'P') support having the thread ID appended to the end of the command"));
     t.push_back (Packet (set_logging_mode,              &RNBRemote::HandlePacket_QSetLogging            , NULL, "QSetLogging:", "Check if register packets ('g', 'G', 'p', and 'P' support having the thread ID prefix"));
@@ -206,10 +287,12 @@ RNBRemote::CreatePacketTable  ()
     t.push_back (Packet (memory_region_info,            &RNBRemote::HandlePacket_MemoryRegionInfo, NULL, "qMemoryRegionInfo", "Return size and attributes of a memory region that contains the given address"));
     t.push_back (Packet (get_profile_data,              &RNBRemote::HandlePacket_GetProfileData, NULL, "qGetProfileData", "Return profiling data of the current target."));
     t.push_back (Packet (set_enable_profiling,          &RNBRemote::HandlePacket_SetEnableAsyncProfiling, NULL, "QSetEnableAsyncProfiling", "Enable or disable the profiling of current target."));
+    t.push_back (Packet (enable_compression,            &RNBRemote::HandlePacket_QEnableCompression, NULL, "QEnableCompression:", "Enable compression for the remainder of the connection"));
     t.push_back (Packet (watchpoint_support_info,       &RNBRemote::HandlePacket_WatchpointSupportInfo, NULL, "qWatchpointSupportInfo", "Return the number of supported hardware watchpoints"));
     t.push_back (Packet (set_process_event,             &RNBRemote::HandlePacket_QSetProcessEvent, NULL, "QSetProcessEvent:", "Set a process event, to be passed to the process, can be set before the process is started, or after."));
     t.push_back (Packet (set_detach_on_error,           &RNBRemote::HandlePacket_QSetDetachOnError, NULL, "QSetDetachOnError:", "Set whether debugserver will detach (1) or kill (0) from the process it is controlling if it loses connection to lldb."));
     t.push_back (Packet (speed_test,                    &RNBRemote::HandlePacket_qSpeedTest, NULL, "qSpeedTest:", "Test the maximum speed at which packet can be sent/received."));
+    t.push_back (Packet (query_transfer,                &RNBRemote::HandlePacket_qXfer, NULL, "qXfer:", "Support the qXfer packet."));
 }
 
 
@@ -308,11 +391,146 @@ RNBRemote::SendAsyncProfileDataPacket (char *buf, nub_size_t buf_size)
     return SendPacket(packet);
 }
 
+// Given a std::string packet contents to send, possibly encode/compress it.
+// If compression is enabled, the returned std::string will be in one of two
+// forms:
+// 
+//    N<original packet contents uncompressed>
+//    C<size of original decompressed packet>:<packet compressed with the requested compression scheme>
+//
+// If compression is not requested, the original packet contents are returned
+
+std::string 
+RNBRemote::CompressString (const std::string &orig)
+{
+    std::string compressed;
+    compression_types compression_type = GetCompressionType();
+    if (compression_type != compression_types::none)
+    {
+        bool compress_this_packet = false;
+
+        if (orig.size() > m_compression_minsize)
+        {
+            compress_this_packet = true;
+        }
+
+        if (compress_this_packet)
+        {
+            const size_t encoded_data_buf_size = orig.size() + 128;
+            std::vector<uint8_t> encoded_data (encoded_data_buf_size);
+            size_t compressed_size = 0;
+
+#if defined (HAVE_LIBCOMPRESSION)
+            if (compression_decode_buffer && compression_type == compression_types::lz4)
+            {
+                compressed_size = compression_encode_buffer (encoded_data.data(), 
+                                                             encoded_data_buf_size,
+                                                             (uint8_t*) orig.c_str(),
+                                                             orig.size(),
+                                                             nullptr,
+                                                             COMPRESSION_LZ4_RAW);
+            }
+            if (compression_decode_buffer && compression_type == compression_types::zlib_deflate)
+            {
+                compressed_size = compression_encode_buffer (encoded_data.data(), 
+                                                             encoded_data_buf_size,
+                                                             (uint8_t*) orig.c_str(),
+                                                             orig.size(),
+                                                             nullptr,
+                                                             COMPRESSION_ZLIB);
+            }
+            if (compression_decode_buffer && compression_type == compression_types::lzma)
+            {
+                compressed_size = compression_encode_buffer (encoded_data.data(), 
+                                                             encoded_data_buf_size,
+                                                             (uint8_t*) orig.c_str(),
+                                                             orig.size(),
+                                                             nullptr,
+                                                             COMPRESSION_LZMA);
+            }
+            if (compression_decode_buffer && compression_type == compression_types::lzfse)
+            {
+                compressed_size = compression_encode_buffer (encoded_data.data(), 
+                                                             encoded_data_buf_size,
+                                                             (uint8_t*) orig.c_str(),
+                                                             orig.size(),
+                                                             nullptr,
+                                                             COMPRESSION_LZFSE);
+            }
+#endif
+
+#if defined (HAVE_LIBZ)
+            if (compressed_size == 0 && compression_type == compression_types::zlib_deflate)
+            {
+                z_stream stream;
+                memset (&stream, 0, sizeof (z_stream));
+                stream.next_in = (Bytef *) orig.c_str();
+                stream.avail_in = (uInt) orig.size();
+                stream.next_out = (Bytef *) encoded_data.data();
+                stream.avail_out = (uInt) encoded_data_buf_size;
+                stream.zalloc = Z_NULL;
+                stream.zfree = Z_NULL;
+                stream.opaque = Z_NULL;
+                deflateInit2 (&stream, 5, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY);
+                int compress_status = deflate (&stream, Z_FINISH);
+                deflateEnd (&stream);
+                if (compress_status == Z_STREAM_END && stream.total_out > 0)
+                {
+                    compressed_size = stream.total_out;
+                }
+            }
+#endif
+
+            if (compressed_size > 0)
+            {
+                compressed.clear ();
+                compressed.reserve (compressed_size);
+                compressed = "C";
+                char numbuf[16];
+                snprintf (numbuf, sizeof (numbuf), "%zu:", orig.size());
+                numbuf[sizeof (numbuf) - 1] = '\0';
+                compressed.append (numbuf);
+
+                for (size_t i = 0; i < compressed_size; i++)
+                {
+                    uint8_t byte = encoded_data[i];
+                    if (byte == '#' || byte == '$' || byte == '}' || byte == '*' || byte == '\0')
+                    {
+                        compressed.push_back (0x7d);
+                        compressed.push_back (byte ^ 0x20);
+                    }
+                    else
+                    {
+                        compressed.push_back (byte);
+                    }
+                }
+            }
+            else
+            {
+                compressed = "N" + orig;
+            }
+        }
+        else
+        {
+            compressed = "N" + orig;
+        }
+    }
+    else
+    {
+        compressed = orig;
+    }
+
+    return compressed;
+}
+
 rnb_err_t
 RNBRemote::SendPacket (const std::string &s)
 {
     DNBLogThreadedIf (LOG_RNB_MAX, "%8d RNBRemote::%s (%s) called", (uint32_t)m_comm.Timer().ElapsedMicroSeconds(true), __FUNCTION__, s.c_str());
-    std::string sendpacket = "$" + s + "#";
+
+    std::string s_compressed = CompressString (s);
+
+    std::string sendpacket = "$" + s_compressed + "#";
     int cksum = 0;
     char hexbuf[5];
 
@@ -322,8 +540,8 @@ RNBRemote::SendPacket (const std::string &s)
     }
     else
     {
-        for (int i = 0; i != s.size(); ++i)
-            cksum += s[i];
+        for (int i = 0; i != s_compressed.size(); ++i)
+            cksum += s_compressed[i];
         snprintf (hexbuf, sizeof hexbuf, "%02x", cksum & 0xff);
         sendpacket += hexbuf;
     }
@@ -1498,6 +1716,16 @@ RNBRemote::HandlePacket_qC (const char *p)
 }
 
 rnb_err_t
+RNBRemote::HandlePacket_qEcho (const char *p)
+{
+    // Just send the exact same packet back that we received to
+    // synchronize the response packets after a previous packet
+    // timed out. This allows the debugger to get back on track
+    // with responses after a packet timeout.
+    return SendPacket (p);
+}
+
+rnb_err_t
 RNBRemote::HandlePacket_qGetPid (const char *p)
 {
     nub_process_t pid;
@@ -2212,18 +2440,19 @@ RNBRemote::HandlePacket_QSetProcessEvent (const char *p)
 }
 
 void
-append_hex_value (std::ostream& ostrm, const uint8_t* buf, size_t buf_size, bool swap)
+append_hex_value (std::ostream& ostrm, const void *buf, size_t buf_size, bool swap)
 {
     int i;
+    const uint8_t *p = (const uint8_t *)buf;
     if (swap)
     {
         for (i = static_cast<int>(buf_size)-1; i >= 0; i--)
-            ostrm << RAWHEX8(buf[i]);
+            ostrm << RAWHEX8(p[i]);
     }
     else
     {
         for (i = 0; i < buf_size; i++)
-            ostrm << RAWHEX8(buf[i]);
+            ostrm << RAWHEX8(p[i]);
     }
 }
 
@@ -2293,6 +2522,91 @@ gdb_regnum_with_fixed_width_hex_register_value (std::ostream& ostrm,
     }
 }
 
+
+void
+RNBRemote::DispatchQueueOffsets::GetThreadQueueInfo (nub_process_t pid,
+                                                     nub_addr_t dispatch_qaddr,
+                                                     std::string &queue_name,
+                                                     uint64_t &queue_width,
+                                                     uint64_t &queue_serialnum) const
+{
+    queue_name.clear();
+    queue_width = 0;
+    queue_serialnum = 0;
+
+    if (IsValid() && dispatch_qaddr != INVALID_NUB_ADDRESS && dispatch_qaddr != 0)
+    {
+        nub_addr_t dispatch_queue_addr = DNBProcessMemoryReadPointer (pid, dispatch_qaddr);
+        if (dispatch_queue_addr)
+        {
+            queue_width = DNBProcessMemoryReadInteger (pid, dispatch_queue_addr + dqo_width, dqo_width_size, 0);
+            queue_serialnum = DNBProcessMemoryReadInteger (pid, dispatch_queue_addr + dqo_serialnum, dqo_serialnum_size, 0);
+
+            if (dqo_version >= 4)
+            {
+                // libdispatch versions 4+, pointer to dispatch name is in the
+                // queue structure.
+                nub_addr_t pointer_to_label_address = dispatch_queue_addr + dqo_label;
+                nub_addr_t label_addr = DNBProcessMemoryReadPointer (pid, pointer_to_label_address);
+                if (label_addr)
+                    queue_name = std::move(DNBProcessMemoryReadCString (pid, label_addr));
+            }
+            else
+            {
+                // libdispatch versions 1-3, dispatch name is a fixed width char array
+                // in the queue structure.
+                queue_name = std::move(DNBProcessMemoryReadCStringFixed(pid, dispatch_queue_addr + dqo_label, dqo_label_size));
+            }
+        }
+    }
+}
+
+struct StackMemory
+{
+    uint8_t bytes[2*sizeof(nub_addr_t)];
+    nub_size_t length;
+};
+typedef std::map<nub_addr_t, StackMemory> StackMemoryMap;
+
+
+static void
+ReadStackMemory (nub_process_t pid, nub_thread_t tid, StackMemoryMap &stack_mmap)
+{
+    DNBRegisterValue reg_value;
+    if (DNBThreadGetRegisterValueByID(pid, tid, REGISTER_SET_GENERIC, GENERIC_REGNUM_FP, &reg_value))
+    {
+        uint32_t frame_count = 0;
+        uint64_t fp = 0;
+        if (reg_value.info.size == 4)
+            fp = reg_value.value.uint32;
+        else
+            fp = reg_value.value.uint64;
+        while (fp != 0)
+        {
+            // Make sure we never recurse more than 256 times so we don't recurse too far or
+            // store up too much memory in the expedited cache
+            if (++frame_count > 256)
+                break;
+
+            const nub_size_t read_size = reg_value.info.size*2;
+            StackMemory stack_memory;
+            stack_memory.length = read_size;
+            if (DNBProcessMemoryRead(pid, fp, read_size, stack_memory.bytes) != read_size)
+                break;
+            // Make sure we don't try to put the same stack memory in more than once
+            if (stack_mmap.find(fp) != stack_mmap.end())
+                break;
+            // Put the entry into the cache
+            stack_mmap[fp] = stack_memory;
+            // Dereference the frame pointer to get to the previous frame pointer
+            if (reg_value.info.size == 4)
+                fp = ((uint32_t *)stack_memory.bytes)[0];
+            else
+                fp = ((uint64_t *)stack_memory.bytes)[0];
+        }
+    }
+}
+
 rnb_err_t
 RNBRemote::SendStopReplyPacketForThread (nub_thread_t tid)
 {
@@ -2309,7 +2623,13 @@ RNBRemote::SendStopReplyPacketForThread (nub_thread_t tid)
     {
         const bool did_exec = tid_stop_info.reason == eStopTypeExec;
         if (did_exec)
+        {
             RNBRemote::InitializeRegisters(true);
+
+            // Reset any symbols that need resetting when we exec
+            m_dispatch_queue_offsets_addr = INVALID_NUB_ADDRESS;
+            m_dispatch_queue_offsets.Clear();
+        }
 
         std::ostringstream ostrm;
         // Output the T packet with the thread
@@ -2363,9 +2683,32 @@ RNBRemote::SendStopReplyPacketForThread (nub_thread_t tid)
         if (DNBThreadGetIdentifierInfo (pid, tid, &thread_ident_info))
         {
             if (thread_ident_info.dispatch_qaddr != 0)
-                ostrm << std::hex << "qaddr:" << thread_ident_info.dispatch_qaddr << ';';
+            {
+                ostrm << "qaddr:" << std::hex << thread_ident_info.dispatch_qaddr << ';';
+                const DispatchQueueOffsets *dispatch_queue_offsets = GetDispatchQueueOffsets();
+                if (dispatch_queue_offsets)
+                {
+                    std::string queue_name;
+                    uint64_t queue_width = 0;
+                    uint64_t queue_serialnum = 0;
+                    dispatch_queue_offsets->GetThreadQueueInfo(pid, thread_ident_info.dispatch_qaddr, queue_name, queue_width, queue_serialnum);
+                    if (!queue_name.empty())
+                    {
+                        ostrm << "qname:";
+                        append_hex_value(ostrm, queue_name.data(), queue_name.size(), false);
+                        ostrm << ';';
+                    }
+                    if (queue_width == 1)
+                        ostrm << "qkind:serial;";
+                    else if (queue_width > 1)
+                        ostrm << "qkind:concurrent;";
+
+                    if (queue_serialnum > 0)
+                        ostrm << "qserial:" << DECIMAL << queue_serialnum << ';';
+                }
+            }
         }
-        
+
         // If a 'QListThreadsInStopReply' was sent to enable this feature, we
         // will send all thread IDs back in the "threads" key whose value is
         // a list of hex thread IDs separated by commas:
@@ -2419,11 +2762,26 @@ RNBRemote::SendStopReplyPacketForThread (nub_thread_t tid)
         }
         else if (tid_stop_info.details.exception.type)
         {
-            ostrm << "metype:" << std::hex << tid_stop_info.details.exception.type << ";";
-            ostrm << "mecount:" << std::hex << tid_stop_info.details.exception.data_count << ";";
+            ostrm << "metype:" << std::hex << tid_stop_info.details.exception.type << ';';
+            ostrm << "mecount:" << std::hex << tid_stop_info.details.exception.data_count << ';';
             for (int i = 0; i < tid_stop_info.details.exception.data_count; ++i)
-                ostrm << "medata:" << std::hex << tid_stop_info.details.exception.data[i] << ";";
+                ostrm << "medata:" << std::hex << tid_stop_info.details.exception.data[i] << ';';
         }
+
+        // Add expedited stack memory so stack backtracing doesn't need to read anything from the
+        // frame pointer chain.
+        StackMemoryMap stack_mmap;
+        ReadStackMemory (pid, tid, stack_mmap);
+        if (!stack_mmap.empty())
+        {
+            for (const auto &stack_memory : stack_mmap)
+            {
+                ostrm << "memory:" << HEXBASE << stack_memory.first << '=';
+                append_hex_value (ostrm, stack_memory.second.bytes, stack_memory.second.length, false);
+                ostrm << ';';
+            }
+        }
+
         return SendPacket (ostrm.str ());
     }
     return SendPacket("E51");
@@ -3084,8 +3442,39 @@ rnb_err_t
 RNBRemote::HandlePacket_qSupported (const char *p)
 {
     uint32_t max_packet_size = 128 * 1024;  // 128KBytes is a reasonable max packet size--debugger can always use less
-    char buf[64];
-    snprintf (buf, sizeof(buf), "PacketSize=%x", max_packet_size);
+    char buf[256];
+    snprintf (buf, sizeof(buf), "qXfer:features:read+;PacketSize=%x;qEcho+", max_packet_size);
+
+    // By default, don't enable compression.  It's only worth doing when we are working
+    // with a low speed communication channel.
+    bool enable_compression = false;
+
+    // Enable compression when debugserver is running on a watchOS device where communication may be over Bluetooth.
+#if defined (TARGET_OS_WATCH) && TARGET_OS_WATCH == 1
+    enable_compression = true;
+#endif
+
+#if defined (HAVE_LIBCOMPRESSION)
+    // libcompression is weak linked so test if compression_decode_buffer() is available
+    if (enable_compression && compression_decode_buffer != NULL)
+    {
+        strcat (buf, ";SupportedCompressions=lzfse,zlib-deflate,lz4,lzma;DefaultCompressionMinSize=");
+        char numbuf[16];
+        snprintf (numbuf, sizeof (numbuf), "%zu", m_compression_minsize);
+        numbuf[sizeof (numbuf) - 1] = '\0';
+        strcat (buf, numbuf);
+    }
+#elif defined (HAVE_LIBZ)
+    if (enable_compression)
+    {
+        strcat (buf, ";SupportedCompressions=zlib-deflate;DefaultCompressionMinSize=");
+        char numbuf[16];
+        snprintf (numbuf, sizeof (numbuf), "%zu", m_compression_minsize);
+        numbuf[sizeof (numbuf) - 1] = '\0';
+        strcat (buf, numbuf);
+    }
+#endif
+
     return SendPacket (buf);
 }
 
@@ -3753,6 +4142,72 @@ RNBRemote::HandlePacket_SetEnableAsyncProfiling (const char *p)
     return SendPacket ("OK");
 }
 
+// QEnableCompression:type:<COMPRESSION-TYPE>;minsize:<MINIMUM PACKET SIZE TO COMPRESS>;
+//
+// type: must be a type previously reported by the qXfer:features: SupportedCompressions list
+//
+// minsize: is optional; by default the qXfer:features: DefaultCompressionMinSize value is used
+// debugserver may have a better idea of what a good minimum packet size to compress is than lldb. 
+
+rnb_err_t
+RNBRemote::HandlePacket_QEnableCompression (const char *p)
+{
+    p += sizeof ("QEnableCompression:") - 1;
+
+    size_t new_compression_minsize = m_compression_minsize;
+    const char *new_compression_minsize_str = strstr (p, "minsize:");
+    if (new_compression_minsize_str)
+    {
+        new_compression_minsize_str += strlen ("minsize:");
+        errno = 0;
+        new_compression_minsize = strtoul (new_compression_minsize_str, NULL, 10);
+        if (errno != 0 || new_compression_minsize == ULONG_MAX)
+        {
+            new_compression_minsize = m_compression_minsize;
+        }
+    }
+
+#if defined (HAVE_LIBCOMPRESSION)
+    if (compression_decode_buffer != NULL)
+    {
+        if (strstr (p, "type:zlib-deflate;") != nullptr)
+        {
+            EnableCompressionNextSendPacket (compression_types::zlib_deflate);
+            m_compression_minsize = new_compression_minsize;
+            return SendPacket ("OK");
+        }
+        else if (strstr (p, "type:lz4;") != nullptr)
+        {
+            EnableCompressionNextSendPacket (compression_types::lz4);
+            m_compression_minsize = new_compression_minsize;
+            return SendPacket ("OK");
+        }
+        else if (strstr (p, "type:lzma;") != nullptr)
+        {
+            EnableCompressionNextSendPacket (compression_types::lzma);
+            m_compression_minsize = new_compression_minsize;
+            return SendPacket ("OK");
+        }
+        else if (strstr (p, "type:lzfse;") != nullptr)
+        {
+            EnableCompressionNextSendPacket (compression_types::lzfse);
+            m_compression_minsize = new_compression_minsize;
+            return SendPacket ("OK");
+        }
+    }
+#endif
+
+#if defined (HAVE_LIBZ)
+    if (strstr (p, "type:zlib-deflate;") != nullptr)
+    {
+        EnableCompressionNextSendPacket (compression_types::zlib_deflate);
+        m_compression_minsize = new_compression_minsize;
+        return SendPacket ("OK");
+    }
+#endif
+
+    return SendPacket ("E88");
+}
 
 rnb_err_t
 RNBRemote::HandlePacket_qSpeedTest (const char *p)
@@ -3979,38 +4434,94 @@ RNBRemote::HandlePacket_S (const char *p)
     return rnb_success;
 }
 
+static const char *
+GetArchName (const uint32_t cputype, const uint32_t cpusubtype)
+{
+    switch (cputype)
+    {
+    case CPU_TYPE_ARM:
+        switch (cpusubtype)
+        {
+        case 5:     return "armv4";
+        case 6:     return "armv6";
+        case 7:     return "armv5t";
+        case 8:     return "xscale";
+        case 9:     return "armv7";
+        case 10:    return "armv7f";
+        case 11:    return "armv7s";
+        case 12:    return "armv7k";
+        case 14:    return "armv6m";
+        case 15:    return "armv7m";
+        case 16:    return "armv7em";
+        default:    return "arm";
+        }
+        break;
+    case CPU_TYPE_ARM64:    return "arm64";
+    case CPU_TYPE_I386:     return "i386";
+    case CPU_TYPE_X86_64:
+        switch (cpusubtype)
+        {
+        default:    return "x86_64";
+        case 8:     return "x86_64h";
+        }
+        break;
+    }
+    return NULL;
+}
+
+static bool
+GetHostCPUType (uint32_t &cputype, uint32_t &cpusubtype, uint32_t &is_64_bit_capable, bool &promoted_to_64)
+{
+    static uint32_t g_host_cputype = 0;
+    static uint32_t g_host_cpusubtype = 0;
+    static uint32_t g_is_64_bit_capable = 0;
+    static bool g_promoted_to_64 = false;
+    
+    if (g_host_cputype == 0)
+    {
+        g_promoted_to_64 = false;
+        size_t len = sizeof(uint32_t);
+        if  (::sysctlbyname("hw.cputype", &g_host_cputype, &len, NULL, 0) == 0)
+        {
+            len = sizeof (uint32_t);
+            if  (::sysctlbyname("hw.cpu64bit_capable", &g_is_64_bit_capable, &len, NULL, 0) == 0)
+            {
+                if (g_is_64_bit_capable && ((g_host_cputype & CPU_ARCH_ABI64) == 0))
+                {
+                    g_promoted_to_64 = true;
+                    g_host_cputype |= CPU_ARCH_ABI64;
+                }
+            }
+        }
+        
+        len = sizeof(uint32_t);
+        if (::sysctlbyname("hw.cpusubtype", &g_host_cpusubtype, &len, NULL, 0) == 0)
+        {
+            if (g_promoted_to_64 &&
+                g_host_cputype == CPU_TYPE_X86_64 && g_host_cpusubtype == CPU_SUBTYPE_486)
+                g_host_cpusubtype = CPU_SUBTYPE_X86_64_ALL;
+        }
+    }
+    
+    cputype = g_host_cputype;
+    cpusubtype = g_host_cpusubtype;
+    is_64_bit_capable = g_is_64_bit_capable;
+    promoted_to_64 = g_promoted_to_64;
+    return g_host_cputype != 0;
+}
+
 rnb_err_t
 RNBRemote::HandlePacket_qHostInfo (const char *p)
 {
     std::ostringstream strm;
 
-    uint32_t cputype, is_64_bit_capable;
-    size_t len = sizeof(cputype);
+    uint32_t cputype = 0;
+    uint32_t cpusubtype = 0;
+    uint32_t is_64_bit_capable = 0;
     bool promoted_to_64 = false;
-    if  (::sysctlbyname("hw.cputype", &cputype, &len, NULL, 0) == 0)
+    if (GetHostCPUType (cputype, cpusubtype, is_64_bit_capable, promoted_to_64))
     {
-        len = sizeof (is_64_bit_capable);
-        if  (::sysctlbyname("hw.cpu64bit_capable", &is_64_bit_capable, &len, NULL, 0) == 0)
-        {
-            if (is_64_bit_capable && ((cputype & CPU_ARCH_ABI64) == 0))
-            {
-                promoted_to_64 = true;
-                cputype |= CPU_ARCH_ABI64;
-            }
-        }
-        
         strm << "cputype:" << std::dec << cputype << ';';
-    }
-
-    uint32_t cpusubtype;
-    len = sizeof(cpusubtype);
-    if (::sysctlbyname("hw.cpusubtype", &cpusubtype, &len, NULL, 0) == 0)
-    {
-        if (promoted_to_64 && 
-            cputype == CPU_TYPE_X86_64 && 
-            cpusubtype == CPU_SUBTYPE_486)
-            cpusubtype = CPU_SUBTYPE_X86_64_ALL;
-
         strm << "cpusubtype:" << std::dec << cpusubtype << ';';
     }
 
@@ -4054,6 +4565,348 @@ RNBRemote::HandlePacket_qHostInfo (const char *p)
     return SendPacket (strm.str());
 }
 
+void
+XMLElementStart (std::ostringstream &s, uint32_t indent, const char *name, bool has_attributes)
+{
+    if (indent)
+        s << INDENT_WITH_SPACES(indent);
+    s << '<' << name;
+    if (!has_attributes)
+        s << '>' << std::endl;
+}
+
+void
+XMLElementStartEndAttributes (std::ostringstream &s, bool empty)
+{
+    if (empty)
+        s << '/';
+    s << '>' << std::endl;
+}
+
+void
+XMLElementEnd (std::ostringstream &s, uint32_t indent, const char *name)
+{
+    if (indent)
+        s << INDENT_WITH_SPACES(indent);
+    s << '<' << '/' << name << '>' << std::endl;
+}
+
+void
+XMLElementWithStringValue (std::ostringstream &s, uint32_t indent, const char *name, const char *value, bool close = true)
+{
+    if (value)
+    {
+        if (indent)
+            s << INDENT_WITH_SPACES(indent);
+        s << '<' << name << '>' << value;
+        if (close)
+            XMLElementEnd(s, 0, name);
+    }
+}
+
+void
+XMLElementWithUnsignedValue (std::ostringstream &s, uint32_t indent, const char *name, uint64_t value, bool close = true)
+{
+    if (indent)
+        s << INDENT_WITH_SPACES(indent);
+
+    s << '<' << name << '>' << DECIMAL << value;
+    if (close)
+        XMLElementEnd(s, 0, name);
+}
+
+void
+XMLAttributeString (std::ostringstream &s, const char *name, const char *value, const char *default_value = NULL)
+{
+    if (value)
+    {
+        if (default_value && strcmp(value, default_value) == 0)
+            return; // No need to emit the attribute because it matches the default value
+        s <<' ' << name << "=\"" << value << "\"";
+    }
+}
+
+void
+XMLAttributeUnsignedDecimal (std::ostringstream &s, const char *name, uint64_t value)
+{
+    s <<' ' << name << "=\"" << DECIMAL << value << "\"";
+}
+
+void
+GenerateTargetXMLRegister (std::ostringstream &s,
+                           const uint32_t reg_num,
+                           nub_size_t num_reg_sets,
+                           const DNBRegisterSetInfo *reg_set_info,
+                           const register_map_entry_t &reg)
+{
+    const char *default_lldb_encoding = "uint";
+    const char *lldb_encoding = default_lldb_encoding;
+    const char *gdb_group = "general";
+    const char *default_gdb_type = "int";
+    const char *gdb_type = default_gdb_type;
+    const char *default_lldb_format = "hex";
+    const char *lldb_format = default_lldb_format;
+    const char *lldb_set = NULL;
+
+    switch (reg.nub_info.type)
+    {
+        case Uint:      lldb_encoding = "uint"; break;
+        case Sint:      lldb_encoding = "sint"; break;
+        case IEEE754:   lldb_encoding = "ieee754";  if (reg.nub_info.set > 0) gdb_group = "float"; break;
+        case Vector:    lldb_encoding = "vector"; if (reg.nub_info.set > 0) gdb_group = "vector"; break;
+    }
+
+    switch (reg.nub_info.format)
+    {
+        case Binary:            lldb_format = "binary"; break;
+        case Decimal:           lldb_format = "decimal"; break;
+        case Hex:               lldb_format = "hex"; break;
+        case Float:             gdb_type = "float"; lldb_format = "float"; break;
+        case VectorOfSInt8:     gdb_type = "float"; lldb_format = "vector-sint8"; break;
+        case VectorOfUInt8:     gdb_type = "float"; lldb_format = "vector-uint8"; break;
+        case VectorOfSInt16:    gdb_type = "float"; lldb_format = "vector-sint16"; break;
+        case VectorOfUInt16:    gdb_type = "float"; lldb_format = "vector-uint16"; break;
+        case VectorOfSInt32:    gdb_type = "float"; lldb_format = "vector-sint32"; break;
+        case VectorOfUInt32:    gdb_type = "float"; lldb_format = "vector-uint32"; break;
+        case VectorOfFloat32:   gdb_type = "float"; lldb_format = "vector-float32"; break;
+        case VectorOfUInt128:   gdb_type = "float"; lldb_format = "vector-uint128"; break;
+    };
+    if (reg_set_info && reg.nub_info.set < num_reg_sets)
+        lldb_set = reg_set_info[reg.nub_info.set].name;
+
+    uint32_t indent = 2;
+
+    XMLElementStart(s, indent, "reg", true);
+    XMLAttributeString(s, "name", reg.nub_info.name);
+    XMLAttributeUnsignedDecimal(s, "regnum", reg_num);
+    XMLAttributeUnsignedDecimal(s, "offset", reg.offset);
+    XMLAttributeUnsignedDecimal(s, "bitsize", reg.nub_info.size * 8);
+    XMLAttributeString(s, "group", gdb_group);
+    XMLAttributeString(s, "type", gdb_type, default_gdb_type);
+    XMLAttributeString (s, "altname", reg.nub_info.alt);
+    XMLAttributeString(s, "encoding", lldb_encoding, default_lldb_encoding);
+    XMLAttributeString(s, "format", lldb_format, default_lldb_format);
+    XMLAttributeUnsignedDecimal(s, "group_id", reg.nub_info.set);
+    if (reg.nub_info.reg_gcc != INVALID_NUB_REGNUM)
+        XMLAttributeUnsignedDecimal(s, "gcc_regnum", reg.nub_info.reg_gcc);
+    if (reg.nub_info.reg_dwarf != INVALID_NUB_REGNUM)
+        XMLAttributeUnsignedDecimal(s, "dwarf_regnum", reg.nub_info.reg_dwarf);
+
+    const char *lldb_generic = NULL;
+    switch (reg.nub_info.reg_generic)
+    {
+        case GENERIC_REGNUM_FP:     lldb_generic = "fp"; break;
+        case GENERIC_REGNUM_PC:     lldb_generic = "pc"; break;
+        case GENERIC_REGNUM_SP:     lldb_generic = "sp"; break;
+        case GENERIC_REGNUM_RA:     lldb_generic = "ra"; break;
+        case GENERIC_REGNUM_FLAGS:  lldb_generic = "flags"; break;
+        case GENERIC_REGNUM_ARG1:   lldb_generic = "arg1"; break;
+        case GENERIC_REGNUM_ARG2:   lldb_generic = "arg2"; break;
+        case GENERIC_REGNUM_ARG3:   lldb_generic = "arg3"; break;
+        case GENERIC_REGNUM_ARG4:   lldb_generic = "arg4"; break;
+        case GENERIC_REGNUM_ARG5:   lldb_generic = "arg5"; break;
+        case GENERIC_REGNUM_ARG6:   lldb_generic = "arg6"; break;
+        case GENERIC_REGNUM_ARG7:   lldb_generic = "arg7"; break;
+        case GENERIC_REGNUM_ARG8:   lldb_generic = "arg8"; break;
+        default: break;
+    }
+    XMLAttributeString(s, "generic", lldb_generic);
+
+
+    bool empty = reg.value_regnums.empty() && reg.invalidate_regnums.empty();
+    if (!empty)
+    {
+        if (!reg.value_regnums.empty())
+        {
+            std::ostringstream regnums;
+            bool first = true;
+            regnums << DECIMAL;
+            for (auto regnum : reg.value_regnums)
+            {
+                if (!first)
+                    regnums << ',';
+                regnums << regnum;
+                first = false;
+            }
+            XMLAttributeString(s, "value_regnums", regnums.str().c_str());
+        }
+
+        if (!reg.invalidate_regnums.empty())
+        {
+            std::ostringstream regnums;
+            bool first = true;
+            regnums << DECIMAL;
+            for (auto regnum : reg.invalidate_regnums)
+            {
+                if (!first)
+                    regnums << ',';
+                regnums << regnum;
+                first = false;
+            }
+            XMLAttributeString(s, "invalidate_regnums", regnums.str().c_str());
+        }
+    }
+    XMLElementStartEndAttributes(s, true);
+}
+
+void
+GenerateTargetXMLRegisters (std::ostringstream &s)
+{
+    nub_size_t num_reg_sets = 0;
+    const DNBRegisterSetInfo *reg_sets = DNBGetRegisterSetInfo (&num_reg_sets);
+
+
+    uint32_t cputype = DNBGetRegisterCPUType();
+    if (cputype)
+    {
+        XMLElementStart(s, 0, "feature", true);
+        std::ostringstream name_strm;
+        name_strm << "com.apple.debugserver." << GetArchName (cputype, 0);
+        XMLAttributeString(s, "name", name_strm.str().c_str());
+        XMLElementStartEndAttributes(s, false);
+        for (uint32_t reg_num = 0; reg_num < g_num_reg_entries; ++reg_num)
+//        for (const auto &reg: g_dynamic_register_map)
+        {
+            GenerateTargetXMLRegister(s, reg_num, num_reg_sets, reg_sets, g_reg_entries[reg_num]);
+        }
+        XMLElementEnd(s, 0, "feature");
+
+        if (num_reg_sets > 0)
+        {
+            XMLElementStart(s, 0, "groups", false);
+            for (uint32_t set=1; set<num_reg_sets; ++set)
+            {
+                XMLElementStart(s, 2, "group", true);
+                XMLAttributeUnsignedDecimal(s, "id", set);
+                XMLAttributeString(s, "name", reg_sets[set].name);
+                XMLElementStartEndAttributes(s, true);
+            }
+            XMLElementEnd(s, 0, "groups");
+        }
+    }
+}
+
+static const char *g_target_xml_header = R"(<?xml version="1.0"?>
+<target version="1.0">)";
+
+static const char *g_target_xml_footer = "</target>";
+
+static std::string g_target_xml;
+
+void
+UpdateTargetXML ()
+{
+    std::ostringstream s;
+    s << g_target_xml_header << std::endl;
+    
+    // Set the architecture
+    //s << "<architecture>" << arch "</architecture>" << std::endl;
+    
+    // Set the OSABI
+    //s << "<osabi>abi-name</osabi>"
+
+    GenerateTargetXMLRegisters(s);
+    
+    s << g_target_xml_footer << std::endl;
+
+    // Save the XML output in case it gets retrieved in chunks
+    g_target_xml = s.str();
+}
+
+rnb_err_t
+RNBRemote::HandlePacket_qXfer (const char *command)
+{
+    const char *p = command;
+    p += strlen ("qXfer:");
+    const char *sep = strchr(p, ':');
+    if (sep)
+    {
+        std::string object(p, sep - p);     // "auxv", "backtrace", "features", etc
+        p = sep + 1;
+        sep = strchr(p, ':');
+        if (sep)
+        {
+            std::string rw(p, sep - p);    // "read" or "write"
+            p = sep + 1;
+            sep = strchr(p, ':');
+            if (sep)
+            {
+                std::string annex(p, sep - p);    // "read" or "write"
+
+                p = sep + 1;
+                sep = strchr(p, ',');
+                if (sep)
+                {
+                    std::string offset_str(p, sep - p); // read the length as a string
+                    p = sep + 1;
+                    std::string length_str(p); // read the offset as a string
+                    char *end = nullptr;
+                    const uint64_t offset = strtoul(offset_str.c_str(), &end, 16); // convert offset_str to a offset
+                    if (*end == '\0')
+                    {
+                        const uint64_t length = strtoul(length_str.c_str(), &end, 16); // convert length_str to a length
+                        if (*end == '\0')
+                        {
+                            if (object == "features"  &&
+                                rw     == "read"      &&
+                                annex  == "target.xml")
+                            {
+                                std::ostringstream xml_out;
+
+                                if (offset == 0)
+                                {
+                                    InitializeRegisters (true);
+
+                                    UpdateTargetXML();
+                                    if (g_target_xml.empty())
+                                        return SendPacket("E83");
+
+                                    if (length > g_target_xml.size())
+                                    {
+                                        xml_out << 'l'; // No more data
+                                        xml_out << binary_encode_string(g_target_xml);
+                                    }
+                                    else
+                                    {
+                                        xml_out << 'm'; // More data needs to be read with a subsequent call
+                                        xml_out << binary_encode_string(std::string(g_target_xml, offset, length));
+                                    }
+                                }
+                                else
+                                {
+                                    // Retrieving target XML in chunks
+                                    if (offset < g_target_xml.size())
+                                    {
+                                        std::string chunk(g_target_xml, offset, length);
+                                        if (chunk.size() < length)
+                                            xml_out << 'l'; // No more data
+                                        else
+                                            xml_out << 'm'; // More data needs to be read with a subsequent call
+                                        xml_out << binary_encode_string(chunk.data());
+                                    }
+                                }
+                                return SendPacket(xml_out.str());
+                            }
+                            // Well formed, put not supported
+                            return HandlePacket_UNIMPLEMENTED (command);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                SendPacket ("E85");
+            }
+        }
+        else
+        {
+            SendPacket ("E86");
+        }
+    }
+    return SendPacket ("E82");
+}
+
+
 rnb_err_t
 RNBRemote::HandlePacket_qGDBServerVersion (const char *p)
 {
@@ -4079,19 +4932,176 @@ get_integer_value_for_key_name_from_json (const char *key, const char *json_stri
     uint64_t retval = INVALID_NUB_ADDRESS;
     std::string key_with_quotes = "\"";
     key_with_quotes += key;
-    key_with_quotes += "\":";
+    key_with_quotes += "\"";
     const char *c = strstr (json_string, key_with_quotes.c_str());
     if (c)
     {
         c += key_with_quotes.size();
-        errno = 0;
-        retval = strtoul (c, NULL, 10);
-        if (errno != 0)
+
+        while (*c != '\0' && (*c == ' ' || *c == '\t' || *c == '\n' || *c == '\r'))
+            c++;
+
+        if (*c == ':')
         {
-            retval = INVALID_NUB_ADDRESS;
+            c++;
+
+            while (*c != '\0' && (*c == ' ' || *c == '\t' || *c == '\n' || *c == '\r'))
+                c++;
+
+            errno = 0;
+            retval = strtoul (c, NULL, 10);
+            if (errno != 0)
+            {
+                retval = INVALID_NUB_ADDRESS;
+            }
         }
     }
     return retval;
+
+}
+
+rnb_err_t
+RNBRemote::HandlePacket_jThreadsInfo (const char *p)
+{
+    JSONGenerator::Array threads_array;
+
+    std::ostringstream json;
+    std::ostringstream reply_strm;
+    // If we haven't run the process yet, return an error.
+    if (m_ctx.HasValidProcessID())
+    {
+        nub_process_t pid = m_ctx.ProcessID();
+
+        nub_size_t numthreads = DNBProcessGetNumThreads (pid);
+        for (nub_size_t i = 0; i < numthreads; ++i)
+        {
+            nub_thread_t tid = DNBProcessGetThreadAtIndex (pid, i);
+
+            struct DNBThreadStopInfo tid_stop_info;
+
+            JSONGenerator::DictionarySP thread_dict_sp(new JSONGenerator::Dictionary());
+
+            thread_dict_sp->AddIntegerItem("tid", tid);
+
+            std::string reason_value("none");
+            if (DNBThreadGetStopReason (pid, tid, &tid_stop_info))
+            {
+                switch (tid_stop_info.reason)
+                {
+                    case eStopTypeInvalid:
+                        break;
+                    case eStopTypeSignal:
+                        if (tid_stop_info.details.signal.signo != 0)
+                            reason_value = "signal";
+                        break;
+                    case eStopTypeException:
+                        if (tid_stop_info.details.exception.type != 0)
+                            reason_value = "exception";
+                        break;
+                    case eStopTypeExec:
+                        reason_value = "exec";
+                        break;
+                }
+                if (tid_stop_info.reason == eStopTypeSignal)
+                {
+                    thread_dict_sp->AddIntegerItem("signal", tid_stop_info.details.signal.signo);
+                }
+                else if (tid_stop_info.reason == eStopTypeException && tid_stop_info.details.exception.type != 0)
+                {
+                    thread_dict_sp->AddIntegerItem("metype", tid_stop_info.details.exception.type);
+                    JSONGenerator::ArraySP medata_array_sp(new JSONGenerator::Array());
+                    for (nub_size_t i=0; i<tid_stop_info.details.exception.data_count; ++i)
+                    {
+                        medata_array_sp->AddItem(JSONGenerator::IntegerSP(new JSONGenerator::Integer(tid_stop_info.details.exception.data[i])));
+                    }
+                    thread_dict_sp->AddItem("medata", medata_array_sp);
+                }
+            }
+
+            thread_dict_sp->AddStringItem("reason", reason_value);
+
+            const char *thread_name = DNBThreadGetName (pid, tid);
+            if (thread_name && thread_name[0])
+                thread_dict_sp->AddStringItem("name", thread_name);
+
+
+            thread_identifier_info_data_t thread_ident_info;
+            if (DNBThreadGetIdentifierInfo (pid, tid, &thread_ident_info))
+            {
+                if (thread_ident_info.dispatch_qaddr != 0)
+                {
+                    thread_dict_sp->AddIntegerItem("qaddr", thread_ident_info.dispatch_qaddr);
+
+                    const DispatchQueueOffsets *dispatch_queue_offsets = GetDispatchQueueOffsets();
+                    if (dispatch_queue_offsets)
+                    {
+                        std::string queue_name;
+                        uint64_t queue_width = 0;
+                        uint64_t queue_serialnum = 0;
+                        dispatch_queue_offsets->GetThreadQueueInfo(pid, thread_ident_info.dispatch_qaddr, queue_name, queue_width, queue_serialnum);
+                        if (!queue_name.empty())
+                            thread_dict_sp->AddStringItem("qname", queue_name);
+                        if (queue_width == 1)
+                            thread_dict_sp->AddStringItem("qkind", "serial");
+                        else if (queue_width > 1)
+                            thread_dict_sp->AddStringItem("qkind", "concurrent");
+                        if (queue_serialnum > 0)
+                            thread_dict_sp->AddIntegerItem("qserial", queue_serialnum);
+                    }
+                }
+            }
+            DNBRegisterValue reg_value;
+
+            if (g_reg_entries != NULL)
+            {
+                JSONGenerator::DictionarySP registers_dict_sp(new JSONGenerator::Dictionary());
+
+                for (uint32_t reg = 0; reg < g_num_reg_entries; reg++)
+                {
+                    // Expedite all registers in the first register set that aren't
+                    // contained in other registers
+                    if (g_reg_entries[reg].nub_info.set == 1 &&
+                        g_reg_entries[reg].nub_info.value_regs == NULL)
+                    {
+                        if (!DNBThreadGetRegisterValueByID (pid, tid, g_reg_entries[reg].nub_info.set, g_reg_entries[reg].nub_info.reg, &reg_value))
+                            continue;
+
+                        std::ostringstream reg_num;
+                        reg_num << std::dec << g_reg_entries[reg].gdb_regnum;
+                        // Encode native byte ordered bytes as hex ascii
+                        registers_dict_sp->AddBytesAsHexASCIIString(reg_num.str(), reg_value.value.v_uint8, g_reg_entries[reg].nub_info.size);
+                    }
+                }
+                thread_dict_sp->AddItem("registers", registers_dict_sp);
+            }
+
+            // Add expedited stack memory so stack backtracing doesn't need to read anything from the
+            // frame pointer chain.
+            StackMemoryMap stack_mmap;
+            ReadStackMemory (pid, tid, stack_mmap);
+            if (!stack_mmap.empty())
+            {
+                JSONGenerator::ArraySP memory_array_sp(new JSONGenerator::Array());
+
+                for (const auto &stack_memory : stack_mmap)
+                {
+                    JSONGenerator::DictionarySP stack_memory_sp(new JSONGenerator::Dictionary());
+                    stack_memory_sp->AddIntegerItem("address", stack_memory.first);
+                    stack_memory_sp->AddBytesAsHexASCIIString("bytes", stack_memory.second.bytes, stack_memory.second.length);
+                    memory_array_sp->AddItem(stack_memory_sp);
+                }
+                thread_dict_sp->AddItem("memory", memory_array_sp);
+            }
+            threads_array.AddItem(thread_dict_sp);
+        }
+
+        std::ostringstream strm;
+        threads_array.Dump (strm);
+        std::string binary_packet = binary_encode_string (strm.str());
+        if (!binary_packet.empty())
+            return SendPacket (binary_packet.c_str());
+    }
+    return SendPacket ("E85");
 
 }
 
@@ -4100,7 +5110,6 @@ RNBRemote::HandlePacket_jThreadExtendedInfo (const char *p)
 {
     nub_process_t pid;
     std::ostringstream json;
-    std::ostringstream reply_strm;
     // If we haven't run the process yet, return an error.
     if (!m_ctx.HasValidProcessID())
     {
@@ -4330,11 +5339,75 @@ RNBRemote::HandlePacket_jThreadExtendedInfo (const char *p)
 
             json << "}";
             std::string json_quoted = binary_encode_string (json.str());
-            reply_strm << json_quoted;
-            return SendPacket (reply_strm.str());
+            return SendPacket (json_quoted);
         }
     }
     return SendPacket ("OK");
+}
+
+
+rnb_err_t
+RNBRemote::HandlePacket_qSymbol (const char *command)
+{
+    const char *p = command;
+    p += strlen ("qSymbol:");
+    const char *sep = strchr(p, ':');
+
+    std::string symbol_name;
+    std::string symbol_value_str;
+    // Extract the symbol value if there is one
+    if (sep > p)
+        symbol_value_str.assign(p, sep - p);
+    p = sep + 1;
+
+    if (*p)
+    {
+        // We have a symbol name
+        symbol_name = std::move(decode_hex_ascii_string(p));
+        if (!symbol_value_str.empty())
+        {
+            nub_addr_t symbol_value = decode_uint64(symbol_value_str.c_str(), 16);
+            if (symbol_name == "dispatch_queue_offsets")
+                m_dispatch_queue_offsets_addr = symbol_value;
+        }
+        ++m_qSymbol_index;
+    }
+    else
+    {
+        // No symbol name, set our symbol index to zero so we can
+        // read any symbols that we need
+        m_qSymbol_index = 0;
+    }
+
+    symbol_name.clear();
+
+    if (m_qSymbol_index == 0)
+    {
+        if (m_dispatch_queue_offsets_addr == INVALID_NUB_ADDRESS)
+            symbol_name = "dispatch_queue_offsets";
+        else
+            ++m_qSymbol_index;
+    }
+
+//    // Lookup next symbol when we have one...
+//    if (m_qSymbol_index == 1)
+//    {
+//    }
+
+
+    if (symbol_name.empty())
+    {
+        // Done with symbol lookups
+        return SendPacket ("OK");
+    }
+    else
+    {
+        std::ostringstream reply;
+        reply << "qSymbol:";
+        for (size_t i = 0; i < symbol_name.size(); ++i)
+            reply << RAWHEX8(symbol_name[i]);
+        return SendPacket (reply.str().c_str());
+    }
 }
 
 // Note that all numeric values returned by qProcessInfo are hex encoded,
@@ -4387,13 +5460,11 @@ RNBRemote::HandlePacket_qProcessInfo (const char *p)
         rep << "cputype:" << std::hex << cputype << ";";
     }
 
-    bool host_cpu_is_64bit;
+    bool host_cpu_is_64bit = false;
     uint32_t is64bit_capable;
     size_t is64bit_capable_len = sizeof (is64bit_capable);
     if (sysctlbyname("hw.cpu64bit_capable", &is64bit_capable, &is64bit_capable_len, NULL, 0) == 0)
-        host_cpu_is_64bit = true;
-    else
-        host_cpu_is_64bit = false;
+        host_cpu_is_64bit = is64bit_capable != 0;
 
     uint32_t cpusubtype;
     size_t cpusubtype_len = sizeof(cpusubtype);
@@ -4529,3 +5600,43 @@ RNBRemote::HandlePacket_qProcessInfo (const char *p)
     return SendPacket (rep.str());
 }
 
+const RNBRemote::DispatchQueueOffsets *
+RNBRemote::GetDispatchQueueOffsets()
+{
+    if (!m_dispatch_queue_offsets.IsValid() && m_dispatch_queue_offsets_addr != INVALID_NUB_ADDRESS && m_ctx.HasValidProcessID())
+    {
+        nub_process_t pid = m_ctx.ProcessID();
+        nub_size_t bytes_read = DNBProcessMemoryRead(pid, m_dispatch_queue_offsets_addr, sizeof(m_dispatch_queue_offsets), &m_dispatch_queue_offsets);
+        if (bytes_read != sizeof(m_dispatch_queue_offsets))
+            m_dispatch_queue_offsets.Clear();
+    }
+
+    if (m_dispatch_queue_offsets.IsValid())
+        return &m_dispatch_queue_offsets;
+    else
+        return nullptr;
+}
+
+void
+RNBRemote::EnableCompressionNextSendPacket (compression_types type)
+{
+    m_compression_mode = type;
+    m_enable_compression_next_send_packet = true;
+}
+
+compression_types
+RNBRemote::GetCompressionType ()
+{
+    // The first packet we send back to the debugger after a QEnableCompression request
+    // should be uncompressed -- so we can indicate whether the compression was enabled
+    // or not via OK / Enn returns.  After that, all packets sent will be using the
+    // compression protocol.
+
+    if (m_enable_compression_next_send_packet)
+    {
+        // One time, we send back "None" as our compression type
+        m_enable_compression_next_send_packet = false;
+        return compression_types::none;
+    }
+    return m_compression_mode;
+}

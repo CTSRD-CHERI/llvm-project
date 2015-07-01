@@ -24,6 +24,10 @@
 #include <intrin.h>
 #endif
 
+#ifdef __ANDROID_NDK__
+#include <android/api-level.h>
+#endif
+
 namespace llvm {
 /// \brief The behavior an operation has on an input of 0.
 enum ZeroBehavior {
@@ -318,31 +322,31 @@ inline bool isIntN(unsigned N, int64_t x) {
   return N >= 64 || (-(INT64_C(1)<<(N-1)) <= x && x < (INT64_C(1)<<(N-1)));
 }
 
-/// isMask_32 - This function returns true if the argument is a sequence of ones
-/// starting at the least significant bit with the remainder zero (32 bit
-/// version).   Ex. isMask_32(0x0000FFFFU) == true.
+/// isMask_32 - This function returns true if the argument is a non-empty
+/// sequence of ones starting at the least significant bit with the remainder
+/// zero (32 bit version).  Ex. isMask_32(0x0000FFFFU) == true.
 inline bool isMask_32(uint32_t Value) {
   return Value && ((Value + 1) & Value) == 0;
 }
 
-/// isMask_64 - This function returns true if the argument is a sequence of ones
-/// starting at the least significant bit with the remainder zero (64 bit
-/// version).
+/// isMask_64 - This function returns true if the argument is a non-empty
+/// sequence of ones starting at the least significant bit with the remainder
+/// zero (64 bit version).
 inline bool isMask_64(uint64_t Value) {
   return Value && ((Value + 1) & Value) == 0;
 }
 
 /// isShiftedMask_32 - This function returns true if the argument contains a
-/// sequence of ones with the remainder zero (32 bit version.)
+/// non-empty sequence of ones with the remainder zero (32 bit version.)
 /// Ex. isShiftedMask_32(0x0000FF00U) == true.
 inline bool isShiftedMask_32(uint32_t Value) {
-  return isMask_32((Value - 1) | Value);
+  return Value && isMask_32((Value - 1) | Value);
 }
 
 /// isShiftedMask_64 - This function returns true if the argument contains a
-/// sequence of ones with the remainder zero (64 bit version.)
+/// non-empty sequence of ones with the remainder zero (64 bit version.)
 inline bool isShiftedMask_64(uint64_t Value) {
-  return isMask_64((Value - 1) | Value);
+  return Value && isMask_64((Value - 1) | Value);
 }
 
 /// isPowerOf2_32 - This function returns true if the argument is a power of
@@ -449,6 +453,15 @@ inline unsigned countPopulation(T Value) {
   return detail::PopulationCounter<T, sizeof(T)>::count(Value);
 }
 
+/// Log2 - This function returns the log base 2 of the specified value
+inline double Log2(double Value) {
+#if defined(__ANDROID_API__) && __ANDROID_API__ < 18
+  return __builtin_log(Value) / __builtin_log(2.0);
+#else
+  return log2(Value);
+#endif
+}
+
 /// Log2_32 - This function returns the floor log base 2 of the specified value,
 /// -1 if the value is zero. (32 bit edition.)
 /// Ex. Log2_32(32) == 5, Log2_32(1) == 0, Log2_32(0) == -1, Log2_32(6) == 2
@@ -549,7 +562,7 @@ inline uint64_t MinAlign(uint64_t A, uint64_t B) {
 ///
 /// Alignment should be a power of two.  This method rounds up, so
 /// alignAddr(7, 4) == 8 and alignAddr(8, 4) == 8.
-inline uintptr_t alignAddr(void *Addr, size_t Alignment) {
+inline uintptr_t alignAddr(const void *Addr, size_t Alignment) {
   assert(Alignment && isPowerOf2_64((uint64_t)Alignment) &&
          "Alignment is not a power of two!");
 
@@ -560,7 +573,7 @@ inline uintptr_t alignAddr(void *Addr, size_t Alignment) {
 
 /// \brief Returns the necessary adjustment for aligning \c Ptr to \c Alignment
 /// bytes, rounding up.
-inline size_t alignmentAdjustment(void *Ptr, size_t Alignment) {
+inline size_t alignmentAdjustment(const void *Ptr, size_t Alignment) {
   return alignAddr(Ptr, Alignment) - (uintptr_t)Ptr;
 }
 

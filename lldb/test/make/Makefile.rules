@@ -17,6 +17,7 @@
 # CFLAGS_EXTRAS :=
 # LD_EXTRAS :=
 # SPLIT_DEBUG_SYMBOLS := YES
+# CROSS_COMPILE :=
 #
 # And test/functionalities/archives/Makefile:
 # MAKE_DSYM := NO
@@ -29,9 +30,58 @@
 THIS_FILE_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))/
 LLDB_BASE_DIR := $(THIS_FILE_DIR)../../
 
+
+#----------------------------------------------------------------------
+# If TRIPLE is not defined try to set the ARCH, CC, CFLAGS, and more
+# from the triple alone
+#----------------------------------------------------------------------
+TRIPLE_CFLAGS :=
+ifneq "$(TRIPLE)" ""
+	triple_space = $(subst -, ,$(TRIPLE))
+	ARCH =$(word 1, $(triple_space))
+	TRIPLE_VENDOR =$(word 2, $(triple_space))
+	triple_os_and_version =$(shell echo $(word 3, $(triple_space)) | sed -e 's/\(.*\)\([0-9]\.[0-9]\).*/\1 \2/')
+	TRIPLE_OS =$(word 1, $(triple_os_and_version))
+	TRIPLE_VERSION =$(word 2, $(triple_os_and_version))
+	ifeq "$(TRIPLE_VENDOR)" "apple"
+		ifeq "$(TRIPLE_OS)" "ios"
+		    ifeq "$(SDKROOT)" ""
+				# Set SDKROOT if it wasn't set
+				ifneq (,$(findstring arm,$(ARCH)))
+					SDKROOT = $(shell xcrun --sdk iphoneos --show-sdk-path)
+					ifeq "$(TRIPLE_VERSION)" ""
+						TRIPLE_VERSION =$(shell echo $(notdir $(SDKROOT)) | sed -e 's/.*\([0-9]\.[0-9]\).*/\1/')
+					endif
+					TRIPLE_CFLAGS :=-mios-version-min=$(TRIPLE_VERSION) -isysroot "$(SDKROOT)"
+				else
+					SDKROOT = $(shell xcrun --sdk iphonesimulator --show-sdk-path)
+					ifeq "$(TRIPLE_VERSION)" ""
+						TRIPLE_VERSION =$(shell echo $(notdir $(SDKROOT)) | sed -e 's/.*\([0-9]\.[0-9]\).*/\1/')
+					endif
+					TRIPLE_CFLAGS :=-mios-simulator-version-min=$(TRIPLE_VERSION) -isysroot "$(SDKROOT)"
+				endif
+			endif
+		endif
+	endif
+endif
+
+#----------------------------------------------------------------------
+# If OS is not defined, use 'uname -s' to determine the OS name.
+#
+# uname on Windows gives "windows32", but most environments standardize
+# on "Windows_NT", so we'll make it consistent here.  When running
+# tests from Visual Studio, the environment variable isn't inherited
+# all the way down to the process spawned for make.
+#----------------------------------------------------------------------
+ifeq "$(OS)" ""
+	OS = $(shell uname -s)
+endif
+ifeq "$(OS)" "windows32"
+	OS = Windows_NT
+endif
+
 #----------------------------------------------------------------------
 # If ARCH is not defined, default to x86_64.
-# If OS is not defined, use 'uname -s' to determine the OS name.
 #----------------------------------------------------------------------
 ifeq "$(ARCH)" ""
 ifeq "$(OS)" "Windows_NT"
@@ -39,10 +89,6 @@ ifeq "$(OS)" "Windows_NT"
 else
 	ARCH = x86_64
 endif
-endif
-
-ifeq "$(OS)" ""
-	OS = $(shell uname -s)
 endif
 
 #----------------------------------------------------------------------
@@ -58,14 +104,20 @@ endif
 #----------------------------------------------------------------------
 CC ?= clang
 ifeq "$(CC)" "cc"
-	CC = clang
+	ifneq "$(shell which clang)" ""
+		CC = clang
+	else ifneq "$(shell which clang-3.5)" ""
+		CC = clang-3.5
+	else ifneq "$(shell which gcc)" ""
+		CC = gcc
+	endif
 endif
 
 #----------------------------------------------------------------------
 # ARCHFLAG is the flag used to tell the compiler which architecture
 # to compile for. The default is the flag that clang accepts.
 #----------------------------------------------------------------------
-ARCHFLAG ?= -arch 
+ARCHFLAG ?= -arch
 
 #----------------------------------------------------------------------
 # Change any build/tool options needed
@@ -74,9 +126,10 @@ ifeq "$(OS)" "Darwin"
 	DS := $(shell xcrun -find -toolchain default dsymutil)
 	DSFLAGS =
 	DSYM = $(EXE).dSYM
-	AR := libtool
+	AR := $(CROSS_COMPILE)libtool
 	ARFLAGS := -static -o
 else
+	AR := $(CROSS_COMPILE)ar
 	# On non-Apple platforms, -arch becomes -m
 	ARCHFLAG := -m
 
@@ -116,12 +169,20 @@ else
 	endif
 endif
 
-CFLAGS ?= -g -O0
-CFLAGS += $(ARCHFLAG)$(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) -I$(LLDB_BASE_DIR)include
-CFLAGS += -include $(THIS_FILE_DIR)test_common.h
+CFLAGS ?= -g -O0 -fno-builtin
+ifeq "$(OS)" "Darwin"
+	CFLAGS += $(ARCHFLAG) $(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) -I$(LLDB_BASE_DIR)include
+else
+	CFLAGS += $(ARCHFLAG)$(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) -I$(LLDB_BASE_DIR)include
+endif
+CFLAGS += -include $(THIS_FILE_DIR)test_common.h $(TRIPLE_CFLAGS)
 
 # Use this one if you want to build one part of the result without debug information:
-CFLAGS_NO_DEBUG = -O0 $(ARCHFLAG)$(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS)
+ifeq "$(OS)" "Darwin"
+	CFLAGS_NO_DEBUG = -O0 $(ARCHFLAG) $(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) $(TRIPLE_CFLAGS)
+else
+	CFLAGS_NO_DEBUG = -O0 $(ARCHFLAG)$(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) $(TRIPLE_CFLAGS)
+endif
 
 CXXFLAGS += -std=c++11
 CXXFLAGS += $(CFLAGS)
@@ -129,23 +190,9 @@ LD = $(CC)
 LDFLAGS ?= $(CFLAGS)
 LDFLAGS += $(LD_EXTRAS)
 ifeq (,$(filter $(OS), Windows_NT Android))
-    ifeq "$(ENABLE_THREADS)" "YES"
-        LDFLAGS += -lpthread
-    else
-        ifeq "$(ENABLE_STD_THREADS)" "YES"
-            # with the specific combination of Linux, g++, std=c++11, adding the 
-            # linker flag -lpthread, will cause a program to hang when a std::conditional_variable
-            # is used in a program that links lldb (see bugzilla 21553)
-            ifeq "$(OS)" "Linux"
-                ifeq (,$(findstring gcc,$(CC))) 
-                    # Linux, but not gcc
-                    LDFLAGS += -lpthread
-                endif
-            else
-                LDFLAGS += -lpthread
-            endif
-        endif
-    endif
+	ifneq (,$(filter YES,$(ENABLE_THREADS) $(ENABLE_STD_THREADS)))
+		LDFLAGS += -pthread
+	endif
 endif
 OBJECTS =
 EXE ?= a.out
@@ -153,8 +200,8 @@ EXE ?= a.out
 ifneq "$(DYLIB_NAME)" ""
 	ifeq "$(OS)" "Darwin"
 		DYLIB_FILENAME = lib$(DYLIB_NAME).dylib
-  else ifeq "$(OS)" "Windows_NT"
-    DYLIB_FILENAME = $(DYLIB_NAME).dll
+	else ifeq "$(OS)" "Windows_NT"
+		DYLIB_FILENAME = $(DYLIB_NAME).dll
 	else
 		DYLIB_FILENAME = lib$(DYLIB_NAME).so
 	endif
@@ -184,6 +231,8 @@ cxx_linker_notdir = $(if $(findstring clang,$(1)), \
                                         $(subst cc,c++,$(1))))))
 cxx_linker = $(if $(findstring /,$(1)),$(join $(dir $(1)), $(call cxx_linker_notdir,$(notdir $(1)))),$(call cxx_linker_notdir,$(1)))
 
+OBJCOPY := $(CROSS_COMPILE)objcopy
+
 #----------------------------------------------------------------------
 # Windows specific options
 #----------------------------------------------------------------------
@@ -202,7 +251,19 @@ endif
 # Android specific options
 #----------------------------------------------------------------------
 ifeq "$(OS)" "Android"
-	LDFLAGS += -pie
+    LDFLAGS += -pie
+    replace_with = $(if $(findstring clang,$(1)), \
+                        $(subst clang,$(2),$(1)), \
+                        $(if $(findstring gcc,$(1)), \
+                             $(subst gcc,$(2),$(1)), \
+                             $(subst cc,$(2),$(1))))
+    ifeq "$(notdir $(CC))" "$(CC)"
+        replace_cc_with = $(call replace_with,$(CC),$(1))
+    else
+        replace_cc_with = $(join $(dir $(CC)),$(call replace_with,$(notdir $(CC)),$(1)))
+    endif
+    OBJCOPY = $(call replace_cc_with,objcopy)
+    AR = $(call replace_cc_with,ar)
 endif
 
 #----------------------------------------------------------------------
@@ -221,6 +282,10 @@ ifeq (1,$(USE_LIBCPP))
 	ifneq (,$(findstring clang,$(CC)))
 		CXXFLAGS += -stdlib=libc++
 		LDFLAGS += -stdlib=libc++
+		ifeq "$(OS)" "Linux"
+			# This is the default install location on Ubuntu 14.04
+			CXXFLAGS += -I/usr/include/c++/v1
+        	endif
 	endif
 endif
 
@@ -316,13 +381,15 @@ endif
 #----------------------------------------------------------------------
 # Check if we are compiling with gcc 4.6
 #----------------------------------------------------------------------
-ifneq (,$(filter g++,$(CXX)))
-	CXXVERSION = $(shell g++ -dumpversion | cut -b 1-3)
+ifneq "$(strip $(CXX_SOURCES) $(OBJCXX_SOURCES))" ""
+ifneq "$(filter g++,$(CXX))" ""
+	CXXVERSION = $(shell $(CXX) -dumpversion | cut -b 1-3)
 	ifeq "$(CXXVERSION)" "4.6"
                 # GCC 4.6 cannot handle -std=c++11, so replace it with -std=c++0x
                 # instead. FIXME: remove once GCC version is upgraded.
 		override CXXFLAGS := $(subst -std=c++11,-std=c++0x,$(CXXFLAGS))
 	endif
+endif
 endif
 
 #----------------------------------------------------------------------
@@ -342,8 +409,8 @@ ifneq "$(MAKE_DSYM)" "NO"
 endif
 else
 ifeq "$(SPLIT_DEBUG_SYMBOLS)" "YES"
-	objcopy --only-keep-debug "$(EXE)" "$(DSYM)"
-	objcopy --strip-debug --add-gnu-debuglink="$(DSYM)" "$(EXE)" "$(EXE)"
+	$(OBJCOPY) --only-keep-debug "$(EXE)" "$(DSYM)"
+	$(OBJCOPY) --strip-debug --add-gnu-debuglink="$(DSYM)" "$(EXE)" "$(EXE)"
 endif
 endif
 endif
@@ -383,17 +450,17 @@ $(DYLIB_OBJECTS) : CFLAGS += -DCOMPILING_LLDB_TEST_DLL
 
 $(DYLIB_FILENAME) : $(DYLIB_OBJECTS)
 ifeq "$(OS)" "Darwin"
-	$(LD) $(LDFLAGS) $(DYLIB_OBJECTS) -install_name "@executable_path/$(DYLIB_FILENAME)" -dynamiclib -o "$(DYLIB_FILENAME)"
+	$(LD) $(DYLIB_OBJECTS) $(LDFLAGS) -install_name "@executable_path/$(DYLIB_FILENAME)" -dynamiclib -o "$(DYLIB_FILENAME)"
 ifneq "$(MAKE_DSYM)" "NO"
 ifneq "$(DS)" ""
 	"$(DS)" $(DSFLAGS) "$(DYLIB_FILENAME)"
 endif
 endif
 else
-	$(LD) $(LDFLAGS) $(DYLIB_OBJECTS) -shared -o "$(DYLIB_FILENAME)"
+	$(LD) $(DYLIB_OBJECTS) $(LDFLAGS) -shared -o "$(DYLIB_FILENAME)"
 ifeq "$(SPLIT_DEBUG_SYMBOLS)" "YES"
-	objcopy --only-keep-debug "$(DYLIB_FILENAME)" "$(DYLIB_FILENAME).debug"
-	objcopy --strip-debug --add-gnu-debuglink="$(DYLIB_FILENAME).debug" "$(DYLIB_FILENAME)" "$(DYLIB_FILENAME)"
+	$(OBJCOPY) --only-keep-debug "$(DYLIB_FILENAME)" "$(DYLIB_FILENAME).debug"
+	$(OBJCOPY) --strip-debug --add-gnu-debuglink="$(DYLIB_FILENAME).debug" "$(DYLIB_FILENAME)" "$(DYLIB_FILENAME)"
 endif
 endif
 
@@ -472,10 +539,9 @@ ifneq "$(DSYM)" ""
 	$(RM) -r "$(DSYM)"
 endif
 ifeq "$(OS)" "Windows_NT"
-	$(RM) "$(EXE).manifest" $(wildcard *.pdb *.ilk)
+	$(RM) $(wildcard *.manifest *.pdb *.ilk)
   ifneq "$(DYLIB_NAME)" ""
-	  $(RM) $(DYLIB_FILENAME).manifest
-	  $(RM) $(DYLIB_NAME).lib $(DYLIB_NAME).exp
+	$(RM) $(DYLIB_NAME).lib $(DYLIB_NAME).exp
   endif
 endif
 
@@ -490,7 +556,6 @@ print-%:
 	@echo '  flavor = $(flavor $*)'
 	@echo '   value = $(value  $*)'
 
-
 ### Local Variables: ###
 ### mode:makefile ###
 ### End: ###

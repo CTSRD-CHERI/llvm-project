@@ -178,7 +178,12 @@ public:
     OBJC_TQ_Out = 0x4,
     OBJC_TQ_Bycopy = 0x8,
     OBJC_TQ_Byref = 0x10,
-    OBJC_TQ_Oneway = 0x20
+    OBJC_TQ_Oneway = 0x20,
+
+    /// The nullability qualifier is set when the nullability of the
+    /// result or parameter was expressed via a context-sensitive
+    /// keyword.
+    OBJC_TQ_CSNullability = 0x40
   };
 
 protected:
@@ -317,7 +322,7 @@ protected:
     : NextInContextAndBits(), DeclCtx(DC),
       Loc(L), DeclKind(DK), InvalidDecl(0),
       HasAttrs(false), Implicit(false), Used(false), Referenced(false),
-      Access(AS_none), FromASTFile(0), Hidden(0),
+      Access(AS_none), FromASTFile(0), Hidden(DC && cast<Decl>(DC)->Hidden),
       IdentifierNamespace(getIdentifierNamespaceForKind(DK)),
       CacheValidAndLinkage(0)
   {
@@ -637,13 +642,30 @@ public:
 
 private:
   Module *getOwningModuleSlow() const;
+protected:
+  bool hasLocalOwningModuleStorage() const;
 
 public:
-  Module *getOwningModule() const {
+  /// \brief Get the imported owning module, if this decl is from an imported
+  /// (non-local) module.
+  Module *getImportedOwningModule() const {
     if (!isFromASTFile())
       return nullptr;
 
     return getOwningModuleSlow();
+  }
+
+  /// \brief Get the local owning module, if known. Returns nullptr if owner is
+  /// not yet known or declaration is not from a module.
+  Module *getLocalOwningModule() const {
+    if (isFromASTFile() || !Hidden)
+      return nullptr;
+    return reinterpret_cast<Module *const *>(this)[-1];
+  }
+  void setLocalOwningModule(Module *M) {
+    assert(!isFromASTFile() && Hidden && hasLocalOwningModuleStorage() &&
+           "should not have a cached owning module");
+    reinterpret_cast<Module **>(this)[-1] = M;
   }
 
   unsigned getIdentifierNamespace() const {
@@ -1207,6 +1229,11 @@ public:
     default:
       return DeclKind >= Decl::firstFunction && DeclKind <= Decl::lastFunction;
     }
+  }
+
+  /// \brief Test whether the context supports looking up names.
+  bool isLookupContext() const {
+    return !isFunctionOrMethod() && DeclKind != Decl::LinkageSpec;
   }
 
   bool isFileContext() const {

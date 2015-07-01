@@ -25,7 +25,7 @@ namespace llvm {
 
 namespace AArch64ISD {
 
-enum {
+enum NodeType : unsigned {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
   WrapperLarge, // 4-instruction MOVZ/MOVK sequence for 64-bit addresses.
   CALL,         // Function call.
@@ -305,6 +305,15 @@ public:
                      unsigned &RequiredAligment) const override;
   bool hasPairedLoad(EVT LoadedType, unsigned &RequiredAligment) const override;
 
+  unsigned getMaxSupportedInterleaveFactor() const override { return 4; }
+
+  bool lowerInterleavedLoad(LoadInst *LI,
+                            ArrayRef<ShuffleVectorInst *> Shuffles,
+                            ArrayRef<unsigned> Indices,
+                            unsigned Factor) const override;
+  bool lowerInterleavedStore(StoreInst *SI, ShuffleVectorInst *SVI,
+                             unsigned Factor) const override;
+
   bool isLegalAddImmediate(int64_t) const override;
   bool isLegalICmpImmediate(int64_t) const override;
 
@@ -314,14 +323,16 @@ public:
 
   /// isLegalAddressingMode - Return true if the addressing mode represented
   /// by AM is legal for this target, for a load/store of the specified type.
-  bool isLegalAddressingMode(const AddrMode &AM, Type *Ty) const override;
+  bool isLegalAddressingMode(const AddrMode &AM, Type *Ty,
+                             unsigned AS) const override;
 
   /// \brief Return the cost of the scaling factor used in the addressing
   /// mode represented by AM for this target, for a load/store
   /// of the specified type.
   /// If the AM is supported, the return value must be >= 0.
   /// If the AM is not supported, it returns a negative value.
-  int getScalingFactorCost(const AddrMode &AM, Type *Ty) const override;
+  int getScalingFactorCost(const AddrMode &AM, Type *Ty,
+                           unsigned AS) const override;
 
   /// isFMAFasterThanFMulAndFAdd - Return true if an FMA operation is faster
   /// than a pair of fmul and fadd instructions. fmuladd intrinsics will be
@@ -355,6 +366,8 @@ public:
   getPreferredVectorAction(EVT VT) const override;
 
 private:
+  bool isExtFreeImpl(const Instruction *Ext) const override;
+
   /// Subtarget - Keep a pointer to the AArch64Subtarget around so that we can
   /// make the right decision when generating code for different targets.
   const AArch64Subtarget *Subtarget;
@@ -418,6 +431,9 @@ private:
   SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerSELECT_CC(ISD::CondCode CC, SDValue LHS, SDValue RHS,
+                         SDValue TVal, SDValue FVal, SDLoc dl,
+                         SelectionDAG &DAG) const;
   SDValue LowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;

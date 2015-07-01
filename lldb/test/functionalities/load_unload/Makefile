@@ -38,13 +38,13 @@ endif
 all: a.out $(LIB_A) $(LIB_B) $(LIB_C) $(LIB_D) hidden/$(LIB_D)
 
 a.out: main.o $(LIB_D)
-	$(CC) $(CFLAGS) -o a.out main.o -L. -lloadunload_d $(LIB_DL)
+	$(CC) $(CFLAGS) -o a.out main.o -L. -pie -lloadunload_d $(LIB_DL)
 
 main.o: main.c
 	$(CC) $(CFLAGS) -c main.c
 
-hidden/$(LIB_D): b.o
-	$(CC) $(CFLAGS) $(LD_FLAGS) -o hidden/$(LIB_D) d.o
+hidden/$(LIB_D): dh.o
+	$(CC) $(CFLAGS) $(LD_FLAGS) -o hidden/$(LIB_D) dh.o
 	if [ "$(OS)" = "Darwin" ]; then dsymutil -o hidden/$(LIB_D).dSYM hidden/$(LIB_D); fi
 
 $(LIB_A): a.o $(LIB_B)
@@ -74,6 +74,9 @@ $(LIB_D): d.o
 
 d.o: d.c
 	$(CC) $(CFLAGS) -c d.c
+
+dh.o: d.c
+	$(CC) $(CFLAGS) -DHIDDEN -c d.c -o dh.o
 
 clean:
 	rm -rf $(wildcard *.o *~ *.dylib *.so a.out *.dSYM hidden/*)

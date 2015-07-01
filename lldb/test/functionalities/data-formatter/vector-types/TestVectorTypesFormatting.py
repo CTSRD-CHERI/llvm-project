@@ -13,7 +13,7 @@ class VectorTypesFormattingTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     # rdar://problem/14035604
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Check that vector types format properly"""
@@ -22,7 +22,7 @@ class VectorTypesFormattingTestCase(TestBase):
 
     # rdar://problem/14035604
     @dwarf_test
-    @skipIfGcc # gcc don't have ext_vector_type extension
+    @skipIf(compiler='gcc') # gcc don't have ext_vector_type extension
     def test_with_dwarf_and_run_command(self):
         """Check that vector types format properly"""
         self.buildDwarf()
@@ -40,7 +40,7 @@ class VectorTypesFormattingTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -71,6 +71,15 @@ class VectorTypesFormattingTestCase(TestBase):
         
         self.expect("expr -f int16_t[] -- v", substrs=['[0] = 0', '[1] = 16288', '[2] = 0', '[3] = 16288', '[4] = 0', '[5] = 16416', '[6] = 0', '[7] = 16416'])
         self.expect("expr -f uint128_t[] -- v", substrs=['[0] = 85236745249553456609335044694184296448'])
+        
+        oldValue = v.GetChildAtIndex(0).GetValue()
+        v.SetFormat(lldb.eFormatHex)
+        newValue = v.GetChildAtIndex(0).GetValue()
+        self.assertFalse(oldValue == newValue, "values did not change along with format")
+        
+        v.SetFormat(lldb.eFormatVectorOfFloat32)
+        oldValueAgain = v.GetChildAtIndex(0).GetValue()
+        self.assertTrue(oldValue == oldValueAgain, "same format but different values")
 
 if __name__ == '__main__':
     import atexit

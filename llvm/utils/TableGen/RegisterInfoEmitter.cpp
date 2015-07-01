@@ -233,7 +233,7 @@ EmitRegUnitPressure(raw_ostream &OS, const CodeGenRegBank &RegBank,
   OS << "// Get the name of this register unit pressure set.\n"
      << "const char *" << ClassName << "::\n"
      << "getRegPressureSetName(unsigned Idx) const {\n"
-     << "  static const char *PressureNameTable[] = {\n";
+     << "  static const char *const PressureNameTable[] = {\n";
   unsigned MaxRegUnitWeight = 0;
   for (unsigned i = 0; i < NumSets; ++i ) {
     const RegUnitSet &RegUnits = RegBank.getRegSetAt(i);
@@ -752,7 +752,7 @@ RegisterInfoEmitter::emitComposeSubRegIndexLaneMask(raw_ostream &OS,
     Idx += Sequence.size() + 1;
   }
   OS << "  };\n"
-        "  static const MaskRolOp *CompositeSequences[] = {\n";
+        "  static const MaskRolOp *const CompositeSequences[] = {\n";
   for (size_t i = 0, e = SubRegIndices.size(); i != e; ++i) {
     OS << "    ";
     unsigned Idx = SubReg2SequenceIndexMap[i];
@@ -1094,6 +1094,8 @@ RegisterInfoEmitter::runTargetHeader(raw_ostream &OS, CodeGenTarget &Target,
      << "const TargetRegisterClass *RC) const override;\n"
      << "  const int *getRegUnitPressureSets("
      << "unsigned RegUnit) const override;\n"
+     << "  ArrayRef<const char *> getRegMaskNames() const override;\n"
+     << "  ArrayRef<const uint32_t *> getRegMasks() const override;\n"
      << "};\n\n";
 
   const auto &RegisterClasses = RegBank.getRegClasses();
@@ -1287,6 +1289,7 @@ RegisterInfoEmitter::runTargetDesc(raw_ostream &OS, CodeGenTarget &Target,
          << "SubClassMask,\n    SuperRegIdxSeqs + "
          << SuperRegIdxSeqs.get(SuperRegIdxLists[RC.EnumValue]) << ",\n    "
          << format("0x%08x,\n    ", RC.LaneMask)
+         << (unsigned)RC.AllocationPriority << ",\n    "
          << (RC.HasDisjunctSubRegs?"true":"false")
          << ", /* HasDisjunctSubRegs */\n    ";
       if (RC.getSuperClasses().empty())
@@ -1443,6 +1446,26 @@ RegisterInfoEmitter::runTargetDesc(raw_ostream &OS, CodeGenTarget &Target,
     OS << "};\n";
   }
   OS << "\n\n";
+
+  OS << "ArrayRef<const uint32_t *> " << ClassName
+     << "::getRegMasks() const {\n";
+  OS << "  static const uint32_t *Masks[] = {\n";
+  for (Record *CSRSet : CSRSets)
+    OS << "    " << CSRSet->getName() << "_RegMask, \n";
+  OS << "    nullptr\n  };\n";
+  OS << "  return ArrayRef<const uint32_t *>(Masks, (size_t)" << CSRSets.size()
+     << ");\n";
+  OS << "}\n\n";
+
+  OS << "ArrayRef<const char *> " << ClassName
+     << "::getRegMaskNames() const {\n";
+  OS << "  static const char *Names[] = {\n";
+  for (Record *CSRSet : CSRSets)
+    OS << "    " << '"' << CSRSet->getName() << '"' << ",\n";
+  OS << "    nullptr\n  };\n";
+  OS << "  return ArrayRef<const char *>(Names, (size_t)" << CSRSets.size()
+     << ");\n";
+  OS << "}\n\n";
 
   OS << "} // End llvm namespace\n";
   OS << "#endif // GET_REGINFO_TARGET_DESC\n\n";

@@ -21,7 +21,7 @@
 
 namespace llvm {
   namespace MSP430ISD {
-    enum {
+    enum NodeType : unsigned {
       FIRST_NUMBER = ISD::BUILTIN_OP_END,
 
       /// Return with a flag operand. Operand 0 is the chain operand.
@@ -101,12 +101,6 @@ namespace llvm {
     getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
                                  const std::string &Constraint,
                                  MVT VT) const override;
-
-    unsigned getInlineAsmMemConstraint(
-        const std::string &ConstraintCode) const override {
-      // FIXME: Map different constraints differently.
-      return InlineAsm::Constraint_m;
-    }
 
     /// isTruncateFree - Return true if it's free to truncate a value of type
     /// Ty1 to type Ty2. e.g. On msp430 it's free to truncate a i16 value in

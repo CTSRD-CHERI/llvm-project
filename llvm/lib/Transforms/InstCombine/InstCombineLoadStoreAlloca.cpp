@@ -84,7 +84,7 @@ isOnlyCopiedFromConstantGlobal(Value *V, MemTransferInst *&TheCopy,
         continue;
       }
 
-      if (CallSite CS = I) {
+      if (auto CS = CallSite(I)) {
         // If this is the function being called then we treat it like a load and
         // ignore it.
         if (CS.isCallee(&U))
@@ -314,7 +314,8 @@ Instruction *InstCombiner::visitAllocaInst(AllocaInst &AI) {
 ///
 /// Note that this will create all of the instructions with whatever insert
 /// point the \c InstCombiner currently is using.
-static LoadInst *combineLoadToNewType(InstCombiner &IC, LoadInst &LI, Type *NewTy) {
+static LoadInst *combineLoadToNewType(InstCombiner &IC, LoadInst &LI, Type *NewTy,
+                                      const Twine &Suffix = "") {
   Value *Ptr = LI.getPointerOperand();
   unsigned AS = LI.getPointerAddressSpace();
   SmallVector<std::pair<unsigned, MDNode *>, 8> MD;
@@ -322,7 +323,7 @@ static LoadInst *combineLoadToNewType(InstCombiner &IC, LoadInst &LI, Type *NewT
 
   LoadInst *NewLoad = IC.Builder->CreateAlignedLoad(
       IC.Builder->CreateBitCast(Ptr, NewTy->getPointerTo(AS)),
-      LI.getAlignment(), LI.getName());
+      LI.getAlignment(), LI.getName() + Suffix);
   MDBuilder MDB(NewLoad->getContext());
   for (const auto &MDPair : MD) {
     unsigned ID = MDPair.first;
@@ -482,16 +483,56 @@ static Instruction *combineLoadToOperationType(InstCombiner &IC, LoadInst &LI) {
   }
 
   // Fold away bit casts of the loaded value by loading the desired type.
+  // We can do this for BitCastInsts as well as casts from and to pointer types,
+  // as long as those are noops (i.e., the source or dest type have the same
+  // bitwidth as the target's pointers).
   if (LI.hasOneUse())
-    if (auto *BC = dyn_cast<BitCastInst>(LI.user_back())) {
-      LoadInst *NewLoad = combineLoadToNewType(IC, LI, BC->getDestTy());
-      BC->replaceAllUsesWith(NewLoad);
-      IC.EraseInstFromFunction(*BC);
-      return &LI;
+    if (auto* CI = dyn_cast<CastInst>(LI.user_back())) {
+      if (CI->isNoopCast(DL)) {
+        LoadInst *NewLoad = combineLoadToNewType(IC, LI, CI->getDestTy());
+        CI->replaceAllUsesWith(NewLoad);
+        IC.EraseInstFromFunction(*CI);
+        return &LI;
+      }
     }
 
   // FIXME: We should also canonicalize loads of vectors when their elements are
   // cast to other types.
+  return nullptr;
+}
+
+static Instruction *unpackLoadToAggregate(InstCombiner &IC, LoadInst &LI) {
+  // FIXME: We could probably with some care handle both volatile and atomic
+  // stores here but it isn't clear that this is important.
+  if (!LI.isSimple())
+    return nullptr;
+
+  Type *T = LI.getType();
+  if (!T->isAggregateType())
+    return nullptr;
+
+  assert(LI.getAlignment() && "Alignement must be set at this point");
+
+  if (auto *ST = dyn_cast<StructType>(T)) {
+    // If the struct only have one element, we unpack.
+    if (ST->getNumElements() == 1) {
+      LoadInst *NewLoad = combineLoadToNewType(IC, LI, ST->getTypeAtIndex(0U),
+                                               ".unpack");
+      return IC.ReplaceInstUsesWith(LI, IC.Builder->CreateInsertValue(
+        UndefValue::get(T), NewLoad, 0, LI.getName()));
+    }
+  }
+
+  if (auto *AT = dyn_cast<ArrayType>(T)) {
+    // If the array only have one element, we unpack.
+    if (AT->getNumElements() == 1) {
+      LoadInst *NewLoad = combineLoadToNewType(IC, LI, AT->getElementType(),
+                                               ".unpack");
+      return IC.ReplaceInstUsesWith(LI, IC.Builder->CreateInsertValue(
+        UndefValue::get(T), NewLoad, 0, LI.getName()));
+    }
+  }
+
   return nullptr;
 }
 
@@ -520,8 +561,8 @@ static bool isObjectSizeLessThanOrEq(Value *V, uint64_t MaxSize,
     }
 
     if (PHINode *PN = dyn_cast<PHINode>(P)) {
-      for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
-        Worklist.push_back(PN->getIncomingValue(i));
+      for (Value *IncValue : PN->incoming_values())
+        Worklist.push_back(IncValue);
       continue;
     }
 
@@ -611,8 +652,10 @@ static bool canReplaceGEPIdxWithZero(InstCombiner &IC, GetElementPtrInst *GEPI,
     return false;
 
   SmallVector<Value *, 4> Ops(GEPI->idx_begin(), GEPI->idx_begin() + Idx);
-  Type *AllocTy =
-    GetElementPtrInst::getIndexedType(GEPI->getOperand(0)->getType(), Ops);
+  Type *AllocTy = GetElementPtrInst::getIndexedType(
+      cast<PointerType>(GEPI->getOperand(0)->getType()->getScalarType())
+          ->getElementType(),
+      Ops);
   if (!AllocTy || !AllocTy->isSized())
     return false;
   const DataLayout &DL = IC.getDataLayout();
@@ -698,6 +741,9 @@ Instruction *InstCombiner::visitLoadInst(LoadInst &LI) {
   // None of the following transforms are legal for volatile/atomic loads.
   // FIXME: Some of it is okay for atomic loads; needs refactoring.
   if (!LI.isSimple()) return nullptr;
+
+  if (Instruction *Res = unpackLoadToAggregate(*this, LI))
+    return Res;
 
   // Do really simple store-to-load forwarding and load CSE, to catch cases
   // where there are several consecutive memory accesses to the same location,
@@ -830,9 +876,18 @@ static bool unpackStoreToAggregate(InstCombiner &IC, StoreInst &SI) {
   if (!T->isAggregateType())
     return false;
 
-  if (StructType *ST = dyn_cast<StructType>(T)) {
+  if (auto *ST = dyn_cast<StructType>(T)) {
     // If the struct only have one element, we unpack.
     if (ST->getNumElements() == 1) {
+      V = IC.Builder->CreateExtractValue(V, 0);
+      combineStoreToNewValue(IC, SI, V);
+      return true;
+    }
+  }
+
+  if (auto *AT = dyn_cast<ArrayType>(T)) {
+    // If the array only have one element, we unpack.
+    if (AT->getNumElements() == 1) {
       V = IC.Builder->CreateExtractValue(V, 0);
       combineStoreToNewValue(IC, SI, V);
       return true;

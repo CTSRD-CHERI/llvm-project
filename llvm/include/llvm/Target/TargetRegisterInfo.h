@@ -46,6 +46,9 @@ public:
   const uint32_t *SubClassMask;
   const uint16_t *SuperRegIndices;
   const unsigned LaneMask;
+  /// Classes with a higher priority value are assigned first by register
+  /// allocators using a greedy heuristic. The value is in the range [0,63].
+  const uint8_t AllocationPriority;
   /// Whether the class supports two (or more) disjunct subregister indices.
   const bool HasDisjunctSubRegs;
   const sc_iterator SuperClasses;
@@ -370,6 +373,19 @@ public:
     return SubRegIndexLaneMasks[SubIdx];
   }
 
+  /// Returns true if the given lane mask is imprecise.
+  ///
+  /// LaneMasks as given by getSubRegIndexLaneMask() have a limited number of
+  /// bits, so for targets with more than 31 disjunct subregister indices there
+  /// may be cases where:
+  ///    getSubReg(Reg,A) does not overlap getSubReg(Reg,B)
+  /// but we still have
+  ///    (getSubRegIndexLaneMask(A) & getSubRegIndexLaneMask(B)) != 0.
+  /// This function returns true in those cases.
+  static bool isImpreciseLaneMask(unsigned LaneMask) {
+    return LaneMask & 0x80000000u;
+  }
+
   /// The lane masks returned by getSubRegIndexLaneMask() above can only be
   /// used to determine if sub-registers overlap - they can't be used to
   /// determine if a set of sub-registers completely cover another
@@ -452,6 +468,10 @@ public:
     // The default mask clobbers everything.  All targets should override.
     return nullptr;
   }
+
+  /// Return all the call-preserved register masks defined for this target.
+  virtual ArrayRef<const uint32_t *> getRegMasks() const = 0;
+  virtual ArrayRef<const char *> getRegMaskNames() const = 0;
 
   /// getReservedRegs - Returns a bitset indexed by physical register number
   /// indicating if a register is a special register that has particular uses

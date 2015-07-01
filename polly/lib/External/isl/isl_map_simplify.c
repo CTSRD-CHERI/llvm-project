@@ -12,7 +12,6 @@
  * B.P. 105 - 78153 Le Chesnay, France
  */
 
-#include <strings.h>
 #include <isl_ctx_private.h>
 #include <isl_map_private.h>
 #include "isl_equalities.h"
@@ -376,6 +375,80 @@ struct isl_basic_set *isl_basic_set_normalize_constraints(
 		(struct isl_basic_map *)bset);
 }
 
+/* Assuming the variable at position "pos" has an integer coefficient
+ * in integer division "div", extract it from this integer division.
+ * "pos" is as determined by isl_basic_map_offset, i.e., pos == 0
+ * corresponds to the constant term.
+ *
+ * That is, the integer division is of the form
+ *
+ *	floor((... + c * d * x_pos + ...)/d)
+ *
+ * Replace it by
+ *
+ *	floor((... + 0 * x_pos + ...)/d) + c * x_pos
+ */
+static __isl_give isl_basic_map *remove_var_from_div(
+	__isl_take isl_basic_map *bmap, int div, int pos)
+{
+	isl_int shift;
+
+	isl_int_init(shift);
+	isl_int_divexact(shift, bmap->div[div][1 + pos], bmap->div[div][0]);
+	isl_int_neg(shift, shift);
+	bmap = isl_basic_map_shift_div(bmap, div, pos, shift);
+	isl_int_clear(shift);
+
+	return bmap;
+}
+
+/* Check if integer division "div" has any integral coefficient
+ * (or constant term).  If so, extract them from the integer division.
+ */
+static __isl_give isl_basic_map *remove_independent_vars_from_div(
+	__isl_take isl_basic_map *bmap, int div)
+{
+	int i;
+	unsigned total = 1 + isl_basic_map_total_dim(bmap);
+
+	for (i = 0; i < total; ++i) {
+		if (isl_int_is_zero(bmap->div[div][1 + i]))
+			continue;
+		if (!isl_int_is_divisible_by(bmap->div[div][1 + i],
+					     bmap->div[div][0]))
+			continue;
+		bmap = remove_var_from_div(bmap, div, i);
+		if (!bmap)
+			break;
+	}
+
+	return bmap;
+}
+
+/* Check if any known integer division has any integral coefficient
+ * (or constant term).  If so, extract them from the integer division.
+ */
+static __isl_give isl_basic_map *remove_independent_vars_from_divs(
+	__isl_take isl_basic_map *bmap)
+{
+	int i;
+
+	if (!bmap)
+		return NULL;
+	if (bmap->n_div == 0)
+		return bmap;
+
+	for (i = 0; i < bmap->n_div; ++i) {
+		if (isl_int_is_zero(bmap->div[i][0]))
+			continue;
+		bmap = remove_independent_vars_from_div(bmap, i);
+		if (!bmap)
+			break;
+	}
+
+	return bmap;
+}
+
 /* Remove any common factor in numerator and denominator of the div expression,
  * not taking into account the constant term.
  * That is, if the div is of the form
@@ -497,14 +570,16 @@ static void eliminate_var_using_equality(struct isl_basic_map *bmap,
 
 /* Assumes divs have been ordered if keep_divs is set.
  */
-static void eliminate_div(struct isl_basic_map *bmap, isl_int *eq,
-	unsigned div, int keep_divs)
+static __isl_give isl_basic_map *eliminate_div(__isl_take isl_basic_map *bmap,
+	isl_int *eq, unsigned div, int keep_divs)
 {
 	unsigned pos = isl_space_dim(bmap->dim, isl_dim_all) + div;
 
 	eliminate_var_using_equality(bmap, pos, eq, keep_divs, NULL);
 
-	isl_basic_map_drop_div(bmap, div);
+	bmap = isl_basic_map_drop_div(bmap, div);
+
+	return bmap;
 }
 
 /* Check if elimination of div "div" using equality "eq" would not
@@ -558,8 +633,9 @@ static struct isl_basic_map *eliminate_divs_eq(
 				continue;
 			modified = 1;
 			*progress = 1;
-			eliminate_div(bmap, bmap->eq[i], d, 1);
-			isl_basic_map_drop_equality(bmap, i);
+			bmap = eliminate_div(bmap, bmap->eq[i], d, 1);
+			if (isl_basic_map_drop_equality(bmap, i) < 0)
+				return isl_basic_map_free(bmap);
 			break;
 		}
 	}
@@ -773,7 +849,9 @@ static struct isl_basic_map *remove_duplicate_divs(
 		k = elim_for[l] - 1;
 		isl_int_set_si(eq.data[1+total_var+k], -1);
 		isl_int_set_si(eq.data[1+total_var+l], 1);
-		eliminate_div(bmap, eq.data, l, 1);
+		bmap = eliminate_div(bmap, eq.data, l, 1);
+		if (!bmap)
+			break;
 		isl_int_set_si(eq.data[1+total_var+k], 0);
 		isl_int_set_si(eq.data[1+total_var+l], 0);
 	}
@@ -1314,6 +1392,7 @@ struct isl_basic_map *isl_basic_map_simplify(struct isl_basic_map *bmap)
 		if (isl_basic_map_plain_is_empty(bmap))
 			break;
 		bmap = isl_basic_map_normalize_constraints(bmap);
+		bmap = remove_independent_vars_from_divs(bmap);
 		bmap = normalize_div_expressions(bmap);
 		bmap = remove_duplicate_divs(bmap, &progress);
 		bmap = eliminate_unit_divs(bmap, &progress);
@@ -1758,8 +1837,8 @@ static struct isl_basic_set *remove_shifted_constraints(
 	int k, h, l;
 	isl_ctx *ctx;
 
-	if (!bset)
-		return NULL;
+	if (!bset || !context)
+		return bset;
 
 	size = round_up(4 * (context->n_ineq+1) / 3 - 1);
 	if (size == 0)
@@ -2523,7 +2602,7 @@ __isl_give isl_set *isl_set_gist_params(__isl_take isl_set *set,
  * one basic map in the context of the equalities of the other
  * basic map and check if we get a contradiction.
  */
-int isl_basic_map_plain_is_disjoint(__isl_keep isl_basic_map *bmap1,
+isl_bool isl_basic_map_plain_is_disjoint(__isl_keep isl_basic_map *bmap1,
 	__isl_keep isl_basic_map *bmap2)
 {
 	struct isl_vec *v = NULL;
@@ -2532,17 +2611,17 @@ int isl_basic_map_plain_is_disjoint(__isl_keep isl_basic_map *bmap1,
 	int i;
 
 	if (!bmap1 || !bmap2)
-		return -1;
+		return isl_bool_error;
 	isl_assert(bmap1->ctx, isl_space_is_equal(bmap1->dim, bmap2->dim),
-			return -1);
+			return isl_bool_error);
 	if (bmap1->n_div || bmap2->n_div)
-		return 0;
+		return isl_bool_false;
 	if (!bmap1->n_eq && !bmap2->n_eq)
-		return 0;
+		return isl_bool_false;
 
 	total = isl_space_dim(bmap1->dim, isl_dim_all);
 	if (total == 0)
-		return 0;
+		return isl_bool_false;
 	v = isl_vec_alloc(bmap1->ctx, 1 + total);
 	if (!v)
 		goto error;
@@ -2577,15 +2656,15 @@ int isl_basic_map_plain_is_disjoint(__isl_keep isl_basic_map *bmap1,
 	}
 	isl_vec_free(v);
 	free(elim);
-	return 0;
+	return isl_bool_false;
 disjoint:
 	isl_vec_free(v);
 	free(elim);
-	return 1;
+	return isl_bool_true;
 error:
 	isl_vec_free(v);
 	free(elim);
-	return -1;
+	return isl_bool_error;
 }
 
 int isl_basic_set_plain_is_disjoint(__isl_keep isl_basic_set *bset1,
@@ -2608,16 +2687,16 @@ int isl_basic_set_plain_is_disjoint(__isl_keep isl_basic_set *bset1,
  * Otherwise we check if each basic map in "map1" is obviously disjoint
  * from each basic map in "map2".
  */
-int isl_map_plain_is_disjoint(__isl_keep isl_map *map1,
+isl_bool isl_map_plain_is_disjoint(__isl_keep isl_map *map1,
 	__isl_keep isl_map *map2)
 {
 	int i, j;
-	int disjoint;
-	int intersect;
-	int match;
+	isl_bool disjoint;
+	isl_bool intersect;
+	isl_bool match;
 
 	if (!map1 || !map2)
-		return -1;
+		return isl_bool_error;
 
 	disjoint = isl_map_plain_is_empty(map1);
 	if (disjoint < 0 || disjoint)
@@ -2630,31 +2709,31 @@ int isl_map_plain_is_disjoint(__isl_keep isl_map *map1,
 	match = isl_space_tuple_is_equal(map1->dim, isl_dim_in,
 				map2->dim, isl_dim_in);
 	if (match < 0 || !match)
-		return match < 0 ? -1 : 1;
+		return match < 0 ? isl_bool_error : isl_bool_true;
 
 	match = isl_space_tuple_is_equal(map1->dim, isl_dim_out,
 				map2->dim, isl_dim_out);
 	if (match < 0 || !match)
-		return match < 0 ? -1 : 1;
+		return match < 0 ? isl_bool_error : isl_bool_true;
 
 	match = isl_space_match(map1->dim, isl_dim_param,
 				map2->dim, isl_dim_param);
 	if (match < 0 || !match)
-		return match < 0 ? -1 : 0;
+		return match < 0 ? isl_bool_error : isl_bool_false;
 
 	intersect = isl_map_plain_is_equal(map1, map2);
 	if (intersect < 0 || intersect)
-		return intersect < 0 ? -1 : 0;
+		return intersect < 0 ? isl_bool_error : isl_bool_false;
 
 	for (i = 0; i < map1->n; ++i) {
 		for (j = 0; j < map2->n; ++j) {
-			int d = isl_basic_map_plain_is_disjoint(map1->p[i],
-							       map2->p[j]);
-			if (d != 1)
+			isl_bool d = isl_basic_map_plain_is_disjoint(map1->p[i],
+								   map2->p[j]);
+			if (d != isl_bool_true)
 				return d;
 		}
 	}
-	return 1;
+	return isl_bool_true;
 }
 
 /* Are "map1" and "map2" disjoint?
@@ -2664,10 +2743,10 @@ int isl_map_plain_is_disjoint(__isl_keep isl_map *map1,
  * If none of these cases apply, we compute the intersection and see if
  * the result is empty.
  */
-int isl_map_is_disjoint(__isl_keep isl_map *map1, __isl_keep isl_map *map2)
+isl_bool isl_map_is_disjoint(__isl_keep isl_map *map1, __isl_keep isl_map *map2)
 {
-	int disjoint;
-	int intersect;
+	isl_bool disjoint;
+	isl_bool intersect;
 	isl_map *test;
 
 	disjoint = isl_map_plain_is_disjoint(map1, map2);
@@ -2684,11 +2763,11 @@ int isl_map_is_disjoint(__isl_keep isl_map *map1, __isl_keep isl_map *map2)
 
 	intersect = isl_map_plain_is_universe(map1);
 	if (intersect < 0 || intersect)
-		return intersect < 0 ? -1 : 0;
+		return intersect < 0 ? isl_bool_error : isl_bool_false;
 
 	intersect = isl_map_plain_is_universe(map2);
 	if (intersect < 0 || intersect)
-		return intersect < 0 ? -1 : 0;
+		return intersect < 0 ? isl_bool_error : isl_bool_false;
 
 	test = isl_map_intersect(isl_map_copy(map1), isl_map_copy(map2));
 	disjoint = isl_map_is_empty(test);
@@ -2704,11 +2783,11 @@ int isl_map_is_disjoint(__isl_keep isl_map *map1, __isl_keep isl_map *map2)
  * If none of these cases apply, we compute the intersection and see if
  * the result is empty.
  */
-int isl_basic_map_is_disjoint(__isl_keep isl_basic_map *bmap1,
+isl_bool isl_basic_map_is_disjoint(__isl_keep isl_basic_map *bmap1,
 	__isl_keep isl_basic_map *bmap2)
 {
-	int disjoint;
-	int intersect;
+	isl_bool disjoint;
+	isl_bool intersect;
 	isl_basic_map *test;
 
 	disjoint = isl_basic_map_plain_is_disjoint(bmap1, bmap2);
@@ -2725,11 +2804,11 @@ int isl_basic_map_is_disjoint(__isl_keep isl_basic_map *bmap1,
 
 	intersect = isl_basic_map_is_universe(bmap1);
 	if (intersect < 0 || intersect)
-		return intersect < 0 ? -1 : 0;
+		return intersect < 0 ? isl_bool_error : isl_bool_false;
 
 	intersect = isl_basic_map_is_universe(bmap2);
 	if (intersect < 0 || intersect)
-		return intersect < 0 ? -1 : 0;
+		return intersect < 0 ? isl_bool_error : isl_bool_false;
 
 	test = isl_basic_map_intersect(isl_basic_map_copy(bmap1),
 		isl_basic_map_copy(bmap2));
@@ -2741,13 +2820,13 @@ int isl_basic_map_is_disjoint(__isl_keep isl_basic_map *bmap1,
 
 /* Are "bset1" and "bset2" disjoint?
  */
-int isl_basic_set_is_disjoint(__isl_keep isl_basic_set *bset1,
+isl_bool isl_basic_set_is_disjoint(__isl_keep isl_basic_set *bset1,
 	__isl_keep isl_basic_set *bset2)
 {
 	return isl_basic_map_is_disjoint(bset1, bset2);
 }
 
-int isl_set_plain_is_disjoint(__isl_keep isl_set *set1,
+isl_bool isl_set_plain_is_disjoint(__isl_keep isl_set *set1,
 	__isl_keep isl_set *set2)
 {
 	return isl_map_plain_is_disjoint((struct isl_map *)set1,
@@ -2756,14 +2835,9 @@ int isl_set_plain_is_disjoint(__isl_keep isl_set *set1,
 
 /* Are "set1" and "set2" disjoint?
  */
-int isl_set_is_disjoint(__isl_keep isl_set *set1, __isl_keep isl_set *set2)
+isl_bool isl_set_is_disjoint(__isl_keep isl_set *set1, __isl_keep isl_set *set2)
 {
 	return isl_map_is_disjoint(set1, set2);
-}
-
-int isl_set_fast_is_disjoint(__isl_keep isl_set *set1, __isl_keep isl_set *set2)
-{
-	return isl_set_plain_is_disjoint(set1, set2);
 }
 
 /* Check if we can combine a given div with lower bound l and upper
@@ -3404,7 +3478,7 @@ static __isl_give isl_vec *normalize_constraint(__isl_take isl_vec *v,
  * opposite inequalities that can be replaced by an equality.
  * We therefore call isl_basic_map_detect_inequality_pairs,
  * which checks for such pairs of inequalities as well as eliminate_divs_eq
- * if such a pair was found.
+ * and isl_basic_map_gauss if such a pair was found.
  */
 __isl_give isl_basic_map *isl_basic_map_reduce_coefficients(
 	__isl_take isl_basic_map *bmap)
@@ -3465,8 +3539,10 @@ __isl_give isl_basic_map *isl_basic_map_reduce_coefficients(
 		int progress = 0;
 
 		bmap = isl_basic_map_detect_inequality_pairs(bmap, &progress);
-		if (progress)
+		if (progress) {
 			bmap = eliminate_divs_eq(bmap, &progress);
+			bmap = isl_basic_map_gauss(bmap, NULL);
+		}
 	}
 
 	return bmap;
@@ -3477,7 +3553,10 @@ error:
 	return isl_basic_map_free(bmap);
 }
 
-/* Shift the integer division at position "div" of "bmap" by "shift".
+/* Shift the integer division at position "div" of "bmap"
+ * by "shift" times the variable at position "pos".
+ * "pos" is as determined by isl_basic_map_offset, i.e., pos == 0
+ * corresponds to the constant term.
  *
  * That is, if the integer division has the form
  *
@@ -3485,10 +3564,10 @@ error:
  *
  * then replace it by
  *
- *	floor((f(x) + shift * d)/d) - shift
+ *	floor((f(x) + shift * d * x_pos)/d) - shift * x_pos
  */
 __isl_give isl_basic_map *isl_basic_map_shift_div(
-	__isl_take isl_basic_map *bmap, int div, isl_int shift)
+	__isl_take isl_basic_map *bmap, int div, int pos, isl_int shift)
 {
 	int i;
 	unsigned total;
@@ -3499,18 +3578,18 @@ __isl_give isl_basic_map *isl_basic_map_shift_div(
 	total = isl_basic_map_dim(bmap, isl_dim_all);
 	total -= isl_basic_map_dim(bmap, isl_dim_div);
 
-	isl_int_addmul(bmap->div[div][1], shift, bmap->div[div][0]);
+	isl_int_addmul(bmap->div[div][1 + pos], shift, bmap->div[div][0]);
 
 	for (i = 0; i < bmap->n_eq; ++i) {
 		if (isl_int_is_zero(bmap->eq[i][1 + total + div]))
 			continue;
-		isl_int_submul(bmap->eq[i][0],
+		isl_int_submul(bmap->eq[i][pos],
 				shift, bmap->eq[i][1 + total + div]);
 	}
 	for (i = 0; i < bmap->n_ineq; ++i) {
 		if (isl_int_is_zero(bmap->ineq[i][1 + total + div]))
 			continue;
-		isl_int_submul(bmap->ineq[i][0],
+		isl_int_submul(bmap->ineq[i][pos],
 				shift, bmap->ineq[i][1 + total + div]);
 	}
 	for (i = 0; i < bmap->n_div; ++i) {
@@ -3518,7 +3597,7 @@ __isl_give isl_basic_map *isl_basic_map_shift_div(
 			continue;
 		if (isl_int_is_zero(bmap->div[i][1 + 1 + total + div]))
 			continue;
-		isl_int_submul(bmap->div[i][1],
+		isl_int_submul(bmap->div[i][1 + pos],
 				shift, bmap->div[i][1 + 1 + total + div]);
 	}
 

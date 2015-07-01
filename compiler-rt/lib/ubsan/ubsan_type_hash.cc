@@ -13,6 +13,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "ubsan_platform.h"
+#if CAN_SANITIZE_UB
 #include "ubsan_type_hash.h"
 
 #include "sanitizer_common/sanitizer_common.h"
@@ -35,13 +37,13 @@ namespace __cxxabiv1 {
 /// Type info for classes with no bases, and base class for type info for
 /// classes with bases.
 class __class_type_info : public std::type_info {
-  virtual ~__class_type_info();
+  ~__class_type_info() override;
 };
 
 /// Type info for classes with simple single public inheritance.
 class __si_class_type_info : public __class_type_info {
 public:
-  virtual ~__si_class_type_info();
+  ~__si_class_type_info() override;
 
   const __class_type_info *__base_type;
 };
@@ -61,7 +63,7 @@ public:
 /// Type info for classes with multiple, virtual, or non-public inheritance.
 class __vmi_class_type_info : public __class_type_info {
 public:
-  virtual ~__vmi_class_type_info();
+  ~__vmi_class_type_info() override;
 
   unsigned int flags;
   unsigned int base_count;
@@ -194,11 +196,11 @@ struct VtablePrefix {
   /// The type_info object describing the most-derived class type.
   std::type_info *TypeInfo;
 };
-VtablePrefix *getVtablePrefix(void *Object) {
-  VtablePrefix **VptrPtr = reinterpret_cast<VtablePrefix**>(Object);
-  if (!*VptrPtr)
+VtablePrefix *getVtablePrefix(void *Vtable) {
+  VtablePrefix *Vptr = reinterpret_cast<VtablePrefix*>(Vtable);
+  if (!Vptr)
     return 0;
-  VtablePrefix *Prefix = *VptrPtr - 1;
+  VtablePrefix *Prefix = Vptr - 1;
   if (Prefix->Offset > 0 || !Prefix->TypeInfo)
     // This can't possibly be a valid vtable.
     return 0;
@@ -218,7 +220,8 @@ bool __ubsan::checkDynamicType(void *Object, void *Type, HashValue Hash) {
     return true;
   }
 
-  VtablePrefix *Vtable = getVtablePrefix(Object);
+  void *VtablePtr = *reinterpret_cast<void **>(Object);
+  VtablePrefix *Vtable = getVtablePrefix(VtablePtr);
   if (!Vtable)
     return false;
 
@@ -238,8 +241,14 @@ bool __ubsan::checkDynamicType(void *Object, void *Type, HashValue Hash) {
   return true;
 }
 
-__ubsan::DynamicTypeInfo __ubsan::getDynamicTypeInfo(void *Object) {
-  VtablePrefix *Vtable = getVtablePrefix(Object);
+__ubsan::DynamicTypeInfo __ubsan::getDynamicTypeInfoFromObject(void *Object) {
+  void *VtablePtr = *reinterpret_cast<void **>(Object);
+  return getDynamicTypeInfoFromVtable(VtablePtr);
+}
+
+__ubsan::DynamicTypeInfo
+__ubsan::getDynamicTypeInfoFromVtable(void *VtablePtr) {
+  VtablePrefix *Vtable = getVtablePrefix(VtablePtr);
   if (!Vtable)
     return DynamicTypeInfo(0, 0, 0);
   const abi::__class_type_info *ObjectType = findBaseAtOffset(
@@ -248,3 +257,5 @@ __ubsan::DynamicTypeInfo __ubsan::getDynamicTypeInfo(void *Object) {
   return DynamicTypeInfo(Vtable->TypeInfo->__type_name, -Vtable->Offset,
                          ObjectType ? ObjectType->__type_name : "<unknown>");
 }
+
+#endif  // CAN_SANITIZE_UB

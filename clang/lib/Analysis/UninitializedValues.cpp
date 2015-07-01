@@ -36,7 +36,7 @@ using namespace clang;
 static bool isTrackedVar(const VarDecl *vd, const DeclContext *dc) {
   if (vd->isLocalVarDecl() && !vd->hasGlobalStorage() &&
       !vd->isExceptionVariable() && !vd->isInitCapture() &&
-      vd->getDeclContext() == dc) {
+      !vd->isImplicit() && vd->getDeclContext() == dc) {
     QualType ty = vd->getType();
     return ty->isScalarType() || ty->isVectorType() || ty->isRecordType();
   }
@@ -837,7 +837,7 @@ struct PruneBlocksHandler : public UninitVariablesHandler {
     : hadUse(numBlocks, false), hadAnyUse(false),
       currentBlock(0) {}
 
-  virtual ~PruneBlocksHandler() {}
+  ~PruneBlocksHandler() override {}
 
   /// Records if a CFGBlock had a potential use of an uninitialized variable.
   llvm::BitVector hadUse;

@@ -34,6 +34,7 @@ set(LLVM_TEST_DEPENDS
           llvm-dsymutil
           llvm-dwarfdump
           llvm-extract
+          llvm-lib
           llvm-link
           llvm-lto
           llvm-mc
@@ -52,6 +53,7 @@ set(LLVM_TEST_DEPENDS
           FileCheck
           count
           not
+          yaml-bench
           yaml2obj
           obj2yaml
           verify-uselistorder
@@ -100,6 +102,12 @@ add_lit_testsuite(check-llvm "Running the LLVM regression tests"
   DEPENDS ${LLVM_TEST_DEPENDS}
   )
 set_target_properties(check-llvm PROPERTIES FOLDER "Tests")
+
+add_lit_testsuites(LLVM ${CMAKE_CURRENT_SOURCE_DIR}
+  PARAMS llvm_site_config=${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
+         llvm_unit_site_config=${CMAKE_CURRENT_BINARY_DIR}/Unit/lit.site.cfg
+  DEPENDS ${LLVM_TEST_DEPENDS}
+  )
 
 # Setup a legacy alias for 'check-llvm'. This will likely change to be an
 # alias for 'check-all' at some point in the future.

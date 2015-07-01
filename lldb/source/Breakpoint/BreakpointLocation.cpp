@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 // C Includes
 // C++ Includes
 #include <string>
@@ -536,6 +534,7 @@ bool
 BreakpointLocation::SetBreakpointSite (BreakpointSiteSP& bp_site_sp)
 {
     m_bp_site_sp = bp_site_sp;
+    SendBreakpointLocationChangedEvent (eBreakpointEventTypeLocationsResolved);
     return true;
 }
 

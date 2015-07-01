@@ -685,7 +685,20 @@ public:
         else
             m_running_user_expression--;
     }
-    
+
+    void
+    SetStopEventForLastNaturalStopID (lldb::EventSP event_sp)
+    {
+        m_last_natural_stop_event = event_sp;
+    }
+
+    lldb::EventSP GetStopEventForStopID (uint32_t stop_id) const
+    {
+        if (stop_id == m_last_natural_stop_id)
+            return m_last_natural_stop_event;
+        return lldb::EventSP();
+    }
+
 private:
     uint32_t m_stop_id;
     uint32_t m_last_natural_stop_id;
@@ -693,6 +706,7 @@ private:
     uint32_t m_memory_id;
     uint32_t m_last_user_expression_resume;
     uint32_t m_running_user_expression;
+    lldb::EventSP m_last_natural_stop_event;
 };
 inline bool operator== (const ProcessModID &lhs, const ProcessModID &rhs)
 {
@@ -804,11 +818,12 @@ public:
             virtual const ConstString &
             GetFlavor () const;
 
-            const lldb::ProcessSP &
+            lldb::ProcessSP
             GetProcessSP() const
             {
-                return m_process_sp;
+                return m_process_wp.lock();
             }
+
             lldb::StateType
             GetState() const
             {
@@ -903,7 +918,7 @@ public:
                 m_restarted_reasons.push_back(reason);
             }
 
-            lldb::ProcessSP m_process_sp;
+            lldb::ProcessWP m_process_wp;
             lldb::StateType m_state;
             std::vector<std::string> m_restarted_reasons;
             bool m_restarted;  // For "eStateStopped" events, this is true if the target was automatically restarted.
@@ -1120,6 +1135,22 @@ public:
     //------------------------------------------------------------------
     virtual const lldb::DataBufferSP
     GetAuxvData();
+
+    //------------------------------------------------------------------
+    /// Sometimes processes know how to retrieve and load shared libraries.
+    /// This is normally done by DynamicLoader plug-ins, but sometimes the
+    /// connection to the process allows retrieving this information. The
+    /// dynamic loader plug-ins can use this function if they can't
+    /// determine the current shared library load state.
+    ///
+    /// @return
+    ///    The number of shared libraries that were loaded
+    //------------------------------------------------------------------
+    virtual size_t
+    LoadModules ()
+    {
+        return 0;
+    }
 
 protected:
     virtual JITLoaderList &
@@ -1343,11 +1374,19 @@ public:
     /// This function is not meant to be overridden by Process
     /// subclasses.
     ///
+    /// @param[in] force_kill
+    ///     Whether lldb should force a kill (instead of a detach) from
+    ///     the inferior process.  Normally if lldb launched a binary and
+    ///     Destory is called, lldb kills it.  If lldb attached to a 
+    ///     running process and Destory is called, lldb detaches.  If 
+    ///     this behavior needs to be over-ridden, this is the bool that
+    ///     can be used.
+    ///
     /// @return
     ///     Returns an error object.
     //------------------------------------------------------------------
     Error
-    Destroy();
+    Destroy(bool force_kill);
 
     //------------------------------------------------------------------
     /// Sends a process a UNIX signal \a signal.
@@ -1429,31 +1468,14 @@ public:
     /// @param[in] pid
     ///     The process ID that we should attempt to attach to.
     ///
-    /// @return
-    ///     Returns \a pid if attaching was successful, or
-    ///     LLDB_INVALID_PROCESS_ID if attaching fails.
-    //------------------------------------------------------------------
-    virtual Error
-    DoAttachToProcessWithID (lldb::pid_t pid)
-    {
-        Error error;
-        error.SetErrorStringWithFormat("error: %s does not support attaching to a process by pid", GetPluginName().GetCString());
-        return error;
-    }
-
-    //------------------------------------------------------------------
-    /// Attach to an existing process using a process ID.
-    ///
-    /// @param[in] pid
-    ///     The process ID that we should attempt to attach to.
-    ///
     /// @param[in] attach_info
     ///     Information on how to do the attach. For example, GetUserID()
     ///     will return the uid to attach as.
     ///
     /// @return
-    ///     Returns \a pid if attaching was successful, or
-    ///     LLDB_INVALID_PROCESS_ID if attaching fails.
+    ///     Returns a successful Error attaching was successful, or
+    ///     an appropriate (possibly platform-specific) error code if
+    ///     attaching fails.
     /// hanming : need flag
     //------------------------------------------------------------------
     virtual Error
@@ -1475,7 +1497,9 @@ public:
     ///     will return the uid to attach as.
     ///
     /// @return
-    ///     Returns an error object.
+    ///     Returns a successful Error attaching was successful, or
+    ///     an appropriate (possibly platform-specific) error code if
+    ///     attaching fails.
     //------------------------------------------------------------------
     virtual Error
     DoAttachToProcessWithName (const char *process_name, const ProcessAttachInfo &attach_info)
@@ -1854,7 +1878,13 @@ public:
     void
     SendAsyncInterrupt ();
     
-    void
+    //------------------------------------------------------------------
+    // Notify this process class that modules got loaded.
+    //
+    // If subclasses override this method, they must call this version
+    // before doing anything in the subclass version of the function.
+    //------------------------------------------------------------------
+    virtual void
     ModulesDidLoad (ModuleList &module_list);
 
 protected:
@@ -1945,11 +1975,17 @@ public:
     }
     
     uint32_t
-    GetLastNaturalStopID()
+    GetLastNaturalStopID() const
     {
         return m_mod_id.GetLastNaturalStopID();
     }
-    
+
+    lldb::EventSP
+    GetStopEventForStopID (uint32_t stop_id) const
+    {
+        return m_mod_id.GetStopEventForStopID(stop_id);
+    }
+
     //------------------------------------------------------------------
     /// Set accessor for the process exit status (return code).
     ///
@@ -2717,6 +2753,11 @@ public:
                           Listener *hijack_listener = NULL,
                           Stream *stream = NULL);
 
+    uint32_t
+    GetIOHandlerID () const
+    {
+        return m_iohandler_sync.GetValue();
+    }
 
     //--------------------------------------------------------------------------------------
     /// Waits for the process state to be running within a given msec timeout.
@@ -2727,14 +2768,9 @@ public:
     /// @param[in] timeout_msec
     ///     The maximum time length to wait for the process to transition to the
     ///     eStateRunning state, specified in milliseconds.
-    ///
-    /// @return
-    ///     true if successfully signalled that process started and IOHandler pushes, false
-    ///     if it timed out.
     //--------------------------------------------------------------------------------------
-    bool
-    SyncIOHandler (uint64_t timeout_msec);
-
+    void
+    SyncIOHandler (uint32_t iohandler_id, uint64_t timeout_msec);
 
     lldb::StateType
     WaitForStateChangedEvents (const TimeValue *timeout,
@@ -2970,7 +3006,6 @@ public:
     ProcessRunLock &
     GetRunLock ();
 
-public:
     virtual Error
     SendEventData(const char *data)
     {
@@ -2983,6 +3018,51 @@ public:
 
     lldb::InstrumentationRuntimeSP
     GetInstrumentationRuntime(lldb::InstrumentationRuntimeType type);
+
+    //------------------------------------------------------------------
+    /// Try to fetch the module specification for a module with the
+    /// given file name and architecture. Process sub-classes have to
+    /// override this method if they support platforms where the
+    /// Platform object can't get the module spec for all module.
+    ///
+    /// @param[in] module_file_spec
+    ///     The file name of the module to get specification for.
+    ///
+    /// @param[in] arch
+    ///     The architecture of the module to get specification for.
+    ///
+    /// @param[out] module_spec
+    ///     The fetched module specification if the return value is
+    ///     \b true, unchanged otherwise.
+    ///
+    /// @return
+    ///     Returns \b true if the module spec fetched successfully,
+    ///     \b false otherwise.
+    //------------------------------------------------------------------
+    virtual bool
+    GetModuleSpec(const FileSpec& module_file_spec, const ArchSpec& arch, ModuleSpec &module_spec);
+
+    //------------------------------------------------------------------
+    /// Try to find the load address of a file.
+    /// The load address is defined as the address of the first memory
+    /// region what contains data mapped from the specified file.
+    ///
+    /// @param[in] file 
+    ///     The name of the file whose load address we are looking for
+    ///
+    /// @param[out] is_loaded
+    ///     \b True if the file is loaded into the memory and false
+    ///     otherwise.
+    ///
+    /// @param[out] load_addr
+    ///     The load address of the file if it is loaded into the
+    ///     processes address space, LLDB_INVALID_ADDRESS otherwise.
+    //------------------------------------------------------------------
+    virtual Error
+    GetFileLoadAddress(const FileSpec& file, bool& is_loaded, lldb::addr_t& load_addr)
+    {
+        return Error("Not supported");
+    }
 
 protected:
 
@@ -3135,7 +3215,7 @@ protected:
     std::string                 m_stderr_data;
     Mutex                       m_profile_data_comm_mutex;
     std::vector<std::string>    m_profile_data;
-    Predicate<bool>             m_iohandler_sync;
+    Predicate<uint32_t>         m_iohandler_sync;
     MemoryCache                 m_memory_cache;
     AllocatedMemoryCache        m_allocated_memory_cache;
     bool                        m_should_detach;   /// Should we detach if the process object goes away with an explicit call to Kill or Detach?
@@ -3149,7 +3229,8 @@ protected:
     ArchSpec::StopInfoOverrideCallbackType m_stop_info_override_callback;
     bool                        m_currently_handling_do_on_removals;
     bool                        m_resume_requested;         // If m_currently_handling_event or m_currently_handling_do_on_removals are true, Resume will only request a resume, using this flag to check.
-    bool                        m_finalize_called;
+    bool                        m_finalizing; // This is set at the beginning of Process::Finalize() to stop functions from looking up or creating things during a finalize call
+    bool                        m_finalize_called; // This is set at the end of Process::Finalize()
     bool                        m_clear_thread_plans_on_stop;
     bool                        m_force_next_event_delivery;
     lldb::StateType             m_last_broadcast_state;   /// This helps with the Public event coalescing in ShouldBroadcastEvent.
@@ -3175,7 +3256,7 @@ protected:
     SetPrivateState (lldb::StateType state);
 
     bool
-    StartPrivateStateThread (bool force = false);
+    StartPrivateStateThread (bool is_secondary_thread = false);
 
     void
     StopPrivateStateThread ();
@@ -3186,11 +3267,22 @@ protected:
     void
     ResumePrivateStateThread ();
 
+    struct PrivateStateThreadArgs
+    {
+        Process *process;
+        bool is_secondary_thread;
+    };
+
     static lldb::thread_result_t
     PrivateStateThread (void *arg);
 
+    // The starts up the private state thread that will watch for events from the debugee.
+    // Pass true for is_secondary_thread in the case where you have to temporarily spin up a
+    // secondary state thread to handle events from a hand-called function on the primary
+    // private state thread.
+    
     lldb::thread_result_t
-    RunPrivateStateThread ();
+    RunPrivateStateThread (bool is_secondary_thread);
 
     void
     HandlePrivateEvent (lldb::EventSP &event_sp);
@@ -3235,6 +3327,12 @@ protected:
     
     bool
     ProcessIOHandlerIsActive ();
+
+    bool
+    ProcessIOHandlerExists () const
+    {
+        return static_cast<bool>(m_process_input_reader);
+    }
     
     Error
     HaltForDestroyOrDetach(lldb::EventSP &exit_event_sp);

@@ -65,10 +65,10 @@ public:
     FindTargetWithProcess (Process *process);
 
     static void
-    Initialize (LoadPluginCallbackType load_plugin_callback);
+    Initialize(LoadPluginCallbackType load_plugin_callback);
     
-    static int
-    Terminate ();
+    static void
+    Terminate();
     
     static void
     SettingsInitialize ();
@@ -210,6 +210,9 @@ public:
     bool
     IsTopIOHandler (const lldb::IOHandlerSP& reader_sp);
 
+    void
+    PrintAsync (const char *s, size_t len, bool is_stdout);
+
     ConstString
     GetTopIOHandlerControlSequence(char ch);
 
@@ -218,12 +221,6 @@ public:
 
     const char *
     GetIOHandlerHelpPrologue();
-
-    bool
-    HideTopIOHandler();
-
-    void
-    RefreshTopIOHandler();
 
     static lldb::DebuggerSP
     FindDebuggerWithID (lldb::user_id_t id);
@@ -247,9 +244,6 @@ public:
 
     void
     ClearIOHandlers ();
-
-    static int
-    TestDebuggerRefCount ();
 
     bool
     GetCloseInputOnEOF () const;

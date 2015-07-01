@@ -29,6 +29,10 @@
 #include "kmp_stats.h"
 #include "kmp_itt.h"
 
+#if OMPT_SUPPORT
+#include "ompt-specific.h"
+#endif
+
 // template for type limits
 template< typename T >
 struct i_maxmin {
@@ -88,6 +92,12 @@ __kmp_for_static_init(
     register kmp_uint32  nth;
     register UT          trip_count;
     register kmp_team_t *team;
+    register kmp_info_t *th = __kmp_threads[ gtid ];
+
+#if OMPT_SUPPORT && OMPT_TRACE
+    ompt_team_info_t *team_info = __ompt_get_teaminfo(0, NULL);
+    ompt_task_info_t *task_info = __ompt_get_taskinfo(0);
+#endif
 
     KMP_DEBUG_ASSERT( plastiter && plower && pupper && pstride );
     KE_TRACE( 10, ("__kmpc_for_static_init called (%d)\n", global_tid));
@@ -132,6 +142,15 @@ __kmp_for_static_init(
         }
         #endif
         KE_TRACE( 10, ("__kmpc_for_static_init: T#%d return\n", global_tid ) );
+
+#if OMPT_SUPPORT && OMPT_TRACE
+        if ((ompt_status == ompt_status_track_callback) &&
+            ompt_callbacks.ompt_callback(ompt_event_loop_begin)) {
+            ompt_callbacks.ompt_callback(ompt_event_loop_begin)(
+                team_info->parallel_id, task_info->task_id,
+                team_info->microtask);
+        }
+#endif
         return;
     }
 
@@ -139,13 +158,13 @@ __kmp_for_static_init(
     if ( schedtype > kmp_ord_upper ) {
         // we are in DISTRIBUTE construct
         schedtype += kmp_sch_static - kmp_distribute_static;      // AC: convert to usual schedule type
-        tid  = __kmp_threads[ gtid ]->th.th_team->t.t_master_tid;
-        team = __kmp_threads[ gtid ]->th.th_team->t.t_parent;
+        tid  = th->th.th_team->t.t_master_tid;
+        team = th->th.th_team->t.t_parent;
     } else
     #endif
     {
         tid  = __kmp_tid_from_gtid( global_tid );
-        team = __kmp_threads[ gtid ]->th.th_team;
+        team = th->th.th_team;
     }
 
     /* determine if "for" loop is an active worksharing construct */
@@ -168,6 +187,15 @@ __kmp_for_static_init(
         }
         #endif
         KE_TRACE( 10, ("__kmpc_for_static_init: T#%d return\n", global_tid ) );
+
+#if OMPT_SUPPORT && OMPT_TRACE
+        if ((ompt_status == ompt_status_track_callback) &&
+            ompt_callbacks.ompt_callback(ompt_event_loop_begin)) {
+            ompt_callbacks.ompt_callback(ompt_event_loop_begin)(
+                team_info->parallel_id, task_info->task_id,
+                team_info->microtask);
+        }
+#endif
         return;
     }
     nth = team->t.t_nproc;
@@ -187,6 +215,15 @@ __kmp_for_static_init(
         }
         #endif
         KE_TRACE( 10, ("__kmpc_for_static_init: T#%d return\n", global_tid ) );
+
+#if OMPT_SUPPORT && OMPT_TRACE
+        if ((ompt_status == ompt_status_track_callback) &&
+            ompt_callbacks.ompt_callback(ompt_event_loop_begin)) {
+            ompt_callbacks.ompt_callback(ompt_event_loop_begin)(
+                team_info->parallel_id, task_info->task_id,
+                team_info->microtask);
+        }
+#endif
         return;
     }
 
@@ -282,7 +319,12 @@ __kmp_for_static_init(
 
 #if USE_ITT_BUILD
     // Report loop metadata
-    if ( KMP_MASTER_TID(tid) && __itt_metadata_add_ptr && __kmp_forkjoin_frames_mode == 3 ) {
+    if ( KMP_MASTER_TID(tid) && __itt_metadata_add_ptr && __kmp_forkjoin_frames_mode == 3 &&
+#if OMP_40_ENABLED
+        th->th.th_teams_microtask == NULL &&
+#endif
+        team->t.t_active_level == 1 )
+    {
         kmp_uint64 cur_chunk = chunk;
         // Calculate chunk in case it was not specified; it is specified for kmp_sch_static_chunked
         if ( schedtype == kmp_sch_static ) {
@@ -304,6 +346,15 @@ __kmp_for_static_init(
     }
     #endif
     KE_TRACE( 10, ("__kmpc_for_static_init: T#%d return\n", global_tid ) );
+
+#if OMPT_SUPPORT && OMPT_TRACE
+    if ((ompt_status == ompt_status_track_callback) &&
+        ompt_callbacks.ompt_callback(ompt_event_loop_begin)) {
+        ompt_callbacks.ompt_callback(ompt_event_loop_begin)(
+            team_info->parallel_id, task_info->task_id, team_info->microtask);
+    }
+#endif
+
     return;
 }
 
@@ -731,17 +782,14 @@ __kmpc_for_static_init_8u( ident_t *loc, kmp_int32 gtid, kmp_int32 schedtype, km
 @ingroup WORK_SHARING
 @param    loc       Source code location
 @param    gtid      Global thread id of this thread
-@param    scheduleD Scheduling type for the distribute
-@param    scheduleL Scheduling type for the parallel loop
+@param    schedule  Scheduling type for the parallel loop
 @param    plastiter Pointer to the "last iteration" flag
 @param    plower    Pointer to the lower bound
 @param    pupper    Pointer to the upper bound of loop chunk
 @param    pupperD   Pointer to the upper bound of dist_chunk
-@param    pstrideD  Pointer to the stride for distribute
-@param    pstrideL  Pointer to the stride for parallel loop
+@param    pstride   Pointer to the stride for parallel loop
 @param    incr      Loop increment
-@param    chunkD    The chunk size for the distribute
-@param    chunkL    The chunk size for the parallel loop
+@param    chunk     The chunk size for the parallel loop
 
 Each of the four functions here are identical apart from the argument types.
 

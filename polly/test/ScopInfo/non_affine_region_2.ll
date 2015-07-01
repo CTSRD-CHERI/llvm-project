@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -disable-polly-intra-scop-scalar-to-array -polly-model-phi-nodes -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
 ;
 ; Verify the scalar x defined in a non-affine subregion is written as it
 ; escapes the region. In this test the two conditionals inside the region
@@ -23,7 +23,7 @@
 ; CHECK:   Stmt_(bb3 => bb18)
 ; CHECK:         Domain :=
 ; CHECK:             { Stmt_(bb3 => bb18)[i0] : i0 >= 0 and i0 <= 1023 };
-; CHECK:         Scattering :=
+; CHECK:         Schedule :=
 ; CHECK:             { Stmt_(bb3 => bb18)[i0] -> [i0, 0] };
 ; CHECK-NOT:         { Stmt_(bb3 => bb18)[i0] -> MemRef_x_0[] };
 ; CHECK-NOT:         { Stmt_(bb3 => bb18)[i0] -> MemRef_x_1[] };
@@ -42,7 +42,7 @@
 ; CHECK:   Stmt_bb18
 ; CHECK:         Domain :=
 ; CHECK:             { Stmt_bb18[i0] : i0 >= 0 and i0 <= 1023 };
-; CHECK:         Scattering :=
+; CHECK:         Schedule :=
 ; CHECK:             { Stmt_bb18[i0] -> [i0, 1] };
 ; CHECK:         ReadAccess := [Reduction Type: NONE] [Scalar: 1]
 ; CHECK:             { Stmt_bb18[i0] -> MemRef_x_2[] };

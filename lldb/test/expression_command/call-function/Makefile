@@ -6,10 +6,10 @@ CXX_SOURCES := main.cpp
 # targets.  Other targets do not, which causes this test to fail.
 # This flag enables FullDebugInfo for all targets.
 ifneq (,$(findstring clang,$(CC)))
-  CFLAGS_EXTRAS := -fno-limit-debug-info
+  CFLAGS_EXTRAS += -fno-limit-debug-info
 endif
 
 include $(LEVEL)/Makefile.rules
 
 clean::
-	rm -rf *.o *.d *.dSYM
+	rm -rf $(wildcard *.o *.d *.dSYM)

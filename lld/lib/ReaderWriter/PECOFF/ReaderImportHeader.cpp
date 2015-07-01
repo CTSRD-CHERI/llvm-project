@@ -216,7 +216,7 @@ public:
   uint64_t ordinal() const override { return 0; }
   Scope scope() const override { return scopeGlobal; }
   ContentType contentType() const override { return typeCode; }
-  Alignment alignment() const override { return Alignment(1); }
+  Alignment alignment() const override { return 2; }
   ContentPermissions permissions() const override { return permR_X; }
 
 private:
@@ -257,7 +257,7 @@ public:
 
     // Check if the total size is valid.
     if (std::size_t(end - buf) != sizeof(COFF::ImportHeader) + dataSize)
-      return make_error_code(NativeReaderError::unknown_file_format);
+      return make_dynamic_error_code("Broken import library");
 
     uint16_t hint = read16le(buf + offsetof(COFF::ImportHeader, OrdinalHint));
     StringRef symbolName(buf + sizeof(COFF::ImportHeader));
@@ -282,19 +282,19 @@ public:
     return std::error_code();
   }
 
-  const atom_collection<DefinedAtom> &defined() const override {
+  const AtomVector<DefinedAtom> &defined() const override {
     return _definedAtoms;
   }
 
-  const atom_collection<UndefinedAtom> &undefined() const override {
+  const AtomVector<UndefinedAtom> &undefined() const override {
     return _noUndefinedAtoms;
   }
 
-  const atom_collection<SharedLibraryAtom> &sharedLibrary() const override {
+  const AtomVector<SharedLibraryAtom> &sharedLibrary() const override {
     return _sharedLibraryAtoms;
   }
 
-  const atom_collection<AbsoluteAtom> &absolute() const override {
+  const AtomVector<AbsoluteAtom> &absolute() const override {
     return _noAbsoluteAtoms;
   }
 
@@ -305,18 +305,18 @@ private:
                                                     StringRef dllName) {
     auto *atom = new (_alloc)
         COFFSharedLibraryAtom(*this, hint, symbolName, importName, dllName);
-    _sharedLibraryAtoms._atoms.push_back(atom);
+    _sharedLibraryAtoms.push_back(atom);
     return atom;
   }
 
   void addFuncAtom(StringRef symbolName, StringRef dllName,
                    const COFFSharedLibraryAtom *impAtom) {
     auto *atom = new (_alloc) FuncAtom(*this, symbolName, impAtom, _machine);
-    _definedAtoms._atoms.push_back(atom);
+    _definedAtoms.push_back(atom);
   }
 
-  atom_collection_vector<DefinedAtom> _definedAtoms;
-  atom_collection_vector<SharedLibraryAtom> _sharedLibraryAtoms;
+  AtomVector<DefinedAtom> _definedAtoms;
+  AtomVector<SharedLibraryAtom> _sharedLibraryAtoms;
   mutable llvm::BumpPtrAllocator _alloc;
 
   // Does the same thing as StringRef::ltrim() but removes at most one
@@ -361,19 +361,18 @@ class COFFImportLibraryReader : public Reader {
 public:
   COFFImportLibraryReader(PECOFFLinkingContext &ctx) : _ctx(ctx) {}
 
-  bool canParse(file_magic magic, StringRef,
-                const MemoryBuffer &mb) const override {
+  bool canParse(file_magic magic, MemoryBufferRef mb) const override {
     if (mb.getBufferSize() < sizeof(COFF::ImportHeader))
       return false;
-    return (magic == llvm::sys::fs::file_magic::coff_import_library);
+    return magic == llvm::sys::fs::file_magic::coff_import_library;
   }
 
-  std::error_code
-  loadFile(std::unique_ptr<MemoryBuffer> mb, const class Registry &,
-           std::vector<std::unique_ptr<File> > &result) const override {
-    auto *file = new FileImportLibrary(std::move(mb), _ctx.getMachineType());
-    result.push_back(std::unique_ptr<File>(file));
-    return std::error_code();
+  ErrorOr<std::unique_ptr<File>>
+  loadFile(std::unique_ptr<MemoryBuffer> mb,
+           const class Registry &) const override {
+    std::unique_ptr<File> ret = llvm::make_unique<FileImportLibrary>(
+        std::move(mb), _ctx.getMachineType());
+    return std::move(ret);
   }
 
 private:

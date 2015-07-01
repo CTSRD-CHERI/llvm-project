@@ -34,17 +34,12 @@ MCSubtargetInfo::InitCPUSchedModel(StringRef CPU) {
     CPUSchedModel = MCSchedModel::GetDefaultSchedModel();
 }
 
-void
-MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef C, StringRef FS,
-                                     ArrayRef<SubtargetFeatureKV> PF,
-                                     ArrayRef<SubtargetFeatureKV> PD,
-                                     const SubtargetInfoKV *ProcSched,
-                                     const MCWriteProcResEntry *WPR,
-                                     const MCWriteLatencyEntry *WL,
-                                     const MCReadAdvanceEntry *RA,
-                                     const InstrStage *IS,
-                                     const unsigned *OC,
-                                     const unsigned *FP) {
+void MCSubtargetInfo::InitMCSubtargetInfo(
+    const Triple &TT, StringRef C, StringRef FS,
+    ArrayRef<SubtargetFeatureKV> PF, ArrayRef<SubtargetFeatureKV> PD,
+    const SubtargetInfoKV *ProcSched, const MCWriteProcResEntry *WPR,
+    const MCWriteLatencyEntry *WL, const MCReadAdvanceEntry *RA,
+    const InstrStage *IS, const unsigned *OC, const unsigned *FP) {
   TargetTriple = TT;
   CPU = C;
   ProcFeatures = PF;
@@ -81,6 +76,11 @@ FeatureBitset MCSubtargetInfo::ToggleFeature(StringRef FS) {
   return FeatureBits;
 }
 
+FeatureBitset MCSubtargetInfo::ApplyFeatureFlag(StringRef FS) {
+  SubtargetFeatures Features;
+  FeatureBits = Features.ApplyFeatureFlag(FeatureBits, FS, ProcFeatures);
+  return FeatureBits;
+}
 
 MCSchedModel
 MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
@@ -98,9 +98,10 @@ MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
   const SubtargetInfoKV *Found =
     std::lower_bound(ProcSchedModels, ProcSchedModels+NumProcs, CPU);
   if (Found == ProcSchedModels+NumProcs || StringRef(Found->Key) != CPU) {
-    errs() << "'" << CPU
-           << "' is not a recognized processor for this target"
-           << " (ignoring processor)\n";
+    if (CPU != "help") // Don't error if the user asked for help.
+      errs() << "'" << CPU
+             << "' is not a recognized processor for this target"
+             << " (ignoring processor)\n";
     return MCSchedModel::GetDefaultSchedModel();
   }
   assert(Found->Value && "Missing processor SchedModel value");

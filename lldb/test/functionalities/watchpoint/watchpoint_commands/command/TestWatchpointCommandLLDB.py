@@ -25,7 +25,7 @@ class WatchpointLLDBCommandTestCase(TestBase):
         self.exe_name = 'a%d.out' % self.test_number
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_watchpoint_command_with_dsym(self):
         """Test 'watchpoint command'."""
@@ -40,7 +40,7 @@ class WatchpointLLDBCommandTestCase(TestBase):
         self.setTearDownCleanup(dictionary=self.d)
         self.watchpoint_command()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_watchpoint_command_can_disable_a_watchpoint_with_dsym(self):
         """Test that 'watchpoint command' action can disable a watchpoint after it is triggered."""
@@ -64,7 +64,7 @@ class WatchpointLLDBCommandTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -113,7 +113,7 @@ class WatchpointLLDBCommandTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.

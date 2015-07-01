@@ -40,9 +40,9 @@ class ImportTableEntryAtom;
 
 // A state object of this pass.
 struct IdataContext {
-  IdataContext(MutableFile &f, VirtualFile &g, const PECOFFLinkingContext &c)
+  IdataContext(SimpleFile &f, VirtualFile &g, const PECOFFLinkingContext &c)
       : file(f), dummyFile(g), ctx(c) {}
-  MutableFile &file;
+  SimpleFile &file;
   VirtualFile &dummyFile;
   const PECOFFLinkingContext &ctx;
 };
@@ -163,7 +163,7 @@ class DelayImportAddressAtom : public IdataAtom {
 public:
   explicit DelayImportAddressAtom(IdataContext &context)
       : IdataAtom(context, createContent(context.ctx)),
-        _align(Alignment(context.ctx.is64Bit() ? 3 : 2)) {}
+        _align(context.ctx.is64Bit() ? 8 : 4) {}
   StringRef customSectionName() const override { return ".data"; }
   ContentPermissions permissions() const override { return permRW_; }
   Alignment alignment() const override { return _align; }
@@ -183,7 +183,7 @@ public:
                   const Atom *descAtom, const Atom *delayLoadHelperAtom);
   StringRef customSectionName() const override { return ".text"; }
   ContentPermissions permissions() const override { return permR_X; }
-  Alignment alignment() const override { return Alignment(0); }
+  Alignment alignment() const override { return 1; }
 
 private:
   std::vector<uint8_t> createContent(MachineTypes machine) const;
@@ -195,13 +195,13 @@ class IdataPass : public lld::Pass {
 public:
   IdataPass(const PECOFFLinkingContext &ctx) : _dummyFile(ctx), _ctx(ctx) {}
 
-  void perform(std::unique_ptr<MutableFile> &file) override;
+  std::error_code perform(SimpleFile &file) override;
 
 private:
   std::map<StringRef, std::vector<COFFSharedLibraryAtom *>>
-  groupByLoadName(MutableFile &file);
+  groupByLoadName(SimpleFile &file);
 
-  void replaceSharedLibraryAtoms(MutableFile &file);
+  void replaceSharedLibraryAtoms(SimpleFile *file);
 
   // A dummy file with which all the atoms created in the pass will be
   // associated. Atoms need to be associated to an input file even if it's not

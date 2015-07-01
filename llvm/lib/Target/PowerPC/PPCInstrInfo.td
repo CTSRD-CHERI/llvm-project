@@ -201,6 +201,12 @@ def SDT_PPCsc     : SDTypeProfile<0, 1, [SDTCisInt<0>]>;
 def PPCsc         : SDNode<"PPCISD::SC", SDT_PPCsc,
                            [SDNPHasChain, SDNPSideEffect]>;
 
+def PPCclrbhrb    : SDNode<"PPCISD::CLRBHRB", SDTNone,
+                           [SDNPHasChain, SDNPSideEffect]>;
+def PPCmfbhrbe    : SDNode<"PPCISD::MFBHRBE", SDTIntBinOp, [SDNPHasChain]>;
+def PPCrfebb      : SDNode<"PPCISD::RFEBB", SDT_PPCsc,
+                           [SDNPHasChain, SDNPSideEffect]>;
+
 def PPCvcmp       : SDNode<"PPCISD::VCMP" , SDT_PPCvcmp, []>;
 def PPCvcmp_o     : SDNode<"PPCISD::VCMPo", SDT_PPCvcmp, [SDNPOutGlue]>;
 
@@ -228,41 +234,42 @@ def PPCdynalloc   : SDNode<"PPCISD::DYNALLOC", SDTDynOp, [SDNPHasChain]>;
 
 def SHL32 : SDNodeXForm<imm, [{
   // Transformation function: 31 - imm
-  return getI32Imm(31 - N->getZExtValue());
+  return getI32Imm(31 - N->getZExtValue(), SDLoc(N));
 }]>;
 
 def SRL32 : SDNodeXForm<imm, [{
   // Transformation function: 32 - imm
-  return N->getZExtValue() ? getI32Imm(32 - N->getZExtValue()) : getI32Imm(0);
+  return N->getZExtValue() ? getI32Imm(32 - N->getZExtValue(), SDLoc(N))
+                           : getI32Imm(0, SDLoc(N));
 }]>;
 
 def LO16 : SDNodeXForm<imm, [{
   // Transformation function: get the low 16 bits.
-  return getI32Imm((unsigned short)N->getZExtValue());
+  return getI32Imm((unsigned short)N->getZExtValue(), SDLoc(N));
 }]>;
 
 def HI16 : SDNodeXForm<imm, [{
   // Transformation function: shift the immediate value down into the low bits.
-  return getI32Imm((unsigned)N->getZExtValue() >> 16);
+  return getI32Imm((unsigned)N->getZExtValue() >> 16, SDLoc(N));
 }]>;
 
 def HA16 : SDNodeXForm<imm, [{
   // Transformation function: shift the immediate value down into the low bits.
   signed int Val = N->getZExtValue();
-  return getI32Imm((Val - (signed short)Val) >> 16);
+  return getI32Imm((Val - (signed short)Val) >> 16, SDLoc(N));
 }]>;
 def MB : SDNodeXForm<imm, [{
   // Transformation function: get the start bit of a mask
   unsigned mb = 0, me;
   (void)isRunOfOnes((unsigned)N->getZExtValue(), mb, me);
-  return getI32Imm(mb);
+  return getI32Imm(mb, SDLoc(N));
 }]>;
 
 def ME : SDNodeXForm<imm, [{
   // Transformation function: get the end bit of a mask
   unsigned mb, me = 0;
   (void)isRunOfOnes((unsigned)N->getZExtValue(), mb, me);
-  return getI32Imm(me);
+  return getI32Imm(me, SDLoc(N));
 }]>;
 def maskimm32 : PatLeaf<(imm), [{
   // maskImm predicate - True if immediate is a run of ones.
@@ -432,6 +439,9 @@ def PPCRegCRRCAsmOperand : AsmOperandClass {
 def crrc : RegisterOperand<CRRC> {
   let ParserMatchClass = PPCRegCRRCAsmOperand;
 }
+def crrc0 : RegisterOperand<CRRC0> {
+  let ParserMatchClass = PPCRegCRRCAsmOperand;
+}
 
 def PPCU1ImmAsmOperand : AsmOperandClass {
   let Name = "U1Imm"; let PredicateMethod = "isU1Imm";
@@ -449,6 +459,15 @@ def PPCU2ImmAsmOperand : AsmOperandClass {
 def u2imm   : Operand<i32> {
   let PrintMethod = "printU2ImmOperand";
   let ParserMatchClass = PPCU2ImmAsmOperand;
+}
+
+def PPCU3ImmAsmOperand : AsmOperandClass {
+  let Name = "U3Imm"; let PredicateMethod = "isU3Imm";
+  let RenderMethod = "addImmOperands";
+}
+def u3imm   : Operand<i32> {
+  let PrintMethod = "printU3ImmOperand";
+  let ParserMatchClass = PPCU3ImmAsmOperand;
 }
 
 def PPCU4ImmAsmOperand : AsmOperandClass {
@@ -485,6 +504,15 @@ def u6imm   : Operand<i32> {
   let PrintMethod = "printU6ImmOperand";
   let ParserMatchClass = PPCU6ImmAsmOperand;
   let DecoderMethod = "decodeUImmOperand<6>";
+}
+def PPCU10ImmAsmOperand : AsmOperandClass {
+  let Name = "U10Imm"; let PredicateMethod = "isU10Imm";
+  let RenderMethod = "addImmOperands";
+}
+def u10imm  : Operand<i32> {
+  let PrintMethod = "printU10ImmOperand";
+  let ParserMatchClass = PPCU10ImmAsmOperand;
+  let DecoderMethod = "decodeUImmOperand<10>";
 }
 def PPCU12ImmAsmOperand : AsmOperandClass {
   let Name = "U12Imm"; let PredicateMethod = "isU12Imm";
@@ -714,6 +742,8 @@ def HasICBT : Predicate<"PPCSubTarget->hasICBT()">;
 def HasPartwordAtomics : Predicate<"PPCSubTarget->hasPartwordAtomics()">;
 def NoNaNsFPMath : Predicate<"TM.Options.NoNaNsFPMath">;
 def NaNsFPMath   : Predicate<"!TM.Options.NoNaNsFPMath">;
+def HasBPERMD : Predicate<"PPCSubTarget->hasBPERMD()">;
+def HasExtDiv : Predicate<"PPCSubTarget->hasExtDiv()">;
 
 //===----------------------------------------------------------------------===//
 // PowerPC Multiclass Definitions.
@@ -787,6 +817,23 @@ multiclass XOForm_1r<bits<6> opcode, bits<9> xo, bit oe, dag OOL, dag IOL,
     def o    : XOForm_1<opcode, xo, oe, OOL, IOL,
                        !strconcat(asmbase, !strconcat(". ", asmstr)), itin,
                        []>, isDOT, RecFormRel;
+  }
+}
+
+// Multiclass for instructions for which the non record form is not cracked
+// and the record form is cracked (i.e. divw, mullw, etc.)
+multiclass XOForm_1rcr<bits<6> opcode, bits<9> xo, bit oe, dag OOL, dag IOL,
+                      string asmbase, string asmstr, InstrItinClass itin,
+                      list<dag> pattern> {
+  let BaseName = asmbase in {
+    def NAME : XOForm_1<opcode, xo, oe, OOL, IOL,
+                       !strconcat(asmbase, !strconcat(" ", asmstr)), itin,
+                       pattern>, RecFormRel;
+    let Defs = [CR0] in
+    def o    : XOForm_1<opcode, xo, oe, OOL, IOL,
+                       !strconcat(asmbase, !strconcat(". ", asmstr)), itin,
+                       []>, isDOT, RecFormRel, PPC970_DGroup_First,
+                       PPC970_DGroup_Cracked;
   }
 }
 
@@ -1325,6 +1372,24 @@ let PPC970_Unit = 7 in {
                       "sc $lev", IIC_BrB, [(PPCsc (i32 imm:$lev))]>;
 }
 
+// Branch history rolling buffer.
+def CLRBHRB : XForm_0<31, 430, (outs), (ins), "clrbhrb", IIC_BrB,
+                      [(PPCclrbhrb)]>,
+                      PPC970_DGroup_Single;
+// The $dmy argument used for MFBHRBE is not needed; however, including
+// it avoids automatic generation of PPCFastISel::fastEmit_i(), which
+// interferes with necessary special handling (see PPCFastISel.cpp).
+def MFBHRBE : XFXForm_3p<31, 302, (outs gprc:$rD),
+                         (ins u10imm:$imm, u10imm:$dmy),
+                         "mfbhrbe $rD, $imm", IIC_BrB,
+                         [(set i32:$rD,
+                               (PPCmfbhrbe imm:$imm, imm:$dmy))]>,
+                         PPC970_DGroup_First;
+
+def RFEBB : XLForm_S<19, 146, (outs), (ins u1imm:$imm), "rfebb $imm",
+                     IIC_BrB, [(PPCrfebb (i32 imm:$imm))]>,
+                     PPC970_DGroup_Single;
+
 // DCB* instructions.
 def DCBA   : DCB_Form<758, 0, (outs), (ins memrr:$dst), "dcba $dst",
                       IIC_LdStDCBF, [(int_ppc_dcba xoaddr:$dst)]>,
@@ -1338,12 +1403,6 @@ def DCBI   : DCB_Form<470, 0, (outs), (ins memrr:$dst), "dcbi $dst",
 def DCBST  : DCB_Form<54, 0, (outs), (ins memrr:$dst), "dcbst $dst",
                       IIC_LdStDCBF, [(int_ppc_dcbst xoaddr:$dst)]>,
                       PPC970_DGroup_Single;
-def DCBT   : DCB_Form<278, 0, (outs), (ins memrr:$dst), "dcbt $dst",
-                      IIC_LdStDCBF, [(int_ppc_dcbt xoaddr:$dst)]>,
-                      PPC970_DGroup_Single;
-def DCBTST : DCB_Form<246, 0, (outs), (ins memrr:$dst), "dcbtst $dst",
-                      IIC_LdStDCBF, [(int_ppc_dcbtst xoaddr:$dst)]>,
-                      PPC970_DGroup_Single;
 def DCBZ   : DCB_Form<1014, 0, (outs), (ins memrr:$dst), "dcbz $dst",
                       IIC_LdStDCBF, [(int_ppc_dcbz xoaddr:$dst)]>,
                       PPC970_DGroup_Single;
@@ -1351,13 +1410,27 @@ def DCBZL  : DCB_Form<1014, 1, (outs), (ins memrr:$dst), "dcbzl $dst",
                       IIC_LdStDCBF, [(int_ppc_dcbzl xoaddr:$dst)]>,
                       PPC970_DGroup_Single;
 
+let hasSideEffects = 0, mayLoad = 1, mayStore = 1 in {
+def DCBT   : DCB_Form_hint<278, (outs), (ins u5imm:$TH, memrr:$dst),
+                      "dcbt $dst, $TH", IIC_LdStDCBF, []>,
+                      PPC970_DGroup_Single;
+def DCBTST : DCB_Form_hint<246, (outs), (ins u5imm:$TH, memrr:$dst),
+                      "dcbtst $dst, $TH", IIC_LdStDCBF, []>,
+                      PPC970_DGroup_Single;
+} // hasSideEffects = 0
+
 def ICBT  : XForm_icbt<31, 22, (outs), (ins u4imm:$CT, memrr:$src),
                        "icbt $CT, $src", IIC_LdStLoad>, Requires<[HasICBT]>;
 
+def : Pat<(int_ppc_dcbt xoaddr:$dst),
+          (DCBT 0, xoaddr:$dst)>;
+def : Pat<(int_ppc_dcbtst xoaddr:$dst),
+          (DCBTST 0, xoaddr:$dst)>;
+
 def : Pat<(prefetch xoaddr:$dst, (i32 0), imm, (i32 1)),
-          (DCBT xoaddr:$dst)>;   // data prefetch for loads
+          (DCBT 0, xoaddr:$dst)>;   // data prefetch for loads
 def : Pat<(prefetch xoaddr:$dst, (i32 1), imm, (i32 1)),
-          (DCBTST xoaddr:$dst)>; // data prefetch for stores
+          (DCBTST 0, xoaddr:$dst)>; // data prefetch for stores
 def : Pat<(prefetch xoaddr:$dst, (i32 0), imm, (i32 0)),
           (ICBT 0, xoaddr:$dst)>, Requires<[HasICBT]>; // inst prefetch (for read)
 
@@ -2152,7 +2225,7 @@ def MTSPR : XFXForm_1<31, 467, (outs), (ins i32imm:$SPR, gprc:$RT),
                       "mtspr $SPR, $RT", IIC_SprMTSPR>;
 
 def MFTB : XFXForm_1<31, 371, (outs gprc:$RT), (ins i32imm:$SPR),
-                     "mftb $RT, $SPR", IIC_SprMFTB>, Deprecated<DeprecatedMFTB>;
+                     "mftb $RT, $SPR", IIC_SprMFTB>;
 
 // A pseudo-instruction used to implement the read of the 64-bit cycle counter
 // on a 32-bit target.
@@ -2288,14 +2361,30 @@ defm ADDC  : XOForm_1rc<31, 10, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
                         [(set i32:$rT, (addc i32:$rA, i32:$rB))]>,
                         PPC970_DGroup_Cracked;
 
-defm DIVW  : XOForm_1r<31, 491, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
-                       "divw", "$rT, $rA, $rB", IIC_IntDivW,
-                       [(set i32:$rT, (sdiv i32:$rA, i32:$rB))]>,
-                       PPC970_DGroup_First, PPC970_DGroup_Cracked;
-defm DIVWU : XOForm_1r<31, 459, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
-                       "divwu", "$rT, $rA, $rB", IIC_IntDivW,
-                       [(set i32:$rT, (udiv i32:$rA, i32:$rB))]>,
-                       PPC970_DGroup_First, PPC970_DGroup_Cracked;
+defm DIVW  : XOForm_1rcr<31, 491, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
+                          "divw", "$rT, $rA, $rB", IIC_IntDivW,
+                          [(set i32:$rT, (sdiv i32:$rA, i32:$rB))]>;
+defm DIVWU : XOForm_1rcr<31, 459, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
+                          "divwu", "$rT, $rA, $rB", IIC_IntDivW,
+                          [(set i32:$rT, (udiv i32:$rA, i32:$rB))]>;
+def DIVWE : XOForm_1<31, 427, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
+                     "divwe $rT, $rA, $rB", IIC_IntDivW,
+                     [(set i32:$rT, (int_ppc_divwe gprc:$rA, gprc:$rB))]>,
+                     Requires<[HasExtDiv]>;
+let Defs = [CR0] in
+def DIVWEo : XOForm_1<31, 427, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
+                      "divwe. $rT, $rA, $rB", IIC_IntDivW,
+                      []>, isDOT, PPC970_DGroup_Cracked, PPC970_DGroup_First,
+                      Requires<[HasExtDiv]>;
+def DIVWEU : XOForm_1<31, 395, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
+                      "divweu $rT, $rA, $rB", IIC_IntDivW,
+                      [(set i32:$rT, (int_ppc_divweu gprc:$rA, gprc:$rB))]>,
+                      Requires<[HasExtDiv]>;
+let Defs = [CR0] in
+def DIVWEUo : XOForm_1<31, 395, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
+                       "divweu. $rT, $rA, $rB", IIC_IntDivW,
+                       []>, isDOT, PPC970_DGroup_Cracked, PPC970_DGroup_First,
+                       Requires<[HasExtDiv]>;
 let isCommutable = 1 in {
 defm MULHW : XOForm_1r<31, 75, 0, (outs gprc:$rT), (ins gprc:$rA, gprc:$rB),
                        "mulhw", "$rT, $rA, $rB", IIC_IntMulHW,
@@ -2708,6 +2797,7 @@ include "PPCInstrSPE.td"
 include "PPCInstr64Bit.td"
 include "PPCInstrVSX.td"
 include "PPCInstrQPX.td"
+include "PPCInstrHTM.td"
 
 def crnot : OutPatFrag<(ops node:$in),
                        (CRNOR $in, $in)>;
@@ -3428,7 +3518,7 @@ class PPCAsmPseudo<string asm, dag iops>
 def : InstAlias<"sc", (SC 0)>;
 
 def : InstAlias<"sync", (SYNC 0)>, Requires<[HasSYNC]>;
-def : InstAlias<"msync", (SYNC 0)>, Requires<[HasSYNC]>;
+def : InstAlias<"msync", (SYNC 0), 0>, Requires<[HasSYNC]>;
 def : InstAlias<"lwsync", (SYNC 1)>, Requires<[HasSYNC]>;
 def : InstAlias<"ptesync", (SYNC 2)>, Requires<[HasSYNC]>;
 
@@ -3437,6 +3527,17 @@ def : InstAlias<"waitrsv", (WAIT 1)>;
 def : InstAlias<"waitimpl", (WAIT 2)>;
 
 def : InstAlias<"mbar", (MBAR 0)>, Requires<[IsBookE]>;
+
+def DCBTx   : PPCAsmPseudo<"dcbt $dst", (ins memrr:$dst)>;
+def DCBTSTx : PPCAsmPseudo<"dcbtst $dst", (ins memrr:$dst)>;
+
+def DCBTCT : PPCAsmPseudo<"dcbtct $dst, $TH", (ins memrr:$dst, u5imm:$TH)>;
+def DCBTDS : PPCAsmPseudo<"dcbtds $dst, $TH", (ins memrr:$dst, u5imm:$TH)>;
+def DCBTT  : PPCAsmPseudo<"dcbtt $dst", (ins memrr:$dst)>;
+
+def DCBTSTCT : PPCAsmPseudo<"dcbtstct $dst, $TH", (ins memrr:$dst, u5imm:$TH)>;
+def DCBTSTDS : PPCAsmPseudo<"dcbtstds $dst, $TH", (ins memrr:$dst, u5imm:$TH)>;
+def DCBTSTT  : PPCAsmPseudo<"dcbtstt $dst", (ins memrr:$dst)>;
 
 def : InstAlias<"crset $bx", (CREQV crbitrc:$bx, crbitrc:$bx, crbitrc:$bx)>;
 def : InstAlias<"crclr $bx", (CRXOR crbitrc:$bx, crbitrc:$bx, crbitrc:$bx)>;
@@ -3712,6 +3813,19 @@ def : InstAlias<"rotld $rA, $rS, $rB", (RLDCL g8rc:$rA, g8rc:$rS, gprc:$rB, 0)>;
 def : InstAlias<"rotld. $rA, $rS, $rB", (RLDCLo g8rc:$rA, g8rc:$rS, gprc:$rB, 0)>;
 def : InstAlias<"clrldi $rA, $rS, $n", (RLDICL g8rc:$rA, g8rc:$rS, 0, u6imm:$n)>;
 def : InstAlias<"clrldi. $rA, $rS, $n", (RLDICLo g8rc:$rA, g8rc:$rS, 0, u6imm:$n)>;
+
+def RLWINMbm : PPCAsmPseudo<"rlwinm $rA, $rS, $n, $b",
+                            (ins g8rc:$rA, g8rc:$rS, u5imm:$n, i32imm:$b)>;
+def RLWINMobm : PPCAsmPseudo<"rlwinm. $rA, $rS, $n, $b",
+                            (ins g8rc:$rA, g8rc:$rS, u5imm:$n, i32imm:$b)>;
+def RLWIMIbm : PPCAsmPseudo<"rlwimi $rA, $rS, $n, $b",
+                           (ins g8rc:$rA, g8rc:$rS, u5imm:$n, i32imm:$b)>;
+def RLWIMIobm : PPCAsmPseudo<"rlwimi. $rA, $rS, $n, $b",
+                            (ins g8rc:$rA, g8rc:$rS, u5imm:$n, i32imm:$b)>;
+def RLWNMbm : PPCAsmPseudo<"rlwnm $rA, $rS, $n, $b",
+                          (ins g8rc:$rA, g8rc:$rS, u5imm:$n, i32imm:$b)>;
+def RLWNMobm : PPCAsmPseudo<"rlwnm. $rA, $rS, $n, $b",
+                           (ins g8rc:$rA, g8rc:$rS, u5imm:$n, i32imm:$b)>;
 
 // These generic branch instruction forms are used for the assembler parser only.
 // Defs and Uses are conservative, since we don't know the BO value.

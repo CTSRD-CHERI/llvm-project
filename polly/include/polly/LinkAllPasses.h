@@ -36,14 +36,11 @@ llvm::Pass *createDOTViewerPass();
 llvm::Pass *createIndependentBlocksPass();
 llvm::Pass *createJSONExporterPass();
 llvm::Pass *createJSONImporterPass();
-#ifdef PLUTO_FOUND
-llvm::Pass *createPlutoOptimizerPass();
-#endif
 llvm::Pass *createPollyCanonicalizePass();
 llvm::Pass *createScopDetectionPass();
 llvm::Pass *createScopInfoPass();
 llvm::Pass *createIslAstInfoPass();
-llvm::Pass *createIslCodeGenerationPass();
+llvm::Pass *createCodeGenerationPass();
 llvm::Pass *createIslScheduleOptimizerPass();
 llvm::Pass *createTempScopInfoPass();
 
@@ -73,12 +70,9 @@ struct PollyForcePassLinking {
     polly::createJSONImporterPass();
     polly::createScopDetectionPass();
     polly::createScopInfoPass();
-#ifdef PLUTO_FOUND
-    polly::createPlutoOptimizerPass();
-#endif
     polly::createPollyCanonicalizePass();
     polly::createIslAstInfoPass();
-    polly::createIslCodeGenerationPass();
+    polly::createCodeGenerationPass();
     polly::createIslScheduleOptimizerPass();
     polly::createTempScopInfoPass();
   }
@@ -93,11 +87,8 @@ void initializeIndependentBlocksPass(llvm::PassRegistry &);
 void initializeJSONExporterPass(llvm::PassRegistry &);
 void initializeJSONImporterPass(llvm::PassRegistry &);
 void initializeIslAstInfoPass(llvm::PassRegistry &);
-void initializeIslCodeGenerationPass(llvm::PassRegistry &);
+void initializeCodeGenerationPass(llvm::PassRegistry &);
 void initializeIslScheduleOptimizerPass(llvm::PassRegistry &);
-#ifdef PLUTO_FOUND
-void initializePlutoOptimizerPass(llvm::PassRegistry &);
-#endif
 void initializePollyCanonicalizePass(llvm::PassRegistry &);
 }
 

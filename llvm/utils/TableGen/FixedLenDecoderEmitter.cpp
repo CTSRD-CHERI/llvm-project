@@ -610,7 +610,7 @@ void Filter::emitTableEntry(DecoderTableInfo &TableInfo) const {
   TableInfo.Table.push_back(NumBits);
 
   // A new filter entry begins a new scope for fixup resolution.
-  TableInfo.FixupStack.push_back(FixupList());
+  TableInfo.FixupStack.emplace_back();
 
   DecoderTable &Table = TableInfo.Table;
 
@@ -1054,7 +1054,7 @@ void FilterChooser::emitBinaryParser(raw_ostream &o, unsigned &Indentation,
                           << "(MI, tmp, Address, Decoder)"
                           << Emitter->GuardPostfix << "\n";
   else
-    o.indent(Indentation) << "MI.addOperand(MCOperand::CreateImm(tmp));\n";
+    o.indent(Indentation) << "MI.addOperand(MCOperand::createImm(tmp));\n";
 
 }
 
@@ -1112,7 +1112,8 @@ bool FilterChooser::emitPredicateMatch(raw_ostream &o, unsigned &Indentation,
                                        unsigned Opc) const {
   ListInit *Predicates =
     AllInstructions[Opc]->TheDef->getValueAsListInit("Predicates");
-  for (unsigned i = 0; i < Predicates->getSize(); ++i) {
+  bool IsFirstEmission = true;
+  for (unsigned i = 0; i < Predicates->size(); ++i) {
     Record *Pred = Predicates->getElementAsRecord(i);
     if (!Pred->getValue("AssemblerMatcherPredicate"))
       continue;
@@ -1122,7 +1123,7 @@ bool FilterChooser::emitPredicateMatch(raw_ostream &o, unsigned &Indentation,
     if (!P.length())
       continue;
 
-    if (i != 0)
+    if (!IsFirstEmission)
       o << " && ";
 
     StringRef SR(P);
@@ -1133,14 +1134,15 @@ bool FilterChooser::emitPredicateMatch(raw_ostream &o, unsigned &Indentation,
       pairs = pairs.second.split(',');
     }
     emitSinglePredicateMatch(o, pairs.first, Emitter->PredicateNamespace);
+    IsFirstEmission = false;
   }
-  return Predicates->getSize() > 0;
+  return !Predicates->empty();
 }
 
 bool FilterChooser::doesOpcodeNeedPredicate(unsigned Opc) const {
   ListInit *Predicates =
     AllInstructions[Opc]->TheDef->getValueAsListInit("Predicates");
-  for (unsigned i = 0; i < Predicates->getSize(); ++i) {
+  for (unsigned i = 0; i < Predicates->size(); ++i) {
     Record *Pred = Predicates->getElementAsRecord(i);
     if (!Pred->getValue("AssemblerMatcherPredicate"))
       continue;
@@ -1331,7 +1333,7 @@ void FilterChooser::emitSingletonTableEntry(DecoderTableInfo &TableInfo,
 
   // complex singletons need predicate checks from the first singleton
   // to refer forward to the variable filterchooser that follows.
-  TableInfo.FixupStack.push_back(FixupList());
+  TableInfo.FixupStack.emplace_back();
 
   emitSingletonTableEntry(TableInfo, Opc);
 
@@ -1348,7 +1350,7 @@ void FilterChooser::emitSingletonTableEntry(DecoderTableInfo &TableInfo,
 void FilterChooser::runSingleFilter(unsigned startBit, unsigned numBit,
                                     bool mixed) {
   Filters.clear();
-  Filters.push_back(Filter(*this, startBit, numBit, true));
+  Filters.emplace_back(*this, startBit, numBit, true);
   BestIndex = 0; // Sole Filter instance to choose from.
   bestFilter().recurse();
 }
@@ -1358,9 +1360,9 @@ void FilterChooser::runSingleFilter(unsigned startBit, unsigned numBit,
 void FilterChooser::reportRegion(bitAttr_t RA, unsigned StartBit,
                                  unsigned BitIndex, bool AllowMixed) {
   if (RA == ATTR_MIXED && AllowMixed)
-    Filters.push_back(Filter(*this, StartBit, BitIndex - StartBit, true));
+    Filters.emplace_back(*this, StartBit, BitIndex - StartBit, true);
   else if (RA == ATTR_ALL_SET && !AllowMixed)
-    Filters.push_back(Filter(*this, StartBit, BitIndex - StartBit, false));
+    Filters.emplace_back(*this, StartBit, BitIndex - StartBit, false);
 }
 
 // FilterProcessor scans the well-known encoding bits of the instructions and
@@ -2177,7 +2179,7 @@ void FixedLenDecoderEmitter::run(raw_ostream &o) {
     TableInfo.Table.clear();
     TableInfo.FixupStack.clear();
     TableInfo.Table.reserve(16384);
-    TableInfo.FixupStack.push_back(FixupList());
+    TableInfo.FixupStack.emplace_back();
     FC.emitTableEntries(TableInfo);
     // Any NumToSkip fixups in the top level scope can resolve to the
     // OPC_Fail at the end of the table.

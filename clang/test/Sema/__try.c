@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -fborland-extensions -DBORLAND -fsyntax-only -verify -fblocks %s
-// RUN: %clang_cc1 -fms-extensions -fsyntax-only -verify -fblocks %s
+// RUN: %clang_cc1 -triple x86_64-windows -fborland-extensions -DBORLAND -fsyntax-only -verify -fblocks %s
+// RUN: %clang_cc1 -triple x86_64-windows -fms-extensions -fsyntax-only -verify -fblocks %s
 
 #define JOIN2(x,y) x ## y
 #define JOIN(x,y) JOIN2(x,y)
@@ -279,5 +279,11 @@ void test_jump_out_of___finally() {
     ^{
       return;
     }();
+  }
+}
+
+void test_typo_in_except() {
+  __try {
+  } __except(undeclared_identifier) { // expected-error {{use of undeclared identifier 'undeclared_identifier'}} expected-error {{expected expression}}
   }
 }

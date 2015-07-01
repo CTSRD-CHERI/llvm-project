@@ -129,7 +129,7 @@ class APInt {
 
   /// \brief Clear unused high order bits
   ///
-  /// This method is used internally to clear the to "N" bits in the high order
+  /// This method is used internally to clear the top "N" bits in the high order
   /// word that are not used by the APInt. This is needed after the most
   /// significant word is assigned a value to ensure that those bits are
   /// zero'd out.
@@ -351,8 +351,7 @@ public:
   /// This checks to see if the value of this APInt is the maximum signed
   /// value for the APInt's bit width.
   bool isMaxSignedValue() const {
-    return BitWidth == 1 ? VAL == 0
-                         : !isNegative() && countPopulation() == BitWidth - 1;
+    return !isNegative() && countPopulation() == BitWidth - 1;
   }
 
   /// \brief Determine if this is the smallest unsigned value.
@@ -366,7 +365,7 @@ public:
   /// This checks to see if the value of this APInt is the minimum signed
   /// value for the APInt's bit width.
   bool isMinSignedValue() const {
-    return BitWidth == 1 ? VAL == 1 : isNegative() && isPowerOf2();
+    return isNegative() && isPowerOf2();
   }
 
   /// \brief Check if this APInt has an N-bits unsigned integer value.
@@ -406,6 +405,13 @@ public:
     return (getActiveBits() > 64 || getZExtValue() > Limit) ? Limit
                                                             : getZExtValue();
   }
+
+  /// \brief Check if the APInt consists of a repeated bit pattern.
+  ///
+  /// e.g. 0x01010101 satisfies isSplat(8).
+  /// \param SplatSizeInBits The size of the pattern in bits. Must divide bit
+  /// width without remainder.
+  bool isSplat(unsigned SplatSizeInBits) const;
 
   /// @}
   /// \name Value Generators
@@ -789,7 +795,7 @@ public:
 
   /// \brief Bitwise OR function.
   ///
-  /// Performs a bitwise or on *this and RHS. This is implemented bny simply
+  /// Performs a bitwise or on *this and RHS. This is implemented by simply
   /// calling operator|.
   ///
   /// \returns An APInt value representing the bitwise OR of *this and RHS.
@@ -1064,7 +1070,7 @@ public:
   /// the validity of the less-or-equal relationship.
   ///
   /// \returns true if *this <= RHS when considered unsigned.
-  bool ule(uint64_t RHS) const { return ule(APInt(getBitWidth(), RHS)); }
+  bool ule(uint64_t RHS) const { return !ugt(RHS); }
 
   /// \brief Signed less or equal comparison
   ///
@@ -1080,7 +1086,7 @@ public:
   /// validity of the less-or-equal relationship.
   ///
   /// \returns true if *this <= RHS when considered signed.
-  bool sle(uint64_t RHS) const { return sle(APInt(getBitWidth(), RHS)); }
+  bool sle(uint64_t RHS) const { return !sgt(RHS); }
 
   /// \brief Unsigned greather than comparison
   ///
@@ -1128,7 +1134,7 @@ public:
   /// the validity of the greater-or-equal relationship.
   ///
   /// \returns true if *this >= RHS when considered unsigned.
-  bool uge(uint64_t RHS) const { return uge(APInt(getBitWidth(), RHS)); }
+  bool uge(uint64_t RHS) const { return !ult(RHS); }
 
   /// \brief Signed greather or equal comparison
   ///
@@ -1144,7 +1150,7 @@ public:
   /// the validity of the greater-or-equal relationship.
   ///
   /// \returns true if *this >= RHS when considered signed.
-  bool sge(uint64_t RHS) const { return sge(APInt(getBitWidth(), RHS)); }
+  bool sge(uint64_t RHS) const { return !slt(RHS); }
 
   /// This operation tests if there are any pairs of corresponding bits
   /// between this APInt and RHS that are both set.

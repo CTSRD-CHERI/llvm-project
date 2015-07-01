@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <string.h>
 
 void *guard;
 
@@ -26,6 +27,8 @@ void handler(int signo, siginfo_t *info, void *uctx) {
 
 int main() {
   struct sigaction a, old;
+  memset(&a, 0, sizeof(a));
+  memset(&old, 0, sizeof(old));
   a.sa_sigaction = handler;
   a.sa_flags = SA_SIGINFO;
   sigaction(SIGSEGV, &a, &old);

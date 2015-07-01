@@ -13,7 +13,7 @@ class ThreadSteppingTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_step_out_with_dsym_and_run_command(self):
         """Exercise thread step-out and frame select followed by thread step-out."""
@@ -44,7 +44,7 @@ class ThreadSteppingTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line1, num_expected_locations=1, loc_exact=True)
 
         # Now run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The process should be stopped at this point.
         self.expect("process status", PROCESS_STOPPED,

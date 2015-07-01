@@ -13,10 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/CodeGen/IRBuilder.h"
-
 #include "polly/ScopInfo.h"
 #include "polly/Support/ScopHelper.h"
-
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/Debug.h"
 
@@ -61,8 +59,8 @@ void ScopAnnotator::buildAliasScopes(Scop &S) {
   OtherAliasScopeListMap.clear();
 
   SetVector<Value *> BasePtrs;
-  for (ScopStmt *Stmt : S)
-    for (MemoryAccess *MA : *Stmt)
+  for (ScopStmt &Stmt : S)
+    for (MemoryAccess *MA : Stmt)
       BasePtrs.insert(MA->getBaseAddr());
 
   std::string AliasScopeStr = "polly.alias.scope.";

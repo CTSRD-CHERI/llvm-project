@@ -30,13 +30,6 @@ HostInfoAndroid::ComputeHostArchitectureSupport(ArchSpec &arch_32, ArchSpec &arc
     }
 }
 
-bool
-HostInfoAndroid::ComputeSupportExeDirectory(FileSpec &file_spec)
-{
-    file_spec.GetDirectory() = HostInfoLinux::GetProgramFileSpec().GetDirectory();
-    return (bool)file_spec.GetDirectory();
-}
-
 FileSpec
 HostInfoAndroid::GetDefaultShell()
 {
@@ -93,4 +86,16 @@ HostInfoAndroid::ResolveLibraryPath(const std::string& module_path, const ArchSp
     }
 
     return FileSpec();
+}
+
+bool
+HostInfoAndroid::ComputeTempFileBaseDirectory(FileSpec &file_spec)
+{
+    if (HostInfoLinux::ComputeTempFileBaseDirectory(file_spec))
+        return true;
+
+    // If the default mechanism for computing the temp directory failed then
+    // fall back to /data/local/tmp
+    file_spec = FileSpec("/data/local/tmp", false);
+    return true;
 }

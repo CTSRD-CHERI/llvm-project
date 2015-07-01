@@ -40,17 +40,17 @@ namespace lldb_private
 class LocalDebugDelegate : public IDebugDelegate
 {
   public:
-    explicit LocalDebugDelegate::LocalDebugDelegate(lldb::ProcessSP process);
+    explicit LocalDebugDelegate(lldb::ProcessSP process);
 
-    virtual void OnExitProcess(uint32_t exit_code) override;
-    virtual void OnDebuggerConnected(lldb::addr_t image_base) override;
-    virtual ExceptionResult OnDebugException(bool first_chance, const ExceptionRecord &record) override;
-    virtual void OnCreateThread(const HostThread &thread) override;
-    virtual void OnExitThread(const HostThread &thread) override;
-    virtual void OnLoadDll(const lldb_private::ModuleSpec &module_spec, lldb::addr_t module_addr) override;
-    virtual void OnUnloadDll(lldb::addr_t module_addr) override;
-    virtual void OnDebugString(const std::string &message) override;
-    virtual void OnDebuggerError(const Error &error, uint32_t type) override;
+    void OnExitProcess(uint32_t exit_code) override;
+    void OnDebuggerConnected(lldb::addr_t image_base) override;
+    ExceptionResult OnDebugException(bool first_chance, const ExceptionRecord &record) override;
+    void OnCreateThread(const HostThread &thread) override;
+    void OnExitThread(lldb::tid_t thread_id, uint32_t exit_code) override;
+    void OnLoadDll(const lldb_private::ModuleSpec &module_spec, lldb::addr_t module_addr) override;
+    void OnUnloadDll(lldb::addr_t module_addr) override;
+    void OnDebugString(const std::string &message) override;
+    void OnDebuggerError(const Error &error, uint32_t type) override;
 
   private:
     lldb::ProcessSP m_process;

@@ -18,14 +18,14 @@ class PoVerbosityTestCase(TestBase):
         self.line = line_number('main.m',
                                 '// Stop here')
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym(self):
         """Test that the po command acts correctly."""
         self.buildDsym()
         self.do_my_test()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin due to ObjC test case")
+    @skipUnlessDarwin
     @dwarf_test
     def test_with_dwarf(self):
         """Test that the po command acts correctly."""
@@ -48,7 +48,7 @@ class PoVerbosityTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.m", self.line, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
         
         self.expect("expr -O -v -- foo",
             substrs = ['(id) $',' = 0x', '1 = 2','2 = 3;'])

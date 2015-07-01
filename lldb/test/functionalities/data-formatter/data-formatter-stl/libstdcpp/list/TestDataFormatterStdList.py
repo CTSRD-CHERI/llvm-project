@@ -12,7 +12,7 @@ class StdListDataFormatterTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Test data formatter commands."""
@@ -40,7 +40,7 @@ class StdListDataFormatterTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=-1)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -162,7 +162,7 @@ class StdListDataFormatterTestCase(TestBase):
         
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.final_line, num_expected_locations=-1)
 
-        self.runCmd("c", RUN_SUCCEEDED)
+        self.runCmd("c", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

@@ -24,7 +24,7 @@
 
 /* Return a schedule encapsulating the given schedule tree.
  *
- * We currently only allow schedule trees with a domain as root.
+ * We currently only allow schedule trees with a domain or extension as root.
  *
  * The leaf field is initialized as a leaf node so that it can be
  * used to represent leaves in the constructed schedule.
@@ -36,13 +36,16 @@
 __isl_give isl_schedule *isl_schedule_from_schedule_tree(isl_ctx *ctx,
 	__isl_take isl_schedule_tree *tree)
 {
+	enum isl_schedule_node_type type;
 	isl_schedule *schedule;
 
 	if (!tree)
 		return NULL;
-	if (isl_schedule_tree_get_type(tree) != isl_schedule_node_domain)
+	type = isl_schedule_tree_get_type(tree);
+	if (type != isl_schedule_node_domain &&
+	    type != isl_schedule_node_extension)
 		isl_die(isl_schedule_tree_get_ctx(tree), isl_error_unsupported,
-			"root of schedule tree should be a domain",
+			"root of schedule tree should be a domain or extension",
 			goto error);
 
 	schedule = isl_calloc_type(ctx, isl_schedule);
@@ -179,13 +182,13 @@ __isl_keep isl_schedule_tree *isl_schedule_peek_leaf(
 
 /* Are "schedule1" and "schedule2" obviously equal to each other?
  */
-int isl_schedule_plain_is_equal(__isl_keep isl_schedule *schedule1,
+isl_bool isl_schedule_plain_is_equal(__isl_keep isl_schedule *schedule1,
 	__isl_keep isl_schedule *schedule2)
 {
 	if (!schedule1 || !schedule2)
-		return -1;
+		return isl_bool_error;
 	if (schedule1 == schedule2)
-		return 1;
+		return isl_bool_true;
 	return isl_schedule_tree_plain_is_equal(schedule1->root,
 						schedule2->root);
 }
@@ -245,7 +248,7 @@ __isl_give isl_schedule_node *isl_schedule_get_root(
 /* Set max_out to the maximal number of output dimensions over
  * all maps.
  */
-static int update_max_out(__isl_take isl_map *map, void *user)
+static isl_stat update_max_out(__isl_take isl_map *map, void *user)
 {
 	int *max_out = user;
 	int n_out = isl_map_dim(map, isl_dim_out);
@@ -254,7 +257,7 @@ static int update_max_out(__isl_take isl_map *map, void *user)
 		*max_out = n_out;
 
 	isl_map_free(map);
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Internal data structure for map_pad_range.
@@ -270,7 +273,7 @@ struct isl_pad_schedule_map_data {
 /* Pad the range of the given map with zeros to data->max_out and
  * then add the result to data->res.
  */
-static int map_pad_range(__isl_take isl_map *map, void *user)
+static isl_stat map_pad_range(__isl_take isl_map *map, void *user)
 {
 	struct isl_pad_schedule_map_data *data = user;
 	int i;
@@ -282,9 +285,9 @@ static int map_pad_range(__isl_take isl_map *map, void *user)
 
 	data->res = isl_union_map_add_map(data->res, map);
 	if (!data->res)
-		return -1;
+		return isl_stat_error;
 
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Pad the ranges of the maps in the union map with zeros such they all have
@@ -334,17 +337,19 @@ __isl_give isl_union_set *isl_schedule_get_domain(
  *
  * Return 0 on success and -1 on failure.
  */
-int isl_schedule_foreach_schedule_node(__isl_keep isl_schedule *sched,
-	int (*fn)(__isl_keep isl_schedule_node *node, void *user), void *user)
+isl_stat isl_schedule_foreach_schedule_node_top_down(
+	__isl_keep isl_schedule *sched,
+	isl_bool (*fn)(__isl_keep isl_schedule_node *node, void *user),
+	void *user)
 {
 	isl_schedule_node *node;
-	int r;
+	isl_stat r;
 
 	if (!sched)
-		return -1;
+		return isl_stat_error;
 
 	node = isl_schedule_get_root(sched);
-	r = isl_schedule_node_foreach_descendant(node, fn, user);
+	r = isl_schedule_node_foreach_descendant_top_down(node, fn, user);
 	isl_schedule_node_free(node);
 
 	return r;
@@ -357,7 +362,7 @@ int isl_schedule_foreach_schedule_node(__isl_keep isl_schedule *sched,
  * lead to an infinite loop.  It is safest to always return a pointer
  * to the same position (same ancestors and child positions) as the input node.
  */
-__isl_give isl_schedule *isl_schedule_map_schedule_node(
+__isl_give isl_schedule *isl_schedule_map_schedule_node_bottom_up(
 	__isl_take isl_schedule *schedule,
 	__isl_give isl_schedule_node *(*fn)(
 		__isl_take isl_schedule_node *node, void *user), void *user)
@@ -367,7 +372,7 @@ __isl_give isl_schedule *isl_schedule_map_schedule_node(
 	node = isl_schedule_get_root(schedule);
 	isl_schedule_free(schedule);
 
-	node = isl_schedule_node_map_descendant(node, fn, user);
+	node = isl_schedule_node_map_descendant_bottom_up(node, fn, user);
 	schedule = isl_schedule_node_get_schedule(node);
 	isl_schedule_node_free(node);
 
@@ -375,7 +380,7 @@ __isl_give isl_schedule *isl_schedule_map_schedule_node(
 }
 
 /* Wrapper around isl_schedule_node_reset_user for use as
- * an isl_schedule_map_schedule_node callback.
+ * an isl_schedule_map_schedule_node_bottom_up callback.
  */
 static __isl_give isl_schedule_node *reset_user(
 	__isl_take isl_schedule_node *node, void *user)
@@ -389,11 +394,12 @@ static __isl_give isl_schedule_node *reset_user(
 __isl_give isl_schedule *isl_schedule_reset_user(
 	__isl_take isl_schedule *schedule)
 {
-	return isl_schedule_map_schedule_node(schedule, &reset_user, NULL);
+	return isl_schedule_map_schedule_node_bottom_up(schedule, &reset_user,
+							NULL);
 }
 
 /* Wrapper around isl_schedule_node_align_params for use as
- * an isl_schedule_map_schedule_node callback.
+ * an isl_schedule_map_schedule_node_bottom_up callback.
  */
 static __isl_give isl_schedule_node *align_params(
 	__isl_take isl_schedule_node *node, void *user)
@@ -409,14 +415,14 @@ static __isl_give isl_schedule_node *align_params(
 __isl_give isl_schedule *isl_schedule_align_params(
 	__isl_take isl_schedule *schedule, __isl_take isl_space *space)
 {
-	schedule = isl_schedule_map_schedule_node(schedule,
+	schedule = isl_schedule_map_schedule_node_bottom_up(schedule,
 						    &align_params, space);
 	isl_space_free(space);
 	return schedule;
 }
 
 /* Wrapper around isl_schedule_node_pullback_union_pw_multi_aff for use as
- * an isl_schedule_map_schedule_node callback.
+ * an isl_schedule_map_schedule_node_bottom_up callback.
  */
 static __isl_give isl_schedule_node *pullback_upma(
 	__isl_take isl_schedule_node *node, void *user)
@@ -429,18 +435,21 @@ static __isl_give isl_schedule_node *pullback_upma(
 
 /* Compute the pullback of "schedule" by the function represented by "upma".
  * In other words, plug in "upma" in the iteration domains of "schedule".
+ *
+ * The schedule tree is not allowed to contain any expansion nodes.
  */
 __isl_give isl_schedule *isl_schedule_pullback_union_pw_multi_aff(
 	__isl_take isl_schedule *schedule,
 	__isl_take isl_union_pw_multi_aff *upma)
 {
-	schedule = isl_schedule_map_schedule_node(schedule,
+	schedule = isl_schedule_map_schedule_node_bottom_up(schedule,
 						&pullback_upma, upma);
 	isl_union_pw_multi_aff_free(upma);
 	return schedule;
 }
 
 /* Intersect the domain of the schedule "schedule" with "domain".
+ * The root of "schedule" is required to be a domain node.
  */
 __isl_give isl_schedule *isl_schedule_intersect_domain(
 	__isl_take isl_schedule *schedule, __isl_take isl_union_set *domain)
@@ -453,8 +462,8 @@ __isl_give isl_schedule *isl_schedule_intersect_domain(
 
 	root_type = isl_schedule_tree_get_type(schedule->root);
 	if (root_type != isl_schedule_node_domain)
-		isl_die(isl_schedule_get_ctx(schedule), isl_error_internal,
-			"root node not a domain node", goto error);
+		isl_die(isl_schedule_get_ctx(schedule), isl_error_invalid,
+			"root node must be a domain node", goto error);
 
 	node = isl_schedule_get_root(schedule);
 	isl_schedule_free(schedule);
@@ -734,11 +743,23 @@ static __isl_give isl_band_list *construct_band_list(
 	case isl_schedule_node_domain:
 		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
 			"internal domain nodes not allowed", goto error);
+	case isl_schedule_node_expansion:
+		isl_die(isl_schedule_node_get_ctx(node), isl_error_unsupported,
+			"expansion nodes not supported", goto error);
+	case isl_schedule_node_extension:
+		isl_die(isl_schedule_node_get_ctx(node), isl_error_unsupported,
+			"extension nodes not supported", goto error);
 	case isl_schedule_node_filter:
 		filter = isl_schedule_node_filter_get_filter(node);
 		domain = isl_union_set_intersect(domain, filter);
 		node = isl_schedule_node_child(node, 0);
 		return construct_band_list(node, domain, parent);
+	case isl_schedule_node_guard:
+		isl_die(isl_schedule_node_get_ctx(node), isl_error_unsupported,
+			"guard nodes not supported", goto error);
+	case isl_schedule_node_mark:
+		isl_die(isl_schedule_node_get_ctx(node), isl_error_unsupported,
+			"mark nodes not supported", goto error);
 	case isl_schedule_node_set:
 		ctx = isl_schedule_node_get_ctx(node);
 		if (isl_options_get_schedule_separate_components(ctx))
@@ -904,6 +925,25 @@ __isl_give isl_schedule *isl_schedule_insert_context(
 	isl_schedule_free(schedule);
 	node = isl_schedule_node_child(node, 0);
 	node = isl_schedule_node_insert_context(node, context);
+	schedule = isl_schedule_node_get_schedule(node);
+	isl_schedule_node_free(node);
+
+	return schedule;
+}
+
+/* Insert a guard node with constraints "guard" between the domain
+ * root node of "schedule" and its single child.
+ * Return a pointer to the updated schedule.
+ */
+__isl_give isl_schedule *isl_schedule_insert_guard(
+	__isl_take isl_schedule *schedule, __isl_take isl_set *guard)
+{
+	isl_schedule_node *node;
+
+	node = isl_schedule_get_root(schedule);
+	isl_schedule_free(schedule);
+	node = isl_schedule_node_child(node, 0);
+	node = isl_schedule_node_insert_guard(node, guard);
 	schedule = isl_schedule_node_get_schedule(node);
 	isl_schedule_node_free(node);
 

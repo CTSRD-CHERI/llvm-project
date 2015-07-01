@@ -104,15 +104,15 @@ public:
 class DOSStubChunk : public HeaderChunk {
 public:
   explicit DOSStubChunk(const PECOFFLinkingContext &ctx)
-      : HeaderChunk(), _context(ctx) {
+      : HeaderChunk(), _ctx(ctx) {
     // Minimum size of DOS stub is 64 bytes. The next block (PE header) needs to
     // be aligned on 8 byte boundary.
-    size_t size = std::max(_context.getDosStub().size(), (size_t)64);
+    size_t size = std::max(_ctx.getDosStub().size(), (size_t)64);
     _size = llvm::RoundUpToAlignment(size, 8);
   }
 
   void write(uint8_t *buffer) override {
-    ArrayRef<uint8_t> array = _context.getDosStub();
+    ArrayRef<uint8_t> array = _ctx.getDosStub();
     std::memcpy(buffer, array.data(), array.size());
     auto *header = reinterpret_cast<llvm::object::dos_header *>(buffer);
     header->AddressOfRelocationTable = sizeof(llvm::object::dos_header);
@@ -120,7 +120,7 @@ public:
   }
 
 private:
-  const PECOFFLinkingContext &_context;
+  const PECOFFLinkingContext &_ctx;
 };
 
 /// A PEHeaderChunk represents PE header including COFF header.
@@ -849,10 +849,10 @@ uint64_t AtomChunk::memAlign() const {
   // the section. We restore that here.
   if (_atomLayouts.empty())
     return _ctx.getPageSize();
-  int align = _ctx.getPageSize();
+  unsigned align = _ctx.getPageSize();
   for (auto atomLayout : _atomLayouts) {
     auto *atom = cast<const DefinedAtom>(atomLayout->_atom);
-    align = std::max(align, 1 << atom->alignment().powerOf2);
+    align = std::max(align, (unsigned)atom->alignment().value);
   }
   return align;
 }
@@ -860,7 +860,7 @@ uint64_t AtomChunk::memAlign() const {
 void AtomChunk::appendAtom(const DefinedAtom *atom) {
   // Atom may have to be at a proper alignment boundary. If so, move the
   // pointer to make a room after the last atom before adding new one.
-  _size = llvm::RoundUpToAlignment(_size, 1 << atom->alignment().powerOf2);
+  _size = llvm::RoundUpToAlignment(_size, atom->alignment().value);
 
   // Create an AtomLayout and move the current pointer.
   auto *layout = new (_alloc) AtomLayout(atom, _size, _size);

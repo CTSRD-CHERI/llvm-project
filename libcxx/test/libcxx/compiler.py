@@ -107,12 +107,15 @@ class CXXCompiler(object):
             # Otherwise wrap the filename in a context manager function.
             with_fn = lambda: libcxx.util.nullContext(object_file)
         with with_fn() as object_file:
-            cmd, output, err, rc = self.compile(source_file, object_file,
-                                                flags=flags, env=env, cwd=cwd)
+            cc_cmd, cc_stdout, cc_stderr, rc = self.compile(
+                    source_file, object_file, flags=flags, env=env, cwd=cwd)
             if rc != 0:
-                return cmd, output, err, rc
-            return self.link(object_file, out=out, flags=flags, env=env,
-                             cwd=cwd)
+                return cc_cmd, cc_stdout, cc_stderr, rc
+
+            link_cmd, link_stdout, link_stderr, rc = self.link(
+                    object_file, out=out, flags=flags, env=env, cwd=cwd)
+            return (cc_cmd + ['&&'] + link_cmd, cc_stdout + link_stdout,
+                    cc_stderr + link_stderr, rc)
 
     def dumpMacros(self, source_files=None, flags=[], env=None, cwd=None):
         if source_files is None:
@@ -134,3 +137,13 @@ class CXXCompiler(object):
     def getTriple(self):
         cmd = [self.path] + self.flags + ['-dumpmachine']
         return lit.util.capture(cmd).strip()
+
+    def hasCompileFlag(self, flag):
+        flags = [flag]
+        # Add -Werror to ensure that an unrecognized flag causes a non-zero
+        # exit code. -Werror is supported on all known compiler types.
+        if self.type is not None:
+            flags += ['-Werror']
+        cmd, out, err, rc = self.compile(os.devnull, out=os.devnull,
+                                         flags=flags)
+        return rc == 0

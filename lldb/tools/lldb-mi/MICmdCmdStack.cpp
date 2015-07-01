@@ -29,6 +29,7 @@
 #include "MICmdArgValThreadGrp.h"
 #include "MICmdArgValOptionLong.h"
 #include "MICmdArgValOptionShort.h"
+#include "MICmdArgValPrintValues.h"
 #include "MICmdArgValListOfN.h"
 
 //++ ------------------------------------------------------------------------------------
@@ -213,7 +214,7 @@ CMICmdCmdStackInfoFrame::Execute(void)
 
     lldb::SBThread sbThread = sbProcess.GetSelectedThread();
     MIuint nFrameId = sbThread.GetSelectedFrame().GetFrameID();
-    if (!rSessionInfo.MIResponseFormFrameInfo(sbThread, nFrameId, m_miValueTuple))
+    if (!rSessionInfo.MIResponseFormFrameInfo(sbThread, nFrameId, CMICmnLLDBDebugSessionInfo::eFrameInfoFormat_NoArguments, m_miValueTuple))
          return MIstatus::failure;
 
     return MIstatus::success;
@@ -356,7 +357,7 @@ CMICmdCmdStackListFrames::Execute(void)
     for (MIuint nLevel = nFrameLow; nLevel < nThreadFrames; nLevel++)
     {
         CMICmnMIValueTuple miValueTuple;
-        if (!rSessionInfo.MIResponseFormFrameInfo(thread, nLevel, miValueTuple))
+        if (!rSessionInfo.MIResponseFormFrameInfo(thread, nLevel, CMICmnLLDBDebugSessionInfo::eFrameInfoFormat_NoArguments, miValueTuple))
             return MIstatus::failure;
 
         const CMICmnMIValueResult miValueResult8("frame", miValueTuple);
@@ -449,9 +450,6 @@ CMICmdCmdStackListArguments::CMICmdCmdStackListArguments(void)
     , m_miValueList(true)
     , m_constStrArgThread("thread")
     , m_constStrArgPrintValues("print-values")
-    , m_constStrArgNoValues("no-values")
-    , m_constStrArgAllValues("all-values")
-    , m_constStrArgSimpleValues("simple-values")
     , m_constStrArgFrameLow("low-frame")
     , m_constStrArgFrameHigh("high-frame")
 {
@@ -487,10 +485,7 @@ CMICmdCmdStackListArguments::ParseArgs(void)
 {
     bool bOk =
         m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgThread, false, true, CMICmdArgValListBase::eArgValType_Number, 1)));
-    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValNumber(m_constStrArgPrintValues, false, true)));
-    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgNoValues, false, true)));
-    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgAllValues, false, true)));
-    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgSimpleValues, false, true)));
+    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValPrintValues(m_constStrArgPrintValues, true, true)));
     bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValNumber(m_constStrArgFrameLow, false, true)));
     bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValNumber(m_constStrArgFrameHigh, false, true)));
     return (bOk && ParseValidateCmdOptions());
@@ -509,10 +504,7 @@ bool
 CMICmdCmdStackListArguments::Execute(void)
 {
     CMICMDBASE_GETOPTION(pArgThread, OptionLong, m_constStrArgThread);
-    CMICMDBASE_GETOPTION(pArgPrintValues, Number, m_constStrArgPrintValues);
-    CMICMDBASE_GETOPTION(pArgNoValues, OptionLong, m_constStrArgNoValues);
-    CMICMDBASE_GETOPTION(pArgAllValues, OptionLong, m_constStrArgAllValues);
-    CMICMDBASE_GETOPTION(pArgSimpleValues, OptionLong, m_constStrArgSimpleValues);
+    CMICMDBASE_GETOPTION(pArgPrintValues, PrintValues, m_constStrArgPrintValues);
     CMICMDBASE_GETOPTION(pArgFrameLow, Number, m_constStrArgFrameLow);
     CMICMDBASE_GETOPTION(pArgFrameHigh, Number, m_constStrArgFrameHigh);
 
@@ -527,28 +519,7 @@ CMICmdCmdStackListArguments::Execute(void)
         }
     }
 
-    CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e eVarInfoFormat;
-    if (pArgPrintValues->GetFound())
-    {
-        const MIuint nPrintValues = pArgPrintValues->GetValue();
-        if (nPrintValues >= CMICmnLLDBDebugSessionInfo::kNumVariableInfoFormats)
-        {
-            SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_INVALID_PRINT_VALUES), m_cmdData.strMiCmd.c_str()));
-            return MIstatus::failure;
-        }
-        eVarInfoFormat = static_cast<CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e>(nPrintValues);
-    }
-    else if (pArgNoValues->GetFound())
-        eVarInfoFormat = CMICmnLLDBDebugSessionInfo::eVariableInfoFormat_NoValues;
-    else if (pArgAllValues->GetFound())
-        eVarInfoFormat = CMICmnLLDBDebugSessionInfo::eVariableInfoFormat_AllValues;
-    else if (pArgSimpleValues->GetFound())
-        eVarInfoFormat = CMICmnLLDBDebugSessionInfo::eVariableInfoFormat_SimpleValues;
-    else
-    {
-        SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_INVALID_PRINT_VALUES), m_cmdData.strMiCmd.c_str()));
-        return MIstatus::failure;
-    }
+    const CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e eVarInfoFormat = static_cast<CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e>(pArgPrintValues->GetValue());
 
     MIuint nFrameLow = 0;
     MIuint nFrameHigh = UINT32_MAX;
@@ -667,9 +638,6 @@ CMICmdCmdStackListLocals::CMICmdCmdStackListLocals(void)
     , m_constStrArgThread("thread")
     , m_constStrArgFrame("frame")
     , m_constStrArgPrintValues("print-values")
-    , m_constStrArgNoValues("no-values")
-    , m_constStrArgAllValues("all-values")
-    , m_constStrArgSimpleValues("simple-values")
 {
     // Command factory matches this name with that received from the stdin stream
     m_strMiCmd = "stack-list-locals";
@@ -705,10 +673,7 @@ CMICmdCmdStackListLocals::ParseArgs(void)
         m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgThread, false, true, CMICmdArgValListBase::eArgValType_Number, 1)));
     bOk = bOk &&
           m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgFrame, false, true, CMICmdArgValListBase::eArgValType_Number, 1)));
-    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValNumber(m_constStrArgPrintValues, false, true)));
-    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgNoValues, false, true)));
-    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgAllValues, false, true)));
-    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgSimpleValues, false, true)));
+    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValPrintValues(m_constStrArgPrintValues, true, true)));
     return (bOk && ParseValidateCmdOptions());
 }
 
@@ -726,10 +691,7 @@ CMICmdCmdStackListLocals::Execute(void)
 {
     CMICMDBASE_GETOPTION(pArgThread, OptionLong, m_constStrArgThread);
     CMICMDBASE_GETOPTION(pArgFrame, OptionLong, m_constStrArgFrame);
-    CMICMDBASE_GETOPTION(pArgPrintValues, Number, m_constStrArgPrintValues);
-    CMICMDBASE_GETOPTION(pArgNoValues, OptionLong, m_constStrArgNoValues);
-    CMICMDBASE_GETOPTION(pArgAllValues, OptionLong, m_constStrArgAllValues);
-    CMICMDBASE_GETOPTION(pArgSimpleValues, OptionLong, m_constStrArgSimpleValues);
+    CMICMDBASE_GETOPTION(pArgPrintValues, PrintValues, m_constStrArgPrintValues);
 
     // Retrieve the --thread option's thread ID (only 1)
     MIuint64 nThreadId = UINT64_MAX;
@@ -752,28 +714,7 @@ CMICmdCmdStackListLocals::Execute(void)
         }
     }
 
-    CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e eVarInfoFormat;
-    if (pArgPrintValues->GetFound())
-    {
-        const MIuint nPrintValues = pArgPrintValues->GetValue();
-        if (nPrintValues >= CMICmnLLDBDebugSessionInfo::kNumVariableInfoFormats)
-        {
-            SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_INVALID_PRINT_VALUES), m_cmdData.strMiCmd.c_str()));
-            return MIstatus::failure;
-        }
-        eVarInfoFormat = static_cast<CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e>(nPrintValues);
-    }
-    else if (pArgNoValues->GetFound())
-        eVarInfoFormat = CMICmnLLDBDebugSessionInfo::eVariableInfoFormat_NoValues;
-    else if (pArgAllValues->GetFound())
-        eVarInfoFormat = CMICmnLLDBDebugSessionInfo::eVariableInfoFormat_AllValues;
-    else if (pArgSimpleValues->GetFound())
-        eVarInfoFormat = CMICmnLLDBDebugSessionInfo::eVariableInfoFormat_SimpleValues;
-    else
-    {
-        SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_INVALID_PRINT_VALUES), m_cmdData.strMiCmd.c_str()));
-        return MIstatus::failure;
-    }
+    const CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e eVarInfoFormat = static_cast<CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e>(pArgPrintValues->GetValue());
 
     CMICmnLLDBDebugSessionInfo &rSessionInfo(CMICmnLLDBDebugSessionInfo::Instance());
     lldb::SBProcess sbProcess = rSessionInfo.GetProcess();
@@ -843,6 +784,170 @@ CMICmdBase *
 CMICmdCmdStackListLocals::CreateSelf(void)
 {
     return new CMICmdCmdStackListLocals();
+}
+
+//---------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------
+
+//++ ------------------------------------------------------------------------------------
+// Details: CMICmdCmdStackListVariables constructor.
+// Type:    Method.
+// Args:    None.
+// Return:  None.
+// Throws:  None.
+//--
+CMICmdCmdStackListVariables::CMICmdCmdStackListVariables(void)
+    : m_bThreadInvalid(false)
+    , m_miValueList(true)
+    , m_constStrArgThread("thread")
+    , m_constStrArgFrame("frame")
+    , m_constStrArgPrintValues("print-values")
+{
+    // Command factory matches this name with that received from the stdin stream
+    m_strMiCmd = "stack-list-variables";
+    
+    // Required by the CMICmdFactory when registering *this command
+    m_pSelfCreatorFn = &CMICmdCmdStackListVariables::CreateSelf;
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: CMICmdCmdStackListVariables destructor.
+// Type:    Overrideable.
+// Args:    None.
+// Return:  None.
+// Throws:  None.
+//--
+CMICmdCmdStackListVariables::~CMICmdCmdStackListVariables(void)
+{
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: The invoker requires this function. The parses the command line options
+//          arguments to extract values for each of those arguments.
+// Type:    Overridden.
+// Args:    None.
+// Return:  MIstatus::success - Functional succeeded.
+//          MIstatus::failure - Functional failed.
+// Throws:  None.
+//--
+bool
+CMICmdCmdStackListVariables::ParseArgs(void)
+{
+    bool bOk =
+    m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgThread, false, true, CMICmdArgValListBase::eArgValType_Number, 1)));
+    bOk = bOk &&
+    m_setCmdArgs.Add(*(new CMICmdArgValOptionLong(m_constStrArgFrame, false, true, CMICmdArgValListBase::eArgValType_Number, 1)));
+    bOk = bOk && m_setCmdArgs.Add(*(new CMICmdArgValPrintValues(m_constStrArgPrintValues, true, true)));
+    return (bOk && ParseValidateCmdOptions());
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: The invoker requires this function. The command does work in this function.
+//          The command is likely to communicate with the LLDB SBDebugger in here.
+// Type:    Overridden.
+// Args:    None.
+// Return:  MIstatus::success - Functional succeeded.
+//          MIstatus::failure - Functional failed.
+// Throws:  None.
+//--
+bool
+CMICmdCmdStackListVariables::Execute(void)
+{
+    CMICMDBASE_GETOPTION(pArgThread, OptionLong, m_constStrArgThread);
+    CMICMDBASE_GETOPTION(pArgFrame, OptionLong, m_constStrArgFrame);
+    CMICMDBASE_GETOPTION(pArgPrintValues, PrintValues, m_constStrArgPrintValues);
+    
+    // Retrieve the --thread option's thread ID (only 1)
+    MIuint64 nThreadId = UINT64_MAX;
+    if (pArgThread->GetFound())
+    {
+        if (!pArgThread->GetExpectedOption<CMICmdArgValNumber, MIuint64>(nThreadId))
+        {
+            SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_OPTION_NOT_FOUND), m_cmdData.strMiCmd.c_str(), m_constStrArgThread.c_str()));
+            return MIstatus::failure;
+        }
+    }
+    
+    MIuint64 nFrame = UINT64_MAX;
+    if (pArgFrame->GetFound())
+    {
+        if (!pArgFrame->GetExpectedOption<CMICmdArgValNumber, MIuint64>(nFrame))
+        {
+            SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_OPTION_NOT_FOUND), m_cmdData.strMiCmd.c_str(), m_constStrArgFrame.c_str()));
+            return MIstatus::failure;
+        }
+    }
+    
+    const CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e eVarInfoFormat = static_cast<CMICmnLLDBDebugSessionInfo::VariableInfoFormat_e>(pArgPrintValues->GetValue());
+    
+    CMICmnLLDBDebugSessionInfo &rSessionInfo(CMICmnLLDBDebugSessionInfo::Instance());
+    lldb::SBProcess sbProcess = rSessionInfo.GetProcess();
+    lldb::SBThread thread = (nThreadId != UINT64_MAX) ? sbProcess.GetThreadByIndexID(nThreadId) : sbProcess.GetSelectedThread();
+    m_bThreadInvalid = !thread.IsValid();
+    if (m_bThreadInvalid)
+        return MIstatus::success;
+    
+    const lldb::StopReason eStopReason = thread.GetStopReason();
+    if ((eStopReason == lldb::eStopReasonNone) || (eStopReason == lldb::eStopReasonInvalid))
+    {
+        m_bThreadInvalid = true;
+        return MIstatus::success;
+    }
+    
+    lldb::SBFrame frame = (nFrame != UINT64_MAX) ? thread.GetFrameAtIndex(nFrame) : thread.GetSelectedFrame();
+    
+    CMICmnMIValueList miValueList(true);
+    const MIuint maskVarTypes = CMICmnLLDBDebugSessionInfo::eVariableType_Arguments | CMICmnLLDBDebugSessionInfo::eVariableType_Locals;
+    if (!rSessionInfo.MIResponseFormVariableInfo(frame, maskVarTypes, eVarInfoFormat, miValueList, 10, true))
+        return MIstatus::failure;
+    m_miValueList = miValueList;
+    
+    return MIstatus::success;
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: The invoker requires this function. The command prepares a MI Record Result
+//          for the work carried out in the Execute().
+// Type:    Overridden.
+// Args:    None.
+// Return:  MIstatus::success - Functional succeeded.
+//          MIstatus::failure - Functional failed.
+// Throws:  None.
+//--
+bool
+CMICmdCmdStackListVariables::Acknowledge(void)
+{
+    if (m_bThreadInvalid)
+    {
+        // MI print "%s^done,variables=[]"
+        const CMICmnMIValueList miValueList(true);
+        const CMICmnMIValueResult miValueResult("variables", miValueList);
+        const CMICmnMIResultRecord miRecordResult(m_cmdData.strMiCmdToken, CMICmnMIResultRecord::eResultClass_Done, miValueResult);
+        m_miResultRecord = miRecordResult;
+        return MIstatus::success;
+    }
+
+    // MI print "%s^done,variables=[%s]"
+    const CMICmnMIValueResult miValueResult("variables", m_miValueList);
+    const CMICmnMIResultRecord miRecordResult(m_cmdData.strMiCmdToken, CMICmnMIResultRecord::eResultClass_Done, miValueResult);
+    m_miResultRecord = miRecordResult;
+
+    return MIstatus::success;
+}
+
+//++ ------------------------------------------------------------------------------------
+// Details: Required by the CMICmdFactory when registering *this command. The factory
+//          calls this function to create an instance of *this command.
+// Type:    Static method.
+// Args:    None.
+// Return:  CMICmdBase * - Pointer to a new command.
+// Throws:  None.
+//--
+CMICmdBase *
+CMICmdCmdStackListVariables::CreateSelf(void)
+{
+    return new CMICmdCmdStackListVariables();
 }
 
 //---------------------------------------------------------------------------------------

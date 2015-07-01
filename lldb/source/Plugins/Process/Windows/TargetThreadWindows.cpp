@@ -7,6 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "lldb/Core/Log.h"
+#include "lldb/Core/Logging.h"
+#include "lldb/Core/State.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/HostNativeThreadBase.h"
 #include "lldb/Host/windows/HostThreadWindows.h"
@@ -15,9 +18,12 @@
 
 #include "TargetThreadWindows.h"
 #include "ProcessWindows.h"
+#include "ProcessWindowsLog.h"
 #include "UnwindLLDB.h"
 
-#if !defined(_WIN64)
+#if defined(_WIN64)
+#include "x64/RegisterContextWindows_x64.h"
+#else
 #include "x86/RegisterContextWindows_x86.h"
 #endif
 
@@ -38,15 +44,18 @@ TargetThreadWindows::~TargetThreadWindows()
 void
 TargetThreadWindows::RefreshStateAfterStop()
 {
-    DWORD old_suspend_count = ::SuspendThread(m_host_thread.GetNativeThread().GetSystemHandle());
-
+    ::SuspendThread(m_host_thread.GetNativeThread().GetSystemHandle());
+    SetState(eStateStopped);
     GetRegisterContext()->InvalidateIfNeeded(false);
 }
 
 void
 TargetThreadWindows::WillResume(lldb::StateType resume_state)
 {
-    SetResumeState(resume_state);
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (WINDOWS_LOG_THREAD));
+    if (log)
+        log->Printf ("TargetThreadWindows::WillResume (tid = %" PRIi64 ") setting thread resume state to %s",
+                     GetID(), StateAsCString(resume_state));
 }
 
 void
@@ -86,7 +95,7 @@ TargetThreadWindows::CreateRegisterContextForFrameIndex(uint32_t idx)
                 break;
             case llvm::Triple::x86_64:
 #if defined(_WIN64)
-                // FIXME: This is a 64-bit process, create a RegisterContextWindows_x86_64
+                m_reg_context_sp.reset(new RegisterContextWindows_x64(*this, idx));
 #else
                 // LLDB is 32-bit, but the target process is 64-bit.  We probably can't debug this.
 #endif

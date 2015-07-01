@@ -129,7 +129,7 @@ class SettingsCommandTestCase(TestBase):
         self.format_string = m.group(1)
 
         # Change the default format to print function.name rather than function.name-with-args
-        format_string = "frame #${frame.index}: ${frame.pc}{ ${module.file.basename}`${function.name}{${function.pc-offset}}}{ at ${line.file.fullpath}:${line.number}}\n"
+        format_string = "frame #${frame.index}: ${frame.pc}{ ${module.file.basename}`${function.name}{${function.pc-offset}}}{ at ${line.file.fullpath}:${line.number}}{, lang=${language}}\n"
         self.runCmd("settings set frame-format %s" % format_string)
 
         # Immediately test the setting.
@@ -165,7 +165,8 @@ class SettingsCommandTestCase(TestBase):
         self.expect("settings show auto-confirm", SETTING_MSG("auto-confirm"),
             startstr = "auto-confirm (boolean) = false")
 
-    @unittest2.skipUnless(os.name != "nt" and os.uname()[4] in ['amd64', 'i386', 'x86_64'], "requires x86 or x86_64")
+    @expectedFailureArch("arm")
+    @expectedFailureArch("aarch64")
     def test_disassembler_settings(self):
         """Test that user options for the disassembler take effect."""
         self.buildDefault()
@@ -199,7 +200,7 @@ class SettingsCommandTestCase(TestBase):
         self.expect("disassemble -n numberfn",
             substrs = ["5ah"])
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_run_args_and_env_vars_with_dsym(self):
         """Test that run-args and env-vars are passed to the launched process."""
@@ -226,7 +227,7 @@ class SettingsCommandTestCase(TestBase):
         self.addTearDownHook(
             lambda: self.runCmd("settings clear target.env-vars"))
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # Read the output file produced by running the program.
         if lldb.remote_platform:
@@ -262,7 +263,7 @@ class SettingsCommandTestCase(TestBase):
             os.environ.pop("MY_HOST_ENV_VAR2")
 
         self.addTearDownHook(unset_env_variables)
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # Read the output file produced by running the program.
         if lldb.remote_platform:
@@ -298,7 +299,7 @@ class SettingsCommandTestCase(TestBase):
                     SETTING_MSG("target.output-path"),
                     substrs = ['target.output-path (file) = "stdout.txt"'])
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         if lldb.remote_platform:
             self.runCmd('platform get-file "stderr.txt" "stderr.txt"')
@@ -357,6 +358,15 @@ class SettingsCommandTestCase(TestBase):
         self.expect ("settings show target.env-vars",
                      substrs = [ 'MY_FILE=this is a file name with spaces.txt' ])
         self.runCmd ("settings clear target.env-vars")
+        # Test and make sure that setting "format-string" settings obeys quotes if they are provided
+        self.runCmd ("settings set thread-format    'abc def'   ")
+        self.expect ("settings show thread-format", 'thread-format (format-string) = "abc def"')
+        self.runCmd ('settings set thread-format    "abc def"   ')
+        self.expect ("settings show thread-format", 'thread-format (format-string) = "abc def"')
+        # Make sure when no quotes are provided that we maintain any trailing spaces
+        self.runCmd ('settings set thread-format abc def   ')
+        self.expect ("settings show thread-format", 'thread-format (format-string) = "abc def   "')
+        self.runCmd ('settings clear thread-format')
 
     def test_settings_with_trailing_whitespace (self):
         
@@ -449,6 +459,7 @@ class SettingsCommandTestCase(TestBase):
                                  "thread-format",
                                  "use-external-editor",
                                  "target.default-arch",
+                                 "target.move-to-nearest-code",
                                  "target.expr-prefix",
                                  "target.prefer-dynamic-value",
                                  "target.enable-synthetic-value",

@@ -33,8 +33,99 @@ class ScriptInterpreterPython :
     public IOHandlerDelegateMultiline
 {
 public:
+    typedef void (*SWIGInitCallback) (void);
 
-    friend class IOHandlerPythonInterpreter;
+    typedef bool (*SWIGBreakpointCallbackFunction) (const char *python_function_name,
+                                                    const char *session_dictionary_name,
+                                                    const lldb::StackFrameSP& frame_sp,
+                                                    const lldb::BreakpointLocationSP &bp_loc_sp);
+    
+    typedef bool (*SWIGWatchpointCallbackFunction) (const char *python_function_name,
+                                                    const char *session_dictionary_name,
+                                                    const lldb::StackFrameSP& frame_sp,
+                                                    const lldb::WatchpointSP &wp_sp);
+    
+    typedef bool (*SWIGPythonTypeScriptCallbackFunction) (const char *python_function_name,
+                                                          void *session_dictionary,
+                                                          const lldb::ValueObjectSP& valobj_sp,
+                                                          void** pyfunct_wrapper,
+                                                          const lldb::TypeSummaryOptionsSP& options,
+                                                          std::string& retval);
+    
+    typedef void* (*SWIGPythonCreateSyntheticProvider) (const char *python_class_name,
+                                                        const char *session_dictionary_name,
+                                                        const lldb::ValueObjectSP& valobj_sp);
+
+    typedef void* (*SWIGPythonCreateCommandObject) (const char *python_class_name,
+                                                    const char *session_dictionary_name,
+                                                    const lldb::DebuggerSP debugger_sp);
+    
+    typedef void* (*SWIGPythonCreateScriptedThreadPlan) (const char *python_class_name,
+                                                        const char *session_dictionary_name,
+                                                        const lldb::ThreadPlanSP& thread_plan_sp);
+
+    typedef bool (*SWIGPythonCallThreadPlan) (void *implementor, const char *method_name, Event *event_sp, bool &got_error);
+
+    typedef void* (*SWIGPythonCreateOSPlugin) (const char *python_class_name,
+                                               const char *session_dictionary_name,
+                                               const lldb::ProcessSP& process_sp);
+    
+    typedef size_t          (*SWIGPythonCalculateNumChildren)                   (void *implementor);
+    typedef void*           (*SWIGPythonGetChildAtIndex)                        (void *implementor, uint32_t idx);
+    typedef int             (*SWIGPythonGetIndexOfChildWithName)                (void *implementor, const char* child_name);
+    typedef void*           (*SWIGPythonCastPyObjectToSBValue)                  (void* data);
+    typedef lldb::ValueObjectSP  (*SWIGPythonGetValueObjectSPFromSBValue)       (void* data);
+    typedef bool            (*SWIGPythonUpdateSynthProviderInstance)            (void* data);
+    typedef bool            (*SWIGPythonMightHaveChildrenSynthProviderInstance) (void* data);
+    typedef void*           (*SWIGPythonGetValueSynthProviderInstance)          (void *implementor);
+    
+    typedef bool            (*SWIGPythonCallCommand)            (const char *python_function_name,
+                                                                 const char *session_dictionary_name,
+                                                                 lldb::DebuggerSP& debugger,
+                                                                 const char* args,
+                                                                 lldb_private::CommandReturnObject& cmd_retobj,
+                                                                 lldb::ExecutionContextRefSP exe_ctx_ref_sp);
+
+    typedef bool            (*SWIGPythonCallCommandObject)        (void *implementor,
+                                                                   lldb::DebuggerSP& debugger,
+                                                                   const char* args,
+                                                                   lldb_private::CommandReturnObject& cmd_retobj,
+                                                                   lldb::ExecutionContextRefSP exe_ctx_ref_sp);
+
+    
+    typedef bool            (*SWIGPythonCallModuleInit)         (const char *python_module_name,
+                                                                 const char *session_dictionary_name,
+                                                                 lldb::DebuggerSP& debugger);
+    
+    typedef bool            (*SWIGPythonScriptKeyword_Process)  (const char* python_function_name,
+                                                                 const char* session_dictionary_name,
+                                                                 lldb::ProcessSP& process,
+                                                                 std::string& output);
+    typedef bool            (*SWIGPythonScriptKeyword_Thread)   (const char* python_function_name,
+                                                                 const char* session_dictionary_name,
+                                                                 lldb::ThreadSP& thread,
+                                                                 std::string& output);
+    
+    typedef bool            (*SWIGPythonScriptKeyword_Target)   (const char* python_function_name,
+                                                                 const char* session_dictionary_name,
+                                                                 lldb::TargetSP& target,
+                                                                 std::string& output);
+
+    typedef bool            (*SWIGPythonScriptKeyword_Frame)    (const char* python_function_name,
+                                                                 const char* session_dictionary_name,
+                                                                 lldb::StackFrameSP& frame,
+                                                                 std::string& output);
+
+    typedef bool            (*SWIGPythonScriptKeyword_Value)    (const char* python_function_name,
+                                                                 const char* session_dictionary_name,
+                                                                 lldb::ValueObjectSP& value,
+                                                                 std::string& output);
+    
+    typedef void*           (*SWIGPython_GetDynamicSetting)     (void* module,
+                                                                 const char* setting,
+                                                                 const lldb::TargetSP& target_sp);
+
+    friend class ::IOHandlerPythonInterpreter;
 
     ScriptInterpreterPython (CommandInterpreter &interpreter);
 
@@ -180,6 +271,9 @@ public:
     bool
     GetShortHelpForCommandObject(StructuredData::GenericSP cmd_obj_sp, std::string& dest) override;
     
+    uint32_t
+    GetFlagsForCommandObject (StructuredData::GenericSP cmd_obj_sp) override;
+    
     bool
     GetLongHelpForCommandObject(StructuredData::GenericSP cmd_obj_sp, std::string& dest) override;
     
@@ -255,10 +349,9 @@ public:
 
     StringList
     ReadCommandInputFromUser (FILE *in_file);
-    
-    virtual void
-    ResetOutputFileHandle (FILE *new_fh) override;
-    
+
+    void ResetOutputFileHandle(FILE *new_fh) override;
+
     static void
     InitializePrivate ();
 
@@ -400,6 +493,13 @@ public:
         PyGILState_STATE         m_GILState;
 	};
 protected:
+    enum class AddLocation
+    {
+        Beginning,
+        End
+    };
+
+    static void AddToSysPath(AddLocation location, std::string path);
 
     uint32_t
     IsExecutingPython () const

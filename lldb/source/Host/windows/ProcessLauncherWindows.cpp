@@ -34,9 +34,9 @@ ProcessLauncherWindows::LaunchProcess(const ProcessLaunchInfo &launch_info, Erro
 
     startupinfo.cb = sizeof(startupinfo);
     startupinfo.dwFlags |= STARTF_USESTDHANDLES;
-    startupinfo.hStdError = stderr_handle;
-    startupinfo.hStdInput = stdin_handle;
-    startupinfo.hStdOutput = stdout_handle;
+    startupinfo.hStdError  = stderr_handle ? stderr_handle : ::GetStdHandle(STD_ERROR_HANDLE);
+    startupinfo.hStdInput  = stdin_handle  ? stdin_handle  : ::GetStdHandle(STD_INPUT_HANDLE);
+    startupinfo.hStdOutput = stdout_handle ? stdout_handle : ::GetStdHandle(STD_OUTPUT_HANDLE);
 
     const char *hide_console_var = getenv("LLDB_LAUNCH_INFERIORS_WITHOUT_CONSOLE");
     if (hide_console_var && llvm::StringRef(hide_console_var).equals_lower("true"))
@@ -52,7 +52,7 @@ ProcessLauncherWindows::LaunchProcess(const ProcessLaunchInfo &launch_info, Erro
     executable = launch_info.GetExecutableFile().GetPath();
     launch_info.GetArguments().GetQuotedCommandString(commandLine);
     BOOL result = ::CreateProcessA(executable.c_str(), const_cast<char *>(commandLine.c_str()), NULL, NULL, TRUE, flags, NULL,
-                                   launch_info.GetWorkingDirectory(), &startupinfo, &pi);
+                                   launch_info.GetWorkingDirectory().GetCString(), &startupinfo, &pi);
     if (result)
     {
         // Do not call CloseHandle on pi.hProcess, since we want to pass that back through the HostProcess.

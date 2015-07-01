@@ -24,7 +24,7 @@
 
 namespace llvm {
   namespace PPCISD {
-    enum NodeType {
+    enum NodeType : unsigned {
       // Start the numbering where the builtin ops and target ops leave off.
       FIRST_NUMBER = ISD::BUILTIN_OP_END,
 
@@ -118,6 +118,15 @@ namespace llvm {
       /// This copies the bits corresponding to the specified CRREG into the
       /// resultant GPR.  Bits corresponding to other CR regs are undefined.
       MFOCRF,
+
+      /// Direct move from a VSX register to a GPR
+      MFVSR,
+
+      /// Direct move from a GPR to a VSX register (algebraic)
+      MTVSRA,
+
+      /// Direct move from a GPR to a VSX register (zero)
+      MTVSRZ,
 
       // FIXME: Remove these once the ANDI glue bug is fixed:
       /// i1 = ANDIo_1_[EQ|GT]_BIT(i32 or i64 x) - Represents the result of the
@@ -266,6 +275,16 @@ namespace llvm {
       /// operand identifies the operating system entry point.
       SC,
 
+      /// CHAIN = CLRBHRB CHAIN - Clear branch history rolling buffer.
+      CLRBHRB,
+
+      /// GPRC, CHAIN = MFBHRBE CHAIN, Entry, Dummy - Move from branch
+      /// history rolling buffer entry.
+      MFBHRBE,
+
+      /// CHAIN = RFEBB CHAIN, State - Return from event-based branch.
+      RFEBB,
+
       /// VSRC, CHAIN = XXSWAPD CHAIN, VSRC - Occurs only for little
       /// endian.  Maps to an xxswapd instruction that corrects an lxvd2x
       /// or stxvd2x instruction.  The chain is necessary because the
@@ -348,6 +367,11 @@ namespace llvm {
     bool isVPKUWUMShuffleMask(ShuffleVectorSDNode *N, unsigned ShuffleKind,
                               SelectionDAG &DAG);
 
+    /// isVPKUDUMShuffleMask - Return true if this is the shuffle mask for a
+    /// VPKUDUM instruction.
+    bool isVPKUDUMShuffleMask(ShuffleVectorSDNode *N, unsigned ShuffleKind,
+                              SelectionDAG &DAG);
+
     /// isVMRGLShuffleMask - Return true if this is a shuffle mask suitable for
     /// a VRGL* instruction with the specified unit size (1,2 or 4 bytes).
     bool isVMRGLShuffleMask(ShuffleVectorSDNode *N, unsigned UnitSize,
@@ -358,6 +382,11 @@ namespace llvm {
     bool isVMRGHShuffleMask(ShuffleVectorSDNode *N, unsigned UnitSize,
                             unsigned ShuffleKind, SelectionDAG &DAG);
 
+    /// isVMRGEOShuffleMask - Return true if this is a shuffle mask suitable for
+    /// a VMRGEW or VMRGOW instruction
+    bool isVMRGEOShuffleMask(ShuffleVectorSDNode *N, bool CheckEven,
+                             unsigned ShuffleKind, SelectionDAG &DAG);
+  
     /// isVSLDOIShuffleMask - If this is a vsldoi shuffle mask, return the
     /// shift amount, otherwise return -1.
     int isVSLDOIShuffleMask(SDNode *N, unsigned ShuffleKind,
@@ -367,10 +396,6 @@ namespace llvm {
     /// specifies a splat of a single element that is suitable for input to
     /// VSPLTB/VSPLTH/VSPLTW.
     bool isSplatShuffleMask(ShuffleVectorSDNode *N, unsigned EltSize);
-
-    /// isAllNegativeZeroVector - Returns true if all elements of build_vector
-    /// are -0.0.
-    bool isAllNegativeZeroVector(SDNode *N);
 
     /// getVSPLTImmediate - Return the appropriate VSPLT* immediate to splat the
     /// specified isSplatShuffleMask VECTOR_SHUFFLE mask.
@@ -536,7 +561,8 @@ namespace llvm {
 
     /// isLegalAddressingMode - Return true if the addressing mode represented
     /// by AM is legal for this target, for a load/store of the specified type.
-    bool isLegalAddressingMode(const AddrMode &AM, Type *Ty) const override;
+    bool isLegalAddressingMode(const AddrMode &AM, Type *Ty,
+                               unsigned AS) const override;
 
     /// isLegalICmpImmediate - Return true if the specified immediate is legal
     /// icmp immediate, that is the target has icmp instructions which can
@@ -649,6 +675,10 @@ namespace llvm {
 
     void LowerFP_TO_INTForReuse(SDValue Op, ReuseLoadInfo &RLI,
                                 SelectionDAG &DAG, SDLoc dl) const;
+    SDValue LowerFP_TO_INTDirectMove(SDValue Op, SelectionDAG &DAG,
+                                     SDLoc dl) const;
+    SDValue LowerINT_TO_FPDirectMove(SDValue Op, SelectionDAG &DAG,
+                                     SDLoc dl) const;
 
     SDValue getFramePointerFrameIndex(SelectionDAG & DAG) const;
     SDValue getReturnAddrFrameIndex(SelectionDAG & DAG) const;

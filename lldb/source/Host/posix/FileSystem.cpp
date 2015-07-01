@@ -10,6 +10,7 @@
 #include "lldb/Host/FileSystem.h"
 
 // C includes
+#include <dirent.h>
 #include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/stat.h>
@@ -35,70 +36,91 @@ FileSystem::GetNativePathSyntax()
 }
 
 Error
-FileSystem::MakeDirectory(const char *path, uint32_t file_permissions)
+FileSystem::MakeDirectory(const FileSpec &file_spec, uint32_t file_permissions)
 {
-    Error error;
-    if (path && path[0])
+    if (file_spec)
     {
-        if (::mkdir(path, file_permissions) != 0)
+        Error error;
+        if (::mkdir(file_spec.GetCString(), file_permissions) == -1)
         {
             error.SetErrorToErrno();
+            errno = 0;
             switch (error.GetError())
             {
                 case ENOENT:
                 {
                     // Parent directory doesn't exist, so lets make it if we can
-                    FileSpec spec(path, false);
-                    if (spec.GetDirectory() && spec.GetFilename())
+                    // Make the parent directory and try again
+                    FileSpec parent_file_spec{file_spec.GetDirectory().GetCString(), false};
+                    error = MakeDirectory(parent_file_spec, file_permissions);
+                    if (error.Fail())
+                        return error;
+                    // Try and make the directory again now that the parent directory was made successfully
+                    if (::mkdir(file_spec.GetCString(), file_permissions) == -1)
                     {
-                        // Make the parent directory and try again
-                        Error error2 = MakeDirectory(spec.GetDirectory().GetCString(), file_permissions);
-                        if (error2.Success())
-                        {
-                            // Try and make the directory again now that the parent directory was made successfully
-                            if (::mkdir(path, file_permissions) == 0)
-                                error.Clear();
-                            else
-                                error.SetErrorToErrno();
-                        }
+                        error.SetErrorToErrno();
+                        return error;
                     }
                 }
-                break;
-
                 case EEXIST:
                 {
-                    FileSpec path_spec(path, false);
-                    if (path_spec.IsDirectory())
-                        error.Clear(); // It is a directory and it already exists
+                    if (file_spec.IsDirectory())
+                        return Error{}; // It is a directory and it already exists
                 }
-                break;
             }
         }
+        return error;
     }
-    else
-    {
-        error.SetErrorString("empty path");
-    }
-    return error;
+    return Error{"empty path"};
 }
 
 Error
-FileSystem::DeleteDirectory(const char *path, bool recurse)
+FileSystem::DeleteDirectory(const FileSpec &file_spec, bool recurse)
 {
     Error error;
-    if (path && path[0])
+    if (file_spec)
     {
         if (recurse)
         {
-            StreamString command;
-            command.Printf("rm -rf \"%s\"", path);
-            int status = ::system(command.GetString().c_str());
-            if (status != 0)
-                error.SetError(status, eErrorTypeGeneric);
+            // Save all sub directories in a list so we don't recursively call this function
+            // and possibly run out of file descriptors if the directory is too deep.
+            std::vector<FileSpec> sub_directories;
+
+            FileSpec::ForEachItemInDirectory (file_spec.GetCString(), [&error, &sub_directories](FileSpec::FileType file_type, const FileSpec &spec) -> FileSpec::EnumerateDirectoryResult {
+                if (file_type == FileSpec::eFileTypeDirectory)
+                {
+                    // Save all directorires and process them after iterating through this directory
+                    sub_directories.push_back(spec);
+                }
+                else
+                {
+                    // Update sub_spec to point to the current file and delete it
+                    error = FileSystem::Unlink(spec);
+                }
+                // If anything went wrong, stop iterating, else process the next file
+                if (error.Fail())
+                    return FileSpec::eEnumerateDirectoryResultQuit;
+                else
+                    return FileSpec::eEnumerateDirectoryResultNext;
+            });
+
+            if (error.Success())
+            {
+                // Now delete all sub directories with separate calls that aren't
+                // recursively calling into this function _while_ this function is
+                // iterating through the current directory.
+                for (const auto &sub_directory : sub_directories)
+                {
+                    error = DeleteDirectory(sub_directory, recurse);
+                    if (error.Fail())
+                        break;
+                }
+            }
         }
-        else
+
+        if (error.Success())
         {
-            if (::rmdir(path) != 0)
+            if (::rmdir(file_spec.GetCString()) != 0)
                 error.SetErrorToErrno();
         }
     }
@@ -110,11 +132,11 @@ FileSystem::DeleteDirectory(const char *path, bool recurse)
 }
 
 Error
-FileSystem::GetFilePermissions(const char *path, uint32_t &file_permissions)
+FileSystem::GetFilePermissions(const FileSpec &file_spec, uint32_t &file_permissions)
 {
     Error error;
     struct stat file_stats;
-    if (::stat(path, &file_stats) == 0)
+    if (::stat(file_spec.GetCString(), &file_stats) == 0)
     {
         // The bits in "st_mode" currently match the definitions
         // for the file mode bits in unix.
@@ -128,10 +150,10 @@ FileSystem::GetFilePermissions(const char *path, uint32_t &file_permissions)
 }
 
 Error
-FileSystem::SetFilePermissions(const char *path, uint32_t file_permissions)
+FileSystem::SetFilePermissions(const FileSpec &file_spec, uint32_t file_permissions)
 {
     Error error;
-    if (::chmod(path, file_permissions) != 0)
+    if (::chmod(file_spec.GetCString(), file_permissions) != 0)
         error.SetErrorToErrno();
     return error;
 }
@@ -149,34 +171,45 @@ FileSystem::GetFileExists(const FileSpec &file_spec)
 }
 
 Error
-FileSystem::Symlink(const char *src, const char *dst)
+FileSystem::Hardlink(const FileSpec &src, const FileSpec &dst)
 {
     Error error;
-    if (::symlink(dst, src) == -1)
+    if (::link(dst.GetCString(), src.GetCString()) == -1)
         error.SetErrorToErrno();
     return error;
 }
 
 Error
-FileSystem::Unlink(const char *path)
+FileSystem::Symlink(const FileSpec &src, const FileSpec &dst)
 {
     Error error;
-    if (::unlink(path) == -1)
+    if (::symlink(dst.GetCString(), src.GetCString()) == -1)
         error.SetErrorToErrno();
     return error;
 }
 
 Error
-FileSystem::Readlink(const char *path, char *buf, size_t buf_len)
+FileSystem::Unlink(const FileSpec &file_spec)
 {
     Error error;
-    ssize_t count = ::readlink(path, buf, buf_len);
+    if (::unlink(file_spec.GetCString()) == -1)
+        error.SetErrorToErrno();
+    return error;
+}
+
+Error
+FileSystem::Readlink(const FileSpec &src, FileSpec &dst)
+{
+    Error error;
+    char buf[PATH_MAX];
+    ssize_t count = ::readlink(src.GetCString(), buf, sizeof(buf) - 1);
     if (count < 0)
         error.SetErrorToErrno();
-    else if (static_cast<size_t>(count) < (buf_len - 1))
-        buf[count] = '\0'; // Success
     else
-        error.SetErrorString("'buf' buffer is too small to contain link contents");
+    {
+        buf[count] = '\0'; // Success
+        dst.SetFile(buf, false);
+    }
     return error;
 }
 
@@ -184,7 +217,7 @@ static bool IsLocal(const struct statfs& info)
 {
 #ifdef __linux__
     #define CIFS_MAGIC_NUMBER 0xFF534D42
-    switch (info.f_type)
+    switch ((uint32_t)info.f_type)
     {
     case NFS_SUPER_MAGIC:
     case SMB_SUPER_MAGIC:

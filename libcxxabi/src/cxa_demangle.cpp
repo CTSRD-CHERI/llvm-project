@@ -195,7 +195,7 @@ parse_floating_number(const char* first, const char* last, C& db)
         }
         if (*t == 'E')
         {
-#if __LITTLE_ENDIAN__
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
             std::reverse(buf, e);
 #endif
             char num[float_data<Float>::max_demangled_size] = {0};
@@ -1575,10 +1575,9 @@ parse_function_type(const char* first, const char* last, C& db)
         const char* t = first+1;
         if (t != last)
         {
-            bool externC = false;
             if (*t == 'Y')
             {
-                externC = true;
+                /* extern "C" */
                 if (++t == last)
                     return first;
             }
@@ -1672,7 +1671,7 @@ parse_pointer_to_member_type(const char* first, const char* last, C& db)
                 auto func = std::move(db.names.back());
                 db.names.pop_back();
                 auto class_type = std::move(db.names.back());
-                if (func.second.front() == '(')
+                if (!func.second.empty() && func.second.front() == '(')
                 {
                     db.names.back().first = std::move(func.first) + "(" + class_type.move_full() + "::*";
                     db.names.back().second = ")" + std::move(func.second);
@@ -2019,7 +2018,8 @@ parse_type(const char* first, const char* last, C& db)
                                     db.names[k].first += " (";
                                     db.names[k].second.insert(0, ")");
                                 }
-                                else if (db.names[k].second.front() == '(')
+                                else if (!db.names[k].second.empty() &&
+                                          db.names[k].second.front() == '(')
                                 {
                                     db.names[k].first += "(";
                                     db.names[k].second.insert(0, ")");
@@ -2046,7 +2046,8 @@ parse_type(const char* first, const char* last, C& db)
                                     db.names[k].first += " (";
                                     db.names[k].second.insert(0, ")");
                                 }
-                                else if (db.names[k].second.front() == '(')
+                                else if (!db.names[k].second.empty() &&
+                                          db.names[k].second.front() == '(')
                                 {
                                     db.names[k].first += "(";
                                     db.names[k].second.insert(0, ")");
@@ -2080,7 +2081,8 @@ parse_type(const char* first, const char* last, C& db)
                                     db.names[k].first += " (";
                                     db.names[k].second.insert(0, ")");
                                 }
-                                else if (db.names[k].second.front() == '(')
+                                else if (!db.names[k].second.empty() &&
+                                          db.names[k].second.front() == '(')
                                 {
                                     db.names[k].first += "(";
                                     db.names[k].second.insert(0, ")");

@@ -20,6 +20,13 @@
 #include <cerrno>
 #include <ctype.h>
 
+// These prototypes are defined in <direct.h>, but it also defines chdir() and getcwd(), giving multiply defined errors
+extern "C"
+{
+    char *_getcwd(char *buffer, int maxlen);
+    int _chdir(const char *path);
+}
+
 int vasprintf(char **ret, const char *fmt, va_list ap)
 {
     char *buf;
@@ -157,11 +164,16 @@ char* basename(char *path)
     return &l1[1];
 }
 
+// use _getcwd() instead of GetCurrentDirectory() because it updates errno
 char* getcwd(char* path, int max)
 {
-    if (GetCurrentDirectory(max, path) == 0)
-        return path;
-    return NULL;
+    return _getcwd(path, max);
+}
+
+// use _chdir() instead of SetCurrentDirectory() because it updates errno
+int chdir(const char* path)
+{
+    return _chdir(path);
 }
 
 char *dirname(char *path)
@@ -186,8 +198,33 @@ int strncasecmp(const char* s1, const char* s2, size_t n)
 
 int usleep(uint32_t useconds)
 {
-	Sleep(useconds / 1000);
-	return 0;
+    Sleep(useconds / 1000);
+    return 0;
+}
+
+int snprintf(char *buffer, size_t count, const char *format, ...)
+{
+    int old_errno = errno;
+    va_list argptr;
+    va_start(argptr, format);
+    int r = vsnprintf(buffer, count, format, argptr);
+    int new_errno = errno;
+    buffer[count-1] = '\0';
+    if (r == -1 || r == count)
+    {
+        FILE *nul = fopen("nul", "w");
+        int bytes_written = vfprintf(nul, format, argptr);
+        fclose(nul);
+        if (bytes_written < count)
+            errno = new_errno;
+        else
+        {
+            errno = old_errno;
+            r = bytes_written;
+        }
+    }
+    va_end(argptr);
+    return r;
 }
 
 #endif // _MSC_VER

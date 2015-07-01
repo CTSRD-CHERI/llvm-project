@@ -573,8 +573,10 @@ class OMPScheduleClause : public OMPClause {
   SourceLocation KindLoc;
   /// \brief Location of ',' (if any).
   SourceLocation CommaLoc;
-  /// \brief Chunk size.
-  Stmt *ChunkSize;
+  /// \brief Chunk size and a reference to pseudo variable for combined
+  /// directives.
+  enum { CHUNK_SIZE, HELPER_CHUNK_SIZE, NUM_EXPRS };
+  Stmt *ChunkSizes[NUM_EXPRS];
 
   /// \brief Set schedule kind.
   ///
@@ -600,7 +602,12 @@ class OMPScheduleClause : public OMPClause {
   ///
   /// \param E Chunk size.
   ///
-  void setChunkSize(Expr *E) { ChunkSize = E; }
+  void setChunkSize(Expr *E) { ChunkSizes[CHUNK_SIZE] = E; }
+  /// \brief Set helper chunk size.
+  ///
+  /// \param E Helper chunk size.
+  ///
+  void setHelperChunkSize(Expr *E) { ChunkSizes[HELPER_CHUNK_SIZE] = E; }
 
 public:
   /// \brief Build 'schedule' clause with schedule kind \a Kind and chunk size
@@ -613,19 +620,26 @@ public:
   /// \param EndLoc Ending location of the clause.
   /// \param Kind Schedule kind.
   /// \param ChunkSize Chunk size.
+  /// \param HelperChunkSize Helper chunk size for combined directives.
   ///
   OMPScheduleClause(SourceLocation StartLoc, SourceLocation LParenLoc,
                     SourceLocation KLoc, SourceLocation CommaLoc,
                     SourceLocation EndLoc, OpenMPScheduleClauseKind Kind,
-                    Expr *ChunkSize)
+                    Expr *ChunkSize, Expr *HelperChunkSize)
       : OMPClause(OMPC_schedule, StartLoc, EndLoc), LParenLoc(LParenLoc),
-        Kind(Kind), KindLoc(KLoc), CommaLoc(CommaLoc), ChunkSize(ChunkSize) {}
+        Kind(Kind), KindLoc(KLoc), CommaLoc(CommaLoc) {
+    ChunkSizes[CHUNK_SIZE] = ChunkSize;
+    ChunkSizes[HELPER_CHUNK_SIZE] = HelperChunkSize;
+  }
 
   /// \brief Build an empty clause.
   ///
   explicit OMPScheduleClause()
       : OMPClause(OMPC_schedule, SourceLocation(), SourceLocation()),
-        Kind(OMPC_SCHEDULE_unknown), ChunkSize(nullptr) {}
+        Kind(OMPC_SCHEDULE_unknown) {
+    ChunkSizes[CHUNK_SIZE] = nullptr;
+    ChunkSizes[HELPER_CHUNK_SIZE] = nullptr;
+  }
 
   /// \brief Get kind of the clause.
   ///
@@ -641,16 +655,30 @@ public:
   SourceLocation getCommaLoc() { return CommaLoc; }
   /// \brief Get chunk size.
   ///
-  Expr *getChunkSize() { return dyn_cast_or_null<Expr>(ChunkSize); }
+  Expr *getChunkSize() { return dyn_cast_or_null<Expr>(ChunkSizes[CHUNK_SIZE]); }
   /// \brief Get chunk size.
   ///
-  Expr *getChunkSize() const { return dyn_cast_or_null<Expr>(ChunkSize); }
+  Expr *getChunkSize() const {
+    return dyn_cast_or_null<Expr>(ChunkSizes[CHUNK_SIZE]);
+  }
+  /// \brief Get helper chunk size.
+  ///
+  Expr *getHelperChunkSize() {
+    return dyn_cast_or_null<Expr>(ChunkSizes[HELPER_CHUNK_SIZE]);
+  }
+  /// \brief Get helper chunk size.
+  ///
+  Expr *getHelperChunkSize() const {
+    return dyn_cast_or_null<Expr>(ChunkSizes[HELPER_CHUNK_SIZE]);
+  }
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_schedule;
   }
 
-  StmtRange children() { return StmtRange(&ChunkSize, &ChunkSize + 1); }
+  StmtRange children() {
+    return StmtRange(&ChunkSizes[CHUNK_SIZE], &ChunkSizes[CHUNK_SIZE] + 1);
+  }
 };
 
 /// \brief This represents 'ordered' clause in the '#pragma omp ...' directive.
@@ -1137,8 +1165,26 @@ public:
 /// \endcode
 /// In this example directive '#pragma omp simd' has clause 'lastprivate'
 /// with the variables 'a' and 'b'.
-///
 class OMPLastprivateClause : public OMPVarListClause<OMPLastprivateClause> {
+  // There are 4 additional tail-allocated arrays at the end of the class:
+  // 1. Contains list of pseudo variables with the default initialization for
+  // each non-firstprivate variables. Used in codegen for initialization of
+  // lastprivate copies.
+  // 2. List of helper expressions for proper generation of assignment operation
+  // required for lastprivate clause. This list represents private variables
+  // (for arrays, single array element).
+  // 3. List of helper expressions for proper generation of assignment operation
+  // required for lastprivate clause. This list represents original variables
+  // (for arrays, single array element).
+  // 4. List of helper expressions that represents assignment operation:
+  // \code
+  // DstExprs = SrcExprs;
+  // \endcode
+  // Required for proper codegen of final assignment performed by the
+  // lastprivate clause.
+  //
+  friend class OMPClauseReader;
+
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param StartLoc Starting location of the clause.
@@ -1160,6 +1206,56 @@ class OMPLastprivateClause : public OMPVarListClause<OMPLastprivateClause> {
             OMPC_lastprivate, SourceLocation(), SourceLocation(),
             SourceLocation(), N) {}
 
+  /// \brief Get the list of helper expressions for initialization of private
+  /// copies for lastprivate variables.
+  MutableArrayRef<Expr *> getPrivateCopies() {
+    return MutableArrayRef<Expr *>(varlist_end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getPrivateCopies() const {
+    return llvm::makeArrayRef(varlist_end(), varlist_size());
+  }
+
+  /// \brief Set list of helper expressions, required for proper codegen of the
+  /// clause. These expressions represent private variables (for arrays, single
+  /// array element) in the final assignment statement performed by the
+  /// lastprivate clause.
+  void setSourceExprs(ArrayRef<Expr *> SrcExprs);
+
+  /// \brief Get the list of helper source expressions.
+  MutableArrayRef<Expr *> getSourceExprs() {
+    return MutableArrayRef<Expr *>(getPrivateCopies().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getSourceExprs() const {
+    return llvm::makeArrayRef(getPrivateCopies().end(), varlist_size());
+  }
+
+  /// \brief Set list of helper expressions, required for proper codegen of the
+  /// clause. These expressions represent original variables (for arrays, single
+  /// array element) in the final assignment statement performed by the
+  /// lastprivate clause.
+  void setDestinationExprs(ArrayRef<Expr *> DstExprs);
+
+  /// \brief Get the list of helper destination expressions.
+  MutableArrayRef<Expr *> getDestinationExprs() {
+    return MutableArrayRef<Expr *>(getSourceExprs().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getDestinationExprs() const {
+    return llvm::makeArrayRef(getSourceExprs().end(), varlist_size());
+  }
+
+  /// \brief Set list of helper assignment expressions, required for proper
+  /// codegen of the clause. These expressions are assignment expressions that
+  /// assign private copy of the variable to original variable.
+  void setAssignmentOps(ArrayRef<Expr *> AssignmentOps);
+
+  /// \brief Get the list of helper assignment expressions.
+  MutableArrayRef<Expr *> getAssignmentOps() {
+    return MutableArrayRef<Expr *>(getDestinationExprs().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getAssignmentOps() const {
+    return llvm::makeArrayRef(getDestinationExprs().end(), varlist_size());
+  }
+
 public:
   /// \brief Creates clause with a list of variables \a VL.
   ///
@@ -1168,16 +1264,73 @@ public:
   /// \param LParenLoc Location of '('.
   /// \param EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
+  /// \param SrcExprs List of helper expressions for proper generation of
+  /// assignment operation required for lastprivate clause. This list represents
+  /// private variables (for arrays, single array element).
+  /// \param DstExprs List of helper expressions for proper generation of
+  /// assignment operation required for lastprivate clause. This list represents
+  /// original variables (for arrays, single array element).
+  /// \param AssignmentOps List of helper expressions that represents assignment
+  /// operation:
+  /// \code
+  /// DstExprs = SrcExprs;
+  /// \endcode
+  /// Required for proper codegen of final assignment performed by the
+  /// lastprivate clause.
+  ///
   ///
   static OMPLastprivateClause *
   Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation LParenLoc,
-         SourceLocation EndLoc, ArrayRef<Expr *> VL);
+         SourceLocation EndLoc, ArrayRef<Expr *> VL, ArrayRef<Expr *> SrcExprs,
+         ArrayRef<Expr *> DstExprs, ArrayRef<Expr *> AssignmentOps);
   /// \brief Creates an empty clause with the place for \a N variables.
   ///
   /// \param C AST context.
   /// \param N The number of variables.
   ///
   static OMPLastprivateClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  typedef MutableArrayRef<Expr *>::iterator helper_expr_iterator;
+  typedef ArrayRef<const Expr *>::iterator helper_expr_const_iterator;
+  typedef llvm::iterator_range<helper_expr_iterator> helper_expr_range;
+  typedef llvm::iterator_range<helper_expr_const_iterator>
+      helper_expr_const_range;
+
+  /// \brief Set list of helper expressions, required for generation of private
+  /// copies of original lastprivate variables.
+  void setPrivateCopies(ArrayRef<Expr *> PrivateCopies);
+
+  helper_expr_const_range private_copies() const {
+    return helper_expr_const_range(getPrivateCopies().begin(),
+                                   getPrivateCopies().end());
+  }
+  helper_expr_range private_copies() {
+    return helper_expr_range(getPrivateCopies().begin(),
+                             getPrivateCopies().end());
+  }
+  helper_expr_const_range source_exprs() const {
+    return helper_expr_const_range(getSourceExprs().begin(),
+                                   getSourceExprs().end());
+  }
+  helper_expr_range source_exprs() {
+    return helper_expr_range(getSourceExprs().begin(), getSourceExprs().end());
+  }
+  helper_expr_const_range destination_exprs() const {
+    return helper_expr_const_range(getDestinationExprs().begin(),
+                                   getDestinationExprs().end());
+  }
+  helper_expr_range destination_exprs() {
+    return helper_expr_range(getDestinationExprs().begin(),
+                             getDestinationExprs().end());
+  }
+  helper_expr_const_range assignment_ops() const {
+    return helper_expr_const_range(getAssignmentOps().begin(),
+                                   getAssignmentOps().end());
+  }
+  helper_expr_range assignment_ops() {
+    return helper_expr_range(getAssignmentOps().begin(),
+                             getAssignmentOps().end());
+  }
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
@@ -1301,6 +1454,48 @@ class OMPReductionClause : public OMPVarListClause<OMPReductionClause> {
   /// \brief Sets the nested name specifier.
   void setQualifierLoc(NestedNameSpecifierLoc NSL) { QualifierLoc = NSL; }
 
+  /// \brief Set list of helper expressions, required for proper codegen of the
+  /// clause. These expressions represent LHS expression in the final
+  /// reduction expression performed by the reduction clause.
+  void setLHSExprs(ArrayRef<Expr *> LHSExprs);
+
+  /// \brief Get the list of helper LHS expressions.
+  MutableArrayRef<Expr *> getLHSExprs() {
+    return MutableArrayRef<Expr *>(varlist_end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getLHSExprs() const {
+    return llvm::makeArrayRef(varlist_end(), varlist_size());
+  }
+
+  /// \brief Set list of helper expressions, required for proper codegen of the
+  /// clause. These expressions represent RHS expression in the final
+  /// reduction expression performed by the reduction clause.
+  /// Also, variables in these expressions are used for proper initialization of
+  /// reduction copies.
+  void setRHSExprs(ArrayRef<Expr *> RHSExprs);
+
+  /// \brief Get the list of helper destination expressions.
+  MutableArrayRef<Expr *> getRHSExprs() {
+    return MutableArrayRef<Expr *>(getLHSExprs().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getRHSExprs() const {
+    return llvm::makeArrayRef(getLHSExprs().end(), varlist_size());
+  }
+
+  /// \brief Set list of helper reduction expressions, required for proper
+  /// codegen of the clause. These expressions are binary expressions or
+  /// operator/custom reduction call that calculates new value from source
+  /// helper expressions to destination helper expressions.
+  void setReductionOps(ArrayRef<Expr *> ReductionOps);
+
+  /// \brief Get the list of helper reduction expressions.
+  MutableArrayRef<Expr *> getReductionOps() {
+    return MutableArrayRef<Expr *>(getRHSExprs().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getReductionOps() const {
+    return llvm::makeArrayRef(getRHSExprs().end(), varlist_size());
+  }
+
 public:
   /// \brief Creates clause with a list of variables \a VL.
   ///
@@ -1311,12 +1506,30 @@ public:
   /// \param VL The variables in the clause.
   /// \param QualifierLoc The nested-name qualifier with location information
   /// \param NameInfo The full name info for reduction identifier.
+  /// \param LHSExprs List of helper expressions for proper generation of
+  /// assignment operation required for copyprivate clause. This list represents
+  /// LHSs of the reduction expressions.
+  /// \param RHSExprs List of helper expressions for proper generation of
+  /// assignment operation required for copyprivate clause. This list represents
+  /// RHSs of the reduction expressions.
+  /// Also, variables in these expressions are used for proper initialization of
+  /// reduction copies.
+  /// \param ReductionOps List of helper expressions that represents reduction
+  /// expressions:
+  /// \code
+  /// LHSExprs binop RHSExprs;
+  /// operator binop(LHSExpr, RHSExpr);
+  /// <CutomReduction>(LHSExpr, RHSExpr);
+  /// \endcode
+  /// Required for proper codegen of final reduction operation performed by the
+  /// reduction clause.
   ///
   static OMPReductionClause *
   Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation LParenLoc,
          SourceLocation ColonLoc, SourceLocation EndLoc, ArrayRef<Expr *> VL,
          NestedNameSpecifierLoc QualifierLoc,
-         const DeclarationNameInfo &NameInfo);
+         const DeclarationNameInfo &NameInfo, ArrayRef<Expr *> LHSExprs,
+         ArrayRef<Expr *> RHSExprs, ArrayRef<Expr *> ReductionOps);
   /// \brief Creates an empty clause with the place for \a N variables.
   ///
   /// \param C AST context.
@@ -1330,6 +1543,33 @@ public:
   const DeclarationNameInfo &getNameInfo() const { return NameInfo; }
   /// \brief Gets the nested name specifier.
   NestedNameSpecifierLoc getQualifierLoc() const { return QualifierLoc; }
+
+  typedef MutableArrayRef<Expr *>::iterator helper_expr_iterator;
+  typedef ArrayRef<const Expr *>::iterator helper_expr_const_iterator;
+  typedef llvm::iterator_range<helper_expr_iterator> helper_expr_range;
+  typedef llvm::iterator_range<helper_expr_const_iterator>
+      helper_expr_const_range;
+
+  helper_expr_const_range lhs_exprs() const {
+    return helper_expr_const_range(getLHSExprs().begin(), getLHSExprs().end());
+  }
+  helper_expr_range lhs_exprs() {
+    return helper_expr_range(getLHSExprs().begin(), getLHSExprs().end());
+  }
+  helper_expr_const_range rhs_exprs() const {
+    return helper_expr_const_range(getRHSExprs().begin(), getRHSExprs().end());
+  }
+  helper_expr_range rhs_exprs() {
+    return helper_expr_range(getRHSExprs().begin(), getRHSExprs().end());
+  }
+  helper_expr_const_range reduction_ops() const {
+    return helper_expr_const_range(getReductionOps().begin(),
+                                   getReductionOps().end());
+  }
+  helper_expr_range reduction_ops() {
+    return helper_expr_range(getReductionOps().begin(),
+                             getReductionOps().end());
+  }
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
@@ -1512,7 +1752,7 @@ public:
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
-                     reinterpret_cast<Stmt **>(getFinals().end() + 2));
+                     reinterpret_cast<Stmt **>(varlist_end()));
   }
 
   static bool classof(const OMPClause *T) {
@@ -1597,7 +1837,7 @@ public:
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
-                     reinterpret_cast<Stmt **>(varlist_end() + 1));
+                     reinterpret_cast<Stmt **>(varlist_end()));
   }
 
   static bool classof(const OMPClause *T) {
@@ -1614,6 +1854,20 @@ public:
 /// with the variables 'a' and 'b'.
 ///
 class OMPCopyinClause : public OMPVarListClause<OMPCopyinClause> {
+  // Class has 3 additional tail allocated arrays:
+  // 1. List of helper expressions for proper generation of assignment operation
+  // required for copyin clause. This list represents sources.
+  // 2. List of helper expressions for proper generation of assignment operation
+  // required for copyin clause. This list represents destinations.
+  // 3. List of helper expressions that represents assignment operation:
+  // \code
+  // DstExprs = SrcExprs;
+  // \endcode
+  // Required for proper codegen of propagation of master's thread values of
+  // threadprivate variables to local instances of that variables in other
+  // implicit threads.
+
+  friend class OMPClauseReader;
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param StartLoc Starting location of the clause.
@@ -1635,6 +1889,46 @@ class OMPCopyinClause : public OMPVarListClause<OMPCopyinClause> {
                                           SourceLocation(), SourceLocation(),
                                           N) {}
 
+  /// \brief Set list of helper expressions, required for proper codegen of the
+  /// clause. These expressions represent source expression in the final
+  /// assignment statement performed by the copyin clause.
+  void setSourceExprs(ArrayRef<Expr *> SrcExprs);
+
+  /// \brief Get the list of helper source expressions.
+  MutableArrayRef<Expr *> getSourceExprs() {
+    return MutableArrayRef<Expr *>(varlist_end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getSourceExprs() const {
+    return llvm::makeArrayRef(varlist_end(), varlist_size());
+  }
+
+  /// \brief Set list of helper expressions, required for proper codegen of the
+  /// clause. These expressions represent destination expression in the final
+  /// assignment statement performed by the copyin clause.
+  void setDestinationExprs(ArrayRef<Expr *> DstExprs);
+
+  /// \brief Get the list of helper destination expressions.
+  MutableArrayRef<Expr *> getDestinationExprs() {
+    return MutableArrayRef<Expr *>(getSourceExprs().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getDestinationExprs() const {
+    return llvm::makeArrayRef(getSourceExprs().end(), varlist_size());
+  }
+
+  /// \brief Set list of helper assignment expressions, required for proper
+  /// codegen of the clause. These expressions are assignment expressions that
+  /// assign source helper expressions to destination helper expressions
+  /// correspondingly.
+  void setAssignmentOps(ArrayRef<Expr *> AssignmentOps);
+
+  /// \brief Get the list of helper assignment expressions.
+  MutableArrayRef<Expr *> getAssignmentOps() {
+    return MutableArrayRef<Expr *>(getDestinationExprs().end(), varlist_size());
+  }
+  ArrayRef<const Expr *> getAssignmentOps() const {
+    return llvm::makeArrayRef(getDestinationExprs().end(), varlist_size());
+  }
+
 public:
   /// \brief Creates clause with a list of variables \a VL.
   ///
@@ -1643,16 +1937,61 @@ public:
   /// \param LParenLoc Location of '('.
   /// \param EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
+  /// \param SrcExprs List of helper expressions for proper generation of
+  /// assignment operation required for copyin clause. This list represents
+  /// sources.
+  /// \param DstExprs List of helper expressions for proper generation of
+  /// assignment operation required for copyin clause. This list represents
+  /// destinations.
+  /// \param AssignmentOps List of helper expressions that represents assignment
+  /// operation:
+  /// \code
+  /// DstExprs = SrcExprs;
+  /// \endcode
+  /// Required for proper codegen of propagation of master's thread values of
+  /// threadprivate variables to local instances of that variables in other
+  /// implicit threads.
   ///
-  static OMPCopyinClause *Create(const ASTContext &C, SourceLocation StartLoc,
-                                 SourceLocation LParenLoc,
-                                 SourceLocation EndLoc, ArrayRef<Expr *> VL);
+  static OMPCopyinClause *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation LParenLoc,
+         SourceLocation EndLoc, ArrayRef<Expr *> VL, ArrayRef<Expr *> SrcExprs,
+         ArrayRef<Expr *> DstExprs, ArrayRef<Expr *> AssignmentOps);
   /// \brief Creates an empty clause with \a N variables.
   ///
   /// \param C AST context.
   /// \param N The number of variables.
   ///
   static OMPCopyinClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  typedef MutableArrayRef<Expr *>::iterator helper_expr_iterator;
+  typedef ArrayRef<const Expr *>::iterator helper_expr_const_iterator;
+  typedef llvm::iterator_range<helper_expr_iterator> helper_expr_range;
+  typedef llvm::iterator_range<helper_expr_const_iterator>
+      helper_expr_const_range;
+
+  helper_expr_const_range source_exprs() const {
+    return helper_expr_const_range(getSourceExprs().begin(),
+                                   getSourceExprs().end());
+  }
+  helper_expr_range source_exprs() {
+    return helper_expr_range(getSourceExprs().begin(), getSourceExprs().end());
+  }
+  helper_expr_const_range destination_exprs() const {
+    return helper_expr_const_range(getDestinationExprs().begin(),
+                                   getDestinationExprs().end());
+  }
+  helper_expr_range destination_exprs() {
+    return helper_expr_range(getDestinationExprs().begin(),
+                             getDestinationExprs().end());
+  }
+  helper_expr_const_range assignment_ops() const {
+    return helper_expr_const_range(getAssignmentOps().begin(),
+                                   getAssignmentOps().end());
+  }
+  helper_expr_range assignment_ops() {
+    return helper_expr_range(getAssignmentOps().begin(),
+                             getAssignmentOps().end());
+  }
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
@@ -1870,6 +2209,94 @@ public:
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_flush;
+  }
+};
+
+/// \brief This represents implicit clause 'depend' for the '#pragma omp task'
+/// directive.
+///
+/// \code
+/// #pragma omp task depend(in:a,b)
+/// \endcode
+/// In this example directive '#pragma omp task' with clause 'depend' with the
+/// variables 'a' and 'b' with dependency 'in'.
+///
+class OMPDependClause : public OMPVarListClause<OMPDependClause> {
+  friend class OMPClauseReader;
+  /// \brief Dependency type (one of in, out, inout).
+  OpenMPDependClauseKind DepKind;
+  /// \brief Dependency type location.
+  SourceLocation DepLoc;
+  /// \brief Colon location.
+  SourceLocation ColonLoc;
+  /// \brief Build clause with number of variables \a N.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param LParenLoc Location of '('.
+  /// \param EndLoc Ending location of the clause.
+  /// \param N Number of the variables in the clause.
+  ///
+  OMPDependClause(SourceLocation StartLoc, SourceLocation LParenLoc,
+                  SourceLocation EndLoc, unsigned N)
+      : OMPVarListClause<OMPDependClause>(OMPC_depend, StartLoc, LParenLoc,
+                                          EndLoc, N),
+        DepKind(OMPC_DEPEND_unknown) {}
+
+  /// \brief Build an empty clause.
+  ///
+  /// \param N Number of variables.
+  ///
+  explicit OMPDependClause(unsigned N)
+      : OMPVarListClause<OMPDependClause>(OMPC_depend, SourceLocation(),
+                                          SourceLocation(), SourceLocation(),
+                                          N),
+        DepKind(OMPC_DEPEND_unknown) {}
+  /// \brief Set dependency kind.
+  void setDependencyKind(OpenMPDependClauseKind K) { DepKind = K; }
+
+  /// \brief Set dependency kind and its location.
+  void setDependencyLoc(SourceLocation Loc) { DepLoc = Loc; }
+
+  /// \brief Set colon location.
+  void setColonLoc(SourceLocation Loc) { ColonLoc = Loc; }
+
+public:
+  /// \brief Creates clause with a list of variables \a VL.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the clause.
+  /// \param LParenLoc Location of '('.
+  /// \param EndLoc Ending location of the clause.
+  /// \param DepKind Dependency type.
+  /// \param DepLoc Location of the dependency type.
+  /// \param ColonLoc Colon location.
+  /// \param VL List of references to the variables.
+  ///
+  static OMPDependClause *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation LParenLoc,
+         SourceLocation EndLoc, OpenMPDependClauseKind DepKind,
+         SourceLocation DepLoc, SourceLocation ColonLoc, ArrayRef<Expr *> VL);
+  /// \brief Creates an empty clause with \a N variables.
+  ///
+  /// \param C AST context.
+  /// \param N The number of variables.
+  ///
+  static OMPDependClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  /// \brief Get dependency type.
+  OpenMPDependClauseKind getDependencyKind() const { return DepKind; }
+  /// \brief Get dependency type location.
+  SourceLocation getDependencyLoc() const { return DepLoc; }
+  /// \brief Get colon location.
+  SourceLocation getColonLoc() const { return ColonLoc; }
+
+  StmtRange children() {
+    return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
+                     reinterpret_cast<Stmt **>(varlist_end()));
+  }
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_depend;
   }
 };
 

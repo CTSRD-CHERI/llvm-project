@@ -210,8 +210,8 @@ Symtab::DumpSymbolHeader (Stream *s)
 static int
 CompareSymbolID (const void *key, const void *p)
 {
-    const user_id_t match_uid = *(user_id_t*) key;
-    const user_id_t symbol_uid = ((Symbol *)p)->GetID();
+    const user_id_t match_uid = *(const user_id_t*) key;
+    const user_id_t symbol_uid = ((const Symbol *)p)->GetID();
     if (match_uid < symbol_uid)
         return -1;
     if (match_uid > symbol_uid)
@@ -227,7 +227,7 @@ Symtab::FindSymbolByID (lldb::user_id_t symbol_uid) const
     Symbol *symbol = (Symbol*)::bsearch (&symbol_uid, 
                                          &m_symbols[0], 
                                          m_symbols.size(), 
-                                         (uint8_t *)&m_symbols[1] - (uint8_t *)&m_symbols[0], 
+                                         sizeof(m_symbols[0]),
                                          CompareSymbolID);
     return symbol;
 }
@@ -598,14 +598,14 @@ namespace {
             addr_t value_a = addr_cache[index_a];
             if (value_a == LLDB_INVALID_ADDRESS)
             {
-                value_a = symbols[index_a].GetAddress().GetFileAddress();
+                value_a = symbols[index_a].GetAddressRef().GetFileAddress();
                 addr_cache[index_a] = value_a;
             }
             
             addr_t value_b = addr_cache[index_b];
             if (value_b == LLDB_INVALID_ADDRESS)
             {
-                value_b = symbols[index_b].GetAddress().GetFileAddress();
+                value_b = symbols[index_b].GetAddressRef().GetFileAddress();
                 addr_cache[index_b] = value_b;
             }
             
@@ -902,7 +902,7 @@ SymbolWithClosestFileAddress (SymbolSearchInfo *info, const uint32_t *index_ptr)
     const addr_t info_file_addr = info->file_addr;
     if (symbol->ValueIsAddress())
     {
-        const addr_t curr_file_addr = symbol->GetAddress().GetFileAddress();
+        const addr_t curr_file_addr = symbol->GetAddressRef().GetFileAddress();
         if (info_file_addr < curr_file_addr)
             return -1;
 
@@ -936,7 +936,7 @@ Symtab::InitAddressIndexes()
         {
             if (pos->ValueIsAddress())
             {
-                entry.SetRangeBase(pos->GetAddress().GetFileAddress());
+                entry.SetRangeBase(pos->GetAddressRef().GetFileAddress());
                 entry.SetByteSize(pos->GetByteSize());
                 entry.data = std::distance(begin, pos);
                 m_file_addr_to_index.Append(entry);

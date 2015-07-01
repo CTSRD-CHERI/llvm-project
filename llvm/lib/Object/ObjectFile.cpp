@@ -28,20 +28,23 @@ void ObjectFile::anchor() { }
 ObjectFile::ObjectFile(unsigned int Type, MemoryBufferRef Source)
     : SymbolicFile(Type, Source) {}
 
+bool SectionRef::containsSymbol(SymbolRef S) const {
+  section_iterator SymSec = getObject()->section_end();
+  if (S.getSection(SymSec))
+    return false;
+  return *this == *SymSec;
+}
+
 std::error_code ObjectFile::printSymbolName(raw_ostream &OS,
                                             DataRefImpl Symb) const {
   StringRef Name;
   if (std::error_code EC = getSymbolName(Symb, Name))
     return EC;
   OS << Name;
-  return object_error::success;
+  return std::error_code();
 }
 
-std::error_code ObjectFile::getSymbolAlignment(DataRefImpl DRI,
-                                               uint32_t &Result) const {
-  Result = 0;
-  return object_error::success;
-}
+uint32_t ObjectFile::getSymbolAlignment(DataRefImpl DRI) const { return 0; }
 
 section_iterator ObjectFile::getRelocatedSection(DataRefImpl Sec) const {
   return section_iterator(SectionRef(Sec, this));

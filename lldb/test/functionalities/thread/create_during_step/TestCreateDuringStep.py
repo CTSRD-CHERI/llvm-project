@@ -12,7 +12,7 @@ class CreateDuringStepTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
     @dsym_test
     def test_step_inst_with_dsym(self):
@@ -20,7 +20,7 @@ class CreateDuringStepTestCase(TestBase):
         self.buildDsym(dictionary=self.getBuildFlags())
         self.create_during_step_inst_test()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
     @dsym_test
     def test_step_over_with_dsym(self):
@@ -28,7 +28,7 @@ class CreateDuringStepTestCase(TestBase):
         self.buildDsym(dictionary=self.getBuildFlags())
         self.create_during_step_over_test()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
     @dsym_test
     def test_step_in_with_dsym(self):
@@ -38,7 +38,7 @@ class CreateDuringStepTestCase(TestBase):
 
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
     @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
-    @expectedFailureLLGS("llvm.org/pr15824") # thread states not properly maintained
+    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
     @dwarf_test
     def test_step_inst_with_dwarf(self):
         """Test thread creation during step-inst handling."""
@@ -47,7 +47,7 @@ class CreateDuringStepTestCase(TestBase):
 
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
     @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
-    @expectedFailureLLGS("llvm.org/pr15824") # thread states not properly maintained
+    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
     @dwarf_test
     def test_step_over_with_dwarf(self):
         """Test thread creation during step-over handling."""
@@ -56,7 +56,7 @@ class CreateDuringStepTestCase(TestBase):
 
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
     @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
-    @expectedFailureLLGS("llvm.org/pr15824") # thread states not properly maintained
+    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
     @dwarf_test
     def test_step_in_with_dwarf(self):
         """Test thread creation during step-in handling."""
@@ -95,7 +95,7 @@ class CreateDuringStepTestCase(TestBase):
             substrs = ["1: file = 'main.cpp', line = %d, locations = 1" % self.breakpoint])
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

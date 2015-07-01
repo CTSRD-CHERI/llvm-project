@@ -14,6 +14,8 @@ set(LLVM_LINK_COMPONENTS
   RuntimeDyld
   SelectionDAG
   Support
+  Target
+  TransformUtils
   native
   )
 
@@ -35,6 +37,7 @@ endif( LLVM_USE_INTEL_JITEVENTS )
 
 add_llvm_tool(lli
   lli.cpp
+  OrcLazyJIT.cpp
   RemoteMemoryManager.cpp
   RemoteTarget.cpp
   RemoteTargetExternal.cpp

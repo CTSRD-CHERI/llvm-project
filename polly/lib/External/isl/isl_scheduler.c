@@ -1,6 +1,7 @@
 /*
  * Copyright 2011      INRIA Saclay
  * Copyright 2012-2014 Ecole Normale Superieure
+ * Copyright 2015      Sven Verdoolaege
  *
  * Use of this software is governed by the MIT license
  *
@@ -21,6 +22,7 @@
 #include <isl_mat_private.h>
 #include <isl_vec_private.h>
 #include <isl/set.h>
+#include <isl/union_set.h>
 #include <isl_seq.h>
 #include <isl_tab.h>
 #include <isl_dim_map.h>
@@ -74,7 +76,7 @@ struct isl_schedule_constraints {
 	isl_union_map *constraint[isl_edge_last + 1];
 };
 
- __isl_give isl_schedule_constraints *isl_schedule_constraints_copy(
+__isl_give isl_schedule_constraints *isl_schedule_constraints_copy(
 	__isl_keep isl_schedule_constraints *sc)
 {
 	isl_ctx *ctx;
@@ -263,6 +265,52 @@ isl_ctx *isl_schedule_constraints_get_ctx(
 	__isl_keep isl_schedule_constraints *sc)
 {
 	return sc ? isl_union_set_get_ctx(sc->domain) : NULL;
+}
+
+/* Return the validity constraints of "sc".
+ */
+__isl_give isl_union_map *isl_schedule_constraints_get_validity(
+	__isl_keep isl_schedule_constraints *sc)
+{
+	if (!sc)
+		return NULL;
+
+	return isl_union_map_copy(sc->constraint[isl_edge_validity]);
+}
+
+/* Return the coincidence constraints of "sc".
+ */
+__isl_give isl_union_map *isl_schedule_constraints_get_coincidence(
+	__isl_keep isl_schedule_constraints *sc)
+{
+	if (!sc)
+		return NULL;
+
+	return isl_union_map_copy(sc->constraint[isl_edge_coincidence]);
+}
+
+/* Return the conditional validity constraints of "sc".
+ */
+__isl_give isl_union_map *isl_schedule_constraints_get_conditional_validity(
+	__isl_keep isl_schedule_constraints *sc)
+{
+	if (!sc)
+		return NULL;
+
+	return
+	    isl_union_map_copy(sc->constraint[isl_edge_conditional_validity]);
+}
+
+/* Return the conditions for the conditional validity constraints of "sc".
+ */
+__isl_give isl_union_map *
+isl_schedule_constraints_get_conditional_validity_condition(
+	__isl_keep isl_schedule_constraints *sc)
+{
+	if (!sc)
+		return NULL;
+
+	return isl_union_map_copy(sc->constraint[isl_edge_condition]);
 }
 
 void isl_schedule_constraints_dump(__isl_keep isl_schedule_constraints *sc)
@@ -485,7 +533,7 @@ struct isl_sched_edge {
  * edge_table contains pointers into the edge array, hashed on the source
  *	and sink spaces; there is one such table for each type;
  *	a given edge may be referenced from more than one table
- *	if the corresponding relation appears in more than of the
+ *	if the corresponding relation appears in more than one of the
  *	sets of dependences
  *
  * node_table contains pointers into the node array, hashed on the space
@@ -586,8 +634,9 @@ static int edge_has_src_and_dst(const void *entry, const void *val)
 
 /* Add the given edge to graph->edge_table[type].
  */
-static int graph_edge_table_add(isl_ctx *ctx, struct isl_sched_graph *graph,
-	enum isl_edge_type type, struct isl_sched_edge *edge)
+static isl_stat graph_edge_table_add(isl_ctx *ctx,
+	struct isl_sched_graph *graph, enum isl_edge_type type,
+	struct isl_sched_edge *edge)
 {
 	struct isl_hash_table_entry *entry;
 	uint32_t hash;
@@ -598,10 +647,10 @@ static int graph_edge_table_add(isl_ctx *ctx, struct isl_sched_graph *graph,
 	entry = isl_hash_table_find(ctx, graph->edge_table[type], hash,
 				    &edge_has_src_and_dst, edge, 1);
 	if (!entry)
-		return -1;
+		return isl_stat_error;
 	entry->data = edge;
 
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Allocate the edge_tables based on the maximal number of edges of
@@ -662,12 +711,12 @@ static struct isl_sched_edge *graph_find_edge(struct isl_sched_graph *graph,
 /* Check whether the dependence graph has an edge of the given type
  * between the given two nodes.
  */
-static int graph_has_edge(struct isl_sched_graph *graph,
+static isl_bool graph_has_edge(struct isl_sched_graph *graph,
 	enum isl_edge_type type,
 	struct isl_sched_node *src, struct isl_sched_node *dst)
 {
 	struct isl_sched_edge *edge;
-	int empty;
+	isl_bool empty;
 
 	edge = graph_find_edge(graph, type, src, dst);
 	if (!edge)
@@ -675,7 +724,7 @@ static int graph_has_edge(struct isl_sched_graph *graph,
 
 	empty = isl_map_plain_is_empty(edge->map);
 	if (empty < 0)
-		return -1;
+		return isl_bool_error;
 
 	return !empty;
 }
@@ -731,11 +780,11 @@ static void graph_remove_edge(struct isl_sched_graph *graph,
 /* Check whether the dependence graph has any edge
  * between the given two nodes.
  */
-static int graph_has_any_edge(struct isl_sched_graph *graph,
+static isl_bool graph_has_any_edge(struct isl_sched_graph *graph,
 	struct isl_sched_node *src, struct isl_sched_node *dst)
 {
 	enum isl_edge_type i;
-	int r;
+	isl_bool r;
 
 	for (i = isl_edge_first; i <= isl_edge_last; ++i) {
 		r = graph_has_edge(graph, i, src, dst);
@@ -757,10 +806,10 @@ static int graph_has_any_edge(struct isl_sched_graph *graph,
  * of strongly connected components and we cannot ignore
  * conditional validity edges during this detection.
  */
-static int graph_has_validity_edge(struct isl_sched_graph *graph,
+static isl_bool graph_has_validity_edge(struct isl_sched_graph *graph,
 	struct isl_sched_node *src, struct isl_sched_node *dst)
 {
-	int r;
+	isl_bool r;
 
 	r = graph_has_edge(graph, isl_edge_validity, src, dst);
 	if (r < 0 || r)
@@ -834,7 +883,7 @@ static void graph_free(isl_ctx *ctx, struct isl_sched_graph *graph)
 /* For each "set" on which this function is called, increment
  * graph->n by one and update graph->maxvar.
  */
-static int init_n_maxvar(__isl_take isl_set *set, void *user)
+static isl_stat init_n_maxvar(__isl_take isl_set *set, void *user)
 {
 	struct isl_sched_graph *graph = user;
 	int nvar = isl_set_dim(set, isl_dim_set);
@@ -845,19 +894,19 @@ static int init_n_maxvar(__isl_take isl_set *set, void *user)
 
 	isl_set_free(set);
 
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Add the number of basic maps in "map" to *n.
  */
-static int add_n_basic_map(__isl_take isl_map *map, void *user)
+static isl_stat add_n_basic_map(__isl_take isl_map *map, void *user)
 {
 	int *n = user;
 
 	*n += isl_map_n_basic_map(map);
 	isl_map_free(map);
 
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Compute the number of rows that should be allocated for the schedule.
@@ -919,9 +968,9 @@ static int has_any_defining_equality(__isl_keep isl_basic_set *bset)
  * If "compressed" is not set, then "hull", "compress" and "decompress"
  * should be NULL.
  */
-static int add_node(struct isl_sched_graph *graph, __isl_take isl_space *space,
-	int nvar, int compressed, __isl_take isl_set *hull,
-	__isl_take isl_multi_aff *compress,
+static isl_stat add_node(struct isl_sched_graph *graph,
+	__isl_take isl_space *space, int nvar, int compressed,
+	__isl_take isl_set *hull, __isl_take isl_multi_aff *compress,
 	__isl_take isl_multi_aff *decompress)
 {
 	int nparam;
@@ -930,7 +979,7 @@ static int add_node(struct isl_sched_graph *graph, __isl_take isl_space *space,
 	int *coincident;
 
 	if (!space)
-		return -1;
+		return isl_stat_error;
 
 	ctx = isl_space_get_ctx(space);
 	nparam = isl_space_dim(space, isl_dim_param);
@@ -951,11 +1000,11 @@ static int add_node(struct isl_sched_graph *graph, __isl_take isl_space *space,
 	graph->n++;
 
 	if (!space || !sched || (graph->max_row && !coincident))
-		return -1;
+		return isl_stat_error;
 	if (compressed && (!hull || !compress || !decompress))
-		return -1;
+		return isl_stat_error;
 
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Add a new node to the graph representing the given set.
@@ -964,7 +1013,7 @@ static int add_node(struct isl_sched_graph *graph, __isl_take isl_space *space,
  * we perform variable compression such that we can perform
  * the scheduling on the compressed domain.
  */
-static int extract_node(__isl_take isl_set *set, void *user)
+static isl_stat extract_node(__isl_take isl_set *set, void *user)
 {
 	int nvar;
 	int has_equality;
@@ -1000,7 +1049,7 @@ static int extract_node(__isl_take isl_set *set, void *user)
 error:
 	isl_basic_set_free(hull);
 	isl_space_free(space);
-	return -1;
+	return isl_stat_error;
 }
 
 struct isl_extract_edge_data {
@@ -1147,7 +1196,7 @@ static __isl_give isl_map *map_intersect_domains(__isl_take isl_map *tagged,
  * outside of these domains, while the scheduler no longer has
  * any control over those outside parts.
  */
-static int extract_edge(__isl_take isl_map *map, void *user)
+static isl_stat extract_edge(__isl_take isl_map *map, void *user)
 {
 	isl_ctx *ctx = isl_map_get_ctx(map);
 	struct isl_extract_edge_data *data = user;
@@ -1177,7 +1226,7 @@ static int extract_edge(__isl_take isl_map *map, void *user)
 	if (!src || !dst) {
 		isl_map_free(map);
 		isl_map_free(tagged);
-		return 0;
+		return isl_stat_ok;
 	}
 
 	if (src->compressed || dst->compressed) {
@@ -1219,7 +1268,7 @@ static int extract_edge(__isl_take isl_map *map, void *user)
 	edge = graph_find_matching_edge(graph, &graph->edge[graph->n_edge]);
 	if (!edge) {
 		graph->n_edge++;
-		return -1;
+		return isl_stat_error;
 	}
 	if (edge == &graph->edge[graph->n_edge])
 		return graph_edge_table_add(ctx, graph, data->type,
@@ -1234,9 +1283,9 @@ static int extract_edge(__isl_take isl_map *map, void *user)
 /* Check whether there is any dependence from node[j] to node[i]
  * or from node[i] to node[j].
  */
-static int node_follows_weak(int i, int j, void *user)
+static isl_bool node_follows_weak(int i, int j, void *user)
 {
-	int f;
+	isl_bool f;
 	struct isl_sched_graph *graph = user;
 
 	f = graph_has_any_edge(graph, &graph->node[j], &graph->node[i]);
@@ -1248,7 +1297,7 @@ static int node_follows_weak(int i, int j, void *user)
 /* Check whether there is a (conditional) validity dependence from node[j]
  * to node[i], forcing node[i] to follow node[j].
  */
-static int node_follows_strong(int i, int j, void *user)
+static isl_bool node_follows_strong(int i, int j, void *user)
 {
 	struct isl_sched_graph *graph = user;
 
@@ -2462,6 +2511,7 @@ static __isl_give isl_union_map *intersect_domains(
 static int update_edge(struct isl_sched_graph *graph,
 	struct isl_sched_edge *edge)
 {
+	int empty;
 	isl_map *id;
 
 	id = specializer(edge->src, edge->dst);
@@ -2482,28 +2532,190 @@ static int update_edge(struct isl_sched_graph *graph,
 			goto error;
 	}
 
-	isl_map_free(id);
-	if (isl_map_plain_is_empty(edge->map))
+	empty = isl_map_plain_is_empty(edge->map);
+	if (empty < 0)
+		goto error;
+	if (empty)
 		graph_remove_edge(graph, edge);
 
+	isl_map_free(id);
 	return 0;
 error:
 	isl_map_free(id);
 	return -1;
 }
 
-/* Update the dependence relations of all edges based on the current schedule.
+/* Does the domain of "umap" intersect "uset"?
+ */
+static int domain_intersects(__isl_keep isl_union_map *umap,
+	__isl_keep isl_union_set *uset)
+{
+	int empty;
+
+	umap = isl_union_map_copy(umap);
+	umap = isl_union_map_intersect_domain(umap, isl_union_set_copy(uset));
+	empty = isl_union_map_is_empty(umap);
+	isl_union_map_free(umap);
+
+	return empty < 0 ? -1 : !empty;
+}
+
+/* Does the range of "umap" intersect "uset"?
+ */
+static int range_intersects(__isl_keep isl_union_map *umap,
+	__isl_keep isl_union_set *uset)
+{
+	int empty;
+
+	umap = isl_union_map_copy(umap);
+	umap = isl_union_map_intersect_range(umap, isl_union_set_copy(uset));
+	empty = isl_union_map_is_empty(umap);
+	isl_union_map_free(umap);
+
+	return empty < 0 ? -1 : !empty;
+}
+
+/* Are the condition dependences of "edge" local with respect to
+ * the current schedule?
+ *
+ * That is, are domain and range of the condition dependences mapped
+ * to the same point?
+ *
+ * In other words, is the condition false?
+ */
+static int is_condition_false(struct isl_sched_edge *edge)
+{
+	isl_union_map *umap;
+	isl_map *map, *sched, *test;
+	int empty, local;
+
+	empty = isl_union_map_is_empty(edge->tagged_condition);
+	if (empty < 0 || empty)
+		return empty;
+
+	umap = isl_union_map_copy(edge->tagged_condition);
+	umap = isl_union_map_zip(umap);
+	umap = isl_union_set_unwrap(isl_union_map_domain(umap));
+	map = isl_map_from_union_map(umap);
+
+	sched = node_extract_schedule(edge->src);
+	map = isl_map_apply_domain(map, sched);
+	sched = node_extract_schedule(edge->dst);
+	map = isl_map_apply_range(map, sched);
+
+	test = isl_map_identity(isl_map_get_space(map));
+	local = isl_map_is_subset(map, test);
+	isl_map_free(map);
+	isl_map_free(test);
+
+	return local;
+}
+
+/* For each conditional validity constraint that is adjacent
+ * to a condition with domain in condition_source or range in condition_sink,
+ * turn it into an unconditional validity constraint.
+ */
+static int unconditionalize_adjacent_validity(struct isl_sched_graph *graph,
+	__isl_take isl_union_set *condition_source,
+	__isl_take isl_union_set *condition_sink)
+{
+	int i;
+
+	condition_source = isl_union_set_coalesce(condition_source);
+	condition_sink = isl_union_set_coalesce(condition_sink);
+
+	for (i = 0; i < graph->n_edge; ++i) {
+		int adjacent;
+		isl_union_map *validity;
+
+		if (!graph->edge[i].conditional_validity)
+			continue;
+		if (graph->edge[i].validity)
+			continue;
+
+		validity = graph->edge[i].tagged_validity;
+		adjacent = domain_intersects(validity, condition_sink);
+		if (adjacent >= 0 && !adjacent)
+			adjacent = range_intersects(validity, condition_source);
+		if (adjacent < 0)
+			goto error;
+		if (!adjacent)
+			continue;
+
+		graph->edge[i].validity = 1;
+	}
+
+	isl_union_set_free(condition_source);
+	isl_union_set_free(condition_sink);
+	return 0;
+error:
+	isl_union_set_free(condition_source);
+	isl_union_set_free(condition_sink);
+	return -1;
+}
+
+/* Update the dependence relations of all edges based on the current schedule
+ * and enforce conditional validity constraints that are adjacent
+ * to satisfied condition constraints.
+ *
+ * First check if any of the condition constraints are satisfied
+ * (i.e., not local to the outer schedule) and keep track of
+ * their domain and range.
+ * Then update all dependence relations (which removes the non-local
+ * constraints).
+ * Finally, if any condition constraints turned out to be satisfied,
+ * then turn all adjacent conditional validity constraints into
+ * unconditional validity constraints.
  */
 static int update_edges(isl_ctx *ctx, struct isl_sched_graph *graph)
 {
 	int i;
+	int any = 0;
+	isl_union_set *source, *sink;
+
+	source = isl_union_set_empty(isl_space_params_alloc(ctx, 0));
+	sink = isl_union_set_empty(isl_space_params_alloc(ctx, 0));
+	for (i = 0; i < graph->n_edge; ++i) {
+		int local;
+		isl_union_set *uset;
+		isl_union_map *umap;
+
+		if (!graph->edge[i].condition)
+			continue;
+		if (graph->edge[i].local)
+			continue;
+		local = is_condition_false(&graph->edge[i]);
+		if (local < 0)
+			goto error;
+		if (local)
+			continue;
+
+		any = 1;
+
+		umap = isl_union_map_copy(graph->edge[i].tagged_condition);
+		uset = isl_union_map_domain(umap);
+		source = isl_union_set_union(source, uset);
+
+		umap = isl_union_map_copy(graph->edge[i].tagged_condition);
+		uset = isl_union_map_range(umap);
+		sink = isl_union_set_union(sink, uset);
+	}
 
 	for (i = graph->n_edge - 1; i >= 0; --i) {
 		if (update_edge(graph, &graph->edge[i]) < 0)
-			return -1;
+			goto error;
 	}
 
+	if (any)
+		return unconditionalize_adjacent_validity(graph, source, sink);
+
+	isl_union_set_free(source);
+	isl_union_set_free(sink);
 	return 0;
+error:
+	isl_union_set_free(source);
+	isl_union_set_free(sink);
+	return -1;
 }
 
 static void next_band(struct isl_sched_graph *graph)
@@ -2581,43 +2793,6 @@ static __isl_give isl_union_set_list *extract_split(isl_ctx *ctx,
 	filters = isl_union_set_list_add(filters, dom);
 
 	return filters;
-}
-
-/* Topologically sort statements mapped to the same schedule iteration
- * and add insert a sequence node in front of "node"
- * corresponding to this order.
- */
-static __isl_give isl_schedule_node *sort_statements(
-	__isl_take isl_schedule_node *node, struct isl_sched_graph *graph)
-{
-	isl_ctx *ctx;
-	isl_union_set_list *filters;
-
-	if (!node)
-		return NULL;
-
-	ctx = isl_schedule_node_get_ctx(node);
-	if (graph->n < 1)
-		isl_die(ctx, isl_error_internal,
-			"graph should have at least one node",
-			return isl_schedule_node_free(node));
-
-	if (graph->n == 1)
-		return node;
-
-	if (update_edges(ctx, graph) < 0)
-		return isl_schedule_node_free(node);
-
-	if (graph->n_edge == 0)
-		return node;
-
-	if (detect_sccs(ctx, graph) < 0)
-		return isl_schedule_node_free(node);
-
-	filters = extract_sccs(ctx, graph);
-	node = isl_schedule_node_insert_sequence(node, filters);
-
-	return node;
 }
 
 /* Copy nodes that satisfy node_pred from the src dependence graph
@@ -2873,7 +3048,6 @@ static __isl_give isl_schedule_node *compute_split_schedule(
 	__isl_take isl_schedule_node *node, struct isl_sched_graph *graph)
 {
 	int i, n, e1, e2;
-	int orig_total_row;
 	isl_ctx *ctx;
 	isl_union_set_list *filters;
 
@@ -2908,14 +3082,12 @@ static __isl_give isl_schedule_node *compute_split_schedule(
 	node = isl_schedule_node_child(node, 0);
 	node = isl_schedule_node_child(node, 0);
 
-	orig_total_row = graph->n_total_row;
 	node = compute_sub_schedule(node, ctx, graph, n, e1,
 				&node_scc_at_most, &edge_dst_scc_at_most,
 				graph->src_scc, 0);
 	node = isl_schedule_node_parent(node);
 	node = isl_schedule_node_next_sibling(node);
 	node = isl_schedule_node_child(node, 0);
-	graph->n_total_row = orig_total_row;
 	node = compute_sub_schedule(node, ctx, graph, graph->n - n, e2,
 				&node_scc_at_least, &edge_src_scc_at_least,
 				graph->src_scc + 1, 0);
@@ -2978,7 +3150,7 @@ static __isl_give isl_schedule_node *insert_current_band(
 }
 
 /* Update the dependence relations based on the current schedule,
- * add the current band to "node" and the continue with the computation
+ * add the current band to "node" and then continue with the computation
  * of the next band.
  * Return the updated schedule node.
  */
@@ -3186,12 +3358,12 @@ static int count_all_constraints(struct isl_sched_graph *graph,
  * such that the schedule carries as many dependences as possible.
  * In particular, for each dependence i, we bound the dependence distance
  * from below by e_i, with 0 <= e_i <= 1 and then maximize the sum
- * of all e_i's.  Dependence with e_i = 0 in the solution are simply
+ * of all e_i's.  Dependences with e_i = 0 in the solution are simply
  * respected, while those with e_i > 0 (in practice e_i = 1) are carried.
  * Note that if the dependence relation is a union of basic maps,
  * then we have to consider each basic map individually as it may only
  * be possible to carry the dependences expressed by some of those
- * basic maps and not all off them.
+ * basic maps and not all of them.
  * Below, we consider each of those basic maps as a separate "edge".
  *
  * All variables of the LP are non-negative.  The actual coefficients
@@ -3235,8 +3407,6 @@ static int setup_carry_lp(isl_ctx *ctx, struct isl_sched_graph *graph)
 	}
 
 	if (count_all_constraints(graph, &n_eq, &n_ineq) < 0)
-		return -1;
-	if (count_bound_coefficient_constraints(ctx, graph, &n_eq, &n_ineq) < 0)
 		return -1;
 
 	dim = isl_space_set_alloc(ctx, 0, total);
@@ -3289,8 +3459,6 @@ static int setup_carry_lp(isl_ctx *ctx, struct isl_sched_graph *graph)
 		isl_int_set_si(graph->lp->ineq[k][0], 1);
 	}
 
-	if (add_bound_coefficient_constraints(ctx, graph) < 0)
-		return -1;
 	if (add_all_constraints(graph) < 0)
 		return -1;
 
@@ -3574,6 +3742,52 @@ static __isl_give isl_schedule_node *carry_dependences(
 	return split_scaled(node, graph);
 }
 
+/* Topologically sort statements mapped to the same schedule iteration
+ * and add insert a sequence node in front of "node"
+ * corresponding to this order.
+ *
+ * If it turns out to be impossible to sort the statements apart,
+ * because different dependences impose different orderings
+ * on the statements, then we extend the schedule such that
+ * it carries at least one more dependence.
+ */
+static __isl_give isl_schedule_node *sort_statements(
+	__isl_take isl_schedule_node *node, struct isl_sched_graph *graph)
+{
+	isl_ctx *ctx;
+	isl_union_set_list *filters;
+
+	if (!node)
+		return NULL;
+
+	ctx = isl_schedule_node_get_ctx(node);
+	if (graph->n < 1)
+		isl_die(ctx, isl_error_internal,
+			"graph should have at least one node",
+			return isl_schedule_node_free(node));
+
+	if (graph->n == 1)
+		return node;
+
+	if (update_edges(ctx, graph) < 0)
+		return isl_schedule_node_free(node);
+
+	if (graph->n_edge == 0)
+		return node;
+
+	if (detect_sccs(ctx, graph) < 0)
+		return isl_schedule_node_free(node);
+
+	next_band(graph);
+	if (graph->scc < graph->n)
+		return carry_dependences(node, graph);
+
+	filters = extract_sccs(ctx, graph);
+	node = isl_schedule_node_insert_sequence(node, filters);
+
+	return node;
+}
+
 /* Are there any (non-empty) (conditional) validity edges in the graph?
  */
 static int has_validity_edges(struct isl_sched_graph *graph)
@@ -3706,68 +3920,6 @@ static int is_violated(struct isl_sched_graph *graph, int edge_index)
 		return -1;
 
 	return !empty;
-}
-
-/* Does the domain of "umap" intersect "uset"?
- */
-static int domain_intersects(__isl_keep isl_union_map *umap,
-	__isl_keep isl_union_set *uset)
-{
-	int empty;
-
-	umap = isl_union_map_copy(umap);
-	umap = isl_union_map_intersect_domain(umap, isl_union_set_copy(uset));
-	empty = isl_union_map_is_empty(umap);
-	isl_union_map_free(umap);
-
-	return empty < 0 ? -1 : !empty;
-}
-
-/* Does the range of "umap" intersect "uset"?
- */
-static int range_intersects(__isl_keep isl_union_map *umap,
-	__isl_keep isl_union_set *uset)
-{
-	int empty;
-
-	umap = isl_union_map_copy(umap);
-	umap = isl_union_map_intersect_range(umap, isl_union_set_copy(uset));
-	empty = isl_union_map_is_empty(umap);
-	isl_union_map_free(umap);
-
-	return empty < 0 ? -1 : !empty;
-}
-
-/* Are the condition dependences of "edge" local with respect to
- * the current schedule?
- *
- * That is, are domain and range of the condition dependences mapped
- * to the same point?
- *
- * In other words, is the condition false?
- */
-static int is_condition_false(struct isl_sched_edge *edge)
-{
-	isl_union_map *umap;
-	isl_map *map, *sched, *test;
-	int local;
-
-	umap = isl_union_map_copy(edge->tagged_condition);
-	umap = isl_union_map_zip(umap);
-	umap = isl_union_set_unwrap(isl_union_map_domain(umap));
-	map = isl_map_from_union_map(umap);
-
-	sched = node_extract_schedule(edge->src);
-	map = isl_map_apply_domain(map, sched);
-	sched = node_extract_schedule(edge->dst);
-	map = isl_map_apply_range(map, sched);
-
-	test = isl_map_identity(isl_map_get_space(map));
-	local = isl_map_is_subset(map, test);
-	isl_map_free(map);
-	isl_map_free(test);
-
-	return local;
 }
 
 /* Does "graph" have any satisfied condition edges that
@@ -3933,6 +4085,7 @@ static __isl_give isl_schedule_node *compute_schedule_wcc(
 	int use_coincidence;
 	int force_coincidence = 0;
 	int check_conditional;
+	int insert;
 	isl_ctx *ctx;
 
 	if (!node)
@@ -4003,12 +4156,13 @@ static __isl_give isl_schedule_node *compute_schedule_wcc(
 		use_coincidence = has_coincidence;
 	}
 
-	if (graph->n_total_row > graph->band_start) {
+	insert = graph->n_total_row > graph->band_start;
+	if (insert) {
 		node = insert_current_band(node, graph, 1);
 		node = isl_schedule_node_child(node, 0);
 	}
 	node = sort_statements(node, graph);
-	if (graph->n_total_row > graph->band_start)
+	if (insert)
 		node = isl_schedule_node_parent(node);
 
 	return node;
@@ -4030,7 +4184,6 @@ static __isl_give isl_schedule_node *compute_component_schedule(
 {
 	int component, i;
 	int n, n_edge;
-	int orig_total_row;
 	isl_ctx *ctx;
 	isl_union_set_list *filters;
 
@@ -4044,7 +4197,6 @@ static __isl_give isl_schedule_node *compute_component_schedule(
 	else
 		node = isl_schedule_node_insert_sequence(node, filters);
 
-	orig_total_row = graph->n_total_row;
 	for (component = 0; component < graph->scc; ++component) {
 		n = 0;
 		for (i = 0; i < graph->n; ++i)
@@ -4063,7 +4215,6 @@ static __isl_give isl_schedule_node *compute_component_schedule(
 				    &edge_scc_exactly, component, wcc);
 		node = isl_schedule_node_parent(node);
 		node = isl_schedule_node_parent(node);
-		graph->n_total_row = orig_total_row;
 	}
 
 	return node;
@@ -4075,7 +4226,7 @@ static __isl_give isl_schedule_node *compute_component_schedule(
  * We first check if the graph is connected (through validity and conditional
  * validity dependences) and, if not, compute a schedule
  * for each component separately.
- * If schedule_fuse is set to minimal fusion, then we check for strongly
+ * If the schedule_serialize_sccs option is set, then we check for strongly
  * connected components instead and compute a separate schedule for
  * each such strongly connected component.
  */
@@ -4088,7 +4239,7 @@ static __isl_give isl_schedule_node *compute_schedule(isl_schedule_node *node,
 		return NULL;
 
 	ctx = isl_schedule_node_get_ctx(node);
-	if (ctx->opt->schedule_fuse == ISL_SCHEDULE_FUSE_MIN) {
+	if (isl_options_get_schedule_serialize_sccs(ctx)) {
 		if (detect_sccs(ctx, graph) < 0)
 			return isl_schedule_node_free(node);
 	} else {
@@ -4176,7 +4327,8 @@ __isl_give isl_schedule *isl_schedule_constraints_compute_schedule(
 
 	node = isl_schedule_node_from_domain(isl_union_set_copy(sc->domain));
 	node = isl_schedule_node_child(node, 0);
-	node = compute_schedule(node, &graph);
+	if (graph.n > 0)
+		node = compute_schedule(node, &graph);
 	sched = isl_schedule_node_get_schedule(node);
 	isl_schedule_node_free(node);
 

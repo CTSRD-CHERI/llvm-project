@@ -24,7 +24,14 @@
 #include "sanitizer_common/sanitizer_libc.h"
 #include "sanitizer_common/sanitizer_mac.h"
 
-#include <crt_externs.h>  // for _NSGetArgv
+#if !SANITIZER_IOS
+#include <crt_externs.h>  // for _NSGetArgv and _NSGetEnviron
+#else
+extern "C" {
+  extern char ***_NSGetArgv(void);
+}
+#endif
+
 #include <dlfcn.h>  // for dladdr()
 #include <mach-o/dyld.h>
 #include <mach-o/loader.h>
@@ -62,30 +69,27 @@ LowLevelAllocator allocator_for_env;
 // otherwise the corresponding "NAME=value" string is replaced with
 // |name_value|.
 void LeakyResetEnv(const char *name, const char *name_value) {
-  char ***env_ptr = _NSGetEnviron();
-  CHECK(env_ptr);
-  char **environ = *env_ptr;
-  CHECK(environ);
+  char **env = GetEnviron();
   uptr name_len = internal_strlen(name);
-  while (*environ != 0) {
-    uptr len = internal_strlen(*environ);
+  while (*env != 0) {
+    uptr len = internal_strlen(*env);
     if (len > name_len) {
-      const char *p = *environ;
+      const char *p = *env;
       if (!internal_memcmp(p, name, name_len) && p[name_len] == '=') {
         // Match.
         if (name_value) {
           // Replace the old value with the new one.
-          *environ = const_cast<char*>(name_value);
+          *env = const_cast<char*>(name_value);
         } else {
           // Shift the subsequent pointers back.
-          char **del = environ;
+          char **del = env;
           do {
             del[0] = del[1];
           } while (*del++);
         }
       }
     }
-    environ++;
+    env++;
   }
 }
 

@@ -12,7 +12,7 @@ class TypeCompletionTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Check that types only get completed when necessary."""
@@ -37,7 +37,7 @@ class TypeCompletionTestCase(TestBase):
 
         lldbutil.run_break_set_by_source_regexp (self, "// Set break point at this line.")
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

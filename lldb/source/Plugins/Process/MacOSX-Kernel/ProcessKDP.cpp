@@ -12,6 +12,8 @@
 #include <stdlib.h>
 
 // C++ Includes
+#include <mutex>
+
 // Other libraries and framework includes
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/PluginManager.h"
@@ -401,15 +403,6 @@ ProcessKDP::DoLaunch (Module *exe_module,
 {
     Error error;
     error.SetErrorString ("launching not supported in kdp-remote plug-in");
-    return error;
-}
-
-
-Error
-ProcessKDP::DoAttachToProcessWithID (lldb::pid_t attach_pid)
-{
-    Error error;
-    error.SetErrorString ("attach to process by ID is not suppported in kdp remote debugging");
     return error;
 }
 
@@ -835,24 +828,23 @@ ProcessKDP::DoSignal (int signo)
 void
 ProcessKDP::Initialize()
 {
-    static bool g_initialized = false;
-    
-    if (g_initialized == false)
+    static std::once_flag g_once_flag;
+
+    std::call_once(g_once_flag, []()
     {
-        g_initialized = true;
         PluginManager::RegisterPlugin (GetPluginNameStatic(),
                                        GetPluginDescriptionStatic(),
                                        CreateInstance,
                                        DebuggerInitialize);
-        
+
         Log::Callbacks log_callbacks = {
             ProcessKDPLog::DisableLog,
             ProcessKDPLog::EnableLog,
             ProcessKDPLog::ListLogCategories
         };
-        
+
         Log::RegisterLogChannel (ProcessKDP::GetPluginNameStatic(), log_callbacks);
-    }
+    });
 }
 
 void

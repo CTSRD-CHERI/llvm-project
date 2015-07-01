@@ -113,7 +113,8 @@ bool MipsDAGToDAGISel::selectAddr16(SDNode *Parent, SDValue N, SDValue &Base,
   return false;
 }
 
-bool MipsDAGToDAGISel::selectVSplat(SDNode *N, APInt &Imm) const {
+bool MipsDAGToDAGISel::selectVSplat(SDNode *N, APInt &Imm,
+                                    unsigned MinSizeInBits) const {
   llvm_unreachable("Unimplemented function.");
   return false;
 }
@@ -232,8 +233,16 @@ SDNode* MipsDAGToDAGISel::Select(SDNode *Node) {
 bool MipsDAGToDAGISel::
 SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
                              std::vector<SDValue> &OutOps) {
-  assert(ConstraintID == InlineAsm::Constraint_m &&
-         "unexpected asm memory constraint");
-  OutOps.push_back(Op);
-  return false;
+  // All memory constraints can at least accept raw pointers.
+  switch(ConstraintID) {
+  default:
+    llvm_unreachable("Unexpected asm memory constraint");
+  case InlineAsm::Constraint_i:
+  case InlineAsm::Constraint_m:
+  case InlineAsm::Constraint_R:
+  case InlineAsm::Constraint_ZC:
+    OutOps.push_back(Op);
+    return false;
+  }
+  return true;
 }

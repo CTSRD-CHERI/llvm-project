@@ -243,25 +243,33 @@ CMICmdCmdBreakInsert::Execute(void)
 
     if (bOk)
     {
+        if (!m_bBrkPtIsPending && (m_brkPt.GetNumLocations() == 0))
+        {
+            sbTarget.BreakpointDelete(m_brkPt.GetID());
+            SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_BRKPT_LOCATION_NOT_FOUND), m_cmdData.strMiCmd.c_str(), m_brkName.c_str()));
+            return MIstatus::failure;
+        }
+
         m_brkPt.SetEnabled(m_bBrkPtEnabled);
         m_brkPt.SetIgnoreCount(m_nBrkPtIgnoreCount);
         if (m_bBrkPtCondition)
             m_brkPt.SetCondition(m_brkPtCondition.c_str());
         if (m_bBrkPtThreadId)
             m_brkPt.SetThreadID(m_nBrkPtThreadId);
-        if (!m_brkPt.IsValid())
-            m_bBrkPtIsPending = pArgPendingBrkPt->GetFound();
     }
 
     // CODETAG_LLDB_BREAKPOINT_CREATION
     // This is in the main thread
     // Record break point information to be by LLDB event handler function
     CMICmnLLDBDebugSessionInfo::SBrkPtInfo sBrkPtInfo;
+    if (!rSessionInfo.GetBrkPtInfo(m_brkPt, sBrkPtInfo))
+        return MIstatus::failure;
     sBrkPtInfo.m_id = m_brkPt.GetID();
     sBrkPtInfo.m_bDisp = m_bBrkPtIsTemp;
     sBrkPtInfo.m_bEnabled = m_bBrkPtEnabled;
     sBrkPtInfo.m_bHaveArgOptionThreadGrp = m_bHaveArgOptionThreadGrp;
     sBrkPtInfo.m_strOptThrdGrp = m_strArgOptionThreadGrp;
+    sBrkPtInfo.m_nTimes = m_brkPt.GetHitCount();
     sBrkPtInfo.m_strOrigLoc = m_brkName;
     sBrkPtInfo.m_nIgnore = m_nBrkPtIgnoreCount;
     sBrkPtInfo.m_bPending = m_bBrkPtIsPending;
@@ -269,8 +277,8 @@ CMICmdCmdBreakInsert::Execute(void)
     sBrkPtInfo.m_strCondition = m_brkPtCondition;
     sBrkPtInfo.m_bBrkPtThreadId = m_bBrkPtThreadId;
     sBrkPtInfo.m_nBrkPtThreadId = m_nBrkPtThreadId;
-    bOk = bOk && rSessionInfo.RecordBrkPtInfo(m_brkPt.GetID(), sBrkPtInfo);
 
+    bOk = bOk && rSessionInfo.RecordBrkPtInfo(m_brkPt.GetID(), sBrkPtInfo);
     if (!bOk)
     {
         SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_BRKPT_INVALID), m_cmdData.strMiCmd.c_str(), m_brkName.c_str()));
@@ -303,33 +311,14 @@ CMICmdCmdBreakInsert::Acknowledge(void)
     // Get breakpoint information
     CMICmnLLDBDebugSessionInfo &rSessionInfo(CMICmnLLDBDebugSessionInfo::Instance());
     CMICmnLLDBDebugSessionInfo::SBrkPtInfo sBrkPtInfo;
-    if (!rSessionInfo.GetBrkPtInfo(m_brkPt, sBrkPtInfo))
-    {
+    if (!rSessionInfo.RecordBrkPtInfoGet(m_brkPt.GetID(), sBrkPtInfo))
         return MIstatus::failure;
-    }
-
-    // CODETAG_LLDB_BREAKPOINT_CREATION
-    // Add more breakpoint information or overwrite existing information
-    sBrkPtInfo.m_bDisp = m_bBrkPtIsTemp;
-    sBrkPtInfo.m_bEnabled = m_bBrkPtEnabled;
-    sBrkPtInfo.m_bHaveArgOptionThreadGrp = m_bHaveArgOptionThreadGrp;
-    sBrkPtInfo.m_strOptThrdGrp = m_strArgOptionThreadGrp;
-    sBrkPtInfo.m_nTimes = m_brkPt.GetHitCount();
-    sBrkPtInfo.m_strOrigLoc = m_brkName;
-    sBrkPtInfo.m_nIgnore = m_nBrkPtIgnoreCount;
-    sBrkPtInfo.m_bPending = m_bBrkPtIsPending;
-    sBrkPtInfo.m_bCondition = m_bBrkPtCondition;
-    sBrkPtInfo.m_strCondition = m_brkPtCondition;
-    sBrkPtInfo.m_bBrkPtThreadId = m_bBrkPtThreadId;
-    sBrkPtInfo.m_nBrkPtThreadId = m_nBrkPtThreadId;
 
     // MI print
     // "^done,bkpt={number=\"%d\",type=\"breakpoint\",disp=\"%s\",enabled=\"%c\",addr=\"0x%016" PRIx64 "\",func=\"%s\",file=\"%s\",fullname=\"%s/%s\",line=\"%d\",thread-groups=[\"%s\"],times=\"%d\",original-location=\"%s\"}"
     CMICmnMIValueTuple miValueTuple;
     if (!rSessionInfo.MIResponseFormBrkPtInfo(sBrkPtInfo, miValueTuple))
-    {
         return MIstatus::failure;
-    }
 
     const CMICmnMIValueResult miValueResultD("bkpt", miValueTuple);
     const CMICmnMIResultRecord miRecordResult(m_cmdData.strMiCmdToken, CMICmnMIResultRecord::eResultClass_Done, miValueResultD);

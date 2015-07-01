@@ -10,6 +10,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Config/config.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/StringSaver.h"
 #include "gtest/gtest.h"
 #include <stdlib.h>
 #include <string>
@@ -65,9 +66,7 @@ public:
   StackOption(const M0t &M0, const M1t &M1, const M2t &M2, const M3t &M3)
     : Base(M0, M1, M2, M3) {}
 
-  ~StackOption() {
-    this->removeArgument();
-  }
+  ~StackOption() override { this->removeArgument(); }
 };
 
 
@@ -148,26 +147,20 @@ TEST(CommandLineTest, UseOptionCategory) {
                                                   "Category.";
 }
 
-class StrDupSaver : public cl::StringSaver {
-  const char *SaveString(const char *Str) override {
-    return strdup(Str);
-  }
-};
-
-typedef void ParserFunction(StringRef Source, llvm::cl::StringSaver &Saver,
+typedef void ParserFunction(StringRef Source, StringSaver &Saver,
                             SmallVectorImpl<const char *> &NewArgv,
                             bool MarkEOLs);
 
 void testCommandLineTokenizer(ParserFunction *parse, const char *Input,
                               const char *const Output[], size_t OutputSize) {
   SmallVector<const char *, 0> Actual;
-  StrDupSaver Saver;
+  BumpPtrAllocator A;
+  BumpPtrStringSaver Saver(A);
   parse(Input, Saver, Actual, /*MarkEOLs=*/false);
   EXPECT_EQ(OutputSize, Actual.size());
   for (unsigned I = 0, E = Actual.size(); I != E; ++I) {
     if (I < OutputSize)
       EXPECT_STREQ(Output[I], Actual[I]);
-    free(const_cast<char *>(Actual[I]));
   }
 }
 

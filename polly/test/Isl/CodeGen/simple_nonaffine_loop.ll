@@ -17,7 +17,6 @@
 ;}
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
-target triple = "x86_64-apple-macosx10.7.2"
 
 @.str = private unnamed_addr constant [17 x i8] c"Random Value: %d\00", align 1
 
@@ -47,7 +46,7 @@ for.end:                                          ; preds = %for.body
   %idxprom3 = sext i32 %mul2 to i64
   %arrayidx4 = getelementptr inbounds [1048576 x i32], [1048576 x i32]* %A, i64 0, i64 %idxprom3
   %2 = load i32, i32* %arrayidx4, align 16
-  %call5 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([17 x i8], [17 x i8]* @.str, i64 0, i64 0), i32 %2) nounwind
+  %call5 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([17 x i8], [17 x i8]* @.str, i64 0, i64 0), i32 %2) nounwind
   ret i32 0
 }
 

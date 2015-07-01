@@ -51,7 +51,7 @@ public:
   ///
   MultiplexExternalSemaSource(ExternalSemaSource& s1, ExternalSemaSource& s2);
 
-  ~MultiplexExternalSemaSource();
+  ~MultiplexExternalSemaSource() override;
 
   ///\brief Appends new source to the source list.
   ///
@@ -230,6 +230,10 @@ public:
   void ReadUndefinedButUsed(
                 llvm::DenseMap<NamedDecl*, SourceLocation> &Undefined) override;
 
+  void ReadMismatchingDeleteExpressions(llvm::MapVector<
+      FieldDecl *, llvm::SmallVector<std::pair<SourceLocation, bool>, 4>> &
+                                            Exprs) override;
+
   /// \brief Do last resort, unqualified lookup on a LookupResult that
   /// Sema cannot find.
   ///
@@ -331,8 +335,8 @@ public:
   /// external source should take care not to introduce the same map entries
   /// repeatedly.
   void ReadLateParsedTemplates(
-                         llvm::DenseMap<const FunctionDecl *,
-                                        LateParsedTemplate *> &LPTMap) override;
+      llvm::MapVector<const FunctionDecl *, LateParsedTemplate *> &LPTMap)
+      override;
 
   /// \copydoc ExternalSemaSource::CorrectTypo
   /// \note Returns the first nonempty correction.

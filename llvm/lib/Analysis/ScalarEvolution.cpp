@@ -726,6 +726,13 @@ public:
       return;
     }
 
+    // A simple case when N/1. The quotient is N.
+    if (Denominator->isOne()) {
+      *Quotient = Numerator;
+      *Remainder = D.Zero;
+      return;
+    }
+
     // Split the Denominator when it is a product.
     if (const SCEVMulExpr *T = dyn_cast<const SCEVMulExpr>(Denominator)) {
       const SCEV *Q, *R;
@@ -788,6 +795,14 @@ public:
     assert(Numerator->isAffine() && "Numerator should be affine");
     divide(SE, Numerator->getStart(), Denominator, &StartQ, &StartR);
     divide(SE, Numerator->getStepRecurrence(SE), Denominator, &StepQ, &StepR);
+    // Bail out if the types do not match.
+    Type *Ty = Denominator->getType();
+    if (Ty != StartQ->getType() || Ty != StartR->getType() ||
+        Ty != StepQ->getType() || Ty != StepR->getType()) {
+      Quotient = Zero;
+      Remainder = Numerator;
+      return;
+    }
     Quotient = SE.getAddRecExpr(StartQ, StepQ, Numerator->getLoop(),
                                 Numerator->getNoWrapFlags());
     Remainder = SE.getAddRecExpr(StartR, StepR, Numerator->getLoop(),
@@ -2911,6 +2926,56 @@ ScalarEvolution::getAddRecExpr(SmallVectorImpl<const SCEV *> &Operands,
   return S;
 }
 
+const SCEV *
+ScalarEvolution::getGEPExpr(Type *PointeeType, const SCEV *BaseExpr,
+                            const SmallVectorImpl<const SCEV *> &IndexExprs,
+                            bool InBounds) {
+  // getSCEV(Base)->getType() has the same address space as Base->getType()
+  // because SCEV::getType() preserves the address space.
+  Type *IntPtrTy = getEffectiveSCEVType(BaseExpr->getType());
+  // FIXME(PR23527): Don't blindly transfer the inbounds flag from the GEP
+  // instruction to its SCEV, because the Instruction may be guarded by control
+  // flow and the no-overflow bits may not be valid for the expression in any
+  // context.
+  SCEV::NoWrapFlags Wrap = InBounds ? SCEV::FlagNSW : SCEV::FlagAnyWrap;
+
+  const SCEV *TotalOffset = getConstant(IntPtrTy, 0);
+  // The address space is unimportant. The first thing we do on CurTy is getting
+  // its element type.
+  Type *CurTy = PointerType::getUnqual(PointeeType);
+  for (const SCEV *IndexExpr : IndexExprs) {
+    // Compute the (potentially symbolic) offset in bytes for this index.
+    if (StructType *STy = dyn_cast<StructType>(CurTy)) {
+      // For a struct, add the member offset.
+      ConstantInt *Index = cast<SCEVConstant>(IndexExpr)->getValue();
+      unsigned FieldNo = Index->getZExtValue();
+      const SCEV *FieldOffset = getOffsetOfExpr(IntPtrTy, STy, FieldNo);
+
+      // Add the field offset to the running total offset.
+      TotalOffset = getAddExpr(TotalOffset, FieldOffset);
+
+      // Update CurTy to the type of the field at Index.
+      CurTy = STy->getTypeAtIndex(Index);
+    } else {
+      // Update CurTy to its element type.
+      CurTy = cast<SequentialType>(CurTy)->getElementType();
+      // For an array, add the element offset, explicitly scaled.
+      const SCEV *ElementSize = getSizeOfExpr(IntPtrTy, CurTy);
+      // Getelementptr indices are signed.
+      IndexExpr = getTruncateOrSignExtend(IndexExpr, IntPtrTy);
+
+      // Multiply the index by the element size to compute the element offset.
+      const SCEV *LocalOffset = getMulExpr(IndexExpr, ElementSize, Wrap);
+
+      // Add the element offset to the running total offset.
+      TotalOffset = getAddExpr(TotalOffset, LocalOffset);
+    }
+  }
+
+  // Add the total offset from all the GEP indices to the base.
+  return getAddExpr(BaseExpr, TotalOffset, Wrap);
+}
+
 const SCEV *ScalarEvolution::getSMaxExpr(const SCEV *LHS,
                                          const SCEV *RHS) {
   SmallVector<const SCEV *, 2> Ops;
@@ -3685,52 +3750,16 @@ const SCEV *ScalarEvolution::createNodeForPHI(PHINode *PN) {
 /// operations. This allows them to be analyzed by regular SCEV code.
 ///
 const SCEV *ScalarEvolution::createNodeForGEP(GEPOperator *GEP) {
-  Type *IntPtrTy = getEffectiveSCEVType(GEP->getType());
   Value *Base = GEP->getOperand(0);
   // Don't attempt to analyze GEPs over unsized objects.
   if (!Base->getType()->getPointerElementType()->isSized())
     return getUnknown(GEP);
 
-  // Don't blindly transfer the inbounds flag from the GEP instruction to the
-  // Add expression, because the Instruction may be guarded by control flow
-  // and the no-overflow bits may not be valid for the expression in any
-  // context.
-  SCEV::NoWrapFlags Wrap = GEP->isInBounds() ? SCEV::FlagNSW : SCEV::FlagAnyWrap;
-
-  const SCEV *TotalOffset = getConstant(IntPtrTy, 0);
-  gep_type_iterator GTI = gep_type_begin(GEP);
-  for (GetElementPtrInst::op_iterator I = std::next(GEP->op_begin()),
-                                      E = GEP->op_end();
-       I != E; ++I) {
-    Value *Index = *I;
-    // Compute the (potentially symbolic) offset in bytes for this index.
-    if (StructType *STy = dyn_cast<StructType>(*GTI++)) {
-      // For a struct, add the member offset.
-      unsigned FieldNo = cast<ConstantInt>(Index)->getZExtValue();
-      const SCEV *FieldOffset = getOffsetOfExpr(IntPtrTy, STy, FieldNo);
-
-      // Add the field offset to the running total offset.
-      TotalOffset = getAddExpr(TotalOffset, FieldOffset);
-    } else {
-      // For an array, add the element offset, explicitly scaled.
-      const SCEV *ElementSize = getSizeOfExpr(IntPtrTy, *GTI);
-      const SCEV *IndexS = getSCEV(Index);
-      // Getelementptr indices are signed.
-      IndexS = getTruncateOrSignExtend(IndexS, IntPtrTy);
-
-      // Multiply the index by the element size to compute the element offset.
-      const SCEV *LocalOffset = getMulExpr(IndexS, ElementSize, Wrap);
-
-      // Add the element offset to the running total offset.
-      TotalOffset = getAddExpr(TotalOffset, LocalOffset);
-    }
-  }
-
-  // Get the SCEV for the GEP base.
-  const SCEV *BaseS = getSCEV(Base);
-
-  // Add the total offset from all the GEP indices to the base.
-  return getAddExpr(BaseS, TotalOffset, Wrap);
+  SmallVector<const SCEV *, 4> IndexExprs;
+  for (auto Index = GEP->idx_begin(); Index != GEP->idx_end(); ++Index)
+    IndexExprs.push_back(getSCEV(*Index));
+  return getGEPExpr(GEP->getSourceElementType(), getSCEV(Base), IndexExprs,
+                    GEP->isInBounds());
 }
 
 /// GetMinTrailingZeros - Determine the minimum number of zero bits that S is
@@ -5308,12 +5337,9 @@ static bool canConstantEvolve(Instruction *I, const Loop *L) {
   if (!L->contains(I)) return false;
 
   if (isa<PHINode>(I)) {
-    if (L->getHeader() == I->getParent())
-      return true;
-    else
-      // We don't currently keep track of the control flow needed to evaluate
-      // PHIs, so we cannot handle PHIs inside of loops.
-      return false;
+    // We don't currently keep track of the control flow needed to evaluate
+    // PHIs, so we cannot handle PHIs inside of loops.
+    return L->getHeader() == I->getParent();
   }
 
   // If we won't be able to constant fold this expression even if the operands
@@ -5693,7 +5719,7 @@ static Constant *BuildConstantFromSCEV(const SCEV *V) {
             if (PTy->getElementType()->isStructTy())
               C2 = ConstantExpr::getIntegerCast(
                   C2, Type::getInt32Ty(C->getContext()), true);
-            C = ConstantExpr::getGetElementPtr(C, C2);
+            C = ConstantExpr::getGetElementPtr(PTy->getElementType(), C, C2);
           } else
             C = ConstantExpr::getAdd(C, C2);
         }
@@ -6701,6 +6727,65 @@ ScalarEvolution::isLoopBackedgeGuardedByCond(const Loop *L,
       return true;
   }
 
+  struct ClearWalkingBEDominatingCondsOnExit {
+    ScalarEvolution &SE;
+
+    explicit ClearWalkingBEDominatingCondsOnExit(ScalarEvolution &SE)
+        : SE(SE){};
+
+    ~ClearWalkingBEDominatingCondsOnExit() {
+      SE.WalkingBEDominatingConds = false;
+    }
+  };
+
+  // We don't want more than one activation of the following loop on the stack
+  // -- that can lead to O(n!) time complexity.
+  if (WalkingBEDominatingConds)
+    return false;
+
+  WalkingBEDominatingConds = true;
+  ClearWalkingBEDominatingCondsOnExit ClearOnExit(*this);
+
+  // If the loop is not reachable from the entry block, we risk running into an
+  // infinite loop as we walk up into the dom tree.  These loops do not matter
+  // anyway, so we just return a conservative answer when we see them.
+  if (!DT->isReachableFromEntry(L->getHeader()))
+    return false;
+
+  for (DomTreeNode *DTN = (*DT)[Latch], *HeaderDTN = (*DT)[L->getHeader()];
+       DTN != HeaderDTN;
+       DTN = DTN->getIDom()) {
+
+    assert(DTN && "should reach the loop header before reaching the root!");
+
+    BasicBlock *BB = DTN->getBlock();
+    BasicBlock *PBB = BB->getSinglePredecessor();
+    if (!PBB)
+      continue;
+
+    BranchInst *ContinuePredicate = dyn_cast<BranchInst>(PBB->getTerminator());
+    if (!ContinuePredicate || !ContinuePredicate->isConditional())
+      continue;
+
+    Value *Condition = ContinuePredicate->getCondition();
+
+    // If we have an edge `E` within the loop body that dominates the only
+    // latch, the condition guarding `E` also guards the backedge.  This
+    // reasoning works only for loops with a single latch.
+
+    BasicBlockEdge DominatingEdge(PBB, BB);
+    if (DominatingEdge.isSingleEdge()) {
+      // We're constructively (and conservatively) enumerating edges within the
+      // loop body that dominate the latch.  The dominator tree better agree
+      // with us on this:
+      assert(DT->dominates(DominatingEdge, Latch) && "should be!");
+
+      if (isImpliedCond(Pred, LHS, RHS, Condition,
+                        BB != ContinuePredicate->getSuccessor(0)))
+        return true;
+    }
+  }
+
   return false;
 }
 
@@ -6796,15 +6881,6 @@ bool ScalarEvolution::isImpliedCond(ICmpInst::Predicate Pred,
   ICmpInst *ICI = dyn_cast<ICmpInst>(FoundCondValue);
   if (!ICI) return false;
 
-  // Bail if the ICmp's operands' types are wider than the needed type
-  // before attempting to call getSCEV on them. This avoids infinite
-  // recursion, since the analysis of widening casts can require loop
-  // exit condition information for overflow checking, which would
-  // lead back here.
-  if (getTypeSizeInBits(LHS->getType()) <
-      getTypeSizeInBits(ICI->getOperand(0)->getType()))
-    return false;
-
   // Now that we found a conditional branch that dominates the loop or controls
   // the loop latch. Check to see if it is the comparison we are looking for.
   ICmpInst::Predicate FoundPred;
@@ -6816,9 +6892,17 @@ bool ScalarEvolution::isImpliedCond(ICmpInst::Predicate Pred,
   const SCEV *FoundLHS = getSCEV(ICI->getOperand(0));
   const SCEV *FoundRHS = getSCEV(ICI->getOperand(1));
 
-  // Balance the types. The case where FoundLHS' type is wider than
-  // LHS' type is checked for above.
-  if (getTypeSizeInBits(LHS->getType()) >
+  // Balance the types.
+  if (getTypeSizeInBits(LHS->getType()) <
+      getTypeSizeInBits(FoundLHS->getType())) {
+    if (CmpInst::isSigned(Pred)) {
+      LHS = getSignExtendExpr(LHS, FoundLHS->getType());
+      RHS = getSignExtendExpr(RHS, FoundLHS->getType());
+    } else {
+      LHS = getZeroExtendExpr(LHS, FoundLHS->getType());
+      RHS = getZeroExtendExpr(RHS, FoundLHS->getType());
+    }
+  } else if (getTypeSizeInBits(LHS->getType()) >
       getTypeSizeInBits(FoundLHS->getType())) {
     if (CmpInst::isSigned(FoundPred)) {
       FoundLHS = getSignExtendExpr(FoundLHS, LHS->getType());
@@ -7563,11 +7647,11 @@ struct SCEVCollectTerms {
 }
 
 /// Find parametric terms in this SCEVAddRecExpr.
-void SCEVAddRecExpr::collectParametricTerms(
-    ScalarEvolution &SE, SmallVectorImpl<const SCEV *> &Terms) const {
+void ScalarEvolution::collectParametricTerms(const SCEV *Expr,
+    SmallVectorImpl<const SCEV *> &Terms) {
   SmallVector<const SCEV *, 4> Strides;
-  SCEVCollectStrides StrideCollector(SE, Strides);
-  visitAll(this, StrideCollector);
+  SCEVCollectStrides StrideCollector(*this, Strides);
+  visitAll(Expr, StrideCollector);
 
   DEBUG({
       dbgs() << "Strides:\n";
@@ -7783,19 +7867,23 @@ void ScalarEvolution::findArrayDimensions(SmallVectorImpl<const SCEV *> &Terms,
 
 /// Third step of delinearization: compute the access functions for the
 /// Subscripts based on the dimensions in Sizes.
-void SCEVAddRecExpr::computeAccessFunctions(
-    ScalarEvolution &SE, SmallVectorImpl<const SCEV *> &Subscripts,
-    SmallVectorImpl<const SCEV *> &Sizes) const {
+void ScalarEvolution::computeAccessFunctions(
+    const SCEV *Expr, SmallVectorImpl<const SCEV *> &Subscripts,
+    SmallVectorImpl<const SCEV *> &Sizes) {
 
   // Early exit in case this SCEV is not an affine multivariate function.
-  if (Sizes.empty() || !this->isAffine())
+  if (Sizes.empty())
     return;
 
-  const SCEV *Res = this;
+  if (auto AR = dyn_cast<SCEVAddRecExpr>(Expr))
+    if (!AR->isAffine())
+      return;
+
+  const SCEV *Res = Expr;
   int Last = Sizes.size() - 1;
   for (int i = Last; i >= 0; i--) {
     const SCEV *Q, *R;
-    SCEVDivision::divide(SE, Res, Sizes[i], &Q, &R);
+    SCEVDivision::divide(*this, Res, Sizes[i], &Q, &R);
 
     DEBUG({
         dbgs() << "Res: " << *Res << "\n";
@@ -7887,31 +7975,31 @@ void SCEVAddRecExpr::computeAccessFunctions(
 /// asking for the SCEV of the memory access with respect to all enclosing
 /// loops, calling SCEV->delinearize on that and printing the results.
 
-void SCEVAddRecExpr::delinearize(ScalarEvolution &SE,
+void ScalarEvolution::delinearize(const SCEV *Expr,
                                  SmallVectorImpl<const SCEV *> &Subscripts,
                                  SmallVectorImpl<const SCEV *> &Sizes,
-                                 const SCEV *ElementSize) const {
+                                 const SCEV *ElementSize) {
   // First step: collect parametric terms.
   SmallVector<const SCEV *, 4> Terms;
-  collectParametricTerms(SE, Terms);
+  collectParametricTerms(Expr, Terms);
 
   if (Terms.empty())
     return;
 
   // Second step: find subscript sizes.
-  SE.findArrayDimensions(Terms, Sizes, ElementSize);
+  findArrayDimensions(Terms, Sizes, ElementSize);
 
   if (Sizes.empty())
     return;
 
   // Third step: compute the access functions for each subscript.
-  computeAccessFunctions(SE, Subscripts, Sizes);
+  computeAccessFunctions(Expr, Subscripts, Sizes);
 
   if (Subscripts.empty())
     return;
 
   DEBUG({
-      dbgs() << "succeeded to delinearize " << *this << "\n";
+      dbgs() << "succeeded to delinearize " << *Expr << "\n";
       dbgs() << "ArrayDecl[UnknownSize]";
       for (const SCEV *S : Sizes)
         dbgs() << "[" << *S << "]";
@@ -7972,8 +8060,8 @@ ScalarEvolution::SCEVCallbackVH::SCEVCallbackVH(Value *V, ScalarEvolution *se)
 //===----------------------------------------------------------------------===//
 
 ScalarEvolution::ScalarEvolution()
-  : FunctionPass(ID), ValuesAtScopes(64), LoopDispositions(64),
-    BlockDispositions(64), FirstUnknown(nullptr) {
+    : FunctionPass(ID), WalkingBEDominatingConds(false), ValuesAtScopes(64),
+      LoopDispositions(64), BlockDispositions(64), FirstUnknown(nullptr) {
   initializeScalarEvolutionPass(*PassRegistry::getPassRegistry());
 }
 
@@ -8004,6 +8092,7 @@ void ScalarEvolution::releaseMemory() {
   }
 
   assert(PendingLoopPredicates.empty() && "isImpliedCond garbage");
+  assert(!WalkingBEDominatingConds && "isLoopBackedgeGuardedByCond garbage!");
 
   BackedgeTakenCounts.clear();
   ConstantEvolutionLoopExitValue.clear();

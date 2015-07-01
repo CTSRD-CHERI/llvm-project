@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 // C Includes
 #include <errno.h>
 #if defined(__APPLE__)
@@ -19,24 +17,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 
 // C++ Includes
 
 // Other libraries and framework includes
 #include "lldb/Core/Error.h"
-#include "lldb/Core/ConnectionMachPort.h"
-#include "lldb/Core/Debugger.h"
-#include "lldb/Core/StreamFile.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/HostGetOpt.h"
 #include "lldb/Host/OptionParser.h"
-#include "lldb/Interpreter/CommandInterpreter.h"
-#include "lldb/Interpreter/CommandReturnObject.h"
+#include "lldb/Host/Socket.h"
+#include "LLDBServerUtilities.h"
 #include "Plugins/Process/gdb-remote/GDBRemoteCommunicationServerPlatform.h"
 #include "Plugins/Process/gdb-remote/ProcessGDBRemoteLog.h"
 
 using namespace lldb;
 using namespace lldb_private;
+using namespace lldb_private::lldb_server;
+using namespace lldb_private::process_gdb_remote;
+using namespace llvm;
 
 //----------------------------------------------------------------------
 // option descriptors for getopt_long_only()
@@ -44,19 +43,20 @@ using namespace lldb_private;
 
 static int g_debug = 0;
 static int g_verbose = 0;
-static int g_stay_alive = 0;
+static int g_server = 0;
 
 static struct option g_long_options[] =
 {
     { "debug",              no_argument,        &g_debug,           1   },
     { "verbose",            no_argument,        &g_verbose,         1   },
-    { "stay-alive",         no_argument,        &g_stay_alive,      1   },
+    { "log-file",           required_argument,  NULL,               'l' },
+    { "log-channels",       required_argument,  NULL,               'c' },
     { "listen",             required_argument,  NULL,               'L' },
     { "port-offset",        required_argument,  NULL,               'p' },
     { "gdbserver-port",     required_argument,  NULL,               'P' },
     { "min-gdbserver-port", required_argument,  NULL,               'm' },
     { "max-gdbserver-port", required_argument,  NULL,               'M' },
-    { "lldb-command",       required_argument,  NULL,               'c' },
+    { "server",             no_argument,        &g_server,          1   },
     { NULL,                 0,                  NULL,               0   }
 };
 
@@ -67,7 +67,6 @@ static struct option g_long_options[] =
 #define LOW_PORT    (1024u)
 #define HIGH_PORT   (49151u)
 #endif
-
 
 //----------------------------------------------------------------------
 // Watch for signals
@@ -90,7 +89,7 @@ signal_handler(int signo)
 static void
 display_usage (const char *progname, const char *subcommand)
 {
-    fprintf(stderr, "Usage:\n  %s %s [--log-file log-file-path] [--log-flags flags] --listen port\n", progname, subcommand);
+    fprintf(stderr, "Usage:\n  %s %s [--log-file log-file-name] [--log-channels log-channel-list] --server --listen port\n", progname, subcommand);
     exit(0);
 }
 
@@ -111,20 +110,17 @@ main_platform (int argc, char *argv[])
     std::string listen_host_port;
     int ch;
 
-    lldb::DebuggerSP debugger_sp = Debugger::CreateInstance ();
-
-    debugger_sp->SetInputFileHandle(stdin, false);
-    debugger_sp->SetOutputFileHandle(stdout, false);
-    debugger_sp->SetErrorFileHandle(stderr, false);
-    
+    std::string log_file;
+    StringRef log_channels; // e.g. "lldb process threads:gdb-remote default:linux all"
+  
     GDBRemoteCommunicationServerPlatform::PortMap gdbserver_portmap;
     int min_gdbserver_port = 0;
     int max_gdbserver_port = 0;
     uint16_t port_offset = 0;
     
-    std::vector<std::string> lldb_commands;
     bool show_usage = false;
     int option_error = 0;
+    int socket_error = -1;
     
     std::string short_options(OptionParser::GetShortOptionString(g_long_options));
                             
@@ -144,6 +140,16 @@ main_platform (int argc, char *argv[])
 
         case 'L':
             listen_host_port.append (optarg);
+            break;
+
+        case 'l': // Set Log File
+            if (optarg && optarg[0])
+                log_file.assign(optarg);
+            break;
+
+        case 'c': // Log Channels
+            if (optarg && optarg[0])
+                log_channels = StringRef(optarg);
             break;
 
         case 'p':
@@ -200,10 +206,6 @@ main_platform (int argc, char *argv[])
                 }
             }
             break;
-            
-        case 'c':
-            lldb_commands.push_back(optarg);
-            break;
 
         case 'h':   /* fall-through is intentional */
         case '?':
@@ -211,6 +213,9 @@ main_platform (int argc, char *argv[])
             break;
         }
     }
+
+    if (!LLDBServerUtilities::SetupLogging(log_file, log_channels, 0))
+        return -1;
 
     // Make a port map for a port range that was specified.
     if (min_gdbserver_port < max_gdbserver_port)
@@ -222,7 +227,6 @@ main_platform (int argc, char *argv[])
     {
         fprintf (stderr, "error: --min-gdbserver-port (%u) is greater than --max-gdbserver-port (%u)\n", min_gdbserver_port, max_gdbserver_port);
         option_error = 3;
-        
     }
 
     // Print usage and exit if no listening port is specified.
@@ -235,17 +239,22 @@ main_platform (int argc, char *argv[])
         exit(option_error);
     }
     
-    // Execute any LLDB commands that we were asked to evaluate.
-    for (const auto &lldb_command : lldb_commands)
-    {
-        lldb_private::CommandReturnObject result;
-        printf("(lldb) %s\n", lldb_command.c_str());
-        debugger_sp->GetCommandInterpreter().HandleCommand(lldb_command.c_str(), eLazyBoolNo, result);
-        const char *output = result.GetOutputData();
-        if (output && output[0])
-            puts(output);
-    }
+    std::unique_ptr<Socket> listening_socket_up;
+    Socket *socket = nullptr;
+    const bool children_inherit_listen_socket = false;
 
+    // the test suite makes many connections in parallel, let's not miss any.
+    // The highest this should get reasonably is a function of the number 
+    // of target CPUs.  For now, let's just use 100
+    const int backlog = 100;
+    error = Socket::TcpListen(listen_host_port.c_str(), children_inherit_listen_socket, socket, NULL, backlog);
+    if (error.Fail())
+    {
+        printf("error: %s\n", error.AsCString());
+        exit(socket_error);
+    }
+    listening_socket_up.reset(socket);
+    printf ("Listening for a connection from %u...\n", listening_socket_up->GetLocalPortNumber());
 
     do {
         GDBRemoteCommunicationServerPlatform platform;
@@ -258,51 +267,68 @@ main_platform (int argc, char *argv[])
             platform.SetPortMap(std::move(gdbserver_portmap));
         }
 
-        if (!listen_host_port.empty())
+        const bool children_inherit_accept_socket = true;
+        socket = nullptr;
+        error = listening_socket_up->BlockingAccept(listen_host_port.c_str(), children_inherit_accept_socket, socket);
+        if (error.Fail())
         {
-            std::unique_ptr<ConnectionFileDescriptor> conn_ap(new ConnectionFileDescriptor());
-            if (conn_ap.get())
+            printf ("error: %s\n", error.AsCString());
+            exit(socket_error);
+        }
+        printf ("Connection established.\n");
+        if (g_server)
+        {
+            // Collect child zombie processes.
+            while (waitpid(-1, nullptr, WNOHANG) > 0);
+            if (fork())
             {
-                std::string connect_url ("listen://");
-                connect_url.append(listen_host_port.c_str());
+                // Parent doesn't need a connection to the lldb client
+                delete socket;
+                socket = nullptr;
 
-                printf ("Listening for a connection from %s...\n", listen_host_port.c_str());
-                if (conn_ap->Connect(connect_url.c_str(), &error) == eConnectionStatusSuccess)
-                {
-                    printf ("Connection established.\n");
-                    platform.SetConnection (conn_ap.release());
-                }
-                else
-                {
-                    printf ("error: %s\n", error.AsCString());
-                }
+                // Parent will continue to listen for new connections.
+                continue;
             }
-
-            if (platform.IsConnected())
+            else
             {
-                // After we connected, we need to get an initial ack from...
-                if (platform.HandshakeWithClient(&error))
-                {
-                    bool interrupt = false;
-                    bool done = false;
-                    while (!interrupt && !done)
-                    {
-                        if (platform.GetPacketAndSendResponse (UINT32_MAX, error, interrupt, done) != GDBRemoteCommunication::PacketResult::Success)
-                            break;
-                    }
-                    
-                    if (error.Fail())
-                    {
-                        fprintf(stderr, "error: %s\n", error.AsCString());
-                    }
-                }
-                else
-                {
-                    fprintf(stderr, "error: handshake with client failed\n");
-                }
+                // Child process will handle the connection and exit.
+                g_server = 0;
+                // Listening socket is owned by parent process.
+                listening_socket_up.release();
             }
         }
-    } while (g_stay_alive);
+        else
+        {
+            // If not running as a server, this process will not accept
+            // connections while a connection is active.
+            listening_socket_up.reset();
+        }
+        platform.SetConnection (new ConnectionFileDescriptor(socket));
+
+        if (platform.IsConnected())
+        {
+            // After we connected, we need to get an initial ack from...
+            if (platform.HandshakeWithClient(&error))
+            {
+                bool interrupt = false;
+                bool done = false;
+                while (!interrupt && !done)
+                {
+                    if (platform.GetPacketAndSendResponse (UINT32_MAX, error, interrupt, done) != GDBRemoteCommunication::PacketResult::Success)
+                        break;
+                }
+
+                if (error.Fail())
+                {
+                    fprintf(stderr, "error: %s\n", error.AsCString());
+                }
+            }
+            else
+            {
+                fprintf(stderr, "error: handshake with client failed\n");
+            }
+        }
+    } while (g_server);
 
     fprintf(stderr, "lldb-server exiting...\n");
 

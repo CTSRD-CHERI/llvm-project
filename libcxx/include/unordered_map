@@ -123,6 +123,7 @@ public:
     void insert(initializer_list<value_type>);
 
     iterator erase(const_iterator position);
+    iterator erase(iterator position);  // C++14
     size_type erase(const key_type& k);
     iterator erase(const_iterator first, const_iterator last);
     void clear() noexcept;
@@ -287,6 +288,7 @@ public:
     void insert(initializer_list<value_type>);
 
     iterator erase(const_iterator position);
+    iterator erase(iterator position);  // C++14
     size_type erase(const key_type& k);
     iterator erase(const_iterator first, const_iterator last);
     void clear() noexcept;
@@ -359,10 +361,8 @@ template <class Key, class T, class Hash, class Pred, class Alloc>
 
 _LIBCPP_BEGIN_NAMESPACE_STD
 
-template <class _Key, class _Cp, class _Hash, bool = is_empty<_Hash>::value
-#if __has_feature(is_final)
-                                         && !__is_final(_Hash)
-#endif
+template <class _Key, class _Cp, class _Hash,
+          bool = is_empty<_Hash>::value && !__libcpp_is_final<_Hash>::value
          >
 class __unordered_map_hasher
     : private _Hash
@@ -410,10 +410,8 @@ public:
         {return __hash_(__x);}
 };
 
-template <class _Key, class _Cp, class _Pred, bool = is_empty<_Pred>::value
-#if __has_feature(is_final)
-                                         && !__is_final(_Pred)
-#endif
+template <class _Key, class _Cp, class _Pred,
+          bool = is_empty<_Pred>::value && !__libcpp_is_final<_Pred>::value
          >
 class __unordered_map_equal
     : private _Pred
@@ -551,7 +549,7 @@ union __hash_value_type
 
     _LIBCPP_INLINE_VISIBILITY
     __hash_value_type(__hash_value_type&& __v)
-        : __nc(std::move(__v.__nc)) {}
+        : __nc(_VSTD::move(__v.__nc)) {}
 
     _LIBCPP_INLINE_VISIBILITY
     __hash_value_type& operator=(const __hash_value_type& __v)
@@ -559,7 +557,7 @@ union __hash_value_type
 
     _LIBCPP_INLINE_VISIBILITY
     __hash_value_type& operator=(__hash_value_type&& __v)
-        {__nc = std::move(__v.__nc); return *this;}
+        {__nc = _VSTD::move(__v.__nc); return *this;}
 
     _LIBCPP_INLINE_VISIBILITY
     ~__hash_value_type() {__cc.~value_type();}
@@ -730,13 +728,8 @@ private:
     typedef __hash_value_type<key_type, mapped_type>                 __value_type;
     typedef __unordered_map_hasher<key_type, __value_type, hasher>   __hasher;
     typedef __unordered_map_equal<key_type, __value_type, key_equal> __key_equal;
-    typedef typename allocator_traits<allocator_type>::template
-#ifndef _LIBCPP_HAS_NO_TEMPLATE_ALIASES
-            rebind_alloc<__value_type>
-#else
-            rebind_alloc<__value_type>::other
-#endif
-                                                           __allocator_type;
+    typedef typename __rebind_alloc_helper<allocator_traits<allocator_type>,
+                                                 __value_type>::type __allocator_type;
 
     typedef __hash_table<__value_type, __hasher,
                          __key_equal,  __allocator_type>   __table;
@@ -948,6 +941,8 @@ public:
 
     _LIBCPP_INLINE_VISIBILITY
     iterator erase(const_iterator __p) {return __table_.erase(__p.__i_);}
+    _LIBCPP_INLINE_VISIBILITY
+    iterator erase(iterator __p)       {return __table_.erase(__p.__i_);}
     _LIBCPP_INLINE_VISIBILITY
     size_type erase(const key_type& __k) {return __table_.__erase_unique(__k);}
     _LIBCPP_INLINE_VISIBILITY
@@ -1469,13 +1464,8 @@ private:
     typedef __hash_value_type<key_type, mapped_type>                 __value_type;
     typedef __unordered_map_hasher<key_type, __value_type, hasher>   __hasher;
     typedef __unordered_map_equal<key_type, __value_type, key_equal> __key_equal;
-    typedef typename allocator_traits<allocator_type>::template
-#ifndef _LIBCPP_HAS_NO_TEMPLATE_ALIASES
-            rebind_alloc<__value_type>
-#else
-            rebind_alloc<__value_type>::other
-#endif
-                                                           __allocator_type;
+    typedef typename __rebind_alloc_helper<allocator_traits<allocator_type>,
+                                                 __value_type>::type __allocator_type;
 
     typedef __hash_table<__value_type, __hasher,
                          __key_equal,  __allocator_type>   __table;
@@ -1653,6 +1643,8 @@ public:
 
     _LIBCPP_INLINE_VISIBILITY
     iterator erase(const_iterator __p) {return __table_.erase(__p.__i_);}
+    _LIBCPP_INLINE_VISIBILITY
+    iterator erase(iterator __p)       {return __table_.erase(__p.__i_);}
     _LIBCPP_INLINE_VISIBILITY
     size_type erase(const key_type& __k) {return __table_.__erase_multi(__k);}
     _LIBCPP_INLINE_VISIBILITY

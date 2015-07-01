@@ -142,6 +142,29 @@ void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
   const Expr *Init = D.getInit();
   QualType T = D.getType();
 
+  // The address space of a static local variable (DeclPtr) may be different
+  // from the address space of the "this" argument of the constructor. In that
+  // case, we need an addrspacecast before calling the constructor.
+  //
+  // struct StructWithCtor {
+  //   __device__ StructWithCtor() {...}
+  // };
+  // __device__ void foo() {
+  //   __shared__ StructWithCtor s;
+  //   ...
+  // }
+  //
+  // For example, in the above CUDA code, the static local variable s has a
+  // "shared" address space qualifier, but the constructor of StructWithCtor
+  // expects "this" in the "generic" address space.
+  unsigned ExpectedAddrSpace = getContext().getTargetAddressSpace(T);
+  unsigned ActualAddrSpace = DeclPtr->getType()->getPointerAddressSpace();
+  if (ActualAddrSpace != ExpectedAddrSpace) {
+    llvm::Type *LTy = CGM.getTypes().ConvertTypeForMem(T);
+    llvm::PointerType *PTy = llvm::PointerType::get(LTy, ExpectedAddrSpace);
+    DeclPtr = llvm::ConstantExpr::getAddrSpaceCast(DeclPtr, PTy);
+  }
+
   if (!T->isReferenceType()) {
     if (getLangOpts().OpenMP && D.hasAttr<OMPThreadPrivateDeclAttr>())
       (void)CGM.getOpenMPRuntime().emitThreadPrivateVarDefinition(
@@ -239,18 +262,23 @@ llvm::Function *CodeGenModule::CreateGlobalInitOrDestructFunction(
       Fn->setSection(Section);
   }
 
+  SetLLVMFunctionAttributes(nullptr, getTypes().arrangeNullaryFunction(), Fn);
+
   Fn->setCallingConv(getRuntimeCC());
 
   if (!getLangOpts().Exceptions)
     Fn->setDoesNotThrow();
 
   if (!isInSanitizerBlacklist(Fn, Loc)) {
-    if (getLangOpts().Sanitize.has(SanitizerKind::Address))
+    if (getLangOpts().Sanitize.hasOneOf(SanitizerKind::Address |
+                                        SanitizerKind::KernelAddress))
       Fn->addFnAttr(llvm::Attribute::SanitizeAddress);
     if (getLangOpts().Sanitize.has(SanitizerKind::Thread))
       Fn->addFnAttr(llvm::Attribute::SanitizeThread);
     if (getLangOpts().Sanitize.has(SanitizerKind::Memory))
       Fn->addFnAttr(llvm::Attribute::SanitizeMemory);
+    if (getLangOpts().Sanitize.has(SanitizerKind::SafeStack))
+      Fn->addFnAttr(llvm::Attribute::SafeStack);
   }
 
   return Fn;
@@ -278,6 +306,11 @@ void
 CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
                                             llvm::GlobalVariable *Addr,
                                             bool PerformInit) {
+  // Check if we've already initialized this decl.
+  auto I = DelayedCXXInitPosition.find(D);
+  if (I != DelayedCXXInitPosition.end() && I->second == ~0U)
+    return;
+
   llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, false);
   SmallString<256> FnName;
   {
@@ -307,11 +340,9 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
     CXXThreadLocalInitVars.push_back(Addr);
   } else if (PerformInit && ISA) {
     EmitPointerToInitFunc(D, Addr, Fn, ISA);
-    DelayedCXXInitPosition.erase(D);
   } else if (auto *IPA = D->getAttr<InitPriorityAttr>()) {
     OrderGlobalInits Key(IPA->getPriority(), PrioritizedCXXGlobalInits.size());
     PrioritizedCXXGlobalInits.push_back(std::make_pair(Key, Fn));
-    DelayedCXXInitPosition.erase(D);
   } else if (isTemplateInstantiation(D->getTemplateSpecializationKind())) {
     // C++ [basic.start.init]p2:
     //   Definitions of explicitly specialized class template static data
@@ -326,24 +357,24 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
     // minor startup time optimization.  In the MS C++ ABI, there are no guard
     // variables, so this COMDAT key is required for correctness.
     AddGlobalCtor(Fn, 65535, COMDATKey);
-    DelayedCXXInitPosition.erase(D);
   } else if (D->hasAttr<SelectAnyAttr>()) {
     // SelectAny globals will be comdat-folded. Put the initializer into a
     // COMDAT group associated with the global, so the initializers get folded
     // too.
     AddGlobalCtor(Fn, 65535, COMDATKey);
-    DelayedCXXInitPosition.erase(D);
   } else {
-    llvm::DenseMap<const Decl *, unsigned>::iterator I =
-      DelayedCXXInitPosition.find(D);
+    I = DelayedCXXInitPosition.find(D); // Re-do lookup in case of re-hash.
     if (I == DelayedCXXInitPosition.end()) {
       CXXGlobalInits.push_back(Fn);
-    } else {
-      assert(CXXGlobalInits[I->second] == nullptr);
+    } else if (I->second != ~0U) {
+      assert(I->second < CXXGlobalInits.size() &&
+             CXXGlobalInits[I->second] == nullptr);
       CXXGlobalInits[I->second] = Fn;
-      DelayedCXXInitPosition.erase(I);
     }
   }
+
+  // Remember that we already emitted the initializer for this global.
+  DelayedCXXInitPosition[D] = ~0U;
 }
 
 void CodeGenModule::EmitCXXThreadLocalInitFunc() {
@@ -396,6 +427,7 @@ CodeGenModule::EmitCXXGlobalInitFunc() {
       CodeGenFunction(*this).GenerateCXXGlobalInitFunc(Fn, LocalCXXGlobalInits);
       AddGlobalCtor(Fn, Priority);
     }
+    PrioritizedCXXGlobalInits.clear();
   }
 
   SmallString<128> FileName;
@@ -406,7 +438,7 @@ CodeGenModule::EmitCXXGlobalInitFunc() {
     // priority emitted above.
     FileName = llvm::sys::path::filename(MainFile->getName());
   } else {
-    FileName = SmallString<128>("<null>");
+    FileName = "<null>";
   }
 
   for (size_t i = 0; i < FileName.size(); ++i) {
@@ -423,7 +455,6 @@ CodeGenModule::EmitCXXGlobalInitFunc() {
   AddGlobalCtor(Fn);
 
   CXXGlobalInits.clear();
-  PrioritizedCXXGlobalInits.clear();
 }
 
 void CodeGenModule::EmitCXXGlobalDtorFunc() {

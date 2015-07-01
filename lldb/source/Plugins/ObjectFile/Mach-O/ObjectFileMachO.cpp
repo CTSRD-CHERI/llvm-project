@@ -1271,7 +1271,7 @@ ObjectFileMachO::GetAddressClass (lldb::addr_t file_addr)
         {
             if (symbol->ValueIsAddress())
             {
-                SectionSP section_sp (symbol->GetAddress().GetSection());
+                SectionSP section_sp (symbol->GetAddressRef().GetSection());
                 if (section_sp)
                 {
                     const lldb::SectionType section_type = section_sp->GetType();
@@ -1464,7 +1464,9 @@ ObjectFileMachO::CreateSections (SectionList &unified_section_list)
             if (m_data.GetU32(&offset, &encryption_cmd, 2) == NULL)
                 break;
 
-            if (encryption_cmd.cmd == LC_ENCRYPTION_INFO)
+            // LC_ENCRYPTION_INFO and LC_ENCRYPTION_INFO_64 have the same sizes for
+            // the 3 fields we care about, so treat them the same.
+            if (encryption_cmd.cmd == LC_ENCRYPTION_INFO || encryption_cmd.cmd == LC_ENCRYPTION_INFO_64)
             {
                 if (m_data.GetU32(&offset, &encryption_cmd.cryptoff, 3))
                 {
@@ -2281,7 +2283,15 @@ ObjectFileMachO::ParseSymtab ()
 
             if (linkedit_section_sp)
             {
-                const addr_t linkedit_load_addr = linkedit_section_sp->GetLoadBaseAddress(&target);
+                addr_t linkedit_load_addr = linkedit_section_sp->GetLoadBaseAddress(&target);
+                if (linkedit_load_addr == LLDB_INVALID_ADDRESS)
+                {
+                    // We might be trying to access the symbol table before the __LINKEDIT's load
+                    // address has been set in the target. We can't fail to read the symbol table,
+                    // so calculate the right address manually
+                    linkedit_load_addr = CalculateSectionLoadAddressForMemoryImage(m_memory_addr, GetMachHeaderSection(), linkedit_section_sp.get());
+                }
+
                 const addr_t linkedit_file_offset = linkedit_section_sp->GetFileOffset();
                 const addr_t symoff_addr = linkedit_load_addr + symtab_load_command.symoff - linkedit_file_offset;
                 strtab_addr = linkedit_load_addr + symtab_load_command.stroff - linkedit_file_offset;
@@ -3511,8 +3521,8 @@ ObjectFileMachO::ParseSymtab ()
                                                                 m_nlist_idx_to_sym_idx[nlist_idx] = GSYM_sym_idx;
                                                                 // Copy the address, because often the N_GSYM address has an invalid address of zero
                                                                 // when the global is a common symbol
-                                                                sym[GSYM_sym_idx].GetAddress().SetSection (symbol_section);
-                                                                sym[GSYM_sym_idx].GetAddress().SetOffset (symbol_value);
+                                                                sym[GSYM_sym_idx].GetAddressRef().SetSection (symbol_section);
+                                                                sym[GSYM_sym_idx].GetAddressRef().SetOffset (symbol_value);
                                                                 // We just need the flags from the linker symbol, so put these flags
                                                                 // into the N_GSYM flags to avoid duplicate symbols in the symbol table
                                                                 sym[GSYM_sym_idx].SetFlags (nlist.n_type << 16 | nlist.n_desc);
@@ -3527,8 +3537,8 @@ ObjectFileMachO::ParseSymtab ()
                                                 sym[sym_idx].SetType (type);
                                                 if (set_value)
                                                 {
-                                                    sym[sym_idx].GetAddress().SetSection (symbol_section);
-                                                    sym[sym_idx].GetAddress().SetOffset (symbol_value);
+                                                    sym[sym_idx].GetAddressRef().SetSection (symbol_section);
+                                                    sym[sym_idx].GetAddressRef().SetOffset (symbol_value);
                                                 }
                                                 sym[sym_idx].SetFlags (nlist.n_type << 16 | nlist.n_desc);
 
@@ -4354,8 +4364,8 @@ ObjectFileMachO::ParseSymtab ()
                                     m_nlist_idx_to_sym_idx[nlist_idx] = GSYM_sym_idx;
                                     // Copy the address, because often the N_GSYM address has an invalid address of zero
                                     // when the global is a common symbol
-                                    sym[GSYM_sym_idx].GetAddress().SetSection (symbol_section);
-                                    sym[GSYM_sym_idx].GetAddress().SetOffset (symbol_value);
+                                    sym[GSYM_sym_idx].GetAddressRef().SetSection (symbol_section);
+                                    sym[GSYM_sym_idx].GetAddressRef().SetOffset (symbol_value);
                                     // We just need the flags from the linker symbol, so put these flags
                                     // into the N_GSYM flags to avoid duplicate symbols in the symbol table
                                     sym[GSYM_sym_idx].SetFlags (nlist.n_type << 16 | nlist.n_desc);
@@ -4370,8 +4380,8 @@ ObjectFileMachO::ParseSymtab ()
                     sym[sym_idx].SetType (type);
                     if (set_value)
                     {
-                        sym[sym_idx].GetAddress().SetSection (symbol_section);
-                        sym[sym_idx].GetAddress().SetOffset (symbol_value);
+                        sym[sym_idx].GetAddressRef().SetSection (symbol_section);
+                        sym[sym_idx].GetAddressRef().SetOffset (symbol_value);
                     }
                     sym[sym_idx].SetFlags (nlist.n_type << 16 | nlist.n_desc);
 
@@ -4465,7 +4475,7 @@ ObjectFileMachO::ParseSymtab ()
                                 sym[sym_idx].GetMangled().SetDemangledName(ConstString(synthetic_function_symbol));
                                 sym[sym_idx].SetType (eSymbolTypeCode);
                                 sym[sym_idx].SetIsSynthetic (true);
-                                sym[sym_idx].GetAddress() = symbol_addr;
+                                sym[sym_idx].GetAddressRef() = symbol_addr;
                                 if (symbol_flags)
                                     sym[sym_idx].SetFlags (symbol_flags);
                                 if (symbol_byte_size)
@@ -4549,7 +4559,7 @@ ObjectFileMachO::ParseSymtab ()
                                         else
                                             stub_symbol->SetType (eSymbolTypeResolver);
                                         stub_symbol->SetExternal (false);
-                                        stub_symbol->GetAddress() = so_addr;
+                                        stub_symbol->GetAddressRef() = so_addr;
                                         stub_symbol->SetByteSize (symbol_stub_byte_size);
                                     }
                                     else
@@ -4568,7 +4578,7 @@ ObjectFileMachO::ParseSymtab ()
                                         else
                                             sym[sym_idx].SetType (eSymbolTypeResolver);
                                         sym[sym_idx].SetIsSynthetic (true);
-                                        sym[sym_idx].GetAddress() = so_addr;
+                                        sym[sym_idx].GetAddressRef() = so_addr;
                                         sym[sym_idx].SetByteSize (symbol_stub_byte_size);
                                         ++sym_idx;
                                     }
@@ -4786,6 +4796,8 @@ ObjectFileMachO::GetDependentModules (FileSpecList& files)
         lldb_private::Mutex::Locker locker(module_sp->GetMutex());
         struct load_command load_cmd;
         lldb::offset_t offset = MachHeaderSizeFromMagic(m_header.magic);
+        std::vector<std::string> rpath_paths;
+        std::vector<std::string> rpath_relative_paths;
         const bool resolve_path = false; // Don't resolve the dependent file paths since they may not reside on this system
         uint32_t i;
         for (i=0; i<m_header.ncmds; ++i)
@@ -4796,6 +4808,7 @@ ObjectFileMachO::GetDependentModules (FileSpecList& files)
 
             switch (load_cmd.cmd)
             {
+            case LC_RPATH:
             case LC_LOAD_DYLIB:
             case LC_LOAD_WEAK_DYLIB:
             case LC_REEXPORT_DYLIB:
@@ -4805,14 +4818,24 @@ ObjectFileMachO::GetDependentModules (FileSpecList& files)
                 {
                     uint32_t name_offset = cmd_offset + m_data.GetU32(&offset);
                     const char *path = m_data.PeekCStr(name_offset);
-                    // Skip any path that starts with '@' since these are usually:
-                    // @executable_path/.../file
-                    // @rpath/.../file
-                    if (path && path[0] != '@')
+                    if (path)
                     {
-                        FileSpec file_spec(path, resolve_path);
-                        if (files.AppendIfUnique(file_spec))
-                            count++;
+                        if (load_cmd.cmd == LC_RPATH)
+                            rpath_paths.push_back(path);
+                        else
+                        {
+                            if (path[0] == '@')
+                            {
+                                if (strncmp(path, "@rpath", strlen("@rpath")) == 0)
+                                    rpath_relative_paths.push_back(path + strlen("@rpath"));
+                            }
+                            else
+                            {
+                                FileSpec file_spec(path, resolve_path);
+                                if (files.AppendIfUnique(file_spec))
+                                    count++;
+                            }
+                        }
                     }
                 }
                 break;
@@ -4821,6 +4844,48 @@ ObjectFileMachO::GetDependentModules (FileSpecList& files)
                 break;
             }
             offset = cmd_offset + load_cmd.cmdsize;
+        }
+
+        if (!rpath_paths.empty())
+        {
+            // Fixup all LC_RPATH values to be absolute paths
+            FileSpec this_file_spec(m_file);
+            this_file_spec.ResolvePath();
+            std::string loader_path("@loader_path");
+            std::string executable_path("@executable_path");
+            for (auto &rpath : rpath_paths)
+            {
+                if (rpath.find(loader_path) == 0)
+                {
+                    rpath.erase(0, loader_path.size());
+                    rpath.insert(0, this_file_spec.GetDirectory().GetCString());
+                }
+                else if (rpath.find(executable_path) == 0)
+                {
+                    rpath.erase(0, executable_path.size());
+                    rpath.insert(0, this_file_spec.GetDirectory().GetCString());
+                }
+            }
+
+            for (const auto &rpath_relative_path : rpath_relative_paths)
+            {
+                for (const auto &rpath : rpath_paths)
+                {
+                    std::string path = rpath;
+                    path += rpath_relative_path;
+                    // It is OK to resolve this path because we must find a file on
+                    // disk for us to accept it anyway if it is rpath relative.
+                    FileSpec file_spec(path, true);
+                    // Remove any redundant parts of the path (like "../foo") since
+                    // LC_RPATH values often contain "..".
+                    file_spec.NormalizePath ();
+                    if (file_spec.Exists() && files.AppendIfUnique(file_spec))
+                    {
+                        count++;
+                        break;
+                    }
+                }
+            }
         }
     }
     return count;
@@ -5457,6 +5522,72 @@ ObjectFileMachO::GetPluginVersion()
 }
 
 
+Section *
+ObjectFileMachO::GetMachHeaderSection()
+{
+    // Find the first address of the mach header which is the first non-zero
+    // file sized section whose file offset is zero. This is the base file address
+    // of the mach-o file which can be subtracted from the vmaddr of the other
+    // segments found in memory and added to the load address
+    ModuleSP module_sp = GetModule();
+    if (module_sp)
+    {
+        SectionList *section_list = GetSectionList ();
+        if (section_list)
+        {
+            lldb::addr_t mach_base_file_addr = LLDB_INVALID_ADDRESS;
+            const size_t num_sections = section_list->GetSize();
+
+            for (size_t sect_idx = 0;
+                 sect_idx < num_sections && mach_base_file_addr == LLDB_INVALID_ADDRESS;
+                 ++sect_idx)
+            {
+                Section *section = section_list->GetSectionAtIndex (sect_idx).get();
+                if (section &&
+                    section->GetFileSize() > 0 &&
+                    section->GetFileOffset() == 0 &&
+                    section->IsThreadSpecific() == false &&
+                    module_sp.get() == section->GetModule().get())
+                {
+                    return section;
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
+lldb::addr_t
+ObjectFileMachO::CalculateSectionLoadAddressForMemoryImage(lldb::addr_t mach_header_load_address, const Section *mach_header_section, const Section *section)
+{
+    ModuleSP module_sp = GetModule();
+    if (module_sp && mach_header_section && section && mach_header_load_address != LLDB_INVALID_ADDRESS)
+    {
+        lldb::addr_t mach_header_file_addr = mach_header_section->GetFileAddress();
+        if (mach_header_file_addr != LLDB_INVALID_ADDRESS)
+        {
+            if (section &&
+                section->GetFileSize() > 0 &&
+                section->IsThreadSpecific() == false &&
+                module_sp.get() == section->GetModule().get())
+            {
+                // Ignore __LINKEDIT and __DWARF segments
+                if (section->GetName() == GetSegmentNameLINKEDIT())
+                {
+                    // Only map __LINKEDIT if we have an in memory image and this isn't
+                    // a kernel binary like a kext or mach_kernel.
+                    const bool is_memory_image = (bool)m_process_wp.lock();
+                    const Strata strata = GetStrata();
+                    if (is_memory_image == false || strata == eStrataKernel)
+                        return LLDB_INVALID_ADDRESS;
+                }
+                return section->GetFileAddress() - mach_header_file_addr + mach_header_load_address;
+            }
+        }
+    }
+    return LLDB_INVALID_ADDRESS;
+}
+
 bool
 ObjectFileMachO::SetLoadAddress (Target &target,
                                  lldb::addr_t value,
@@ -5469,12 +5600,8 @@ ObjectFileMachO::SetLoadAddress (Target &target,
         SectionList *section_list = GetSectionList ();
         if (section_list)
         {
-            lldb::addr_t mach_base_file_addr = LLDB_INVALID_ADDRESS;
             const size_t num_sections = section_list->GetSize();
 
-            const bool is_memory_image = (bool)m_process_wp.lock();
-            const Strata strata = GetStrata();
-            static ConstString g_linkedit_segname ("__LINKEDIT");
             if (value_is_offset)
             {
                 // "value" is an offset to apply to each top level segment
@@ -5490,10 +5617,12 @@ ObjectFileMachO::SetLoadAddress (Target &target,
                         module_sp.get() == section_sp->GetModule().get())
                     {
                         // Ignore __LINKEDIT and __DWARF segments
-                        if (section_sp->GetName() == g_linkedit_segname)
+                        if (section_sp->GetName() == GetSegmentNameLINKEDIT())
                         {
                             // Only map __LINKEDIT if we have an in memory image and this isn't
                             // a kernel binary like a kext or mach_kernel.
+                            const bool is_memory_image = (bool)m_process_wp.lock();
+                            const Strata strata = GetStrata();
                             if (is_memory_image == false || strata == eStrataKernel)
                                 continue;
                         }
@@ -5507,58 +5636,17 @@ ObjectFileMachO::SetLoadAddress (Target &target,
                 // "value" is the new base address of the mach_header, adjust each
                 // section accordingly
 
-                // First find the address of the mach header which is the first non-zero
-                // file sized section whose file offset is zero as this will be subtracted
-                // from each other valid section's vmaddr and then get "base_addr" added to
-                // it when loading the module in the target
-                for (size_t sect_idx = 0;
-                     sect_idx < num_sections && mach_base_file_addr == LLDB_INVALID_ADDRESS;
-                     ++sect_idx)
-                {
-                    // Iterate through the object file sections to find all
-                    // of the sections that size on disk (to avoid __PAGEZERO)
-                    // and load them
-                    Section *section = section_list->GetSectionAtIndex (sect_idx).get();
-                    if (section &&
-                        section->GetFileSize() > 0 &&
-                        section->GetFileOffset() == 0 &&
-                        section->IsThreadSpecific() == false &&
-                        module_sp.get() == section->GetModule().get())
-                    {
-                        // Ignore __LINKEDIT and __DWARF segments
-                        if (section->GetName() == g_linkedit_segname)
-                        {
-                            // Only map __LINKEDIT if we have an in memory image and this isn't
-                            // a kernel binary like a kext or mach_kernel.
-                            if (is_memory_image == false || strata == eStrataKernel)
-                                continue;
-                        }
-                        mach_base_file_addr = section->GetFileAddress();
-                    }
-                }
-
-                if (mach_base_file_addr != LLDB_INVALID_ADDRESS)
+                Section *mach_header_section = GetMachHeaderSection();
+                if (mach_header_section)
                 {
                     for (size_t sect_idx = 0; sect_idx < num_sections; ++sect_idx)
                     {
-                        // Iterate through the object file sections to find all
-                        // of the sections that size on disk (to avoid __PAGEZERO)
-                        // and load them
                         SectionSP section_sp (section_list->GetSectionAtIndex (sect_idx));
-                        if (section_sp &&
-                            section_sp->GetFileSize() > 0 &&
-                            section_sp->IsThreadSpecific() == false &&
-                            module_sp.get() == section_sp->GetModule().get())
+
+                        lldb::addr_t section_load_addr = CalculateSectionLoadAddressForMemoryImage(value, mach_header_section, section_sp.get());
+                        if (section_load_addr != LLDB_INVALID_ADDRESS)
                         {
-                            // Ignore __LINKEDIT and __DWARF segments
-                            if (section_sp->GetName() == g_linkedit_segname)
-                            {
-                                // Only map __LINKEDIT if we have an in memory image and this isn't
-                                // a kernel binary like a kext or mach_kernel.
-                                if (is_memory_image == false || strata == eStrataKernel)
-                                    continue;
-                            }
-                            if (target.GetSectionLoadList().SetSectionLoadAddress (section_sp, section_sp->GetFileAddress() - mach_base_file_addr + value))
+                            if (target.GetSectionLoadList().SetSectionLoadAddress (section_sp, section_load_addr))
                                 ++num_loaded_sections;
                         }
                     }
@@ -5587,11 +5675,7 @@ ObjectFileMachO::SaveCore (const lldb::ProcessSP &process_sp,
             bool make_core = false;
             switch (target_arch.GetMachine())
             {
-                  // arm64 core file writing is having some problem with writing  down the 
-                  // dyld shared images info struct and/or the main executable binary. May
-                  // turn out to be a debugserver problem, not sure yet.
-//                case llvm::Triple::aarch64:
-
+                case llvm::Triple::aarch64:
                 case llvm::Triple::arm:
                 case llvm::Triple::x86:
                 case llvm::Triple::x86_64:

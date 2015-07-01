@@ -17,6 +17,10 @@ class RegisterCommandsTestCase(TestBase):
         TestBase.setUp(self)
         self.has_teardown = False
 
+    def tearDown(self):
+        self.dbg.GetSelectedTarget().GetProcess().Destroy()
+        TestBase.tearDown(self)
+
     def test_register_commands(self):
         """Test commands related to registers, in particular vector registers."""
         if not self.getArchitecture() in ['amd64', 'i386', 'x86_64']:
@@ -71,7 +75,7 @@ class RegisterCommandsTestCase(TestBase):
         # Break in main().
         lldbutil.run_break_set_by_symbol (self, "main", num_expected_locations=-1)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -84,6 +88,8 @@ class RegisterCommandsTestCase(TestBase):
 
     # platform specific logging of the specified category
     def log_enable(self, category):
+        # This intentionally checks the host platform rather than the target
+        # platform as logging is host side.
         self.platform = ""
         if sys.platform.startswith("darwin"):
             self.platform = "" # TODO: add support for "log enable darwin registers"
@@ -96,7 +102,7 @@ class RegisterCommandsTestCase(TestBase):
 
         if self.platform != "":
             self.log_file = os.path.join(os.getcwd(), 'TestRegisters.log')
-            self.runCmd("log enable " + self.platform + " " + str(category) + " registers -v -f " + self.log_file, RUN_SUCCEEDED)
+            self.runCmd("log enable " + self.platform + " " + str(category) + " registers -v -f " + self.log_file, RUN_FAILED)
             if not self.has_teardown:
                 self.has_teardown = True
                 self.addTearDownHook(self.remove_log)

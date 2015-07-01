@@ -34,29 +34,32 @@
 #include "Utility/StringExtractor.h"
 #include "GDBRemoteRegisterContext.h"
 
+namespace lldb_private {
+namespace process_gdb_remote {
+
 class ThreadGDBRemote;
 
-class ProcessGDBRemote : public lldb_private::Process
+class ProcessGDBRemote : public Process
 {
 public:
     //------------------------------------------------------------------
     // Constructors and Destructors
     //------------------------------------------------------------------
     static lldb::ProcessSP
-    CreateInstance (lldb_private::Target& target, 
-                    lldb_private::Listener &listener,
-                    const lldb_private::FileSpec *crash_file_path);
+    CreateInstance (Target& target, 
+                    Listener &listener,
+                    const FileSpec *crash_file_path);
 
     static void
     Initialize();
 
     static void
-    DebuggerInitialize (lldb_private::Debugger &debugger);
+    DebuggerInitialize (Debugger &debugger);
 
     static void
     Terminate();
 
-    static lldb_private::ConstString
+    static ConstString
     GetPluginNameStatic();
 
     static const char *
@@ -65,7 +68,7 @@ public:
     //------------------------------------------------------------------
     // Constructors and Destructors
     //------------------------------------------------------------------
-    ProcessGDBRemote(lldb_private::Target& target, lldb_private::Listener &listener);
+    ProcessGDBRemote(Target& target, Listener &listener);
 
     virtual
     ~ProcessGDBRemote();
@@ -74,54 +77,49 @@ public:
     // Check if a given Process
     //------------------------------------------------------------------
     bool
-    CanDebug (lldb_private::Target &target,
-              bool plugin_specified_by_name) override;
+    CanDebug (Target &target, bool plugin_specified_by_name) override;
 
-    lldb_private::CommandObject *
+    CommandObject *
     GetPluginCommandObject() override;
 
     //------------------------------------------------------------------
     // Creating a new process, or attaching to an existing one
     //------------------------------------------------------------------
-    lldb_private::Error
-    WillLaunch (lldb_private::Module* module) override;
+    Error
+    WillLaunch (Module* module) override;
 
-    lldb_private::Error
-    DoLaunch (lldb_private::Module *exe_module, 
-              lldb_private::ProcessLaunchInfo &launch_info) override;
+    Error
+    DoLaunch (Module *exe_module, ProcessLaunchInfo &launch_info) override;
 
     void
     DidLaunch () override;
 
-    lldb_private::Error
+    Error
     WillAttachToProcessWithID (lldb::pid_t pid) override;
 
-    lldb_private::Error
+    Error
     WillAttachToProcessWithName (const char *process_name, bool wait_for_launch) override;
 
-    lldb_private::Error
-    DoConnectRemote (lldb_private::Stream *strm, const char *remote_url) override;
+    Error
+    DoConnectRemote (Stream *strm, const char *remote_url) override;
     
-    lldb_private::Error
+    Error
     WillLaunchOrAttach ();
-
-    lldb_private::Error
-    DoAttachToProcessWithID (lldb::pid_t pid) override;
     
-    lldb_private::Error
-    DoAttachToProcessWithID (lldb::pid_t pid, const lldb_private::ProcessAttachInfo &attach_info) override;
+    Error
+    DoAttachToProcessWithID (lldb::pid_t pid, const ProcessAttachInfo &attach_info) override;
     
-    lldb_private::Error
+    Error
     DoAttachToProcessWithName (const char *process_name,
-                               const lldb_private::ProcessAttachInfo &attach_info) override;
+                               const ProcessAttachInfo &attach_info) override;
 
     void
-    DidAttach (lldb_private::ArchSpec &process_arch) override;
+    DidAttach (ArchSpec &process_arch) override;
 
     //------------------------------------------------------------------
     // PluginInterface protocol
     //------------------------------------------------------------------
-    lldb_private::ConstString
+    ConstString
     GetPluginName() override;
 
     uint32_t
@@ -130,25 +128,25 @@ public:
     //------------------------------------------------------------------
     // Process Control
     //------------------------------------------------------------------
-    lldb_private::Error
+    Error
     WillResume () override;
 
-    lldb_private::Error
+    Error
     DoResume () override;
 
-    lldb_private::Error
+    Error
     DoHalt (bool &caused_stop) override;
 
-    lldb_private::Error
+    Error
     DoDetach (bool keep_stopped) override;
     
     bool
     DetachRequiresHalt() override { return true; }
 
-    lldb_private::Error
+    Error
     DoSignal (int signal) override;
 
-    lldb_private::Error
+    Error
     DoDestroy () override;
 
     void
@@ -167,49 +165,48 @@ public:
     // Process Memory
     //------------------------------------------------------------------
     size_t
-    DoReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error) override;
+    DoReadMemory (lldb::addr_t addr, void *buf, size_t size, Error &error) override;
 
     size_t
-    DoWriteMemory (lldb::addr_t addr, const void *buf, size_t size, lldb_private::Error &error) override;
+    DoWriteMemory (lldb::addr_t addr, const void *buf, size_t size, Error &error) override;
 
     lldb::addr_t
-    DoAllocateMemory (size_t size, uint32_t permissions, lldb_private::Error &error) override;
+    DoAllocateMemory (size_t size, uint32_t permissions, Error &error) override;
 
-    lldb_private::Error
-    GetMemoryRegionInfo (lldb::addr_t load_addr, 
-                         lldb_private::MemoryRegionInfo &region_info) override;
+    Error
+    GetMemoryRegionInfo (lldb::addr_t load_addr, MemoryRegionInfo &region_info) override;
     
-    lldb_private::Error
+    Error
     DoDeallocateMemory (lldb::addr_t ptr) override;
 
     //------------------------------------------------------------------
     // Process STDIO
     //------------------------------------------------------------------
     size_t
-    PutSTDIN (const char *buf, size_t buf_size, lldb_private::Error &error) override;
+    PutSTDIN (const char *buf, size_t buf_size, Error &error) override;
 
     //----------------------------------------------------------------------
     // Process Breakpoints
     //----------------------------------------------------------------------
-    lldb_private::Error
-    EnableBreakpointSite (lldb_private::BreakpointSite *bp_site) override;
+    Error
+    EnableBreakpointSite (BreakpointSite *bp_site) override;
 
-    lldb_private::Error
-    DisableBreakpointSite (lldb_private::BreakpointSite *bp_site) override;
+    Error
+    DisableBreakpointSite (BreakpointSite *bp_site) override;
 
     //----------------------------------------------------------------------
     // Process Watchpoints
     //----------------------------------------------------------------------
-    lldb_private::Error
-    EnableWatchpoint (lldb_private::Watchpoint *wp, bool notify = true) override;
+    Error
+    EnableWatchpoint (Watchpoint *wp, bool notify = true) override;
 
-    lldb_private::Error
-    DisableWatchpoint (lldb_private::Watchpoint *wp, bool notify = true) override;
+    Error
+    DisableWatchpoint (Watchpoint *wp, bool notify = true) override;
 
-    lldb_private::Error
+    Error
     GetWatchpointSupportInfo (uint32_t &num) override;
     
-    lldb_private::Error
+    Error
     GetWatchpointSupportInfo (uint32_t &num, bool& after) override;
     
     bool
@@ -224,22 +221,38 @@ public:
         return m_gdb_comm;
     }
     
-    lldb_private::Error
+    Error
     SendEventData(const char *data) override;
 
     //----------------------------------------------------------------------
-    // Override SetExitStatus so we can disconnect from the remote GDB server
+    // Override DidExit so we can disconnect from the remote GDB server
     //----------------------------------------------------------------------
-    bool
-    SetExitStatus (int exit_status, const char *cstr) override;
+    void
+    DidExit () override;
 
     void
     SetUserSpecifiedMaxMemoryTransferSize (uint64_t user_specified_max);
+
+    bool
+    GetModuleSpec(const FileSpec& module_file_spec,
+                  const ArchSpec& arch,
+                  ModuleSpec &module_spec) override;
+
+    size_t
+    LoadModules() override;
+
+    Error
+    GetFileLoadAddress(const FileSpec& file, bool& is_loaded, lldb::addr_t& load_addr) override;
+
+    void
+    ModulesDidLoad (ModuleList &module_list) override;
 
 protected:
     friend class ThreadGDBRemote;
     friend class GDBRemoteCommunicationClient;
     friend class GDBRemoteRegisterContext;
+
+    class GDBLoadedModuleInfoList;
 
     //----------------------------------------------------------------------
     // Accessors
@@ -273,24 +286,24 @@ protected:
     void
     Clear ( );
 
-    lldb_private::Flags &
+    Flags &
     GetFlags ()
     {
         return m_flags;
     }
 
-    const lldb_private::Flags &
+    const Flags &
     GetFlags () const
     {
         return m_flags;
     }
 
     bool
-    UpdateThreadList (lldb_private::ThreadList &old_thread_list, 
-                      lldb_private::ThreadList &new_thread_list) override;
+    UpdateThreadList (ThreadList &old_thread_list, 
+                      ThreadList &new_thread_list) override;
 
-    lldb_private::Error
-    LaunchAndConnectToDebugserver (const lldb_private::ProcessInfo &process_info);
+    Error
+    LaunchAndConnectToDebugserver (const ProcessInfo &process_info);
 
     void
     KillDebugserverProcess ();
@@ -302,16 +315,22 @@ protected:
     SetLastStopPacket (const StringExtractorGDBRemote &response);
 
     bool
-    ParsePythonTargetDefinition(const lldb_private::FileSpec &target_definition_fspec);
+    ParsePythonTargetDefinition(const FileSpec &target_definition_fspec);
 
     const lldb::DataBufferSP
     GetAuxvData() override;
 
-    lldb_private::StructuredData::ObjectSP
+    StructuredData::ObjectSP
     GetExtendedInfoForThread (lldb::tid_t tid);
 
     void
     GetMaxMemorySize();
+
+    bool
+    CalculateThreadStopInfo (ThreadGDBRemote *thread);
+
+    size_t
+    UpdateThreadIDsFromStopReplyThreadsValue (std::string &value);
 
     //------------------------------------------------------------------
     /// Broadcaster event bits definitions.
@@ -323,19 +342,21 @@ protected:
         eBroadcastBitAsyncThreadDidExit             = (1 << 2)
     };
     
-    lldb_private::Flags m_flags;            // Process specific flags (see eFlags enums)
+    Flags m_flags;            // Process specific flags (see eFlags enums)
     GDBRemoteCommunicationClient m_gdb_comm;
     std::atomic<lldb::pid_t> m_debugserver_pid;
-    StringExtractorGDBRemote m_last_stop_packet;
-    lldb_private::Mutex m_last_stop_packet_mutex;
+    std::vector<StringExtractorGDBRemote> m_stop_packet_stack;  // The stop packet stack replaces the last stop packet variable
+    Mutex m_last_stop_packet_mutex;
     GDBRemoteDynamicRegisterInfo m_register_info;
-    lldb_private::Broadcaster m_async_broadcaster;
-    lldb_private::HostThread m_async_thread;
-    lldb_private::Mutex m_async_thread_state_mutex;
+    Broadcaster m_async_broadcaster;
+    HostThread m_async_thread;
+    Mutex m_async_thread_state_mutex;
     typedef std::vector<lldb::tid_t> tid_collection;
     typedef std::vector< std::pair<lldb::tid_t,int> > tid_sig_collection;
     typedef std::map<lldb::addr_t, lldb::addr_t> MMapMap;
+    typedef std::map<uint32_t, std::string> ExpeditedRegisterMap;
     tid_collection m_thread_ids; // Thread IDs for all threads. This list gets updated after stopping
+    StructuredData::ObjectSP m_threads_info_sp; // Stop info for all threads if "jThreadsInfo" packet is supported
     tid_collection m_continue_c_tids;                  // 'c' for continue
     tid_sig_collection m_continue_C_tids; // 'C' for continue with signal
     tid_collection m_continue_s_tids;                  // 's' for step
@@ -348,6 +369,10 @@ protected:
     bool m_destroy_tried_resuming;
     lldb::CommandObjectSP m_command_sp;
     int64_t m_breakpoint_pc_offset;
+    lldb::tid_t m_initial_tid; // The inital thread ID, given by stub on attach
+
+    bool
+    HandleNotifyPacket(StringExtractorGDBRemote &packet);
 
     bool
     StartAsyncThread ();
@@ -368,6 +393,27 @@ protected:
     lldb::StateType
     SetThreadStopInfo (StringExtractor& stop_packet);
 
+    lldb::StateType
+    SetThreadStopInfo (StructuredData::Dictionary *thread_dict);
+
+    lldb::ThreadSP
+    SetThreadStopInfo (lldb::tid_t tid,
+                       ExpeditedRegisterMap &expedited_register_map,
+                       uint8_t signo,
+                       const std::string &thread_name,
+                       const std::string &reason,
+                       const std::string &description,
+                       uint32_t exc_type,
+                       const std::vector<lldb::addr_t> &exc_data,
+                       lldb::addr_t thread_dispatch_qaddr,
+                       bool queue_vars_valid,
+                       std::string &queue_name,
+                       lldb::QueueKind queue_kind,
+                       uint64_t queue_serial);
+
+    void
+    HandleStopReplySequence ();
+
     void
     ClearThreadIDList ();
 
@@ -375,17 +421,28 @@ protected:
     UpdateThreadIDList ();
 
     void
-    DidLaunchOrAttach (lldb_private::ArchSpec& process_arch);
+    DidLaunchOrAttach (ArchSpec& process_arch);
 
-    lldb_private::Error
+    Error
     ConnectToDebugserver (const char *host_port);
 
     const char *
     GetDispatchQueueNameForThread (lldb::addr_t thread_dispatch_qaddr,
                                    std::string &dispatch_queue_name);
 
-    lldb_private::DynamicLoader *
+    DynamicLoader *
     GetDynamicLoader () override;
+
+    // Query remote GDBServer for register information
+    bool
+    GetGDBServerRegisterInfo ();
+
+    // Query remote GDBServer for a detailed loaded library list
+    Error
+    GetLoadedModuleList (GDBLoadedModuleInfoList &);
+
+    lldb::ModuleSP
+    LoadModuleAtAddress (const FileSpec &file, lldb::addr_t base_addr);
 
 private:
     //------------------------------------------------------------------
@@ -393,12 +450,15 @@ private:
     //------------------------------------------------------------------
     static bool
     NewThreadNotifyBreakpointHit (void *baton,
-                         lldb_private::StoppointCallbackContext *context,
+                         StoppointCallbackContext *context,
                          lldb::user_id_t break_id,
                          lldb::user_id_t break_loc_id);
 
     DISALLOW_COPY_AND_ASSIGN (ProcessGDBRemote);
 
 };
+
+} // namespace process_gdb_remote
+} // namespace lldb_private
 
 #endif  // liblldb_ProcessGDBRemote_h_

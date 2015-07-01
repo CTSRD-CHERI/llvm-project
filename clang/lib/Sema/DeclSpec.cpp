@@ -345,8 +345,9 @@ bool Declarator::isDeclarationOfFunction() const {
 bool Declarator::isStaticMember() {
   assert(getContext() == MemberContext);
   return getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_static ||
-         CXXMethodDecl::isStaticOverloadedOperator(
-             getName().OperatorFunctionId.Operator);
+         (getName().Kind == UnqualifiedId::IK_OperatorFunctionId &&
+          CXXMethodDecl::isStaticOverloadedOperator(
+              getName().OperatorFunctionId.Operator));
 }
 
 bool DeclSpec::hasTagDefinition() const {
@@ -910,6 +911,18 @@ bool DeclSpec::SetConstexprSpec(SourceLocation Loc, const char *&PrevSpec,
   return false;
 }
 
+bool DeclSpec::SetConceptSpec(SourceLocation Loc, const char *&PrevSpec,
+                              unsigned &DiagID) {
+  if (Concept_specified) {
+    DiagID = diag::ext_duplicate_declspec;
+    PrevSpec = "concept";
+    return true;
+  }
+  Concept_specified = true;
+  ConceptLoc = Loc;
+  return false;
+}
+
 void DeclSpec::setProtocolQualifiers(Decl * const *Protos,
                                      unsigned NP,
                                      SourceLocation *ProtoLocs,
@@ -1238,7 +1251,10 @@ void UnqualifiedId::setOperatorFunctionId(SourceLocation OperatorLoc,
 
 bool VirtSpecifiers::SetSpecifier(Specifier VS, SourceLocation Loc,
                                   const char *&PrevSpec) {
+  if (!FirstLocation.isValid())
+    FirstLocation = Loc;
   LastLocation = Loc;
+  LastSpecifier = VS;
   
   if (Specifiers & VS) {
     PrevSpec = getSpecifierName(VS);

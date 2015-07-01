@@ -8,7 +8,7 @@ import lldb
 from lldbtest import *
 import lldbutil
 
-@unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+@skipUnlessDarwin
 class MethodReturningBOOLTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
@@ -45,7 +45,7 @@ class MethodReturningBOOLTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.m", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
         self.expect("process status", STOPPED_DUE_TO_BREAKPOINT,
             substrs = [" at %s:%d" % (self.main_source, self.line),
                        "stop reason = breakpoint"])
