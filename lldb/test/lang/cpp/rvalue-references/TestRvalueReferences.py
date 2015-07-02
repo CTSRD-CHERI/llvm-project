@@ -10,7 +10,7 @@ class RvalueReferencesTestCase(TestBase):
     
     mydir = TestBase.compute_mydir(__file__)
     
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @expectedFailureClang("rdar://problem/11479676")
     @dsym_test
     def test_with_dsym_and_run_command(self):
@@ -19,8 +19,6 @@ class RvalueReferencesTestCase(TestBase):
         self.static_method_commands()
 
     #rdar://problem/11479676
-    @expectedFailureClang("rdar://problem/11479676 pr16762: Expression evaluation of an rvalue-reference does not show the correct type.")
-    @expectedFailureGcc("GCC (4.7) does not emit correct DWARF tags for rvalue-references")
     @expectedFailureIcc("ICC (13.1, 14-beta) do not emit DW_TAG_rvalue_reference_type.")
     @dwarf_test
     def test_with_dwarf_and_run_command(self):
@@ -41,7 +39,7 @@ class RvalueReferencesTestCase(TestBase):
         self.set_breakpoint(line_number('main.cpp', '// breakpoint 1'))
         self.set_breakpoint(line_number('main.cpp', '// breakpoint 2'))
 
-        self.runCmd("process launch", RUN_SUCCEEDED)
+        self.runCmd("process launch", RUN_FAILED)
 
         # Note that clang as of r187480 doesn't emit DW_TAG_const_type, unlike gcc 4.8.1
         # With gcc 4.8.1, lldb reports the type as (int &&const)
@@ -50,7 +48,7 @@ class RvalueReferencesTestCase(TestBase):
                     substrs = ["i = 0x", "&i = 3"])
 
         self.expect("expression -- i",
-                    startstr = "(int &&",
+                    startstr = "(int) ",
                     substrs = ["3"])
 
         self.expect("breakpoint delete 1")

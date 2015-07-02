@@ -38,6 +38,7 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/TargetOptions.h"
 using namespace llvm;
@@ -83,13 +84,13 @@ public:
 private:
   bool X86FastEmitCompare(const Value *LHS, const Value *RHS, EVT VT, DebugLoc DL);
 
-  bool X86FastEmitLoad(EVT VT, const X86AddressMode &AM, MachineMemOperand *MMO,
-                       unsigned &ResultReg);
+  bool X86FastEmitLoad(EVT VT, X86AddressMode &AM, MachineMemOperand *MMO,
+                       unsigned &ResultReg, unsigned Alignment = 1);
 
-  bool X86FastEmitStore(EVT VT, const Value *Val, const X86AddressMode &AM,
+  bool X86FastEmitStore(EVT VT, const Value *Val, X86AddressMode &AM,
                         MachineMemOperand *MMO = nullptr, bool Aligned = false);
   bool X86FastEmitStore(EVT VT, unsigned ValReg, bool ValIsKill,
-                        const X86AddressMode &AM,
+                        X86AddressMode &AM,
                         MachineMemOperand *MMO = nullptr, bool Aligned = false);
 
   bool X86FastEmitExtend(ISD::NodeType Opc, EVT DstVT, unsigned Src, EVT SrcVT,
@@ -165,6 +166,9 @@ private:
 
   bool foldX86XALUIntrinsic(X86::CondCode &CC, const Instruction *I,
                             const Value *Cond);
+
+  const MachineInstrBuilder &addFullAddress(const MachineInstrBuilder &MIB,
+                                            X86AddressMode &AM);
 };
 
 } // end anonymous namespace.
@@ -240,6 +244,20 @@ getX86SSEConditionCode(CmpInst::Predicate Predicate) {
   }
 
   return std::make_pair(CC, NeedSwap);
+}
+
+/// \brief Adds a complex addressing mode to the given machine instr builder.
+/// Note, this will constrain the index register.  If its not possible to
+/// constrain the given index register, then a new one will be created.  The
+/// IndexReg field of the addressing mode will be updated to match in this case.
+const MachineInstrBuilder &
+X86FastISel::addFullAddress(const MachineInstrBuilder &MIB,
+                            X86AddressMode &AM) {
+  // First constrain the index register.  It needs to be a GR64_NOSP.
+  AM.IndexReg = constrainOperandRegClass(MIB->getDesc(), AM.IndexReg,
+                                         MIB->getNumOperands() +
+                                         X86::AddrIndexReg);
+  return ::addFullAddress(MIB, AM);
 }
 
 /// \brief Check if it is possible to fold the condition from the XALU intrinsic
@@ -326,8 +344,9 @@ bool X86FastISel::isTypeLegal(Type *Ty, MVT &VT, bool AllowI1) {
 /// X86FastEmitLoad - Emit a machine instruction to load a value of type VT.
 /// The address is either pre-computed, i.e. Ptr, or a GlobalAddress, i.e. GV.
 /// Return true and the result register by reference if it is possible.
-bool X86FastISel::X86FastEmitLoad(EVT VT, const X86AddressMode &AM,
-                                  MachineMemOperand *MMO, unsigned &ResultReg) {
+bool X86FastISel::X86FastEmitLoad(EVT VT, X86AddressMode &AM,
+                                  MachineMemOperand *MMO, unsigned &ResultReg,
+                                  unsigned Alignment) {
   // Get opcode and regclass of the output for the given load instruction.
   unsigned Opc = 0;
   const TargetRegisterClass *RC = nullptr;
@@ -372,6 +391,30 @@ bool X86FastISel::X86FastEmitLoad(EVT VT, const X86AddressMode &AM,
   case MVT::f80:
     // No f80 support yet.
     return false;
+  case MVT::v4f32:
+    if (Alignment >= 16)
+      Opc = Subtarget->hasAVX() ? X86::VMOVAPSrm : X86::MOVAPSrm;
+    else
+      Opc = Subtarget->hasAVX() ? X86::VMOVUPSrm : X86::MOVUPSrm;
+    RC  = &X86::VR128RegClass;
+    break;
+  case MVT::v2f64:
+    if (Alignment >= 16)
+      Opc = Subtarget->hasAVX() ? X86::VMOVAPDrm : X86::MOVAPDrm;
+    else
+      Opc = Subtarget->hasAVX() ? X86::VMOVUPDrm : X86::MOVUPDrm;
+    RC  = &X86::VR128RegClass;
+    break;
+  case MVT::v4i32:
+  case MVT::v2i64:
+  case MVT::v8i16:
+  case MVT::v16i8:
+    if (Alignment >= 16)
+      Opc = Subtarget->hasAVX() ? X86::VMOVDQArm : X86::MOVDQArm;
+    else
+      Opc = Subtarget->hasAVX() ? X86::VMOVDQUrm : X86::MOVDQUrm;
+    RC  = &X86::VR128RegClass;
+    break;
   }
 
   ResultReg = createResultReg(RC);
@@ -388,7 +431,7 @@ bool X86FastISel::X86FastEmitLoad(EVT VT, const X86AddressMode &AM,
 /// and a displacement offset, or a GlobalAddress,
 /// i.e. V. Return true if it is possible.
 bool X86FastISel::X86FastEmitStore(EVT VT, unsigned ValReg, bool ValIsKill,
-                                   const X86AddressMode &AM,
+                                   X86AddressMode &AM,
                                    MachineMemOperand *MMO, bool Aligned) {
   // Get opcode and regclass of the output for the given store instruction.
   unsigned Opc = 0;
@@ -449,7 +492,7 @@ bool X86FastISel::X86FastEmitStore(EVT VT, unsigned ValReg, bool ValIsKill,
 }
 
 bool X86FastISel::X86FastEmitStore(EVT VT, const Value *Val,
-                                   const X86AddressMode &AM,
+                                   X86AddressMode &AM,
                                    MachineMemOperand *MMO, bool Aligned) {
   // Handle 'null' like i32/i64 0.
   if (isa<ConstantPointerNull>(Val))
@@ -1068,8 +1111,14 @@ bool X86FastISel::X86SelectLoad(const Instruction *I) {
   if (!X86SelectAddress(Ptr, AM))
     return false;
 
+  unsigned Alignment = LI->getAlignment();
+  unsigned ABIAlignment = DL.getABITypeAlignment(LI->getType());
+  if (Alignment == 0) // Ensure that codegen never sees alignment 0
+    Alignment = ABIAlignment;
+
   unsigned ResultReg = 0;
-  if (!X86FastEmitLoad(VT, AM, createMachineMemOperandFor(LI), ResultReg))
+  if (!X86FastEmitLoad(VT, AM, createMachineMemOperandFor(LI), ResultReg,
+                       Alignment))
     return false;
 
   updateValueMap(I, ResultReg);
@@ -2034,6 +2083,12 @@ bool X86FastISel::X86SelectSelect(const Instruction *I) {
 }
 
 bool X86FastISel::X86SelectSIToFP(const Instruction *I) {
+  // The target-independent selection algorithm in FastISel already knows how
+  // to select a SINT_TO_FP if the target is SSE but not AVX.
+  // Early exit if the subtarget doesn't have AVX.
+  if (!Subtarget->hasAVX())
+    return false;
+
   if (!I->getOperand(0)->getType()->isIntegerTy(32))
     return false;
 
@@ -2055,11 +2110,6 @@ bool X86FastISel::X86SelectSIToFP(const Instruction *I) {
     RC = &X86::FR32RegClass;
   } else
     return false;
-
-  // The target-independent selection algorithm in FastISel already knows how
-  // to select a SINT_TO_FP if the target is SSE but not AVX. This code is only
-  // reachable if the subtarget has AVX.
-  assert(Subtarget->hasAVX() && "Expected a subtarget with AVX!");
 
   unsigned ImplicitDefReg = createResultReg(RC);
   BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
@@ -2136,6 +2186,7 @@ bool X86FastISel::X86SelectTrunc(const Instruction *I) {
     return true;
   }
 
+  bool KillInputReg = false;
   if (!Subtarget->is64Bit()) {
     // If we're on x86-32; we can't extract an i8 from a general register.
     // First issue a copy to GR16_ABCD or GR32_ABCD.
@@ -2145,11 +2196,12 @@ bool X86FastISel::X86SelectTrunc(const Instruction *I) {
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
             TII.get(TargetOpcode::COPY), CopyReg).addReg(InputReg);
     InputReg = CopyReg;
+    KillInputReg = true;
   }
 
   // Issue an extract_subreg.
   unsigned ResultReg = fastEmitInst_extractsubreg(MVT::i8,
-                                                  InputReg, /*Kill=*/true,
+                                                  InputReg, KillInputReg,
                                                   X86::sub_8bit);
   if (!ResultReg)
     return false;
@@ -2203,7 +2255,7 @@ bool X86FastISel::fastLowerIntrinsicCall(const IntrinsicInst *II) {
   default: return false;
   case Intrinsic::convert_from_fp16:
   case Intrinsic::convert_to_fp16: {
-    if (TM.Options.UseSoftFloat || !Subtarget->hasF16C())
+    if (Subtarget->useSoftFloat() || !Subtarget->hasF16C())
       return false;
 
     const Value *Op = II->getArgOperand(0);
@@ -2386,6 +2438,8 @@ bool X86FastISel::fastLowerIntrinsicCall(const IntrinsicInst *II) {
     const MCInstrDesc &II = TII.get(TargetOpcode::DBG_VALUE);
     // FIXME may need to add RegState::Debug to any registers produced,
     // although ESP/EBP should be the only ones at the moment.
+    assert(DI->getVariable()->isValidLocationForIntrinsic(DbgLoc) &&
+           "Expected inlined-at fields to agree");
     addFullAddress(BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II), AM)
         .addImm(0)
         .addMetadata(DI->getVariable())
@@ -2768,7 +2822,7 @@ bool X86FastISel::fastLowerCall(CallLoweringInfo &CLI) {
   bool &IsTailCall    = CLI.IsTailCall;
   bool IsVarArg       = CLI.IsVarArg;
   const Value *Callee = CLI.Callee;
-  const char *SymName = CLI.SymName;
+  MCSymbol *Symbol = CLI.Symbol;
 
   bool Is64Bit        = Subtarget->is64Bit();
   bool IsWin64        = Subtarget->isCallingConvWin64(CC);
@@ -3064,8 +3118,8 @@ bool X86FastISel::fastLowerCall(CallLoweringInfo &CLI) {
     }
 
     MIB = BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(CallOpc));
-    if (SymName)
-      MIB.addExternalSymbol(SymName, OpFlags);
+    if (Symbol)
+      MIB.addSym(Symbol, OpFlags);
     else
       MIB.addGlobalAddress(GV, 0, OpFlags);
   }
@@ -3477,14 +3531,32 @@ bool X86FastISel::tryToFoldLoadIntoMI(MachineInstr *MI, unsigned OpNo,
   SmallVector<MachineOperand, 8> AddrOps;
   AM.getFullAddress(AddrOps);
 
-  MachineInstr *Result =
-    XII.foldMemoryOperandImpl(*FuncInfo.MF, MI, OpNo, AddrOps,
-                              Size, Alignment, /*AllowCommute=*/true);
+  MachineInstr *Result = XII.foldMemoryOperandImpl(
+      *FuncInfo.MF, MI, OpNo, AddrOps, FuncInfo.InsertPt, Size, Alignment,
+      /*AllowCommute=*/true);
   if (!Result)
     return false;
 
+  // The index register could be in the wrong register class.  Unfortunately,
+  // foldMemoryOperandImpl could have commuted the instruction so its not enough
+  // to just look at OpNo + the offset to the index reg.  We actually need to
+  // scan the instruction to find the index reg and see if its the correct reg
+  // class.
+  unsigned OperandNo = 0;
+  for (MachineInstr::mop_iterator I = Result->operands_begin(),
+       E = Result->operands_end(); I != E; ++I, ++OperandNo) {
+    MachineOperand &MO = *I;
+    if (!MO.isReg() || MO.isDef() || MO.getReg() != AM.IndexReg)
+      continue;
+    // Found the index reg, now try to rewrite it.
+    unsigned IndexReg = constrainOperandRegClass(Result->getDesc(),
+                                                 MO.getReg(), OperandNo);
+    if (IndexReg == MO.getReg())
+      continue;
+    MO.setReg(IndexReg);
+  }
+
   Result->addMemOperand(*FuncInfo.MF, createMachineMemOperandFor(LI));
-  FuncInfo.MBB->insert(FuncInfo.InsertPt, Result);
   MI->eraseFromParent();
   return true;
 }

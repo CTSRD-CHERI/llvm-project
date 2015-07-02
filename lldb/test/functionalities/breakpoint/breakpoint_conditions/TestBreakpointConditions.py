@@ -12,21 +12,21 @@ class BreakpointConditionsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_breakpoint_condition_with_dsym_and_run_command(self):
         """Exercise breakpoint condition with 'breakpoint modify -c <expr> id'."""
         self.buildDsym()
         self.breakpoint_conditions()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_breakpoint_condition_inline_with_dsym_and_run_command(self):
         """Exercise breakpoint condition inline with 'breakpoint set'."""
         self.buildDsym()
         self.breakpoint_conditions(inline=True)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_breakpoint_condition_with_dsym_and_python_api(self):
@@ -35,14 +35,14 @@ class BreakpointConditionsTestCase(TestBase):
         self.breakpoint_conditions_python()
 
     @dwarf_test
-    @unittest2.skipIf(sys.platform.startswith("win32"), "Requires EE to support COFF on Windows (http://llvm.org/pr22232)")
+    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
     def test_breakpoint_condition_with_dwarf_and_run_command(self):
         """Exercise breakpoint condition with 'breakpoint modify -c <expr> id'."""
         self.buildDwarf()
         self.breakpoint_conditions()
 
     @dwarf_test
-    @unittest2.skipIf(sys.platform.startswith("win32"), "Requires EE to support COFF on Windows (http://llvm.org/pr22232)")
+    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
     def test_breakpoint_condition_inline_with_dwarf_and_run_command(self):
         """Exercise breakpoint condition inline with 'breakpoint set'."""
         self.buildDwarf()
@@ -50,7 +50,7 @@ class BreakpointConditionsTestCase(TestBase):
 
     @python_api_test
     @dwarf_test
-    @unittest2.skipIf(sys.platform.startswith("win32"), "Requires EE to support COFF on Windows (http://llvm.org/pr22232)")
+    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
     def test_breakpoint_condition_with_dwarf_and_python_api(self):
         """Use Python APIs to set breakpoint conditions."""
         self.buildDwarf()
@@ -79,7 +79,7 @@ class BreakpointConditionsTestCase(TestBase):
             self.runCmd("breakpoint modify -c 'val == 3' 1")
 
         # Now run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The process should be stopped at this point.
         self.expect("process status", PROCESS_STOPPED,
@@ -110,7 +110,7 @@ class BreakpointConditionsTestCase(TestBase):
             substrs = ["Condition:"])
 
         # Now run the program again.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The process should be stopped at this point.
         self.expect("process status", PROCESS_STOPPED,
@@ -124,9 +124,14 @@ class BreakpointConditionsTestCase(TestBase):
         self.runCmd("breakpoint disable")
 
         self.runCmd("breakpoint set -p Loop")
-        self.runCmd("breakpoint modify -c ($eax&&i)")
+        if self.getArchitecture() in ['x86_64', 'i386']:
+            self.runCmd("breakpoint modify -c ($eax&&i)")
+        elif self.getArchitecture() in ['aarch64']:
+            self.runCmd("breakpoint modify -c ($x1&&i)")
+        elif self.getArchitecture() in ['arm']:
+            self.runCmd("breakpoint modify -c ($r0&&i)")
         self.runCmd("run")
-        
+
         self.expect("process status", PROCESS_STOPPED,
             patterns = ['Process .* stopped'])
 

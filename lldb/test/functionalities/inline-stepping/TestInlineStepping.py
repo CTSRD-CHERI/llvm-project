@@ -10,7 +10,7 @@ class TestInlineStepping(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_with_dsym_and_python_api(self):
@@ -22,12 +22,15 @@ class TestInlineStepping(TestBase):
     @dwarf_test
     @expectedFailureFreeBSD('llvm.org/pr17214')
     @expectedFailureIcc # Not really a bug.  ICC combines two inlined functions.
+    @expectedFailureAll("llvm.org/pr23139", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
+    # failed 1/365 dosep runs, (i386-clang), TestInlineStepping.py:237 failed to stop at first breakpoint in main
+    @expectedFailureAll(oslist=["linux"], archs=["i386"])
     def test_with_dwarf_and_python_api(self):
         """Test stepping over and into inlined functions."""
         self.buildDwarf()
         self.inline_stepping()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_step_over_with_dsym_and_python_api(self):
@@ -37,6 +40,7 @@ class TestInlineStepping(TestBase):
 
     @python_api_test
     @dwarf_test
+    @expectedFailureAll("llvm.org/pr23139", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
     def test_step_over_with_dwarf_and_python_api(self):
         """Test stepping over and into inlined functions."""
         self.buildDwarf()
@@ -108,7 +112,7 @@ class TestInlineStepping(TestBase):
         test_stack_depth = True
         # Work around for <rdar://problem/16363195>, the darwin unwinder seems flakey about whether it duplicates the first frame 
         # or not, which makes counting stack depth unreliable.
-        if "darwin" in sys.platform:
+        if self.platformIsDarwin():
             test_stack_depth = False
 
         for step_pattern in step_sequence:

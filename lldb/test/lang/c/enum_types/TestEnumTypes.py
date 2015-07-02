@@ -10,7 +10,7 @@ class EnumTypesTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym(self):
         """Test 'image lookup -t days' and check for correct display and enum value printing."""
@@ -39,7 +39,7 @@ class EnumTypesTestCase(TestBase):
         # Break inside the main.
         bkpt_id = lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

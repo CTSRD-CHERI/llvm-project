@@ -14,12 +14,12 @@
 using namespace clang::ast_matchers;
 
 namespace clang {
-namespace ast_matchers {
-AST_MATCHER(CXXRecordDecl, hasUserDeclaredDestructor) {
+namespace {
+AST_MATCHER(CXXRecordDecl, hasNonTrivialDestructor) {
   // TODO: If the dtor is there but empty we don't want to warn either.
-  return Node.hasDefinition() && Node.hasUserDeclaredDestructor();
+  return Node.hasDefinition() && Node.hasNonTrivialDestructor();
 }
-} // namespace ast_matchers
+} // namespace
 
 namespace tidy {
 namespace misc {
@@ -32,7 +32,7 @@ void UnusedRAIICheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(
       exprWithCleanups(unless(isInTemplateInstantiation()),
                        hasParent(compoundStmt().bind("compound")),
-                       hasType(recordDecl(hasUserDeclaredDestructor())),
+                       hasType(recordDecl(hasNonTrivialDestructor())),
                        anyOf(has(BindTemp), has(functionalCastExpr(
                                                 has(BindTemp))))).bind("expr"),
       this);

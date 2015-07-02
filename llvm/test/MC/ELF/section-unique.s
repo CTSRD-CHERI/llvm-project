@@ -1,22 +1,22 @@
 // RUN: llvm-mc -triple x86_64-pc-linux-gnu %s -o - | FileCheck %s
 // RUN: llvm-mc -triple x86_64-pc-linux-gnu %s -filetype=obj -o - | llvm-readobj -t | FileCheck %s --check-prefix=OBJ
 
-	.section	.text,"ax",@progbits,unique
+	.section	.text,"ax",@progbits,unique, 4294967293
         .globl	f
 f:
         nop
 
-	.section	.text,"ax",@progbits,unique
+	.section	.text,"ax",@progbits,unique, 4294967294
         .globl	g
 g:
         nop
 
 // test that f and g are in different sections.
 
-// CHECK: .section	.text,"ax",@progbits,unique
+// CHECK: .section	.text,"ax",@progbits,unique,4294967293
 // CHECK: f:
 
-// CHECK: .section	.text,"ax",@progbits,unique
+// CHECK: .section	.text,"ax",@progbits,unique,4294967294
 // CHECK: g:
 
 // OBJ: Symbol {
@@ -26,7 +26,7 @@ g:
 // OBJ:   Binding: Global
 // OBJ:   Type:    None
 // OBJ:   Other:   0
-// OBJ:   Section: .text (0x4)
+// OBJ:   Section: .text (0x5)
 // OBJ: }
 // OBJ: Symbol {
 // OBJ:   Name:    g
@@ -35,5 +35,5 @@ g:
 // OBJ:   Binding: Global
 // OBJ:   Type:    None
 // OBJ:   Other:   0
-// OBJ:   Section: .text (0x5)
+// OBJ:   Section: .text (0x6)
 // OBJ: }

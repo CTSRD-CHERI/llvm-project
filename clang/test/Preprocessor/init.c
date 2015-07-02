@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -E -dM -x assembler-with-cpp < /dev/null | FileCheck -check-prefix ASM %s
+/PtrDiffType / RUN: %clang_cc1 -E -dM -x assembler-with-cpp < /dev/null | FileCheck -check-prefix ASM %s
 //
 // ASM:#define __ASSEMBLER__ 1
 //
@@ -2793,6 +2793,12 @@
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=i386-netbsd6 -target-feature +sse2 < /dev/null | FileCheck -check-prefix I386-NETBSD6-SSE %s
 // I386-NETBSD6-SSE:#define __FLT_EVAL_METHOD__ 1
 
+// RUN: %clang_cc1 -E -dM -triple=i686-pc-mingw32 < /dev/null | FileCheck -check-prefix I386-DECLSPEC %s
+// RUN: %clang_cc1 -E -dM -fms-extensions -triple=i686-pc-mingw32 < /dev/null | FileCheck -check-prefix I386-DECLSPEC %s
+// RUN: %clang_cc1 -E -dM -triple=i686-unknown-cygwin < /dev/null | FileCheck -check-prefix I386-DECLSPEC %s
+// RUN: %clang_cc1 -E -dM -fms-extensions -triple=i686-unknown-cygwin < /dev/null | FileCheck -check-prefix I386-DECLSPEC %s
+// I386-DECLSPEC: #define __declspec
+
 //
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=mips-none-none < /dev/null | FileCheck -check-prefix MIPS32BE %s
 //
@@ -4416,10 +4422,15 @@
 // RUN:   | FileCheck -check-prefix MIPS-MSA %s
 // MIPS-MSA:#define __mips_msa 1
 //
-// RUN: %clang_cc1 -target-feature +nan2008 \
+// RUN: %clang_cc1 -target-cpu mips32r3 -target-feature +nan2008 \
 // RUN:   -E -dM -triple=mips-none-none < /dev/null \
 // RUN:   | FileCheck -check-prefix MIPS-NAN2008 %s
 // MIPS-NAN2008:#define __mips_nan2008 1
+//
+// RUN: %clang_cc1 -target-cpu mips32r3 -target-feature -nan2008 \
+// RUN:   -E -dM -triple=mips-none-none < /dev/null \
+// RUN:   | FileCheck -check-prefix NOMIPS-NAN2008 %s
+// NOMIPS-NAN2008-NOT:#define __mips_nan2008 1
 //
 // RUN: %clang_cc1 -target-feature -fp64 \
 // RUN:   -E -dM -triple=mips-none-none < /dev/null \
@@ -4769,7 +4780,7 @@
 // NVPTX32:#define __NVPTX__ 1
 // NVPTX32:#define __POINTER_WIDTH__ 32
 // NVPTX32:#define __PRAGMA_REDEFINE_EXTNAME 1
-// NVPTX32:#define __PTRDIFF_TYPE__ unsigned int
+// NVPTX32:#define __PTRDIFF_TYPE__ int
 // NVPTX32:#define __PTRDIFF_WIDTH__ 32
 // NVPTX32:#define __PTX__ 1
 // NVPTX32:#define __SCHAR_MAX__ 127
@@ -4898,10 +4909,10 @@
 // NVPTX64:#define __INTMAX_MAX__ 9223372036854775807LL
 // NVPTX64:#define __INTMAX_TYPE__ long long int
 // NVPTX64:#define __INTMAX_WIDTH__ 64
-// NVPTX64:#define __INTPTR_FMTd__ "lld"
-// NVPTX64:#define __INTPTR_FMTi__ "lli"
-// NVPTX64:#define __INTPTR_MAX__ 9223372036854775807LL
-// NVPTX64:#define __INTPTR_TYPE__ long long int
+// NVPTX64:#define __INTPTR_FMTd__ "ld"
+// NVPTX64:#define __INTPTR_FMTi__ "li"
+// NVPTX64:#define __INTPTR_MAX__ 9223372036854775807L
+// NVPTX64:#define __INTPTR_TYPE__ long int
 // NVPTX64:#define __INTPTR_WIDTH__ 64
 // NVPTX64:#define __INT_FAST16_FMTd__ "hd"
 // NVPTX64:#define __INT_FAST16_FMTi__ "hi"
@@ -4956,7 +4967,7 @@
 // NVPTX64:#define __NVPTX__ 1
 // NVPTX64:#define __POINTER_WIDTH__ 64
 // NVPTX64:#define __PRAGMA_REDEFINE_EXTNAME 1
-// NVPTX64:#define __PTRDIFF_TYPE__ long long unsigned int
+// NVPTX64:#define __PTRDIFF_TYPE__ long int
 // NVPTX64:#define __PTRDIFF_WIDTH__ 64
 // NVPTX64:#define __PTX__ 1
 // NVPTX64:#define __SCHAR_MAX__ 127
@@ -4976,7 +4987,7 @@
 // NVPTX64:#define __SIZEOF_WCHAR_T__ 4
 // NVPTX64:#define __SIZEOF_WINT_T__ 4
 // NVPTX64:#define __SIZE_MAX__ 18446744073709551615UL
-// NVPTX64:#define __SIZE_TYPE__ long long unsigned int
+// NVPTX64:#define __SIZE_TYPE__ long unsigned int
 // NVPTX64:#define __SIZE_WIDTH__ 64
 // NVPTX64:#define __UINT16_C_SUFFIX__ {{$}}
 // NVPTX64:#define __UINT16_MAX__ 65535
@@ -4994,8 +5005,8 @@
 // NVPTX64:#define __UINTMAX_MAX__ 18446744073709551615ULL
 // NVPTX64:#define __UINTMAX_TYPE__ long long unsigned int
 // NVPTX64:#define __UINTMAX_WIDTH__ 64
-// NVPTX64:#define __UINTPTR_MAX__ 18446744073709551615ULL
-// NVPTX64:#define __UINTPTR_TYPE__ long long unsigned int
+// NVPTX64:#define __UINTPTR_MAX__ 18446744073709551615UL
+// NVPTX64:#define __UINTPTR_TYPE__ long unsigned int
 // NVPTX64:#define __UINTPTR_WIDTH__ 64
 // NVPTX64:#define __UINT_FAST16_MAX__ 65535
 // NVPTX64:#define __UINT_FAST16_TYPE__ unsigned short
@@ -6641,21 +6652,21 @@
 // S390X:#define __INT32_FMTi__ "i"
 // S390X:#define __INT32_MAX__ 2147483647
 // S390X:#define __INT32_TYPE__ int
-// S390X:#define __INT64_C_SUFFIX__ LL
-// S390X:#define __INT64_FMTd__ "lld"
-// S390X:#define __INT64_FMTi__ "lli"
-// S390X:#define __INT64_MAX__ 9223372036854775807LL
-// S390X:#define __INT64_TYPE__ long long int
+// S390X:#define __INT64_C_SUFFIX__ L
+// S390X:#define __INT64_FMTd__ "ld"
+// S390X:#define __INT64_FMTi__ "li"
+// S390X:#define __INT64_MAX__ 9223372036854775807L
+// S390X:#define __INT64_TYPE__ long int
 // S390X:#define __INT8_C_SUFFIX__ {{$}}
 // S390X:#define __INT8_FMTd__ "hhd"
 // S390X:#define __INT8_FMTi__ "hhi"
 // S390X:#define __INT8_MAX__ 127
 // S390X:#define __INT8_TYPE__ signed char
-// S390X:#define __INTMAX_C_SUFFIX__ LL
-// S390X:#define __INTMAX_FMTd__ "lld"
-// S390X:#define __INTMAX_FMTi__ "lli"
-// S390X:#define __INTMAX_MAX__ 9223372036854775807LL
-// S390X:#define __INTMAX_TYPE__ long long int
+// S390X:#define __INTMAX_C_SUFFIX__ L
+// S390X:#define __INTMAX_FMTd__ "ld"
+// S390X:#define __INTMAX_FMTi__ "li"
+// S390X:#define __INTMAX_MAX__ 9223372036854775807L
+// S390X:#define __INTMAX_TYPE__ long int
 // S390X:#define __INTMAX_WIDTH__ 64
 // S390X:#define __INTPTR_FMTd__ "ld"
 // S390X:#define __INTPTR_FMTi__ "li"
@@ -6738,15 +6749,15 @@
 // S390X:#define __UINT32_C_SUFFIX__ U
 // S390X:#define __UINT32_MAX__ 4294967295U
 // S390X:#define __UINT32_TYPE__ unsigned int
-// S390X:#define __UINT64_C_SUFFIX__ ULL
-// S390X:#define __UINT64_MAX__ 18446744073709551615ULL
-// S390X:#define __UINT64_TYPE__ long long unsigned int
+// S390X:#define __UINT64_C_SUFFIX__ UL
+// S390X:#define __UINT64_MAX__ 18446744073709551615UL
+// S390X:#define __UINT64_TYPE__ long unsigned int
 // S390X:#define __UINT8_C_SUFFIX__ {{$}}
 // S390X:#define __UINT8_MAX__ 255
 // S390X:#define __UINT8_TYPE__ unsigned char
-// S390X:#define __UINTMAX_C_SUFFIX__ ULL
-// S390X:#define __UINTMAX_MAX__ 18446744073709551615ULL
-// S390X:#define __UINTMAX_TYPE__ long long unsigned int
+// S390X:#define __UINTMAX_C_SUFFIX__ UL
+// S390X:#define __UINTMAX_MAX__ 18446744073709551615UL
+// S390X:#define __UINTMAX_TYPE__ long unsigned int
 // S390X:#define __UINTMAX_WIDTH__ 64
 // S390X:#define __UINTPTR_MAX__ 18446744073709551615UL
 // S390X:#define __UINTPTR_TYPE__ long unsigned int
@@ -6840,10 +6851,10 @@
 // SPARC:#define __INTMAX_MAX__ 9223372036854775807LL
 // SPARC:#define __INTMAX_TYPE__ long long int
 // SPARC:#define __INTMAX_WIDTH__ 64
-// SPARC:#define __INTPTR_FMTd__ "ld"
-// SPARC:#define __INTPTR_FMTi__ "li"
-// SPARC:#define __INTPTR_MAX__ 2147483647L
-// SPARC:#define __INTPTR_TYPE__ long int
+// SPARC:#define __INTPTR_FMTd__ "d"
+// SPARC:#define __INTPTR_FMTi__ "i"
+// SPARC:#define __INTPTR_MAX__ 2147483647
+// SPARC:#define __INTPTR_TYPE__ int
 // SPARC:#define __INTPTR_WIDTH__ 32
 // SPARC:#define __INT_FAST16_FMTd__ "hd"
 // SPARC:#define __INT_FAST16_FMTi__ "hi"
@@ -6895,7 +6906,7 @@
 // SPARC:#define __LONG_MAX__ 2147483647L
 // SPARC-NOT:#define __LP64__
 // SPARC:#define __POINTER_WIDTH__ 32
-// SPARC:#define __PTRDIFF_TYPE__ long int
+// SPARC:#define __PTRDIFF_TYPE__ int
 // SPARC:#define __PTRDIFF_WIDTH__ 32
 // SPARC:#define __REGISTER_PREFIX__
 // SPARC:#define __SCHAR_MAX__ 127
@@ -6915,7 +6926,7 @@
 // SPARC:#define __SIZEOF_WCHAR_T__ 4
 // SPARC:#define __SIZEOF_WINT_T__ 4
 // SPARC:#define __SIZE_MAX__ 4294967295U
-// SPARC:#define __SIZE_TYPE__ long unsigned int
+// SPARC:#define __SIZE_TYPE__ unsigned int
 // SPARC:#define __SIZE_WIDTH__ 32
 // SPARC:#define __UINT16_C_SUFFIX__ {{$}}
 // SPARC:#define __UINT16_MAX__ 65535
@@ -6934,7 +6945,7 @@
 // SPARC:#define __UINTMAX_TYPE__ long long unsigned int
 // SPARC:#define __UINTMAX_WIDTH__ 64
 // SPARC:#define __UINTPTR_MAX__ 4294967295U
-// SPARC:#define __UINTPTR_TYPE__ long unsigned int
+// SPARC:#define __UINTPTR_TYPE__ unsigned int
 // SPARC:#define __UINTPTR_WIDTH__ 32
 // SPARC:#define __UINT_FAST16_MAX__ 65535
 // SPARC:#define __UINT_FAST16_TYPE__ unsigned short
@@ -6964,6 +6975,15 @@
 // SPARC:#define __sparcv8 1
 // SPARC:#define sparc 1
 // 
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=sparc-none-netbsd < /dev/null | FileCheck -check-prefix SPARC-NETBSD %s
+// SPARC-NETBSD:#define __INTPTR_FMTd__ "ld"
+// SPARC-NETBSD:#define __INTPTR_FMTi__ "li"
+// SPARC-NETBSD:#define __INTPTR_MAX__ 2147483647L
+// SPARC-NETBSD:#define __INTPTR_TYPE__ long int
+// SPARC-NETBSD:#define __PTRDIFF_TYPE__ long int
+// SPARC-NETBSD:#define __SIZE_TYPE__ long unsigned int
+// SPARC-NETBSD:#define __UINTPTR_TYPE__ long unsigned int
+
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=tce-none-none < /dev/null | FileCheck -check-prefix TCE %s
 //
 // TCE-NOT:#define _LP64
@@ -8340,6 +8360,10 @@
 // PS4:#define __unix__ 1
 // PS4:#define __x86_64 1
 // PS4:#define __x86_64__ 1
+//
+// RUN: %clang_cc1 -E -dM -triple=x86_64-pc-mingw32 < /dev/null | FileCheck -check-prefix X86-64-DECLSPEC %s
+// RUN: %clang_cc1 -E -dM -fms-extensions -triple=x86_64-unknown-mingw32 < /dev/null | FileCheck -check-prefix X86-64-DECLSPEC %s
+// X86-64-DECLSPEC: #define __declspec
 //
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=sparc64-none-none < /dev/null | FileCheck -check-prefix SPARCV9 %s
 // SPARCV9:#define __INT64_TYPE__ long int

@@ -23,6 +23,9 @@ include "llvm/Target/Target.td"
 def ModeThumb  : SubtargetFeature<"thumb-mode", "InThumbMode", "true",
                                   "Thumb mode">;
 
+def ModeSoftFloat : SubtargetFeature<"soft-float", "UseSoftFloat", "true",
+                                     "Use software floating point features.">;
+
 //===----------------------------------------------------------------------===//
 // ARM Subtarget features.
 //
@@ -175,6 +178,9 @@ def HasV8Ops    : SubtargetFeature<"v8", "HasV8Ops", "true",
                                    "Support ARM v8 instructions",
                                    [HasV7Ops, FeatureVirtualization,
                                     FeatureMP]>;
+def HasV8_1aOps : SubtargetFeature<"v8.1a", "HasV8_1aOps", "true",
+                                   "Support ARM v8.1a instructions",
+                                   [HasV8Ops, FeatureAClass, FeatureCRC]>;
 
 //===----------------------------------------------------------------------===//
 // ARM Processors supported.
@@ -251,6 +257,14 @@ def ProcA57     : SubtargetFeature<"a57", "ARMProcFamily", "CortexA57",
                                    [FeatureHWDiv, FeatureHWDivARM,
                                     FeatureTrustZone, FeatureT2XtPk,
                                     FeatureCrypto, FeatureCRC]>;
+
+def ProcR4      : SubtargetFeature<"r4", "ARMProcFamily", "CortexR4",
+                                   "Cortex-R4 ARM processors",
+                                   [FeatureHWDiv,
+                                    FeatureAvoidPartialCPSR,
+                                    FeatureDSPThumb2, FeatureT2XtPk,
+                                    HasV7Ops, FeatureDB, FeatureHasRAS,
+                                    FeatureRClass]>;
 
 def ProcR5      : SubtargetFeature<"r5", "ARMProcFamily", "CortexR5",
                                    "Cortex-R5 ARM processors",
@@ -388,11 +402,21 @@ def : ProcessorModel<"krait",       CortexA9Model,
                                      FeatureDSPThumb2, FeatureHasRAS,
                                      FeatureAClass]>;
 
+// FIXME: R4 has currently the same ProcessorModel as A8.
+def : ProcessorModel<"cortex-r4",   CortexA8Model,
+                                    [ProcR4]>;
+
+// FIXME: R4F has currently the same ProcessorModel as A8.
+def : ProcessorModel<"cortex-r4f",  CortexA8Model,
+                                    [ProcR4,
+                                     FeatureSlowFPBrcc, FeatureHasSlowFPVMLx,
+                                     FeatureVFP3, FeatureD16]>;
+
 // FIXME: R5 has currently the same ProcessorModel as A8.
 def : ProcessorModel<"cortex-r5",   CortexA8Model,
                                     [ProcR5, HasV7Ops, FeatureDB,
                                      FeatureVFP3, FeatureDSPThumb2,
-                                     FeatureHasRAS, FeatureVFPOnlySP,
+                                     FeatureHasRAS,
                                      FeatureD16, FeatureRClass]>;
 
 // FIXME: R7 has currently the same ProcessorModel as A8 and is modelled as R5.
@@ -469,7 +493,15 @@ def ARMInstrInfo : InstrInfo;
 // Declare the target which we are implementing
 //===----------------------------------------------------------------------===//
 
+def ARMAsmWriter : AsmWriter {
+  string AsmWriterClassName  = "InstPrinter";
+  int PassSubtarget = 1;
+  int Variant = 0;
+  bit isMCAsmWriter = 1;
+}
+
 def ARM : Target {
   // Pull in Instruction Info:
   let InstructionSet = ARMInstrInfo;
+  let AssemblyWriters = [ARMAsmWriter];
 }

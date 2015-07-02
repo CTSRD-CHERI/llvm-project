@@ -114,6 +114,20 @@ define i16 @simple_negzero(i8 %a) {
   ret i16 %3
 }
 
+; CHECK-LABEL: @simple_negative
+; CHECK: %1 = sext i8 %call to i32
+; CHECK: %mul1 = mul i32 %1, -3
+; CHECK: %2 = trunc i32 %mul1 to i8
+; CHECK: %conv3 = sext i8 %2 to i32
+; CHECK: ret i32 %conv3
+define i32 @simple_negative(i8 %call) {
+  %conv1 = sitofp i8 %call to float
+  %mul = fmul float %conv1, -3.000000e+00
+  %conv2 = fptosi float %mul to i8
+  %conv3 = sext i8 %conv2 to i32
+  ret i32 %conv3
+}
+
 ;
 ; Negative tests
 ;
@@ -225,3 +239,18 @@ define i80 @neg_toolarge(i80 %a) {
   ret i80 %3
 }
 
+; CHECK-LABEL: @neg_calluser
+; CHECK: sitofp
+; CHECK: fcmp
+; The sequence %1..%3 cannot be converted because %4 uses %2.
+define i32 @neg_calluser(i32 %value) {
+  %1 = sitofp i32 %value to double
+  %2 = fadd double %1, 1.0
+  %3 = fcmp olt double %2, 0.000000e+00
+  %4 = tail call double @g(double %2)
+  %5 = fptosi double %4 to i32
+  %6 = zext i1 %3 to i32
+  %7 = add i32 %6, %5
+  ret i32 %7
+}
+declare double @g(double)

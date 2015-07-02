@@ -25,7 +25,7 @@ class WatchpointPythonCommandTestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_watchpoint_command_with_dsym(self):
         """Test 'watchpoint command'."""
@@ -34,6 +34,7 @@ class WatchpointPythonCommandTestCase(TestBase):
         self.watchpoint_command()
 
     @dwarf_test
+    @skipIfFreeBSD # timing out on buildbot
     def test_watchpoint_command_with_dwarf(self):
         """Test 'watchpoint command'."""
         self.buildDwarf(dictionary=self.d)
@@ -52,7 +53,7 @@ class WatchpointPythonCommandTestCase(TestBase):
 #                       (self.source, self.line))#
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.

@@ -33,10 +33,10 @@ class GenericTester(TestBase):
 
     def tearDown(self):
         """Cleanup the test byproducts."""
-        TestBase.tearDown(self)
         #print "Removing golden-output.txt..."
         if os.path.exists(self.golden_filename):
             os.remove(self.golden_filename)
+        TestBase.tearDown(self)
 
     #==========================================================================#
     # Functions build_and_run() and build_and_run_expr() are generic functions #
@@ -86,7 +86,7 @@ class GenericTester(TestBase):
         if lldb.remote_platform:
             # process launch -o requires a path that is valid on the target
             self.assertIsNotNone(lldb.remote_platform.GetWorkingDirectory())
-            remote_path = os.path.join(lldb.remote_platform.GetWorkingDirectory(), "lldb-stdout-redirect.txt")
+            remote_path = lldbutil.append_to_process_working_directory("lldb-stdout-redirect.txt")
             self.runCmd('process launch -o {remote}'.format(remote=remote_path))
             # copy remote_path to local host
             self.runCmd('platform get-file {remote} "{local}"'.format(
@@ -125,7 +125,7 @@ class GenericTester(TestBase):
                 gl.append((var, val))
         #print "golden list:", gl
 
-        # This test uses a #include of a the "basic_type.cpp" so we need to enable
+        # This test uses a #include of "basic_type.cpp" so we need to enable
         # always setting inlined breakpoints.
         self.runCmd('settings set target.inline-breakpoint-strategy always')
         # And add hooks to restore the settings during tearDown().
@@ -140,7 +140,7 @@ class GenericTester(TestBase):
             break_line = line_number ("basic_type.cpp", "// Here is the line we will break on to check variables.")
         lldbutil.run_break_set_by_file_and_line (self, "basic_type.cpp", break_line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
         self.expect("process status", STOPPED_DUE_TO_BREAKPOINT,
             substrs = [" at basic_type.cpp:%d" % break_line,
                        "stop reason = breakpoint"])
@@ -154,7 +154,7 @@ class GenericTester(TestBase):
             output = self.res.GetOutput()
 
             # The input type is in a canonical form as a set of named atoms.
-            # The display type string must conatin each and every element.
+            # The display type string must contain each and every element.
             #
             # Example:
             #     runCmd: frame variable --show-types a_array_bounded[0]
@@ -176,6 +176,7 @@ class GenericTester(TestBase):
             nv = ("%s = '%s'" if quotedDisplay else "%s = %s") % (var, val)
             self.expect(output, Msg(var, val, True), exe=False,
                 substrs = [nv])
+        pass
 
     def generic_type_expr_tester(self, exe_name, atoms, quotedDisplay=False, blockCaptured=False):
         """Test that variable expressions with basic types are evaluated correctly."""
@@ -208,7 +209,7 @@ class GenericTester(TestBase):
                 gl.append((var, val))
         #print "golden list:", gl
 
-        # This test uses a #include of a the "basic_type.cpp" so we need to enable
+        # This test uses a #include of "basic_type.cpp" so we need to enable
         # always setting inlined breakpoints.
         self.runCmd('settings set target.inline-breakpoint-strategy always')
         # And add hooks to restore the settings during tearDown().
@@ -223,7 +224,7 @@ class GenericTester(TestBase):
             break_line = line_number ("basic_type.cpp", "// Here is the line we will break on to check variables.")
         lldbutil.run_break_set_by_file_and_line (self, "basic_type.cpp", break_line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
         self.expect("process status", STOPPED_DUE_TO_BREAKPOINT,
             substrs = [" at basic_type.cpp:%d" % break_line,
                        "stop reason = breakpoint"])
@@ -237,7 +238,7 @@ class GenericTester(TestBase):
             output = self.res.GetOutput()
 
             # The input type is in a canonical form as a set of named atoms.
-            # The display type string must conatin each and every element.
+            # The display type string must contain each and every element.
             #
             # Example:
             #     runCmd: expr a
@@ -259,3 +260,4 @@ class GenericTester(TestBase):
             valPart = ("'%s'" if quotedDisplay else "%s") % val
             self.expect(output, Msg(var, val, False), exe=False,
                 substrs = [valPart])
+        pass

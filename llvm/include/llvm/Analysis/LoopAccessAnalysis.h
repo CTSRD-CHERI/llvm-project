@@ -225,6 +225,8 @@ public:
     return RecordInterestingDependences ? &InterestingDependences : nullptr;
   }
 
+  void clearInterestingDependences() { InterestingDependences.clear(); }
+
   /// \brief The vector of memory access instructions.  The indices are used as
   /// instruction identifiers in the Dependence class.
   const SmallVectorImpl<Instruction *> &getMemoryInstructions() const {
@@ -339,6 +341,14 @@ public:
     bool needsChecking(unsigned I, unsigned J,
                        const SmallVectorImpl<int> *PtrPartition) const;
 
+    /// \brief Return true if any pointer requires run-time checking according
+    /// to needsChecking.
+    bool needsAnyChecking(const SmallVectorImpl<int> *PtrPartition) const;
+
+    /// \brief Returns the number of run-time checks required according to
+    /// needsChecking.
+    unsigned getNumberOfChecks(const SmallVectorImpl<int> *PtrPartition) const;
+
     /// \brief Print the list run-time memory checks necessary.
     ///
     /// If \p PtrPartition is set, it contains the partition number for
@@ -366,7 +376,8 @@ public:
 
   LoopAccessInfo(Loop *L, ScalarEvolution *SE, const DataLayout &DL,
                  const TargetLibraryInfo *TLI, AliasAnalysis *AA,
-                 DominatorTree *DT, const ValueToValueMap &Strides);
+                 DominatorTree *DT, LoopInfo *LI,
+                 const ValueToValueMap &Strides);
 
   /// Return true we can analyze the memory accesses in the loop and there are
   /// no memory dependence cycles.
@@ -378,7 +389,10 @@ public:
 
   /// \brief Number of memchecks required to prove independence of otherwise
   /// may-alias pointers.
-  unsigned getNumRuntimePointerChecks() const { return NumComparisons; }
+  unsigned getNumRuntimePointerChecks(
+    const SmallVectorImpl<int> *PtrPartition = nullptr) const {
+    return PtrRtCheck.getNumberOfChecks(PtrPartition);
+  }
 
   /// Return true if the block BB needs to be predicated in order for the loop
   /// to be vectorized.
@@ -428,6 +442,13 @@ public:
   /// Only used in DEBUG build but we don't want NDEBUG-dependent ABI.
   unsigned NumSymbolicStrides;
 
+  /// \brief Checks existence of store to invariant address inside loop.
+  /// If the loop has any store to invariant address, then it returns true,
+  /// else returns false.
+  bool hasStoreToLoopInvariantAddress() const {
+    return StoreToLoopInvariantAddress;
+  }
+
 private:
   /// \brief Analyze the loop.  Substitute symbolic strides using Strides.
   void analyzeLoop(const ValueToValueMap &Strides);
@@ -446,16 +467,13 @@ private:
   /// loop-independent and loop-carried dependences between memory accesses.
   MemoryDepChecker DepChecker;
 
-  /// \brief Number of memchecks required to prove independence of otherwise
-  /// may-alias pointers
-  unsigned NumComparisons;
-
   Loop *TheLoop;
   ScalarEvolution *SE;
   const DataLayout &DL;
   const TargetLibraryInfo *TLI;
   AliasAnalysis *AA;
   DominatorTree *DT;
+  LoopInfo *LI;
 
   unsigned NumLoads;
   unsigned NumStores;
@@ -464,6 +482,10 @@ private:
 
   /// \brief Cache the result of analyzeLoop.
   bool CanVecMem;
+
+  /// \brief Indicator for storing to uniform addresses.
+  /// If a loop has write to a loop invariant address then it should be true.
+  bool StoreToLoopInvariantAddress;
 
   /// \brief The diagnostics report generated for the analysis.  E.g. why we
   /// couldn't analyze the loop.
@@ -481,6 +503,11 @@ Value *stripIntegerCast(Value *V);
 const SCEV *replaceSymbolicStrideSCEV(ScalarEvolution *SE,
                                       const ValueToValueMap &PtrToStride,
                                       Value *Ptr, Value *OrigPtr = nullptr);
+
+/// \brief Check the stride of the pointer and ensure that it does not wrap in
+/// the address space.
+int isStridedPtr(ScalarEvolution *SE, Value *Ptr, const Loop *Lp,
+                 const ValueToValueMap &StridesMap);
 
 /// \brief This analysis provides dependence information for the memory accesses
 /// of a loop.
@@ -526,6 +553,7 @@ private:
   const TargetLibraryInfo *TLI;
   AliasAnalysis *AA;
   DominatorTree *DT;
+  LoopInfo *LI;
 };
 } // End llvm namespace
 

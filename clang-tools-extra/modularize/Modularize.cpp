@@ -46,19 +46,19 @@
 //   [(include-files_list)|(module map)]+ [(front-end-options) ...]
 //
 // Options:
-//    -prefix (optional header path prefix)
+//    -prefix=(optional header path prefix)
 //          Note that unless a "-prefix (header path)" option is specified,
 //          non-absolute file paths in the header list file will be relative
 //          to the header list file directory.  Use -prefix to specify a
 //          different directory.
-//    -module-map-path (module map)
+//    -module-map-path=(module map)
 //          Skip the checks, and instead act as a module.map generation
 //          assistant, generating a module map file based on the header list.
 //          An optional "-root-module=(rootName)" argument can specify a root
 //          module to be created in the generated module.map file.  Note that
 //          you will likely need to edit this file to suit the needs of your
 //          headers.
-//    -root-module (root module name)
+//    -root-module=(root module name)
 //          Specifies a root module to be created in the generated module.map
 //          file.
 //    -block-check-header-list-only
@@ -73,9 +73,9 @@
 // you will likely need to pass in additional compiler front-end
 // arguments to match those passed in by default by the driver.
 //
-// Note that by default, the underlying Clang front end assumes .h files
-// contain C source.  If your .h files in the file list contain C++ source,
-// you should append the following to your command lines: -x c++
+// Note that by default, the modularize assumes .h files contain C++ source.
+// If your .h files in the file list contain another language, you should
+// append an appropriate -x option to your command line, i.e.:  -x c
 //
 // Modularization Issue Checks
 //
@@ -323,17 +323,17 @@ static std::string findInputFile(const CommandLineArguments &CLArgs) {
                                             E = CLArgs.end();
        I != E; ++I)
     Argv.push_back(I->c_str());
-  std::unique_ptr<InputArgList> Args(
-      Opts->ParseArgs(Argv.data(), Argv.data() + Argv.size(), MissingArgIndex,
-                      MissingArgCount, IncludedFlagsBitmask));
-  std::vector<std::string> Inputs = Args->getAllArgValues(OPT_INPUT);
+  InputArgList Args = Opts->ParseArgs(Argv, MissingArgIndex, MissingArgCount,
+                                      IncludedFlagsBitmask);
+  std::vector<std::string> Inputs = Args.getAllArgValues(OPT_INPUT);
   return ModularizeUtilities::getCanonicalPath(Inputs.back());
 }
 
 // This arguments adjuster inserts "-include (file)" arguments for header
-// dependencies.
+// dependencies.  It also insertts a "-w" option and a "-x c++",
+// if no other "-x" option is present.
 static ArgumentsAdjuster
-getAddDependenciesAdjuster(DependencyMap &Dependencies) {
+getModularizeArgumentsAdjuster(DependencyMap &Dependencies) {
   return [&Dependencies](const CommandLineArguments &Args) {
     std::string InputFile = findInputFile(Args);
     DependentsVector &FileDependents = Dependencies[InputFile];
@@ -345,6 +345,13 @@ getAddDependenciesAdjuster(DependencyMap &Dependencies) {
                          std::string("\""));
         NewArgs.push_back(FileDependents[Index]);
       }
+    }
+    // Ignore warnings.  (Insert after "clang_tool" at beginning.)
+    NewArgs.insert(NewArgs.begin() + 1, "-w");
+    // Since we are compiling .h files, assume C++ unless given a -x option.
+    if (std::find(NewArgs.begin(), NewArgs.end(), "-x") == NewArgs.end()) {
+      NewArgs.insert(NewArgs.begin() + 2, "-x");
+      NewArgs.insert(NewArgs.begin() + 3, "c++");
     }
     return NewArgs;
   };
@@ -631,9 +638,9 @@ public:
     PPTracker.handlePreprocessorEntry(PP, InFile);
   }
 
-  ~CollectEntitiesConsumer() { PPTracker.handlePreprocessorExit(); }
+  ~CollectEntitiesConsumer() override { PPTracker.handlePreprocessorExit(); }
 
-  virtual void HandleTranslationUnit(ASTContext &Ctx) {
+  void HandleTranslationUnit(ASTContext &Ctx) override {
     SourceManager &SM = Ctx.getSourceManager();
 
     // Collect declared entities.
@@ -644,7 +651,7 @@ public:
     for (Preprocessor::macro_iterator M = PP.macro_begin(),
                                       MEnd = PP.macro_end();
          M != MEnd; ++M) {
-      Location Loc(SM, M->second->getLocation());
+      Location Loc(SM, M->second.getLatest()->getLocation());
       if (!Loc)
         continue;
 
@@ -691,7 +698,7 @@ public:
       : Entities(Entities), PPTracker(preprocessorTracker),
         HadErrors(HadErrors) {}
 
-  virtual CollectEntitiesAction *create() {
+  CollectEntitiesAction *create() override {
     return new CollectEntitiesAction(Entities, PPTracker, HadErrors);
   }
 
@@ -730,8 +737,8 @@ int main(int Argc, const char **Argv) {
       ListFileNames, HeaderPrefix));
 
   // Get header file names and dependencies.
-  ModUtil->loadAllHeaderListsAndDependencies();
-
+  if (ModUtil->loadAllHeaderListsAndDependencies())
+    HadErrors = 1;
 
   // If we are in assistant mode, output the module map and quit.
   if (ModuleMapPath.length() != 0) {
@@ -767,7 +774,8 @@ int main(int Argc, const char **Argv) {
   // Parse all of the headers, detecting duplicates.
   EntityMap Entities;
   ClangTool Tool(*Compilations, ModUtil->HeaderFileNames);
-  Tool.appendArgumentsAdjuster(getAddDependenciesAdjuster(ModUtil->Dependencies));
+  Tool.appendArgumentsAdjuster(
+    getModularizeArgumentsAdjuster(ModUtil->Dependencies));
   ModularizeFrontendActionFactory Factory(Entities, *PPTracker, HadErrors);
   HadErrors |= Tool.run(&Factory);
 

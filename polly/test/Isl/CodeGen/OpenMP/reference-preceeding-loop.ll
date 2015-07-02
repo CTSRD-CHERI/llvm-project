@@ -1,5 +1,5 @@
 ; RUN: opt %loadPolly -polly-detect-unprofitable -polly-parallel -polly-parallel-force -polly-ast -analyze < %s | FileCheck %s -check-prefix=AST
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-parallel -polly-parallel-force -polly-codegen-isl -S -verify-dom-info < %s | FileCheck %s -check-prefix=IR
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-parallel -polly-parallel-force -polly-codegen -S -verify-dom-info < %s | FileCheck %s -check-prefix=IR
 
 
 ; - Test the case where scalar evolution references a loop that is outside
@@ -18,10 +18,9 @@
 ; AST-NEXT:     Stmt_while_body(c0);
 
 ; IR: @update_model.polly.subfn
-; IR: @update_model.polly.subfn1
+; IR: @update_model.polly.subfn.1
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-unknown-linux-gnu"
 
 @cum_freq = external global [258 x i64], align 16
 

@@ -23,20 +23,20 @@
 // C++ Includes
 
 // Other libraries and framework includes
-#include "lldb/Core/Error.h"
+#include "llvm/ADT/StringRef.h"
+
 #include "lldb/Core/ConnectionMachPort.h"
-#include "lldb/Core/Debugger.h"
+#include "lldb/Core/Error.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/StreamFile.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/HostThread.h"
-#include "lldb/Host/Pipe.h"
 #include "lldb/Host/OptionParser.h"
+#include "lldb/Host/Pipe.h"
 #include "lldb/Host/Socket.h"
 #include "lldb/Host/StringConvert.h"
 #include "lldb/Host/ThreadLauncher.h"
-#include "lldb/Interpreter/CommandInterpreter.h"
-#include "lldb/Interpreter/CommandReturnObject.h"
+#include "lldb/Target/Platform.h"
+#include "LLDBServerUtilities.h"
 #include "Plugins/Process/gdb-remote/GDBRemoteCommunicationServerLLGS.h"
 #include "Plugins/Process/gdb-remote/ProcessGDBRemoteLog.h"
 
@@ -48,8 +48,11 @@
 #define LLGS_VERSION_STR "local_build"
 #endif
 
+using namespace llvm;
 using namespace lldb;
 using namespace lldb_private;
+using namespace lldb_private::lldb_server;
+using namespace lldb_private::process_gdb_remote;
 
 // lldb-gdbserver state
 
@@ -72,11 +75,11 @@ static struct option g_long_options[] =
     { "debug",              no_argument,        &g_debug,           1   },
     { "platform",           required_argument,  NULL,               'p' },
     { "verbose",            no_argument,        &g_verbose,         1   },
-    { "lldb-command",       required_argument,  NULL,               'c' },
     { "log-file",           required_argument,  NULL,               'l' },
-    { "log-flags",          required_argument,  NULL,               'f' },
+    { "log-channels",       required_argument,  NULL,               'c' },
     { "attach",             required_argument,  NULL,               'a' },
-    { "named-pipe",         required_argument,  NULL,               'P' },
+    { "named-pipe",         required_argument,  NULL,               'N' },
+    { "pipe",               required_argument,  NULL,               'U' },
     { "native-regs",        no_argument,        NULL,               'r' },  // Specify to use the native registers instead of the gdb defaults for the architecture.  NOTE: this is a do-nothing arg as it's behavior is default now.  FIXME remove call from lldb-platform.
     { "reverse-connect",    no_argument,        NULL,               'R' },  // Specifies that llgs attaches to the client address:port rather than llgs listening for a connection from address on port.
     { "setsid",             no_argument,        NULL,               'S' },  // Call setsid() to make llgs run in its own session.
@@ -121,7 +124,15 @@ signal_handler(int signo)
 static void
 display_usage (const char *progname, const char* subcommand)
 {
-    fprintf(stderr, "Usage:\n  %s %s [--log-file log-file-path] [--log-flags flags] [--lldb-command command]* [--platform platform_name] [--setsid] [--named-pipe named-pipe-path] [--native-regs] [--attach pid] [[HOST]:PORT] "
+    fprintf(stderr, "Usage:\n  %s %s "
+            "[--log-file log-file-name] "
+            "[--log-channels log-channel-list] "
+            "[--platform platform_name] "
+            "[--setsid] "
+            "[--named-pipe named-pipe-path] "
+            "[--native-regs] "
+            "[--attach pid] "
+            "[[HOST]:PORT] "
             "[-- PROGRAM ARG1 ARG2 ...]\n", progname, subcommand);
     exit(0);
 }
@@ -147,21 +158,6 @@ dump_available_platforms (FILE *output_file)
         // the plugin name (e.g. 'host' doesn't show up as a
         // registered platform plugin even though it's the default).
         fprintf (output_file, "%s\tDefault platform for this host.\n", Platform::GetHostPlatform ()->GetPluginName ().AsCString ());
-    }
-}
-
-static void
-run_lldb_commands (const lldb::DebuggerSP &debugger_sp, const std::vector<std::string> &lldb_commands)
-{
-    for (const auto &lldb_command : lldb_commands)
-    {
-        printf("(lldb) %s\n", lldb_command.c_str ());
-
-        lldb_private::CommandReturnObject result;
-        debugger_sp->GetCommandInterpreter ().HandleCommand (lldb_command.c_str (), eLazyBoolNo, result);
-        const char *output = result.GetOutputData ();
-        if (output && output[0])
-            puts (output);
     }
 }
 
@@ -223,7 +219,7 @@ handle_attach (GDBRemoteCommunicationServerLLGS &gdb_server, const std::string &
 {
     assert (!attach_target.empty () && "attach_target cannot be empty");
 
-    // First check if the attach_target is convertable to a long. If so, we'll use it as a pid.
+    // First check if the attach_target is convertible to a long. If so, we'll use it as a pid.
     char *end_p = nullptr;
     const long int pid = strtol (attach_target.c_str (), &end_p, 10);
 
@@ -308,24 +304,44 @@ JoinListenThread ()
 }
 
 Error
-writePortToPipe (const char *const named_pipe_path, const uint16_t port)
+WritePortToPipe(Pipe &port_pipe, const uint16_t port)
 {
-    Pipe port_name_pipe;
-    // Wait for 10 seconds for pipe to be opened.
-    auto error = port_name_pipe.OpenAsWriterWithTimeout (named_pipe_path, false, std::chrono::microseconds (10 * 1000000));
-    if (error.Fail ())
-        return error;
-
     char port_str[64];
-    const auto port_str_len = ::snprintf (port_str, sizeof (port_str), "%u", port);
+    const auto port_str_len = ::snprintf(port_str, sizeof(port_str), "%u", port);
 
     size_t bytes_written = 0;
     // Write the port number as a C string with the NULL terminator.
-    return port_name_pipe.Write (port_str, port_str_len + 1, bytes_written);
+    return port_pipe.Write(port_str, port_str_len + 1, bytes_written);
+}
+
+Error
+writePortToPipe(const char *const named_pipe_path, const uint16_t port)
+{
+    Pipe port_name_pipe;
+    // Wait for 10 seconds for pipe to be opened.
+    auto error = port_name_pipe.OpenAsWriterWithTimeout(named_pipe_path, false,
+            std::chrono::seconds{10});
+    if (error.Fail())
+        return error;
+    return WritePortToPipe(port_name_pipe, port);
+}
+
+Error
+writePortToPipe(int unnamed_pipe_fd, const uint16_t port)
+{
+#if defined(_WIN32)
+    return Error("Unnamed pipes are not supported on Windows.");
+#else
+    Pipe port_pipe{Pipe::kInvalidDescriptor, unnamed_pipe_fd};
+    return WritePortToPipe(port_pipe, port);
+#endif
 }
 
 void
-ConnectToRemote (GDBRemoteCommunicationServerLLGS &gdb_server, bool reverse_connect, const char *const host_and_port, const char *const progname, const char *const subcommand, const char *const named_pipe_path)
+ConnectToRemote(GDBRemoteCommunicationServerLLGS &gdb_server,
+        bool reverse_connect, const char *const host_and_port,
+        const char *const progname, const char *const subcommand,
+        const char *const named_pipe_path, int unnamed_pipe_fd)
 {
     Error error;
 
@@ -416,6 +432,25 @@ ConnectToRemote (GDBRemoteCommunicationServerLLGS &gdb_server, bool reverse_conn
                 }
             }
 
+            // If we have an unnamed pipe to write the port number back to, do that now.
+            if (unnamed_pipe_fd >= 0 && connection_portno == 0)
+            {
+                const uint16_t bound_port = s_listen_connection_up->GetListeningPort(10);
+                if (bound_port > 0)
+                {
+                    error = writePortToPipe(unnamed_pipe_fd, bound_port);
+                    if (error.Fail())
+                    {
+                        fprintf(stderr, "failed to write to the unnamed pipe: %s",
+                                error.AsCString());
+                    }
+                }
+                else
+                {
+                    fprintf(stderr, "unable to get the bound port for the listening connection\n");
+                }
+            }
+
             // Join the listener thread.
             if (!JoinListenThread ())
             {
@@ -491,26 +526,28 @@ main_gdbserver (int argc, char *argv[])
     signal (SIGPIPE, signal_handler);
     signal (SIGHUP, signal_handler);
 #endif
+#ifdef __linux__
+    // Block delivery of SIGCHLD on linux. NativeProcessLinux will read it using signalfd.
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGCHLD);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+#endif
 
     const char *progname = argv[0];
     const char *subcommand = argv[1];
     argc--;
     argv++;
     int long_option_index = 0;
-    StreamSP log_stream_sp;
-    Args log_args;
     Error error;
     int ch;
     std::string platform_name;
     std::string attach_target;
     std::string named_pipe_path;
+    std::string log_file;
+    StringRef log_channels; // e.g. "lldb process threads:gdb-remote default:linux all"
+    int unnamed_pipe_fd = -1;
     bool reverse_connect = false;
-
-    lldb::DebuggerSP debugger_sp = Debugger::CreateInstance ();
-
-    debugger_sp->SetInputFileHandle(stdin, false);
-    debugger_sp->SetOutputFileHandle(stdout, false);
-    debugger_sp->SetErrorFileHandle(stderr, false);
 
     // ProcessLaunchInfo launch_info;
     ProcessAttachInfo attach_info;
@@ -526,8 +563,6 @@ main_gdbserver (int argc, char *argv[])
 
     std::string short_options(OptionParser::GetShortOptionString(g_long_options));
 
-    std::vector<std::string> lldb_commands;
-
     while ((ch = getopt_long_only(argc, argv, short_options.c_str(), g_long_options, &long_option_index)) != -1)
     {
         switch (ch)
@@ -537,41 +572,12 @@ main_gdbserver (int argc, char *argv[])
 
         case 'l': // Set Log File
             if (optarg && optarg[0])
-            {
-                if ((strcasecmp(optarg, "stdout") == 0) || (strcmp(optarg, "/dev/stdout") == 0))
-                {
-                    log_stream_sp.reset (new StreamFile (stdout, false));
-                }
-                else if ((strcasecmp(optarg, "stderr") == 0) || (strcmp(optarg, "/dev/stderr") == 0))
-                {
-                    log_stream_sp.reset (new StreamFile (stderr, false));
-                }
-                else
-                {
-                    FILE *log_file = fopen(optarg, "w");
-                    if (log_file)
-                    {
-                        setlinebuf(log_file);
-                        log_stream_sp.reset (new StreamFile (log_file, true));
-                    }
-                    else
-                    {
-                        const char *errno_str = strerror(errno);
-                        fprintf (stderr, "Failed to open log file '%s' for writing: errno = %i (%s)", optarg, errno, errno_str ? errno_str : "unknown error");
-                    }
-
-                }
-            }
+                log_file.assign(optarg);
             break;
 
-        case 'f': // Log Flags
+        case 'c': // Log Channels
             if (optarg && optarg[0])
-                log_args.AppendArgument(optarg);
-            break;
-
-        case 'c': // lldb commands
-            if (optarg && optarg[0])
-                lldb_commands.push_back(optarg);
+                log_channels = StringRef(optarg);
             break;
 
         case 'p': // platform name
@@ -579,10 +585,14 @@ main_gdbserver (int argc, char *argv[])
                 platform_name = optarg;
             break;
 
-        case 'P': // named pipe
+        case 'N': // named pipe
             if (optarg && optarg[0])
                 named_pipe_path = optarg;
             break;
+
+        case 'U': // unnamed pipe
+            if (optarg && optarg[0])
+                unnamed_pipe_fd = StringConvert::ToUInt32(optarg, -1);
 
         case 'r':
             // Do nothing, native regs is the default these days
@@ -634,12 +644,9 @@ main_gdbserver (int argc, char *argv[])
         exit(option_error);
     }
 
-    if (log_stream_sp)
-    {
-        if (log_args.GetArgumentCount() == 0)
-            log_args.AppendArgument("default");
-        ProcessGDBRemoteLog::EnableLog (log_stream_sp, 0,log_args.GetConstArgumentVector(), log_stream_sp.get());
-    }
+    if (!LLDBServerUtilities::SetupLogging(log_file, log_channels, 0))
+        return -1;
+
     Log *log(lldb_private::GetLogIfAnyCategoriesSet (GDBR_LOG_VERBOSE));
     if (log)
     {
@@ -660,19 +667,16 @@ main_gdbserver (int argc, char *argv[])
         exit(255);
     }
 
-    // Run any commands requested.
-    run_lldb_commands (debugger_sp, lldb_commands);
-
     // Setup the platform that GDBRemoteCommunicationServerLLGS will use.
     lldb::PlatformSP platform_sp = setup_platform (platform_name);
 
-    GDBRemoteCommunicationServerLLGS gdb_server (platform_sp, debugger_sp);
+    GDBRemoteCommunicationServerLLGS gdb_server (platform_sp);
 
     const char *const host_and_port = argv[0];
     argc -= 1;
     argv += 1;
 
-    // Any arguments left over are for the the program that we need to launch. If there
+    // Any arguments left over are for the program that we need to launch. If there
     // are no arguments, then the GDB server will start up and wait for an 'A' packet
     // to launch a program, or a vAttach packet to attach to an existing process, unless
     // explicitly asked to attach with the --attach={pid|program_name} form.
@@ -684,7 +688,9 @@ main_gdbserver (int argc, char *argv[])
     // Print version info.
     printf("%s-%s", LLGS_PROGRAM_NAME, LLGS_VERSION_STR);
 
-    ConnectToRemote (gdb_server, reverse_connect, host_and_port, progname, subcommand, named_pipe_path.c_str ());
+    ConnectToRemote(gdb_server, reverse_connect,
+                    host_and_port, progname, subcommand,
+                    named_pipe_path.c_str(), unnamed_pipe_fd);
 
     fprintf(stderr, "lldb-server exiting...\n");
 

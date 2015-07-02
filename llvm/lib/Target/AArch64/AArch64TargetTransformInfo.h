@@ -110,7 +110,7 @@ public:
     return 64;
   }
 
-  unsigned getMaxInterleaveFactor();
+  unsigned getMaxInterleaveFactor(unsigned VF);
 
   unsigned getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src);
 
@@ -139,6 +139,11 @@ public:
 
   bool getTgtMemIntrinsic(IntrinsicInst *Inst, MemIntrinsicInfo &Info);
 
+  unsigned getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
+                                      unsigned Factor,
+                                      ArrayRef<unsigned> Indices,
+                                      unsigned Alignment,
+                                      unsigned AddressSpace);
   /// @}
 };
 

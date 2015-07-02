@@ -242,7 +242,7 @@ DynamicLoaderMacOSXDYLD::Clear (bool clear_process)
 {
     Mutex::Locker locker(m_mutex);
 
-    if (m_process->IsAlive() && LLDB_BREAK_ID_IS_VALID(m_break_id))
+    if (LLDB_BREAK_ID_IS_VALID(m_break_id))
         m_process->GetTarget().RemoveBreakpointByID (m_break_id);
 
     if (clear_process)
@@ -407,7 +407,7 @@ DynamicLoaderMacOSXDYLD::ReadDYLDInfoFromMemoryAndSetNotificationCallback(lldb::
                 static ConstString g_dyld_all_image_infos ("dyld_all_image_infos");
                 const Symbol *symbol = dyld_module_sp->FindFirstSymbolWithNameAndType (g_dyld_all_image_infos, eSymbolTypeData);
                 if (symbol)
-                    m_dyld_all_image_infos_addr = symbol->GetAddress().GetLoadAddress(&target);
+                    m_dyld_all_image_infos_addr = symbol->GetLoadAddress(&target);
             }
 
             // Update all image infos
@@ -607,11 +607,16 @@ DynamicLoaderMacOSXDYLD::NotifyBreakpointHit (void *baton,
     // will do so and return true.  In the course of initializing the all_image_infos it will read the complete
     // current state, so we don't need to figure out what has changed from the data passed in to us.
     
+    ExecutionContext exe_ctx (context->exe_ctx_ref);
+    Process *process = exe_ctx.GetProcessPtr();
+
+    // This is a sanity check just in case this dyld_instance is an old dyld plugin's breakpoint still lying around.
+    if (process != dyld_instance->m_process)
+        return false;
+
     if (dyld_instance->InitializeFromAllImageInfos())
         return dyld_instance->GetStopWhenImagesChange(); 
 
-    ExecutionContext exe_ctx (context->exe_ctx_ref);
-    Process *process = exe_ctx.GetProcessPtr();
     const lldb::ABISP &abi = process->GetABI();
     if (abi)
     {
@@ -1266,7 +1271,7 @@ DynamicLoaderMacOSXDYLD::ParseLoadCommands (const DataExtractor& data, DYLDImage
         // Iterate through the object file sections to find the
         // first section that starts of file offset zero and that
         // has bytes in the file...
-        if (dylib_info.segments[i].fileoff == 0 && dylib_info.segments[i].filesize > 0)
+        if ((dylib_info.segments[i].fileoff == 0 && dylib_info.segments[i].filesize > 0) || (dylib_info.segments[i].name == ConstString("__TEXT")))
         {
             dylib_info.slide = dylib_info.address - dylib_info.segments[i].vmaddr;
             // We have found the slide amount, so we can exit
@@ -1365,7 +1370,7 @@ DynamicLoaderMacOSXDYLD::AlwaysRelyOnEHUnwindInfo (SymbolContext &sym_ctx)
     ModuleSP module_sp;
     if (sym_ctx.symbol)
     {
-        module_sp = sym_ctx.symbol->GetAddress().GetModule();
+        module_sp = sym_ctx.symbol->GetAddressRef().GetModule();
     }
     if (module_sp.get() == NULL && sym_ctx.function)
     {
@@ -1428,7 +1433,7 @@ DynamicLoaderMacOSXDYLD::DYLDImageInfo::PutToLog (Log *log) const
 {
     if (log == NULL)
         return;
-    uint8_t *u = (uint8_t *)uuid.GetBytes();
+    const uint8_t *u = (const uint8_t *)uuid.GetBytes();
 
     if (address == LLDB_INVALID_ADDRESS)
     {
@@ -1644,12 +1649,13 @@ DynamicLoaderMacOSXDYLD::GetStepThroughTrampolinePlan (Thread &thread, bool stop
                                 Symbol *actual_symbol = context.symbol->ResolveReExportedSymbol(*target_sp.get());
                                 if (actual_symbol)
                                 {
-                                    if (actual_symbol->GetAddress().IsValid())
+                                    const Address actual_symbol_addr = actual_symbol->GetAddress();
+                                    if (actual_symbol_addr.IsValid())
                                     {
-                                        addresses.push_back(actual_symbol->GetAddress());
+                                        addresses.push_back(actual_symbol_addr);
                                         if (log)
                                         {
-                                            lldb::addr_t load_addr = actual_symbol->GetAddress().GetLoadAddress(target_sp.get());
+                                            lldb::addr_t load_addr = actual_symbol_addr.GetLoadAddress(target_sp.get());
                                             log->Printf ("Found a re-exported symbol: %s at 0x%" PRIx64 ".",
                                                          actual_symbol->GetName().GetCString(), load_addr);
                                         }
@@ -1715,7 +1721,8 @@ DynamicLoaderMacOSXDYLD::GetStepThroughTrampolinePlan (Thread &thread, bool stop
                 if (symbol && symbol->IsIndirect())
                 {
                     Error error;
-                    addr_t resolved_addr = thread.GetProcess()->ResolveIndirectFunction(&symbol->GetAddress(), error);
+                    Address symbol_address = symbol->GetAddress();
+                    addr_t resolved_addr = thread.GetProcess()->ResolveIndirectFunction(&symbol_address, error);
                     if (error.Success())
                     {
                         load_addrs.push_back(resolved_addr);

@@ -166,6 +166,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_BUILTIN;
   case Attribute::ByVal:
     return bitc::ATTR_KIND_BY_VAL;
+  case Attribute::Convergent:
+    return bitc::ATTR_KIND_CONVERGENT;
   case Attribute::InAlloca:
     return bitc::ATTR_KIND_IN_ALLOCA;
   case Attribute::Cold:
@@ -200,6 +202,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_NON_NULL;
   case Attribute::Dereferenceable:
     return bitc::ATTR_KIND_DEREFERENCEABLE;
+  case Attribute::DereferenceableOrNull:
+    return bitc::ATTR_KIND_DEREFERENCEABLE_OR_NULL;
   case Attribute::NoRedZone:
     return bitc::ATTR_KIND_NO_RED_ZONE;
   case Attribute::NoReturn:
@@ -228,6 +232,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_STACK_PROTECT_REQ;
   case Attribute::StackProtectStrong:
     return bitc::ATTR_KIND_STACK_PROTECT_STRONG;
+  case Attribute::SafeStack:
+    return bitc::ATTR_KIND_SAFESTACK;
   case Attribute::StructRet:
     return bitc::ATTR_KIND_STRUCT_RET;
   case Attribute::SanitizeAddress:
@@ -588,7 +594,7 @@ static void WriteModuleInfo(const Module *M, const ValueEnumerator &VE,
   unsigned MaxGlobalType = 0;
   for (const GlobalValue &GV : M->globals()) {
     MaxAlignment = std::max(MaxAlignment, GV.getAlignment());
-    MaxGlobalType = std::max(MaxGlobalType, VE.getTypeID(GV.getType()));
+    MaxGlobalType = std::max(MaxGlobalType, VE.getTypeID(GV.getValueType()));
     if (GV.hasSection()) {
       // Give section names unique ID's.
       unsigned &Entry = SectionMap[GV.getSection()];
@@ -629,10 +635,12 @@ static void WriteModuleInfo(const Module *M, const ValueEnumerator &VE,
     Abbv->Add(BitCodeAbbrevOp(bitc::MODULE_CODE_GLOBALVAR));
     Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed,
                               Log2_32_Ceil(MaxGlobalType+1)));
-    Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1));      // Constant.
-    Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));        // Initializer.
-    Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 5));      // Linkage.
-    if (MaxAlignment == 0)                                      // Alignment.
+    Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));   // AddrSpace << 2
+                                                           //| explicitType << 1
+                                                           //| constant
+    Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));   // Initializer.
+    Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 5)); // Linkage.
+    if (MaxAlignment == 0)                                 // Alignment.
       Abbv->Add(BitCodeAbbrevOp(0));
     else {
       unsigned MaxEncAlignment = Log2_32(MaxAlignment)+1;
@@ -657,8 +665,8 @@ static void WriteModuleInfo(const Module *M, const ValueEnumerator &VE,
     //             linkage, alignment, section, visibility, threadlocal,
     //             unnamed_addr, externally_initialized, dllstorageclass,
     //             comdat]
-    Vals.push_back(VE.getTypeID(GV.getType()));
-    Vals.push_back(GV.isConstant());
+    Vals.push_back(VE.getTypeID(GV.getValueType()));
+    Vals.push_back(GV.getType()->getAddressSpace() << 2 | 2 | GV.isConstant());
     Vals.push_back(GV.isDeclaration() ? 0 :
                    (VE.getValueID(GV.getInitializer()) + 1));
     Vals.push_back(getEncodedLinkage(GV));
@@ -687,8 +695,8 @@ static void WriteModuleInfo(const Module *M, const ValueEnumerator &VE,
   for (const Function &F : *M) {
     // FUNCTION:  [type, callingconv, isproto, linkage, paramattrs, alignment,
     //             section, visibility, gc, unnamed_addr, prologuedata,
-    //             dllstorageclass, comdat, prefixdata]
-    Vals.push_back(VE.getTypeID(F.getType()));
+    //             dllstorageclass, comdat, prefixdata, personalityfn]
+    Vals.push_back(VE.getTypeID(F.getFunctionType()));
     Vals.push_back(F.getCallingConv());
     Vals.push_back(F.isDeclaration());
     Vals.push_back(getEncodedLinkage(F));
@@ -704,6 +712,8 @@ static void WriteModuleInfo(const Module *M, const ValueEnumerator &VE,
     Vals.push_back(F.hasComdat() ? VE.getComdatID(F.getComdat()) : 0);
     Vals.push_back(F.hasPrefixData() ? (VE.getValueID(F.getPrefixData()) + 1)
                                      : 0);
+    Vals.push_back(
+        F.hasPersonalityFn() ? (VE.getValueID(F.getPersonalityFn()) + 1) : 0);
 
     unsigned AbbrevToUse = 0;
     Stream.EmitRecord(bitc::MODULE_CODE_FUNCTION, Vals, AbbrevToUse);
@@ -780,7 +790,7 @@ static void WriteMDTuple(const MDTuple *N, const ValueEnumerator &VE,
   Record.clear();
 }
 
-static void WriteMDLocation(const MDLocation *N, const ValueEnumerator &VE,
+static void WriteDILocation(const DILocation *N, const ValueEnumerator &VE,
                             BitstreamWriter &Stream,
                             SmallVectorImpl<uint64_t> &Record,
                             unsigned Abbrev) {
@@ -794,11 +804,11 @@ static void WriteMDLocation(const MDLocation *N, const ValueEnumerator &VE,
   Record.clear();
 }
 
-static void WriteGenericDebugNode(const GenericDebugNode *N,
-                                  const ValueEnumerator &VE,
-                                  BitstreamWriter &Stream,
-                                  SmallVectorImpl<uint64_t> &Record,
-                                  unsigned Abbrev) {
+static void WriteGenericDINode(const GenericDINode *N,
+                               const ValueEnumerator &VE,
+                               BitstreamWriter &Stream,
+                               SmallVectorImpl<uint64_t> &Record,
+                               unsigned Abbrev) {
   Record.push_back(N->isDistinct());
   Record.push_back(N->getTag());
   Record.push_back(0); // Per-tag version field; unused for now.
@@ -815,19 +825,19 @@ static uint64_t rotateSign(int64_t I) {
   return I < 0 ? ~(U << 1) : U << 1;
 }
 
-static void WriteMDSubrange(const MDSubrange *N, const ValueEnumerator &,
+static void WriteDISubrange(const DISubrange *N, const ValueEnumerator &,
                             BitstreamWriter &Stream,
                             SmallVectorImpl<uint64_t> &Record,
                             unsigned Abbrev) {
   Record.push_back(N->isDistinct());
   Record.push_back(N->getCount());
-  Record.push_back(rotateSign(N->getLo()));
+  Record.push_back(rotateSign(N->getLowerBound()));
 
   Stream.EmitRecord(bitc::METADATA_SUBRANGE, Record, Abbrev);
   Record.clear();
 }
 
-static void WriteMDEnumerator(const MDEnumerator *N, const ValueEnumerator &VE,
+static void WriteDIEnumerator(const DIEnumerator *N, const ValueEnumerator &VE,
                               BitstreamWriter &Stream,
                               SmallVectorImpl<uint64_t> &Record,
                               unsigned Abbrev) {
@@ -839,7 +849,7 @@ static void WriteMDEnumerator(const MDEnumerator *N, const ValueEnumerator &VE,
   Record.clear();
 }
 
-static void WriteMDBasicType(const MDBasicType *N, const ValueEnumerator &VE,
+static void WriteDIBasicType(const DIBasicType *N, const ValueEnumerator &VE,
                              BitstreamWriter &Stream,
                              SmallVectorImpl<uint64_t> &Record,
                              unsigned Abbrev) {
@@ -854,7 +864,7 @@ static void WriteMDBasicType(const MDBasicType *N, const ValueEnumerator &VE,
   Record.clear();
 }
 
-static void WriteMDDerivedType(const MDDerivedType *N,
+static void WriteDIDerivedType(const DIDerivedType *N,
                                const ValueEnumerator &VE,
                                BitstreamWriter &Stream,
                                SmallVectorImpl<uint64_t> &Record,
@@ -876,7 +886,7 @@ static void WriteMDDerivedType(const MDDerivedType *N,
   Record.clear();
 }
 
-static void WriteMDCompositeType(const MDCompositeType *N,
+static void WriteDICompositeType(const DICompositeType *N,
                                  const ValueEnumerator &VE,
                                  BitstreamWriter &Stream,
                                  SmallVectorImpl<uint64_t> &Record,
@@ -892,30 +902,30 @@ static void WriteMDCompositeType(const MDCompositeType *N,
   Record.push_back(N->getAlignInBits());
   Record.push_back(N->getOffsetInBits());
   Record.push_back(N->getFlags());
-  Record.push_back(VE.getMetadataOrNullID(N->getElements()));
+  Record.push_back(VE.getMetadataOrNullID(N->getElements().get()));
   Record.push_back(N->getRuntimeLang());
   Record.push_back(VE.getMetadataOrNullID(N->getVTableHolder()));
-  Record.push_back(VE.getMetadataOrNullID(N->getTemplateParams()));
+  Record.push_back(VE.getMetadataOrNullID(N->getTemplateParams().get()));
   Record.push_back(VE.getMetadataOrNullID(N->getRawIdentifier()));
 
   Stream.EmitRecord(bitc::METADATA_COMPOSITE_TYPE, Record, Abbrev);
   Record.clear();
 }
 
-static void WriteMDSubroutineType(const MDSubroutineType *N,
+static void WriteDISubroutineType(const DISubroutineType *N,
                                   const ValueEnumerator &VE,
                                   BitstreamWriter &Stream,
                                   SmallVectorImpl<uint64_t> &Record,
                                   unsigned Abbrev) {
   Record.push_back(N->isDistinct());
   Record.push_back(N->getFlags());
-  Record.push_back(VE.getMetadataOrNullID(N->getTypeArray()));
+  Record.push_back(VE.getMetadataOrNullID(N->getTypeArray().get()));
 
   Stream.EmitRecord(bitc::METADATA_SUBROUTINE_TYPE, Record, Abbrev);
   Record.clear();
 }
 
-static void WriteMDFile(const MDFile *N, const ValueEnumerator &VE,
+static void WriteDIFile(const DIFile *N, const ValueEnumerator &VE,
                         BitstreamWriter &Stream,
                         SmallVectorImpl<uint64_t> &Record, unsigned Abbrev) {
   Record.push_back(N->isDistinct());
@@ -926,7 +936,7 @@ static void WriteMDFile(const MDFile *N, const ValueEnumerator &VE,
   Record.clear();
 }
 
-static void WriteMDCompileUnit(const MDCompileUnit *N,
+static void WriteDICompileUnit(const DICompileUnit *N,
                                const ValueEnumerator &VE,
                                BitstreamWriter &Stream,
                                SmallVectorImpl<uint64_t> &Record,
@@ -940,21 +950,21 @@ static void WriteMDCompileUnit(const MDCompileUnit *N,
   Record.push_back(N->getRuntimeVersion());
   Record.push_back(VE.getMetadataOrNullID(N->getRawSplitDebugFilename()));
   Record.push_back(N->getEmissionKind());
-  Record.push_back(VE.getMetadataOrNullID(N->getEnumTypes()));
-  Record.push_back(VE.getMetadataOrNullID(N->getRetainedTypes()));
-  Record.push_back(VE.getMetadataOrNullID(N->getSubprograms()));
-  Record.push_back(VE.getMetadataOrNullID(N->getGlobalVariables()));
-  Record.push_back(VE.getMetadataOrNullID(N->getImportedEntities()));
+  Record.push_back(VE.getMetadataOrNullID(N->getEnumTypes().get()));
+  Record.push_back(VE.getMetadataOrNullID(N->getRetainedTypes().get()));
+  Record.push_back(VE.getMetadataOrNullID(N->getSubprograms().get()));
+  Record.push_back(VE.getMetadataOrNullID(N->getGlobalVariables().get()));
+  Record.push_back(VE.getMetadataOrNullID(N->getImportedEntities().get()));
+  Record.push_back(N->getDWOId());
 
   Stream.EmitRecord(bitc::METADATA_COMPILE_UNIT, Record, Abbrev);
   Record.clear();
 }
 
-static void WriteMDSubprogram(const MDSubprogram *N,
-                               const ValueEnumerator &VE,
-                               BitstreamWriter &Stream,
-                               SmallVectorImpl<uint64_t> &Record,
-                               unsigned Abbrev) {
+static void WriteDISubprogram(const DISubprogram *N, const ValueEnumerator &VE,
+                              BitstreamWriter &Stream,
+                              SmallVectorImpl<uint64_t> &Record,
+                              unsigned Abbrev) {
   Record.push_back(N->isDistinct());
   Record.push_back(VE.getMetadataOrNullID(N->getScope()));
   Record.push_back(VE.getMetadataOrNullID(N->getRawName()));
@@ -970,20 +980,20 @@ static void WriteMDSubprogram(const MDSubprogram *N,
   Record.push_back(N->getVirtualIndex());
   Record.push_back(N->getFlags());
   Record.push_back(N->isOptimized());
-  Record.push_back(VE.getMetadataOrNullID(N->getFunction()));
-  Record.push_back(VE.getMetadataOrNullID(N->getTemplateParams()));
+  Record.push_back(VE.getMetadataOrNullID(N->getRawFunction()));
+  Record.push_back(VE.getMetadataOrNullID(N->getTemplateParams().get()));
   Record.push_back(VE.getMetadataOrNullID(N->getDeclaration()));
-  Record.push_back(VE.getMetadataOrNullID(N->getVariables()));
+  Record.push_back(VE.getMetadataOrNullID(N->getVariables().get()));
 
   Stream.EmitRecord(bitc::METADATA_SUBPROGRAM, Record, Abbrev);
   Record.clear();
 }
 
-static void WriteMDLexicalBlock(const MDLexicalBlock *N,
-                               const ValueEnumerator &VE,
-                               BitstreamWriter &Stream,
-                               SmallVectorImpl<uint64_t> &Record,
-                               unsigned Abbrev) {
+static void WriteDILexicalBlock(const DILexicalBlock *N,
+                                const ValueEnumerator &VE,
+                                BitstreamWriter &Stream,
+                                SmallVectorImpl<uint64_t> &Record,
+                                unsigned Abbrev) {
   Record.push_back(N->isDistinct());
   Record.push_back(VE.getMetadataOrNullID(N->getScope()));
   Record.push_back(VE.getMetadataOrNullID(N->getFile()));
@@ -994,7 +1004,7 @@ static void WriteMDLexicalBlock(const MDLexicalBlock *N,
   Record.clear();
 }
 
-static void WriteMDLexicalBlockFile(const MDLexicalBlockFile *N,
+static void WriteDILexicalBlockFile(const DILexicalBlockFile *N,
                                     const ValueEnumerator &VE,
                                     BitstreamWriter &Stream,
                                     SmallVectorImpl<uint64_t> &Record,
@@ -1008,7 +1018,7 @@ static void WriteMDLexicalBlockFile(const MDLexicalBlockFile *N,
   Record.clear();
 }
 
-static void WriteMDNamespace(const MDNamespace *N, const ValueEnumerator &VE,
+static void WriteDINamespace(const DINamespace *N, const ValueEnumerator &VE,
                              BitstreamWriter &Stream,
                              SmallVectorImpl<uint64_t> &Record,
                              unsigned Abbrev) {
@@ -1022,7 +1032,18 @@ static void WriteMDNamespace(const MDNamespace *N, const ValueEnumerator &VE,
   Record.clear();
 }
 
-static void WriteMDTemplateTypeParameter(const MDTemplateTypeParameter *N,
+static void WriteDIModule(const DIModule *N, const ValueEnumerator &VE,
+                          BitstreamWriter &Stream,
+                          SmallVectorImpl<uint64_t> &Record, unsigned Abbrev) {
+  Record.push_back(N->isDistinct());
+  for (auto &I : N->operands())
+    Record.push_back(VE.getMetadataOrNullID(I));
+
+  Stream.EmitRecord(bitc::METADATA_MODULE, Record, Abbrev);
+  Record.clear();
+}
+
+static void WriteDITemplateTypeParameter(const DITemplateTypeParameter *N,
                                          const ValueEnumerator &VE,
                                          BitstreamWriter &Stream,
                                          SmallVectorImpl<uint64_t> &Record,
@@ -1035,7 +1056,7 @@ static void WriteMDTemplateTypeParameter(const MDTemplateTypeParameter *N,
   Record.clear();
 }
 
-static void WriteMDTemplateValueParameter(const MDTemplateValueParameter *N,
+static void WriteDITemplateValueParameter(const DITemplateValueParameter *N,
                                           const ValueEnumerator &VE,
                                           BitstreamWriter &Stream,
                                           SmallVectorImpl<uint64_t> &Record,
@@ -1050,7 +1071,7 @@ static void WriteMDTemplateValueParameter(const MDTemplateValueParameter *N,
   Record.clear();
 }
 
-static void WriteMDGlobalVariable(const MDGlobalVariable *N,
+static void WriteDIGlobalVariable(const DIGlobalVariable *N,
                                   const ValueEnumerator &VE,
                                   BitstreamWriter &Stream,
                                   SmallVectorImpl<uint64_t> &Record,
@@ -1064,14 +1085,14 @@ static void WriteMDGlobalVariable(const MDGlobalVariable *N,
   Record.push_back(VE.getMetadataOrNullID(N->getType()));
   Record.push_back(N->isLocalToUnit());
   Record.push_back(N->isDefinition());
-  Record.push_back(VE.getMetadataOrNullID(N->getVariable()));
+  Record.push_back(VE.getMetadataOrNullID(N->getRawVariable()));
   Record.push_back(VE.getMetadataOrNullID(N->getStaticDataMemberDeclaration()));
 
   Stream.EmitRecord(bitc::METADATA_GLOBAL_VAR, Record, Abbrev);
   Record.clear();
 }
 
-static void WriteMDLocalVariable(const MDLocalVariable *N,
+static void WriteDILocalVariable(const DILocalVariable *N,
                                  const ValueEnumerator &VE,
                                  BitstreamWriter &Stream,
                                  SmallVectorImpl<uint64_t> &Record,
@@ -1085,13 +1106,12 @@ static void WriteMDLocalVariable(const MDLocalVariable *N,
   Record.push_back(VE.getMetadataOrNullID(N->getType()));
   Record.push_back(N->getArg());
   Record.push_back(N->getFlags());
-  Record.push_back(VE.getMetadataOrNullID(N->getInlinedAt()));
 
   Stream.EmitRecord(bitc::METADATA_LOCAL_VAR, Record, Abbrev);
   Record.clear();
 }
 
-static void WriteMDExpression(const MDExpression *N, const ValueEnumerator &,
+static void WriteDIExpression(const DIExpression *N, const ValueEnumerator &,
                               BitstreamWriter &Stream,
                               SmallVectorImpl<uint64_t> &Record,
                               unsigned Abbrev) {
@@ -1104,11 +1124,11 @@ static void WriteMDExpression(const MDExpression *N, const ValueEnumerator &,
   Record.clear();
 }
 
-static void WriteMDObjCProperty(const MDObjCProperty *N,
-                                 const ValueEnumerator &VE,
-                                 BitstreamWriter &Stream,
-                                 SmallVectorImpl<uint64_t> &Record,
-                                 unsigned Abbrev) {
+static void WriteDIObjCProperty(const DIObjCProperty *N,
+                                const ValueEnumerator &VE,
+                                BitstreamWriter &Stream,
+                                SmallVectorImpl<uint64_t> &Record,
+                                unsigned Abbrev) {
   Record.push_back(N->isDistinct());
   Record.push_back(VE.getMetadataOrNullID(N->getRawName()));
   Record.push_back(VE.getMetadataOrNullID(N->getFile()));
@@ -1122,7 +1142,7 @@ static void WriteMDObjCProperty(const MDObjCProperty *N,
   Record.clear();
 }
 
-static void WriteMDImportedEntity(const MDImportedEntity *N,
+static void WriteDIImportedEntity(const DIImportedEntity *N,
                                   const ValueEnumerator &VE,
                                   BitstreamWriter &Stream,
                                   SmallVectorImpl<uint64_t> &Record,
@@ -1161,7 +1181,7 @@ static void WriteModuleMetadata(const Module *M,
 #define HANDLE_MDNODE_LEAF(CLASS) unsigned CLASS##Abbrev = 0;
 #include "llvm/IR/Metadata.def"
 
-  if (VE.hasMDLocation()) {
+  if (VE.hasDILocation()) {
     // Abbrev for METADATA_LOCATION.
     //
     // Assume the column is usually under 128, and always output the inlined-at
@@ -1173,10 +1193,10 @@ static void WriteModuleMetadata(const Module *M,
     Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8));
     Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));
     Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));
-    MDLocationAbbrev = Stream.EmitAbbrev(Abbv);
+    DILocationAbbrev = Stream.EmitAbbrev(Abbv);
   }
 
-  if (VE.hasGenericDebugNode()) {
+  if (VE.hasGenericDINode()) {
     // Abbrev for METADATA_GENERIC_DEBUG.
     //
     // Assume the column is usually under 128, and always output the inlined-at
@@ -1189,7 +1209,7 @@ static void WriteModuleMetadata(const Module *M,
     Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));
     Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Array));
     Abbv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));
-    GenericDebugNodeAbbrev = Stream.EmitAbbrev(Abbv);
+    GenericDINodeAbbrev = Stream.EmitAbbrev(Abbv);
   }
 
   unsigned NameAbbrev = 0;
@@ -1278,6 +1298,15 @@ static void WriteMetadataAttachment(const Function &F,
   // Write metadata attachments
   // METADATA_ATTACHMENT - [m x [value, [n x [id, mdnode]]]
   SmallVector<std::pair<unsigned, MDNode *>, 4> MDs;
+  F.getAllMetadata(MDs);
+  if (!MDs.empty()) {
+    for (const auto &I : MDs) {
+      Record.push_back(I.first);
+      Record.push_back(VE.getMetadataID(I.second));
+    }
+    Stream.EmitRecord(bitc::METADATA_ATTACHMENT, Record, 0);
+    Record.clear();
+  }
 
   for (Function::const_iterator BB = F.begin(), E = F.end(); BB != E; ++BB)
     for (BasicBlock::const_iterator I = BB->begin(), E = BB->end();
@@ -1501,8 +1530,8 @@ static void WriteConstants(unsigned FirstVal, unsigned LastVal,
     } else if (isa<ConstantArray>(C) || isa<ConstantStruct>(C) ||
                isa<ConstantVector>(C)) {
       Code = bitc::CST_CODE_AGGREGATE;
-      for (unsigned i = 0, e = C->getNumOperands(); i != e; ++i)
-        Record.push_back(VE.getValueID(C->getOperand(i)));
+      for (const Value *Op : C->operands())
+        Record.push_back(VE.getValueID(Op));
       AbbrevToUse = AggregateAbbrev;
     } else if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(C)) {
       switch (CE->getOpcode()) {
@@ -1789,15 +1818,15 @@ static void WriteInstruction(const Instruction &I, unsigned InstID,
 
   case Instruction::Invoke: {
     const InvokeInst *II = cast<InvokeInst>(&I);
-    const Value *Callee(II->getCalledValue());
-    PointerType *PTy = cast<PointerType>(Callee->getType());
-    FunctionType *FTy = cast<FunctionType>(PTy->getElementType());
+    const Value *Callee = II->getCalledValue();
+    FunctionType *FTy = II->getFunctionType();
     Code = bitc::FUNC_CODE_INST_INVOKE;
 
     Vals.push_back(VE.getAttributeID(II->getAttributes()));
-    Vals.push_back(II->getCallingConv());
+    Vals.push_back(II->getCallingConv() | 1 << 13);
     Vals.push_back(VE.getValueID(II->getNormalDest()));
     Vals.push_back(VE.getValueID(II->getUnwindDest()));
+    Vals.push_back(VE.getTypeID(FTy));
     PushValueAndType(Callee, InstID, Vals, VE);
 
     // Emit value #'s for the fixed parameters.
@@ -1843,7 +1872,6 @@ static void WriteInstruction(const Instruction &I, unsigned InstID,
     const LandingPadInst &LP = cast<LandingPadInst>(I);
     Code = bitc::FUNC_CODE_INST_LANDINGPAD;
     Vals.push_back(VE.getTypeID(LP.getType()));
-    PushValueAndType(LP.getPersonalityFn(), InstID, Vals, VE);
     Vals.push_back(LP.isCleanup());
     Vals.push_back(LP.getNumClauses());
     for (unsigned I = 0, E = LP.getNumClauses(); I != E; ++I) {
@@ -1858,15 +1886,16 @@ static void WriteInstruction(const Instruction &I, unsigned InstID,
 
   case Instruction::Alloca: {
     Code = bitc::FUNC_CODE_INST_ALLOCA;
-    Vals.push_back(VE.getTypeID(I.getType()));
+    const AllocaInst &AI = cast<AllocaInst>(I);
+    Vals.push_back(VE.getTypeID(AI.getAllocatedType()));
     Vals.push_back(VE.getTypeID(I.getOperand(0)->getType()));
     Vals.push_back(VE.getValueID(I.getOperand(0))); // size.
-    const AllocaInst &AI = cast<AllocaInst>(I);
     unsigned AlignRecord = Log2_32(AI.getAlignment()) + 1;
     assert(Log2_32(Value::MaximumAlignment) + 1 < 1 << 5 &&
            "not enough bits for maximum alignment");
     assert(AlignRecord < 1 << 5 && "alignment greater than 1 << 64");
     AlignRecord |= AI.isUsedWithInAlloca() << 5;
+    AlignRecord |= 1 << 6;
     Vals.push_back(AlignRecord);
     break;
   }
@@ -1894,7 +1923,7 @@ static void WriteInstruction(const Instruction &I, unsigned InstID,
     else
       Code = bitc::FUNC_CODE_INST_STORE;
     PushValueAndType(I.getOperand(1), InstID, Vals, VE);  // ptrty + ptr
-    pushValue(I.getOperand(0), InstID, Vals, VE);         // val.
+    PushValueAndType(I.getOperand(0), InstID, Vals, VE);  // valty + val
     Vals.push_back(Log2_32(cast<StoreInst>(I).getAlignment())+1);
     Vals.push_back(cast<StoreInst>(I).isVolatile());
     if (cast<StoreInst>(I).isAtomic()) {
@@ -1905,7 +1934,7 @@ static void WriteInstruction(const Instruction &I, unsigned InstID,
   case Instruction::AtomicCmpXchg:
     Code = bitc::FUNC_CODE_INST_CMPXCHG;
     PushValueAndType(I.getOperand(0), InstID, Vals, VE);  // ptrty + ptr
-    pushValue(I.getOperand(1), InstID, Vals, VE);         // cmp.
+    PushValueAndType(I.getOperand(1), InstID, Vals, VE);         // cmp.
     pushValue(I.getOperand(2), InstID, Vals, VE);         // newval.
     Vals.push_back(cast<AtomicCmpXchgInst>(I).isVolatile());
     Vals.push_back(GetEncodedOrdering(
@@ -1934,14 +1963,14 @@ static void WriteInstruction(const Instruction &I, unsigned InstID,
     break;
   case Instruction::Call: {
     const CallInst &CI = cast<CallInst>(I);
-    PointerType *PTy = cast<PointerType>(CI.getCalledValue()->getType());
-    FunctionType *FTy = cast<FunctionType>(PTy->getElementType());
+    FunctionType *FTy = CI.getFunctionType();
 
     Code = bitc::FUNC_CODE_INST_CALL;
 
     Vals.push_back(VE.getAttributeID(CI.getAttributes()));
     Vals.push_back((CI.getCallingConv() << 1) | unsigned(CI.isTailCall()) |
-                   unsigned(CI.isMustTailCall()) << 14);
+                   unsigned(CI.isMustTailCall()) << 14 | 1 << 15);
+    Vals.push_back(VE.getTypeID(FTy));
     PushValueAndType(CI.getCalledValue(), InstID, Vals, VE);  // Callee
 
     // Emit value #'s for the fixed parameters.
@@ -2047,6 +2076,9 @@ static void WriteUseList(ValueEnumerator &VE, UseListOrder &&Order,
 
 static void WriteUseListBlock(const Function *F, ValueEnumerator &VE,
                               BitstreamWriter &Stream) {
+  assert(VE.shouldPreserveUseListOrder() &&
+         "Expected to be preserving use-list order");
+
   auto hasMore = [&]() {
     return !VE.UseListOrders.empty() && VE.UseListOrders.back().F == F;
   };
@@ -2087,9 +2119,9 @@ static void WriteFunction(const Function &F, ValueEnumerator &VE,
   // Keep a running idea of what the instruction ID is.
   unsigned InstID = CstEnd;
 
-  bool NeedsMetadataAttachment = false;
+  bool NeedsMetadataAttachment = F.hasMetadata();
 
-  DebugLoc LastDL;
+  DILocation *LastDL = nullptr;
 
   // Finally, emit all the instructions, in order.
   for (Function::const_iterator BB = F.begin(), E = F.end(); BB != E; ++BB)
@@ -2104,26 +2136,24 @@ static void WriteFunction(const Function &F, ValueEnumerator &VE,
       NeedsMetadataAttachment |= I->hasMetadataOtherThanDebugLoc();
 
       // If the instruction has a debug location, emit it.
-      DebugLoc DL = I->getDebugLoc();
-      if (DL.isUnknown()) {
-        // nothing todo.
-      } else if (DL == LastDL) {
+      DILocation *DL = I->getDebugLoc();
+      if (!DL)
+        continue;
+
+      if (DL == LastDL) {
         // Just repeat the same debug loc as last time.
         Stream.EmitRecord(bitc::FUNC_CODE_DEBUG_LOC_AGAIN, Vals);
-      } else {
-        MDNode *Scope, *IA;
-        DL.getScopeAndInlinedAt(Scope, IA, I->getContext());
-        assert(Scope && "Expected valid scope");
-
-        Vals.push_back(DL.getLine());
-        Vals.push_back(DL.getCol());
-        Vals.push_back(VE.getMetadataOrNullID(Scope));
-        Vals.push_back(VE.getMetadataOrNullID(IA));
-        Stream.EmitRecord(bitc::FUNC_CODE_DEBUG_LOC, Vals);
-        Vals.clear();
-
-        LastDL = DL;
+        continue;
       }
+
+      Vals.push_back(DL->getLine());
+      Vals.push_back(DL->getColumn());
+      Vals.push_back(VE.getMetadataOrNullID(DL->getScope()));
+      Vals.push_back(VE.getMetadataOrNullID(DL->getInlinedAt()));
+      Stream.EmitRecord(bitc::FUNC_CODE_DEBUG_LOC, Vals);
+      Vals.clear();
+
+      LastDL = DL;
     }
 
   // Emit names for all the instructions etc.
@@ -2131,7 +2161,7 @@ static void WriteFunction(const Function &F, ValueEnumerator &VE,
 
   if (NeedsMetadataAttachment)
     WriteMetadataAttachment(F, VE, Stream);
-  if (shouldPreserveBitcodeUseListOrder())
+  if (VE.shouldPreserveUseListOrder())
     WriteUseListBlock(&F, VE, Stream);
   VE.purgeFunction();
   Stream.ExitBlock();
@@ -2313,7 +2343,8 @@ static void WriteBlockInfo(const ValueEnumerator &VE, BitstreamWriter &Stream) {
 }
 
 /// WriteModule - Emit the specified module to the bitstream.
-static void WriteModule(const Module *M, BitstreamWriter &Stream) {
+static void WriteModule(const Module *M, BitstreamWriter &Stream,
+                        bool ShouldPreserveUseListOrder) {
   Stream.EnterSubblock(bitc::MODULE_BLOCK_ID, 3);
 
   SmallVector<unsigned, 1> Vals;
@@ -2322,7 +2353,7 @@ static void WriteModule(const Module *M, BitstreamWriter &Stream) {
   Stream.EmitRecord(bitc::MODULE_CODE_VERSION, Vals);
 
   // Analyze the module, enumerating globals, functions, etc.
-  ValueEnumerator VE(*M);
+  ValueEnumerator VE(*M, ShouldPreserveUseListOrder);
 
   // Emit blockinfo, which defines the standard abbreviations etc.
   WriteBlockInfo(VE, Stream);
@@ -2355,7 +2386,7 @@ static void WriteModule(const Module *M, BitstreamWriter &Stream) {
   WriteValueSymbolTable(M->getValueSymbolTable(), VE, Stream);
 
   // Emit module-level use-lists.
-  if (shouldPreserveBitcodeUseListOrder())
+  if (VE.shouldPreserveUseListOrder())
     WriteUseListBlock(nullptr, VE, Stream);
 
   // Emit function bodies.
@@ -2386,10 +2417,7 @@ enum {
 
 static void WriteInt32ToBuffer(uint32_t Value, SmallVectorImpl<char> &Buffer,
                                uint32_t &Position) {
-  Buffer[Position + 0] = (unsigned char) (Value >>  0);
-  Buffer[Position + 1] = (unsigned char) (Value >>  8);
-  Buffer[Position + 2] = (unsigned char) (Value >> 16);
-  Buffer[Position + 3] = (unsigned char) (Value >> 24);
+  support::endian::write32le(&Buffer[Position], Value);
   Position += 4;
 }
 
@@ -2441,7 +2469,8 @@ static void EmitDarwinBCHeaderAndTrailer(SmallVectorImpl<char> &Buffer,
 
 /// WriteBitcodeToFile - Write the specified module to the specified output
 /// stream.
-void llvm::WriteBitcodeToFile(const Module *M, raw_ostream &Out) {
+void llvm::WriteBitcodeToFile(const Module *M, raw_ostream &Out,
+                              bool ShouldPreserveUseListOrder) {
   SmallVector<char, 0> Buffer;
   Buffer.reserve(256*1024);
 
@@ -2464,7 +2493,7 @@ void llvm::WriteBitcodeToFile(const Module *M, raw_ostream &Out) {
     Stream.Emit(0xD, 4);
 
     // Emit the module.
-    WriteModule(M, Stream);
+    WriteModule(M, Stream, ShouldPreserveUseListOrder);
   }
 
   if (TT.isOSDarwin())

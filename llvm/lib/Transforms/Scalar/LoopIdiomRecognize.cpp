@@ -611,7 +611,9 @@ bool NclPopcountRecognize::recognize() {
 
 bool LoopIdiomRecognize::runOnCountableLoop() {
   const SCEV *BECount = SE->getBackedgeTakenCount(CurLoop);
-  if (isa<SCEVCouldNotCompute>(BECount)) return false;
+  assert(!isa<SCEVCouldNotCompute>(BECount) &&
+    "runOnCountableLoop() called on a loop without a predictable"
+    "backedge-taken count");
 
   // If this loop executes exactly one time, then it should be peeled, not
   // optimized by this pass.
@@ -637,13 +639,12 @@ bool LoopIdiomRecognize::runOnCountableLoop() {
 
   bool MadeChange = false;
   // Scan all the blocks in the loop that are not in subloops.
-  for (Loop::block_iterator BI = CurLoop->block_begin(),
-         E = CurLoop->block_end(); BI != E; ++BI) {
+  for (auto *BB : CurLoop->getBlocks()) {
     // Ignore blocks in subloops.
-    if (LI.getLoopFor(*BI) != CurLoop)
+    if (LI.getLoopFor(BB) != CurLoop)
       continue;
 
-    MadeChange |= runOnLoopBlock(*BI, BECount, ExitBlocks);
+    MadeChange |= runOnLoopBlock(BB, BECount, ExitBlocks);
   }
   return MadeChange;
 }
@@ -832,7 +833,7 @@ static bool mayLoopAccessLocation(Value *Ptr,AliasAnalysis::ModRefResult Access,
   // Get the location that may be stored across the loop.  Since the access is
   // strided positively through memory, we say that the modified location starts
   // at the pointer and has infinite size.
-  uint64_t AccessSize = AliasAnalysis::UnknownSize;
+  uint64_t AccessSize = MemoryLocation::UnknownSize;
 
   // If the loop iterates a fixed number of times, we can refine the access size
   // to be exactly the size of the memset, which is (BECount+1)*StoreSize
@@ -843,7 +844,7 @@ static bool mayLoopAccessLocation(Value *Ptr,AliasAnalysis::ModRefResult Access,
   // operand in the store.  Store to &A[i] of 100 will always return may alias
   // with store of &A[100], we need to StoreLoc to be "A" with size of 100,
   // which will then no-alias a store to &A[100].
-  AliasAnalysis::Location StoreLoc(Ptr, AccessSize);
+  MemoryLocation StoreLoc(Ptr, AccessSize);
 
   for (Loop::block_iterator BI = L->block_begin(), E = L->block_end(); BI != E;
        ++BI)
@@ -1000,7 +1001,7 @@ processLoopStridedStore(Value *DestPtr, unsigned StoreSize,
     GV->setUnnamedAddr(true); // Ok to merge these.
     GV->setAlignment(16);
     Value *PatternPtr = ConstantExpr::getBitCast(GV, Int8PtrTy);
-    NewCall = Builder.CreateCall3(MSP, BasePtr, PatternPtr, NumBytes);
+    NewCall = Builder.CreateCall(MSP, {BasePtr, PatternPtr, NumBytes});
   }
 
   DEBUG(dbgs() << "  Formed memset: " << *NewCall << "\n"

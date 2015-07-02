@@ -9,7 +9,7 @@ class CStringsTestCase(TestBase):
     
     mydir = TestBase.compute_mydir(__file__)
     
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Tests that C strings work as expected in expressions"""
@@ -34,7 +34,7 @@ class CStringsTestCase(TestBase):
 
         self.set_breakpoint(line_number('main.c', '// breakpoint 1'))
 
-        self.runCmd("process launch", RUN_SUCCEEDED)
+        self.runCmd("process launch", RUN_FAILED)
 
         self.expect("expression -- a[2]",
                     patterns = ["\((const )?char\) \$0 = 'c'"])

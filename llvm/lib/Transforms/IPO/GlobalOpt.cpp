@@ -564,6 +564,7 @@ static GlobalVariable *SRAGlobal(GlobalVariable *GV, const DataLayout &DL) {
     if (Val >= NewGlobals.size()) Val = 0; // Out of bound array access.
 
     Value *NewPtr = NewGlobals[Val];
+    Type *NewTy = NewGlobals[Val]->getValueType();
 
     // Form a shorter GEP if needed.
     if (GEP->getNumOperands() > 3) {
@@ -572,7 +573,8 @@ static GlobalVariable *SRAGlobal(GlobalVariable *GV, const DataLayout &DL) {
         Idxs.push_back(NullInt);
         for (unsigned i = 3, e = CE->getNumOperands(); i != e; ++i)
           Idxs.push_back(CE->getOperand(i));
-        NewPtr = ConstantExpr::getGetElementPtr(cast<Constant>(NewPtr), Idxs);
+        NewPtr =
+            ConstantExpr::getGetElementPtr(NewTy, cast<Constant>(NewPtr), Idxs);
       } else {
         GetElementPtrInst *GEPI = cast<GetElementPtrInst>(GEP);
         SmallVector<Value*, 8> Idxs;
@@ -580,8 +582,7 @@ static GlobalVariable *SRAGlobal(GlobalVariable *GV, const DataLayout &DL) {
         for (unsigned i = 3, e = GEPI->getNumOperands(); i != e; ++i)
           Idxs.push_back(GEPI->getOperand(i));
         NewPtr = GetElementPtrInst::Create(
-            NewPtr->getType()->getPointerElementType(), NewPtr, Idxs,
-            GEPI->getName() + "." + Twine(Val), GEPI);
+            NewTy, NewPtr, Idxs, GEPI->getName() + "." + Twine(Val), GEPI);
       }
     }
     GEP->replaceAllUsesWith(NewPtr);
@@ -721,8 +722,8 @@ static bool OptimizeAwayTrappingUsesOfValue(Value *V, Constant *NewV) {
         else
           break;
       if (Idxs.size() == GEPI->getNumOperands()-1)
-        Changed |= OptimizeAwayTrappingUsesOfValue(GEPI,
-                          ConstantExpr::getGetElementPtr(NewV, Idxs));
+        Changed |= OptimizeAwayTrappingUsesOfValue(
+            GEPI, ConstantExpr::getGetElementPtr(nullptr, NewV, Idxs));
       if (GEPI->use_empty()) {
         Changed = true;
         GEPI->eraseFromParent();
@@ -1999,11 +2000,9 @@ isSimpleEnoughValueToCommitHelper(Constant *C,
   // Aggregate values are safe if all their elements are.
   if (isa<ConstantArray>(C) || isa<ConstantStruct>(C) ||
       isa<ConstantVector>(C)) {
-    for (unsigned i = 0, e = C->getNumOperands(); i != e; ++i) {
-      Constant *Op = cast<Constant>(C->getOperand(i));
-      if (!isSimpleEnoughValueToCommit(Op, SimpleConstants, DL))
+    for (Value *Op : C->operands())
+      if (!isSimpleEnoughValueToCommit(cast<Constant>(Op), SimpleConstants, DL))
         return false;
-    }
     return true;
   }
 
@@ -2352,7 +2351,7 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
               Constant *IdxZero = ConstantInt::get(IdxTy, 0, false);
               Constant * const IdxList[] = {IdxZero, IdxZero};
 
-              Ptr = ConstantExpr::getGetElementPtr(Ptr, IdxList);
+              Ptr = ConstantExpr::getGetElementPtr(nullptr, Ptr, IdxList);
               if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Ptr))
                 Ptr = ConstantFoldConstantExpression(CE, DL, TLI);
 
@@ -2425,8 +2424,8 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
            i != e; ++i)
         GEPOps.push_back(getVal(*i));
       InstResult =
-        ConstantExpr::getGetElementPtr(P, GEPOps,
-                                       cast<GEPOperator>(GEP)->isInBounds());
+          ConstantExpr::getGetElementPtr(GEP->getSourceElementType(), P, GEPOps,
+                                         cast<GEPOperator>(GEP)->isInBounds());
       DEBUG(dbgs() << "Found a GEP! Simplifying: " << *InstResult
             << "\n");
     } else if (LoadInst *LI = dyn_cast<LoadInst>(CurInst)) {

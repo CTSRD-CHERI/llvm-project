@@ -12,14 +12,14 @@ class BreakpointIgnoreCountTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Exercise breakpoint ignore count with 'breakpoint set -i <count>'."""
         self.buildDsym()
         self.breakpoint_ignore_count()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_with_dsym_and_python_api(self):
@@ -59,7 +59,7 @@ class BreakpointIgnoreCountTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, 'main.c', self.line1, extra_options='-i 1', num_expected_locations=1, loc_exact=True)
 
         # Now run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The process should be stopped at this point.
         self.expect("process status", PROCESS_STOPPED,
@@ -79,7 +79,7 @@ class BreakpointIgnoreCountTestCase(TestBase):
 
         # continue -i 1 is the same as setting the ignore count to 1 again, try that:
         # Now run the program.
-        self.runCmd("process continue -i 1", RUN_SUCCEEDED)
+        self.runCmd("process continue -i 1", RUN_FAILED)
 
         # The process should be stopped at this point.
         self.expect("process status", PROCESS_STOPPED,

@@ -303,9 +303,12 @@ std::string ToolChain::ComputeLLVMTriple(const ArgList &Args,
     // Thumb2 is the default for V7 on Darwin.
     //
     // FIXME: Thumb should just be another -target-feaure, not in the triple.
-    StringRef Suffix = Triple.isOSBinFormatMachO()
-      ? tools::arm::getLLVMArchSuffixForARM(tools::arm::getARMCPUForMArch(Args, Triple))
-      : tools::arm::getLLVMArchSuffixForARM(tools::arm::getARMTargetCPU(Args, Triple));
+    std::string CPU = Triple.isOSBinFormatMachO()
+      ? tools::arm::getARMCPUForMArch(Args, Triple)
+      : tools::arm::getARMTargetCPU(Args, Triple);
+    StringRef Suffix = 
+      tools::arm::getLLVMArchSuffixForARM(CPU,
+                                          tools::arm::getARMArch(Args, Triple));
     bool ThumbDefault = Suffix.startswith("v6m") || Suffix.startswith("v7m") ||
       Suffix.startswith("v7em") ||
       (Suffix.startswith("v7") && getTriple().isOSBinFormatMachO());
@@ -478,3 +481,12 @@ bool ToolChain::AddFastMathRuntimeIfAvailable(const ArgList &Args,
   CmdArgs.push_back(Args.MakeArgString(Path));
   return true;
 }
+
+SanitizerMask ToolChain::getSupportedSanitizers() const {
+  // Return sanitizers which don't require runtime support and are not
+  // platform or architecture-dependent.
+  using namespace SanitizerKind;
+  return (Undefined & ~Vptr & ~Function) | CFI | CFICastStrict |
+         UnsignedIntegerOverflow | LocalBounds;
+}
+

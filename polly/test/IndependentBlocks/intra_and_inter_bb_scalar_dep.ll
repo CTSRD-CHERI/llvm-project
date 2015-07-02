@@ -1,7 +1,5 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -S < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -S < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array -S < %s | FileCheck %s -check-prefix=SCALARACCESS
-; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -disable-polly-intra-scop-scalar-to-array -S < %s | FileCheck %s -check-prefix=SCALARACCESS
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -S < %s | FileCheck %s -check-prefix=SCALARACCESS
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-independent -S < %s | FileCheck %s -check-prefix=SCALARACCESS
 
 ; void f(long A[], int N, int *init_ptr) {
 ;   long i, j;
@@ -16,14 +14,9 @@
 ; }
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128"
-target triple = "x86_64-unknown-linux-gnu"
 
 define void @f(i64* noalias %A, i64 %N, i64* noalias %init_ptr) nounwind {
 entry:
-
-; CHECK: entry
-; CHECK: %init.s2a = alloca i64
-; CHECK: br label %for.i
 
 ; SCALARACCESS-NOT: alloca
   br label %for.i
@@ -42,9 +35,6 @@ for.j:
   %indvar.j = phi i64 [ 0, %entry.next ], [ %indvar.j.next, %for.j ]
   %init_2 = load i64, i64* %init_ptr
   %init_sum = add i64 %init, %init_2
-; CHECK: %init_2 = load i64, i64* %init_ptr
-; CHECK: %init.loadarray = load i64, i64* %init.s2a
-; CHECK: %init_sum = add i64 %init.loadarray, %init_2
 
 ; The SCEV of %init_sum is (%init + %init_2). It is referring to both an
 ; UnknownValue in the same and in a different basic block. We want only the

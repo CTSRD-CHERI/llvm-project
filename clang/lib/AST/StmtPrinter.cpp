@@ -396,8 +396,9 @@ void StmtPrinter::VisitGCCAsmStmt(GCCAsmStmt *Node) {
     }
 
     VisitStringLiteral(Node->getOutputConstraintLiteral(i));
-    OS << " ";
+    OS << " (";
     Visit(Node->getOutputExpr(i));
+    OS << ")";
   }
 
   // Inputs
@@ -415,8 +416,9 @@ void StmtPrinter::VisitGCCAsmStmt(GCCAsmStmt *Node) {
     }
 
     VisitStringLiteral(Node->getInputConstraintLiteral(i));
-    OS << " ";
+    OS << " (";
     Visit(Node->getInputExpr(i));
+    OS << ")";
   }
 
   // Clobbers
@@ -797,6 +799,17 @@ void OMPClausePrinter::VisitOMPFlushClause(OMPFlushClause *Node) {
     OS << ")";
   }
 }
+
+void OMPClausePrinter::VisitOMPDependClause(OMPDependClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "depend(";
+    OS << getOpenMPSimpleClauseTypeName(Node->getClauseKind(),
+                                        Node->getDependencyKind())
+       << " :";
+    VisitOMPClauseList(Node, ' ');
+    OS << ")";
+  }
+}
 }
 
 //===----------------------------------------------------------------------===//
@@ -905,6 +918,11 @@ void StmtPrinter::VisitOMPBarrierDirective(OMPBarrierDirective *Node) {
 
 void StmtPrinter::VisitOMPTaskwaitDirective(OMPTaskwaitDirective *Node) {
   Indent() << "#pragma omp taskwait";
+  PrintOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTaskgroupDirective(OMPTaskgroupDirective *Node) {
+  Indent() << "#pragma omp taskgroup";
   PrintOMPExecutableDirective(Node);
 }
 
@@ -1395,13 +1413,16 @@ void StmtPrinter::VisitParenListExpr(ParenListExpr* Node) {
 }
 
 void StmtPrinter::VisitDesignatedInitExpr(DesignatedInitExpr *Node) {
+  bool NeedsEquals = true;
   for (DesignatedInitExpr::designators_iterator D = Node->designators_begin(),
                       DEnd = Node->designators_end();
        D != DEnd; ++D) {
     if (D->isFieldDesignator()) {
       if (D->getDotLoc().isInvalid()) {
-        if (IdentifierInfo *II = D->getFieldName())
+        if (IdentifierInfo *II = D->getFieldName()) {
           OS << II->getName() << ":";
+          NeedsEquals = false;
+        }
       } else {
         OS << "." << D->getFieldName()->getName();
       }
@@ -1418,8 +1439,27 @@ void StmtPrinter::VisitDesignatedInitExpr(DesignatedInitExpr *Node) {
     }
   }
 
-  OS << " = ";
+  if (NeedsEquals)
+    OS << " = ";
+  else
+    OS << " ";
   PrintExpr(Node->getInit());
+}
+
+void StmtPrinter::VisitDesignatedInitUpdateExpr(
+    DesignatedInitUpdateExpr *Node) {
+  OS << "{";
+  OS << "/*base*/";
+  PrintExpr(Node->getBase());
+  OS << ", ";
+
+  OS << "/*updater*/";
+  PrintExpr(Node->getUpdater());
+  OS << "}";
+}
+
+void StmtPrinter::VisitNoInitExpr(NoInitExpr *Node) {
+  OS << "/*no init*/";
 }
 
 void StmtPrinter::VisitImplicitValueInitExpr(ImplicitValueInitExpr *Node) {
@@ -1622,6 +1662,15 @@ void StmtPrinter::VisitUserDefinedLiteral(UserDefinedLiteral *Node) {
     const TemplateArgumentList *Args =
       cast<FunctionDecl>(DRE->getDecl())->getTemplateSpecializationArgs();
     assert(Args);
+
+    if (Args->size() != 1) {
+      OS << "operator \"\" " << Node->getUDSuffix()->getName();
+      TemplateSpecializationType::PrintTemplateArgumentList(
+          OS, Args->data(), Args->size(), Policy);
+      OS << "()";
+      return;
+    }
+
     const TemplateArgument &Pack = Args->get(0);
     for (const auto &P : Pack.pack_elements()) {
       char C = (char)P.getAsIntegral().getZExtValue();
@@ -1749,7 +1798,7 @@ void StmtPrinter::VisitLambdaExpr(LambdaExpr *Node) {
       break;
 
     case LCK_ByRef:
-      if (Node->getCaptureDefault() != LCD_ByRef || C->isInitCapture())
+      if (Node->getCaptureDefault() != LCD_ByRef || Node->isInitCapture(C))
         OS << '&';
       OS << C->getCapturedVar()->getName();
       break;
@@ -1761,7 +1810,7 @@ void StmtPrinter::VisitLambdaExpr(LambdaExpr *Node) {
       llvm_unreachable("VLA type in explicit captures.");
     }
 
-    if (C->isInitCapture())
+    if (Node->isInitCapture(C))
       PrintExpr(C->getCapturedVar()->getInit());
   }
   OS << ']';

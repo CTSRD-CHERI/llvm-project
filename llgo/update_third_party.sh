@@ -1,17 +1,25 @@
 #!/bin/sh -e
 
+scriptpath=$(readlink -f "$0")
+llgosrcdir=$(dirname "$scriptpath")
+cd $llgosrcdir
+
 gofrontendrepo=https://code.google.com/p/gofrontend
-gofrontendrev=0fde0b6a7eb2
+gofrontendrev=15a24202fa42
 
 gccrepo=svn://gcc.gnu.org/svn/gcc/trunk
-gccrev=216268
+gccrev=219477
 
 gotoolsrepo=https://go.googlesource.com/tools
-gotoolsrev=47f2109c640e97025f36c98610bd9782e815012e
+gotoolsrev=d4e70101500b43ffe705d4c45e50dd4f1c8e3b2e
+
+linerrepo=https://github.com/peterh/liner.git
+linerrev=1bb0d1c1a25ed393d8feb09bab039b2b1b1fbced
 
 tempdir=$(mktemp -d /tmp/update_third_party.XXXXXX)
 gofrontenddir=$tempdir/gofrontend
 gotoolsdir=$tempdir/go.tools
+linerdir=third_party/liner
 
 rm -rf third_party
 mkdir -p third_party/gofrontend third_party/gotools
@@ -51,6 +59,7 @@ cp include/dwarf2.h third_party/gofrontend/include/
 cp include/filenames.h third_party/gofrontend/include/
 cp include/unwind-pe.h third_party/gofrontend/libgcc/
 
+# Note: this expects the llgo source tree to be located at llvm/tools/llgo.
 cp ../../autoconf/config.guess third_party/gofrontend/
 cp ../../autoconf/config.sub third_party/gofrontend/
 
@@ -63,10 +72,14 @@ rm \
   third_party/gofrontend/libffi/ChangeLog \
   third_party/gofrontend/libffi/doc/libffi.texi \
   third_party/gofrontend/libffi/msvcc.sh \
-  third_party/gofrontend/libffi/testsuite/lib/libffi.exp \
+  third_party/gofrontend/libffi/testsuite/config/default.exp \
   third_party/gofrontend/libffi/testsuite/libffi.call/call.exp \
+  third_party/gofrontend/libffi/testsuite/libffi.complex/complex.exp \
+  third_party/gofrontend/libffi/testsuite/libffi.go/go.exp \
   third_party/gofrontend/libffi/testsuite/libffi.special/special.exp \
-  third_party/gofrontend/libffi/testsuite/config/default.exp
+  third_party/gofrontend/libffi/testsuite/lib/libffi.exp \
+  third_party/gofrontend/libffi/testsuite/lib/target-libpath.exp \
+  third_party/gofrontend/libffi/testsuite/lib/wrapper.exp
 
 # The build requires these files to exist.
 touch \
@@ -84,10 +97,10 @@ cp -r $gotoolsdir/LICENSE $gotoolsdir/go third_party/gotools
 find third_party/gotools -name '*.go' | xargs sed -i -e \
   's,"golang.org/x/tools/,"llvm.org/llgo/third_party/gotools/,g'
 
-# Until the version skew between the "go" tool and the compiler is resolved,
-# we patch out Go 1.4 specific code in go.tools.
-sed -i -e '/go1\.4/ d' third_party/gotools/go/exact/go13.go
-rm third_party/gotools/go/exact/go14.go
+# --------------------- peterh/liner -----------------
+
+git clone $linerrepo $linerdir
+(cd $linerdir && git checkout $linerrev && rm -rf .git)
 
 # --------------------- license check ---------------------
 

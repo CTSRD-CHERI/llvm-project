@@ -8,7 +8,7 @@ import lldb
 from lldbtest import *
 import lldbutil
 
-@unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+@skipUnlessDarwin
 class SetDataTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
@@ -27,7 +27,7 @@ class SetDataTestCase(TestBase):
         self.runCmd("br s -p First");
         self.runCmd("br s -p Second");
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         self.expect("p myFoo.x", VARIABLES_DISPLAYED_CORRECTLY,
             substrs = ['2'])

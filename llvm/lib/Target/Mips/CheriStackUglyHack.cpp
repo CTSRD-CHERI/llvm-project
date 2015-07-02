@@ -258,7 +258,7 @@ class CheriStackHack : public FunctionPass,
         PointerType *CapTy = PointerType::get(AllocationTy, 200);
         InitialBitCast = B.CreateBitCast(AI, Type::getInt8PtrTy(C, 0));
         CastToCap = B.CreateCall(CastFn, InitialBitCast);
-        Value *AllocaAsCap = B.CreateCall2(SetLenFun, CastToCap, Size);
+        Value *AllocaAsCap = B.CreateCall(SetLenFun, {CastToCap, Size});
         AllocaAsCap = B.CreateBitCast(AllocaAsCap, CapTy);
         Value *AllocaAsPtr = B.CreateAddrSpaceCast(CastToCap, AllocaTy);
         Replacement R = { AI, AllocaAsCap, AllocaAsPtr };

@@ -32,15 +32,23 @@ project(LLVM)
 set(LLVM_PARALLEL_COMPILE_JOBS "" CACHE STRING
   "Define the maximum number of concurrent compilation jobs.")
 if(LLVM_PARALLEL_COMPILE_JOBS)
-  set_property(GLOBAL APPEND PROPERTY JOB_POOLS compile_job_pool=${LLVM_PARALLEL_COMPILE_JOBS})
-  set(CMAKE_JOB_POOL_COMPILE compile_job_pool)
+  if(CMAKE_VERSION VERSION_LESS 3.0 OR NOT CMAKE_MAKE_PROGRAM MATCHES "ninja$")
+    message(WARNING "Job pooling is only available with Ninja generators and CMake 3.0 and later.")
+  else()
+    set_property(GLOBAL APPEND PROPERTY JOB_POOLS compile_job_pool=${LLVM_PARALLEL_COMPILE_JOBS})
+    set(CMAKE_JOB_POOL_COMPILE compile_job_pool)
+  endif()
 endif()
 
 set(LLVM_PARALLEL_LINK_JOBS "" CACHE STRING
   "Define the maximum number of concurrent link jobs.")
 if(LLVM_PARALLEL_LINK_JOBS)
-  set_property(GLOBAL APPEND PROPERTY JOB_POOLS link_job_pool=${LLVM_PARALLEL_LINK_JOBS})
-  set(CMAKE_JOB_POOL_LINK link_job_pool)
+  if(CMAKE_VERSION VERSION_LESS 3.0 OR NOT CMAKE_MAKE_PROGRAM MATCHES "ninja$")
+    message(WARNING "Job pooling is only available with Ninja generators and CMake 3.0 and later.")
+  else()
+    set_property(GLOBAL APPEND PROPERTY JOB_POOLS link_job_pool=${LLVM_PARALLEL_LINK_JOBS})
+    set(CMAKE_JOB_POOL_LINK link_job_pool)
+  endif()
 endif()
 
 # Add path for custom modules
@@ -59,6 +67,8 @@ if (NOT PACKAGE_VERSION)
   set(PACKAGE_VERSION
     "${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}.${LLVM_VERSION_PATCH}${LLVM_VERSION_SUFFIX}")
 endif()
+
+option(LLVM_INSTALL_UTILS "Include utility binaries in the 'install' target." OFF)
 
 option(LLVM_INSTALL_TOOLCHAIN_ONLY "Only include toolchain files in the 'install' target." OFF)
 
@@ -91,6 +101,7 @@ set(CPACK_PACKAGE_VERSION_MINOR ${LLVM_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${LLVM_VERSION_PATCH})
 set(CPACK_PACKAGE_VERSION ${PACKAGE_VERSION})
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.TXT")
+set(CPACK_NSIS_COMPRESSOR "/SOLID lzma \r\n SetCompressorDictSize 32")
 if(WIN32 AND NOT UNIX)
   set(CPACK_PACKAGE_INSTALL_REGISTRY_KEY "LLVM")
   set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}\\\\cmake\\\\nsis_logo.bmp")
@@ -165,14 +176,15 @@ set(LLVM_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 set(LLVM_ALL_TARGETS
   AArch64
+  AMDGPU
   ARM
+  BPF
   CppBackend
   Hexagon
   Mips
   MSP430
   NVPTX
   PowerPC
-  R600
   Sparc
   SystemZ
   X86
@@ -236,14 +248,7 @@ list(REMOVE_DUPLICATES LLVM_TARGETS_TO_BUILD)
 include(AddLLVMDefinitions)
 
 option(LLVM_ENABLE_PIC "Build Position-Independent Code" ON)
-
-# MSVC has a gazillion warnings with this.
-if( MSVC )
-  option(LLVM_ENABLE_WARNINGS "Enable compiler warnings." OFF)
-else()
-  option(LLVM_ENABLE_WARNINGS "Enable compiler warnings." ON)
-endif()
-
+option(LLVM_ENABLE_WARNINGS "Enable compiler warnings." ON)
 option(LLVM_ENABLE_MODULES "Compile with C++ modules enabled." OFF)
 option(LLVM_ENABLE_CXX1Y "Compile with C++1y enabled." OFF)
 option(LLVM_ENABLE_LIBCXX "Use libc++ if available." OFF)
@@ -256,6 +261,9 @@ if( NOT uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG" )
 else()
   option(LLVM_ENABLE_ASSERTIONS "Enable assertions" ON)
 endif()
+
+set(LLVM_ABI_BREAKING_CHECKS "WITH_ASSERTS" CACHE STRING
+  "Enable abi-breaking checks.  Can be WITH_ASSERTS, FORCE_ON or FORCE_OFF.")
 
 option(LLVM_FORCE_USE_OLD_HOST_TOOLCHAIN
        "Set to ON to force using an old, unsupported host toolchain." OFF)
@@ -340,6 +348,7 @@ option (LLVM_BUILD_EXTERNAL_COMPILER_RT
   "Build compiler-rt as an external project." OFF)
 
 option(LLVM_BUILD_LLVM_DYLIB "Build libllvm dynamic library" OFF)
+option(LLVM_DYLIB_EXPORT_ALL "Export all symbols from libLLVM.dylib (default is C API only" OFF)
 option(LLVM_DISABLE_LLVM_DYLIB_ATEXIT "Disable llvm-shlib's atexit destructors." ON)
 if(LLVM_DISABLE_LLVM_DYLIB_ATEXIT)
   set(DISABLE_LLVM_DYLIB_ATEXIT 1)
@@ -526,7 +535,7 @@ endif()
 # check its symbols. This is wasteful (the check was done when foo.so
 # was created) and can fail since it is not the dynamic linker and
 # doesn't know how to handle search paths correctly.
-if (UNIX AND NOT APPLE)
+if (UNIX AND NOT APPLE AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "SunOS")
   set(CMAKE_EXE_LINKER_FLAGS
       "${CMAKE_EXE_LINKER_FLAGS} -Wl,-allow-shlib-undefined")
 endif()
@@ -636,11 +645,6 @@ if( LLVM_INCLUDE_TESTS )
     DEPENDS ${LLVM_LIT_DEPENDS}
     ARGS ${LLVM_LIT_EXTRA_ARGS}
     )
-
-  add_lit_testsuites(LLVM ${CMAKE_SOURCE_DIR}/test
-    PARAMS ${LLVM_LIT_PARAMS}
-    DEPENDS ${LLVM_LIT_DEPENDS}
-    ARGS ${LLVM_LIT_EXTRA_ARGS})
 endif()
 
 if (LLVM_INCLUDE_DOCS)

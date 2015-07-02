@@ -12,17 +12,18 @@ LLDB_LEVEL := ../..
 include $(LLDB_LEVEL)/../../Makefile.config
 
 
-PARALLEL_DIRS := ABI/MacOSX-arm ABI/MacOSX-arm64 ABI/MacOSX-i386 ABI/SysV-x86_64 \
-	ABI/SysV-hexagon ABI/SysV-ppc ABI/SysV-ppc64 \
-	Disassembler/llvm \
+PARALLEL_DIRS := ABI/MacOSX-arm ABI/MacOSX-arm64 ABI/MacOSX-i386 ABI/SysV-i386 ABI/SysV-x86_64 \
+	ABI/SysV-arm ABI/SysV-arm64 ABI/SysV-hexagon ABI/SysV-ppc ABI/SysV-ppc64 \
+	ABI/SysV-mips ABI/SysV-mips64 Disassembler/llvm \
 	ObjectContainer/BSD-Archive ObjectFile/ELF ObjectFile/PECOFF \
 	ObjectContainer/Universal-Mach-O ObjectFile/Mach-O \
 	ObjectFile/JIT SymbolFile/DWARF SymbolFile/Symtab Process/Utility \
 	DynamicLoader/Static Platform Process/gdb-remote \
-	Instruction/ARM Instruction/ARM64 Instruction/MIPS64 \
+	Instruction/ARM Instruction/ARM64 Instruction/MIPS Instruction/MIPS64 \
 	UnwindAssembly/InstEmulation UnwindAssembly/x86 \
 	LanguageRuntime/CPlusPlus/ItaniumABI \
 	LanguageRuntime/ObjC/AppleObjCRuntime \
+	LanguageRuntime/RenderScript/RenderScriptRuntime \
 	DynamicLoader/POSIX-DYLD \
 	DynamicLoader/Hexagon-DYLD \
 	DynamicLoader/MacOSX-DYLD \

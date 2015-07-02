@@ -1,3 +1,7 @@
+set(LLDB_PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+set(LLDB_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/source")
+set(LLDB_INCLUDE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
   set(LLDB_DEFAULT_DISABLE_PYTHON 0)
   set(LLDB_DEFAULT_DISABLE_CURSES 1)
@@ -10,25 +14,16 @@ else()
     set(LLDB_DEFAULT_DISABLE_CURSES 0)
   endif()
 endif()
+
 set(LLDB_DISABLE_PYTHON ${LLDB_DEFAULT_DISABLE_PYTHON} CACHE BOOL
   "Disables the Python scripting integration.")
 set(LLDB_DISABLE_CURSES ${LLDB_DEFAULT_DISABLE_CURSES} CACHE BOOL
   "Disables the Curses integration.")
 
-if ( LLDB_DISABLE_PYTHON )
-  set(LLDB_DEFAULT_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION 0)
-else ()
-  set(LLDB_DEFAULT_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION 1)
-endif ()
-
-set(LLDB_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION ${LLDB_DEFAULT_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION} CACHE BOOL
+set(LLDB_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION 1 CACHE BOOL
   "Enables using new Python scripts for SWIG API generation .")  
-
-set(LLDB_PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
-set(LLDB_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/source")
-set(LLDB_INCLUDE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include")
-
-set(LLDB_DISABLE_PYTHON 0 CACHE BOOL "Disables the Python scripting integration.")
+set(LLDB_RELOCATABLE_PYTHON 0 CACHE BOOL
+  "Causes LLDB to use the PYTHONHOME environment variable to locate Python.")
 
 if ((NOT MSVC) OR MSVC12)
   add_definitions( -DHAVE_ROUND )
@@ -45,15 +40,39 @@ if (NOT LLDB_DISABLE_PYTHON)
       set(CMAKE_LIBRARY_ARCHITECTURE "x86_64-linux-gnu")
     endif()
   endif()
-  if (MSVC)
-    if ("${PYTHON_INCLUDE_DIR}" STREQUAL "" OR "${PYTHON_LIBRARY}" STREQUAL "")
-      message("-- LLDB Embedded python disabled.  Embedding python on Windows requires "
-              "manually specifying PYTHON_INCLUDE_DIR *and* PYTHON_LIBRARY")
-      set(LLDB_DISABLE_PYTHON 1)
+  
+  if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+    if (NOT "${PYTHON_HOME}" STREQUAL "")
+      file(TO_CMAKE_PATH "${PYTHON_HOME}" PYTHON_HOME)
+      if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        file(TO_CMAKE_PATH "${PYTHON_HOME}/python_d.exe" PYTHON_EXECUTABLE)
+        file(TO_CMAKE_PATH "${PYTHON_HOME}/libs/python27_d.lib" PYTHON_LIBRARY)
+        file(TO_CMAKE_PATH "${PYTHON_HOME}/python27_d.dll" PYTHON_DLL)
+      else()
+        file(TO_CMAKE_PATH "${PYTHON_HOME}/python.exe" PYTHON_EXECUTABLE)
+        file(TO_CMAKE_PATH "${PYTHON_HOME}/libs/python27.lib" PYTHON_LIBRARY)
+        file(TO_CMAKE_PATH "${PYTHON_HOME}/python27.dll" PYTHON_DLL)
+      endif()
+      
+      file(TO_CMAKE_PATH "${PYTHON_HOME}/Include" PYTHON_INCLUDE_DIR)
+      if (NOT LLDB_RELOCATABLE_PYTHON)
+        add_definitions( -DLLDB_PYTHON_HOME="${PYTHON_HOME}" )
+      endif()
     else()
+      message("Embedding Python on Windows without specifying a value for PYTHON_HOME is deprecated.  Support for this will be dropped soon.")
+        
+      if ("${PYTHON_INCLUDE_DIR}" STREQUAL "" OR "${PYTHON_LIBRARY}" STREQUAL "")
+        message("-- LLDB Embedded python disabled.  Embedding python on Windows requires "
+                "manually specifying PYTHON_INCLUDE_DIR *and* PYTHON_LIBRARY")
+        set(LLDB_DISABLE_PYTHON 1)
+      endif()
+    endif()
+    
+    if (PYTHON_LIBRARY)
       message("-- Found PythonLibs: ${PYTHON_LIBRARY}")
       include_directories(${PYTHON_INCLUDE_DIR})
     endif()
+    
   else()
     find_package(PythonLibs REQUIRED)
     include_directories(${PYTHON_INCLUDE_DIRS})
@@ -164,13 +183,18 @@ include_directories(BEFORE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   )
 
-install(DIRECTORY include/
-  DESTINATION include
-  FILES_MATCHING
-  PATTERN "*.h"
-  PATTERN ".svn" EXCLUDE
-  )
+if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
+  install(DIRECTORY include/
+    DESTINATION include
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN ".svn" EXCLUDE
+    )
+endif()
 
+if (NOT LIBXML2_FOUND)
+  find_package(LibXml2)
+endif()
 
 # Find libraries or frameworks that may be needed
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
@@ -181,13 +205,28 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
   find_library(SECURITY_LIBRARY Security)
   find_library(DEBUG_SYMBOLS_LIBRARY DebugSymbols PATHS "/System/Library/PrivateFrameworks")
 
-  if (NOT LIBXML2_FOUND)
-    find_package(LibXml2)
-  endif ()
+  add_definitions( -DLIBXML2_DEFINED )
   list(APPEND system_libs xml2 ncurses panel)
   list(APPEND system_libs ${CARBON_LIBRARY} ${FOUNDATION_LIBRARY}
   ${CORE_FOUNDATION_LIBRARY} ${CORE_SERVICES_LIBRARY} ${SECURITY_LIBRARY}
   ${DEBUG_SYMBOLS_LIBRARY})
+
+else()
+
+  if (LIBXML2_FOUND)
+    add_definitions( -DLIBXML2_DEFINED )
+    list(APPEND system_libs ${LIBXML2_LIBRARIES})
+    include_directories(${LIBXML2_INCLUDE_DIR})
+  endif()
+
+endif()
+
+if (HAVE_LIBPTHREAD)
+  list(APPEND system_libs pthread)
+endif(HAVE_LIBPTHREAD)
+
+if (HAVE_LIBDL)
+  list(APPEND system_libs ${CMAKE_DL_LIBS})
 endif()
 
 if(LLDB_REQUIRES_EH)
@@ -211,3 +250,27 @@ if(NOT LLDB_REQUIRES_RTTI)
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLDB_COMPILE_FLAGS}")
+
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    # Check for syscall used by lldb-server on linux.
+    # If these are not found, it will fall back to ptrace (slow) for memory reads.
+    check_cxx_source_compiles("
+        #include <sys/uio.h>
+        int main() { process_vm_readv(0, nullptr, 0, nullptr, 0, 0); return 0; }"
+        HAVE_PROCESS_VM_READV)
+
+    if (HAVE_PROCESS_VM_READV)
+        add_definitions(-DHAVE_PROCESS_VM_READV)
+    else()
+        # If we don't have the syscall wrapper function, but we know the syscall number, we can
+        # still issue the syscall manually
+        check_cxx_source_compiles("
+            #include <sys/syscall.h>
+            int main() { return __NR_process_vm_readv; }"
+            HAVE_NR_PROCESS_VM_READV)
+
+        if (HAVE_NR_PROCESS_VM_READV)
+            add_definitions(-DHAVE_NR_PROCESS_VM_READV)
+        endif()
+    endif()
+endif()

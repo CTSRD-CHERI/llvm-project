@@ -41,9 +41,10 @@ public:
   void storeOptions(ClangTidyOptions::OptionMap &Opts) override;
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
+  void onEndOfTranslationUnit() override;
 
 private:
-  void checkStmt(const ast_matchers::MatchFinder::MatchResult &Result,
+  bool checkStmt(const ast_matchers::MatchFinder::MatchResult &Result,
                  const Stmt *S, SourceLocation StartLoc,
                  SourceLocation EndLocHint = SourceLocation());
   template <typename IfOrWhileStmt>
@@ -51,6 +52,7 @@ private:
                                const ASTContext *Context);
 
 private:
+  std::set<const Stmt*> ForceBracesStmts;
   const unsigned ShortStatementLines;
 };
 

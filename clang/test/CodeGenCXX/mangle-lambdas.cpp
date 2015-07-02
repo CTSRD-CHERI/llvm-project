@@ -1,10 +1,5 @@
 // RUN: %clang_cc1 -std=c++11 -triple x86_64-apple-macosx10.7.0 -emit-llvm -o - %s -w | FileCheck %s
 
-// CHECK: @_ZZZN7PR12917IJicdEEC1EicdEd1_NKUlvE_clEvE1n = linkonce_odr global i32 0
-// CHECK: @_ZZZN7PR12917IJicdEEC1EicdEd0_NKUlvE_clEvE1n = linkonce_odr global i32 0
-// CHECK: @_ZZZN7PR12917IJicdEEC1EicdEd_NKUlvE_clEvE1n = linkonce_odr global i32 0
-// CHECK: @_ZZNK7PR12917IJiiEE1nMUlvE_clEvE1n = linkonce_odr global i32 0
-
 // CHECK-LABEL: define linkonce_odr void @_Z11inline_funci
 inline void inline_func(int n) {
   // CHECK: call i32 @_ZZ11inline_funciENKUlvE_clEv
@@ -133,23 +128,23 @@ int (*StaticMembers<T>::f)() = []{return 5;};
 // CHECK: ret i32 2
 template float StaticMembers<float>::x;
 
-// CHECK-LABEL: define internal void @__cxx_global_var_init1()
+// CHECK-LABEL: define internal void @__cxx_global_var_init.1()
 // CHECK: call i32 @_ZNK13StaticMembersIfE1yMUlvE_clEv
 // CHECK-LABEL: define linkonce_odr i32 @_ZNK13StaticMembersIfE1yMUlvE_clEv
 // CHECK: ret i32 3
 template float StaticMembers<float>::y;
 
-// CHECK-LABEL: define internal void @__cxx_global_var_init2()
+// CHECK-LABEL: define internal void @__cxx_global_var_init.2()
 // CHECK: call i32 @_Z13accept_lambdaIN13StaticMembersIfE1zMUlvE_EEiT_
 // CHECK: declare i32 @_Z13accept_lambdaIN13StaticMembersIfE1zMUlvE_EEiT_()
 template float StaticMembers<float>::z;
 
-// CHECK-LABEL: define internal void @__cxx_global_var_init3()
+// CHECK-LABEL: define internal void @__cxx_global_var_init.3()
 // CHECK: call {{.*}} @_ZNK13StaticMembersIfE1fMUlvE_cvPFivEEv
 // CHECK-LABEL: define linkonce_odr i32 ()* @_ZNK13StaticMembersIfE1fMUlvE_cvPFivEEv
 template int (*StaticMembers<float>::f)();
 
-// CHECK-LABEL: define internal void @__cxx_global_var_init4
+// CHECK-LABEL: define internal void @__cxx_global_var_init.4
 // CHECK: call i32 @"_ZNK13StaticMembersIdE3$_2clEv"
 // CHECK-LABEL: define internal i32 @"_ZNK13StaticMembersIdE3$_2clEv"
 // CHECK: ret i32 42
@@ -163,23 +158,6 @@ void use_func_template() {
   // CHECK: call i32 @"_ZZ13func_templateIiEvT_ENK3$_3clEv"
   func_template<int>();
 }
-
-
-template<typename...T> struct PR12917 {
-  PR12917(T ...t = []{ static int n = 0; return ++n; }());
-
-  static int n[3];
-};
-template<typename...T> int PR12917<T...>::n[3] = {
-  []{ static int n = 0; return ++n; }()
-};
-
-// CHECK: call i32 @_ZZN7PR12917IJicdEEC1EicdEd1_NKUlvE_clEv(
-// CHECK: call i32 @_ZZN7PR12917IJicdEEC1EicdEd0_NKUlvE_clEv(
-// CHECK: call i32 @_ZZN7PR12917IJicdEEC1EicdEd_NKUlvE_clEv(
-// CHECK: call void @_ZN7PR12917IJicdEEC1Eicd(
-PR12917<int, char, double> pr12917;
-int *pr12917_p = PR12917<int, int>::n;
 
 namespace std {
   struct type_info;

@@ -10,7 +10,7 @@ class TestRealDefinition(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_frame_var_after_stop_at_interface_with_dsym(self):
         """Test that we can find the implementation for an objective C type"""
@@ -19,7 +19,7 @@ class TestRealDefinition(TestBase):
         self.buildDsym()
         self.stop_at_interface()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dwarf_test
     def test_frame_var_after_stop_at_interface_with_dwarf(self):
         """Test that we can find the implementation for an objective C type"""
@@ -28,7 +28,7 @@ class TestRealDefinition(TestBase):
         self.buildDwarf()
         self.stop_at_interface()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_frame_var_after_stop_at_implementation_with_dsym(self):
         """Test that we can find the implementation for an objective C type"""
@@ -37,7 +37,7 @@ class TestRealDefinition(TestBase):
         self.buildDsym()
         self.stop_at_implementation()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dwarf_test
     def test_frame_var_after_stop_at_implementation_with_dwarf(self):
         """Test that we can find the implementation for an objective C type"""
@@ -65,7 +65,7 @@ class TestRealDefinition(TestBase):
         line = line_number('Foo.m', '// Set breakpoint where Bar is an interface')
         lldbutil.run_break_set_by_file_and_line (self, 'Foo.m', line, num_expected_locations=1, loc_exact=True);
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -76,7 +76,7 @@ class TestRealDefinition(TestBase):
         self.expect("breakpoint list -f", BREAKPOINT_HIT_ONCE,
             substrs = [' resolved, hit count = 1'])
 
-        self.runCmd("continue", RUN_SUCCEEDED)
+        self.runCmd("continue", RUN_FAILED)
 
         # Run at stop at main
         self.expect("breakpoint list -f", BREAKPOINT_HIT_ONCE,
@@ -93,7 +93,7 @@ class TestRealDefinition(TestBase):
         line = line_number('Bar.m', '// Set breakpoint where Bar is an implementation')
         lldbutil.run_break_set_by_file_and_line (self, 'Bar.m', line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -104,7 +104,7 @@ class TestRealDefinition(TestBase):
         self.expect("breakpoint list -f", BREAKPOINT_HIT_ONCE,
             substrs = [' resolved, hit count = 1'])
 
-        self.runCmd("continue", RUN_SUCCEEDED)
+        self.runCmd("continue", RUN_FAILED)
 
         # Run at stop at main
         self.expect("breakpoint list -f", BREAKPOINT_HIT_ONCE,

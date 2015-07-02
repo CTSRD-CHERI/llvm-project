@@ -433,6 +433,12 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
   }
 
   static const X86MemoryFoldTableEntry MemoryFoldTable1[] = {
+    { X86::BSF16rr,         X86::BSF16rm,             0 },
+    { X86::BSF32rr,         X86::BSF32rm,             0 },
+    { X86::BSF64rr,         X86::BSF64rm,             0 },
+    { X86::BSR16rr,         X86::BSR16rm,             0 },
+    { X86::BSR32rr,         X86::BSR32rm,             0 },
+    { X86::BSR64rr,         X86::BSR64rm,             0 },
     { X86::CMP16rr,         X86::CMP16rm,             0 },
     { X86::CMP32rr,         X86::CMP32rm,             0 },
     { X86::CMP64rr,         X86::CMP64rm,             0 },
@@ -526,11 +532,11 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::PSHUFLWri,       X86::PSHUFLWmi,           TB_ALIGN_16 },
     { X86::PTESTrr,         X86::PTESTrm,             TB_ALIGN_16 },
     { X86::RCPPSr,          X86::RCPPSm,              TB_ALIGN_16 },
-    { X86::RCPPSr_Int,      X86::RCPPSm_Int,          TB_ALIGN_16 },
+    { X86::RCPSSr,          X86::RCPSSm,              0 },
+    { X86::RCPSSr_Int,      X86::RCPSSm_Int,          0 },
     { X86::ROUNDPDr,        X86::ROUNDPDm,            TB_ALIGN_16 },
     { X86::ROUNDPSr,        X86::ROUNDPSm,            TB_ALIGN_16 },
     { X86::RSQRTPSr,        X86::RSQRTPSm,            TB_ALIGN_16 },
-    { X86::RSQRTPSr_Int,    X86::RSQRTPSm_Int,        TB_ALIGN_16 },
     { X86::RSQRTSSr,        X86::RSQRTSSm,            0 },
     { X86::RSQRTSSr_Int,    X86::RSQRTSSm_Int,        0 },
     { X86::SQRTPDr,         X86::SQRTPDm,             TB_ALIGN_16 },
@@ -558,6 +564,15 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::MMX_PABSDrr64,     X86::MMX_PABSDrm64,     0 },
     { X86::MMX_PABSWrr64,     X86::MMX_PABSWrm64,     0 },
     { X86::MMX_PSHUFWri,      X86::MMX_PSHUFWmi,      0 },
+
+    // 3DNow! version of foldable instructions
+    { X86::PF2IDrr,         X86::PF2IDrm,             0 },
+    { X86::PF2IWrr,         X86::PF2IWrm,             0 },
+    { X86::PFRCPrr,         X86::PFRCPrm,             0 },
+    { X86::PFRSQRTrr,       X86::PFRSQRTrm,           0 },
+    { X86::PI2FDrr,         X86::PI2FDrm,             0 },
+    { X86::PI2FWrr,         X86::PI2FWrm,             0 },
+    { X86::PSWAPDrr,        X86::PSWAPDrm,            0 },
 
     // AVX 128-bit versions of foldable instructions
     { X86::Int_VCOMISDrr,   X86::Int_VCOMISDrm,       0 },
@@ -625,11 +640,9 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPSHUFLWri,      X86::VPSHUFLWmi,          0 },
     { X86::VPTESTrr,        X86::VPTESTrm,            0 },
     { X86::VRCPPSr,         X86::VRCPPSm,             0 },
-    { X86::VRCPPSr_Int,     X86::VRCPPSm_Int,         0 },
     { X86::VROUNDPDr,       X86::VROUNDPDm,           0 },
     { X86::VROUNDPSr,       X86::VROUNDPSm,           0 },
     { X86::VRSQRTPSr,       X86::VRSQRTPSm,           0 },
-    { X86::VRSQRTPSr_Int,   X86::VRSQRTPSm_Int,       0 },
     { X86::VSQRTPDr,        X86::VSQRTPDm,            0 },
     { X86::VSQRTPSr,        X86::VSQRTPSm,            0 },
     { X86::VTESTPDrr,       X86::VTESTPDrm,           0 },
@@ -658,11 +671,9 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMILPSYri,    X86::VPERMILPSYmi,        0 },
     { X86::VPTESTYrr,       X86::VPTESTYrm,           0 },
     { X86::VRCPPSYr,        X86::VRCPPSYm,            0 },
-    { X86::VRCPPSYr_Int,    X86::VRCPPSYm_Int,        0 },
     { X86::VROUNDYPDr,      X86::VROUNDYPDm,          0 },
     { X86::VROUNDYPSr,      X86::VROUNDYPSm,          0 },
     { X86::VRSQRTPSYr,      X86::VRSQRTPSYm,          0 },
-    { X86::VRSQRTPSYr_Int,  X86::VRSQRTPSYm_Int,      0 },
     { X86::VSQRTPDYr,       X86::VSQRTPDYm,           0 },
     { X86::VSQRTPSYr,       X86::VSQRTPSYm,           0 },
     { X86::VTESTPDYrr,      X86::VTESTPDYrm,          0 },
@@ -943,6 +954,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::CMPPSrri,        X86::CMPPSrmi,      TB_ALIGN_16 },
     { X86::CMPSDrr,         X86::CMPSDrm,       0 },
     { X86::CMPSSrr,         X86::CMPSSrm,       0 },
+    { X86::CRC32r32r32,     X86::CRC32r32m32,   0 },
+    { X86::CRC32r64r64,     X86::CRC32r64m64,   0 },
     { X86::DIVPDrr,         X86::DIVPDrm,       TB_ALIGN_16 },
     { X86::DIVPSrr,         X86::DIVPSrm,       TB_ALIGN_16 },
     { X86::DIVSDrr,         X86::DIVSDrm,       0 },
@@ -1201,6 +1214,25 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::MMX_PUNPCKLWDirr,  X86::MMX_PUNPCKLWDirm,  0 },
     { X86::MMX_PXORirr,       X86::MMX_PXORirm,       0 },
 
+    // 3DNow! version of foldable instructions
+    { X86::PAVGUSBrr,         X86::PAVGUSBrm,         0 },
+    { X86::PFACCrr,           X86::PFACCrm,           0 },
+    { X86::PFADDrr,           X86::PFADDrm,           0 },
+    { X86::PFCMPEQrr,         X86::PFCMPEQrm,         0 },
+    { X86::PFCMPGErr,         X86::PFCMPGErm,         0 },
+    { X86::PFCMPGTrr,         X86::PFCMPGTrm,         0 },
+    { X86::PFMAXrr,           X86::PFMAXrm,           0 },
+    { X86::PFMINrr,           X86::PFMINrm,           0 },
+    { X86::PFMULrr,           X86::PFMULrm,           0 },
+    { X86::PFNACCrr,          X86::PFNACCrm,          0 },
+    { X86::PFPNACCrr,         X86::PFPNACCrm,         0 },
+    { X86::PFRCPIT1rr,        X86::PFRCPIT1rm,        0 },
+    { X86::PFRCPIT2rr,        X86::PFRCPIT2rm,        0 },
+    { X86::PFRSQIT1rr,        X86::PFRSQIT1rm,        0 },
+    { X86::PFSUBrr,           X86::PFSUBrm,           0 },
+    { X86::PFSUBRrr,          X86::PFSUBRrm,          0 },
+    { X86::PMULHRWrr,         X86::PMULHRWrm,         0 },
+
     // AVX 128-bit versions of foldable instructions
     { X86::VCVTSD2SSrr,       X86::VCVTSD2SSrm,        0 },
     { X86::Int_VCVTSD2SSrr,   X86::Int_VCVTSD2SSrm,    0 },
@@ -1215,9 +1247,13 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VCVTSS2SDrr,       X86::VCVTSS2SDrm,        0 },
     { X86::Int_VCVTSS2SDrr,   X86::Int_VCVTSS2SDrm,    0 },
     { X86::VRCPSSr,           X86::VRCPSSm,            0 },
+    { X86::VRCPSSr_Int,       X86::VRCPSSm_Int,        0 },
     { X86::VRSQRTSSr,         X86::VRSQRTSSm,          0 },
+    { X86::VRSQRTSSr_Int,     X86::VRSQRTSSm_Int,      0 },
     { X86::VSQRTSDr,          X86::VSQRTSDm,           0 },
+    { X86::VSQRTSDr_Int,      X86::VSQRTSDm_Int,       0 },
     { X86::VSQRTSSr,          X86::VSQRTSSm,           0 },
+    { X86::VSQRTSSr_Int,      X86::VSQRTSSm_Int,       0 },
     { X86::VADDPDrr,          X86::VADDPDrm,           0 },
     { X86::VADDPSrr,          X86::VADDPSrm,           0 },
     { X86::VADDSDrr,          X86::VADDSDrm,           0 },
@@ -1541,38 +1577,38 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPXORYrr,          X86::VPXORYrm,           0 },
 
     // FMA4 foldable patterns
-    { X86::VFMADDSS4rr,       X86::VFMADDSS4mr,        0 },
-    { X86::VFMADDSD4rr,       X86::VFMADDSD4mr,        0 },
-    { X86::VFMADDPS4rr,       X86::VFMADDPS4mr,        0 },
-    { X86::VFMADDPD4rr,       X86::VFMADDPD4mr,        0 },
-    { X86::VFMADDPS4rrY,      X86::VFMADDPS4mrY,       0 },
-    { X86::VFMADDPD4rrY,      X86::VFMADDPD4mrY,       0 },
-    { X86::VFNMADDSS4rr,      X86::VFNMADDSS4mr,       0 },
-    { X86::VFNMADDSD4rr,      X86::VFNMADDSD4mr,       0 },
-    { X86::VFNMADDPS4rr,      X86::VFNMADDPS4mr,       0 },
-    { X86::VFNMADDPD4rr,      X86::VFNMADDPD4mr,       0 },
-    { X86::VFNMADDPS4rrY,     X86::VFNMADDPS4mrY,      0 },
-    { X86::VFNMADDPD4rrY,     X86::VFNMADDPD4mrY,      0 },
-    { X86::VFMSUBSS4rr,       X86::VFMSUBSS4mr,        0 },
-    { X86::VFMSUBSD4rr,       X86::VFMSUBSD4mr,        0 },
-    { X86::VFMSUBPS4rr,       X86::VFMSUBPS4mr,        0 },
-    { X86::VFMSUBPD4rr,       X86::VFMSUBPD4mr,        0 },
-    { X86::VFMSUBPS4rrY,      X86::VFMSUBPS4mrY,       0 },
-    { X86::VFMSUBPD4rrY,      X86::VFMSUBPD4mrY,       0 },
-    { X86::VFNMSUBSS4rr,      X86::VFNMSUBSS4mr,       0 },
-    { X86::VFNMSUBSD4rr,      X86::VFNMSUBSD4mr,       0 },
-    { X86::VFNMSUBPS4rr,      X86::VFNMSUBPS4mr,       0 },
-    { X86::VFNMSUBPD4rr,      X86::VFNMSUBPD4mr,       0 },
-    { X86::VFNMSUBPS4rrY,     X86::VFNMSUBPS4mrY,      0 },
-    { X86::VFNMSUBPD4rrY,     X86::VFNMSUBPD4mrY,      0 },
-    { X86::VFMADDSUBPS4rr,    X86::VFMADDSUBPS4mr,     0 },
-    { X86::VFMADDSUBPD4rr,    X86::VFMADDSUBPD4mr,     0 },
-    { X86::VFMADDSUBPS4rrY,   X86::VFMADDSUBPS4mrY,    0 },
-    { X86::VFMADDSUBPD4rrY,   X86::VFMADDSUBPD4mrY,    0 },
-    { X86::VFMSUBADDPS4rr,    X86::VFMSUBADDPS4mr,     0 },
-    { X86::VFMSUBADDPD4rr,    X86::VFMSUBADDPD4mr,     0 },
-    { X86::VFMSUBADDPS4rrY,   X86::VFMSUBADDPS4mrY,    0 },
-    { X86::VFMSUBADDPD4rrY,   X86::VFMSUBADDPD4mrY,    0 },
+    { X86::VFMADDSS4rr,       X86::VFMADDSS4mr,        TB_ALIGN_NONE },
+    { X86::VFMADDSD4rr,       X86::VFMADDSD4mr,        TB_ALIGN_NONE },
+    { X86::VFMADDPS4rr,       X86::VFMADDPS4mr,        TB_ALIGN_NONE },
+    { X86::VFMADDPD4rr,       X86::VFMADDPD4mr,        TB_ALIGN_NONE },
+    { X86::VFMADDPS4rrY,      X86::VFMADDPS4mrY,       TB_ALIGN_NONE },
+    { X86::VFMADDPD4rrY,      X86::VFMADDPD4mrY,       TB_ALIGN_NONE },
+    { X86::VFNMADDSS4rr,      X86::VFNMADDSS4mr,       TB_ALIGN_NONE },
+    { X86::VFNMADDSD4rr,      X86::VFNMADDSD4mr,       TB_ALIGN_NONE },
+    { X86::VFNMADDPS4rr,      X86::VFNMADDPS4mr,       TB_ALIGN_NONE },
+    { X86::VFNMADDPD4rr,      X86::VFNMADDPD4mr,       TB_ALIGN_NONE },
+    { X86::VFNMADDPS4rrY,     X86::VFNMADDPS4mrY,      TB_ALIGN_NONE },
+    { X86::VFNMADDPD4rrY,     X86::VFNMADDPD4mrY,      TB_ALIGN_NONE },
+    { X86::VFMSUBSS4rr,       X86::VFMSUBSS4mr,        TB_ALIGN_NONE },
+    { X86::VFMSUBSD4rr,       X86::VFMSUBSD4mr,        TB_ALIGN_NONE },
+    { X86::VFMSUBPS4rr,       X86::VFMSUBPS4mr,        TB_ALIGN_NONE },
+    { X86::VFMSUBPD4rr,       X86::VFMSUBPD4mr,        TB_ALIGN_NONE },
+    { X86::VFMSUBPS4rrY,      X86::VFMSUBPS4mrY,       TB_ALIGN_NONE },
+    { X86::VFMSUBPD4rrY,      X86::VFMSUBPD4mrY,       TB_ALIGN_NONE },
+    { X86::VFNMSUBSS4rr,      X86::VFNMSUBSS4mr,       TB_ALIGN_NONE },
+    { X86::VFNMSUBSD4rr,      X86::VFNMSUBSD4mr,       TB_ALIGN_NONE },
+    { X86::VFNMSUBPS4rr,      X86::VFNMSUBPS4mr,       TB_ALIGN_NONE },
+    { X86::VFNMSUBPD4rr,      X86::VFNMSUBPD4mr,       TB_ALIGN_NONE },
+    { X86::VFNMSUBPS4rrY,     X86::VFNMSUBPS4mrY,      TB_ALIGN_NONE },
+    { X86::VFNMSUBPD4rrY,     X86::VFNMSUBPD4mrY,      TB_ALIGN_NONE },
+    { X86::VFMADDSUBPS4rr,    X86::VFMADDSUBPS4mr,     TB_ALIGN_NONE },
+    { X86::VFMADDSUBPD4rr,    X86::VFMADDSUBPD4mr,     TB_ALIGN_NONE },
+    { X86::VFMADDSUBPS4rrY,   X86::VFMADDSUBPS4mrY,    TB_ALIGN_NONE },
+    { X86::VFMADDSUBPD4rrY,   X86::VFMADDSUBPD4mrY,    TB_ALIGN_NONE },
+    { X86::VFMSUBADDPS4rr,    X86::VFMSUBADDPS4mr,     TB_ALIGN_NONE },
+    { X86::VFMSUBADDPD4rr,    X86::VFMSUBADDPD4mr,     TB_ALIGN_NONE },
+    { X86::VFMSUBADDPS4rrY,   X86::VFMSUBADDPS4mrY,    TB_ALIGN_NONE },
+    { X86::VFMSUBADDPD4rrY,   X86::VFMSUBADDPD4mrY,    TB_ALIGN_NONE },
 
     // XOP foldable instructions
     { X86::VPCMOVrr,          X86::VPCMOVmr,            0 },
@@ -1660,8 +1696,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPSUBQZrr,         X86::VPSUBQZrm,           0 },
     { X86::VSHUFPDZrri,       X86::VSHUFPDZrmi,         0 },
     { X86::VSHUFPSZrri,       X86::VSHUFPSZrmi,         0 },
-    { X86::VALIGNQrri,        X86::VALIGNQrmi,          0 },
-    { X86::VALIGNDrri,        X86::VALIGNDrmi,          0 },
+    { X86::VALIGNQZrri,       X86::VALIGNQZrmi,         0 },
+    { X86::VALIGNDZrri,       X86::VALIGNDZrmi,         0 },
     { X86::VPMULUDQZrr,       X86::VPMULUDQZrm,         0 },
     { X86::VBROADCASTSSZrkz,  X86::VBROADCASTSSZmkz,    TB_NO_REVERSE },
     { X86::VBROADCASTSDZrkz,  X86::VBROADCASTSDZmkz,    TB_NO_REVERSE },
@@ -1816,38 +1852,38 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VFMSUBADDPDr213rY,     X86::VFMSUBADDPDr213mY,     TB_ALIGN_NONE },
 
     // FMA4 foldable patterns
-    { X86::VFMADDSS4rr,           X86::VFMADDSS4rm,           0           },
-    { X86::VFMADDSD4rr,           X86::VFMADDSD4rm,           0           },
-    { X86::VFMADDPS4rr,           X86::VFMADDPS4rm,           TB_ALIGN_16 },
-    { X86::VFMADDPD4rr,           X86::VFMADDPD4rm,           TB_ALIGN_16 },
-    { X86::VFMADDPS4rrY,          X86::VFMADDPS4rmY,          TB_ALIGN_32 },
-    { X86::VFMADDPD4rrY,          X86::VFMADDPD4rmY,          TB_ALIGN_32 },
-    { X86::VFNMADDSS4rr,          X86::VFNMADDSS4rm,          0           },
-    { X86::VFNMADDSD4rr,          X86::VFNMADDSD4rm,          0           },
-    { X86::VFNMADDPS4rr,          X86::VFNMADDPS4rm,          TB_ALIGN_16 },
-    { X86::VFNMADDPD4rr,          X86::VFNMADDPD4rm,          TB_ALIGN_16 },
-    { X86::VFNMADDPS4rrY,         X86::VFNMADDPS4rmY,         TB_ALIGN_32 },
-    { X86::VFNMADDPD4rrY,         X86::VFNMADDPD4rmY,         TB_ALIGN_32 },
-    { X86::VFMSUBSS4rr,           X86::VFMSUBSS4rm,           0           },
-    { X86::VFMSUBSD4rr,           X86::VFMSUBSD4rm,           0           },
-    { X86::VFMSUBPS4rr,           X86::VFMSUBPS4rm,           TB_ALIGN_16 },
-    { X86::VFMSUBPD4rr,           X86::VFMSUBPD4rm,           TB_ALIGN_16 },
-    { X86::VFMSUBPS4rrY,          X86::VFMSUBPS4rmY,          TB_ALIGN_32 },
-    { X86::VFMSUBPD4rrY,          X86::VFMSUBPD4rmY,          TB_ALIGN_32 },
-    { X86::VFNMSUBSS4rr,          X86::VFNMSUBSS4rm,          0           },
-    { X86::VFNMSUBSD4rr,          X86::VFNMSUBSD4rm,          0           },
-    { X86::VFNMSUBPS4rr,          X86::VFNMSUBPS4rm,          TB_ALIGN_16 },
-    { X86::VFNMSUBPD4rr,          X86::VFNMSUBPD4rm,          TB_ALIGN_16 },
-    { X86::VFNMSUBPS4rrY,         X86::VFNMSUBPS4rmY,         TB_ALIGN_32 },
-    { X86::VFNMSUBPD4rrY,         X86::VFNMSUBPD4rmY,         TB_ALIGN_32 },
-    { X86::VFMADDSUBPS4rr,        X86::VFMADDSUBPS4rm,        TB_ALIGN_16 },
-    { X86::VFMADDSUBPD4rr,        X86::VFMADDSUBPD4rm,        TB_ALIGN_16 },
-    { X86::VFMADDSUBPS4rrY,       X86::VFMADDSUBPS4rmY,       TB_ALIGN_32 },
-    { X86::VFMADDSUBPD4rrY,       X86::VFMADDSUBPD4rmY,       TB_ALIGN_32 },
-    { X86::VFMSUBADDPS4rr,        X86::VFMSUBADDPS4rm,        TB_ALIGN_16 },
-    { X86::VFMSUBADDPD4rr,        X86::VFMSUBADDPD4rm,        TB_ALIGN_16 },
-    { X86::VFMSUBADDPS4rrY,       X86::VFMSUBADDPS4rmY,       TB_ALIGN_32 },
-    { X86::VFMSUBADDPD4rrY,       X86::VFMSUBADDPD4rmY,       TB_ALIGN_32 },
+    { X86::VFMADDSS4rr,           X86::VFMADDSS4rm,           TB_ALIGN_NONE },
+    { X86::VFMADDSD4rr,           X86::VFMADDSD4rm,           TB_ALIGN_NONE },
+    { X86::VFMADDPS4rr,           X86::VFMADDPS4rm,           TB_ALIGN_NONE },
+    { X86::VFMADDPD4rr,           X86::VFMADDPD4rm,           TB_ALIGN_NONE },
+    { X86::VFMADDPS4rrY,          X86::VFMADDPS4rmY,          TB_ALIGN_NONE },
+    { X86::VFMADDPD4rrY,          X86::VFMADDPD4rmY,          TB_ALIGN_NONE },
+    { X86::VFNMADDSS4rr,          X86::VFNMADDSS4rm,          TB_ALIGN_NONE },
+    { X86::VFNMADDSD4rr,          X86::VFNMADDSD4rm,          TB_ALIGN_NONE },
+    { X86::VFNMADDPS4rr,          X86::VFNMADDPS4rm,          TB_ALIGN_NONE },
+    { X86::VFNMADDPD4rr,          X86::VFNMADDPD4rm,          TB_ALIGN_NONE },
+    { X86::VFNMADDPS4rrY,         X86::VFNMADDPS4rmY,         TB_ALIGN_NONE },
+    { X86::VFNMADDPD4rrY,         X86::VFNMADDPD4rmY,         TB_ALIGN_NONE },
+    { X86::VFMSUBSS4rr,           X86::VFMSUBSS4rm,           TB_ALIGN_NONE },
+    { X86::VFMSUBSD4rr,           X86::VFMSUBSD4rm,           TB_ALIGN_NONE },
+    { X86::VFMSUBPS4rr,           X86::VFMSUBPS4rm,           TB_ALIGN_NONE },
+    { X86::VFMSUBPD4rr,           X86::VFMSUBPD4rm,           TB_ALIGN_NONE },
+    { X86::VFMSUBPS4rrY,          X86::VFMSUBPS4rmY,          TB_ALIGN_NONE },
+    { X86::VFMSUBPD4rrY,          X86::VFMSUBPD4rmY,          TB_ALIGN_NONE },
+    { X86::VFNMSUBSS4rr,          X86::VFNMSUBSS4rm,          TB_ALIGN_NONE },
+    { X86::VFNMSUBSD4rr,          X86::VFNMSUBSD4rm,          TB_ALIGN_NONE },
+    { X86::VFNMSUBPS4rr,          X86::VFNMSUBPS4rm,          TB_ALIGN_NONE },
+    { X86::VFNMSUBPD4rr,          X86::VFNMSUBPD4rm,          TB_ALIGN_NONE },
+    { X86::VFNMSUBPS4rrY,         X86::VFNMSUBPS4rmY,         TB_ALIGN_NONE },
+    { X86::VFNMSUBPD4rrY,         X86::VFNMSUBPD4rmY,         TB_ALIGN_NONE },
+    { X86::VFMADDSUBPS4rr,        X86::VFMADDSUBPS4rm,        TB_ALIGN_NONE },
+    { X86::VFMADDSUBPD4rr,        X86::VFMADDSUBPD4rm,        TB_ALIGN_NONE },
+    { X86::VFMADDSUBPS4rrY,       X86::VFMADDSUBPS4rmY,       TB_ALIGN_NONE },
+    { X86::VFMADDSUBPD4rrY,       X86::VFMADDSUBPD4rmY,       TB_ALIGN_NONE },
+    { X86::VFMSUBADDPS4rr,        X86::VFMSUBADDPS4rm,        TB_ALIGN_NONE },
+    { X86::VFMSUBADDPD4rr,        X86::VFMSUBADDPD4rm,        TB_ALIGN_NONE },
+    { X86::VFMSUBADDPS4rrY,       X86::VFMSUBADDPS4rmY,       TB_ALIGN_NONE },
+    { X86::VFMSUBADDPD4rrY,       X86::VFMSUBADDPD4rmY,       TB_ALIGN_NONE },
 
     // XOP foldable instructions
     { X86::VPCMOVrr,              X86::VPCMOVrm,              0 },
@@ -3420,11 +3456,11 @@ bool X86InstrInfo::isUnpredicatedTerminator(const MachineInstr *MI) const {
   return !isPredicated(MI);
 }
 
-bool X86InstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
-                                 MachineBasicBlock *&TBB,
-                                 MachineBasicBlock *&FBB,
-                                 SmallVectorImpl<MachineOperand> &Cond,
-                                 bool AllowModify) const {
+bool X86InstrInfo::AnalyzeBranchImpl(
+    MachineBasicBlock &MBB, MachineBasicBlock *&TBB, MachineBasicBlock *&FBB,
+    SmallVectorImpl<MachineOperand> &Cond,
+    SmallVectorImpl<MachineInstr *> &CondBranches, bool AllowModify) const {
+
   // Start from the bottom of the block and work up, examining the
   // terminator instructions.
   MachineBasicBlock::iterator I = MBB.end();
@@ -3522,6 +3558,7 @@ bool X86InstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
       FBB = TBB;
       TBB = I->getOperand(0).getMBB();
       Cond.push_back(MachineOperand::CreateImm(BranchCode));
+      CondBranches.push_back(I);
       continue;
     }
 
@@ -3559,9 +3596,88 @@ bool X86InstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
 
     // Update the MachineOperand.
     Cond[0].setImm(BranchCode);
+    CondBranches.push_back(I);
   }
 
   return false;
+}
+
+bool X86InstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
+                                 MachineBasicBlock *&TBB,
+                                 MachineBasicBlock *&FBB,
+                                 SmallVectorImpl<MachineOperand> &Cond,
+                                 bool AllowModify) const {
+  SmallVector<MachineInstr *, 4> CondBranches;
+  return AnalyzeBranchImpl(MBB, TBB, FBB, Cond, CondBranches, AllowModify);
+}
+
+bool X86InstrInfo::AnalyzeBranchPredicate(MachineBasicBlock &MBB,
+                                          MachineBranchPredicate &MBP,
+                                          bool AllowModify) const {
+  using namespace std::placeholders;
+
+  SmallVector<MachineOperand, 4> Cond;
+  SmallVector<MachineInstr *, 4> CondBranches;
+  if (AnalyzeBranchImpl(MBB, MBP.TrueDest, MBP.FalseDest, Cond, CondBranches,
+                        AllowModify))
+    return true;
+
+  if (Cond.size() != 1)
+    return true;
+
+  assert(MBP.TrueDest && "expected!");
+
+  if (!MBP.FalseDest)
+    MBP.FalseDest = MBB.getNextNode();
+
+  const TargetRegisterInfo *TRI = &getRegisterInfo();
+
+  MachineInstr *ConditionDef = nullptr;
+  bool SingleUseCondition = true;
+
+  for (auto I = std::next(MBB.rbegin()), E = MBB.rend(); I != E; ++I) {
+    if (I->modifiesRegister(X86::EFLAGS, TRI)) {
+      ConditionDef = &*I;
+      break;
+    }
+
+    if (I->readsRegister(X86::EFLAGS, TRI))
+      SingleUseCondition = false;
+  }
+
+  if (!ConditionDef)
+    return true;
+
+  if (SingleUseCondition) {
+    for (auto *Succ : MBB.successors())
+      if (Succ->isLiveIn(X86::EFLAGS))
+        SingleUseCondition = false;
+  }
+
+  MBP.ConditionDef = ConditionDef;
+  MBP.SingleUseCondition = SingleUseCondition;
+
+  // Currently we only recognize the simple pattern:
+  //
+  //   test %reg, %reg
+  //   je %label
+  //
+  const unsigned TestOpcode =
+      Subtarget.is64Bit() ? X86::TEST64rr : X86::TEST32rr;
+
+  if (ConditionDef->getOpcode() == TestOpcode &&
+      ConditionDef->getNumOperands() == 3 &&
+      ConditionDef->getOperand(0).isIdenticalTo(ConditionDef->getOperand(1)) &&
+      (Cond[0].getImm() == X86::COND_NE || Cond[0].getImm() == X86::COND_E)) {
+    MBP.LHS = ConditionDef->getOperand(0);
+    MBP.RHS = MachineOperand::CreateImm(0);
+    MBP.Predicate = Cond[0].getImm() == X86::COND_NE
+                        ? MachineBranchPredicate::PRED_NE
+                        : MachineBranchPredicate::PRED_EQ;
+    return false;
+  }
+
+  return true;
 }
 
 unsigned X86InstrInfo::RemoveBranch(MachineBasicBlock &MBB) const {
@@ -3586,8 +3702,7 @@ unsigned X86InstrInfo::RemoveBranch(MachineBasicBlock &MBB) const {
 
 unsigned
 X86InstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
-                           MachineBasicBlock *FBB,
-                           const SmallVectorImpl<MachineOperand> &Cond,
+                           MachineBasicBlock *FBB, ArrayRef<MachineOperand> Cond,
                            DebugLoc DL) const {
   // Shouldn't be a fall through.
   assert(TBB && "InsertBranch must not be told to insert a fallthrough");
@@ -3635,7 +3750,7 @@ X86InstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
 
 bool X86InstrInfo::
 canInsertSelect(const MachineBasicBlock &MBB,
-                const SmallVectorImpl<MachineOperand> &Cond,
+                ArrayRef<MachineOperand> Cond,
                 unsigned TrueReg, unsigned FalseReg,
                 int &CondCycles, int &TrueCycles, int &FalseCycles) const {
   // Not all subtargets have cmov instructions.
@@ -3672,8 +3787,7 @@ canInsertSelect(const MachineBasicBlock &MBB,
 
 void X86InstrInfo::insertSelect(MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator I, DebugLoc DL,
-                                unsigned DstReg,
-                                const SmallVectorImpl<MachineOperand> &Cond,
+                                unsigned DstReg, ArrayRef<MachineOperand> Cond,
                                 unsigned TrueReg, unsigned FalseReg) const {
    MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
    assert(Cond.size() == 1 && "Invalid Cond array");
@@ -3929,6 +4043,36 @@ static unsigned getLoadStoreRegOpcode(unsigned Reg,
     else
       return load ? X86::VMOVUPSZrm : X86::VMOVUPSZmr;
   }
+}
+
+bool X86InstrInfo::getMemOpBaseRegImmOfs(MachineInstr *MemOp, unsigned &BaseReg,
+                                         unsigned &Offset,
+                                         const TargetRegisterInfo *TRI) const {
+  const MCInstrDesc &Desc = MemOp->getDesc();
+  int MemRefBegin = X86II::getMemoryOperandNo(Desc.TSFlags, MemOp->getOpcode());
+  if (MemRefBegin < 0)
+    return false;
+
+  MemRefBegin += X86II::getOperandBias(Desc);
+
+  BaseReg = MemOp->getOperand(MemRefBegin + X86::AddrBaseReg).getReg();
+  if (MemOp->getOperand(MemRefBegin + X86::AddrScaleAmt).getImm() != 1)
+    return false;
+
+  if (MemOp->getOperand(MemRefBegin + X86::AddrIndexReg).getReg() !=
+      X86::NoRegister)
+    return false;
+
+  const MachineOperand &DispMO = MemOp->getOperand(MemRefBegin + X86::AddrDisp);
+
+  // Displacement can be symbolic
+  if (!DispMO.isImm())
+    return false;
+
+  Offset = DispMO.getImm();
+
+  return (MemOp->getOperand(MemRefBegin + X86::AddrIndexReg).getReg() ==
+          X86::NoRegister);
 }
 
 static unsigned getStoreRegOpcode(unsigned SrcReg,
@@ -4549,7 +4693,7 @@ MachineInstr *X86InstrInfo::optimizeLoadInstr(MachineInstr *MI,
   DefMI = MRI->getVRegDef(FoldAsLoadDefReg);
   assert(DefMI);
   bool SawStore = false;
-  if (!DefMI->isSafeToMove(this, nullptr, SawStore))
+  if (!DefMI->isSafeToMove(nullptr, SawStore))
     return nullptr;
 
   // Collect information about virtual register operands of MI.
@@ -4667,8 +4811,17 @@ bool X86InstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
   return false;
 }
 
+static void addOperands(MachineInstrBuilder &MIB, ArrayRef<MachineOperand> MOs) {
+  unsigned NumAddrOps = MOs.size();
+  for (unsigned i = 0; i != NumAddrOps; ++i)
+    MIB.addOperand(MOs[i]);
+  if (NumAddrOps < 4) // FrameIndex only
+    addOffset(MIB, 0);
+}
+
 static MachineInstr *FuseTwoAddrInst(MachineFunction &MF, unsigned Opcode,
                                      ArrayRef<MachineOperand> MOs,
+                                     MachineBasicBlock::iterator InsertPt,
                                      MachineInstr *MI,
                                      const TargetInstrInfo &TII) {
   // Create the base instruction with the memory operand as the first part.
@@ -4676,11 +4829,7 @@ static MachineInstr *FuseTwoAddrInst(MachineFunction &MF, unsigned Opcode,
   MachineInstr *NewMI = MF.CreateMachineInstr(TII.get(Opcode),
                                               MI->getDebugLoc(), true);
   MachineInstrBuilder MIB(MF, NewMI);
-  unsigned NumAddrOps = MOs.size();
-  for (unsigned i = 0; i != NumAddrOps; ++i)
-    MIB.addOperand(MOs[i]);
-  if (NumAddrOps < 4)  // FrameIndex only
-    addOffset(MIB, 0);
+  addOperands(MIB, MOs);
 
   // Loop over the rest of the ri operands, converting them over.
   unsigned NumOps = MI->getDesc().getNumOperands()-2;
@@ -4692,11 +4841,16 @@ static MachineInstr *FuseTwoAddrInst(MachineFunction &MF, unsigned Opcode,
     MachineOperand &MO = MI->getOperand(i);
     MIB.addOperand(MO);
   }
+
+  MachineBasicBlock *MBB = InsertPt->getParent();
+  MBB->insert(InsertPt, NewMI);
+
   return MIB;
 }
 
 static MachineInstr *FuseInst(MachineFunction &MF, unsigned Opcode,
                               unsigned OpNo, ArrayRef<MachineOperand> MOs,
+                              MachineBasicBlock::iterator InsertPt,
                               MachineInstr *MI, const TargetInstrInfo &TII) {
   // Omit the implicit operands, something BuildMI can't do.
   MachineInstr *NewMI = MF.CreateMachineInstr(TII.get(Opcode),
@@ -4707,38 +4861,32 @@ static MachineInstr *FuseInst(MachineFunction &MF, unsigned Opcode,
     MachineOperand &MO = MI->getOperand(i);
     if (i == OpNo) {
       assert(MO.isReg() && "Expected to fold into reg operand!");
-      unsigned NumAddrOps = MOs.size();
-      for (unsigned i = 0; i != NumAddrOps; ++i)
-        MIB.addOperand(MOs[i]);
-      if (NumAddrOps < 4)  // FrameIndex only
-        addOffset(MIB, 0);
+      addOperands(MIB, MOs);
     } else {
       MIB.addOperand(MO);
     }
   }
+
+  MachineBasicBlock *MBB = InsertPt->getParent();
+  MBB->insert(InsertPt, NewMI);
+
   return MIB;
 }
 
 static MachineInstr *MakeM0Inst(const TargetInstrInfo &TII, unsigned Opcode,
                                 ArrayRef<MachineOperand> MOs,
+                                MachineBasicBlock::iterator InsertPt,
                                 MachineInstr *MI) {
-  MachineFunction &MF = *MI->getParent()->getParent();
-  MachineInstrBuilder MIB = BuildMI(MF, MI->getDebugLoc(), TII.get(Opcode));
-
-  unsigned NumAddrOps = MOs.size();
-  for (unsigned i = 0; i != NumAddrOps; ++i)
-    MIB.addOperand(MOs[i]);
-  if (NumAddrOps < 4)  // FrameIndex only
-    addOffset(MIB, 0);
+  MachineInstrBuilder MIB = BuildMI(*InsertPt->getParent(), InsertPt,
+                                    MI->getDebugLoc(), TII.get(Opcode));
+  addOperands(MIB, MOs);
   return MIB.addImm(0);
 }
 
-MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
-                                                  MachineInstr *MI,
-                                                  unsigned OpNum,
-                                                  ArrayRef<MachineOperand> MOs,
-                                                  unsigned Size, unsigned Align,
-                                                  bool AllowCommute) const {
+MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
+    MachineFunction &MF, MachineInstr *MI, unsigned OpNum,
+    ArrayRef<MachineOperand> MOs, MachineBasicBlock::iterator InsertPt,
+    unsigned Size, unsigned Align, bool AllowCommute) const {
   const DenseMap<unsigned,
                  std::pair<unsigned,unsigned> > *OpcodeTablePtr = nullptr;
   bool isCallRegIndirect = Subtarget.callRegIndirect();
@@ -4772,7 +4920,7 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
     isTwoAddrFold = true;
   } else if (OpNum == 0) {
     if (MI->getOpcode() == X86::MOV32r0) {
-      NewMI = MakeM0Inst(*this, X86::MOV32mi, MOs, MI);
+      NewMI = MakeM0Inst(*this, X86::MOV32mi, MOs, InsertPt, MI);
       if (NewMI)
         return NewMI;
     }
@@ -4817,9 +4965,9 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
       }
 
       if (isTwoAddrFold)
-        NewMI = FuseTwoAddrInst(MF, Opcode, MOs, MI, *this);
+        NewMI = FuseTwoAddrInst(MF, Opcode, MOs, InsertPt, MI, *this);
       else
-        NewMI = FuseInst(MF, Opcode, OpNum, MOs, MI, *this);
+        NewMI = FuseInst(MF, Opcode, OpNum, MOs, InsertPt, MI, *this);
 
       if (NarrowToMOV32rm) {
         // If this is the special case where we use a MOV32rm to load a 32-bit
@@ -4871,8 +5019,9 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
         // Attempt to fold with the commuted version of the instruction.
         unsigned CommuteOp =
             (CommuteOpIdx1 == OriginalOpIdx ? CommuteOpIdx2 : CommuteOpIdx1);
-        NewMI = foldMemoryOperandImpl(MF, MI, CommuteOp, MOs, Size, Align,
-                                      /*AllowCommute=*/false);
+        NewMI =
+            foldMemoryOperandImpl(MF, MI, CommuteOp, MOs, InsertPt, Size, Align,
+                                  /*AllowCommute=*/false);
         if (NewMI)
           return NewMI;
 
@@ -5101,10 +5250,9 @@ breakPartialRegDependency(MachineBasicBlock::iterator MI, unsigned OpNum,
   MI->addRegisterKilled(Reg, TRI, true);
 }
 
-MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
-                                                  MachineInstr *MI,
-                                                  ArrayRef<unsigned> Ops,
-                                                  int FrameIndex) const {
+MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
+    MachineFunction &MF, MachineInstr *MI, ArrayRef<unsigned> Ops,
+    MachineBasicBlock::iterator InsertPt, int FrameIndex) const {
   // Check switch flag
   if (NoFusing) return nullptr;
 
@@ -5143,40 +5291,75 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
     return nullptr;
 
   return foldMemoryOperandImpl(MF, MI, Ops[0],
-                               MachineOperand::CreateFI(FrameIndex), Size,
-                               Alignment, /*AllowCommute=*/true);
+                               MachineOperand::CreateFI(FrameIndex), InsertPt,
+                               Size, Alignment, /*AllowCommute=*/true);
 }
 
-static bool isPartialRegisterLoad(const MachineInstr &LoadMI,
-                                  const MachineFunction &MF) {
+/// Check if \p LoadMI is a partial register load that we can't fold into \p MI
+/// because the latter uses contents that wouldn't be defined in the folded
+/// version.  For instance, this transformation isn't legal:
+///   movss (%rdi), %xmm0
+///   addps %xmm0, %xmm0
+/// ->
+///   addps (%rdi), %xmm0
+///
+/// But this one is:
+///   movss (%rdi), %xmm0
+///   addss %xmm0, %xmm0
+/// ->
+///   addss (%rdi), %xmm0
+///
+static bool isNonFoldablePartialRegisterLoad(const MachineInstr &LoadMI,
+                                             const MachineInstr &UserMI,
+                                             const MachineFunction &MF) {
   unsigned Opc = LoadMI.getOpcode();
+  unsigned UserOpc = UserMI.getOpcode();
   unsigned RegSize =
       MF.getRegInfo().getRegClass(LoadMI.getOperand(0).getReg())->getSize();
 
-  if ((Opc == X86::MOVSSrm || Opc == X86::VMOVSSrm) && RegSize > 4)
+  if ((Opc == X86::MOVSSrm || Opc == X86::VMOVSSrm) && RegSize > 4) {
     // These instructions only load 32 bits, we can't fold them if the
-    // destination register is wider than 32 bits (4 bytes).
-    return true;
+    // destination register is wider than 32 bits (4 bytes), and its user
+    // instruction isn't scalar (SS).
+    switch (UserOpc) {
+    case X86::ADDSSrr_Int: case X86::VADDSSrr_Int:
+    case X86::DIVSSrr_Int: case X86::VDIVSSrr_Int:
+    case X86::MULSSrr_Int: case X86::VMULSSrr_Int:
+    case X86::SUBSSrr_Int: case X86::VSUBSSrr_Int:
+      return false;
+    default:
+      return true;
+    }
+  }
 
-  if ((Opc == X86::MOVSDrm || Opc == X86::VMOVSDrm) && RegSize > 8)
+  if ((Opc == X86::MOVSDrm || Opc == X86::VMOVSDrm) && RegSize > 8) {
     // These instructions only load 64 bits, we can't fold them if the
-    // destination register is wider than 64 bits (8 bytes).
-    return true;
+    // destination register is wider than 64 bits (8 bytes), and its user
+    // instruction isn't scalar (SD).
+    switch (UserOpc) {
+    case X86::ADDSDrr_Int: case X86::VADDSDrr_Int:
+    case X86::DIVSDrr_Int: case X86::VDIVSDrr_Int:
+    case X86::MULSDrr_Int: case X86::VMULSDrr_Int:
+    case X86::SUBSDrr_Int: case X86::VSUBSDrr_Int:
+      return false;
+    default:
+      return true;
+    }
+  }
 
   return false;
 }
 
-MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
-                                                  MachineInstr *MI,
-                                                  ArrayRef<unsigned> Ops,
-                                                  MachineInstr *LoadMI) const {
+MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
+    MachineFunction &MF, MachineInstr *MI, ArrayRef<unsigned> Ops,
+    MachineBasicBlock::iterator InsertPt, MachineInstr *LoadMI) const {
   // If loading from a FrameIndex, fold directly from the FrameIndex.
   unsigned NumOps = LoadMI->getDesc().getNumOperands();
   int FrameIndex;
   if (isLoadFromStackSlot(LoadMI, FrameIndex)) {
-    if (isPartialRegisterLoad(*LoadMI, MF))
+    if (isNonFoldablePartialRegisterLoad(*LoadMI, *MI, MF))
       return nullptr;
-    return foldMemoryOperandImpl(MF, MI, Ops, FrameIndex);
+    return foldMemoryOperandImpl(MF, MI, Ops, InsertPt, FrameIndex);
   }
 
   // Check switch flag
@@ -5287,7 +5470,7 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
     break;
   }
   default: {
-    if (isPartialRegisterLoad(*LoadMI, MF))
+    if (isNonFoldablePartialRegisterLoad(*LoadMI, *MI, MF))
       return nullptr;
 
     // Folding a normal load. Just copy the load's address operands.
@@ -5296,7 +5479,7 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
     break;
   }
   }
-  return foldMemoryOperandImpl(MF, MI, Ops[0], MOs,
+  return foldMemoryOperandImpl(MF, MI, Ops[0], MOs, InsertPt,
                                /*Size=*/0, Alignment, /*AllowCommute=*/true);
 }
 
@@ -5969,6 +6152,7 @@ static const uint16_t ReplaceableInstrs[][3] = {
   { X86::MOVAPSrr,   X86::MOVAPDrr,  X86::MOVDQArr  },
   { X86::MOVUPSmr,   X86::MOVUPDmr,  X86::MOVDQUmr  },
   { X86::MOVUPSrm,   X86::MOVUPDrm,  X86::MOVDQUrm  },
+  { X86::MOVLPSmr,   X86::MOVLPDmr,  X86::MOVPQI2QImr  },
   { X86::MOVNTPSmr,  X86::MOVNTPDmr, X86::MOVNTDQmr },
   { X86::ANDNPSrm,   X86::ANDNPDrm,  X86::PANDNrm   },
   { X86::ANDNPSrr,   X86::ANDNPDrr,  X86::PANDNrr   },
@@ -5984,6 +6168,7 @@ static const uint16_t ReplaceableInstrs[][3] = {
   { X86::VMOVAPSrr,  X86::VMOVAPDrr,  X86::VMOVDQArr  },
   { X86::VMOVUPSmr,  X86::VMOVUPDmr,  X86::VMOVDQUmr  },
   { X86::VMOVUPSrm,  X86::VMOVUPDrm,  X86::VMOVDQUrm  },
+  { X86::VMOVLPSmr,  X86::VMOVLPDmr,  X86::VMOVPQI2QImr  },
   { X86::VMOVNTPSmr, X86::VMOVNTPDmr, X86::VMOVNTDQmr },
   { X86::VANDNPSrm,  X86::VANDNPDrm,  X86::VPANDNrm   },
   { X86::VANDNPSrr,  X86::VANDNPDrr,  X86::VPANDNrr   },
@@ -6081,7 +6266,7 @@ void X86InstrInfo::getNoopForMachoTarget(MCInst &NopInst) const {
 void X86InstrInfo::getUnconditionalBranch(
     MCInst &Branch, const MCSymbolRefExpr *BranchTarget) const {
   Branch.setOpcode(X86::JMP_1);
-  Branch.addOperand(MCOperand::CreateExpr(BranchTarget));
+  Branch.addOperand(MCOperand::createExpr(BranchTarget));
 }
 
 // This code must remain in sync with getJumpInstrTableEntryBound in this class!
@@ -6178,11 +6363,225 @@ bool X86InstrInfo::isHighLatencyDef(int opc) const {
 }
 
 bool X86InstrInfo::
-hasHighOperandLatency(const InstrItineraryData *ItinData,
+hasHighOperandLatency(const TargetSchedModel &SchedModel,
                       const MachineRegisterInfo *MRI,
                       const MachineInstr *DefMI, unsigned DefIdx,
                       const MachineInstr *UseMI, unsigned UseIdx) const {
   return isHighLatencyDef(DefMI->getOpcode());
+}
+
+static bool hasVirtualRegDefsInBasicBlock(const MachineInstr &Inst,
+                                          const MachineBasicBlock *MBB) {
+  assert(Inst.getNumOperands() == 3 && "Reassociation needs binary operators");
+  const MachineOperand &Op1 = Inst.getOperand(1);
+  const MachineOperand &Op2 = Inst.getOperand(2);
+  const MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
+
+  // We need virtual register definitions.
+  MachineInstr *MI1 = nullptr;
+  MachineInstr *MI2 = nullptr;
+  if (Op1.isReg() && TargetRegisterInfo::isVirtualRegister(Op1.getReg()))
+    MI1 = MRI.getUniqueVRegDef(Op1.getReg());
+  if (Op2.isReg() && TargetRegisterInfo::isVirtualRegister(Op2.getReg()))
+    MI2 = MRI.getUniqueVRegDef(Op2.getReg());
+
+  // And they need to be in the trace (otherwise, they won't have a depth).
+  if (MI1 && MI2 && MI1->getParent() == MBB && MI2->getParent() == MBB)
+    return true;
+
+  return false;
+}
+
+static bool hasReassocSibling(const MachineInstr &Inst, bool &Commuted) {
+  const MachineBasicBlock *MBB = Inst.getParent();
+  const MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
+  MachineInstr *MI1 = MRI.getUniqueVRegDef(Inst.getOperand(1).getReg());
+  MachineInstr *MI2 = MRI.getUniqueVRegDef(Inst.getOperand(2).getReg());
+  unsigned AssocOpcode = Inst.getOpcode();
+
+  // If only one operand has the same opcode and it's the second source operand,
+  // the operands must be commuted.
+  Commuted = MI1->getOpcode() != AssocOpcode && MI2->getOpcode() == AssocOpcode;
+  if (Commuted)
+    std::swap(MI1, MI2);
+
+  // 1. The previous instruction must be the same type as Inst.
+  // 2. The previous instruction must have virtual register definitions for its
+  //    operands in the same basic block as Inst.
+  // 3. The previous instruction's result must only be used by Inst.
+  if (MI1->getOpcode() == AssocOpcode &&
+      hasVirtualRegDefsInBasicBlock(*MI1, MBB) &&
+      MRI.hasOneNonDBGUse(MI1->getOperand(0).getReg()))
+    return true;
+  
+  return false;
+}
+
+/// Return true if the input instruction is part of a chain of dependent ops
+/// that are suitable for reassociation, otherwise return false.
+/// If the instruction's operands must be commuted to have a previous
+/// instruction of the same type define the first source operand, Commuted will
+/// be set to true.
+static bool isReassocCandidate(const MachineInstr &Inst, unsigned AssocOpcode,
+                               bool &Commuted) {
+  // 1. The instruction must have the correct type.
+  // 2. The instruction must have virtual register definitions for its
+  //    operands in the same basic block.
+  // 3. The instruction must have a reassociatable sibling.
+  if (Inst.getOpcode() == AssocOpcode &&
+      hasVirtualRegDefsInBasicBlock(Inst, Inst.getParent()) &&
+      hasReassocSibling(Inst, Commuted))
+    return true;
+
+  return false;
+}
+
+// FIXME: This has the potential to be expensive (compile time) while not
+// improving the code at all. Some ways to limit the overhead:
+// 1. Track successful transforms; bail out if hit rate gets too low.
+// 2. Only enable at -O3 or some other non-default optimization level.
+// 3. Pre-screen pattern candidates here: if an operand of the previous
+//    instruction is known to not increase the critical path, then don't match
+//    that pattern.
+bool X86InstrInfo::getMachineCombinerPatterns(MachineInstr &Root,
+        SmallVectorImpl<MachineCombinerPattern::MC_PATTERN> &Patterns) const {
+  if (!Root.getParent()->getParent()->getTarget().Options.UnsafeFPMath)
+    return false;
+
+  // TODO: There is nothing x86-specific here except the instruction type.
+  // This logic could be hoisted into the machine combiner pass itself.
+
+  // Look for this reassociation pattern:
+  //   B = A op X (Prev)
+  //   C = B op Y (Root)
+
+  // TODO: There are many more associative instruction types to match:
+  //       1. Other forms of scalar FP add (non-AVX)
+  //       2. Other data types (double, integer, vectors)
+  //       3. Other math / logic operations (mul, and, or)
+  unsigned AssocOpcode = X86::VADDSSrr;
+
+  bool Commute = false;
+  if (isReassocCandidate(Root, AssocOpcode, Commute)) {
+    // We found a sequence of instructions that may be suitable for a
+    // reassociation of operands to increase ILP. Specify each commutation
+    // possibility for the Prev instruction in the sequence and let the
+    // machine combiner decide if changing the operands is worthwhile.
+    if (Commute) {
+      Patterns.push_back(MachineCombinerPattern::MC_REASSOC_AX_YB);
+      Patterns.push_back(MachineCombinerPattern::MC_REASSOC_XA_YB);
+    } else {
+      Patterns.push_back(MachineCombinerPattern::MC_REASSOC_AX_BY);
+      Patterns.push_back(MachineCombinerPattern::MC_REASSOC_XA_BY);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+/// Attempt the following reassociation to reduce critical path length:
+///   B = A op X (Prev)
+///   C = B op Y (Root)
+///   ===>
+///   B = X op Y
+///   C = A op B
+static void reassociateOps(MachineInstr &Root, MachineInstr &Prev,
+                           MachineCombinerPattern::MC_PATTERN Pattern,
+                           SmallVectorImpl<MachineInstr *> &InsInstrs,
+                           SmallVectorImpl<MachineInstr *> &DelInstrs,
+                           DenseMap<unsigned, unsigned> &InstrIdxForVirtReg) {
+  MachineFunction *MF = Root.getParent()->getParent();
+  MachineRegisterInfo &MRI = MF->getRegInfo();
+  const TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
+  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+  const TargetRegisterClass *RC = Root.getRegClassConstraint(0, TII, TRI);
+
+  // This array encodes the operand index for each parameter because the
+  // operands may be commuted. Each row corresponds to a pattern value,
+  // and each column specifies the index of A, B, X, Y.
+  unsigned OpIdx[4][4] = {
+    { 1, 1, 2, 2 },
+    { 1, 2, 2, 1 },
+    { 2, 1, 1, 2 },
+    { 2, 2, 1, 1 }
+  };
+
+  MachineOperand &OpA = Prev.getOperand(OpIdx[Pattern][0]);
+  MachineOperand &OpB = Root.getOperand(OpIdx[Pattern][1]);
+  MachineOperand &OpX = Prev.getOperand(OpIdx[Pattern][2]);
+  MachineOperand &OpY = Root.getOperand(OpIdx[Pattern][3]);
+  MachineOperand &OpC = Root.getOperand(0);
+  
+  unsigned RegA = OpA.getReg();
+  unsigned RegB = OpB.getReg();
+  unsigned RegX = OpX.getReg();
+  unsigned RegY = OpY.getReg();
+  unsigned RegC = OpC.getReg();
+
+  if (TargetRegisterInfo::isVirtualRegister(RegA))
+    MRI.constrainRegClass(RegA, RC);
+  if (TargetRegisterInfo::isVirtualRegister(RegB))
+    MRI.constrainRegClass(RegB, RC);
+  if (TargetRegisterInfo::isVirtualRegister(RegX))
+    MRI.constrainRegClass(RegX, RC);
+  if (TargetRegisterInfo::isVirtualRegister(RegY))
+    MRI.constrainRegClass(RegY, RC);
+  if (TargetRegisterInfo::isVirtualRegister(RegC))
+    MRI.constrainRegClass(RegC, RC);
+
+  // Create a new virtual register for the result of (X op Y) instead of
+  // recycling RegB because the MachineCombiner's computation of the critical
+  // path requires a new register definition rather than an existing one.
+  unsigned NewVR = MRI.createVirtualRegister(RC);
+  InstrIdxForVirtReg.insert(std::make_pair(NewVR, 0));
+
+  unsigned Opcode = Root.getOpcode();
+  bool KillA = OpA.isKill();
+  bool KillX = OpX.isKill();
+  bool KillY = OpY.isKill();
+
+  // Create new instructions for insertion.
+  MachineInstrBuilder MIB1 =
+    BuildMI(*MF, Prev.getDebugLoc(), TII->get(Opcode), NewVR)
+      .addReg(RegX, getKillRegState(KillX))
+      .addReg(RegY, getKillRegState(KillY));
+  InsInstrs.push_back(MIB1);
+  
+  MachineInstrBuilder MIB2 =
+    BuildMI(*MF, Root.getDebugLoc(), TII->get(Opcode), RegC)
+      .addReg(RegA, getKillRegState(KillA))
+      .addReg(NewVR, getKillRegState(true));
+  InsInstrs.push_back(MIB2);
+
+  // Record old instructions for deletion.
+  DelInstrs.push_back(&Prev);
+  DelInstrs.push_back(&Root);
+}
+
+void X86InstrInfo::genAlternativeCodeSequence(
+    MachineInstr &Root,
+    MachineCombinerPattern::MC_PATTERN Pattern,
+    SmallVectorImpl<MachineInstr *> &InsInstrs,
+    SmallVectorImpl<MachineInstr *> &DelInstrs,
+    DenseMap<unsigned, unsigned> &InstIdxForVirtReg) const {
+  MachineRegisterInfo &MRI = Root.getParent()->getParent()->getRegInfo();
+
+  // Select the previous instruction in the sequence based on the input pattern.
+  MachineInstr *Prev = nullptr;
+  switch (Pattern) {
+    case MachineCombinerPattern::MC_REASSOC_AX_BY:
+    case MachineCombinerPattern::MC_REASSOC_XA_BY:
+      Prev = MRI.getUniqueVRegDef(Root.getOperand(1).getReg());
+      break;
+    case MachineCombinerPattern::MC_REASSOC_AX_YB:
+    case MachineCombinerPattern::MC_REASSOC_XA_YB:
+      Prev = MRI.getUniqueVRegDef(Root.getOperand(2).getReg());
+  }
+  assert(Prev && "Unknown pattern for machine combiner");
+  
+  reassociateOps(Root, *Prev, Pattern, InsInstrs, DelInstrs, InstIdxForVirtReg);
+  return;
 }
 
 namespace {

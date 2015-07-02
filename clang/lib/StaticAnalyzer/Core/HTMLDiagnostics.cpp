@@ -22,6 +22,7 @@
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
@@ -45,7 +46,7 @@ class HTMLDiagnostics : public PathDiagnosticConsumer {
 public:
   HTMLDiagnostics(AnalyzerOptions &AnalyzerOpts, const std::string& prefix, const Preprocessor &pp);
 
-  virtual ~HTMLDiagnostics() { FlushDiagnostics(nullptr); }
+  ~HTMLDiagnostics() override { FlushDiagnostics(nullptr); }
 
   void FlushDiagnosticsImpl(std::vector<const PathDiagnostic *> &Diags,
                             FilesMade *filesMade) override;
@@ -306,7 +307,7 @@ void HTMLDiagnostics::ReportDiag(const PathDiagnostic& D,
                                                FD,
                                                llvm::sys::fs::F_RW |
                                                llvm::sys::fs::F_Excl);
-          if (EC && EC != std::errc::file_exists) {
+          if (EC && EC != llvm::errc::file_exists) {
               llvm::errs() << "warning: could not create file '" << Model
                            << "': " << EC.message() << '\n';
               return;

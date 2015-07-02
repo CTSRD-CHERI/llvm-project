@@ -69,7 +69,7 @@
 #endif // KMP_LIB_TYPE
 
 // Detect link type (static, dynamic).
-#ifdef GUIDEDLL_EXPORTS
+#ifdef KMP_DYNAMIC_LIB
     #define KMP_LINK_TYPE "dynamic"
 #else
     #define KMP_LINK_TYPE "static"
@@ -103,7 +103,7 @@ char const __kmp_version_copyright[]      = KMP_VERSION_PREFIX KMP_COPYRIGHT;
 char const __kmp_version_lib_ver[]        = KMP_VERSION_PREFIX "version: " stringer( KMP_VERSION_MAJOR ) "." stringer( KMP_VERSION_MINOR ) "." stringer( KMP_VERSION_BUILD );
 char const __kmp_version_lib_type[]       = KMP_VERSION_PREFIX "library type: " KMP_LIB_TYPE;
 char const __kmp_version_link_type[]      = KMP_VERSION_PREFIX "link type: " KMP_LINK_TYPE;
-char const __kmp_version_build_time[]     = KMP_VERSION_PREFIX "build time: " _KMP_BUILD_TIME;
+char const __kmp_version_build_time[]     = KMP_VERSION_PREFIX "build time: " __DATE__ " " __TIME__;
 #if KMP_MIC2
     char const __kmp_version_target_env[] = KMP_VERSION_PREFIX "target environment: MIC2";
 #endif

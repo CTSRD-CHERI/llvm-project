@@ -53,6 +53,7 @@
 #include <cassert>
 #include <cstring>
 #include <iterator>
+#include <string>
 #include <utility>
 
 namespace llvm {
@@ -75,7 +76,7 @@ class hash_code {
 public:
   /// \brief Default construct a hash_code.
   /// Note that this leaves the value uninitialized.
-  hash_code() {}
+  hash_code() = default;
 
   /// \brief Form a hash code directly from a numerical value.
   hash_code(size_t value) : value(value) {}

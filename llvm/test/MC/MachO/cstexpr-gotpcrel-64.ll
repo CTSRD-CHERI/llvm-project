@@ -79,3 +79,17 @@ define i32 @t0(i32 %a) {
                            to i32), %a
   ret i32 %x
 }
+
+; Also test direct instruction uses.
+define i32** @t1() {
+  ret i32** @bargotequiv
+}
+
+; Do not crash when a pattern cannot be matched as a GOT equivalent
+
+@a = external global i8
+@b = internal unnamed_addr constant i8* @a
+
+; X86-LABEL: _c:
+; X86:   .quad _b
+@c = global i8** @b

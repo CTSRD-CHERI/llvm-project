@@ -38,7 +38,7 @@ class targetCommandTestCase(TestBase):
 
     # rdar://problem/9763907
     # 'target variable' command fails if the target program has been run
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_target_variable_command_with_dsym(self):
         """Test 'target variable' command before and after starting the inferior."""
@@ -48,7 +48,7 @@ class targetCommandTestCase(TestBase):
 
         self.do_target_variable_command('globals')
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_target_variable_command_with_dsym_no_fail(self):
         """Test 'target variable' command before and after starting the inferior."""
@@ -82,15 +82,15 @@ class targetCommandTestCase(TestBase):
                     break;
 
         self.runCmd("target create " + exe_a, CURRENT_EXECUTABLE_SET)
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         self.runCmd("target create " + exe_b, CURRENT_EXECUTABLE_SET)
         lldbutil.run_break_set_by_file_and_line (self, 'b.c', self.line_b, num_expected_locations=1, loc_exact=True)
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         self.runCmd("target create " + exe_c, CURRENT_EXECUTABLE_SET)
         lldbutil.run_break_set_by_file_and_line (self, 'c.c', self.line_c, num_expected_locations=1, loc_exact=True)
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         self.runCmd("target list")
 

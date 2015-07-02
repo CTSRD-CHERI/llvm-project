@@ -38,6 +38,15 @@
 using namespace lldb;
 using namespace lldb_private;
 
+static ConstString GetSymbolOrFunctionName(const SymbolContext &sym_ctx)
+{
+    if (sym_ctx.symbol)
+        return sym_ctx.symbol->GetName();
+    else if (sym_ctx.function)
+        return sym_ctx.function->GetName();
+    return ConstString();
+}
+
 RegisterContextLLDB::RegisterContextLLDB
 (
     Thread& thread,
@@ -175,12 +184,12 @@ RegisterContextLLDB::InitializeZerothFrame()
     if (m_sym_ctx.symbol)
     {
         UnwindLogMsg ("with pc value of 0x%" PRIx64 ", symbol name is '%s'",
-                      current_pc, m_sym_ctx.symbol == NULL ? "" : m_sym_ctx.symbol->GetName().AsCString());
+                      current_pc, GetSymbolOrFunctionName(m_sym_ctx).AsCString(""));
     }
     else if (m_sym_ctx.function)
     {
         UnwindLogMsg ("with pc value of 0x%" PRIx64 ", function name is '%s'",
-                      current_pc, m_sym_ctx.symbol == NULL ? "" : m_sym_ctx.function->GetName().AsCString());
+                      current_pc, GetSymbolOrFunctionName(m_sym_ctx).AsCString(""));
     }
     else
     {
@@ -457,12 +466,12 @@ RegisterContextLLDB::InitializeNonZerothFrame()
     if (m_sym_ctx.symbol)
     {
         UnwindLogMsg ("with pc value of 0x%" PRIx64 ", symbol name is '%s'",
-                      pc, m_sym_ctx.symbol == NULL ? "" : m_sym_ctx.symbol->GetName().AsCString());
+                      pc, GetSymbolOrFunctionName(m_sym_ctx).AsCString(""));
     }
     else if (m_sym_ctx.function)
     {
         UnwindLogMsg ("with pc value of 0x%" PRIx64 ", function name is '%s'",
-                      pc, m_sym_ctx.symbol == NULL ? "" : m_sym_ctx.function->GetName().AsCString());
+                      pc, GetSymbolOrFunctionName(m_sym_ctx).AsCString(""));
     }
     else
     {
@@ -500,7 +509,7 @@ RegisterContextLLDB::InitializeNonZerothFrame()
     if (decr_pc_and_recompute_addr_range)
     {
         UnwindLogMsg ("Backing up the pc value of 0x%" PRIx64 " by 1 and re-doing symbol lookup; old symbol was %s",
-                      pc, m_sym_ctx.symbol == NULL ? "" : m_sym_ctx.symbol->GetName().AsCString());
+                      pc, GetSymbolOrFunctionName(m_sym_ctx).AsCString(""));
         Address temporary_pc;
         temporary_pc.SetLoadAddress (pc - 1, &process->GetTarget());
         m_sym_ctx.Clear (false);
@@ -514,7 +523,7 @@ RegisterContextLLDB::InitializeNonZerothFrame()
             if (m_sym_ctx.GetAddressRange (resolve_scope, 0, false,  addr_range))
                 m_sym_ctx_valid = true;
         }
-        UnwindLogMsg ("Symbol is now %s", m_sym_ctx.symbol == NULL ? "" : m_sym_ctx.symbol->GetName().AsCString());
+        UnwindLogMsg ("Symbol is now %s", GetSymbolOrFunctionName(m_sym_ctx).AsCString(""));
     }
 
     // If we were able to find a symbol/function, set addr_range_ptr to the bounds of that symbol/function.
@@ -683,7 +692,7 @@ RegisterContextLLDB::GetFastUnwindPlanForFrame ()
     if (m_frame_type == eTrapHandlerFrame || m_frame_type == eDebuggerFrame)
         return unwind_plan_sp;
 
-    unwind_plan_sp = func_unwinders_sp->GetUnwindPlanFastUnwind (m_thread);
+    unwind_plan_sp = func_unwinders_sp->GetUnwindPlanFastUnwind (*m_thread.CalculateTarget(), m_thread);
     if (unwind_plan_sp)
     {
         if (unwind_plan_sp->PlanValidAtAddress (m_current_pc))
@@ -1394,16 +1403,13 @@ RegisterContextLLDB::SavedLocationForRegister (uint32_t lldb_regnum, lldb_privat
 
     if (unwindplan_regloc.IsSame())
     {
-        if (IsFrameZero ())
-        {
-            UnwindLogMsg ("could not supply caller's %s (%d) location, IsSame", 
-                          regnum.GetName(), regnum.GetAsKind (eRegisterKindLLDB));
-            return UnwindLLDB::RegisterSearchResult::eRegisterNotFound;
-        }
-        else
-        {
-            return UnwindLLDB::RegisterSearchResult::eRegisterNotFound;
-        }
+        regloc.type = UnwindLLDB::RegisterLocation::eRegisterInRegister;
+        regloc.location.register_number = regnum.GetAsKind (eRegisterKindLLDB);
+        m_registers[regnum.GetAsKind (eRegisterKindLLDB)] = regloc;
+        UnwindLogMsg ("supplying caller's register %s (%d), saved in register %s (%d)", 
+                      regnum.GetName(), regnum.GetAsKind (eRegisterKindLLDB), 
+                      regnum.GetName(), regnum.GetAsKind (eRegisterKindLLDB));
+        return UnwindLLDB::RegisterSearchResult::eRegisterFound;
     }
 
     if (unwindplan_regloc.IsCFAPlusOffset())

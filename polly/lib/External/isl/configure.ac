@@ -1,10 +1,10 @@
-AC_INIT([isl], [0.14], [isl-development@googlegroups.com])
+AC_INIT([isl], [0.15], [isl-development@googlegroups.com])
 AC_CONFIG_AUX_DIR([.])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign])
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 AC_SUBST(versioninfo)
-versioninfo=14:0:1
+versioninfo=15:0:0
 
 if test "x$prefix" != "xNONE"; then
 	prefix_wd=`cd $prefix && pwd`
@@ -36,15 +36,16 @@ AM_CONDITIONAL(GENERATE_DOC, test -n "$PERL" -a -n "$PDFLATEX" -a -n "$POD2HTML"
 AX_CREATE_STDINT_H(include/isl/stdint.h)
 
 AC_ARG_WITH([int],
-	    [AS_HELP_STRING([--with-int=gmp|imath],
+	    [AS_HELP_STRING([--with-int=gmp|imath|imath-32],
 			    [Which package to use to represent
 				multi-precision integers [default=gmp]])],
 	    [], [with_int=gmp])
 case "$with_int" in
-gmp|imath)
+gmp|imath|imath-32)
 	;;
 *)
-	AC_MSG_ERROR([bad value ${withval} for --with-int (use gmp or imath)])
+	AC_MSG_ERROR(
+	    [bad value ${withval} for --with-int (use gmp, imath or imath-32)])
 esac
 
 AC_SUBST(MP_CPPFLAGS)
@@ -54,15 +55,45 @@ case "$with_int" in
 gmp)
 	AX_DETECT_GMP
 	;;
-imath)
+imath|imath-32)
 	AX_DETECT_IMATH
 	;;
 esac
+if test "x$with_int" = "ximath-32" -a "x$GCC" = "xyes"; then
+	MP_CPPFLAGS="-std=gnu99 $MP_CPPFLAGS"
+fi
 
-AM_CONDITIONAL(IMATH_FOR_MP, test x$with_int = ximath)
+AM_CONDITIONAL(IMATH_FOR_MP, test x$with_int = ximath -o x$with_int = ximath-32)
 AM_CONDITIONAL(GMP_FOR_MP, test x$with_int = xgmp)
+
+AM_CONDITIONAL(SMALL_INT_OPT, test "x$with_int" == "ximath-32")
+AS_IF([test "x$with_int" == "ximath-32"], [
+	AC_DEFINE([USE_SMALL_INT_OPT], [], [Use small integer optimization])
+])
+
 AC_CHECK_DECLS(ffs,[],[],[#include <strings.h>])
 AC_CHECK_DECLS(__builtin_ffs,[],[],[])
+AC_CHECK_DECLS([_BitScanForward],[],[],[#include <intrin.h>])
+if test "x$ac_cv_have_decl_ffs" = xno -a \
+		"x$ac_cv_have_decl___builtin_ffs" = xno -a \
+		"x$ac_cv_have_decl__BitScanForward" = xno; then
+	AC_MSG_ERROR([No ffs implementation found])
+fi
+AC_CHECK_DECLS([strcasecmp,strncasecmp],[],[],[#include <strings.h>])
+AC_CHECK_DECLS([_stricmp,_strnicmp],[],[],[#include <string.h>])
+if test "x$ac_cv_have_decl_strcasecmp" = xno -a \
+		"x$ac_cv_have_decl__stricmp" = xno; then
+	AC_MSG_ERROR([No strcasecmp implementation found])
+fi
+if test "x$ac_cv_have_decl_strncasecmp" = xno -a \
+		"x$ac_cv_have_decl__strnicmp" = xno; then
+	AC_MSG_ERROR([No strncasecmp implementation found])
+fi
+AC_CHECK_DECLS([snprintf,_snprintf],[],[],[#include <stdio.h>])
+if test "x$ac_cv_have_decl_snprintf" = xno -a \
+		"x$ac_cv_have_decl__snprintf" = xno; then
+	AC_MSG_ERROR([No snprintf implementation found])
+fi
 
 AC_SUBST(CLANG_CXXFLAGS)
 AC_SUBST(CLANG_LDFLAGS)

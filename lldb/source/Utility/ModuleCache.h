@@ -14,8 +14,10 @@
 #include "lldb/lldb-forward.h"
 
 #include "lldb/Core/Error.h"
+#include "lldb/Host/File.h"
 #include "lldb/Host/FileSpec.h"
 
+#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -44,6 +46,17 @@ class UUID;
 class ModuleCache
 {
 public:
+    using Downloader = std::function<Error (const ModuleSpec&, const FileSpec&)>;
+
+    Error
+    GetAndPut(const FileSpec &root_dir_spec,
+              const char *hostname,
+              const ModuleSpec &module_spec,
+              const Downloader &downloader,
+              lldb::ModuleSP &cached_module_sp,
+              bool *did_create_ptr);
+
+private:
     Error
     Put (const FileSpec &root_dir_spec,
          const char *hostname,
@@ -54,17 +67,8 @@ public:
     Get (const FileSpec &root_dir_spec,
          const char *hostname,
          const ModuleSpec &module_spec,
-         lldb::ModuleSP &cached_module_sp);
-
-private:
-    static FileSpec
-    GetModuleDirectory (const FileSpec &root_dir_spec, const UUID &uuid);
-
-    static FileSpec
-    GetHostSysRootModulePath (const FileSpec &root_dir_spec, const char *hostname, const FileSpec &platform_module_spec);
-
-    static Error
-    CreateHostSysRootModuleSymLink (const FileSpec &sysroot_module_path_spec, const FileSpec &module_file_path);
+         lldb::ModuleSP &cached_module_sp,
+         bool *did_create_ptr);
 
     std::unordered_map<std::string, lldb::ModuleWP> m_loaded_modules;
 };

@@ -585,16 +585,14 @@ PACKAGE_BUGREPORT='polly-dev@googlegroups.com'
 PACKAGE_URL=''
 
 ac_unique_file=""lib/Analysis/ScopInfo.cpp""
+enable_option_checking=no
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+subdirs
 cuda_ld
 cuda_lib
 cuda_inc
 cuda_found
-pluto_ld
-pluto_lib
-pluto_inc
-pluto_found
 OBJEXT
 EXEEXT
 ac_ct_CXX
@@ -647,7 +645,6 @@ ac_user_opts='
 enable_option_checking
 with_llvmsrc
 with_llvmobj
-with_pluto
 enable_polly_gpu_codegen
 with_cuda
 '
@@ -660,7 +657,7 @@ LDFLAGS
 LIBS
 CPPFLAGS
 CCC'
-
+ac_subdirs_all='lib/External/isl'
 
 # Initialize some variables set by options.
 ac_init_help=
@@ -1277,7 +1274,6 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-llvmsrc          Location of LLVM Source Code
   --with-llvmobj          Location of LLVM Object Code
-  --with-pluto            prefix of pluto
   --with-cuda             prefix of cuda
 
 Some influential environment variables:
@@ -1887,8 +1883,22 @@ fi
 
 
 
-saved_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS"
+# Check whether --enable-polly_gpu_codegen was given.
+if test "${enable_polly_gpu_codegen+set}" = set; then :
+  enableval=$enable_polly_gpu_codegen;
+else
+  enableval=default
+fi
+
+case "$enableval" in
+  yes)
+$as_echo "#define GPU_CODEGEN 1" >>confdefs.h
+ ;;
+  no) ;;
+  default) ;;
+  *) as_fn_error $? "Invalid setting for --enable-polly-gpu-codegen. Use \"yes\" or \"no\"" "$LINENO" 5 ;;
+esac
+
 ac_ext=cpp
 ac_cpp='$CXXCPP $CPPFLAGS'
 ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
@@ -2408,108 +2418,6 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
   OLD_LDFLAGS=$LDFLAGS;
   OLD_LIBS=$LIBS;
 
-  LIBS="$LIBS -lpluto";
-
-  # Get include path and lib path
-
-# Check whether --with-pluto was given.
-if test "${with_pluto+set}" = set; then :
-  withval=$with_pluto; given_inc_path="$withval/include"; CXXFLAGS="-I$given_inc_path $CXXFLAGS";
-       given_lib_path="$withval/lib"; LDFLAGS="-L$given_lib_path $LDFLAGS"
-else
-  given_inc_path=inc_not_give_pluto;
-       given_lib_path=lib_not_give_pluto
-
-fi
-
-  # Check for library and headers works
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for pluto: pluto/libpluto.h in $given_inc_path, and libpluto in $given_lib_path" >&5
-$as_echo_n "checking for pluto: pluto/libpluto.h in $given_inc_path, and libpluto in $given_lib_path... " >&6; }
-
-  # try to compile a file that includes a header of the library
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include <pluto/libpluto.h>
-int
-main ()
-{
-;
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_cxx_try_link "$LINENO"; then :
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
-$as_echo "ok" >&6; }
-    pluto_found="yes"
-
-    if test "x$given_inc_path" != "xinc_not_give_pluto"; then :
-  pluto_inc="-I$given_inc_path"
-
-fi
-    pluto_lib="-lpluto"
-
-    if test "x$given_lib_path" != "xlib_not_give_pluto"; then :
-  pluto_ld="-L$given_lib_path"
-
-fi
-else
-  if test "x" = "xrequired"; then :
-  as_fn_error $? "pluto required but not found" "$LINENO" 5
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
-$as_echo "not found" >&6; }
-fi
-
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-
-  # reset original CXXFLAGS
-  CXXFLAGS=$OLD_CXXFLAGS
-  LDFLAGS=$OLD_LDFLAGS;
-  LIBS=$OLD_LIBS
-  ac_ext=c
-ac_cpp='$CPP $CPPFLAGS'
-ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
-ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
-ac_compiler_gnu=$ac_cv_c_compiler_gnu
-
-
-CXXFLAGS=$saved_CXXFLAGS
-if test "x$pluto_found" = "xyes"; then :
-
-$as_echo "#define PLUTO_FOUND 1" >>confdefs.h
-
-fi
-
-# Check whether --enable-polly_gpu_codegen was given.
-if test "${enable_polly_gpu_codegen+set}" = set; then :
-  enableval=$enable_polly_gpu_codegen;
-else
-  enableval=default
-fi
-
-case "$enableval" in
-  yes)
-$as_echo "#define GPU_CODEGEN 1" >>confdefs.h
- ;;
-  no) ;;
-  default) ;;
-  *) as_fn_error $? "Invalid setting for --enable-polly-gpu-codegen. Use \"yes\" or \"no\"" "$LINENO" 5 ;;
-esac
-
-
-  ac_ext=cpp
-ac_cpp='$CXXCPP $CPPFLAGS'
-ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
-ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
-ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
-
-  OLD_CXXFLAGS=$CXXFLAGS;
-  OLD_LDFLAGS=$LDFLAGS;
-  OLD_LIBS=$LIBS;
-
   LIBS="$LIBS -lcuda";
 
   # Get include path and lib path
@@ -2584,6 +2492,12 @@ if test "x$cuda_found" = "xyes"; then :
 $as_echo "#define CUDALIB_FOUND 1" >>confdefs.h
 
 fi
+
+
+
+
+subdirs="$subdirs lib/External/isl"
+
 
 
 ac_config_headers="$ac_config_headers include/polly/Config/config.h"
@@ -3849,6 +3763,9 @@ test $ac_write_fail = 0 ||
   as_fn_error $? "write failure creating $CONFIG_STATUS" "$LINENO" 5
 
 
+      ac_configure_args="$ac_configure_args --with-int=imath-32"
+
+
 # configure is writing to config.log, and then calls config.status.
 # config.status does its own redirection, appending to config.log.
 # Unfortunately, on DOS this fails, as config.log is still kept open
@@ -3868,6 +3785,151 @@ if test "$no_create" != yes; then
   # Use ||, not &&, to avoid exiting from the if with $? = 1, which
   # would make configure fail if this is the last instruction.
   $ac_cs_success || as_fn_exit 1
+fi
+
+#
+# CONFIG_SUBDIRS section.
+#
+if test "$no_recursion" != yes; then
+
+  # Remove --cache-file, --srcdir, and --disable-option-checking arguments
+  # so they do not pile up.
+  ac_sub_configure_args=
+  ac_prev=
+  eval "set x $ac_configure_args"
+  shift
+  for ac_arg
+  do
+    if test -n "$ac_prev"; then
+      ac_prev=
+      continue
+    fi
+    case $ac_arg in
+    -cache-file | --cache-file | --cache-fil | --cache-fi \
+    | --cache-f | --cache- | --cache | --cach | --cac | --ca | --c)
+      ac_prev=cache_file ;;
+    -cache-file=* | --cache-file=* | --cache-fil=* | --cache-fi=* \
+    | --cache-f=* | --cache-=* | --cache=* | --cach=* | --cac=* | --ca=* \
+    | --c=*)
+      ;;
+    --config-cache | -C)
+      ;;
+    -srcdir | --srcdir | --srcdi | --srcd | --src | --sr)
+      ac_prev=srcdir ;;
+    -srcdir=* | --srcdir=* | --srcdi=* | --srcd=* | --src=* | --sr=*)
+      ;;
+    -prefix | --prefix | --prefi | --pref | --pre | --pr | --p)
+      ac_prev=prefix ;;
+    -prefix=* | --prefix=* | --prefi=* | --pref=* | --pre=* | --pr=* | --p=*)
+      ;;
+    --disable-option-checking)
+      ;;
+    *)
+      case $ac_arg in
+      *\'*) ac_arg=`$as_echo "$ac_arg" | sed "s/'/'\\\\\\\\''/g"` ;;
+      esac
+      as_fn_append ac_sub_configure_args " '$ac_arg'" ;;
+    esac
+  done
+
+  # Always prepend --prefix to ensure using the same prefix
+  # in subdir configurations.
+  ac_arg="--prefix=$prefix"
+  case $ac_arg in
+  *\'*) ac_arg=`$as_echo "$ac_arg" | sed "s/'/'\\\\\\\\''/g"` ;;
+  esac
+  ac_sub_configure_args="'$ac_arg' $ac_sub_configure_args"
+
+  # Pass --silent
+  if test "$silent" = yes; then
+    ac_sub_configure_args="--silent $ac_sub_configure_args"
+  fi
+
+  # Always prepend --disable-option-checking to silence warnings, since
+  # different subdirs can have different --enable and --with options.
+  ac_sub_configure_args="--disable-option-checking $ac_sub_configure_args"
+
+  ac_popdir=`pwd`
+  for ac_dir in : $subdirs; do test "x$ac_dir" = x: && continue
+
+    # Do not complain, so a configure script can configure whichever
+    # parts of a large source tree are present.
+    test -d "$srcdir/$ac_dir" || continue
+
+    ac_msg="=== configuring in $ac_dir (`pwd`/$ac_dir)"
+    $as_echo "$as_me:${as_lineno-$LINENO}: $ac_msg" >&5
+    $as_echo "$ac_msg" >&6
+    as_dir="$ac_dir"; as_fn_mkdir_p
+    ac_builddir=.
+
+case "$ac_dir" in
+.) ac_dir_suffix= ac_top_builddir_sub=. ac_top_build_prefix= ;;
+*)
+  ac_dir_suffix=/`$as_echo "$ac_dir" | sed 's|^\.[\\/]||'`
+  # A ".." for each directory in $ac_dir_suffix.
+  ac_top_builddir_sub=`$as_echo "$ac_dir_suffix" | sed 's|/[^\\/]*|/..|g;s|/||'`
+  case $ac_top_builddir_sub in
+  "") ac_top_builddir_sub=. ac_top_build_prefix= ;;
+  *)  ac_top_build_prefix=$ac_top_builddir_sub/ ;;
+  esac ;;
+esac
+ac_abs_top_builddir=$ac_pwd
+ac_abs_builddir=$ac_pwd$ac_dir_suffix
+# for backward compatibility:
+ac_top_builddir=$ac_top_build_prefix
+
+case $srcdir in
+  .)  # We are building in place.
+    ac_srcdir=.
+    ac_top_srcdir=$ac_top_builddir_sub
+    ac_abs_top_srcdir=$ac_pwd ;;
+  [\\/]* | ?:[\\/]* )  # Absolute name.
+    ac_srcdir=$srcdir$ac_dir_suffix;
+    ac_top_srcdir=$srcdir
+    ac_abs_top_srcdir=$srcdir ;;
+  *) # Relative name.
+    ac_srcdir=$ac_top_build_prefix$srcdir$ac_dir_suffix
+    ac_top_srcdir=$ac_top_build_prefix$srcdir
+    ac_abs_top_srcdir=$ac_pwd/$srcdir ;;
+esac
+ac_abs_srcdir=$ac_abs_top_srcdir$ac_dir_suffix
+
+
+    cd "$ac_dir"
+
+    # Check for guested configure; otherwise get Cygnus style configure.
+    if test -f "$ac_srcdir/configure.gnu"; then
+      ac_sub_configure=$ac_srcdir/configure.gnu
+    elif test -f "$ac_srcdir/configure"; then
+      ac_sub_configure=$ac_srcdir/configure
+    elif test -f "$ac_srcdir/configure.in"; then
+      # This should be Cygnus configure.
+      ac_sub_configure=$ac_aux_dir/configure
+    else
+      { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: no configuration information is in $ac_dir" >&5
+$as_echo "$as_me: WARNING: no configuration information is in $ac_dir" >&2;}
+      ac_sub_configure=
+    fi
+
+    # The recursion is here.
+    if test -n "$ac_sub_configure"; then
+      # Make the cache file name correct relative to the subdirectory.
+      case $cache_file in
+      [\\/]* | ?:[\\/]* ) ac_sub_cache_file=$cache_file ;;
+      *) # Relative name.
+	ac_sub_cache_file=$ac_top_build_prefix$cache_file ;;
+      esac
+
+      { $as_echo "$as_me:${as_lineno-$LINENO}: running $SHELL $ac_sub_configure $ac_sub_configure_args --cache-file=$ac_sub_cache_file --srcdir=$ac_srcdir" >&5
+$as_echo "$as_me: running $SHELL $ac_sub_configure $ac_sub_configure_args --cache-file=$ac_sub_cache_file --srcdir=$ac_srcdir" >&6;}
+      # The eval makes quoting arguments work.
+      eval "\$SHELL \"\$ac_sub_configure\" $ac_sub_configure_args \
+	   --cache-file=\"\$ac_sub_cache_file\" --srcdir=\"\$ac_srcdir\"" ||
+	as_fn_error $? "$ac_sub_configure failed for $ac_dir" "$LINENO" 5
+    fi
+
+    cd "$ac_popdir"
+  done
 fi
 if test -n "$ac_unrecognized_opts" && test "$enable_option_checking" != no; then
   { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: unrecognized options: $ac_unrecognized_opts" >&5

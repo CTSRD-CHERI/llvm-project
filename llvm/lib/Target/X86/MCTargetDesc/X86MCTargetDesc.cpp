@@ -42,12 +42,11 @@ using namespace llvm;
 #define GET_SUBTARGETINFO_MC_DESC
 #include "X86GenSubtargetInfo.inc"
 
-std::string X86_MC::ParseX86Triple(StringRef TT) {
-  Triple TheTriple(TT);
+std::string X86_MC::ParseX86Triple(const Triple &TT) {
   std::string FS;
-  if (TheTriple.getArch() == Triple::x86_64)
+  if (TT.getArch() == Triple::x86_64)
     FS = "+64bit-mode,-32bit-mode,-16bit-mode";
-  else if (TheTriple.getEnvironment() != Triple::CODE16)
+  else if (TT.getEnvironment() != Triple::CODE16)
     FS = "-64bit-mode,+32bit-mode,-16bit-mode";
   else
     FS = "-64bit-mode,-32bit-mode,+16bit-mode";
@@ -55,144 +54,7 @@ std::string X86_MC::ParseX86Triple(StringRef TT) {
   return FS;
 }
 
-/// GetCpuIDAndInfo - Execute the specified cpuid and return the 4 values in the
-/// specified arguments.  If we can't run cpuid on the host, return true.
-bool X86_MC::GetCpuIDAndInfo(unsigned value, unsigned *rEAX,
-                             unsigned *rEBX, unsigned *rECX, unsigned *rEDX) {
-#if defined(__x86_64__) || defined(_M_AMD64) || defined (_M_X64)
-  #if defined(__GNUC__)
-    // gcc doesn't know cpuid would clobber ebx/rbx. Preseve it manually.
-    asm ("movq\t%%rbx, %%rsi\n\t"
-         "cpuid\n\t"
-         "xchgq\t%%rbx, %%rsi\n\t"
-         : "=a" (*rEAX),
-           "=S" (*rEBX),
-           "=c" (*rECX),
-           "=d" (*rEDX)
-         :  "a" (value));
-    return false;
-  #elif defined(_MSC_VER)
-    int registers[4];
-    __cpuid(registers, value);
-    *rEAX = registers[0];
-    *rEBX = registers[1];
-    *rECX = registers[2];
-    *rEDX = registers[3];
-    return false;
-  #else
-    return true;
-  #endif
-#elif defined(i386) || defined(__i386__) || defined(__x86__) || defined(_M_IX86)
-  #if defined(__GNUC__)
-    asm ("movl\t%%ebx, %%esi\n\t"
-         "cpuid\n\t"
-         "xchgl\t%%ebx, %%esi\n\t"
-         : "=a" (*rEAX),
-           "=S" (*rEBX),
-           "=c" (*rECX),
-           "=d" (*rEDX)
-         :  "a" (value));
-    return false;
-  #elif defined(_MSC_VER)
-    __asm {
-      mov   eax,value
-      cpuid
-      mov   esi,rEAX
-      mov   dword ptr [esi],eax
-      mov   esi,rEBX
-      mov   dword ptr [esi],ebx
-      mov   esi,rECX
-      mov   dword ptr [esi],ecx
-      mov   esi,rEDX
-      mov   dword ptr [esi],edx
-    }
-    return false;
-  #else
-    return true;
-  #endif
-#else
-  return true;
-#endif
-}
-
-/// GetCpuIDAndInfoEx - Execute the specified cpuid with subleaf and return the
-/// 4 values in the specified arguments.  If we can't run cpuid on the host,
-/// return true.
-bool X86_MC::GetCpuIDAndInfoEx(unsigned value, unsigned subleaf, unsigned *rEAX,
-                               unsigned *rEBX, unsigned *rECX, unsigned *rEDX) {
-#if defined(__x86_64__) || defined(_M_AMD64) || defined (_M_X64)
-  #if defined(__GNUC__)
-    // gcc desn't know cpuid would clobber ebx/rbx. Preseve it manually.
-    asm ("movq\t%%rbx, %%rsi\n\t"
-         "cpuid\n\t"
-         "xchgq\t%%rbx, %%rsi\n\t"
-         : "=a" (*rEAX),
-           "=S" (*rEBX),
-           "=c" (*rECX),
-           "=d" (*rEDX)
-         :  "a" (value),
-            "c" (subleaf));
-    return false;
-  #elif defined(_MSC_VER)
-    int registers[4];
-    __cpuidex(registers, value, subleaf);
-    *rEAX = registers[0];
-    *rEBX = registers[1];
-    *rECX = registers[2];
-    *rEDX = registers[3];
-    return false;
-  #else
-    return true;
-  #endif
-#elif defined(i386) || defined(__i386__) || defined(__x86__) || defined(_M_IX86)
-  #if defined(__GNUC__)
-    asm ("movl\t%%ebx, %%esi\n\t"
-         "cpuid\n\t"
-         "xchgl\t%%ebx, %%esi\n\t"
-         : "=a" (*rEAX),
-           "=S" (*rEBX),
-           "=c" (*rECX),
-           "=d" (*rEDX)
-         :  "a" (value),
-            "c" (subleaf));
-    return false;
-  #elif defined(_MSC_VER)
-    __asm {
-      mov   eax,value
-      mov   ecx,subleaf
-      cpuid
-      mov   esi,rEAX
-      mov   dword ptr [esi],eax
-      mov   esi,rEBX
-      mov   dword ptr [esi],ebx
-      mov   esi,rECX
-      mov   dword ptr [esi],ecx
-      mov   esi,rEDX
-      mov   dword ptr [esi],edx
-    }
-    return false;
-  #else
-    return true;
-  #endif
-#else
-  return true;
-#endif
-}
-
-void X86_MC::DetectFamilyModel(unsigned EAX, unsigned &Family,
-                               unsigned &Model) {
-  Family = (EAX >> 8) & 0xf; // Bits 8 - 11
-  Model  = (EAX >> 4) & 0xf; // Bits 4 - 7
-  if (Family == 6 || Family == 0xf) {
-    if (Family == 0xf)
-      // Examine extended family ID if family ID is F.
-      Family += (EAX >> 20) & 0xff;    // Bits 20 - 27
-    // Examine extended model ID if family ID is 6 or F.
-    Model += ((EAX >> 16) & 0xf) << 4; // Bits 16 - 19
-  }
-}
-
-unsigned X86_MC::getDwarfRegFlavour(Triple TT, bool isEH) {
+unsigned X86_MC::getDwarfRegFlavour(const Triple &TT, bool isEH) {
   if (TT.getArch() == Triple::x86_64)
     return DWARFFlavour::X86_64;
 
@@ -212,12 +74,12 @@ void X86_MC::InitLLVM2SEHRegisterMapping(MCRegisterInfo *MRI) {
   }
 }
 
-MCSubtargetInfo *X86_MC::createX86MCSubtargetInfo(StringRef TT, StringRef CPU,
-                                                  StringRef FS) {
+MCSubtargetInfo *X86_MC::createX86MCSubtargetInfo(const Triple &TT,
+                                                  StringRef CPU, StringRef FS) {
   std::string ArchFS = X86_MC::ParseX86Triple(TT);
   if (!FS.empty()) {
     if (!ArchFS.empty())
-      ArchFS = ArchFS + "," + FS.str();
+      ArchFS = (Twine(ArchFS) + "," + FS).str();
     else
       ArchFS = FS;
   }
@@ -252,8 +114,8 @@ static MCRegisterInfo *createX86MCRegisterInfo(StringRef TT) {
   return X;
 }
 
-static MCAsmInfo *createX86MCAsmInfo(const MCRegisterInfo &MRI, StringRef TT) {
-  Triple TheTriple(TT);
+static MCAsmInfo *createX86MCAsmInfo(const MCRegisterInfo &MRI,
+                                     const Triple &TheTriple) {
   bool is64Bit = TheTriple.getArch() == Triple::x86_64;
 
   MCAsmInfo *MAI;
@@ -340,32 +202,30 @@ static MCCodeGenInfo *createX86MCCodeGenInfo(StringRef TT, Reloc::Model RM,
     // 64-bit JIT places everything in the same buffer except external funcs.
     CM = is64Bit ? CodeModel::Large : CodeModel::Small;
 
-  X->InitMCCodeGenInfo(RM, CM, OL);
+  X->initMCCodeGenInfo(RM, CM, OL);
   return X;
 }
 
-static MCInstPrinter *createX86MCInstPrinter(const Target &T,
+static MCInstPrinter *createX86MCInstPrinter(const Triple &T,
                                              unsigned SyntaxVariant,
                                              const MCAsmInfo &MAI,
                                              const MCInstrInfo &MII,
-                                             const MCRegisterInfo &MRI,
-                                             const MCSubtargetInfo &STI) {
+                                             const MCRegisterInfo &MRI) {
   if (SyntaxVariant == 0)
-    return new X86ATTInstPrinter(MAI, MII, MRI, STI);
+    return new X86ATTInstPrinter(MAI, MII, MRI);
   if (SyntaxVariant == 1)
     return new X86IntelInstPrinter(MAI, MII, MRI);
   return nullptr;
 }
 
-static MCRelocationInfo *createX86MCRelocationInfo(StringRef TT,
+static MCRelocationInfo *createX86MCRelocationInfo(const Triple &TheTriple,
                                                    MCContext &Ctx) {
-  Triple TheTriple(TT);
   if (TheTriple.isOSBinFormatMachO() && TheTriple.getArch() == Triple::x86_64)
     return createX86_64MachORelocationInfo(Ctx);
   else if (TheTriple.isOSBinFormatELF())
     return createX86_64ELFRelocationInfo(Ctx);
   // Default to the stock relocation info.
-  return llvm::createMCRelocationInfo(TT, Ctx);
+  return llvm::createMCRelocationInfo(TheTriple, Ctx);
 }
 
 static MCInstrAnalysis *createX86MCInstrAnalysis(const MCInstrInfo *Info) {

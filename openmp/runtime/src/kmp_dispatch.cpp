@@ -35,6 +35,11 @@
     #include <float.h>
 #endif
 
+#if OMPT_SUPPORT
+#include "ompt-internal.h"
+#include "ompt-specific.h"
+#endif
+
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
@@ -628,6 +633,12 @@ __kmp_dispatch_init(
 
 #if USE_ITT_BUILD
     kmp_uint64 cur_chunk = chunk;
+    int itt_need_metadata_reporting = __itt_metadata_add_ptr && __kmp_forkjoin_frames_mode == 3 &&
+        KMP_MASTER_GTID(gtid) &&
+#if OMP_40_ENABLED
+        th->th.th_teams_microtask == NULL &&
+#endif
+        team->t.t_active_level == 1;
 #endif
     if ( ! active ) {
         pr = reinterpret_cast< dispatch_private_info_template< T >* >
@@ -864,9 +875,8 @@ __kmp_dispatch_init(
             }
 #if USE_ITT_BUILD
             // Calculate chunk for metadata report
-            if(  __itt_metadata_add_ptr  && __kmp_forkjoin_frames_mode == 3 ) {
+            if ( itt_need_metadata_reporting )
                 cur_chunk = limit - init + 1;
-            }
 #endif
             if ( st == 1 ) {
                 pr->u.p.lb = lb + init;
@@ -1119,16 +1129,10 @@ __kmp_dispatch_init(
         if ( pr->ordered ) {
             __kmp_itt_ordered_init( gtid );
         }; // if
-#endif /* USE_ITT_BUILD */
-    }; // if
-
-#if USE_ITT_BUILD
-    // Report loop metadata
-    if( __itt_metadata_add_ptr  && __kmp_forkjoin_frames_mode == 3 ) {
-        kmp_uint32 tid  = __kmp_tid_from_gtid( gtid );
-        if (KMP_MASTER_TID(tid)) {
+        // Report loop metadata
+        if ( itt_need_metadata_reporting ) {
+            // Only report metadata by master of active team at level 1
             kmp_uint64 schedtype = 0;
-
             switch ( schedule ) {
             case kmp_sch_static_chunked:
             case kmp_sch_static_balanced:// Chunk is calculated in the switch above
@@ -1151,8 +1155,8 @@ __kmp_dispatch_init(
             }
             __kmp_itt_metadata_loop(loc, schedtype, tc, cur_chunk);
         }
-    }
 #endif /* USE_ITT_BUILD */
+    }; // if
 
     #ifdef KMP_DEBUG
     {
@@ -1189,6 +1193,16 @@ __kmp_dispatch_init(
       }
     }
     #endif // ( KMP_STATIC_STEAL_ENABLED && USE_STEALING )
+
+#if OMPT_SUPPORT && OMPT_TRACE
+    if ((ompt_status == ompt_status_track_callback) &&
+        ompt_callbacks.ompt_callback(ompt_event_loop_begin)) {
+        ompt_team_info_t *team_info = __ompt_get_teaminfo(0, NULL);
+        ompt_task_info_t *task_info = __ompt_get_taskinfo(0);
+        ompt_callbacks.ompt_callback(ompt_event_loop_begin)(
+            team_info->parallel_id, task_info->task_id, team_info->microtask);
+    }
+#endif
 }
 
 /*
@@ -1339,6 +1353,24 @@ __kmp_dispatch_finish_chunk( int gtid, ident_t *loc )
 
 #endif /* KMP_GOMP_COMPAT */
 
+/* Define a macro for exiting __kmp_dispatch_next(). If status is 0
+ * (no more work), then tell OMPT the loop is over. In some cases
+ * kmp_dispatch_fini() is not called. */
+#if OMPT_SUPPORT && OMPT_TRACE
+#define OMPT_LOOP_END                                                          \
+    if (status == 0) {                                                         \
+        if ((ompt_status == ompt_status_track_callback) &&                     \
+            ompt_callbacks.ompt_callback(ompt_event_loop_end)) {               \
+            ompt_team_info_t *team_info = __ompt_get_teaminfo(0, NULL);        \
+            ompt_task_info_t *task_info = __ompt_get_taskinfo(0);              \
+            ompt_callbacks.ompt_callback(ompt_event_loop_end)(                 \
+                team_info->parallel_id, task_info->task_id);                   \
+        }                                                                      \
+    }
+#else
+#define OMPT_LOOP_END // no-op
+#endif
+
 template< typename T >
 static int
 __kmp_dispatch_next(
@@ -1348,7 +1380,9 @@ __kmp_dispatch_next(
     typedef typename traits_t< T >::unsigned_t  UT;
     typedef typename traits_t< T >::signed_t    ST;
     typedef typename traits_t< T >::floating_t  DBL;
+#if ( KMP_STATIC_STEAL_ENABLED && KMP_ARCH_X86_64 )
     static const int ___kmp_size_type = sizeof( UT );
+#endif
 
     int                                   status;
     dispatch_private_info_template< T > * pr;
@@ -1476,6 +1510,7 @@ __kmp_dispatch_next(
 #if INCLUDE_SSC_MARKS
         SSC_MARK_DISPATCH_NEXT();
 #endif
+        OMPT_LOOP_END;
         return status;
     } else {
         kmp_int32 last = 0;
@@ -2115,6 +2150,7 @@ __kmp_dispatch_next(
 #if INCLUDE_SSC_MARKS
     SSC_MARK_DISPATCH_NEXT();
 #endif
+    OMPT_LOOP_END;
     return status;
 }
 

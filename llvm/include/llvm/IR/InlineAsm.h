@@ -51,7 +51,7 @@ private:
   InlineAsm(PointerType *Ty, const std::string &AsmString,
             const std::string &Constraints, bool hasSideEffects,
             bool isAlignStack, AsmDialect asmDialect);
-  virtual ~InlineAsm();
+  ~InlineAsm() override;
 
   /// When the ConstantUniqueMap merges two types and makes two InlineAsms
   /// identical, it destroys one of them with this method.
@@ -248,6 +248,14 @@ public:
     Constraint_R,
     Constraint_S,
     Constraint_T,
+    Constraint_Um,
+    Constraint_Un,
+    Constraint_Uq,
+    Constraint_Us,
+    Constraint_Ut,
+    Constraint_Uv,
+    Constraint_Uy,
+    Constraint_X,
     Constraint_Z,
     Constraint_ZC,
     Constraint_Zy,

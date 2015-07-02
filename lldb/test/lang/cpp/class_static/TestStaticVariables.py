@@ -13,7 +13,7 @@ class StaticVariableTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
     failing_compilers = ['clang', 'gcc']
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Test that file and class static variables display correctly."""
@@ -26,7 +26,7 @@ class StaticVariableTestCase(TestBase):
         self.buildDwarf()
         self.static_variable_commands()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @expectedFailureClang(9980907)
     @expectedFailureGcc(9980907)
     @python_api_test
@@ -38,6 +38,7 @@ class StaticVariableTestCase(TestBase):
 
     @expectedFailureDarwin(9980907)
     @expectedFailureClang('Clang emits incomplete debug info.')
+    @expectedFailureFreeBSD('llvm.org/pr20550 failing on FreeBSD-11')
     @expectedFailureGcc('GCC emits incomplete debug info.')
     @python_api_test
     @dwarf_test
@@ -58,7 +59,7 @@ class StaticVariableTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -73,7 +74,7 @@ class StaticVariableTestCase(TestBase):
 
         # On Mac OS X, gcc 4.2 emits the wrong debug info for A::g_points.
         # A::g_points is an array of two elements.
-        if sys.platform.startswith("darwin") or sys.platform.startswith("linux"):
+        if self.platformIsDarwin() or self.getPlatform() == "linux":
             self.expect("target variable A::g_points[1].x", VARIABLES_DISPLAYED_CORRECTLY,
                 startstr = "(int) A::g_points[1].x = 11")
 

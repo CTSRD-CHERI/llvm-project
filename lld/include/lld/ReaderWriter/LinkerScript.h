@@ -20,6 +20,7 @@
 #include "lld/Core/range.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -78,6 +79,7 @@ public:
     kw_entry,
     kw_exclude_file,
     kw_extern,
+    kw_fill,
     kw_group,
     kw_hidden,
     kw_input,
@@ -85,6 +87,7 @@ public:
     kw_length,
     kw_memory,
     kw_origin,
+    kw_phdrs,
     kw_provide,
     kw_provide_hidden,
     kw_only_if_ro,
@@ -160,6 +163,7 @@ public:
   enum class Kind {
     Entry,
     Extern,
+    Fill,
     Group,
     Input,
     InputSectionsCmd,
@@ -170,6 +174,7 @@ public:
     OutputFormat,
     OutputSectionDescription,
     Overlay,
+    PHDRS,
     SearchDir,
     Sections,
     SortedGroup,
@@ -190,6 +195,14 @@ private:
   Parser &_ctx;
   Kind _kind;
 };
+
+template <class T>
+ArrayRef<T> save_array(llvm::BumpPtrAllocator &alloc, ArrayRef<T> array) {
+  size_t num = array.size();
+  T *start = alloc.Allocate<T>(num);
+  std::uninitialized_copy(std::begin(array), std::end(array), start);
+  return llvm::makeArrayRef(start, num);
+}
 
 class Output : public Command {
 public:
@@ -212,10 +225,7 @@ class OutputFormat : public Command {
 public:
   OutputFormat(Parser &ctx, const SmallVectorImpl<StringRef> &formats)
       : Command(ctx, Kind::OutputFormat) {
-    size_t numFormats = formats.size();
-    StringRef *formatsStart = getAllocator().Allocate<StringRef>(numFormats);
-    std::copy(std::begin(formats), std::end(formats), formatsStart);
-    _formats = llvm::makeArrayRef(formatsStart, numFormats);
+    _formats = save_array<StringRef>(getAllocator(), formats);
   }
 
   static bool classof(const Command *c) {
@@ -274,10 +284,7 @@ class PathList : public Command {
 public:
   PathList(Parser &ctx, StringRef name, const SmallVectorImpl<Path> &paths)
       : Command(ctx, K), _name(name) {
-    size_t numPaths = paths.size();
-    Path *pathsStart = getAllocator().template Allocate<Path>(numPaths);
-    std::copy(std::begin(paths), std::end(paths), pathsStart);
-    _paths = llvm::makeArrayRef(pathsStart, numPaths);
+    _paths = save_array<Path>(getAllocator(), paths);
   }
 
   static bool classof(const Command *c) { return c->getKind() == K; }
@@ -382,7 +389,8 @@ public:
   Kind getKind() const { return _kind; }
   inline llvm::BumpPtrAllocator &getAllocator() const;
   virtual void dump(raw_ostream &os) const = 0;
-  virtual ErrorOr<int64_t> evalExpr(SymbolTableTy &symbolTable) const = 0;
+  virtual ErrorOr<int64_t>
+  evalExpr(const SymbolTableTy &symbolTable = SymbolTableTy()) const = 0;
   virtual ~Expression() {}
 
 protected:
@@ -406,7 +414,7 @@ public:
     return c->getKind() == Kind::Constant;
   }
 
-  ErrorOr<int64_t> evalExpr(SymbolTableTy &symbolTable) const override;
+  ErrorOr<int64_t> evalExpr(const SymbolTableTy &symbolTable) const override;
 
 private:
   uint64_t _num;
@@ -422,7 +430,7 @@ public:
     return c->getKind() == Kind::Symbol;
   }
 
-  ErrorOr<int64_t> evalExpr(SymbolTableTy &symbolTable) const override;
+  ErrorOr<int64_t> evalExpr(const SymbolTableTy &symbolTable) const override;
 
 private:
   StringRef _name;
@@ -433,11 +441,7 @@ public:
   FunctionCall(Parser &ctx, StringRef name,
                const SmallVectorImpl<const Expression *> &args)
       : Expression(ctx, Kind::FunctionCall), _name(name) {
-    size_t numArgs = args.size();
-    const Expression **argsStart =
-        getAllocator().Allocate<const Expression *>(numArgs);
-    std::copy(std::begin(args), std::end(args), argsStart);
-    _args = llvm::makeArrayRef(argsStart, numArgs);
+    _args = save_array<const Expression *>(getAllocator(), args);
   }
 
   void dump(raw_ostream &os) const override;
@@ -446,7 +450,7 @@ public:
     return c->getKind() == Kind::FunctionCall;
   }
 
-  ErrorOr<int64_t> evalExpr(SymbolTableTy &symbolTable) const override;
+  ErrorOr<int64_t> evalExpr(const SymbolTableTy &symbolTable) const override;
 
 private:
   StringRef _name;
@@ -468,7 +472,7 @@ public:
     return c->getKind() == Kind::Unary;
   }
 
-  ErrorOr<int64_t> evalExpr(SymbolTableTy &symbolTable) const override;
+  ErrorOr<int64_t> evalExpr(const SymbolTableTy &symbolTable) const override;
 
 private:
   Operation _op;
@@ -503,7 +507,7 @@ public:
     return c->getKind() == Kind::BinOp;
   }
 
-  ErrorOr<int64_t> evalExpr(SymbolTableTy &symbolTable) const override;
+  ErrorOr<int64_t> evalExpr(const SymbolTableTy &symbolTable) const override;
 
 private:
   Operation _op;
@@ -538,7 +542,7 @@ public:
     return c->getKind() == Kind::TernaryConditional;
   }
 
-  ErrorOr<int64_t> evalExpr(SymbolTableTy &symbolTable) const override;
+  ErrorOr<int64_t> evalExpr(const SymbolTableTy &symbolTable) const override;
 
 private:
   const Expression *_conditional;
@@ -647,11 +651,7 @@ public:
   InputSectionSortedGroup(Parser &ctx, WildcardSortMode sort,
                           const SmallVectorImpl<const InputSection *> &sections)
       : InputSection(ctx, Kind::SortedGroup), _sortMode(sort) {
-    size_t numSections = sections.size();
-    const InputSection **sectionsStart =
-        getAllocator().Allocate<const InputSection *>(numSections);
-    std::copy(std::begin(sections), std::end(sections), sectionsStart);
-    _sections = llvm::makeArrayRef(sectionsStart, numSections);
+    _sections = save_array<const InputSection *>(getAllocator(), sections);
   }
 
   void dump(raw_ostream &os) const override;
@@ -691,11 +691,7 @@ public:
       : Command(ctx, Kind::InputSectionsCmd), _memberName(memberName),
         _archiveName(archiveName), _keep(keep), _fileSortMode(fileSortMode),
         _archiveSortMode(archiveSortMode) {
-    size_t numSections = sections.size();
-    const InputSection **sectionsStart =
-        getAllocator().Allocate<const InputSection *>(numSections);
-    std::copy(std::begin(sections), std::end(sections), sectionsStart);
-    _sections = llvm::makeArrayRef(sectionsStart, numSections);
+    _sections = save_array<const InputSection *>(getAllocator(), sections);
   }
 
   void dump(raw_ostream &os) const override;
@@ -718,6 +714,24 @@ private:
   WildcardSortMode _fileSortMode;
   WildcardSortMode _archiveSortMode;
   llvm::ArrayRef<const InputSection *> _sections;
+};
+
+class FillCmd : public Command {
+public:
+  FillCmd(Parser &ctx, ArrayRef<uint8_t> bytes) : Command(ctx, Kind::Fill) {
+    _bytes = save_array<uint8_t>(getAllocator(), bytes);
+  }
+
+  void dump(raw_ostream &os) const override;
+
+  static bool classof(const Command *c) {
+    return c->getKind() == Kind::Fill;
+  }
+
+  ArrayRef<uint8_t> bytes() { return _bytes; }
+
+private:
+  ArrayRef<uint8_t> _bytes;
 };
 
 /// A sections-command to specify which input sections and symbols compose a
@@ -743,18 +757,16 @@ public:
       const Expression *align, const Expression *subAlign, const Expression *at,
       const Expression *fillExpr, StringRef fillStream, bool alignWithInput,
       bool discard, Constraint constraint,
-      const SmallVectorImpl<const Command *> &outputSectionCommands)
+      const SmallVectorImpl<const Command *> &outputSectionCommands,
+      ArrayRef<StringRef> phdrs)
       : Command(ctx, Kind::OutputSectionDescription), _sectionName(sectionName),
         _address(address), _align(align), _subAlign(subAlign), _at(at),
         _fillExpr(fillExpr), _fillStream(fillStream),
         _alignWithInput(alignWithInput), _discard(discard),
         _constraint(constraint) {
-    size_t numCommands = outputSectionCommands.size();
-    const Command **commandsStart =
-        getAllocator().Allocate<const Command *>(numCommands);
-    std::copy(std::begin(outputSectionCommands),
-              std::end(outputSectionCommands), commandsStart);
-    _outputSectionCommands = llvm::makeArrayRef(commandsStart, numCommands);
+    _outputSectionCommands =
+        save_array<const Command *>(getAllocator(), outputSectionCommands);
+    _phdrs = save_array<StringRef>(getAllocator(), phdrs);
   }
 
   static bool classof(const Command *c) {
@@ -766,6 +778,8 @@ public:
   const_iterator begin() const { return _outputSectionCommands.begin(); }
   const_iterator end() const { return _outputSectionCommands.end(); }
   StringRef name() const { return _sectionName; }
+  bool isDiscarded() const { return _discard; }
+  ArrayRef<StringRef> PHDRs() const { return _phdrs; }
 
 private:
   StringRef _sectionName;
@@ -779,6 +793,7 @@ private:
   bool _discard;
   Constraint _constraint;
   llvm::ArrayRef<const Command *> _outputSectionCommands;
+  ArrayRef<StringRef> _phdrs;
 };
 
 /// Represents an Overlay structure as documented in
@@ -794,6 +809,50 @@ public:
   void dump(raw_ostream &os) const override { os << "Overlay description\n"; }
 };
 
+class PHDR {
+public:
+  PHDR(StringRef name, uint64_t type, bool includeFileHdr, bool includePHDRs,
+       const Expression *at, uint64_t flags)
+      : _name(name), _type(type), _includeFileHdr(includeFileHdr),
+        _includePHDRs(includePHDRs), _at(at), _flags(flags) {}
+
+  StringRef name() const { return _name; }
+
+  void dump(raw_ostream &os) const;
+
+  /// Special header that discards output sections assigned to it.
+  static const PHDR *NONE;
+
+private:
+  StringRef _name;
+  uint64_t _type;
+  bool _includeFileHdr;
+  bool _includePHDRs;
+  const Expression *_at;
+  uint64_t _flags;
+};
+
+class PHDRS : public Command {
+public:
+  typedef ArrayRef<const PHDR *>::const_iterator const_iterator;
+
+  PHDRS(Parser &ctx, const SmallVectorImpl<const PHDR *> &phdrs)
+      : Command(ctx, Kind::PHDRS) {
+    _phdrs = save_array<const PHDR *>(getAllocator(), phdrs);
+  }
+
+  static bool classof(const Command *c) {
+    return c->getKind() == Kind::PHDRS;
+  }
+
+  void dump(raw_ostream &os) const override;
+  const_iterator begin() const { return _phdrs.begin(); }
+  const_iterator end() const { return _phdrs.end(); }
+
+private:
+  ArrayRef<const PHDR *> _phdrs;
+};
+
 /// Represents all the contents of the SECTIONS {} construct.
 class Sections : public Command {
 public:
@@ -802,12 +861,8 @@ public:
   Sections(Parser &ctx,
            const SmallVectorImpl<const Command *> &sectionsCommands)
       : Command(ctx, Kind::Sections) {
-    size_t numCommands = sectionsCommands.size();
-    const Command **commandsStart =
-        getAllocator().Allocate<const Command *>(numCommands);
-    std::copy(std::begin(sectionsCommands), std::end(sectionsCommands),
-              commandsStart);
-    _sectionsCommands = llvm::makeArrayRef(commandsStart, numCommands);
+    _sectionsCommands =
+        save_array<const Command *>(getAllocator(), sectionsCommands);
   }
 
   static bool classof(const Command *c) {
@@ -844,11 +899,7 @@ public:
   Memory(Parser &ctx,
          const SmallVectorImpl<const MemoryBlock *> &blocks)
       : Command(ctx, Kind::Memory) {
-    size_t numBlocks = blocks.size();
-    const MemoryBlock **blocksStart =
-        getAllocator().Allocate<const MemoryBlock *>(numBlocks);
-    std::copy(std::begin(blocks), std::end(blocks), blocksStart);
-    _blocks = llvm::makeArrayRef(blocksStart, numBlocks);
+    _blocks = save_array<const MemoryBlock *>(getAllocator(), blocks);
   }
 
   static bool classof(const Command *c) {
@@ -869,11 +920,7 @@ public:
   Extern(Parser &ctx,
          const SmallVectorImpl<StringRef> &symbols)
       : Command(ctx, Kind::Extern) {
-    size_t numSymbols = symbols.size();
-    StringRef *symbolsStart =
-        getAllocator().Allocate<StringRef>(numSymbols);
-    std::copy(std::begin(symbols), std::end(symbols), symbolsStart);
-    _symbols = llvm::makeArrayRef(symbolsStart, numSymbols);
+    _symbols = save_array<StringRef>(getAllocator(), symbols);
   }
 
   static bool classof(const Command *c) {
@@ -1133,6 +1180,8 @@ private:
   /// }
   const InputSectionsCmd *parseInputSectionsCmd();
 
+  const FillCmd *parseFillCmd();
+
   /// Parse output section description statements.
   /// Example:
   ///
@@ -1144,6 +1193,10 @@ private:
 
   /// Stub for parsing overlay commands. Currently unimplemented.
   const Overlay *parseOverlay();
+
+  const PHDR *parsePHDR();
+
+  PHDRS *parsePHDRS();
 
   /// Parse the SECTIONS linker script command.
   /// Example:
@@ -1273,6 +1326,13 @@ public:
   /// has been performed (by calling evalExpr() for all expressions).
   uint64_t getLinkerScriptExprValue(StringRef name) const;
 
+  /// Retrieve all the headers the given output section is assigned to.
+  /// Error is returned if the output section is assigned to headers with
+  /// missing declarations.
+  std::error_code
+  getPHDRsForOutputSection(StringRef name,
+                           std::vector<const PHDR *> &phdrs) const;
+
   void dump() const;
 
 private:
@@ -1314,6 +1374,9 @@ private:
   bool localCompare(int order, const SectionKey &lhs,
                     const SectionKey &rhs) const;
 
+  /// Build map that matches output section names to segments they should be
+  /// put into.
+  std::error_code buildSectionToPHDR();
 
   /// Our goal with all linearizeAST overloaded functions is to
   /// traverse the linker script AST while putting nodes in a vector and
@@ -1380,6 +1443,9 @@ private:
       _cacheSectionOrder, _cacheExpressionOrder;
   llvm::DenseSet<int> _deliveredExprs;
   mutable llvm::StringSet<> _definedSymbols;
+
+  bool _parsedPHDRS;
+  llvm::StringMap<llvm::SmallVector<const PHDR *, 2>> _sectionToPHDR;
 
   Expression::SymbolTableTy _symbolTable;
 };

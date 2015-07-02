@@ -452,6 +452,7 @@ static Value *tryFactorization(InstCombiner::BuilderTy *Builder,
   if (!A || !C || !B || !D)
     return nullptr;
 
+  Value *V = nullptr;
   Value *SimplifiedInst = nullptr;
   Value *LHS = I.getOperand(0), *RHS = I.getOperand(1);
   Instruction::BinaryOps TopLevelOpcode = I.getOpcode();
@@ -468,7 +469,7 @@ static Value *tryFactorization(InstCombiner::BuilderTy *Builder,
         std::swap(C, D);
       // Consider forming "A op' (B op D)".
       // If "B op D" simplifies then it can be formed with no cost.
-      Value *V = SimplifyBinOp(TopLevelOpcode, B, D, DL);
+      V = SimplifyBinOp(TopLevelOpcode, B, D, DL);
       // If "B op D" doesn't simplify then only go on if both of the existing
       // operations "A op' B" and "C op' D" will be zapped as no longer used.
       if (!V && LHS->hasOneUse() && RHS->hasOneUse())
@@ -487,7 +488,7 @@ static Value *tryFactorization(InstCombiner::BuilderTy *Builder,
         std::swap(C, D);
       // Consider forming "(A op C) op' B".
       // If "A op C" simplifies then it can be formed with no cost.
-      Value *V = SimplifyBinOp(TopLevelOpcode, A, C, DL);
+      V = SimplifyBinOp(TopLevelOpcode, A, C, DL);
 
       // If "A op C" doesn't simplify then only go on if both of the existing
       // operations "A op' B" and "C op' D" will be zapped as no longer used.
@@ -517,7 +518,19 @@ static Value *tryFactorization(InstCombiner::BuilderTy *Builder,
         if (BinaryOperator *Op1 = dyn_cast<BinaryOperator>(RHS))
           if (isa<OverflowingBinaryOperator>(Op1))
             HasNSW &= Op1->hasNoSignedWrap();
-        BO->setHasNoSignedWrap(HasNSW);
+
+        // We can propogate 'nsw' if we know that
+        //  %Y = mul nsw i16 %X, C
+        //  %Z = add nsw i16 %Y, %X
+        // =>
+        //  %Z = mul nsw i16 %X, C+1
+        //
+        // iff C+1 isn't INT_MIN
+        const APInt *CInt;
+        if (TopLevelOpcode == Instruction::Add &&
+            InnerOpcode == Instruction::Mul)
+          if (match(V, m_APInt(CInt)) && !CInt->isMinSignedValue())
+            BO->setHasNoSignedWrap(HasNSW);
       }
     }
   }
@@ -714,6 +727,22 @@ Instruction *InstCombiner::FoldOpIntoSelect(Instruction &Op, SelectInst *SI) {
         return nullptr;
     }
 
+    // Test if a CmpInst instruction is used exclusively by a select as
+    // part of a minimum or maximum operation. If so, refrain from doing
+    // any other folding. This helps out other analyses which understand
+    // non-obfuscated minimum and maximum idioms, such as ScalarEvolution
+    // and CodeGen. And in this case, at least one of the comparison
+    // operands has at least one user besides the compare (the select),
+    // which would often largely negate the benefit of folding anyway.
+    if (auto *CI = dyn_cast<CmpInst>(SI->getCondition())) {
+      if (CI->hasOneUse()) {
+        Value *Op0 = CI->getOperand(0), *Op1 = CI->getOperand(1);
+        if ((SI->getOperand(1) == Op0 && SI->getOperand(2) == Op1) ||
+            (SI->getOperand(2) == Op0 && SI->getOperand(1) == Op1))
+          return nullptr;
+      }
+    }
+
     Value *SelectTrueVal = FoldOperationIntoSelectOperand(Op, TV, this);
     Value *SelectFalseVal = FoldOperationIntoSelectOperand(Op, FV, this);
 
@@ -722,7 +751,6 @@ Instruction *InstCombiner::FoldOpIntoSelect(Instruction &Op, SelectInst *SI) {
   }
   return nullptr;
 }
-
 
 /// FoldOpIntoPhi - Given a binary operator, cast instruction, or select which
 /// has a PHI node as operand #0, see if we can fold the instruction into the
@@ -869,11 +897,9 @@ Instruction *InstCombiner::FoldOpIntoPhi(Instruction &I) {
 /// whether or not there is a sequence of GEP indices into the pointed type that
 /// will land us at the specified offset.  If so, fill them into NewIndices and
 /// return the resultant element type, otherwise return null.
-Type *InstCombiner::FindElementAtOffset(Type *PtrTy, int64_t Offset,
+Type *InstCombiner::FindElementAtOffset(PointerType *PtrTy, int64_t Offset,
                                         SmallVectorImpl<Value *> &NewIndices) {
-  assert(PtrTy->isPtrOrPtrVectorTy());
-
-  Type *Ty = PtrTy->getPointerElementType();
+  Type *Ty = PtrTy->getElementType();
   if (!Ty->isSized())
     return nullptr;
 
@@ -1469,6 +1495,11 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
         // normalized.
         if (SO1->getType() != GO1->getType())
           return nullptr;
+        // Only do the combine when GO1 and SO1 are both constants. Only in
+        // this case, we are sure the cost after the merge is never more than
+        // that before the merge.
+        if (!isa<Constant>(GO1) || !isa<Constant>(SO1))
+          return nullptr;
         Sum = Builder->CreateAdd(SO1, GO1, PtrOp->getName()+".sum");
       }
 
@@ -1593,9 +1624,29 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
             // is a leading zero) we can fold the cast into this GEP.
             if (StrippedPtrTy->getAddressSpace() == GEP.getAddressSpace()) {
               GEP.setOperand(0, StrippedPtr);
+              GEP.setSourceElementType(XATy);
               return &GEP;
             }
             return nullptr;
+            // This transform appears to break things:
+#if 0
+            // Cannot replace the base pointer directly because StrippedPtr's
+            // address space is different. Instead, create a new GEP followed by
+            // an addrspacecast.
+            // e.g.,
+            // GEP (addrspacecast [10 x i8] addrspace(1)* X to [0 x i8]*),
+            //   i32 0, ...
+            // ->
+            // %0 = GEP [10 x i8] addrspace(1)* X, ...
+            // addrspacecast i8 addrspace(1)* %0 to i8*
+            SmallVector<Value*, 8> Idx(GEP.idx_begin(), GEP.idx_end());
+            Value *NewGEP = GEP.isInBounds()
+                                ? Builder->CreateInBoundsGEP(
+                                      nullptr, StrippedPtr, Idx, GEP.getName())
+                                : Builder->CreateGEP(nullptr, StrippedPtr, Idx,
+                                                     GEP.getName());
+            return new AddrSpaceCastInst(NewGEP, GEP.getType());
+#endif
           }
         }
       }
@@ -1610,9 +1661,11 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
               DL.getTypeAllocSize(ResElTy)) {
         Type *IdxType = DL.getIntPtrType(GEP.getType());
         Value *Idx[2] = { Constant::getNullValue(IdxType), GEP.getOperand(1) };
-        Value *NewGEP = GEP.isInBounds() ?
-          Builder->CreateInBoundsGEP(StrippedPtr, Idx, GEP.getName()) :
-          Builder->CreateGEP(StrippedPtr, Idx, GEP.getName());
+        Value *NewGEP =
+            GEP.isInBounds()
+                ? Builder->CreateInBoundsGEP(nullptr, StrippedPtr, Idx,
+                                             GEP.getName())
+                : Builder->CreateGEP(nullptr, StrippedPtr, Idx, GEP.getName());
 
         // V and GEP are both pointer types --> BitCast
         return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP,
@@ -1643,9 +1696,12 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
             // Successfully decomposed Idx as NewIdx * Scale, form a new GEP.
             // If the multiplication NewIdx * Scale may overflow then the new
             // GEP may not be "inbounds".
-            Value *NewGEP = GEP.isInBounds() && NSW ?
-              Builder->CreateInBoundsGEP(StrippedPtr, NewIdx, GEP.getName()) :
-              Builder->CreateGEP(StrippedPtr, NewIdx, GEP.getName());
+            Value *NewGEP =
+                GEP.isInBounds() && NSW
+                    ? Builder->CreateInBoundsGEP(nullptr, StrippedPtr, NewIdx,
+                                                 GEP.getName())
+                    : Builder->CreateGEP(nullptr, StrippedPtr, NewIdx,
+                                         GEP.getName());
 
             // The NewGEP must be pointer typed, so must the old one -> BitCast
             return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP,
@@ -1683,9 +1739,11 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
                 Constant::getNullValue(DL.getIntPtrType(GEP.getType())),
                 NewIdx};
 
-            Value *NewGEP = GEP.isInBounds() && NSW ?
-              Builder->CreateInBoundsGEP(StrippedPtr, Off, GEP.getName()) :
-              Builder->CreateGEP(StrippedPtr, Off, GEP.getName());
+            Value *NewGEP = GEP.isInBounds() && NSW
+                                ? Builder->CreateInBoundsGEP(
+                                      SrcElTy, StrippedPtr, Off, GEP.getName())
+                                : Builder->CreateGEP(SrcElTy, StrippedPtr, Off,
+                                                     GEP.getName());
             // The NewGEP must be pointer typed, so must the old one -> BitCast
             return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP,
                                                                  GEP.getType());
@@ -1749,9 +1807,10 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
       if (FindElementAtOffset(OpType, Offset.getSExtValue(), NewIndices)) {
         if (Operand->getType()->getPointerAddressSpace() != GEP.getAddressSpace())
           return nullptr;
-        Value *NGEP = GEP.isInBounds() ?
-          Builder->CreateInBoundsGEP(Operand, NewIndices) :
-          Builder->CreateGEP(Operand, NewIndices);
+        Value *NGEP =
+            GEP.isInBounds()
+                ? Builder->CreateInBoundsGEP(nullptr, Operand, NewIndices)
+                : Builder->CreateGEP(nullptr, Operand, NewIndices);
 
         if (NGEP->getType() == GEP.getType())
           return ReplaceInstUsesWith(GEP, NGEP);
@@ -1782,7 +1841,7 @@ isAllocSiteRemovable(Instruction *AI, SmallVectorImpl<WeakVH> &Users,
 
       case Instruction::BitCast:
       case Instruction::GetElementPtr:
-        Users.push_back(I);
+        Users.emplace_back(I);
         Worklist.push_back(I);
         continue;
 
@@ -1791,7 +1850,7 @@ isAllocSiteRemovable(Instruction *AI, SmallVectorImpl<WeakVH> &Users,
         // We can fold eq/ne comparisons with null to false/true, respectively.
         if (!ICI->isEquality() || !isa<ConstantPointerNull>(ICI->getOperand(1)))
           return false;
-        Users.push_back(I);
+        Users.emplace_back(I);
         continue;
       }
 
@@ -1817,13 +1876,13 @@ isAllocSiteRemovable(Instruction *AI, SmallVectorImpl<WeakVH> &Users,
           case Intrinsic::lifetime_start:
           case Intrinsic::lifetime_end:
           case Intrinsic::objectsize:
-            Users.push_back(I);
+            Users.emplace_back(I);
             continue;
           }
         }
 
         if (isFreeCall(I, TLI)) {
-          Users.push_back(I);
+          Users.emplace_back(I);
           continue;
         }
         return false;
@@ -1832,7 +1891,7 @@ isAllocSiteRemovable(Instruction *AI, SmallVectorImpl<WeakVH> &Users,
         StoreInst *SI = cast<StoreInst>(I);
         if (SI->isVolatile() || SI->getPointerOperand() != PI)
           return false;
-        Users.push_back(I);
+        Users.emplace_back(I);
         continue;
       }
       }
@@ -2064,7 +2123,7 @@ Instruction *InstCombiner::visitSwitchInst(SwitchInst &SI) {
 
   // Truncate the condition operand if the new type is equal to or larger than
   // the largest legal integer type. We need to be conservative here since
-  // x86 generates redundant zero-extenstion instructions if the operand is
+  // x86 generates redundant zero-extension instructions if the operand is
   // truncated to i8 or i16.
   bool TruncCond = false;
   if (NewWidth > 0 && BitWidth > NewWidth &&
@@ -2241,7 +2300,8 @@ Instruction *InstCombiner::visitExtractValueInst(ExtractValueInst &EV) {
       // We need to insert these at the location of the old load, not at that of
       // the extractvalue.
       Builder->SetInsertPoint(L->getParent(), L);
-      Value *GEP = Builder->CreateInBoundsGEP(L->getPointerOperand(), Indices);
+      Value *GEP = Builder->CreateInBoundsGEP(L->getType(),
+                                              L->getPointerOperand(), Indices);
       // Returning the load directly will cause the main loop to insert it in
       // the wrong spot, so use ReplaceInstUsesWith().
       return ReplaceInstUsesWith(EV, Builder->CreateLoad(GEP));
@@ -2291,7 +2351,8 @@ Instruction *InstCombiner::visitLandingPadInst(LandingPadInst &LI) {
   // The logic here should be correct for any real-world personality function.
   // However if that turns out not to be true, the offending logic can always
   // be conditioned on the personality function, like the catch-all logic is.
-  EHPersonality Personality = classifyEHPersonality(LI.getPersonalityFn());
+  EHPersonality Personality =
+      classifyEHPersonality(LI.getParent()->getParent()->getPersonalityFn());
 
   // Simplify the list of clauses, eg by removing repeated catch clauses
   // (these are often created by inlining).
@@ -2558,7 +2619,6 @@ Instruction *InstCombiner::visitLandingPadInst(LandingPadInst &LI) {
   // with a new one.
   if (MakeNewInstruction) {
     LandingPadInst *NLI = LandingPadInst::Create(LI.getType(),
-                                                 LI.getPersonalityFn(),
                                                  NewClauses.size());
     for (unsigned i = 0, e = NewClauses.size(); i != e; ++i)
       NLI->addClause(NewClauses[i]);
@@ -2629,7 +2689,8 @@ bool InstCombiner::run() {
     }
 
     // Instruction isn't dead, see if we can constant propagate it.
-    if (!I->use_empty() && isa<Constant>(I->getOperand(0))) {
+    if (!I->use_empty() &&
+        (I->getNumOperands() == 0 || isa<Constant>(I->getOperand(0)))) {
       if (Constant *C = ConstantFoldInstruction(I, DL, TLI)) {
         DEBUG(dbgs() << "IC: ConstFold to: " << *C << " from: " << *I << '\n');
 
@@ -2698,7 +2759,7 @@ bool InstCombiner::run() {
         DEBUG(dbgs() << "IC: Old = " << *I << '\n'
                      << "    New = " << *Result << '\n');
 
-        if (!I->getDebugLoc().isUnknown())
+        if (I->getDebugLoc())
           Result->setDebugLoc(I->getDebugLoc());
         // Everything uses the new instruction now.
         I->replaceAllUsesWith(Result);
@@ -2784,7 +2845,8 @@ static bool AddReachableCodeToWorklist(BasicBlock *BB, const DataLayout &DL,
       }
 
       // ConstantProp instruction if trivially constant.
-      if (!Inst->use_empty() && isa<Constant>(Inst->getOperand(0)))
+      if (!Inst->use_empty() &&
+          (Inst->getNumOperands() == 0 || isa<Constant>(Inst->getOperand(0))))
         if (Constant *C = ConstantFoldInstruction(Inst, DL, TLI)) {
           DEBUG(dbgs() << "IC: ConstFold to: " << *C << " from: "
                        << *Inst << '\n');

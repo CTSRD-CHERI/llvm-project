@@ -31,9 +31,9 @@ protected:
     return Result;
   }
 
-  static std::string format(
-      llvm::StringRef Code,
-      const FormatStyle &Style = getGoogleStyle(FormatStyle::LK_Java)) {
+  static std::string
+  format(llvm::StringRef Code,
+         const FormatStyle &Style = getGoogleStyle(FormatStyle::LK_Java)) {
     return format(Code, 0, Code.size(), Style);
   }
 
@@ -433,7 +433,7 @@ TEST_F(FormatTestJava, NeverAlignAfterReturn) {
                getStyleWithColumns(40));
   verifyFormat("return aaaaaaaaaaaaaaaaaaa()\n"
                "    .bbbbbbbbbbbbbbbbbbb(\n"
-               "         ccccccccccccccc)\n"
+               "        ccccccccccccccc)\n"
                "    .ccccccccccccccccccc();",
                getStyleWithColumns(40));
 }

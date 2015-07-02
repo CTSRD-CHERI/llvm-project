@@ -1,4 +1,5 @@
-; RUN: llc < %s -mtriple=i386-apple-darwin -mattr=-avx,+sse2 | FileCheck %s
+; RUN: llc < %s -mtriple=i386-apple-darwin -mattr=-avx,+sse2 | FileCheck %s --check-prefix=CHECK --check-prefix=SSE
+; RUN: llc < %s -mtriple=i386-apple-darwin -mcpu=knl | FileCheck %s
 
 define <2 x double> @test_x86_sse2_add_sd(<2 x double> %a0, <2 x double> %a1) {
   ; CHECK: addsd
@@ -142,7 +143,7 @@ declare i32 @llvm.x86.sse2.cvtsd2si(<2 x double>) nounwind readnone
 
 define <4 x float> @test_x86_sse2_cvtsd2ss(<4 x float> %a0, <2 x double> %a1) {
   ; CHECK: cvtsd2ss 
-  ; CHECK-NOT: cvtsd2ss %xmm{{[0-9]+}}, %xmm{{[0-9]+}}, %xmm{{[0-9]+}} 
+  ; SSE-NOT: cvtsd2ss %xmm{{[0-9]+}}, %xmm{{[0-9]+}}, %xmm{{[0-9]+}} 
   %res = call <4 x float> @llvm.x86.sse2.cvtsd2ss(<4 x float> %a0, <2 x double> %a1) ; <<4 x float>> [#uses=1]
   ret <4 x float> %res
 }
@@ -581,7 +582,7 @@ declare <2 x double> @llvm.x86.sse2.sqrt.sd(<2 x double>) nounwind readnone
 define void @test_x86_sse2_storel_dq(i8* %a0, <4 x i32> %a1) {
   ; CHECK: test_x86_sse2_storel_dq
   ; CHECK: movl
-  ; CHECK: movq
+  ; CHECK: movlps
   call void @llvm.x86.sse2.storel.dq(i8* %a0, <4 x i32> %a1)
   ret void
 }

@@ -18,6 +18,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
 #include "llvm/ExecutionEngine/RuntimeDyldChecker.h"
 #include "llvm/Object/ObjectFile.h"
@@ -51,7 +52,7 @@ class Twine;
 class SectionEntry {
 public:
   /// Name - section name.
-  StringRef Name;
+  std::string Name;
 
   /// Address - address in the linker's memory where the section resides.
   uint8_t *Address;
@@ -188,7 +189,10 @@ class RuntimeDyldImpl {
   friend class RuntimeDyldCheckerImpl;
 protected:
   // The MemoryManager to load objects into.
-  RTDyldMemoryManager *MemMgr;
+  RuntimeDyld::MemoryManager &MemMgr;
+
+  // The symbol resolver to use for external symbols.
+  RuntimeDyld::SymbolResolver &Resolver;
 
   // Attached RuntimeDyldChecker instance. Null if no instance attached.
   RuntimeDyldCheckerImpl *Checker;
@@ -199,7 +203,7 @@ protected:
   SectionList Sections;
 
   typedef unsigned SID; // Type for SectionIDs
-#define RTDYLD_INVALID_SECTION_ID ((SID)(-1))
+#define RTDYLD_INVALID_SECTION_ID ((RuntimeDyldImpl::SID)(-1))
 
   // Keep a map of sections from object file to the SectionID which
   // references it.
@@ -232,6 +236,8 @@ protected:
 
   Triple::ArchType Arch;
   bool IsTargetLittleEndian;
+  bool IsMipsO32ABI;
+  bool IsMipsN64ABI;
 
   // True if all sections should be passed to the memory manager, false if only
   // sections containing relocations should be. Defaults to 'false'.
@@ -299,6 +305,11 @@ protected:
     *(Addr + 7) = Value & 0xFF;
   }
 
+  virtual void setMipsABI(const ObjectFile &Obj) {
+    IsMipsO32ABI = false;
+    IsMipsN64ABI = false;
+  }
+
   /// Endian-aware read Read the least significant Size bytes from Src.
   uint64_t readBytesUnaligned(uint8_t *Src, unsigned Size) const;
 
@@ -357,10 +368,6 @@ protected:
   /// \brief Resolve relocations to external symbols.
   void resolveExternalSymbols();
 
-  /// \brief Update GOT entries for external symbols.
-  // The base class does nothing.  ELF overrides this.
-  virtual void updateGOTEntries(StringRef Name, uint64_t Addr) {}
-
   // \brief Compute an upper bound of the memory that is required to load all
   // sections
   void computeTotalAllocSize(const ObjectFile &Obj, uint64_t &CodeSize,
@@ -374,8 +381,10 @@ protected:
   std::pair<unsigned, unsigned> loadObjectImpl(const object::ObjectFile &Obj);
 
 public:
-  RuntimeDyldImpl(RTDyldMemoryManager *mm)
-    : MemMgr(mm), Checker(nullptr), ProcessAllSections(false), HasError(false) {
+  RuntimeDyldImpl(RuntimeDyld::MemoryManager &MemMgr,
+                  RuntimeDyld::SymbolResolver &Resolver)
+    : MemMgr(MemMgr), Resolver(Resolver), Checker(nullptr),
+      ProcessAllSections(false), HasError(false) {
   }
 
   virtual ~RuntimeDyldImpl();

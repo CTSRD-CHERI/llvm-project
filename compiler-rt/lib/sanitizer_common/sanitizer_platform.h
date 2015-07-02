@@ -38,9 +38,15 @@
 # else
 #  define SANITIZER_IOS    0
 # endif
+# if TARGET_IPHONE_SIMULATOR
+#  define SANITIZER_IOSSIM 1
+# else
+#  define SANITIZER_IOSSIM 0
+# endif
 #else
 # define SANITIZER_MAC     0
 # define SANITIZER_IOS     0
+# define SANITIZER_IOSSIM  0
 #endif
 
 #if defined(_WIN32)
@@ -128,6 +134,12 @@
 # define SANITIZER_POINTER_FORMAT_LENGTH FIRST_32_SECOND_64(8, 10)
 #else
 # define SANITIZER_POINTER_FORMAT_LENGTH FIRST_32_SECOND_64(8, 12)
+#endif
+
+// Assume obsolete RPC headers are available by default
+#if !defined(HAVE_RPC_XDR_H) && !defined(HAVE_TIRPC_RPC_XDR_H)
+# define HAVE_RPC_XDR_H (SANITIZER_LINUX && !SANITIZER_ANDROID)
+# define HAVE_TIRPC_RPC_XDR_H 0
 #endif
 
 #endif // SANITIZER_PLATFORM_H

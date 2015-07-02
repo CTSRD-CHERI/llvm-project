@@ -45,36 +45,39 @@
 #include "lldb/Host/windows/ConnectionGenericFileWindows.h"
 #endif
 
+#include "llvm/ADT/StringRef.h"
+
 using namespace lldb;
 using namespace lldb_private;
 
+static ScriptInterpreterPython::SWIGInitCallback g_swig_init_callback = nullptr;
+static ScriptInterpreterPython::SWIGBreakpointCallbackFunction g_swig_breakpoint_callback = nullptr;
+static ScriptInterpreterPython::SWIGWatchpointCallbackFunction g_swig_watchpoint_callback = nullptr;
+static ScriptInterpreterPython::SWIGPythonTypeScriptCallbackFunction g_swig_typescript_callback = nullptr;
+static ScriptInterpreterPython::SWIGPythonCreateSyntheticProvider g_swig_synthetic_script = nullptr;
+static ScriptInterpreterPython::SWIGPythonCreateCommandObject g_swig_create_cmd = nullptr;
+static ScriptInterpreterPython::SWIGPythonCalculateNumChildren g_swig_calc_children = nullptr;
+static ScriptInterpreterPython::SWIGPythonGetChildAtIndex g_swig_get_child_index = nullptr;
+static ScriptInterpreterPython::SWIGPythonGetIndexOfChildWithName g_swig_get_index_child = nullptr;
+static ScriptInterpreterPython::SWIGPythonCastPyObjectToSBValue g_swig_cast_to_sbvalue  = nullptr;
+static ScriptInterpreterPython::SWIGPythonGetValueObjectSPFromSBValue g_swig_get_valobj_sp_from_sbvalue = nullptr;
+static ScriptInterpreterPython::SWIGPythonUpdateSynthProviderInstance g_swig_update_provider = nullptr;
+static ScriptInterpreterPython::SWIGPythonMightHaveChildrenSynthProviderInstance g_swig_mighthavechildren_provider = nullptr;
+static ScriptInterpreterPython::SWIGPythonGetValueSynthProviderInstance g_swig_getvalue_provider = nullptr;
+static ScriptInterpreterPython::SWIGPythonCallCommand g_swig_call_command = nullptr;
+static ScriptInterpreterPython::SWIGPythonCallCommandObject g_swig_call_command_object = nullptr;
+static ScriptInterpreterPython::SWIGPythonCallModuleInit g_swig_call_module_init = nullptr;
+static ScriptInterpreterPython::SWIGPythonCreateOSPlugin g_swig_create_os_plugin = nullptr;
+static ScriptInterpreterPython::SWIGPythonScriptKeyword_Process g_swig_run_script_keyword_process = nullptr;
+static ScriptInterpreterPython::SWIGPythonScriptKeyword_Thread g_swig_run_script_keyword_thread = nullptr;
+static ScriptInterpreterPython::SWIGPythonScriptKeyword_Target g_swig_run_script_keyword_target = nullptr;
+static ScriptInterpreterPython::SWIGPythonScriptKeyword_Frame g_swig_run_script_keyword_frame = nullptr;
+static ScriptInterpreterPython::SWIGPythonScriptKeyword_Value g_swig_run_script_keyword_value = nullptr;
+static ScriptInterpreterPython::SWIGPython_GetDynamicSetting g_swig_plugin_get = nullptr;
+static ScriptInterpreterPython::SWIGPythonCreateScriptedThreadPlan g_swig_thread_plan_script = nullptr;
+static ScriptInterpreterPython::SWIGPythonCallThreadPlan g_swig_call_thread_plan = nullptr;
 
-static ScriptInterpreter::SWIGInitCallback g_swig_init_callback = nullptr;
-static ScriptInterpreter::SWIGBreakpointCallbackFunction g_swig_breakpoint_callback = nullptr;
-static ScriptInterpreter::SWIGWatchpointCallbackFunction g_swig_watchpoint_callback = nullptr;
-static ScriptInterpreter::SWIGPythonTypeScriptCallbackFunction g_swig_typescript_callback = nullptr;
-static ScriptInterpreter::SWIGPythonCreateSyntheticProvider g_swig_synthetic_script = nullptr;
-static ScriptInterpreter::SWIGPythonCreateCommandObject g_swig_create_cmd = nullptr;
-static ScriptInterpreter::SWIGPythonCalculateNumChildren g_swig_calc_children = nullptr;
-static ScriptInterpreter::SWIGPythonGetChildAtIndex g_swig_get_child_index = nullptr;
-static ScriptInterpreter::SWIGPythonGetIndexOfChildWithName g_swig_get_index_child = nullptr;
-static ScriptInterpreter::SWIGPythonCastPyObjectToSBValue g_swig_cast_to_sbvalue  = nullptr;
-static ScriptInterpreter::SWIGPythonGetValueObjectSPFromSBValue g_swig_get_valobj_sp_from_sbvalue = nullptr;
-static ScriptInterpreter::SWIGPythonUpdateSynthProviderInstance g_swig_update_provider = nullptr;
-static ScriptInterpreter::SWIGPythonMightHaveChildrenSynthProviderInstance g_swig_mighthavechildren_provider = nullptr;
-static ScriptInterpreter::SWIGPythonGetValueSynthProviderInstance g_swig_getvalue_provider = nullptr;
-static ScriptInterpreter::SWIGPythonCallCommand g_swig_call_command = nullptr;
-static ScriptInterpreter::SWIGPythonCallCommandObject g_swig_call_command_object = nullptr;
-static ScriptInterpreter::SWIGPythonCallModuleInit g_swig_call_module_init = nullptr;
-static ScriptInterpreter::SWIGPythonCreateOSPlugin g_swig_create_os_plugin = nullptr;
-static ScriptInterpreter::SWIGPythonScriptKeyword_Process g_swig_run_script_keyword_process = nullptr;
-static ScriptInterpreter::SWIGPythonScriptKeyword_Thread g_swig_run_script_keyword_thread = nullptr;
-static ScriptInterpreter::SWIGPythonScriptKeyword_Target g_swig_run_script_keyword_target = nullptr;
-static ScriptInterpreter::SWIGPythonScriptKeyword_Frame g_swig_run_script_keyword_frame = nullptr;
-static ScriptInterpreter::SWIGPythonScriptKeyword_Value g_swig_run_script_keyword_value = nullptr;
-static ScriptInterpreter::SWIGPython_GetDynamicSetting g_swig_plugin_get = nullptr;
-static ScriptInterpreter::SWIGPythonCreateScriptedThreadPlan g_swig_thread_plan_script = nullptr;
-static ScriptInterpreter::SWIGPythonCallThreadPlan g_swig_call_thread_plan = nullptr;
+static bool g_initialized = false;
 
 static std::string
 ReadPythonBacktrace (PyObject* py_backtrace);
@@ -175,8 +178,7 @@ ScriptInterpreterPython::ScriptInterpreterPython (CommandInterpreter &interprete
     m_lock_count (0),
     m_command_thread_state (nullptr)
 {
-
-    ScriptInterpreterPython::InitializePrivate ();
+    assert(g_initialized && "ScriptInterpreterPython created but initialize has not been called!");
 
     m_dictionary_name.append("_dict");
     StreamString run_string;
@@ -189,16 +191,6 @@ ScriptInterpreterPython::ScriptInterpreterPython (CommandInterpreter &interprete
 
     run_string.Clear();
 
-    // Importing 'lldb' module calls SBDebugger::Initialize, which calls Debugger::Initialize, which increments a
-    // global debugger ref-count; therefore we need to check the ref-count before and after importing lldb, and if the
-    // ref-count increased we need to call Debugger::Terminate here to decrement the ref-count so that when the final 
-    // call to Debugger::Terminate is made, the ref-count has the correct value. 
-    //
-    // Bonus question:  Why doesn't the ref-count always increase?  Because sometimes lldb has already been imported, in
-    // which case the code inside it, including the call to SBDebugger::Initialize(), does not get executed.
-    
-    int old_count = Debugger::TestDebuggerRefCount();
-    
     run_string.Printf ("run_one_line (%s, 'import copy, keyword, os, re, sys, uuid, lldb')", m_dictionary_name.c_str());
     PyRun_SimpleString (run_string.GetData());
 
@@ -208,11 +200,6 @@ ScriptInterpreterPython::ScriptInterpreterPython (CommandInterpreter &interprete
     run_string.Printf ("run_one_line (%s, 'import lldb.formatters, lldb.formatters.cpp, pydoc')", m_dictionary_name.c_str());
     PyRun_SimpleString (run_string.GetData());
     run_string.Clear();
-
-    int new_count = Debugger::TestDebuggerRefCount();
-    
-    if (new_count > old_count)
-        Debugger::Terminate();
 
     run_string.Printf ("run_one_line (%s, 'import lldb.embedded_interpreter; from lldb.embedded_interpreter import run_python_interpreter; from lldb.embedded_interpreter import run_one_line')", m_dictionary_name.c_str());
     PyRun_SimpleString (run_string.GetData());
@@ -397,6 +384,13 @@ ScriptInterpreterPython::LeaveSession ()
     m_session_is_active = false;
 }
 
+static PyObject *
+PyFile_FromFile_Const(FILE *fp, const char *name, const char *mode, int (*close)(FILE *))
+{
+    // Read through the Python source, doesn't seem to modify these strings
+    return PyFile_FromFile(fp, const_cast<char*>(name), const_cast<char*>(mode), close);
+}
+
 bool
 ScriptInterpreterPython::EnterSession (uint16_t on_entry_flags,
                                        FILE *in,
@@ -462,7 +456,7 @@ ScriptInterpreterPython::EnterSession (uint16_t on_entry_flags,
             {
                 m_saved_stdin.Reset(sys_module_dict.GetItemForKey("stdin"));
                 // This call can deadlock your process if the file is locked
-                PyObject *new_file = PyFile_FromFile (in, (char *) "", (char *) "r", nullptr);
+                PyObject *new_file = PyFile_FromFile_Const (in, "", "r", nullptr);
                 sys_module_dict.SetItemForKey ("stdin", new_file);
                 Py_DECREF (new_file);
             }
@@ -474,7 +468,7 @@ ScriptInterpreterPython::EnterSession (uint16_t on_entry_flags,
         {
             m_saved_stdout.Reset(sys_module_dict.GetItemForKey("stdout"));
 
-            PyObject *new_file = PyFile_FromFile (out, (char *) "", (char *) "w", nullptr);
+            PyObject *new_file = PyFile_FromFile_Const (out, "", "w", nullptr);
             sys_module_dict.SetItemForKey ("stdout", new_file);
             Py_DECREF (new_file);
         }
@@ -487,7 +481,7 @@ ScriptInterpreterPython::EnterSession (uint16_t on_entry_flags,
         {
             m_saved_stderr.Reset(sys_module_dict.GetItemForKey("stderr"));
 
-            PyObject *new_file = PyFile_FromFile (err, (char *) "", (char *) "w", nullptr);
+            PyObject *new_file = PyFile_FromFile_Const (err, "", "w", nullptr);
             sys_module_dict.SetItemForKey ("stderr", new_file);
             Py_DECREF (new_file);
         }
@@ -742,22 +736,21 @@ public:
         
     }
     
-    virtual
-    ~IOHandlerPythonInterpreter()
+    ~IOHandlerPythonInterpreter() override
     {
         
     }
     
-    virtual ConstString
-    GetControlSequence (char ch)
+    ConstString
+    GetControlSequence (char ch) override
     {
         if (ch == 'd')
             return ConstString("quit()\n");
         return ConstString();
     }
 
-    virtual void
-    Run ()
+    void
+    Run () override
     {
         if (m_python)
         {
@@ -803,32 +796,20 @@ public:
         SetIsDone(true);
     }
 
-    virtual void
-    Hide ()
-    {
-        
-    }
-    
-    virtual void
-    Refresh ()
+    void
+    Cancel () override
     {
         
     }
 
-    virtual void
-    Cancel ()
-    {
-        
-    }
-
-    virtual bool
-    Interrupt ()
+    bool
+    Interrupt () override
     {
         return m_python->Interrupt();
     }
     
-    virtual void
-    GotEOF()
+    void
+    GotEOF() override
     {
         
     }
@@ -2636,6 +2617,16 @@ ScriptInterpreterPython::LoadScriptingModule(const char *pathname, bool can_relo
 bool
 ScriptInterpreterPython::IsReservedWord (const char* word)
 {
+    if (!word || !word[0])
+        return false;
+    
+    llvm::StringRef word_sr(word);
+
+    // filter out a few characters that would just confuse us
+    // and that are clearly not keyword material anyway
+    if (word_sr.find_first_of("'\"") != llvm::StringRef::npos)
+        return false;
+    
     StreamString command_stream;
     command_stream.Printf("keyword.iskeyword('%s')", word);
     bool result;
@@ -2886,6 +2877,78 @@ ScriptInterpreterPython::GetShortHelpForCommandObject (StructuredData::GenericSP
     return got_string;
 }
 
+uint32_t
+ScriptInterpreterPython::GetFlagsForCommandObject (StructuredData::GenericSP cmd_obj_sp)
+{
+    uint32_t result = 0;
+    
+    Locker py_lock (this,
+                    Locker::AcquireLock | Locker::NoSTDIN,
+                    Locker::FreeLock);
+    
+    static char callee_name[] = "get_flags";
+    
+    if (!cmd_obj_sp)
+        return result;
+    
+    PyObject* implementor = (PyObject*)cmd_obj_sp->GetValue();
+    
+    if (implementor == nullptr || implementor == Py_None)
+        return result;
+    
+    PyObject* pmeth  = PyObject_GetAttrString(implementor, callee_name);
+    
+    if (PyErr_Occurred())
+    {
+        PyErr_Clear();
+    }
+    
+    if (pmeth == nullptr || pmeth == Py_None)
+    {
+        Py_XDECREF(pmeth);
+        return result;
+    }
+    
+    if (PyCallable_Check(pmeth) == 0)
+    {
+        if (PyErr_Occurred())
+        {
+            PyErr_Clear();
+        }
+        
+        Py_XDECREF(pmeth);
+        return result;
+    }
+    
+    if (PyErr_Occurred())
+    {
+        PyErr_Clear();
+    }
+    
+    Py_XDECREF(pmeth);
+    
+    // right now we know this function exists and is callable..
+    PyObject* py_return = PyObject_CallMethod(implementor, callee_name, nullptr);
+    
+    // if it fails, print the error but otherwise go on
+    if (PyErr_Occurred())
+    {
+        PyErr_Print();
+        PyErr_Clear();
+    }
+    
+    if (py_return != nullptr && py_return != Py_None)
+    {
+        if (PyInt_Check(py_return))
+            result = (uint32_t)PyInt_AsLong(py_return);
+        else if (PyLong_Check(py_return))
+            result = (uint32_t)PyLong_AsLong(py_return);
+    }
+    Py_XDECREF(py_return);
+    
+    return result;
+}
+
 bool
 ScriptInterpreterPython::GetLongHelpForCommandObject (StructuredData::GenericSP cmd_obj_sp,
                                                       std::string& dest)
@@ -3029,11 +3092,7 @@ ScriptInterpreterPython::InitializeInterpreter (SWIGInitCallback swig_init_callb
 void
 ScriptInterpreterPython::InitializePrivate ()
 {
-    static int g_initialized = false;
-    
-    if (g_initialized)
-        return;
-    
+    assert(!g_initialized && "ScriptInterpreterPython::InitializePrivate() called more than once!");
     g_initialized = true;
 
     Timer scoped_timer (__PRETTY_FUNCTION__, __PRETTY_FUNCTION__);
@@ -3043,6 +3102,9 @@ ScriptInterpreterPython::InitializePrivate ()
     TerminalState stdin_tty_state;
     stdin_tty_state.Save(STDIN_FILENO, false);
 
+#if defined(LLDB_PYTHON_HOME)
+    Py_SetPythonHome(LLDB_PYTHON_HOME);
+#endif
     PyGILState_STATE gstate;
     Log *log (lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_SCRIPT | LIBLLDB_LOG_VERBOSE));
     bool threads_already_initialized = false;
@@ -3057,57 +3119,25 @@ ScriptInterpreterPython::InitializePrivate ()
     }
     Py_InitializeEx (0);
 
-    // Initialize SWIG after setting up python
     if (g_swig_init_callback)
         g_swig_init_callback ();
 
     // Update the path python uses to search for modules to include the current directory.
 
     PyRun_SimpleString ("import sys");
-    PyRun_SimpleString ("sys.path.append ('.')");
-
-    // Find the module that owns this code and use that path we get to
-    // set the sys.path appropriately.
+    AddToSysPath(AddLocation::End, ".");
 
     FileSpec file_spec;
-    char python_dir_path[PATH_MAX];
+    // Don't denormalize paths when calling file_spec.GetPath().  On platforms that use
+    // a backslash as the path separator, this will result in executing python code containing
+    // paths with unescaped backslashes.  But Python also accepts forward slashes, so to make
+    // life easier we just use that.
     if (HostInfo::GetLLDBPath(ePathTypePythonDir, file_spec))
-    {
-        std::string python_path("sys.path.insert(0,\"");
-        size_t orig_len = python_path.length();
-        if (file_spec.GetPath(python_dir_path, sizeof (python_dir_path)))
-        {
-            python_path.append (python_dir_path);
-            python_path.append ("\")");
-            PyRun_SimpleString (python_path.c_str());
-            python_path.resize (orig_len);
-        }
-
-        if (HostInfo::GetLLDBPath(ePathTypeLLDBShlibDir, file_spec))
-        {
-            if (file_spec.GetPath(python_dir_path, sizeof (python_dir_path)))
-            {
-                python_path.append (python_dir_path);
-                python_path.append ("\")");
-                PyRun_SimpleString (python_path.c_str());
-                python_path.resize (orig_len);
-            }
-        }
-    }
-
-    // Importing 'lldb' module calls SBDebugger::Initialize, which calls Debugger::Initialize, which increments a
-    // global debugger ref-count; therefore we need to check the ref-count before and after importing lldb, and if the
-    // ref-count increased we need to call Debugger::Terminate here to decrement the ref-count so that when the final 
-    // call to Debugger::Terminate is made, the ref-count has the correct value. 
-    
-    int old_count = Debugger::TestDebuggerRefCount ();
+        AddToSysPath(AddLocation::Beginning, file_spec.GetPath(false));
+    if (HostInfo::GetLLDBPath(ePathTypeLLDBShlibDir, file_spec))
+        AddToSysPath(AddLocation::Beginning, file_spec.GetPath(false));
 
     PyRun_SimpleString ("sys.dont_write_bytecode = 1; import lldb.embedded_interpreter; from lldb.embedded_interpreter import run_python_interpreter; from lldb.embedded_interpreter import run_one_line");
-
-    int new_count = Debugger::TestDebuggerRefCount ();
-    
-    if (new_count > old_count)
-        Debugger::Terminate ();
 
     if (threads_already_initialized) {
         if (log)
@@ -3120,6 +3150,28 @@ ScriptInterpreterPython::InitializePrivate ()
 
     stdin_tty_state.Restore();
 }
+
+void
+ScriptInterpreterPython::AddToSysPath(AddLocation location, std::string path)
+{
+    std::string path_copy;
+
+    std::string statement;
+    if (location == AddLocation::Beginning)
+    {
+        statement.assign("sys.path.insert(0,\"");
+        statement.append (path);
+        statement.append ("\")");
+    }
+    else
+    {
+        statement.assign("sys.path.append(\"");
+        statement.append(path);
+        statement.append("\")");
+    }
+    PyRun_SimpleString (statement.c_str());
+}
+
 
 //void
 //ScriptInterpreterPython::Terminate ()

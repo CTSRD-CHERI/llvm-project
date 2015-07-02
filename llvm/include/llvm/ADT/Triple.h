@@ -50,7 +50,8 @@ public:
     armeb,      // ARM (big endian): armeb
     aarch64,    // AArch64 (little endian): aarch64
     aarch64_be, // AArch64 (big endian): aarch64_be
-    bpf,        // eBPF or extended BPF or 64-bit BPF (little endian)
+    bpfel,      // eBPF or extended BPF or 64-bit BPF (little endian)
+    bpfeb,      // eBPF or extended BPF or 64-bit BPF (big endian)
     hexagon,    // Hexagon: hexagon
     mips,       // MIPS: mips, mipsallegrex
     mipsel,     // MIPSEL: mipsel, mipsallegrexel
@@ -64,6 +65,7 @@ public:
     amdgcn,     // AMDGCN: AMD GCN GPUs
     sparc,      // Sparc: sparc
     sparcv9,    // Sparcv9: Sparcv9
+    sparcel,    // Sparc: (endianness = little). NB: 'Sparcle' is a CPU variant
     systemz,    // SystemZ: s390x
     tce,        // TCE (http://tce.cs.tut.fi/): tce
     thumb,      // Thumb (little endian): thumb, thumbv.*
@@ -82,11 +84,16 @@ public:
     spir,       // SPIR: standard portable IR for OpenCL 32-bit version
     spir64,     // SPIR: standard portable IR for OpenCL 64-bit version
     cheri,      // Capability Hardware Enhanced RISC Instructions
-    kalimba     // Kalimba: generic kalimba
+    kalimba,    // Kalimba: generic kalimba
+    shave,      // SHAVE: Movidius vector VLIW processors
+    wasm32,     // WebAssembly with 32-bit pointers
+    wasm64,     // WebAssembly with 64-bit pointers
+    LastArchType = wasm64
   };
   enum SubArchType {
     NoSubArch,
 
+    ARMSubArch_v8_1a,
     ARMSubArch_v8,
     ARMSubArch_v7,
     ARMSubArch_v7em,
@@ -117,7 +124,8 @@ public:
     ImaginationTechnologies,
     MipsTechnologies,
     NVIDIA,
-    CSR
+    CSR,
+    LastVendorType = CSR
   };
   enum OSType {
     UnknownOS,
@@ -145,7 +153,8 @@ public:
     CUDA,       // NVIDIA CUDA
     NVCL,       // NVIDIA OpenCL
     AMDHSA,     // AMD HSA Runtime
-    PS4
+    PS4,
+    LastOSType = PS4
   };
   enum EnvironmentType {
     UnknownEnvironment,
@@ -162,6 +171,7 @@ public:
     MSVC,
     Itanium,
     Cygnus,
+    LastEnvironmentType = Cygnus
   };
   enum ObjectFormatType {
     UnknownObjectFormat,
@@ -249,6 +259,15 @@ public:
 
   /// getEnvironment - Get the parsed environment type of this triple.
   EnvironmentType getEnvironment() const { return Environment; }
+
+  /// \brief Parse the version number from the OS name component of the
+  /// triple, if present.
+  ///
+  /// For example, "fooos1.2.3" would return (1, 2, 3).
+  ///
+  /// If an entry is not defined, it will be returned as 0.
+  void getEnvironmentVersion(unsigned &Major, unsigned &Minor,
+                             unsigned &Micro) const;
 
   /// getFormat - Get the object format for this triple.
   ObjectFormatType getObjectFormat() const { return ObjectFormat; }

@@ -27,11 +27,15 @@
 using namespace llvm;
 
 static cl:: opt<bool> DisableHardwareLoops("disable-hexagon-hwloops",
-      cl::Hidden, cl::desc("Disable Hardware Loops for Hexagon target"));
+  cl::Hidden, cl::desc("Disable Hardware Loops for Hexagon target"));
 
 static cl::opt<bool> DisableHexagonCFGOpt("disable-hexagon-cfgopt",
-      cl::Hidden, cl::ZeroOrMore, cl::init(false),
-      cl::desc("Disable Hexagon CFG Optimization"));
+  cl::Hidden, cl::ZeroOrMore, cl::init(false),
+  cl::desc("Disable Hexagon CFG Optimization"));
+
+static cl::opt<bool> EnableExpandCondsets("hexagon-expand-condsets",
+  cl::init(true), cl::Hidden, cl::ZeroOrMore,
+  cl::desc("Early expansion of MUX"));
 
 
 /// HexagonTargetMachineModule - Note that this is used on hosts that
@@ -55,12 +59,32 @@ static MachineSchedRegistry
 SchedCustomRegistry("hexagon", "Run Hexagon's custom scheduler",
                     createVLIWMachineSched);
 
+namespace llvm {
+  FunctionPass *createHexagonExpandCondsets();
+  FunctionPass *createHexagonISelDag(HexagonTargetMachine &TM,
+                                     CodeGenOpt::Level OptLevel);
+  FunctionPass *createHexagonDelaySlotFillerPass(const TargetMachine &TM);
+  FunctionPass *createHexagonFPMoverPass(const TargetMachine &TM);
+  FunctionPass *createHexagonRemoveExtendArgs(const HexagonTargetMachine &TM);
+  FunctionPass *createHexagonCFGOptimizer();
+
+  FunctionPass *createHexagonSplitConst32AndConst64();
+  FunctionPass *createHexagonExpandPredSpillCode();
+  FunctionPass *createHexagonHardwareLoops();
+  FunctionPass *createHexagonPeephole();
+  FunctionPass *createHexagonFixupHwLoops();
+  FunctionPass *createHexagonNewValueJump();
+  FunctionPass *createHexagonCopyToCombine();
+  FunctionPass *createHexagonPacketizer();
+  FunctionPass *createHexagonNewValueJump();
+} // end namespace llvm;
+
 /// HexagonTargetMachine ctor - Create an ILP32 architecture model.
 ///
 
 /// Hexagon_TODO: Do I need an aggregate alignment?
 ///
-HexagonTargetMachine::HexagonTargetMachine(const Target &T, StringRef TT,
+HexagonTargetMachine::HexagonTargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
                                            Reloc::Model RM, CodeModel::Model CM,
@@ -79,7 +103,15 @@ namespace {
 class HexagonPassConfig : public TargetPassConfig {
 public:
   HexagonPassConfig(HexagonTargetMachine *TM, PassManagerBase &PM)
-      : TargetPassConfig(TM, PM) {}
+    : TargetPassConfig(TM, PM) {
+    bool NoOpt = (TM->getOptLevel() == CodeGenOpt::None);
+    if (!NoOpt) {
+      if (EnableExpandCondsets) {
+        Pass *Exp = createHexagonExpandCondsets();
+        insertPass(&RegisterCoalescerID, IdentifyingPassPtr(Exp));
+      }
+    }
+  }
 
   HexagonTargetMachine &getHexagonTargetMachine() const {
     return getTM<HexagonTargetMachine>();

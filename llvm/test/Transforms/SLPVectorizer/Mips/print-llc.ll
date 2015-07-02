@@ -125,7 +125,7 @@ entry:
   br i1 %cmp, label %if.then, label %if.end
 
 if.then:                                          ; preds = %entry
-  %call = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str, i32 0, i32 0))
+  %call = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str, i32 0, i32 0))
   %2 = load i8 addrspace(200)*, i8 addrspace(200)** %p.addr, align 32
   %3 = load i32, i32* %caplen.addr, align 4
   call void @default_print(i8 addrspace(200)* %2, i32 %3)
@@ -165,7 +165,7 @@ if.else:                                          ; preds = %if.end
   br i1 %cmp6, label %if.then8, label %if.end10
 
 if.then8:                                         ; preds = %if.else
-  %call9 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str, i32 0, i32 0))
+  %call9 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str, i32 0, i32 0))
   %16 = load i8 addrspace(200)*, i8 addrspace(200)** %p.addr, align 32
   %17 = load i32, i32* %caplen.addr, align 4
   call void @default_print(i8 addrspace(200)* %16, i32 %17)
@@ -218,7 +218,7 @@ if.then26:                                        ; preds = %land.lhs.true
   br i1 %tobool, label %if.then27, label %if.end29
 
 if.then27:                                        ; preds = %if.then26
-  %call28 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str1, i32 0, i32 0))
+  %call28 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str1, i32 0, i32 0))
   br label %if.end29
 
 if.end29:                                         ; preds = %if.then27, %if.then26
@@ -264,7 +264,7 @@ if.then39:                                        ; preds = %if.end30
   %conv49 = zext i8 %43 to i32
   %and50 = and i32 %conv49, 1
   %call51 = call i8* @tok2str(%struct.tok* getelementptr inbounds ([7 x %struct.tok], [7 x %struct.tok]* @llc_flag_values, i32 0, i32 0), i8* getelementptr inbounds ([8 x i8], [8 x i8]* @.str3, i32 0, i32 0), i32 %and50)
-  %call52 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([46 x i8], [46 x i8]* @.str2, i32 0, i32 0), i8* %call41, i32 %conv42, i8* %call45, i8* %call47, i32 %conv48, i8* %call51)
+  %call52 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([46 x i8], [46 x i8]* @.str2, i32 0, i32 0), i8* %call41, i32 %conv42, i8* %call45, i8* %call47, i32 %conv48, i8* %call51)
   %44 = load i32, i32* %is_u, align 4
   %tobool53 = icmp ne i32 %44, 0
   br i1 %tobool53, label %if.then54, label %if.else57
@@ -272,13 +272,13 @@ if.then39:                                        ; preds = %if.end30
 if.then54:                                        ; preds = %if.then39
   %45 = load i16, i16* %control, align 2
   %conv55 = zext i16 %45 to i32
-  %call56 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([16 x i8], [16 x i8]* @.str4, i32 0, i32 0), i32 %conv55)
+  %call56 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([16 x i8], [16 x i8]* @.str4, i32 0, i32 0), i32 %conv55)
   br label %if.end60
 
 if.else57:                                        ; preds = %if.then39
   %46 = load i16, i16* %control, align 2
   %conv58 = zext i16 %46 to i32
-  %call59 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([16 x i8], [16 x i8]* @.str5, i32 0, i32 0), i32 %conv58)
+  %call59 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([16 x i8], [16 x i8]* @.str5, i32 0, i32 0), i32 %conv58)
   br label %if.end60
 
 if.end60:                                         ; preds = %if.else57, %if.then54
@@ -369,7 +369,7 @@ if.then102:                                       ; preds = %land.lhs.true98
   br i1 %tobool104, label %if.then105, label %if.end107
 
 if.then105:                                       ; preds = %if.then102
-  %call106 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str6, i32 0, i32 0))
+  %call106 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str6, i32 0, i32 0))
   br label %if.end107
 
 if.end107:                                        ; preds = %if.then105, %if.then102
@@ -552,7 +552,7 @@ if.then186:                                       ; preds = %lor.lhs.false183, %
   %115 = load i8, i8* %dsap, align 1
   %conv187 = zext i8 %115 to i32
   %call188 = call i8* @tok2str(%struct.tok* getelementptr inbounds ([16 x %struct.tok], [16 x %struct.tok]* @llc_values, i32 0, i32 0), i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str8, i32 0, i32 0), i32 %conv187)
-  %call189 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str7, i32 0, i32 0), i8* %call188)
+  %call189 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str7, i32 0, i32 0), i8* %call188)
   br label %if.end196
 
 if.else190:                                       ; preds = %lor.lhs.false183
@@ -563,7 +563,7 @@ if.else190:                                       ; preds = %lor.lhs.false183
   %118 = load i8, i8* %dsap, align 1
   %conv193 = zext i8 %118 to i32
   %call194 = call i8* @tok2str(%struct.tok* getelementptr inbounds ([16 x %struct.tok], [16 x %struct.tok]* @llc_values, i32 0, i32 0), i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str8, i32 0, i32 0), i32 %conv193)
-  %call195 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str9, i32 0, i32 0), i8* %call191, i8* %call192, i8* %call194)
+  %call195 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str9, i32 0, i32 0), i8* %call191, i8* %call192, i8* %call194)
   br label %if.end196
 
 if.end196:                                        ; preds = %if.else190, %if.then186
@@ -592,7 +592,7 @@ if.then203:                                       ; preds = %lor.lhs.false200, %
   %128 = load i8, i8* %dsap, align 1
   %conv206 = zext i8 %128 to i32
   %call207 = call i8* @tok2str(%struct.tok* getelementptr inbounds ([16 x %struct.tok], [16 x %struct.tok]* @llc_values, i32 0, i32 0), i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str8, i32 0, i32 0), i32 %conv206)
-  %call208 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str10, i32 0, i32 0), i8* %call205, i8* %call207)
+  %call208 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str10, i32 0, i32 0), i8* %call205, i8* %call207)
   br label %if.end217
 
 if.else209:                                       ; preds = %lor.lhs.false200
@@ -606,7 +606,7 @@ if.else209:                                       ; preds = %lor.lhs.false200
   %132 = load i8, i8* %dsap, align 1
   %conv214 = zext i8 %132 to i32
   %call215 = call i8* @tok2str(%struct.tok* getelementptr inbounds ([16 x %struct.tok], [16 x %struct.tok]* @llc_values, i32 0, i32 0), i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str8, i32 0, i32 0), i32 %conv214)
-  %call216 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str12, i32 0, i32 0), i8* %call210, i8* %call212, i8* %call213, i8* %call215)
+  %call216 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str12, i32 0, i32 0), i8* %call210, i8* %call212, i8* %call213, i8* %call215)
   br label %if.end217
 
 if.end217:                                        ; preds = %if.else209, %if.then203
@@ -634,7 +634,7 @@ if.then221:                                       ; preds = %if.end219
   %or229 = or i32 %and226, %and228
   %call230 = call i8* @tok2str(%struct.tok* getelementptr inbounds ([7 x %struct.tok], [7 x %struct.tok]* @llc_flag_values, i32 0, i32 0), i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str15, i32 0, i32 0), i32 %or229)
   %137 = load i32, i32* %length.addr, align 4
-  %call231 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([38 x i8], [38 x i8]* @.str13, i32 0, i32 0), i8* %call224, i8* %call230, i32 %137)
+  %call231 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([38 x i8], [38 x i8]* @.str13, i32 0, i32 0), i8* %call224, i8* %call230, i32 %137)
   %138 = load i8 addrspace(200)*, i8 addrspace(200)** %p.addr, align 32
   %add.ptr232 = getelementptr inbounds i8, i8 addrspace(200)* %138, i64 3
   store i8 addrspace(200)* %add.ptr232, i8 addrspace(200)** %p.addr, align 32
@@ -666,7 +666,7 @@ if.then243:                                       ; preds = %if.then239
   %arrayidx245 = getelementptr inbounds i8, i8 addrspace(200)* %146, i64 2
   %147 = load i8, i8 addrspace(200)* %arrayidx245, align 1
   %conv246 = zext i8 %147 to i32
-  %call247 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str16, i32 0, i32 0), i32 %conv244, i32 %conv246)
+  %call247 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str16, i32 0, i32 0), i32 %conv244, i32 %conv246)
   %148 = load i8 addrspace(200)*, i8 addrspace(200)** %p.addr, align 32
   %add.ptr248 = getelementptr inbounds i8, i8 addrspace(200)* %148, i64 3
   store i8 addrspace(200)* %add.ptr248, i8 addrspace(200)** %p.addr, align 32
@@ -710,7 +710,7 @@ if.then258:                                       ; preds = %if.else253
   %or269 = or i32 %and266, %and268
   %call270 = call i8* @tok2str(%struct.tok* getelementptr inbounds ([7 x %struct.tok], [7 x %struct.tok]* @llc_flag_values, i32 0, i32 0), i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str15, i32 0, i32 0), i32 %or269)
   %156 = load i32, i32* %length.addr, align 4
-  %call271 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([51 x i8], [51 x i8]* @.str17, i32 0, i32 0), i8* %call261, i32 %and264, i8* %call270, i32 %156)
+  %call271 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([51 x i8], [51 x i8]* @.str17, i32 0, i32 0), i8* %call261, i32 %and264, i8* %call270, i32 %156)
   br label %if.end286
 
 if.else272:                                       ; preds = %if.else253
@@ -731,7 +731,7 @@ if.else272:                                       ; preds = %if.else253
   %or283 = or i32 %and280, %and282
   %call284 = call i8* @tok2str(%struct.tok* getelementptr inbounds ([7 x %struct.tok], [7 x %struct.tok]* @llc_flag_values, i32 0, i32 0), i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str15, i32 0, i32 0), i32 %or283)
   %161 = load i32, i32* %length.addr, align 4
-  %call285 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([60 x i8], [60 x i8]* @.str18, i32 0, i32 0), i32 %and275, i32 %and278, i8* %call284, i32 %161)
+  %call285 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([60 x i8], [60 x i8]* @.str18, i32 0, i32 0), i32 %and275, i32 %and278, i8* %call284, i32 %161)
   br label %if.end286
 
 if.end286:                                        ; preds = %if.else272, %if.then258
@@ -880,7 +880,7 @@ for.end:                                          ; preds = %if.then13, %for.con
   %call20 = call i8* @tok2str(%struct.tok* %27, i8* getelementptr inbounds ([8 x i8], [8 x i8]* @.str3, i32 0, i32 0), i32 %conv19)
   %29 = load i16, i16* %et, align 2
   %conv21 = zext i16 %29 to i32
-  %call22 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([34 x i8], [34 x i8]* @.str19, i32 0, i32 0), i8* %call16, i32 %25, i8* %cond, i8* %call20, i32 %conv21)
+  %call22 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([34 x i8], [34 x i8]* @.str19, i32 0, i32 0), i8* %call16, i32 %25, i8* %cond, i8* %call20, i32 %conv21)
   br label %if.end23
 
 if.end23:                                         ; preds = %for.end, %if.end
@@ -1133,7 +1133,7 @@ sw.epilog85:                                      ; preds = %sw.epilog84, %if.en
   br label %return
 
 trunc:                                            ; preds = %if.then74, %if.then62, %if.then53, %if.then
-  %call86 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([8 x i8], [8 x i8]* @.str22, i32 0, i32 0))
+  %call86 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([8 x i8], [8 x i8]* @.str22, i32 0, i32 0))
   store i32 1, i32* %retval
   br label %return
 

@@ -16,39 +16,6 @@
 
 using namespace lld;
 
-class _NativeReaderErrorCategory : public std::error_category {
-public:
-  const char* name() const LLVM_NOEXCEPT override {
-    return "lld.native.reader";
-  }
-
-  std::string message(int ev) const override {
-    switch (static_cast<NativeReaderError>(ev)) {
-    case NativeReaderError::success:
-      return "Success";
-    case NativeReaderError::unknown_file_format:
-      return "Unknown file format";
-    case NativeReaderError::file_too_short:
-      return "file truncated";
-    case NativeReaderError::file_malformed:
-      return "file malformed";
-    case NativeReaderError::memory_error:
-      return "out of memory";
-    case NativeReaderError::unknown_chunk_type:
-      return "unknown chunk type";
-    case NativeReaderError::conflicting_target_machine:
-      return "conflicting target machine";
-    }
-    llvm_unreachable("An enumerator of NativeReaderError does not have a "
-                     "message defined.");
-  }
-};
-
-const std::error_category &lld::native_reader_category() {
-  static _NativeReaderErrorCategory o;
-  return o;
-}
-
 class _YamlReaderErrorCategory : public std::error_category {
 public:
   const char* name() const LLVM_NOEXCEPT override {
@@ -57,8 +24,6 @@ public:
 
   std::string message(int ev) const override {
     switch (static_cast<YamlReaderError>(ev)) {
-    case YamlReaderError::success:
-      return "Success";
     case YamlReaderError::unknown_keyword:
       return "Unknown keyword found in yaml file";
     case YamlReaderError::illegal_value:
@@ -91,6 +56,8 @@ public:
     case LinkerScriptReaderError::unrecognized_function_in_expr:
       return "Unrecognized function call when evaluating linker script "
              "expression";
+    case LinkerScriptReaderError::unknown_phdr_ids:
+      return "Unknown header identifiers (missing in PHDRS command) are used";
     }
     llvm_unreachable("An enumerator of LinkerScriptReaderError does not have a "
                      "message defined.");
@@ -139,6 +106,10 @@ private:
 };
 
 static dynamic_error_category categorySingleton;
+
+std::error_code make_dynamic_error_code(const char *msg) {
+  return make_dynamic_error_code(StringRef(msg));
+}
 
 std::error_code make_dynamic_error_code(StringRef msg) {
   return std::error_code(categorySingleton.add(msg), categorySingleton);

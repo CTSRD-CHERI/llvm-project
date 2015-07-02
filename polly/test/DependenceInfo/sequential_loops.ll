@@ -1,7 +1,6 @@
 ; RUN: opt -S %loadPolly -polly-detect-unprofitable -basicaa -polly-dependences -analyze -polly-dependences-analysis-type=value-based < %s | FileCheck %s -check-prefix=VALUE
 ; RUN: opt -S %loadPolly -polly-detect-unprofitable -basicaa -polly-dependences -analyze -polly-dependences-analysis-type=memory-based < %s | FileCheck %s -check-prefix=MEMORY
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
-target triple = "x86_64-pc-linux-gnu"
 
 ;     for(i = 0; i < 100; i++ )
 ; S1:   A[i] = 2;
@@ -51,7 +50,7 @@ exit.3:
   ret void
 }
 
-; VALUE: region: 'S1 => exit.3' in function 'sequential_writes':
+; VALUE-LABEL: region: 'S1 => exit.3' in function 'sequential_writes':
 ; VALUE:   RAW dependences:
 ; VALUE:     {  }
 ; VALUE:   WAR dependences:
@@ -63,7 +62,7 @@ exit.3:
 ; VALUE:       Stmt_S1[i0] -> Stmt_S3[i0] : i0 >= 10 and i0 <= 99
 ; VALUE:     }
 
-; MEMORY: region: 'S1 => exit.3' in function 'sequential_writes':
+; MEMORY-LABEL: region: 'S1 => exit.3' in function 'sequential_writes':
 ; MEMORY:   RAW dependences:
 ; MEMORY:     {  }
 ; MEMORY:   WAR dependences:
@@ -126,7 +125,7 @@ exit.3:
   ret void
 }
 
-; VALUE: region: 'S1 => exit.3' in function 'read_after_writes':
+; VALUE-LABEL: region: 'S1 => exit.3' in function 'read_after_writes':
 ; VALUE:   RAW dependences:
 ; VALUE:     {
 ; VALUE:       Stmt_S2[i0] -> Stmt_S3[i0] : i0 >= 0 and i0 <= 9;
@@ -136,10 +135,10 @@ exit.3:
 ; VALUE:     {  }
 ; VALUE:   WAW dependences:
 ; VALUE:     {
-; VALUE:       Stmt_S1[i0] -> Stmt_S2[i0] : i0 >= 0 and i0 <= 9
+; VALUE:       Stmt_S1[i0] -> Stmt_S2[i0] : i0 <= 9 and i0 >= 0
 ; VALUE:     }
 
-; MEMORY: region: 'S1 => exit.3' in function 'read_after_writes':
+; MEMORY-LABEL: region: 'S1 => exit.3' in function 'read_after_writes':
 ; MEMORY:   RAW dependences:
 ; MEMORY:     {
 ; MEMORY:       Stmt_S2[i0] -> Stmt_S3[i0] : i0 <= 9 and i0 >= 0;
@@ -203,7 +202,7 @@ exit.3:
   ret void
 }
 
-; VALUE: region: 'S1 => exit.3' in function 'write_after_read':
+; VALUE-LABEL: region: 'S1 => exit.3' in function 'write_after_read':
 ; VALUE:   RAW dependences:
 ; VALUE:     {
 ; VALUE:     }
@@ -214,10 +213,10 @@ exit.3:
 ; VALUE:     }
 ; VALUE:   WAW dependences:
 ; VALUE:     {
-; VALUE:       Stmt_S2[i0] -> Stmt_S3[i0] : i0 >= 0 and i0 <= 9
+; VALUE:       Stmt_S2[i0] -> Stmt_S3[i0] : i0 <= 9 and i0 >= 0
 ; VALUE:     }
 
-; MEMORY: region: 'S1 => exit.3' in function 'write_after_read':
+; MEMORY-LABEL: region: 'S1 => exit.3' in function 'write_after_read':
 ; MEMORY:   RAW dependences:
 ; MEMORY:     {
 ; MEMORY:     }

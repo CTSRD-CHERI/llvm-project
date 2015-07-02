@@ -51,15 +51,20 @@ __isl_null isl_schedule_band *isl_schedule_band_free(
 
 isl_ctx *isl_schedule_band_get_ctx(__isl_keep isl_schedule_band *band);
 
-int isl_schedule_band_plain_is_equal(__isl_keep isl_schedule_band *band1,
+isl_bool isl_schedule_band_plain_is_equal(__isl_keep isl_schedule_band *band1,
 	__isl_keep isl_schedule_band *band2);
 
 int isl_schedule_band_is_anchored(__isl_keep isl_schedule_band *band);
 
 __isl_give isl_space *isl_schedule_band_get_space(
 	__isl_keep isl_schedule_band *band);
+__isl_give isl_schedule_band *isl_schedule_band_intersect_domain(
+	__isl_take isl_schedule_band *band, __isl_take isl_union_set *domain);
 __isl_give isl_multi_union_pw_aff *isl_schedule_band_get_partial_schedule(
 	__isl_keep isl_schedule_band *band);
+__isl_give isl_schedule_band *isl_schedule_band_set_partial_schedule(
+	__isl_take isl_schedule_band *band,
+	__isl_take isl_multi_union_pw_aff *schedule);
 enum isl_ast_loop_type isl_schedule_band_member_get_ast_loop_type(
 	__isl_keep isl_schedule_band *band, int pos);
 __isl_give isl_schedule_band *isl_schedule_band_member_set_ast_loop_type(
@@ -77,11 +82,11 @@ __isl_give isl_schedule_band *isl_schedule_band_set_ast_build_options(
 	__isl_take isl_schedule_band *band, __isl_take isl_union_set *options);
 
 int isl_schedule_band_n_member(__isl_keep isl_schedule_band *band);
-int isl_schedule_band_member_get_coincident(
+isl_bool isl_schedule_band_member_get_coincident(
 	__isl_keep isl_schedule_band *band, int pos);
 __isl_give isl_schedule_band *isl_schedule_band_member_set_coincident(
 	__isl_take isl_schedule_band *band, int pos, int coincident);
-int isl_schedule_band_get_permutable(__isl_keep isl_schedule_band *band);
+isl_bool isl_schedule_band_get_permutable(__isl_keep isl_schedule_band *band);
 __isl_give isl_schedule_band *isl_schedule_band_set_permutable(
 	__isl_take isl_schedule_band *band, int permutable);
 
@@ -89,11 +94,16 @@ __isl_give isl_schedule_band *isl_schedule_band_scale(
 	__isl_take isl_schedule_band *band, __isl_take isl_multi_val *mv);
 __isl_give isl_schedule_band *isl_schedule_band_scale_down(
 	__isl_take isl_schedule_band *band, __isl_take isl_multi_val *mv);
+__isl_give isl_schedule_band *isl_schedule_band_mod(
+	__isl_take isl_schedule_band *band, __isl_take isl_multi_val *mv);
 __isl_give isl_schedule_band *isl_schedule_band_tile(
 	__isl_take isl_schedule_band *band, __isl_take isl_multi_val *sizes);
 __isl_give isl_schedule_band *isl_schedule_band_point(
 	__isl_take isl_schedule_band *band, __isl_keep isl_schedule_band *tile,
 	__isl_take isl_multi_val *sizes);
+__isl_give isl_schedule_band *isl_schedule_band_shift(
+	__isl_take isl_schedule_band *band,
+	__isl_take isl_multi_union_pw_aff *shift);
 __isl_give isl_schedule_band *isl_schedule_band_drop(
 	__isl_take isl_schedule_band *band, int pos, int n);
 __isl_give isl_schedule_band *isl_schedule_band_gist(

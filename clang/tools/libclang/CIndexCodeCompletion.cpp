@@ -533,7 +533,7 @@ namespace {
       : CodeCompleteConsumer(Opts, false), 
         AllocatedResults(Results), CCTUInfo(Results.CodeCompletionAllocator),
         TU(TranslationUnit) { }
-    ~CaptureCompletionResults() { Finish(); }
+    ~CaptureCompletionResults() override { Finish(); }
 
     void ProcessCodeCompleteResults(Sema &S, 
                                     CodeCompletionContext Context,
@@ -715,14 +715,12 @@ static void clang_codeCompleteAt_Impl(void *UserData) {
 
   // Perform completion.
   AST->CodeComplete(complete_filename, complete_line, complete_column,
-                    RemappedFiles,
-                    (options & CXCodeComplete_IncludeMacros),
+                    RemappedFiles, (options & CXCodeComplete_IncludeMacros),
                     (options & CXCodeComplete_IncludeCodePatterns),
-                    IncludeBriefComments,
-                    Capture,
-                    *Results->Diag, Results->LangOpts, *Results->SourceMgr,
-                    *Results->FileMgr, Results->Diagnostics,
-                    Results->TemporaryBuffers);
+                    IncludeBriefComments, Capture,
+                    CXXIdx->getPCHContainerOperations(), *Results->Diag,
+                    Results->LangOpts, *Results->SourceMgr, *Results->FileMgr,
+                    Results->Diagnostics, Results->TemporaryBuffers);
 
   Results->DiagnosticsWrappers.resize(Results->Diagnostics.size());
 

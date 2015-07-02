@@ -1060,7 +1060,7 @@ class AllocaPromoter : public LoadAndStorePromoter {
   SmallVector<DbgDeclareInst *, 4> DDIs;
   SmallVector<DbgValueInst *, 4> DVIs;
 public:
-  AllocaPromoter(const SmallVectorImpl<Instruction*> &Insts, SSAUpdater &S,
+  AllocaPromoter(ArrayRef<Instruction*> Insts, SSAUpdater &S,
                  DIBuilder *DB)
     : LoadAndStorePromoter(Insts, S), AI(nullptr), DIB(DB) {}
 
@@ -1068,8 +1068,8 @@ public:
     // Remember which alloca we're promoting (for isInstInList).
     this->AI = AI;
     if (auto *L = LocalAsMetadata::getIfExists(AI)) {
-      if (auto *DebugNode = MetadataAsValue::getIfExists(AI->getContext(), L)) {
-        for (User *U : DebugNode->users())
+      if (auto *DINode = MetadataAsValue::getIfExists(AI->getContext(), L)) {
+        for (User *U : DINode->users())
           if (DbgDeclareInst *DDI = dyn_cast<DbgDeclareInst>(U))
             DDIs.push_back(DDI);
           else if (DbgValueInst *DVI = dyn_cast<DbgValueInst>(U))
@@ -1125,10 +1125,9 @@ public:
       } else {
         continue;
       }
-      Instruction *DbgVal = DIB->insertDbgValueIntrinsic(
-          Arg, 0, DIVariable(DVI->getVariable()),
-          DIExpression(DVI->getExpression()), Inst);
-      DbgVal->setDebugLoc(DVI->getDebugLoc());
+      DIB->insertDbgValueIntrinsic(Arg, 0, DVI->getVariable(),
+                                   DVI->getExpression(), DVI->getDebugLoc(),
+                                   Inst);
     }
   }
 };
@@ -1149,8 +1148,8 @@ public:
 /// the select can be loaded unconditionally.
 static bool isSafeSelectToSpeculate(SelectInst *SI) {
   const DataLayout &DL = SI->getModule()->getDataLayout();
-  bool TDerefable = SI->getTrueValue()->isDereferenceablePointer(DL);
-  bool FDerefable = SI->getFalseValue()->isDereferenceablePointer(DL);
+  bool TDerefable = isDereferenceablePointer(SI->getTrueValue(), DL);
+  bool FDerefable = isDereferenceablePointer(SI->getFalseValue(), DL);
 
   for (User *U : SI->users()) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
@@ -1237,7 +1236,7 @@ static bool isSafePHIToSpeculate(PHINode *PN) {
 
     // If this pointer is always safe to load, or if we can prove that there is
     // already a load in the block, then we can move the load to the pred block.
-    if (InVal->isDereferenceablePointer(DL) ||
+    if (isDereferenceablePointer(InVal, DL) ||
         isSafeToLoadUnconditionally(InVal, Pred->getTerminator(), MaxAlign))
       continue;
 
@@ -2143,7 +2142,7 @@ void SROA::RewriteLifetimeIntrinsic(IntrinsicInst *II, AllocaInst *AI,
     // split the alloca again later.
     unsigned AS = AI->getType()->getAddressSpace();
     Value *V = Builder.CreateBitCast(NewElts[Idx], Builder.getInt8PtrTy(AS));
-    V = Builder.CreateGEP(V, Builder.getInt64(NewOffset));
+    V = Builder.CreateGEP(Builder.getInt8Ty(), V, Builder.getInt64(NewOffset));
 
     IdxTy = NewElts[Idx]->getAllocatedType();
     uint64_t EltSize = DL.getTypeAllocSize(IdxTy) - NewOffset;

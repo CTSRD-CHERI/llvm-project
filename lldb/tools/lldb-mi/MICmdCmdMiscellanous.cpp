@@ -74,7 +74,7 @@ bool
 CMICmdCmdGdbExit::Execute(void)
 {
     CMICmnLLDBDebugger::Instance().GetDriver().SetExitApplicationFlag(true);
-    const lldb::SBError sbErr = m_rLLDBDebugSessionInfo.GetProcess().Detach();
+    const lldb::SBError sbErr = m_rLLDBDebugSessionInfo.GetProcess().Destroy();
     // Do not check for sbErr.Fail() here, m_lldbProcess is likely !IsValid()
 
     return MIstatus::success;
@@ -239,7 +239,7 @@ CMICmdCmdListThreadGroups::Execute(void)
         if (thread.IsValid())
         {
             CMICmnMIValueTuple miTuple;
-            if (!rSessionInfo.MIResponseFormThreadInfo2(m_cmdData, thread, miTuple))
+            if (!rSessionInfo.MIResponseFormThreadInfo(m_cmdData, thread, CMICmnLLDBDebugSessionInfo::eThreadInfoFormat_NoFrames, miTuple))
                 return MIstatus::failure;
 
             m_vecMIValueTuple.push_back(miTuple);
@@ -399,7 +399,7 @@ CMICmdCmdListThreadGroups::CreateSelf(void)
 // Throws:  None.
 //--
 CMICmdCmdInterpreterExec::CMICmdCmdInterpreterExec(void)
-    : m_constStrArgNamedInterpreter("intepreter")
+    : m_constStrArgNamedInterpreter("interpreter")
     , m_constStrArgNamedCommand("command")
 {
     // Command factory matches this name with that received from the stdin stream
@@ -483,19 +483,12 @@ CMICmdCmdInterpreterExec::Acknowledge(void)
         CMIUtilString strMsg(m_lldbResult.GetOutput());
         strMsg = strMsg.StripCREndOfLine();
         CMICmnStreamStdout::TextToStdout(strMsg);
-
-        // Send the LLDB result message to console so the user can see the result of the
-        // command they typed. It is not necessary an error message.
-        CMICmnStreamStderr::LLDBMsgToConsole(strMsg);
     }
     if (m_lldbResult.GetErrorSize() > 0)
     {
         CMIUtilString strMsg(m_lldbResult.GetError());
         strMsg = strMsg.StripCREndOfLine();
         CMICmnStreamStderr::LLDBMsgToConsole(strMsg);
-
-        // Send LLDB's error message to the MI Driver's Log file
-        CMICmnStreamStdout::TextToStdout(strMsg);
     }
 
     const CMICmnMIResultRecord miRecordResult(m_cmdData.strMiCmdToken, CMICmnMIResultRecord::eResultClass_Done);

@@ -13,14 +13,14 @@ class DataFormatterRdar12437442TestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_rdar12437442_with_dsym_and_run_command(self):
         """Test that we update SBValues correctly as dynamic types change."""
         self.buildDsym()
         self.rdar12437442_tester()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dwarf_test
     def test_rdar12437442_with_dwarf_and_run_command(self):
         """Test that we update SBValues correctly as dynamic types change."""
@@ -39,7 +39,7 @@ class DataFormatterRdar12437442TestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.m", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

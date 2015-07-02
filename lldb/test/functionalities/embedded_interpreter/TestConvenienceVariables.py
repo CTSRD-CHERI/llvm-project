@@ -9,7 +9,7 @@ class ConvenienceVariablesCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     @skipIfRemote
     def test_with_dsym_and_run_command(self):
@@ -20,7 +20,7 @@ class ConvenienceVariablesCase(TestBase):
     @dwarf_test
     @skipIfFreeBSD # llvm.org/pr17228
     @skipIfRemote
-    @expectedFailureLinux("llvm.org/pr20276") # intermittent failure on Linux
+    @expectedFailureAll("llvm.org/pr23560", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_with_dwarf_and_run_commands(self):
         """Test convenience variables lldb.debugger, lldb.target, lldb.process, lldb.thread, and lldb.frame."""
@@ -41,7 +41,7 @@ class ConvenienceVariablesCase(TestBase):
         python_prompt = ">>> "
 
         # So that the child gets torn down after the test.
-        self.child = pexpect.spawn('%s %s %s' % (self.lldbHere, self.lldbOption, exe))
+        self.child = pexpect.spawn('%s %s %s' % (lldbtest_config.lldbExec, self.lldbOption, exe))
         child = self.child
         # Turn on logging for what the child sends back.
         if self.TraceOn():
@@ -79,8 +79,9 @@ class ConvenienceVariablesCase(TestBase):
 
         child.sendline('print lldb.thread')
         child.expect_exact(python_prompt)
+        # Linux outputs decimal tid and 'name' instead of 'queue'
         self.expect(child.before, exe=False,
-            patterns = ['thread #1: tid = 0x[0-9a-f]+, 0x[0-9a-f]+ a\.out`main\(argc=1, argv=0x[0-9a-f]+\) \+ \d+ at main\.c:%d, queue = \'.+\', stop reason = breakpoint 1\.1' % self.line])
+            patterns = ['thread #1: tid = (0x[0-9a-f]+|[0-9]+), 0x[0-9a-f]+ a\.out`main\(argc=1, argv=0x[0-9a-f]+\) \+ \d+ at main\.c:%d, (name|queue) = \'.+\', stop reason = breakpoint 1\.1' % self.line])
 
         child.sendline('print lldb.frame')
         child.expect_exact(python_prompt)

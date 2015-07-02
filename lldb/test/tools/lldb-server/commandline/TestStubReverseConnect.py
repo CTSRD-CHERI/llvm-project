@@ -7,6 +7,9 @@ import time
 from lldbtest import *
 
 class TestStubReverseConnect(gdbremote_testcase.GdbRemoteTestCaseBase):
+
+    mydir = TestBase.compute_mydir(__file__)
+
     _DEFAULT_TIMEOUT = 20
 
     def setUp(self):
@@ -49,7 +52,7 @@ class TestStubReverseConnect(gdbremote_testcase.GdbRemoteTestCaseBase):
 
         triple = self.dbg.GetSelectedPlatform().GetTriple()
         if re.match(".*-.*-.*-android", triple):
-            self.forward_adb_port(self.port, self.port, "reverse")
+            self.forward_adb_port(self.port, self.port, "reverse", self.stub_device)
 
         # Start the stub.
         server = self.launch_debug_monitor(logfile=sys.stdout)
@@ -75,6 +78,7 @@ class TestStubReverseConnect(gdbremote_testcase.GdbRemoteTestCaseBase):
         self.reverse_connect_works()
 
     @llgs_test
+    @skipIfRemote # reverse connect is not a supported use case for now
     def test_reverse_connect_works_llgs(self):
         self.init_llgs_test(use_named_pipe=False)
         self.set_inferior_startup_launch()

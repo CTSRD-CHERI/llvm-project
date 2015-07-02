@@ -50,6 +50,7 @@ public:
         eServerPacketType_qfProcessInfo,
         eServerPacketType_qsProcessInfo,
         eServerPacketType_qC,
+        eServerPacketType_qEcho,
         eServerPacketType_qGroupName,
         eServerPacketType_qHostInfo,
         eServerPacketType_qLaunchGDBServer,
@@ -60,6 +61,7 @@ public:
         eServerPacketType_qSpeedTest,
         eServerPacketType_qUserName,
         eServerPacketType_qGetWorkingDir,
+        eServerPacketType_qFileLoadAddress,
         eServerPacketType_QEnvironment,
         eServerPacketType_QLaunchArch,
         eServerPacketType_QSetDisableASLR,
@@ -145,6 +147,7 @@ public:
 
         eServerPacketType__M,
         eServerPacketType__m,
+        eServerPacketType_notify, // '%' notification
     };
     
     ServerPacketType

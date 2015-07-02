@@ -830,24 +830,22 @@ static bool hasLifetimeMarkers(AllocaInst *AI) {
 /// Rebuild the entire inlined-at chain for this instruction so that the top of
 /// the chain now is inlined-at the new call site.
 static DebugLoc
-updateInlinedAtInfo(DebugLoc DL, MDLocation *InlinedAtNode,
-                    LLVMContext &Ctx,
-                    DenseMap<const MDLocation *, MDLocation *> &IANodes) {
-  SmallVector<MDLocation*, 3> InlinedAtLocations;
-  MDLocation *Last = InlinedAtNode;
-  DebugLoc CurInlinedAt = DL;
+updateInlinedAtInfo(DebugLoc DL, DILocation *InlinedAtNode, LLVMContext &Ctx,
+                    DenseMap<const DILocation *, DILocation *> &IANodes) {
+  SmallVector<DILocation *, 3> InlinedAtLocations;
+  DILocation *Last = InlinedAtNode;
+  DILocation *CurInlinedAt = DL;
 
   // Gather all the inlined-at nodes
-  while (MDLocation *IA =
-             cast_or_null<MDLocation>(CurInlinedAt.getInlinedAt(Ctx))) {
+  while (DILocation *IA = CurInlinedAt->getInlinedAt()) {
     // Skip any we've already built nodes for
-    if (MDLocation *Found = IANodes[IA]) {
+    if (DILocation *Found = IANodes[IA]) {
       Last = Found;
       break;
     }
 
     InlinedAtLocations.push_back(IA);
-    CurInlinedAt = DebugLoc::getFromDILocation(IA);
+    CurInlinedAt = IA;
   }
 
   // Starting from the top, rebuild the nodes to point to the new inlined-at
@@ -855,14 +853,14 @@ updateInlinedAtInfo(DebugLoc DL, MDLocation *InlinedAtNode,
   // map of already-constructed inlined-at nodes.
   for (auto I = InlinedAtLocations.rbegin(), E = InlinedAtLocations.rend();
        I != E; ++I) {
-    const MDLocation *MD = *I;
-    Last = IANodes[MD] = MDLocation::getDistinct(
+    const DILocation *MD = *I;
+    Last = IANodes[MD] = DILocation::getDistinct(
         Ctx, MD->getLine(), MD->getColumn(), MD->getScope(), Last);
   }
 
   // And finally create the normal location for this instruction, referring to
   // the new inlined-at chain.
-  return DebugLoc::get(DL.getLine(), DL.getCol(), DL.getScope(Ctx), Last);
+  return DebugLoc::get(DL.getLine(), DL.getCol(), DL.getScope(), Last);
 }
 
 /// Update inlined instructions' line numbers to
@@ -870,28 +868,28 @@ updateInlinedAtInfo(DebugLoc DL, MDLocation *InlinedAtNode,
 static void fixupLineNumbers(Function *Fn, Function::iterator FI,
                              Instruction *TheCall) {
   DebugLoc TheCallDL = TheCall->getDebugLoc();
-  if (TheCallDL.isUnknown())
+  if (!TheCallDL)
     return;
 
   auto &Ctx = Fn->getContext();
-  auto *InlinedAtNode = cast<MDLocation>(TheCallDL.getAsMDNode(Ctx));
+  DILocation *InlinedAtNode = TheCallDL;
 
   // Create a unique call site, not to be confused with any other call from the
   // same location.
-  InlinedAtNode = MDLocation::getDistinct(
+  InlinedAtNode = DILocation::getDistinct(
       Ctx, InlinedAtNode->getLine(), InlinedAtNode->getColumn(),
       InlinedAtNode->getScope(), InlinedAtNode->getInlinedAt());
 
   // Cache the inlined-at nodes as they're built so they are reused, without
   // this every instruction's inlined-at chain would become distinct from each
   // other.
-  DenseMap<const MDLocation *, MDLocation *> IANodes;
+  DenseMap<const DILocation *, DILocation *> IANodes;
 
   for (; FI != Fn->end(); ++FI) {
     for (BasicBlock::iterator BI = FI->begin(), BE = FI->end();
          BI != BE; ++BI) {
       DebugLoc DL = BI->getDebugLoc();
-      if (DL.isUnknown()) {
+      if (!DL) {
         // If the inlined instruction has no line number, make it look as if it
         // originates from the call location. This is important for
         // ((__always_inline__, __nodebug__)) functions which must use caller
@@ -905,19 +903,6 @@ static void fixupLineNumbers(Function *Fn, Function::iterator FI,
         BI->setDebugLoc(TheCallDL);
       } else {
         BI->setDebugLoc(updateInlinedAtInfo(DL, InlinedAtNode, BI->getContext(), IANodes));
-        if (DbgValueInst *DVI = dyn_cast<DbgValueInst>(BI)) {
-          LLVMContext &Ctx = BI->getContext();
-          MDNode *InlinedAt = BI->getDebugLoc().getInlinedAt(Ctx);
-          DVI->setOperand(2, MetadataAsValue::get(
-                                 Ctx, createInlinedVariable(DVI->getVariable(),
-                                                            InlinedAt, Ctx)));
-        } else if (DbgDeclareInst *DDI = dyn_cast<DbgDeclareInst>(BI)) {
-          LLVMContext &Ctx = BI->getContext();
-          MDNode *InlinedAt = BI->getDebugLoc().getInlinedAt(Ctx);
-          DDI->setOperand(1, MetadataAsValue::get(
-                                 Ctx, createInlinedVariable(DDI->getVariable(),
-                                                            InlinedAt, Ctx)));
-        }
       }
     }
   }
@@ -964,35 +949,23 @@ bool llvm::InlineFunction(CallSite CS, InlineFunctionInfo &IFI,
   }
 
   // Get the personality function from the callee if it contains a landing pad.
-  Value *CalleePersonality = nullptr;
-  for (Function::const_iterator I = CalledFunc->begin(), E = CalledFunc->end();
-       I != E; ++I)
-    if (const InvokeInst *II = dyn_cast<InvokeInst>(I->getTerminator())) {
-      const BasicBlock *BB = II->getUnwindDest();
-      const LandingPadInst *LP = BB->getLandingPadInst();
-      CalleePersonality = LP->getPersonalityFn();
-      break;
-    }
+  Constant *CalledPersonality =
+      CalledFunc->hasPersonalityFn() ? CalledFunc->getPersonalityFn() : nullptr;
 
   // Find the personality function used by the landing pads of the caller. If it
   // exists, then check to see that it matches the personality function used in
   // the callee.
-  if (CalleePersonality) {
-    for (Function::const_iterator I = Caller->begin(), E = Caller->end();
-         I != E; ++I)
-      if (const InvokeInst *II = dyn_cast<InvokeInst>(I->getTerminator())) {
-        const BasicBlock *BB = II->getUnwindDest();
-        const LandingPadInst *LP = BB->getLandingPadInst();
-
-        // If the personality functions match, then we can perform the
-        // inlining. Otherwise, we can't inline.
-        // TODO: This isn't 100% true. Some personality functions are proper
-        //       supersets of others and can be used in place of the other.
-        if (LP->getPersonalityFn() != CalleePersonality)
-          return false;
-
-        break;
-      }
+  Constant *CallerPersonality =
+      Caller->hasPersonalityFn() ? Caller->getPersonalityFn() : nullptr;
+  if (CalledPersonality) {
+    if (!CallerPersonality)
+      Caller->setPersonalityFn(CalledPersonality);
+    // If the personality functions match, then we can perform the
+    // inlining. Otherwise, we can't inline.
+    // TODO: This isn't 100% true. Some personality functions are proper
+    //       supersets of others and can be used in place of the other.
+    else if (CalledPersonality != CallerPersonality)
+      return false;
   }
 
   // Get an iterator to the last basic block in the function, which will have
@@ -1181,7 +1154,11 @@ bool llvm::InlineFunction(CallSite CS, InlineFunctionInfo &IFI,
         Type *AllocaType = AI->getAllocatedType();
         uint64_t AllocaTypeSize = DL.getTypeAllocSize(AllocaType);
         uint64_t AllocaArraySize = AIArraySize->getLimitedValue();
-        assert(AllocaArraySize > 0 && "array size of AllocaInst is zero");
+
+        // Don't add markers for zero-sized allocas.
+        if (AllocaArraySize == 0)
+          continue;
+
         // Check that array size doesn't saturate uint64_t and doesn't
         // overflow when it's multiplied by type size.
         if (AllocaArraySize != ~0ULL &&
@@ -1213,7 +1190,7 @@ bool llvm::InlineFunction(CallSite CS, InlineFunctionInfo &IFI,
 
     // Insert the llvm.stacksave.
     CallInst *SavedPtr = IRBuilder<>(FirstNewBlock, FirstNewBlock->begin())
-      .CreateCall(StackSave, "savedstack");
+                             .CreateCall(StackSave, {}, "savedstack");
 
     // Insert a call to llvm.stackrestore before any return instructions in the
     // inlined function.

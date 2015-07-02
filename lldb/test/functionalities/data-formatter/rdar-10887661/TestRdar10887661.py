@@ -13,7 +13,7 @@ class Rdar10887661TestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     # rdar://problem/10887661
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Check for an issue where capping does not work because the Target pointer appears to be changing behind our backs."""
@@ -39,7 +39,7 @@ class Rdar10887661TestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

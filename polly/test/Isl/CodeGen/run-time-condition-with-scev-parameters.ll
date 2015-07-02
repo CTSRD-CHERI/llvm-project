@@ -1,15 +1,12 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen-isl -S -polly-delinearize < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen-isl -S -polly-delinearize < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen -S -polly-delinearize < %s | FileCheck %s
 
-; CHECK: %1 = zext i32 %n to i64
-; CHECK-NEST: %2 = icmp sge i64 %1, 1
-; CHECK-NEST: br label %polly.split_new_and_old
 ; CHECK: polly.split_new_and_old:
+; CHECK-NEXT: %1 = zext i32 %n to i64
+; CHECK-NEXT: %2 = icmp sge i64 %1, 1
 ; CHECK-NEXT: br i1 %2, label %polly.start, label %for.body4
 
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-unknown-linux-gnu"
 
 define void @init_array(i32 %n, double* %data) {
 entry:

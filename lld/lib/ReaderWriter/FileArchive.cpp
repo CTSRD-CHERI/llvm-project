@@ -119,20 +119,20 @@ public:
     return std::error_code();
   }
 
-  const atom_collection<DefinedAtom> &defined() const override {
-    return _definedAtoms;
+  const AtomVector<DefinedAtom> &defined() const override {
+    return _noDefinedAtoms;
   }
 
-  const atom_collection<UndefinedAtom> &undefined() const override {
-    return _undefinedAtoms;
+  const AtomVector<UndefinedAtom> &undefined() const override {
+    return _noUndefinedAtoms;
   }
 
-  const atom_collection<SharedLibraryAtom> &sharedLibrary() const override {
-    return _sharedLibraryAtoms;
+  const AtomVector<SharedLibraryAtom> &sharedLibrary() const override {
+    return _noSharedLibraryAtoms;
   }
 
-  const atom_collection<AbsoluteAtom> &absolute() const override {
-    return _absoluteAtoms;
+  const AtomVector<AbsoluteAtom> &absolute() const override {
+    return _noAbsoluteAtoms;
   }
 
   /// Returns a set of all defined symbols in the archive.
@@ -173,11 +173,11 @@ private:
     std::unique_ptr<MemoryBuffer> memberMB(MemoryBuffer::getMemBuffer(
         mb.getBuffer(), mb.getBufferIdentifier(), false));
 
-    std::vector<std::unique_ptr<File>> files;
-    if (std::error_code ec = _registry.loadFile(std::move(memberMB), files))
+    ErrorOr<std::unique_ptr<File>> fileOrErr =
+        _registry.loadFile(std::move(memberMB));
+    if (std::error_code ec = fileOrErr.getError())
       return ec;
-    assert(files.size() == 1);
-    result = std::move(files[0]);
+    result = std::move(fileOrErr.get());
     if (std::error_code ec = result->parse())
       return ec;
     result->setArchivePath(_archive->getFileName());
@@ -215,9 +215,7 @@ private:
         continue;
 
       // Returns true if it's a data symbol.
-      SymbolRef::Type type;
-      if (sym.getType(type))
-        return false;
+      SymbolRef::Type type = sym.getType();
       if (type == SymbolRef::ST_Data)
         return true;
     }
@@ -251,10 +249,6 @@ private:
   std::unique_ptr<Archive> _archive;
   MemberMap _symbolMemberMap;
   InstantiatedSet _membersInstantiated;
-  atom_collection_vector<DefinedAtom> _definedAtoms;
-  atom_collection_vector<UndefinedAtom> _undefinedAtoms;
-  atom_collection_vector<SharedLibraryAtom> _sharedLibraryAtoms;
-  atom_collection_vector<AbsoluteAtom> _absoluteAtoms;
   bool _logLoading;
   std::vector<std::unique_ptr<MemoryBuffer>> _memberBuffers;
   std::map<const char *, std::unique_ptr<Future<File *>>> _preloaded;
@@ -265,19 +259,16 @@ class ArchiveReader : public Reader {
 public:
   ArchiveReader(bool logLoading) : _logLoading(logLoading) {}
 
-  bool canParse(file_magic magic, StringRef,
-                const MemoryBuffer &) const override {
-    return (magic == llvm::sys::fs::file_magic::archive);
+  bool canParse(file_magic magic, MemoryBufferRef) const override {
+    return magic == llvm::sys::fs::file_magic::archive;
   }
 
-  std::error_code
-  loadFile(std::unique_ptr<MemoryBuffer> mb, const Registry &reg,
-           std::vector<std::unique_ptr<File>> &result) const override {
+  ErrorOr<std::unique_ptr<File>> loadFile(std::unique_ptr<MemoryBuffer> mb,
+                                          const Registry &reg) const override {
     StringRef path = mb->getBufferIdentifier();
-    std::unique_ptr<FileArchive> file(
-        new FileArchive(std::move(mb), reg, path, _logLoading));
-    result.push_back(std::move(file));
-    return std::error_code();
+    std::unique_ptr<File> ret =
+        llvm::make_unique<FileArchive>(std::move(mb), reg, path, _logLoading);
+    return std::move(ret);
   }
 
 private:

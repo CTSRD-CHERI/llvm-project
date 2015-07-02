@@ -8,7 +8,7 @@ import lldb
 from lldbtest import *
 import lldbutil
 
-@unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+@skipUnlessDarwin
 class FoundationDisassembleTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
@@ -100,7 +100,7 @@ class FoundationDisassembleTestCase(TestBase):
         break_results = lldbutil.run_break_set_command (self, "_regexp-break -[NSAutoreleasePool release]")
         lldbutil.check_breakpoint_result (self, break_results, symbol_name='-[NSAutoreleasePool release]', num_locations=1)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # First stop is +[NSString stringWithFormat:].
         self.expect("thread backtrace", "Stop at +[NSString stringWithFormat:]",

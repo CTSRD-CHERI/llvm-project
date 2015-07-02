@@ -25,6 +25,7 @@
 #include "StreamWriter.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/ELFObjectFile.h"
+#include "llvm/Object/MachOUniversal.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -38,7 +39,6 @@
 #include "llvm/Support/TargetSelect.h"
 #include <string>
 #include <system_error>
-
 
 using namespace llvm;
 using namespace llvm::object;
@@ -89,6 +89,10 @@ namespace opts {
   cl::alias RelocationsShort("r",
     cl::desc("Alias for --relocations"),
     cl::aliasopt(Relocations));
+
+  // -dyn-relocations
+  cl::opt<bool> DynRelocs("dyn-relocations",
+    cl::desc("Display the dynamic relocation entries in the file"));
 
   // -symbols, -t
   cl::opt<bool> Symbols("symbols",
@@ -147,6 +151,14 @@ namespace opts {
   MipsPLTGOT("mips-plt-got",
              cl::desc("Display the MIPS GOT and PLT GOT sections"));
 
+  // -mips-abi-flags
+  cl::opt<bool> MipsABIFlags("mips-abi-flags",
+                             cl::desc("Display the MIPS.abiflags section"));
+
+  // -mips-reginfo
+  cl::opt<bool> MipsReginfo("mips-reginfo",
+                            cl::desc("Display the MIPS .reginfo section"));
+
   // -coff-imports
   cl::opt<bool>
   COFFImports("coff-imports", cl::desc("Display the PE/COFF import table"));
@@ -164,6 +176,12 @@ namespace opts {
   cl::opt<bool>
   COFFBaseRelocs("coff-basereloc",
                  cl::desc("Display the PE/COFF .reloc section"));
+
+  // -stackmap
+  cl::opt<bool>
+  PrintStackMap("stackmap",
+                cl::desc("Display contents of stackmap section"));
+
 } // namespace opts
 
 static int ReturnValue = EXIT_SUCCESS;
@@ -181,9 +199,8 @@ bool error(std::error_code EC) {
 }
 
 bool relocAddressLess(RelocationRef a, RelocationRef b) {
-  uint64_t a_addr, b_addr;
-  if (error(a.getOffset(a_addr))) exit(ReturnValue);
-  if (error(b.getOffset(b_addr))) exit(ReturnValue);
+  uint64_t a_addr = a.getOffset();
+  uint64_t b_addr = b.getOffset();
   return a_addr < b_addr;
 }
 
@@ -271,6 +288,8 @@ static void dumpObject(const ObjectFile *Obj) {
     Dumper->printSections();
   if (opts::Relocations)
     Dumper->printRelocations();
+  if (opts::DynRelocs)
+    Dumper->printDynamicRelocations();
   if (opts::Symbols)
     Dumper->printSymbols();
   if (opts::DynamicSymbols)
@@ -286,9 +305,14 @@ static void dumpObject(const ObjectFile *Obj) {
   if (Obj->getArch() == llvm::Triple::arm && Obj->isELF())
     if (opts::ARMAttributes)
       Dumper->printAttributes();
-  if (isMipsArch(Obj->getArch()) && Obj->isELF())
+  if (isMipsArch(Obj->getArch()) && Obj->isELF()) {
     if (opts::MipsPLTGOT)
       Dumper->printMipsPLTGOT();
+    if (opts::MipsABIFlags)
+      Dumper->printMipsABIFlags();
+    if (opts::MipsReginfo)
+      Dumper->printMipsReginfo();
+  }
   if (opts::COFFImports)
     Dumper->printCOFFImports();
   if (opts::COFFExports)
@@ -297,8 +321,10 @@ static void dumpObject(const ObjectFile *Obj) {
     Dumper->printCOFFDirectives();
   if (opts::COFFBaseRelocs)
     Dumper->printCOFFBaseReloc();
-}
 
+  if (opts::PrintStackMap)
+    Dumper->printStackMap();
+}
 
 /// @brief Dumps each object file in \a Arc;
 static void dumpArchive(const Archive *Arc) {
@@ -320,6 +346,18 @@ static void dumpArchive(const Archive *Arc) {
   }
 }
 
+/// @brief Dumps each object file in \a MachO Universal Binary;
+static void dumpMachOUniversalBinary(const MachOUniversalBinary *UBinary) {
+  for (const MachOUniversalBinary::ObjectForArch &Obj : UBinary->objects()) {
+    ErrorOr<std::unique_ptr<MachOObjectFile>> ObjOrErr = Obj.getAsObjectFile();
+    if (ObjOrErr)
+      dumpObject(&*ObjOrErr.get());
+    else if (ErrorOr<std::unique_ptr<Archive>> AOrErr = Obj.getAsArchive())
+      dumpArchive(&*AOrErr.get());
+    else
+      reportError(UBinary->getFileName(), ObjOrErr.getError().message());
+  }
+}
 
 /// @brief Opens \a File and dumps it.
 static void dumpInput(StringRef File) {
@@ -339,20 +377,19 @@ static void dumpInput(StringRef File) {
 
   if (Archive *Arc = dyn_cast<Archive>(&Binary))
     dumpArchive(Arc);
+  else if (MachOUniversalBinary *UBinary =
+               dyn_cast<MachOUniversalBinary>(&Binary))
+    dumpMachOUniversalBinary(UBinary);
   else if (ObjectFile *Obj = dyn_cast<ObjectFile>(&Binary))
     dumpObject(Obj);
   else
     reportError(File, readobj_error::unrecognized_file_format);
 }
 
-
 int main(int argc, const char *argv[]) {
   sys::PrintStackTraceOnErrorSignal();
   PrettyStackTraceProgram X(argc, argv);
   llvm_shutdown_obj Y;
-
-  // Initialize targets.
-  llvm::InitializeAllTargetInfos();
 
   // Register the target printer for --version.
   cl::AddExtraVersionPrinter(TargetRegistry::printRegisteredTargetsForVersion);

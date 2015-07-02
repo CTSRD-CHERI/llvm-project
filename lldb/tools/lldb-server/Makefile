@@ -12,6 +12,8 @@ TOOLNAME = lldb-server
 
 LLVMLibsOptions += -llldb -llldbUtility
 
+LINK_COMPONENTS := support
+
 include $(LLDB_LEVEL)/Makefile
 
 ifeq ($(HOST_OS),Darwin)
@@ -19,5 +21,5 @@ ifeq ($(HOST_OS),Darwin)
 endif
 
 ifeq ($(HOST_OS), $(filter $(HOST_OS), Linux FreeBSD GNU/kFreeBSD))
-	LLVMLibsOptions += -Wl,-rpath,$(LibDir)
+	LLVMLibsOptions += -Wl,-rpath,$(LibDir) -lpthread
 endif

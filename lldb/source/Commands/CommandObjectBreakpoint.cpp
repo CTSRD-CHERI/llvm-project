@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include "CommandObjectBreakpoint.h"
 #include "CommandObjectBreakpointCommand.h"
 
@@ -112,10 +110,11 @@ public:
             m_catch_bp (false),
             m_throw_bp (true),
             m_hardware (false),
-            m_language (eLanguageTypeUnknown),
+            m_exception_language (eLanguageTypeUnknown),
             m_skip_prologue (eLazyBoolCalculate),
             m_one_shot (false),
-            m_all_files (false)
+            m_all_files (false),
+            m_move_to_nearest_code (eLazyBoolCalculate)
         {
         }
 
@@ -173,16 +172,16 @@ public:
                         case eLanguageTypeC:
                         case eLanguageTypeC99:
                         case eLanguageTypeC11:
-                            m_language = eLanguageTypeC;
+                            m_exception_language = eLanguageTypeC;
                             break;
                         case eLanguageTypeC_plus_plus:
                         case eLanguageTypeC_plus_plus_03:
                         case eLanguageTypeC_plus_plus_11:
                         case eLanguageTypeC_plus_plus_14:
-                            m_language = eLanguageTypeC_plus_plus;
+                            m_exception_language = eLanguageTypeC_plus_plus;
                             break;
                         case eLanguageTypeObjC:
-                            m_language = eLanguageTypeObjC;
+                            m_exception_language = eLanguageTypeObjC;
                             break;
                         case eLanguageTypeObjC_plus_plus:
                             error.SetErrorStringWithFormat ("Set exception breakpoints separately for c++ and objective-c");
@@ -249,6 +248,22 @@ public:
                         error.SetErrorStringWithFormat ("invalid line number: %s.", option_arg);
                     break;
                 }
+
+                case 'm':
+                {
+                    bool success;
+                    bool value;
+                    value = Args::StringToBoolean (option_arg, true, &success);
+                    if (value)
+                        m_move_to_nearest_code = eLazyBoolYes;
+                    else
+                        m_move_to_nearest_code = eLazyBoolNo;
+                        
+                    if (!success)
+                        error.SetErrorStringWithFormat ("Invalid boolean value for move-to-nearest-code option: '%s'", option_arg);
+                    break;
+                }
+
                 case 'M':
                     m_func_names.push_back (option_arg);
                     m_func_name_type_mask |= eFunctionNameTypeMethod;
@@ -266,6 +281,11 @@ public:
 
                 case 'o':
                     m_one_shot = true;
+                    break;
+
+                case 'O':
+                    m_exception_extra_args.AppendArgument ("-O");
+                    m_exception_extra_args.AppendArgument (option_arg);
                     break;
 
                 case 'p':
@@ -349,12 +369,14 @@ public:
             m_catch_bp = false;
             m_throw_bp = true;
             m_hardware = false;
-            m_language = eLanguageTypeUnknown;
+            m_exception_language = eLanguageTypeUnknown;
             m_skip_prologue = eLazyBoolCalculate;
             m_one_shot = false;
             m_use_dummy = false;
             m_breakpoint_names.clear();
             m_all_files = false;
+            m_exception_extra_args.Clear();
+            m_move_to_nearest_code = eLazyBoolCalculate;
         }
     
         const OptionDefinition*
@@ -388,11 +410,13 @@ public:
         bool m_catch_bp;
         bool m_throw_bp;
         bool m_hardware; // Request to use hardware breakpoints
-        lldb::LanguageType m_language;
+        lldb::LanguageType m_exception_language;
         LazyBool m_skip_prologue;
         bool m_one_shot;
         bool m_use_dummy;
         bool m_all_files;
+        Args m_exception_extra_args;
+        LazyBool m_move_to_nearest_code;
 
     };
 
@@ -430,7 +454,7 @@ protected:
             break_type = eSetTypeFunctionRegexp;
         else if (!m_options.m_source_text_regexp.empty())
             break_type = eSetTypeSourceRegexp;
-        else if (m_options.m_language != eLanguageTypeUnknown)
+        else if (m_options.m_exception_language != eLanguageTypeUnknown)
             break_type = eSetTypeException;
 
         Breakpoint *bp = NULL;
@@ -470,7 +494,8 @@ protected:
                                                    check_inlines,
                                                    m_options.m_skip_prologue,
                                                    internal,
-                                                   m_options.m_hardware).get();
+                                                   m_options.m_hardware,
+                                                   m_options.m_move_to_nearest_code).get();
                 }
                 break;
 
@@ -551,15 +576,27 @@ protected:
                                                               &(m_options.m_filenames),
                                                               regexp,
                                                               internal,
-                                                              m_options.m_hardware).get();
+                                                              m_options.m_hardware,
+                                                              m_options.m_move_to_nearest_code).get();
                 }
                 break;
             case eSetTypeException:
                 {
-                    bp = target->CreateExceptionBreakpoint (m_options.m_language,
+                    Error precond_error;
+                    bp = target->CreateExceptionBreakpoint (m_options.m_exception_language,
                                                             m_options.m_catch_bp,
                                                             m_options.m_throw_bp,
-                                                            m_options.m_hardware).get();
+                                                            internal,
+                                                            &m_options.m_exception_extra_args,
+                                                            &precond_error).get();
+                    if (precond_error.Fail())
+                    {
+                        result.AppendErrorWithFormat("Error setting extra exception arguments: %s",
+                                                     precond_error.AsCString());
+                        target->RemoveBreakpointByID(bp->GetID());
+                        result.SetStatus(eReturnStatusFailed);
+                        return false;
+                    }
                 }
                 break;
             default:
@@ -671,6 +708,7 @@ private:
 #define LLDB_OPT_FILE ( LLDB_OPT_SET_FROM_TO(1, 9) & ~LLDB_OPT_SET_2 )
 #define LLDB_OPT_NOT_10 ( LLDB_OPT_SET_FROM_TO(1, 10) & ~LLDB_OPT_SET_10 )
 #define LLDB_OPT_SKIP_PROLOGUE ( LLDB_OPT_SET_1 | LLDB_OPT_SET_FROM_TO(3,8) )
+#define LLDB_OPT_MOVE_TO_NEAREST_CODE ( LLDB_OPT_SET_1 | LLDB_OPT_SET_9 )
 
 OptionDefinition
 CommandObjectBreakpointSet::CommandOptions::g_option_table[] =
@@ -758,6 +796,10 @@ CommandObjectBreakpointSet::CommandOptions::g_option_table[] =
     { LLDB_OPT_SET_10, false, "on-catch", 'h', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeBoolean,
         "Set the breakpoint on exception catcH." },
 
+//  Don't add this option till it actually does something useful...
+//    { LLDB_OPT_SET_10, false, "exception-typename", 'O', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeTypeName,
+//        "The breakpoint will only stop if an exception Object of this type is thrown.  Can be repeated multiple times to stop for multiple object types" },
+
     { LLDB_OPT_SKIP_PROLOGUE, false, "skip-prologue", 'K', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeBoolean,
         "sKip the prologue if the breakpoint is at the beginning of a function.  If not set the target.skip-prologue setting is used." },
 
@@ -766,6 +808,9 @@ CommandObjectBreakpointSet::CommandOptions::g_option_table[] =
 
     { LLDB_OPT_SET_ALL, false, "breakpoint-name", 'N', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeBreakpointName,
         "Adds this to the list of names for this breakopint."},
+
+    { LLDB_OPT_MOVE_TO_NEAREST_CODE, false, "move-to-nearest-code", 'm', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeBoolean,
+        "Move breakpoints to nearest code. If not set the target.move-to-nearest-code setting is used." },
 
     { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
 };

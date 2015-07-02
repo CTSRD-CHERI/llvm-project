@@ -10,6 +10,7 @@
 #ifndef liblldb_Plugins_Process_Windows_DebuggerThread_H_
 #define liblldb_Plugins_Process_Windows_DebuggerThread_H_
 
+#include <atomic>
 #include <memory>
 
 #include "ForwardDecl.h"
@@ -34,6 +35,7 @@ class DebuggerThread : public std::enable_shared_from_this<DebuggerThread>
     virtual ~DebuggerThread();
 
     Error DebugLaunch(const ProcessLaunchInfo &launch_info);
+    Error DebugAttach(lldb::pid_t pid, const ProcessAttachInfo &attach_info);
 
     HostProcess
     GetProcess() const
@@ -80,8 +82,16 @@ class DebuggerThread : public std::enable_shared_from_this<DebuggerThread>
                                                  // is finished processing and the debug loop can be
                                                  // continued.
 
-    static lldb::thread_result_t DebuggerThreadRoutine(void *data);
-    lldb::thread_result_t DebuggerThreadRoutine(const ProcessLaunchInfo &launch_info);
+    HANDLE m_debugging_ended_event; // An event which gets signalled by the debugger thread when it
+                                    // exits the debugger loop and is detached from the inferior.
+
+    std::atomic<DWORD> m_pid_to_detach;  // Signals the loop to detach from the process (specified by pid).
+    bool m_detached;  // Indicates we've detached from the inferior process and the debug loop can exit.
+
+    static lldb::thread_result_t DebuggerThreadLaunchRoutine(void *data);
+    lldb::thread_result_t DebuggerThreadLaunchRoutine(const ProcessLaunchInfo &launch_info);
+    static lldb::thread_result_t DebuggerThreadAttachRoutine(void *data);
+    lldb::thread_result_t DebuggerThreadAttachRoutine(lldb::pid_t pid, const ProcessAttachInfo &launch_info);
 };
 }
 

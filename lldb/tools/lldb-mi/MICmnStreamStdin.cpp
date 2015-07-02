@@ -7,13 +7,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+// Third Party Headers
+#ifdef _MSC_VER
+#include <Windows.h>
+#endif
+#include <string.h> // For std::strerror()
+
 // In-house headers:
 #include "MICmnStreamStdin.h"
 #include "MICmnStreamStdout.h"
 #include "MICmnResources.h"
 #include "MICmnLog.h"
+#include "MIDriver.h"
 #include "MIUtilSingletonHelper.h"
-#include <string.h> // For std::strerror()
 
 //++ ------------------------------------------------------------------------------------
 // Details: CMICmnStreamStdin constructor.
@@ -25,7 +31,6 @@
 CMICmnStreamStdin::CMICmnStreamStdin(void)
     : m_strPromptCurrent("(gdb)")
     , m_bShowPrompt(true)
-    , m_bRedrawPrompt(true)
     , m_pCmdBuffer(nullptr)
 {
 }
@@ -205,7 +210,19 @@ CMICmnStreamStdin::ReadLine(CMIUtilString &vwErrMsg)
     const MIchar *pText = ::fgets(&m_pCmdBuffer[0], m_constBufferSize, stdin);
     if (pText == nullptr)
     {
-        if (::ferror(stdin) != 0)
+#ifdef _MSC_VER
+        // Was Ctrl-C hit?
+        // On Windows, Ctrl-C gives an ERROR_OPERATION_ABORTED as error on the command-line.
+        // The end-of-file indicator is also set, so without this check we will exit next if statement.
+        if (::GetLastError() == ERROR_OPERATION_ABORTED)
+            return nullptr;
+#endif
+        if (::feof(stdin))
+        {
+            const bool bForceExit = true;
+            CMIDriver::Instance().SetExitApplicationFlag(bForceExit);
+        }
+        else if (::ferror(stdin) != 0)
             vwErrMsg = ::strerror(errno);
         return nullptr;
     }

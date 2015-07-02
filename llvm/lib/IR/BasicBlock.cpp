@@ -94,8 +94,8 @@ void BasicBlock::removeFromParent() {
   getParent()->getBasicBlockList().remove(this);
 }
 
-void BasicBlock::eraseFromParent() {
-  getParent()->getBasicBlockList().erase(this);
+iplist<BasicBlock>::iterator BasicBlock::eraseFromParent() {
+  return getParent()->getBasicBlockList().erase(this);
 }
 
 /// Unlink this basic block from its current function and
@@ -114,6 +114,10 @@ void BasicBlock::moveAfter(BasicBlock *MovePos) {
 }
 
 const Module *BasicBlock::getModule() const {
+  return getParent()->getParent();
+}
+
+Module *BasicBlock::getModule() {
   return getParent()->getParent();
 }
 
@@ -238,6 +242,14 @@ BasicBlock *BasicBlock::getUniquePredecessor() {
   return PredBB;
 }
 
+BasicBlock *BasicBlock::getSingleSuccessor() {
+  succ_iterator SI = succ_begin(this), E = succ_end(this);
+  if (SI == E) return nullptr; // no successors
+  BasicBlock *TheSucc = *SI;
+  ++SI;
+  return (SI == E) ? TheSucc : nullptr /* multiple successors */;
+}
+
 BasicBlock *BasicBlock::getUniqueSuccessor() {
   succ_iterator SI = succ_begin(this), E = succ_end(this);
   if (SI == E) return NULL; // No successors
@@ -350,12 +362,15 @@ BasicBlock *BasicBlock::splitBasicBlock(iterator I, const Twine &BBName) {
   BasicBlock *New = BasicBlock::Create(getContext(), BBName,
                                        getParent(), InsertBefore);
 
+  // Save DebugLoc of split point before invalidating iterator.
+  DebugLoc Loc = I->getDebugLoc();
   // Move all of the specified instructions from the original basic block into
   // the new basic block.
   New->getInstList().splice(New->end(), this->getInstList(), I, end());
 
   // Add a branch instruction to the newly formed basic block.
-  BranchInst::Create(New, this);
+  BranchInst *BI = BranchInst::Create(New, this);
+  BI->setDebugLoc(Loc);
 
   // Now we must loop through all of the successors of the New block (which
   // _were_ the successors of the 'this' block), and update any PHI nodes in

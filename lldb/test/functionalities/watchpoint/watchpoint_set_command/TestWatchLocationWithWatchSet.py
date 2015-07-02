@@ -1,5 +1,5 @@
 """
-Test lldb watchpoint that uses 'watchpoint set -w write -x size' to watch a pointed location with size.
+Test lldb watchpoint that uses 'watchpoint set -w write -s size' to watch a pointed location with size.
 """
 
 import os, time
@@ -12,20 +12,20 @@ class WatchLocationUsingWatchpointSetTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_watchlocation_with_dsym_using_watchpoint_set(self):
-        """Test watching a location with 'watchpoint set expression -w write -x size' option."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
+        """Test watching a location with 'watchpoint set expression -w write -s size' option."""
+        self.buildDsym()
+        self.setTearDownCleanup()
         self.watchlocation_using_watchpoint_set()
 
     @expectedFailureFreeBSD('llvm.org/pr18832')
     @dwarf_test
     def test_watchlocation_with_dwarf_using_watchpoint_set(self):
-        """Test watching a location with 'watchpoint set expression -w write -x size' option."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
+        """Test watching a location with 'watchpoint set expression -w write -s size' option."""
+        self.buildDwarf()
+        self.setTearDownCleanup()
         self.watchlocation_using_watchpoint_set()
 
     def setUp(self):
@@ -38,19 +38,17 @@ class WatchLocationUsingWatchpointSetTestCase(TestBase):
         # This is for verifying that watch location works.
         self.violating_func = "do_bad_thing_with_location";
         # Build dictionary to have unique executable names for each test method.
-        self.exe_name = self.testMethodName
-        self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
     def watchlocation_using_watchpoint_set(self):
-        """Test watching a location with '-x size' option."""
-        exe = os.path.join(os.getcwd(), self.exe_name)
+        """Test watching a location with '-s size' option."""
+        exe = os.path.join(os.getcwd(), 'a.out')
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         # Add a breakpoint to set a watchpoint when stopped on the breakpoint.
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -62,7 +60,7 @@ class WatchLocationUsingWatchpointSetTestCase(TestBase):
         # with offset as 7.
         # The main.cpp, by design, misbehaves by not following the agreed upon
         # protocol of only accessing the allowable index range of [0, 6].
-        self.expect("watchpoint set expression -w write -x 1 -- g_char_ptr + 7", WATCHPOINT_CREATED,
+        self.expect("watchpoint set expression -w write -s 1 -- g_char_ptr + 7", WATCHPOINT_CREATED,
             substrs = ['Watchpoint created', 'size = 1', 'type = w'])
         self.runCmd("expr unsigned val = g_char_ptr[7]; val")
         self.expect(self.res.GetOutput().splitlines()[0], exe=False,

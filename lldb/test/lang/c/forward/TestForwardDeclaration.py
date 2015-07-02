@@ -10,7 +10,7 @@ class ForwardDeclarationTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Display *bar_ptr when stopped on a function with forward declaration of struct bar."""
@@ -35,7 +35,7 @@ class ForwardDeclarationTestCase(TestBase):
         # Break inside the foo function which takes a bar_ptr argument.
         lldbutil.run_break_set_by_symbol (self, "foo", num_expected_locations=1, sym_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

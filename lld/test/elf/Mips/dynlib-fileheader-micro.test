@@ -22,9 +22,9 @@
 # CHECK-NEXT:  Type: SharedObject (0x3)
 # CHECK-NEXT:  Machine: EM_MIPS (0x8)
 # CHECK-NEXT:  Version: 1
-# CHECK-NEXT:  Entry: 0x100
-# CHECK-NEXT:  ProgramHeaderOffset: 0x34
-# CHECK-NEXT:  SectionHeaderOffset: 0x2100
+# CHECK-NEXT:  Entry: 0x{{[0-9A-F]+}}
+# CHECK-NEXT:  ProgramHeaderOffset: 0x{{[0-9A-F]+}}
+# CHECK-NEXT:  SectionHeaderOffset: 0x{{[0-9A-F]+}}
 # CHECK-NEXT:  Flags [ (0x72001007)
 # CHECK-NEXT:    EF_MIPS_ABI_O32 (0x1000)
 # CHECK-NEXT:    EF_MIPS_ARCH_32R2 (0x70000000)
@@ -35,10 +35,10 @@
 # CHECK-NEXT:  ]
 # CHECK-NEXT:  HeaderSize: 52
 # CHECK-NEXT:  ProgramHeaderEntrySize: 32
-# CHECK-NEXT:  ProgramHeaderCount: 4
+# CHECK-NEXT:  ProgramHeaderCount: {{[0-9]+}}
 # CHECK-NEXT:  SectionHeaderEntrySize: 40
-# CHECK-NEXT:  SectionHeaderCount: 11
-# CHECK-NEXT:  StringTableSectionIndex: 8
+# CHECK-NEXT:  SectionHeaderCount: {{[0-9]+}}
+# CHECK-NEXT:  StringTableSectionIndex: {{[0-9]+}}
 # CHECK-NEXT:}
 
 FileHeader:
@@ -64,16 +64,13 @@ Sections:
     Flags:           [ SHF_WRITE, SHF_ALLOC ]
     AddressAlign:    0x04
     Size:            0x00
-  - Name:            .reginfo
-    Type:            SHT_MIPS_REGINFO
-    Flags:           [ SHF_ALLOC ]
-    AddressAlign:    0x01
-    Size:            0x18
   - Name:            .MIPS.abiflags
     Type:            SHT_MIPS_ABIFLAGS
     Flags:           [ SHF_ALLOC ]
     AddressAlign:    0x08
-    Size:            0x18
+    ISA:             MIPS32
+    ISARevision:     2
+    ASEs:            [ MICROMIPS ]
 
 Symbols:
   Global:

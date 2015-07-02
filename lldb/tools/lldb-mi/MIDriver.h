@@ -97,7 +97,6 @@ class CMIDriver : public CMICmnBase,
     virtual bool DoInitialize(void);
     virtual bool DoShutdown(void);
     virtual bool DoMainLoop(void);
-    virtual void DoResizeWindow(const uint32_t vWindowSizeWsCol);
     virtual lldb::SBError DoParseArgs(const int argc, const char *argv[], FILE *vpStdOut, bool &vwbExiting);
     virtual CMIUtilString GetError(void) const;
     virtual const CMIUtilString &GetName(void) const;
@@ -130,6 +129,7 @@ class CMIDriver : public CMICmnBase,
     bool DoAppQuit(void);
     bool InterpretCommand(const CMIUtilString &vTextLine);
     bool InterpretCommandThisDriver(const CMIUtilString &vTextLine, bool &vwbCmdYesValid);
+    CMIUtilString WrapCLICommandIntoMICommand(const CMIUtilString &vTextLine) const;
     bool InterpretCommandFallThruDriver(const CMIUtilString &vTextLine, bool &vwbCmdYesValid);
     bool ExecuteCommand(const SMICmdData &vCmdData);
     bool StartWorkerThreads(void);
@@ -137,6 +137,7 @@ class CMIDriver : public CMICmnBase,
     bool InitClientIDEToMIDriver(void) const;
     bool InitClientIDEEclipse(void) const;
     bool LocalDebugSessionStartupExecuteCommands(void);
+    bool ExecuteCommandFile(const bool vbAsyncMode);
 
     // Overridden:
   private:
@@ -161,4 +162,6 @@ class CMIDriver : public CMICmnBase,
     CMIUtilString m_strCmdLineArgExecuteableFileNamePath;
     bool m_bDriverDebuggingArgExecutable; // True = the MI Driver (MI mode) is debugging executable passed as argument,
                                           // false = running via a client (e.g. Eclipse)
+    bool m_bHaveCommandFileNamePathOnCmdLine; // True = file with initial commands given as one of the parameters to the MI Driver, false = not found
+    CMIUtilString m_strCmdLineArgCommandFileNamePath;
 };

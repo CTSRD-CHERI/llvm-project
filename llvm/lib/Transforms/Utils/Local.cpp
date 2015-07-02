@@ -14,6 +14,8 @@
 
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
@@ -828,64 +830,45 @@ bool llvm::TryToSimplifyUncondBranchFromEmptyBlock(BasicBlock *BB) {
 /// orders them so it usually won't matter.
 ///
 bool llvm::EliminateDuplicatePHINodes(BasicBlock *BB) {
-  bool Changed = false;
-
   // This implementation doesn't currently consider undef operands
   // specially. Theoretically, two phis which are identical except for
   // one having an undef where the other doesn't could be collapsed.
 
-  // Map from PHI hash values to PHI nodes. If multiple PHIs have
-  // the same hash value, the element is the first PHI in the
-  // linked list in CollisionMap.
-  DenseMap<uintptr_t, PHINode *> HashMap;
+  struct PHIDenseMapInfo {
+    static PHINode *getEmptyKey() {
+      return DenseMapInfo<PHINode *>::getEmptyKey();
+    }
+    static PHINode *getTombstoneKey() {
+      return DenseMapInfo<PHINode *>::getTombstoneKey();
+    }
+    static unsigned getHashValue(PHINode *PN) {
+      // Compute a hash value on the operands. Instcombine will likely have
+      // sorted them, which helps expose duplicates, but we have to check all
+      // the operands to be safe in case instcombine hasn't run.
+      return static_cast<unsigned>(hash_combine(
+          hash_combine_range(PN->value_op_begin(), PN->value_op_end()),
+          hash_combine_range(PN->block_begin(), PN->block_end())));
+    }
+    static bool isEqual(PHINode *LHS, PHINode *RHS) {
+      if (LHS == getEmptyKey() || LHS == getTombstoneKey() ||
+          RHS == getEmptyKey() || RHS == getTombstoneKey())
+        return LHS == RHS;
+      return LHS->isIdenticalTo(RHS);
+    }
+  };
 
-  // Maintain linked lists of PHI nodes with common hash values.
-  DenseMap<PHINode *, PHINode *> CollisionMap;
+  // Set of unique PHINodes.
+  DenseSet<PHINode *, PHIDenseMapInfo> PHISet;
 
   // Examine each PHI.
-  for (BasicBlock::iterator I = BB->begin();
-       PHINode *PN = dyn_cast<PHINode>(I++); ) {
-    // Compute a hash value on the operands. Instcombine will likely have sorted
-    // them, which helps expose duplicates, but we have to check all the
-    // operands to be safe in case instcombine hasn't run.
-    uintptr_t Hash = 0;
-    // This hash algorithm is quite weak as hash functions go, but it seems
-    // to do a good enough job for this particular purpose, and is very quick.
-    for (User::op_iterator I = PN->op_begin(), E = PN->op_end(); I != E; ++I) {
-      Hash ^= reinterpret_cast<uintptr_t>(static_cast<Value *>(*I));
-      Hash = (Hash << 7) | (Hash >> (sizeof(uintptr_t) * CHAR_BIT - 7));
-    }
-    for (PHINode::block_iterator I = PN->block_begin(), E = PN->block_end();
-         I != E; ++I) {
-      Hash ^= reinterpret_cast<uintptr_t>(static_cast<BasicBlock *>(*I));
-      Hash = (Hash << 7) | (Hash >> (sizeof(uintptr_t) * CHAR_BIT - 7));
-    }
-    // Avoid colliding with the DenseMap sentinels ~0 and ~0-1.
-    Hash >>= 1;
-    // If we've never seen this hash value before, it's a unique PHI.
-    std::pair<DenseMap<uintptr_t, PHINode *>::iterator, bool> Pair =
-      HashMap.insert(std::make_pair(Hash, PN));
-    if (Pair.second) continue;
-    // Otherwise it's either a duplicate or a hash collision.
-    for (PHINode *OtherPN = Pair.first->second; ; ) {
-      if (OtherPN->isIdenticalTo(PN)) {
-        // A duplicate. Replace this PHI with its duplicate.
-        PN->replaceAllUsesWith(OtherPN);
-        PN->eraseFromParent();
-        Changed = true;
-        break;
-      }
-      // A non-duplicate hash collision.
-      DenseMap<PHINode *, PHINode *>::iterator I = CollisionMap.find(OtherPN);
-      if (I == CollisionMap.end()) {
-        // Set this PHI to be the head of the linked list of colliding PHIs.
-        PHINode *Old = Pair.first->second;
-        Pair.first->second = PN;
-        CollisionMap[PN] = Old;
-        break;
-      }
-      // Proceed to the next PHI in the list.
-      OtherPN = I->second;
+  bool Changed = false;
+  for (auto I = BB->begin(); PHINode *PN = dyn_cast<PHINode>(I++);) {
+    auto Inserted = PHISet.insert(PN);
+    if (!Inserted.second) {
+      // A duplicate. Replace this PHI with its duplicate.
+      PN->replaceAllUsesWith(*Inserted.first);
+      PN->eraseFromParent();
+      Changed = true;
     }
   }
 
@@ -978,7 +961,7 @@ unsigned llvm::getOrEnforceKnownAlignment(Value *V, unsigned PrefAlign,
 ///
 
 /// See if there is a dbg.value intrinsic for DIVar before I.
-static bool LdStHasDebugValue(DIVariable &DIVar, Instruction *I) {
+static bool LdStHasDebugValue(const DILocalVariable *DIVar, Instruction *I) {
   // Since we can't guarantee that the original dbg.declare instrinsic
   // is removed by LowerDbgDeclare(), we need to make sure that we are
   // not inserting the same dbg.value intrinsic over and over.
@@ -998,17 +981,13 @@ static bool LdStHasDebugValue(DIVariable &DIVar, Instruction *I) {
 /// that has an associated llvm.dbg.decl intrinsic.
 bool llvm::ConvertDebugDeclareToDebugValue(DbgDeclareInst *DDI,
                                            StoreInst *SI, DIBuilder &Builder) {
-  DIVariable DIVar(DDI->getVariable());
-  DIExpression DIExpr(DDI->getExpression());
-  assert((!DIVar || DIVar.isVariable()) &&
-         "Variable in DbgDeclareInst should be either null or a DIVariable.");
-  if (!DIVar)
-    return false;
+  auto *DIVar = DDI->getVariable();
+  auto *DIExpr = DDI->getExpression();
+  assert(DIVar && "Missing variable");
 
   if (LdStHasDebugValue(DIVar, SI))
     return true;
 
-  Instruction *DbgVal = nullptr;
   // If an argument is zero extended then use argument directly. The ZExt
   // may be zapped by an optimization pass in future.
   Argument *ExtendedArg = nullptr;
@@ -1017,11 +996,11 @@ bool llvm::ConvertDebugDeclareToDebugValue(DbgDeclareInst *DDI,
   if (SExtInst *SExt = dyn_cast<SExtInst>(SI->getOperand(0)))
     ExtendedArg = dyn_cast<Argument>(SExt->getOperand(0));
   if (ExtendedArg)
-    DbgVal = Builder.insertDbgValueIntrinsic(ExtendedArg, 0, DIVar, DIExpr, SI);
+    Builder.insertDbgValueIntrinsic(ExtendedArg, 0, DIVar, DIExpr,
+                                    DDI->getDebugLoc(), SI);
   else
-    DbgVal = Builder.insertDbgValueIntrinsic(SI->getOperand(0), 0, DIVar,
-                                             DIExpr, SI);
-  DbgVal->setDebugLoc(DDI->getDebugLoc());
+    Builder.insertDbgValueIntrinsic(SI->getOperand(0), 0, DIVar, DIExpr,
+                                    DDI->getDebugLoc(), SI);
   return true;
 }
 
@@ -1029,19 +1008,15 @@ bool llvm::ConvertDebugDeclareToDebugValue(DbgDeclareInst *DDI,
 /// that has an associated llvm.dbg.decl intrinsic.
 bool llvm::ConvertDebugDeclareToDebugValue(DbgDeclareInst *DDI,
                                            LoadInst *LI, DIBuilder &Builder) {
-  DIVariable DIVar(DDI->getVariable());
-  DIExpression DIExpr(DDI->getExpression());
-  assert((!DIVar || DIVar.isVariable()) &&
-         "Variable in DbgDeclareInst should be either null or a DIVariable.");
-  if (!DIVar)
-    return false;
+  auto *DIVar = DDI->getVariable();
+  auto *DIExpr = DDI->getExpression();
+  assert(DIVar && "Missing variable");
 
   if (LdStHasDebugValue(DIVar, LI))
     return true;
 
-  Instruction *DbgVal =
-      Builder.insertDbgValueIntrinsic(LI->getOperand(0), 0, DIVar, DIExpr, LI);
-  DbgVal->setDebugLoc(DDI->getDebugLoc());
+  Builder.insertDbgValueIntrinsic(LI->getOperand(0), 0, DIVar, DIExpr,
+                                  DDI->getDebugLoc(), LI);
   return true;
 }
 
@@ -1083,10 +1058,9 @@ bool llvm::LowerDbgDeclare(Function &F) {
           // This is a call by-value or some other instruction that
           // takes a pointer to the variable. Insert a *value*
           // intrinsic that describes the alloca.
-          auto DbgVal = DIB.insertDbgValueIntrinsic(
-              AI, 0, DIVariable(DDI->getVariable()),
-              DIExpression(DDI->getExpression()), CI);
-          DbgVal->setDebugLoc(DDI->getDebugLoc());
+          DIB.insertDbgValueIntrinsic(AI, 0, DDI->getVariable(),
+                                      DDI->getExpression(), DDI->getDebugLoc(),
+                                      CI);
         }
       DDI->eraseFromParent();
     }
@@ -1112,12 +1086,9 @@ bool llvm::replaceDbgDeclareForAlloca(AllocaInst *AI, Value *NewAllocaAddress,
   if (!DDI)
     return false;
   DebugLoc Loc = DDI->getDebugLoc();
-  DIVariable DIVar(DDI->getVariable());
-  DIExpression DIExpr(DDI->getExpression());
-  assert((!DIVar || DIVar.isVariable()) &&
-         "Variable in DbgDeclareInst should be either null or a DIVariable.");
-  if (!DIVar)
-    return false;
+  auto *DIVar = DDI->getVariable();
+  auto *DIExpr = DDI->getExpression();
+  assert(DIVar && "Missing variable");
 
   if (Deref) {
     // Create a copy of the original DIDescriptor for user variable, prepending
@@ -1127,16 +1098,14 @@ bool llvm::replaceDbgDeclareForAlloca(AllocaInst *AI, Value *NewAllocaAddress,
     SmallVector<uint64_t, 4> NewDIExpr;
     NewDIExpr.push_back(dwarf::DW_OP_deref);
     if (DIExpr)
-      for (unsigned i = 0, n = DIExpr.getNumElements(); i < n; ++i)
-        NewDIExpr.push_back(DIExpr.getElement(i));
+      NewDIExpr.append(DIExpr->elements_begin(), DIExpr->elements_end());
     DIExpr = Builder.createExpression(NewDIExpr);
   }
 
   // Insert llvm.dbg.declare in the same basic block as the original alloca,
   // and remove old llvm.dbg.declare.
   BasicBlock *BB = AI->getParent();
-  Builder.insertDeclare(NewAllocaAddress, DIVar, DIExpr, BB)
-    ->setDebugLoc(Loc);
+  Builder.insertDeclare(NewAllocaAddress, DIVar, DIExpr, Loc, BB);
   DDI->eraseFromParent();
   return true;
 }
@@ -1187,10 +1156,11 @@ static void changeToCall(InvokeInst *II) {
   II->eraseFromParent();
 }
 
-static bool markAliveBlocks(BasicBlock *BB,
+static bool markAliveBlocks(Function &F,
                             SmallPtrSetImpl<BasicBlock*> &Reachable) {
 
   SmallVector<BasicBlock*, 128> Worklist;
+  BasicBlock *BB = F.begin();
   Worklist.push_back(BB);
   Reachable.insert(BB);
   bool Changed = false;
@@ -1261,7 +1231,7 @@ static bool markAliveBlocks(BasicBlock *BB,
       if (isa<ConstantPointerNull>(Callee) || isa<UndefValue>(Callee)) {
         changeToUnreachable(II, true);
         Changed = true;
-      } else if (II->doesNotThrow() && canSimplifyInvokeNoUnwind(II)) {
+      } else if (II->doesNotThrow() && canSimplifyInvokeNoUnwind(&F)) {
         if (II->use_empty() && II->onlyReadsMemory()) {
           // jump to the normal destination branch.
           BranchInst::Create(II->getNormalDest(), II);
@@ -1286,7 +1256,7 @@ static bool markAliveBlocks(BasicBlock *BB,
 /// otherwise.
 bool llvm::removeUnreachableBlocks(Function &F) {
   SmallPtrSet<BasicBlock*, 128> Reachable;
-  bool Changed = markAliveBlocks(F.begin(), Reachable);
+  bool Changed = markAliveBlocks(F, Reachable);
 
   // If there are unreachable blocks in the CFG...
   if (Reachable.size() == F.size())
@@ -1356,4 +1326,24 @@ void llvm::combineMetadata(Instruction *K, const Instruction *J, ArrayRef<unsign
         break;
     }
   }
+}
+
+unsigned llvm::replaceDominatedUsesWith(Value *From, Value *To,
+                                        DominatorTree &DT,
+                                        const BasicBlockEdge &Root) {
+  assert(From->getType() == To->getType());
+  
+  unsigned Count = 0;
+  for (Value::use_iterator UI = From->use_begin(), UE = From->use_end();
+       UI != UE; ) {
+    Use &U = *UI++;
+    if (DT.dominates(Root, U)) {
+      U.set(To);
+      DEBUG(dbgs() << "Replace dominated use of '"
+            << From->getName() << "' as "
+            << *To << " in " << *U << "\n");
+      ++Count;
+    }
+  }
+  return Count;
 }

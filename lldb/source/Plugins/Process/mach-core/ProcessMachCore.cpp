@@ -13,6 +13,7 @@
 
 // C++ Includes
 #include "llvm/Support/MathExtras.h"
+#include <mutex>
 
 // Other libraries and framework includes
 #include "lldb/Core/DataBuffer.h"
@@ -109,13 +110,9 @@ ProcessMachCore::CanDebug(Target &target, bool plugin_specified_by_name)
 
         if (m_core_module_sp)
         {
-            const llvm::Triple &triple_ref = m_core_module_sp->GetArchitecture().GetTriple();
-            if (triple_ref.getVendor() == llvm::Triple::Apple)
-            {
-                ObjectFile *core_objfile = m_core_module_sp->GetObjectFile();
-                if (core_objfile && core_objfile->GetType() == ObjectFile::eTypeCoreFile)
-                    return true;
-            }
+            ObjectFile *core_objfile = m_core_module_sp->GetObjectFile();
+            if (core_objfile && core_objfile->GetType() == ObjectFile::eTypeCoreFile)
+                return true;
         }
     }
     return false;
@@ -483,15 +480,13 @@ ProcessMachCore::Clear()
 void
 ProcessMachCore::Initialize()
 {
-    static bool g_initialized = false;
-    
-    if (g_initialized == false)
-    {
-        g_initialized = true;
+    static std::once_flag g_once_flag;
+
+    std::call_once(g_once_flag, []() {
         PluginManager::RegisterPlugin (GetPluginNameStatic(),
                                        GetPluginDescriptionStatic(),
-                                       CreateInstance);        
-    }
+                                       CreateInstance);
+    });
 }
 
 addr_t

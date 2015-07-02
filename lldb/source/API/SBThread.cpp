@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include "lldb/API/SBThread.h"
 
 #include "lldb/API/SBSymbolContext.h"
@@ -116,13 +114,13 @@ SBThread::GetQueue () const
         else
         {
             if (log)
-                log->Printf ("SBThread(%p)::GetQueueKind() => error: process is running",
+                log->Printf ("SBThread(%p)::GetQueue() => error: process is running",
                              static_cast<void*>(exe_ctx.GetThreadPtr()));
         }
     }
 
     if (log)
-        log->Printf ("SBThread(%p)::GetQueueKind () => SBQueue(%p)",
+        log->Printf ("SBThread(%p)::GetQueue () => SBQueue(%p)",
                      static_cast<void*>(exe_ctx.GetThreadPtr()), static_cast<void*>(queue_sp.get()));
 
     return sb_queue;

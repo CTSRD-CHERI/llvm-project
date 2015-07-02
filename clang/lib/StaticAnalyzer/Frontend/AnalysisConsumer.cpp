@@ -92,7 +92,7 @@ class ClangDiagPathDiagConsumer : public PathDiagnosticConsumer {
 public:
   ClangDiagPathDiagConsumer(DiagnosticsEngine &Diag)
     : Diag(Diag), IncludePath(false) {}
-  virtual ~ClangDiagPathDiagConsumer() {}
+  ~ClangDiagPathDiagConsumer() override {}
   StringRef getName() const override { return "ClangDiags"; }
 
   bool supportsLogicalOpControlFlow() const override { return true; }
@@ -199,7 +199,7 @@ public:
     }
   }
 
-  ~AnalysisConsumer() {
+  ~AnalysisConsumer() override {
     if (Opts->PrintStats)
       delete TUTotalTimer;
   }
@@ -373,8 +373,7 @@ public:
     return true;
   }
 
-  virtual void
-  AddDiagnosticConsumer(PathDiagnosticConsumer *Consumer) override {
+  void AddDiagnosticConsumer(PathDiagnosticConsumer *Consumer) override {
     PathConsumers.push_back(Consumer);
   }
 
@@ -589,7 +588,10 @@ AnalysisConsumer::getModeForDecl(Decl *D, AnalysisMode Mode) {
   // - Header files: run non-path-sensitive checks only.
   // - System headers: don't run any checks.
   SourceManager &SM = Ctx->getSourceManager();
-  SourceLocation SL = SM.getExpansionLoc(D->getLocation());
+  SourceLocation SL = D->hasBody() ? D->getBody()->getLocStart()
+                                     : D->getLocation();
+  SL = SM.getExpansionLoc(SL);
+
   if (!Opts->AnalyzeAll && !SM.isWrittenInMainFile(SL)) {
     if (SL.isInvalid() || SM.isInSystemHeader(SL))
       return AM_None;
@@ -724,7 +726,7 @@ class UbigraphViz : public ExplodedNode::Auditor {
 public:
   UbigraphViz(std::unique_ptr<raw_ostream> Out, StringRef Filename);
 
-  ~UbigraphViz();
+  ~UbigraphViz() override;
 
   void AddEdge(ExplodedNode *Src, ExplodedNode *Dst) override;
 };

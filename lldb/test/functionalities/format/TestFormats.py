@@ -11,13 +11,14 @@ class TestFormats(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @expectedFailureFreeBSD("llvm.org/pr22784: pexpect failing on the FreeBSD buildbot")
+    @expectedFailureHostWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_formats(self):
         """Test format string functionality."""
         self.buildDwarf ()
         import pexpect
         prompt = "(lldb) "
-        child = pexpect.spawn('%s %s -x -o "b main" -o r a.out' % (self.lldbHere, self.lldbOption))
+        child = pexpect.spawn('%s %s -x -o "b main" -o r a.out' % (lldbtest_config.lldbExec, self.lldbOption))
         # Turn on logging for what the child sends back.
         if self.TraceOn():
             child.logfile_read = sys.stdout

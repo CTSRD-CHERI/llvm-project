@@ -16,7 +16,7 @@ import re
 
 # rdar://problem/9087739
 # test failure: objc_optimized does not work for "-C clang -A i386"
-@unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+@skipUnlessDarwin
 class ObjcOptimizedTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
@@ -43,7 +43,7 @@ class ObjcOptimizedTestCase(TestBase):
 
         lldbutil.run_break_set_by_symbol (self, self.method_spec, num_expected_locations=1, sym_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
         self.expect("thread backtrace", STOPPED_DUE_TO_BREAKPOINT,
             substrs = ["stop reason = breakpoint"],
             patterns = ["frame.*0:.*%s %s" % (self.myclass, self.mymethod)])

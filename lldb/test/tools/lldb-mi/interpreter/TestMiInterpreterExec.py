@@ -44,23 +44,26 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         # Test that "breakpoint set" sets a breakpoint
         self.runCmd("-interpreter-exec console \"breakpoint set --name main\"")
         self.expect("\^done")
+        self.expect("=breakpoint-created,bkpt={number=\"1\"")
 
         # Test that breakpoint was set properly
         self.runCmd("-exec-run")
         self.expect("\^running")
+        self.expect("=breakpoint-modified,bkpt={number=\"1\"")
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
+    @expectedFailureLinux  # Failing in ~9/600 dosep runs (build 3120-3122)
     def test_lldbmi_settings_set_target_run_args_before(self):
         """Test that 'lldb-mi --interpreter' can set target arguments by 'setting set target.run-args' command before than target was created."""
 
         self.spawnLldbMi(args = None)
 
         # Test that "settings set target.run-args" passes arguments to executable
-        #FIXME: "--arg1 \"2nd arg\" third_arg fourth=\"4th arg\"" causes an error
-        self.runCmd("-interpreter-exec console \"setting set target.run-args arg1\"")
+        #FIXME: --arg1 causes an error
+        self.runCmd("-interpreter-exec console \"setting set target.run-args arg1 \\\"2nd arg\\\" third_arg fourth=\\\"4th arg\\\"\"")
         self.expect("\^done")
 
         # Load executable
@@ -72,11 +75,20 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^running")
 
         # Test that arguments were passed properly
-        self.expect("~\"argc=2\\\\r\\\\n\"")
+        self.expect("@\"argc=5\\\\r\\\\n\"")
+        self.expect("@\"argv.0.=.*lldb-mi")
+        self.expect("@\"argv.1.=arg1\\\\r\\\\n\"")
+        self.expect("@\"argv.2.=2nd arg\\\\r\\\\n\"")
+        self.expect("@\"argv.3.=third_arg\\\\r\\\\n\"")
+        self.expect("@\"argv.4.=fourth=4th arg\\\\r\\\\n\"")
+
+        # Test that program exited normally
+        self.expect("\*stopped,reason=\"exited-normally\"")
 
     @lldbmi_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
+    @expectedFailureLinux  # Failing in ~9/600 dosep runs (build 3120-3122)
     def test_lldbmi_settings_set_target_run_args_after(self):
         """Test that 'lldb-mi --interpreter' can set target arguments by 'setting set target.run-args' command after than target was created."""
 
@@ -87,16 +99,35 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^done")
 
         # Test that "settings set target.run-args" passes arguments to executable
-        #FIXME: "--arg1 \"2nd arg\" third_arg fourth=\"4th arg\"" causes an error
-        self.runCmd("-interpreter-exec console \"setting set target.run-args arg1\"")
+        #FIXME: --arg1 causes an error
+        self.runCmd("-interpreter-exec console \"setting set target.run-args arg1 \\\"2nd arg\\\" third_arg fourth=\\\"4th arg\\\"\"")
         self.expect("\^done")
 
-        # Run
+        # Run to BP_printf
+        line = line_number('main.cpp', '// BP_printf')
+        self.runCmd("-break-insert main.cpp:%d" % line)
+        self.expect("\^done,bkpt={number=\"1\"")
         self.runCmd("-exec-run")
-        self.expect("\^running")
+        self.expect("\^running");
+        self.expect("\*stopped,reason=\"breakpoint-hit\"")
+
+        # Run to BP_return
+        line = line_number('main.cpp', '// BP_return')
+        self.runCmd("-break-insert main.cpp:%d" % line)
+        self.expect("\^done,bkpt={number=\"2\"")
+        self.runCmd("-exec-continue")
+        self.expect("\^running");
 
         # Test that arguments were passed properly
-        self.expect("~\"argc=2\\\\r\\\\n\"")
+        self.expect("@\"argc=5\\\\r\\\\n\"")
+        self.expect("@\"argv.0.=.*lldb-mi")
+        self.expect("@\"argv.1.=arg1\\\\r\\\\n\"")
+        self.expect("@\"argv.2.=2nd arg\\\\r\\\\n\"")
+        self.expect("@\"argv.3.=third_arg\\\\r\\\\n\"")
+        self.expect("@\"argv.4.=fourth=4th arg\\\\r\\\\n\"")
+
+        # Hit BP_return
+        self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
@@ -146,10 +177,10 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         # Linux:  "*stopped,reason=\"end-stepping-range\",frame={addr="0x[0-9a-f]+\",func=\"__printf\",args=[{name=\"format\",value=\"0x[0-9a-f]+\"}],file=\"printf.c\",fullname=\".+printf.c\",line="\d+"},thread-id=\"1\",stopped-threads=\"all\"
         self.runCmd("-interpreter-exec console \"thread step-in\"")
         self.expect("\^done")
-        it = self.expect([ "~\"argc=1\\\\r\\\\n\"",
-                           "\*stopped,reason=\"end-stepping-range\".+func=\"((?!main).)+\"" ])
+        it = self.expect([ "@\"argc=1\\\\r\\\\n\"",
+                           "\*stopped,reason=\"end-stepping-range\".+?func=\"(?!main).+?\"" ])
         if it == 0:
-            self.expect("\*stopped,reason=\"end-stepping-range\".+func=\"main\"")
+            self.expect("\*stopped,reason=\"end-stepping-range\".+?func=\"main\"")
 
     @lldbmi_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
@@ -173,7 +204,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         # Test that "thread step-over" steps over
         self.runCmd("-interpreter-exec console \"thread step-over\"")
         self.expect("\^done")
-        self.expect("~\"argc=1\\\\r\\\\n\"")
+        self.expect("@\"argc=1\\\\r\\\\n\"")
         self.expect("\*stopped,reason=\"end-stepping-range\"")
 
     @lldbmi_test
@@ -198,7 +229,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         # Test that "thread continue" continues execution
         self.runCmd("-interpreter-exec console \"thread continue\"")
         self.expect("\^done")
-        self.expect("~\"argc=1\\\\r\\\\n")
+        self.expect("@\"argc=1\\\\r\\\\n")
         self.expect("\*stopped,reason=\"exited-normally\"")
 
 if __name__ == '__main__':

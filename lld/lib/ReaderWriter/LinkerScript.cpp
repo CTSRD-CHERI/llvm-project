@@ -14,6 +14,11 @@
 
 #include "lld/ReaderWriter/LinkerScript.h"
 
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Errc.h"
+#include "llvm/Support/ELF.h"
+
 namespace lld {
 namespace script {
 void Token::dump(raw_ostream &os) const {
@@ -63,6 +68,7 @@ void Token::dump(raw_ostream &os) const {
     CASE(kw_entry)
     CASE(kw_exclude_file)
     CASE(kw_extern)
+    CASE(kw_fill)
     CASE(kw_group)
     CASE(kw_hidden)
     CASE(kw_input)
@@ -70,6 +76,7 @@ void Token::dump(raw_ostream &os) const {
     CASE(kw_length)
     CASE(kw_memory)
     CASE(kw_origin)
+    CASE(kw_phdrs)
     CASE(kw_provide)
     CASE(kw_provide_hidden)
     CASE(kw_only_if_ro)
@@ -100,7 +107,7 @@ static llvm::ErrorOr<uint64_t> parseDecimal(StringRef str) {
   for (auto &c : str) {
     res *= 10;
     if (c < '0' || c > '9')
-      return llvm::ErrorOr<uint64_t>(std::make_error_code(std::errc::io_error));
+      return llvm::ErrorOr<uint64_t>(make_error_code(llvm::errc::io_error));
     res += c - '0';
   }
   return res;
@@ -111,7 +118,7 @@ static llvm::ErrorOr<uint64_t> parseOctal(StringRef str) {
   for (auto &c : str) {
     res <<= 3;
     if (c < '0' || c > '7')
-      return llvm::ErrorOr<uint64_t>(std::make_error_code(std::errc::io_error));
+      return llvm::ErrorOr<uint64_t>(make_error_code(llvm::errc::io_error));
     res += c - '0';
   }
   return res;
@@ -122,7 +129,7 @@ static llvm::ErrorOr<uint64_t> parseBinary(StringRef str) {
   for (auto &c : str) {
     res <<= 1;
     if (c != '0' && c != '1')
-      return llvm::ErrorOr<uint64_t>(std::make_error_code(std::errc::io_error));
+      return llvm::ErrorOr<uint64_t>(make_error_code(llvm::errc::io_error));
     res += c - '0';
   }
   return res;
@@ -139,7 +146,7 @@ static llvm::ErrorOr<uint64_t> parseHex(StringRef str) {
     else if (c >= 'A' && c <= 'F')
       res += c - 'A' + 10;
     else
-      return llvm::ErrorOr<uint64_t>(std::make_error_code(std::errc::io_error));
+      return llvm::ErrorOr<uint64_t>(make_error_code(llvm::errc::io_error));
   }
   return res;
 }
@@ -469,6 +476,7 @@ void Lexer::lex(Token &tok) {
             .Case("ENTRY", Token::kw_entry)
             .Case("EXCLUDE_FILE", Token::kw_exclude_file)
             .Case("EXTERN", Token::kw_extern)
+            .Case("FILL", Token::kw_fill)
             .Case("GROUP", Token::kw_group)
             .Case("HIDDEN", Token::kw_hidden)
             .Case("INPUT", Token::kw_input)
@@ -486,6 +494,7 @@ void Lexer::lex(Token &tok) {
             .Case("OUTPUT_ARCH", Token::kw_output_arch)
             .Case("OUTPUT_FORMAT", Token::kw_output_format)
             .Case("OVERLAY", Token::kw_overlay)
+            .Case("PHDRS", Token::kw_phdrs)
             .Case("PROVIDE", Token::kw_provide)
             .Case("PROVIDE_HIDDEN", Token::kw_provide_hidden)
             .Case("SEARCH_DIR", Token::kw_search_dir)
@@ -544,14 +553,14 @@ void Lexer::skipWhitespace() {
 // Constant functions
 void Constant::dump(raw_ostream &os) const { os << _num; }
 
-ErrorOr<int64_t> Constant::evalExpr(SymbolTableTy &symbolTable) const {
+ErrorOr<int64_t> Constant::evalExpr(const SymbolTableTy &symbolTable) const {
   return _num;
 }
 
 // Symbol functions
 void Symbol::dump(raw_ostream &os) const { os << _name; }
 
-ErrorOr<int64_t> Symbol::evalExpr(SymbolTableTy &symbolTable) const {
+ErrorOr<int64_t> Symbol::evalExpr(const SymbolTableTy &symbolTable) const {
   auto it = symbolTable.find(_name);
   if (it == symbolTable.end())
     return LinkerScriptReaderError::unknown_symbol_in_expr;
@@ -569,7 +578,8 @@ void FunctionCall::dump(raw_ostream &os) const {
   os << ")";
 }
 
-ErrorOr<int64_t> FunctionCall::evalExpr(SymbolTableTy &symbolTable) const {
+ErrorOr<int64_t>
+FunctionCall::evalExpr(const SymbolTableTy &symbolTable) const {
   return LinkerScriptReaderError::unrecognized_function_in_expr;
 }
 
@@ -584,7 +594,7 @@ void Unary::dump(raw_ostream &os) const {
   os << ")";
 }
 
-ErrorOr<int64_t> Unary::evalExpr(SymbolTableTy &symbolTable) const {
+ErrorOr<int64_t> Unary::evalExpr(const SymbolTableTy &symbolTable) const {
   auto child = _child->evalExpr(symbolTable);
   if (child.getError())
     return child.getError();
@@ -654,7 +664,7 @@ void BinOp::dump(raw_ostream &os) const {
   os << ")";
 }
 
-ErrorOr<int64_t> BinOp::evalExpr(SymbolTableTy &symbolTable) const {
+ErrorOr<int64_t> BinOp::evalExpr(const SymbolTableTy &symbolTable) const {
   auto lhs = _lhs->evalExpr(symbolTable);
   if (lhs.getError())
     return lhs.getError();
@@ -695,7 +705,7 @@ void TernaryConditional::dump(raw_ostream &os) const {
 }
 
 ErrorOr<int64_t>
-TernaryConditional::evalExpr(SymbolTableTy &symbolTable) const {
+TernaryConditional::evalExpr(const SymbolTableTy &symbolTable) const {
   auto conditional = _conditional->evalExpr(symbolTable);
   if (conditional.getError())
     return conditional.getError();
@@ -857,6 +867,12 @@ void InputSectionsCmd::dump(raw_ostream &os) const {
     os << ")";
 }
 
+void FillCmd::dump(raw_ostream &os) const {
+  os << "FILL(";
+  dumpByteStream(os, StringRef((const char *)_bytes.begin(), _bytes.size()));
+  os << ")";
+}
+
 // OutputSectionDescription functions
 void OutputSectionDescription::dump(raw_ostream &os) const {
   if (_discard)
@@ -909,6 +925,9 @@ void OutputSectionDescription::dump(raw_ostream &os) const {
   }
   os << "  }";
 
+  for (auto && phdr : _phdrs)
+    os << " : " << phdr;
+
   if (_fillStream.size() > 0) {
     os << " =";
     dumpByteStream(os, _fillStream);
@@ -916,6 +935,33 @@ void OutputSectionDescription::dump(raw_ostream &os) const {
     os << " =";
     _fillExpr->dump(os);
   }
+}
+
+void PHDR::dump(raw_ostream &os) const {
+  os << _name << " " << _type;
+  if (_includeFileHdr)
+    os << " FILEHDR";
+  if (_includePHDRs)
+    os << " PHDRS";
+  if (_at) {
+    os << " AT (";
+    _at->dump(os);
+    os << ")";
+  }
+  if (_flags)
+    os << " FLAGS (" << _flags << ")";
+  os << ";\n";
+}
+
+static PHDR none("NONE", 0, false, false, NULL, 0);
+const PHDR *PHDR::NONE = &none;
+
+void PHDRS::dump(raw_ostream &os) const {
+  os << "PHDRS\n{\n";
+  for (auto &&phdr : _phdrs) {
+    phdr->dump(os);
+  }
+  os << "}\n";
 }
 
 // Sections functions
@@ -1022,6 +1068,13 @@ std::error_code Parser::parse() {
       if (!entry)
         return LinkerScriptReaderError::parse_error;
       _script._commands.push_back(entry);
+      break;
+    }
+    case Token::kw_phdrs: {
+      PHDRS *phdrs = parsePHDRS();
+      if (!phdrs)
+        return LinkerScriptReaderError::parse_error;
+      _script._commands.push_back(phdrs);
       break;
     }
     case Token::kw_search_dir: {
@@ -1588,7 +1641,7 @@ llvm::ErrorOr<InputSectionsCmd::VectorTy> Parser::parseExcludeFile() {
 
   if (!expectAndConsume(Token::l_paren, "expected ("))
     return llvm::ErrorOr<InputSectionsCmd::VectorTy>(
-        std::make_error_code(std::errc::io_error));
+        make_error_code(llvm::errc::io_error));
 
   while (_tok._kind == Token::identifier) {
     res.push_back(new (_alloc) InputSectionName(*this, _tok._range, true));
@@ -1597,7 +1650,7 @@ llvm::ErrorOr<InputSectionsCmd::VectorTy> Parser::parseExcludeFile() {
 
   if (!expectAndConsume(Token::r_paren, "expected )"))
     return llvm::ErrorOr<InputSectionsCmd::VectorTy>(
-        std::make_error_code(std::errc::io_error));
+        make_error_code(llvm::errc::io_error));
   return llvm::ErrorOr<InputSectionsCmd::VectorTy>(std::move(res));
 }
 
@@ -1793,6 +1846,46 @@ const InputSectionsCmd *Parser::parseInputSectionsCmd() {
                        archiveSortMode, inputSections);
 }
 
+const FillCmd *Parser::parseFillCmd() {
+  assert(_tok._kind == Token::kw_fill && "Expected FILL!");
+  consumeToken();
+  if (!expectAndConsume(Token::l_paren, "expected ("))
+    return nullptr;
+
+  SmallVector<uint8_t, 8> storage;
+
+  // If the expression is just a number, it's arbitrary length.
+  if (_tok._kind == Token::number && peek()._kind == Token::r_paren) {
+    if (_tok._range.size() > 2 && _tok._range.startswith("0x")) {
+      StringRef num = _tok._range.substr(2);
+      for (char c : num) {
+        unsigned nibble = llvm::hexDigitValue(c);
+        if (nibble == -1u)
+          goto not_simple_hex;
+        storage.push_back(nibble);
+      }
+      
+      if (storage.size() % 2 != 0)
+        storage.insert(storage.begin(), 0);
+
+      // Collapse nibbles.
+      for (std::size_t i = 0, e = storage.size() / 2; i != e; ++i)
+        storage[i] = (storage[i * 2] << 4) + storage[(i * 2) + 1];
+
+      storage.resize(storage.size() / 2);
+    }
+  }
+not_simple_hex:
+
+  const Expression *expr = parseExpression();
+  if (!expr)
+    return nullptr;
+  if (!expectAndConsume(Token::r_paren, "expected )"))
+    return nullptr;
+  
+  return new(getAllocator()) FillCmd(*this, storage);
+}
+
 const OutputSectionDescription *Parser::parseOutputSectionDescription() {
   assert((_tok._kind == Token::kw_discard || _tok._kind == Token::identifier) &&
          "Expected /DISCARD/ or identifier!");
@@ -1892,6 +1985,12 @@ const OutputSectionDescription *Parser::parseOutputSectionDescription() {
         break;
       }
       break;
+    case Token::kw_fill:
+      if (const Command *cmd = parseFillCmd())
+        outputSectionCommands.push_back(cmd);
+      else
+        return nullptr;
+      break;
     case Token::kw_keep:
     case Token::star:
     case Token::colon:
@@ -1921,6 +2020,17 @@ const OutputSectionDescription *Parser::parseOutputSectionDescription() {
   if (!expectAndConsume(Token::r_brace, "expected }"))
     return nullptr;
 
+  SmallVector<StringRef, 2> phdrs;
+  while (_tok._kind == Token::colon) {
+    consumeToken();
+    if (_tok._kind != Token::identifier) {
+      error(_tok, "expected program header name");
+      return nullptr;
+    }
+    phdrs.push_back(_tok._range);
+    consumeToken();
+  }
+
   if (_tok._kind == Token::equal) {
     consumeToken();
     if (_tok._kind != Token::number || !_tok._range.startswith_lower("0x")) {
@@ -1945,13 +2055,117 @@ const OutputSectionDescription *Parser::parseOutputSectionDescription() {
 
   return new (_alloc) OutputSectionDescription(
       *this, sectionName, address, align, subAlign, at, fillExpr, fillStream,
-      alignWithInput, discard, constraint, outputSectionCommands);
+      alignWithInput, discard, constraint, outputSectionCommands, phdrs);
 }
 
 const Overlay *Parser::parseOverlay() {
   assert(_tok._kind == Token::kw_overlay && "Expected OVERLAY!");
   error(_tok, "Overlay description is not yet supported.");
   return nullptr;
+}
+
+const PHDR *Parser::parsePHDR() {
+  assert(_tok._kind == Token::identifier && "Expected identifier!");
+  
+  StringRef name = _tok._range;
+  consumeToken();
+    
+  uint64_t type;
+
+  switch (_tok._kind) {
+  case Token::identifier:
+  case Token::number:
+  case Token::l_paren: {
+    const Expression *expr = parseExpression();
+    if (!expr)
+      return nullptr;
+    Expression::SymbolTableTy PHDRTypes;
+#define PHDR_INSERT(x) PHDRTypes.insert(std::make_pair(#x, llvm::ELF::x))
+    PHDR_INSERT(PT_NULL);
+    PHDR_INSERT(PT_LOAD);
+    PHDR_INSERT(PT_DYNAMIC);
+    PHDR_INSERT(PT_INTERP);
+    PHDR_INSERT(PT_NOTE);
+    PHDR_INSERT(PT_SHLIB);
+    PHDR_INSERT(PT_PHDR);
+    PHDR_INSERT(PT_TLS);
+    PHDR_INSERT(PT_LOOS);
+    PHDR_INSERT(PT_GNU_EH_FRAME);
+    PHDR_INSERT(PT_GNU_STACK);
+    PHDR_INSERT(PT_GNU_RELRO);
+    PHDR_INSERT(PT_SUNW_EH_FRAME);
+    PHDR_INSERT(PT_SUNW_UNWIND);
+    PHDR_INSERT(PT_HIOS);
+    PHDR_INSERT(PT_LOPROC);
+    PHDR_INSERT(PT_ARM_ARCHEXT);
+    PHDR_INSERT(PT_ARM_EXIDX);
+    PHDR_INSERT(PT_ARM_UNWIND);
+    PHDR_INSERT(PT_MIPS_REGINFO);
+    PHDR_INSERT(PT_MIPS_RTPROC);
+    PHDR_INSERT(PT_MIPS_OPTIONS);
+    PHDR_INSERT(PT_MIPS_ABIFLAGS);
+    PHDR_INSERT(PT_HIPROC);
+#undef PHDR_INSERT
+    auto t = expr->evalExpr(PHDRTypes);
+    if (t == LinkerScriptReaderError::unknown_symbol_in_expr) {
+      error(_tok, "Unknown type");
+      return nullptr;
+    }
+    if (!t)
+      return nullptr;
+    type = *t;
+    break;
+  }
+  default:
+    error(_tok, "expected identifier or expression");
+    return nullptr;
+  }
+
+  uint64_t flags = 0;
+
+  if (_tok._kind == Token::identifier && _tok._range == "FLAGS") {
+    consumeToken();
+    if (!expectAndConsume(Token::l_paren, "Expected ("))
+      return nullptr;
+    const Expression *flagsExpr = parseExpression();
+    if (!flagsExpr)
+      return nullptr;
+    auto f = flagsExpr->evalExpr();
+    if (!f)
+      return nullptr;
+    flags = *f;
+    if (!expectAndConsume(Token::r_paren, "Expected )"))
+      return nullptr;
+  }
+  
+  if (!expectAndConsume(Token::semicolon, "Expected ;"))
+    return nullptr;
+
+  return new (getAllocator()) PHDR(name, type, false, false, nullptr, flags);
+}
+
+PHDRS *Parser::parsePHDRS() {
+  assert(_tok._kind == Token::kw_phdrs && "Expected PHDRS!");
+  consumeToken();
+  if (!expectAndConsume(Token::l_brace, "expected {"))
+    return nullptr;
+
+  SmallVector<const PHDR *, 8> phdrs;
+
+  while (true) {
+    if (_tok._kind == Token::identifier) {
+      const PHDR *phdr = parsePHDR();
+      if (!phdr)
+        return nullptr;
+      phdrs.push_back(phdr);
+    } else
+      break;
+  }
+
+  if (!expectAndConsume(Token::r_brace, "expected }"))
+    return nullptr;
+
+  return new (getAllocator()) PHDRS(*this, phdrs);
 }
 
 Sections *Parser::parseSections() {
@@ -2142,10 +2356,7 @@ Extern *Parser::parseExtern() {
 }
 
 // Sema member functions
-Sema::Sema()
-    : _scripts(), _layoutCommands(), _memberToLayoutOrder(),
-      _memberNameWildcards(), _cacheSectionOrder(), _cacheExpressionOrder(),
-      _deliveredExprs(), _symbolTable() {}
+Sema::Sema() : _parsedPHDRS(false) {}
 
 void Sema::perform() {
   for (auto &parser : _scripts)
@@ -2252,6 +2463,18 @@ uint64_t Sema::getLinkerScriptExprValue(StringRef name) const {
   auto it = _symbolTable.find(name);
   assert (it != _symbolTable.end() && "Invalid symbol name!");
   return it->second;
+}
+
+std::error_code
+Sema::getPHDRsForOutputSection(StringRef name,
+                               std::vector<const PHDR *> &phdrs) const {
+  // Cache results if not done yet.
+  if (auto ec = const_cast<Sema *>(this)->buildSectionToPHDR())
+    return ec;
+
+  auto vec = _sectionToPHDR.lookup(name);
+  std::copy(std::begin(vec), std::end(vec), std::back_inserter(phdrs));
+  return std::error_code();
 }
 
 void Sema::dump() const {
@@ -2488,6 +2711,64 @@ bool Sema::localCompare(int order, const SectionKey &lhs,
 
   llvm_unreachable("");
   return false;
+}
+
+std::error_code Sema::buildSectionToPHDR() {
+  if (_parsedPHDRS)
+    return std::error_code();
+  _parsedPHDRS = true;
+
+  // No scripts - nothing to do.
+  if (_scripts.empty() || _layoutCommands.empty())
+    return std::error_code();
+
+  // Collect all header declarations.
+  llvm::StringMap<const PHDR *> phdrs;
+  for (auto &parser : _scripts) {
+    for (auto *cmd : parser->get()->_commands) {
+      if (auto *ph = dyn_cast<PHDRS>(cmd)) {
+        for (auto *p : *ph)
+          phdrs[p->name()] = p;
+      }
+    }
+  }
+  const bool noPhdrs = phdrs.empty();
+
+  // Add NONE header to the map provided there's no user-defined
+  // header with the same name.
+  if (!_sectionToPHDR.count(PHDR::NONE->name()))
+    phdrs[PHDR::NONE->name()] = PHDR::NONE;
+
+  // Match output sections to available headers.
+  llvm::SmallVector<const PHDR *, 2> phdrsCur, phdrsLast { PHDR::NONE };
+  for (const Command *cmd : _layoutCommands) {
+    auto osd = dyn_cast<OutputSectionDescription>(cmd);
+    if (!osd || osd->isDiscarded())
+      continue;
+
+    phdrsCur.clear();
+    for (StringRef name : osd->PHDRs()) {
+      auto it = phdrs.find(name);
+      if (it == phdrs.end()) {
+        return LinkerScriptReaderError::unknown_phdr_ids;
+      }
+      phdrsCur.push_back(it->second);
+    }
+
+    // If no headers and no errors - insert empty headers set.
+    // If the current set of headers is empty, then use the last non-empty
+    // set. Otherwise mark the current set to be the last non-empty set for
+    // successors.
+    if (noPhdrs)
+      phdrsCur.clear();
+    else if (phdrsCur.empty())
+      phdrsCur = phdrsLast;
+    else
+      phdrsLast = phdrsCur;
+
+    _sectionToPHDR[osd->name()] = phdrsCur;
+  }
+  return std::error_code();
 }
 
 static bool hasWildcard(StringRef name) {

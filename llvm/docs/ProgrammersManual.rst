@@ -940,7 +940,7 @@ There are a variety of ways to pass around and use strings in C and C++, and
 LLVM adds a few new options to choose from.  Pick the first option on this list
 that will do what you need, they are ordered according to their relative cost.
 
-Note that is is generally preferred to *not* pass strings around as ``const
+Note that it is generally preferred to *not* pass strings around as ``const
 char*``'s.  These have a number of problems, including the fact that they
 cannot represent embedded nul ("\0") characters, and do not have a length
 available efficiently.  The general replacement for '``const char*``' is
@@ -1105,10 +1105,10 @@ If you have a set-like data structure that is usually small and whose elements
 are reasonably small, a ``SmallSet<Type, N>`` is a good choice.  This set has
 space for N elements in place (thus, if the set is dynamically smaller than N,
 no malloc traffic is required) and accesses them with a simple linear search.
-When the set grows beyond 'N' elements, it allocates a more expensive
+When the set grows beyond N elements, it allocates a more expensive
 representation that guarantees efficient access (for most types, it falls back
-to std::set, but for pointers it uses something far better, :ref:`SmallPtrSet
-<dss_smallptrset>`.
+to :ref:`std::set <dss_set>`, but for pointers it uses something far better,
+:ref:`SmallPtrSet <dss_smallptrset>`.
 
 The magic of this class is that it handles small sets extremely efficiently, but
 gracefully handles extremely large sets without loss of efficiency.  The
@@ -1120,16 +1120,31 @@ and erasing, but does not support iteration.
 llvm/ADT/SmallPtrSet.h
 ^^^^^^^^^^^^^^^^^^^^^^
 
-SmallPtrSet has all the advantages of ``SmallSet`` (and a ``SmallSet`` of
+``SmallPtrSet`` has all the advantages of ``SmallSet`` (and a ``SmallSet`` of
 pointers is transparently implemented with a ``SmallPtrSet``), but also supports
-iterators.  If more than 'N' insertions are performed, a single quadratically
+iterators.  If more than N insertions are performed, a single quadratically
 probed hash table is allocated and grows as needed, providing extremely
 efficient access (constant time insertion/deleting/queries with low constant
 factors) and is very stingy with malloc traffic.
 
-Note that, unlike ``std::set``, the iterators of ``SmallPtrSet`` are invalidated
-whenever an insertion occurs.  Also, the values visited by the iterators are not
-visited in sorted order.
+Note that, unlike :ref:`std::set <dss_set>`, the iterators of ``SmallPtrSet``
+are invalidated whenever an insertion occurs.  Also, the values visited by the
+iterators are not visited in sorted order.
+
+.. _dss_stringset:
+
+llvm/ADT/StringSet.h
+^^^^^^^^^^^^^^^^^^^^
+
+``StringSet`` is a thin wrapper around :ref:`StringMap\<char\> <dss_stringmap>`,
+and it allows efficient storage and retrieval of unique strings.
+
+Functionally analogous to ``SmallSet<StringRef>``, ``StringSet`` also suports
+iteration. (The iterator dereferences to a ``StringMapEntry<char>``, so you
+need to call ``i->getKey()`` to access the item of the StringSet.)  On the
+other hand, ``StringSet`` doesn't support range-insertion and
+copy-construction, which :ref:`SmallSet <dss_smallset>` and :ref:`SmallPtrSet
+<dss_smallptrset>` do support.
 
 .. _dss_denseset:
 
@@ -1297,8 +1312,9 @@ never use hash_set and unordered_set because they are generally very expensive
 (each insertion requires a malloc) and very non-portable.
 
 std::multiset is useful if you're not interested in elimination of duplicates,
-but has all the drawbacks of std::set.  A sorted vector (where you don't delete
-duplicate entries) or some other approach is almost always better.
+but has all the drawbacks of :ref:`std::set <dss_set>`.  A sorted vector
+(where you don't delete duplicate entries) or some other approach is almost
+always better.
 
 .. _ds_map:
 
@@ -1687,8 +1703,8 @@ they will automatically convert to a ptr-to-instance type whenever they need to.
 Instead of derferencing the iterator and then taking the address of the result,
 you can simply assign the iterator to the proper pointer type and you get the
 dereference and address-of operation as a result of the assignment (behind the
-scenes, this is a result of overloading casting mechanisms).  Thus the last line
-of the last example,
+scenes, this is a result of overloading casting mechanisms).  Thus the second
+line of the last example,
 
 .. code-block:: c++
 
@@ -2553,6 +2569,22 @@ section on :ref:`isa and dyn_cast <isa>` and our :doc:`detailed document
 <HowToSetUpLLVMStyleRTTI>` which describes how you can implement this
 pattern for use with the LLVM helpers.
 
+.. _abi_breaking_checks:
+
+ABI Breaking Checks
+-------------------
+
+Checks and asserts that alter the LLVM C++ ABI are predicated on the
+preprocessor symbol `LLVM_ENABLE_ABI_BREAKING_CHECKS` -- LLVM
+libraries built with `LLVM_ENABLE_ABI_BREAKING_CHECKS` are not ABI
+compatible LLVM libraries built without it defined.  By default,
+turning on assertions also turns on `LLVM_ENABLE_ABI_BREAKING_CHECKS`
+so a default +Asserts build is not ABI compatible with a
+default -Asserts build.  Clients that want ABI compatibility
+between +Asserts and -Asserts builds should use the CMake or autoconf
+build systems to set `LLVM_ENABLE_ABI_BREAKING_CHECKS` independently
+of `LLVM_ENABLE_ASSERTIONS`.
+
 .. _coreclasses:
 
 The Core LLVM Class Hierarchy Reference
@@ -2566,8 +2598,9 @@ doxygen info: `Type Clases <http://llvm.org/doxygen/classllvm_1_1Type.html>`_
 
 The Core LLVM classes are the primary means of representing the program being
 inspected or transformed.  The core LLVM classes are defined in header files in
-the ``include/llvm/`` directory, and implemented in the ``lib/VMCore``
-directory.
+the ``include/llvm/IR`` directory, and implemented in the ``lib/IR``
+directory. It's worth noting that, for historical reasons, this library is
+called ``libLLVMCore.so``, not ``libLLVMIR.so`` as you might expect.
 
 .. _Type:
 
@@ -2635,7 +2668,7 @@ Important Derived Types
   Subclass of SequentialType for vector types.  A vector type is similar to an
   ArrayType but is distinguished because it is a first class type whereas
   ArrayType is not.  Vector types are used for vector operations and are usually
-  small vectors of of an integer or floating point type.
+  small vectors of an integer or floating point type.
 
 ``StructType``
   Subclass of DerivedTypes for struct types.

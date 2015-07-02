@@ -8,13 +8,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/lldb-private-types.h"
-#include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/Error.h"
 #include "lldb/Core/RegisterValue.h"
 #include "lldb/Host/windows/HostThreadWindows.h"
 #include "lldb/Host/windows/windows.h"
 
 #include "lldb-x86-register-enums.h"
+#include "ProcessWindowsLog.h"
 #include "RegisterContext_x86.h"
 #include "RegisterContextWindows_x86.h"
 #include "TargetThreadWindows.h"
@@ -48,8 +48,6 @@ enum RegisterIndex
     eRegisterIndexEip,
     eRegisterIndexEflags
 };
-
-const DWORD kWinContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
 
 // Array of all register information supported by Windows x86
 RegisterInfo g_register_infos[] =
@@ -92,20 +90,12 @@ RegisterSet g_register_sets[] = {
 // Constructors and Destructors
 //------------------------------------------------------------------
 RegisterContextWindows_x86::RegisterContextWindows_x86(Thread &thread, uint32_t concrete_frame_idx)
-    : RegisterContext(thread, concrete_frame_idx)
-    , m_context_stale(true)
-    , m_context()
+    : RegisterContextWindows(thread, concrete_frame_idx)
 {
 }
 
 RegisterContextWindows_x86::~RegisterContextWindows_x86()
 {
-}
-
-void
-RegisterContextWindows_x86::InvalidateAllRegisters()
-{
-    m_context_stale = true;
 }
 
 size_t
@@ -138,37 +128,51 @@ RegisterContextWindows_x86::ReadRegister(const RegisterInfo *reg_info, RegisterV
     if (!CacheAllRegisterValues())
         return false;
 
-    switch (reg_info->kinds[eRegisterKindLLDB])
+    uint32_t reg = reg_info->kinds[eRegisterKindLLDB];
+    switch (reg)
     {
         case lldb_eax_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from EAX", m_context.Eax);
             reg_value.SetUInt32(m_context.Eax);
             break;
         case lldb_ebx_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from EBX", m_context.Ebx);
             reg_value.SetUInt32(m_context.Ebx);
             break;
         case lldb_ecx_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from ECX", m_context.Ecx);
             reg_value.SetUInt32(m_context.Ecx);
             break;
         case lldb_edx_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from EDX", m_context.Edx);
             reg_value.SetUInt32(m_context.Edx);
             break;
         case lldb_edi_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from EDI", m_context.Edi);
             reg_value.SetUInt32(m_context.Edi);
             break;
         case lldb_esi_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from ESI", m_context.Esi);
             reg_value.SetUInt32(m_context.Esi);
             break;
         case lldb_ebp_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from EBP", m_context.Ebp);
             reg_value.SetUInt32(m_context.Ebp);
             break;
         case lldb_esp_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from ESP", m_context.Esp);
             reg_value.SetUInt32(m_context.Esp);
             break;
         case lldb_eip_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from EIP", m_context.Eip);
             reg_value.SetUInt32(m_context.Eip);
             break;
         case lldb_eflags_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%x from EFLAGS", m_context.EFlags);
             reg_value.SetUInt32(m_context.EFlags);
+            break;
+        default:
+            WINWARN_IFALL(WINDOWS_LOG_REGISTERS, "Requested unknown register %u", reg);
             break;
     }
     return true;
@@ -183,146 +187,55 @@ RegisterContextWindows_x86::WriteRegister(const RegisterInfo *reg_info, const Re
     if (!CacheAllRegisterValues())
         return false;
 
-    switch (reg_info->kinds[eRegisterKindLLDB])
+    uint32_t reg = reg_info->kinds[eRegisterKindLLDB];
+    switch (reg)
     {
         case lldb_eax_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to EAX", reg_value.GetAsUInt32());
             m_context.Eax = reg_value.GetAsUInt32();
             break;
         case lldb_ebx_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to EBX", reg_value.GetAsUInt32());
             m_context.Ebx = reg_value.GetAsUInt32();
             break;
         case lldb_ecx_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to ECX", reg_value.GetAsUInt32());
             m_context.Ecx = reg_value.GetAsUInt32();
             break;
         case lldb_edx_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to EDX", reg_value.GetAsUInt32());
             m_context.Edx = reg_value.GetAsUInt32();
             break;
         case lldb_edi_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to EDI", reg_value.GetAsUInt32());
             m_context.Edi = reg_value.GetAsUInt32();
             break;
         case lldb_esi_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to ESI", reg_value.GetAsUInt32());
             m_context.Esi = reg_value.GetAsUInt32();
             break;
         case lldb_ebp_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to EBP", reg_value.GetAsUInt32());
             m_context.Ebp = reg_value.GetAsUInt32();
             break;
         case lldb_esp_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to ESP", reg_value.GetAsUInt32());
             m_context.Esp = reg_value.GetAsUInt32();
             break;
         case lldb_eip_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to EIP", reg_value.GetAsUInt32());
             m_context.Eip = reg_value.GetAsUInt32();
             break;
         case lldb_eflags_i386:
+            WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to EFLAGS", reg_value.GetAsUInt32());
             m_context.EFlags = reg_value.GetAsUInt32();
             break;
+        default:
+            WINWARN_IFALL(WINDOWS_LOG_REGISTERS, "Write value 0x%x to unknown register %u", reg_value.GetAsUInt32(),
+                          reg);
     }
 
     // Physically update the registers in the target process.
     TargetThreadWindows &wthread = static_cast<TargetThreadWindows &>(m_thread);
     return ::SetThreadContext(wthread.GetHostThread().GetNativeThread().GetSystemHandle(), &m_context);
-}
-
-bool
-RegisterContextWindows_x86::ReadAllRegisterValues(lldb::DataBufferSP &data_sp)
-{
-    if (!CacheAllRegisterValues())
-        return false;
-    if (data_sp->GetByteSize() < sizeof(m_context))
-    {
-        data_sp.reset(new DataBufferHeap(sizeof(CONTEXT), 0));
-    }
-    memcpy(data_sp->GetBytes(), &m_context, sizeof(m_context));
-    return true;
-}
-
-bool
-RegisterContextWindows_x86::WriteAllRegisterValues(const lldb::DataBufferSP &data_sp)
-{
-    assert(data_sp->GetByteSize() >= sizeof(m_context));
-    memcpy(&m_context, data_sp->GetBytes(), sizeof(m_context));
-
-    TargetThreadWindows &wthread = static_cast<TargetThreadWindows &>(m_thread);
-    if (!::SetThreadContext(wthread.GetHostThread().GetNativeThread().GetSystemHandle(), &m_context))
-        return false;
-
-    return true;
-}
-
-uint32_t
-RegisterContextWindows_x86::ConvertRegisterKindToRegisterNumber(lldb::RegisterKind kind, uint32_t num)
-{
-    const uint32_t num_regs = GetRegisterCount();
-
-    assert(kind < kNumRegisterKinds);
-    for (uint32_t reg_idx = 0; reg_idx < num_regs; ++reg_idx)
-    {
-        const RegisterInfo *reg_info = GetRegisterInfoAtIndex(reg_idx);
-
-        if (reg_info->kinds[kind] == num)
-            return reg_idx;
-    }
-
-    return LLDB_INVALID_REGNUM;
-}
-
-//------------------------------------------------------------------
-// Subclasses can these functions if desired
-//------------------------------------------------------------------
-uint32_t
-RegisterContextWindows_x86::NumSupportedHardwareBreakpoints()
-{
-    // Support for hardware breakpoints not yet implemented.
-    return 0;
-}
-
-uint32_t
-RegisterContextWindows_x86::SetHardwareBreakpoint(lldb::addr_t addr, size_t size)
-{
-    return 0;
-}
-
-bool
-RegisterContextWindows_x86::ClearHardwareBreakpoint(uint32_t hw_idx)
-{
-    return false;
-}
-
-uint32_t
-RegisterContextWindows_x86::NumSupportedHardwareWatchpoints()
-{
-    // Support for hardware watchpoints not yet implemented.
-    return 0;
-}
-
-uint32_t
-RegisterContextWindows_x86::SetHardwareWatchpoint(lldb::addr_t addr, size_t size, bool read, bool write)
-{
-    return 0;
-}
-
-bool
-RegisterContextWindows_x86::ClearHardwareWatchpoint(uint32_t hw_index)
-{
-    return false;
-}
-
-bool
-RegisterContextWindows_x86::HardwareSingleStep(bool enable)
-{
-    return false;
-}
-
-bool
-RegisterContextWindows_x86::CacheAllRegisterValues()
-{
-    if (!m_context_stale)
-        return true;
-
-    TargetThreadWindows &wthread = static_cast<TargetThreadWindows &>(m_thread);
-    memset(&m_context, 0, sizeof(m_context));
-    m_context.ContextFlags = kWinContextFlags;
-    if (!::GetThreadContext(wthread.GetHostThread().GetNativeThread().GetSystemHandle(), &m_context))
-        return false;
-    m_context_stale = false;
-    return true;
 }

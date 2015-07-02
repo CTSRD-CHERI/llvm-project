@@ -12,7 +12,7 @@ class BreakpointInDummyTarget (TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym(self):
         """Test breakpoint set before we have a target. """
@@ -54,11 +54,11 @@ class BreakpointInDummyTarget (TestBase):
 
         # The breakpoint list should show 3 locations.
         self.expect("breakpoint list -f", "Breakpoint locations shown correctly",
-            substrs = ["1: file = 'main.c', line = %d, locations = 1" % self.line,
-                       "2: file = 'main.c', line = %d, locations = 1" % self.line2])
+            substrs = ["1: file = 'main.c', line = %d, exact_match = 0, locations = 1" % self.line,
+                       "2: file = 'main.c', line = %d, exact_match = 0, locations = 1" % self.line2])
 
         # Run the program.
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # Stopped once.
         self.expect("thread backtrace", STOPPED_DUE_TO_BREAKPOINT,

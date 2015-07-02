@@ -51,6 +51,8 @@
 #define TASK_UNTIED              0
 #define TASK_EXPLICIT            1
 #define TASK_IMPLICIT            0
+#define TASK_PROXY               1
+#define TASK_FULL                0
 
 #define KMP_CANCEL_THREADS
 #define KMP_THREAD_ATTR
@@ -108,6 +110,10 @@ class kmp_stats_list;
 # pragma weak clock_gettime
 #endif
 
+#if OMPT_SUPPORT
+#include "ompt-internal.h"
+#endif
+
 /*Select data placement in NUMA memory */
 #define NO_FIRST_TOUCH 0
 #define FIRST_TOUCH 1       /* Exploit SGI's first touch page placement algo */
@@ -151,16 +157,8 @@ class kmp_stats_list;
 // #define USE_QUEUING_LOCK_FOR_BGET
 // #endif
 
-#ifndef NSEC_PER_SEC
-# define NSEC_PER_SEC 1000000000L
-#endif
-
-#ifndef USEC_PER_SEC
-# define USEC_PER_SEC 1000000L
-#endif
-
-// For error messages
-#define KMP_IOMP_NAME       "Intel(R) OMP"
+#define KMP_NSEC_PER_SEC 1000000000L
+#define KMP_USEC_PER_SEC 1000000L
 
 /*!
 @ingroup BASIC_TYPES
@@ -1654,7 +1652,7 @@ typedef struct KMP_ALIGN_CACHE kmp_bstate {
     kmp_uint32 *skip_per_level;
     kmp_uint32 my_level;
     kmp_int32 parent_tid;
-    kmp_uint32 old_tid;
+    kmp_int32 old_tid;
     kmp_uint32 depth;
     struct kmp_bstate *parent_bar;
     kmp_team_t *team;
@@ -1983,7 +1981,12 @@ typedef struct kmp_tasking_flags {          /* Total struct must be exactly 32 b
     unsigned merged_if0  : 1;               /* no __kmpc_task_{begin/complete}_if0 calls in if0 code path */
 #if OMP_40_ENABLED
     unsigned destructors_thunk : 1;         /* set if the compiler creates a thunk to invoke destructors from the runtime */
+#if OMP_41_ENABLED
+    unsigned proxy       : 1;               /* task is a proxy task (it will be executed outside the context of the RTL) */
+    unsigned reserved    : 11;              /* reserved for compiler use */
+#else
     unsigned reserved    : 12;              /* reserved for compiler use */
+#endif
 #else // OMP_40_ENABLED
     unsigned reserved    : 13;              /* reserved for compiler use */
 #endif // OMP_40_ENABLED
@@ -2025,6 +2028,9 @@ struct kmp_taskdata {                                 /* aligned during dynamic 
     kmp_taskgroup_t *       td_taskgroup;         // Each task keeps pointer to its current taskgroup
     kmp_dephash_t *         td_dephash;           // Dependencies for children tasks are tracked from here
     kmp_depnode_t *         td_depnode;           // Pointer to graph node if this task has dependencies
+#endif
+#if OMPT_SUPPORT
+    ompt_task_info_t        ompt_task_info;
 #endif
 #if KMP_HAVE_QUAD
     _Quad                   td_dummy;             // Align structure 16-byte size since allocated just before kmp_task_t
@@ -2070,6 +2076,9 @@ typedef struct kmp_base_task_team {
                                                    /* TRUE means tt_threads_data is set up and initialized */
     kmp_int32               tt_nproc;              /* #threads in team           */
     kmp_int32               tt_max_threads;        /* number of entries allocated for threads_data array */
+#if OMP_41_ENABLED
+    kmp_int32               tt_found_proxy_tasks;  /* Have we found proxy tasks since last barrier */
+#endif
 
     KMP_ALIGN_CACHE
     volatile kmp_uint32     tt_unfinished_threads; /* #threads still active      */
@@ -2188,6 +2197,11 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     /* TODO the first serial team should actually be stored in the info_t
      * structure.  this will help reduce initial allocation overhead */
     KMP_ALIGN_CACHE kmp_team_p *th_serial_team; /*serialized team held in reserve*/
+
+#if OMPT_SUPPORT
+    ompt_thread_info_t      ompt_thread_info;
+#endif
+
 /* The following are also read by the master during reinit */
     struct common_table    *th_pri_common;
 
@@ -2322,6 +2336,12 @@ typedef struct KMP_ALIGN_CACHE kmp_base_team {
     int                      t_nproc;        // number of threads in team
     microtask_t              t_pkfn;
     launch_t                 t_invoke;       // procedure to launch the microtask
+
+#if OMPT_SUPPORT
+    ompt_team_info_t         ompt_team_info;
+    ompt_lw_taskteam_t      *ompt_serialized_team_info;
+#endif
+
 #if KMP_ARCH_X86 || KMP_ARCH_X86_64
     kmp_int8                 t_fp_control_saved;
     kmp_int8                 t_pad2b;
@@ -2517,7 +2537,7 @@ extern char const   *__kmp_barrier_pattern_name        [ bp_last_bar ];
 
 /* Global Locks */
 extern kmp_bootstrap_lock_t __kmp_initz_lock;     /* control initialization */
-extern kmp_bootstrap_lock_t __kmp_forkjoin_lock;  /* control fork/join access and load calculation if rml is used*/
+extern kmp_bootstrap_lock_t __kmp_forkjoin_lock;  /* control fork/join access */
 extern kmp_bootstrap_lock_t __kmp_exit_lock;      /* exit() is not always thread-safe */
 extern kmp_bootstrap_lock_t __kmp_monitor_lock;   /* control monitor thread creation */
 extern kmp_bootstrap_lock_t __kmp_tp_cached_lock; /* used for the hack to allow threadprivate cache and __kmp_threads expansion to co-exist */
@@ -3005,11 +3025,17 @@ extern kmp_info_t * __kmp_allocate_thread( kmp_root_t *root,
                                            kmp_team_t *team, int tid);
 #if OMP_40_ENABLED
 extern kmp_team_t * __kmp_allocate_team( kmp_root_t *root, int new_nproc, int max_nproc,
+#if OMPT_SUPPORT
+                                         ompt_parallel_id_t ompt_parallel_id,
+#endif
                                          kmp_proc_bind_t proc_bind,
                                          kmp_internal_control_t *new_icvs,
                                          int argc USE_NESTED_HOT_ARG(kmp_info_t *thr) );
 #else
 extern kmp_team_t * __kmp_allocate_team( kmp_root_t *root, int new_nproc, int max_nproc,
+#if OMPT_SUPPORT
+                                         ompt_parallel_id_t ompt_parallel_id,
+#endif
                                          kmp_internal_control_t *new_icvs,
                                          int argc USE_NESTED_HOT_ARG(kmp_info_t *thr) );
 #endif // OMP_40_ENABLED
@@ -3044,7 +3070,11 @@ enum fork_context_e
     fork_context_last
 };
 extern int __kmp_fork_call( ident_t *loc, int gtid, enum fork_context_e fork_context,
-  kmp_int32 argc, microtask_t microtask, launch_t invoker,
+  kmp_int32 argc,
+#if OMPT_SUPPORT
+  void *unwrapped_task,
+#endif
+  microtask_t microtask, launch_t invoker,
 /* TODO: revert workaround for Intel(R) 64 tracker #96 */
 #if (KMP_ARCH_ARM || KMP_ARCH_X86_64 || KMP_ARCH_AARCH64) && KMP_OS_LINUX
                              va_list *ap
@@ -3091,6 +3121,9 @@ extern void __kmp_pop_current_task_from_thread( kmp_info_t *this_thr );
 extern kmp_task_t* __kmp_task_alloc( ident_t *loc_ref, kmp_int32 gtid,
   kmp_tasking_flags_t *flags, size_t sizeof_kmp_task_t, size_t sizeof_shareds,
   kmp_routine_entry_t task_entry );
+#if OMPT_SUPPORT
+extern void __kmp_task_init_ompt( kmp_taskdata_t * task, int tid );
+#endif
 extern void __kmp_init_implicit_task( ident_t *loc_ref, kmp_info_t *this_thr,
                   kmp_team_t *team, int tid, int set_curr_task );
 
@@ -3116,7 +3149,7 @@ int __kmp_execute_tasks_oncore(kmp_info_t *thread, kmp_int32 gtid, kmp_flag_onco
 extern void __kmp_reap_task_teams( void );
 extern void __kmp_unref_task_team( kmp_task_team_t *task_team, kmp_info_t *thread );
 extern void __kmp_wait_to_unref_task_teams( void );
-extern void __kmp_task_team_setup ( kmp_info_t *this_thr, kmp_team_t *team, int both );
+extern void __kmp_task_team_setup ( kmp_info_t *this_thr, kmp_team_t *team, int both, int always );
 extern void __kmp_task_team_sync  ( kmp_info_t *this_thr, kmp_team_t *team );
 extern void __kmp_task_team_wait  ( kmp_info_t *this_thr, kmp_team_t *team
 #if USE_ITT_BUILD
@@ -3151,7 +3184,11 @@ extern void __kmp_clear_x87_fpu_status_word();
 
 #endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
 
-extern int __kmp_invoke_microtask( microtask_t pkfn, int gtid, int npr, int argc, void *argv[] );
+extern int __kmp_invoke_microtask( microtask_t pkfn, int gtid, int npr, int argc, void *argv[]
+#if OMPT_SUPPORT
+                                   , void **exit_frame_ptr
+#endif
+);
 
 
 /* ------------------------------------------------------------------------ */
@@ -3267,7 +3304,15 @@ KMP_EXPORT kmp_int32 __kmpc_cancellationpoint(ident_t* loc_ref, kmp_int32 gtid, 
 KMP_EXPORT kmp_int32 __kmpc_cancel_barrier(ident_t* loc_ref, kmp_int32 gtid);
 KMP_EXPORT int __kmp_get_cancellation_status(int cancel_kind);
 
+#if OMP_41_ENABLED
+
+KMP_EXPORT void __kmpc_proxy_task_completed( kmp_int32 gtid, kmp_task_t *ptask );
+KMP_EXPORT void __kmpc_proxy_task_completed_ooo ( kmp_task_t *ptask );
+
 #endif
+
+#endif
+
 
 /*
  * Lock interface routines (fast versions with gtid passed in)

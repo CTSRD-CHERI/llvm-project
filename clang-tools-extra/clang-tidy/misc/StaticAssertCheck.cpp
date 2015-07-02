@@ -27,25 +27,32 @@ StaticAssertCheck::StaticAssertCheck(StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context) {}
 
 void StaticAssertCheck::registerMatchers(MatchFinder *Finder) {
-  auto IsAlwaysFalse = ignoringParenImpCasts(
-      anyOf(boolLiteral(equals(false)).bind("isAlwaysFalse"),
-            integerLiteral(equals(0)).bind("isAlwaysFalse")));
+  auto IsAlwaysFalse = expr(ignoringParenImpCasts(
+      expr(anyOf(boolLiteral(equals(false)), integerLiteral(equals(0)),
+          nullPtrLiteralExpr(), gnuNullExpr())).bind("isAlwaysFalse")));
+  auto IsAlwaysFalseWithCast = ignoringParenImpCasts(anyOf(IsAlwaysFalse,
+      cStyleCastExpr(has(IsAlwaysFalse)).bind("castExpr")));
   auto AssertExprRoot = anyOf(
       binaryOperator(
-          hasOperatorName("&&"),
+          anyOf(hasOperatorName("&&"), hasOperatorName("==")),
           hasEitherOperand(ignoringImpCasts(stringLiteral().bind("assertMSG"))),
-          anyOf(binaryOperator(hasEitherOperand(IsAlwaysFalse)), anything()))
-          .bind("assertExprRoot"),
+          anyOf(binaryOperator(hasEitherOperand(IsAlwaysFalseWithCast)),
+          anything())).bind("assertExprRoot"),
       IsAlwaysFalse);
-  auto Condition = expr(anyOf(
+  auto NonConstexprFunctionCall =
+      callExpr(hasDeclaration(functionDecl(unless(isConstexpr()))));
+  auto AssertCondition = expr(anyOf(
       expr(ignoringParenCasts(anyOf(
           AssertExprRoot,
           unaryOperator(hasUnaryOperand(ignoringParenCasts(AssertExprRoot)))))),
-      anything()));
+      anything()), unless(findAll(NonConstexprFunctionCall))).bind("condition");
+  auto Condition = anyOf(ignoringParenImpCasts(callExpr(
+      hasDeclaration(functionDecl(hasName("__builtin_expect"))),
+      hasArgument(0, AssertCondition))), AssertCondition);
 
   Finder->addMatcher(
-      stmt(anyOf(conditionalOperator(hasCondition(Condition.bind("condition"))),
-                 ifStmt(hasCondition(Condition.bind("condition")))),
+      stmt(anyOf(conditionalOperator(hasCondition(Condition)),
+                 ifStmt(hasCondition(Condition))),
            unless(isInTemplateInstantiation())).bind("condStmt"),
       this);
 }
@@ -60,6 +67,7 @@ void StaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *AssertMSG = Result.Nodes.getNodeAs<StringLiteral>("assertMSG");
   const auto *AssertExprRoot =
       Result.Nodes.getNodeAs<BinaryOperator>("assertExprRoot");
+  const auto *CastExpr = Result.Nodes.getNodeAs<CStyleCastExpr>("castExpr");
   SourceLocation AssertExpansionLoc = CondStmt->getLocStart();
 
   if (!Opts.CPlusPlus11 || !AssertExpansionLoc.isValid() ||
@@ -75,7 +83,7 @@ void StaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
     return;
 
   // False literal is not the result of macro expansion.
-  if (IsAlwaysFalse) {
+  if (IsAlwaysFalse && (!CastExpr || CastExpr->getType()->isPointerType())) {
     SourceLocation FalseLiteralLoc =
         SM.getImmediateSpellingLoc(IsAlwaysFalse->getExprLoc());
     if (!FalseLiteralLoc.isMacroID())
@@ -83,7 +91,8 @@ void StaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
 
     StringRef FalseMacroName =
         Lexer::getImmediateMacroName(FalseLiteralLoc, SM, Opts);
-    if (FalseMacroName.compare_lower("false") == 0)
+    if (FalseMacroName.compare_lower("false") == 0 ||
+        FalseMacroName.compare_lower("null") == 0)
       return;
   }
 

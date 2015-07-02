@@ -27,6 +27,7 @@
 #include "MICmdCmdFile.h"
 #include "MICmdCmdGdbInfo.h"
 #include "MICmdCmdGdbSet.h"
+#include "MICmdCmdGdbShow.h"
 #include "MICmdCmdGdbThread.h"
 #include "MICmdCmdMiscellanous.h"
 #include "MICmdCmdStack.h"
@@ -82,6 +83,7 @@ MICmnCommands::RegisterAll(void)
     bOk &= Register<CMICmdCmdBreakInsert>();
     bOk &= Register<CMICmdCmdDataDisassemble>();
     bOk &= Register<CMICmdCmdDataEvaluateExpression>();
+    bOk &= Register<CMICmdCmdDataInfoLine>();
     bOk &= Register<CMICmdCmdDataReadMemoryBytes>();
     bOk &= Register<CMICmdCmdDataReadMemory>();
     bOk &= Register<CMICmdCmdDataListRegisterNames>();
@@ -103,6 +105,7 @@ MICmnCommands::RegisterAll(void)
     bOk &= Register<CMICmdCmdGdbExit>();
     bOk &= Register<CMICmdCmdGdbInfo>();
     bOk &= Register<CMICmdCmdGdbSet>();
+    bOk &= Register<CMICmdCmdGdbShow>();
     bOk &= Register<CMICmdCmdGdbThread>();
     bOk &= Register<CMICmdCmdInferiorTtySet>();
     bOk &= Register<CMICmdCmdInterpreterExec>();
@@ -113,10 +116,13 @@ MICmnCommands::RegisterAll(void)
     bOk &= Register<CMICmdCmdStackListFrames>();
     bOk &= Register<CMICmdCmdStackListArguments>();
     bOk &= Register<CMICmdCmdStackListLocals>();
+    bOk &= Register<CMICmdCmdStackListVariables>();
     bOk &= Register<CMICmdCmdStackSelectFrame>();
     bOk &= Register<CMICmdCmdSupportListFeatures>();
     bOk &= Register<CMICmdCmdSymbolListLines>();
     bOk &= Register<CMICmdCmdTargetSelect>();
+    bOk &= Register<CMICmdCmdTargetAttach>();
+    bOk &= Register<CMICmdCmdTargetDetach>();
     bOk &= Register<CMICmdCmdThreadInfo>();
     bOk &= Register<CMICmdCmdVarAssign>();
     bOk &= Register<CMICmdCmdVarCreate>();

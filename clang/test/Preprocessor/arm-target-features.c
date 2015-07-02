@@ -7,6 +7,7 @@
 // CHECK: __ARM_FEATURE_NUMERIC_MAXMIN 1
 
 // RUN: %clang -target armv7a-none-linux-gnu -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-V7 %s
+// RUN: %clang -target x86_64-apple-macosx10.10 -arch armv7s -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-V7 %s
 // CHECK-V7: __ARMEL__ 1
 // CHECK-V7: __ARM_ARCH 7
 // CHECK-V7: __ARM_ARCH_7A__ 1
@@ -137,8 +138,8 @@
 // FPUNONE-A5-NOT:#define __ARM_NEON__ 1
 // FPUNONE-A5-NOT:#define __ARM_VFPV4__ 1
 
-// RUN: %clang -target armv7-none-linux-gnueabi -mcpu=cortex-a5 -mfpu=vfp3-d16 -x c -E -dM %s -o - | FileCheck --check-prefix=NONEON-A5 %s
-// RUN: %clang -target armv7-none-linux-gnueabi -mthumb -mcpu=cortex-a5 -mfpu=vfp3-d16 -x c -E -dM %s -o - | FileCheck --check-prefix=NONEON-A5 %s
+// RUN: %clang -target armv7-none-linux-gnueabi -mcpu=cortex-a5 -mfpu=vfp4-d16 -x c -E -dM %s -o - | FileCheck --check-prefix=NONEON-A5 %s
+// RUN: %clang -target armv7-none-linux-gnueabi -mthumb -mcpu=cortex-a5 -mfpu=vfp4-d16 -x c -E -dM %s -o - | FileCheck --check-prefix=NONEON-A5 %s
 // NONEON-A5-NOT:#define __ARM_NEON__ 1
 // NONEON-A5:#define __ARM_VFPV4__ 1
 
@@ -264,6 +265,24 @@
 // A53-THUMB:#define __ARM_ARCH_EXT_IDIV__ 1
 // A53-THUMB:#define __ARM_FEATURE_DSP
 
+// Test whether predefines are as expected when targeting cortex-r4.
+// RUN: %clang -target armv7 -mcpu=cortex-r4 -x c -E -dM %s -o - | FileCheck --check-prefix=R4-ARM %s
+// R4-ARM-NOT:#define __ARM_ARCH_EXT_IDIV__
+// R4-ARM:#define __ARM_FEATURE_DSP
+
+// RUN: %clang -target armv7 -mthumb -mcpu=cortex-r4 -x c -E -dM %s -o - | FileCheck --check-prefix=R4-THUMB %s
+// R4-THUMB:#define __ARM_ARCH_EXT_IDIV__ 1
+// R4-THUMB:#define __ARM_FEATURE_DSP
+
+// Test whether predefines are as expected when targeting cortex-r4f.
+// RUN: %clang -target armv7 -mcpu=cortex-r4f -x c -E -dM %s -o - | FileCheck --check-prefix=R4F-ARM %s
+// R4F-ARM-NOT:#define __ARM_ARCH_EXT_IDIV__
+// R4F-ARM:#define __ARM_FEATURE_DSP
+
+// RUN: %clang -target armv7 -mthumb -mcpu=cortex-r4f -x c -E -dM %s -o - | FileCheck --check-prefix=R4F-THUMB %s
+// R4F-THUMBT:#define __ARM_ARCH_EXT_IDIV__ 1
+// R4F-THUMB:#define __ARM_FEATURE_DSP
+
 // Test whether predefines are as expected when targeting cortex-r5.
 // RUN: %clang -target armv7 -mcpu=cortex-r5 -x c -E -dM %s -o - | FileCheck --check-prefix=R5-ARM %s
 // R5-ARM:#define __ARM_ARCH_EXT_IDIV__ 1
@@ -316,3 +335,8 @@
 // KRAIT-THUMB:#define __ARM_ARCH_EXT_IDIV__ 1
 // KRAIT-THUMB:#define __ARM_FEATURE_DSP
 // KRAIT-THUMB:#define  __ARM_VFPV4__ 1
+
+// RUN: %clang -target armv8.1a-none-none-eabi -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-V81A %s
+// CHECK-V81A: __ARM_ARCH 8
+// CHECK-V81A: __ARM_ARCH_8_1A__ 1
+// CHECK-V81A: #define __ARM_ARCH_PROFILE 'A'

@@ -21,7 +21,6 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Host.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Target/TargetMachine.h"
 #include <cstdlib>
@@ -48,7 +47,7 @@ PPCSubtarget &PPCSubtarget::initializeSubtargetDependencies(StringRef CPU,
   return *this;
 }
 
-PPCSubtarget::PPCSubtarget(const std::string &TT, const std::string &CPU,
+PPCSubtarget::PPCSubtarget(const Triple &TT, const std::string &CPU,
                            const std::string &FS, const PPCTargetMachine &TM)
     : PPCGenSubtargetInfo(TT, CPU, FS), TargetTriple(TT),
       IsPPC64(TargetTriple.getArch() == Triple::ppc64 ||
@@ -83,6 +82,8 @@ void PPCSubtarget::initializeEnvironment() {
   HasFPCVT = false;
   HasISEL = false;
   HasPOPCNTD = false;
+  HasBPERMD = false;
+  HasExtDiv = false;
   HasCMPB = false;
   HasLDBRX = false;
   IsBookE = false;
@@ -90,13 +91,15 @@ void PPCSubtarget::initializeEnvironment() {
   IsPPC4xx = false;
   IsPPC6xx = false;
   IsE500 = false;
-  DeprecatedMFTB = false;
+  FeatureMFTB = false;
   DeprecatedDST = false;
   HasLazyResolverStubs = false;
   HasICBT = false;
   HasInvariantFunctionDescriptors = false;
   HasPartwordAtomics = false;
+  HasDirectMove = false;
   IsQPXStackUnaligned = false;
+  HasHTM = false;
 }
 
 void PPCSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
@@ -109,11 +112,6 @@ void PPCSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
     else
       CPUName = "generic";
   }
-#if (defined(__APPLE__) || defined(__linux__)) && \
-    (defined(__ppc__) || defined(__powerpc__))
-  if (CPUName == "generic")
-    CPUName = sys::getHostCPUName();
-#endif
 
   // Initialize scheduling itinerary for the specified CPU.
   InstrItins = getInstrItineraryForCPU(CPUName);
@@ -177,7 +175,7 @@ bool PPCSubtarget::enableMachineScheduler() const {
 }
 
 // This overrides the PostRAScheduler bit in the SchedModel for each CPU.
-bool PPCSubtarget::enablePostMachineScheduler() const { return true; }
+bool PPCSubtarget::enablePostRAScheduler() const { return true; }
 
 PPCGenSubtargetInfo::AntiDepBreakMode PPCSubtarget::getAntiDepBreakMode() const {
   return TargetSubtargetInfo::ANTIDEP_ALL;

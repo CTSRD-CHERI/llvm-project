@@ -69,6 +69,10 @@ nub_bool_t      DNBProcessInterrupt     (nub_process_t pid) DNB_EXPORT;
 nub_bool_t      DNBProcessKill          (nub_process_t pid) DNB_EXPORT;
 nub_bool_t      DNBProcessSendEvent     (nub_process_t pid, const char *event) DNB_EXPORT;
 nub_size_t      DNBProcessMemoryRead    (nub_process_t pid, nub_addr_t addr, nub_size_t size, void *buf) DNB_EXPORT;
+uint64_t        DNBProcessMemoryReadInteger (nub_process_t pid, nub_addr_t addr, nub_size_t integer_size, uint64_t fail_value) DNB_EXPORT;
+nub_addr_t      DNBProcessMemoryReadPointer (nub_process_t pid, nub_addr_t addr) DNB_EXPORT;
+std::string     DNBProcessMemoryReadCString (nub_process_t pid, nub_addr_t addr) DNB_EXPORT;
+std::string     DNBProcessMemoryReadCStringFixed (nub_process_t pid, nub_addr_t addr, nub_size_t fixed_length) DNB_EXPORT;
 nub_size_t      DNBProcessMemoryWrite   (nub_process_t pid, nub_addr_t addr, nub_size_t size, const void *buf) DNB_EXPORT;
 nub_addr_t      DNBProcessMemoryAllocate    (nub_process_t pid, nub_size_t size, uint32_t permissions) DNB_EXPORT;
 nub_bool_t      DNBProcessMemoryDeallocate  (nub_process_t pid, nub_addr_t addr) DNB_EXPORT;
@@ -151,6 +155,7 @@ nub_bool_t      DNBWatchpointSet                (nub_process_t pid, nub_addr_t a
 nub_bool_t      DNBWatchpointClear              (nub_process_t pid, nub_addr_t addr);
 uint32_t        DNBWatchpointGetNumSupportedHWP (nub_process_t pid); 
 
+uint32_t        DNBGetRegisterCPUType           ();
 const DNBRegisterSetInfo *
                 DNBGetRegisterSetInfo           (nub_size_t *num_reg_sets);
 nub_bool_t      DNBGetRegisterInfoByName        (const char *reg_name, DNBRegisterInfo* info);

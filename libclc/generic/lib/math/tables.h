@@ -40,11 +40,13 @@
 
 TABLE_FUNCTION_DECL(float2, loge_tbl);
 TABLE_FUNCTION_DECL(float, log_inv_tbl);
+TABLE_FUNCTION_DECL(uint4,  pibits_tbl);
 
 #ifdef cl_khr_fp64
 
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 TABLE_FUNCTION_DECL(double2, ln_tbl);
-
+TABLE_FUNCTION_DECL(double2, atan_jby256_tbl);
+TABLE_FUNCTION_DECL(double2, two_to_jby64_ep_tbl);
 #endif // cl_khr_fp64

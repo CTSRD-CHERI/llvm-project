@@ -38,19 +38,20 @@ class MipsMCCodeEmitter : public MCCodeEmitter {
   bool IsLittleEndian;
 
   bool isMicroMips(const MCSubtargetInfo &STI) const;
+  bool isMips32r6(const MCSubtargetInfo &STI) const;
 
 public:
   MipsMCCodeEmitter(const MCInstrInfo &mcii, MCContext &Ctx_, bool IsLittle)
       : MCII(mcii), Ctx(Ctx_), IsLittleEndian(IsLittle) {}
 
-  ~MipsMCCodeEmitter() {}
+  ~MipsMCCodeEmitter() override {}
 
   void EmitByte(unsigned char C, raw_ostream &OS) const;
 
   void EmitInstruction(uint64_t Val, unsigned Size, const MCSubtargetInfo &STI,
                        raw_ostream &OS) const;
 
-  void EncodeInstruction(const MCInst &MI, raw_ostream &OS,
+  void encodeInstruction(const MCInst &MI, raw_ostream &OS,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
 

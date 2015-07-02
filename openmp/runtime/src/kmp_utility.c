@@ -30,7 +30,9 @@ static const char *unknown = "unknown";
 /* the debugging package has not been initialized yet, and only "0" will print   */
 /* debugging output since the environment variables have not been read.          */
 
+#ifdef KMP_DEBUG
 static int trace_level = 5;
+#endif
 
 /*
  * LOG_ID_BITS  = ( 1 + floor( log_2( max( log_per_phy - 1, 1 ))))
@@ -78,7 +80,6 @@ __kmp_get_logical_id( int log_per_phy, int apic_id )
 {
    unsigned current_bit;
    int bits_seen;
-   unsigned mask;
 
    if (log_per_phy <= 1) return ( 0 );
 
@@ -136,7 +137,9 @@ __kmp_query_cpuid( kmp_cpuinfo_t *p )
     struct kmp_cpuid buf;
     int max_arg;
     int log_per_phy;
+#ifdef KMP_DEBUG
     int cflush_size;
+#endif
 
     p->initialized = 1;
 
@@ -314,12 +317,12 @@ __kmp_expand_host_name( char *buffer, size_t size )
 	DWORD	s = size;
 
 	if (! GetComputerNameA( buffer, & s ))
-	    strcpy( buffer, unknown );
+	    KMP_STRCPY_S( buffer, size, unknown );
     }
 #else
     buffer[size - 2] = 0;
     if (gethostname( buffer, size ) || buffer[size - 2] != 0)
-	strcpy( buffer, unknown );
+	KMP_STRCPY_S( buffer, size, unknown );
 #endif
 }
 
@@ -374,7 +377,7 @@ __kmp_expand_file_name( char *result, size_t rlen, char *pattern )
 		case 'h':
 		    {
 			__kmp_expand_host_name( buffer, sizeof( buffer ) );
-			strncpy( pos,  buffer, end - pos + 1);
+			KMP_STRNCPY( pos,  buffer, end - pos + 1);
 			if(*end == 0) {
 			    while ( *pos )
 				++pos;
@@ -386,7 +389,7 @@ __kmp_expand_file_name( char *result, size_t rlen, char *pattern )
 		case 'P':
 		case 'p':
 		    {
-			snp_result = snprintf( pos, end - pos + 1, "%0*d", cpu_width, __kmp_dflt_team_nth );
+			snp_result = KMP_SNPRINTF( pos, end - pos + 1, "%0*d", cpu_width, __kmp_dflt_team_nth );
 			if(snp_result >= 0 && snp_result <= end - pos) {
 			    while ( *pos )
 				++pos;
@@ -399,7 +402,7 @@ __kmp_expand_file_name( char *result, size_t rlen, char *pattern )
 		case 'i':
 		    {
 			pid_t id = getpid();
-			snp_result = snprintf( pos, end - pos + 1, "%0*d", width, id );
+			snp_result = KMP_SNPRINTF( pos, end - pos + 1, "%0*d", width, id );
 			if(snp_result >= 0 && snp_result <= end - pos) {
 			    while ( *pos )
 				++pos;

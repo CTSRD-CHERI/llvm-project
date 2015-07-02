@@ -47,13 +47,13 @@ define i1 @c5(i32* %q, i32 %bitno) {
 declare void @throw_if_bit_set(i8*, i8) readonly
 
 ; CHECK: define i1 @c6(i8* readonly %q, i8 %bit)
-define i1 @c6(i8* %q, i8 %bit) {
+define i1 @c6(i8* %q, i8 %bit) personality i32 (...)* @__gxx_personality_v0 {
 	invoke void @throw_if_bit_set(i8* %q, i8 %bit)
 		to label %ret0 unwind label %ret1
 ret0:
 	ret i1 0
 ret1:
-        %exn = landingpad {i8*, i32} personality i32 (...)* @__gxx_personality_v0
+        %exn = landingpad {i8*, i32}
                  cleanup
 	ret i1 1
 }
@@ -188,7 +188,7 @@ declare void @test6_1(i8* %x6_1, i8* nocapture %y6_1, ...)
 
 ; CHECK: define void @test6_2(i8* %x6_2, i8* nocapture %y6_2, i8* %z6_2)
 define void @test6_2(i8* %x6_2, i8* %y6_2, i8* %z6_2) {
-  call void (i8*, i8*, ...)* @test6_1(i8* %x6_2, i8* %y6_2, i8* %z6_2)
+  call void (i8*, i8*, ...) @test6_1(i8* %x6_2, i8* %y6_2, i8* %z6_2)
   store i32* null, i32** @g
   ret void
 }

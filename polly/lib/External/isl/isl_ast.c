@@ -325,18 +325,18 @@ error:
 
 /* Is "expr1" equal to "expr2"?
  */
-int isl_ast_expr_is_equal(__isl_keep isl_ast_expr *expr1,
+isl_bool isl_ast_expr_is_equal(__isl_keep isl_ast_expr *expr1,
 	__isl_keep isl_ast_expr *expr2)
 {
 	int i;
 
 	if (!expr1 || !expr2)
-		return -1;
+		return isl_bool_error;
 
 	if (expr1 == expr2)
-		return 1;
+		return isl_bool_true;
 	if (expr1->type != expr2->type)
-		return 0;
+		return isl_bool_false;
 	switch (expr1->type) {
 	case isl_ast_expr_int:
 		return isl_val_eq(expr1->u.v, expr2->u.v);
@@ -344,11 +344,11 @@ int isl_ast_expr_is_equal(__isl_keep isl_ast_expr *expr1,
 		return expr1->u.id == expr2->u.id;
 	case isl_ast_expr_op:
 		if (expr1->u.op.op != expr2->u.op.op)
-			return 0;
+			return isl_bool_false;
 		if (expr1->u.op.n_arg != expr2->u.op.n_arg)
-			return 0;
+			return isl_bool_false;
 		for (i = 0; i < expr1->u.op.n_arg; ++i) {
-			int equal;
+			isl_bool equal;
 			equal = isl_ast_expr_is_equal(expr1->u.op.args[i],
 							expr2->u.op.args[i]);
 			if (equal < 0 || !equal)
@@ -356,8 +356,11 @@ int isl_ast_expr_is_equal(__isl_keep isl_ast_expr *expr1,
 		}
 		return 1;
 	case isl_ast_expr_error:
-		return -1;
+		return isl_bool_error;
 	}
+
+	isl_die(isl_ast_expr_get_ctx(expr1), isl_error_internal,
+		"unhandled case", return isl_bool_error);
 }
 
 /* Create a new operation expression of operation type "op",
@@ -853,6 +856,32 @@ error:
 	return NULL;
 }
 
+/* Create a mark node, marking "node" with "id".
+ */
+__isl_give isl_ast_node *isl_ast_node_alloc_mark(__isl_take isl_id *id,
+	__isl_take isl_ast_node *node)
+{
+	isl_ctx *ctx;
+	isl_ast_node *mark;
+
+	if (!id || !node)
+		goto error;
+
+	ctx = isl_id_get_ctx(id);
+	mark = isl_ast_node_alloc(ctx, isl_ast_node_mark);
+	if (!mark)
+		goto error;
+
+	mark->u.m.mark = id;
+	mark->u.m.node = node;
+
+	return mark;
+error:
+	isl_id_free(id);
+	isl_ast_node_free(node);
+	return NULL;
+}
+
 /* Create a user node evaluating "expr".
  */
 __isl_give isl_ast_node *isl_ast_node_alloc_user(__isl_take isl_ast_expr *expr)
@@ -962,6 +991,12 @@ __isl_give isl_ast_node *isl_ast_node_dup(__isl_keep isl_ast_node *node)
 		if (!dup->u.b.children)
 			return isl_ast_node_free(dup);
 		break;
+	case isl_ast_node_mark:
+		dup->u.m.mark = isl_id_copy(node->u.m.mark);
+		dup->u.m.node = isl_ast_node_copy(node->u.m.node);
+		if (!dup->u.m.mark || !dup->u.m.node)
+			return isl_ast_node_free(dup);
+		break;
 	case isl_ast_node_user:
 		dup->u.e.expr = isl_ast_expr_copy(node->u.e.expr);
 		if (!dup->u.e.expr)
@@ -1008,6 +1043,10 @@ __isl_null isl_ast_node *isl_ast_node_free(__isl_take isl_ast_node *node)
 		break;
 	case isl_ast_node_block:
 		isl_ast_node_list_free(node->u.b.children);
+		break;
+	case isl_ast_node_mark:
+		isl_id_free(node->u.m.mark);
+		isl_ast_node_free(node->u.m.node);
 		break;
 	case isl_ast_node_user:
 		isl_ast_expr_free(node->u.e.expr);
@@ -1068,13 +1107,13 @@ __isl_give isl_ast_node *isl_ast_node_for_mark_degenerate(
 	return node;
 }
 
-int isl_ast_node_for_is_degenerate(__isl_keep isl_ast_node *node)
+isl_bool isl_ast_node_for_is_degenerate(__isl_keep isl_ast_node *node)
 {
 	if (!node)
-		return -1;
+		return isl_bool_error;
 	if (node->type != isl_ast_node_for)
 		isl_die(isl_ast_node_get_ctx(node), isl_error_invalid,
-			"not a for node", return -1);
+			"not a for node", return isl_bool_error);
 	return node->u.f.degenerate;
 }
 
@@ -1174,14 +1213,14 @@ __isl_give isl_ast_node *isl_ast_node_if_get_then(
 	return isl_ast_node_copy(node->u.i.then);
 }
 
-int isl_ast_node_if_has_else(
+isl_bool isl_ast_node_if_has_else(
 	__isl_keep isl_ast_node *node)
 {
 	if (!node)
-		return -1;
+		return isl_bool_error;
 	if (node->type != isl_ast_node_if)
 		isl_die(isl_ast_node_get_ctx(node), isl_error_invalid,
-			"not an if node", return -1);
+			"not an if node", return isl_bool_error);
 	return node->u.i.else_node != NULL;
 }
 
@@ -1228,6 +1267,33 @@ __isl_give isl_ast_expr *isl_ast_node_user_get_expr(
 			"not a user node", return NULL);
 
 	return isl_ast_expr_copy(node->u.e.expr);
+}
+
+/* Return the mark identifier of the mark node "node".
+ */
+__isl_give isl_id *isl_ast_node_mark_get_id(__isl_keep isl_ast_node *node)
+{
+	if (!node)
+		return NULL;
+	if (node->type != isl_ast_node_mark)
+		isl_die(isl_ast_node_get_ctx(node), isl_error_invalid,
+			"not a mark node", return NULL);
+
+	return isl_id_copy(node->u.m.mark);
+}
+
+/* Return the node marked by mark node "node".
+ */
+__isl_give isl_ast_node *isl_ast_node_mark_get_node(
+	__isl_keep isl_ast_node *node)
+{
+	if (!node)
+		return NULL;
+	if (node->type != isl_ast_node_mark)
+		isl_die(isl_ast_node_get_ctx(node), isl_error_invalid,
+			"not a mark node", return NULL);
+
+	return isl_ast_node_copy(node->u.m.node);
 }
 
 __isl_give isl_id *isl_ast_node_get_annotation(__isl_keep isl_ast_node *node)
@@ -1589,6 +1655,11 @@ static __isl_give isl_printer *print_ast_node_isl(__isl_take isl_printer *p,
 			p = isl_printer_print_ast_node(p, node->u.f.body);
 		}
 		break;
+	case isl_ast_node_mark:
+		p = isl_printer_print_str(p, "mark: ");
+		p = isl_printer_print_id(p, node->u.m.mark);
+		p = isl_printer_print_str(p, "node: ");
+		p = isl_printer_print_ast_node(p, node->u.m.node);
 	case isl_ast_node_user:
 		p = isl_printer_print_ast_expr(p, node->u.e.expr);
 		break;
@@ -1609,7 +1680,7 @@ static __isl_give isl_printer *print_ast_node_isl(__isl_take isl_printer *p,
 	case isl_ast_node_block:
 		p = isl_printer_print_ast_node_list(p, node->u.b.children);
 		break;
-	default:
+	case isl_ast_node_error:
 		break;
 	}
 	p = isl_printer_print_str(p, ")");
@@ -1624,6 +1695,10 @@ static __isl_give isl_printer *print_ast_node_isl(__isl_take isl_printer *p,
  * as well.
  * If the node is an if node with an else, then we print a block
  * to avoid spurious dangling else warnings emitted by some compilers.
+ * If the node is a mark, then in principle, we would have to check
+ * the child of the mark node.  However, even if the child would not
+ * require us to print a block, for readability it is probably best
+ * to print a block anyway.
  * If the ast_always_print_block option has been set, then we print a block.
  */
 static int need_block(__isl_keep isl_ast_node *node)
@@ -1635,6 +1710,8 @@ static int need_block(__isl_keep isl_ast_node *node)
 	if (node->type == isl_ast_node_for && node->u.f.degenerate)
 		return 1;
 	if (node->type == isl_ast_node_if && node->u.i.else_node)
+		return 1;
+	if (node->type == isl_ast_node_mark)
 		return 1;
 
 	ctx = isl_ast_node_get_ctx(node);
@@ -1842,6 +1919,13 @@ static __isl_give isl_printer *print_ast_node_c(__isl_take isl_printer *p,
 		if (!in_block)
 			p = end_block(p);
 		break;
+	case isl_ast_node_mark:
+		p = isl_printer_start_line(p);
+		p = isl_printer_print_str(p, "// ");
+		p = isl_printer_print_str(p, isl_id_get_name(node->u.m.mark));
+		p = isl_printer_end_line(p);
+		p = print_ast_node_c(p, node->u.m.node, options, 0, in_list);
+		break;
 	case isl_ast_node_user:
 		if (options->print_user)
 			return options->print_user(p,
@@ -2024,6 +2108,9 @@ static int ast_node_required_macros(__isl_keep isl_ast_node *node, int macros)
 		macros = ast_node_list_required_macros(node->u.b.children,
 							macros);
 		break;
+	case isl_ast_node_mark:
+		macros = ast_node_required_macros(node->u.m.node, macros);
+		break;
 	case isl_ast_node_user:
 		macros = ast_expr_required_macros(node->u.e.expr, macros);
 		break;
@@ -2083,33 +2170,33 @@ __isl_give isl_printer *isl_ast_op_type_print_macro(
 /* Call "fn" for each type of operation that appears in "node"
  * and that requires a macro definition.
  */
-int isl_ast_node_foreach_ast_op_type(__isl_keep isl_ast_node *node,
-	int (*fn)(enum isl_ast_op_type type, void *user), void *user)
+isl_stat isl_ast_node_foreach_ast_op_type(__isl_keep isl_ast_node *node,
+	isl_stat (*fn)(enum isl_ast_op_type type, void *user), void *user)
 {
 	int macros;
 
 	if (!node)
-		return -1;
+		return isl_stat_error;
 
 	macros = ast_node_required_macros(node, 0);
 
 	if (macros & ISL_AST_MACRO_MIN && fn(isl_ast_op_min, user) < 0)
-		return -1;
+		return isl_stat_error;
 	if (macros & ISL_AST_MACRO_MAX && fn(isl_ast_op_max, user) < 0)
-		return -1;
+		return isl_stat_error;
 	if (macros & ISL_AST_MACRO_FLOORD && fn(isl_ast_op_fdiv_q, user) < 0)
-		return -1;
+		return isl_stat_error;
 
-	return 0;
+	return isl_stat_ok;
 }
 
-static int ast_op_type_print_macro(enum isl_ast_op_type type, void *user)
+static isl_stat ast_op_type_print_macro(enum isl_ast_op_type type, void *user)
 {
 	isl_printer **p = user;
 
 	*p = isl_ast_op_type_print_macro(type, *p);
 
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Print macro definitions for all the macros used in the result

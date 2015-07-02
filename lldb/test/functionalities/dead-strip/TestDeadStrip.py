@@ -12,7 +12,7 @@ class DeadStripTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym(self):
         """Test breakpoint works correctly with dead-code stripping."""
@@ -20,7 +20,6 @@ class DeadStripTestCase(TestBase):
         self.dead_strip()
 
     @skipIfFreeBSD # The -dead_strip linker option isn't supported on FreeBSD versions of ld.
-    @skipIfLinux # The -dead_strip linker option isn't supported on Linux versions of ld.
     @dwarf_test
     def test_with_dwarf(self):
         """Test breakpoint works correctly with dead-code stripping."""
@@ -41,7 +40,7 @@ class DeadStripTestCase(TestBase):
         # Break by function name f3 (live code).
         lldbutil.run_break_set_by_symbol (self, "f3", num_expected_locations=1, module_name="a.out")
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint (breakpoint #1).
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

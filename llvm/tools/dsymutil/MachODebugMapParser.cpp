@@ -160,7 +160,7 @@ void MachODebugMapParser::handleStabSymbolTableEntry(uint32_t StringIndex,
     // symbol table to find its address as it might not be in the
     // debug map (for common symbols).
     Value = getMainBinarySymbolAddress(Name);
-    if (Value == UnknownAddressOrSize)
+    if (Value == UnknownAddress)
       return;
     break;
   case MachO::N_FUN:
@@ -199,8 +199,7 @@ void MachODebugMapParser::loadCurrentObjectFileSymbols() {
   for (auto Sym : CurrentObjectHolder.Get().symbols()) {
     StringRef Name;
     uint64_t Addr;
-    if (Sym.getAddress(Addr) || Addr == UnknownAddressOrSize ||
-        Sym.getName(Name))
+    if (Sym.getAddress(Addr) || Addr == UnknownAddress || Sym.getName(Name))
       continue;
     CurrentObjectAddresses[Name] = Addr;
   }
@@ -212,7 +211,7 @@ void MachODebugMapParser::loadCurrentObjectFileSymbols() {
 uint64_t MachODebugMapParser::getMainBinarySymbolAddress(StringRef Name) {
   auto Sym = MainBinarySymbolAddresses.find(Name);
   if (Sym == MainBinarySymbolAddresses.end())
-    return UnknownAddressOrSize;
+    return UnknownAddress;
   return Sym->second;
 }
 
@@ -222,10 +221,9 @@ void MachODebugMapParser::loadMainBinarySymbols() {
   const MachOObjectFile &MainBinary = MainBinaryHolder.GetAs<MachOObjectFile>();
   section_iterator Section = MainBinary.section_end();
   for (const auto &Sym : MainBinary.symbols()) {
-    SymbolRef::Type Type;
+    SymbolRef::Type Type = Sym.getType();
     // Skip undefined and STAB entries.
-    if (Sym.getType(Type) || (Type & SymbolRef::ST_Debug) ||
-        (Type & SymbolRef::ST_Unknown))
+    if ((Type & SymbolRef::ST_Debug) || (Type & SymbolRef::ST_Unknown))
       continue;
     StringRef Name;
     uint64_t Addr;
@@ -233,7 +231,7 @@ void MachODebugMapParser::loadMainBinarySymbols() {
     // are the only ones that need to be queried because the address
     // of common data won't be described in the debug map. All other
     // addresses should be fetched for the debug map.
-    if (Sym.getAddress(Addr) || Addr == UnknownAddressOrSize ||
+    if (Sym.getAddress(Addr) || Addr == UnknownAddress ||
         !(Sym.getFlags() & SymbolRef::SF_Global) || Sym.getSection(Section) ||
         Section->isText() || Sym.getName(Name) || Name.size() == 0 ||
         Name[0] == '\0')
@@ -244,10 +242,16 @@ void MachODebugMapParser::loadMainBinarySymbols() {
 
 namespace llvm {
 namespace dsymutil {
-llvm::ErrorOr<std::unique_ptr<DebugMap>>
-parseDebugMap(StringRef InputFile, StringRef PrependPath, bool Verbose) {
-  MachODebugMapParser Parser(InputFile, PrependPath, Verbose);
-  return Parser.parse();
+llvm::ErrorOr<std::unique_ptr<DebugMap>> parseDebugMap(StringRef InputFile,
+                                                       StringRef PrependPath,
+                                                       bool Verbose,
+                                                       bool InputIsYAML) {
+  if (!InputIsYAML) {
+    MachODebugMapParser Parser(InputFile, PrependPath, Verbose);
+    return Parser.parse();
+  } else {
+    return DebugMap::parseYAMLDebugMap(InputFile, PrependPath, Verbose);
+  }
 }
 }
 }

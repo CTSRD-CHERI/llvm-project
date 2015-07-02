@@ -29,6 +29,7 @@
 #include "lld/Core/LLVM.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/MachO.h"
+#include "llvm/Support/LEB128.h"
 
 using namespace llvm::MachO;
 using namespace lld::mach_o::normalized;
@@ -78,6 +79,9 @@ const MachORelocatableSectionToAtomType sectsToAtomType[] = {
   ENTRY("",       "",                 S_NON_LAZY_SYMBOL_POINTERS,
                                                           typeGOT),
   ENTRY("__DATA", "__interposing",    S_INTERPOSING,      typeInterposingTuples),
+  ENTRY("__DATA", "__thread_vars",    S_THREAD_LOCAL_VARIABLES,
+                                                          typeThunkTLV),
+  ENTRY("__DATA", "__thread_data", S_THREAD_LOCAL_REGULAR, typeTLVInitialData),
   ENTRY("",       "",                 S_INTERPOSING,      typeInterposingTuples),
   ENTRY("__LD",   "__compact_unwind", S_REGULAR,
                                                          typeCompactUnwindInfo),
@@ -558,17 +562,17 @@ std::error_code convertRelocs(const Section &section,
         *result = target;
         return std::error_code();
       }
-      return make_dynamic_error_code(Twine("no atom found for defined symbol"));
+      return make_dynamic_error_code("no atom found for defined symbol");
     } else if ((sym->type & N_TYPE) == N_UNDF) {
       const lld::Atom *target = file.findUndefAtom(sym->name);
       if (target) {
         *result = target;
         return std::error_code();
       }
-      return make_dynamic_error_code(Twine("no undefined atom found for sym"));
+      return make_dynamic_error_code("no undefined atom found for sym");
     } else {
       // Search undefs
-      return make_dynamic_error_code(Twine("no atom found for symbol"));
+      return make_dynamic_error_code("no atom found for symbol");
     }
   };
 
@@ -644,11 +648,158 @@ static int64_t readSPtr(bool is64, bool isBig, const uint8_t *addr) {
   return res;
 }
 
+/// --- Augmentation String Processing ---
+
+struct CIEInfo {
+  bool _augmentationDataPresent = false;
+  bool _mayHaveLSDA = false;
+};
+
+typedef llvm::DenseMap<const MachODefinedAtom*, CIEInfo> CIEInfoMap;
+
+static std::error_code processAugmentationString(const uint8_t *augStr,
+                                                 CIEInfo &cieInfo,
+                                                 unsigned *len = nullptr) {
+
+  if (augStr[0] == '\0') {
+    if (len)
+      *len = 1;
+    return std::error_code();
+  }
+
+  if (augStr[0] != 'z')
+    return make_dynamic_error_code("expected 'z' at start of augmentation "
+                                   "string");
+
+  cieInfo._augmentationDataPresent = true;
+  uint64_t idx = 1;
+
+  while (augStr[idx] != '\0') {
+    if (augStr[idx] == 'L') {
+      cieInfo._mayHaveLSDA = true;
+      ++idx;
+    } else
+      ++idx;
+  }
+
+  if (len)
+    *len = idx + 1;
+  return std::error_code();
+}
+
+static std::error_code processCIE(const NormalizedFile &normalizedFile,
+                                  MachODefinedAtom *atom,
+                                  CIEInfoMap &cieInfos) {
+  const bool isBig = MachOLinkingContext::isBigEndian(normalizedFile.arch);
+  const uint8_t *frameData = atom->rawContent().data();
+
+  CIEInfo cieInfo;
+
+  uint32_t size = read32(frameData, isBig);
+  uint64_t cieIDField = size == 0xffffffffU
+                          ? sizeof(uint32_t) + sizeof(uint64_t)
+                          : sizeof(uint32_t);
+  uint64_t versionField = cieIDField + sizeof(uint32_t);
+  uint64_t augmentationStringField = versionField + sizeof(uint8_t);
+
+  if (auto err = processAugmentationString(frameData + augmentationStringField,
+                                           cieInfo))
+    return err;
+
+  cieInfos[atom] = std::move(cieInfo);
+
+  return std::error_code();
+}
+
+static std::error_code processFDE(const NormalizedFile &normalizedFile,
+                                  MachOFile &file,
+                                  mach_o::ArchHandler &handler,
+                                  const Section *ehFrameSection,
+                                  MachODefinedAtom *atom,
+                                  uint64_t offset,
+                                  const CIEInfoMap &cieInfos) {
+
+  const bool isBig = MachOLinkingContext::isBigEndian(normalizedFile.arch);
+  const bool is64 = MachOLinkingContext::is64Bit(normalizedFile.arch);
+
+  // Compiler wasn't lazy and actually told us what it meant.
+  if (atom->begin() != atom->end())
+    return std::error_code();
+
+  const uint8_t *frameData = atom->rawContent().data();
+  uint32_t size = read32(frameData, isBig);
+  uint64_t cieFieldInFDE = size == 0xffffffffU
+    ? sizeof(uint32_t) + sizeof(uint64_t)
+    : sizeof(uint32_t);
+
+  // Linker needs to fixup a reference from the FDE to its parent CIE (a
+  // 32-bit byte offset backwards in the __eh_frame section).
+  uint32_t cieDelta = read32(frameData + cieFieldInFDE, isBig);
+  uint64_t cieAddress = ehFrameSection->address + offset + cieFieldInFDE;
+  cieAddress -= cieDelta;
+
+  Reference::Addend addend;
+  const MachODefinedAtom *cie =
+    findAtomCoveringAddress(normalizedFile, file, cieAddress, &addend);
+  atom->addReference(cieFieldInFDE, handler.unwindRefToCIEKind(), cie,
+                     addend, handler.kindArch());
+
+  assert(cie && cie->contentType() == DefinedAtom::typeCFI && !addend &&
+         "FDE's CIE field does not point at the start of a CIE.");
+
+  const CIEInfo &cieInfo = cieInfos.find(cie)->second;
+
+  // Linker needs to fixup reference from the FDE to the function it's
+  // describing. FIXME: there are actually different ways to do this, and the
+  // particular method used is specified in the CIE's augmentation fields
+  // (hopefully)
+  uint64_t rangeFieldInFDE = cieFieldInFDE + sizeof(uint32_t);
+
+  int64_t functionFromFDE = readSPtr(is64, isBig,
+                                     frameData + rangeFieldInFDE);
+  uint64_t rangeStart = ehFrameSection->address + offset + rangeFieldInFDE;
+  rangeStart += functionFromFDE;
+
+  const Atom *func =
+    findAtomCoveringAddress(normalizedFile, file, rangeStart, &addend);
+  atom->addReference(rangeFieldInFDE, handler.unwindRefToFunctionKind(),
+                     func, addend, handler.kindArch());
+
+  // Handle the augmentation data if there is any.
+  if (cieInfo._augmentationDataPresent) {
+    // First process the augmentation data length field.
+    uint64_t augmentationDataLengthFieldInFDE =
+      rangeFieldInFDE + 2 * (is64 ? sizeof(uint64_t) : sizeof(uint32_t));
+    unsigned lengthFieldSize = 0;
+    uint64_t augmentationDataLength =
+      llvm::decodeULEB128(frameData + augmentationDataLengthFieldInFDE,
+                          &lengthFieldSize);
+
+    if (cieInfo._mayHaveLSDA && augmentationDataLength > 0) {
+
+      // Look at the augmentation data field.
+      uint64_t augmentationDataFieldInFDE =
+        augmentationDataLengthFieldInFDE + lengthFieldSize;
+
+      int64_t lsdaFromFDE = readSPtr(is64, isBig,
+                                     frameData + augmentationDataFieldInFDE);
+      uint64_t lsdaStart =
+        ehFrameSection->address + offset + augmentationDataFieldInFDE +
+        lsdaFromFDE;
+      const Atom *lsda =
+        findAtomCoveringAddress(normalizedFile, file, lsdaStart, &addend);
+      atom->addReference(augmentationDataFieldInFDE,
+                         handler.unwindRefToFunctionKind(),
+                         lsda, addend, handler.kindArch());
+    }
+  }
+
+  return std::error_code();
+}
+
 std::error_code addEHFrameReferences(const NormalizedFile &normalizedFile,
                                      MachOFile &file,
                                      mach_o::ArchHandler &handler) {
-  const bool isBig = MachOLinkingContext::isBigEndian(normalizedFile.arch);
-  const bool is64 = MachOLinkingContext::is64Bit(normalizedFile.arch);
 
   const Section *ehFrameSection = nullptr;
   for (auto &section : normalizedFile.sections)
@@ -662,51 +813,26 @@ std::error_code addEHFrameReferences(const NormalizedFile &normalizedFile,
   if (!ehFrameSection)
     return std::error_code();
 
+  std::error_code ehFrameErr;
+  CIEInfoMap cieInfos;
+
   file.eachAtomInSection(*ehFrameSection,
                          [&](MachODefinedAtom *atom, uint64_t offset) -> void {
     assert(atom->contentType() == DefinedAtom::typeCFI);
 
+    // Bail out if we've encountered an error.
+    if (ehFrameErr)
+      return;
+
+    const bool isBig = MachOLinkingContext::isBigEndian(normalizedFile.arch);
     if (ArchHandler::isDwarfCIE(isBig, atom))
-      return;
-
-    // Compiler wasn't lazy and actually told us what it meant.
-    if (atom->begin() != atom->end())
-      return;
-
-    const uint8_t *frameData = atom->rawContent().data();
-    uint32_t size = read32(frameData, isBig);
-    uint64_t cieFieldInFDE = size == 0xffffffffU
-                                   ? sizeof(uint32_t) + sizeof(uint64_t)
-                                   : sizeof(uint32_t);
-
-    // Linker needs to fixup a reference from the FDE to its parent CIE (a
-    // 32-bit byte offset backwards in the __eh_frame section).
-    uint32_t cieDelta = read32(frameData + cieFieldInFDE, isBig);
-    uint64_t cieAddress = ehFrameSection->address + offset + cieFieldInFDE;
-    cieAddress -= cieDelta;
-
-    Reference::Addend addend;
-    const Atom *cie =
-        findAtomCoveringAddress(normalizedFile, file, cieAddress, &addend);
-    atom->addReference(cieFieldInFDE, handler.unwindRefToCIEKind(), cie,
-                       addend, handler.kindArch());
-
-    // Linker needs to fixup reference from the FDE to the function it's
-    // describing. FIXME: there are actually different ways to do this, and the
-    // particular method used is specified in the CIE's augmentation fields
-    // (hopefully)
-    uint64_t rangeFieldInFDE = cieFieldInFDE + sizeof(uint32_t);
-
-    int64_t functionFromFDE = readSPtr(is64, isBig, frameData + rangeFieldInFDE);
-    uint64_t rangeStart = ehFrameSection->address + offset + rangeFieldInFDE;
-    rangeStart += functionFromFDE;
-
-    const Atom *func =
-        findAtomCoveringAddress(normalizedFile, file, rangeStart, &addend);
-    atom->addReference(rangeFieldInFDE, handler.unwindRefToFunctionKind(), func,
-                       addend, handler.kindArch());
+      ehFrameErr = processCIE(normalizedFile, atom, cieInfos);
+    else
+      ehFrameErr = processFDE(normalizedFile, file, handler, ehFrameSection,
+                              atom, offset, cieInfos);
   });
-  return std::error_code();
+
+  return ehFrameErr;
 }
 
 
@@ -759,7 +885,8 @@ normalizedObjectToAtoms(MachOFile *file,
       file->addUndefinedAtom(sym.name, copyRefs);
     } else {
       file->addTentativeDefAtom(sym.name, atomScope(sym.scope), sym.value,
-                               DefinedAtom::Alignment(sym.desc >> 8), copyRefs);
+                                DefinedAtom::Alignment(1 << (sym.desc >> 8)),
+                                copyRefs);
     }
   }
 

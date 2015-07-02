@@ -158,14 +158,13 @@ def validate_arguments( vArgv ):
     nResult = 0;
     strListArgs = "hdm"; # Format "hiox:" = -h -i -o -x <arg>
     listLongArgs = ["srcRoot=", "targetDir=", "cfgBldDir=", "prefix=", "cmakeBuildConfiguration=",
-                    "argsFile", "buildConfig="];
+                    "argsFile"];
     dictArgReq = {  "-h": "o",          # o = optional, m = mandatory
                     "-d": "o",
                     "-m": "o",
                     "--srcRoot": "m",
                     "--targetDir": "m",
                     "--cfgBldDir": "o",
-                    "--buildConfig": "m",
                     "--prefix": "o",
                     "--cmakeBuildConfiguration": "o",
                     "--argsFile": "o" };
@@ -199,9 +198,8 @@ def run_post_process( vStrScriptLang, vstrFinishFileName, vDictArgs ):
     nResult = 0;
     strStatusMsg = "";
     strScriptFile = vstrFinishFileName % vStrScriptLang;
-    strScriptFileDir = "%s%s/%s" % (vDictArgs[ "--srcRoot" ], "/scripts",
-                                    vStrScriptLang);
-    strScriptFilePath = "%s/%s" % (strScriptFileDir, strScriptFile);
+    strScriptFileDir = os.path.normpath(os.path.join(vDictArgs["--srcRoot"], "scripts", vStrScriptLang));
+    strScriptFilePath = os.path.join(strScriptFileDir, strScriptFile);
 
     # Check for the existence of the script file
     strPath = os.path.normcase( strScriptFilePath );
@@ -245,7 +243,7 @@ def run_post_process_for_each_script_supported( vDictArgs ):
     dbg = utilsDebug.CDebugFnVerbose( "run_post_process_for_each_script_supported()" );
     nResult = 0;
     strStatusMsg = "";
-    strScriptDir = vDictArgs[ "--srcRoot" ] + "/scripts";
+    strScriptDir = os.path.normpath(os.path.join(vDictArgs["--srcRoot"], "scripts"));
     strFinishFileName = "finishSwig%sLLDB.py";
 
     # Check for the existence of the scripts folder
@@ -261,6 +259,12 @@ def run_post_process_for_each_script_supported( vDictArgs ):
         nDepth = nDepth - 1;
         if nDepth == 0:
             break;
+
+    # Skip the directory that contains the interface files.
+    listDirs.remove('interface')
+    # and the svn directory.
+    if '.svn' in listDirs:
+        listDirs.remove('.svn')
 
     if gbDbgFlag:
         print strScriptLangsFound,

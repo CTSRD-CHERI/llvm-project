@@ -673,8 +673,8 @@ static Constant *SymbolicallyEvaluateBinop(unsigned Opc, Constant *Op0,
 
 /// If array indices are not pointer-sized integers, explicitly cast them so
 /// that they aren't implicitly casted by the getelementptr.
-static Constant *CastGEPIndices(ArrayRef<Constant *> Ops, Type *ResultTy,
-                                const DataLayout &DL,
+static Constant *CastGEPIndices(Type *SrcTy, ArrayRef<Constant *> Ops,
+                                Type *ResultTy, const DataLayout &DL,
                                 const TargetLibraryInfo *TLI) {
   Type *IntPtrTy = DL.getIntPtrType(ResultTy);
 
@@ -683,8 +683,9 @@ static Constant *CastGEPIndices(ArrayRef<Constant *> Ops, Type *ResultTy,
   for (unsigned i = 1, e = Ops.size(); i != e; ++i) {
     if ((i == 1 ||
          !isa<StructType>(GetElementPtrInst::getIndexedType(
-                            Ops[0]->getType(),
-                            Ops.slice(1, i - 1)))) &&
+             cast<PointerType>(Ops[0]->getType()->getScalarType())
+                 ->getElementType(),
+             Ops.slice(1, i - 1)))) &&
         Ops[i]->getType() != IntPtrTy) {
       Any = true;
       NewIdxs.push_back(ConstantExpr::getCast(CastInst::getCastOpcode(Ops[i],
@@ -699,7 +700,7 @@ static Constant *CastGEPIndices(ArrayRef<Constant *> Ops, Type *ResultTy,
   if (!Any)
     return nullptr;
 
-  Constant *C = ConstantExpr::getGetElementPtr(Ops[0], NewIdxs);
+  Constant *C = ConstantExpr::getGetElementPtr(SrcTy, Ops[0], NewIdxs);
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(C)) {
     if (Constant *Folded = ConstantFoldConstantExpression(CE, DL, TLI))
       C = Folded;
@@ -725,7 +726,7 @@ static Constant* StripPtrCastKeepAS(Constant* Ptr) {
 }
 
 /// If we can symbolically evaluate the GEP constant expression, do so.
-static Constant *SymbolicallyEvaluateGEP(ArrayRef<Constant *> Ops,
+static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
                                          Type *ResultTy, const DataLayout &DL,
                                          const TargetLibraryInfo *TLI) {
   Constant *Ptr = Ops[0];
@@ -867,7 +868,7 @@ static Constant *SymbolicallyEvaluateGEP(ArrayRef<Constant *> Ops,
     return nullptr;
 
   // Create a GEP.
-  Constant *C = ConstantExpr::getGetElementPtr(Ptr, NewIdxs);
+  Constant *C = ConstantExpr::getGetElementPtr(SrcTy, Ptr, NewIdxs);
   assert(C->getType()->getPointerElementType() == Ty &&
          "Computed GetElementPtr has unexpected type!");
 
@@ -896,8 +897,7 @@ Constant *llvm::ConstantFoldInstruction(Instruction *I, const DataLayout &DL,
   if (PHINode *PN = dyn_cast<PHINode>(I)) {
     Constant *CommonValue = nullptr;
 
-    for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i) {
-      Value *Incoming = PN->getIncomingValue(i);
+    for (Value *Incoming : PN->incoming_values()) {
       // If the incoming value is undef then skip it.  Note that while we could
       // skip the value if it is equal to the phi node itself we choose not to
       // because that would break the rule that constant folding only applies if
@@ -1087,13 +1087,15 @@ Constant *llvm::ConstantFoldInstOperands(unsigned Opcode, Type *DestTy,
     return ConstantExpr::getInsertElement(Ops[0], Ops[1], Ops[2]);
   case Instruction::ShuffleVector:
     return ConstantExpr::getShuffleVector(Ops[0], Ops[1], Ops[2]);
-  case Instruction::GetElementPtr:
-    if (Constant *C = CastGEPIndices(Ops, DestTy, DL, TLI))
+  case Instruction::GetElementPtr: {
+    Type *SrcTy = nullptr;
+    if (Constant *C = CastGEPIndices(SrcTy, Ops, DestTy, DL, TLI))
       return C;
-    if (Constant *C = SymbolicallyEvaluateGEP(Ops, DestTy, DL, TLI))
+    if (Constant *C = SymbolicallyEvaluateGEP(SrcTy, Ops, DestTy, DL, TLI))
       return C;
 
-    return ConstantExpr::getGetElementPtr(Ops[0], Ops.slice(1));
+    return ConstantExpr::getGetElementPtr(SrcTy, Ops[0], Ops.slice(1));
+  }
   }
 }
 
@@ -1437,7 +1439,7 @@ static Constant *ConstantFoldScalarCall(StringRef Name, unsigned IntrinsicID,
         case Intrinsic::fabs:
           return ConstantFoldFP(fabs, V, Ty);
         case Intrinsic::log2:
-          return ConstantFoldFP(log2, V, Ty);
+          return ConstantFoldFP(Log2, V, Ty);
         case Intrinsic::log:
           return ConstantFoldFP(log, V, Ty);
         case Intrinsic::log10:
@@ -1543,8 +1545,8 @@ static Constant *ConstantFoldScalarCall(StringRef Name, unsigned IntrinsicID,
         APFloat Val(APFloat::IEEEhalf, Op->getValue());
 
         bool lost = false;
-        APFloat::opStatus status =
-          Val.convert(APFloat::IEEEsingle, APFloat::rmNearestTiesToEven, &lost);
+        APFloat::opStatus status = Val.convert(
+            Ty->getFltSemantics(), APFloat::rmNearestTiesToEven, &lost);
 
         // Conversion is always precise.
         (void)status;

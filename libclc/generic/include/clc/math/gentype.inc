@@ -8,28 +8,39 @@
 #undef __CLC_SCALAR
 
 #define __CLC_GENTYPE float2
+#define __CLC_INTN int2
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #define __CLC_GENTYPE float3
+#define __CLC_INTN int3
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #define __CLC_GENTYPE float4
+#define __CLC_INTN int4
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #define __CLC_GENTYPE float8
+#define __CLC_INTN int8
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #define __CLC_GENTYPE float16
+#define __CLC_INTN int16
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #undef __CLC_FPSIZE
 #undef __CLC_SCALAR_GENTYPE
 
+#ifndef __FLOAT_ONLY
 #ifdef cl_khr_fp64
 #define __CLC_SCALAR_GENTYPE double
 #define __CLC_FPSIZE 64
@@ -41,27 +52,38 @@
 #undef __CLC_SCALAR
 
 #define __CLC_GENTYPE double2
+#define __CLC_INTN int2
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #define __CLC_GENTYPE double3
+#define __CLC_INTN int3
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #define __CLC_GENTYPE double4
+#define __CLC_INTN int4
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #define __CLC_GENTYPE double8
+#define __CLC_INTN int8
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #define __CLC_GENTYPE double16
+#define __CLC_INTN int16
 #include __CLC_BODY
 #undef __CLC_GENTYPE
+#undef __CLC_INTN
 
 #undef __CLC_FPSIZE
 #undef __CLC_SCALAR_GENTYPE
 #endif
 
 #undef __CLC_BODY
+#endif

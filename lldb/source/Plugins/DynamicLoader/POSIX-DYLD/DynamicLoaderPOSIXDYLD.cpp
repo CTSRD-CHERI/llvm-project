@@ -120,15 +120,41 @@ DynamicLoaderPOSIXDYLD::DidAttach()
     if (log)
         log->Printf ("DynamicLoaderPOSIXDYLD::%s pid %" PRIu64 " reloaded auxv data", __FUNCTION__, m_process ? m_process->GetID () : LLDB_INVALID_PROCESS_ID);
 
-    ModuleSP executable_sp = GetTargetExecutable();
-    ResolveExecutableModule(executable_sp);
+    // ask the process if it can load any of its own modules
+    m_process->LoadModules ();
 
-    addr_t load_offset = ComputeLoadOffset();
+    ModuleSP executable_sp = GetTargetExecutable ();
+    ResolveExecutableModule (executable_sp);
+
+    // find the main process load offset
+    addr_t load_offset = ComputeLoadOffset ();
     if (log)
         log->Printf ("DynamicLoaderPOSIXDYLD::%s pid %" PRIu64 " executable '%s', load_offset 0x%" PRIx64, __FUNCTION__, m_process ? m_process->GetID () : LLDB_INVALID_PROCESS_ID, executable_sp ? executable_sp->GetFileSpec().GetPath().c_str () : "<null executable>", load_offset);
 
+    // if we dont have a load address we cant re-base
+    bool rebase_exec = (load_offset == LLDB_INVALID_ADDRESS) ? false : true;
 
-    if (executable_sp && load_offset != LLDB_INVALID_ADDRESS)
+    // if we have a valid executable
+    if (executable_sp.get())
+    {
+        lldb_private::ObjectFile * obj = executable_sp->GetObjectFile();
+        if (obj)
+        {
+            // don't rebase if the module already has a load address
+            Target & target = m_process->GetTarget ();
+            Address addr = obj->GetImageInfoAddress (&target);
+            if (addr.GetLoadAddress (&target) != LLDB_INVALID_ADDRESS)
+                rebase_exec = false;
+        }
+    }
+    else
+    {
+        // no executable, nothing to re-base
+        rebase_exec = false;
+    }
+
+    // if the target executable should be re-based
+    if (rebase_exec)
     {
         ModuleList module_list;
 
@@ -388,8 +414,7 @@ DynamicLoaderPOSIXDYLD::RefreshModules()
         E = m_rendezvous.loaded_end();
         for (I = m_rendezvous.loaded_begin(); I != E; ++I)
         {
-            FileSpec file(I->path.c_str(), true);
-            ModuleSP module_sp = LoadModuleAtAddress(file, I->link_addr, I->base_addr);
+            ModuleSP module_sp = LoadModuleAtAddress(I->file_spec, I->link_addr, I->base_addr);
             if (module_sp.get())
             {
                 loaded_modules.AppendIfNeeded(module_sp);
@@ -406,9 +431,8 @@ DynamicLoaderPOSIXDYLD::RefreshModules()
         E = m_rendezvous.unloaded_end();
         for (I = m_rendezvous.unloaded_begin(); I != E; ++I)
         {
-            FileSpec file(I->path.c_str(), true);
-            ModuleSpec module_spec (file);
-            ModuleSP module_sp = 
+            ModuleSpec module_spec{I->file_spec};
+            ModuleSP module_sp =
                 loaded_modules.FindFirstModule (module_spec);
 
             if (module_sp.get())
@@ -499,9 +523,7 @@ DynamicLoaderPOSIXDYLD::LoadAllCurrentModules()
 
     for (I = m_rendezvous.begin(), E = m_rendezvous.end(); I != E; ++I)
     {
-        const char *module_path = I->path.c_str();
-        FileSpec file(module_path, false);
-        ModuleSP module_sp = LoadModuleAtAddress(file, I->link_addr, I->base_addr);
+        ModuleSP module_sp = LoadModuleAtAddress(I->file_spec, I->link_addr, I->base_addr);
         if (module_sp.get())
         {
             module_list.Append(module_sp);
@@ -511,7 +533,7 @@ DynamicLoaderPOSIXDYLD::LoadAllCurrentModules()
             Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_DYNAMIC_LOADER));
             if (log)
                 log->Printf("DynamicLoaderPOSIXDYLD::%s failed loading module %s at 0x%" PRIx64,
-                            __FUNCTION__, module_path, I->base_addr);
+                            __FUNCTION__, I->file_spec.GetCString(), I->base_addr);
         }
     }
 

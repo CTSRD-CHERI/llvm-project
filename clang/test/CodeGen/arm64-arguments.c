@@ -92,7 +92,7 @@ struct s21 f21(void) {}
 // CHECK: define i64 @f22()
 // CHECK: define i64 @f23()
 // CHECK: define i64 @f24()
-// CHECK: define i128 @f25()
+// CHECK: define [2 x i64] @f25()
 // CHECK: define { float, float } @f26()
 // CHECK: define { double, double } @f27()
 _Complex char       f22(void) {}
@@ -641,7 +641,7 @@ float test_hfa(int n, ...) {
 
 float test_hfa_call(struct HFA *a) {
 // CHECK-LABEL: define float @test_hfa_call(%struct.HFA* %a)
-// CHECK: call float (i32, ...)* @test_hfa(i32 1, [4 x float] {{.*}})
+// CHECK: call float (i32, ...) @test_hfa(i32 1, [4 x float] {{.*}})
   test_hfa(1, *a);
 }
 

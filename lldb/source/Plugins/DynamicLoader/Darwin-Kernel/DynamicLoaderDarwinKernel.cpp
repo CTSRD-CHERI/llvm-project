@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include "lldb/Utility/SafeMachO.h"
 
 #include "lldb/Breakpoint/StoppointCallbackContext.h"
@@ -831,7 +829,7 @@ DynamicLoaderDarwinKernel::KextImageInfo::LoadImageUsingMemoryModule (Process *p
                     ModuleSpec kext_bundle_module_spec(module_spec);
                     FileSpec kext_filespec(m_name.c_str(), false);
                     kext_bundle_module_spec.GetFileSpec() = kext_filespec;
-                    platform_sp->GetSharedModule (kext_bundle_module_spec, m_module_sp, &target.GetExecutableSearchPaths(), NULL, NULL);
+                    platform_sp->GetSharedModule (kext_bundle_module_spec, process, m_module_sp, &target.GetExecutableSearchPaths(), NULL, NULL);
                 }
             }
 

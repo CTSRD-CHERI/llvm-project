@@ -225,6 +225,13 @@ public:
     void
     SetPromptOnQuit(bool b);
 
+    //----------------------------------------------------------------------
+    /// Resolve the command just as HandleCommand would, expanding abbreviations
+    /// and aliases.  If successful, result->GetOutput has the full expansion.
+    //----------------------------------------------------------------------
+    void
+    ResolveCommand(const char *command_line, SBCommandReturnObject &result);
+
 protected:
 
     lldb_private::CommandInterpreter &
@@ -283,6 +290,12 @@ public:
     
     void
     SetHelpLong (const char*);
+    
+    uint32_t
+    GetFlags ();
+    
+    void
+    SetFlags (uint32_t flags);
     
     lldb::SBCommand
     AddMultiwordCommand (const char* name, const char* help = NULL);

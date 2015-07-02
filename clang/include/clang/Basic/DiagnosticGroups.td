@@ -45,6 +45,7 @@ def IntConversion : DiagGroup<"int-conversion">;
 def EnumConversion : DiagGroup<"enum-conversion">;
 def FloatConversion : DiagGroup<"float-conversion">;
 def EnumTooLarge : DiagGroup<"enum-too-large">;
+def UnsupportedNan : DiagGroup<"unsupported-nan">;
 def NonLiteralNullConversion : DiagGroup<"non-literal-null-conversion">;
 def NullConversion : DiagGroup<"null-conversion">;
 def ImplicitConversionFloatingPointToBool :
@@ -107,6 +108,8 @@ def Documentation : DiagGroup<"documentation",
                                DocumentationDeprecatedSync]>;
 
 def EmptyBody : DiagGroup<"empty-body">;
+def Exceptions : DiagGroup<"exceptions">;
+
 def GNUEmptyInitializer : DiagGroup<"gnu-empty-initializer">;
 def GNUEmptyStruct : DiagGroup<"gnu-empty-struct">;
 def ExtraTokens : DiagGroup<"extra-tokens">;
@@ -220,7 +223,10 @@ def GNULabelsAsValue : DiagGroup<"gnu-label-as-value">;
 def LiteralRange : DiagGroup<"literal-range">;
 def LocalTypeTemplateArgs : DiagGroup<"local-type-template-args",
                                       [CXX98CompatLocalTypeTemplateArgs]>;
-def LoopAnalysis : DiagGroup<"loop-analysis">;
+def RangeLoopAnalysis : DiagGroup<"range-loop-analysis">;
+def ForLoopAnalysis : DiagGroup<"for-loop-analysis">;
+def LoopAnalysis : DiagGroup<"loop-analysis", [ForLoopAnalysis,
+                                               RangeLoopAnalysis]>;
 def MalformedWarningCheck : DiagGroup<"malformed-warning-check">;
 def Main : DiagGroup<"main">;
 def MainReturnType : DiagGroup<"main-return-type">;
@@ -233,6 +239,7 @@ def MultiChar : DiagGroup<"multichar">;
 def : DiagGroup<"nested-externs">;
 def CXX11LongLong : DiagGroup<"c++11-long-long">;
 def LongLong : DiagGroup<"long-long", [CXX11LongLong]>;
+def ImplicitlyUnsignedLiteral : DiagGroup<"implicitly-unsigned-literal">;
 def MethodSignatures : DiagGroup<"method-signatures">;
 def MismatchedParameterTypes : DiagGroup<"mismatched-parameter-types">;
 def MismatchedReturnTypes : DiagGroup<"mismatched-return-types">;
@@ -241,6 +248,10 @@ def MissingFieldInitializers : DiagGroup<"missing-field-initializers">;
 def ModuleBuild : DiagGroup<"module-build">;
 def ModuleConflict : DiagGroup<"module-conflict">;
 def NewlineEOF : DiagGroup<"newline-eof">;
+def Nullability : DiagGroup<"nullability">;
+def NullabilityDeclSpec : DiagGroup<"nullability-declspec">;
+def NullableToNonNullConversion : DiagGroup<"nullable-to-nonnull-conversion">;
+def NullabilityCompleteness : DiagGroup<"nullability-completeness">;
 def NullArithmetic : DiagGroup<"null-arithmetic">;
 def NullCharacter : DiagGroup<"null-character">;
 def NullDereference : DiagGroup<"null-dereference">;
@@ -258,6 +269,8 @@ def : DiagGroup<"overflow">;
 def ForwardClassReceiver : DiagGroup<"receiver-forward-class">;
 def MethodAccess : DiagGroup<"objc-method-access">;
 def ObjCReceiver : DiagGroup<"receiver-expr">;
+// FIXME: Remove this when Xcode removes the warning setting.
+def : DiagGroup<"receiver-is-weak">;
 def OperatorNewReturnsNull : DiagGroup<"new-returns-null">;
 def OverlengthStrings : DiagGroup<"overlength-strings">;
 def OverloadedVirtual : DiagGroup<"overloaded-virtual">;
@@ -280,6 +293,7 @@ def DeprecatedObjCIsaUsage : DiagGroup<"deprecated-objc-isa-usage">;
 def ExplicitInitializeCall : DiagGroup<"explicit-initialize-call">;
 def Packed : DiagGroup<"packed">;
 def Padded : DiagGroup<"padded">;
+def PessimizingMove : DiagGroup<"pessimizing-move">;
 def PointerArith : DiagGroup<"pointer-arith">;
 def PoundWarning : DiagGroup<"#warnings">;
 def PoundPragmaMessage : DiagGroup<"#pragma-messages">,
@@ -288,6 +302,7 @@ def : DiagGroup<"pointer-to-int-cast">;
 def : DiagGroup<"redundant-decls">;
 def RedeclaredClassMember : DiagGroup<"redeclared-class-member">;
 def GNURedeclaredEnum : DiagGroup<"gnu-redeclared-enum">;
+def RedundantMove : DiagGroup<"redundant-move">;
 def ReturnStackAddress : DiagGroup<"return-stack-address">;
 def ReturnTypeCLinkage : DiagGroup<"return-type-c-linkage">;
 def ReturnType : DiagGroup<"return-type", [ReturnTypeCLinkage]>;
@@ -388,10 +403,12 @@ def IgnoredPragmas : DiagGroup<"ignored-pragmas">;
 def Pragmas : DiagGroup<"pragmas", [UnknownPragmas, IgnoredPragmas]>;
 def UnknownWarningOption : DiagGroup<"unknown-warning-option">;
 def NSobjectAttribute : DiagGroup<"NSObject-attribute">;
+def IndependentClassAttribute : DiagGroup<"IndependentClass-attribute">;
 def UnknownAttributes : DiagGroup<"unknown-attributes">;
 def IgnoredAttributes : DiagGroup<"ignored-attributes">;
 def Attributes : DiagGroup<"attributes", [UnknownAttributes,
                                           IgnoredAttributes]>;
+def UnknownSanitizers : DiagGroup<"unknown-sanitizers">;
 def UnnamedTypeTemplateArgs : DiagGroup<"unnamed-type-template-args",
                                         [CXX98CompatUnnamedTypeTemplateArgs]>;
 def UnsupportedFriend : DiagGroup<"unsupported-friend">;
@@ -567,6 +584,8 @@ def IntToVoidPointerCast : DiagGroup<"int-to-void-pointer-cast">;
 def IntToPointerCast : DiagGroup<"int-to-pointer-cast",
                                  [IntToVoidPointerCast]>;
 
+def Move : DiagGroup<"move", [PessimizingMove, RedundantMove, SelfMove]>;
+
 def Extra : DiagGroup<"extra", [
     MissingFieldInitializers,
     IgnoredQualifiers,
@@ -583,8 +602,10 @@ def Most : DiagGroup<"most", [
     DeleteNonVirtualDtor,
     Format,
     Implicit,
+    InfiniteRecursion,
     MismatchedTags,
     MissingBraces,
+    Move,
     MultiChar,
     Reorder,
     ReturnType,

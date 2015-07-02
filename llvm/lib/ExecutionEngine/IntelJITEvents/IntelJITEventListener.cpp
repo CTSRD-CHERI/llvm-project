@@ -13,23 +13,23 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Config/config.h"
-#include "EventListenerCommon.h"
 #include "IntelJITEventsWrapper.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/DebugInfo/DWARF/DIContext.h"
+#include "llvm/DebugInfo/DIContext.h"
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Object/SymbolSize.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Errno.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
-using namespace llvm::jitprofiling;
 using namespace llvm::object;
 
 #define DEBUG_TYPE "amplifier-jit-event-listener"
@@ -41,7 +41,6 @@ class IntelJITEventListener : public JITEventListener {
 
   std::unique_ptr<IntelJITEventsWrapper> Wrapper;
   MethodIDMap MethodIDs;
-  FilenameCache Filenames;
 
   typedef SmallVector<const void *, 64> MethodAddressVector;
   typedef DenseMap<const void *, MethodAddressVector>  ObjectMap;
@@ -105,26 +104,23 @@ void IntelJITEventListener::NotifyObjectEmitted(
 
   // Get the address of the object image for use as a unique identifier
   const void* ObjData = DebugObj.getData().data();
-  DIContext* Context = DIContext::getDWARFContext(DebugObj);
+  DIContext* Context = new DWARFContextInMemory(DebugObj);
   MethodAddressVector Functions;
 
   // Use symbol info to iterate functions in the object.
-  for (symbol_iterator I = DebugObj.symbol_begin(),
-                       E = DebugObj.symbol_end();
-                        I != E;
-                        ++I) {
+  for (const std::pair<SymbolRef, uint64_t> &P : computeSymbolSizes(DebugObj)) {
+    SymbolRef Sym = P.first;
     std::vector<LineNumberInfo> LineInfo;
     std::string SourceFileName;
 
-    SymbolRef::Type SymType;
-    if (I->getType(SymType)) continue;
-    if (SymType == SymbolRef::ST_Function) {
+    if (Sym.getType() == SymbolRef::ST_Function) {
       StringRef  Name;
       uint64_t   Addr;
-      uint64_t   Size;
-      if (I->getName(Name)) continue;
-      if (I->getAddress(Addr)) continue;
-      if (I->getSize(Size)) continue;
+      if (Sym.getName(Name))
+        continue;
+      if (Sym.getAddress(Addr))
+        continue;
+      uint64_t Size = P.second;
 
       // Record this address in a local vector
       Functions.push_back((void*)Addr);

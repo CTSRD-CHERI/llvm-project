@@ -12,7 +12,7 @@ class ChangeValueAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_change_value_with_dsym(self):
@@ -24,7 +24,6 @@ class ChangeValueAPITestCase(TestBase):
 
     @python_api_test
     @dwarf_test
-    @expectedFailureLinux # this test fails 6/100 dosep runs
     def test_change_value_with_dwarf(self):
         """Exercise the SBValue::SetValueFromCString API."""
         d = {'EXE': self.exe_name}
@@ -42,7 +41,6 @@ class ChangeValueAPITestCase(TestBase):
         self.check_line = line_number('main.c', '// Stop here and check values')
         self.end_line = line_number ('main.c', '// Set a breakpoint here at the end')
 
-    @skipIfGcc # llvm.org/pr15039: If GCC is the test compiler, stdout is not available via lldb.SBProcess.GetSTDOUT()
     @expectedFailureFreeBSD("llvm.org/pr15039 test fails intermittently on FreeBSD")
     def change_value_api(self, exe_name):
         """Exercise some SBValue APIs."""

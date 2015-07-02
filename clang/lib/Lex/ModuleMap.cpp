@@ -89,7 +89,7 @@ ModuleMap::ModuleMap(SourceManager &SourceMgr, DiagnosticsEngine &Diags,
                      HeaderSearch &HeaderInfo)
     : SourceMgr(SourceMgr), Diags(Diags), LangOpts(LangOpts), Target(Target),
       HeaderInfo(HeaderInfo), BuiltinIncludeDir(nullptr),
-      CompilingModule(nullptr), SourceModule(nullptr) {
+      CompilingModule(nullptr), SourceModule(nullptr), NumCreatedModules(0) {
   MMapLangOpts.LineComment = true;
 }
 
@@ -165,7 +165,8 @@ static bool isBuiltinHeader(StringRef FileName) {
 ModuleMap::HeadersMap::iterator
 ModuleMap::findKnownHeader(const FileEntry *File) {
   HeadersMap::iterator Known = Headers.find(File);
-  if (Known == Headers.end() && File->getDir() == BuiltinIncludeDir &&
+  if (HeaderInfo.getHeaderSearchOpts().ImplicitModuleMaps &&
+      Known == Headers.end() && File->getDir() == BuiltinIncludeDir &&
       isBuiltinHeader(llvm::sys::path::filename(File->getName()))) {
     HeaderInfo.loadTopLevelSystemModules();
     return Headers.find(File);
@@ -176,6 +177,9 @@ ModuleMap::findKnownHeader(const FileEntry *File) {
 ModuleMap::KnownHeader
 ModuleMap::findHeaderInUmbrellaDirs(const FileEntry *File,
                     SmallVectorImpl<const DirectoryEntry *> &IntermediateDirs) {
+  if (UmbrellaDirs.empty())
+    return KnownHeader();
+
   const DirectoryEntry *Dir = File->getDir();
   assert(Dir && "file in no directory");
 
@@ -205,16 +209,6 @@ ModuleMap::findHeaderInUmbrellaDirs(const FileEntry *File,
   return KnownHeader();
 }
 
-// Returns true if RequestingModule directly uses RequestedModule.
-static bool directlyUses(const Module *RequestingModule,
-                         const Module *RequestedModule) {
-  for (const Module* DirectUse : RequestingModule->DirectUses) {
-    if (RequestedModule->isSubModuleOf(DirectUse))
-      return true;
-  }
-  return false;
-}
-
 static bool violatesPrivateInclude(Module *RequestingModule,
                                    const FileEntry *IncFileEnt,
                                    ModuleMap::ModuleHeaderRole Role,
@@ -238,6 +232,9 @@ static bool violatesPrivateInclude(Module *RequestingModule,
   }
 #endif
   return IsPrivateRole &&
+         // FIXME: Should we map RequestingModule to its top-level module here
+         //        too? This check is redundant with the isSubModuleOf check in
+         //        diagnoseHeaderInclusion.
          RequestedModule->getTopLevelModule() != RequestingModule;
 }
 
@@ -279,7 +276,7 @@ void ModuleMap::diagnoseHeaderInclusion(Module *RequestingModule,
       // If uses need to be specified explicitly, we are only allowed to return
       // modules that are explicitly used by the requesting module.
       if (RequestingModule && LangOpts.ModulesDeclUse &&
-          !directlyUses(RequestingModule, Header.getModule())) {
+          !RequestingModule->directlyUses(Header.getModule())) {
         NotUsed = Header.getModule();
         continue;
       }
@@ -337,42 +334,26 @@ static bool isBetterKnownHeader(const ModuleMap::KnownHeader &New,
   return false;
 }
 
-ModuleMap::KnownHeader
-ModuleMap::findModuleForHeader(const FileEntry *File,
-                               Module *RequestingModule,
-                               bool IncludeTextualHeaders) {
-  HeadersMap::iterator Known = findKnownHeader(File);
-
+ModuleMap::KnownHeader ModuleMap::findModuleForHeader(const FileEntry *File) {
   auto MakeResult = [&](ModuleMap::KnownHeader R) -> ModuleMap::KnownHeader {
-    if (!IncludeTextualHeaders && (R.getRole() & ModuleMap::TextualHeader))
+    if (R.getRole() & ModuleMap::TextualHeader)
       return ModuleMap::KnownHeader();
     return R;
   };
 
+  HeadersMap::iterator Known = findKnownHeader(File);
   if (Known != Headers.end()) {
     ModuleMap::KnownHeader Result;
-
     // Iterate over all modules that 'File' is part of to find the best fit.
-    for (SmallVectorImpl<KnownHeader>::iterator I = Known->second.begin(),
-                                                E = Known->second.end();
-         I != E; ++I) {
+    for (KnownHeader &H : Known->second) {
+      // Prefer a header from the current module over all others.
+      if (H.getModule() == CompilingModule)
+        return MakeResult(H);
       // Cannot use a module if it is unavailable.
-      if (!I->getModule()->isAvailable())
+      if (!H.getModule()->isAvailable())
         continue;
-
-      // If 'File' is part of 'RequestingModule', 'RequestingModule' is the
-      // module we are looking for.
-      if (I->getModule() == RequestingModule)
-        return MakeResult(*I);
-
-      // If uses need to be specified explicitly, we are only allowed to return
-      // modules that are explicitly used by the requesting module.
-      if (RequestingModule && LangOpts.ModulesDeclUse &&
-          !directlyUses(RequestingModule, I->getModule()))
-        continue;
-
-      if (!Result || isBetterKnownHeader(*I, Result))
-        Result = *I;
+      if (!Result || isBetterKnownHeader(H, Result))
+        Result = H;
     }
     return MakeResult(Result);
   }
@@ -570,7 +551,7 @@ ModuleMap::findOrCreateModule(StringRef Name, Module *Parent, bool IsFramework,
   
   // Create a new module with this name.
   Module *Result = new Module(Name, SourceLocation(), Parent,
-                              IsFramework, IsExplicit);
+                              IsFramework, IsExplicit, NumCreatedModules++);
   if (LangOpts.CurrentModule == Name) {
     SourceModule = Result;
     SourceModuleName = Name;
@@ -700,7 +681,8 @@ Module *ModuleMap::inferFrameworkModule(StringRef ModuleName,
     return nullptr;
 
   Module *Result = new Module(ModuleName, SourceLocation(), Parent,
-                              /*IsFramework=*/true, /*IsExplicit=*/false);
+                              /*IsFramework=*/true, /*IsExplicit=*/false,
+                              NumCreatedModules++);
   InferredModuleAllowedBy[Result] = ModuleMapFile;
   Result->IsInferred = true;
   if (LangOpts.CurrentModule == ModuleName) {
@@ -711,14 +693,16 @@ Module *ModuleMap::inferFrameworkModule(StringRef ModuleName,
   Result->IsSystem |= Attrs.IsSystem;
   Result->IsExternC |= Attrs.IsExternC;
   Result->ConfigMacrosExhaustive |= Attrs.IsExhaustive;
+  Result->Directory = FrameworkDir;
 
   if (!Parent)
     Modules[ModuleName] = Result;
   
   // umbrella header "umbrella-header-name"
-  Result->Umbrella = UmbrellaHeader;
-  Headers[UmbrellaHeader].push_back(KnownHeader(Result, NormalHeader));
-  UmbrellaDirs[UmbrellaHeader->getDir()] = Result;
+  //
+  // The "Headers/" component of the name is implied because this is
+  // a framework module.
+  setUmbrellaHeader(Result, UmbrellaHeader, ModuleName + ".h");
   
   // export *
   Result->Exports.push_back(Module::ExportDecl(nullptr, true));
@@ -779,14 +763,18 @@ Module *ModuleMap::inferFrameworkModule(StringRef ModuleName,
   return Result;
 }
 
-void ModuleMap::setUmbrellaHeader(Module *Mod, const FileEntry *UmbrellaHeader){
+void ModuleMap::setUmbrellaHeader(Module *Mod, const FileEntry *UmbrellaHeader,
+                                  Twine NameAsWritten) {
   Headers[UmbrellaHeader].push_back(KnownHeader(Mod, NormalHeader));
   Mod->Umbrella = UmbrellaHeader;
+  Mod->UmbrellaAsWritten = NameAsWritten.str();
   UmbrellaDirs[UmbrellaHeader->getDir()] = Mod;
 }
 
-void ModuleMap::setUmbrellaDir(Module *Mod, const DirectoryEntry *UmbrellaDir) {
+void ModuleMap::setUmbrellaDir(Module *Mod, const DirectoryEntry *UmbrellaDir,
+                               Twine NameAsWritten) {
   Mod->Umbrella = UmbrellaDir;
+  Mod->UmbrellaAsWritten = NameAsWritten.str();
   UmbrellaDirs[UmbrellaDir] = Mod;
 }
 
@@ -871,50 +859,44 @@ void ModuleMap::dump() {
 }
 
 bool ModuleMap::resolveExports(Module *Mod, bool Complain) {
-  bool HadError = false;
-  for (unsigned I = 0, N = Mod->UnresolvedExports.size(); I != N; ++I) {
-    Module::ExportDecl Export = resolveExport(Mod, Mod->UnresolvedExports[I], 
-                                              Complain);
+  auto Unresolved = std::move(Mod->UnresolvedExports);
+  Mod->UnresolvedExports.clear();
+  for (auto &UE : Unresolved) {
+    Module::ExportDecl Export = resolveExport(Mod, UE, Complain);
     if (Export.getPointer() || Export.getInt())
       Mod->Exports.push_back(Export);
     else
-      HadError = true;
+      Mod->UnresolvedExports.push_back(UE);
   }
-  Mod->UnresolvedExports.clear();
-  return HadError;
+  return !Mod->UnresolvedExports.empty();
 }
 
 bool ModuleMap::resolveUses(Module *Mod, bool Complain) {
-  bool HadError = false;
-  for (unsigned I = 0, N = Mod->UnresolvedDirectUses.size(); I != N; ++I) {
-    Module *DirectUse =
-        resolveModuleId(Mod->UnresolvedDirectUses[I], Mod, Complain);
+  auto Unresolved = std::move(Mod->UnresolvedDirectUses);
+  Mod->UnresolvedDirectUses.clear();
+  for (auto &UDU : Unresolved) {
+    Module *DirectUse = resolveModuleId(UDU, Mod, Complain);
     if (DirectUse)
       Mod->DirectUses.push_back(DirectUse);
     else
-      HadError = true;
+      Mod->UnresolvedDirectUses.push_back(UDU);
   }
-  Mod->UnresolvedDirectUses.clear();
-  return HadError;
+  return !Mod->UnresolvedDirectUses.empty();
 }
 
 bool ModuleMap::resolveConflicts(Module *Mod, bool Complain) {
-  bool HadError = false;
-  for (unsigned I = 0, N = Mod->UnresolvedConflicts.size(); I != N; ++I) {
-    Module *OtherMod = resolveModuleId(Mod->UnresolvedConflicts[I].Id,
-                                       Mod, Complain);
-    if (!OtherMod) {
-      HadError = true;
-      continue;
-    }
-
-    Module::Conflict Conflict;
-    Conflict.Other = OtherMod;
-    Conflict.Message = Mod->UnresolvedConflicts[I].Message;
-    Mod->Conflicts.push_back(Conflict);
-  }
+  auto Unresolved = std::move(Mod->UnresolvedConflicts);
   Mod->UnresolvedConflicts.clear();
-  return HadError;
+  for (auto &UC : Unresolved) {
+    if (Module *OtherMod = resolveModuleId(UC.Id, Mod, Complain)) {
+      Module::Conflict Conflict;
+      Conflict.Other = OtherMod;
+      Conflict.Message = UC.Message;
+      Mod->Conflicts.push_back(Conflict);
+    } else
+      Mod->UnresolvedConflicts.push_back(UC);
+  }
+  return !Mod->UnresolvedConflicts.empty();
 }
 
 Module *ModuleMap::inferModuleFromLocation(FullSourceLoc Loc) {
@@ -1765,7 +1747,13 @@ void ModuleMapParser::parseHeaderDecl(MMToken::TokenKind LeadingToken,
         // If Clang supplies this header but the underlying system does not,
         // just silently swap in our builtin version. Otherwise, we'll end
         // up adding both (later).
-        if (!File && BuiltinFile) {
+        //
+        // For local visibility, entirely replace the system file with our
+        // one and textually include the system one. We need to pass macros
+        // from our header to the system one if we #include_next it.
+        //
+        // FIXME: Can we do this in all cases?
+        if (BuiltinFile && (!File || Map.LangOpts.ModulesLocalVisibility)) {
           File = BuiltinFile;
           RelativePathName = BuiltinPathName;
           BuiltinFile = nullptr;
@@ -1785,7 +1773,7 @@ void ModuleMapParser::parseHeaderDecl(MMToken::TokenKind LeadingToken,
         HadError = true;
       } else {
         // Record this umbrella header.
-        Map.setUmbrellaHeader(ActiveModule, File);
+        Map.setUmbrellaHeader(ActiveModule, File, RelativePathName.str());
       }
     } else if (LeadingToken == MMToken::ExcludeKeyword) {
       Module::Header H = {RelativePathName.str(), File};
@@ -1867,7 +1855,7 @@ void ModuleMapParser::parseUmbrellaDirDecl(SourceLocation UmbrellaLoc) {
   } 
   
   // Record this umbrella directory.
-  Map.setUmbrellaDir(ActiveModule, Dir);
+  Map.setUmbrellaDir(ActiveModule, Dir, DirName);
 }
 
 /// \brief Parse a module export declaration.
@@ -1918,18 +1906,21 @@ void ModuleMapParser::parseExportDecl() {
   ActiveModule->UnresolvedExports.push_back(Unresolved);
 }
 
-/// \brief Parse a module uses declaration.
+/// \brief Parse a module use declaration.
 ///
-///   uses-declaration:
-///     'uses' wildcard-module-id
+///   use-declaration:
+///     'use' wildcard-module-id
 void ModuleMapParser::parseUseDecl() {
   assert(Tok.is(MMToken::UseKeyword));
-  consumeToken();
+  auto KWLoc = consumeToken();
   // Parse the module-id.
   ModuleId ParsedModuleId;
   parseModuleId(ParsedModuleId);
 
-  ActiveModule->UnresolvedDirectUses.push_back(ParsedModuleId);
+  if (ActiveModule->Parent)
+    Diags.Report(KWLoc, diag::err_mmap_use_decl_submodule);
+  else
+    ActiveModule->UnresolvedDirectUses.push_back(ParsedModuleId);
 }
 
 /// \brief Parse a link declaration.

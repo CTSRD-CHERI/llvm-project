@@ -112,7 +112,7 @@ __kmp_str_buf_reserve(
             if ( buffer->str == NULL ) {
 		KMP_FATAL( MemoryAllocFailed );
             }; // if
-            memcpy( buffer->str, buffer->bulk, buffer->used + 1 );
+            KMP_MEMCPY_S( buffer->str, buffer->size, buffer->bulk, buffer->used + 1 );
         } else {
             buffer->str = (char *) KMP_INTERNAL_REALLOC( buffer->str, buffer->size );
             if ( buffer->str == NULL ) {
@@ -142,7 +142,7 @@ __kmp_str_buf_detach(
         if ( buffer->str == NULL ) {
 		KMP_FATAL( MemoryAllocFailed );
         }; // if
-        memcpy( buffer->str, buffer->bulk, buffer->used + 1 );
+        KMP_MEMCPY_S( buffer->str, buffer->size, buffer->bulk, buffer->used + 1 );
     }; // if
 
 } // __kmp_str_buf_detach
@@ -173,7 +173,7 @@ __kmp_str_buf_cat(
     KMP_DEBUG_ASSERT( str != NULL );
     KMP_DEBUG_ASSERT( len >= 0 );
     __kmp_str_buf_reserve( buffer, buffer->used + len + 1 );
-    memcpy( buffer->str + buffer->used, str, len );
+    KMP_MEMCPY( buffer->str + buffer->used, str, len );
     buffer->str[ buffer->used + len ] = 0;
     buffer->used += len;
     KMP_STR_BUF_INVARIANT( buffer );
@@ -211,7 +211,7 @@ __kmp_str_buf_vprint(
                 __va_copy( _args, args );  // Make copy of args.
                 #define args _args         // Substitute args with its copy, _args.
             #endif // KMP_OS_WINDOWS
-            rc = vsnprintf( buffer->str + buffer->used, free, format, args );
+            rc = KMP_VSNPRINTF( buffer->str + buffer->used, free, format, args );
             #if ! KMP_OS_WINDOWS
                 #undef args                // Remove substitution.
                 va_end( _args );
@@ -275,7 +275,6 @@ __kmp_str_buf_print_size(
     char const * names[] = { "", "k", "M", "G", "T", "P", "E", "Z", "Y" };
     int const    units   = sizeof( names ) / sizeof( char const * );
     int          u       = 0;
-    int          rc;
     if ( size > 0 ) {
         while ( ( size % 1024 == 0 ) && ( u + 1 < units ) ) {
             size = size / 1024;
@@ -502,7 +501,7 @@ __kmp_str_format(           // Allocated string.
 
         // Try to format string.
         va_start( args, format );
-        rc = vsnprintf( buffer, size, format, args );
+        rc = KMP_VSNPRINTF( buffer, size, format, args );
         va_end( args );
 
         // No errors, string has been formatted.
@@ -733,7 +732,6 @@ __kmp_str_to_size(         // R: Error code.
     size_t value    = 0;
     size_t factor   = 0;
     int    overflow = 0;
-    int    bad_unit = 0;
     int    i        = 0;
     int    digit;
 

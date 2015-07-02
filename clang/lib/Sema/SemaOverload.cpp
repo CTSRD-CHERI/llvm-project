@@ -1752,18 +1752,20 @@ bool Sema::IsIntegralPromotion(Expr *From, QualType FromType, QualType ToType) {
       return false;
 
     // We can perform an integral promotion to the underlying type of the enum,
-    // even if that's not the promoted type.
+    // even if that's not the promoted type. Note that the check for promoting
+    // the underlying type is based on the type alone, and does not consider
+    // the bitfield-ness of the actual source expression.
     if (FromEnumType->getDecl()->isFixed()) {
       QualType Underlying = FromEnumType->getDecl()->getIntegerType();
       return Context.hasSameUnqualifiedType(Underlying, ToType) ||
-             IsIntegralPromotion(From, Underlying, ToType);
+             IsIntegralPromotion(nullptr, Underlying, ToType);
     }
 
     // We have already pre-calculated the promotion type, so this is trivial.
     if (ToType->isIntegerType() &&
         !RequireCompleteType(From->getLocStart(), FromType, 0))
-      return Context.hasSameUnqualifiedType(ToType,
-                                FromEnumType->getDecl()->getPromotionType());
+      return Context.hasSameUnqualifiedType(
+          ToType, FromEnumType->getDecl()->getPromotionType());
   }
 
   // C++0x [conv.prom]p2:
@@ -1811,13 +1813,12 @@ bool Sema::IsIntegralPromotion(Expr *From, QualType FromType, QualType ToType) {
   // other value of that type for promotion purposes (C++ 4.5p3).
   // FIXME: We should delay checking of bit-fields until we actually perform the
   // conversion.
-  using llvm::APSInt;
-  if (From)
+  if (From) {
     if (FieldDecl *MemberDecl = From->getSourceBitField()) {
-      APSInt BitWidth;
+      llvm::APSInt BitWidth;
       if (FromType->isIntegralType(Context) &&
           MemberDecl->getBitWidth()->isIntegerConstantExpr(BitWidth, Context)) {
-        APSInt ToSize(BitWidth.getBitWidth(), BitWidth.isUnsigned());
+        llvm::APSInt ToSize(BitWidth.getBitWidth(), BitWidth.isUnsigned());
         ToSize = Context.getTypeSize(ToType);
 
         // Are we promoting to an int from a bitfield that fits in an int?
@@ -1835,6 +1836,7 @@ bool Sema::IsIntegralPromotion(Expr *From, QualType FromType, QualType ToType) {
         return false;
       }
     }
+  }
 
   // An rvalue of type bool can be converted to an rvalue of type int,
   // with false becoming zero and true becoming one (C++ 4.5p4).
@@ -2952,7 +2954,10 @@ IsInitializerListConstructorConversion(Sema &S, Expr *From, QualType ToType,
   bool HadMultipleCandidates = (CandidateSet.size() > 1);
 
   OverloadCandidateSet::iterator Best;
-  switch (CandidateSet.BestViableFunction(S, From->getLocStart(), Best, true)) {
+  switch (auto Result = 
+            CandidateSet.BestViableFunction(S, From->getLocStart(), 
+                                            Best, true)) {
+  case OR_Deleted:
   case OR_Success: {
     // Record the standard conversion we used and the conversion function.
     CXXConstructorDecl *Constructor = cast<CXXConstructorDecl>(Best->Function);
@@ -2965,13 +2970,11 @@ IsInitializerListConstructorConversion(Sema &S, Expr *From, QualType ToType,
     User.After.setAsIdentityConversion();
     User.After.setFromType(ThisType->getAs<PointerType>()->getPointeeType());
     User.After.setAllToTypes(ToType);
-    return OR_Success;
+    return Result;
   }
 
   case OR_No_Viable_Function:
     return OR_No_Viable_Function;
-  case OR_Deleted:
-    return OR_Deleted;
   case OR_Ambiguous:
     return OR_Ambiguous;
   }
@@ -10504,7 +10507,8 @@ DiagnoseTwoPhaseLookup(Sema &SemaRef, SourceLocation FnLoc,
                        const CXXScopeSpec &SS, LookupResult &R,
                        OverloadCandidateSet::CandidateSetKind CSK,
                        TemplateArgumentListInfo *ExplicitTemplateArgs,
-                       ArrayRef<Expr *> Args) {
+                       ArrayRef<Expr *> Args,
+                       bool *DoDiagnoseEmptyLookup = nullptr) {
   if (SemaRef.ActiveTemplateInstantiations.empty() || !SS.isEmpty())
     return false;
 
@@ -10521,6 +10525,8 @@ DiagnoseTwoPhaseLookup(Sema &SemaRef, SourceLocation FnLoc,
         // Don't diagnose names we find in classes; we get much better
         // diagnostics for these from DiagnoseEmptyLookup.
         R.clear();
+        if (DoDiagnoseEmptyLookup)
+          *DoDiagnoseEmptyLookup = true;
         return false;
       }
 
@@ -10670,15 +10676,16 @@ BuildRecoveryCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
 
   LookupResult R(SemaRef, ULE->getName(), ULE->getNameLoc(),
                  Sema::LookupOrdinaryName);
+  bool DoDiagnoseEmptyLookup = EmptyLookup;
   if (!DiagnoseTwoPhaseLookup(SemaRef, Fn->getExprLoc(), SS, R,
                               OverloadCandidateSet::CSK_Normal,
-                              ExplicitTemplateArgs, Args) &&
-      (!EmptyLookup ||
-       SemaRef.DiagnoseEmptyLookup(
-           S, SS, R,
-           MakeValidator(SemaRef, dyn_cast<MemberExpr>(Fn), Args.size(),
-                         ExplicitTemplateArgs != nullptr, AllowTypoCorrection),
-           ExplicitTemplateArgs, Args)))
+                              ExplicitTemplateArgs, Args,
+                              &DoDiagnoseEmptyLookup) &&
+    (!DoDiagnoseEmptyLookup || SemaRef.DiagnoseEmptyLookup(
+        S, SS, R,
+        MakeValidator(SemaRef, dyn_cast<MemberExpr>(Fn), Args.size(),
+                      ExplicitTemplateArgs != nullptr, AllowTypoCorrection),
+        ExplicitTemplateArgs, Args)))
     return ExprError();
 
   assert(!R.empty() && "lookup results empty despite recovery");
@@ -10743,25 +10750,28 @@ bool Sema::buildOverloadedCallSet(Scope *S, Expr *Fn,
   // functions, including those from argument-dependent lookup.
   AddOverloadedCallCandidates(ULE, Args, *CandidateSet);
 
-  // If we found nothing, try to recover.
-  // BuildRecoveryCallExpr diagnoses the error itself, so we just bail
-  // out if it fails.
-  if (CandidateSet->empty()) {
-    // In Microsoft mode, if we are inside a template class member function then
-    // create a type dependent CallExpr. The goal is to postpone name lookup
-    // to instantiation time to be able to search into type dependent base
-    // classes.
-    if (getLangOpts().MSVCCompat && CurContext->isDependentContext() &&
-        (isa<FunctionDecl>(CurContext) || isa<CXXRecordDecl>(CurContext))) {
-      CallExpr *CE = new (Context) CallExpr(Context, Fn, Args,
-                                            Context.DependentTy, VK_RValue,
-                                            RParenLoc);
+  if (getLangOpts().MSVCCompat &&
+      CurContext->isDependentContext() && !isSFINAEContext() &&
+      (isa<FunctionDecl>(CurContext) || isa<CXXRecordDecl>(CurContext))) {
+
+    OverloadCandidateSet::iterator Best;
+    if (CandidateSet->empty() ||
+        CandidateSet->BestViableFunction(*this, Fn->getLocStart(), Best) ==
+            OR_No_Viable_Function) {
+      // In Microsoft mode, if we are inside a template class member function then
+      // create a type dependent CallExpr. The goal is to postpone name lookup
+      // to instantiation time to be able to search into type dependent base
+      // classes.
+      CallExpr *CE = new (Context) CallExpr(
+          Context, Fn, Args, Context.DependentTy, VK_RValue, RParenLoc);
       CE->setTypeDependent(true);
       *Result = CE;
       return true;
     }
-    return false;
   }
+
+  if (CandidateSet->empty())
+    return false;
 
   UnbridgedCasts.restore();
   return false;
@@ -11250,7 +11260,7 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
         if (Op == OO_Equal)
           DiagnoseSelfMove(Args[0], Args[1], OpLoc);
 
-        checkCall(FnDecl, ArgsArray, 0, isa<CXXMethodDecl>(FnDecl), OpLoc,
+        checkCall(FnDecl, nullptr, ArgsArray, isa<CXXMethodDecl>(FnDecl), OpLoc, 
                   TheCall->getSourceRange(), VariadicDoesNotApply);
 
         return MaybeBindToTemporary(TheCall);
@@ -12488,15 +12498,11 @@ Expr *Sema::FixOverloadedFunctionReference(Expr *E, DeclAccessPair Found,
       type = Context.BoundMemberTy;
     }
 
-    MemberExpr *ME = MemberExpr::Create(Context, Base,
-                                        MemExpr->isArrow(),
-                                        MemExpr->getQualifierLoc(),
-                                        MemExpr->getTemplateKeywordLoc(),
-                                        Fn,
-                                        Found,
-                                        MemExpr->getMemberNameInfo(),
-                                        TemplateArgs,
-                                        type, valueKind, OK_Ordinary);
+    MemberExpr *ME = MemberExpr::Create(
+        Context, Base, MemExpr->isArrow(), MemExpr->getOperatorLoc(),
+        MemExpr->getQualifierLoc(), MemExpr->getTemplateKeywordLoc(), Fn, Found,
+        MemExpr->getMemberNameInfo(), TemplateArgs, type, valueKind,
+        OK_Ordinary);
     ME->setHadMultipleCandidates(true);
     MarkMemberReferenced(ME);
     return ME;

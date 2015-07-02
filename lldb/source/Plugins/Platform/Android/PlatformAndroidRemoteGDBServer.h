@@ -19,7 +19,10 @@
 // Project includes
 #include "Plugins/Platform/gdb-server/PlatformRemoteGDBServer.h"
 
-class PlatformAndroidRemoteGDBServer : public PlatformRemoteGDBServer
+namespace lldb_private {
+namespace platform_android {
+
+class PlatformAndroidRemoteGDBServer : public platform_gdb_server::PlatformRemoteGDBServer
 {
 public:
     PlatformAndroidRemoteGDBServer ();
@@ -27,14 +30,15 @@ public:
     virtual
     ~PlatformAndroidRemoteGDBServer ();
 
-    lldb_private::Error
-    ConnectRemote (lldb_private::Args& args) override;
+    Error
+    ConnectRemote (Args& args) override;
 
-    lldb_private::Error
+    Error
     DisconnectRemote () override;
 
 protected:
-    std::map<lldb::pid_t, std::pair<uint16_t, std::string>> m_port_forwards;
+    std::string m_device_id;
+    std::map<lldb::pid_t, uint16_t> m_port_forwards;
 
     uint16_t
     LaunchGDBserverAndGetPort (lldb::pid_t &pid) override;
@@ -42,9 +46,15 @@ protected:
     bool
     KillSpawnedProcess (lldb::pid_t pid) override;
 
+    void
+    DeleteForwardPort (lldb::pid_t pid);
+
 private:
     DISALLOW_COPY_AND_ASSIGN (PlatformAndroidRemoteGDBServer);
 
 };
+
+} // namespace platform_android
+} // namespace lldb_private
 
 #endif  // liblldb_PlatformAndroidRemoteGDBServer_h_

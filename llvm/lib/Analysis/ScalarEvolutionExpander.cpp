@@ -23,10 +23,13 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
+using namespace PatternMatch;
 
 /// ReuseOrCreateCast - Arrange for there to be a cast of V to Ty at IP,
 /// reusing an existing cast if a suitable one exists, moving an existing
@@ -374,7 +377,8 @@ Value *SCEVExpander::expandAddToGEP(const SCEV *const *op_begin,
                                     PointerType *PTy,
                                     Type *Ty,
                                     Value *V) {
-  Type *ElTy = PTy->getElementType();
+  Type *OriginalElTy = PTy->getElementType();
+  Type *ElTy = OriginalElTy;
   SmallVector<Value *, 4> GepIndices;
   SmallVector<const SCEV *, 8> Ops(op_begin, op_end);
   bool AnyNonZeroIndices = false;
@@ -487,7 +491,8 @@ Value *SCEVExpander::expandAddToGEP(const SCEV *const *op_begin,
     // Fold a GEP with constant operands.
     if (Constant *CLHS = dyn_cast<Constant>(V))
       if (Constant *CRHS = dyn_cast<Constant>(Idx))
-        return ConstantExpr::getGetElementPtr(CLHS, CRHS);
+        return ConstantExpr::getGetElementPtr(Type::getInt8Ty(Ty->getContext()),
+                                              CLHS, CRHS);
 
     // Do a quick scan to see if we have this GEP nearby.  If so, reuse it.
     unsigned ScanLimit = 6;
@@ -522,7 +527,7 @@ Value *SCEVExpander::expandAddToGEP(const SCEV *const *op_begin,
     }
 
     // Emit a GEP.
-    Value *GEP = Builder.CreateGEP(V, Idx, "uglygep");
+    Value *GEP = Builder.CreateGEP(Builder.getInt8Ty(), V, Idx, "uglygep");
     rememberInstruction(GEP);
 
     return GEP;
@@ -558,7 +563,7 @@ Value *SCEVExpander::expandAddToGEP(const SCEV *const *op_begin,
   Value *Casted = V;
   if (V->getType() != PTy)
     Casted = InsertNoopCastOfTo(Casted, PTy);
-  Value *GEP = Builder.CreateGEP(Casted,
+  Value *GEP = Builder.CreateGEP(OriginalElTy, Casted,
                                  GepIndices,
                                  "scevgep");
   Ops.push_back(SE.getUnknown(GEP));
@@ -748,25 +753,30 @@ Value *SCEVExpander::visitMulExpr(const SCEVMulExpr *S) {
   // out of loops.
   Value *Prod = nullptr;
   for (SmallVectorImpl<std::pair<const Loop *, const SCEV *> >::iterator
-       I = OpsAndLoops.begin(), E = OpsAndLoops.end(); I != E; ) {
+       I = OpsAndLoops.begin(), E = OpsAndLoops.end(); I != E; ++I) {
     const SCEV *Op = I->second;
     if (!Prod) {
       // This is the first operand. Just expand it.
       Prod = expand(Op);
-      ++I;
     } else if (Op->isAllOnesValue()) {
       // Instead of doing a multiply by negative one, just do a negate.
       Prod = InsertNoopCastOfTo(Prod, Ty);
       Prod = InsertBinop(Instruction::Sub, Constant::getNullValue(Ty), Prod);
-      ++I;
     } else {
       // A simple mul.
       Value *W = expandCodeFor(Op, Ty);
       Prod = InsertNoopCastOfTo(Prod, Ty);
       // Canonicalize a constant to the RHS.
       if (isa<Constant>(Prod)) std::swap(Prod, W);
-      Prod = InsertBinop(Instruction::Mul, Prod, W);
-      ++I;
+      const APInt *RHS;
+      if (match(W, m_Power2(RHS))) {
+        // Canonicalize Prod*(1<<C) to Prod<<C.
+        assert(!Ty->isVectorTy() && "vector types are not SCEVable");
+        Prod = InsertBinop(Instruction::Shl, Prod,
+                           ConstantInt::get(Ty, RHS->logBase2()));
+      } else {
+        Prod = InsertBinop(Instruction::Mul, Prod, W);
+      }
     }
   }
 
@@ -1699,7 +1709,7 @@ unsigned SCEVExpander::replaceCongruentIVs(Loop *L, const DominatorTree *DT,
 
   unsigned NumElim = 0;
   DenseMap<const SCEV *, PHINode *> ExprToIVMap;
-  // Process phis from wide to narrow. Mapping wide phis to the their truncation
+  // Process phis from wide to narrow. Map wide phis to their truncation
   // so narrow phis can reuse them.
   for (SmallVectorImpl<PHINode*>::const_iterator PIter = Phis.begin(),
          PEnd = Phis.end(); PIter != PEnd; ++PIter) {
@@ -1709,7 +1719,7 @@ unsigned SCEVExpander::replaceCongruentIVs(Loop *L, const DominatorTree *DT,
     // would confuse the logic below that expects proper IVs.
     if (Value *V = SimplifyInstruction(Phi, DL, SE.TLI, SE.DT, SE.AC)) {
       Phi->replaceAllUsesWith(V);
-      DeadInsts.push_back(Phi);
+      DeadInsts.emplace_back(Phi);
       ++NumElim;
       DEBUG_WITH_TYPE(DebugType, dbgs()
                       << "INDVARS: Eliminated constant iv: " << *Phi << '\n');
@@ -1784,7 +1794,7 @@ unsigned SCEVExpander::replaceCongruentIVs(Loop *L, const DominatorTree *DT,
             CreateTruncOrBitCast(OrigInc, IsomorphicInc->getType(), IVName);
         }
         IsomorphicInc->replaceAllUsesWith(NewInc);
-        DeadInsts.push_back(IsomorphicInc);
+        DeadInsts.emplace_back(IsomorphicInc);
       }
     }
     DEBUG_WITH_TYPE(DebugType, dbgs()
@@ -1797,9 +1807,91 @@ unsigned SCEVExpander::replaceCongruentIVs(Loop *L, const DominatorTree *DT,
       NewIV = Builder.CreateTruncOrBitCast(OrigPhiRef, Phi->getType(), IVName);
     }
     Phi->replaceAllUsesWith(NewIV);
-    DeadInsts.push_back(Phi);
+    DeadInsts.emplace_back(Phi);
   }
   return NumElim;
+}
+
+bool SCEVExpander::isHighCostExpansionHelper(
+    const SCEV *S, Loop *L, SmallPtrSetImpl<const SCEV *> &Processed) {
+
+  // Zero/One operand expressions
+  switch (S->getSCEVType()) {
+  case scUnknown:
+  case scConstant:
+    return false;
+  case scTruncate:
+    return isHighCostExpansionHelper(cast<SCEVTruncateExpr>(S)->getOperand(), L,
+                                     Processed);
+  case scZeroExtend:
+    return isHighCostExpansionHelper(cast<SCEVZeroExtendExpr>(S)->getOperand(),
+                                     L, Processed);
+  case scSignExtend:
+    return isHighCostExpansionHelper(cast<SCEVSignExtendExpr>(S)->getOperand(),
+                                     L, Processed);
+  }
+
+  if (!Processed.insert(S).second)
+    return false;
+
+  if (auto *UDivExpr = dyn_cast<SCEVUDivExpr>(S)) {
+    // If the divisor is a power of two and the SCEV type fits in a native
+    // integer, consider the divison cheap irrespective of whether it occurs in
+    // the user code since it can be lowered into a right shift.
+    if (auto *SC = dyn_cast<SCEVConstant>(UDivExpr->getRHS()))
+      if (SC->getValue()->getValue().isPowerOf2()) {
+        const DataLayout &DL =
+            L->getHeader()->getParent()->getParent()->getDataLayout();
+        unsigned Width = cast<IntegerType>(UDivExpr->getType())->getBitWidth();
+        return DL.isIllegalInteger(Width);
+      }
+
+    // UDivExpr is very likely a UDiv that ScalarEvolution's HowFarToZero or
+    // HowManyLessThans produced to compute a precise expression, rather than a
+    // UDiv from the user's code. If we can't find a UDiv in the code with some
+    // simple searching, assume the former consider UDivExpr expensive to
+    // compute.
+    BasicBlock *ExitingBB = L->getExitingBlock();
+    if (!ExitingBB)
+      return true;
+
+    BranchInst *ExitingBI = dyn_cast<BranchInst>(ExitingBB->getTerminator());
+    if (!ExitingBI || !ExitingBI->isConditional())
+      return true;
+
+    ICmpInst *OrigCond = dyn_cast<ICmpInst>(ExitingBI->getCondition());
+    if (!OrigCond)
+      return true;
+
+    const SCEV *RHS = SE.getSCEV(OrigCond->getOperand(1));
+    RHS = SE.getMinusSCEV(RHS, SE.getConstant(RHS->getType(), 1));
+    if (RHS != S) {
+      const SCEV *LHS = SE.getSCEV(OrigCond->getOperand(0));
+      LHS = SE.getMinusSCEV(LHS, SE.getConstant(LHS->getType(), 1));
+      if (LHS != S)
+        return true;
+    }
+  }
+
+  // HowManyLessThans uses a Max expression whenever the loop is not guarded by
+  // the exit condition.
+  if (isa<SCEVSMaxExpr>(S) || isa<SCEVUMaxExpr>(S))
+    return true;
+
+  // Recurse past nary expressions, which commonly occur in the
+  // BackedgeTakenCount. They may already exist in program code, and if not,
+  // they are not too expensive rematerialize.
+  if (const SCEVNAryExpr *NAry = dyn_cast<SCEVNAryExpr>(S)) {
+    for (SCEVNAryExpr::op_iterator I = NAry->op_begin(), E = NAry->op_end();
+         I != E; ++I) {
+      if (isHighCostExpansionHelper(*I, L, Processed))
+        return true;
+    }
+  }
+
+  // If we haven't recognized an expensive SCEV pattern, assume it's an
+  // expression produced by program code.
+  return false;
 }
 
 namespace {

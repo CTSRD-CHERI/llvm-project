@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include "CommandObjectSource.h"
 
 // C Includes
@@ -253,7 +251,7 @@ public:
                              "source list",
                              "Display source code (as specified) based on the current executable's debug info.",
                              NULL,
-                             eFlagRequiresTarget), 
+                             eCommandRequiresTarget), 
         m_options (interpreter)
     {
     }
@@ -539,9 +537,9 @@ protected:
                 {
                     SymbolContext sc;
                     sc_list_symbols.GetContextAtIndex (i, sc);
-                    if (sc.symbol)
+                    if (sc.symbol && sc.symbol->ValueIsAddress())
                     {
-                        const Address &base_address = sc.symbol->GetAddress();
+                        const Address &base_address = sc.symbol->GetAddressRef();
                         Function *function = base_address.CalculateSymbolContextFunction();
                         if (function)
                         {

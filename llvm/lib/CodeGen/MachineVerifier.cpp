@@ -329,8 +329,18 @@ bool MachineVerifier::runOnMachineFunction(MachineFunction &MF) {
       } else if (!CurBundle)
         report("No bundle header", MBBI);
       visitMachineInstrBefore(MBBI);
-      for (unsigned I = 0, E = MBBI->getNumOperands(); I != E; ++I)
-        visitMachineOperand(&MBBI->getOperand(I), I);
+      for (unsigned I = 0, E = MBBI->getNumOperands(); I != E; ++I) {
+        const MachineInstr &MI = *MBBI;
+        const MachineOperand &Op = MI.getOperand(I);
+        if (Op.getParent() != &MI) {
+          // Make sure to use correct addOperand / RemoveOperand / ChangeTo
+          // functions when replacing operands of a MachineInstr.
+          report("Instruction has operand with wrong parent set", &MI);
+        }
+
+        visitMachineOperand(&Op, I);
+      }
+
       visitMachineInstrAfter(MBBI);
 
       // Was this the last bundled instruction?
@@ -684,7 +694,7 @@ MachineVerifier::visitMachineBasicBlockBefore(const MachineBasicBlock *MBB) {
 
   const MachineFrameInfo *MFI = MF->getFrameInfo();
   assert(MFI && "Function has no frame info");
-  BitVector PR = MFI->getPristineRegs(MBB);
+  BitVector PR = MFI->getPristineRegs(*MF);
   for (int I = PR.find_first(); I>0; I = PR.find_next(I)) {
     for (MCSubRegIterator SubRegs(I, TRI, /*IncludeSelf=*/true);
          SubRegs.isValid(); ++SubRegs)
@@ -1650,40 +1660,35 @@ void MachineVerifier::verifyLiveRange(const LiveRange &LR, unsigned Reg,
 }
 
 void MachineVerifier::verifyLiveInterval(const LiveInterval &LI) {
-  verifyLiveRange(LI, LI.reg);
-
   unsigned Reg = LI.reg;
-  if (TargetRegisterInfo::isVirtualRegister(Reg)) {
-    unsigned Mask = 0;
-    unsigned MaxMask = MRI->getMaxLaneMaskForVReg(Reg);
-    for (const LiveInterval::SubRange &SR : LI.subranges()) {
-      if ((Mask & SR.LaneMask) != 0)
-        report("Lane masks of sub ranges overlap in live interval", MF, LI);
-      if ((SR.LaneMask & ~MaxMask) != 0)
-        report("Subrange lanemask is invalid", MF, LI);
-      Mask |= SR.LaneMask;
-      verifyLiveRange(SR, LI.reg, SR.LaneMask);
-      if (!LI.covers(SR))
-        report("A Subrange is not covered by the main range", MF, LI);
-    }
-  } else if (LI.hasSubRanges()) {
-    report("subregister liveness only allowed for virtual registers", MF, LI);
+  assert(TargetRegisterInfo::isVirtualRegister(Reg));
+  verifyLiveRange(LI, Reg);
+
+  unsigned Mask = 0;
+  unsigned MaxMask = MRI->getMaxLaneMaskForVReg(Reg);
+  for (const LiveInterval::SubRange &SR : LI.subranges()) {
+    if ((Mask & SR.LaneMask) != 0)
+      report("Lane masks of sub ranges overlap in live interval", MF, LI);
+    if ((SR.LaneMask & ~MaxMask) != 0)
+      report("Subrange lanemask is invalid", MF, LI);
+    Mask |= SR.LaneMask;
+    verifyLiveRange(SR, LI.reg, SR.LaneMask);
+    if (!LI.covers(SR))
+      report("A Subrange is not covered by the main range", MF, LI);
   }
 
   // Check the LI only has one connected component.
-  if (TargetRegisterInfo::isVirtualRegister(LI.reg)) {
-    ConnectedVNInfoEqClasses ConEQ(*LiveInts);
-    unsigned NumComp = ConEQ.Classify(&LI);
-    if (NumComp > 1) {
-      report("Multiple connected components in live interval", MF, LI);
-      for (unsigned comp = 0; comp != NumComp; ++comp) {
-        errs() << comp << ": valnos";
-        for (LiveInterval::const_vni_iterator I = LI.vni_begin(),
-             E = LI.vni_end(); I!=E; ++I)
-          if (comp == ConEQ.getEqClass(*I))
-            errs() << ' ' << (*I)->id;
-        errs() << '\n';
-      }
+  ConnectedVNInfoEqClasses ConEQ(*LiveInts);
+  unsigned NumComp = ConEQ.Classify(&LI);
+  if (NumComp > 1) {
+    report("Multiple connected components in live interval", MF, LI);
+    for (unsigned comp = 0; comp != NumComp; ++comp) {
+      errs() << comp << ": valnos";
+      for (LiveInterval::const_vni_iterator I = LI.vni_begin(),
+           E = LI.vni_end(); I!=E; ++I)
+        if (comp == ConEQ.getEqClass(*I))
+          errs() << ' ' << (*I)->id;
+      errs() << '\n';
     }
   }
 }
@@ -1711,8 +1716,8 @@ namespace {
 /// by a FrameDestroy <n>, stack adjustments are identical on all
 /// CFG edges to a merge point, and frame is destroyed at end of a return block.
 void MachineVerifier::verifyStackFrame() {
-  int FrameSetupOpcode   = TII->getCallFrameSetupOpcode();
-  int FrameDestroyOpcode = TII->getCallFrameDestroyOpcode();
+  unsigned FrameSetupOpcode   = TII->getCallFrameSetupOpcode();
+  unsigned FrameDestroyOpcode = TII->getCallFrameDestroyOpcode();
 
   SmallVector<StackStateOfBB, 8> SPState;
   SPState.resize(MF->getNumBlockIDs());

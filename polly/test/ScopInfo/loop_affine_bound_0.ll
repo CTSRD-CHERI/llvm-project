@@ -8,7 +8,6 @@
 ;   }
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128"
-target triple = "x86_64-unknown-linux-gnu"
 
 define void @f([128 x i64]* nocapture %a, i64 %N, i64 %M) nounwind {
 entry:
@@ -57,7 +56,7 @@ return:                                           ; preds = %bb.nph8, %bb3, %ent
 ; CHECK:    Stmt_bb1
 ; CHECK:          Domain :=
 ; CHECK:              [N, M] -> { Stmt_bb1[i0, i1] : i0 >= 0 and i0 <= 2 + 4N + 7M and i1 >= 0 and i1 <= 1 + 5N and N >= 0 };
-; CHECK:          Scattering :=
+; CHECK:          Schedule :=
 ; CHECK:              [N, M] -> { Stmt_bb1[i0, i1] -> [i0, i1] };
 ; CHECK:          MustWriteAccess := [Reduction Type: NONE]
 ; CHECK:              [N, M] -> { Stmt_bb1[i0, i1] -> MemRef_a[i0 + 128i1] };

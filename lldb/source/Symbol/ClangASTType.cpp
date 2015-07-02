@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include "lldb/Symbol/ClangASTType.h"
 
 #include "clang/AST/ASTConsumer.h"
@@ -2248,6 +2246,24 @@ ClangASTType::GetEncoding (uint64_t &count) const
             case clang::BuiltinType::ObjCSel:       return lldb::eEncodingUint;
                 
             case clang::BuiltinType::NullPtr:       return lldb::eEncodingUint;
+                
+            case clang::BuiltinType::Kind::ARCUnbridgedCast:
+            case clang::BuiltinType::Kind::BoundMember:
+            case clang::BuiltinType::Kind::BuiltinFn:
+            case clang::BuiltinType::Kind::Dependent:
+            case clang::BuiltinType::Kind::Half:
+            case clang::BuiltinType::Kind::OCLEvent:
+            case clang::BuiltinType::Kind::OCLImage1d:
+            case clang::BuiltinType::Kind::OCLImage1dArray:
+            case clang::BuiltinType::Kind::OCLImage1dBuffer:
+            case clang::BuiltinType::Kind::OCLImage2d:
+            case clang::BuiltinType::Kind::OCLImage2dArray:
+            case clang::BuiltinType::Kind::OCLImage3d:
+            case clang::BuiltinType::Kind::OCLSampler:
+            case clang::BuiltinType::Kind::Overload:
+            case clang::BuiltinType::Kind::PseudoObject:
+            case clang::BuiltinType::Kind::UnknownAny:
+                break;
         }
             break;
             // All pointer types are represented as unsigned integer encodings.
@@ -3714,7 +3730,7 @@ ClangASTType::GetChildClangTypeAtIndex (ExecutionContext *exe_ctx,
                     if (element_type.GetCompleteType())
                     {
                         char element_name[64];
-                        ::snprintf (element_name, sizeof (element_name), "[%zu]", idx);
+                        ::snprintf(element_name, sizeof(element_name), "[%" PRIu64 "]", static_cast<uint64_t>(idx));
                         child_name.assign(element_name);
                         child_byte_size = element_type.GetByteSize(exe_ctx ? exe_ctx->GetBestExecutionContextScope() : NULL);
                         child_byte_offset = (int32_t)idx * (int32_t)child_byte_size;
@@ -3735,7 +3751,7 @@ ClangASTType::GetChildClangTypeAtIndex (ExecutionContext *exe_ctx,
                     if (element_type.GetCompleteType())
                     {
                         char element_name[64];
-                        ::snprintf (element_name, sizeof (element_name), "[%zu]", idx);
+                        ::snprintf(element_name, sizeof(element_name), "[%" PRIu64 "]", static_cast<uint64_t>(idx));
                         child_name.assign(element_name);
                         child_byte_size = element_type.GetByteSize(exe_ctx ? exe_ctx->GetBestExecutionContextScope() : NULL);
                         child_byte_offset = (int32_t)idx * (int32_t)child_byte_size;
@@ -5160,7 +5176,7 @@ ClangASTType::AddMethodToCXXRecordType (const char *name,
             {
                 // Check the number of operator parameters. Sometimes we have
                 // seen bad DWARF that doesn't correctly describe operators and
-                // if we try to create a methed and add it to the class, clang
+                // if we try to create a method and add it to the class, clang
                 // will assert and crash, so we need to make sure things are
                 // acceptable.
                 if (!ClangASTContext::CheckOverloadedOperatorKindParameterCount (op_kind, num_params))
@@ -5382,6 +5398,7 @@ ClangASTType::AddObjCClassProperty (const char *property_name,
                                                                                       &m_ast->Idents.get(property_name),
                                                                                       clang::SourceLocation(), //Source Location for AT
                                                                                       clang::SourceLocation(), //Source location for (
+                                                                                      ivar_decl ? ivar_decl->getType() : property_clang_type.GetQualType(),
                                                                                       prop_type_source);
             
             if (property_decl)
@@ -6147,7 +6164,7 @@ ClangASTType::DumpValue (ExecutionContext *exe_ctx,
             for (field = record_decl->field_begin(), field_end = record_decl->field_end(); field != field_end; ++field, ++field_idx, ++child_idx)
             {
                 // Print the starting squiggly bracket (if this is the
-                // first member) or comman (for member 2 and beyong) for
+                // first member) or comma (for member 2 and beyond) for
                 // the struct/union/class member.
                 if (child_idx == 0)
                     s->PutChar('{');
@@ -6262,7 +6279,7 @@ ClangASTType::DumpValue (ExecutionContext *exe_ctx,
                 for (element_idx = 0; element_idx < element_count; ++element_idx)
                 {
                     // Print the starting squiggly bracket (if this is the
-                    // first member) or comman (for member 2 and beyong) for
+                    // first member) or comma (for member 2 and beyond) for
                     // the struct/union/class member.
                     if (element_idx == 0)
                         s->PutChar('{');
@@ -6369,7 +6386,7 @@ ClangASTType::DumpValue (ExecutionContext *exe_ctx,
         break;
 
     default:
-        // We are down the a scalar type that we just need to display.
+        // We are down to a scalar type that we just need to display.
         data.Dump(s,
                   data_byte_offset,
                   format,
@@ -6478,7 +6495,7 @@ ClangASTType::DumpTypeValue (Stream *s,
             // format was not enum, just fall through and dump the value as requested....
                 
         default:
-            // We are down the a scalar type that we just need to display.
+            // We are down to a scalar type that we just need to display.
             {
                 uint32_t item_count = 1;
                 // A few formats, we might need to modify our size and count for depending

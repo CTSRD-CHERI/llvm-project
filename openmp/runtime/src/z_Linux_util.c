@@ -101,7 +101,7 @@ static kmp_mutex_align_t   __kmp_wait_mx;
 static void
 __kmp_print_cond( char *buffer, kmp_cond_align_t *cond )
 {
-    sprintf( buffer, "(cond (lock (%ld, %d)), (descr (%p)))",
+    KMP_SNPRINTF( buffer, 128, "(cond (lock (%ld, %d)), (descr (%p)))",
                       cond->c_cond.__c_lock.__status, cond->c_cond.__c_lock.__spinlock,
                       cond->c_cond.__c_waiting );
 }
@@ -227,7 +227,7 @@ __kmp_affinity_bind_thread( int which )
     KMP_ASSERT2(KMP_AFFINITY_CAPABLE(),
       "Illegal set affinity operation when not capable");
 
-    kmp_affin_mask_t *mask = (kmp_affin_mask_t *)alloca(__kmp_affin_mask_size);
+    kmp_affin_mask_t *mask = (kmp_affin_mask_t *)KMP_ALLOCA(__kmp_affin_mask_size);
     KMP_CPU_ZERO(mask);
     KMP_CPU_SET(which, mask);
     __kmp_set_system_affinity(mask, TRUE);
@@ -683,9 +683,10 @@ __kmp_launch_worker( void *thr )
     sigset_t    new_set, old_set;
 #endif /* KMP_BLOCK_SIGNALS */
     void *exit_val;
+#if KMP_OS_LINUX || KMP_OS_FREEBSD
     void *padding = 0;
+#endif
     int gtid;
-    int error;
 
     gtid = ((kmp_info_t*)thr) -> th.th_info.ds.ds_gtid;
     __kmp_gtid_set_specific( gtid );
@@ -732,7 +733,7 @@ __kmp_launch_worker( void *thr )
 
 #if KMP_OS_LINUX || KMP_OS_FREEBSD
     if ( __kmp_stkoffset > 0 && gtid > 0 ) {
-        padding = alloca( gtid * __kmp_stkoffset );
+        padding = KMP_ALLOCA( gtid * __kmp_stkoffset );
     }
 #endif
 
@@ -764,7 +765,6 @@ __kmp_launch_monitor( void *thr )
     struct timespec  interval;
     int yield_count;
     int yield_cycles = 0;
-    int error;
 
     KMP_MB();       /* Flush all pending memory write invalidates.  */
 
@@ -843,7 +843,7 @@ __kmp_launch_monitor( void *thr )
         interval.tv_nsec = 0;
     } else {
         interval.tv_sec  = 0;
-        interval.tv_nsec = (NSEC_PER_SEC / __kmp_monitor_wakeups);
+        interval.tv_nsec = (KMP_NSEC_PER_SEC / __kmp_monitor_wakeups);
     }
 
     KA_TRACE( 10, ("__kmp_launch_monitor: #2 monitor\n" ) );
@@ -870,9 +870,9 @@ __kmp_launch_monitor( void *thr )
         now.tv_sec  += interval.tv_sec;
         now.tv_nsec += interval.tv_nsec;
 
-        if (now.tv_nsec >= NSEC_PER_SEC) {
+        if (now.tv_nsec >= KMP_NSEC_PER_SEC) {
             now.tv_sec  += 1;
-            now.tv_nsec -= NSEC_PER_SEC;
+            now.tv_nsec -= KMP_NSEC_PER_SEC;
         }
 
         status = pthread_mutex_lock( & __kmp_wait_mx.m_mutex );
@@ -1114,8 +1114,10 @@ __kmp_create_monitor( kmp_info_t *th )
     pthread_attr_t      thread_attr;
     size_t              size;
     int                 status;
-    int                 caller_gtid = __kmp_get_gtid();
+    int                 caller_gtid;
     int                 auto_adj_size = FALSE;
+
+    caller_gtid = __kmp_get_gtid();
 
     KA_TRACE( 10, ("__kmp_create_monitor: try to create monitor\n" ) );
 
@@ -1274,7 +1276,7 @@ void __kmp_resume_monitor();
 void
 __kmp_reap_monitor( kmp_info_t *th )
 {
-    int          status, i;
+    int          status;
     void        *exit_val;
 
     KA_TRACE( 10, ("__kmp_reap_monitor: try to reap monitor thread with handle %#.8lx\n",
@@ -2248,14 +2250,14 @@ __kmp_elapsed( double *t )
 
     status = clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts );
     KMP_CHECK_SYSFAIL_ERRNO( "clock_gettime", status );
-    *t = (double) ts.tv_nsec * (1.0 / (double) NSEC_PER_SEC) +
+    *t = (double) ts.tv_nsec * (1.0 / (double) KMP_NSEC_PER_SEC) +
         (double) ts.tv_sec;
 # else
     struct timeval tv;
 
     status = gettimeofday( & tv, NULL );
     KMP_CHECK_SYSFAIL_ERRNO( "gettimeofday", status );
-    *t = (double) tv.tv_usec * (1.0 / (double) USEC_PER_SEC) +
+    *t = (double) tv.tv_usec * (1.0 / (double) KMP_USEC_PER_SEC) +
         (double) tv.tv_sec;
 # endif
 }
@@ -2300,7 +2302,7 @@ __kmp_is_address_mapped( void * addr ) {
             if ( rc == EOF ) {
                 break;
             }; // if
-            KMP_ASSERT( rc == 3 && strlen( perms ) == 4 ); // Make sure all fields are read.
+            KMP_ASSERT( rc == 3 && KMP_STRLEN( perms ) == 4 ); // Make sure all fields are read.
 
             // Ending address is not included in the region, but beginning is.
             if ( ( addr >= beginning ) && ( addr < ending ) ) {
@@ -2475,7 +2477,7 @@ __kmp_get_load_balance( int max )
 
             // Construct task_path.
             task_path.used = task_path_fixed_len;    // Reset task_path to "/proc/".
-            __kmp_str_buf_cat( & task_path, proc_entry->d_name, strlen( proc_entry->d_name ) );
+            __kmp_str_buf_cat( & task_path, proc_entry->d_name, KMP_STRLEN( proc_entry->d_name ) );
             __kmp_str_buf_cat( & task_path, "/task", 5 );
 
             task_dir = opendir( task_path.str );
@@ -2510,7 +2512,7 @@ __kmp_get_load_balance( int max )
                         //  __kmp_str_buf_print( & stat_path, "%s/%s/stat", task_path.str, task_entry->d_name );
                         // but seriae of __kmp_str_buf_cat works a bit faster.
                         stat_path.used = stat_path_fixed_len;    // Reset stat path to its fixed part.
-                        __kmp_str_buf_cat( & stat_path, task_entry->d_name, strlen( task_entry->d_name ) );
+                        __kmp_str_buf_cat( & stat_path, task_entry->d_name, KMP_STRLEN( task_entry->d_name ) );
                         __kmp_str_buf_cat( & stat_path, "/stat", 5 );
 
                         // Note: Low-level API (open/read/close) is used. High-level API

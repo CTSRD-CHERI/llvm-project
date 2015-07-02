@@ -168,6 +168,8 @@ def FeaturePRFCHW  : SubtargetFeature<"prfchw", "HasPRFCHW", "true",
                                       "Support PRFCHW instructions">;
 def FeatureRDSEED  : SubtargetFeature<"rdseed", "HasRDSEED", "true",
                                       "Support RDSEED instruction">;
+def FeatureMPX     : SubtargetFeature<"mpx", "HasMPX", "true",
+                                      "Support MPX instructions">;
 def FeatureLeaForSP : SubtargetFeature<"lea-sp", "UseLeaForSP", "true",
                                      "Use LEA for adjusting the stack pointer">;
 def FeatureSlowDivide32 : SubtargetFeature<"idivl-to-divb",
@@ -188,10 +190,9 @@ def FeatureSlowLEA : SubtargetFeature<"slow-lea", "SlowLEA", "true",
                                    "LEA instruction with certain arguments is slow">;
 def FeatureSlowIncDec : SubtargetFeature<"slow-incdec", "SlowIncDec", "true",
                                    "INC and DEC instructions are slower than ADD and SUB">;
-def FeatureUseSqrtEst : SubtargetFeature<"use-sqrt-est", "UseSqrtEst", "true",
-                            "Use RSQRT* to optimize square root calculations">;
-def FeatureUseRecipEst : SubtargetFeature<"use-recip-est", "UseReciprocalEst",
-                          "true", "Use RCP* to optimize division calculations">;
+def FeatureSoftFloat
+    : SubtargetFeature<"soft-float", "UseSoftFloat", "true",
+                       "Use software floating point features.">;
 
 //===----------------------------------------------------------------------===//
 // X86 processors supported.
@@ -273,17 +274,15 @@ def : SilvermontProc<"silvermont">;
 def : SilvermontProc<"slm">; // Legacy alias.
 
 // "Arrandale" along with corei3 and corei5
-class NehalemProc<string Name, list<SubtargetFeature> AdditionalFeatures>
-    : ProcessorModel<Name, SandyBridgeModel, !listconcat([
-                                                           FeatureSSE42,
-                                                           FeatureCMPXCHG16B,
-                                                           FeatureSlowBTMem,
-                                                           FeatureFastUAMem,
-                                                           FeaturePOPCNT
-                                                         ],
-                                                         AdditionalFeatures)>;
-def : NehalemProc<"nehalem", []>;
-def : NehalemProc<"corei7", [FeatureAES]>;
+class NehalemProc<string Name> : ProcessorModel<Name, SandyBridgeModel, [
+                                   FeatureSSE42,
+                                   FeatureCMPXCHG16B,
+                                   FeatureSlowBTMem,
+                                   FeatureFastUAMem,
+                                   FeaturePOPCNT
+                                 ]>;
+def : NehalemProc<"nehalem">;
+def : NehalemProc<"corei7">;
 
 // Westmere is a similar machine to nehalem with some additional features.
 // Westmere is the corei3/i5/i7 path from nehalem to sandybridge
@@ -379,7 +378,7 @@ class KnightsLandingProc<string Name> : ProcessorModel<Name, HaswellModel,
                       FeatureAES, FeaturePCLMUL, FeatureRDRAND, FeatureF16C,
                       FeatureFSGSBase, FeatureMOVBE, FeatureLZCNT, FeatureBMI,
                       FeatureBMI2, FeatureFMA, FeatureRTM, FeatureHLE,
-                      FeatureSlowIncDec]>;
+                      FeatureSlowIncDec, FeatureMPX]>;
 def : KnightsLandingProc<"knl">;
 
 // FIXME: define SKX model
@@ -390,7 +389,7 @@ class SkylakeProc<string Name> : ProcessorModel<Name, HaswellModel,
                       FeatureAES, FeaturePCLMUL, FeatureRDRAND, FeatureF16C,
                       FeatureFSGSBase, FeatureMOVBE, FeatureLZCNT, FeatureBMI,
                       FeatureBMI2, FeatureFMA, FeatureRTM, FeatureHLE,
-                      FeatureSlowIncDec]>;
+                      FeatureSlowIncDec, FeatureMPX]>;
 def : SkylakeProc<"skylake">;
 def : SkylakeProc<"skx">; // Legacy alias.
 
@@ -443,7 +442,7 @@ def : ProcessorModel<"btver2", BtVer2Model,
                       FeaturePRFCHW, FeatureAES, FeaturePCLMUL,
                       FeatureBMI, FeatureF16C, FeatureMOVBE,
                       FeatureLZCNT, FeaturePOPCNT, FeatureFastUAMem,
-                      FeatureSlowSHLD, FeatureUseSqrtEst, FeatureUseRecipEst]>;
+                      FeatureSlowSHLD]>;
 
 // TODO: We should probably add 'FeatureFastUAMem' to all of the AMD chips.
 

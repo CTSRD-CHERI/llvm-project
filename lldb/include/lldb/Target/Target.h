@@ -64,9 +64,15 @@ public:
     void
     SetDefaultArchitecture (const ArchSpec& arch);
 
+    bool
+    GetMoveToNearestCode () const;
+
     lldb::DynamicValueType
     GetPreferDynamicValue() const;
-    
+
+    bool
+    SetPreferDynamicValue (lldb::DynamicValueType d);
+
     bool
     GetDisableASLR () const;
     
@@ -123,6 +129,12 @@ public:
 
     FileSpecList &
     GetDebugFileSearchPaths ();
+    
+    FileSpecList &
+    GetClangModuleSearchPaths ();
+    
+    bool
+    GetEnableAutoImportClangModules () const;
     
     bool
     GetEnableSyntheticValue () const;
@@ -183,7 +195,13 @@ public:
 
     void
     SetUserSpecifiedTrapHandlerNames (const Args &args);
-    
+
+    bool
+    GetNonStopModeEnabled () const;
+
+    void
+    SetNonStopModeEnabled (bool b);
+
     bool
     GetDisplayRuntimeSupportValues () const;
     
@@ -225,19 +243,20 @@ public:
     EvaluateExpressionOptions() :
         m_execution_policy(eExecutionPolicyOnlyWhenNeeded),
         m_language (lldb::eLanguageTypeUnknown),
-        m_coerce_to_id(false),
-        m_unwind_on_error(true),
+        m_prefix (), // A prefix specific to this expression that is added after the prefix from the settings (if any)
+        m_coerce_to_id (false),
+        m_unwind_on_error (true),
         m_ignore_breakpoints (false),
-        m_keep_in_memory(false),
-        m_try_others(true),
-        m_stop_others(true),
-        m_debug(false),
-        m_trap_exceptions(true),
-        m_generate_debug_info(false),
-        m_result_is_internal(false),
-        m_use_dynamic(lldb::eNoDynamicValues),
-        m_timeout_usec(default_timeout),
-        m_one_thread_timeout_usec(0),
+        m_keep_in_memory (false),
+        m_try_others (true),
+        m_stop_others (true),
+        m_debug (false),
+        m_trap_exceptions (true),
+        m_generate_debug_info (false),
+        m_result_is_internal (false),
+        m_use_dynamic (lldb::eNoDynamicValues),
+        m_timeout_usec (default_timeout),
+        m_one_thread_timeout_usec (0),
         m_cancel_callback (nullptr),
         m_cancel_callback_baton (nullptr)
     {
@@ -272,7 +291,24 @@ public:
     {
         return m_coerce_to_id;
     }
-    
+
+    const char *
+    GetPrefix () const
+    {
+        if (m_prefix.empty())
+            return NULL;
+        return m_prefix.c_str();
+    }
+
+    void
+    SetPrefix (const char *prefix)
+    {
+        if (prefix && prefix[0])
+            m_prefix = prefix;
+        else
+            m_prefix.clear();
+    }
+
     void
     SetCoerceToId (bool coerce = true)
     {
@@ -444,6 +480,7 @@ public:
 private:
     ExecutionPolicy m_execution_policy;
     lldb::LanguageType m_language;
+    std::string m_prefix;
     bool m_coerce_to_id;
     bool m_unwind_on_error;
     bool m_ignore_breakpoints;
@@ -557,6 +594,9 @@ public:
 
     static FileSpecList
     GetDefaultDebugFileSearchPaths ();
+    
+    static FileSpecList
+    GetDefaultClangModuleSearchPaths ();
 
     static ArchSpec
     GetDefaultArchitecture ();
@@ -686,7 +726,8 @@ public:
                       LazyBool check_inlines,
                       LazyBool skip_prologue,
                       bool internal,
-                      bool request_hardware);
+                      bool request_hardware,
+                      LazyBool move_to_nearest_code);
 
     // Use this to create breakpoint that matches regex against the source lines in files given in source_file_list:
     lldb::BreakpointSP
@@ -694,7 +735,8 @@ public:
                                  const FileSpecList *source_file_list,
                                  RegularExpression &source_regex,
                                  bool internal,
-                                 bool request_hardware);
+                                 bool request_hardware,
+                                 LazyBool move_to_nearest_code);
 
     // Use this to create a breakpoint from a load address
     lldb::BreakpointSP
@@ -721,7 +763,8 @@ public:
 
     // Use this to create a function breakpoint by name in containingModule, or all modules if it is NULL
     // When "skip_prologue is set to eLazyBoolCalculate, we use the current target 
-    // setting, else we use the values passed in
+    // setting, else we use the values passed in.
+    // func_name_type_mask is or'ed values from the FunctionNameType enum.
     lldb::BreakpointSP
     CreateBreakpoint (const FileSpecList *containingModules,
                       const FileSpecList *containingSourceFiles,
@@ -732,11 +775,17 @@ public:
                       bool request_hardware);
                       
     lldb::BreakpointSP
-    CreateExceptionBreakpoint (enum lldb::LanguageType language, bool catch_bp, bool throw_bp, bool internal);
+    CreateExceptionBreakpoint (enum lldb::LanguageType language,
+                               bool catch_bp,
+                               bool throw_bp,
+                               bool internal,
+                               Args *additional_args = nullptr,
+                               Error *additional_args_error = nullptr);
     
     // This is the same as the func_name breakpoint except that you can specify a vector of names.  This is cheaper
     // than a regular expression breakpoint in the case where you just want to set a breakpoint on a set of names
     // you already know.
+    // func_name_type_mask is or'ed values from the FunctionNameType enum.
     lldb::BreakpointSP
     CreateBreakpoint (const FileSpecList *containingModules,
                       const FileSpecList *containingSourceFiles,

@@ -7,22 +7,26 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if defined(__i386__) || defined(__x86_64__)
 
 #ifndef lldb_NativeRegisterContextLinux_x86_64_h
 #define lldb_NativeRegisterContextLinux_x86_64_h
 
-#include "lldb/Host/common/NativeRegisterContextRegisterInfo.h"
+#include "Plugins/Process/Linux/NativeRegisterContextLinux.h"
 #include "Plugins/Process/Utility/RegisterContext_x86.h"
 #include "Plugins/Process/Utility/lldb-x86-register-enums.h"
 
-namespace lldb_private
-{
+namespace lldb_private {
+namespace process_linux {
+
     class NativeProcessLinux;
 
-    class NativeRegisterContextLinux_x86_64 : public NativeRegisterContextRegisterInfo
+    class NativeRegisterContextLinux_x86_64 : public NativeRegisterContextLinux
     {
     public:
-        NativeRegisterContextLinux_x86_64 (NativeThreadProtocol &native_thread, uint32_t concrete_frame_idx, RegisterInfoInterface *reg_info_interface_p);
+        NativeRegisterContextLinux_x86_64 (const ArchSpec& target_arch,
+                                           NativeThreadProtocol &native_thread,
+                                           uint32_t concrete_frame_idx);
 
         uint32_t
         GetRegisterSetCount () const override;
@@ -49,7 +53,7 @@ namespace lldb_private
         IsWatchpointHit(uint32_t wp_index, bool &is_hit) override;
 
         Error
-        GetWatchpointHitIndex(uint32_t &wp_index) override;
+        GetWatchpointHitIndex(uint32_t &wp_index, lldb::addr_t trap_addr) override;
 
         Error
         IsWatchpointVacant(uint32_t wp_index, bool &is_vacant) override;
@@ -73,6 +77,22 @@ namespace lldb_private
 
         uint32_t
         NumSupportedHardwareWatchpoints() override;
+
+    protected:
+        void*
+        GetGPRBuffer() override { return &m_gpr_x86_64; }
+
+        void*
+        GetFPRBuffer() override;
+
+        size_t
+        GetFPRSize() override;
+
+        Error
+        ReadFPR() override;
+
+        Error
+        WriteFPR() override;
 
     private:
 
@@ -118,13 +138,7 @@ namespace lldb_private
         uint64_t m_gpr_x86_64[k_num_gpr_registers_x86_64];
 
         // Private member methods.
-        lldb_private::Error
-        WriteRegister(const uint32_t reg, const RegisterValue &value);
-
         bool IsRegisterSetAvailable (uint32_t set_index) const;
-
-        lldb::ByteOrder
-        GetByteOrder() const;
 
         bool
         IsGPR(uint32_t reg_index) const;
@@ -136,9 +150,7 @@ namespace lldb_private
         IsFPR(uint32_t reg_index) const;
 
         bool
-        WriteFPR();
-
-        bool IsFPR(uint32_t reg_index, FPRType fpr_type) const;
+        IsFPR(uint32_t reg_index, FPRType fpr_type) const;
 
         bool
         CopyXSTATEtoYMM (uint32_t reg_index, lldb::ByteOrder byte_order);
@@ -148,20 +160,11 @@ namespace lldb_private
 
         bool
         IsAVX (uint32_t reg_index) const;
-
-        bool
-        ReadFPR ();
-
-        lldb_private::Error
-        ReadRegisterRaw (uint32_t reg_index, RegisterValue &reg_value);
-
-        bool
-        ReadGPR();
-
-        bool
-        WriteGPR();
     };
-}
+
+} // namespace process_linux
+} // namespace lldb_private
 
 #endif // #ifndef lldb_NativeRegisterContextLinux_x86_64_h
 
+#endif // defined(__i386__) || defined(__x86_64__)

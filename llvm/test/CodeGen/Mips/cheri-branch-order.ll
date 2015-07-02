@@ -33,7 +33,7 @@ if.end:                                           ; preds = %entry
   %4 = addrspacecast i8 addrspace(200)* addrspace(200)* %3 to i8 addrspace(200)**
   store i8 addrspace(200)** %4, i8 addrspace(200)*** %slot, align 8
   %5 = load i8 addrspace(200)**, i8 addrspace(200)*** %slot, align 8
-  %call = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str, i32 0, i32 0), i8 addrspace(200)** %5)
+  %call = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str, i32 0, i32 0), i8 addrspace(200)** %5)
   %6 = load i8 addrspace(200)**, i8 addrspace(200)*** %slot, align 8
   %7 = bitcast i8 addrspace(200)** %6 to i8*
   store i8* %7, i8** %retval

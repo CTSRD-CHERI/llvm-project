@@ -17,6 +17,7 @@
 // In-house headers:
 #include "MIUtilSystemWindows.h"
 #include "MICmnResources.h"
+#include "MIUtilFileStd.h"
 
 //++ ------------------------------------------------------------------------------------
 // Details: CMIUtilSystemWindows constructor.
@@ -110,15 +111,13 @@ CMIUtilSystemWindows::GetExecutablesPath(CMIUtilString &vrwFileNamePath) const
     bool bOk = MIstatus::success;
     HMODULE hModule = ::GetModuleHandle(nullptr);
     char pPath[MAX_PATH];
-    const DWORD nLen = ::GetModuleFileName(hModule, &pPath[0], MAX_PATH);
-    const CMIUtilString strLastErr(GetOSLastError());
-    if ((nLen != 0) && (strLastErr == "Unknown OS error"))
-        vrwFileNamePath = &pPath[0];
-    else
+    if (!::GetModuleFileName(hModule, &pPath[0], MAX_PATH))
     {
         bOk = MIstatus::failure;
-        vrwFileNamePath = strLastErr;
+        vrwFileNamePath = GetOSLastError();
     }
+    else
+        vrwFileNamePath = &pPath[0];
 
     return bOk;
 }
@@ -135,7 +134,8 @@ CMIUtilSystemWindows::GetExecutablesPath(CMIUtilString &vrwFileNamePath) const
 bool
 CMIUtilSystemWindows::GetLogFilesPath(CMIUtilString &vrwFileNamePath) const
 {
-    return GetExecutablesPath(vrwFileNamePath);
+    vrwFileNamePath = CMIUtilString(".");
+    return MIstatus::success;
 }
 
 #endif // #if defined( _MSC_VER )

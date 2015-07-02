@@ -23,6 +23,7 @@
 
 using namespace lldb;
 using namespace lldb_private;
+using namespace lldb_private::process_gdb_remote;
 
 GDBRemoteCommunicationServer::GDBRemoteCommunicationServer(const char *comm_name,
                                                            const char *listener_name) :
@@ -50,7 +51,7 @@ GDBRemoteCommunicationServer::GetPacketAndSendResponse (uint32_t timeout_usec,
 {
     StringExtractorGDBRemote packet;
 
-    PacketResult packet_result = WaitForPacketWithTimeoutMicroSecondsNoLock (packet, timeout_usec);
+    PacketResult packet_result = WaitForPacketWithTimeoutMicroSecondsNoLock (packet, timeout_usec, false);
     if (packet_result == PacketResult::Success)
     {
         const StringExtractorGDBRemote::ServerPacketType packet_type = packet.GetServerPacketType ();

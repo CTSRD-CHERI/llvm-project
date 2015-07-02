@@ -33,6 +33,7 @@ add_lldb_library(liblldb SHARED
   SBHostOS.cpp
   SBInstruction.cpp
   SBInstructionList.cpp
+  SBLanguageRuntime.cpp
   SBLaunchInfo.cpp
   SBLineEntry.cpp
   SBListener.cpp
@@ -66,6 +67,7 @@ add_lldb_library(liblldb SHARED
   SBVariablesOptions.cpp
   SBWatchpoint.cpp
   SBUnixSignals.cpp
+  SystemInitializerFull.cpp
   ${LLDB_WRAP_PYTHON}
   ${LLDB_VERS_GENERATED_FILE}
   )

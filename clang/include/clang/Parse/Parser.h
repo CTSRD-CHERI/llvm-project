@@ -235,7 +235,7 @@ class Parser : public CodeCompletionHandler {
 
 public:
   Parser(Preprocessor &PP, Sema &Actions, bool SkipFunctionBodies);
-  ~Parser();
+  ~Parser() override;
 
   const LangOptions &getLangOpts() const { return PP.getLangOpts(); }
   const TargetInfo &getTargetInfo() const { return PP.getTargetInfo(); }
@@ -301,6 +301,12 @@ public:
       return false;
     Loc = PrevTokLocation;
     return true;
+  }
+
+  /// Retrieve the underscored keyword (_Nonnull, _Nullable) that corresponds
+  /// to the given nullability kind.
+  IdentifierInfo *getNullabilityKeyword(NullabilityKind nullability) {
+    return Actions.getNullabilityKeyword(nullability);
   }
 
 private:
@@ -620,6 +626,16 @@ private:
                                 const char *&PrevSpec, unsigned &DiagID,
                                 bool &isInvalid);
 
+  /// Returns true if the current token is the identifier 'instancetype'.
+  ///
+  /// Should only be used in Objective-C language modes.
+  bool isObjCInstancetype() {
+    assert(getLangOpts().ObjC1);
+    if (!Ident_instancetype)
+      Ident_instancetype = PP.getIdentifierInfo("instancetype");
+    return Tok.getIdentifierInfo() == Ident_instancetype;
+  }
+
   /// TryKeywordIdentFallback - For compatibility with system headers using
   /// keywords as identifiers, attempt to convert the current token to an
   /// identifier and optionally disable the keyword for the remainder of the
@@ -887,7 +903,7 @@ private:
   class LateParsedClass : public LateParsedDeclaration {
   public:
     LateParsedClass(Parser *P, ParsingClass *C);
-    virtual ~LateParsedClass();
+    ~LateParsedClass() override;
 
     void ParseLexedMethodDeclarations() override;
     void ParseLexedMemberInitializers() override;
@@ -1166,7 +1182,7 @@ private:
                                 ParsingDeclarator &D,
                                 const ParsedTemplateInfo &TemplateInfo,
                                 const VirtSpecifiers& VS,
-                                ExprResult& Init);
+                                SourceLocation PureSpecLoc);
   void ParseCXXNonStaticMemberInitializer(Decl *VarD);
   void ParseLexedAttributes(ParsingClass &Class);
   void ParseLexedAttributeList(LateParsedAttrList &LAs, Decl *D,
@@ -1240,6 +1256,7 @@ private:
   bool ParseObjCProtocolReferences(SmallVectorImpl<Decl *> &P,
                                    SmallVectorImpl<SourceLocation> &PLocs,
                                    bool WarnOnDeclarations,
+                                   bool ForObjCContainer,
                                    SourceLocation &LAngleLoc,
                                    SourceLocation &EndProtoLoc);
   bool ParseObjCProtocolQualifiers(DeclSpec &DS);
@@ -1281,6 +1298,7 @@ private:
   // Definitions for Objective-c context sensitive keywords recognition.
   enum ObjCTypeQual {
     objc_in=0, objc_out, objc_inout, objc_oneway, objc_bycopy, objc_byref,
+    objc_nonnull, objc_nullable, objc_null_unspecified,
     objc_NumQuals
   };
   IdentifierInfo *ObjCTypeQuals[objc_NumQuals];
@@ -1313,6 +1331,7 @@ public:
 
   ExprResult ParseExpression(TypeCastState isTypeCast = NotTypeCast);
   ExprResult ParseConstantExpression(TypeCastState isTypeCast = NotTypeCast);
+  ExprResult ParseConstraintExpression();
   // Expr that doesn't include commas.
   ExprResult ParseAssignmentExpression(TypeCastState isTypeCast = NotTypeCast);
 
@@ -1684,7 +1703,9 @@ private:
     DSC_trailing, // C++11 trailing-type-specifier in a trailing return type
     DSC_alias_declaration, // C++11 type-specifier-seq in an alias-declaration
     DSC_top_level, // top-level/namespace declaration context
-    DSC_template_type_arg // template type argument context
+    DSC_template_type_arg, // template type argument context
+    DSC_objc_method_result, // ObjC method result context, enables 'instancetype'
+    DSC_condition // condition declaration context
   };
 
   /// Is this a context in which we are parsing just a type-specifier (or
@@ -1694,6 +1715,8 @@ private:
     case DSC_normal:
     case DSC_class:
     case DSC_top_level:
+    case DSC_objc_method_result:
+    case DSC_condition:
       return false;
 
     case DSC_template_type_arg:
@@ -1979,6 +2002,9 @@ private:
   void DiagnoseMisplacedCXX11Attribute(ParsedAttributesWithRange &Attrs,
                                        SourceLocation CorrectLocation);
 
+  void handleDeclspecAlignBeforeClassKey(ParsedAttributesWithRange &Attrs,
+                                         DeclSpec &DS, Sema::TagUseKind TUK);
+
   void ProhibitAttributes(ParsedAttributesWithRange &attrs) {
     if (!attrs.Range.isValid()) return;
     DiagnoseProhibitedAttributes(attrs);
@@ -2083,7 +2109,15 @@ private:
   }
   void ParseMicrosoftAttributes(ParsedAttributes &attrs,
                                 SourceLocation *endLoc = nullptr);
-  void ParseMicrosoftDeclSpec(ParsedAttributes &Attrs);
+  void MaybeParseMicrosoftDeclSpecs(ParsedAttributes &Attrs,
+                                    SourceLocation *End = nullptr) {
+    const auto &LO = getLangOpts();
+    if ((LO.MicrosoftExt || LO.Borland || LO.CUDA) &&
+        Tok.is(tok::kw___declspec))
+      ParseMicrosoftDeclSpecs(Attrs, End);
+  }
+  void ParseMicrosoftDeclSpecs(ParsedAttributes &Attrs,
+                               SourceLocation *End = nullptr);
   bool ParseMicrosoftDeclSpecArgs(IdentifierInfo *AttrName,
                                   SourceLocation AttrNameLoc,
                                   ParsedAttributes &Attrs);
@@ -2094,6 +2128,7 @@ private:
   void ParseBorlandTypeAttributes(ParsedAttributes &attrs);
   void ParseOpenCLAttributes(ParsedAttributes &attrs);
   void ParseOpenCLQualifiers(ParsedAttributes &Attrs);
+  void ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs);
 
   VersionTuple ParseVersionTuple(SourceRange &Range);
   void ParseAvailabilityAttribute(IdentifierInfo &Availability,
@@ -2214,6 +2249,8 @@ private:
                                BalancedDelimiterTracker &Tracker,
                                bool IsAmbiguous,
                                bool RequiresArg = false);
+  bool ParseRefQualifier(bool &RefQualifierIsLValueRef,
+                         SourceLocation &RefQualifierLoc);
   bool isFunctionDeclaratorIdentifierList();
   void ParseFunctionDeclaratorIdentifierList(
          Declarator &D,
@@ -2282,6 +2319,10 @@ private:
                            AccessSpecifier AS, bool EnteringContext,
                            DeclSpecContext DSC, 
                            ParsedAttributesWithRange &Attributes);
+  void SkipCXXMemberSpecification(SourceLocation StartLoc,
+                                  SourceLocation AttrFixitLoc,
+                                  unsigned TagType,
+                                  Decl *TagDecl);
   void ParseCXXMemberSpecification(SourceLocation StartLoc,
                                    SourceLocation AttrFixitLoc,
                                    ParsedAttributesWithRange &Attrs,
@@ -2293,6 +2334,8 @@ private:
                                                  VirtSpecifiers &VS,
                                                  ExprResult &BitfieldSize,
                                                  LateParsedAttrList &LateAttrs);
+  void MaybeParseAndDiagnoseDeclSpecAfterCXX11VirtSpecifierSeq(Declarator &D,
+                                                               VirtSpecifiers &VS);
   void ParseCXXClassMemberDeclaration(AccessSpecifier AS, AttributeList *Attr,
                   const ParsedTemplateInfo &TemplateInfo = ParsedTemplateInfo(),
                   ParsingDeclRAIIObject *DiagsFromTParams = nullptr);

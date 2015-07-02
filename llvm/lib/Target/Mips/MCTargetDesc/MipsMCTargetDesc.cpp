@@ -42,13 +42,12 @@ using namespace llvm;
 #include "MipsGenRegisterInfo.inc"
 
 /// Select the Mips CPU for the given triple and cpu name.
-StringRef MIPS_MC::selectMipsCPU(StringRef TT, StringRef CPU) {
+/// FIXME: Merge with the copy in MipsSubtarget.cpp
+StringRef MIPS_MC::selectMipsCPU(const Triple &TT, StringRef CPU) {
   if (CPU.empty() || CPU == "generic") {
-    Triple TheTriple(TT);
-    if (TheTriple.getArch() == Triple::mips ||
-        TheTriple.getArch() == Triple::mipsel)
+    if (TT.getArch() == Triple::mips || TT.getArch() == Triple::mipsel)
       CPU = "mips32";
-    else if (TheTriple.getArch() == Triple::cheri)
+    else if (TT.getArch() == Triple::cheri)
       CPU = "cheri";
     else
       CPU = "mips64";
@@ -68,15 +67,16 @@ static MCRegisterInfo *createMipsMCRegisterInfo(StringRef TT) {
   return X;
 }
 
-static MCSubtargetInfo *createMipsMCSubtargetInfo(StringRef TT, StringRef CPU,
-                                                  StringRef FS) {
+static MCSubtargetInfo *createMipsMCSubtargetInfo(const Triple &TT,
+                                                  StringRef CPU, StringRef FS) {
   CPU = MIPS_MC::selectMipsCPU(TT, CPU);
   MCSubtargetInfo *X = new MCSubtargetInfo();
   InitMipsMCSubtargetInfo(X, TT, CPU, FS);
   return X;
 }
 
-static MCAsmInfo *createMipsMCAsmInfo(const MCRegisterInfo &MRI, StringRef TT) {
+static MCAsmInfo *createMipsMCAsmInfo(const MCRegisterInfo &MRI,
+                                      const Triple &TT) {
   MCAsmInfo *MAI = new MipsMCAsmInfo(TT);
 
   unsigned SP = MRI.getDwarfRegNum(Mips::SP, true);
@@ -94,21 +94,20 @@ static MCCodeGenInfo *createMipsMCCodeGenInfo(StringRef TT, Reloc::Model RM,
     RM = Reloc::Static;
   else if (RM == Reloc::Default)
     RM = Reloc::PIC_;
-  X->InitMCCodeGenInfo(RM, CM, OL);
+  X->initMCCodeGenInfo(RM, CM, OL);
   return X;
 }
 
-static MCInstPrinter *createMipsMCInstPrinter(const Target &T,
+static MCInstPrinter *createMipsMCInstPrinter(const Triple &T,
                                               unsigned SyntaxVariant,
                                               const MCAsmInfo &MAI,
                                               const MCInstrInfo &MII,
-                                              const MCRegisterInfo &MRI,
-                                              const MCSubtargetInfo &STI) {
+                                              const MCRegisterInfo &MRI) {
   return new MipsInstPrinter(MAI, MII, MRI);
 }
 
 static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
-                                    MCAsmBackend &MAB, raw_ostream &OS,
+                                    MCAsmBackend &MAB, raw_pwrite_stream &OS,
                                     MCCodeEmitter *Emitter, bool RelaxAll) {
   MCStreamer *S;
   if (!T.isOSNaCl())

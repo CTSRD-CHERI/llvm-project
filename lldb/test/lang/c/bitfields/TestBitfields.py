@@ -10,14 +10,14 @@ class BitfieldsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Test 'frame variable ...' on a variable with bitfields."""
         self.buildDsym()
         self.bitfields_variable()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_with_dsym_and_python_api(self):
@@ -26,7 +26,7 @@ class BitfieldsTestCase(TestBase):
         self.bitfields_variable_python()
 
     @dwarf_test
-    @unittest2.skipIf(sys.platform.startswith("win32"), "BitFields exhibit crashes in record layout on Windows (http://llvm.org/pr21800)")
+    @skipIfWindows # BitFields exhibit crashes in record layout on Windows (http://llvm.org/pr21800)
     def test_with_dwarf_and_run_command(self):
         """Test 'frame variable ...' on a variable with bitfields."""
         self.buildDwarf()
@@ -34,8 +34,7 @@ class BitfieldsTestCase(TestBase):
 
     @python_api_test
     @dwarf_test
-    @unittest2.skipIf(sys.platform.startswith("win32"), "BitFields exhibit crashes in record layout on Windows (http://llvm.org/pr21800)")
-    @expectedFailureGcc # GCC (4.6/4.7) generates incorrect code with unnamed bitfields.
+    @skipIfWindows # BitFields exhibit crashes in record layout on Windows (http://llvm.org/pr21800)
     def test_with_dwarf_and_python_api(self):
         """Use Python APIs to inspect a bitfields variable."""
         self.buildDwarf()
@@ -55,7 +54,7 @@ class BitfieldsTestCase(TestBase):
         # Break inside the main.
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -155,11 +154,7 @@ class BitfieldsTestCase(TestBase):
         self.assertTrue(bits.GetTypeName() == 'Bits', "bits.GetTypeName() == 'Bits'");
         self.assertTrue(bits.GetNumChildren() == 10, "bits.GetNumChildren() == 10");
         test_compiler = self.getCompiler()
-        if "gcc" in test_compiler:
-        # Clang ignores the align attribute, so this structure isn't padded out to 
-        # 32 bytes there as the test author intended.  Suppress this test for clang
-        # till somebody has a chance to go rewrite the test source to be this big portably.
-            self.assertTrue(bits.GetByteSize() == 32, "bits.GetByteSize() == 32");
+        self.assertTrue(bits.GetByteSize() == 32, "bits.GetByteSize() == 32");
 
         # Notice the pattern of int(b1.GetValue(), 0).  We pass a base of 0
         # so that the proper radix is determined based on the contents of the

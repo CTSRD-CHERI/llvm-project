@@ -207,6 +207,7 @@ append_list_if(COMPILER_RT_HAS_FNO_EXCEPTIONS_FLAG -fno-exceptions SANITIZER_COM
 append_list_if(COMPILER_RT_HAS_FOMIT_FRAME_POINTER_FLAG -fomit-frame-pointer SANITIZER_COMMON_CFLAGS)
 append_list_if(COMPILER_RT_HAS_FUNWIND_TABLES_FLAG -funwind-tables SANITIZER_COMMON_CFLAGS)
 append_list_if(COMPILER_RT_HAS_FNO_STACK_PROTECTOR_FLAG -fno-stack-protector SANITIZER_COMMON_CFLAGS)
+append_list_if(COMPILER_RT_HAS_FNO_SANITIZE_SAFE_STACK_FLAG -fno-sanitize=safe-stack SANITIZER_COMMON_CFLAGS)
 append_list_if(COMPILER_RT_HAS_FVISIBILITY_HIDDEN_FLAG -fvisibility=hidden SANITIZER_COMMON_CFLAGS)
 append_list_if(COMPILER_RT_HAS_FNO_FUNCTION_SECTIONS_FLAG -fno-function-sections SANITIZER_COMMON_CFLAGS)
 append_list_if(COMPILER_RT_HAS_FNO_LTO_FLAG -fno-lto SANITIZER_COMMON_CFLAGS)
@@ -238,12 +239,13 @@ if(NOT COMPILER_RT_DEBUG AND NOT MSVC)
 endif()
 
 # Determine if we should restrict stack frame sizes.
-# Stack frames on PowerPC and in debug biuld can be much larger than
+# Stack frames on PowerPC and Mips and in debug biuld can be much larger than
 # anticipated.
 # FIXME: Fix all sanitizers and add -Wframe-larger-than to
 # SANITIZER_COMMON_FLAGS
 if(COMPILER_RT_HAS_WFRAME_LARGER_THAN_FLAG AND NOT COMPILER_RT_DEBUG
-   AND NOT ${LLVM_NATIVE_ARCH} STREQUAL "PowerPC")
+   AND NOT ${LLVM_NATIVE_ARCH} STREQUAL "PowerPC"
+   AND NOT ${LLVM_NATIVE_ARCH} STREQUAL "Mips")
   set(SANITIZER_LIMIT_FRAME_SIZE TRUE)
 else()
   set(SANITIZER_LIMIT_FRAME_SIZE FALSE)
@@ -290,23 +292,33 @@ if(APPLE)
   find_darwin_sdk_dir(OSX_SDK_DIR macosx)
   find_darwin_sdk_dir(IOSSIM_SDK_DIR iphonesimulator)
 
-  string(REGEX MATCH "-mmacosx-version-min="
+  set(SANITIZER_COMMON_SUPPORTED_OS osx)
+  string(REGEX MATCH "-mmacosx-version-min=([.0-9]+)"
          MACOSX_VERSION_MIN_FLAG "${CMAKE_CXX_FLAGS}")
-  set(SANITIZER_COMMON_SUPPORTED_DARWIN_OS osx)
-  if (IOSSIM_SDK_DIR AND NOT MACOSX_VERSION_MIN_FLAG)
-    list(APPEND SANITIZER_COMMON_SUPPORTED_DARWIN_OS iossim)
+  if(MACOSX_VERSION_MIN_FLAG)
+    set(SANITIZER_MIN_OSX_VERSION "${CMAKE_MATCH_1}")
+  elseif(CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(SANITIZER_MIN_OSX_VERSION ${CMAKE_OSX_DEPLOYMENT_TARGET})
+  else()
+    set(SANITIZER_MIN_OSX_VERSION 10.9)
+    if(IOSSIM_SDK_DIR)
+      list(APPEND SANITIZER_COMMON_SUPPORTED_OS iossim)
+    endif()
+  endif()
+  if(SANITIZER_MIN_OSX_VERSION VERSION_LESS "10.7")
+    message(FATAL_ERROR "Too old OS X version: ${SANITIZER_MIN_OSX_VERSION}")
   endif()
 
-  set(SANITIZER_MIN_OSX_VERSION 10.7)
-  set(CMAKE_OSX_DEPLOYMENT_TARGET "") # We're setting the flag manually below.
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "") # We evaluate target OS X version above.
   set(DARWIN_osx_CFLAGS -mmacosx-version-min=${SANITIZER_MIN_OSX_VERSION}
     -stdlib=libc++)
   set(DARWIN_iossim_CFLAGS
+    -stdlib=libc++
     -mios-simulator-version-min=7.0 -isysroot ${IOSSIM_SDK_DIR})
   set(DARWIN_osx_LINKFLAGS -mmacosx-version-min=${SANITIZER_MIN_OSX_VERSION}
-     -stdlib=libc++
-     -lc++abi)
+    -stdlib=libc++ -lc++ -lc++abi)
   set(DARWIN_iossim_LINKFLAGS
+    -stdlib=libc++ -lc++ -lc++abi
     -Wl,-ios_simulator_version_min,7.0.0
     -mios-simulator-version-min=7.0
     -isysroot ${IOSSIM_SDK_DIR})
@@ -316,6 +328,15 @@ if(APPLE)
     list(APPEND DARWIN_osx_LINKFLAGS -isysroot ${OSX_SDK_DIR})
   endif()
 endif()
+
+if(APPLE AND SANITIZER_MIN_OSX_VERSION VERSION_LESS "10.9")
+  # Mac OS X prior to 10.9 had problems with exporting symbols from
+  # libc++/libc++abi.
+  set(SANITIZER_CAN_USE_CXXABI FALSE)
+else()
+  set(SANITIZER_CAN_USE_CXXABI TRUE)
+endif()
+pythonize_bool(SANITIZER_CAN_USE_CXXABI)
 
 add_subdirectory(include)
 

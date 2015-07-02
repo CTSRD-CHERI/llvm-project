@@ -13,7 +13,7 @@ class IterateFrameAndDisassembleTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
     failing_compilers = ['clang', 'gcc']
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Disassemble each call frame when stopped on C's constructor."""
@@ -26,7 +26,7 @@ class IterateFrameAndDisassembleTestCase(TestBase):
         self.buildDwarf()
         self.disassemble_call_stack()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_with_dsym_and_python_api(self):
@@ -55,7 +55,7 @@ class IterateFrameAndDisassembleTestCase(TestBase):
         # Break on the ctor function of class C.
         bpno = lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=-1)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

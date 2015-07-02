@@ -21,15 +21,15 @@ target triple = "x86_64-pc-windows-msvc"
 @_ZTIi = external constant i8*
 
 ; The function entry will be rewritten like this.
-; CHECK: define void @_Z4testv() #0 {
+; CHECK: define void @_Z4testv()
 ; CHECK: entry:
 ; CHECK:   [[I_PTR:\%.+]] = alloca i32, align 4
-; CHECK:   call void (...)* @llvm.frameescape(i32* [[I_PTR]])
+; CHECK:   call void (...) @llvm.frameescape(i32* [[I_PTR]])
 ; CHECK:   invoke void @_Z9may_throwv()
-; CHECK:           to label %invoke.cont unwind label %[[LPAD_LABEL:lpad[0-9]+]]
+; CHECK:           to label %invoke.cont unwind label %[[LPAD_LABEL:lpad[0-9]*]]
 
 ; Function Attrs: uwtable
-define void @_Z4testv() #0 {
+define void @_Z4testv() #0 personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to i8*) {
 entry:
   %exn.slot = alloca i8*
   %ehselector.slot = alloca i32
@@ -41,13 +41,13 @@ invoke.cont:                                      ; preds = %entry
   br label %try.cont
 
 ; CHECK: [[LPAD_LABEL]]:{{[ ]+}}; preds = %entry
-; CHECK:   landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to i8*)
+; CHECK:   landingpad { i8*, i32 }
 ; CHECK-NEXT:           catch i8* bitcast (i8** @_ZTIi to i8*)
-; CHECK-NEXT:   [[RECOVER:\%.+]] = call i8* (...)* @llvm.eh.actions(i32 1, i8* bitcast (i8** @_ZTIi to i8*), i32* %i, i8* (i8*, i8*)* @_Z4testv.catch)
+; CHECK-NEXT:   [[RECOVER:\%.+]] = call i8* (...) @llvm.eh.actions(i32 1, i8* bitcast (i8** @_ZTIi to i8*), i32 0, i8* (i8*, i8*)* @_Z4testv.catch)
 ; CHECK-NEXT:   indirectbr i8* [[RECOVER]], [label %try.cont]
 
 lpad:                                             ; preds = %entry
-  %tmp = landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to i8*)
+  %tmp = landingpad { i8*, i32 }
           catch i8* bitcast (i8** @_ZTIi to i8*)
   %tmp1 = extractvalue { i8*, i32 } %tmp, 0
   store i8* %tmp1, i8** %exn.slot
@@ -94,7 +94,7 @@ eh.resume:                                        ; preds = %catch.dispatch
 ; CHECK: }
 }
 
-; CHECK: define internal i8* @_Z4testv.catch(i8*, i8*) {
+; CHECK: define internal i8* @_Z4testv.catch(i8*, i8*)
 ; CHECK: entry:
 ; CHECK:   [[RECOVER_I:\%.+]] = call i8* @llvm.framerecover(i8* bitcast (void ()* @_Z4testv to i8*), i8* %1, i32 0)
 ; CHECK:   [[I_PTR1:\%.+]] = bitcast i8* [[RECOVER_I]] to i32*

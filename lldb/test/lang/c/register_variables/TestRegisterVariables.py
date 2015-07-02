@@ -17,8 +17,9 @@ class RegisterVariableTestCase(TestBase):
         self.buildDsym()
         self.const_variable()
 
-    @expectedFailureClang
     @dwarf_test
+    @expectedFailureClang(None, ['<', '3.5'])
+    @expectedFailureGcc(None, ['is', '4.8.2'])
     def test_with_dwarf_and_run_command(self):
         """Test expressions on register values."""
         self.buildDwarf()
@@ -39,7 +40,7 @@ class RegisterVariableTestCase(TestBase):
         ####################
         # First breakpoint
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

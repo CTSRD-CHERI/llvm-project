@@ -24,6 +24,16 @@ public:
   ; // expected-warning{{extra ';' inside a class}}
 
   virtual int vf() const volatile = 0;
+
+  virtual int vf0() = 0l; // expected-error {{does not look like a pure-specifier}}
+  virtual int vf1() = 1; // expected-error {{does not look like a pure-specifier}}
+  virtual int vf2() = 00; // expected-error {{does not look like a pure-specifier}}
+  virtual int vf3() = 0x0; // expected-error {{does not look like a pure-specifier}}
+  virtual int vf4() = 0.0; // expected-error {{does not look like a pure-specifier}}
+  virtual int vf5(){0}; // expected-error +{{}} expected-warning {{unused}}
+  virtual int vf5a(){0;}; // function definition, expected-warning {{unused}}
+  virtual int vf6()(0); // expected-error +{{}} expected-note +{{}}
+  virtual int vf7() = { 0 }; // expected-error {{does not look like a pure-specifier}}
   
 private:
   int x,f(),y,g();
@@ -159,6 +169,7 @@ namespace DtorErrors {
   ~D::D() throw(X) {} // expected-error {{'~' in destructor name should be after nested name specifier}}
 
   ~Undeclared::Undeclared() {} // expected-error {{use of undeclared identifier 'Undeclared'}} expected-error {{'~' in destructor name should be after nested name specifier}}
+  ~Undeclared:: {} // expected-error {{expected identifier}} expected-error {{'~' in destructor name should be after nested name specifier}}
 
   struct S {
     // For another struct's destructor, emit the same diagnostic like for
@@ -209,9 +220,9 @@ class X2 { a::a; }; // expected-error {{undeclared identifier 'a'}}
 
 class BadExceptionSpec {
   void f() throw(int; // expected-error {{expected ')'}} expected-note {{to match}}
-  void g() throw( // expected-note {{to match}}
-      int( // expected-note {{to match}}
-          ; // expected-error 2{{expected ')'}} expected-error {{unexpected end of exception specification}}
+  void g() throw(
+      int(
+          ; // expected-error {{unexpected ';' before ')'}}
           ));
 };
 

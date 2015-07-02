@@ -41,16 +41,23 @@ set( LLDB_USED_LIBS
   lldbPluginUnwindAssemblyInstEmulation
   lldbPluginUnwindAssemblyX86
   lldbPluginAppleObjCRuntime
+  lldbPluginRenderScriptRuntime
   lldbPluginCXXItaniumABI
   lldbPluginABIMacOSX_arm
   lldbPluginABIMacOSX_arm64
   lldbPluginABIMacOSX_i386
+  lldbPluginABISysV_arm
+  lldbPluginABISysV_arm64
+  lldbPluginABISysV_i386
   lldbPluginABISysV_x86_64
   lldbPluginABISysV_hexagon
   lldbPluginABISysV_ppc
   lldbPluginABISysV_ppc64
+  lldbPluginABISysV_mips
+  lldbPluginABISysV_mips64
   lldbPluginInstructionARM
   lldbPluginInstructionARM64
+  lldbPluginInstructionMIPS
   lldbPluginInstructionMIPS64
   lldbPluginObjectFilePECOFF
   lldbPluginOSPython
@@ -165,6 +172,7 @@ set( LLVM_LINK_COMPONENTS
   core
   mcdisassembler
   executionengine
+  runtimedyld
   option
   support
   )
@@ -173,6 +181,9 @@ if ( NOT LLDB_DISABLE_PYTHON )
   set(LLDB_WRAP_PYTHON ${LLDB_BINARY_DIR}/scripts/LLDBWrapPython.cpp)
 
   set_source_files_properties(${LLDB_WRAP_PYTHON} PROPERTIES GENERATED 1)
+  if (CLANG_CL)
+    set_source_files_properties(${LLDB_WRAP_PYTHON} PROPERTIES COMPILE_FLAGS -Wno-unused-function)
+  endif()
   if (LLVM_COMPILER_IS_GCC_COMPATIBLE AND
       NOT "${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
     set_property(SOURCE ${LLDB_WRAP_PYTHON}

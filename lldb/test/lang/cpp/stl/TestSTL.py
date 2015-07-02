@@ -14,7 +14,7 @@ class STLTestCase(TestBase):
 
     # rdar://problem/10400981
     @unittest2.expectedFailure
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym(self):
         """Test some expressions involving STL data types."""
@@ -31,12 +31,12 @@ class STLTestCase(TestBase):
 
     @python_api_test
     @dsym_test
+    @skipUnlessDarwin
     def test_SBType_template_aspects_with_dsym(self):
         """Test APIs for getting template arguments from an SBType."""
         self.buildDsym()
         self.sbtype_template_apis()
 
-    @skipIfGcc # llvm.org/pr15036: crashes during DWARF parsing when built with GCC
     @expectedFailureIcc # icc 13.1 and 14-beta do not emit DW_TAG_template_type_parameter
     @python_api_test
     @dwarf_test
@@ -67,7 +67,7 @@ class STLTestCase(TestBase):
         # is this a problem with clang generated debug info?
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # Stop at 'std::string hello_world ("Hello World!");'.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

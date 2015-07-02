@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 // C Includes
 
 // C++ Includes
@@ -23,7 +21,7 @@
 #include "lldb/Core/StreamString.h"
 #include "lldb/DataFormatters/TypeSynthetic.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
-#include "lldb/Interpreter/ScriptInterpreterPython.h"
+#include "lldb/Interpreter/ScriptInterpreter.h"
 #include "lldb/Symbol/ClangASTType.h"
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"

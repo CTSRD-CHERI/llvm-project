@@ -10,7 +10,7 @@ class SBFormattersAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @python_api_test
     @dsym_test
     def test_with_dsym_formatters_api(self):
@@ -45,7 +45,7 @@ class SBFormattersAPITestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -153,7 +153,7 @@ class SBFormattersAPITestCase(TestBase):
         self.expect("frame variable foo", matching=True,
              substrs = ['B = ', 'C = ', 'E = ', 'F = '])
 
-        self.runCmd("command script import --allow-reload ./jas_synth.py")
+        self.runCmd("command script import --allow-reload ./synth.py")
 
         self.expect("frame variable foo", matching=False,
              substrs = ['X = 1'])
@@ -161,6 +161,10 @@ class SBFormattersAPITestCase(TestBase):
         self.dbg.GetCategory("JASSynth").SetEnabled(True)
         self.expect("frame variable foo", matching=True,
              substrs = ['X = 1'])
+
+        self.dbg.GetCategory("CCCSynth").SetEnabled(True)
+        self.expect("frame variable ccc", matching=True,
+             substrs = ['CCC object with leading value (int) a = 111', 'a = 111', 'b = 222', 'c = 333'])
 
         foo_var = self.dbg.GetSelectedTarget().GetProcess().GetSelectedThread().GetSelectedFrame().FindVariable('foo')
         self.assertTrue(foo_var.IsValid(), 'could not find foo')
@@ -304,7 +308,7 @@ class SBFormattersAPITestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

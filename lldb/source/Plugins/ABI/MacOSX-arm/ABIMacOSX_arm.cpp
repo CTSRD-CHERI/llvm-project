@@ -184,13 +184,19 @@ ABIMacOSX_arm::CreateInstance (const ArchSpec &arch)
 {
     static ABISP g_abi_sp;
     const llvm::Triple::ArchType arch_type = arch.GetTriple().getArch();
-    if ((arch_type == llvm::Triple::arm) ||
-        (arch_type == llvm::Triple::thumb))
+    const llvm::Triple::VendorType vendor_type = arch.GetTriple().getVendor();
+
+    if (vendor_type == llvm::Triple::Apple)
     {
-        if (!g_abi_sp)
-            g_abi_sp.reset (new ABIMacOSX_arm);
-        return g_abi_sp;
+        if ((arch_type == llvm::Triple::arm) ||
+            (arch_type == llvm::Triple::thumb))
+        {
+            if (!g_abi_sp)
+                g_abi_sp.reset (new ABIMacOSX_arm);
+            return g_abi_sp;
+        }
     }
+
     return ABISP();
 }
 

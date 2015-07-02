@@ -24,10 +24,10 @@ extern "C" void LLVMInitializeMipsTargetInfo() {
         /*HasJIT=*/true> Y(TheMipselTarget, "mipsel", "Mipsel");
 
   RegisterTarget<Triple::mips64,
-        /*HasJIT=*/false> A(TheMips64Target, "mips64", "Mips64 [experimental]");
+        /*HasJIT=*/true> A(TheMips64Target, "mips64", "Mips64 [experimental]");
 
   RegisterTarget<Triple::mips64el,
-        /*HasJIT=*/false> B(TheMips64elTarget,
+        /*HasJIT=*/true> B(TheMips64elTarget,
                             "mips64el", "Mips64el [experimental]");
   RegisterTarget<Triple::cheri,
         /*HasJIT=*/true> C(TheMipsCheriTarget, "cheri", "CHERI");

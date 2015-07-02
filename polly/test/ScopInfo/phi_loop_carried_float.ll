@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -polly-model-phi-nodes -disable-polly-intra-scop-scalar-to-array -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
 ;
 ;    float f(float *A, int N) {
 ;      float tmp = 0;
@@ -7,18 +7,25 @@
 ;    }
 ;
 ; CHECK:      Statements {
-; CHECK:        Stmt_bb1
+; CHECK-LABEL:   Stmt_bb1
+; CHECK-NOT: Access
 ; CHECK:              ReadAccess := [Reduction Type: NONE]
 ; CHECK:                  [N] -> { Stmt_bb1[i0] -> MemRef_tmp_0[] };
+; CHECK-NOT: Access
 ; CHECK:              MustWriteAccess :=  [Reduction Type: NONE]
 ; CHECK:                  [N] -> { Stmt_bb1[i0] -> MemRef_tmp_0[] };
-; CHECK:        Stmt_bb4
+; CHECK-NOT: Access
+; CHECK-LABEL:   Stmt_bb4
+; CHECK-NOT: Access
 ; CHECK:              MustWriteAccess :=  [Reduction Type: NONE]
 ; CHECK:                  [N] -> { Stmt_bb4[i0] -> MemRef_tmp_0[] };
+; CHECK-NOT: Access
 ; CHECK:              ReadAccess := [Reduction Type: NONE]
 ; CHECK:                  [N] -> { Stmt_bb4[i0] -> MemRef_tmp_0[] };
+; CHECK-NOT: Access
 ; CHECK:              ReadAccess := [Reduction Type: NONE]
 ; CHECK:                  [N] -> { Stmt_bb4[i0] -> MemRef_A[i0] };
+; CHECK-NOT: Access
 ; CHECK:      }
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

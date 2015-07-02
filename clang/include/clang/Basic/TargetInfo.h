@@ -66,6 +66,7 @@ protected:
   unsigned char LongWidth, LongAlign;
   unsigned char LongLongWidth, LongLongAlign;
   unsigned char SuitableAlign;
+  unsigned char DefaultAlignForAttributeAligned;
   unsigned char MinGlobalAlign;
   unsigned char MaxAtomicPromoteWidth, MaxAtomicInlineWidth;
   unsigned short MaxVectorAlign;
@@ -314,6 +315,12 @@ public:
   /// object with a fundamental alignment requirement.
   unsigned getSuitableAlign() const { return SuitableAlign; }
 
+  /// \brief Return the default alignment for __attribute__((aligned)) on
+  /// this target, to be used if no alignment value is specified.
+  unsigned getDefaultAlignForAttributeAligned() const {
+    return DefaultAlignForAttributeAligned;
+  }
+
   /// getMinGlobalAlign - Return the minimum alignment of a global variable,
   /// unless its alignment is explicitly reduced via attributes.
   unsigned getMinGlobalAlign() const { return MinGlobalAlign; }
@@ -355,6 +362,10 @@ public:
   const llvm::fltSemantics &getLongDoubleFormat() const {
     return *LongDoubleFormat;
   }
+
+  /// \brief Return true if the 'long double' type should be mangled like
+  /// __float128.
+  virtual bool useFloat128ManglingForLongDouble() const { return false; }
 
   /// \brief Return the value for the C99 FLT_EVAL_METHOD macro.
   virtual unsigned getFloatEvalMethod() const { return 0; }
@@ -599,6 +610,9 @@ public:
       // Don't copy Name or constraint string.
     }
   };
+
+  // Validate the contents of the __builtin_cpu_supports(const char*) argument.
+  virtual bool validateCpuSupports(StringRef Name) const { return false; }
 
   // validateOutputConstraint, validateInputConstraint - Checks that
   // a constraint is valid and provides information about it.

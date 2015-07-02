@@ -32,8 +32,9 @@ using namespace llvm;
 Mips16FrameLowering::Mips16FrameLowering(const MipsSubtarget &STI)
     : MipsFrameLowering(STI, STI.stackAlignment()) {}
 
-void Mips16FrameLowering::emitPrologue(MachineFunction &MF) const {
-  MachineBasicBlock &MBB = MF.front();
+void Mips16FrameLowering::emitPrologue(MachineFunction &MF,
+                                       MachineBasicBlock &MBB) const {
+  assert(&MF.front() == &MBB && "Shrink-wrapping not yet supported");
   MachineFrameInfo *MFI = MF.getFrameInfo();
   const Mips16InstrInfo &TII =
       *static_cast<const Mips16InstrInfo *>(STI.getInstrInfo());
@@ -141,25 +142,6 @@ bool Mips16FrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
   //
 
   return true;
-}
-
-// Eliminate ADJCALLSTACKDOWN, ADJCALLSTACKUP pseudo instructions
-void Mips16FrameLowering::
-eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
-                              MachineBasicBlock::iterator I) const {
-  if (!hasReservedCallFrame(MF)) {
-    int64_t Amount = I->getOperand(0).getImm();
-
-    if (I->getOpcode() == Mips::ADJCALLSTACKDOWN)
-      Amount = -Amount;
-
-    const Mips16InstrInfo &TII =
-        *static_cast<const Mips16InstrInfo *>(STI.getInstrInfo());
-
-    TII.adjustStackPtr(Mips::SP, Amount, MBB, I);
-  }
-
-  MBB.erase(I);
 }
 
 bool

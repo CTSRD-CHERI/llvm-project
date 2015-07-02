@@ -271,8 +271,10 @@ BitSetInfo LowerBitSets::buildBitSet(
     for (MDNode *Op : BitSetNM->operands()) {
       if (Op->getOperand(0) != BitSet || !Op->getOperand(1))
         continue;
-      auto OpGlobal = cast<GlobalVariable>(
+      auto OpGlobal = dyn_cast<GlobalVariable>(
           cast<ConstantAsMetadata>(Op->getOperand(1))->getValue());
+      if (!OpGlobal)
+        continue;
       uint64_t Offset =
           cast<ConstantInt>(cast<ConstantAsMetadata>(Op->getOperand(2))
                                 ->getValue())->getZExtValue();
@@ -349,7 +351,8 @@ void LowerBitSets::allocateByteArrays() {
 
     Constant *Idxs[] = {ConstantInt::get(IntPtrTy, 0),
                         ConstantInt::get(IntPtrTy, ByteArrayOffsets[I])};
-    Constant *GEP = ConstantExpr::getInBoundsGetElementPtr(ByteArray, Idxs);
+    Constant *GEP = ConstantExpr::getInBoundsGetElementPtr(
+        ByteArrayConst->getType(), ByteArray, Idxs);
 
     // Create an alias instead of RAUW'ing the gep directly. On x86 this ensures
     // that the pc-relative displacement is folded into the lea instead of the
@@ -357,8 +360,9 @@ void LowerBitSets::allocateByteArrays() {
     if (LinkerSubsectionsViaSymbols) {
       BAI->ByteArray->replaceAllUsesWith(GEP);
     } else {
-      GlobalAlias *Alias = GlobalAlias::create(
-          Int8Ty, 0, GlobalValue::PrivateLinkage, "bits", GEP, M);
+      GlobalAlias *Alias =
+          GlobalAlias::create(PointerType::getUnqual(Int8Ty),
+                              GlobalValue::PrivateLinkage, "bits", GEP, M);
       BAI->ByteArray->replaceAllUsesWith(Alias);
     }
     BAI->ByteArray->eraseFromParent();
@@ -395,16 +399,17 @@ Value *LowerBitSets::createBitSetTest(IRBuilder<> &B, BitSetInfo &BSI,
     }
 
     Constant *ByteArray = BAI->ByteArray;
+    Type *Ty = BAI->ByteArray->getValueType();
     if (!LinkerSubsectionsViaSymbols && AvoidReuse) {
       // Each use of the byte array uses a different alias. This makes the
       // backend less likely to reuse previously computed byte array addresses,
       // improving the security of the CFI mechanism based on this pass.
-      ByteArray = GlobalAlias::create(
-          BAI->ByteArray->getType()->getElementType(), 0,
-          GlobalValue::PrivateLinkage, "bits_use", ByteArray, M);
+      ByteArray = GlobalAlias::create(BAI->ByteArray->getType(),
+                                      GlobalValue::PrivateLinkage, "bits_use",
+                                      ByteArray, M);
     }
 
-    Value *ByteAddr = B.CreateGEP(ByteArray, BitOffset);
+    Value *ByteAddr = B.CreateGEP(Ty, ByteArray, BitOffset);
     Value *Byte = B.CreateLoad(ByteAddr);
 
     Value *ByteAndMask = B.CreateAnd(Byte, BAI->Mask);
@@ -546,15 +551,14 @@ void LowerBitSets::buildBitSetsFromGlobals(
     // Multiply by 2 to account for padding elements.
     Constant *CombinedGlobalIdxs[] = {ConstantInt::get(Int32Ty, 0),
                                       ConstantInt::get(Int32Ty, I * 2)};
-    Constant *CombinedGlobalElemPtr =
-        ConstantExpr::getGetElementPtr(CombinedGlobal, CombinedGlobalIdxs);
+    Constant *CombinedGlobalElemPtr = ConstantExpr::getGetElementPtr(
+        NewInit->getType(), CombinedGlobal, CombinedGlobalIdxs);
     if (LinkerSubsectionsViaSymbols) {
       Globals[I]->replaceAllUsesWith(CombinedGlobalElemPtr);
     } else {
-      GlobalAlias *GAlias = GlobalAlias::create(
-          Globals[I]->getType()->getElementType(),
-          Globals[I]->getType()->getAddressSpace(), Globals[I]->getLinkage(),
-          "", CombinedGlobalElemPtr, M);
+      GlobalAlias *GAlias =
+          GlobalAlias::create(Globals[I]->getType(), Globals[I]->getLinkage(),
+                              "", CombinedGlobalElemPtr, M);
       GAlias->takeName(Globals[I]);
       Globals[I]->replaceAllUsesWith(GAlias);
     }
@@ -619,7 +623,7 @@ bool LowerBitSets::buildBitSets() {
         report_fatal_error("Bit set element must be a constant");
       auto OpGlobal = dyn_cast<GlobalVariable>(OpConstMD->getValue());
       if (!OpGlobal)
-        report_fatal_error("Bit set element must refer to global");
+        continue;
 
       auto OffsetConstMD = dyn_cast<ConstantAsMetadata>(Op->getOperand(2));
       if (!OffsetConstMD)
@@ -673,8 +677,10 @@ bool LowerBitSets::buildBitSets() {
         if (I == BitSetIndices.end())
           continue;
 
-        auto OpGlobal = cast<GlobalVariable>(
+        auto OpGlobal = dyn_cast<GlobalVariable>(
             cast<ConstantAsMetadata>(Op->getOperand(1))->getValue());
+        if (!OpGlobal)
+          continue;
         BitSetMembers[I->second].insert(GlobalIndices[OpGlobal]);
       }
     }

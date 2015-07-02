@@ -193,7 +193,7 @@ void Float2Int::walkBackwards(const SmallPtrSetImpl<Instruction*> &Roots) {
     default:
       // Path terminated uncleanly.
       seen(I, badRange());
-      continue;
+      break;
 
     case Instruction::UIToFP: {
       // Path terminated cleanly.
@@ -219,19 +219,19 @@ void Float2Int::walkBackwards(const SmallPtrSetImpl<Instruction*> &Roots) {
     case Instruction::FPToUI:
     case Instruction::FPToSI:
     case Instruction::FCmp:
+      seen(I, unknownRange());
       break;
     }
   
-    seen(I, unknownRange());
     for (Value *O : I->operands()) {
       if (Instruction *OI = dyn_cast<Instruction>(O)) {
         // Unify def-use chains if they interfere.
         ECs.unionSets(I, OI);
-        Worklist.push_back(OI);
+	if (SeenInsts.find(I)->second != badRange())
+          Worklist.push_back(OI);
       } else if (!isa<ConstantFP>(O)) {      
         // Not an instruction or ConstantFP? we can't do anything.
         seen(I, badRange());
-        break;
       }
     }
   }
@@ -364,7 +364,8 @@ bool Float2Int::validateAndTransform() {
          MI != ME; ++MI) {
       Instruction *I = *MI;
       auto SeenI = SeenInsts.find(I);
-      assert (SeenI != SeenInsts.end() && "Didn't see this instruction?");
+      if (SeenI == SeenInsts.end())
+        continue;
 
       R = R.unionWith(SeenI->second);
       // We need to ensure I has no users that have not been seen.
@@ -445,7 +446,7 @@ Value *Float2Int::convert(Instruction *I, Type *ToTy) {
     } else if (Instruction *VI = dyn_cast<Instruction>(V)) {
       NewOperands.push_back(convert(VI, ToTy));
     } else if (ConstantFP *CF = dyn_cast<ConstantFP>(V)) {
-      APSInt Val(ToTy->getPrimitiveSizeInBits(), true);
+      APSInt Val(ToTy->getPrimitiveSizeInBits(), /*IsUnsigned=*/false);
       bool Exact;
       CF->getValueAPF().convertToInteger(Val,
                                          APFloat::rmNearestTiesToEven,
@@ -510,6 +511,9 @@ void Float2Int::cleanup() {
 }
 
 bool Float2Int::runOnFunction(Function &F) {
+  if (skipOptnoneFunction(F))
+    return false;
+
   DEBUG(dbgs() << "F2I: Looking at function " << F.getName() << "\n");
   // Clear out all state.
   ECs = EquivalenceClasses<Instruction*>();

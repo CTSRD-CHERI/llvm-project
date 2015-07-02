@@ -20,7 +20,7 @@ class ObjCXXTestCase(TestBase):
         self.buildDsym()
         self.do_testObjCXXClasses()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dwarf_test
     def test_break_with_dwarf(self):
         """Test ivars of Objective-C++ classes"""
@@ -36,7 +36,7 @@ class ObjCXXTestCase(TestBase):
 
         lldbutil.run_break_set_by_source_regexp (self, 'breakpoint 1', num_expected_locations=1) 
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         self.expect("expr f->f", "Found ivar in class",
             substrs = ["= 3"])

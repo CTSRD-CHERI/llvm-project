@@ -9,7 +9,7 @@ class CPPThisTestCase(TestBase):
     
     mydir = TestBase.compute_mydir(__file__)
     
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     #rdar://problem/9962849
     #@expectedFailureClang
     @dsym_test
@@ -22,6 +22,7 @@ class CPPThisTestCase(TestBase):
     @expectedFailureGcc # llvm.org/pr15439 The 'this' pointer isn't available during expression evaluation when stopped in an inlined member function.
     @expectedFailureIcc # ICC doesn't emit correct DWARF inline debug info for inlined member functions
     @dwarf_test
+    @expectedFlakeyClang(bugnumber='llvm.org/pr23012', compiler_version=['>=','3.6']) # failed with totclang - clang3.7
     def test_with_dwarf_and_run_command(self):
         """Test that the appropriate member variables are available when stopped in C++ static, inline, and const methods"""
         self.buildDwarf()
@@ -42,7 +43,7 @@ class CPPThisTestCase(TestBase):
         self.set_breakpoint(line_number('main.cpp', '// breakpoint 3'))
         self.set_breakpoint(line_number('main.cpp', '// breakpoint 4'))
 
-        self.runCmd("process launch", RUN_SUCCEEDED)
+        self.runCmd("process launch", RUN_FAILED)
 
         self.expect("expression -- m_a = 2",
                     startstr = "(int) $0 = 2")

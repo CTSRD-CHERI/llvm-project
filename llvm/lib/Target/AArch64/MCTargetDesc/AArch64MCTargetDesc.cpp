@@ -41,7 +41,7 @@ static MCInstrInfo *createAArch64MCInstrInfo() {
 }
 
 static MCSubtargetInfo *
-createAArch64MCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS) {
+createAArch64MCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
   MCSubtargetInfo *X = new MCSubtargetInfo();
 
   if (CPU.empty())
@@ -58,15 +58,13 @@ static MCRegisterInfo *createAArch64MCRegisterInfo(StringRef Triple) {
 }
 
 static MCAsmInfo *createAArch64MCAsmInfo(const MCRegisterInfo &MRI,
-                                         StringRef TT) {
-  Triple TheTriple(TT);
-
+                                         const Triple &TheTriple) {
   MCAsmInfo *MAI;
-  if (TheTriple.isOSDarwin())
+  if (TheTriple.isOSBinFormatMachO())
     MAI = new AArch64MCAsmInfoDarwin();
   else {
     assert(TheTriple.isOSBinFormatELF() && "Only expect Darwin or ELF");
-    MAI = new AArch64MCAsmInfoELF(TT);
+    MAI = new AArch64MCAsmInfoELF(TheTriple);
   }
 
   // Initial state of the frame pointer is SP.
@@ -105,33 +103,32 @@ static MCCodeGenInfo *createAArch64MCCodeGenInfo(StringRef TT, Reloc::Model RM,
     RM = Reloc::Static;
 
   MCCodeGenInfo *X = new MCCodeGenInfo();
-  X->InitMCCodeGenInfo(RM, CM, OL);
+  X->initMCCodeGenInfo(RM, CM, OL);
   return X;
 }
 
-static MCInstPrinter *createAArch64MCInstPrinter(const Target &T,
+static MCInstPrinter *createAArch64MCInstPrinter(const Triple &T,
                                                  unsigned SyntaxVariant,
                                                  const MCAsmInfo &MAI,
                                                  const MCInstrInfo &MII,
-                                                 const MCRegisterInfo &MRI,
-                                                 const MCSubtargetInfo &STI) {
+                                                 const MCRegisterInfo &MRI) {
   if (SyntaxVariant == 0)
-    return new AArch64InstPrinter(MAI, MII, MRI, STI);
+    return new AArch64InstPrinter(MAI, MII, MRI);
   if (SyntaxVariant == 1)
-    return new AArch64AppleInstPrinter(MAI, MII, MRI, STI);
+    return new AArch64AppleInstPrinter(MAI, MII, MRI);
 
   return nullptr;
 }
 
 static MCStreamer *createELFStreamer(const Triple &T, MCContext &Ctx,
-                                     MCAsmBackend &TAB, raw_ostream &OS,
+                                     MCAsmBackend &TAB, raw_pwrite_stream &OS,
                                      MCCodeEmitter *Emitter, bool RelaxAll) {
   return createAArch64ELFStreamer(Ctx, TAB, OS, Emitter, RelaxAll);
 }
 
 static MCStreamer *createMachOStreamer(MCContext &Ctx, MCAsmBackend &TAB,
-                                       raw_ostream &OS, MCCodeEmitter *Emitter,
-                                       bool RelaxAll,
+                                       raw_pwrite_stream &OS,
+                                       MCCodeEmitter *Emitter, bool RelaxAll,
                                        bool DWARFMustBeAtTheEnd) {
   return createMachOStreamer(Ctx, TAB, OS, Emitter, RelaxAll,
                              DWARFMustBeAtTheEnd,

@@ -364,6 +364,11 @@ bool Type::isStructureType() const {
     return RT->getDecl()->isStruct();
   return false;
 }
+bool Type::isObjCBoxableRecordType() const {
+  if (const RecordType *RT = getAs<RecordType>())
+    return RT->getDecl()->hasAttr<ObjCBoxableAttr>();
+  return false;
+}
 bool Type::isInterfaceType() const {
   if (const RecordType *RT = getAs<RecordType>())
     return RT->getDecl()->isInterface();
@@ -632,12 +637,13 @@ bool Type::hasIntegerRepresentation() const {
 bool Type::isIntegralType(ASTContext &Ctx) const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() >= BuiltinType::Bool &&
-    BT->getKind() <= BuiltinType::Int128;
-  
+           BT->getKind() <= BuiltinType::Int128;
+
+  // Complete enum types are integral in C.
   if (!Ctx.getLangOpts().CPlusPlus)
     if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType))
-      return ET->getDecl()->isComplete(); // Complete enum types are integral in C.
-  
+      return ET->getDecl()->isComplete();
+
   return false;
 }
 
@@ -728,7 +734,7 @@ bool Type::isSignedIntegerType() const {
 bool Type::isSignedIntegerOrEnumerationType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType)) {
     return BT->getKind() >= BuiltinType::Char_S &&
-    BT->getKind() <= BuiltinType::Int128;
+           BT->getKind() <= BuiltinType::Int128;
   }
   
   if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType)) {
@@ -1918,7 +1924,10 @@ bool AttributedType::isCallingConv() const {
   case attr_objc_gc:
   case attr_objc_ownership:
   case attr_noreturn:
-      return false;
+  case attr_nonnull:
+  case attr_nullable:
+  case attr_null_unspecified:
+    return false;
   case attr_pcs:
   case attr_pcs_vfp:
   case attr_cdecl:
@@ -2339,6 +2348,153 @@ LinkageInfo Type::getLinkageAndVisibility() const {
   return LV;
 }
 
+Optional<NullabilityKind> Type::getNullability(const ASTContext &context) const {
+  QualType type(this, 0);
+  do {
+    // Check whether this is an attributed type with nullability
+    // information.
+    if (auto attributed = dyn_cast<AttributedType>(type.getTypePtr())) {
+      if (auto nullability = attributed->getImmediateNullability())
+        return nullability;
+    }
+
+    // Desugar the type. If desugaring does nothing, we're done.
+    QualType desugared = type.getSingleStepDesugaredType(context);
+    if (desugared.getTypePtr() == type.getTypePtr())
+      return None;
+    
+    type = desugared;
+  } while (true);
+}
+
+bool Type::canHaveNullability() const {
+  QualType type = getCanonicalTypeInternal();
+  
+  switch (type->getTypeClass()) {
+  // We'll only see canonical types here.
+#define NON_CANONICAL_TYPE(Class, Parent)       \
+  case Type::Class:                             \
+    llvm_unreachable("non-canonical type");
+#define TYPE(Class, Parent)
+#include "clang/AST/TypeNodes.def"
+
+  // Pointer types.
+  case Type::Pointer:
+  case Type::BlockPointer:
+  case Type::MemberPointer:
+  case Type::ObjCObjectPointer:
+    return true;
+
+  // Dependent types that could instantiate to pointer types.
+  case Type::UnresolvedUsing:
+  case Type::TypeOfExpr:
+  case Type::TypeOf:
+  case Type::Decltype:
+  case Type::UnaryTransform:
+  case Type::TemplateTypeParm:
+  case Type::SubstTemplateTypeParmPack:
+  case Type::DependentName:
+  case Type::DependentTemplateSpecialization:
+    return true;
+
+  // Dependent template specializations can instantiate to pointer
+  // types unless they're known to be specializations of a class
+  // template.
+  case Type::TemplateSpecialization:
+    if (TemplateDecl *templateDecl
+          = cast<TemplateSpecializationType>(type.getTypePtr())
+              ->getTemplateName().getAsTemplateDecl()) {
+      if (isa<ClassTemplateDecl>(templateDecl))
+        return false;
+    }
+    return true;
+
+  // auto is considered dependent when it isn't deduced.
+  case Type::Auto:
+    return !cast<AutoType>(type.getTypePtr())->isDeduced();
+
+  case Type::Builtin:
+    switch (cast<BuiltinType>(type.getTypePtr())->getKind()) {
+      // Signed, unsigned, and floating-point types cannot have nullability.
+#define SIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
+#define UNSIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
+#define FLOATING_TYPE(Id, SingletonId) case BuiltinType::Id:
+#define BUILTIN_TYPE(Id, SingletonId)
+#include "clang/AST/BuiltinTypes.def"
+      return false;
+
+    // Dependent types that could instantiate to a pointer type.
+    case BuiltinType::Dependent:
+    case BuiltinType::Overload:
+    case BuiltinType::BoundMember:
+    case BuiltinType::PseudoObject:
+    case BuiltinType::UnknownAny:
+    case BuiltinType::ARCUnbridgedCast:
+      return true;
+
+    case BuiltinType::Void:
+    case BuiltinType::ObjCId:
+    case BuiltinType::ObjCClass:
+    case BuiltinType::ObjCSel:
+    case BuiltinType::OCLImage1d:
+    case BuiltinType::OCLImage1dArray:
+    case BuiltinType::OCLImage1dBuffer:
+    case BuiltinType::OCLImage2d:
+    case BuiltinType::OCLImage2dArray:
+    case BuiltinType::OCLImage3d:
+    case BuiltinType::OCLSampler:
+    case BuiltinType::OCLEvent:
+    case BuiltinType::BuiltinFn:
+    case BuiltinType::NullPtr:
+      return false;
+    }
+
+  // Non-pointer types.
+  case Type::Complex:
+  case Type::LValueReference:
+  case Type::RValueReference:
+  case Type::ConstantArray:
+  case Type::IncompleteArray:
+  case Type::VariableArray:
+  case Type::DependentSizedArray:
+  case Type::DependentSizedExtVector:
+  case Type::Vector:
+  case Type::ExtVector:
+  case Type::FunctionProto:
+  case Type::FunctionNoProto:
+  case Type::Record:
+  case Type::Enum:
+  case Type::InjectedClassName:
+  case Type::PackExpansion:
+  case Type::ObjCObject:
+  case Type::ObjCInterface:
+  case Type::Atomic:
+    return false;
+  }
+  llvm_unreachable("bad type kind!");
+}
+
+llvm::Optional<NullabilityKind> AttributedType::getImmediateNullability() const {
+  if (getAttrKind() == AttributedType::attr_nonnull)
+    return NullabilityKind::NonNull;
+  if (getAttrKind() == AttributedType::attr_nullable)
+    return NullabilityKind::Nullable;
+  if (getAttrKind() == AttributedType::attr_null_unspecified)
+    return NullabilityKind::Unspecified;
+  return None;
+}
+
+Optional<NullabilityKind> AttributedType::stripOuterNullability(QualType &T) {
+  if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr())) {
+    if (auto nullability = attributed->getImmediateNullability()) {
+      T = attributed->getModifiedType();
+      return nullability;
+    }
+  }
+
+  return None;
+}
+
 Qualifiers::ObjCLifetime Type::getObjCARCImplicitLifetime() const {
   if (isObjCARCImplicitlyUnretainedType())
     return Qualifiers::OCL_ExplicitNone;
@@ -2368,6 +2524,11 @@ bool Type::isObjCARCImplicitlyUnretainedType() const {
 bool Type::isObjCNSObjectType() const {
   if (const TypedefType *typedefType = dyn_cast<TypedefType>(this))
     return typedefType->getDecl()->hasAttr<ObjCNSObjectAttr>();
+  return false;
+}
+bool Type::isObjCIndependentClassType() const {
+  if (const TypedefType *typedefType = dyn_cast<TypedefType>(this))
+    return typedefType->getDecl()->hasAttr<ObjCIndependentClassAttr>();
   return false;
 }
 bool Type::isObjCRetainableType() const {

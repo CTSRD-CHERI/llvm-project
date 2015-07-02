@@ -1,0 +1,4 @@
+# RUN: env LINK=-help lld -flavor link2 > %t.log
+# RUN: FileCheck %s < %t.log
+
+CHECK: OVERVIEW: LLVM Linker

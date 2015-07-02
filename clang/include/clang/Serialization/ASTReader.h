@@ -73,6 +73,7 @@ class GlobalModuleIndex;
 class GotoStmt;
 class MacroDefinition;
 class MacroDirective;
+class ModuleMacro;
 class NamedDecl;
 class OpaqueValueExpr;
 class Preprocessor;
@@ -303,7 +304,6 @@ class ASTReader
     public ExternalHeaderFileInfoSource,
     public ExternalSemaSource,
     public IdentifierInfoLookup,
-    public ExternalIdentifierLookup,
     public ExternalSLocEntrySource
 {
 public:
@@ -361,6 +361,7 @@ private:
 
   SourceManager &SourceMgr;
   FileManager &FileMgr;
+  const PCHContainerOperations &PCHContainerOps;
   DiagnosticsEngine &Diags;
 
   /// \brief The semantic analysis object that will be processing the
@@ -515,6 +516,10 @@ private:
   /// \brief Functions or methods that have bodies that will be attached.
   PendingBodiesMap PendingBodies;
 
+  /// \brief Definitions for which we have added merged definitions but not yet
+  /// performed deduplication.
+  llvm::SetVector<NamedDecl*> PendingMergedDefinitionsToDeduplicate;
+
   /// \brief Read the records that describe the contents of declcontexts.
   bool ReadDeclContextStorage(ModuleFile &M,
                               llvm::BitstreamCursor &Cursor,
@@ -575,54 +580,8 @@ private:
   /// global submodule ID to produce a local ID.
   GlobalSubmoduleMapType GlobalSubmoduleMap;
 
-  /// \brief Information on a macro definition or undefinition that is visible
-  /// at the end of a submodule.
-  struct ModuleMacroInfo;
-
-  /// \brief An entity that has been hidden.
-  class HiddenName {
-  public:
-    enum NameKind {
-      Declaration,
-      Macro
-    } Kind;
-
-  private:
-    union {
-      Decl *D;
-      ModuleMacroInfo *MMI;
-    };
-
-    IdentifierInfo *Id;
-
-  public:
-    HiddenName(Decl *D) : Kind(Declaration), D(D), Id() { }
-
-    HiddenName(IdentifierInfo *II, ModuleMacroInfo *MMI)
-      : Kind(Macro), MMI(MMI), Id(II) { }
-
-    NameKind getKind() const { return Kind; }
-
-    Decl *getDecl() const {
-      assert(getKind() == Declaration && "Hidden name is not a declaration");
-      return D;
-    }
-
-    std::pair<IdentifierInfo *, ModuleMacroInfo *> getMacro() const {
-      assert(getKind() == Macro && "Hidden name is not a macro!");
-      return std::make_pair(Id, MMI);
-    }
-  };
-
-  typedef llvm::SmallDenseMap<IdentifierInfo*,
-                              ModuleMacroInfo*> HiddenMacrosMap;
-
   /// \brief A set of hidden declarations.
-  struct HiddenNames {
-    SmallVector<Decl*, 2> HiddenDecls;
-    HiddenMacrosMap HiddenMacros;
-  };
-
+  typedef SmallVector<Decl*, 2> HiddenNames;
   typedef llvm::DenseMap<Module *, HiddenNames> HiddenNamesMapType;
 
   /// \brief A mapping from each of the hidden submodules to the deserialized
@@ -676,30 +635,10 @@ private:
 
   struct PendingMacroInfo {
     ModuleFile *M;
+    uint64_t MacroDirectivesOffset;
 
-    struct ModuleMacroDataTy {
-      uint32_t MacID;
-      serialization::SubmoduleID *Overrides;
-    };
-    struct PCHMacroDataTy {
-      uint64_t MacroDirectivesOffset;
-    };
-
-    union {
-      ModuleMacroDataTy ModuleMacroData;
-      PCHMacroDataTy PCHMacroData;
-    };
-
-    PendingMacroInfo(ModuleFile *M,
-                     uint32_t MacID,
-                     serialization::SubmoduleID *Overrides) : M(M) {
-      ModuleMacroData.MacID = MacID;
-      ModuleMacroData.Overrides = Overrides;
-    }
-
-    PendingMacroInfo(ModuleFile *M, uint64_t MacroDirectivesOffset) : M(M) {
-      PCHMacroData.MacroDirectivesOffset = MacroDirectivesOffset;
-    }
+    PendingMacroInfo(ModuleFile *M, uint64_t MacroDirectivesOffset)
+        : M(M), MacroDirectivesOffset(MacroDirectivesOffset) {}
   };
 
   typedef llvm::MapVector<IdentifierInfo *, SmallVector<PendingMacroInfo, 2> >
@@ -820,6 +759,9 @@ private:
   /// \brief A list of undefined decls with internal linkage followed by the
   /// SourceLocation of a matching ODR-use.
   SmallVector<uint64_t, 8> UndefinedButUsed;
+
+  /// \brief Delete expressions to analyze at the end of translation unit.
+  SmallVector<uint64_t, 8> DelayedDeleteExprs;
 
   // \brief A list of late parsed template function data.
   SmallVector<uint64_t, 1> LateParsedTemplates;
@@ -1295,6 +1237,9 @@ public:
   /// \param Context the AST context that this precompiled header will be
   /// loaded into.
   ///
+  /// \param PCHContainerOps the PCHContainerOperations to use for loading and
+  /// creating modules.
+  ///
   /// \param isysroot If non-NULL, the system include path specified by the
   /// user. This is only used with relocatable PCH files. If non-NULL,
   /// a relocatable PCH file will use the default path "/".
@@ -1316,14 +1261,14 @@ public:
   ///
   /// \param UseGlobalIndex If true, the AST reader will try to load and use
   /// the global module index.
-  ASTReader(Preprocessor &PP, ASTContext &Context, StringRef isysroot = "",
-            bool DisableValidation = false,
+  ASTReader(Preprocessor &PP, ASTContext &Context,
+            const PCHContainerOperations &PCHContainerOps,
+            StringRef isysroot = "", bool DisableValidation = false,
             bool AllowASTWithCompilerErrors = false,
             bool AllowConfigurationMismatch = false,
-            bool ValidateSystemInputs = false,
-            bool UseGlobalIndex = true);
+            bool ValidateSystemInputs = false, bool UseGlobalIndex = true);
 
-  ~ASTReader();
+  ~ASTReader() override;
 
   SourceManager &getSourceManager() const { return SourceMgr; }
   FileManager &getFileManager() const { return FileMgr; }
@@ -1377,16 +1322,12 @@ public:
   /// module.  Visibility can only be increased over time.
   ///
   /// \param ImportLoc The location at which the import occurs.
-  ///
-  /// \param Complain Whether to complain about conflicting module imports.
   void makeModuleVisible(Module *Mod,
                          Module::NameVisibilityKind NameVisibility,
-                         SourceLocation ImportLoc,
-                         bool Complain);
+                         SourceLocation ImportLoc);
 
   /// \brief Make the names within this set of hidden names visible.
-  void makeNamesVisible(const HiddenNames &Names, Module *Owner,
-                        bool FromFinalization);
+  void makeNamesVisible(const HiddenNames &Names, Module *Owner);
 
   /// \brief Take the AST callbacks listener.
   std::unique_ptr<ASTReaderListener> takeListener() {
@@ -1487,21 +1428,23 @@ public:
 
   /// \brief Retrieve the name of the original source file name directly from
   /// the AST file, without actually loading the AST file.
-  static std::string getOriginalSourceFile(const std::string &ASTFileName,
-                                           FileManager &FileMgr,
-                                           DiagnosticsEngine &Diags);
+  static std::string
+  getOriginalSourceFile(const std::string &ASTFileName, FileManager &FileMgr,
+                        const PCHContainerOperations &PCHContainerOps,
+                        DiagnosticsEngine &Diags);
 
   /// \brief Read the control block for the named AST file.
   ///
   /// \returns true if an error occurred, false otherwise.
-  static bool readASTFileControlBlock(StringRef Filename,
-                                      FileManager &FileMgr,
-                                      ASTReaderListener &Listener);
+  static bool
+  readASTFileControlBlock(StringRef Filename, FileManager &FileMgr,
+                          const PCHContainerOperations &PCHContainerOps,
+                          ASTReaderListener &Listener);
 
   /// \brief Determine whether the given AST file is acceptable to load into a
   /// translation unit with the given language and target options.
-  static bool isAcceptableASTFile(StringRef Filename,
-                                  FileManager &FileMgr,
+  static bool isAcceptableASTFile(StringRef Filename, FileManager &FileMgr,
+                                  const PCHContainerOperations &PCHContainerOps,
                                   const LangOptions &LangOpts,
                                   const TargetOptions &TargetOpts,
                                   const PreprocessorOptions &PPOpts,
@@ -1805,6 +1748,10 @@ public:
   void ReadUndefinedButUsed(
                llvm::DenseMap<NamedDecl *, SourceLocation> &Undefined) override;
 
+  void ReadMismatchingDeleteExpressions(llvm::MapVector<
+      FieldDecl *, llvm::SmallVector<std::pair<SourceLocation, bool>, 4>> &
+                                            Exprs) override;
+
   void ReadTentativeDefinitions(
                             SmallVectorImpl<VarDecl *> &TentativeDefs) override;
 
@@ -1832,8 +1779,8 @@ public:
                                            SourceLocation> > &Pending) override;
 
   void ReadLateParsedTemplates(
-                         llvm::DenseMap<const FunctionDecl *,
-                                        LateParsedTemplate *> &LPTMap) override;
+      llvm::MapVector<const FunctionDecl *, LateParsedTemplate *> &LPTMap)
+      override;
 
   /// \brief Load a selector from disk, registering its ID if it exists.
   void LoadSelector(Selector Sel);
@@ -1868,28 +1815,7 @@ public:
   serialization::IdentifierID getGlobalIdentifierID(ModuleFile &M,
                                                     unsigned LocalID);
 
-  ModuleMacroInfo *getModuleMacro(IdentifierInfo *II,
-                                  const PendingMacroInfo &PMInfo);
-
   void resolvePendingMacro(IdentifierInfo *II, const PendingMacroInfo &PMInfo);
-
-  void installPCHMacroDirectives(IdentifierInfo *II,
-                                 ModuleFile &M, uint64_t Offset);
-
-  void installImportedMacro(IdentifierInfo *II, ModuleMacroInfo *MMI,
-                            Module *Owner);
-
-  typedef llvm::TinyPtrVector<DefMacroDirective *> AmbiguousMacros;
-  llvm::DenseMap<IdentifierInfo*, AmbiguousMacros> AmbiguousMacroDefs;
-
-  void
-  removeOverriddenMacros(IdentifierInfo *II, SourceLocation Loc,
-                         AmbiguousMacros &Ambig,
-                         ArrayRef<serialization::SubmoduleID> Overrides);
-
-  AmbiguousMacros *
-  removeOverriddenMacros(IdentifierInfo *II, SourceLocation Loc,
-                         ArrayRef<serialization::SubmoduleID> Overrides);
 
   /// \brief Retrieve the macro with the given ID.
   MacroInfo *getMacro(serialization::MacroID ID);
@@ -1918,6 +1844,11 @@ public:
   ///
   /// Note: overrides method in ExternalASTSource
   Module *getModule(unsigned ID) override;
+
+  /// \brief Return a descriptor for the corresponding module.
+  llvm::Optional<ASTSourceDescriptor> getSourceDescriptor(unsigned ID) override;
+  /// \brief Return a descriptor for the module.
+  ASTSourceDescriptor getSourceDescriptor(const Module &M) override;
 
   /// \brief Retrieve a selector from the given module with its local ID
   /// number.
@@ -2073,24 +2004,14 @@ public:
   serialization::PreprocessedEntityID
   getGlobalPreprocessedEntityID(ModuleFile &M, unsigned LocalID) const;
 
-  /// \brief Add a macro to resolve imported from a module.
-  ///
-  /// \param II The name of the macro.
-  /// \param M The module file.
-  /// \param GMacID The global macro ID that is associated with this identifier.
-  void addPendingMacroFromModule(IdentifierInfo *II,
-                                 ModuleFile *M,
-                                 serialization::GlobalMacroID GMacID,
-                                 ArrayRef<serialization::SubmoduleID>);
-
-  /// \brief Add a macro to deserialize its macro directive history from a PCH.
+  /// \brief Add a macro to deserialize its macro directive history.
   ///
   /// \param II The name of the macro.
   /// \param M The module file.
   /// \param MacroDirectivesOffset Offset of the serialized macro directive
   /// history.
-  void addPendingMacroFromPCH(IdentifierInfo *II,
-                              ModuleFile *M, uint64_t MacroDirectivesOffset);
+  void addPendingMacro(IdentifierInfo *II, ModuleFile *M,
+                       uint64_t MacroDirectivesOffset);
 
   /// \brief Read the set of macros defined by this external macro source.
   void ReadDefinedMacros() override;

@@ -8,7 +8,7 @@ import lldb
 from lldbtest import *
 import lldbutil
 
-@unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+@skipUnlessDarwin
 class ObjCDynamicSBTypeTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
@@ -47,7 +47,7 @@ class ObjCDynamicSBTypeTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, self.main_source, self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         v_object = self.frame().FindVariable("object").GetDynamicValue(lldb.eDynamicCanRunTarget)
         v_base = self.frame().FindVariable("base").GetDynamicValue(lldb.eDynamicCanRunTarget)

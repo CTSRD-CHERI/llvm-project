@@ -18,16 +18,13 @@ include $(LEVEL)/Makefile.config
 
 # Enable optional source files
 ifeq ($(GPU_CODEGEN), yes)
-GPGPU_CODEGEN_FILES= CodeGen/PTXGenerator.cpp
-endif
-
-ifeq ($(PLUTO_FOUND), yes)
-POLLY_PLUTO_FILES= Transform/Pluto.cpp
+GPGPU_CODEGEN_FILES=""
 endif
 
 ISL_CODEGEN_FILES= CodeGen/IslAst.cpp \
                    CodeGen/IslExprBuilder.cpp \
-                   CodeGen/IslCodeGeneration.cpp
+                   CodeGen/IslNodeBuilder.cpp \
+                   CodeGen/CodeGeneration.cpp
 
 POLLY_JSON_FILES= JSON/json_reader.cpp \
 		  JSON/json_value.cpp \
@@ -51,7 +48,6 @@ ISL_FILES= External/isl/basis_reduction_tab.c \
            External/isl/isl_convex_hull.c \
            External/isl/isl_ctx.c \
            External/isl/isl_deprecated.c \
-           External/isl/isl_dim.c \
            External/isl/isl_dim_map.c \
            External/isl/isl_equalities.c \
            External/isl/isl_factorization.c \
@@ -65,6 +61,7 @@ ISL_FILES= External/isl/basis_reduction_tab.c \
            External/isl/isl_ilp.c \
            External/isl/isl_imath.c \
            External/isl/isl_input.c \
+           External/isl/isl_int_sioimath.c \
            External/isl/isl_local_space.c \
            External/isl/isl_lp.c \
            External/isl/isl_map.c \
@@ -101,24 +98,21 @@ ISL_FILES= External/isl/basis_reduction_tab.c \
            External/isl/isl_transitive_closure.c \
            External/isl/isl_union_map.c \
            External/isl/isl_val.c \
-           External/isl/isl_val_imath.c \
+           External/isl/isl_val_sioimath.c \
            External/isl/isl_vec.c \
            External/isl/isl_version.c \
            External/isl/isl_vertices.c \
            External/isl/print.c \
            External/isl/imath/gmp_compat.c \
            External/isl/imath/imath.c \
-           External/isl/imath/imdrover.c \
-           External/isl/imath/imrat.c \
-           External/isl/imath/iprime.c \
-           External/isl/imath/pi.c \
-           External/isl/imath/rsamath.c
+           External/isl/imath/imrat.c
 
 SOURCES= Polly.cpp \
 	 Support/GICHelper.cpp \
 	 Support/SCEVValidator.cpp \
 	 Support/RegisterPasses.cpp \
 	 Support/ScopHelper.cpp \
+	 Support/ScopLocation.cpp \
 	 Analysis/DependenceInfo.cpp \
 	 Analysis/ScopDetection.cpp \
 	 Analysis/ScopDetectionDiagnostic.cpp \
@@ -140,7 +134,6 @@ SOURCES= Polly.cpp \
 	 ${GPGPU_FILES} \
 	 ${ISL_CODEGEN_FILES} \
 	 ${POLLY_JSON_FILES} \
-	 ${POLLY_PLUTO_FILES} \
 	 ${ISL_FILES}
 
 #

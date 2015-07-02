@@ -10,7 +10,7 @@ class TlsGlobalTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     @unittest2.expectedFailure("rdar://7796742")
     def test_with_dsym(self):
@@ -28,7 +28,7 @@ class TlsGlobalTestCase(TestBase):
     def setUp(self):
         TestBase.setUp(self)
 
-        if sys.platform.startswith("freebsd") or sys.platform.startswith("linux"):
+        if self.getPlatform() == "freebsd" or self.getPlatform() == "linux":
             # LD_LIBRARY_PATH must be set so the shared libraries are found on startup
             if "LD_LIBRARY_PATH" in os.environ:
                 self.runCmd("settings set target.env-vars " + self.dylibPath + "=" + os.environ["LD_LIBRARY_PATH"] + ":" + os.getcwd())
@@ -44,7 +44,7 @@ class TlsGlobalTestCase(TestBase):
 
         line1 = line_number('main.c', '// thread breakpoint')
         lldbutil.run_break_set_by_file_and_line (self, "main.c", line1, num_expected_locations=1, loc_exact=True)
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.runCmd("process status", "Get process status")
@@ -65,7 +65,7 @@ class TlsGlobalTestCase(TestBase):
         # Continue on the main thread
         line2 = line_number('main.c', '// main breakpoint')
         lldbutil.run_break_set_by_file_and_line (self, "main.c", line2, num_expected_locations=1, loc_exact=True)
-        self.runCmd("continue", RUN_SUCCEEDED)
+        self.runCmd("continue", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.runCmd("process status", "Get process status")

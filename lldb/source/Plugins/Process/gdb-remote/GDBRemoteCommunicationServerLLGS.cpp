@@ -24,8 +24,8 @@
 #include "llvm/ADT/Triple.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Core/DataBuffer.h"
-#include "lldb/Core/Debugger.h"
 #include "lldb/Core/Log.h"
+#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/State.h"
 #include "lldb/Core/StreamString.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
@@ -40,7 +40,6 @@
 #include "lldb/Target/FileAction.h"
 #include "lldb/Target/MemoryRegionInfo.h"
 #include "lldb/Target/Platform.h"
-#include "lldb/Target/Process.h"
 #include "lldb/Host/common/NativeRegisterContext.h"
 #include "lldb/Host/common/NativeProcessProtocol.h"
 #include "lldb/Host/common/NativeThreadProtocol.h"
@@ -53,6 +52,8 @@
 
 using namespace lldb;
 using namespace lldb_private;
+using namespace lldb_private::process_gdb_remote;
+using namespace llvm;
 
 //----------------------------------------------------------------------
 // GDBRemote Errors
@@ -74,8 +75,7 @@ namespace
 // GDBRemoteCommunicationServerLLGS constructor
 //----------------------------------------------------------------------
 GDBRemoteCommunicationServerLLGS::GDBRemoteCommunicationServerLLGS(
-        const lldb::PlatformSP& platform_sp,
-        lldb::DebuggerSP &debugger_sp) :
+        const lldb::PlatformSP& platform_sp) :
     GDBRemoteCommunicationServerCommon ("gdb-remote.server", "gdb-remote.server.rx_packet"),
     m_platform_sp (platform_sp),
     m_async_thread (LLDB_INVALID_HOST_THREAD),
@@ -83,7 +83,6 @@ GDBRemoteCommunicationServerLLGS::GDBRemoteCommunicationServerLLGS(
     m_continue_tid (LLDB_INVALID_THREAD_ID),
     m_debugged_process_mutex (Mutex::eMutexTypeRecursive),
     m_debugged_process_sp (),
-    m_debugger_sp (debugger_sp),
     m_stdio_communication ("process.stdio"),
     m_inferior_prev_state (StateType::eStateInvalid),
     m_active_auxv_buffer_sp (),
@@ -92,7 +91,6 @@ GDBRemoteCommunicationServerLLGS::GDBRemoteCommunicationServerLLGS(
     m_next_saved_registers_id (1)
 {
     assert(platform_sp);
-    assert(debugger_sp && "must specify non-NULL debugger_sp for lldb-gdbserver");
     RegisterPacketHandlers();
 }
 
@@ -137,6 +135,8 @@ GDBRemoteCommunicationServerLLGS::RegisterPacketHandlers()
                                   &GDBRemoteCommunicationServerLLGS::Handle_qC);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_qfThreadInfo,
                                   &GDBRemoteCommunicationServerLLGS::Handle_qfThreadInfo);
+    RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_qFileLoadAddress,
+                                  &GDBRemoteCommunicationServerLLGS::Handle_qFileLoadAddress);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_qGetWorkingDir,
                                   &GDBRemoteCommunicationServerLLGS::Handle_qGetWorkingDir);
     RegisterMemberFunctionHandler(StringExtractorGDBRemote::eServerPacketType_qMemoryRegionInfo,
@@ -189,32 +189,32 @@ GDBRemoteCommunicationServerLLGS::RegisterPacketHandlers()
                           });
 }
 
-lldb_private::Error
+Error
 GDBRemoteCommunicationServerLLGS::SetLaunchArguments (const char *const args[], int argc)
 {
     if ((argc < 1) || !args || !args[0] || !args[0][0])
-        return lldb_private::Error ("%s: no process command line specified to launch", __FUNCTION__);
+        return Error ("%s: no process command line specified to launch", __FUNCTION__);
 
     m_process_launch_info.SetArguments (const_cast<const char**> (args), true);
-    return lldb_private::Error ();
+    return Error ();
 }
 
-lldb_private::Error
+Error
 GDBRemoteCommunicationServerLLGS::SetLaunchFlags (unsigned int launch_flags)
 {
     m_process_launch_info.GetFlags ().Set (launch_flags);
-    return lldb_private::Error ();
+    return Error ();
 }
 
-lldb_private::Error
+Error
 GDBRemoteCommunicationServerLLGS::LaunchProcess ()
 {
     Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS));
 
     if (!m_process_launch_info.GetArguments ().GetArgumentCount ())
-        return lldb_private::Error ("%s: no process command line specified to launch", __FUNCTION__);
+        return Error ("%s: no process command line specified to launch", __FUNCTION__);
 
-    lldb_private::Error error;
+    Error error;
     {
         Mutex::Locker locker (m_debugged_process_mutex);
         assert (!m_debugged_process_sp && "lldb-gdbserver creating debugged process but one already exists");
@@ -286,7 +286,7 @@ GDBRemoteCommunicationServerLLGS::LaunchProcess ()
     return error;
 }
 
-lldb_private::Error
+Error
 GDBRemoteCommunicationServerLLGS::AttachToProcess (lldb::pid_t pid)
 {
     Error error;
@@ -340,7 +340,7 @@ GDBRemoteCommunicationServerLLGS::AttachToProcess (lldb::pid_t pid)
 }
 
 void
-GDBRemoteCommunicationServerLLGS::InitializeDelegate (lldb_private::NativeProcessProtocol *process)
+GDBRemoteCommunicationServerLLGS::InitializeDelegate (NativeProcessProtocol *process)
 {
     assert (process && "process cannot be NULL");
     Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS));
@@ -354,7 +354,7 @@ GDBRemoteCommunicationServerLLGS::InitializeDelegate (lldb_private::NativeProces
 }
 
 GDBRemoteCommunication::PacketResult
-GDBRemoteCommunicationServerLLGS::SendWResponse (lldb_private::NativeProcessProtocol *process)
+GDBRemoteCommunicationServerLLGS::SendWResponse (NativeProcessProtocol *process)
 {
     assert (process && "process cannot be NULL");
     Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS));
@@ -653,7 +653,7 @@ GDBRemoteCommunicationServerLLGS::SendStopReplyPacketForThread (lldb::tid_t tid)
 }
 
 void
-GDBRemoteCommunicationServerLLGS::HandleInferiorState_Exited (lldb_private::NativeProcessProtocol *process)
+GDBRemoteCommunicationServerLLGS::HandleInferiorState_Exited (NativeProcessProtocol *process)
 {
     assert (process && "process cannot be NULL");
 
@@ -705,7 +705,7 @@ GDBRemoteCommunicationServerLLGS::HandleInferiorState_Exited (lldb_private::Nati
 }
 
 void
-GDBRemoteCommunicationServerLLGS::HandleInferiorState_Stopped (lldb_private::NativeProcessProtocol *process)
+GDBRemoteCommunicationServerLLGS::HandleInferiorState_Stopped (NativeProcessProtocol *process)
 {
     assert (process && "process cannot be NULL");
 
@@ -734,7 +734,7 @@ GDBRemoteCommunicationServerLLGS::HandleInferiorState_Stopped (lldb_private::Nat
 }
 
 void
-GDBRemoteCommunicationServerLLGS::ProcessStateChanged (lldb_private::NativeProcessProtocol *process, lldb::StateType state)
+GDBRemoteCommunicationServerLLGS::ProcessStateChanged (NativeProcessProtocol *process, lldb::StateType state)
 {
     assert (process && "process cannot be NULL");
     Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS));
@@ -745,6 +745,11 @@ GDBRemoteCommunicationServerLLGS::ProcessStateChanged (lldb_private::NativeProce
                 process->GetID (),
                 StateAsCString (state));
     }
+
+    // Make sure we get all of the pending stdout/stderr from the inferior
+    // and send it to the lldb host before we send the state change
+    // notification
+    m_stdio_communication.SynchronizeWithReadThread();
 
     switch (state)
     {
@@ -793,7 +798,7 @@ GDBRemoteCommunicationServerLLGS::SendONotification (const char *buffer, uint32_
     return SendPacketNoLock (response.GetData (), response.GetSize ());
 }
 
-lldb_private::Error
+Error
 GDBRemoteCommunicationServerLLGS::SetSTDIOFileDescriptor (int fd)
 {
     Error error;
@@ -948,18 +953,18 @@ GDBRemoteCommunicationServerLLGS::Handle_QSetWorkingDir (StringExtractorGDBRemot
     packet.SetFilePos (::strlen ("QSetWorkingDir:"));
     std::string path;
     packet.GetHexByteString (path);
-    m_process_launch_info.SwapWorkingDirectory (path);
+    m_process_launch_info.SetWorkingDirectory(FileSpec{path, true});
     return SendOKResponse ();
 }
 
 GDBRemoteCommunication::PacketResult
 GDBRemoteCommunicationServerLLGS::Handle_qGetWorkingDir (StringExtractorGDBRemote &packet)
 {
-    const char *working_dir = m_process_launch_info.GetWorkingDirectory();
-    if (working_dir && working_dir[0])
+    FileSpec working_dir{m_process_launch_info.GetWorkingDirectory()};
+    if (working_dir)
     {
         StreamString response;
-        response.PutBytesAsRawHex8(working_dir, strlen(working_dir));
+        response.PutCStringAsRawHex8(working_dir.GetCString());
         return SendPacketNoLock(response.GetData(), response.GetSize());
     }
 
@@ -1002,7 +1007,7 @@ GDBRemoteCommunicationServerLLGS::Handle_C (StringExtractorGDBRemote &packet)
             return SendIllFormedResponse (packet, "unexpected content after $C{signal-number}");
     }
 
-    lldb_private::ResumeActionList resume_actions (StateType::eStateRunning, 0);
+    ResumeActionList resume_actions (StateType::eStateRunning, 0);
     Error error;
 
     // We have two branches: what to do if a continue thread is specified (in which case we target
@@ -1015,7 +1020,7 @@ GDBRemoteCommunicationServerLLGS::Handle_C (StringExtractorGDBRemote &packet)
     if (signal_tid != LLDB_INVALID_THREAD_ID)
     {
         // The resume action for the continue thread (or all threads if a continue thread is not set).
-        lldb_private::ResumeAction action = { GetContinueThreadID (), StateType::eStateRunning, static_cast<int> (signo) };
+        ResumeAction action = { GetContinueThreadID (), StateType::eStateRunning, static_cast<int> (signo) };
 
         // Add the action for the continue thread (or all threads when the continue thread isn't present).
         resume_actions.Append (action);
@@ -1080,7 +1085,7 @@ GDBRemoteCommunicationServerLLGS::Handle_c (StringExtractorGDBRemote &packet)
     }
 
     // Build the ResumeActionList
-    lldb_private::ResumeActionList actions (StateType::eStateRunning, 0);
+    ResumeActionList actions (StateType::eStateRunning, 0);
 
     Error error = m_debugged_process_sp->Resume (actions);
     if (error.Fail ())
@@ -1840,8 +1845,8 @@ GDBRemoteCommunicationServerLLGS::Handle_m (StringExtractorGDBRemote &packet)
 
 
     // Retrieve the process memory.
-    lldb::addr_t bytes_read = 0;
-    lldb_private::Error error = m_debugged_process_sp->ReadMemory (read_addr, &buf[0], byte_count, bytes_read);
+    size_t bytes_read = 0;
+    Error error = m_debugged_process_sp->ReadMemoryWithoutTrap(read_addr, &buf[0], byte_count, bytes_read);
     if (error.Fail ())
     {
         if (log)
@@ -1852,12 +1857,12 @@ GDBRemoteCommunicationServerLLGS::Handle_m (StringExtractorGDBRemote &packet)
     if (bytes_read == 0)
     {
         if (log)
-            log->Printf ("GDBRemoteCommunicationServerLLGS::%s pid %" PRIu64 " mem 0x%" PRIx64 ": read %" PRIu64 " of %" PRIu64 " requested bytes", __FUNCTION__, m_debugged_process_sp->GetID (), read_addr, bytes_read, byte_count);
+            log->Printf ("GDBRemoteCommunicationServerLLGS::%s pid %" PRIu64 " mem 0x%" PRIx64 ": read 0 of %" PRIu64 " requested bytes", __FUNCTION__, m_debugged_process_sp->GetID (), read_addr, byte_count);
         return SendErrorResponse (0x08);
     }
 
     StreamGDBRemote response;
-    for (lldb::addr_t i = 0; i < bytes_read; ++i)
+    for (size_t i = 0; i < bytes_read; ++i)
         response.PutHex8(buf[i]);
 
     return SendPacketNoLock(response.GetData(), response.GetSize());
@@ -1911,7 +1916,7 @@ GDBRemoteCommunicationServerLLGS::Handle_M (StringExtractorGDBRemote &packet)
 
     // Convert the hex memory write contents to bytes.
     StreamGDBRemote response;
-    const uint64_t convert_count = static_cast<uint64_t> (packet.GetHexBytes (&buf[0], byte_count, 0));
+    const uint64_t convert_count = packet.GetHexBytes(&buf[0], byte_count, 0);
     if (convert_count != byte_count)
     {
         if (log)
@@ -1920,8 +1925,8 @@ GDBRemoteCommunicationServerLLGS::Handle_M (StringExtractorGDBRemote &packet)
     }
 
     // Write the process memory.
-    lldb::addr_t bytes_written = 0;
-    lldb_private::Error error = m_debugged_process_sp->WriteMemory (write_addr, &buf[0], byte_count, bytes_written);
+    size_t bytes_written = 0;
+    Error error = m_debugged_process_sp->WriteMemory (write_addr, &buf[0], byte_count, bytes_written);
     if (error.Fail ())
     {
         if (log)
@@ -1932,7 +1937,7 @@ GDBRemoteCommunicationServerLLGS::Handle_M (StringExtractorGDBRemote &packet)
     if (bytes_written == 0)
     {
         if (log)
-            log->Printf ("GDBRemoteCommunicationServerLLGS::%s pid %" PRIu64 " mem 0x%" PRIx64 ": wrote %" PRIu64 " of %" PRIu64 " requested bytes", __FUNCTION__, m_debugged_process_sp->GetID (), write_addr, bytes_written, byte_count);
+            log->Printf ("GDBRemoteCommunicationServerLLGS::%s pid %" PRIu64 " mem 0x%" PRIx64 ": wrote 0 of %" PRIu64 " requested bytes", __FUNCTION__, m_debugged_process_sp->GetID (), write_addr, byte_count);
         return SendErrorResponse (0x09);
     }
 
@@ -2234,10 +2239,10 @@ GDBRemoteCommunicationServerLLGS::Handle_s (StringExtractorGDBRemote &packet)
         return SendErrorResponse (0x33);
 
     // Create the step action for the given thread.
-    lldb_private::ResumeAction action = { tid, eStateStepping, 0 };
+    ResumeAction action = { tid, eStateStepping, 0 };
 
     // Setup the actions list.
-    lldb_private::ResumeActionList actions;
+    ResumeActionList actions;
     actions.Append (action);
 
     // All other threads stop while we're single stepping a thread.
@@ -2598,6 +2603,34 @@ GDBRemoteCommunicationServerLLGS::Handle_qWatchpointSupportInfo (StringExtractor
     return SendPacketNoLock(response.GetData(), response.GetSize());
 }
 
+GDBRemoteCommunication::PacketResult
+GDBRemoteCommunicationServerLLGS::Handle_qFileLoadAddress (StringExtractorGDBRemote &packet)
+{
+    // Fail if we don't have a current process.
+    if (!m_debugged_process_sp ||
+            m_debugged_process_sp->GetID () == LLDB_INVALID_PROCESS_ID)
+        return SendErrorResponse(67);
+
+    packet.SetFilePos(strlen("qFileLoadAddress:"));
+    if (packet.GetBytesLeft() == 0)
+        return SendErrorResponse(68);
+
+    std::string file_name;
+    packet.GetHexByteString(file_name);
+
+    lldb::addr_t file_load_address = LLDB_INVALID_ADDRESS;
+    Error error = m_debugged_process_sp->GetFileLoadAddress(file_name, file_load_address);
+    if (error.Fail())
+        return SendErrorResponse(69);
+
+    if (file_load_address == LLDB_INVALID_ADDRESS)
+        return SendErrorResponse(1); // File not loaded
+
+    StreamGDBRemote response;
+    response.PutHex64(file_load_address);
+    return SendPacketNoLock(response.GetData(), response.GetSize());
+}
+
 void
 GDBRemoteCommunicationServerLLGS::FlushInferiorOutput ()
 {
@@ -2642,7 +2675,7 @@ GDBRemoteCommunicationServerLLGS::MaybeCloseInferiorTerminalConnection ()
 }
 
 
-lldb_private::NativeThreadProtocolSP
+NativeThreadProtocolSP
 GDBRemoteCommunicationServerLLGS::GetThreadFromSuffix (StringExtractorGDBRemote &packet)
 {
     NativeThreadProtocolSP thread_sp;

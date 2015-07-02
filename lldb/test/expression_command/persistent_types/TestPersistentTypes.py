@@ -19,7 +19,7 @@ class PersistenttypesTestCase(TestBase):
 
         self.runCmd("breakpoint set --name main")
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         self.runCmd("expression struct $foo { int a; int b; };")
 
@@ -42,6 +42,9 @@ class PersistenttypesTestCase(TestBase):
 
         self.expect("memory read foo -t foobar",
                     substrs = ['($foobar) 0x', ' = ', "a = 'H'","b = 'e'","c = 'l'","d = 'l'"],matching=False,error=True) # the type name is $foobar, make sure we settle for nothing less
+
+        self.expect("expression struct { int a; int b; } x = { 2, 3 }; x",
+                    substrs = ['a = 2', 'b = 3'])
 
 
 if __name__ == '__main__':

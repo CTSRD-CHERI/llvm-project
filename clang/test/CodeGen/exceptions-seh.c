@@ -1,6 +1,5 @@
 // RUN: %clang_cc1 %s -triple x86_64-pc-win32 -fms-extensions -emit-llvm -o - | FileCheck %s
 
-// FIXME: Perform this outlining automatically CodeGen.
 void try_body(int numerator, int denominator, int *myres) {
   *myres = numerator / denominator;
 }
@@ -20,12 +19,12 @@ int safe_div(int numerator, int denominator, int *res) {
   *res = myres;
   return success;
 }
-// CHECK-LABEL: define i32 @safe_div(i32 %numerator, i32 %denominator, i32* %res)
+// CHECK-LABEL: define i32 @safe_div(i32 %numerator, i32 %denominator, i32* %res) {{.*}} personality i8* bitcast (i32 (...)* @__C_specific_handler to i8*)
 // CHECK: invoke void @try_body(i32 %{{.*}}, i32 %{{.*}}, i32* %{{.*}}) #[[NOINLINE:[0-9]+]]
 // CHECK:       to label %{{.*}} unwind label %[[lpad:[^ ]*]]
 //
 // CHECK: [[lpad]]
-// CHECK: landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__C_specific_handler to i8*)
+// CHECK: landingpad { i8*, i32 }
 // CHECK-NEXT: catch i8* null
 // CHECK-NOT: br i1
 // CHECK: br label %[[except:[^ ]*]]
@@ -37,20 +36,19 @@ int safe_div(int numerator, int denominator, int *res) {
 
 void j(void);
 
-// FIXME: Implement local variable captures in filter expressions.
 int filter_expr_capture(void) {
   int r = 42;
   __try {
     j();
-  } __except(/*r =*/ -1) {
+  } __except(r = -1) {
     r = 13;
   }
   return r;
 }
 
-// CHECK-LABEL: define i32 @filter_expr_capture()
-// FIXMECHECK: %[[captures]] = call i8* @llvm.frameallocate(i32 4)
-// CHECK: store i32 42, i32* %[[r:[^ ,]*]]
+// CHECK-LABEL: define i32 @filter_expr_capture() {{.*}} personality i8* bitcast (i32 (...)* @__C_specific_handler to i8*)
+// CHECK: call void (...) @llvm.frameescape(i32* %[[r:[^ ,]*]])
+// CHECK: store i32 42, i32* %[[r]]
 // CHECK: invoke void @j() #[[NOINLINE]]
 //
 // CHECK: landingpad
@@ -61,8 +59,8 @@ int filter_expr_capture(void) {
 // CHECK: ret i32 %[[rv]]
 
 // CHECK-LABEL: define internal i32 @"\01?filt$0@0@filter_expr_capture@@"(i8* %exception_pointers, i8* %frame_pointer)
-// FIXMECHECK: %[[captures]] = call i8* @llvm.framerecover(i8* bitcast (i32 ()* @filter_expr_capture, i8* %frame_pointer)
-// FIXMECHECK: store i32 -1, i32* %{{.*}}
+// CHECK: call i8* @llvm.framerecover(i8* bitcast (i32 ()* @filter_expr_capture to i8*), i8* %frame_pointer, i32 0)
+// CHECK: store i32 -1, i32* %{{.*}}
 // CHECK: ret i32 -1
 
 int nested_try(void) {
@@ -79,7 +77,7 @@ int nested_try(void) {
   }
   return r;
 }
-// CHECK-LABEL: define i32 @nested_try()
+// CHECK-LABEL: define i32 @nested_try() {{.*}} personality i8* bitcast (i32 (...)* @__C_specific_handler to i8*)
 // CHECK: store i32 42, i32* %[[r:[^ ,]*]]
 // CHECK: invoke void @j() #[[NOINLINE]]
 // CHECK:       to label %[[cont:[^ ]*]] unwind label %[[lpad:[^ ]*]]
@@ -89,7 +87,7 @@ int nested_try(void) {
 // CHECK: br label %[[inner_try_cont:[^ ]*]]
 //
 // CHECK: [[lpad]]
-// CHECK: landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__C_specific_handler to i8*)
+// CHECK: landingpad { i8*, i32 }
 // CHECK: catch i8* bitcast (i32 (i8*, i8*)* @"\01?filt$1@0@nested_try@@" to i8*)
 // CHECK: catch i8* bitcast (i32 (i8*, i8*)* @"\01?filt$0@0@nested_try@@" to i8*)
 // CHECK: store i8* %{{.*}}, i8** %[[ehptr_slot:[^ ]*]]
@@ -118,8 +116,6 @@ int nested_try(void) {
 // CHECK: [[inner_try_cont]]
 // CHECK: br label %[[outer_try_cont]]
 
-// FIXME: This lowering of __finally can't actually work, it will have to
-// change.
 static unsigned g = 0;
 void basic_finally(void) {
   ++g;
@@ -129,7 +125,7 @@ void basic_finally(void) {
     --g;
   }
 }
-// CHECK-LABEL: define void @basic_finally()
+// CHECK-LABEL: define void @basic_finally() {{.*}} personality i8* bitcast (i32 (...)* @__C_specific_handler to i8*)
 // CHECK: load i32, i32* @g
 // CHECK: add i32 %{{.*}}, 1
 // CHECK: store i32 %{{.*}}, i32* @g
@@ -138,23 +134,22 @@ void basic_finally(void) {
 // CHECK:       to label %[[cont:[^ ]*]] unwind label %[[lpad:[^ ]*]]
 //
 // CHECK: [[cont]]
-// CHECK: br label %[[finally:[^ ]*]]
-//
-// CHECK: [[finally]]
-// CHECK: load i32, i32* @g
-// CHECK: add i32 %{{.*}}, -1
-// CHECK: store i32 %{{.*}}, i32* @g
-// CHECK: icmp eq
-// CHECK: br i1 %{{.*}}, label
-//
+// CHECK: %[[fp:[^ ]*]] = call i8* @llvm.frameaddress(i32 0)
+// CHECK: call void @"\01?fin$0@0@basic_finally@@"(i8 0, i8* %[[fp]])
 // CHECK: ret void
 //
 // CHECK: [[lpad]]
-// CHECK: landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__C_specific_handler to i8*)
+// CHECK: landingpad { i8*, i32 }
 // CHECK-NEXT: cleanup
-// CHECK: br label %[[finally]]
-//
+// CHECK: %[[fp:[^ ]*]] = call i8* @llvm.frameaddress(i32 0)
+// CHECK: call void @"\01?fin$0@0@basic_finally@@"(i8 1, i8* %[[fp]])
 // CHECK: resume
+
+// CHECK: define internal void @"\01?fin$0@0@basic_finally@@"(i8 %abnormal_termination, i8* %frame_pointer)
+// CHECK:   load i32, i32* @g, align 4
+// CHECK:   add i32 %{{.*}}, -1
+// CHECK:   store i32 %{{.*}}, i32* @g, align 4
+// CHECK:   ret void
 
 int returns_int(void);
 int except_return(void) {

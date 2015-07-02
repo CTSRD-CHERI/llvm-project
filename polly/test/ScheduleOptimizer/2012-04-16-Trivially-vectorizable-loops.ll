@@ -1,6 +1,5 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-opt-isl %vector-opt < %s
+; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-opt-isl -polly-vectorizer=polly < %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
-target triple = "x86_64-unknown-linux-gnu"
 
 %struct._IO_FILE = type { i32, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, %struct._IO_marker*, %struct._IO_FILE*, i32, i32, i64, i16, i8, [1 x i8], i8*, i64, i8*, i8*, i8*, i8*, i64, i32, [20 x i8] }
 %struct._IO_marker = type { %struct._IO_marker*, %struct._IO_FILE*, i32 }
@@ -94,14 +93,14 @@ for.body3:                                        ; preds = %for.cond1
   %arrayidx5 = getelementptr inbounds [1536 x float], [1536 x float]* %arrayidx, i32 0, i64 %idxprom
   %1 = load float, float* %arrayidx5, align 4
   %conv = fpext float %1 to double
-  %call = call i32 (%struct._IO_FILE*, i8*, ...)* @fprintf(%struct._IO_FILE* %0, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str, i32 0, i32 0), double %conv)
+  %call = call i32 (%struct._IO_FILE*, i8*, ...) @fprintf(%struct._IO_FILE* %0, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str, i32 0, i32 0), double %conv)
   %rem = srem i32 %j.0, 80
   %cmp6 = icmp eq i32 %rem, 79
   br i1 %cmp6, label %if.then, label %if.end
 
 if.then:                                          ; preds = %for.body3
   %2 = load %struct._IO_FILE*, %struct._IO_FILE** @stdout, align 8
-  %call8 = call i32 (%struct._IO_FILE*, i8*, ...)* @fprintf(%struct._IO_FILE* %2, i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str1, i32 0, i32 0))
+  %call8 = call i32 (%struct._IO_FILE*, i8*, ...) @fprintf(%struct._IO_FILE* %2, i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str1, i32 0, i32 0))
   br label %if.end
 
 if.end:                                           ; preds = %if.then, %for.body3
@@ -113,7 +112,7 @@ for.inc:                                          ; preds = %if.end
 
 for.end:                                          ; preds = %for.cond1
   %3 = load %struct._IO_FILE*, %struct._IO_FILE** @stdout, align 8
-  %call9 = call i32 (%struct._IO_FILE*, i8*, ...)* @fprintf(%struct._IO_FILE* %3, i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str1, i32 0, i32 0))
+  %call9 = call i32 (%struct._IO_FILE*, i8*, ...) @fprintf(%struct._IO_FILE* %3, i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str1, i32 0, i32 0))
   br label %for.inc10
 
 for.inc10:                                        ; preds = %for.end

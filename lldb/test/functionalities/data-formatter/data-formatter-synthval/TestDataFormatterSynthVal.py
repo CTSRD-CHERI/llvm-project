@@ -12,7 +12,7 @@ class DataFormatterSynthValueTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Test using Python synthetic children provider to provide a value."""
@@ -20,11 +20,8 @@ class DataFormatterSynthValueTestCase(TestBase):
         self.data_formatter_commands()
 
     @skipIfFreeBSD # llvm.org/pr20545 bogus output confuses buildbot parser
-    @expectedFailureLinux # non-core functionality, need to reenable and fix
-                          # later (DES 2014.11.07). Most likely failing because
-                          # of mis-match is version of libstdc++ supported by
-                          # the data-formatters.
     @dwarf_test
+    @expectedFailureLinux('llvm.org/pr19011', ['clang'])
     def test_with_dwarf_and_run_command(self):
         """Test using Python synthetic children provider to provide a value."""
         self.buildDwarf()
@@ -42,7 +39,7 @@ class DataFormatterSynthValueTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,

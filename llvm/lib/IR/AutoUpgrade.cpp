@@ -62,21 +62,6 @@ static bool UpgradeX86IntrinsicsWith8BitMask(Function *F, Intrinsic::ID IID,
   return true;
 }
 
-// Upgrade the declarations of AVX-512 cmp intrinsic functions whose 8-bit
-// immediates have changed their type from i32 to i8.
-static bool UpgradeAVX512CmpIntrinsic(Function *F, Intrinsic::ID IID,
-                                      Function *&NewFn) {
-  // Check that the last argument is an i32.
-  Type *LastArgType = F->getFunctionType()->getParamType(2);
-  if (!LastArgType->isIntegerTy(32))
-    return false;
-
-  // Move this function aside and map down.
-  F->setName(F->getName() + ".old");
-  NewFn = Intrinsic::getDeclaration(F->getParent(), IID);
-  return true;
-}
-
 static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
   assert(F && "Illegal to upgrade a non-existent Function.");
 
@@ -120,19 +105,6 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       F->setName(Name + ".old");
       NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::cttz,
                                         F->arg_begin()->getType());
-      return true;
-    }
-    break;
-  }
-  case 'd': {
-    if (Name.startswith("dbg.declare") && F->arg_size() == 2) {
-      F->setName(Name + ".old");
-      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::dbg_declare);
-      return true;
-    }
-    if (Name.startswith("dbg.value") && F->arg_size() == 3) {
-      F->setName(Name + ".old");
-      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::dbg_value);
       return true;
     }
     break;
@@ -224,88 +196,6 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       return UpgradeX86IntrinsicsWith8BitMask(F, Intrinsic::x86_avx2_mpsadbw,
                                               NewFn);
 
-    if (Name == "x86.avx512.mask.cmp.ps.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_ps_512,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.pd.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_pd_512,
-                                       NewFn);
-
-    if (Name == "x86.avx512.mask.cmp.b.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_b_512,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.w.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_w_512,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.d.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_d_512,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.q.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_q_512,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.b.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_b_512,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.w.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_w_512,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.d.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_d_512,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.q.512")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_q_512,
-                                       NewFn);
-
-    if (Name == "x86.avx512.mask.cmp.b.256")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_b_256,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.w.256")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_w_256,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.d.256")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_d_256,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.q.256")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_q_256,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.b.256")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_b_256,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.w.256")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_w_256,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.d.256")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_d_256,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.q.256")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_q_256,
-                                       NewFn);
-
-    if (Name == "x86.avx512.mask.cmp.b.128")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_b_128,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.w.128")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_w_128,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.d.128")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_d_128,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.cmp.q.128")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_cmp_q_128,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.b.128")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_b_128,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.w.128")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_w_128,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.d.128")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_d_128,
-                                       NewFn);
-    if (Name == "x86.avx512.mask.ucmp.q.128")
-      return UpgradeAVX512CmpIntrinsic(F, Intrinsic::x86_avx512_mask_ucmp_q_128,
-                                       NewFn);
-
     // frcz.ss/sd may need to have an argument dropped
     if (Name.startswith("x86.xop.vfrcz.ss") && F->arg_size() == 2) {
       F->setName(Name + ".old");
@@ -343,32 +233,14 @@ bool llvm::UpgradeIntrinsicFunction(Function *F, Function *&NewFn) {
   // Upgrade intrinsic attributes.  This does not change the function.
   if (NewFn)
     F = NewFn;
-  if (unsigned id = F->getIntrinsicID())
-    F->setAttributes(Intrinsic::getAttributes(F->getContext(),
-                                              (Intrinsic::ID)id));
+  if (Intrinsic::ID id = F->getIntrinsicID())
+    F->setAttributes(Intrinsic::getAttributes(F->getContext(), id));
   return Upgraded;
 }
 
 bool llvm::UpgradeGlobalVariable(GlobalVariable *GV) {
   // Nothing to do yet.
   return false;
-}
-
-static MDNode *getNodeField(const MDNode *DbgNode, unsigned Elt) {
-  if (!DbgNode || Elt >= DbgNode->getNumOperands())
-    return nullptr;
-  return dyn_cast_or_null<MDNode>(DbgNode->getOperand(Elt));
-}
-
-static MetadataAsValue *getExpression(Value *VarOperand, Function *F) {
-  // Old-style DIVariables have an optional expression as the 8th element.
-  DIExpression Expr(getNodeField(
-      cast<MDNode>(cast<MetadataAsValue>(VarOperand)->getMetadata()), 8));
-  if (!Expr) {
-    DIBuilder DIB(*F->getParent(), /*AllowUnresolved*/ false);
-    Expr = DIB.createExpression();
-  }
-  return MetadataAsValue::get(F->getContext(), Expr);
 }
 
 // Handles upgrading SSE2 and AVX2 PSLLDQ intrinsics by converting them
@@ -543,13 +415,14 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
         llvm_unreachable("Unknown condition");
 
       Function *VPCOM = Intrinsic::getDeclaration(F->getParent(), intID);
-      Rep = Builder.CreateCall3(VPCOM, CI->getArgOperand(0),
-                                CI->getArgOperand(1), Builder.getInt8(Imm));
+      Rep =
+          Builder.CreateCall(VPCOM, {CI->getArgOperand(0), CI->getArgOperand(1),
+                                     Builder.getInt8(Imm)});
     } else if (Name == "llvm.x86.sse42.crc32.64.8") {
       Function *CRC32 = Intrinsic::getDeclaration(F->getParent(),
                                                Intrinsic::x86_sse42_crc32_32_8);
       Value *Trunc0 = Builder.CreateTrunc(CI->getArgOperand(0), Type::getInt32Ty(C));
-      Rep = Builder.CreateCall2(CRC32, Trunc0, CI->getArgOperand(1));
+      Rep = Builder.CreateCall(CRC32, {Trunc0, CI->getArgOperand(1)});
       Rep = Builder.CreateZExt(Rep, CI->getType(), "");
     } else if (Name.startswith("llvm.x86.avx.vbroadcast")) {
       // Replace broadcasts with a series of insertelements.
@@ -558,7 +431,7 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       unsigned EltNum = VecTy->getVectorNumElements();
       Value *Cast = Builder.CreateBitCast(CI->getArgOperand(0),
                                           EltTy->getPointerTo());
-      Value *Load = Builder.CreateLoad(Cast);
+      Value *Load = Builder.CreateLoad(EltTy, Cast);
       Type *I32Ty = Type::getInt32Ty(C);
       Rep = UndefValue::get(VecTy);
       for (unsigned I = 0; I < EltNum; ++I)
@@ -566,10 +439,10 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
                                           ConstantInt::get(I32Ty, I));
     } else if (Name == "llvm.x86.avx2.vbroadcasti128") {
       // Replace vbroadcasts with a vector shuffle.
-      Value *Op = Builder.CreatePointerCast(
-          CI->getArgOperand(0),
-          PointerType::getUnqual(VectorType::get(Type::getInt64Ty(C), 2)));
-      Value *Load = Builder.CreateLoad(Op);
+      Type *VT = VectorType::get(Type::getInt64Ty(C), 2);
+      Value *Op = Builder.CreatePointerCast(CI->getArgOperand(0),
+                                            PointerType::getUnqual(VT));
+      Value *Load = Builder.CreateLoad(VT, Op);
       const int Idxs[4] = { 0, 1, 0, 1 };
       Rep = Builder.CreateShuffleVector(Load, UndefValue::get(Load->getType()),
                                         Idxs);
@@ -745,7 +618,7 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
     return;
   }
 
-  std::string Name = CI->getName().str();
+  std::string Name = CI->getName();
   if (!Name.empty())
     CI->setName(Name + ".old");
 
@@ -753,52 +626,31 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
   default:
     llvm_unreachable("Unknown function for CallInst upgrade.");
 
-  // Upgrade debug intrinsics to use an additional DIExpression argument.
-  case Intrinsic::dbg_declare: {
-    auto NewCI =
-        Builder.CreateCall3(NewFn, CI->getArgOperand(0), CI->getArgOperand(1),
-                            getExpression(CI->getArgOperand(1), F), Name);
-    NewCI->setDebugLoc(CI->getDebugLoc());
-    CI->replaceAllUsesWith(NewCI);
-    CI->eraseFromParent();
-    return;
-  }
-  case Intrinsic::dbg_value: {
-    auto NewCI = Builder.CreateCall4(
-        NewFn, CI->getArgOperand(0), CI->getArgOperand(1), CI->getArgOperand(2),
-        getExpression(CI->getArgOperand(2), F), Name);
-    NewCI->setDebugLoc(CI->getDebugLoc());
-    CI->replaceAllUsesWith(NewCI);
-    CI->eraseFromParent();
-    return;
-  }
   case Intrinsic::ctlz:
   case Intrinsic::cttz:
     assert(CI->getNumArgOperands() == 1 &&
            "Mismatch between function args and call args");
-    CI->replaceAllUsesWith(Builder.CreateCall2(NewFn, CI->getArgOperand(0),
-                                               Builder.getFalse(), Name));
+    CI->replaceAllUsesWith(Builder.CreateCall(
+        NewFn, {CI->getArgOperand(0), Builder.getFalse()}, Name));
     CI->eraseFromParent();
     return;
 
   case Intrinsic::objectsize:
-    CI->replaceAllUsesWith(Builder.CreateCall2(NewFn,
-                                               CI->getArgOperand(0),
-                                               CI->getArgOperand(1),
-                                               Name));
+    CI->replaceAllUsesWith(Builder.CreateCall(
+        NewFn, {CI->getArgOperand(0), CI->getArgOperand(1)}, Name));
     CI->eraseFromParent();
     return;
 
   case Intrinsic::ctpop: {
-    CI->replaceAllUsesWith(Builder.CreateCall(NewFn, CI->getArgOperand(0)));
+    CI->replaceAllUsesWith(Builder.CreateCall(NewFn, {CI->getArgOperand(0)}));
     CI->eraseFromParent();
     return;
   }
 
   case Intrinsic::x86_xop_vfrcz_ss:
   case Intrinsic::x86_xop_vfrcz_sd:
-    CI->replaceAllUsesWith(Builder.CreateCall(NewFn, CI->getArgOperand(1),
-                                              Name));
+    CI->replaceAllUsesWith(
+        Builder.CreateCall(NewFn, {CI->getArgOperand(1)}, Name));
     CI->eraseFromParent();
     return;
 
@@ -816,16 +668,12 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
     // Old intrinsic, add bitcasts
     Value *Arg1 = CI->getArgOperand(1);
 
-    Value *BC0 =
-      Builder.CreateBitCast(Arg0,
-                            VectorType::get(Type::getInt64Ty(C), 2),
-                            "cast");
-    Value *BC1 =
-      Builder.CreateBitCast(Arg1,
-                            VectorType::get(Type::getInt64Ty(C), 2),
-                            "cast");
+    Type *NewVecTy = VectorType::get(Type::getInt64Ty(C), 2);
 
-    CallInst* NewCall = Builder.CreateCall2(NewFn, BC0, BC1, Name);
+    Value *BC0 = Builder.CreateBitCast(Arg0, NewVecTy, "cast");
+    Value *BC1 = Builder.CreateBitCast(Arg1, NewVecTy, "cast");
+
+    CallInst *NewCall = Builder.CreateCall(NewFn, {BC0, BC1}, Name);
     CI->replaceAllUsesWith(NewCall);
     CI->eraseFromParent();
     return;
@@ -844,21 +692,6 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
 
     // Replace the last argument with a trunc.
     Args.back() = Builder.CreateTrunc(Args.back(), Type::getInt8Ty(C), "trunc");
-
-    CallInst *NewCall = Builder.CreateCall(NewFn, Args);
-    CI->replaceAllUsesWith(NewCall);
-    CI->eraseFromParent();
-    return;
-  }
-  case Intrinsic::x86_avx512_mask_cmp_ps_512:
-  case Intrinsic::x86_avx512_mask_cmp_pd_512: {
-    // Need to truncate the last argument from i32 to i8 -- this argument models
-    // an inherently 8-bit immediate operand to these x86 instructions.
-    SmallVector<Value *, 5> Args(CI->arg_operands().begin(),
-                                 CI->arg_operands().end());
-
-    // Replace the last argument with a trunc.
-    Args[2] = Builder.CreateTrunc(Args[2], Type::getInt8Ty(C), "trunc");
 
     CallInst *NewCall = Builder.CreateCall(NewFn, Args);
     CI->replaceAllUsesWith(NewCall);

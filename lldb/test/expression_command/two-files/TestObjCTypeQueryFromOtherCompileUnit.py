@@ -20,14 +20,14 @@ class ObjCTypeQueryTestCase(TestBase):
         self.line = line_number('main.m',
                                 "// Set breakpoint here, then do 'expr (NSArray*)array_token'.")
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym(self):
         """The expression parser's type search should be wider than the current compilation unit."""
         self.buildDsym()
         self.type_query_from_other_cu()
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dwarf_test
     def test_with_dwarf(self):
         """The expression parser's type search should be wider than the current compilation unit."""
@@ -40,7 +40,7 @@ class ObjCTypeQueryTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.m", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("run", RUN_FAILED)
 
         # Now do a NSArry type query from the 'main.m' compile uint.
         self.expect("expression (NSArray*)array_token",

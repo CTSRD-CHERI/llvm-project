@@ -19,6 +19,7 @@
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/DwarfStringPoolEntry.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -53,6 +54,7 @@ class MCSection;
 class MCStreamer;
 class MCSubtargetInfo;
 class MCSymbol;
+class MCTargetOptions;
 class MDNode;
 class DwarfDebug;
 class Mangler;
@@ -78,7 +80,7 @@ public:
   /// This is the MCStreamer object for the file we are generating. This
   /// contains the transient state for the current translation unit that we are
   /// generating (such as the current section etc).
-  MCStreamer &OutStreamer;
+  std::unique_ptr<MCStreamer> OutStreamer;
 
   /// The current machine function.
   const MachineFunction *MF;
@@ -140,7 +142,7 @@ protected:
   explicit AsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer);
 
 public:
-  virtual ~AsmPrinter();
+  ~AsmPrinter() override;
 
   DwarfDebug *getDwarfDebug() { return DD; }
   DwarfDebug *getDwarfDebug() const { return DD; }
@@ -416,10 +418,18 @@ public:
   /// Emit reference to a ttype global with a specified encoding.
   void EmitTTypeReference(const GlobalValue *GV, unsigned Encoding) const;
 
-  /// Emit the 4-byte offset of Label from the start of its section.  This can
-  /// be done with a special directive if the target supports it (e.g. cygwin)
-  /// or by emitting it as an offset from a label at the start of the section.
-  void emitSectionOffset(const MCSymbol *Label) const;
+  /// Emit a reference to a symbol for use in dwarf. Different object formats
+  /// represent this in different ways. Some use a relocation others encode
+  /// the label offset in its section.
+  void emitDwarfSymbolReference(const MCSymbol *Label,
+                                bool ForceOffset = false) const;
+
+  /// Emit the 4-byte offset of a string from the start of its section.
+  ///
+  /// When possible, emit a DwarfStringPool section offset without any
+  /// relocations, and without using the symbol.  Otherwise, defers to \a
+  /// emitDwarfSymbolReference().
+  void emitDwarfStringOffset(DwarfStringPoolEntryRef S) const;
 
   /// Get the value for DW_AT_APPLE_isa. Zero if no isa encoding specified.
   virtual unsigned getISAEncoding() { return 0; }
@@ -493,11 +503,12 @@ private:
   mutable unsigned Counter;
 
   /// This method emits the header for the current function.
-  void EmitFunctionHeader();
+  virtual void EmitFunctionHeader();
 
   /// Emit a blob of inline asm to the output streamer.
   void
   EmitInlineAsm(StringRef Str, const MCSubtargetInfo &STI,
+                const MCTargetOptions &MCOptions,
                 const MDNode *LocMDNode = nullptr,
                 InlineAsm::AsmDialect AsmDialect = InlineAsm::AD_ATT) const;
 

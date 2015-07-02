@@ -14,9 +14,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/TempScopInfo.h"
-#include "polly/ScopDetection.h"
-#include "polly/LinkAllPasses.h"
 #include "polly/CodeGen/BlockGenerators.h"
+#include "polly/LinkAllPasses.h"
+#include "polly/ScopDetection.h"
 #include "polly/Support/GICHelper.h"
 #include "polly/Support/SCEVValidator.h"
 #include "polly/Support/ScopHelper.h"
@@ -212,7 +212,9 @@ bool TempScopInfo::buildScalarDependences(Instruction *Inst, Region *R,
 
 extern MapInsnToMemAcc InsnToMemAcc;
 
-IRAccess TempScopInfo::buildIRAccess(Instruction *Inst, Loop *L, Region *R) {
+IRAccess
+TempScopInfo::buildIRAccess(Instruction *Inst, Loop *L, Region *R,
+                            const ScopDetection::BoxedLoopsSetTy *BoxedLoops) {
   unsigned Size;
   Type *SizeType;
   enum IRAccess::TypeKind Type;
@@ -235,12 +237,24 @@ IRAccess TempScopInfo::buildIRAccess(Instruction *Inst, Loop *L, Region *R) {
   assert(BasePointer && "Could not find base pointer");
   AccessFunction = SE->getMinusSCEV(AccessFunction, BasePointer);
 
-  MemAcc *Acc = InsnToMemAcc[Inst];
-  if (PollyDelinearize && Acc)
+  auto AccItr = InsnToMemAcc.find(Inst);
+  if (PollyDelinearize && AccItr != InsnToMemAcc.end())
     return IRAccess(Type, BasePointer->getValue(), AccessFunction, Size, true,
-                    Acc->DelinearizedSubscripts, Acc->Shape->DelinearizedSizes);
+                    AccItr->second.DelinearizedSubscripts,
+                    AccItr->second.Shape->DelinearizedSizes);
 
-  bool IsAffine = isAffineExpr(R, AccessFunction, *SE, BasePointer->getValue());
+  // Check if the access depends on a loop contained in a non-affine subregion.
+  bool isVariantInNonAffineLoop = false;
+  if (BoxedLoops) {
+    SetVector<const Loop *> Loops;
+    findLoops(AccessFunction, Loops);
+    for (const Loop *L : Loops)
+      if (BoxedLoops->count(L))
+        isVariantInNonAffineLoop = true;
+  }
+
+  bool IsAffine = !isVariantInNonAffineLoop &&
+                  isAffineExpr(R, AccessFunction, *SE, BasePointer->getValue());
 
   SmallVector<const SCEV *, 4> Subscripts, Sizes;
   Subscripts.push_back(AccessFunction);
@@ -273,10 +287,14 @@ void TempScopInfo::buildAccessFunctions(Region &R, BasicBlock &BB,
   AccFuncSetType Functions;
   Loop *L = LI->getLoopFor(&BB);
 
+  // The set of loops contained in non-affine subregions that are part of R.
+  const ScopDetection::BoxedLoopsSetTy *BoxedLoops = SD->getBoxedLoops(&R);
+
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
     Instruction *Inst = I;
     if (isa<LoadInst>(Inst) || isa<StoreInst>(Inst))
-      Functions.push_back(std::make_pair(buildIRAccess(Inst, L, &R), Inst));
+      Functions.push_back(
+          std::make_pair(buildIRAccess(Inst, L, &R, BoxedLoops), Inst));
 
     if (PHINode *PHI = dyn_cast<PHINode>(Inst))
       buildPHIAccesses(PHI, R, Functions, NonAffineSubRegion);
@@ -297,8 +315,7 @@ void TempScopInfo::buildAccessFunctions(Region &R, BasicBlock &BB,
   Accs.insert(Accs.end(), Functions.begin(), Functions.end());
 }
 
-void TempScopInfo::buildAffineCondition(Value &V, bool inverted,
-                                        Comparison **Comp) const {
+Comparison TempScopInfo::buildAffineCondition(Value &V, bool inverted) {
   if (ConstantInt *C = dyn_cast<ConstantInt>(&V)) {
     // If this is always true condition, we will create 0 <= 1,
     // otherwise we will create 0 >= 1.
@@ -306,11 +323,9 @@ void TempScopInfo::buildAffineCondition(Value &V, bool inverted,
     const SCEV *RHS = SE->getConstant(C->getType(), 1);
 
     if (C->isOne() == inverted)
-      *Comp = new Comparison(LHS, RHS, ICmpInst::ICMP_SLE);
+      return Comparison(LHS, RHS, ICmpInst::ICMP_SLE);
     else
-      *Comp = new Comparison(LHS, RHS, ICmpInst::ICMP_SGE);
-
-    return;
+      return Comparison(LHS, RHS, ICmpInst::ICMP_SGE);
   }
 
   ICmpInst *ICmp = dyn_cast<ICmpInst>(&V);
@@ -340,7 +355,7 @@ void TempScopInfo::buildAffineCondition(Value &V, bool inverted,
     break;
   }
 
-  *Comp = new Comparison(LHS, RHS, Pred);
+  return Comparison(LHS, RHS, Pred);
 }
 
 void TempScopInfo::buildCondition(BasicBlock *BB, Region &R) {
@@ -404,9 +419,7 @@ void TempScopInfo::buildCondition(BasicBlock *BB, Region &R) {
         inverted = false;
     }
 
-    Comparison *Cmp;
-    buildAffineCondition(*(Br->getCondition()), inverted, &Cmp);
-    Cond.push_back(*Cmp);
+    Cond.push_back(buildAffineCondition(*(Br->getCondition()), inverted));
   }
 
   if (!Cond.empty())

@@ -15,7 +15,7 @@ class ExprDoesntDeadlockTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @unittest2.skipUnless(sys.platform.startswith("darwin"), "requires Darwin")
+    @skipUnlessDarwin
     @dsym_test
     def test_with_dsym_and_run_command(self):
         """Test that expr will time out and allow other threads to run if it blocks - with dsym."""
@@ -24,7 +24,7 @@ class ExprDoesntDeadlockTestCase(TestBase):
 
     @dwarf_test
     @expectedFailureFreeBSD('llvm.org/pr17946')
-    @expectedFailureLinux('llvm.org/pr15258') # disabled due to assertion failure in ProcessMonitor::GetCrashReasonForSIGSEGV:
+    @expectedFlakeyLinux # failed 1/365 test runs, line 61, thread.IsValid()
     def test_with_dwarf_and_run_command(self):
         """Test that expr will time out and allow other threads to run if it blocks."""
         self.buildDwarf()

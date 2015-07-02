@@ -135,8 +135,8 @@ sub ProcessClangFailure {
   my ($PPH, $PPFile) = tempfile( $prefix . "_XXXXXX",
                                  SUFFIX => GetPPExt($Lang),
                                  DIR => $Dir);
-  system $Clang, @$Args, "-E", "-o", $PPFile;
   close ($PPH);
+  system $Clang, @$Args, "-E", "-o", $PPFile;
 
   # Create the info file.
   open (OUT, ">", "$PPFile.info.txt") or die "Cannot open $PPFile.info.txt\n";
@@ -492,6 +492,11 @@ foreach (my $i = 0; $i < scalar(@ARGV); ++$i) {
   my $Arg = $ARGV[$i];
   my ($ArgKey) = split /=/,$Arg,2;
 
+  # Be friendly to "" in the argument list.
+  if (!defined($ArgKey)) {
+    next;
+  }
+
   # Modes ccc-analyzer supports
   if ($Arg =~ /^-(E|MM?)$/) { $Action = 'preprocess'; }
   elsif ($Arg eq '-c') { $Action = 'compile'; }
@@ -751,5 +756,3 @@ if ($Action eq 'compile' or $Action eq 'link') {
     }
   }
 }
-
-exit($Status >> 8);

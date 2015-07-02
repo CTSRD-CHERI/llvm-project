@@ -63,7 +63,7 @@ entry:
   ret void
 }
 
-define void ()* @test1(void ()** %x) {
+define void ()* @test1(void ()** %x) personality i32 (...)* @__gxx_personality_v0 {
 ; CHECK-LABEL: Call edges in function: test1
 ; CHECK-NEXT: -> f12
 ; CHECK-NEXT: -> f11
@@ -90,14 +90,14 @@ next:
   select i1 true, void ()* @f3, void ()* @f4
   store void ()* @f5, void ()** %x
   call void @f6()
-  call void (void ()*, void ()*)* bitcast (void ()* @f7 to void (void ()*, void ()*)*)(void ()* @f8, void ()* @f9)
+  call void (void ()*, void ()*) bitcast (void ()* @f7 to void (void ()*, void ()*)*)(void ()* @f8, void ()* @f9)
   invoke void @f10() to label %exit unwind label %unwind
 
 exit:
   ret void ()* @f11
 
 unwind:
-  %res = landingpad { i8*, i32 } personality i32 (...)* @__gxx_personality_v0
+  %res = landingpad { i8*, i32 }
           cleanup
   resume { i8*, i32 } { i8* bitcast (void ()* @f12 to i8*), i32 42 }
 }

@@ -96,7 +96,7 @@ public:
     return 32;
   }
 
-  unsigned getMaxInterleaveFactor() {
+  unsigned getMaxInterleaveFactor(unsigned VF) {
     // These are out of order CPUs:
     if (ST->isCortexA15() || ST->isSwift())
       return 2;
@@ -126,6 +126,11 @@ public:
   unsigned getMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
                            unsigned AddressSpace);
 
+  unsigned getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
+                                      unsigned Factor,
+                                      ArrayRef<unsigned> Indices,
+                                      unsigned Alignment,
+                                      unsigned AddressSpace);
   /// @}
 };
 

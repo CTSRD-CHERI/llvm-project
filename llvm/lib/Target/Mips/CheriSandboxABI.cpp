@@ -104,7 +104,7 @@ class CheriSandboxABI : public ModulePass,
         Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
         if (AI->isArrayAllocation())
           Size = B.CreateMul(Size, AI->getArraySize());
-        Alloca = B.CreateCall2(SetLenFun, Alloca, Size);
+        Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
         Alloca = B.CreateBitCast(Alloca, AllocaTy);
         AI->replaceAllUsesWith(Alloca);
         AI->eraseFromParent();

@@ -17,12 +17,16 @@
 #include "lldb/Target/Thread.h"
 
 class StringExtractor;
+
+namespace lldb_private {
+namespace process_gdb_remote {
+
 class ProcessGDBRemote;
 
-class ThreadGDBRemote : public lldb_private::Thread
+class ThreadGDBRemote : public Thread
 {
 public:
-    ThreadGDBRemote (lldb_private::Process &process, lldb::tid_t tid);
+    ThreadGDBRemote (Process &process, lldb::tid_t tid);
 
     virtual
     ~ThreadGDBRemote ();
@@ -52,10 +56,10 @@ public:
     GetRegisterContext () override;
 
     lldb::RegisterContextSP
-    CreateRegisterContextForFrame (lldb_private::StackFrame *frame) override;
+    CreateRegisterContextForFrame (StackFrame *frame) override;
 
     void
-    Dump (lldb_private::Log *log, uint32_t index);
+    Dump (Log *log, uint32_t index);
 
     static bool
     ThreadIDIsValid (lldb::tid_t thread);
@@ -87,7 +91,13 @@ public:
         m_thread_dispatch_qaddr = thread_dispatch_qaddr;
     }
 
-    lldb_private::StructuredData::ObjectSP
+    void
+    ClearQueueInfo ();
+    
+    void
+    SetQueueInfo (std::string &&queue_name, lldb::QueueKind queue_kind, uint64_t queue_serial);
+
+    StructuredData::ObjectSP
     FetchThreadExtendedInfo () override;
 
 protected:
@@ -97,13 +107,20 @@ protected:
     bool
     PrivateSetRegisterValue (uint32_t reg, 
                              StringExtractor &response);
-                             
+
+    bool
+    CachedQueueInfoIsValid() const
+    {
+        return m_queue_kind != lldb::eQueueKindUnknown;
+    }
     //------------------------------------------------------------------
     // Member variables.
     //------------------------------------------------------------------
     std::string m_thread_name;
     std::string m_dispatch_queue_name;
     lldb::addr_t m_thread_dispatch_qaddr;
+    lldb::QueueKind m_queue_kind;     // Queue info from stop reply/stop info for thread
+    uint64_t m_queue_serial;    // Queue info from stop reply/stop info for thread
     //------------------------------------------------------------------
     // Member variables.
     //------------------------------------------------------------------
@@ -113,8 +130,9 @@ protected:
 
     bool
     CalculateStopInfo () override;
-
-
 };
+
+} // namespace process_gdb_remote
+} // namespace lldb_private
 
 #endif  // liblldb_ThreadGDBRemote_h_

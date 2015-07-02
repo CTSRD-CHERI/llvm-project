@@ -60,7 +60,7 @@ TEST(RangeVerifier, WrongRange) {
 
 class LabelDeclRangeVerifier : public RangeVerifier<LabelStmt> {
 protected:
-  virtual SourceRange getRange(const LabelStmt &Node) {
+  SourceRange getRange(const LabelStmt &Node) override {
     return Node.getDecl()->getSourceRange();
   }
 };
@@ -106,6 +106,38 @@ TEST(MemberExpr, ImplicitMemberRange) {
   Verifier.expectRange(2, 30, 2, 30);
   EXPECT_TRUE(Verifier.match("struct S { operator int() const; };\n"
                              "int foo(const S& s) { return s; }",
+                             memberExpr()));
+}
+
+class MemberExprArrowLocVerifier : public RangeVerifier<MemberExpr> {
+protected:
+  SourceRange getRange(const MemberExpr &Node) override {
+     return Node.getOperatorLoc();
+  }
+};
+
+TEST(MemberExpr, ArrowRange) {
+  MemberExprArrowLocVerifier Verifier;
+  Verifier.expectRange(2, 19, 2, 19);
+  EXPECT_TRUE(Verifier.match("struct S { int x; };\n"
+                             "void foo(S *s) { s->x = 0; }",
+                             memberExpr()));
+}
+
+TEST(MemberExpr, MacroArrowRange) {
+  MemberExprArrowLocVerifier Verifier;
+  Verifier.expectRange(1, 24, 1, 24);
+  EXPECT_TRUE(Verifier.match("#define MEMBER(a, b) (a->b)\n"
+                             "struct S { int x; };\n"
+                             "void foo(S *s) { MEMBER(s, x) = 0; }",
+                             memberExpr()));
+}
+
+TEST(MemberExpr, ImplicitArrowRange) {
+  MemberExprArrowLocVerifier Verifier;
+  Verifier.expectRange(0, 0, 0, 0);
+  EXPECT_TRUE(Verifier.match("struct S { int x; void Test(); };\n"
+                             "void S::Test() { x = 1; }",
                              memberExpr()));
 }
 
@@ -169,7 +201,7 @@ TEST(InitListExpr, VectorLiteralInitListParens) {
 
 class TemplateAngleBracketLocRangeVerifier : public RangeVerifier<TypeLoc> {
 protected:
-  virtual SourceRange getRange(const TypeLoc &Node) {
+  SourceRange getRange(const TypeLoc &Node) override {
     TemplateSpecializationTypeLoc T =
         Node.getUnqualifiedLoc().castAs<TemplateSpecializationTypeLoc>();
     assert(!T.isNull());
@@ -194,7 +226,7 @@ TEST(CXXNewExpr, TypeParenRange) {
 
 class UnaryTransformTypeLocParensRangeVerifier : public RangeVerifier<TypeLoc> {
 protected:
-  virtual SourceRange getRange(const TypeLoc &Node) {
+  SourceRange getRange(const TypeLoc &Node) override {
     UnaryTransformTypeLoc T =
         Node.getUnqualifiedLoc().castAs<UnaryTransformTypeLoc>();
     assert(!T.isNull());
