@@ -1,5 +1,8 @@
 ; Check that register scavenging spill slot is close to $fp.
 ; RUN: llc -march=mipsel -O0 < %s | FileCheck %s
+; XFAIL:
+; CHERI-LLVM handles spill slots differently because of the small immediates in
+; capability loads and stores, causing this test to fail.
 
 ; CHECK: sw ${{.*}}, 4($sp)
 ; CHECK: lw ${{.*}}, 4($sp)

@@ -4,7 +4,7 @@
 ; RUN: llc -march=mips64el -target-abi n32 -mattr=+msa,+fp64 < %s | FileCheck -check-prefix=ALL -check-prefix=N32 -check-prefix=MIPS64 -check-prefix=ALL-LE %s
 ; RUN: llc -march=mips64 -mattr=+msa,+fp64 < %s | FileCheck -check-prefix=ALL -check-prefix=N64 -check-prefix=MIPS64 -check-prefix=ALL-BE %s
 ; RUN: llc -march=mips64el -mattr=+msa,+fp64 < %s | FileCheck -check-prefix=ALL -check-prefix=N64 -check-prefix=MIPS64 -check-prefix=ALL-LE %s
-; XFAIL: Fragile MSA test.
+; XFAIL:
 
 @v4i8 = global <4 x i8> <i8 0, i8 0, i8 0, i8 0>
 @v16i8 = global <16 x i8> <i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0>
