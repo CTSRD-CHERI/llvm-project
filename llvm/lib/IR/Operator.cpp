@@ -15,7 +15,7 @@ Type *GEPOperator::getSourceElementType() const {
 bool GEPOperator::accumulateConstantOffset(const DataLayout &DL,
                                            APInt &Offset) const {
   assert(Offset.getBitWidth() ==
-             DL.getPointerSizeInBits(getPointerAddressSpace()) &&
+             DL.getPointerBaseSizeInBits(getPointerAddressSpace()) &&
          "The offset must have exactly as many bits as our pointer.");
 
   for (gep_type_iterator GTI = gep_type_begin(this), GTE = gep_type_end(this);
