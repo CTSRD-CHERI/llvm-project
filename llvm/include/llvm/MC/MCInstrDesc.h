@@ -542,8 +542,6 @@ public:
     return -1;
   }
 
-private:
-
   /// \brief Return true if this instruction defines the specified physical
   /// register, either explicitly or implicitly.
   bool hasDefOfPhysReg(const MCInst &MI, unsigned Reg,
