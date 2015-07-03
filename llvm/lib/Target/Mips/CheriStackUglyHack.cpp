@@ -145,6 +145,7 @@ class CheriStackHack : public FunctionPass,
         case Intrinsic::invariant_start:
         case Intrinsic::invariant_end:
           CI->eraseFromParent();
+        default:
           return;
       }
     CI->replaceUsesOfWith(R.Alloca, R.Ptr);
