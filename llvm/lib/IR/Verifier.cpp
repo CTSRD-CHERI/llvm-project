@@ -2675,8 +2675,8 @@ void Verifier::visitStoreInst(StoreInst &SI) {
 
 void Verifier::visitAllocaInst(AllocaInst &AI) {
   SmallPtrSet<const Type*, 4> Visited;
-  PointerType *PTy = AI.getType();
 #ifndef NDEBUG
+  PointerType *PTy = AI.getType();
   Assert((PTy->getAddressSpace() ==
           AI.getModule()->getDataLayout().getAllocaAS()),
          "Allocation instruction pointer not in the stack address space!",
