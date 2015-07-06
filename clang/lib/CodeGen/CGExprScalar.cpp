@@ -1856,10 +1856,16 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
 
   // Most common case by far: integer increment.
   } else if (type->isIntegerType()) {
+    llvm::Value *Base = value;
+    if (type.isCapabilityType(CGF.getContext())) {
+      llvm::Function *GetOffset =
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
+      value = Builder.CreateCall(GetOffset, Base);
+    }
     // Note that signed integer inc/dec with width less than int can't
     // overflow because of promotion rules; we're just eliding a few steps here.
     bool CanOverflow = value->getType()->getIntegerBitWidth() >=
-                       CGF.IntTy->getIntegerBitWidth();
+                    CGF.IntTy->getIntegerBitWidth();
     if (CanOverflow && type->isSignedIntegerOrEnumerationType()) {
       value = EmitIncDecConsiderOverflowBehavior(E, value, isInc);
     } else if (CanOverflow && type->isUnsignedIntegerType() &&
@@ -1870,7 +1876,11 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
       llvm::Value *amt = llvm::ConstantInt::get(value->getType(), amount, true);
       value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
     }
-
+    if (type.isCapabilityType(CGF.getContext())) {
+      llvm::Function *SetOffset =
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
+      value = Builder.CreateCall(SetOffset, {Base, value});
+    }
   // Next most common: pointer increment.
   } else if (const PointerType *ptr = type->getAs<PointerType>()) {
     QualType type = ptr->getPointeeType();

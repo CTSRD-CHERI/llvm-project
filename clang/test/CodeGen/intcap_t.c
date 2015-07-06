@@ -118,3 +118,15 @@ int cp(__capability void* x, __capability void* y)
   return x - y;
 }
 
+// increment and decrement should work
+__intcap_t x;
+__uintcap_t y;
+
+void incdec(void)
+{
+  x++;
+  y++;
+  x--;
+  y--;
+}
+
