@@ -107,8 +107,7 @@ def : Pat<(setoge CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $ct, CheriOp
 def : Pat<(setolt CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $cb, CheriOpnd:$ct)>;
 def : Pat<(setole CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $cb, CheriOpnd:$ct)>;
 
-// Pseudo instruction for capability cmov, expands to a branch sequence
-class CheriSelectPseudo<dag outs, dag ins, string asmstr,
+class CheriPseudo<dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   MipsInst<outs, ins, asmstr, pattern, NoItinerary, Pseudo>
 {
@@ -116,7 +115,8 @@ class CheriSelectPseudo<dag outs, dag ins, string asmstr,
   let usesCustomInserter = 1;
 }
 
-def CAP_SELECT : CheriSelectPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,
+// Pseudo instruction for capability cmov, expands to a branch sequence
+def CAP_SELECT : CheriPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,
                               CheriOpnd:$t, CheriOpnd:$f),
                               "#CAP_SELECT",
                               [(set CheriOpnd: $dst, (select GPR32Opnd:$cond, CheriOpnd:$t, CheriOpnd:$f))]>;
@@ -231,15 +231,7 @@ def CIncBase2  : CheriFmtRegs<0x0d, 3, (outs CheriOpnd: $r0),
   "cincbase2\t$r0, $r1, $r2",
   [(set CheriOpnd: $r0, (int_mips_cap_base_only_increment CheriOpnd: $r1, GPR64Opnd: $r2))]>;
 
-class CheriMovePseudo<dag outs, dag ins, string asmstr,
-                list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, NoItinerary, Pseudo>
-{
-  let isPseudo = 1;
-  let usesCustomInserter = 1;
-}
-
-def CMove : CheriMovePseudo<(outs CheriOpnd: $cd),
+def CMove : CheriPseudo<(outs CheriOpnd: $cd),
   (ins CheriOpnd:$cs),
   "cmove\t$cd,  $cs",
   []>;
@@ -423,31 +415,23 @@ defm CAP0STORE32    : StoreViaCap0<CAPSTORE32, GPR32Opnd, store>;
 defm CAP0STORE3264  : StoreViaCap0<CAPSTORE3264, GPR64Opnd, truncstorei32>;
 defm CAP0STORE64    : StoreViaCap0<CAPSTORE64, GPR64Opnd, store>;
 
-class CheriFPUMemPseudo<dag outs, dag ins, string asmstr,
-                list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, NoItinerary, Pseudo>
-{
-  let isPseudo = 1;
-  let usesCustomInserter = 1;
-}
-
-def CLDC1 : CheriFPUMemPseudo<(outs FGR64Opnd: $rd),
+def CLDC1 : CheriPseudo<(outs FGR64Opnd: $rd),
   (ins GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
   "cldc1\t$rd,  ${rt}, ${offset}(${cb})",
   [(set FGR64Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset))))]>;
 
 
-def CLWC1 : CheriFPUMemPseudo<(outs FGR32Opnd: $rd),
+def CLWC1 : CheriPseudo<(outs FGR32Opnd: $rd),
   (ins GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
   "clwc1\t$rd,  ${rt}, ${offset}(${cb})",
   [(set FGR32Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset))))]>;
 
-def CSDC1 : CheriFPUMemPseudo<(outs),
+def CSDC1 : CheriPseudo<(outs),
   (ins FGR64Opnd:$rs, GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
   "csdc1\t$rs,  ${rt}, ${offset}(${cb})",
   [(store (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset)), FGR64Opnd: $rs)]>;
 
-def CSWC1 : CheriFPUMemPseudo<(outs),
+def CSWC1 : CheriPseudo<(outs),
   (ins FGR32Opnd:$rs, GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
   "cswc1\t$rs,  ${rt}, ${offset}(${cb})",
   [(store (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset)), FGR32Opnd: $rs)]>;
