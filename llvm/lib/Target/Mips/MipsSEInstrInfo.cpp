@@ -413,6 +413,9 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
   case Mips::CPSETUP:
     expandCPSETUP(MBB, MI);
     break;
+  case Mips::CCallPseudo:
+    expandCCallPseudo(MBB, MI);
+    break;
   }
 
   MBB.erase(MI);
@@ -720,6 +723,25 @@ void MipsSEInstrInfo::expandEhReturn(MachineBasicBlock &MBB,
       .addReg(ZERO);
   BuildMI(MBB, I, I->getDebugLoc(), get(ADDU), SP).addReg(SP).addReg(OffsetReg);
   expandRetRA(MBB, I);
+}
+
+void MipsSEInstrInfo::expandCCallPseudo(MachineBasicBlock &MBB,
+                                        MachineBasicBlock::iterator I) const {
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  DebugLoc DL = I->getDebugLoc();
+  // Operand 1 contains the mask of registers to clear, with the top 16 bits
+  // containing the capability registers and the bottom 16 bits containing the
+  // integer registers (floating point are currently ignored).
+  uint32_t ClearMask = I->getOperand(1).getImm();
+  // Clear the capability registers
+  BuildMI(MBB, I, DL, TII->get(Mips::CClearLo)).addImm(ClearMask >> 16);
+  // Emit the jump
+  MachineBasicBlock::iterator JALR = BuildMI(MBB, I, DL,
+      TII->get(Mips::JALR64), Mips::RA_64).addReg(I->getOperand(0).getReg());
+  // Clear the integer registers (in the delay slot)
+  BuildMI(MBB, I, DL, TII->get(Mips::ClearLo)).addImm(ClearMask & 0xffff);
+  // Ensure that the jump and the delay slot are not split
+  MIBundleBuilder(MBB, JALR, std::next(JALR, 2));
 }
 
 void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,

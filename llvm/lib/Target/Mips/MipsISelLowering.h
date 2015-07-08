@@ -151,8 +151,8 @@ namespace llvm {
       CBTS,
       /// Convert a stack pointer into a capability.
       STACKTOCAP,
-      /// Clear a large number of registers at once.
-      CLEARREGS,
+      // Jump and link pseudo that ties the clear regs.
+      CheriJmpLink,
 
       // DSP shift nodes.
       SHLL_DSP,

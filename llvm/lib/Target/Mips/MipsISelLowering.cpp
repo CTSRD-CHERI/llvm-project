@@ -59,6 +59,11 @@ EnableMipsFastISel("mips-fast-isel", cl::Hidden,
   cl::desc("Allow mips-fast-isel to be used"),
   cl::init(false));
 
+cl::opt<bool>
+UseClearRegs("cheri-use-clearregs",
+  cl::desc("Zero registers using the ClearRegs instructions"),
+  cl::init(false));
+
 static const MCPhysReg Mips64DPRegs[8] = {
   Mips::D12_64, Mips::D13_64, Mips::D14_64, Mips::D15_64,
   Mips::D16_64, Mips::D17_64, Mips::D18_64, Mips::D19_64
@@ -225,7 +230,7 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::CBTS:              return "MipsISD::CBTS";
   case MipsISD::CBTU:              return "MipsISD::CBTU";
   case MipsISD::STACKTOCAP:        return "MipsISD::STACKTOCAP";
-  case MipsISD::CLEARREGS:         return "MipsISD::CLEARREGS";
+  case MipsISD::CheriJmpLink:      return "MipsISD::CheriJmpLink";
   }
   return nullptr;
 }
@@ -2963,7 +2968,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     RegsToPass.push_back(std::make_pair(Mips::C12, PtrOff));
   }
   // If we're doing a CCall then any unused arg registers should be zero.
-  if (CallConv == CallingConv::CHERI_CCall) {
+  if (!UseClearRegs && (CallConv == CallingConv::CHERI_CCall)) {
     assert(CapArgs >= 2);
     CapArgs -= 2;
     // Optional argument registers for CCall calling convention
@@ -3045,10 +3050,30 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   getOpndList(Ops, RegsToPass, IsPICCall, GlobalOrExternal, InternalLinkage,
               IsCallReloc, CLI, Callee, Chain);
 
-  if (IsTailCall)
-    return DAG.getNode(MipsISD::TailCall, DL, MVT::Other, Ops);
+  // If we're doing a CCall then any unused arg registers should be zero.
+  if (UseClearRegs && (CallConv == CallingConv::CHERI_CCall)) {
+    assert(CapArgs >= 2);
+    uint32_t ClearRegsMask = 0;
+    // Cap registers C1-C10 are used for arguments (C1/C2 for the CHERI object)
+    for (unsigned i=CapArgs+1 ; i<11 ; i++) {
+      ClearRegsMask |= 1 << (15 - i);
+    }
+    assert(ClearRegsMask <= 0xffff);
+    ClearRegsMask <<= 16;
+    // Int registers $4-$11 are used for arguments and v0 ($1) for the method
+    // number
+    for (unsigned i=IntArgs+4 ; i<12 ; i++) {
+      ClearRegsMask |= 1 << (15 - i);
+      assert((1 << (15 - i)) <= 0xffff);
+    }
+    Ops.insert(Ops.begin()+2, DAG.getConstant(ClearRegsMask, DL, MVT::i32));
+    Chain = DAG.getNode(MipsISD::CheriJmpLink, DL, NodeTys, Ops);
+  } else {
+    if (IsTailCall)
+      return DAG.getNode(MipsISD::TailCall, DL, MVT::Other, Ops);
 
-  Chain = DAG.getNode(MipsISD::JmpLink, DL, NodeTys, Ops);
+    Chain = DAG.getNode(MipsISD::JmpLink, DL, NodeTys, Ops);
+  }
   SDValue InFlag = Chain.getValue(1);
 
   // Create the CALLSEQ_END node.

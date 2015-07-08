@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 
-def SDT_MipsClearRegs: SDTypeProfile<0, 2, [SDTCisVT<0, i8>, SDTCisVT<1, i32>]>;
 def SDT_MipsCBT      : SDTypeProfile<0, 2, [SDTCisVT<0, iFATPTR>]>;
 def MipsCBTS : SDNode<"MipsISD::CBTS", SDT_MipsCBT,
                           [SDNPHasChain, SDNPOptInGlue]>;
@@ -22,8 +21,12 @@ def SDT_MipsPtrToCap     : SDTypeProfile<1, 1, [SDTCisVT<0, iFATPTR>,
                                             SDTCisVT<1, i64>]>;
 def MipsSTC : SDNode<"MipsISD::STACKTOCAP", SDT_MipsPtrToCap,
                           []>;
-def MipsClearRegs : SDNode<"MipsISD::CLEARREGS", SDT_MipsClearRegs,
-                          [SDNPHasChain, SDNPOptInGlue]>;
+
+def SDT_CheriJmpLink : SDTypeProfile<0, 2, [SDTCisVT<0, iPTR>, SDTCisVT<1, i32>]>;
+def CheriJmpLink : SDNode<"MipsISD::CheriJmpLink",SDT_CheriJmpLink,
+                         [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
+                          SDNPVariadic]>;
+
 
 // 11-bit immediate offset used by C[SL]CR
 def simm11_64: Operand<i64>;
@@ -36,6 +39,9 @@ def simm8: Operand<i64>;
 // these.
 def regslist: Operand<i32>;
 def reglist_pat : PatLeaf<(imm), [{ return isInt<16>(N->getZExtValue()); }]>;
+
+def uimm32: Operand<i32>;
+def uimm32_pat:  PatLeaf<(imm), [{ return isInt<32>(N->getZExtValue()); }]>;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -529,10 +535,20 @@ class ClearRegs<bits<5> regset, string instr_asm> :
               CheriFmtClearRegs<regset, (outs),
                                 (ins regslist: $mask),
                                 !strconcat(instr_asm, "\t${mask}"),
-                                [(MipsClearRegs (i8 regset), (i32 reglist_pat: $mask))]>;
+                                []>;
 
 def ClearLo : ClearRegs<0, "clearlo">;
 def ClearHi : ClearRegs<1, "clearhi">;
-def CClearHi : ClearRegs<2, "cclearlo">;
-def CClearLo : ClearRegs<3, "cclearhi">;
+def CClearLo : ClearRegs<2, "cclearlo">;
+def CClearHi : ClearRegs<3, "cclearhi">;
+
+
+def  CCallPseudo : PseudoSE<(outs), (ins GPR64Opnd:$rs, uimm32: $mask),
+                            [(CheriJmpLink GPR64Opnd:$rs, (i32 uimm32_pat: $mask))], IIBranch>
+{
+  let isCall=1;
+  let Defs = [RA];
+}
+
+
 }
