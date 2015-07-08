@@ -2963,7 +2963,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     RegsToPass.push_back(std::make_pair(Mips::C12, PtrOff));
   }
   // If we're doing a CCall then any unused arg registers should be zero.
-  if(CallConv == CallingConv::CHERI_CCall) {
+  if (CallConv == CallingConv::CHERI_CCall) {
     assert(CapArgs >= 2);
     CapArgs -= 2;
     // Optional argument registers for CCall calling convention
