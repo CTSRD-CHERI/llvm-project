@@ -225,6 +225,7 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::CBTS:              return "MipsISD::CBTS";
   case MipsISD::CBTU:              return "MipsISD::CBTU";
   case MipsISD::STACKTOCAP:        return "MipsISD::STACKTOCAP";
+  case MipsISD::CLEARREGS:         return "MipsISD::CLEARREGS";
   }
   return nullptr;
 }

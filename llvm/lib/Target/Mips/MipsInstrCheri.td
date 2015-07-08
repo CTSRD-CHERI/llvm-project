@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 
+def SDT_MipsClearRegs: SDTypeProfile<0, 2, [SDTCisVT<0, i8>, SDTCisVT<1, i32>]>;
 def SDT_MipsCBT      : SDTypeProfile<0, 2, [SDTCisVT<0, iFATPTR>]>;
 def MipsCBTS : SDNode<"MipsISD::CBTS", SDT_MipsCBT,
                           [SDNPHasChain, SDNPOptInGlue]>;
@@ -21,12 +22,21 @@ def SDT_MipsPtrToCap     : SDTypeProfile<1, 1, [SDTCisVT<0, iFATPTR>,
                                             SDTCisVT<1, i64>]>;
 def MipsSTC : SDNode<"MipsISD::STACKTOCAP", SDT_MipsPtrToCap,
                           []>;
+def MipsClearRegs : SDNode<"MipsISD::CLEARREGS", SDT_MipsClearRegs,
+                          [SDNPHasChain, SDNPOptInGlue]>;
 
 // 11-bit immediate offset used by C[SL]CR
 def simm11_64: Operand<i64>;
 def immSExt11  : PatLeaf<(imm), [{ return isInt<11>(N->getSExtValue()); }]>;
 // 8-bit immediate offset used by C[SL]C
 def simm8: Operand<i64>;
+
+// ClearRegs values
+// TODO: Add some nice parsing so that we can get handle register lists for
+// these.
+def regslist: Operand<i32>;
+def reglist_pat : PatLeaf<(imm), [{ return isInt<16>(N->getZExtValue()); }]>;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Flow control
@@ -511,4 +521,18 @@ let usesCustomInserter = 1 in {
 
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// ClearRegs
+////////////////////////////////////////////////////////////////////////////////
+
+class ClearRegs<bits<5> regset, string instr_asm> :
+              CheriFmtClearRegs<regset, (outs),
+                                (ins regslist: $mask),
+                                !strconcat(instr_asm, "\t${mask}"),
+                                [(MipsClearRegs (i8 regset), (i32 reglist_pat: $mask))]>;
+
+def ClearLo : ClearRegs<0, "clearlo">;
+def ClearHi : ClearRegs<1, "clearhi">;
+def CClearHi : ClearRegs<2, "cclearlo">;
+def CClearLo : ClearRegs<3, "cclearhi">;
 }

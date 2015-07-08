@@ -210,3 +210,15 @@ class CheriFmtCSX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
   let Inst{2}     = e;
   let Inst{1-0}   = t;
 }
+
+class CheriFmtClearRegs<bits<5> regset, dag outs, dag ins, string asmstr,
+                        list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<16> mask;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = 0xf;
+  let Inst{20-16} = regset;
+  let Inst{15-0}  = mask;
+}
