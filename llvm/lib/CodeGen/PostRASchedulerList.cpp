@@ -339,7 +339,7 @@ bool PostRAScheduler::runOnMachineFunction(MachineFunction &Fn) {
         Scheduler.Observe(MI, CurrentCount);
       }
       I = MI;
-      if (MI->isBundle())
+      if (MI->isBundled())
         Count -= MI->getBundleSize();
     }
     assert(Count == 0 && "Instruction count mismatch!");
