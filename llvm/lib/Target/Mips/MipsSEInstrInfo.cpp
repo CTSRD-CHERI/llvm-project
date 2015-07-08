@@ -734,14 +734,15 @@ void MipsSEInstrInfo::expandCCallPseudo(MachineBasicBlock &MBB,
   // integer registers (floating point are currently ignored).
   uint32_t ClearMask = I->getOperand(1).getImm();
   // Clear the capability registers
-  BuildMI(MBB, I, DL, TII->get(Mips::CClearLo)).addImm(ClearMask >> 16);
+  MachineBasicBlock::iterator BundleStart = BuildMI(MBB, I, DL,
+      TII->get(Mips::CClearLo)).addImm(ClearMask >> 16);
   // Emit the jump
-  MachineBasicBlock::iterator JALR = BuildMI(MBB, I, DL,
-      TII->get(Mips::JALR64), Mips::RA_64).addReg(I->getOperand(0).getReg());
+  BuildMI(MBB, I, DL, TII->get(Mips::JALR64),
+      Mips::RA_64).addReg(I->getOperand(0).getReg());
   // Clear the integer registers (in the delay slot)
   BuildMI(MBB, I, DL, TII->get(Mips::ClearLo)).addImm(ClearMask & 0xffff);
   // Ensure that the jump and the delay slot are not split
-  MIBundleBuilder(MBB, JALR, std::next(JALR, 2));
+  MIBundleBuilder(MBB, BundleStart, std::next(BundleStart, 3));
 }
 
 void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,
