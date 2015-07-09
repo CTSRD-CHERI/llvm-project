@@ -2994,7 +2994,7 @@ static bool isDereferenceablePointer(const Value *V, const DataLayout &DL,
                                   DT, TLI, Visited))
       return false;
     
-    APInt Offset(DL.getPointerTypeSizeInBits(VTy), 0);
+    APInt Offset(DL.getPointerBaseSizeInBits(VTy), 0);
     if (!GEP->accumulateConstantOffset(DL, Offset))
       return false;
     
