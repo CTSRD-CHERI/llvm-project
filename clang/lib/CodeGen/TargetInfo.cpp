@@ -5840,6 +5840,9 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
       !Ty.isCapabilityType(getContext()))
     return ABIArgInfo::getExtend();
 
+  if (Ty.isCapabilityType(getContext()))
+    return ABIArgInfo::getDirect(CGT.ConvertType(Ty));
+
   return ABIArgInfo::getDirect(
       nullptr, 0, IsO32 ? nullptr : getPaddingType(OrigOffset, CurrOffset));
 }
