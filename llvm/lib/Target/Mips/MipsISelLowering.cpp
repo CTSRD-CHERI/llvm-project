@@ -3056,15 +3056,15 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     uint32_t ClearRegsMask = 0;
     // Cap registers C1-C10 are used for arguments (C1/C2 for the CHERI object)
     for (unsigned i=CapArgs+1 ; i<11 ; i++) {
-      ClearRegsMask |= 1 << (15 - i);
+      ClearRegsMask |= 1 << i;
     }
     assert(ClearRegsMask <= 0xffff);
     ClearRegsMask <<= 16;
     // Int registers $4-$11 are used for arguments and v0 ($1) for the method
     // number
     for (unsigned i=IntArgs+4 ; i<12 ; i++) {
-      ClearRegsMask |= 1 << (15 - i);
-      assert((1 << (15 - i)) <= 0xffff);
+      ClearRegsMask |= 1 << i;
+      assert((1 << i) <= 0xffff);
     }
     Ops.insert(Ops.begin()+2, DAG.getConstant(ClearRegsMask, DL, MVT::i32));
     Chain = DAG.getNode(MipsISD::CheriJmpLink, DL, NodeTys, Ops);

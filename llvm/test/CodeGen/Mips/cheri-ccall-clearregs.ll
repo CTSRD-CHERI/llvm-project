@@ -13,9 +13,9 @@ define void @a(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %ba
   ; CHECK: move	$4, $5
   ; Then make sure that we've cleared the other argument registers, with one
   ; clear in the delay slot
-  ; CHECK: cclearlo	8160
+  ; CHECK: cclearlo	2040
   ; CHECK-NEXT: jalr	$25
-  ; CHECK-NEXT: clearlo	2032
+  ; CHECK-NEXT: clearlo	4064
   tail call chericcallcc void @b(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %bar) #2
   ret void
 }
