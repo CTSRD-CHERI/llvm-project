@@ -68,13 +68,13 @@ def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriOpnd:$cb),
 }
 let isCall=1, hasDelaySlot=1 in {
 def CJALR : CheriFmt3Caps<0x07, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb),
-                              "cjalr\t${cb}, ${cd}",
+                              "cjalr\t${cd}, ${cb}",
                               []>
 {
 	bits<5> cb;
 	bits<5> cd;
-	let r0 = cb;
-	let r1 = cd;
+	let r0 = cd;
+	let r1 = cb;
 	let r2 = 0;
 }
 def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb),
