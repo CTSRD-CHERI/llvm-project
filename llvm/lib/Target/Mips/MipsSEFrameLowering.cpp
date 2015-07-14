@@ -408,6 +408,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       .addCFIIndex(CFIIndex);
 
   const std::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
+  bool IsRASpilled = false;
 
   if (CSI.size()) {
     // Find the instruction past the last instruction that saves a callee-saved
@@ -421,6 +422,8 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
            E = CSI.end(); I != E; ++I) {
       int64_t Offset = MFI->getObjectOffset(I->getFrameIdx());
       unsigned Reg = I->getReg();
+      if (Reg == Mips::RA_64 || Reg == Mips::RA)
+        IsRASpilled = true;
 
       // If Reg is a double precision register, emit two cfa_offsets,
       // one for each of the paired single precision registers.
@@ -520,6 +523,20 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       }
     }
   }
+
+  // If we've spilled RA and we're targeting CHERI, then we want to use
+  // cjr $c16 for return, not jr $ra
+  if (IsRASpilled && STI.isCheri())
+    for (auto &BB : MF)
+      for (auto &I : BB.terminators())
+        if (I.getOpcode() == Mips::RetRA) {
+            BuildMI(BB, (MachineBasicBlock::iterator)I, I.getDebugLoc(),
+                TII.get(Mips::CJR))
+              .addReg(Mips::C16);
+            I.eraseFromBundle();
+            break;
+        }
+
 }
 
 void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
@@ -578,6 +595,19 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
   TII.adjustStackPtr(SP, StackSize, MBB, MBBI);
 }
 
+bool MipsSEFrameLowering::assignCalleeSavedSpillSlots(MachineFunction &MF,
+          const TargetRegisterInfo *TRI, std::vector<CalleeSavedInfo> &CSI) const {
+  // If we're on CHERI and we're compiling for the compatible ABI, then reserve
+  // an extra spill slot for the return capability, if $ra is spilled.
+  if (STI.isCheri() && !STI.getABI().IsCheriSandbox())
+    for (auto &I : CSI)
+      if (I.getReg() == Mips::RA_64) {
+        CSI.push_back(CalleeSavedInfo(Mips::C16, 0));
+        break;
+      }
+  return false;
+}
+
 bool MipsSEFrameLowering::
 spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                           MachineBasicBlock::iterator MI,
@@ -587,6 +617,12 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
   MachineBasicBlock *EntryBlock = MF->begin();
   const TargetInstrInfo &TII = *STI.getInstrInfo();
 
+  bool IsRetAddrTaken = MF->getFrameInfo()->isReturnAddressTaken();
+  bool KillRAOnSpill = true;
+  if (STI.isCheri() && !STI.getABI().IsCheriSandbox())
+    KillRAOnSpill = false;
+
+
   for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
     // Add the callee-saved register as live-in. Do not add if the register is
     // RA and return address is taken, because it has already been added in
@@ -594,13 +630,20 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     // It's killed at the spill, unless the register is RA and return address
     // is taken.
     unsigned Reg = CSI[i].getReg();
-    bool IsRAAndRetAddrIsTaken = (Reg == Mips::RA || Reg == Mips::RA_64)
-        && MF->getFrameInfo()->isReturnAddressTaken();
+    bool IsRA = (Reg == Mips::RA || Reg == Mips::RA_64);
+    bool IsRAAndRetAddrIsTaken = IsRA && IsRetAddrTaken;
     if (!IsRAAndRetAddrIsTaken)
       EntryBlock->addLiveIn(Reg);
+    // $c16 is not a callee-save register, so if we're being asked to spill it
+    // then we're actually using it to hold the return address as a capability.
+    if (Reg == Mips::C16) {
+      BuildMI(MBB, &*MI, MI->getDebugLoc(), TII.get(Mips::CGetPCC), Mips::C16);
+      BuildMI(MBB, &*MI, MI->getDebugLoc(), TII.get(Mips::CSetOffset), Mips::C16)
+          .addReg(Mips::C16).addReg(Mips::RA_64, RegState::Kill);
+    }
 
     // Insert the spill to the stack frame.
-    bool IsKill = !IsRAAndRetAddrIsTaken;
+    bool IsKill = !IsRAAndRetAddrIsTaken && KillRAOnSpill;
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
     TII.storeRegToStackSlot(*EntryBlock, MI, Reg, IsKill,
                             CSI[i].getFrameIdx(), RC, TRI);
