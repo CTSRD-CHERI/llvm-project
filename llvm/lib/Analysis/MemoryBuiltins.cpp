@@ -389,7 +389,7 @@ ObjectSizeOffsetVisitor::ObjectSizeOffsetVisitor(const DataLayout &DL,
 }
 
 SizeOffsetType ObjectSizeOffsetVisitor::compute(Value *V) {
-  IntTyBits = DL.getPointerTypeSizeInBits(V->getType());
+  IntTyBits = DL.getPointerBaseSizeInBits(V->getType());
   Zero = APInt::getNullValue(IntTyBits);
 
   V = V->stripPointerCasts();
