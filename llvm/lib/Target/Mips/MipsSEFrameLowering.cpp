@@ -28,6 +28,13 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetOptions.h"
 
+static llvm::cl::opt<bool>
+CHERICFI(
+      "cheri-cfi", llvm::cl::NotHidden,
+      llvm::cl::desc("Spill return addresses as capabilities"),
+      llvm::cl::init(false));
+
+
 using namespace llvm;
 
 namespace {
@@ -526,7 +533,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
 
   // If we've spilled RA and we're targeting CHERI, then we want to use
   // cjr $c16 for return, not jr $ra
-  if (IsRASpilled && STI.isCheri())
+  if (CHERICFI && IsRASpilled && STI.isCheri())
     for (auto &BB : MF)
       for (auto &I : BB.terminators())
         if (I.getOpcode() == Mips::RetRA) {
@@ -599,7 +606,7 @@ bool MipsSEFrameLowering::assignCalleeSavedSpillSlots(MachineFunction &MF,
           const TargetRegisterInfo *TRI, std::vector<CalleeSavedInfo> &CSI) const {
   // If we're on CHERI and we're compiling for the compatible ABI, then reserve
   // an extra spill slot for the return capability, if $ra is spilled.
-  if (STI.isCheri() && !STI.getABI().IsCheriSandbox())
+  if (CHERICFI && STI.isCheri() && !STI.getABI().IsCheriSandbox())
     for (auto &I : CSI)
       if (I.getReg() == Mips::RA_64) {
         CSI.push_back(CalleeSavedInfo(Mips::C16, 0));
@@ -640,6 +647,8 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
       BuildMI(MBB, &*MI, MI->getDebugLoc(), TII.get(Mips::CGetPCC), Mips::C16);
       BuildMI(MBB, &*MI, MI->getDebugLoc(), TII.get(Mips::CSetOffset), Mips::C16)
           .addReg(Mips::C16).addReg(Mips::RA_64, RegState::Kill);
+      MachineFrameInfo *MFI = MBB.getParent()->getFrameInfo();
+      MFI->setObjectAlignment(CSI[i].getFrameIdx(), 32);
     }
 
     // Insert the spill to the stack frame.
