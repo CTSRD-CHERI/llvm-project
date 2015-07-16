@@ -2960,6 +2960,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     MemOpChains.push_back(passArgOnStack(StackPtr, VA.getLocMemOffset(),
                                          Chain, Arg, DL, IsTailCall, DAG));
   }
+#if 0
   if ((FirstOffset != -1) && ABI.IsCheriSandbox()) {
     Intrinsic::ID SetLength = Subtarget.isCheri128() ?
       Intrinsic::mips_cap_bounds_set : Intrinsic::mips_cap_length_set;
@@ -2968,8 +2969,9 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
         DAG.getConstant(SetLength, DL, MVT::i64), PtrOff,
         DAG.getIntPtrConstant(LastOffset, DL));
-    RegsToPass.push_back(std::make_pair(Mips::C12, PtrOff));
+    RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
   }
+#endif
   // If we're doing a CCall then any unused arg registers should be zero.
   if (!UseClearRegs && (CallConv == CallingConv::CHERI_CCall)) {
     assert(CapArgs >= 2);
