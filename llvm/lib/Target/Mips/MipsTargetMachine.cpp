@@ -36,6 +36,12 @@ using namespace llvm;
 
 #define DEBUG_TYPE "mips"
 
+static llvm::cl::opt<bool>
+UnsafeUsage(
+"cheri128-test-mode", llvm::cl::Hidden,
+llvm::cl::init(false));
+
+
 extern "C" void LLVMInitializeMipsTarget() {
   // Register the target.
   RegisterTargetMachine<MipsebTargetMachine> X(TheMipsTarget);
@@ -60,10 +66,18 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
 
   Ret += "-m:m";
 
-  if (FS.find("+cheri128") != StringRef::npos)
+  if (FS.find("+cheri128") != StringRef::npos) {
+#ifndef CHERI_IS_128
+   if (!UnsafeUsage)
+      abort();
+#endif
     Ret += "-p200:128:128";
-  else if (Triple(TT).getArch() == Triple::cheri)
+  } else if (Triple(TT).getArch() == Triple::cheri) {
+#ifdef CHERI_IS_128
+    abort();
+#endif
     Ret += "-p200:256:256";
+  }
 
   // Pointers are 32 bit on some ABIs.
   if (!ABI.IsN64())
