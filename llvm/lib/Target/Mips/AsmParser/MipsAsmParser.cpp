@@ -1750,8 +1750,7 @@ bool MipsAsmParser::needsExpansion(MCInst &Inst) {
 
 void MipsAsmParser::expandCapMove(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
                                     SmallVectorImpl<MCInst> &Instructions) {
-  bool IsCheri128 = STI.getFeatureBits()[llvm::Mips::FeatureMipsCheri128];
-  auto MoveInst = IsCheri128 ? Mips::CIncOffset : Mips::CIncBase;
+  auto MoveInst = Mips::CIncOffset;
   MCInst tmpInst;
   tmpInst.setOpcode(MoveInst);
   tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(0).getReg()));
