@@ -3496,7 +3496,7 @@ MipsSETargetLowering::emitCapFloat32Store(MachineInstr *MI,
 MachineBasicBlock *
 MipsSETargetLowering::emitCapMove(MachineInstr *MI,
                                   MachineBasicBlock *BB) const {
-  auto MoveInst = Subtarget.isCheri128() ? Mips::CIncOffset : Mips::CIncBase;
+  auto MoveInst = Mips::CIncOffset;
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, MI->getDebugLoc(), TII->get(MoveInst))
       .addReg(MI->getOperand(0).getReg())

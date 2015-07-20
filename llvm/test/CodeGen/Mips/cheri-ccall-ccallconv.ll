@@ -6,8 +6,8 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: nounwind
 define void @a(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %bar) #0 {
   ; Move the argument registers into the ccall registers
-  ; CHECK: cincbase	$c1, $c3, $zero
-  ; CHECK: cincbase	$c2, $c4, $zero
+  ; CHECK: cincoffset	$c1, $c3, $zero
+  ; CHECK: cincoffset	$c2, $c4, $zero
   ; Move argument 0 from a0 to v0, arg 1 from a1 to a0.
   ; CHECK: move	$2, $4
   ; CHECK: move	$4, $1

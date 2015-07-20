@@ -152,7 +152,7 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     else if (Mips::FGR64RegClass.contains(DestReg))
       Opc = Mips::DMTC1;
  } else if (Mips::CheriRegsRegClass.contains(SrcReg)) {
-   auto MoveInst = Subtarget.isCheri128() ? Mips::CIncOffset : Mips::CIncBase;
+   auto MoveInst = Mips::CIncOffset;
    BuildMI(MBB, I, DL, get(MoveInst))
    .addReg(DestReg, RegState::Define)
    .addReg(SrcReg, getKillRegState(KillSrc))

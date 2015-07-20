@@ -2962,8 +2962,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
 #if 0
   if ((FirstOffset != -1) && ABI.IsCheriSandbox()) {
-    Intrinsic::ID SetLength = Subtarget.isCheri128() ?
-      Intrinsic::mips_cap_bounds_set : Intrinsic::mips_cap_length_set;
+    Intrinsic::ID SetLength = Intrinsic::mips_cap_bounds_set;
     SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
     PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
     PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
