@@ -1512,7 +1512,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   }
   case CK_AddressSpaceConversion: {
     Value *Src = Visit(const_cast<Expr*>(E));
-    return Builder.CreateAddrSpaceCast(Src, ConvertType(DestTy));
+    llvm::Type *DestType = ConvertType(DestTy);
+    if (Src->getType() == DestType)
+      return Src;
+    return Builder.CreatePointerBitCastOrAddrSpaceCast(Src, DestType);
   }
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
@@ -1584,8 +1587,23 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     // the array type was of an incomplete type.
     return CGF.Builder.CreatePointerCast(V, ConvertType(CE->getType()));
   }
-  case CK_FunctionToPointerDecay:
-    return EmitLValue(E).getAddress();
+  case CK_FunctionToPointerDecay: {
+    llvm::Value *Addr = EmitLValue(E).getAddress();
+    llvm::Type *AddrTy = Addr->getType();
+    // FIXME: Do this in a less-ugly way.
+    if ((CGF.getContext().getDefaultAS() == 200) && AddrTy->getPointerAddressSpace() != 200) {
+      llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
+          ->getElementType()->getPointerTo(200);
+      Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+      llvm::Value *PCC = Builder.CreateCall(
+              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+      Addr = Builder.CreateCall(
+              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set),
+              {PCC, Addr});
+      Addr = Builder.CreateBitCast(Addr, CapTy);
+    }
+    return Addr;
+  }
 
   case CK_NullToPointer:
     if (MustVisitNullValue(E))

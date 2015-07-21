@@ -5250,7 +5250,8 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
 
   QualType SrcTy = Src.get()->getType();
   if (Context.hasSameUnqualifiedType(SrcTy, DestTy))
-    return CK_NoOp;
+    return (SrcTy.getAddressSpace() == DestTy.getAddressSpace()) ? CK_NoOp :
+        CK_AddressSpaceConversion;
 
   switch (Type::ScalarTypeKind SrcKind = SrcTy->getScalarTypeKind()) {
   case Type::STK_MemberPointer:
@@ -6640,8 +6641,12 @@ checkPointerTypesForAssignment(Sema &S, QualType LHSType, QualType RHSType) {
 
   if (!lhq.compatiblyIncludes(rhq)) {
     // Treat address-space mismatches as fatal.  TODO: address subspaces
-    if (!lhq.isAddressSpaceSupersetOf(rhq))
-      ConvTy = Sema::IncompatiblePointerDiscardsQualifiers;
+    if (!lhq.isAddressSpaceSupersetOf(rhq)) {
+      if (RHSType->isFunctionPointerType() && LHSType->isFunctionPointerType())
+        ConvTy = Sema::Compatible;
+      else
+        ConvTy = Sema::IncompatiblePointerDiscardsQualifiers;
+    }
 
     // It's okay to add or remove GC or lifetime qualifiers when converting to
     // and from void*.
@@ -8633,6 +8638,8 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
     if (LCanPointeeTy != RCanPointeeTy) {
       const PointerType *lhsPtr = LHSType->getAs<PointerType>();
       if (!LHSIsNull && !RHSIsNull &&
+          !(LHSType->isFunctionPointerType() &&
+            RHSType->isFunctionPointerType()) &&
           !lhsPtr->isAddressSpaceOverlapping(*RHSType->getAs<PointerType>())) {
         Diag(Loc,
              diag::err_typecheck_op_on_nonoverlapping_address_space_pointers)
