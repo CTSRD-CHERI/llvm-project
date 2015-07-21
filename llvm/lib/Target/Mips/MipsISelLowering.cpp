@@ -3059,7 +3059,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
   // If we're in the sandbox ABI, then we need to turn the address into a
   // PCC-derived capability.
-  if (ABI.IsCheriSandbox())
+  if (ABI.IsCheriSandbox() && (Callee.getValueType() != MVT::iFATPTR))
     Callee = DAG.getNode(MipsISD::CODETOCAP, DL, MVT::iFATPTR, Callee);
 
 
