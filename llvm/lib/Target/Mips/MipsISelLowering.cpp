@@ -1781,12 +1781,12 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     Ty = MVT::i64;
   SDValue Global;
 
-  if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
-    Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
-  else if (LargeGOT)
+  if (LargeGOT)
     Global = getAddrGlobalLargeGOT(N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16,
                                  MipsII::MO_GOT_LO16, DAG.getEntryNode(),
                                  MachinePointerInfo::getGOT());
+  else if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
+    Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
   else 
     Global = getAddrGlobal(N, SDLoc(N), Ty, DAG,
                        (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP
@@ -1804,6 +1804,11 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
 
   if (getTargetMachine().getRelocationModel() != Reloc::PIC_ && !ABI.IsN64())
     return getAddrNonPIC(N, SDLoc(N), Ty, DAG);
+
+  if (LargeGOT)
+    return getAddrGlobalLargeGOT(N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16,
+                                 MipsII::MO_GOT_LO16, DAG.getEntryNode(),
+                                 MachinePointerInfo::getGOT());
 
   return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
 }
@@ -1895,6 +1900,11 @@ lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
 
   if (getTargetMachine().getRelocationModel() != Reloc::PIC_ && !ABI.IsN64())
     return getAddrNonPIC(N, SDLoc(N), Ty, DAG);
+
+  if (LargeGOT)
+    return getAddrGlobalLargeGOT(N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16,
+                                 MipsII::MO_GOT_LO16, DAG.getEntryNode(),
+                                 MachinePointerInfo::getGOT());
 
   return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
 }
