@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Config/config.h"
 #include "MipsTargetMachine.h"
 #include "Mips.h"
 #include "Mips16FrameLowering.h"
