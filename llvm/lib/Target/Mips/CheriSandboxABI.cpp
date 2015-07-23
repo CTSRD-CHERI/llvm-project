@@ -22,7 +22,7 @@
 using namespace llvm;
 using std::pair;
 
-namespace 
+namespace
 {
 class CheriSandboxABI : public ModulePass,
                        public InstVisitor<CheriSandboxABI> {
@@ -74,7 +74,7 @@ class CheriSandboxABI : public ModulePass,
         return false;
 
       Intrinsic::ID SetLength = Intrinsic::mips_cap_bounds_set;
-      Function *CastFn = 
+      Function *CastFn =
         Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
       Function *SetLenFun = Intrinsic::getDeclaration(M, SetLength);
 
