@@ -29,6 +29,7 @@ class CheriSandboxABI : public ModulePass,
   DataLayout *DL;
   Module *M;
   llvm::SmallVector<AllocaInst*, 16> Allocas;
+  bool IsCheri128;
 
   virtual const char *getPassName() const {
     return "CHERI sandbox ABI setup";
@@ -56,6 +57,7 @@ class CheriSandboxABI : public ModulePass,
       // that the AS for new allocas is 0.
       DL->setAllocaAS(0);
       M->setDataLayout(*DL);
+      IsCheri128 = DL->getPointerSizeInBits(200) == 128;
       bool Modified = false;
       for (Function &F : Mod)
         Modified |= runOnFunction(F);
@@ -84,13 +86,29 @@ class CheriSandboxABI : public ModulePass,
       for (AllocaInst *AI : Allocas) {
         assert(AI->getType()->getPointerAddressSpace() == 200);
         B.SetInsertPoint(AI->getParent(), AI);
+        unsigned ForcedAligment = 0;
 
         PointerType *AllocaTy = AI->getType();
         Type *AllocationTy = AllocaTy->getElementType();
+        Value *ArraySize = AI->getArraySize();
 
         // Create a new (AS 0) alloca
-        Value *Alloca = B.CreateAlloca(AllocationTy, AI->getArraySize());
+        Value *Alloca = B.CreateAlloca(AllocationTy, ArraySize);
         assert(Alloca->getType()->getPointerAddressSpace() == 0);
+        // For imprecise capabilities, we need to increase the alignment for
+        // on-stack allocations to ensure that we can create precise bounds.
+        if (IsCheri128) {
+          uint64_t AllocaSize = DL->getTypeAllocSize(AllocationTy);
+          if (ConstantInt *CI = dyn_cast<ConstantInt>(ArraySize))
+            AllocaSize *= CI->getValue().getLimitedValue();
+          else
+            AllocaSize *= 128*1024;
+          // Note: This is not correct, but it's a reasonable first cut.
+          if (AllocaSize >= 64*1024)
+            ForcedAligment = 128;
+        }
+        cast<AllocaInst>(Alloca)->setAlignment(
+            std::max(AI->getAlignment(),ForcedAligment));
 
         // Convert the new alloca into a stack-cap relative capability
         Alloca = B.CreateBitCast(Alloca, Type::getInt8PtrTy(C, 0));
