@@ -66,9 +66,8 @@ namespace
         unsigned ElementSize = TD->getTypeAllocSize(AllocationTy);
         if (ElementSize == 1)
           return AllocOperands(ArraySize, 0);
-        Value *Size = ConstantInt::get(Type::getInt64Ty(M->getContext()),
-                ElementSize);
-        return AllocOperands(Size,ArraySize);
+        Value *Size = ConstantInt::get(ArraySize->getType(), ElementSize);
+        return AllocOperands(Size, ArraySize);
       }
       return AllocOperands();
     }
@@ -79,6 +78,8 @@ namespace
       IRBuilder<> B(InsertPt);
       Value *Size = (AO.second) ? B.CreateMul(AO.first, AO.second) : AO.first;
       BitCast = B.CreateBitCast(I2P, CapPtrTy);
+      if (Size->getType() != Int64Ty)
+        Size = B.CreateZExt(Size, Int64Ty);
       CallInst *SetLength = B.CreateCall(SetLengthFn, {BitCast, Size});
       if (BitCast == I2P)
         BitCast = SetLength;
@@ -205,6 +206,7 @@ namespace
             i->second.Instr->setOperand(i->second.OpNo, New);
           }
           verifyModule(*F.getParent());
+		  F.dump();
           return true;
         }
         return false;
