@@ -59,10 +59,18 @@ namespace
           case 3:
             return AllocOperands(Malloc.getArgument(0), Malloc.getArgument(1));
         }
+      } else if (AllocaInst *AI = dyn_cast<AllocaInst>(Src)) {
+        PointerType *AllocaTy = AI->getType();
+        Value *ArraySize = AI->getArraySize();
+        Type *AllocationTy = AllocaTy->getElementType();
+        unsigned ElementSize = TD->getTypeAllocSize(AllocationTy);
+        if (ElementSize == 1)
+          return AllocOperands(ArraySize, 0);
+        Value *Size = ConstantInt::get(Type::getInt64Ty(M->getContext()),
+                ElementSize);
+        return AllocOperands(Size,ArraySize);
       }
-      PointerType *AllocType = cast<PointerType>(Src->getType());
-      uint64_t size = TD->getTypeAllocSize(AllocType->getElementType());
-      return AllocOperands(ConstantInt::get(Int64Ty, size), 0);
+      return AllocOperands();
     }
     Value *RangeCheckedValue(Instruction *InsertPt,
                              AllocOperands AO,
