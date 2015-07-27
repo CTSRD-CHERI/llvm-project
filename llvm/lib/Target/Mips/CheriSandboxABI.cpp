@@ -86,7 +86,7 @@ class CheriSandboxABI : public ModulePass,
       for (AllocaInst *AI : Allocas) {
         assert(AI->getType()->getPointerAddressSpace() == 200);
         B.SetInsertPoint(AI->getParent(), AI);
-        unsigned ForcedAligment = 0;
+        unsigned ForcedAlignment = 0;
 
         PointerType *AllocaTy = AI->getType();
         Type *AllocationTy = AllocaTy->getElementType();
@@ -102,13 +102,12 @@ class CheriSandboxABI : public ModulePass,
           if (ConstantInt *CI = dyn_cast<ConstantInt>(ArraySize))
             AllocaSize *= CI->getValue().getLimitedValue();
           else
-            AllocaSize *= 128*1024;
-          // Note: This is not correct, but it's a reasonable first cut.
-          if (AllocaSize >= 64*1024)
-            ForcedAligment = 128;
+            AllocaSize *= 1048576;
+          ForcedAlignment = AllocaSize / (1 << 13);
         }
         cast<AllocaInst>(Alloca)->setAlignment(
-            std::max(AI->getAlignment(),ForcedAligment));
+            std::max(AI->getAlignment(),ForcedAlignment));
+		Alloca->dump();
 
         // Convert the new alloca into a stack-cap relative capability
         Alloca = B.CreateBitCast(Alloca, Type::getInt8PtrTy(C, 0));
