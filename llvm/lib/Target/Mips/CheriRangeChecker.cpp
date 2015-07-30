@@ -206,7 +206,6 @@ namespace
             i->second.Instr->setOperand(i->second.OpNo, New);
           }
           verifyModule(*F.getParent());
-		  F.dump();
           return true;
         }
         return false;

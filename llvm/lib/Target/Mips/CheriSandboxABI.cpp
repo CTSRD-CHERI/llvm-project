@@ -107,7 +107,6 @@ class CheriSandboxABI : public ModulePass,
         }
         cast<AllocaInst>(Alloca)->setAlignment(
             std::max(AI->getAlignment(),ForcedAlignment));
-		Alloca->dump();
 
         // Convert the new alloca into a stack-cap relative capability
         Alloca = B.CreateBitCast(Alloca, Type::getInt8PtrTy(C, 0));
