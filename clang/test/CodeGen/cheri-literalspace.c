@@ -9,6 +9,6 @@ char takes_string_ptr(const char *a) {
 // CHECK-LABEL: main
 char main(void) {
 	// Ensure an address space cast is generated inside the call.
-	// CHECK: takes_string_ptr(i8 addrspace(200)* addrspacecast
+	// CHECK: (i8 addrspace(200)* addrspacecast
     return takes_string_ptr("hi");
 }
