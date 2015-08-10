@@ -639,20 +639,9 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
     auto *FT =
       dyn_cast<FunctionType>(FD->getType().getDesugaredType(getContext()));
     if (FT && (FT->getCallConv() == CC_CheriCCallee))
-      if (auto *ClsAttr = FD->getAttr<CheriMethodClassAttr>()) {
-        assert(ClsAttr);
-        // Emit a global of the form __cheri_method_{class}_{function}
-        auto GlobalName = (StringRef("__cheri_callee_method.") +
-            ClsAttr->getDefaultClass()->getName() + "." + FD->getName()).str();
-        auto *MethodNumVar = CGM.getModule().getNamedGlobal(GlobalName);
-        if (!MethodNumVar) {
-          MethodNumVar = new llvm::GlobalVariable(CGM.getModule(),
-              Fn->getType(),
-              /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
-              Fn, GlobalName);
-          MethodNumVar->setSection(".CHERI_CALLEE");
-        }
-      }
+      if (auto *ClsAttr = FD->getAttr<CheriMethodClassAttr>())
+        CGM.EmitSandboxDefinedMethod(ClsAttr->getDefaultClass()->getName(),
+                                     FD->getName(), Fn);
   }
 
   if (getLangOpts().OpenCL) {

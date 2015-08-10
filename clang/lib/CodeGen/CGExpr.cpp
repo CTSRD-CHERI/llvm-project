@@ -3421,18 +3421,9 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
     std::string FunctionBaseName = cast<NamedDecl>(TargetDecl)->getName().str();
     FunctionBaseName = FunctionBaseName.substr(0, FunctionBaseName.size() -
         Suffix.size());
-    // Emit a global of the form __cheri_method_{class}_{function}
-    auto GlobalName = (StringRef("__cheri_method.") +
-        ClsAttr->getDefaultClass()->getName() + "." + FunctionBaseName).str();
-
-    auto *MethodNumVar = CGM.getModule().getNamedGlobal(GlobalName);
-    if (!MethodNumVar) {
-      llvm::IntegerType *Ty = cast<llvm::IntegerType>(ConvertType(NumTy));
-      MethodNumVar = new llvm::GlobalVariable(CGM.getModule(), Ty,
-          /*isConstant*/false, llvm::GlobalValue::LinkOnceODRLinkage,
-          llvm::ConstantInt::get(Ty, 0), GlobalName);
-      MethodNumVar->setSection(".CHERI_CALLER");
-    }
+    auto *MethodNumVar =
+        CGM.EmitSandboxRequiredMethod(ClsAttr->getDefaultClass()->getName(),
+                                      FunctionBaseName);
     // Load the global and use it in the call
     auto *MethodNum = Builder.CreateLoad(MethodNumVar);
     MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),

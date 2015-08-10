@@ -3698,3 +3698,102 @@ llvm::MDTuple *CodeGenModule::CreateVTableBitSetEntry(
           llvm::ConstantInt::get(Int64Ty, Offset.getQuantity()))};
   return llvm::MDTuple::get(getLLVMContext(), BitsetOps);
 }
+llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
+    StringRef Fn) {
+  // We're going to emit a structure of the following form:
+  // struct sandbox_required_method {
+  //   int64_t   flags;
+  //   char     *class;
+  //   char     *method;
+  //   int64_t  *method_number_var;
+  //   int64_t   method_number;
+  // };
+  // The class and method fields point to the names of the class and method.
+  // The method_number_var field is temporary and points to the
+  // __cheri_method.{class}.{function} variable that older versions of the
+  // sandbox interface ABI used.
+  // The method number is the new method number variable.
+  // The low 32 bits of the flags field are reserved for the compiler, the high
+  // 32 bits for the runtime.  The runtime uses one of these to indicate a
+  // resolved method.
+  // At some point, the compiler will use the low 1 bit of flags to indicate
+  // that the `method_number_var` field is not present and that the compiled
+  // code uses the method_number field directly.
+
+
+  // Emit a global of the form __cheri_method.{class}.{function}
+  auto GlobalName = (StringRef("__cheri_method.") + Cls + "." + Fn).str();
+
+  auto *MethodNumVar = getModule().getNamedGlobal(GlobalName);
+  auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
+  if (!MethodNumVar) {
+    MethodNumVar = new llvm::GlobalVariable(getModule(), Int64Ty,
+        /*isConstant*/false, llvm::GlobalValue::LinkOnceODRLinkage,
+        Zero64, GlobalName);
+    MethodNumVar->setSection(".CHERI_CALLER");
+  }
+
+  auto GlobalStructName = (StringRef(".sandbox_required_method.") + Cls + "." +
+      Fn).str();
+  if (!getModule().getNamedGlobal(GlobalStructName)) {
+    auto ClsName = GetAddrOfConstantCString(Cls);
+    auto MethodName = GetAddrOfConstantCString(Fn);
+    auto StructTy = llvm::StructType::get(Int64Ty, ClsName->getType(),
+        MethodName->getType(), MethodNumVar->getType(), Int64Ty, nullptr);
+
+    auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64, ClsName,
+        MethodName, MethodNumVar, Zero64});
+    auto *MetadataGV = new llvm::GlobalVariable(getModule(), StructTy,
+        /*isConstant*/false, llvm::GlobalValue::ExternalLinkage, StructInit,
+        GlobalStructName);
+    MetadataGV->setSection("__cheri_sandbox_required_methods");
+    MetadataGV->setComdat(getModule().getOrInsertComdat(GlobalStructName));
+  }
+
+  return MethodNumVar;
+}
+
+void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
+    Method, llvm::Function *Fn) {
+  // For each defined method, we emit a structure of the following form:
+  // struct sandbox_provided_method {
+  //   int64_t   flags;
+  //   char     *class;
+  //   char     *method;
+  //   void     *method_ptr;
+  // };
+  // The flags field is always zero.  The class and method give the name of the
+  // class and method.  The method_ptr field includes the sandbox-relative
+  // address of the method.
+
+  // Emit a global of the form __cheri_method_{class}_{function}
+  auto GlobalName = (StringRef("__cheri_callee_method.") + Cls + "." +
+      Method).str();
+  auto *MethodPtrVar = getModule().getNamedGlobal(GlobalName);
+  if (!MethodPtrVar) {
+    MethodPtrVar = new llvm::GlobalVariable(getModule(),
+        Fn->getType(),
+        /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
+        Fn, GlobalName);
+    MethodPtrVar->setSection(".CHERI_CALLEE");
+  }
+
+  auto GlobalStructName = (StringRef(".sandbox_provided_method.") + Cls + "." +
+      Method).str();
+  if (!getModule().getNamedGlobal(GlobalStructName)) {
+    auto ClsName = GetAddrOfConstantCString(Cls);
+    auto MethodName = GetAddrOfConstantCString(Method);
+    auto StructTy = llvm::StructType::get(Int64Ty, ClsName->getType(),
+        MethodName->getType(), MethodPtrVar->getType(), nullptr);
+    auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
+
+    auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64, ClsName,
+        MethodName, MethodPtrVar});
+    auto *MetadataGV = new llvm::GlobalVariable(getModule(), StructTy,
+        /*isConstant*/false, llvm::GlobalValue::ExternalLinkage, StructInit,
+        GlobalStructName);
+    MetadataGV->setSection("__cheri_sandbox_provided_methods");
+    MetadataGV->setComdat(getModule().getOrInsertComdat(StringRef(GlobalStructName)));
+  }
+
+}
