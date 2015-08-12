@@ -1903,6 +1903,8 @@ unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D,
     else
       AddrSpace = getContext().getTargetAddressSpace(LangAS::cuda_device);
   }
+  if (D && (D->getTLSKind() != VarDecl::TLS_None) && (AddrSpace == 200))
+    return 0;
 
   return AddrSpace;
 }
