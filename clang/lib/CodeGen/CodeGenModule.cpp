@@ -3783,9 +3783,9 @@ void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
   auto GlobalStructName = (StringRef(".sandbox_provided_method.") + Cls + "." +
       Method).str();
   if (!getModule().getNamedGlobal(GlobalStructName)) {
-    auto ClsName = GetAddrOfConstantCString(Cls);
-    auto MethodName = GetAddrOfConstantCString(Method);
-    auto StructTy = llvm::StructType::get(Int64Ty, ClsName->getType(),
+    auto *ClsName = GetAddrOfConstantCString(Cls);
+    auto *MethodName = GetAddrOfConstantCString(Method);
+    auto *StructTy = llvm::StructType::get(Int64Ty, ClsName->getType(),
         MethodName->getType(), MethodPtrVar->getType(), nullptr);
     auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
 
