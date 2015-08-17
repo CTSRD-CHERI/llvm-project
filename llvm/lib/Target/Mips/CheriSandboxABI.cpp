@@ -67,6 +67,16 @@ class CheriSandboxABI : public ModulePass,
 #endif
       return Modified;
     }
+    int RoundUpToPowerOfTwo(int v) {
+      v--;
+      v |= v >> 1;
+      v |= v >> 2;
+      v |= v >> 4;
+      v |= v >> 8;
+      v |= v >> 16;
+      v++;
+      return v;
+    }
     bool runOnFunction(Function &F) {
       LLVMContext &C = M->getContext();
       Allocas.clear();
@@ -104,6 +114,9 @@ class CheriSandboxABI : public ModulePass,
           else
             AllocaSize *= 1048576;
           ForcedAlignment = AllocaSize / (1 << 13);
+          ForcedAlignment = RoundUpToPowerOfTwo(ForcedAlignment);
+          // MIPS doesn't support stack alignments greater than 2^16
+          ForcedAlignment = std::min(ForcedAlignment, 0x4000U);
         }
         cast<AllocaInst>(Alloca)->setAlignment(
             std::max(AI->getAlignment(),ForcedAlignment));
