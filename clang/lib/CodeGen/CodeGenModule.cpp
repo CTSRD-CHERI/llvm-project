@@ -2021,8 +2021,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
     }
   }
 
-  if (InitExpr && Target.SupportsCapabilities() && Context.getDefaultAS() != 0)
-  {
+  if (InitExpr && Target.SupportsCapabilities()) {
     QualType T = InitExpr->getType();
     bool IsCapInit = false;
     if (TheTargetCodeGenInfo->containsCapabilities(T)) {

@@ -281,8 +281,7 @@ llvm::GlobalVariable *
 CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
                                                llvm::GlobalVariable *GV) {
   llvm::Constant *Init = CGM.EmitConstantInit(D, this);
-  if (Init && Target.SupportsCapabilities() &&
-      getContext().getDefaultAS() != 0) {
+  if (Init && Target.SupportsCapabilities()) {
     const VarDecl *InitDecl;
     const Expr *InitExpr = D.getAnyInitializer(InitDecl);
     QualType T = InitExpr->getType();
