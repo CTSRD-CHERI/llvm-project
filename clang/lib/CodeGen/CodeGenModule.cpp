@@ -2023,9 +2023,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   if (InitExpr && Target.SupportsCapabilities()) {
     QualType T = InitExpr->getType();
-    bool IsCapInit = false;
     if (TheTargetCodeGenInfo->containsCapabilities(T)) {
-      IsCapInit = true;
       NeedsGlobalCtor = true;
       Init = EmitNullConstant(D->getType());
     }
