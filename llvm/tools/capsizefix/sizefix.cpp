@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     uint64_t BigSize =
         support::endian::byte_swap<uint64_t, support::big>(SectionSizes[base]);
     // This is an ugly hack.  object ought to allow modification
-    fseek(F, entry - MB.getBufferStart() + 32, SEEK_SET);
+    fseek(F, entry - MB.getBufferStart() + 24, SEEK_SET);
     fwrite(&BigSize, sizeof(BigSize), 1, F);
   }
   fclose(F);
