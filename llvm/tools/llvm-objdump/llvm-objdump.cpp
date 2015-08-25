@@ -58,6 +58,7 @@
 #include <cctype>
 #include <cstring>
 #include <system_error>
+#include <unordered_map>
 
 using namespace llvm;
 using namespace object;
@@ -74,6 +75,9 @@ Disassembled("d", cl::desc("Alias for --disassemble"),
 
 cl::opt<bool>
 llvm::Relocations("r", cl::desc("Display the relocation entries in the file"));
+
+cl::opt<bool> llvm::CapRelocations(
+    "C", cl::desc("Display the capability relocation entries in the file"));
 
 cl::opt<bool>
 llvm::SectionContents("s", cl::desc("Display the content of each section"));
@@ -944,6 +948,46 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     }
   }
 }
+void llvm::PrintCapRelocations(const ObjectFile *Obj) {
+  std::unordered_map<uint64_t, std::string> SymbolNames;
+  for (const SymbolRef &Sym : Obj->symbols()) {
+    uint64_t Start;
+    if (Sym.getAddress(Start))
+      continue;
+    StringRef Name;
+    Sym.getName(Name);
+    SymbolNames.insert({Start, Name.str()});
+  }
+  StringRef Data;
+  for (const SectionRef &Sec : Obj->sections()) {
+    StringRef Name;
+    if (Sec.getName(Name))
+      continue;
+    if (Name == "__cap_relocs") {
+      Sec.getContents(Data);
+      break;
+    }
+  }
+  outs() << "CAPABILITY RELOCATION RECORDS:\n";
+  const size_t entry_size = 40;
+  for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
+    const char *entry = Data.data() + (entry_size * i);
+    uint64_t Target = support::endian::read<uint64_t, support::big, 1>(entry);
+    uint64_t Base = support::endian::read<uint64_t, support::big, 1>(entry + 8);
+    uint64_t Offset =
+        support::endian::read<uint64_t, support::big, 1>(entry + 16);
+    uint64_t Length =
+        support::endian::read<uint64_t, support::big, 1>(entry + 24);
+    StringRef Symbol = "<Unnamed symbol>";
+    if (SymbolNames.find(Base) != SymbolNames.end())
+      Symbol = SymbolNames[Base];
+    outs() << format("0x%016" PRIx64, Target) << "\tBase: " << Symbol << " ("
+           << format("0x%016" PRIx64, Base)
+           << ")\tOffset: " << format("%016" PRIu64, Offset)
+           << "\tLength: " << format("%016" PRIu64, Length) << "\n";
+  }
+  outs() << "\n";
+}
 
 void llvm::PrintRelocations(const ObjectFile *Obj) {
   StringRef Fmt = Obj->getBytesInAddress() > 4 ? "%016" PRIx64 :
@@ -1324,6 +1368,8 @@ static void DumpObject(const ObjectFile *o) {
     DisassembleObject(o, Relocations);
   if (Relocations && !Disassemble)
     PrintRelocations(o);
+  if (CapRelocations)
+    PrintCapRelocations(o);
   if (SectionHeaders)
     PrintSectionHeaders(o);
   if (SectionContents)
@@ -1423,6 +1469,7 @@ int main(int argc, char **argv) {
     InputFilenames.push_back("a.out");
 
   if (!Disassemble
+      && !CapRelocations
       && !Relocations
       && !SectionHeaders
       && !SectionContents
