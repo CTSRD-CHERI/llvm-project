@@ -179,6 +179,10 @@ class MCStreamer {
   /// PushSection.
   SmallVector<std::pair<MCSectionSubPair, MCSectionSubPair>, 4> SectionStack;
 
+  /// Array of locations that contain fat pointers and the expressions used to
+  /// initialise them.
+  SmallVector<std::pair<const MCSymbol*, const MCExpr*>, 32> FatRelocs;
+
 protected:
   MCStreamer(MCContext &Ctx);
 

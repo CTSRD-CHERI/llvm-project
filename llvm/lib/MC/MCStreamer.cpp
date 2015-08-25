@@ -19,6 +19,7 @@
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSection.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -109,7 +110,17 @@ void MCStreamer::EmitSLEB128IntValue(int64_t Value) {
 
 void MCStreamer::EmitValue(const MCExpr *Value, unsigned Size,
                            const SMLoc &Loc) {
-  EmitValueImpl(Value, Size, Loc);
+  // This is a massive hack, but it needs rewriting once we have proper linker
+  // support.
+  if (Size > 8) {
+    MCSymbol *Here = Context.createTempSymbol();
+    EmitLabel(Here);
+    FatRelocs.push_back(std::make_pair(Here, Value));
+    EmitZeros(Size);
+    // We do this here to ensure that the section exists.
+    Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, 0);
+  } else
+    EmitValueImpl(Value, Size, Loc);
 }
 
 void MCStreamer::EmitSymbolValue(const MCSymbol *Sym, unsigned Size,
@@ -585,6 +596,24 @@ void MCStreamer::EmitWindowsUnwindTables() {
 void MCStreamer::Finish() {
   if (!DwarfFrameInfos.empty() && !DwarfFrameInfos.back().End)
     report_fatal_error("Unfinished frame!");
+  if (!FatRelocs.empty()) {
+    MCSection *RelocSection = Context.getELFSection("__cap_relocs",
+        ELF::SHT_PROGBITS, 0);
+    SwitchSection(RelocSection);
+    for (auto &R : FatRelocs) {
+      EmitValue(MCSymbolRefExpr::create(R.first, Context), 8);
+      if (const MCSymbolRefExpr *Sym = dyn_cast<MCSymbolRefExpr>(R.second)) {
+        EmitValue(Sym, 8);
+        EmitZeros(8);
+      } else {
+        const MCBinaryExpr *Bin = cast<MCBinaryExpr>(R.second);
+        EmitValue(cast<MCSymbolRefExpr>(Bin->getLHS()), 8);
+        EmitValue(Bin->getRHS(), 8);
+      }
+      // TODO: Emit size / perms here.
+      EmitZeros(16);
+    }
+  }
 
   MCTargetStreamer *TS = getTargetStreamer();
   if (TS)
