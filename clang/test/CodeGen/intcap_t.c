@@ -110,14 +110,6 @@ void *castp(__intcap_t a)
   return (void*)a;
 }
 
-// Simplify casts bug:
-int cp(__capability void* x, __capability void* y)
-{
-  // CHECK: ptrtoint i8 addrspace(200)* %x to i64
-  // CHECK: ptrtoint i8 addrspace(200)* %y to i64
-  return x - y;
-}
-
 // increment and decrement should work
 __intcap_t x;
 __uintcap_t y;
@@ -128,5 +120,21 @@ void incdec(void)
   y++;
   x--;
   y--;
+}
+
+int capdiff(__capability int *a, __capability int *b)
+{
+  // CHECK: @capdiff(i32 addrspace(200)* %a, i32 addrspace(200)* %b) #0 {
+  // CHECK: %0 = bitcast i32 addrspace(200)* %a to i8 addrspace(200)*
+  // CHECK: %1 = bitcast i32 addrspace(200)* %b to i8 addrspace(200)*
+  // CHECK: %2 = tail call i64 @llvm.mips.cap.base.get(i8 addrspace(200)* %0)
+  // CHECK: %3 = tail call i64 @llvm.mips.cap.base.get(i8 addrspace(200)* %1)
+  // CHECK: %4 = tail call i64 @llvm.mips.cap.offset.get(i8 addrspace(200)* %0)
+  // CHECK: %5 = tail call i64 @llvm.mips.cap.offset.get(i8 addrspace(200)* %1)
+  // CHECK: %sub.ptr.rhs.cast.neg = sub i64 %2, %3
+  // CHECK: %sub.ptr.lhs.cast = add i64 %sub.ptr.rhs.cast.neg, %4
+  // CHECK: %sub.ptr.sub = sub i64 %sub.ptr.lhs.cast, %5
+  // CHECK: %sub.ptr.div.1 = lshr exact i64 %sub.ptr.sub, 2
+  return a-b;
 }
 
