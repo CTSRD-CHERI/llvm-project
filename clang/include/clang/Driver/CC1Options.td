@@ -149,6 +149,9 @@ def msave_temp_labels : Flag<["-"], "msave-temp-labels">,
 
 }
 
+def cheri_linker : Flag<["-"], "cheri-linker">,
+  HelpText<"Assume the existence of a CHERI-aware linker">;
+
 def disable_llvm_optzns : Flag<["-"], "disable-llvm-optzns">,
   HelpText<"Don't run LLVM optimization passes">;
 def disable_llvm_verifier : Flag<["-"], "disable-llvm-verifier">,

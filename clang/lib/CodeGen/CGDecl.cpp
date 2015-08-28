@@ -281,7 +281,8 @@ llvm::GlobalVariable *
 CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
                                                llvm::GlobalVariable *GV) {
   llvm::Constant *Init = CGM.EmitConstantInit(D, this);
-  if (Init && Target.SupportsCapabilities()) {
+  if (!CGM.getCodeGenOpts().CheriLinker && Init &&
+      Target.SupportsCapabilities()) {
     const VarDecl *InitDecl;
     const Expr *InitExpr = D.getAnyInitializer(InitDecl);
     QualType T = InitExpr->getType();
@@ -942,7 +943,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
       // Otherwise, tell the initialization code that we're in this case.
       emission.IsConstantAggregate = true;
-      if (Target.SupportsCapabilities() &&
+      if (!CGM.getCodeGenOpts().CheriLinker && Target.SupportsCapabilities() &&
           (getContext().getDefaultAS() != 0) &&
           (Ty.isCapabilityType(getContext()) || Ty->isCompoundType()))
         emission.IsConstantAggregate = false;

@@ -2021,7 +2021,8 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
     }
   }
 
-  if (InitExpr && Target.SupportsCapabilities()) {
+  if (!getCodeGenOpts().CheriLinker &&
+      InitExpr && Target.SupportsCapabilities()) {
     QualType T = InitExpr->getType();
     if (TheTargetCodeGenInfo->containsCapabilities(T)) {
       NeedsGlobalCtor = true;
