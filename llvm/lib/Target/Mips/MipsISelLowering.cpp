@@ -408,7 +408,10 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
 
   setOperationAction(ISD::VASTART,           MVT::Other, Custom);
   setOperationAction(ISD::VAARG,             MVT::Other, Custom);
-  setOperationAction(ISD::VACOPY,            MVT::Other, Expand);
+  if (ABI.IsCheriSandbox())
+    setOperationAction(ISD::VACOPY,          MVT::Other, Custom);
+  else
+    setOperationAction(ISD::VACOPY,          MVT::Other, Expand);
   setOperationAction(ISD::VAEND,             MVT::Other, Expand);
 
   // Use the default for now
@@ -895,6 +898,7 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const
   case ISD::SETCC:              return lowerSETCC(Op, DAG);
   case ISD::VASTART:            return lowerVASTART(Op, DAG);
   case ISD::VAARG:              return lowerVAARG(Op, DAG);
+  case ISD::VACOPY:             return lowerVACOPY(Op, DAG);
   case ISD::FCOPYSIGN:          return lowerFCOPYSIGN(Op, DAG);
   case ISD::FRAMEADDR:          return lowerFRAMEADDR(Op, DAG);
   case ISD::RETURNADDR:         return lowerRETURNADDR(Op, DAG);
@@ -1939,6 +1943,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
                                  getPointerTy());
 
   if (ABI.IsCheriSandbox()) {
+    unsigned Reg = MF.addLiveIn(Mips::C13, getRegClassFor(MVT::iFATPTR));
     // In the sandbox ABI, the va_start intrinsic will (to work around LLVM's
     // assumption that allocas are all in AS0) be an address space cast of the
     // alloca to AS 0.  We need to extract the original operands.
@@ -1952,7 +1957,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     else
       CapAddr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR,
           CapAddr);
-    FI = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, FI);
+    FI = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, MVT::iFATPTR);
     return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV), false,
         false, 0);
   }
@@ -1962,6 +1967,25 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
   return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
                       MachinePointerInfo(SV), false, false, 0);
+}
+
+SDValue MipsTargetLowering::lowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
+  // VACOPY lowering should only be custom with the sandbox ABI.
+  assert(ABI.IsCheriSandbox());
+
+  SDValue Chain = Op->getOperand(0);
+  SDValue Dest = Op->getOperand(1);
+  SDValue Src = Op->getOperand(2);
+  if (Dest->getOpcode() == ISD::ADDRSPACECAST)
+    Dest = Dest->getOperand(0);
+  if (Src->getOpcode() == ISD::ADDRSPACECAST)
+    Src = Src->getOperand(0);
+  SDLoc DL(Op);
+  // The source is a pointer to the existing va_list
+  Src = DAG.getLoad(MVT::iFATPTR, DL, Chain, Src, MachinePointerInfo(), false,
+          false, false, 0);
+  return DAG.getStore(Chain, DL, Src, Dest, MachinePointerInfo(), false,
+          false, 0);
 }
 
 SDValue MipsTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const {
@@ -2970,17 +2994,15 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     MemOpChains.push_back(passArgOnStack(StackPtr, VA.getLocMemOffset(),
                                          Chain, Arg, DL, IsTailCall, DAG));
   }
-#if 0
   if ((FirstOffset != -1) && ABI.IsCheriSandbox()) {
-    Intrinsic::ID SetLength = Intrinsic::mips_cap_bounds_set;
+    Intrinsic::ID SetBounds = Intrinsic::mips_cap_bounds_set;
     SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
     PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
     PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
-        DAG.getConstant(SetLength, DL, MVT::i64), PtrOff,
+        DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
         DAG.getIntPtrConstant(LastOffset, DL));
     RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
   }
-#endif
   // If we're doing a CCall then any unused arg registers should be zero.
   if (!UseClearRegs && (CallConv == CallingConv::CHERI_CCall)) {
     assert(CapArgs >= 2);
