@@ -4084,6 +4084,11 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   case Intrinsic::vastart:  visitVAStart(I); return nullptr;
   case Intrinsic::vaend:    visitVAEnd(I); return nullptr;
   case Intrinsic::vacopy:   visitVACopy(I); return nullptr;
+  case Intrinsic::returncapability:
+    // FIXME: Don't hard-code 200
+    setValue(&I, DAG.getNode(ISD::RETURNADDR, sdl, TLI.getPointerTy(200),
+                             getValue(I.getArgOperand(0))));
+    return nullptr;
   case Intrinsic::returnaddress:
     setValue(&I, DAG.getNode(ISD::RETURNADDR, sdl, TLI.getPointerTy(),
                              getValue(I.getArgOperand(0))));

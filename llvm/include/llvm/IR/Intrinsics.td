@@ -278,6 +278,7 @@ def int_gcwrite : Intrinsic<[],
 //===--------------------- Code Generator Intrinsics ----------------------===//
 //
 def int_returnaddress : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty], [IntrNoMem]>;
+def int_returncapability : Intrinsic<[llvm_fatptr_ty], [llvm_i32_ty], [IntrNoMem]>;
 def int_frameaddress  : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty], [IntrNoMem]>;
 def int_frameescape : Intrinsic<[], [llvm_vararg_ty]>;
 def int_framerecover : Intrinsic<[llvm_ptr_ty],

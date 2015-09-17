@@ -638,6 +638,8 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     // is taken.
     unsigned Reg = CSI[i].getReg();
     bool IsRA = (Reg == Mips::RA || Reg == Mips::RA_64);
+    if (STI.getABI().IsCheriSandbox())
+      IsRA = (Reg == Mips::C17);
     bool IsRAAndRetAddrIsTaken = IsRA && IsRetAddrTaken;
     if (!IsRAAndRetAddrIsTaken)
       EntryBlock->addLiveIn(Reg);
