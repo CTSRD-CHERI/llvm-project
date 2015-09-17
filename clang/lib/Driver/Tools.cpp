@@ -7150,6 +7150,17 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  bool IsSandboxABI = false;
+  if (ToolChain.getArch() == llvm::Triple::cheri)
+    if (Args.hasArg(options::OPT_mabi_EQ)) {
+      auto A = Args.getLastArg(options::OPT_mabi_EQ);
+      IsSandboxABI = (StringRef(A->getValue()).lower() == "sandbox");
+    }
+  // The FreeBSD/MIPS version of GNU ld is horribly buggy and errors out
+  // complaining about linking 32-bit and 64-bit code when linking CHERI code.
+  if (IsSandboxABI)
+    CmdArgs.push_back(Args.MakeArgString("--no-warn-mismatch"));
+
   if (Output.isFilename()) {
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
