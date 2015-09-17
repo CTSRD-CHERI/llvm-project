@@ -7281,8 +7281,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs));
-  if (IsSandboxABI && !Args.hasArg(options::OPT_static) &&
-      !Args.hasArg(options::OPT_shared)) {
+  if (IsSandboxABI) {
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("brandelf"));
     ArgStringList BrandElfArgs;
     BrandElfArgs.push_back("-c");
