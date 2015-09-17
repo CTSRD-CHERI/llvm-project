@@ -872,7 +872,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_return_address: {
     Value *Depth = EmitScalarExpr(E->getArg(0));
     Depth = Builder.CreateIntCast(Depth, Int32Ty, false);
-    Value *F = CGM.getIntrinsic(Intrinsic::returnaddress);
+    Value *F = CGM.getContext().getDefaultAS() == 200
+        ? CGM.getIntrinsic(Intrinsic::returncapability)
+        : CGM.getIntrinsic(Intrinsic::returnaddress);
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI__builtin_frame_address: {
