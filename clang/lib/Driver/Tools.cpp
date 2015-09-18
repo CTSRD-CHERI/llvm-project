@@ -7182,7 +7182,10 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     if (crt1)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
 
-    CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
+    // Don't support .init and .fini sections for CheriABI.
+    if (Arch != llvm::Triple::cheri ||
+	!tools::mips::hasMipsAbiArg(Args, "sandbox"))
+      CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
     const char *crtbegin = nullptr;
     if (Args.hasArg(options::OPT_static))
@@ -7274,7 +7277,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtendS.o")));
     else
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtend.o")));
-    CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
+
+    // Don't support .init and .fini sections for CheriABI.
+    if (Arch != llvm::Triple::cheri ||
+	!tools::mips::hasMipsAbiArg(Args, "sandbox"))
+      CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
   }
 
   addProfileRT(ToolChain, Args, CmdArgs);

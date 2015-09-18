@@ -14,3 +14,5 @@
 // CHECK-CHERI-SANDBOX: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
 // CHECK-CHERI-SANDBOX: "-L[[SYSROOT]]/usr/libcheri"
 // CHECK-CHERI-SANDBOX-NOT: "-L[[SYSROOT]]/usr/lib"
+// CHECK-CHERI-SANDBOX-NOT: "{{.*}}crti.o"
+// CHECK-CHERI-SANDBOX-NOT: "{{.*}}crtn.o"
