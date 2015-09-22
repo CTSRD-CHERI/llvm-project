@@ -2359,11 +2359,19 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
                                     E->getComputationLHSType());
 
   // Expand the binary operator.
-  Value *Base = OpInfo.LHS;
-  OpInfo.LHS = GetBinOpVal(OpInfo, OpInfo.LHS);
-  OpInfo.RHS = GetBinOpVal(OpInfo, OpInfo.RHS);
-  Result = (this->*Func)(OpInfo);
-  Result = GetBinOpResult(OpInfo, Base, Result);
+  // We need special handling for add operations (pointer + integer)
+  // FIXME: We should be able to emit a GEP for intcap_t add/sub operations,
+  // but we can't because the logic checks lower down assumes that anything
+  // that has an LLVM pointer type also has a C pointer type.
+  if (OpInfo.Opcode == BO_AddAssign && E->getType()->isPointerType())
+    Result = (this->*Func)(OpInfo);
+  else {
+    Value *Base = OpInfo.LHS;
+    OpInfo.LHS = GetBinOpVal(OpInfo, OpInfo.LHS);
+    OpInfo.RHS = GetBinOpVal(OpInfo, OpInfo.RHS);
+    Result = (this->*Func)(OpInfo);
+    Result = GetBinOpResult(OpInfo, Base, Result);
+  }
 
   // Convert the result back to the LHS type.
   Result = EmitScalarConversion(Result, E->getComputationResultType(), LHSTy);
