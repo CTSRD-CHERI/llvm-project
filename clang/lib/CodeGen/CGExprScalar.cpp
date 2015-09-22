@@ -872,6 +872,16 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   }
 
   if (isa<llvm::PointerType>(SrcTy)) {
+    if (!SrcType->isPointerType()) {
+      // If this is not a pointer type in C, but is in LLVM IR, then it must be
+      // a [u]intcap_t
+      assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
+             SrcType->isSpecificBuiltinType(BuiltinType::IntCap));
+      Src = Builder.CreateCall(
+              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get), Src);
+      return Builder.CreateTruncOrBitCast(Src, DstTy, "conv");
+
+    }
     // Must be an ptr to int cast.
     assert(isa<llvm::IntegerType>(DstTy) && "not ptr->int?");
     return Builder.CreatePtrToInt(Src, DstTy, "conv");
