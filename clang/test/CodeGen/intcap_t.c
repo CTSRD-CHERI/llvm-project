@@ -122,6 +122,12 @@ void incdec(void)
   y--;
 }
 
+__uintcap_t xor(__uintcap_t f)
+{
+  f ^= 2;
+  return f;
+}
+
 int capdiff(__capability int *a, __capability int *b)
 {
   // CHECK: @capdiff(i32 addrspace(200)* %a, i32 addrspace(200)* %b) #0 {

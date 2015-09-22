@@ -2349,7 +2349,11 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
                                     E->getComputationLHSType());
 
   // Expand the binary operator.
+  Value *Base = OpInfo.LHS;
+  OpInfo.LHS = GetBinOpVal(OpInfo, OpInfo.LHS);
+  OpInfo.RHS = GetBinOpVal(OpInfo, OpInfo.RHS);
   Result = (this->*Func)(OpInfo);
+  Result = GetBinOpResult(OpInfo, Base, Result);
 
   // Convert the result back to the LHS type.
   Result = EmitScalarConversion(Result, E->getComputationResultType(), LHSTy);
