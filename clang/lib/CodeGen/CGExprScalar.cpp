@@ -2363,7 +2363,8 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
   // FIXME: We should be able to emit a GEP for intcap_t add/sub operations,
   // but we can't because the logic checks lower down assumes that anything
   // that has an LLVM pointer type also has a C pointer type.
-  if (OpInfo.Opcode == BO_AddAssign && E->getType()->isPointerType())
+  if ((OpInfo.Opcode == BO_AddAssign || OpInfo.Opcode == BO_SubAssign) &&
+      E->getType()->isPointerType())
     Result = (this->*Func)(OpInfo);
   else {
     Value *Base = OpInfo.LHS;
