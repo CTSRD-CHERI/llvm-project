@@ -7291,6 +7291,12 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs));
+  if (Args.hasArg(options::OPT_cheri_linker)) {
+    Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
+    ArgStringList SizeFixArgs;
+    SizeFixArgs.push_back(Output.getFilename());
+    C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, SizeFixArgs));
+  }
   if (IsSandboxABI) {
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("brandelf"));
     ArgStringList BrandElfArgs;
