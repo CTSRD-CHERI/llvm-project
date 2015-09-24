@@ -49,10 +49,12 @@ int main(int argc, char *argv[]) {
               "Unexpected location for capability relocations section!\n");
       return EXIT_FAILURE;
     }
-    if (SectionSizes.find(base) == SectionSizes.end())
+    if (SectionSizes.find(base) == SectionSizes.end()) {
       fprintf(stderr, "Unable to find size for pointer at %lld\n",
               static_cast<unsigned long long>(
                   support::endian::read<uint64_t, support::big, 1>(entry)));
+      continue;
+    }
     uint64_t BigSize =
         support::endian::byte_swap<uint64_t, support::big>(SectionSizes[base]);
     // This is an ugly hack.  object ought to allow modification
