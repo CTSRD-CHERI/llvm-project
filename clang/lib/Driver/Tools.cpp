@@ -7184,7 +7184,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
     // Don't support .init and .fini sections for CheriABI.
     if (Arch != llvm::Triple::cheri ||
-	!tools::mips::hasMipsAbiArg(Args, "sandbox"))
+        !tools::mips::hasMipsAbiArg(Args, "sandbox"))
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
     const char *crtbegin = nullptr;
@@ -7280,7 +7280,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
     // Don't support .init and .fini sections for CheriABI.
     if (Arch != llvm::Triple::cheri ||
-	!tools::mips::hasMipsAbiArg(Args, "sandbox"))
+        !tools::mips::hasMipsAbiArg(Args, "sandbox"))
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
   }
 
