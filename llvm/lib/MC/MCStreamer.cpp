@@ -118,7 +118,7 @@ void MCStreamer::EmitValue(const MCExpr *Value, unsigned Size,
     FatRelocs.push_back(std::make_pair(Here, Value));
     EmitZeros(Size);
     // We do this here to ensure that the section exists.
-    Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, 0);
+    Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
   } else
     EmitValueImpl(Value, Size, Loc);
 }
@@ -598,7 +598,7 @@ void MCStreamer::Finish() {
     report_fatal_error("Unfinished frame!");
   if (!FatRelocs.empty()) {
     MCSection *RelocSection = Context.getELFSection("__cap_relocs",
-        ELF::SHT_PROGBITS, 0);
+        ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
     SwitchSection(RelocSection);
     for (auto &R : FatRelocs) {
       EmitValue(MCSymbolRefExpr::create(R.first, Context), 8);
