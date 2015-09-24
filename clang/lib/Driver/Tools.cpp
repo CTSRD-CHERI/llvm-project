@@ -4740,6 +4740,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(A->getValue()));
   }
 
+  if (Args.hasArg(options::OPT_cheri_linker))
+    CmdArgs.push_back("-cheri-linker");
+
   if (Args.hasArg(options::OPT_fretain_comments_from_system_headers))
     CmdArgs.push_back("-fretain-comments-from-system-headers");
 

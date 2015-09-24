@@ -129,6 +129,9 @@ def internal_debug_Group :
   OptionGroup<"<clang debug/development internal options>">,
   Group<internal_Group>, HelpText<"DEBUG/DEVELOPMENT OPTIONS">;
 
+def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>,
+  HelpText<"Assume the existence of a CHERI-aware linker">;
+
 class InternalDriverOpt : Group<internal_driver_Group>,
   Flags<[DriverOption, HelpHidden]>;
 def driver_mode : Joined<["--"], "driver-mode=">, Group<internal_driver_Group>,
