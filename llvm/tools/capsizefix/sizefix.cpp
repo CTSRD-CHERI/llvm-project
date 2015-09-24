@@ -19,8 +19,10 @@ int main(int argc, char *argv[]) {
   FILE *F = fopen(argv[1], "r+");
 
   for (const SymbolRef &sym : OF->getBinary()->symbols()) {
-    uint64_t Start;
     uint64_t Size = ELFSymbolRef(sym).getSize();
+    if (Size == 0)
+      continue;
+    uint64_t Start;
     if (sym.getAddress(Start))
       continue;
     StringRef Name;
