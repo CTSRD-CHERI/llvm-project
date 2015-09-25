@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
   auto OF = ObjectFile::createObjectFile(argv[1]);
-  std::unordered_map<uint64_t, uint64_t> SectionSizes;
+  std::unordered_map<uint64_t, std::pair<uint64_t,bool>> SectionSizes;
   // ObjectFile doesn't allow in-place modification, so we open the file again
   // and write it out.
   FILE *F = fopen(argv[1], "r+");
@@ -25,9 +25,10 @@ int main(int argc, char *argv[]) {
     uint64_t Start;
     if (sym.getAddress(Start))
       continue;
+    SymbolRef::Type type = sym.getType();
     StringRef Name;
     sym.getName(Name);
-    SectionSizes.insert({Start, Size});
+    SectionSizes.insert({Start, {Size, (type == SymbolRef::ST_Function)}});
   }
   StringRef Data;
   for (const SectionRef &Sec : OF->getBinary()->sections()) {
@@ -49,17 +50,26 @@ int main(int argc, char *argv[]) {
               "Unexpected location for capability relocations section!\n");
       return EXIT_FAILURE;
     }
-    if (SectionSizes.find(base) == SectionSizes.end()) {
+    auto SizeAndType = SectionSizes.find(base);
+    if (SizeAndType == SectionSizes.end()) {
       fprintf(stderr, "Unable to find size for pointer at %lld\n",
               static_cast<unsigned long long>(
                   support::endian::read<uint64_t, support::big, 1>(entry)));
       continue;
     }
+    uint64_t Size = SizeAndType->second.first;
+    bool isFunction = SizeAndType->second.second;
+    uint64_t Perms = 0;
+    if (isFunction)
+        Perms |= (1ULL<<63);
     uint64_t BigSize =
-        support::endian::byte_swap<uint64_t, support::big>(SectionSizes[base]);
+        support::endian::byte_swap<uint64_t, support::big>(Size);
+    uint64_t BigPerms =
+        support::endian::byte_swap<uint64_t, support::big>(Perms);
     // This is an ugly hack.  object ought to allow modification
     fseek(F, entry - MB.getBufferStart() + 24, SEEK_SET);
     fwrite(&BigSize, sizeof(BigSize), 1, F);
+    fwrite(&BigPerms, sizeof(BigPerms), 1, F);
   }
   fclose(F);
 }
