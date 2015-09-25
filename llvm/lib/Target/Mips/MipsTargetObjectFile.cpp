@@ -146,3 +146,19 @@ MipsTargetObjectFile::getSectionForConstant(SectionKind Kind,
   // Otherwise, we work the same as ELF.
   return TargetLoweringObjectFileELF::getSectionForConstant(Kind, C);
 }
+
+const MCExpr *
+MipsTargetObjectFile::getExecutableRelativeSymbol(const ConstantExpr *CE,
+                                                  Mangler &Mang,
+                                              const TargetMachine &TM) const {
+  // In the pure-capability ABI, we end up with address space casts for
+  // constant initialisers for function pointers.  Just pass through a symbol
+  // ref and a later step will deal with it.
+  if (CE->getOpcode() == Instruction::AddrSpaceCast) {
+    if (CE->getType()->getPointerAddressSpace() == 200) {
+      GlobalValue *GV = cast<GlobalValue>(CE->getOperand(0));
+      return MCSymbolRefExpr::create(TM.getSymbol(GV, Mang), getContext());
+    }
+  }
+  return nullptr;
+}

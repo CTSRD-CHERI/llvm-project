@@ -41,6 +41,11 @@ class MipsTargetMachine;
 
     MCSection *getSectionForConstant(SectionKind Kind,
                                      const Constant *C) const override;
+    const MCExpr *
+    getExecutableRelativeSymbol(const ConstantExpr *CE, Mangler &Mang,
+                                const TargetMachine &TM) const override;
+
+
   };
 } // end namespace llvm
 
