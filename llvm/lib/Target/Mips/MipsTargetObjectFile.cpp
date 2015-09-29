@@ -156,7 +156,7 @@ MipsTargetObjectFile::getExecutableRelativeSymbol(const ConstantExpr *CE,
   // ref and a later step will deal with it.
   if (CE->getOpcode() == Instruction::AddrSpaceCast) {
     if (CE->getType()->getPointerAddressSpace() == 200) {
-      GlobalValue *GV = cast<GlobalValue>(CE->getOperand(0));
+      GlobalValue *GV = cast<GlobalValue>(CE->getOperand(0)->stripPointerCasts());
       return MCSymbolRefExpr::create(TM.getSymbol(GV, Mang), getContext());
     }
   }
