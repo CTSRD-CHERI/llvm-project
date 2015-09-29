@@ -3005,6 +3005,9 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
         DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
         DAG.getIntPtrConstant(LastOffset, DL));
+    PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+        DAG.getConstant(Intrinsic::mips_cap_perms_and, DL, MVT::i64), PtrOff,
+        DAG.getIntPtrConstant(0xFFD7, DL));
     RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
   }
   // If we're doing a CCall then any unused arg registers should be zero.
