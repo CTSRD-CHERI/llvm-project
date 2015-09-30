@@ -52,7 +52,8 @@ int main(int argc, char *argv[]) {
     }
     auto SizeAndType = SectionSizes.find(base);
     if (SizeAndType == SectionSizes.end()) {
-      fprintf(stderr, "Unable to find size for pointer at %lld\n",
+      fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n",
+              (unsigned long long)base,
               static_cast<unsigned long long>(
                   support::endian::read<uint64_t, support::big, 1>(entry)));
       continue;
