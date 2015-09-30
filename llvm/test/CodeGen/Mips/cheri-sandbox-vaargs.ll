@@ -101,7 +101,9 @@ define void @k(i32 addrspace(200)* %x, i32 addrspace(200)* %y) #0 {
 entry:
 ; CHECK: daddiu	$1, $zero, 32
 ; CHECK: cincoffset	$c3, $c11, $sp
-; CHECK: csetbounds	$c13, $c3, $1
+; CHECK: csetbounds	$c3, $c3, $1
+; CHECK: ori	$1, $zero, 65495
+; CHECK: candperm	$c13, $c3, $1
   %x.addr = alloca i32 addrspace(200)*, align 32
   %y.addr = alloca i32 addrspace(200)*, align 32
   store i32 addrspace(200)* %x, i32 addrspace(200)* addrspace(200)* %x.addr, align 32, !tbaa !1
