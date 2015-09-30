@@ -4799,7 +4799,8 @@ public:
 } // end anonymous namespace
 
 static bool EvaluatePointer(const Expr* E, LValue& Result, EvalInfo &Info) {
-  assert(E->isRValue() && E->getType()->hasPointerRepresentation());
+  assert(E->isRValue() && (E->getType()->hasPointerRepresentation() ||
+        E->getType().isCapabilityType(Info.Ctx)));
   return PointerExprEvaluator(Info, Result).Visit(E);
 }
 
@@ -4885,6 +4886,10 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
     VisitIgnoredValue(E->getSubExpr());
     return ZeroInitialization(E);
 
+  case CK_IntegralCast:
+    if (!E->getType().isCapabilityType(Info.Ctx))
+      return false;
+  // Fall through
   case CK_IntegralToPointer: {
     CCEDiag(E, diag::note_constexpr_invalid_cast) << 2;
 
@@ -8356,10 +8361,11 @@ static bool Evaluate(APValue &Result, EvalInfo &Info, const Expr *E) {
   } else if (T->isVectorType()) {
     if (!EvaluateVector(E, Result, Info))
       return false;
-  } else if (T->isIntegralOrEnumerationType()) {
+  } else if (T->isIntegralOrEnumerationType() &&
+     !T.isCapabilityType(Info.Ctx)) {
     if (!IntExprEvaluator(Info, Result).Visit(E))
       return false;
-  } else if (T->hasPointerRepresentation()) {
+  } else if (T->hasPointerRepresentation() || T.isCapabilityType(Info.Ctx)) {
     LValue LV;
     if (!EvaluatePointer(E, LV, Info))
       return false;
