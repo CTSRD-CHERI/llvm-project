@@ -1629,6 +1629,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
 
   // For a __c11 builtin, this should be a pointer to an _Atomic type.
   QualType AtomTy = pointerType->getPointeeType(); // 'A'
+  unsigned PointerAS = AtomTy.getAddressSpace();
   QualType ValType = AtomTy; // 'C'
   if (IsC11) {
     if (!AtomTy->isAtomicType()) {
@@ -1733,8 +1734,10 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
           Ty = ByValType;
         else if (Form == Arithmetic)
           Ty = Context.getPointerDiffType();
-        else
-          Ty = Context.getPointerType(ValType.getUnqualifiedType());
+        else {
+          Ty = Context.getAddrSpaceQualType(ValType.getLocalUnqualifiedType(), PointerAS);
+          Ty = Context.getPointerType(Ty);
+        }
         break;
       case 2:
         // The third argument to compare_exchange / GNU exchange is a
