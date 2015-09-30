@@ -113,6 +113,14 @@ void MCStreamer::EmitValue(const MCExpr *Value, unsigned Size,
   // This is a massive hack, but it needs rewriting once we have proper linker
   // support.
   if (Size > 8) {
+    // FIXME: CHERI128
+    if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
+      EmitIntValue(0, 8);
+      EmitIntValue(CE->getValue(), 8);
+      EmitIntValue(0, 8);
+      EmitIntValue(0, 8);
+      return;
+    }
     MCSymbol *Here = Context.createTempSymbol();
     EmitLabel(Here);
     FatRelocs.push_back(std::make_pair(Here, Value));
