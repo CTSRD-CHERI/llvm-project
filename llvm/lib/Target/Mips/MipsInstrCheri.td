@@ -575,4 +575,42 @@ def PseudoReturnCap: PseudoReturnBase<CheriOpnd>;
 let isReturn=1, isTerminator=1, hasDelaySlot=1, isBarrier=1, hasCtrlDep=1 in
 def CapRetPseudo : PseudoSE<(outs), (ins), [(CapRet)]>;
 
+////////////////////////////////////////////////////////////////////////////////
+// Atomic loads and stores
+////////////////////////////////////////////////////////////////////////////////
 
+let DecoderNamespace="CHERI" in {
+def CLLD2 : CheriFmtAtomic<1, 0, 3, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "clld\t$rd, ${rt}(${cb})", []>;
+def CLLW  : CheriFmtAtomic<1, 1, 2, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cllw\t$rd, ${rt}(${cb})", []>;
+def CLLWU : CheriFmtAtomic<1, 0, 2, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cllwu\t$rd, ${rt}(${cb})", []>;
+def CLLH  : CheriFmtAtomic<1, 1, 1, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cllh\t$rd, ${rt}(${cb})", []>;
+def CLLHU : CheriFmtAtomic<1, 0, 1, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cllhu\t$rd, ${rt}(${cb})", []>;
+def CLLB  : CheriFmtAtomic<1, 1, 0, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cllb\t$rd, ${rt}(${cb})", []>;
+def CLLBU : CheriFmtAtomic<1, 0, 0, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cllbu\t$rd, ${rt}(${cb})", []>;
+def CSCD2 : CheriFmtAtomic<0, 0, 3, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cscd\t$rd, ${rt}(${cb})", []>;
+def CSCW  : CheriFmtAtomic<0, 0, 2, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cscw\t$rd, ${rt}(${cb})", []>;
+def CSCH  : CheriFmtAtomic<0, 0, 1, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "csch\t$rd, ${rt}(${cb})", []>;
+def CSCB  : CheriFmtAtomic<0, 0, 0, (outs GPR64Opnd:$rd),
+                        (ins GPR64Opnd:$rt, CheriOpnd:$cb),
+                        "cscb\t$rd, ${rt}(${cb})", []>;
+}

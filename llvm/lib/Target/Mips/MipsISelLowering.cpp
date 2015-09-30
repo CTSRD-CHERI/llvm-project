@@ -1111,11 +1111,11 @@ MachineBasicBlock *
 MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
                                      unsigned Size, unsigned BinOpcode,
                                      bool Nand) const {
-  assert((Size == 4 || Size == 8) && "Unsupported size for EmitAtomicBinary.");
+  unsigned RegSize = std::max(Size, 4U);
 
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &RegInfo = MF->getRegInfo();
-  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(Size * 8));
+  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(RegSize * 8));
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
   unsigned LL, SC, AND, NOR, ZERO, BEQ;
@@ -1151,13 +1151,32 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
   unsigned AndRes = RegInfo.createVirtualRegister(RC);
   unsigned Success = RegInfo.createVirtualRegister(RC);
 
-  // If this is a capability-relative atomic operation, then we should 
+  // If this is a capability-relative atomic operation, then we should emit
+  // capability operations.
   if (Subtarget.isCheri() &&
       RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
-    LL = Mips::CLLD;
-    SC = Mips::CSCD;
+    switch (Size) {
+      case 8:
+        LL = Mips::CLLD2;
+        SC = Mips::CSCD2;
+        break;
+      case 4:
+        LL = Mips::CLLW;
+        SC = Mips::CSCW;
+        break;
+      case 2:
+        LL = Mips::CLLH;
+        SC = Mips::CSCH;
+        break;
+      case 1:
+        LL = Mips::CLLB;
+        SC = Mips::CSCB;
+        break;
+    }
     isCapOp = true;
   }
+  assert(isCapOp || (Size == 4 || Size == 8) &&
+         "Unsupported size for EmitAtomicBinary.");
 
   // insert new blocks after the current block
   const BasicBlock *LLVM_BB = BB->getBasicBlock();
@@ -1187,7 +1206,7 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
   //    beq success, $0, loopMBB
   BB = loopMBB;
   if (isCapOp)
-    BuildMI(BB, DL, TII->get(LL), OldVal).addReg(ZERO).addImm(0).addReg(Ptr);
+    BuildMI(BB, DL, TII->get(LL), OldVal).addReg(ZERO).addReg(Ptr);
   else
     BuildMI(BB, DL, TII->get(LL), OldVal).addReg(Ptr).addImm(0);
   if (Nand) {
@@ -1201,13 +1220,8 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
   } else {
     StoreVal = Incr;
   }
-  if (isCapOp) {
-    // Initialize Success to zero, so that we can use it as the offset.
-    unsigned ZeroSuccess = RegInfo.createVirtualRegister(RC);
-    BuildMI(BB, DL, TII->get(Mips::DADDi), ZeroSuccess).addReg(ZERO).addImm(0);
-    BuildMI(BB, DL, TII->get(SC),
-        Success).addReg(StoreVal).addReg(ZeroSuccess).addImm(0).addReg(Ptr);
-  }
+  if (isCapOp)
+    BuildMI(BB, DL, TII->get(SC), Success).addReg(Ptr).addReg(StoreVal);
   else
     BuildMI(BB, DL, TII->get(SC), Success).addReg(StoreVal).addReg(Ptr).addImm(0);
   BuildMI(BB, DL, TII->get(BEQ)).addReg(Success).addReg(ZERO).addMBB(loopMBB);
@@ -1252,7 +1266,6 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinaryPartword(
     bool Nand) const {
   assert((Size == 1 || Size == 2) &&
          "Unsupported size for EmitAtomicBinaryPartial.");
-
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &RegInfo = MF->getRegInfo();
   const TargetRegisterClass *RC = getRegClassFor(MVT::i32);
@@ -1262,6 +1275,10 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinaryPartword(
   unsigned Dest = MI->getOperand(0).getReg();
   unsigned Ptr = MI->getOperand(1).getReg();
   unsigned Incr = MI->getOperand(2).getReg();
+
+  if (Subtarget.isCheri() &&
+      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass)
+    return emitAtomicBinary(MI, BB, Size, BinOpcode, Nand);
 
   unsigned AlignedAddr = RegInfo.createVirtualRegister(RC);
   unsigned ShiftAmt = RegInfo.createVirtualRegister(RC);
@@ -1403,11 +1420,11 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinaryPartword(
 MachineBasicBlock * MipsTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
                                                           MachineBasicBlock *BB,
                                                           unsigned Size) const {
-  assert((Size == 4 || Size == 8) && "Unsupported size for EmitAtomicCmpSwap.");
+  unsigned RegSize = std::max(Size, 4U);
 
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &RegInfo = MF->getRegInfo();
-  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(Size * 8));
+  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(RegSize * 8));
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
   unsigned LL, SC, ZERO, BNE, BEQ;
@@ -1430,6 +1447,32 @@ MachineBasicBlock * MipsTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
   unsigned Ptr     = MI->getOperand(1).getReg();
   unsigned OldVal  = MI->getOperand(2).getReg();
   unsigned NewVal  = MI->getOperand(3).getReg();
+  bool isCapOp = false;
+
+  if (Subtarget.isCheri() &&
+      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
+    switch (Size) {
+      case 8:
+        LL = Mips::CLLD2;
+        SC = Mips::CSCD2;
+        break;
+      case 4:
+        LL = Mips::CLLW;
+        SC = Mips::CSCW;
+        break;
+      case 2:
+        LL = Mips::CLLH;
+        SC = Mips::CSCH;
+        break;
+      case 1:
+        LL = Mips::CLLB;
+        SC = Mips::CSCB;
+        break;
+    }
+    isCapOp = true;
+  }
+  assert(isCapOp || (Size == 4 || Size == 8) &&
+         "Unsupported size for EmitAtomicCmpSwap.");
 
   unsigned Success = RegInfo.createVirtualRegister(RC);
 
@@ -1462,7 +1505,10 @@ MachineBasicBlock * MipsTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
   //   ll dest, 0(ptr)
   //   bne dest, oldval, exitMBB
   BB = loop1MBB;
-  BuildMI(BB, DL, TII->get(LL), Dest).addReg(Ptr).addImm(0);
+  if (isCapOp)
+    BuildMI(BB, DL, TII->get(LL), Dest).addReg(ZERO).addReg(Ptr);
+  else
+    BuildMI(BB, DL, TII->get(LL), Dest).addReg(Ptr).addImm(0);
   BuildMI(BB, DL, TII->get(BNE))
     .addReg(Dest).addReg(OldVal).addMBB(exitMBB);
 
@@ -1470,8 +1516,11 @@ MachineBasicBlock * MipsTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
   //   sc success, newval, 0(ptr)
   //   beq success, $0, loop1MBB
   BB = loop2MBB;
-  BuildMI(BB, DL, TII->get(SC), Success)
-    .addReg(NewVal).addReg(Ptr).addImm(0);
+  if (isCapOp)
+    BuildMI(BB, DL, TII->get(SC), Success).addReg(Ptr).addReg(NewVal);
+  else
+    BuildMI(BB, DL, TII->get(SC), Success)
+      .addReg(NewVal).addReg(Ptr).addImm(0);
   BuildMI(BB, DL, TII->get(BEQ))
     .addReg(Success).addReg(ZERO).addMBB(loop1MBB);
 
@@ -1484,9 +1533,6 @@ MachineBasicBlock *
 MipsTargetLowering::emitAtomicCmpSwapPartword(MachineInstr *MI,
                                               MachineBasicBlock *BB,
                                               unsigned Size) const {
-  assert((Size == 1 || Size == 2) &&
-      "Unsupported size for EmitAtomicCmpSwapPartial.");
-
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &RegInfo = MF->getRegInfo();
   const TargetRegisterClass *RC = getRegClassFor(MVT::i32);
@@ -1497,6 +1543,13 @@ MipsTargetLowering::emitAtomicCmpSwapPartword(MachineInstr *MI,
   unsigned Ptr     = MI->getOperand(1).getReg();
   unsigned CmpVal  = MI->getOperand(2).getReg();
   unsigned NewVal  = MI->getOperand(3).getReg();
+
+  if (Subtarget.isCheri() &&
+      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass)
+    return emitAtomicCmpSwap(MI, BB, Size);
+
+  assert((Size == 1 || Size == 2) &&
+      "Unsupported size for EmitAtomicCmpSwapPartial.");
 
   unsigned AlignedAddr = RegInfo.createVirtualRegister(RC);
   unsigned ShiftAmt = RegInfo.createVirtualRegister(RC);
