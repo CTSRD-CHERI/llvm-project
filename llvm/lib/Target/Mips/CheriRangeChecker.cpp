@@ -205,7 +205,6 @@ namespace
                 BitCast);
             i->second.Instr->setOperand(i->second.OpNo, New);
           }
-          verifyModule(*F.getParent());
           return true;
         }
         return false;

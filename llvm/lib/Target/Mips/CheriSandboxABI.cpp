@@ -61,10 +61,6 @@ class CheriSandboxABI : public ModulePass,
       bool Modified = false;
       for (Function &F : Mod)
         Modified |= runOnFunction(F);
-#ifndef NDEBUG
-      if (Modified)
-        verifyModule(Mod);
-#endif
       return Modified;
     }
     int RoundUpToPowerOfTwo(int v) {

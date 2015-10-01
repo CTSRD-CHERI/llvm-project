@@ -112,9 +112,6 @@ class CheriMemOpLowering : public FunctionPass,
     virtual bool runOnFunction(Function &F) {
       Modified = false;
       visit(F);
-#ifndef NDEBUG
-      verifyModule(*F.getParent());
-#endif
       return Modified;
     }
 };
