@@ -223,25 +223,40 @@ class CheriFmtClearRegs<bits<5> regset, dag outs, dag ins, string asmstr,
   let Inst{15-0}  = mask;
 }
 
-class CheriFmtAtomic<bit isLoad, bit isSigned, bits<2> type, dag outs, dag ins,
-                     string asmstr, list<dag> pattern> :
-                       MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+class CheriFmtCLL<bit isSigned, bits<2> type, dag outs, dag ins, string asmstr> :
+                  MipsInst<outs, ins, asmstr, [], NoItinerary, FrmOther>
 {
   bits<5> rd;
   bits<5> cb;
-  bits<5> rt;
 
   let Opcode = 0x12;
-  let mayLoad = isLoad;
-  let mayStore = !if(isLoad,0,1);
+  let mayLoad = 1;
 
   let Inst{25-21} = 0x10;
   let Inst{20-16} = rd;
   let Inst{15-11} = cb;
-  let Inst{10-6}  = rt;
-  let Inst{5-2}  = 0; // Reserved
-  let Inst{3}   = isLoad;
+  let Inst{10-2}  = 0; // Reserved
+  let Inst{3}   = 1;
   let Inst{2}   = isSigned;
   let Inst{1-0}   = type;
+}
+
+class CheriFmtCSC<bits<3> type, dag outs, dag ins, string asmstr> :
+                  MipsInst<outs, ins, asmstr, [], NoItinerary, FrmOther>
+{
+  bits<5> rs;
+  bits<5> rd;
+  bits<5> cb;
+
+  let Opcode = 0x12;
+  let mayStore = 1;
+
+  let Inst{25-21} = 0x10;
+  let Inst{20-16} = rs;
+  let Inst{15-11} = cb;
+  let Inst{10-6} = rd;
+  let Inst{5-2}  = 0; // Reserved
+  let Inst{3}   = 0;
+  let Inst{2-0}   = type;
 }
 

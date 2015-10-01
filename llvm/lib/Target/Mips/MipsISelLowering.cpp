@@ -1206,7 +1206,7 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
   //    beq success, $0, loopMBB
   BB = loopMBB;
   if (isCapOp)
-    BuildMI(BB, DL, TII->get(LL), OldVal).addReg(ZERO).addReg(Ptr);
+    BuildMI(BB, DL, TII->get(LL), OldVal).addReg(Ptr);
   else
     BuildMI(BB, DL, TII->get(LL), OldVal).addReg(Ptr).addImm(0);
   if (Nand) {
@@ -1221,7 +1221,7 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
     StoreVal = Incr;
   }
   if (isCapOp)
-    BuildMI(BB, DL, TII->get(SC), Success).addReg(Ptr).addReg(StoreVal);
+    BuildMI(BB, DL, TII->get(SC), Success).addReg(StoreVal).addReg(Ptr);
   else
     BuildMI(BB, DL, TII->get(SC), Success).addReg(StoreVal).addReg(Ptr).addImm(0);
   BuildMI(BB, DL, TII->get(BEQ)).addReg(Success).addReg(ZERO).addMBB(loopMBB);
@@ -1506,7 +1506,7 @@ MachineBasicBlock * MipsTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
   //   bne dest, oldval, exitMBB
   BB = loop1MBB;
   if (isCapOp)
-    BuildMI(BB, DL, TII->get(LL), Dest).addReg(ZERO).addReg(Ptr);
+    BuildMI(BB, DL, TII->get(LL), Dest).addReg(Ptr);
   else
     BuildMI(BB, DL, TII->get(LL), Dest).addReg(Ptr).addImm(0);
   BuildMI(BB, DL, TII->get(BNE))
@@ -1517,7 +1517,7 @@ MachineBasicBlock * MipsTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
   //   beq success, $0, loop1MBB
   BB = loop2MBB;
   if (isCapOp)
-    BuildMI(BB, DL, TII->get(SC), Success).addReg(Ptr).addReg(NewVal);
+    BuildMI(BB, DL, TII->get(SC), Success).addReg(NewVal).addReg(Ptr);
   else
     BuildMI(BB, DL, TII->get(SC), Success)
       .addReg(NewVal).addReg(Ptr).addImm(0);
