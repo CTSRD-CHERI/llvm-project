@@ -33,6 +33,10 @@
 #include <memory>
 using namespace clang;
 
+static llvm::cl::opt<bool>
+Cheri128("cheri128", llvm::cl::desc("CHERI capabilities are 128 bits"),
+    llvm::cl::NotHidden, llvm::cl::init(false));
+
 //===----------------------------------------------------------------------===//
 //  Common code shared among targets.
 //===----------------------------------------------------------------------===//
@@ -6160,6 +6164,12 @@ public:
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR2C__", Twine(1<<14));
 
       Builder.defineMacro("_MIPS_SZCAP", Twine(getPointerWidth(200)));
+      if (Cheri128)
+          Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xfffffffffffffff0");
+      else
+          Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xffffffffffffffe0");
+
+
       Builder.defineMacro("__capability",
         Twine("__attribute__((address_space(200)))"));
     }
@@ -6634,10 +6644,6 @@ public:
     Mips64TargetInfoBase::getTargetDefines(Opts, Builder);
   }
 };
-
-static llvm::cl::opt<bool>
-Cheri128("cheri128", llvm::cl::desc("CHERI capabilities are 128 bits"),
-    llvm::cl::NotHidden, llvm::cl::init(false));
 
 struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
   int CapSize;
