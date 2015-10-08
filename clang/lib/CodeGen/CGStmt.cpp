@@ -1581,6 +1581,12 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
   if (S.getConditionVariable())
     EmitAutoVarDecl(*S.getConditionVariable());
   llvm::Value *CondV = EmitScalarExpr(S.getCond());
+  // If we're an intcap_t, then we actually want to switch on the offset.
+  if (S.getCond()->getType().isCapabilityType(getContext())) {
+    llvm::Function *GetOffset =
+      CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
+    CondV = Builder.CreateCall(GetOffset, CondV);
+  }
 
   // Create basic block to hold stuff that comes after switch
   // statement. We also need to create a default block now so that

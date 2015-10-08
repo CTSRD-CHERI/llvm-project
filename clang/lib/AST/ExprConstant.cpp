@@ -8592,14 +8592,20 @@ bool Expr::isEvaluatable(const ASTContext &Ctx) const {
 
 APSInt Expr::EvaluateKnownConstInt(const ASTContext &Ctx,
                     SmallVectorImpl<PartialDiagnosticAt> *Diag) const {
-  EvalResult EvalResult;
-  EvalResult.Diag = Diag;
-  bool Result = EvaluateAsRValue(EvalResult, Ctx);
+  EvalResult ER;
+  ER.Diag = Diag;
+  bool Result = EvaluateAsRValue(ER, Ctx);
   (void)Result;
   assert(Result && "Could not evaluate expression");
-  assert(EvalResult.Val.isInt() && "Expression did not evaluate to integer");
+  if (ER.Val.isLValue() && ER.Val.getLValueBase().isNull()) {
+    // FIXME: Ugly hack!
+    APSInt Val(64);
+    Val = ER.Val.getLValueOffset().getQuantity();
+    ER.Val = APValue(Val);
+  }
+  assert(ER.Val.isInt() && "Expression did not evaluate to integer");
 
-  return EvalResult.Val.getInt();
+  return ER.Val.getInt();
 }
 
 void Expr::EvaluateForOverflow(const ASTContext &Ctx) const {
