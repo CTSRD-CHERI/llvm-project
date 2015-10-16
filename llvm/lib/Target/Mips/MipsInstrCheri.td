@@ -584,17 +584,17 @@ def CLLC  : CheriFmtCLL<1, 3, (outs CheriOpnd:$rd), (ins CheriOpnd:$cb),
                         "cllc\t$rd, $cb">;
 def CLLD2 : CheriFmtCLL<0, 3, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "clld\t$rd, $cb">;
-def CLLW  : CheriFmtCLL<0, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLW  : CheriFmtCLL<1, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "cllw\t$rd, $cb">;
-def CLLWU : CheriFmtCLL<1, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLWU : CheriFmtCLL<0, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "cllwu\t$rd, $cb">;
-def CLLH  : CheriFmtCLL<0, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLH  : CheriFmtCLL<1, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "cllh\t$rd, $cb">;
-def CLLHU : CheriFmtCLL<1, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLHU : CheriFmtCLL<0, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "cllhu\t$rd, $cb">;
-def CLLB  : CheriFmtCLL<0, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLB  : CheriFmtCLL<1, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "cllb\t$rd, $cb">;
-def CLLBU : CheriFmtCLL<1, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLBU : CheriFmtCLL<0, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "cllbu\t$rd, $cb">;
 
 def CSCC  : CheriFmtCSC<7, (outs GPR64Opnd:$rd), (ins CheriOpnd: $rs, CheriOpnd:$cb),
