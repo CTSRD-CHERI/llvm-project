@@ -5622,6 +5622,8 @@ public:
 class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
                               CheriCapClassifier {
   unsigned SizeOfUnwindException;
+  mutable llvm::Function *GetOffset = nullptr;
+  mutable llvm::Function *SetOffset = nullptr;
 public:
   MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32)
     : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32)),
@@ -5630,6 +5632,20 @@ public:
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const override {
     return 29;
+  }
+
+  llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &CGF,
+                                        llvm::Value *V) const override {
+    if (!GetOffset)
+      GetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
+    return CGF.Builder.CreateCall(GetOffset, V);
+  }
+
+  llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &CGF,
+          llvm::Value *Ptr, llvm::Value *Offset) const override {
+    if (!SetOffset)
+      SetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
+    return CGF.Builder.CreateCall(SetOffset, {Ptr, Offset});
   }
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,

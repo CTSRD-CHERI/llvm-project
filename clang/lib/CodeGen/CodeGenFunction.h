@@ -21,6 +21,7 @@
 #include "CodeGenModule.h"
 #include "CodeGenPGO.h"
 #include "EHScopeStack.h"
+#include "TargetInfo.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
@@ -2978,6 +2979,13 @@ public:
                     CallExpr::const_arg_iterator ArgEnd,
                     const FunctionDecl *CalleeDecl = nullptr,
                     unsigned ParamsToSkip = 0);
+  llvm::Value *getPointerOffset(llvm::Value *V) {
+    return getTargetHooks().getPointerOffset(*this, V);
+  }
+  llvm::Value *setPointerOffset(llvm::Value *Ptr, llvm::Value *Offset) {
+    return getTargetHooks().setPointerOffset(*this, Ptr, Offset);
+  }
+
 
 private:
   QualType getVarArgType(const Expr *Arg);

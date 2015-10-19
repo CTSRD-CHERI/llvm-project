@@ -489,18 +489,12 @@ public:
     if (!Op.E->getType().isCapabilityType(CGF.getContext()) ||
         !V->getType()->isPointerTy())
       return V;
-    // FIXME: Once more than one architecture supports capabilities, this
-    // should be a generic intrinsic
-    llvm::Function *GetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
-    return Builder.CreateCall(GetOffset, V);
+    return CGF.getPointerOffset(V);
   }
   Value *GetBinOpResult(BinOpInfo &Op, Value *LHS, Value *V) {
     if (!Op.E->getType().isCapabilityType(CGF.getContext()))
       return V;
-    llvm::Function *SetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
-    return Builder.CreateCall(SetOffset, {LHS, V});
+    return CGF.setPointerOffset(LHS, V);
   }
   // Common helper for getting how wide LHS of shift is.
   static Value *GetWidthMinusOneValue(Value* LHS,Value* RHS);
@@ -856,10 +850,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (DstType.isCapabilityType(CGF.getContext())) {
       Value *Null =
         Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstTy);
-      llvm::Function *SetOffset =
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
       Src = Builder.CreateZExtOrTrunc(Src, CGF.Int64Ty);
-      return Builder.CreateCall(SetOffset, {Null, Src});
+      return CGF.setPointerOffset(Null, Src);
     }
     // First, convert to the correct width so that we control the kind of
     // extension.
@@ -877,8 +869,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       // a [u]intcap_t
       assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
              SrcType->isSpecificBuiltinType(BuiltinType::IntCap));
-      Src = Builder.CreateCall(
-              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get), Src);
+      Src = CGF.getPointerOffset(Src);
       return Builder.CreateTruncOrBitCast(Src, DstTy, "conv");
 
     }
@@ -1607,9 +1598,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
       llvm::Value *PCC = Builder.CreateCall(
               CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
-      Addr = Builder.CreateCall(
-              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set),
-              {PCC, Addr});
+      Addr = CGF.setPointerOffset(PCC, Addr);
       Addr = Builder.CreateBitCast(Addr, CapTy);
     }
     return Addr;
@@ -1885,11 +1874,8 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
   // Most common case by far: integer increment.
   } else if (type->isIntegerType()) {
     llvm::Value *Base = value;
-    if (type.isCapabilityType(CGF.getContext())) {
-      llvm::Function *GetOffset =
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
-      value = Builder.CreateCall(GetOffset, Base);
-    }
+    if (type.isCapabilityType(CGF.getContext()))
+      value = CGF.getPointerOffset(Base);
     // Note that signed integer inc/dec with width less than int can't
     // overflow because of promotion rules; we're just eliding a few steps here.
     bool CanOverflow = value->getType()->getIntegerBitWidth() >=
@@ -1904,11 +1890,8 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
       llvm::Value *amt = llvm::ConstantInt::get(value->getType(), amount, true);
       value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
     }
-    if (type.isCapabilityType(CGF.getContext())) {
-      llvm::Function *SetOffset =
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
-      value = Builder.CreateCall(SetOffset, {Base, value});
-    }
+    if (type.isCapabilityType(CGF.getContext()))
+      value = CGF.setPointerOffset(Base, value);
   // Next most common: pointer increment.
   } else if (const PointerType *ptr = type->getAs<PointerType>()) {
     QualType type = ptr->getPointeeType();
@@ -2849,15 +2832,13 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
     // in the presence of GC as long as LHS and RHS point to the same object.
     llvm::Function *GetBase =
       CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_base_get);
-    llvm::Function *GetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
     llvm::Type *CapTy = GetBase->getFunctionType()->getParamType(0);
     LHS = Builder.CreateBitCast(LHS, CapTy);
     RHS = Builder.CreateBitCast(RHS, CapTy);
     Value *LHSBase = Builder.CreateCall(GetBase, LHS);
     Value *RHSBase = Builder.CreateCall(GetBase, RHS);
-    Value *LHSOffset = Builder.CreateCall(GetOffset, LHS);
-    Value *RHSOffset = Builder.CreateCall(GetOffset, RHS);
+    Value *LHSOffset = CGF.getPointerOffset(LHS);
+    Value *RHSOffset = CGF.getPointerOffset(RHS);
     LHS = Builder.CreateAdd(LHSBase, LHSOffset, "sub.ptr.lhs.cast");
     RHS = Builder.CreateAdd(RHSBase, RHSOffset, "sub.ptr.rhs.cast");
   } else {

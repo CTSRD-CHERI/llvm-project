@@ -223,6 +223,17 @@ public:
   /// capability or an aggregate type that contains one or more capabilities.
   virtual bool containsCapabilities(QualType Ty) const { return false; }
 
+  virtual llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &,
+                                        llvm::Value *V) const {
+      assert(0 && "Target does not support capabilities!\n");
+      return nullptr;
+  }
+  virtual llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &,
+          llvm::Value *Ptr, llvm::Value *Offset) const {
+      assert(0 && "Target does not support capabilities!\n");
+      return nullptr;
+  }
+
   /// Gets the target-specific default alignment used when an 'aligned' clause
   /// is used with a 'simd' OpenMP directive without specifying a specific
   /// alignment.
