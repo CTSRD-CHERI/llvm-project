@@ -2373,9 +2373,14 @@ TargetLowering::ParseConstraints(const TargetRegisterInfo *TRI,
           break;
         }
       } else if (PointerType *PT = dyn_cast<PointerType>(OpTy)) {
-        unsigned PtrSize
-          = getDataLayout()->getPointerSizeInBits(PT->getAddressSpace());
-        OpInfo.ConstraintVT = MVT::getIntegerVT(PtrSize);
+        unsigned AS = PT->getAddressSpace();
+        // FIXME: Ugly hack!
+        if (AS == 200)
+          OpInfo.ConstraintVT = MVT::iFATPTR;
+        else {
+          unsigned PtrSize = getDataLayout()->getPointerSizeInBits(AS);
+          OpInfo.ConstraintVT = MVT::getIntegerVT(PtrSize);
+        }
       } else {
         OpInfo.ConstraintVT = MVT::getVT(OpTy, true);
       }
