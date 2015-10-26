@@ -168,14 +168,7 @@ public:
 
   /// EmitPointerToBoolConversion - Perform a pointer to boolean conversion.
   Value *EmitPointerToBoolConversion(Value *V) {
-    llvm::PointerType *PT = cast<llvm::PointerType>(V->getType());
-    if ((int)PT->getAddressSpace() ==
-        CGF.getTarget().AddressSpaceForCapabilities()){
-      return Builder.CreateIsNotNull(
-          Builder.CreatePtrToInt(V, CGF.IntPtrTy), "tobool");
-    }
-    Value *Zero = llvm::ConstantPointerNull::get(PT);
-    return Builder.CreateICmpNE(V, Zero, "tobool");
+    return Builder.CreateIsNotNull(V, "tobool");
   }
 
   Value *EmitIntToBoolConversion(Value *V) {
