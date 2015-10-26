@@ -607,6 +607,7 @@ void MCStreamer::Finish() {
   if (!FatRelocs.empty()) {
     MCSection *RelocSection = Context.getELFSection("__cap_relocs",
         ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+    RelocSection->setAlignment(32);
     SwitchSection(RelocSection);
     for (auto &R : FatRelocs) {
       EmitValue(MCSymbolRefExpr::create(R.first, Context), 8);
