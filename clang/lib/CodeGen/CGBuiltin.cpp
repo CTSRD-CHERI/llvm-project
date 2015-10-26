@@ -866,8 +866,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     int32_t Offset = 0;
 
     Value *F = CGM.getIntrinsic(Intrinsic::eh_dwarf_cfa);
-    return RValue::get(Builder.CreateCall(F,
-                                      llvm::ConstantInt::get(Int32Ty, Offset)));
+    F = Builder.CreateCall(F, llvm::ConstantInt::get(Int32Ty, Offset));
+    unsigned AS = getContext().getDefaultAS();
+    if (AS != 0)
+      F = Builder.CreateAddrSpaceCast(F, Int8Ty->getPointerTo(AS));
+    return RValue::get(F);
   }
   case Builtin::BI__builtin_return_address: {
     Value *Depth = EmitScalarExpr(E->getArg(0));
@@ -912,6 +915,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_eh_return: {
     Value *Int = EmitScalarExpr(E->getArg(0));
     Value *Ptr = EmitScalarExpr(E->getArg(1));
+    Ptr = Builder.CreatePointerBitCastOrAddrSpaceCast(Ptr,
+        Int8Ty->getPointerTo(0));
 
     llvm::IntegerType *IntTy = cast<llvm::IntegerType>(Int->getType());
     assert((IntTy->getBitWidth() == 32 || IntTy->getBitWidth() == 64) &&
