@@ -303,7 +303,6 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   MachineMemOperand *MMO = GetMemOperand(MBB, FI, MachineMemOperand::MOLoad);
   unsigned Opc = 0;
 
-<<<<<<< HEAD
   // The ACC64/128 registers are handled by LOAD_ACC64/128 pseudos, which call this function again with more ordinary
   // registers when they are lowered: so no special treatment for CHERI is required.
   if (Subtarget.usesCheriStackCapabilityABI() &&
@@ -333,14 +332,11 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       .addReg(Mips::C11);
     return;
   }
-||||||| merged common ancestors
-=======
   const Function *Func = MBB.getParent()->getFunction();
   bool ReqIndirectLoad = Func->hasFnAttribute("interrupt") &&
                          (DestReg == Mips::LO0 || DestReg == Mips::LO0_64 ||
                           DestReg == Mips::HI0 || DestReg == Mips::HI0_64);
 
->>>>>>> 9f2026ed3f9b66a84fd537c66fc3d09ce74aedb0
   if (Mips::GPR32RegClass.hasSubClassEq(RC))
     Opc = Mips::LW;
   else if (Mips::GPR64RegClass.hasSubClassEq(RC))
@@ -367,17 +363,13 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     Opc = Mips::LD_W;
   else if (RC->hasType(MVT::v2i64) || RC->hasType(MVT::v2f64))
     Opc = Mips::LD_D;
-<<<<<<< HEAD
   else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
     Opc = Mips::LOADCAP;
     BuildMI(MBB, I, DL, get(Opc), DestReg)
       .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
       .addReg(Mips::C0);
     return;
-  }
-||||||| merged common ancestors
-=======
-  else if (Mips::HI32RegClass.hasSubClassEq(RC))
+  } else if (Mips::HI32RegClass.hasSubClassEq(RC))
     Opc = Mips::LW;
   else if (Mips::HI64RegClass.hasSubClassEq(RC))
     Opc = Mips::LD;
@@ -385,7 +377,6 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     Opc = Mips::LW;
   else if (Mips::LO64RegClass.hasSubClassEq(RC))
     Opc = Mips::LD;
->>>>>>> 9f2026ed3f9b66a84fd537c66fc3d09ce74aedb0
 
   assert(Opc && "Register class not handled!");
 

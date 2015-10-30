@@ -99,6 +99,13 @@ public:
                         const TargetOptions &Options,
                         Reloc::Model RM, CodeModel::Model CM,
                         CodeGenOpt::Level OL);
+  bool isCompatibleDataLayout(const DataLayout &Candidate) const override {
+    if (TargetMachine::isCompatibleDataLayout(Candidate))
+      return true;
+    DataLayout MutableCandidate(Candidate);
+    MutableCandidate.setAllocaAS(getDataLayout().getAllocaAS());
+    return TargetMachine::isCompatibleDataLayout(MutableCandidate);
+  }
 };
 
 } // End llvm namespace

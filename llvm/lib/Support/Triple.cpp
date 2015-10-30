@@ -1255,6 +1255,7 @@ Triple Triple::getBigEndianArchVariant() const {
   case Triple::aarch64_be:
   case Triple::armeb:
   case Triple::bpfeb:
+  case Triple::cheri:
   case Triple::mips64:
   case Triple::mips:
   case Triple::ppc64:
@@ -1285,6 +1286,7 @@ Triple Triple::getLittleEndianArchVariant() const {
   case Triple::sparcv9:
   case Triple::systemz:
   case Triple::tce:
+  case Triple::cheri:
 
   // ARM is intentionally unsupported here, changing the architecture would
   // drop any arch suffixes.

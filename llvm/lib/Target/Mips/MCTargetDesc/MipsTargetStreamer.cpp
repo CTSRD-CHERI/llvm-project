@@ -364,6 +364,12 @@ void MipsTargetAsmStreamer::emitDirectiveCpLoad(unsigned RegNo) {
   forbidModuleDirective();
 }
 
+void MipsTargetAsmStreamer::emitDirectiveCpRestore(
+    SmallVector<MCInst, 3> &StoreInsts, int Offset) {
+  MipsTargetStreamer::emitDirectiveCpRestore(StoreInsts, Offset);
+  OS << "\t.cprestore\t" << Offset << "\n";
+}
+
 void MipsTargetAsmStreamer::emitDirectiveCpreturn() {
   OS << "\t.cpreturn\n";
   forbidModuleDirective();

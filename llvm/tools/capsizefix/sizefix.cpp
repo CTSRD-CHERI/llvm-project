@@ -22,13 +22,11 @@ int main(int argc, char *argv[]) {
     uint64_t Size = ELFSymbolRef(sym).getSize();
     if (Size == 0)
       continue;
-    uint64_t Start;
-    if (sym.getAddress(Start))
+    ErrorOr<uint64_t> Start = sym.getAddress();
+    if (!Start)
       continue;
     SymbolRef::Type type = sym.getType();
-    StringRef Name;
-    sym.getName(Name);
-    SectionSizes.insert({Start, {Size, (type == SymbolRef::ST_Function)}});
+    SectionSizes.insert({Start.get(), {Size, (type == SymbolRef::ST_Function)}});
   }
   StringRef Data;
   for (const SectionRef &Sec : OF->getBinary()->sections()) {

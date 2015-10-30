@@ -10,7 +10,7 @@
 // BC2F
 class CheriFmtCBT<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, IIBranch, FrmOther>
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
 {
   bits<5>  cb;
   bits<16> offset;

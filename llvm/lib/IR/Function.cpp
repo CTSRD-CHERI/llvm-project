@@ -558,7 +558,7 @@ enum IIT_Info {
   IIT_PTR_TO_ARG = 32,
   IIT_VEC_OF_PTRS_TO_ELT = 33,
   IIT_I128 = 34,
-  IIT_IFATPTR = 34
+  IIT_IFATPTR = 35
 };
 
 

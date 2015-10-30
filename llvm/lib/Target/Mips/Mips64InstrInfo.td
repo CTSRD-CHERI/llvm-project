@@ -622,8 +622,6 @@ def : MipsInstAlias<"dsra $rd, $rt, $rs",
 def : MipsInstAlias<"dsrl $rd, $rt, $rs",
                     (DSRLV GPR64Opnd:$rd, GPR64Opnd:$rt, GPR32Opnd:$rs), 0>,
                     ISA_MIPS3;
-def LoadAddr64Reg : LoadAddressFromReg32<"dla", mem, GPR64Opnd>;
-def LoadAddr64Imm : LoadAddressFromImm32<"dla", uimm5, GPR64Opnd>;
 
 def : MipsInstAlias<"bnez $rs,$offset",
                     (BNE64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;

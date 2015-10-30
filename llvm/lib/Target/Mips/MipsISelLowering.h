@@ -287,6 +287,8 @@ namespace llvm {
       // Mips doesn't have any special address spaces so we just reserve
       // the first 256 for software use (e.g. OpenCL) and treat casts
       // between them as noops.
+      if (((SrcAS == 200) || (DestAS == 200)) && (DestAS != SrcAS))
+        return false;
       return SrcAS < 256 && DestAS < 256;
     }
 

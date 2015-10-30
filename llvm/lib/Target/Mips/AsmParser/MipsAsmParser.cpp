@@ -2500,25 +2500,31 @@ bool MipsAsmParser::loadAndAddSymbolAddress(
 
   // This is the 64-bit symbol address expansion.
   if (ABI.ArePtrs64bit() && isGP64bit()) {
-    // We always need AT for the 64-bit expansion.
-    // If it is not available we exit.
-    unsigned ATReg = getATReg(IDLoc);
+    unsigned ATReg = 0;
+    if (UseSrcReg) {
+      ATReg = getATReg(IDLoc);
+      if (ATReg == 0)
+        return true;
+    } else if (unsigned ATIndex = AssemblerOptions.back()->getATRegIndex()) {
+      ATReg = getReg((isGP64bit()) ? Mips::GPR64RegClassID :
+          Mips::GPR32RegClassID, ATIndex);
+    }
 
     if (!Is32BitSym) {
       // If it's a 64-bit architecture and we are allowed to use AT, expand to:
-      // la d,sym => lui     d,highest(sym)
-      //             lui     t,hi16(sym)
-      //             daddiu  d,d,higher(sym)
-      //             daddiu  t,t,lo16(sym)
+      // la d,sym => lui     d,%highest(sym)
+      //             lui     t,%hi16(sym)
+      //             daddiu  d,d,%higher(sym)
+      //             daddiu  t,t,%lo16(sym)
       //             dsll32  d,d,0
       //             daddu   d,d,t
       // If we are not allowed to use AT:
-      // la d,sym => lui     d,highest(sym)
-      //             daddiu  d,d,higher(sym)
+      // la d,sym => lui     d,%highest(sym)
+      //             daddiu  d,d,%higher(sym)
       //             dsll    d,d,16
-      //             daddiu  d,d,hi16(sym)
+      //             daddiu  d,d,%hi16(sym)
       //             dsll    d,d,16
-      //             daddiu  d,d,lo16(sym)
+      //             daddiu  d,d,%lo16(sym)
       // 
       const MipsMCExpr *HighestExpr = MipsMCExpr::create(
           MCSymbolRefExpr::VK_Mips_HIGHEST, Symbol, getContext());
@@ -2528,19 +2534,28 @@ bool MipsAsmParser::loadAndAddSymbolAddress(
       MCOperand Higher = MCOperand::createExpr(HigherExpr);
       MCOperand Hi = MCOperand::createExpr(HiExpr);
       MCOperand Lo = MCOperand::createExpr(LoExpr);
-      emitRX(Mips::LUi, DstReg, Highest, IDLoc, Instructions);
-      if (ATReg) {
+      if (ATReg && !(UseSrcReg && (SrcReg == DstReg))) {
+        emitRX(Mips::LUi, DstReg, Highest, IDLoc, Instructions);
         emitRX(Mips::LUi, ATReg, Hi, IDLoc, Instructions);
         emitRRX(Mips::DADDiu, DstReg, DstReg, Higher, IDLoc, Instructions);
         emitRRX(Mips::DADDiu, ATReg, ATReg, Lo, IDLoc, Instructions);
         emitRRI(Mips::DSLL32, DstReg, DstReg, 0, IDLoc, Instructions);
-        emitRRR(Mips::DADD, DstReg, DstReg, ATReg, IDLoc, Instructions);
+        emitRRR(Mips::DADDu, DstReg, DstReg, ATReg, IDLoc, Instructions);
+        if (UseSrcReg)
+          emitRRR(Mips::DADDu, DstReg, DstReg, SrcReg, IDLoc, Instructions);
       } else {
-        emitRRX(Mips::DADDiu, DstReg, DstReg, Higher, IDLoc, Instructions);
-        emitRRI(Mips::DSLL, DstReg, DstReg, 16, IDLoc, Instructions);
-        emitRRX(Mips::DADDiu, DstReg, DstReg, Hi, IDLoc, Instructions);
-        emitRRI(Mips::DSLL, DstReg, DstReg, 16, IDLoc, Instructions);
-        emitRRX(Mips::DADDiu, DstReg, DstReg, Lo, IDLoc, Instructions);
+        unsigned TmpReg = UseSrcReg ? ATReg : DstReg;
+        emitRX(Mips::LUi, TmpReg, Highest, IDLoc, Instructions);
+        emitRRX(Mips::DADDiu, TmpReg, TmpReg, Higher, IDLoc, Instructions);
+        emitRRI(Mips::DSLL, TmpReg, TmpReg, 16, IDLoc, Instructions);
+        emitRRX(Mips::DADDiu, TmpReg, TmpReg, Hi, IDLoc, Instructions);
+        emitRRI(Mips::DSLL, TmpReg, TmpReg, 16, IDLoc, Instructions);
+        if (!UseSrcReg)
+          emitRRX(Mips::DADDiu, DstReg, TmpReg, Lo, IDLoc, Instructions);
+        else {
+          emitRRX(Mips::DADDiu, TmpReg, TmpReg, Lo, IDLoc, Instructions);
+          emitRRR(Mips::DADDu, DstReg, TmpReg, SrcReg, IDLoc, Instructions);
+        }
       }
       return false;
     }
@@ -5191,11 +5206,6 @@ bool MipsAsmParser::parseDirectiveCpLoad(SMLoc Loc) {
   return false;
 }
 
-bool MipsAsmParser::parseDirectiveCPReturn() {
-  getTargetStreamer().emitDirectiveCpreturn();
-  return false;
-}
-
 bool MipsAsmParser::parseDirectiveCpRestore(SMLoc Loc) {
   MCAsmParser &Parser = getParser();
 
@@ -5244,7 +5254,6 @@ bool MipsAsmParser::parseDirectiveCpRestore(SMLoc Loc) {
   return false;
 }
 
->>>>>>> 92150c7f1229c69dae893c558430e08c3e899115
 bool MipsAsmParser::parseDirectiveCPSetup() {
   MCAsmParser &Parser = getParser();
   unsigned FuncReg;

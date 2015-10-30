@@ -548,7 +548,7 @@ def CClearHi : ClearRegs<3, "cclearhi">;
 
 
 def  CCallPseudo : PseudoSE<(outs), (ins GPR64Opnd:$rs, uimm32: $mask),
-                            [(CheriJmpLink GPR64Opnd:$rs, (i32 uimm32_pat: $mask))], IIBranch>
+                            [(CheriJmpLink GPR64Opnd:$rs, (i32 uimm32_pat: $mask))], NoItinerary>
 {
   let isCall=1;
   let Defs = [RA];
@@ -564,7 +564,7 @@ def CapJmpLink : SDNode<"MipsISD::CapJmpLink",SDT_MipsCapJmpLink,
                           SDNPVariadic]>;
 let isCall=1, hasDelaySlot=1, Defs = [C17] in {
 def CapJumpLinkPseudo :
-  PseudoSE<(outs), (ins CheriOpnd: $rs), [(CapJmpLink CheriOpnd: $rs)], IIBranch>,
+  PseudoSE<(outs), (ins CheriOpnd: $rs), [(CapJmpLink CheriOpnd: $rs)], NoItinerary>,
   PseudoInstExpansion<(CJALR C17, CheriOpnd:$rs)>;
 }
 def CapRet : SDNode<"MipsISD::CapRet", SDTNone,

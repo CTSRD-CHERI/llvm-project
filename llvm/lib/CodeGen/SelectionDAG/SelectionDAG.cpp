@@ -4550,8 +4550,7 @@ SDValue SelectionDAG::getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset) {
   EVT BasePtrVT = Ptr.getValueType();
   if (BasePtrVT == MVT::iFATPTR) {
     // Assume that address space 0 has the range of any pointer.
-    MVT IntPtrTy = MVT::getIntegerVT(
-        TLI->getDataLayout()->getPointerSizeInBits(0));
+    MVT IntPtrTy = MVT::getIntegerVT(getDataLayout().getPointerSizeInBits(0));
     return getNode(ISD::PTRADD, dl, BasePtrVT, Ptr, getConstant(Offset,
           dl, IntPtrTy));
   }
@@ -7030,7 +7029,7 @@ unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
   const GlobalValue *GV;
   int64_t GVOffset = 0;
   if (TLI->isGAPlusOffset(Ptr.getNode(), GV, GVOffset)) {
-    unsigned PtrWidth = getDataLayout()->getPointerBaseSizeInBits(GV->getType());
+    unsigned PtrWidth = getDataLayout().getPointerBaseSizeInBits(GV->getType());
     APInt KnownZero(PtrWidth, 0), KnownOne(PtrWidth, 0);
     llvm::computeKnownBits(const_cast<GlobalValue *>(GV), KnownZero, KnownOne,
                            getDataLayout());
