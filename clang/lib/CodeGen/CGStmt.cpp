@@ -976,7 +976,9 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
         if (VarDecl *Key = cast<TypedefDecl>(TT->getDecl())->getOpaqueKey()) {
           llvm::Type *RetTy = RetV->getType();
           llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
-          KeyV = Builder.CreateLoad(KeyV);
+          CharUnits Alignment = getContext().getDeclAlign(Key);
+          Address Addr(KeyV, Alignment);
+          KeyV = Builder.CreateLoad(Addr);
           // FIXME: Don't hard-code address space 200!
           // If this is CHERI, enforce this in hardware
           if (Ty->getPointeeType().getAddressSpace() == 200) {

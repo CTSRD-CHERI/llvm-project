@@ -2586,7 +2586,15 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
   }
 
   QualType EltType = E->getType()->castAsArrayTypeUnsafe()->getElementType();
-  return Builder.CreateElementBitCast(Addr, ConvertTypeForMem(EltType));
+  Addr = Builder.CreateElementBitCast(Addr, ConvertTypeForMem(EltType));
+  unsigned AS =
+    getContext().getTargetAddressSpace(E->getType().getAddressSpace());
+  llvm::PointerType *PtrTy = cast<llvm::PointerType>(Addr.getPointer()->getType());
+  if (PtrTy->getPointerAddressSpace() != AS)
+    Addr = Address(Builder.CreateAddrSpaceCast(Addr.getPointer(),
+          llvm::PointerType::get(PtrTy->getElementType(), AS)),
+        Addr.getAlignment());
+  return Addr;
 }
 
 /// isSimpleArrayDecayOperand - If the specified expr is a simple decay from an
@@ -3847,7 +3855,9 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
         CGM.EmitSandboxRequiredMethod(ClsAttr->getDefaultClass()->getName(),
                                       FunctionBaseName);
     // Load the global and use it in the call
-    auto *MethodNum = Builder.CreateLoad(MethodNumVar);
+    // FIXME: EmitSandboxRequiredMethod should return an Address so that we
+    // don't have to know the alignment here.
+    auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar, CharUnits::fromQuantity(8)));
     MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
         llvm::MDNode::get(getLLVMContext(), None));
     CallArg MethodNumArg(RValue::get(MethodNum), NumTy, false);

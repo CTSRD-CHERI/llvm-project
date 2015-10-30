@@ -2989,6 +2989,8 @@ bool AttributedType::isQualifier() const {
   case AttributedType::attr_pcs_vfp:
   case AttributedType::attr_noreturn:
   case AttributedType::attr_cdecl:
+  case AttributedType::attr_cheri_ccall:
+  case AttributedType::attr_cheri_ccallee:
   case AttributedType::attr_fastcall:
   case AttributedType::attr_stdcall:
   case AttributedType::attr_thiscall:

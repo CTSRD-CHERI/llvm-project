@@ -6156,32 +6156,6 @@ void MipsABIInfo::computeInfo(CGFunctionInfo &FI) const {
     I.info = classifyArgumentType(I.type, Offset);
 }
 
-static llvm::Value *getPointerInt(CodeGenFunction &CGF,
-                                  unsigned AS,
-                                  llvm::Value *V,
-                                  llvm::Type *IntTy) {
-  if (AS == 200) {
-    llvm::Function *GetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
-    return CGF.Builder.CreateCall(GetOffset, V);
-  }
-  return CGF.Builder.CreatePtrToInt(V, IntTy);
-}
-static llvm::Value *setPointerInt(CodeGenFunction &CGF,
-                                  unsigned AS,
-                                  llvm::Value *Base,
-                                  llvm::Value *V,
-                                  llvm::Type *PTy){
-  if (AS == 200) {
-    llvm::Function *SetOffset =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
-    llvm::Value *Addr = CGF.Builder.CreateCall(SetOffset, {Base, V});
-    return CGF.Builder.CreateBitCast(Addr, PTy);
-  }
-  return CGF.Builder.CreateIntToPtr(V, PTy);
-}
-
-
 Address MipsABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                                QualType OrigTy) const {
   QualType Ty = OrigTy;

@@ -6280,6 +6280,8 @@ public:
                     getTriple().getArch() == llvm::Triple::mipsel;
     CPU = Name;
     return llvm::StringSwitch<bool>(Name)
+        .Case("cheri", true)
+        .Case("cheri128", true)
         .Case("mips1", IsMips32)
         .Case("mips2", IsMips32)
         .Case("mips3", true)
@@ -6302,13 +6304,15 @@ public:
   const std::string& getCPU() const { return CPU; }
   bool
   initFeatureMap(llvm::StringMap<bool> &Features, DiagnosticsEngine &Diags,
-                 StringRef CPU,
+                 StringRef OverrideCPU,
                  const std::vector<std::string> &FeaturesVec) const override {
-    if (CPU == "octeon")
+    if (OverrideCPU == "octeon")
       Features["mips64r2"] = Features["cnmips"] = true;
+    else if (!OverrideCPU.empty())
+      Features[OverrideCPU] = true;
     else
       Features[CPU] = true;
-    return TargetInfo::initFeatureMap(Features, Diags, CPU, FeaturesVec);
+    return TargetInfo::initFeatureMap(Features, Diags, OverrideCPU, FeaturesVec);
   }
 
   void getTargetDefines(const LangOptions &Opts,
@@ -6876,10 +6880,10 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
       setCPU("cheri");
     }
   }
-  virtual void setDescriptionString() {
+  void setDataLayoutString() override {
     if (SandboxABI)
       Desc += "-A200";
-    DescriptionString = Desc.c_str();
+    DataLayoutString = Desc.c_str();
   }
   unsigned getIntCapWidth() const override { return Cheri128 ? 128 : 256; }
   unsigned getIntCapAlign() const override { return Cheri128 ? 128 : 256; }

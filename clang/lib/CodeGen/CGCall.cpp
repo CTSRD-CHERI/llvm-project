@@ -3561,7 +3561,9 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                 // result.
                 if (VarDecl *Key = cast<TypedefDecl>(TT->getDecl())->getOpaqueKey()) {
                   llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
-                  KeyV = Builder.CreateLoad(KeyV);
+                  CharUnits Alignment = getContext().getDeclAlign(Key);
+                  Address Addr(V, Alignment);
+                  KeyV = Builder.CreateLoad(Addr);
                   // FIXME: Don't hard-code address space 200!
                   // If this is CHERI, enforce this in hardware
                   if (RetTy->getPointeeType().getAddressSpace() == 200) {

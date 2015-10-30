@@ -1029,7 +1029,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E, Address Dest) {
   if (Val2.isValid())
     Val2 = Builder.CreateBitCast(Val2,
         ITy->getPointerTo(Val2.getType()->getPointerAddressSpace()));
-  if (Dest.isvalid() && !E->isCmpXChg())
+  if (Dest.isValid() && !E->isCmpXChg())
     Dest = Builder.CreateBitCast(Dest,
         ITy->getPointerTo(Dest.getType()->getPointerAddressSpace()));
 

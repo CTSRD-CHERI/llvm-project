@@ -3923,11 +3923,12 @@ llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
   if (!getModule().getNamedGlobal(GlobalStructName)) {
     auto ClsName = GetAddrOfConstantCString(Cls);
     auto MethodName = GetAddrOfConstantCString(Fn);
-    auto StructTy = llvm::StructType::get(Int64Ty, ClsName->getType(),
-        MethodName->getType(), MethodNumVar->getType(), Int64Ty, nullptr);
+    auto StructTy = llvm::StructType::get(Int64Ty,
+        ClsName.getPointer()->getType(), MethodName.getPointer()->getType(),
+        MethodNumVar->getType(), Int64Ty, nullptr);
 
-    auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64, ClsName,
-        MethodName, MethodNumVar, Zero64});
+    auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
+        ClsName.getPointer(), MethodName.getPointer(), MethodNumVar, Zero64});
     auto *MetadataGV = new llvm::GlobalVariable(getModule(), StructTy,
         /*isConstant*/false, llvm::GlobalValue::ExternalLinkage, StructInit,
         GlobalStructName);
@@ -3966,14 +3967,15 @@ void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
   auto GlobalStructName = (StringRef(".sandbox_provided_method.") + Cls + "." +
       Method).str();
   if (!getModule().getNamedGlobal(GlobalStructName)) {
-    auto *ClsName = GetAddrOfConstantCString(Cls);
-    auto *MethodName = GetAddrOfConstantCString(Method);
-    auto *StructTy = llvm::StructType::get(Int64Ty, ClsName->getType(),
-        MethodName->getType(), MethodPtrVar->getType(), nullptr);
+    auto ClsName = GetAddrOfConstantCString(Cls);
+    auto MethodName = GetAddrOfConstantCString(Method);
+    auto *StructTy = llvm::StructType::get(Int64Ty,
+        ClsName.getPointer()->getType(), MethodName.getPointer()->getType(),
+        MethodPtrVar->getType(), nullptr);
     auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
 
-    auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64, ClsName,
-        MethodName, MethodPtrVar});
+    auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
+        ClsName.getPointer(), MethodName.getPointer(), MethodPtrVar});
     auto *MetadataGV = new llvm::GlobalVariable(getModule(), StructTy,
         /*isConstant*/false, llvm::GlobalValue::ExternalLinkage, StructInit,
         GlobalStructName);
