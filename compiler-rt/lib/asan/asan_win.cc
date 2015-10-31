@@ -16,7 +16,6 @@
 #if SANITIZER_WINDOWS
 #include <windows.h>
 
-#include <dbghelp.h>
 #include <stdlib.h>
 
 #include "asan_interceptors.h"
@@ -194,15 +193,11 @@ void AsanCheckDynamicRTPrereqs() {}
 
 void AsanCheckIncompatibleRT() {}
 
-void AsanPlatformThreadInit() {
-  // Nothing here for now.
-}
-
 void ReadContextStack(void *context, uptr *stack, uptr *ssize) {
   UNIMPLEMENTED();
 }
 
-void AsanOnSIGSEGV(int, void *siginfo, void *context) {
+void AsanOnDeadlySignal(int, void *siginfo, void *context) {
   UNIMPLEMENTED();
 }
 
@@ -219,7 +214,7 @@ static long WINAPI SEHHandler(EXCEPTION_POINTERS *info) {
             ? "access-violation"
             : "in-page-error";
     SignalContext sig = SignalContext::Create(exception_record, context);
-    ReportSIGSEGV(description, sig);
+    ReportDeadlySignal(description, sig);
   }
 
   // FIXME: Handle EXCEPTION_STACK_OVERFLOW here.
@@ -257,7 +252,7 @@ int __asan_set_seh_filter() {
 // Put a pointer to __asan_set_seh_filter at the end of the global list
 // of C initializers, after the default EH is set by the CRT.
 #pragma section(".CRT$XIZ", long, read)  // NOLINT
-static __declspec(allocate(".CRT$XIZ"))
+__declspec(allocate(".CRT$XIZ"))
     int (*__intercept_seh)() = __asan_set_seh_filter;
 #endif
 // }}}

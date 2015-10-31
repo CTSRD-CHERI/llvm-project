@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-code-generator=isl -polly-ast -analyze          < %s | FileCheck %s --check-prefix=NOAA
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-code-generator=isl -polly-ast -analyze -tbaa    < %s | FileCheck %s --check-prefix=TBAA
+; RUN: opt %loadPolly -polly-code-generator=isl -polly-ast -analyze          < %s | FileCheck %s --check-prefix=NOAA
+; RUN: opt %loadPolly -polly-code-generator=isl -polly-ast -analyze -tbaa    < %s | FileCheck %s --check-prefix=TBAA
 ;
 ;    void jd(int *Int0, int *Int1, float *Float0, float *Float1) {
 ;      for (int i = 0; i < 1024; i++) {
@@ -9,15 +9,15 @@
 ;    }
 ;
 ; NOAA:      if (1 && (
-; NOAA-DAG:    &MemRef_Float0[1024] <= &MemRef_Int0[0] || &MemRef_Int0[1024] <= &MemRef_Float0[0]
-; NOAA-DAG:    &MemRef_Float1[1024] <= &MemRef_Int0[0] || &MemRef_Int0[1024] <= &MemRef_Float1[0]
-; NOAA-DAG:    &MemRef_Int1[1024] <= &MemRef_Int0[0] || &MemRef_Int0[1024] <= &MemRef_Int1[0]
-; NOAA-DAG:    &MemRef_Float0[1024] <= &MemRef_Float1[0] || &MemRef_Float1[1024] <= &MemRef_Float0[0]
+; NOAA-DAG:    &MemRef_Int0[1024] <= &MemRef_Float0[0] || &MemRef_Float0[1024] <= &MemRef_Int0[0]
 ; NOAA-DAG:    &MemRef_Int1[1024] <= &MemRef_Float0[0] || &MemRef_Float0[1024] <= &MemRef_Int1[0]
+; NOAA-DAG:    &MemRef_Float1[1024] <= &MemRef_Float0[0] || &MemRef_Float0[1024] <= &MemRef_Float1[0]
+; NOAA-DAG:    &MemRef_Int1[1024] <= &MemRef_Int0[0] || &MemRef_Int0[1024] <= &MemRef_Int1[0]
+; NOAA-DAG:    &MemRef_Float1[1024] <= &MemRef_Int0[0] || &MemRef_Int0[1024] <= &MemRef_Float1[0]
 ; NOAA:      ))
 ;
 ; TBAA:      if (1 && (
-; TBAA-DAG:    &MemRef_Int0[1024] <= &MemRef_Int1[0] || &MemRef_Int1[1024] <= &MemRef_Int0[0]
+; TBAA-DAG:    &MemRef_Int1[1024] <= &MemRef_Int0[0] || &MemRef_Int0[1024] <= &MemRef_Int1[0]
 ; TBAA-DAG:    &MemRef_Float1[1024] <= &MemRef_Float0[0] || &MemRef_Float0[1024] <= &MemRef_Float1[0]
 ; TBAA:      ))
 ;

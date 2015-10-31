@@ -3,8 +3,11 @@ Set breakpoints on objective-c class and instance methods in foundation.
 Also lookup objective-c data types and evaluate expressions.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, os.path, time
-import unittest2
 import lldb
 import string
 from lldbtest import *
@@ -16,50 +19,16 @@ class FoundationTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @dsym_test
-    def test_break_with_dsym(self):
+    def setUp(self):
+        # Call super's setUp().
+        TestBase.setUp(self)
+        # Find the line number to break inside main().
+        self.main_source = "main.m"
+        self.line = line_number(self.main_source, '// Set break point at this line.')
+
+    def test_break(self):
         """Test setting objc breakpoints using '_regexp-break' and 'breakpoint set'."""
-        self.buildDsym()
-        self.break_on_objc_methods()
-
-    @dwarf_test
-    def test_break_with_dwarf(self):
-        """Test setting objc breakpoints using '_regexp-break' and 'breakpoint set'."""
-        self.buildDwarf()
-        self.break_on_objc_methods()
-
-    #@unittest2.expectedFailure
-    # rdar://problem/8542091
-    # rdar://problem/8492646
-    @dsym_test
-    def test_data_type_and_expr_with_dsym(self):
-        """Lookup objective-c data types and evaluate expressions."""
-        self.buildDsym()
-        self.data_type_and_expr_objc()
-
-    #@unittest2.expectedFailure
-    # rdar://problem/8542091
-    # rdar://problem/8492646
-    @dwarf_test
-    def test_data_type_and_expr_with_dwarf(self):
-        """Lookup objective-c data types and evaluate expressions."""
-        self.buildDwarf()
-        self.data_type_and_expr_objc()
-
-    @python_api_test
-    @dsym_test
-    def test_print_ivars_correctly_with_dsym (self):
-        self.buildDsym()
-        self.print_ivars_correctly()
-
-    @python_api_test
-    @dwarf_test
-    def test_print_ivars_correctly_with_dwarf (self):
-        self.buildDwarf()
-        self.print_ivars_correctly()
-
-    def break_on_objc_methods(self):
-        """Test setting objc breakpoints using '_regexp-break' and 'breakpoint set'."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -77,7 +46,7 @@ class FoundationTestCase(TestBase):
         break_results = lldbutil.run_break_set_command(self, "_regexp-break -[NSAutoreleasePool release]")
         lldbutil.check_breakpoint_result (self, break_results, symbol_name='-[NSAutoreleasePool release]', num_locations=1)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # First stop is +[NSString stringWithFormat:].
         self.expect("thread backtrace", "Stop at +[NSString stringWithFormat:]",
@@ -113,64 +82,11 @@ class FoundationTestCase(TestBase):
         self.expect("thread backtrace", "Stop at -[NSAutoreleasePool release]",
             substrs = ["Foundation`-[NSAutoreleasePool release]"])
 
-    @dsym_test
-    def test_expression_lookups_objc_dsym(self):
-        """Test running an expression detect spurious debug info lookups (dSYM)."""
-        self.buildDsym()
-        self.expression_lookups_objc()
-
-    @dwarf_test
-    def test_expression_lookups_objc_dwarf(self):
-        """Test running an expression detect spurious debug info lookups (DWARF)."""
-        self.buildDwarf()
-        self.expression_lookups_objc()
-
-    def expression_lookups_objc (self):
-        """Test running an expression and make sure we don't search all dwarf files for any internal names (anything that contains '__lldb')."""
-        exe = os.path.join(os.getcwd(), "a.out")
-        self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
-
-        # Stop at -[MyString initWithNSString:].
-        lldbutil.run_break_set_by_symbol (self, '-[MyString initWithNSString:]', num_expected_locations=1, sym_exact=True)
-
-        self.runCmd("run", RUN_FAILED)
-
-        global file_index
-        # Log any DWARF lookups
-        ++file_index
-        logfile = os.path.join(os.getcwd(), "dwarf-lookups-" + self.getArchitecture() + "-" + str(file_index) + ".txt")
-        self.runCmd("log enable -f %s dwarf lookups" % (logfile))
-        self.runCmd("expr self")
-        self.runCmd("log disable dwarf lookups")
-        
-        def cleanup():
-            if os.path.exists (logfile):
-                os.unlink (logfile)
-        
-        self.addTearDownHook(cleanup)
-        
-        if os.path.exists (logfile):
-            f = open(logfile)
-            lines = f.readlines()
-            num_errors = 0
-            for line in lines:
-                if string.find(line, "$__lldb") != -1:
-                    if num_errors == 0:
-                        print "error: found spurious name lookups when evaluating an expression:"
-                    num_errors += 1
-                    print line,
-            self.assertTrue(num_errors == 0, "Spurious lookups detected")
-            f.close()
-
-    def setUp(self):
-        # Call super's setUp().
-        TestBase.setUp(self)
-        # Find the line number to break inside main().
-        self.main_source = "main.m"
-        self.line = line_number(self.main_source, '// Set break point at this line.')
-
-    def data_type_and_expr_objc(self):
+    # rdar://problem/8542091
+    # rdar://problem/8492646
+    def test_data_type_and_expr(self):
         """Lookup objective-c data types and evaluate expressions."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -179,7 +95,7 @@ class FoundationTestCase(TestBase):
 #        self.expect("breakpoint set -n '-[MyString description]", BREAKPOINT_CREATED,
 #            startstr = "Breakpoint created: 1: name = '-[MyString description]', locations = 1")
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The backtrace should show we stop at -[MyString description].
         self.expect("thread backtrace", "Stop at -[MyString description]",
@@ -189,11 +105,11 @@ class FoundationTestCase(TestBase):
 
         self.expect("image lookup -t NSString", DATA_TYPES_DISPLAYED_CORRECTLY,
             substrs = ['name = "NSString"',
-                       'clang_type = "@interface NSString'])
+                       'compiler_type = "@interface NSString'])
 
         self.expect("image lookup -t MyString", DATA_TYPES_DISPLAYED_CORRECTLY,
             substrs = ['name = "MyString"',
-                       'clang_type = "@interface MyString',
+                       'compiler_type = "@interface MyString',
                        'NSString * str;',
                        'NSDate * date;'])
 
@@ -258,9 +174,11 @@ class FoundationTestCase(TestBase):
         self.expect("expression --object-description -- my", "Object description displayed correctly",
             patterns = ["Hello from.*a.out.*with timestamp: "])
 
-    # See: <rdar://problem/8717050> lldb needs to use the ObjC runtime symbols for ivar offsets
-    # Only fails for the ObjC 2.0 runtime.
-    def print_ivars_correctly(self) :
+    @add_test_categories(['pyapi'])
+    def test_print_ivars_correctly (self):
+        self.build()
+        # See: <rdar://problem/8717050> lldb needs to use the ObjC runtime symbols for ivar offsets
+        # Only fails for the ObjC 2.0 runtime.
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -304,9 +222,41 @@ class FoundationTestCase(TestBase):
         my_str_value = int(my_str_var.GetValue(), 0)
 
         self.assertTrue(str_value == my_str_value, "Got the correct value for my->str")
+
+    def test_expression_lookups_objc(self):
+        """Test running an expression detect spurious debug info lookups (DWARF)."""
+        self.build()
+        exe = os.path.join(os.getcwd(), "a.out")
+        self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
+
+        # Stop at -[MyString initWithNSString:].
+        lldbutil.run_break_set_by_symbol (self, '-[MyString initWithNSString:]', num_expected_locations=1, sym_exact=True)
+
+        self.runCmd("run", RUN_SUCCEEDED)
+
+        global file_index
+        # Log any DWARF lookups
+        ++file_index
+        logfile = os.path.join(os.getcwd(), "dwarf-lookups-" + self.getArchitecture() + "-" + str(file_index) + ".txt")
+        self.runCmd("log enable -f %s dwarf lookups" % (logfile))
+        self.runCmd("expr self")
+        self.runCmd("log disable dwarf lookups")
         
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+        def cleanup():
+            if os.path.exists (logfile):
+                os.unlink (logfile)
+        
+        self.addTearDownHook(cleanup)
+        
+        if os.path.exists (logfile):
+            f = open(logfile)
+            lines = f.readlines()
+            num_errors = 0
+            for line in lines:
+                if string.find(line, "$__lldb") != -1:
+                    if num_errors == 0:
+                        print("error: found spurious name lookups when evaluating an expression:")
+                    num_errors += 1
+                    print(line, end='')
+            self.assertTrue(num_errors == 0, "Spurious lookups detected")
+            f.close()

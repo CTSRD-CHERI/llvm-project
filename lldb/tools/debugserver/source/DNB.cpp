@@ -446,10 +446,24 @@ DNBProcessLaunch (const char *path,
             else
             {
                 bool res = AddProcessToMap(pid, processSP);
+                UNUSED_IF_ASSERT_DISABLED(res);
                 assert(res && "Couldn't add process to map!");
                 return pid;
             }
         }
+    }
+    return INVALID_NUB_PROCESS;
+}
+
+// If there is one process with a given name, return the pid for that process.
+nub_process_t
+DNBProcessGetPIDByName (const char *name)
+{
+    std::vector<struct kinfo_proc> matching_proc_infos;
+    size_t num_matching_proc_infos = GetAllInfosMatchingName(name, matching_proc_infos);
+    if (num_matching_proc_infos == 1)
+    {
+        return matching_proc_infos[0].kp_proc.p_pid;
     }
     return INVALID_NUB_PROCESS;
 }
@@ -494,6 +508,7 @@ DNBProcessAttach (nub_process_t attach_pid, struct timespec *timeout, char *err_
         if (pid != INVALID_NUB_PROCESS)
         {
             bool res = AddProcessToMap(pid, processSP);
+            UNUSED_IF_ASSERT_DISABLED(res);
             assert(res && "Couldn't add process to map!");
             spawn_waitpid_thread(pid);
         }
@@ -732,7 +747,7 @@ DNBProcessAttachWait (const char *waitfor_process_name,
         if (attach_token != NULL)
         {
             nub_process_t pid;
-            pid = MachProcess::CheckForProcess(attach_token);
+            pid = MachProcess::CheckForProcess(attach_token, launch_flavor);
             if (pid != INVALID_NUB_PROCESS)
             {
                 waitfor_pid = pid;
@@ -810,7 +825,7 @@ DNBProcessAttachWait (const char *waitfor_process_name,
     }
 
     bool success = waitfor_pid != INVALID_NUB_PROCESS;
-    MachProcess::CleanupAfterAttach (attach_token, success, prepare_error);
+    MachProcess::CleanupAfterAttach (attach_token, launch_flavor, success, prepare_error);
 
     return waitfor_pid;
 }
@@ -1065,6 +1080,18 @@ DNBGetTSDAddressForThread (nub_process_t pid, nub_thread_t tid, uint64_t plo_pth
     }
     return INVALID_NUB_ADDRESS;
 }
+
+JSONGenerator::ObjectSP 
+DNBGetLoadedDynamicLibrariesInfos (nub_process_t pid, nub_addr_t image_list_address, nub_addr_t image_count)
+{
+    MachProcessSP procSP;
+    if (GetProcessSP (pid, procSP))
+    {
+        return procSP->GetLoadedDynamicLibrariesInfos (pid, image_list_address, image_count);
+    }
+    return JSONGenerator::ObjectSP();
+}
+
 
 
 const char *
@@ -1907,6 +1934,12 @@ DNBResolveExecutablePath (const char *path, char *resolved_path, size_t resolved
         }
     }
     return false;
+}
+
+bool
+DNBGetOSVersionNumbers (uint64_t *major, uint64_t *minor, uint64_t *patch)
+{
+    return MachProcess::GetOSVersionNumbers (major, minor, patch);
 }
 
 

@@ -293,7 +293,7 @@ class PPCAsmParser : public MCTargetAsmParser {
 public:
   PPCAsmParser(MCSubtargetInfo &STI, MCAsmParser &, const MCInstrInfo &MII,
                const MCTargetOptions &Options)
-      : MCTargetAsmParser(), STI(STI), MII(MII) {
+      : MCTargetAsmParser(Options), STI(STI), MII(MII) {
     // Check for 64-bit vs. 32-bit pointer mode.
     Triple TheTriple(STI.getTargetTriple());
     IsPPC64 = (TheTriple.getArch() == Triple::ppc64 ||
@@ -1730,10 +1730,19 @@ bool PPCAsmParser::ParseDirectiveWord(unsigned Size, SMLoc L) {
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
     for (;;) {
       const MCExpr *Value;
+      SMLoc ExprLoc = getLexer().getLoc();
       if (getParser().parseExpression(Value))
         return false;
 
-      getParser().getStreamer().EmitValue(Value, Size);
+      if (const auto *MCE = dyn_cast<MCConstantExpr>(Value)) {
+        assert(Size <= 8 && "Invalid size");
+        uint64_t IntValue = MCE->getValue();
+        if (!isUIntN(8 * Size, IntValue) && !isIntN(8 * Size, IntValue))
+          return Error(ExprLoc, "literal value out of range for directive");
+        getStreamer().EmitIntValue(IntValue, Size);
+      } else {
+        getStreamer().EmitValue(Value, Size, ExprLoc);
+      }
 
       if (getLexer().is(AsmToken::EndOfStatement))
         break;

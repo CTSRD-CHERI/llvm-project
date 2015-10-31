@@ -1,9 +1,19 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-allow-nonaffine-loops=false -polly-detect -analyze < %s 2>&1| FileCheck %s --check-prefix=REJECTNONAFFINELOOPS
-; RUN: opt %loadPolly -polly-detect-unprofitable -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-allow-nonaffine-loops=true -polly-detect -analyze < %s 2>&1| FileCheck %s --check-prefix=ALLOWNONAFFINELOOPS
-; RUN: opt %loadPolly -polly-detect-unprofitable -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-allow-nonaffine-loops=true -polly-allow-nonaffine -polly-detect -analyze < %s 2>&1| FileCheck %s --check-prefix=ALLOWNONAFFINEALL
+; RUN: opt %loadPolly \
+; RUN:     -pass-remarks-missed="polly-detect" -polly-detect-track-failures \
+; RUN:     -polly-allow-nonaffine-loops=false -polly-detect -analyze \
+; RUN:     < %s 2>&1| FileCheck %s --check-prefix=REJECTNONAFFINELOOPS
+; RUN: opt %loadPolly \
+; RUN:     -pass-remarks-missed="polly-detect" -polly-detect-track-failures \
+; RUN:     -polly-allow-nonaffine-loops=true -polly-detect -analyze \
+; RUN:     < %s 2>&1| FileCheck %s --check-prefix=ALLOWNONAFFINELOOPS
+; RUN: opt %loadPolly -pass-remarks-missed="polly-detect" \
+; RUN:     -polly-process-unprofitable=false \
+; RUN:     -polly-detect-track-failures -polly-allow-nonaffine-loops=true \
+; RUN:     -polly-allow-nonaffine -polly-detect -analyze < %s 2>&1 \
+; RUN:     | FileCheck %s --check-prefix=ALLOWNONAFFINEALL
 
 ; void f(int A[], int n) {
-;   for (int i = 0; i < A[n]; i++)
+;   for (int i = 0; i < A[n+i]; i++)
 ;     A[i] = 0;
 ; }
 
@@ -52,7 +62,8 @@ for.body:                                         ; preds = %for.body.lr.ph, %fo
   %inc = trunc i64 %1 to i32, !dbg !21
   store i32 0, i32* %arrayidx2, align 4, !dbg !24
   tail call void @llvm.dbg.value(metadata !{null}, i64 0, metadata !18, metadata !DIExpression()), !dbg !20
-  %2 = load i32, i32* %arrayidx, align 4, !dbg !21
+  %arrayidx3 = getelementptr inbounds i32, i32* %arrayidx, i64 %indvar, !dbg !21
+  %2 = load i32, i32* %arrayidx3, align 4, !dbg !21
   %cmp = icmp slt i32 %inc, %2, !dbg !21
   %indvar.next = add i64 %indvar, 1, !dbg !21
   br i1 %cmp, label %for.body, label %for.cond.for.end_crit_edge, !dbg !21
@@ -75,11 +86,11 @@ attributes #1 = { nounwind readnone }
 !llvm.module.flags = !{!10, !11}
 !llvm.ident = !{!12}
 
-!0 = !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.6.0 ", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.6.0 ", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
 !1 = !DIFile(filename: "ReportLoopBound-01.c", directory: "test/ScopDetectionDiagnostic/")
 !2 = !{}
 !3 = !{!4}
-!4 = !DISubprogram(name: "f", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !1, scope: !5, type: !6, function: void (i32*, i32)* @f, variables: !2)
+!4 = distinct !DISubprogram(name: "f", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !1, scope: !5, type: !6, function: void (i32*, i32)* @f, variables: !2)
 !5 = !DIFile(filename: "ReportLoopBound-01.c", directory: "test/ScopDetectionDiagnostic/")
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8, !9}
@@ -88,12 +99,12 @@ attributes #1 = { nounwind readnone }
 !10 = !{i32 2, !"Dwarf Version", i32 4}
 !11 = !{i32 2, !"Debug Info Version", i32 3}
 !12 = !{!"clang version 3.6.0 "}
-!13 = !DILocalVariable(tag: DW_TAG_arg_variable, name: "A", line: 1, arg: 1, scope: !4, file: !5, type: !8)
+!13 = !DILocalVariable(name: "A", line: 1, arg: 1, scope: !4, file: !5, type: !8)
 !14 = !DILocation(line: 1, column: 12, scope: !4)
-!15 = !DILocalVariable(tag: DW_TAG_arg_variable, name: "n", line: 1, arg: 2, scope: !4, file: !5, type: !9)
+!15 = !DILocalVariable(name: "n", line: 1, arg: 2, scope: !4, file: !5, type: !9)
 !16 = !DILocation(line: 1, column: 21, scope: !4)
 !17 = !{i32 0}
-!18 = !DILocalVariable(tag: DW_TAG_auto_variable, name: "i", line: 2, scope: !19, file: !5, type: !9)
+!18 = !DILocalVariable(name: "i", line: 2, scope: !19, file: !5, type: !9)
 !19 = distinct !DILexicalBlock(line: 2, column: 3, file: !1, scope: !4)
 !20 = !DILocation(line: 2, column: 12, scope: !19)
 !21 = !DILocation(line: 2, column: 8, scope: !19)

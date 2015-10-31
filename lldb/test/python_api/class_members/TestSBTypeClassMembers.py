@@ -2,35 +2,18 @@
 Test SBType APIs to fetch member function types.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class SBTypeMemberFunctionsTest(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym(self):
-        """Test SBType APIs to fetch member function types."""
-        d = {'EXE': self.exe_name}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.type_api(self.exe_name)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test SBType APIs to fetch member function types."""
-        d = {'EXE': self.exe_name}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.type_api(self.exe_name)
 
     def setUp(self):
         # Call super's setUp().
@@ -41,9 +24,14 @@ class SBTypeMemberFunctionsTest(TestBase):
         self.source = 'main.mm'
         self.line = line_number(self.source, '// set breakpoint here')
 
-    def type_api(self, exe_name):
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
+    def test(self):
         """Test SBType APIs to fetch member function types."""
-        exe = os.path.join(os.getcwd(), exe_name)
+        d = {'EXE': self.exe_name}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        exe = os.path.join(os.getcwd(), self.exe_name)
 
         # Create a target by the debugger.
         target = self.dbg.CreateTarget(exe)
@@ -86,9 +74,3 @@ class SBTypeMemberFunctionsTest(TestBase):
         self.assertTrue(Thingy.GetMemberFunctionAtIndex(0).GetReturnType().GetName() == "id", "Thingy::init returns an id")
         self.assertTrue(Thingy.GetMemberFunctionAtIndex(1).GetNumberOfArguments() == 2, "Thingy::foo takes two arguments")
         self.assertTrue(Thingy.GetMemberFunctionAtIndex(1).GetArgumentTypeAtIndex(0).GetName() == "int", "Thingy::foo takes an int")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

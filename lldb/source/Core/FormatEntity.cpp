@@ -7,13 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/StringRef.h"
-
 #include "lldb/Core/FormatEntity.h"
+
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringRef.h"
 
 #include "lldb/Core/Address.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Language.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/Stream.h"
 #include "lldb/Core/StreamString.h"
@@ -21,7 +21,8 @@
 #include "lldb/Core/ValueObjectVariable.h"
 #include "lldb/DataFormatters/DataVisualization.h"
 #include "lldb/DataFormatters/FormatManager.h"
-#include "lldb/Expression/ClangExpressionVariable.h"
+#include "lldb/DataFormatters/ValueObjectPrinter.h"
+#include "lldb/Expression/ExpressionVariable.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Symbol/Block.h"
@@ -31,6 +32,7 @@
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Symbol/VariableList.h"
 #include "lldb/Target/ExecutionContext.h"
+#include "lldb/Target/Language.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/SectionLoadList.h"
@@ -98,7 +100,8 @@ static FormatEntity::Entry::Definition g_function_child_entries[] =
     ENTRY ("line-offset"         , FunctionLineOffset     , UInt64),
     ENTRY ("pc-offset"           , FunctionPCOffset       , UInt64),
     ENTRY ("initial-function"    , FunctionInitial        , None),
-    ENTRY ("changed"             , FunctionChanged        , None)
+    ENTRY ("changed"             , FunctionChanged        , None),
+    ENTRY ("is-optimized"        , FunctionIsOptimized    , None)
 };
 
 static FormatEntity::Entry::Definition g_line_child_entries[] =
@@ -343,6 +346,7 @@ FormatEntity::Entry::TypeToCString (Type t)
     ENUM_TO_CSTR(FunctionPCOffset);
     ENUM_TO_CSTR(FunctionInitial);
     ENUM_TO_CSTR(FunctionChanged);
+    ENUM_TO_CSTR(FunctionIsOptimized);
     ENUM_TO_CSTR(LineEntryFile);
     ENUM_TO_CSTR(LineEntryLineNumber);
     ENUM_TO_CSTR(LineEntryStartAddress);
@@ -530,7 +534,7 @@ ScanBracketedRange (llvm::StringRef subpath,
                     int64_t& index_lower,
                     int64_t& index_higher)
 {
-    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_TYPES));
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_DATAFORMATTERS));
     close_bracket_index = llvm::StringRef::npos;
     const size_t open_bracket_index = subpath.find('[');
     if (open_bracket_index == llvm::StringRef::npos)
@@ -667,7 +671,7 @@ ExpandIndexedExpression (ValueObject* valobj,
                          StackFrame* frame,
                          bool deref_pointer)
 {
-    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_TYPES));
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_DATAFORMATTERS));
     const char* ptr_deref_format = "[%d]";
     std::string ptr_deref_buffer(10,0);
     ::sprintf(&ptr_deref_buffer[0], ptr_deref_format, index);
@@ -728,7 +732,7 @@ DumpValue (Stream &s,
     if (valobj == NULL)
         return false;
 
-    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_TYPES));
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_DATAFORMATTERS));
     Format custom_format = eFormatInvalid;
     ValueObject::ValueObjectRepresentationStyle val_obj_display = entry.string.empty() ? ValueObject::eValueObjectRepresentationStyleValue : ValueObject::eValueObjectRepresentationStyleSummary;
 
@@ -883,10 +887,10 @@ DumpValue (Stream &s,
     }
 
     // TODO use flags for these
-    const uint32_t type_info_flags = target->GetClangType().GetTypeInfo(NULL);
+    const uint32_t type_info_flags = target->GetCompilerType().GetTypeInfo(NULL);
     bool is_array = (type_info_flags & eTypeIsArray) != 0;
     bool is_pointer = (type_info_flags & eTypeIsPointer) != 0;
-    bool is_aggregate = target->GetClangType().IsAggregateType();
+    bool is_aggregate = target->GetCompilerType().IsAggregateType();
 
     if ((is_array || is_pointer) && (!is_array_range) && val_obj_display == ValueObject::eValueObjectRepresentationStyleValue) // this should be wrong, but there are some exceptions
     {
@@ -1302,6 +1306,8 @@ FormatEntity::Format (const Entry &entry,
                         // Watch for the special "tid" format...
                         if (entry.printf_format == "tid")
                         {
+                            // TODO(zturner): Rather than hardcoding this to be platform specific, it should be controlled by a
+                            // setting and the default value of the setting can be different depending on the platform.
                             Target &target = thread->GetProcess()->GetTarget();
                             ArchSpec arch (target.GetArchitecture ());
                             llvm::Triple::OSType ostype = arch.IsValid() ? arch.GetTriple().getOS() : llvm::Triple::UnknownOS;
@@ -1432,7 +1438,7 @@ FormatEntity::Format (const Entry &entry,
                     StopInfoSP stop_info_sp = thread->GetStopInfo ();
                     if (stop_info_sp && stop_info_sp->IsValid())
                     {
-                        ClangExpressionVariableSP expression_var_sp = StopInfo::GetExpressionVariable (stop_info_sp);
+                        ExpressionVariableSP expression_var_sp = StopInfo::GetExpressionVariable (stop_info_sp);
                         if (expression_var_sp && expression_var_sp->GetValueObject())
                         {
                             expression_var_sp->GetValueObject()->Dump(s);
@@ -1524,8 +1530,7 @@ FormatEntity::Format (const Entry &entry,
                 CompileUnit *cu = sc->comp_unit;
                 if (cu)
                 {
-                    Language lang(cu->GetLanguage());
-                    const char *lang_name = lang.AsCString();
+                    const char *lang_name = Language::GetNameForLanguageType(cu->GetLanguage());
                     if (lang_name)
                     {
                         s.PutCString(lang_name);
@@ -1666,7 +1671,7 @@ FormatEntity::Format (const Entry &entry,
                             if (inline_info)
                             {
                                 s.PutCString(" [inlined] ");
-                                inline_info->GetName().Dump(&s);
+                                inline_info->GetName(sc->function->GetLanguage()).Dump(&s);
                             }
                         }
                     }
@@ -1679,9 +1684,9 @@ FormatEntity::Format (const Entry &entry,
             {
                 ConstString name;
                 if (sc->function)
-                    name = sc->function->GetMangled().GetName (Mangled::ePreferDemangledWithoutArguments);
+                    name = sc->function->GetNameNoArguments();
                 else if (sc->symbol)
-                    name = sc->symbol->GetMangled().GetName (Mangled::ePreferDemangledWithoutArguments);
+                    name = sc->symbol->GetNameNoArguments();
                 if (name)
                 {
                     s.PutCString(name.GetCString());
@@ -1724,7 +1729,7 @@ FormatEntity::Format (const Entry &entry,
                         {
                             s.PutCString (cstr);
                             s.PutCString (" [inlined] ");
-                            cstr = inline_info->GetName().GetCString();
+                            cstr = inline_info->GetName(sc->function->GetLanguage()).GetCString();
                         }
 
                         VariableList args;
@@ -1782,20 +1787,34 @@ FormatEntity::Format (const Entry &entry,
 
                                 VariableSP var_sp (args.GetVariableAtIndex (arg_idx));
                                 ValueObjectSP var_value_sp (ValueObjectVariable::Create (exe_scope, var_sp));
+                                StreamString ss;
                                 const char *var_representation = nullptr;
                                 const char *var_name = var_value_sp->GetName().GetCString();
-                                if (var_value_sp->GetClangType().IsAggregateType() &&
-                                    DataVisualization::ShouldPrintAsOneLiner(*var_value_sp.get()))
+                                if (var_value_sp->GetCompilerType().IsValid())
                                 {
-                                    static StringSummaryFormat format(TypeSummaryImpl::Flags()
-                                                                      .SetHideItemNames(false)
-                                                                      .SetShowMembersOneLiner(true),
-                                                                      "");
-                                    format.FormatObject(var_value_sp.get(), buffer, TypeSummaryOptions());
-                                    var_representation = buffer.c_str();
+                                    if (var_value_sp && exe_scope->CalculateTarget())
+                                        var_value_sp = var_value_sp->GetQualifiedRepresentationIfAvailable(exe_scope->CalculateTarget()->TargetProperties::GetPreferDynamicValue(),
+                                                                                                           exe_scope->CalculateTarget()->TargetProperties::GetEnableSyntheticValue());
+                                    if (var_value_sp->GetCompilerType().IsAggregateType() &&
+                                        DataVisualization::ShouldPrintAsOneLiner(*var_value_sp.get()))
+                                    {
+                                        static StringSummaryFormat format(TypeSummaryImpl::Flags()
+                                                                          .SetHideItemNames(false)
+                                                                          .SetShowMembersOneLiner(true),
+                                                                          "");
+                                        format.FormatObject(var_value_sp.get(), buffer, TypeSummaryOptions());
+                                        var_representation = buffer.c_str();
+                                    }
+                                    else
+                                        var_value_sp->DumpPrintableRepresentation(ss,
+                                                                                  ValueObject::ValueObjectRepresentationStyle::eValueObjectRepresentationStyleSummary,
+                                                                                  eFormatDefault,
+                                                                                  ValueObject::PrintableRepresentationSpecialCases::ePrintableRepresentationSpecialCasesAllow,
+                                                                                  false);
                                 }
-                                else
-                                    var_representation = var_value_sp->GetValueAsCString();
+                                
+                                if (ss.GetData() && ss.GetSize())
+                                    var_representation = ss.GetData();
                                 if (arg_idx > 0)
                                     s.PutCString (", ");
                                 if (var_value_sp->GetError().Success())
@@ -1869,6 +1888,16 @@ FormatEntity::Format (const Entry &entry,
 
         case Entry::Type::FunctionChanged:
             return function_changed == true;
+
+        case Entry::Type::FunctionIsOptimized:
+            {
+                bool is_optimized = false;
+                if (sc->function && sc->function->GetIsOptimized())
+                {
+                    is_optimized = true;
+                }
+                return is_optimized;
+            }
 
         case Entry::Type::FunctionInitial:
             return initial_function == true;
@@ -1976,7 +2005,7 @@ ParseEntry (const llvm::StringRef &format_str,
             switch (entry_def->type)
             {
                 case FormatEntity::Entry::Type::ParentString:
-                    entry.string = std::move(format_str.str());
+                    entry.string = format_str.str();
                     return error; // Success
 
                 case FormatEntity::Entry::Type::ParentNumber:
@@ -2026,7 +2055,7 @@ ParseEntry (const llvm::StringRef &format_str,
                 {
                     // Any value whose separator is a with a ':' means this value has a string argument
                     // that needs to be stored in the entry (like "${script.var:modulename.function}")
-                    entry.string = std::move(value.str());
+                    entry.string = value.str();
                 }
                 else
                 {
@@ -2247,7 +2276,7 @@ FormatEntity::ParseInternal (llvm::StringRef &format, Entry &parent_entry, uint3
                         Entry entry;
                         if (!variable_format.empty())
                         {
-                            entry.printf_format = std::move(variable_format.str());
+                            entry.printf_format = variable_format.str();
                             
                             // If the format contains a '%' we are going to assume this is
                             // a printf style format. So if you want to format your thread ID
@@ -2396,10 +2425,10 @@ FormatEntity::ExtractVariableInfo (llvm::StringRef &format_str, llvm::StringRef 
     variable_name = llvm::StringRef();
     variable_format = llvm::StringRef();
 
-    const size_t paren_pos = format_str.find_first_of('}');
+    const size_t paren_pos = format_str.find('}');
     if (paren_pos != llvm::StringRef::npos)
     {
-        const size_t percent_pos = format_str.find_first_of('%');
+        const size_t percent_pos = format_str.find('%');
         if (percent_pos < paren_pos)
         {
             if (percent_pos > 0)
@@ -2449,7 +2478,7 @@ MakeMatch (const llvm::StringRef &prefix, const char *suffix)
 {
     std::string match(prefix.str());
     match.append(suffix);
-    return std::move(match);
+    return match;
 }
 
 static void
@@ -2463,7 +2492,7 @@ AddMatches (const FormatEntity::Entry::Definition *def,
     {
         for (size_t i=0; i<n; ++i)
         {
-            std::string match = std::move(prefix.str());
+            std::string match = prefix.str();
             if (match_prefix.empty())
                 matches.AppendString(MakeMatch (prefix, def->children[i].name));
             else if (strncmp(def->children[i].name, match_prefix.data(), match_prefix.size()) == 0)
@@ -2488,7 +2517,7 @@ FormatEntity::AutoComplete (const char *s,
         // Hitting TAB after $ at the end of the string add a "{"
         if (dollar_pos == str.size() - 1)
         {
-            std::string match = std::move(str.str());
+            std::string match = str.str();
             match.append("{");
             matches.AppendString(std::move(match));
         }
@@ -2521,12 +2550,12 @@ FormatEntity::AutoComplete (const char *s,
                                 if (n > 0)
                                 {
                                     // "${thread.info" <TAB>
-                                    matches.AppendString(std::move(MakeMatch (str, ".")));
+                                    matches.AppendString(MakeMatch(str, "."));
                                 }
                                 else
                                 {
                                     // "${thread.id" <TAB>
-                                    matches.AppendString(std::move(MakeMatch (str, "}")));
+                                    matches.AppendString(MakeMatch (str, "}"));
                                     word_complete = true;
                                 }
                             }

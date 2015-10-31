@@ -20,31 +20,28 @@
 
 //++ ============================================================================
 // Details: MI common code utility class. Map type container that hold general
-//          object types (by being wrappin an variant wrapper)
+//          object types (by being a variant wrapper)
 //          objects by ID.
-// Gotchas: None.
-// Authors: Illya Rudkin 19/06/2014.
-// Changes: None.
 //--
 class CMIUtilMapIdToVariant : public CMICmnBase
 {
     // Methods:
   public:
-    /* ctor */ CMIUtilMapIdToVariant(void);
+    /* ctor */ CMIUtilMapIdToVariant();
 
     template <typename T> bool Add(const CMIUtilString &vId, const T &vData);
-    void Clear(void);
+    void Clear();
     template <typename T> bool Get(const CMIUtilString &vId, T &vrwData, bool &vrwbFound) const;
     bool HaveAlready(const CMIUtilString &vId) const;
-    bool IsEmpty(void) const;
+    bool IsEmpty() const;
     bool Remove(const CMIUtilString &vId);
 
     // Overridden:
   public:
     // From CMICmnBase
-    /* dtor */ virtual ~CMIUtilMapIdToVariant(void);
+    /* dtor */ ~CMIUtilMapIdToVariant() override;
 
-    // Typdefs:
+    // Typedefs:
   private:
     typedef std::map<CMIUtilString, CMIUtilVariant> MapKeyToVariantValue_t;
     typedef std::pair<CMIUtilString, CMIUtilVariant> MapPairKeyToVariantValue_t;
@@ -65,8 +62,8 @@ class CMIUtilMapIdToVariant : public CMICmnBase
 // Args:    T       - The data object's variable type.
 //          vId     - (R) Unique ID i.e. GUID.
 //          vData   - (R) The general data object to be stored of some type.
-// Return:  MIstatus::success - Functional succeeded.
-//          MIstatus::failure - Functional failed.
+// Return:  MIstatus::success - Function succeeded.
+//          MIstatus::failure - Function failed.
 // Throws:  None.
 //--
 template <typename T>
@@ -98,8 +95,8 @@ CMIUtilMapIdToVariant::Add(const CMIUtilString &vId, const T &vData)
 //          vId         - (R) Unique ID i.e. GUID.
 //          vrwData     - (W) Copy of the data object held.
 //          vrwbFound   - (W) True = data found, false = data not found.
-// Return:  MIstatus::success - Functional succeeded.
-//          MIstatus::failure - Functional failed.
+// Return:  MIstatus::success - Function succeeded.
+//          MIstatus::failure - Function failed.
 // Throws:  None.
 //--
 template <typename T>

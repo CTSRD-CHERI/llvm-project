@@ -1,7 +1,10 @@
 """Test lldb's response time for 'frame variable' command."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys
-import unittest2
 import lldb
 from lldbbench import *
 
@@ -25,12 +28,13 @@ class FrameVariableResponseBench(BenchBase):
             self.count = 20
 
     @benchmarks_test
+    @no_debug_info_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_startup_delay(self):
         """Test response time for the 'frame variable' command."""
-        print
+        print()
         self.run_frame_variable_bench(self.exe, self.break_spec, self.count)
-        print "lldb frame variable benchmark:", self.stopwatch
+        print("lldb frame variable benchmark:", self.stopwatch)
 
     def run_frame_variable_bench(self, exe, break_spec, count):
         import pexpect
@@ -71,10 +75,3 @@ class FrameVariableResponseBench(BenchBase):
         # The test is about to end and if we come to here, the child process has
         # been terminated.  Mark it so.
         self.child = None
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

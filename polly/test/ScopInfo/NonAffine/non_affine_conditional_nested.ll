@@ -1,4 +1,5 @@
-; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine-branches -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine-branches \
+; RUN:                -analyze < %s | FileCheck %s
 ;
 ;    void f(int *A) {
 ;      for (int i = 0; i < 1024; i++)
@@ -10,19 +11,17 @@
 ; CHECK:    Region: %bb1---%bb18
 ; CHECK:    Max Loop Depth:  1
 ; CHECK:    Statements {
-; CHECK:      Stmt_(bb2 => bb16)
-; CHECK:            Domain :=
-; CHECK:                { Stmt_(bb2 => bb16)[i0] : i0 >= 0 and i0 <= 1023 };
+; CHECK:      Stmt_bb2__TO__bb16
 ; CHECK:            Schedule :=
-; CHECK:                { Stmt_(bb2 => bb16)[i0] -> [i0] };
+; CHECK:                { Stmt_bb2__TO__bb16[i0] -> [i0] };
 ; CHECK:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                { Stmt_(bb2 => bb16)[i0] -> MemRef_A[i0] };
+; CHECK:                { Stmt_bb2__TO__bb16[i0] -> MemRef_A[i0] };
 ; CHECK:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                { Stmt_(bb2 => bb16)[i0] -> MemRef_A[-1 + i0] };
+; CHECK:                { Stmt_bb2__TO__bb16[i0] -> MemRef_A[-1 + i0] };
 ; CHECK:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                { Stmt_(bb2 => bb16)[i0] -> MemRef_A[-2 + i0] };
+; CHECK:                { Stmt_bb2__TO__bb16[i0] -> MemRef_A[-2 + i0] };
 ; CHECK:            MayWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                { Stmt_(bb2 => bb16)[i0] -> MemRef_A[i0] };
+; CHECK:                { Stmt_bb2__TO__bb16[i0] -> MemRef_A[i0] };
 ; CHECK:    }
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"

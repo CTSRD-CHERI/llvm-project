@@ -2,8 +2,11 @@
 Test the AddressSanitizer runtime support for report breakpoint and data extraction.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -17,23 +20,13 @@ class AsanTestReportDataCase(TestBase):
     # may not have the debugging API which was recently added, so we're calling
     # self.useBuiltClang() to use clang from the llvm-build directory instead
 
-    @dsym_test
-    @skipIfRemote
-    @skipUnlessCompilerRt
-    @skipUnlessDarwin
-    def test_with_dsym (self):
-        compiler = self.findBuiltClang ()
-        self.buildDsym (None, compiler)
-        self.asan_tests ()
-
-    @dwarf_test
     @expectedFailureLinux # non-core functionality, need to reenable and fix later (DES 2014.11.07)
     @skipIfFreeBSD # llvm.org/pr21136 runtimes not yet available by default
     @skipIfRemote
     @skipUnlessCompilerRt
-    def test_with_dwarf (self):
+    def test(self):
         compiler = self.findBuiltClang ()
-        self.buildDwarf (None, compiler)
+        self.build (None, compiler)
         self.asan_tests ()
 
     def setUp(self):
@@ -88,9 +81,3 @@ class AsanTestReportDataCase(TestBase):
         s = s.GetData()
         data2 = json.loads(s)
         self.assertEqual(data, data2)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

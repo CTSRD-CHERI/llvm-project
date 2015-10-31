@@ -18,7 +18,7 @@
 // Return:  None.
 // Throws:  None.
 //--
-CMICmdArgValString::CMICmdArgValString(void)
+CMICmdArgValString::CMICmdArgValString()
     : m_bHandleQuotedString(false)
     , m_bAcceptNumbers(false)
     , m_bHandleDirPaths(false)
@@ -44,7 +44,7 @@ CMICmdArgValString::CMICmdArgValString(const bool vbAnything)
 //++ ------------------------------------------------------------------------------------
 // Details: CMICmdArgValString constructor.
 // Type:    Method.
-// Args:    vbHandleQuotes      - (R) True = Parse a string surrounded by quotes spaces are not delimitors, false = only text up to
+// Args:    vbHandleQuotes      - (R) True = Parse a string surrounded by quotes spaces are not delimiters, false = only text up to
 // next delimiting space character.
 //          vbAcceptNumbers     - (R) True = Parse a string and accept as a number if number, false = numbers not recognised
 // as string types.
@@ -67,7 +67,7 @@ CMICmdArgValString::CMICmdArgValString(const bool vbHandleQuotes, const bool vbA
 // Args:    vrArgName       - (R) Argument's name to search by.
 //          vbMandatory     - (R) True = Yes must be present, false = optional argument.
 //          vbHandleByCmd   - (R) True = Command processes *this option, false = not handled.
-//          vbHandleQuotes  - (R) True = Parse a string surrounded by quotes spaces are not delimitors, false = only text up to
+//          vbHandleQuotes  - (R) True = Parse a string surrounded by quotes spaces are not delimiters, false = only text up to
 // next delimiting space character. (Dflt = false)
 //          vbAcceptNumbers - (R) True = Parse a string and accept as a number if number, false = numbers not recognised as
 // string types. (Dflt = false)
@@ -91,7 +91,7 @@ CMICmdArgValString::CMICmdArgValString(const CMIUtilString &vrArgName, const boo
 // Return:  None.
 // Throws:  None.
 //--
-CMICmdArgValString::~CMICmdArgValString(void)
+CMICmdArgValString::~CMICmdArgValString()
 {
 }
 
@@ -179,7 +179,7 @@ CMICmdArgValString::ValidateQuotedText(CMICmdArgContext &vrwArgContext)
     if (vrwArgContext.RemoveArg(rArg))
     {
         m_bValid = true;
-        const MIchar cQuote = '"';
+        const char cQuote = '"';
         m_argValue = rArg.Trim(cQuote).StripSlashes();
         return MIstatus::success;
     }
@@ -220,8 +220,8 @@ CMICmdArgValString::IsStringArgSingleText(const CMIUtilString &vrTxt) const
     if (!m_bHandleDirPaths)
     {
         // Look for directory file paths, if found reject
-        const bool bHavePosSlash = (vrTxt.find_first_of("/") != std::string::npos);
-        const bool bHaveBckSlash = (vrTxt.find_first_of("\\") != std::string::npos);
+        const bool bHavePosSlash = (vrTxt.find('/') != std::string::npos);
+        const bool bHaveBckSlash = (vrTxt.find('\\') != std::string::npos);
         if (bHavePosSlash || bHaveBckSlash)
             return false;
     }
@@ -231,11 +231,11 @@ CMICmdArgValString::IsStringArgSingleText(const CMIUtilString &vrTxt) const
         return false;
 
     // Look for -f type short options, if found reject
-    if ((0 == vrTxt.find("-")) && (vrTxt.length() == 2))
+    if ((0 == vrTxt.find('-')) && (vrTxt.length() == 2))
         return false;
 
     // Look for thread group i1 i2 i3...., if found reject
-    if ((vrTxt.find("i") == 0) && ::isdigit(vrTxt[1]))
+    if ((vrTxt.find('i') == 0) && ::isdigit(vrTxt[1]))
         return false;
 
     // Look for numbers, if found reject
@@ -262,19 +262,19 @@ CMICmdArgValString::IsStringArgQuotedText(const CMIUtilString &vrTxt) const
         return true;
 
     // CODETAG_QUOTEDTEXT_SIMILAR_CODE
-    const MIchar cQuote = '"';
-    const MIint nPos = vrTxt.find(cQuote);
-    if (nPos == (MIint)std::string::npos)
+    const char cQuote = '"';
+    const size_t nPos = vrTxt.find(cQuote);
+    if (nPos == std::string::npos)
         return false;
 
     // Is one and only quote at end of the string
-    if (nPos == (MIint)(vrTxt.length() - 1))
+    if (nPos == (vrTxt.length() - 1))
         return false;
 
     // Quote must be the first character in the string or be preceded by a space
     // Also check for embedded string formating quote
-    const MIchar cBckSlash = '\\';
-    const MIchar cSpace = ' ';
+    const char cBckSlash = '\\';
+    const char cSpace = ' ';
     if ((nPos > 1) && (vrTxt[nPos - 1] == cBckSlash) && (vrTxt[nPos - 2] != cSpace))
     {
         return false;
@@ -283,8 +283,8 @@ CMICmdArgValString::IsStringArgQuotedText(const CMIUtilString &vrTxt) const
         return false;
 
     // Need to find the other quote
-    const MIint nPos2 = vrTxt.rfind(cQuote);
-    if (nPos2 == (MIint)std::string::npos)
+    const size_t nPos2 = vrTxt.rfind(cQuote);
+    if (nPos2 == std::string::npos)
         return false;
 
     // Make sure not same quote, need two quotes
@@ -308,22 +308,22 @@ bool
 CMICmdArgValString::IsStringArgQuotedTextEmbedded(const CMIUtilString &vrTxt) const
 {
     // CODETAG_QUOTEDTEXT_SIMILAR_CODE
-    const MIchar cBckSlash = '\\';
-    const MIint nPos = vrTxt.find(cBckSlash);
-    if (nPos == (MIint)std::string::npos)
+    const char cBckSlash = '\\';
+    const size_t nPos = vrTxt.find(cBckSlash);
+    if (nPos == std::string::npos)
         return false;
 
     // Slash must be the first character in the string or be preceded by a space
-    const MIchar cSpace = ' ';
+    const char cSpace = ' ';
     if ((nPos > 0) && (vrTxt[nPos - 1] != cSpace))
         return false;
 
     // Need to find the other matching slash
-    const MIint nPos2 = vrTxt.rfind(cBckSlash);
-    if (nPos2 == (MIint)std::string::npos)
+    const size_t nPos2 = vrTxt.rfind(cBckSlash);
+    if (nPos2 == std::string::npos)
         return false;
 
-    // Make sure not same back slash, need two slashs
+    // Make sure not same back slash, need two slashes
     if (nPos == nPos2)
         return MIstatus::failure;
 
@@ -343,15 +343,15 @@ CMICmdArgValString::IsStringArgQuotedTextEmbedded(const CMIUtilString &vrTxt) co
 bool
 CMICmdArgValString::IsStringArgQuotedQuotedTextEmbedded(const CMIUtilString &vrTxt) const
 {
-    const MIint nPos = vrTxt.find("\"\\\"");
-    if (nPos == (MIint)std::string::npos)
+    const size_t nPos = vrTxt.find("\"\\\"");
+    if (nPos == std::string::npos)
         return false;
 
-    const MIint nPos2 = vrTxt.rfind("\\\"\"");
-    if (nPos2 == (MIint)std::string::npos)
+    const size_t nPos2 = vrTxt.rfind("\\\"\"");
+    if (nPos2 == std::string::npos)
         return false;
 
-    const MIint nLen = vrTxt.length();
+    const size_t nLen = vrTxt.length();
     if ((nLen > 5) && ((nPos + 2) == (nPos2 - 2)))
         return false;
 

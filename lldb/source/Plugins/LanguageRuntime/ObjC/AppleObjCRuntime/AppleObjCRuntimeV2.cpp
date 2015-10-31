@@ -1,4 +1,4 @@
-//===-- AppleObjCRuntimeV2.cpp --------------------------------------*- C++ -*-===//
+//===-- AppleObjCRuntimeV2.cpp ----------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,13 +7,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <string>
-#include <vector>
+// C Includes
 #include <stdint.h>
 
+// C++ Includes
+#include <string>
+#include <vector>
+
+// Other libraries and framework includes
+#include "clang/AST/ASTContext.h"
+#include "clang/AST/DeclObjC.h"
+
+// Project includes
 #include "lldb/lldb-enumerations.h"
 #include "lldb/Core/ClangForward.h"
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 
 #include "lldb/Core/ClangForward.h"
 #include "lldb/Core/ConstString.h"
@@ -28,8 +36,8 @@
 #include "lldb/Core/StreamString.h"
 #include "lldb/Core/Timer.h"
 #include "lldb/Core/ValueObjectVariable.h"
-#include "lldb/Expression/ClangFunction.h"
-#include "lldb/Expression/ClangUtilityFunction.h"
+#include "lldb/Expression/FunctionCaller.h"
+#include "lldb/Expression/UtilityFunction.h"
 #include "lldb/Host/StringConvert.h"
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Interpreter/CommandObjectMultiword.h"
@@ -52,12 +60,7 @@
 #include "AppleObjCDeclVendor.h"
 #include "AppleObjCTrampolineHandler.h"
 
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/DeclObjC.h"
-
 #include "Plugins/Platform/MacOSX/PlatformiOSSimulator.h"
-
-#include <vector>
 
 using namespace lldb;
 using namespace lldb_private;
@@ -342,17 +345,14 @@ ExtractRuntimeGlobalSymbol (Process* process,
         error.SetErrorString("no symbol");
         return default_value;
     }
-
 }
 
 AppleObjCRuntimeV2::AppleObjCRuntimeV2 (Process *process,
                                         const ModuleSP &objc_module_sp) :
     AppleObjCRuntime (process),
-    m_get_class_info_function(),
     m_get_class_info_code(),
     m_get_class_info_args (LLDB_INVALID_ADDRESS),
     m_get_class_info_args_mutex (Mutex::eMutexTypeNormal),
-    m_get_shared_cache_class_info_function(),
     m_get_shared_cache_class_info_code(),
     m_get_shared_cache_class_info_args (LLDB_INVALID_ADDRESS),
     m_get_shared_cache_class_info_args_mutex (Mutex::eMutexTypeNormal),
@@ -370,21 +370,19 @@ AppleObjCRuntimeV2::AppleObjCRuntimeV2 (Process *process,
     m_has_object_getClass = (objc_module_sp->FindFirstSymbolWithNameAndType(g_gdb_object_getClass, eSymbolTypeCode) != NULL);
 }
 
-AppleObjCRuntimeV2::~AppleObjCRuntimeV2()
-{
-}
-
 bool
 AppleObjCRuntimeV2::GetDynamicTypeAndAddress (ValueObject &in_value,
                                               DynamicValueType use_dynamic, 
                                               TypeAndOrName &class_type_or_name, 
-                                              Address &address)
+                                              Address &address,
+                                              Value::ValueType &value_type)
 {
     // The Runtime is attached to a particular process, you shouldn't pass in a value from another process.
     assert (in_value.GetProcessSP().get() == m_process);
     assert (m_process != NULL);
     
     class_type_or_name.Clear();
+    value_type = Value::ValueType::eValueTypeScalar;
 
     // Make sure we can have a dynamic value before starting...
     if (CouldHaveDynamicValue (in_value))
@@ -411,13 +409,13 @@ AppleObjCRuntimeV2::GetDynamicTypeAndAddress (ValueObject &in_value,
                 }
                 else
                 {
-                    // try to go for a ClangASTType at least
+                    // try to go for a CompilerType at least
                     DeclVendor* vendor = GetDeclVendor();
                     if (vendor)
                     {
                         std::vector<clang::NamedDecl*> decls;
                         if (vendor->FindDecls(class_name, false, 1, decls) && decls.size())
-                            class_type_or_name.SetClangASTType(ClangASTContext::GetTypeForDecl(decls[0]));
+                            class_type_or_name.SetCompilerType(ClangASTContext::GetTypeForDecl(decls[0]));
                     }
                 }
             }
@@ -438,7 +436,7 @@ AppleObjCRuntimeV2::CreateInstance (Process *process, LanguageType language)
     {
         ModuleSP objc_module_sp;
         
-        if (AppleObjCRuntime::GetObjCVersion (process, objc_module_sp) == eAppleObjC_V2)
+        if (AppleObjCRuntime::GetObjCVersion (process, objc_module_sp) == ObjCRuntimeVersions::eAppleObjC_V2)
             return new AppleObjCRuntimeV2 (process, objc_module_sp);
         else
             return NULL;
@@ -450,7 +448,6 @@ AppleObjCRuntimeV2::CreateInstance (Process *process, LanguageType language)
 class CommandObjectObjC_ClassTable_Dump : public CommandObjectParsed
 {
 public:
-    
     CommandObjectObjC_ClassTable_Dump (CommandInterpreter &interpreter) :
     CommandObjectParsed (interpreter,
                          "dump",
@@ -461,14 +458,12 @@ public:
                          eCommandProcessMustBePaused   )
     {
     }
-    
-    ~CommandObjectObjC_ClassTable_Dump ()
-    {
-    }
-    
+
+    ~CommandObjectObjC_ClassTable_Dump() override = default;
+
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute(Args& command, CommandReturnObject &result) override
     {
         Process *process = m_exe_ctx.GetProcessPtr();
         ObjCLanguageRuntime *objc_runtime = process->GetObjCLanguageRuntime();
@@ -510,7 +505,6 @@ protected:
 class CommandObjectMultiwordObjC_TaggedPointer_Info : public CommandObjectParsed
 {
 public:
-    
     CommandObjectMultiwordObjC_TaggedPointer_Info (CommandInterpreter &interpreter) :
     CommandObjectParsed (interpreter,
                          "info",
@@ -533,14 +527,12 @@ public:
         // Push the data for the first argument into the m_arguments vector.
         m_arguments.push_back (arg);
     }
-    
-    ~CommandObjectMultiwordObjC_TaggedPointer_Info ()
-    {
-    }
-    
+
+    ~CommandObjectMultiwordObjC_TaggedPointer_Info() override = default;
+
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute(Args& command, CommandReturnObject &result) override
     {
         if (command.GetArgumentCount() == 0)
         {
@@ -610,7 +602,6 @@ protected:
 class CommandObjectMultiwordObjC_ClassTable : public CommandObjectMultiword
 {
 public:
-    
     CommandObjectMultiwordObjC_ClassTable (CommandInterpreter &interpreter) :
     CommandObjectMultiword (interpreter,
                             "class-table",
@@ -619,11 +610,8 @@ public:
     {
         LoadSubCommand ("dump",   CommandObjectSP (new CommandObjectObjC_ClassTable_Dump (interpreter)));
     }
-    
-    virtual
-    ~CommandObjectMultiwordObjC_ClassTable ()
-    {
-    }
+
+    ~CommandObjectMultiwordObjC_ClassTable() override = default;
 };
 
 class CommandObjectMultiwordObjC_TaggedPointer : public CommandObjectMultiword
@@ -638,17 +626,13 @@ public:
     {
         LoadSubCommand ("info",   CommandObjectSP (new CommandObjectMultiwordObjC_TaggedPointer_Info (interpreter)));
     }
-    
-    virtual
-    ~CommandObjectMultiwordObjC_TaggedPointer ()
-    {
-    }
+
+    ~CommandObjectMultiwordObjC_TaggedPointer() override = default;
 };
 
 class CommandObjectMultiwordObjC : public CommandObjectMultiword
 {
 public:
-    
     CommandObjectMultiwordObjC (CommandInterpreter &interpreter) :
     CommandObjectMultiword (interpreter,
                             "objc",
@@ -658,11 +642,8 @@ public:
         LoadSubCommand ("class-table",   CommandObjectSP (new CommandObjectMultiwordObjC_ClassTable (interpreter)));
         LoadSubCommand ("tagged-pointer",   CommandObjectSP (new CommandObjectMultiwordObjC_TaggedPointer (interpreter)));
     }
-    
-    virtual
-    ~CommandObjectMultiwordObjC ()
-    {
-    }
+
+    ~CommandObjectMultiwordObjC() override = default;
 };
 
 void
@@ -689,7 +670,6 @@ AppleObjCRuntimeV2::GetPluginNameStatic()
     return g_name;
 }
 
-
 //------------------------------------------------------------------
 // PluginInterface protocol
 //------------------------------------------------------------------
@@ -714,6 +694,7 @@ AppleObjCRuntimeV2::CreateExceptionResolver (Breakpoint *bkpt, bool catch_bp, bo
         resolver_sp.reset (new BreakpointResolverName (bkpt,
                                                        "objc_exception_throw",
                                                        eFunctionNameTypeBase,
+                                                       eLanguageTypeUnknown,
                                                        Breakpoint::Exact,
                                                        eLazyBoolNo));
     // FIXME: We don't do catch breakpoints for ObjC yet.
@@ -721,7 +702,7 @@ AppleObjCRuntimeV2::CreateExceptionResolver (Breakpoint *bkpt, bool catch_bp, bo
     return resolver_sp;
 }
 
-ClangUtilityFunction *
+UtilityFunction *
 AppleObjCRuntimeV2::CreateObjectChecker(const char *name)
 {
     char check_function_code[2048];
@@ -779,11 +760,12 @@ AppleObjCRuntimeV2::CreateObjectChecker(const char *name)
     
     assert (len < (int)sizeof(check_function_code));
 
-    return new ClangUtilityFunction(check_function_code, name);
+    Error error;
+    return GetTargetRef().GetUtilityFunctionForLanguage(check_function_code, eLanguageTypeObjC, name, error);
 }
 
 size_t
-AppleObjCRuntimeV2::GetByteOffsetForIvar (ClangASTType &parent_ast_type, const char *ivar_name)
+AppleObjCRuntimeV2::GetByteOffsetForIvar (CompilerType &parent_ast_type, const char *ivar_name)
 {
     uint32_t ivar_offset = LLDB_INVALID_IVAR_OFFSET;
 
@@ -834,7 +816,6 @@ AppleObjCRuntimeV2::GetByteOffsetForIvar (ClangASTType &parent_ast_type, const c
     return ivar_offset;
 }
 
-
 // tagged pointers are special not-a-real-pointer values that contain both type and value information
 // this routine attempts to check with as little computational effort as possible whether something
 // could possibly be a tagged pointer - false positives are possible but false negatives shouldn't
@@ -849,7 +830,6 @@ AppleObjCRuntimeV2::IsTaggedPointer(addr_t ptr)
 class RemoteNXMapTable
 {
 public:
-    
     RemoteNXMapTable () :
         m_count (0),
         m_num_buckets_minus_one (0),
@@ -994,6 +974,7 @@ public:
             
             return element(ConstString(key_string.c_str()), (ObjCLanguageRuntime::ObjCISA)value);
         }
+
     private:
         void AdvanceToValidIndex ()
         {
@@ -1070,8 +1051,6 @@ private:
     lldb::addr_t m_invalid_key;
 };
 
-
-
 AppleObjCRuntimeV2::HashTableSignature::HashTableSignature() :
     m_count (0),
     m_num_buckets (0),
@@ -1138,7 +1117,7 @@ AppleObjCRuntimeV2::GetClassDescriptor (ValueObject& valobj)
     // if we get an invalid VO (which might still happen when playing around
     // with pointers returned by the expression parser, don't consider this
     // a valid ObjC object)
-    if (valobj.GetClangType().IsValid())
+    if (valobj.GetCompilerType().IsValid())
     {
         addr_t isa_pointer = valobj.GetPointerValue();
         
@@ -1244,78 +1223,74 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapDynamic(RemoteNXMapTable &hash_table
     }
     
     // Make some types for our arguments
-    ClangASTType clang_uint32_t_type = ast->GetBuiltinTypeForEncodingAndBitSize(eEncodingUint, 32);
-    ClangASTType clang_void_pointer_type = ast->GetBasicType(eBasicTypeVoid).GetPointerType();
-    
-    if (!m_get_class_info_code.get())
-    {
-        m_get_class_info_code.reset (new ClangUtilityFunction (g_get_dynamic_class_info_body,
-                                                               g_get_dynamic_class_info_name));
-        
-        errors.Clear();
-        
-        if (!m_get_class_info_code->Install(errors, exe_ctx))
-        {
-            if (log)
-                log->Printf ("Failed to install implementation lookup: %s.", errors.GetData());
-            m_get_class_info_code.reset();
-        }
-    }
-    
-    if (m_get_class_info_code.get())
-        function_address.SetOffset(m_get_class_info_code->StartAddress());
-    else
-        return false;
+    CompilerType clang_uint32_t_type = ast->GetBuiltinTypeForEncodingAndBitSize(eEncodingUint, 32);
+    CompilerType clang_void_pointer_type = ast->GetBasicType(eBasicTypeVoid).GetPointerType();
     
     ValueList arguments;
-    
-    // Next make the runner function for our implementation utility function.
-    if (!m_get_class_info_function.get())
+    FunctionCaller *get_class_info_function = nullptr;
+
+    if (!m_get_class_info_code.get())
     {
+        Error error;
+        m_get_class_info_code.reset (GetTargetRef().GetUtilityFunctionForLanguage (g_get_dynamic_class_info_body,
+                                                                                   eLanguageTypeObjC,
+                                                                                   g_get_dynamic_class_info_name,
+                                                                                   error));
+        if (error.Fail())
+        {
+            if (log)
+                log->Printf ("Failed to get Utility Function for implementation lookup: %s", error.AsCString());
+            m_get_class_info_code.reset();
+        }
+        else
+        {
+            errors.Clear();
+            
+            if (!m_get_class_info_code->Install(errors, exe_ctx))
+            {
+                if (log)
+                    log->Printf ("Failed to install implementation lookup: %s.", errors.GetData());
+                m_get_class_info_code.reset();
+            }
+        }
+        if (!m_get_class_info_code.get())
+            return false;
+        
+        // Next make the runner function for our implementation utility function.
         Value value;
         value.SetValueType (Value::eValueTypeScalar);
-//        value.SetContext (Value::eContextTypeClangType, clang_void_pointer_type);
-        value.SetClangType (clang_void_pointer_type);
+        value.SetCompilerType (clang_void_pointer_type);
         arguments.PushValue (value);
         arguments.PushValue (value);
         
         value.SetValueType (Value::eValueTypeScalar);
-//        value.SetContext (Value::eContextTypeClangType, clang_uint32_t_type);
-        value.SetClangType (clang_uint32_t_type);
+        value.SetCompilerType (clang_uint32_t_type);
         arguments.PushValue (value);
         
-        m_get_class_info_function.reset(new ClangFunction (*m_process,
-                                                           clang_uint32_t_type,
-                                                           function_address,
-                                                           arguments,
-                                                           "objc-v2-isa-to-descriptor"));
+        get_class_info_function = m_get_class_info_code->MakeFunctionCaller(clang_uint32_t_type,
+                                                                            arguments,
+                                                                            error);
         
-        if (m_get_class_info_function.get() == NULL)
-            return false;
-        
-        errors.Clear();
-        
-        unsigned num_errors = m_get_class_info_function->CompileFunction(errors);
-        if (num_errors)
+        if (error.Fail())
         {
             if (log)
-                log->Printf ("Error compiling function: \"%s\".", errors.GetData());
-            return false;
-        }
-        
-        errors.Clear();
-        
-        if (!m_get_class_info_function->WriteFunctionWrapper(exe_ctx, errors))
-        {
-            if (log)
-                log->Printf ("Error Inserting function: \"%s\".", errors.GetData());
+                log->Printf("Failed to make function caller for implementation lookup: %s.", error.AsCString());
             return false;
         }
     }
     else
     {
-        arguments = m_get_class_info_function->GetArgumentValues ();
+        get_class_info_function = m_get_class_info_code->GetFunctionCaller();
+        if (!get_class_info_function)
+        {
+            if (log)
+                log->Printf ("Failed to get implementation lookup function caller: %s.", errors.GetData());
+            return false;
+        }
+        arguments = get_class_info_function->GetArgumentValues();
     }
+
+    errors.Clear();
     
     const uint32_t class_info_byte_size = addr_size + 4;
     const uint32_t class_infos_byte_size = num_classes * class_info_byte_size;
@@ -1338,9 +1313,8 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapDynamic(RemoteNXMapTable &hash_table
     errors.Clear();
     
     // Write our function arguments into the process so we can run our function
-    if (m_get_class_info_function->WriteFunctionArguments (exe_ctx,
+    if (get_class_info_function->WriteFunctionArguments (exe_ctx,
                                                            m_get_class_info_args,
-                                                           function_address,
                                                            arguments,
                                                            errors))
     {
@@ -1354,17 +1328,17 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapDynamic(RemoteNXMapTable &hash_table
         Value return_value;
         return_value.SetValueType (Value::eValueTypeScalar);
         //return_value.SetContext (Value::eContextTypeClangType, clang_uint32_t_type);
-        return_value.SetClangType (clang_uint32_t_type);
+        return_value.SetCompilerType (clang_uint32_t_type);
         return_value.GetScalar() = 0;
         
         errors.Clear();
         
         // Run the function
-        ExpressionResults results = m_get_class_info_function->ExecuteFunction (exe_ctx,
-                                                                               &m_get_class_info_args,
-                                                                               options,
-                                                                               errors,
-                                                                               return_value);
+        ExpressionResults results = get_class_info_function->ExecuteFunction (exe_ctx,
+                                                                              &m_get_class_info_args,
+                                                                              options,
+                                                                              errors,
+                                                                              return_value);
         
         if (results == eExpressionCompleted)
         {
@@ -1498,78 +1472,70 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapSharedCache()
     }
     
     // Make some types for our arguments
-    ClangASTType clang_uint32_t_type = ast->GetBuiltinTypeForEncodingAndBitSize(eEncodingUint, 32);
-    ClangASTType clang_void_pointer_type = ast->GetBasicType(eBasicTypeVoid).GetPointerType();
+    CompilerType clang_uint32_t_type = ast->GetBuiltinTypeForEncodingAndBitSize(eEncodingUint, 32);
+    CompilerType clang_void_pointer_type = ast->GetBasicType(eBasicTypeVoid).GetPointerType();
+    
+    ValueList arguments;
+    FunctionCaller *get_shared_cache_class_info_function = nullptr;
     
     if (!m_get_shared_cache_class_info_code.get())
     {
-        m_get_shared_cache_class_info_code.reset (new ClangUtilityFunction (g_get_shared_cache_class_info_body,
-                                                                            g_get_shared_cache_class_info_name));
-        
-        errors.Clear();
-        
-        if (!m_get_shared_cache_class_info_code->Install(errors, exe_ctx))
+        Error error;
+        m_get_shared_cache_class_info_code.reset (GetTargetRef().GetUtilityFunctionForLanguage (g_get_shared_cache_class_info_body,
+                                                                                                eLanguageTypeObjC,
+                                                                                                g_get_shared_cache_class_info_name,
+                                                                                                error));
+        if (error.Fail())
         {
             if (log)
-                log->Printf ("Failed to install implementation lookup: %s.", errors.GetData());
+                log->Printf ("Failed to get Utility function for implementation lookup: %s.", error.AsCString());
             m_get_shared_cache_class_info_code.reset();
         }
-    }
+        else
+        {
+            errors.Clear();
+            
+            if (!m_get_shared_cache_class_info_code->Install(errors, exe_ctx))
+            {
+                if (log)
+                    log->Printf ("Failed to install implementation lookup: %s.", errors.GetData());
+                m_get_shared_cache_class_info_code.reset();
+            }
+        }
+        
+        if (!m_get_shared_cache_class_info_code.get())
+            return DescriptorMapUpdateResult::Fail();
     
-    if (m_get_shared_cache_class_info_code.get())
-        function_address.SetOffset(m_get_shared_cache_class_info_code->StartAddress());
-    else
-        return DescriptorMapUpdateResult::Fail();
-    
-    ValueList arguments;
-    
-    // Next make the runner function for our implementation utility function.
-    if (!m_get_shared_cache_class_info_function.get())
-    {
+        // Next make the function caller for our implementation utility function.
         Value value;
         value.SetValueType (Value::eValueTypeScalar);
         //value.SetContext (Value::eContextTypeClangType, clang_void_pointer_type);
-        value.SetClangType (clang_void_pointer_type);
+        value.SetCompilerType (clang_void_pointer_type);
         arguments.PushValue (value);
         arguments.PushValue (value);
         
         value.SetValueType (Value::eValueTypeScalar);
         //value.SetContext (Value::eContextTypeClangType, clang_uint32_t_type);
-        value.SetClangType (clang_uint32_t_type);
+        value.SetCompilerType (clang_uint32_t_type);
         arguments.PushValue (value);
         
-        m_get_shared_cache_class_info_function.reset(new ClangFunction (*m_process,
-                                                                        clang_uint32_t_type,
-                                                                        function_address,
-                                                                        arguments,
-                                                                        "objc-isa-to-descriptor-shared-cache"));
+        get_shared_cache_class_info_function = m_get_shared_cache_class_info_code->MakeFunctionCaller(clang_uint32_t_type,
+                                                                                                      arguments,
+                                                                                                      error);
         
-        if (m_get_shared_cache_class_info_function.get() == NULL)
+        if (get_shared_cache_class_info_function == nullptr)
             return DescriptorMapUpdateResult::Fail();
-        
-        errors.Clear();
-        
-        unsigned num_errors = m_get_shared_cache_class_info_function->CompileFunction(errors);
-        if (num_errors)
-        {
-            if (log)
-                log->Printf ("Error compiling function: \"%s\".", errors.GetData());
-            return DescriptorMapUpdateResult::Fail();
-        }
-        
-        errors.Clear();
-        
-        if (!m_get_shared_cache_class_info_function->WriteFunctionWrapper(exe_ctx, errors))
-        {
-            if (log)
-                log->Printf ("Error Inserting function: \"%s\".", errors.GetData());
-            return DescriptorMapUpdateResult::Fail();
-        }
+    
     }
     else
     {
-        arguments = m_get_shared_cache_class_info_function->GetArgumentValues ();
+        get_shared_cache_class_info_function = m_get_shared_cache_class_info_code->GetFunctionCaller();
+        if (get_shared_cache_class_info_function == nullptr)
+            return DescriptorMapUpdateResult::Fail();
+        arguments = get_shared_cache_class_info_function->GetArgumentValues();
     }
+    
+    errors.Clear();
     
     const uint32_t class_info_byte_size = addr_size + 4;
     const uint32_t class_infos_byte_size = num_classes * class_info_byte_size;
@@ -1593,11 +1559,10 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapSharedCache()
     errors.Clear();
     
     // Write our function arguments into the process so we can run our function
-    if (m_get_shared_cache_class_info_function->WriteFunctionArguments (exe_ctx,
-                                                                        m_get_shared_cache_class_info_args,
-                                                                        function_address,
-                                                                        arguments,
-                                                                        errors))
+    if (get_shared_cache_class_info_function->WriteFunctionArguments (exe_ctx,
+                                                                      m_get_shared_cache_class_info_args,
+                                                                      arguments,
+                                                                      errors))
     {
         EvaluateExpressionOptions options;
         options.SetUnwindOnError(true);
@@ -1609,17 +1574,17 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapSharedCache()
         Value return_value;
         return_value.SetValueType (Value::eValueTypeScalar);
         //return_value.SetContext (Value::eContextTypeClangType, clang_uint32_t_type);
-        return_value.SetClangType (clang_uint32_t_type);
+        return_value.SetCompilerType (clang_uint32_t_type);
         return_value.GetScalar() = 0;
         
         errors.Clear();
         
         // Run the function
-        ExpressionResults results = m_get_shared_cache_class_info_function->ExecuteFunction (exe_ctx,
-                                                                                            &m_get_shared_cache_class_info_args,
-                                                                                            options,
-                                                                                            errors,
-                                                                                            return_value);
+        ExpressionResults results = get_shared_cache_class_info_function->ExecuteFunction (exe_ctx,
+                                                                                           &m_get_shared_cache_class_info_args,
+                                                                                           options,
+                                                                                           errors,
+                                                                                           return_value);
         
         if (results == eExpressionCompleted)
         {
@@ -1680,7 +1645,6 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapSharedCache()
     
     return DescriptorMapUpdateResult(success, any_found);
 }
-
 
 bool
 AppleObjCRuntimeV2::UpdateISAToDescriptorMapFromMemory (RemoteNXMapTable &hash_table)
@@ -1789,7 +1753,6 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapIfNeeded()
             else
                 m_loaded_objc_opt = true;
         }
-        
     }
     else
     {

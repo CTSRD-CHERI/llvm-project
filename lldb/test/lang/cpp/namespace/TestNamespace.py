@@ -2,8 +2,11 @@
 Test the printing of anonymous and named namespace variables.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -11,21 +14,6 @@ import lldbutil
 class NamespaceTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    # rdar://problem/8668674
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test that anonymous and named namespace variables display correctly."""
-        self.buildDsym()
-        self.namespace_variable_commands()
-
-    # rdar://problem/8668674
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test that anonymous and named namespace variables display correctly."""
-        self.buildDwarf()
-        self.namespace_variable_commands()
 
     def setUp(self):
         # Call super's setUp().
@@ -39,13 +27,16 @@ class NamespaceTestCase(TestBase):
         self.line_break = line_number('main.cpp',
                 '// Set break point at this line.')
 
-    def namespace_variable_commands(self):
+    # rdar://problem/8668674
+    @expectedFailureWindows("llvm.org/pr24764")
+    def test_with_run_command(self):
         """Test that anonymous and named namespace variables display correctly."""
+        self.build()
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line_break, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -118,9 +109,3 @@ class NamespaceTestCase(TestBase):
 
         self.expect("p variadic_sum",
             patterns = ['\(anonymous namespace\)::variadic_sum\(int, ...\)'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

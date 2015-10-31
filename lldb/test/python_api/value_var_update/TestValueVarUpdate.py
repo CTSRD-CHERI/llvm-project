@@ -1,7 +1,10 @@
 """Test SBValue::GetValueDidChange"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys, time
-import unittest2
 import lldb
 import time
 from lldbtest import *
@@ -10,24 +13,6 @@ class HelloWorldTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_process_launch_api(self):
-        """Test SBValue::GetValueDidChange"""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.do_test()
-
-    @expectedFailureFreeBSD("llvm.org/pr21620 GetValueDidChange() wrong")
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_process_launch_api(self):
-        """Test SBValue::GetValueDidChange"""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.do_test()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -35,14 +20,16 @@ class HelloWorldTestCase(TestBase):
         self.exe = os.path.join(os.getcwd(), self.testMethodName)
         self.d = {'EXE': self.testMethodName}
 
-    def do_test(self):
-        """Create target, breakpoint, launch a process, and then kill it."""
-
+    @add_test_categories(['pyapi'])
+    def test_with_process_launch_api(self):
+        """Test SBValue::GetValueDidChange"""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
         target = self.dbg.CreateTarget(self.exe)
 
         breakpoint = target.BreakpointCreateBySourceRegex("break here", lldb.SBFileSpec("main.c"))
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -70,9 +57,3 @@ class HelloWorldTestCase(TestBase):
         # Check complex type
         self.assertTrue(c.GetChildAtIndex(0).GetChildAtIndex(0).GetValueDidChange() and
                         not c.GetChildAtIndex(1).GetValueDidChange(), "GetValueDidChange() is saying a lie")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

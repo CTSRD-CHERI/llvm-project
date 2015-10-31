@@ -233,21 +233,20 @@ public:
         {
         }
 
-        virtual
-        ~Array()
+        ~Array() override
         {
         }
 
-        void
+        bool
         ForEach (std::function <bool(Object* object)> const &foreach_callback) const
         {
             for (const auto &object_sp : m_items)
             {
                 if (foreach_callback(object_sp.get()) == false)
-                    break;
+                    return false;
             }
+            return true;
         }
-
 
         size_t
         GetSize() const
@@ -374,8 +373,7 @@ public:
         collection m_items;
     };
 
-
-    class Integer  : public Object
+    class Integer : public Object
     {
     public:
         Integer (uint64_t i = 0) :
@@ -384,7 +382,7 @@ public:
         {
         }
 
-        virtual ~Integer()
+        ~Integer() override
         {
         }
 
@@ -406,7 +404,7 @@ public:
         uint64_t m_value;
     };
 
-    class Float  : public Object
+    class Float : public Object
     {
     public:
         Float (double d = 0.0) :
@@ -415,7 +413,7 @@ public:
         {
         }
 
-        virtual ~Float()
+        ~Float() override
         {
         }
 
@@ -437,7 +435,7 @@ public:
         double m_value;
     };
 
-    class Boolean  : public Object
+    class Boolean : public Object
     {
     public:
         Boolean (bool b = false) :
@@ -446,7 +444,7 @@ public:
         {
         }
 
-        virtual ~Boolean()
+        ~Boolean() override
         {
         }
 
@@ -468,9 +466,7 @@ public:
         bool m_value;
     };
 
-
-
-    class String  : public Object
+    class String : public Object
     {
     public:
         String (const char *cstr = NULL) :
@@ -521,7 +517,7 @@ public:
         {
         }
 
-        virtual ~Dictionary()
+        ~Dictionary() override
         {
         }
 
@@ -727,7 +723,7 @@ public:
         {
         }
 
-        virtual ~Null()
+        ~Null() override
         {
         }
 
@@ -777,10 +773,8 @@ public:
 
     static ObjectSP
     ParseJSON (std::string json_text);
-
 };  // class StructuredData
-
 
 } // namespace lldb_private
 
-#endif  // liblldb_StructuredData_h_
+#endif // liblldb_StructuredData_h_

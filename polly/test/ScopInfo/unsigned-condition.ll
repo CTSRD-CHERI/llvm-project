@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze -polly-allow-unsigned < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze -polly-allow-unsigned < %s | FileCheck %s
 
 ; void f(int a[], int N, unsigned P) {
 ;   int i;
@@ -19,7 +19,7 @@ bb:
   br i1 %brcond, label %store, label %bb.backedge
 
 store:
-  %scevgep = getelementptr i64, i64* %a, i64 %i
+  %scevgep = getelementptr inbounds i64, i64* %a, i64 %i
   store i64 %i, i64* %scevgep
   br label %bb.backedge
 
@@ -37,10 +37,14 @@ return:
 
 ; CHECK:  Stmt_store
 ; CHECK:        Domain :=
-; CHECK:            [N, P] -> { Stmt_store[i0] :
-; CHECK:              i0 >= 0 and i0 <= -1 + N and P >= 42
+; CHECK:            [P, N] -> { Stmt_store[i0] :
+; CHECK-DAG:          i0 >= 0
+; CHECK-DAG:        and
+; CHECK-DAG:          i0 <= -1 + N
+; CHECK-DAG:        and
+; CHECK-DAG:          P >= 42
 ; CHECK:                   };
 ; CHECK:        Schedule :=
-; CHECK:            [N, P] -> { Stmt_store[i0] -> [i0] };
+; CHECK:            [P, N] -> { Stmt_store[i0] -> [i0] };
 ; CHECK:        MustWriteAccess := [Reduction Type: NONE]
-; CHECK:            [N, P] -> { Stmt_store[i0] -> MemRef_a[i0] };
+; CHECK:            [P, N] -> { Stmt_store[i0] -> MemRef_a[i0] };

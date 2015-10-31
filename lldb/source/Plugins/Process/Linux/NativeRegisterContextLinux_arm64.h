@@ -30,6 +30,9 @@ namespace process_linux {
         uint32_t
         GetRegisterSetCount () const override;
 
+        uint32_t
+        GetUserRegisterCount() const override;
+
         const RegisterSet *
         GetRegisterSet (uint32_t set_index) const override;
 
@@ -78,6 +81,13 @@ namespace process_linux {
 
         bool
         WatchpointIsEnabled(uint32_t wp_index);
+
+        // Debug register type select
+        enum DREGType
+        {
+            eDREGTypeWATCH = 0,
+            eDREGTypeBREAK
+        };
 
     protected:
         Error
@@ -169,10 +179,13 @@ namespace process_linux {
         IsFPR(unsigned reg) const;
 
         Error
-        ReadHardwareDebugInfo(unsigned int &watch_count , unsigned int &break_count);
+        ReadHardwareDebugInfo();
 
         Error
-        WriteHardwareDebugRegs(lldb::addr_t *addr_buf, uint32_t *cntrl_buf, int type, int count);
+        WriteHardwareDebugRegs(int hwbType);
+
+        uint32_t
+        CalculateFprOffset(const RegisterInfo* reg_info) const;
     };
 
 } // namespace process_linux

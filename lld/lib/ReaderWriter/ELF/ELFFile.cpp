@@ -125,6 +125,19 @@ std::error_code ELFFile<ELFT>::createAtomizableSections() {
   // Record the number of relocs to guess at preallocating the buffer.
   uint64_t totalRelocs = 0;
   for (const Elf_Shdr &section : _objFile->sections()) {
+    switch (section.sh_type) {
+    case llvm::ELF::SHT_SYMTAB:
+      _symtab = &section;
+      continue;
+    case llvm::ELF::SHT_SYMTAB_SHNDX: {
+      ErrorOr<ArrayRef<Elf_Word>> tableOrErr = _objFile->getSHNDXTable(section);
+      if (std::error_code ec = tableOrErr.getError())
+        return ec;
+      _shndxTable = *tableOrErr;
+      continue;
+    }
+    }
+
     if (isIgnoredSection(&section))
       continue;
 
@@ -134,30 +147,28 @@ std::error_code ELFFile<ELFT>::createAtomizableSections() {
     }
 
     if (section.sh_type == llvm::ELF::SHT_RELA) {
-      auto sHdr = _objFile->getSection(section.sh_info);
-
-      auto sectionName = _objFile->getSectionName(sHdr);
-      if (std::error_code ec = sectionName.getError())
+      auto sHdrOrErr = _objFile->getSection(section.sh_info);
+      if (std::error_code ec = sHdrOrErr.getError())
         return ec;
-
+      auto sHdr = *sHdrOrErr;
       auto rai = _objFile->rela_begin(&section);
       auto rae = _objFile->rela_end(&section);
-
       _relocationAddendReferences[sHdr] = make_range(rai, rae);
       totalRelocs += std::distance(rai, rae);
     } else if (section.sh_type == llvm::ELF::SHT_REL) {
-      auto sHdr = _objFile->getSection(section.sh_info);
-
-      auto sectionName = _objFile->getSectionName(sHdr);
-      if (std::error_code ec = sectionName.getError())
+      auto sHdrOrErr = _objFile->getSection(section.sh_info);
+      if (std::error_code ec = sHdrOrErr.getError())
         return ec;
-
+      auto sHdr = *sHdrOrErr;
       auto ri = _objFile->rel_begin(&section);
       auto re = _objFile->rel_end(&section);
-
-      _relocationReferences[sHdr] = make_range(ri, re);
+      _relocationReferences[sHdr] = &section;
       totalRelocs += std::distance(ri, re);
     } else {
+      auto sectionName = _objFile->getSectionName(&section);
+      if (std::error_code ec = sectionName.getError())
+        return ec;
+      _ctx.notifyInputSectionName(*sectionName);
       _sectionSymbols[&section];
     }
   }
@@ -210,16 +221,27 @@ template <class ELFT>
 std::error_code ELFFile<ELFT>::createSymbolsFromAtomizableSections() {
   // Increment over all the symbols collecting atoms and symbol names for
   // later use.
-  auto SymI = _objFile->symbol_begin(), SymE = _objFile->symbol_end();
+  if (!_symtab)
+    return std::error_code();
 
+  ErrorOr<StringRef> strTableOrErr =
+      _objFile->getStringTableForSymtab(*_symtab);
+  if (std::error_code ec = strTableOrErr.getError())
+    return ec;
+  StringRef strTable = *strTableOrErr;
+
+  auto SymI = _objFile->symbol_begin(_symtab),
+       SymE = _objFile->symbol_end(_symtab);
   // Skip over dummy sym.
-  if (SymI != SymE)
-    ++SymI;
+  ++SymI;
 
   for (; SymI != SymE; ++SymI) {
-    const Elf_Shdr *section = _objFile->getSection(&*SymI);
+    ErrorOr<const Elf_Shdr *> section =
+        _objFile->getSection(SymI, _symtab, _shndxTable);
+    if (std::error_code ec = section.getError())
+      return ec;
 
-    auto symbolName = _objFile->getSymbolName(SymI, false);
+    auto symbolName = SymI->getName(strTable);
     if (std::error_code ec = symbolName.getError())
       return ec;
 
@@ -246,7 +268,7 @@ std::error_code ELFFile<ELFT>::createSymbolsFromAtomizableSections() {
       addAtom(*commonAtom);
       _symbolToAtomMapping.insert(std::make_pair(&*SymI, commonAtom));
     } else if (SymI->isDefined()) {
-      _sectionSymbols[section].push_back(SymI);
+      _sectionSymbols[*section].push_back(SymI);
     } else {
       llvm::errs() << "Unable to create atom for: " << *symbolName << "\n";
       return llvm::object::object_error::parse_failed;
@@ -301,11 +323,18 @@ template <class ELFT> std::error_code ELFFile<ELFT>::createAtoms() {
     ELFDefinedAtom<ELFT> *previousAtom = nullptr;
     ELFReference<ELFT> *anonFollowedBy = nullptr;
 
+    if (!_symtab)
+      continue;
+    ErrorOr<StringRef> strTableOrErr =
+        _objFile->getStringTableForSymtab(*_symtab);
+    if (std::error_code ec = strTableOrErr.getError())
+      return ec;
+    StringRef strTable = *strTableOrErr;
     for (auto si = symbols.begin(), se = symbols.end(); si != se; ++si) {
       auto symbol = *si;
       StringRef symbolName = "";
       if (symbol->getType() != llvm::ELF::STT_SECTION) {
-        auto symName = _objFile->getSymbolName(symbol, false);
+        auto symName = symbol->getName(strTable);
         if (std::error_code ec = symName.getError())
           return ec;
         symbolName = *symName;
@@ -478,16 +507,23 @@ std::error_code ELFFile<ELFT>::handleSectionGroup(
       reinterpret_cast<const Elf_Word *>(sectionContents->data());
   const size_t count = section->sh_size / sizeof(Elf_Word);
   for (size_t i = 1; i < count; i++) {
-    const Elf_Shdr *shdr = _objFile->getSection(groupMembers[i]);
-    ErrorOr<StringRef> sectionName = _objFile->getSectionName(shdr);
+    ErrorOr<const Elf_Shdr *> shdr = _objFile->getSection(groupMembers[i]);
+    if (std::error_code ec = shdr.getError())
+      return ec;
+    ErrorOr<StringRef> sectionName = _objFile->getSectionName(*shdr);
     if (std::error_code ec = sectionName.getError())
       return ec;
     sectionNames.push_back(*sectionName);
   }
-  const Elf_Sym *symbol = _objFile->getSymbol(section->sh_info);
-  const Elf_Shdr *symtab = _objFile->getSection(section->sh_link);
-  const Elf_Shdr *strtab_sec = _objFile->getSection(symtab->sh_link);
-  ErrorOr<StringRef> strtab_or_err = _objFile->getStringTable(strtab_sec);
+  ErrorOr<const Elf_Shdr *> symtab = _objFile->getSection(section->sh_link);
+  if (std::error_code ec = symtab.getError())
+    return ec;
+  const Elf_Sym *symbol = _objFile->getSymbol(*symtab, section->sh_info);
+  ErrorOr<const Elf_Shdr *> strtab_sec =
+      _objFile->getSection((*symtab)->sh_link);
+  if (std::error_code ec = strtab_sec.getError())
+    return ec;
+  ErrorOr<StringRef> strtab_or_err = _objFile->getStringTable(*strtab_sec);
   if (std::error_code ec = strtab_or_err.getError())
     return ec;
   StringRef strtab = *strtab_or_err;
@@ -576,7 +612,7 @@ ELFDefinedAtom<ELFT> *ELFFile<ELFT>::createDefinedAtomAndAssignRelocations(
 template <class ELFT>
 void ELFFile<ELFT>::createRelocationReferences(const Elf_Sym *symbol,
                                                ArrayRef<uint8_t> content,
-                                               range<Elf_Rela_Iter> rels) {
+                                               range<const Elf_Rela *> rels) {
   bool isMips64EL = _objFile->isMips64EL();
   const auto symValue = getSymbolValue(symbol);
   for (const auto &rel : rels) {
@@ -594,7 +630,8 @@ template <class ELFT>
 void ELFFile<ELFT>::createRelocationReferences(const Elf_Sym *symbol,
                                                ArrayRef<uint8_t> symContent,
                                                ArrayRef<uint8_t> secContent,
-                                               range<Elf_Rel_Iter> rels) {
+                                               const Elf_Shdr *relSec) {
+  auto rels = _objFile->rels(relSec);
   bool isMips64EL = _objFile->isMips64EL();
   const auto symValue = getSymbolValue(symbol);
   for (const auto &rel : rels) {
@@ -643,13 +680,15 @@ template <class ELFT> void ELFFile<ELFT>::updateReferences() {
   for (auto &ri : _references) {
     if (ri->kindNamespace() != Reference::KindNamespace::ELF)
       continue;
-    const Elf_Sym *symbol = _objFile->getSymbol(ri->targetSymbolIndex());
-    const Elf_Shdr *shdr = _objFile->getSection(symbol);
+    const Elf_Sym *symbol =
+        _objFile->getSymbol(_symtab, ri->targetSymbolIndex());
+    ErrorOr<const Elf_Shdr *> shdr =
+        _objFile->getSection(symbol, _symtab, _shndxTable);
 
     // If the atom is not in mergeable string section, the target atom is
     // simply that atom.
-    if (isMergeableStringSection(shdr))
-      updateReferenceForMergeStringAccess(ri, symbol, shdr);
+    if (isMergeableStringSection(*shdr))
+      updateReferenceForMergeStringAccess(ri, symbol, *shdr);
     else
       ri->setTarget(findAtom(findSymbolForReference(ri), symbol));
   }

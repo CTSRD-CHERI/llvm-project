@@ -63,7 +63,8 @@ public:
   std::string
   symbolizeData(const std::string &ModuleName, uint64_t ModuleOffset);
   void flush();
-  static std::string DemangleName(const std::string &Name);
+  static std::string DemangleName(const std::string &Name, ModuleInfo *ModInfo);
+
 private:
   typedef std::pair<ObjectFile*, ObjectFile*> ObjectPair;
 
@@ -78,7 +79,7 @@ private:
   /// universal binary (or the binary itself if it is an object file).
   ObjectFile *getObjectFileFromBinary(Binary *Bin, const std::string &ArchName);
 
-  std::string printDILineInfo(DILineInfo LineInfo) const;
+  std::string printDILineInfo(DILineInfo LineInfo, ModuleInfo *ModInfo) const;
 
   // Owns all the parsed binaries and object files.
   SmallVector<std::unique_ptr<Binary>, 4> ParsedBinariesAndObjects;
@@ -113,6 +114,13 @@ public:
   bool symbolizeData(uint64_t ModuleOffset, std::string &Name, uint64_t &Start,
                      uint64_t &Size) const;
 
+  // Return true if this is a 32-bit x86 PE COFF module.
+  bool isWin32Module() const;
+
+  // Returns the preferred base of the module, i.e. where the loader would place
+  // it in memory assuming there were no conflicts.
+  uint64_t getModulePreferredBase() const;
+
 private:
   bool getNameFromSymbolTable(SymbolRef::Type Type, uint64_t Address,
                               std::string &Name, uint64_t &Addr,
@@ -122,6 +130,7 @@ private:
   void addSymbol(const SymbolRef &Symbol, uint64_t SymbolSize,
                  DataExtractor *OpdExtractor = nullptr,
                  uint64_t OpdAddress = 0);
+  void addCoffExportSymbols(const COFFObjectFile *CoffObj);
   ObjectFile *Module;
   std::unique_ptr<DIContext> DebugInfoContext;
 

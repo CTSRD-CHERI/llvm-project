@@ -87,6 +87,7 @@ GDBRemoteCommunicationClient::GDBRemoteCommunicationClient() :
     m_supports_qXfer_features_read (eLazyBoolCalculate),
     m_supports_augmented_libraries_svr4_read (eLazyBoolCalculate),
     m_supports_jThreadExtendedInfo (eLazyBoolCalculate),
+    m_supports_jLoadedDynamicLibrariesInfos (eLazyBoolCalculate),
     m_supports_qProcessInfoPID (true),
     m_supports_qfProcessInfo (true),
     m_supports_qUserName (true),
@@ -618,7 +619,6 @@ GDBRemoteCommunicationClient::GetThreadsInfo()
     if (m_supports_jThreadsInfo)
     {
         StringExtractorGDBRemote response;
-        m_supports_jThreadExtendedInfo = eLazyBoolNo;
         if (SendPacketAndWaitForResponse("jThreadsInfo", response, false) == PacketResult::Success)
         {
             if (response.IsUnsupportedResponse())
@@ -651,6 +651,24 @@ GDBRemoteCommunicationClient::GetThreadExtendedInfoSupported ()
         }
     }
     return m_supports_jThreadExtendedInfo;
+}
+
+bool
+GDBRemoteCommunicationClient::GetLoadedDynamicLibrariesInfosSupported ()
+{
+    if (m_supports_jLoadedDynamicLibrariesInfos == eLazyBoolCalculate)
+    {
+        StringExtractorGDBRemote response;
+        m_supports_jLoadedDynamicLibrariesInfos = eLazyBoolNo;
+        if (SendPacketAndWaitForResponse("jGetLoadedDynamicLibrariesInfos:", response, false) == PacketResult::Success)
+        {
+            if (response.IsOKResponse())
+            {
+                m_supports_jLoadedDynamicLibrariesInfos = eLazyBoolYes;
+            }
+        }
+    }
+    return m_supports_jLoadedDynamicLibrariesInfos;
 }
 
 bool
@@ -763,7 +781,7 @@ GDBRemoteCommunicationClient::SendPacketAndWaitForResponse
     Log *log (ProcessGDBRemoteLog::GetLogIfAllCategoriesSet (GDBR_LOG_PROCESS));
 
     // In order to stop async notifications from being processed in the middle of the
-    // send/recieve sequence Hijack the broadcast. Then rebroadcast any events when we are done.
+    // send/receive sequence Hijack the broadcast. Then rebroadcast any events when we are done.
     static Listener hijack_listener("lldb.NotifyHijacker");
     HijackBroadcaster(&hijack_listener, eBroadcastBitGdbReadThreadGotNotify);    
 
@@ -859,10 +877,10 @@ GDBRemoteCommunicationClient::SendPacketAndWaitForResponse
         }
     }
 
-    // Remove our Hijacking listner from the broadcast.
+    // Remove our Hijacking listener from the broadcast.
     RestoreBroadcaster();
 
-    // If a notification event occured, rebroadcast since it can now be processed safely.  
+    // If a notification event occurred, rebroadcast since it can now be processed safely.
     EventSP event_sp;
     if (hijack_listener.GetNextEvent(event_sp))
         BroadcastEvent(event_sp);
@@ -1037,8 +1055,8 @@ GDBRemoteCommunicationClient::SendContinuePacketAndWaitForResponse
     // may change if we are interrupted and we continue after an async packet...
     std::string continue_packet(payload, packet_length);
 
-    const auto sigstop_signo = process->GetUnixSignals().GetSignalNumberFromName("SIGSTOP");
-    const auto sigint_signo = process->GetUnixSignals().GetSignalNumberFromName("SIGINT");
+    const auto sigstop_signo = process->GetUnixSignals()->GetSignalNumberFromName("SIGSTOP");
+    const auto sigint_signo = process->GetUnixSignals()->GetSignalNumberFromName("SIGINT");
 
     bool got_async_packet = false;
     
@@ -1113,11 +1131,11 @@ GDBRemoteCommunicationClient::SendContinuePacketAndWaitForResponse
                             {
                                 continue_after_async = false;
 
-                                // We didn't get a a SIGINT or SIGSTOP, so try for a
-                                // very brief time (1 ms) to get another stop reply
+                                // We didn't get a SIGINT or SIGSTOP, so try for a
+                                // very brief time (0.1s) to get another stop reply
                                 // packet to make sure it doesn't get in the way
                                 StringExtractorGDBRemote extra_stop_reply_packet;
-                                uint32_t timeout_usec = 1000;
+                                uint32_t timeout_usec = 100000;
                                 if (ReadPacket (extra_stop_reply_packet, timeout_usec, false) == PacketResult::Success)
                                 {
                                     switch (extra_stop_reply_packet.GetChar())
@@ -1243,9 +1261,13 @@ GDBRemoteCommunicationClient::SendContinuePacketAndWaitForResponse
                         got_async_packet = true;
                         std::string inferior_stdout;
                         inferior_stdout.reserve(response.GetBytesLeft () / 2);
-                        char ch;
-                        while ((ch = response.GetHexU8()) != '\0')
-                            inferior_stdout.append(1, ch);
+
+                        uint8_t ch;
+                        while (response.GetHexU8Ex(ch))
+                        {
+                            if (ch != 0)
+                                inferior_stdout.append(1, (char)ch);
+                        }
                         process->AppendSTDOUT (inferior_stdout.c_str(), inferior_stdout.size());
                     }
                     break;
@@ -1438,6 +1460,21 @@ GDBRemoteCommunicationClient::GetCurrentProcessID (bool allow_lazy)
                         return m_curr_pid;
                     }
                 }
+            }
+        }
+
+        // If we don't get a response for $qC, check if $qfThreadID gives us a result.
+        if (m_curr_pid == LLDB_INVALID_PROCESS_ID)
+        {
+            std::vector<lldb::tid_t> thread_ids;
+            bool sequence_mutex_unavailable;
+            size_t size;
+            size = GetCurrentThreadIDs (thread_ids, sequence_mutex_unavailable);
+            if (size && sequence_mutex_unavailable == false)
+            {
+                m_curr_pid = thread_ids.front();
+                m_curr_pid_is_valid = eLazyBoolYes;
+                return m_curr_pid;
             }
         }
     }
@@ -2274,7 +2311,8 @@ GDBRemoteCommunicationClient::Detach (bool keep_stopped)
             const int packet_len = ::snprintf(packet, sizeof(packet), "qSupportsDetachAndStayStopped:");
             assert (packet_len < (int)sizeof(packet));
             StringExtractorGDBRemote response;
-            if (SendPacketAndWaitForResponse (packet, packet_len, response, false) == PacketResult::Success)
+            if (SendPacketAndWaitForResponse (packet, packet_len, response, false) == PacketResult::Success
+                  && response.IsOKResponse())
             {
                 m_supports_detach_stay_stopped = eLazyBoolYes;        
             }
@@ -2292,7 +2330,7 @@ GDBRemoteCommunicationClient::Detach (bool keep_stopped)
         else
         {
             StringExtractorGDBRemote response;
-            PacketResult packet_result = SendPacketAndWaitForResponse ("D1", 1, response, false);
+            PacketResult packet_result = SendPacketAndWaitForResponse ("D1", 2, response, false);
             if (packet_result != PacketResult::Success)
                 error.SetErrorString ("Sending extended disconnect packet failed.");
         }
@@ -2453,26 +2491,45 @@ GDBRemoteCommunicationClient::GetWatchpointSupportInfo (uint32_t &num)
 }
 
 lldb_private::Error
-GDBRemoteCommunicationClient::GetWatchpointSupportInfo (uint32_t &num, bool& after)
+GDBRemoteCommunicationClient::GetWatchpointSupportInfo (uint32_t &num, bool& after, const ArchSpec &arch)
 {
     Error error(GetWatchpointSupportInfo(num));
     if (error.Success())
-        error = GetWatchpointsTriggerAfterInstruction(after);
+        error = GetWatchpointsTriggerAfterInstruction(after, arch);
     return error;
 }
 
 lldb_private::Error
-GDBRemoteCommunicationClient::GetWatchpointsTriggerAfterInstruction (bool &after)
+GDBRemoteCommunicationClient::GetWatchpointsTriggerAfterInstruction (bool &after, const ArchSpec &arch)
 {
     Error error;
+    llvm::Triple::ArchType atype = arch.GetMachine();
     
     // we assume watchpoints will happen after running the relevant opcode
     // and we only want to override this behavior if we have explicitly
     // received a qHostInfo telling us otherwise
     if (m_qHostInfo_is_valid != eLazyBoolYes)
-        after = true;
+    {
+        // On targets like MIPS, watchpoint exceptions are always generated 
+        // before the instruction is executed. The connected target may not 
+        // support qHostInfo or qWatchpointSupportInfo packets.
+        if (atype == llvm::Triple::mips || atype == llvm::Triple::mipsel
+            || atype == llvm::Triple::mips64 || atype == llvm::Triple::mips64el)
+            after = false;
+        else
+            after = true;
+    }
     else
+    {
+        // For MIPS, set m_watchpoints_trigger_after_instruction to eLazyBoolNo 
+        // if it is not calculated before.
+        if (m_watchpoints_trigger_after_instruction == eLazyBoolCalculate &&
+            (atype == llvm::Triple::mips || atype == llvm::Triple::mipsel
+            || atype == llvm::Triple::mips64 || atype == llvm::Triple::mips64el))
+            m_watchpoints_trigger_after_instruction = eLazyBoolNo;
+
         after = (m_watchpoints_trigger_after_instruction != eLazyBoolNo);
+    }
     return error;
 }
 
@@ -3258,10 +3315,16 @@ GDBRemoteCommunicationClient::SendSpeedTestPacket (uint32_t send_size, uint32_t 
     return SendPacketAndWaitForResponse (packet.GetData(), packet.GetSize(), response, false)  == PacketResult::Success;
 }
 
-uint16_t
-GDBRemoteCommunicationClient::LaunchGDBserverAndGetPort (lldb::pid_t &pid, const char *remote_accept_hostname)
+bool
+GDBRemoteCommunicationClient::LaunchGDBServer (const char *remote_accept_hostname,
+                                               lldb::pid_t &pid,
+                                               uint16_t &port,
+                                               std::string &socket_name)
 {
     pid = LLDB_INVALID_PROCESS_ID;
+    port = 0;
+    socket_name.clear();
+
     StringExtractorGDBRemote response;
     StreamString stream;
     stream.PutCString("qLaunchGDBServer;");
@@ -3286,22 +3349,30 @@ GDBRemoteCommunicationClient::LaunchGDBserverAndGetPort (lldb::pid_t &pid, const
 
     // give the process a few seconds to startup
     GDBRemoteCommunication::ScopedTimeout timeout (*this, 10);
-    
+
     if (SendPacketAndWaitForResponse(packet, packet_len, response, false) == PacketResult::Success)
     {
         std::string name;
         std::string value;
-        uint16_t port = 0;
+        StringExtractor extractor;
         while (response.GetNameColonValue(name, value))
         {
             if (name.compare("port") == 0)
                 port = StringConvert::ToUInt32(value.c_str(), 0, 0);
             else if (name.compare("pid") == 0)
                 pid = StringConvert::ToUInt64(value.c_str(), LLDB_INVALID_PROCESS_ID, 0);
+            else if (name.compare("socket_name") == 0)
+            {
+                extractor.GetStringRef().swap(value);
+                extractor.SetFilePos(0);
+                extractor.GetHexByteString(value);
+
+                socket_name = value;
+            }
         }
-        return port;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 bool
@@ -3342,6 +3413,17 @@ GDBRemoteCommunicationClient::SetCurrentThread (uint64_t tid)
             m_curr_tid = tid;
             return true;
         }
+
+        /*
+         * Connected bare-iron target (like YAMON gdb-stub) may not have support for Hg packet.
+         * The reply from '?' packet could be as simple as 'S05'. There is no packet which can
+         * give us pid and/or tid. Assume pid=tid=1 in such cases.
+        */
+        if (response.IsUnsupportedResponse() && IsConnected())
+        {
+            m_curr_tid = 1;
+            return true;
+        }
     }
     return false;
 }
@@ -3366,6 +3448,17 @@ GDBRemoteCommunicationClient::SetCurrentThreadForRun (uint64_t tid)
         if (response.IsOKResponse())
         {
             m_curr_tid_run = tid;
+            return true;
+        }
+
+        /*
+         * Connected bare-iron target (like YAMON gdb-stub) may not have support for Hc packet.
+         * The reply from '?' packet could be as simple as 'S05'. There is no packet which can
+         * give us pid and/or tid. Assume pid=tid=1 in such cases.
+        */
+        if (response.IsUnsupportedResponse() && IsConnected())
+        {
+            m_curr_tid_run = 1;
             return true;
         }
     }
@@ -3492,6 +3585,17 @@ GDBRemoteCommunicationClient::GetCurrentThreadIDs (std::vector<lldb::tid_t> &thr
                     ch = response.GetChar();    // Skip the command separator
                 } while (ch == ',');            // Make sure we got a comma separator
             }
+        }
+
+        /*
+         * Connected bare-iron target (like YAMON gdb-stub) may not have support for
+         * qProcessInfo, qC and qfThreadInfo packets. The reply from '?' packet could
+         * be as simple as 'S05'. There is no packet which can give us pid and/or tid.
+         * Assume pid=tid=1 in such cases.
+        */
+        if (response.IsUnsupportedResponse() && thread_ids.size() == 0 && IsConnected())
+        {
+            thread_ids.push_back (1);
         }
     }
     else
@@ -4294,100 +4398,97 @@ GDBRemoteCommunicationClient::ServeSymbolLookups(lldb_private::Process *process)
         {
             StreamString packet;
             packet.PutCString ("qSymbol::");
-            while (1)
+            StringExtractorGDBRemote response;
+            while (SendPacketAndWaitForResponseNoLock(packet.GetData(), packet.GetSize(), response) == PacketResult::Success)
             {
-                StringExtractorGDBRemote response;
-                if (SendPacketAndWaitForResponseNoLock(packet.GetData(), packet.GetSize(), response) == PacketResult::Success)
+                if (response.IsOKResponse())
                 {
-                    if (response.IsOKResponse())
-                    {
-                        // We are done serving symbols requests
-                        return;
-                    }
+                    // We are done serving symbols requests
+                    return;
+                }
 
-                    if (response.IsUnsupportedResponse())
+                if (response.IsUnsupportedResponse())
+                {
+                    // qSymbol is not supported by the current GDB server we are connected to
+                    m_supports_qSymbol = false;
+                    return;
+                }
+                else
+                {
+                    llvm::StringRef response_str(response.GetStringRef());
+                    if (response_str.startswith("qSymbol:"))
                     {
-                        // qSymbol is not supported by the current GDB server we are connected to
-                        m_supports_qSymbol = false;
-                        return;
-                    }
-                    else
-                    {
-                        llvm::StringRef response_str(response.GetStringRef());
-                        if (response_str.startswith("qSymbol:"))
+                        response.SetFilePos(strlen("qSymbol:"));
+                        std::string symbol_name;
+                        if (response.GetHexByteString(symbol_name))
                         {
-                            response.SetFilePos(strlen("qSymbol:"));
-                            std::string symbol_name;
-                            if (response.GetHexByteString(symbol_name))
+                            if (symbol_name.empty())
+                                return;
+
+                            addr_t symbol_load_addr = LLDB_INVALID_ADDRESS;
+                            lldb_private::SymbolContextList sc_list;
+                            if (process->GetTarget().GetImages().FindSymbolsWithNameAndType(ConstString(symbol_name), eSymbolTypeAny, sc_list))
                             {
-                                if (symbol_name.empty())
-                                    return;
-
-                                addr_t symbol_load_addr = LLDB_INVALID_ADDRESS;
-                                lldb_private::SymbolContextList sc_list;
-                                if (process->GetTarget().GetImages().FindSymbolsWithNameAndType(ConstString(symbol_name), eSymbolTypeAny, sc_list))
+                                const size_t num_scs = sc_list.GetSize();
+                                for (size_t sc_idx=0; sc_idx<num_scs && symbol_load_addr == LLDB_INVALID_ADDRESS; ++sc_idx)
                                 {
-                                    const size_t num_scs = sc_list.GetSize();
-                                    for (size_t sc_idx=0; sc_idx<num_scs && symbol_load_addr == LLDB_INVALID_ADDRESS; ++sc_idx)
+                                    SymbolContext sc;
+                                    if (sc_list.GetContextAtIndex(sc_idx, sc))
                                     {
-                                        SymbolContext sc;
-                                        if (sc_list.GetContextAtIndex(sc_idx, sc))
+                                        if (sc.symbol)
                                         {
-                                            if (sc.symbol)
+                                            switch (sc.symbol->GetType())
                                             {
-                                                switch (sc.symbol->GetType())
-                                                {
-                                                case eSymbolTypeInvalid:
-                                                case eSymbolTypeAbsolute:
-                                                case eSymbolTypeUndefined:
-                                                case eSymbolTypeSourceFile:
-                                                case eSymbolTypeHeaderFile:
-                                                case eSymbolTypeObjectFile:
-                                                case eSymbolTypeCommonBlock:
-                                                case eSymbolTypeBlock:
-                                                case eSymbolTypeLocal:
-                                                case eSymbolTypeParam:
-                                                case eSymbolTypeVariable:
-                                                case eSymbolTypeVariableType:
-                                                case eSymbolTypeLineEntry:
-                                                case eSymbolTypeLineHeader:
-                                                case eSymbolTypeScopeBegin:
-                                                case eSymbolTypeScopeEnd:
-                                                case eSymbolTypeAdditional:
-                                                case eSymbolTypeCompiler:
-                                                case eSymbolTypeInstrumentation:
-                                                case eSymbolTypeTrampoline:
-                                                    break;
+                                            case eSymbolTypeInvalid:
+                                            case eSymbolTypeAbsolute:
+                                            case eSymbolTypeUndefined:
+                                            case eSymbolTypeSourceFile:
+                                            case eSymbolTypeHeaderFile:
+                                            case eSymbolTypeObjectFile:
+                                            case eSymbolTypeCommonBlock:
+                                            case eSymbolTypeBlock:
+                                            case eSymbolTypeLocal:
+                                            case eSymbolTypeParam:
+                                            case eSymbolTypeVariable:
+                                            case eSymbolTypeVariableType:
+                                            case eSymbolTypeLineEntry:
+                                            case eSymbolTypeLineHeader:
+                                            case eSymbolTypeScopeBegin:
+                                            case eSymbolTypeScopeEnd:
+                                            case eSymbolTypeAdditional:
+                                            case eSymbolTypeCompiler:
+                                            case eSymbolTypeInstrumentation:
+                                            case eSymbolTypeTrampoline:
+                                                break;
 
-                                                case eSymbolTypeCode:
-                                                case eSymbolTypeResolver:
-                                                case eSymbolTypeData:
-                                                case eSymbolTypeRuntime:
-                                                case eSymbolTypeException:
-                                                case eSymbolTypeObjCClass:
-                                                case eSymbolTypeObjCMetaClass:
-                                                case eSymbolTypeObjCIVar:
-                                                case eSymbolTypeReExported:
-                                                    symbol_load_addr = sc.symbol->GetLoadAddress(&process->GetTarget());
-                                                    break;
-                                                }
+                                            case eSymbolTypeCode:
+                                            case eSymbolTypeResolver:
+                                            case eSymbolTypeData:
+                                            case eSymbolTypeRuntime:
+                                            case eSymbolTypeException:
+                                            case eSymbolTypeObjCClass:
+                                            case eSymbolTypeObjCMetaClass:
+                                            case eSymbolTypeObjCIVar:
+                                            case eSymbolTypeReExported:
+                                                symbol_load_addr = sc.symbol->GetLoadAddress(&process->GetTarget());
+                                                break;
                                             }
                                         }
                                     }
                                 }
-                                // This is the normal path where our symbol lookup was successful and we want
-                                // to send a packet with the new symbol value and see if another lookup needs to be
-                                // done.
-
-                                // Change "packet" to contain the requested symbol value and name
-                                packet.Clear();
-                                packet.PutCString("qSymbol:");
-                                if (symbol_load_addr != LLDB_INVALID_ADDRESS)
-                                    packet.Printf("%" PRIx64, symbol_load_addr);
-                                packet.PutCString(":");
-                                packet.PutBytesAsRawHex8(symbol_name.data(), symbol_name.size());
-                                continue; // go back to the while loop and send "packet" and wait for another response
                             }
+                            // This is the normal path where our symbol lookup was successful and we want
+                            // to send a packet with the new symbol value and see if another lookup needs to be
+                            // done.
+
+                            // Change "packet" to contain the requested symbol value and name
+                            packet.Clear();
+                            packet.PutCString("qSymbol:");
+                            if (symbol_load_addr != LLDB_INVALID_ADDRESS)
+                                packet.Printf("%" PRIx64, symbol_load_addr);
+                            packet.PutCString(":");
+                            packet.PutBytesAsRawHex8(symbol_name.data(), symbol_name.size());
+                            continue; // go back to the while loop and send "packet" and wait for another response
                         }
                     }
                 }

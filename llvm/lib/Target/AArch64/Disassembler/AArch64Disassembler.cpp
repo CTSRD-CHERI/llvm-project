@@ -228,7 +228,7 @@ DecodeStatus AArch64Disassembler::getInstruction(MCInst &MI, uint64_t &Size,
 }
 
 static MCSymbolizer *
-createAArch64ExternalSymbolizer(StringRef TT, LLVMOpInfoCallback GetOpInfo,
+createAArch64ExternalSymbolizer(const Triple &TT, LLVMOpInfoCallback GetOpInfo,
                                 LLVMSymbolLookupCallback SymbolLookUp,
                                 void *DisInfo, MCContext *Ctx,
                                 std::unique_ptr<MCRelocationInfo> &&RelInfo) {
@@ -1515,6 +1515,9 @@ static DecodeStatus DecodeSystemPStateInstruction(llvm::MCInst &Inst,
   uint64_t crm = fieldFromInstruction(insn, 8, 4);
 
   uint64_t pstate_field = (op1 << 3) | op2;
+
+  if (pstate_field == AArch64PState::PAN && crm > 1)
+    return Fail;
 
   Inst.addOperand(MCOperand::createImm(pstate_field));
   Inst.addOperand(MCOperand::createImm(crm));

@@ -27,26 +27,23 @@
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "list-features".
 //          This command does not follow the MI documentation exactly.
-// Gotchas: None.
-// Authors: Illya Rudkin 03/03/2014.
-// Changes: None.
 //--
 class CMICmdCmdSupportListFeatures : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdSupportListFeatures(void);
+    /* ctor */ CMICmdCmdSupportListFeatures();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
+    bool Execute() override;
+    bool Acknowledge() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdSupportListFeatures(void);
+    /* dtor */ ~CMICmdCmdSupportListFeatures() override;
 };

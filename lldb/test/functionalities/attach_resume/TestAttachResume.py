@@ -2,8 +2,11 @@
 Test process attach/resume.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -14,17 +17,15 @@ class AttachResumeTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @expectedFlakeyLinux('llvm.org/pr19310')
-    @expectedFailureFreeBSD('llvm.org/pr19310')
     @skipIfRemote
-    @dwarf_test
+    @expectedFailureFreeBSD('llvm.org/pr19310')
+    @expectedFailureWindows("llvm.org/pr24778")
+    @expectedFlakeyLinux('llvm.org/pr19310')
     def test_attach_continue_interrupt_detach(self):
         """Test attach/continue/interrupt/detach"""
-        self.buildDwarf()
+        self.build()
         self.process_attach_continue_interrupt_detach()
 
-    @expectedFlakeyLinux('llvm.org/pr19478') # intermittent ~2/14 runs
-    @skipIfRemote
     def process_attach_continue_interrupt_detach(self):
         """Test attach/continue/interrupt/detach"""
 
@@ -35,70 +36,36 @@ class AttachResumeTestCase(TestBase):
 
         self.runCmd("process attach -p " + str(popen.pid))
 
-        self._state = 0
-        def process_events():
-            event = lldb.SBEvent()
-            while self.dbg.GetListener().GetNextEvent(event):
-                self._state = lldb.SBProcess.GetStateFromEvent(event)
-
-        # using process.GetState() does not work: llvm.org/pr16172
-        def wait_for_state(s, timeout=5):
-            t = 0
-            period = 0.1
-            while self._state != s:
-                process_events()
-                time.sleep(period)
-                t += period
-                if t > timeout:
-                    return False
-            return True
-
         self.setAsync(True)
+        listener = self.dbg.GetListener()
 
         self.runCmd("c")
-        self.assertTrue(wait_for_state(lldb.eStateRunning),
-            'Process not running after continue')
+        lldbutil.expect_state_changes(self, listener, [lldb.eStateRunning])
 
         self.runCmd("process interrupt")
-        self.assertTrue(wait_for_state(lldb.eStateStopped),
-            'Process not stopped after interrupt')
+        lldbutil.expect_state_changes(self, listener, [lldb.eStateStopped])
 
         # be sure to continue/interrupt/continue (r204504)
         self.runCmd("c")
-        self.assertTrue(wait_for_state(lldb.eStateRunning),
-            'Process not running after continue')
+        lldbutil.expect_state_changes(self, listener, [lldb.eStateRunning])
 
         self.runCmd("process interrupt")
-        self.assertTrue(wait_for_state(lldb.eStateStopped),
-            'Process not stopped after interrupt')
+        lldbutil.expect_state_changes(self, listener, [lldb.eStateStopped])
 
         # check that this breakpoint is auto-cleared on detach (r204752)
         self.runCmd("br set -f main.cpp -l %u" % (line_number('main.cpp', '// Set breakpoint here')))
 
         self.runCmd("c")
-        self.assertTrue(wait_for_state(lldb.eStateRunning),
-            'Process not running after continue')
-
-        self.assertTrue(wait_for_state(lldb.eStateStopped),
-            'Process not stopped after breakpoint')
-        # This test runs a bunch of threads in the same little function with this
-        # breakpoint.  We want to make sure the breakpoint got hit at least once,
-        # but more than one thread may hit it at a time.  So we really only care
-        # that is isn't 0 times, not how many times it is.
+        lldbutil.expect_state_changes(self, listener, [lldb.eStateRunning, lldb.eStateStopped])
         self.expect('br list', 'Breakpoint not hit',
-            patterns = ['hit count = [1-9]'])
+            substrs = ['hit count = 1'])
+
+        # Make sure the breakpoint is not hit again.
+        self.expect("expr debugger_flag = false", substrs=[" = false"]);
 
         self.runCmd("c")
-        self.assertTrue(wait_for_state(lldb.eStateRunning),
-            'Process not running after continue')
+        lldbutil.expect_state_changes(self, listener, [lldb.eStateRunning])
 
         # make sure to detach while in running state (r204759)
         self.runCmd("detach")
-        self.assertTrue(wait_for_state(lldb.eStateDetached),
-            'Process not detached after detach')
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+        lldbutil.expect_state_changes(self, listener, [lldb.eStateDetached])

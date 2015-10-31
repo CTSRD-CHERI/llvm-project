@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
 
 ; void foo(int n, int m, int o, double A[n][m][o]) {
 ;
@@ -13,23 +13,43 @@
 ; correctness issue, but could be improved.
 
 ; CHECK: Assumed Context:
-; CHECK:  [n, m, o, p_3, p_4] -> { :
-; CHECK-DAG: p_3 >= o
-; CHECK-DAG: p_4 >= m
+; CHECK:  [o, m, n, p_3, p_4] -> { :
+; CHECK-DAG: p_3 >= m
+; CHECK-DAG: p_4 >= o
 ; CHECK:  }
-; CHECK: p0: %n
+; CHECK: p0: %o
 ; CHECK: p1: %m
-; CHECK: p2: %o
-; CHECK: p3: (zext i32 %o to i64)
-; CHECK: p4: (zext i32 %m to i64)
+; CHECK: p2: %n
+; CHECK: p3: (zext i32 %m to i64)
+; CHECK: p4: (zext i32 %o to i64)
 ; CHECK-NOT: p5
 
+; CHECK: Arrays {
+; CHECK: double MemRef_A[*][(zext i32 %m to i64)][(zext i32 %o to i64)][8] // Element size 8
+; CHECK: }
+; CHECK: Arrays (Bounds as pw_affs) {
+; CHECK: double MemRef_A[*][ [p_3] -> { [] -> [(p_3)] } ][ [p_4] -> { [] -> [(p_4)] } ][ { [] -> [(8)] } ] // Element size 8
+; CHECK: }
+
+
 ; CHECK: Domain
-; CHECK:   [n, m, o, p_3, p_4] -> { Stmt_for_k[i0, i1, i2] : i0 >= 0 and i0 <= -1 + n and i1 >= 0 and i1 <= -1 + m and i2 >= 0 and i2 <= -1 + o };
+; CHECK:   [o, m, n, p_3, p_4] -> { Stmt_for_k[i0, i1, i2] :
+; CHECK-DAG:             i0 >= 0
+; CHECK-DAG:          and
+; CHECK-DAG:             i0 <= -1 + n
+; CHECK-DAG:          and
+; CHECK-DAG:             i1 >= 0
+; CHECK-DAG:          and
+; CHECK-DAG:             i1 <= -1 + m
+; CHECK-DAG:          and
+; CHECK-DAG:             i2 >= 0
+; CHECK-DAG:          and
+; CHECK-DAG:             i2 <= -1 + o
+; CHECK:              }
 ; CHECK: Schedule
-; CHECK:   [n, m, o, p_3, p_4] -> { Stmt_for_k[i0, i1, i2] -> [i0, i1, i2] };
+; CHECK:   [o, m, n, p_3, p_4] -> { Stmt_for_k[i0, i1, i2] -> [i0, i1, i2] };
 ; CHECK: WriteAccess
-; CHECK:   [n, m, o, p_3, p_4] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[i0, i1, i2] };
+; CHECK:   [o, m, n, p_3, p_4] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[i0, i1, i2] };
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
 

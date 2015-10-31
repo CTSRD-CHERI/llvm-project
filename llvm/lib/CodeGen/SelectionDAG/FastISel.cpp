@@ -118,9 +118,9 @@ bool FastISel::lowerArguments() {
   for (Function::const_arg_iterator I = FuncInfo.Fn->arg_begin(),
                                     E = FuncInfo.Fn->arg_end();
        I != E; ++I) {
-    DenseMap<const Value *, unsigned>::iterator VI = LocalValueMap.find(I);
+    DenseMap<const Value *, unsigned>::iterator VI = LocalValueMap.find(&*I);
     assert(VI != LocalValueMap.end() && "Missed an argument?");
-    FuncInfo.ValueMap[I] = VI->second;
+    FuncInfo.ValueMap[&*I] = VI->second;
   }
   return true;
 }
@@ -166,7 +166,7 @@ bool FastISel::hasTrivialKill(const Value *V) {
 }
 
 unsigned FastISel::getRegForValue(const Value *V) {
-  EVT RealVT = TLI.getValueType(V->getType(), /*AllowUnknown=*/true);
+  EVT RealVT = TLI.getValueType(DL, V->getType(), /*AllowUnknown=*/true);
   // Don't handle non-simple values in FastISel.
   if (!RealVT.isSimple())
     return 0;
@@ -228,7 +228,7 @@ unsigned FastISel::materializeConstant(const Value *V, MVT VT) {
     if (!Reg) {
       // Try to emit the constant by using an integer constant with a cast.
       const APFloat &Flt = CF->getValueAPF();
-      EVT IntVT = TLI.getPointerTy();
+      EVT IntVT = TLI.getPointerTy(DL);
 
       uint64_t x[2];
       uint32_t IntBitWidth = IntVT.getSizeInBits();
@@ -321,7 +321,7 @@ std::pair<unsigned, bool> FastISel::getRegForGEPIndex(const Value *Idx) {
   bool IdxNIsKill = hasTrivialKill(Idx);
 
   // If the index is smaller or larger than intptr_t, truncate or extend it.
-  MVT PtrVT = TLI.getPointerTy();
+  MVT PtrVT = TLI.getPointerTy(DL);
   EVT IdxVT = EVT::getEVT(Idx->getType(), /*HandleUnknown=*/false);
   if (IdxVT.bitsLT(PtrVT)) {
     IdxN = fastEmit_r(IdxVT.getSimpleVT(), PtrVT, ISD::SIGN_EXTEND, IdxN,
@@ -493,7 +493,7 @@ bool FastISel::selectGetElementPtr(const User *I) {
   // FIXME: What's a good SWAG number for MaxOffs?
   uint64_t MaxOffs = 2048;
   Type *Ty = I->getOperand(0)->getType();
-  MVT VT = TLI.getPointerTy();
+  MVT VT = TLI.getPointerTy(DL);
   for (GetElementPtrInst::const_op_iterator OI = I->op_begin() + 1,
                                             E = I->op_end();
        OI != E; ++OI) {
@@ -611,7 +611,7 @@ bool FastISel::selectStackmap(const CallInst *I) {
   // have to worry about calling conventions and target-specific lowering code.
   // Instead we perform the call lowering right here.
   //
-  // CALLSEQ_START(0)
+  // CALLSEQ_START(0...)
   // STACKMAP(id, nbytes, ...)
   // CALLSEQ_END(0, 0)
   //
@@ -647,8 +647,11 @@ bool FastISel::selectStackmap(const CallInst *I) {
 
   // Issue CALLSEQ_START
   unsigned AdjStackDown = TII.getCallFrameSetupOpcode();
-  BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(AdjStackDown))
-      .addImm(0);
+  auto Builder =
+      BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(AdjStackDown));
+  const MCInstrDesc &MCID = Builder.getInstr()->getDesc();
+  for (unsigned I = 0, E = MCID.getNumOperands(); I < E; ++I)
+    Builder.addImm(0);
 
   // Issue STACKMAP.
   MachineInstrBuilder MIB = BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
@@ -908,10 +911,10 @@ bool FastISel::lowerCallTo(CallLoweringInfo &CLI) {
   // Handle the incoming return values from the call.
   CLI.clearIns();
   SmallVector<EVT, 4> RetTys;
-  ComputeValueVTs(TLI, CLI.RetTy, RetTys);
+  ComputeValueVTs(TLI, DL, CLI.RetTy, RetTys);
 
   SmallVector<ISD::OutputArg, 4> Outs;
-  GetReturnInfo(CLI.RetTy, getReturnAttrs(CLI), Outs, TLI);
+  GetReturnInfo(CLI.RetTy, getReturnAttrs(CLI), Outs, TLI, DL);
 
   bool CanLowerReturn = TLI.CanLowerReturn(
       CLI.CallConv, *FuncInfo.MF, CLI.IsVarArg, Outs, CLI.RetTy->getContext());
@@ -976,7 +979,7 @@ bool FastISel::lowerCallTo(CallLoweringInfo &CLI) {
       // not there, but there are cases it cannot get right.
       unsigned FrameAlign = Arg.Alignment;
       if (!FrameAlign)
-        FrameAlign = TLI.getByValTypeAlignment(ElementTy);
+        FrameAlign = TLI.getByValTypeAlignment(ElementTy, DL);
       Flags.setByValSize(FrameSize);
       Flags.setByValAlign(FrameAlign);
     }
@@ -1100,13 +1103,6 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
   // The donothing intrinsic does, well, nothing.
   case Intrinsic::donothing:
     return true;
-  case Intrinsic::eh_actions: {
-    unsigned ResultReg = getRegForValue(UndefValue::get(II->getType()));
-    if (!ResultReg)
-      return false;
-    updateValueMap(II, ResultReg);
-    return true;
-  }
   case Intrinsic::dbg_declare: {
     const DbgDeclareInst *DI = cast<DbgDeclareInst>(II);
     assert(DI->getVariable() && "Missing variable");
@@ -1245,8 +1241,8 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
 }
 
 bool FastISel::selectCast(const User *I, unsigned Opcode) {
-  EVT SrcVT = TLI.getValueType(I->getOperand(0)->getType());
-  EVT DstVT = TLI.getValueType(I->getType());
+  EVT SrcVT = TLI.getValueType(DL, I->getOperand(0)->getType());
+  EVT DstVT = TLI.getValueType(DL, I->getType());
 
   if (SrcVT == MVT::Other || !SrcVT.isSimple() || DstVT == MVT::Other ||
       !DstVT.isSimple())
@@ -1288,8 +1284,8 @@ bool FastISel::selectBitCast(const User *I) {
   }
 
   // Bitcasts of other values become reg-reg copies or BITCAST operators.
-  EVT SrcEVT = TLI.getValueType(I->getOperand(0)->getType());
-  EVT DstEVT = TLI.getValueType(I->getType());
+  EVT SrcEVT = TLI.getValueType(DL, I->getOperand(0)->getType());
+  EVT DstEVT = TLI.getValueType(DL, I->getType());
   if (SrcEVT == MVT::Other || DstEVT == MVT::Other ||
       !TLI.isTypeLegal(SrcEVT) || !TLI.isTypeLegal(DstEVT))
     // Unhandled type. Halt "fast" selection and bail.
@@ -1350,7 +1346,7 @@ bool FastISel::selectInstruction(const Instruction *I) {
 
     // Don't handle Intrinsic::trap if a trap funciton is specified.
     if (F && F->getIntrinsicID() == Intrinsic::trap &&
-        !TM.Options.getTrapFunctionName().empty())
+        Call->hasFnAttr("trap-func-name"))
       return false;
   }
 
@@ -1405,6 +1401,22 @@ void FastISel::fastEmitBranch(MachineBasicBlock *MSucc, DebugLoc DbgLoc) {
   FuncInfo.MBB->addSuccessor(MSucc, BranchWeight);
 }
 
+void FastISel::finishCondBranch(const BasicBlock *BranchBB,
+                                MachineBasicBlock *TrueMBB,
+                                MachineBasicBlock *FalseMBB) {
+  uint32_t BranchWeight = 0;
+  if (FuncInfo.BPI)
+    BranchWeight = FuncInfo.BPI->getEdgeWeight(BranchBB,
+                                               TrueMBB->getBasicBlock());
+  // Add TrueMBB as successor unless it is equal to the FalseMBB: This can
+  // happen in degenerate IR and MachineIR forbids to have a block twice in the
+  // successor/predecessor lists.
+  if (TrueMBB != FalseMBB)
+    FuncInfo.MBB->addSuccessor(TrueMBB, BranchWeight);
+
+  fastEmitBranch(FalseMBB, DbgLoc);
+}
+
 /// Emit an FNeg operation.
 bool FastISel::selectFNeg(const User *I) {
   unsigned OpReg = getRegForValue(BinaryOperator::getFNegArgument(I));
@@ -1413,7 +1425,7 @@ bool FastISel::selectFNeg(const User *I) {
   bool OpRegIsKill = hasTrivialKill(I);
 
   // If the target has ISD::FNEG, use it.
-  EVT VT = TLI.getValueType(I->getType());
+  EVT VT = TLI.getValueType(DL, I->getType());
   unsigned ResultReg = fastEmit_r(VT.getSimpleVT(), VT.getSimpleVT(), ISD::FNEG,
                                   OpReg, OpRegIsKill);
   if (ResultReg) {
@@ -1456,7 +1468,7 @@ bool FastISel::selectExtractValue(const User *U) {
 
   // Make sure we only try to handle extracts with a legal result.  But also
   // allow i1 because it's easy.
-  EVT RealVT = TLI.getValueType(EVI->getType(), /*AllowUnknown=*/true);
+  EVT RealVT = TLI.getValueType(DL, EVI->getType(), /*AllowUnknown=*/true);
   if (!RealVT.isSimple())
     return false;
   MVT VT = RealVT.getSimpleVT();
@@ -1480,7 +1492,7 @@ bool FastISel::selectExtractValue(const User *U) {
   unsigned VTIndex = ComputeLinearIndex(AggTy, EVI->getIndices());
 
   SmallVector<EVT, 4> AggValueVTs;
-  ComputeValueVTs(TLI, AggTy, AggValueVTs);
+  ComputeValueVTs(TLI, DL, AggTy, AggValueVTs);
 
   for (unsigned i = 0; i < VTIndex; i++)
     ResultReg += TLI.getNumRegisters(FuncInfo.Fn->getContext(), AggValueVTs[i]);
@@ -1582,8 +1594,8 @@ bool FastISel::selectOperator(const User *I, unsigned Opcode) {
 
   case Instruction::IntToPtr: // Deliberate fall-through.
   case Instruction::PtrToInt: {
-    EVT SrcVT = TLI.getValueType(I->getOperand(0)->getType());
-    EVT DstVT = TLI.getValueType(I->getType());
+    EVT SrcVT = TLI.getValueType(DL, I->getOperand(0)->getType());
+    EVT DstVT = TLI.getValueType(DL, I->getType());
     if (DstVT.bitsGT(SrcVT))
       return selectCast(I, ISD::ZERO_EXTEND);
     if (DstVT.bitsLT(SrcVT))
@@ -1612,7 +1624,7 @@ FastISel::FastISel(FunctionLoweringInfo &FuncInfo,
                    bool SkipTargetIndependentISel)
     : FuncInfo(FuncInfo), MF(FuncInfo.MF), MRI(FuncInfo.MF->getRegInfo()),
       MFI(*FuncInfo.MF->getFrameInfo()), MCP(*FuncInfo.MF->getConstantPool()),
-      TM(FuncInfo.MF->getTarget()), DL(*TM.getDataLayout()),
+      TM(FuncInfo.MF->getTarget()), DL(MF->getDataLayout()),
       TII(*MF->getSubtarget().getInstrInfo()),
       TLI(*MF->getSubtarget().getTargetLowering()),
       TRI(*MF->getSubtarget().getRegisterInfo()), LibInfo(LibInfo),
@@ -1864,21 +1876,18 @@ unsigned FastISel::fastEmitInst_rii(unsigned MachineInstOpcode,
   return ResultReg;
 }
 
-unsigned FastISel::fastEmitInst_rf(unsigned MachineInstOpcode,
-                                   const TargetRegisterClass *RC, unsigned Op0,
-                                   bool Op0IsKill, const ConstantFP *FPImm) {
+unsigned FastISel::fastEmitInst_f(unsigned MachineInstOpcode,
+                                  const TargetRegisterClass *RC,
+                                  const ConstantFP *FPImm) {
   const MCInstrDesc &II = TII.get(MachineInstOpcode);
 
   unsigned ResultReg = createResultReg(RC);
-  Op0 = constrainOperandRegClass(II, Op0, II.getNumDefs());
 
   if (II.getNumDefs() >= 1)
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II, ResultReg)
-        .addReg(Op0, getKillRegState(Op0IsKill))
         .addFPImm(FPImm);
   else {
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II)
-        .addReg(Op0, getKillRegState(Op0IsKill))
         .addFPImm(FPImm);
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
             TII.get(TargetOpcode::COPY), ResultReg).addReg(II.ImplicitDefs[0]);
@@ -1912,35 +1921,6 @@ unsigned FastISel::fastEmitInst_rri(unsigned MachineInstOpcode,
   return ResultReg;
 }
 
-unsigned FastISel::fastEmitInst_rrii(unsigned MachineInstOpcode,
-                                     const TargetRegisterClass *RC,
-                                     unsigned Op0, bool Op0IsKill, unsigned Op1,
-                                     bool Op1IsKill, uint64_t Imm1,
-                                     uint64_t Imm2) {
-  const MCInstrDesc &II = TII.get(MachineInstOpcode);
-
-  unsigned ResultReg = createResultReg(RC);
-  Op0 = constrainOperandRegClass(II, Op0, II.getNumDefs());
-  Op1 = constrainOperandRegClass(II, Op1, II.getNumDefs() + 1);
-
-  if (II.getNumDefs() >= 1)
-    BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II, ResultReg)
-        .addReg(Op0, getKillRegState(Op0IsKill))
-        .addReg(Op1, getKillRegState(Op1IsKill))
-        .addImm(Imm1)
-        .addImm(Imm2);
-  else {
-    BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II)
-        .addReg(Op0, getKillRegState(Op0IsKill))
-        .addReg(Op1, getKillRegState(Op1IsKill))
-        .addImm(Imm1)
-        .addImm(Imm2);
-    BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
-            TII.get(TargetOpcode::COPY), ResultReg).addReg(II.ImplicitDefs[0]);
-  }
-  return ResultReg;
-}
-
 unsigned FastISel::fastEmitInst_i(unsigned MachineInstOpcode,
                                   const TargetRegisterClass *RC, uint64_t Imm) {
   unsigned ResultReg = createResultReg(RC);
@@ -1951,25 +1931,6 @@ unsigned FastISel::fastEmitInst_i(unsigned MachineInstOpcode,
         .addImm(Imm);
   else {
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II).addImm(Imm);
-    BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
-            TII.get(TargetOpcode::COPY), ResultReg).addReg(II.ImplicitDefs[0]);
-  }
-  return ResultReg;
-}
-
-unsigned FastISel::fastEmitInst_ii(unsigned MachineInstOpcode,
-                                   const TargetRegisterClass *RC, uint64_t Imm1,
-                                   uint64_t Imm2) {
-  unsigned ResultReg = createResultReg(RC);
-  const MCInstrDesc &II = TII.get(MachineInstOpcode);
-
-  if (II.getNumDefs() >= 1)
-    BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II, ResultReg)
-        .addImm(Imm1)
-        .addImm(Imm2);
-  else {
-    BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II).addImm(Imm1)
-        .addImm(Imm2);
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
             TII.get(TargetOpcode::COPY), ResultReg).addReg(II.ImplicitDefs[0]);
   }
@@ -2037,7 +1998,7 @@ bool FastISel::handlePHINodesInSuccessorBlocks(const BasicBlock *LLVMBB) {
       // own moves. Second, this check is necessary because FastISel doesn't
       // use CreateRegs to create registers, so it always creates
       // exactly one register for each non-void instruction.
-      EVT VT = TLI.getValueType(PN->getType(), /*AllowUnknown=*/true);
+      EVT VT = TLI.getValueType(DL, PN->getType(), /*AllowUnknown=*/true);
       if (VT == MVT::Other || !TLI.isTypeLegal(VT)) {
         // Handle integer promotions, though, because they're common and easy.
         if (!(VT == MVT::i1 || VT == MVT::i8 || VT == MVT::i16)) {

@@ -1,11 +1,10 @@
-set(LLVM_NO_RTTI 1)
-
 add_lldb_library(lldbCommands
   CommandCompletions.cpp
   CommandObjectApropos.cpp
   CommandObjectArgs.cpp
   CommandObjectBreakpoint.cpp
   CommandObjectBreakpointCommand.cpp
+  CommandObjectBugreport.cpp
   CommandObjectCommands.cpp
   CommandObjectDisassemble.cpp
   CommandObjectExpression.cpp

@@ -60,20 +60,19 @@ define void @check_vfp_fold() minsize {
 ; CHECK: vpush {d6, d7, d8, d9}
 ; CHECK-NOT: sub sp,
 ; ...
-; CHECK: vldmia r[[GLOBREG]], {d8, d9}
-; ...
 ; CHECK-NOT: add sp,
 ; CHECK: vpop {d6, d7, d8, d9}
-; CHECKL pop {r[[GLOBREG]], pc}
+; CHECK: pop {r[[GLOBREG]], pc}
 
   ; iOS uses aligned NEON stores here, which is convenient since we
   ; want to make sure that works too.
 ; CHECK-IOS-LABEL: check_vfp_fold:
-; CHECK-IOS: push {r0, r1, r2, r3, r4, r7, lr}
+; CHECK-IOS: push {r4, r7, lr}
 ; CHECK-IOS: sub.w r4, sp, #16
 ; CHECK-IOS: bfc r4, #0, #4
 ; CHECK-IOS: mov sp, r4
 ; CHECK-IOS: vst1.64 {d8, d9}, [r4:128]
+; CHECK-IOS: sub sp, #16
 ; ...
 ; CHECK-IOS: add r4, sp, #16
 ; CHECK-IOS: vld1.64 {d8, d9}, [r4:128]
@@ -82,9 +81,8 @@ define void @check_vfp_fold() minsize {
 
   %var = alloca i8, i32 16
 
-  %tmp = load %bigVec, %bigVec* @var
+  call void asm "", "r,~{d8},~{d9}"(i8* %var)
   call void @bar(i8* %var)
-  store %bigVec %tmp, %bigVec* @var
 
   ret void
 }
@@ -170,9 +168,9 @@ define void @test_varsize(...) minsize {
 ; CHECK-T1: push	{r5, r6, r7, lr}
 ; ...
 ; CHECK-T1: pop	{r2, r3, r7}
-; CHECK-T1: pop	{r3}
+; CHECK-T1: pop {[[POP_REG:r[0-3]]]}
 ; CHECK-T1: add	sp, #16
-; CHECK-T1: bx	r3
+; CHECK-T1: bx	[[POP_REG]]
 
 ; CHECK-LABEL: test_varsize:
 ; CHECK: sub	sp, #16

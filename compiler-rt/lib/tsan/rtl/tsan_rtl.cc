@@ -99,8 +99,10 @@ Context::Context()
   , nmissed_expected()
   , thread_registry(new(thread_registry_placeholder) ThreadRegistry(
       CreateThreadContext, kMaxTid, kThreadQuarantineSize, kMaxTidReuse))
+  , racy_mtx(MutexTypeRacy, StatMtxRacy)
   , racy_stacks(MBlockRacyStacks)
   , racy_addresses(MBlockRacyAddresses)
+  , fired_suppressions_mtx(MutexTypeFired, StatMtxFired)
   , fired_suppressions(8) {
 }
 
@@ -318,8 +320,9 @@ void Initialize(ThreadState *thr) {
 
   ctx = new(ctx_placeholder) Context;
   const char *options = GetEnv(kTsanOptionsEnv);
-  InitializeFlags(&ctx->flags, options);
   CacheBinaryName();
+  InitializeFlags(&ctx->flags, options);
+  CheckVMASize();
 #ifndef SANITIZER_GO
   InitializeAllocator();
 #endif
@@ -417,7 +420,7 @@ int Finalize(ThreadState *thr) {
   StatOutput(ctx->stat);
 #endif
 
-  return failed ? flags()->exitcode : 0;
+  return failed ? common_flags()->exitcode : 0;
 }
 
 #ifndef SANITIZER_GO

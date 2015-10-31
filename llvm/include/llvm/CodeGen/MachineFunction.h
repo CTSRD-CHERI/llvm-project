@@ -38,6 +38,7 @@ class MachineJumpTableInfo;
 class MachineModuleInfo;
 class MCContext;
 class Pass;
+class PseudoSourceValueManager;
 class TargetMachine;
 class TargetSubtargetInfo;
 class TargetRegisterClass;
@@ -102,7 +103,7 @@ class MachineFunction {
 
   // Keep track of constants which are spilled to memory
   MachineConstantPool *ConstantPool;
-  
+
   // Keep track of jump tables for switch instructions
   MachineJumpTableInfo *JumpTableInfo;
 
@@ -131,7 +132,7 @@ class MachineFunction {
   /// this translation unit.
   ///
   unsigned FunctionNumber;
-  
+
   /// Alignment - The alignment of the function.
   unsigned Alignment;
 
@@ -145,6 +146,9 @@ class MachineFunction {
   /// True if the function includes any inline assembly.
   bool HasInlineAsm;
 
+  // Allocation management for pseudo source values.
+  std::unique_ptr<PseudoSourceValueManager> PSVManager;
+
   MachineFunction(const MachineFunction &) = delete;
   void operator=(const MachineFunction&) = delete;
 public:
@@ -154,6 +158,11 @@ public:
 
   MachineModuleInfo &getMMI() const { return MMI; }
   MCContext &getContext() const { return Ctx; }
+
+  PseudoSourceValueManager &getPSVManager() const { return *PSVManager; }
+
+  /// Return the DataLayout attached to the Module associated to this MF.
+  const DataLayout &getDataLayout() const;
 
   /// getFunction - Return the LLVM function that this machine code represents
   ///
@@ -195,7 +204,7 @@ public:
   MachineFrameInfo *getFrameInfo() { return FrameInfo; }
   const MachineFrameInfo *getFrameInfo() const { return FrameInfo; }
 
-  /// getJumpTableInfo - Return the jump table info object for the current 
+  /// getJumpTableInfo - Return the jump table info object for the current
   /// function.  This object contains information about jump tables in the
   /// current function.  If the current function has no jump tables, this will
   /// return null.
@@ -206,7 +215,6 @@ public:
   /// does already exist, allocate one.
   MachineJumpTableInfo *getOrCreateJumpTableInfo(unsigned JTEntryKind);
 
-  
   /// getConstantPool - Return the constant pool object for the current
   /// function.
   ///
@@ -281,14 +289,14 @@ public:
   /// getNumBlockIDs - Return the number of MBB ID's allocated.
   ///
   unsigned getNumBlockIDs() const { return (unsigned)MBBNumbering.size(); }
-  
+
   /// RenumberBlocks - This discards all of the MachineBasicBlock numbers and
   /// recomputes them.  This guarantees that the MBB numbers are sequential,
   /// dense, and match the ordering of the blocks within the function.  If a
   /// specific MachineBasicBlock is specified, only that block and those after
   /// it are renumbered.
   void RenumberBlocks(MachineBasicBlock *MBBFrom = nullptr);
-  
+
   /// print - Print out the MachineFunction in a format suitable for debugging
   /// to the specified stream.
   ///
@@ -355,15 +363,21 @@ public:
   void splice(iterator InsertPt, iterator MBBI) {
     BasicBlocks.splice(InsertPt, BasicBlocks, MBBI);
   }
+  void splice(iterator InsertPt, MachineBasicBlock *MBB) {
+    BasicBlocks.splice(InsertPt, BasicBlocks, MBB);
+  }
   void splice(iterator InsertPt, iterator MBBI, iterator MBBE) {
     BasicBlocks.splice(InsertPt, BasicBlocks, MBBI, MBBE);
   }
 
-  void remove(iterator MBBI) {
-    BasicBlocks.remove(MBBI);
-  }
-  void erase(iterator MBBI) {
-    BasicBlocks.erase(MBBI);
+  void remove(iterator MBBI) { BasicBlocks.remove(MBBI); }
+  void remove(MachineBasicBlock *MBBI) { BasicBlocks.remove(MBBI); }
+  void erase(iterator MBBI) { BasicBlocks.erase(MBBI); }
+  void erase(MachineBasicBlock *MBBI) { BasicBlocks.erase(MBBI); }
+
+  template <typename Comp>
+  void sort(Comp comp) {
+    BasicBlocks.sort(comp);
   }
 
   //===--------------------------------------------------------------------===//
@@ -422,7 +436,7 @@ public:
                                           unsigned base_alignment,
                                           const AAMDNodes &AAInfo = AAMDNodes(),
                                           const MDNode *Ranges = nullptr);
-  
+
   /// getMachineMemOperand - Allocate a new MachineMemOperand by copying
   /// an existing one, adjusting by an offset and using the given size.
   /// MachineMemOperands are owned by the MachineFunction and need not be
@@ -472,16 +486,19 @@ public:
     extractStoreMemRefs(MachineInstr::mmo_iterator Begin,
                         MachineInstr::mmo_iterator End);
 
+  /// Allocate a string and populate it with the given external symbol name.
+  const char *createExternalSymbolName(StringRef Name);
+
   //===--------------------------------------------------------------------===//
   // Label Manipulation.
   //
-  
+
   /// getJTISymbol - Return the MCSymbol for the specified non-empty jump table.
   /// If isLinkerPrivate is specified, an 'l' label is returned, otherwise a
   /// normal 'L' label is returned.
-  MCSymbol *getJTISymbol(unsigned JTI, MCContext &Ctx, 
+  MCSymbol *getJTISymbol(unsigned JTI, MCContext &Ctx,
                          bool isLinkerPrivate = false) const;
-  
+
   /// getPICBaseSymbol - Return a function-local symbol to represent the PIC
   /// base.
   MCSymbol *getPICBaseSymbol() const;

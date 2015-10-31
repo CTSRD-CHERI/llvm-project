@@ -2,8 +2,11 @@
 Test example snippets from the lldb 'help expression' output.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -19,16 +22,16 @@ class Radar9673644TestCase(TestBase):
         self.main_source = "main.c"
         self.line = line_number(self.main_source, '// Set breakpoint here.')
 
-    @expectedFailureDarwin(15641319)
+    @expectedFailureWindows("llvm.org/pr21765")
     def test_expr_commands(self):
         """The following expression commands should just work."""
-        self.buildDefault()
+        self.build()
 
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, self.main_source, self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # rdar://problem/9673664 lldb expression evaluation problem
 
@@ -36,10 +39,3 @@ class Radar9673644TestCase(TestBase):
             substrs = ["'f'"])
         # runCmd: expr char c[] = "foo"; c[0]
         # output: (char) $0 = 'f'
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

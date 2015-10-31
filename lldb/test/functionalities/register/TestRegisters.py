@@ -2,9 +2,12 @@
 Test the 'register' command.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys, time
 import re
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -25,46 +28,52 @@ class RegisterCommandsTestCase(TestBase):
         """Test commands related to registers, in particular vector registers."""
         if not self.getArchitecture() in ['amd64', 'i386', 'x86_64']:
             self.skipTest("This test requires x86 or x86_64 as the architecture for the inferior")
-        self.buildDefault()
+        self.build()
         self.register_commands()
 
+    @skipIfTargetAndroid(archs=["i386"]) # Writing of mxcsr register fails, presumably due to a kernel/hardware problem
     def test_fp_register_write(self):
         """Test commands that write to registers, in particular floating-point registers."""
         if not self.getArchitecture() in ['amd64', 'i386', 'x86_64']:
             self.skipTest("This test requires x86 or x86_64 as the architecture for the inferior")
-        self.buildDefault()
+        self.build()
         self.fp_register_write()
+
+    @expectedFailureAndroid(archs=["i386"]) # "register read fstat" always return 0xffff
+    @skipIfFreeBSD    #llvm.org/pr25057
+    def test_fp_special_purpose_register_read(self):
+        """Test commands that read fpu special purpose registers."""
+        if not self.getArchitecture() in ['amd64', 'i386', 'x86_64']:
+            self.skipTest("This test requires x86 or x86_64 as the architecture for the inferior")
+        self.build()
+        self.fp_special_purpose_register_read()
 
     def test_register_expressions(self):
         """Test expression evaluation with commands related to registers."""
         if not self.getArchitecture() in ['amd64', 'i386', 'x86_64']:
             self.skipTest("This test requires x86 or x86_64 as the architecture for the inferior")
-        self.buildDefault()
+        self.build()
         self.register_expressions()
 
     def test_convenience_registers(self):
         """Test convenience registers."""
         if not self.getArchitecture() in ['amd64', 'x86_64']:
             self.skipTest("This test requires x86_64 as the architecture for the inferior")
-        self.buildDefault()
+        self.build()
         self.convenience_registers()
 
-    @skipIfFreeBSD # llvm.org/pr16684
-    @expectedFailureFreeBSD("llvm.org/pr18200")
     def test_convenience_registers_with_process_attach(self):
         """Test convenience registers after a 'process attach'."""
         if not self.getArchitecture() in ['amd64', 'x86_64']:
             self.skipTest("This test requires x86_64 as the architecture for the inferior")
-        self.buildDefault()
+        self.build()
         self.convenience_registers_with_process_attach(test_16bit_regs=False)
 
-    @skipIfFreeBSD # llvm.org/pr18230
-    @expectedFailureFreeBSD("llvm.org/pr18200")
     def test_convenience_registers_16bit_with_process_attach(self):
         """Test convenience registers after a 'process attach'."""
         if not self.getArchitecture() in ['amd64', 'x86_64']:
             self.skipTest("This test requires x86_64 as the architecture for the inferior")
-        self.buildDefault()
+        self.build()
         self.convenience_registers_with_process_attach(test_16bit_regs=True)
 
     def common_setup(self):
@@ -75,7 +84,7 @@ class RegisterCommandsTestCase(TestBase):
         # Break in main().
         lldbutil.run_break_set_by_symbol (self, "main", num_expected_locations=-1)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -102,7 +111,7 @@ class RegisterCommandsTestCase(TestBase):
 
         if self.platform != "":
             self.log_file = os.path.join(os.getcwd(), 'TestRegisters.log')
-            self.runCmd("log enable " + self.platform + " " + str(category) + " registers -v -f " + self.log_file, RUN_FAILED)
+            self.runCmd("log enable " + self.platform + " " + str(category) + " registers -v -f " + self.log_file, RUN_SUCCEEDED)
             if not self.has_teardown:
                 self.has_teardown = True
                 self.addTearDownHook(self.remove_log)
@@ -151,6 +160,76 @@ class RegisterCommandsTestCase(TestBase):
         self.runCmd("register write " + register + " \'" + new_value + "\'")
         self.expect("register read " + register,
             substrs = [register + ' = ', new_value])
+
+    def fp_special_purpose_register_read(self):
+        exe = os.path.join(os.getcwd(), "a.out")
+
+        # Create a target by the debugger.
+        target = self.dbg.CreateTarget(exe)
+        self.assertTrue(target, VALID_TARGET)
+
+        # Launch the process and stop.
+        self.expect ("run", PROCESS_STOPPED, substrs = ['stopped'])
+
+        # Check stop reason; Should be either signal SIGTRAP or EXC_BREAKPOINT
+        output = self.res.GetOutput()
+        matched = False
+        substrs = ['stop reason = EXC_BREAKPOINT', 'stop reason = signal SIGTRAP']
+        for str1 in substrs:
+            matched = output.find(str1) != -1
+            with recording(self, False) as sbuf:
+                print("%s sub string: %s" % ('Expecting', str1), file=sbuf)
+                print("Matched" if matched else "Not Matched", file=sbuf)
+            if matched:
+                break
+        self.assertTrue(matched, STOPPED_DUE_TO_SIGNAL)
+
+        process = target.GetProcess()
+        self.assertTrue(process.GetState() == lldb.eStateStopped,
+                        PROCESS_STOPPED)
+
+        thread = process.GetThreadAtIndex(0)
+        self.assertTrue(thread.IsValid(), "current thread is valid")
+
+        currentFrame = thread.GetFrameAtIndex(0)
+        self.assertTrue(currentFrame.IsValid(), "current frame is valid")
+
+        # Extract the value of fstat and ftag flag at the point just before
+        # we start pushing floating point values on st% register stack
+        value = currentFrame.FindValue("fstat", lldb.eValueTypeRegister)
+        error = lldb.SBError()
+        reg_value_fstat_initial = value.GetValueAsUnsigned(error, 0)
+
+        self.assertTrue(error.Success(), "reading a value for fstat")
+        value = currentFrame.FindValue("ftag", lldb.eValueTypeRegister)
+        error = lldb.SBError()
+        reg_value_ftag_initial = value.GetValueAsUnsigned(error, 0)
+
+        self.assertTrue(error.Success(), "reading a value for ftag")
+        fstat_top_pointer_initial = (reg_value_fstat_initial & 0x3800)>>11
+
+        # Execute 'si' aka 'thread step-inst' instruction 5 times and with
+        # every execution verify the value of fstat and ftag registers
+        for x in range(0,5):
+            # step into the next instruction to push a value on 'st' register stack
+            self.runCmd ("si", RUN_SUCCEEDED)
+
+            # Verify fstat and save it to be used for verification in next execution of 'si' command
+            if not (reg_value_fstat_initial & 0x3800):
+                self.expect("register read fstat",
+                    substrs = ['fstat' + ' = ', str("0x%0.4x" %((reg_value_fstat_initial & ~(0x3800))| 0x3800))])
+                reg_value_fstat_initial = ((reg_value_fstat_initial & ~(0x3800))| 0x3800)
+                fstat_top_pointer_initial = 7
+            else :
+                self.expect("register read fstat",
+                    substrs = ['fstat' + ' = ', str("0x%0.4x" % (reg_value_fstat_initial - 0x0800))])
+                reg_value_fstat_initial = (reg_value_fstat_initial - 0x0800)
+                fstat_top_pointer_initial -= 1
+
+            # Verify ftag and save it to be used for verification in next execution of 'si' command
+            self.expect("register read ftag",
+                substrs = ['ftag' + ' = ', str("0x%0.2x" % (reg_value_ftag_initial | (1<< fstat_top_pointer_initial)))])
+            reg_value_ftag_initial = reg_value_ftag_initial | (1<< fstat_top_pointer_initial)
 
     def fp_register_write(self):
         exe = os.path.join(os.getcwd(), "a.out")
@@ -262,7 +341,7 @@ class RegisterCommandsTestCase(TestBase):
         self.addTearDownHook(self.cleanupSubprocesses)
 
         if self.TraceOn():
-            print "pid of spawned process: %d" % pid
+            print("pid of spawned process: %d" % pid)
 
         self.runCmd("process attach -p %d" % pid)
 
@@ -276,9 +355,3 @@ class RegisterCommandsTestCase(TestBase):
         if test_16bit_regs:
             self.expect("expr -- $ax == (($ah << 8) | $al)",
                 substrs = ['true'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

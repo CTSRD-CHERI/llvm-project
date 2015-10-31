@@ -98,6 +98,8 @@ public:
     OptimizeNone,          ///< Function must not be optimized.
     ReadNone,              ///< Function does not access memory
     ReadOnly,              ///< Function only reads from memory
+    ArgMemOnly,            ///< Funciton can access memory only using pointers
+                           ///< based on its arguments.
     Returned,              ///< Return value is always equal to this argument
     ReturnsTwice,          ///< Function can return twice
     SExt,                  ///< Sign extended before/after call
@@ -118,9 +120,11 @@ public:
 
     EndAttrKinds           ///< Sentinal value useful for loops
   };
+
 private:
   AttributeImpl *pImpl;
   Attribute(AttributeImpl *A) : pImpl(A) {}
+
 public:
   Attribute() : pImpl(nullptr) {}
 
@@ -224,6 +228,7 @@ public:
     ReturnIndex = 0U,
     FunctionIndex = ~0U
   };
+
 private:
   friend class AttrBuilder;
   friend class AttributeSetImpl;
@@ -247,8 +252,8 @@ private:
                               ArrayRef<std::pair<unsigned,
                                                  AttributeSetNode*> > Attrs);
 
-
   explicit AttributeSet(AttributeSetImpl *LI) : pImpl(LI) {}
+
 public:
   AttributeSet() : pImpl(nullptr) {}
 
@@ -282,13 +287,13 @@ public:
   /// \brief Remove the specified attribute at the specified index from this
   /// attribute list. Because attribute lists are immutable, this returns the
   /// new list.
-  AttributeSet removeAttribute(LLVMContext &C, unsigned Index, 
+  AttributeSet removeAttribute(LLVMContext &C, unsigned Index,
                                Attribute::AttrKind Attr) const;
 
   /// \brief Remove the specified attributes at the specified index from this
   /// attribute list. Because attribute lists are immutable, this returns the
   /// new list.
-  AttributeSet removeAttributes(LLVMContext &C, unsigned Index, 
+  AttributeSet removeAttributes(LLVMContext &C, unsigned Index,
                                 AttributeSet Attrs) const;
 
   /// \brief Remove the specified attributes at the specified index from this
@@ -437,6 +442,7 @@ class AttrBuilder {
   uint64_t StackAlignment;
   uint64_t DerefBytes;
   uint64_t DerefOrNullBytes;
+
 public:
   AttrBuilder()
       : Attrs(0), Alignment(0), StackAlignment(0), DerefBytes(0),
@@ -509,8 +515,8 @@ public:
   /// \brief Retrieve the stack alignment attribute, if it exists.
   uint64_t getStackAlignment() const { return StackAlignment; }
 
-  /// \brief Retrieve the number of dereferenceable bytes, if the dereferenceable
-  /// attribute exists (zero is returned otherwise).
+  /// \brief Retrieve the number of dereferenceable bytes, if the
+  /// dereferenceable attribute exists (zero is returned otherwise).
   uint64_t getDereferenceableBytes() const { return DerefBytes; }
 
   /// \brief Retrieve the number of dereferenceable_or_null bytes, if the
@@ -571,7 +577,7 @@ public:
 namespace AttributeFuncs {
 
 /// \brief Which attributes cannot be applied to a type.
-AttrBuilder typeIncompatible(const Type *Ty);
+AttrBuilder typeIncompatible(Type *Ty);
 
 } // end AttributeFuncs namespace
 

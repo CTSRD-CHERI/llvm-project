@@ -11,12 +11,12 @@
 #define liblldb_ProcessMachCore_h_
 
 // C Includes
-
 // C++ Includes
 #include <list>
 #include <vector>
 
 // Other libraries and framework includes
+// Project includes
 #include "lldb/Core/ConstString.h"
 #include "lldb/Core/Error.h"
 #include "lldb/Target/Process.h"
@@ -29,8 +29,14 @@ public:
     //------------------------------------------------------------------
     // Constructors and Destructors
     //------------------------------------------------------------------
+    ProcessMachCore(lldb::TargetSP target_sp, 
+                    lldb_private::Listener &listener,
+                    const lldb_private::FileSpec &core_file);
+    
+    ~ProcessMachCore() override;
+    
     static lldb::ProcessSP
-    CreateInstance (lldb_private::Target& target, 
+    CreateInstance (lldb::TargetSP target_sp, 
                     lldb_private::Listener &listener, 
                     const lldb_private::FileSpec *crash_file_path);
     
@@ -47,69 +53,59 @@ public:
     GetPluginDescriptionStatic();
     
     //------------------------------------------------------------------
-    // Constructors and Destructors
-    //------------------------------------------------------------------
-    ProcessMachCore(lldb_private::Target& target, 
-                    lldb_private::Listener &listener,
-                    const lldb_private::FileSpec &core_file);
-    
-    virtual
-    ~ProcessMachCore();
-    
-    //------------------------------------------------------------------
     // Check if a given Process
     //------------------------------------------------------------------
-    virtual bool
-    CanDebug (lldb_private::Target &target,
-              bool plugin_specified_by_name);
+    bool
+    CanDebug (lldb::TargetSP target_sp,
+              bool plugin_specified_by_name) override;
     
     //------------------------------------------------------------------
     // Creating a new process, or attaching to an existing one
     //------------------------------------------------------------------
-    virtual lldb_private::Error
-    DoLoadCore ();
+    lldb_private::Error
+    DoLoadCore () override;
     
-    virtual lldb_private::DynamicLoader *
-    GetDynamicLoader ();
+    lldb_private::DynamicLoader *
+    GetDynamicLoader () override;
 
     //------------------------------------------------------------------
     // PluginInterface protocol
     //------------------------------------------------------------------
-    virtual lldb_private::ConstString
-    GetPluginName();
+    lldb_private::ConstString
+    GetPluginName() override;
     
-    virtual uint32_t
-    GetPluginVersion();
+    uint32_t
+    GetPluginVersion() override;
     
     //------------------------------------------------------------------
     // Process Control
     //------------------------------------------------------------------    
-    virtual lldb_private::Error
-    DoDestroy ();
+    lldb_private::Error
+    DoDestroy () override;
     
-    virtual void
-    RefreshStateAfterStop();
+    void
+    RefreshStateAfterStop() override;
     
     //------------------------------------------------------------------
     // Process Queries
     //------------------------------------------------------------------
-    virtual bool
-    IsAlive ();
+    bool
+    IsAlive () override;
 
-    virtual bool
-    WarnBeforeDetach () const;
+    bool
+    WarnBeforeDetach () const override;
 
     //------------------------------------------------------------------
     // Process Memory
     //------------------------------------------------------------------
-    virtual size_t
-    ReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error);
+    size_t
+    ReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error) override;
     
-    virtual size_t
-    DoReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error);
+    size_t
+    DoReadMemory (lldb::addr_t addr, void *buf, size_t size, lldb_private::Error &error) override;
     
-    virtual lldb::addr_t
-    GetImageInfoAddress ();
+    lldb::addr_t
+    GetImageInfoAddress () override;
 
 protected:
     friend class ThreadMachCore;
@@ -117,9 +113,9 @@ protected:
     void
     Clear ( );
     
-    virtual bool
+    bool
     UpdateThreadList (lldb_private::ThreadList &old_thread_list, 
-                      lldb_private::ThreadList &new_thread_list);
+                      lldb_private::ThreadList &new_thread_list) override;
     
     lldb_private::ObjectFile *
     GetCoreObjectFile ();
@@ -161,8 +157,8 @@ private:
     lldb::addr_t m_dyld_addr;
     lldb::addr_t m_mach_kernel_addr;
     lldb_private::ConstString m_dyld_plugin_name;
+
     DISALLOW_COPY_AND_ASSIGN (ProcessMachCore);
-    
 };
 
-#endif  // liblldb_ProcessMachCore_h_
+#endif // liblldb_ProcessMachCore_h_

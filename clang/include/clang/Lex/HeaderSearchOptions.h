@@ -20,10 +20,11 @@
 namespace clang {
 
 namespace frontend {
-  /// IncludeDirGroup - Identifiers the group a include entry belongs to, which
-  /// represents its relative positive in the search list.  A \#include of a ""
-  /// path starts at the -iquote group, then searches the Angled group, then
-  /// searches the system group, etc.
+  /// IncludeDirGroup - Identifies the group an include Entry belongs to,
+  /// representing its relative positive in the search list.
+  /// \#include directives whose paths are enclosed by string quotes ("")
+  /// start searching at the Quoted group (specified by '-iquote'),
+  /// then search the Angled group, then the System group, etc.
   enum IncludeDirGroup {
     Quoted = 0,     ///< '\#include ""' paths, added by 'gcc -iquote'.
     Angled,         ///< Paths for '\#include <>' added by '-I'.
@@ -91,6 +92,9 @@ public:
 
   /// \brief The directory used for a user build.
   std::string ModuleUserBuildPath;
+
+  /// The module/pch container format.
+  std::string ModuleFormat;
 
   /// \brief Whether we should disable the use of the hash string within the
   /// module cache.
@@ -165,18 +169,19 @@ public:
   /// \brief Whether to validate system input files when a module is loaded.
   unsigned ModulesValidateSystemHeaders : 1;
 
-public:
+  /// Whether the module includes debug information (-gmodules).
+  unsigned UseDebugInfo : 1;
+
   HeaderSearchOptions(StringRef _Sysroot = "/")
-    : Sysroot(_Sysroot), DisableModuleHash(0), ImplicitModuleMaps(0),
-      ModuleMapFileHomeIsCwd(0),
-      ModuleCachePruneInterval(7*24*60*60),
-      ModuleCachePruneAfter(31*24*60*60),
-      BuildSessionTimestamp(0),
-      UseBuiltinIncludes(true),
-      UseStandardSystemIncludes(true), UseStandardCXXIncludes(true),
-      UseLibcxx(false), Verbose(false),
-      ModulesValidateOncePerBuildSession(false),
-      ModulesValidateSystemHeaders(false) {}
+      : Sysroot(_Sysroot), ModuleFormat("raw"), DisableModuleHash(0),
+        ImplicitModuleMaps(0), ModuleMapFileHomeIsCwd(0),
+        ModuleCachePruneInterval(7 * 24 * 60 * 60),
+        ModuleCachePruneAfter(31 * 24 * 60 * 60), BuildSessionTimestamp(0),
+        UseBuiltinIncludes(true), UseStandardSystemIncludes(true),
+        UseStandardCXXIncludes(true), UseLibcxx(false), Verbose(false),
+        ModulesValidateOncePerBuildSession(false),
+        ModulesValidateSystemHeaders(false),
+        UseDebugInfo(false) {}
 
   /// AddPath - Add the \p Path path to the specified \p Group list.
   void AddPath(StringRef Path, frontend::IncludeDirGroup Group,

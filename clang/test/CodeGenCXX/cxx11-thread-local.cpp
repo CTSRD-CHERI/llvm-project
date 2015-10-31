@@ -1,4 +1,6 @@
 // RUN: %clang_cc1 -std=c++11 -emit-llvm %s -o - -triple x86_64-linux-gnu | FileCheck %s
+// RUN: %clang_cc1 -std=c++11 -femulated-tls -emit-llvm %s -o - \
+// RUN:     -triple x86_64-linux-gnu 2>&1 | FileCheck --check-prefix=CHECK %s
 
 int f();
 int g();
@@ -43,10 +45,10 @@ int e = V<int>::m;
 
 // CHECK: @llvm.global_ctors = appending global {{.*}} @[[GLOBAL_INIT:[^ ]*]]
 
-// CHECK: @_ZTH1a = alias void ()* @__tls_init
-// CHECK: @_ZTHL1d = internal alias void ()* @__tls_init
-// CHECK: @_ZTHN1U1mE = alias void ()* @__tls_init
-// CHECK: @_ZTHN1VIiE1mE = linkonce_odr alias void ()* @__tls_init
+// CHECK: @_ZTH1a = alias void (), void ()* @__tls_init
+// CHECK: @_ZTHL1d = internal alias void (), void ()* @__tls_init
+// CHECK: @_ZTHN1U1mE = alias void (), void ()* @__tls_init
+// CHECK: @_ZTHN1VIiE1mE = linkonce_odr alias void (), void ()* @__tls_init
 
 
 // Individual variable initialization functions:

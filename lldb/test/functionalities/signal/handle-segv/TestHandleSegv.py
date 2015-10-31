@@ -1,7 +1,10 @@
 """Test that we can debug inferiors that handle SIGSEGV by themselves"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -15,8 +18,8 @@ class HandleSegvTestCase(TestBase):
     @skipIfWindows # signals do not exist on Windows
     @skipIfDarwin
     @expectedFailureFreeBSD("llvm.org/pr23699 SIGSEGV is reported as exception, not signal")
-    def test_inferior_handle_sigsegv_with_dwarf(self):
-        self.buildDefault()
+    def test_inferior_handle_sigsegv(self):
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -38,9 +41,3 @@ class HandleSegvTestCase(TestBase):
         process.Continue()
         self.assertEqual(process.GetState(), lldb.eStateExited)
         self.assertEqual(process.GetExitStatus(), 0)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

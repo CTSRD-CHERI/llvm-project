@@ -45,11 +45,17 @@ static cl::opt<int> OptComputeOut(
     "polly-dependences-computeout",
     cl::desc("Bound the dependence analysis by a maximal amount of "
              "computational steps (0 means no bound)"),
-    cl::Hidden, cl::init(410000), cl::ZeroOrMore, cl::cat(PollyCategory));
+    cl::Hidden, cl::init(500000), cl::ZeroOrMore, cl::cat(PollyCategory));
 
 static cl::opt<bool> LegalityCheckDisabled(
     "disable-polly-legality", cl::desc("Disable polly legality check"),
     cl::Hidden, cl::init(false), cl::ZeroOrMore, cl::cat(PollyCategory));
+
+static cl::opt<bool>
+    UseReductions("polly-dependences-use-reductions",
+                  cl::desc("Exploit reductions in dependence analysis"),
+                  cl::Hidden, cl::init(true), cl::ZeroOrMore,
+                  cl::cat(PollyCategory));
 
 enum AnalysisType { VALUE_BASED_ANALYSIS, MEMORY_BASED_ANALYSIS };
 
@@ -79,10 +85,11 @@ static void collectInfo(Scop &S, isl_union_map **Read, isl_union_map **Write,
   *StmtSchedule = isl_union_map_empty(Space);
 
   SmallPtrSet<const Value *, 8> ReductionBaseValues;
-  for (ScopStmt &Stmt : S)
-    for (MemoryAccess *MA : Stmt)
-      if (MA->isReductionLike())
-        ReductionBaseValues.insert(MA->getBaseAddr());
+  if (UseReductions)
+    for (ScopStmt &Stmt : S)
+      for (MemoryAccess *MA : Stmt)
+        if (MA->isReductionLike())
+          ReductionBaseValues.insert(MA->getBaseAddr());
 
   for (ScopStmt &Stmt : S) {
     for (MemoryAccess *MA : Stmt) {
@@ -219,16 +226,58 @@ void Dependences::addPrivatizationDependences() {
   isl_union_set_free(Universe);
 }
 
+static isl_stat getMaxScheduleDim(__isl_take isl_map *Map, void *User) {
+  unsigned int *MaxScheduleDim = (unsigned int *)User;
+  *MaxScheduleDim = std::max(*MaxScheduleDim, isl_map_dim(Map, isl_dim_out));
+  isl_map_free(Map);
+  return isl_stat_ok;
+}
+
+__isl_give isl_union_map *
+addZeroPaddingToSchedule(__isl_take isl_union_map *Schedule) {
+  unsigned int MaxScheduleDim = 0;
+
+  isl_union_map_foreach_map(Schedule, getMaxScheduleDim, &MaxScheduleDim);
+
+  auto ExtensionMap = isl_union_map_empty(isl_union_map_get_space(Schedule));
+  for (unsigned int i = 0; i <= MaxScheduleDim; i++) {
+    auto *Map = isl_map_identity(
+        isl_space_alloc(isl_union_map_get_ctx(Schedule), 0, i, i));
+    Map = isl_map_add_dims(Map, isl_dim_out, MaxScheduleDim - i);
+    for (unsigned int j = 0; j < MaxScheduleDim - i; j++)
+      Map = isl_map_fix_si(Map, isl_dim_out, i + j, 0);
+
+    ExtensionMap = isl_union_map_add_map(ExtensionMap, Map);
+  }
+  Schedule = isl_union_map_apply_range(Schedule, ExtensionMap);
+
+  return Schedule;
+}
+
 void Dependences::calculateDependences(Scop &S) {
-  isl_union_map *Read, *Write, *MayWrite, *AccessSchedule, *StmtSchedule,
-      *ScheduleMap;
+  isl_union_map *Read, *Write, *MayWrite, *AccessSchedule, *StmtSchedule;
+  isl_schedule *Schedule;
 
   DEBUG(dbgs() << "Scop: \n" << S << "\n");
 
   collectInfo(S, &Read, &Write, &MayWrite, &AccessSchedule, &StmtSchedule);
 
-  ScheduleMap =
-      isl_union_map_union(AccessSchedule, isl_union_map_copy(StmtSchedule));
+  if (isl_union_map_is_empty(AccessSchedule)) {
+    isl_union_map_free(AccessSchedule);
+    Schedule = S.getScheduleTree();
+  } else {
+    auto *ScheduleMap =
+        isl_union_map_union(AccessSchedule, isl_union_map_copy(StmtSchedule));
+    Schedule = isl_schedule_from_domain(
+        isl_union_map_domain(isl_union_map_copy(ScheduleMap)));
+    if (!isl_union_map_is_empty(ScheduleMap)) {
+      ScheduleMap = addZeroPaddingToSchedule(ScheduleMap);
+      Schedule = isl_schedule_insert_partial_schedule(
+          Schedule, isl_multi_union_pw_aff_from_union_map(ScheduleMap));
+    } else {
+      isl_union_map_free(ScheduleMap);
+    }
+  }
 
   Read = isl_union_map_coalesce(Read);
   Write = isl_union_map_coalesce(Write);
@@ -241,15 +290,9 @@ void Dependences::calculateDependences(Scop &S) {
 
   DEBUG(dbgs() << "Read: " << Read << "\n";
         dbgs() << "Write: " << Write << "\n";
-        dbgs() << "MayWrite: " << MayWrite << "\n";
-        dbgs() << "Schedule: " << ScheduleMap << "\n");
+        dbgs() << "MayWrite: " << MayWrite << "\n");
 
   RAW = WAW = WAR = RED = nullptr;
-
-  auto *Schedule = isl_schedule_from_domain(
-      isl_union_map_domain(isl_union_map_copy(ScheduleMap)));
-  Schedule = isl_schedule_insert_partial_schedule(
-      Schedule, isl_multi_union_pw_aff_from_union_map(ScheduleMap));
 
   if (OptAnalysisType == VALUE_BASED_ANALYSIS) {
     isl_union_access_info *AI;

@@ -26,8 +26,6 @@ template <class ELFT> class ELFFile : public SimpleFile {
   typedef llvm::object::Elf_Shdr_Impl<ELFT> Elf_Shdr;
   typedef llvm::object::Elf_Rel_Impl<ELFT, false> Elf_Rel;
   typedef llvm::object::Elf_Rel_Impl<ELFT, true> Elf_Rela;
-  typedef typename llvm::object::ELFFile<ELFT>::Elf_Rela_Iter Elf_Rela_Iter;
-  typedef typename llvm::object::ELFFile<ELFT>::Elf_Rel_Iter Elf_Rel_Iter;
   typedef typename llvm::object::ELFFile<ELFT>::Elf_Word Elf_Word;
 
   // A Map is used to hold the atoms that have been divided up
@@ -137,13 +135,13 @@ protected:
   /// \brief Iterate over Elf_Rela relocations list and create references.
   virtual void createRelocationReferences(const Elf_Sym *symbol,
                                           ArrayRef<uint8_t> content,
-                                          range<Elf_Rela_Iter> rels);
+                                          range<const Elf_Rela *> rels);
 
   /// \brief Iterate over Elf_Rel relocations list and create references.
   virtual void createRelocationReferences(const Elf_Sym *symbol,
                                           ArrayRef<uint8_t> symContent,
                                           ArrayRef<uint8_t> secContent,
-                                          range<Elf_Rel_Iter> rels);
+                                          const Elf_Shdr *relSec);
 
   /// \brief After all the Atoms and References are created, update each
   /// Reference's target with the Atom pointer it refers to.
@@ -198,12 +196,14 @@ protected:
 
   /// Determines if the target wants to create an atom for a section that has no
   /// symbol references.
-  bool handleSectionWithNoSymbols(const Elf_Shdr *shdr,
-                                  std::vector<const Elf_Sym *> &syms) const {
+  bool
+  handleSectionWithNoSymbols(const Elf_Shdr *shdr,
+                             std::vector<const Elf_Sym *> &syms) const {
     return shdr &&
            (shdr->sh_type == llvm::ELF::SHT_PROGBITS ||
             shdr->sh_type == llvm::ELF::SHT_INIT_ARRAY ||
-            shdr->sh_type == llvm::ELF::SHT_FINI_ARRAY) &&
+            shdr->sh_type == llvm::ELF::SHT_FINI_ARRAY ||
+            shdr->sh_type == llvm::ELF::SHT_NOTE) &&
            syms.empty();
   }
 
@@ -322,15 +322,17 @@ protected:
 
   llvm::BumpPtrAllocator _readerStorage;
   std::unique_ptr<llvm::object::ELFFile<ELFT> > _objFile;
+  const Elf_Shdr *_symtab = nullptr;
+  ArrayRef<Elf_Word> _shndxTable;
 
   /// \brief _relocationAddendReferences and _relocationReferences contain the
   /// list of relocations references.  In ELF, if a section named, ".text" has
   /// relocations will also have a section named ".rel.text" or ".rela.text"
   /// which will hold the entries.
-  std::unordered_map<const Elf_Shdr *, range<Elf_Rela_Iter>>
-  _relocationAddendReferences;
+  std::unordered_map<const Elf_Shdr *, range<const Elf_Rela *>>
+      _relocationAddendReferences;
   MergedSectionMapT _mergedSectionMap;
-  std::unordered_map<const Elf_Shdr *, range<Elf_Rel_Iter>> _relocationReferences;
+  std::unordered_map<const Elf_Shdr *, const Elf_Shdr *> _relocationReferences;
   std::vector<ELFReference<ELFT> *> _references;
   llvm::DenseMap<const Elf_Sym *, Atom *> _symbolToAtomMapping;
   llvm::DenseMap<const ELFReference<ELFT> *, const Elf_Sym *>

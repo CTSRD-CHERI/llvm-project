@@ -50,7 +50,6 @@ public:
 
   void moveNext();
 
-  ErrorOr<uint64_t> getAddress() const;
   uint64_t getOffset() const;
   symbol_iterator getSymbol() const;
   uint64_t getType() const;
@@ -132,10 +131,10 @@ public:
     assert(isa<ObjectFile>(BasicSymbolRef::getObject()));
   }
 
-  std::error_code getName(StringRef &Result) const;
+  ErrorOr<StringRef> getName() const;
   /// Returns the symbol virtual address (i.e. address at which it will be
   /// mapped).
-  std::error_code getAddress(uint64_t &Result) const;
+  ErrorOr<uint64_t> getAddress() const;
 
   /// Return the value of the symbol depending on the object this can be an
   /// offset or a virtual address.
@@ -148,7 +147,7 @@ public:
 
   /// @brief Get section this symbol is defined in reference to. Result is
   /// end_sections() if it is undefined or is an absolute symbol.
-  std::error_code getSection(section_iterator &Result) const;
+  ErrorOr<section_iterator> getSection() const;
 
   const ObjectFile *getObject() const;
 };
@@ -195,18 +194,16 @@ protected:
   // Implementations assume that the DataRefImpl is valid and has not been
   // modified externally. It's UB otherwise.
   friend class SymbolRef;
-  virtual std::error_code getSymbolName(DataRefImpl Symb,
-                                        StringRef &Res) const = 0;
+  virtual ErrorOr<StringRef> getSymbolName(DataRefImpl Symb) const = 0;
   std::error_code printSymbolName(raw_ostream &OS,
                                   DataRefImpl Symb) const override;
-  virtual std::error_code getSymbolAddress(DataRefImpl Symb,
-                                           uint64_t &Res) const = 0;
-  virtual uint64_t getSymbolValue(DataRefImpl Symb) const = 0;
+  virtual ErrorOr<uint64_t> getSymbolAddress(DataRefImpl Symb) const = 0;
+  virtual uint64_t getSymbolValueImpl(DataRefImpl Symb) const = 0;
   virtual uint32_t getSymbolAlignment(DataRefImpl Symb) const;
   virtual uint64_t getCommonSymbolSizeImpl(DataRefImpl Symb) const = 0;
   virtual SymbolRef::Type getSymbolType(DataRefImpl Symb) const = 0;
-  virtual std::error_code getSymbolSection(DataRefImpl Symb,
-                                           section_iterator &Res) const = 0;
+  virtual ErrorOr<section_iterator>
+  getSymbolSection(DataRefImpl Symb) const = 0;
 
   // Same as above for SectionRef.
   friend class SectionRef;
@@ -230,12 +227,13 @@ protected:
   // Same as above for RelocationRef.
   friend class RelocationRef;
   virtual void moveRelocationNext(DataRefImpl &Rel) const = 0;
-  virtual ErrorOr<uint64_t> getRelocationAddress(DataRefImpl Rel) const = 0;
   virtual uint64_t getRelocationOffset(DataRefImpl Rel) const = 0;
   virtual symbol_iterator getRelocationSymbol(DataRefImpl Rel) const = 0;
   virtual uint64_t getRelocationType(DataRefImpl Rel) const = 0;
   virtual void getRelocationTypeName(DataRefImpl Rel,
                                      SmallVectorImpl<char> &Result) const = 0;
+
+  uint64_t getSymbolValue(DataRefImpl Symb) const;
 
 public:
   uint64_t getCommonSymbolSize(DataRefImpl Symb) const {
@@ -305,12 +303,12 @@ public:
 inline SymbolRef::SymbolRef(DataRefImpl SymbolP, const ObjectFile *Owner)
     : BasicSymbolRef(SymbolP, Owner) {}
 
-inline std::error_code SymbolRef::getName(StringRef &Result) const {
-  return getObject()->getSymbolName(getRawDataRefImpl(), Result);
+inline ErrorOr<StringRef> SymbolRef::getName() const {
+  return getObject()->getSymbolName(getRawDataRefImpl());
 }
 
-inline std::error_code SymbolRef::getAddress(uint64_t &Result) const {
-  return getObject()->getSymbolAddress(getRawDataRefImpl(), Result);
+inline ErrorOr<uint64_t> SymbolRef::getAddress() const {
+  return getObject()->getSymbolAddress(getRawDataRefImpl());
 }
 
 inline uint64_t SymbolRef::getValue() const {
@@ -325,8 +323,8 @@ inline uint64_t SymbolRef::getCommonSize() const {
   return getObject()->getCommonSymbolSize(getRawDataRefImpl());
 }
 
-inline std::error_code SymbolRef::getSection(section_iterator &Result) const {
-  return getObject()->getSymbolSection(getRawDataRefImpl(), Result);
+inline ErrorOr<section_iterator> SymbolRef::getSection() const {
+  return getObject()->getSymbolSection(getRawDataRefImpl());
 }
 
 inline SymbolRef::Type SymbolRef::getType() const {
@@ -429,10 +427,6 @@ inline bool RelocationRef::operator==(const RelocationRef &Other) const {
 
 inline void RelocationRef::moveNext() {
   return OwningObject->moveRelocationNext(RelocationPimpl);
-}
-
-inline ErrorOr<uint64_t> RelocationRef::getAddress() const {
-  return OwningObject->getRelocationAddress(RelocationPimpl);
 }
 
 inline uint64_t RelocationRef::getOffset() const {

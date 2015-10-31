@@ -32,7 +32,7 @@
 #include "lldb/Utility/PseudoTerminal.h"
 
 #include "Plugins/Process/POSIX/CrashReason.h"
-#include "POSIXThread.h"
+#include "FreeBSDThread.h"
 #include "ProcessFreeBSD.h"
 #include "ProcessPOSIXLog.h"
 #include "ProcessMonitor.h"
@@ -804,7 +804,7 @@ ProcessMonitor::AttachArgs::~AttachArgs()
 /// launching or attaching to the inferior process, and then 2) servicing
 /// operations such as register reads/writes, stepping, etc.  See the comments
 /// on the Operation class for more info as to why this is needed.
-ProcessMonitor::ProcessMonitor(ProcessPOSIX *process,
+ProcessMonitor::ProcessMonitor(ProcessFreeBSD *process,
                                Module *module,
                                const char *argv[],
                                const char *envp[],
@@ -865,7 +865,7 @@ WAIT_AGAIN:
     }
 }
 
-ProcessMonitor::ProcessMonitor(ProcessPOSIX *process,
+ProcessMonitor::ProcessMonitor(ProcessFreeBSD *process,
                                lldb::pid_t pid,
                                lldb_private::Error &error)
     : m_process(static_cast<ProcessFreeBSD *>(process)),
@@ -1297,7 +1297,7 @@ ProcessMonitor::MonitorSignal(ProcessMonitor *monitor,
         if (log)
             log->Printf ("ProcessMonitor::%s() received signal %s with code %s, pid = %d",
                             __FUNCTION__,
-                            monitor->m_process->GetUnixSignals().GetSignalAsCString (signo),
+                            monitor->m_process->GetUnixSignals()->GetSignalAsCString (signo),
                             "SI_USER",
                             info->si_pid);
         if (info->si_pid == getpid())
@@ -1307,7 +1307,7 @@ ProcessMonitor::MonitorSignal(ProcessMonitor *monitor,
     }
 
     if (log)
-        log->Printf ("ProcessMonitor::%s() received signal %s", __FUNCTION__, monitor->m_process->GetUnixSignals().GetSignalAsCString (signo));
+        log->Printf ("ProcessMonitor::%s() received signal %s", __FUNCTION__, monitor->m_process->GetUnixSignals()->GetSignalAsCString (signo));
 
     switch (signo)
     {
@@ -1483,7 +1483,7 @@ ProcessMonitor::Resume(lldb::tid_t unused, uint32_t signo)
     Log *log (ProcessPOSIXLog::GetLogIfAllCategoriesSet (POSIX_LOG_PROCESS));
 
     if (log) {
-        const char *signame = m_process->GetUnixSignals().GetSignalAsCString (signo);
+        const char *signame = m_process->GetUnixSignals()->GetSignalAsCString (signo);
         if (signame == nullptr)
             signame = "<none>";
         log->Printf("ProcessMonitor::%s() resuming pid %"  PRIu64 " with signal %s",

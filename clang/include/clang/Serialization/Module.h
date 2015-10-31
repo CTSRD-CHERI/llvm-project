@@ -50,17 +50,6 @@ enum ModuleKind {
   MK_MainFile        ///< File is a PCH file treated as the actual main file.
 };
 
-/// \brief Information about the contents of a DeclContext.
-struct DeclContextInfo {
-  DeclContextInfo()
-    : NameLookupTableData(), LexicalDecls(), NumLexicalDecls() {}
-
-  llvm::OnDiskIterableChainedHashTable<reader::ASTDeclContextNameLookupTrait>
-    *NameLookupTableData; // an ASTDeclContextNameLookupTable.
-  const KindDeclIDPair *LexicalDecls;
-  unsigned NumLexicalDecls;
-};
-
 /// \brief The input file that has been loaded from this AST file, along with
 /// bools indicating whether this was an overridden buffer or if it was
 /// out-of-date or not-found.
@@ -154,6 +143,9 @@ public:
 
   /// \brief Whether this precompiled header is a relocatable PCH file.
   bool RelocatablePCH;
+
+  /// \brief Whether timestamps are included in this module file.
+  bool HasTimestamps;
 
   /// \brief The file entry for the module file.
   const FileEntry *File;
@@ -269,6 +261,10 @@ public:
   /// \brief A pointer to an on-disk hash table of opaque type
   /// IdentifierHashTable.
   void *IdentifierLookupTable;
+
+  /// \brief Offsets of identifiers that we're going to preload within
+  /// IdentifierTableData.
+  std::vector<unsigned> PreloadIdentifierOffsets;
 
   // === Macros ===
 
@@ -412,28 +408,10 @@ public:
   /// indexed by the C++ ctor initializer list ID minus 1.
   const uint32_t *CXXCtorInitializersOffsets;
 
-  typedef llvm::DenseMap<const DeclContext *, DeclContextInfo>
-  DeclContextInfosMap;
-
-  /// \brief Information about the lexical and visible declarations
-  /// for each DeclContext.
-  DeclContextInfosMap DeclContextInfos;
-
   /// \brief Array of file-level DeclIDs sorted by file.
   const serialization::DeclID *FileSortedDecls;
   unsigned NumFileSortedDecls;
 
-  /// \brief Array of redeclaration chain location information within this 
-  /// module file, sorted by the first declaration ID.
-  const serialization::LocalRedeclarationsInfo *RedeclarationsMap;
-
-  /// \brief The number of redeclaration info entries in RedeclarationsMap.
-  unsigned LocalNumRedeclarationsInMap;
-  
-  /// \brief The redeclaration chains for declarations local to this
-  /// module file.
-  SmallVector<uint64_t, 1> RedeclarationChains;
-  
   /// \brief Array of category list location information within this 
   /// module file, sorted by the definition ID.
   const serialization::ObjCCategoriesInfo *ObjCCategoriesMap;
@@ -475,6 +453,11 @@ public:
   /// \brief Determine whether this module was directly imported at
   /// any point during translation.
   bool isDirectlyImported() const { return DirectlyImported; }
+
+  /// \brief Is this a module file for a module (rather than a PCH or similar).
+  bool isModule() const {
+    return Kind == MK_ImplicitModule || Kind == MK_ExplicitModule;
+  }
 
   /// \brief Dump debugging output for this module.
   void dump();

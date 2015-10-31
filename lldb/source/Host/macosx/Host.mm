@@ -18,14 +18,28 @@
 #if !defined(NO_XPC_SERVICES)
 #define __XPC_PRIVATE_H__
 #include <xpc/xpc.h>
-#include "launcherXPCService/LauncherXPCService.h"
+
+#define LaunchUsingXPCRightName "com.apple.dt.Xcode.RootDebuggingXPCService"
+
+// These XPC messaging keys are used for communication between Host.mm and the XPC service.
+#define LauncherXPCServiceAuthKey               "auth-key"
+#define LauncherXPCServiceArgPrefxKey           "arg"
+#define LauncherXPCServiceEnvPrefxKey           "env"
+#define LauncherXPCServiceCPUTypeKey            "cpuType"
+#define LauncherXPCServicePosixspawnFlagsKey    "posixspawnFlags"
+#define LauncherXPCServiceStdInPathKeyKey       "stdInPath"
+#define LauncherXPCServiceStdOutPathKeyKey      "stdOutPath"
+#define LauncherXPCServiceStdErrPathKeyKey      "stdErrPath"
+#define LauncherXPCServiceChildPIDKey           "childPID"
+#define LauncherXPCServiceErrorTypeKey          "errorType"
+#define LauncherXPCServiceCodeTypeKey           "errorCode"
+
 #endif
 
 #include "llvm/Support/Host.h"
 
 #include <asl.h>
 #include <crt_externs.h>
-#include <execinfo.h>
 #include <grp.h>
 #include <libproc.h>
 #include <pwd.h>
@@ -39,6 +53,7 @@
 
 #include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/Communication.h"
+#include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/DataExtractor.h"
 #include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
@@ -790,21 +805,23 @@ GetMacOSXProcessArgs (const ProcessInstanceInfoMatch *match_info_ptr,
     {
         int proc_args_mib[3] = { CTL_KERN, KERN_PROCARGS2, (int)process_info.GetProcessID() };
 
-        char arg_data[8192];
-        size_t arg_data_size = sizeof(arg_data);
-        if (::sysctl (proc_args_mib, 3, arg_data, &arg_data_size , NULL, 0) == 0)
+        size_t arg_data_size = 0;
+        if (::sysctl (proc_args_mib, 3, nullptr, &arg_data_size, NULL, 0) || arg_data_size == 0)
+            arg_data_size = 8192;
+
+        // Add a few bytes to the calculated length, I know we need to add at least one byte
+        // to this number otherwise we get junk back, so add 128 just in case...
+        DataBufferHeap arg_data(arg_data_size+128, 0);
+        arg_data_size = arg_data.GetByteSize();
+        if (::sysctl (proc_args_mib, 3, arg_data.GetBytes(), &arg_data_size , NULL, 0) == 0)
         {
-            DataExtractor data (arg_data, arg_data_size, lldb::endian::InlHostByteOrder(), sizeof(void *));
+            DataExtractor data (arg_data.GetBytes(), arg_data_size, lldb::endian::InlHostByteOrder(), sizeof(void *));
             lldb::offset_t offset = 0;
             uint32_t argc = data.GetU32 (&offset);
-            const char *cstr;
-            
-            
             llvm::Triple &triple = process_info.GetArchitecture().GetTriple();
             const llvm::Triple::ArchType triple_arch = triple.getArch();
             const bool check_for_ios_simulator = (triple_arch == llvm::Triple::x86 || triple_arch == llvm::Triple::x86_64);
-            
-            cstr = data.GetCStr (&offset);
+            const char *cstr = data.GetCStr (&offset);
             if (cstr)
             {
                 process_info.GetExecutableFile().SetFile(cstr, false);
@@ -1100,11 +1117,7 @@ LaunchProcessXPC(const char *exe_path, ProcessLaunchInfo &launch_info, lldb::pid
     const char *xpc_service  = nil;
     bool send_auth = false;
     AuthorizationExternalForm extForm;
-    if ((requested_uid == UINT32_MAX) || (requested_uid == HostInfo::GetEffectiveUserID()))
-    {
-        xpc_service = "com.apple.lldb.launcherXPCService";
-    }
-    else if (requested_uid == 0)
+    if (requested_uid == 0)
     {
         if (AuthorizationMakeExternalForm(authorizationRef, &extForm) == errAuthorizationSuccess)
         {
@@ -1120,12 +1133,12 @@ LaunchProcessXPC(const char *exe_path, ProcessLaunchInfo &launch_info, lldb::pid
             }
             return error;
         }
-        xpc_service = "com.apple.lldb.launcherRootXPCService";
+        xpc_service = LaunchUsingXPCRightName;
     }
     else
     {
         error.SetError(4, eErrorTypeGeneric);
-        error.SetErrorStringWithFormat("Launching via XPC is only currently available for either the login user or root.");
+        error.SetErrorStringWithFormat("Launching via XPC is only currently available for root.");
         if (log)
         {
             error.PutToLog(log, "%s", error.AsCString());
@@ -1343,13 +1356,13 @@ Host::ShellExpandArguments (ProcessLaunchInfo &launch_info)
         FileSpec expand_tool_spec;
         if (!HostInfo::GetLLDBPath(lldb::ePathTypeSupportExecutableDir, expand_tool_spec))
         {
-            error.SetErrorString("could not find argdumper tool");
+            error.SetErrorString("could not get support executable directory for argdumper tool");
             return error;
         }
         expand_tool_spec.AppendPathComponent("argdumper");
         if (!expand_tool_spec.Exists())
         {
-            error.SetErrorString("could not find argdumper tool");
+            error.SetErrorStringWithFormat("could not find argdumper tool: %s", expand_tool_spec.GetPath().c_str());
             return error;
         }
 

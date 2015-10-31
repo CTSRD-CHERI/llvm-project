@@ -1,7 +1,10 @@
 """Check that compiler-generated constant values work correctly"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,33 +13,28 @@ class ConstVariableTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @dsym_test
-    @unittest2.expectedFailure(13314878)
-    def test_with_dsym_and_run_command(self):
+    @expectedFailureAll(
+        oslist=["freebsd", "linux"],
+        compiler="clang", compiler_version=["<", "3.5"])
+    @expectedFailureAll(
+        oslist=["freebsd", "linux"],
+        compiler="clang", compiler_version=["=", "3.7"])
+    @expectedFailureAll(
+        oslist=["freebsd", "linux"],
+        compiler="clang", compiler_version=["=", "3.8"])
+    @expectedFailureAll(oslist=["freebsd", "linux"], compiler="icc")
+    @expectedFailureWindows("llvm.org/pr24489: Name lookup not working correctly on Windows")
+    @expectedFailureWindows("llvm.org/pr24490: We shouldn't be using platform-specific names like `getpid` in tests")
+    def test_and_run_command(self):
         """Test interpreted and JITted expressions on constant values."""
-        self.buildDsym()
-        self.const_variable()
-
-    @expectedFailureClang('13314878') # This test works with gcc, but fails with newer version of clang on Linux due to a clang issue. Fails for icc as well. Bug number TDB.
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test interpreted and JITted expressions on constant values."""
-        self.buildDwarf()
-        self.const_variable()
-
-    def setUp(self):
-        # Call super's setUp().
-        TestBase.setUp(self)
-
-    def const_variable(self):
-        """Test interpreted and JITted expressions on constant values."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         # Break inside the main.
         lldbutil.run_break_set_by_symbol (self, "main", num_expected_locations=1)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -62,9 +60,3 @@ class ConstVariableTestCase(TestBase):
             substrs = ['(int) $1 = 256'])
 
         self.runCmd("kill")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

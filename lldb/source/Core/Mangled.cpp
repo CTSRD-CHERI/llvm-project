@@ -13,6 +13,7 @@
 #if defined(_MSC_VER)
 #include "lldb/Host/windows/windows.h"
 #include <Dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
 #define LLDB_USE_BUILTIN_DEMANGLER
 #elif defined (__FreeBSD__)
 #define LLDB_USE_BUILTIN_DEMANGLER
@@ -37,7 +38,7 @@
 #include "lldb/Core/RegularExpression.h"
 #include "lldb/Core/Stream.h"
 #include "lldb/Core/Timer.h"
-#include "lldb/Target/CPPLanguageRuntime.h"
+#include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -65,7 +66,7 @@ cstring_is_mangled(const char *s)
 }
 
 static const ConstString &
-get_demangled_name_without_arguments (const Mangled *obj)
+get_demangled_name_without_arguments (ConstString mangled, ConstString demangled)
 {
     // This pair is <mangled name, demangled name without function arguments>
     static std::pair<ConstString, ConstString> g_most_recent_mangled_to_name_sans_args;
@@ -75,9 +76,6 @@ get_demangled_name_without_arguments (const Mangled *obj)
     // anything better.
     static ConstString g_last_mangled;
     static ConstString g_last_demangled;
-
-    ConstString mangled = obj->GetMangledName ();
-    ConstString demangled = obj->GetDemangledName ();
 
     if (mangled && g_most_recent_mangled_to_name_sans_args.first == mangled)
     {
@@ -96,11 +94,12 @@ get_demangled_name_without_arguments (const Mangled *obj)
             mangled_name_cstr[2] != 'G' && // avoid guard variables
             mangled_name_cstr[2] != 'Z'))  // named local entities (if we eventually handle eSymbolTypeData, we will want this back)
         {
-            CPPLanguageRuntime::MethodName cxx_method (demangled);
-            if (!cxx_method.GetBasename().empty() && !cxx_method.GetContext().empty())
+            CPlusPlusLanguage::MethodName cxx_method (demangled);
+            if (!cxx_method.GetBasename().empty())
             {
-                std::string shortname = cxx_method.GetContext().str();
-                shortname += "::";
+                std::string shortname;
+                if (!cxx_method.GetContext().empty())
+                    shortname = cxx_method.GetContext().str() + "::";
                 shortname += cxx_method.GetBasename().str();
                 ConstString result(shortname.c_str());
                 g_most_recent_mangled_to_name_sans_args.first = mangled;
@@ -196,7 +195,7 @@ Mangled::Clear ()
 int
 Mangled::Compare (const Mangled& a, const Mangled& b)
 {
-    return ConstString::Compare(a.GetName(ePreferMangled), a.GetName(ePreferMangled));
+    return ConstString::Compare(a.GetName(lldb::eLanguageTypeUnknown, ePreferMangled), a.GetName(lldb::eLanguageTypeUnknown, ePreferMangled));
 }
 
 
@@ -260,7 +259,7 @@ Mangled::SetValue (const ConstString &name)
 // object's lifetime.
 //----------------------------------------------------------------------
 const ConstString&
-Mangled::GetDemangledName () const
+Mangled::GetDemangledName (lldb::LanguageType language) const
 {
     // Check to make sure we have a valid mangled name and that we
     // haven't already decoded our mangled name.
@@ -338,13 +337,20 @@ Mangled::GetDemangledName () const
 }
 
 
+ConstString
+Mangled::GetDisplayDemangledName (lldb::LanguageType language) const
+{
+    return GetDemangledName(language);
+}
+
 bool
-Mangled::NameMatches (const RegularExpression& regex) const
+Mangled::NameMatches (const RegularExpression& regex, lldb::LanguageType language) const
 {
     if (m_mangled && regex.Execute (m_mangled.AsCString()))
         return true;
-    
-    if (GetDemangledName() && regex.Execute (m_demangled.AsCString()))
+
+    ConstString demangled = GetDemangledName(language);
+    if (demangled && regex.Execute (demangled.AsCString()))
         return true;
     return false;
 }
@@ -352,30 +358,28 @@ Mangled::NameMatches (const RegularExpression& regex) const
 //----------------------------------------------------------------------
 // Get the demangled name if there is one, else return the mangled name.
 //----------------------------------------------------------------------
-const ConstString&
-Mangled::GetName (Mangled::NamePreference preference) const
+ConstString
+Mangled::GetName (lldb::LanguageType language, Mangled::NamePreference preference) const
 {
+    ConstString demangled = GetDemangledName(language);
+
     if (preference == ePreferDemangledWithoutArguments)
     {
-        // Call the accessor to make sure we get a demangled name in case
-        // it hasn't been demangled yet...
-        GetDemangledName();
-
-        return get_demangled_name_without_arguments (this);
+        return get_demangled_name_without_arguments (m_mangled, demangled);
     }
     if (preference == ePreferDemangled)
     {
         // Call the accessor to make sure we get a demangled name in case
         // it hasn't been demangled yet...
-        if (GetDemangledName())
-            return m_demangled;
+        if (demangled)
+            return demangled;
         return m_mangled;
     }
     else
     {
         if (m_mangled)
             return m_mangled;
-        return GetDemangledName();
+        return demangled;
     }
 }
 
@@ -428,7 +432,7 @@ Mangled::GuessLanguage () const
     ConstString mangled = GetMangledName();
     if (mangled)
     {
-        if (GetDemangledName())
+        if (GetDemangledName(lldb::eLanguageTypeUnknown))
         {
             if (cstring_is_mangled(mangled.GetCString()))
                 return lldb::eLanguageTypeC_plus_plus;
@@ -446,7 +450,7 @@ operator << (Stream& s, const Mangled& obj)
     if (obj.GetMangledName())
         s << "mangled = '" << obj.GetMangledName() << "'";
 
-    const ConstString& demangled = obj.GetDemangledName();
+    const ConstString& demangled = obj.GetDemangledName(lldb::eLanguageTypeUnknown);
     if (demangled)
         s << ", demangled = '" << demangled << '\'';
     else

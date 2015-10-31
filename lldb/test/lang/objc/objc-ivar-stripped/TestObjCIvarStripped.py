@@ -1,7 +1,10 @@
 """Test printing ObjC objects that use unbacked properties - so that the static ivar offsets are incorrect."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,14 +13,6 @@ class TestObjCIvarStripped(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Test that we can find stripped Objective-C ivars in the runtime"""
-        self.buildDsym()
-        self.objc_ivar_offsets()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -25,8 +20,13 @@ class TestObjCIvarStripped(TestBase):
         self.main_source = "main.m"
         self.stop_line = line_number(self.main_source, '// Set breakpoint here.')
 
-    def objc_ivar_offsets(self):
+    @skipUnlessDarwin
+    @skipIfDwarf    # This test requires a stripped binary and a dSYM
+    @skipIfDWO      # This test requires a stripped binary and a dSYM
+    @add_test_categories(['pyapi'])
+    def test_with_python_api(self):
         """Test that we can find stripped Objective-C ivars in the runtime"""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out.stripped")
 
         target = self.dbg.CreateTarget(exe)
@@ -57,9 +57,3 @@ class TestObjCIvarStripped(TestBase):
         ivar_value = ivar.GetValueAsSigned (error)
         self.assertTrue (error.Success())
         self.assertTrue (ivar_value == 3)
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

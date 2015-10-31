@@ -1,5 +1,3 @@
-set(LLVM_NO_RTTI 1)
-
 add_lldb_library(lldbCore
   Address.cpp
   AddressRange.cpp
@@ -31,7 +29,6 @@ add_lldb_library(lldbCore
   FormatEntity.cpp
   History.cpp
   IOHandler.cpp
-  Language.cpp
   Listener.cpp
   Log.cpp
   Logging.cpp
@@ -65,6 +62,7 @@ add_lldb_library(lldbCore
   ValueObjectCast.cpp
   ValueObjectChild.cpp
   ValueObjectConstResult.cpp
+  ValueObjectConstResultCast.cpp
   ValueObjectConstResultChild.cpp
   ValueObjectConstResultImpl.cpp
   ValueObjectDynamicValue.cpp

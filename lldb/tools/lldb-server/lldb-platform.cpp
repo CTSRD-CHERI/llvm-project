@@ -20,13 +20,20 @@
 #include <sys/wait.h>
 
 // C++ Includes
+#include <fstream>
 
 // Other libraries and framework includes
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/FileUtilities.h"
+
 #include "lldb/Core/Error.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
+#include "lldb/Host/FileSpec.h"
+#include "lldb/Host/FileSystem.h"
 #include "lldb/Host/HostGetOpt.h"
 #include "lldb/Host/OptionParser.h"
-#include "lldb/Host/Socket.h"
+#include "lldb/Host/common/TCPSocket.h"
+#include "Acceptor.h"
 #include "LLDBServerUtilities.h"
 #include "Plugins/Process/gdb-remote/GDBRemoteCommunicationServerPlatform.h"
 #include "Plugins/Process/gdb-remote/ProcessGDBRemoteLog.h"
@@ -56,6 +63,7 @@ static struct option g_long_options[] =
     { "gdbserver-port",     required_argument,  NULL,               'P' },
     { "min-gdbserver-port", required_argument,  NULL,               'm' },
     { "max-gdbserver-port", required_argument,  NULL,               'M' },
+    { "socket-file",        required_argument,  NULL,               'f' },
     { "server",             no_argument,        &g_server,          1   },
     { NULL,                 0,                  NULL,               0   }
 };
@@ -89,8 +97,40 @@ signal_handler(int signo)
 static void
 display_usage (const char *progname, const char *subcommand)
 {
-    fprintf(stderr, "Usage:\n  %s %s [--log-file log-file-name] [--log-channels log-channel-list] --server --listen port\n", progname, subcommand);
+    fprintf(stderr, "Usage:\n  %s %s [--log-file log-file-name] [--log-channels log-channel-list] [--port-file port-file-path] --server --listen port\n", progname, subcommand);
     exit(0);
+}
+
+static Error
+save_socket_id_to_file(const std::string &socket_id, const FileSpec &file_spec)
+{
+    FileSpec temp_file_spec(file_spec.GetDirectory().AsCString(), false);
+    auto error = FileSystem::MakeDirectory(temp_file_spec, eFilePermissionsDirectoryDefault);
+    if (error.Fail())
+       return Error("Failed to create directory %s: %s", temp_file_spec.GetCString(), error.AsCString());
+
+    llvm::SmallString<PATH_MAX> temp_file_path;
+    temp_file_spec.AppendPathComponent("port-file.%%%%%%");
+    auto err_code = llvm::sys::fs::createUniqueFile(temp_file_spec.GetCString(), temp_file_path);
+    if (err_code)
+        return Error("Failed to create temp file: %s", err_code.message().c_str());
+
+    llvm::FileRemover tmp_file_remover(temp_file_path.c_str());
+
+    {
+        std::ofstream temp_file(temp_file_path.c_str(), std::ios::out);
+        if (!temp_file.is_open())
+            return Error("Failed to open temp file %s", temp_file_path.c_str());
+        temp_file << socket_id;
+    }
+
+    err_code = llvm::sys::fs::rename(temp_file_path.c_str(), file_spec.GetPath().c_str());
+    if (err_code)
+        return Error("Failed to rename file %s to %s: %s",
+                     temp_file_path.c_str(), file_spec.GetPath().c_str(), err_code.message().c_str());
+
+    tmp_file_remover.releaseFile();
+    return Error();
 }
 
 //----------------------------------------------------------------------
@@ -112,12 +152,13 @@ main_platform (int argc, char *argv[])
 
     std::string log_file;
     StringRef log_channels; // e.g. "lldb process threads:gdb-remote default:linux all"
-  
+
     GDBRemoteCommunicationServerPlatform::PortMap gdbserver_portmap;
     int min_gdbserver_port = 0;
     int max_gdbserver_port = 0;
     uint16_t port_offset = 0;
-    
+
+    FileSpec socket_file;
     bool show_usage = false;
     int option_error = 0;
     int socket_error = -1;
@@ -150,6 +191,11 @@ main_platform (int argc, char *argv[])
         case 'c': // Log Channels
             if (optarg && optarg[0])
                 log_channels = StringRef(optarg);
+            break;
+
+        case 'f': // Socket file
+            if (optarg && optarg[0])
+                socket_file.SetFile(optarg, false);
             break;
 
         case 'p':
@@ -238,26 +284,38 @@ main_platform (int argc, char *argv[])
         display_usage(progname, subcommand);
         exit(option_error);
     }
-    
-    std::unique_ptr<Socket> listening_socket_up;
-    Socket *socket = nullptr;
-    const bool children_inherit_listen_socket = false;
 
+    const bool children_inherit_listen_socket = false;
     // the test suite makes many connections in parallel, let's not miss any.
-    // The highest this should get reasonably is a function of the number 
-    // of target CPUs.  For now, let's just use 100
+    // The highest this should get reasonably is a function of the number
+    // of target CPUs. For now, let's just use 100.
     const int backlog = 100;
-    error = Socket::TcpListen(listen_host_port.c_str(), children_inherit_listen_socket, socket, NULL, backlog);
+
+    std::unique_ptr<Acceptor> acceptor_up(Acceptor::Create(listen_host_port, children_inherit_listen_socket, error));
     if (error.Fail())
     {
-        printf("error: %s\n", error.AsCString());
+        fprintf(stderr, "failed to create acceptor: %s", error.AsCString());
         exit(socket_error);
     }
-    listening_socket_up.reset(socket);
-    printf ("Listening for a connection from %u...\n", listening_socket_up->GetLocalPortNumber());
+
+    error = acceptor_up->Listen(backlog);
+    if (error.Fail())
+    {
+        printf("failed to listen: %s\n", error.AsCString());
+        exit(socket_error);
+    }
+    if (socket_file)
+    {
+        error = save_socket_id_to_file(acceptor_up->GetLocalSocketId(), socket_file);
+        if (error.Fail())
+        {
+            fprintf(stderr, "failed to write socket id to %s: %s", socket_file.GetPath().c_str(), error.AsCString());
+            return 1;
+        }
+    }
 
     do {
-        GDBRemoteCommunicationServerPlatform platform;
+        GDBRemoteCommunicationServerPlatform platform(acceptor_up->GetSocketProtocol());
         
         if (port_offset > 0)
             platform.SetPortOffset(port_offset);
@@ -268,8 +326,8 @@ main_platform (int argc, char *argv[])
         }
 
         const bool children_inherit_accept_socket = true;
-        socket = nullptr;
-        error = listening_socket_up->BlockingAccept(listen_host_port.c_str(), children_inherit_accept_socket, socket);
+        Connection* conn = nullptr;
+        error = acceptor_up->Accept(children_inherit_accept_socket, conn);
         if (error.Fail())
         {
             printf ("error: %s\n", error.AsCString());
@@ -283,8 +341,7 @@ main_platform (int argc, char *argv[])
             if (fork())
             {
                 // Parent doesn't need a connection to the lldb client
-                delete socket;
-                socket = nullptr;
+                delete conn;
 
                 // Parent will continue to listen for new connections.
                 continue;
@@ -294,21 +351,21 @@ main_platform (int argc, char *argv[])
                 // Child process will handle the connection and exit.
                 g_server = 0;
                 // Listening socket is owned by parent process.
-                listening_socket_up.release();
+                acceptor_up.release();
             }
         }
         else
         {
             // If not running as a server, this process will not accept
             // connections while a connection is active.
-            listening_socket_up.reset();
+            acceptor_up.reset();
         }
-        platform.SetConnection (new ConnectionFileDescriptor(socket));
+        platform.SetConnection (conn);
 
         if (platform.IsConnected())
         {
             // After we connected, we need to get an initial ack from...
-            if (platform.HandshakeWithClient(&error))
+            if (platform.HandshakeWithClient())
             {
                 bool interrupt = false;
                 bool done = false;

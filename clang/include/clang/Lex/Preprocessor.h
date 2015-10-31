@@ -98,6 +98,7 @@ class Preprocessor : public RefCountedBase<Preprocessor> {
   DiagnosticsEngine        *Diags;
   LangOptions       &LangOpts;
   const TargetInfo  *Target;
+  const TargetInfo  *AuxTarget;
   FileManager       &FileMgr;
   SourceManager     &SourceMgr;
   std::unique_ptr<ScratchBuffer> ScratchBuf;
@@ -656,7 +657,10 @@ public:
   ///
   /// \param Target is owned by the caller and must remain valid for the
   /// lifetime of the preprocessor.
-  void Initialize(const TargetInfo &Target);
+  /// \param AuxTarget is owned by the caller and must remain valid for
+  /// the lifetime of the preprocessor.
+  void Initialize(const TargetInfo &Target,
+                  const TargetInfo *AuxTarget = nullptr);
 
   /// \brief Initialize the preprocessor to parse a model file
   ///
@@ -678,6 +682,7 @@ public:
 
   const LangOptions &getLangOpts() const { return LangOpts; }
   const TargetInfo &getTargetInfo() const { return *Target; }
+  const TargetInfo *getAuxTargetInfo() const { return AuxTarget; }
   FileManager &getFileManager() const { return FileMgr; }
   SourceManager &getSourceManager() const { return SourceMgr; }
   HeaderSearch &getHeaderSearchInfo() const { return HeaderInfo; }
@@ -784,6 +789,22 @@ public:
   bool isMacroDefined(const IdentifierInfo *II) {
     return II->hasMacroDefinition() &&
            (!getLangOpts().Modules || (bool)getMacroDefinition(II));
+  }
+
+  /// \brief Determine whether II is defined as a macro within the module M,
+  /// if that is a module that we've already preprocessed. Does not check for
+  /// macros imported into M.
+  bool isMacroDefinedInLocalModule(const IdentifierInfo *II, Module *M) {
+    if (!II->hasMacroDefinition())
+      return false;
+    auto I = Submodules.find(M);
+    if (I == Submodules.end())
+      return false;
+    auto J = I->second.Macros.find(II);
+    if (J == I->second.Macros.end())
+      return false;
+    auto *MD = J->second.getLatest();
+    return MD && MD->isDefined();
   }
 
   MacroDefinition getMacroDefinition(const IdentifierInfo *II) {

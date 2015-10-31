@@ -1,5 +1,3 @@
-set(LLVM_NO_RTTI 1)
-
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/..)
 include_directories(${LLDB_SOURCE_DIR}/source)
 
@@ -10,12 +8,31 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -Wl,-sectcreate,__TEXT,__info_plist,${CMAKE_CURRENT_SOURCE_DIR}/../resources/lldb-debugserver-Info.plist")
 endif()
 
-add_definitions(
-  -DDEBUGSERVER_VERSION_STR="${LLDB_VERSION}"
-  )
+check_cxx_compiler_flag("-Wno-gnu-zero-variadic-macro-arguments"
+                        CXX_SUPPORTS_NO_GNU_ZERO_VARIADIC_MACRO_ARGUMENTS)
+if (CXX_SUPPORTS_NO_GNU_ZERO_VARIADIC_MACRO_ARGUMENTS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-gnu-zero-variadic-macro-arguments")
+endif ()
+
+check_cxx_compiler_flag("-Wno-zero-length-array"
+                        CXX_SUPPORTS_NO_ZERO_LENGTH_ARRAY)
+if (CXX_SUPPORTS_NO_ZERO_LENGTH_ARRAY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-zero-length-array")
+endif ()
+
+check_cxx_compiler_flag("-Wno-extended-offsetof"
+                        CXX_SUPPORTS_NO_EXTENDED_OFFSETOF)
+if (CXX_SUPPORTS_NO_EXTENDED_OFFSETOF)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-extended-offsetof")
+endif ()
+
+if (NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  add_definitions(
+    -DDEBUGSERVER_VERSION_STR="${LLDB_VERSION}"
+    )
+endif ()
 
 add_library(lldbDebugserverCommon
-  #${dnbconfig_header}
   debugserver.cpp
   DNBArch.cpp
   DNBBreakpoint.cpp
@@ -36,8 +53,6 @@ add_library(lldbDebugserverCommon
   SysSignal.cpp
   TTYState.cpp
   )
-
-add_dependencies(lldbDebugserverCommon generate_dnbconfig)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
   find_library(COCOA_LIBRARY Cocoa)

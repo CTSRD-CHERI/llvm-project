@@ -82,7 +82,7 @@ StringExtractorGDBRemote::GetServerPacketType () const
 
     case 'A':
         return eServerPacketType_A;
-            
+
     case 'Q':
 
         switch (packet_cstr[1])
@@ -122,7 +122,7 @@ StringExtractorGDBRemote::GetServerPacketType () const
             break;
         }
         break;
-            
+
     case 'q':
         switch (packet_cstr[1])
         {
@@ -219,6 +219,12 @@ StringExtractorGDBRemote::GetServerPacketType () const
             break;
         }
         break;
+
+    case 'j':
+        if (PACKET_MATCHES("jSignalsInfo"))                     return eServerPacketType_jSignalsInfo;
+        if (PACKET_MATCHES("jThreadsInfo"))                     return eServerPacketType_jThreadsInfo;
+
+
     case 'v':
             if (PACKET_STARTS_WITH("vFile:"))
             {
@@ -303,6 +309,12 @@ StringExtractorGDBRemote::GetServerPacketType () const
 
       case 'S':
         return eServerPacketType_S;
+
+      case 'x':
+        return eServerPacketType_x;
+
+      case 'X':
+        return eServerPacketType_X;
 
       case 'T':
         return eServerPacketType_T;

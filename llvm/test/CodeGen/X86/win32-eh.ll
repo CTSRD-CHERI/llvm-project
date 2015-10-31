@@ -15,77 +15,78 @@ define internal i32 @catchall_filt() {
 define void @use_except_handler3() personality i32 (...)* @_except_handler3 {
 entry:
   invoke void @may_throw_or_crash()
-      to label %cont unwind label %catchall
+      to label %cont unwind label %lpad
 cont:
   ret void
-catchall:
-  %0 = landingpad { i8*, i32 }
-      catch i8* bitcast (i32 ()* @catchall_filt to i8*)
-  %1 = extractvalue { i8*, i32 } %0, 1
-  %2 = call i32 @llvm.eh.typeid.for(i8* bitcast (i32 ()* @catchall_filt to i8*)) #4
-  %matches = icmp eq i32 %1, %2
-  br i1 %matches, label %cont, label %eh.resume
-eh.resume:
-  resume { i8*, i32 } %0
+lpad:
+  %p = catchpad [i8* bitcast (i32 ()* @catchall_filt to i8*)]
+      to label %catch unwind label %endpad
+catch:
+  catchret %p to label %cont
+endpad:
+  catchendpad unwind to caller
 }
 
 ; CHECK-LABEL: _use_except_handler3:
 ; CHECK: pushl %ebp
 ; CHECK: movl %esp, %ebp
+; CHECK: pushl %ebx
+; CHECK: pushl %edi
+; CHECK: pushl %esi
 ; CHECK: subl ${{[0-9]+}}, %esp
-; CHECK: movl $-1, -4(%ebp)
-; CHECK: movl $L__ehtable$use_except_handler3, -8(%ebp)
-; CHECK: leal -16(%ebp), %[[node:[^ ,]*]]
-; CHECK: movl $__except_handler3, -12(%ebp)
+; CHECK: movl $-1, -16(%ebp)
+; CHECK: movl $L__ehtable$use_except_handler3, -20(%ebp)
+; CHECK: leal -28(%ebp), %[[node:[^ ,]*]]
+; CHECK: movl $__except_handler3, -24(%ebp)
 ; CHECK: movl %fs:0, %[[next:[^ ,]*]]
-; CHECK: movl %[[next]], -16(%ebp)
+; CHECK: movl %[[next]], -28(%ebp)
 ; CHECK: movl %[[node]], %fs:0
 ; CHECK: calll _may_throw_or_crash
-; CHECK: movl -16(%ebp), %[[next:[^ ,]*]]
+; CHECK: movl -28(%ebp), %[[next:[^ ,]*]]
 ; CHECK: movl %[[next]], %fs:0
 ; CHECK: retl
+; CHECK: LBB1_2: # %lpad{{$}}
 
 ; CHECK: .section .xdata,"dr"
 ; CHECK-LABEL: L__ehtable$use_except_handler3:
 ; CHECK-NEXT:  .long   -1
 ; CHECK-NEXT:  .long   _catchall_filt
-; CHECK-NEXT:  .long   Ltmp{{[0-9]+}}
+; CHECK-NEXT:  .long   LBB1_2
 
 define void @use_except_handler4() personality i32 (...)* @_except_handler4 {
 entry:
   invoke void @may_throw_or_crash()
-      to label %cont unwind label %catchall
+      to label %cont unwind label %lpad
 cont:
   ret void
-catchall:
-  %0 = landingpad { i8*, i32 }
-      catch i8* bitcast (i32 ()* @catchall_filt to i8*)
-  %1 = extractvalue { i8*, i32 } %0, 1
-  %2 = call i32 @llvm.eh.typeid.for(i8* bitcast (i32 ()* @catchall_filt to i8*)) #4
-  %matches = icmp eq i32 %1, %2
-  br i1 %matches, label %cont, label %eh.resume
-eh.resume:
-  resume { i8*, i32 } %0
+lpad:
+  %p = catchpad [i8* bitcast (i32 ()* @catchall_filt to i8*)]
+      to label %catch unwind label %endpad
+catch:
+  catchret %p to label %cont
+endpad:
+  catchendpad unwind to caller
 }
 
 ; CHECK-LABEL: _use_except_handler4:
 ; CHECK: pushl %ebp
 ; CHECK: movl %esp, %ebp
 ; CHECK: subl ${{[0-9]+}}, %esp
-; CHECK: movl %esp, -24(%ebp)
-; CHECK: movl $-2, -4(%ebp)
+; CHECK: movl %esp, -36(%ebp)
+; CHECK: movl $-2, -16(%ebp)
 ; CHECK: movl $L__ehtable$use_except_handler4, %[[lsda:[^ ,]*]]
 ; CHECK: xorl ___security_cookie, %[[lsda]]
-; CHECK: movl %[[lsda]], -8(%ebp)
-; CHECK: leal -16(%ebp), %[[node:[^ ,]*]]
-; CHECK: movl $__except_handler4, -12(%ebp)
+; CHECK: movl %[[lsda]], -20(%ebp)
+; CHECK: leal -28(%ebp), %[[node:[^ ,]*]]
+; CHECK: movl $__except_handler4, -24(%ebp)
 ; CHECK: movl %fs:0, %[[next:[^ ,]*]]
-; CHECK: movl %[[next]], -16(%ebp)
+; CHECK: movl %[[next]], -28(%ebp)
 ; CHECK: movl %[[node]], %fs:0
 ; CHECK: calll _may_throw_or_crash
-; CHECK: movl -16(%ebp), %[[next:[^ ,]*]]
+; CHECK: movl -28(%ebp), %[[next:[^ ,]*]]
 ; CHECK: movl %[[next]], %fs:0
 ; CHECK: retl
+; CHECK: LBB2_2: # %lpad{{$}}
 
 ; CHECK: .section .xdata,"dr"
 ; CHECK-LABEL: L__ehtable$use_except_handler4:
@@ -95,40 +96,44 @@ eh.resume:
 ; CHECK-NEXT:  .long   0
 ; CHECK-NEXT:  .long   -2
 ; CHECK-NEXT:  .long   _catchall_filt
-; CHECK-NEXT:  .long   Ltmp{{[0-9]+}}
+; CHECK-NEXT:  .long   LBB2_2
 
 define void @use_CxxFrameHandler3() personality i32 (...)* @__CxxFrameHandler3 {
   invoke void @may_throw_or_crash()
       to label %cont unwind label %catchall
 cont:
   ret void
+
 catchall:
-  %ehvals = landingpad { i8*, i32 }
-      catch i8* null
-  %ehptr = extractvalue { i8*, i32 } %ehvals, 0
-  call void @llvm.eh.begincatch(i8* %ehptr, i8* null)
-  call void @llvm.eh.endcatch()
-  br label %cont
+  %p = catchpad [i8* null, i32 64, i8* null]
+      to label %catch unwind label %endcatch
+
+catch:
+  catchret %p to label %cont
+
+endcatch:
+  catchendpad unwind to caller
 }
 
 ; CHECK-LABEL: _use_CxxFrameHandler3:
 ; CHECK: pushl %ebp
 ; CHECK: movl %esp, %ebp
 ; CHECK: subl ${{[0-9]+}}, %esp
-; CHECK: movl %esp, -16(%ebp)
-; CHECK: movl $-1, -4(%ebp)
-; CHECK: leal -12(%ebp), %[[node:[^ ,]*]]
-; CHECK: movl $___ehhandler$use_CxxFrameHandler3, -8(%ebp)
+; CHECK: movl %esp, -28(%ebp)
+; CHECK: movl $-1, -16(%ebp)
+; CHECK: leal -24(%ebp), %[[node:[^ ,]*]]
+; CHECK: movl $___ehhandler$use_CxxFrameHandler3, -20(%ebp)
 ; CHECK: movl %fs:0, %[[next:[^ ,]*]]
-; CHECK: movl %[[next]], -12(%ebp)
+; CHECK: movl %[[next]], -24(%ebp)
 ; CHECK: movl %[[node]], %fs:0
-; CHECK: movl $0, -4(%ebp)
+; CHECK: movl $0, -16(%ebp)
 ; CHECK: calll _may_throw_or_crash
-; CHECK: movl -12(%ebp), %[[next:[^ ,]*]]
+; CHECK: movl -24(%ebp), %[[next:[^ ,]*]]
 ; CHECK: movl %[[next]], %fs:0
 ; CHECK: retl
 
 ; CHECK: .section .xdata,"dr"
+; CHECK: .align 4
 ; CHECK-LABEL: L__ehtable$use_CxxFrameHandler3:
 ; CHECK-NEXT:  .long   429065506
 ; CHECK-NEXT:  .long   2

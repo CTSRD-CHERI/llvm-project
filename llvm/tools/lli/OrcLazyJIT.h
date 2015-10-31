@@ -37,6 +37,8 @@ public:
     TransformFtor;
   typedef orc::IRTransformLayer<CompileLayerT, TransformFtor> IRDumpLayerT;
   typedef orc::CompileOnDemandLayer<IRDumpLayerT, CompileCallbackMgr> CODLayerT;
+  typedef CODLayerT::IndirectStubsManagerBuilderT
+    IndirectStubsManagerBuilder;
   typedef CODLayerT::ModuleSetHandleT ModuleHandleT;
 
   typedef std::function<
@@ -45,17 +47,18 @@ public:
                                                 LLVMContext&)>
     CallbackManagerBuilder;
 
-  static CallbackManagerBuilder createCallbackManagerBuilder(Triple T);
-
   OrcLazyJIT(std::unique_ptr<TargetMachine> TM, LLVMContext &Context,
-             CallbackManagerBuilder &BuildCallbackMgr)
-    : TM(std::move(TM)),
-      ObjectLayer(),
-      CompileLayer(ObjectLayer, orc::SimpleCompiler(*this->TM)),
-      IRDumpLayer(CompileLayer, createDebugDumper()),
-      CCMgr(BuildCallbackMgr(IRDumpLayer, CCMgrMemMgr, Context)),
-      CODLayer(IRDumpLayer, *CCMgr, false),
-      CXXRuntimeOverrides([this](const std::string &S) { return mangle(S); }) {}
+             CallbackManagerBuilder &BuildCallbackMgr,
+             IndirectStubsManagerBuilder IndirectStubsMgrBuilder,
+             bool InlineStubs)
+      : TM(std::move(TM)), DL(this->TM->createDataLayout()), ObjectLayer(),
+        CompileLayer(ObjectLayer, orc::SimpleCompiler(*this->TM)),
+        IRDumpLayer(CompileLayer, createDebugDumper()),
+        CCMgr(BuildCallbackMgr(IRDumpLayer, CCMgrMemMgr, Context)),
+        CODLayer(IRDumpLayer, extractSingleFunction, *CCMgr,
+                 std::move(IndirectStubsMgrBuilder), InlineStubs),
+        CXXRuntimeOverrides(
+            [this](const std::string &S) { return mangle(S); }) {}
 
   ~OrcLazyJIT() {
     // Run any destructors registered with __cxa_atexit.
@@ -65,15 +68,14 @@ public:
       DtorRunner.runViaLayer(CODLayer);
   }
 
-  template <typename PtrTy>
-  static PtrTy fromTargetAddress(orc::TargetAddress Addr) {
-    return reinterpret_cast<PtrTy>(static_cast<uintptr_t>(Addr));
-  }
+  static CallbackManagerBuilder createCallbackMgrBuilder(Triple T);
+
+  static IndirectStubsManagerBuilder createIndirectStubsMgrBuilder(Triple T);
 
   ModuleHandleT addModule(std::unique_ptr<Module> M) {
     // Attach a data-layout if one isn't already present.
     if (M->getDataLayout().isDefault())
-      M->setDataLayout(*TM->getDataLayout());
+      M->setDataLayout(DL);
 
     // Record the static constructors and destructors. We have to do this before
     // we hand over ownership of the module to the JIT.
@@ -136,14 +138,21 @@ private:
     std::string MangledName;
     {
       raw_string_ostream MangledNameStream(MangledName);
-      Mangler::getNameWithPrefix(MangledNameStream, Name, *TM->getDataLayout());
+      Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
     }
     return MangledName;
+  }
+
+  static std::set<Function*> extractSingleFunction(Function &F) {
+    std::set<Function*> Partition;
+    Partition.insert(&F);
+    return Partition;
   }
 
   static TransformFtor createDebugDumper();
 
   std::unique_ptr<TargetMachine> TM;
+  DataLayout DL;
   SectionMemoryManager CCMgrMemMgr;
 
   ObjLayerT ObjectLayer;

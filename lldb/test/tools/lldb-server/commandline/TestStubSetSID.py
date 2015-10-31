@@ -1,4 +1,6 @@
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
 
 import gdbremote_testcase
 import lldbgdbserverutils
@@ -38,7 +40,6 @@ class TestStubSetSIDTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
 
     @debugserver_test
     @skipIfRemote # --setsid not used on remote platform and currently it is also impossible to get the sid of lldb-platform running on a remote target
-    @unittest2.expectedFailure() # This is the whole purpose of this feature, I would expect it to be the same without --setsid. Investigate.
     def test_sid_is_same_without_setsid_debugserver(self):
         self.init_debugserver_test()
         self.set_inferior_startup_launch()
@@ -46,7 +47,7 @@ class TestStubSetSIDTestCase(gdbremote_testcase.GdbRemoteTestCaseBase):
 
     @llgs_test
     @skipIfRemote # --setsid not used on remote platform and currently it is also impossible to get the sid of lldb-platform running on a remote target
-    @unittest2.expectedFailure() # This is the whole purpose of this feature, I would expect it to be the same without --setsid. Investigate.
+    @expectedFailureFreeBSD()
     def test_sid_is_same_without_setsid_llgs(self):
         self.init_llgs_test()
         self.set_inferior_startup_launch()

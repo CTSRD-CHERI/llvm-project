@@ -1,15 +1,20 @@
 """Module for supporting unit testing of the lldb-server debug monitor exe.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
 import os.path
 import platform
-import Queue
 import re
 import socket_packet_pump
 import subprocess
 import time
 from lldbtest import *
+
+from six.moves import queue
 
 def _get_debug_monitor_from_lldb(lldb_exe, debug_monitor_basename):
     """Return the debug monitor exe path given the lldb exe path.
@@ -215,14 +220,14 @@ def expect_lldb_gdbserver_replay(
                     try:
                         # Grab next entry from the output queue.
                         content = pump.output_queue().get(True, timeout_seconds)
-                    except Queue.Empty:
+                    except queue.Empty:
                         if logger:
                             logger.warning("timeout waiting for stub output (accumulated output:{})".format(pump.get_accumulated_output()))
                         raise Exception("timed out while waiting for output match (accumulated output: {})".format(pump.get_accumulated_output()))
                 else:
                     try:
                         content = pump.packet_queue().get(True, timeout_seconds)
-                    except Queue.Empty:
+                    except queue.Empty:
                         if logger:
                             logger.warning("timeout waiting for packet match (receive buffer: {})".format(pump.get_receive_buffer()))
                         raise Exception("timed out while waiting for packet match (receive buffer: {})".format(pump.get_receive_buffer()))
@@ -476,7 +481,7 @@ class GdbRemoteEntry(GdbRemoteEntryBase):
 
         if self.capture:
             # Handle captures.
-            for group_index, var_name in self.capture.items():
+            for group_index, var_name in list(self.capture.items()):
                 capture_text = match.group(group_index)
                 # It is okay for capture text to be None - which it will be if it is a group that can match nothing.
                 # The user must be okay with it since the regex itself matched above.
@@ -484,7 +489,7 @@ class GdbRemoteEntry(GdbRemoteEntryBase):
 
         if self.expect_captures:
             # Handle comparing matched groups to context dictionary entries.
-            for group_index, var_name in self.expect_captures.items():
+            for group_index, var_name in list(self.expect_captures.items()):
                 capture_text = match.group(group_index)
                 if not capture_text:
                     raise Exception("No content to expect for group index {}".format(group_index))
@@ -698,17 +703,17 @@ class MatchRemoteOutputEntry(GdbRemoteEntryBase):
 
         # If we don't match, wait to try again after next $O content, or time out.
         if not match:
-            # print "re pattern \"{}\" did not match against \"{}\"".format(self._regex.pattern, accumulated_output)
+            # print("re pattern \"{}\" did not match against \"{}\"".format(self._regex.pattern, accumulated_output))
             return context
 
         # We do match.
         self._matched = True
-        # print "re pattern \"{}\" matched against \"{}\"".format(self._regex.pattern, accumulated_output)
+        # print("re pattern \"{}\" matched against \"{}\"".format(self._regex.pattern, accumulated_output))
 
         # Collect up any captures into the context.
         if self._capture:
             # Handle captures.
-            for group_index, var_name in self._capture.items():
+            for group_index, var_name in list(self._capture.items()):
                 capture_text = match.group(group_index)
                 if not capture_text:
                     raise Exception("No content for group index {}".format(group_index))
@@ -832,6 +837,6 @@ def process_is_running(pid, unknown_value=True):
 if __name__ == '__main__':
     EXE_PATH = get_lldb_server_exe()
     if EXE_PATH:
-        print "lldb-server path detected: {}".format(EXE_PATH)
+        print("lldb-server path detected: {}".format(EXE_PATH))
     else:
-        print "lldb-server could not be found"
+        print("lldb-server could not be found")

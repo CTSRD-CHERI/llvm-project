@@ -84,6 +84,12 @@ public:
     
     bool
     SupportsModules () override { return true; }
+    
+    lldb_private::ConstString
+    GetFullNameForDylib (lldb_private::ConstString basename) override;
+
+    lldb_private::FileSpec
+    LocateExecutable (const char *basename) override;
 
 protected:
 

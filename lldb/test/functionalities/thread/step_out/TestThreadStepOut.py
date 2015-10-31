@@ -2,8 +2,11 @@
 Test stepping out from a function in a multi-threaded program.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,49 +15,31 @@ class ThreadStepOutTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @dsym_test
-    def test_step_single_thread_with_dsym(self):
-        """Test thread step out on one thread via command interpreter. """
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.step_out_test(self.step_out_single_thread_with_cmd)
-
     @skipIfLinux                              # Test occasionally times out on the Linux build bot
     @expectedFailureLinux("llvm.org/pr23477") # Test occasionally times out on the Linux build bot
     @expectedFailureFreeBSD("llvm.org/pr18066") # inferior does not exit
-    @dwarf_test
-    def test_step_single_thread_with_dwarf(self):
+    @expectedFailureWindows # Test crashes
+    def test_step_single_thread(self):
         """Test thread step out on one thread via command interpreter. """
-        self.buildDwarf(dictionary=self.getBuildFlags())
+        self.build(dictionary=self.getBuildFlags())
         self.step_out_test(self.step_out_single_thread_with_cmd)
-
-    @dsym_test
-    def test_step_all_threads_with_dsym(self):
-        """Test thread step out on all threads via command interpreter. """
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.step_out_test(self.step_out_all_threads_with_cmd)
 
     @skipIfLinux                              # Test occasionally times out on the Linux build bot
     @expectedFailureLinux("llvm.org/pr23477") # Test occasionally times out on the Linux build bot
     @expectedFailureFreeBSD("llvm.org/pr19347") # 2nd thread stops at breakpoint
-    @dwarf_test
-    def test_step_all_threads_with_dwarf(self):
+    @expectedFailureWindows # Test crashes
+    def test_step_all_threads(self):
         """Test thread step out on all threads via command interpreter. """
-        self.buildDwarf(dictionary=self.getBuildFlags())
+        self.build(dictionary=self.getBuildFlags())
         self.step_out_test(self.step_out_all_threads_with_cmd)
-
-    @dsym_test
-    def test_python_with_dsym(self):
-        """Test thread step out on one threads via Python API (dsym)."""
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.step_out_test(self.step_out_with_python)
 
     @skipIfLinux                              # Test occasionally times out on the Linux build bot
     @expectedFailureLinux("llvm.org/pr23477") # Test occasionally times out on the Linux build bot
     @expectedFailureFreeBSD("llvm.org/pr19347")
-    @dwarf_test
-    def test_python_with_dwarf(self):
+    @expectedFailureWindows("llvm.org/pr24681")
+    def test_python(self):
         """Test thread step out on one thread via Python API (dwarf)."""
-        self.buildDwarf(dictionary=self.getBuildFlags())
+        self.build(dictionary=self.getBuildFlags())
         self.step_out_test(self.step_out_with_python)
 
     def setUp(self):
@@ -113,7 +98,7 @@ class ThreadStepOutTestCase(TestBase):
             substrs = ["1: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" % self.breakpoint])
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # Get the target process
         self.inferior_target = self.dbg.GetSelectedTarget()
@@ -144,9 +129,3 @@ class ThreadStepOutTestCase(TestBase):
 
         # At this point, the inferior process should have exited.
         self.assertTrue(self.inferior_process.GetState() == lldb.eStateExited, PROCESS_EXITED)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

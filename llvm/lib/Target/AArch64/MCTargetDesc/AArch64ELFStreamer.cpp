@@ -128,8 +128,7 @@ public:
   /// This is one of the functions used to emit data into an ELF section, so the
   /// AArch64 streamer overrides it to add the appropriate mapping symbol ($d)
   /// if necessary.
-  void EmitValueImpl(const MCExpr *Value, unsigned Size,
-                     const SMLoc &Loc) override {
+  void EmitValueImpl(const MCExpr *Value, unsigned Size, SMLoc Loc) override {
     EmitDataMappingSymbol();
     MCELFStreamer::EmitValueImpl(Value, Size);
   }
@@ -199,7 +198,7 @@ MCELFStreamer *createAArch64ELFStreamer(MCContext &Context, MCAsmBackend &TAB,
 MCTargetStreamer *
 createAArch64ObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
   const Triple &TT = STI.getTargetTriple();
-  if (TT.getObjectFormat() == Triple::ELF)
+  if (TT.isOSBinFormatELF())
     return new AArch64TargetELFStreamer(S);
   return nullptr;
 }

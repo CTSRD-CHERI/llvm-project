@@ -102,6 +102,7 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::BR_CC, MVT::i64, Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
+  setOperationAction(ISD::BRIND, MVT::Other, Expand);
   setOperationAction(ISD::BRCOND, MVT::Other, Expand);
   setOperationAction(ISD::SETCC, MVT::i64, Expand);
   setOperationAction(ISD::SELECT, MVT::i64, Expand);
@@ -127,9 +128,6 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::ADDE, MVT::i64, Expand);
   setOperationAction(ISD::SUBC, MVT::i64, Expand);
   setOperationAction(ISD::SUBE, MVT::i64, Expand);
-
-  // no UNDEF allowed
-  setOperationAction(ISD::UNDEF, MVT::i64, Expand);
 
   setOperationAction(ISD::ROTR, MVT::i64, Expand);
   setOperationAction(ISD::ROTL, MVT::i64, Expand);
@@ -302,8 +300,9 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     DAG.getContext()->diagnose(Err);
   }
 
+  auto PtrVT = getPointerTy(MF.getDataLayout());
   Chain = DAG.getCALLSEQ_START(
-      Chain, DAG.getConstant(NumBytes, CLI.DL, getPointerTy(), true), CLI.DL);
+      Chain, DAG.getConstant(NumBytes, CLI.DL, PtrVT, true), CLI.DL);
 
   SmallVector<std::pair<unsigned, SDValue>, 5> RegsToPass;
 
@@ -350,10 +349,10 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // turn it into a TargetGlobalAddress node so that legalize doesn't hack it.
   // Likewise ExternalSymbol -> TargetExternalSymbol.
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
-    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), CLI.DL, getPointerTy(),
+    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), CLI.DL, PtrVT,
                                         G->getOffset(), 0);
   else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee))
-    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), getPointerTy(), 0);
+    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT, 0);
 
   // Returns a chain & a flag for retval copy to use.
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
@@ -374,8 +373,8 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   // Create the CALLSEQ_END node.
   Chain = DAG.getCALLSEQ_END(
-      Chain, DAG.getConstant(NumBytes, CLI.DL, getPointerTy(), true),
-      DAG.getConstant(0, CLI.DL, getPointerTy(), true), InFlag, CLI.DL);
+      Chain, DAG.getConstant(NumBytes, CLI.DL, PtrVT, true),
+      DAG.getConstant(0, CLI.DL, PtrVT, true), InFlag, CLI.DL);
   InFlag = Chain.getValue(1);
 
   // Handle result values, copying them out of physregs into vregs that we
@@ -548,8 +547,7 @@ BPFTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
   // to set, the condition code register to branch on, the true/false values to
   // select between, and a branch opcode to use.
   const BasicBlock *LLVM_BB = BB->getBasicBlock();
-  MachineFunction::iterator I = BB;
-  ++I;
+  MachineFunction::iterator I = ++BB->getIterator();
 
   // ThisMBB:
   // ...

@@ -1,5 +1,3 @@
-set(LLVM_NO_RTTI 1)
-
 add_lldb_library(lldbInterpreter
   Args.cpp
   CommandHistory.cpp
@@ -43,8 +41,5 @@ add_lldb_library(lldbInterpreter
   OptionGroupWatchpoint.cpp
   Options.cpp
   Property.cpp
-  PythonDataObjects.cpp
   ScriptInterpreter.cpp
-  ScriptInterpreterNone.cpp
-  ScriptInterpreterPython.cpp
   )

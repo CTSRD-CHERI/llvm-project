@@ -137,7 +137,9 @@ public:
   /// \brief Does this runtime allow ARC at all?
   bool allowsARC() const {
     switch (getKind()) {
-    case FragileMacOSX: return false;
+    case FragileMacOSX:
+      // No stub library for the fragile runtime.
+      return getVersion() >= VersionTuple(10, 7);
     case MacOSX: return true;
     case iOS: return true;
     case GCC: return false;
@@ -154,7 +156,7 @@ public:
   /// library.
   bool hasNativeARC() const {
     switch (getKind()) {
-    case FragileMacOSX: return false;
+    case FragileMacOSX: return getVersion() >= VersionTuple(10, 7);
     case MacOSX: return getVersion() >= VersionTuple(10, 7);
     case iOS: return getVersion() >= VersionTuple(5);
 

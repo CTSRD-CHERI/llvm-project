@@ -14,6 +14,12 @@
 #ifndef __MachProcess_h__
 #define __MachProcess_h__
 
+#include <mach/mach.h>
+#include <sys/signal.h>
+#include <pthread.h>
+#include <vector>
+#include <CoreFoundation/CoreFoundation.h>
+
 #include "DNBDefs.h"
 #include "DNBBreakpoint.h"
 #include "DNBError.h"
@@ -27,11 +33,7 @@
 #include "PThreadMutex.h"
 #include "Genealogy.h"
 #include "ThreadInfo.h"
-
-#include <mach/mach.h>
-#include <sys/signal.h>
-#include <pthread.h>
-#include <vector>
+#include "JSONGenerator.h"
 
 class DNBThreadResumeActions;
 
@@ -77,18 +79,24 @@ public:
                                                                DNBError& err);
     nub_addr_t              GetDYLDAllImageInfosAddress ();
     static const void *     PrepareForAttach (const char *path, nub_launch_flavor_t launch_flavor, bool waitfor, DNBError &err_str);
-    static void             CleanupAfterAttach (const void *attach_token, bool success, DNBError &err_str);
-    static nub_process_t    CheckForProcess (const void *attach_token);
-#ifdef WITH_BKS
-    pid_t                   BKSLaunchForDebug (const char *app_bundle_path, char const *argv[], char const *envp[], bool no_stdio, bool disable_aslr, const char *event_data, DNBError &launch_err);
-    pid_t                   BKSForkChildForPTraceDebugging (const char *path, char const *argv[], char const *envp[], bool no_stdio, bool disable_aslr, const char *event_data, DNBError &launch_err);
-    bool                    BKSSendEvent (const char *event, DNBError &error);
-    static void             BKSCleanupAfterAttach (const void *attach_token, DNBError &err_str);
+    static void             CleanupAfterAttach (const void *attach_token, nub_launch_flavor_t launch_flavor, bool success, DNBError &err_str);
+    static nub_process_t    CheckForProcess (const void *attach_token, nub_launch_flavor_t launch_flavor);
+#if defined(WITH_BKS) || defined(WITH_FBS)
+    pid_t                   BoardServiceLaunchForDebug (const char *app_bundle_path, char const *argv[], char const *envp[], bool no_stdio, bool disable_aslr, const char *event_data, DNBError &launch_err);
+    pid_t                   BoardServiceForkChildForPTraceDebugging (const char *path, char const *argv[], char const *envp[], bool no_stdio, bool disable_aslr, const char *event_data, DNBError &launch_err);
+    bool                    BoardServiceSendEvent (const char *event, DNBError &error);
 #endif
+    static bool             GetOSVersionNumbers (uint64_t *major, uint64_t *minor, uint64_t *patch);
+#ifdef WITH_BKS
+    static void             BKSCleanupAfterAttach (const void *attach_token, DNBError &err_str);
+#endif // WITH_BKS
+#ifdef WITH_FBS
+    static void             FBSCleanupAfterAttach (const void *attach_token, DNBError &err_str);
+#endif  // WITH_FBS
 #ifdef WITH_SPRINGBOARD
     pid_t                   SBLaunchForDebug (const char *app_bundle_path, char const *argv[], char const *envp[], bool no_stdio, bool disable_aslr, DNBError &launch_err);
     static pid_t            SBForkChildForPTraceDebugging (const char *path, char const *argv[], char const *envp[], bool no_stdio, MachProcess* process, DNBError &launch_err);
-#endif
+#endif  // WITH_SPRINGBOARD
     nub_addr_t              LookupSymbol (const char *name, const char *shlib);
     void                    SetNameToAddressCallback (DNBCallbackNameToAddress callback, void *baton)
                             {
@@ -185,6 +193,7 @@ public:
     nub_addr_t              GetPThreadT (nub_thread_t tid);
     nub_addr_t              GetDispatchQueueT (nub_thread_t tid);
     nub_addr_t              GetTSDAddressForThread (nub_thread_t tid, uint64_t plo_pthread_tsd_base_address_offset, uint64_t plo_pthread_tsd_base_offset, uint64_t plo_pthread_tsd_entry_size);
+    JSONGenerator::ObjectSP GetLoadedDynamicLibrariesInfos (nub_process_t pid, nub_addr_t image_list_address, nub_addr_t image_count);
 
     nub_size_t              GetNumThreads () const;
     nub_thread_t            GetThreadAtIndex (nub_size_t thread_idx) const;
@@ -284,7 +293,8 @@ private:
         eMachProcessFlagsNone = 0,
         eMachProcessFlagsAttached = (1 << 0),
         eMachProcessFlagsUsingSBS = (1 << 1),
-        eMachProcessFlagsUsingBKS = (1 << 2)
+        eMachProcessFlagsUsingBKS = (1 << 2),
+        eMachProcessFlagsUsingFBS = (1 << 3)
     };
     void                    Clear (bool detaching = false);
     void                    ReplyToAllExceptions ();

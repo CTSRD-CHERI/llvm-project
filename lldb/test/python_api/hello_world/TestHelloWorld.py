@@ -1,7 +1,10 @@
 """Test Python APIs for target (launch and attach), breakpoint, and process."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys, time
-import unittest2
 import lldb
 import time
 from lldbtest import *
@@ -9,80 +12,7 @@ from lldbtest import *
 class HelloWorldTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_process_launch_api(self):
-        """Create target, breakpoint, launch a process, and then kill it.
-
-        Use dsym info and process launch API.
-        """
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_world_python()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_process_launch_api(self):
-        """Create target, breakpoint, launch a process, and then kill it.
-
-        Use dwarf debug map and process launch API.
-        """
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_world_python()
-
-    @not_remote_testsuite_ready
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_attach_to_process_with_id_api(self):
-        """Create target, spawn a process, and attach to it with process id.
-
-        Use dsym info and attach to process with id API.
-        """
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_world_attach_with_id_api()
-
-    @python_api_test
-    @dwarf_test
-    @expectedFailurei386 # llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly
-    def test_with_dwarf_and_attach_to_process_with_id_api(self):
-        """Create target, spawn a process, and attach to it with process id.
-
-        Use dwarf map (no dsym) and attach to process with id API.
-        """
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_world_attach_with_id_api()
-
-    @not_remote_testsuite_ready
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_attach_to_process_with_name_api(self):
-        """Create target, spawn a process, and attach to it with process name.
-
-        Use dsym info and attach to process with name API.
-        """
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_world_attach_with_name_api()
-
-    @python_api_test
-    @dwarf_test
-    @expectedFailurei386 # llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly
-    def test_with_dwarf_and_attach_to_process_with_name_api(self):
-        """Create target, spawn a process, and attach to it with process name.
-
-        Use dwarf map (no dsym) and attach to process with name API.
-        """
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_world_attach_with_name_api()
-
+    
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -99,9 +29,11 @@ class HelloWorldTestCase(TestBase):
         # Call super's tearDown().
         TestBase.tearDown(self)
 
-    def hello_world_python(self):
+    @add_test_categories(['pyapi'])
+    def test_with_process_launch_api(self):
         """Create target, breakpoint, launch a process, and then kill it."""
-
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
         target = self.dbg.CreateTarget(self.exe)
 
         breakpoint = target.BreakpointCreateByLocation("main.c", self.line1)
@@ -140,9 +72,13 @@ class HelloWorldTestCase(TestBase):
         # The breakpoint should have a hit count of 1.
         self.assertTrue(breakpoint.GetHitCount() == 1, BREAKPOINT_HIT_ONCE)
 
-    def hello_world_attach_with_id_api(self):
-        """Create target, spawn a process, and attach to it by id."""
-
+    @add_test_categories(['pyapi'])
+    @expectedFailurei386 # llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly
+    @expectedFailureWindows("llvm.org/pr24600")
+    def test_with_attach_to_process_with_id_api(self):
+        """Create target, spawn a process, and attach to it with process id."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
         target = self.dbg.CreateTarget(self.exe)
 
         # Spawn a new process
@@ -165,9 +101,13 @@ class HelloWorldTestCase(TestBase):
             substrs = ['main.c:%d' % self.line2,
                        '(int)argc=3'])
 
-    def hello_world_attach_with_name_api(self):
-        """Create target, spawn a process, and attach to it by name."""
-
+    @add_test_categories(['pyapi'])
+    @expectedFailurei386 # llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly
+    @expectedFailureWindows("llvm.org/pr24600")
+    def test_with_attach_to_process_with_name_api(self):
+        """Create target, spawn a process, and attach to it with process name."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
         target = self.dbg.CreateTarget(self.exe)
 
         # Spawn a new process
@@ -202,10 +142,3 @@ class HelloWorldTestCase(TestBase):
         self.expect(stacktraces, exe=False,
             substrs = ['main.c:%d' % self.line2,
                        '(int)argc=3'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

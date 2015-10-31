@@ -1,10 +1,14 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 ;
 ; Check that the contstraints on the paramater derived from the
 ; range metadata (see bottom of the file) are present:
 ;
 ; CHECK: Context:
-; CHECK:   [p_0] -> {  : p_0 >= 0 and p_0 <= 255 }
+; CHECK:   [p_0] -> {  :
+; CHECK-DAG:             p_0 >= 0
+; CHECK-DAG:              and
+; CHECK-DAG:             p_0 <= 255
+; CHECK:            }
 ;
 ;    void jd(int *A, int *p /* in [0,256) */) {
 ;      for (int i = 0; i < 1024; i++)

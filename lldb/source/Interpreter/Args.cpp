@@ -371,7 +371,7 @@ char **
 Args::GetArgumentVector()
 {
     if (!m_argv.empty())
-        return (char **)&m_argv[0];
+        return const_cast<char **>(&m_argv[0]);
     return nullptr;
 }
 
@@ -379,7 +379,7 @@ const char **
 Args::GetConstArgumentVector() const
 {
     if (!m_argv.empty())
-        return (const char **)&m_argv[0];
+        return const_cast<const char **>(&m_argv[0]);
     return nullptr;
 }
 
@@ -719,7 +719,7 @@ Args::StringToAddress (const ExecutionContext *exe_ctx, const char *s, lldb::add
                 else
                 {
                     // Since the compiler can't handle things like "main + 12" we should
-                    // try to do this for now. The compliler doesn't like adding offsets
+                    // try to do this for now. The compiler doesn't like adding offsets
                     // to function pointer types.
                     static RegularExpression g_symbol_plus_offset_regex("^(.*)([-\\+])[[:space:]]*(0x[0-9A-Fa-f]+|[0-9]+)[[:space:]]*$");
                     RegularExpression::Match regex_match(3);
@@ -1387,7 +1387,7 @@ Args::ParseArgsForCompletion
         int long_options_index = -1;
         
         val = OptionParser::Parse (dummy_vec.size() - 1,
-                                  (char *const *) &dummy_vec.front(),
+                                  const_cast<char *const *>(&dummy_vec.front()),
                                   sstr.GetData(),
                                   long_options,
                                   &long_options_index);
@@ -1666,5 +1666,35 @@ Args::ExpandEscapedCharacters (const char *src, std::string &dst)
             }
         }
     }
+}
+
+std::string
+Args::EscapeLLDBCommandArgument (const std::string& arg, char quote_char)
+{
+    const char* chars_to_escape = nullptr;
+    switch (quote_char)
+    {
+        case '\0':
+            chars_to_escape = " \t\\'\"`";
+            break;
+        case '\'':
+            chars_to_escape = "";
+            break;
+        case '"':
+            chars_to_escape = "$\"`\\";
+            break;
+        default:
+            assert(false && "Unhandled quote character");
+    }
+
+    std::string res;
+    res.reserve(arg.size());
+    for (char c : arg)
+    {
+        if (::strchr(chars_to_escape, c))
+            res.push_back('\\');
+        res.push_back(c);
+    }
+    return res;
 }
 

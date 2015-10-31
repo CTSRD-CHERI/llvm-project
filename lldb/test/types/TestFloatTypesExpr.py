@@ -2,8 +2,11 @@
 Test that variable expressions of floating point types are evaluated correctly.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import AbstractBase
-import unittest2
 import lldb
 import sys
 from lldbtest import *
@@ -22,43 +25,20 @@ class FloatTypesExprTestCase(AbstractBase.GenericTester):
         self.runCmd("settings set auto-confirm true")
         self.addTearDownHook(lambda: self.runCmd("settings clear auto-confirm"))
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_float_type_with_dsym(self):
+    def test_float_type(self):
         """Test that float-type variable expressions are evaluated correctly."""
         self.build_and_run_expr('float.cpp', set(['float']))
 
     @skipUnlessDarwin
-    @dsym_test
-    def test_float_type_from_block_with_dsym(self):
+    def test_float_type_from_block(self):
         """Test that float-type variables are displayed correctly from a block."""
         self.build_and_run_expr('float.cpp', set(['float']), bc=True)
 
-    @dwarf_test
-    def test_float_type_with_dwarf(self):
-        """Test that float-type variable expressions are evaluated correctly."""
-        self.build_and_run_expr('float.cpp', set(['float']), dsym=False)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_double_type_with_dsym(self):
+    def test_double_type(self):
         """Test that double-type variable expressions are evaluated correctly."""
         self.build_and_run_expr('double.cpp', set(['double']))
 
     @skipUnlessDarwin
-    @dsym_test
-    def test_double_type_from_block_with_dsym(self):
+    def test_double_type_from_block(self):
         """Test that double-type variables are displayed correctly from a block."""
         self.build_and_run_expr('double.cpp', set(['double']), bc=True)
-
-    @dwarf_test
-    def test_double_type_with_dwarf(self):
-        """Test that double-type variable expressions are evaluated correctly."""
-        self.build_and_run_expr('double.cpp', set(['double']), dsym=False)
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

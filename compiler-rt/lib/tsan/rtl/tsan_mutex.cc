@@ -41,6 +41,8 @@ static MutexType CanLockTab[MutexTypeCount][MutexTypeCount] = {
   /*9  MutexTypeMBlock*/      {MutexTypeSyncVar},
   /*10 MutexTypeJavaMBlock*/  {MutexTypeSyncVar},
   /*11 MutexTypeDDetector*/   {},
+  /*12 MutexTypeFired*/       {MutexTypeLeaf},
+  /*13 MutexTypeRacy*/        {MutexTypeLeaf},
 };
 
 static bool CanLockAdj[MutexTypeCount][MutexTypeCount];
@@ -124,9 +126,8 @@ void InitializeMutex() {
 #endif
 }
 
-InternalDeadlockDetector::InternalDeadlockDetector() {
-  // Rely on zero initialization because some mutexes can be locked before ctor.
-}
+// Rely on zero initialization because some mutexes can be locked before ctor.
+InternalDeadlockDetector::InternalDeadlockDetector() = default;
 
 #if SANITIZER_DEBUG && !SANITIZER_GO
 void InternalDeadlockDetector::Lock(MutexType t) {

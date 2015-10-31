@@ -4,8 +4,11 @@ Test that lldb command "command source" works correctly.
 See also http://llvm.org/viewvc/llvm-project?view=rev&revision=109673.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -13,6 +16,7 @@ class CommandSourceTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
+    @no_debug_info_test
     def test_command_source(self):
         """Test that lldb command "command source" works correctly."""
 
@@ -30,10 +34,3 @@ class CommandSourceTestCase(TestBase):
         self.expect(result.GetOutput(), "script my.date() runs successfully",
                     exe=False,
             substrs = [str(datetime.date.today())])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

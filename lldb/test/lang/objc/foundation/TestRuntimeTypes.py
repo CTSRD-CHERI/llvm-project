@@ -2,8 +2,11 @@
 Test that Objective-C methods from the runtime work correctly.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -13,30 +16,19 @@ class RuntimeTypesTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @dsym_test
-    def test_break_with_dsym(self):
+    def test_break(self):
         """Test setting objc breakpoints using '_regexp-break' and 'breakpoint set'."""
-        # This only applies to the v2 runtime
-        if self.getArchitecture() == 'x86_64':
-            self.buildDsym()
-            self.runtime_types()
+        if self.getArchitecture() != 'x86_64':
+            self.skipTest("This only applies to the v2 runtime")
 
-    @dwarf_test
-    def test_break_with_dwarf(self):
-        """Test setting objc breakpoints using '_regexp-break' and 'breakpoint set'."""
-        # This only applies to the v2 runtime
-        if self.getArchitecture() == 'x86_64':
-            self.buildDwarf()
-            self.runtime_types()
-
-    def runtime_types(self):
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         # Stop at -[MyString description].
         lldbutil.run_break_set_by_symbol (self, '-[MyString description]', num_expected_locations=1, sym_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The backtrace should show we stop at -[MyString description].
         self.expect("thread backtrace", "Stop at -[MyString description]",
@@ -54,9 +46,3 @@ class RuntimeTypesTestCase(TestBase):
 
         self.expect("po $1", VARIABLES_DISPLAYED_CORRECTLY,
             substrs = ["foo"])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

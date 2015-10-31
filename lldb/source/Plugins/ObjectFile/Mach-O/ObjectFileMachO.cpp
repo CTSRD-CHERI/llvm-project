@@ -7,8 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+// C Includes
+// C++ Includes
+// Other libraries and framework includes
 #include "llvm/ADT/StringRef.h" 
 
+// Project includes
 #include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/DataBuffer.h"
 #include "lldb/Core/Debugger.h"
@@ -26,7 +30,6 @@
 #include "lldb/Core/UUID.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/FileSpec.h"
-#include "lldb/Symbol/ClangNamespaceDecl.h"
 #include "lldb/Symbol/DWARFCallFrameInfo.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/MemoryRegionInfo.h"
@@ -54,6 +57,7 @@
 #include "Utility/UuidCompatibility.h"
 #endif
 
+#define THUMB_ADDRESS_BIT_MASK 0xfffffffffffffffeull
 using namespace lldb;
 using namespace lldb_private;
 using namespace llvm::MachO;
@@ -67,8 +71,8 @@ public:
         SetRegisterDataFrom_LC_THREAD (data);
     }
 
-    virtual void
-    InvalidateAllRegisters ()
+    void
+    InvalidateAllRegisters() override
     {
         // Do nothing... registers are always valid...
     }
@@ -127,7 +131,6 @@ public:
             }
         }
     }
-    
 
     static size_t
     WriteRegister (RegisterContext *reg_ctx, const char *name, const char *alt_name, size_t reg_byte_size, Stream &data)
@@ -250,43 +253,42 @@ public:
     }
 
 protected:
-    virtual int
-    DoReadGPR (lldb::tid_t tid, int flavor, GPR &gpr)
+    int
+    DoReadGPR(lldb::tid_t tid, int flavor, GPR &gpr) override
     {
         return 0;
     }
 
-    virtual int
-    DoReadFPU (lldb::tid_t tid, int flavor, FPU &fpu)
+    int
+    DoReadFPU(lldb::tid_t tid, int flavor, FPU &fpu) override
     {
         return 0;
     }
 
-    virtual int
-    DoReadEXC (lldb::tid_t tid, int flavor, EXC &exc)
+    int
+    DoReadEXC(lldb::tid_t tid, int flavor, EXC &exc) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteGPR (lldb::tid_t tid, int flavor, const GPR &gpr)
+    int
+    DoWriteGPR(lldb::tid_t tid, int flavor, const GPR &gpr) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteFPU (lldb::tid_t tid, int flavor, const FPU &fpu)
+    int
+    DoWriteFPU(lldb::tid_t tid, int flavor, const FPU &fpu) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteEXC (lldb::tid_t tid, int flavor, const EXC &exc)
+    int
+    DoWriteEXC(lldb::tid_t tid, int flavor, const EXC &exc) override
     {
         return 0;
     }
 };
-
 
 class RegisterContextDarwin_i386_Mach : public RegisterContextDarwin_i386
 {
@@ -297,8 +299,8 @@ public:
         SetRegisterDataFrom_LC_THREAD (data);
     }
 
-    virtual void
-    InvalidateAllRegisters ()
+    void
+    InvalidateAllRegisters() override
     {
         // Do nothing... registers are always valid...
     }
@@ -425,38 +427,38 @@ public:
     }
 
 protected:
-    virtual int
-    DoReadGPR (lldb::tid_t tid, int flavor, GPR &gpr)
+    int
+    DoReadGPR(lldb::tid_t tid, int flavor, GPR &gpr) override
     {
         return 0;
     }
 
-    virtual int
-    DoReadFPU (lldb::tid_t tid, int flavor, FPU &fpu)
+    int
+    DoReadFPU(lldb::tid_t tid, int flavor, FPU &fpu) override
     {
         return 0;
     }
 
-    virtual int
-    DoReadEXC (lldb::tid_t tid, int flavor, EXC &exc)
+    int
+    DoReadEXC(lldb::tid_t tid, int flavor, EXC &exc) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteGPR (lldb::tid_t tid, int flavor, const GPR &gpr)
+    int
+    DoWriteGPR(lldb::tid_t tid, int flavor, const GPR &gpr) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteFPU (lldb::tid_t tid, int flavor, const FPU &fpu)
+    int
+    DoWriteFPU(lldb::tid_t tid, int flavor, const FPU &fpu) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteEXC (lldb::tid_t tid, int flavor, const EXC &exc)
+    int
+    DoWriteEXC(lldb::tid_t tid, int flavor, const EXC &exc) override
     {
         return 0;
     }
@@ -471,8 +473,8 @@ public:
         SetRegisterDataFrom_LC_THREAD (data);
     }
 
-    virtual void
-    InvalidateAllRegisters ()
+    void
+    InvalidateAllRegisters() override
     {
         // Do nothing... registers are always valid...
     }
@@ -611,50 +613,50 @@ public:
     }
 
 protected:
-    virtual int
-    DoReadGPR (lldb::tid_t tid, int flavor, GPR &gpr)
+    int
+    DoReadGPR(lldb::tid_t tid, int flavor, GPR &gpr) override
     {
         return -1;
     }
 
-    virtual int
-    DoReadFPU (lldb::tid_t tid, int flavor, FPU &fpu)
+    int
+    DoReadFPU(lldb::tid_t tid, int flavor, FPU &fpu) override
     {
         return -1;
     }
 
-    virtual int
-    DoReadEXC (lldb::tid_t tid, int flavor, EXC &exc)
+    int
+    DoReadEXC(lldb::tid_t tid, int flavor, EXC &exc) override
     {
         return -1;
     }
 
-    virtual int
-    DoReadDBG (lldb::tid_t tid, int flavor, DBG &dbg)
+    int
+    DoReadDBG(lldb::tid_t tid, int flavor, DBG &dbg) override
     {
         return -1;
     }
 
-    virtual int
-    DoWriteGPR (lldb::tid_t tid, int flavor, const GPR &gpr)
+    int
+    DoWriteGPR(lldb::tid_t tid, int flavor, const GPR &gpr) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteFPU (lldb::tid_t tid, int flavor, const FPU &fpu)
+    int
+    DoWriteFPU(lldb::tid_t tid, int flavor, const FPU &fpu) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteEXC (lldb::tid_t tid, int flavor, const EXC &exc)
+    int
+    DoWriteEXC(lldb::tid_t tid, int flavor, const EXC &exc) override
     {
         return 0;
     }
 
-    virtual int
-    DoWriteDBG (lldb::tid_t tid, int flavor, const DBG &dbg)
+    int
+    DoWriteDBG(lldb::tid_t tid, int flavor, const DBG &dbg) override
     {
         return -1;
     }
@@ -669,8 +671,8 @@ public:
         SetRegisterDataFrom_LC_THREAD (data);
     }
     
-    virtual void
-    InvalidateAllRegisters ()
+    void
+    InvalidateAllRegisters() override
     {
         // Do nothing... registers are always valid...
     }
@@ -819,50 +821,50 @@ public:
     }
 
 protected:
-    virtual int
-    DoReadGPR (lldb::tid_t tid, int flavor, GPR &gpr)
+    int
+    DoReadGPR(lldb::tid_t tid, int flavor, GPR &gpr) override
     {
         return -1;
     }
     
-    virtual int
-    DoReadFPU (lldb::tid_t tid, int flavor, FPU &fpu)
+    int
+    DoReadFPU(lldb::tid_t tid, int flavor, FPU &fpu) override
     {
         return -1;
     }
     
-    virtual int
-    DoReadEXC (lldb::tid_t tid, int flavor, EXC &exc)
+    int
+    DoReadEXC(lldb::tid_t tid, int flavor, EXC &exc) override
     {
         return -1;
     }
 
-    virtual int
-    DoReadDBG (lldb::tid_t tid, int flavor, DBG &dbg)
+    int
+    DoReadDBG(lldb::tid_t tid, int flavor, DBG &dbg) override
     {
         return -1;
     }
     
-    virtual int
-    DoWriteGPR (lldb::tid_t tid, int flavor, const GPR &gpr)
+    int
+    DoWriteGPR(lldb::tid_t tid, int flavor, const GPR &gpr) override
     {
         return 0;
     }
     
-    virtual int
-    DoWriteFPU (lldb::tid_t tid, int flavor, const FPU &fpu)
+    int
+    DoWriteFPU(lldb::tid_t tid, int flavor, const FPU &fpu) override
     {
         return 0;
     }
     
-    virtual int
-    DoWriteEXC (lldb::tid_t tid, int flavor, const EXC &exc)
+    int
+    DoWriteEXC(lldb::tid_t tid, int flavor, const EXC &exc) override
     {
         return 0;
     }
     
-    virtual int
-    DoWriteDBG (lldb::tid_t tid, int flavor, const DBG &dbg)
+    int
+    DoWriteDBG(lldb::tid_t tid, int flavor, const DBG &dbg) override
     {
         return -1;
     }
@@ -906,7 +908,6 @@ ObjectFileMachO::Terminate()
 {
     PluginManager::UnregisterPlugin (CreateInstance);
 }
-
 
 lldb_private::ConstString
 ObjectFileMachO::GetPluginNameStatic()
@@ -1010,8 +1011,6 @@ ObjectFileMachO::GetModuleSpecifications (const lldb_private::FileSpec& file,
     return specs.GetSize() - initial_count;
 }
 
-
-
 const ConstString &
 ObjectFileMachO::GetSegmentNameTEXT()
 {
@@ -1024,6 +1023,20 @@ ObjectFileMachO::GetSegmentNameDATA()
 {
     static ConstString g_segment_name_DATA ("__DATA");
     return g_segment_name_DATA;
+}
+
+const ConstString &
+ObjectFileMachO::GetSegmentNameDATA_DIRTY()
+{
+    static ConstString g_segment_name ("__DATA_DIRTY");
+    return g_segment_name;
+}
+
+const ConstString &
+ObjectFileMachO::GetSegmentNameDATA_CONST()
+{
+    static ConstString g_segment_name ("__DATA_CONST");
+    return g_segment_name;
 }
 
 const ConstString &
@@ -1059,7 +1072,6 @@ ObjectFileMachO::MagicBytesMatch (DataBufferSP& data_sp,
     return MachHeaderSizeFromMagic(magic) != 0;
 }
 
-
 ObjectFileMachO::ObjectFileMachO(const lldb::ModuleSP &module_sp,
                                  DataBufferSP& data_sp,
                                  lldb::offset_t data_offset,
@@ -1090,10 +1102,6 @@ ObjectFileMachO::ObjectFileMachO (const lldb::ModuleSP &module_sp,
 {
     ::memset (&m_header, 0, sizeof(m_header));
     ::memset (&m_dysymtab, 0, sizeof(m_dysymtab));
-}
-
-ObjectFileMachO::~ObjectFileMachO()
-{
 }
 
 bool
@@ -1241,7 +1249,6 @@ ObjectFileMachO::ParseHeader ()
     return false;
 }
 
-
 ByteOrder
 ObjectFileMachO::GetByteOrder () const
 {
@@ -1304,10 +1311,12 @@ ObjectFileMachO::GetAddressClass (lldb::addr_t file_addr)
                     case eSectionTypeZeroFill:
                     case eSectionTypeDataObjCMessageRefs:
                     case eSectionTypeDataObjCCFStrings:
+                    case eSectionTypeGoSymtab:
                         return eAddressClassData;
 
                     case eSectionTypeDebug:
                     case eSectionTypeDWARFDebugAbbrev:
+                    case eSectionTypeDWARFDebugAddr:
                     case eSectionTypeDWARFDebugAranges:
                     case eSectionTypeDWARFDebugFrame:
                     case eSectionTypeDWARFDebugInfo:
@@ -1318,6 +1327,7 @@ ObjectFileMachO::GetAddressClass (lldb::addr_t file_addr)
                     case eSectionTypeDWARFDebugPubTypes:
                     case eSectionTypeDWARFDebugRanges:
                     case eSectionTypeDWARFDebugStr:
+                    case eSectionTypeDWARFDebugStrOffsets:
                     case eSectionTypeDWARFAppleNames:
                     case eSectionTypeDWARFAppleTypes:
                     case eSectionTypeDWARFAppleNamespaces:
@@ -1325,6 +1335,8 @@ ObjectFileMachO::GetAddressClass (lldb::addr_t file_addr)
                         return eAddressClassDebug;
 
                     case eSectionTypeEHFrame:
+                    case eSectionTypeARMexidx:
+                    case eSectionTypeARMextab:
                     case eSectionTypeCompactUnwind:
                         return eAddressClassRuntime;
 
@@ -1761,6 +1773,7 @@ ObjectFileMachO::CreateSections (SectionList &unified_section_list)
                                     static ConstString g_sect_name_compact_unwind ("__unwind_info");
                                     static ConstString g_sect_name_text ("__text");
                                     static ConstString g_sect_name_data ("__data");
+                                    static ConstString g_sect_name_go_symtab ("__gosymtab");
 
 
                                     if (section_name == g_sect_name_dwarf_debug_abbrev)
@@ -1803,6 +1816,8 @@ ObjectFileMachO::CreateSections (SectionList &unified_section_list)
                                         sect_type = eSectionTypeCompactUnwind;
                                     else if (section_name == g_sect_name_cfstring)
                                         sect_type = eSectionTypeDataObjCCFStrings;
+                                    else if (section_name == g_sect_name_go_symtab)
+                                        sect_type = eSectionTypeGoSymtab;
                                     else if (section_name == g_sect_name_objc_data ||
                                              section_name == g_sect_name_objc_classrefs ||
                                              section_name == g_sect_name_objc_superrefs ||
@@ -1923,7 +1938,6 @@ ObjectFileMachO::CreateSections (SectionList &unified_section_list)
 class MachSymtabSectionInfo
 {
 public:
-
     MachSymtabSectionInfo (SectionList *section_list) :
         m_section_list (section_list),
         m_section_infos()
@@ -1933,7 +1947,6 @@ public:
         // may be added for debug map or
         m_section_infos.resize(section_list->GetNumSections(1));
     }
-
 
     SectionSP
     GetSection (uint8_t n_sect, addr_t file_addr)
@@ -2058,6 +2071,7 @@ struct TrieEntryWithOffset
 static void
 ParseTrieEntries (DataExtractor &data,
                   lldb::offset_t offset,
+                  const bool is_arm,
                   std::vector<llvm::StringRef> &nameSlices,
                   std::set<lldb::addr_t> &resolver_addresses,
                   std::vector<TrieEntryWithOffset>& output)
@@ -2080,9 +2094,11 @@ ParseTrieEntries (DataExtractor &data,
 			e.entry.address = data.GetULEB128(&offset);
 			if ( e.entry.flags & EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER )
             {
-                //resolver_addresses.insert(e.entry.address);
 				e.entry.other = data.GetULEB128(&offset);
-                resolver_addresses.insert(e.entry.other);
+                uint64_t resolver_addr = e.entry.other;
+                if (is_arm)
+                    resolver_addr &= THUMB_ADDRESS_BIT_MASK;
+                resolver_addresses.insert(resolver_addr);
             }
 			else
 				e.entry.other = 0;
@@ -2118,6 +2134,7 @@ ParseTrieEntries (DataExtractor &data,
         {
             ParseTrieEntries(data,
                              childNodeOffset,
+                             is_arm,
                              nameSlices,
                              resolver_addresses,
                              output);
@@ -2414,7 +2431,6 @@ ObjectFileMachO::ParseSymtab ()
             return 0;
         }
 
-
         const bool have_strtab_data = strtab_data.GetByteSize() > 0;
         if (!have_strtab_data)
         {
@@ -2437,10 +2453,14 @@ ObjectFileMachO::ParseSymtab ()
 
         const ConstString &g_segment_name_TEXT = GetSegmentNameTEXT();
         const ConstString &g_segment_name_DATA = GetSegmentNameDATA();
+        const ConstString &g_segment_name_DATA_DIRTY = GetSegmentNameDATA_DIRTY();
+        const ConstString &g_segment_name_DATA_CONST = GetSegmentNameDATA_CONST();
         const ConstString &g_segment_name_OBJC = GetSegmentNameOBJC();
         const ConstString &g_section_name_eh_frame = GetSectionNameEHFrame();
         SectionSP text_section_sp(section_list->FindSectionByName(g_segment_name_TEXT));
         SectionSP data_section_sp(section_list->FindSectionByName(g_segment_name_DATA));
+        SectionSP data_dirty_section_sp(section_list->FindSectionByName(g_segment_name_DATA_DIRTY));
+        SectionSP data_const_section_sp(section_list->FindSectionByName(g_segment_name_DATA_CONST));
         SectionSP objc_section_sp(section_list->FindSectionByName(g_segment_name_OBJC));
         SectionSP eh_frame_section_sp;
         if (text_section_sp.get())
@@ -2482,7 +2502,7 @@ ObjectFileMachO::ParseSymtab ()
             // the module.
             if (text_section_sp.get() && eh_frame_section_sp.get() && m_type != eTypeDebugInfo)
             {
-                DWARFCallFrameInfo eh_frame(*this, eh_frame_section_sp, eRegisterKindGCC, true);
+                DWARFCallFrameInfo eh_frame(*this, eh_frame_section_sp, eRegisterKindEHFrame, true);
                 DWARFCallFrameInfo::FunctionAddressAndSizeVector functions;
                 eh_frame.GetFunctionAddressAndSizeVector (functions);
                 addr_t text_base_addr = text_section_sp->GetFileAddress();
@@ -2542,6 +2562,7 @@ ObjectFileMachO::ParseSymtab ()
             std::vector<llvm::StringRef> nameSlices;
             ParseTrieEntries (dyld_trie_data,
                               0,
+                              is_arm,
                               nameSlices,
                               resolver_addresses,
                               trie_entries);
@@ -2605,6 +2626,7 @@ ObjectFileMachO::ParseSymtab ()
                 uint64_t    localSymbolsOffset;   // file offset of where local symbols are stored
                 uint64_t    localSymbolsSize;     // size of local symbols information
             };
+
             struct lldb_copy_dyld_cache_header_v1
             {
                 char        magic[16];            // e.g. "dyld_v0    i386", "dyld_v1   armv7", etc.
@@ -2640,6 +2662,7 @@ ObjectFileMachO::ParseSymtab ()
                 uint32_t        entriesOffset;
                 uint32_t        entriesCount;
             };
+
             struct lldb_copy_dyld_cache_local_symbols_entry
             {
                 uint32_t        dylibOffset;
@@ -2934,7 +2957,6 @@ ObjectFileMachO::ParseSymtab ()
                                                         // Skip these if we want minimal symbol tables
                                                         add_nlist = false;
                                                         break;
-
 
                                                     case N_OPT:
                                                         // emitted with gcc2_compiled and in gcc source
@@ -3292,7 +3314,9 @@ ObjectFileMachO::ParseSymtab ()
                                                                         else
                                                                             type = eSymbolTypeCode;
                                                                     }
-                                                                    else if (symbol_section->IsDescendant(data_section_sp.get()))
+                                                                    else if (symbol_section->IsDescendant(data_section_sp.get()) ||
+                                                                             symbol_section->IsDescendant(data_dirty_section_sp.get()) ||
+                                                                             symbol_section->IsDescendant(data_const_section_sp.get()))
                                                                     {
                                                                         if (symbol_sect_name && ::strstr (symbol_sect_name, "__objc") == symbol_sect_name)
                                                                         {
@@ -3386,7 +3410,11 @@ ObjectFileMachO::ParseSymtab ()
                                                         ConstString const_symbol_name(symbol_name);
                                                         sym[sym_idx].GetMangled().SetValue(const_symbol_name, symbol_name_is_mangled);
                                                         if (is_gsym && is_debug)
-                                                            N_GSYM_name_to_sym_idx[sym[sym_idx].GetMangled().GetName(Mangled::ePreferMangled).GetCString()] = sym_idx;
+                                                        {
+                                                            const char *gsym_name = sym[sym_idx].GetMangled().GetName(Mangled::ePreferMangled).GetCString();
+                                                            if (gsym_name)
+                                                                N_GSYM_name_to_sym_idx[gsym_name] = sym_idx;
+                                                        }
                                                     }
                                                 }
                                                 if (symbol_section)
@@ -3419,7 +3447,7 @@ ObjectFileMachO::ParseSymtab ()
                                                             {
                                                                 if (symbol_file_addr & 1)
                                                                     symbol_flags = MACHO_NLIST_ARM_SYMBOL_IS_THUMB;
-                                                                symbol_file_addr &= 0xfffffffffffffffeull;
+                                                                symbol_file_addr &= THUMB_ADDRESS_BIT_MASK;
                                                             }
 
                                                             const FunctionStarts::Entry *next_func_start_entry = function_starts.FindNextEntry (func_start_entry);
@@ -3430,7 +3458,7 @@ ObjectFileMachO::ParseSymtab ()
                                                                 // Be sure the clear the Thumb address bit when we calculate the size
                                                                 // from the current and next address
                                                                 if (is_arm)
-                                                                    next_symbol_file_addr &= 0xfffffffffffffffeull;
+                                                                    next_symbol_file_addr &= THUMB_ADDRESS_BIT_MASK;
                                                                 symbol_byte_size = std::min<lldb::addr_t>(next_symbol_file_addr - symbol_file_addr, section_end_file_addr - symbol_file_addr);
                                                             }
                                                             else
@@ -3513,21 +3541,25 @@ ObjectFileMachO::ParseSymtab ()
                                                         }
                                                         else
                                                         {
-                                                            // Combine N_GSYM stab entries with the non stab symbol
-                                                            ConstNameToSymbolIndexMap::const_iterator pos = N_GSYM_name_to_sym_idx.find(sym[sym_idx].GetMangled().GetName(Mangled::ePreferMangled).GetCString());
-                                                            if (pos != N_GSYM_name_to_sym_idx.end())
+                                                            const char *gsym_name = sym[sym_idx].GetMangled().GetName(Mangled::ePreferMangled).GetCString();
+                                                            if (gsym_name)
                                                             {
-                                                                const uint32_t GSYM_sym_idx = pos->second;
-                                                                m_nlist_idx_to_sym_idx[nlist_idx] = GSYM_sym_idx;
-                                                                // Copy the address, because often the N_GSYM address has an invalid address of zero
-                                                                // when the global is a common symbol
-                                                                sym[GSYM_sym_idx].GetAddressRef().SetSection (symbol_section);
-                                                                sym[GSYM_sym_idx].GetAddressRef().SetOffset (symbol_value);
-                                                                // We just need the flags from the linker symbol, so put these flags
-                                                                // into the N_GSYM flags to avoid duplicate symbols in the symbol table
-                                                                sym[GSYM_sym_idx].SetFlags (nlist.n_type << 16 | nlist.n_desc);
-                                                                sym[sym_idx].Clear();
-                                                                continue;
+                                                                // Combine N_GSYM stab entries with the non stab symbol
+                                                                ConstNameToSymbolIndexMap::const_iterator pos = N_GSYM_name_to_sym_idx.find(gsym_name);
+                                                                if (pos != N_GSYM_name_to_sym_idx.end())
+                                                                {
+                                                                    const uint32_t GSYM_sym_idx = pos->second;
+                                                                    m_nlist_idx_to_sym_idx[nlist_idx] = GSYM_sym_idx;
+                                                                    // Copy the address, because often the N_GSYM address has an invalid address of zero
+                                                                    // when the global is a common symbol
+                                                                    sym[GSYM_sym_idx].GetAddressRef().SetSection (symbol_section);
+                                                                    sym[GSYM_sym_idx].GetAddressRef().SetOffset (symbol_value);
+                                                                    // We just need the flags from the linker symbol, so put these flags
+                                                                    // into the N_GSYM flags to avoid duplicate symbols in the symbol table
+                                                                    sym[GSYM_sym_idx].SetFlags (nlist.n_type << 16 | nlist.n_desc);
+                                                                    sym[sym_idx].Clear();
+                                                                    continue;
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -3845,7 +3877,7 @@ ObjectFileMachO::ParseSymtab ()
                             {
                                 // This is usually the second N_SO entry that contains just the filename,
                                 // so here we combine it with the first one if we are minimizing the symbol table
-                                const char *so_path = sym[sym_idx - 1].GetMangled().GetDemangledName().AsCString();
+                                const char *so_path = sym[sym_idx - 1].GetMangled().GetDemangledName(lldb::eLanguageTypeUnknown).AsCString();
                                 if (so_path && so_path[0])
                                 {
                                     std::string full_so_path (so_path);
@@ -3881,7 +3913,6 @@ ObjectFileMachO::ParseSymtab ()
                                 N_SO_index = sym_idx;
                             }
                         }
-
                         break;
 
                     case N_OSO:
@@ -4134,7 +4165,9 @@ ObjectFileMachO::ParseSymtab ()
                                             type = eSymbolTypeCode;
                                     }
                                     else
-                                    if (symbol_section->IsDescendant(data_section_sp.get()))
+                                    if (symbol_section->IsDescendant(data_section_sp.get()) ||
+                                        symbol_section->IsDescendant(data_dirty_section_sp.get()) ||
+                                        symbol_section->IsDescendant(data_const_section_sp.get()))
                                     {
                                         if (symbol_sect_name && ::strstr (symbol_sect_name, "__objc") == symbol_sect_name)
                                         {
@@ -4235,7 +4268,11 @@ ObjectFileMachO::ParseSymtab ()
                     }
 
                     if (is_gsym)
-                        N_GSYM_name_to_sym_idx[sym[sym_idx].GetMangled().GetName(Mangled::ePreferMangled).GetCString()] = sym_idx;
+                    {
+                        const char *gsym_name = sym[sym_idx].GetMangled().GetName(lldb::eLanguageTypeUnknown, Mangled::ePreferMangled).GetCString();
+                        if (gsym_name)
+                            N_GSYM_name_to_sym_idx[gsym_name] = sym_idx;
+                    }
 
                     if (symbol_section)
                     {
@@ -4263,7 +4300,7 @@ ObjectFileMachO::ParseSymtab ()
 
                                 addr_t symbol_file_addr = func_start_entry->addr;
                                 if (is_arm)
-                                    symbol_file_addr &= 0xfffffffffffffffeull;
+                                    symbol_file_addr &= THUMB_ADDRESS_BIT_MASK;
 
                                 const FunctionStarts::Entry *next_func_start_entry = function_starts.FindNextEntry (func_start_entry);
                                 const addr_t section_end_file_addr = section_file_addr + symbol_section->GetByteSize();
@@ -4273,7 +4310,7 @@ ObjectFileMachO::ParseSymtab ()
                                     // Be sure the clear the Thumb address bit when we calculate the size
                                     // from the current and next address
                                     if (is_arm)
-                                        next_symbol_file_addr &= 0xfffffffffffffffeull;
+                                        next_symbol_file_addr &= THUMB_ADDRESS_BIT_MASK;
                                     symbol_byte_size = std::min<lldb::addr_t>(next_symbol_file_addr - symbol_file_addr, section_end_file_addr - symbol_file_addr);
                                 }
                                 else
@@ -4300,7 +4337,7 @@ ObjectFileMachO::ParseSymtab ()
                                 bool found_it = false;
                                 for (ValueToSymbolIndexMap::const_iterator pos = range.first; pos != range.second; ++pos)
                                 {
-                                    if (sym[sym_idx].GetMangled().GetName(Mangled::ePreferMangled) == sym[pos->second].GetMangled().GetName(Mangled::ePreferMangled))
+                                    if (sym[sym_idx].GetMangled().GetName(lldb::eLanguageTypeUnknown, Mangled::ePreferMangled) == sym[pos->second].GetMangled().GetName(lldb::eLanguageTypeUnknown, Mangled::ePreferMangled))
                                     {
                                         m_nlist_idx_to_sym_idx[nlist_idx] = pos->second;
                                         // We just need the flags from the linker symbol, so put these flags
@@ -4339,7 +4376,7 @@ ObjectFileMachO::ParseSymtab ()
                                 bool found_it = false;
                                 for (ValueToSymbolIndexMap::const_iterator pos = range.first; pos != range.second; ++pos)
                                 {
-                                    if (sym[sym_idx].GetMangled().GetName(Mangled::ePreferMangled) == sym[pos->second].GetMangled().GetName(Mangled::ePreferMangled))
+                                    if (sym[sym_idx].GetMangled().GetName(lldb::eLanguageTypeUnknown, Mangled::ePreferMangled) == sym[pos->second].GetMangled().GetName(lldb::eLanguageTypeUnknown, Mangled::ePreferMangled))
                                     {
                                         m_nlist_idx_to_sym_idx[nlist_idx] = pos->second;
                                         // We just need the flags from the linker symbol, so put these flags
@@ -4357,20 +4394,24 @@ ObjectFileMachO::ParseSymtab ()
                             else
                             {
                                 // Combine N_GSYM stab entries with the non stab symbol
-                                ConstNameToSymbolIndexMap::const_iterator pos = N_GSYM_name_to_sym_idx.find(sym[sym_idx].GetMangled().GetName(Mangled::ePreferMangled).GetCString());
-                                if (pos != N_GSYM_name_to_sym_idx.end())
+                                const char *gsym_name = sym[sym_idx].GetMangled().GetName(lldb::eLanguageTypeUnknown, Mangled::ePreferMangled).GetCString();
+                                if (gsym_name)
                                 {
-                                    const uint32_t GSYM_sym_idx = pos->second;
-                                    m_nlist_idx_to_sym_idx[nlist_idx] = GSYM_sym_idx;
-                                    // Copy the address, because often the N_GSYM address has an invalid address of zero
-                                    // when the global is a common symbol
-                                    sym[GSYM_sym_idx].GetAddressRef().SetSection (symbol_section);
-                                    sym[GSYM_sym_idx].GetAddressRef().SetOffset (symbol_value);
-                                    // We just need the flags from the linker symbol, so put these flags
-                                    // into the N_GSYM flags to avoid duplicate symbols in the symbol table
-                                    sym[GSYM_sym_idx].SetFlags (nlist.n_type << 16 | nlist.n_desc);
-                                    sym[sym_idx].Clear();
-                                    continue;
+                                    ConstNameToSymbolIndexMap::const_iterator pos = N_GSYM_name_to_sym_idx.find(gsym_name);
+                                    if (pos != N_GSYM_name_to_sym_idx.end())
+                                    {
+                                        const uint32_t GSYM_sym_idx = pos->second;
+                                        m_nlist_idx_to_sym_idx[nlist_idx] = GSYM_sym_idx;
+                                        // Copy the address, because often the N_GSYM address has an invalid address of zero
+                                        // when the global is a common symbol
+                                        sym[GSYM_sym_idx].GetAddressRef().SetSection (symbol_section);
+                                        sym[GSYM_sym_idx].GetAddressRef().SetOffset (symbol_value);
+                                        // We just need the flags from the linker symbol, so put these flags
+                                        // into the N_GSYM flags to avoid duplicate symbols in the symbol table
+                                        sym[GSYM_sym_idx].SetFlags (nlist.n_type << 16 | nlist.n_desc);
+                                        sym[sym_idx].Clear();
+                                        continue;
+                                    }
                                 }
                             }
                         }
@@ -4409,7 +4450,6 @@ ObjectFileMachO::ParseSymtab ()
                         sym[pos.first].SetReExportedSymbolSharedLibrary(dylib_files.GetFileSpecAtIndex(dylib_ordinal-1));
                 }
             }
-
         }
 
         uint32_t synthetic_sym_id = symtab_load_command.nsyms;
@@ -4443,7 +4483,7 @@ ObjectFileMachO::ParseSymtab ()
                         {
                             if (symbol_file_addr & 1)
                                 symbol_flags = MACHO_NLIST_ARM_SYMBOL_IS_THUMB;
-                            symbol_file_addr &= 0xfffffffffffffffeull;
+                            symbol_file_addr &= THUMB_ADDRESS_BIT_MASK;
                         }
                         Address symbol_addr;
                         if (module_sp->ResolveFileAddress (symbol_file_addr, symbol_addr))
@@ -4459,7 +4499,7 @@ ObjectFileMachO::ParseSymtab ()
                                 {
                                     addr_t next_symbol_file_addr = next_func_start_entry->addr;
                                     if (is_arm)
-                                        next_symbol_file_addr &= 0xfffffffffffffffeull;
+                                        next_symbol_file_addr &= THUMB_ADDRESS_BIT_MASK;
                                     symbol_byte_size = std::min<lldb::addr_t>(next_symbol_file_addr - symbol_file_addr, section_end_file_addr - symbol_file_addr);
                                 }
                                 else
@@ -4595,7 +4635,6 @@ ObjectFileMachO::ParseSymtab ()
             }
         }
 
-        
         if (!trie_entries.empty())
         {
             for (const auto &e : trie_entries)
@@ -4623,9 +4662,7 @@ ObjectFileMachO::ParseSymtab ()
                 }
             }
         }
-
-
-        
+       
 //        StreamFile s(stdout, false);
 //        s.Printf ("Symbol table before CalculateSymbolSizes():\n");
 //        symtab->Dump(&s, NULL, eSortOrderNone);
@@ -4639,7 +4676,6 @@ ObjectFileMachO::ParseSymtab ()
     }
     return 0;
 }
-
 
 void
 ObjectFileMachO::Dump (Stream *s)
@@ -4713,7 +4749,6 @@ ObjectFileMachO::GetUUID (const llvm::MachO::mach_header &header,
     return false;
 }
 
-
 bool
 ObjectFileMachO::GetArchitecture (const llvm::MachO::mach_header &header,
                                   const lldb_private::DataExtractor &data,
@@ -4784,7 +4819,6 @@ ObjectFileMachO::GetUUID (lldb_private::UUID* uuid)
     }
     return false;
 }
-
 
 uint32_t
 ObjectFileMachO::GetDependentModules (FileSpecList& files)
@@ -5045,7 +5079,6 @@ ObjectFileMachO::GetEntryPointAddress ()
     }
 
     return m_entry_point_address;
-
 }
 
 lldb_private::Address
@@ -5139,7 +5172,6 @@ ObjectFileMachO::GetThreadContextAtIndex (uint32_t idx, lldb_private::Thread &th
     }
     return reg_ctx_sp;
 }
-
 
 ObjectFile::Type
 ObjectFileMachO::CalculateType()
@@ -5236,7 +5268,6 @@ ObjectFileMachO::CalculateStrata()
     return eStrataUnknown;
 }
 
-
 uint32_t
 ObjectFileMachO::GetVersion (uint32_t *versions, uint32_t num_versions)
 {
@@ -5303,7 +5334,6 @@ ObjectFileMachO::GetArchitecture (ArchSpec &arch)
     }
     return false;
 }
-
 
 UUID
 ObjectFileMachO::GetProcessSharedCacheUUID (Process *process)
@@ -5499,7 +5529,6 @@ ObjectFileMachO::GetSDKVersion(uint32_t *versions, uint32_t num_versions)
     return ObjectFile::GetSDKVersion (versions, num_versions);
 }
 
-
 bool
 ObjectFileMachO::GetIsDynamicLinkEditor()
 {
@@ -5520,7 +5549,6 @@ ObjectFileMachO::GetPluginVersion()
 {
     return 1;
 }
-
 
 Section *
 ObjectFileMachO::GetMachHeaderSection()
@@ -5677,6 +5705,7 @@ ObjectFileMachO::SaveCore (const lldb::ProcessSP &process_sp,
             {
                 case llvm::Triple::aarch64:
                 case llvm::Triple::arm:
+                case llvm::Triple::thumb:
                 case llvm::Triple::x86:
                 case llvm::Triple::x86_64:
                     make_core = true;
@@ -5984,4 +6013,3 @@ ObjectFileMachO::SaveCore (const lldb::ProcessSP &process_sp,
     }
     return false;
 }
-

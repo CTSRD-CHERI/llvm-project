@@ -1,4 +1,9 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+
+; TODO: FIXME: IslExprBuilder is not capable of producing valid code
+;              for arbitrary pointer expressions at the moment. Until
+;              this is fixed we disallow pointer expressions completely.
+; XFAIL: *
 
 ; void f(int a[], int N, float *P) {
 ;   int i;
@@ -19,7 +24,7 @@ bb:
   br i1 %brcond, label %store, label %bb.backedge
 
 store:
-  %scevgep = getelementptr i64, i64* %a, i64 %i
+  %scevgep = getelementptr inbounds i64, i64* %a, i64 %i
   store i64 %i, i64* %scevgep
   br label %bb.backedge
 
@@ -37,12 +42,12 @@ return:
 
 ; CHECK:  Stmt_store
 ; CHECK:        Domain :=
-; CHECK:            [N, P] -> { Stmt_store[i0] :
-; CHECK:              (P <= -1 and i0 >= 0 and i0 <= -1 + N)
-; CHECK:                or
-; CHECK:              (P >= 1 and i0 >= 0 and i0 <= -1 + N)
+; CHECK:            [P, N] -> { Stmt_store[i0] :
+; CHECK-DAG:              (P <= -1 and i0 >= 0 and i0 <= -1 + N)
+; CHECK-DAG:                or
+; CHECK-DAG:              (P >= 1 and i0 >= 0 and i0 <= -1 + N)
 ; CHECK:                   };
 ; CHECK:        Schedule :=
-; CHECK:            [N, P] -> { Stmt_store[i0] -> [i0] };
+; CHECK:            [P, N] -> { Stmt_store[i0] -> [i0] : P <= -1 or P >= 1 };
 ; CHECK:        MustWriteAccess := [Reduction Type: NONE]
-; CHECK:            [N, P] -> { Stmt_store[i0] -> MemRef_a[i0] };
+; CHECK:            [P, N] -> { Stmt_store[i0] -> MemRef_a[i0] };

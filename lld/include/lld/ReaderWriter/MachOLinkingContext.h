@@ -27,12 +27,13 @@ namespace mach_o {
 class ArchHandler;
 class MachODylibFile;
 class MachOFile;
+class SectCreateFile;
 }
 
 class MachOLinkingContext : public LinkingContext {
 public:
   MachOLinkingContext();
-  ~MachOLinkingContext();
+  ~MachOLinkingContext() override;
 
   enum Arch {
     arch_unknown,
@@ -61,6 +62,13 @@ public:
   enum class DebugInfoMode {
     addDebugMap,    // Default
     noDebugMap      // -S option
+  };
+
+  enum class UndefinedMode {
+    error,
+    warning,
+    suppress,
+    dynamicLookup
   };
 
   /// Initializes the context to sane default values given the specified output
@@ -204,6 +212,30 @@ public:
   /// when linking a binary that does not use any of its symbols.
   bool deadStrippableDylib() const { return _deadStrippableDylib; }
 
+  /// \brief Whether or not to use flat namespace.
+  ///
+  /// MachO usually uses a two-level namespace, where each external symbol
+  /// referenced by the target is associated with the dylib that will provide
+  /// the symbol's definition at runtime. Using flat namespace overrides this
+  /// behavior: the linker searches all dylibs on the command line and all
+  /// dylibs those original dylibs depend on, but does not record which dylib
+  /// an external symbol came from. At runtime dyld again searches all images
+  /// and uses the first definition it finds. In addition, any undefines in
+  /// loaded flat_namespace dylibs must be resolvable at build time.
+  bool useFlatNamespace() const { return _flatNamespace; }
+
+  /// \brief How to handle undefined symbols.
+  ///
+  /// Options are:
+  ///  * error: Report an error and terminate linking.
+  ///  * warning: Report a warning, but continue linking.
+  ///  * suppress: Ignore and continue linking.
+  ///  * dynamic_lookup: For use with -twolevel namespace: Records source dylibs
+  ///    for symbols that are defined in a linked dylib at static link time.
+  ///    Undefined symbols are handled by searching all loaded images at
+  ///    runtime.
+  UndefinedMode undefinedMode() const { return _undefinedMode; }
+
   /// \brief The path to the executable that will load the bundle at runtime.
   ///
   /// When building a Mach-O bundle, this executable will be examined if there
@@ -218,6 +250,14 @@ public:
   void setDeadStrippableDylib(bool deadStrippable) {
     _deadStrippableDylib = deadStrippable;
   }
+  void setUseFlatNamespace(bool flatNamespace) {
+    _flatNamespace = flatNamespace;
+  }
+
+  void setUndefinedMode(UndefinedMode undefinedMode) {
+    _undefinedMode = undefinedMode;
+  }
+
   void setBundleLoader(StringRef loader) { _bundleLoader = loader; }
   void setPrintAtoms(bool value=true) { _printAtoms = value; }
   void setTestingFileUsage(bool value = true) {
@@ -232,6 +272,10 @@ public:
 
   /// Add section alignment constraint on final layout.
   void addSectionAlignment(StringRef seg, StringRef sect, uint16_t align);
+
+  /// \brief Add a section based on a command-line sectcreate option.
+  void addSectCreateSection(StringRef seg, StringRef sect,
+                            std::unique_ptr<MemoryBuffer> content);
 
   /// Returns true if specified section had alignment constraints.
   bool sectionAligned(StringRef seg, StringRef sect, uint16_t &align) const;
@@ -301,6 +345,11 @@ public:
   bool customAtomOrderer(const DefinedAtom *left, const DefinedAtom *right,
                          bool &leftBeforeRight) const;
 
+  /// Return the 'flat namespace' file. This is the file that supplies
+  /// atoms for otherwise undefined symbols when the -flat_namespace or
+  /// -undefined dynamic_lookup options are used.
+  File* flatNamespaceFile() const { return _flatNamespaceFile; }
+
 private:
   Writer &writer() const override;
   mach_o::MachODylibFile* loadIndirectDylib(StringRef path);
@@ -349,6 +398,8 @@ private:
   uint32_t _currentVersion;
   StringRef _installName;
   StringRefVector _rpaths;
+  bool _flatNamespace;
+  UndefinedMode _undefinedMode;
   bool _deadStrippableDylib;
   bool _printAtoms;
   bool _testingFileUsage;
@@ -369,8 +420,10 @@ private:
   std::unique_ptr<llvm::raw_fd_ostream> _dependencyInfo;
   llvm::StringMap<std::vector<OrderFileNode>> _orderFiles;
   unsigned _orderFileEntries;
+  File *_flatNamespaceFile;
+  mach_o::SectCreateFile *_sectCreateFile = nullptr;
 };
 
 } // end namespace lld
 
-#endif
+#endif // LLD_READER_WRITER_MACHO_LINKING_CONTEXT_H

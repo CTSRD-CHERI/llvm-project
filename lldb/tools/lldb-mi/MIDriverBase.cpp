@@ -21,7 +21,7 @@
 // Return:  None.
 // Throws:  None.
 //--
-CMIDriverBase::CMIDriverBase(void)
+CMIDriverBase::CMIDriverBase()
     : m_pDriverFallThru(nullptr)
     , m_pDriverParent(nullptr)
     , m_bExitApp(false)
@@ -35,7 +35,7 @@ CMIDriverBase::CMIDriverBase(void)
 // Return:  None.
 // Throws:  None.
 //--
-CMIDriverBase::~CMIDriverBase(void)
+CMIDriverBase::~CMIDriverBase()
 {
     m_pDriverFallThru = NULL;
 }
@@ -107,7 +107,7 @@ CMIDriverBase::SetDriverParent(const CMIDriverBase &vrOtherDriver)
 // Throws:  None.
 //--
 CMIDriverBase *
-CMIDriverBase::GetDriversParent(void) const
+CMIDriverBase::GetDriversParent() const
 {
     return m_pDriverParent;
 }
@@ -122,7 +122,7 @@ CMIDriverBase::GetDriversParent(void) const
 // Throws:  None.
 //--
 CMIDriverBase *
-CMIDriverBase::GetDriverToFallThruTo(void) const
+CMIDriverBase::GetDriverToFallThruTo() const
 {
     return m_pDriverFallThru;
 }
@@ -137,7 +137,7 @@ CMIDriverBase::GetDriverToFallThruTo(void) const
 // Throws:  None.
 //--
 FILE *
-CMIDriverBase::GetStdin(void) const
+CMIDriverBase::GetStdin() const
 {
     // Do nothing - override and implement
     return nullptr;
@@ -152,7 +152,7 @@ CMIDriverBase::GetStdin(void) const
 // Throws:  None.
 //--
 FILE *
-CMIDriverBase::GetStdout(void) const
+CMIDriverBase::GetStdout() const
 {
     // Do nothing - override and implement
     return nullptr;
@@ -167,7 +167,7 @@ CMIDriverBase::GetStdout(void) const
 // Throws:  None.
 //--
 FILE *
-CMIDriverBase::GetStderr(void) const
+CMIDriverBase::GetStderr() const
 {
     // Do nothing - override and implement
     return nullptr;
@@ -175,7 +175,7 @@ CMIDriverBase::GetStderr(void) const
 
 //++ ------------------------------------------------------------------------------------
 // Details: Set the MI Driver's exit application flag. The application checks this flag
-//          after every stdin line is read so the exit may not be instantious.
+//          after every stdin line is read so the exit may not be instantaneous.
 //          If vbForceExit is false the MI Driver queries its state and determines if is
 //          should exit or continue operating depending on that running state.
 // Type:    Overrideable.

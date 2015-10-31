@@ -2,7 +2,7 @@
 // RUN: %clang_cc1 -triple x86_64-linux-gnu -std=c++11 -x objective-c++ -fmodules -fimplicit-module-maps -fmodules-cache-path=%t -I %S/Inputs -verify %s -Wno-objc-root-class
 // RUN: %clang_cc1 -triple x86_64-linux-gnu -std=c++11 -x objective-c++ -fmodules -fimplicit-module-maps -fmodules-cache-path=%t -I %S/Inputs -emit-llvm %s -o - -Wno-objc-root-class | FileCheck %s
 // expected-no-diagnostics
-
+// REQUIRES: x86-registered-target
 @import templates_left;
 
 void testInlineRedeclEarly() {
@@ -27,6 +27,8 @@ void testTemplateClasses() {
 
   N::Set<char> set_char;
   set_char.insert('A');
+
+  static_assert(sizeof(List<long>) == sizeof(List<short>), "");
 
   List<double> list_double;
   list_double.push_back(0.0);

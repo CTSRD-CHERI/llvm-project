@@ -1,5 +1,10 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-ast -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen -S < %s | FileCheck %s -check-prefix=CODEGEN
+; RUN: opt %loadPolly -polly-ast -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-codegen -S < %s | FileCheck %s -check-prefix=CODEGEN
+
+; TODO: FIXME: IslExprBuilder is not capable of producing valid code
+;              for arbitrary pointer expressions at the moment. Until
+;              this is fixed we disallow pointer expressions completely.
+; XFAIL: *
 
 ; void f(int a[], int N, float *P) {
 ;   int i;
@@ -41,6 +46,7 @@ return:
 ; CHECK:     Stmt_store(c0);
 ; CHECK: }
 
-; CODEGEN:   %0 = bitcast float* %P to i8*
-; CODEGEN:   %1 = icmp ule i8* %0, inttoptr (i64 -1 to i8*)
+; CODEGEN:   %[[R0:[0-9]*]] = bitcast float* %P to i8*
+; CODEGEN:   %[[R1:[0-9]*]] = bitcast float* %P to i8*
+; CODEGEN-NEXT:   icmp ule i8* %[[R1]], inttoptr (i64 -1 to i8*)
 

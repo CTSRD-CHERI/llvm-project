@@ -42,7 +42,7 @@ protected:
     std::error_code ec =
         GnuLdDriver::evalLinkerScript(*_ctx, std::move(mb), out, nostdlib);
     EXPECT_FALSE(ec);
-  };
+  }
 
   std::unique_ptr<ELFLinkingContext> _ctx;
 };
@@ -199,6 +199,22 @@ TEST_F(GnuLdParserTest, AsNeeded) {
   EXPECT_FALSE(cast<FileNode>(nodes[3].get())->asNeeded());
 }
 
+// Emulation
+
+TEST_F(GnuLdParserTest, Emulation) {
+  EXPECT_TRUE(parse("mips-linux-gnu-ld", "a.o", "-m", "elf64ltsmip", nullptr));
+  EXPECT_EQ(Triple::mips64el, _ctx->getTriple().getArch());
+  EXPECT_TRUE(
+      parse("mips64el-linux-gnu-ld", "a.o", "-m", "elf32btsmip", nullptr));
+  EXPECT_EQ(Triple::mips, _ctx->getTriple().getArch());
+  EXPECT_TRUE(
+      parse("mipsel-linux-gnu-ld", "a.o", "-m", "elf32btsmipn32", nullptr));
+  EXPECT_EQ(Triple::mips, _ctx->getTriple().getArch());
+  EXPECT_TRUE(
+      parse("mips-linux-gnu-ld", "a.o", "-m", "elf32ltsmipn32", nullptr));
+  EXPECT_EQ(Triple::mipsel, _ctx->getTriple().getArch());
+}
+
 // Linker script
 
 TEST_F(LinkerScriptTest, Input) {
@@ -281,4 +297,3 @@ TEST_F(LinkerScriptTest, ExprEval) {
   EXPECT_EQ(0x14000, result);
   EXPECT_EQ(0, sa2->symbol().compare(StringRef(".")));
 }
-

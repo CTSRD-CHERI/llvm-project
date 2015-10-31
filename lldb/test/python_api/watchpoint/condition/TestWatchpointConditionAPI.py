@@ -2,8 +2,11 @@
 Test watchpoint condition API.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -25,23 +28,12 @@ class WatchpointConditionAPITestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_watchpoint_cond_api_with_dsym(self):
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @skipIfWindows # Watchpoints not supported on Windows, and this test hangs
+    def test_watchpoint_cond_api(self):
         """Test watchpoint condition API."""
-        self.buildDsym(dictionary=self.d)
+        self.build(dictionary=self.d)
         self.setTearDownCleanup(dictionary=self.d)
-        self.watchpoint_condition_api()
-
-    @dwarf_test
-    def test_watchpoint_cond_api_with_dwarf(self):
-        """Test watchpoint condition API."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.watchpoint_condition_api()
-
-    def watchpoint_condition_api(self):
-        """Do watchpoint condition API to set condition as 'global==5'."""
         exe = os.path.join(os.getcwd(), self.exe_name)
 
         # Create a target by the debugger.
@@ -81,7 +73,7 @@ class WatchpointConditionAPITestCase(TestBase):
         if not self.TraceOn():
             self.HideStdout()
 
-        print watchpoint
+        print(watchpoint)
 
         # Continue.  Expect the program to stop due to the variable being written to.
         process.Continue()
@@ -95,10 +87,3 @@ class WatchpointConditionAPITestCase(TestBase):
 
         # Verify that the condition is met.
         self.assertTrue(value.GetValueAsUnsigned() == 5)
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

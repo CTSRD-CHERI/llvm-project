@@ -1,7 +1,10 @@
 """Test lldb's stepping speed."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys
-import unittest2
 import lldb
 from lldbbench import *
 
@@ -24,16 +27,17 @@ class SteppingSpeedBench(BenchBase):
         if self.count <= 0:
             self.count = 50
 
-        #print "self.exe=%s" % self.exe
-        #print "self.break_spec=%s" % self.break_spec
+        #print("self.exe=%s" % self.exe)
+        #print("self.break_spec=%s" % self.break_spec)
 
     @benchmarks_test
+    @no_debug_info_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_run_lldb_steppings(self):
         """Test lldb steppings on a large executable."""
-        print
+        print()
         self.run_lldb_steppings(self.exe, self.break_spec, self.count)
-        print "lldb stepping benchmark:", self.stopwatch
+        print("lldb stepping benchmark:", self.stopwatch)
 
     def run_lldb_steppings(self, exe, break_spec, count):
         import pexpect
@@ -70,10 +74,3 @@ class SteppingSpeedBench(BenchBase):
             pass
 
         self.child = None
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

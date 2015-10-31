@@ -2,9 +2,12 @@
 Test SBSymbolContext APIs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,29 +15,17 @@ class SymbolContextAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym(self):
-        """Exercise SBSymbolContext API extensively."""
-        self.buildDsym()
-        self.symbol_context()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Exercise SBSymbolContext API extensively."""
-        self.buildDwarf()
-        self.symbol_context()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to of function 'c'.
         self.line = line_number('main.c', '// Find the line number of function "c" here.')
 
-    def symbol_context(self):
-        """Get an SBSymbolContext object and call its many methods."""
+    @add_test_categories(['pyapi'])
+    @expectedFailureWindows("llvm.org/pr24778")
+    def test(self):
+        """Exercise SBSymbolContext API extensively."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -43,7 +34,7 @@ class SymbolContextAPITestCase(TestBase):
 
         # Now create a breakpoint on main.c by name 'c'.
         breakpoint = target.BreakpointCreateByName('c', 'a.out')
-        #print "breakpoint:", breakpoint
+        #print("breakpoint:", breakpoint)
         self.assertTrue(breakpoint and
                         breakpoint.GetNumLocations() == 1,
                         VALID_BREAKPOINT)
@@ -75,14 +66,14 @@ class SymbolContextAPITestCase(TestBase):
 
         function = context.GetFunction()
         self.assertTrue(function)
-        #print "function:", function
+        #print("function:", function)
 
         block = context.GetBlock()
         self.assertTrue(block)
-        #print "block:", block
+        #print("block:", block)
 
         lineEntry = context.GetLineEntry()
-        #print "line entry:", lineEntry
+        #print("line entry:", lineEntry)
         self.expect(lineEntry.GetFileSpec().GetDirectory(), "The line entry should have the correct directory",
                     exe=False,
             substrs = [self.mydir])
@@ -95,10 +86,3 @@ class SymbolContextAPITestCase(TestBase):
         symbol = context.GetSymbol()
         self.assertTrue(function.GetName() == symbol.GetName() and symbol.GetName() == 'c',
                         "The symbol name should be 'c'")
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

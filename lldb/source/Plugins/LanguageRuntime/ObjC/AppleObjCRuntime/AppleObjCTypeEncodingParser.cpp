@@ -10,7 +10,7 @@
 #include "AppleObjCTypeEncodingParser.h"
 
 #include "lldb/Symbol/ClangASTContext.h"
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/StringLexer.h"
@@ -44,7 +44,7 @@ AppleObjCTypeEncodingParser::ReadQuotedString(lldb_utility::StringLexer& type)
     while (type.HasAtLeast(1) && type.Peek() != '"')
         buffer.Printf("%c",type.Next());
     StringLexer::Character next = type.Next();
-    (void) next; // Avoid warnings when assertions are off.
+    UNUSED_IF_ASSERT_DISABLED(next);
     assert (next == '"');
     return buffer.GetString();
 }
@@ -136,10 +136,10 @@ AppleObjCTypeEncodingParser::BuildAggregate (clang::ASTContext &ast_ctx, lldb_ut
     ClangASTContext *lldb_ctx = ClangASTContext::GetASTContext(&ast_ctx);
     if (!lldb_ctx)
         return clang::QualType();
-    ClangASTType union_type(lldb_ctx->CreateRecordType(nullptr, lldb::eAccessPublic, name.c_str(), kind, lldb::eLanguageTypeC));
+    CompilerType union_type(lldb_ctx->CreateRecordType(nullptr, lldb::eAccessPublic, name.c_str(), kind, lldb::eLanguageTypeC));
     if (union_type)
     {
-        union_type.StartTagDeclarationDefinition();
+        ClangASTContext::StartTagDeclarationDefinition(union_type);
         
         unsigned int count = 0;
         for (auto element: elements)
@@ -150,13 +150,12 @@ AppleObjCTypeEncodingParser::BuildAggregate (clang::ASTContext &ast_ctx, lldb_ut
                 elem_name.Printf("__unnamed_%u",count);
                 element.name = std::string(elem_name.GetData());
             }
-            union_type.AddFieldToRecordType(element.name.c_str(), ClangASTType(&ast_ctx,element.type.getAsOpaquePtr()), lldb::eAccessPublic, element.bitfield);
+            ClangASTContext::AddFieldToRecordType(union_type, element.name.c_str(), CompilerType(&ast_ctx, element.type), lldb::eAccessPublic, element.bitfield);
             ++count;
         }
-        
-        union_type.CompleteTagDeclarationDefinition();
+        ClangASTContext::CompleteTagDeclarationDefinition(union_type);
     }
-    return union_type.GetQualType();
+    return ClangASTContext::GetQualType(union_type);
 }
 
 clang::QualType
@@ -171,8 +170,8 @@ AppleObjCTypeEncodingParser::BuildArray (clang::ASTContext &ast_ctx, lldb_utilit
     ClangASTContext *lldb_ctx = ClangASTContext::GetASTContext(&ast_ctx);
     if (!lldb_ctx)
         return clang::QualType();
-    ClangASTType array_type(lldb_ctx->CreateArrayType(ClangASTType(&ast_ctx,element_type.getAsOpaquePtr()), size, false));
-    return array_type.GetQualType();
+    CompilerType array_type(lldb_ctx->CreateArrayType(CompilerType(&ast_ctx, element_type), size, false));
+    return ClangASTContext::GetQualType(array_type);
 }
 
 // the runtime can emit these in the form of @"SomeType", giving more specifics
@@ -231,7 +230,7 @@ AppleObjCTypeEncodingParser::BuildObjCObjectPointerType (clang::ASTContext &ast_
     
     if (for_expression && !name.empty())
     {
-        size_t less_than_pos = name.find_first_of('<');
+        size_t less_than_pos = name.find('<');
         
         if (less_than_pos != std::string::npos)
         {
@@ -263,7 +262,7 @@ AppleObjCTypeEncodingParser::BuildObjCObjectPointerType (clang::ASTContext &ast_
             return ast_ctx.getObjCIdType();
 #endif
         
-        return ClangASTContext::GetTypeForDecl(decls[0]).GetPointerType().GetQualType();
+        return ClangASTContext::GetQualType(ClangASTContext::GetTypeForDecl(decls[0]).GetPointerType());
     }
     else
     {
@@ -385,15 +384,15 @@ AppleObjCTypeEncodingParser::BuildType (clang::ASTContext &ast_ctx, StringLexer&
     }
 }
 
-ClangASTType
+CompilerType
 AppleObjCTypeEncodingParser::RealizeType (clang::ASTContext &ast_ctx, const char* name, bool for_expression)
 {
     if (name && name[0])
     {
         StringLexer lexer(name);
         clang::QualType qual_type = BuildType(ast_ctx, lexer, for_expression);
-        return ClangASTType(&ast_ctx, qual_type.getAsOpaquePtr());
+        return CompilerType(&ast_ctx, qual_type);
     }
-    return ClangASTType();
+    return CompilerType();
 }
 

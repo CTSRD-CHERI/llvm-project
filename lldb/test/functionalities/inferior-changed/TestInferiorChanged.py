@@ -1,7 +1,10 @@
 """Test lldb reloads the inferior after it was changed during the session."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,21 +13,10 @@ class ChangedInferiorTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    def test_inferior_crashing_dsym(self):
-        """Test lldb reloads the inferior after it was changed during the session."""
-        self.buildDsym()
-        self.inferior_crashing()
-        self.cleanup()
-        d = {'C_SOURCES': 'main2.c'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.inferior_not_crashing()
-
     @skipIfHostWindows
-    def test_inferior_crashing_dwarf(self):
+    def test_inferior_crashing(self):
         """Test lldb reloads the inferior after it was changed during the session."""
-        self.buildDwarf()
+        self.build()
         self.inferior_crashing()
         self.cleanup()
         # lldb needs to recognize the inferior has changed. If lldb needs to check the
@@ -32,7 +24,7 @@ class ChangedInferiorTestCase(TestBase):
         # 1 second delay.
         time.sleep(1)
         d = {'C_SOURCES': 'main2.c'}
-        self.buildDwarf(dictionary=d)
+        self.build(dictionary=d)
         self.setTearDownCleanup(dictionary=d)
         self.inferior_not_crashing()
 
@@ -48,7 +40,7 @@ class ChangedInferiorTestCase(TestBase):
         self.exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + self.exe, CURRENT_EXECUTABLE_SET)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should have one crashing thread
         self.assertEquals(
@@ -65,7 +57,7 @@ class ChangedInferiorTestCase(TestBase):
         # Prod the lldb-platform that we have a newly built inferior ready.
         if lldb.lldbtest_remote_sandbox:
             self.runCmd("file " + self.exe, CURRENT_EXECUTABLE_SET)
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         self.runCmd("process status")
 
         self.assertNotEquals(
@@ -76,7 +68,7 @@ class ChangedInferiorTestCase(TestBase):
         # Break inside the main.
         lldbutil.run_break_set_by_file_and_line (self, "main2.c", self.line2, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -88,10 +80,3 @@ class ChangedInferiorTestCase(TestBase):
             substrs = ['= 7'])
         self.expect("expression *int_ptr",
             substrs = ['= 7'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

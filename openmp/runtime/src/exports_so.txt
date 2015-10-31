@@ -21,8 +21,22 @@ VERSION {
         # "Normal" symbols.
         #
         omp_*;     # Standard OpenMP functions.
-        ompt_initialize;     # OMPT initialization interface
+
+        #
+        # OMPT API
+        #
+        ompt_tool;           # OMPT initialization interface
         ompt_control;        # OMPT control interface
+        
+        #
+        # OMPT state placeholders
+        #
+        ompt_idle;
+        ompt_overhead;
+        ompt_barrier_wait;
+        ompt_task_wait;
+        ompt_mutex_wait;
+
         ompc_*;    # omp.h renames some standard functions to ompc_*.
         kmp_*;     # Intel extensions.
         kmpc_*;    # Intel extensions.
@@ -32,6 +46,13 @@ VERSION {
         _You_must_link_with_*;     # Mutual detection/MS compatibility symbols.
 
 
+        #
+        # Debugger support.
+        #
+#if USE_DEBUGGER
+        __kmp_debugging;
+        __kmp_omp_debug_struct_info;
+#endif /* USE_DEBUGGER */
 
         #
         # Internal functions exported for testing purposes.

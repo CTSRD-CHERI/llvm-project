@@ -35,7 +35,9 @@ namespace __sanitizer {
 
 // --------------------- sanitizer_common.h
 uptr GetPageSize() {
-  return 1U << 14;  // FIXME: is this configurable?
+  // FIXME: there is an API for getting the system page size (GetSystemInfo or
+  // GetNativeSystemInfo), but if we use it here we get test failures elsewhere.
+  return 1U << 14;
 }
 
 uptr GetMmapGranularity() {
@@ -49,7 +51,7 @@ uptr GetMaxVirtualAddress() {
 }
 
 bool FileExists(const char *filename) {
-  UNIMPLEMENTED();
+  return ::GetFileAttributesA(filename) != INVALID_FILE_ATTRIBUTES;
 }
 
 uptr internal_getpid() {
@@ -83,12 +85,8 @@ void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
 
 void *MmapOrDie(uptr size, const char *mem_type) {
   void *rv = VirtualAlloc(0, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-  if (rv == 0) {
-    Report("ERROR: %s failed to "
-           "allocate 0x%zx (%zd) bytes of %s (error code: %d)\n",
-           SanitizerToolName, size, size, mem_type, GetLastError());
-    CHECK("unable to mmap" && 0);
-  }
+  if (rv == 0)
+    ReportMmapFailureAndDie(size, mem_type, GetLastError());
   return rv;
 }
 
@@ -168,7 +166,7 @@ void *MapFileToMemory(const char *file_name, uptr *buff_size) {
   UNIMPLEMENTED();
 }
 
-void *MapWritableFileToMemory(void *addr, uptr size, fd_t fd, uptr offset) {
+void *MapWritableFileToMemory(void *addr, uptr size, fd_t fd, OFF_T offset) {
   UNIMPLEMENTED();
 }
 
@@ -290,11 +288,6 @@ void SetAddressSpaceUnlimited() {
   UNIMPLEMENTED();
 }
 
-char *FindPathToBinary(const char *name) {
-  // Nothing here for now.
-  return 0;
-}
-
 bool IsPathSeparator(const char c) {
   return c == '\\' || c == '/';
 }
@@ -319,6 +312,58 @@ void Abort() {
   if (::IsDebuggerPresent())
     __debugbreak();
   internal__exit(3);
+}
+
+// Read the file to extract the ImageBase field from the PE header. If ASLR is
+// disabled and this virtual address is available, the loader will typically
+// load the image at this address. Therefore, we call it the preferred base. Any
+// addresses in the DWARF typically assume that the object has been loaded at
+// this address.
+static uptr GetPreferredBase(const char *modname) {
+  fd_t fd = OpenFile(modname, RdOnly, nullptr);
+  if (fd == kInvalidFd)
+    return 0;
+  FileCloser closer(fd);
+
+  // Read just the DOS header.
+  IMAGE_DOS_HEADER dos_header;
+  uptr bytes_read;
+  if (!ReadFromFile(fd, &dos_header, sizeof(dos_header), &bytes_read) ||
+      bytes_read != sizeof(dos_header))
+    return 0;
+
+  // The file should start with the right signature.
+  if (dos_header.e_magic != IMAGE_DOS_SIGNATURE)
+    return 0;
+
+  // The layout at e_lfanew is:
+  // "PE\0\0"
+  // IMAGE_FILE_HEADER
+  // IMAGE_OPTIONAL_HEADER
+  // Seek to e_lfanew and read all that data.
+  char buf[4 + sizeof(IMAGE_FILE_HEADER) + sizeof(IMAGE_OPTIONAL_HEADER)];
+  if (::SetFilePointer(fd, dos_header.e_lfanew, nullptr, FILE_BEGIN) ==
+      INVALID_SET_FILE_POINTER)
+    return 0;
+  if (!ReadFromFile(fd, &buf[0], sizeof(buf), &bytes_read) ||
+      bytes_read != sizeof(buf))
+    return 0;
+
+  // Check for "PE\0\0" before the PE header.
+  char *pe_sig = &buf[0];
+  if (internal_memcmp(pe_sig, "PE\0\0", 4) != 0)
+    return 0;
+
+  // Skip over IMAGE_FILE_HEADER. We could do more validation here if we wanted.
+  IMAGE_OPTIONAL_HEADER *pe_header =
+      (IMAGE_OPTIONAL_HEADER *)(pe_sig + 4 + sizeof(IMAGE_FILE_HEADER));
+
+  // Check for more magic in the PE header.
+  if (pe_header->Magic != IMAGE_NT_OPTIONAL_HDR_MAGIC)
+    return 0;
+
+  // Finally, return the ImageBase.
+  return (uptr)pe_header->ImageBase;
 }
 
 uptr GetListOfModules(LoadedModule *modules, uptr max_modules,
@@ -353,19 +398,33 @@ uptr GetListOfModules(LoadedModule *modules, uptr max_modules,
     if (!GetModuleInformation(cur_process, handle, &mi, sizeof(mi)))
       continue;
 
-    char module_name[MAX_PATH];
-    bool got_module_name =
-        GetModuleFileNameA(handle, module_name, sizeof(module_name));
-    if (!got_module_name)
-      module_name[0] = '\0';
+    // Get the UTF-16 path and convert to UTF-8.
+    wchar_t modname_utf16[kMaxPathLength];
+    int modname_utf16_len =
+        GetModuleFileNameW(handle, modname_utf16, kMaxPathLength);
+    if (modname_utf16_len == 0)
+      modname_utf16[0] = '\0';
+    char module_name[kMaxPathLength];
+    int module_name_len =
+        ::WideCharToMultiByte(CP_UTF8, 0, modname_utf16, modname_utf16_len + 1,
+                              &module_name[0], kMaxPathLength, NULL, NULL);
+    module_name[module_name_len] = '\0';
 
     if (filter && !filter(module_name))
       continue;
 
     uptr base_address = (uptr)mi.lpBaseOfDll;
     uptr end_address = (uptr)mi.lpBaseOfDll + mi.SizeOfImage;
+
+    // Adjust the base address of the module so that we get a VA instead of an
+    // RVA when computing the module offset. This helps llvm-symbolizer find the
+    // right DWARF CU. In the common case that the image is loaded at it's
+    // preferred address, we will now print normal virtual addresses.
+    uptr preferred_base = GetPreferredBase(&module_name[0]);
+    uptr adjusted_base = base_address - preferred_base;
+
     LoadedModule *cur_module = &modules[count];
-    cur_module->set(module_name, base_address);
+    cur_module->set(module_name, adjusted_base);
     // We add the whole module as one single address range.
     cur_module->addAddressRange(base_address, end_address, /*executable*/ true);
     count++;
@@ -395,15 +454,22 @@ static int RunAtexit() {
 }
 
 #pragma section(".CRT$XID", long, read)  // NOLINT
-static __declspec(allocate(".CRT$XID")) int (*__run_atexit)() = RunAtexit;
+__declspec(allocate(".CRT$XID")) int (*__run_atexit)() = RunAtexit;
 #endif
 
 // ------------------ sanitizer_libc.h
 fd_t OpenFile(const char *filename, FileAccessMode mode, error_t *last_error) {
-  if (mode != WrOnly)
+  fd_t res;
+  if (mode == RdOnly) {
+    res = CreateFile(filename, GENERIC_READ,
+                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                     nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  } else if (mode == WrOnly) {
+    res = CreateFile(filename, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                     FILE_ATTRIBUTE_NORMAL, nullptr);
+  } else {
     UNIMPLEMENTED();
-  fd_t res = CreateFile(filename, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                        FILE_ATTRIBUTE_NORMAL, nullptr);
+  }
   CHECK(res != kStdoutFd || kStdoutFd == kInvalidFd);
   CHECK(res != kStderrFd || kStderrFd == kInvalidFd);
   if (res == kInvalidFd && last_error)
@@ -417,7 +483,18 @@ void CloseFile(fd_t fd) {
 
 bool ReadFromFile(fd_t fd, void *buff, uptr buff_size, uptr *bytes_read,
                   error_t *error_p) {
-  UNIMPLEMENTED();
+  CHECK(fd != kInvalidFd);
+
+  // bytes_read can't be passed directly to ReadFile:
+  // uptr is unsigned long long on 64-bit Windows.
+  unsigned long num_read_long;
+
+  bool success = ::ReadFile(fd, buff, buff_size, &num_read_long, nullptr);
+  if (!success && error_p)
+    *error_p = GetLastError();
+  if (bytes_read)
+    *bytes_read = num_read_long;
+  return success;
 }
 
 bool SupportsColoredOutput(fd_t fd) {
@@ -429,21 +506,32 @@ bool WriteToFile(fd_t fd, const void *buff, uptr buff_size, uptr *bytes_written,
                  error_t *error_p) {
   CHECK(fd != kInvalidFd);
 
-  if (fd == kStdoutFd) {
-    fd = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (fd == 0) fd = kInvalidFd;
-  } else if (fd == kStderrFd) {
-    fd = GetStdHandle(STD_ERROR_HANDLE);
-    if (fd == 0) fd = kInvalidFd;
+  // Handle null optional parameters.
+  error_t dummy_error;
+  error_p = error_p ? error_p : &dummy_error;
+  uptr dummy_bytes_written;
+  bytes_written = bytes_written ? bytes_written : &dummy_bytes_written;
+
+  // Initialize output parameters in case we fail.
+  *error_p = 0;
+  *bytes_written = 0;
+
+  // Map the conventional Unix fds 1 and 2 to Windows handles. They might be
+  // closed, in which case this will fail.
+  if (fd == kStdoutFd || fd == kStderrFd) {
+    fd = GetStdHandle(fd == kStdoutFd ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+    if (fd == 0) {
+      *error_p = ERROR_INVALID_HANDLE;
+      return false;
+    }
   }
 
-  DWORD internal_bytes_written;
-  if (fd == kInvalidFd ||
-      WriteFile(fd, buff, buff_size, &internal_bytes_written, 0)) {
-    if (error_p) *error_p = GetLastError();
+  DWORD bytes_written_32;
+  if (!WriteFile(fd, buff, buff_size, &bytes_written_32, 0)) {
+    *error_p = GetLastError();
     return false;
   } else {
-    if (bytes_written) *bytes_written = internal_bytes_written;
+    *bytes_written = bytes_written_32;
     return true;
   }
 }
@@ -615,7 +703,27 @@ bool IsDeadlySignal(int signum) {
 }
 
 bool IsAccessibleMemoryRange(uptr beg, uptr size) {
-  // FIXME: Actually implement this function.
+  SYSTEM_INFO si;
+  GetNativeSystemInfo(&si);
+  uptr page_size = si.dwPageSize;
+  uptr page_mask = ~(page_size - 1);
+
+  for (uptr page = beg & page_mask, end = (beg + size - 1) & page_mask;
+       page <= end;) {
+    MEMORY_BASIC_INFORMATION info;
+    if (VirtualQuery((LPCVOID)page, &info, sizeof(info)) != sizeof(info))
+      return false;
+
+    if (info.Protect == 0 || info.Protect == PAGE_NOACCESS ||
+        info.Protect == PAGE_EXECUTE)
+      return false;
+
+    if (info.RegionSize == 0)
+      return false;
+
+    page += info.RegionSize;
+  }
+
   return true;
 }
 
@@ -641,6 +749,14 @@ uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
   CHECK_GT(buf_len, 0);
   buf[0] = 0;
   return 0;
+}
+
+uptr ReadLongProcessName(/*out*/char *buf, uptr buf_len) {
+  return ReadBinaryName(buf, buf_len);
+}
+
+void CheckVMASize() {
+  // Do nothing.
 }
 
 }  // namespace __sanitizer

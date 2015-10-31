@@ -1,13 +1,18 @@
-; RUN: opt %loadPolly -polly-codegen -S -polly-no-early-exit < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-codegen -S \
+; RUN:     < %s | FileCheck %s
 ;
 ;    void pos(float *A, long n) {
 ;      for (long i = 0; i < 100; i++)
 ;        A[n % 42] += 1;
 ;    }
 ;
-; CHECK: polly.stmt.bb3:
-; CHECK: %p_tmp.moved.to.bb3 = srem i64 %n, 42
-; CHECK: %p_tmp3 = getelementptr inbounds float, float* %A, i64 %p_tmp.moved.to.bb3
+; CHECK:      polly.stmt.bb2:
+; CHECK-NEXT:   %p_tmp = srem i64 %n, 42
+; CHECK-NEXT:   store i64 %p_tmp, i64* %tmp.s2a
+;
+; CHECK:      polly.stmt.bb3:
+; CHECK:        %tmp.s2a.reload = load i64, i64* %tmp.s2a
+; CHECK:        %p_tmp3 = getelementptr inbounds float, float* %A, i64 %tmp.s2a.reload
 
 define void @pos(float* %A, i64 %n) {
 bb:

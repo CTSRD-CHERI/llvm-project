@@ -193,6 +193,7 @@ ScalarEnumerationTraits<ELFYAML::ELF_EM>::enumeration(IO &IO,
   ECase(EM_VIDEOCORE5)
   ECase(EM_78KOR)
   ECase(EM_56800EX)
+  ECase(EM_AMDGPU)
 #undef ECase
 }
 
@@ -315,6 +316,25 @@ void ScalarBitSetTraits<ELFYAML::ELF_EF>::bitset(IO &IO,
     BCase(EF_HEXAGON_ISA_V3)
     BCase(EF_HEXAGON_ISA_V4)
     BCase(EF_HEXAGON_ISA_V5)
+    break;
+  case ELF::EM_AVR:
+    BCase(EF_AVR_ARCH_AVR1)
+    BCase(EF_AVR_ARCH_AVR2)
+    BCase(EF_AVR_ARCH_AVR25)
+    BCase(EF_AVR_ARCH_AVR3)
+    BCase(EF_AVR_ARCH_AVR31)
+    BCase(EF_AVR_ARCH_AVR35)
+    BCase(EF_AVR_ARCH_AVR4)
+    BCase(EF_AVR_ARCH_AVR51)
+    BCase(EF_AVR_ARCH_AVR6)
+    BCase(EF_AVR_ARCH_AVRTINY)
+    BCase(EF_AVR_ARCH_XMEGA1)
+    BCase(EF_AVR_ARCH_XMEGA2)
+    BCase(EF_AVR_ARCH_XMEGA3)
+    BCase(EF_AVR_ARCH_XMEGA4)
+    BCase(EF_AVR_ARCH_XMEGA5)
+    BCase(EF_AVR_ARCH_XMEGA6)
+    BCase(EF_AVR_ARCH_XMEGA7)
     break;
   default:
     llvm_unreachable("Unsupported architecture");
@@ -627,6 +647,11 @@ static void sectionMapping(IO &IO, ELFYAML::RawContentSection &Section) {
   IO.mapOptional("Size", Section.Size, Hex64(Section.Content.binary_size()));
 }
 
+static void sectionMapping(IO &IO, ELFYAML::NoBitsSection &Section) {
+  commonSectionMapping(IO, Section);
+  IO.mapOptional("Size", Section.Size, Hex64(0));
+}
+
 static void sectionMapping(IO &IO, ELFYAML::RelocationSection &Section) {
   commonSectionMapping(IO, Section);
   IO.mapOptional("Relocations", Section.Relocations);
@@ -681,6 +706,11 @@ void MappingTraits<std::unique_ptr<ELFYAML::Section>>::mapping(
     if (!IO.outputting())
       Section.reset(new ELFYAML::Group());
     groupSectionMapping(IO, *cast<ELFYAML::Group>(Section.get()));
+    break;
+  case ELF::SHT_NOBITS:
+    if (!IO.outputting())
+      Section.reset(new ELFYAML::NoBitsSection());
+    sectionMapping(IO, *cast<ELFYAML::NoBitsSection>(Section.get()));
     break;
   case ELF::SHT_MIPS_ABIFLAGS:
     if (!IO.outputting())

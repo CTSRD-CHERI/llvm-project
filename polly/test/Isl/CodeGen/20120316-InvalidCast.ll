@@ -1,4 +1,9 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -S -polly-detect-scops-in-functions-without-loops -polly-detect-scops-in-regions-without-loops -polly-codegen -polly-no-early-exit < %s | FileCheck %s
+; RUN: opt %loadPolly -S -polly-codegen < %s | FileCheck %s
+
+; TODO: FIXME: IslExprBuilder is not capable of producing valid code
+;              for arbitrary pointer expressions at the moment. Until
+;              this is fixed we disallow pointer expressions completely.
+; XFAIL: *
 
 ; CHECK: polly.start
 

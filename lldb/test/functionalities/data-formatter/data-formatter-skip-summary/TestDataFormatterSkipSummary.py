@@ -2,8 +2,11 @@
 Test lldb data formatter subsystem.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,18 +15,11 @@ class SkipSummaryDataFormatterTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test data formatter commands."""
-        self.buildDsym()
-        self.data_formatter_commands()
-
     @expectedFailureFreeBSD("llvm.org/pr20548") # fails to build on lab.llvm.org buildbot
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
+    @expectedFailureWindows("llvm.org/pr24462") # Data formatters have problems on Windows
+    def test_with_run_command(self):
         """Test data formatter commands."""
-        self.buildDwarf()
+        self.build()
         self.data_formatter_commands()
 
     def setUp(self):
@@ -40,7 +36,7 @@ class SkipSummaryDataFormatterTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -137,13 +133,13 @@ class SkipSummaryDataFormatterTestCase(TestBase):
         if self.getCompiler().endswith('gcc') and not self.getCompiler().endswith('llvm-gcc'):
            import re
            gcc_version_output = system([[lldbutil.which(self.getCompiler()), "-v"]])[1]
-           #print "my output:", gcc_version_output
+           #print("my output:", gcc_version_output)
            for line in gcc_version_output.split(os.linesep):
                m = re.search('\(Apple Inc\. build ([0-9]+)\)', line)
-               #print "line:", line
+               #print("line:", line)
                if m:
                    gcc_build = int(m.group(1))
-                   #print "gcc build:", gcc_build
+                   #print("gcc build:", gcc_build)
                    if gcc_build >= 5666:
                        # rdar://problem/9804600"
                        self.skipTest("rdar://problem/9804600 wrong namespace for std::string in debug info")
@@ -177,10 +173,3 @@ class SkipSummaryDataFormatterTestCase(TestBase):
                     substrs = ['(DeepData_5) data2.m_child4.m_child2.m_child2 = {',
                                'm_some_text = "Just a test"',
                                '}'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -73,11 +73,12 @@ endif
 # tests from Visual Studio, the environment variable isn't inherited
 # all the way down to the process spawned for make.
 #----------------------------------------------------------------------
-ifeq "$(OS)" ""
-	OS = $(shell uname -s)
+HOST_OS = $(shell uname -s)
+ifeq "$(HOST_OS)" "windows32"
+	HOST_OS = Windows_NT
 endif
-ifeq "$(OS)" "windows32"
-	OS = Windows_NT
+ifeq "$(OS)" ""
+	OS = $(HOST_OS)
 endif
 
 #----------------------------------------------------------------------
@@ -169,6 +170,11 @@ else
 	endif
 endif
 
+LIMIT_DEBUG_INFO_FLAGS =
+ifneq (,$(findstring clang,$(CC)))
+   LIMIT_DEBUG_INFO_FLAGS += -flimit-debug-info
+endif
+
 CFLAGS ?= -g -O0 -fno-builtin
 ifeq "$(OS)" "Darwin"
 	CFLAGS += $(ARCHFLAG) $(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) -I$(LLDB_BASE_DIR)include
@@ -182,6 +188,10 @@ ifeq "$(OS)" "Darwin"
 	CFLAGS_NO_DEBUG = -O0 $(ARCHFLAG) $(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) $(TRIPLE_CFLAGS)
 else
 	CFLAGS_NO_DEBUG = -O0 $(ARCHFLAG)$(ARCH) $(FRAMEWORK_INCLUDES) $(CFLAGS_EXTRAS) $(TRIPLE_CFLAGS)
+endif
+
+ifeq "$(MAKE_DWO)" "YES"
+	CFLAGS += -gsplit-dwarf
 endif
 
 CXXFLAGS += -std=c++11
@@ -200,6 +210,7 @@ EXE ?= a.out
 ifneq "$(DYLIB_NAME)" ""
 	ifeq "$(OS)" "Darwin"
 		DYLIB_FILENAME = lib$(DYLIB_NAME).dylib
+		DYLIB_EXECUTABLE_PATH ?= @executable_path
 	else ifeq "$(OS)" "Windows_NT"
 		DYLIB_FILENAME = $(DYLIB_NAME).dll
 	else
@@ -251,7 +262,9 @@ endif
 # Android specific options
 #----------------------------------------------------------------------
 ifeq "$(OS)" "Android"
-    LDFLAGS += -pie
+    ifdef PIE
+        LDFLAGS += -pie
+    endif
     replace_with = $(if $(findstring clang,$(1)), \
                         $(subst clang,$(2),$(1)), \
                         $(if $(findstring gcc,$(1)), \
@@ -280,12 +293,17 @@ endif
 ifeq (1,$(USE_LIBCPP))
 	# Clang requires an extra flag: -stdlib=libstdc++
 	ifneq (,$(findstring clang,$(CC)))
-		CXXFLAGS += -stdlib=libc++
-		LDFLAGS += -stdlib=libc++
 		ifeq "$(OS)" "Linux"
 			# This is the default install location on Ubuntu 14.04
-			CXXFLAGS += -I/usr/include/c++/v1
-        	endif
+			ifneq ($(wildcard /usr/include/c++/v1/.),)
+				CXXFLAGS += -stdlib=libc++ -DLLDB_USING_LIBCPP
+				LDFLAGS += -stdlib=libc++
+				CXXFLAGS += -I/usr/include/c++/v1
+			endif
+		else
+			CXXFLAGS += -stdlib=libc++ -DLLDB_USING_LIBCPP
+			LDFLAGS += -stdlib=libc++
+		endif
 	endif
 endif
 
@@ -450,7 +468,7 @@ $(DYLIB_OBJECTS) : CFLAGS += -DCOMPILING_LLDB_TEST_DLL
 
 $(DYLIB_FILENAME) : $(DYLIB_OBJECTS)
 ifeq "$(OS)" "Darwin"
-	$(LD) $(DYLIB_OBJECTS) $(LDFLAGS) -install_name "@executable_path/$(DYLIB_FILENAME)" -dynamiclib -o "$(DYLIB_FILENAME)"
+	$(LD) $(DYLIB_OBJECTS) $(LDFLAGS) -install_name "$(DYLIB_EXECUTABLE_PATH)/$(DYLIB_FILENAME)" -dynamiclib -o "$(DYLIB_FILENAME)"
 ifneq "$(MAKE_DSYM)" "NO"
 ifneq "$(DS)" ""
 	"$(DS)" $(DSFLAGS) "$(DYLIB_FILENAME)"
@@ -471,8 +489,10 @@ endif
 # files by replacing all .c files with .d.
 #----------------------------------------------------------------------
 PREREQS := $(OBJECTS:.o=.d)
+DWOS := $(OBJECTS:.o=.dwo) $(ARCHIVE_OBJECTS:.o=.dwo)
 ifneq "$(DYLIB_NAME)" ""
 	DYLIB_PREREQS := $(DYLIB_OBJECTS:.o=.d)
+	DYLIB_DWOS := $(DYLIB_OBJECTS:.o=.dwo)
 endif
 
 #----------------------------------------------------------------------
@@ -480,7 +500,7 @@ endif
 # the compiler -MM option. The -M option will list all system headers,
 # and the -MM option will list all non-system dependencies.
 #----------------------------------------------------------------------
-ifeq "$(OS)" "Windows_NT"
+ifeq "$(HOST_OS)" "Windows_NT"
 	JOIN_CMD = &
 	QUOTE = "
 else
@@ -530,19 +550,23 @@ endif
 dsym:	$(DSYM)
 all:	$(EXE) $(DSYM)
 clean::
-	$(RM) "$(EXE)" $(OBJECTS) $(PREREQS) $(PREREQS:.d=.d.tmp) $(ARCHIVE_NAME) $(ARCHIVE_OBJECTS)
+	$(RM) $(OBJECTS) $(PREREQS) $(PREREQS:.d=.d.tmp) $(DWOS) $(ARCHIVE_NAME) $(ARCHIVE_OBJECTS)
 ifneq "$(DYLIB_NAME)" ""
 	$(RM) -r $(DYLIB_FILENAME).dSYM
-	$(RM) $(DYLIB_OBJECTS) $(DYLIB_PREREQS) $(DYLIB_PREREQS:.d=.d.tmp) $(DYLIB_FILENAME) $(DYLIB_FILENAME).debug
+	$(RM) $(DYLIB_OBJECTS) $(DYLIB_PREREQS) $(DYLIB_PREREQS:.d=.d.tmp) $(DYLIB_DWOS) $(DYLIB_FILENAME) $(DYLIB_FILENAME).debug
 endif
 ifneq "$(DSYM)" ""
 	$(RM) -r "$(DSYM)"
 endif
 ifeq "$(OS)" "Windows_NT"
+# http://llvm.org/pr24589
+	IF EXIST "$(EXE)" del "$(EXE)"
 	$(RM) $(wildcard *.manifest *.pdb *.ilk)
-  ifneq "$(DYLIB_NAME)" ""
+ifneq "$(DYLIB_NAME)" ""
 	$(RM) $(DYLIB_NAME).lib $(DYLIB_NAME).exp
-  endif
+endif
+else
+	$(RM) "$(EXE)"
 endif
 
 #----------------------------------------------------------------------

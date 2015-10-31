@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
 
 ; void foo(long n, long m, long o, double A[n][m][o]) {
 ;   for (long i = 0; i < n-3; i++)
@@ -14,8 +14,8 @@
 ; CHECK:     double MemRef_A[*][%m][%o][8] // Element size 8
 ; CHECK: }
 
-; CHECK: [n, m, o] -> { Stmt_for_body6[i0, i1, i2] -> MemRef_A[3 + i0, i1, 7 + i2] };
-; CHECK: [n, m, o] -> { Stmt_for_body6[i0, i1, i2] -> MemRef_A[i0, 0, i2] };
+; CHECK: [m, o, n] -> { Stmt_for_body6[i0, i1, i2] -> MemRef_A[3 + i0, i1, 7 + i2] };
+; CHECK: [m, o, n] -> { Stmt_for_body6[i0, i1, i2] -> MemRef_A[i0, 0, i2] };
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

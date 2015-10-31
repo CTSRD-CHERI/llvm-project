@@ -6,10 +6,13 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-// WebAssembly Atomic operand code-gen constructs.
-//
+///
+/// \file
+/// \brief WebAssembly Atomic operand code-gen constructs.
+///
 //===----------------------------------------------------------------------===//
+
+// TODO: Implement atomic instructions.
 
 //===----------------------------------------------------------------------===//
 // Atomic fences

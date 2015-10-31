@@ -20,11 +20,11 @@
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/Target/TargetLowering.h"
 
 namespace llvm {
-  class AliasAnalysis;
   class SUnit;
   class MachineConstantPool;
   class MachineFunction;
@@ -374,7 +374,7 @@ namespace llvm {
     /// correspond to schedulable entities (e.g. instructions) and do not have a
     /// valid ID. Consequently, always check for boundary nodes before accessing
     /// an assoicative data structure keyed on node ID.
-    bool isBoundaryNode() const { return NodeNum == BoundaryID; };
+    bool isBoundaryNode() const { return NodeNum == BoundaryID; }
 
     /// setNode - Assign the representative SDNode for this SUnit.
     /// This may be used during pre-regalloc scheduling.

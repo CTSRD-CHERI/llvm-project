@@ -1,8 +1,11 @@
+from __future__ import print_function
+
+import lldb_shared
+
+import unittest2
 import os.path
 import re
 import sys
-
-import unittest2
 
 from lldbgdbserverutils import *
 
@@ -44,6 +47,3 @@ class TestLldbGdbServerUtils(unittest2.TestCase):
         except AssertionError:
             # okay
             return None
-
-if __name__ == '__main__':
-    unittest2.main()

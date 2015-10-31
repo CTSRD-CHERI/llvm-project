@@ -141,8 +141,7 @@ class ModuleCache;
         /// The destructor is virtual since this class is designed to be
         /// inherited from by the plug-in instance.
         //------------------------------------------------------------------
-        virtual
-        ~Platform();
+        ~Platform() override;
 
         //------------------------------------------------------------------
         /// Find a platform plugin for a given process.
@@ -269,6 +268,9 @@ class ModuleCache;
 
         virtual const char *
         GetHostname ();
+        
+        virtual ConstString
+        GetFullNameForDylib (ConstString basename);
 
         virtual const char *
         GetDescription () = 0;
@@ -863,6 +865,12 @@ class ModuleCache;
             return 1;
         }
 
+        virtual const lldb::UnixSignalsSP &
+        GetRemoteUnixSignals();
+
+        const lldb::UnixSignalsSP &
+        GetUnixSignals();
+
         //------------------------------------------------------------------
         /// Locate a queue name given a thread's qaddr
         ///
@@ -940,63 +948,34 @@ class ModuleCache;
         GetTrapHandlerSymbolNames ();
 
         //------------------------------------------------------------------
-        /// Launch a process for debugging.
+        /// Find a support executable that may not live within in the
+        /// standard locations related to LLDB.
         ///
-        /// This differs from Launch in that it returns a NativeProcessProtocol.
-        /// Currently used by lldb-gdbserver.
+        /// Executable might exist within the Platform SDK directories, or
+        /// in standard tool directories within the current IDE that is
+        /// running LLDB.
         ///
-        /// @param[in] launch_info
-        ///     Information required to launch the process.
-        ///
-        /// @param[in] native_delegate
-        ///     The delegate that will receive messages regarding the
-        ///     inferior.  Must outlive the NativeProcessProtocol
-        ///     instance.
-        ///
-        /// @param[out] process_sp
-        ///     On successful return from the method, this parameter
-        ///     contains the shared pointer to the
-        ///     NativeProcessProtocol that can be used to manipulate
-        ///     the native process.
+        /// @param[in] basename
+        ///     The basename of the executable to locate in the current
+        ///     platform.
         ///
         /// @return
-        ///     An error object indicating if the operation succeeded,
-        ///     and if not, what error occurred.
+        ///     A FileSpec pointing to the executable on disk, or an invalid
+        ///     FileSpec if the executable cannot be found.
         //------------------------------------------------------------------
-        virtual Error
-        LaunchNativeProcess (
-            ProcessLaunchInfo &launch_info,
-            lldb_private::NativeProcessProtocol::NativeDelegate &native_delegate,
-            NativeProcessProtocolSP &process_sp);
+        virtual FileSpec
+        LocateExecutable (const char *basename)
+        {
+            return FileSpec();
+        }
 
         //------------------------------------------------------------------
-        /// Attach to an existing process on the given platform.
-        ///
-        /// This method differs from Attach() in that it returns a
-        /// NativeProcessProtocol.  Currently this is used by lldb-gdbserver.
-        ///
-        /// @param[in] pid
-        ///     pid of the process locatable by the platform.
-        ///
-        /// @param[in] native_delegate
-        ///     The delegate that will receive messages regarding the
-        ///     inferior.  Must outlive the NativeProcessProtocol
-        ///     instance.
-        ///
-        /// @param[out] process_sp
-        ///     On successful return from the method, this parameter
-        ///     contains the shared pointer to the
-        ///     NativeProcessProtocol that can be used to manipulate
-        ///     the native process.
-        ///
-        /// @return
-        ///     An error object indicating if the operation succeeded,
-        ///     and if not, what error occurred.
+        /// Allow the platform to set preferred memory cache line size. If non-zero (and the user
+        /// has not set cache line size explicitly), this value will be used as the cache line
+        /// size for memory reads.
         //------------------------------------------------------------------
-        virtual Error
-        AttachNativeProcess (lldb::pid_t pid,
-                             lldb_private::NativeProcessProtocol::NativeDelegate &native_delegate,
-                             NativeProcessProtocolSP &process_sp);
+        virtual uint32_t
+        GetDefaultMemoryCacheLineSize() { return 0; }
 
     protected:
         bool m_is_host;
@@ -1145,6 +1124,10 @@ class ModuleCache;
                              const uint64_t src_offset,
                              const uint64_t src_size,
                              const FileSpec& dst_file_spec);
+        
+        virtual Error
+        DownloadSymbolFile (const lldb::ModuleSP& module_sp,
+                            const FileSpec& dst_file_spec);
 
         virtual const char *
         GetCacheHostname ();
@@ -1273,22 +1256,21 @@ class ModuleCache;
     public:
         OptionGroupPlatformRSync ();
         
-        virtual
-        ~OptionGroupPlatformRSync ();
+        ~OptionGroupPlatformRSync() override;
         
-        virtual lldb_private::Error
-        SetOptionValue (CommandInterpreter &interpreter,
-                        uint32_t option_idx,
-                        const char *option_value);
+        lldb_private::Error
+        SetOptionValue(CommandInterpreter &interpreter,
+		       uint32_t option_idx,
+		       const char *option_value) override;
         
         void
-        OptionParsingStarting (CommandInterpreter &interpreter);
+        OptionParsingStarting(CommandInterpreter &interpreter) override;
         
         const lldb_private::OptionDefinition*
-        GetDefinitions ();
+        GetDefinitions() override;
         
-        virtual uint32_t
-        GetNumDefinitions ();
+        uint32_t
+        GetNumDefinitions() override;
         
         // Options table: Required for subclasses of Options.
         
@@ -1309,22 +1291,21 @@ class ModuleCache;
     public:
         OptionGroupPlatformSSH ();
         
-        virtual
-        ~OptionGroupPlatformSSH ();
+        ~OptionGroupPlatformSSH() override;
         
-        virtual lldb_private::Error
-        SetOptionValue (CommandInterpreter &interpreter,
-                        uint32_t option_idx,
-                        const char *option_value);
+        lldb_private::Error
+        SetOptionValue(CommandInterpreter &interpreter,
+		       uint32_t option_idx,
+		       const char *option_value) override;
         
         void
-        OptionParsingStarting (CommandInterpreter &interpreter);
+        OptionParsingStarting(CommandInterpreter &interpreter) override;
         
-        virtual uint32_t
-        GetNumDefinitions ();
+        uint32_t
+        GetNumDefinitions() override;
         
         const lldb_private::OptionDefinition*
-        GetDefinitions ();
+        GetDefinitions() override;
         
         // Options table: Required for subclasses of Options.
         
@@ -1345,22 +1326,21 @@ class ModuleCache;
     public:
         OptionGroupPlatformCaching ();
         
-        virtual
-        ~OptionGroupPlatformCaching ();
+        ~OptionGroupPlatformCaching() override;
         
-        virtual lldb_private::Error
-        SetOptionValue (CommandInterpreter &interpreter,
-                        uint32_t option_idx,
-                        const char *option_value);
+        lldb_private::Error
+        SetOptionValue(CommandInterpreter &interpreter,
+		       uint32_t option_idx,
+		       const char *option_value) override;
         
         void
-        OptionParsingStarting (CommandInterpreter &interpreter);
+        OptionParsingStarting(CommandInterpreter &interpreter) override;
         
-        virtual uint32_t
-        GetNumDefinitions ();
+        uint32_t
+        GetNumDefinitions() override;
         
         const lldb_private::OptionDefinition*
-        GetDefinitions ();
+        GetDefinitions() override;
         
         // Options table: Required for subclasses of Options.
         
@@ -1375,4 +1355,4 @@ class ModuleCache;
     
 } // namespace lldb_private
 
-#endif  // liblldb_Platform_h_
+#endif // liblldb_Platform_h_

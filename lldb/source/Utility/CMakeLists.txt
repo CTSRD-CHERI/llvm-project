@@ -1,5 +1,3 @@
-set(LLVM_NO_RTTI 1)
-
 add_lldb_library(lldbUtility
   ARM_DWARF_Registers.cpp
   ARM64_DWARF_Registers.cpp
@@ -16,6 +14,7 @@ add_lldb_library(lldbUtility
   StringExtractor.cpp
   StringExtractorGDBRemote.cpp
   StringLexer.cpp
+  TaskPool.cpp
   TimeSpecTimeout.cpp
   UriParser.cpp
   )

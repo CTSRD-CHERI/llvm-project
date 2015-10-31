@@ -43,6 +43,7 @@
 #include "lldb/Target/Process.h"
 #include "lldb/Target/TargetList.h"
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/DynamicLibrary.h"
 
@@ -998,6 +999,17 @@ SBDebugger::RunCommandInterpreter (bool auto_handle_events,
         quit_requested = interp.GetQuitRequested();
         stopped_for_crash = interp.GetStoppedForCrash();
     }
+}
+
+SBError
+SBDebugger::RunREPL (lldb::LanguageType language, const char *repl_options)
+{
+    SBError error;
+    if (m_opaque_sp)
+        error.ref() = m_opaque_sp->RunREPL(language, repl_options);
+    else
+        error.SetErrorString ("invalid debugger");
+    return error;
 }
 
 void

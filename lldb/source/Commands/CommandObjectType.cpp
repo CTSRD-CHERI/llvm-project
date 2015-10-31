@@ -30,6 +30,9 @@
 #include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Interpreter/Options.h"
 #include "lldb/Interpreter/OptionGroupFormat.h"
+#include "lldb/Interpreter/OptionValueBoolean.h"
+#include "lldb/Interpreter/OptionValueLanguage.h"
+#include "lldb/Target/Language.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
@@ -144,17 +147,16 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg);
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override;
         
         void
-        OptionParsingStarting ();
+        OptionParsingStarting () override;
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -177,8 +179,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -200,12 +202,12 @@ public:
     
     CommandObjectTypeSummaryAdd (CommandInterpreter &interpreter);
     
-    ~CommandObjectTypeSummaryAdd ()
+    ~CommandObjectTypeSummaryAdd () override
     {
     }
     
-    virtual void
-    IOHandlerActivated (IOHandler &io_handler)
+    void
+    IOHandlerActivated (IOHandler &io_handler) override
     {
         static const char *g_summary_addreader_instructions = "Enter your Python command(s). Type 'DONE' to end.\n"
         "def function (valobj,internal_dict):\n"
@@ -221,8 +223,8 @@ public:
     }
     
     
-    virtual void
-    IOHandlerInputComplete (IOHandler &io_handler, std::string &data)
+    void
+    IOHandlerInputComplete (IOHandler &io_handler, std::string &data) override
     {
         StreamFileSP error_sp = io_handler.GetErrorStreamFile();
         
@@ -353,7 +355,7 @@ public:
                Error* error = NULL);
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result);
+    DoExecute (Args& command, CommandReturnObject &result) override;
     
 };
 
@@ -383,11 +385,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -428,7 +429,7 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_cascade = true;
             m_class_name = "";
@@ -441,7 +442,7 @@ private:
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -469,8 +470,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -483,7 +484,7 @@ private:
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         WarnOnPotentialUnquotedUnsignedType(command, result);
         
@@ -499,8 +500,8 @@ protected:
         }
     }
     
-    virtual void
-    IOHandlerActivated (IOHandler &io_handler)
+    void
+    IOHandlerActivated (IOHandler &io_handler) override
     {
         StreamFileSP output_sp(io_handler.GetOutputStreamFile());
         if (output_sp)
@@ -511,8 +512,8 @@ protected:
     }
     
     
-    virtual void
-    IOHandlerInputComplete (IOHandler &io_handler, std::string &data)
+    void
+    IOHandlerInputComplete (IOHandler &io_handler, std::string &data) override
     {
         StreamFileSP error_sp = io_handler.GetErrorStreamFile();
         
@@ -626,7 +627,7 @@ public:
     
     CommandObjectTypeSynthAdd (CommandInterpreter &interpreter);
     
-    ~CommandObjectTypeSynthAdd ()
+    ~CommandObjectTypeSynthAdd () override
     {
     }
     
@@ -656,22 +657,21 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions ()
+        ~CommandOptions () override
         {
         }
         
-        virtual uint32_t
-        GetNumDefinitions ();
+        uint32_t
+        GetNumDefinitions () override;
         
-        virtual const OptionDefinition*
-        GetDefinitions ()
+        const OptionDefinition*
+        GetDefinitions () override
         {
             return g_option_table;
         }
         
-        virtual void
-        OptionParsingStarting (CommandInterpreter &interpreter)
+        void
+        OptionParsingStarting (CommandInterpreter &interpreter) override
         {
             m_cascade = true;
             m_skip_pointers = false;
@@ -680,10 +680,10 @@ private:
             m_category.assign("default");
             m_custom_type_name.clear();
         }
-        virtual Error
+        Error
         SetOptionValue (CommandInterpreter &interpreter,
                         uint32_t option_idx,
-                        const char *option_value)
+                        const char *option_value) override
         {
             Error error;
             const int short_option = g_option_table[option_idx].short_option;
@@ -737,8 +737,8 @@ private:
     OptionGroupFormat m_format_options;
     CommandOptions m_command_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_option_group;
     }
@@ -764,31 +764,39 @@ public:
         m_arguments.push_back (type_arg);
         
         SetHelpLong(
-                    "Some examples of using this command.\n"
-                    "We use as reference the following snippet of code:\n"
-                    "\n"
-                    "typedef int Aint;\n"
-                    "typedef float Afloat;\n"
-                    "typedef Aint Bint;\n"
-                    "typedef Afloat Bfloat;\n"
-                    "\n"
-                    "Aint ix = 5;\n"
-                    "Bint iy = 5;\n"
-                    "\n"
-                    "Afloat fx = 3.14;\n"
-                    "BFloat fy = 3.14;\n"
-                    "\n"
-                    "Typing:\n"
-                    "type format add -f hex AInt\n"
-                    "frame variable iy\n"
-                    "will produce an hex display of iy, because no formatter is available for Bint and the one for Aint is used instead\n"
-                    "To prevent this type\n"
-                    "type format add -f hex -C no AInt\n"
-                    "\n"
-                    "A similar reasoning applies to\n"
-                    "type format add -f hex -C no float -p\n"
-                    "which now prints all floats and float&s as hexadecimal, but does not format float*s\n"
-                    "and does not change the default display for Afloat and Bfloat objects.\n"
+R"(
+The following examples of 'type format add' refer to this code snippet for context:
+
+    typedef int Aint;
+    typedef float Afloat;
+    typedef Aint Bint;
+    typedef Afloat Bfloat;
+
+    Aint ix = 5;
+    Bint iy = 5;
+
+    Afloat fx = 3.14;
+    BFloat fy = 3.14;
+
+Adding default formatting:
+
+(lldb) type format add -f hex AInt
+(lldb) frame variable iy
+
+)" "    Produces hexidecimal display of iy, because no formatter is available for Bint and \
+the one for Aint is used instead." R"(
+
+To prevent this use the cascade option '-C no' to prevent evaluation of typedef chains:
+
+
+(lldb) type format add -f hex -C no AInt
+
+Similar reasoning applies to this:
+
+(lldb) type format add -f hex -C no float -p
+
+)" "    All float values and float references are now formatted as hexadecimal, but not \
+pointers to floats.  Nor will it change the default display for Afloat and Bfloat objects."
                     );
     
         // Add the "--format" to all options groups
@@ -798,13 +806,13 @@ public:
 
     }
     
-    ~CommandObjectTypeFormatAdd ()
+    ~CommandObjectTypeFormatAdd () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -915,11 +923,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -941,14 +948,14 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_delete_all = false;
             m_category = "default";
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -966,8 +973,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -1001,13 +1008,13 @@ public:
         
     }
     
-    ~CommandObjectTypeFormatDelete ()
+    ~CommandObjectTypeFormatDelete () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -1082,11 +1089,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -1105,13 +1111,13 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_delete_all = false;
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -1128,8 +1134,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -1154,13 +1160,13 @@ public:
     {
     }
     
-    ~CommandObjectTypeFormatClear ()
+    ~CommandObjectTypeFormatClear () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         if (m_options.m_delete_all)
             DataVisualization::Categories::LoopThrough(PerCategoryCallback, NULL);
@@ -1221,11 +1227,10 @@ class CommandObjectTypeFormatList : public CommandObjectParsed
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -1244,13 +1249,13 @@ class CommandObjectTypeFormatList : public CommandObjectParsed
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_category_regex = "";
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -1267,8 +1272,8 @@ class CommandObjectTypeFormatList : public CommandObjectParsed
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -1292,13 +1297,13 @@ public:
         m_arguments.push_back (type_arg);
     }
     
-    ~CommandObjectTypeFormatList ()
+    ~CommandObjectTypeFormatList () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -1347,9 +1352,7 @@ private:
         if(param->cate_regex != NULL && strcmp(cate_name,param->cate_regex->GetText()) != 0 && param->cate_regex->Execute(cate_name) == false)
             return true;
         
-        result->GetOutputStream().Printf("-----------------------\nCategory: %s (%s)\n-----------------------\n",
-                                         cate_name,
-                                         (cate->IsEnabled() ? "enabled" : "disabled"));
+        result->GetOutputStream().Printf("-----------------------\nCategory: %s\n-----------------------\n", cate->GetDescription().c_str());
         
         cate->GetTypeFormatsContainer()->LoopThrough(CommandObjectTypeFormatList_LoopCallback, param_vp);
         
@@ -1429,6 +1432,9 @@ CommandObjectTypeSummaryAdd::CommandOptions::SetOptionValue (uint32_t option_idx
             break;
         case 'e':
             m_flags.SetDontShowChildren(false);
+            break;
+        case 'h':
+            m_flags.SetHideEmptyAggregates(true);
             break;
         case 'v':
             m_flags.SetDontShowValue(true);
@@ -1736,69 +1742,86 @@ CommandObjectTypeSummaryAdd::CommandObjectTypeSummaryAdd (CommandInterpreter &in
     m_arguments.push_back (type_arg);
     
     SetHelpLong(
-                "Some examples of using this command.\n"
-                "We use as reference the following snippet of code:\n"
-                "struct JustADemo\n"
-                "{\n"
-                "int* ptr;\n"
-                "float value;\n"
-                "JustADemo(int p = 1, float v = 0.1) : ptr(new int(p)), value(v) {}\n"
-                "};\n"
-                "JustADemo object(42,3.14);\n"
-                "struct AnotherDemo : public JustADemo\n"
-                "{\n"
-                "uint8_t byte;\n"
-                "AnotherDemo(uint8_t b = 'E', int p = 1, float v = 0.1) : JustADemo(p,v), byte(b) {}\n"
-                "};\n"
-                "AnotherDemo *another_object = new AnotherDemo('E',42,3.14);\n"
-                "\n"
-                "type summary add --summary-string \"the answer is ${*var.ptr}\" JustADemo\n"
-                "when typing frame variable object you will get \"the answer is 42\"\n"
-                "type summary add --summary-string \"the answer is ${*var.ptr}, and the question is ${var.value}\" JustADemo\n"
-                "when typing frame variable object you will get \"the answer is 42 and the question is 3.14\"\n"
-                "\n"
-                "Alternatively, you could also say\n"
-                "type summary add --summary-string \"${var%V} -> ${*var}\" \"int *\"\n"
-                "and replace the above summary string with\n"
-                "type summary add --summary-string \"the answer is ${var.ptr}, and the question is ${var.value}\" JustADemo\n"
-                "to obtain a similar result\n"
-                "\n"
-                "To add a summary valid for both JustADemo and AnotherDemo you can use the scoping operator, as in:\n"
-                "type summary add --summary-string \"${var.ptr}, ${var.value},{${var.byte}}\" JustADemo -C yes\n"
-                "\n"
-                "This will be used for both variables of type JustADemo and AnotherDemo. To prevent this, change the -C to read -C no\n"
-                "If you do not want pointers to be shown using that summary, you can use the -p option, as in:\n"
-                "type summary add --summary-string \"${var.ptr}, ${var.value},{${var.byte}}\" JustADemo -C yes -p\n"
-                "A similar option -r exists for references.\n"
-                "\n"
-                "If you simply want a one-line summary of the content of your variable, without typing an explicit string to that effect\n"
-                "you can use the -c option, without giving any summary string:\n"
-                "type summary add -c JustADemo\n"
-                "frame variable object\n"
-                "the output being similar to (ptr=0xsomeaddress, value=3.14)\n"
-                "\n"
-                "If you want to display some summary text, but also expand the structure of your object, you can add the -e option, as in:\n"
-                "type summary add -e --summary-string \"*ptr = ${*var.ptr}\" JustADemo\n"
-                "Here the value of the int* is displayed, followed by the standard LLDB sequence of children objects, one per line.\n"
-                "to get an output like:\n"
-                "\n"
-                "*ptr = 42 {\n"
-                " ptr = 0xsomeaddress\n"
-                " value = 3.14\n"
-                "}\n"
-                "\n"
-                "You can also add Python summaries, in which case you will use lldb public API to gather information from your variables"
-                "and elaborate them to a meaningful summary inside a script written in Python. The variable object will be passed to your"
-                "script as an SBValue object. The following example might help you when starting to use the Python summaries feature:\n"
-                "type summary add JustADemo -o \"value = valobj.GetChildMemberWithName('value'); return 'My value is ' + value.GetValue();\"\n"
-                "If you prefer to type your scripts on multiple lines, you will use the -P option and then type your script, ending it with "
-                "the word DONE on a line by itself to mark you're finished editing your code:\n"
-                "(lldb)type summary add JustADemo -P\n"
-                "     value = valobj.GetChildMemberWithName('value');\n"
-                "     return 'My value is ' + value.GetValue();\n"
-                "DONE\n"
-                "(lldb) <-- type further LLDB commands here\n"
-                );
+R"(
+The following examples of 'type summary add' refer to this code snippet for context:
+
+    struct JustADemo
+    {
+        int* ptr;
+        float value;
+        JustADemo(int p = 1, float v = 0.1) : ptr(new int(p)), value(v) {}
+    };
+    JustADemo demo_instance(42, 3.14);
+
+    typedef JustADemo NewDemo;
+    NewDemo new_demo_instance(42, 3.14);
+
+(lldb) type summary add --summary-string "the answer is ${*var.ptr}" JustADemo
+
+    Subsequently displaying demo_instance with 'frame variable' or 'expression' will display "the answer is 42"
+
+(lldb) type summary add --summary-string "the answer is ${*var.ptr}, and the question is ${var.value}" JustADemo
+
+    Subsequently displaying demo_instance with 'frame variable' or 'expression' will display "the answer is 42 and the question is 3.14"
+
+)" "Alternatively, you could define formatting for all pointers to integers and \
+rely on that when formatting JustADemo to obtain the same result:" R"(
+
+(lldb) type summary add --summary-string "${var%V} -> ${*var}" "int *"
+(lldb) type summary add --summary-string "the answer is ${var.ptr}, and the question is ${var.value}" JustADemo
+
+)" "Type summaries are automatically applied to derived typedefs, so the examples \
+above apply to both JustADemo and NewDemo.  The cascade option can be used to \
+suppress this behavior:" R"(
+
+(lldb) type summary add --summary-string "${var.ptr}, ${var.value},{${var.byte}}" JustADemo -C no
+
+    The summary will now be used for values of JustADemo but not NewDemo.
+
+)" "By default summaries are shown for pointers and references to values of the \
+specified type.  To suppress formatting for pointers use the -p option, or apply \
+the corresponding -r option to suppress formatting for references:" R"(
+
+(lldb) type summary add -p -r --summary-string "${var.ptr}, ${var.value},{${var.byte}}" JustADemo
+
+)" "One-line summaries including all fields in a type can be inferred without supplying an \
+explicit summary string by passing the -c option:" R"(
+
+(lldb) type summary add -c JustADemo
+(lldb) frame variable demo_instance
+(ptr=<address>, value=3.14)
+
+)" "Type summaries normally suppress the nested display of individual fields.  To \
+supply a summary to supplement the default structure add the -e option:" R"(
+
+(lldb) type summary add -e --summary-string "*ptr = ${*var.ptr}" JustADemo
+
+)" "Now when displaying JustADemo values the int* is displayed, followed by the \
+standard LLDB sequence of children, one per line:" R"(
+
+*ptr = 42 {
+  ptr = <address>
+  value = 3.14
+}
+
+)" "You can also add summaries written in Python.  These scripts use lldb public API to \
+gather information from your variables and produce a meaningful summary.  To start a \
+multi-line script use the -P option.  The function declaration will be displayed along with \
+a comment describing the two arguments.  End your script with the  word 'DONE' on a line by \
+itself:" R"(
+
+(lldb) type summary add JustADemo -P
+def function (valobj,internal_dict):
+"""valobj: an SBValue which you want to provide a summary for
+internal_dict: an LLDB support object not to be used"""
+    value = valobj.GetChildMemberWithName('value');
+    return 'My value is ' + value.GetValue();
+    DONE
+
+Alternatively, the -o option can be used when providing a simple one-line Python script:
+
+(lldb) type summary add JustADemo -o "value = valobj.GetChildMemberWithName('value'); return 'My value is ' + value.GetValue();")"
+    );
 }
 
 bool
@@ -1899,6 +1922,7 @@ CommandObjectTypeSummaryAdd::CommandOptions::g_option_table[] =
     { LLDB_OPT_SET_3, false, "python-function", 'F', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypePythonFunction, "Give the name of a Python function to use for this type."},
     { LLDB_OPT_SET_3, false, "input-python", 'P', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone, "Input Python code to use for this type manually."},
     { LLDB_OPT_SET_2 | LLDB_OPT_SET_3,   false, "expand", 'e', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,    "Expand aggregate data types to show children on separate lines."},
+    { LLDB_OPT_SET_2 | LLDB_OPT_SET_3,   false, "hide-empty", 'h', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,    "Do not expand aggregate data types with no children."},
     { LLDB_OPT_SET_2 | LLDB_OPT_SET_3,   false, "name", 'n', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeName,    "A name for this summary string."},
     { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
 };
@@ -1920,11 +1944,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -1946,14 +1969,14 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_delete_all = false;
             m_category = "default";
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -1971,8 +1994,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -2006,13 +2029,13 @@ public:
         
     }
     
-    ~CommandObjectTypeSummaryDelete ()
+    ~CommandObjectTypeSummaryDelete () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -2083,11 +2106,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -2106,13 +2128,13 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_delete_all = false;
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -2129,8 +2151,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -2155,13 +2177,13 @@ public:
     {
     }
     
-    ~CommandObjectTypeSummaryClear ()
+    ~CommandObjectTypeSummaryClear () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         
         if (m_options.m_delete_all)
@@ -2227,11 +2249,10 @@ class CommandObjectTypeSummaryList : public CommandObjectParsed
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -2250,13 +2271,13 @@ class CommandObjectTypeSummaryList : public CommandObjectParsed
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_category_regex = "";
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -2273,8 +2294,8 @@ class CommandObjectTypeSummaryList : public CommandObjectParsed
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -2298,13 +2319,13 @@ public:
         m_arguments.push_back (type_arg);
     }
     
-    ~CommandObjectTypeSummaryList ()
+    ~CommandObjectTypeSummaryList () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -2368,10 +2389,8 @@ private:
         if(param->cate_regex != NULL && strcmp(cate_name,param->cate_regex->GetText()) != 0 && param->cate_regex->Execute(cate_name) == false)
             return true;
         
-        result->GetOutputStream().Printf("-----------------------\nCategory: %s (%s)\n-----------------------\n",
-                                         cate_name,
-                                         (cate->IsEnabled() ? "enabled" : "disabled"));
-                
+        result->GetOutputStream().Printf("-----------------------\nCategory: %s\n-----------------------\n", cate->GetDescription().c_str());
+
         cate->GetTypeSummariesContainer()->LoopThrough(CommandObjectTypeSummaryList_LoopCallback, param_vp);
         
         if (cate->GetRegexTypeSummariesContainer()->GetCount() > 0)
@@ -2426,17 +2445,87 @@ CommandObjectTypeSummaryList::CommandOptions::g_option_table[] =
 };
 
 //-------------------------------------------------------------------------
-// CommandObjectTypeCategoryEnable
+// CommandObjectTypeCategoryDefine
 //-------------------------------------------------------------------------
 
-class CommandObjectTypeCategoryEnable : public CommandObjectParsed
+class CommandObjectTypeCategoryDefine : public CommandObjectParsed
 {
+    
+    class CommandOptions : public Options
+    {
+    public:
+        
+        CommandOptions (CommandInterpreter &interpreter) :
+        Options (interpreter),
+        m_define_enabled(false,false),
+        m_cate_language(eLanguageTypeUnknown,eLanguageTypeUnknown)
+        {
+        }
+        
+        ~CommandOptions () override {}
+        
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
+        {
+            Error error;
+            const int short_option = m_getopt_table[option_idx].val;
+            
+            switch (short_option)
+            {
+                case 'e':
+                    m_define_enabled.SetValueFromString("true");
+                    break;
+                case 'l':
+                    error = m_cate_language.SetValueFromString(option_arg);
+                    break;
+                default:
+                    error.SetErrorStringWithFormat ("unrecognized option '%c'", short_option);
+                    break;
+            }
+            
+            return error;
+        }
+        
+        void
+        OptionParsingStarting () override
+        {
+            m_define_enabled.Clear();
+            m_cate_language.Clear();
+        }
+        
+        const OptionDefinition*
+        GetDefinitions () override
+        {
+            return g_option_table;
+        }
+        
+        // Options table: Required for subclasses of Options.
+        
+        static OptionDefinition g_option_table[];
+        
+        // Instance variables to hold the values for command options.
+        
+        OptionValueBoolean m_define_enabled;
+        OptionValueLanguage m_cate_language;
+        
+        
+    };
+    
+    CommandOptions m_options;
+    
+    Options *
+    GetOptions () override
+    {
+        return &m_options;
+    }
+
 public:
-    CommandObjectTypeCategoryEnable (CommandInterpreter &interpreter) :
-        CommandObjectParsed (interpreter,
-                             "type category enable",
-                             "Enable a category as a source of formatters.",
-                             NULL)
+    CommandObjectTypeCategoryDefine (CommandInterpreter &interpreter) :
+    CommandObjectParsed (interpreter,
+                         "type category define",
+                         "Define a new category as a source of formatters.",
+                         NULL),
+    m_options(interpreter)
     {
         CommandArgumentEntry type_arg;
         CommandArgumentData type_style_arg;
@@ -2450,13 +2539,13 @@ public:
         
     }
     
-    ~CommandObjectTypeCategoryEnable ()
+    ~CommandObjectTypeCategoryDefine () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -2467,11 +2556,146 @@ protected:
             return false;
         }
         
+        for (size_t i = 0; i < argc; i++)
+        {
+            const char* cateName = command.GetArgumentAtIndex(i);
+            TypeCategoryImplSP category_sp;
+            if (DataVisualization::Categories::GetCategory(ConstString(cateName), category_sp) && category_sp)
+            {
+                category_sp->AddLanguage(m_options.m_cate_language.GetCurrentValue());
+                if (m_options.m_define_enabled.GetCurrentValue())
+                    DataVisualization::Categories::Enable(category_sp, TypeCategoryMap::Default);
+            }
+        }
+        
+        result.SetStatus(eReturnStatusSuccessFinishResult);
+        return result.Succeeded();
+    }
+    
+};
+
+OptionDefinition
+CommandObjectTypeCategoryDefine::CommandOptions::g_option_table[] =
+{
+    { LLDB_OPT_SET_ALL, false, "enabled", 'e', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,  "If specified, this category will be created enabled."},
+    { LLDB_OPT_SET_ALL, false, "language", 'l', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeLanguage,  "Specify the language that this category is supported for."},
+    { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
+};
+
+//-------------------------------------------------------------------------
+// CommandObjectTypeCategoryEnable
+//-------------------------------------------------------------------------
+
+class CommandObjectTypeCategoryEnable : public CommandObjectParsed
+{
+    class CommandOptions : public Options
+    {
+    public:
+        
+        CommandOptions (CommandInterpreter &interpreter) :
+        Options (interpreter)
+        {
+        }
+        
+        ~CommandOptions () override {}
+        
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
+        {
+            Error error;
+            const int short_option = m_getopt_table[option_idx].val;
+            
+            switch (short_option)
+            {
+                case 'l':
+                    if (option_arg)
+                    {
+                        m_language = Language::GetLanguageTypeFromString(option_arg);
+                        if (m_language == lldb::eLanguageTypeUnknown)
+                            error.SetErrorStringWithFormat ("unrecognized language '%s'", option_arg);
+                    }
+                    break;
+                default:
+                    error.SetErrorStringWithFormat ("unrecognized option '%c'", short_option);
+                    break;
+            }
+            
+            return error;
+        }
+        
+        void
+        OptionParsingStarting () override
+        {
+            m_language = lldb::eLanguageTypeUnknown;
+        }
+        
+        const OptionDefinition*
+        GetDefinitions () override
+        {
+            return g_option_table;
+        }
+        
+        // Options table: Required for subclasses of Options.
+        
+        static OptionDefinition g_option_table[];
+        
+        // Instance variables to hold the values for command options.
+        
+        lldb::LanguageType m_language;
+        
+    };
+    
+    CommandOptions m_options;
+    
+    Options *
+    GetOptions () override
+    {
+        return &m_options;
+    }
+    
+public:
+    CommandObjectTypeCategoryEnable (CommandInterpreter &interpreter) :
+        CommandObjectParsed (interpreter,
+                             "type category enable",
+                             "Enable a category as a source of formatters.",
+                             NULL),
+        m_options(interpreter)
+    {
+        CommandArgumentEntry type_arg;
+        CommandArgumentData type_style_arg;
+        
+        type_style_arg.arg_type = eArgTypeName;
+        type_style_arg.arg_repetition = eArgRepeatPlus;
+        
+        type_arg.push_back (type_style_arg);
+        
+        m_arguments.push_back (type_arg);
+        
+    }
+    
+    ~CommandObjectTypeCategoryEnable () override
+    {
+    }
+    
+protected:
+    bool
+    DoExecute (Args& command, CommandReturnObject &result) override
+    {
+        const size_t argc = command.GetArgumentCount();
+        
+        if (argc < 1 &&
+            m_options.m_language == lldb::eLanguageTypeUnknown)
+        {
+            result.AppendErrorWithFormat ("%s takes arguments and/or a language", m_cmd_name.c_str());
+            result.SetStatus(eReturnStatusFailed);
+            return false;
+        }
+        
         if (argc == 1 && strcmp(command.GetArgumentAtIndex(0),"*") == 0)
         {
             DataVisualization::Categories::EnableStar();
         }
-        else
+        else if (argc > 0)
         {
             for (int i = argc - 1; i >= 0; i--)
             {
@@ -2496,10 +2720,20 @@ protected:
             }
         }
         
+        if (m_options.m_language != lldb::eLanguageTypeUnknown)
+            DataVisualization::Categories::Enable(m_options.m_language);
+        
         result.SetStatus(eReturnStatusSuccessFinishResult);
         return result.Succeeded();
     }
     
+};
+
+OptionDefinition
+CommandObjectTypeCategoryEnable::CommandOptions::g_option_table[] =
+{
+    { LLDB_OPT_SET_ALL, false, "language", 'l', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeLanguage,  "Enable the category for this language."},
+    { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
 };
 
 //-------------------------------------------------------------------------
@@ -2527,13 +2761,13 @@ public:
         
     }
     
-    ~CommandObjectTypeCategoryDelete ()
+    ~CommandObjectTypeCategoryDelete () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -2581,12 +2815,78 @@ protected:
 
 class CommandObjectTypeCategoryDisable : public CommandObjectParsed
 {
+    class CommandOptions : public Options
+    {
+    public:
+        
+        CommandOptions (CommandInterpreter &interpreter) :
+        Options (interpreter)
+        {
+        }
+        
+        ~CommandOptions () override {}
+        
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
+        {
+            Error error;
+            const int short_option = m_getopt_table[option_idx].val;
+            
+            switch (short_option)
+            {
+                case 'l':
+                    if (option_arg)
+                    {
+                        m_language = Language::GetLanguageTypeFromString(option_arg);
+                        if (m_language == lldb::eLanguageTypeUnknown)
+                            error.SetErrorStringWithFormat ("unrecognized language '%s'", option_arg);
+                    }
+                    break;
+                default:
+                    error.SetErrorStringWithFormat ("unrecognized option '%c'", short_option);
+                    break;
+            }
+            
+            return error;
+        }
+        
+        void
+        OptionParsingStarting () override
+        {
+            m_language = lldb::eLanguageTypeUnknown;
+        }
+        
+        const OptionDefinition*
+        GetDefinitions () override
+        {
+            return g_option_table;
+        }
+        
+        // Options table: Required for subclasses of Options.
+        
+        static OptionDefinition g_option_table[];
+        
+        // Instance variables to hold the values for command options.
+        
+        lldb::LanguageType m_language;
+        
+    };
+    
+    CommandOptions m_options;
+    
+    Options *
+    GetOptions () override
+    {
+        return &m_options;
+    }
+
 public:
     CommandObjectTypeCategoryDisable (CommandInterpreter &interpreter) :
         CommandObjectParsed (interpreter,
                              "type category disable",
                              "Disable a category as a source of formatters.",
-                             NULL)
+                             NULL),
+        m_options(interpreter)
     {
         CommandArgumentEntry type_arg;
         CommandArgumentData type_style_arg;
@@ -2600,19 +2900,20 @@ public:
         
     }
     
-    ~CommandObjectTypeCategoryDisable ()
+    ~CommandObjectTypeCategoryDisable () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
-        if (argc < 1)
+        if (argc < 1 &&
+            m_options.m_language == lldb::eLanguageTypeUnknown)
         {
-            result.AppendErrorWithFormat ("%s takes 1 or more args.\n", m_cmd_name.c_str());
+            result.AppendErrorWithFormat ("%s takes arguments and/or a language", m_cmd_name.c_str());
             result.SetStatus(eReturnStatusFailed);
             return false;
         }
@@ -2621,7 +2922,7 @@ protected:
         {
             DataVisualization::Categories::DisableStar();
         }
-        else
+        else if (argc > 0)
         {
             // the order is not relevant here
             for (int i = argc - 1; i >= 0; i--)
@@ -2638,11 +2939,21 @@ protected:
                 DataVisualization::Categories::Disable(typeCS);
             }
         }
+        
+        if (m_options.m_language != lldb::eLanguageTypeUnknown)
+            DataVisualization::Categories::Disable(m_options.m_language);
 
         result.SetStatus(eReturnStatusSuccessFinishResult);
         return result.Succeeded();
     }
     
+};
+
+OptionDefinition
+CommandObjectTypeCategoryDisable::CommandOptions::g_option_table[] =
+{
+    { LLDB_OPT_SET_ALL, false, "language", 'l', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeLanguage,  "Enable the category for this language."},
+    { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
 };
 
 //-------------------------------------------------------------------------
@@ -2679,9 +2990,7 @@ private:
         const char* cate_name = cate->GetName();
         
         if (regex == NULL || strcmp(cate_name, regex->GetText()) == 0 || regex->Execute(cate_name))
-            result->GetOutputStream().Printf("Category %s is%s enabled\n",
-                                       cate_name,
-                                       (cate->IsEnabled() ? "" : " not"));
+            result->GetOutputStream().Printf("Category: %s\n", cate->GetDescription().c_str());
         return true;
     }
 public:
@@ -2702,13 +3011,13 @@ public:
         m_arguments.push_back (type_arg);
     }
     
-    ~CommandObjectTypeCategoryList ()
+    ~CommandObjectTypeCategoryList () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         RegularExpression* regex = NULL;
@@ -2769,11 +3078,10 @@ class CommandObjectTypeFilterList : public CommandObjectParsed
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -2792,13 +3100,13 @@ class CommandObjectTypeFilterList : public CommandObjectParsed
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_category_regex = "";
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -2815,8 +3123,8 @@ class CommandObjectTypeFilterList : public CommandObjectParsed
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -2840,13 +3148,13 @@ public:
         m_arguments.push_back (type_arg);
     }
     
-    ~CommandObjectTypeFilterList ()
+    ~CommandObjectTypeFilterList () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -2895,9 +3203,7 @@ private:
         if(param->cate_regex != NULL && strcmp(cate_name,param->cate_regex->GetText()) != 0 && param->cate_regex->Execute(cate_name) == false)
             return true;
         
-        result->GetOutputStream().Printf("-----------------------\nCategory: %s (%s)\n-----------------------\n",
-                                         cate_name,
-                                         (cate->IsEnabled() ? "enabled" : "disabled"));
+        result->GetOutputStream().Printf("-----------------------\nCategory: %s\n-----------------------\n", cate->GetDescription().c_str());
         
         cate->GetTypeFiltersContainer()->LoopThrough(CommandObjectTypeFilterList_LoopCallback, param_vp);
         
@@ -2984,11 +3290,10 @@ class CommandObjectTypeSynthList : public CommandObjectParsed
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -3007,13 +3312,13 @@ class CommandObjectTypeSynthList : public CommandObjectParsed
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_category_regex = "";
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -3030,8 +3335,8 @@ class CommandObjectTypeSynthList : public CommandObjectParsed
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -3055,13 +3360,13 @@ public:
         m_arguments.push_back (type_arg);
     }
     
-    ~CommandObjectTypeSynthList ()
+    ~CommandObjectTypeSynthList () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -3110,9 +3415,7 @@ private:
         if(param->cate_regex != NULL && strcmp(cate_name,param->cate_regex->GetText()) != 0 && param->cate_regex->Execute(cate_name) == false)
             return true;
         
-        result->GetOutputStream().Printf("-----------------------\nCategory: %s (%s)\n-----------------------\n",
-                                         cate_name,
-                                         (cate->IsEnabled() ? "enabled" : "disabled"));
+        result->GetOutputStream().Printf("-----------------------\nCategory: %s\n-----------------------\n", cate->GetDescription().c_str());
         
         cate->GetTypeSyntheticsContainer()->LoopThrough(CommandObjectTypeSynthList_LoopCallback, param_vp);
         
@@ -3183,11 +3486,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -3209,14 +3511,14 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_delete_all = false;
             m_category = "default";
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -3234,8 +3536,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -3268,13 +3570,13 @@ public:
         
     }
     
-    ~CommandObjectTypeFilterDelete ()
+    ~CommandObjectTypeFilterDelete () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -3349,11 +3651,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -3375,14 +3676,14 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_delete_all = false;
             m_category = "default";
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -3400,8 +3701,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -3434,13 +3735,13 @@ public:
         
     }
     
-    ~CommandObjectTypeSynthDelete ()
+    ~CommandObjectTypeSynthDelete () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -3516,11 +3817,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -3539,13 +3839,13 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_delete_all = false;
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -3562,8 +3862,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -3587,13 +3887,13 @@ public:
     {
     }
     
-    ~CommandObjectTypeFilterClear ()
+    ~CommandObjectTypeFilterClear () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         
         if (m_options.m_delete_all)
@@ -3645,11 +3945,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -3668,13 +3967,13 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_delete_all = false;
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -3691,8 +3990,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -3716,13 +4015,13 @@ public:
     {
     }
     
-    ~CommandObjectTypeSynthClear ()
+    ~CommandObjectTypeSynthClear () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         
         if (m_options.m_delete_all)
@@ -3931,10 +4230,10 @@ CommandObjectTypeSynthAdd::CommandOptions::g_option_table[] =
 {
     { LLDB_OPT_SET_ALL, false, "cascade", 'C', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeBoolean,    "If true, cascade through typedef chains."},
     { LLDB_OPT_SET_ALL, false, "skip-pointers", 'p', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,         "Don't use this format for pointers-to-type objects."},
-    { LLDB_OPT_SET_ALL, false, "skip-references", 'r', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,         "Don't use this format for references-to-tNULL, ype objects."},
+    { LLDB_OPT_SET_ALL, false, "skip-references", 'r', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,         "Don't use this format for references-to-type objects."},
     { LLDB_OPT_SET_ALL, false, "category", 'w', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeName,         "Add this to the given category instead of the default one."},
     { LLDB_OPT_SET_2, false, "python-class", 'l', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypePythonClass,    "Use this Python class to produce synthetic children."},
-    { LLDB_OPT_SET_3, false, "input-python", 'P', OptionParser::eNoArgument,NULL,  NULL, 0, eArgTypeNone,    "Type Python code to generate a class that NULL, provides synthetic children."},
+    { LLDB_OPT_SET_3, false, "input-python", 'P', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,    "Type Python code to generate a class that provides synthetic children."},
     { LLDB_OPT_SET_ALL, false,  "regex", 'x', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,    "Type names are actually regular expressions."},
     { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
 };
@@ -3956,11 +4255,10 @@ private:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -3998,7 +4296,7 @@ private:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_cascade = true;
             m_skip_pointers = false;
@@ -4010,7 +4308,7 @@ private:
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -4037,8 +4335,8 @@ private:
     
     CommandOptions m_options;
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -4117,40 +4415,46 @@ public:
         m_arguments.push_back (type_arg);
         
         SetHelpLong(
-                    "Some examples of using this command.\n"
-                    "We use as reference the following snippet of code:\n"
-                    "\n"
-                    "class Foo {;\n"
-                    "    int a;\n"
-                    "    int b;\n"
-                    "    int c;\n"
-                    "    int d;\n"
-                    "    int e;\n"
-                    "    int f;\n"
-                    "    int g;\n"
-                    "    int h;\n"
-                    "    int i;\n"
-                    "} \n"
-                    "Typing:\n"
-                    "type filter add --child a --child g Foo\n"
-                    "frame variable a_foo\n"
-                    "will produce an output where only a and g are displayed\n"
-                    "Other children of a_foo (b,c,d,e,f,h and i) are available by asking for them, as in:\n"
-                    "frame variable a_foo.b a_foo.c ... a_foo.i\n"
-                    "\n"
-                    "Use option --raw to frame variable prevails on the filter\n"
-                    "frame variable a_foo --raw\n"
-                    "shows all the children of a_foo (a thru i) as if no filter was defined\n"
-                    );        
+R"(
+The following examples of 'type filter add' refer to this code snippet for context:
+
+    class Foo {
+        int a;
+        int b;
+        int c;
+        int d;
+        int e;
+        int f;
+        int g;
+        int h;
+        int i;
+    }
+    Foo my_foo;
+
+Adding a simple filter:
+
+(lldb) type filter add --child a --child g Foo
+(lldb) frame variable my_foo
+
+)" "Produces output where only a and g are displayed.  Other children of my_foo \
+(b, c, d, e, f, h and i) are available by asking for them explicitly:" R"(
+
+(lldb) frame variable my_foo.b my_foo.c my_foo.i
+
+)" "The formatting option --raw on frame variable bypasses the filter, showing \
+all children of my_foo as if no filter was defined:" R"(
+
+(lldb) frame variable my_foo --raw)"
+        );
     }
     
-    ~CommandObjectTypeFilterAdd ()
+    ~CommandObjectTypeFilterAdd () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         
@@ -4235,6 +4539,215 @@ CommandObjectTypeFilterAdd::CommandOptions::g_option_table[] =
     { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
 };
 
+//----------------------------------------------------------------------
+// "type lookup"
+//----------------------------------------------------------------------
+class CommandObjectTypeLookup : public CommandObjectRaw
+{
+protected:
+    
+    class CommandOptions : public OptionGroup
+    {
+    public:
+        
+        CommandOptions () :
+        OptionGroup(),
+        m_show_help(false),
+        m_language(eLanguageTypeUnknown)
+        {}
+        
+        ~CommandOptions () override {}
+        
+        uint32_t
+        GetNumDefinitions () override
+        {
+            return 3;
+        }
+        
+        const OptionDefinition*
+        GetDefinitions () override
+        {
+            return g_option_table;
+        }
+        
+        Error
+        SetOptionValue (CommandInterpreter &interpreter,
+                        uint32_t option_idx,
+                        const char *option_value) override
+        {
+            Error error;
+            
+            const int short_option = g_option_table[option_idx].short_option;
+            
+            switch (short_option)
+            {
+                case 'h':
+                    m_show_help = true;
+                    break;
+                    
+                case 'l':
+                    m_language = Language::GetLanguageTypeFromString(option_value);
+                    break;
+                    
+                default:
+                    error.SetErrorStringWithFormat("invalid short option character '%c'", short_option);
+                    break;
+            }
+            
+            return error;
+        }
+        
+        void
+        OptionParsingStarting (CommandInterpreter &interpreter) override
+        {
+            m_show_help = false;
+            m_language = eLanguageTypeUnknown;
+        }
+        
+        // Options table: Required for subclasses of Options.
+        
+        static OptionDefinition g_option_table[];
+        bool m_show_help;
+        lldb::LanguageType m_language;
+    };
+    
+    OptionGroupOptions m_option_group;
+    CommandOptions m_command_options;
+    
+public:
+    
+    CommandObjectTypeLookup (CommandInterpreter &interpreter) :
+    CommandObjectRaw (interpreter,
+                      "type lookup",
+                      "Lookup a type by name in the select target.",
+                      "type lookup <typename>",
+                      eCommandRequiresTarget),
+    m_option_group(interpreter),
+    m_command_options()
+    {
+        m_option_group.Append(&m_command_options);
+        m_option_group.Finalize();
+    }
+    
+    ~CommandObjectTypeLookup () override
+    {
+    }
+    
+    Options *
+    GetOptions () override
+    {
+        return &m_option_group;
+    }
+    
+    bool
+    DoExecute (const char *raw_command_line, CommandReturnObject &result) override
+    {
+        if (!raw_command_line || !raw_command_line[0])
+        {
+            result.SetError("type lookup cannot be invoked without a type name as argument");
+            return false;
+        }
+        
+        m_option_group.NotifyOptionParsingStarting();
+        
+        const char * name_of_type = NULL;
+        
+        if (raw_command_line[0] == '-')
+        {
+            // We have some options and these options MUST end with --.
+            const char *end_options = NULL;
+            const char *s = raw_command_line;
+            while (s && s[0])
+            {
+                end_options = ::strstr (s, "--");
+                if (end_options)
+                {
+                    end_options += 2; // Get past the "--"
+                    if (::isspace (end_options[0]))
+                    {
+                        name_of_type = end_options;
+                        while (::isspace (*name_of_type))
+                            ++name_of_type;
+                        break;
+                    }
+                }
+                s = end_options;
+            }
+            
+            if (end_options)
+            {
+                Args args (llvm::StringRef(raw_command_line, end_options - raw_command_line));
+                if (!ParseOptions (args, result))
+                    return false;
+                
+                Error error (m_option_group.NotifyOptionParsingFinished());
+                if (error.Fail())
+                {
+                    result.AppendError (error.AsCString());
+                    result.SetStatus (eReturnStatusFailed);
+                    return false;
+                }
+            }
+        }
+        if (nullptr == name_of_type)
+            name_of_type = raw_command_line;
+        
+        TargetSP target_sp(GetCommandInterpreter().GetDebugger().GetSelectedTarget());
+        const bool fill_all_in = true;
+        ExecutionContext exe_ctx(target_sp.get(), fill_all_in);
+        ExecutionContextScope *best_scope = exe_ctx.GetBestExecutionContextScope();
+        
+        bool any_found = false;
+        
+        std::vector<Language*> languages;
+        
+        if (m_command_options.m_language == eLanguageTypeUnknown)
+        {
+            // FIXME: hardcoding languages is not good
+            languages.push_back(Language::FindPlugin(eLanguageTypeObjC));
+            languages.push_back(Language::FindPlugin(eLanguageTypeC_plus_plus));
+        }
+        else
+        {
+            languages.push_back(Language::FindPlugin(m_command_options.m_language));
+        }
+        
+        for (Language* language : languages)
+        {
+            if (!language)
+                continue;
+
+            if (auto scavenger = language->GetTypeScavenger())
+            {
+                Language::TypeScavenger::ResultSet search_results;
+                if (scavenger->Find(best_scope, name_of_type, search_results) > 0)
+                {
+                    for (const auto& search_result : search_results)
+                    {
+                        if (search_result && search_result->IsValid())
+                        {
+                            any_found = true;
+                            search_result->DumpToStream(result.GetOutputStream(), this->m_command_options.m_show_help);
+                        }
+                    }
+                }
+            }
+        }
+        
+        result.SetStatus (any_found ? lldb::eReturnStatusSuccessFinishResult : lldb::eReturnStatusSuccessFinishNoResult);
+        return true;
+    }
+    
+};
+
+OptionDefinition
+CommandObjectTypeLookup::CommandOptions::g_option_table[] =
+{
+    { LLDB_OPT_SET_ALL, false, "show-help",        'h', OptionParser::eNoArgument, NULL, NULL, 0, eArgTypeNone,    "Display available help for types"},
+    { LLDB_OPT_SET_ALL, false, "language",         'l', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeLanguage,    "Which language's types should the search scope be"},
+    { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
+};
+
 template <typename FormatterType>
 class CommandObjectFormatterInfo : public CommandObjectRaw
 {
@@ -4262,14 +4775,13 @@ public:
         SetSyntax(syntax.GetData());
     }
     
-    virtual
-    ~CommandObjectFormatterInfo ()
+    ~CommandObjectFormatterInfo () override
     {
     }
     
 protected:
-    virtual bool
-    DoExecute (const char *command, CommandReturnObject &result)
+    bool
+    DoExecute (const char *command, CommandReturnObject &result) override
     {
         auto target_sp = m_interpreter.GetDebugger().GetSelectedTarget();
         auto frame_sp = target_sp->GetProcessSP()->GetThreadList().GetSelectedThread()->GetSelectedFrame();
@@ -4334,7 +4846,7 @@ public:
     }
 
 
-    ~CommandObjectTypeFormat ()
+    ~CommandObjectTypeFormat () override
     {
     }
 };
@@ -4362,7 +4874,7 @@ public:
     }
     
     
-    ~CommandObjectTypeSynth ()
+    ~CommandObjectTypeSynth () override
     {
     }
 };
@@ -4385,7 +4897,7 @@ public:
     }
     
     
-    ~CommandObjectTypeFilter ()
+    ~CommandObjectTypeFilter () override
     {
     }
 };
@@ -4399,6 +4911,7 @@ public:
                             "A set of commands for operating on categories",
                             "type category [<sub-command-options>] ")
     {
+        LoadSubCommand ("define",        CommandObjectSP (new CommandObjectTypeCategoryDefine (interpreter)));
         LoadSubCommand ("enable",        CommandObjectSP (new CommandObjectTypeCategoryEnable (interpreter)));
         LoadSubCommand ("disable",       CommandObjectSP (new CommandObjectTypeCategoryDisable (interpreter)));
         LoadSubCommand ("delete",        CommandObjectSP (new CommandObjectTypeCategoryDelete (interpreter)));
@@ -4406,7 +4919,7 @@ public:
     }
     
     
-    ~CommandObjectTypeCategory ()
+    ~CommandObjectTypeCategory () override
     {
     }
 };
@@ -4432,7 +4945,7 @@ public:
     }
     
     
-    ~CommandObjectTypeSummary ()
+    ~CommandObjectTypeSummary () override
     {
     }
 };
@@ -4454,6 +4967,7 @@ CommandObjectType::CommandObjectType (CommandInterpreter &interpreter) :
 #ifndef LLDB_DISABLE_PYTHON
     LoadSubCommand ("synthetic", CommandObjectSP (new CommandObjectTypeSynth (interpreter)));
 #endif
+    LoadSubCommand ("lookup",   CommandObjectSP (new CommandObjectTypeLookup (interpreter)));
 }
 
 

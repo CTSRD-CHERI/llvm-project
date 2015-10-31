@@ -1,4 +1,4 @@
-//===- Config.h -----------------------------------------------------------===//
+//===- Config.h -------------------------------------------------*- C++ -*-===//
 //
 //                             The LLVM Linker
 //
@@ -20,37 +20,60 @@
 namespace lld {
 namespace coff {
 
+using llvm::COFF::IMAGE_FILE_MACHINE_UNKNOWN;
 using llvm::COFF::WindowsSubsystem;
 using llvm::StringRef;
-struct Symbol;
+class DefinedAbsolute;
+class DefinedRelative;
+class Undefined;
+
+// Short aliases.
+static const auto AMD64 = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
+static const auto ARMNT = llvm::COFF::IMAGE_FILE_MACHINE_ARMNT;
+static const auto I386 = llvm::COFF::IMAGE_FILE_MACHINE_I386;
 
 // Represents an /export option.
 struct Export {
-  StringRef Name;
-  StringRef ExtName;
-  Symbol *Sym = nullptr;
+  StringRef Name;       // N in /export:N or /export:E=N
+  StringRef ExtName;    // E in /export:E=N
+  Undefined *Sym = nullptr;
   uint16_t Ordinal = 0;
   bool Noname = false;
   bool Data = false;
   bool Private = false;
+
+  // True if this /export option was in .drectves section.
+  bool Directives = false;
+  StringRef SymbolName;
+  StringRef ExportName; // Name in DLL
+
+  bool operator==(const Export &E) {
+    return (Name == E.Name && ExtName == E.ExtName &&
+            Ordinal == E.Ordinal && Noname == E.Noname &&
+            Data == E.Data && Private == E.Private);
+  }
 };
 
 // Global configuration.
 struct Configuration {
   enum ManifestKind { SideBySide, Embed, No };
+  bool is64() { return Machine == AMD64; }
 
-  llvm::COFF::MachineTypes MachineType = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
+  llvm::COFF::MachineTypes Machine = IMAGE_FILE_MACHINE_UNKNOWN;
   bool Verbose = false;
   WindowsSubsystem Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_UNKNOWN;
-  StringRef EntryName;
+  Undefined *Entry = nullptr;
   bool NoEntry = false;
   std::string OutputFile;
   bool DoGC = true;
+  bool DoICF = true;
   bool Relocatable = true;
   bool Force = false;
+  bool Debug = false;
+  bool WriteSymtab = true;
 
   // Symbols in this set are considered as live by the garbage collector.
-  std::set<StringRef> GCRoots;
+  std::set<Undefined *> GCRoot;
 
   std::set<StringRef> NoDefaultLibs;
   bool NoDefaultLibAll = false;
@@ -59,10 +82,22 @@ struct Configuration {
   bool DLL = false;
   StringRef Implib;
   std::vector<Export> Exports;
-  std::set<StringRef> DelayLoads;
+  std::set<std::string> DelayLoads;
+  std::map<std::string, int> DLLOrder;
+  Undefined *DelayLoadHelper = nullptr;
 
-  // Used for /opt:icf
-  bool ICF = false;
+  // Used for SafeSEH.
+  DefinedRelative *SEHTable = nullptr;
+  DefinedAbsolute *SEHCount = nullptr;
+
+  // Used for /opt:lldlto=N
+  unsigned LTOOptLevel = 2;
+
+  // Used for /opt:lldltojobs=N
+  unsigned LTOJobs = 1;
+
+  // Used for /merge:from=to (e.g. /merge:.rdata=.text)
+  std::map<StringRef, StringRef> Merge;
 
   // Options for manifest files.
   ManifestKind Manifest = SideBySide;
@@ -79,7 +114,7 @@ struct Configuration {
   // Used for /alternatename.
   std::map<StringRef, StringRef> AlternateNames;
 
-  uint64_t ImageBase = 0x140000000;
+  uint64_t ImageBase = -1;
   uint64_t StackReserve = 1024 * 1024;
   uint64_t StackCommit = 4096;
   uint64_t HeapReserve = 1024 * 1024;
@@ -89,11 +124,12 @@ struct Configuration {
   uint32_t MajorOSVersion = 6;
   uint32_t MinorOSVersion = 0;
   bool DynamicBase = true;
-  bool HighEntropyVA = true;
   bool AllowBind = true;
   bool NxCompat = true;
   bool AllowIsolation = true;
   bool TerminalServerAware = true;
+  bool LargeAddressAware = false;
+  bool HighEntropyVA = false;
 };
 
 extern Configuration *Config;

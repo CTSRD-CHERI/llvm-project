@@ -65,6 +65,9 @@ public:
   InstrProfIterator end() { return InstrProfIterator(); }
 
 protected:
+  /// String table for holding a unique copy of all the strings in the profile.
+  InstrProfStringTable StringTable;
+
   /// Set the current std::error_code and return same.
   std::error_code error(std::error_code EC) {
     LastError = EC;
@@ -129,28 +132,12 @@ class RawInstrProfReader : public InstrProfReader {
 private:
   /// The profile data file contents.
   std::unique_ptr<MemoryBuffer> DataBuffer;
-  struct ProfileData {
-    const uint32_t NameSize;
-    const uint32_t NumCounters;
-    const uint64_t FuncHash;
-    const IntPtrT NamePtr;
-    const IntPtrT CounterPtr;
-  };
-  struct RawHeader {
-    const uint64_t Magic;
-    const uint64_t Version;
-    const uint64_t DataSize;
-    const uint64_t CountersSize;
-    const uint64_t NamesSize;
-    const uint64_t CountersDelta;
-    const uint64_t NamesDelta;
-  };
 
   bool ShouldSwapBytes;
   uint64_t CountersDelta;
   uint64_t NamesDelta;
-  const ProfileData *Data;
-  const ProfileData *DataEnd;
+  const RawInstrProf::ProfileData<IntPtrT> *Data;
+  const RawInstrProf::ProfileData<IntPtrT> *DataEnd;
   const uint64_t *CountersStart;
   const char *NamesStart;
   const char *ProfileEnd;
@@ -167,7 +154,7 @@ public:
 
 private:
   std::error_code readNextHeader(const char *CurrentPos);
-  std::error_code readHeader(const RawHeader &Header);
+  std::error_code readHeader(const RawInstrProf::Header &Header);
   template <class IntT>
   IntT swap(IntT Int) const {
     return ShouldSwapBytes ? sys::getSwappedBytes(Int) : Int;
@@ -195,6 +182,7 @@ class InstrProfLookupTrait {
   std::vector<InstrProfRecord> DataBuffer;
   IndexedInstrProf::HashT HashType;
   unsigned FormatVersion;
+  std::vector<std::pair<uint64_t, const char *>> HashKeys;
 
 public:
   InstrProfLookupTrait(IndexedInstrProf::HashT HashType, unsigned FormatVersion)
@@ -209,9 +197,13 @@ public:
 
   static bool EqualKey(StringRef A, StringRef B) { return A == B; }
   static StringRef GetInternalKey(StringRef K) { return K; }
+  static StringRef GetExternalKey(StringRef K) { return K; }
 
   hash_value_type ComputeHash(StringRef K);
 
+  void setHashKeys(std::vector<std::pair<uint64_t, const char *>> HashKeys) {
+    this->HashKeys = std::move(HashKeys);
+  }
   static std::pair<offset_type, offset_type>
   ReadKeyDataLength(const unsigned char *&D) {
     using namespace support;
@@ -224,6 +216,8 @@ public:
     return StringRef((const char *)D, N);
   }
 
+  bool ReadValueProfilingData(const unsigned char *&D,
+                              const unsigned char *const End);
   data_type ReadData(StringRef K, const unsigned char *D, offset_type N);
 };
 

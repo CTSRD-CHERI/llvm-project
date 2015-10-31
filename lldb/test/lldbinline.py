@@ -1,8 +1,9 @@
+from __future__ import print_function
+
 import lldb
 from lldbtest import *
 import lldbutil
 import os
-import unittest2
 import sys
 
 def source_type(filename):
@@ -88,7 +89,7 @@ class InlineTest(TestBase):
         for f in os.listdir(os.getcwd()):
             t = source_type(f)
             if t:
-                if t in categories.keys():
+                if t in list(categories.keys()):
                     categories[t].append(f)
                 else:
                     categories[t] = [f]
@@ -99,14 +100,14 @@ class InlineTest(TestBase):
 
         makefile.write("LEVEL = " + level + "\n")
 
-        for t in categories.keys():
+        for t in list(categories.keys()):
             line = t + " := " + " ".join(categories[t])
             makefile.write(line + "\n")
 
-        if ('OBJCXX_SOURCES' in categories.keys()) or ('OBJC_SOURCES' in categories.keys()):
+        if ('OBJCXX_SOURCES' in list(categories.keys())) or ('OBJC_SOURCES' in list(categories.keys())):
             makefile.write("LDFLAGS = $(CFLAGS) -lobjc -framework Foundation\n")
 
-        if ('CXX_SOURCES' in categories.keys()):
+        if ('CXX_SOURCES' in list(categories.keys())):
             makefile.write("CXXFLAGS += -std=c++11\n")
 
         makefile.write("include $(LEVEL)/Makefile.rules\n")
@@ -125,6 +126,12 @@ class InlineTest(TestBase):
         self.using_dsym = False
         self.BuildMakefile()
         self.buildDwarf()
+        self.do_test()
+
+    def __test_with_dwo(self):
+        self.using_dsym = False
+        self.BuildMakefile()
+        self.buildDwo()
         self.do_test()
 
     def execute_user_command(self, __command):
@@ -155,8 +162,8 @@ class InlineTest(TestBase):
         value = self.frame().EvaluateExpression (expression)
         self.assertTrue(value.IsValid(), expression+"returned a valid value")
         if self.TraceOn():
-            print value.GetSummary()
-            print value.GetValue()
+            print(value.GetSummary())
+            print(value.GetValue())
         if use_summary:
             answer = value.GetSummary()
         else:
@@ -186,6 +193,7 @@ def MakeInlineTest(__file, __globals, decorators=None):
 
     test.test_with_dsym = ApplyDecoratorsToFunction(test._InlineTest__test_with_dsym, decorators)
     test.test_with_dwarf = ApplyDecoratorsToFunction(test._InlineTest__test_with_dwarf, decorators)
+    test.test_with_dwo = ApplyDecoratorsToFunction(test._InlineTest__test_with_dwo, decorators)
 
     # Add the test case to the globals, and hide InlineTest
     __globals.update({test_name : test})

@@ -2,8 +2,11 @@
 Test number of threads.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -11,22 +14,6 @@ import lldbutil
 class ThreadExitTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @dsym_test
-    def test_with_dsym(self):
-        """Test thread exit handling."""
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.thread_exit_test()
-
-    @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test thread exit handling."""
-        self.buildDwarf(dictionary=self.getBuildFlags())
-        self.thread_exit_test()
 
     def setUp(self):
         # Call super's setUp().
@@ -37,8 +24,11 @@ class ThreadExitTestCase(TestBase):
         self.break_3 = line_number('main.cpp', '// Set third breakpoint here')
         self.break_4 = line_number('main.cpp', '// Set fourth breakpoint here')
 
-    def thread_exit_test(self):
+    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
+    @expectedFailureWindows("llvm.org/pr24681")
+    def test(self):
         """Test thread exit handling."""
+        self.build(dictionary=self.getBuildFlags())
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -56,7 +46,7 @@ class ThreadExitTestCase(TestBase):
                        "4: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" % self.break_4])
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint 1.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT + " 1",
@@ -125,9 +115,3 @@ class ThreadExitTestCase(TestBase):
 
         # At this point, the inferior process should have exited.
         self.assertTrue(process.GetState() == lldb.eStateExited, PROCESS_EXITED)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -613,7 +613,7 @@ NumericLiteralParser::NumericLiteralParser(StringRef TokSpelling,
           break;
 
         if (!isFPConstant) {
-          // Allow i8, i16, i32, i64, and i128.
+          // Allow i8, i16, i32, and i64.
           switch (s[1]) {
           case '8':
             s += 2; // i8 suffix
@@ -623,9 +623,6 @@ NumericLiteralParser::NumericLiteralParser(StringRef TokSpelling,
             if (s[2] == '6') {
               s += 3; // i16 suffix
               MicrosoftInteger = 16;
-            } else if (s[2] == '2' && s[3] == '8') {
-              s += 4; // i128 suffix
-              MicrosoftInteger = 128;
             }
             break;
           case '3':
@@ -1420,10 +1417,23 @@ void StringLiteralParser::init(ArrayRef<Token> StringToks){
       ThisTokEnd -= ThisTokBuf - Prefix;
       assert(ThisTokEnd >= ThisTokBuf && "malformed raw string literal");
 
-      // Copy the string over
-      if (CopyStringFragment(StringToks[i], ThisTokBegin,
-                             StringRef(ThisTokBuf, ThisTokEnd - ThisTokBuf)))
-        hadError = true;
+      // C++14 [lex.string]p4: A source-file new-line in a raw string literal
+      // results in a new-line in the resulting execution string-literal.
+      StringRef RemainingTokenSpan(ThisTokBuf, ThisTokEnd - ThisTokBuf);
+      while (!RemainingTokenSpan.empty()) {
+        // Split the string literal on \r\n boundaries.
+        size_t CRLFPos = RemainingTokenSpan.find("\r\n");
+        StringRef BeforeCRLF = RemainingTokenSpan.substr(0, CRLFPos);
+        StringRef AfterCRLF = RemainingTokenSpan.substr(CRLFPos);
+
+        // Copy everything before the \r\n sequence into the string literal.
+        if (CopyStringFragment(StringToks[i], ThisTokBegin, BeforeCRLF))
+          hadError = true;
+
+        // Point into the \n inside the \r\n sequence and operate on the
+        // remaining portion of the literal.
+        RemainingTokenSpan = AfterCRLF.substr(1);
+      }
     } else {
       if (ThisTokBuf[0] != '"') {
         // The file may have come from PCH and then changed after loading the

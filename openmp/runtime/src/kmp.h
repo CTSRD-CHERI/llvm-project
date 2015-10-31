@@ -17,6 +17,8 @@
 #ifndef KMP_H
 #define KMP_H
 
+#include "kmp_config.h"
+
 /* #define BUILD_PARALLEL_ORDERED 1 */
 
 /* This fix replaces gettimeofday with clock_gettime for better scalability on
@@ -86,17 +88,12 @@ class kmp_stats_list;
 #include "kmp_version.h"
 #include "kmp_debug.h"
 #include "kmp_lock.h"
+#if USE_DEBUGGER
+#include "kmp_debugger.h"
+#endif
 #include "kmp_i18n.h"
 
-#define KMP_HANDLE_SIGNALS (KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_WINDOWS || KMP_OS_DARWIN)
-
-#ifdef KMP_SETVERSION
-/*  from factory/Include, to get VERSION_STRING embedded for 'what'  */
-#include "kaiconfig.h"
-#include "eye.h"
-#include "own.h"
-#include "setversion.h"
-#endif
+#define KMP_HANDLE_SIGNALS (KMP_OS_UNIX || KMP_OS_WINDOWS)
 
 #include "kmp_wrapper_malloc.h"
 #if KMP_OS_UNIX
@@ -791,9 +788,11 @@ typedef enum kmp_cancel_kind_t {
 } kmp_cancel_kind_t;
 #endif // OMP_40_ENABLED
 
+extern int __kmp_place_num_sockets;
+extern int __kmp_place_socket_offset;
 extern int __kmp_place_num_cores;
-extern int __kmp_place_num_threads_per_core;
 extern int __kmp_place_core_offset;
+extern int __kmp_place_num_threads_per_core;
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
@@ -846,10 +845,10 @@ extern int __kmp_place_core_offset;
 #define KMP_MIN_NTH           1
 
 #ifndef KMP_MAX_NTH
-#  ifdef PTHREAD_THREADS_MAX
+#  if defined(PTHREAD_THREADS_MAX) && PTHREAD_THREADS_MAX < INT_MAX
 #    define KMP_MAX_NTH          PTHREAD_THREADS_MAX
 #  else
-#    define KMP_MAX_NTH          (32 * 1024)
+#    define KMP_MAX_NTH          INT_MAX
 #  endif
 #endif /* KMP_MAX_NTH */
 
@@ -980,6 +979,10 @@ extern int __kmp_place_core_offset;
 #  define KMP_NEXT_WAIT   512U          /* susequent number of spin-tests */
 #elif KMP_OS_FREEBSD
 /* TODO: tune for KMP_OS_FREEBSD */
+#  define KMP_INIT_WAIT  1024U          /* initial number of spin-tests   */
+#  define KMP_NEXT_WAIT   512U          /* susequent number of spin-tests */
+#elif KMP_OS_NETBSD
+/* TODO: tune for KMP_OS_NETBSD */
 #  define KMP_INIT_WAIT  1024U          /* initial number of spin-tests   */
 #  define KMP_NEXT_WAIT   512U          /* susequent number of spin-tests */
 #endif
@@ -1663,6 +1666,11 @@ typedef struct KMP_ALIGN_CACHE kmp_bstate {
     kmp_uint8 offset;
     kmp_uint8 wait_flag;
     kmp_uint8 use_oncore_barrier;
+#if USE_DEBUGGER
+    // The following field is intended for the debugger solely. Only the worker thread itself accesses this
+    // field: the worker increases it by 1 when it arrives to a barrier.
+    KMP_ALIGN_CACHE kmp_uint b_worker_arrived;
+#endif /* USE_DEBUGGER */
 } kmp_bstate_t;
 
 union KMP_ALIGN_CACHE kmp_barrier_union {
@@ -1678,7 +1686,14 @@ union KMP_ALIGN_CACHE kmp_barrier_team_union {
     double       b_align;        /* use worst case alignment */
     char         b_pad[ CACHE_LINE ];
     struct {
-        kmp_uint     b_arrived;       /* STATE => task reached synch point. */
+        kmp_uint64   b_arrived;       /* STATE => task reached synch point. */
+#if USE_DEBUGGER
+        // The following two fields are indended for the debugger solely. Only master of the team accesses
+        // these fields: the first one is increased by 1 when master arrives to a barrier, the
+        // second one is increased by one when all the threads arrived.
+        kmp_uint     b_master_arrived;
+        kmp_uint     b_team_arrived;
+#endif
     };
 };
 
@@ -2718,12 +2733,22 @@ extern kmp_info_t __kmp_monitor;
 extern volatile kmp_uint32 __kmp_team_counter;      // Used by Debugging Support Library.
 extern volatile kmp_uint32 __kmp_task_counter;      // Used by Debugging Support Library.
 
+#if USE_DEBUGGER
+
+#define _KMP_GEN_ID( counter )                                         \
+    (                                                                  \
+        __kmp_debugging                                                \
+        ?                                                              \
+        KMP_TEST_THEN_INC32( (volatile kmp_int32 *) & counter ) + 1    \
+        :                                                              \
+        ~ 0                                                            \
+    )
+#else
 #define _KMP_GEN_ID( counter )                                         \
     (                                                                  \
         ~ 0                                                            \
     )
-
-
+#endif /* USE_DEBUGGER */
 
 #define KMP_GEN_TASK_ID()    _KMP_GEN_ID( __kmp_task_counter )
 #define KMP_GEN_TEAM_ID()    _KMP_GEN_ID( __kmp_team_counter )
@@ -2965,6 +2990,7 @@ extern int __kmp_aux_get_affinity_mask_proc(int proc, void **mask);
 extern void __kmp_balanced_affinity( int tid, int team_size );
 #endif /* KMP_AFFINITY_SUPPORTED */
 
+extern void __kmp_cleanup_hierarchy();
 extern void __kmp_get_hierarchy(kmp_uint32 nproc, kmp_bstate_t *thr_bar);
 
 #if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
@@ -3084,6 +3110,9 @@ extern int __kmp_fork_call( ident_t *loc, int gtid, enum fork_context_e fork_con
                              );
 
 extern void __kmp_join_call( ident_t *loc, int gtid
+#if OMPT_SUPPORT
+                           , enum fork_context_e fork_context
+#endif
 #if OMP_40_ENABLED
                            , int exit_teams = 0
 #endif
@@ -3121,9 +3150,6 @@ extern void __kmp_pop_current_task_from_thread( kmp_info_t *this_thr );
 extern kmp_task_t* __kmp_task_alloc( ident_t *loc_ref, kmp_int32 gtid,
   kmp_tasking_flags_t *flags, size_t sizeof_kmp_task_t, size_t sizeof_shareds,
   kmp_routine_entry_t task_entry );
-#if OMPT_SUPPORT
-extern void __kmp_task_init_ompt( kmp_taskdata_t * task, int tid );
-#endif
 extern void __kmp_init_implicit_task( ident_t *loc_ref, kmp_info_t *this_thr,
                   kmp_team_t *team, int tid, int set_curr_task );
 
@@ -3361,7 +3387,8 @@ KMP_EXPORT kmp_int32 __kmp_get_reduce_method( void );
 KMP_EXPORT kmp_uint64 __kmpc_get_taskid();
 KMP_EXPORT kmp_uint64 __kmpc_get_parent_taskid();
 
-KMP_EXPORT void __kmpc_place_threads(int,int,int);
+// this function exported for testing of KMP_PLACE_THREADS functionality
+KMP_EXPORT void __kmpc_place_threads(int,int,int,int,int);
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */

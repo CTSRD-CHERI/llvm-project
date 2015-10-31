@@ -20,7 +20,7 @@
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnStreamStderr::CMICmnStreamStderr(void)
+CMICmnStreamStderr::CMICmnStreamStderr()
 {
 }
 
@@ -31,7 +31,7 @@ CMICmnStreamStderr::CMICmnStreamStderr(void)
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnStreamStderr::~CMICmnStreamStderr(void)
+CMICmnStreamStderr::~CMICmnStreamStderr()
 {
     Shutdown();
 }
@@ -45,7 +45,7 @@ CMICmnStreamStderr::~CMICmnStreamStderr(void)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStderr::Initialize(void)
+CMICmnStreamStderr::Initialize()
 {
     m_clientUsageRefCnt++;
 
@@ -76,7 +76,7 @@ CMICmnStreamStderr::Initialize(void)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStderr::Shutdown(void)
+CMICmnStreamStderr::Shutdown()
 {
     if (--m_clientUsageRefCnt > 0)
         return MIstatus::success;
@@ -93,7 +93,7 @@ CMICmnStreamStderr::Shutdown(void)
 
 //++ ------------------------------------------------------------------------------------
 // Details: Write text data to stderr. Prefix the message with "MI:". The text data does
-//          not need to include a carrage line return as this is added to the text. The
+//          not need to include a carriage line return as this is added to the text. The
 //          function also then passes the text data into the CMICmnLog logger.
 // Type:    Method.
 // Args:    vText       - (R) Text data.
@@ -115,7 +115,7 @@ CMICmnStreamStderr::Write(const CMIUtilString &vText, const bool vbSendToLog /* 
 
 //++ ------------------------------------------------------------------------------------
 // Details: Write an LLDB text message to stderr.
-//          The text data does not need to include a carrage line return as this is added
+//          The text data does not need to include a carriage line return as this is added
 //          to the text. The function also then passes the text data into the CMICmnLog
 //          logger.
 // Type:    Method.
@@ -138,7 +138,7 @@ CMICmnStreamStderr::WriteLLDBMsg(const CMIUtilString &vText, const bool vbSendTo
 
 //++ ------------------------------------------------------------------------------------
 // Details: Write text data to stderr. The text data does not need to
-//          include a carrage line return as this is added to the text. The function also
+//          include a carriage line return as this is added to the text. The function also
 //          then passes the text data into the CMICmnLog logger.
 // Type:    Method.
 // Args:    vText           - (R) Text data. May be prefixed with MI app's short name.
@@ -191,7 +191,7 @@ CMICmnStreamStderr::WritePriv(const CMIUtilString &vText, const CMIUtilString &v
 // Throws:  None.
 //--
 bool
-CMICmnStreamStderr::Lock(void)
+CMICmnStreamStderr::Lock()
 {
     m_mutex.Lock();
     return MIstatus::success;
@@ -206,7 +206,7 @@ CMICmnStreamStderr::Lock(void)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStderr::Unlock(void)
+CMICmnStreamStderr::Unlock()
 {
     m_mutex.Unlock();
     return MIstatus::success;

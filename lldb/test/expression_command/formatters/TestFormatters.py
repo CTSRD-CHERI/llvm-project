@@ -2,7 +2,10 @@
 Test using LLDB data formatters with frozen objects coming from the expression parser.
 """
 
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import lldbutil
 from lldbtest import *
@@ -18,23 +21,16 @@ class ExprFormattersTestCase(TestBase):
         self.line = line_number('main.cpp',
                                 '// Stop here')
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test expr + formatters for good interoperability."""
-        self.buildDsym()
-        self.do_my_test()
-
+    @skipIfFreeBSD # llvm.org/pr24691 skipping to avoid crashing the test runner
     @expectedFailureFreeBSD('llvm.org/pr19011') # Newer Clang omits C1 complete object constructor
-    @expectedFailureLinux('llvm.org/pr19011', ['clang'])
-    @dwarf_test
-    def test_with_dwarf(self):
+    @expectedFailureFreeBSD('llvm.org/pr24691') # we hit an assertion in clang
+    @expectedFailureWindows("llvm.org/pr21765")
+    @skipIfTargetAndroid() # skipping to avoid crashing the test runner
+    @expectedFailureAndroid('llvm.org/pr24691') # we hit an assertion in clang
+    def test(self):
         """Test expr + formatters for good interoperability."""
-        self.buildDwarf()
-        self.do_my_test()
+        self.build()
 
-    def do_my_test(self):
-        
         # This is the function to remove the custom formats in order to have a
         # clean slate for the next test case.
         def cleanup():
@@ -49,13 +45,14 @@ class ExprFormattersTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
-        self.runCmd("script import formatters")
-        self.runCmd("script import foosynth")
+        self.runCmd("run", RUN_SUCCEEDED)
+        self.runCmd("command script import formatters.py")
+        self.runCmd("command script import foosynth.py")
         
-        self.runCmd("frame variable foo1 --show-types")
-        self.runCmd("frame variable foo1.b --show-types")
-        self.runCmd("frame variable foo1.b.b_ref --show-types")
+        if self.TraceOn():
+            self.runCmd("frame variable foo1 --show-types")
+            self.runCmd("frame variable foo1.b --show-types")
+            self.runCmd("frame variable foo1.b.b_ref --show-types")
 
         self.expect("expression --show-types -- *(new foo(47))",
             substrs = ['(int) a = 47', '(bar) b = {', '(int) i = 94', '(baz) b = {', '(int) k = 99'])
@@ -168,9 +165,3 @@ class ExprFormattersTestCase(TestBase):
         self.assertTrue(a_data.GetUnsignedInt32(error, 8) == 3, 'numbers[2] == 3')
         self.assertTrue(a_data.GetUnsignedInt32(error, 12) == 4, 'numbers[3] == 4')
         self.assertTrue(a_data.GetUnsignedInt32(error, 16) == 5, 'numbers[4] == 5')
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

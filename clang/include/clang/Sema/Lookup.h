@@ -140,6 +140,7 @@ public:
       HideTags(true),
       Diagnose(Redecl == Sema::NotForRedeclaration),
       AllowHidden(Redecl == Sema::ForRedeclaration),
+      AllowHiddenInternal(AllowHidden),
       Shadowed(false)
   {
     configure();
@@ -162,6 +163,7 @@ public:
       HideTags(true),
       Diagnose(Redecl == Sema::NotForRedeclaration),
       AllowHidden(Redecl == Sema::ForRedeclaration),
+      AllowHiddenInternal(AllowHidden),
       Shadowed(false)
   {
     configure();
@@ -182,6 +184,7 @@ public:
       HideTags(Other.HideTags),
       Diagnose(false),
       AllowHidden(Other.AllowHidden),
+      AllowHiddenInternal(Other.AllowHiddenInternal),
       Shadowed(false)
   {}
 
@@ -223,13 +226,25 @@ public:
   /// \brief Specify whether hidden declarations are visible, e.g.,
   /// for recovery reasons.
   void setAllowHidden(bool AH) {
-    AllowHidden = AH;
+    AllowHiddenInternal = AllowHidden = AH;
+  }
+
+  /// \brief Specify whether hidden internal declarations are visible.
+  void setAllowHiddenInternal(bool AHI) {
+    AllowHiddenInternal = AHI;
   }
 
   /// \brief Determine whether this lookup is permitted to see hidden
   /// declarations, such as those in modules that have not yet been imported.
-  bool isHiddenDeclarationVisible() const {
-    return AllowHidden || LookupKind == Sema::LookupTagName;
+  bool isHiddenDeclarationVisible(NamedDecl *ND) const {
+    // If a using-shadow declaration is hidden, it's never visible, not
+    // even to redeclaration lookup.
+    // FIXME: Should this apply to typedefs and namespace aliases too?
+    if (isa<UsingShadowDecl>(ND) && LookupKind != Sema::LookupUsingDeclName)
+      return false;
+    return (AllowHidden &&
+            (AllowHiddenInternal || ND->isExternallyVisible())) ||
+           LookupKind == Sema::LookupTagName;
   }
   
   /// Sets whether tag declarations should be hidden by non-tag
@@ -302,7 +317,7 @@ public:
     if (!D->isInIdentifierNamespace(IDNS))
       return nullptr;
 
-    if (isHiddenDeclarationVisible() || isVisible(getSema(), D))
+    if (isHiddenDeclarationVisible(D) || isVisible(getSema(), D))
       return D;
 
     return getAcceptableDeclSlow(D);
@@ -511,7 +526,7 @@ public:
   /// \brief Change this lookup's redeclaration kind.
   void setRedeclarationKind(Sema::RedeclarationKind RK) {
     Redecl = RK;
-    AllowHidden = (RK == Sema::ForRedeclaration);
+    AllowHiddenInternal = AllowHidden = (RK == Sema::ForRedeclaration);
     configure();
   }
 
@@ -565,6 +580,11 @@ public:
     {}
 
   public:
+    Filter(Filter &&F)
+        : Results(F.Results), I(F.I), Changed(F.Changed),
+          CalledDone(F.CalledDone) {
+      F.CalledDone = true;
+    }
     ~Filter() {
       assert(CalledDone &&
              "LookupResult::Filter destroyed without done() call");
@@ -677,6 +697,9 @@ private:
 
   /// \brief True if we should allow hidden declarations to be 'visible'.
   bool AllowHidden;
+
+  /// \brief True if we should allow hidden internal declarations to be visible.
+  bool AllowHiddenInternal;
 
   /// \brief True if the found declarations were shadowed by some other
   /// declaration that we skipped. This only happens when \c LookupKind

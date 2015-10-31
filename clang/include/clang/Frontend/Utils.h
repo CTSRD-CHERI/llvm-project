@@ -45,7 +45,7 @@ class HeaderSearch;
 class HeaderSearchOptions;
 class IdentifierTable;
 class LangOptions;
-class PCHContainerOperations;
+class PCHContainerReader;
 class Preprocessor;
 class PreprocessorOptions;
 class PreprocessorOutputOptions;
@@ -63,7 +63,7 @@ void ApplyHeaderSearchOptions(HeaderSearch &HS,
 /// InitializePreprocessor - Initialize the preprocessor getting it and the
 /// environment ready to process a single file.
 void InitializePreprocessor(Preprocessor &PP, const PreprocessorOptions &PPOpts,
-                            const PCHContainerOperations &PCHContainerOps,
+                            const PCHContainerReader &PCHContainerRdr,
                             const FrontendOptions &FEOpts);
 
 /// DoPrintPreprocessedInput - Implement -E mode.
@@ -148,6 +148,9 @@ public:
 /// AttachHeaderIncludeGen - Create a header include list generator, and attach
 /// it to the given preprocessor.
 ///
+/// \param ExtraHeaders - If not empty, will write the header filenames, just
+/// like they were included during a regular preprocessing. Useful for
+/// implicit include dependencies, like sanitizer blacklists.
 /// \param ShowAllHeaders - If true, show all header information instead of just
 /// headers following the predefines buffer. This is useful for making sure
 /// includes mentioned on the command line are also reported, but differs from
@@ -156,7 +159,9 @@ public:
 /// information to, instead of writing to stderr.
 /// \param ShowDepth - Whether to indent to show the nesting of the includes.
 /// \param MSStyle - Whether to print in cl.exe /showIncludes style.
-void AttachHeaderIncludeGen(Preprocessor &PP, bool ShowAllHeaders = false,
+void AttachHeaderIncludeGen(Preprocessor &PP,
+                            const std::vector<std::string> &ExtraHeaders,
+                            bool ShowAllHeaders = false,
                             StringRef OutputPath = "",
                             bool ShowDepth = true, bool MSStyle = false);
 

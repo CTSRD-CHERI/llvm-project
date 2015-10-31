@@ -294,11 +294,12 @@ public:
       delete[] pVal;
   }
 
-  /// \brief Default constructor that creates an uninitialized APInt.
+  /// \brief Default constructor that creates an uninteresting APInt
+  /// representing a 1-bit zero value.
   ///
   /// This is useful for object deserialization (pair this with the static
   ///  method Read).
-  explicit APInt() : BitWidth(1) {}
+  explicit APInt() : BitWidth(1), VAL(0) {}
 
   /// \brief Returns whether this instance allocated memory.
   bool needsCleanup() const { return !isSingleWord(); }
@@ -1038,7 +1039,9 @@ public:
   /// the validity of the less-than relationship.
   ///
   /// \returns true if *this < RHS when considered unsigned.
-  bool ult(uint64_t RHS) const { return ult(APInt(getBitWidth(), RHS)); }
+  bool ult(uint64_t RHS) const {
+    return getActiveBits() > 64 ? false : getZExtValue() < RHS;
+  }
 
   /// \brief Signed less than comparison
   ///
@@ -1054,7 +1057,9 @@ public:
   /// the validity of the less-than relationship.
   ///
   /// \returns true if *this < RHS when considered signed.
-  bool slt(uint64_t RHS) const { return slt(APInt(getBitWidth(), RHS)); }
+  bool slt(int64_t RHS) const {
+    return getMinSignedBits() > 64 ? isNegative() : getSExtValue() < RHS;
+  }
 
   /// \brief Unsigned less or equal comparison
   ///
@@ -1102,7 +1107,9 @@ public:
   /// the validity of the greater-than relationship.
   ///
   /// \returns true if *this > RHS when considered unsigned.
-  bool ugt(uint64_t RHS) const { return ugt(APInt(getBitWidth(), RHS)); }
+  bool ugt(uint64_t RHS) const {
+    return getActiveBits() > 64 ? true : getZExtValue() > RHS;
+  }
 
   /// \brief Signed greather than comparison
   ///
@@ -1118,7 +1125,9 @@ public:
   /// the validity of the greater-than relationship.
   ///
   /// \returns true if *this > RHS when considered signed.
-  bool sgt(uint64_t RHS) const { return sgt(APInt(getBitWidth(), RHS)); }
+  bool sgt(int64_t RHS) const {
+    return getMinSignedBits() > 64 ? !isNegative() : getSExtValue() > RHS;
+  }
 
   /// \brief Unsigned greater or equal comparison
   ///
@@ -1150,7 +1159,7 @@ public:
   /// the validity of the greater-or-equal relationship.
   ///
   /// \returns true if *this >= RHS when considered signed.
-  bool sge(uint64_t RHS) const { return !slt(RHS); }
+  bool sge(int64_t RHS) const { return !slt(RHS); }
 
   /// This operation tests if there are any pairs of corresponding bits
   /// between this APInt and RHS that are both set.
@@ -1520,7 +1529,7 @@ public:
   /// \returns the nearest log base 2 of this APInt. Ties round up.
   ///
   /// NOTE: When we have a BitWidth of 1, we define:
-  /// 
+  ///
   ///   log2(0) = UINT32_MAX
   ///   log2(1) = 0
   ///

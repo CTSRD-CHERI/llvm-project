@@ -1,7 +1,10 @@
 """Test breakpoint by file/line number; and list variables with array types."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,48 +13,21 @@ class ArrayTypesTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test 'frame variable var_name' on some variables with array types."""
-        self.buildDsym()
-        self.array_types()
-
-    @skipUnlessDarwin
-    @python_api_test    
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Use Python APIs to inspect variables with array types."""
-        self.buildDsym()
-        self.array_types_python()
-
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test 'frame variable var_name' on some variables with array types."""
-        self.buildDwarf()
-        self.array_types()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_python_api(self):
-        """Use Python APIs to inspect variables with array types."""
-        self.buildDwarf()
-        self.array_types_python()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break inside main().
         self.line = line_number('main.c', '// Set break point at this line.')
 
-    def array_types(self):
+    def test_and_run_command(self):
         """Test 'frame variable var_name' on some variables with array types."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=False)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The test suite sometimes shows that the process has exited without stopping.
         #
@@ -92,8 +68,10 @@ class ArrayTypesTestCase(TestBase):
         self.expect("frame variable --show-types long_6", VARIABLES_DISPLAYED_CORRECTLY,
             startstr = '(long [6])')
 
-    def array_types_python(self):
+    @add_test_categories(['pyapi'])
+    def test_and_python_api(self):
         """Use Python APIs to inspect variables with array types."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -130,10 +108,14 @@ class ArrayTypesTestCase(TestBase):
 
         # Sanity check the print representation of thread.
         thr = str(thread)
-        if self.platformIsDarwin():
-            tidstr = "tid = 0x%4.4x" % thread.GetThreadID()
-        else:
+        # TODO(zturner): Whether the TID is printed in hex or decimal should be controlled by a setting,
+        # and this test should read the value of the setting.  This check is currently hardcoded to
+        # match the check in Core/FormatEntity.cpp in the function FormatEntity::Format() for
+        # the Entry::Type::ThreadID case of the switch statement.
+        if self.getPlatform() == "linux" or self.getPlatform() == "freebsd":
             tidstr = "tid = %u" % thread.GetThreadID()
+        else:
+            tidstr = "tid = 0x%4.4x" % thread.GetThreadID()
         self.expect(thr, "Thread looks good with stop reason = breakpoint", exe=False,
             substrs = [tidstr])
 
@@ -214,10 +196,3 @@ class ArrayTypesTestCase(TestBase):
         self.assertTrue(argc.GetValueType() == lldb.eValueTypeVariableArgument,
                         "Variable 'argc' should have '%s' value type." %
                         value_type_to_str(lldb.eValueTypeVariableArgument))
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-detect-scops-in-regions-without-loops -polly-codegen -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-detect-scops-in-regions-without-loops -polly-codegen -S < %s | FileCheck %s -check-prefix=CHECK-CODE
+; RUN: opt %loadPolly -polly-codegen -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-codegen -S < %s | FileCheck %s -check-prefix=CHECK-CODE
 
 ; void f(long A[], long N) {
 ;   long i;
@@ -37,6 +37,8 @@ else1:
   br label %next
 
 next:
+  %sg = getelementptr i64, i64* %A, i64 42
+  store i64 undef, i64* %sg
   br i1 true, label %then, label %else
 
 then:
@@ -65,6 +67,6 @@ return:
   ret void
 }
 
-; CHECK: Create LLVM-IR from SCoPs' for region: 'next.split => polly.merge_new_and_old'
+; CHECK: Create LLVM-IR from SCoPs' for region: 'next => polly.merge_new_and_old'
 ; CHECK-CODE: polly.split_new_and_old
 ; CHECK-CODE: polly.merge_new_and_old

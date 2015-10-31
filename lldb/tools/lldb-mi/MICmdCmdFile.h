@@ -29,31 +29,29 @@
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "file-exec-and-symbols".
 //          This command does not follow the MI documentation exactly.
-// Gotchas: This command has additonal flags that were not available in GDB MI.
+// Gotchas: This command has additional flags that were not available in GDB MI.
 //          See MIextensions.txt for details.
-// Authors: Illya Rudkin 25/02/2014.
-// Changes: None.
 //--
 class CMICmdCmdFileExecAndSymbols : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdFileExecAndSymbols(void);
+    /* ctor */ CMICmdCmdFileExecAndSymbols();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdFileExecAndSymbols(void);
-    virtual bool GetExitAppOnCommandFailure(void) const;
+    /* dtor */ ~CMICmdCmdFileExecAndSymbols() override;
+    bool GetExitAppOnCommandFailure() const override;
 
     // Attributes:
   private:

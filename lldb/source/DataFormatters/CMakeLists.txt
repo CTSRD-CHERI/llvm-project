@@ -1,25 +1,12 @@
-set(LLVM_NO_RTTI 1)
-
 add_lldb_library(lldbDataFormatters
-  CF.cpp
-  Cocoa.cpp
-  CoreMedia.cpp
-  CXXFormatterFunctions.cpp
+  CXXFunctionPointer.cpp
   DataVisualization.cpp
+  DumpValueObjectOptions.cpp
   FormatCache.cpp
   FormatClasses.cpp
   FormatManager.cpp
-  LibCxx.cpp
-  LibCxxInitializerList.cpp
-  LibCxxList.cpp
-  LibCxxMap.cpp
-  LibCxxUnorderedMap.cpp
-  LibCxxVector.cpp
-  LibStdcpp.cpp
-  NSArray.cpp
-  NSDictionary.cpp
-  NSIndexPath.cpp
-  NSSet.cpp
+  FormattersHelpers.cpp
+  LanguageCategory.cpp
   StringPrinter.cpp
   TypeCategory.cpp
   TypeCategoryMap.cpp

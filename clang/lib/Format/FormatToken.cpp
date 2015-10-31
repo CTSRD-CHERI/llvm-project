@@ -13,8 +13,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "FormatToken.h"
 #include "ContinuationIndenter.h"
+#include "FormatToken.h"
 #include "clang/Format/Format.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
@@ -22,6 +22,20 @@
 
 namespace clang {
 namespace format {
+
+const char *getTokenTypeName(TokenType Type) {
+  static const char *const TokNames[] = {
+#define TYPE(X) #X,
+LIST_TOKEN_TYPES
+#undef TYPE
+    nullptr
+  };
+
+  if (Type < NUM_TOKEN_TYPES)
+    return TokNames[Type];
+  llvm_unreachable("unknown TokenType");
+  return nullptr;
+}
 
 // FIXME: This is copy&pasted from Sema. Put it in a common place and remove
 // duplication.
@@ -169,7 +183,8 @@ void CommaSeparatedList::precomputeFormattingInfos(const FormatToken *Token) {
       ItemEnd = Token->MatchingParen;
       const FormatToken *NonCommentEnd = ItemEnd->getPreviousNonComment();
       ItemLengths.push_back(CodePointsBetween(ItemBegin, NonCommentEnd));
-      if (Style.Cpp11BracedListStyle) {
+      if (Style.Cpp11BracedListStyle &&
+          !ItemEnd->Previous->isTrailingComment()) {
         // In Cpp11 braced list style, the } and possibly other subsequent
         // tokens will need to stay on a line with the last element.
         while (ItemEnd->Next && !ItemEnd->Next->CanBreakBefore)

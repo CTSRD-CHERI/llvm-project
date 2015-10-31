@@ -16,6 +16,7 @@
 #ifndef KMP_OS_H
 #define KMP_OS_H
 
+#include "kmp_config.h"
 #include <stdlib.h>
 
 #define KMP_FTN_PLAIN   1
@@ -61,8 +62,6 @@
 #else
 # error Unknown compiler
 #endif
-
-#include "kmp_platform.h"
 
 #if (KMP_OS_LINUX || KMP_OS_WINDOWS) && !KMP_OS_CNK && !KMP_ARCH_PPC64
 # define KMP_AFFINITY_SUPPORTED 1
@@ -281,22 +280,6 @@ extern "C" {
 # define KMP_ALIGN(bytes)     __declspec( align(bytes) )
 #endif
 
-#if defined(__MIC__) || defined(__MIC2__)
-    #define KMP_MIC  1
-// Intel(R) Composer XE (13.0) defines both __MIC__ and __MIC2__ !
-# if __MIC2__ || __KNC__
-    #define KMP_MIC1 0
-    #define KMP_MIC2 1
-# else
-    #define KMP_MIC1 1
-    #define KMP_MIC2 0
-# endif
-#else
-    #define KMP_MIC  0
-    #define KMP_MIC1 0
-    #define KMP_MIC2 0
-#endif
-
 /* General purpose fence types for memory operations */
 enum kmp_mem_fence_type {
     kmp_no_fence,         /* No memory fence */
@@ -414,7 +397,7 @@ extern kmp_real64 __kmp_xchg_real64( volatile kmp_real64 *p, kmp_real64 v );
 //# define KMP_COMPARE_AND_STORE_RET32(p, cv, sv) __kmp_compare_and_store_ret32( (p), (cv), (sv) )
 # define KMP_COMPARE_AND_STORE_RET64(p, cv, sv) __kmp_compare_and_store_ret64( (p), (cv), (sv) )
 
-# define KMP_XCHG_FIXED8(p, v)                  __kmp_xchg_fixed8( (p), (v) );
+# define KMP_XCHG_FIXED8(p, v)                  __kmp_xchg_fixed8( (volatile kmp_int8*)(p), (kmp_int8)(v) );
 # define KMP_XCHG_FIXED16(p, v)                 __kmp_xchg_fixed16( (p), (v) );
 //# define KMP_XCHG_FIXED32(p, v)                 __kmp_xchg_fixed32( (p), (v) );
 //# define KMP_XCHG_FIXED64(p, v)                 __kmp_xchg_fixed64( (p), (v) );
@@ -551,7 +534,7 @@ extern kmp_real64 __kmp_xchg_real64( volatile kmp_real64 *p, kmp_real64 v );
 # define KMP_COMPARE_AND_STORE_RET32(p, cv, sv) __kmp_compare_and_store_ret32( (p), (cv), (sv) )
 # define KMP_COMPARE_AND_STORE_RET64(p, cv, sv) __kmp_compare_and_store_ret64( (p), (cv), (sv) )
 
-# define KMP_XCHG_FIXED8(p, v)                  __kmp_xchg_fixed8( (p), (v) );
+# define KMP_XCHG_FIXED8(p, v)                  __kmp_xchg_fixed8( (volatile kmp_int8*)(p), (kmp_int8)(v) );
 # define KMP_XCHG_FIXED16(p, v)                 __kmp_xchg_fixed16( (p), (v) );
 # define KMP_XCHG_FIXED32(p, v)                 __kmp_xchg_fixed32( (p), (v) );
 # define KMP_XCHG_FIXED64(p, v)                 __kmp_xchg_fixed64( (p), (v) );

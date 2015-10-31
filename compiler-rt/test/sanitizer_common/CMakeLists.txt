@@ -19,7 +19,12 @@ foreach(tool ${SUPPORTED_TOOLS})
   if(${tool_toupper}_SUPPORTED_ARCH AND NOT COMPILER_RT_STANDALONE_BUILD)
     list(APPEND SANITIZER_COMMON_TEST_DEPS ${tool})
   endif()
-  foreach(arch ${${tool_toupper}_SUPPORTED_ARCH})
+  set(TEST_ARCH ${${tool_toupper}_SUPPORTED_ARCH})
+  if(APPLE)
+    darwin_filter_host_archs(${tool_toupper}_SUPPORTED_ARCH TEST_ARCH)
+  endif()
+
+  foreach(arch ${TEST_ARCH})
     set(SANITIZER_COMMON_LIT_TEST_MODE ${tool})
     set(SANITIZER_COMMON_TEST_TARGET_ARCH ${arch})
     if(${arch} MATCHES "arm|aarch64")
@@ -48,7 +53,9 @@ if(COMPILER_RT_INCLUDE_TESTS)
   list(APPEND SANITIZER_COMMON_TEST_DEPS SanitizerUnitTests)
 endif()
 
-if(SANITIZER_COMMON_TESTSUITES)
+# FIXME: Re-enable on 64-bit Windows.
+if(SANITIZER_COMMON_TESTSUITES AND
+    (NOT OS_NAME MATCHES "Windows" OR CMAKE_SIZEOF_VOID_P EQUAL 4))
   add_lit_testsuite(check-sanitizer "Running sanitizer_common tests"
     ${SANITIZER_COMMON_TESTSUITES}
     DEPENDS ${SANITIZER_COMMON_TEST_DEPS})

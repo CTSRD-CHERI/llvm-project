@@ -9,7 +9,10 @@ o test_modify_source_file_while_debugging:
   Test the caching mechanism of the source manager.
 """
 
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 from lldbtest import *
 import lldbutil
@@ -25,24 +28,10 @@ class SourceManagerTestCase(TestBase):
         self.line = line_number('main.c', '// Set break point at this line.')
         lldb.skip_build_and_cleanup = False
 
-    @python_api_test
+    @add_test_categories(['pyapi'])
     def test_display_source_python(self):
         """Test display of source using the SBSourceManager API."""
-        self.buildDefault()
-        self.display_source_python()
-
-    def test_move_and_then_display_source(self):
-        """Test that target.source-map settings work by moving main.c to hidden/main.c."""
-        self.buildDefault()
-        self.move_and_then_display_source()
-
-    def test_modify_source_file_while_debugging(self):
-        """Modify a source file while debugging the executable."""
-        self.buildDefault()
-        self.modify_source_file_while_debugging()
-
-    def display_source_python(self):
-        """Display source using the SBSourceManager API."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -81,8 +70,9 @@ class SourceManagerTestCase(TestBase):
         stream.Print(None)
         stream.RedirectToFile(None, True)
 
-    def move_and_then_display_source(self):
+    def test_move_and_then_display_source(self):
         """Test that target.source-map settings work by moving main.c to hidden/main.c."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -108,14 +98,15 @@ class SourceManagerTestCase(TestBase):
         self.expect("source list -n main", SOURCE_DISPLAYED_CORRECTLY,
             substrs = ['Hello world'])
 
-    def modify_source_file_while_debugging(self):
+    def test_modify_source_file_while_debugging(self):
         """Modify a source file while debugging the executable."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -146,24 +137,24 @@ class SourceManagerTestCase(TestBase):
         with open('main.c', 'r') as f:
             original_content = f.read()
             if self.TraceOn():
-                print "original content:", original_content
+                print("original content:", original_content)
 
         # Modify the in-memory copy of the original source code.
         new_content = original_content.replace('Hello world', 'Hello lldb', 1)
 
         # This is the function to restore the original content.
         def restore_file():
-            #print "os.path.getmtime() before restore:", os.path.getmtime('main.c')
+            #print("os.path.getmtime() before restore:", os.path.getmtime('main.c'))
             time.sleep(1)
             with open('main.c', 'wb') as f:
                 f.write(original_content)
             if self.TraceOn():
                 with open('main.c', 'r') as f:
-                    print "content restored to:", f.read()
+                    print("content restored to:", f.read())
             # Touch the file just to be sure.
             os.utime('main.c', None)
             if self.TraceOn():
-                print "os.path.getmtime() after restore:", os.path.getmtime('main.c')
+                print("os.path.getmtime() after restore:", os.path.getmtime('main.c'))
 
 
 
@@ -172,18 +163,11 @@ class SourceManagerTestCase(TestBase):
             time.sleep(1)
             f.write(new_content)
             if self.TraceOn():
-                print "new content:", new_content
-                print "os.path.getmtime() after writing new content:", os.path.getmtime('main.c')
+                print("new content:", new_content)
+                print("os.path.getmtime() after writing new content:", os.path.getmtime('main.c'))
             # Add teardown hook to restore the file to the original content.
             self.addTearDownHook(restore_file)
 
         # Display the source code again.  We should see the updated line.
         self.expect("source list -f main.c -l %d" % self.line, SOURCE_DISPLAYED_CORRECTLY,
             substrs = ['Hello lldb'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -9,7 +9,6 @@
 
 #ifndef liblldb_File_h_
 #define liblldb_File_h_
-#if defined(__cplusplus)
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -104,7 +103,7 @@ public:
     /// path. If \a path is not NULL or empty, this function will call
     /// File::Open (const char *path, uint32_t options, uint32_t permissions).
     ///
-    /// @param[in] path
+    /// @param[in] filespec
     ///     The FileSpec for this file.
     ///
     /// @param[in] options
@@ -133,11 +132,10 @@ public:
     ///
     /// The destructor is virtual in case this class is subclassed.
     //------------------------------------------------------------------
-    virtual
-    ~File ();
+    ~File() override;
 
     bool
-    IsValid () const
+    IsValid() const override
     {
         return DescriptorIsValid() || StreamIsValid();
     }
@@ -216,7 +214,7 @@ public:
           uint32_t permissions = lldb::eFilePermissionsFileDefault);
 
     Error
-    Close ();
+    Close() override;
     
     Error
     Duplicate (const File &rhs);
@@ -225,8 +223,7 @@ public:
     GetDescriptor() const;
 
     WaitableHandle
-    GetWaitableHandle();
-
+    GetWaitableHandle() override;
 
     void
     SetDescriptor(int fd, bool transfer_ownership);
@@ -247,7 +244,7 @@ public:
     /// @param[in] buf
     ///     A buffer where to put the bytes that are read.
     ///
-    /// @param[in/out] num_bytes
+    /// @param[in,out] num_bytes
     ///     The number of bytes to read form the current file position
     ///     which gets modified with the number of bytes that were read.
     ///
@@ -256,7 +253,7 @@ public:
     ///     failure.
     //------------------------------------------------------------------
     Error
-    Read (void *buf, size_t &num_bytes);
+    Read(void *buf, size_t &num_bytes) override;
           
     //------------------------------------------------------------------
     /// Write bytes to a file at the current file position.
@@ -268,7 +265,7 @@ public:
     /// @param[in] buf
     ///     A buffer where to put the bytes that are read.
     ///
-    /// @param[in/out] num_bytes
+    /// @param[in,out] num_bytes
     ///     The number of bytes to write to the current file position
     ///     which gets modified with the number of bytes that were 
     ///     written.
@@ -278,7 +275,7 @@ public:
     ///     failure.
     //------------------------------------------------------------------
     Error
-    Write (const void *buf, size_t &num_bytes);
+    Write(const void *buf, size_t &num_bytes) override;
 
     //------------------------------------------------------------------
     /// Seek to an offset relative to the beginning of the file.
@@ -335,7 +332,7 @@ public:
     /// @see File::Read (void *, size_t, off_t &)
     /// @see File::Write (const void *, size_t, off_t &)
     ///
-    /// @param[in/out] offset
+    /// @param[in,out] offset
     ///     The offset to seek to within the file relative to the 
     ///     end of the file which gets filled in with the resulting
     ///     absolute file offset.
@@ -357,14 +354,14 @@ public:
     /// own file position markers and reads on other threads won't mess
     /// up the current read.
     ///
-    /// @param[in] buf
+    /// @param[in] dst
     ///     A buffer where to put the bytes that are read.
     ///
-    /// @param[in/out] num_bytes
+    /// @param[in,out] num_bytes
     ///     The number of bytes to read form the current file position
     ///     which gets modified with the number of bytes that were read.
     ///
-    /// @param[in/out] offset
+    /// @param[in,out] offset
     ///     The offset within the file from which to read \a num_bytes
     ///     bytes. This offset gets incremented by the number of bytes
     ///     that were read.
@@ -383,11 +380,11 @@ public:
     /// own file position markers and reads on other threads won't mess
     /// up the current read.
     ///
-    /// @param[in/out] num_bytes
+    /// @param[in,out] num_bytes
     ///     The number of bytes to read form the current file position
     ///     which gets modified with the number of bytes that were read.
     ///
-    /// @param[in/out] offset
+    /// @param[in,out] offset
     ///     The offset within the file from which to read \a num_bytes
     ///     bytes. This offset gets incremented by the number of bytes
     ///     that were read.
@@ -419,15 +416,15 @@ public:
     /// their own locking externally to avoid multiple people writing
     /// to the file at the same time.
     ///
-    /// @param[in] buf
+    /// @param[in] src
     ///     A buffer containing the bytes to write.
     ///
-    /// @param[in/out] num_bytes
+    /// @param[in,out] num_bytes
     ///     The number of bytes to write to the file at offset \a offset.
     ///     \a num_bytes gets modified with the number of bytes that 
     ///     were read.
     ///
-    /// @param[in/out] offset
+    /// @param[in,out] offset
     ///     The offset within the file at which to write \a num_bytes
     ///     bytes. This offset gets incremented by the number of bytes
     ///     that were written.
@@ -497,6 +494,9 @@ public:
     //------------------------------------------------------------------
     bool
     GetIsRealTerminal ();
+    
+    bool
+    GetIsTerminalWithColors ();
 
     //------------------------------------------------------------------
     /// Output printf formatted output to the stream.
@@ -549,9 +549,9 @@ protected:
     bool m_own_stream;
     LazyBool m_is_interactive;
     LazyBool m_is_real_terminal;
+    LazyBool m_supports_colors;
 };
 
 } // namespace lldb_private
 
-#endif  // #if defined(__cplusplus)
-#endif  // liblldb_File_h_
+#endif // liblldb_File_h_

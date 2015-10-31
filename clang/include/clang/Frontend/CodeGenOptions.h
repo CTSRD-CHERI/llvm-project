@@ -16,6 +16,7 @@
 
 #include "clang/Basic/Sanitizers.h"
 #include "llvm/Support/Regex.h"
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -120,6 +121,8 @@ public:
   /// non-empty.
   std::string DwarfDebugFlags;
 
+  std::map<std::string, std::string> DebugPrefixMap;
+
   /// The ABI to use for passing floating point arguments.
   std::string FloatABI;
 
@@ -155,6 +158,7 @@ public:
   std::vector<std::string> DependentLibraries;
 
   /// Name of the profile file to use as output for -fprofile-instr-generate
+  /// and -fprofile-generate.
   std::string InstrProfileOutput;
 
   /// Name of the profile file to use with -fprofile-sample-use.

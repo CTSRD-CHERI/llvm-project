@@ -2,16 +2,19 @@
 Test that the lldb-mi driver prints prompt properly.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import lldbmi_testcase
 from lldbtest import *
-import unittest2
 
 class MiPromptTestCase(lldbmi_testcase.MiTestCaseBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_prompt(self):
         """Test that 'lldb-mi --interpreter' echos '(gdb)' after commands and events."""
@@ -50,6 +53,3 @@ class MiPromptTestCase(lldbmi_testcase.MiTestCaseBase):
         # Test that lldb-mi is ready after program exited
         self.expect("\*stopped,reason=\"exited-normally\"")
         self.expect(self.child_prompt, exactly = True)
-
-if __name__ == '__main__':
-    unittest2.main()

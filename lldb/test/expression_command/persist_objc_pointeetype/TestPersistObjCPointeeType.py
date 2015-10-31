@@ -2,7 +2,10 @@
 Test that we can p *objcObject
 """
 
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import lldbutil
 from lldbtest import *
@@ -18,25 +21,16 @@ class PersistObjCPointeeType(TestBase):
         self.line = line_number('main.m','// break here')
 
     @skipUnlessDarwin
-    @dsym_test
-    @expectedFailureDarwin('http://llvm.org/pr23504') # can't compile inferior with Xcode 6.1.1 or 6.2
-    def test_with_dsym(self):
+    @expectedFailureAll(
+        bugnumber='http://llvm.org/pr23504',
+        oslist=['macosx'], compiler='clang', compiler_version=['<', '7.0.0'])
+    def test_with(self):
         """Test that we can p *objcObject"""
-        self.buildDsym()
-        self.do_my_test()
+        self.build()
 
-    @skipUnlessDarwin
-    @dwarf_test
-    @expectedFailureDarwin('http://llvm.org/pr23504') # can't compile inferior with Xcode 6.1.1 or 6.2
-    def test_with_dwarf(self):
-        """Test that we can p *objcObject"""
-        self.buildDwarf()
-        self.do_my_test()
-
-    def do_my_test(self):
         def cleanup():
             pass
-        
+
         # Execute the cleanup function during test case tear down.
         self.addTearDownHook(cleanup)
 
@@ -44,7 +38,7 @@ class PersistObjCPointeeType(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.m", self.line, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         
         self.expect("p *self", substrs=['_sc_name = nil',
         '_sc_name2 = nil',
@@ -54,9 +48,3 @@ class PersistObjCPointeeType(TestBase):
         '_sc_name6 = nil',
         '_sc_name7 = nil',
         '_sc_name8 = nil'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -2,16 +2,19 @@
 Test lldb-mi -var-xxx commands.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import lldbmi_testcase
 from lldbtest import *
-import unittest2
 
 class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     @expectedFailureAll("llvm.org/pr23560", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
     def test_lldbmi_eval(self):
@@ -33,7 +36,7 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
 
         # Print non-existant variable
         self.runCmd("-var-create var1 * undef")
-        self.expect("\^error,msg=\"error: error: use of undeclared identifier \'undef\'\s+error: 1 errors parsing expression\"")
+        self.expect("\^error,msg=\"error: error: use of undeclared identifier \'undef\'\\\\nerror: 1 errors parsing expression\\\\n\"")
         self.runCmd("-data-evaluate-expression undef")
         self.expect("\^error,msg=\"Could not evaluate expression\"")
 
@@ -123,7 +126,7 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^done,numchild=\"1\",children=\[child=\{name=\"var6\.\*\$[0-9]+\",exp=\"\*\$[0-9]+\",numchild=\"0\",type=\"const char\",thread-id=\"4294967295\",value=\"47 '/'\",has_more=\"0\"\}\],has_more=\"0\"") #FIXME -var-list-children shows invalid thread-id
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux # llvm.org/pr22841: lldb-mi tests fail on all Linux buildbots
     def test_lldbmi_var_update(self):
@@ -188,7 +191,7 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^done,changelist=\[\{name=\"var_complx_array\",value=\"\[2\]\",in_scope=\"true\",type_changed=\"false\",has_more=\"0\"\}\]")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_var_create_register(self):
         """Test that 'lldb-mi --interpreter' works for -var-create $regname."""
@@ -228,7 +231,7 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^done,register-values=\[{number=\"0\",value=\"6\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux # llvm.org/pr22841: lldb-mi tests fail on all Linux buildbots
     def test_lldbmi_var_list_children(self):
@@ -255,6 +258,17 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^done,name=\"var_complx_array\",numchild=\"2\",value=\"\[2\]\",type=\"complex_type \[2\]\",thread-id=\"1\",has_more=\"0\"")
         self.runCmd("-var-create var_pcomplx * pcomplx")
         self.expect("\^done,name=\"var_pcomplx\",numchild=\"2\",value=\"\{\.\.\.\}\",type=\"pcomplex_type\",thread-id=\"1\",has_more=\"0\"")
+
+        # Test that -var-evaluate-expression can evaluate the children of created varobj
+        self.runCmd("-var-list-children var_complx")
+        self.runCmd("-var-evaluate-expression var_complx.i")
+        self.expect("\^done,value=\"3\"")
+        self.runCmd("-var-list-children var_complx_array")
+        self.runCmd("-var-evaluate-expression var_complx_array.[0]")
+        self.expect("\^done,value=\"\{...\}\"")
+        self.runCmd("-var-list-children var_pcomplx")
+        self.runCmd("-var-evaluate-expression var_pcomplx.complex_type")
+        self.expect("\^done,value=\"\{...\}\"")
 
         # Test that -var-list-children lists empty children if range is empty
         # (and that print-values is optional)
@@ -318,5 +332,69 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
         self.runCmd("-var-list-children 0 var_complx 0")
         self.expect("\^error,msg=\"Command 'var-list-children'. Variable children range invalid\"")
 
-if __name__ == '__main__':
-    unittest2.main()
+    @lldbmi_test
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi working on Windows
+    @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
+    @skipIfLinux # llvm.org/pr22841: lldb-mi tests fail on all Linux buildbots
+    def test_lldbmi_var_create_for_stl_types(self):
+        """Test that 'lldb-mi --interpreter' print summary for STL types."""
+
+        self.spawnLldbMi(args = None)
+
+        # Load executable
+        self.runCmd("-file-exec-and-symbols %s" % self.myexe)
+        self.expect("\^done")
+
+        # Run to BP_gdb_set_show_print_char_array_as_string_test
+        line = line_number('main.cpp', '// BP_cpp_stl_types_test')
+        self.runCmd("-break-insert main.cpp:%d" % line)
+        self.expect("\^done,bkpt={number=\"1\"")
+        self.runCmd("-exec-run")
+        self.expect("\^running")
+        self.expect("\*stopped,reason=\"breakpoint-hit\"")
+
+        # Test for std::string
+        self.runCmd("-var-create - * std_string")
+        self.expect('\^done,name="var\d+",numchild="[0-9]+",value="\\\\"hello\\\\"",type="std::[\S]*?string",thread-id="1",has_more="0"')
+ 
+    @lldbmi_test
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi working on Windows
+    @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
+    @skipIfLinux # llvm.org/pr22841: lldb-mi tests fail on all Linux buildbots
+    def test_lldbmi_var_create_for_unnamed_objects(self):
+        """Test that 'lldb-mi --interpreter' can expand unnamed structures and unions."""
+
+        self.spawnLldbMi(args = None)
+
+        # Load executable
+        self.runCmd("-file-exec-and-symbols %s" % self.myexe)
+        self.expect("\^done")
+
+        # Run to breakpoint
+        line = line_number('main.cpp', '// BP_unnamed_objects_test')
+        self.runCmd("-break-insert main.cpp:%d" % line)
+        self.expect("\^done,bkpt={number=\"1\"")
+        self.runCmd("-exec-run")
+        self.expect("\^running")
+        self.expect("\*stopped,reason=\"breakpoint-hit\"")
+
+        # Evaluate struct_with_unions type and its children
+        self.runCmd("-var-create v0 * swu")
+        self.expect('\^done,name="v0",numchild="2",value="\{\.\.\.\}",type="struct_with_unions",thread-id="1",has_more="0"')
+       
+        self.runCmd("-var-list-children v0")
+        
+        # inspect the first unnamed union
+        self.runCmd("-var-list-children v0.$0")
+        self.runCmd("-var-evaluate-expression v0.$0.u_i")
+        self.expect('\^done,value="1"')
+        
+        # inspect the second unnamed union
+        self.runCmd("-var-list-children v0.$1")
+        self.runCmd("-var-evaluate-expression v0.$1.u1")
+        self.expect('\^done,value="-1"')
+        # inspect unnamed structure
+        self.runCmd("-var-list-children v0.$1.$1")
+        self.runCmd("-var-evaluate-expression v0.$1.$1.s1")
+        self.expect('\^done,value="-1"')
+

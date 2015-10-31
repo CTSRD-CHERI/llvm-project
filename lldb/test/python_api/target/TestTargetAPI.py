@@ -2,204 +2,19 @@
 Test SBTarget APIs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
+import unittest2
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class TargetAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_find_global_variables_with_dsym(self):
-        """Exercise SBTaget.FindGlobalVariables() API."""
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.find_global_variables('a.out')
-
-    #rdar://problem/9700873
-    # Find global variable value fails for dwarf if inferior not started
-    # (Was CrashTracer: [USER] 1 crash in Python at _lldb.so: lldb_private::MemoryCache::Read + 94)
-    #
-    # It does not segfaults now.  But for dwarf, the variable value is None if
-    # the inferior process does not exist yet.  The radar has been updated.
-    #@unittest232.skip("segmentation fault -- skipping")
-    @python_api_test
-    @dwarf_test
-    def test_find_global_variables_with_dwarf(self):
-        """Exercise SBTarget.FindGlobalVariables() API."""
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.find_global_variables('b.out')
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_find_functions_with_dsym(self):
-        """Exercise SBTaget.FindFunctions() API."""
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.find_functions('a.out')
-
-    @python_api_test
-    @dwarf_test
-    def test_find_functions_with_dwarf(self):
-        """Exercise SBTarget.FindFunctions() API."""
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.find_functions('b.out')
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_get_description_with_dsym(self):
-        """Exercise SBTaget.GetDescription() API."""
-        self.buildDsym()
-        self.get_description()
-
-    @python_api_test
-    @dwarf_test
-    def test_get_description_with_dwarf(self):
-        """Exercise SBTarget.GetDescription() API."""
-        self.buildDwarf()
-        self.get_description()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    @expectedFailureDarwin("llvm.org/pr20273")
-    def test_launch_new_process_and_redirect_stdout_with_dsym(self):
-        """Exercise SBTaget.Launch() API."""
-        self.buildDsym()
-        self.launch_new_process_and_redirect_stdout()
-
-    @python_api_test
-    @dwarf_test
-    @expectedFailureDarwin("llvm.org/pr20273")
-    def test_launch_new_process_and_redirect_stdout_with_dwarf(self):
-        """Exercise SBTarget.Launch() API."""
-        self.buildDwarf()
-        self.launch_new_process_and_redirect_stdout()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_resolve_symbol_context_with_address_with_dsym(self):
-        """Exercise SBTaget.ResolveSymbolContextForAddress() API."""
-        self.buildDsym()
-        self.resolve_symbol_context_with_address()
-
-    @python_api_test
-    @dwarf_test
-    def test_resolve_symbol_context_with_address_with_dwarf(self):
-        """Exercise SBTarget.ResolveSymbolContextForAddress() API."""
-        self.buildDwarf()
-        self.resolve_symbol_context_with_address()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_get_platform_with_dsym(self):
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('a.out')
-        platform = target.platform
-        self.assertTrue(platform, VALID_PLATFORM)
-
-    @python_api_test
-    @dwarf_test
-    def test_get_platform_with_dwarf(self):
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('b.out')
-        platform = target.platform
-        self.assertTrue(platform, VALID_PLATFORM)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_get_data_byte_size_with_dsym(self):
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('a.out')
-        self.assertEquals(target.data_byte_size, 1)
-
-    @python_api_test
-    @dwarf_test
-    def test_get_data_byte_size_with_dwarf(self):
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('b.out')
-        self.assertEquals(target.data_byte_size, 1)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_get_code_byte_size_with_dsym(self):
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('a.out')
-        self.assertEquals(target.code_byte_size, 1)
-
-    @python_api_test
-    @dwarf_test
-    def test_get_code_byte_size_with_dwarf(self):
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('b.out')
-        self.assertEquals(target.code_byte_size, 1)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_resolve_file_address_with_dsym(self):
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('a.out')
-        self.resolve_file_address(target)
-
-    @python_api_test
-    @dwarf_test
-    def test_resolve_file_address_with_dwarf(self):
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('b.out')
-        self.resolve_file_address(target)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_read_memory_with_dsym(self):
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('a.out')
-        self.read_memory(target)
-
-    @python_api_test
-    @dwarf_test
-    def test_read_memory_with_dwarf(self):
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        target = self.create_simple_target('b.out')
-        self.read_memory(target)
 
     def setUp(self):
         # Call super's setUp().
@@ -209,7 +24,103 @@ class TargetAPITestCase(TestBase):
         self.line2 = line_number('main.c', '// Find the line number for breakpoint 2 here.')
         self.line_main = line_number("main.c", "// Set a break at entry to main.")
 
-    def read_memory(self, target):
+    #rdar://problem/9700873
+    # Find global variable value fails for dwarf if inferior not started
+    # (Was CrashTracer: [USER] 1 crash in Python at _lldb.so: lldb_private::MemoryCache::Read + 94)
+    #
+    # It does not segfaults now.  But for dwarf, the variable value is None if
+    # the inferior process does not exist yet.  The radar has been updated.
+    #@unittest232.skip("segmentation fault -- skipping")
+    @add_test_categories(['pyapi'])
+    def test_find_global_variables(self):
+        """Exercise SBTarget.FindGlobalVariables() API."""
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        self.find_global_variables('b.out')
+
+    @add_test_categories(['pyapi'])
+    @expectedFailureWindows("llvm.org/pr24778")
+    def test_find_functions(self):
+        """Exercise SBTarget.FindFunctions() API."""
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        self.find_functions('b.out')
+
+    @add_test_categories(['pyapi'])
+    def test_get_description(self):
+        """Exercise SBTarget.GetDescription() API."""
+        self.build()
+        self.get_description()
+
+    @add_test_categories(['pyapi'])
+    def test_launch_new_process_and_redirect_stdout(self):
+        """Exercise SBTarget.Launch() API."""
+        self.build()
+        self.launch_new_process_and_redirect_stdout()
+
+    @add_test_categories(['pyapi'])
+    def test_resolve_symbol_context_with_address(self):
+        """Exercise SBTarget.ResolveSymbolContextForAddress() API."""
+        self.build()
+        self.resolve_symbol_context_with_address()
+
+    @add_test_categories(['pyapi'])
+    def test_get_platform(self):
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        target = self.create_simple_target('b.out')
+        platform = target.platform
+        self.assertTrue(platform, VALID_PLATFORM)
+
+    @add_test_categories(['pyapi'])
+    def test_get_data_byte_size(self):
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        target = self.create_simple_target('b.out')
+        self.assertEquals(target.data_byte_size, 1)
+
+    @add_test_categories(['pyapi'])
+    def test_get_code_byte_size(self):
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        target = self.create_simple_target('b.out')
+        self.assertEquals(target.code_byte_size, 1)
+
+    @add_test_categories(['pyapi'])
+    def test_resolve_file_address(self):
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        target = self.create_simple_target('b.out')
+
+        # find the file address in the .data section of the main
+        # module            
+        data_section = self.find_data_section(target)
+        data_section_addr = data_section.file_addr
+
+        # resolve the above address, and compare the address produced
+        # by the resolution against the original address/section       
+        res_file_addr = target.ResolveFileAddress(data_section_addr)
+        self.assertTrue(res_file_addr.IsValid())
+
+        self.assertEquals(data_section_addr, res_file_addr.file_addr) 
+
+        data_section2 = res_file_addr.section
+        self.assertIsNotNone(data_section2)
+        self.assertEquals(data_section.name, data_section2.name) 
+
+    @add_test_categories(['pyapi'])
+    def test_read_memory(self):
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        target = self.create_simple_target('b.out')
+
         breakpoint = target.BreakpointCreateByLocation("main.c", self.line_main)
         self.assertTrue(breakpoint, VALID_BREAKPOINT)
 
@@ -234,23 +145,6 @@ class TargetAPITestCase(TestBase):
         target = self.dbg.CreateTarget(exe)
         self.assertTrue(target, VALID_TARGET)
         return target
-
-    def resolve_file_address(self, target):
-        # find the file address in the .data section of the main
-        # module            
-        data_section = self.find_data_section(target)
-        data_section_addr = data_section.file_addr
-
-        # resolve the above address, and compare the address produced
-        # by the resolution against the original address/section       
-        res_file_addr = target.ResolveFileAddress(data_section_addr)
-        self.assertTrue(res_file_addr.IsValid())
-
-        self.assertEquals(data_section_addr, res_file_addr.file_addr) 
-
-        data_section2 = res_file_addr.section
-        self.assertIsNotNone(data_section2)
-        self.assertEquals(data_section.name, data_section2.name) 
 
     def find_data_section(self, target):
         mod = target.GetModuleAtIndex(0)
@@ -416,8 +310,8 @@ class TargetAPITestCase(TestBase):
         # Now create the two breakpoints inside function 'a'.
         breakpoint1 = target.BreakpointCreateByLocation('main.c', self.line1)
         breakpoint2 = target.BreakpointCreateByLocation('main.c', self.line2)
-        #print "breakpoint1:", breakpoint1
-        #print "breakpoint2:", breakpoint2
+        #print("breakpoint1:", breakpoint1)
+        #print("breakpoint2:", breakpoint2)
         self.assertTrue(breakpoint1 and
                         breakpoint1.GetNumLocations() == 1,
                         VALID_BREAKPOINT)
@@ -452,33 +346,26 @@ class TargetAPITestCase(TestBase):
 
         address2 = lineEntry.GetStartAddress()
 
-        #print "address1:", address1
-        #print "address2:", address2
+        #print("address1:", address1)
+        #print("address2:", address2)
 
         # Now call SBTarget.ResolveSymbolContextForAddress() with the addresses from our line entry.
         context1 = target.ResolveSymbolContextForAddress(address1, lldb.eSymbolContextEverything)
         context2 = target.ResolveSymbolContextForAddress(address2, lldb.eSymbolContextEverything)
 
         self.assertTrue(context1 and context2)
-        #print "context1:", context1
-        #print "context2:", context2
+        #print("context1:", context1)
+        #print("context2:", context2)
 
         # Verify that the context point to the same function 'a'.
         symbol1 = context1.GetSymbol()
         symbol2 = context2.GetSymbol()
         self.assertTrue(symbol1 and symbol2)
-        #print "symbol1:", symbol1
-        #print "symbol2:", symbol2
+        #print("symbol1:", symbol1)
+        #print("symbol2:", symbol2)
 
         from lldbutil import get_description
         desc1 = get_description(symbol1)
         desc2 = get_description(symbol2)
         self.assertTrue(desc1 and desc2 and desc1 == desc2,
                         "The two addresses should resolve to the same symbol")
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

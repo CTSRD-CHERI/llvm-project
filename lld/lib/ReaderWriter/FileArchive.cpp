@@ -11,6 +11,7 @@
 #include "lld/Core/LLVM.h"
 #include "lld/Core/LinkingContext.h"
 #include "lld/Core/Parallel.h"
+#include "lld/Driver/Driver.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Object/Archive.h"
@@ -50,7 +51,10 @@ public:
     Archive::child_iterator ci = member->second;
 
     // Don't return a member already returned
-    const char *memberStart = ci->getBuffer().data();
+    ErrorOr<StringRef> buf = ci->getBuffer();
+    if (!buf)
+      return nullptr;
+    const char *memberStart = buf->data();
     if (_membersInstantiated.count(memberStart))
       return nullptr;
     if (dataSymbolOnly && !isDataSymbol(ci, name))
@@ -73,8 +77,11 @@ public:
     if (instantiateMember(ci, result))
       return nullptr;
 
-    // give up the pointer so that this object no longer manages it
-    return result.release();
+    File *file = result.get();
+    _filesReturned.push_back(std::move(result));
+
+    // Give up the file pointer. It was stored and will be destroyed with destruction of FileArchive
+    return file;
   }
 
   // Instantiate a member file containing a given symbol name.
@@ -85,7 +92,10 @@ public:
     Archive::child_iterator ci = member->second;
 
     // Do nothing if a member is already instantiated.
-    const char *memberStart = ci->getBuffer().data();
+    ErrorOr<StringRef> buf = ci->getBuffer();
+    if (!buf)
+      return;
+    const char *memberStart = buf->data();
     if (_membersInstantiated.count(memberStart))
       return;
 
@@ -205,10 +215,10 @@ private:
 
     for (SymbolRef sym : obj->symbols()) {
       // Skip until we find the symbol.
-      StringRef name;
-      if (sym.getName(name))
+      ErrorOr<StringRef> name = sym.getName();
+      if (!name)
         return false;
-      if (name != symbol)
+      if (*name != symbol)
         continue;
       uint32_t flags = sym.getFlags();
       if (flags <= SymbolRef::SF_Undefined)
@@ -234,9 +244,9 @@ private:
       Archive::child_iterator member = memberOrErr.get();
       DEBUG_WITH_TYPE(
           "FileArchive",
-          llvm::dbgs() << llvm::format("0x%08llX ", member->getBuffer().data())
+          llvm::dbgs() << llvm::format("0x%08llX ", member->getBuffer()->data())
                        << "'" << name << "'\n");
-      _symbolMemberMap[name] = member;
+      _symbolMemberMap.insert(std::make_pair(name, member));
     }
     return std::error_code();
   }
@@ -253,6 +263,7 @@ private:
   std::vector<std::unique_ptr<MemoryBuffer>> _memberBuffers;
   std::map<const char *, std::unique_ptr<Future<File *>>> _preloaded;
   std::mutex _mutex;
+  FileVector _filesReturned;
 };
 
 class ArchiveReader : public Reader {

@@ -2,8 +2,12 @@
 Test the lldb disassemble command on lib stdc++.
 """
 
-import os, time
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
+import os, time
 import lldb
 from lldbtest import *
 import lldbutil
@@ -23,7 +27,7 @@ class StdCXXDisassembleTestCase(TestBase):
     @unittest2.skipIf(TestBase.skipLongRunningTest(), "Skip this long running test")
     def test_stdcxx_disasm(self):
         """Do 'disassemble' on each and every 'Code' symbol entry from the std c++ lib."""
-        self.buildDefault()
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -34,7 +38,7 @@ class StdCXXDisassembleTestCase(TestBase):
         # Break on line 13 of main.cpp.
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # Now let's get the target as well as the process objects.
         target = self.dbg.GetSelectedTarget()
@@ -94,9 +98,9 @@ class StdCXXDisassembleTestCase(TestBase):
             if match:
                 LA = match.group(1)
                 if self.TraceOn():
-                    print "line:", line
-                    print "load address:", LA
-                    print "SA:", SA
+                    print("line:", line)
+                    print("load address:", LA)
+                    print("SA:", SA)
                 if SA and LA:
                     if int(LA, 16) > int(SA, 16):
                         self.runCmd("disassemble -s %s -e %s" % (SA, LA))
@@ -104,10 +108,3 @@ class StdCXXDisassembleTestCase(TestBase):
             else:
                 # This entry is not a Code entry.  Reset SA = None.
                 SA = None
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

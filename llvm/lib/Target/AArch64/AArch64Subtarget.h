@@ -44,12 +44,19 @@ protected:
   bool HasNEON;
   bool HasCrypto;
   bool HasCRC;
+  bool HasPerfMon;
 
   // HasZeroCycleRegMove - Has zero-cycle register mov instructions.
   bool HasZeroCycleRegMove;
 
   // HasZeroCycleZeroing - Has zero-cycle zeroing instructions.
   bool HasZeroCycleZeroing;
+
+  // StrictAlign - Disallow unaligned memory accesses.
+  bool StrictAlign;
+
+  // ReserveX18 - X18 is not available as a general purpose register.
+  bool ReserveX18;
 
   bool IsLittle;
 
@@ -101,10 +108,14 @@ public:
 
   bool hasZeroCycleZeroing() const { return HasZeroCycleZeroing; }
 
+  bool requiresStrictAlign() const { return StrictAlign; }
+
+  bool isX18Reserved() const { return ReserveX18; }
   bool hasFPARMv8() const { return HasFPARMv8; }
   bool hasNEON() const { return HasNEON; }
   bool hasCrypto() const { return HasCrypto; }
   bool hasCRC() const { return HasCRC; }
+  bool hasPerfMon() const { return HasPerfMon; }
 
   bool isLittleEndian() const { return IsLittle; }
 
@@ -112,6 +123,7 @@ public:
   bool isTargetIOS() const { return TargetTriple.isiOS(); }
   bool isTargetLinux() const { return TargetTriple.isOSLinux(); }
   bool isTargetWindows() const { return TargetTriple.isOSWindows(); }
+  bool isTargetAndroid() const { return TargetTriple.isAndroid(); }
 
   bool isTargetCOFF() const { return TargetTriple.isOSBinFormatCOFF(); }
   bool isTargetELF() const { return TargetTriple.isOSBinFormatELF(); }

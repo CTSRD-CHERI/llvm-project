@@ -54,23 +54,62 @@ template <class ELFT> bool DynamicFile<ELFT>::canParse(file_magic magic) {
 }
 
 template <class ELFT> std::error_code DynamicFile<ELFT>::doParse() {
+  typedef llvm::object::ELFFile<ELFT> ELFO;
+  typedef typename ELFO::Elf_Shdr Elf_Shdr;
+  typedef typename ELFO::Elf_Dyn Elf_Dyn;
+
   std::error_code ec;
-  _objFile.reset(new llvm::object::ELFFile<ELFT>(_mb->getBuffer(), ec));
+  _objFile.reset(new ELFO(_mb->getBuffer(), ec));
   if (ec)
     return ec;
 
-  llvm::object::ELFFile<ELFT> &obj = *_objFile;
+  ELFO &obj = *_objFile;
 
-  _soname = obj.getLoadName();
+  const char *base = _mb->getBuffer().data();
+  const Elf_Dyn *dynStart = nullptr;
+  const Elf_Dyn *dynEnd = nullptr;
+
+  const Elf_Shdr *dynSymSec = nullptr;
+  for (const Elf_Shdr &sec : obj.sections()) {
+    switch (sec.sh_type) {
+    case llvm::ELF::SHT_DYNAMIC: {
+      dynStart = reinterpret_cast<const Elf_Dyn *>(base + sec.sh_offset);
+      uint64_t size = sec.sh_size;
+      if (size % sizeof(Elf_Dyn))
+        return llvm::object::object_error::parse_failed;
+      dynEnd = dynStart + size / sizeof(Elf_Dyn);
+      break;
+    }
+    case llvm::ELF::SHT_DYNSYM:
+      dynSymSec = &sec;
+      break;
+    }
+  }
+
+  ErrorOr<StringRef> strTableOrErr = obj.getStringTableForSymtab(*dynSymSec);
+  if (std::error_code ec = strTableOrErr.getError())
+    return ec;
+  StringRef stringTable = *strTableOrErr;
+
+  for (const Elf_Dyn &dyn : llvm::make_range(dynStart, dynEnd)) {
+    if (dyn.d_tag == llvm::ELF::DT_SONAME) {
+      uint64_t offset = dyn.getVal();
+      if (offset >= stringTable.size())
+        return llvm::object::object_error::parse_failed;
+      _soname = StringRef(stringTable.data() + offset);
+      break;
+    }
+  }
+
   if (_soname.empty())
     _soname = llvm::sys::path::filename(path());
 
   // Create a map from names to dynamic symbol table entries.
   // TODO: This should use the object file's build in hash table instead if
   // it exists.
-  for (auto i = obj.dynamic_symbol_begin(), e = obj.dynamic_symbol_end();
+  for (auto i = obj.symbol_begin(dynSymSec), e = obj.symbol_end(dynSymSec);
        i != e; ++i) {
-    auto name = obj.getSymbolName(i, true);
+    auto name = i->getName(stringTable);
     if ((ec = name.getError()))
       return ec;
 

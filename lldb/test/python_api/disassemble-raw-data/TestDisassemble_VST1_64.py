@@ -2,9 +2,12 @@
 Use lldb Python API to disassemble raw machine code bytes
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,15 +15,12 @@ class Disassemble_VST1_64(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @python_api_test
+    @skipIf(True) # llvm.org/pr24575: all tests get ERRORs in dotest.py after this
+    @add_test_categories(['pyapi'])
+    @no_debug_info_test
     def test_disassemble_invalid_vst_1_64_raw_data(self):
         """Test disassembling invalid vst1.64 raw bytes with the API."""
-        self.disassemble_invalid_vst_1_64_raw_data()
-
-    def disassemble_invalid_vst_1_64_raw_data(self):
-        """Test disassembling invalid vst1.64 raw bytes with the API."""
         # Create a target from the debugger.
-
         target = self.dbg.CreateTargetWithFileAndTargetTriple ("", "thumbv7")
         self.assertTrue(target, VALID_TARGET)
 
@@ -33,9 +33,9 @@ class Disassemble_VST1_64(TestBase):
         insts = target.GetInstructions(lldb.SBAddress(), raw_bytes)
 
         if self.TraceOn():
-            print
+            print()
             for i in insts:
-                print "Disassembled%s" % str(i)
+                print("Disassembled%s" % str(i))
 
         # Remove the following return statement when the radar is fixed.
         return
@@ -50,15 +50,8 @@ class Disassemble_VST1_64(TestBase):
         inst = insts.GetInstructionAtIndex(0)
 
         if self.TraceOn():
-            print
-            print "Raw bytes:    ", [hex(x) for x in raw_bytes]
-            print "Disassembled%s" % str(inst)
+            print()
+            print("Raw bytes:    ", [hex(x) for x in raw_bytes])
+            print("Disassembled%s" % str(inst))
  
         self.assertTrue (inst.GetMnemonic(target) == "vst1.64")
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

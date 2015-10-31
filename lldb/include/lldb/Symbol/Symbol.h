@@ -152,16 +152,26 @@ public:
     lldb::addr_t
     ResolveCallableAddress(Target &target) const;
 
-    const ConstString &
-    GetName () const
-    {
-        return m_mangled.GetName();
-    }
+    ConstString
+    GetName () const;
 
+    ConstString
+    GetNameNoArguments () const;
+
+    ConstString
+    GetDisplayName () const;
+    
     uint32_t
     GetID() const
     {
         return m_uid;
+    }
+
+    lldb::LanguageType
+    GetLanguage() const
+    {
+        // TODO: See if there is a way to determine the language for a symbol somehow, for now just return our best guess
+        return m_mangled.GuessLanguage();
     }
 
     void
@@ -323,6 +333,7 @@ public:
     {
         return m_demangled_is_synthesized;
     }
+
     void
     SetDemangledNameIsSynthesized(bool b)
     {
@@ -344,22 +355,22 @@ public:
     ///
     /// @see SymbolContextScope
     //------------------------------------------------------------------
-    virtual void
-    CalculateSymbolContext (SymbolContext *sc);
+    void
+    CalculateSymbolContext(SymbolContext *sc) override;
 
-    virtual lldb::ModuleSP
-    CalculateSymbolContextModule ();
+    lldb::ModuleSP
+    CalculateSymbolContextModule() override;
     
-    virtual Symbol *
-    CalculateSymbolContextSymbol ();
+    Symbol *
+    CalculateSymbolContextSymbol() override;
 
     //------------------------------------------------------------------
     /// @copydoc SymbolContextScope::DumpSymbolContext(Stream*)
     ///
     /// @see SymbolContextScope
     //------------------------------------------------------------------
-    virtual void
-    DumpSymbolContext (Stream *s);
+    void
+    DumpSymbolContext(Stream *s) override;
 
     lldb::DisassemblerSP
     GetInstructions (const ExecutionContext &exe_ctx,
@@ -401,4 +412,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif  // liblldb_Symbol_h_
+#endif // liblldb_Symbol_h_

@@ -23,7 +23,7 @@
 #include "lldb/Breakpoint/WatchpointOptions.h"
 #include "lldb/Breakpoint/StoppointLocation.h"
 #include "lldb/Core/UserID.h"
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/Target.h"
 
 namespace lldb_private {
@@ -38,18 +38,16 @@ public:
         public EventData
     {
     public:
+        WatchpointEventData (lldb::WatchpointEventType sub_type,
+                             const lldb::WatchpointSP &new_watchpoint_sp);
+
+        ~WatchpointEventData() override;
 
         static const ConstString &
         GetFlavorString ();
 
-        virtual const ConstString &
-        GetFlavor () const;
-
-        WatchpointEventData (lldb::WatchpointEventType sub_type,
-                             const lldb::WatchpointSP &new_watchpoint_sp);
-
-        virtual
-        ~WatchpointEventData();
+        const ConstString &
+        GetFlavor() const override;
 
         lldb::WatchpointEventType
         GetWatchpointEventType () const;
@@ -57,8 +55,8 @@ public:
         lldb::WatchpointSP &
         GetWatchpoint ();
         
-        virtual void
-        Dump (Stream *s) const;
+        void
+        Dump(Stream *s) const override;
 
         static lldb::WatchpointEventType
         GetWatchpointEventTypeFromEvent (const lldb::EventSP &event_sp);
@@ -77,8 +75,8 @@ public:
         DISALLOW_COPY_AND_ASSIGN (WatchpointEventData);
     };
 
-    Watchpoint (Target& target, lldb::addr_t addr, uint32_t size, const ClangASTType *type, bool hardware = true);
-    ~Watchpoint ();
+    Watchpoint (Target& target, lldb::addr_t addr, uint32_t size, const CompilerType *type, bool hardware = true);
+    ~Watchpoint() override;
 
     void
     IncrementFalseAlarmsAndReviseHitCount();
@@ -89,11 +87,11 @@ public:
     void
     SetEnabled (bool enabled, bool notify = true);
 
-    virtual bool
-    IsHardware () const;
+    bool
+    IsHardware() const override;
 
-    virtual bool
-    ShouldStop (StoppointCallbackContext *context);
+    bool
+    ShouldStop(StoppointCallbackContext *context) override;
 
     bool        WatchpointRead () const;
     bool        WatchpointWrite () const;
@@ -110,7 +108,7 @@ public:
     bool        CaptureWatchedValue (const ExecutionContext &exe_ctx);
 
     void        GetDescription (Stream *s, lldb::DescriptionLevel level);
-    void        Dump (Stream *s) const;
+    void        Dump (Stream *s) const override;
     void        DumpSnapshots (Stream *s, const char * prefix = NULL) const;
     void        DumpWithLevel (Stream *s, lldb::DescriptionLevel description_level) const;
     Target      &GetTarget() { return m_target; }
@@ -195,12 +193,11 @@ public:
     bool
     IsDisabledDuringEphemeralMode();
     
-    const ClangASTType &
-    GetClangASTType()
+    const CompilerType &
+    GetCompilerType()
     {
         return m_type;
     }
-
 
 private:
     friend class Target;
@@ -240,13 +237,13 @@ private:
     std::string m_watch_spec_str;      // Spec for the watchpoint.
     lldb::ValueObjectSP m_old_value_sp;
     lldb::ValueObjectSP m_new_value_sp;
-    ClangASTType m_type;
+    CompilerType m_type;
     Error       m_error;               // An error object describing errors associated with this watchpoint.
     WatchpointOptions m_options;       // Settable watchpoint options, which is a delegate to handle
                                        // the callback machinery.
     bool        m_being_created;
 
-    std::unique_ptr<ClangUserExpression> m_condition_ap;  // The condition to test.
+    std::unique_ptr<UserExpression> m_condition_ap;  // The condition to test.
 
     void SetID(lldb::watch_id_t id) { m_loc_id = id; }
     
@@ -261,4 +258,4 @@ private:
 
 } // namespace lldb_private
 
-#endif  // liblldb_Watchpoint_h_
+#endif // liblldb_Watchpoint_h_

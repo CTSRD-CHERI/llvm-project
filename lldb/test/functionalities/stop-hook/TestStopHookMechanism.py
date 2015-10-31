@@ -2,30 +2,17 @@
 Test lldb target stop-hook mechanism to see whether it fires off correctly .
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 
 class StopHookMechanismTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test the stop-hook mechanism."""
-        self.buildDsym()
-        self.stop_hook_firing()
-
-    @skipIfFreeBSD # llvm.org/pr15037
-    @expectedFlakeyLinux('llvm.org/pr15037') # stop-hooks sometimes fail to fire on Linux
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test the stop-hook mechanism."""
-        self.buildDwarf()
-        self.stop_hook_firing()
 
     def setUp(self):
         # Call super's setUp().
@@ -36,8 +23,13 @@ class StopHookMechanismTestCase(TestBase):
         self.correct_step_line = line_number ('main.cpp', '// We should stop here after stepping.')
         self.line = line_number('main.cpp', '// Another breakpoint which is outside of the stop-hook range.')
 
-    def stop_hook_firing(self):
+    @skipIfFreeBSD # llvm.org/pr15037
+    @expectedFlakeyLinux('llvm.org/pr15037') # stop-hooks sometimes fail to fire on Linux
+    @expectedFailureHostWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    def test(self):
         """Test the stop-hook mechanism."""
+        self.build()
+
         import pexpect
         exe = os.path.join(os.getcwd(), "a.out")
         prompt = "(lldb) "
@@ -45,11 +37,22 @@ class StopHookMechanismTestCase(TestBase):
         add_prompt1 = "> "
 
         # So that the child gets torn down after the test.
-        self.child = pexpect.spawn('%s %s %s' % (lldbtest_config.lldbExec, self.lldbOption, exe))
+        self.child = pexpect.spawn('%s %s' % (lldbtest_config.lldbExec, self.lldbOption))
         child = self.child
         # Turn on logging for what the child sends back.
         if self.TraceOn():
             child.logfile_read = sys.stdout
+
+        if lldb.remote_platform:
+            child.expect_exact(prompt)
+            child.sendline('platform select %s' % lldb.remote_platform.GetName())
+            child.expect_exact(prompt)
+            child.sendline('platform connect %s' % lldb.platform_url)
+            child.expect_exact(prompt)
+            child.sendline('platform settings -w %s' % lldb.remote_platform_working_dir)
+
+        child.expect_exact(prompt)
+        child.sendline('target create %s' % exe)
 
         # Set the breakpoint, followed by the target stop-hook commands.
         child.expect_exact(prompt)
@@ -82,7 +85,7 @@ class StopHookMechanismTestCase(TestBase):
         # make up a whole nother test case for it.
         child.sendline('frame info')
         at_line = 'at main.cpp:%d' % (self.correct_step_line)
-        print 'expecting "%s"' % at_line
+        print('expecting "%s"' % at_line)
         child.expect_exact(at_line)
 
         # Now continue the inferior, we'll stop at another breakpoint which is outside the stop-hook range.
@@ -95,10 +98,3 @@ class StopHookMechanismTestCase(TestBase):
         # Verify that the 'Stop Hooks' mechanism is NOT BEING fired off.
         self.expect(child.before, exe=False, matching=False,
             substrs = ['(void *) $'])
-        
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

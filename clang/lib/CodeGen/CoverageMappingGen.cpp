@@ -47,17 +47,6 @@ public:
                       Optional<SourceLocation> LocEnd)
       : Count(Count), LocStart(LocStart), LocEnd(LocEnd) {}
 
-  SourceMappingRegion(SourceMappingRegion &&Region)
-      : Count(std::move(Region.Count)), LocStart(std::move(Region.LocStart)),
-        LocEnd(std::move(Region.LocEnd)) {}
-
-  SourceMappingRegion &operator=(SourceMappingRegion &&RHS) {
-    Count = std::move(RHS.Count);
-    LocStart = std::move(RHS.LocStart);
-    LocEnd = std::move(RHS.LocEnd);
-    return *this;
-  }
-
   const Counter &getCounter() const { return Count; }
 
   void setCounter(Counter C) { Count = C; }
@@ -66,7 +55,7 @@ public:
 
   void setStartLoc(SourceLocation Loc) { LocStart = Loc; }
 
-  const SourceLocation &getStartLoc() const {
+  SourceLocation getStartLoc() const {
     assert(LocStart && "Region has no start location");
     return *LocStart;
   }
@@ -75,7 +64,7 @@ public:
 
   void setEndLoc(SourceLocation Loc) { LocEnd = Loc; }
 
-  const SourceLocation &getEndLoc() const {
+  SourceLocation getEndLoc() const {
     assert(LocEnd && "Region has no end location");
     return *LocEnd;
   }
@@ -174,7 +163,7 @@ public:
 
       unsigned Depth = 0;
       for (SourceLocation Parent = getIncludeOrExpansionLoc(Loc);
-           !Parent.isInvalid(); Parent = getIncludeOrExpansionLoc(Parent))
+           Parent.isValid(); Parent = getIncludeOrExpansionLoc(Parent))
         ++Depth;
       FileLocs.push_back(std::make_pair(Loc, Depth));
     }
@@ -255,7 +244,7 @@ public:
       assert(Region.hasEndLoc() && "incomplete region");
 
       SourceLocation LocStart = Region.getStartLoc();
-      assert(!SM.getFileID(LocStart).isInvalid() && "region in invalid file");
+      assert(SM.getFileID(LocStart).isValid() && "region in invalid file");
 
       auto CovFileID = getCoverageFileID(LocStart);
       // Ignore regions that don't have a file, such as builtin macros.
@@ -413,8 +402,8 @@ struct CounterCoverageMappingBuilder
           SourceRegions.emplace_back(Region.getCounter(), NestedLoc, EndLoc);
 
           EndLoc = getPreciseTokenLocEnd(getIncludeOrExpansionLoc(EndLoc));
-          assert(!EndLoc.isInvalid() &&
-                 "File exit was not handled before popRegions");
+          if (EndLoc.isInvalid())
+            llvm::report_fatal_error("File exit not handled before popRegions");
         }
         Region.setEndLoc(EndLoc);
 
@@ -426,7 +415,7 @@ struct CounterCoverageMappingBuilder
           MostRecentLocation = getIncludeOrExpansionLoc(EndLoc);
 
         assert(SM.isWrittenInSameFile(Region.getStartLoc(), EndLoc));
-        SourceRegions.push_back(std::move(Region));
+        SourceRegions.push_back(Region);
       }
       RegionStack.pop_back();
     }
@@ -496,12 +485,12 @@ struct CounterCoverageMappingBuilder
 
     llvm::SmallSet<SourceLocation, 8> StartLocs;
     Optional<Counter> ParentCounter;
-    for (auto I = RegionStack.rbegin(), E = RegionStack.rend(); I != E; ++I) {
-      if (!I->hasStartLoc())
+    for (SourceMappingRegion &I : llvm::reverse(RegionStack)) {
+      if (!I.hasStartLoc())
         continue;
-      SourceLocation Loc = I->getStartLoc();
+      SourceLocation Loc = I.getStartLoc();
       if (!isNestedIn(Loc, ParentFile)) {
-        ParentCounter = I->getCounter();
+        ParentCounter = I.getCounter();
         break;
       }
 
@@ -510,11 +499,11 @@ struct CounterCoverageMappingBuilder
         // correct count. We avoid creating redundant regions by stopping once
         // we've seen this region.
         if (StartLocs.insert(Loc).second)
-          SourceRegions.emplace_back(I->getCounter(), Loc,
+          SourceRegions.emplace_back(I.getCounter(), Loc,
                                      getEndOfFileOrMacro(Loc));
         Loc = getIncludeOrExpansionLoc(Loc);
       }
-      I->setStartLoc(getPreciseTokenLocEnd(Loc));
+      I.setStartLoc(getPreciseTokenLocEnd(Loc));
     }
 
     if (ParentCounter) {
@@ -580,12 +569,11 @@ struct CounterCoverageMappingBuilder
   }
 
   void VisitStmt(const Stmt *S) {
-    if (!S->getLocStart().isInvalid())
+    if (S->getLocStart().isValid())
       extendRegion(S);
-    for (Stmt::const_child_range I = S->children(); I; ++I) {
-      if (*I)
-        this->Visit(*I);
-    }
+    for (const Stmt *Child : S->children())
+      if (Child)
+        this->Visit(Child);
     handleFileExit(getEnd(S));
   }
 
@@ -843,7 +831,6 @@ struct CounterCoverageMappingBuilder
   }
 
   void VisitCXXCatchStmt(const CXXCatchStmt *S) {
-    extendRegion(S);
     propagateCounts(getRegionCounter(S), S->getHandlerBlock());
   }
 
@@ -892,7 +879,7 @@ static bool isMachO(const CodeGenModule &CGM) {
 }
 
 static StringRef getCoverageSection(const CodeGenModule &CGM) {
-  return isMachO(CGM) ? "__DATA,__llvm_covmap" : "__llvm_covmap";
+  return llvm::getInstrProfCoverageSectionName(isMachO(CGM));
 }
 
 static void dump(llvm::raw_ostream &OS, StringRef FunctionName,
@@ -932,7 +919,8 @@ void CoverageMappingModuleGen::addFunctionMappingRecord(
   if (!FunctionRecordTy) {
     llvm::Type *FunctionRecordTypes[] = {Int8PtrTy, Int32Ty, Int32Ty, Int64Ty};
     FunctionRecordTy =
-        llvm::StructType::get(Ctx, makeArrayRef(FunctionRecordTypes));
+        llvm::StructType::get(Ctx, makeArrayRef(FunctionRecordTypes),
+                              /*isPacked=*/true);
   }
 
   llvm::Constant *FunctionRecordVals[] = {
@@ -1023,7 +1011,7 @@ void CoverageMappingModuleGen::emit() {
   auto CovData = new llvm::GlobalVariable(CGM.getModule(), CovDataTy, true,
                                           llvm::GlobalValue::InternalLinkage,
                                           CovDataVal,
-                                          "__llvm_coverage_mapping");
+                                          llvm::getCoverageMappingVarName());
 
   CovData->setSection(getCoverageSection(CGM));
   CovData->setAlignment(8);

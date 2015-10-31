@@ -14,18 +14,18 @@
 // C++ Includes
 #include <map>
 #include <vector>
+
 // Other libraries and framework includes
 // Project includes
 #include "lldb/lldb-public.h"
 #include "lldb/Host/Mutex.h"
-
+#include "lldb/Expression/UtilityFunction.h"
 
 namespace lldb_private
 {
   
 class AppleObjCTrampolineHandler {
 public:
-    
     AppleObjCTrampolineHandler (const lldb::ProcessSP &process_sp, 
                                 const lldb::ModuleSP &objc_module_sp);
     
@@ -35,8 +35,8 @@ public:
     GetStepThroughDispatchPlan (Thread &thread, 
                                 bool stop_others);
     
-    ClangFunction *
-    GetLookupImplementationWrapperFunction ();
+    FunctionCaller *
+    GetLookupImplementationFunctionCaller ();
     
     bool 
     AddrIsMsgForward (lldb::addr_t addr) const
@@ -44,7 +44,6 @@ public:
         return (addr == m_msg_forward_addr || addr == m_msg_forward_stret_addr);
     }
 
-    
     struct DispatchFunction {
     public:
         typedef enum 
@@ -91,7 +90,6 @@ private:
             uint32_t flags;
             lldb::addr_t code_start;
         };
-
 
         class VTableRegion 
         {
@@ -176,39 +174,36 @@ private:
         bool
         IsAddressInVTables (lldb::addr_t addr, uint32_t &flags);
                 
-        Process *GetProcess ()
+        lldb::ProcessSP
+        GetProcessSP ()
         {   
-            return m_process_sp.get();
+            return m_process_wp.lock();
         }
         
     private:
-        lldb::ProcessSP m_process_sp;
+        lldb::ProcessWP m_process_wp;
         typedef std::vector<VTableRegion> region_collection;
         lldb::addr_t m_trampoline_header;
         lldb::break_id_t m_trampolines_changed_bp_id;
         region_collection m_regions;
         lldb::ModuleSP m_objc_module_sp;
-        
     };
     
     static const DispatchFunction g_dispatch_functions[];
     
     typedef std::map<lldb::addr_t, int> MsgsendMap; // This table maps an dispatch fn address to the index in g_dispatch_functions
     MsgsendMap m_msgSend_map;
-    lldb::ProcessSP m_process_sp;
+    lldb::ProcessWP m_process_wp;
     lldb::ModuleSP m_objc_module_sp;
-    std::unique_ptr<ClangFunction> m_impl_function;
-    std::unique_ptr<ClangUtilityFunction> m_impl_code;
+    std::unique_ptr<UtilityFunction> m_impl_code;
     Mutex m_impl_function_mutex;
     lldb::addr_t m_impl_fn_addr;
     lldb::addr_t m_impl_stret_fn_addr;
     lldb::addr_t m_msg_forward_addr;
     lldb::addr_t m_msg_forward_stret_addr;
     std::unique_ptr<AppleObjCVTables> m_vtables_ap;
-    
-     
 };
 
-}  // using namespace lldb_private
+} // namespace lldb_private
 
-#endif	// lldb_AppleObjCTrampolineHandler_h_
+#endif // lldb_AppleObjCTrampolineHandler_h_

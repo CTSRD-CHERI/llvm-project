@@ -43,13 +43,13 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   # These variables are used by add_llvm_library.
   set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin)
   set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/lib${LLVM_LIBDIR_SUFFIX})
+  set(LLVM_LIBRARY_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR})
 
   include(AddLLVM)
   include(HandleLLVMOptions)
 
-  # Verify that we can find a Python 2 interpreter.  Python 3 is unsupported.
   if (PYTHON_EXECUTABLE STREQUAL "")
-    set(Python_ADDITIONAL_VERSIONS 2.7 2.6 2.5)
+    set(Python_ADDITIONAL_VERSIONS 3.5 3.4 3.3 3.2 3.1 3.0 2.7 2.6 2.5)
     include(FindPythonInterp)
     if( NOT PYTHONINTERP_FOUND )
       message(FATAL_ERROR
@@ -61,7 +61,9 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   endif()
   # Import CMake library targets from LLVM and Clang.
   include("${LLDB_PATH_TO_LLVM_BUILD}/share/llvm/cmake/LLVMConfig.cmake")
-  include("${LLDB_PATH_TO_CLANG_BUILD}/share/clang/cmake/ClangConfig.cmake")
+  if (EXISTS "${LLDB_PATH_TO_CLANG_BUILD}/share/clang/cmake/ClangConfig.cmake")
+      include("${LLDB_PATH_TO_CLANG_BUILD}/share/clang/cmake/ClangConfig.cmake")
+  endif()
 
   set(PACKAGE_VERSION "${LLVM_PACKAGE_VERSION}")
 

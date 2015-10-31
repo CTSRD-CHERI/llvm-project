@@ -2,8 +2,11 @@
 Test number of threads.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,56 +15,32 @@ class CreateDuringStepTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @dsym_test
-    def test_step_inst_with_dsym(self):
+    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
+    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
+    @expectedFailureWindows("llvm.org/pr24668") # Breakpoints not resolved correctly
+    def test_step_inst(self):
         """Test thread creation during step-inst handling."""
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.create_during_step_inst_test()
+        self.build(dictionary=self.getBuildFlags())
+        self.create_during_step_base("thread step-inst -m all-threads", 'stop reason = instruction step')
 
-    @skipUnlessDarwin
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @dsym_test
-    def test_step_over_with_dsym(self):
+    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
+    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
+    @expectedFailureWindows("llvm.org/pr24668") # Breakpoints not resolved correctly
+    def test_step_over(self):
         """Test thread creation during step-over handling."""
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.create_during_step_over_test()
+        self.build(dictionary=self.getBuildFlags())
+        self.create_during_step_base("thread step-over -m all-threads", 'stop reason = step over')
 
-    @skipUnlessDarwin
     @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @dsym_test
-    def test_step_in_with_dsym(self):
+    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
+    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
+    @expectedFailureWindows("llvm.org/pr24668") # Breakpoints not resolved correctly
+    def test_step_in(self):
         """Test thread creation during step-in handling."""
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.create_during_step_in_test()
-
-    @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
-    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
-    @dwarf_test
-    def test_step_inst_with_dwarf(self):
-        """Test thread creation during step-inst handling."""
-        self.buildDwarf(dictionary=self.getBuildFlags())
-        self.create_during_step_inst_test()
-
-    @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
-    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
-    @dwarf_test
-    def test_step_over_with_dwarf(self):
-        """Test thread creation during step-over handling."""
-        self.buildDwarf(dictionary=self.getBuildFlags())
-        self.create_during_step_over_test()
-
-    @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
-    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
-    @dwarf_test
-    def test_step_in_with_dwarf(self):
-        """Test thread creation during step-in handling."""
-        self.buildDwarf(dictionary=self.getBuildFlags())
-        self.create_during_step_in_test()
+        self.build(dictionary=self.getBuildFlags())
+        self.create_during_step_base("thread step-in -m all-threads", 'stop reason = step in')
 
     def setUp(self):
         # Call super's setUp().
@@ -69,18 +48,6 @@ class CreateDuringStepTestCase(TestBase):
         # Find the line numbers to break and continue.
         self.breakpoint = line_number('main.cpp', '// Set breakpoint here')
         self.continuepoint = line_number('main.cpp', '// Continue from here')
-
-    def create_during_step_inst_test(self):
-        """Test thread creation while using step-inst."""
-        self.create_during_step_base("thread step-inst -m all-threads", 'stop reason = instruction step')
-
-    def create_during_step_over_test(self):
-        """Test thread creation while using step-over."""
-        self.create_during_step_base("thread step-over -m all-threads", 'stop reason = step over')
-
-    def create_during_step_in_test(self):
-        """Test thread creation while using step-in."""
-        self.create_during_step_base("thread step-in -m all-threads", 'stop reason = step in')
 
     def create_during_step_base(self, step_cmd, step_stop_reason):
         """Test thread creation while using step-in."""
@@ -95,7 +62,7 @@ class CreateDuringStepTestCase(TestBase):
             substrs = ["1: file = 'main.cpp', line = %d, locations = 1" % self.breakpoint])
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -158,9 +125,3 @@ class CreateDuringStepTestCase(TestBase):
 
         # At this point, the inferior process should have exited.
         self.assertTrue(process.GetState() == lldb.eStateExited, PROCESS_EXITED)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

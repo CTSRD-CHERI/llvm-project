@@ -159,7 +159,6 @@ private:
 
   struct TrieEdge {
     TrieEdge(StringRef s, TrieNode *node) : _subString(s), _child(node) {}
-    ~TrieEdge() {}
 
     StringRef          _subString;
     struct TrieNode   *_child;
@@ -1043,7 +1042,12 @@ void MachOFileLayout::buildBindInfo() {
     _bindingInfo.append_byte(BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
                             | entry.segIndex);
     _bindingInfo.append_uleb128(entry.segOffset);
-    _bindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | entry.ordinal);
+    if (entry.ordinal > 0)
+      _bindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM |
+                               (entry.ordinal & 0xF));
+    else
+      _bindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
+                               (entry.ordinal & 0xF));
     _bindingInfo.append_byte(BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM);
     _bindingInfo.append_string(entry.symbolName);
     if (entry.addend != lastAddend) {
@@ -1063,7 +1067,12 @@ void MachOFileLayout::buildLazyBindInfo() {
     _lazyBindingInfo.append_byte(BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
                             | entry.segIndex);
     _lazyBindingInfo.append_uleb128Fixed(entry.segOffset, 5);
-    _lazyBindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | entry.ordinal);
+    if (entry.ordinal > 0)
+      _lazyBindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM |
+                                   (entry.ordinal & 0xF));
+    else
+      _lazyBindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
+                                   (entry.ordinal & 0xF));
     _lazyBindingInfo.append_byte(BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM);
     _lazyBindingInfo.append_string(entry.symbolName);
     _lazyBindingInfo.append_byte(BIND_OPCODE_DO_BIND);
@@ -1310,19 +1319,18 @@ std::error_code MachOFileLayout::writeBinary(StringRef path) {
   if (_ec)
     return _ec;
   // Create FileOutputBuffer with calculated size.
-  std::unique_ptr<llvm::FileOutputBuffer> fob;
   unsigned flags = 0;
   if (_file.fileType != llvm::MachO::MH_OBJECT)
     flags = llvm::FileOutputBuffer::F_executable;
-  std::error_code ec;
-  ec = llvm::FileOutputBuffer::create(path, size(), fob, flags);
-  if (ec)
+  ErrorOr<std::unique_ptr<llvm::FileOutputBuffer>> fobOrErr =
+      llvm::FileOutputBuffer::create(path, size(), flags);
+  if (std::error_code ec = fobOrErr.getError())
     return ec;
-
+  std::unique_ptr<llvm::FileOutputBuffer> &fob = *fobOrErr;
   // Write content.
   _buffer = fob->getBufferStart();
   writeMachHeader();
-  ec = writeLoadCommands();
+  std::error_code ec = writeLoadCommands();
   if (ec)
     return ec;
   writeSectionContent();

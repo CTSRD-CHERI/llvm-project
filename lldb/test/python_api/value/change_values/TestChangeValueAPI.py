@@ -2,34 +2,18 @@
 Test some SBValue APIs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class ChangeValueAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_change_value_with_dsym(self):
-        """Exercise the SBValue::SetValueFromCString API."""
-        d = {'EXE': self.exe_name}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.change_value_api(self.exe_name)
-
-    @python_api_test
-    @dwarf_test
-    def test_change_value_with_dwarf(self):
-        """Exercise the SBValue::SetValueFromCString API."""
-        d = {'EXE': self.exe_name}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.change_value_api(self.exe_name)
 
     def setUp(self):
         # Call super's setUp().
@@ -41,10 +25,14 @@ class ChangeValueAPITestCase(TestBase):
         self.check_line = line_number('main.c', '// Stop here and check values')
         self.end_line = line_number ('main.c', '// Set a breakpoint here at the end')
 
-    @expectedFailureFreeBSD("llvm.org/pr15039 test fails intermittently on FreeBSD")
-    def change_value_api(self, exe_name):
-        """Exercise some SBValue APIs."""
-        exe = os.path.join(os.getcwd(), exe_name)
+    @expectedFailureWindows("llvm.org/pr24772")
+    @add_test_categories(['pyapi'])
+    def test_change_value(self):
+        """Exercise the SBValue::SetValueFromCString API."""
+        d = {'EXE': self.exe_name}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        exe = os.path.join(os.getcwd(), self.exe_name)
 
         # Create a target by the debugger.
         target = self.dbg.CreateTarget(exe)
@@ -157,9 +145,3 @@ class ChangeValueAPITestCase(TestBase):
         self.assertTrue(thread == None, "We should not have managed to hit our second breakpoint with sp == 1")
         
         process.Kill()
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

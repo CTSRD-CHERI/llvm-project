@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 
 ;void f(long a[], long N, long M) {
 ;  long i, j, k;
@@ -43,10 +43,7 @@ return:                                           ; preds = %bb3, %entry
   ret void
 }
 
-; CHECK: Stmt_bb1
-; CHECK:   Domain :=
-; CHECK:     [M, N] -> { Stmt_bb1[i0] : i0 >= 0 and i0 <= -1 + M };
-; CHECK: Stmt_bb2
-; CHECK:   Domain :=
-; CHECK:     [M, N] -> { Stmt_bb2[i0] : 1 = 0 };
-
+; CHECK:     Stmt_bb1
+; CHECK:       Domain :=
+; CHECK:         [M] -> { Stmt_bb1[i0] : i0 >= 0 and i0 <= -1 + M };
+; CHECK-NOT: Stmt_bb2

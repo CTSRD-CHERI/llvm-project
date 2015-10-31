@@ -15,10 +15,6 @@
 
 #include "kmp.h"
 
-#ifdef KMP_SETVERSION
-char __kmp_setversion_string[] = VERSION_STRING;
-#endif
-
 kmp_key_t __kmp_gtid_threadprivate_key;
 
 kmp_cpuinfo_t   __kmp_cpuinfo = { 0 }; // Not initialized
@@ -107,8 +103,7 @@ char const *__kmp_barrier_type_name           [ bs_last_barrier ] =
                                     , "reduction"
                                 #endif // KMP_FAST_REDUCTION_BARRIER
                             };
-char const *__kmp_barrier_pattern_name [ bp_last_bar ] = { "linear", "tree", "hyper", "hierarchical" };
-
+char const *__kmp_barrier_pattern_name[bp_last_bar] = {"linear","tree","hyper","hierarchical"};
 
 int       __kmp_allThreadsSpecified = 0;
 size_t    __kmp_align_alloc = CACHE_LINE;
@@ -253,9 +248,11 @@ kmp_nested_proc_bind_t __kmp_nested_proc_bind = { NULL, 0, 0 };
 int __kmp_affinity_num_places = 0;
 #endif
 
+int __kmp_place_num_sockets = 0;
+int __kmp_place_socket_offset = 0;
 int __kmp_place_num_cores = 0;
-int __kmp_place_num_threads_per_core = 0;
 int __kmp_place_core_offset = 0;
+int __kmp_place_num_threads_per_core = 0;
 
 kmp_tasking_mode_t __kmp_tasking_mode = tskm_task_teams;
 

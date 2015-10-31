@@ -8,17 +8,19 @@
 //===----------------------------------------------------------------------===//
 
 #include <map>
+#include <set>
 
 #include "lldb/Core/Module.h"
 #include "lldb/Core/RegularExpression.h"
 #include "lldb/Core/Section.h"
+#include "lldb/Core/Stream.h"
 #include "lldb/Core/Timer.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Symbol/Symtab.h"
-#include "lldb/Target/CPPLanguageRuntime.h"
-#include "lldb/Target/ObjCLanguageRuntime.h"
+#include "Plugins/Language/ObjC/ObjCLanguage.h"
+#include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -136,7 +138,7 @@ Symtab::Dump (Stream *s, Target *target, SortOrder sort_order)
                 CStringToSymbol name_map;
                 for (const_iterator pos = m_symbols.begin(), end = m_symbols.end(); pos != end; ++pos)
                 {
-                    const char *name = pos->GetMangled().GetName(Mangled::ePreferDemangled).AsCString();
+                    const char *name = pos->GetName().AsCString();
                     if (name && name[0])
                         name_map.insert (std::make_pair(name, &(*pos)));
                 }
@@ -329,7 +331,7 @@ Symtab::InitNameIndexes()
                          entry.cstring[2] != 'G' && // avoid guard variables
                          entry.cstring[2] != 'Z'))  // named local entities (if we eventually handle eSymbolTypeData, we will want this back)
                     {
-                        CPPLanguageRuntime::MethodName cxx_method (mangled.GetDemangledName());
+                        CPlusPlusLanguage::MethodName cxx_method (mangled.GetDemangledName(lldb::eLanguageTypeC_plus_plus));
                         entry.cstring = ConstString(cxx_method.GetBasename()).GetCString();
                         if (entry.cstring && entry.cstring[0])
                         {
@@ -378,7 +380,7 @@ Symtab::InitNameIndexes()
                 }
             }
             
-            entry.cstring = mangled.GetDemangledName().GetCString();
+            entry.cstring = mangled.GetDemangledName(symbol->GetLanguage()).GetCString();
             if (entry.cstring && entry.cstring[0]) {
                 m_name_to_index.Append (entry);
 
@@ -392,7 +394,7 @@ Symtab::InitNameIndexes()
                 
             // If the demangled name turns out to be an ObjC name, and
             // is a category name, add the version without categories to the index too.
-            ObjCLanguageRuntime::MethodName objc_method (entry.cstring, true);
+            ObjCLanguage::MethodName objc_method (entry.cstring, true);
             if (objc_method.IsValid(true))
             {
                 entry.cstring = objc_method.GetSelector().GetCString();
@@ -486,7 +488,7 @@ Symtab::AppendSymbolNamesToMap (const IndexCollection &indexes,
             const Mangled &mangled = symbol->GetMangled();
             if (add_demangled)
             {
-                entry.cstring = mangled.GetDemangledName().GetCString();
+                entry.cstring = mangled.GetDemangledName(symbol->GetLanguage()).GetCString();
                 if (entry.cstring && entry.cstring[0])
                     name_to_index_map.Append (entry);
             }
@@ -746,7 +748,7 @@ Symtab::AppendSymbolIndexesMatchingRegExAndType (const RegularExpression &regexp
     {
         if (symbol_type == eSymbolTypeAny || m_symbols[i].GetType() == symbol_type)
         {
-            const char *name = m_symbols[i].GetMangled().GetName().AsCString();
+            const char *name = m_symbols[i].GetName().AsCString();
             if (name)
             {
                 if (regexp.Execute (name))
@@ -773,7 +775,7 @@ Symtab::AppendSymbolIndexesMatchingRegExAndType (const RegularExpression &regexp
             if (CheckSymbolAtIndex(i, symbol_debug_type, symbol_visibility) == false)
                 continue;
 
-            const char *name = m_symbols[i].GetMangled().GetName().AsCString();
+            const char *name = m_symbols[i].GetName().AsCString();
             if (name)
             {
                 if (regexp.Execute (name))

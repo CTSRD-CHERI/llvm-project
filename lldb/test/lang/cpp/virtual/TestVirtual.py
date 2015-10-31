@@ -2,6 +2,8 @@
 Test C++ virtual function and virtual inheritance.
 """
 
+from __future__ import print_function
+
 import os, time
 import re
 import lldb
@@ -22,19 +24,6 @@ class CppVirtualMadness(TestBase):
     # Assert message.
     PRINTF_OUTPUT_GROKKED = "The printf output from compiled code is parsed correctly"
 
-    @skipIfWindows # Process::GetSTDOUT unsupported on Windows.  This test should be re-written to use stdout re-direction
-    @skipUnlessDarwin
-    def test_virtual_madness_dsym(self):
-        """Test that expression works correctly with virtual inheritance as well as virtual function."""
-        self.buildDsym()
-        self.virtual_madness_test()
-
-    @expectedFailureIcc('llvm.org/pr16808') # lldb does not call the correct virtual function with icc
-    def test_virtual_madness_dwarf(self):
-        """Test that expression works correctly with virtual inheritance as well as virtual function."""
-        self.buildDwarf()
-        self.virtual_madness_test()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -42,8 +31,10 @@ class CppVirtualMadness(TestBase):
         self.source = 'main.cpp'
         self.line = line_number(self.source, '// Set first breakpoint here.')
 
-    def virtual_madness_test(self):
-        """Test that variable expressions with basic types are evaluated correctly."""
+    @expectedFailureIcc('llvm.org/pr16808') # lldb does not call the correct virtual function with icc
+    def test_virtual_madness(self):
+        """Test that expression works correctly with virtual inheritance as well as virtual function."""
+        self.build()
 
         # Bring the program to the point where we can issue a series of
         # 'expression' command to compare against the golden output.
@@ -82,7 +73,7 @@ class CppVirtualMadness(TestBase):
             if match:
                 my_expr, val = match.group(1), match.group(2)
                 gl.append((my_expr, val))
-        #print "golden list:", gl
+        #print("golden list:", gl)
 
         # Now iterate through the golden list, comparing against the output from
         # 'expression var'.

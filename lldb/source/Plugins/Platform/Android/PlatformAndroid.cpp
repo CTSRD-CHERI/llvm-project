@@ -11,8 +11,11 @@
 // C++ Includes
 // Other libraries and framework includes
 #include "lldb/Core/Log.h"
+#include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
+#include "lldb/Core/Section.h"
 #include "lldb/Host/HostInfo.h"
+#include "lldb/Host/StringConvert.h"
 #include "Utility/UriParser.h"
 
 // Project includes
@@ -25,6 +28,7 @@ using namespace lldb_private;
 using namespace lldb_private::platform_android;
 
 static uint32_t g_initialize_count = 0;
+static const unsigned int g_android_default_cache_size = 2048; // Fits inside 4k adb packet.
 
 void
 PlatformAndroid::Initialize ()
@@ -133,7 +137,8 @@ PlatformAndroid::CreateInstance (bool force, const ArchSpec *arch)
 }
 
 PlatformAndroid::PlatformAndroid (bool is_host) :
-    PlatformLinux(is_host)
+    PlatformLinux(is_host),
+    m_sdk_version(0)
 {
 }
 
@@ -256,4 +261,116 @@ PlatformAndroid::DownloadModuleSlice (const FileSpec &src_file_spec,
         return Error ("Invalid offset - %" PRIu64, src_offset);
 
     return GetFile (src_file_spec, dst_file_spec);
+}
+
+Error
+PlatformAndroid::DisconnectRemote()
+{
+    Error error = PlatformLinux::DisconnectRemote();
+    if (error.Success())
+    {
+        m_device_id.clear();
+        m_sdk_version = 0;
+    }
+    return error;
+}
+
+uint32_t
+PlatformAndroid::GetDefaultMemoryCacheLineSize()
+{
+    return g_android_default_cache_size;
+}
+
+uint32_t
+PlatformAndroid::GetSdkVersion()
+{
+    if (!IsConnected())
+        return 0;
+
+    if (m_sdk_version != 0)
+        return m_sdk_version;
+
+    std::string version_string;
+    AdbClient adb(m_device_id);
+    Error error = adb.Shell("getprop ro.build.version.sdk", 5000 /* ms */, &version_string);
+    version_string = llvm::StringRef(version_string).trim().str();
+
+    if (error.Fail() || version_string.empty())
+    {
+        Log* log = GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM);
+        if (log)
+            log->Printf("Get SDK version failed. (error: %s, output: %s)",
+                        error.AsCString(), version_string.c_str());
+        return 0;
+    }
+
+    m_sdk_version = StringConvert::ToUInt32(version_string.c_str());
+    return m_sdk_version;
+}
+
+Error
+PlatformAndroid::DownloadSymbolFile (const lldb::ModuleSP& module_sp,
+                                     const FileSpec& dst_file_spec)
+{
+    // For oat file we can try to fetch additional debug info from the device
+    if (module_sp->GetFileSpec().GetFileNameExtension() != ConstString("oat"))
+        return Error("Symbol file downloading only supported for oat files");
+
+    // If we have no information about the platform file we can't execute oatdump
+    if (!module_sp->GetPlatformFileSpec())
+        return Error("No platform file specified");
+
+    // Symbolizer isn't available before SDK version 23
+    if (GetSdkVersion() < 23)
+        return Error("Symbol file generation only supported on SDK 23+");
+
+    // If we already have symtab then we don't have to try and generate one
+    if (module_sp->GetSectionList()->FindSectionByName(ConstString(".symtab")) != nullptr)
+        return Error("Symtab already available in the module");
+
+    AdbClient adb(m_device_id);
+
+    std::string tmpdir;
+    Error error = adb.Shell("mktemp --directory --tmpdir /data/local/tmp", 5000 /* ms */, &tmpdir);
+    if (error.Fail() || tmpdir.empty())
+        return Error("Failed to generate temporary directory on the device (%s)", error.AsCString());
+    tmpdir = llvm::StringRef(tmpdir).trim().str();
+
+    // Create file remover for the temporary directory created on the device
+    std::unique_ptr<std::string, std::function<void(std::string*)>> tmpdir_remover(
+        &tmpdir,
+        [this, &adb](std::string* s) {
+            StreamString command;
+            command.Printf("rm -rf %s", s->c_str());
+            Error error = adb.Shell(command.GetData(), 5000 /* ms */, nullptr);
+
+            Log *log(GetLogIfAllCategoriesSet (LIBLLDB_LOG_PLATFORM));
+            if (error.Fail())
+                log->Printf("Failed to remove temp directory: %s", error.AsCString());
+        }
+    );
+
+    FileSpec symfile_platform_filespec(tmpdir.c_str(), false);
+    symfile_platform_filespec.AppendPathComponent("symbolized.oat");
+
+    // Execute oatdump on the remote device to generate a file with symtab
+    StreamString command;
+    command.Printf("oatdump --symbolize=%s --output=%s",
+                   module_sp->GetPlatformFileSpec().GetCString(false),
+                   symfile_platform_filespec.GetCString(false));
+    error = adb.Shell(command.GetData(), 60000 /* ms */, nullptr);
+    if (error.Fail())
+        return Error("Oatdump failed: %s", error.AsCString());
+
+    // Download the symbolfile from the remote device
+    return GetFile(symfile_platform_filespec, dst_file_spec);
+}
+
+bool
+PlatformAndroid::GetRemoteOSVersion ()
+{
+    m_major_os_version = GetSdkVersion();
+    m_minor_os_version = 0;
+    m_update_os_version = 0;
+    return m_major_os_version != 0;
 }

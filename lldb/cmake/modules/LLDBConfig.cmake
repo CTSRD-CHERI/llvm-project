@@ -2,6 +2,12 @@ set(LLDB_PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(LLDB_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/source")
 set(LLDB_INCLUDE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+set(LLDB_LINKER_SUPPORTS_GROUPS OFF)
+if (LLVM_COMPILER_IS_GCC_COMPATIBLE AND NOT "${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
+  # The Darwin linker doesn't understand --start-group/--end-group.
+  set(LLDB_LINKER_SUPPORTS_GROUPS ON)
+endif()
+
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
   set(LLDB_DEFAULT_DISABLE_PYTHON 0)
   set(LLDB_DEFAULT_DISABLE_CURSES 1)
@@ -20,10 +26,17 @@ set(LLDB_DISABLE_PYTHON ${LLDB_DEFAULT_DISABLE_PYTHON} CACHE BOOL
 set(LLDB_DISABLE_CURSES ${LLDB_DEFAULT_DISABLE_CURSES} CACHE BOOL
   "Disables the Curses integration.")
 
-set(LLDB_ENABLE_PYTHON_SCRIPTS_SWIG_API_GENERATION 1 CACHE BOOL
-  "Enables using new Python scripts for SWIG API generation .")  
 set(LLDB_RELOCATABLE_PYTHON 0 CACHE BOOL
   "Causes LLDB to use the PYTHONHOME environment variable to locate Python.")
+
+if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
+  set(LLDB_EXPORT_ALL_SYMBOLS 0 CACHE BOOL
+    "Causes lldb to export all symbols when building liblldb.")
+else()
+  # Windows doesn't support toggling this, so don't bother making it a
+  # cache variable.
+  set(LLDB_EXPORT_ALL_SYMBOLS 0)
+endif()
 
 if ((NOT MSVC) OR MSVC12)
   add_definitions( -DHAVE_ROUND )
@@ -33,6 +46,124 @@ if (LLDB_DISABLE_CURSES)
   add_definitions( -DLLDB_DISABLE_CURSES )
 endif()
 
+# On Windows, we can't use the normal FindPythonLibs module that comes with CMake,
+# for a number of reasons.
+# 1) Prior to MSVC 2015, it is only possible to embed Python if python itself was
+#    compiled with an identical version (and build configuration) of MSVC as LLDB.
+#    The standard algorithm does not take into account the differences between
+#    a binary release distribution of python and a custom built distribution.
+# 2) From MSVC 2015 and onwards, it is only possible to use Python 3.5 or later.
+# 3) FindPythonLibs queries the registry to locate Python, and when looking for a
+#    64-bit version of Python, since cmake.exe is a 32-bit executable, it will see
+#    a 32-bit view of the registry.  As such, it is impossible for FindPythonLibs to
+#    locate 64-bit Python libraries.
+# This function is designed to address those limitations.  Currently it only partially
+# addresses them, but it can be improved and extended on an as-needed basis.
+function(find_python_libs_windows)
+  if ("${PYTHON_HOME}" STREQUAL "")
+    message("LLDB embedded Python on Windows requires specifying a value for PYTHON_HOME.  Python support disabled.")
+    set(LLDB_DISABLE_PYTHON 1 PARENT_SCOPE)
+    return()
+  endif()
+
+  file(TO_CMAKE_PATH "${PYTHON_HOME}/Include" PYTHON_INCLUDE_DIRS)
+
+  if(EXISTS "${PYTHON_INCLUDE_DIRS}/patchlevel.h")
+    file(STRINGS "${PYTHON_INCLUDE_DIRS}/patchlevel.h" python_version_str
+         REGEX "^#define[ \t]+PY_VERSION[ \t]+\"[^\"]+\"")
+    string(REGEX REPLACE "^#define[ \t]+PY_VERSION[ \t]+\"([^\"]+)\".*" "\\1"
+                         PYTHONLIBS_VERSION_STRING "${python_version_str}")
+    message("-- Found Python version ${PYTHONLIBS_VERSION_STRING}")
+    string(REGEX REPLACE "([0-9]+)[.]([0-9]+)[.][0-9]+" "python\\1\\2" PYTHONLIBS_BASE_NAME "${PYTHONLIBS_VERSION_STRING}")
+    unset(python_version_str)
+  else()
+    message("Unable to find ${PYTHON_INCLUDE_DIRS}/patchlevel.h, Python installation is corrupt.")
+    message("Python support will be disabled for this build.")
+    set(LLDB_DISABLE_PYTHON 1 PARENT_SCOPE)
+    return()
+  endif()
+
+  file(TO_CMAKE_PATH "${PYTHON_HOME}" PYTHON_HOME)
+  file(TO_CMAKE_PATH "${PYTHON_HOME}/python_d.exe" PYTHON_DEBUG_EXE)
+  file(TO_CMAKE_PATH "${PYTHON_HOME}/libs/${PYTHONLIBS_BASE_NAME}_d.lib" PYTHON_DEBUG_LIB)
+  file(TO_CMAKE_PATH "${PYTHON_HOME}/${PYTHONLIBS_BASE_NAME}_d.dll" PYTHON_DEBUG_DLL)
+
+  file(TO_CMAKE_PATH "${PYTHON_HOME}/python.exe" PYTHON_RELEASE_EXE)
+  file(TO_CMAKE_PATH "${PYTHON_HOME}/libs/${PYTHONLIBS_BASE_NAME}.lib" PYTHON_RELEASE_LIB)
+  file(TO_CMAKE_PATH "${PYTHON_HOME}/${PYTHONLIBS_BASE_NAME}.dll" PYTHON_RELEASE_DLL)
+
+  if (NOT EXISTS ${PYTHON_DEBUG_EXE})
+    message("Unable to find ${PYTHON_DEBUG_EXE}")
+    unset(PYTHON_DEBUG_EXE)
+  endif()
+
+  if (NOT EXISTS ${PYTHON_RELEASE_EXE})
+    message("Unable to find ${PYTHON_RELEASE_EXE}")
+    unset(PYTHON_RELEASE_EXE)
+  endif()
+
+  if (NOT EXISTS ${PYTHON_DEBUG_LIB})
+    message("Unable to find ${PYTHON_DEBUG_LIB}")
+    unset(PYTHON_DEBUG_LIB)
+  endif()
+
+  if (NOT EXISTS ${PYTHON_RELEASE_LIB})
+    message("Unable to find ${PYTHON_RELEASE_LIB}")
+    unset(PYTHON_RELEASE_LIB)
+  endif()
+
+  if (NOT EXISTS ${PYTHON_DEBUG_DLL})
+    message("Unable to find ${PYTHON_DEBUG_DLL}")
+    unset(PYTHON_DEBUG_DLL)
+  endif()
+
+  if (NOT EXISTS ${PYTHON_RELEASE_DLL})
+    message("Unable to find ${PYTHON_RELEASE_DLL}")
+    unset(PYTHON_RELEASE_DLL)
+  endif()
+
+  if (NOT (PYTHON_DEBUG_EXE AND PYTHON_RELEASE_EXE AND PYTHON_DEBUG_LIB AND PYTHON_RELEASE_LIB AND PYTHON_DEBUG_DLL AND PYTHON_RELEASE_DLL))
+    message("Python installation is corrupt. Python support will be disabled for this build.")
+    set(LLDB_DISABLE_PYTHON 1 PARENT_SCOPE)
+    return()
+  endif()
+
+  # Generator expressions are evaluated in the context of each build configuration generated
+  # by CMake. Here we use the $<CONFIG:Debug>:VALUE logical generator expression to ensure
+  # that the debug Python library, DLL, and executable are used in the Debug build configuration.
+  #
+  # Generator expressions can be difficult to grok at first so here's a breakdown of the one
+  # used for PYTHON_LIBRARY:
+  #
+  # 1. $<CONFIG:Debug> evaluates to 1 when the Debug configuration is being generated,
+  #    or 0 in all other cases.
+  # 2. $<$<CONFIG:Debug>:${PYTHON_DEBUG_LIB}> expands to ${PYTHON_DEBUG_LIB} when the Debug
+  #    configuration is being generated, or nothing (literally) in all other cases.
+  # 3. $<$<NOT:$<CONFIG:Debug>>:${PYTHON_RELEASE_LIB}> expands to ${PYTHON_RELEASE_LIB} when
+  #    any configuration other than Debug is being generated, or nothing in all other cases.
+  # 4. The conditionals in 2 & 3 are mutually exclusive.
+  # 5. A logical expression with a conditional that evaluates to 0 yields no value at all.
+  #
+  # Due to 4 & 5 it's possible to concatenate 2 & 3 to obtain a single value specific to each
+  # build configuration. In this example the value will be ${PYTHON_DEBUG_LIB} when generating the
+  # Debug configuration, or ${PYTHON_RELEASE_LIB} when generating any other configuration.
+  # Note that it's imperative that there is no whitespace between the two expressions, otherwise
+  # CMake will insert a semicolon between the two.
+  set (PYTHON_EXECUTABLE $<$<CONFIG:Debug>:${PYTHON_DEBUG_EXE}>$<$<NOT:$<CONFIG:Debug>>:${PYTHON_RELEASE_EXE}>)
+  set (PYTHON_LIBRARY $<$<CONFIG:Debug>:${PYTHON_DEBUG_LIB}>$<$<NOT:$<CONFIG:Debug>>:${PYTHON_RELEASE_LIB}>)
+  set (PYTHON_DLL $<$<CONFIG:Debug>:${PYTHON_DEBUG_DLL}>$<$<NOT:$<CONFIG:Debug>>:${PYTHON_RELEASE_DLL}>)
+
+  set (PYTHON_EXECUTABLE ${PYTHON_EXECUTABLE} PARENT_SCOPE)
+  set (PYTHON_LIBRARY ${PYTHON_LIBRARY} PARENT_SCOPE)
+  set (PYTHON_DLL ${PYTHON_DLL} PARENT_SCOPE)
+  set (PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} PARENT_SCOPE)
+
+  message("-- LLDB Found PythonExecutable: ${PYTHON_RELEASE_EXE} and ${PYTHON_DEBUG_EXE}")
+  message("-- LLDB Found PythonLibs: ${PYTHON_RELEASE_LIB} and ${PYTHON_DEBUG_LIB}")
+  message("-- LLDB Found PythonDLL: ${PYTHON_RELEASE_DLL} and ${PYTHON_DEBUG_DLL}")
+  message("-- LLDB Found PythonIncludeDirs: ${PYTHON_INCLUDE_DIRS}")
+endfunction(find_python_libs_windows)
+
 if (NOT LLDB_DISABLE_PYTHON)
   if(UNIX)
     # This is necessary for crosscompile on Ubuntu 14.04 64bit. Need a proper fix.
@@ -40,79 +171,31 @@ if (NOT LLDB_DISABLE_PYTHON)
       set(CMAKE_LIBRARY_ARCHITECTURE "x86_64-linux-gnu")
     endif()
   endif()
-  
+
   if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
-    if (NOT "${PYTHON_HOME}" STREQUAL "")
-      file(TO_CMAKE_PATH "${PYTHON_HOME}" PYTHON_HOME)
-      if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-        file(TO_CMAKE_PATH "${PYTHON_HOME}/python_d.exe" PYTHON_EXECUTABLE)
-        file(TO_CMAKE_PATH "${PYTHON_HOME}/libs/python27_d.lib" PYTHON_LIBRARY)
-        file(TO_CMAKE_PATH "${PYTHON_HOME}/python27_d.dll" PYTHON_DLL)
-      else()
-        file(TO_CMAKE_PATH "${PYTHON_HOME}/python.exe" PYTHON_EXECUTABLE)
-        file(TO_CMAKE_PATH "${PYTHON_HOME}/libs/python27.lib" PYTHON_LIBRARY)
-        file(TO_CMAKE_PATH "${PYTHON_HOME}/python27.dll" PYTHON_DLL)
-      endif()
-      
-      file(TO_CMAKE_PATH "${PYTHON_HOME}/Include" PYTHON_INCLUDE_DIR)
-      if (NOT LLDB_RELOCATABLE_PYTHON)
-        add_definitions( -DLLDB_PYTHON_HOME="${PYTHON_HOME}" )
-      endif()
-    else()
-      message("Embedding Python on Windows without specifying a value for PYTHON_HOME is deprecated.  Support for this will be dropped soon.")
-        
-      if ("${PYTHON_INCLUDE_DIR}" STREQUAL "" OR "${PYTHON_LIBRARY}" STREQUAL "")
-        message("-- LLDB Embedded python disabled.  Embedding python on Windows requires "
-                "manually specifying PYTHON_INCLUDE_DIR *and* PYTHON_LIBRARY")
-        set(LLDB_DISABLE_PYTHON 1)
-      endif()
+    find_python_libs_windows()
+
+    if (NOT LLDB_RELOCATABLE_PYTHON)
+      file(TO_CMAKE_PATH "${PYTHON_HOME}" LLDB_PYTHON_HOME)
+      add_definitions( -DLLDB_PYTHON_HOME="${LLDB_PYTHON_HOME}" )
     endif()
-    
-    if (PYTHON_LIBRARY)
-      message("-- Found PythonLibs: ${PYTHON_LIBRARY}")
-      include_directories(${PYTHON_INCLUDE_DIR})
-    endif()
-    
   else()
     find_package(PythonLibs REQUIRED)
+  endif()
+  
+  if (PYTHON_INCLUDE_DIRS)
     include_directories(${PYTHON_INCLUDE_DIRS})
   endif()
 endif()
 
 if (LLDB_DISABLE_PYTHON)
-  unset(PYTHON_INCLUDE_DIR)
+  unset(PYTHON_INCLUDE_DIRS)
   unset(PYTHON_LIBRARY)
   add_definitions( -DLLDB_DISABLE_PYTHON )
 endif()
 
 include_directories(../clang/include)
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/../clang/include")
-
-# lldb requires c++11 to build. Make sure that we have a compiler and standard
-# library combination that can do that.
-if (NOT MSVC)
-  # gcc and clang require the -std=c++0x or -std=c++11 flag.
-  if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU" OR
-      "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    if (NOT ("${CMAKE_CXX_FLAGS}" MATCHES "-std=c\\+\\+0x" OR
-             "${CMAKE_CXX_FLAGS}" MATCHES "-std=gnu\\+\\+0x" OR
-             "${CMAKE_CXX_FLAGS}" MATCHES "-std=c\\+\\+11" OR
-             "${CMAKE_CXX_FLAGS}" MATCHES "-std=gnu\\+\\+11"))
-      if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.7")
-          set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-        else()
-          set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-        endif()
-      else()
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-      endif()
-    endif()
-  endif()
-elseif (MSVC_VERSION LESS 1700)
-  message(FATAL_ERROR "The selected compiler does not support c++11 which is "
-          "required to build lldb.")
-endif()
 
 # Disable GCC warnings
 check_cxx_compiler_flag("-Wno-deprecated-declarations"
@@ -127,11 +210,23 @@ if (CXX_SUPPORTS_NO_UNKNOWN_PRAGMAS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas")
 endif ()
 
+check_cxx_compiler_flag("-Wno-strict-aliasing"
+                        CXX_SUPPORTS_NO_STRICT_ALIASING)
+if (CXX_SUPPORTS_NO_STRICT_ALIASING)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-strict-aliasing")
+endif ()
+
 # Disable Clang warnings
 check_cxx_compiler_flag("-Wno-deprecated-register"
                         CXX_SUPPORTS_NO_DEPRECATED_REGISTER)
 if (CXX_SUPPORTS_NO_DEPRECATED_REGISTER)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
+endif ()
+
+check_cxx_compiler_flag("-Wno-vla-extension"
+                        CXX_SUPPORTS_NO_VLA_EXTENSION)
+if (CXX_SUPPORTS_NO_VLA_EXTENSION)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-vla-extension")
 endif ()
 
 # Disable MSVC warnings
@@ -144,7 +239,7 @@ if( MSVC )
     -wd4521 # Suppress 'warning C4521: 'type' : multiple copy constructors specified'
     -wd4530 # Suppress 'warning C4530: C++ exception handler used, but unwind semantics are not enabled.'
   )
-endif() 
+endif()
 
 set(LLDB_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(LLDB_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
@@ -192,7 +287,11 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
     )
 endif()
 
-if (NOT LIBXML2_FOUND)
+if (NOT LIBXML2_FOUND AND NOT (CMAKE_SYSTEM_NAME MATCHES "Windows"))
+  # Skip Libxml2 on Windows.  In CMake 3.4 and higher, the algorithm for
+  # finding libxml2 got "smarter", and it can now locate the version which is
+  # in gnuwin32, even though that version does not contain the headers that
+  # LLDB uses.
   find_package(LibXml2)
 endif()
 
@@ -212,7 +311,6 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
   ${DEBUG_SYMBOLS_LIBRARY})
 
 else()
-
   if (LIBXML2_FOUND)
     add_definitions( -DLIBXML2_DEFINED )
     list(APPEND system_libs ${LIBXML2_LIBRARIES})
@@ -273,4 +371,22 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
             add_definitions(-DHAVE_NR_PROCESS_VM_READV)
         endif()
     endif()
+endif()
+
+# Figure out if lldb could use lldb-server.  If so, then we'll
+# ensure we build lldb-server when an lldb target is being built.
+if ((CMAKE_SYSTEM_NAME MATCHES "Darwin") OR
+    (CMAKE_SYSTEM_NAME MATCHES "FreeBSD") OR
+    (CMAKE_SYSTEM_NAME MATCHES "Linux"))
+    set(LLDB_CAN_USE_LLDB_SERVER 1)
+else()
+    set(LLDB_CAN_USE_LLDB_SERVER 0)
+endif()
+
+# Figure out if lldb could use debugserver.  If so, then we'll
+# ensure we build debugserver when we build lldb.
+if ( CMAKE_SYSTEM_NAME MATCHES "Darwin" )
+    set(LLDB_CAN_USE_DEBUGSERVER 1)
+else()
+    set(LLDB_CAN_USE_DEBUGSERVER 0)
 endif()

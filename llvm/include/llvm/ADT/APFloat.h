@@ -142,6 +142,9 @@ public:
   /// @}
 
   static unsigned int semanticsPrecision(const fltSemantics &);
+  static ExponentType semanticsMinExponent(const fltSemantics &);
+  static ExponentType semanticsMaxExponent(const fltSemantics &);
+  static unsigned int semanticsSizeInBits(const fltSemantics &);
 
   /// IEEE-754R 5.11: Floating Point Comparison Relations.
   enum cmpResult {
@@ -276,6 +279,10 @@ public:
   /// \param isIEEE   - If 128 bit number, select between PPC and IEEE
   static APFloat getAllOnesValue(unsigned BitWidth, bool isIEEE = false);
 
+  /// Returns the size of the floating point number (in bits) in the given
+  /// semantics.
+  static unsigned getSizeInBits(const fltSemantics &Sem);
+
   /// @}
 
   /// Used to insert APFloat objects, or objects that contain APFloat objects,
@@ -292,7 +299,7 @@ public:
   /// IEEE remainder.
   opStatus remainder(const APFloat &);
   /// C fmod, or llvm frem.
-  opStatus mod(const APFloat &, roundingMode);
+  opStatus mod(const APFloat &);
   opStatus fusedMultiplyAdd(const APFloat &, const APFloat &, roundingMode);
   opStatus roundToIntegral(roundingMode);
   /// IEEE-754R 5.3.1: nextUp/nextDown.

@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 
 ; Check that we correctly convert integers to isl values.
 
@@ -11,8 +11,7 @@ entry:
 
 bb:
   %indvar = phi i1024 [ 0, %entry ], [ %indvar.next, %bb ]
-  %scevgep = getelementptr i1024, i1024* %a, i1024 %indvar
-  store i1024 %indvar, i1024* %scevgep, align 8
+  store i1024 %indvar, i1024* %a, align 8
   %indvar.next = add nsw i1024 %indvar, 1
   %exitcond = icmp eq i1024 %indvar, 123456000000000000000000000
 ; CHECK:  'bb => return' in function 'f'

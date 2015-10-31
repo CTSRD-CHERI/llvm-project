@@ -1,7 +1,10 @@
 """Test calling functions in class methods."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -10,25 +13,6 @@ class TestObjCClassMethod(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-
-    @expectedFailurei386
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Test calling functions in class methods."""
-        self.buildDsym()
-        self.objc_class_method()
-
-    @skipUnlessDarwin
-    @expectedFailurei386
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_python_api(self):
-        """Test calling functions in class methods."""
-        self.buildDwarf()
-        self.objc_class_method()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -36,9 +20,13 @@ class TestObjCClassMethod(TestBase):
         self.main_source = "class.m"
         self.break_line = line_number(self.main_source, '// Set breakpoint here.')
 
+    @skipUnlessDarwin
+    @expectedFailurei386
+    @add_test_categories(['pyapi'])
     #rdar://problem/9745789 "expression" can't call functions in class methods
-    def objc_class_method(self):
-        """Test calling class methods."""
+    def test_with_python_api(self):
+        """Test calling functions in class methods."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -65,10 +53,4 @@ class TestObjCClassMethod(TestBase):
 
         cmd_value = frame.EvaluateExpression ("(int)[Foo doSomethingWithString:@\"Hello\"]")
         self.assertTrue (cmd_value.IsValid())
-	self.assertTrue (cmd_value.GetValueAsUnsigned() == 5)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+        self.assertTrue (cmd_value.GetValueAsUnsigned() == 5)

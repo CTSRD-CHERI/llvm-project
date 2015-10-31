@@ -35,20 +35,20 @@ class CMICmdCmdSymbolListLines : public CMICmdBase
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdSymbolListLines(void);
+    /* ctor */ CMICmdCmdSymbolListLines();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdSymbolListLines(void);
+    /* dtor */ ~CMICmdCmdSymbolListLines() override;
 
     // Attributes:
   private:

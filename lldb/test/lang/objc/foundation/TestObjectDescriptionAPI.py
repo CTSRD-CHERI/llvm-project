@@ -2,37 +2,18 @@
 Test SBValue.GetObjectDescription() with the value from SBTarget.FindGlobalVariables().
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class ObjectDescriptionAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    # rdar://problem/10857337
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_find_global_variables_then_object_description_with_dsym(self):
-        """Exercise SBTaget.FindGlobalVariables() API."""
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.find_global_variables_then_object_description('a.out')
-
-    # rdar://problem/10857337
-    @skipUnlessDarwin
-    @python_api_test
-    @dwarf_test
-    def test_find_global_variables_then_object_description_with_dwarf(self):
-        """Exercise SBTarget.FindGlobalVariables() API."""
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.find_global_variables_then_object_description('b.out')
 
     def setUp(self):
         # Call super's setUp().
@@ -41,9 +22,15 @@ class ObjectDescriptionAPITestCase(TestBase):
         self.source = 'main.m'
         self.line = line_number(self.source, '// Set break point at this line.')
 
-    def find_global_variables_then_object_description(self, exe_name):
-        """Exercise SBTaget.FindGlobalVariables() followed by SBValue.GetObjectDescription()."""
-        exe = os.path.join(os.getcwd(), exe_name)
+    # rdar://problem/10857337
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
+    def test_find_global_variables_then_object_description(self):
+        """Exercise SBTarget.FindGlobalVariables() API."""
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        exe = os.path.join(os.getcwd(), 'b.out')
 
         # Create a target by the debugger.
         target = self.dbg.CreateTarget(exe)
@@ -67,8 +54,8 @@ class ObjectDescriptionAPITestCase(TestBase):
         for v in value_list1:
             self.DebugSBValue(v)
             if self.TraceOn():
-                print "val:", v
-                print "object description:", v.GetObjectDescription()
+                print("val:", v)
+                print("object description:", v.GetObjectDescription())
             if v.GetName() == 'my_global_str':
                 self.assertTrue(v.GetObjectDescription() == 'This is a global string')
 
@@ -77,14 +64,7 @@ class ObjectDescriptionAPITestCase(TestBase):
         for v in value_list2:
             self.DebugSBValue(v)
             if self.TraceOn():
-                print "val:", v
-                print "object description:", v.GetObjectDescription()
+                print("val:", v)
+                print("object description:", v.GetObjectDescription())
             if v.GetName() == 'my_global_str':
                 self.assertTrue(v.GetObjectDescription() == 'This is a global string')
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

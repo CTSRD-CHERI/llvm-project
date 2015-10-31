@@ -2,7 +2,10 @@
 Test calling std::String member functions.
 """
 
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import lldbutil
 from lldbtest import *
@@ -18,31 +21,18 @@ class ExprCommandCallFunctionTestCase(TestBase):
         self.line = line_number('main.cpp',
                                 '// Please test these expressions while stopped at this line:')
 
-    @skipUnlessDarwin
-    @dsym_test
-    @expectedFailureDarwin(16361880) # <rdar://problem/16361880>, we get the result correctly, but fail to invoke the Summary formatter.
-    def test_with_dsym(self):
-        """Test calling std::String member function."""
-        self.buildDsym()
-        self.call_function()
-
-    @dwarf_test
-    @expectedFailureFreeBSD('llvm.org/pr17807') # Fails on FreeBSD buildbot
     @expectedFailureIcc # llvm.org/pr14437, fails with ICC 13.1
-    @expectedFailureDarwin(16361880) # <rdar://problem/16361880>, we get the result correctly, but fail to invoke the Summary formatter.
-    def test_with_dwarf(self):
+    @expectedFailureFreeBSD('llvm.org/pr17807') # Fails on FreeBSD buildbot
+    @expectedFailureWindows("llvm.org/pr21765")
+    def test_with(self):
         """Test calling std::String member function."""
-        self.buildDwarf()
-        self.call_function()
-
-    def call_function(self):
-        """Test calling std::String member function."""
+        self.build()
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         # Some versions of GCC encode two locations for the 'return' statement in main.cpp
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=-1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         self.expect("print str",
             substrs = ['Hello world'])
@@ -51,9 +41,3 @@ class ExprCommandCallFunctionTestCase(TestBase):
         # const char *, and thus don't invoke the Summary formatter.
         self.expect("print str.c_str()",
             substrs = ['Hello world'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

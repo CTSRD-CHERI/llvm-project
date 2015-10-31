@@ -1,8 +1,8 @@
-// RUN: %clang_cc1 -verify -fopenmp -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck %s
-// RUN: %clang_cc1 -fopenmp -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
-// RUN: %clang_cc1 -fopenmp -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -g -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s
-// RUN: %clang_cc1 -verify -triple x86_64-apple-darwin10 -fopenmp -fexceptions -fcxx-exceptions -gline-tables-only -x c++ -emit-llvm %s -o - | FileCheck %s --check-prefix=TERM_DEBUG
-//
+// RUN: %clang_cc1 -verify -fopenmp -x c++ -triple x86_64-unknown-unknown -emit-llvm -fexceptions -fcxx-exceptions -o - < %s | FileCheck %s
+// RUN: %clang_cc1 -fopenmp -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t < %s
+// RUN: %clang_cc1 -fopenmp -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -debug-info-kind=limited -std=c++11 -include-pch %t -verify -emit-llvm -o - < %s | FileCheck %s
+// RUN: %clang_cc1 -verify -triple x86_64-apple-darwin10 -fopenmp -fexceptions -fcxx-exceptions -debug-info-kind=line-tables-only -x c++ -emit-llvm -o - < %s | FileCheck %s --check-prefix=TERM_DEBUG
+// REQUIRES: x86-registered-target
 // expected-no-diagnostics
 #ifndef HEADER
 #define HEADER
@@ -50,7 +50,7 @@ void simple(float *a, float *b, float *c, float *d) {
   }
 // CHECK: [[SIMPLE_LOOP1_END]]
 // CHECK: call void @__kmpc_for_static_fini(%ident_t* {{.+}}, i32 %{{.+}})
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
 
   long long k = get_val();
 
@@ -101,7 +101,7 @@ void simple(float *a, float *b, float *c, float *d) {
 // CHECK: [[LIN0_2:%.+]] = load i64, i64* [[LIN0]]
 // CHECK-NEXT: [[LIN_ADD2:%.+]] = add nsw i64 [[LIN0_2]], 27
 // CHECK-NEXT: store i64 [[LIN_ADD2]], i64* [[K_VAR]]
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
 
   int lin = 12;
   #pragma omp for simd linear(lin : get_val()), linear(g_ptr)
@@ -172,7 +172,7 @@ void simple(float *a, float *b, float *c, float *d) {
 // CHECK: store i32 {{.+}}, i32* [[LIN_VAR]],
 // CHECK: [[GLINSTART:.+]] = load double*, double** [[GLIN_START]]
 // CHECK: store double* {{.*}}[[GLIN_VAR]]
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
 
   #pragma omp for simd
 // CHECK: call void @__kmpc_for_static_init_4(%ident_t* {{[^,]+}}, i32 %{{[^,]+}}, i32 34, i32* %{{[^,]+}}, i32* [[LB:%[^,]+]], i32* [[UB:%[^,]+]], i32* [[STRIDE:%[^,]+]], i32 1, i32 1)
@@ -209,7 +209,7 @@ void simple(float *a, float *b, float *c, float *d) {
   }
 // CHECK: [[SIMPLE_LOOP4_END]]
 // CHECK: call void @__kmpc_for_static_fini(%ident_t* {{.+}}, i32 %{{.+}})
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
 
   #pragma omp for simd
 // CHECK: call void @__kmpc_for_static_init_4(%ident_t* {{[^,]+}}, i32 %{{[^,]+}}, i32 34, i32* %{{[^,]+}}, i32* [[LB:%[^,]+]], i32* [[UB:%[^,]+]], i32* [[STRIDE:%[^,]+]], i32 1, i32 1)
@@ -246,7 +246,7 @@ void simple(float *a, float *b, float *c, float *d) {
   }
 // CHECK: [[SIMPLE_LOOP5_END]]
 // CHECK: call void @__kmpc_for_static_fini(%ident_t* {{.+}}, i32 %{{.+}})
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
 
 // CHECK-NOT: mul i32 %{{.+}}, 10
   #pragma omp for simd
@@ -303,7 +303,7 @@ void simple(float *a, float *b, float *c, float *d) {
 // CHECK: [[A_PRIV_VAL:%.+]] = load i32, i32* [[A_PRIV]],
 // CHECK-NEXT: store i32 [[A_PRIV_VAL]], i32* %{{.+}},
 // CHECK-NEXT: br label
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
   }
   int R;
   #pragma omp parallel
@@ -354,7 +354,7 @@ void simple(float *a, float *b, float *c, float *d) {
 // CHECK: [[RED:%.+]] = mul nsw i32 %{{.+}}, [[R_PRIV_VAL]]
 // CHECK-NEXT: store i32 [[RED]], i32* %{{.+}},
 // CHECK-NEXT: call void @__kmpc_end_reduce(
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
   }
 }
 
@@ -413,7 +413,7 @@ int templ1(T a, T *z) {
 // CHECK-NEXT: br label {{%.+}}
 // CHECK: [[T1_END]]
 // CHECK: call void @__kmpc_for_static_fini(%ident_t* {{.+}}, i32 %{{.+}})
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
 // CHECK: ret i32 0
 //
 void inst_templ1() {
@@ -505,7 +505,7 @@ void iter_simple(IterDouble ia, IterDouble ib, IterDouble ic) {
   }
 // CHECK: [[IT_END]]
 // CHECK: call void @__kmpc_for_static_fini(%ident_t* {{.+}}, i32 %{{.+}})
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
 // CHECK: ret void
 }
 
@@ -584,7 +584,7 @@ void collapsed(float *a, float *b, float *c, float *d) {
 // CHECK-NEXT: store i32 3, i32* [[I:%[^,]+]]
 // CHECK-NEXT: store i32 5, i32* [[I:%[^,]+]]
 // CHECK-NEXT: store i16 9, i16* [[I:%[^,]+]]
-// CHECK: call i32 @__kmpc_cancel_barrier(%ident_t* {{.+}}, i32 %{{.+}})
+// CHECK: call void @__kmpc_barrier(%ident_t* {{.+}}, i32 %{{.+}})
 // CHECK: ret void
 }
 
@@ -683,4 +683,3 @@ void parallel_simd(float *a) {
 }
 // TERM_DEBUG: !{{[0-9]+}} = !DILocation(line: [[@LINE-11]],
 #endif // HEADER
-

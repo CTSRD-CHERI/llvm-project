@@ -57,8 +57,9 @@ def warn_cxx98_compat_no_newline_eof : Warning<
 
 def ext_dollar_in_identifier : Extension<"'$' in identifier">,
   InGroup<DiagGroup<"dollar-in-identifier-extension">>;
-def ext_charize_microsoft : Extension<"charizing operator #@ is a Microsoft extension">,
-  InGroup<Microsoft>;
+def ext_charize_microsoft : Extension<
+  "charizing operator #@ is a Microsoft extension">,
+  InGroup<MicrosoftCharize>;
 
 def ext_token_used : Extension<"extension used">,
   InGroup<DiagGroup<"language-extension-token">>;
@@ -183,7 +184,7 @@ def ext_hexconstant_invalid : Extension<
 def ext_binary_literal : Extension<
   "binary integer literals are a GNU extension">, InGroup<GNUBinaryLiteral>;
 def ext_binary_literal_cxx14 : Extension<
-  "binary integer literals are a C++14 extension">, InGroup<CXX14>;
+  "binary integer literals are a C++14 extension">, InGroup<CXX14BinaryLiteral>;
 def warn_cxx11_compat_binary_literal : Warning<
   "binary integer literals are incompatible with C++ standards before C++14">,
   InGroup<CXXPre14CompatPedantic>, DefaultIgnore;
@@ -255,10 +256,13 @@ def err_pp_hash_error : Error<"%0">;
 }
 
 def pp_include_next_in_primary : Warning<
-  "#include_next in primary source file">;
+  "#include_next in primary source file">,
+  InGroup<DiagGroup<"include-next-outside-header">>;
 def pp_include_macros_out_of_predefines : Error<
   "the #__include_macros directive is only for internal use by -imacros">;
-def pp_include_next_absolute_path : Warning<"#include_next with absolute path">;
+def pp_include_next_absolute_path : Warning<
+  "#include_next with absolute path">,
+  InGroup<DiagGroup<"include-next-absolute-path">>;
 def ext_c99_whitespace_required_after_macro_name : ExtWarn<
   "ISO C99 requires whitespace after the macro name">, InGroup<C99>;
 def ext_missing_whitespace_after_macro_name : ExtWarn<
@@ -266,9 +270,11 @@ def ext_missing_whitespace_after_macro_name : ExtWarn<
 def warn_missing_whitespace_after_macro_name : Warning<
   "whitespace recommended after macro name">;
   
-def pp_pragma_once_in_main_file : Warning<"#pragma once in main file">;
+def pp_pragma_once_in_main_file : Warning<"#pragma once in main file">,
+  InGroup<DiagGroup<"pragma-once-outside-header">>;
 def pp_pragma_sysheader_in_main_file : Warning<
-  "#pragma system_header ignored in main file">;
+  "#pragma system_header ignored in main file">,
+  InGroup<DiagGroup<"pragma-system-header-outside-header">>;
 def pp_poisoning_existing_macro : Warning<"poisoning existing macro">;
 def pp_out_of_date_dependency : Warning<
   "current file is older than dependency %0">;
@@ -310,12 +316,12 @@ def ext_pp_import_directive : Extension<"#import is a language extension">,
 def err_pp_import_directive_ms : Error<
   "#import of type library is an unsupported Microsoft feature">;
 def ext_pp_include_search_ms : ExtWarn<
-  "#include resolved using non-portable MSVC search rules as: %0">,
-  InGroup<DiagGroup<"msvc-include">>;
+  "#include resolved using non-portable Microsoft search rules as: %0">,
+  InGroup<MicrosoftInclude>;
 
 def ext_pp_ident_directive : Extension<"#ident is a language extension">;
 def ext_pp_include_next_directive : Extension<
-  "#include_next is a language extension">;
+  "#include_next is a language extension">, InGroup<GNUIncludeNext>;
 def ext_pp_warning_directive : Extension<"#warning is a language extension">;
 
 def ext_pp_extra_tokens_at_eol : ExtWarn<
@@ -510,7 +516,7 @@ def ext_pp_bad_paste_ms : ExtWarn<
 def err_pp_operator_used_as_macro_name : Error<
   "C++ operator %0 (aka %1) used as a macro name">;
 def ext_pp_operator_used_as_macro_name : Extension<
-  "C++ operator %0 (aka %1) used as a macro name">, InGroup<Microsoft>;
+  err_pp_operator_used_as_macro_name.Text>, InGroup<MicrosoftCppMacro>;
 def err_pp_illegal_floating_literal : Error<
   "floating point literal in preprocessor expression">;
 def err_pp_line_requires_integer : Error<
@@ -622,6 +628,8 @@ def warn_mmap_unknown_attribute : Warning<"unknown attribute '%0'">,
 def warn_auto_module_import : Warning<
   "treating #%select{include|import|include_next|__include_macros}0 as an "
   "import of module '%1'">, InGroup<AutoImport>, DefaultIgnore;
+def note_implicit_top_level_module_import_here : Note<
+  "submodule of top-level module '%0' implicitly imported here">;
 def warn_uncovered_module_header : Warning<
   "umbrella header for module '%0' does not include header '%1'">, 
   InGroup<IncompleteUmbrella>;

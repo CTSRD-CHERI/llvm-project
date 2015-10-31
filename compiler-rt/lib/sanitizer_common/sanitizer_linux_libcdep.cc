@@ -13,8 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "sanitizer_platform.h"
+
 #if SANITIZER_FREEBSD || SANITIZER_LINUX
 
+#include "sanitizer_allocator_internal.h"
 #include "sanitizer_atomic.h"
 #include "sanitizer_common.h"
 #include "sanitizer_flags.h"
@@ -47,6 +49,12 @@
 #include <android/api-level.h>
 #endif
 
+#if SANITIZER_ANDROID && __ANDROID_API__ < 21
+#include <android/log.h>
+#else
+#include <syslog.h>
+#endif
+
 #if !SANITIZER_ANDROID
 #include <elf.h>
 #include <unistd.h>
@@ -58,7 +66,7 @@ namespace __sanitizer {
 extern "C" {
 SANITIZER_WEAK_ATTRIBUTE int
 real_pthread_attr_getstack(void *attr, void **addr, size_t *size);
-}  // extern "C"
+} // extern "C"
 
 static int my_pthread_attr_getstack(void *attr, void **addr, size_t *size) {
 #if !SANITIZER_GO
@@ -93,7 +101,8 @@ void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
     MemoryMappingLayout proc_maps(/*cache_enabled*/true);
     uptr start, end, offset;
     uptr prev_end = 0;
-    while (proc_maps.Next(&start, &end, &offset, 0, 0, /* protection */0)) {
+    while (proc_maps.Next(&start, &end, &offset, nullptr, 0,
+          /* protection */nullptr)) {
       if ((uptr)&rl < end)
         break;
       prev_end = end;
@@ -118,7 +127,7 @@ void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
   pthread_attr_init(&attr);
   CHECK_EQ(pthread_getattr_np(pthread_self(), &attr), 0);
   uptr stacksize = 0;
-  void *stackaddr = 0;
+  void *stackaddr = nullptr;
   my_pthread_attr_getstack(&attr, &stackaddr, (size_t*)&stacksize);
   pthread_attr_destroy(&attr);
 
@@ -130,7 +139,7 @@ void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
 #if !SANITIZER_GO
 bool SetEnv(const char *name, const char *value) {
   void *f = dlsym(RTLD_NEXT, "setenv");
-  if (f == 0)
+  if (!f)
     return false;
   typedef int(*setenv_ft)(const char *name, const char *value, int overwrite);
   setenv_ft setenv_f;
@@ -161,7 +170,7 @@ bool SanitizerGetThreadName(char *name, int max_len) {
 #endif
 }
 
-#if !SANITIZER_FREEBSD
+#if !SANITIZER_FREEBSD && !SANITIZER_ANDROID && !SANITIZER_GO
 static uptr g_tls_size;
 #endif
 
@@ -187,6 +196,8 @@ static uptr TlsPreTcbSize() {
 
 void InitTlsSize() {
 #if !SANITIZER_FREEBSD && !SANITIZER_ANDROID && !SANITIZER_GO
+// all current supported platforms have 16 bytes stack alignment
+  const size_t kStackAlign = 16;
   typedef void (*get_tls_func)(size_t*, size_t*) DL_INTERNAL_FUNCTION;
   get_tls_func get_tls;
   void *get_tls_static_info_ptr = dlsym(RTLD_NEXT, "_dl_get_tls_static_info");
@@ -197,12 +208,15 @@ void InitTlsSize() {
   size_t tls_size = 0;
   size_t tls_align = 0;
   get_tls(&tls_size, &tls_align);
-  g_tls_size = tls_size;
-#endif  // !SANITIZER_FREEBSD && !SANITIZER_ANDROID
+  if (tls_align < kStackAlign)
+    tls_align = kStackAlign;
+  g_tls_size = RoundUpTo(tls_size, tls_align);
+#endif  // !SANITIZER_FREEBSD && !SANITIZER_ANDROID && !SANITIZER_GO
 }
 
-#if (defined(__x86_64__) || defined(__i386__) || defined(__mips__)) \
-    && SANITIZER_LINUX
+#if (defined(__x86_64__) || defined(__i386__) || defined(__mips__) \
+    || defined(__aarch64__)) \
+    && SANITIZER_LINUX && !SANITIZER_ANDROID
 // sizeof(struct thread) from glibc.
 static atomic_uintptr_t kThreadDescriptorSize;
 
@@ -249,6 +263,11 @@ uptr ThreadDescriptorSize() {
   if (val)
     atomic_store(&kThreadDescriptorSize, val, memory_order_relaxed);
   return val;
+#elif defined(__aarch64__)
+  // The sizeof (struct pthread) is the same from GLIBC 2.17 to 2.22.
+  val = 1776;
+  atomic_store(&kThreadDescriptorSize, val, memory_order_relaxed);
+  return val;
 #endif
   return 0;
 }
@@ -278,6 +297,8 @@ uptr ThreadSelf() {
                 rdhwr %0,$29;\
                 .set pop" : "=r" (thread_pointer));
   descr_addr = thread_pointer - kTlsTcbOffset - TlsPreTcbSize();
+# elif defined(__aarch64__)
+  descr_addr = reinterpret_cast<uptr>(__builtin_thread_pointer());
 # else
 #  error "unsupported CPU arch"
 # endif
@@ -307,13 +328,13 @@ uptr ThreadSelf() {
 
 #if !SANITIZER_GO
 static void GetTls(uptr *addr, uptr *size) {
-#if SANITIZER_LINUX
+#if SANITIZER_LINUX && !SANITIZER_ANDROID
 # if defined(__x86_64__) || defined(__i386__)
   *addr = ThreadSelf();
   *size = GetTlsSize();
   *addr -= *size;
   *addr += ThreadDescriptorSize();
-# elif defined(__mips__)
+# elif defined(__mips__) || defined(__aarch64__)
   *addr = ThreadSelf();
   *size = GetTlsSize();
 # else
@@ -333,6 +354,9 @@ static void GetTls(uptr *addr, uptr *size) {
     *addr = (uptr) dtv[2];
     *size = (*addr == 0) ? 0 : ((uptr) segbase[0] - (uptr) dtv[2]);
   }
+#elif SANITIZER_ANDROID
+  *addr = 0;
+  *size = 0;
 #else
 # error "Unknown OS"
 #endif
@@ -341,7 +365,7 @@ static void GetTls(uptr *addr, uptr *size) {
 
 #if !SANITIZER_GO
 uptr GetTlsSize() {
-#if SANITIZER_FREEBSD
+#if SANITIZER_FREEBSD || SANITIZER_ANDROID
   uptr addr, size;
   GetTls(&addr, &size);
   return size;
@@ -376,6 +400,7 @@ void GetThreadStackAndTls(bool main, uptr *stk_addr, uptr *stk_size,
 #endif
 }
 
+#if !SANITIZER_GO
 void AdjustStackSize(void *attr_) {
   pthread_attr_t *attr = (pthread_attr_t *)attr_;
   uptr stackaddr = 0;
@@ -400,6 +425,7 @@ void AdjustStackSize(void *attr_) {
     }
   }
 }
+#endif // !SANITIZER_GO
 
 # if !SANITIZER_FREEBSD
 typedef ElfW(Phdr) Elf_Phdr;
@@ -455,7 +481,7 @@ extern "C" __attribute__((weak)) int dl_iterate_phdr(
 
 uptr GetListOfModules(LoadedModule *modules, uptr max_modules,
                       string_predicate_t filter) {
-#if SANITIZER_ANDROID && __ANDROID_API__ < 21
+#if SANITIZER_ANDROID && __ANDROID_API__ <= 22
   u32 api_level = AndroidGetApiLevel();
   // Fall back to /proc/maps if dl_iterate_phdr is unavailable or broken.
   // The runtime check allows the same library to work with
@@ -510,6 +536,55 @@ uptr GetRSS() {
   return rss * GetPageSizeCached();
 }
 
-}  // namespace __sanitizer
+// 64-bit Android targets don't provide the deprecated __android_log_write.
+// Starting with the L release, syslog() works and is preferable to
+// __android_log_write.
+#if SANITIZER_LINUX
 
-#endif  // SANITIZER_FREEBSD || SANITIZER_LINUX
+#if SANITIZER_ANDROID
+static atomic_uint8_t android_log_initialized;
+
+void AndroidLogInit() {
+  atomic_store(&android_log_initialized, 1, memory_order_release);
+}
+
+static bool IsSyslogAvailable() {
+  return atomic_load(&android_log_initialized, memory_order_acquire);
+}
+#else
+void AndroidLogInit() {}
+
+static bool IsSyslogAvailable() { return true; }
+#endif  // SANITIZER_ANDROID
+
+static void WriteOneLineToSyslog(const char *s) {
+#if SANITIZER_ANDROID &&__ANDROID_API__ < 21
+  __android_log_write(ANDROID_LOG_INFO, NULL, s);
+#else
+  syslog(LOG_INFO, "%s", s);
+#endif
+}
+
+void WriteToSyslog(const char *buffer) {
+  if (!IsSyslogAvailable())
+    return;
+  char *copy = internal_strdup(buffer);
+  char *p = copy;
+  char *q;
+  // syslog, at least on Android, has an implicit message length limit.
+  // Print one line at a time.
+  do {
+    q = internal_strchr(p, '\n');
+    if (q)
+      *q = '\0';
+    WriteOneLineToSyslog(p);
+    if (q)
+      p = q + 1;
+  } while (q);
+  InternalFree(copy);
+}
+#endif // SANITIZER_LINUX
+
+} // namespace __sanitizer
+
+#endif // SANITIZER_FREEBSD || SANITIZER_LINUX

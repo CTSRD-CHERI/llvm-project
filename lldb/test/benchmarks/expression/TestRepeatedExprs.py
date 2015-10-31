@@ -1,7 +1,10 @@
 """Test evaluating expressions repeatedly comparing lldb against gdb."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys
-import unittest2
 import lldb
 from lldbbench import *
 
@@ -23,15 +26,15 @@ class RepeatedExprsCase(BenchBase):
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_compare_lldb_to_gdb(self):
         """Test repeated expressions with lldb vs. gdb."""
-        self.buildDefault()
+        self.build()
         self.exe_name = 'a.out'
 
-        print
+        print()
         self.run_lldb_repeated_exprs(self.exe_name, self.count)
-        print "lldb benchmark:", self.stopwatch
+        print("lldb benchmark:", self.stopwatch)
         self.run_gdb_repeated_exprs(self.exe_name, self.count)
-        print "gdb benchmark:", self.stopwatch
-        print "lldb_avg/gdb_avg: %f" % (self.lldb_avg/self.gdb_avg)
+        print("gdb benchmark:", self.stopwatch)
+        print("lldb_avg/gdb_avg: %f" % (self.lldb_avg/self.gdb_avg))
 
     def run_lldb_repeated_exprs(self, exe_name, count):
         import pexpect
@@ -76,7 +79,7 @@ class RepeatedExprsCase(BenchBase):
 
         self.lldb_avg = self.stopwatch.avg()
         if self.TraceOn():
-            print "lldb expression benchmark:", str(self.stopwatch)
+            print("lldb expression benchmark:", str(self.stopwatch))
         self.child = None
 
     def run_gdb_repeated_exprs(self, exe_name, count):
@@ -124,12 +127,5 @@ class RepeatedExprsCase(BenchBase):
 
         self.gdb_avg = self.stopwatch.avg()
         if self.TraceOn():
-            print "gdb expression benchmark:", str(self.stopwatch)
+            print("gdb expression benchmark:", str(self.stopwatch))
         self.child = None
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

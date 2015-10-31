@@ -18,6 +18,13 @@
 #include <cstring>
 #include <cctype>
 
+#ifdef _MSC_VER
+// snprintf is implemented in VS 2015
+#if _MSC_VER < 1900
+#define snprintf _snprintf_s
+#endif
+#endif
+
 namespace __cxxabiv1
 {
 
@@ -156,7 +163,9 @@ constexpr const char* float_data<double>::spec;
 template <>
 struct float_data<long double>
 {
-#if defined(__arm__)
+#if defined(__mips__) && defined(__mips_n64) || defined(__aarch64__)
+    static const size_t mangled_size = 32;
+#elif defined(__arm__) || defined(__mips__)
     static const size_t mangled_size = 16;
 #else
     static const size_t mangled_size = 20;  // May need to be adjusted to 16 or 24 on other platforms
@@ -4045,7 +4054,7 @@ parse_nested_name(const char* first, const char* last, C& db,
 
 // <discriminator> := _ <non-negative number>      # when number < 10
 //                 := __ <non-negative number> _   # when number >= 10
-//  extension      := decimal-digit+
+//  extension      := decimal-digit+               # at the end of string
 
 const char*
 parse_discriminator(const char* first, const char* last)
@@ -4074,7 +4083,8 @@ parse_discriminator(const char* first, const char* last)
             const char* t1 = first+1;
             for (; t1 != last && std::isdigit(*t1); ++t1)
                 ;
-            first = t1;
+            if (t1 == last)
+                first = last;
         }
     }
     return first;
@@ -4405,7 +4415,7 @@ parse_special_name(const char* first, const char* last, C& db)
                 {
                     if (db.names.empty())
                         return first;
-                    if (first[2] == 'v')
+                    if (first[1] == 'v')
                     {
                         db.names.back().first.insert(0, "virtual thunk to ");
                         first = t;
@@ -4816,6 +4826,12 @@ class malloc_alloc
 {
 public:
     typedef T value_type;
+    typedef T& reference;
+    typedef const T& const_reference;
+    typedef T* pointer;
+    typedef const T* const_pointer;
+    typedef std::size_t size_type;
+    typedef std::ptrdiff_t difference_type;
 
     malloc_alloc() = default;
     template <class U> malloc_alloc(const malloc_alloc<U>&) noexcept {}
@@ -4827,6 +4843,17 @@ public:
     void deallocate(T* p, std::size_t) noexcept
     {
         std::free(p);
+    }
+
+    template <class U> struct rebind { using other = malloc_alloc<U>; };
+    template <class U, class... Args>
+    void construct(U* p, Args&&... args)
+    {
+        ::new ((void*)p) U(std::forward<Args>(args)...);
+    }
+    void destroy(T* p)
+    {
+        p->~T();
     }
 };
 

@@ -1,4 +1,4 @@
-""" Post process SWIG Bridge wrapper code Python script for Windows/LINUX/OSX platform
+﻿""" Post process SWIG Bridge wrapper code Python script for Windows/LINUX/OSX platform
 
     --------------------------------------------------------------------------
     File:           finishSwigWrapperClasses.py
@@ -97,7 +97,7 @@ def program_exit_success( vnResult, vMsg ):
 
     if vMsg.__len__() != 0:
         strMsg = "%s: %s (%d)" % (strExitMsgSuccess, vMsg, vnResult);
-        print strMsg;
+        print(strMsg);
 
     sys.exit( vnResult );
 
@@ -110,7 +110,7 @@ def program_exit_success( vnResult, vMsg ):
 # Throws:   None.
 #--
 def program_exit_on_failure( vnResult, vMsg ):
-    print "%s%s (%d)" % (strExitMsgError, vMsg, vnResult);
+    print(("%s%s (%d)" % (strExitMsgError, vMsg, vnResult)));
     sys.exit( vnResult );
 
 #++---------------------------------------------------------------------------
@@ -135,13 +135,13 @@ def program_exit( vnResult, vMsg ):
 # Throws:   None.
 #--
 def print_out_input_parameters( vDictArgs ):
-    for arg, val in vDictArgs.iteritems():
+    for arg, val in list(vDictArgs.items()):
         strEqs = "";
         strQ = "";
         if val.__len__() != 0:
             strEqs = " =";
             strQ = "\"";
-        print "%s%s%s %s%s%s\n" % (strParameter, arg, strEqs, strQ, val, strQ);
+        print(("%s%s%s %s%s%s\n" % (strParameter, arg, strEqs, strQ, val, strQ)));
 
 #++---------------------------------------------------------------------------
 # Details:  Validate the arguments passed to the program. This function exits
@@ -210,8 +210,8 @@ def run_post_process( vStrScriptLang, vstrFinishFileName, vDictArgs ):
         return (-9, strStatusMsg);
 
     if gbDbgFlag:
-        print strScriptLangFound % vStrScriptLang;
-        print strExecuteMsg % vStrScriptLang;
+        print((strScriptLangFound % vStrScriptLang));
+        print((strExecuteMsg % vStrScriptLang));
 
     # Change where Python looks for our modules
     strDir = os.path.normcase( strScriptFileDir );
@@ -267,16 +267,18 @@ def run_post_process_for_each_script_supported( vDictArgs ):
         listDirs.remove('.svn')
 
     if gbDbgFlag:
-        print strScriptLangsFound,
+        sys.stdout.write(strScriptLangsFound)
         for dir in listDirs:
-            print dir,
-        print "\n";
+            sys.stdout.write(dir)
+        print("\n")
 
     # Iterate script directory find any script language directories
     for scriptLang in listDirs:
-        dbg.dump_text( "Executing language script for \'%s\'" % scriptLang );
-        nResult, strStatusMsg = run_post_process( scriptLang, strFinishFileName,
-                                                  vDictArgs );
+        # __pycache__ is a magic directory in Python 3 that holds .pyc files
+        if scriptLang != "__pycache__":
+            dbg.dump_text( "Executing language script for \'%s\'" % scriptLang );
+            nResult, strStatusMsg = run_post_process( scriptLang, strFinishFileName,
+                                                      vDictArgs );
         if nResult < 0:
             break;
 
@@ -310,7 +312,7 @@ def main( vArgv ):
         program_exit( -4, strMsgErrorOsTypeUnknown );
 
     global gbDbgFlag;
-    gbDbgFlag = dictArgs.has_key( "-d" );
+    gbDbgFlag = "-d" in dictArgs;
     if gbDbgFlag:
         print_out_input_parameters( dictArgs );
 
@@ -319,7 +321,7 @@ def main( vArgv ):
     # Not used in this program, but passed through to the language script file
     # called by this program
     global gbMakeFileFlag;
-    gbMakeFileFlag = dictArgs.has_key( "-m" );
+    gbMakeFileFlag = "-m" in dictArgs;
 
     nResult, strMsg = run_post_process_for_each_script_supported( dictArgs );
 

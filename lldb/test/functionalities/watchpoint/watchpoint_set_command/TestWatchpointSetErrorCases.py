@@ -2,8 +2,11 @@
 Test error cases for the 'watchpoint set' command to make sure it errors out when necessary.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -11,13 +14,6 @@ import lldbutil
 class WatchpointSetErrorTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @expectedFailureFreeBSD('llvm.org/pr18832')
-    def test_error_cases_with_watchpoint_set(self):
-        """Test error cases with the 'watchpoint set' command."""
-        self.buildDwarf()
-        self.setTearDownCleanup()
-        self.error_cases_with_watchpoint_set()
 
     def setUp(self):
         # Call super's setUp().
@@ -28,8 +24,11 @@ class WatchpointSetErrorTestCase(TestBase):
         self.line = line_number(self.source, '// Set break point at this line.')
         # Build dictionary to have unique executable names for each test method.
 
-    def error_cases_with_watchpoint_set(self):
+    def test_error_cases_with_watchpoint_set(self):
         """Test error cases with the 'watchpoint set' command."""
+        self.build()
+        self.setTearDownCleanup()
+
         exe = os.path.join(os.getcwd(), 'a.out')
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -37,7 +36,7 @@ class WatchpointSetErrorTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -66,10 +65,3 @@ class WatchpointSetErrorTestCase(TestBase):
         # Wrong size parameter is an error.
         self.expect("watchpoint set variable -s -128", error=True,
             substrs = ['invalid enumeration value'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

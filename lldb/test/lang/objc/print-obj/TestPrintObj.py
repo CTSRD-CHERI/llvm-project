@@ -2,8 +2,11 @@
 Test "print object" where another thread blocks the print object from making progress.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -11,22 +14,6 @@ from lldbtest import *
 class PrintObjTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @dsym_test
-    def test_print_obj_with_dsym(self):
-        """Test "print object" where another thread blocks the print object from making progress."""
-        d = {'EXE': 'a.out'}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.print_obj('a.out')
-
-    @dwarf_test
-    def test_print_obj_with_dwarf(self):
-        """Test "print object" where another thread blocks the print object from making progress."""
-        d = {'EXE': 'b.out'}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.print_obj('b.out')
 
     def setUp(self):
         # Call super's setUp().
@@ -36,7 +23,7 @@ class PrintObjTestCase(TestBase):
         # Find the line numbers to break at.
         self.line = line_number(self.source, '// Set a breakpoint here.')
 
-    def print_obj(self, exe_name):
+    def test_print_obj(self):
         """
         Test "print object" where another thread blocks the print object from making progress.
 
@@ -45,7 +32,10 @@ class PrintObjTestCase(TestBase):
         try to get the lock already gotten by my_pthread_routime thread, it will
         have to switch to running all threads, and that should then succeed.
         """
-        exe = os.path.join(os.getcwd(), exe_name)
+        d = {'EXE': 'b.out'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        exe = os.path.join(os.getcwd(), 'b.out')
 
         target = self.dbg.CreateTarget(exe)
         self.assertTrue(target, VALID_TARGET)
@@ -77,7 +67,7 @@ class PrintObjTestCase(TestBase):
         self.assertTrue(other_thread)
         process.SetSelectedThread(other_thread)
         if self.TraceOn():
-            print "selected thread:" + lldbutil.get_description(other_thread)
+            print("selected thread:" + lldbutil.get_description(other_thread))
         self.runCmd("thread backtrace")
 
         # We want to traverse the frame to the one corresponding to blocked.m to
@@ -90,15 +80,8 @@ class PrintObjTestCase(TestBase):
             if name == 'main':
                 other_thread.SetSelectedFrame(i)
                 if self.TraceOn():
-                    print "selected frame:" + lldbutil.get_description(frame)
+                    print("selected frame:" + lldbutil.get_description(frame))
                 break
 
         self.expect("po lock_me", OBJECT_PRINTED_CORRECTLY,
             substrs = ['I am pretty special.'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

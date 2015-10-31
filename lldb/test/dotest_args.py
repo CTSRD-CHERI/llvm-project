@@ -1,30 +1,35 @@
+from __future__ import print_function
+
+import argparse
 import sys
+import multiprocessing
 import os
 import textwrap
-
-if sys.version_info >= (2, 7):
-    argparse = __import__('argparse')
-else:
-    argparse = __import__('argparse_compat')
 
 class ArgParseNamespace(object):
     pass
 
 def parse_args(parser, argv):
     """ Returns an argument object. LLDB_TEST_ARGUMENTS environment variable can
-        be used to pass additional arguments if a compatible (>=2.7) argparse
-        library is available.
+        be used to pass additional arguments.
     """
-    if sys.version_info >= (2, 7):
-        args = ArgParseNamespace()
+    args = ArgParseNamespace()
 
-        if ('LLDB_TEST_ARGUMENTS' in os.environ):
-            print "Arguments passed through environment: '%s'" % os.environ['LLDB_TEST_ARGUMENTS']
-            args = parser.parse_args([sys.argv[0]].__add__(os.environ['LLDB_TEST_ARGUMENTS'].split()),namespace=args)
+    if ('LLDB_TEST_ARGUMENTS' in os.environ):
+        print("Arguments passed through environment: '%s'" % os.environ['LLDB_TEST_ARGUMENTS'])
+        args = parser.parse_args([sys.argv[0]].__add__(os.environ['LLDB_TEST_ARGUMENTS'].split()),namespace=args)
 
-        return parser.parse_args(args=argv, namespace=args)
+    return parser.parse_args(args=argv, namespace=args)
+
+
+def default_thread_count():
+    # Check if specified in the environment
+    num_threads_str = os.environ.get("LLDB_TEST_THREADS")
+    if num_threads_str:
+        return int(num_threads_str)
     else:
-        return parser.parse_args(args=argv)
+        return multiprocessing.cpu_count()
+
 
 def create_parser():
     parser = argparse.ArgumentParser(description='description', prefix_chars='+-', add_help=False)
@@ -49,9 +54,7 @@ def create_parser():
 
     # Test filtering options
     group = parser.add_argument_group('Test filtering options')
-    group.add_argument('-N', choices=['dwarf', 'dsym'], help="Don't do test cases marked with the @dsym decorator by passing 'dsym' as the option arg, or don't do test cases marked with the @dwarf decorator by passing 'dwarf' as the option arg")
-    X('-a', "Don't do lldb Python API tests")
-    X('+a', "Just do lldb Python API tests. Do not specify along with '-a'", dest='plus_a')
+    group.add_argument('-N', choices=['dwarf', 'dwo', 'dsym'], help="Don't do test cases marked with the @dsym_test/@dwarf_test/@dwo_test decorator by passing dsym/dwarf/dwo as the option arg")
     X('+b', 'Just do benchmark tests', dest='plus_b')
     group.add_argument('-b', metavar='blacklist', help='Read a blacklist file specified after this option')
     group.add_argument('-f', metavar='filterspec', action='append', help='Specify a filter, which consists of the test class name, a dot, followed by the test method, to only admit such test into the test suite')  # FIXME: Example?
@@ -107,8 +110,83 @@ def create_parser():
     group.set_defaults(disable_crash_dialog=True)
     group.set_defaults(hide_inferior_console=True)
 
+    group = parser.add_argument_group('Parallel execution options')
+    group.add_argument(
+        '--inferior',
+        action='store_true',
+        help=('specify this invocation is a multiprocess inferior, '
+              'used internally'))
+    group.add_argument(
+        '--no-multiprocess',
+        action='store_true',
+        help='skip running the multiprocess test runner')
+    group.add_argument(
+        '--output-on-success',
+        action='store_true',
+        help=('print full output of the dotest.py inferior, '
+              'even when all tests succeed'))
+    group.add_argument(
+        '--threads',
+        type=int,
+        dest='num_threads',
+        default=default_thread_count(),
+        help=('The number of threads/processes to use when running tests '
+              'separately, defaults to the number of CPU cores available'))
+    group.add_argument(
+        '--test-subdir',
+        action='store',
+        help='Specify a test subdirectory to use relative to the test root dir'
+    )
+    group.add_argument(
+        '--test-runner-name',
+        action='store',
+        help=('Specify a test runner strategy.  Valid values: multiprocessing,'
+              ' multiprocessing-pool, serial, threading, threading-pool')
+    )
+
+    # Test results support.
+    group = parser.add_argument_group('Test results options')
+    group.add_argument(
+        '--results-file',
+        action='store',
+        help=('Specifies the file where test results will be written '
+              'according to the results-formatter class used'))
+    group.add_argument(
+        '--results-port',
+        action='store',
+        type=int,
+        help=('Specifies the localhost port to which the results '
+              'formatted output should be sent'))
+    group.add_argument(
+        '--results-formatter',
+        action='store',
+        help=('Specifies the full package/module/class name used to translate '
+              'test events into some kind of meaningful report, written to '
+              'the designated output results file-like object'))
+    group.add_argument(
+        '--results-formatter-option',
+        '-O',
+        action='append',
+        dest='results_formatter_options',
+        help=('Specify an option to pass to the formatter. '
+              'Use --results-formatter-option="--option1=val1" '
+              'syntax.  Note the "=" is critical, don\'t include whitespace.'))
+    group.add_argument(
+        '--event-add-entries',
+        action='store',
+        help=('Specify comma-separated KEY=VAL entries to add key and value '
+              'pairs to all test events generated by this test run.  VAL may '
+              'be specified as VAL:TYPE, where TYPE may be int to convert '
+              'the value to an int'))
     # Remove the reference to our helper function
     del X
+
+    D = lambda optstr, **kwargs: group.add_argument(optstr, action='store_true', **kwargs)
+    group = parser.add_argument_group('Deprecated options (do not use)')
+    # Deprecated on 23.10.2015. Remove completely after a grace period.
+    D('-a')
+    D('+a', dest='plus_a')
+    del D
 
     group = parser.add_argument_group('Test directories')
     group.add_argument('args', metavar='test-dir', nargs='*', help='Specify a list of directory names to search for test modules named after Test*.py (test discovery). If empty, search from the current working directory instead.')

@@ -96,9 +96,11 @@ typedef enum
     eLaunchFlavorSpringBoard = 3,
 #endif
 #ifdef WITH_BKS
-    eLaunchFlavorBKS = 4
+    eLaunchFlavorBKS = 4,
 #endif
-
+#ifdef WITH_FBS
+    eLaunchFlavorFBS = 5
+#endif
 } nub_launch_flavor_t;
 
 #define NUB_STATE_IS_RUNNING(s) ((s) == eStateAttaching ||\
@@ -208,10 +210,10 @@ struct DNBRegisterInfo
     uint16_t    format;         // Default format for display (DNBRegisterFormat),
     uint32_t    size;           // Size in bytes of the register
     uint32_t    offset;         // Offset from the beginning of the register context
-    uint32_t    reg_gcc;        // GCC register number (INVALID_NUB_REGNUM when none)
+    uint32_t    reg_ehframe;    // eh_frame register number (INVALID_NUB_REGNUM when none)
     uint32_t    reg_dwarf;      // DWARF register number (INVALID_NUB_REGNUM when none)
     uint32_t    reg_generic;    // Generic register number (INVALID_NUB_REGNUM when none)
-    uint32_t    reg_gdb;        // The GDB register number (INVALID_NUB_REGNUM when none)
+    uint32_t    reg_debugserver;// The debugserver register number we'll use over gdb-remote protocol (INVALID_NUB_REGNUM when none)
     const char **value_regs;    // If this register is a part of other registers, list the register names terminated by NULL
     const char **update_regs;   // If modifying this register will invalidate other registers, list the register names terminated by NULL
 };
@@ -364,5 +366,7 @@ enum DNBProfileDataScanType
 typedef nub_addr_t (*DNBCallbackNameToAddress)(nub_process_t pid, const char *name, const char *shlib_regex, void *baton);
 typedef nub_size_t (*DNBCallbackCopyExecutableImageInfos)(nub_process_t pid, struct DNBExecutableImageInfo **image_infos, nub_bool_t only_changed, void *baton);
 typedef void (*DNBCallbackLog)(void *baton, uint32_t flags, const char *format, va_list args);
+
+#define UNUSED_IF_ASSERT_DISABLED(x) ((void)(x))
 
 #endif    // #ifndef __DNBDefs_h__

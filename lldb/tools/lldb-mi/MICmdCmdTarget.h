@@ -29,29 +29,26 @@
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "target-select".
 //          http://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Target-Manipulation.html#GDB_002fMI-Target-Manipulation
-// Gotchas: None.
-// Authors: Illya Rudkin 05/03/2014.
-// Changes: None.
 //--
 class CMICmdCmdTargetSelect : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdTargetSelect(void);
+    /* ctor */ CMICmdCmdTargetSelect();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdTargetSelect(void);
+    /* dtor */ ~CMICmdCmdTargetSelect() override;
 
     // Attributes:
   private:
@@ -69,20 +66,20 @@ class CMICmdCmdTargetAttach : public CMICmdBase
     // Statics:
 public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
     
     // Methods:
 public:
-    /* ctor */ CMICmdCmdTargetAttach(void);
+    /* ctor */ CMICmdCmdTargetAttach();
     
     // Overridden:
 public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdTargetAttach(void);
+    /* dtor */ ~CMICmdCmdTargetAttach() override;
     
     // Attributes:
 private:
@@ -101,19 +98,19 @@ class CMICmdCmdTargetDetach : public CMICmdBase
     // Statics:
 public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
     
     // Methods:
 public:
-    /* ctor */ CMICmdCmdTargetDetach(void);
+    /* ctor */ CMICmdCmdTargetDetach();
     
     // Overridden:
 public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdTargetDetach(void);
+    /* dtor */ ~CMICmdCmdTargetDetach() override;
 };
 

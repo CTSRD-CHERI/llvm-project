@@ -2,9 +2,12 @@
 Test SBprocess and SBThread APIs with printing of the stack traces using lldbutil.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -19,15 +22,11 @@ class ThreadsStackTracesTestCase(TestBase):
         self.line = line_number('main.cpp', '// Set break point at this line.')
 
     @expectedFailureAll("llvm.org/pr23043", ["linux"], archs=["i386"]) # We are unable to produce a backtrace of the main thread when the thread is blocked in fgets
-    @python_api_test
+    @expectedFailureWindows("llvm.org/pr24778")
+    @add_test_categories(['pyapi'])
     def test_stack_traces(self):
         """Test SBprocess and SBThread APIs with printing of the stack traces."""
-        self.buildDefault()
-        self.break_and_print_stacktraces()
-
-    def break_and_print_stacktraces(self):
-        """Break at main.cpp:68 and do a threads dump"""
-
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -51,10 +50,3 @@ class ThreadsStackTracesTestCase(TestBase):
         stacktraces = lldbutil.print_stacktraces(process, string_buffer=True)
         self.expect(stacktraces, exe=False,
             substrs = ['(int)argc=3'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

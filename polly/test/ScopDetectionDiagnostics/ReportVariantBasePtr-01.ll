@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -analyze < %s 2>&1| FileCheck %s
+; RUN: opt %loadPolly -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -analyze < %s 2>&1| FileCheck %s
 
 ; struct b {
 ;   double **b;
@@ -6,7 +6,7 @@
 ;
 ; void a(struct b *A) {
 ;   for (int i=0; i<32; i++)
-;     A->b[i] = 0;
+;     A[i].b[i] = 0;
 ; }
 
 ; CHECK: remark: ReportVariantBasePtr01.c:6:8: The following errors keep this region from being a Scop.
@@ -23,11 +23,11 @@ entry:
 entry.split:                                      ; preds = %entry
   tail call void @llvm.dbg.value(metadata %struct.b* %A, i64 0, metadata !16, metadata !DIExpression()), !dbg !23
   tail call void @llvm.dbg.value(metadata i32 0, i64 0, metadata !17, metadata !DIExpression()), !dbg !25
-  %b = getelementptr inbounds %struct.b, %struct.b* %A, i64 0, i32 0, !dbg !26
   br label %for.body, !dbg !27
 
 for.body:                                         ; preds = %for.body, %entry.split
   %indvar4 = phi i64 [ %indvar.next, %for.body ], [ 0, %entry.split ]
+  %b = getelementptr inbounds %struct.b, %struct.b* %A, i64 %indvar4, i32 0, !dbg !26
   %0 = mul i64 %indvar4, 4, !dbg !26
   %1 = add i64 %0, 3, !dbg !26
   %2 = add i64 %0, 2, !dbg !26
@@ -61,11 +61,11 @@ attributes #1 = { nounwind readnone }
 !llvm.module.flags = !{!20, !21}
 !llvm.ident = !{!22}
 
-!0 = !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5.0 ", isOptimized: true, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5.0 ", isOptimized: true, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
 !1 = !DIFile(filename: "ReportVariantBasePtr01.c", directory: "test/ScopDetectionDiagnostics")
 !2 = !{}
 !3 = !{!4}
-!4 = !DISubprogram(name: "a", line: 5, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 5, file: !1, scope: !5, type: !6, function: void (%struct.b*)* @a, variables: !15)
+!4 = distinct !DISubprogram(name: "a", line: 5, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 5, file: !1, scope: !5, type: !6, function: void (%struct.b*)* @a, variables: !15)
 !5 = !DIFile(filename: "ReportVariantBasePtr01.c", directory: "test/ScopDetectionDiagnostics")
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8}
@@ -77,8 +77,8 @@ attributes #1 = { nounwind readnone }
 !13 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !14)
 !14 = !DIBasicType(tag: DW_TAG_base_type, name: "double", size: 64, align: 64, encoding: DW_ATE_float)
 !15 = !{!16, !17}
-!16 = !DILocalVariable(tag: DW_TAG_arg_variable, name: "A", line: 5, arg: 1, scope: !4, file: !5, type: !8)
-!17 = !DILocalVariable(tag: DW_TAG_auto_variable, name: "i", line: 6, scope: !18, file: !5, type: !19)
+!16 = !DILocalVariable(name: "A", line: 5, arg: 1, scope: !4, file: !5, type: !8)
+!17 = !DILocalVariable(name: "i", line: 6, scope: !18, file: !5, type: !19)
 !18 = distinct !DILexicalBlock(line: 6, column: 3, file: !1, scope: !4)
 !19 = !DIBasicType(tag: DW_TAG_base_type, name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
 !20 = !{i32 2, !"Dwarf Version", i32 4}

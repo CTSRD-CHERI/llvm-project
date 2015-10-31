@@ -1,7 +1,10 @@
 """Test stepping through ObjC method dispatch in various forms."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -12,22 +15,6 @@ class TestObjCStepping(TestBase):
         return ['basic_process']
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Test stepping through ObjC method dispatch in various forms."""
-        self.buildDsym()
-        self.objc_stepping()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_python_api(self):
-        """Test stepping through ObjC method dispatch in various forms."""
-        self.buildDwarf()
-        self.objc_stepping()
 
     def setUp(self):
         # Call super's setUp().
@@ -40,8 +27,11 @@ class TestObjCStepping(TestBase):
         self.sourceBase_returnsStruct_start_line = line_number (self.main_source, '// SourceBase returnsStruct start line.')
         self.stepped_past_nil_line = line_number (self.main_source, '// Step over nil should stop here.')
 
-    def objc_stepping(self):
-        """Use Python APIs to test stepping into ObjC methods."""
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
+    def test_with_python_api(self):
+        """Test stepping through ObjC method dispatch in various forms."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -97,7 +87,7 @@ class TestObjCStepping(TestBase):
         className = mySource_isa.GetSummary ()
 
         if self.TraceOn():
-             print mySource_isa
+             print(mySource_isa)
 
         # Lets delete mySource so we can check that after stepping a child variable
         # with no parent persists and is useful.
@@ -139,7 +129,7 @@ class TestObjCStepping(TestBase):
         newClassName = mySource_isa.GetSummary ()
 
         if self.TraceOn():
-             print mySource_isa
+             print(mySource_isa)
 
         self.assertTrue (newClassName != className, "The isa did indeed change, swizzled!")
 
@@ -180,9 +170,3 @@ class TestObjCStepping(TestBase):
         thread.StepInto()
         line_number = thread.GetFrameAtIndex(0).GetLineEntry().GetLine()
         self.assertTrue (line_number == self.stepped_past_nil_line, "Step in over dispatch to nil stepped over.")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -16,7 +16,10 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm-c/Initialization.h"
 #include "llvm-c/Transforms/Scalar.h"
+#include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/Passes.h"
+#include "llvm/Analysis/ScopedNoAliasAA.h"
+#include "llvm/Analysis/TypeBasedAliasAnalysis.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/InitializePasses.h"
@@ -30,7 +33,6 @@ void llvm::initializeScalarOpts(PassRegistry &Registry) {
   initializeADCEPass(Registry);
   initializeBDCEPass(Registry);
   initializeAlignmentFromAssumptionsPass(Registry);
-  initializeSampleProfileLoaderPass(Registry);
   initializeConstantHoistingPass(Registry);
   initializeConstantPropagationPass(Registry);
   initializeCorrelatedValuePropagationPass(Registry);
@@ -66,7 +68,7 @@ void llvm::initializeScalarOpts(PassRegistry &Registry) {
   initializeRewriteStatepointsForGCPass(Registry);
   initializeSCCPPass(Registry);
   initializeIPSCCPPass(Registry);
-  initializeSROAPass(Registry);
+  initializeSROALegacyPassPass(Registry);
   initializeSROA_DTPass(Registry);
   initializeSROA_SSAUpPass(Registry);
   initializeCFGSimplifyPassPass(Registry);
@@ -225,15 +227,15 @@ void LLVMAddEarlyCSEPass(LLVMPassManagerRef PM) {
 }
 
 void LLVMAddTypeBasedAliasAnalysisPass(LLVMPassManagerRef PM) {
-  unwrap(PM)->add(createTypeBasedAliasAnalysisPass());
+  unwrap(PM)->add(createTypeBasedAAWrapperPass());
 }
 
 void LLVMAddScopedNoAliasAAPass(LLVMPassManagerRef PM) {
-  unwrap(PM)->add(createScopedNoAliasAAPass());
+  unwrap(PM)->add(createScopedNoAliasAAWrapperPass());
 }
 
 void LLVMAddBasicAliasAnalysisPass(LLVMPassManagerRef PM) {
-  unwrap(PM)->add(createBasicAliasAnalysisPass());
+  unwrap(PM)->add(createBasicAAWrapperPass());
 }
 
 void LLVMAddLowerExpectIntrinsicPass(LLVMPassManagerRef PM) {

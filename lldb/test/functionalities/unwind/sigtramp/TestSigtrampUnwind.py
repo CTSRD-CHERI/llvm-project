@@ -2,8 +2,11 @@
 Test that we can backtrace correctly with 'sigtramp' functions on the stack
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -14,22 +17,11 @@ class SigtrampUnwind(TestBase):
     # On different platforms the "_sigtramp" and "__kill" frames are likely to be different.
     # This test could probably be adapted to run on linux/*bsd easily enough.
     @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym (self):
+    def test (self):
         """Test that we can backtrace correctly with _sigtramp on the stack"""
-        self.buildDsym()
+        self.build()
         self.setTearDownCleanup()
-        self.sigtramp_unwind_tests()
 
-    @skipUnlessDarwin
-    @dwarf_test
-    def test_with_dwarf (self):
-        """Test that we can backtrace correctly with _sigtramp on the stack"""
-        self.buildDwarf()
-        self.setTearDownCleanup()
-        self.sigtramp_unwind_tests()
-
-    def sigtramp_unwind_tests (self):
         exe = os.path.join(os.getcwd(), "a.out")
         target = self.dbg.CreateTarget(exe)
         self.assertTrue(target, VALID_TARGET)
@@ -72,9 +64,9 @@ class SigtrampUnwind(TestBase):
                 found_main = True
 
         if self.TraceOn():
-            print "Backtrace once we're stopped:"
+            print("Backtrace once we're stopped:")
             for f in thread.frames:
-                print "  %d %s" % (f.GetFrameID(), f.GetFunctionName())
+                print("  %d %s" % (f.GetFrameID(), f.GetFunctionName()))
 
         if found_handler == False:
             self.fail("Unable to find handler() in backtrace.")
@@ -87,9 +79,3 @@ class SigtrampUnwind(TestBase):
 
         if found_main == False:
             self.fail("Unable to find main() in backtrace.")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -32,28 +32,16 @@ namespace llvm {
 
 class FunctionType;
 class LLVMContext;
+class DISubprogram;
 
-template<> struct ilist_traits<Argument>
-  : public SymbolTableListTraits<Argument, Function> {
-
-  Argument *createSentinel() const {
-    return static_cast<Argument*>(&Sentinel);
-  }
-  static void destroySentinel(Argument*) {}
-
-  Argument *provideInitialHead() const { return createSentinel(); }
-  Argument *ensureHead(Argument*) const { return createSentinel(); }
-  static void noteHead(Argument*, Argument*) {}
-
-  static ValueSymbolTable *getSymTab(Function *ItemParent);
-private:
-  mutable ilist_half_node<Argument> Sentinel;
-};
+template <>
+struct SymbolTableListSentinelTraits<Argument>
+    : public ilist_half_embedded_sentinel_traits<Argument> {};
 
 class Function : public GlobalObject, public ilist_node<Function> {
 public:
-  typedef iplist<Argument> ArgumentListType;
-  typedef iplist<BasicBlock> BasicBlockListType;
+  typedef SymbolTableList<Argument> ArgumentListType;
+  typedef SymbolTableList<BasicBlock> BasicBlockListType;
 
   // BasicBlock iterators...
   typedef BasicBlockListType::iterator iterator;
@@ -90,7 +78,7 @@ private:
                                 (Value ? Mask : 0u));
   }
 
-  friend class SymbolTableListTraits<Function, Module>;
+  friend class SymbolTableListTraits<Function>;
 
   void setParent(Module *parent);
 
@@ -267,13 +255,13 @@ public:
   uint64_t getDereferenceableBytes(unsigned i) const {
     return AttributeSets.getDereferenceableBytes(i);
   }
-  
+
   /// @brief Extract the number of dereferenceable_or_null bytes for a call or
   /// parameter (0=unknown).
   uint64_t getDereferenceableOrNullBytes(unsigned i) const {
     return AttributeSets.getDereferenceableOrNullBytes(i);
   }
-  
+
   /// @brief Determine if the function does not access memory.
   bool doesNotAccessMemory() const {
     return AttributeSets.hasAttribute(AttributeSet::FunctionIndex,
@@ -292,6 +280,14 @@ public:
   void setOnlyReadsMemory() {
     addFnAttr(Attribute::ReadOnly);
   }
+
+  /// @brief Determine if the call can access memmory only using pointers based
+  /// on its arguments.
+  bool onlyAccessesArgMemory() const {
+    return AttributeSets.hasAttribute(AttributeSet::FunctionIndex,
+                                      Attribute::ArgMemOnly);
+  }
+  void setOnlyAccessesArgMemory() { addFnAttr(Attribute::ArgMemOnly); }
 
   /// @brief Determine if the function cannot return.
   bool doesNotReturn() const {
@@ -385,6 +381,14 @@ public:
     addAttribute(n, Attribute::ReadOnly);
   }
 
+  /// Optimize this function for minimum size (-Oz).
+  bool optForMinSize() const { return hasFnAttribute(Attribute::MinSize); };
+
+  /// Optimize this function for size (-Os) or minimum size (-Oz).
+  bool optForSize() const {
+    return hasFnAttribute(Attribute::OptimizeForSize) || optForMinSize();
+  }
+
   /// copyAttributesFrom - copy all additional attributes (those not needed to
   /// create a Function) from the Function Src to this one.
   void copyAttributesFrom(const GlobalValue *Src) override;
@@ -407,7 +411,6 @@ public:
   ///
   void eraseFromParent() override;
 
-
   /// Get the underlying elements of the Function... the basic block list is
   /// empty for external functions.
   ///
@@ -419,13 +422,13 @@ public:
     CheckLazyArguments();
     return ArgumentList;
   }
-  static iplist<Argument> Function::*getSublistAccess(Argument*) {
+  static ArgumentListType Function::*getSublistAccess(Argument*) {
     return &Function::ArgumentList;
   }
 
   const BasicBlockListType &getBasicBlockList() const { return BasicBlocks; }
         BasicBlockListType &getBasicBlockList()       { return BasicBlocks; }
-  static iplist<BasicBlock> Function::*getSublistAccess(BasicBlock*) {
+  static BasicBlockListType Function::*getSublistAccess(BasicBlock*) {
     return &Function::BasicBlocks;
   }
 
@@ -439,7 +442,6 @@ public:
   ///
   inline       ValueSymbolTable &getValueSymbolTable()       { return *SymTab; }
   inline const ValueSymbolTable &getValueSymbolTable() const { return *SymTab; }
-
 
   //===--------------------------------------------------------------------===//
   // BasicBlock iterator forwarding functions
@@ -502,10 +504,6 @@ public:
 
   Constant *getPrologueData() const;
   void setPrologueData(Constant *PrologueData);
-
-  /// Print the function to an output stream with an optional
-  /// AssemblyAnnotationWriter.
-  void print(raw_ostream &OS, AssemblyAnnotationWriter *AAW = nullptr) const;
 
   /// viewCFG - This function is meant for use from the debugger.  You can just
   /// say 'call F->viewCFG()' and a ghostview window should pop up from the
@@ -586,6 +584,17 @@ public:
   /// Drop all metadata from \c this not included in \c KnownIDs.
   void dropUnknownMetadata(ArrayRef<unsigned> KnownIDs);
 
+  /// \brief Set the attached subprogram.
+  ///
+  /// Calls \a setMetadata() with \a LLVMContext::MD_dbg.
+  void setSubprogram(DISubprogram *SP);
+
+  /// \brief Get the attached subprogram.
+  ///
+  /// Calls \a getMetadata() with \a LLVMContext::MD_dbg and casts the result
+  /// to \a DISubprogram.
+  DISubprogram *getSubprogram() const;
+
 private:
   // Shadow Value::setValueSubclassData with a private forwarding method so that
   // subclasses cannot accidentally use it.
@@ -602,16 +611,6 @@ private:
 
   void clearMetadata();
 };
-
-inline ValueSymbolTable *
-ilist_traits<BasicBlock>::getSymTab(Function *F) {
-  return F ? &F->getValueSymbolTable() : nullptr;
-}
-
-inline ValueSymbolTable *
-ilist_traits<Argument>::getSymTab(Function *F) {
-  return F ? &F->getValueSymbolTable() : nullptr;
-}
 
 template <>
 struct OperandTraits<Function> : public OptionalOperandTraits<Function> {};

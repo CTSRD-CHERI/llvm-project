@@ -2,8 +2,11 @@
 Test watchpoint list, enable, disable, and delete commands.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -26,83 +29,13 @@ class WatchpointCommandsTestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'C_SOURCES': self.source, 'EXE': self.exe_name}
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_rw_watchpoint_with_dsym(self):
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_rw_watchpoint(self):
         """Test read_write watchpoint and expect to stop two times."""
-        self.buildDsym(dictionary=self.d)
+        self.build(dictionary=self.d)
         self.setTearDownCleanup(dictionary=self.d)
-        self.normal_read_write_watchpoint()
-
-    @dwarf_test
-    def test_rw_watchpoint_with_dwarf(self):
-        """Test read_write watchpoint and expect to stop two times."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.normal_read_write_watchpoint()
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_rw_watchpoint_delete_with_dsym(self):
-        """Test delete watchpoint and expect not to stop for watchpoint."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.delete_read_write_watchpoint()
-
-    @dwarf_test
-    def test_rw_watchpoint_delete_with_dwarf(self):
-        """Test delete watchpoint and expect not to stop for watchpoint."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.delete_read_write_watchpoint()
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_rw_watchpoint_set_ignore_count_with_dsym(self):
-        """Test watchpoint ignore count and expect to not to stop at all."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.ignore_read_write_watchpoint()
-
-    @dwarf_test
-    def test_rw_watchpoint_set_ignore_count_with_dwarf(self):
-        """Test watchpoint ignore count and expect to not to stop at all."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.ignore_read_write_watchpoint()
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_rw_disable_after_first_stop_with_dsym(self):
-        """Test read_write watchpoint but disable it after the first stop."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.read_write_watchpoint_disable_after_first_stop()
-
-    @dwarf_test
-    def test_rw_disable_after_first_stop__with_dwarf(self):
-        """Test read_write watchpoint but disable it after the first stop."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.read_write_watchpoint_disable_after_first_stop()
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_rw_disable_then_enable_with_dsym(self):
-        """Test read_write watchpoint, disable initially, then enable it."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.read_write_watchpoint_disable_then_enable()
-
-    @dwarf_test
-    def test_rw_disable_then_enable_with_dwarf(self):
-        """Test read_write watchpoint, disable initially, then enable it."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.read_write_watchpoint_disable_then_enable()
-
-    def normal_read_write_watchpoint(self):
-        """Do read_write watchpoint and expect to stop two times."""
+        
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -110,7 +43,7 @@ class WatchpointCommandsTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -156,8 +89,13 @@ class WatchpointCommandsTestCase(TestBase):
         self.expect("watchpoint list -v",
             substrs = ['hit_count = 2'])
 
-    def delete_read_write_watchpoint(self):
-        """Do delete watchpoint immediately and expect not to stop for watchpoint."""
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_rw_watchpoint_delete(self):
+        """Test delete watchpoint and expect not to stop for watchpoint."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
+        
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -165,7 +103,7 @@ class WatchpointCommandsTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -196,8 +134,13 @@ class WatchpointCommandsTestCase(TestBase):
         self.expect("process status",
             substrs = ['exited'])
 
-    def ignore_read_write_watchpoint(self):
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_rw_watchpoint_set_ignore_count(self):
         """Test watchpoint ignore count and expect to not to stop at all."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
+        
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -205,7 +148,7 @@ class WatchpointCommandsTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -240,63 +183,13 @@ class WatchpointCommandsTestCase(TestBase):
         self.expect("watchpoint list -v",
             substrs = ['hit_count = 2', 'ignore_count = 2'])
 
-    def read_write_watchpoint_disable_after_first_stop(self):
-        """Do read_write watchpoint but disable it after the first stop."""
-        exe = os.path.join(os.getcwd(), self.exe_name)
-        self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
-
-        # Add a breakpoint to set a watchpoint when stopped on the breakpoint.
-        lldbutil.run_break_set_by_file_and_line (self, "main.m")
-
-        # Run the program.
-        self.runCmd("run", RUN_FAILED)
-
-        # We should be stopped again due to the breakpoint.
-        # The stop reason of the thread should be breakpoint.
-        self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
-            substrs = ['stopped',
-                       'stop reason = breakpoint'])
-
-        # Now let's set a read_write-type watchpoint for 'global'.
-        # There should be two watchpoint hits (see main.c).
-        self.expect("watchpoint set variable -w read_write global", WATCHPOINT_CREATED,
-            substrs = ['Watchpoint created', 'size = 4', 'type = rw',
-                       '%s:%d' % (self.source, self.decl)])
-
-        # Use the '-v' option to do verbose listing of the watchpoint.
-        # The hit count should be 0 initially.
-        self.expect("watchpoint list -v",
-            substrs = ['Number of supported hardware watchpoints:',
-                       'hit_count = 0'])
-
-        self.runCmd("process continue")
-
-        # We should be stopped again due to the watchpoint (read_write type).
-        # The stop reason of the thread should be watchpoint.
-        self.expect("thread backtrace", STOPPED_DUE_TO_WATCHPOINT,
-            substrs = ['stop reason = watchpoint'])
-
-        self.runCmd("process continue")
-
-        # We should be stopped again due to the watchpoint (read_write type).
-        # The stop reason of the thread should be watchpoint.
-        self.expect("thread backtrace", STOPPED_DUE_TO_WATCHPOINT,
-            substrs = ['stop reason = watchpoint'])
-
-        self.runCmd("process continue")
-
-        # There should be no more watchpoint hit and the process status should
-        # be 'exited'.
-        self.expect("process status",
-            substrs = ['exited'])
-
-        # Use the '-v' option to do verbose listing of the watchpoint.
-        # The hit count should now be 2.
-        self.expect("watchpoint list -v",
-            substrs = ['hit_count = 2'])
-
-    def delete_read_write_watchpoint(self):
-        """Do delete watchpoint immediately and expect not to stop for watchpoint."""
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_rw_disable_after_first_stop(self):
+        """Test read_write watchpoint but disable it after the first stop."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
+        
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -304,91 +197,7 @@ class WatchpointCommandsTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
-
-        # We should be stopped again due to the breakpoint.
-        # The stop reason of the thread should be breakpoint.
-        self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
-            substrs = ['stopped',
-                       'stop reason = breakpoint'])
-
-        # Now let's set a read_write-type watchpoint for 'global'.
-        # There should be two watchpoint hits (see main.c).
-        self.expect("watchpoint set variable -w read_write global", WATCHPOINT_CREATED,
-            substrs = ['Watchpoint created', 'size = 4', 'type = rw',
-                       '%s:%d' % (self.source, self.decl)])
-
-        # Delete the watchpoint immediately, but set auto-confirm to true first.
-        self.runCmd("settings set auto-confirm true")
-        self.expect("watchpoint delete",
-            substrs = ['All watchpoints removed.'])
-        # Restore the original setting of auto-confirm.
-        self.runCmd("settings clear auto-confirm")
-
-        # Use the '-v' option to do verbose listing of the watchpoint.
-        self.runCmd("watchpoint list -v")
-
-        self.runCmd("process continue")
-
-        # There should be no more watchpoint hit and the process status should
-        # be 'exited'.
-        self.expect("process status",
-            substrs = ['exited'])
-
-    def ignore_read_write_watchpoint(self):
-        """Test watchpoint ignore count and expect to not to stop at all."""
-        exe = os.path.join(os.getcwd(), self.exe_name)
-        self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
-
-        # Add a breakpoint to set a watchpoint when stopped on the breakpoint.
-        lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
-
-        # Run the program.
-        self.runCmd("run", RUN_FAILED)
-
-        # We should be stopped again due to the breakpoint.
-        # The stop reason of the thread should be breakpoint.
-        self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
-            substrs = ['stopped',
-                       'stop reason = breakpoint'])
-
-        # Now let's set a read_write-type watchpoint for 'global'.
-        # There should be two watchpoint hits (see main.c).
-        self.expect("watchpoint set variable -w read_write global", WATCHPOINT_CREATED,
-            substrs = ['Watchpoint created', 'size = 4', 'type = rw',
-                       '%s:%d' % (self.source, self.decl)])
-
-        # Set the ignore count of the watchpoint immediately.
-        self.expect("watchpoint ignore -i 2",
-            substrs = ['All watchpoints ignored.'])
-
-        # Use the '-v' option to do verbose listing of the watchpoint.
-        # Expect to find an ignore_count of 2.
-        self.expect("watchpoint list -v",
-            substrs = ['hit_count = 0', 'ignore_count = 2'])
-
-        self.runCmd("process continue")
-
-        # There should be no more watchpoint hit and the process status should
-        # be 'exited'.
-        self.expect("process status",
-            substrs = ['exited'])
-
-        # Use the '-v' option to do verbose listing of the watchpoint.
-        # Expect to find a hit_count of 2 as well.
-        self.expect("watchpoint list -v",
-            substrs = ['hit_count = 2', 'ignore_count = 2'])
-
-    def read_write_watchpoint_disable_after_first_stop(self):
-        """Do read_write watchpoint but disable it after the first stop."""
-        exe = os.path.join(os.getcwd(), self.exe_name)
-        self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
-
-        # Add a breakpoint to set a watchpoint when stopped on the breakpoint.
-        lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
-
-        # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -433,8 +242,13 @@ class WatchpointCommandsTestCase(TestBase):
         self.expect("watchpoint list -v",
             substrs = ['hit_count = 1'])
 
-    def read_write_watchpoint_disable_then_enable(self):
-        """Do read_write watchpoint, disable initially, then enable it."""
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_rw_disable_then_enable(self):
+        """Test read_write watchpoint, disable initially, then enable it."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
+
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -443,7 +257,7 @@ class WatchpointCommandsTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line2, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -497,10 +311,3 @@ class WatchpointCommandsTestCase(TestBase):
         # The hit count should be 1.
         self.expect("watchpoint list -v",
             substrs = ['hit_count = 1'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

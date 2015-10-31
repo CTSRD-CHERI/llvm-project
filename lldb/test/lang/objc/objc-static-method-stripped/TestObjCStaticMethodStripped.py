@@ -1,7 +1,10 @@
 """Test calling functions in static methods with a stripped binary."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -10,17 +13,6 @@ class TestObjCStaticMethodStripped(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    #<rdar://problem/12042992>
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Test calling functions in static methods with a stripped binary."""
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        self.buildDsym()
-        self.objc_static_method_stripped()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -28,9 +20,16 @@ class TestObjCStaticMethodStripped(TestBase):
         self.main_source = "static.m"
         self.break_line = line_number(self.main_source, '// Set breakpoint here.')
 
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
+    @skipIfDwarf    # This test requires a stripped binary and a dSYM
+    @skipIfDWO      # This test requires a stripped binary and a dSYM
     #<rdar://problem/12042992>
-    def objc_static_method_stripped(self):
+    def test_with_python_api(self):
         """Test calling functions in static methods with a stripped binary."""
+        if self.getArchitecture() == 'i386':
+            self.skipTest("requires modern objc runtime")
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out.stripped")
 
         target = self.dbg.CreateTarget(exe)
@@ -64,9 +63,3 @@ class TestObjCStaticMethodStripped(TestBase):
         self.assertTrue (cmd_value.IsValid())
         string_length = cmd_value.GetValueAsUnsigned()
         self.assertTrue (string_length == 27, "Got the right value from another class method on the same class.")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

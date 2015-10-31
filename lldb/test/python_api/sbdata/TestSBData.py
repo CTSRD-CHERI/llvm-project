@@ -1,7 +1,10 @@
 """Test the SBData APIs."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 from math import fabs
@@ -11,47 +14,21 @@ class SBDataAPICase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test the SBData APIs."""
-        self.buildDsym()
-        self.data_api()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test the SBData APIs."""
-        self.buildDwarf()
-        self.data_api()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break on inside main.cpp.
         self.line = line_number('main.cpp', '// set breakpoint here')
 
-    def assert_data(self, func, arg, expected):
-        """ Asserts func(SBError error, arg) == expected. """
-        error = lldb.SBError()
-        result = func(error, arg)
-        if not error.Success():
-            stream = lldb.SBStream()
-            error.GetDescription(stream)
-            self.assertTrue(error.Success(),
-                            "%s(error, %s) did not succeed: %s" % (func.__name__,
-                                                                   arg,
-                                                                   stream.GetData()))
-        self.assertTrue(expected == result, "%s(error, %s) == %s != %s" % (func.__name__, arg, result, expected))
-          
-    def data_api(self):
+    @add_test_categories(['pyapi'])
+    def test_with_run_command(self):
         """Test the SBData APIs."""
+        self.build()
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
         
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
         
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -66,16 +43,16 @@ class SBDataAPICase(TestBase):
 
         frame = thread.GetSelectedFrame()
         if self.TraceOn():
-            print frame
+            print(frame)
         foobar = frame.FindVariable('foobar')
         self.assertTrue(foobar.IsValid())
         if self.TraceOn():
-            print foobar
+            print(foobar)
 
         data = foobar.GetPointeeData(0, 2)
 
         if self.TraceOn():
-            print data
+            print(data)
 
         offset = 0
         error = lldb.SBError()
@@ -121,7 +98,7 @@ class SBDataAPICase(TestBase):
         data = star_foobar.GetData()
 
         if self.TraceOn():
-            print data
+            print(data)
         
         offset = 0
         self.assert_data(data.GetUnsignedInt32, offset, 1)
@@ -139,12 +116,12 @@ class SBDataAPICase(TestBase):
         new_foobar = foobar.CreateValueFromAddress("f00", foobar_addr, star_foobar.GetType())
         self.assertTrue(new_foobar.IsValid())
         if self.TraceOn():
-            print new_foobar
+            print(new_foobar)
         
         data = new_foobar.GetData()
 
         if self.TraceOn():
-            print data
+            print(data)
 
         self.assertTrue(data.uint32[0] == 8, 'then foo[1].a == 8')
         self.assertTrue(data.uint32[1] == 7, 'then foo[1].b == 7')
@@ -163,7 +140,7 @@ class SBDataAPICase(TestBase):
         data = new_foobar.GetData()
 
         if self.TraceOn():
-            print data
+            print(data)
 
         offset = 0
         self.assert_data(data.GetUnsignedInt32, offset, 8)
@@ -180,10 +157,10 @@ class SBDataAPICase(TestBase):
         data = barfoo.GetData()
 
         if self.TraceOn():
-            print barfoo
+            print(barfoo)
 
         if self.TraceOn():
-            print data
+            print(data)
 
         offset = 0
         self.assert_data(data.GetUnsignedInt32, offset, 1)
@@ -203,7 +180,7 @@ class SBDataAPICase(TestBase):
         new_object = barfoo.CreateValueFromData("new_object",data,barfoo.GetType().GetBasicType(lldb.eBasicTypeInt))
 
         if self.TraceOn():
-            print new_object
+            print(new_object)
         
         self.assertTrue(new_object.GetValue() == "1", 'new_object == 1')
 
@@ -217,7 +194,7 @@ class SBDataAPICase(TestBase):
         data.Append(data2)
         
         if self.TraceOn():
-            print data
+            print(data)
 
         # this breaks on EBCDIC
         offset = 0
@@ -242,30 +219,56 @@ class SBDataAPICase(TestBase):
         self.assert_data(data2.GetUnsignedInt8, 3, 108) # l
         self.assertTrue(data2.uint8[4] == 111, 'o == 111')
         self.assert_data(data2.GetUnsignedInt8, 5, 33) # !
-        
-        data2 = lldb.SBData.CreateDataFromUInt64Array(process.GetByteOrder(),process.GetAddressByteSize(),[1,2,3,4,5])
-        self.assert_data(data2.GetUnsignedInt64, 0, 1)
-        self.assert_data(data2.GetUnsignedInt64, 8, 2)
-        self.assert_data(data2.GetUnsignedInt64, 16, 3)
-        self.assert_data(data2.GetUnsignedInt64, 24, 4)
-        self.assert_data(data2.GetUnsignedInt64, 32, 5)
-        
-        self.assertTrue(data2.uint64s == [1,2,3,4,5], 'read_data_helper failure: data2 == [1,2,3,4,5]')
 
-        data2 = lldb.SBData.CreateDataFromSInt32Array(process.GetByteOrder(),process.GetAddressByteSize(),[2, -2])
-        self.assertTrue(data2.sint32[0:2] == [2,-2], 'signed32 data2 = [2,-2]')
+        uint_lists = [ [1,2,3,4,5], [long(i) for i in [1, 2, 3, 4, 5]] ]
+        int_lists = [ [2, -2], [long(i) for i in [2, -2]] ]
+
+        for l in uint_lists:
+            data2 = lldb.SBData.CreateDataFromUInt64Array(process.GetByteOrder(), process.GetAddressByteSize(), l)
+            self.assert_data(data2.GetUnsignedInt64, 0, 1)
+            self.assert_data(data2.GetUnsignedInt64, 8, 2)
+            self.assert_data(data2.GetUnsignedInt64, 16, 3)
+            self.assert_data(data2.GetUnsignedInt64, 24, 4)
+            self.assert_data(data2.GetUnsignedInt64, 32, 5)
         
-        data2.Append(lldb.SBData.CreateDataFromSInt64Array(process.GetByteOrder(),process.GetAddressByteSize(),[2, -2]))
+            self.assertTrue(data2.uint64s == [1,2,3,4,5], 'read_data_helper failure: data2 == [1,2,3,4,5]')
+
+        for l in int_lists:
+            data2 = lldb.SBData.CreateDataFromSInt32Array(process.GetByteOrder(), process.GetAddressByteSize(), l)
+            self.assertTrue(data2.sint32[0:2] == [2,-2], 'signed32 data2 = [2,-2]')
+        
+        data2.Append(lldb.SBData.CreateDataFromSInt64Array(process.GetByteOrder(), process.GetAddressByteSize(), int_lists[0]))
         self.assert_data(data2.GetSignedInt32, 0, 2)
         self.assert_data(data2.GetSignedInt32, 4, -2)
         self.assertTrue(data2.sint64[1:3] == [2,-2], 'signed64 data2 = [2,-2]')
-        
-        data2 = lldb.SBData.CreateDataFromUInt32Array(process.GetByteOrder(),process.GetAddressByteSize(),[1,2,3,4,5])
-        self.assert_data(data2.GetUnsignedInt32,0, 1)
-        self.assert_data(data2.GetUnsignedInt32,4, 2)
-        self.assert_data(data2.GetUnsignedInt32,8, 3)
-        self.assert_data(data2.GetUnsignedInt32,12, 4)
-        self.assert_data(data2.GetUnsignedInt32,16, 5)
+
+        for l in int_lists:
+            data2 = lldb.SBData.CreateDataFromSInt64Array(process.GetByteOrder(), process.GetAddressByteSize(), l)
+            self.assert_data(data2.GetSignedInt64, 0, 2)
+            self.assert_data(data2.GetSignedInt64, 8, -2)
+            self.assertTrue(data2.sint64[0:2] == [2,-2], 'signed64 data2 = [2,-2]')
+
+        for l in uint_lists:
+            data2 = lldb.SBData.CreateDataFromUInt32Array(process.GetByteOrder(), process.GetAddressByteSize(), l)
+            self.assert_data(data2.GetUnsignedInt32,0, 1)
+            self.assert_data(data2.GetUnsignedInt32,4, 2)
+            self.assert_data(data2.GetUnsignedInt32,8, 3)
+            self.assert_data(data2.GetUnsignedInt32,12, 4)
+            self.assert_data(data2.GetUnsignedInt32,16, 5)
+
+        bool_list = [True, True, False, False, True, False]
+
+        data2 = lldb.SBData.CreateDataFromSInt32Array(process.GetByteOrder(), process.GetAddressByteSize(), bool_list)
+        self.assertTrue(data2.sint32[0:6] == [1, 1, 0, 0, 1, 0], 'signed32 data2 = [1, 1, 0, 0, 1, 0]')
+
+        data2 = lldb.SBData.CreateDataFromUInt32Array(process.GetByteOrder(), process.GetAddressByteSize(), bool_list)
+        self.assertTrue(data2.uint32[0:6] == [1, 1, 0, 0, 1, 0], 'unsigned32 data2 = [1, 1, 0, 0, 1, 0]')
+
+        data2 = lldb.SBData.CreateDataFromSInt64Array(process.GetByteOrder(), process.GetAddressByteSize(), bool_list)
+        self.assertTrue(data2.sint64[0:6] == [1, 1, 0, 0, 1, 0], 'signed64 data2 = [1, 1, 0, 0, 1, 0]')
+
+        data2 = lldb.SBData.CreateDataFromUInt64Array(process.GetByteOrder(), process.GetAddressByteSize(), bool_list)
+        self.assertTrue(data2.uint64[0:6] == [1, 1, 0, 0, 1, 0], 'signed64 data2 = [1, 1, 0, 0, 1, 0]')
         
         data2 = lldb.SBData.CreateDataFromDoubleArray(process.GetByteOrder(),process.GetAddressByteSize(),[3.14,6.28,2.71])
         self.assertTrue( fabs(data2.GetDouble(error,0) - 3.14) < 0.5, 'double data2[0] = 3.14')
@@ -331,8 +334,15 @@ class SBDataAPICase(TestBase):
         self.assertTrue( fabs(data2.double[1] - 6.28) < 0.5, 'read_data_helper failure: set double data2[1] = 6.28')
         self.assertTrue( fabs(data2.double[2] - 2.71) < 0.5, 'read_data_helper failure: set double data2[2] = 2.71')
 
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+    def assert_data(self, func, arg, expected):
+        """ Asserts func(SBError error, arg) == expected. """
+        error = lldb.SBError()
+        result = func(error, arg)
+        if not error.Success():
+            stream = lldb.SBStream()
+            error.GetDescription(stream)
+            self.assertTrue(error.Success(),
+                            "%s(error, %s) did not succeed: %s" % (func.__name__,
+                                                                   arg,
+                                                                   stream.GetData()))
+        self.assertTrue(expected == result, "%s(error, %s) == %s != %s" % (func.__name__, arg, result, expected))

@@ -26,6 +26,7 @@
 #include <map>
 #include <string>
 #include <vector>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "subtarget-emitter"
@@ -105,9 +106,8 @@ public:
     Records(R), SchedModels(TGT.getSchedModels()), Target(TGT.getName()) {}
 
   void run(raw_ostream &o);
-
 };
-} // End anonymous namespace
+} // end anonymous namespace
 
 //
 // Enumeration - Emit the specified class as an enumeration.
@@ -1199,7 +1199,8 @@ void SubtargetEmitter::EmitProcessorModels(raw_ostream &OS) {
          << "  " << (SchedModels.schedClassEnd()
                      - SchedModels.schedClassBegin()) << ",\n";
     else
-      OS << "  0, 0, 0, 0, // No instruction-level machine model.\n";
+      OS << "  nullptr, nullptr, 0, 0,"
+         << " // No instruction-level machine model.\n";
     if (PI->hasItineraries())
       OS << "  " << PI->ItinsDef->getName() << "};\n";
     else
@@ -1414,7 +1415,7 @@ void SubtargetEmitter::run(raw_ostream &OS) {
 
   OS << "namespace llvm {\n";
   Enumeration(OS, "SubtargetFeature");
-  OS << "} // End llvm namespace \n";
+  OS << "} // end llvm namespace\n";
   OS << "#endif // GET_SUBTARGETINFO_ENUM\n\n";
 
   OS << "\n#ifdef GET_SUBTARGETINFO_MC_DESC\n";
@@ -1435,10 +1436,10 @@ void SubtargetEmitter::run(raw_ostream &OS) {
 #endif
 
   // MCInstrInfo initialization routine.
-  OS << "static inline void Init" << Target
-     << "MCSubtargetInfo(MCSubtargetInfo *II, "
+  OS << "static inline MCSubtargetInfo *create" << Target
+     << "MCSubtargetInfoImpl("
      << "const Triple &TT, StringRef CPU, StringRef FS) {\n";
-  OS << "  II->InitMCSubtargetInfo(TT, CPU, FS, ";
+  OS << "  return new MCSubtargetInfo(TT, CPU, FS, ";
   if (NumFeatures)
     OS << Target << "FeatureKV, ";
   else
@@ -1461,7 +1462,7 @@ void SubtargetEmitter::run(raw_ostream &OS) {
     OS << "0, 0, 0";
   OS << ");\n}\n\n";
 
-  OS << "} // End llvm namespace \n";
+  OS << "} // end llvm namespace\n";
 
   OS << "#endif // GET_SUBTARGETINFO_MC_DESC\n\n";
 
@@ -1491,7 +1492,7 @@ void SubtargetEmitter::run(raw_ostream &OS) {
      << "  DFAPacketizer *createDFAPacketizer(const InstrItineraryData *IID)"
      << " const;\n"
      << "};\n";
-  OS << "} // End llvm namespace \n";
+  OS << "} // end llvm namespace\n";
 
   OS << "#endif // GET_SUBTARGETINFO_HEADER\n\n";
 
@@ -1518,8 +1519,7 @@ void SubtargetEmitter::run(raw_ostream &OS) {
 
   OS << ClassName << "::" << ClassName << "(const Triple &TT, StringRef CPU, "
      << "StringRef FS)\n"
-     << "  : TargetSubtargetInfo() {\n"
-     << "  InitMCSubtargetInfo(TT, CPU, FS, ";
+     << "  : TargetSubtargetInfo(TT, CPU, FS, ";
   if (NumFeatures)
     OS << "makeArrayRef(" << Target << "FeatureKV, " << NumFeatures << "), ";
   else
@@ -1528,23 +1528,23 @@ void SubtargetEmitter::run(raw_ostream &OS) {
     OS << "makeArrayRef(" << Target << "SubTypeKV, " << NumProcs << "), ";
   else
     OS << "None, ";
-  OS << '\n'; OS.indent(22);
+  OS << '\n'; OS.indent(24);
   OS << Target << "ProcSchedKV, "
      << Target << "WriteProcResTable, "
      << Target << "WriteLatencyTable, "
      << Target << "ReadAdvanceTable, ";
-  OS << '\n'; OS.indent(22);
+  OS << '\n'; OS.indent(24);
   if (SchedModels.hasItineraries()) {
     OS << Target << "Stages, "
        << Target << "OperandCycles, "
        << Target << "ForwardingPaths";
   } else
     OS << "0, 0, 0";
-  OS << ");\n}\n\n";
+  OS << ") {}\n\n";
 
   EmitSchedModelHelpers(ClassName, OS);
 
-  OS << "} // End llvm namespace \n";
+  OS << "} // end llvm namespace\n";
 
   OS << "#endif // GET_SUBTARGETINFO_CTOR\n\n";
 }
@@ -1556,4 +1556,4 @@ void EmitSubtarget(RecordKeeper &RK, raw_ostream &OS) {
   SubtargetEmitter(RK, CGTarget).run(OS);
 }
 
-} // End llvm namespace
+} // end llvm namespace

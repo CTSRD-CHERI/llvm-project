@@ -39,8 +39,6 @@ using namespace llvm;
 //===----------------------------------------------------------------------===//
 //                                Value Class
 //===----------------------------------------------------------------------===//
-const unsigned Value::NumUserOperandsBits;
-
 static inline Type *checkType(Type *Ty) {
   assert(Ty && "Value defined with a null type: Error!");
   return Ty;
@@ -492,8 +490,7 @@ Value *Value::stripAndAccumulateInBoundsConstantOffsets(const DataLayout &DL,
         return V;
       Offset = GEPOffset;
       V = GEP->getPointerOperand();
-    } else if (Operator::getOpcode(V) == Instruction::BitCast ||
-               Operator::getOpcode(V) == Instruction::AddrSpaceCast) {
+    } else if (Operator::getOpcode(V) == Instruction::BitCast) {
       V = cast<Operator>(V)->getOperand(0);
     } else if (GlobalAlias *GA = dyn_cast<GlobalAlias>(V)) {
       V = GA->getAliasee();

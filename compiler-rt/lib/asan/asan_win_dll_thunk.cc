@@ -30,8 +30,9 @@ void *__stdcall GetProcAddress(void *module, const char *proc_name);
 void abort();
 }
 
-static void *getRealProcAddressOrDie(const char *name) {
-  void *ret = GetProcAddress(GetModuleHandleA(0), name);
+static uptr getRealProcAddressOrDie(const char *name) {
+  uptr ret =
+      __interception::InternalGetProcAddress((void *)GetModuleHandleA(0), name);
   if (!ret)
     abort();
   return ret;
@@ -62,13 +63,12 @@ struct FunctionInterceptor<0> {
 };
 
 #define INTERCEPT_WHEN_POSSIBLE(main_function, dll_function)                   \
-  template<> struct FunctionInterceptor<__LINE__> {                            \
+  template <> struct FunctionInterceptor<__LINE__> {                           \
     static void Execute() {                                                    \
-      void *wrapper = getRealProcAddressOrDie(main_function);                  \
-      if (!__interception::OverrideFunction((uptr)dll_function,                \
-                                            (uptr)wrapper, 0))                 \
+      uptr wrapper = getRealProcAddressOrDie(main_function);                   \
+      if (!__interception::OverrideFunction((uptr)dll_function, wrapper, 0))   \
         abort();                                                               \
-      FunctionInterceptor<__LINE__-1>::Execute();                              \
+      FunctionInterceptor<__LINE__ - 1>::Execute();                            \
     }                                                                          \
   };
 
@@ -210,13 +210,17 @@ extern "C" {
     // __asan_init is expected to be called by only one thread.
     if (fn) return;
 
-    fn = (fntype)getRealProcAddressOrDie(__asan_init_name);
+    fn = (fntype)getRealProcAddressOrDie("__asan_init");
     fn();
     __asan_option_detect_stack_use_after_return =
         (__asan_should_detect_stack_use_after_return() != 0);
 
     InterceptHooks();
   }
+}
+
+extern "C" void __asan_version_mismatch_check() {
+  // Do nothing.
 }
 
 INTERFACE_FUNCTION(__asan_handle_no_return)
@@ -304,6 +308,7 @@ INTERFACE_FUNCTION(__sanitizer_cov_module_init)
 INTERFACE_FUNCTION(__sanitizer_cov_trace_basic_block)
 INTERFACE_FUNCTION(__sanitizer_cov_trace_func_enter)
 INTERFACE_FUNCTION(__sanitizer_cov_trace_cmp)
+INTERFACE_FUNCTION(__sanitizer_cov_trace_switch)
 INTERFACE_FUNCTION(__sanitizer_cov_with_check)
 INTERFACE_FUNCTION(__sanitizer_get_allocated_size)
 INTERFACE_FUNCTION(__sanitizer_get_coverage_guards)

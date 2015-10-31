@@ -1,5 +1,5 @@
-; RUN: opt -S %loadPolly -polly-detect-unprofitable -polly-dependences -analyze < %s | FileCheck %s -check-prefix=VALUE
-; RUN: opt -S %loadPolly -polly-detect-unprofitable -polly-dependences -analyze -polly-dependences-computeout=1 < %s | FileCheck %s -check-prefix=TIMEOUT
+; RUN: opt -S %loadPolly -polly-dependences -analyze < %s | FileCheck %s -check-prefix=VALUE
+; RUN: opt -S %loadPolly -polly-dependences -analyze -polly-dependences-computeout=1 < %s | FileCheck %s -check-prefix=TIMEOUT
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 
 ;     for(i = 0; i < 100; i++ )
@@ -57,9 +57,9 @@ exit.3:
 ; VALUE:     {  }
 ; VALUE:   WAW dependences:
 ; VALUE:     {
-; VALUE:       Stmt_S1[i0] -> Stmt_S2[i0] : i0 >= 0 and i0 <= 9;
-; VALUE:       Stmt_S2[i0] -> Stmt_S3[i0] : i0 >= 0 and i0 <= 9;
-; VALUE:       Stmt_S1[i0] -> Stmt_S3[i0] : i0 >= 10 and i0 <= 99
+; VALUE:       Stmt_S1[i0] -> Stmt_S2[i0] : i0 <= 9 and i0 >= 0;
+; VALUE:       Stmt_S2[i0] -> Stmt_S3[i0] : i0 <= 9 and i0 >= 0;
+; VALUE:       Stmt_S1[i0] -> Stmt_S3[i0] : i0 <= 99 and i0 >= 10
 ; VALUE:     }
 
 ; TIMEOUT: region: 'S1 => exit.3' in function 'sequential_writes':

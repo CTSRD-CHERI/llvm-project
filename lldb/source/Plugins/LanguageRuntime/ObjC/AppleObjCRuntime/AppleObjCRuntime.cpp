@@ -1,4 +1,4 @@
-//===-- AppleObjCRuntime.cpp --------------------------------------*- C++ -*-===//
+//===-- AppleObjCRuntime.cpp -------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -22,7 +22,8 @@
 #include "lldb/Core/Scalar.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/StreamString.h"
-#include "lldb/Expression/ClangFunction.h"
+#include "lldb/Core/ValueObject.h"
+#include "lldb/Expression/FunctionCaller.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/ExecutionContext.h"
@@ -39,6 +40,10 @@ using namespace lldb_private;
 
 #define PO_FUNCTION_TIMEOUT_USEC 15*1000*1000
 
+AppleObjCRuntime::~AppleObjCRuntime()
+{
+}
+
 AppleObjCRuntime::AppleObjCRuntime(Process *process) :
     ObjCLanguageRuntime (process),
     m_read_objc_library (false),
@@ -51,11 +56,11 @@ AppleObjCRuntime::AppleObjCRuntime(Process *process) :
 bool
 AppleObjCRuntime::GetObjectDescription (Stream &str, ValueObject &valobj)
 {
-    ClangASTType clang_type(valobj.GetClangType());
+    CompilerType compiler_type(valobj.GetCompilerType());
     bool is_signed;
     // ObjC objects can only be pointers (or numbers that actually represents pointers
     // but haven't been typecast, because reasons..)
-    if (!clang_type.IsIntegerType (is_signed) && !clang_type.IsPointerType ())
+    if (!compiler_type.IsIntegerType (is_signed) && !compiler_type.IsPointerType ())
         return false;
     
     // Make the argument list: we pass one arg, the address of our pointer, to the print function.
@@ -89,10 +94,10 @@ AppleObjCRuntime::GetObjectDescription (Stream &strm, Value &value, ExecutionCon
         return false;
     
     Target *target = exe_ctx.GetTargetPtr();
-    ClangASTType clang_type = value.GetClangType();
-    if (clang_type)
+    CompilerType compiler_type = value.GetCompilerType();
+    if (compiler_type)
     {
-        if (!clang_type.IsObjCObjectPointerType())
+        if (!ClangASTContext::IsObjCObjectPointerType(compiler_type))
         {
             strm.Printf ("Value doesn't point to an ObjC object.\n");
             return false;
@@ -102,11 +107,11 @@ AppleObjCRuntime::GetObjectDescription (Stream &strm, Value &value, ExecutionCon
     {
         // If it is not a pointer, see if we can make it into a pointer.
         ClangASTContext *ast_context = target->GetScratchClangASTContext();
-        ClangASTType opaque_type = ast_context->GetBasicType(eBasicTypeObjCID);
+        CompilerType opaque_type = ast_context->GetBasicType(eBasicTypeObjCID);
         if (!opaque_type)
             opaque_type = ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
         //value.SetContext(Value::eContextTypeClangType, opaque_type_ptr);
-        value.SetClangType (opaque_type);
+        value.SetCompilerType (opaque_type);
     }
 
     ValueList arg_value_list;
@@ -115,10 +120,10 @@ AppleObjCRuntime::GetObjectDescription (Stream &strm, Value &value, ExecutionCon
     // This is the return value:
     ClangASTContext *ast_context = target->GetScratchClangASTContext();
     
-    ClangASTType return_clang_type = ast_context->GetCStringType(true);
+    CompilerType return_compiler_type = ast_context->GetCStringType(true);
     Value ret;
-//    ret.SetContext(Value::eContextTypeClangType, return_clang_type);
-    ret.SetClangType (return_clang_type);
+//    ret.SetContext(Value::eContextTypeClangType, return_compiler_type);
+    ret.SetCompilerType (return_compiler_type);
     
     if (exe_ctx.GetFramePtr() == NULL)
     {
@@ -135,16 +140,36 @@ AppleObjCRuntime::GetObjectDescription (Stream &strm, Value &value, ExecutionCon
     }
     
     // Now we're ready to call the function:
-    ClangFunction func (*exe_ctx.GetBestExecutionContextScope(),
-                        return_clang_type, 
-                        *function_address, 
-                        arg_value_list,
-                        "objc-object-description");
-
-    StreamString error_stream;
     
+    StreamString error_stream;
     lldb::addr_t wrapper_struct_addr = LLDB_INVALID_ADDRESS;
-    func.InsertFunction(exe_ctx, wrapper_struct_addr, error_stream);
+
+    if (!m_print_object_caller_up)
+    {
+        Error error;
+         m_print_object_caller_up.reset(exe_scope->CalculateTarget()->GetFunctionCallerForLanguage (eLanguageTypeObjC,
+                                                                                                    return_compiler_type,
+                                                                                                    *function_address,
+                                                                                                    arg_value_list,
+                                                                                                    "objc-object-description",
+                                                                                                    error));
+        if (error.Fail())
+        {
+            m_print_object_caller_up.reset();
+            strm.Printf("Could not get function runner to call print for debugger function: %s.", error.AsCString());
+            return false;
+        }
+        m_print_object_caller_up->InsertFunction(exe_ctx, wrapper_struct_addr, error_stream);
+    }
+    else
+    {
+        m_print_object_caller_up->WriteFunctionArguments(exe_ctx,
+                                                         wrapper_struct_addr,
+                                                         arg_value_list,
+                                                         error_stream);
+    }
+
+    
 
     EvaluateExpressionOptions options;
     options.SetUnwindOnError(true);
@@ -153,11 +178,11 @@ AppleObjCRuntime::GetObjectDescription (Stream &strm, Value &value, ExecutionCon
     options.SetIgnoreBreakpoints(true);
     options.SetTimeoutUsec(PO_FUNCTION_TIMEOUT_USEC);
     
-    ExpressionResults results = func.ExecuteFunction (exe_ctx, 
-                                                     &wrapper_struct_addr,
-                                                     options,
-                                                     error_stream, 
-                                                     ret);
+    ExpressionResults results = m_print_object_caller_up->ExecuteFunction (exe_ctx,
+                                                                           &wrapper_struct_addr,
+                                                                           options,
+                                                                           error_stream,
+                                                                           ret);
     if (results != eExpressionCompleted)
     {
         strm.Printf("Error evaluating Print Object function: %d.\n", results);
@@ -229,7 +254,7 @@ AppleObjCRuntime::GetPrintForDebuggerAddr()
 bool
 AppleObjCRuntime::CouldHaveDynamicValue (ValueObject &in_value)
 {
-    return in_value.GetClangType().IsPossibleDynamicType (NULL,
+    return in_value.GetCompilerType().IsPossibleDynamicType (NULL,
                                                           false, // do not check C++
                                                           true); // check ObjC
 }
@@ -238,9 +263,42 @@ bool
 AppleObjCRuntime::GetDynamicTypeAndAddress (ValueObject &in_value, 
                                             lldb::DynamicValueType use_dynamic, 
                                             TypeAndOrName &class_type_or_name, 
-                                            Address &address)
+                                            Address &address,
+                                            Value::ValueType &value_type)
 {
     return false;
+}
+
+TypeAndOrName
+AppleObjCRuntime::FixUpDynamicType (const TypeAndOrName& type_and_or_name,
+                                    ValueObject& static_value)
+{
+    CompilerType static_type(static_value.GetCompilerType());
+    Flags static_type_flags(static_type.GetTypeInfo());
+    
+    TypeAndOrName ret(type_and_or_name);
+    if (type_and_or_name.HasType())
+    {
+        // The type will always be the type of the dynamic object.  If our parent's type was a pointer,
+        // then our type should be a pointer to the type of the dynamic object.  If a reference, then the original type
+        // should be okay...
+        CompilerType orig_type = type_and_or_name.GetCompilerType();
+        CompilerType corrected_type = orig_type;
+        if (static_type_flags.AllSet(eTypeIsPointer))
+            corrected_type = orig_type.GetPointerType ();
+        ret.SetCompilerType(corrected_type);
+    }
+    else
+    {
+        // If we are here we need to adjust our dynamic type name to include the correct & or * symbol
+        std::string corrected_name (type_and_or_name.GetName().GetCString());
+        if (static_type_flags.AllSet(eTypeIsPointer))
+            corrected_name.append(" *");
+        // the parent type should be a correctly pointer'ed or referenc'ed type
+        ret.SetCompilerType(static_type);
+        ret.SetName(corrected_name.c_str());
+    }
+    return ret;
 }
 
 bool
@@ -319,13 +377,16 @@ AppleObjCRuntime::GetStepThroughTrampolinePlan (Thread &thread, bool stop_others
 //------------------------------------------------------------------
 // Static Functions
 //------------------------------------------------------------------
-enum ObjCRuntimeVersions
+ObjCLanguageRuntime::ObjCRuntimeVersions
 AppleObjCRuntime::GetObjCVersion (Process *process, ModuleSP &objc_module_sp)
 {
     if (!process)
-        return eObjC_VersionUnknown;
-        
+        return ObjCRuntimeVersions::eObjC_VersionUnknown;
+
     Target &target = process->GetTarget();
+    if (target.GetArchitecture().GetTriple().getVendor() != llvm::Triple::VendorType::Apple)
+        return ObjCRuntimeVersions::eObjC_VersionUnknown;
+
     const ModuleList &target_modules = target.GetImages();
     Mutex::Locker modules_locker(target_modules.GetMutex());
     
@@ -343,21 +404,21 @@ AppleObjCRuntime::GetObjCVersion (Process *process, ModuleSP &objc_module_sp)
             objc_module_sp = module_sp;
             ObjectFile *ofile = module_sp->GetObjectFile();
             if (!ofile)
-                return eObjC_VersionUnknown;
+                return ObjCRuntimeVersions::eObjC_VersionUnknown;
             
             SectionList *sections = module_sp->GetSectionList();
             if (!sections)
-                return eObjC_VersionUnknown;    
+                return ObjCRuntimeVersions::eObjC_VersionUnknown;
             SectionSP v1_telltale_section_sp = sections->FindSectionByName(ConstString ("__OBJC"));
             if (v1_telltale_section_sp)
             {
-                return eAppleObjC_V1;
+                return ObjCRuntimeVersions::eAppleObjC_V1;
             }
-            return eAppleObjC_V2;
+            return ObjCRuntimeVersions::eAppleObjC_V2;
         }
     }
             
-    return eObjC_VersionUnknown;
+    return ObjCRuntimeVersions::eObjC_VersionUnknown;
 }
 
 void

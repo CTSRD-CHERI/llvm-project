@@ -1,6 +1,12 @@
 """
 Tests that C++ member and static variables have correct layout and scope.
 """
+
+from __future__ import print_function
+
+import lldb_shared
+
+import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -9,35 +15,17 @@ class CPPStaticMembersTestCase(TestBase):
     
     mydir = TestBase.compute_mydir(__file__)
     
-    @skipUnlessDarwin
     @unittest2.expectedFailure # llvm.org/pr15401
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
+    @expectedFailureWindows("llvm.org/pr21765")
+    def test_with_run_command(self):
         """Test that member variables have the correct layout, scope and qualifiers when stopped inside and outside C++ methods"""
-        self.buildDsym()
-        self.static_member_commands()
-
-    @unittest2.expectedFailure # llvm.org/pr15401
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test that member variables have the correct layout, scope and qualifiers when stopped inside and outside C++ methods"""
-        self.buildDwarf()
-        self.static_member_commands()
-
-    def setUp(self):
-        TestBase.setUp(self)
-    
-    def set_breakpoint(self, line):
-        lldbutil.run_break_set_by_file_and_line (self, "main.cpp", line, num_expected_locations=1, loc_exact=False)
-
-    def static_member_commands(self):
-        """Test that member variables have the correct layout, scope and qualifiers when stopped inside and outside C++ methods"""
+        self.build()
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         self.set_breakpoint(line_number('main.cpp', '// breakpoint 1'))
         self.set_breakpoint(line_number('main.cpp', '// breakpoint 2'))
 
-        self.runCmd("process launch", RUN_FAILED)
+        self.runCmd("process launch", RUN_SUCCEEDED)
         self.expect("expression my_a.access()",
                     startstr = "(long) $0 = 10")
         
@@ -66,10 +54,6 @@ class CPPStaticMembersTestCase(TestBase):
                     startstr = "(long) $6 = 2")
 
         self.runCmd("process continue")
-        
 
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+    def set_breakpoint(self, line):
+        lldbutil.run_break_set_by_file_and_line (self, "main.cpp", line, num_expected_locations=1, loc_exact=False)

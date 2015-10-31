@@ -12,8 +12,10 @@
 
 #include "lldb/lldb-private.h"
 #include "lldb/Core/PluginInterface.h"
-#include "lldb/Symbol/ClangASTType.h"
-#include "lldb/Symbol/ClangNamespaceDecl.h"
+#include "lldb/Symbol/CompilerType.h"
+#include "lldb/Symbol/CompilerDecl.h"
+#include "lldb/Symbol/CompilerDeclContext.h"
+
 #include "lldb/Symbol/Type.h"
 
 namespace lldb_private {
@@ -55,8 +57,7 @@ public:
     {
     }
 
-    virtual
-    ~SymbolFile()
+    ~SymbolFile() override
     {
     }
 
@@ -129,27 +130,34 @@ public:
     virtual size_t          ParseTypes (const SymbolContext& sc) = 0;
     virtual size_t          ParseVariablesForContext (const SymbolContext& sc) = 0;
     virtual Type*           ResolveTypeUID (lldb::user_id_t type_uid) = 0;
-    virtual bool            ResolveClangOpaqueTypeDefinition (ClangASTType &clang_type) = 0;
-    virtual clang::DeclContext* GetClangDeclContextForTypeUID (const lldb_private::SymbolContext &sc, lldb::user_id_t type_uid) { return NULL; }
-    virtual clang::DeclContext* GetClangDeclContextContainingTypeUID (lldb::user_id_t type_uid) { return NULL; }
+    virtual bool            CompleteType (CompilerType &compiler_type) = 0;
+    virtual void            ParseDeclsForContext (CompilerDeclContext decl_ctx) {}
+    virtual CompilerDecl    GetDeclForUID (lldb::user_id_t uid) { return CompilerDecl(); }
+    virtual CompilerDeclContext GetDeclContextForUID (lldb::user_id_t uid) { return CompilerDeclContext(); }
+    virtual CompilerDeclContext GetDeclContextContainingUID (lldb::user_id_t uid) { return CompilerDeclContext(); }
     virtual uint32_t        ResolveSymbolContext (const Address& so_addr, uint32_t resolve_scope, SymbolContext& sc) = 0;
-    virtual uint32_t        ResolveSymbolContext (const FileSpec& file_spec, uint32_t line, bool check_inlines, uint32_t resolve_scope, SymbolContextList& sc_list) = 0;
-    virtual uint32_t        FindGlobalVariables (const ConstString &name, const ClangNamespaceDecl *namespace_decl, bool append, uint32_t max_matches, VariableList& variables) = 0;
-    virtual uint32_t        FindGlobalVariables (const RegularExpression& regex, bool append, uint32_t max_matches, VariableList& variables) = 0;
-    virtual uint32_t        FindFunctions (const ConstString &name, const ClangNamespaceDecl *namespace_decl, uint32_t name_type_mask, bool include_inlines, bool append, SymbolContextList& sc_list) = 0;
-    virtual uint32_t        FindFunctions (const RegularExpression& regex, bool include_inlines, bool append, SymbolContextList& sc_list) = 0;
-    virtual uint32_t        FindTypes (const SymbolContext& sc, const ConstString &name, const ClangNamespaceDecl *namespace_decl, bool append, uint32_t max_matches, TypeList& types) = 0;
+    virtual uint32_t        ResolveSymbolContext (const FileSpec& file_spec, uint32_t line, bool check_inlines, uint32_t resolve_scope, SymbolContextList& sc_list);
+    virtual uint32_t        FindGlobalVariables (const ConstString &name, const CompilerDeclContext *parent_decl_ctx, bool append, uint32_t max_matches, VariableList& variables);
+    virtual uint32_t        FindGlobalVariables (const RegularExpression& regex, bool append, uint32_t max_matches, VariableList& variables);
+    virtual uint32_t        FindFunctions (const ConstString &name, const CompilerDeclContext *parent_decl_ctx, uint32_t name_type_mask, bool include_inlines, bool append, SymbolContextList& sc_list);
+    virtual uint32_t        FindFunctions (const RegularExpression& regex, bool include_inlines, bool append, SymbolContextList& sc_list);
+    virtual uint32_t        FindTypes (const SymbolContext& sc, const ConstString &name, const CompilerDeclContext *parent_decl_ctx, bool append, uint32_t max_matches, TypeMap& types);
 //  virtual uint32_t        FindTypes (const SymbolContext& sc, const RegularExpression& regex, bool append, uint32_t max_matches, TypeList& types) = 0;
     virtual TypeList *      GetTypeList ();
     virtual size_t          GetTypes (lldb_private::SymbolContextScope *sc_scope,
                                       uint32_t type_mask,
                                       lldb_private::TypeList &type_list) = 0;
-    virtual ClangASTContext &
-                            GetClangASTContext ();
-    virtual ClangNamespaceDecl
+
+    virtual lldb_private::TypeSystem *
+                            GetTypeSystemForLanguage (lldb::LanguageType language);
+
+    virtual CompilerDeclContext
                             FindNamespace (const SymbolContext& sc, 
                                            const ConstString &name,
-                                           const ClangNamespaceDecl *parent_namespace_decl) = 0;
+                                           const CompilerDeclContext *parent_decl_ctx)
+    {
+        return CompilerDeclContext();
+    }
 
     ObjectFile*             GetObjectFile() { return m_obj_file; }
     const ObjectFile*       GetObjectFile() const { return m_obj_file; }
@@ -163,16 +171,15 @@ public:
     { 
     }
 
-    
 protected:
     ObjectFile*             m_obj_file; // The object file that symbols can be extracted from.
     uint32_t                m_abilities;
     bool                    m_calculated_abilities;
+
 private:
     DISALLOW_COPY_AND_ASSIGN (SymbolFile);
 };
 
-
 } // namespace lldb_private
 
-#endif  // liblldb_SymbolFile_h_
+#endif // liblldb_SymbolFile_h_

@@ -1,7 +1,10 @@
 """Benchmark the turnaround time starting a debugger and run to the breakpont with lldb vs. gdb."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys
-import unittest2
 import lldb
 from lldbbench import *
 
@@ -22,15 +25,16 @@ class CompileRunToBreakpointBench(BenchBase):
         self.gdb_avg = None
 
     @benchmarks_test
+    @no_debug_info_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_run_lldb_then_gdb(self):
         """Benchmark turnaround time with lldb vs. gdb."""
-        print
+        print()
         self.run_lldb_turnaround(self.exe, self.function, self.count)
-        print "lldb turnaround benchmark:", self.stopwatch
+        print("lldb turnaround benchmark:", self.stopwatch)
         self.run_gdb_turnaround(self.exe, self.function, self.count)
-        print "gdb turnaround benchmark:", self.stopwatch
-        print "lldb_avg/gdb_avg: %f" % (self.lldb_avg/self.gdb_avg)
+        print("gdb turnaround benchmark:", self.stopwatch)
+        print("lldb_avg/gdb_avg: %f" % (self.lldb_avg/self.gdb_avg))
 
     def run_lldb_turnaround(self, exe, function, count):
         import pexpect
@@ -115,10 +119,3 @@ class CompileRunToBreakpointBench(BenchBase):
 
         self.gdb_avg = self.stopwatch.avg()
         self.child = None
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

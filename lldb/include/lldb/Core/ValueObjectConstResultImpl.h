@@ -42,7 +42,7 @@ public:
     CreateChildAtIndex (size_t idx, bool synthetic_array_member, int32_t synthetic_index);
     
     lldb::ValueObjectSP
-    GetSyntheticChildAtOffset (uint32_t offset, const ClangASTType& type, bool can_create);
+    GetSyntheticChildAtOffset (uint32_t offset, const CompilerType& type, bool can_create);
     
     lldb::ValueObjectSP
     AddressOf (Error &error);
@@ -52,6 +52,9 @@ public:
     {
         return m_live_address;
     }
+
+    lldb::ValueObjectSP
+    Cast (const CompilerType &compiler_type);
     
     void
     SetLiveAddress(lldb::addr_t addr = LLDB_INVALID_ADDRESS,

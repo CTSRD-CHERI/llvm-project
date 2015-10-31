@@ -1,14 +1,13 @@
 
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-ast -analyze -polly-ignore-aliasing < %s | FileCheck %s -check-prefix=SCALAR
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -polly-codegen -polly-ignore-aliasing -disable-output < %s
+; RUN: opt %loadPolly -polly-ast -analyze -polly-ignore-aliasing < %s | FileCheck %s -check-prefix=SCALAR
+; RUN: opt %loadPolly -polly-codegen -polly-ignore-aliasing -disable-output < %s
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
-; SCALAR: if (1)
+; SCALAR: if (
 ; SCALAR:     {
-; SCALAR:       for (int c0 = 0; c0 <= -Scalar0.val + 99; c0 += 1)
+; SCALAR:       Stmt_for_1(0);
+; SCALAR:       for (int c0 = 1; c0 <= -Scalar0.val + 99; c0 += 1)
 ; SCALAR:         Stmt_for_1(c0);
-; SCALAR:       if (Scalar0.val >= 100)
-; SCALAR:         Stmt_for_1(0);
 ; SCALAR:     }
 
 ; SCALAR: if (1)
@@ -22,6 +21,7 @@ entry:
 
 for.0:
   %Scalar0.val = load i32, i32* %Scalar0
+  store i32 1, i32* %Scalar0
   br i1 false, label %for.0, label %for.1.preheader
 
 for.1.preheader:

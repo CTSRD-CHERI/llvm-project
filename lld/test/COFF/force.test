@@ -1,10 +1,10 @@
 # RUN: yaml2obj < %s > %t.obj
-# RUN: not lld -flavor link2 /out:%t.exe /entry:main %t.obj >& %t.log
+# RUN: not lld-link /out:%t.exe /entry:main %t.obj >& %t.log
 # RUN: FileCheck %s < %t.log
-# RUN: lld -flavor link2 /out:%t.exe /entry:main %t.obj /force >& %t.log
+# RUN: lld-link /out:%t.exe /entry:main %t.obj /force >& %t.log
 # RUN: FileCheck %s < %t.log
 
-# CHECK: undefined symbol: foo
+# CHECK: .obj: undefined symbol: foo
 
 ---
 header:

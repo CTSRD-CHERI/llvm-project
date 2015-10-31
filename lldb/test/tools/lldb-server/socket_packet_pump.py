@@ -1,9 +1,15 @@
-import Queue
+
+from __future__ import print_function
+
+import lldb_shared
+
 import re
 import select
 import threading
 import traceback
 import codecs
+
+from six.moves import queue
 
 def _handle_output_packet_string(packet_contents):
     if (not packet_contents) or (len(packet_contents) < 1):
@@ -17,8 +23,8 @@ def _handle_output_packet_string(packet_contents):
 
 def _dump_queue(the_queue):
     while not the_queue.empty():
-        print codecs.encode(the_queue.get(True), "string_escape")
-        print "\n"
+        print(codecs.encode(the_queue.get(True), "string_escape"))
+        print("\n")
 
 class SocketPacketPump(object):
     """A threaded packet reader that partitions packets into two streams.
@@ -38,8 +44,8 @@ class SocketPacketPump(object):
         if not pump_socket:
             raise Exception("pump_socket cannot be None")
 
-        self._output_queue = Queue.Queue()
-        self._packet_queue = Queue.Queue()
+        self._output_queue = queue.Queue()
+        self._packet_queue = queue.Queue()
         self._thread = None
         self._stop_thread = False
         self._socket = pump_socket
@@ -63,15 +69,15 @@ class SocketPacketPump(object):
         # Warn if there is any content left in any of the queues.
         # That would represent unmatched packets.
         if not self.output_queue().empty():
-            print "warning: output queue entries still exist:"
+            print("warning: output queue entries still exist:")
             _dump_queue(self.output_queue())
-            print "from here:"
+            print("from here:")
             traceback.print_stack()
 
         if not self.packet_queue().empty():
-            print "warning: packet queue entries still exist:"
+            print("warning: packet queue entries still exist:")
             _dump_queue(self.packet_queue())
-            print "from here:"
+            print("from here:")
             traceback.print_stack()
 
     def start_pump_thread(self):

@@ -2,8 +2,11 @@
 Test lldb watchpoint that uses 'watchpoint set -w write -s size' to watch a pointed location with size.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -11,22 +14,6 @@ import lldbutil
 class WatchLocationUsingWatchpointSetTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_watchlocation_with_dsym_using_watchpoint_set(self):
-        """Test watching a location with 'watchpoint set expression -w write -s size' option."""
-        self.buildDsym()
-        self.setTearDownCleanup()
-        self.watchlocation_using_watchpoint_set()
-
-    @expectedFailureFreeBSD('llvm.org/pr18832')
-    @dwarf_test
-    def test_watchlocation_with_dwarf_using_watchpoint_set(self):
-        """Test watching a location with 'watchpoint set expression -w write -s size' option."""
-        self.buildDwarf()
-        self.setTearDownCleanup()
-        self.watchlocation_using_watchpoint_set()
 
     def setUp(self):
         # Call super's setUp().
@@ -39,8 +26,13 @@ class WatchLocationUsingWatchpointSetTestCase(TestBase):
         self.violating_func = "do_bad_thing_with_location";
         # Build dictionary to have unique executable names for each test method.
 
-    def watchlocation_using_watchpoint_set(self):
-        """Test watching a location with '-s size' option."""
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_watchlocation_using_watchpoint_set(self):
+        """Test watching a location with 'watchpoint set expression -w write -s size' option."""
+        self.build()
+        self.setTearDownCleanup()
+
         exe = os.path.join(os.getcwd(), 'a.out')
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -48,7 +40,7 @@ class WatchLocationUsingWatchpointSetTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -93,10 +85,3 @@ class WatchLocationUsingWatchpointSetTestCase(TestBase):
             substrs = ['hit_count = 1'])
 
         self.runCmd("thread backtrace all")
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

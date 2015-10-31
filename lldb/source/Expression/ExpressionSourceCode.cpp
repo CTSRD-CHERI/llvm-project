@@ -10,9 +10,10 @@
 #include "lldb/Expression/ExpressionSourceCode.h"
 
 #include "lldb/Core/StreamString.h"
-#include "lldb/Expression/ClangModulesDeclVendor.h"
-#include "lldb/Expression/ClangPersistentVariables.h"
+#include "Plugins/ExpressionParser/Clang/ClangModulesDeclVendor.h"
+#include "Plugins/ExpressionParser/Clang/ClangPersistentVariables.h"
 #include "lldb/Symbol/Block.h"
+#include "lldb/Symbol/TypeSystem.h"
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/StackFrame.h"
@@ -82,7 +83,8 @@ bool ExpressionSourceCode::GetText (std::string &text, lldb::LanguageType wrappi
         
         if (ClangModulesDeclVendor *decl_vendor = target->GetClangModulesDeclVendor())
         {
-            const ClangModulesDeclVendor::ModuleVector &hand_imported_modules = target->GetPersistentVariables().GetHandLoadedClangModules();
+            ClangPersistentVariables *persistent_vars = llvm::cast<ClangPersistentVariables>(target->GetPersistentExpressionStateForLanguage(lldb::eLanguageTypeC));
+            const ClangModulesDeclVendor::ModuleVector &hand_imported_modules = persistent_vars->GetHandLoadedClangModules();
             ClangModulesDeclVendor::ModuleVector modules_for_macros;
             
             for (ClangModulesDeclVendor::ModuleID module : hand_imported_modules)

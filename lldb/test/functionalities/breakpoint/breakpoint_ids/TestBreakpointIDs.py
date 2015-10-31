@@ -2,8 +2,11 @@
 Test lldb breakpoint ids.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,18 +15,9 @@ class BreakpointIDTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym (self):
-        self.buildDsym ()
-        self.breakpoint_id_tests ()
+    def test (self):
+        self.build()
 
-    @dwarf_test
-    def test_with_dwarf (self):
-        self.buildDwarf ()
-        self.breakpoint_id_tests ()
-
-    def breakpoint_id_tests (self):
         exe = os.path.join (os.getcwd(), "a.out")
         self.expect("file " + exe,
                     patterns = [ "Current executable set to .*a.out" ])
@@ -55,10 +49,3 @@ class BreakpointIDTestCase(TestBase):
 
         self.expect ("breakpoint enable 2.*",
                      patterns = [ ".* breakpoints enabled."] )
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

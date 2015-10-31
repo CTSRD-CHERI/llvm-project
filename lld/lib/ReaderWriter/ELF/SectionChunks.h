@@ -85,6 +85,10 @@ public:
     return nullptr;
   }
 
+  const OutputSection<ELFT> *getOutputSection() const {
+    return _outputSection;
+  }
+
   void setOutputSection(OutputSection<ELFT> *os, bool isFirst = false) {
     _outputSection = os;
     _isFirstSectionInOutputSection = isFirst;
@@ -161,7 +165,7 @@ public:
   /// \brief Set the virtual address of each Atom in the Section. This
   /// routine gets called after the linker fixes up the virtual address
   /// of the section
-  virtual void assignVirtualAddress(uint64_t addr) override;
+  void assignVirtualAddress(uint64_t addr) override;
 
   /// \brief Set the file offset of each Atom in the section. This routine
   /// gets called after the linker fixes up the section offset
@@ -195,8 +199,8 @@ protected:
   std::vector<AtomLayout *> _atoms;
   mutable std::mutex _outputMutex;
 
-  void printError(const std::string &errorStr, const AtomLayout &atom,
-                  const Reference &ref) const;
+  std::string formatError(const std::string &errorStr, const AtomLayout &atom,
+                          const Reference &ref) const;
 };
 
 /// \brief A OutputSection represents a set of sections grouped by the same
@@ -260,7 +264,7 @@ public:
   int64_t entsize() const { return _entSize; }
   uint64_t fileOffset() const { return _fileOffset; }
   uint64_t flags() const { return _flags; }
-  uint64_t memSize() { return _memSize; }
+  uint64_t memSize() const { return _memSize; }
 
 private:
   StringRef _name;
@@ -530,7 +534,7 @@ public:
                 StringRef interp);
 
   void write(ELFWriter *writer, TargetLayout<ELFT> &layout,
-             llvm::FileOutputBuffer &buffer);
+             llvm::FileOutputBuffer &buffer) override;
 
 private:
   StringRef _interp;
@@ -609,4 +613,4 @@ private:
 } // end namespace elf
 } // end namespace lld
 
-#endif
+#endif // LLD_READER_WRITER_ELF_SECTION_CHUNKS_H

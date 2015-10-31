@@ -2,9 +2,12 @@
 Test that you can set breakpoint commands successfully with the Python API's:
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
 import re
-import unittest2
 import lldb, lldbutil
 import sys
 from lldbtest import *
@@ -14,19 +17,10 @@ class PythonBreakpointCommandSettingTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
     my_var = 10
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_step_out_with_dsym_python(self):
+    @add_test_categories(['pyapi'])
+    def test_step_out_python(self):
         """Test stepping out using avoid-no-debug with dsyms."""
-        self.buildDsym()
-        self.do_set_python_command_from_python()
-
-    @python_api_test
-    @dwarf_test
-    def test_step_out_with_dwarf_python(self):
-        """Test stepping out using avoid-no-debug with dsyms."""
-        self.buildDwarf()
+        self.build()
         self.do_set_python_command_from_python ()
 
     def setUp (self):
@@ -57,7 +51,7 @@ class PythonBreakpointCommandSettingTestCase(TestBase):
         got_one_in_B = False
         for idx in range(0, num_locations):
             comp_unit = no_files_bkpt.GetLocationAtIndex(idx).GetAddress().GetSymbolContext(lldb.eSymbolContextCompUnit).GetCompileUnit().GetFileSpec()
-            print "Got comp unit: ", comp_unit.GetFilename()
+            print("Got comp unit: ", comp_unit.GetFilename())
             if comp_unit.GetFilename() == "a.c":
                 got_one_in_A = True
             elif comp_unit.GetFilename() == "b.c":
@@ -72,7 +66,7 @@ class PythonBreakpointCommandSettingTestCase(TestBase):
         error = body_bkpt.SetScriptCallbackBody("\
 import TestBreakpointCommandsFromPython\n\
 TestBreakpointCommandsFromPython.PythonBreakpointCommandSettingTestCase.my_var = 20\n\
-print 'Hit breakpoint'")
+print('Hit breakpoint')")
         self.assertTrue (error.Success(), "Failed to set the script callback body: %s."%(error.GetCString()))
 
         self.dbg.HandleCommand("command script import --allow-reload ./bktptcmd.py")
@@ -98,10 +92,3 @@ print 'Hit breakpoint'")
         self.assertTrue(os.path.isfile("output2.txt"),
                         "'output2.txt' exists due to breakpoint command for breakpoint function.")
         self.RemoveTempFile("output2.txt")
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

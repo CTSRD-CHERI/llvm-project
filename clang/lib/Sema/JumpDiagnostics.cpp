@@ -147,9 +147,12 @@ static ScopePair GetDiagForGotoScopeDecl(Sema &S, const Decl *D) {
     if (VD->hasLocalStorage()) {
       switch (VD->getType().isDestructedType()) {
       case QualType::DK_objc_strong_lifetime:
+        return ScopePair(diag::note_protected_by_objc_strong_init,
+                         diag::note_exits_objc_strong);
+
       case QualType::DK_objc_weak_lifetime:
-        return ScopePair(diag::note_protected_by_objc_ownership,
-                         diag::note_exits_objc_ownership);
+        return ScopePair(diag::note_protected_by_objc_weak_init,
+                         diag::note_exits_objc_weak);
 
       case QualType::DK_cxx_destructor:
         OutDiag = diag::note_exits_dtor;
@@ -372,13 +375,12 @@ void JumpScopeChecker::BuildScopeInformation(Stmt *S, unsigned &origParentScope)
     break;
   }
 
-  for (Stmt::child_range CI = S->children(); CI; ++CI) {
+  for (Stmt *SubStmt : S->children()) {
     if (SkipFirstSubStmt) {
       SkipFirstSubStmt = false;
       continue;
     }
 
-    Stmt *SubStmt = *CI;
     if (!SubStmt) continue;
 
     // Cases, labels, and defaults aren't "scope parents".  It's also

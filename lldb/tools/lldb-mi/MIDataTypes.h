@@ -39,30 +39,17 @@ const bool failure = false;
 // Use to avoid "unused parameter" compiler warnings:
 #define MIunused(x) (void) x;
 
-#ifdef _WIN32
-#define MI_NO_INITIALIZE_VTABLE __declspec(novtable)
-#define MI_FORCE_INLINE __forceinline
-#else
-#define MI_NO_INITIALIZE_VTABLE
-#define MI_FORCE_INLINE inline
-// __attribute__( ( always_inline ) )
-#endif // _WIN32
-
 // Portability issues
 #ifdef _WIN64
 typedef unsigned __int64 size_t;
-typedef unsigned __int64 PointerToInteger_t;
 typedef __int64 MIint;
 typedef unsigned __int64 MIuint;
 #else
 #ifdef _WIN32
 typedef unsigned int size_t;
-typedef unsigned int PointerToInteger_t;
 typedef int MIint;
 typedef unsigned int MIuint;
 #else
-//       typedef     long unsigned int size_t; // size_t already defined
-typedef unsigned int PointerToInteger_t;
 typedef int MIint;
 typedef unsigned int MIuint;
 
@@ -74,17 +61,5 @@ typedef unsigned int MIuint;
 // Common types:
 
 // Fundamentals:
-typedef float MIflt;
-typedef double MIdbl;
-typedef char MIchar;                 // Defaults to signed char, i.e. MIschar.
-typedef signed char MIschar;         // Range: -128 to 127. More explicit than using MIchar.
-typedef unsigned char MIuchar;       // Range: 0 to 255.
 typedef long long MIint64;           // 64bit signed integer.
 typedef unsigned long long MIuint64; // 64bit unsigned integer.
-
-// using namespace std; // Better to put this or std:: at translation units scope.
-
-//--------------------------------------------------------------------------------------
-// Common routines:
-
-//--------------------------------------------------------------------------------------

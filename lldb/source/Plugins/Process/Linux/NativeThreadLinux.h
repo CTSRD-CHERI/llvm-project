@@ -14,6 +14,7 @@
 #include "lldb/Host/common/NativeThreadProtocol.h"
 
 #include <map>
+#include <memory>
 #include <string>
 
 namespace lldb_private {
@@ -87,26 +88,13 @@ namespace process_linux {
         SetStoppedByTrace ();
 
         void
-        SetCrashedWithException (const siginfo_t& info);
-
-        void
-        SetSuspended ();
+        SetStoppedWithNoReason ();
 
         void
         SetExited ();
 
         Error
         RequestStop ();
-
-        typedef std::function<Error (lldb::tid_t tid, bool supress_signal)> ResumeThreadFunction;
-        struct ThreadContext
-        {
-            bool stop_requested = false;
-            ResumeThreadFunction request_resume_function;
-        };
-
-        ThreadContext &
-        GetThreadContext() { return m_thread_context; }
 
         // ---------------------------------------------------------------------
         // Private interface
@@ -123,9 +111,9 @@ namespace process_linux {
         std::string m_stop_description;
         using WatchpointIndexMap = std::map<lldb::addr_t, uint32_t>;
         WatchpointIndexMap m_watchpoint_index_map;
-        ThreadContext m_thread_context;
     };
 
+    typedef std::shared_ptr<NativeThreadLinux> NativeThreadLinuxSP;
 } // namespace process_linux
 } // namespace lldb_private
 

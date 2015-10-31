@@ -221,6 +221,8 @@ __isl_give isl_ast_build *isl_ast_build_product(
 	__isl_take isl_ast_build *build, __isl_take isl_space *embedding);
 __isl_give isl_ast_build *isl_ast_build_set_loop_bounds(
 	__isl_take isl_ast_build *build, __isl_take isl_basic_set *bounds);
+__isl_give isl_ast_build *isl_ast_build_set_pending_generated(
+	__isl_take isl_ast_build *build, __isl_take isl_basic_set *bounds);
 __isl_give isl_ast_build *isl_ast_build_detect_strides(
 	__isl_take isl_ast_build *build, __isl_take isl_set *set);
 __isl_give isl_ast_build *isl_ast_build_include_stride(
@@ -242,8 +244,6 @@ __isl_give isl_ast_build *isl_ast_build_restrict_generated(
 	__isl_take isl_ast_build *build, __isl_take isl_set *set);
 __isl_give isl_ast_build *isl_ast_build_replace_pending_by_guard(
 	__isl_take isl_ast_build *build, __isl_take isl_set *guard);
-__isl_give isl_ast_build *isl_ast_build_restrict_pending(
-	__isl_take isl_ast_build *build, __isl_take isl_set *set);
 __isl_give int isl_ast_build_need_schedule_map(
 	__isl_keep isl_ast_build *build);
 __isl_give isl_multi_aff *isl_ast_build_get_schedule_map_multi_aff(
@@ -270,6 +270,8 @@ int isl_ast_build_has_isolated(__isl_keep isl_ast_build *build);
 __isl_give isl_set *isl_ast_build_get_isolated(
 	__isl_keep isl_ast_build *build);
 
+__isl_give isl_basic_set *isl_ast_build_specialize_basic_set(
+	__isl_keep isl_ast_build *build, __isl_take isl_basic_set *bset);
 __isl_give isl_basic_set *isl_ast_build_compute_gist_basic_set(
 	__isl_keep isl_ast_build *build, __isl_take isl_basic_set *bset);
 __isl_give isl_set *isl_ast_build_specialize(__isl_keep isl_ast_build *build,

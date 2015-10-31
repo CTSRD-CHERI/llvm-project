@@ -1,4 +1,18 @@
-; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops \
+; RUN:     -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops \
+; RUN:     -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine-branches \
+; RUN:     -polly-process-unprofitable=false \
+; RUN:     -polly-allow-nonaffine-loops -analyze < %s | FileCheck %s \
+; RUN:     --check-prefix=PROFIT
+
+
+; RUN: opt %loadPolly -polly-scops -polly-detect-reductions \
+; RUN:                -polly-allow-nonaffine-branches \
+; RUN:                \
+; RUN:                -polly-allow-nonaffine-loops -analyze < %s \
+; RUN:                -polly-detect-reductions=false \
+; RUN: | FileCheck %s -check-prefix=NO-REDUCTION
 ;
 ;    void f(int *A, int *C) {
 ;      for (int i = 0; i < 1024; i++) {
@@ -11,18 +25,26 @@
 ; CHECK:    Region: %bb1---%bb12
 ; CHECK:    Max Loop Depth:  1
 ; CHECK:    Statements {
-; CHECK:      Stmt_(bb3 => bb10)
+; CHECK:      Stmt_bb3__TO__bb10
 ; CHECK:            Domain :=
-; CHECK:                { Stmt_(bb3 => bb10)[i0] : i0 >= 0 and i0 <= 1023 };
+; CHECK:                { Stmt_bb3__TO__bb10[i0] :
+; CHECK-DAG:               i0 >= 0
+; CHECK-DAG:             and
+; CHECK-DAG:               i0 <= 1023
+; CHECK:                }
 ; CHECK:            Schedule :=
-; CHECK:                { Stmt_(bb3 => bb10)[i0] -> [i0] };
+; CHECK:                { Stmt_bb3__TO__bb10[i0] -> [i0] };
 ; CHECK:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                { Stmt_(bb3 => bb10)[i0] -> MemRef_C[i0] };
+; CHECK:                { Stmt_bb3__TO__bb10[i0] -> MemRef_C[i0] };
 ; CHECK:            ReadAccess := [Reduction Type: +] [Scalar: 0]
-; CHECK:                { Stmt_(bb3 => bb10)[i0] -> MemRef_A[i0] };
+; CHECK:                { Stmt_bb3__TO__bb10[i0] -> MemRef_A[i0] };
 ; CHECK:            MayWriteAccess :=  [Reduction Type: +] [Scalar: 0]
-; CHECK:                { Stmt_(bb3 => bb10)[i0] -> MemRef_A[i0] };
+; CHECK:                { Stmt_bb3__TO__bb10[i0] -> MemRef_A[i0] };
 ; CHECK:    }
+
+; PROFIT-NOT: Statements
+
+; NO-REDUCTION-NOT: Reduction Type: +
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

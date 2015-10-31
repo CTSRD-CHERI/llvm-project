@@ -1,4 +1,11 @@
-; RUN: opt %loadPolly -basicaa -polly-scops -polly-allow-nonaffine -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true -analyze < %s | FileCheck %s -check-prefix=SCALAR
+; RUN: opt %loadPolly -basicaa -polly-scops \
+; RUN:     -polly-allow-nonaffine -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=true -analyze < %s | FileCheck %s \
+; RUN:     -check-prefix=SCALAR
+; RUN: opt %loadPolly -basicaa -polly-scops -polly-allow-nonaffine \
+; RUN:     -polly-process-unprofitable=false \
+; RUN:     -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true \
+; RUN:     -analyze < %s | FileCheck %s -check-prefix=PROFIT
 ;
 ; SCALAR:    Function: f
 ; SCALAR:    Region: %bb1---%bb13
@@ -10,25 +17,32 @@
 ; SCALAR:    Alias Groups (0):
 ; SCALAR:        n/a
 ; SCALAR:    Statements {
-; SCALAR:      Stmt_(bb3 => bb11)
+; SCALAR:      Stmt_bb3__TO__bb11
 ; SCALAR:            Domain :=
-; SCALAR:                { Stmt_(bb3 => bb11)[i0] : i0 >= 0 and i0 <= 1023 };
+; SCALAR:                { Stmt_bb3__TO__bb11[i0] :
+; SCALAR-DAG:               i0 >= 0
+; SCALAR-DAG:             and
+; SCALAR-DAG:               i0 <= 1023
+; SCALAR:                }
 ; SCALAR:            Schedule :=
-; SCALAR:                { Stmt_(bb3 => bb11)[i0] -> [i0] };
+; SCALAR:                { Stmt_bb3__TO__bb11[i0] -> [i0] };
 ; SCALAR:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; SCALAR:                { Stmt_(bb3 => bb11)[i0] -> MemRef_C[i0] };
+; SCALAR:                { Stmt_bb3__TO__bb11[i0] -> MemRef_C[i0] };
 ; SCALAR:            ReadAccess := [Reduction Type: +] [Scalar: 0]
-; SCALAR:                { Stmt_(bb3 => bb11)[i0] -> MemRef_A[o0] : o0 <= 2147483645 and o0 >= -2147483648 };
+; SCALAR:                { Stmt_bb3__TO__bb11[i0] -> MemRef_A[o0] : o0 <= 2147483645 and o0 >= -2147483648 };
 ; SCALAR:            MayWriteAccess := [Reduction Type: +] [Scalar: 0]
-; SCALAR:                { Stmt_(bb3 => bb11)[i0] -> MemRef_A[o0] : o0 <= 2147483645 and o0 >= -2147483648 };
+; SCALAR:                { Stmt_bb3__TO__bb11[i0] -> MemRef_A[o0] : o0 <= 2147483645 and o0 >= -2147483648 };
 ; SCALAR:    }
 
+; PROFIT-NOT: Statements
 ;
 ;    void f(int * restrict A, int * restrict C) {
 ;      int j;
 ;      for (int i = 0; i < 1024; i++) {
-;        while ((j = C[i]))
+;        while ((j = C[i++])) {
 ;          A[j]++;
+;          if (true) break;
+;        }
 ;      }
 ;    }
 ;
@@ -58,7 +72,7 @@ bb6:                                              ; preds = %bb3
   %tmp9 = load i32, i32* %tmp8, align 4
   %tmp10 = add nsw i32 %tmp9, 1
   store i32 %tmp10, i32* %tmp8, align 4
-  br label %bb3
+  br i1 true, label %bb11, label %bb3
 
 bb11:                                             ; preds = %bb3
   br label %bb12

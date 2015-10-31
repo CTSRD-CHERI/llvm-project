@@ -2,8 +2,11 @@
 Test number of threads.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,31 +15,19 @@ class MultipleBreakpointTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @dsym_test
-    def test_with_dsym(self):
-        """Test simultaneous breakpoints in multiple threads."""
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.multiple_breakpoint_test()
-
-    @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
-    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
-    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test simultaneous breakpoints in multiple threads."""
-        self.buildDwarf(dictionary=self.getBuildFlags())
-        self.multiple_breakpoint_test()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number for our breakpoint.
         self.breakpoint = line_number('main.cpp', '// Set breakpoint here')
 
-    def multiple_breakpoint_test(self):
+    @expectedFailureDarwin("llvm.org/pr15824") # thread states not properly maintained
+    @expectedFailureFreeBSD("llvm.org/pr18190") # thread states not properly maintained
+    @expectedFailureLinux("llvm.org/pr15824") # thread states not properly maintained
+    @expectedFailureWindows("llvm.org/pr24668") # Breakpoints not resolved correctly
+    def test(self):
         """Test simultaneous breakpoints in multiple threads."""
+        self.build(dictionary=self.getBuildFlags())
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -48,7 +39,7 @@ class MultipleBreakpointTestCase(TestBase):
             substrs = ["1: file = 'main.cpp', line = %d, locations = 1" % self.breakpoint])
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         # The breakpoint may be hit in either thread 2 or thread 3.
@@ -84,9 +75,3 @@ class MultipleBreakpointTestCase(TestBase):
 
         # At this point, the inferior process should have exited.
         self.assertTrue(process.GetState() == lldb.eStateExited, PROCESS_EXITED)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

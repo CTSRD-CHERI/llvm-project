@@ -2,9 +2,12 @@
 Test lldb watchpoint that uses '-s size' to watch a pointed location with size.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,22 +15,6 @@ import lldbutil
 class HelloWatchLocationTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_hello_watchlocation_with_dsym(self):
-        """Test watching a location with '-s size' option."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_watchlocation()
-
-    @expectedFailureFreeBSD("llvm.org/pr18832")
-    @dwarf_test
-    def test_hello_watchlocation_with_dwarf(self):
-        """Test watching a location with '-s size' option."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_watchlocation()
 
     def setUp(self):
         # Call super's setUp().
@@ -42,8 +29,12 @@ class HelloWatchLocationTestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
-    def hello_watchlocation(self):
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_hello_watchlocation(self):
         """Test watching a location with '-s size' option."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -51,7 +42,7 @@ class HelloWatchLocationTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1, loc_exact=False)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -104,10 +95,3 @@ class HelloWatchLocationTestCase(TestBase):
             substrs = ['hit_count = 1'])
 
         self.runCmd("thread backtrace all")
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

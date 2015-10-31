@@ -2,8 +2,11 @@
 Test some more expression commands.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -19,15 +22,16 @@ class ExprCommands2TestCase(TestBase):
         self.line = line_number('main.cpp',
                                 '// Please test many expressions while stopped at this line:')
 
+    @expectedFailureWindows("llvm.org/pr24489: Name lookup not working correctly on Windows")
     def test_more_expr_commands(self):
         """Test some more expression commands."""
-        self.buildDefault()
+        self.build()
 
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line(self, "main.cpp", self.line, num_expected_locations=1,loc_exact=False)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # Does static casting work?
         self.expect("expression (int*)argv",
@@ -54,10 +58,3 @@ class ExprCommands2TestCase(TestBase):
         self.expect("expression $4 + 1",
             startstr = "(int) $5 = 24")
         # (int) $5 = 6
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

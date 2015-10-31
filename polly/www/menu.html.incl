@@ -9,6 +9,10 @@ Optimizations</span></h2>
 </div>
 <div id="menu">
   <div class="submenu">
+    <label>LLVM</label>
+    <a href="http://llvm.org">llvm.org</a>
+  </div>
+  <div class="submenu">
     <label>Information</label>
     <a href="/index.html">About Polly</a>
     <a href="/documentation.html">Documentation</a>
@@ -21,7 +25,7 @@ Optimizations</span></h2>
 
   <div class="submenu">
     <label>Development </label>
-    <a href="http://lists.cs.uiuc.edu/mailman/listinfo/llvm-commits">
+    <a href="http://lists.llvm.org/mailman/listinfo/llvm-commits">
       Mailing List (patches)
     </a>
     <a href="http://groups.google.com/group/polly-dev">Mailing List (discussion)</a>

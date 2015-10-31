@@ -1,7 +1,10 @@
 """Test that lldb functions correctly after the inferior has crashed."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb, lldbutil, lldbplatformutil
 from lldbtest import *
 
@@ -9,81 +12,52 @@ class CrashingInferiorTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    def test_inferior_crashing_dsym(self):
-        """Test that lldb reliably catches the inferior crashing (command)."""
-        self.buildDsym()
-        self.inferior_crashing()
-
     @expectedFailureFreeBSD("llvm.org/pr23699 SIGSEGV is reported as exception, not signal")
-    def test_inferior_crashing_dwarf(self):
+    @expectedFailureWindows("llvm.org/pr24778") # This actually works, but the test relies on the output format instead of the API
+    def test_inferior_crashing(self):
         """Test that lldb reliably catches the inferior crashing (command)."""
-        self.buildDwarf()
+        self.build()
         self.inferior_crashing()
 
-    @skipUnlessDarwin
-    def test_inferior_crashing_registers_dsym(self):
+    @expectedFailureWindows("llvm.org/pr24778")
+    def test_inferior_crashing_register(self):
         """Test that lldb reliably reads registers from the inferior after crashing (command)."""
-        self.buildDsym()
+        self.build()
         self.inferior_crashing_registers()
 
-    def test_inferior_crashing_register_dwarf(self):
-        """Test that lldb reliably reads registers from the inferior after crashing (command)."""
-        self.buildDwarf()
-        self.inferior_crashing_registers()
-
-    @python_api_test
+    @add_test_categories(['pyapi'])
+    @expectedFailureWindows("llvm.org/pr24778")
     def test_inferior_crashing_python(self):
         """Test that lldb reliably catches the inferior crashing (Python API)."""
-        self.buildDefault()
+        self.build()
         self.inferior_crashing_python()
 
-    @skipUnlessDarwin
-    def test_inferior_crashing_expr_dsym(self):
+    @expectedFailureWindows("llvm.org/pr24778")
+    def test_inferior_crashing_expr(self):
         """Test that the lldb expression interpreter can read from the inferior after crashing (command)."""
-        self.buildDsym()
+        self.build()
         self.inferior_crashing_expr()
-
-    def test_inferior_crashing_expr_dwarf(self):
-        """Test that the lldb expression interpreter can read from the inferior after crashing (command)."""
-        self.buildDwarf()
-        self.inferior_crashing_expr()
-
-    @skipUnlessDarwin
-    def test_inferior_crashing_step_dsym(self):
-        """Test that lldb functions correctly after stepping through a crash."""
-        self.buildDsym()
-        self.inferior_crashing_step()
 
     @expectedFailureAll("llvm.org/pr23139", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
-    def test_inferior_crashing_step_dwarf(self):
+    @expectedFailureWindows("llvm.org/pr24778")
+    def test_inferior_crashing_step(self):
         """Test that stepping after a crash behaves correctly."""
-        self.buildDwarf()
+        self.build()
         self.inferior_crashing_step()
 
-    @skipUnlessDarwin
-    def test_inferior_crashing_step_after_break_dsym(self):
-        """Test that stepping after a crash behaves correctly."""
-        self.buildDsym()
-        self.inferior_crashing_step_after_break()
-
-    @skipIfFreeBSD # llvm.org/pr16684
-    def test_inferior_crashing_step_after_break_dwarf(self):
+    @expectedFailureFreeBSD('llvm.org/pr24939')
+    @expectedFailureWindows("llvm.org/pr24778")
+    @expectedFailureAndroid(archs=['aarch64'], api_levels=range(21 + 1)) # No eh_frame for sa_restorer
+    def test_inferior_crashing_step_after_break(self):
         """Test that lldb functions correctly after stepping through a crash."""
-        self.buildDwarf()
+        self.build()
         self.inferior_crashing_step_after_break()
 
-    @skipUnlessDarwin
-    def test_inferior_crashing_expr_step_and_expr_dsym(self):
-        """Test that lldb expressions work before and after stepping after a crash."""
-        self.buildDsym()
-        self.inferior_crashing_expr_step_expr()
-
-    @expectedFailureFreeBSD('llvm.org/pr15989') # Couldn't allocate space for the stack frame
+    @expectedFailureWindows("llvm.org/pr24778")
     @skipIfLinux # Inferior exits after stepping after a segfault. This is working as intended IMHO.
-    def test_inferior_crashing_expr_step_and_expr_dwarf(self):
+    def test_inferior_crashing_expr_step_and_expr(self):
         """Test that lldb expressions work before and after stepping after a crash."""
-        self.buildDwarf()
+        self.build()
         self.inferior_crashing_expr_step_expr()
 
     def set_breakpoint(self, line):
@@ -110,7 +84,7 @@ class CrashingInferiorTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         # The exact stop reason depends on the platform
         if self.platformIsDarwin():
             stop_reason = 'stop reason = EXC_BAD_ACCESS'
@@ -154,7 +128,7 @@ class CrashingInferiorTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         self.check_stop_reason()
 
         # lldb should be able to read from registers from the inferior after crashing.
@@ -165,7 +139,7 @@ class CrashingInferiorTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         self.check_stop_reason()
 
         # The lldb expression interpreter should be able to read from addresses of the inferior after a crash.
@@ -181,7 +155,7 @@ class CrashingInferiorTestCase(TestBase):
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         self.set_breakpoint(self.line)
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
             substrs = ['main.c:%d' % self.line,
@@ -208,7 +182,7 @@ class CrashingInferiorTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         self.check_stop_reason()
 
         expected_state = 'exited' # Provide the exit code.
@@ -230,7 +204,7 @@ class CrashingInferiorTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         self.check_stop_reason()
 
         # The lldb expression interpreter should be able to read from addresses of the inferior after a crash.
@@ -243,10 +217,3 @@ class CrashingInferiorTestCase(TestBase):
         # The lldb expression interpreter should be able to read from addresses of the inferior after a crash.
         self.expect("p argv[0]",
             substrs = ['a.out'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

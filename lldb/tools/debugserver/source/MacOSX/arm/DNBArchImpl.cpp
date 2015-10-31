@@ -20,7 +20,7 @@
 #include "DNBLog.h"
 #include "DNBRegisterInfo.h"
 #include "DNB.h"
-#include "ARM_GCC_Registers.h"
+#include "ARM_ehframe_Registers.h"
 #include "ARM_DWARF_Registers.h"
 
 #include <inttypes.h>
@@ -139,7 +139,7 @@ DNBArchMachARM::Create (MachThread *thread)
     return obj;
 }
 
-const uint8_t * const
+const uint8_t *
 DNBArchMachARM::SoftwareBreakpointOpcode (nub_size_t byte_size)
 {
     switch (byte_size)
@@ -1523,8 +1523,8 @@ enum
 // register offset, encoding, format and native register. This ensures that
 // the register state structures are defined correctly and have the correct
 // sizes and offsets.
-#define DEFINE_GPR_IDX(idx, reg, alt, gen) { e_regSetGPR, gpr_##reg, #reg, alt, Uint, Hex, 4, GPR_OFFSET_IDX(idx), gcc_##reg, dwarf_##reg, gen, INVALID_NUB_REGNUM, NULL, NULL}
-#define DEFINE_GPR_NAME(reg, alt, gen, inval) { e_regSetGPR, gpr_##reg, #reg, alt, Uint, Hex, 4, GPR_OFFSET_NAME(reg), gcc_##reg, dwarf_##reg, gen, INVALID_NUB_REGNUM, NULL, inval}
+#define DEFINE_GPR_IDX(idx, reg, alt, gen) { e_regSetGPR, gpr_##reg, #reg, alt, Uint, Hex, 4, GPR_OFFSET_IDX(idx), ehframe_##reg, dwarf_##reg, gen, INVALID_NUB_REGNUM, NULL, NULL}
+#define DEFINE_GPR_NAME(reg, alt, gen, inval) { e_regSetGPR, gpr_##reg, #reg, alt, Uint, Hex, 4, GPR_OFFSET_NAME(reg), ehframe_##reg, dwarf_##reg, gen, INVALID_NUB_REGNUM, NULL, inval}
 
 // In case we are debugging to a debug target that the ability to
 // change into the protected modes with folded registers (ABT, IRQ,
@@ -2060,6 +2060,7 @@ DNBArchMachARM::GetRegisterContext (void *buf, nub_size_t buf_len)
         p += sizeof(m_state.context.exc);
 
         size_t bytes_written = p - (uint8_t *)buf;
+        UNUSED_IF_ASSERT_DISABLED(bytes_written);
         assert (bytes_written == size);
 
     }
@@ -2093,6 +2094,7 @@ DNBArchMachARM::SetRegisterContext (const void *buf, nub_size_t buf_len)
         p += sizeof(m_state.context.exc);
         
         size_t bytes_written = p - (uint8_t *)buf;
+        UNUSED_IF_ASSERT_DISABLED(bytes_written);
         assert (bytes_written == size);
 
         if (SetGPRState() | SetVFPState() | SetEXCState())

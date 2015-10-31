@@ -1,22 +1,17 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-parallel -polly-parallel-force -polly-ast -analyze < %s | FileCheck %s -check-prefix=AST
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-parallel -polly-parallel-force -polly-codegen -S -verify-dom-info < %s | FileCheck %s -check-prefix=IR
+; RUN: opt %loadPolly -polly-parallel -polly-parallel-force -polly-ast -analyze < %s | FileCheck %s -check-prefix=AST
+; RUN: opt %loadPolly -polly-parallel -polly-parallel-force -polly-codegen -S -verify-dom-info < %s | FileCheck %s -check-prefix=IR
 
 ; This test case verifies that we create correct code even if two OpenMP loops
 ; share common outer variables.
 
-; AST: if (nj >= p_1 + 3) {
+; AST:   Stmt_for_body35(0);
 ; AST:   #pragma simd
 ; AST:   #pragma omp parallel for
-; AST:   for (int c0 = 0; c0 < p_0 + nj - 1; c0 += 1)
-; AST:     Stmt_for_body35(c0);
-; AST: } else
-; AST:   #pragma simd
-; AST:   #pragma omp parallel for
-; AST:   for (int c0 = 0; c0 <= p_0 + p_1; c0 += 1)
+; AST:   for (int c0 = 1; c0 < -p_0 + nj - 1; c0 += 1)
 ; AST:     Stmt_for_body35(c0);
 
-; IR: @foo.polly.subfn
-; IR: @foo.polly.subfn.1
+; IR: @foo_polly_subfn
+; IR-NOT: @foo_polly_subfn_1
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

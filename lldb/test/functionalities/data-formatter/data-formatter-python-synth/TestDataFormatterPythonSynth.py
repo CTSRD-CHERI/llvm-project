@@ -2,8 +2,11 @@
 Test lldb data formatter subsystem.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,31 +15,15 @@ class PythonSynthDataFormatterTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test data formatter commands."""
-        self.buildDsym()
-        self.data_formatter_commands()
-
     @skipIfFreeBSD # llvm.org/pr20545 bogus output confuses buildbot parser
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
+    def test_with_run_command(self):
         """Test data formatter commands."""
-        self.buildDwarf()
+        self.build()
         self.data_formatter_commands()
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_rdar10960550_with_dsym_and_run_command(self):
+    def test_rdar10960550_with_run_command(self):
         """Test data formatter commands."""
-        self.buildDsym()
-        self.rdar10960550_formatter_commands()
-
-    @dwarf_test
-    def test_rdar10960550_with_dwarf_and_run_command(self):
-        """Test data formatter commands."""
-        self.buildDwarf()
+        self.build()
         self.rdar10960550_formatter_commands()
 
 
@@ -54,7 +41,7 @@ class PythonSynthDataFormatterTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -210,7 +197,7 @@ class PythonSynthDataFormatterTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line2, num_expected_locations=1, loc_exact=False)
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line3, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -240,7 +227,7 @@ class PythonSynthDataFormatterTestCase(TestBase):
         str_cast = str(test_cast)
 
         if self.TraceOn():
-             print str_cast
+             print(str_cast)
 
         self.assertTrue(str_cast.find('A') != -1, 'could not find A in output')
         self.assertTrue(str_cast.find('B') != -1, 'could not find B in output')
@@ -253,7 +240,7 @@ class PythonSynthDataFormatterTestCase(TestBase):
         str_cast = str(test_cast)
 
         if self.TraceOn():
-             print str_cast
+             print(str_cast)
 
         # we detect that all the values of the child objects have changed - but the counter-generated item
         # is still fixed at 0 because it is cached - this would fail if update(self): in ftsp returned False
@@ -263,10 +250,3 @@ class PythonSynthDataFormatterTestCase(TestBase):
         self.assertTrue(str_cast.find('T') != -1, 'could not find T in output')
         self.assertTrue(str_cast.find('F') != -1, 'could not find F in output')
         self.assertTrue(str_cast.find("4 = '\\0'") != -1, 'could not find item 4 == 0')
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

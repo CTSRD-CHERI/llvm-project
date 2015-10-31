@@ -2,7 +2,10 @@
 Test that template instaniations of std::vector<long> and <short> in the same module have the correct types.
 """
 
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import lldbutil
 from lldbtest import *
@@ -11,19 +14,6 @@ class UniqueTypesTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test for unique types of std::vector<long> and std::vector<short>."""
-        self.buildDsym()
-        self.unique_types()
-
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test for unique types of std::vector<long> and std::vector<short>."""
-        self.buildDwarf()
-        self.unique_types()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -31,8 +21,9 @@ class UniqueTypesTestCase(TestBase):
         self.line = line_number("main.cpp",
           "// Set breakpoint here to verify that std::vector 'longs' and 'shorts' have unique types.")
 
-    def unique_types(self):
+    def test(self):
         """Test for unique types of std::vector<long> and std::vector<short>."""
+        self.build()
 
         compiler = self.getCompiler()
         compiler_basename = os.path.basename(compiler)
@@ -43,7 +34,7 @@ class UniqueTypesTestCase(TestBase):
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=-1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -69,10 +60,3 @@ class UniqueTypesTestCase(TestBase):
                 continue
             self.expect(x, "Expect type 'short'", exe=False,
                 substrs = ['short'])
-        
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

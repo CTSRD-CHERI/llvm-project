@@ -1,7 +1,10 @@
 """Test that we handle inferiors which change their process group"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -17,28 +20,11 @@ class ChangeProcessGroupTestCase(TestBase):
         # Find the line number to break for main.c.
         self.line = line_number('main.c', '// Set breakpoint here')
 
-    @skipIfWindows # setpgid call does not exist on Windows
-    @skipUnlessDarwin
-    @dsym_test
-    def test_setpgid_with_dsym(self):
-        self.buildDsym()
-        self.setpgid()
-
     @skipIfFreeBSD # Times out on FreeBSD llvm.org/pr23731
     @skipIfWindows # setpgid call does not exist on Windows
     @expectedFailureAndroid("http://llvm.org/pr23762", api_levels=[16])
-    @dwarf_test
-    def test_setpgid_with_dwarf(self):
-        self.buildDwarf()
-        self.setpgid()
-
-    def run_platform_command(self, cmd):
-        platform = self.dbg.GetSelectedPlatform()
-        shell_command = lldb.SBPlatformShellCommand(cmd)
-        err = platform.Run(shell_command)
-        return (err, shell_command.GetStatus(), shell_command.GetOutput())
-
-    def setpgid(self):
+    def test_setpgid(self):
+        self.build()
         exe = os.path.join(os.getcwd(), 'a.out')
 
         # Use a file as a synchronization point between test and inferior.
@@ -55,7 +41,7 @@ class ChangeProcessGroupTestCase(TestBase):
             if err.Success() and retcode == 0:
                 break
             else:
-                print msg
+                print(msg)
             if i < max_attempts:
                 # Exponential backoff!
                 time.sleep(pow(2, i) * 0.25)
@@ -89,9 +75,6 @@ class ChangeProcessGroupTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line(self, 'main.c', self.line, num_expected_locations=-1)
 
         thread = process.GetSelectedThread()
-        # this gives a chance for the thread to exit the sleep syscall and sidesteps
-        # <https://llvm.org/bugs/show_bug.cgi?id=23659> on linux
-        thread.StepInstruction(False)
 
         # release the child from its loop
         self.expect("expr release_child_flag = 1", substrs = ["= 1"])
@@ -112,8 +95,8 @@ class ChangeProcessGroupTestCase(TestBase):
         process.Continue()
         self.assertEqual(process.GetState(), lldb.eStateExited)
 
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+    def run_platform_command(self, cmd):
+        platform = self.dbg.GetSelectedPlatform()
+        shell_command = lldb.SBPlatformShellCommand(cmd)
+        err = platform.Run(shell_command)
+        return (err, shell_command.GetStatus(), shell_command.GetOutput())

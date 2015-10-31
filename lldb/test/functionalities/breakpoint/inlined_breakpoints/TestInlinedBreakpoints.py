@@ -3,8 +3,11 @@ Test that inlined breakpoints (breakpoint set on a file/line included from
 another source file) works correctly.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -14,18 +17,9 @@ class InlinedBreakpointsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
+    def test_with_run_command(self):
         """Test 'b basic_types.cpp:176' does break (where int.cpp includes basic_type.cpp)."""
-        self.buildDsym()
-        self.inlined_breakpoints()
-
-    @expectedFailureFreeBSD("llvm.org/pr21142")
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test 'b basic_types.cpp:176' does break (where int.cpp includes basic_type.cpp)."""
-        self.buildDwarf()
+        self.build()
         self.inlined_breakpoints()
 
     def setUp(self):
@@ -53,7 +47,7 @@ class InlinedBreakpointsTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "basic_type.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         # And it should break at basic_type.cpp:176.
@@ -61,10 +55,3 @@ class InlinedBreakpointsTestCase(TestBase):
             substrs = ['stopped',
                        'stop reason = breakpoint',
                        'basic_type.cpp:%d' % self.line])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

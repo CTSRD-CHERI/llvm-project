@@ -47,9 +47,9 @@ protected:
   CXXBaseSpecifier *GetExternalCXXBaseSpecifiers(uint64_t Offset) override;
   bool FindExternalVisibleDeclsByName(const DeclContext *DC,
                                       DeclarationName Name) override;
-  ExternalLoadResult
+  void
   FindExternalLexicalDecls(const DeclContext *DC,
-                           bool (*isKindWeWant)(Decl::Kind),
+                           llvm::function_ref<bool(Decl::Kind)> IsKindWeWant,
                            SmallVectorImpl<Decl *> &Result) override;
   void CompleteType(TagDecl *Tag) override;
   void CompleteType(ObjCInterfaceDecl *Class) override;
@@ -81,7 +81,7 @@ createASTReader(CompilerInstance &CI, StringRef pchFile,
   Preprocessor &PP = CI.getPreprocessor();
   std::unique_ptr<ASTReader> Reader;
   Reader.reset(new ASTReader(PP, CI.getASTContext(),
-                             *CI.getPCHContainerOperations(),
+                             CI.getPCHContainerReader(),
                              /*isysroot=*/"", /*DisableValidation=*/true));
   for (unsigned ti = 0; ti < bufNames.size(); ++ti) {
     StringRef sr(bufNames[ti]);
@@ -169,7 +169,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
 
     if (firstInclude) {
       Preprocessor &PP = Clang->getPreprocessor();
-      PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
+      PP.getBuiltinInfo().initializeBuiltins(PP.getIdentifierTable(),
                                              PP.getLangOpts());
     } else {
       assert(!SerialBufs.empty());
@@ -246,11 +246,10 @@ ChainedIncludesSource::FindExternalVisibleDeclsByName(const DeclContext *DC,
                                                       DeclarationName Name) {
   return getFinalReader().FindExternalVisibleDeclsByName(DC, Name);
 }
-ExternalLoadResult 
-ChainedIncludesSource::FindExternalLexicalDecls(const DeclContext *DC,
-                                      bool (*isKindWeWant)(Decl::Kind),
-                                      SmallVectorImpl<Decl*> &Result) {
-  return getFinalReader().FindExternalLexicalDecls(DC, isKindWeWant, Result);
+void ChainedIncludesSource::FindExternalLexicalDecls(
+    const DeclContext *DC, llvm::function_ref<bool(Decl::Kind)> IsKindWeWant,
+    SmallVectorImpl<Decl *> &Result) {
+  return getFinalReader().FindExternalLexicalDecls(DC, IsKindWeWant, Result);
 }
 void ChainedIncludesSource::CompleteType(TagDecl *Tag) {
   return getFinalReader().CompleteType(Tag);

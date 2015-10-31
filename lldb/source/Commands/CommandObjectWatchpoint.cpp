@@ -104,7 +104,7 @@ CommandObjectMultiwordWatchpoint::VerifyWatchpointIDs(Target *target, Args &args
     std::pair<llvm::StringRef, llvm::StringRef> Pair;
     size_t i;
     int32_t idx;
-    // Go through the argments and make a canonical form of arg list containing
+    // Go through the arguments and make a canonical form of arg list containing
     // only numbers with possible "-" in between.
     for (i = 0; i < args.GetArgumentCount(); ++i) {
         llvm::StringRef Arg(args.GetArgumentAtIndex(i));
@@ -178,11 +178,10 @@ public:
         m_arguments.push_back(arg);
     }
 
-    virtual
-    ~CommandObjectWatchpointList () {}
+    ~CommandObjectWatchpointList () override {}
 
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -197,11 +196,10 @@ public:
         {
         }
 
-        virtual
-        ~CommandOptions () {}
+        ~CommandOptions () override {}
 
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -226,13 +224,13 @@ public:
         }
 
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_level = lldb::eDescriptionLevelFull;
         }
 
         const OptionDefinition *
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -248,8 +246,8 @@ public:
     };
 
 protected:
-    virtual bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    bool
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
         if (target == NULL)
@@ -361,13 +359,12 @@ public:
         m_arguments.push_back(arg);
     }
 
-    virtual
-    ~CommandObjectWatchpointEnable () {}
+    ~CommandObjectWatchpointEnable () override {}
 
 protected:
-    virtual bool
+    bool
     DoExecute (Args& command,
-             CommandReturnObject &result)
+             CommandReturnObject &result) override
     {
         Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
         if (!CheckTargetForWatchpointOperations(target, result))
@@ -441,12 +438,11 @@ public:
     }
 
 
-    virtual
-    ~CommandObjectWatchpointDisable () {}
+    ~CommandObjectWatchpointDisable () override {}
 
 protected:
-    virtual bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    bool
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
         if (!CheckTargetForWatchpointOperations(target, result))
@@ -524,12 +520,11 @@ public:
         m_arguments.push_back(arg);
     }
 
-    virtual
-    ~CommandObjectWatchpointDelete () {}
+    ~CommandObjectWatchpointDelete () override {}
 
 protected:
-    virtual bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    bool
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
         if (!CheckTargetForWatchpointOperations(target, result))
@@ -607,11 +602,10 @@ public:
         m_arguments.push_back(arg);
     }
 
-    virtual
-    ~CommandObjectWatchpointIgnore () {}
+    ~CommandObjectWatchpointIgnore () override {}
 
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -626,11 +620,10 @@ public:
         {
         }
 
-        virtual
-        ~CommandOptions () {}
+        ~CommandOptions () override {}
 
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -653,13 +646,13 @@ public:
         }
 
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_ignore_count = 0;
         }
 
         const OptionDefinition *
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -675,9 +668,9 @@ public:
     };
 
 protected:
-    virtual bool
+    bool
     DoExecute (Args& command,
-             CommandReturnObject &result)
+             CommandReturnObject &result) override
     {
         Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
         if (!CheckTargetForWatchpointOperations(target, result))
@@ -763,11 +756,10 @@ public:
         m_arguments.push_back (arg);   
     }
 
-    virtual
-    ~CommandObjectWatchpointModify () {}
+    ~CommandObjectWatchpointModify () override {}
 
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -783,11 +775,10 @@ public:
         {
         }
 
-        virtual
-        ~CommandOptions () {}
+        ~CommandOptions () override {}
 
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -810,14 +801,14 @@ public:
         }
 
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_condition.clear();
             m_condition_passed = false;
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -833,8 +824,8 @@ public:
     };
 
 protected:
-    virtual bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    bool
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
         if (!CheckTargetForWatchpointOperations(target, result))
@@ -931,10 +922,14 @@ public:
         m_option_watchpoint ()
     {
         SetHelpLong(
-    "Examples: \n\
-    \n\
-        watchpoint set variable -w read_write my_global_var \n\
-        # Watch my_global_var for read/write access, with the region to watch corresponding to the byte size of the data type.\n");
+R"(
+Examples:
+
+(lldb) watchpoint set variable -w read_write my_global_var
+
+)" "    Watches my_global_var for read/write access, with the region to watch \
+corresponding to the byte size of the data type."
+        );
 
         CommandArgumentEntry arg;
         CommandArgumentData var_name_arg;
@@ -954,11 +949,10 @@ public:
         m_option_group.Finalize();
     }
 
-    virtual
-    ~CommandObjectWatchpointSetVariable () {}
+    ~CommandObjectWatchpointSetVariable () override {}
 
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_option_group;
     }
@@ -979,8 +973,8 @@ protected:
         return 0;
     }
     
-    virtual bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    bool
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
         StackFrame *frame = m_exe_ctx.GetFramePtr();
@@ -1044,7 +1038,7 @@ protected:
                 valobj_sp = valobj_list.GetValueObjectAtIndex(0);
         }
         
-        ClangASTType clang_type;
+        CompilerType compiler_type;
         
         if (valobj_sp)
         {
@@ -1057,7 +1051,7 @@ protected:
                 size = m_option_watchpoint.watch_size == 0 ? valobj_sp->GetByteSize()
                                                            : m_option_watchpoint.watch_size;
             }
-            clang_type = valobj_sp->GetClangType();
+            compiler_type = valobj_sp->GetCompilerType();
         }
         else
         {
@@ -1074,7 +1068,7 @@ protected:
         uint32_t watch_type = m_option_watchpoint.watch_type;
         
         error.Clear();
-        Watchpoint *wp = target->CreateWatchpoint(addr, size, &clang_type, watch_type, error).get();
+        Watchpoint *wp = target->CreateWatchpoint(addr, size, &compiler_type, watch_type, error).get();
         if (wp)
         {
             wp->SetWatchSpec(command.GetArgumentAtIndex(0));
@@ -1138,10 +1132,13 @@ public:
         m_option_watchpoint ()
     {
         SetHelpLong(
-    "Examples: \n\
-    \n\
-        watchpoint set expression -w write -x 1 -- foo + 32\n\
-        # Watch write access for the 1-byte region pointed to by the address 'foo + 32'.\n");
+R"(
+Examples:
+
+(lldb) watchpoint set expression -w write -x 1 -- foo + 32
+
+    Watches write access for the 1-byte region pointed to by the address 'foo + 32')"
+        );
 
         CommandArgumentEntry arg;
         CommandArgumentData expression_arg;
@@ -1162,22 +1159,21 @@ public:
     }
 
 
-    virtual
-    ~CommandObjectWatchpointSetExpression () {}
+    ~CommandObjectWatchpointSetExpression () override {}
 
     // Overrides base class's behavior where WantsCompletion = !WantsRawCommandString.
-    virtual bool
-    WantsCompletion() { return true; }
+    bool
+    WantsCompletion() override { return true; }
 
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_option_group;
     }
 
 protected:
-    virtual bool
-    DoExecute (const char *raw_command, CommandReturnObject &result)
+    bool
+    DoExecute (const char *raw_command, CommandReturnObject &result) override
     {
         m_option_group.NotifyOptionParsingStarting(); // This is a raw command, so notify the option group
         
@@ -1288,10 +1284,10 @@ protected:
         
         // Fetch the type from the value object, the type of the watched object is the pointee type
         /// of the expression, so convert to that if we  found a valid type.
-        ClangASTType clang_type(valobj_sp->GetClangType());
+        CompilerType compiler_type(valobj_sp->GetCompilerType());
         
         Error error;
-        Watchpoint *wp = target->CreateWatchpoint(addr, size, &clang_type, watch_type, error).get();
+        Watchpoint *wp = target->CreateWatchpoint(addr, size, &compiler_type, watch_type, error).get();
         if (wp)
         {
             Stream &output_stream = result.GetOutputStream();
@@ -1338,8 +1334,7 @@ public:
     }
 
 
-    virtual
-    ~CommandObjectWatchpointSet () {}
+    ~CommandObjectWatchpointSet () override {}
 
 };
 

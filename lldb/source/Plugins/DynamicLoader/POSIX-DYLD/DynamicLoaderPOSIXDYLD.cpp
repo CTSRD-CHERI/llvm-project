@@ -62,11 +62,6 @@ DynamicLoaderPOSIXDYLD::GetPluginDescriptionStatic()
            "loads/unloads in POSIX processes.";
 }
 
-void
-DynamicLoaderPOSIXDYLD::GetPluginCommandHelp(const char *command, Stream *strm)
-{
-}
-
 uint32_t
 DynamicLoaderPOSIXDYLD::GetPluginVersion()
 {
@@ -165,7 +160,7 @@ DynamicLoaderPOSIXDYLD::DidAttach()
                          m_process ? m_process->GetID () : LLDB_INVALID_PROCESS_ID,
                          executable_sp->GetFileSpec().GetPath().c_str ());
 
-        UpdateLoadedSections(executable_sp, LLDB_INVALID_ADDRESS, load_offset);
+        UpdateLoadedSections(executable_sp, LLDB_INVALID_ADDRESS, load_offset, true);
 
         // When attaching to a target, there are two possible states:
         // (1) We already crossed the entry point and therefore the rendezvous
@@ -223,7 +218,7 @@ DynamicLoaderPOSIXDYLD::DidLaunch()
     {
         ModuleList module_list;
         module_list.Append(executable);
-        UpdateLoadedSections(executable, LLDB_INVALID_ADDRESS, load_offset);
+        UpdateLoadedSections(executable, LLDB_INVALID_ADDRESS, load_offset, true);
 
         if (log)
             log->Printf ("DynamicLoaderPOSIXDYLD::%s about to call ProbeEntry()", __FUNCTION__);
@@ -234,29 +229,19 @@ DynamicLoaderPOSIXDYLD::DidLaunch()
 }
 
 Error
-DynamicLoaderPOSIXDYLD::ExecutePluginCommand(Args &command, Stream *strm)
-{
-    return Error();
-}
-
-Log *
-DynamicLoaderPOSIXDYLD::EnablePluginLogging(Stream *strm, Args &command)
-{
-    return NULL;
-}
-
-Error
 DynamicLoaderPOSIXDYLD::CanLoadImage()
 {
     return Error();
 }
 
 void
-DynamicLoaderPOSIXDYLD::UpdateLoadedSections(ModuleSP module, addr_t link_map_addr, addr_t base_addr)
+DynamicLoaderPOSIXDYLD::UpdateLoadedSections(ModuleSP module,
+                                             addr_t link_map_addr,
+                                             addr_t base_addr,
+                                             bool base_addr_is_offset)
 {
     m_loaded_modules[module] = link_map_addr;
-
-    UpdateLoadedSectionsCommon(module, base_addr);
+    UpdateLoadedSectionsCommon(module, base_addr, base_addr_is_offset);
 }
 
 void
@@ -414,7 +399,7 @@ DynamicLoaderPOSIXDYLD::RefreshModules()
         E = m_rendezvous.loaded_end();
         for (I = m_rendezvous.loaded_begin(); I != E; ++I)
         {
-            ModuleSP module_sp = LoadModuleAtAddress(I->file_spec, I->link_addr, I->base_addr);
+            ModuleSP module_sp = LoadModuleAtAddress(I->file_spec, I->link_addr, I->base_addr, true);
             if (module_sp.get())
             {
                 loaded_modules.AppendIfNeeded(module_sp);
@@ -432,8 +417,7 @@ DynamicLoaderPOSIXDYLD::RefreshModules()
         for (I = m_rendezvous.unloaded_begin(); I != E; ++I)
         {
             ModuleSpec module_spec{I->file_spec};
-            ModuleSP module_sp =
-                loaded_modules.FindFirstModule (module_spec);
+            ModuleSP module_sp = loaded_modules.FindFirstModule (module_spec);
 
             if (module_sp.get())
             {
@@ -458,7 +442,7 @@ DynamicLoaderPOSIXDYLD::GetStepThroughTrampolinePlan(Thread &thread, bool stop)
     if (sym == NULL || !sym->IsTrampoline())
         return thread_plan_sp;
 
-    const ConstString &sym_name = sym->GetMangled().GetName(Mangled::ePreferMangled);
+    ConstString sym_name = sym->GetName();
     if (!sym_name)
         return thread_plan_sp;
 
@@ -520,10 +504,9 @@ DynamicLoaderPOSIXDYLD::LoadAllCurrentModules()
     ModuleSP executable = GetTargetExecutable();
     m_loaded_modules[executable] = m_rendezvous.GetLinkMapAddress();
 
-
     for (I = m_rendezvous.begin(), E = m_rendezvous.end(); I != E; ++I)
     {
-        ModuleSP module_sp = LoadModuleAtAddress(I->file_spec, I->link_addr, I->base_addr);
+        ModuleSP module_sp = LoadModuleAtAddress(I->file_spec, I->link_addr, I->base_addr, true);
         if (module_sp.get())
         {
             module_list.Append(module_sp);
@@ -667,7 +650,9 @@ DynamicLoaderPOSIXDYLD::ResolveExecutableModule (lldb::ModuleSP &module_sp)
     if (module_sp && module_sp->MatchesModuleSpec (module_spec))
         return;
 
-    auto error = platform_sp->ResolveExecutable (module_spec, module_sp, nullptr);
+    const auto executable_search_paths (Target::GetDefaultExecutableSearchPaths());
+    auto error = platform_sp->ResolveExecutable (
+        module_spec, module_sp, !executable_search_paths.IsEmpty() ? &executable_search_paths : nullptr);
     if (error.Fail ())
     {
         StreamString stream;

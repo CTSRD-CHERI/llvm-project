@@ -11,6 +11,8 @@
 
 // C Includes
 // C++ Includes
+#include <mutex>
+
 // Other libraries and framework includes
 #include "clang/Basic/VersionTuple.h"
 // Project includes
@@ -649,17 +651,17 @@ PlatformDarwin::GetSoftwareBreakpointTrapOpcode (Target &target, BreakpointSite 
 bool
 PlatformDarwin::GetProcessInfo (lldb::pid_t pid, ProcessInstanceInfo &process_info)
 {
-    bool sucess = false;
+    bool success = false;
     if (IsHost())
     {
-        sucess = Platform::GetProcessInfo (pid, process_info);
+        success = Platform::GetProcessInfo (pid, process_info);
     }
     else
     {
         if (m_remote_platform_sp)
-            sucess = m_remote_platform_sp->GetProcessInfo (pid, process_info);
+            success = m_remote_platform_sp->GetProcessInfo (pid, process_info);
     }
-    return sucess;
+    return success;
 }
 
 uint32_t
@@ -1144,6 +1146,7 @@ PlatformDarwin::SetThreadCreationBreakpoint (Target &target)
                                      g_bp_names,
                                      llvm::array_lengthof(g_bp_names),
                                      eFunctionNameTypeFull,
+                                     eLanguageTypeUnknown,
                                      skip_prologue,
                                      internal,
                                      hardware);
@@ -1208,58 +1211,80 @@ static const char *const sdk_strings[] = {
 };
 
 static FileSpec
+CheckPathForXcode(const FileSpec &fspec)
+{
+    if (fspec.Exists())
+    {
+        const char substr[] = ".app/Contents/";
+
+        std::string path_to_shlib = fspec.GetPath();
+        size_t pos = path_to_shlib.rfind(substr);
+        if (pos != std::string::npos)
+        {
+            path_to_shlib.erase(pos + strlen(substr));
+            return FileSpec(path_to_shlib.c_str(), false);
+        }
+    }
+    return FileSpec();
+}
+
+static FileSpec
 GetXcodeContentsPath ()
 {
-    const char substr[] = ".app/Contents/";
-    
-    // First, try based on the current shlib's location
-    
-    {
+    static FileSpec g_xcode_filespec;
+    static std::once_flag g_once_flag;
+    std::call_once(g_once_flag, []() {
+
+
         FileSpec fspec;
-        
-        if (HostInfo::GetLLDBPath (lldb::ePathTypeLLDBShlibDir, fspec))
+
+        // First get the program file spec. If lldb.so or LLDB.framework is running
+        // in a program and that program is Xcode, the path returned with be the path
+        // to Xcode.app/Contents/MacOS/Xcode, so this will be the correct Xcode to use.
+        fspec = HostInfo::GetProgramFileSpec();
+
+        if (fspec)
         {
-            std::string path_to_shlib = fspec.GetPath();
-            size_t pos = path_to_shlib.rfind(substr);
-            if (pos != std::string::npos)
+            g_xcode_filespec = CheckPathForXcode(fspec);
+        }
+
+        // Next check DEVELOPER_DIR environment variable
+        if (!g_xcode_filespec)
+        {
+            const char *developer_dir_env_var = getenv("DEVELOPER_DIR");
+            if (developer_dir_env_var && developer_dir_env_var[0])
             {
-                path_to_shlib.erase(pos + strlen(substr));
-                return FileSpec(path_to_shlib.c_str(), false);
+                g_xcode_filespec = CheckPathForXcode(FileSpec(developer_dir_env_var, true));
+            }
+
+            // Fall back to using "xcrun" to find the selected Xcode
+            if (!g_xcode_filespec)
+            {
+                int status = 0;
+                int signo = 0;
+                std::string output;
+                const char *command = "xcrun -sdk macosx --show-sdk-path";
+                lldb_private::Error error = Host::RunShellCommand (command,   // shell command to run
+                                                                   NULL,      // current working directory
+                                                                   &status,   // Put the exit status of the process in here
+                                                                   &signo,    // Put the signal that caused the process to exit in here
+                                                                   &output,   // Get the output from the command and place it in this string
+                                                                   3);        // Timeout in seconds to wait for shell program to finish
+                if (status == 0 && !output.empty())
+                {
+                    size_t first_non_newline = output.find_last_not_of("\r\n");
+                    if (first_non_newline != std::string::npos)
+                    {
+                        output.erase(first_non_newline+1);
+                    }
+
+                    g_xcode_filespec = CheckPathForXcode(FileSpec(output.c_str(), false));
+                }
             }
         }
-    }
+    });
     
-    // Fall back to using xcrun
-    
-    {
-        int status = 0;
-        int signo = 0;
-        std::string output;
-        const char *command = "xcrun -sdk macosx --show-sdk-path";
-        lldb_private::Error error = Host::RunShellCommand (command,   // shell command to run
-                                                           NULL,      // current working directory
-                                                           &status,   // Put the exit status of the process in here
-                                                           &signo,    // Put the signal that caused the process to exit in here
-                                                           &output,   // Get the output from the command and place it in this string
-                                                           3);        // Timeout in seconds to wait for shell program to finish
-        if (status == 0 && !output.empty())
-        {
-            size_t first_non_newline = output.find_last_not_of("\r\n");
-            if (first_non_newline != std::string::npos)
-            {
-                output.erase(first_non_newline+1);
-            }
-            
-            size_t pos = output.rfind(substr);
-            if (pos != std::string::npos)
-            {
-                output.erase(pos + strlen(substr));
-                return FileSpec(output.c_str(), false);
-            }
-        }
-    }
-    
-    return FileSpec();
+    return g_xcode_filespec;
 }
 
 bool
@@ -1529,4 +1554,59 @@ PlatformDarwin::AddClangModuleCompilationOptionsForSDKType (Target *target, std:
         options.push_back("-isysroot");
         options.push_back(sysroot_spec.GetPath());
     }
+}
+
+ConstString
+PlatformDarwin::GetFullNameForDylib (ConstString basename)
+{
+    if (basename.IsEmpty())
+        return basename;
+    
+    StreamString stream;
+    stream.Printf("lib%s.dylib", basename.GetCString());
+    return ConstString(stream.GetData());
+}
+
+
+lldb_private::FileSpec
+PlatformDarwin::LocateExecutable (const char *basename)
+{
+    // A collection of SBFileSpec whose SBFileSpec.m_directory members are filled in with
+    // any executable directories that should be searched.
+    static std::vector<FileSpec> g_executable_dirs;
+
+    // Find the global list of directories that we will search for
+    // executables once so we don't keep doing the work over and over.
+    static std::once_flag g_once_flag;
+    std::call_once(g_once_flag,  []() {
+
+        // When locating executables, trust the DEVELOPER_DIR first if it is set
+        FileSpec xcode_contents_dir = GetXcodeContentsPath();
+        if (xcode_contents_dir)
+        {
+            FileSpec xcode_lldb_resources = xcode_contents_dir;
+            xcode_lldb_resources.AppendPathComponent("SharedFrameworks");
+            xcode_lldb_resources.AppendPathComponent("LLDB.framework");
+            xcode_lldb_resources.AppendPathComponent("Resources");
+            if (xcode_lldb_resources.Exists())
+            {
+                FileSpec dir;
+                dir.GetDirectory().SetCString(xcode_lldb_resources.GetPath().c_str());
+                g_executable_dirs.push_back(dir);
+            }
+        }
+    });
+
+    // Now search the global list of executable directories for the executable we
+    // are looking for
+    for (const auto &executable_dir : g_executable_dirs)
+    {
+        FileSpec executable_file;
+        executable_file.GetDirectory() = executable_dir.GetDirectory();
+        executable_file.GetFilename().SetCString(basename);
+        if (executable_file.Exists())
+            return executable_file;
+    }
+
+    return FileSpec();
 }

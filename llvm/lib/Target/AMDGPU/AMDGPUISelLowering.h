@@ -65,6 +65,7 @@ private:
   SDValue LowerSIGN_EXTEND_INREG(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue performStoreCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performShlCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performMulCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
 protected:
@@ -123,7 +124,7 @@ public:
 
   bool isNarrowingProfitable(EVT VT1, EVT VT2) const override;
 
-  MVT getVectorIdxTy() const override;
+  MVT getVectorIdxTy(const DataLayout &) const override;
   bool isSelectSupported(SelectSupportKind) const override;
 
   bool isFPImmLegal(const APFloat &Imm, EVT VT) const override;
@@ -137,6 +138,7 @@ public:
   bool storeOfVectorConstantIsCheap(EVT MemVT,
                                     unsigned NumElem,
                                     unsigned AS) const override;
+  bool aggressivelyPreferBuildVectorSources(EVT VecVT) const override;
   bool isCheapToSpeculateCttz() const override;
   bool isCheapToSpeculateCtlz() const override;
 
@@ -147,6 +149,9 @@ public:
                       SDLoc DL, SelectionDAG &DAG) const override;
   SDValue LowerCall(CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
+
+  SDValue LowerDYNAMIC_STACKALLOC(SDValue Op,
+                                  SelectionDAG &DAG) const;
 
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
@@ -164,14 +169,6 @@ public:
                                SDValue False,
                                SDValue CC,
                                DAGCombinerInfo &DCI) const;
-  SDValue CombineIMinMax(SDLoc DL,
-                         EVT VT,
-                         SDValue LHS,
-                         SDValue RHS,
-                         SDValue True,
-                         SDValue False,
-                         SDValue CC,
-                         SelectionDAG &DAG) const;
 
   const char* getTargetNodeName(unsigned Opcode) const override;
 
@@ -207,6 +204,16 @@ public:
   virtual SDValue CreateLiveInRegister(SelectionDAG &DAG,
                                        const TargetRegisterClass *RC,
                                        unsigned Reg, EVT VT) const;
+
+  enum ImplicitParameter {
+    GRID_DIM,
+    GRID_OFFSET
+  };
+
+  /// \brief Helper function that returns the byte offset of the given
+  /// type of implicit parameter.
+  uint32_t getImplicitParameterOffset(const AMDGPUMachineFunction *MFI,
+                                      const ImplicitParameter Param) const;
 };
 
 namespace AMDGPUISD {

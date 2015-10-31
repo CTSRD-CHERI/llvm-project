@@ -21,8 +21,8 @@
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Scalar.h"
 #include "lldb/Core/StreamString.h"
-#include "lldb/Expression/ClangFunction.h"
-#include "lldb/Expression/ClangUtilityFunction.h"
+#include "lldb/Expression/FunctionCaller.h"
+#include "lldb/Expression/UtilityFunction.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Target/ExecutionContext.h"
@@ -47,11 +47,13 @@ AppleObjCRuntimeV1::AppleObjCRuntimeV1(Process *process) :
 // required for the data formatters to work
 bool
 AppleObjCRuntimeV1::GetDynamicTypeAndAddress (ValueObject &in_value,
-                                             lldb::DynamicValueType use_dynamic, 
-                                             TypeAndOrName &class_type_or_name, 
-                                             Address &address)
+                                              lldb::DynamicValueType use_dynamic,
+                                              TypeAndOrName &class_type_or_name,
+                                              Address &address,
+                                              Value::ValueType &value_type)
 {
     class_type_or_name.Clear();
+    value_type = Value::ValueType::eValueTypeScalar;
     if (CouldHaveDynamicValue(in_value))
     {
         auto class_descriptor(GetClassDescriptor(in_value));
@@ -77,7 +79,7 @@ AppleObjCRuntimeV1::CreateInstance (Process *process, lldb::LanguageType languag
     {
         ModuleSP objc_module_sp;
         
-        if (AppleObjCRuntime::GetObjCVersion (process, objc_module_sp) == eAppleObjC_V1)
+        if (AppleObjCRuntime::GetObjCVersion (process, objc_module_sp) == ObjCRuntimeVersions::eAppleObjC_V1)
             return new AppleObjCRuntimeV1 (process);
         else
             return NULL;
@@ -132,6 +134,7 @@ AppleObjCRuntimeV1::CreateExceptionResolver (Breakpoint *bkpt, bool catch_bp, bo
         resolver_sp.reset (new BreakpointResolverName (bkpt,
                                                        "objc_exception_throw",
                                                        eFunctionNameTypeBase,
+                                                       eLanguageTypeUnknown,
                                                        Breakpoint::Exact,
                                                        eLazyBoolNo));
     // FIXME: don't do catch yet.
@@ -142,7 +145,7 @@ struct BufStruct {
     char contents[2048];
 };
 
-ClangUtilityFunction *
+UtilityFunction *
 AppleObjCRuntimeV1::CreateObjectChecker(const char *name)
 {
     std::unique_ptr<BufStruct> buf(new BufStruct);
@@ -169,7 +172,8 @@ AppleObjCRuntimeV1::CreateObjectChecker(const char *name)
                     "}                                                                      \n",
                     name) < (int)sizeof(buf->contents));
 
-    return new ClangUtilityFunction(buf->contents, name);
+    Error error;
+    return GetTargetRef().GetUtilityFunctionForLanguage(buf->contents, eLanguageTypeObjC, name, error);
 }
 
 AppleObjCRuntimeV1::ClassDescriptorV1::ClassDescriptorV1 (ValueObject &isa_pointer)

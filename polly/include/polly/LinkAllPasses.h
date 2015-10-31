@@ -33,7 +33,6 @@ llvm::Pass *createDOTOnlyPrinterPass();
 llvm::Pass *createDOTOnlyViewerPass();
 llvm::Pass *createDOTPrinterPass();
 llvm::Pass *createDOTViewerPass();
-llvm::Pass *createIndependentBlocksPass();
 llvm::Pass *createJSONExporterPass();
 llvm::Pass *createJSONImporterPass();
 llvm::Pass *createPollyCanonicalizePass();
@@ -42,9 +41,7 @@ llvm::Pass *createScopInfoPass();
 llvm::Pass *createIslAstInfoPass();
 llvm::Pass *createCodeGenerationPass();
 llvm::Pass *createIslScheduleOptimizerPass();
-llvm::Pass *createTempScopInfoPass();
 
-extern char &IndependentBlocksID;
 extern char &CodePreparationID;
 }
 
@@ -65,7 +62,6 @@ struct PollyForcePassLinking {
     polly::createDOTOnlyViewerPass();
     polly::createDOTPrinterPass();
     polly::createDOTViewerPass();
-    polly::createIndependentBlocksPass();
     polly::createJSONExporterPass();
     polly::createJSONImporterPass();
     polly::createScopDetectionPass();
@@ -74,7 +70,6 @@ struct PollyForcePassLinking {
     polly::createIslAstInfoPass();
     polly::createCodeGenerationPass();
     polly::createIslScheduleOptimizerPass();
-    polly::createTempScopInfoPass();
   }
 } PollyForcePassLinking; // Force link by creating a global definition.
 }
@@ -83,7 +78,6 @@ namespace llvm {
 class PassRegistry;
 void initializeCodePreparationPass(llvm::PassRegistry &);
 void initializeDeadCodeElimPass(llvm::PassRegistry &);
-void initializeIndependentBlocksPass(llvm::PassRegistry &);
 void initializeJSONExporterPass(llvm::PassRegistry &);
 void initializeJSONImporterPass(llvm::PassRegistry &);
 void initializeIslAstInfoPass(llvm::PassRegistry &);

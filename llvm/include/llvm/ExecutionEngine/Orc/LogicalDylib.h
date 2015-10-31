@@ -28,6 +28,12 @@ private:
   typedef std::vector<BaseLayerModuleSetHandleT> BaseLayerHandleList;
 
   struct LogicalModule {
+    // Make this move-only to ensure they don't get duplicated across moves of
+    // LogicalDylib or anything like that.
+    LogicalModule(LogicalModule &&RHS)
+        : Resources(std::move(RHS.Resources)),
+          BaseLayerHandles(std::move(RHS.BaseLayerHandles)) {}
+    LogicalModule() = default;
     LogicalModuleResources Resources;
     BaseLayerHandleList BaseLayerHandles;
   };
@@ -45,6 +51,13 @@ public:
       for (auto BLH : LM.BaseLayerHandles)
         BaseLayer.removeModuleSet(BLH);
   }
+
+  // If possible, remove this and ~LogicalDylib once the work in the dtor is
+  // moved to members (eg: self-unregistering base layer handles).
+  LogicalDylib(LogicalDylib &&RHS)
+      : BaseLayer(std::move(RHS.BaseLayer)),
+        LogicalModules(std::move(RHS.LogicalModules)),
+        DylibResources(std::move(RHS.DylibResources)) {}
 
   LogicalModuleHandle createLogicalModule() {
     LogicalModules.push_back(LogicalModule());
@@ -69,22 +82,27 @@ public:
   }
 
   JITSymbol findSymbolInLogicalModule(LogicalModuleHandle LMH,
-                                      const std::string &Name) {
+                                      const std::string &Name,
+                                      bool ExportedSymbolsOnly) {
+
+    if (auto StubSym = LMH->Resources.findSymbol(Name, ExportedSymbolsOnly))
+      return StubSym;
+
     for (auto BLH : LMH->BaseLayerHandles)
-      if (auto Symbol = BaseLayer.findSymbolIn(BLH, Name, false))
+      if (auto Symbol = BaseLayer.findSymbolIn(BLH, Name, ExportedSymbolsOnly))
         return Symbol;
     return nullptr;
   }
 
   JITSymbol findSymbolInternally(LogicalModuleHandle LMH,
                                  const std::string &Name) {
-    if (auto Symbol = findSymbolInLogicalModule(LMH, Name))
+    if (auto Symbol = findSymbolInLogicalModule(LMH, Name, false))
       return Symbol;
 
     for (auto LMI = LogicalModules.begin(), LME = LogicalModules.end();
            LMI != LME; ++LMI) {
       if (LMI != LMH)
-        if (auto Symbol = findSymbolInLogicalModule(LMI, Name))
+        if (auto Symbol = findSymbolInLogicalModule(LMI, Name, false))
           return Symbol;
     }
 
@@ -92,11 +110,10 @@ public:
   }
 
   JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly) {
-    for (auto &LM : LogicalModules)
-      for (auto BLH : LM.BaseLayerHandles)
-        if (auto Symbol =
-            BaseLayer.findSymbolIn(BLH, Name, ExportedSymbolsOnly))
-          return Symbol;
+    for (auto LMI = LogicalModules.begin(), LME = LogicalModules.end();
+         LMI != LME; ++LMI)
+      if (auto Sym = findSymbolInLogicalModule(LMI, Name, ExportedSymbolsOnly))
+        return Sym;
     return nullptr;
   }
 
@@ -106,7 +123,6 @@ protected:
   BaseLayerT BaseLayer;
   LogicalModuleList LogicalModules;
   LogicalDylibResources DylibResources;
-
 };
 
 } // End namespace orc.

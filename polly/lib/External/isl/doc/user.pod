@@ -196,7 +196,7 @@ an C<isl_val> instead of an C<isl_qpolynomial>.
 
 =item * The function C<isl_band_member_is_zero_distance>
 has been removed.  Essentially the same functionality is available
-through C<isl_band_member_is_coincident>, except that is requires
+through C<isl_band_member_is_coincident>, except that it requires
 setting up coincidence constraints.
 The option C<schedule_outer_zero_distance> has accordingly been
 replaced by the option C<schedule_outer_coincidence>.
@@ -211,9 +211,6 @@ a regular basic set, rather than a rational basic set.
 =head3 Changes since isl-0.14
 
 =over
-
-=item * Objects of type C<isl_union_pw_multi_aff> can no longer contain
-two or more C<isl_pw_multi_aff> objects with the same domain space.
 
 =item * The function C<isl_union_pw_multi_aff_add> now consistently
 computes the sum on the shared definition domain.
@@ -3128,6 +3125,14 @@ is that of the shared parameter space.
 The union expression types defined by C<isl>
 are C<isl_union_pw_aff>, C<isl_union_pw_multi_aff>,
 C<isl_union_pw_qpolynomial> and C<isl_union_pw_qpolynomial_fold>.
+In case of
+C<isl_union_pw_aff>,
+C<isl_union_pw_qpolynomial> and C<isl_union_pw_qpolynomial_fold>,
+there can be at most one base expression for a given domain space.
+In case of
+C<isl_union_pw_multi_aff>,
+there can be multiple such expressions for a given domain space,
+but the domains of these expressions need to be disjoint.
 
 An empty union expression can be created using the following functions.
 
@@ -4631,6 +4636,9 @@ basic set or relation.
 	__isl_give isl_union_pw_multi_aff *
 	isl_union_pw_multi_aff_coalesce(
 		__isl_take isl_union_pw_multi_aff *upma);
+	__isl_give isl_multi_union_pw_aff *
+	isl_multi_union_pw_aff_coalesce(
+		__isl_take isl_multi_union_pw_aff *aff);
 
 	#include <isl/polynomial.h>
 	__isl_give isl_pw_qpolynomial_fold *
@@ -7573,6 +7581,15 @@ redundant.
 	__isl_give isl_schedule *isl_schedule_intersect_domain(
 		__isl_take isl_schedule *schedule,
 		__isl_take isl_union_set *domain);
+
+The following function can be used to simplify the domain
+of a schedule with a domain node as root with respect to the given
+parameter domain.
+
+	#include <isl/schedule.h>
+	__isl_give isl_schedule *isl_schedule_gist_domain_params(
+		__isl_take isl_schedule *schedule,
+		__isl_take isl_set *context);
 
 The following function resets the user pointers on all parameter
 and tuple identifiers referenced by the nodes of the given schedule.

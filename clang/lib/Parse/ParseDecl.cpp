@@ -1,4 +1,4 @@
-//===--- ParseDecl.cpp - Declaration Parsing ------------------------------===//
+//===--- ParseDecl.cpp - Declaration Parsing --------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -27,6 +27,7 @@
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringSwitch.h"
+
 using namespace clang;
 
 //===----------------------------------------------------------------------===//
@@ -66,7 +67,6 @@ TypeResult Parser::ParseTypeName(SourceRange *Range,
 
   return Actions.ActOnTypeName(getCurScope(), DeclaratorInfo);
 }
-
 
 /// isAttributeLateParsed - Return true if the attribute has arguments that
 /// require late parsing.
@@ -365,7 +365,8 @@ void Parser::ParseGNUAttributeArgs(IdentifierInfo *AttrName,
   // These may refer to the function arguments, but need to be parsed early to
   // participate in determining whether it's a redeclaration.
   std::unique_ptr<ParseScope> PrototypeScope;
-  if (AttrName->isStr("enable_if") && D && D->isFunctionDeclarator()) {
+  if (normalizeAttrName(AttrName->getName()) == "enable_if" &&
+      D && D->isFunctionDeclarator()) {
     DeclaratorChunk::FunctionTypeInfo FTI = D->getFunctionTypeInfo();
     PrototypeScope.reset(new ParseScope(this, Scope::FunctionPrototypeScope |
                                         Scope::FunctionDeclarationScope |
@@ -386,7 +387,7 @@ bool Parser::ParseMicrosoftDeclSpecArgs(IdentifierInfo *AttrName,
   // If the attribute isn't known, we will not attempt to parse any
   // arguments.
   if (!hasAttribute(AttrSyntax::Declspec, nullptr, AttrName,
-                    getTargetInfo().getTriple(), getLangOpts())) {
+                    getTargetInfo(), getLangOpts())) {
     // Eat the left paren, then skip to the ending right paren.
     ConsumeParen();
     SkipUntil(tok::r_paren);
@@ -531,9 +532,7 @@ bool Parser::ParseMicrosoftDeclSpecArgs(IdentifierInfo *AttrName,
 ///             extended-decl-modifier extended-decl-modifier-seq
 void Parser::ParseMicrosoftDeclSpecs(ParsedAttributes &Attrs,
                                      SourceLocation *End) {
-  assert((getLangOpts().MicrosoftExt || getLangOpts().Borland ||
-          getLangOpts().CUDA) &&
-         "Incorrect language options for parsing __declspec");
+  assert(getLangOpts().DeclSpecKeyword && "__declspec keyword is not enabled");
   assert(Tok.is(tok::kw___declspec) && "Not a declspec!");
 
   while (Tok.is(tok::kw___declspec)) {
@@ -1154,7 +1153,6 @@ void Parser::ParseLexedAttributes(ParsingClass &Class) {
                                                  Class.TagOrTemplate);
 }
 
-
 /// \brief Parse all attributes in LAs, and attach them to Decl D.
 void Parser::ParseLexedAttributeList(LateParsedAttrList &LAs, Decl *D,
                                      bool EnterScope, bool OnDefinition) {
@@ -1168,7 +1166,6 @@ void Parser::ParseLexedAttributeList(LateParsedAttrList &LAs, Decl *D,
   }
   LAs.clear();
 }
-
 
 /// \brief Finish parsing an attribute for which parsing was delayed.
 /// This will be called at the end of parsing a class declaration
@@ -2144,8 +2141,7 @@ void Parser::ParseSpecifierQualifierList(DeclSpec &DS, AccessSpecifier AS,
   if (isTypeSpecifier(DSC) && !DS.hasTypeSpecifier()) {
     Diag(Tok, diag::err_expected_type);
     DS.SetTypeSpecError();
-  } else if (Specs == DeclSpec::PQ_None && !DS.getNumProtocolQualifiers() &&
-             !DS.hasAttributes()) {
+  } else if (Specs == DeclSpec::PQ_None && !DS.hasAttributes()) {
     Diag(Tok, diag::err_typename_requires_specqual);
     if (!DS.hasTypeSpecifier())
       DS.SetTypeSpecError();
@@ -2202,7 +2198,6 @@ static bool isValidAfterIdentifierInDeclarator(const Token &T) {
                    tok::comma, tok::equal, tok::kw_asm, tok::l_brace,
                    tok::colon);
 }
-
 
 /// ParseImplicitInt - This method is called when we have an non-typename
 /// identifier in a declspec (which normally terminates the decl spec) when
@@ -2602,6 +2597,7 @@ Parser::DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
 /// [C11]   alignment-specifier declaration-specifiers[opt]
 /// [GNU]   attributes declaration-specifiers[opt]
 /// [Clang] '__module_private__' declaration-specifiers[opt]
+/// [ObjC1] '__kindof' declaration-specifiers[opt]
 ///
 ///       storage-class-specifier: [C99 6.7.1]
 ///         'typedef'
@@ -2620,8 +2616,6 @@ Parser::DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
 /// [OpenCL] '__kernel'
 ///       'friend': [C++ dcl.friend]
 ///       'constexpr': [C++0x dcl.constexpr]
-
-///
 void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
                                         const ParsedTemplateInfo &TemplateInfo,
                                         AccessSpecifier AS,
@@ -2645,6 +2639,18 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     bool isStorageClass = false;
     const char *PrevSpec = nullptr;
     unsigned DiagID = 0;
+
+    // HACK: MSVC doesn't consider _Atomic to be a keyword and its STL
+    // implementation for VS2013 uses _Atomic as an identifier for one of the
+    // classes in <atomic>.
+    //
+    // A typedef declaration containing _Atomic<...> is among the places where
+    // the class is used.  If we are currently parsing such a declaration, treat
+    // the token as an identifier.
+    if (getLangOpts().MSVCCompat && Tok.is(tok::kw__Atomic) &&
+        DS.getStorageClassSpec() == clang::DeclSpec::SCS_typedef &&
+        !DS.hasTypeSpecifier() && GetLookAheadToken(1).is(tok::less))
+      Tok.setKind(tok::identifier);
 
     SourceLocation Loc = Tok.getLocation();
 
@@ -2886,12 +2892,6 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       DS.SetRangeEnd(Tok.getAnnotationEndLoc());
       ConsumeToken(); // The typename
 
-      // Objective-C supports syntax of the form 'id<proto1,proto2>' where 'id'
-      // is a specific typedef and 'itf<proto1,proto2>' where 'itf' is an
-      // Objective-C interface.
-      if (Tok.is(tok::less) && getLangOpts().ObjC1)
-        ParseObjCProtocolQualifiers(DS);
-
       continue;
     }
 
@@ -2997,11 +2997,19 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       DS.SetRangeEnd(Tok.getLocation());
       ConsumeToken(); // The identifier
 
-      // Objective-C supports syntax of the form 'id<proto1,proto2>' where 'id'
-      // is a specific typedef and 'itf<proto1,proto2>' where 'itf' is an
-      // Objective-C interface.
-      if (Tok.is(tok::less) && getLangOpts().ObjC1)
-        ParseObjCProtocolQualifiers(DS);
+      // Objective-C supports type arguments and protocol references
+      // following an Objective-C object or object pointer
+      // type. Handle either one of them.
+      if (Tok.is(tok::less) && getLangOpts().ObjC1) {
+        SourceLocation NewEndLoc;
+        TypeResult NewTypeRep = parseObjCTypeArgsAndProtocolQualifiers(
+                                  Loc, TypeRep, /*consumeLastToken=*/true,
+                                  NewEndLoc);
+        if (NewTypeRep.isUsable()) {
+          DS.UpdateTypeRep(NewTypeRep.get());
+          DS.SetRangeEnd(NewEndLoc);
+        }
+      }
 
       // Need to support trailing type qualifiers (e.g. "id<p> const").
       // If a type specifier follows, it will be diagnosed elsewhere.
@@ -3080,6 +3088,13 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     case tok::kw__Nullable:
     case tok::kw__Null_unspecified:
       ParseNullabilityTypeSpecifiers(DS.getAttributes());
+      continue;
+
+    // Objective-C 'kindof' types.
+    case tok::kw___kindof:
+      DS.getAttributes().addNew(Tok.getIdentifierInfo(), Loc, nullptr, Loc,
+                                nullptr, 0, AttributeList::AS_Keyword);
+      (void)ConsumeToken();
       continue;
 
     // storage-class-specifier
@@ -3424,10 +3439,19 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       if (DS.hasTypeSpecifier() || !getLangOpts().ObjC1)
         goto DoneWithDeclSpec;
 
-      if (!ParseObjCProtocolQualifiers(DS))
-        Diag(Loc, diag::warn_objc_protocol_qualifier_missing_id)
-          << FixItHint::CreateInsertion(Loc, "id")
-          << SourceRange(Loc, DS.getSourceRange().getEnd());
+      SourceLocation StartLoc = Tok.getLocation();
+      SourceLocation EndLoc;
+      TypeResult Type = parseObjCProtocolQualifierType(EndLoc);
+      if (Type.isUsable()) {
+        if (DS.SetTypeSpecType(DeclSpec::TST_typename, StartLoc, StartLoc,
+                               PrevSpec, DiagID, Type.get(),
+                               Actions.getASTContext().getPrintingPolicy()))
+          Diag(StartLoc, DiagID) << PrevSpec;
+        
+        DS.SetRangeEnd(EndLoc);
+      } else {
+        DS.SetTypeSpecError();
+      }
 
       // Need to support trailing type qualifiers (e.g. "id<p> const").
       // If a type specifier follows, it will be diagnosed elsewhere.
@@ -3564,7 +3588,8 @@ void Parser::ParseStructUnionBody(SourceLocation RecordLoc,
   SmallVector<Decl *, 32> FieldDecls;
 
   // While we still have something to read, read the declarations in the struct.
-  while (Tok.isNot(tok::r_brace) && !isEofOrEom()) {
+  while (Tok.isNot(tok::r_brace) && Tok.isNot(tok::eof) &&
+         !tryParseMisplacedModuleImport()) {
     // Each iteration of this loop reads one struct-declaration.
 
     // Check for extraneous top-level semicolon.
@@ -3590,6 +3615,14 @@ void Parser::ParseStructUnionBody(SourceLocation RecordLoc,
       continue;
     }
 
+    if (Tok.is(tok::annot_pragma_openmp)) {
+      // Result can be ignored, because it must be always empty.
+      auto Res = ParseOpenMPDeclarativeDirective();
+      assert(!Res);
+      // Silence possible warnings.
+      (void)Res;
+      continue;
+    }
     if (!Tok.is(tok::at)) {
       auto CFieldCallback = [&](ParsingFieldDeclarator &FD) {
         // Install the declarator into the current TagDecl.
@@ -4343,6 +4376,8 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw__Nullable:
   case tok::kw__Null_unspecified:
 
+  case tok::kw___kindof:
+
   case tok::kw___private:
   case tok::kw___local:
   case tok::kw___global:
@@ -4523,6 +4558,8 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw__Nonnull:
   case tok::kw__Nullable:
   case tok::kw__Null_unspecified:
+
+  case tok::kw___kindof:
 
   case tok::kw___private:
   case tok::kw___local:
@@ -4767,6 +4804,13 @@ void Parser::ParseTypeQualifierListOpt(DeclSpec &DS, unsigned AttrReqs,
       ParseNullabilityTypeSpecifiers(DS.getAttributes());
       continue;
 
+    // Objective-C 'kindof' types.
+    case tok::kw___kindof:
+      DS.getAttributes().addNew(Tok.getIdentifierInfo(), Loc, nullptr, Loc,
+                                nullptr, 0, AttributeList::AS_Keyword);
+      (void)ConsumeToken();
+      continue;
+
     case tok::kw___attribute:
       if (AttrReqs & AR_GNUAttributesParsedAndRejected)
         // When GNU attributes are expressly forbidden, diagnose their usage.
@@ -4798,7 +4842,6 @@ void Parser::ParseTypeQualifierListOpt(DeclSpec &DS, unsigned AttrReqs,
     EndLoc = ConsumeToken();
   }
 }
-
 
 /// ParseDeclarator - Parse and verify a newly-initialized declarator.
 ///
@@ -5447,7 +5490,7 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
   SmallVector<ParsedType, 2> DynamicExceptions;
   SmallVector<SourceRange, 2> DynamicExceptionRanges;
   ExprResult NoexceptExpr;
-  CachedTokens *ExceptionSpecTokens = 0;
+  CachedTokens *ExceptionSpecTokens = nullptr;
   ParsedAttributes FnAttrs(AttrFactory);
   TypeResult TrailingReturnType;
 
@@ -5585,7 +5628,7 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
                                              VolatileQualifierLoc,
                                              RestrictQualifierLoc,
                                              /*MutableLoc=*/SourceLocation(),
-                                             ESpecType, ESpecRange.getBegin(),
+                                             ESpecType, ESpecRange,
                                              DynamicExceptions.data(),
                                              DynamicExceptionRanges.data(),
                                              DynamicExceptions.size(),
@@ -6203,7 +6246,6 @@ void Parser::ParseAtomicSpecifier(DeclSpec &DS) {
                          Actions.getASTContext().getPrintingPolicy()))
     Diag(StartLoc, DiagID) << PrevSpec;
 }
-
 
 /// TryAltiVecVectorTokenOutOfLine - Out of line body that should only be called
 /// from TryAltiVecVectorToken.

@@ -1,7 +1,10 @@
 """Test Python APIs for working with formatters"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,42 +13,23 @@ class SBFormattersAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_formatters_api(self):
-        """Test Python APIs for working with formatters"""
-        self.buildDsym()
-        self.setTearDownCleanup()
-        self.formatters()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_formatters_api(self):
-        """Test Python APIs for working with formatters"""
-        self.buildDwarf()
-        self.setTearDownCleanup()
-        self.formatters()
-
-    @python_api_test
-    def test_force_synth_off(self):
-        """Test that one can have the public API return non-synthetic SBValues if desired"""
-        self.buildDwarf(dictionary={'EXE':'no_synth'})
-        self.setTearDownCleanup()
-        self.force_synth_off()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         self.line = line_number('main.cpp', '// Set break point at this line.')
 
-    def formatters(self):
+    @add_test_categories(['pyapi'])
+    def test_formatters_api(self):
+        """Test Python APIs for working with formatters"""
+        self.build()
+        self.setTearDownCleanup()
+        
         """Test Python APIs for working with formatters"""
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -168,6 +152,7 @@ class SBFormattersAPITestCase(TestBase):
 
         foo_var = self.dbg.GetSelectedTarget().GetProcess().GetSelectedThread().GetSelectedFrame().FindVariable('foo')
         self.assertTrue(foo_var.IsValid(), 'could not find foo')
+        self.assertTrue(foo_var.GetDeclaration().IsValid(), 'foo declaration is invalid')
 
         self.assertTrue(foo_var.GetNumChildren() == 2, 'synthetic value has wrong number of child items (synth)')
         self.assertTrue(foo_var.GetChildMemberWithName('X').GetValueAsUnsigned() == 1, 'foo_synth.X has wrong value (synth)')
@@ -302,13 +287,21 @@ class SBFormattersAPITestCase(TestBase):
         self.assertTrue(summary.IsValid(), "no summary found for foo* when one was in place")
         self.assertTrue(summary.GetData() == "hello static world", "wrong summary found for foo*")
 
-    def force_synth_off(self):
+        self.expect("frame variable e1", substrs=["I am an empty Empty1 {}"])
+        self.expect("frame variable e2", substrs=["I am an empty Empty2"])
+        self.expect("frame variable e2", substrs=["I am an empty Empty2 {}"], matching=False)
+
+    @add_test_categories(['pyapi'])
+    def test_force_synth_off(self):
         """Test that one can have the public API return non-synthetic SBValues if desired"""
+        self.build(dictionary={'EXE':'no_synth'})
+        self.setTearDownCleanup()
+
         self.runCmd("file no_synth", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -333,26 +326,19 @@ class SBFormattersAPITestCase(TestBase):
         frame = self.dbg.GetSelectedTarget().GetProcess().GetSelectedThread().GetSelectedFrame()
         int_vector = frame.FindVariable("int_vector")
         if self.TraceOn():
-             print int_vector
+             print(int_vector)
         self.assertTrue(int_vector.GetNumChildren() == 0, 'synthetic vector is empty')
 
         self.runCmd('settings set target.enable-synthetic-value false')
         frame = self.dbg.GetSelectedTarget().GetProcess().GetSelectedThread().GetSelectedFrame()
         int_vector = frame.FindVariable("int_vector")
         if self.TraceOn():
-             print int_vector
+             print(int_vector)
         self.assertFalse(int_vector.GetNumChildren() == 0, '"physical" vector is not empty')
 
         self.runCmd('settings set target.enable-synthetic-value true')
         frame = self.dbg.GetSelectedTarget().GetProcess().GetSelectedThread().GetSelectedFrame()
         int_vector = frame.FindVariable("int_vector")
         if self.TraceOn():
-             print int_vector
+             print(int_vector)
         self.assertTrue(int_vector.GetNumChildren() == 0, 'synthetic vector is still empty')
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

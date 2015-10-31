@@ -2,9 +2,12 @@
 Test that variables with signed types display correctly.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -13,19 +16,6 @@ class UnsignedTypesTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test that variables with signed types display correctly."""
-        self.buildDsym()
-        self.signed_types()
-
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test that variables with signed types display correctly."""
-        self.buildDwarf()
-        self.signed_types()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -33,7 +23,10 @@ class UnsignedTypesTestCase(TestBase):
         self.source = 'main.cpp'
         self.line = line_number(self.source, '// Set break point at this line.')
 
-    def signed_types(self):
+    def test(self):
+        """Test that variables with signed types display correctly."""
+        self.build()
+
         # Run in synchronous mode
         self.dbg.SetAsync(False)
 
@@ -65,10 +58,3 @@ class UnsignedTypesTestCase(TestBase):
             substrs = ["(int) the_signed_int = 99",
                        "(long) the_signed_long = 99",
                        "(long long) the_signed_long_long = 99"])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -2,30 +2,18 @@
 Test newly added SBSymbol and SBAddress APIs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class SymbolAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym(self):
-        """Exercise some SBSymbol and SBAddress APIs."""
-        self.buildDsym()
-        self.symbol_and_address_api()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Exercise some SBSymbol and SBAddress APIs."""
-        self.buildDwarf()
-        self.symbol_and_address_api()
 
     def setUp(self):
         # Call super's setUp().
@@ -34,8 +22,11 @@ class SymbolAPITestCase(TestBase):
         self.line1 = line_number('main.c', '// Find the line number for breakpoint 1 here.')
         self.line2 = line_number('main.c', '// Find the line number for breakpoint 2 here.')
 
-    def symbol_and_address_api(self):
+    @add_test_categories(['pyapi'])
+    @expectedFailureWindows("llvm.org/pr24778")
+    def test(self):
         """Exercise some SBSymbol and SBAddress APIs."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -45,8 +36,8 @@ class SymbolAPITestCase(TestBase):
         # Now create the two breakpoints inside function 'a'.
         breakpoint1 = target.BreakpointCreateByLocation('main.c', self.line1)
         breakpoint2 = target.BreakpointCreateByLocation('main.c', self.line2)
-        #print "breakpoint1:", breakpoint1
-        #print "breakpoint2:", breakpoint2
+        #print("breakpoint1:", breakpoint1)
+        #print("breakpoint2:", breakpoint2)
         self.assertTrue(breakpoint1 and
                         breakpoint1.GetNumLocations() == 1,
                         VALID_BREAKPOINT)
@@ -85,12 +76,5 @@ class SymbolAPITestCase(TestBase):
 
         # Now verify that both addresses point to the same module.
         if self.TraceOn():
-            print "UUID:", addr_line1.GetModule().GetUUIDString()
+            print("UUID:", addr_line1.GetModule().GetUUIDString())
         self.assertTrue(addr_line1.GetModule().GetUUIDString() == addr_line2.GetModule().GetUUIDString())
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

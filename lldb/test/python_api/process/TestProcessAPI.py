@@ -2,8 +2,11 @@
 Test SBProcess APIs, including ReadMemory(), WriteMemory(), and others.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbutil import get_stopped_thread, state_type_to_str
 from lldbtest import *
@@ -12,71 +15,16 @@ class ProcessAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_read_memory_with_dsym(self):
-        """Test Python SBProcess.ReadMemory() API."""
-        self.buildDsym()
-        self.read_memory()
-
-    @python_api_test
-    @dwarf_test
-    def test_read_memory_with_dwarf(self):
-        """Test Python SBProcess.ReadMemory() API."""
-        self.buildDwarf()
-        self.read_memory()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_write_memory_with_dsym(self):
-        """Test Python SBProcess.WriteMemory() API."""
-        self.buildDsym()
-        self.write_memory()
-
-    @python_api_test
-    @dwarf_test
-    def test_write_memory_with_dwarf(self):
-        """Test Python SBProcess.WriteMemory() API."""
-        self.buildDwarf()
-        self.write_memory()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_access_my_int_with_dsym(self):
-        """Test access 'my_int' using Python SBProcess.GetByteOrder() and other APIs."""
-        self.buildDsym()
-        self.access_my_int()
-
-    @python_api_test
-    @dwarf_test
-    def test_access_my_int_with_dwarf(self):
-        """Test access 'my_int' using Python SBProcess.GetByteOrder() and other APIs."""
-        self.buildDwarf()
-        self.access_my_int()
-
-    @python_api_test
-    def test_remote_launch(self):
-        """Test SBProcess.RemoteLaunch() API with a process not in eStateConnected, and it should fail."""
-        self.buildDefault()
-        self.remote_launch_should_fail()
-
-    @python_api_test
-    def test_get_num_supported_hardware_watchpoints(self):
-        """Test SBProcess.GetNumSupportedHardwareWatchpoints() API with a process."""
-        self.buildDefault()
-        self.get_num_supported_hardware_watchpoints()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break inside main().
         self.line = line_number("main.cpp", "// Set break point at this line and check variable 'my_char'.")
 
-    def read_memory(self):
+    @add_test_categories(['pyapi'])
+    def test_read_memory(self):
         """Test Python SBProcess.ReadMemory() API."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -104,7 +52,7 @@ class ProcessAPITestCase(TestBase):
         if not error.Success():
             self.fail("SBProcess.ReadMemory() failed")
         if self.TraceOn():
-            print "memory content:", content
+            print("memory content:", content)
 
         self.expect(content, "Result from SBProcess.ReadMemory() matches our expected output: 'x'",
                     exe=False,
@@ -117,7 +65,7 @@ class ProcessAPITestCase(TestBase):
         if not error.Success():
             self.fail("SBProcess.ReadCStringFromMemory() failed")
         if self.TraceOn():
-            print "cstring read is:", cstring
+            print("cstring read is:", cstring)
 
         self.expect(cstring, "Result from SBProcess.ReadCStringFromMemory() matches our expected output",
                     exe=False,
@@ -134,7 +82,7 @@ class ProcessAPITestCase(TestBase):
         if not error.Success():
             self.fail("SBProcess.ReadCStringFromMemory() failed")
         if self.TraceOn():
-            print "cstring read is:", cstring
+            print("cstring read is:", cstring)
 
         self.expect(cstring, "Result from SBProcess.ReadCStringFromMemory() matches our expected output",
                     exe=False,
@@ -151,13 +99,15 @@ class ProcessAPITestCase(TestBase):
         if not error.Success():
             self.fail("SBProcess.ReadCStringFromMemory() failed")
         if self.TraceOn():
-            print "uint32 read is:", my_uint32
+            print("uint32 read is:", my_uint32)
 
         if my_uint32 != 12345:
             self.fail("Result from SBProcess.ReadUnsignedFromMemory() does not match our expected output")
 
-    def write_memory(self):
+    @add_test_categories(['pyapi'])
+    def test_write_memory(self):
         """Test Python SBProcess.WriteMemory() API."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -200,14 +150,16 @@ class ProcessAPITestCase(TestBase):
         if not error.Success():
             self.fail("SBProcess.ReadMemory() failed")
         if self.TraceOn():
-            print "memory content:", content
+            print("memory content:", content)
 
         self.expect(content, "Result from SBProcess.ReadMemory() matches our expected output: 'a'",
                     exe=False,
             startstr = 'a')
 
-    def access_my_int(self):
+    @add_test_categories(['pyapi'])
+    def test_access_my_int(self):
         """Test access 'my_int' using Python SBProcess.GetByteOrder() and other APIs."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -292,10 +244,12 @@ class ProcessAPITestCase(TestBase):
         # Dump the memory content....
         if self.TraceOn():
             for i in new_bytes:
-                print "byte:", i
+                print("byte:", i)
 
-    def remote_launch_should_fail(self):
+    @add_test_categories(['pyapi'])
+    def test_remote_launch(self):
         """Test SBProcess.RemoteLaunch() API with a process not in eStateConnected, and it should fail."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -305,15 +259,17 @@ class ProcessAPITestCase(TestBase):
         process = target.LaunchSimple (None, None, self.get_process_working_directory())
 
         if self.TraceOn():
-            print "process state:", state_type_to_str(process.GetState())
+            print("process state:", state_type_to_str(process.GetState()))
         self.assertTrue(process.GetState() != lldb.eStateConnected)
 
         error = lldb.SBError()
         success = process.RemoteLaunch(None, None, None, None, None, None, 0, False, error)
         self.assertTrue(not success, "RemoteLaunch() should fail for process state != eStateConnected")
 
-    def get_num_supported_hardware_watchpoints(self):
+    @add_test_categories(['pyapi'])
+    def test_get_num_supported_hardware_watchpoints(self):
         """Test SBProcess.GetNumSupportedHardwareWatchpoints() API with a process."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -329,11 +285,5 @@ class ProcessAPITestCase(TestBase):
         error = lldb.SBError();
         num = process.GetNumSupportedHardwareWatchpoints(error)
         if self.TraceOn() and error.Success():
-            print "Number of supported hardware watchpoints: %d" % num
+            print("Number of supported hardware watchpoints: %d" % num)
 
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

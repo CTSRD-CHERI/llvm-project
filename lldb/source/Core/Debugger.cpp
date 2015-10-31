@@ -11,13 +11,12 @@
 
 #include <map>
 
-#include "clang/AST/DeclCXX.h"
-#include "clang/AST/Type.h"
 #include "llvm/ADT/StringRef.h"
 
 #include "lldb/lldb-private.h"
 #include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/Module.h"
+#include "lldb/Core/PluginInterface.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/State.h"
@@ -32,6 +31,7 @@
 #include "lldb/DataFormatters/DataVisualization.h"
 #include "lldb/DataFormatters/FormatManager.h"
 #include "lldb/DataFormatters/TypeSummary.h"
+#include "lldb/Expression/REPL.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/Terminal.h"
@@ -40,14 +40,12 @@
 #include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Interpreter/OptionValueSInt64.h"
 #include "lldb/Interpreter/OptionValueString.h"
-#include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/Function.h"
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Symbol/VariableList.h"
-#include "lldb/Target/CPPLanguageRuntime.h"
-#include "lldb/Target/ObjCLanguageRuntime.h"
 #include "lldb/Target/TargetList.h"
+#include "lldb/Target/Language.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/SectionLoadList.h"
@@ -105,6 +103,7 @@ g_language_enumerators[] =
 
 #define MODULE_WITH_FUNC "{ ${module.file.basename}{`${function.name-with-args}${function.pc-offset}}}"
 #define FILE_AND_LINE "{ at ${line.file.basename}:${line.number}}"
+#define IS_OPTIMIZED "{${function.is-optimized} [opt]}"
 
 #define DEFAULT_THREAD_FORMAT "thread #${thread.index}: tid = ${thread.id%tid}"\
     "{, ${frame.pc}}"\
@@ -122,6 +121,7 @@ g_language_enumerators[] =
 #define DEFAULT_FRAME_FORMAT "frame #${frame.index}: ${frame.pc}"\
     MODULE_WITH_FUNC\
     FILE_AND_LINE\
+    IS_OPTIMIZED\
     "\\n"
 
 // Three parts to this disassembly format specification:
@@ -158,6 +158,9 @@ g_properties[] =
 {   "use-external-editor",      OptionValue::eTypeBoolean     , true, false, NULL, NULL, "Whether to use an external editor or not." },
 {   "use-color",                OptionValue::eTypeBoolean     , true, true , NULL, NULL, "Whether to use Ansi color codes or not." },
 {   "auto-one-line-summaries",  OptionValue::eTypeBoolean     , true, true, NULL, NULL, "If true, LLDB will automatically display small structs in one-liner format (default: true)." },
+{   "auto-indent",              OptionValue::eTypeBoolean     , true, true , NULL, NULL, "If true, LLDB will auto indent/outdent code. Currently only supported in the REPL (default: true)." },
+{   "print-decls",              OptionValue::eTypeBoolean     , true, true , NULL, NULL, "If true, LLDB will print the values of variables declared in an expression. Currently only supported in the REPL (default: true)." },
+{   "tab-size",                 OptionValue::eTypeUInt64      , true, 4    , NULL, NULL, "The tab size to use when indenting code in multi-line input mode (default: 4)." },
 {   "escape-non-printables",    OptionValue::eTypeBoolean     , true, true, NULL, NULL, "If true, LLDB will automatically escape non-printable and escape characters when formatting strings." },
 {   NULL,                       OptionValue::eTypeInvalid     , true, 0    , NULL, NULL, NULL }
 };
@@ -179,6 +182,9 @@ enum
     ePropertyUseExternalEditor,
     ePropertyUseColor,
     ePropertyAutoOneLineSummaries,
+    ePropertyAutoIndent,
+    ePropertyPrintDecls,
+    ePropertyTabSize,
     ePropertyEscapeNonPrintables
 };
 
@@ -394,6 +400,49 @@ Debugger::GetEscapeNonPrintables () const
     return m_collection_sp->GetPropertyAtIndexAsBoolean (NULL, idx, true);
 }
 
+bool
+Debugger::GetAutoIndent () const
+{
+    const uint32_t idx = ePropertyAutoIndent;
+    return m_collection_sp->GetPropertyAtIndexAsBoolean (NULL, idx, true);
+}
+
+bool
+Debugger::SetAutoIndent (bool b)
+{
+    const uint32_t idx = ePropertyAutoIndent;
+    return m_collection_sp->SetPropertyAtIndexAsBoolean (NULL, idx, b);
+}
+
+bool
+Debugger::GetPrintDecls () const
+{
+    const uint32_t idx = ePropertyPrintDecls;
+    return m_collection_sp->GetPropertyAtIndexAsBoolean (NULL, idx, true);
+}
+
+bool
+Debugger::SetPrintDecls (bool b)
+{
+    const uint32_t idx = ePropertyPrintDecls;
+    return m_collection_sp->SetPropertyAtIndexAsBoolean (NULL, idx, b);
+}
+
+uint32_t
+Debugger::GetTabSize () const
+{
+    const uint32_t idx = ePropertyTabSize;
+    return m_collection_sp->GetPropertyAtIndexAsUInt64 (NULL, idx, g_properties[idx].default_uint_value);
+}
+
+bool
+Debugger::SetTabSize (uint32_t tab_size)
+{
+    const uint32_t idx = ePropertyTabSize;
+    return m_collection_sp->SetPropertyAtIndexAsUInt64 (NULL, idx, tab_size);
+}
+
+
 #pragma mark Debugger
 
 //const DebuggerPropertiesSP &
@@ -420,7 +469,11 @@ Debugger::Terminate ()
 
     // Clear our master list of debugger objects
     Mutex::Locker locker (GetDebuggerListMutex ());
-    GetDebuggerList().clear();
+    auto& debuggers = GetDebuggerList();
+    for (const auto& debugger: debuggers)
+        debugger->Clear();
+
+    debuggers.clear();
 }
 
 void
@@ -915,6 +968,12 @@ bool
 Debugger::IsTopIOHandler (const lldb::IOHandlerSP& reader_sp)
 {
     return m_input_reader_stack.IsTop (reader_sp);
+}
+
+bool
+Debugger::CheckTopIOHandlerTypes (IOHandler::Type top_type, IOHandler::Type second_top_type)
+{
+    return m_input_reader_stack.CheckTopIOHandlerTypes (top_type, second_top_type);
 }
 
 void
@@ -1682,6 +1741,12 @@ Debugger::IOHandlerThread (lldb::thread_arg_t arg)
 }
 
 bool
+Debugger::HasIOHandlerThread()
+{
+    return m_io_handler_thread.IsJoinable();
+}
+
+bool
 Debugger::StartIOHandlerThread()
 {
     if (!m_io_handler_thread.IsJoinable())
@@ -1704,6 +1769,17 @@ Debugger::StopIOHandlerThread()
     }
 }
 
+void
+Debugger::JoinIOHandlerThread()
+{
+    if (HasIOHandlerThread())
+    {
+        thread_result_t result;
+        m_io_handler_thread.Join(&result);
+        m_io_handler_thread = LLDB_INVALID_HOST_THREAD;
+    }
+}
+
 Target *
 Debugger::GetDummyTarget()
 {
@@ -1722,5 +1798,54 @@ Debugger::GetSelectedOrDummyTarget(bool prefer_dummy)
     }
     
     return GetDummyTarget();
+}
+
+Error
+Debugger::RunREPL (LanguageType language, const char *repl_options)
+{
+    Error err;
+    FileSpec repl_executable;
+    
+    if (language == eLanguageTypeUnknown)
+    {
+        std::set<LanguageType> repl_languages;
+        
+        Language::GetLanguagesSupportingREPLs(repl_languages);
+        
+        if (repl_languages.size() == 1)
+        {
+            language = *repl_languages.begin();
+        }
+        else if (repl_languages.size() == 0)
+        {
+            err.SetErrorStringWithFormat("LLDB isn't configured with support support for any REPLs.");
+            return err;
+        }
+        else
+        {
+            err.SetErrorStringWithFormat("Multiple possible REPL languages.  Please specify a language.");
+            return err;
+        }
+    }
+
+    Target *const target = nullptr; // passing in an empty target means the REPL must create one
+    
+    REPLSP repl_sp(REPL::Create(err, language, this, target, repl_options));
+
+    if (!err.Success())
+    {
+        return err;
+    }
+    
+    if (!repl_sp)
+    {
+        err.SetErrorStringWithFormat("couldn't find a REPL for %s", Language::GetNameForLanguageType(language));
+        return err;
+    }
+    
+    repl_sp->SetCompilerOptions(repl_options);
+    repl_sp->RunLoop();
+    
+    return err;
 }
 

@@ -1,7 +1,10 @@
 """Test settings and readings of program variables."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -9,19 +12,6 @@ import lldbutil
 class SetValuesTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test settings and readings of program variables."""
-        self.buildDsym()
-        self.set_values()
-
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test settings and readings of program variables."""
-        self.buildDwarf()
-        self.set_values()
 
     def setUp(self):
         # Call super's setUp().
@@ -33,8 +23,10 @@ class SetValuesTestCase(TestBase):
         self.line4 = line_number('main.c', '// Set break point #4.')
         self.line5 = line_number('main.c', '// Set break point #5.')
 
-    def set_values(self):
+    @expectedFailureWindows("llvm.org/pr21765")
+    def test(self):
         """Test settings and readings of program variables."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -49,7 +41,7 @@ class SetValuesTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line5, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -117,10 +109,3 @@ class SetValuesTestCase(TestBase):
         self.runCmd("expression i = 1.5")
         self.expect("frame variable --show-types", VARIABLES_DISPLAYED_CORRECTLY,
             startstr = "(long double) i = 1.5")
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

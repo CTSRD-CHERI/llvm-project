@@ -2,34 +2,18 @@
 Test that dynamic values update their child count correctly
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class DynamicValueChildCountTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    @expectedFailurei386("to be figured out")
-    def test_get_dynamic_vals_with_dsym(self):
-        """Test fetching C++ dynamic values from pointers & references."""
-        self.buildDsym(dictionary=self.getBuildFlags())
-        self.do_get_dynamic_vals()
-
-    @expectedFailureLinux("llvm.org/pr23039")
-    @expectedFailureFreeBSD("llvm.org/pr19311") # continue at a breakpoint does not work
-    @python_api_test
-    @dwarf_test
-    @expectedFailurei386("to be figured out")
-    def test_get_dynamic_vals_with_dwarf(self):
-        """Test fetching C++ dynamic values from pointers & references."""
-        self.buildDwarf(dictionary=self.getBuildFlags())
-        self.do_get_dynamic_vals()
 
     def setUp(self):
         # Call super's setUp().                                                                                                           
@@ -46,11 +30,15 @@ class DynamicValueChildCountTestCase(TestBase):
         self.main_sixth_call_line = line_number('pass-to-base.cpp',
                                                        '// Break here and check b has 0 children again')
 
-
-
-
-    def do_get_dynamic_vals(self):
+    @expectedFailureLinux("llvm.org/pr23039")
+    @expectedFailureFreeBSD("llvm.org/pr19311") # continue at a breakpoint does not work
+    @expectedFailureWindows("llvm.org/pr24663")
+    @expectedFailurei386("to be figured out")
+    @add_test_categories(['pyapi'])
+    def test_get_dynamic_vals(self):
+        """Test fetching C++ dynamic values from pointers & references."""
         """Get argument vals for the call stack when stopped on a breakpoint."""
+        self.build(dictionary=self.getBuildFlags())
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target from the debugger.
@@ -87,9 +75,3 @@ class DynamicValueChildCountTestCase(TestBase):
         self.assertTrue(b.GetNumChildren() != 0, "b now has 1 child")
         self.runCmd("continue")
         self.assertTrue(b.GetNumChildren() == 0, "b didn't go back to 0 children")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

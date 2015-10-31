@@ -54,7 +54,7 @@ public:
   const std::string &nameSpace() const { return NS; }
   bool knownToGCC() const { return K; }
 };
-} // namespace
+} // end anonymous namespace
 
 static std::vector<FlattenedSpelling>
 GetFlattenedSpellings(const Record &Attr) {
@@ -176,7 +176,7 @@ namespace {
         upperName[0] = std::toupper(upperName[0]);
       }
     }
-    virtual ~Argument() {}
+    virtual ~Argument() = default;
 
     StringRef getLowerName() const { return lowerName; }
     StringRef getUpperName() const { return upperName; }
@@ -326,7 +326,8 @@ namespace {
       OS << "    " << getLowerName() << "Length = S.size();\n";
       OS << "    this->" << getLowerName() << " = new (C, 1) char ["
          << getLowerName() << "Length];\n";
-      OS << "    std::memcpy(this->" << getLowerName() << ", S.data(), "
+      OS << "    if (!S.empty())\n";
+      OS << "      std::memcpy(this->" << getLowerName() << ", S.data(), "
          << getLowerName() << "Length);\n";
       OS << "  }";
     }
@@ -337,7 +338,8 @@ namespace {
       OS << "A->get" << getUpperName() << "()";
     }
     void writeCtorBody(raw_ostream &OS) const override {
-      OS << "      std::memcpy(" << getLowerName() << ", " << getUpperName()
+      OS << "      if (!" << getUpperName() << ".empty())\n";
+      OS << "        std::memcpy(" << getLowerName() << ", " << getUpperName()
          << ".data(), " << getLowerName() << "Length);";
     }
     void writeCtorInitializers(raw_ostream &OS) const override {
@@ -346,7 +348,7 @@ namespace {
          << "Length])";
     }
     void writeCtorDefaultInitializers(raw_ostream &OS) const override {
-      OS << getLowerName() << "Length(0)," << getLowerName() << "(0)";
+      OS << getLowerName() << "Length(0)," << getLowerName() << "(nullptr)";
     }
     void writeCtorParameters(raw_ostream &OS) const override {
       OS << "llvm::StringRef " << getUpperName();
@@ -489,7 +491,7 @@ namespace {
       // The aligned attribute argument expression is optional.
       OS << "    if (is" << getLowerName() << "Expr && "
          << getLowerName() << "Expr)\n";
-      OS << "      " << getLowerName() << "Expr->printPretty(OS, 0, Policy);\n";
+      OS << "      " << getLowerName() << "Expr->printPretty(OS, nullptr, Policy);\n";
       OS << "    OS << \"";
     }
     void writeDump(raw_ostream &OS) const override {
@@ -1016,7 +1018,7 @@ namespace {
           getType(), "SA->get" + std::string(getUpperName()) + "Loc()");
     }
   };
-}
+} // end anonymous namespace
 
 static std::unique_ptr<Argument>
 createArgument(const Record &Arg, StringRef Attr,
@@ -1066,7 +1068,7 @@ createArgument(const Record &Arg, StringRef Attr,
 
   if (!Ptr) {
     // Search in reverse order so that the most-derived type is handled first.
-    std::vector<Record*> Bases = Search->getSuperClasses();
+    ArrayRef<Record*> Bases = Search->getSuperClasses();
     for (const auto *Base : llvm::make_range(Bases.rbegin(), Bases.rend())) {
       if ((Ptr = createArgument(Arg, Attr, Base)))
         break;
@@ -1178,6 +1180,7 @@ writePrettyPrintFunction(Record &R,
     if (Variety == "Pragma") {
       OS << " \";\n";
       OS << "    printPrettyPragma(OS, Policy);\n";
+      OS << "    OS << \"\\n\";";
       OS << "    break;\n";
       OS << "  }\n";
       continue;
@@ -1456,7 +1459,7 @@ void EmitClangAttrClass(RecordKeeper &Records, raw_ostream &OS) {
     if (!R.getValueAsBit("ASTNode"))
       continue;
     
-    const std::vector<Record *> Supers = R.getSuperClasses();
+    ArrayRef<Record *> Supers = R.getSuperClasses();
     assert(!Supers.empty() && "Forgot to specify a superclass for the attr");
     std::string SuperName;
     for (const auto *Super : llvm::make_range(Supers.rbegin(), Supers.rend())) {
@@ -1860,6 +1863,65 @@ void EmitClangAttrPCHWrite(RecordKeeper &Records, raw_ostream &OS) {
   OS << "  }\n";
 }
 
+// Generate a conditional expression to check if the current target satisfies
+// the conditions for a TargetSpecificAttr record, and append the code for
+// those checks to the Test string. If the FnName string pointer is non-null,
+// append a unique suffix to distinguish this set of target checks from other
+// TargetSpecificAttr records.
+static void GenerateTargetSpecificAttrChecks(const Record *R,
+                                             std::vector<std::string> &Arches,
+                                             std::string &Test,
+                                             std::string *FnName) {
+  // It is assumed that there will be an llvm::Triple object
+  // named "T" and a TargetInfo object named "Target" within
+  // scope that can be used to determine whether the attribute exists in
+  // a given target.
+  Test += "(";
+
+  for (auto I = Arches.begin(), E = Arches.end(); I != E; ++I) {
+    std::string Part = *I;
+    Test += "T.getArch() == llvm::Triple::" + Part;
+    if (I + 1 != E)
+      Test += " || ";
+    if (FnName)
+      *FnName += Part;
+  }
+  Test += ")";
+
+  // If the attribute is specific to particular OSes, check those.
+  if (!R->isValueUnset("OSes")) {
+    // We know that there was at least one arch test, so we need to and in the
+    // OS tests.
+    Test += " && (";
+    std::vector<std::string> OSes = R->getValueAsListOfStrings("OSes");
+    for (auto I = OSes.begin(), E = OSes.end(); I != E; ++I) {
+      std::string Part = *I;
+
+      Test += "T.getOS() == llvm::Triple::" + Part;
+      if (I + 1 != E)
+        Test += " || ";
+      if (FnName)
+        *FnName += Part;
+    }
+    Test += ")";
+  }
+
+  // If one or more CXX ABIs are specified, check those as well.
+  if (!R->isValueUnset("CXXABIs")) {
+    Test += " && (";
+    std::vector<std::string> CXXABIs = R->getValueAsListOfStrings("CXXABIs");
+    for (auto I = CXXABIs.begin(), E = CXXABIs.end(); I != E; ++I) {
+      std::string Part = *I;
+      Test += "Target.getCXXABI().getKind() == TargetCXXABI::" + Part;
+      if (I + 1 != E)
+        Test += " || ";
+      if (FnName)
+        *FnName += Part;
+    }
+    Test += ")";
+  }
+}
+
 static void GenerateHasAttrSpellingStringSwitch(
     const std::vector<Record *> &Attrs, raw_ostream &OS,
     const std::string &Variety = "", const std::string &Scope = "") {
@@ -1885,37 +1947,12 @@ static void GenerateHasAttrSpellingStringSwitch(
       }
     }
 
-    // It is assumed that there will be an llvm::Triple object named T within
-    // scope that can be used to determine whether the attribute exists in
-    // a given target.
     std::string Test;
     if (Attr->isSubClassOf("TargetSpecificAttr")) {
       const Record *R = Attr->getValueAsDef("Target");
       std::vector<std::string> Arches = R->getValueAsListOfStrings("Arches");
+      GenerateTargetSpecificAttrChecks(R, Arches, Test, nullptr);
 
-      Test += "(";
-      for (auto AI = Arches.begin(), AE = Arches.end(); AI != AE; ++AI) {
-        std::string Part = *AI;
-        Test += "T.getArch() == llvm::Triple::" + Part;
-        if (AI + 1 != AE)
-          Test += " || ";
-      }
-      Test += ")";
-
-      std::vector<std::string> OSes;
-      if (!R->isValueUnset("OSes")) {
-        Test += " && (";
-        std::vector<std::string> OSes = R->getValueAsListOfStrings("OSes");
-        for (auto AI = OSes.begin(), AE = OSes.end(); AI != AE; ++AI) {
-          std::string Part = *AI;
-
-          Test += "T.getOS() == llvm::Triple::" + Part;
-          if (AI + 1 != AE)
-            Test += " || ";
-        }
-        Test += ")";
-      }
-      
       // If this is the C++11 variety, also add in the LangOpts test.
       if (Variety == "CXX11")
         Test += " && LangOpts.CPlusPlus11";
@@ -1962,6 +1999,7 @@ void EmitClangAttrHasAttrImpl(RecordKeeper &Records, raw_ostream &OS) {
     }
   }
 
+  OS << "const llvm::Triple &T = Target.getTriple();\n";
   OS << "switch (Syntax) {\n";
   OS << "case AttrSyntax::GNU:\n";
   OS << "  return llvm::StringSwitch<int>(Name)\n";
@@ -2047,7 +2085,7 @@ void EmitClangAttrASTVisitor(RecordKeeper &Records, raw_ostream &OS) {
     OS << "  bool Visit"
        << R.getName() << "Attr(" << R.getName() << "Attr *A) {\n"
        << "    return true; \n"
-       << "  };\n";
+       << "  }\n";
   }
   OS << "\n#else // ATTR_VISITOR_DECLS_ONLY\n\n";
 
@@ -2121,7 +2159,7 @@ void EmitClangAttrTemplateInstantiate(RecordKeeper &Records, raw_ostream &OS) {
     bool ShouldClone = R.getValueAsBit("Clone");
 
     if (!ShouldClone) {
-      OS << "      return NULL;\n";
+      OS << "      return nullptr;\n";
       OS << "    }\n";
       continue;
     }
@@ -2155,7 +2193,7 @@ void EmitClangAttrTemplateInstantiate(RecordKeeper &Records, raw_ostream &OS) {
   }
   OS << "  } // end switch\n"
      << "  llvm_unreachable(\"Unknown attribute!\");\n"
-     << "  return 0;\n"
+     << "  return nullptr;\n"
      << "}\n\n"
      << "} // end namespace sema\n"
      << "} // end namespace clang\n";
@@ -2326,6 +2364,7 @@ static std::string GetSubjectWithSuffix(const Record *R) {
     return "Decl";
   return B + "Decl";
 }
+
 static std::string GenerateCustomAppertainsTo(const Record &Subject,
                                               raw_ostream &OS) {
   std::string FnName = "is" + Subject.getName();
@@ -2464,7 +2503,7 @@ static std::string GenerateLangOptRequirements(const Record &R,
 }
 
 static void GenerateDefaultTargetRequirements(raw_ostream &OS) {
-  OS << "static bool defaultTargetRequirements(const llvm::Triple &) {\n";
+  OS << "static bool defaultTargetRequirements(const TargetInfo &) {\n";
   OS << "  return true;\n";
   OS << "}\n\n";
 }
@@ -2503,35 +2542,9 @@ static std::string GenerateTargetRequirements(const Record &Attr,
     }
   }
 
-  std::string FnName = "isTarget", Test = "(";
-  for (auto I = Arches.begin(), E = Arches.end(); I != E; ++I) {
-    std::string Part = *I;
-    Test += "Arch == llvm::Triple::" + Part;
-    if (I + 1 != E)
-      Test += " || ";
-    FnName += Part;
-  }
-  Test += ")";
-
-  // If the target also requires OS testing, generate those tests as well.
-  bool UsesOS = false;
-  if (!R->isValueUnset("OSes")) {
-    UsesOS = true;
-    
-    // We know that there was at least one arch test, so we need to and in the
-    // OS tests.
-    Test += " && (";
-    std::vector<std::string> OSes = R->getValueAsListOfStrings("OSes");
-    for (auto I = OSes.begin(), E = OSes.end(); I != E; ++I) {
-      std::string Part = *I;
-
-      Test += "OS == llvm::Triple::" + Part;
-      if (I + 1 != E)
-        Test += " || ";
-      FnName += Part;
-    }
-    Test += ")";
-  }
+  std::string FnName = "isTarget";
+  std::string Test;
+  GenerateTargetSpecificAttrChecks(R, Arches, Test, &FnName);
 
   // If this code has already been generated, simply return the previous
   // instance of it.
@@ -2540,10 +2553,8 @@ static std::string GenerateTargetRequirements(const Record &Attr,
   if (I != CustomTargetSet.end())
     return *I;
 
-  OS << "static bool " << FnName << "(const llvm::Triple &T) {\n";
-  OS << "  llvm::Triple::ArchType Arch = T.getArch();\n";
-  if (UsesOS)
-    OS << "  llvm::Triple::OSType OS = T.getOS();\n";
+  OS << "static bool " << FnName << "(const TargetInfo &Target) {\n";
+  OS << "  const llvm::Triple &T = Target.getTriple();\n";
   OS << "  return " << Test << ";\n";
   OS << "}\n\n";
 

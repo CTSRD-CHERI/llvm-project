@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 
 ; void f(int a[], int N) {
 ;   int i;
@@ -14,7 +14,7 @@ entry:
 
 bb:                                               ; preds = %bb, %entry
   %i = phi i64 [ 0, %entry ], [ %i.inc, %bb ]
-  %scevgep = getelementptr i64, i64* %a, i64 %i
+  %scevgep = getelementptr inbounds i64, i64* %a, i64 %i
   store i64 %i, i64* %scevgep
   %i.inc = add nsw i64 %i, 1
   %exitcond = icmp eq i64 %i.inc, %N

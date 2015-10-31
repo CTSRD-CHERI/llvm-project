@@ -50,7 +50,7 @@ class CodeGenModule;
 class CodeGenABITypes
 {
 public:
-  CodeGenABITypes(ASTContext &C, llvm::Module &M, const llvm::DataLayout &TD,
+  CodeGenABITypes(ASTContext &C, llvm::Module &M,
                   CoverageSourceInfo *CoverageInfo = nullptr);
   ~CodeGenABITypes();
 
@@ -75,12 +75,12 @@ private:
   /// Default CodeGenOptions object used to initialize the
   /// CodeGenModule and otherwise not used. More specifically, it is
   /// not used in ABI type generation, so none of the options matter.
-  CodeGenOptions *CGO;
-  HeaderSearchOptions *HSO;
-  PreprocessorOptions *PPO;
+  std::unique_ptr<CodeGenOptions> CGO;
+  std::unique_ptr<HeaderSearchOptions> HSO;
+  std::unique_ptr<PreprocessorOptions> PPO;
 
   /// The CodeGenModule we use get to the CodeGenTypes object.
-  CodeGen::CodeGenModule *CGM;
+  std::unique_ptr<CodeGen::CodeGenModule> CGM;
 };
 
 }  // end namespace CodeGen

@@ -2,8 +2,11 @@
 Test number of threads.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,27 +15,15 @@ class NumberOfThreadsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test number of threads."""
-        self.buildDsym()
-        self.number_of_threads_test()
-
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test number of threads."""
-        self.buildDwarf()
-        self.number_of_threads_test()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break inside main().
         self.line = line_number('main.cpp', '// Set break point at this line.')
 
-    def number_of_threads_test(self):
+    def test(self):
         """Test number of threads."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -44,7 +35,7 @@ class NumberOfThreadsTestCase(TestBase):
             substrs = ["1: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" % self.line])
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # Stopped once.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -60,9 +51,3 @@ class NumberOfThreadsTestCase(TestBase):
         # Using std::thread may involve extra threads, so we assert that there are
         # at least 4 rather than exactly 4.
         self.assertTrue(num_threads >= 4, 'Number of expected threads and actual threads do not match.')
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

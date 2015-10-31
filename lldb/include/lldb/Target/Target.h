@@ -24,6 +24,8 @@
 #include "lldb/Core/Disassembler.h"
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/UserSettingsController.h"
+#include "lldb/Expression/Expression.h"
+#include "lldb/Symbol/TypeSystem.h"
 #include "lldb/Target/ExecutionContextScope.h"
 #include "lldb/Target/PathMappingList.h"
 #include "lldb/Target/ProcessLaunchInfo.h"
@@ -55,8 +57,7 @@ class TargetProperties : public Properties
 public:
     TargetProperties(Target *target);
 
-    virtual
-    ~TargetProperties();
+    ~TargetProperties() override;
     
     ArchSpec
     GetDefaultArchitecture () const;
@@ -169,6 +170,9 @@ public:
     bool
     GetBreakpointsConsultPlatformAvoidList ();
     
+    lldb::LanguageType
+    GetLanguage () const;
+
     const char *
     GetExpressionPrefixContentsAsCString ();
 
@@ -438,6 +442,18 @@ public:
     }
     
     bool
+    GetColorizeErrors () const
+    {
+        return m_ansi_color_errors;
+    }
+    
+    void
+    SetColorizeErrors (bool b)
+    {
+        m_ansi_color_errors = b;
+    }
+    
+    bool
     GetTrapExceptions() const
     {
         return m_trap_exceptions;
@@ -447,6 +463,18 @@ public:
     SetTrapExceptions (bool b)
     {
         m_trap_exceptions = b;
+    }
+    
+    bool
+    GetREPLEnabled() const
+    {
+        return m_repl;
+    }
+    
+    void
+    SetREPLEnabled (bool b)
+    {
+        m_repl = b;
     }
     
     void
@@ -463,6 +491,37 @@ public:
             return false;
         else
             return m_cancel_callback (phase, m_cancel_callback_baton);
+    }
+    
+    // Allows the expression contents to be remapped to point to the specified file and line
+    // using #line directives.
+    void
+    SetPoundLine (const char *path, uint32_t line) const
+    {
+        if (path && path[0])
+        {
+            m_pound_line_file = path;
+            m_pound_line_line = line;
+        }
+        else
+        {
+            m_pound_line_file.clear();
+            m_pound_line_line = 0;
+        }
+    }
+    
+    const char *
+    GetPoundLineFilePath () const
+    {
+        if (m_pound_line_file.empty())
+            return NULL;
+        return m_pound_line_file.c_str();
+    }
+    
+    uint32_t
+    GetPoundLineLine () const
+    {
+        return m_pound_line_line;
     }
 
     void
@@ -489,13 +548,20 @@ private:
     bool m_stop_others;
     bool m_debug;
     bool m_trap_exceptions;
+    bool m_repl;
     bool m_generate_debug_info;
+    bool m_ansi_color_errors;
     bool m_result_is_internal;
     lldb::DynamicValueType m_use_dynamic;
     uint32_t m_timeout_usec;
     uint32_t m_one_thread_timeout_usec;
     lldb::ExpressionCancelCallback m_cancel_callback;
     void *m_cancel_callback_baton;
+    // If m_pound_line_file is not empty and m_pound_line_line is non-zero,
+    // use #line %u "%s" before the expression content to remap where the source
+    // originates
+    mutable std::string m_pound_line_file;
+    mutable uint32_t m_pound_line_line;
 };
 
 //----------------------------------------------------------------------
@@ -527,7 +593,7 @@ public:
     
     static ConstString &GetStaticBroadcasterClass ();
 
-    virtual ConstString &GetBroadcasterClass() const
+    ConstString &GetBroadcasterClass() const override
     {
         return GetStaticBroadcasterClass();
     }
@@ -540,20 +606,19 @@ public:
 
         TargetEventData (const lldb::TargetSP &target_sp, const ModuleList &module_list);
 
-        virtual
-        ~TargetEventData();
+        ~TargetEventData() override;
 
         static const ConstString &
         GetFlavorString ();
 
-        virtual const ConstString &
-        GetFlavor () const
+        const ConstString &
+        GetFlavor() const override
         {
             return TargetEventData::GetFlavorString ();
         }
 
-        virtual void
-        Dump (Stream *s) const;
+        void
+        Dump(Stream *s) const override;
 
         static const TargetEventData *
         GetEventDataFromEvent (const Event *event_ptr);
@@ -618,7 +683,6 @@ public:
     static const lldb::TargetPropertiesSP &
     GetGlobalProperties();
 
-
 private:
     //------------------------------------------------------------------
     /// Construct with optional file and arch.
@@ -646,7 +710,7 @@ private:
     AddBreakpoint(lldb::BreakpointSP breakpoint_sp, bool internal);
 
 public:
-    ~Target();
+    ~Target() override;
 
     Mutex &
     GetAPIMutex ()
@@ -770,6 +834,7 @@ public:
                       const FileSpecList *containingSourceFiles,
                       const char *func_name,
                       uint32_t func_name_type_mask, 
+                      lldb::LanguageType language,
                       LazyBool skip_prologue,
                       bool internal,
                       bool request_hardware);
@@ -792,6 +857,7 @@ public:
                       const char *func_names[],
                       size_t num_names, 
                       uint32_t func_name_type_mask, 
+                      lldb::LanguageType language,
                       LazyBool skip_prologue,
                       bool internal,
                       bool request_hardware);
@@ -801,10 +867,10 @@ public:
                       const FileSpecList *containingSourceFiles,
                       const std::vector<std::string> &func_names,
                       uint32_t func_name_type_mask,
+                      lldb::LanguageType language,
                       LazyBool skip_prologue,
                       bool internal,
                       bool request_hardware);
-
 
     // Use this to create a general breakpoint:
     lldb::BreakpointSP
@@ -818,7 +884,7 @@ public:
     lldb::WatchpointSP
     CreateWatchpoint (lldb::addr_t addr,
                       size_t size,
-                      const ClangASTType *type,
+                      const CompilerType *type,
                       uint32_t kind,
                       Error &error);
 
@@ -914,23 +980,31 @@ public:
     lldb::addr_t
     GetOpcodeLoadAddress (lldb::addr_t load_addr, lldb::AddressClass addr_class = lldb::eAddressClassInvalid) const;
 
+    // Get load_addr as breakable load address for this target.
+    // Take a addr and check if for any reason there is a better address than this to put a breakpoint on.
+    // If there is then return that address.
+    // For MIPS, if instruction at addr is a delay slot instruction then this method will find the address of its
+    // previous instruction and return that address.
+    lldb::addr_t
+    GetBreakableLoadAddress (lldb::addr_t addr);
+
 protected:
     //------------------------------------------------------------------
     /// Implementing of ModuleList::Notifier.
     //------------------------------------------------------------------
     
-    virtual void
-    ModuleAdded (const ModuleList& module_list, const lldb::ModuleSP& module_sp);
+    void
+    ModuleAdded(const ModuleList& module_list, const lldb::ModuleSP& module_sp) override;
     
-    virtual void
-    ModuleRemoved (const ModuleList& module_list, const lldb::ModuleSP& module_sp);
+    void
+    ModuleRemoved(const ModuleList& module_list, const lldb::ModuleSP& module_sp) override;
     
-    virtual void
-    ModuleUpdated (const ModuleList& module_list,
-                   const lldb::ModuleSP& old_module_sp,
-                   const lldb::ModuleSP& new_module_sp);
-    virtual void
-    WillClearList (const ModuleList& module_list);
+    void
+    ModuleUpdated(const ModuleList& module_list,
+		  const lldb::ModuleSP& old_module_sp,
+		  const lldb::ModuleSP& new_module_sp) override;
+    void
+    WillClearList(const ModuleList& module_list) override;
 
 public:
     
@@ -1199,24 +1273,65 @@ public:
     //------------------------------------------------------------------
     // lldb::ExecutionContextScope pure virtual functions
     //------------------------------------------------------------------
-    virtual lldb::TargetSP
-    CalculateTarget ();
+    lldb::TargetSP
+    CalculateTarget() override;
     
-    virtual lldb::ProcessSP
-    CalculateProcess ();
+    lldb::ProcessSP
+    CalculateProcess() override;
     
-    virtual lldb::ThreadSP
-    CalculateThread ();
+    lldb::ThreadSP
+    CalculateThread() override;
     
-    virtual lldb::StackFrameSP
-    CalculateStackFrame ();
+    lldb::StackFrameSP
+    CalculateStackFrame() override;
 
-    virtual void
-    CalculateExecutionContext (ExecutionContext &exe_ctx);
+    void
+    CalculateExecutionContext(ExecutionContext &exe_ctx) override;
 
     PathMappingList &
     GetImageSearchPathList ();
     
+    TypeSystem *
+    GetScratchTypeSystemForLanguage (Error *error, lldb::LanguageType language, bool create_on_demand = true);
+    
+    PersistentExpressionState *
+    GetPersistentExpressionStateForLanguage (lldb::LanguageType language);
+    
+    // Creates a UserExpression for the given language, the rest of the parameters have the
+    // same meaning as for the UserExpression constructor.
+    // Returns a new-ed object which the caller owns.
+    
+    UserExpression *
+    GetUserExpressionForLanguage(const char *expr,
+                                 const char *expr_prefix,
+                                 lldb::LanguageType language,
+                                 Expression::ResultType desired_type,
+                                 Error &error);
+    
+    // Creates a FunctionCaller for the given language, the rest of the parameters have the
+    // same meaning as for the FunctionCaller constructor.  Since a FunctionCaller can't be
+    // IR Interpreted, it makes no sense to call this with an ExecutionContextScope that lacks
+    // a Process.
+    // Returns a new-ed object which the caller owns.
+    
+    FunctionCaller *
+    GetFunctionCallerForLanguage (lldb::LanguageType language,
+                                  const CompilerType &return_type,
+                                  const Address& function_address,
+                                  const ValueList &arg_value_list,
+                                  const char *name,
+                                  Error &error);
+    
+    // Creates a UtilityFunction for the given language, the rest of the parameters have the
+    // same meaning as for the UtilityFunction constructor.
+    // Returns a new-ed object which the caller owns.
+    
+    UtilityFunction *
+    GetUtilityFunctionForLanguage (const char *expr,
+                                   lldb::LanguageType language,
+                                   const char *name,
+                                   Error &error);
+
     ClangASTContext *
     GetScratchClangASTContext(bool create_on_demand=true);
     
@@ -1270,9 +1385,12 @@ public:
                         lldb::ValueObjectSP &result_valobj_sp,
                         const EvaluateExpressionOptions& options = EvaluateExpressionOptions());
 
-    ClangPersistentVariables &
-    GetPersistentVariables();
-
+    lldb::ExpressionVariableSP
+    GetPersistentVariable(const ConstString &name);
+    
+    lldb::addr_t
+    GetPersistentSymbol(const ConstString &name);
+    
     //------------------------------------------------------------------
     // Target Stop Hooks
     //------------------------------------------------------------------
@@ -1448,6 +1566,12 @@ public:
     
     lldb::SearchFilterSP
     GetSearchFilterForModuleAndCUList (const FileSpecList *containingModules, const FileSpecList *containingSourceFiles);
+    
+    lldb::REPLSP
+    GetREPL (Error &err, lldb::LanguageType language, const char *repl_options, bool can_create);
+    
+    void
+    SetREPL (lldb::LanguageType language, lldb::REPLSP repl_sp);
 
 protected:
     //------------------------------------------------------------------
@@ -1470,11 +1594,13 @@ protected:
     lldb::ProcessSP m_process_sp;
     lldb::SearchFilterSP  m_search_filter_sp;
     PathMappingList m_image_search_paths;
-    lldb::ClangASTContextUP m_scratch_ast_context_ap;
-    lldb::ClangASTSourceUP m_scratch_ast_source_ap;
+    TypeSystemMap m_scratch_type_system_map;
+    
+    typedef std::map<lldb::LanguageType, lldb::REPLSP> REPLMap;
+    REPLMap m_repl_map;
+    
     lldb::ClangASTImporterUP m_ast_importer_ap;
     lldb::ClangModulesDeclVendorUP m_clang_modules_decl_vendor_ap;
-    lldb::ClangPersistentVariablesUP m_persistent_variables;      ///< These are the persistent variables associated with this process for the expression parser.
 
     lldb::SourceManagerUP m_source_manager_ap;
 
@@ -1495,4 +1621,4 @@ private:
 
 } // namespace lldb_private
 
-#endif  // liblldb_Target_h_
+#endif // liblldb_Target_h_

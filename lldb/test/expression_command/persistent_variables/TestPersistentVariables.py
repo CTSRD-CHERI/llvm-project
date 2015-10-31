@@ -2,8 +2,11 @@
 Test that lldb persistent variables works correctly.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -13,13 +16,13 @@ class PersistentVariablesTestCase(TestBase):
 
     def test_persistent_variables(self):
         """Test that lldb persistent variables works correctly."""
-        self.buildDefault()
+        self.build()
 
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         self.runCmd("breakpoint set --source-pattern-regexp break")
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         self.runCmd("expression int $i = i")
 
@@ -49,9 +52,3 @@ class PersistentVariablesTestCase(TestBase):
 
         self.expect("expression (long)$4",
             startstr = "(long) $6 = -2")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

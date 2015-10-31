@@ -75,12 +75,12 @@ test_dir(char ret[PATH_MAX], const char *dir, const char *bin)
   char fullpath[PATH_MAX];
 
   snprintf(fullpath, PATH_MAX, "%s/%s", dir, bin);
-  if (realpath(fullpath, ret) == NULL)
-    return (1);
+  if (!realpath(fullpath, ret))
+    return 1;
   if (stat(fullpath, &sb) != 0)
-    return (1);
+    return 1;
 
-  return (0);
+  return 0;
 }
 
 static char *
@@ -91,34 +91,34 @@ getprogpath(char ret[PATH_MAX], const char *bin)
   /* First approach: absolute path. */
   if (bin[0] == '/') {
     if (test_dir(ret, "/", bin) == 0)
-      return (ret);
-    return (NULL);
+      return ret;
+    return nullptr;
   }
 
   /* Second approach: relative path. */
-  if (strchr(bin, '/') != NULL) {
+  if (strchr(bin, '/')) {
     char cwd[PATH_MAX];
-    if (getcwd(cwd, PATH_MAX) == NULL)
-      return (NULL);
+    if (!getcwd(cwd, PATH_MAX))
+      return nullptr;
     if (test_dir(ret, cwd, bin) == 0)
-      return (ret);
-    return (NULL);
+      return ret;
+    return nullptr;
   }
 
   /* Third approach: $PATH */
-  if ((pv = getenv("PATH")) == NULL)
-    return (NULL);
+  if ((pv = getenv("PATH")) == nullptr)
+    return nullptr;
   s = pv = strdup(pv);
-  if (pv == NULL)
-    return (NULL);
-  while ((t = strsep(&s, ":")) != NULL) {
+  if (!pv)
+    return nullptr;
+  while ((t = strsep(&s, ":")) != nullptr) {
     if (test_dir(ret, t, bin) == 0) {
       free(pv);
-      return (ret);
+      return ret;
     }
   }
   free(pv);
-  return (NULL);
+  return nullptr;
 }
 #endif // __FreeBSD__ || __NetBSD__ || __FreeBSD_kernel__
 
@@ -153,8 +153,8 @@ std::string getMainExecutable(const char *argv0, void *MainAddr) {
           return std::string(exe_path, len);
   } else {
       // Fall back to the classical detection.
-      if (getprogpath(exe_path, argv0) != NULL)
-          return exe_path;
+      if (getprogpath(exe_path, argv0))
+        return exe_path;
   }
 #elif defined(HAVE_DLFCN_H)
   // Use dladdr to get executable path if available.
@@ -219,11 +219,12 @@ std::error_code current_path(SmallVectorImpl<char> &result) {
   return std::error_code();
 }
 
-std::error_code create_directory(const Twine &path, bool IgnoreExisting) {
+std::error_code create_directory(const Twine &path, bool IgnoreExisting,
+                                 perms Perms) {
   SmallString<128> path_storage;
   StringRef p = path.toNullTerminatedStringRef(path_storage);
 
-  if (::mkdir(p.begin(), S_IRWXU | S_IRWXG) == -1) {
+  if (::mkdir(p.begin(), Perms) == -1) {
     if (errno != EEXIST || !IgnoreExisting)
       return std::error_code(errno, std::generic_category());
   }
@@ -322,6 +323,10 @@ std::error_code access(const Twine &Path, AccessMode Mode) {
   }
 
   return std::error_code();
+}
+
+bool can_execute(const Twine &Path) {
+  return !access(Path, AccessMode::Execute);
 }
 
 bool equivalent(file_status A, file_status B) {

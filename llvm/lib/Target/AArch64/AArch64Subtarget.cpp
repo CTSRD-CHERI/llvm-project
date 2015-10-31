@@ -47,17 +47,18 @@ AArch64Subtarget::AArch64Subtarget(const Triple &TT, const std::string &CPU,
                                    const TargetMachine &TM, bool LittleEndian)
     : AArch64GenSubtargetInfo(TT, CPU, FS), ARMProcFamily(Others),
       HasV8_1aOps(false), HasFPARMv8(false), HasNEON(false), HasCrypto(false),
-      HasCRC(false), HasZeroCycleRegMove(false), HasZeroCycleZeroing(false),
+      HasCRC(false), HasPerfMon(false), HasZeroCycleRegMove(false),
+      HasZeroCycleZeroing(false), StrictAlign(false), ReserveX18(false),
       IsLittle(LittleEndian), CPUString(CPU), TargetTriple(TT), FrameLowering(),
-      InstrInfo(initializeSubtargetDependencies(FS)),
-      TSInfo(TM.getDataLayout()), TLInfo(TM, *this) {}
+      InstrInfo(initializeSubtargetDependencies(FS)), TSInfo(),
+      TLInfo(TM, *this) {}
 
 /// ClassifyGlobalReference - Find the target operand flags that describe
 /// how a global value should be referenced for the current subtarget.
 unsigned char
 AArch64Subtarget::ClassifyGlobalReference(const GlobalValue *GV,
                                         const TargetMachine &TM) const {
-  bool isDecl = GV->isDeclarationForLinker();
+  bool isDef = GV->isStrongDefinitionForLinker();
 
   // MachO large model always goes via a GOT, simply to get a single 8-byte
   // absolute relocation on all global addresses.
@@ -66,8 +67,7 @@ AArch64Subtarget::ClassifyGlobalReference(const GlobalValue *GV,
 
   // The small code mode's direct accesses use ADRP, which cannot necessarily
   // produce the value 0 (if the code is above 4GB).
-  if (TM.getCodeModel() == CodeModel::Small &&
-      GV->isWeakForLinker() && isDecl) {
+  if (TM.getCodeModel() == CodeModel::Small && GV->hasExternalWeakLinkage()) {
     // In PIC mode use the GOT, but in absolute mode use a constant pool load.
     if (TM.getRelocationModel() == Reloc::Static)
         return AArch64II::MO_CONSTPOOL;
@@ -85,8 +85,7 @@ AArch64Subtarget::ClassifyGlobalReference(const GlobalValue *GV,
   //     defined could end up in unexpected places. Use a GOT.
   if (TM.getRelocationModel() != Reloc::Static && GV->hasDefaultVisibility()) {
     if (isTargetMachO())
-      return (isDecl || GV->isWeakForLinker()) ? AArch64II::MO_GOT
-                                               : AArch64II::MO_NO_FLAG;
+      return isDef ? AArch64II::MO_NO_FLAG : AArch64II::MO_GOT;
     else
       // No need to go through the GOT for local symbols on ELF.
       return GV->hasLocalLinkage() ? AArch64II::MO_NO_FLAG : AArch64II::MO_GOT;
@@ -115,6 +114,11 @@ void AArch64Subtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
   // bi-directional scheduling. 253.perlbmk.
   Policy.OnlyTopDown = false;
   Policy.OnlyBottomUp = false;
+  // Enabling or Disabling the latency heuristic is a close call: It seems to
+  // help nearly no benchmark on out-of-order architectures, on the other hand
+  // it regresses register pressure on a few benchmarking.
+  if (isCyclone())
+    Policy.DisableLatencyHeuristic = true;
 }
 
 bool AArch64Subtarget::enableEarlyIfConversion() const {

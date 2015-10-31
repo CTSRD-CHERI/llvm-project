@@ -2,8 +2,11 @@
 Test that lldb watchpoint works for multiple threads.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import re
 import lldb
 from lldbtest import *
@@ -13,33 +16,19 @@ class WatchpointForMultipleThreadsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_watchpoint_multiple_threads_with_dsym(self):
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_watchpoint_multiple_threads(self):
         """Test that lldb watchpoint works for multiple threads."""
-        self.buildDsym()
+        self.build()
         self.setTearDownCleanup()
         self.hello_multiple_threads()
 
-    @dwarf_test
-    def test_watchpoint_multiple_threads_with_dwarf(self):
-        """Test that lldb watchpoint works for multiple threads."""
-        self.buildDwarf()
-        self.setTearDownCleanup()
-        self.hello_multiple_threads()
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_watchpoint_multiple_threads_wp_set_and_then_delete_with_dsym(self):
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_watchpoint_multiple_threads_wp_set_and_then_delete(self):
         """Test that lldb watchpoint works for multiple threads, and after the watchpoint is deleted, the watchpoint event should no longer fires."""
-        self.buildDsym()
-        self.setTearDownCleanup()
-        self.hello_multiple_threads_wp_set_and_then_delete()
-
-    @dwarf_test
-    def test_watchpoint_multiple_threads_wp_set_and_then_delete_with_dwarf(self):
-        """Test that lldb watchpoint works for multiple threads, and after the watchpoint is deleted, the watchpoint event should no longer fires."""
-        self.buildDwarf()
+        self.build()
         self.setTearDownCleanup()
         self.hello_multiple_threads_wp_set_and_then_delete()
 
@@ -59,7 +48,7 @@ class WatchpointForMultipleThreadsTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.first_stop, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -103,7 +92,7 @@ class WatchpointForMultipleThreadsTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.first_stop, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -139,17 +128,10 @@ class WatchpointForMultipleThreadsTestCase(TestBase):
                     self.fail("Watchpoint hits not supposed to exceed 1 by design!")
                 # Good, we verified that the watchpoint works!  Now delete the watchpoint.
                 if self.TraceOn():
-                    print "watchpoint_stops=%d at the moment we delete the watchpoint" % watchpoint_stops
+                    print("watchpoint_stops=%d at the moment we delete the watchpoint" % watchpoint_stops)
                 self.runCmd("watchpoint delete 1")
                 self.expect("watchpoint list -v",
                     substrs = ['No watchpoints currently set.'])
                 continue
             else:
                 self.fail("The stop reason should be either break or watchpoint")
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

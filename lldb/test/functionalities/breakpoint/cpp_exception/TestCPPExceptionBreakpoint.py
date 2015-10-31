@@ -2,9 +2,12 @@
 Test that you can set breakpoint and hit the C++ language exception breakpoint
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
 import re
-import unittest2
 import lldb, lldbutil
 import sys
 from lldbtest import *
@@ -14,19 +17,11 @@ class TestCPPExceptionBreakpoint (TestBase):
     mydir = TestBase.compute_mydir(__file__)
     my_var = 10
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_cpp_exception_breakpoint (self):
+    @add_test_categories(['pyapi'])
+    @expectedFailureWindows("llvm.org/pr24538") # clang-cl does not support throw or catch
+    def test_cpp_exception_breakpoint(self):
         """Test setting and hitting the C++ exception breakpoint."""
-        self.buildDsym()
-        self.do_cpp_exception_bkpt ()
-
-    @python_api_test
-    @dwarf_test
-    def test_cpp_exception_breakpoint_with_dwarf(self):
-        """Test setting and hitting the C++ exception breakpoint."""
-        self.buildDwarf()
+        self.build()
         self.do_cpp_exception_bkpt ()
 
     def setUp (self):
@@ -50,9 +45,3 @@ class TestCPPExceptionBreakpoint (TestBase):
         
         thread_list = lldbutil.get_threads_stopped_at_breakpoint (process, exception_bkpt)
         self.assertTrue (len(thread_list) == 1, "One thread stopped at the exception breakpoint.")
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

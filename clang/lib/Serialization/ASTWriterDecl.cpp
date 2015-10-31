@@ -117,6 +117,7 @@ namespace clang {
 
     // FIXME: Put in the same order is DeclNodes.td?
     void VisitObjCMethodDecl(ObjCMethodDecl *D);
+    void VisitObjCTypeParamDecl(ObjCTypeParamDecl *D);
     void VisitObjCContainerDecl(ObjCContainerDecl *D);
     void VisitObjCInterfaceDecl(ObjCInterfaceDecl *D);
     void VisitObjCIvarDecl(ObjCIvarDecl *D);
@@ -131,6 +132,22 @@ namespace clang {
     void VisitObjCPropertyImplDecl(ObjCPropertyImplDecl *D);
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
 
+    /// Add an Objective-C type parameter list to the given record.
+    void AddObjCTypeParamList(ObjCTypeParamList *typeParams) {
+      // Empty type parameter list.
+      if (!typeParams) {
+        Record.push_back(0);
+        return;
+      }
+
+      Record.push_back(typeParams->size());
+      for (auto typeParam : *typeParams) {
+        Writer.AddDeclRef(typeParam, Record);
+      }
+      Writer.AddSourceLocation(typeParams->getLAngleLoc(), Record);
+      Writer.AddSourceLocation(typeParams->getRAngleLoc(), Record);
+    }
+
     void AddFunctionDefinition(const FunctionDecl *FD) {
       assert(FD->doesThisDeclarationHaveABody());
       if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
@@ -140,6 +157,22 @@ namespace clang {
               llvm::makeArrayRef(CD->init_begin(), CD->init_end()), Record);
       }
       Writer.AddStmt(FD->getBody());
+    }
+
+    /// Add to the record the first declaration from each module file that
+    /// provides a declaration of D. The intent is to provide a sufficient
+    /// set such that reloading this set will load all current redeclarations.
+    void AddFirstDeclFromEachModule(const Decl *D, bool IncludeLocal) {
+      llvm::MapVector<ModuleFile*, const Decl*> Firsts;
+      // FIXME: We can skip entries that we know are implied by others.
+      for (const Decl *R = D->getMostRecentDecl(); R; R = R->getPreviousDecl()) {
+        if (R->isFromASTFile())
+          Firsts[Writer.Chain->getOwningModuleFile(R)] = R;
+        else if (IncludeLocal)
+          Firsts[nullptr] = R;
+      }
+      for (const auto &F : Firsts)
+        Writer.AddDeclRef(F.second, Record);
     }
 
     /// Get the specialization decl from an entry in the specialization list.
@@ -175,22 +208,48 @@ namespace clang {
       auto &&PartialSpecializations = getPartialSpecializations(Common);
       ArrayRef<DeclID> LazySpecializations;
       if (auto *LS = Common->LazySpecializations)
-        LazySpecializations = ArrayRef<DeclID>(LS + 1, LS + 1 + LS[0]);
+        LazySpecializations = llvm::makeArrayRef(LS + 1, LS[0]);
 
-      Record.push_back(Specializations.size() +
-                       PartialSpecializations.size() +
-                       LazySpecializations.size());
+      // Add a slot to the record for the number of specializations.
+      unsigned I = Record.size();
+      Record.push_back(0);
+
       for (auto &Entry : Specializations) {
         auto *D = getSpecializationDecl(Entry);
         assert(D->isCanonicalDecl() && "non-canonical decl in set");
-        Writer.AddDeclRef(D, Record);
+        AddFirstDeclFromEachModule(D, /*IncludeLocal*/true);
       }
       for (auto &Entry : PartialSpecializations) {
         auto *D = getSpecializationDecl(Entry);
         assert(D->isCanonicalDecl() && "non-canonical decl in set");
-        Writer.AddDeclRef(D, Record);
+        AddFirstDeclFromEachModule(D, /*IncludeLocal*/true);
       }
       Record.append(LazySpecializations.begin(), LazySpecializations.end());
+
+      // Update the size entry we added earlier.
+      Record[I] = Record.size() - I - 1;
+    }
+
+    /// Ensure that this template specialization is associated with the specified
+    /// template on reload.
+    void RegisterTemplateSpecialization(const Decl *Template,
+                                        const Decl *Specialization) {
+      Template = Template->getCanonicalDecl();
+
+      // If the canonical template is local, we'll write out this specialization
+      // when we emit it.
+      // FIXME: We can do the same thing if there is any local declaration of
+      // the template, to avoid emitting an update record.
+      if (!Template->isFromASTFile())
+        return;
+
+      // We only need to associate the first local declaration of the
+      // specialization. The other declarations will get pulled in by it.
+      if (Writer.getFirstLocalDecl(Specialization) != Specialization)
+        return;
+
+      Writer.DeclUpdates[Template].push_back(ASTWriter::DeclUpdate(
+          UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION, Specialization));
     }
   };
 }
@@ -201,7 +260,7 @@ void ASTDeclWriter::Visit(Decl *D) {
   // Source locations require array (variable-length) abbreviations.  The
   // abbreviation infrastructure requires that arrays are encoded last, so
   // we handle it here in the case of those classes derived from DeclaratorDecl
-  if (DeclaratorDecl *DD = dyn_cast<DeclaratorDecl>(D)){
+  if (DeclaratorDecl *DD = dyn_cast<DeclaratorDecl>(D)) {
     Writer.AddTypeSourceInfo(DD->getTypeSourceInfo(), Record);
   }
 
@@ -237,6 +296,8 @@ void ASTDeclWriter::VisitDecl(Decl *D) {
   //
   // This happens when we instantiate a class with a friend declaration or a
   // function with a local extern declaration, for instance.
+  //
+  // FIXME: Can we handle this in AddedVisibleDecl instead?
   if (D->isOutOfLine()) {
     auto *DC = D->getDeclContext();
     while (auto *NS = dyn_cast<NamespaceDecl>(DC->getRedeclContext())) {
@@ -317,9 +378,6 @@ void ASTDeclWriter::VisitTagDecl(TagDecl *D) {
     Record.push_back(2);
     Writer.AddDeclRef(TD, Record);
     Writer.AddIdentifierRef(TD->getDeclName().getAsIdentifierInfo(), Record);
-  } else if (auto *DD = D->getDeclaratorForAnonDecl()) {
-    Record.push_back(3);
-    Writer.AddDeclRef(DD, Record);
   } else {
     Record.push_back(0);
   }
@@ -349,7 +407,6 @@ void ASTDeclWriter::VisitEnumDecl(EnumDecl *D) {
       !D->isUsed(false) &&
       !D->hasExtInfo() &&
       !D->getTypedefNameForAnonDecl() &&
-      !D->getDeclaratorForAnonDecl() &&
       D->getFirstDecl() == D->getMostRecentDecl() &&
       !D->isInvalidDecl() &&
       !D->isReferenced() &&
@@ -378,7 +435,6 @@ void ASTDeclWriter::VisitRecordDecl(RecordDecl *D) {
       !D->isUsed(false) &&
       !D->hasExtInfo() &&
       !D->getTypedefNameForAnonDecl() &&
-      !D->getDeclaratorForAnonDecl() &&
       D->getFirstDecl() == D->getMostRecentDecl() &&
       !D->isInvalidDecl() &&
       !D->isReferenced() &&
@@ -460,6 +516,9 @@ void ASTDeclWriter::VisitFunctionDecl(FunctionDecl *D) {
   case FunctionDecl::TK_FunctionTemplateSpecialization: {
     FunctionTemplateSpecializationInfo *
       FTSInfo = D->getTemplateSpecializationInfo();
+
+    RegisterTemplateSpecialization(FTSInfo->getTemplate(), D);
+
     Writer.AddDeclRef(FTSInfo->getTemplate(), Record);
     Record.push_back(FTSInfo->getTemplateSpecializationKind());
     
@@ -562,6 +621,16 @@ void ASTDeclWriter::VisitObjCMethodDecl(ObjCMethodDecl *D) {
   Code = serialization::DECL_OBJC_METHOD;
 }
 
+void ASTDeclWriter::VisitObjCTypeParamDecl(ObjCTypeParamDecl *D) {
+  VisitTypedefNameDecl(D);
+  Record.push_back(D->Variance);
+  Record.push_back(D->Index);
+  Writer.AddSourceLocation(D->VarianceLoc, Record);
+  Writer.AddSourceLocation(D->ColonLoc, Record);
+
+  Code = serialization::DECL_OBJC_TYPE_PARAM;
+}
+
 void ASTDeclWriter::VisitObjCContainerDecl(ObjCContainerDecl *D) {
   VisitNamedDecl(D);
   Writer.AddSourceLocation(D->getAtStartLoc(), Record);
@@ -573,14 +642,14 @@ void ASTDeclWriter::VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
   VisitRedeclarable(D);
   VisitObjCContainerDecl(D);
   Writer.AddTypeRef(QualType(D->getTypeForDecl(), 0), Record);
+  AddObjCTypeParamList(D->TypeParamList);
 
   Record.push_back(D->isThisDeclarationADefinition());
   if (D->isThisDeclarationADefinition()) {
     // Write the DefinitionData
     ObjCInterfaceDecl::DefinitionData &Data = D->data();
     
-    Writer.AddDeclRef(D->getSuperClass(), Record);
-    Writer.AddSourceLocation(D->getSuperClassLoc(), Record);
+    Writer.AddTypeSourceInfo(D->getSuperClassTInfo(), Record);
     Writer.AddSourceLocation(D->getEndOfDefinitionLoc(), Record);
     Record.push_back(Data.HasDesignatedInitializers);
 
@@ -660,6 +729,7 @@ void ASTDeclWriter::VisitObjCCategoryDecl(ObjCCategoryDecl *D) {
   Writer.AddSourceLocation(D->getIvarLBraceLoc(), Record);
   Writer.AddSourceLocation(D->getIvarRBraceLoc(), Record);
   Writer.AddDeclRef(D->getClassInterface(), Record);
+  AddObjCTypeParamList(D->TypeParamList);
   Record.push_back(D->protocol_size());
   for (const auto *I : D->protocols())
     Writer.AddDeclRef(I, Record);
@@ -977,40 +1047,6 @@ void ASTDeclWriter::VisitNamespaceDecl(NamespaceDecl *D) {
     Writer.AddDeclRef(D->getAnonymousNamespace(), Record);
   Code = serialization::DECL_NAMESPACE;
 
-  if (Writer.hasChain() && !D->isOriginalNamespace() &&
-      D->getOriginalNamespace()->isFromASTFile()) {
-    NamespaceDecl *NS = D->getOriginalNamespace();
-    Writer.UpdatedDeclContexts.insert(NS);
-
-    // Make sure all visible decls are written. They will be recorded later. We
-    // do this using a side data structure so we can sort the names into
-    // a deterministic order.
-    StoredDeclsMap *Map = NS->buildLookup();
-    SmallVector<std::pair<DeclarationName, DeclContext::lookup_result>, 16>
-        LookupResults;
-    LookupResults.reserve(Map->size());
-    for (auto &Entry : *Map)
-      LookupResults.push_back(
-          std::make_pair(Entry.first, Entry.second.getLookupResult()));
-
-    std::sort(LookupResults.begin(), LookupResults.end(), llvm::less_first());
-    for (auto &NameAndResult : LookupResults) {
-      DeclarationName Name = NameAndResult.first;
-      DeclContext::lookup_result Result = NameAndResult.second;
-      if (Name.getNameKind() == DeclarationName::CXXConstructorName ||
-          Name.getNameKind() == DeclarationName::CXXConversionFunctionName) {
-        // We have to work around a name lookup bug here where negative lookup
-        // results for these names get cached in namespace lookup tables.
-        assert(Result.empty() && "Cannot have a constructor or conversion "
-                                 "function name in a namespace!");
-        continue;
-      }
-
-      for (NamedDecl *ND : Result)
-        Writer.GetDeclRef(ND);
-    }
-  }
-
   if (Writer.hasChain() && D->isAnonymousNamespace() && 
       D == D->getMostRecentDecl()) {
     // This is a most recent reopening of the anonymous namespace. If its parent
@@ -1253,6 +1289,8 @@ void ASTDeclWriter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
 
 void ASTDeclWriter::VisitClassTemplateSpecializationDecl(
                                            ClassTemplateSpecializationDecl *D) {
+  RegisterTemplateSpecialization(D->getSpecializedTemplate(), D);
+
   VisitCXXRecordDecl(D);
 
   llvm::PointerUnion<ClassTemplateDecl *,
@@ -1312,6 +1350,8 @@ void ASTDeclWriter::VisitVarTemplateDecl(VarTemplateDecl *D) {
 
 void ASTDeclWriter::VisitVarTemplateSpecializationDecl(
     VarTemplateSpecializationDecl *D) {
+  RegisterTemplateSpecialization(D->getSpecializedTemplate(), D);
+
   VisitVarDecl(D);
 
   llvm::PointerUnion<VarTemplateDecl *, VarTemplatePartialSpecializationDecl *>
@@ -1482,49 +1522,78 @@ void ASTDeclWriter::VisitDeclContext(DeclContext *DC, uint64_t LexicalOffset,
   Record.push_back(VisibleOffset);
 }
 
+const Decl *ASTWriter::getFirstLocalDecl(const Decl *D) {
+  /// \brief Is this a local declaration (that is, one that will be written to
+  /// our AST file)? This is the case for declarations that are neither imported
+  /// from another AST file nor predefined.
+  auto IsLocalDecl = [&](const Decl *D) -> bool {
+    if (D->isFromASTFile())
+      return false;
+    auto I = DeclIDs.find(D);
+    return (I == DeclIDs.end() || I->second >= NUM_PREDEF_DECL_IDS);
+  };
+
+  assert(IsLocalDecl(D) && "expected a local declaration");
+
+  const Decl *Canon = D->getCanonicalDecl();
+  if (IsLocalDecl(Canon))
+    return Canon;
+
+  const Decl *&CacheEntry = FirstLocalDeclCache[Canon];
+  if (CacheEntry)
+    return CacheEntry;
+
+  for (const Decl *Redecl = D; Redecl; Redecl = Redecl->getPreviousDecl())
+    if (IsLocalDecl(Redecl))
+      D = Redecl;
+  return CacheEntry = D;
+}
+
 template <typename T>
 void ASTDeclWriter::VisitRedeclarable(Redeclarable<T> *D) {
   T *First = D->getFirstDecl();
   T *MostRecent = First->getMostRecentDecl();
+  T *DAsT = static_cast<T *>(D);
   if (MostRecent != First) {
-    assert(isRedeclarableDeclKind(static_cast<T *>(D)->getKind()) &&
+    assert(isRedeclarableDeclKind(DAsT->getKind()) &&
            "Not considered redeclarable?");
 
-    // There is more than one declaration of this entity, so we will need to
-    // write a redeclaration chain.
     Writer.AddDeclRef(First, Record);
-    Writer.Redeclarations.insert(First);
 
-    auto *Previous = D->getPreviousDecl();
-
-    // In a modules build, we can have imported declarations after a local
-    // canonical declaration. If this is the first local declaration, emit
-    // a list of all such imported declarations so that we can ensure they
-    // are loaded before we are. This allows us to rebuild the redecl chain
-    // in the right order on reload (all declarations imported by a module
-    // should be before all declarations provided by that module).
-    bool EmitImportedMergedCanonicalDecls = false;
-    if (Context.getLangOpts().Modules && Writer.Chain) {
-      auto *PreviousLocal = Previous;
-      while (PreviousLocal && PreviousLocal->isFromASTFile())
-        PreviousLocal = PreviousLocal->getPreviousDecl();
-      if (!PreviousLocal)
-        EmitImportedMergedCanonicalDecls = true;
-    }
-    if (EmitImportedMergedCanonicalDecls) {
-      llvm::SmallMapVector<ModuleFile*, Decl*, 16> FirstInModule;
-      for (auto *Redecl = MostRecent; Redecl;
-           Redecl = Redecl->getPreviousDecl())
-        if (Redecl->isFromASTFile())
-          FirstInModule[Writer.Chain->getOwningModuleFile(Redecl)] = Redecl;
-      // FIXME: If FirstInModule has entries for modules A and B, and B imports
-      // A (directly or indirectly), we don't need to write the entry for A.
-      Record.push_back(FirstInModule.size());
-      for (auto I = FirstInModule.rbegin(), E = FirstInModule.rend();
-           I != E; ++I)
-        Writer.AddDeclRef(I->second, Record);
-    } else
+    // Write out a list of local redeclarations of this declaration if it's the
+    // first local declaration in the chain.
+    const Decl *FirstLocal = Writer.getFirstLocalDecl(DAsT);
+    if (DAsT == FirstLocal) {
+      // Emit a list of all imported first declarations so that we can be sure
+      // that all redeclarations visible to this module are before D in the
+      // redecl chain.
+      unsigned I = Record.size();
       Record.push_back(0);
+      if (Writer.Chain)
+        AddFirstDeclFromEachModule(DAsT, /*IncludeLocal*/false);
+      // This is the number of imported first declarations + 1.
+      Record[I] = Record.size() - I;
+
+      // Collect the set of local redeclarations of this declaration, from
+      // newest to oldest.
+      RecordData LocalRedecls;
+      for (const Decl *Prev = FirstLocal->getMostRecentDecl();
+           Prev != FirstLocal; Prev = Prev->getPreviousDecl())
+        if (!Prev->isFromASTFile())
+          Writer.AddDeclRef(Prev, LocalRedecls);
+
+      // If we have any redecls, write them now as a separate record preceding
+      // the declaration itself.
+      if (LocalRedecls.empty())
+        Record.push_back(0);
+      else {
+        Record.push_back(Writer.Stream.GetCurrentBitNo());
+        Writer.Stream.EmitRecord(LOCAL_REDECLARATIONS, LocalRedecls);
+      }
+    } else {
+      Record.push_back(0);
+      Writer.AddDeclRef(FirstLocal, Record);
+    }
 
     // Make sure that we serialize both the previous and the most-recent 
     // declarations, which (transitively) ensures that all declarations in the
@@ -1532,7 +1601,7 @@ void ASTDeclWriter::VisitRedeclarable(Redeclarable<T> *D) {
     //
     // FIXME: This is not correct; when we reach an imported declaration we
     // won't emit its previous declaration.
-    (void)Writer.GetDeclRef(Previous);
+    (void)Writer.GetDeclRef(D->getPreviousDecl());
     (void)Writer.GetDeclRef(MostRecent);
   } else {
     // We use the sentinel value 0 to indicate an only declaration.
@@ -1981,7 +2050,6 @@ void ASTWriter::WriteDeclAbbrevs() {
 
   Abv = new BitCodeAbbrev();
   Abv->Add(BitCodeAbbrevOp(serialization::DECL_CONTEXT_VISIBLE));
-  Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));
   DeclContextVisibleLookupAbbrev = Stream.EmitAbbrev(Abv);
 }
@@ -1998,14 +2066,19 @@ void ASTWriter::WriteDeclAbbrevs() {
 /// clients to use a separate API call to "realize" the decl. This should be
 /// relatively painless since they would presumably only do it for top-level
 /// decls.
-static bool isRequiredDecl(const Decl *D, ASTContext &Context) {
+static bool isRequiredDecl(const Decl *D, ASTContext &Context,
+                           bool WritingModule) {
   // An ObjCMethodDecl is never considered as "required" because its
   // implementation container always is.
 
-  // File scoped assembly or obj-c implementation must be seen. ImportDecl is
-  // used by codegen to determine the set of imported modules to search for
-  // inputs for automatic linking.
-  if (isa<FileScopeAsmDecl>(D) || isa<ObjCImplDecl>(D) || isa<ImportDecl>(D))
+  // File scoped assembly or obj-c implementation must be seen.
+  if (isa<FileScopeAsmDecl>(D) || isa<ObjCImplDecl>(D))
+    return true;
+
+  // ImportDecl is used by codegen to determine the set of imported modules to
+  // search for inputs for automatic linking; include it if it has a semantic
+  // effect.
+  if (isa<ImportDecl>(D) && !WritingModule)
     return true;
 
   return Context.DeclMustBeEmitted(D);
@@ -2028,7 +2101,7 @@ void ASTWriter::WriteDecl(ASTContext &Context, Decl *D) {
     if (IDR == 0)
       IDR = NextDeclID++;
     
-    ID= IDR;
+    ID = IDR;
   }
 
   bool isReplacingADecl = ID < FirstDeclID;
@@ -2054,6 +2127,13 @@ void ASTWriter::WriteDecl(ASTContext &Context, Decl *D) {
     VisibleOffset = WriteDeclContextVisibleBlock(Context, DC);
   }
   
+  // Build a record for this declaration
+  Record.clear();
+  W.Code = (serialization::DeclCode)0;
+  W.AbbrevToUse = 0;
+  W.Visit(D);
+  if (DC) W.VisitDeclContext(DC, LexicalOffset, VisibleOffset);
+
   if (isReplacingADecl) {
     // We're replacing a decl in a previous file.
     ReplacedDecls.push_back(ReplacedDeclInfo(ID, Stream.GetCurrentBitNo(),
@@ -2070,18 +2150,11 @@ void ASTWriter::WriteDecl(ASTContext &Context, Decl *D) {
       DeclOffsets[Index].setLocation(Loc);
       DeclOffsets[Index].BitOffset = Stream.GetCurrentBitNo();
     }
-    
+
     SourceManager &SM = Context.getSourceManager();
     if (Loc.isValid() && SM.isLocalSourceLocation(Loc))
       associateDeclWithFile(D, ID);
   }
-
-  // Build and emit a record for this declaration
-  Record.clear();
-  W.Code = (serialization::DeclCode)0;
-  W.AbbrevToUse = 0;
-  W.Visit(D);
-  if (DC) W.VisitDeclContext(DC, LexicalOffset, VisibleOffset);
 
   if (!W.Code)
     llvm::report_fatal_error(StringRef("unexpected declaration kind '") +
@@ -2094,7 +2167,7 @@ void ASTWriter::WriteDecl(ASTContext &Context, Decl *D) {
 
   // Note declarations that should be deserialized eagerly so that we can add
   // them to a record in the AST file later.
-  if (isRequiredDecl(D, Context))
+  if (isRequiredDecl(D, Context, WritingModule))
     EagerlyDeserializedDecls.push_back(ID);
 }
 

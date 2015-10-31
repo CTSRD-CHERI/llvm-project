@@ -4,8 +4,11 @@ Test some lldb help commands.
 See also CommandInterpreter::OutputFormattedHelpText().
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -13,6 +16,7 @@ class HelpCommandTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
+    @no_debug_info_test
     def test_simplehelp(self):
         """A simple test of 'help' command and its output."""
         self.expect("help",
@@ -24,12 +28,14 @@ class HelpCommandTestCase(TestBase):
         self.expect("help", matching=True,
                     substrs = ['next'])
     
+    @no_debug_info_test
     def test_help_on_help(self):
         """Testing the help on the help facility."""
         self.expect("help help", matching=True,
                     substrs = ['--hide-aliases',
                                '--hide-user-commands'])
 
+    @no_debug_info_test
     def version_number_string(self):
         """Helper function to find the version number string of lldb."""
         plist = os.path.join(os.environ["LLDB_SRC"], "resources", "LLDB-Info.plist")
@@ -64,12 +70,13 @@ class HelpCommandTestCase(TestBase):
         # Use None to signify that we are not able to grok the version number.
         return None
 
-
+    @no_debug_info_test
     def test_help_arch(self):
         """Test 'help arch' which should list of supported architectures."""
         self.expect("help arch",
             substrs = ['arm', 'x86_64', 'i386'])
 
+    @no_debug_info_test
     def test_help_version(self):
         """Test 'help version' and 'version' commands."""
         self.expect("help version",
@@ -85,11 +92,13 @@ class HelpCommandTestCase(TestBase):
         self.expect("version",
             patterns = search_regexp)
 
+    @no_debug_info_test
     def test_help_should_not_crash_lldb(self):
         """Command 'help disasm' should not crash lldb."""
         self.runCmd("help disasm", check=False)
         self.runCmd("help unsigned-integer")
 
+    @no_debug_info_test
     def test_help_should_not_hang_emacsshell(self):
         """Command 'settings set term-width 0' should not hang the help command."""
         self.expect("settings set term-width 0",
@@ -99,12 +108,14 @@ class HelpCommandTestCase(TestBase):
         self.expect("help",
             startstr = 'Debugger commands:')
 
+    @no_debug_info_test
     def test_help_breakpoint_set(self):
         """Test that 'help breakpoint set' does not print out redundant lines of:
         'breakpoint set [-s <shlib-name>] ...'."""
         self.expect("help breakpoint set", matching=False,
             substrs = ['breakpoint set [-s <shlib-name>]'])
 
+    @no_debug_info_test
     def test_help_image_dump_symtab_should_not_crash(self):
         """Command 'help image dump symtab' should not crash lldb."""
         # 'image' is an alias for 'target modules'.
@@ -112,6 +123,7 @@ class HelpCommandTestCase(TestBase):
             substrs = ['dump symtab',
                        'sort-order'])
 
+    @no_debug_info_test
     def test_help_image_du_sym_is_ambiguous(self):
         """Command 'help image du sym' is ambiguous and spits out the list of candidates."""
         self.expect("help image du sym",
@@ -120,17 +132,20 @@ class HelpCommandTestCase(TestBase):
                        'symfile',
                        'symtab'])
 
+    @no_debug_info_test
     def test_help_image_du_line_should_work(self):
         """Command 'help image du line' is not ambiguous and should work."""
         # 'image' is an alias for 'target modules'.
         self.expect("help image du line",
             substrs = ['Dump the line table for one or more compilation units'])
 
+    @no_debug_info_test
     def test_help_target_variable_syntax(self):
         """Command 'help target variable' should display <variable-name> ..."""
         self.expect("help target variable",
             substrs = ['<variable-name> [<variable-name> [...]]'])
 
+    @no_debug_info_test
     def test_help_watchpoint_and_its_args(self):
         """Command 'help watchpoint', 'help watchpt-id', and 'help watchpt-id-list' should work."""
         self.expect("help watchpoint",
@@ -140,6 +155,7 @@ class HelpCommandTestCase(TestBase):
         self.expect("help watchpt-id-list",
             substrs = ['<watchpt-id-list>'])
 
+    @no_debug_info_test
     def test_help_watchpoint_set(self):
         """Test that 'help watchpoint set' prints out 'expression' and 'variable'
         as the possible subcommands."""
@@ -147,10 +163,3 @@ class HelpCommandTestCase(TestBase):
             substrs = ['The following subcommands are supported:'],
             patterns = ['expression +--',
                         'variable +--'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

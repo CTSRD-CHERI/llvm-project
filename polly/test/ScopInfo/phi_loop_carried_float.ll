@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 ;
 ;    float f(float *A, int N) {
 ;      float tmp = 0;
@@ -10,7 +10,7 @@
 ; CHECK-LABEL:   Stmt_bb1
 ; CHECK-NOT: Access
 ; CHECK:              ReadAccess := [Reduction Type: NONE]
-; CHECK:                  [N] -> { Stmt_bb1[i0] -> MemRef_tmp_0[] };
+; CHECK:                  [N] -> { Stmt_bb1[i0] -> MemRef_tmp_0__phi[] };
 ; CHECK-NOT: Access
 ; CHECK:              MustWriteAccess :=  [Reduction Type: NONE]
 ; CHECK:                  [N] -> { Stmt_bb1[i0] -> MemRef_tmp_0[] };
@@ -18,7 +18,7 @@
 ; CHECK-LABEL:   Stmt_bb4
 ; CHECK-NOT: Access
 ; CHECK:              MustWriteAccess :=  [Reduction Type: NONE]
-; CHECK:                  [N] -> { Stmt_bb4[i0] -> MemRef_tmp_0[] };
+; CHECK:                  [N] -> { Stmt_bb4[i0] -> MemRef_tmp_0__phi[] };
 ; CHECK-NOT: Access
 ; CHECK:              ReadAccess := [Reduction Type: NONE]
 ; CHECK:                  [N] -> { Stmt_bb4[i0] -> MemRef_tmp_0[] };

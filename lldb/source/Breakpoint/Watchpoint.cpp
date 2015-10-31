@@ -22,12 +22,12 @@
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/ThreadSpec.h"
-#include "lldb/Expression/ClangUserExpression.h"
+#include "lldb/Expression/UserExpression.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
-Watchpoint::Watchpoint (Target& target, lldb::addr_t addr, uint32_t size, const ClangASTType *type, bool hardware) :
+Watchpoint::Watchpoint (Target& target, lldb::addr_t addr, uint32_t size, const CompilerType *type, bool hardware) :
     StoppointLocation (0, addr, size, hardware),
     m_target(target),
     m_enabled(false),
@@ -218,14 +218,31 @@ Watchpoint::DumpSnapshots(Stream *s, const char *prefix) const
         s->Printf("\nWatchpoint %u hit:", GetID());
         prefix = "";
     }
-    
+
     if (m_old_value_sp)
     {
-        s->Printf("\n%sold value: %s", prefix, m_old_value_sp->GetValueAsCString());
+        const char *old_value_cstr =  m_old_value_sp->GetValueAsCString();
+        if (old_value_cstr && old_value_cstr[0])
+            s->Printf("\n%sold value: %s", prefix, old_value_cstr);
+        else
+        {
+            const char *old_summary_cstr =  m_old_value_sp-> GetSummaryAsCString();
+            if (old_summary_cstr && old_summary_cstr[0])
+                s->Printf("\n%sold value: %s", prefix, old_summary_cstr);
+        }
     }
+
     if (m_new_value_sp)
     {
-        s->Printf("\n%snew value: %s", prefix, m_new_value_sp->GetValueAsCString());
+        const char *new_value_cstr =  m_new_value_sp->GetValueAsCString();
+        if (new_value_cstr && new_value_cstr[0])
+            s->Printf("\n%snew value: %s", prefix, new_value_cstr);
+        else
+        {
+            const char *new_summary_cstr =  m_new_value_sp-> GetSummaryAsCString();
+            if (new_summary_cstr && new_summary_cstr[0])
+                s->Printf("\n%snew value: %s", prefix, new_summary_cstr);
+        }
     }
 }
 
@@ -371,7 +388,17 @@ Watchpoint::SetCondition (const char *condition)
     else
     {
         // Pass NULL for expr_prefix (no translation-unit level definitions).
-        m_condition_ap.reset(new ClangUserExpression (condition, NULL, lldb::eLanguageTypeUnknown, ClangUserExpression::eResultTypeAny));
+        Error error;
+        m_condition_ap.reset(m_target.GetUserExpressionForLanguage (condition,
+                                                                      NULL,
+                                                                      lldb::eLanguageTypeUnknown,
+                                                                      UserExpression::eResultTypeAny,
+                                                                      error));
+        if (error.Fail())
+        {
+            // FIXME: Log something...
+            m_condition_ap.reset();
+        }
     }
     SendWatchpointChangedEvent (eWatchpointEventTypeConditionChanged);
 }

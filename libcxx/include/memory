@@ -612,7 +612,7 @@ void* align(size_t alignment, size_t size, void*& ptr, size_t& space);
     #include <cassert>
 #endif
 
-#if __has_feature(cxx_atomic) && !defined(_LIBCPP_HAS_NO_THREADS)
+#if !defined(_LIBCPP_HAS_NO_ATOMIC_HEADER)
 #  include <atomic>
 #endif
 
@@ -624,6 +624,18 @@ void* align(size_t alignment, size_t size, void*& ptr, size_t& space);
 #endif
 
 _LIBCPP_BEGIN_NAMESPACE_STD
+
+template <class _ValueType>
+inline _LIBCPP_ALWAYS_INLINE
+_ValueType __libcpp_relaxed_load(_ValueType const* __value) {
+#if !defined(_LIBCPP_HAS_NO_THREADS) && \
+    defined(__ATOMIC_RELAXED) &&        \
+    (__has_builtin(__atomic_load_n) || _GNUC_VER >= 407)
+    return __atomic_load_n(__value, __ATOMIC_RELAXED);
+#else
+    return *__value;
+#endif
+}
 
 // addressof moved to <__functional_base>
 
@@ -918,6 +930,15 @@ public:
     static pointer pointer_to(typename conditional<is_void<element_type>::value,
                                       __nat, element_type>::type& __r) _NOEXCEPT
         {return _VSTD::addressof(__r);}
+};
+
+template <class _From, class _To>
+struct __rebind_pointer {
+#ifndef _LIBCPP_HAS_NO_TEMPLATE_ALIASES
+    typedef typename pointer_traits<_From>::template rebind<_To>        type;
+#else
+    typedef typename pointer_traits<_From>::template rebind<_To>::other type;
+#endif
 };
 
 // allocator_traits
@@ -1657,7 +1678,7 @@ private:
             {return __a.max_size();}
     _LIBCPP_INLINE_VISIBILITY
     static size_type __max_size(false_type, const allocator_type&)
-            {return numeric_limits<size_type>::max();}
+            {return numeric_limits<size_type>::max() / sizeof(value_type);}
 
     _LIBCPP_INLINE_VISIBILITY
     static allocator_type
@@ -1787,6 +1808,7 @@ public:
     typedef const _Tp         value_type;
 
     typedef true_type propagate_on_container_move_assignment;
+    typedef true_type is_always_equal;
 
     template <class _Up> struct rebind {typedef allocator<_Up> other;};
 
@@ -1887,6 +1909,10 @@ public:
     _LIBCPP_INLINE_VISIBILITY raw_storage_iterator& operator*() {return *this;}
     _LIBCPP_INLINE_VISIBILITY raw_storage_iterator& operator=(const _Tp& __element)
         {::new(&*__x_) _Tp(__element); return *this;}
+#if _LIBCPP_STD_VER >= 14
+    _LIBCPP_INLINE_VISIBILITY raw_storage_iterator& operator=(_Tp&& __element)
+        {::new(&*__x_) _Tp(_VSTD::move(__element)); return *this;}
+#endif
     _LIBCPP_INLINE_VISIBILITY raw_storage_iterator& operator++() {++__x_; return *this;}
     _LIBCPP_INLINE_VISIBILITY raw_storage_iterator  operator++(int)
         {raw_storage_iterator __t(*this); ++__x_; return __t;}
@@ -2022,11 +2048,11 @@ public:
     typedef const typename remove_reference<_T1>::type& _T1_const_reference;
     typedef const typename remove_reference<_T2>::type& _T2_const_reference;
 
-    _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp() {}
+    _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp() : __first_(), __second_() {}
     _LIBCPP_INLINE_VISIBILITY explicit __libcpp_compressed_pair_imp(_T1_param __t1)
-        : __first_(_VSTD::forward<_T1_param>(__t1)) {}
+        : __first_(_VSTD::forward<_T1_param>(__t1)), __second_() {}
     _LIBCPP_INLINE_VISIBILITY explicit __libcpp_compressed_pair_imp(_T2_param __t2)
-        : __second_(_VSTD::forward<_T2_param>(__t2)) {}
+        : __first_(), __second_(_VSTD::forward<_T2_param>(__t2)) {}
     _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp(_T1_param __t1, _T2_param __t2)
         : __first_(_VSTD::forward<_T1_param>(__t1)), __second_(_VSTD::forward<_T2_param>(__t2)) {}
 
@@ -2115,9 +2141,9 @@ public:
     typedef const _T1&                                        _T1_const_reference;
     typedef const typename remove_reference<_T2>::type& _T2_const_reference;
 
-    _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp() {}
+    _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp() : __second_() {}
     _LIBCPP_INLINE_VISIBILITY explicit __libcpp_compressed_pair_imp(_T1_param __t1)
-        : _T1(_VSTD::forward<_T1_param>(__t1)) {}
+        : _T1(_VSTD::forward<_T1_param>(__t1)), __second_() {}
     _LIBCPP_INLINE_VISIBILITY explicit __libcpp_compressed_pair_imp(_T2_param __t2)
         : __second_(_VSTD::forward<_T2_param>(__t2)) {}
     _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp(_T1_param __t1, _T2_param __t2)
@@ -2205,11 +2231,11 @@ public:
     typedef const typename remove_reference<_T1>::type& _T1_const_reference;
     typedef const _T2&                                        _T2_const_reference;
 
-    _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp() {}
+    _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp() : __first_() {}
     _LIBCPP_INLINE_VISIBILITY explicit __libcpp_compressed_pair_imp(_T1_param __t1)
         : __first_(_VSTD::forward<_T1_param>(__t1)) {}
     _LIBCPP_INLINE_VISIBILITY explicit __libcpp_compressed_pair_imp(_T2_param __t2)
-        : _T2(_VSTD::forward<_T2_param>(__t2)) {}
+        : _T2(_VSTD::forward<_T2_param>(__t2)), __first_() {}
     _LIBCPP_INLINE_VISIBILITY __libcpp_compressed_pair_imp(_T1_param __t1, _T2_param __t2)
         _NOEXCEPT_(is_nothrow_move_constructible<_T1>::value &&
                    is_nothrow_move_constructible<_T2>::value)
@@ -2646,10 +2672,17 @@ public:
         : __ptr_(__u->release(), _VSTD::forward<deleter_type>(__u->get_deleter())) {}
 
     template <class _Up, class _Ep>
-    _LIBCPP_INLINE_VISIBILITY unique_ptr& operator=(unique_ptr<_Up, _Ep> __u)
+    _LIBCPP_INLINE_VISIBILITY
+    typename enable_if<
+        !is_array<_Up>::value &&
+        is_convertible<typename unique_ptr<_Up, _Ep>::pointer, pointer>::value &&
+        is_assignable<deleter_type&, _Ep&>::value,
+        unique_ptr&
+    >::type
+    operator=(unique_ptr<_Up, _Ep> __u)
     {
         reset(__u.release());
-        __ptr_.second() = _VSTD::forward<deleter_type>(__u.get_deleter());
+        __ptr_.second() = _VSTD::forward<_Ep>(__u.get_deleter());
         return *this;
     }
 
@@ -3407,7 +3440,7 @@ struct __scalar_hash<_Tp, 2>
             {
                 size_t __a;
                 size_t __b;
-            };
+            } __s;
         } __u;
         __u.__t = __v;
         return __murmur2_or_cityhash<size_t>()(&__u, sizeof(__u));
@@ -3429,7 +3462,7 @@ struct __scalar_hash<_Tp, 3>
                 size_t __a;
                 size_t __b;
                 size_t __c;
-            };
+            } __s;
         } __u;
         __u.__t = __v;
         return __murmur2_or_cityhash<size_t>()(&__u, sizeof(__u));
@@ -3452,7 +3485,7 @@ struct __scalar_hash<_Tp, 4>
                 size_t __b;
                 size_t __c;
                 size_t __d;
-            };
+            } __s;
         } __u;
         __u.__t = __v;
         return __murmur2_or_cityhash<size_t>()(&__u, sizeof(__u));
@@ -3671,7 +3704,9 @@ public:
     void __add_shared() _NOEXCEPT;
     bool __release_shared() _NOEXCEPT;
     _LIBCPP_INLINE_VISIBILITY
-    long use_count() const _NOEXCEPT {return __shared_owners_ + 1;}
+    long use_count() const _NOEXCEPT {
+        return __libcpp_relaxed_load(&__shared_owners_) + 1;
+    }
 };
 
 class _LIBCPP_TYPE_VIS __shared_weak_count
@@ -5366,7 +5401,9 @@ inline _LIBCPP_INLINE_VISIBILITY
 basic_ostream<_CharT, _Traits>&
 operator<<(basic_ostream<_CharT, _Traits>& __os, shared_ptr<_Yp> const& __p);
 
-#if __has_feature(cxx_atomic) && !defined(_LIBCPP_HAS_NO_THREADS)
+// TODO(EricWF): Enable this for both Clang and GCC. Currently it is only
+// enabled with clang.
+#if defined(_LIBCPP_HAS_C_ATOMIC_IMP) && !defined(_LIBCPP_HAS_NO_THREADS)
 
 class _LIBCPP_TYPE_VIS __sp_mut
 {
@@ -5492,7 +5529,7 @@ atomic_compare_exchange_weak_explicit(shared_ptr<_Tp>* __p, shared_ptr<_Tp>* __v
     return atomic_compare_exchange_weak(__p, __v, __w);
 }
 
-#endif  // __has_feature(cxx_atomic) && !defined(_LIBCPP_HAS_NO_THREADS)
+#endif  // defined(_LIBCPP_HAS_C_ATOMIC_IMP) && !defined(_LIBCPP_HAS_NO_THREADS)
 
 //enum class
 struct _LIBCPP_TYPE_VIS pointer_safety
@@ -5527,6 +5564,47 @@ undeclare_reachable(_Tp* __p)
 }
 
 _LIBCPP_FUNC_VIS void* align(size_t __align, size_t __sz, void*& __ptr, size_t& __space);
+
+// --- Helper for container swap --
+template <typename _Alloc>
+_LIBCPP_INLINE_VISIBILITY
+void __swap_allocator(_Alloc & __a1, _Alloc & __a2)
+#if _LIBCPP_STD_VER >= 14
+    _NOEXCEPT
+#else
+    _NOEXCEPT_(__is_nothrow_swappable<_Alloc>::value)
+#endif
+{
+    __swap_allocator(__a1, __a2, 
+      integral_constant<bool, _VSTD::allocator_traits<_Alloc>::propagate_on_container_swap::value>());
+}
+
+template <typename _Alloc>
+_LIBCPP_INLINE_VISIBILITY
+void __swap_allocator(_Alloc & __a1, _Alloc & __a2, true_type)
+#if _LIBCPP_STD_VER >= 14
+    _NOEXCEPT
+#else
+    _NOEXCEPT_(__is_nothrow_swappable<_Alloc>::value)
+#endif
+{
+    using _VSTD::swap;
+    swap(__a1, __a2);
+}
+
+template <typename _Alloc>
+_LIBCPP_INLINE_VISIBILITY
+void __swap_allocator(_Alloc &, _Alloc &, false_type) _NOEXCEPT {}
+
+template <typename _Alloc, typename _Traits=allocator_traits<_Alloc> >
+struct __noexcept_move_assign_container : public integral_constant<bool, 
+    _Traits::propagate_on_container_move_assignment::value
+#if _LIBCPP_STD_VER > 14
+        || _Traits::is_always_equal::value
+#else
+        && is_nothrow_move_assignable<_Alloc>::value
+#endif
+    > {};
 
 _LIBCPP_END_NAMESPACE_STD
 

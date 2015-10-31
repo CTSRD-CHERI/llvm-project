@@ -68,7 +68,6 @@ void MCELFStreamer::mergeFragment(MCDataFragment *DF,
       EF->setBundlePadding(static_cast<uint8_t>(RequiredBundlePadding));
 
       Assembler.writeFragmentPadding(*EF, FSize, OW);
-      VecOS.flush();
       delete OW;
 
       DF->getContents().append(Code.begin(), Code.end());
@@ -112,7 +111,7 @@ void MCELFStreamer::EmitLabel(MCSymbol *S) {
   MCObjectStreamer::EmitLabel(Symbol);
 
   const MCSectionELF &Section =
-    static_cast<const MCSectionELF&>(Symbol->getSection());
+      static_cast<const MCSectionELF &>(*getCurrentSectionOnly());
   if (Section.getFlags() & ELF::SHF_TLS)
     Symbol->setType(ELF::STT_TLS);
 }
@@ -134,7 +133,7 @@ void MCELFStreamer::EmitAssemblerFlag(MCAssemblerFlag Flag) {
   llvm_unreachable("invalid assembler flag!");
 }
 
-// If bundle aligment is used and there are any instructions in the section, it
+// If bundle alignment is used and there are any instructions in the section, it
 // needs to be aligned to at least the bundle size.
 static void setSectionAlignmentForBundling(const MCAssembler &Assembler,
                                            MCSection *Section) {
@@ -312,11 +311,6 @@ void MCELFStreamer::EmitCommonSymbol(MCSymbol *S, uint64_t Size,
   Symbol->setType(ELF::STT_OBJECT);
 
   if (Symbol->getBinding() == ELF::STB_LOCAL) {
-    MCSection *Section = getAssembler().getContext().getELFSection(
-        ".bss", ELF::SHT_NOBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC);
-
-    AssignSection(Symbol, Section);
-
     struct LocalCommon L = {Symbol, Size, ByteAlignment};
     LocalCommons.push_back(L);
   } else {
@@ -344,7 +338,7 @@ void MCELFStreamer::EmitLocalCommonSymbol(MCSymbol *S, uint64_t Size,
 }
 
 void MCELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
-                                  const SMLoc &Loc) {
+                                  SMLoc Loc) {
   if (isBundleLocked())
     report_fatal_error("Emitting values inside a locked bundle is forbidden");
   fixSymbolsInTLSFixups(Value);
@@ -480,7 +474,6 @@ void MCELFStreamer::EmitInstToData(const MCInst &Inst,
   SmallString<256> Code;
   raw_svector_ostream VecOS(Code);
   Assembler.getEmitter().encodeInstruction(Inst, VecOS, Fixups, STI);
-  VecOS.flush();
 
   for (unsigned i = 0, e = Fixups.size(); i != e; ++i)
     fixSymbolsInTLSFixups(Fixups[i].getValue());
@@ -603,7 +596,7 @@ void MCELFStreamer::EmitBundleUnlock() {
     report_fatal_error("Empty bundle-locked group is forbidden");
 
   // When the -mc-relax-all flag is used, we emit instructions to fragments
-  // stored on a stack. When the bundle unlock is emited, we pop a fragment
+  // stored on a stack. When the bundle unlock is emitted, we pop a fragment
   // from the stack a merge it to the one below.
   if (getAssembler().getRelaxAll()) {
     assert(!BundleGroups.empty() && "There are no bundle groups");
@@ -632,7 +625,8 @@ void MCELFStreamer::Flush() {
     const MCSymbol &Symbol = *i->Symbol;
     uint64_t Size = i->Size;
     unsigned ByteAlignment = i->ByteAlignment;
-    MCSection &Section = Symbol.getSection();
+    MCSection &Section = *getAssembler().getContext().getELFSection(
+        ".bss", ELF::SHT_NOBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC);
 
     getAssembler().registerSection(Section);
     new MCAlignFragment(ByteAlignment, 0, 1, ByteAlignment, &Section);

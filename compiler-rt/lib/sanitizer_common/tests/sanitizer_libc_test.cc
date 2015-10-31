@@ -14,12 +14,12 @@
 #include "sanitizer_common/sanitizer_platform.h"
 #include "gtest/gtest.h"
 
-#if SANITIZER_LINUX || SANITIZER_MAC
-# define SANITIZER_TEST_HAS_STAT_H 1
+#if SANITIZER_WINDOWS
+#include <windows.h>
+#endif
+#if SANITIZER_POSIX
 # include <sys/stat.h>
 # include "sanitizer_common/sanitizer_posix.h"
-#else
-# define SANITIZER_TEST_HAS_STAT_H 0
 #endif
 
 // A regression test for internal_memmove() implementation.
@@ -57,6 +57,17 @@ struct stat_and_more {
 };
 
 static void temp_file_name(char *buf, size_t bufsize, const char *prefix) {
+#if SANITIZER_WINDOWS
+  buf[0] = '\0';
+  char tmp_dir[MAX_PATH];
+  if (!::GetTempPathA(MAX_PATH, tmp_dir))
+    return;
+  // GetTempFileNameA needs a MAX_PATH buffer.
+  char tmp_path[MAX_PATH];
+  if (!::GetTempFileNameA(tmp_dir, prefix, 0, tmp_path))
+    return;
+  internal_strncpy(buf, tmp_path, bufsize);
+#else
   const char *tmpdir = "/tmp";
 #if SANITIZER_ANDROID
   // I don't know a way to query temp directory location on Android without
@@ -67,10 +78,9 @@ static void temp_file_name(char *buf, size_t bufsize, const char *prefix) {
 #endif
   u32 uid = GetUid();
   internal_snprintf(buf, bufsize, "%s/%s%d", tmpdir, prefix, uid);
+#endif
 }
 
-// FIXME: File manipulations are not yet supported on Windows
-#if !defined(_WIN32)
 TEST(SanitizerCommon, FileOps) {
   const char *str1 = "qwerty";
   uptr len1 = internal_strlen(str1);
@@ -81,16 +91,23 @@ TEST(SanitizerCommon, FileOps) {
   temp_file_name(tmpfile, sizeof(tmpfile), "sanitizer_common.fileops.tmp.");
   fd_t fd = OpenFile(tmpfile, WrOnly);
   ASSERT_NE(fd, kInvalidFd);
-  EXPECT_EQ(len1, internal_write(fd, str1, len1));
-  EXPECT_EQ(len2, internal_write(fd, str2, len2));
+  uptr bytes_written = 0;
+  EXPECT_TRUE(WriteToFile(fd, str1, len1, &bytes_written));
+  EXPECT_EQ(len1, bytes_written);
+  EXPECT_TRUE(WriteToFile(fd, str2, len2, &bytes_written));
+  EXPECT_EQ(len2, bytes_written);
   CloseFile(fd);
+
+  EXPECT_TRUE(FileExists(tmpfile));
 
   fd = OpenFile(tmpfile, RdOnly);
   ASSERT_NE(fd, kInvalidFd);
+
+#if SANITIZER_POSIX
+  // The stat wrappers are posix-only.
   uptr fsize = internal_filesize(fd);
   EXPECT_EQ(len1 + len2, fsize);
 
-#if SANITIZER_TEST_HAS_STAT_H
   struct stat st1, st2, st3;
   EXPECT_EQ(0u, internal_stat(tmpfile, &st1));
   EXPECT_EQ(0u, internal_lstat(tmpfile, &st2));
@@ -108,16 +125,25 @@ TEST(SanitizerCommon, FileOps) {
 #endif
 
   char buf[64] = {};
-  EXPECT_EQ(len1, internal_read(fd, buf, len1));
+  uptr bytes_read = 0;
+  EXPECT_TRUE(ReadFromFile(fd, buf, len1, &bytes_read));
+  EXPECT_EQ(len1, bytes_read);
   EXPECT_EQ(0, internal_memcmp(buf, str1, len1));
   EXPECT_EQ((char)0, buf[len1 + 1]);
   internal_memset(buf, 0, len1);
-  EXPECT_EQ(len2, internal_read(fd, buf, len2));
+  EXPECT_TRUE(ReadFromFile(fd, buf, len2, &bytes_read));
+  EXPECT_EQ(len2, bytes_read);
   EXPECT_EQ(0, internal_memcmp(buf, str2, len2));
   CloseFile(fd);
+
+#if SANITIZER_WINDOWS
+  // No sanitizer needs to delete a file on Windows yet. If we ever do, we can
+  // add a portable wrapper and test it from here.
+  ::DeleteFileA(&tmpfile[0]);
+#else
   internal_unlink(tmpfile);
-}
 #endif
+}
 
 TEST(SanitizerCommon, InternalStrFunctions) {
   const char *haystack = "haystack";
@@ -128,7 +154,7 @@ TEST(SanitizerCommon, InternalStrFunctions) {
 }
 
 // FIXME: File manipulations are not yet supported on Windows
-#if !defined(_WIN32) && !SANITIZER_MAC
+#if SANITIZER_POSIX && !SANITIZER_MAC
 TEST(SanitizerCommon, InternalMmapWithOffset) {
   char tmpfile[128];
   temp_file_name(tmpfile, sizeof(tmpfile),

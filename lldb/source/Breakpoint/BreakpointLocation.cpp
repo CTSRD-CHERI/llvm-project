@@ -21,9 +21,11 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/StreamString.h"
 #include "lldb/Core/ValueObject.h"
-#include "lldb/Expression/ClangUserExpression.h"
+#include "lldb/Expression/ExpressionVariable.h"
+#include "lldb/Expression/UserExpression.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/Symbol.h"
+#include "lldb/Symbol/TypeSystem.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Thread.h"
@@ -86,6 +88,12 @@ Breakpoint &
 BreakpointLocation::GetBreakpoint ()
 {
     return m_owner;
+}
+
+Target &
+BreakpointLocation::GetTarget()
+{
+    return m_owner.GetTarget();
 }
 
 bool
@@ -278,10 +286,26 @@ BreakpointLocation::ConditionSaysStop (ExecutionContext &exe_ctx, Error &error)
         !m_user_expression_sp ||
         !m_user_expression_sp->MatchesContext(exe_ctx))
     {
-        m_user_expression_sp.reset(new ClangUserExpression(condition_text,
-                                                           NULL,
-                                                           lldb::eLanguageTypeUnknown,
-                                                           ClangUserExpression::eResultTypeAny));
+        LanguageType language = eLanguageTypeUnknown;
+        // See if we can figure out the language from the frame, otherwise use the default language:
+        CompileUnit *comp_unit = m_address.CalculateSymbolContextCompileUnit();
+        if (comp_unit)
+            language = comp_unit->GetLanguage();
+        
+        Error error;
+        m_user_expression_sp.reset(GetTarget().GetUserExpressionForLanguage(condition_text,
+                                                                             NULL,
+                                                                             language,
+                                                                             Expression::eResultTypeAny,
+                                                                             error));
+        if (error.Fail())
+        {
+            if (log)
+                log->Printf("Error getting condition expression: %s.", error.AsCString());
+            m_user_expression_sp.reset();
+            return true;
+        }
+        
         
         StreamString errors;
         
@@ -314,7 +338,7 @@ BreakpointLocation::ConditionSaysStop (ExecutionContext &exe_ctx, Error &error)
     
     StreamString execution_errors;
     
-    ClangExpressionVariableSP result_variable_sp;
+    ExpressionVariableSP result_variable_sp;
     
     ExpressionResults result_code =
     m_user_expression_sp->Execute(execution_errors,
@@ -611,7 +635,7 @@ BreakpointLocation::GetDescription (Stream *s, lldb::DescriptionLevel level)
                 {
                     s->EOL();
                     s->Indent("function = ");
-                    s->PutCString (sc.function->GetMangled().GetName().AsCString("<unknown>"));
+                    s->PutCString (sc.function->GetName().AsCString("<unknown>"));
                 }
 
                 if (sc.line_entry.line > 0)
@@ -632,7 +656,7 @@ BreakpointLocation::GetDescription (Stream *s, lldb::DescriptionLevel level)
                         s->Indent ("re-exported target = ");
                     else
                         s->Indent("symbol = ");
-                    s->PutCString(sc.symbol->GetMangled().GetName().AsCString("<unknown>"));
+                    s->PutCString(sc.symbol->GetName().AsCString("<unknown>"));
                 }
             }
         }

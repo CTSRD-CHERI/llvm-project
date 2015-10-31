@@ -18,6 +18,7 @@
 
 #define KMP_OS_LINUX    0
 #define KMP_OS_FREEBSD  0
+#define KMP_OS_NETBSD   0
 #define KMP_OS_DARWIN   0
 #define KMP_OS_WINDOWS  0
 #define KMP_OS_CNK      0
@@ -49,16 +50,21 @@
 # define KMP_OS_FREEBSD 1
 #endif
 
+#if ( defined __NetBSD__ )
+# undef KMP_OS_NETBSD
+# define KMP_OS_NETBSD 1
+#endif
+
 #if ( defined __bgq__ )
 # undef KMP_OS_CNK
 # define KMP_OS_CNK 1
 #endif
 
-#if (1 != KMP_OS_LINUX + KMP_OS_FREEBSD + KMP_OS_DARWIN + KMP_OS_WINDOWS)
+#if (1 != KMP_OS_LINUX + KMP_OS_FREEBSD + KMP_OS_NETBSD + KMP_OS_DARWIN + KMP_OS_WINDOWS)
 # error Unknown OS
 #endif
 
-#if KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_DARWIN
+#if KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_NETBSD || KMP_OS_DARWIN
 # undef KMP_OS_UNIX
 # define KMP_OS_UNIX 1
 #endif
@@ -137,6 +143,21 @@
 
 #if defined(KMP_ARCH_ARMV2)
 # define KMP_ARCH_ARM 1
+#endif
+
+#if defined(__MIC__) || defined(__MIC2__)
+# define KMP_MIC  1
+# if __MIC2__ || __KNC__
+#  define KMP_MIC1 0
+#  define KMP_MIC2 1
+# else
+#  define KMP_MIC1 1
+#  define KMP_MIC2 0
+# endif
+#else
+# define KMP_MIC  0
+# define KMP_MIC1 0
+# define KMP_MIC2 0
 #endif
 
 // TODO: Fixme - This is clever, but really fugly
