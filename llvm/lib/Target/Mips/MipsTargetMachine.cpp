@@ -99,7 +99,6 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   if (ABI.IsCheriSandbox())
     Ret += "-A200";
 
-  fprintf(stderr, "Target data layout: '%s'\nFeatures: '%s'\n", Ret.c_str(), FS.str().c_str());
   return Ret;
 }
 
