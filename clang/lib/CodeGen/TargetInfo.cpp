@@ -195,14 +195,25 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
   Address Addr = Address::invalid();
   if (AllowHigherAlign && DirectAlign > SlotSize) {
     llvm::Value *PtrAsInt = Ptr;
-    PtrAsInt = CGF.Builder.CreatePtrToInt(PtrAsInt, CGF.IntPtrTy);
-    PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
-          llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
-    PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
-             llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
-    Addr = Address(CGF.Builder.CreateIntToPtr(PtrAsInt, Ptr->getType(),
-                                              "argp.cur.aligned"),
-                   DirectAlign);
+    if (Ptr->getType()->getPointerAddressSpace() ==
+        (unsigned)CGF.getTarget().AddressSpaceForCapabilities()) {
+      PtrAsInt = CGF.getPointerOffset(PtrAsInt);
+      PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
+            llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
+      PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
+               llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
+      Addr = Address(CGF.setPointerOffset(Ptr, PtrAsInt),
+                     DirectAlign);
+    } else {
+      PtrAsInt = CGF.Builder.CreatePtrToInt(PtrAsInt, CGF.IntPtrTy);
+      PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
+            llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
+      PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
+               llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
+      Addr = Address(CGF.Builder.CreateIntToPtr(PtrAsInt, Ptr->getType(),
+                                                "argp.cur.aligned"),
+                     DirectAlign);
+    }
   } else {
     Addr = Address(Ptr, SlotSize);
   }
