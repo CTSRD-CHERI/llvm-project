@@ -2,8 +2,11 @@
 Test lldb data formatter subsystem.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbbench import *
 import lldbutil
@@ -13,18 +16,9 @@ class TestBenchmarkContinue(BenchBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @benchmarks_test
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
+    def test_run_command(self):
         """Benchmark different ways to continue a process"""
-        self.buildDsym()
-        self.data_formatter_commands()
-
-    @benchmarks_test
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Benchmark different ways to continue a process"""
-        self.buildDwarf()
+        self.build()
         self.data_formatter_commands()
 
     def setUp(self):
@@ -37,7 +31,7 @@ class TestBenchmarkContinue(BenchBase):
 
         bkpt = self.target().FindBreakpointByID(lldbutil.run_break_set_by_source_regexp (self, "// break here"))
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -69,10 +63,4 @@ class TestBenchmarkContinue(BenchBase):
             lldbutil.continue_to_breakpoint(self.process(), bkpt)
             lldbutil_sw.stop()
             
-        print "runCmd: %s\nlldbutil: %s" % (runCmd_sw,lldbutil_sw)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+        print("runCmd: %s\nlldbutil: %s" % (runCmd_sw,lldbutil_sw))

@@ -2,8 +2,11 @@
 Test lldb data formatter subsystem.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,32 +15,20 @@ class NamedSummariesDataFormatterTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test data formatter commands."""
-        self.buildDsym()
-        self.data_formatter_commands()
-
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test data formatter commands."""
-        self.buildDwarf()
-        self.data_formatter_commands()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break at.
         self.line = line_number('main.cpp', '// Set break point at this line.')
 
-    def data_formatter_commands(self):
+    def test_with_run_command(self):
         """Test that that file and class static variables display correctly."""
+        self.build()
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -129,10 +120,3 @@ class NamedSummariesDataFormatterTestCase(TestBase):
         self.expect("frame variable first",matching=False,
             substrs = ['FirstAndFriends: x=12',
                        'y=34'])
-
-                    
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

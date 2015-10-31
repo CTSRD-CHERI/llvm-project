@@ -240,7 +240,7 @@ EmitRegUnitPressure(raw_ostream &OS, const CodeGenRegBank &RegBank,
     MaxRegUnitWeight = std::max(MaxRegUnitWeight, RegUnits.Weight);
     OS << "    \"" << RegUnits.Name << "\",\n";
   }
-  OS << "    nullptr };\n"
+  OS << "  };\n"
      << "  return PressureNameTable[Idx];\n"
      << "}\n\n";
 
@@ -1070,11 +1070,11 @@ RegisterInfoEmitter::runTargetHeader(raw_ostream &OS, CodeGenTarget &Target,
 
   OS << "namespace llvm {\n\n";
 
+  OS << "class " << TargetName << "FrameLowering;\n\n";
+
   OS << "struct " << ClassName << " : public TargetRegisterInfo {\n"
      << "  explicit " << ClassName
-     << "(unsigned RA, unsigned D = 0, unsigned E = 0, unsigned PC = 0);\n"
-     << "  bool needsStackRealignment(const MachineFunction &) const override\n"
-     << "     { return false; }\n";
+     << "(unsigned RA, unsigned D = 0, unsigned E = 0, unsigned PC = 0);\n";
   if (!RegBank.getSubRegIndices().empty()) {
     OS << "  unsigned composeSubRegIndicesImpl"
        << "(unsigned, unsigned) const override;\n"
@@ -1096,6 +1096,9 @@ RegisterInfoEmitter::runTargetHeader(raw_ostream &OS, CodeGenTarget &Target,
      << "unsigned RegUnit) const override;\n"
      << "  ArrayRef<const char *> getRegMaskNames() const override;\n"
      << "  ArrayRef<const uint32_t *> getRegMasks() const override;\n"
+     << "  /// Devirtualized TargetFrameLowering.\n"
+     << "  static const " << TargetName << "FrameLowering *getFrameLowering(\n"
+     << "      const MachineFunction &MF);\n"
      << "};\n\n";
 
   const auto &RegisterClasses = RegBank.getRegClasses();
@@ -1449,23 +1452,35 @@ RegisterInfoEmitter::runTargetDesc(raw_ostream &OS, CodeGenTarget &Target,
 
   OS << "ArrayRef<const uint32_t *> " << ClassName
      << "::getRegMasks() const {\n";
-  OS << "  static const uint32_t *Masks[] = {\n";
-  for (Record *CSRSet : CSRSets)
-    OS << "    " << CSRSet->getName() << "_RegMask, \n";
-  OS << "    nullptr\n  };\n";
-  OS << "  return ArrayRef<const uint32_t *>(Masks, (size_t)" << CSRSets.size()
-     << ");\n";
+  if (!CSRSets.empty()) {
+    OS << "  static const uint32_t *const Masks[] = {\n";
+    for (Record *CSRSet : CSRSets)
+      OS << "    " << CSRSet->getName() << "_RegMask,\n";
+    OS << "  };\n";
+    OS << "  return makeArrayRef(Masks);\n";
+  } else {
+    OS << "  return None;\n";
+  }
   OS << "}\n\n";
 
   OS << "ArrayRef<const char *> " << ClassName
      << "::getRegMaskNames() const {\n";
-  OS << "  static const char *Names[] = {\n";
-  for (Record *CSRSet : CSRSets)
-    OS << "    " << '"' << CSRSet->getName() << '"' << ",\n";
-  OS << "    nullptr\n  };\n";
-  OS << "  return ArrayRef<const char *>(Names, (size_t)" << CSRSets.size()
-     << ");\n";
+  if (!CSRSets.empty()) {
+  OS << "  static const char *const Names[] = {\n";
+    for (Record *CSRSet : CSRSets)
+      OS << "    " << '"' << CSRSet->getName() << '"' << ",\n";
+    OS << "  };\n";
+    OS << "  return makeArrayRef(Names);\n";
+  } else {
+    OS << "  return None;\n";
+  }
   OS << "}\n\n";
+
+  OS << "const " << TargetName << "FrameLowering *\n" << TargetName
+     << "GenRegisterInfo::getFrameLowering(const MachineFunction &MF) {\n"
+     << "  return static_cast<const " << TargetName << "FrameLowering *>(\n"
+     << "      MF.getSubtarget().getFrameLowering());\n"
+     << "}\n\n";
 
   OS << "} // End llvm namespace\n";
   OS << "#endif // GET_REGINFO_TARGET_DESC\n\n";

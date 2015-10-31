@@ -92,8 +92,7 @@ def _SLASH_I : CLJoinedOrSeparate<"I">,
 def _SLASH_J : CLFlag<"J">, HelpText<"Make char type unsigned">,
   Alias<funsigned_char>;
 def _SLASH_O0 : CLFlag<"O0">, Alias<O0>;
-def _SLASH_O : CLJoined<"O">, HelpText<"Optimization level">,
-  MetaVarName<"<n>">, Alias<O>;
+def _SLASH_O : CLJoined<"O">, HelpText<"Optimization level">;
 def _SLASH_Ob0 : CLFlag<"Ob0">, HelpText<"Disable inlining">,
   Alias<fno_inline>;
 def _SLASH_Od : CLFlag<"Od">, HelpText<"Disable optimization">, Alias<O0>;
@@ -105,12 +104,6 @@ def _SLASH_Os : CLFlag<"Os">, HelpText<"Optimize for size">, Alias<O>,
   AliasArgs<["s"]>;
 def _SLASH_Ot : CLFlag<"Ot">, HelpText<"Optimize for speed">, Alias<O>,
   AliasArgs<["2"]>;
-def _SLASH_Ox : CLFlag<"Ox">, HelpText<"Maximum optimization">, Alias<O>,
-  AliasArgs<["3"]>;
-def _SLASH_Oy : CLFlag<"Oy">, HelpText<"Enable frame pointer omission">,
-  Alias<fomit_frame_pointer>;
-def _SLASH_Oy_ : CLFlag<"Oy-">, HelpText<"Disable frame pointer omission">,
-  Alias<fno_omit_frame_pointer>;
 def _SLASH_QUESTION : CLFlag<"?">, Alias<help>,
   HelpText<"Display available options">;
 def _SLASH_Qvec : CLFlag<"Qvec">,
@@ -160,9 +153,10 @@ def _SLASH_Zc_trigraphs : CLFlag<"Zc:trigraphs">,
   HelpText<"Enable trigraphs">, Alias<ftrigraphs>;
 def _SLASH_Zc_trigraphs_off : CLFlag<"Zc:trigraphs-">,
   HelpText<"Disable trigraphs (default)">, Alias<fno_trigraphs>;
-def _SLASH_Z7 : CLFlag<"Z7">, Alias<gline_tables_only>;
-def _SLASH_Zi : CLFlag<"Zi">, HelpText<"Enable debug information">,
-  Alias<gline_tables_only>;
+def _SLASH_Z7 : CLFlag<"Z7">,
+  HelpText<"Enable CodeView debug information in object files">;
+def _SLASH_Zi : CLFlag<"Zi">, Alias<_SLASH_Z7>,
+  HelpText<"Alias for /Z7. Does not produce PDBs.">;
 def _SLASH_Zp : CLJoined<"Zp">,
   HelpText<"Specify the default maximum struct packing alignment">,
   Alias<fpack_struct_EQ>;
@@ -188,7 +182,7 @@ def _SLASH_EP : CLFlag<"EP">,
 def _SLASH_FA : CLFlag<"FA">,
   HelpText<"Output assembly code file during compilation">;
 def _SLASH_Fa : CLJoined<"Fa">,
-  HelpText<"Output assembly code to this file during compilation">,
+  HelpText<"Output assembly code to this file during compilation (with /FA)">,
   MetaVarName<"<file or directory>">;
 def _SLASH_fallback : CLCompileFlag<"fallback">,
   HelpText<"Fall back to cl.exe if clang-cl fails to compile">;
@@ -198,10 +192,10 @@ def _SLASH_Fe : CLJoined<"Fe">,
   HelpText<"Set output executable file or directory (ends in / or \\)">,
   MetaVarName<"<file or directory>">;
 def _SLASH_Fi : CLCompileJoined<"Fi">,
-  HelpText<"Set preprocess output file name">,
+  HelpText<"Set preprocess output file name (with /P)">,
   MetaVarName<"<file>">;
 def _SLASH_Fo : CLCompileJoined<"Fo">,
-  HelpText<"Set output object file, or directory (ends in / or \\)">,
+  HelpText<"Set output object file, or directory (ends in / or \\) (with /c)">,
   MetaVarName<"<file or directory>">;
 def _SLASH_LD : CLFlag<"LD">, HelpText<"Create DLL">;
 def _SLASH_LDd : CLFlag<"LDd">, HelpText<"Create debug DLL">;
@@ -243,10 +237,13 @@ def _SLASH_vmv : CLFlag<"vmv">,
 def _SLASH_volatile_ms  : Option<["/", "-"], "volatile:ms", KIND_FLAG>,
   Group<_SLASH_volatile_Group>, Flags<[CLOption, DriverOption]>,
   HelpText<"Volatile loads and stores have acquire and release semantics">;
+def _SLASH_Zl : CLFlag<"Zl">,
+  HelpText<"Don't mention any default libraries in the object file">;
 
 // Ignored:
 
 def _SLASH_analyze_ : CLIgnoredFlag<"analyze-">;
+def _SLASH_bigobj : CLIgnoredFlag<"bigobj">;
 def _SLASH_cgthreads : CLIgnoredJoined<"cgthreads">;
 def _SLASH_d2Zi_PLUS : CLIgnoredFlag<"d2Zi+">;
 def _SLASH_errorReport : CLIgnoredJoined<"errorReport">;
@@ -259,6 +256,7 @@ def _SLASH_kernel_ : CLIgnoredFlag<"kernel-">;
 def _SLASH_nologo : CLIgnoredFlag<"nologo">;
 def _SLASH_Ob1 : CLIgnoredFlag<"Ob1">;
 def _SLASH_Ob2 : CLIgnoredFlag<"Ob2">;
+def _SLASH_Og : CLIgnoredFlag<"Og">;
 def _SLASH_openmp_ : CLIgnoredFlag<"openmp-">;
 def _SLASH_RTC : CLIgnoredJoined<"RTC">;
 def _SLASH_sdl : CLIgnoredFlag<"sdl">;
@@ -277,7 +275,6 @@ def _SLASH_Zo_ : CLIgnoredFlag<"Zo-">;
 // Unsupported:
 
 def _SLASH_AI : CLJoined<"AI">;
-def _SLASH_bigobj : CLFlag<"bigobj">;
 def _SLASH_clr : CLJoined<"clr">;
 def _SLASH_doc : CLJoined<"doc">;
 def _SLASH_FA_joined : CLJoined<"FA">;
@@ -333,5 +330,4 @@ def _SLASH_Zc : CLJoined<"Zc:">;
 def _SLASH_Ze : CLFlag<"Ze">;
 def _SLASH_Zg : CLFlag<"Zg">;
 def _SLASH_ZI : CLFlag<"ZI">;
-def _SLASH_Zl : CLFlag<"Zl">;
 def _SLASH_ZW : CLJoined<"ZW">;

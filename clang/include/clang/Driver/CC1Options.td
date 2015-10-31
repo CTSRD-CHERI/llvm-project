@@ -132,6 +132,8 @@ def migrator_no_finalize_removal : Flag<["-"], "no-finalize-removal">,
 
 let Flags = [CC1Option, CC1AsOption, NoDriverOption] in {
 
+def debug_info_kind_EQ : Joined<["-"], "debug-info-kind=">;
+def dwarf_version_EQ : Joined<["-"], "dwarf-version=">;
 def fdebug_compilation_dir : Separate<["-"], "fdebug-compilation-dir">,
   HelpText<"The compilation directory to embed in the debug info.">;
 def dwarf_debug_flags : Separate<["-"], "dwarf-debug-flags">,
@@ -146,13 +148,17 @@ def msave_temp_labels : Flag<["-"], "msave-temp-labels">,
   HelpText<"Save temporary labels in the symbol table. "
            "Note this may change .s semantics and shouldn't generally be used "
            "on compiler-generated code.">;
-
+def mrelocation_model : Separate<["-"], "mrelocation-model">,
+  HelpText<"The relocation model to use">;
 }
 
 def disable_llvm_optzns : Flag<["-"], "disable-llvm-optzns">,
   HelpText<"Don't run LLVM optimization passes">;
 def disable_llvm_verifier : Flag<["-"], "disable-llvm-verifier">,
   HelpText<"Don't run the LLVM IR verifier pass">;
+def disable_llvm_passes : Flag<["-"], "disable-llvm-passes">,
+  HelpText<"Use together with -emit-llvm to get pristine LLVM IR from the "
+           "frontend by not running any LLVM passes at all">;
 def disable_red_zone : Flag<["-"], "disable-red-zone">,
   HelpText<"Do not emit code that uses the red zone.">;
 def dwarf_column_info : Flag<["-"], "dwarf-column-info">,
@@ -163,6 +169,9 @@ def gnu_pubnames : Flag<["-"], "gnu-pubnames">,
   HelpText<"Emit newer GNU style pubnames">;
 def arange_sections : Flag<["-"], "arange_sections">,
   HelpText<"Emit DWARF .debug_arange sections">;
+def dwarf_ext_refs : Flag<["-"], "dwarf-ext-refs">,
+  HelpText<"Generate debug info with external references to clang modules"
+           " or precompiled headers">;
 def fforbid_guard_variables : Flag<["-"], "fforbid-guard-variables">,
   HelpText<"Emit an error if a C++ static local initializer would need a guard variable">;
 def no_implicit_float : Flag<["-"], "no-implicit-float">,
@@ -225,8 +234,6 @@ def backend_option : Separate<["-"], "backend-option">,
   HelpText<"Additional arguments to forward to LLVM backend (during code gen)">;
 def mregparm : Separate<["-"], "mregparm">,
   HelpText<"Limit the number of registers available for integer arguments">;
-def mrelocation_model : Separate<["-"], "mrelocation-model">,
-  HelpText<"The relocation model to use">;
 def munwind_tables : Flag<["-"], "munwind-tables">,
   HelpText<"Generate unwinding tables for all functions">;
 def mconstructor_aliases : Flag<["-"], "mconstructor-aliases">,
@@ -320,6 +327,8 @@ def cc1as : Flag<["-"], "cc1as">;
 def ast_merge : Separate<["-"], "ast-merge">,
   MetaVarName<"<ast file>">,
   HelpText<"Merge the given AST file into the translation unit being compiled.">;
+def aux_triple : Separate<["-"], "aux-triple">,
+  HelpText<"Auxiliary target triple.">;
 def code_completion_at : Separate<["-"], "code-completion-at">,
   MetaVarName<"<file>:<line>:<column>">,
   HelpText<"Dump code-completion information at a location">;
@@ -365,10 +374,17 @@ def fmodule_map_file_home_is_cwd : Flag<["-"], "fmodule-map-file-home-is-cwd">,
 def fmodule_feature : Separate<["-"], "fmodule-feature">,
   MetaVarName<"<feature>">,
   HelpText<"Enable <feature> in module map requires declarations">;
+def fmodules_embed_file_EQ : Joined<["-"], "fmodules-embed-file=">,
+  MetaVarName<"<file>">,
+  HelpText<"Embed the contents of the specified file into the module file "
+           "being compiled.">;
 def fmodules_local_submodule_visibility :
   Flag<["-"], "fmodules-local-submodule-visibility">,
   HelpText<"Enforce name visibility rules across submodules of the same "
            "top-level module.">;
+def fmodule_format_EQ : Joined<["-"], "fmodule-format=">,
+  HelpText<"Select the container format for clang modules and PCH. "
+           "Supported options are 'raw' and 'obj'.">;
 def fno_modules_hide_internal_linkage :
   Flag<["-"], "fno-modules-hide-internal-linkage">,
   HelpText<"Make all declarations visible to redeclaration lookup, "
@@ -480,6 +496,8 @@ def fblocks_runtime_optional : Flag<["-"], "fblocks-runtime-optional">,
   HelpText<"Weakly link in the blocks runtime">;
 def fsjlj_exceptions : Flag<["-"], "fsjlj-exceptions">,
   HelpText<"Use SjLj style exceptions">;
+def fnew_ms_eh: Flag<["-"], "fnew-ms-eh">,
+  HelpText<"Use the new IR representation for MS exceptions">;
 def split_dwarf_file : Separate<["-"], "split-dwarf-file">,
   HelpText<"File name to use for split dwarf debug info output">;
 def fno_wchar : Flag<["-"], "fno-wchar">,
@@ -493,6 +511,8 @@ def fobjc_runtime_has_weak : Flag<["-"], "fobjc-runtime-has-weak">,
   HelpText<"The target Objective-C runtime supports ARC weak operations">;
 def fobjc_dispatch_method_EQ : Joined<["-"], "fobjc-dispatch-method=">,
   HelpText<"Objective-C dispatch method to use">;
+def fobjc_weak : Flag<["-"], "fobjc-weak">, Group<f_Group>,
+  HelpText<"Enable ARC-style __weak references">;
 def disable_objc_default_synthesize_properties : Flag<["-"], "disable-objc-default-synthesize-properties">,
   HelpText<"disable the default synthesis of Objective-C properties">;
 def fencode_extended_block_signature : Flag<["-"], "fencode-extended-block-signature">,
@@ -561,6 +581,10 @@ def fnative_half_type: Flag<["-"], "fnative-half-type">,
   HelpText<"Use the native half type for __fp16 instead of promoting to float">;
 def fallow_half_arguments_and_returns : Flag<["-"], "fallow-half-arguments-and-returns">,
   HelpText<"Allow function arguments and returns of type half">;
+
+// C++ TSes.
+def fcoroutines : Flag<["-"], "fcoroutines">,
+  HelpText<"Enable support for the C++ Coroutines TS">;
 
 //===----------------------------------------------------------------------===//
 // Header Search Options
@@ -645,6 +669,10 @@ def fcuda_disable_target_call_checks : Flag<["-"],
   HelpText<"Disable all cross-target (host, device, etc.) call checks in CUDA">;
 def fcuda_include_gpubinary : Separate<["-"], "fcuda-include-gpubinary">,
   HelpText<"Incorporate CUDA device-side binary into host object file.">;
+def fcuda_target_overloads : Flag<["-"], "fcuda-target-overloads">,
+  HelpText<"Enable function overloads based on CUDA target attributes.">;
+def fcuda_uses_libdevice : Flag<["-"], "fcuda-uses-libdevice">,
+  HelpText<"Selectively link and internalize bitcode.">;
 
 } // let Flags = [CC1Option]
 

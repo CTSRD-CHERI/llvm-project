@@ -44,6 +44,7 @@ using llvm::object::ELF64BE;
 class ELFWriter;
 
 std::unique_ptr<ELFLinkingContext> createAArch64LinkingContext(llvm::Triple);
+std::unique_ptr<ELFLinkingContext> createAMDGPULinkingContext(llvm::Triple);
 std::unique_ptr<ELFLinkingContext> createARMLinkingContext(llvm::Triple);
 std::unique_ptr<ELFLinkingContext> createExampleLinkingContext(llvm::Triple);
 std::unique_ptr<ELFLinkingContext> createHexagonLinkingContext(llvm::Triple);
@@ -282,7 +283,7 @@ public:
   void addSearchPath(StringRef ref) { _inputSearchPaths.push_back(ref); }
 
   // Retrieve search path list.
-  StringRefVector getSearchPaths() { return _inputSearchPaths; };
+  StringRefVector getSearchPaths() { return _inputSearchPaths; }
 
   // By default, the linker would merge sections that are read only with
   // segments that have read and execute permissions. When the user specifies a
@@ -336,8 +337,8 @@ public:
   void addWrapForSymbol(StringRef sym) { _wrapCalls.insert(sym); }
 
   // \brief Set DT_FLAGS flag.
-  void setDTFlag(DTFlag f) { _dtFlags |= f; };
-  bool getDTFlag(DTFlag f) { return (_dtFlags & f); };
+  void setDTFlag(DTFlag f) { _dtFlags |= f; }
+  bool getDTFlag(DTFlag f) { return (_dtFlags & f); }
 
   const llvm::StringSet<> &wrapCalls() const { return _wrapCalls; }
 
@@ -346,6 +347,13 @@ public:
   script::Sema &linkerScriptSema() { return _linkerScriptSema; }
   const script::Sema &linkerScriptSema() const { return _linkerScriptSema; }
 
+  /// Notify the ELFLinkingContext when the new ELF section is read.
+  void notifyInputSectionName(StringRef name);
+  /// Encountered C-ident input section names.
+  const llvm::StringSet<> &cidentSectionNames() const {
+    return _cidentSections;
+  }
+
   // Set R_ARM_TARGET1 relocation behaviour
   bool armTarget1Rel() const { return _armTarget1Rel; }
   void setArmTarget1Rel(bool value) { _armTarget1Rel = value; }
@@ -353,14 +361,6 @@ public:
   // Set R_MIPS_EH relocation behaviour.
   bool mipsPcRelEhRel() const { return _mipsPcRelEhRel; }
   void setMipsPcRelEhRel(bool value) { _mipsPcRelEhRel = value; }
-
-  /// Each time a reader reads a new file, this member function is called
-  /// with the file's ELF magics. This is supposed to "merge" all attributes
-  /// to generate output ELF file magic. This can also reject input files
-  /// if they conflict with previous input files.
-  virtual std::error_code mergeHeaderFlags(uint8_t fileClass, uint64_t flags) {
-    return std::error_code();
-  }
 
 protected:
   ELFLinkingContext(llvm::Triple triple, std::unique_ptr<TargetHandler> handler)
@@ -409,6 +409,8 @@ protected:
   std::map<std::string, uint64_t> _absoluteSymbols;
   llvm::StringSet<> _dynamicallyExportedSymbols;
   std::unique_ptr<File> _resolver;
+  std::mutex _cidentMutex;
+  llvm::StringSet<> _cidentSections;
 
   // The linker script semantic object, which owns all script ASTs, is stored
   // in the current linking context via _linkerScriptSema.

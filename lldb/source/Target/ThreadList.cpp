@@ -46,7 +46,7 @@ ThreadList::operator = (const ThreadList& rhs)
     if (this != &rhs)
     {
         // Lock both mutexes to make sure neither side changes anyone on us
-        // while the assignement occurs
+        // while the assignment occurs
         Mutex::Locker locker(GetMutex());
         m_process = rhs.m_process;
         m_stop_id = rhs.m_stop_id;
@@ -750,7 +750,7 @@ ThreadList::Update (ThreadList &rhs)
     if (this != &rhs)
     {
         // Lock both mutexes to make sure neither side changes anyone on us
-        // while the assignement occurs
+        // while the assignment occurs
         Mutex::Locker locker(GetMutex());
         m_process = rhs.m_process;
         m_stop_id = rhs.m_stop_id;
@@ -773,7 +773,8 @@ ThreadList::Update (ThreadList &rhs)
             const uint32_t num_threads = m_threads.size();
             for (uint32_t idx = 0; idx < num_threads; ++idx)
             {
-                if (m_threads[idx]->GetID() == tid)
+                ThreadSP backing_thread = m_threads[idx]->GetBackingThread();
+                if (m_threads[idx]->GetID() == tid || (backing_thread && backing_thread->GetID() == tid))
                 {
                     thread_is_alive = true;
                     break;

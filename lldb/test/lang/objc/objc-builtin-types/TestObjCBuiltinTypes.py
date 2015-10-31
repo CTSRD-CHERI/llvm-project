@@ -1,7 +1,10 @@
 """Test that the expression parser doesn't get confused by 'id' and 'Class'"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -10,22 +13,6 @@ class TestObjCBuiltinTypes(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Test expression parser respect for ObjC built-in types."""
-        self.buildDsym()
-        self.objc_builtin_types()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_python_api(self):
-        """Test expression parser respect for ObjC built-in types."""
-        self.buildDwarf()
-        self.objc_builtin_types()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -33,9 +20,12 @@ class TestObjCBuiltinTypes(TestBase):
         self.main_source = "main.cpp"
         self.break_line = line_number(self.main_source, '// Set breakpoint here.')
 
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
     #<rdar://problem/10591460> [regression] Can't print ivar value: error: reference to 'id' is ambiguous
-    def objc_builtin_types(self):
+    def test_with_python_api(self):
         """Test expression parser respect for ObjC built-in types."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -63,9 +53,3 @@ class TestObjCBuiltinTypes(TestBase):
         self.expect("expr (foo)", patterns = ["\(ns::id\) \$.* = 0"])
 
         self.expect("expr id my_id = 0; my_id", patterns = ["\(id\) \$.* = nil"])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

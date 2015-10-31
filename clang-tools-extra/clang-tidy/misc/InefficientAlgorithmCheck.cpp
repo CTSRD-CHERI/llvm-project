@@ -28,6 +28,11 @@ static bool areTypesCompatible(QualType Left, QualType Right) {
 }
 
 void InefficientAlgorithmCheck::registerMatchers(MatchFinder *Finder) {
+  // Only register the matchers for C++; the functionality currently does not
+  // provide any benefit to other languages, despite being benign.
+  if (!getLangOpts().CPlusPlus)
+    return;
+
   const std::string Algorithms =
       "^::std::(find|count|equal_range|lower_bound|upper_bound)$";
   const auto ContainerMatcher = classTemplateSpecializationDecl(
@@ -36,20 +41,21 @@ void InefficientAlgorithmCheck::registerMatchers(MatchFinder *Finder) {
       callExpr(
           callee(functionDecl(matchesName(Algorithms))),
           hasArgument(
-              0, constructExpr(has(memberCallExpr(
-                     callee(methodDecl(hasName("begin"))),
+              0, cxxConstructExpr(has(cxxMemberCallExpr(
+                     callee(cxxMethodDecl(hasName("begin"))),
                      on(declRefExpr(
                             hasDeclaration(decl().bind("IneffContObj")),
                             anyOf(hasType(ContainerMatcher.bind("IneffCont")),
                                   hasType(pointsTo(
                                       ContainerMatcher.bind("IneffContPtr")))))
                             .bind("IneffContExpr")))))),
-          hasArgument(1, constructExpr(has(memberCallExpr(
-                             callee(methodDecl(hasName("end"))),
+          hasArgument(1, cxxConstructExpr(has(cxxMemberCallExpr(
+                             callee(cxxMethodDecl(hasName("end"))),
                              on(declRefExpr(hasDeclaration(
                                  equalsBoundNode("IneffContObj")))))))),
           hasArgument(2, expr().bind("AlgParam")),
-          unless(isInTemplateInstantiation())).bind("IneffAlg");
+          unless(isInTemplateInstantiation()))
+          .bind("IneffAlg");
 
   Finder->addMatcher(Matcher, this);
 }
@@ -105,18 +111,41 @@ void InefficientAlgorithmCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *IneffContExpr = Result.Nodes.getNodeAs<Expr>("IneffContExpr");
   FixItHint Hint;
 
-  if (!AlgCall->getLocStart().isMacroID() && !Maplike && CompatibleTypes) {
+  SourceManager &SM = *Result.SourceManager;
+  LangOptions LangOpts = Result.Context->getLangOpts();
+
+  CharSourceRange CallRange =
+      CharSourceRange::getTokenRange(AlgCall->getSourceRange());
+
+  // FIXME: Create a common utility to extract a file range that the given token
+  // sequence is exactly spelled at (without macro argument expansions etc.).
+  // We can't use Lexer::makeFileCharRange here, because for
+  //
+  //   #define F(x) x
+  //   x(a b c);
+  //
+  // it will return "x(a b c)", when given the range "a"-"c". It makes sense for
+  // removals, but not for replacements.
+  //
+  // This code is over-simplified, but works for many real cases.
+  if (SM.isMacroArgExpansion(CallRange.getBegin()) &&
+      SM.isMacroArgExpansion(CallRange.getEnd())) {
+    CallRange.setBegin(SM.getSpellingLoc(CallRange.getBegin()));
+    CallRange.setEnd(SM.getSpellingLoc(CallRange.getEnd()));
+  }
+
+  if (!CallRange.getBegin().isMacroID() && !Maplike && CompatibleTypes) {
+    StringRef ContainerText = Lexer::getSourceText(
+        CharSourceRange::getTokenRange(IneffContExpr->getSourceRange()), SM,
+        LangOpts);
+    StringRef ParamText = Lexer::getSourceText(
+        CharSourceRange::getTokenRange(AlgParam->getSourceRange()), SM,
+        LangOpts);
     std::string ReplacementText =
-        (llvm::Twine(Lexer::getSourceText(
-             CharSourceRange::getTokenRange(IneffContExpr->getSourceRange()),
-             *Result.SourceManager, Result.Context->getLangOpts())) +
-         (PtrToContainer ? "->" : ".") + AlgDecl->getName() + "(" +
-         Lexer::getSourceText(
-             CharSourceRange::getTokenRange(AlgParam->getSourceRange()),
-             *Result.SourceManager, Result.Context->getLangOpts()) +
-         ")").str();
-    Hint = FixItHint::CreateReplacement(AlgCall->getSourceRange(),
-                                        ReplacementText);
+        (llvm::Twine(ContainerText) + (PtrToContainer ? "->" : ".") +
+         AlgDecl->getName() + "(" + ParamText + ")")
+            .str();
+    Hint = FixItHint::CreateReplacement(CallRange, ReplacementText);
   }
 
   diag(AlgCall->getLocStart(),

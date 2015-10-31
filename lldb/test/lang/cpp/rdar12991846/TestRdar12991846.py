@@ -3,8 +3,12 @@
 Test that the expression parser returns proper Unicode strings.
 """
 
-import os, time
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
+import os, time
 import lldb
 from lldbtest import *
 import lldbutil
@@ -27,48 +31,24 @@ class Rdar12991846TestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @unittest2.expectedFailure("rdar://18684408")
-    @skipUnlessDarwin
-    @dsym_test
-    def test_expr1_with_dsym(self):
+    @expectedFailureWindows("llvm.org/pr24489: Name lookup not working correctly on Windows")
+    def test_expr1(self):
         """Test that the expression parser returns proper Unicode strings."""
-        self.buildDsym()
+        self.build()
         self.rdar12991846(expr=1)
 
     @unittest2.expectedFailure("rdar://18684408")
-    @dwarf_test
-    def test_expr1_with_dwarf(self):
+    @expectedFailureWindows("llvm.org/pr24489: Name lookup not working correctly on Windows")
+    def test_expr2(self):
         """Test that the expression parser returns proper Unicode strings."""
-        self.buildDwarf()
-        self.rdar12991846(expr=1)
-
-    @unittest2.expectedFailure("rdar://18684408")
-    @skipUnlessDarwin
-    @dsym_test
-    def test_expr2_with_dsym(self):
-        """Test that the expression parser returns proper Unicode strings."""
-        self.buildDsym()
+        self.build()
         self.rdar12991846(expr=2)
 
     @unittest2.expectedFailure("rdar://18684408")
-    @dwarf_test
-    def test_expr2_with_dwarf(self):
+    @expectedFailureWindows("llvm.org/pr24489: Name lookup not working correctly on Windows")
+    def test_expr3(self):
         """Test that the expression parser returns proper Unicode strings."""
-        self.buildDwarf()
-        self.rdar12991846(expr=2)
-
-    @unittest2.expectedFailure("rdar://18684408")
-    @skipUnlessDarwin
-    @dsym_test
-    def test_expr3_with_dsym(self):
-        """Test that the expression parser returns proper Unicode strings."""
-        self.buildDsym()
-        self.rdar12991846(expr=3)
-
-    @unittest2.expectedFailure("rdar://18684408")
-    @dwarf_test
-    def test_expr3_with_dwarf(self):
-        """Test that the expression parser returns proper Unicode strings."""
-        self.buildDwarf()
+        self.build()
         self.rdar12991846(expr=3)
 
     def setUp(self):
@@ -103,9 +83,3 @@ class Rdar12991846TestCase(TestBase):
         if expr == 2: self.expect('expression u"hello"', substrs = ['hello'])
 
         if expr == 3: self.expect('expression U"hello"', substrs = ['hello'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

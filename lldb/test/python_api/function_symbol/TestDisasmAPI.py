@@ -2,30 +2,18 @@
 Test retrieval of SBAddress from function/symbol, disassembly, and SBAddress APIs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class DisasmAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym(self):
-        """Exercise getting SBAddress objects, disassembly, and SBAddress APIs."""
-        self.buildDsym()
-        self.disasm_and_address_api()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Exercise getting SBAddress objects, disassembly, and SBAddress APIs."""
-        self.buildDwarf()
-        self.disasm_and_address_api()
 
     def setUp(self):
         # Call super's setUp().
@@ -34,8 +22,10 @@ class DisasmAPITestCase(TestBase):
         self.line1 = line_number('main.c', '// Find the line number for breakpoint 1 here.')
         self.line2 = line_number('main.c', '// Find the line number for breakpoint 2 here.')
 
-    def disasm_and_address_api(self):
+    @add_test_categories(['pyapi'])
+    def test(self):
         """Exercise getting SBAddress objects, disassembly, and SBAddress APIs."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -45,8 +35,8 @@ class DisasmAPITestCase(TestBase):
         # Now create the two breakpoints inside function 'a'.
         breakpoint1 = target.BreakpointCreateByLocation('main.c', self.line1)
         breakpoint2 = target.BreakpointCreateByLocation('main.c', self.line2)
-        #print "breakpoint1:", breakpoint1
-        #print "breakpoint2:", breakpoint2
+        #print("breakpoint1:", breakpoint1)
+        #print("breakpoint2:", breakpoint2)
         self.assertTrue(breakpoint1 and
                         breakpoint1.GetNumLocations() == 1,
                         VALID_BREAKPOINT)
@@ -67,14 +57,14 @@ class DisasmAPITestCase(TestBase):
         self.assertTrue(lineEntry.GetLine() == self.line1)
 
         address1 = lineEntry.GetStartAddress()
-        #print "address1:", address1
+        #print("address1:", address1)
 
         # Now call SBTarget.ResolveSymbolContextForAddress() with address1.
         context1 = target.ResolveSymbolContextForAddress(address1, lldb.eSymbolContextEverything)
 
         self.assertTrue(context1)
         if self.TraceOn():
-            print "context1:", context1
+            print("context1:", context1)
 
         # Continue the inferior, the breakpoint 2 should be hit.
         process.Continue()
@@ -92,24 +82,24 @@ class DisasmAPITestCase(TestBase):
 
         disasm_output = lldbutil.disassemble(target, symbol)
         if self.TraceOn():
-            print "symbol:", symbol
-            print "disassembly=>\n", disasm_output
+            print("symbol:", symbol)
+            print("disassembly=>\n", disasm_output)
 
         disasm_output = lldbutil.disassemble(target, function)
         if self.TraceOn():
-            print "function:", function
-            print "disassembly=>\n", disasm_output
+            print("function:", function)
+            print("disassembly=>\n", disasm_output)
 
         sa1 = symbol.GetStartAddress()
-        #print "sa1:", sa1
-        #print "sa1.GetFileAddress():", hex(sa1.GetFileAddress())
+        #print("sa1:", sa1)
+        #print("sa1.GetFileAddress():", hex(sa1.GetFileAddress()))
         #ea1 = symbol.GetEndAddress()
-        #print "ea1:", ea1
+        #print("ea1:", ea1)
         sa2 = function.GetStartAddress()
-        #print "sa2:", sa2
-        #print "sa2.GetFileAddress():", hex(sa2.GetFileAddress())
+        #print("sa2:", sa2)
+        #print("sa2.GetFileAddress():", hex(sa2.GetFileAddress()))
         #ea2 = function.GetEndAddress()
-        #print "ea2:", ea2
+        #print("ea2:", ea2)
         self.assertTrue(sa1 and sa2 and sa1 == sa2,
                         "The two starting addresses should be the same")
 
@@ -118,10 +108,3 @@ class DisasmAPITestCase(TestBase):
         desc2 = get_description(sa2)
         self.assertTrue(desc1 and desc2 and desc1 == desc2,
                         "SBAddress.GetDescription() API of sa1 and sa2 should return the same string")
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

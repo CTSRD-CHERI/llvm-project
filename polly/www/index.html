@@ -38,39 +38,55 @@
   what has already been done and what is possible in the context of polyhedral
   compilation.
 
-  <p>
-  <div class="video-js-box" style="margin:auto; margin-top: 1em; margin-bottom: 1em">
-    <video id="example_video_2" class="video-js" width="640" height="360"
-           controls="controls" preload="auto"
-           poster="images/video-summit-2011.png">
-      <source
-           src="http://www.grosser.es/publications/grosser-2011--Polly-First-successful-optimizations--LLVM-Developer-Meeting.mp4"
-           type='video/mp4; codecs="avc1.42E01E, mp4a.40.2"'>
-      <source
-           src="http://www.grosser.es/publications/grosser-2011--Polly-First-successful-optimizations--LLVM-Developer-Meeting.webm"
-           type='video/webm; codecs="vp8, vorbis"'>
-      <object id="flash_fallback_2" class="vjs-flash-fallback" width="640"
-      height="360" type="application/x-shockwave-flash"
-        data="http://releases.flowplayer.org/swf/flowplayer-3.2.1.swf">
-        <param name="movie" value="http://releases.flowplayer.org/swf/flowplayer-3.2.1.swf" />
-        <param name="allowfullscreen" value="true" />
-        <param name="flashvars"
-        value='config={"playlist":["publications/images/video-summit-2011.png",
-        {"url":
-        "http://www.grosser.es/publications/grosser-2011--Polly-First-successful-optimizations--LLVM-Developer-Meeting.mp4","autoPlay":false,"autoBuffering":true}]}'
-        />
-        <img src="images/video-summit-2011.png" width="640" height="360" alt="Poster Image"
-          title="No video playback capabilities." />
-      </object>
-    </video>
-  </div>
-
   <!--=====================================================================-->
   <h2>News</h2>
   <!--=====================================================================-->
 
   <table id="news">
   <tr><td><b>2015</b></td></tr>
+  <tr><td width="120"><p>July</p></td>
+  <td>
+    <h4>AST Generation Paper published in TOPLAS</h4>
+    The July issue of TOPLAS contains a 50 page discussion of the AST
+    generation techniques used in Polly. This discussion gives not only an
+    in-depth description of how we (re)generate an imperative AST from our
+    polyhedral based mathematical program description, but also gives
+    interesting insights about:
+    <ul>
+      <li><b>Schedule trees:</b> A tree-based mathematical program description
+      that enables us to perform loop transformations on an abstract level,
+      while issues like the generation of the correct loop structure and loop
+      bounds will be taken care of by our AST generator.
+      <li><b>Polyhedral unrolling:</b> We discuss techniques that allow the
+      unrolling of non-trivial loops in the context of parameteric loop bounds,
+      complex tile shapes and conditionally executed statements. Such unrolling
+      support enables the generation of predicated code e.g. in the context of
+      GPGPU computing.
+      <li><b>Isolation for full/partial tile separation:</b> We discuss native
+      support for handling full/partial tile separation and -- in general --
+      native support for isolation of boundary cases to enable smooth code
+      generation for core computations.
+      <li><b>AST generation with modulo constraints:</b> We discuss how modulo
+      mappings are lowered to efficient C/LLVM code.
+      <li><b>User-defined constraint sets for run-time checks</b> We discuss how
+      arbitrary sets of constraints can be used to automatically create run-time
+      checks that ensure a set of constrainst actually hold. This feature is
+      very useful to verify at run-time various assumptions that have been taken
+      program optimization.
+    </ul>
+
+   <a href="http://www.grosser.es#pub-polyhedral-AST-generation">
+   <em>Polyhedral AST generation is more than scanning polyhedra</em></a><br />
+    Tobias Grosser, Sven Verdoolaege, Albert Cohen<br />
+    ACM Transations on Programming Languages and Systems (TOPLAS), 37(4),
+    July 2015
+
+    <br>
+    <br>
+    <br>
+    <br>
+  </td>
+  </tr>
   <tr><td width="120"><p>February</p></td>
   <td>
     <h4>Polly allows now non-affine subregions</h4>

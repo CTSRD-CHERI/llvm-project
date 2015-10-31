@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-no-early-exit -basicaa -polly-ast -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -basicaa -polly-ast -analyze < %s | FileCheck %s
 
 ;#include <string.h>
 ;#define N 1024
@@ -166,11 +166,9 @@ define i32 @main() nounwind {
 declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1) nounwind
 
 ; CHECK: for (int c0 = 0; c0 <= 1023; c0 += 1) {
-; CHECK:   if (c0 >= 513) {
-; CHECK:     Stmt_4(c0);
-; CHECK:   } else if (c0 <= 511) {
-; CHECK:     Stmt_4(c0);
-; CHECK:   } else
+; CHECK:   if (c0 == 512) {
 ; CHECK:     Stmt_5(512);
+; CHECK:   } else
+; CHECK:     Stmt_4(c0);
 ; CHECK:   Stmt_6(c0);
 ; CHECK: }

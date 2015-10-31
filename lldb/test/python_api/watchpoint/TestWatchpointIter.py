@@ -2,9 +2,12 @@
 Use lldb Python SBTarget API to iterate on the watchpoint(s) for the target.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -20,23 +23,12 @@ class WatchpointIteratorTestCase(TestBase):
         # Find the line number to break inside main().
         self.line = line_number(self.source, '// Set break point at this line.')
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_watch_iter_with_dsym(self):
+    @add_test_categories(['pyapi'])
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_watch_iter(self):
         """Exercise SBTarget.watchpoint_iter() API to iterate on the available watchpoints."""
-        self.buildDsym()
-        self.do_watchpoint_iter()
-
-    @python_api_test
-    @dwarf_test
-    def test_watch_iter_with_dwarf(self):
-        """Exercise SBTarget.watchpoint_iter() API to iterate on the available watchpoints."""
-        self.buildDwarf()
-        self.do_watchpoint_iter()
-
-    def do_watchpoint_iter(self):
-        """Use SBTarget.watchpoint_iter() to do Pythonic iteration on the available watchpoints."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -94,11 +86,11 @@ class WatchpointIteratorTestCase(TestBase):
         # We currently only support hardware watchpoint.  Verify that we have a
         # meaningful hardware index at this point.  Exercise the printed repr of
         # SBWatchpointLocation.
-        print watchpoint
+        print(watchpoint)
         self.assertTrue(watchpoint.GetHardwareIndex() != -1)
 
         # SBWatchpoint.GetDescription() takes a description level arg.
-        print lldbutil.get_description(watchpoint, lldb.eDescriptionLevelFull)
+        print(lldbutil.get_description(watchpoint, lldb.eDescriptionLevelFull))
 
         # Now disable the 'rw' watchpoint.  The program won't stop when it reads
         # 'global' next.
@@ -118,11 +110,5 @@ class WatchpointIteratorTestCase(TestBase):
             self.assertTrue(watchpoint)
             self.assertTrue(watchpoint.GetWatchSize() == 4)
             self.assertTrue(watchpoint.GetHitCount() == 1)
-            print watchpoint
+            print(watchpoint)
 
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

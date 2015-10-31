@@ -1,7 +1,10 @@
 """Test SBValue::Persist"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,34 +13,17 @@ class SBValuePersistTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym(self):
+    @add_test_categories(['pyapi'])
+    @expectedFailureWindows("llvm.org/pr24772")
+    def test(self):
         """Test SBValue::Persist"""
-        self.buildDsym()
+        self.build()
         self.setTearDownCleanup()
-        self.doTest()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test SBValue::Persist"""
-        self.buildDwarf()
-        self.setTearDownCleanup()
-        self.doTest()
-
-    def setUp(self):
-        # Call super's setUp().
-        TestBase.setUp(self)
-
-    def doTest(self):
-        """Test SBValue::Persist"""
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_source_regexp (self, "break here")
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -86,9 +72,3 @@ class SBValuePersistTestCase(TestBase):
         self.assertTrue(bazPersist.GetSummary() == '"85"', "bazPersist != 85")
         
         self.expect("expr *(%s)" % (barPersist.GetName()), substrs = ['= 4'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -72,7 +72,7 @@ static const llvm::opt::OptTable::Info infoTable[] = {
 // Create OptTable class for parsing actual command line arguments
 class GnuLdOptTable : public llvm::opt::OptTable {
 public:
-  GnuLdOptTable() : OptTable(infoTable, llvm::array_lengthof(infoTable)){}
+  GnuLdOptTable() : OptTable(infoTable){}
 };
 
 } // anonymous namespace
@@ -89,7 +89,7 @@ maybeExpandResponseFiles(llvm::ArrayRef<const char *> args,
   SmallVector<const char *, 256> smallvec;
   for (const char *arg : args)
     smallvec.push_back(arg);
-  llvm::BumpPtrStringSaver saver(alloc);
+  llvm::StringSaver saver(alloc);
   llvm::cl::ExpandResponseFiles(saver, llvm::cl::TokenizeGNUCommandLine, smallvec);
 
   // Pack the results to a C-array and return it.
@@ -164,13 +164,16 @@ getArchType(const llvm::Triple &triple, StringRef value) {
     if (value == "elf_x86_64")
       return llvm::Triple::x86_64;
     return llvm::None;
+  case llvm::Triple::mips:
   case llvm::Triple::mipsel:
+  case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-    if (value == "elf32ltsmip")
-      return llvm::Triple::mipsel;
-    if (value == "elf64ltsmip")
-      return llvm::Triple::mips64el;
-    return llvm::None;
+    return llvm::StringSwitch<llvm::Optional<llvm::Triple::ArchType>>(value)
+        .Cases("elf32btsmip", "elf32btsmipn32", llvm::Triple::mips)
+        .Cases("elf32ltsmip", "elf32ltsmipn32", llvm::Triple::mipsel)
+        .Case("elf64btsmip", llvm::Triple::mips64)
+        .Case("elf64ltsmip", llvm::Triple::mips64el)
+        .Default(llvm::None);
   case llvm::Triple::aarch64:
     if (value == "aarch64linux")
       return llvm::Triple::aarch64;
@@ -322,6 +325,7 @@ std::unique_ptr<ELFLinkingContext>
 GnuLdDriver::createELFLinkingContext(llvm::Triple triple) {
   std::unique_ptr<ELFLinkingContext> p;
   if ((p = elf::createAArch64LinkingContext(triple))) return p;
+  if ((p = elf::createAMDGPULinkingContext(triple))) return p;
   if ((p = elf::createARMLinkingContext(triple))) return p;
   if ((p = elf::createExampleLinkingContext(triple))) return p;
   if ((p = elf::createHexagonLinkingContext(triple))) return p;
@@ -536,8 +540,14 @@ bool GnuLdDriver::parse(llvm::ArrayRef<const char *> args,
   if (triple.getArch() == llvm::Triple::mips ||
       triple.getArch() == llvm::Triple::mipsel ||
       triple.getArch() == llvm::Triple::mips64 ||
-      triple.getArch() == llvm::Triple::mips64el)
+      triple.getArch() == llvm::Triple::mips64el) {
     ctx->setMipsPcRelEhRel(parsedArgs.hasArg(OPT_pcrel_eh_reloc));
+    auto *hashArg = parsedArgs.getLastArg(OPT_hash_style);
+    if (hashArg && hashArg->getValue() != StringRef("sysv")) {
+      diag << "error: .gnu.hash is incompatible with the MIPS ABI\n";
+      return false;
+    }
+  }
   else {
     for (const auto *arg : parsedArgs.filtered(OPT_grp_mips_targetopts)) {
       diag << "warning: ignoring unsupported MIPS specific argument: "
@@ -741,7 +751,10 @@ bool GnuLdDriver::parse(llvm::ArrayRef<const char *> args,
     return false;
 
   // Perform linker script semantic actions
-  ctx->linkerScriptSema().perform();
+  if (auto ec = ctx->linkerScriptSema().perform()) {
+    diag << "Error in the linker script's semantics: " << ec.message() << "\n";
+    return false;
+  }
 
   context.swap(ctx);
   return true;

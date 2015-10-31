@@ -19,6 +19,7 @@
 #include "lldb/Core/Communication.h"
 #include "lldb/Host/Mutex.h"
 #include "lldb/Host/common/NativeProcessProtocol.h"
+#include "lldb/Host/MainLoop.h"
 
 // Project includes
 #include "GDBRemoteCommunicationServerCommon.h"
@@ -26,6 +27,7 @@
 class StringExtractorGDBRemote;
 
 namespace lldb_private {
+
 namespace process_gdb_remote {
 
 class ProcessGDBRemote;
@@ -38,10 +40,7 @@ public:
     //------------------------------------------------------------------
     // Constructors and Destructors
     //------------------------------------------------------------------
-    GDBRemoteCommunicationServerLLGS(const lldb::PlatformSP& platform_sp);
-
-    virtual
-    ~GDBRemoteCommunicationServerLLGS();
+    GDBRemoteCommunicationServerLLGS(const lldb::PlatformSP& platform_sp, MainLoop &mainloop);
 
     //------------------------------------------------------------------
     /// Specify the program to launch and its arguments.
@@ -111,19 +110,28 @@ public:
     void
     DidExec (NativeProcessProtocol *process) override;
 
+    Error
+    InitializeConnection (std::unique_ptr<Connection> &&connection);
+
 protected:
     lldb::PlatformSP m_platform_sp;
-    lldb::thread_t m_async_thread;
+    MainLoop &m_mainloop;
+    MainLoop::ReadHandleUP m_network_handle_up;
     lldb::tid_t m_current_tid;
     lldb::tid_t m_continue_tid;
     Mutex m_debugged_process_mutex;
     NativeProcessProtocolSP m_debugged_process_sp;
+
+    Mutex m_stdio_communication_mutex; // Protects m_stdio_communication and m_stdio_handle_up
     Communication m_stdio_communication;
+    MainLoop::ReadHandleUP m_stdio_handle_up;
+
     lldb::StateType m_inferior_prev_state;
     lldb::DataBufferSP m_active_auxv_buffer_sp;
     Mutex m_saved_registers_mutex;
     std::unordered_map<uint32_t, lldb::DataBufferSP> m_saved_registers_map;
     uint32_t m_next_saved_registers_id;
+    bool m_handshake_completed : 1;
 
     PacketResult
     SendONotification (const char *buffer, uint32_t len);
@@ -135,7 +143,7 @@ protected:
     SendStopReplyPacketForThread (lldb::tid_t tid);
 
     PacketResult
-    SendStopReasonForState (lldb::StateType process_state, bool flush_on_exit);
+    SendStopReasonForState (lldb::StateType process_state);
 
     PacketResult
     Handle_k (StringExtractorGDBRemote &packet);
@@ -194,8 +202,9 @@ protected:
     PacketResult
     Handle_interrupt (StringExtractorGDBRemote &packet);
 
+    // Handles $m and $x packets.
     PacketResult
-    Handle_m (StringExtractorGDBRemote &packet);
+    Handle_memory_read (StringExtractorGDBRemote &packet);
 
     PacketResult
     Handle_M (StringExtractorGDBRemote &packet);
@@ -234,6 +243,9 @@ protected:
     Handle_qThreadStopInfo (StringExtractorGDBRemote &packet);
 
     PacketResult
+    Handle_jThreadsInfo (StringExtractorGDBRemote &packet);
+
+    PacketResult
     Handle_qWatchpointSupportInfo (StringExtractorGDBRemote &packet);
 
     PacketResult
@@ -254,31 +266,15 @@ protected:
     Error
     SetSTDIOFileDescriptor (int fd);
 
-    static void
-    STDIOReadThreadBytesReceived (void *baton, const void *src, size_t src_len);
-
     FileSpec
     FindModuleFile (const std::string& module_path, const ArchSpec& arch) override;
 
 private:
-    bool
-    DebuggedProcessReaped (lldb::pid_t pid);
-
-    static bool
-    ReapDebuggedProcess (void *callback_baton,
-                         lldb::pid_t pid,
-                         bool exited,
-                         int signal,
-                         int status);
-
     void
     HandleInferiorState_Exited (NativeProcessProtocol *process);
 
     void
     HandleInferiorState_Stopped (NativeProcessProtocol *process);
-
-    void
-    FlushInferiorOutput ();
 
     NativeThreadProtocolSP
     GetThreadFromSuffix (StringExtractorGDBRemote &packet);
@@ -294,6 +290,15 @@ private:
 
     void
     RegisterPacketHandlers ();
+
+    void
+    DataAvailableCallback ();
+
+    void
+    SendProcessOutput ();
+
+    void
+    StopSTDIOForwarding();
 
     //------------------------------------------------------------------
     // For GDBRemoteCommunicationServerLLGS only

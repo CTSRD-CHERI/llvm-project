@@ -1,7 +1,10 @@
 """Test the SBCommandInterpreter APIs."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -9,29 +12,16 @@ class CommandInterpreterAPICase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_process_launch_api(self):
-        """Test the SBCommandInterpreter APIs."""
-        self.buildDsym()
-        self.command_interpreter_api()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_process_launch_api(self):
-        """Test the SBCommandInterpreter APIs."""
-        self.buildDwarf()
-        self.command_interpreter_api()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break on inside main.cpp.
         self.line = line_number('main.c', 'Hello world.')
 
-    def command_interpreter_api(self):
+    @add_test_categories(['pyapi'])
+    def test_with_process_launch_api(self):
         """Test the SBCommandInterpreter APIs."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -68,7 +58,7 @@ class CommandInterpreterAPICase(TestBase):
         res.AppendMessage("Just appended a message.")
         res.AppendMessage(None)
         if self.TraceOn():
-            print res
+            print(res)
 
         process = ci.GetProcess()
         self.assertTrue(process)
@@ -81,10 +71,3 @@ class CommandInterpreterAPICase(TestBase):
 
         if self.TraceOn():
             lldbutil.print_stacktraces(process)        
-                        
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

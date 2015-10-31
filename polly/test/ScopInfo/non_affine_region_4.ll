@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops  -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops  -analyze < %s | FileCheck %s
 ;
 ; Verify that both scalars (x and y) are properly written in the non-affine
 ; region and read afterwards.
@@ -13,28 +13,49 @@
 ;    }
 ;
 ; CHECK:    Region: %bb1---%bb11
-; CHECK:      Stmt_(bb2 => bb7)
+;
+; CHECK: Arrays {
+; CHECK:   i32 MemRef_A[*][4]
+; CHECK:   i32 MemRef_x[*] [BasePtrOrigin: MemRef_A]
+; CHECK:   i32 MemRef_y__phi[*]
+; CHECK: }
+;
+; CHECK: Arrays (Bounds as pw_affs) {
+; CHECK:   i32 MemRef_A[*][ { [] -> [(4)] } ]
+; CHECK:   i32 MemRef_x[*] [BasePtrOrigin: MemRef_A]
+; CHECK:   i32 MemRef_y__phi[*]
+; CHECK: }
+;
+; CHECK:      Stmt_bb2__TO__bb7
 ; CHECK:            Domain :=
-; CHECK:                { Stmt_(bb2 => bb7)[i0] : i0 >= 0 and i0 <= 1023 };
+; CHECK:                { Stmt_bb2__TO__bb7[i0] :
+; CHECK-DAG:               i0 >= 0
+; CHECK-DAG:             and
+; CHECK-DAG:               i0 <= 1023
+; CHECK:                };
 ; CHECK:            Schedule :=
-; CHECK:                { Stmt_(bb2 => bb7)[i0] -> [i0, 0] };
+; CHECK:                { Stmt_bb2__TO__bb7[i0] -> [i0, 0] };
 ; CHECK:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                { Stmt_(bb2 => bb7)[i0] -> MemRef_A[i0] };
+; CHECK:                { Stmt_bb2__TO__bb7[i0] -> MemRef_A[i0] };
 ; CHECK:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                { Stmt_(bb2 => bb7)[i0] -> MemRef_x[] };
-; CHECK:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                { Stmt_(bb2 => bb7)[i0] -> MemRef_y[] };
+; CHECK:                { Stmt_bb2__TO__bb7[i0] -> MemRef_x[] };
 ; CHECK:            MayWriteAccess := [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                { Stmt_(bb2 => bb7)[i0] -> MemRef_y[] };
+; CHECK:                { Stmt_bb2__TO__bb7[i0] -> MemRef_y__phi[] };
+; CHECK:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
+; CHECK:                { Stmt_bb2__TO__bb7[i0] -> MemRef_y__phi[] };
 ; CHECK:      Stmt_bb7
 ; CHECK:            Domain :=
-; CHECK:                { Stmt_bb7[i0] : i0 >= 0 and i0 <= 1023 };
+; CHECK:                { Stmt_bb7[i0] :
+; CHECK-DAG:               i0 >= 0
+; CHECK-DAG:             and
+; CHECK-DAG:               i0 <= 1023
+; CHECK:                };
 ; CHECK:            Schedule :=
 ; CHECK:                { Stmt_bb7[i0] -> [i0, 1] };
 ; CHECK:            ReadAccess := [Reduction Type: NONE] [Scalar: 1]
 ; CHECK:                { Stmt_bb7[i0] -> MemRef_x[] };
 ; CHECK:            ReadAccess := [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                { Stmt_bb7[i0] -> MemRef_y[] };
+; CHECK:                { Stmt_bb7[i0] -> MemRef_y__phi[] };
 ; CHECK:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
 ; CHECK:                { Stmt_bb7[i0] -> MemRef_A[i0] };
 ;

@@ -1,7 +1,10 @@
 """Test the lldb public C++ api when doing multiple debug sessions simultaneously."""
 
-import os, re, StringIO
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
+import os, re
 from lldbtest import *
 import lldbutil
 import lldb
@@ -18,9 +21,10 @@ class TestMultipleSimultaneousDebuggers(TestBase):
 
     @skipIfi386
     @skipIfNoSBHeaders
-    @expectedFailureDarwin("llvm.org/pr20282") # intermittent
     @expectedFailureFreeBSD("llvm.org/pr20282")
     @expectedFailureLinux("llvm.org/pr20282")
+    @expectedFailureWindows # Test crashes
+    @expectedFlakeyDarwin()
     def test_multiple_debuggers(self):
         env = {self.dylibPath : self.getLLDBLibraryEnvVal()}
 
@@ -38,14 +42,8 @@ class TestMultipleSimultaneousDebuggers(TestBase):
 # will recognize it as a test failure.
 
         if self.TraceOn():
-            print "Running test %s" % self.driver_exe
+            print("Running test %s" % self.driver_exe)
             check_call([self.driver_exe, self.inferior_exe], env=env)
         else:
             with open(os.devnull, 'w') as fnull:
                 check_call([self.driver_exe, self.inferior_exe], env=env, stdout=fnull, stderr=fnull)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

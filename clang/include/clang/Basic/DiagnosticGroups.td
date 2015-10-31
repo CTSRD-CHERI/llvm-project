@@ -29,9 +29,11 @@ def ArrayBoundsPointerArithmetic : DiagGroup<"array-bounds-pointer-arithmetic">;
 def Availability : DiagGroup<"availability">;
 def Section : DiagGroup<"section">;
 def AutoImport : DiagGroup<"auto-import">;
+def CXX14BinaryLiteral : DiagGroup<"c++14-binary-literal">;
 def GNUBinaryLiteral : DiagGroup<"gnu-binary-literal">;
 def GNUCompoundLiteralInitializer : DiagGroup<"gnu-compound-literal-initializer">;
 def BitFieldConstantConversion : DiagGroup<"bitfield-constant-conversion">;
+def BitFieldWidth : DiagGroup<"bitfield-width">;
 def ConstantConversion :
   DiagGroup<"constant-conversion", [ BitFieldConstantConversion ] >;
 def LiteralConversion : DiagGroup<"literal-conversion">;
@@ -94,6 +96,7 @@ def Deprecated : DiagGroup<"deprecated", [DeprecatedDeclarations,
                                           DeprecatedWritableStr]>,
                  DiagCategory<"Deprecations">;
 
+def LibLTO : DiagGroup<"liblto">;
 def : DiagGroup<"disabled-optimization">;
 def : DiagGroup<"discard-qual">;
 def : DiagGroup<"div-by-zero">;
@@ -199,6 +202,7 @@ def InfiniteRecursion : DiagGroup<"infinite-recursion">;
 def GNUImaginaryConstant : DiagGroup<"gnu-imaginary-constant">;
 def IgnoredQualifiers : DiagGroup<"ignored-qualifiers">;
 def : DiagGroup<"import">;
+def GNUIncludeNext : DiagGroup<"gnu-include-next">;
 def IncompatibleMSStruct : DiagGroup<"incompatible-ms-struct">;
 def IncompatiblePointerTypesDiscardsQualifiers 
   : DiagGroup<"incompatible-pointer-types-discards-qualifiers">;
@@ -213,6 +217,7 @@ def NonModularIncludeInModule : DiagGroup<"non-modular-include-in-module",
 def IncompleteModule : DiagGroup<"incomplete-module",
     [IncompleteUmbrella, NonModularIncludeInModule]>;
 
+def CXX11InlineNamespace : DiagGroup<"c++11-inline-namespace">;
 def InvalidNoreturn : DiagGroup<"invalid-noreturn">;
 def InvalidSourceEncoding : DiagGroup<"invalid-source-encoding">;
 def KNRPromotedParameter : DiagGroup<"knr-promoted-parameter">;
@@ -280,6 +285,7 @@ def FunctionDefInObjCContainer : DiagGroup<"function-def-in-objc-container">;
 def BadFunctionCast : DiagGroup<"bad-function-cast">;
 def ObjCPropertyImpl : DiagGroup<"objc-property-implementation">;
 def ObjCPropertyNoAttribute : DiagGroup<"objc-property-no-attribute">;
+def ObjCProtocolQualifiers : DiagGroup<"objc-protocol-qualifiers">;
 def ObjCMissingSuperCalls : DiagGroup<"objc-missing-super-calls">;
 def ObjCDesignatedInit : DiagGroup<"objc-designated-initializers">;
 def ObjCRetainBlockProperty : DiagGroup<"objc-noncopy-retain-block-property">;
@@ -674,11 +680,12 @@ def NonGCC : DiagGroup<"non-gcc",
 
 // A warning group for warnings about using C++11 features as extensions in
 // earlier C++ versions.
-def CXX11 : DiagGroup<"c++11-extensions", [CXX11ExtraSemi, CXX11LongLong]>;
+def CXX11 : DiagGroup<"c++11-extensions", [CXX11ExtraSemi, CXX11InlineNamespace,
+                                           CXX11LongLong]>;
 
 // A warning group for warnings about using C++14 features as extensions in
 // earlier C++ versions.
-def CXX14 : DiagGroup<"c++14-extensions">;
+def CXX14 : DiagGroup<"c++14-extensions", [CXX14BinaryLiteral]>;
 
 // A warning group for warnings about using C++1z features as extensions in
 // earlier C++ versions.
@@ -704,7 +711,8 @@ def GNU : DiagGroup<"gnu", [GNUAlignofExpression, GNUAnonymousStruct,
                             GNUEmptyInitializer, GNUEmptyStruct,
                             VLAExtension, GNUFlexibleArrayInitializer,
                             GNUFlexibleArrayUnionMember, GNUFoldingConstant,
-                            GNUImaginaryConstant, GNULabelsAsValue,
+                            GNUImaginaryConstant, GNUIncludeNext,
+                            GNULabelsAsValue,
                             RedeclaredClassMember, GNURedeclaredEnum,
                             GNUStatementExpression, GNUStaticFloatInit,
                             GNUStringLiteralOperatorTemplate,
@@ -714,8 +722,49 @@ def GNU : DiagGroup<"gnu", [GNUAlignofExpression, GNUAnonymousStruct,
 // A warning group for warnings about code that clang accepts but gcc doesn't.
 def GccCompat : DiagGroup<"gcc-compat">;
 
-// A warning group for warnings about Microsoft extensions.
-def Microsoft : DiagGroup<"microsoft">;
+// Warnings for Microsoft extensions.
+def MicrosoftCharize : DiagGroup<"microsoft-charize">;
+def MicrosoftInclude : DiagGroup<"microsoft-include">;
+def MicrosoftCppMacro : DiagGroup<"microsoft-cpp-macro">;
+def MicrosoftFixedEnum : DiagGroup<"microsoft-fixed-enum">;
+def MicrosoftSealed : DiagGroup<"microsoft-sealed">;
+def MicrosoftUnqualifiedFriend : DiagGroup<"microsoft-unqualified-friend">;
+def MicrosoftExceptionSpec : DiagGroup<"microsoft-exception-spec">;
+def MicrosoftUsingDecl : DiagGroup<"microsoft-using-decl">;
+def MicrosoftMutableReference : DiagGroup<"microsoft-mutable-reference">;
+def MicrosoftPureDefinition : DiagGroup<"microsoft-pure-definition">;
+def MicrosoftUnionMemberReference : DiagGroup<
+    "microsoft-union-member-reference">;
+def MicrosoftExplicitConstructorCall : DiagGroup<
+    "microsoft-explicit-constructor-call">;
+def MicrosoftEnumValue : DiagGroup<"microsoft-enum-value">;
+def MicrosoftDefaultArgRedefinition :
+    DiagGroup<"microsoft-default-arg-redefinition">;
+def MicrosoftTemplate : DiagGroup<"microsoft-template">;
+def MicrosoftRedeclareStatic : DiagGroup<"microsoft-redeclare-static">;
+def MicrosoftEnumForwardReference :
+    DiagGroup<"microsoft-enum-forward-reference">;
+def MicrosoftGoto : DiagGroup<"microsoft-goto">;
+def MicrosoftFlexibleArray : DiagGroup<"microsoft-flexible-array">;
+def MicrosoftExtraQualification : DiagGroup<"microsoft-extra-qualification">;
+def MicrosoftCast : DiagGroup<"microsoft-cast">;
+def MicrosoftConstInit : DiagGroup<"microsoft-const-init">;
+def MicrosoftVoidPseudoDtor : DiagGroup<"microsoft-void-pseudo-dtor">;
+def MicrosoftAnonTag : DiagGroup<"microsoft-anon-tag">;
+// Aliases.
+def : DiagGroup<"msvc-include", [MicrosoftInclude]>;
+                // -Wmsvc-include = -Wmicrosoft-include
+
+// Warnings group for warnings about Microsoft extensions.
+def Microsoft : DiagGroup<"microsoft",
+    [MicrosoftCharize, MicrosoftInclude, MicrosoftCppMacro, MicrosoftFixedEnum,
+     MicrosoftSealed, MicrosoftUnqualifiedFriend, MicrosoftExceptionSpec,
+     MicrosoftUsingDecl, MicrosoftMutableReference, MicrosoftPureDefinition,
+     MicrosoftUnionMemberReference, MicrosoftExplicitConstructorCall,
+     MicrosoftEnumValue, MicrosoftDefaultArgRedefinition, MicrosoftTemplate,
+     MicrosoftRedeclareStatic, MicrosoftEnumForwardReference, MicrosoftGoto,
+     MicrosoftFlexibleArray, MicrosoftExtraQualification, MicrosoftCast,
+     MicrosoftConstInit, MicrosoftVoidPseudoDtor, MicrosoftAnonTag]>;
 
 def ObjCNonUnifiedException : DiagGroup<"objc-nonunified-exceptions">;
 
@@ -776,3 +825,7 @@ def CudaCompat : DiagGroup<"cuda-compat">;
 
 // A warning group for things that will change semantics in the future.
 def FutureCompat : DiagGroup<"future-compat">;
+
+def InvalidOrNonExistentDirectory : DiagGroup<"invalid-or-nonexistent-directory">;
+
+def OptionIgnored : DiagGroup<"option-ignored">;

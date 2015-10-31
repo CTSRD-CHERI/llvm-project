@@ -59,12 +59,17 @@ set(files
   unwind.h
   vadefs.h
   varargs.h
+  vecintrin.h
   __wmmintrin_aes.h
   wmmintrin.h
   __wmmintrin_pclmul.h
   x86intrin.h
   xmmintrin.h
   xopintrin.h
+  xsaveintrin.h
+  xsaveoptintrin.h
+  xsavecintrin.h
+  xsavesintrin.h
   xtestintrin.h
   )
 

@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -analyze -polly-scops < %s | FileCheck %s
+; RUN: opt %loadPolly -analyze -polly-scops < %s | FileCheck %s
 ;
 ;    void f(int *A, int c, int N) {
 ;      int tmp;
@@ -15,17 +15,17 @@
 ; CHECK-LABEL:      Stmt_bb6
 ; CHECK-NOT: Access
 ; CHECK:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                [N, c] -> { Stmt_bb6[i0] -> MemRef_tmp_0[] };
+; CHECK:                [N, c] -> { Stmt_bb6[i0] -> MemRef_tmp_0__phi[] };
 ; CHECK-NOT: Access
 ; CHECK-LABEL:      Stmt_bb7
 ; CHECK-NOT: Access
 ; CHECK:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                [N, c] -> { Stmt_bb7[i0] -> MemRef_tmp_0[] };
+; CHECK:                [N, c] -> { Stmt_bb7[i0] -> MemRef_tmp_0__phi[] };
 ; CHECK-NOT: Access
 ; CHECK-LABEL:      Stmt_bb8
 ; CHECK-NOT: Access
 ; CHECK:            ReadAccess := [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                [N, c] -> { Stmt_bb8[i0] -> MemRef_tmp_0[] };
+; CHECK:                [N, c] -> { Stmt_bb8[i0] -> MemRef_tmp_0__phi[] };
 ; CHECK-NOT: Access
 ; CHECK:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
 ; CHECK:                [N, c] -> { Stmt_bb8[i0] -> MemRef_tmp_0[] };

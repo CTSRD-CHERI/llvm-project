@@ -106,13 +106,6 @@ typedef enum SortOrder
     eSortOrderByName
 } SortOrder;
 
-typedef enum ObjCRuntimeVersions {
-    eObjC_VersionUnknown = 0,
-    eAppleObjC_V1 = 1,
-    eAppleObjC_V2 = 2
-} ObjCRuntimeVersions;
-
-    
 //----------------------------------------------------------------------
 // LazyBool is for boolean values that need to be calculated lazily.
 // Values start off set to eLazyBoolCalculate, and then they can be
@@ -188,7 +181,7 @@ typedef enum FormatterChoiceCriterion
     eFormatterChoiceCriterionNavigatedTypedefs =             0x00000002,
     eFormatterChoiceCriterionRegularExpressionSummary =      0x00000004,
     eFormatterChoiceCriterionRegularExpressionFilter =       0x00000004,
-    eFormatterChoiceCriterionDynamicObjCDiscovery =          0x00000008,
+    eFormatterChoiceCriterionLanguagePlugin =                0x00000008,
     eFormatterChoiceCriterionStrippedBitField =              0x00000010,
     eFormatterChoiceCriterionWentToStaticValue =             0x00000020
 } FormatterChoiceCriterion;

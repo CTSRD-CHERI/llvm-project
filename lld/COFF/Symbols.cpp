@@ -47,9 +47,8 @@ int SymbolBody::compare(SymbolBody *Other) {
 
   // First handle comparisons between two different kinds.
   if (LK != RK) {
-
     if (RK > LastDefinedKind) {
-      if (LK == LazyKind && cast<Undefined>(Other)->getWeakAlias())
+      if (LK == LazyKind && cast<Undefined>(Other)->WeakAlias)
         return -1;
 
       // The LHS is either defined or lazy and so it wins.
@@ -94,12 +93,16 @@ int SymbolBody::compare(SymbolBody *Other) {
   case DefinedRegularKind: {
     auto *LHS = cast<DefinedRegular>(this);
     auto *RHS = cast<DefinedRegular>(Other);
-    return (LHS->isCOMDAT() && RHS->isCOMDAT()) ? 1 : 0;
+    if (LHS->isCOMDAT() && RHS->isCOMDAT())
+      return LHS->getFileIndex() < RHS->getFileIndex() ? 1 : -1;
+    return 0;
   }
 
   case DefinedCommonKind: {
     auto *LHS = cast<DefinedCommon>(this);
     auto *RHS = cast<DefinedCommon>(Other);
+    if (LHS->getSize() == RHS->getSize())
+      return LHS->getFileIndex() < RHS->getFileIndex() ? 1 : -1;
     return LHS->getSize() > RHS->getSize() ? 1 : -1;
   }
 
@@ -111,22 +114,36 @@ int SymbolBody::compare(SymbolBody *Other) {
       return 0;
 
     // Non-replaceable symbols win, but even two replaceable symboles don't
-    // tie.
+    // tie. If both symbols are replaceable, choice is arbitrary.
+    if (RHS->IsReplaceable && LHS->IsReplaceable)
+      return uintptr_t(LHS) < uintptr_t(RHS) ? 1 : -1;
     return LHS->IsReplaceable ? -1 : 1;
   }
 
-  case LazyKind:
-    // Don't tie, just pick the LHS.
-    return 1;
+  case LazyKind: {
+    // Don't tie, pick the earliest.
+    auto *LHS = cast<Lazy>(this);
+    auto *RHS = cast<Lazy>(Other);
+    return LHS->getFileIndex() < RHS->getFileIndex() ? 1 : -1;
+  }
 
-  case UndefinedKind:
-    // Don't tie, just pick the LHS unless the RHS has a weak alias.
-    return cast<Undefined>(Other)->getWeakAlias() ? -1 : 1;
+  case UndefinedKind: {
+    auto *LHS = cast<Undefined>(this);
+    auto *RHS = cast<Undefined>(Other);
+    // Tie if both undefined symbols have different weak aliases.
+    if (LHS->WeakAlias && RHS->WeakAlias) {
+      if (LHS->WeakAlias->getName() != RHS->WeakAlias->getName())
+        return 0;
+      return uintptr_t(LHS) < uintptr_t(RHS) ? 1 : -1;
+    }
+    return LHS->WeakAlias ? 1 : -1;
+  }
 
   case DefinedLocalImportKind:
   case DefinedImportThunkKind:
   case DefinedImportDataKind:
   case DefinedAbsoluteKind:
+  case DefinedRelativeKind:
     // These all simply tie.
     return 0;
   }
@@ -143,30 +160,6 @@ std::string SymbolBody::getDebugName() {
     N += D->File->getShortName();
   }
   return N;
-}
-
-uint64_t Defined::getRVA() {
-  switch (kind()) {
-  case DefinedAbsoluteKind:
-    return cast<DefinedAbsolute>(this)->getRVA();
-  case DefinedImportDataKind:
-    return cast<DefinedImportData>(this)->getRVA();
-  case DefinedImportThunkKind:
-    return cast<DefinedImportThunk>(this)->getRVA();
-  case DefinedLocalImportKind:
-    return cast<DefinedLocalImport>(this)->getRVA();
-  case DefinedCommonKind:
-    return cast<DefinedCommon>(this)->getRVA();
-  case DefinedRegularKind:
-    return cast<DefinedRegular>(this)->getRVA();
-
-  case DefinedBitcodeKind:
-    llvm_unreachable("There is no address for a bitcode symbol.");
-  case LazyKind:
-  case UndefinedKind:
-    llvm_unreachable("Cannot get the address for an undefined symbol.");
-  }
-  llvm_unreachable("unknown symbol kind");
 }
 
 uint64_t Defined::getFileOff() {
@@ -186,6 +179,8 @@ uint64_t Defined::getFileOff() {
     llvm_unreachable("There is no file offset for a bitcode symbol.");
   case DefinedAbsoluteKind:
     llvm_unreachable("Cannot get a file offset for an absolute symbol.");
+  case DefinedRelativeKind:
+    llvm_unreachable("Cannot get a file offset for a relative symbol.");
   case LazyKind:
   case UndefinedKind:
     llvm_unreachable("Cannot get a file offset for an undefined symbol.");
@@ -193,11 +188,27 @@ uint64_t Defined::getFileOff() {
   llvm_unreachable("unknown symbol kind");
 }
 
-ErrorOr<std::unique_ptr<InputFile>> Lazy::getMember() {
-  auto MBRefOrErr = File->getMember(&Sym);
-  if (auto EC = MBRefOrErr.getError())
-    return EC;
-  MemoryBufferRef MBRef = MBRefOrErr.get();
+COFFSymbolRef DefinedCOFF::getCOFFSymbol() {
+  size_t SymSize = File->getCOFFObj()->getSymbolTableEntrySize();
+  if (SymSize == sizeof(coff_symbol16))
+    return COFFSymbolRef(reinterpret_cast<const coff_symbol16 *>(Sym));
+  assert(SymSize == sizeof(coff_symbol32));
+  return COFFSymbolRef(reinterpret_cast<const coff_symbol32 *>(Sym));
+}
+
+DefinedImportThunk::DefinedImportThunk(StringRef Name, DefinedImportData *S,
+                                       uint16_t Machine)
+    : Defined(DefinedImportThunkKind, Name) {
+  switch (Machine) {
+  case AMD64: Data.reset(new ImportThunkChunkX64(S)); return;
+  case I386:  Data.reset(new ImportThunkChunkX86(S)); return;
+  case ARMNT: Data.reset(new ImportThunkChunkARM(S)); return;
+  default:    llvm_unreachable("unknown machine type");
+  }
+}
+
+std::unique_ptr<InputFile> Lazy::getMember() {
+  MemoryBufferRef MBRef = File->getMember(&Sym);
 
   // getMember returns an empty buffer if the member was already
   // read from the library.
@@ -205,19 +216,27 @@ ErrorOr<std::unique_ptr<InputFile>> Lazy::getMember() {
     return std::unique_ptr<InputFile>(nullptr);
 
   file_magic Magic = identify_magic(MBRef.getBuffer());
-  if (Magic == file_magic::bitcode)
-    return std::unique_ptr<InputFile>(new BitcodeFile(MBRef));
   if (Magic == file_magic::coff_import_library)
     return std::unique_ptr<InputFile>(new ImportFile(MBRef));
 
-  if (Magic != file_magic::coff_object) {
-    llvm::errs() << File->getName() << ": unknown file type\n";
-    return make_error_code(LLDError::InvalidFile);
-  }
+  std::unique_ptr<InputFile> Obj;
+  if (Magic == file_magic::coff_object)
+    Obj.reset(new ObjectFile(MBRef));
+  else if (Magic == file_magic::bitcode)
+    Obj.reset(new BitcodeFile(MBRef));
+  else
+    error(Twine(File->getName()) + ": unknown file type");
 
-  std::unique_ptr<InputFile> Obj(new ObjectFile(MBRef));
   Obj->setParentName(File->getName());
-  return std::move(Obj);
+  return Obj;
+}
+
+Defined *Undefined::getWeakAlias() {
+  // A weak alias may be a weak alias to another symbol, so check recursively.
+  for (SymbolBody *A = WeakAlias; A; A = cast<Undefined>(A)->WeakAlias)
+    if (auto *D = dyn_cast<Defined>(A->repl()))
+      return D;
+  return nullptr;
 }
 
 } // namespace coff

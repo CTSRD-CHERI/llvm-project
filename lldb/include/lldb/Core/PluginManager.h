@@ -117,11 +117,10 @@ public:
     //------------------------------------------------------------------
     // OperatingSystem
     //------------------------------------------------------------------
-    static bool
-    RegisterPlugin (const ConstString &name,
-                    const char *description,
-                    OperatingSystemCreateInstance create_callback);
-    
+    static bool RegisterPlugin(const ConstString &name, const char *description,
+                               OperatingSystemCreateInstance create_callback,
+                               DebuggerInitializeCallback debugger_init_callback);
+
     static bool
     UnregisterPlugin (OperatingSystemCreateInstance create_callback);
     
@@ -131,6 +130,23 @@ public:
     static OperatingSystemCreateInstance
     GetOperatingSystemCreateCallbackForPluginName (const ConstString &name);
 
+    //------------------------------------------------------------------
+    // Language
+    //------------------------------------------------------------------
+    static bool
+    RegisterPlugin (const ConstString &name,
+                    const char *description,
+                    LanguageCreateInstance create_callback);
+    
+    static bool
+    UnregisterPlugin (LanguageCreateInstance create_callback);
+    
+    static LanguageCreateInstance
+    GetLanguageCreateCallbackAtIndex (uint32_t idx);
+    
+    static LanguageCreateInstance
+    GetLanguageCreateCallbackForPluginName (const ConstString &name);
+    
     //------------------------------------------------------------------
     // LanguageRuntime
     //------------------------------------------------------------------
@@ -296,12 +312,30 @@ public:
     GetProcessPluginDescriptionAtIndex (uint32_t idx);
 
     //------------------------------------------------------------------
+    // ScriptInterpreter
+    //------------------------------------------------------------------
+    static bool
+    RegisterPlugin(const ConstString &name, const char *description, lldb::ScriptLanguage script_lang,
+                               ScriptInterpreterCreateInstance create_callback);
+
+    static bool
+    UnregisterPlugin(ScriptInterpreterCreateInstance create_callback);
+
+    static ScriptInterpreterCreateInstance
+    GetScriptInterpreterCreateCallbackAtIndex(uint32_t idx);
+
+    static lldb::ScriptInterpreterSP
+    GetScriptInterpreterForLanguage(lldb::ScriptLanguage script_lang,
+                                    CommandInterpreter &interpreter);
+
+    //------------------------------------------------------------------
     // SymbolFile
     //------------------------------------------------------------------
     static bool
     RegisterPlugin (const ConstString &name,
                     const char *description,
-                    SymbolFileCreateInstance create_callback);
+                    SymbolFileCreateInstance create_callback,
+                    DebuggerInitializeCallback debugger_init_callback = nullptr);
 
     static bool
     UnregisterPlugin (SymbolFileCreateInstance create_callback);
@@ -385,6 +419,53 @@ public:
     static InstrumentationRuntimeCreateInstance
     GetInstrumentationRuntimeCreateCallbackForPluginName (const ConstString &name);
 
+    //------------------------------------------------------------------
+    // TypeSystem
+    //------------------------------------------------------------------
+    static bool
+    RegisterPlugin (const ConstString &name,
+                    const char *description,
+                    TypeSystemCreateInstance create_callback,
+                    TypeSystemEnumerateSupportedLanguages enumerate_languages_callback);
+
+    static bool
+    UnregisterPlugin (TypeSystemCreateInstance create_callback);
+
+    static TypeSystemCreateInstance
+    GetTypeSystemCreateCallbackAtIndex (uint32_t idx);
+
+    static TypeSystemCreateInstance
+    GetTypeSystemCreateCallbackForPluginName (const ConstString &name);
+    
+    static TypeSystemEnumerateSupportedLanguages
+    GetTypeSystemEnumerateSupportedLanguagesCallbackAtIndex (uint32_t idx);
+    
+    static TypeSystemEnumerateSupportedLanguages
+    GetTypeSystemEnumerateSupportedLanguagesCallbackForPluginName (const ConstString &name);
+    
+    //------------------------------------------------------------------
+    // REPL
+    //------------------------------------------------------------------
+    static bool
+    RegisterPlugin (const ConstString &name,
+                    const char *description,
+                    REPLCreateInstance create_callback,
+                    REPLEnumerateSupportedLanguages enumerate_languages_callback);
+    
+    static bool
+    UnregisterPlugin (REPLCreateInstance create_callback);
+    
+    static REPLCreateInstance
+    GetREPLCreateCallbackAtIndex (uint32_t idx);
+    
+    static REPLCreateInstance
+    GetREPLCreateCallbackForPluginName (const ConstString &name);
+    
+    static REPLEnumerateSupportedLanguages
+    GetREPLEnumerateSupportedLanguagesCallbackAtIndex (uint32_t idx);
+    
+    static REPLEnumerateSupportedLanguages
+    GetREPLSystemEnumerateSupportedLanguagesCallbackForPluginName (const ConstString &name);
     
     //------------------------------------------------------------------
     // Some plug-ins might register a DebuggerInitializeCallback
@@ -419,13 +500,39 @@ public:
     static lldb::OptionValuePropertiesSP
     GetSettingForProcessPlugin (Debugger &debugger,
                                 const ConstString &setting_name);
-    
+
     static bool
     CreateSettingForProcessPlugin (Debugger &debugger,
                                    const lldb::OptionValuePropertiesSP &properties_sp,
                                    const ConstString &description,
                                    bool is_global_property);
 
+    static lldb::OptionValuePropertiesSP
+    GetSettingForSymbolFilePlugin (Debugger &debugger,
+                                   const ConstString &setting_name);
+
+    static bool
+    CreateSettingForSymbolFilePlugin (Debugger &debugger,
+                                      const lldb::OptionValuePropertiesSP &properties_sp,
+                                      const ConstString &description,
+                                      bool is_global_property);
+
+    static lldb::OptionValuePropertiesSP
+    GetSettingForJITLoaderPlugin (Debugger &debugger,
+                                   const ConstString &setting_name);
+
+    static bool
+    CreateSettingForJITLoaderPlugin (Debugger &debugger,
+                                     const lldb::OptionValuePropertiesSP &properties_sp,
+                                     const ConstString &description,
+                                     bool is_global_property);
+
+    static lldb::OptionValuePropertiesSP GetSettingForOperatingSystemPlugin(Debugger &debugger,
+                                                                            const ConstString &setting_name);
+
+    static bool CreateSettingForOperatingSystemPlugin(Debugger &debugger,
+                                                      const lldb::OptionValuePropertiesSP &properties_sp,
+                                                      const ConstString &description, bool is_global_property);
 };
 
 

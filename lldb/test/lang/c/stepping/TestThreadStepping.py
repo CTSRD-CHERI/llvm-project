@@ -2,9 +2,12 @@
 Test thread stepping features in combination with frame select.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 import lldbutil
@@ -12,19 +15,6 @@ import lldbutil
 class ThreadSteppingTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_step_out_with_dsym_and_run_command(self):
-        """Exercise thread step-out and frame select followed by thread step-out."""
-        self.buildDwarf()
-        self.thread_step_out()
-
-    @dwarf_test
-    def test_step_out_with_dwarf_and_run_command(self):
-        """Exercise thread step-out and frame select followed by thread step-out."""
-        self.buildDwarf()
-        self.thread_step_out()
 
     def setUp(self):
         # Call super's setUp().
@@ -35,8 +25,9 @@ class ThreadSteppingTestCase(TestBase):
         self.line3 = line_number('main.c', '// thread step-out while stopped at "c(2)"')
         self.line4 = line_number('main.c', '// frame select 1, thread step-out while stopped at "c(3)"')
 
-    def thread_step_out(self):
+    def test_step_out_with_run_command(self):
         """Exercise thread step-out and frame select followed by thread step-out."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -44,7 +35,7 @@ class ThreadSteppingTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line1, num_expected_locations=1, loc_exact=True)
 
         # Now run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The process should be stopped at this point.
         self.expect("process status", PROCESS_STOPPED,
@@ -87,10 +78,3 @@ class ThreadSteppingTestCase(TestBase):
         self.expect("thread backtrace", STEP_OUT_SUCCEEDED,
             substrs = ["stop reason = step out"],
             patterns = ["frame #0.*main.c:%d" % self.line4])
-        
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

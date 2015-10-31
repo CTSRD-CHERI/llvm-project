@@ -45,10 +45,19 @@ void Decl::updateOutOfDate(IdentifierInfo &II) const {
   getASTContext().getExternalSource()->updateOutOfDateIdentifier(II);
 }
 
+#define DECL(DERIVED, BASE)                                                    \
+  static_assert(Decl::DeclObjAlignment >=                                      \
+                    llvm::AlignOf<DERIVED##Decl>::Alignment,                   \
+                "Alignment sufficient after objects prepended to " #DERIVED);
+#define ABSTRACT_DECL(DECL)
+#include "clang/AST/DeclNodes.inc"
+
 void *Decl::operator new(std::size_t Size, const ASTContext &Context,
                          unsigned ID, std::size_t Extra) {
   // Allocate an extra 8 bytes worth of storage, which ensures that the
-  // resulting pointer will still be 8-byte aligned. 
+  // resulting pointer will still be 8-byte aligned.
+  static_assert(sizeof(unsigned) * 2 >= DeclObjAlignment,
+                "Decl won't be misaligned");
   void *Start = Context.Allocate(Size + Extra + 8);
   void *Result = (char*)Start + 8;
 
@@ -69,7 +78,13 @@ void *Decl::operator new(std::size_t Size, const ASTContext &Ctx,
   // With local visibility enabled, we track the owning module even for local
   // declarations.
   if (Ctx.getLangOpts().ModulesLocalVisibility) {
-    void *Buffer = ::operator new(sizeof(Module *) + Size + Extra, Ctx);
+    // Ensure required alignment of the resulting object by adding extra
+    // padding at the start if required.
+    size_t ExtraAlign =
+        llvm::OffsetToAlignment(sizeof(Module *), DeclObjAlignment);
+    char *Buffer = reinterpret_cast<char *>(
+        ::operator new(ExtraAlign + sizeof(Module *) + Size + Extra, Ctx));
+    Buffer += ExtraAlign;
     return new (Buffer) Module*(nullptr) + 1;
   }
   return ::operator new(Size + Extra, Ctx);
@@ -236,6 +251,7 @@ void Decl::setLexicalDeclContext(DeclContext *DC) {
   } else {
     getMultipleDC()->LexicalDC = DC;
   }
+  Hidden = cast<Decl>(DC)->Hidden;
 }
 
 void Decl::setDeclContextsImpl(DeclContext *SemaDC, DeclContext *LexicalDC,
@@ -248,6 +264,18 @@ void Decl::setDeclContextsImpl(DeclContext *SemaDC, DeclContext *LexicalDC,
     MDC->LexicalDC = LexicalDC;
     DeclCtx = MDC;
   }
+}
+
+bool Decl::isLexicallyWithinFunctionOrMethod() const {
+  const DeclContext *LDC = getLexicalDeclContext();
+  while (true) {
+    if (LDC->isFunctionOrMethod())
+      return true;
+    if (!isa<TagDecl>(LDC))
+      return false;
+    LDC = LDC->getLexicalParent();
+  }
+  return false;
 }
 
 bool Decl::isInAnonymousNamespace() const {
@@ -560,6 +588,7 @@ unsigned Decl::getIdentifierNamespaceForKind(Kind DeclKind) {
     case TypeAliasTemplate:
     case UnresolvedUsingTypename:
     case TemplateTypeParm:
+    case ObjCTypeParam:
       return IDNS_Ordinary | IDNS_Type;
 
     case UsingShadow:
@@ -1042,14 +1071,7 @@ DeclContext::LoadLexicalDeclsFromExternalStorage() const {
   // Load the external declarations, if any.
   SmallVector<Decl*, 64> Decls;
   ExternalLexicalStorage = false;
-  switch (Source->FindExternalLexicalDecls(this, Decls)) {
-  case ELR_Success:
-    break;
-    
-  case ELR_Failure:
-  case ELR_AlreadyLoaded:
-    return false;
-  }
+  Source->FindExternalLexicalDecls(this, Decls);
 
   if (Decls.empty())
     return false;
@@ -1211,7 +1233,7 @@ void DeclContext::addHiddenDecl(Decl *D) {
   }
 
   // Notify a C++ record declaration that we've added a member, so it can
-  // update it's class-specific state.
+  // update its class-specific state.
   if (CXXRecordDecl *Record = dyn_cast<CXXRecordDecl>(this))
     Record->addedMember(D);
 

@@ -1,7 +1,10 @@
 """Test that we are able to evaluate expressions when the inferior is blocked in a syscall"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -11,16 +14,9 @@ class ExprSyscallTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_setpgid_with_dsym(self):
-        self.buildDsym()
-        self.expr_syscall()
-
-    @expectedFailureAll("llvm.org/pr23659", oslist=["linux"], archs=["i386", "x86_64"])
-    @dwarf_test
-    def test_setpgid_with_dwarf(self):
-        self.buildDwarf()
+    @expectedFailureWindows("llvm.org/pr21765") # Also getpid() is not a function on Windows anyway
+    def test_setpgid(self):
+        self.build()
         self.expr_syscall()
 
     def expr_syscall(self):
@@ -61,7 +57,7 @@ class ExprSyscallTestCase(TestBase):
 
         # send the process a signal
         process.SendAsyncInterrupt()
-        while listener.WaitForEvent(1, event):
+        while listener.WaitForEvent(2, event):
             pass
 
         # as a result the process should stop
@@ -77,14 +73,10 @@ class ExprSyscallTestCase(TestBase):
         process.Continue()
 
         # process all events
-        while listener.WaitForEvent(1, event):
-            pass
+        while listener.WaitForEvent(10, event):
+            new_state = lldb.SBProcess.GetStateFromEvent(event)
+            if new_state == lldb.eStateExited:
+                break
 
         self.assertEqual(process.GetState(), lldb.eStateExited)
         self.assertEqual(process.GetExitStatus(), 0)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

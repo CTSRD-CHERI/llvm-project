@@ -5,11 +5,19 @@ class B {
   struct Inner1 {};
 public:
   struct Inner2;
+  struct Inner3;
   template<typename T> void f();
+};
+struct BFriend {
+  friend class B::Inner3;
+private:
+  struct Inner3Base {};
 };
 // Check that lookup and access checks are performed in the right context.
 struct B::Inner2 : Inner1 {};
+struct B::Inner3 : BFriend::Inner3Base {};
 template<typename T> void B::f() {}
+template<> inline void B::f<int>() {}
 
 // Check that base-specifiers are correctly disambiguated.
 template<int N> struct C_Base { struct D { constexpr operator int() const { return 0; } }; };
@@ -31,7 +39,8 @@ template<typename T> struct F {
 template<typename T> int F<T>::f() { return 0; }
 template<typename T> template<typename U> int F<T>::g() { return 0; }
 template<typename T> int F<T>::n = 0;
-//template<> template<typename U> int F<char>::g() { return 0; } // FIXME: Re-enable this once we support merging member specializations.
+template<> inline int F<char>::f() { return 0; }
+template<> template<typename U> int F<char>::g() { return 0; }
 template<> struct F<void> { int h(); };
 inline int F<void>::h() { return 0; }
 template<typename T> struct F<T *> { int i(); };
@@ -73,4 +82,52 @@ namespace FriendDefArg {
     template<template<typename> class> friend struct C;
     template<typename, int, template<typename> class> friend struct D;
   };
+}
+
+namespace SeparateInline {
+  inline void f();
+  void f() {}
+  constexpr int g() { return 0; }
+}
+
+namespace TrailingAttributes {
+  template<typename T> struct X {} __attribute__((aligned(8)));
+}
+
+namespace MergeFunctionTemplateSpecializations {
+  template<typename T> T f();
+  template<typename T> struct X {
+    template<typename U> using Q = decltype(f<T>() + U());
+  };
+  using xiq = X<int>::Q<int>;
+}
+
+enum ScopedEnum : int;
+enum ScopedEnum : int { a, b, c };
+
+namespace RedeclDifferentDeclKind {
+  struct X {};
+  typedef X X;
+  using RedeclDifferentDeclKind::X;
+}
+
+namespace Anon {
+  struct X {
+    union {
+      int n;
+    };
+  };
+}
+
+namespace ClassTemplatePartialSpec {
+  template<typename T> struct F;
+  template<template<int> class A, int B> struct F<A<B>> {
+    template<typename C> F();
+  };
+  template<template<int> class A, int B> template<typename C> F<A<B>>::F() {}
+
+  template<typename A, int B> struct F<A[B]> {
+    template<typename C> F();
+  };
+  template<typename A, int B> template<typename C> F<A[B]>::F() {}
 }

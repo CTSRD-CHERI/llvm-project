@@ -1,7 +1,10 @@
 """Show global variables and check that they do indeed have global scopes."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -9,19 +12,6 @@ import lldbutil
 class GlobalVariablesTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test 'frame variable --scope --no-args' which omits args and shows scopes."""
-        self.buildDsym()
-        self.global_variables()
-
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test 'frame variable --scope --no-args' which omits args and shows scopes."""
-        self.buildDwarf()
-        self.global_variables()
 
     def setUp(self):
         # Call super's setUp().
@@ -31,8 +21,11 @@ class GlobalVariablesTestCase(TestBase):
         self.line = line_number(self.source, '// Set break point at this line.')
         self.shlib_names = ["a"]
 
-    def global_variables(self):
+    @expectedFailureWindows("llvm.org/pr24764")
+    def test(self):
         """Test 'frame variable --scope --no-args' which omits args and shows scopes."""
+        self.build()
+
         # Create a target by the debugger.
         target = self.dbg.CreateTarget("a.out")
         self.assertTrue(target, VALID_TARGET)
@@ -82,10 +75,3 @@ class GlobalVariablesTestCase(TestBase):
                     substrs = ['g_marked_spot.y', '21'])
         self.expect("target variable g_marked_spot.y", VARIABLES_DISPLAYED_CORRECTLY, matching=False,
                     substrs = ["can't be resolved"])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

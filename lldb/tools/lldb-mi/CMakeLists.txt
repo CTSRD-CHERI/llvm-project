@@ -1,5 +1,3 @@
-set(LLVM_NO_RTTI 1)
-
 set(LLDB_MI_SOURCES
   MICmdArgContext.cpp
   MICmdArgSet.cpp
@@ -67,14 +65,12 @@ set(LLDB_MI_SOURCES
   MIDriverBase.cpp
   MIDriverMain.cpp
   MIDriverMgr.cpp
+  MIUtilParse.cpp
   MIUtilDateTimeStd.cpp
   MIUtilDebug.cpp
   MIUtilFileStd.cpp
   MIUtilMapIdToVariant.cpp
   MIUtilString.cpp
-  MIUtilSystemLinux.cpp
-  MIUtilSystemOsx.cpp
-  MIUtilSystemWindows.cpp
   MIUtilThreadBaseStd.cpp
   MIUtilVariant.cpp
   Platform.cpp
@@ -83,9 +79,11 @@ set(LLDB_MI_SOURCES
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
   add_definitions( -DIMPORT_LIBLLDB )
   list(APPEND LLDB_MI_SOURCES
-    ${LLDB_SOURCE_ROOT}/Host/windows/getopt/GetOptInc.cpp
+    ${LLDB_SOURCE_ROOT}/Host/common/GetOptInc.cpp
     )
 endif ()
+
+include(../../cmake/LLDBDependencies.cmake)
 
 add_lldb_executable(lldb-mi ${LLDB_MI_SOURCES})
 
@@ -96,7 +94,7 @@ endif ()
 
 # TODO: why isn't this done by add_lldb_executable?
 #target_link_libraries(lldb-mi ${LLDB_USED_LIBS})
-#llvm_config(lldb-mi ${LLVM_LINK_COMPONENTS})
+llvm_config(lldb-mi ${LLVM_LINK_COMPONENTS})
 
 set_target_properties(lldb-mi PROPERTIES VERSION ${LLDB_VERSION})
 

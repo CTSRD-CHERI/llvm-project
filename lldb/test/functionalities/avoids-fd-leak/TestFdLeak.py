@@ -2,31 +2,40 @@
 Test whether a process started by lldb has no extra file descriptors open.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
+
+
+def python_leaky_fd_version(test):
+    import sys
+    # Python random module leaks file descriptors on some versions.
+    return sys.version_info >= (2, 7, 8) and sys.version_info < (2, 7, 10)
+
 
 class AvoidsFdLeakTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @expectedFailure(lambda x: sys.version_info >= (2, 7, 8), "bugs.freebsd.org/197376") # python random leaks fd
-    @expectedFailureLinux # xfail flakey test to get buildbot green
+    @expectedFailure(python_leaky_fd_version, "bugs.freebsd.org/197376")
     @skipIfWindows # The check for descriptor leakage needs to be implemented differently here.
     @skipIfTargetAndroid() # Android have some other file descriptors open by the shell
     def test_fd_leak_basic (self):
         self.do_test([])
 
-    @expectedFailure(lambda x: sys.version_info >= (2, 7, 8), "bugs.freebsd.org/197376") # python random leaks fd
+    @expectedFailure(python_leaky_fd_version, "bugs.freebsd.org/197376")
     @skipIfWindows # The check for descriptor leakage needs to be implemented differently here.
     @skipIfTargetAndroid() # Android have some other file descriptors open by the shell
     def test_fd_leak_log (self):
         self.do_test(["log enable -f '/dev/null' lldb commands"])
 
     def do_test (self, commands):
-        self.buildDefault()
+        self.build()
         exe = os.path.join (os.getcwd(), "a.out")
 
         for c in commands:
@@ -41,12 +50,12 @@ class AvoidsFdLeakTestCase(TestBase):
         self.assertTrue(process.GetExitStatus() == 0,
                 "Process returned non-zero status. Were incorrect file descriptors passed?")
 
-    @expectedFailure(lambda x: sys.version_info >= (2, 7, 8), "bugs.freebsd.org/197376") # python random leaks fd
+    @expectedFailure(python_leaky_fd_version, "bugs.freebsd.org/197376")
     @expectedFlakeyLinux
     @skipIfWindows # The check for descriptor leakage needs to be implemented differently here.
     @skipIfTargetAndroid() # Android have some other file descriptors open by the shell
     def test_fd_leak_multitarget (self):
-        self.buildDefault()
+        self.build()
         exe = os.path.join (os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -64,10 +73,3 @@ class AvoidsFdLeakTestCase(TestBase):
         self.assertTrue(process2.GetState() == lldb.eStateExited, "Process should have exited.")
         self.assertTrue(process2.GetExitStatus() == 0,
                 "Process returned non-zero status. Were incorrect file descriptors passed?")
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

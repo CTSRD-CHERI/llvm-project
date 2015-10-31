@@ -37,20 +37,69 @@ static const uint8_t mipsGotTlsGdAtomContent[] = {
   0x00, 0x00, 0x00, 0x00
 };
 
-// Regular PLT0 entry
-static const uint8_t mipsPlt0AtomContent[] = {
+// Regular big-endian PLT0 entry
+static const uint8_t mipsBePlt0AtomContent[] = {
+  0x3c, 0x1c, 0x00, 0x00, // lui   $28, %hi(&GOTPLT[0])
+  0x8f, 0x99, 0x00, 0x00, // lw    $25, %lo(&GOTPLT[0])($28)
+  0x27, 0x9c, 0x00, 0x00, // addiu $28, $28, %lo(&GOTPLT[0])
+  0x03, 0x1c, 0xc0, 0x23, // subu  $24, $24, $28
+  0x03, 0xe0, 0x78, 0x25, // move  $15, $31
+  0x00, 0x18, 0xc0, 0x82, // srl   $24, $24, 2
+  0x03, 0x20, 0xf8, 0x09, // jalr  $25
+  0x27, 0x18, 0xff, 0xfe  // subu  $24, $24, 2
+};
+
+// Regular little-endian PLT0 entry
+static const uint8_t mipsLePlt0AtomContent[] = {
   0x00, 0x00, 0x1c, 0x3c, // lui   $28, %hi(&GOTPLT[0])
   0x00, 0x00, 0x99, 0x8f, // lw    $25, %lo(&GOTPLT[0])($28)
   0x00, 0x00, 0x9c, 0x27, // addiu $28, $28, %lo(&GOTPLT[0])
   0x23, 0xc0, 0x1c, 0x03, // subu  $24, $24, $28
-  0x21, 0x78, 0xe0, 0x03, // move  $15, $31
+  0x25, 0x78, 0xe0, 0x03, // move  $15, $31
   0x82, 0xc0, 0x18, 0x00, // srl   $24, $24, 2
   0x09, 0xf8, 0x20, 0x03, // jalr  $25
   0xfe, 0xff, 0x18, 0x27  // subu  $24, $24, 2
 };
 
-// microMIPS PLT0 entry
-static const uint8_t micromipsPlt0AtomContent[] = {
+// N32 big-endian PLT0 entry
+static const uint8_t mipsN32BePlt0AtomContent[] = {
+  0x3c, 0x0e, 0x00, 0x00, // lui   $14, %hi(&GOTPLT[0])
+  0x8d, 0xd9, 0x00, 0x00, // lw    $25, %lo(&GOTPLT[0])($14)
+  0x25, 0xce, 0x00, 0x00, // addiu $14, $14, %lo(&GOTPLT[0])
+  0x03, 0x0e, 0xc0, 0x23, // subu  $24, $24, $14
+  0x03, 0xe0, 0x78, 0x25, // move  $15, $31
+  0x00, 0x18, 0xc0, 0x82, // srl   $24, $24, 2
+  0x03, 0x20, 0xf8, 0x09, // jalr  $25
+  0x27, 0x18, 0xff, 0xfe  // subu  $24, $24, 2
+};
+
+// N32 little-endian PLT0 entry
+static const uint8_t mipsN32LePlt0AtomContent[] = {
+  0x00, 0x00, 0x0e, 0x3c, // lui   $14, %hi(&GOTPLT[0])
+  0x00, 0x00, 0xd9, 0x8d, // lw    $25, %lo(&GOTPLT[0])($14)
+  0x00, 0x00, 0xce, 0x25, // addiu $14, $14, %lo(&GOTPLT[0])
+  0x23, 0xc0, 0x0e, 0x03, // subu  $24, $24, $14
+  0x25, 0x78, 0xe0, 0x03, // move  $15, $31
+  0x82, 0xc0, 0x18, 0x00, // srl   $24, $24, 2
+  0x09, 0xf8, 0x20, 0x03, // jalr  $25
+  0xfe, 0xff, 0x18, 0x27  // subu  $24, $24, 2
+};
+
+// microMIPS big-endian PLT0 entry
+static const uint8_t microMipsBePlt0AtomContent[] = {
+  0x79, 0x80, 0x00, 0x00, // addiupc $3,  (&GOTPLT[0]) - .
+  0xff, 0x23, 0x00, 0x00, // lw      $25, 0($3)
+  0x05, 0x35,             // subu    $2,  $2, $3
+  0x25, 0x25,             // srl     $2,  $2, 2
+  0x33, 0x02, 0xff, 0xfe, // subu    $24, $2, 2
+  0x0d, 0xff,             // move    $15, $31
+  0x45, 0xf9,             // jalrs   $25
+  0x0f, 0x83,             // move    $28, $3
+  0x0c, 0x00              // nop
+};
+
+// microMIPS little-endian PLT0 entry
+static const uint8_t microMipsLePlt0AtomContent[] = {
   0x80, 0x79, 0x00, 0x00, // addiupc $3,  (&GOTPLT[0]) - .
   0x23, 0xff, 0x00, 0x00, // lw      $25, 0($3)
   0x35, 0x05,             // subu    $2,  $2, $3
@@ -62,40 +111,80 @@ static const uint8_t micromipsPlt0AtomContent[] = {
   0x00, 0x0c              // nop
 };
 
-// Regular PLT entry
-static const uint8_t mipsPltAAtomContent[] = {
+// Regular big-endian PLT entry
+static const uint8_t mipsBePltAAtomContent[] = {
+  0x3c, 0x0f, 0x00, 0x00, // lui   $15, %hi(.got.plt entry)
+  0x8d, 0xf9, 0x00, 0x00, // l[wd] $25, %lo(.got.plt entry)($15)
+  0x03, 0x20, 0x00, 0x08, // jr    $25
+  0x25, 0xf8, 0x00, 0x00  // addiu $24, $15, %lo(.got.plt entry)
+};
+
+// Regular little-endian PLT entry
+static const uint8_t mipsLePltAAtomContent[] = {
   0x00, 0x00, 0x0f, 0x3c, // lui   $15, %hi(.got.plt entry)
   0x00, 0x00, 0xf9, 0x8d, // l[wd] $25, %lo(.got.plt entry)($15)
   0x08, 0x00, 0x20, 0x03, // jr    $25
   0x00, 0x00, 0xf8, 0x25  // addiu $24, $15, %lo(.got.plt entry)
 };
 
-// microMIPS PLT entry
-static const uint8_t micromipsPltAtomContent[] = {
+// microMIPS big-endian PLT entry
+static const uint8_t microMipsBePltAAtomContent[] = {
+  0x79, 0x00, 0x00, 0x00, // addiupc $2, (.got.plt entry) - .
+  0xff, 0x22, 0x00, 0x00, // lw $25, 0($2)
+  0x45, 0x99,             // jr $25
+  0x0f, 0x02              // move $24, $2
+};
+
+// microMIPS little-endian PLT entry
+static const uint8_t microMipsLePltAAtomContent[] = {
   0x00, 0x79, 0x00, 0x00, // addiupc $2, (.got.plt entry) - .
   0x22, 0xff, 0x00, 0x00, // lw $25, 0($2)
   0x99, 0x45,             // jr $25
   0x02, 0x0f              // move $24, $2
 };
 
-// R6 PLT entry
-static const uint8_t mipsR6PltAAtomContent[] = {
+// R6 big-endian PLT entry
+static const uint8_t mipsR6BePltAAtomContent[] = {
+  0x3c, 0x0f, 0x00, 0x00, // lui   $15, %hi(.got.plt entry)
+  0x8d, 0xf9, 0x00, 0x00, // l[wd] $25, %lo(.got.plt entry)($15)
+  0x03, 0x20, 0x00, 0x09, // jr    $25
+  0x25, 0xf8, 0x00, 0x00  // addiu $24, $15, %lo(.got.plt entry)
+};
+
+// R6 little-endian PLT entry
+static const uint8_t mipsR6LePltAAtomContent[] = {
   0x00, 0x00, 0x0f, 0x3c, // lui   $15, %hi(.got.plt entry)
   0x00, 0x00, 0xf9, 0x8d, // l[wd] $25, %lo(.got.plt entry)($15)
   0x09, 0x00, 0x20, 0x03, // jr    $25
   0x00, 0x00, 0xf8, 0x25  // addiu $24, $15, %lo(.got.plt entry)
 };
 
-// LA25 stub entry
-static const uint8_t mipsLA25AtomContent[] = {
+// LA25 big-endian stub entry
+static const uint8_t mipsBeLA25AtomContent[] = {
+  0x3c, 0x19, 0x00, 0x00, // lui   $25, %hi(func)
+  0x08, 0x00, 0x00, 0x00, // j     func
+  0x27, 0x39, 0x00, 0x00, // addiu $25, $25, %lo(func)
+  0x00, 0x00, 0x00, 0x00  // nop
+};
+
+// LA25 little-endian stub entry
+static const uint8_t mipsLeLA25AtomContent[] = {
   0x00, 0x00, 0x19, 0x3c, // lui   $25, %hi(func)
   0x00, 0x00, 0x00, 0x08, // j     func
   0x00, 0x00, 0x39, 0x27, // addiu $25, $25, %lo(func)
   0x00, 0x00, 0x00, 0x00  // nop
 };
 
-// microMIPS LA25 stub entry
-static const uint8_t micromipsLA25AtomContent[] = {
+// microMIPS LA25 big-endian stub entry
+static const uint8_t microMipsBeLA25AtomContent[] = {
+  0x41, 0xbe, 0x00, 0x00, // lui   $25, %hi(func)
+  0xd4, 0x00, 0x00, 0x00, // j     func
+  0x33, 0x39, 0x00, 0x00, // addiu $25, $25, %lo(func)
+  0x00, 0x00, 0x00, 0x00  // nop
+};
+
+// microMIPS LA25 little-endian stub entry
+static const uint8_t microMipsLeLA25AtomContent[] = {
   0xb9, 0x41, 0x00, 0x00, // lui   $25, %hi(func)
   0x00, 0xd4, 0x00, 0x00, // j     func
   0x39, 0x33, 0x00, 0x00, // addiu $25, $25, %lo(func)
@@ -120,8 +209,14 @@ public:
   ArrayRef<uint8_t> rawContent() const override;
 };
 
+template <> ArrayRef<uint8_t> GOT0Atom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsGot0AtomContent).slice(4);
+}
 template <> ArrayRef<uint8_t> GOT0Atom<ELF32LE>::rawContent() const {
   return llvm::makeArrayRef(mipsGot0AtomContent).slice(4);
+}
+template <> ArrayRef<uint8_t> GOT0Atom<ELF64BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsGot0AtomContent);
 }
 template <> ArrayRef<uint8_t> GOT0Atom<ELF64LE>::rawContent() const {
   return llvm::makeArrayRef(mipsGot0AtomContent);
@@ -136,8 +231,16 @@ public:
 };
 
 template <>
+ArrayRef<uint8_t> GOTModulePointerAtom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsGotModulePointerAtomContent).slice(4);
+}
+template <>
 ArrayRef<uint8_t> GOTModulePointerAtom<ELF32LE>::rawContent() const {
   return llvm::makeArrayRef(mipsGotModulePointerAtomContent).slice(4);
+}
+template <>
+ArrayRef<uint8_t> GOTModulePointerAtom<ELF64BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsGotModulePointerAtomContent);
 }
 template <>
 ArrayRef<uint8_t> GOTModulePointerAtom<ELF64LE>::rawContent() const {
@@ -152,12 +255,17 @@ public:
   ArrayRef<uint8_t> rawContent() const override;
 };
 
-template <> ArrayRef<uint8_t> GOTTLSGdAtom<ELF32LE>::rawContent() const {
-    return llvm::makeArrayRef(mipsGotTlsGdAtomContent).slice(8);
+template <> ArrayRef<uint8_t> GOTTLSGdAtom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsGotTlsGdAtomContent).slice(8);
 }
-
+template <> ArrayRef<uint8_t> GOTTLSGdAtom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(mipsGotTlsGdAtomContent).slice(8);
+}
+template <> ArrayRef<uint8_t> GOTTLSGdAtom<ELF64BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsGotTlsGdAtomContent);
+}
 template <> ArrayRef<uint8_t> GOTTLSGdAtom<ELF64LE>::rawContent() const {
-    return llvm::makeArrayRef(mipsGotTlsGdAtomContent);
+  return llvm::makeArrayRef(mipsGotTlsGdAtomContent);
 }
 
 class GOTPLTAtom : public GOTAtom {
@@ -180,7 +288,7 @@ public:
   }
 };
 
-class PLT0Atom : public PLTAtom {
+template <class ELFT> class PLT0Atom : public PLTAtom {
 public:
   PLT0Atom(const Atom *got, const File &f) : PLTAtom(f, ".plt") {
     // Setup reference to fixup the PLT0 entry.
@@ -190,11 +298,39 @@ public:
   }
 
   ArrayRef<uint8_t> rawContent() const override {
-    return llvm::makeArrayRef(mipsPlt0AtomContent);
+    llvm_unreachable("PLT0 is not applicable for this target");
   }
 };
 
-class PLT0MicroAtom : public PLTAtom {
+template <> ArrayRef<uint8_t> PLT0Atom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsBePlt0AtomContent);
+}
+template <> ArrayRef<uint8_t> PLT0Atom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(mipsLePlt0AtomContent);
+}
+
+template <class ELFT> class PLT0N32Atom : public PLTAtom {
+public:
+  PLT0N32Atom(const Atom *got, const File &f) : PLTAtom(f, ".plt") {
+    // Setup reference to fixup the PLT0 entry.
+    addReferenceELF_Mips(R_MIPS_HI16, 0, got, 0);
+    addReferenceELF_Mips(R_MIPS_LO16, 4, got, 0);
+    addReferenceELF_Mips(R_MIPS_LO16, 8, got, 0);
+  }
+
+  ArrayRef<uint8_t> rawContent() const override {
+    llvm_unreachable("PLT0 is not applicable for this target");
+  }
+};
+
+template <> ArrayRef<uint8_t> PLT0N32Atom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsN32BePlt0AtomContent);
+}
+template <> ArrayRef<uint8_t> PLT0N32Atom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(mipsN32LePlt0AtomContent);
+}
+
+template <class ELFT> class PLT0MicroAtom : public PLTAtom {
 public:
   PLT0MicroAtom(const Atom *got, const File &f) : PLTAtom(f, ".plt") {
     // Setup reference to fixup the PLT0 entry.
@@ -204,9 +340,16 @@ public:
   CodeModel codeModel() const override { return codeMipsMicro; }
 
   ArrayRef<uint8_t> rawContent() const override {
-    return llvm::makeArrayRef(micromipsPlt0AtomContent);
+    llvm_unreachable("PLT0 is not applicable for this target");
   }
 };
+
+template <> ArrayRef<uint8_t> PLT0MicroAtom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(microMipsBePlt0AtomContent);
+}
+template <> ArrayRef<uint8_t> PLT0MicroAtom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(microMipsLePlt0AtomContent);
+}
 
 class PLTAAtom : public PLTAtom {
 public:
@@ -216,22 +359,41 @@ public:
     addReferenceELF_Mips(R_MIPS_LO16, 4, got, 0);
     addReferenceELF_Mips(R_MIPS_LO16, 12, got, 0);
   }
+};
+
+template <class ELFT> class PLTARegAtom : public PLTAAtom {
+public:
+  PLTARegAtom(const GOTPLTAtom *got, const File &f) : PLTAAtom(got, f) {}
 
   ArrayRef<uint8_t> rawContent() const override {
-    return llvm::makeArrayRef(mipsPltAAtomContent);
+    llvm_unreachable("PLT is not applicable for this target");
   }
 };
 
-class PLTR6Atom : public PLTAAtom {
+template <> ArrayRef<uint8_t> PLTARegAtom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsBePltAAtomContent);
+}
+template <> ArrayRef<uint8_t> PLTARegAtom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(mipsLePltAAtomContent);
+}
+
+template <class ELFT> class PLTR6Atom : public PLTAAtom {
 public:
   PLTR6Atom(const GOTPLTAtom *got, const File &f) : PLTAAtom(got, f) {}
 
   ArrayRef<uint8_t> rawContent() const override {
-    return llvm::makeArrayRef(mipsR6PltAAtomContent);
+    llvm_unreachable("PLT is not applicable for this target");
   }
 };
 
-class PLTMicroAtom : public PLTAtom {
+template <> ArrayRef<uint8_t> PLTR6Atom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsR6BePltAAtomContent);
+}
+template <> ArrayRef<uint8_t> PLTR6Atom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(mipsR6LePltAAtomContent);
+}
+
+template <class ELFT> class PLTMicroAtom : public PLTAtom {
 public:
   PLTMicroAtom(const GOTPLTAtom *got, const File &f) : PLTAtom(f, ".plt") {
     // Setup reference to fixup the microMIPS PLT entry.
@@ -242,16 +404,23 @@ public:
   CodeModel codeModel() const override { return codeMipsMicro; }
 
   ArrayRef<uint8_t> rawContent() const override {
-    return llvm::makeArrayRef(micromipsPltAtomContent);
+    llvm_unreachable("PLT is not applicable for this target");
   }
 };
+
+template <> ArrayRef<uint8_t> PLTMicroAtom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(microMipsBePltAAtomContent);
+}
+template <> ArrayRef<uint8_t> PLTMicroAtom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(microMipsLePltAAtomContent);
+}
 
 class LA25Atom : public PLTAtom {
 public:
   LA25Atom(const File &f) : PLTAtom(f, ".text") {}
 };
 
-class LA25RegAtom : public LA25Atom {
+template <typename ELFT> class LA25RegAtom : public LA25Atom {
 public:
   LA25RegAtom(const Atom *a, const File &f) : LA25Atom(f) {
     // Setup reference to fixup the LA25 stub entry.
@@ -261,11 +430,18 @@ public:
   }
 
   ArrayRef<uint8_t> rawContent() const override {
-    return llvm::makeArrayRef(mipsLA25AtomContent);
+    llvm_unreachable("LA25 stubs are not applicable for this target");
   }
 };
 
-class LA25MicroAtom : public LA25Atom {
+template <> ArrayRef<uint8_t> LA25RegAtom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(mipsBeLA25AtomContent);
+}
+template <> ArrayRef<uint8_t> LA25RegAtom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(mipsLeLA25AtomContent);
+}
+
+template <typename ELFT> class LA25MicroAtom : public LA25Atom {
 public:
   LA25MicroAtom(const Atom *a, const File &f) : LA25Atom(f) {
     // Setup reference to fixup the microMIPS LA25 stub entry.
@@ -277,15 +453,40 @@ public:
   CodeModel codeModel() const override { return codeMipsMicro; }
 
   ArrayRef<uint8_t> rawContent() const override {
-    return llvm::makeArrayRef(micromipsLA25AtomContent);
+    llvm_unreachable("LA25 stubs are not applicable for this target");
   }
 };
+
+template <> ArrayRef<uint8_t> LA25MicroAtom<ELF32BE>::rawContent() const {
+  return llvm::makeArrayRef(microMipsBeLA25AtomContent);
+}
+template <> ArrayRef<uint8_t> LA25MicroAtom<ELF32LE>::rawContent() const {
+  return llvm::makeArrayRef(microMipsLeLA25AtomContent);
+}
 
 class MipsGlobalOffsetTableAtom : public GlobalOffsetTableAtom {
 public:
   MipsGlobalOffsetTableAtom(const File &f) : GlobalOffsetTableAtom(f) {}
 
   StringRef customSectionName() const override { return ".got"; }
+};
+
+template <typename ELFT> class MipsRldAtom : public SimpleELFDefinedAtom {
+public:
+  MipsRldAtom(const File &f) : SimpleELFDefinedAtom(f) {}
+
+  Scope scope() const override { return scopeGlobal; }
+  SectionChoice sectionChoice() const override { return sectionCustomRequired; }
+  StringRef customSectionName() const override { return ".rld_map"; }
+  ContentType contentType() const override { return typeData; }
+  uint64_t size() const override { return rawContent().size(); }
+  ContentPermissions permissions() const override { return permRW_; }
+  Alignment alignment() const override { return rawContent().size(); }
+  StringRef name() const override { return "__RLD_MAP"; }
+  ArrayRef<uint8_t> rawContent() const override {
+    return llvm::makeArrayRef(mipsGot0AtomContent)
+        .slice(ELFT::Is64Bits ? 0 : 4);
+  }
 };
 
 class RelocationPassFile : public SimpleFile {
@@ -342,14 +543,14 @@ private:
 
   /// \brief Map Atoms to their PLT entries.
   llvm::DenseMap<const Atom *, PLTAAtom *> _pltRegMap;
-  llvm::DenseMap<const Atom *, PLTMicroAtom *> _pltMicroMap;
+  llvm::DenseMap<const Atom *, PLTMicroAtom<ELFT> *> _pltMicroMap;
 
   /// \brief Map Atoms to their Object entries.
   llvm::DenseMap<const Atom *, ObjectAtom *> _objectMap;
 
   /// \brief Map Atoms to their LA25 entries.
-  llvm::DenseMap<const Atom *, LA25RegAtom *> _la25RegMap;
-  llvm::DenseMap<const Atom *, LA25MicroAtom *> _la25MicroMap;
+  llvm::DenseMap<const Atom *, LA25Atom *> _la25RegMap;
+  llvm::DenseMap<const Atom *, LA25Atom *> _la25MicroMap;
 
   /// \brief Atoms referenced by static relocations.
   llvm::DenseSet<const Atom *> _hasStaticRelocations;
@@ -448,7 +649,8 @@ std::error_code RelocationPass<ELFT>::perform(SimpleFile &mf) {
 
   // Create R_MIPS_REL32 relocations.
   for (auto *ref : _rel32Candidates) {
-    if (!isDynamic(ref->target()) || hasPLTEntry(ref->target()))
+    bool forceRel = isLocal(ref->target()) && _ctx.getOutputELFType() == ET_DYN;
+    if (!forceRel && (!isDynamic(ref->target()) || hasPLTEntry(ref->target())))
       continue;
     ref->setKindValue(R_MIPS_REL32);
     if (ELFT::Is64Bits)
@@ -458,6 +660,12 @@ std::error_code RelocationPass<ELFT>::perform(SimpleFile &mf) {
   }
 
   uint64_t ordinal = 0;
+
+  if (_ctx.isDynamic() && _ctx.getOutputELFType() == ET_EXEC) {
+    auto rlda = new (_file._alloc) MipsRldAtom<ELFT>(_file);
+    rlda->setOrdinal(ordinal++);
+    mf.addAtom(*rlda);
+  }
 
   if (!_localGotVector.empty() || !_globalGotVector.empty() ||
       !_tlsGotVector.empty()) {
@@ -633,6 +841,10 @@ void RelocationPass<ELFT>::handleReference(const MipsELFDefinedAtom<ELFT> &atom,
     ref.setTarget(getTLSGOTEntry(ref.target(), ref.addend()));
   else if (kind == R_MIPS_GPREL32 || (isLocal(ref.target()) && isGpRelReloc(kind)))
     ref.setAddend(ref.addend() + atom.file().getGP0());
+  else if (kind == R_MIPS_JALR) {
+    if (_ctx.getOutputELFType() != ET_EXEC || !isLocalCall(ref.target()))
+      ref.setKindValue(R_MIPS_NONE);
+  }
 }
 
 template <typename ELFT>
@@ -675,10 +887,10 @@ RelocationPass<ELFT>::collectReferenceInfo(const MipsELFDefinedAtom<ELFT> &atom,
   if (!isConstrainSym(atom, refKind))
     return std::error_code();
 
-  if (mightBeDynamic(atom, refKind))
-    _rel32Candidates.push_back(&ref);
-  else
+  if (!mightBeDynamic(atom, refKind))
     _hasStaticRelocations.insert(ref.target());
+  else if (refKind == R_MIPS_32 || refKind == R_MIPS_64)
+    _rel32Candidates.push_back(&ref);
 
   if (!isBranchReloc(refKind) && !isAllCallReloc(refKind) &&
       refKind != R_MIPS_EH)
@@ -703,16 +915,6 @@ make_reject_for_shared_lib_reloc_error(const ELFLinkingContext &ctx,
 }
 
 static std::error_code
-make_external_gprel32_reloc_error(const ELFLinkingContext &ctx,
-                                  const DefinedAtom &atom,
-                                  const Reference &ref) {
-  return make_dynamic_error_code(
-      "R_MIPS_GPREL32 (12) relocation cannot be used "
-      "against external symbol " +
-      ref.target()->name() + " in file " + atom.file().path());
-}
-
-static std::error_code
 make_local_call16_reloc_error(const ELFLinkingContext &ctx,
                               const DefinedAtom &atom, const Reference &ref) {
   return make_dynamic_error_code("R_MIPS_CALL16 (11) relocation cannot be used "
@@ -727,9 +929,6 @@ RelocationPass<ELFT>::validateRelocation(const DefinedAtom &atom,
                                          const Reference &ref) const {
   if (!ref.target())
     return std::error_code();
-
-  if (ref.kindValue() == R_MIPS_GPREL32 && !isLocal(ref.target()))
-    return make_external_gprel32_reloc_error(this->_ctx, atom, ref);
 
   if (isCallReloc(ref.kindValue()) && isLocal(ref.target()))
     return make_local_call16_reloc_error(this->_ctx, atom, ref);
@@ -798,7 +997,7 @@ bool RelocationPass<ELFT>::mightBeDynamic(const MipsELFDefinedAtom<ELFT> &atom,
     return true;
   if (!isMipsReadonly(atom))
     return true;
-  if (atom.file().isPIC())
+  if (atom.isPIC())
     return true;
 
   return false;
@@ -957,9 +1156,7 @@ bool RelocationPass<ELFT>::requireLA25Stub(const MipsELFDefinedAtom<ELFT> &atom,
   if (atom.file().isPIC())
     return false;
   if (auto *da = dyn_cast<DefinedAtom>(ref.target()))
-    return static_cast<const MipsELFDefinedAtom<ELFT> *>(da)->file().isPIC() ||
-           da->codeModel() == DefinedAtom::codeMipsMicroPIC ||
-           da->codeModel() == DefinedAtom::codeMipsPIC;
+    return static_cast<const MipsELFDefinedAtom<ELFT> *>(da)->isPIC();
   return false;
 }
 
@@ -1087,9 +1284,10 @@ PLTAtom *RelocationPass<ELFT>::createPLTHeader(bool isMicroMips) {
   _gotpltVector.insert(_gotpltVector.begin(), ga0);
 
   if (isMicroMips)
-    return new (_file._alloc) PLT0MicroAtom(ga0, _file);
-  else
-    return new (_file._alloc) PLT0Atom(ga0, _file);
+    return new (_file._alloc) PLT0MicroAtom<ELFT>(ga0, _file);
+  if (_ctx.getAbi() == MipsAbi::N32)
+    return new (_file._alloc) PLT0N32Atom<ELFT>(ga0, _file);
+  return new (_file._alloc) PLT0Atom<ELFT>(ga0, _file);
 }
 
 template <typename ELFT>
@@ -1110,9 +1308,11 @@ const PLTAtom *RelocationPass<ELFT>::getPLTRegEntry(const Atom *a) {
   if (plt != _pltRegMap.end())
     return plt->second;
 
-  PLTAAtom *pa = isMipsR6()
-                     ? new (_file._alloc) PLTR6Atom(getGOTPLTEntry(a), _file)
-                     : new (_file._alloc) PLTAAtom(getGOTPLTEntry(a), _file);
+  PLTAAtom *pa = nullptr;
+  if (isMipsR6())
+    pa = new (_file._alloc) PLTR6Atom<ELFT>(getGOTPLTEntry(a), _file);
+  else
+    pa = new (_file._alloc) PLTARegAtom<ELFT>(getGOTPLTEntry(a), _file);
   _pltRegMap[a] = pa;
   _pltRegVector.push_back(pa);
 
@@ -1129,7 +1329,7 @@ const PLTAtom *RelocationPass<ELFT>::getPLTMicroEntry(const Atom *a) {
   if (plt != _pltMicroMap.end())
     return plt->second;
 
-  auto pa = new (_file._alloc) PLTMicroAtom(getGOTPLTEntry(a), _file);
+  auto pa = new (_file._alloc) PLTMicroAtom<ELFT>(getGOTPLTEntry(a), _file);
   _pltMicroMap[a] = pa;
   _pltMicroVector.push_back(pa);
 
@@ -1146,7 +1346,7 @@ const LA25Atom *RelocationPass<ELFT>::getLA25RegEntry(const Atom *a) {
   if (la25 != _la25RegMap.end())
     return la25->second;
 
-  auto sa = new (_file._alloc) LA25RegAtom(a, _file);
+  auto sa = new (_file._alloc) LA25RegAtom<ELFT>(a, _file);
   _la25RegMap[a] = sa;
   _la25Vector.push_back(sa);
 
@@ -1159,7 +1359,7 @@ const LA25Atom *RelocationPass<ELFT>::getLA25MicroEntry(const Atom *a) {
   if (la25 != _la25MicroMap.end())
     return la25->second;
 
-  auto sa = new (_file._alloc) LA25MicroAtom(a, _file);
+  auto sa = new (_file._alloc) LA25MicroAtom<ELFT>(a, _file);
   _la25MicroMap[a] = sa;
   _la25Vector.push_back(sa);
 
@@ -1188,8 +1388,12 @@ RelocationPass<ELFT>::getObjectEntry(const SharedLibraryAtom *a) {
 
 static std::unique_ptr<Pass> createPass(MipsLinkingContext &ctx) {
   switch (ctx.getTriple().getArch()) {
+  case llvm::Triple::mips:
+    return llvm::make_unique<RelocationPass<ELF32BE>>(ctx);
   case llvm::Triple::mipsel:
     return llvm::make_unique<RelocationPass<ELF32LE>>(ctx);
+  case llvm::Triple::mips64:
+    return llvm::make_unique<RelocationPass<ELF64BE>>(ctx);
   case llvm::Triple::mips64el:
     return llvm::make_unique<RelocationPass<ELF64LE>>(ctx);
   default:

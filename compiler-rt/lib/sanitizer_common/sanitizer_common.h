@@ -23,6 +23,11 @@
 #include "sanitizer_list.h"
 #include "sanitizer_mutex.h"
 
+#ifdef _MSC_VER
+extern "C" void _ReadWriteBarrier();
+#pragma intrinsic(_ReadWriteBarrier)
+#endif
+
 namespace __sanitizer {
 struct StackTrace;
 struct AddressInfo;
@@ -92,6 +97,8 @@ void DecreaseTotalMmap(uptr size);
 uptr GetRSS();
 void NoHugePagesInRegion(uptr addr, uptr length);
 void DontDumpShadowMemory(uptr addr, uptr length);
+// Check if the built VMA size matches the runtime one.
+void CheckVMASize();
 
 // InternalScopedBuffer can be used instead of large stack arrays to
 // keep frame size low.
@@ -219,19 +226,28 @@ bool WriteToFile(fd_t fd, const void *buff, uptr buff_size,
 bool RenameFile(const char *oldpath, const char *newpath,
                 error_t *error_p = nullptr);
 
+// Scoped file handle closer.
+struct FileCloser {
+  explicit FileCloser(fd_t fd) : fd(fd) {}
+  ~FileCloser() { CloseFile(fd); }
+  fd_t fd;
+};
+
 bool SupportsColoredOutput(fd_t fd);
 
 // Opens the file 'file_name" and reads up to 'max_len' bytes.
 // The resulting buffer is mmaped and stored in '*buff'.
-// The size of the mmaped region is stored in '*buff_size',
-// Returns the number of read bytes or 0 if file can not be opened.
-uptr ReadFileToBuffer(const char *file_name, char **buff, uptr *buff_size,
-                      uptr max_len, error_t *errno_p = nullptr);
+// The size of the mmaped region is stored in '*buff_size'.
+// The total number of read bytes is stored in '*read_len'.
+// Returns true if file was successfully opened and read.
+bool ReadFileToBuffer(const char *file_name, char **buff, uptr *buff_size,
+                      uptr *read_len, uptr max_len = 1 << 26,
+                      error_t *errno_p = nullptr);
 // Maps given file to virtual memory, and returns pointer to it
 // (or NULL if mapping fails). Stores the size of mmaped region
 // in '*buff_size'.
 void *MapFileToMemory(const char *file_name, uptr *buff_size);
-void *MapWritableFileToMemory(void *addr, uptr size, fd_t fd, uptr offset);
+void *MapWritableFileToMemory(void *addr, uptr size, fd_t fd, OFF_T offset);
 
 bool IsAccessibleMemoryRange(uptr beg, uptr size);
 
@@ -244,7 +260,9 @@ const char *StripModuleName(const char *module);
 // OS
 uptr ReadBinaryName(/*out*/char *buf, uptr buf_len);
 uptr ReadBinaryNameCached(/*out*/char *buf, uptr buf_len);
-const char *GetBinaryBasename();
+uptr ReadLongProcessName(/*out*/ char *buf, uptr buf_len);
+const char *GetProcessName();
+void UpdateProcessName();
 void CacheBinaryName();
 void DisableCoreDumperIfNecessary();
 void DumpProcessMap();
@@ -290,6 +308,8 @@ void NORETURN Abort();
 void NORETURN Die();
 void NORETURN
 CheckFailed(const char *file, int line, const char *cond, u64 v1, u64 v2);
+void NORETURN ReportMmapFailureAndDie(uptr size, const char *mem_type,
+                                      error_t err);
 
 // Set the name of the current thread to 'name', return true on succees.
 // The name may be truncated to a system-dependent limit.
@@ -301,9 +321,16 @@ bool SanitizerGetThreadName(char *name, int max_len);
 // Specific tools may override behavior of "Die" and "CheckFailed" functions
 // to do tool-specific job.
 typedef void (*DieCallbackType)(void);
-void SetDieCallback(DieCallbackType);
-void SetUserDieCallback(DieCallbackType);
-DieCallbackType GetDieCallback();
+
+// It's possible to add several callbacks that would be run when "Die" is
+// called. The callbacks will be run in the opposite order. The tools are
+// strongly recommended to setup all callbacks during initialization, when there
+// is only a single thread.
+bool AddDieCallback(DieCallbackType callback);
+bool RemoveDieCallback(DieCallbackType callback);
+
+void SetUserDieCallback(DieCallbackType callback);
+
 typedef void (*CheckFailedCallbackType)(const char *, int, const char *,
                                        u64, u64);
 void SetCheckFailedCallback(CheckFailedCallbackType callback);
@@ -350,7 +377,11 @@ INLINE uptr MostSignificantSetBitIndex(uptr x) {
   CHECK_NE(x, 0U);
   unsigned long up;  // NOLINT
 #if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
+# ifdef _WIN64
+  up = SANITIZER_WORDSIZE - 1 - __builtin_clzll(x);
+# else
   up = SANITIZER_WORDSIZE - 1 - __builtin_clzl(x);
+# endif
 #elif defined(_WIN64)
   _BitScanReverse64(&up, x);
 #else
@@ -363,7 +394,11 @@ INLINE uptr LeastSignificantSetBitIndex(uptr x) {
   CHECK_NE(x, 0U);
   unsigned long up;  // NOLINT
 #if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
+# ifdef _WIN64
+  up = __builtin_ctzll(x);
+# else
   up = __builtin_ctzl(x);
+# endif
 #elif defined(_WIN64)
   _BitScanForward64(&up, x);
 #else
@@ -383,7 +418,7 @@ INLINE uptr RoundUpToPowerOfTwo(uptr size) {
   uptr up = MostSignificantSetBitIndex(size);
   CHECK(size < (1ULL << (up + 1)));
   CHECK(size > (1ULL << up));
-  return 1UL << (up + 1);
+  return 1ULL << (up + 1);
 }
 
 INLINE uptr RoundUpTo(uptr size, uptr boundary) {
@@ -401,17 +436,7 @@ INLINE bool IsAligned(uptr a, uptr alignment) {
 
 INLINE uptr Log2(uptr x) {
   CHECK(IsPowerOfTwo(x));
-#if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
-  return __builtin_ctzl(x);
-#elif defined(_WIN64)
-  unsigned long ret;  // NOLINT
-  _BitScanForward64(&ret, x);
-  return ret;
-#else
-  unsigned long ret;  // NOLINT
-  _BitScanForward(&ret, x);
-  return ret;
-#endif
+  return LeastSignificantSetBitIndex(x);
 }
 
 // Don't use std::min, std::max or std::swap, to minimize dependency
@@ -623,15 +648,20 @@ enum AndroidApiLevel {
   ANDROID_POST_LOLLIPOP = 23
 };
 
-#if SANITIZER_ANDROID
+#if SANITIZER_LINUX
 // Initialize Android logging. Any writes before this are silently lost.
 void AndroidLogInit();
-void AndroidLogWrite(const char *buffer);
+void WriteToSyslog(const char *buffer);
+#else
+INLINE void AndroidLogInit() {}
+INLINE void WriteToSyslog(const char *buffer) {}
+#endif
+
+#if SANITIZER_ANDROID
 void GetExtraActivationFlags(char *buf, uptr size);
 void SanitizerInitializeUnwinder();
 AndroidApiLevel AndroidGetApiLevel();
 #else
-INLINE void AndroidLogInit() {}
 INLINE void AndroidLogWrite(const char *buffer_unused) {}
 INLINE void GetExtraActivationFlags(char *buf, uptr size) { *buf = '\0'; }
 INLINE void SanitizerInitializeUnwinder() {}
@@ -658,9 +688,8 @@ void MaybeStartBackgroudThread();
 // compiler from recognising it and turning it into an actual call to
 // memset/memcpy/etc.
 static inline void SanitizerBreakOptimization(void *arg) {
-#if _MSC_VER
-  // FIXME: make sure this is actually enough.
-  __asm;
+#if _MSC_VER && !defined(__clang__)
+  _ReadWriteBarrier();
 #else
   __asm__ __volatile__("" : : "r" (arg) : "memory");
 #endif

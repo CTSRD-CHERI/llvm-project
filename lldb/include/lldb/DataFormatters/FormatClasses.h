@@ -19,11 +19,30 @@
 // Project includes
 #include "lldb/lldb-public.h"
 #include "lldb/lldb-enumerations.h"
-
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/DataFormatters/TypeFormat.h"
+#include "lldb/DataFormatters/TypeSummary.h"
+#include "lldb/DataFormatters/TypeSynthetic.h"
+#include "lldb/DataFormatters/TypeValidator.h"
+#include "lldb/Symbol/CompilerType.h"
 #include "lldb/Symbol/Type.h"
 
 namespace lldb_private {
+
+class HardcodedFormatters {
+public:
+    template <typename FormatterType>
+    using HardcodedFormatterFinder = std::function<typename FormatterType::SharedPointer (lldb_private::ValueObject&,
+                                                                                          lldb::DynamicValueType,
+                                                                                          FormatManager&)>;
+
+    template <typename FormatterType>
+    using HardcodedFormatterFinders = std::vector<HardcodedFormatterFinder<FormatterType>>;
+
+    typedef HardcodedFormatterFinders<TypeFormatImpl> HardcodedFormatFinder;
+    typedef HardcodedFormatterFinders<TypeSummaryImpl> HardcodedSummaryFinder;
+    typedef HardcodedFormatterFinders<SyntheticChildren> HardcodedSyntheticFinder;
+    typedef HardcodedFormatterFinders<TypeValidatorImpl> HardcodedValidatorFinder;
+};
 
 class FormattersMatchCandidate
 {
@@ -99,6 +118,36 @@ private:
 };
 
 typedef std::vector<FormattersMatchCandidate> FormattersMatchVector;
+typedef std::vector<lldb::LanguageType> CandidateLanguagesVector;
+
+class FormattersMatchData
+{
+public:
+    FormattersMatchData (ValueObject&,
+                         lldb::DynamicValueType);
+    
+    FormattersMatchVector
+    GetMatchesVector ();
+    
+    ConstString
+    GetTypeForCache ();
+    
+    CandidateLanguagesVector
+    GetCandidateLanguages ();
+    
+    ValueObject&
+    GetValueObject ();
+    
+    lldb::DynamicValueType
+    GetDynamicValueType ();
+    
+private:
+    ValueObject& m_valobj;
+    lldb::DynamicValueType m_dynamic_value_type;
+    std::pair<FormattersMatchVector,bool> m_formatters_match_vector;
+    ConstString m_type_for_cache;
+    CandidateLanguagesVector m_candidate_languages;
+};
     
 class TypeNameSpecifierImpl
 {
@@ -130,7 +179,7 @@ public:
         }
     }
 
-    TypeNameSpecifierImpl (ClangASTType type) :
+    TypeNameSpecifierImpl (CompilerType type) :
     m_is_regex(false),
     m_type()
     {
@@ -157,12 +206,12 @@ public:
         return lldb::TypeSP();
     }
     
-    ClangASTType
-    GetClangASTType ()
+    CompilerType
+    GetCompilerType ()
     {
         if (m_type.m_type_pair.IsValid())
-            return m_type.m_type_pair.GetClangASTType();
-        return ClangASTType();
+            return m_type.m_type_pair.GetCompilerType();
+        return CompilerType();
     }
     
     bool
@@ -174,7 +223,7 @@ public:
 private:
     bool m_is_regex;
     // this works better than TypeAndOrName because the latter only wraps a TypeSP
-    // whereas TypePair can also be backed by a ClangASTType
+    // whereas TypePair can also be backed by a CompilerType
     struct TypeOrName
     {
         std::string m_type_name;

@@ -2,9 +2,12 @@
 Test SBBreakpoint APIs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,27 +15,10 @@ class BreakpointAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_breakpoint_is_valid_with_dsym(self):
+    @add_test_categories(['pyapi'])
+    def test_breakpoint_is_valid(self):
         """Make sure that if an SBBreakpoint gets deleted its IsValid returns false."""
-        self.buildDsym()
-        self.breakpoint_is_valid()
-
-    @python_api_test
-    @dwarf_test
-    def test_breakpoint_is_valid_with_dwarf(self):
-        """Make sure that if an SBBreakpoint gets deleted its IsValid returns false."""
-        self.buildDwarf()
-        self.breakpoint_is_valid ()
-
-    def setUp(self):
-        # Call super's setUp().
-        TestBase.setUp(self)
-
-    def breakpoint_is_valid(self):
-        """Get an SBBreakpoint object, delete it from the target and make sure it is no longer valid."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -41,7 +27,7 @@ class BreakpointAPITestCase(TestBase):
 
         # Now create a breakpoint on main.c by name 'AFunction'.
         breakpoint = target.BreakpointCreateByName('AFunction', 'a.out')
-        #print "breakpoint:", breakpoint
+        #print("breakpoint:", breakpoint)
         self.assertTrue(breakpoint and
                         breakpoint.GetNumLocations() == 1,
                         VALID_BREAKPOINT)
@@ -56,10 +42,3 @@ class BreakpointAPITestCase(TestBase):
 
         # Finally make sure the original breakpoint is no longer valid.
         self.assertTrue (not breakpoint, "Breakpoint we deleted is no longer valid.")
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

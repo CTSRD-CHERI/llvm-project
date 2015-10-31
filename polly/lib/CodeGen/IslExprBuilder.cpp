@@ -12,7 +12,7 @@
 #include "polly/CodeGen/IslExprBuilder.h"
 #include "polly/ScopInfo.h"
 #include "polly/Support/GICHelper.h"
-#include "llvm/Analysis/ScalarEvolutionExpander.h"
+#include "polly/Support/ScopHelper.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
@@ -112,6 +112,10 @@ Value *IslExprBuilder::createAccessAddress(isl_ast_expr *Expr) {
 
   const ScopArrayInfo *SAI = ScopArrayInfo::getFromId(BaseId);
   Base = SAI->getBasePtr();
+
+  if (auto NewBase = GlobalMap.lookup(Base))
+    Base = NewBase;
+
   assert(Base->getType()->isPointerTy() && "Access base should be a pointer");
   StringRef BaseName = Base->getName();
 
@@ -148,8 +152,12 @@ Value *IslExprBuilder::createAccessAddress(isl_ast_expr *Expr) {
       break;
 
     const SCEV *DimSCEV = SAI->getDimensionSize(u - 1);
-    Value *DimSize = Expander.expandCodeFor(DimSCEV, DimSCEV->getType(),
-                                            Builder.GetInsertPoint());
+
+    llvm::ValueToValueMap Map(GlobalMap.begin(), GlobalMap.end());
+    DimSCEV = SCEVParameterRewriter::rewrite(DimSCEV, SE, Map);
+    Value *DimSize =
+        expandCodeFor(S, SE, DL, "polly", DimSCEV, DimSCEV->getType(),
+                      Builder.GetInsertPoint());
 
     Type *Ty = getWidestType(DimSize->getType(), IndexOp->getType());
 

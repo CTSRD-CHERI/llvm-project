@@ -47,10 +47,10 @@ public:
     {
     }
 
-    ~CommandObjectCommandsHistory () {}
+    ~CommandObjectCommandsHistory () override {}
 
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -70,11 +70,10 @@ protected:
         {
         }
 
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
 
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -109,7 +108,7 @@ protected:
         }
 
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_start_idx.Clear();
             m_stop_idx.Clear();
@@ -118,7 +117,7 @@ protected:
         }
 
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -136,7 +135,7 @@ protected:
     };
     
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         if (m_options.m_clear.GetCurrentValue() && m_options.m_clear.OptionWasSet())
         {
@@ -259,15 +258,15 @@ public:
         m_arguments.push_back (arg);
     }
 
-    ~CommandObjectCommandsSource () {}
+    ~CommandObjectCommandsSource () override {}
 
-    virtual const char*
-    GetRepeatCommand (Args &current_command_args, uint32_t index)
+    const char*
+    GetRepeatCommand (Args &current_command_args, uint32_t index) override
     {
         return "";
     }
     
-    virtual int
+    int
     HandleArgumentCompletion (Args &input,
                               int &cursor_index,
                               int &cursor_char_position,
@@ -275,7 +274,7 @@ public:
                               int match_start_point,
                               int max_return_elements,
                               bool &word_complete,
-                              StringList &matches)
+                              StringList &matches) override
     {
         std::string completion_str (input.GetArgumentAtIndex(cursor_index));
         completion_str.erase (cursor_char_position);
@@ -291,8 +290,8 @@ public:
         return matches.GetSize();
     }
 
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -311,11 +310,10 @@ protected:
         {
         }
 
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
 
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -343,7 +341,7 @@ protected:
         }
 
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_stop_on_error.Clear();
             m_silent_run.Clear();
@@ -351,7 +349,7 @@ protected:
         }
 
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -368,7 +366,7 @@ protected:
     };
     
     bool
-    DoExecute(Args& command, CommandReturnObject &result)
+    DoExecute(Args& command, CommandReturnObject &result) override
     {
         const size_t argc = command.GetArgumentCount();
         if (argc == 1)
@@ -450,60 +448,74 @@ public:
                        NULL)
     {
         SetHelpLong(
-    "'alias' allows the user to create a short-cut or abbreviation for long \n\
-    commands, multi-word commands, and commands that take particular options. \n\
-    Below are some simple examples of how one might use the 'alias' command: \n\
-    \n    'command alias sc script'            // Creates the abbreviation 'sc' for the 'script' \n\
-                                         // command. \n\
-    'command alias bp breakpoint'        // Creates the abbreviation 'bp' for the 'breakpoint' \n\
-                                         // command.  Since breakpoint commands are two-word \n\
-                                         // commands, the user will still need to enter the \n\
-                                         // second word after 'bp', e.g. 'bp enable' or \n\
-                                         // 'bp delete'. \n\
-    'command alias bpl breakpoint list'  // Creates the abbreviation 'bpl' for the \n\
-                                         // two-word command 'breakpoint list'. \n\
-    \nAn alias can include some options for the command, with the values either \n\
-    filled in at the time the alias is created, or specified as positional \n\
-    arguments, to be filled in when the alias is invoked.  The following example \n\
-    shows how to create aliases with options: \n\
-    \n\
-    'command alias bfl breakpoint set -f %1 -l %2' \n\
-    \nThis creates the abbreviation 'bfl' (for break-file-line), with the -f and -l \n\
-    options already part of the alias.  So if the user wants to set a breakpoint \n\
-    by file and line without explicitly having to use the -f and -l options, the \n\
-    user can now use 'bfl' instead.  The '%1' and '%2' are positional placeholders \n\
-    for the actual arguments that will be passed when the alias command is used. \n\
-    The number in the placeholder refers to the position/order the actual value \n\
-    occupies when the alias is used.  All the occurrences of '%1' in the alias \n\
-    will be replaced with the first argument, all the occurrences of '%2' in the \n\
-    alias will be replaced with the second argument, and so on.  This also allows \n\
-    actual arguments to be used multiple times within an alias (see 'process \n\
-    launch' example below).  \n\
-    Note: the positional arguments must substitute as whole words in the resultant\n\
-    command, so you can't at present do something like:\n\
-    \n\
-    command alias bcppfl breakpoint set -f %1.cpp -l %2\n\
-    \n\
-    to get the file extension \".cpp\" automatically appended.  For more complex\n\
-    aliasing, use the \"command regex\" command instead.\n\
-    \nSo in the 'bfl' case, the actual file value will be \n\
-    filled in with the first argument following 'bfl' and the actual line number \n\
-    value will be filled in with the second argument.  The user would use this \n\
-    alias as follows: \n\
-    \n    (lldb)  command alias bfl breakpoint set -f %1 -l %2 \n\
-    <... some time later ...> \n\
-    (lldb)  bfl my-file.c 137 \n\
-    \nThis would be the same as if the user had entered \n\
-    'breakpoint set -f my-file.c -l 137'. \n\
-    \nAnother example: \n\
-    \n    (lldb)  command alias pltty  process launch -s -o %1 -e %1 \n\
-    (lldb)  pltty /dev/tty0 \n\
-           // becomes 'process launch -s -o /dev/tty0 -e /dev/tty0' \n\
-    \nIf the user always wanted to pass the same value to a particular option, the \n\
-    alias could be defined with that value directly in the alias as a constant, \n\
-    rather than using a positional placeholder: \n\
-    \n    command alias bl3  breakpoint set -f %1 -l 3  // Always sets a breakpoint on line \n\
-                                                   // 3 of whatever file is indicated. \n");
+"'alias' allows the user to create a short-cut or abbreviation for long \
+commands, multi-word commands, and commands that take particular options.  \
+Below are some simple examples of how one might use the 'alias' command:" R"(
+
+(lldb) command alias sc script
+
+    Creates the abbreviation 'sc' for the 'script' command.
+
+(lldb) command alias bp breakpoint
+
+)" "    Creates the abbreviation 'bp' for the 'breakpoint' command.  Since \
+breakpoint commands are two-word commands, the user would still need to \
+enter the second word after 'bp', e.g. 'bp enable' or 'bp delete'." R"(
+
+(lldb) command alias bpl breakpoint list
+
+    Creates the abbreviation 'bpl' for the two-word command 'breakpoint list'.
+
+)" "An alias can include some options for the command, with the values either \
+filled in at the time the alias is created, or specified as positional \
+arguments, to be filled in when the alias is invoked.  The following example \
+shows how to create aliases with options:" R"(
+
+(lldb) command alias bfl breakpoint set -f %1 -l %2
+
+)" "    Creates the abbreviation 'bfl' (for break-file-line), with the -f and -l \
+options already part of the alias.  So if the user wants to set a breakpoint \
+by file and line without explicitly having to use the -f and -l options, the \
+user can now use 'bfl' instead.  The '%1' and '%2' are positional placeholders \
+for the actual arguments that will be passed when the alias command is used.  \
+The number in the placeholder refers to the position/order the actual value \
+occupies when the alias is used.  All the occurrences of '%1' in the alias \
+will be replaced with the first argument, all the occurrences of '%2' in the \
+alias will be replaced with the second argument, and so on.  This also allows \
+actual arguments to be used multiple times within an alias (see 'process \
+launch' example below)." R"(
+
+)" "Note: the positional arguments must substitute as whole words in the resultant \
+command, so you can't at present do something like this to append the file extension \
+\".cpp\":" R"(
+
+(lldb) command alias bcppfl breakpoint set -f %1.cpp -l %2
+
+)" "For more complex aliasing, use the \"command regex\" command instead.  In the \
+'bfl' case above, the actual file value will be filled in with the first argument \
+following 'bfl' and the actual line number value will be filled in with the second \
+argument.  The user would use this alias as follows:" R"(
+
+(lldb) command alias bfl breakpoint set -f %1 -l %2
+(lldb) bfl my-file.c 137
+
+This would be the same as if the user had entered 'breakpoint set -f my-file.c -l 137'.
+
+Another example:
+
+(lldb) command alias pltty process launch -s -o %1 -e %1
+(lldb) pltty /dev/tty0
+
+    Interpreted as 'process launch -s -o /dev/tty0 -e /dev/tty0'
+
+)" "If the user always wanted to pass the same value to a particular option, the \
+alias could be defined with that value directly in the alias as a constant, \
+rather than using a positional placeholder:" R"(
+
+(lldb) command alias bl3 breakpoint set -f %1 -l 3
+
+    Always sets a breakpoint on line 3 of whatever file is indicated.)"
+        );
 
         CommandArgumentEntry arg1;
         CommandArgumentEntry arg2;
@@ -539,13 +551,13 @@ public:
         m_arguments.push_back (arg3);
     }
 
-    ~CommandObjectCommandsAlias ()
+    ~CommandObjectCommandsAlias () override
     {
     }
 
 protected:
-    virtual bool
-    DoExecute (const char *raw_command_line, CommandReturnObject &result)
+    bool
+    DoExecute (const char *raw_command_line, CommandReturnObject &result) override
     {
         Args args (raw_command_line);
         std::string raw_command_string (raw_command_line);
@@ -806,13 +818,13 @@ public:
         m_arguments.push_back (arg);
     }
 
-    ~CommandObjectCommandsUnalias()
+    ~CommandObjectCommandsUnalias() override
     {
     }
 
 protected:
     bool
-    DoExecute (Args& args, CommandReturnObject &result)
+    DoExecute (Args& args, CommandReturnObject &result) override
     {
         CommandObject::CommandMap::iterator pos;
         CommandObject *cmd_obj;
@@ -899,13 +911,13 @@ public:
         m_arguments.push_back (arg);
     }
 
-    ~CommandObjectCommandsDelete()
+    ~CommandObjectCommandsDelete() override
     {
     }
 
 protected:
     bool
-    DoExecute (Args& args, CommandReturnObject &result)
+    DoExecute (Args& args, CommandReturnObject &result) override
     {
         CommandObject::CommandMap::iterator pos;
 
@@ -960,34 +972,33 @@ public:
         IOHandlerDelegateMultiline ("", IOHandlerDelegate::Completion::LLDBCommand),
         m_options (interpreter)
     {
-        SetHelpLong(
-"This command allows the user to create powerful regular expression commands\n"
-"with substitutions. The regular expressions and substitutions are specified\n"
-"using the regular expression substitution format of:\n"
-"\n"
-"    s/<regex>/<subst>/\n"
-"\n"
-"<regex> is a regular expression that can use parenthesis to capture regular\n"
-"expression input and substitute the captured matches in the output using %1\n"
-"for the first match, %2 for the second, and so on.\n"
-"\n"
-"The regular expressions can all be specified on the command line if more than\n"
-"one argument is provided. If just the command name is provided on the command\n"
-"line, then the regular expressions and substitutions can be entered on separate\n"
-" lines, followed by an empty line to terminate the command definition.\n"
-"\n"
-"EXAMPLES\n"
-"\n"
-"The following example will define a regular expression command named 'f' that\n"
-"will call 'finish' if there are no arguments, or 'frame select <frame-idx>' if\n"
-"a number follows 'f':\n"
-"\n"
-"    (lldb) command regex f s/^$/finish/ 's/([0-9]+)/frame select %1/'\n"
-"\n"
-                    );
+        SetHelpLong(R"(
+)" "This command allows the user to create powerful regular expression commands \
+with substitutions. The regular expressions and substitutions are specified \
+using the regular expression substitution format of:" R"(
+
+    s/<regex>/<subst>/
+
+)" "<regex> is a regular expression that can use parenthesis to capture regular \
+expression input and substitute the captured matches in the output using %1 \
+for the first match, %2 for the second, and so on." R"(
+
+)" "The regular expressions can all be specified on the command line if more than \
+one argument is provided. If just the command name is provided on the command \
+line, then the regular expressions and substitutions can be entered on separate \
+lines, followed by an empty line to terminate the command definition." R"(
+
+EXAMPLES
+
+)" "The following example will define a regular expression command named 'f' that \
+will call 'finish' if there are no arguments, or 'frame select <frame-idx>' if \
+a number follows 'f':" R"(
+
+    (lldb) command regex f s/^$/finish/ 's/([0-9]+)/frame select %1/')"
+        );
     }
     
-    ~CommandObjectCommandsAddRegex()
+    ~CommandObjectCommandsAddRegex() override
     {
     }
     
@@ -1237,11 +1248,10 @@ private:
          {
          }
          
-         virtual
-         ~CommandOptions (){}
+         ~CommandOptions () override {}
          
-         virtual Error
-         SetOptionValue (uint32_t option_idx, const char *option_arg)
+         Error
+         SetOptionValue (uint32_t option_idx, const char *option_arg) override
          {
              Error error;
              const int short_option = m_getopt_table[option_idx].val;
@@ -1264,14 +1274,14 @@ private:
          }
          
          void
-         OptionParsingStarting ()
+         OptionParsingStarting () override
          {
              m_help.clear();
              m_syntax.clear();
          }
          
          const OptionDefinition*
-         GetDefinitions ()
+         GetDefinitions () override
          {
              return g_option_table;
          }
@@ -1350,13 +1360,12 @@ public:
         }
     }
     
-    virtual
-    ~CommandObjectPythonFunction ()
+    ~CommandObjectPythonFunction () override
     {
     }
     
-    virtual bool
-    IsRemovable () const
+    bool
+    IsRemovable () const override
     {
         return true;
     }
@@ -1373,8 +1382,8 @@ public:
         return m_synchro;
     }
     
-    virtual const char *
-    GetHelpLong ()
+    const char *
+    GetHelpLong () override
     {
         if (!m_fetched_help_long)
         {
@@ -1391,8 +1400,8 @@ public:
     }
     
 protected:
-    virtual bool
-    DoExecute (const char *raw_command_line, CommandReturnObject &result)
+    bool
+    DoExecute (const char *raw_command_line, CommandReturnObject &result) override
     {
         ScriptInterpreter* scripter = m_interpreter.GetScriptInterpreter();
         
@@ -1457,13 +1466,12 @@ public:
             GetFlags().Set(scripter->GetFlagsForCommandObject(cmd_obj_sp));
     }
     
-    virtual
-    ~CommandObjectScriptingObject ()
+    ~CommandObjectScriptingObject () override
     {
     }
     
-    virtual bool
-    IsRemovable () const
+    bool
+    IsRemovable () const override
     {
         return true;
     }
@@ -1480,8 +1488,8 @@ public:
         return m_synchro;
     }
 
-    virtual const char *
-    GetHelp ()
+    const char *
+    GetHelp () override
     {
         if (!m_fetched_help_short)
         {
@@ -1497,8 +1505,8 @@ public:
         return CommandObjectRaw::GetHelp();
     }
     
-    virtual const char *
-    GetHelpLong ()
+    const char *
+    GetHelpLong () override
     {
         if (!m_fetched_help_long)
         {
@@ -1515,8 +1523,8 @@ public:
     }
     
 protected:
-    virtual bool
-    DoExecute (const char *raw_command_line, CommandReturnObject &result)
+    bool
+    DoExecute (const char *raw_command_line, CommandReturnObject &result) override
     {
         ScriptInterpreter* scripter = m_interpreter.GetScriptInterpreter();
         
@@ -1579,11 +1587,11 @@ public:
         m_arguments.push_back (arg1);
     }
     
-    ~CommandObjectCommandsScriptImport ()
+    ~CommandObjectCommandsScriptImport () override
     {
     }
     
-    virtual int
+    int
     HandleArgumentCompletion (Args &input,
                               int &cursor_index,
                               int &cursor_char_position,
@@ -1591,7 +1599,7 @@ public:
                               int match_start_point,
                               int max_return_elements,
                               bool &word_complete,
-                              StringList &matches)
+                              StringList &matches) override
     {
         std::string completion_str (input.GetArgumentAtIndex(cursor_index));
         completion_str.erase (cursor_char_position);
@@ -1607,8 +1615,8 @@ public:
         return matches.GetSize();
     }
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -1624,11 +1632,10 @@ protected:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -1647,13 +1654,13 @@ protected:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_allow_reload = true;
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -1668,7 +1675,7 @@ protected:
     };
 
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         if (m_interpreter.GetDebugger().GetScriptLanguage() != lldb::eScriptLanguagePython)
         {
@@ -1759,12 +1766,12 @@ public:
         m_arguments.push_back (arg1);
     }
     
-    ~CommandObjectCommandsScriptAdd ()
+    ~CommandObjectCommandsScriptAdd () override
     {
     }
     
-    virtual Options *
-    GetOptions ()
+    Options *
+    GetOptions () override
     {
         return &m_options;
     }
@@ -1784,11 +1791,10 @@ protected:
         {
         }
         
-        virtual
-        ~CommandOptions (){}
+        ~CommandOptions () override {}
         
-        virtual Error
-        SetOptionValue (uint32_t option_idx, const char *option_arg)
+        Error
+        SetOptionValue (uint32_t option_idx, const char *option_arg) override
         {
             Error error;
             const int short_option = m_getopt_table[option_idx].val;
@@ -1821,7 +1827,7 @@ protected:
         }
         
         void
-        OptionParsingStarting ()
+        OptionParsingStarting () override
         {
             m_class_name.clear();
             m_funct_name.clear();
@@ -1830,7 +1836,7 @@ protected:
         }
         
         const OptionDefinition*
-        GetDefinitions ()
+        GetDefinitions () override
         {
             return g_option_table;
         }
@@ -1847,8 +1853,8 @@ protected:
         ScriptedCommandSynchronicity m_synchronicity;
     };
 
-    virtual void
-    IOHandlerActivated (IOHandler &io_handler)
+    void
+    IOHandlerActivated (IOHandler &io_handler) override
     {
         StreamFileSP output_sp(io_handler.GetOutputStreamFile());
         if (output_sp)
@@ -1859,8 +1865,8 @@ protected:
     }
     
 
-    virtual void
-    IOHandlerInputComplete (IOHandler &io_handler, std::string &data)
+    void
+    IOHandlerInputComplete (IOHandler &io_handler, std::string &data) override
     {
         StreamFileSP error_sp = io_handler.GetErrorStreamFile();
         
@@ -1922,7 +1928,7 @@ protected:
 
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         
         if (m_interpreter.GetDebugger().GetScriptLanguage() != lldb::eScriptLanguagePython)
@@ -2051,12 +2057,12 @@ public:
     {
     }
     
-    ~CommandObjectCommandsScriptList ()
+    ~CommandObjectCommandsScriptList () override
     {
     }
     
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         
         m_interpreter.GetHelp(result,
@@ -2087,13 +2093,13 @@ public:
     {
     }
     
-    ~CommandObjectCommandsScriptClear ()
+    ~CommandObjectCommandsScriptClear () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         
         m_interpreter.RemoveAllUser();
@@ -2131,13 +2137,13 @@ public:
         m_arguments.push_back (arg1);
     }
     
-    ~CommandObjectCommandsScriptDelete ()
+    ~CommandObjectCommandsScriptDelete () override
     {
     }
     
 protected:
     bool
-    DoExecute (Args& command, CommandReturnObject &result)
+    DoExecute (Args& command, CommandReturnObject &result) override
     {
         
         size_t argc = command.GetArgumentCount();
@@ -2189,7 +2195,7 @@ public:
         LoadSubCommand ("import", CommandObjectSP (new CommandObjectCommandsScriptImport (interpreter)));
     }
 
-    ~CommandObjectMultiwordCommandsScript ()
+    ~CommandObjectMultiwordCommandsScript () override
     {
     }
     

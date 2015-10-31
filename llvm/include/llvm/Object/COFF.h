@@ -474,7 +474,7 @@ struct coff_import_header {
   support::ulittle16_t OrdinalHint;
   support::ulittle16_t TypeInfo;
   int getType() const { return TypeInfo & 0x3; }
-  int getNameType() const { return (TypeInfo & 0x7) >> 2; }
+  int getNameType() const { return (TypeInfo >> 2) & 0x7; }
 };
 
 struct coff_import_directory_table_entry {
@@ -647,16 +647,13 @@ public:
   }
 protected:
   void moveSymbolNext(DataRefImpl &Symb) const override;
-  std::error_code getSymbolName(DataRefImpl Symb,
-                                StringRef &Res) const override;
-  std::error_code getSymbolAddress(DataRefImpl Symb,
-                                   uint64_t &Res) const override;
-  uint64_t getSymbolValue(DataRefImpl Symb) const override;
+  ErrorOr<StringRef> getSymbolName(DataRefImpl Symb) const override;
+  ErrorOr<uint64_t> getSymbolAddress(DataRefImpl Symb) const override;
+  uint64_t getSymbolValueImpl(DataRefImpl Symb) const override;
   uint64_t getCommonSymbolSizeImpl(DataRefImpl Symb) const override;
   uint32_t getSymbolFlags(DataRefImpl Symb) const override;
   SymbolRef::Type getSymbolType(DataRefImpl Symb) const override;
-  std::error_code getSymbolSection(DataRefImpl Symb,
-                                   section_iterator &Res) const override;
+  ErrorOr<section_iterator> getSymbolSection(DataRefImpl Symb) const override;
   void moveSectionNext(DataRefImpl &Sec) const override;
   std::error_code getSectionName(DataRefImpl Sec,
                                  StringRef &Res) const override;
@@ -673,7 +670,6 @@ protected:
   relocation_iterator section_rel_end(DataRefImpl Sec) const override;
 
   void moveRelocationNext(DataRefImpl &Rel) const override;
-  ErrorOr<uint64_t> getRelocationAddress(DataRefImpl Rel) const override;
   uint64_t getRelocationOffset(DataRefImpl Rel) const override;
   symbol_iterator getRelocationSymbol(DataRefImpl Rel) const override;
   uint64_t getRelocationType(DataRefImpl Rel) const override;
@@ -777,6 +773,7 @@ public:
   std::error_code getSectionContents(const coff_section *Sec,
                                      ArrayRef<uint8_t> &Res) const;
 
+  uint64_t getImageBase() const;
   std::error_code getVaPtr(uint64_t VA, uintptr_t &Res) const;
   std::error_code getRvaPtr(uint32_t Rva, uintptr_t &Res) const;
   std::error_code getHintName(uint32_t Rva, uint16_t &Hint,

@@ -35,29 +35,26 @@
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "break-insert".
 //          This command does not follow the MI documentation exactly.
-// Gotchas: None.
-// Authors: Illya Rudkin 11/03/2014.
-// Changes: None.
 //--
 class CMICmdCmdBreakInsert : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdBreakInsert(void);
+    /* ctor */ CMICmdCmdBreakInsert();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdBreakInsert(void);
+    /* dtor */ ~CMICmdCmdBreakInsert() override;
 
     // Enumerations:
   private:
@@ -104,29 +101,26 @@ class CMICmdCmdBreakInsert : public CMICmdBase
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "break-delete".
-// Gotchas: None.
-// Authors: Illya Rudkin 11/03/2014.
-// Changes: None.
 //--
 class CMICmdCmdBreakDelete : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdBreakDelete(void);
+    /* ctor */ CMICmdCmdBreakDelete();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdBreakDelete(void);
+    /* dtor */ ~CMICmdCmdBreakDelete() override;
 
     // Attributes:
   private:
@@ -137,29 +131,26 @@ class CMICmdCmdBreakDelete : public CMICmdBase
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "break-disable".
-// Gotchas: None.
-// Authors: Illya Rudkin 19/05/2014.
-// Changes: None.
 //--
 class CMICmdCmdBreakDisable : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdBreakDisable(void);
+    /* ctor */ CMICmdCmdBreakDisable();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdBreakDisable(void);
+    /* dtor */ ~CMICmdCmdBreakDisable() override;
 
     // Attributes:
   private:
@@ -172,29 +163,26 @@ class CMICmdCmdBreakDisable : public CMICmdBase
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "break-enable".
-// Gotchas: None.
-// Authors: Illya Rudkin 19/05/2014.
-// Changes: None.
 //--
 class CMICmdCmdBreakEnable : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdBreakEnable(void);
+    /* ctor */ CMICmdCmdBreakEnable();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdBreakEnable(void);
+    /* dtor */ ~CMICmdCmdBreakEnable() override;
 
     // Attributes:
   private:
@@ -207,29 +195,26 @@ class CMICmdCmdBreakEnable : public CMICmdBase
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "break-after".
-// Gotchas: None.
-// Authors: Illya Rudkin 29/05/2014.
-// Changes: None.
 //--
 class CMICmdCmdBreakAfter : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdBreakAfter(void);
+    /* ctor */ CMICmdCmdBreakAfter();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdBreakAfter(void);
+    /* dtor */ ~CMICmdCmdBreakAfter() override;
 
     // Attributes:
   private:
@@ -243,33 +228,30 @@ class CMICmdCmdBreakAfter : public CMICmdBase
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "break-condition".
-// Gotchas: None.
-// Authors: Illya Rudkin 29/05/2014.
-// Changes: None.
 //--
 class CMICmdCmdBreakCondition : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdBreakCondition(void);
+    /* ctor */ CMICmdCmdBreakCondition();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdBreakCondition(void);
+    /* dtor */ ~CMICmdCmdBreakCondition() override;
 
     // Methods:
   private:
-    CMIUtilString GetRestOfExpressionNotSurroundedInQuotes(void);
+    CMIUtilString GetRestOfExpressionNotSurroundedInQuotes();
 
     // Attributes:
   private:

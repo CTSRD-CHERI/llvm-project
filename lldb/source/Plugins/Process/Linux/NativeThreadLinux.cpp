@@ -13,10 +13,7 @@
 #include <sstream>
 
 #include "NativeProcessLinux.h"
-#include "NativeRegisterContextLinux_arm.h"
-#include "NativeRegisterContextLinux_arm64.h"
-#include "NativeRegisterContextLinux_x86_64.h"
-#include "NativeRegisterContextLinux_mips64.h"
+#include "NativeRegisterContextLinux.h"
 
 #include "lldb/Core/Log.h"
 #include "lldb/Core/State.h"
@@ -31,7 +28,7 @@
 #include <sys/syscall.h>
 // Try to define a macro to encapsulate the tgkill syscall
 #define tgkill(pid, tid, sig) \
-    syscall(SYS_tgkill, static_cast<::pid_t>(pid), static_cast<::pid_t>(tid), sig)
+    syscall(SYS_tgkill, static_cast< ::pid_t>(pid), static_cast< ::pid_t>(tid), sig)
 
 using namespace lldb;
 using namespace lldb_private;
@@ -256,17 +253,20 @@ NativeThreadLinux::SetStoppedBySignal(uint32_t signo, const siginfo_t *info)
     m_stop_info.details.signal.signo = signo;
 
     m_stop_description.clear();
-    switch (signo)
+    if (info)
     {
-    case SIGSEGV:
-    case SIGBUS:
-    case SIGFPE:
-    case SIGILL:
-        if (! info)
-            break;
-        const auto reason = GetCrashReason(*info);
-        m_stop_description = GetCrashReasonString(reason, reinterpret_cast<uintptr_t>(info->si_addr));
-        break;
+        switch (signo)
+        {
+        case SIGSEGV:
+        case SIGBUS:
+        case SIGFPE:
+        case SIGILL:
+             //In case of MIPS64 target, SI_KERNEL is generated for invalid 64bit address.
+             const auto reason = (info->si_signo == SIGBUS && info->si_code == SI_KERNEL) ? 
+                                  CrashReason::eInvalidAddress : GetCrashReason(*info);
+             m_stop_description = GetCrashReasonString(reason, reinterpret_cast<uintptr_t>(info->si_addr));
+             break;
+        }
     }
 }
 
@@ -330,6 +330,16 @@ NativeThreadLinux::SetStoppedByWatchpoint (uint32_t wp_index)
     std::ostringstream ostr;
     ostr << GetRegisterContext()->GetWatchpointAddress(wp_index) << " ";
     ostr << wp_index;
+
+    /*
+     * MIPS: Last 3bits of the watchpoint address are masked by the kernel. For example:
+     * 'n' is at 0x120010d00 and 'm' is 0x120010d04. When a watchpoint is set at 'm', then
+     * watch exception is generated even when 'n' is read/written. To handle this case,
+     * find the base address of the load/store instruction and append it in the stop-info 
+     * packet.
+    */
+    ostr << " " << GetRegisterContext()->GetWatchpointHitAddress(wp_index);
+
     m_stop_description = ostr.str();
 
     m_stop_info.reason = StopReason::eStopReasonWatchpoint;
@@ -362,14 +372,14 @@ NativeThreadLinux::SetStoppedByTrace ()
 }
 
 void
-NativeThreadLinux::SetSuspended ()
+NativeThreadLinux::SetStoppedWithNoReason ()
 {
-    const StateType new_state = StateType::eStateSuspended;
+    const StateType new_state = StateType::eStateStopped;
     MaybeLogStateChange (new_state);
     m_state = new_state;
 
-    // FIXME what makes sense here? Do we need a suspended StopReason?
     m_stop_info.reason = StopReason::eStopReasonNone;
+    m_stop_info.details.signal.signo = 0;
 }
 
 void
@@ -405,8 +415,6 @@ NativeThreadLinux::RequestStop ()
         if (log)
             log->Printf ("NativeThreadLinux::%s tgkill(%" PRIu64 ", %" PRIu64 ", SIGSTOP) failed: %s", __FUNCTION__, pid, tid, err.AsCString ());
     }
-    else
-        m_thread_context.stop_requested = true;
 
     return err;
 }

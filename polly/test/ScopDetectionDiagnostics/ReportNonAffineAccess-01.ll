@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -analyze < %s 2>&1| FileCheck %s
+; RUN: opt %loadPolly -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -analyze < %s 2>&1| FileCheck %s
 
 ; void f(int A[]) {
 ;   for(int i=0; i<42; ++i)
@@ -47,11 +47,11 @@ attributes #1 = { nounwind readnone }
 !llvm.module.flags = !{!10, !11}
 !llvm.ident = !{!12}
 
-!0 = !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.6.0 ", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.6.0 ", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
 !1 = !DIFile(filename: "ReportNonAffineAccess-01.c", directory: "test/ScopDetectionDiagnostic/")
 !2 = !{}
 !3 = !{!4}
-!4 = !DISubprogram(name: "f", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !1, scope: !5, type: !6, function: void (i32*)* @f, variables: !2)
+!4 = distinct !DISubprogram(name: "f", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !1, scope: !5, type: !6, function: void (i32*)* @f, variables: !2)
 !5 = !DIFile(filename: "ReportNonAffineAccess-01.c", directory: "test/ScopDetectionDiagnostic/")
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8}
@@ -60,10 +60,10 @@ attributes #1 = { nounwind readnone }
 !10 = !{i32 2, !"Dwarf Version", i32 4}
 !11 = !{i32 2, !"Debug Info Version", i32 3}
 !12 = !{!"clang version 3.6.0 "}
-!13 = !DILocalVariable(tag: DW_TAG_arg_variable, name: "A", line: 1, arg: 1, scope: !4, file: !5, type: !8)
+!13 = !DILocalVariable(name: "A", line: 1, arg: 1, scope: !4, file: !5, type: !8)
 !14 = !DILocation(line: 1, column: 12, scope: !4)
 !15 = !{i32 0}
-!16 = !DILocalVariable(tag: DW_TAG_auto_variable, name: "i", line: 2, scope: !17, file: !5, type: !9)
+!16 = !DILocalVariable(name: "i", line: 2, scope: !17, file: !5, type: !9)
 !17 = distinct !DILexicalBlock(line: 2, column: 3, file: !1, scope: !4)
 !18 = !DILocation(line: 2, column: 11, scope: !17)
 !19 = !DILocation(line: 2, column: 7, scope: !17)

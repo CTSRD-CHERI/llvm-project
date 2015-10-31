@@ -2,9 +2,12 @@
 Test denied process attach.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
 import time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -23,8 +26,7 @@ class AttachDeniedTestCase(TestBase):
     @skipIfWindows
     def test_attach_to_process_by_id_denied(self):
         """Test attach by process id denied"""
-
-        self.buildDefault()
+        self.build()
         exe = os.path.join(os.getcwd(), exe_name)
 
         # Use a file as a synchronization point between test and inferior.
@@ -42,7 +44,7 @@ class AttachDeniedTestCase(TestBase):
             if err.Success() and retcode == 0:
                 break
             else:
-                print msg
+                print(msg)
             if i < max_attempts:
                 # Exponential backoff!
                 time.sleep(pow(2, i) * 0.25)
@@ -55,10 +57,3 @@ class AttachDeniedTestCase(TestBase):
         self.expect('process attach -p ' + pid,
                     startstr = 'error: attach failed:',
                     error = True)
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

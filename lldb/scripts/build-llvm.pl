@@ -9,6 +9,7 @@
 # files might contain object files with the same name.
 
 use strict;
+use Cwd 'abs_path';
 use File::Basename;
 use File::Glob ':glob';
 use File::Slurp;
@@ -17,9 +18,7 @@ use Digest::MD5 qw(md5_hex);
 
 our $llvm_srcroot = $ENV{SCRIPT_INPUT_FILE_0};
 our $llvm_dstroot = $ENV{SCRIPT_INPUT_FILE_1};
-
-our $llvm_clang_outfile = $ENV{SCRIPT_OUTPUT_FILE_0};
-our ($llvm_clang_basename, $llvm_clang_dirname) = fileparse ($llvm_clang_outfile);
+our $archive_filelist_file = $ENV{SCRIPT_INPUT_FILE_2};
 
 our $llvm_configuration = $ENV{LLVM_CONFIGURATION};
 
@@ -53,11 +52,10 @@ else
     die "Unsupported LLVM configuration: '$llvm_configuration'\n";
 }
 our @llvm_repositories = (
-    "$llvm_srcroot",
-    "$llvm_srcroot/tools/clang",
-    "$llvm_srcroot/projects/compiler-rt"
+    abs_path("$llvm_srcroot"),
+    abs_path("$llvm_srcroot/tools/clang"),
+#    abs_path("$llvm_srcroot/projects/compiler-rt")
 );
-
 
 if (-e "$llvm_srcroot/lib")
 {
@@ -70,8 +68,8 @@ else
     do_command ("cd '$SRCROOT' && svn co --quiet --revision $llvm_revision http://llvm.org/svn/llvm-project/llvm/trunk llvm", "checking out llvm from repository", 1);
     print "Checking out clang sources from revision $clang_revision...\n";
     do_command ("cd '$llvm_srcroot/tools' && svn co --quiet --revision $clang_revision http://llvm.org/svn/llvm-project/cfe/trunk clang", "checking out clang from repository", 1);
-    print "Checking out compiler-rt sources from revision $compiler_rt_revision...\n";
-    do_command ("cd '$llvm_srcroot/projects' && svn co --quiet --revision $compiler_rt_revision http://llvm.org/svn/llvm-project/compiler-rt/trunk compiler-rt", "checking out compiler-rt from repository", 1);
+#    print "Checking out compiler-rt sources from revision $compiler_rt_revision...\n";
+#    do_command ("cd '$llvm_srcroot/projects' && svn co --quiet --revision $compiler_rt_revision http://llvm.org/svn/llvm-project/compiler-rt/trunk compiler-rt", "checking out compiler-rt from repository", 1);
     print "Applying any local patches to LLVM/Clang...";
 
     my @llvm_patches = bsd_glob("$ENV{SRCROOT}/scripts/llvm.*.diff");
@@ -86,19 +84,12 @@ else
         do_command ("cd '$llvm_srcroot/tools/clang' && patch -p0 < $patch");
     }
 
-    my @compiler_rt_patches = bsd_glob("$ENV{SRCROOT}/scripts/compiler-rt.*.diff");
-    foreach my $patch (@compiler_rt_patches)
-    {
-        do_command ("cd '$llvm_srcroot/projects/compiler-rt' && patch -p0 < $patch");
-    }
+#    my @compiler_rt_patches = bsd_glob("$ENV{SRCROOT}/scripts/compiler-rt.*.diff");
+#    foreach my $patch (@compiler_rt_patches)
+#    {
+#        do_command ("cd '$llvm_srcroot/projects/compiler-rt' && patch -p0 < $patch");
+#    }
 }
-
-# If our output file already exists then we need not generate it again.
-if (-e $llvm_clang_outfile)
-{
-    exit 0;
-}
-
 
 # Get our options
 
@@ -127,8 +118,8 @@ sub build_llvm
     {
         if (-d "$repo/.svn")
         {
-            push(@llvm_md5_strings, `svn info '$repo'`);
-            push(@llvm_md5_strings, `svn diff '$repo'`);
+            push(@llvm_md5_strings, `cd '$repo'; svn info`);
+            push(@llvm_md5_strings, `cd '$repo'; svn diff`);
         }
         elsif (-d "$repo/.git")
         {
@@ -136,11 +127,23 @@ sub build_llvm
             push(@llvm_md5_strings, `cd '$repo'; git diff`);
         }
     }
+    
+    # open my $md5_data_file, '>', "/tmp/a.txt" or die "Can't open $! for writing...\n";
+    # foreach my $md5_string (@llvm_md5_strings)
+    # {
+    #     print $md5_data_file $md5_string;
+    # }
+    # close ($md5_data_file);
+    
     #print "LLVM MD5 will be generated from:\n";
     #print @llvm_md5_strings;
     my $llvm_hex_digest = md5_hex(@llvm_md5_strings);
-
+    my $did_make = 0;
+    
     #print "llvm MD5: $llvm_hex_digest\n";
+
+    my @archive_dirs;
+
     foreach my $arch (@archs)
     {
         my $llvm_dstroot_arch = "${llvm_dstroot}/${arch}";
@@ -151,8 +154,10 @@ sub build_llvm
         my $is_arm = $arch =~ /^arm/;
         my $save_arch_digest = 1;
         my $arch_digest_file = "$llvm_dstroot_arch/md5";
+        my $llvm_dstroot_arch_archive_dir = "$llvm_dstroot_arch/$llvm_configuration/lib";
+        
+        push @archive_dirs, $llvm_dstroot_arch_archive_dir;
 
-        my $llvm_dstroot_arch_archive = "$llvm_dstroot_arch/$llvm_clang_basename";
         print "LLVM architecture root for ${arch} exists at '$llvm_dstroot_arch'...";
         if (-e $llvm_dstroot_arch)
         {
@@ -186,30 +191,25 @@ sub build_llvm
                 
                 if ($do_make == 0)
                 {
-                    if (-e $llvm_dstroot_arch_archive)
+                    if (-e $archive_filelist_file)
                     {
                         # the final archive exists, check the modification times on all .a files that
                         # make the final archive to make sure we don't need to rebuild
-                        my $llvm_dstroot_arch_archive_modtime = (stat($llvm_dstroot_arch_archive))[9];
+                        my $archive_filelist_file_modtime = (stat($archive_filelist_file))[9];
                         
-                        our @archive_files = glob "$llvm_dstroot_arch/$llvm_configuration/lib/*.a";
+                        our @archive_files = glob "$llvm_dstroot_arch_archive_dir/*.a";
                         
                         for my $llvm_lib (@archive_files)
                         {
                             if (-e $llvm_lib)
                             {
-                                if ($llvm_dstroot_arch_archive_modtime < (stat($llvm_lib))[9])
+                                if ($archive_filelist_file_modtime < (stat($llvm_lib))[9])
                                 {
-                                    print "'$llvm_dstroot_arch/$llvm_lib' is newer than '$llvm_dstroot_arch_archive', rebuilding...\n";
+                                    print "'$llvm_dstroot_arch/$llvm_lib' is newer than '$archive_filelist_file', rebuilding...\n";
                                     $do_make = 1;
                                     last;
                                 }
                             }
-                        }
-
-                        if ($do_make == 0)
-                        {
-                            print "LLVM architecture archive for ${arch} is '$llvm_dstroot_arch_archive' and is up to date.\n";
                         }
                     }
                     else
@@ -217,11 +217,6 @@ sub build_llvm
                         $do_make = 1;
                     }
                 }
-            }
-            
-            if ($do_make)
-            {
-                unlink($llvm_dstroot_arch_archive);
             }
         }
         else
@@ -309,6 +304,7 @@ sub build_llvm
 
         if ($do_make)
         {
+            $did_make = 1;
             # Build llvm and clang
             my $num_cpus = parallel_guess();
             print "Building clang using $num_cpus cpus ($arch)...\n";
@@ -319,12 +315,22 @@ sub build_llvm
             }
             do_command ("cd '$llvm_dstroot_arch' && make -j$num_cpus clang-only VERBOSE=1 $llvm_config_href->{make_options} PROJECT_NAME='llvm' $extra_make_flags", "making llvm and clang", 1);
             do_command ("cd '$llvm_dstroot_arch' && make -j$num_cpus tools-only VERBOSE=1 $llvm_config_href->{make_options} PROJECT_NAME='llvm' $extra_make_flags EDIS_VERSION=1", "making libedis", 1);
-            # Combine all .o files from a bunch of static libraries from llvm
-            # and clang into a single .a file.
-            create_single_llvm_archive_for_arch ($llvm_dstroot_arch, 1);
+            
         }
 
         ++$arch_idx;
+    }
+
+    # If we did any makes update the archive filenames file with any .a files from
+    # each architectures "lib" folder...
+    if ($did_make)
+    {
+        open my $fh, '>', $archive_filelist_file or die "Can't open $! for writing...\n";
+        foreach my $archive_dir (@archive_dirs)
+        {
+            append_all_archive_files ($archive_dir, $fh);
+        }
+        close($fh);
     }
 }
 
@@ -386,60 +392,16 @@ sub do_command
     }
 }
 
-sub create_single_llvm_archive_for_arch
+sub append_all_archive_files
 {
-    my $arch_dstroot = shift;
-    my $split_into_objects = shift;
-    my @object_dirs;
-    my $object_dir;
-    my $tmp_dir = $arch_dstroot;
-    my $arch_output_file = "$arch_dstroot/$llvm_clang_basename";
-    -e $arch_output_file and return;
-    my $files = "$arch_dstroot/files.txt";
-    open (FILES, ">$files") or die "Can't open $! for writing...\n";
-    
-    our @archive_files = glob "$arch_dstroot/$llvm_configuration/lib/*.a";
-    
-    for my $archive_fullpath (@archive_files)
-    {
-        if (-e $archive_fullpath)
-        {
-            if ($split_into_objects)
-            {
-                my ($archive_file, $archive_dir, $archive_ext) = fileparse($archive_fullpath, ('.a'));
-                $object_dir = "$tmp_dir/$archive_file";
-                push @object_dirs, $object_dir;
+   my $archive_dir = shift;
+   my $fh = shift;
 
-                do_command ("cd '$tmp_dir'; mkdir '$archive_file'; cd '$archive_file'; ar -x $archive_fullpath");
-
-                my @objects = bsd_glob("$object_dir/*.o");
-                foreach my $object (@objects)
-                {
-                    my ($o_file, $o_dir) = fileparse($object);
-                    my $new_object = "$object_dir/${archive_file}-$o_file";
-                    print FILES "$new_object\n";
-                    do_command ("mv '$object' '$new_object'");
-                }
-            }
-            else
-            {
-                # just add the .a files into the file list
-                print FILES "$archive_fullpath\n";
-            }
-        }
-        else
-        {
-            print "warning: archive doesn't exist: '$archive_fullpath'\n";
-        }
-    }
-    close (FILES);
-    do_command ("libtool -static -o '$arch_output_file' -filelist '$files'");
-
-    foreach $object_dir (@object_dirs)
-    {
-        do_command ("rm -rf '$object_dir'");
-    }
-    do_command ("rm -rf '$files'");
+   our @archive_files = glob "$archive_dir/*.a";    
+   for my $archive_fullpath (@archive_files)
+   {
+       print $fh "$archive_fullpath\n";
+   }
 }
 
 build_llvm();

@@ -1,7 +1,10 @@
-"""Test that lldb command 'process signal SIGUSR1' to send a signal to the inferior works."""
+﻿"""Test that lldb command 'process signal SIGUSR1' to send a signal to the inferior works."""
+
+from __future__ import print_function
+
+import lldb_shared
 
 import os, time, signal
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -11,42 +14,17 @@ class SendSignalTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test that lldb command 'process signal SIGUSR1' sends a signal to the inferior process."""
-        self.buildDsym()
-        self.send_signal()
-
-    @expectedFailureFreeBSD("llvm.org/pr23318: does not report running state")
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test that lldb command 'process signal SIGUSR1' sends a signal to the inferior process."""
-        self.buildDwarf()
-        self.send_signal()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break inside main().
         self.line = line_number('main.c', 'Put breakpoint here')
 
-    def match_state(self, process_listener, expected_state):
-        num_seconds = 5
-        broadcaster = self.process().GetBroadcaster()
-        event_type_mask = lldb.SBProcess.eBroadcastBitStateChanged
-        event = lldb.SBEvent()
-        got_event = process_listener.WaitForEventForBroadcasterWithType(
-            num_seconds, broadcaster, event_type_mask, event)
-        self.assertTrue(got_event, "Got an event")
-        state = lldb.SBProcess.GetStateFromEvent(event)
-        self.assertTrue(state == expected_state,
-                        "It was the %s state." %
-                        lldb.SBDebugger_StateAsCString(expected_state))
-
-    def send_signal(self):
+    @expectedFailureFreeBSD("llvm.org/pr23318: does not report running state")
+    @skipIfWindows # Windows does not support signals
+    def test_with_run_command(self):
         """Test that lldb command 'process signal SIGUSR1' sends a signal to the inferior process."""
-
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -113,8 +91,15 @@ class SendSignalTestCase(TestBase):
         self.assertTrue(thread.GetStopReasonDataAtIndex(0) == lldbutil.get_signal_number('SIGUSR1'),
                 "The stop signal was SIGUSR1")
 
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+    def match_state(self, process_listener, expected_state):
+        num_seconds = 5
+        broadcaster = self.process().GetBroadcaster()
+        event_type_mask = lldb.SBProcess.eBroadcastBitStateChanged
+        event = lldb.SBEvent()
+        got_event = process_listener.WaitForEventForBroadcasterWithType(
+            num_seconds, broadcaster, event_type_mask, event)
+        self.assertTrue(got_event, "Got an event")
+        state = lldb.SBProcess.GetStateFromEvent(event)
+        self.assertTrue(state == expected_state,
+                        "It was the %s state." %
+                        lldb.SBDebugger_StateAsCString(expected_state))

@@ -59,8 +59,8 @@ def incl : Joined<["/", "-"], "include:">,
 def deffile : Joined<["/", "-"], "def:">,
     HelpText<"Use module-definition file">;
 
-def debug : F<"debug">;
-def dll : F<"dll">;
+def debug : F<"debug">, HelpText<"Embed a symbol table in the image">;
+def dll : F<"dll">, HelpText<"Create a DLL">;
 def nodefaultlib_all : F<"nodefaultlib">;
 def noentry : F<"noentry">;
 def profile : F<"profile">;
@@ -86,7 +86,8 @@ defm tsaware  : B<"tsaware", "Create non-Terminal Server aware executable">;
 def help : F<"help">;
 def help_q : Flag<["/?", "-?"], "">, Alias<help>;
 
-def DASH_DASH : Option<["--"], "", KIND_REMAINING_ARGS>;
+// LLD extensions
+def nosymtab : F<"nosymtab">;
 
 // Flags for debugging
 def lldmap : Joined<["/", "-"], "lldmap:">;
@@ -107,6 +108,8 @@ def ignoreidl : F<"ignoreidl">;
 def incremental : F<"incremental">;
 def no_incremental : F<"incremental:no">;
 def nologo : F<"nologo">;
+def throwingnew : F<"throwingnew">;
+def editandcontinue : F<"editandcontinue">;
 
 def delay : QF<"delay">;
 def errorreport : QF<"errorreport">;
@@ -117,5 +120,6 @@ def pdbaltpath : QF<"pdbaltpath">;
 def tlbid : QF<"tlbid">;
 def tlbout : QF<"tlbout">;
 def verbose_all : QF<"verbose">;
+def guardsym : QF<"guardsym">;
 
 defm wx : QB<"wx">;

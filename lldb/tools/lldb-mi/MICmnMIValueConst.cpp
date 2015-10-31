@@ -1,4 +1,4 @@
-//===-- Platform.cpp --------------------------------------------*- C++ -*-===//
+//===-- MICmnMIValueConst.cpp -----------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -49,7 +49,7 @@ CMICmnMIValueConst::CMICmnMIValueConst(const CMIUtilString &vString, const bool 
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnMIValueConst::~CMICmnMIValueConst(void)
+CMICmnMIValueConst::~CMICmnMIValueConst()
 {
 }
 
@@ -62,7 +62,7 @@ CMICmnMIValueConst::~CMICmnMIValueConst(void)
 // Throws:  None.
 //--
 bool
-CMICmnMIValueConst::BuildConst(void)
+CMICmnMIValueConst::BuildConst()
 {
     if (m_strPartConst.length() != 0)
     {
@@ -73,13 +73,13 @@ CMICmnMIValueConst::BuildConst(void)
         }
         else
         {
-            const MIchar *pFormat = "%s%s%s";
+            const char *pFormat = "%s%s%s";
             m_strValue = CMIUtilString::Format(pFormat, ms_constStrDblQuote.c_str(), strValue.c_str(), ms_constStrDblQuote.c_str());
         }
     }
     else
     {
-        const MIchar *pFormat = "%s%s";
+        const char *pFormat = "%s%s";
         m_strValue = CMIUtilString::Format(pFormat, ms_constStrDblQuote.c_str(), ms_constStrDblQuote.c_str());
     }
 

@@ -15,7 +15,7 @@
 using namespace clang::ast_matchers;
 
 static bool isContainer(llvm::StringRef ClassName) {
-  static const char *ContainerNames[] = {
+  static const char *const ContainerNames[] = {
     "std::array",
     "std::deque",
     "std::forward_list",
@@ -54,6 +54,11 @@ ContainerSizeEmptyCheck::ContainerSizeEmptyCheck(StringRef Name,
     : ClangTidyCheck(Name, Context) {}
 
 void ContainerSizeEmptyCheck::registerMatchers(MatchFinder *Finder) {
+  // Only register the matchers for C++; the functionality currently does not
+  // provide any benefit to other languages, despite being benign.
+  if (!getLangOpts().CPlusPlus)
+    return;
+
   const auto WrongUse = anyOf(
       hasParent(
           binaryOperator(
@@ -70,12 +75,13 @@ void ContainerSizeEmptyCheck::registerMatchers(MatchFinder *Finder) {
       hasParent(explicitCastExpr(hasDestinationType(isBoolType()))));
 
   Finder->addMatcher(
-      memberCallExpr(
+      cxxMemberCallExpr(
           on(expr(anyOf(hasType(namedDecl(stlContainer())),
                         hasType(pointsTo(namedDecl(stlContainer()))),
                         hasType(references(namedDecl(stlContainer())))))
                  .bind("STLObject")),
-          callee(methodDecl(hasName("size"))), WrongUse).bind("SizeCallExpr"),
+          callee(cxxMethodDecl(hasName("size"))), WrongUse)
+          .bind("SizeCallExpr"),
       this);
 }
 

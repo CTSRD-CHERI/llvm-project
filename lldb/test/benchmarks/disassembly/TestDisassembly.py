@@ -1,7 +1,10 @@
 """Disassemble lldb's Driver::MainLoop() functions comparing lldb against gdb."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys
-import unittest2
 import lldb
 from lldbbench import *
 
@@ -37,34 +40,36 @@ class DisassembleDriverMainLoop(BenchBase):
             self.count = 5
 
     @benchmarks_test
+    @no_debug_info_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_run_lldb_then_gdb(self):
         """Test disassembly on a large function with lldb vs. gdb."""
-        print
-        print "lldb path: %s" % lldbtest_config.lldbExec
-        print "gdb path: %s" % self.gdbExec
+        print()
+        print("lldb path: %s" % lldbtest_config.lldbExec)
+        print("gdb path: %s" % self.gdbExec)
 
-        print
+        print()
         self.run_lldb_disassembly(self.exe, self.function, self.count)
-        print "lldb benchmark:", self.stopwatch
+        print("lldb benchmark:", self.stopwatch)
         self.run_gdb_disassembly(self.exe, self.function, self.count)
-        print "gdb benchmark:", self.stopwatch
-        print "lldb_avg/gdb_avg: %f" % (self.lldb_avg/self.gdb_avg)
+        print("gdb benchmark:", self.stopwatch)
+        print("lldb_avg/gdb_avg: %f" % (self.lldb_avg/self.gdb_avg))
 
     @benchmarks_test
+    @no_debug_info_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_run_gdb_then_lldb(self):
         """Test disassembly on a large function with lldb vs. gdb."""
-        print
-        print "lldb path: %s" % lldbtest_config.lldbExec
-        print "gdb path: %s" % self.gdbExec
+        print()
+        print("lldb path: %s" % lldbtest_config.lldbExec)
+        print("gdb path: %s" % self.gdbExec)
 
-        print
+        print()
         self.run_gdb_disassembly(self.exe, self.function, self.count)
-        print "gdb benchmark:", self.stopwatch
+        print("gdb benchmark:", self.stopwatch)
         self.run_lldb_disassembly(self.exe, self.function, self.count)
-        print "lldb benchmark:", self.stopwatch
-        print "lldb_avg/gdb_avg: %f" % (self.lldb_avg/self.gdb_avg)
+        print("lldb benchmark:", self.stopwatch)
+        print("lldb_avg/gdb_avg: %f" % (self.lldb_avg/self.gdb_avg))
 
     def run_lldb_disassembly(self, exe, function, count):
         import pexpect
@@ -104,7 +109,7 @@ class DisassembleDriverMainLoop(BenchBase):
 
         self.lldb_avg = self.stopwatch.avg()
         if self.TraceOn():
-            print "lldb disassembly benchmark:", str(self.stopwatch)
+            print("lldb disassembly benchmark:", str(self.stopwatch))
         self.child = None
 
     def run_gdb_disassembly(self, exe, function, count):
@@ -147,12 +152,5 @@ class DisassembleDriverMainLoop(BenchBase):
 
         self.gdb_avg = self.stopwatch.avg()
         if self.TraceOn():
-            print "gdb disassembly benchmark:", str(self.stopwatch)
+            print("gdb disassembly benchmark:", str(self.stopwatch))
         self.child = None
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

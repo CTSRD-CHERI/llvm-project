@@ -12,22 +12,25 @@
 
 // C Includes
 // C++ Includes
-#include <map>
 #include <vector>
-#include <string>
 
+// Other libraries and framework includes
+// Project includes
 #include "lldb/Target/DynamicLoader.h"
 #include "lldb/Host/FileSpec.h"
+#include "lldb/Core/StructuredData.h"
 #include "lldb/Core/UUID.h"
 #include "lldb/Host/Mutex.h"
 #include "lldb/Target/Process.h"
-
-// Other libraries and framework includes
 #include "lldb/Utility/SafeMachO.h"
 
 class DynamicLoaderMacOSXDYLD : public lldb_private::DynamicLoader
 {
 public:
+    DynamicLoaderMacOSXDYLD(lldb_private::Process *process);
+
+    ~DynamicLoaderMacOSXDYLD() override;
+
     //------------------------------------------------------------------
     // Static Functions
     //------------------------------------------------------------------
@@ -46,48 +49,44 @@ public:
     static lldb_private::DynamicLoader *
     CreateInstance (lldb_private::Process *process, bool force);
 
-    DynamicLoaderMacOSXDYLD (lldb_private::Process *process);
-
-    virtual
-    ~DynamicLoaderMacOSXDYLD ();
     //------------------------------------------------------------------
     /// Called after attaching a process.
     ///
     /// Allow DynamicLoader plug-ins to execute some code after
     /// attaching to a process.
     //------------------------------------------------------------------
-    virtual void
-    DidAttach ();
+    void
+    DidAttach() override;
 
-    virtual void
-    DidLaunch ();
+    void
+    DidLaunch() override;
 
-    virtual bool
-    ProcessDidExec ();
+    bool
+    ProcessDidExec() override;
 
-    virtual lldb::ThreadPlanSP
-    GetStepThroughTrampolinePlan (lldb_private::Thread &thread,
-                                  bool stop_others);
+    lldb::ThreadPlanSP
+    GetStepThroughTrampolinePlan(lldb_private::Thread &thread,
+                                 bool stop_others) override;
 
-    virtual size_t
-    FindEquivalentSymbols (lldb_private::Symbol *original_symbol, 
-                           lldb_private::ModuleList &module_list, 
-                           lldb_private::SymbolContextList &equivalent_symbols);
+    size_t
+    FindEquivalentSymbols(lldb_private::Symbol *original_symbol,
+                          lldb_private::ModuleList &module_list,
+                          lldb_private::SymbolContextList &equivalent_symbols) override;
     
-    virtual lldb_private::Error
-    CanLoadImage ();
+    lldb_private::Error
+    CanLoadImage() override;
 
     //------------------------------------------------------------------
     // PluginInterface protocol
     //------------------------------------------------------------------
-    virtual lldb_private::ConstString
-    GetPluginName();
+    lldb_private::ConstString
+    GetPluginName() override;
 
-    virtual uint32_t
-    GetPluginVersion();
+    uint32_t
+    GetPluginVersion() override;
 
-    virtual bool
-    AlwaysRelyOnEHUnwindInfo (lldb_private::SymbolContext &sym_ctx);
+    bool
+    AlwaysRelyOnEHUnwindInfo(lldb_private::SymbolContext &sym_ctx) override;
 
 protected:
     void
@@ -96,6 +95,7 @@ protected:
     void
     PrivateProcessStateChanged (lldb_private::Process *process,
                                 lldb::StateType state);
+
     bool
     LocateDYLD ();
 
@@ -127,10 +127,10 @@ protected:
     ReadMachHeader (lldb::addr_t addr,
                     llvm::MachO::mach_header *header,
                     lldb_private::DataExtractor *load_command_data);
+
     class Segment
     {
     public:
-
         Segment() :
             name(),
             vmaddr(LLDB_INVALID_ADDRESS),
@@ -344,6 +344,9 @@ protected:
     ReadAllImageInfosStructure ();
     
     bool
+    AddModulesUsingInfosFromDebugserver (lldb_private::StructuredData::ObjectSP image_details, DYLDImageInfo::collection &image_infos);
+
+    bool
     AddModulesUsingImageInfosAddress (lldb::addr_t image_infos_addr, uint32_t image_infos_count);
     
     bool
@@ -379,4 +382,4 @@ private:
     DISALLOW_COPY_AND_ASSIGN (DynamicLoaderMacOSXDYLD);
 };
 
-#endif  // liblldb_DynamicLoaderMacOSXDYLD_h_
+#endif // liblldb_DynamicLoaderMacOSXDYLD_h_

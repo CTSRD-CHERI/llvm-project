@@ -2,33 +2,17 @@
 Test that lldb stop-hook works for multiple threads.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
 class StopHookForMultipleThreadsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_stop_hook_multiple_threads_with_dsym(self):
-        """Test that lldb stop-hook works for multiple threads."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.stop_hook_multiple_threads()
-
-    @dwarf_test
-    @expectedFailureFreeBSD("llvm.org/pr15037")
-    @expectedFlakeyLinux("llvm.org/pr15037") # stop hooks sometimes fail to fire on Linux
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
-    @skipIfFreeBSD # llvm.org/pr22784
-    def test_stop_hook_multiple_threads_with_dwarf(self):
-        """Test that lldb stop-hook works for multiple threads."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.stop_hook_multiple_threads()
 
     def setUp(self):
         # Call super's setUp().
@@ -42,18 +26,35 @@ class StopHookForMultipleThreadsTestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
-    def stop_hook_multiple_threads(self):
+    @expectedFlakeyFreeBSD("llvm.org/pr15037")
+    @expectedFlakeyLinux("llvm.org/pr15037") # stop hooks sometimes fail to fire on Linux
+    @expectedFailureHostWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    def test_stop_hook_multiple_threads(self):
         """Test that lldb stop-hook works for multiple threads."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
+
         import pexpect
         exe = os.path.join(os.getcwd(), self.exe_name)
         prompt = "(lldb) "
 
         # So that the child gets torn down after the test.
-        self.child = pexpect.spawn('%s %s %s' % (lldbtest_config.lldbExec, self.lldbOption, exe))
+        self.child = pexpect.spawn('%s %s' % (lldbtest_config.lldbExec, self.lldbOption))
         child = self.child
         # Turn on logging for what the child sends back.
         if self.TraceOn():
             child.logfile_read = sys.stdout
+
+        if lldb.remote_platform:
+            child.expect_exact(prompt)
+            child.sendline('platform select %s' % lldb.remote_platform.GetName())
+            child.expect_exact(prompt)
+            child.sendline('platform connect %s' % lldb.platform_url)
+            child.expect_exact(prompt)
+            child.sendline('platform settings -w %s' % lldb.remote_platform_working_dir)
+
+        child.expect_exact(prompt)
+        child.sendline('target create %s' % exe)
 
         # Set the breakpoint, followed by the target stop-hook commands.
         child.expect_exact(prompt)
@@ -73,10 +74,3 @@ class StopHookForMultipleThreadsTestCase(TestBase):
         # Continue and expect to find the output emitted by the firing of our stop hook.
         child.sendline('continue')
         child.expect_exact('(uint32_t) ::g_val = ')
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

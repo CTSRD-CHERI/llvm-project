@@ -44,7 +44,7 @@ class CIndexer {
 
 public:
   CIndexer(std::shared_ptr<PCHContainerOperations> PCHContainerOps =
-               std::make_shared<RawPCHContainerOperations>())
+               std::make_shared<PCHContainerOperations>())
       : OnlyLocalDecls(false), DisplayDiagnostics(false),
         Options(CXGlobalOpt_None), PCHContainerOps(PCHContainerOps) {}
 
@@ -85,8 +85,8 @@ public:
   /// threads when possible.
   ///
   /// \return False if a crash was detected.
-  bool RunSafely(llvm::CrashRecoveryContext &CRC,
-                 void (*Fn)(void*), void *UserData, unsigned Size = 0);
+  bool RunSafely(llvm::CrashRecoveryContext &CRC, llvm::function_ref<void()> Fn,
+                 unsigned Size = 0);
 
   /// \brief Set the thread priority to background.
   /// FIXME: Move to llvm/Support.

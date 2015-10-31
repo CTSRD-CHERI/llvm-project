@@ -102,7 +102,8 @@ namespace {
 
     /// getSmallIPtrImm - Return a target constant of pointer type.
     inline SDValue getSmallIPtrImm(unsigned Imm, SDLoc dl) {
-      return CurDAG->getTargetConstant(Imm, dl, PPCLowering->getPointerTy());
+      return CurDAG->getTargetConstant(
+          Imm, dl, PPCLowering->getPointerTy(CurDAG->getDataLayout()));
     }
 
     /// isRotateAndMask - Returns true if Mask and Shift can be folded into a
@@ -285,7 +286,7 @@ void PPCDAGToDAGISel::InsertVRSaveCode(MachineFunction &Fn) {
 
   // Find all return blocks, outputting a restore in each epilog.
   for (MachineFunction::iterator BB = Fn.begin(), E = Fn.end(); BB != E; ++BB) {
-    if (!BB->empty() && BB->back().isReturn()) {
+    if (BB->isReturnBlock()) {
       IP = BB->end(); --IP;
 
       // Skip over all terminator instructions, which are part of the return
@@ -313,7 +314,7 @@ SDNode *PPCDAGToDAGISel::getGlobalBaseReg() {
     const Module *M = MF->getFunction()->getParent();
     DebugLoc dl;
 
-    if (PPCLowering->getPointerTy() == MVT::i32) {
+    if (PPCLowering->getPointerTy(CurDAG->getDataLayout()) == MVT::i32) {
       if (PPCSubTarget->isTargetELF()) {
         GlobalBaseReg = PPC::R30;
         if (M->getPICLevel() == PICLevel::Small) {
@@ -342,7 +343,8 @@ SDNode *PPCDAGToDAGISel::getGlobalBaseReg() {
     }
   }
   return CurDAG->getRegister(GlobalBaseReg,
-                             PPCLowering->getPointerTy()).getNode();
+                             PPCLowering->getPointerTy(CurDAG->getDataLayout()))
+      .getNode();
 }
 
 /// isIntS16Immediate - This method tests to see if the node is either a 32-bit
@@ -1026,7 +1028,7 @@ class BitPermutationSelector {
           BitGroups[BitGroups.size()-1].EndIdx == Bits.size()-1 &&
           BitGroups[0].V == BitGroups[BitGroups.size()-1].V &&
           BitGroups[0].RLAmt == BitGroups[BitGroups.size()-1].RLAmt) {
-        DEBUG(dbgs() << "\tcombining final bit group with inital one\n");
+        DEBUG(dbgs() << "\tcombining final bit group with initial one\n");
         BitGroups[BitGroups.size()-1].EndIdx = BitGroups[0].EndIdx;
         BitGroups.erase(BitGroups.begin());
       }
@@ -2205,7 +2207,8 @@ SDNode *PPCDAGToDAGISel::SelectSETCC(SDNode *N) {
   SDLoc dl(N);
   unsigned Imm;
   ISD::CondCode CC = cast<CondCodeSDNode>(N->getOperand(2))->get();
-  EVT PtrVT = CurDAG->getTargetLoweringInfo().getPointerTy();
+  EVT PtrVT =
+      CurDAG->getTargetLoweringInfo().getPointerTy(CurDAG->getDataLayout());
   bool isPPC64 = (PtrVT == MVT::i64);
 
   if (!PPCSubTarget->useCRBits() &&
@@ -2302,14 +2305,15 @@ SDNode *PPCDAGToDAGISel::SelectSETCC(SDNode *N) {
     if (Swap)
       std::swap(LHS, RHS);
 
+    EVT ResVT = VecVT.changeVectorElementTypeToInteger();
     if (Negate) {
-      SDValue VCmp(CurDAG->getMachineNode(VCmpInst, dl, VecVT, LHS, RHS), 0);
+      SDValue VCmp(CurDAG->getMachineNode(VCmpInst, dl, ResVT, LHS, RHS), 0);
       return CurDAG->SelectNodeTo(N, PPCSubTarget->hasVSX() ? PPC::XXLNOR :
                                                               PPC::VNOR,
-                                  VecVT, VCmp, VCmp);
+                                  ResVT, VCmp, VCmp);
     }
 
-    return CurDAG->SelectNodeTo(N, VCmpInst, VecVT, LHS, RHS);
+    return CurDAG->SelectNodeTo(N, VCmpInst, ResVT, LHS, RHS);
   }
 
   if (PPCSubTarget->useCRBits())
@@ -2468,10 +2472,11 @@ SDNode *PPCDAGToDAGISel::Select(SDNode *N) {
       SDValue Chain = LD->getChain();
       SDValue Base = LD->getBasePtr();
       SDValue Ops[] = { Offset, Base, Chain };
-      return transferMemOperands(N, CurDAG->getMachineNode(Opcode, dl,
-                                      LD->getValueType(0),
-                                      PPCLowering->getPointerTy(),
-                                      MVT::Other, Ops));
+      return transferMemOperands(
+          N, CurDAG->getMachineNode(
+                 Opcode, dl, LD->getValueType(0),
+                 PPCLowering->getPointerTy(CurDAG->getDataLayout()), MVT::Other,
+                 Ops));
     } else {
       unsigned Opcode;
       bool isSExt = LD->getExtensionType() == ISD::SEXTLOAD;
@@ -2506,10 +2511,11 @@ SDNode *PPCDAGToDAGISel::Select(SDNode *N) {
       SDValue Chain = LD->getChain();
       SDValue Base = LD->getBasePtr();
       SDValue Ops[] = { Base, Offset, Chain };
-      return transferMemOperands(N, CurDAG->getMachineNode(Opcode, dl,
-                                      LD->getValueType(0),
-                                      PPCLowering->getPointerTy(),
-                                      MVT::Other, Ops));
+      return transferMemOperands(
+          N, CurDAG->getMachineNode(
+                 Opcode, dl, LD->getValueType(0),
+                 PPCLowering->getPointerTy(CurDAG->getDataLayout()), MVT::Other,
+                 Ops));
     }
   }
 
@@ -2564,13 +2570,25 @@ SDNode *PPCDAGToDAGISel::Select(SDNode *N) {
       return nullptr;
     }
     // ISD::OR doesn't get all the bitfield insertion fun.
-    // (and (or x, c1), c2) where isRunOfOnes(~(c1^c2)) is a bitfield insert
+    // (and (or x, c1), c2) where isRunOfOnes(~(c1^c2)) might be a
+    // bitfield insert.
     if (isInt32Immediate(N->getOperand(1), Imm) &&
         N->getOperand(0).getOpcode() == ISD::OR &&
         isInt32Immediate(N->getOperand(0).getOperand(1), Imm2)) {
+      // The idea here is to check whether this is equivalent to:
+      //   (c1 & m) | (x & ~m)
+      // where m is a run-of-ones mask. The logic here is that, for each bit in
+      // c1 and c2:
+      //  - if both are 1, then the output will be 1.
+      //  - if both are 0, then the output will be 0.
+      //  - if the bit in c1 is 0, and the bit in c2 is 1, then the output will
+      //    come from x.
+      //  - if the bit in c1 is 1, and the bit in c2 is 0, then the output will
+      //    be 0.
+      //  If that last condition is never the case, then we can form m from the
+      //  bits that are the same between c1 and c2.
       unsigned MB, ME;
-      Imm = ~(Imm^Imm2);
-      if (isRunOfOnes(Imm, MB, ME)) {
+      if (isRunOfOnes(~(Imm^Imm2), MB, ME) && !(~Imm & Imm2)) {
         SDValue Ops[] = { N->getOperand(0).getOperand(0),
                             N->getOperand(0).getOperand(1),
                             getI32Imm(0, dl), getI32Imm(MB, dl),
@@ -2662,7 +2680,8 @@ SDNode *PPCDAGToDAGISel::Select(SDNode *N) {
   }
   case ISD::SELECT_CC: {
     ISD::CondCode CC = cast<CondCodeSDNode>(N->getOperand(4))->get();
-    EVT PtrVT = CurDAG->getTargetLoweringInfo().getPointerTy();
+    EVT PtrVT =
+        CurDAG->getTargetLoweringInfo().getPointerTy(CurDAG->getDataLayout());
     bool isPPC64 = (PtrVT == MVT::i64);
 
     // If this is a select of i1 operands, we'll pattern match it.
@@ -2773,6 +2792,23 @@ SDNode *PPCDAGToDAGISel::Select(SDNode *N) {
         else
           DM[i] = 1;
 
+      if (Op1 == Op2 && DM[0] == 0 && DM[1] == 0 &&
+          Op1.getOpcode() == ISD::SCALAR_TO_VECTOR &&
+          isa<LoadSDNode>(Op1.getOperand(0))) {
+        LoadSDNode *LD = cast<LoadSDNode>(Op1.getOperand(0));
+        SDValue Base, Offset;
+
+        if (LD->isUnindexed() &&
+            (LD->getMemoryVT() == MVT::f64 ||
+             LD->getMemoryVT() == MVT::i64) &&
+            SelectAddrIdxOnly(LD->getBasePtr(), Base, Offset)) {
+          SDValue Chain = LD->getChain();
+          SDValue Ops[] = { Base, Offset, Chain };
+          return CurDAG->SelectNodeTo(N, PPC::LXVDSX,
+                                      N->getValueType(0), Ops);
+        }
+      }
+
       // For little endian, we must swap the input operands and adjust
       // the mask elements (reverse and invert them).
       if (PPCSubTarget->isLittleEndian()) {
@@ -2784,22 +2820,6 @@ SDNode *PPCDAGToDAGISel::Select(SDNode *N) {
 
       SDValue DMV = CurDAG->getTargetConstant(DM[1] | (DM[0] << 1), dl,
                                               MVT::i32);
-
-      if (Op1 == Op2 && DM[0] == 0 && DM[1] == 0 &&
-          Op1.getOpcode() == ISD::SCALAR_TO_VECTOR &&
-          isa<LoadSDNode>(Op1.getOperand(0))) {
-        LoadSDNode *LD = cast<LoadSDNode>(Op1.getOperand(0));
-        SDValue Base, Offset;
-
-        if (LD->isUnindexed() &&
-            SelectAddrIdxOnly(LD->getBasePtr(), Base, Offset)) {
-          SDValue Chain = LD->getChain();
-          SDValue Ops[] = { Base, Offset, Chain };
-          return CurDAG->SelectNodeTo(N, PPC::LXVDSX,
-                                      N->getValueType(0), Ops);
-        }
-      }
-
       SDValue Ops[] = { Op1, Op2, DMV };
       return CurDAG->SelectNodeTo(N, PPC::XXPERMDI, N->getValueType(0), Ops);
     }
@@ -2902,7 +2922,7 @@ SDNode *PPCDAGToDAGISel::Select(SDNode *N) {
     if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(GA)) {
       const GlobalValue *GValue = G->getGlobal();
       if ((GValue->getType()->getElementType()->isFunctionTy() &&
-           (GValue->isDeclaration() || GValue->isWeakForLinker())) ||
+           !GValue->isStrongDefinitionForLinker()) ||
           GValue->isDeclaration() || GValue->hasCommonLinkage() ||
           GValue->hasAvailableExternallyLinkage())
         return transferMemOperands(N, CurDAG->getMachineNode(PPC::LDtocL, dl,
@@ -2916,7 +2936,9 @@ SDNode *PPCDAGToDAGISel::Select(SDNode *N) {
     // Generate a PIC-safe GOT reference.
     assert(!PPCSubTarget->isPPC64() && PPCSubTarget->isSVR4ABI() &&
       "PPCISD::PPC32_PICGOT is only supported for 32-bit SVR4");
-    return CurDAG->SelectNodeTo(N, PPC::PPC32PICGOT, PPCLowering->getPointerTy(),  MVT::i32);
+    return CurDAG->SelectNodeTo(
+        N, PPC::PPC32PICGOT, PPCLowering->getPointerTy(CurDAG->getDataLayout()),
+        MVT::i32);
   }
   case PPCISD::VADD_SPLAT: {
     // This expands into one of three sequences, depending on whether
@@ -3283,7 +3305,7 @@ void PPCDAGToDAGISel::PreprocessISelDAG() {
 
   bool MadeChange = false;
   while (Position != CurDAG->allnodes_begin()) {
-    SDNode *N = --Position;
+    SDNode *N = &*--Position;
     if (N->use_empty())
       continue;
 
@@ -3399,9 +3421,8 @@ void PPCDAGToDAGISel::PeepholeCROps() {
   bool IsModified;
   do {
     IsModified = false;
-    for (SelectionDAG::allnodes_iterator I = CurDAG->allnodes_begin(),
-         E = CurDAG->allnodes_end(); I != E; ++I) {
-      MachineSDNode *MachineNode = dyn_cast<MachineSDNode>(I);
+    for (SDNode &Node : CurDAG->allnodes()) {
+      MachineSDNode *MachineNode = dyn_cast<MachineSDNode>(&Node);
       if (!MachineNode || MachineNode->use_empty())
         continue;
       SDNode *ResNode = MachineNode;
@@ -3968,7 +3989,7 @@ void PPCDAGToDAGISel::PeepholePPC64ZExt() {
 
   bool MadeChange = false;
   while (Position != CurDAG->allnodes_begin()) {
-    SDNode *N = --Position;
+    SDNode *N = &*--Position;
     // Skip dead nodes and any non-machine opcodes.
     if (N->use_empty() || !N->isMachineOpcode())
       continue;
@@ -4124,7 +4145,7 @@ void PPCDAGToDAGISel::PeepholePPC64() {
   ++Position;
 
   while (Position != CurDAG->allnodes_begin()) {
-    SDNode *N = --Position;
+    SDNode *N = &*--Position;
     // Skip dead nodes and any non-machine opcodes.
     if (N->use_empty() || !N->isMachineOpcode())
       continue;

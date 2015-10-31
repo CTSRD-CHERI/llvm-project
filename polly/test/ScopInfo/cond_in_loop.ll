@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-analyze-ir  -analyze < %s | not FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 
 ;void f(long a[], long N, long M) {
 ;  long i, j, k;
@@ -44,4 +44,6 @@ return:                                           ; preds = %bb3, %entry
   ret void
 }
 
-; CHECK: Scop!
+; CHECK-LABEL: Printing analysis 'Polly - Create polyhedral description of Scops' for region: 'bb => return' in function 'f':
+; CHECK-NEXT:      Function: f
+; CHECK-NEXT:      Region: %bb---%return

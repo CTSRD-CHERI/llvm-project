@@ -46,7 +46,6 @@ add_llvm_target(MipsCodeGen
   MipsSubtarget.cpp
   MipsTargetMachine.cpp
   MipsTargetObjectFile.cpp
-  MipsSelectionDAGInfo.cpp
   CheriAddressingModeFolder.cpp
   CheriAddressingModeFolder.cpp
   CheriBranchFolder.cpp

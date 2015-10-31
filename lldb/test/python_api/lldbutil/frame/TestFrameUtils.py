@@ -2,8 +2,11 @@
 Test utility functions for the frame object.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -18,13 +21,10 @@ class FrameUtilsTestCase(TestBase):
         self.line = line_number('main.c',
                                 "// Find the line number here.")
 
-    @python_api_test
+    @add_test_categories(['pyapi'])
     def test_frame_utils(self):
         """Test utility functions for the frame object."""
-        self.buildDefault()
-        self.frame_utils()
-
-    def frame_utils(self):
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -55,12 +55,5 @@ class FrameUtilsTestCase(TestBase):
         self.assertTrue(frame0_args and parent_args and "(int)val=1" in frame0_args)
         if self.TraceOn():
             lldbutil.print_stacktrace(thread)
-            print "Current frame: %s" % frame0_args
-            print "Parent frame: %s" % parent_args
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+            print("Current frame: %s" % frame0_args)
+            print("Parent frame: %s" % parent_args)

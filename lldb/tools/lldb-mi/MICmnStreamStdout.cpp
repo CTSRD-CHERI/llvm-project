@@ -1,4 +1,4 @@
-//===-- MIUtilStreamStdout.cpp ----------------------------------*- C++ -*-===//
+//===-- MICmnStreamStdout.cpp -----------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -20,7 +20,7 @@
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnStreamStdout::CMICmnStreamStdout(void)
+CMICmnStreamStdout::CMICmnStreamStdout()
 {
 }
 
@@ -31,7 +31,7 @@ CMICmnStreamStdout::CMICmnStreamStdout(void)
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnStreamStdout::~CMICmnStreamStdout(void)
+CMICmnStreamStdout::~CMICmnStreamStdout()
 {
     Shutdown();
 }
@@ -45,7 +45,7 @@ CMICmnStreamStdout::~CMICmnStreamStdout(void)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStdout::Initialize(void)
+CMICmnStreamStdout::Initialize()
 {
     m_clientUsageRefCnt++;
 
@@ -76,7 +76,7 @@ CMICmnStreamStdout::Initialize(void)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStdout::Shutdown(void)
+CMICmnStreamStdout::Shutdown()
 {
     if (--m_clientUsageRefCnt > 0)
         return MIstatus::success;
@@ -93,7 +93,7 @@ CMICmnStreamStdout::Shutdown(void)
 
 //++ ------------------------------------------------------------------------------------
 // Details: Write an MI format type response to stdout. The text data does not need to
-//          include a carrage line return as this is added to the text. The function also
+//          include a carriage line return as this is added to the text. The function also
 //          then passes the text data into the CMICmnLog logger.
 // Type:    Method.
 // Args:    vText       - (R) MI formatted text.
@@ -110,7 +110,7 @@ CMICmnStreamStdout::WriteMIResponse(const CMIUtilString &vText, const bool vbSen
 
 //++ ------------------------------------------------------------------------------------
 // Details: Write text data to stdout. The text data does not need to
-//          include a carrage line return as this is added to the text. The function also
+//          include a carriage line return as this is added to the text. The function also
 //          then passes the text data into the CMICmnLog logger.
 // Type:    Method.
 // Args:    vText       - (R) Text data.
@@ -132,7 +132,7 @@ CMICmnStreamStdout::Write(const CMIUtilString &vText, const bool vbSendToLog /* 
 
 //++ ------------------------------------------------------------------------------------
 // Details: Write text data to stdout. The text data does not need to
-//          include a carrage line return as this is added to the text. The function also
+//          include a carriage line return as this is added to the text. The function also
 //          then passes the text data into the CMICmnLog logger.
 // Type:    Method.
 // Args:    vText           - (R) Text data prefixed with MI app's short name.
@@ -183,7 +183,7 @@ CMICmnStreamStdout::WritePriv(const CMIUtilString &vText, const CMIUtilString &v
 // Throws:  None.
 //--
 bool
-CMICmnStreamStdout::Lock(void)
+CMICmnStreamStdout::Lock()
 {
     m_mutex.Lock();
     return MIstatus::success;
@@ -198,7 +198,7 @@ CMICmnStreamStdout::Lock(void)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStdout::Unlock(void)
+CMICmnStreamStdout::Unlock()
 {
     m_mutex.Unlock();
     return MIstatus::success;
@@ -229,7 +229,7 @@ CMICmnStreamStdout::TextToStdout(const CMIUtilString &vrTxt)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStdout::WritePrompt(void)
+CMICmnStreamStdout::WritePrompt()
 {
     const CMICmnStreamStdin &rStdinMan = CMICmnStreamStdin::Instance();
     if (rStdinMan.GetEnablePrompt())

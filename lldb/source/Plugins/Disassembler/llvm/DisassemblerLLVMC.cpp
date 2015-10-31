@@ -7,8 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "DisassemblerLLVMC.h"
-
+// C Includes
+// C++ Includes
+// Project includes
 #include "llvm-c/Disassembler.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
@@ -25,6 +26,8 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/ADT/SmallString.h"
 
+// Other libraries and framework includes
+#include "DisassemblerLLVMC.h"
 
 #include "lldb/Core/Address.h"
 #include "lldb/Core/DataExtractor.h"
@@ -52,18 +55,16 @@ public:
         Instruction (address, addr_class),
         m_disasm_sp (disasm.shared_from_this()),
         m_does_branch (eLazyBoolCalculate),
+        m_has_delay_slot (eLazyBoolCalculate),
         m_is_valid (false),
         m_using_file_addr (false)
     {
     }
 
-    virtual
-    ~InstructionLLVMC ()
-    {
-    }
+    ~InstructionLLVMC() override = default;
 
-    virtual bool
-    DoesBranch ()
+    bool
+    DoesBranch() override
     {
         if (m_does_branch == eLazyBoolCalculate)
         {
@@ -99,6 +100,43 @@ public:
         return m_does_branch == eLazyBoolYes;
     }
 
+    bool
+    HasDelaySlot() override
+    {
+        if (m_has_delay_slot == eLazyBoolCalculate)
+        {
+            GetDisassemblerLLVMC().Lock(this, NULL);
+            DataExtractor data;
+            if (m_opcode.GetData(data))
+            {
+                bool is_alternate_isa;
+                lldb::addr_t pc = m_address.GetFileAddress();
+
+                DisassemblerLLVMC::LLVMCDisassembler *mc_disasm_ptr = GetDisasmToUse (is_alternate_isa);
+                const uint8_t *opcode_data = data.GetDataStart();
+                const size_t opcode_data_len = data.GetByteSize();
+                llvm::MCInst inst;
+                const size_t inst_size = mc_disasm_ptr->GetMCInst (opcode_data,
+                                                                   opcode_data_len,
+                                                                   pc,
+                                                                   inst);
+                // if we didn't understand the instruction, say it doesn't have a delay slot...
+                if (inst_size == 0)
+                    m_has_delay_slot = eLazyBoolNo;
+                else
+                {
+                    const bool has_delay_slot = mc_disasm_ptr->HasDelaySlot(inst);
+                    if (has_delay_slot)
+                        m_has_delay_slot = eLazyBoolYes;
+                    else
+                        m_has_delay_slot = eLazyBoolNo;
+                }
+            }
+            GetDisassemblerLLVMC().Unlock();
+        }
+        return m_has_delay_slot == eLazyBoolYes;
+    }
+
     DisassemblerLLVMC::LLVMCDisassembler *
     GetDisasmToUse (bool &is_alternate_isa)
     {
@@ -117,10 +155,10 @@ public:
         return llvm_disasm.m_disasm_ap.get();
     }
 
-    virtual size_t
-    Decode (const lldb_private::Disassembler &disassembler,
-            const lldb_private::DataExtractor &data,
-            lldb::offset_t data_offset)
+    size_t
+    Decode(const lldb_private::Disassembler &disassembler,
+           const lldb_private::DataExtractor &data,
+           lldb::offset_t data_offset) override
     {
         // All we have to do is read the opcode which can be easy for some
         // architectures
@@ -234,8 +272,8 @@ public:
         }
     }
 
-    virtual void
-    CalculateMnemonicOperandsAndComment (const lldb_private::ExecutionContext *exe_ctx)
+    void
+    CalculateMnemonicOperandsAndComment(const lldb_private::ExecutionContext *exe_ctx) override
     {
         DataExtractor data;
         const AddressClass address_class = GetAddressClass ();
@@ -409,13 +447,12 @@ protected:
 
     DisassemblerSP          m_disasm_sp; // for ownership
     LazyBool                m_does_branch;
+    LazyBool                m_has_delay_slot;
     bool                    m_is_valid;
     bool                    m_using_file_addr;
 };
 
-
-
-DisassemblerLLVMC::LLVMCDisassembler::LLVMCDisassembler (const char *triple, const char *cpu, unsigned flavor, DisassemblerLLVMC &owner):
+DisassemblerLLVMC::LLVMCDisassembler::LLVMCDisassembler (const char *triple, const char *cpu, const char *features_str, unsigned flavor, DisassemblerLLVMC &owner):
     m_is_valid(true)
 {
     std::string Error;
@@ -428,8 +465,6 @@ DisassemblerLLVMC::LLVMCDisassembler::LLVMCDisassembler (const char *triple, con
 
     m_instr_info_ap.reset(curr_target->createMCInstrInfo());
     m_reg_info_ap.reset (curr_target->createMCRegInfo(triple));
-
-    std::string features_str;
 
     m_subtarget_info_ap.reset(curr_target->createMCSubtargetInfo(triple, cpu,
                                                                 features_str));
@@ -484,9 +519,7 @@ DisassemblerLLVMC::LLVMCDisassembler::LLVMCDisassembler (const char *triple, con
         m_is_valid = false;
 }
 
-DisassemblerLLVMC::LLVMCDisassembler::~LLVMCDisassembler()
-{
-}
+DisassemblerLLVMC::LLVMCDisassembler::~LLVMCDisassembler() = default;
 
 uint64_t
 DisassemblerLLVMC::LLVMCDisassembler::GetMCInst (const uint8_t *opcode_data,
@@ -520,7 +553,6 @@ DisassemblerLLVMC::LLVMCDisassembler::PrintMCInst (llvm::MCInst &mc_inst,
     llvm::raw_svector_ostream inst_stream(inst_string);
     m_instr_printer_ap->printInst (&mc_inst, inst_stream, unused_annotations,
                                    *m_subtarget_info_ap);
-    inst_stream.flush();
     const size_t output_size = std::min(dst_len - 1, inst_string.size());
     std::memcpy(dst, inst_string.data(), output_size);
     dst[output_size] = '\0';
@@ -546,35 +578,9 @@ DisassemblerLLVMC::LLVMCDisassembler::CanBranch (llvm::MCInst &mc_inst)
 }
 
 bool
-DisassemblerLLVMC::FlavorValidForArchSpec (const lldb_private::ArchSpec &arch, const char *flavor)
+DisassemblerLLVMC::LLVMCDisassembler::HasDelaySlot (llvm::MCInst &mc_inst)
 {
-    llvm::Triple triple = arch.GetTriple();
-    if (flavor == NULL || strcmp (flavor, "default") == 0)
-        return true;
-
-    if (triple.getArch() == llvm::Triple::x86 || triple.getArch() == llvm::Triple::x86_64)
-    {
-        if (strcmp (flavor, "intel") == 0 || strcmp (flavor, "att") == 0)
-            return true;
-        else
-            return false;
-    }
-    else
-        return false;
-}
-
-
-Disassembler *
-DisassemblerLLVMC::CreateInstance (const ArchSpec &arch, const char *flavor)
-{
-    if (arch.GetTriple().getArch() != llvm::Triple::UnknownArch)
-    {
-        std::unique_ptr<DisassemblerLLVMC> disasm_ap (new DisassemblerLLVMC(arch, flavor));
-
-        if (disasm_ap.get() && disasm_ap->IsValid())
-            return disasm_ap.release();
-    }
-    return NULL;
+    return m_instr_info_ap->get(mc_inst.getOpcode()).hasDelaySlot();
 }
 
 DisassemblerLLVMC::DisassemblerLLVMC (const ArchSpec &arch, const char *flavor_string) :
@@ -588,13 +594,12 @@ DisassemblerLLVMC::DisassemblerLLVMC (const ArchSpec &arch, const char *flavor_s
         m_flavor.assign("default");
     }
 
-    const char *triple = arch.GetTriple().getTriple().c_str();
     unsigned flavor = ~0U;
+    llvm::Triple triple = arch.GetTriple();
 
     // So far the only supported flavor is "intel" on x86.  The base class will set this
     // correctly coming in.
-    if (arch.GetTriple().getArch() == llvm::Triple::x86
-        || arch.GetTriple().getArch() == llvm::Triple::x86_64)
+    if (triple.getArch() == llvm::Triple::x86 || triple.getArch() == llvm::Triple::x86_64)
     {
         if (m_flavor == "intel")
         {
@@ -607,7 +612,7 @@ DisassemblerLLVMC::DisassemblerLLVMC (const ArchSpec &arch, const char *flavor_s
     }
 
     ArchSpec thumb_arch(arch);
-    if (arch.GetTriple().getArch() == llvm::Triple::arm)
+    if (triple.getArch() == llvm::Triple::arm)
     {
         std::string thumb_arch_name (thumb_arch.GetTriple().getArchName().str());
         // Replace "arm" with "thumb" so we get all thumb variants correct
@@ -623,18 +628,29 @@ DisassemblerLLVMC::DisassemblerLLVMC (const ArchSpec &arch, const char *flavor_s
         thumb_arch.GetTriple().setArchName(llvm::StringRef(thumb_arch_name.c_str()));
     }
 
+    // If no sub architecture specified then use the most recent arm architecture so the
+    // disassembler will return all instruction. Without it we will see a lot of unknow opcode
+    // in case the code uses instructions which are not available in the oldest arm version
+    // (used when no sub architecture is specified)
+    if (triple.getArch() == llvm::Triple::arm && triple.getSubArch() == llvm::Triple::NoSubArch)
+        triple.setArchName("armv8.1a");
+
+    const char *triple_str = triple.getTriple().c_str();
+
+    // v. https://en.wikipedia.org/wiki/ARM_Cortex-M#Silicon_customization
+    // 
     // Cortex-M3 devices (e.g. armv7m) can only execute thumb (T2) instructions,
     // so hardcode the primary disassembler to thumb mode.  Same for Cortex-M4 (armv7em).
     //
     // Handle the Cortex-M0 (armv6m) the same; the ISA is a subset of the T and T32
     // instructions defined in ARMv7-A.
 
-    if (arch.GetTriple().getArch() == llvm::Triple::arm
+    if ((triple.getArch() == llvm::Triple::arm || triple.getArch() == llvm::Triple::thumb)
         && (arch.GetCore() == ArchSpec::Core::eCore_arm_armv7m
             || arch.GetCore() == ArchSpec::Core::eCore_arm_armv7em
             || arch.GetCore() == ArchSpec::Core::eCore_arm_armv6m))
     {
-        triple = thumb_arch.GetTriple().getTriple().c_str();
+        triple_str = thumb_arch.GetTriple().getTriple().c_str();
     }
 
     const char *cpu = "";
@@ -674,8 +690,21 @@ DisassemblerLLVMC::DisassemblerLLVMC (const ArchSpec &arch, const char *flavor_s
         default:
             cpu = ""; break;
     }
+
+    std::string features_str = "";
+    if (triple.getArch() == llvm::Triple::mips || triple.getArch() == llvm::Triple::mipsel
+        || triple.getArch() == llvm::Triple::mips64 || triple.getArch() == llvm::Triple::mips64el)
+    {
+        uint32_t arch_flags = arch.GetFlags ();
+        if (arch_flags & ArchSpec::eMIPSAse_msa)
+            features_str += "+msa,";
+        if (arch_flags & ArchSpec::eMIPSAse_dsp)
+            features_str += "+dsp,";
+        if (arch_flags & ArchSpec::eMIPSAse_dspr2)
+            features_str += "+dspr2,";
+    }
     
-    m_disasm_ap.reset (new LLVMCDisassembler(triple, cpu, flavor, *this));
+    m_disasm_ap.reset (new LLVMCDisassembler(triple_str, cpu, features_str.c_str(), flavor, *this));
     if (!m_disasm_ap->IsValid())
     {
         // We use m_disasm_ap.get() to tell whether we are valid or not, so if this isn't good for some reason,
@@ -683,11 +712,32 @@ DisassemblerLLVMC::DisassemblerLLVMC (const ArchSpec &arch, const char *flavor_s
         m_disasm_ap.reset();
     }
 
+    llvm::Triple::ArchType llvm_arch = triple.getArch();
+
     // For arm CPUs that can execute arm or thumb instructions, also create a thumb instruction disassembler.
-    if (arch.GetTriple().getArch() == llvm::Triple::arm)
+    if (llvm_arch == llvm::Triple::arm)
     {
         std::string thumb_triple(thumb_arch.GetTriple().getTriple());
-        m_alternate_disasm_ap.reset(new LLVMCDisassembler(thumb_triple.c_str(), "", flavor, *this));
+        m_alternate_disasm_ap.reset(new LLVMCDisassembler(thumb_triple.c_str(), "", "", flavor, *this));
+        if (!m_alternate_disasm_ap->IsValid())
+        {
+            m_disasm_ap.reset();
+            m_alternate_disasm_ap.reset();
+        }
+    }
+    else if (llvm_arch == llvm::Triple::mips
+            || llvm_arch == llvm::Triple::mipsel
+            || llvm_arch == llvm::Triple::mips64
+            || llvm_arch == llvm::Triple::mips64el)
+    {
+        /* Create alternate disassembler for MIPS16 and microMIPS */
+        uint32_t arch_flags = arch.GetFlags ();
+        if (arch_flags & ArchSpec::eMIPSAse_mips16)
+            features_str += "+mips16,";
+        else if (arch_flags & ArchSpec::eMIPSAse_micromips)
+            features_str += "+micromips,";
+
+        m_alternate_disasm_ap.reset(new LLVMCDisassembler (triple_str, cpu, features_str.c_str(), flavor, *this));
         if (!m_alternate_disasm_ap->IsValid())
         {
             m_disasm_ap.reset();
@@ -696,8 +746,19 @@ DisassemblerLLVMC::DisassemblerLLVMC (const ArchSpec &arch, const char *flavor_s
     }
 }
 
-DisassemblerLLVMC::~DisassemblerLLVMC()
+DisassemblerLLVMC::~DisassemblerLLVMC() = default;
+
+Disassembler *
+DisassemblerLLVMC::CreateInstance (const ArchSpec &arch, const char *flavor)
 {
+    if (arch.GetTriple().getArch() != llvm::Triple::UnknownArch)
+    {
+        std::unique_ptr<DisassemblerLLVMC> disasm_ap (new DisassemblerLLVMC(arch, flavor));
+
+        if (disasm_ap.get() && disasm_ap->IsValid())
+            return disasm_ap.release();
+    }
+    return NULL;
 }
 
 size_t
@@ -800,6 +861,24 @@ const char *DisassemblerLLVMC::SymbolLookupCallback (void *disassembler,
                                                                        type,
                                                                        pc,
                                                                        name);
+}
+
+bool
+DisassemblerLLVMC::FlavorValidForArchSpec (const lldb_private::ArchSpec &arch, const char *flavor)
+{
+    llvm::Triple triple = arch.GetTriple();
+    if (flavor == NULL || strcmp (flavor, "default") == 0)
+        return true;
+
+    if (triple.getArch() == llvm::Triple::x86 || triple.getArch() == llvm::Triple::x86_64)
+    {
+        if (strcmp (flavor, "intel") == 0 || strcmp (flavor, "att") == 0)
+            return true;
+        else
+            return false;
+    }
+    else
+        return false;
 }
 
 int DisassemblerLLVMC::OpInfo (uint64_t PC,

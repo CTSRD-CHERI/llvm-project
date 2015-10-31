@@ -31,7 +31,7 @@ using namespace llvm;
 #define GET_REGINFO_MC_DESC
 #include "ARMGenRegisterInfo.inc"
 
-static bool getMCRDeprecationInfo(MCInst &MI, MCSubtargetInfo &STI,
+static bool getMCRDeprecationInfo(MCInst &MI, const MCSubtargetInfo &STI,
                                   std::string &Info) {
   if (STI.getFeatureBits()[llvm::ARM::HasV7Ops] &&
       (MI.getOperand(0).isImm() && MI.getOperand(0).getImm() == 15) &&
@@ -63,7 +63,7 @@ static bool getMCRDeprecationInfo(MCInst &MI, MCSubtargetInfo &STI,
   return false;
 }
 
-static bool getITDeprecationInfo(MCInst &MI, MCSubtargetInfo &STI,
+static bool getITDeprecationInfo(MCInst &MI, const MCSubtargetInfo &STI,
                                  std::string &Info) {
   if (STI.getFeatureBits()[llvm::ARM::HasV8Ops] && MI.getOperand(1).isImm() &&
       MI.getOperand(1).getImm() != 8) {
@@ -75,7 +75,7 @@ static bool getITDeprecationInfo(MCInst &MI, MCSubtargetInfo &STI,
   return false;
 }
 
-static bool getARMStoreDeprecationInfo(MCInst &MI, MCSubtargetInfo &STI,
+static bool getARMStoreDeprecationInfo(MCInst &MI, const MCSubtargetInfo &STI,
                                        std::string &Info) {
   assert(!STI.getFeatureBits()[llvm::ARM::ModeThumb] &&
          "cannot predicate thumb instructions");
@@ -92,7 +92,7 @@ static bool getARMStoreDeprecationInfo(MCInst &MI, MCSubtargetInfo &STI,
   return false;
 }
 
-static bool getARMLoadDeprecationInfo(MCInst &MI, MCSubtargetInfo &STI,
+static bool getARMLoadDeprecationInfo(MCInst &MI, const MCSubtargetInfo &STI,
                                       std::string &Info) {
   assert(!STI.getFeatureBits()[llvm::ARM::ModeThumb] &&
          "cannot predicate thumb instructions");
@@ -141,10 +141,10 @@ std::string ARM_MC::ParseARMTriple(const Triple &TT, StringRef CPU) {
     llvm_unreachable("invalid sub-architecture for ARM");
   case Triple::ARMSubArch_v8:
     if (NoCPU)
-      // v8a: FeatureDB, FeatureFPARMv8, FeatureNEON, FeatureDSPThumb2,
+      // v8a: FeatureDB, FeatureFPARMv8, FeatureNEON, FeatureDSP,
       //      FeatureMP, FeatureHWDiv, FeatureHWDivARM, FeatureTrustZone,
       //      FeatureT2XtPk, FeatureCrypto, FeatureCRC
-      ARMArchFeature = "+v8,+db,+fp-armv8,+neon,+t2dsp,+mp,+hwdiv,+hwdiv-arm,"
+      ARMArchFeature = "+v8,+db,+fp-armv8,+neon,+dsp,+mp,+hwdiv,+hwdiv-arm,"
                        "+trustzone,+t2xtpk,+crypto,+crc";
     else
       // Use CPU to figure out the exact features
@@ -152,10 +152,10 @@ std::string ARM_MC::ParseARMTriple(const Triple &TT, StringRef CPU) {
     break;
   case Triple::ARMSubArch_v8_1a:
     if (NoCPU)
-      // v8.1a: FeatureDB, FeatureFPARMv8, FeatureNEON, FeatureDSPThumb2,
+      // v8.1a: FeatureDB, FeatureFPARMv8, FeatureNEON, FeatureDSP,
       //      FeatureMP, FeatureHWDiv, FeatureHWDivARM, FeatureTrustZone,
       //      FeatureT2XtPk, FeatureCrypto, FeatureCRC, FeatureV8_1a
-      ARMArchFeature = "+v8.1a,+db,+fp-armv8,+neon,+t2dsp,+mp,+hwdiv,+hwdiv-arm,"
+      ARMArchFeature = "+v8.1a,+db,+fp-armv8,+neon,+dsp,+mp,+hwdiv,+hwdiv-arm,"
                        "+trustzone,+t2xtpk,+crypto,+crc";
     else
       // Use CPU to figure out the exact features
@@ -172,18 +172,18 @@ std::string ARM_MC::ParseARMTriple(const Triple &TT, StringRef CPU) {
     break;
   case Triple::ARMSubArch_v7em:
     if (NoCPU)
-      // v7em: FeatureNoARM, FeatureDB, FeatureHWDiv, FeatureDSPThumb2,
+      // v7em: FeatureNoARM, FeatureDB, FeatureHWDiv, FeatureDSP,
       //       FeatureT2XtPk, FeatureMClass
-      ARMArchFeature = "+v7,+noarm,+db,+hwdiv,+t2dsp,+t2xtpk,+mclass";
+      ARMArchFeature = "+v7,+noarm,+db,+hwdiv,+dsp,+t2xtpk,+mclass";
     else
       // Use CPU to figure out the exact features.
       ARMArchFeature = "+v7";
     break;
   case Triple::ARMSubArch_v7s:
     if (NoCPU)
-      // v7s: FeatureNEON, FeatureDB, FeatureDSPThumb2, FeatureHasRAS
+      // v7s: FeatureNEON, FeatureDB, FeatureDSP, FeatureHasRAS
       //      Swift
-      ARMArchFeature = "+v7,+swift,+neon,+db,+t2dsp,+ras";
+      ARMArchFeature = "+v7,+swift,+neon,+db,+dsp,+ras";
     else
       // Use CPU to figure out the exact features.
       ARMArchFeature = "+v7";
@@ -194,8 +194,8 @@ std::string ARM_MC::ParseARMTriple(const Triple &TT, StringRef CPU) {
     // the "minimum" feature set and use CPU string to figure out the exact
     // features.
     if (NoCPU)
-      // v7a: FeatureNEON, FeatureDB, FeatureDSPThumb2, FeatureT2XtPk
-      ARMArchFeature = "+v7,+neon,+db,+t2dsp,+t2xtpk";
+      // v7a: FeatureNEON, FeatureDB, FeatureDSP, FeatureT2XtPk
+      ARMArchFeature = "+v7,+neon,+db,+dsp,+t2xtpk";
     else
       // Use CPU to figure out the exact features.
       ARMArchFeature = "+v7";
@@ -257,9 +257,7 @@ MCSubtargetInfo *ARM_MC::createARMMCSubtargetInfo(const Triple &TT,
       ArchFS = FS;
   }
 
-  MCSubtargetInfo *X = new MCSubtargetInfo();
-  InitARMMCSubtargetInfo(X, TT, CPU, ArchFS);
-  return X;
+  return createARMMCSubtargetInfoImpl(TT, CPU, ArchFS);
 }
 
 static MCInstrInfo *createARMMCInstrInfo() {
@@ -268,7 +266,7 @@ static MCInstrInfo *createARMMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createARMMCRegisterInfo(StringRef Triple) {
+static MCRegisterInfo *createARMMCRegisterInfo(const Triple &Triple) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitARMMCRegisterInfo(X, ARM::LR, 0, 0, ARM::PC);
   return X;
@@ -279,10 +277,10 @@ static MCAsmInfo *createARMMCAsmInfo(const MCRegisterInfo &MRI,
   MCAsmInfo *MAI;
   if (TheTriple.isOSDarwin() || TheTriple.isOSBinFormatMachO())
     MAI = new ARMMCAsmInfoDarwin(TheTriple);
-  else if (TheTriple.isWindowsItaniumEnvironment())
-    MAI = new ARMCOFFMCAsmInfoGNU();
   else if (TheTriple.isWindowsMSVCEnvironment())
     MAI = new ARMCOFFMCAsmInfoMicrosoft();
+  else if (TheTriple.isOSWindows())
+    MAI = new ARMCOFFMCAsmInfoGNU();
   else
     MAI = new ARMELFMCAsmInfo(TheTriple);
 
@@ -292,14 +290,13 @@ static MCAsmInfo *createARMMCAsmInfo(const MCRegisterInfo &MRI,
   return MAI;
 }
 
-static MCCodeGenInfo *createARMMCCodeGenInfo(StringRef TT, Reloc::Model RM,
+static MCCodeGenInfo *createARMMCCodeGenInfo(const Triple &TT, Reloc::Model RM,
                                              CodeModel::Model CM,
                                              CodeGenOpt::Level OL) {
   MCCodeGenInfo *X = new MCCodeGenInfo();
   if (RM == Reloc::Default) {
-    Triple TheTriple(TT);
     // Default relocation model on Darwin is PIC, not DynamicNoPIC.
-    RM = TheTriple.isOSDarwin() ? Reloc::PIC_ : Reloc::DynamicNoPIC;
+    RM = TT.isOSDarwin() ? Reloc::PIC_ : Reloc::DynamicNoPIC;
   }
   X->initMCCodeGenInfo(RM, CM, OL);
   return X;

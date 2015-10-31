@@ -18,10 +18,10 @@
 #include "MipsFrameLowering.h"
 #include "MipsISelLowering.h"
 #include "MipsInstrInfo.h"
-#include "MipsSelectionDAGInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCInstrItineraries.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetSelectionDAGInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include <string>
 
@@ -42,8 +42,14 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
     Mips3, Mips4, Mips5, Mips64, Mips64r2, Mips64r3, Mips64r5, Mips64r6
   };
 
+  enum class CPU { P5600 };
+
   // Mips architecture version
   MipsArchEnum MipsArchVersion;
+
+  // Processor implementation (unused but required to exist by
+  // tablegen-erated code).
+  CPU ProcImpl;
 
   // IsLittle - The target is Little Endian
   bool IsLittle;
@@ -122,8 +128,8 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // InMicroMips -- can process MicroMips instructions
   bool InMicroMipsMode;
 
-  // HasDSP, HasDSPR2 -- supports DSP ASE.
-  bool HasDSP, HasDSPR2;
+  // HasDSP, HasDSPR2, HasDSPR3 -- supports DSP ASE.
+  bool HasDSP, HasDSPR2, HasDSPR3;
 
   // Allow mixed Mips16 and Mips32 in one source file
   bool AllowMixed16_32;
@@ -136,6 +142,12 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // HasMSA -- supports MSA ASE.
   bool HasMSA;
 
+  // UseTCCInDIV -- Enables the use of trapping in the assembler.
+  bool UseTCCInDIV;
+
+  // HasEVA -- supports EVA ASE.
+  bool HasEVA;
+
   InstrItineraryData InstrItins;
 
   // We can override the determination of whether we are in mips16 mode
@@ -146,7 +158,7 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
 
   Triple TargetTriple;
 
-  const MipsSelectionDAGInfo TSInfo;
+  const TargetSelectionDAGInfo TSInfo;
   std::unique_ptr<const MipsInstrInfo> InstrInfo;
   std::unique_ptr<const MipsFrameLowering> FrameLowering;
   std::unique_ptr<const MipsTargetLowering> TLInfo;
@@ -197,7 +209,7 @@ public:
   }
   bool hasMips32r5() const {
     return (MipsArchVersion >= Mips32r5 && MipsArchVersion < Mips32Max) ||
-           hasMips64r2();
+           hasMips64r5();
   }
   bool hasMips32r6() const {
     return (MipsArchVersion >= Mips32r6 && MipsArchVersion < Mips32Max) ||
@@ -237,9 +249,12 @@ public:
   }
   bool inMicroMipsMode() const { return InMicroMipsMode; }
   bool inMicroMips32r6Mode() const { return InMicroMipsMode && hasMips32r6(); }
+  bool inMicroMips64r6Mode() const { return InMicroMipsMode && hasMips64r6(); }
   bool hasDSP() const { return HasDSP; }
   bool hasDSPR2() const { return HasDSPR2; }
+  bool hasDSPR3() const { return HasDSPR3; }
   bool hasMSA() const { return HasMSA; }
+  bool hasEVA() const { return HasEVA; }
   bool useSmallSection() const { return UseSmallSection; }
   bool isCheri() const { return IsCheri; }
   bool isCheri128() const { return IsCheri128; }
@@ -303,7 +318,7 @@ public:
   void setHelperClassesMips16();
   void setHelperClassesMipsSE();
 
-  const MipsSelectionDAGInfo *getSelectionDAGInfo() const override {
+  const TargetSelectionDAGInfo *getSelectionDAGInfo() const override {
     return &TSInfo;
   }
   const MipsInstrInfo *getInstrInfo() const override { return InstrInfo.get(); }

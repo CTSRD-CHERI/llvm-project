@@ -65,15 +65,16 @@ public:
   };
 
 protected:
-  GlobalValue(PointerType *Ty, ValueTy VTy, Use *Ops, unsigned NumOps,
-              LinkageTypes Linkage, const Twine &Name)
-      : Constant(Ty, VTy, Ops, NumOps), Linkage(Linkage),
-        Visibility(DefaultVisibility), UnnamedAddr(0),
-        DllStorageClass(DefaultStorageClass),
+  GlobalValue(Type *Ty, ValueTy VTy, Use *Ops, unsigned NumOps,
+              LinkageTypes Linkage, const Twine &Name, unsigned AddressSpace)
+      : Constant(PointerType::get(Ty, AddressSpace), VTy, Ops, NumOps),
+        ValueType(Ty), Linkage(Linkage), Visibility(DefaultVisibility),
+        UnnamedAddr(0), DllStorageClass(DefaultStorageClass),
         ThreadLocal(NotThreadLocal), IntID((Intrinsic::ID)0U), Parent(nullptr) {
     setName(Name);
   }
 
+  Type *ValueType;
   // Note: VC++ treats enums as signed, so an extra bit is required to prevent
   // Linkage and Visibility from turning into negative values.
   LinkageTypes Linkage : 5;   // The linkage of this global
@@ -184,7 +185,7 @@ public:
   /// Global values are always pointers.
   PointerType *getType() const { return cast<PointerType>(User::getType()); }
 
-  Type *getValueType() const { return getType()->getElementType(); }
+  Type *getValueType() const { return ValueType; }
 
   static LinkageTypes getLinkOnceLinkage(bool ODR) {
     return ODR ? LinkOnceODRLinkage : LinkOnceAnyLinkage;
@@ -236,7 +237,8 @@ public:
   /// Whether the definition of this global may be discarded if it is not used
   /// in its compilation unit.
   static bool isDiscardableIfUnused(LinkageTypes Linkage) {
-    return isLinkOnceLinkage(Linkage) || isLocalLinkage(Linkage);
+    return isLinkOnceLinkage(Linkage) || isLocalLinkage(Linkage) ||
+           isAvailableExternallyLinkage(Linkage);
   }
 
   /// Whether the definition of this global may be replaced by something
@@ -252,10 +254,9 @@ public:
   /// mistake: when working at the IR level use mayBeOverridden instead as it
   /// knows about ODR semantics.
   static bool isWeakForLinker(LinkageTypes Linkage)  {
-    return Linkage == AvailableExternallyLinkage || Linkage == WeakAnyLinkage ||
-           Linkage == WeakODRLinkage || Linkage == LinkOnceAnyLinkage ||
-           Linkage == LinkOnceODRLinkage || Linkage == CommonLinkage ||
-           Linkage == ExternalWeakLinkage;
+    return Linkage == WeakAnyLinkage || Linkage == WeakODRLinkage ||
+           Linkage == LinkOnceAnyLinkage || Linkage == LinkOnceODRLinkage ||
+           Linkage == CommonLinkage || Linkage == ExternalWeakLinkage;
   }
 
   bool hasExternalLinkage() const { return isExternalLinkage(Linkage); }
@@ -347,6 +348,12 @@ public:
       return true;
 
     return isDeclaration();
+  }
+
+  /// Returns true if this global's definition will be the one chosen by the
+  /// linker.
+  bool isStrongDefinitionForLinker() const {
+    return !(isDeclarationForLinker() || isWeakForLinker());
   }
 
   /// This method unlinks 'this' from the containing module, but does not delete

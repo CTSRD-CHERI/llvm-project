@@ -2,8 +2,11 @@
 Test lldb Python commands.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -11,15 +14,8 @@ class CmdPythonTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym (self):
-        self.buildDsym ()
-        self.pycmd_tests ()
-
-    @dwarf_test
-    def test_with_dwarf (self):
-        self.buildDwarf ()
+    def test (self):
+        self.build ()
         self.pycmd_tests ()
 
     def pycmd_tests (self):
@@ -144,10 +140,3 @@ class CmdPythonTestCase(TestBase):
         self.runCmd('command script add -f bug11569 bug11569')
         # This should not crash.
         self.runCmd('bug11569', check=False)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

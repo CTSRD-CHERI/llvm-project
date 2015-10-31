@@ -188,6 +188,10 @@ def SDTBrind : SDTypeProfile<0, 1, [        // brind
   SDTCisPtrTy<0>
 ]>;
 
+def SDTCatchret : SDTypeProfile<0, 2, [     // catchret
+  SDTCisVT<0, OtherVT>, SDTCisVT<1, OtherVT>
+]>;
+
 def SDTNone : SDTypeProfile<0, 0, []>;      // ret, trap
 
 def SDTLoad : SDTypeProfile<1, 1, [         // load
@@ -388,6 +392,8 @@ def smax       : SDNode<"ISD::SMAX"      , SDTIntBinOp>;
 def umin       : SDNode<"ISD::UMIN"      , SDTIntBinOp>;
 def umax       : SDNode<"ISD::UMAX"      , SDTIntBinOp>;
 
+def sabsdiff   : SDNode<"ISD::SABSDIFF"   , SDTIntBinOp>;
+def uabsdiff   : SDNode<"ISD::UABSDIFF"   , SDTIntBinOp>;
 def sext_inreg : SDNode<"ISD::SIGN_EXTEND_INREG", SDTExtInreg>;
 def bswap      : SDNode<"ISD::BSWAP"      , SDTIntUnaryOp>;
 def ctlz       : SDNode<"ISD::CTLZ"       , SDTIntUnaryOp>;
@@ -417,6 +423,8 @@ def fmad       : SDNode<"ISD::FMAD"       , SDTFPTernaryOp>;
 def fabs       : SDNode<"ISD::FABS"       , SDTFPUnaryOp>;
 def fminnum    : SDNode<"ISD::FMINNUM"    , SDTFPBinOp>;
 def fmaxnum    : SDNode<"ISD::FMAXNUM"    , SDTFPBinOp>;
+def fminnan    : SDNode<"ISD::FMINNAN"    , SDTFPBinOp>;
+def fmaxnan    : SDNode<"ISD::FMAXNAN"    , SDTFPBinOp>;
 def fgetsign   : SDNode<"ISD::FGETSIGN"   , SDTFPToIntOp>;
 def fneg       : SDNode<"ISD::FNEG"       , SDTFPUnaryOp>;
 def fsqrt      : SDNode<"ISD::FSQRT"      , SDTFPUnaryOp>;
@@ -452,6 +460,9 @@ def brcc       : SDNode<"ISD::BR_CC"      , SDTBrCC,   [SDNPHasChain]>;
 def brcond     : SDNode<"ISD::BRCOND"     , SDTBrcond, [SDNPHasChain]>;
 def brind      : SDNode<"ISD::BRIND"      , SDTBrind,  [SDNPHasChain]>;
 def br         : SDNode<"ISD::BR"         , SDTBr,     [SDNPHasChain]>;
+def catchret   : SDNode<"ISD::CATCHRET"   , SDTCatchret, [SDNPHasChain]>;
+def cleanupret : SDNode<"ISD::CLEANUPRET" , SDTNone,   [SDNPHasChain]>;
+
 def trap       : SDNode<"ISD::TRAP"       , SDTNone,
                         [SDNPHasChain, SDNPSideEffect]>;
 def debugtrap  : SDNode<"ISD::DEBUGTRAP"  , SDTNone,
@@ -820,6 +831,21 @@ def truncstoref64 : PatFrag<(ops node:$val, node:$ptr),
   return cast<StoreSDNode>(N)->getMemoryVT() == MVT::f64;
 }]>;
 
+def truncstorevi8 : PatFrag<(ops node:$val, node:$ptr),
+                            (truncstore node:$val, node:$ptr), [{
+  return cast<StoreSDNode>(N)->getMemoryVT().getScalarType() == MVT::i8;
+}]>;
+
+def truncstorevi16 : PatFrag<(ops node:$val, node:$ptr),
+                             (truncstore node:$val, node:$ptr), [{
+  return cast<StoreSDNode>(N)->getMemoryVT().getScalarType() == MVT::i16;
+}]>;
+
+def truncstorevi32 : PatFrag<(ops node:$val, node:$ptr),
+                             (truncstore node:$val, node:$ptr), [{
+  return cast<StoreSDNode>(N)->getMemoryVT().getScalarType() == MVT::i32;
+}]>;
+
 // indexed store fragments.
 def istore : PatFrag<(ops node:$val, node:$base, node:$offset),
                      (ist node:$val, node:$base, node:$offset), [{
@@ -892,6 +918,24 @@ def post_truncsti32 : PatFrag<(ops node:$val, node:$base, node:$offset),
 def post_truncstf32 : PatFrag<(ops node:$val, node:$base, node:$offset),
                               (post_truncst node:$val, node:$base, node:$offset), [{
   return cast<StoreSDNode>(N)->getMemoryVT() == MVT::f32;
+}]>;
+
+// nontemporal store fragments.
+def nontemporalstore : PatFrag<(ops node:$val, node:$ptr),
+                               (store node:$val, node:$ptr), [{
+  return cast<StoreSDNode>(N)->isNonTemporal();
+}]>;
+
+def alignednontemporalstore : PatFrag<(ops node:$val, node:$ptr),
+                                      (nontemporalstore node:$val, node:$ptr), [{
+  StoreSDNode *St = cast<StoreSDNode>(N);
+  return St->getAlignment() >= St->getMemoryVT().getStoreSize();
+}]>;
+
+def unalignednontemporalstore : PatFrag<(ops node:$val, node:$ptr),
+                                        (nontemporalstore node:$val, node:$ptr), [{
+  StoreSDNode *St = cast<StoreSDNode>(N);
+  return St->getAlignment() < St->getMemoryVT().getStoreSize();
 }]>;
 
 // setcc convenience fragments.

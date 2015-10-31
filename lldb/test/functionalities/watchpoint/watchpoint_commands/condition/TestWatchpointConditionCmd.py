@@ -1,9 +1,12 @@
-"""
+﻿"""
 Test watchpoint modify command to set condition on a watchpoint.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -25,23 +28,13 @@ class WatchpointConditionCmdTestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_watchpoint_cond_with_dsym(self):
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_watchpoint_cond(self):
         """Test watchpoint condition."""
-        self.buildDsym(dictionary=self.d)
+        self.build(dictionary=self.d)
         self.setTearDownCleanup(dictionary=self.d)
-        self.watchpoint_condition()
 
-    @dwarf_test
-    def test_watchpoint_cond_with_dwarf(self):
-        """Test watchpoint condition."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.watchpoint_condition()
-
-    def watchpoint_condition(self):
-        """Do watchpoint condition 'global==5'."""
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -49,7 +42,7 @@ class WatchpointConditionCmdTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -83,10 +76,3 @@ class WatchpointConditionCmdTestCase(TestBase):
         # The hit count should now be 2.
         self.expect("watchpoint list -v",
             substrs = ['hit_count = 5'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

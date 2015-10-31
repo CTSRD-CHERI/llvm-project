@@ -1,7 +1,11 @@
 """Test that hidden ivars in a shared library are visible from the main executable."""
 
-import os, time
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
+import os, time
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,80 +14,6 @@ import subprocess
 class HiddenIvarsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_expr_with_dsym(self):
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        else:
-            self.buildDsym()
-            self.expr(False)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_expr_stripped_with_dsym(self):
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        else:
-            self.buildDsym()
-            self.expr(True)
-
-    @skipUnlessDarwin
-    @dwarf_test
-    def test_expr_with_dwarf(self):
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        else:
-            self.buildDwarf()
-            self.expr(False)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_frame_variable_with_dsym(self):
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        else:
-            self.buildDsym()
-            self.frame_var(False)
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_frame_variable_stripped_with_dsym(self):
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        else:
-            self.buildDsym()
-            self.frame_var(True)
-
-    @skipUnlessDarwin
-    @dwarf_test
-    def test_frame_variable_with_dwarf(self):
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        else:
-            self.buildDwarf()
-            self.frame_var(False)
-
-    @unittest2.expectedFailure("rdar://18683637")
-    @skipUnlessDarwin
-    @dsym_test
-    def test_frame_variable_across_modules_with_dsym(self):
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        else:
-            self.buildDsym()
-            self.frame_var_type_access_across_module()
-
-    @unittest2.expectedFailure("rdar://18683637")
-    @skipUnlessDarwin
-    @dwarf_test
-    def test_frame_variable_across_modules_with_dwarf(self):
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        else:
-            self.buildDwarf()
-            self.frame_var_type_access_across_module()
 
     def setUp(self):
         # Call super's setUp().
@@ -94,6 +24,52 @@ class HiddenIvarsTestCase(TestBase):
         # The makefile names of the shared libraries as they appear in DYLIB_NAME.
         # The names should have no loading "lib" or extension as they will be localized
         self.shlib_names = ["InternalDefiner"]
+
+    @skipUnlessDarwin
+    @skipIfDwarf    # This test requires a stripped binary and a dSYM
+    @skipIfDWO      # This test requires a stripped binary and a dSYM
+    def test_expr_stripped(self):
+        if self.getArchitecture() == 'i386':
+            self.skipTest("requires modern objc runtime")
+        else:
+            self.build()
+            self.expr(True)
+
+    @skipUnlessDarwin
+    def test_expr(self):
+        if self.getArchitecture() == 'i386':
+            self.skipTest("requires modern objc runtime")
+        else:
+            self.build()
+            self.expr(False)
+
+    @skipUnlessDarwin
+    @skipIfDwarf    # This test requires a stripped binary and a dSYM
+    @skipIfDWO      # This test requires a stripped binary and a dSYM
+    def test_frame_variable_stripped(self):
+        if self.getArchitecture() == 'i386':
+            self.skipTest("requires modern objc runtime")
+        else:
+            self.build()
+            self.frame_var(True)
+
+    @skipUnlessDarwin
+    def test_frame_variable(self):
+        if self.getArchitecture() == 'i386':
+            self.skipTest("requires modern objc runtime")
+        else:
+            self.build()
+            self.frame_var(False)
+
+    @unittest2.expectedFailure("rdar://18683637")
+    @skipUnlessDarwin
+    def test_frame_variable_across_modules(self):
+        if self.getArchitecture() == 'i386':
+            self.skipTest("requires modern objc runtime")
+        else:
+            self.build()
+            self.common_setup(False)
+            self.expect("frame variable k->bar", VARIABLES_DISPLAYED_CORRECTLY, substrs = ["= 3"])
         
     def common_setup(self, strip):
         
@@ -122,7 +98,7 @@ class HiddenIvarsTestCase(TestBase):
         # Break inside the foo function which takes a bar_ptr argument.
         lldbutil.run_break_set_by_file_and_line (self, "main.m", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -157,14 +133,14 @@ class HiddenIvarsTestCase(TestBase):
             substrs = ["= 3"])
 
         self.expect("expression k.filteredDataSource", VARIABLES_DISPLAYED_CORRECTLY,
-            substrs = [' = 0x', '"2 objects"'])
+            substrs = [' = 0x', '"2 elements"'])
 
         if strip:
             self.expect("expression *(k)", VARIABLES_DISPLAYED_CORRECTLY,
-                substrs = ["foo = 2", ' = 0x', '"2 objects"'])
+                substrs = ["foo = 2", ' = 0x', '"2 elements"'])
         else:            
             self.expect("expression *(k)", VARIABLES_DISPLAYED_CORRECTLY,
-                substrs = ["foo = 2", "bar = 3", '_filteredDataSource = 0x', '"2 objects"'])
+                substrs = ["foo = 2", "bar = 3", '_filteredDataSource = 0x', '"2 elements"'])
 
     def frame_var(self, strip):
         self.common_setup(strip)
@@ -188,23 +164,11 @@ class HiddenIvarsTestCase(TestBase):
             substrs = ["= 2"])
 
         self.expect("frame variable k->_filteredDataSource", VARIABLES_DISPLAYED_CORRECTLY,
-            substrs = [' = 0x', '"2 objects"'])
+            substrs = [' = 0x', '"2 elements"'])
 
         if strip:
             self.expect("frame variable *k", VARIABLES_DISPLAYED_CORRECTLY,
-                substrs = ["foo = 2", '_filteredDataSource = 0x', '"2 objects"'])
+                substrs = ["foo = 2", '_filteredDataSource = 0x', '"2 elements"'])
         else:
             self.expect("frame variable *k", VARIABLES_DISPLAYED_CORRECTLY,
-                substrs = ["foo = 2", "bar = 3", '_filteredDataSource = 0x', '"2 objects"'])
-        
-    def frame_var_type_access_across_module(self):
-        self.common_setup(False)
-
-        self.expect("frame variable k->bar", VARIABLES_DISPLAYED_CORRECTLY, substrs = ["= 3"])
-
-                       
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+                substrs = ["foo = 2", "bar = 3", '_filteredDataSource = 0x', '"2 elements"'])

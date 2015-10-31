@@ -10,8 +10,12 @@ file up and generate a test case from it in run time (with name test_standard_un
 after escaping some special characters).
 """
 
-import os, time
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
+import os, time
 import lldb
 from lldbtest import *
 import lldbutil
@@ -39,7 +43,6 @@ class StandardUnwindTest(TestBase):
                 "_start",                # Base function on the stack
                 "__memcpy_base",         # Function reached by a fall through from the previous function
                 "__memcpy_base_aligned", # Function reached by a fall through from the previous function
-                "__subdf3",              # __aeabi_ui2d jumps into the middle of the function. Possibly missing symbol?
             ]
             no_step_function_names = [
                 "__sync_fetch_and_add_4", # Calls into a special SO where we can't set a breakpoint
@@ -83,9 +86,9 @@ class StandardUnwindTest(TestBase):
             thread = process.GetThreadAtIndex(0)
 
             if self.TraceOn():
-                print "INDEX: %u" % index
+                print("INDEX: %u" % index)
                 for f in thread.frames:
-                    print f
+                    print(f)
 
             if thread.GetFrameAtIndex(0).GetFunctionName() is not None:
                 found_main = False
@@ -130,7 +133,7 @@ for f in test_source_files:
                 self.setTearDownCleanup(d)
             except:
                 if self.TraceOn():
-                    print sys.exc_info()[0]
+                    print(sys.exc_info()[0])
                 self.skipTest("Inferior not supported")
             self.standard_unwind_tests()
 
@@ -140,9 +143,3 @@ for f in test_source_files:
 
         test_function_dwarf.__name__ = test_name
         setattr(StandardUnwindTest, test_function_dwarf.__name__, test_function_dwarf)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

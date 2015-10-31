@@ -27,7 +27,7 @@
 #include "lldb/Core/ConstString.h"
 #include "lldb/Core/UserID.h"
 #include "lldb/Core/Value.h"
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/ExecutionContextScope.h"
 #include "lldb/Target/Process.h"
@@ -373,8 +373,8 @@ public:
     
     virtual ~ValueObject();
     
-    ClangASTType
-    GetClangType ();
+    CompilerType
+    GetCompilerType ();
     
     // this vends a TypeImpl that is useful at the SB API layer
     virtual TypeImpl
@@ -408,7 +408,7 @@ public:
     GetObjectRuntimeLanguage();
 
     virtual uint32_t
-    GetTypeInfo (ClangASTType *pointee_or_element_clang_type = NULL);
+    GetTypeInfo (CompilerType *pointee_or_element_compiler_type = NULL);
 
     virtual bool
     IsPointerType ();
@@ -595,7 +595,7 @@ public:
     GetIndexOfChildWithName (const ConstString &name);
 
     size_t
-    GetNumChildren ();
+    GetNumChildren (uint32_t max=UINT32_MAX);
 
     const Value &
     GetValue() const;
@@ -610,11 +610,12 @@ public:
     GetLocationAsCString ();
 
     const char *
-    GetSummaryAsCString ();
+    GetSummaryAsCString (lldb::LanguageType lang = lldb::eLanguageTypeUnknown);
     
     bool
     GetSummaryAsCString (TypeSummaryImpl* summary_ptr,
-                         std::string& destination);
+                         std::string& destination,
+                         lldb::LanguageType lang = lldb::eLanguageTypeUnknown);
     
     bool
     GetSummaryAsCString (std::string& destination,
@@ -690,10 +691,10 @@ public:
     GetSyntheticExpressionPathChild(const char* expression, bool can_create);
     
     virtual lldb::ValueObjectSP
-    GetSyntheticChildAtOffset(uint32_t offset, const ClangASTType& type, bool can_create);
+    GetSyntheticChildAtOffset(uint32_t offset, const CompilerType& type, bool can_create);
     
     virtual lldb::ValueObjectSP
-    GetSyntheticBase (uint32_t offset, const ClangASTType& type, bool can_create);
+    GetSyntheticBase (uint32_t offset, const CompilerType& type, bool can_create);
 
     virtual lldb::ValueObjectSP
     GetDynamicValue (lldb::DynamicValueType valueType);
@@ -746,11 +747,11 @@ public:
     GetCPPVTableAddress(AddressType &address_type);
     
     virtual lldb::ValueObjectSP
-    Cast (const ClangASTType &clang_ast_type);
+    Cast (const CompilerType &compiler_type);
     
     virtual lldb::ValueObjectSP
     CastPointerType (const char *name,
-                     ClangASTType &ast_type);
+                     CompilerType &ast_type);
 
     virtual lldb::ValueObjectSP
     CastPointerType (const char *name,
@@ -809,13 +810,13 @@ public:
     CreateValueObjectFromAddress (const char* name,
                                   uint64_t address,
                                   const ExecutionContext& exe_ctx,
-                                  ClangASTType type);
+                                  CompilerType type);
 
     static lldb::ValueObjectSP
     CreateValueObjectFromData (const char* name,
                                const DataExtractor& data,
                                const ExecutionContext& exe_ctx,
-                               ClangASTType type);
+                               CompilerType type);
     
     void
     LogValueObject (Log *log);
@@ -861,7 +862,7 @@ public:
     bool
     NeedsUpdating ()
     {
-        const bool accept_invalid_exe_ctx = CanUpdateWithInvalidExecutionContext();
+        const bool accept_invalid_exe_ctx = (CanUpdateWithInvalidExecutionContext() == eLazyBoolYes);
         return m_update_point.NeedsUpdating(accept_invalid_exe_ctx);
     }
     
@@ -1093,7 +1094,7 @@ protected:
     
     llvm::Optional<std::pair<TypeValidatorResult, std::string>> m_validation_result;
     
-    ClangASTType        m_override_type;// If the type of the value object should be overridden, the type to impose.
+    CompilerType        m_override_type;// If the type of the value object should be overridden, the type to impose.
     
     ValueObjectManager *m_manager;      // This object is managed by the root object (any ValueObject that gets created
                                         // without a parent.)  The manager gets passed through all the generations of
@@ -1139,7 +1140,7 @@ protected:
     
     friend class ValueObjectChild;
     friend class ClangExpressionDeclMap;  // For GetValue
-    friend class ClangExpressionVariable; // For SetName
+    friend class ExpressionVariable;      // For SetName
     friend class Target;                  // For SetName
     friend class ValueObjectConstResultImpl;
     friend class ValueObjectSynthetic;    // For ClearUserVisibleData
@@ -1172,10 +1173,10 @@ protected:
     virtual bool
     UpdateValue () = 0;
 
-    virtual bool
+    virtual LazyBool
     CanUpdateWithInvalidExecutionContext ()
     {
-        return false;
+        return eLazyBoolCalculate;
     }
     
     virtual void
@@ -1203,7 +1204,7 @@ protected:
 
     // Should only be called by ValueObject::GetNumChildren()
     virtual size_t
-    CalculateNumChildren() = 0;
+    CalculateNumChildren(uint32_t max=UINT32_MAX) = 0;
 
     void
     SetNumChildren (size_t num_children);
@@ -1231,8 +1232,8 @@ protected:
     // Subclasses must implement the functions below.
     //------------------------------------------------------------------
     
-    virtual ClangASTType
-    GetClangTypeImpl () = 0;
+    virtual CompilerType
+    GetCompilerTypeImpl () = 0;
     
     const char *
     GetLocationAsCStringImpl (const Value& value,
@@ -1241,12 +1242,15 @@ protected:
     bool
     IsChecksumEmpty ();
     
+    void
+    SetPreferredDisplayLanguageIfNeeded (lldb::LanguageType);
+    
 private:
     //------------------------------------------------------------------
     // For ValueObject only
     //------------------------------------------------------------------
     
-    virtual ClangASTType
+    virtual CompilerType
     MaybeCalculateCompleteType ();
     
     lldb::ValueObjectSP

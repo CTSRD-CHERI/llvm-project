@@ -30,8 +30,7 @@ class ThreadProperties : public Properties
 public:
     ThreadProperties(bool is_global);
     
-    virtual
-    ~ThreadProperties();
+    ~ThreadProperties() override;
     
     //------------------------------------------------------------------
     /// The regular expression returned determines symbols that this
@@ -82,7 +81,7 @@ public:
 
     static ConstString &GetStaticBroadcasterClass ();
     
-    virtual ConstString &GetBroadcasterClass() const
+    ConstString &GetBroadcasterClass() const override
     {
         return GetStaticBroadcasterClass();
     }
@@ -97,19 +96,19 @@ public:
         
         ThreadEventData();
         
-        virtual ~ThreadEventData();
+        ~ThreadEventData() override;
         
         static const ConstString &
         GetFlavorString ();
 
-        virtual const ConstString &
-        GetFlavor () const
+        const ConstString &
+        GetFlavor() const override
         {
             return ThreadEventData::GetFlavorString ();
         }
         
-        virtual void
-        Dump (Stream *s) const;
+        void
+        Dump(Stream *s) const override;
     
         static const ThreadEventData *
         GetEventDataFromEvent (const Event *event_ptr);
@@ -179,7 +178,7 @@ public:
     //------------------------------------------------------------------
     Thread (Process &process, lldb::tid_t tid, bool use_invalid_index_id = false);
 
-    virtual ~Thread();
+    ~Thread() override;
 
     lldb::ProcessSP
     GetProcess() const
@@ -302,6 +301,9 @@ public:
 
     lldb::StopReason
     GetStopReason();
+
+    bool
+    StopInfoIsUpToDate() const;
 
     // This sets the stop reason to a "blank" stop reason, so you can call functions on the thread
     // without having the called function run with whatever stop reason you stopped with.
@@ -492,11 +494,7 @@ public:
     }
 
     lldb::StackFrameSP
-    GetSelectedFrame ()
-    {
-        lldb::StackFrameListSP stack_frame_list_sp(GetStackFrameList());
-        return stack_frame_list_sp->GetFrameAtIndex (stack_frame_list_sp->GetSelectedFrameIndex());
-    }
+    GetSelectedFrame ();
 
     uint32_t
     SetSelectedFrame (lldb_private::StackFrame *frame, bool broadcast = false);
@@ -990,11 +988,11 @@ public:
     /// Gets the outer-most expression variable from the completed plans
     ///
     /// @return
-    ///     A ClangExpressionVariableSP, either empty if there is no
+    ///     A ExpressionVariableSP, either empty if there is no
     ///     plan completed an expression during the current stop
     ///     or the expression variable that was made for the completed expression.
     //------------------------------------------------------------------
-    lldb::ClangExpressionVariableSP
+    lldb::ExpressionVariableSP
     GetExpressionVariable ();
 
     //------------------------------------------------------------------
@@ -1147,20 +1145,20 @@ public:
     //------------------------------------------------------------------
     // lldb::ExecutionContextScope pure virtual functions
     //------------------------------------------------------------------
-    virtual lldb::TargetSP
-    CalculateTarget ();
+    lldb::TargetSP
+    CalculateTarget() override;
     
-    virtual lldb::ProcessSP
-    CalculateProcess ();
+    lldb::ProcessSP
+    CalculateProcess() override;
     
-    virtual lldb::ThreadSP
-    CalculateThread ();
+    lldb::ThreadSP
+    CalculateThread() override;
     
-    virtual lldb::StackFrameSP
-    CalculateStackFrame ();
+    lldb::StackFrameSP
+    CalculateStackFrame() override;
 
-    virtual void
-    CalculateExecutionContext (ExecutionContext &exe_ctx);
+    void
+    CalculateExecutionContext(ExecutionContext &exe_ctx) override;
     
     lldb::StackFrameSP
     GetStackFrameSPForStackFramePtr (StackFrame *stack_frame_ptr);
@@ -1325,6 +1323,9 @@ protected:
     GetStackFrameList ();
     
 
+    void
+    FunctionOptimizationWarning (lldb_private::StackFrame *frame);
+
     //------------------------------------------------------------------
     // Classes that inherit from Process can see and modify these
     //------------------------------------------------------------------
@@ -1358,9 +1359,8 @@ private:
     //------------------------------------------------------------------
 
     DISALLOW_COPY_AND_ASSIGN (Thread);
-
 };
 
 } // namespace lldb_private
 
-#endif  // liblldb_Thread_h_
+#endif // liblldb_Thread_h_

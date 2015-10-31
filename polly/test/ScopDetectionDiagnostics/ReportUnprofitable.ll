@@ -1,4 +1,6 @@
-; RUN: opt %loadPolly -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -analyze < %s 2>&1| FileCheck %s
+; RUN: opt %loadPolly -pass-remarks-missed="polly-detect" \
+; RUN:     -polly-detect-track-failures -polly-detect -analyze \
+; RUN:     -polly-process-unprofitable=false < %s 2>&1| FileCheck %s
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
 ; void onlyWrite(float *A) {
@@ -85,24 +87,24 @@ attributes #1 = { nounwind readnone }
 !llvm.module.flags = !{!11, !12}
 !llvm.ident = !{!13}
 
-!0 = !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.7.0  (llvm/trunk 229257)", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.7.0  (llvm/trunk 229257)", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
 !1 = !DIFile(filename: "/tmp/test.c", directory: "/home/grosser/Projects/polly/git/tools/polly")
 !2 = !{}
 !3 = !{!4, !10}
-!4 = !DISubprogram(name: "onlyWrite", line: 1, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !1, scope: !5, type: !6, function: void (float*)* @onlyWrite, variables: !2)
+!4 = distinct !DISubprogram(name: "onlyWrite", line: 1, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !1, scope: !5, type: !6, function: void (float*)* @onlyWrite, variables: !2)
 !5 = !DIFile(filename: "/tmp/test.c", directory: "/home/grosser/Projects/polly/git/tools/polly")
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8}
 !8 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !9)
 !9 = !DIBasicType(tag: DW_TAG_base_type, name: "float", size: 32, align: 32, encoding: DW_ATE_float)
-!10 = !DISubprogram(name: "onlyRead", line: 6, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 6, file: !1, scope: !5, type: !6, function: void (float*)* @onlyRead, variables: !2)
+!10 = distinct !DISubprogram(name: "onlyRead", line: 6, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 6, file: !1, scope: !5, type: !6, function: void (float*)* @onlyRead, variables: !2)
 !11 = !{i32 2, !"Dwarf Version", i32 4}
 !12 = !{i32 2, !"Debug Info Version", i32 3}
 !13 = !{!"clang version 3.7.0  (llvm/trunk 229257)"}
-!14 = !DILocalVariable(tag: DW_TAG_arg_variable, name: "A", line: 1, arg: 1, scope: !4, file: !5, type: !8)
+!14 = !DILocalVariable(name: "A", line: 1, arg: 1, scope: !4, file: !5, type: !8)
 !15 = !DIExpression()
 !16 = !DILocation(line: 1, column: 23, scope: !4)
-!17 = !DILocalVariable(tag: DW_TAG_auto_variable, name: "i", line: 2, scope: !18, file: !5, type: !19)
+!17 = !DILocalVariable(name: "i", line: 2, scope: !18, file: !5, type: !19)
 !18 = distinct !DILexicalBlock(line: 2, column: 3, file: !1, scope: !4)
 !19 = !DIBasicType(tag: DW_TAG_base_type, name: "long int", size: 64, align: 64, encoding: DW_ATE_signed)
 !20 = !DILocation(line: 2, column: 13, scope: !18)
@@ -114,9 +116,9 @@ attributes #1 = { nounwind readnone }
 !26 = !DILocation(line: 2, column: 30, scope: !24)
 !27 = !DILocation(line: 2, column: 3, scope: !24)
 !28 = !DILocation(line: 4, column: 1, scope: !4)
-!29 = !DILocalVariable(tag: DW_TAG_arg_variable, name: "A", line: 6, arg: 1, scope: !10, file: !5, type: !8)
+!29 = !DILocalVariable(name: "A", line: 6, arg: 1, scope: !10, file: !5, type: !8)
 !30 = !DILocation(line: 6, column: 22, scope: !10)
-!31 = !DILocalVariable(tag: DW_TAG_auto_variable, name: "i", line: 7, scope: !32, file: !5, type: !19)
+!31 = !DILocalVariable(name: "i", line: 7, scope: !32, file: !5, type: !19)
 !32 = distinct !DILexicalBlock(line: 7, column: 3, file: !1, scope: !10)
 !33 = !DILocation(line: 7, column: 13, scope: !32)
 !34 = !DILocation(line: 7, column: 8, scope: !32)

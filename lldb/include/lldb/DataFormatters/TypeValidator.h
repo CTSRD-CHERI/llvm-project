@@ -13,8 +13,8 @@
 // C Includes
 
 // C++ Includes
-#include <string>
 #include <functional>
+#include <string>
 
 // Other libraries and framework includes
 
@@ -115,6 +115,22 @@ public:
             return *this;
         }
         
+        bool
+        GetNonCacheable () const
+        {
+            return (m_flags & lldb::eTypeOptionNonCacheable) == lldb::eTypeOptionNonCacheable;
+        }
+        
+        Flags&
+        SetNonCacheable (bool value = true)
+        {
+            if (value)
+                m_flags |= lldb::eTypeOptionNonCacheable;
+            else
+                m_flags &= ~lldb::eTypeOptionNonCacheable;
+            return *this;
+        }
+        
         uint32_t
         GetValue ()
         {
@@ -134,7 +150,7 @@ public:
     TypeValidatorImpl (const Flags& flags = Flags());
     
     typedef std::shared_ptr<TypeValidatorImpl> SharedPointer;
-    typedef bool(*ValueCallback)(void*, ConstString, const lldb::TypeValidatorImplSP&);
+    typedef std::function<bool(void*, ConstString, TypeValidatorImpl::SharedPointer)> ValueCallback;
     
     virtual ~TypeValidatorImpl ();
     
@@ -153,6 +169,11 @@ public:
     {
         return m_flags.GetSkipReferences();
     }
+    bool
+    NonCacheable () const
+    {
+        return m_flags.GetNonCacheable();
+    }
     
     void
     SetCascades (bool value)
@@ -170,6 +191,12 @@ public:
     SetSkipsReferences (bool value)
     {
         m_flags.SetSkipReferences(value);
+    }
+    
+    void
+    SetNonCacheable (bool value)
+    {
+        m_flags.SetNonCacheable(value);
     }
     
     uint32_t
@@ -238,9 +265,9 @@ public:
     TypeValidatorImpl_CXX (ValidatorFunction f, std::string d, const TypeValidatorImpl::Flags& flags = Flags());
     
     typedef std::shared_ptr<TypeValidatorImpl_CXX> SharedPointer;
-    typedef bool(*ValueCallback)(void*, ConstString, const TypeValidatorImpl_CXX::SharedPointer&);
+    typedef std::function<bool(void*, ConstString, TypeValidatorImpl_CXX::SharedPointer)> ValueCallback;
     
-    virtual ~TypeValidatorImpl_CXX ();
+    ~TypeValidatorImpl_CXX() override;
     
     ValidatorFunction
     GetValidatorFunction () const
@@ -254,17 +281,17 @@ public:
         m_validator_function = f;
     }
     
-    virtual TypeValidatorImpl::Type
-    GetType ()
+    TypeValidatorImpl::Type
+    GetType() override
     {
         return TypeValidatorImpl::Type::eTypeCXX;
     }
     
-    virtual ValidationResult
-    FormatObject (ValueObject *valobj) const;
+    ValidationResult
+    FormatObject(ValueObject *valobj) const override;
     
-    virtual std::string
-    GetDescription();
+    std::string
+    GetDescription() override;
     
 protected:
     std::string m_description;
@@ -277,4 +304,4 @@ private:
     
 } // namespace lldb_private
 
-#endif	// lldb_TypeValidator_h_
+#endif // lldb_TypeValidator_h_

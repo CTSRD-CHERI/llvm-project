@@ -17,11 +17,10 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/lldb-private.h"
-#include "lldb/Core/ClangForward.h"
 #include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/Error.h"
 #include "lldb/Core/Scalar.h"
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 
 namespace lldb_private {
 
@@ -101,6 +100,7 @@ public:
         // Casts a vector, if valid, to an unsigned int of matching or largest supported size.
         // Truncates to the beginning of the vector if required.
         // Returns a default constructed Scalar if the Vector data is internally inconsistent.
+        llvm::APInt rhs = llvm::APInt(BITWIDTH_INT128, NUM_OF_WORDS_INT128, ((type128 *)bytes)->x);
         Scalar 
 		GetAsScalar() const 
 		{
@@ -111,11 +111,7 @@ public:
                 else if (length == 2) scalar = *(const uint16_t *)bytes;
                 else if (length == 4) scalar = *(const uint32_t *)bytes;
                 else if (length == 8) scalar = *(const uint64_t *)bytes;
-#if defined (ENABLE_128_BIT_SUPPORT)
-                else if (length >= 16) scalar = *(const __uint128_t *)bytes;
-#else
-                else if (length >= 16) scalar = *(const uint64_t *)bytes;
-#endif
+                else if (length >= 16) scalar = rhs;
             }
             return scalar;
         }
@@ -136,11 +132,11 @@ public:
     Value &
     operator=(const Value &rhs);
 
-    const ClangASTType &
-    GetClangType();
+    const CompilerType &
+    GetCompilerType();
     
     void
-    SetClangType (const ClangASTType &clang_type);
+    SetCompilerType (const CompilerType &compiler_type);
 
     ValueType
     GetValueType() const;
@@ -269,7 +265,7 @@ public:
     GetValueDefaultFormat ();
 
     uint64_t
-    GetValueByteSize (Error *error_ptr);
+    GetValueByteSize (Error *error_ptr, ExecutionContext *exe_ctx);
 
     Error
     GetValueAsData (ExecutionContext *exe_ctx, 
@@ -292,7 +288,7 @@ public:
 protected:
     Scalar          m_value;
     Vector          m_vector;
-    ClangASTType    m_clang_type;
+    CompilerType    m_compiler_type;
     void *          m_context;
     ValueType       m_value_type;
     ContextType     m_context_type;

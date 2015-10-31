@@ -44,12 +44,6 @@ using namespace llvm;
 #define GET_REGINFO_TARGET_DESC
 #include "X86GenRegisterInfo.inc"
 
-cl::opt<bool>
-ForceStackAlign("force-align-stack",
-                 cl::desc("Force align the stack to the minimum alignment"
-                           " needed for the function."),
-                 cl::init(false), cl::Hidden);
-
 static cl::opt<bool>
 EnableBasePointer("x86-use-base-pointer", cl::Hidden, cl::init(true),
           cl::desc("Enable use of a base pointer for complex stack frames"));
@@ -174,7 +168,15 @@ X86RegisterInfo::getPointerRegClass(const MachineFunction &MF,
     if (Subtarget.isTarget64BitLP64())
       return &X86::GR64_NOSPRegClass;
     return &X86::GR32_NOSPRegClass;
-  case 2: // Available for tailcall (not callee-saved GPRs).
+  case 2: // NOREX GPRs.
+    if (Subtarget.isTarget64BitLP64())
+      return &X86::GR64_NOREXRegClass;
+    return &X86::GR32_NOREXRegClass;
+  case 3: // NOREX GPRs except the stack pointer (for encoding reasons).
+    if (Subtarget.isTarget64BitLP64())
+      return &X86::GR64_NOREX_NOSPRegClass;
+    return &X86::GR32_NOREX_NOSPRegClass;
+  case 4: // Available for tailcall (not callee-saved GPRs).
     const Function *F = MF.getFunction();
     if (IsWin64 || (F && F->getCallingConv() == CallingConv::X86_64_Win64))
       return &X86::GR64_TCW64RegClass;
@@ -202,7 +204,7 @@ X86RegisterInfo::getCrossCopyRegClass(const TargetRegisterClass *RC) const {
 unsigned
 X86RegisterInfo::getRegPressureLimit(const TargetRegisterClass *RC,
                                      MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  const X86FrameLowering *TFI = getFrameLowering(MF);
 
   unsigned FPDiff = TFI->hasFP(MF) ? 1 : 0;
   switch (RC->getID()) {
@@ -254,6 +256,8 @@ X86RegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
       return CSR_64_Intel_OCL_BI_SaveList;
     break;
   }
+  case CallingConv::HHVM:
+    return CSR_64_HHVM_SaveList;
   case CallingConv::Cold:
     if (Is64Bit)
       return CSR_64_MostRegs_SaveList;
@@ -314,6 +318,8 @@ X86RegisterInfo::getCallPreservedMask(const MachineFunction &MF,
       return CSR_64_Intel_OCL_BI_RegMask;
     break;
   }
+  case CallingConv::HHVM:
+    return CSR_64_HHVM_RegMask;
   case CallingConv::Cold:
     if (Is64Bit)
       return CSR_64_MostRegs_RegMask;
@@ -343,7 +349,7 @@ X86RegisterInfo::getNoPreservedMask() const {
 
 BitVector X86RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  const X86FrameLowering *TFI = getFrameLowering(MF);
 
   // Set the stack-pointer register and its aliases as reserved.
   for (MCSubRegIterator I(X86::RSP, this, /*IncludeSelf=*/true); I.isValid();
@@ -439,6 +445,10 @@ void X86RegisterInfo::adjustStackMapLiveOutMask(uint32_t *Mask) const {
 // Stack Frame Processing methods
 //===----------------------------------------------------------------------===//
 
+static bool CantUseSP(const MachineFrameInfo *MFI) {
+  return MFI->hasVarSizedObjects() || MFI->hasOpaqueSPAdjustment();
+}
+
 bool X86RegisterInfo::hasBasePointer(const MachineFunction &MF) const {
    const MachineFrameInfo *MFI = MF.getFrameInfo();
 
@@ -451,13 +461,11 @@ bool X86RegisterInfo::hasBasePointer(const MachineFunction &MF) const {
    // reference locals while also adjusting the stack pointer.  When we can't
    // use both the SP and the FP, we need a separate base pointer register.
    bool CantUseFP = needsStackRealignment(MF);
-   bool CantUseSP =
-       MFI->hasVarSizedObjects() || MFI->hasInlineAsmWithSPAdjust();
-   return CantUseFP && CantUseSP;
+   return CantUseFP && CantUseSP(MFI);
 }
 
 bool X86RegisterInfo::canRealignStack(const MachineFunction &MF) const {
-  if (MF.getFunction()->hasFnAttribute("no-realign-stack"))
+  if (!TargetRegisterInfo::canRealignStack(MF))
     return false;
 
   const MachineFrameInfo *MFI = MF.getFrameInfo();
@@ -470,24 +478,9 @@ bool X86RegisterInfo::canRealignStack(const MachineFunction &MF) const {
 
   // If a base pointer is necessary.  Check that it isn't too late to reserve
   // it.
-  if (MFI->hasVarSizedObjects())
+  if (CantUseSP(MFI))
     return MRI->canReserveReg(BasePtr);
   return true;
-}
-
-bool X86RegisterInfo::needsStackRealignment(const MachineFunction &MF) const {
-  const MachineFrameInfo *MFI = MF.getFrameInfo();
-  const Function *F = MF.getFunction();
-  unsigned StackAlign =
-    MF.getSubtarget().getFrameLowering()->getStackAlignment();
-  bool requiresRealignment = ((MFI->getMaxAlignment() > StackAlign) ||
-                              F->hasFnAttribute(Attribute::StackAlignment));
-
-  // If we've requested that we force align the stack do so now.
-  if (ForceStackAlign)
-    return canRealignStack(MF);
-
-  return requiresRealignment && canRealignStack(MF);
 }
 
 bool X86RegisterInfo::hasReservedSpillSlot(const MachineFunction &MF,
@@ -503,13 +496,14 @@ X86RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                      RegScavenger *RS) const {
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  const X86FrameLowering *TFI = getFrameLowering(MF);
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   unsigned BasePtr;
 
   unsigned Opc = MI.getOpcode();
   bool AfterFPPop = Opc == X86::TAILJMPm64 || Opc == X86::TAILJMPm ||
                     Opc == X86::TCRETURNmi || Opc == X86::TCRETURNmi64;
+
   if (hasBasePointer(MF))
     BasePtr = (FrameIndex < 0 ? FramePtr : getBaseRegister());
   else if (needsStackRealignment(MF))
@@ -519,20 +513,16 @@ X86RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   else
     BasePtr = (TFI->hasFP(MF) ? FramePtr : StackPtr);
 
-  // FRAME_ALLOC uses a single offset, with no register. It only works in the
+  // LOCAL_ESCAPE uses a single offset, with no register. It only works in the
   // simple FP case, and doesn't work with stack realignment. On 32-bit, the
   // offset is from the traditional base pointer location.  On 64-bit, the
   // offset is from the SP at the end of the prologue, not the FP location. This
   // matches the behavior of llvm.frameaddress.
-  if (Opc == TargetOpcode::FRAME_ALLOC) {
+  unsigned IgnoredFrameReg;
+  if (Opc == TargetOpcode::LOCAL_ESCAPE) {
     MachineOperand &FI = MI.getOperand(FIOperandNum);
-    bool IsWinEH = MF.getTarget().getMCAsmInfo()->usesWindowsCFI();
     int Offset;
-    if (IsWinEH)
-      Offset = static_cast<const X86FrameLowering *>(TFI)
-                     ->getFrameIndexOffsetFromSP(MF, FrameIndex);
-    else
-      Offset = TFI->getFrameIndexOffset(MF, FrameIndex);
+    Offset = TFI->getFrameIndexReference(MF, FrameIndex, IgnoredFrameReg);
     FI.ChangeToImmediate(Offset);
     return;
   }
@@ -554,7 +544,7 @@ X86RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     const MachineFrameInfo *MFI = MF.getFrameInfo();
     FIOffset = MFI->getObjectOffset(FrameIndex) - TFI->getOffsetOfLocalArea();
   } else
-    FIOffset = TFI->getFrameIndexOffset(MF, FrameIndex);
+    FIOffset = TFI->getFrameIndexReference(MF, FrameIndex, IgnoredFrameReg);
 
   if (BasePtr == StackPtr)
     FIOffset += SPAdj;
@@ -584,7 +574,7 @@ X86RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 }
 
 unsigned X86RegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  const X86FrameLowering *TFI = getFrameLowering(MF);
   return TFI->hasFP(MF) ? FramePtr : StackPtr;
 }
 

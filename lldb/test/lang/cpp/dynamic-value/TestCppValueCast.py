@@ -2,9 +2,13 @@
 Test lldb Python API SBValue::Cast(SBType) for C++ types.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
+import unittest2
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -13,38 +17,17 @@ class CppValueCastTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @unittest2.expectedFailure("rdar://problem/10808472 SBValue::Cast test case is failing (virtual inheritance)")
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_value_cast_with_dsym_and_virtual_inheritance(self):
+    @add_test_categories(['pyapi'])
+    def test_value_cast_with_virtual_inheritance(self):
         """Test SBValue::Cast(SBType) API for C++ types with virtual inheritance."""
-        self.buildDsym(dictionary=self.d_virtual)
+        self.build(dictionary=self.d_virtual)
         self.setTearDownCleanup(dictionary=self.d_virtual)
         self.do_sbvalue_cast(self.exe_name)
 
-    @unittest2.expectedFailure("rdar://problem/10808472 SBValue::Cast test case is failing (virtual inheritance)")
-    @python_api_test
-    @dwarf_test
-    def test_value_cast_with_dwarf_and_virtual_inheritance(self):
-        """Test SBValue::Cast(SBType) API for C++ types with virtual inheritance."""
-        self.buildDwarf(dictionary=self.d_virtual)
-        self.setTearDownCleanup(dictionary=self.d_virtual)
-        self.do_sbvalue_cast(self.exe_name)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_value_cast_with_dsym_and_regular_inheritance(self):
+    @add_test_categories(['pyapi'])
+    def test_value_cast_with_regular_inheritance(self):
         """Test SBValue::Cast(SBType) API for C++ types with regular inheritance."""
-        self.buildDsym(dictionary=self.d_regular)
-        self.setTearDownCleanup(dictionary=self.d_regular)
-        self.do_sbvalue_cast(self.exe_name)
-
-    @python_api_test
-    @dwarf_test
-    def test_value_cast_with_dwarf_and_regular_inheritance(self):
-        """Test SBValue::Cast(SBType) API for C++ types with regular inheritance."""
-        self.buildDwarf(dictionary=self.d_regular)
+        self.build(dictionary=self.d_regular)
         self.setTearDownCleanup(dictionary=self.d_regular)
         self.do_sbvalue_cast(self.exe_name)
 
@@ -100,8 +83,8 @@ class CppValueCastTestCase(TestBase):
 
         if self.TraceOn():
             for child in tellerA:
-                print "child name:", child.GetName()
-                print child
+                print("child name:", child.GetName())
+                print(child)
 
         # Call SBValue.Cast() to obtain instanceA.
         instanceA = tellerA.Cast(typeA.GetPointerType())
@@ -110,8 +93,8 @@ class CppValueCastTestCase(TestBase):
         # Iterate through all the children and print their values.
         if self.TraceOn():
             for child in instanceA:
-                print "child name:", child.GetName()
-                print child
+                print("child name:", child.GetName())
+                print(child)
         a_member_val = instanceA.GetChildMemberWithName('m_a_val')
         self.DebugSBValue(a_member_val)
         self.assertTrue(a_member_val.GetValueAsUnsigned(error, 0) == 10)
@@ -128,8 +111,8 @@ class CppValueCastTestCase(TestBase):
 
         if self.TraceOn():
             for child in tellerB:
-                print "child name:", child.GetName()
-                print child
+                print("child name:", child.GetName())
+                print(child)
 
         # Call SBValue.Cast() to obtain instanceB.
         instanceB = tellerB.Cast(typeB.GetPointerType())
@@ -138,15 +121,8 @@ class CppValueCastTestCase(TestBase):
         # Iterate through all the children and print their values.
         if self.TraceOn():
             for child in instanceB:
-                print "child name:", child.GetName()
-                print child
+                print("child name:", child.GetName())
+                print(child)
         b_member_val = instanceB.GetChildMemberWithName('m_b_val')
         self.DebugSBValue(b_member_val)
         self.assertTrue(b_member_val.GetValueAsUnsigned(error, 0) == 36)
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

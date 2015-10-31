@@ -10,30 +10,19 @@ class CPPStaticMethodsTestCase(TestBase):
     
     mydir = TestBase.compute_mydir(__file__)
     
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test that static methods are properly distinguished from regular methods"""
-        self.buildDsym()
-        self.static_method_commands()
-
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test that static methods are properly distinguished from regular methods"""
-        self.buildDwarf()
-        self.static_method_commands()
-
     def setUp(self):
         TestBase.setUp(self)
         self.line = line_number('main.cpp', '// Break at this line')
-    
-    def static_method_commands(self):
+
+    @expectedFailureWindows
+    def test_with_run_command(self):
         """Test that static methods are properly distinguished from regular methods"""
+        self.build()
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("process launch", RUN_FAILED)
+        self.runCmd("process launch", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list",
@@ -45,9 +34,3 @@ class CPPStaticMethodsTestCase(TestBase):
 
         self.expect("expression -- my_a.getMemberValue()",
                     startstr = "(int) $1 = 3")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

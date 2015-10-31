@@ -13,11 +13,11 @@
 namespace lld {
 namespace elf {
 
-AArch64GOTSection::AArch64GOTSection(const ELFLinkingContext &ctx)
-  : AtomSection<ELF64LE>(ctx, ".got", DefinedAtom::typeGOT, DefinedAtom::permRW_,
-    TargetLayout<ELF64LE>::ORDER_GOT)
-{
-  this->_alignment = 8;
+AArch64GOTSection::AArch64GOTSection(const ELFLinkingContext &ctx,
+  StringRef name, int32_t order)
+  : AtomSection<ELF64LE>(ctx, name, DefinedAtom::typeGOT, DefinedAtom::permRW_,
+    order) {
+  _alignment = 8;
 }
 
 const AtomLayout *AArch64GOTSection::appendAtom(const Atom *atom) {
@@ -27,7 +27,8 @@ const AtomLayout *AArch64GOTSection::appendAtom(const Atom *atom) {
     if (r->kindNamespace() != Reference::KindNamespace::ELF)
       continue;
     assert(r->kindArch() == Reference::KindArch::AArch64);
-    if (r->kindValue() == R_AARCH64_TLS_TPREL64)
+    if ((r->kindValue() == R_AARCH64_TLS_TPREL64) ||
+        (r->kindValue() == R_AARCH64_TLSDESC))
       _tlsMap[r->target()] = _tlsMap.size();
   }
 

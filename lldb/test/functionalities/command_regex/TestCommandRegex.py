@@ -2,8 +2,11 @@
 Test lldb 'commands regex' command which allows the user to create a regular expression command.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -11,8 +14,8 @@ class CommandRegexTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @expectedFailureFreeBSD("llvm.org/pr22784: pexpect failing on the FreeBSD buildbot")
     @expectedFailureHostWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @no_debug_info_test
     def test_command_regex(self):
         """Test a simple scenario of 'command regex' invocation and subsequent use."""
         import pexpect
@@ -51,9 +54,3 @@ class CommandRegexTestCase(TestBase):
         child.sendline('Help__')
         child.expect_exact("error: 'Help__' is not a valid command")
         child.expect_exact(prompt)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

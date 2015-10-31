@@ -61,7 +61,6 @@ public:
   reference operator*() const { return Component; }
   pointer   operator->() const { return &Component; }
   const_iterator &operator++();    // preincrement
-  const_iterator &operator++(int); // postincrement
   bool operator==(const const_iterator &RHS) const;
   bool operator!=(const const_iterator &RHS) const { return !(*this == RHS); }
 
@@ -87,7 +86,6 @@ public:
   reference operator*() const { return Component; }
   pointer   operator->() const { return &Component; }
   reverse_iterator &operator++();    // preincrement
-  reverse_iterator &operator++(int); // postincrement
   bool operator==(const reverse_iterator &RHS) const;
   bool operator!=(const reverse_iterator &RHS) const { return !(*this == RHS); }
 };
@@ -218,7 +216,7 @@ StringRef root_name(StringRef path);
 /// @result The root directory of \a path if it has one, otherwise
 ///               "".
 StringRef root_directory(StringRef path);
-  
+
 /// @brief Get root path.
 ///
 /// Equivalent to root_name + root_directory.
@@ -310,7 +308,7 @@ bool is_separator(char value);
 /// @result StringRef of the preferred separator, null-terminated.
 StringRef get_separator();
 
-/// @brief Get the typical temporary directory for the system, e.g., 
+/// @brief Get the typical temporary directory for the system, e.g.,
 /// "/var/tmp" or "C:/TEMP"
 ///
 /// @param erasedOnReboot Whether to favor a path that is erased on reboot
@@ -402,6 +400,12 @@ bool is_absolute(const Twine &path);
 /// @param path Input path.
 /// @result True if the path is relative, false if it is not.
 bool is_relative(const Twine &path);
+
+/// @brief Remove redundant leading "./" pieces and consecutive separators.
+///
+/// @param path Input path.
+/// @result The cleaned-up \a path.
+StringRef remove_leading_dotslash(StringRef path);
 
 } // end namespace path
 } // end namespace sys

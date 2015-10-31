@@ -2,8 +2,11 @@
 Test symbol table access for main.m.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -24,22 +27,10 @@ class FoundationSymtabTestCase(TestBase):
                     'main'
                     ]
 
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
+    @add_test_categories(['pyapi'])
+    def test_with_python_api(self):
         """Test symbol table access with Python APIs."""
-        self.buildDsym()
-        self.symtab_access_python()
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_python_api(self):
-        """Test symbol table access with Python APIs."""
-        self.buildDwarf()
-        self.symtab_access_python()
-
-    def symtab_access_python(self):
-        """Test symbol table access with Python APIs."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -64,21 +55,14 @@ class FoundationSymtabTestCase(TestBase):
         expected_symbols = set(self.symbols_list)
         for symbol in module:
             self.assertTrue(symbol, VALID_SYMBOL)
-            #print "symbol:", symbol
+            #print("symbol:", symbol)
             name = symbol.GetName()
             if name in expected_symbols:
-                #print "Removing %s from known_symbols %s" % (name, expected_symbols)
+                #print("Removing %s from known_symbols %s" % (name, expected_symbols))
                 expected_symbols.remove(name)
 
         # At this point, the known_symbols set should have become an empty set.
         # If not, raise an error.
-        #print "symbols unaccounted for:", expected_symbols
+        #print("symbols unaccounted for:", expected_symbols)
         self.assertTrue(len(expected_symbols) == 0,
                         "All the known symbols are accounted for")
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

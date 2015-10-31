@@ -45,8 +45,15 @@ public:
 
     assert(!_file->hasAtoms() && "The file shouldn't have atoms yet");
     _resolver(sym, *_file);
-    // If atoms were added - release the file to the caller.
-    return _file->hasAtoms() ? _file.release() : nullptr;
+
+    if (!_file->hasAtoms())
+      return nullptr;
+
+    // If atoms were added - return the file but also store it for later
+    // destruction.
+    File *result = _file.get();
+    _returnedFiles.push_back(std::move(_file));
+    return result;
   }
 
 private:
@@ -57,6 +64,7 @@ private:
   // reversed destruction order.
   llvm::BumpPtrAllocator _alloc;
   unique_bump_ptr<SymbolFile<ELFT>> _file;
+  std::vector<unique_bump_ptr<SymbolFile<ELFT>>> _returnedFiles;
 };
 
 } // end anon namespace
@@ -246,6 +254,14 @@ template <class ELFT> void OutputELFWriter<ELFT>::finalizeDefaultAtomValues() {
     assert(a);
     a->_virtualAddr = res;
   }
+  // If there is a section named XXX, and XXX is a valid C identifier,
+  // and there are undefined or weak __start_XXX/__stop_XXX symbols,
+  // set the symbols values to the begin/end of the XXX section
+  // correspondingly.
+  for (const auto &name : _ctx.cidentSectionNames())
+    updateScopeAtomValues((Twine("__start_") + name.getKey()).str(),
+                          (Twine("__stop_") + name.getKey()).str(),
+                          name.getKey());
 }
 
 template <class ELFT> void OutputELFWriter<ELFT>::createDefaultSections() {
@@ -414,11 +430,14 @@ template <class ELFT> uint64_t OutputELFWriter<ELFT>::outputFileSize() const {
 template <class ELFT>
 std::error_code OutputELFWriter<ELFT>::writeOutput(const File &file,
                                                    StringRef path) {
-  std::unique_ptr<FileOutputBuffer> buffer;
+
   ScopedTask createOutputTask(getDefaultDomain(), "ELF Writer Create Output");
-  if (std::error_code ec = FileOutputBuffer::create(
-          path, outputFileSize(), buffer, FileOutputBuffer::F_executable))
+  ErrorOr<std::unique_ptr<FileOutputBuffer>> bufferOrErr =
+      FileOutputBuffer::create(path, outputFileSize(),
+                               FileOutputBuffer::F_executable);
+  if (std::error_code ec = bufferOrErr.getError())
     return ec;
+  std::unique_ptr<FileOutputBuffer> &buffer = *bufferOrErr;
   createOutputTask.end();
 
   ScopedTask writeTask(getDefaultDomain(), "ELF Writer write to memory");
@@ -455,23 +474,35 @@ std::error_code OutputELFWriter<ELFT>::writeFile(const File &file,
 }
 
 template <class ELFT>
+void OutputELFWriter<ELFT>::processUndefinedSymbol(
+    StringRef symName, RuntimeFile<ELFT> &file) const {
+  if (symName.startswith("__start_")) {
+    if (_ctx.cidentSectionNames().count(symName.drop_front(8)))
+      file.addAbsoluteAtom(symName);
+  } else if (symName.startswith("__stop_")) {
+    if (_ctx.cidentSectionNames().count(symName.drop_front(7)))
+      file.addAbsoluteAtom(symName);
+  }
+}
+
+template <class ELFT>
 void OutputELFWriter<ELFT>::updateScopeAtomValues(StringRef sym,
                                                   StringRef sec) {
-  std::string start = ("__" + sym + "_start").str();
-  std::string end = ("__" + sym + "_end").str();
+  updateScopeAtomValues(("__" + sym + "_start").str().c_str(),
+                        ("__" + sym + "_end").str().c_str(), sec);
+}
+
+template <class ELFT>
+void OutputELFWriter<ELFT>::updateScopeAtomValues(StringRef start,
+                                                  StringRef end,
+                                                  StringRef sec) {
   AtomLayout *s = _layout.findAbsoluteAtom(start);
   AtomLayout *e = _layout.findAbsoluteAtom(end);
-  OutputSection<ELFT> *section = _layout.findOutputSection(sec);
-  if (!s || !e)
-    return;
-
-  if (section) {
-    s->_virtualAddr = section->virtualAddr();
-    e->_virtualAddr = section->virtualAddr() + section->memSize();
-  } else {
-    s->_virtualAddr = 0;
-    e->_virtualAddr = 0;
-  }
+  const OutputSection<ELFT> *section = _layout.findOutputSection(sec);
+  if (s)
+    s->_virtualAddr = section ? section->virtualAddr() : 0;
+  if (e)
+    e->_virtualAddr = section ? section->virtualAddr() + section->memSize() : 0;
 }
 
 template class OutputELFWriter<ELF32LE>;

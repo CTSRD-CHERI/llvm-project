@@ -219,8 +219,8 @@ _LIBCPP_BEGIN_NAMESPACE_STD
 template <class>
 struct __void_t { typedef void type; };
 
-template <class T>
-struct __identity { typedef T type; };
+template <class _Tp>
+struct __identity { typedef _Tp type; };
 
 template <class _Tp, bool>
 struct _LIBCPP_TYPE_VIS_ONLY __dependent_type : public _Tp {};
@@ -276,6 +276,53 @@ using bool_constant = integral_constant<bool, __b>;
 
 typedef _LIBCPP_BOOL_CONSTANT(true)  true_type;
 typedef _LIBCPP_BOOL_CONSTANT(false) false_type;
+
+#if !defined(_LIBCPP_HAS_NO_VARIADICS)
+
+// __lazy_and
+
+template <bool _Last, class ..._Preds>
+struct __lazy_and_impl;
+
+template <class ..._Preds>
+struct __lazy_and_impl<false, _Preds...> : false_type {};
+
+template <>
+struct __lazy_and_impl<true> : true_type {};
+
+template <class _Pred>
+struct __lazy_and_impl<true, _Pred> : integral_constant<bool, _Pred::type::value> {};
+
+template <class _Hp, class ..._Tp>
+struct __lazy_and_impl<true, _Hp, _Tp...> : __lazy_and_impl<_Hp::type::value, _Tp...> {};
+
+template <class _P1, class ..._Pr>
+struct __lazy_and : __lazy_and_impl<_P1::type::value, _Pr...> {};
+
+// __lazy_or
+
+template <bool _List, class ..._Preds>
+struct __lazy_or_impl;
+
+template <class ..._Preds>
+struct __lazy_or_impl<true, _Preds...> : true_type {};
+
+template <>
+struct __lazy_or_impl<false> : false_type {};
+
+template <class _Hp, class ..._Tp>
+struct __lazy_or_impl<false, _Hp, _Tp...>
+        : __lazy_or_impl<_Hp::type::value, _Tp...> {};
+
+template <class _P1, class ..._Pr>
+struct __lazy_or : __lazy_or_impl<_P1::type::value, _Pr...> {};
+
+// __lazy_not
+
+template <class _Pred>
+struct __lazy_not : integral_constant<bool, !_Pred::type::value> {};
+
+#endif // !defined(_LIBCPP_HAS_NO_VARIADICS)
 
 // is_const
 
@@ -474,7 +521,7 @@ template <class _Tp> struct _LIBCPP_TYPE_VIS_ONLY is_function
 // template <class _Tp, class _Up> struct __libcpp_is_member_function_pointer<_Tp _Up::*> : public is_function<_Tp> {};
 // 
 
-template <class _MP, bool _IsMemberFuctionPtr, bool _IsMemberObjectPtr>
+template <class _MP, bool _IsMemberFunctionPtr, bool _IsMemberObjectPtr>
 struct __member_pointer_traits_imp
 {  // forward declaration; specializations later
 };
@@ -1143,7 +1190,7 @@ struct _LIBCPP_TYPE_VIS_ONLY aligned_storage
     union type
     {
         _Aligner __align;
-        unsigned char __data[_Len];
+        unsigned char __data[(_Len + _Align - 1)/_Align * _Align];
     };
 };
 
@@ -1158,7 +1205,7 @@ struct _LIBCPP_TYPE_VIS_ONLY aligned_storage<_Len, n>\
 {\
     struct _ALIGNAS(n) type\
     {\
-        unsigned char __lx[_Len];\
+        unsigned char __lx[(_Len + n - 1)/n * n];\
     };\
 }
 
@@ -1289,18 +1336,6 @@ public:
 
 template <class _A1, class _A2 = void, class _A3 = void>
 class __promote : public __promote_imp<_A1, _A2, _A3> {};
-
-#ifdef _LIBCPP_STORE_AS_OPTIMIZATION
-
-// __transform
-
-template <class _Tp, size_t = sizeof(_Tp), bool = is_scalar<_Tp>::value> struct __transform {typedef _Tp type;};
-template <class _Tp> struct __transform<_Tp, 1, true> {typedef unsigned char      type;};
-template <class _Tp> struct __transform<_Tp, 2, true> {typedef unsigned short     type;};
-template <class _Tp> struct __transform<_Tp, 4, true> {typedef unsigned int       type;};
-template <class _Tp> struct __transform<_Tp, 8, true> {typedef unsigned long long type;};
-
-#endif  // _LIBCPP_STORE_AS_OPTIMIZATION
 
 // make_signed / make_unsigned
 
@@ -1482,21 +1517,19 @@ public:
 template <class _Tp, class _Up>
 struct _LIBCPP_TYPE_VIS_ONLY common_type<_Tp, _Up, void>
 {
-private:
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-    static _Tp&& __t();
-    static _Up&& __u();
-#else  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
-    static _Tp __t();
-    static _Up __u();
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
-public:
-    typedef typename remove_reference<decltype(true ? __t() : __u())>::type type;
+    typedef typename decay<decltype(
+        true ? _VSTD::declval<_Tp>() : _VSTD::declval<_Up>()
+      )>::type type;
 };
 
 #else  // _LIBCPP_HAS_NO_VARIADICS
 
-template <class ..._Tp> struct common_type;
+// bullet 1 - sizeof...(Tp) == 0
+
+template <class ..._Tp>
+struct _LIBCPP_TYPE_VIS_ONLY common_type {};
+
+// bullet 2 - sizeof...(Tp) == 1
 
 template <class _Tp>
 struct _LIBCPP_TYPE_VIS_ONLY common_type<_Tp>
@@ -1504,22 +1537,45 @@ struct _LIBCPP_TYPE_VIS_ONLY common_type<_Tp>
     typedef typename decay<_Tp>::type type;
 };
 
+// bullet 3 - sizeof...(Tp) == 2
+
+template <class _Tp, class _Up, class = void>
+struct __common_type2 {};
+
+template <class _Tp, class _Up>
+struct __common_type2<_Tp, _Up,
+    typename __void_t<decltype(
+        true ? _VSTD::declval<_Tp>() : _VSTD::declval<_Up>()
+    )>::type>
+{
+    typedef typename decay<decltype(
+        true ? _VSTD::declval<_Tp>() : _VSTD::declval<_Up>()
+    )>::type type;
+};
+
 template <class _Tp, class _Up>
 struct _LIBCPP_TYPE_VIS_ONLY common_type<_Tp, _Up>
+    : __common_type2<_Tp, _Up> {};
+
+// bullet 4 - sizeof...(Tp) > 2
+
+template <class ...Tp> struct __common_types;
+
+template <class, class = void>
+struct __common_type_impl {};
+
+template <class _Tp, class _Up, class ..._Vp>
+struct __common_type_impl<__common_types<_Tp, _Up, _Vp...>,
+    typename __void_t<typename common_type<_Tp, _Up>::type>::type>
 {
-private:
-    static _Tp&& __t();
-    static _Up&& __u();
-    static bool __f();
-public:
-    typedef typename decay<decltype(__f() ? __t() : __u())>::type type;
+    typedef typename common_type<
+        typename common_type<_Tp, _Up>::type, _Vp...
+    >::type type;
 };
 
 template <class _Tp, class _Up, class ..._Vp>
 struct _LIBCPP_TYPE_VIS_ONLY common_type<_Tp, _Up, _Vp...>
-{
-    typedef typename common_type<typename common_type<_Tp, _Up>::type, _Vp...>::type type;
-};
+    : __common_type_impl<__common_types<_Tp, _Up, _Vp...> > {};
 
 #if _LIBCPP_STD_VER > 11
 template <class ..._Tp> using common_type_t = typename common_type<_Tp...>::type;
@@ -2917,6 +2973,9 @@ template <class _Tp> struct __libcpp_trivial_destructor
 template <class _Tp> struct _LIBCPP_TYPE_VIS_ONLY is_trivially_destructible
     : public __libcpp_trivial_destructor<typename remove_all_extents<_Tp>::type> {};
 
+template <class _Tp> struct _LIBCPP_TYPE_VIS_ONLY is_trivially_destructible<_Tp[]>
+    : public false_type {};
+
 #endif
 
 // is_nothrow_constructible
@@ -3240,6 +3299,10 @@ template <class _Tp> struct __libcpp_nothrow_destructor
 
 template <class _Tp> struct _LIBCPP_TYPE_VIS_ONLY is_nothrow_destructible
     : public __libcpp_nothrow_destructor<typename remove_all_extents<_Tp>::type> {};
+
+template <class _Tp>
+struct _LIBCPP_TYPE_VIS_ONLY is_nothrow_destructible<_Tp[]>
+    : public false_type {};
 
 #endif
 

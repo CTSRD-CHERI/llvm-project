@@ -11,13 +11,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/VirtRegMap.h"
+#include "llvm/IR/Function.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/Target/TargetRegisterInfo.h"
+
+#define DEBUG_TYPE "target-reg-info"
 
 using namespace llvm;
 
@@ -80,6 +86,10 @@ void PrintVRegOrUnit::print(raw_ostream &OS) const {
     return;
   }
   PrintRegUnit::print(OS);
+}
+
+void PrintLaneMask::print(raw_ostream &OS) const {
+  OS << format("%08X", LaneMask);
 }
 
 /// getAllocatableClass - Return the maximal subclass of the given register
@@ -260,13 +270,55 @@ getCommonSuperRegClass(const TargetRegisterClass *RCA, unsigned SubA,
   return BestRC;
 }
 
+/// \brief Check if the registers defined by the pair (RegisterClass, SubReg)
+/// share the same register file.
+static bool shareSameRegisterFile(const TargetRegisterInfo &TRI,
+                                  const TargetRegisterClass *DefRC,
+                                  unsigned DefSubReg,
+                                  const TargetRegisterClass *SrcRC,
+                                  unsigned SrcSubReg) {
+  // Same register class.
+  if (DefRC == SrcRC)
+    return true;
+
+  // Both operands are sub registers. Check if they share a register class.
+  unsigned SrcIdx, DefIdx;
+  if (SrcSubReg && DefSubReg) {
+    return TRI.getCommonSuperRegClass(SrcRC, SrcSubReg, DefRC, DefSubReg,
+                                      SrcIdx, DefIdx) != nullptr;
+  }
+
+  // At most one of the register is a sub register, make it Src to avoid
+  // duplicating the test.
+  if (!SrcSubReg) {
+    std::swap(DefSubReg, SrcSubReg);
+    std::swap(DefRC, SrcRC);
+  }
+
+  // One of the register is a sub register, check if we can get a superclass.
+  if (SrcSubReg)
+    return TRI.getMatchingSuperRegClass(SrcRC, DefRC, SrcSubReg) != nullptr;
+
+  // Plain copy.
+  return TRI.getCommonSubClass(DefRC, SrcRC) != nullptr;
+}
+
+bool TargetRegisterInfo::shouldRewriteCopySrc(const TargetRegisterClass *DefRC,
+                                              unsigned DefSubReg,
+                                              const TargetRegisterClass *SrcRC,
+                                              unsigned SrcSubReg) const {
+  // If this source does not incur a cross register bank copy, use it.
+  return shareSameRegisterFile(*this, DefRC, DefSubReg, SrcRC, SrcSubReg);
+}
+
 // Compute target-independent register allocator hints to help eliminate copies.
 void
 TargetRegisterInfo::getRegAllocationHints(unsigned VirtReg,
                                           ArrayRef<MCPhysReg> Order,
                                           SmallVectorImpl<MCPhysReg> &Hints,
                                           const MachineFunction &MF,
-                                          const VirtRegMap *VRM) const {
+                                          const VirtRegMap *VRM,
+                                          const LiveRegMatrix *Matrix) const {
   const MachineRegisterInfo &MRI = MF.getRegInfo();
   std::pair<unsigned, unsigned> Hint = MRI.getRegAllocationHint(VirtReg);
 
@@ -293,6 +345,26 @@ TargetRegisterInfo::getRegAllocationHints(unsigned VirtReg,
 
   // All clear, tell the register allocator to prefer this register.
   Hints.push_back(Phys);
+}
+
+bool TargetRegisterInfo::canRealignStack(const MachineFunction &MF) const {
+  return !MF.getFunction()->hasFnAttribute("no-realign-stack");
+}
+
+bool TargetRegisterInfo::needsStackRealignment(
+    const MachineFunction &MF) const {
+  const MachineFrameInfo *MFI = MF.getFrameInfo();
+  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  const Function *F = MF.getFunction();
+  unsigned StackAlign = TFI->getStackAlignment();
+  bool requiresRealignment = ((MFI->getMaxAlignment() > StackAlign) ||
+                              F->hasFnAttribute(Attribute::StackAlignment));
+  if (MF.getFunction()->hasFnAttribute("stackrealign") || requiresRealignment) {
+    if (canRealignStack(MF))
+      return true;
+    DEBUG(dbgs() << "Can't realign function's stack: " << F->getName() << "\n");
+  }
+  return false;
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)

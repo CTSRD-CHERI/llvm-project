@@ -2,34 +2,18 @@
 Test SBType and SBTypeList API.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class TypeAndTypeListTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym(self):
-        """Exercise SBType and SBTypeList API."""
-        d = {'EXE': self.exe_name}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.type_and_typelist_api(self.exe_name)
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Exercise SBType and SBTypeList API."""
-        d = {'EXE': self.exe_name}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.type_and_typelist_api(self.exe_name)
 
     def setUp(self):
         # Call super's setUp().
@@ -40,9 +24,13 @@ class TypeAndTypeListTestCase(TestBase):
         self.source = 'main.cpp'
         self.line = line_number(self.source, '// Break at this line')
 
-    def type_and_typelist_api(self, exe_name):
+    @add_test_categories(['pyapi'])
+    def test(self):
         """Exercise SBType and SBTypeList API."""
-        exe = os.path.join(os.getcwd(), exe_name)
+        d = {'EXE': self.exe_name}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        exe = os.path.join(os.getcwd(), self.exe_name)
 
         # Create a target by the debugger.
         target = self.dbg.CreateTarget(exe)
@@ -65,7 +53,7 @@ class TypeAndTypeListTestCase(TestBase):
         # Get the type 'Task'.
         type_list = target.FindTypes('Task')
         if self.TraceOn():
-            print "Size of type_list from target.FindTypes('Task') query: %d" % type_list.GetSize()
+            print("Size of type_list from target.FindTypes('Task') query: %d" % type_list.GetSize())
         self.assertTrue(len(type_list) >= 1) # a second Task make be scared up by the Objective-C runtime
         for type in type_list:
             self.assertTrue(type)
@@ -120,9 +108,3 @@ class TypeAndTypeListTestCase(TestBase):
         # SBType.GetBasicType() takes an enum 'BasicType' (lldb-enumerations.h).
         int_type = id_type.GetBasicType(lldb.eBasicTypeInt)
         self.assertTrue(id_type == int_type)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

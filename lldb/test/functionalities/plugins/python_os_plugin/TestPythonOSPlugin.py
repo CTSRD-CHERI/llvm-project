@@ -2,9 +2,12 @@
 Test that the Python operating system plugin works correctly
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -13,30 +16,14 @@ class PluginPythonOSPlugin(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_python_os_plugin_dsym(self):
+    def test_python_os_plugin(self):
         """Test that the Python operating system plugin works correctly"""
-        self.buildDsym()
+        self.build()
         self.run_python_os_funcionality()
 
-    @dwarf_test
-    def test_python_os_plugin_dwarf(self):
-        """Test that the Python operating system plugin works correctly"""
-        self.buildDwarf()
-        self.run_python_os_funcionality()
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_python_os_step_dsym(self):
+    def run_python_os_step(self):
         """Test that the Python operating system plugin works correctly when single stepping a virtual thread"""
-        self.buildDsym()
-        self.run_python_os_step()
-
-    @dwarf_test
-    def run_python_os_step_dwarf(self):
-        """Test that the Python operating system plugin works correctly when single stepping a virtual thread"""
-        self.buildDwarf()
+        self.build()
         self.run_python_os_step()
 
     def verify_os_thread_registers(self, thread):
@@ -161,10 +148,3 @@ class PluginPythonOSPlugin(TestBase):
         
         self.assertTrue(line_entry.GetFileSpec().GetFilename() == 'main.c', "Make sure we stepped from line 5 to line 6 in main.c")
         self.assertTrue(line_entry.GetLine() == 6, "Make sure we stepped from line 5 to line 6 in main.c")
-        
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -262,9 +262,7 @@ ThreadPlanStepOut::DoPlanExplainsStop (Event *event_ptr)
     if (stop_info_sp)
     {
         StopReason reason = stop_info_sp->GetStopReason();
-        switch (reason)
-        {
-        case eStopReasonBreakpoint:
+        if (reason == eStopReasonBreakpoint)
         {
             // If this is OUR breakpoint, we're fine, otherwise we don't know why this happened...
             BreakpointSiteSP site_sp (m_thread.GetProcess()->GetBreakpointSiteList().FindByID (stop_info_sp->GetValue()));
@@ -310,16 +308,10 @@ ThreadPlanStepOut::DoPlanExplainsStop (Event *event_ptr)
             }
             return false;
         }
-        case eStopReasonWatchpoint:
-        case eStopReasonSignal:
-        case eStopReasonException:
-        case eStopReasonExec:
-        case eStopReasonThreadExiting:
+        else if (IsUsuallyUnexplainedStopReason(reason))
             return false;
-
-        default:
+        else
             return true;
-        }
     }
     return true;
 }
@@ -541,12 +533,12 @@ ThreadPlanStepOut::CalculateReturnValue ()
         
     if (m_immediate_step_from_function != NULL)
     {
-        ClangASTType return_clang_type = m_immediate_step_from_function->GetClangType().GetFunctionReturnType();
-        if (return_clang_type)
+        CompilerType return_compiler_type = m_immediate_step_from_function->GetCompilerType().GetFunctionReturnType();
+        if (return_compiler_type)
         {
             lldb::ABISP abi_sp = m_thread.GetProcess()->GetABI();
             if (abi_sp)
-                m_return_valobj_sp = abi_sp->GetReturnValueObject(m_thread, return_clang_type);
+                m_return_valobj_sp = abi_sp->GetReturnValueObject(m_thread, return_compiler_type);
         }
     }
 }

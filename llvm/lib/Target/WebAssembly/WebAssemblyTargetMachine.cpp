@@ -24,13 +24,15 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Transforms/Scalar.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "wasm"
 
 extern "C" void LLVMInitializeWebAssemblyTarget() {
   // Register the target.
-  RegisterTargetMachine<WebAssemblyTargetMachine> X(TheWebAssemblyTarget);
+  RegisterTargetMachine<WebAssemblyTargetMachine> X(TheWebAssemblyTarget32);
+  RegisterTargetMachine<WebAssemblyTargetMachine> Y(TheWebAssemblyTarget64);
 }
 
 //===----------------------------------------------------------------------===//
@@ -44,8 +46,8 @@ WebAssemblyTargetMachine::WebAssemblyTargetMachine(
     const TargetOptions &Options, Reloc::Model RM, CodeModel::Model CM,
     CodeGenOpt::Level OL)
     : LLVMTargetMachine(T, TT.isArch64Bit()
-                               ? "e-p:64:64-i64:64-v128:8:128-n32:64-S128"
-                               : "e-p:32:32-i64:64-v128:8:128-n32:64-S128",
+                               ? "e-p:64:64-i64:64-n32:64-S128"
+                               : "e-p:32:32-i64:64-n32:64-S128",
                         TT, CPU, FS, Options, RM, CM, OL),
       TLOF(make_unique<WebAssemblyTargetObjectFile>()) {
   initAsmInfo();
@@ -75,7 +77,7 @@ WebAssemblyTargetMachine::getSubtargetImpl(const Function &F) const {
     // creation will depend on the TM and the code generation flags on the
     // function that reside in TargetOptions.
     resetTargetOptions(F);
-    I = make_unique<WebAssemblySubtarget>(TargetTriple, CPU, FS, *this);
+    I = llvm::make_unique<WebAssemblySubtarget>(TargetTriple, CPU, FS, *this);
   }
   return I.get();
 }
@@ -92,15 +94,12 @@ public:
   }
 
   FunctionPass *createTargetRegisterAllocator(bool) override;
-  void addFastRegAlloc(FunctionPass *RegAllocPass) override;
-  void addOptimizedRegAlloc(FunctionPass *RegAllocPass) override;
 
   void addIRPasses() override;
   bool addPreISel() override;
   bool addInstSelector() override;
   bool addILPOpts() override;
   void addPreRegAlloc() override;
-  void addRegAllocPasses(bool Optimized);
   void addPostRegAlloc() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
@@ -108,7 +107,7 @@ public:
 } // end anonymous namespace
 
 TargetIRAnalysis WebAssemblyTargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis([this](Function &F) {
+  return TargetIRAnalysis([this](const Function &F) {
     return TargetTransformInfo(WebAssemblyTTIImpl(this, F));
   });
 }
@@ -122,25 +121,20 @@ FunctionPass *WebAssemblyPassConfig::createTargetRegisterAllocator(bool) {
   return nullptr; // No reg alloc
 }
 
-void WebAssemblyPassConfig::addFastRegAlloc(FunctionPass *RegAllocPass) {
-  assert(!RegAllocPass && "WebAssembly uses no regalloc!");
-  addRegAllocPasses(false);
-}
-
-void WebAssemblyPassConfig::addOptimizedRegAlloc(FunctionPass *RegAllocPass) {
-  assert(!RegAllocPass && "WebAssembly uses no regalloc!");
-  addRegAllocPasses(true);
-}
-
 //===----------------------------------------------------------------------===//
 // The following functions are called from lib/CodeGen/Passes.cpp to modify
 // the CodeGen pass sequence.
 //===----------------------------------------------------------------------===//
 
 void WebAssemblyPassConfig::addIRPasses() {
-  // Expand some atomic operations. WebAssemblyTargetLowering has hooks which
-  // control specifically what gets lowered.
-  addPass(createAtomicExpandPass(&getTM<WebAssemblyTargetMachine>()));
+  // FIXME: the default for this option is currently POSIX, whereas
+  // WebAssembly's MVP should default to Single.
+  if (TM->Options.ThreadModel == ThreadModel::Single)
+    addPass(createLowerAtomicPass());
+  else
+    // Expand some atomic operations. WebAssemblyTargetLowering has hooks which
+    // control specifically what gets lowered.
+    addPass(createAtomicExpandPass(TM));
 
   TargetPassConfig::addIRPasses();
 }
@@ -157,10 +151,22 @@ bool WebAssemblyPassConfig::addILPOpts() { return true; }
 
 void WebAssemblyPassConfig::addPreRegAlloc() {}
 
-void WebAssemblyPassConfig::addRegAllocPasses(bool Optimized) {}
+void WebAssemblyPassConfig::addPostRegAlloc() {
+  // FIXME: the following passes dislike virtual registers. Disable them for now
+  //        so that basic tests can pass. Future patches will remedy this.
+  //
+  // Fails with: Regalloc must assign all vregs.
+  disablePass(&PrologEpilogCodeInserterID);
+  // Fails with: should be run after register allocation.
+  disablePass(&MachineCopyPropagationID);
 
-void WebAssemblyPassConfig::addPostRegAlloc() {}
+  // TODO: Until we get ReverseBranchCondition support, MachineBlockPlacement
+  // can create ugly-looking control flow.
+  disablePass(&MachineBlockPlacementID);
+}
 
 void WebAssemblyPassConfig::addPreSched2() {}
 
-void WebAssemblyPassConfig::addPreEmitPass() {}
+void WebAssemblyPassConfig::addPreEmitPass() {
+  addPass(createWebAssemblyCFGStackify());
+}

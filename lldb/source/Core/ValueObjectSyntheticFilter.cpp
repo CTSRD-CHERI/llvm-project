@@ -26,7 +26,7 @@ public:
     {}
 
     size_t
-    CalculateNumChildren()
+    CalculateNumChildren ()
     {
         return m_backend.GetNumChildren();
     }
@@ -36,7 +36,7 @@ public:
     {
         return m_backend.GetChildAtIndex(idx, true);
     }
-    
+
     size_t
     GetIndexOfChildWithName (const ConstString &name)
     {
@@ -82,10 +82,10 @@ ValueObjectSynthetic::~ValueObjectSynthetic()
 {
 }
 
-ClangASTType
-ValueObjectSynthetic::GetClangTypeImpl ()
+CompilerType
+ValueObjectSynthetic::GetCompilerTypeImpl ()
 {
-    return m_parent->GetClangType();
+    return m_parent->GetCompilerType();
 }
 
 ConstString
@@ -107,12 +107,16 @@ ValueObjectSynthetic::GetDisplayTypeName()
 }
 
 size_t
-ValueObjectSynthetic::CalculateNumChildren()
+ValueObjectSynthetic::CalculateNumChildren(uint32_t max)
 {
     UpdateValueIfNeeded();
     if (m_synthetic_children_count < UINT32_MAX)
-        return m_synthetic_children_count;
-    return (m_synthetic_children_count = m_synth_filter_ap->CalculateNumChildren());
+        return m_synthetic_children_count <= max ? m_synthetic_children_count : max;
+
+    if (max < UINT32_MAX)
+        return m_synth_filter_ap->CalculateNumChildren(max);
+    else
+        return (m_synthetic_children_count = m_synth_filter_ap->CalculateNumChildren(max));
 }
 
 lldb::ValueObjectSP
@@ -223,6 +227,7 @@ ValueObjectSynthetic::GetChildAtIndex (size_t idx, bool can_create)
             if (!synth_guy)
                 return synth_guy;
             m_children_byindex.SetValueForKey(idx, synth_guy.get());
+            synth_guy->SetPreferredDisplayLanguageIfNeeded(GetPreferredDisplayLanguage());
             return synth_guy;
         }
         else
@@ -313,4 +318,34 @@ ValueObjectSynthetic::SetFormat (lldb::Format format)
     }
     this->ValueObject::SetFormat(format);
     this->ClearUserVisibleData(eClearUserVisibleDataItemsAll);
+}
+
+void
+ValueObjectSynthetic::SetPreferredDisplayLanguage (lldb::LanguageType lang)
+{
+    this->ValueObject::SetPreferredDisplayLanguage(lang);
+    if (m_parent)
+        m_parent->SetPreferredDisplayLanguage(lang);
+}
+
+lldb::LanguageType
+ValueObjectSynthetic::GetPreferredDisplayLanguage ()
+{
+    if (m_preferred_display_language == lldb::eLanguageTypeUnknown)
+    {
+        if (m_parent)
+            return m_parent->GetPreferredDisplayLanguage();
+        return lldb::eLanguageTypeUnknown;
+    }
+    else
+        return m_preferred_display_language;
+}
+
+bool
+ValueObjectSynthetic::GetDeclaration (Declaration &decl)
+{
+    if (m_parent)
+        return m_parent->GetDeclaration(decl);
+
+    return ValueObject::GetDeclaration(decl);
 }

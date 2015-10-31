@@ -48,7 +48,30 @@ public:
         eMIPSSubType_mips64r2el,
         eMIPSSubType_mips64r6el,
     };
-    
+
+    // Masks for the ases word of an ABI flags structure.
+    enum MIPSASE
+    {
+        eMIPSAse_dsp        = 0x00000001,   // DSP ASE
+        eMIPSAse_dspr2      = 0x00000002,   // DSP R2 ASE
+        eMIPSAse_eva        = 0x00000004,   // Enhanced VA Scheme
+        eMIPSAse_mcu        = 0x00000008,   // MCU (MicroController) ASE
+        eMIPSAse_mdmx       = 0x00000010,   // MDMX ASE
+        eMIPSAse_mips3d     = 0x00000020,   // MIPS-3D ASE
+        eMIPSAse_mt         = 0x00000040,   // MT ASE
+        eMIPSAse_smartmips  = 0x00000080,   // SmartMIPS ASE
+        eMIPSAse_virt       = 0x00000100,   // VZ ASE
+        eMIPSAse_msa        = 0x00000200,   // MSA ASE
+        eMIPSAse_mips16     = 0x00000400,   // MIPS16 ASE
+        eMIPSAse_micromips  = 0x00000800,   // MICROMIPS ASE
+        eMIPSAse_xpa        = 0x00001000,   // XPA ASE
+        eMIPSAse_mask       = 0x00001fff,
+        eMIPSABI_O32        = 0x00002000,
+        eMIPSABI_N32        = 0x00004000,
+        eMIPSABI_N64        = 0x00008000,
+        eMIPSABI_mask       = 0x000ff000
+    };
+
     enum Core
     {
         eCore_arm_generic,
@@ -318,9 +341,21 @@ public:
     }
 
     bool
+    TripleVendorIsUnspecifiedUnknown() const
+    {
+        return m_triple.getVendor() == llvm::Triple::UnknownVendor && m_triple.getVendorName().empty();
+    }
+
+    bool
     TripleOSWasSpecified() const
     {
         return !m_triple.getOSName().empty();
+    }
+
+    bool
+    TripleOSIsUnspecifiedUnknown() const
+    {
+        return m_triple.getOS() == llvm::Triple::UnknownOS && m_triple.getOSName().empty();
     }
 
     //------------------------------------------------------------------
@@ -461,6 +496,9 @@ public:
         return m_triple;
     }
 
+    void
+    DumpTriple(Stream &s) const;
+
     //------------------------------------------------------------------
     /// Architecture tripple setter.
     ///
@@ -546,6 +584,18 @@ public:
     StopInfoOverrideCallbackType
     GetStopInfoOverrideCallback () const;
 
+    uint32_t
+    GetFlags () const
+    {
+        return m_flags;
+    }
+
+    void
+    SetFlags (uint32_t flags)
+    {
+        m_flags = flags;
+    }
+
 protected:
     bool
     IsEqualTo (const ArchSpec& rhs, bool exact_match) const;
@@ -553,6 +603,11 @@ protected:
     llvm::Triple m_triple;
     Core m_core;
     lldb::ByteOrder m_byte_order;
+
+    // Additional arch flags which we cannot get from triple and core
+    // For MIPS these are application specific extensions like 
+    // micromips, mips16 etc.
+    uint32_t m_flags;
 
     ConstString m_distribution_id;
 

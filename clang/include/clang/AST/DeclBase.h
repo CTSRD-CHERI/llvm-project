@@ -70,8 +70,15 @@ namespace clang {
 /// Decl - This represents one declaration (or definition), e.g. a variable,
 /// typedef, function, struct, etc.
 ///
+/// Note: There are objects tacked on before the *beginning* of Decl
+/// (and its subclasses) in its Decl::operator new(). Proper alignment
+/// of all subclasses (not requiring more than DeclObjAlignment) is
+/// asserted in DeclBase.cpp.
 class Decl {
 public:
+  /// \brief Alignment guaranteed when allocating Decl and any subtypes.
+  enum { DeclObjAlignment = llvm::AlignOf<uint64_t>::Alignment };
+
   /// \brief Lists the kind of concrete classes of Decl.
   enum Kind {
 #define DECL(DERIVED, BASE) DERIVED,
@@ -720,6 +727,15 @@ public:
   bool isDefinedOutsideFunctionOrMethod() const {
     return getParentFunctionOrMethod() == nullptr;
   }
+
+  /// \brief Returns true if this declaration lexically is inside a function.
+  /// It recognizes non-defining declarations as well as members of local
+  /// classes:
+  /// \code
+  ///     void foo() { void bar(); }
+  ///     void foo2() { class ABC { void bar(); }; }
+  /// \endcode
+  bool isLexicallyWithinFunctionOrMethod() const;
 
   /// \brief If this decl is defined inside a function/method/block it returns
   /// the corresponding DeclContext, otherwise it returns null.

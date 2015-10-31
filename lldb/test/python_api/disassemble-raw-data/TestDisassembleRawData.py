@@ -2,9 +2,12 @@
 Use lldb Python API to disassemble raw machine code bytes
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,15 +15,11 @@ class DisassembleRawDataTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @python_api_test
+    @add_test_categories(['pyapi'])
+    @no_debug_info_test
     def test_disassemble_raw_data(self):
         """Test disassembling raw bytes with the API."""
-        self.disassemble_raw_data()
-
-    def disassemble_raw_data(self):
-        """Test disassembling raw bytes with the API."""
         # Create a target from the debugger.
-
         target = self.dbg.CreateTargetWithFileAndTargetTriple ("", "x86_64")
         self.assertTrue(target, VALID_TARGET)
 
@@ -31,15 +30,9 @@ class DisassembleRawDataTestCase(TestBase):
         inst = insts.GetInstructionAtIndex(0)
 
         if self.TraceOn():
-            print
-            print "Raw bytes:    ", [hex(x) for x in raw_bytes]
-            print "Disassembled%s" % str(inst)
+            print()
+            print("Raw bytes:    ", [hex(x) for x in raw_bytes])
+            print("Disassembled%s" % str(inst))
  
         self.assertTrue (inst.GetMnemonic(target) == "movq")
         self.assertTrue (inst.GetOperands(target) == '%' + "rsp, " + '%' + "rbp")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

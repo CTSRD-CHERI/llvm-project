@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -basicaa -polly-codegen -polly-vectorizer=polly -S < %s | FileCheck %s
+; RUN: opt %loadPolly -basicaa -polly-codegen -polly-vectorizer=polly -S < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 
 @A = common global [1024 x float] zeroinitializer, align 16
@@ -24,16 +24,10 @@ return:
   ret void
 }
 
-; CHECK: %value_p_splat_one = load <1 x float>, <1 x float>* bitcast ([1024 x float]* @A to <1 x float>*), align 8
-; CHECK: %value_p_splat = shufflevector <1 x float> %value_p_splat_one, <1 x float> %value_p_splat_one, <4 x i32> zeroinitializer
-; CHECK: %0 = extractelement <4 x float> %value_p_splat, i32 0
-; CHECK: %1 = extractelement <4 x float> %value_p_splat, i32 1
-; CHECK: %2 = extractelement <4 x float> %value_p_splat, i32 2
-; CHECK: %3 = extractelement <4 x float> %value_p_splat, i32 3
-; CHECK: [[RES1:%[a-zA-Z0-9_]+]] = tail call float @foo(float %0) [[NUW:#[0-9]+]]
-; CHECK: [[RES2:%[a-zA-Z0-9_]+]] = tail call float @foo(float %1) [[NUW]]
-; CHECK: [[RES3:%[a-zA-Z0-9_]+]] = tail call float @foo(float %2) [[NUW]]
-; CHECK: [[RES4:%[a-zA-Z0-9_]+]] = tail call float @foo(float %3) [[NUW]]
+; CHECK: [[RES1:%[a-zA-Z0-9_]+]] = tail call float @foo(float %.load) [[NUW:#[0-9]+]]
+; CHECK: [[RES2:%[a-zA-Z0-9_]+]] = tail call float @foo(float %.load) [[NUW]]
+; CHECK: [[RES3:%[a-zA-Z0-9_]+]] = tail call float @foo(float %.load) [[NUW]]
+; CHECK: [[RES4:%[a-zA-Z0-9_]+]] = tail call float @foo(float %.load) [[NUW]]
 ; CHECK: %4 = insertelement <4 x float> undef, float [[RES1]], i32 0
 ; CHECK: %5 = insertelement <4 x float> %4, float [[RES2]], i32 1
 ; CHECK: %6 = insertelement <4 x float> %5, float [[RES3]], i32 2

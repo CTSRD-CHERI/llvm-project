@@ -1,16 +1,5 @@
 include_directories(.)
 
-if (__ANDROID_NDK__ OR (CMAKE_SYSTEM_NAME MATCHES "Windows"))
-  set(LLDB_DEFAULT_DISABLE_LIBEDIT 1)
-else()
-  set(LLDB_DEFAULT_DISABLE_LIBEDIT 0)
-endif ()
-
-set(LLDB_DISABLE_LIBEDIT ${LLDB_DEFAULT_DISABLE_LIBEDIT} CACHE BOOL "Disables the use of editline.")
-if (LLDB_DISABLE_LIBEDIT)
-  add_definitions( -DLLDB_DISABLE_LIBEDIT )
-endif()
-
 if ( CMAKE_SYSTEM_NAME MATCHES "Linux" )
 include_directories(
   Plugins/Process/Linux
@@ -25,9 +14,39 @@ include_directories(
   )
 endif ()
 
-add_lldb_library(lldbBase
-  lldb.cpp
+if ( CMAKE_SYSTEM_NAME MATCHES "NetBSD" )
+include_directories(
+  Plugins/Process/POSIX
   )
+endif ()
+
+
+set(lldbBase_SOURCES
+    lldb.cpp
+  )
+
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  set(LLDB_VERS_GENERATED_FILE ${LLDB_BINARY_DIR}/source/LLDB_vers.c)
+  add_custom_command(OUTPUT ${LLDB_VERS_GENERATED_FILE}
+    COMMAND ${LLDB_SOURCE_DIR}/scripts/generate-vers.pl
+            ${LLDB_SOURCE_DIR}/lldb.xcodeproj/project.pbxproj liblldb_core
+            > ${LLDB_VERS_GENERATED_FILE}
+    DEPENDS ${LLDB_SOURCE_DIR}/scripts/generate-vers.pl
+            ${LLDB_SOURCE_DIR}/lldb.xcodeproj/project.pbxproj)
+  set_source_files_properties(${LLDB_VERS_GENERATED_FILE} PROPERTIES GENERATED 1)
+  # Add this to lldbBase since lldb.cpp uses the symbol defined here.
+  list(APPEND lldbBase_SOURCES ${LLDB_VERS_GENERATED_FILE})
+  add_custom_target(lldbGeneratedVersion
+    DEPENDS ${LLDB_VERS_GENERATED_FILE})
+endif()
+
+add_lldb_library(lldbBase
+  ${lldbBase_SOURCES}
+  )
+
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  add_dependencies(lldbBase lldbGeneratedVersion)
+endif()
 
 add_subdirectory(Breakpoint)
 add_subdirectory(Commands)
@@ -71,4 +90,3 @@ if ( NOT CMAKE_SYSTEM_NAME MATCHES "Windows" )
 endif ()
 # FIXME: implement svn/git revision and repository parsing solution on Windows. There is an SVN-only
 #        revision parsing solution in tools/clang/lib/Basic/CMakelists.txt.
-

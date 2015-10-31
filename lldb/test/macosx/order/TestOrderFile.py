@@ -2,9 +2,12 @@
 Test that debug symbols have the correct order as specified by the order file.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -13,21 +16,9 @@ class OrderFileTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
+    def test(self):
         """Test debug symbols follow the correct order by the order file."""
-        self.buildDsym()
-        self.order_file()
-
-    @skipUnlessDarwin
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test debug symbols follow the correct order by the order file."""
-        self.buildDwarf()
-        self.order_file()
-
-    def order_file(self):
-        """Test debug symbols follow the correct order by the order file."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -43,10 +34,3 @@ class OrderFileTestCase(TestBase):
                         "Symbols have correct order by the order file")
 
         self.runCmd("run", RUN_COMPLETED)
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

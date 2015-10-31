@@ -11,8 +11,13 @@ o test_expr_commands_can_handle_quotes:
   Throw some expression commands with quotes at lldb.
 """
 
-import os, time
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
+
+import os, time
 import lldb
 import lldbutil
 from lldbtest import *
@@ -35,13 +40,13 @@ class BasicExprCommandsTestCase(TestBase):
 
     def build_and_run(self):
         """These basic expression commands should work as expected."""
-        self.buildDefault()
+        self.build()
 
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=False)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
     @unittest2.expectedFailure("llvm.org/pr17135 <rdar://problem/14874559> APFloat::toString does not identify the correct (i.e. least) precision.")
     def test_floating_point_expr_commands(self):
@@ -52,6 +57,7 @@ class BasicExprCommandsTestCase(TestBase):
         # (float) $2 = 2.234
 
     @expectedFailureAll("llvm.org/pr23139", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
+    @expectedFailureWindows("llvm.org/pr21765")
     def test_many_expr_commands(self):
         self.build_and_run()
 
@@ -92,11 +98,12 @@ class BasicExprCommandsTestCase(TestBase):
                        "a.out"])
         # (const char *) $8 = 0x... "/Volumes/data/lldb/svn/trunk/test/expression_command/test/a.out"
 
-    @python_api_test
+    @add_test_categories(['pyapi'])
     @expectedFailureAll("llvm.org/pr23139", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
+    @expectedFailureWindows # Test crashes
     def test_evaluate_expression_python(self):
         """Test SBFrame.EvaluateExpression() API for evaluating an expression."""
-        self.buildDefault()
+        self.build()
 
         exe = os.path.join(os.getcwd(), "a.out")
 
@@ -193,15 +200,16 @@ class BasicExprCommandsTestCase(TestBase):
 
     # rdar://problem/8686536
     # CommandInterpreter::HandleCommand is stripping \'s from input for WantsRawCommand commands
+    @expectedFailureWindows("llvm.org/pr21765")
     def test_expr_commands_can_handle_quotes(self):
         """Throw some expression commands with quotes at lldb."""
-        self.buildDefault()
+        self.build()
 
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line(self, "main.cpp", self.line, num_expected_locations=1,loc_exact=False)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # runCmd: expression 'a'
         # output: (char) $0 = 'a'
@@ -240,9 +248,3 @@ class BasicExprCommandsTestCase(TestBase):
         self.expect('print_hi',
             substrs = ['(int) $',
                        '6'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

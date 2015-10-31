@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// The isl code generator interface takes a Scop and generates a isl_ast. This
+// The isl code generator interface takes a Scop and generates an isl_ast. This
 // ist_ast can either be returned directly or it can be pretty printed to
 // stdout.
 //
@@ -16,6 +16,14 @@
 // for (c2 = max(0, ceild(n + m, 2); c2 <= min(511, floord(5 * n, 3)); c2++) {
 //   bb2(c2);
 // }
+//
+// An in-depth discussion of our AST generation approach can be found in:
+//
+// Polyhedral AST generation is more than scanning polyhedra
+// Tobias Grosser, Sven Verdoolaege, Albert Cohen
+// ACM Transations on Programming Languages and Systems (TOPLAS),
+// 37(4), July 2015
+// http://www.grosser.es/#pub-polyhedral-AST-generation
 //
 //===----------------------------------------------------------------------===//
 
@@ -63,16 +71,15 @@ static cl::opt<bool> DetectParallel("polly-ast-detect-parallel",
                                     cl::init(false), cl::ZeroOrMore,
                                     cl::cat(PollyCategory));
 
-static cl::opt<bool> NoEarlyExit(
-    "polly-no-early-exit",
-    cl::desc("Do not exit early if no benefit of the Polly version was found."),
-    cl::Hidden, cl::init(false), cl::ZeroOrMore, cl::cat(PollyCategory));
+static cl::opt<bool> EarlyExit("polly-no-early-exit",
+                               cl::desc("Dummy flag to keep LNT builders run"),
+                               cl::Hidden, cl::ZeroOrMore,
+                               cl::cat(PollyCategory));
 
 namespace polly {
 class IslAst {
 public:
-  IslAst(Scop *Scop, const Dependences &D);
-
+  static IslAst *create(Scop *Scop, const Dependences &D);
   ~IslAst();
 
   /// Print a source code representation of the program.
@@ -87,6 +94,9 @@ private:
   Scop *S;
   isl_ast_node *Root;
   isl_ast_expr *RunCondition;
+
+  IslAst(Scop *Scop);
+  void init(const Dependences &D);
 
   void buildRunCondition(__isl_keep isl_ast_build *Build);
 };
@@ -303,37 +313,50 @@ static __isl_give isl_ast_node *AtEachDomain(__isl_take isl_ast_node *Node,
   return isl_ast_node_set_annotation(Node, Id);
 }
 
+// Build alias check condition given a pair of minimal/maximal access.
+static __isl_give isl_ast_expr *
+buildCondition(__isl_keep isl_ast_build *Build, const Scop::MinMaxAccessTy *It0,
+               const Scop::MinMaxAccessTy *It1) {
+  isl_ast_expr *NonAliasGroup, *MinExpr, *MaxExpr;
+  MinExpr = isl_ast_expr_address_of(isl_ast_build_access_from_pw_multi_aff(
+      Build, isl_pw_multi_aff_copy(It0->first)));
+  MaxExpr = isl_ast_expr_address_of(isl_ast_build_access_from_pw_multi_aff(
+      Build, isl_pw_multi_aff_copy(It1->second)));
+  NonAliasGroup = isl_ast_expr_le(MaxExpr, MinExpr);
+  MinExpr = isl_ast_expr_address_of(isl_ast_build_access_from_pw_multi_aff(
+      Build, isl_pw_multi_aff_copy(It1->first)));
+  MaxExpr = isl_ast_expr_address_of(isl_ast_build_access_from_pw_multi_aff(
+      Build, isl_pw_multi_aff_copy(It0->second)));
+  NonAliasGroup =
+      isl_ast_expr_or(NonAliasGroup, isl_ast_expr_le(MaxExpr, MinExpr));
+
+  return NonAliasGroup;
+}
+
 void IslAst::buildRunCondition(__isl_keep isl_ast_build *Build) {
   // The conditions that need to be checked at run-time for this scop are
-  // available as an isl_set in the AssumedContext from which we can directly
-  // derive a run-time condition.
-  RunCondition = isl_ast_build_expr_from_set(Build, S->getAssumedContext());
+  // available as an isl_set in the runtime check context from which we can
+  // directly derive a run-time condition.
+  RunCondition =
+      isl_ast_build_expr_from_set(Build, S->getRuntimeCheckContext());
 
   // Create the alias checks from the minimal/maximal accesses in each alias
-  // group. This operation is by construction quadratic in the number of
-  // elements in each alias group.
-  isl_ast_expr *NonAliasGroup, *MinExpr, *MaxExpr;
-  for (const Scop::MinMaxVectorTy *MinMaxAccesses : S->getAliasGroups()) {
-    auto AccEnd = MinMaxAccesses->end();
-    for (auto AccIt0 = MinMaxAccesses->begin(); AccIt0 != AccEnd; ++AccIt0) {
-      for (auto AccIt1 = AccIt0 + 1; AccIt1 != AccEnd; ++AccIt1) {
-        MinExpr =
-            isl_ast_expr_address_of(isl_ast_build_access_from_pw_multi_aff(
-                Build, isl_pw_multi_aff_copy(AccIt0->first)));
-        MaxExpr =
-            isl_ast_expr_address_of(isl_ast_build_access_from_pw_multi_aff(
-                Build, isl_pw_multi_aff_copy(AccIt1->second)));
-        NonAliasGroup = isl_ast_expr_le(MaxExpr, MinExpr);
-        MinExpr =
-            isl_ast_expr_address_of(isl_ast_build_access_from_pw_multi_aff(
-                Build, isl_pw_multi_aff_copy(AccIt1->first)));
-        MaxExpr =
-            isl_ast_expr_address_of(isl_ast_build_access_from_pw_multi_aff(
-                Build, isl_pw_multi_aff_copy(AccIt0->second)));
-        NonAliasGroup =
-            isl_ast_expr_or(NonAliasGroup, isl_ast_expr_le(MaxExpr, MinExpr));
-        RunCondition = isl_ast_expr_and(RunCondition, NonAliasGroup);
-      }
+  // group which consists of read only and non read only (read write) accesses.
+  // This operation is by construction quadratic in the read-write pointers and
+  // linear int the read only pointers in each alias group.
+  for (const Scop::MinMaxVectorPairTy &MinMaxAccessPair : S->getAliasGroups()) {
+    auto &MinMaxReadWrite = MinMaxAccessPair.first;
+    auto &MinMaxReadOnly = MinMaxAccessPair.second;
+    auto RWAccEnd = MinMaxReadWrite.end();
+
+    for (auto RWAccIt0 = MinMaxReadWrite.begin(); RWAccIt0 != RWAccEnd;
+         ++RWAccIt0) {
+      for (auto RWAccIt1 = RWAccIt0 + 1; RWAccIt1 != RWAccEnd; ++RWAccIt1)
+        RunCondition = isl_ast_expr_and(
+            RunCondition, buildCondition(Build, RWAccIt0, RWAccIt1));
+      for (const Scop::MinMaxAccessTy &ROAccIt : MinMaxReadOnly)
+        RunCondition = isl_ast_expr_and(
+            RunCondition, buildCondition(Build, RWAccIt0, &ROAccIt));
     }
   }
 }
@@ -347,8 +370,7 @@ void IslAst::buildRunCondition(__isl_keep isl_ast_build *Build) {
 ///       original as well as optimized SCoP (e.g., #stride-one-accesses).
 static bool benefitsFromPolly(Scop *Scop, bool PerformParallelTest) {
 
-  // First check the user choice.
-  if (NoEarlyExit)
+  if (PollyProcessUnprofitable)
     return true;
 
   // Check if nothing interesting happened.
@@ -360,14 +382,14 @@ static bool benefitsFromPolly(Scop *Scop, bool PerformParallelTest) {
   return true;
 }
 
-IslAst::IslAst(Scop *Scop, const Dependences &D)
-    : S(Scop), Root(nullptr), RunCondition(nullptr) {
+IslAst::IslAst(Scop *Scop) : S(Scop), Root(nullptr), RunCondition(nullptr) {}
 
+void IslAst::init(const Dependences &D) {
   bool PerformParallelTest = PollyParallel || DetectParallel ||
                              PollyVectorizerChoice != VECTORIZER_NONE;
 
   // Skip AST and code generation if there was no benefit achieved.
-  if (!benefitsFromPolly(Scop, PerformParallelTest))
+  if (!benefitsFromPolly(S, PerformParallelTest))
     return;
 
   isl_ctx *Ctx = S->getIslCtx();
@@ -382,9 +404,6 @@ IslAst::IslAst(Scop *Scop, const Dependences &D)
 
   Build = isl_ast_build_set_at_each_domain(Build, AtEachDomain, nullptr);
 
-  isl_union_map *Schedule =
-      isl_union_map_intersect_domain(S->getSchedule(), S->getDomains());
-
   if (PerformParallelTest) {
     BuildInfo.Deps = &D;
     BuildInfo.InParallelFor = 0;
@@ -397,9 +416,15 @@ IslAst::IslAst(Scop *Scop, const Dependences &D)
 
   buildRunCondition(Build);
 
-  Root = isl_ast_build_ast_from_schedule(Build, Schedule);
+  Root = isl_ast_build_node_from_schedule(Build, S->getScheduleTree());
 
   isl_ast_build_free(Build);
+}
+
+IslAst *IslAst::create(Scop *Scop, const Dependences &D) {
+  auto Ast = new IslAst(Scop);
+  Ast->init(D);
+  return Ast;
 }
 
 IslAst::~IslAst() {
@@ -427,7 +452,7 @@ bool IslAstInfo::runOnScop(Scop &Scop) {
 
   const Dependences &D = getAnalysis<DependenceInfo>().getDependences();
 
-  Ast = new IslAst(&Scop, D);
+  Ast = IslAst::create(&Scop, D);
 
   DEBUG(printScop(dbgs(), Scop));
   return false;
@@ -525,6 +550,11 @@ void IslAstInfo::printScop(raw_ostream &OS, Scop &S) const {
 
   if (!RootNode) {
     OS << ":: isl ast generation and code generation was skipped!\n\n";
+    OS << ":: This is either because no useful optimizations could be applied "
+          "(use -polly-process-unprofitable to enforce code generation) or "
+          "because earlier passes such as dependence analysis timed out (use "
+          "-polly-dependences-computeout=0 to set dependence analysis timeout "
+          "to infinity)\n\n";
     return;
   }
 

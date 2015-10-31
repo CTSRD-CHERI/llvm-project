@@ -34,13 +34,18 @@ public:
 
   bool hasReservedCallFrame(const MachineFunction &MF) const override;
 
-  void processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
-                                            RegScavenger *RS) const override;
+  void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
+                            RegScavenger *RS) const override;
   unsigned ehDataReg(unsigned I) const;
   bool assignCalleeSavedSpillSlots(MachineFunction &MF, const
     TargetRegisterInfo *TRI, std::vector<CalleeSavedInfo> &CSI) const override;
-};
 
+private:
+  void emitInterruptEpilogueStub(MachineFunction &MF,
+                                 MachineBasicBlock &MBB) const;
+  void emitInterruptPrologueStub(MachineFunction &MF,
+                                 MachineBasicBlock &MBB) const;
+};
 } // End llvm namespace
 
 #endif

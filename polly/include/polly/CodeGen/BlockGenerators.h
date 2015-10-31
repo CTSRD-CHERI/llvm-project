@@ -17,12 +17,13 @@
 #define POLLY_BLOCK_GENERATORS_H
 
 #include "polly/CodeGen/IRBuilder.h"
+#include "polly/Support/ScopHelper.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "isl/map.h"
-#include <vector>
 
 struct isl_ast_build;
+struct isl_id_to_ast_expr;
 
 namespace llvm {
 class Pass;
@@ -34,41 +35,20 @@ namespace polly {
 using namespace llvm;
 class ScopStmt;
 class MemoryAccess;
+class ScopArrayInfo;
 class IslExprBuilder;
-
-typedef DenseMap<const Value *, Value *> ValueMapT;
-typedef std::vector<ValueMapT> VectorValueMapT;
-
-/// @brief Check whether an instruction can be synthesized by the code
-///        generator.
-///
-/// Some instructions will be recalculated only from information that is code
-/// generated from the polyhedral representation. For such instructions we do
-/// not need to ensure that their operands are available during code generation.
-///
-/// @param I The instruction to check.
-/// @param LI The LoopInfo analysis.
-/// @param SE The scalar evolution database.
-/// @param R The region out of which SSA names are parameters.
-/// @return If the instruction I can be regenerated from its
-///         scalar evolution representation, return true,
-///         otherwise return false.
-bool canSynthesize(const llvm::Instruction *I, const llvm::LoopInfo *LI,
-                   llvm::ScalarEvolution *SE, const llvm::Region *R);
-
-/// @brief Return true iff @p V is an intrinsic that we ignore during code
-///        generation.
-bool isIgnoredIntrinsic(const llvm::Value *V);
 
 /// @brief Generate a new basic block for a polyhedral statement.
 class BlockGenerator {
 public:
+  typedef llvm::SmallVector<ValueMapT, 8> VectorValueMapT;
+
   /// @brief Map types to resolve scalar dependences.
   ///
   ///@{
 
   /// @see The ScalarMap and PHIOpMap member.
-  using ScalarAllocaMapTy = DenseMap<Instruction *, AllocaInst *>;
+  using ScalarAllocaMapTy = DenseMap<AssertingVH<Value>, AssertingVH<Value>>;
 
   /// @brief Simple vector of instructions to store escape users.
   using EscapeUserVectorTy = SmallVector<Instruction *, 4>;
@@ -77,7 +57,8 @@ public:
   ///
   /// @see The EscapeMap member.
   using EscapeUsersAllocaMapTy =
-      DenseMap<Instruction *, std::pair<AllocaInst *, EscapeUserVectorTy>>;
+      DenseMap<Instruction *,
+               std::pair<AssertingVH<Value>, EscapeUserVectorTy>>;
 
   ///@}
 
@@ -92,35 +73,87 @@ public:
   /// @param ScalarMap   Map from scalars to their demoted location.
   /// @param PHIOpMap    Map from PHIs to their demoted operand location.
   /// @param EscapeMap   Map from scalars to their escape users and locations.
+  /// @param GlobalMap   A mapping from llvm::Values used in the original scop
+  ///                    region to a new set of llvm::Values. Each reference to
+  ///                    an original value appearing in this mapping is replaced
+  ///                    with the new value it is mapped to.
   /// @param ExprBuilder An expression builder to generate new access functions.
   BlockGenerator(PollyIRBuilder &Builder, LoopInfo &LI, ScalarEvolution &SE,
                  DominatorTree &DT, ScalarAllocaMapTy &ScalarMap,
                  ScalarAllocaMapTy &PHIOpMap, EscapeUsersAllocaMapTy &EscapeMap,
-                 IslExprBuilder *ExprBuilder = nullptr);
+                 ValueMapT &GlobalMap, IslExprBuilder *ExprBuilder = nullptr);
 
   /// @brief Copy the basic block.
   ///
   /// This copies the entire basic block and updates references to old values
   /// with references to new values, as defined by GlobalMap.
   ///
-  /// @param Stmt      The block statement to code generate.
-  /// @param GlobalMap A mapping from old values to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                  within this basic block).
-  /// @param LTS       A map from old loops to new induction variables as SCEVs.
-  void copyStmt(ScopStmt &Stmt, ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+  /// @param Stmt        The block statement to code generate.
+  /// @param LTS         A map from old loops to new induction variables as
+  ///                    SCEVs.
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  void copyStmt(ScopStmt &Stmt, LoopToScevMapT &LTS,
+                isl_id_to_ast_expr *NewAccesses);
+
+  /// @brief Return the scalar alloca for @p ScalarBase
+  ///
+  /// If no alloca was mapped to @p ScalarBase a new one is created.
+  ///
+  /// @param ScalarBase The demoted scalar value.
+  /// @param GlobalMap  A mapping from Allocas to other memory locations that
+  ///                   can be used to replace the original alloca locations
+  ///                   with new memory locations, e.g. when passing values to
+  ///                   subfunctions while offloading parallel sections.
+  ///
+  /// @returns The alloca for @p ScalarBase or a replacement value taken from
+  ///          GlobalMap.
+  Value *getOrCreateScalarAlloca(Value *ScalarBase);
+
+  /// @brief Return the PHi-node alloca for @p ScalarBase
+  ///
+  /// If no alloca was mapped to @p ScalarBase a new one is created.
+  ///
+  /// @param ScalarBase The demoted scalar value.
+  ///
+  /// @returns The alloca for @p ScalarBase or a replacement value taken from
+  ///          GlobalMap.
+  Value *getOrCreatePHIAlloca(Value *ScalarBase);
+
+  /// @brief Return the alloca for @p Access
+  ///
+  /// If no alloca was mapped for @p Access a new one is created.
+  ///
+  /// @param Access    The memory access for which to generate the alloca
+  ///
+  /// @returns The alloca for @p Access or a replacement value taken from
+  ///          GlobalMap.
+  Value *getOrCreateAlloca(MemoryAccess &Access);
+
+  /// @brief Return the alloca for @p Array
+  ///
+  /// If no alloca was mapped for @p Array a new one is created.
+  ///
+  /// @param Array The array for which to generate the alloca
+  ///
+  /// @returns The alloca for @p Array or a replacement value taken from
+  ///          GlobalMap.
+  Value *getOrCreateAlloca(const ScopArrayInfo *Array);
 
   /// @brief Finalize the code generation for the SCoP @p S.
   ///
   /// This will initialize and finalize the scalar variables we demoted during
   /// the code generation.
   ///
-  /// @see createScalarInitialization(Region &, ValueMapT &)
+  /// @see createScalarInitialization(Scop &)
   /// @see createScalarFinalization(Region &)
-  void finalizeSCoP(Scop &S, ValueMapT &VMap);
+  void finalizeSCoP(Scop &S);
 
   /// @brief An empty destructor
   virtual ~BlockGenerator(){};
+
+  BlockGenerator(const BlockGenerator &) = default;
 
 protected:
   PollyIRBuilder &Builder;
@@ -136,36 +169,140 @@ protected:
 
   /// @brief Maps to resolve scalar dependences for PHI operands and scalars.
   ///
-  /// Usage example:
+  /// When translating code that contains scalar dependences as they result from
+  /// inter-block scalar dependences (including the use of data carrying
+  /// PHI nodes), we do not directly regenerate in-register SSA code, but
+  /// instead allocate some stack memory through which these scalar values are
+  /// passed. Only a later pass of -mem2reg will then (re)introduce in-register
+  /// computations.
   ///
-  ///  x1 = ...   // x1 will be inserted in the ScalarMap and PhiOpMap.
-  ///  for (i=0...N) {
-  ///      x2 = phi(x1, add) // x2 will be inserted in the ScalarMap, x1 and
-  ///                        // add are mapped in the PHIOpMap.
-  ///      add = x2 + A[i];  // add will be inserted in the ScalarMap and
-  ///                        // the PhiOpMap.
-  ///  }
-  ///  print(x1)  // x1 is mapped in the ScalarMap.
-  ///  print(x2)  // x2 is mapped in the ScalarMap.
-  ///  print(add) // add is mapped in the ScalarMap.
+  /// To keep track of the memory location(s) used to store the data computed by
+  /// a given SSA instruction, we use the maps 'ScalarMap' and 'PHIOpMap'. Each
+  /// maps a given scalar value to a junk of stack allocated memory.
+  ///
+  /// 'ScalarMap' is used for normal scalar dependences that go from a scalar
+  /// definition to its use. Such dependences are lowered by directly writing
+  /// the value an instruction computes into the corresponding chunk of memory
+  /// and reading it back from this chunk of memory right before every use of
+  /// this original scalar value. The memory locations in 'ScalarMap' end with
+  /// '.s2a'.
+  ///
+  /// 'PHIOpMap' is used to model PHI nodes. For each PHI nodes we introduce,
+  /// besides the memory in 'ScalarMap', a second chunk of memory into which we
+  /// write at the end of each basic block preceeding the PHI instruction the
+  /// value passed through this basic block. At the place where the PHI node is
+  /// executed, we replace the PHI node with a load from the corresponding
+  /// memory location in the 'PHIOpMap' table. The memory locations in
+  /// 'PHIOpMap' end with '.phiops'.
+  ///
+  /// The ScopArrayInfo objects of accesses that belong to a PHI node may have
+  /// identical base pointers, even though they refer to two different memory
+  /// locations, the normal '.s2a' locations and the special '.phiops'
+  /// locations. For historic reasons we keep such accesses in two maps
+  /// 'ScalarMap' and 'PHIOpMap', index by the BasePointer. An alternative
+  /// implemenation, could use a single map that uses the ScopArrayInfo object
+  /// as index.
+  ///
+  /// Example:
+  ///
+  ///                              Input C Code
+  ///                              ============
+  ///
+  ///                 S1:      x1 = ...
+  ///                          for (i=0...N) {
+  ///                 S2:           x2 = phi(x1, add)
+  ///                 S3:           add = x2 + 42;
+  ///                          }
+  ///                 S4:      print(x1)
+  ///                          print(x2)
+  ///                          print(add)
+  ///
+  ///
+  ///        Unmodified IR                         IR After expansion
+  ///        =============                         ==================
+  ///
+  /// S1:   x1 = ...                     S1:    x1 = ...
+  ///                                           x1.s2a = s1
+  ///                                           x2.phiops = s1
+  ///        |                                    |
+  ///        |   <--<--<--<--<                    |   <--<--<--<--<
+  ///        | /              \                   | /              \     .
+  ///        V V               \                  V V               \    .
+  /// S2:  x2 = phi (x1, add)   |        S2:    x2 = x2.phiops       |
+  ///                           |               x2.s2a = x2          |
+  ///                           |                                    |
+  /// S3:  add = x2 + 42        |        S3:    add = x2 + 42        |
+  ///                           |               add.s2a = add        |
+  ///                           |               x2.phiops = add      |
+  ///        | \               /                  | \               /
+  ///        |  \             /                   |  \             /
+  ///        |   >-->-->-->-->                    |   >-->-->-->-->
+  ///        V                                    V
+  ///
+  ///                                    S4:    x1 = x1.s2a
+  /// S4:  ... = x1                             ... = x1
+  ///                                           x2 = x2.s2a
+  ///      ... = x2                             ... = x2
+  ///                                           add = add.s2a
+  ///      ... = add                            ... = add
+  ///
+  ///      ScalarMap = { x1 -> x1.s2a, x2 -> x2.s2a, add -> add.s2a }
+  ///      PHIOpMap =  { x2 -> x2.phiops }
+  ///
+  ///
+  ///  ??? Why does a PHI-node require two memory chunks ???
+  ///
+  ///  One may wonder why a PHI node requires two memory chunks and not just
+  ///  all data is stored in a single location. The following example tries
+  ///  to store all data in .s2a and drops the .phiops location:
+  ///
+  ///      S1:    x1 = ...
+  ///             x1.s2a = s1
+  ///             x2.s2a = s1             // use .s2a instead of .phiops
+  ///               |
+  ///               |   <--<--<--<--<
+  ///               | /              \    .
+  ///               V V               \   .
+  ///      S2:    x2 = x2.s2a          |  // value is same as above, but read
+  ///                                  |  // from .s2a
+  ///                                  |
+  ///             x2.s2a = x2          |  // store into .s2a as normal
+  ///                                  |
+  ///      S3:    add = x2 + 42        |
+  ///             add.s2a = add        |
+  ///             x2.s2a = add         |  // use s2a instead of .phiops
+  ///               | \               /   // !!! This is wrong, as x2.s2a now
+  ///               |   >-->-->-->-->     // contains add instead of x2.
+  ///               V
+  ///
+  ///      S4:    x1 = x1.s2a
+  ///             ... = x1
+  ///             x2 = x2.s2a             // !!! We now read 'add' instead of
+  ///             ... = x2                // 'x2'
+  ///             add = add.s2a
+  ///             ... = add
+  ///
+  ///  As visible in the example, the SSA value of the PHI node may still be
+  ///  needed _after_ the basic block, which could conceptually branch to the
+  ///  PHI node, has been run and has overwritten the PHI's old value. Hence, a
+  ///  single memory location is not enough to code-generate a PHI node.
   ///
   ///{
-
-  /// The PHIOpMap is used to get the alloca to communicate a value to a PHI
-  /// node, hence when the operand of a PHI is demoted the corresponding write
-  /// access will use the PHIOpMap to look for the correct alloca. PHI nodes
-  /// will then read that location in order to get the correct/current operand
-  /// value.
+  ///
+  /// @brief Memory locations used for the special PHI node modeling.
   ScalarAllocaMapTy &PHIOpMap;
 
-  /// The ScalarMap is used in __all__ other cases, thus always when a scalar
-  /// variable is read/written and the write is not because the scalar is a PHI
-  /// operand.
+  /// @brief Memory locations used to model scalar dependences.
   ScalarAllocaMapTy &ScalarMap;
   ///}
 
   /// @brief Map from instructions to their escape users as well as the alloca.
   EscapeUsersAllocaMapTy &EscapeMap;
+
+  /// @brief A map from llvm::Values referenced in the old code to a new set of
+  ///        llvm::Values, which is used to replace these old values during
+  ///        code generation.
+  ValueMapT &GlobalMap;
 
   /// @brief Split @p BB to create a new one we can use to clone @p BB in.
   BasicBlock *splitBB(BasicBlock *BB);
@@ -176,14 +313,15 @@ protected:
   /// @param BB        The basic block to code generate.
   /// @param BBMap     A mapping from old values to their new values in this
   /// block.
-  /// @param GlobalMap A mapping from old values to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                  within this basic block).
-  /// @param LTS       A map from old loops to new induction variables as SCEVs.
+  /// @param LTS         A map from old loops to new induction variables as
+  ///                    SCEVs.
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
   ///
   /// @returns The copy of the basic block.
   BasicBlock *copyBB(ScopStmt &Stmt, BasicBlock *BB, ValueMapT &BBMap,
-                     ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+                     LoopToScevMapT &LTS, isl_id_to_ast_expr *NewAccesses);
 
   /// @brief Copy the given basic block.
   ///
@@ -192,35 +330,33 @@ protected:
   /// @param BBCopy    The new basic block to generate code in.
   /// @param BBMap     A mapping from old values to their new values in this
   /// block.
-  /// @param GlobalMap A mapping from old values to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                  within this basic block).
-  /// @param LTS       A map from old loops to new induction variables as SCEVs.
+  /// @param LTS         A map from old loops to new induction variables as
+  ///                    SCEVs.
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
   void copyBB(ScopStmt &Stmt, BasicBlock *BB, BasicBlock *BBCopy,
-              ValueMapT &BBMap, ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+              ValueMapT &BBMap, LoopToScevMapT &LTS,
+              isl_id_to_ast_expr *NewAccesses);
 
   /// @brief Return the alloca for @p ScalarBase in @p Map.
   ///
   /// If no alloca was mapped to @p ScalarBase in @p Map a new one is created
   /// and named after @p ScalarBase with the suffix @p NameExt.
   ///
-  /// @param ScalarBase The demoted scalar instruction.
-  /// @param Map        The map we should look for a mapped alloca instruction.
+  /// @param ScalarBase The demoted scalar value.
+  /// @param Map        The map we should look for a mapped alloca value.
   /// @param NameExt    The suffix we add to the name of a new created alloca.
-  /// @param IsNew      If set it will hold true iff the alloca was created.
   ///
-  /// @returns The alloca for @p ScalarBase in @p Map.
-  AllocaInst *getOrCreateAlloca(Instruction *ScalarBase, ScalarAllocaMapTy &Map,
-                                const char *NameExt = ".s2a",
-                                bool *IsNew = nullptr);
+  /// @returns The alloca for @p ScalarBase.
+  Value *getOrCreateAlloca(Value *ScalarBase, ScalarAllocaMapTy &Map,
+                           const char *NameExt);
 
-  /// @brief Generate reload of scalars demoted to memory and needed by @p Inst.
+  /// @brief Generate reload of scalars demoted to memory and needed by @p Stmt.
   ///
   /// @param Stmt  The statement we generate code for.
-  /// @param Inst  The instruction that might need reloaded values.
   /// @param BBMap A mapping from old values to their new values in this block.
-  virtual void generateScalarLoads(ScopStmt &Stmt, const Instruction *Inst,
-                                   ValueMapT &BBMap);
+  void generateScalarLoads(ScopStmt &Stmt, ValueMapT &BBMap);
 
   /// @brief Generate the scalar stores for the given statement.
   ///
@@ -229,26 +365,52 @@ protected:
   /// be demoted to memory.
   ///
   /// @param Stmt  The statement we generate code for.
-  /// @param BB    The basic block we generate code for.
+  /// @param LTS   A mapping from loops virtual canonical induction
+  ///              variable to their new values
+  ///              (for values recalculated in the new ScoP, but not
+  ///               within this basic block)
   /// @param BBMap A mapping from old values to their new values in this block.
-  /// @param GlobalMap A mapping for globally replaced values.
-  virtual void generateScalarStores(ScopStmt &Stmt, BasicBlock *BB,
-                                    ValueMapT &BBMAp, ValueMapT &GlobalMap);
+  virtual void generateScalarStores(ScopStmt &Stmt, LoopToScevMapT &LTS,
+                                    ValueMapT &BBMap);
 
   /// @brief Handle users of @p Inst outside the SCoP.
   ///
-  /// @param R        The current SCoP region.
-  /// @param Inst     The current instruction we check.
-  /// @param InstCopy The copy of the instruction @p Inst in the optimized SCoP.
-  void handleOutsideUsers(const Region &R, Instruction *Inst, Value *InstCopy);
+  /// @param R         The current SCoP region.
+  /// @param Inst      The current instruction we check.
+  /// @param Address   If given it is used as the escape address for @p Inst.
+  void handleOutsideUsers(const Region &R, Instruction *Inst,
+                          Value *Address = nullptr);
+
+  /// @brief Find scalar statements that have outside users.
+  ///
+  /// We register these scalar values to later update subsequent scalar uses of
+  /// these values to either use the newly computed value from within the scop
+  /// (if the scop was executed) or the unchanged original code (if the run-time
+  /// check failed).
+  ///
+  /// @param S The scop for which to find the outside users.
+  void findOutsideUsers(Scop &S);
 
   /// @brief Initialize the memory of demoted scalars.
   ///
-  /// If a PHI node was demoted and one of its predecessor blocks was outside
-  /// the SCoP we need to initialize the memory cell we demoted the PHI into
-  /// with the value corresponding to that predecessor. As a SCoP is a
-  /// __single__ entry region there is at most one such predecessor.
-  void createScalarInitialization(Region &R, ValueMapT &VMap);
+  /// @param S The scop for which to generate the scalar initializers.
+  void createScalarInitialization(Scop &S);
+
+  /// @brief Create exit PHI node merges for PHI nodes with more than two edges
+  ///        from inside the scop.
+  ///
+  /// For scops which have a PHI node in the exit block that has more than two
+  /// incoming edges from inside the scop region, we require some special
+  /// handling to understand which of the possible values will be passed to the
+  /// PHI node from inside the optimized version of the scop. To do so ScopInfo
+  /// models the possible incoming values as write accesses of the ScopStmts.
+  ///
+  /// This function creates corresponding code to reload the computed outgoing
+  /// value from the stack slot it has been stored into and to pass it on to the
+  /// PHI node in the original exit block.
+  ///
+  /// @param S The scop for which to generate the exiting PHI nodes.
+  void createExitPHINodeMerges(Scop &S);
 
   /// @brief Promote the values of demoted scalars after the SCoP.
   ///
@@ -256,6 +418,30 @@ protected:
   /// stored in the memory cell allocated for that scalar and combine it with
   /// the original value in the non-optimized SCoP.
   void createScalarFinalization(Region &R);
+
+  /// @brief Try to synthesize a new value
+  ///
+  /// Given an old value, we try to synthesize it in a new context from its
+  /// original SCEV expression. We start from the original SCEV expression,
+  /// then replace outdated parameter and loop references, and finally
+  /// expand it to code that computes this updated expression.
+  ///
+  /// @param Stmt      The statement to code generate
+  /// @param Old       The old Value
+  /// @param BBMap     A mapping from old values to their new values
+  ///                  (for values recalculated within this basic block)
+  /// @param LTS       A mapping from loops virtual canonical induction
+  ///                  variable to their new values
+  ///                  (for values recalculated in the new ScoP, but not
+  ///                   within this basic block)
+  /// @param L         The loop that surrounded the instruction that referenced
+  ///                  this value in the original code. This loop is used to
+  ///                  evaluate the scalar evolution at the right scope.
+  ///
+  /// @returns  o A newly synthesized value.
+  ///           o NULL, if synthesizing the value failed.
+  Value *trySynthesizeNewValue(ScopStmt &Stmt, Value *Old, ValueMapT &BBMap,
+                               LoopToScevMapT &LTS, Loop *L) const;
 
   /// @brief Get the new version of a value.
   ///
@@ -270,9 +456,6 @@ protected:
   /// @param Old       The old Value.
   /// @param BBMap     A mapping from old values to their new values
   ///                  (for values recalculated within this basic block).
-  /// @param GlobalMap A mapping from old values to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                   within this basic block).
   /// @param LTS       A mapping from loops virtual canonical induction
   ///                  variable to their new values
   ///                  (for values recalculated in the new ScoP, but not
@@ -284,11 +467,11 @@ protected:
   /// @returns  o The old value, if it is still valid.
   ///           o The new value, if available.
   ///           o NULL, if no value is found.
-  Value *getNewValue(ScopStmt &Stmt, const Value *Old, ValueMapT &BBMap,
-                     ValueMapT &GlobalMap, LoopToScevMapT &LTS, Loop *L) const;
+  Value *getNewValue(ScopStmt &Stmt, Value *Old, ValueMapT &BBMap,
+                     LoopToScevMapT &LTS, Loop *L) const;
 
-  void copyInstScalar(ScopStmt &Stmt, const Instruction *Inst, ValueMapT &BBMap,
-                      ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+  void copyInstScalar(ScopStmt &Stmt, Instruction *Inst, ValueMapT &BBMap,
+                      LoopToScevMapT &LTS);
 
   /// @brief Get the innermost loop that surrounds an instruction.
   ///
@@ -296,21 +479,28 @@ protected:
   /// @return The innermost loop that surrounds the instruction.
   Loop *getLoopForInst(const Instruction *Inst);
 
-  /// @brief Get the new operand address according to access relation of @p MA.
-  Value *getNewAccessOperand(ScopStmt &Stmt, const MemoryAccess &MA);
-
   /// @brief Generate the operand address
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
   Value *generateLocationAccessed(ScopStmt &Stmt, const Instruction *Inst,
-                                  const Value *Pointer, ValueMapT &BBMap,
-                                  ValueMapT &GlobalMap, LoopToScevMapT &LTS);
+                                  Value *Pointer, ValueMapT &BBMap,
+                                  LoopToScevMapT &LTS,
+                                  isl_id_to_ast_expr *NewAccesses);
 
-  Value *generateScalarLoad(ScopStmt &Stmt, const LoadInst *load,
-                            ValueMapT &BBMap, ValueMapT &GlobalMap,
-                            LoopToScevMapT &LTS);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  Value *generateScalarLoad(ScopStmt &Stmt, LoadInst *load, ValueMapT &BBMap,
+                            LoopToScevMapT &LTS,
+                            isl_id_to_ast_expr *NewAccesses);
 
-  Value *generateScalarStore(ScopStmt &Stmt, const StoreInst *store,
-                             ValueMapT &BBMap, ValueMapT &GlobalMap,
-                             LoopToScevMapT &LTS);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  void generateScalarStore(ScopStmt &Stmt, StoreInst *store, ValueMapT &BBMap,
+                           LoopToScevMapT &LTS,
+                           isl_id_to_ast_expr *NewAccesses);
 
   /// @brief Copy a single PHI instruction.
   ///
@@ -318,8 +508,8 @@ protected:
   /// subclasses to handle PHIs different.
   ///
   /// @returns The nullptr as the BlockGenerator does not copy PHIs.
-  virtual Value *copyPHIInstruction(ScopStmt &, const PHINode *, ValueMapT &,
-                                    ValueMapT &, LoopToScevMapT &) {
+  virtual Value *copyPHIInstruction(ScopStmt &, PHINode *, ValueMapT &,
+                                    LoopToScevMapT &) {
     return nullptr;
   }
 
@@ -328,36 +518,38 @@ protected:
   /// This copies a single Instruction and updates references to old values
   /// with references to new values, as defined by GlobalMap and BBMap.
   ///
-  /// @param Stmt      The statement to code generate.
-  /// @param Inst      The instruction to copy.
-  /// @param BBMap     A mapping from old values to their new values
-  ///                  (for values recalculated within this basic block).
-  /// @param GlobalMap A mapping from old values to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                  within this basic block).
-  /// @param LTS       A mapping from loops virtual canonical induction
-  ///                  variable to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                   within this basic block).
-  void copyInstruction(ScopStmt &Stmt, const Instruction *Inst,
-                       ValueMapT &BBMap, ValueMapT &GlobalMap,
-                       LoopToScevMapT &LTS);
-
-  /// @brief Helper to get the newest version of @p ScalarValue.
-  ///
-  /// @param ScalarValue The original value needed.
-  /// @param R           The current SCoP region.
-  /// @param ReloadMap   The scalar map for demoted values.
+  /// @param Stmt        The statement to code generate.
+  /// @param Inst        The instruction to copy.
   /// @param BBMap       A mapping from old values to their new values
   ///                    (for values recalculated within this basic block).
   /// @param GlobalMap   A mapping from old values to their new values
   ///                    (for values recalculated in the new ScoP, but not
   ///                    within this basic block).
+  /// @param LTS         A mapping from loops virtual canonical induction
+  ///                    variable to their new values
+  ///                    (for values recalculated in the new ScoP, but not
+  ///                     within this basic block).
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  void copyInstruction(ScopStmt &Stmt, Instruction *Inst, ValueMapT &BBMap,
+                       LoopToScevMapT &LTS, isl_id_to_ast_expr *NewAccesses);
+
+  /// @brief Helper to get the newest version of @p ScalarValue.
+  ///
+  /// @param ScalarValue The original value needed.
+  /// @param R           The current SCoP region.
+  /// @param Stmt        The ScopStmt in which we look up this value.
+  /// @param LTS         A mapping from loops virtual canonical induction
+  ///                    variable to their new values
+  ///                    (for values recalculated in the new ScoP, but not
+  ///                     within this basic block)
+  /// @param BBMap       A mapping from old values to their new values
+  ///                    (for values recalculated within this basic block).
   ///
   /// @returns The newest version (e.g., reloaded) of the scalar value.
-  Value *getNewScalarValue(Value *ScalarValue, const Region &R,
-                           ScalarAllocaMapTy &ReloadMap, ValueMapT &BBMap,
-                           ValueMapT &GlobalMap);
+  Value *getNewScalarValue(Value *ScalarValue, const Region &R, ScopStmt &,
+                           LoopToScevMapT &LTS, ValueMapT &BBMap);
 };
 
 /// @brief Generate a new vector basic block for a polyhedral statement.
@@ -373,37 +565,27 @@ public:
   /// instructions, but e.g. for address calculation instructions we currently
   /// generate scalar instructions for each vector lane.
   ///
-  /// @param BlockGen   A block generator object used as parent.
-  /// @param Stmt       The statement to code generate.
-  /// @param GlobalMaps A vector of maps that define for certain Values
-  ///                   referenced from the original code new Values they should
-  ///                   be replaced with. Each map in the vector of maps is
-  ///                   used for one vector lane. The number of elements in the
-  ///                   vector defines the width of the generated vector
-  ///                   instructions.
-  /// @param VLTS       A mapping from loops virtual canonical induction
-  ///                   variable to their new values
-  ///                   (for values recalculated in the new ScoP, but not
-  ///                    within this basic block), one for each lane.
-  /// @param Schedule   A map from the statement to a schedule where the
-  ///                   innermost dimension is the dimension of the innermost
-  ///                   loop containing the statemenet.
+  /// @param BlockGen    A block generator object used as parent.
+  /// @param Stmt        The statement to code generate.
+  /// @param VLTS        A mapping from loops virtual canonical induction
+  ///                    variable to their new values
+  ///                    (for values recalculated in the new ScoP, but not
+  ///                     within this basic block), one for each lane.
+  /// @param Schedule    A map from the statement to a schedule where the
+  ///                    innermost dimension is the dimension of the innermost
+  ///                    loop containing the statemenet.
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
   static void generate(BlockGenerator &BlockGen, ScopStmt &Stmt,
-                       VectorValueMapT &GlobalMaps,
                        std::vector<LoopToScevMapT> &VLTS,
-                       __isl_keep isl_map *Schedule) {
-    VectorBlockGenerator Generator(BlockGen, GlobalMaps, VLTS, Schedule);
-    Generator.copyStmt(Stmt);
+                       __isl_keep isl_map *Schedule,
+                       __isl_keep isl_id_to_ast_expr *NewAccesses) {
+    VectorBlockGenerator Generator(BlockGen, VLTS, Schedule);
+    Generator.copyStmt(Stmt, NewAccesses);
   }
 
 private:
-  // This is a vector of global value maps.  The first map is used for the first
-  // vector lane, ...
-  // Each map, contains information about Instructions in the old ScoP, which
-  // are recalculated in the new SCoP. When copying the basic block, we replace
-  // all referenes to the old instructions with their recalculated values.
-  VectorValueMapT &GlobalMaps;
-
   // This is a vector of loop->scev maps.  The first map is used for the first
   // vector lane, ...
   // Each map, contains information about Instructions in the old ScoP, which
@@ -426,13 +608,13 @@ private:
   // dimension of the innermost loop containing the statemenet.
   isl_map *Schedule;
 
-  VectorBlockGenerator(BlockGenerator &BlockGen, VectorValueMapT &GlobalMaps,
+  VectorBlockGenerator(BlockGenerator &BlockGen,
                        std::vector<LoopToScevMapT> &VLTS,
                        __isl_keep isl_map *Schedule);
 
   int getVectorWidth();
 
-  Value *getVectorValue(ScopStmt &Stmt, const Value *Old, ValueMapT &VectorMap,
+  Value *getVectorValue(ScopStmt &Stmt, Value *Old, ValueMapT &VectorMap,
                         VectorValueMapT &ScalarMaps, Loop *L);
 
   Type *getVectorPtrTy(const Value *V, int Width);
@@ -452,8 +634,12 @@ private:
   ///                       vector. By default we would do only positive
   ///                       strides.
   ///
-  Value *generateStrideOneLoad(ScopStmt &Stmt, const LoadInst *Load,
+  /// @param NewAccesses    A map from memory access ids to new ast
+  ///                       expressions, which may contain new access
+  ///                       expressions for certain memory accesses.
+  Value *generateStrideOneLoad(ScopStmt &Stmt, LoadInst *Load,
                                VectorValueMapT &ScalarMaps,
+                               __isl_keep isl_id_to_ast_expr *NewAccesses,
                                bool NegativeStride);
 
   /// @brief Load a vector initialized from a single scalar in memory
@@ -466,8 +652,12 @@ private:
   /// %splat = shufflevector <1 x double> %splat_one, <1 x
   ///       double> %splat_one, <4 x i32> zeroinitializer
   ///
-  Value *generateStrideZeroLoad(ScopStmt &Stmt, const LoadInst *Load,
-                                ValueMapT &BBMap);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  Value *generateStrideZeroLoad(ScopStmt &Stmt, LoadInst *Load,
+                                ValueMapT &BBMap,
+                                __isl_keep isl_id_to_ast_expr *NewAccesses);
 
   /// @brief Load a vector from scalars distributed in memory
   ///
@@ -480,33 +670,56 @@ private:
   /// %scalar 2 = load double* %p_2
   /// %vec_2 = insertelement <2 x double> %vec_1, double %scalar_1, i32 1
   ///
-  Value *generateUnknownStrideLoad(ScopStmt &Stmt, const LoadInst *Load,
-                                   VectorValueMapT &ScalarMaps);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  Value *generateUnknownStrideLoad(ScopStmt &Stmt, LoadInst *Load,
+                                   VectorValueMapT &ScalarMaps,
+                                   __isl_keep isl_id_to_ast_expr *NewAccesses);
 
-  void generateLoad(ScopStmt &Stmt, const LoadInst *Load, ValueMapT &VectorMap,
-                    VectorValueMapT &ScalarMaps);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  void generateLoad(ScopStmt &Stmt, LoadInst *Load, ValueMapT &VectorMap,
+                    VectorValueMapT &ScalarMaps,
+                    __isl_keep isl_id_to_ast_expr *NewAccesses);
 
-  void copyUnaryInst(ScopStmt &Stmt, const UnaryInstruction *Inst,
+  void copyUnaryInst(ScopStmt &Stmt, UnaryInstruction *Inst,
                      ValueMapT &VectorMap, VectorValueMapT &ScalarMaps);
 
-  void copyBinaryInst(ScopStmt &Stmt, const BinaryOperator *Inst,
+  void copyBinaryInst(ScopStmt &Stmt, BinaryOperator *Inst,
                       ValueMapT &VectorMap, VectorValueMapT &ScalarMaps);
 
-  void copyStore(ScopStmt &Stmt, const StoreInst *Store, ValueMapT &VectorMap,
-                 VectorValueMapT &ScalarMaps);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  void copyStore(ScopStmt &Stmt, StoreInst *Store, ValueMapT &VectorMap,
+                 VectorValueMapT &ScalarMaps,
+                 __isl_keep isl_id_to_ast_expr *NewAccesses);
 
-  void copyInstScalarized(ScopStmt &Stmt, const Instruction *Inst,
-                          ValueMapT &VectorMap, VectorValueMapT &ScalarMaps);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  void copyInstScalarized(ScopStmt &Stmt, Instruction *Inst,
+                          ValueMapT &VectorMap, VectorValueMapT &ScalarMaps,
+                          __isl_keep isl_id_to_ast_expr *NewAccesses);
 
   bool extractScalarValues(const Instruction *Inst, ValueMapT &VectorMap,
                            VectorValueMapT &ScalarMaps);
 
   bool hasVectorOperands(const Instruction *Inst, ValueMapT &VectorMap);
 
-  void copyInstruction(ScopStmt &Stmt, const Instruction *Inst,
-                       ValueMapT &VectorMap, VectorValueMapT &ScalarMaps);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  void copyInstruction(ScopStmt &Stmt, Instruction *Inst, ValueMapT &VectorMap,
+                       VectorValueMapT &ScalarMaps,
+                       __isl_keep isl_id_to_ast_expr *NewAccesses);
 
-  void copyStmt(ScopStmt &Stmt);
+  /// @param NewAccesses A map from memory access ids to new ast expressions,
+  ///                    which may contain new access expressions for certain
+  ///                    memory accesses.
+  void copyStmt(ScopStmt &Stmt, __isl_keep isl_id_to_ast_expr *NewAccesses);
 };
 
 /// @brief Generator for new versions of polyhedral region statements.
@@ -517,6 +730,8 @@ public:
   /// @param BlockGen A generator for basic blocks.
   RegionGenerator(BlockGenerator &BlockGen) : BlockGenerator(BlockGen) {}
 
+  virtual ~RegionGenerator(){};
+
   /// @brief Copy the region statement @p Stmt.
   ///
   /// This copies the entire region represented by @p Stmt and updates
@@ -524,14 +739,9 @@ public:
   /// GlobalMap.
   ///
   /// @param Stmt      The statement to code generate.
-  /// @param GlobalMap A mapping from old values to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                  within this basic block).
   /// @param LTS       A map from old loops to new induction variables as SCEVs.
-  void copyStmt(ScopStmt &Stmt, ValueMapT &GlobalMap, LoopToScevMapT &LTS);
-
-  /// @brief An empty destructor
-  virtual ~RegionGenerator(){};
+  void copyStmt(ScopStmt &Stmt, LoopToScevMapT &LTS,
+                __isl_keep isl_id_to_ast_expr *IdToAstExp);
 
 private:
   /// @brief A map from old to new blocks in the region.
@@ -555,22 +765,10 @@ private:
   /// @param PHI        The original PHI we copy.
   /// @param PHICopy    The copy of @p PHI.
   /// @param IncomingBB An incoming block of @p PHI.
-  /// @param GlobalMap  A mapping from old values to their new values
-  ///                   (for values recalculated in the new ScoP, but not
-  ///                   within this basic block).
   /// @param LTS        A map from old loops to new induction variables as
   /// SCEVs.
   void addOperandToPHI(ScopStmt &Stmt, const PHINode *PHI, PHINode *PHICopy,
-                       BasicBlock *IncomingBB, ValueMapT &GlobalMap,
-                       LoopToScevMapT &LTS);
-
-  /// @brief Generate reload of scalars demoted to memory and needed by @p Inst.
-  ///
-  /// @param Stmt  The statement we generate code for.
-  /// @param Inst  The instruction that might need reloaded values.
-  /// @param BBMap A mapping from old values to their new values in this block.
-  virtual void generateScalarLoads(ScopStmt &Stmt, const Instruction *Inst,
-                                   ValueMapT &BBMap) override;
+                       BasicBlock *IncomingBB, LoopToScevMapT &LTS);
 
   /// @brief Generate the scalar stores for the given statement.
   ///
@@ -579,14 +777,12 @@ private:
   /// be demoted to memory.
   ///
   /// @param Stmt  The statement we generate code for.
-  /// @param BB    The basic block we generate code for.
+  /// @param LTS   A mapping from loops virtual canonical induction variable to
+  ///              their new values (for values recalculated in the new ScoP,
+  ///              but not within this basic block)
   /// @param BBMap A mapping from old values to their new values in this block.
-  /// @param GlobalMap  A mapping from old values to their new values
-  ///                   (for values recalculated in the new ScoP, but not
-  ///                   within this basic block).
-  virtual void generateScalarStores(ScopStmt &Stmt, BasicBlock *BB,
-                                    ValueMapT &BBMAp,
-                                    ValueMapT &GlobalMap) override;
+  virtual void generateScalarStores(ScopStmt &Stmt, LoopToScevMapT &LTS,
+                                    ValueMapT &BBMAp) override;
 
   /// @brief Copy a single PHI instruction.
   ///
@@ -597,14 +793,11 @@ private:
   /// @param PHI       The PHI instruction to copy.
   /// @param BBMap     A mapping from old values to their new values
   ///                  (for values recalculated within this basic block).
-  /// @param GlobalMap A mapping from old values to their new values
-  ///                  (for values recalculated in the new ScoP, but not
-  ///                  within this basic block).
   /// @param LTS       A map from old loops to new induction variables as SCEVs.
   ///
   /// @returns The copied instruction or nullptr if no copy was made.
-  virtual Value *copyPHIInstruction(ScopStmt &Stmt, const PHINode *Inst,
-                                    ValueMapT &BBMap, ValueMapT &GlobalMap,
+  virtual Value *copyPHIInstruction(ScopStmt &Stmt, PHINode *Inst,
+                                    ValueMapT &BBMap,
                                     LoopToScevMapT &LTS) override;
 };
 }

@@ -104,12 +104,13 @@ protected:
   ///
   /// Note, this should *NOT* be used directly by any class other than User.
   /// User uses this value to find the Use list.
-  static const unsigned NumUserOperandsBits = 29;
-  unsigned NumUserOperands : 29;
+  enum : unsigned { NumUserOperandsBits = 28 };
+  unsigned NumUserOperands : NumUserOperandsBits;
 
   bool IsUsedByMD : 1;
   bool HasName : 1;
   bool HasHungOffUses : 1;
+  bool HasDescriptor : 1;
 
 private:
   template <typename UseT> // UseT == 'Use' or 'const Use'
@@ -201,8 +202,9 @@ public:
 
   /// \brief Implement operator<< on Value.
   /// @{
-  void print(raw_ostream &O) const;
-  void print(raw_ostream &O, ModuleSlotTracker &MST) const;
+  void print(raw_ostream &O, bool IsForDebug = false) const;
+  void print(raw_ostream &O, ModuleSlotTracker &MST,
+             bool IsForDebug = false) const;
   /// @}
 
   /// \brief Print the name of this Value out to the specified raw_ostream.
@@ -493,7 +495,28 @@ private:
   template <class Compare>
   static Use *mergeUseLists(Use *L, Use *R, Compare Cmp) {
     Use *Merged;
-    mergeUseListsImpl(L, R, &Merged, Cmp);
+    Use **Next = &Merged;
+
+    for (;;) {
+      if (!L) {
+        *Next = R;
+        break;
+      }
+      if (!R) {
+        *Next = L;
+        break;
+      }
+      if (Cmp(*R, *L)) {
+        *Next = R;
+        Next = &R->Next;
+        R = R->Next;
+      } else {
+        *Next = L;
+        Next = &L->Next;
+        L = L->Next;
+      }
+    }
+
     return Merged;
   }
 
@@ -584,25 +607,6 @@ template <class Compare> void Value::sortUseList(Compare Cmp) {
     I->setPrev(Prev);
     Prev = &I->Next;
   }
-}
-
-template <class Compare>
-void Value::mergeUseListsImpl(Use *L, Use *R, Use **Next, Compare Cmp) {
-  if (!L) {
-    *Next = R;
-    return;
-  }
-  if (!R) {
-    *Next = L;
-    return;
-  }
-  if (Cmp(*R, *L)) {
-    *Next = R;
-    mergeUseListsImpl(L, R->Next, &R->Next, Cmp);
-    return;
-  }
-  *Next = L;
-  mergeUseListsImpl(L->Next, R, &L->Next, Cmp);
 }
 
 // isa - Provide some specializations of isa so that we don't have to include

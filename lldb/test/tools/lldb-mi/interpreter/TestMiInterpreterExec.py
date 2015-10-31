@@ -2,16 +2,19 @@
 Test lldb-mi -interpreter-exec command.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import lldbmi_testcase
 from lldbtest import *
-import unittest2
 
 class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_target_create(self):
         """Test that 'lldb-mi --interpreter' can create target by 'target create' command."""
@@ -30,7 +33,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_breakpoint_set(self):
         """Test that 'lldb-mi --interpreter' can set breakpoint by 'breakpoint set' command."""
@@ -53,7 +56,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     @expectedFailureLinux  # Failing in ~9/600 dosep runs (build 3120-3122)
     def test_lldbmi_settings_set_target_run_args_before(self):
@@ -86,7 +89,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"exited-normally\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     @expectedFailureLinux  # Failing in ~9/600 dosep runs (build 3120-3122)
     def test_lldbmi_settings_set_target_run_args_after(self):
@@ -130,7 +133,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_process_launch(self):
         """Test that 'lldb-mi --interpreter' can launch process by "process launch" command."""
@@ -153,7 +156,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_thread_step_in(self):
         """Test that 'lldb-mi --interpreter' can step in by "thread step-in" command."""
@@ -183,7 +186,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
             self.expect("\*stopped,reason=\"end-stepping-range\".+?func=\"main\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_thread_step_over(self):
         """Test that 'lldb-mi --interpreter' can step over by "thread step-over" command."""
@@ -208,7 +211,7 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"end-stepping-range\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_thread_continue(self):
         """Test that 'lldb-mi --interpreter' can continue execution by "thread continue" command."""
@@ -231,6 +234,3 @@ class MiInterpreterExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^done")
         self.expect("@\"argc=1\\\\r\\\\n")
         self.expect("\*stopped,reason=\"exited-normally\"")
-
-if __name__ == '__main__':
-    unittest2.main()

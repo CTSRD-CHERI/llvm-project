@@ -2,8 +2,12 @@
 Test that a variable watchpoint should only hit when in scope.
 """
 
-import os, time
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
+import os, time
 import lldb
 from lldbtest import *
 import lldbutil
@@ -20,22 +24,6 @@ class WatchedVariableHitWhenInScopeTestCase(TestBase):
     # clearer API to express this.
     #
 
-    @dsym_test
-    @unittest2.expectedFailure("rdar://problem/18685649")
-    def test_watched_var_should_only_hit_when_in_scope_with_dsym(self):
-        """Test that a variable watchpoint should only hit when in scope."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.watched_var()
-
-    @unittest2.expectedFailure("rdar://problem/18685649")
-    @dwarf_test
-    def test_watched_var_should_only_hit_when_in_scope_with_dwarf(self):
-        """Test that a variable watchpoint should only hit when in scope."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.watched_var()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -44,8 +32,12 @@ class WatchedVariableHitWhenInScopeTestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'C_SOURCES': self.source, 'EXE': self.exe_name}
 
-    def watched_var(self):
-        """Test a simple sequence of watchpoint creation and watchpoint hit."""
+    @unittest2.expectedFailure("rdar://problem/18685649")
+    def test_watched_var_should_only_hit_when_in_scope(self):
+        """Test that a variable watchpoint should only hit when in scope."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
+
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -53,7 +45,7 @@ class WatchedVariableHitWhenInScopeTestCase(TestBase):
         lldbutil.run_break_set_by_symbol (self, "main", num_expected_locations=-1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -89,10 +81,3 @@ class WatchedVariableHitWhenInScopeTestCase(TestBase):
         # The hit count should now be 1.
         self.expect("watchpoint list -v",
             substrs = ['hit_count = 1'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

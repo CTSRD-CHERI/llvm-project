@@ -1,5 +1,6 @@
-; RUN: llc -march=amdgcn -mcpu=SI -verify-machineinstrs -mattr=+load-store-opt -enable-misched < %s | FileCheck -check-prefix=SI --check-prefix=CHECK %s
-; RUN: llc -march=amdgcn -mcpu=bonaire -verify-machineinstrs -mattr=+load-store-opt -enable-misched < %s | FileCheck -check-prefix=CI --check-prefix=CHECK %s
+; RUN: llc -march=amdgcn -mcpu=SI -verify-machineinstrs -mattr=+load-store-opt < %s | FileCheck -check-prefix=SI --check-prefix=CHECK %s
+; RUN: llc -march=amdgcn -mcpu=bonaire -verify-machineinstrs -mattr=+load-store-opt < %s | FileCheck -check-prefix=CI --check-prefix=CHECK %s
+; RUN: llc -march=amdgcn -mcpu=SI -verify-machineinstrs -mattr=+load-store-opt,+unsafe-ds-offset-folding < %s | FileCheck -check-prefix=CI --check-prefix=CHECK %s
 
 declare i32 @llvm.r600.read.tidig.x() #0
 declare void @llvm.AMDGPU.barrier.local() #1
@@ -9,13 +10,13 @@ declare void @llvm.AMDGPU.barrier.local() #1
 ; CHECK: BB0_1:
 ; CHECK: v_add_i32_e32 [[VADDR:v[0-9]+]],
 ; SI-DAG: ds_read_b32 v{{[0-9]+}}, [[VADDR]]
-; SI-DAG: v_add_i32_e32 [[VADDR4:v[0-9]+]], 4, [[VADDR]]
+; SI-DAG: v_add_i32_e32 [[VADDR4:v[0-9]+]], vcc, 4, [[VADDR]]
 ; SI-DAG: ds_read_b32 v{{[0-9]+}}, [[VADDR4]]
-; SI-DAG: v_add_i32_e32 [[VADDR0x80:v[0-9]+]], 0x80, [[VADDR]]
+; SI-DAG: v_add_i32_e32 [[VADDR0x80:v[0-9]+]], vcc, 0x80, [[VADDR]]
 ; SI-DAG: ds_read_b32 v{{[0-9]+}}, [[VADDR0x80]]
-; SI-DAG: v_add_i32_e32 [[VADDR0x84:v[0-9]+]], 0x84, [[VADDR]]
+; SI-DAG: v_add_i32_e32 [[VADDR0x84:v[0-9]+]], vcc, 0x84, [[VADDR]]
 ; SI-DAG: ds_read_b32 v{{[0-9]+}}, [[VADDR0x84]]
-; SI-DAG: v_add_i32_e32 [[VADDR0x100:v[0-9]+]], 0x100, [[VADDR]]
+; SI-DAG: v_add_i32_e32 [[VADDR0x100:v[0-9]+]], vcc, 0x100, [[VADDR]]
 ; SI-DAG: ds_read_b32 v{{[0-9]+}}, [[VADDR0x100]]
 
 ; CI-DAG: ds_read2_b32 v{{\[[0-9]+:[0-9]+\]}}, [[VADDR]] offset1:1

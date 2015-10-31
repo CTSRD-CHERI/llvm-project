@@ -2,9 +2,12 @@
 Use lldb Python API to verify that expression evaluation for property references uses the correct getters and setters
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,36 +15,21 @@ class ObjCPropertyTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_objc_properties_with_dsym(self):
-        """Test that expr uses the correct property getters and setters"""
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        self.buildDsym()
-        self.do_test_properties()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dwarf_test
-    def test_objc_properties_with_dwarf(self):
-        """Test that expr uses the correct property getters and setters"""
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires modern objc runtime")
-        self.buildDwarf()
-        self.do_test_properties()
-
     def setUp(self):
         # Call super's setUp().                                                                                                           
         TestBase.setUp(self)
 
         # Find the line number to break for main.c.                                                                                       
-
         self.source_name = 'main.m'
 
-    def run_to_main (self):
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
+    def test_objc_properties(self):
         """Test that expr uses the correct property getters and setters"""
+        if self.getArchitecture() == 'i386':
+            self.skipTest("requires modern objc runtime")
+
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target from the debugger.
@@ -65,12 +53,6 @@ class ObjCPropertyTestCase(TestBase):
         threads = lldbutil.get_threads_stopped_at_breakpoint (process, main_bkpt)
         self.assertTrue (len(threads) == 1)
         thread = threads[0]
-        return thread
-
-    def do_test_properties (self):
-
-        thread = self.run_to_main()
-
         frame = thread.GetFrameAtIndex(0)
 
         mine = frame.FindVariable ("mine")
@@ -129,9 +111,3 @@ class ObjCPropertyTestCase(TestBase):
         idWithProtocol_error = idWithProtocol_value.GetError()
         self.assertTrue (idWithProtocol_error.Success())
         self.assertTrue (idWithProtocol_value.GetTypeName() == "id")
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

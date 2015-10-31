@@ -105,6 +105,7 @@ class VectorLegalizer {
   SDValue ExpandLoad(SDValue Op);
   SDValue ExpandStore(SDValue Op);
   SDValue ExpandFNEG(SDValue Op);
+  SDValue ExpandABSDIFF(SDValue Op);
 
   /// \brief Implements vector promotion.
   ///
@@ -159,7 +160,7 @@ bool VectorLegalizer::Run() {
   DAG.AssignTopologicalOrder();
   for (SelectionDAG::allnodes_iterator I = DAG.allnodes_begin(),
        E = std::prev(DAG.allnodes_end()); I != std::next(E); ++I)
-    LegalizeOp(SDValue(I, 0));
+    LegalizeOp(SDValue(&*I, 0));
 
   // Finally, it's possible the root changed.  Get the new root.
   SDValue OldRoot = DAG.getRoot();
@@ -265,6 +266,8 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
   case ISD::UDIV:
   case ISD::SREM:
   case ISD::UREM:
+  case ISD::SDIVREM:
+  case ISD::UDIVREM:
   case ISD::FADD:
   case ISD::FSUB:
   case ISD::FMUL:
@@ -298,6 +301,8 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
   case ISD::FABS:
   case ISD::FMINNUM:
   case ISD::FMAXNUM:
+  case ISD::FMINNAN:
+  case ISD::FMAXNAN:
   case ISD::FCOPYSIGN:
   case ISD::FSQRT:
   case ISD::FSIN:
@@ -326,6 +331,8 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
   case ISD::SMAX:
   case ISD::UMIN:
   case ISD::UMAX:
+  case ISD::UABSDIFF:
+  case ISD::SABSDIFF:
     QueryType = Node->getValueType(0);
     break;
   case ISD::FP_ROUND_INREG:
@@ -341,6 +348,7 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
   }
 
   switch (TLI.getOperationAction(Node->getOpcode(), QueryType)) {
+  default: llvm_unreachable("This action is not supported yet!");
   case TargetLowering::Promote:
     Result = Promote(Op);
     Changed = true;
@@ -410,8 +418,8 @@ SDValue VectorLegalizer::Promote(SDValue Op) {
     else
       Operands[j] = Op.getOperand(j);
   }
-
-  Op = DAG.getNode(Op.getOpcode(), dl, NVT, Operands);
+  
+  Op = DAG.getNode(Op.getOpcode(), dl, NVT, Operands, Op.getNode()->getFlags());
   if ((VT.isFloatingPoint() && NVT.isFloatingPoint()) ||
       (VT.isVector() && VT.getVectorElementType().isFloatingPoint() &&
        NVT.isVector() && NVT.getVectorElementType().isFloatingPoint()))
@@ -503,7 +511,7 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
     // Instead, we load all significant words, mask bits off, and concatenate
     // them to form each element. Finally, they are extended to destination
     // scalar type to build the destination vector.
-    EVT WideVT = TLI.getPointerTy();
+    EVT WideVT = TLI.getPointerTy(DAG.getDataLayout());
 
     assert(WideVT.isRound() &&
            "Could not handle the sophisticated case when the widest integer is"
@@ -563,7 +571,8 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
       SDValue Lo, Hi, ShAmt;
 
       if (BitOffset < WideBits) {
-        ShAmt = DAG.getConstant(BitOffset, dl, TLI.getShiftAmountTy(WideVT));
+        ShAmt = DAG.getConstant(
+            BitOffset, dl, TLI.getShiftAmountTy(WideVT, DAG.getDataLayout()));
         Lo = DAG.getNode(ISD::SRL, dl, WideVT, LoadVals[WideIdx], ShAmt);
         Lo = DAG.getNode(ISD::AND, dl, WideVT, Lo, SrcEltBitMask);
       }
@@ -573,8 +582,9 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
         WideIdx++;
         BitOffset -= WideBits;
         if (BitOffset > 0) {
-          ShAmt = DAG.getConstant(SrcEltBits - BitOffset, dl,
-                                  TLI.getShiftAmountTy(WideVT));
+          ShAmt = DAG.getConstant(
+              SrcEltBits - BitOffset, dl,
+              TLI.getShiftAmountTy(WideVT, DAG.getDataLayout()));
           Hi = DAG.getNode(ISD::SHL, dl, WideVT, LoadVals[WideIdx], ShAmt);
           Hi = DAG.getNode(ISD::AND, dl, WideVT, Hi, SrcEltBitMask);
         }
@@ -592,8 +602,9 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
         Lo = DAG.getZExtOrTrunc(Lo, dl, DstEltVT);
         break;
       case ISD::SEXTLOAD:
-        ShAmt = DAG.getConstant(WideBits - SrcEltBits, dl,
-                                TLI.getShiftAmountTy(WideVT));
+        ShAmt =
+            DAG.getConstant(WideBits - SrcEltBits, dl,
+                            TLI.getShiftAmountTy(WideVT, DAG.getDataLayout()));
         Lo = DAG.getNode(ISD::SHL, dl, WideVT, Lo, ShAmt);
         Lo = DAG.getNode(ISD::SRA, dl, WideVT, Lo, ShAmt);
         Lo = DAG.getSExtOrTrunc(Lo, dl, DstEltVT);
@@ -663,8 +674,9 @@ SDValue VectorLegalizer::ExpandStore(SDValue Op) {
   // and save them into memory individually.
   SmallVector<SDValue, 8> Stores;
   for (unsigned Idx = 0; Idx < NumElem; Idx++) {
-    SDValue Ex = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl,
-               RegSclVT, Value, DAG.getConstant(Idx, dl, TLI.getVectorIdxTy()));
+    SDValue Ex = DAG.getNode(
+        ISD::EXTRACT_VECTOR_ELT, dl, RegSclVT, Value,
+        DAG.getConstant(Idx, dl, TLI.getVectorIdxTy(DAG.getDataLayout())));
 
     // This scalar TruncStore may be illegal, but we legalize it later.
     SDValue Store = DAG.getTruncStore(Chain, dl, Ex, BasePTR,
@@ -704,9 +716,40 @@ SDValue VectorLegalizer::Expand(SDValue Op) {
     return ExpandFNEG(Op);
   case ISD::SETCC:
     return UnrollVSETCC(Op);
+  case ISD::UABSDIFF:
+  case ISD::SABSDIFF:
+    return ExpandABSDIFF(Op);
   default:
     return DAG.UnrollVectorOp(Op.getNode());
   }
+}
+
+SDValue VectorLegalizer::ExpandABSDIFF(SDValue Op) {
+  SDLoc dl(Op);
+  SDValue Op0 = Op.getOperand(0);
+  SDValue Op1 = Op.getOperand(1);
+  EVT VT = Op.getValueType();
+
+  // For unsigned intrinsic, promote the type to handle unsigned overflow.
+  bool isUabsdiff = (Op->getOpcode() == ISD::UABSDIFF);
+  if (isUabsdiff) {
+    VT = VT.widenIntegerVectorElementType(*DAG.getContext());
+    Op0 = DAG.getNode(ISD::ZERO_EXTEND, dl, VT, Op0);
+    Op1 = DAG.getNode(ISD::ZERO_EXTEND, dl, VT, Op1);
+  }
+
+  SDNodeFlags Flags;
+  Flags.setNoSignedWrap(!isUabsdiff);
+  SDValue Sub = DAG.getNode(ISD::SUB, dl, VT, Op0, Op1, &Flags);
+  if (isUabsdiff)
+    return DAG.getNode(ISD::TRUNCATE, dl, Op.getValueType(), Sub);
+
+  SDValue Cmp =
+      DAG.getNode(ISD::SETCC, dl, TLI.getSetCCResultType(DAG.getDataLayout(),
+                                                         *DAG.getContext(), VT),
+                  Sub, DAG.getConstant(0, dl, VT), DAG.getCondCode(ISD::SETGE));
+  SDValue Neg = DAG.getNode(ISD::SUB, dl, VT, DAG.getConstant(0, dl, VT), Sub, &Flags);
+  return DAG.getNode(ISD::VSELECT, dl, VT, Cmp, Sub, Neg);
 }
 
 SDValue VectorLegalizer::ExpandSELECT(SDValue Op) {
@@ -803,7 +846,7 @@ SDValue VectorLegalizer::ExpandANY_EXTEND_VECTOR_INREG(SDValue Op) {
 
   // Place the extended lanes into the correct locations.
   int ExtLaneScale = NumSrcElements / NumElements;
-  int EndianOffset = TLI.isBigEndian() ? ExtLaneScale - 1 : 0;
+  int EndianOffset = DAG.getDataLayout().isBigEndian() ? ExtLaneScale - 1 : 0;
   for (int i = 0; i < NumElements; ++i)
     ShuffleMask[i * ExtLaneScale + EndianOffset] = i;
 
@@ -858,7 +901,7 @@ SDValue VectorLegalizer::ExpandZERO_EXTEND_VECTOR_INREG(SDValue Op) {
     ShuffleMask.push_back(i);
 
   int ExtLaneScale = NumSrcElements / NumElements;
-  int EndianOffset = TLI.isBigEndian() ? ExtLaneScale - 1 : 0;
+  int EndianOffset = DAG.getDataLayout().isBigEndian() ? ExtLaneScale - 1 : 0;
   for (int i = 0; i < NumElements; ++i)
     ShuffleMask[i * ExtLaneScale + EndianOffset] = NumSrcElements + i;
 
@@ -967,6 +1010,7 @@ SDValue VectorLegalizer::ExpandUINT_TO_FLOAT(SDValue Op) {
 
   // Convert hi and lo to floats
   // Convert the hi part back to the upper values
+  // TODO: Can any fast-math-flags be set on these nodes?
   SDValue fHI = DAG.getNode(ISD::SINT_TO_FP, DL, Op.getValueType(), HI);
           fHI = DAG.getNode(ISD::FMUL, DL, Op.getValueType(), fHI, TWOHW);
   SDValue fLO = DAG.getNode(ISD::SINT_TO_FP, DL, Op.getValueType(), LO);
@@ -980,6 +1024,7 @@ SDValue VectorLegalizer::ExpandFNEG(SDValue Op) {
   if (TLI.isOperationLegalOrCustom(ISD::FSUB, Op.getValueType())) {
     SDLoc DL(Op);
     SDValue Zero = DAG.getConstantFP(-0.0, DL, Op.getValueType());
+    // TODO: If FNEG had fast-math-flags, they'd get propagated to this FSUB.
     return DAG.getNode(ISD::FSUB, DL, Op.getValueType(),
                        Zero, Op.getOperand(0));
   }
@@ -995,12 +1040,15 @@ SDValue VectorLegalizer::UnrollVSETCC(SDValue Op) {
   SDLoc dl(Op);
   SmallVector<SDValue, 8> Ops(NumElems);
   for (unsigned i = 0; i < NumElems; ++i) {
-    SDValue LHSElem = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl, TmpEltVT, LHS,
-                                  DAG.getConstant(i, dl, TLI.getVectorIdxTy()));
-    SDValue RHSElem = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl, TmpEltVT, RHS,
-                                  DAG.getConstant(i, dl, TLI.getVectorIdxTy()));
+    SDValue LHSElem = DAG.getNode(
+        ISD::EXTRACT_VECTOR_ELT, dl, TmpEltVT, LHS,
+        DAG.getConstant(i, dl, TLI.getVectorIdxTy(DAG.getDataLayout())));
+    SDValue RHSElem = DAG.getNode(
+        ISD::EXTRACT_VECTOR_ELT, dl, TmpEltVT, RHS,
+        DAG.getConstant(i, dl, TLI.getVectorIdxTy(DAG.getDataLayout())));
     Ops[i] = DAG.getNode(ISD::SETCC, dl,
-                         TLI.getSetCCResultType(*DAG.getContext(), TmpEltVT),
+                         TLI.getSetCCResultType(DAG.getDataLayout(),
+                                                *DAG.getContext(), TmpEltVT),
                          LHSElem, RHSElem, CC);
     Ops[i] = DAG.getSelect(dl, EltVT, Ops[i],
                            DAG.getConstant(APInt::getAllOnesValue

@@ -2,8 +2,11 @@
 Test the robustness of lldb expression parser.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -13,13 +16,13 @@ class Radar8638051TestCase(TestBase):
 
     def test_expr_commands(self):
         """The following expression commands should not crash."""
-        self.buildDefault()
+        self.build()
 
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         self.runCmd("breakpoint set -n c")
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         self.expect("expression val",
             startstr = "(int) $0 = 1")
@@ -34,10 +37,3 @@ class Radar8638051TestCase(TestBase):
         self.expect("expression &val",
             startstr = "(int *) $2 = ")
         # (int *) $2 = 0x....
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

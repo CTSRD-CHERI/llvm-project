@@ -1,7 +1,10 @@
 """Disassemble lldb's Driver::MainLoop() functions comparing Xcode 4.1 vs. 4.2's gdb."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys
-import unittest2
 import lldb
 from lldbbench import *
 
@@ -22,30 +25,32 @@ class XCode41Vs42GDBDisassembly(BenchBase):
             self.count = 5
 
     @benchmarks_test
+    @no_debug_info_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_run_41_then_42(self):
         """Test disassembly on a large function with 4.1 vs. 4.2's gdb."""
-        print
+        print()
         self.run_gdb_disassembly(self.gdb_41_exe, self.exe, self.function, self.count)
-        print "4.1 gdb benchmark:", self.stopwatch
+        print("4.1 gdb benchmark:", self.stopwatch)
         self.gdb_41_avg = self.stopwatch.avg()
         self.run_gdb_disassembly(self.gdb_42_exe, self.exe, self.function, self.count)
-        print "4.2 gdb benchmark:", self.stopwatch
+        print("4.2 gdb benchmark:", self.stopwatch)
         self.gdb_42_avg = self.stopwatch.avg()
-        print "gdb_42_avg/gdb_41_avg: %f" % (self.gdb_42_avg/self.gdb_41_avg)
+        print("gdb_42_avg/gdb_41_avg: %f" % (self.gdb_42_avg/self.gdb_41_avg))
 
     @benchmarks_test
+    @no_debug_info_test
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_run_42_then_41(self):
         """Test disassembly on a large function with 4.1 vs. 4.2's gdb."""
-        print
+        print()
         self.run_gdb_disassembly(self.gdb_42_exe, self.exe, self.function, self.count)
-        print "4.2 gdb benchmark:", self.stopwatch
+        print("4.2 gdb benchmark:", self.stopwatch)
         self.gdb_42_avg = self.stopwatch.avg()
         self.run_gdb_disassembly(self.gdb_41_exe, self.exe, self.function, self.count)
-        print "4.1 gdb benchmark:", self.stopwatch
+        print("4.1 gdb benchmark:", self.stopwatch)
         self.gdb_41_avg = self.stopwatch.avg()
-        print "gdb_42_avg/gdb_41_avg: %f" % (self.gdb_42_avg/self.gdb_41_avg)
+        print("gdb_42_avg/gdb_41_avg: %f" % (self.gdb_42_avg/self.gdb_41_avg))
 
     def run_gdb_disassembly(self, gdb_exe_path, exe, function, count):
         import pexpect
@@ -86,12 +91,5 @@ class XCode41Vs42GDBDisassembly(BenchBase):
             pass
 
         if self.TraceOn():
-            print "gdb disassembly benchmark:", str(self.stopwatch)
+            print("gdb disassembly benchmark:", str(self.stopwatch))
         self.child = None
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

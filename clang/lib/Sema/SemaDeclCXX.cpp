@@ -73,8 +73,8 @@ namespace {
   /// VisitExpr - Visit all of the children of this expression.
   bool CheckDefaultArgumentVisitor::VisitExpr(Expr *Node) {
     bool IsInvalid = false;
-    for (Stmt::child_range I = Node->children(); I; ++I)
-      IsInvalid |= Visit(*I);
+    for (Stmt *SubStmt : Node->children())
+      IsInvalid |= Visit(SubStmt);
     return IsInvalid;
   }
 
@@ -162,34 +162,31 @@ Sema::ImplicitExceptionSpecification::CalledDecl(SourceLocation CallLoc,
 
   ExceptionSpecificationType EST = Proto->getExceptionSpecType();
 
-  // If this function can throw any exceptions, make a note of that.
-  if (EST == EST_MSAny || EST == EST_None) {
-    ClearExceptions();
-    ComputedEST = EST;
-    return;
-  }
-
-  // FIXME: If the call to this decl is using any of its default arguments, we
-  // need to search them for potentially-throwing calls.
-
-  // If this function has a basic noexcept, it doesn't affect the outcome.
-  if (EST == EST_BasicNoexcept)
-    return;
-
   // If we have a throw-all spec at this point, ignore the function.
   if (ComputedEST == EST_None)
     return;
 
+  switch(EST) {
+  // If this function can throw any exceptions, make a note of that.
+  case EST_MSAny:
+  case EST_None:
+    ClearExceptions();
+    ComputedEST = EST;
+    return;
+  // FIXME: If the call to this decl is using any of its default arguments, we
+  // need to search them for potentially-throwing calls.
+  // If this function has a basic noexcept, it doesn't affect the outcome.
+  case EST_BasicNoexcept:
+    return;
   // If we're still at noexcept(true) and there's a nothrow() callee,
   // change to that specification.
-  if (EST == EST_DynamicNone) {
+  case EST_DynamicNone:
     if (ComputedEST == EST_BasicNoexcept)
       ComputedEST = EST_DynamicNone;
     return;
-  }
-
   // Check out noexcept specs.
-  if (EST == EST_ComputedNoexcept) {
+  case EST_ComputedNoexcept:
+  {
     FunctionProtoType::NoexceptResult NR =
         Proto->getNoexceptSpec(Self->Context);
     assert(NR != FunctionProtoType::NR_NoNoexcept &&
@@ -197,7 +194,6 @@ Sema::ImplicitExceptionSpecification::CalledDecl(SourceLocation CallLoc,
     assert(NR != FunctionProtoType::NR_Dependent &&
            "Should not generate implicit declarations for dependent cases, "
            "and don't know how to handle them anyway.");
-
     // noexcept(false) -> no spec on the new function
     if (NR == FunctionProtoType::NR_Throw) {
       ClearExceptions();
@@ -206,7 +202,9 @@ Sema::ImplicitExceptionSpecification::CalledDecl(SourceLocation CallLoc,
     // noexcept(true) won't change anything either.
     return;
   }
-
+  default:
+    break;
+  }
   assert(EST == EST_Dynamic && "EST case not considered earlier.");
   assert(ComputedEST != EST_None &&
          "Shouldn't collect exceptions when throw-all is guaranteed.");
@@ -1091,9 +1089,9 @@ CheckConstexprFunctionStmt(Sema &SemaRef, const FunctionDecl *Dcl, Stmt *S,
       break;
     if (!Cxx1yLoc.isValid())
       Cxx1yLoc = S->getLocStart();
-    for (Stmt::child_range Children = S->children(); Children; ++Children)
-      if (*Children &&
-          !CheckConstexprFunctionStmt(SemaRef, Dcl, *Children, ReturnStmts,
+    for (Stmt *SubStmt : S->children())
+      if (SubStmt &&
+          !CheckConstexprFunctionStmt(SemaRef, Dcl, SubStmt, ReturnStmts,
                                       Cxx1yLoc))
         return false;
     return true;
@@ -1106,9 +1104,9 @@ CheckConstexprFunctionStmt(Sema &SemaRef, const FunctionDecl *Dcl, Stmt *S,
     // mutation, we can reasonably allow them in C++11 as an extension.
     if (!Cxx1yLoc.isValid())
       Cxx1yLoc = S->getLocStart();
-    for (Stmt::child_range Children = S->children(); Children; ++Children)
-      if (*Children &&
-          !CheckConstexprFunctionStmt(SemaRef, Dcl, *Children, ReturnStmts,
+    for (Stmt *SubStmt : S->children())
+      if (SubStmt &&
+          !CheckConstexprFunctionStmt(SemaRef, Dcl, SubStmt, ReturnStmts,
                                       Cxx1yLoc))
         return false;
     return true;
@@ -1232,9 +1230,9 @@ bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
       Diag(Dcl->getLocation(),
            OK ? diag::warn_cxx11_compat_constexpr_body_no_return
               : diag::err_constexpr_body_no_return);
-      return OK;
-    }
-    if (ReturnStmts.size() > 1) {
+      if (!OK)
+        return false;
+    } else if (ReturnStmts.size() > 1) {
       Diag(ReturnStmts.back(),
            getLangOpts().CPlusPlus14
              ? diag::warn_cxx11_compat_constexpr_body_multiple_return
@@ -3483,7 +3481,8 @@ BuildImplicitMemberInitializer(Sema &SemaRef, CXXConstructorDecl *Constructor,
                                          /*TemplateKWLoc=*/SourceLocation(),
                                          /*FirstQualifierInScope=*/nullptr,
                                          MemberLookup,
-                                         /*TemplateArgs=*/nullptr);
+                                         /*TemplateArgs=*/nullptr,
+                                         /*S*/nullptr);
     if (CtorArg.isInvalid())
       return true;
 
@@ -4140,7 +4139,7 @@ static void DiagnoseBaseOrMemInitializerOrder(
         if (InitKey == IdealInitKeys[IdealIndex])
           break;
 
-      assert(IdealIndex != NumIdealInits &&
+      assert(IdealIndex < NumIdealInits &&
              "initializer not found in initializer list");
     }
 
@@ -4684,6 +4683,60 @@ static void CheckAbstractClassUsage(AbstractUsageInfo &Info,
   }
 }
 
+static void ReferenceDllExportedMethods(Sema &S, CXXRecordDecl *Class) {
+  Attr *ClassAttr = getDLLAttr(Class);
+  if (!ClassAttr)
+    return;
+
+  assert(ClassAttr->getKind() == attr::DLLExport);
+
+  TemplateSpecializationKind TSK = Class->getTemplateSpecializationKind();
+
+  if (TSK == TSK_ExplicitInstantiationDeclaration)
+    // Don't go any further if this is just an explicit instantiation
+    // declaration.
+    return;
+
+  for (Decl *Member : Class->decls()) {
+    auto *MD = dyn_cast<CXXMethodDecl>(Member);
+    if (!MD)
+      continue;
+
+    if (Member->getAttr<DLLExportAttr>()) {
+      if (MD->isUserProvided()) {
+        // Instantiate non-default class member functions ...
+
+        // .. except for certain kinds of template specializations.
+        if (TSK == TSK_ImplicitInstantiation && !ClassAttr->isInherited())
+          continue;
+
+        S.MarkFunctionReferenced(Class->getLocation(), MD);
+
+        // The function will be passed to the consumer when its definition is
+        // encountered.
+      } else if (!MD->isTrivial() || MD->isExplicitlyDefaulted() ||
+                 MD->isCopyAssignmentOperator() ||
+                 MD->isMoveAssignmentOperator()) {
+        // Synthesize and instantiate non-trivial implicit methods, explicitly
+        // defaulted methods, and the copy and move assignment operators. The
+        // latter are exported even if they are trivial, because the address of
+        // an operator can be taken and should compare equal accross libraries.
+        DiagnosticErrorTrap Trap(S.Diags);
+        S.MarkFunctionReferenced(Class->getLocation(), MD);
+        if (Trap.hasErrorOccurred()) {
+          S.Diag(ClassAttr->getLocation(), diag::note_due_to_dllexported_class)
+              << Class->getName() << !S.getLangOpts().CPlusPlus11;
+          break;
+        }
+
+        // There is no later point when we will see the definition of this
+        // function, so pass it to the consumer now.
+        S.Consumer.HandleTopLevelDecl(DeclGroupRef(MD));
+      }
+    }
+  }
+}
+
 /// \brief Check class-level dllimport/dllexport attribute.
 void Sema::checkClassLevelDLLAttribute(CXXRecordDecl *Class) {
   Attr *ClassAttr = getDLLAttr(Class);
@@ -4785,45 +4838,10 @@ void Sema::checkClassLevelDLLAttribute(CXXRecordDecl *Class) {
       NewAttr->setInherited(true);
       Member->addAttr(NewAttr);
     }
-
-    if (MD && ClassExported) {
-      if (TSK == TSK_ExplicitInstantiationDeclaration)
-        // Don't go any further if this is just an explicit instantiation
-        // declaration.
-        continue;
-
-      if (MD->isUserProvided()) {
-        // Instantiate non-default class member functions ...
-
-        // .. except for certain kinds of template specializations.
-        if (TSK == TSK_ImplicitInstantiation && !ClassAttr->isInherited())
-          continue;
-
-        MarkFunctionReferenced(Class->getLocation(), MD);
-
-        // The function will be passed to the consumer when its definition is
-        // encountered.
-      } else if (!MD->isTrivial() || MD->isExplicitlyDefaulted() ||
-                 MD->isCopyAssignmentOperator() ||
-                 MD->isMoveAssignmentOperator()) {
-        // Synthesize and instantiate non-trivial implicit methods, explicitly
-        // defaulted methods, and the copy and move assignment operators. The
-        // latter are exported even if they are trivial, because the address of
-        // an operator can be taken and should compare equal accross libraries.
-        DiagnosticErrorTrap Trap(Diags);
-        MarkFunctionReferenced(Class->getLocation(), MD);
-        if (Trap.hasErrorOccurred()) {
-          Diag(ClassAttr->getLocation(), diag::note_due_to_dllexported_class)
-              << Class->getName() << !getLangOpts().CPlusPlus11;
-          break;
-        }
-
-        // There is no later point when we will see the definition of this
-        // function, so pass it to the consumer now.
-        Consumer.HandleTopLevelDecl(DeclGroupRef(MD));
-      }
-    }
   }
+
+  if (ClassExported)
+    DelayedDllExportClasses.push_back(Class);
 }
 
 /// \brief Perform propagation of DLL attributes from a derived class to a
@@ -6270,77 +6288,75 @@ bool Sema::SpecialMemberIsTrivial(CXXMethodDecl *MD, CXXSpecialMember CSM,
   return true;
 }
 
-/// \brief Data used with FindHiddenVirtualMethod
 namespace {
-  struct FindHiddenVirtualMethodData {
-    Sema *S;
-    CXXMethodDecl *Method;
-    llvm::SmallPtrSet<const CXXMethodDecl *, 8> OverridenAndUsingBaseMethods;
-    SmallVector<CXXMethodDecl *, 8> OverloadedMethods;
-  };
-}
+struct FindHiddenVirtualMethod {
+  Sema *S;
+  CXXMethodDecl *Method;
+  llvm::SmallPtrSet<const CXXMethodDecl *, 8> OverridenAndUsingBaseMethods;
+  SmallVector<CXXMethodDecl *, 8> OverloadedMethods;
 
-/// \brief Check whether any most overriden method from MD in Methods
-static bool CheckMostOverridenMethods(const CXXMethodDecl *MD,
-                  const llvm::SmallPtrSetImpl<const CXXMethodDecl *>& Methods) {
-  if (MD->size_overridden_methods() == 0)
-    return Methods.count(MD->getCanonicalDecl());
-  for (CXXMethodDecl::method_iterator I = MD->begin_overridden_methods(),
-                                      E = MD->end_overridden_methods();
-       I != E; ++I)
-    if (CheckMostOverridenMethods(*I, Methods))
-      return true;
-  return false;
-}
-
-/// \brief Member lookup function that determines whether a given C++
-/// method overloads virtual methods in a base class without overriding any,
-/// to be used with CXXRecordDecl::lookupInBases().
-static bool FindHiddenVirtualMethod(const CXXBaseSpecifier *Specifier,
-                                    CXXBasePath &Path,
-                                    void *UserData) {
-  RecordDecl *BaseRecord = Specifier->getType()->getAs<RecordType>()->getDecl();
-
-  FindHiddenVirtualMethodData &Data
-    = *static_cast<FindHiddenVirtualMethodData*>(UserData);
-
-  DeclarationName Name = Data.Method->getDeclName();
-  assert(Name.getNameKind() == DeclarationName::Identifier);
-
-  bool foundSameNameMethod = false;
-  SmallVector<CXXMethodDecl *, 8> overloadedMethods;
-  for (Path.Decls = BaseRecord->lookup(Name);
-       !Path.Decls.empty();
-       Path.Decls = Path.Decls.slice(1)) {
-    NamedDecl *D = Path.Decls.front();
-    if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(D)) {
-      MD = MD->getCanonicalDecl();
-      foundSameNameMethod = true;
-      // Interested only in hidden virtual methods.
-      if (!MD->isVirtual())
-        continue;
-      // If the method we are checking overrides a method from its base
-      // don't warn about the other overloaded methods. Clang deviates from GCC
-      // by only diagnosing overloads of inherited virtual functions that do not
-      // override any other virtual functions in the base. GCC's
-      // -Woverloaded-virtual diagnoses any derived function hiding a virtual
-      // function from a base class. These cases may be better served by a
-      // warning (not specific to virtual functions) on call sites when the call
-      // would select a different function from the base class, were it visible.
-      // See FIXME in test/SemaCXX/warn-overload-virtual.cpp for an example.
-      if (!Data.S->IsOverload(Data.Method, MD, false))
+private:
+  /// Check whether any most overriden method from MD in Methods
+  static bool CheckMostOverridenMethods(
+      const CXXMethodDecl *MD,
+      const llvm::SmallPtrSetImpl<const CXXMethodDecl *> &Methods) {
+    if (MD->size_overridden_methods() == 0)
+      return Methods.count(MD->getCanonicalDecl());
+    for (CXXMethodDecl::method_iterator I = MD->begin_overridden_methods(),
+                                        E = MD->end_overridden_methods();
+         I != E; ++I)
+      if (CheckMostOverridenMethods(*I, Methods))
         return true;
-      // Collect the overload only if its hidden.
-      if (!CheckMostOverridenMethods(MD, Data.OverridenAndUsingBaseMethods))
-        overloadedMethods.push_back(MD);
-    }
+    return false;
   }
 
-  if (foundSameNameMethod)
-    Data.OverloadedMethods.append(overloadedMethods.begin(),
-                                   overloadedMethods.end());
-  return foundSameNameMethod;
-}
+public:
+  /// Member lookup function that determines whether a given C++
+  /// method overloads virtual methods in a base class without overriding any,
+  /// to be used with CXXRecordDecl::lookupInBases().
+  bool operator()(const CXXBaseSpecifier *Specifier, CXXBasePath &Path) {
+    RecordDecl *BaseRecord =
+        Specifier->getType()->getAs<RecordType>()->getDecl();
+
+    DeclarationName Name = Method->getDeclName();
+    assert(Name.getNameKind() == DeclarationName::Identifier);
+
+    bool foundSameNameMethod = false;
+    SmallVector<CXXMethodDecl *, 8> overloadedMethods;
+    for (Path.Decls = BaseRecord->lookup(Name); !Path.Decls.empty();
+         Path.Decls = Path.Decls.slice(1)) {
+      NamedDecl *D = Path.Decls.front();
+      if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(D)) {
+        MD = MD->getCanonicalDecl();
+        foundSameNameMethod = true;
+        // Interested only in hidden virtual methods.
+        if (!MD->isVirtual())
+          continue;
+        // If the method we are checking overrides a method from its base
+        // don't warn about the other overloaded methods. Clang deviates from
+        // GCC by only diagnosing overloads of inherited virtual functions that
+        // do not override any other virtual functions in the base. GCC's
+        // -Woverloaded-virtual diagnoses any derived function hiding a virtual
+        // function from a base class. These cases may be better served by a
+        // warning (not specific to virtual functions) on call sites when the
+        // call would select a different function from the base class, were it
+        // visible.
+        // See FIXME in test/SemaCXX/warn-overload-virtual.cpp for an example.
+        if (!S->IsOverload(Method, MD, false))
+          return true;
+        // Collect the overload only if its hidden.
+        if (!CheckMostOverridenMethods(MD, OverridenAndUsingBaseMethods))
+          overloadedMethods.push_back(MD);
+      }
+    }
+
+    if (foundSameNameMethod)
+      OverloadedMethods.append(overloadedMethods.begin(),
+                               overloadedMethods.end());
+    return foundSameNameMethod;
+  }
+};
+} // end anonymous namespace
 
 /// \brief Add the most overriden methods from MD to Methods
 static void AddMostOverridenMethods(const CXXMethodDecl *MD,
@@ -6363,9 +6379,9 @@ void Sema::FindHiddenVirtualMethods(CXXMethodDecl *MD,
   CXXBasePaths Paths(/*FindAmbiguities=*/true, // true to look in all bases.
                      /*bool RecordPaths=*/false,
                      /*bool DetectVirtual=*/false);
-  FindHiddenVirtualMethodData Data;
-  Data.Method = MD;
-  Data.S = this;
+  FindHiddenVirtualMethod FHVM;
+  FHVM.Method = MD;
+  FHVM.S = this;
 
   // Keep the base methods that were overriden or introduced in the subclass
   // by 'using' in a set. A base method not in this set is hidden.
@@ -6376,11 +6392,11 @@ void Sema::FindHiddenVirtualMethods(CXXMethodDecl *MD,
     if (UsingShadowDecl *shad = dyn_cast<UsingShadowDecl>(*I))
       ND = shad->getTargetDecl();
     if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(ND))
-      AddMostOverridenMethods(MD, Data.OverridenAndUsingBaseMethods);
+      AddMostOverridenMethods(MD, FHVM.OverridenAndUsingBaseMethods);
   }
 
-  if (DC->lookupInBases(&FindHiddenVirtualMethod, &Data, Paths))
-    OverloadedMethods = Data.OverloadedMethods;
+  if (DC->lookupInBases(FHVM, Paths))
+    OverloadedMethods = FHVM.OverloadedMethods;
 }
 
 void Sema::NoteHiddenVirtualMethods(CXXMethodDecl *MD,
@@ -6897,7 +6913,7 @@ QualType Sema::CheckDestructorDeclarator(Declarator &D, QualType R,
   return Context.getFunctionType(Context.VoidTy, None, EPI);
 }
 
-static void extendLeft(SourceRange &R, const SourceRange &Before) {
+static void extendLeft(SourceRange &R, SourceRange Before) {
   if (Before.isInvalid())
     return;
   R.setBegin(Before.getBegin());
@@ -6905,7 +6921,7 @@ static void extendLeft(SourceRange &R, const SourceRange &Before) {
     R.setEnd(Before.getEnd());
 }
 
-static void extendRight(SourceRange &R, const SourceRange &After) {
+static void extendRight(SourceRange &R, SourceRange After) {
   if (After.isInvalid())
     return;
   if (R.getBegin().isInvalid())
@@ -7805,7 +7821,8 @@ bool Sema::CheckUsingShadowDecl(UsingDecl *Using, NamedDecl *Orig,
       FoundEquivalentDecl = true;
     }
 
-    (isa<TagDecl>(D) ? Tag : NonTag) = D;
+    if (isVisible(D))
+      (isa<TagDecl>(D) ? Tag : NonTag) = D;
   }
 
   if (FoundEquivalentDecl)
@@ -8014,6 +8031,10 @@ public:
 
         // FIXME: Check that the base class member is accessible?
       }
+    } else {
+      auto *FoundRecord = dyn_cast<CXXRecordDecl>(ND);
+      if (FoundRecord && FoundRecord->isInjectedClassName())
+        return false;
     }
 
     if (isa<TypeDecl>(ND))
@@ -8470,40 +8491,26 @@ bool Sema::CheckUsingDeclQualifier(SourceLocation UsingLoc,
   // in the UsingDecl and UsingShadowDecl so that these checks didn't
   // need to be repeated.
 
-  struct UserData {
-    llvm::SmallPtrSet<const CXXRecordDecl*, 4> Bases;
-
-    static bool collect(const CXXRecordDecl *Base, void *OpaqueData) {
-      UserData *Data = reinterpret_cast<UserData*>(OpaqueData);
-      Data->Bases.insert(Base);
-      return true;
-    }
-
-    bool hasDependentBases(const CXXRecordDecl *Class) {
-      return !Class->forallBases(collect, this);
-    }
-
-    /// Returns true if the base is dependent or is one of the
-    /// accumulated base classes.
-    static bool doesNotContain(const CXXRecordDecl *Base, void *OpaqueData) {
-      UserData *Data = reinterpret_cast<UserData*>(OpaqueData);
-      return !Data->Bases.count(Base);
-    }
-
-    bool mightShareBases(const CXXRecordDecl *Class) {
-      return Bases.count(Class) || !Class->forallBases(doesNotContain, this);
-    }
+  llvm::SmallPtrSet<const CXXRecordDecl *, 4> Bases;
+  auto Collect = [&Bases](const CXXRecordDecl *Base) {
+    Bases.insert(Base);
+    return true;
   };
 
-  UserData Data;
-
-  // Returns false if we find a dependent base.
-  if (Data.hasDependentBases(cast<CXXRecordDecl>(CurContext)))
+  // Collect all bases. Return false if we find a dependent base.
+  if (!cast<CXXRecordDecl>(CurContext)->forallBases(Collect))
     return false;
 
-  // Returns false if the class has a dependent base or if it or one
+  // Returns true if the base is dependent or is one of the accumulated base
+  // classes.
+  auto IsNotBase = [&Bases](const CXXRecordDecl *Base) {
+    return !Bases.count(Base);
+  };
+
+  // Return false if the class has a dependent base or if it or one
   // of its bases is present in the base set of the current context.
-  if (Data.mightShareBases(cast<CXXRecordDecl>(NamedContext)))
+  if (Bases.count(cast<CXXRecordDecl>(NamedContext)) ||
+      !cast<CXXRecordDecl>(NamedContext)->forallBases(IsNotBase))
     return false;
 
   Diag(SS.getRange().getBegin(),
@@ -9497,7 +9504,7 @@ static void getDefaultArgExprsForConstructors(Sema &S, CXXRecordDecl *Class) {
   }
 }
 
-void Sema::ActOnFinishCXXMemberDefaultArgs(Decl *D) {
+void Sema::ActOnFinishCXXNonNestedClass(Decl *D) {
   auto *RD = dyn_cast<CXXRecordDecl>(D);
 
   // Default constructors that are annotated with __declspec(dllexport) which
@@ -9505,6 +9512,15 @@ void Sema::ActOnFinishCXXMemberDefaultArgs(Decl *D) {
   // wrapped with a thunk called the default constructor closure.
   if (RD && Context.getTargetInfo().getCXXABI().isMicrosoft())
     getDefaultArgExprsForConstructors(*this, RD);
+
+  if (!DelayedDllExportClasses.empty()) {
+    // Calling ReferenceDllExportedMethods might cause the current function to
+    // be called again, so use a local copy of DelayedDllExportClasses.
+    SmallVector<CXXRecordDecl *, 4> WorkList;
+    std::swap(DelayedDllExportClasses, WorkList);
+    for (CXXRecordDecl *Class : WorkList)
+      ReferenceDllExportedMethods(*this, Class);
+  }
 }
 
 void Sema::AdjustDestructorExceptionSpec(CXXRecordDecl *ClassDecl,
@@ -9618,7 +9634,7 @@ public:
   Expr *build(Sema &S, SourceLocation Loc) const override {
     return assertNotNull(S.BuildMemberReferenceExpr(
         Builder.build(S, Loc), Type, Loc, IsArrow, SS, SourceLocation(),
-        nullptr, MemberLookup, nullptr).get());
+        nullptr, MemberLookup, nullptr, nullptr).get());
   }
 
   MemberBuilder(const ExprBuilder &Builder, QualType Type, bool IsArrow,
@@ -9828,7 +9844,7 @@ buildSingleCopyAssignRecursively(Sema &S, SourceLocation Loc, QualType T,
                                    SS, /*TemplateKWLoc=*/SourceLocation(),
                                    /*FirstQualifierInScope=*/nullptr,
                                    OpLookup,
-                                   /*TemplateArgs=*/nullptr,
+                                   /*TemplateArgs=*/nullptr, /*S*/nullptr,
                                    /*SuppressQualifierCheck=*/true);
     if (OpEqualRef.isInvalid())
       return StmtError();
@@ -12673,15 +12689,30 @@ NamedDecl *Sema::ActOnFriendFunctionDecl(Scope *S, Declarator &D,
     DC = CurContext;
     assert(isa<CXXRecordDecl>(DC) && "friend declaration not in class?");
   }
-  
+
   if (!DC->isRecord()) {
+    int DiagArg = -1;
+    switch (D.getName().getKind()) {
+    case UnqualifiedId::IK_ConstructorTemplateId:
+    case UnqualifiedId::IK_ConstructorName:
+      DiagArg = 0;
+      break;
+    case UnqualifiedId::IK_DestructorName:
+      DiagArg = 1;
+      break;
+    case UnqualifiedId::IK_ConversionFunctionId:
+      DiagArg = 2;
+      break;
+    case UnqualifiedId::IK_Identifier:
+    case UnqualifiedId::IK_ImplicitSelfParam:
+    case UnqualifiedId::IK_LiteralOperatorId:
+    case UnqualifiedId::IK_OperatorFunctionId:
+    case UnqualifiedId::IK_TemplateId:
+      break;
+    }
     // This implies that it has to be an operator or function.
-    if (D.getName().getKind() == UnqualifiedId::IK_ConstructorName ||
-        D.getName().getKind() == UnqualifiedId::IK_DestructorName ||
-        D.getName().getKind() == UnqualifiedId::IK_ConversionFunctionId) {
-      Diag(Loc, diag::err_introducing_special_friend) <<
-        (D.getName().getKind() == UnqualifiedId::IK_ConstructorName ? 0 :
-         D.getName().getKind() == UnqualifiedId::IK_DestructorName ? 1 : 2);
+    if (DiagArg >= 0) {
+      Diag(Loc, diag::err_introducing_special_friend) << DiagArg;
       return nullptr;
     }
   }
@@ -12887,8 +12918,7 @@ void Sema::SetDeclDefaulted(Decl *Dcl, SourceLocation DefaultLoc) {
 }
 
 static void SearchForReturnInStmt(Sema &Self, Stmt *S) {
-  for (Stmt::child_range CI = S->children(); CI; ++CI) {
-    Stmt *SubStmt = *CI;
+  for (Stmt *SubStmt : S->children()) {
     if (!SubStmt)
       continue;
     if (isa<ReturnStmt>(SubStmt))

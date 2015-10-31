@@ -9,7 +9,6 @@
 
 // C Includes
 #include <errno.h>
-#include <getopt.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,17 +24,16 @@
 // Other libraries and framework includes
 #include "llvm/ADT/StringRef.h"
 
-#include "lldb/Core/ConnectionMachPort.h"
 #include "lldb/Core/Error.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
-#include "lldb/Host/HostThread.h"
+#include "lldb/Host/HostGetOpt.h"
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Host/Pipe.h"
 #include "lldb/Host/Socket.h"
 #include "lldb/Host/StringConvert.h"
-#include "lldb/Host/ThreadLauncher.h"
 #include "lldb/Target/Platform.h"
+#include "Acceptor.h"
 #include "LLDBServerUtilities.h"
 #include "Plugins/Process/gdb-remote/GDBRemoteCommunicationServerLLGS.h"
 #include "Plugins/Process/gdb-remote/ProcessGDBRemoteLog.h"
@@ -53,15 +51,6 @@ using namespace lldb;
 using namespace lldb_private;
 using namespace lldb_private::lldb_server;
 using namespace lldb_private::process_gdb_remote;
-
-// lldb-gdbserver state
-
-namespace
-{
-HostThread s_listen_thread;
-    std::unique_ptr<ConnectionFileDescriptor> s_listen_connection_up;
-    std::string s_listen_url;
-}
 
 //----------------------------------------------------------------------
 // option descriptors for getopt_long_only()
@@ -109,15 +98,20 @@ signal_handler(int signo)
     case SIGPIPE:
         g_sigpipe_received = 1;
         break;
-    case SIGHUP:
-        ++g_sighup_received_count;
-
-        // For now, swallow SIGHUP.
-        if (log)
-            log->Printf ("lldb-server:%s swallowing SIGHUP (receive count=%d)", __FUNCTION__, g_sighup_received_count);
-        signal (SIGHUP, signal_handler);
-        break;
     }
+}
+
+static void
+sighup_handler(MainLoopBase &mainloop)
+{
+    ++g_sighup_received_count;
+
+    Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS));
+    if (log)
+        log->Printf ("lldb-server:%s swallowing SIGHUP (receive count=%d)", __FUNCTION__, g_sighup_received_count);
+
+    if (g_sighup_received_count >= 2)
+        mainloop.RequestTermination();
 }
 #endif // #ifndef _WIN32
 
@@ -258,64 +252,16 @@ handle_launch (GDBRemoteCommunicationServerLLGS &gdb_server, int argc, const cha
     }
 }
 
-static lldb::thread_result_t
-ListenThread (lldb::thread_arg_t /* arg */)
-{
-    Error error;
-
-    if (s_listen_connection_up)
-    {
-        // Do the listen on another thread so we can continue on...
-        if (s_listen_connection_up->Connect(s_listen_url.c_str(), &error) != eConnectionStatusSuccess)
-            s_listen_connection_up.reset();
-    }
-    return nullptr;
-}
-
-static Error
-StartListenThread (const char *hostname, uint16_t port)
-{
-    Error error;
-    if (s_listen_thread.IsJoinable())
-    {
-        error.SetErrorString("listen thread already running");
-    }
-    else
-    {
-        char listen_url[512];
-        if (hostname && hostname[0])
-            snprintf(listen_url, sizeof(listen_url), "listen://%s:%i", hostname, port);
-        else
-            snprintf(listen_url, sizeof(listen_url), "listen://%i", port);
-
-        s_listen_url = listen_url;
-        s_listen_connection_up.reset (new ConnectionFileDescriptor ());
-        s_listen_thread = ThreadLauncher::LaunchThread(listen_url, ListenThread, nullptr, &error);
-    }
-    return error;
-}
-
-static bool
-JoinListenThread ()
-{
-    if (s_listen_thread.IsJoinable())
-        s_listen_thread.Join(nullptr);
-    return true;
-}
-
 Error
-WritePortToPipe(Pipe &port_pipe, const uint16_t port)
+writeSocketIdToPipe(Pipe &port_pipe, const std::string &socket_id)
 {
-    char port_str[64];
-    const auto port_str_len = ::snprintf(port_str, sizeof(port_str), "%u", port);
-
     size_t bytes_written = 0;
     // Write the port number as a C string with the NULL terminator.
-    return port_pipe.Write(port_str, port_str_len + 1, bytes_written);
+    return port_pipe.Write(socket_id.c_str(), socket_id.size() + 1, bytes_written);
 }
 
 Error
-writePortToPipe(const char *const named_pipe_path, const uint16_t port)
+writeSocketIdToPipe(const char *const named_pipe_path, const std::string &socket_id)
 {
     Pipe port_name_pipe;
     // Wait for 10 seconds for pipe to be opened.
@@ -323,22 +269,22 @@ writePortToPipe(const char *const named_pipe_path, const uint16_t port)
             std::chrono::seconds{10});
     if (error.Fail())
         return error;
-    return WritePortToPipe(port_name_pipe, port);
+    return writeSocketIdToPipe(port_name_pipe, socket_id);
 }
 
 Error
-writePortToPipe(int unnamed_pipe_fd, const uint16_t port)
+writeSocketIdToPipe(int unnamed_pipe_fd, const std::string &socket_id)
 {
 #if defined(_WIN32)
     return Error("Unnamed pipes are not supported on Windows.");
 #else
     Pipe port_pipe{Pipe::kInvalidDescriptor, unnamed_pipe_fd};
-    return WritePortToPipe(port_pipe, port);
+    return writeSocketIdToPipe(port_pipe, socket_id);
 #endif
 }
 
 void
-ConnectToRemote(GDBRemoteCommunicationServerLLGS &gdb_server,
+ConnectToRemote(MainLoop &mainloop, GDBRemoteCommunicationServerLLGS &gdb_server,
         bool reverse_connect, const char *const host_and_port,
         const char *const progname, const char *const subcommand,
         const char *const named_pipe_path, int unnamed_pipe_fd)
@@ -365,12 +311,8 @@ ConnectToRemote(GDBRemoteCommunicationServerLLGS &gdb_server,
             connection_port = final_host_and_port.substr (colon_pos + 1);
             connection_portno = StringConvert::ToUInt32 (connection_port.c_str (), 0);
         }
-        else
-        {
-            fprintf (stderr, "failed to parse host and port from connection string '%s'\n", final_host_and_port.c_str ());
-            display_usage (progname, subcommand);
-            exit (1);
-        }
+
+        std::unique_ptr<Connection> connection_up;
 
         if (reverse_connect)
         {
@@ -388,8 +330,7 @@ ConnectToRemote(GDBRemoteCommunicationServerLLGS &gdb_server,
             snprintf(connection_url, sizeof(connection_url), "connect://%s", final_host_and_port.c_str ());
 
             // Create the connection.
-            std::unique_ptr<ConnectionFileDescriptor> connection_up (new ConnectionFileDescriptor ());
-            connection_up.reset (new ConnectionFileDescriptor ());
+            connection_up.reset(new ConnectionFileDescriptor);
             auto connection_result = connection_up->Connect (connection_url, &error);
             if (connection_result != eConnectionStatusSuccess)
             {
@@ -401,117 +342,62 @@ ConnectToRemote(GDBRemoteCommunicationServerLLGS &gdb_server,
                 fprintf (stderr, "error: failed to connect to client at '%s': %s", connection_url, error.AsCString ());
                 exit (-1);
             }
-
-            // We're connected.
-            printf ("Connection established.\n");
-            gdb_server.SetConnection (connection_up.release());
         }
         else
         {
-            // llgs will listen for connections on the given port from the given address.
-            // Start the listener on a new thread.  We need to do this so we can resolve the
-            // bound listener port.
-            StartListenThread(connection_host.c_str (), static_cast<uint16_t> (connection_portno));
-            printf ("Listening to port %s for a connection from %s...\n", connection_port.c_str (), connection_host.c_str ());
-
-            // If we have a named pipe to write the port number back to, do that now.
-            if (named_pipe_path && named_pipe_path[0] && connection_portno == 0)
+            std::unique_ptr<Acceptor> acceptor_up(Acceptor::Create(final_host_and_port, false, error));
+            if (error.Fail())
             {
-                const uint16_t bound_port = s_listen_connection_up->GetListeningPort (10);
-                if (bound_port > 0)
-                {
-                    error = writePortToPipe (named_pipe_path, bound_port);
-                    if (error.Fail ())
-                    {
-                        fprintf (stderr, "failed to write to the named pipe \'%s\': %s", named_pipe_path, error.AsCString());
-                    }
-                }
-                else
-                {
-                    fprintf (stderr, "unable to get the bound port for the listening connection\n");
-                }
+                fprintf(stderr, "failed to create acceptor: %s", error.AsCString());
+                exit(1);
             }
-
-            // If we have an unnamed pipe to write the port number back to, do that now.
-            if (unnamed_pipe_fd >= 0 && connection_portno == 0)
+            error = acceptor_up->Listen(1);
+            if (error.Fail())
             {
-                const uint16_t bound_port = s_listen_connection_up->GetListeningPort(10);
-                if (bound_port > 0)
+                fprintf(stderr, "failed to listen: %s\n", error.AsCString());
+                exit(1);
+            }
+            const std::string socket_id = acceptor_up->GetLocalSocketId();
+            if (!socket_id.empty())
+            {
+                // If we have a named pipe to write the socket id back to, do that now.
+                if (named_pipe_path && named_pipe_path[0])
                 {
-                    error = writePortToPipe(unnamed_pipe_fd, bound_port);
+                    error = writeSocketIdToPipe (named_pipe_path, socket_id);
+                    if (error.Fail ())
+                        fprintf (stderr, "failed to write to the named pipe \'%s\': %s",
+                                 named_pipe_path, error.AsCString());
+                }
+                // If we have an unnamed pipe to write the socket id back to, do that now.
+                else if (unnamed_pipe_fd >= 0)
+                {
+                    error = writeSocketIdToPipe(unnamed_pipe_fd, socket_id);
                     if (error.Fail())
-                    {
                         fprintf(stderr, "failed to write to the unnamed pipe: %s",
                                 error.AsCString());
-                    }
                 }
-                else
-                {
-                    fprintf(stderr, "unable to get the bound port for the listening connection\n");
-                }
-            }
-
-            // Join the listener thread.
-            if (!JoinListenThread ())
-            {
-                fprintf (stderr, "failed to join the listener thread\n");
-                display_usage (progname, subcommand);
-                exit (1);
-            }
-
-            // Ensure we connected.
-            if (s_listen_connection_up)
-            {
-                printf ("Connection established '%s'\n", s_listen_connection_up->GetURI().c_str());
-                gdb_server.SetConnection (s_listen_connection_up.release());
             }
             else
             {
-                fprintf (stderr, "failed to connect to '%s': %s\n", final_host_and_port.c_str (), error.AsCString ());
-                display_usage (progname, subcommand);
-                exit (1);
-            }
-        }
-    }
-
-    if (gdb_server.IsConnected())
-    {
-        // After we connected, we need to get an initial ack from...
-        if (gdb_server.HandshakeWithClient(&error))
-        {
-            // We'll use a half a second timeout interval so that an exit conditions can
-            // be checked that often.
-            const uint32_t TIMEOUT_USEC = 500000;
-
-            bool interrupt = false;
-            bool done = false;
-            while (!interrupt && !done && (g_sighup_received_count < 2))
-            {
-                const GDBRemoteCommunication::PacketResult result = gdb_server.GetPacketAndSendResponse (TIMEOUT_USEC, error, interrupt, done);
-                if ((result != GDBRemoteCommunication::PacketResult::Success) &&
-                    (result != GDBRemoteCommunication::PacketResult::ErrorReplyTimeout))
-                {
-                    // We're bailing out - we only support successful handling and timeouts.
-                    fprintf(stderr, "leaving packet loop due to PacketResult %d\n", result);
-                    break;
-                }
+                fprintf (stderr, "unable to get the socket id for the listening connection\n");
             }
 
+            Connection* conn = nullptr;
+            error = acceptor_up->Accept(false, conn);
             if (error.Fail())
             {
-                fprintf(stderr, "error: %s\n", error.AsCString());
+                printf ("failed to accept new connection: %s\n", error.AsCString());
+                exit(1);
             }
+            connection_up.reset(conn);
         }
-        else
+        error = gdb_server.InitializeConnection (std::move(connection_up));
+        if (error.Fail())
         {
-            fprintf(stderr, "error: handshake with client failed\n");
+            fprintf(stderr, "Failed to initialize connection: %s\n", error.AsCString());
+            exit(-1);
         }
-    }
-    else
-    {
-        fprintf (stderr, "no connection information provided, unable to run\n");
-        display_usage (progname, subcommand);
-        exit (1);
+        printf ("Connection established.\n");
     }
 }
 
@@ -521,10 +407,12 @@ ConnectToRemote(GDBRemoteCommunicationServerLLGS &gdb_server,
 int
 main_gdbserver (int argc, char *argv[])
 {
+    Error error;
+    MainLoop mainloop;
 #ifndef _WIN32
     // Setup signal handlers first thing.
     signal (SIGPIPE, signal_handler);
-    signal (SIGHUP, signal_handler);
+    MainLoop::SignalHandleUP sighup_handle = mainloop.RegisterSignal(SIGHUP, sighup_handler, error);
 #endif
 #ifdef __linux__
     // Block delivery of SIGCHLD on linux. NativeProcessLinux will read it using signalfd.
@@ -539,7 +427,6 @@ main_gdbserver (int argc, char *argv[])
     argc--;
     argv++;
     int long_option_index = 0;
-    Error error;
     int ch;
     std::string platform_name;
     std::string attach_target;
@@ -670,7 +557,7 @@ main_gdbserver (int argc, char *argv[])
     // Setup the platform that GDBRemoteCommunicationServerLLGS will use.
     lldb::PlatformSP platform_sp = setup_platform (platform_name);
 
-    GDBRemoteCommunicationServerLLGS gdb_server (platform_sp);
+    GDBRemoteCommunicationServerLLGS gdb_server (platform_sp, mainloop);
 
     const char *const host_and_port = argv[0];
     argc -= 1;
@@ -688,10 +575,19 @@ main_gdbserver (int argc, char *argv[])
     // Print version info.
     printf("%s-%s", LLGS_PROGRAM_NAME, LLGS_VERSION_STR);
 
-    ConnectToRemote(gdb_server, reverse_connect,
+    ConnectToRemote(mainloop, gdb_server, reverse_connect,
                     host_and_port, progname, subcommand,
                     named_pipe_path.c_str(), unnamed_pipe_fd);
 
+
+    if (! gdb_server.IsConnected())
+    {
+        fprintf (stderr, "no connection information provided, unable to run\n");
+        display_usage (progname, subcommand);
+        return 1;
+    }
+
+    mainloop.Run();
     fprintf(stderr, "lldb-server exiting...\n");
 
     return 0;

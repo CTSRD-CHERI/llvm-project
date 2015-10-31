@@ -1,7 +1,10 @@
 """Test that forward declaration of a data structure gets resolved correctly."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,32 +13,16 @@ class ForwardDeclarationTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
+    def test_and_run_command(self):
         """Display *bar_ptr when stopped on a function with forward declaration of struct bar."""
-        self.buildDsym()
-        self.forward_declaration()
-
-    # rdar://problem/8648070
-    # 'expression *bar_ptr' seg faults
-    # rdar://problem/8546815
-    # './dotest.py -v -t forward' fails for test_with_dwarf_and_run_command
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Display *bar_ptr when stopped on a function with forward declaration of struct bar."""
-        self.buildDwarf()
-        self.forward_declaration()
-
-    def forward_declaration(self):
-        """Display *bar_ptr when stopped on a function with forward declaration of struct bar."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         # Break inside the foo function which takes a bar_ptr argument.
         lldbutil.run_break_set_by_symbol (self, "foo", num_expected_locations=1, sym_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -58,10 +45,3 @@ class ForwardDeclarationTestCase(TestBase):
             substrs = ['(bar)',
                        '(int) a = 1',
                        '(int) b = 2'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

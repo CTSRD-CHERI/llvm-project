@@ -13,7 +13,7 @@ class StdListSynthProvider:
 		logger = lldb.formatters.Logger.Logger()
 		self.valobj = valobj
 		self.count = None
-		logger >> "Providing synthetic children for a map named " + str(valobj.GetName())
+		logger >> "Providing synthetic children for a list named " + str(valobj.GetName())
 
 	def next_node(self,node):
 		logger = lldb.formatters.Logger.Logger()
@@ -21,13 +21,22 @@ class StdListSynthProvider:
 
 	def is_valid(self,node):
 		logger = lldb.formatters.Logger.Logger()
-		return self.value(self.next_node(node)) != self.node_address
+		valid = self.value(self.next_node(node)) != self.node_address
+                if valid:
+                        logger >> "%s is valid" % str(self.valobj.GetName())
+                else:
+                        logger >> "synthetic value is not valid"
+                return valid
 
 	def value(self,node):
 		logger = lldb.formatters.Logger.Logger()
-		return node.GetValueAsUnsigned()
+                value = node.GetValueAsUnsigned()
+                logger >> "synthetic value for {}: {}".format(
+                        str(self.valobj.GetName()),
+                        value)
+                return value
 
-	# Floyd's cyle-finding algorithm
+	# Floyd's cycle-finding algorithm
 	# try to detect if this list has a loop
 	def has_loop(self):
 		global _list_uses_loop_detector
@@ -48,17 +57,18 @@ class StdListSynthProvider:
 		return False
 
 	def num_children(self):
-		global _list_capping_size
 		logger = lldb.formatters.Logger.Logger()
-		if self.count == None:
+		if self.count is None:
+                        # libstdc++ 6.0.21 added dedicated count field.
+                        count_child = self.node.GetChildMemberWithName('_M_data')
+                        if count_child and count_child.IsValid():
+                                self.count = count_child.GetValueAsUnsigned(0)
+                if self.count is None:
 			self.count = self.num_children_impl()
-			if self.count > _list_capping_size:
-				self.count = _list_capping_size
 		return self.count
 
 	def num_children_impl(self):
 		logger = lldb.formatters.Logger.Logger()
-		global _list_capping_size
 		try:
 			next_val = self.next.GetValueAsUnsigned(0)
 			prev_val = self.prev.GetValueAsUnsigned(0)
@@ -76,8 +86,6 @@ class StdListSynthProvider:
 			while current.GetChildMemberWithName('_M_next').GetValueAsUnsigned(0) != self.node_address:
 				size = size + 1
 				current = current.GetChildMemberWithName('_M_next')
-				if size > _list_capping_size:
-					return _list_capping_size
 			return (size - 1)
 		except:
 			return 0;
@@ -123,10 +131,10 @@ class StdListSynthProvider:
 		self.count = None
 		try:
 			impl = self.valobj.GetChildMemberWithName('_M_impl')
-			node = impl.GetChildMemberWithName('_M_node')
+			self.node = impl.GetChildMemberWithName('_M_node')
 			self.node_address = self.valobj.AddressOf().GetValueAsUnsigned(0)
-			self.next = node.GetChildMemberWithName('_M_next')
-			self.prev = node.GetChildMemberWithName('_M_prev')
+			self.next = self.node.GetChildMemberWithName('_M_next')
+			self.prev = self.node.GetChildMemberWithName('_M_prev')
 			self.data_type = self.extract_type()
 			self.data_size = self.data_type.GetByteSize()
 		except:
@@ -143,18 +151,18 @@ class StdVectorSynthProvider:
 			self.count = None
 
 		def num_children(self):
-                        if self.count == None:
-                                self.count = self.num_children_impl()
-                        return self.count
+			if self.count == None:
+				self.count = self.num_children_impl()
+			return self.count
 
-                def num_children_impl(self):
+		def num_children_impl(self):
 			try:
 				start_val = self.start.GetValueAsUnsigned(0)
 				finish_val = self.finish.GetValueAsUnsigned(0)
 				end_val  = self.end.GetValueAsUnsigned(0)
 				# Before a vector has been constructed, it will contain bad values
 				# so we really need to be careful about the length we return since
-				# unitialized data can cause us to return a huge number. We need
+				# uninitialized data can cause us to return a huge number. We need
 				# to also check for any of the start, finish or end of storage values
 				# being zero (NULL). If any are, then this vector has not been
 				# initialized yet and we should return zero
@@ -346,12 +354,9 @@ class StdMapSynthProvider:
 			pass
 
 	def num_children(self):
-		global _map_capping_size
 		logger = lldb.formatters.Logger.Logger()
 		if self.count == None:
 			self.count = self.num_children_impl()
-			if self.count > _map_capping_size:
-				self.count = _map_capping_size
 		return self.count
 
 	def num_children_impl(self):
@@ -445,6 +450,4 @@ class StdMapSynthProvider:
 	def has_children(self):
 		return True
 
-_map_capping_size = 255
-_list_capping_size = 255
 _list_uses_loop_detector = True

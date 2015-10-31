@@ -36,6 +36,9 @@ public:
     GetName() const;
 
     const char *
+    GetDisplayName() const;
+    
+    const char *
     GetMangledName () const;
 
     lldb::SBInstructionList
@@ -61,6 +64,9 @@ public:
     
     lldb::LanguageType
     GetLanguage ();
+
+    bool
+    GetIsOptimized ();
 
     bool
     operator == (const lldb::SBFunction &rhs) const;

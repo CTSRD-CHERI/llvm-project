@@ -1,4 +1,4 @@
-//===-- AppleObjCRuntimeV2.h ----------------------------------------*- C++ -*-===//
+//===-- AppleObjCRuntimeV2.h ------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,7 +12,6 @@
 
 // C Includes
 // C++ Includes
-
 #include <map>
 #include <memory>
 
@@ -30,18 +29,7 @@ class AppleObjCRuntimeV2 :
         public AppleObjCRuntime
 {
 public:
-    virtual ~AppleObjCRuntimeV2();
-    
-    // These are generic runtime functions:
-    virtual bool
-    GetDynamicTypeAndAddress (ValueObject &in_value, 
-                              lldb::DynamicValueType use_dynamic, 
-                              TypeAndOrName &class_type_or_name, 
-                              Address &address);
-    
-    virtual ClangUtilityFunction *
-    CreateObjectChecker (const char *);
-
+    ~AppleObjCRuntimeV2() override = default;
 
     //------------------------------------------------------------------
     // Static Functions
@@ -57,27 +45,73 @@ public:
     
     static lldb_private::ConstString
     GetPluginNameStatic();
+
+    static bool classof(const ObjCLanguageRuntime* runtime)
+    {
+        switch (runtime->GetRuntimeVersion())
+        {
+            case ObjCRuntimeVersions::eAppleObjC_V2:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // These are generic runtime functions:
+    bool
+    GetDynamicTypeAndAddress(ValueObject &in_value,
+                             lldb::DynamicValueType use_dynamic,
+                             TypeAndOrName &class_type_or_name,
+                             Address &address,
+                             Value::ValueType &value_type) override;
     
+    UtilityFunction *
+    CreateObjectChecker(const char *) override;
+
     //------------------------------------------------------------------
     // PluginInterface protocol
     //------------------------------------------------------------------
-    virtual ConstString
-    GetPluginName();
+    ConstString
+    GetPluginName() override;
     
-    virtual uint32_t
-    GetPluginVersion();
+    uint32_t
+    GetPluginVersion() override;
     
-    virtual ObjCRuntimeVersions
-    GetRuntimeVersion ()
+    ObjCRuntimeVersions
+    GetRuntimeVersion() const override
     {
-        return eAppleObjC_V2;
+        return ObjCRuntimeVersions::eAppleObjC_V2;
     }
 
-    virtual size_t
-    GetByteOffsetForIvar (ClangASTType &parent_qual_type, const char *ivar_name);
+    size_t
+    GetByteOffsetForIvar(CompilerType &parent_qual_type, const char *ivar_name) override;
 
-    virtual void
-    UpdateISAToDescriptorMapIfNeeded();
+    void
+    UpdateISAToDescriptorMapIfNeeded() override;
+    
+    ConstString
+    GetActualTypeName(ObjCLanguageRuntime::ObjCISA isa) override;
+    
+    ClassDescriptorSP
+    GetClassDescriptor(ValueObject& in_value) override;
+    
+    ClassDescriptorSP
+    GetClassDescriptorFromISA(ObjCISA isa) override;
+    
+    DeclVendor *
+    GetDeclVendor() override;
+    
+    lldb::addr_t
+    LookupRuntimeSymbol(const ConstString &name) override;
+    
+    EncodingToTypeSP
+    GetEncodingToType() override;
+    
+    TaggedPointerVendor*
+    GetTaggedPointerVendor() override
+    {
+        return m_tagged_pointer_vendor_ap.get();
+    }
     
     // none of these are valid ISAs - we use them to infer the type
     // of tagged pointers - if we have something meaningful to say
@@ -90,36 +124,11 @@ public:
     static const ObjCLanguageRuntime::ObjCISA g_objc_Tagged_ISA_NSManagedObject = 5;
     static const ObjCLanguageRuntime::ObjCISA g_objc_Tagged_ISA_NSDate = 6;
 
-    virtual ConstString
-    GetActualTypeName(ObjCLanguageRuntime::ObjCISA isa);
-    
-    virtual ClassDescriptorSP
-    GetClassDescriptor (ValueObject& in_value);
-    
-    virtual ClassDescriptorSP
-    GetClassDescriptorFromISA (ObjCISA isa);
-    
-    virtual DeclVendor *
-    GetDeclVendor();
-    
-    virtual lldb::addr_t
-    LookupRuntimeSymbol (const ConstString &name);
-    
-    virtual EncodingToTypeSP
-    GetEncodingToType ();
-    
-    virtual TaggedPointerVendor*
-    GetTaggedPointerVendor ()
-    {
-        return m_tagged_pointer_vendor_ap.get();
-    }
-    
 protected:
-    virtual lldb::BreakpointResolverSP
-    CreateExceptionResolver (Breakpoint *bkpt, bool catch_bp, bool throw_bp);
+    lldb::BreakpointResolverSP
+    CreateExceptionResolver(Breakpoint *bkpt, bool catch_bp, bool throw_bp) override;
 
 private:
-    
     class HashTableSignature
     {
     public:
@@ -132,6 +141,7 @@ private:
         
         void
         UpdateSignature (const RemoteNXMapTable &hash_table);
+
     protected:
         uint32_t m_count;
         uint32_t m_num_buckets;
@@ -148,6 +158,7 @@ private:
 
         ObjCLanguageRuntime::ClassDescriptorSP
         GetClassDescriptor (ObjCISA isa);
+
     private:
         NonPointerISACache (AppleObjCRuntimeV2& runtime,
                             uint64_t objc_debug_isa_class_mask,
@@ -171,12 +182,12 @@ private:
     class TaggedPointerVendorV2 : public ObjCLanguageRuntime::TaggedPointerVendor
     {
     public:
+        ~TaggedPointerVendorV2() override = default;
+
         static TaggedPointerVendorV2*
         CreateInstance (AppleObjCRuntimeV2& runtime,
                         const lldb::ModuleSP& objc_module_sp);
-        
-        virtual
-        ~TaggedPointerVendorV2 () { }
+
     protected:
         AppleObjCRuntimeV2&                                         m_runtime;
         
@@ -185,19 +196,20 @@ private:
         m_runtime(runtime)
         {
         }
+
     private:
-        
         DISALLOW_COPY_AND_ASSIGN(TaggedPointerVendorV2);
     };
     
     class TaggedPointerVendorRuntimeAssisted : public TaggedPointerVendorV2
     {
     public:
-        virtual bool
-        IsPossibleTaggedPointer (lldb::addr_t ptr);
+        bool
+        IsPossibleTaggedPointer(lldb::addr_t ptr) override;
         
-        virtual ObjCLanguageRuntime::ClassDescriptorSP
-        GetClassDescriptor (lldb::addr_t ptr);
+        ObjCLanguageRuntime::ClassDescriptorSP
+        GetClassDescriptor(lldb::addr_t ptr) override;
+
     protected:
         TaggedPointerVendorRuntimeAssisted (AppleObjCRuntimeV2& runtime,
                                              uint64_t objc_debug_taggedpointer_mask,
@@ -225,11 +237,12 @@ private:
     class TaggedPointerVendorLegacy : public TaggedPointerVendorV2
     {
     public:
-        virtual bool
-        IsPossibleTaggedPointer (lldb::addr_t ptr);
+        bool
+        IsPossibleTaggedPointer(lldb::addr_t ptr) override;
         
-        virtual ObjCLanguageRuntime::ClassDescriptorSP
-        GetClassDescriptor (lldb::addr_t ptr);
+        ObjCLanguageRuntime::ClassDescriptorSP
+        GetClassDescriptor (lldb::addr_t ptr) override;
+
     protected:
         TaggedPointerVendorLegacy (AppleObjCRuntimeV2& runtime) :
         TaggedPointerVendorV2 (runtime)
@@ -299,22 +312,20 @@ private:
     
     friend class ClassDescriptorV2;
 
-    std::unique_ptr<ClangFunction>            m_get_class_info_function;
-    std::unique_ptr<ClangUtilityFunction>     m_get_class_info_code;
+    std::unique_ptr<UtilityFunction>        m_get_class_info_code;
     lldb::addr_t                            m_get_class_info_args;
     Mutex                                   m_get_class_info_args_mutex;
 
-    std::unique_ptr<ClangFunction>            m_get_shared_cache_class_info_function;
-    std::unique_ptr<ClangUtilityFunction>     m_get_shared_cache_class_info_code;
+    std::unique_ptr<UtilityFunction>        m_get_shared_cache_class_info_code;
     lldb::addr_t                            m_get_shared_cache_class_info_args;
     Mutex                                   m_get_shared_cache_class_info_args_mutex;
 
-    std::unique_ptr<DeclVendor>               m_decl_vendor_ap;
+    std::unique_ptr<DeclVendor>             m_decl_vendor_ap;
     lldb::addr_t                            m_isa_hash_table_ptr;
     HashTableSignature                      m_hash_signature;
     bool                                    m_has_object_getClass;
     bool                                    m_loaded_objc_opt;
-    std::unique_ptr<NonPointerISACache>       m_non_pointer_isa_cache_ap;
+    std::unique_ptr<NonPointerISACache>     m_non_pointer_isa_cache_ap;
     std::unique_ptr<TaggedPointerVendor>    m_tagged_pointer_vendor_ap;
     EncodingToTypeSP                        m_encoding_to_type_sp;
     bool                                    m_noclasses_warning_emitted;
@@ -322,4 +333,4 @@ private:
     
 } // namespace lldb_private
 
-#endif  // liblldb_AppleObjCRuntimeV2_h_
+#endif // liblldb_AppleObjCRuntimeV2_h_

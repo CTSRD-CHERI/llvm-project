@@ -1,7 +1,10 @@
 """Test printing ObjC objects that use unbacked properties - so that the static ivar offsets are incorrect."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,22 +13,6 @@ class TestObjCIvarOffsets(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Test printing ObjC objects that use unbacked properties"""
-        self.buildDsym()
-        self.objc_ivar_offsets()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_python_api(self):
-        """Test printing ObjC objects that use unbacked properties"""
-        self.buildDwarf()
-        self.objc_ivar_offsets()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -33,8 +20,11 @@ class TestObjCIvarOffsets(TestBase):
         self.main_source = "main.m"
         self.stop_line = line_number(self.main_source, '// Set breakpoint here.')
 
-    def objc_ivar_offsets(self):
-        """Use Python APIs to test stepping into ObjC methods."""
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
+    def test_with_python_api(self):
+        """Test printing ObjC objects that use unbacked properties"""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -82,9 +72,3 @@ class TestObjCIvarOffsets(TestBase):
         flag2_value = mine_flag2.GetValueAsUnsigned (error)
         self.assertTrue (error.Success())
         self.assertTrue (flag2_value == 7)
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

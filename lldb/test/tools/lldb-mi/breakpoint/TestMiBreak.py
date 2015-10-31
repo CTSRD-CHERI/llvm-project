@@ -2,17 +2,22 @@
 Test lldb-mi -break-xxx commands.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
+import unittest2
 import lldbmi_testcase
 from lldbtest import *
-import unittest2
 
 class MiBreakTestCase(lldbmi_testcase.MiTestCaseBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
+    @expectedFailureAll("llvm.org/pr24717", oslist=["linux"])
     def test_lldbmi_break_insert_function_pending(self):
         """Test that 'lldb-mi --interpreter' works for pending function breakpoints."""
 
@@ -35,7 +40,7 @@ class MiBreakTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_break_insert_function(self):
         """Test that 'lldb-mi --interpreter' works for function breakpoints."""
@@ -73,10 +78,31 @@ class MiBreakTestCase(lldbmi_testcase.MiTestCaseBase):
         # Test that non-pending BP was set correctly
         self.runCmd("-exec-continue")
         self.expect("\^running")
-        self.expect("\*stopped,reason=\"breakpoint-hit\"")
+        self.expect("\*stopped,reason=\"breakpoint-hit\".*bkptno=\"2\"")
+
+        # Test that we can set a BP using the file:func syntax
+        self.runCmd("-break-insert main.cpp:main")
+        self.expect("\^done,bkpt={number=\"4\"")
+        self.runCmd("-break-insert main.cpp:ns::foo1")
+        self.expect("\^done,bkpt={number=\"5\"")
+        #FIXME: quotes on filenames aren't handled correctly in lldb-mi.
+        #self.runCmd("-break-insert \"main.cpp\":main")
+        #self.expect("\^done,bkpt={number=\"6\"")
+
+        # We should hit BP #5 on 'main.cpp:ns::foo1'
+        self.runCmd("-exec-continue")
+        self.expect("\^running")
+        self.expect("\*stopped,reason=\"breakpoint-hit\".*bkptno=\"5\"")
+
+        #FIXME: this test is disabled due to lldb bug llvm.org/pr24271.
+        # Test that we can set a BP using the global namespace token
+        #self.runCmd("-break-insert ::main")
+        #self.expect("\^done,bkpt={number=\"7\"")
+        #self.runCmd("-break-insert main.cpp:::main")
+        #self.expect("\^done,bkpt={number=\"8\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_break_insert_file_line_pending(self):
         """Test that 'lldb-mi --interpreter' works for pending file:line breakpoints."""
@@ -98,7 +124,7 @@ class MiBreakTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_break_insert_file_line(self):
         """Test that 'lldb-mi --interpreter' works for file:line breakpoints."""
@@ -131,7 +157,7 @@ class MiBreakTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     @unittest2.expectedFailure("-break-insert doesn't work for absolute path")
     def test_lldbmi_break_insert_file_line_absolute_path(self):
@@ -160,7 +186,7 @@ class MiBreakTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_break_insert_settings(self):
         """Test that 'lldb-mi --interpreter' can set breakpoints accoridng to global options."""
@@ -206,10 +232,22 @@ class MiBreakTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^running")
         self.expect("\*stopped,reason=\"breakpoint-hit\",disp=\"del\",bkptno=\"3\"")
 
+        # Test that the target.language=pascal setting works and that BP #5 is NOT set
+        self.runCmd("-interpreter-exec console \"settings set target.language c\"")
+        self.expect("\^done")
+        self.runCmd("-break-insert ns.foo1")
+        self.expect("\^error")
+
+        # Test that the target.language=c++ setting works and that BP #6 is hit
+        self.runCmd("-interpreter-exec console \"settings set target.language c++\"")
+        self.expect("\^done")
+        self.runCmd("-break-insert ns::foo1")
+        self.expect("\^done,bkpt={number=\"6\"")
+        self.runCmd("-exec-continue")
+        self.expect("\^running")
+        self.expect("\*stopped,reason=\"breakpoint-hit\",disp=\"del\",bkptno=\"6\"")
+
         # Test that BP #1 and #2 weren't set by running to program exit
         self.runCmd("-exec-continue")
         self.expect("\^running")
         self.expect("\*stopped,reason=\"exited-normally\"")
-
-if __name__ == '__main__':
-    unittest2.main()

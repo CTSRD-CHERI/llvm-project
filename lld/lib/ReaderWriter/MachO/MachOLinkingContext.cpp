@@ -10,8 +10,10 @@
 #include "lld/ReaderWriter/MachOLinkingContext.h"
 #include "ArchHandler.h"
 #include "File.h"
+#include "FlatNamespaceFile.h"
 #include "MachONormalizedFile.h"
 #include "MachOPasses.h"
+#include "SectCreateFile.h"
 #include "lld/Core/ArchiveLibraryFile.h"
 #include "lld/Core/PassManager.h"
 #include "lld/Core/Reader.h"
@@ -72,7 +74,6 @@ bool MachOLinkingContext::parsePackedVersion(StringRef str, uint32_t &result) {
 
   return false;
 }
-
 
 MachOLinkingContext::ArchInfo MachOLinkingContext::_s_archInfos[] = {
   { "x86_64", arch_x86_64, true,  CPU_TYPE_X86_64,  CPU_SUBTYPE_X86_64_ALL },
@@ -143,10 +144,12 @@ MachOLinkingContext::MachOLinkingContext()
       _doNothing(false), _pie(false), _arch(arch_unknown), _os(OS::macOSX),
       _osMinVersion(0), _pageZeroSize(0), _pageSize(4096), _baseAddress(0),
       _stackSize(0), _compatibilityVersion(0), _currentVersion(0),
+      _flatNamespace(false), _undefinedMode(UndefinedMode::error),
       _deadStrippableDylib(false), _printAtoms(false), _testingFileUsage(false),
       _keepPrivateExterns(false), _demangle(false), _archHandler(nullptr),
       _exportMode(ExportMode::globals),
-      _debugInfoMode(DebugInfoMode::addDebugMap), _orderFileEntries(0) {}
+      _debugInfoMode(DebugInfoMode::addDebugMap), _orderFileEntries(0),
+      _flatNamespaceFile(nullptr) {}
 
 MachOLinkingContext::~MachOLinkingContext() {}
 
@@ -194,6 +197,9 @@ void MachOLinkingContext::configure(HeaderFileType type, Arch arch, OS os,
     } else {
       _pageZeroSize = 0x1000;
     }
+
+    // Initial base address is __PAGEZERO size.
+    _baseAddress = _pageZeroSize;
 
     // Make PIE by default when targetting newer OSs.
     switch (os) {
@@ -266,8 +272,6 @@ bool MachOLinkingContext::isBigEndian(Arch arch) {
   }
   llvm_unreachable("Unknown arch type");
 }
-
-
 
 bool MachOLinkingContext::is64Bit() const {
   return is64Bit(_arch);
@@ -350,9 +354,6 @@ bool MachOLinkingContext::needsTLVPass() const {
 StringRef MachOLinkingContext::binderSymbolName() const {
   return archHandler().stubInfo().binderSymbolName;
 }
-
-
-
 
 bool MachOLinkingContext::minOS(StringRef mac, StringRef iOS) const {
   uint32_t parsedVersion;
@@ -483,7 +484,6 @@ void MachOLinkingContext::addFrameworkSearchDir(StringRef fwPath,
     _frameworkDirs.push_back(fwPath);
 }
 
-
 ErrorOr<StringRef>
 MachOLinkingContext::searchDirForLibrary(StringRef path,
                                          StringRef libName) const {
@@ -512,8 +512,6 @@ MachOLinkingContext::searchDirForLibrary(StringRef path,
   return make_error_code(llvm::errc::no_such_file_or_directory);
 }
 
-
-
 ErrorOr<StringRef> MachOLinkingContext::searchLibrary(StringRef libName) const {
   SmallString<256> path;
   for (StringRef dir : searchDirs()) {
@@ -524,7 +522,6 @@ ErrorOr<StringRef> MachOLinkingContext::searchLibrary(StringRef libName) const {
 
   return make_error_code(llvm::errc::no_such_file_or_directory);
 }
-
 
 ErrorOr<StringRef> MachOLinkingContext::findPathForFramework(StringRef fwName) const{
   SmallString<256> fullPath;
@@ -647,7 +644,6 @@ MachODylibFile* MachOLinkingContext::loadIndirectDylib(StringRef path) {
   return result;
 }
 
-
 MachODylibFile* MachOLinkingContext::findIndirectDylib(StringRef path) {
   // See if already loaded.
   auto pos = _pathToDylibMap.find(path);
@@ -713,8 +709,14 @@ void MachOLinkingContext::createImplicitFiles(
 
   // Let writer add output type specific extras.
   writer().createImplicitFiles(result);
-}
 
+  // If undefinedMode is != error, add a FlatNamespaceFile instance. This will
+  // provide a SharedLibraryAtom for symbols that aren't defined elsewhere.
+  if (undefinedMode() != UndefinedMode::error) {
+    result.emplace_back(new mach_o::FlatNamespaceFile(*this));
+    _flatNamespaceFile = result.back().get();
+  }
+}
 
 void MachOLinkingContext::registerDylib(MachODylibFile *dylib,
                                         bool upward) const {
@@ -727,7 +729,6 @@ void MachOLinkingContext::registerDylib(MachODylibFile *dylib,
   if (upward)
     _upwardDylibs.insert(dylib);
 }
-
 
 bool MachOLinkingContext::isUpwardDylib(StringRef installName) const {
   for (MachODylibFile *dylib : _upwardDylibs) {
@@ -743,11 +744,24 @@ ArchHandler &MachOLinkingContext::archHandler() const {
   return *_archHandler;
 }
 
-
 void MachOLinkingContext::addSectionAlignment(StringRef seg, StringRef sect,
                                               uint16_t align) {
   SectionAlign entry = { seg, sect, align };
   _sectAligns.push_back(entry);
+}
+
+void MachOLinkingContext::addSectCreateSection(
+                                        StringRef seg, StringRef sect,
+                                        std::unique_ptr<MemoryBuffer> content) {
+
+  if (!_sectCreateFile) {
+    auto sectCreateFile = llvm::make_unique<mach_o::SectCreateFile>();
+    _sectCreateFile = sectCreateFile.get();
+    getNodes().push_back(llvm::make_unique<FileNode>(std::move(sectCreateFile)));
+  }
+
+  assert(_sectCreateFile && "sectcreate file does not exist.");
+  _sectCreateFile->addSection(seg, sect, std::move(content));
 }
 
 bool MachOLinkingContext::sectionAligned(StringRef seg, StringRef sect,
@@ -760,7 +774,6 @@ bool MachOLinkingContext::sectionAligned(StringRef seg, StringRef sect,
   }
   return false;
 }
-
 
 void MachOLinkingContext::addExportSymbol(StringRef sym) {
   // Support old crufty export lists with bogus entries.
@@ -816,7 +829,7 @@ std::string MachOLinkingContext::demangle(StringRef symbolName) const {
   const char *cstr = nullTermSym.data() + 1;
   int status;
   char *demangled = abi::__cxa_demangle(cstr, nullptr, nullptr, &status);
-  if (demangled != NULL) {
+  if (demangled) {
     std::string result(demangled);
     // __cxa_demangle() always uses a malloc'ed buffer to return the result.
     free(demangled);

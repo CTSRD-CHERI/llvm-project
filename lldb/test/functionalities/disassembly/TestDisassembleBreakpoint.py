@@ -2,8 +2,11 @@
 Test some lldb command abbreviations.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,18 +15,9 @@ class DisassemblyTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym (self):
-        self.buildDsym ()
-        self.disassemble_breakpoint ()
-
-    @dwarf_test
-    def test_with_dwarf (self):
-        self.buildDwarf ()
-        self.disassemble_breakpoint ()
-
-    def disassemble_breakpoint (self):
+    @expectedFailureWindows # Function name prints fully demangled instead of name-only
+    def test(self):
+        self.build()
         exe = os.path.join (os.getcwd(), "a.out")
         self.expect("file " + exe,
                     patterns = [ "Current executable set to .*a.out.*" ])
@@ -38,22 +32,19 @@ class DisassemblyTestCase(TestBase):
         disassembly = self.res.GetOutput()
 
         # ARCH, if not specified, defaults to x86_64.
-        if self.getArchitecture() in ["", 'x86_64', 'i386']:
-            # make sure that the software breakpoint has been removed
-            self.assertFalse("int3" in disassembly)
-            # make sure a few reasonable assembly instructions are here
-            self.expect(disassembly, exe=False,
-                        startstr = "a.out`sum(int, int)",
-                        substrs = [' mov',
-                                   ' addl ',
-                                   'ret'])
+        if self.getArchitecture() in ["", 'x86_64', 'i386', 'i686']:
+            breakpoint_opcodes = ["int3"]
+            instructions = [' mov', ' addl ', 'ret']
+        elif self.getArchitecture() in ["arm", "aarch64"]:
+            breakpoint_opcodes = ["brk", "udf"]
+            instructions = [' add ', ' ldr ', ' str ']
         else:
             # TODO please add your arch here
             self.fail('unimplemented for arch = "{arch}"'.format(arch=self.getArchitecture()))
 
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+        # make sure that the software breakpoint has been removed
+        for op in breakpoint_opcodes:
+            self.assertFalse(op in disassembly)
 
+        # make sure a few reasonable assembly instructions are here
+        self.expect(disassembly, exe=False, startstr = "a.out`sum", substrs = instructions)

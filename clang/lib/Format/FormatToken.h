@@ -25,65 +25,76 @@
 namespace clang {
 namespace format {
 
+#define LIST_TOKEN_TYPES \
+  TYPE(ArrayInitializerLSquare) \
+  TYPE(ArraySubscriptLSquare) \
+  TYPE(AttributeParen) \
+  TYPE(BinaryOperator) \
+  TYPE(BitFieldColon) \
+  TYPE(BlockComment) \
+  TYPE(CastRParen) \
+  TYPE(ConditionalExpr) \
+  TYPE(ConflictAlternative) \
+  TYPE(ConflictEnd) \
+  TYPE(ConflictStart) \
+  TYPE(CtorInitializerColon) \
+  TYPE(CtorInitializerComma) \
+  TYPE(DesignatedInitializerPeriod) \
+  TYPE(DictLiteral) \
+  TYPE(ForEachMacro) \
+  TYPE(FunctionAnnotationRParen) \
+  TYPE(FunctionDeclarationName) \
+  TYPE(FunctionLBrace) \
+  TYPE(FunctionTypeLParen) \
+  TYPE(ImplicitStringLiteral) \
+  TYPE(InheritanceColon) \
+  TYPE(InlineASMBrace) \
+  TYPE(InlineASMColon) \
+  TYPE(JavaAnnotation) \
+  TYPE(JsComputedPropertyName) \
+  TYPE(JsFatArrow) \
+  TYPE(JsTypeColon) \
+  TYPE(JsTypeOptionalQuestion) \
+  TYPE(LambdaArrow) \
+  TYPE(LambdaLSquare) \
+  TYPE(LeadingJavaAnnotation) \
+  TYPE(LineComment) \
+  TYPE(MacroBlockBegin) \
+  TYPE(MacroBlockEnd) \
+  TYPE(ObjCBlockLBrace) \
+  TYPE(ObjCBlockLParen) \
+  TYPE(ObjCDecl) \
+  TYPE(ObjCForIn) \
+  TYPE(ObjCMethodExpr) \
+  TYPE(ObjCMethodSpecifier) \
+  TYPE(ObjCProperty) \
+  TYPE(ObjCStringLiteral) \
+  TYPE(OverloadedOperator) \
+  TYPE(OverloadedOperatorLParen) \
+  TYPE(PointerOrReference) \
+  TYPE(PureVirtualSpecifier) \
+  TYPE(RangeBasedForLoopColon) \
+  TYPE(RegexLiteral) \
+  TYPE(SelectorName) \
+  TYPE(StartOfName) \
+  TYPE(TemplateCloser) \
+  TYPE(TemplateOpener) \
+  TYPE(TemplateString) \
+  TYPE(TrailingAnnotation) \
+  TYPE(TrailingReturnArrow) \
+  TYPE(TrailingUnaryOperator) \
+  TYPE(UnaryOperator) \
+  TYPE(Unknown)
+
 enum TokenType {
-  TT_ArrayInitializerLSquare,
-  TT_ArraySubscriptLSquare,
-  TT_AttributeParen,
-  TT_BinaryOperator,
-  TT_BitFieldColon,
-  TT_BlockComment,
-  TT_CastRParen,
-  TT_ConditionalExpr,
-  TT_ConflictAlternative,
-  TT_ConflictEnd,
-  TT_ConflictStart,
-  TT_CtorInitializerColon,
-  TT_CtorInitializerComma,
-  TT_DesignatedInitializerPeriod,
-  TT_DictLiteral,
-  TT_ForEachMacro,
-  TT_FunctionAnnotationRParen,
-  TT_FunctionDeclarationName,
-  TT_FunctionLBrace,
-  TT_FunctionTypeLParen,
-  TT_ImplicitStringLiteral,
-  TT_InheritanceColon,
-  TT_InlineASMBrace,
-  TT_InlineASMColon,
-  TT_JavaAnnotation,
-  TT_JsComputedPropertyName,
-  TT_JsFatArrow,
-  TT_JsTypeColon,
-  TT_JsTypeOptionalQuestion,
-  TT_LambdaArrow,
-  TT_LambdaLSquare,
-  TT_LeadingJavaAnnotation,
-  TT_LineComment,
-  TT_ObjCBlockLBrace,
-  TT_ObjCBlockLParen,
-  TT_ObjCDecl,
-  TT_ObjCForIn,
-  TT_ObjCMethodExpr,
-  TT_ObjCMethodSpecifier,
-  TT_ObjCProperty,
-  TT_ObjCStringLiteral,
-  TT_OverloadedOperator,
-  TT_OverloadedOperatorLParen,
-  TT_PointerOrReference,
-  TT_PureVirtualSpecifier,
-  TT_RangeBasedForLoopColon,
-  TT_RegexLiteral,
-  TT_SelectorName,
-  TT_StartOfName,
-  TT_TemplateCloser,
-  TT_TemplateOpener,
-  TT_TemplateString,
-  TT_TrailingAnnotation,
-  TT_TrailingReturnArrow,
-  TT_TrailingUnaryOperator,
-  TT_UnaryOperator,
-  TT_Unknown
+#define TYPE(X) TT_##X,
+LIST_TOKEN_TYPES
+#undef TYPE
+  NUM_TOKEN_TYPES
 };
+
+/// \brief Determines the name of a token type.
+const char *getTokenTypeName(TokenType Type);
 
 // Represents what type of block a set of braces open.
 enum BraceBlockKind { BK_Unknown, BK_Block, BK_BracedInit };
@@ -271,6 +282,10 @@ struct FormatToken {
   bool is(TokenType TT) const { return Type == TT; }
   bool is(const IdentifierInfo *II) const {
     return II && II == Tok.getIdentifierInfo();
+  }
+  bool is(tok::PPKeywordKind Kind) const {
+    return Tok.getIdentifierInfo() &&
+           Tok.getIdentifierInfo()->getPPKeywordID() == Kind;
   }
   template <typename A, typename B> bool isOneOf(A K1, B K2) const {
     return is(K1) || is(K2);
@@ -510,6 +525,8 @@ private:
 /// properly supported by Clang's lexer.
 struct AdditionalKeywords {
   AdditionalKeywords(IdentifierTable &IdentTable) {
+    kw_final = &IdentTable.get("final");
+    kw_override = &IdentTable.get("override");
     kw_in = &IdentTable.get("in");
     kw_CF_ENUM = &IdentTable.get("CF_ENUM");
     kw_CF_OPTIONS = &IdentTable.get("CF_OPTIONS");
@@ -519,11 +536,12 @@ struct AdditionalKeywords {
     kw_finally = &IdentTable.get("finally");
     kw_function = &IdentTable.get("function");
     kw_import = &IdentTable.get("import");
+    kw_let = &IdentTable.get("let");
     kw_var = &IdentTable.get("var");
 
     kw_abstract = &IdentTable.get("abstract");
+    kw_assert = &IdentTable.get("assert");
     kw_extends = &IdentTable.get("extends");
-    kw_final = &IdentTable.get("final");
     kw_implements = &IdentTable.get("implements");
     kw_instanceof = &IdentTable.get("instanceof");
     kw_interface = &IdentTable.get("interface");
@@ -547,6 +565,8 @@ struct AdditionalKeywords {
   }
 
   // Context sensitive keywords.
+  IdentifierInfo *kw_final;
+  IdentifierInfo *kw_override;
   IdentifierInfo *kw_in;
   IdentifierInfo *kw_CF_ENUM;
   IdentifierInfo *kw_CF_OPTIONS;
@@ -558,12 +578,13 @@ struct AdditionalKeywords {
   IdentifierInfo *kw_finally;
   IdentifierInfo *kw_function;
   IdentifierInfo *kw_import;
+  IdentifierInfo *kw_let;
   IdentifierInfo *kw_var;
 
   // Java keywords.
   IdentifierInfo *kw_abstract;
+  IdentifierInfo *kw_assert;
   IdentifierInfo *kw_extends;
-  IdentifierInfo *kw_final;
   IdentifierInfo *kw_implements;
   IdentifierInfo *kw_instanceof;
   IdentifierInfo *kw_interface;

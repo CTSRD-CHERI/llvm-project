@@ -508,6 +508,14 @@ void t41(unsigned short a) {
 // CHECK: "*m,*m,*m,*m,*m,*m,~{dirflag},~{fpsr},~{flags}"(i16* {{.*}}, i16* {{.*}}, i16* {{.*}}, i16* {{.*}}, i16* {{.*}}, i16* {{.*}})
 }
 
+void t42() {
+// CHECK-LABEL: define void @t42
+  int flags;
+  __asm mov flags, eax
+// CHECK: mov dword ptr $0, eax
+// CHECK: "=*m,~{dirflag},~{fpsr},~{flags}"(i32* %flags)
+}
+
 void call_clobber() {
   __asm call t41
   // CHECK-LABEL: define void @call_clobber
@@ -555,3 +563,21 @@ void label4() {
   // CHECK-LABEL: define void @label4
   // CHECK: call void asm sideeffect inteldialect "{{.*}}__MSASMLABEL_.4__label:\0A\09mov eax, {{.*}}__MSASMLABEL_.4__label", "~{eax},~{dirflag},~{fpsr},~{flags}"()
 }
+
+typedef union _LARGE_INTEGER {
+  struct {
+    unsigned int LowPart;
+    unsigned int  HighPart;
+  };
+  struct {
+    unsigned int LowPart;
+    unsigned int  HighPart;
+  } u;
+  unsigned long long QuadPart;
+} LARGE_INTEGER, *PLARGE_INTEGER;
+
+int test_indirect_field(LARGE_INTEGER LargeInteger) {
+    __asm mov     eax, LargeInteger.LowPart
+}
+// CHECK-LABEL: define i32 @test_indirect_field(
+// CHECK: call i32 asm sideeffect inteldialect "mov eax, dword ptr $1",

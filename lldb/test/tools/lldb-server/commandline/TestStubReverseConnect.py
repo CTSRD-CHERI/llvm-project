@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import gdbremote_testcase
 import lldbgdbserverutils
 import re
@@ -63,7 +65,7 @@ class TestStubReverseConnect(gdbremote_testcase.GdbRemoteTestCaseBase):
         (stub_socket, address) = self.listener_socket.accept()
         self.assertIsNotNone(stub_socket)
         self.assertIsNotNone(address)
-        print "connected to stub {} on {}".format(address, stub_socket.getsockname())
+        print("connected to stub {} on {}".format(address, stub_socket.getsockname()))
 
         # Verify we can do the handshake.  If that works, we'll call it good.
         self.do_handshake(stub_socket, timeout_seconds=self._DEFAULT_TIMEOUT)
@@ -83,7 +85,3 @@ class TestStubReverseConnect(gdbremote_testcase.GdbRemoteTestCaseBase):
         self.init_llgs_test(use_named_pipe=False)
         self.set_inferior_startup_launch()
         self.reverse_connect_works()
-
-
-if __name__ == '__main__':
-    unittest2.main()

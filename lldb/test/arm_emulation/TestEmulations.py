@@ -2,8 +2,11 @@
 Test some ARM instruction emulation.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -11,6 +14,7 @@ class ARMEmulationTestCase(TestBase):
     
     mydir = TestBase.compute_mydir(__file__)
 
+    @no_debug_info_test
     def test_thumb_emulations (self):
         current_dir = os.getcwd();
         test_dir = os.path.join (current_dir, "new-test-files")
@@ -24,7 +28,7 @@ class ARMEmulationTestCase(TestBase):
             test_file = os.path.join (test_dir, f)
             self.run_a_single_test (test_file)
 
-
+    @no_debug_info_test
     def test_arm_emulations (self):
         current_dir = os.getcwd();
         test_dir = os.path.join (current_dir, "new-test-files")
@@ -44,14 +48,7 @@ class ARMEmulationTestCase(TestBase):
         success = insn.TestEmulation (stream, filename);
         output = stream.GetData();
         if self.TraceOn():
-            print '\nRunning test ' + os.path.basename(filename)
-            print output
+            print('\nRunning test ' + os.path.basename(filename))
+            print(output)
 
         self.assertTrue (success, 'Emulation test succeeded.')
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

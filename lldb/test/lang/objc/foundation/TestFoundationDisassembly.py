@@ -2,8 +2,12 @@
 Test the lldb disassemble command on foundation framework.
 """
 
-import os, time
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
+import os, time
 import lldb
 from lldbtest import *
 import lldbutil
@@ -18,7 +22,7 @@ class FoundationDisassembleTestCase(TestBase):
     @unittest2.skipIf(TestBase.skipLongRunningTest(), "Skip this long running test")
     def test_foundation_disasm(self):
         """Do 'disassemble -n func' on each and every 'Code' symbol entry from the Foundation.framework."""
-        self.buildDefault()
+        self.build()
         
         # Enable synchronous mode
         self.dbg.SetAsync(False)
@@ -33,7 +37,7 @@ class FoundationDisassembleTestCase(TestBase):
 
         foundation_framework = None
         for module in target.modules:
-            print module
+            print(module)
             if module.file.basename == "Foundation":
                 foundation_framework = module.file.fullpath
                 break
@@ -56,33 +60,22 @@ class FoundationDisassembleTestCase(TestBase):
             match = codeRE.search(line)
             if match:
                 func = match.group(1)
-                #print "line:", line
-                #print "func:", func
+                #print("line:", line)
+                #print("func:", func)
                 self.runCmd('disassemble -n "%s"' % func)
         
 
-    @dsym_test
-    def test_simple_disasm_with_dsym(self):
+    def test_simple_disasm(self):
         """Test the lldb 'disassemble' command"""
-        self.buildDsym()
-        self.do_simple_disasm()
+        self.build()
 
-    @dwarf_test
-    def test_simple_disasm_with_dwarf(self):
-        """Test the lldb 'disassemble' command"""
-        self.buildDwarf()
-        self.do_simple_disasm()
-
-    def do_simple_disasm(self):
-        """Do a bunch of simple disassemble commands."""
-        
         # Create a target by the debugger.
         target = self.dbg.CreateTarget("a.out")
         self.assertTrue(target, VALID_TARGET)
 
-        print target
+        print(target)
         for module in target.modules:
-            print module
+            print(module)
 
         # Stop at +[NSString stringWithFormat:].
         symbol_name = "+[NSString stringWithFormat:]"
@@ -100,7 +93,7 @@ class FoundationDisassembleTestCase(TestBase):
         break_results = lldbutil.run_break_set_command (self, "_regexp-break -[NSAutoreleasePool release]")
         lldbutil.check_breakpoint_result (self, break_results, symbol_name='-[NSAutoreleasePool release]', num_locations=1)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # First stop is +[NSString stringWithFormat:].
         self.expect("thread backtrace", "Stop at +[NSString stringWithFormat:]",
@@ -139,10 +132,3 @@ class FoundationDisassembleTestCase(TestBase):
 
         # Do the disassemble for the currently stopped function.
         self.runCmd("disassemble -f")
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

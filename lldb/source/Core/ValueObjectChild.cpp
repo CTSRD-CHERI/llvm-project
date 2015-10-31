@@ -12,7 +12,7 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ValueObjectList.h"
 
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Symbol/Type.h"
@@ -27,7 +27,7 @@ using namespace lldb_private;
 ValueObjectChild::ValueObjectChild
 (
     ValueObject &parent,
-    const ClangASTType &clang_type,
+    const CompilerType &compiler_type,
     const ConstString &name,
     uint64_t byte_size,
     int32_t byte_offset,
@@ -38,13 +38,14 @@ ValueObjectChild::ValueObjectChild
     AddressType child_ptr_or_ref_addr_type
 ) :
     ValueObject (parent),
-    m_clang_type (clang_type),
+    m_compiler_type (compiler_type),
     m_byte_size (byte_size),
     m_byte_offset (byte_offset),
     m_bitfield_bit_size (bitfield_bit_size),
     m_bitfield_bit_offset (bitfield_bit_offset),
     m_is_base_class (is_base_class),
-    m_is_deref_of_parent (is_deref_of_parent)
+    m_is_deref_of_parent (is_deref_of_parent),
+    m_can_update_with_invalid_exe_ctx()
 {
     m_name = name;
     SetAddressTypeOfChildren(child_ptr_or_ref_addr_type);
@@ -61,9 +62,10 @@ ValueObjectChild::GetValueType() const
 }
 
 size_t
-ValueObjectChild::CalculateNumChildren()
+ValueObjectChild::CalculateNumChildren(uint32_t max)
 {
-    return GetClangType().GetNumChildren (true);
+    auto children_count = GetCompilerType().GetNumChildren (true);
+    return children_count <= max ? children_count : max;
 }
 
 static void
@@ -72,11 +74,11 @@ AdjustForBitfieldness(ConstString& name,
 {
     if (name && bitfield_bit_size)
     {
-        const char *clang_type_name = name.AsCString();
-        if (clang_type_name)
+        const char *compiler_type_name = name.AsCString();
+        if (compiler_type_name)
         {
-            std::vector<char> bitfield_type_name (strlen(clang_type_name) + 32, 0);
-            ::snprintf (&bitfield_type_name.front(), bitfield_type_name.size(), "%s:%u", clang_type_name, bitfield_bit_size);
+            std::vector<char> bitfield_type_name (strlen(compiler_type_name) + 32, 0);
+            ::snprintf (&bitfield_type_name.front(), bitfield_type_name.size(), "%s:%u", compiler_type_name, bitfield_bit_size);
             name.SetCString(&bitfield_type_name.front());
         }
     }
@@ -87,7 +89,7 @@ ValueObjectChild::GetTypeName()
 {
     if (m_type_name.IsEmpty())
     {
-        m_type_name = GetClangType().GetConstTypeName ();
+        m_type_name = GetCompilerType().GetConstTypeName ();
         AdjustForBitfieldness(m_type_name, m_bitfield_bit_size);
     }
     return m_type_name;
@@ -96,7 +98,7 @@ ValueObjectChild::GetTypeName()
 ConstString
 ValueObjectChild::GetQualifiedTypeName()
 {
-    ConstString qualified_name = GetClangType().GetConstTypeName();
+    ConstString qualified_name = GetCompilerType().GetConstTypeName();
     AdjustForBitfieldness(qualified_name, m_bitfield_bit_size);
     return qualified_name;
 }
@@ -104,17 +106,25 @@ ValueObjectChild::GetQualifiedTypeName()
 ConstString
 ValueObjectChild::GetDisplayTypeName()
 {
-    ConstString display_name = GetClangType().GetDisplayTypeName();
+    ConstString display_name = GetCompilerType().GetDisplayTypeName();
     AdjustForBitfieldness(display_name, m_bitfield_bit_size);
     return display_name;
 }
 
-bool
+LazyBool
 ValueObjectChild::CanUpdateWithInvalidExecutionContext ()
 {
+    if (m_can_update_with_invalid_exe_ctx.hasValue())
+        return m_can_update_with_invalid_exe_ctx.getValue();
     if (m_parent)
-        return m_parent->CanUpdateWithInvalidExecutionContext();
-    return this->ValueObject::CanUpdateWithInvalidExecutionContext();
+    {
+        ValueObject *opinionated_parent = m_parent->FollowParentChain([] (ValueObject* valobj) -> bool {
+            return (valobj->CanUpdateWithInvalidExecutionContext() == eLazyBoolCalculate);
+        });
+        if (opinionated_parent)
+            return (m_can_update_with_invalid_exe_ctx = opinionated_parent->CanUpdateWithInvalidExecutionContext()).getValue();
+    }
+    return (m_can_update_with_invalid_exe_ctx = this->ValueObject::CanUpdateWithInvalidExecutionContext()).getValue();
 }
 
 bool
@@ -127,14 +137,14 @@ ValueObjectChild::UpdateValue ()
     {
         if (parent->UpdateValueIfNeeded(false))
         {
-            m_value.SetClangType(GetClangType());
+            m_value.SetCompilerType(GetCompilerType());
 
             // Copy the parent scalar value and the scalar value type
             m_value.GetScalar() = parent->GetValue().GetScalar();
             Value::ValueType value_type = parent->GetValue().GetValueType();
             m_value.SetValueType (value_type);
 
-            if (parent->GetClangType().IsPointerOrReferenceType ())
+            if (parent->GetCompilerType().IsPointerOrReferenceType ())
             {
                 lldb::addr_t addr = parent->GetPointerValue ();
                 m_value.GetScalar() = addr;
@@ -216,7 +226,7 @@ ValueObjectChild::UpdateValue ()
             {
                 const bool thread_and_frame_only_if_stopped = true;
                 ExecutionContext exe_ctx (GetExecutionContextRef().Lock(thread_and_frame_only_if_stopped));
-                if (GetClangType().GetTypeInfo() & lldb::eTypeHasValue)
+                if (GetCompilerType().GetTypeInfo() & lldb::eTypeHasValue)
                     m_error = m_value.GetValueAsData (&exe_ctx, m_data, 0, GetModule().get());
                 else
                     m_error.Clear(); // No value so nothing to read...

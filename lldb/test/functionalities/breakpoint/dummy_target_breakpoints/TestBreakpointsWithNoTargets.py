@@ -2,8 +2,11 @@
 Test breakpoint commands set before we have a target
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,17 +15,9 @@ class BreakpointInDummyTarget (TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
+    def test(self):
         """Test breakpoint set before we have a target. """
-        self.buildDsym()
-        self.dummy_breakpoint_test()
-
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test breakpoint set before we have a target. """
-        self.buildDwarf()
+        self.build()
         self.dummy_breakpoint_test()
 
     def setUp(self):
@@ -58,7 +53,7 @@ class BreakpointInDummyTarget (TestBase):
                        "2: file = 'main.c', line = %d, exact_match = 0, locations = 1" % self.line2])
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # Stopped once.
         self.expect("thread backtrace", STOPPED_DUE_TO_BREAKPOINT,
@@ -70,9 +65,3 @@ class BreakpointInDummyTarget (TestBase):
         # Stopped again.
         self.expect("thread backtrace", STOPPED_DUE_TO_BREAKPOINT,
             substrs = ["stop reason = breakpoint 2."])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

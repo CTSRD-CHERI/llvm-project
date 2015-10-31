@@ -9,8 +9,6 @@
 
 #ifndef liblldb_Debugger_h_
 #define liblldb_Debugger_h_
-#if defined(__cplusplus)
-
 
 #include <stdint.h>
 
@@ -32,8 +30,8 @@ namespace llvm
 namespace sys
 {
 class DynamicLibrary;
-}
-}
+} // namespace sys
+} // namespace llvm
 
 namespace lldb_private {
 
@@ -43,7 +41,6 @@ namespace lldb_private {
 ///
 /// Provides a global root objects for the debugger core.
 //----------------------------------------------------------------------
-
 
 class Debugger :
     public std::enable_shared_from_this<Debugger>,
@@ -79,8 +76,7 @@ public:
     static void
     Destroy (lldb::DebuggerSP &debugger_sp);
 
-    virtual
-    ~Debugger ();
+    ~Debugger() override;
     
     void Clear();
 
@@ -108,8 +104,6 @@ public:
         return m_error_file_sp;
     }
 
-    
-    
     void
     SetInputFileHandle (FILE *fh, bool tranfer_ownership);
 
@@ -209,6 +203,10 @@ public:
     
     bool
     IsTopIOHandler (const lldb::IOHandlerSP& reader_sp);
+    
+    bool
+    CheckTopIOHandlerTypes (IOHandler::Type top_type,
+                            IOHandler::Type second_top_type);
 
     void
     PrintAsync (const char *s, size_t len, bool is_stdout);
@@ -257,7 +255,6 @@ public:
     void
     SetLoggingCallback (lldb::LogOutputCallback log_callback, void *baton);
     
-
     //----------------------------------------------------------------------
     // Properties Functions
     //----------------------------------------------------------------------
@@ -268,11 +265,11 @@ public:
         eStopDisassemblyTypeAlways
     };
     
-    virtual Error
-    SetPropertyValue (const ExecutionContext *exe_ctx,
-                      VarSetOperationType op,
-                      const char *property_path,
-                      const char *value);
+    Error
+    SetPropertyValue(const ExecutionContext *exe_ctx,
+                     VarSetOperationType op,
+                     const char *property_path,
+                     const char *value) override;
 
     bool
     GetAutoConfirm () const;
@@ -329,6 +326,24 @@ public:
     GetAutoOneLineSummaries () const;
     
     bool
+    GetAutoIndent () const;
+    
+    bool
+    SetAutoIndent (bool b);
+    
+    bool
+    GetPrintDecls () const;
+    
+    bool
+    SetPrintDecls (bool b);
+    
+    uint32_t
+    GetTabSize () const;
+    
+    bool
+    SetTabSize (uint32_t tab_size);
+
+    bool
     GetEscapeNonPrintables () const;
     
     bool
@@ -360,6 +375,9 @@ public:
     {
         return m_event_handler_thread.IsJoinable();
     }
+    
+    Error
+    RunREPL (lldb::LanguageType language, const char *repl_options);
 
     // This is for use in the command interpreter, when you either want the selected target, or if no target
     // is present you want to prime the dummy target with entities that will be copied over to new targets.
@@ -369,6 +387,7 @@ public:
 protected:
 
     friend class CommandInterpreter;
+    friend class REPL;
 
     bool
     StartEventHandlerThread();
@@ -380,10 +399,16 @@ protected:
     EventHandlerThread (lldb::thread_arg_t arg);
 
     bool
+    HasIOHandlerThread();
+
+    bool
     StartIOHandlerThread();
     
     void
     StopIOHandlerThread();
+    
+    void
+    JoinIOHandlerThread();
     
     static lldb::thread_result_t
     IOHandlerThread (lldb::thread_arg_t arg);
@@ -456,10 +481,8 @@ private:
     Debugger (lldb::LogOutputCallback m_log_callback, void *baton);
 
     DISALLOW_COPY_AND_ASSIGN (Debugger);
-    
 };
 
 } // namespace lldb_private
 
-#endif  // #if defined(__cplusplus)
-#endif  // liblldb_Debugger_h_
+#endif // liblldb_Debugger_h_

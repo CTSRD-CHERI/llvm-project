@@ -52,13 +52,17 @@ uint16_t ELFLinkingContext::getOutputMachine() const {
     return llvm::ELF::EM_X86_64;
   case llvm::Triple::hexagon:
     return llvm::ELF::EM_HEXAGON;
+  case llvm::Triple::mips:
   case llvm::Triple::mipsel:
+  case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
     return llvm::ELF::EM_MIPS;
   case llvm::Triple::aarch64:
     return llvm::ELF::EM_AARCH64;
   case llvm::Triple::arm:
     return llvm::ELF::EM_ARM;
+  case llvm::Triple::amdgcn:
+    return llvm::ELF::EM_AMDGPU;
   default:
     llvm_unreachable("Unhandled arch");
   }
@@ -231,7 +235,7 @@ std::string ELFLinkingContext::demangle(StringRef symbolName) const {
   const char *cstr = nullTermSym.data();
   int status;
   char *demangled = abi::__cxa_demangle(cstr, nullptr, nullptr, &status);
-  if (demangled == NULL)
+  if (!demangled)
     return symbolName;
   std::string result(demangled);
   // __cxa_demangle() always uses a malloc'ed buffer to return the result.
@@ -245,6 +249,17 @@ std::string ELFLinkingContext::demangle(StringRef symbolName) const {
 void ELFLinkingContext::setUndefinesResolver(std::unique_ptr<File> resolver) {
   assert(isa<ArchiveLibraryFile>(resolver.get()) && "Wrong resolver type");
   _resolver = std::move(resolver);
+}
+
+void ELFLinkingContext::notifyInputSectionName(StringRef name) {
+  // Save sections names which can be represented as a C identifier.
+  if (name.find_first_not_of("0123456789"
+                             "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                             "abcdefghijklmnopqrstuvwxyz"
+                             "_") == StringRef::npos) {
+    std::lock_guard<std::mutex> lock(_cidentMutex);
+    _cidentSections.insert(name);
+  }
 }
 
 } // end namespace lld

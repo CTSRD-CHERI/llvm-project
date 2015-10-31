@@ -47,7 +47,7 @@ class TargetCodeGenInfo {
 
 public:
   // WARNING: Acquires the ownership of ABIInfo.
-  TargetCodeGenInfo(ABIInfo *info = 0) : Info(info) {}
+  TargetCodeGenInfo(ABIInfo *info = nullptr) : Info(info) {}
   virtual ~TargetCodeGenInfo();
 
   /// getABIInfo() - Returns ABI info helper for the target.
@@ -218,14 +218,7 @@ public:
   virtual void getDetectMismatchOption(llvm::StringRef Name,
                                        llvm::StringRef Value,
                                        llvm::SmallString<32> &Opt) const {}
-
-  /// Gets the target-specific default alignment used when an 'aligned' clause
-  /// is used with a 'simd' OpenMP directive without specifying a specific
-  /// alignment.
-  virtual unsigned getOpenMPSimdDefaultAlignment(QualType Type) const {
-    return 0;
-  }
 };
-}
+} // namespace clang
 
-#endif
+#endif // LLVM_CLANG_LIB_CODEGEN_TARGETINFO_H

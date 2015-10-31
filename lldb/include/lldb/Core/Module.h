@@ -10,6 +10,8 @@
 #ifndef liblldb_Module_h_
 #define liblldb_Module_h_
 
+#include <atomic>
+
 #include "lldb/lldb-forward.h"
 #include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/UUID.h"
@@ -17,6 +19,7 @@
 #include "lldb/Host/Mutex.h"
 #include "lldb/Host/TimeValue.h"
 #include "lldb/Symbol/SymbolContextScope.h"
+#include "lldb/Symbol/TypeSystem.h"
 #include "lldb/Target/PathMappingList.h"
 
 namespace lldb_private {
@@ -99,8 +102,7 @@ public:
     //------------------------------------------------------------------
     /// Destructor.
     //------------------------------------------------------------------
-    virtual 
-    ~Module ();
+    ~Module() override;
 
     bool
     MatchesModuleSpec (const ModuleSpec &module_ref);
@@ -154,11 +156,11 @@ public:
     ///
     /// @see SymbolContextScope
     //------------------------------------------------------------------
-    virtual void
-    CalculateSymbolContext (SymbolContext* sc);
+    void
+    CalculateSymbolContext(SymbolContext* sc) override;
 
-    virtual lldb::ModuleSP
-    CalculateSymbolContextModule ();
+    lldb::ModuleSP
+    CalculateSymbolContextModule() override;
 
     void
     GetDescription (Stream *s,
@@ -207,10 +209,9 @@ public:
     ///
     /// @see SymbolContextScope
     //------------------------------------------------------------------
-    virtual void
-    DumpSymbolContext (Stream *s);
+    void
+    DumpSymbolContext(Stream *s) override;
 
-    
     //------------------------------------------------------------------
     /// Find a symbol in the object file's symbol table.
     ///
@@ -288,7 +289,6 @@ public:
     FindCompileUnits (const FileSpec &path,
                       bool append,
                       SymbolContextList &sc_list);
-    
 
     //------------------------------------------------------------------
     /// Find functions by name.
@@ -323,7 +323,7 @@ public:
     //------------------------------------------------------------------
     size_t
     FindFunctions (const ConstString &name,
-                   const ClangNamespaceDecl *namespace_decl,
+                   const CompilerDeclContext *parent_decl_ctx,
                    uint32_t name_type_mask, 
                    bool symbols_ok,
                    bool inlines_ok,
@@ -392,8 +392,8 @@ public:
     ///     The name of the global or static variable we are looking
     ///     for.
     ///
-    /// @param[in] namespace_decl
-    ///     If valid, a namespace to search in.
+    /// @param[in] parent_decl_ctx
+    ///     If valid, a decl context that results must exist within
     ///
     /// @param[in] append
     ///     If \b true, any matches will be appended to \a
@@ -413,7 +413,7 @@ public:
     //------------------------------------------------------------------
     size_t
     FindGlobalVariables (const ConstString &name,
-                         const ClangNamespaceDecl *namespace_decl,
+                         const CompilerDeclContext *parent_decl_ctx,
                          bool append, 
                          size_t max_matches,
                          VariableList& variable_list);
@@ -524,7 +524,7 @@ public:
     size_t
     FindTypesInNamespace (const SymbolContext& sc,
                           const ConstString &type_name,
-                          const ClangNamespaceDecl *namespace_decl,
+                          const CompilerDeclContext *parent_decl_ctx,
                           size_t max_matches,
                           TypeList& type_list);
 
@@ -935,7 +935,6 @@ public:
     uint32_t
     ResolveSymbolContextsForFileSpec (const FileSpec &file_spec, uint32_t line, bool check_inlines, uint32_t resolve_scope, SymbolContextList& sc_list);
 
-
     void
     SetFileSpecAndObjectName (const FileSpec &file,
                               const ConstString &object_name);
@@ -943,8 +942,8 @@ public:
     bool
     GetIsDynamicLinkEditor ();
 
-    ClangASTContext &
-    GetClangASTContext ();
+    TypeSystem *
+    GetTypeSystemForLanguage (lldb::LanguageType language);
 
     // Special error functions that can do printf style formatting that will prepend the message with
     // something appropriate for this module (like the architecture, path and object name (if any)). 
@@ -1041,7 +1040,6 @@ public:
     bool
     RemapSourceFile (const char *path, std::string &new_path) const;
     
-    
     //------------------------------------------------------------------
     /// Prepare to do a function name lookup.
     ///
@@ -1067,6 +1065,10 @@ public:
     ///     The mask of bits from lldb::FunctionNameType enumerations
     ///     that tell us what kind of name we are looking for.
     ///
+    /// @param[out] language
+    ///     If known, the language to use for determining the
+    ///     lookup_name_type_mask.
+    ///
     /// @param[out] lookup_name
     ///     The actual name that will be used when calling
     ///     SymbolVendor::FindFunctions() or Symtab::FindFunctionSymbols()
@@ -1087,6 +1089,7 @@ public:
     static void
     PrepareForFunctionNameLookup (const ConstString &name,
                                   uint32_t name_type_mask,
+                                  lldb::LanguageType language,
                                   ConstString &lookup_name,
                                   uint32_t &lookup_name_type_mask,
                                   bool &match_name_after_lookup);
@@ -1110,17 +1113,16 @@ protected:
     lldb::SymbolVendorUP        m_symfile_ap;   ///< A pointer to the symbol vendor for this module.
     std::vector<lldb::SymbolVendorUP> m_old_symfiles; ///< If anyone calls Module::SetSymbolFileFileSpec() and changes the symbol file,
                                                       ///< we need to keep all old symbol files around in case anyone has type references to them
-    lldb::ClangASTContextUP     m_ast;          ///< The AST context for this module.
+    TypeSystemMap               m_type_system_map;    ///< A map of any type systems associated with this module
     PathMappingList             m_source_mappings; ///< Module specific source remappings for when you have debug info for a module that doesn't match where the sources currently are
     lldb::SectionListUP         m_sections_ap; ///< Unified section list for module that is used by the ObjectFile and and ObjectFile instances for the debug info
 
-    bool                        m_did_load_objfile:1,
-                                m_did_load_symbol_vendor:1,
-                                m_did_parse_uuid:1,
-                                m_did_init_ast:1;
+    std::atomic<bool>           m_did_load_objfile;
+    std::atomic<bool>           m_did_load_symbol_vendor;
+    std::atomic<bool>           m_did_parse_uuid;
     mutable bool                m_file_has_changed:1,
                                 m_first_file_changed_log:1;   /// See if the module was modified after it was initially opened.
-    
+
     //------------------------------------------------------------------
     /// Resolve a file or load virtual address.
     ///
@@ -1178,21 +1180,19 @@ protected:
     friend class SymbolFile;
 
 private:
-    
     Module (); // Only used internally by CreateJITModule ()
     
     size_t
     FindTypes_Impl (const SymbolContext& sc, 
                     const ConstString &name,
-                    const ClangNamespaceDecl *namespace_decl,
+                    const CompilerDeclContext *parent_decl_ctx,
                     bool append, 
                     size_t max_matches,
-                    TypeList& types);
+                    TypeMap& types);
 
-    
     DISALLOW_COPY_AND_ASSIGN (Module);
 };
 
 } // namespace lldb_private
 
-#endif  // liblldb_Module_h_
+#endif // liblldb_Module_h_

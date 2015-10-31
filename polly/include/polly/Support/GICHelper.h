@@ -65,6 +65,18 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
 }
 
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     __isl_keep isl_set *Set) {
+  OS << polly::stringFromIslObj(Set);
+  return OS;
+}
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     __isl_keep isl_pw_aff *Map) {
+  OS << polly::stringFromIslObj(Map);
+  return OS;
+}
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
                                      __isl_keep isl_pw_multi_aff *PMA) {
   OS << polly::stringFromIslObj(PMA);
   return OS;

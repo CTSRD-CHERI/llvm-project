@@ -1,11 +1,13 @@
 """
 Test that argdumper is a viable launching strategy.
 """
-import commands
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import os
 import time
-import unittest2
 from lldbtest import *
 import lldbutil
 
@@ -13,22 +15,11 @@ class LaunchWithShellExpandTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-        
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym (self):
-        self.buildDsym()
-        self.do_test ()
-
-
     @expectedFailureFreeBSD("llvm.org/pr22627 process launch w/ shell expansion not working")
     @expectedFailureLinux("llvm.org/pr22627 process launch w/ shell expansion not working")
-    @dwarf_test
-    def test_with_dwarf (self):
-        self.buildDwarf()
-        self.do_test ()
-
-    def do_test (self):
+    @expectedFailureWindows("llvm.org/pr24778")
+    def test(self):
+        self.build()
         exe = os.path.join (os.getcwd(), "a.out")
         
         self.runCmd("target create %s" % exe)
@@ -104,10 +95,3 @@ class LaunchWithShellExpandTestCase(TestBase):
                          "Thread in process stopped in 'main' should have a stop reason of eStopReasonBreakpoint");
         
         self.expect("frame variable argv[1]", substrs=['foo bar'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

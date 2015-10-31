@@ -150,6 +150,7 @@ void InclusionRewriter::FileChanged(SourceLocation Loc,
   FileID Id = FullSourceLoc(Loc, SM).getFileID();
   auto P = FileIncludes.insert(std::make_pair(
       LastInclusionLocation.getRawEncoding(), IncludedFile(Id, NewFileType)));
+  (void)P;
   assert(P.second && "Unexpected revisitation of the same include directive");
   LastInclusionLocation = SourceLocation();
 }
@@ -159,7 +160,7 @@ void InclusionRewriter::FileChanged(SourceLocation Loc,
 void InclusionRewriter::FileSkipped(const FileEntry &/*SkippedFile*/,
                                     const Token &/*FilenameTok*/,
                                     SrcMgr::CharacteristicKind /*FileType*/) {
-  assert(!LastInclusionLocation.isInvalid() &&
+  assert(LastInclusionLocation.isValid() &&
          "A file, that wasn't found via an inclusion directive, was skipped");
   LastInclusionLocation = SourceLocation();
 }
@@ -184,6 +185,7 @@ void InclusionRewriter::InclusionDirective(SourceLocation HashLoc,
   if (Imported) {
     auto P = ModuleIncludes.insert(
         std::make_pair(HashLoc.getRawEncoding(), Imported));
+    (void)P;
     assert(P.second && "Unexpected revisitation of the same include directive");
   } else
     LastInclusionLocation = HashLoc;
@@ -387,9 +389,10 @@ bool InclusionRewriter::HandleHasInclude(
   SmallVector<std::pair<const FileEntry *, const DirectoryEntry *>, 1>
       Includers;
   Includers.push_back(std::make_pair(FileEnt, FileEnt->getDir()));
+  // FIXME: Why don't we call PP.LookupFile here?
   const FileEntry *File = PP.getHeaderSearchInfo().LookupFile(
       Filename, SourceLocation(), isAngled, nullptr, CurDir, Includers, nullptr,
-      nullptr, nullptr, false);
+      nullptr, nullptr, nullptr, false);
 
   FileExists = File != nullptr;
   return true;

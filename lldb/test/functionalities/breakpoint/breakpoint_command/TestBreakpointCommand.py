@@ -2,8 +2,11 @@
 Test lldb breakpoint command add/list/delete.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -18,18 +21,10 @@ class BreakpointCommandTestCase(TestBase):
         cls.RemoveTempFile("output.txt")
         cls.RemoveTempFile("output2.txt")
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
+    @expectedFailureWindows("llvm.org/pr24528")
+    def test(self):
         """Test a sequence of breakpoint command add, list, and delete."""
-        self.buildDsym()
-        self.breakpoint_command_sequence()
-        self.breakpoint_command_script_parameters ()
-
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test a sequence of breakpoint command add, list, and delete."""
-        self.buildDwarf()
+        self.build()
         self.breakpoint_command_sequence()
         self.breakpoint_command_script_parameters ()
 
@@ -57,7 +52,7 @@ class BreakpointCommandTestCase(TestBase):
 
         # Now add callbacks for the breakpoints just created.
         self.runCmd("breakpoint command add -s command -o 'frame variable --show-types --scope' 1 4")
-        self.runCmd("breakpoint command add -s python -o 'here = open(\"output.txt\", \"w\"); print >> here, \"lldb\"; here.close()' 2")
+        self.runCmd("breakpoint command add -s python -o 'here = open(\"output.txt\", \"w\"); here.write(\"lldb\\n\"); here.close()' 2")
         self.runCmd("breakpoint command add --python-function bktptcmd.function 3")
 
         # Check that the breakpoint commands are correctly set.
@@ -79,7 +74,7 @@ class BreakpointCommandTestCase(TestBase):
         self.expect("breakpoint command list 2", "Breakpoint 2 command ok",
             substrs = ["Breakpoint commands:",
                           "here = open",
-                          "print >> here",
+                          "here.write",
                           "here.close()"])
         self.expect("breakpoint command list 3", "Breakpoint 3 command ok",
             substrs = ["Breakpoint commands:",
@@ -111,7 +106,7 @@ class BreakpointCommandTestCase(TestBase):
         # Run the program.  Remove 'output.txt' if it exists.
         self.RemoveTempFile("output.txt")
         self.RemoveTempFile("output2.txt")
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # Check that the file 'output.txt' exists and contains the string "lldb".
 
@@ -161,7 +156,7 @@ class BreakpointCommandTestCase(TestBase):
                         self.line])
 
         # Run the program again, with breakpoint 1 remaining.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to breakpoint 1.
 
@@ -183,7 +178,7 @@ class BreakpointCommandTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
 
         # Now add callbacks for the breakpoints just created.
-        self.runCmd("breakpoint command add -s python -o 'here = open(\"output-2.txt\", \"w\"); print >> here, frame; print >> here, bp_loc; here.close()' 1")
+        self.runCmd("breakpoint command add -s python -o 'here = open(\"output-2.txt\", \"w\"); here.write(str(frame) + \"\\n\"); here.write(str(bp_loc) + \"\\n\"); here.close()' 1")
 
         # Remove 'output-2.txt' if it already exists.
 
@@ -191,7 +186,7 @@ class BreakpointCommandTestCase(TestBase):
             os.remove ('output-2.txt')
 
         # Run program, hit breakpoint, and hopefully write out new version of 'output-2.txt'
-        self.runCmd ("run", RUN_FAILED)
+        self.runCmd ("run", RUN_SUCCEEDED)
 
         # Check that the file 'output.txt' exists and contains the string "lldb".
 
@@ -209,9 +204,3 @@ class BreakpointCommandTestCase(TestBase):
 
         # Now remove 'output-2.txt'
         os.remove ('output-2.txt')
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

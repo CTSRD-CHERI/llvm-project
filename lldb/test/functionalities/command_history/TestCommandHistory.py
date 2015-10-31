@@ -2,8 +2,11 @@
 Test the command history mechanism
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -11,6 +14,7 @@ class CommandHistoryTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
+    @no_debug_info_test
     def test_history(self):
         self.runCmd('command history --clear', inHistory=False)
         self.runCmd('breakpoint list', check=False, inHistory=True) #0
@@ -62,10 +66,3 @@ class CommandHistoryTestCase(TestBase):
 
         self.expect ("command history -c 1 -e 3 -s 5",error=True, inHistory=True,
                      substrs = ['error: --count, --start-index and --end-index cannot be all specified in the same invocation'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

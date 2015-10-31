@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -analyze -polly-ast -polly-no-early-exit -polly-detect-unprofitable < %s | FileCheck %s --check-prefix=AST
-; RUN: opt %loadPolly -S -polly-no-early-exit -polly-detect-unprofitable -polly-codegen < %s | FileCheck %s
+; RUN: opt %loadPolly -analyze -polly-ast < %s | FileCheck %s --check-prefix=AST
+; RUN: opt %loadPolly -S -polly-codegen < %s | FileCheck %s
 ;
 ;    void jd(int *A, int c) {
 ;      for (int i = 0; i < 1024; i++) {
@@ -11,9 +11,7 @@
 ;    }
 
 ; AST:    for (int c0 = 0; c0 <= 1023; c0 += 1) {
-; AST:      if (c <= -1) {
-; AST:        Stmt_if_then(c0);
-; AST:      } else if (c >= 1) {
+; AST:      if (c <= -1 || c >= 1) {
 ; AST:        Stmt_if_then(c0);
 ; AST:      } else
 ; AST:        Stmt_if_else(c0);
@@ -27,9 +25,6 @@
 ; CHECK-NEXT:     %scevgep
 ; CHECK-NEXT:     store i32 %phi.phiops.reload, i32*
 ; CHECK-LABEL:  polly.stmt.if.then:
-; CHECK-NEXT:     store i32 1, i32* %phi.phiops
-; CHECK-NEXT:     br label %polly.merge{{[.]?}}
-; CHECK-LABEL:  polly.stmt.if.then{{.}}:
 ; CHECK-NEXT:     store i32 1, i32* %phi.phiops
 ; CHECK-NEXT:     br label %polly.merge{{[.]?}}
 ; CHECK-LABEL:  polly.stmt.if.else:

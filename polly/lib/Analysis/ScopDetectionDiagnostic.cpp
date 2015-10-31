@@ -40,8 +40,6 @@
   STATISTIC(Bad##NAME##ForScop, "Number of bad regions for Scop: " DESC)
 
 BADSCOP_STAT(CFG, "CFG too complex");
-BADSCOP_STAT(IndVar, "Non canonical induction variable in loop");
-BADSCOP_STAT(IndEdge, "Found invalid region entering edges");
 BADSCOP_STAT(LoopBound, "Loop bounds can not be computed");
 BADSCOP_STAT(FuncCall, "Function call with side effects appeared");
 BADSCOP_STAT(AffFunc, "Expression not affine");
@@ -143,33 +141,18 @@ bool ReportCFG::classof(const RejectReason *RR) {
 }
 
 //===----------------------------------------------------------------------===//
-// ReportNonBranchTerminator.
+// ReportInvalidTerminator.
 
-std::string ReportNonBranchTerminator::getMessage() const {
-  return ("Non branch instruction terminates BB: " + BB->getName()).str();
+std::string ReportInvalidTerminator::getMessage() const {
+  return ("Invalid instruction terminates BB: " + BB->getName()).str();
 }
 
-const DebugLoc &ReportNonBranchTerminator::getDebugLoc() const {
+const DebugLoc &ReportInvalidTerminator::getDebugLoc() const {
   return BB->getTerminator()->getDebugLoc();
 }
 
-bool ReportNonBranchTerminator::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkNonBranchTerminator;
-}
-
-//===----------------------------------------------------------------------===//
-// ReportCondition.
-
-std::string ReportCondition::getMessage() const {
-  return ("Not well structured condition at BB: " + BB->getName()).str();
-}
-
-const DebugLoc &ReportCondition::getDebugLoc() const {
-  return BB->getTerminator()->getDebugLoc();
-}
-
-bool ReportCondition::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkCondition;
+bool ReportInvalidTerminator::classof(const RejectReason *RR) {
+  return RR->getKind() == rrkInvalidTerminator;
 }
 
 //===----------------------------------------------------------------------===//
@@ -317,51 +300,6 @@ std::string ReportNonAffineAccess::getEndUserMessage() const {
 }
 
 //===----------------------------------------------------------------------===//
-// ReportIndVar.
-
-ReportIndVar::ReportIndVar(const RejectReasonKind K) : RejectReason(K) {
-  ++BadIndVarForScop;
-}
-
-//===----------------------------------------------------------------------===//
-// ReportPhiNodeRefInRegion.
-
-ReportPhiNodeRefInRegion::ReportPhiNodeRefInRegion(Instruction *Inst)
-    : ReportIndVar(rrkPhiNodeRefInRegion), Inst(Inst) {}
-
-std::string ReportPhiNodeRefInRegion::getMessage() const {
-  return "SCEV of PHI node refers to SSA names in region: " + *Inst;
-}
-
-const DebugLoc &ReportPhiNodeRefInRegion::getDebugLoc() const {
-  return Inst->getDebugLoc();
-}
-
-bool ReportPhiNodeRefInRegion::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkPhiNodeRefInRegion;
-}
-
-//===----------------------------------------------------------------------===//
-// ReportIndEdge.
-
-ReportIndEdge::ReportIndEdge(BasicBlock *BB)
-    : RejectReason(rrkIndEdge), BB(BB) {
-  ++BadIndEdgeForScop;
-}
-
-std::string ReportIndEdge::getMessage() const {
-  return "Region has invalid entering edges!";
-}
-
-const DebugLoc &ReportIndEdge::getDebugLoc() const {
-  return BB->getTerminator()->getDebugLoc();
-}
-
-bool ReportIndEdge::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkIndEdge;
-}
-
-//===----------------------------------------------------------------------===//
 // ReportLoopBound.
 
 ReportLoopBound::ReportLoopBound(Loop *L, const SCEV *LoopCount)
@@ -408,6 +346,29 @@ std::string ReportFuncCall::getEndUserMessage() const {
 
 bool ReportFuncCall::classof(const RejectReason *RR) {
   return RR->getKind() == rrkFuncCall;
+}
+
+//===----------------------------------------------------------------------===//
+// ReportNonSimpleMemoryAccess
+
+ReportNonSimpleMemoryAccess::ReportNonSimpleMemoryAccess(Instruction *Inst)
+    : ReportOther(rrkNonSimpleMemoryAccess), Inst(Inst) {}
+
+std::string ReportNonSimpleMemoryAccess::getMessage() const {
+  return "Non-simple memory access: " + *Inst;
+}
+
+const DebugLoc &ReportNonSimpleMemoryAccess::getDebugLoc() const {
+  return Inst->getDebugLoc();
+}
+
+std::string ReportNonSimpleMemoryAccess::getEndUserMessage() const {
+  return "Volatile memory accesses or memory accesses for atomic types "
+         "are not supported.";
+}
+
+bool ReportNonSimpleMemoryAccess::classof(const RejectReason *RR) {
+  return RR->getKind() == rrkNonSimpleMemoryAccess;
 }
 
 //===----------------------------------------------------------------------===//
@@ -547,24 +508,6 @@ const DebugLoc &ReportUnknownInst::getDebugLoc() const {
 
 bool ReportUnknownInst::classof(const RejectReason *RR) {
   return RR->getKind() == rrkUnknownInst;
-}
-
-//===----------------------------------------------------------------------===//
-// ReportPHIinExit.
-
-ReportPHIinExit::ReportPHIinExit(Instruction *Inst)
-    : ReportOther(rrkPHIinExit), Inst(Inst) {}
-
-std::string ReportPHIinExit::getMessage() const {
-  return "PHI node in exit BB";
-}
-
-const DebugLoc &ReportPHIinExit::getDebugLoc() const {
-  return Inst->getDebugLoc();
-}
-
-bool ReportPHIinExit::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkPHIinExit;
 }
 
 //===----------------------------------------------------------------------===//

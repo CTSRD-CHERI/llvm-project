@@ -105,7 +105,7 @@ void LLLexer::FP80HexToIntPair(const char *Buffer, const char *End,
     Pair[1] += hexDigitValue(*Buffer);
   }
   Pair[0] = 0;
-  for (int i=0; i<16; i++, Buffer++) {
+  for (int i = 0; i < 16 && Buffer != End; i++, Buffer++) {
     Pair[0] *= 16;
     Pair[0] += hexDigitValue(*Buffer);
   }
@@ -524,6 +524,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(undef);
   KEYWORD(null);
   KEYWORD(to);
+  KEYWORD(caller);
   KEYWORD(tail);
   KEYWORD(musttail);
   KEYWORD(target);
@@ -588,6 +589,8 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(preserve_mostcc);
   KEYWORD(preserve_allcc);
   KEYWORD(ghccc);
+  KEYWORD(hhvmcc);
+  KEYWORD(hhvm_ccc);
 
   KEYWORD(cc);
   KEYWORD(c);
@@ -595,6 +598,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(attributes);
 
   KEYWORD(alwaysinline);
+  KEYWORD(argmemonly);
   KEYWORD(builtin);
   KEYWORD(byval);
   KEYWORD(inalloca);
@@ -691,6 +695,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   TYPEKEYWORD("label",     Type::getLabelTy(Context));
   TYPEKEYWORD("metadata",  Type::getMetadataTy(Context));
   TYPEKEYWORD("x86_mmx",   Type::getX86_MMXTy(Context));
+  TYPEKEYWORD("token",     Type::getTokenTy(Context));
 #undef TYPEKEYWORD
 
   // Keywords for instructions.
@@ -750,6 +755,13 @@ lltok::Kind LLLexer::LexIdentifier() {
   INSTKEYWORD(extractvalue,   ExtractValue);
   INSTKEYWORD(insertvalue,    InsertValue);
   INSTKEYWORD(landingpad,     LandingPad);
+  INSTKEYWORD(cleanupret,     CleanupRet);
+  INSTKEYWORD(catchret,       CatchRet);
+  INSTKEYWORD(catchpad,     CatchPad);
+  INSTKEYWORD(terminatepad, TerminatePad);
+  INSTKEYWORD(cleanuppad,   CleanupPad);
+  INSTKEYWORD(catchendpad,  CatchEndPad);
+  INSTKEYWORD(cleanupendpad, CleanupEndPad);
 #undef INSTKEYWORD
 
 #define DWKEYWORD(TYPE, TOKEN)                                                 \

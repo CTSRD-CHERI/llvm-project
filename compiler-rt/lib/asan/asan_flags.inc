@@ -62,8 +62,6 @@ ASAN_FLAG(
     "bytes that will be filled with malloc_fill_byte on malloc.")
 ASAN_FLAG(int, malloc_fill_byte, 0xbe,
           "Value used to fill the newly allocated memory.")
-ASAN_FLAG(int, exitcode, ASAN_DEFAULT_FAILURE_EXITCODE,
-          "Override the program exit status if the tool found an error.")
 ASAN_FLAG(bool, allow_user_poisoning, true,
           "If set, user may manually mark memory regions as poisoned or "
           "unpoisoned.")
@@ -77,10 +75,6 @@ ASAN_FLAG(bool, check_malloc_usable_size, true,
           "295.*.")
 ASAN_FLAG(bool, unmap_shadow_on_exit, false,
           "If set, explicitly unmaps the (huge) shadow at exit.")
-ASAN_FLAG(
-    bool, abort_on_error, false,
-    "If set, the tool calls abort() instead of _exit() after printing the "
-    "error report.")
 ASAN_FLAG(bool, print_stats, false,
           "Print various statistics after printing an error message or if "
           "atexit=1.")
@@ -113,9 +107,6 @@ ASAN_FLAG(bool, alloc_dealloc_mismatch,
 
 ASAN_FLAG(bool, new_delete_type_mismatch, true,
           "Report errors on mismatch betwen size of new and delete.")
-ASAN_FLAG(bool, strict_memcmp, true,
-          "If true, assume that memcmp(p1, p2, n) always reads n bytes before "
-          "comparing p1 and p2.")
 ASAN_FLAG(
     bool, strict_init_order, false,
     "If true, assume that dynamic initializers can never access globals from "

@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPUMCTargetDesc.h"
+#include "AMDGPUELFStreamer.h"
 #include "AMDGPUMCAsmInfo.h"
 #include "AMDGPUTargetStreamer.h"
 #include "InstPrinter/AMDGPUInstPrinter.h"
@@ -44,7 +45,7 @@ static MCInstrInfo *createAMDGPUMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createAMDGPUMCRegisterInfo(StringRef TT) {
+static MCRegisterInfo *createAMDGPUMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitAMDGPUMCRegisterInfo(X, 0);
   return X;
@@ -52,14 +53,13 @@ static MCRegisterInfo *createAMDGPUMCRegisterInfo(StringRef TT) {
 
 static MCSubtargetInfo *
 createAMDGPUMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
-  MCSubtargetInfo * X = new MCSubtargetInfo();
-  InitAMDGPUMCSubtargetInfo(X, TT, CPU, FS);
-  return X;
+  return createAMDGPUMCSubtargetInfoImpl(TT, CPU, FS);
 }
 
-static MCCodeGenInfo *createAMDGPUMCCodeGenInfo(StringRef TT, Reloc::Model RM,
-                                               CodeModel::Model CM,
-                                               CodeGenOpt::Level OL) {
+static MCCodeGenInfo *createAMDGPUMCCodeGenInfo(const Triple &TT,
+                                                Reloc::Model RM,
+                                                CodeModel::Model CM,
+                                                CodeGenOpt::Level OL) {
   MCCodeGenInfo *X = new MCCodeGenInfo();
   X->initMCCodeGenInfo(RM, CM, OL);
   return X;
@@ -86,6 +86,15 @@ static MCTargetStreamer * createAMDGPUObjectTargetStreamer(
   return new AMDGPUTargetELFStreamer(S);
 }
 
+static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
+                                    MCAsmBackend &MAB, raw_pwrite_stream &OS,
+                                    MCCodeEmitter *Emitter, bool RelaxAll) {
+  if (T.getOS() == Triple::AMDHSA)
+    return createAMDGPUELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
+
+  return createELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
+}
+
 extern "C" void LLVMInitializeAMDGPUTargetMC() {
   for (Target *T : {&TheAMDGPUTarget, &TheGCNTarget}) {
     RegisterMCAsmInfo<AMDGPUMCAsmInfo> X(*T);
@@ -96,6 +105,7 @@ extern "C" void LLVMInitializeAMDGPUTargetMC() {
     TargetRegistry::RegisterMCSubtargetInfo(*T, createAMDGPUMCSubtargetInfo);
     TargetRegistry::RegisterMCInstPrinter(*T, createAMDGPUMCInstPrinter);
     TargetRegistry::RegisterMCAsmBackend(*T, createAMDGPUAsmBackend);
+    TargetRegistry::RegisterELFStreamer(*T, createMCStreamer);
   }
 
   // R600 specific registration

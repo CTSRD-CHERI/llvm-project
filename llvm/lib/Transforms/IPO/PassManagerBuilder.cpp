@@ -22,7 +22,12 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Analysis/BasicAliasAnalysis.h"
+#include "llvm/Analysis/CFLAliasAnalysis.h"
+#include "llvm/Analysis/GlobalsModRef.h"
+#include "llvm/Analysis/ScopedNoAliasAA.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Analysis/TypeBasedAliasAnalysis.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Scalar.h"
@@ -89,6 +94,11 @@ static cl::opt<bool> EnableLoopDistribute(
     "enable-loop-distribute", cl::init(false), cl::Hidden,
     cl::desc("Enable the new, experimental LoopDistribution Pass"));
 
+static cl::opt<bool> EnableNonLTOGlobalsModRef(
+    "enable-non-lto-gmr", cl::init(true), cl::Hidden,
+    cl::desc(
+        "Enable the GlobalsModRef AliasAnalysis outside of the LTO pipeline."));
+
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
@@ -105,6 +115,7 @@ PassManagerBuilder::PassManagerBuilder() {
     VerifyInput = false;
     VerifyOutput = false;
     MergeFunctions = false;
+    PrepareForLTO = false;
 }
 
 PassManagerBuilder::~PassManagerBuilder() {
@@ -142,10 +153,9 @@ void PassManagerBuilder::addInitialAliasAnalysisPasses(
   // BasicAliasAnalysis wins if they disagree. This is intended to help
   // support "obvious" type-punning idioms.
   if (UseCFLAA)
-    PM.add(createCFLAliasAnalysisPass());
-  PM.add(createTypeBasedAliasAnalysisPass());
-  PM.add(createScopedNoAliasAAPass());
-  PM.add(createBasicAliasAnalysisPass());
+    PM.add(createCFLAAWrapperPass());
+  PM.add(createTypeBasedAAWrapperPass());
+  PM.add(createScopedNoAliasAAWrapperPass());
 }
 
 void PassManagerBuilder::populateFunctionPassManager(
@@ -212,6 +222,12 @@ void PassManagerBuilder::populateModulePassManager(
     MPM.add(createCFGSimplificationPass());   // Clean up after IPCP & DAE
   }
 
+  if (EnableNonLTOGlobalsModRef)
+    // We add a module alias analysis pass here. In part due to bugs in the
+    // analysis infrastructure this "works" in that the analysis stays alive
+    // for the entire SCC pass run below.
+    MPM.add(createGlobalsAAWrapperPass());
+
   // Start of CallGraph SCC passes.
   if (!DisableUnitAtATime)
     MPM.add(createPruneEHPass());             // Remove dead EH info
@@ -227,7 +243,7 @@ void PassManagerBuilder::populateModulePassManager(
   // Start of function pass.
   // Break up aggregate allocas, using SSAUpdater.
   if (UseNewSROA)
-    MPM.add(createSROAPass(/*RequiresDomTree*/ false));
+    MPM.add(createSROAPass());
   else
     MPM.add(createScalarReplAggregatesPass(-1, false));
   MPM.add(createEarlyCSEPass());              // Catch trivial redundancies
@@ -244,6 +260,7 @@ void PassManagerBuilder::populateModulePassManager(
   MPM.add(createLoopRotatePass(SizeLevel == 2 ? 0 : -1));
   MPM.add(createLICMPass());                  // Hoist loop invariants
   MPM.add(createLoopUnswitchPass(SizeLevel || OptLevel < 3));
+  MPM.add(createCFGSimplificationPass());
   MPM.add(createInstructionCombiningPass());
   MPM.add(createIndVarSimplifyPass());        // Canonicalize indvars
   MPM.add(createLoopIdiomPass());             // Recognize idioms like memset.
@@ -314,13 +331,46 @@ void PassManagerBuilder::populateModulePassManager(
   // we must insert a no-op module pass to reset the pass manager.
   MPM.add(createBarrierNoopPass());
 
+  if (!DisableUnitAtATime && OptLevel > 1 && !PrepareForLTO) {
+    // Remove avail extern fns and globals definitions if we aren't
+    // compiling an object file for later LTO. For LTO we want to preserve
+    // these so they are eligible for inlining at link-time. Note if they
+    // are unreferenced they will be removed by GlobalDCE later, so
+    // this only impacts referenced available externally globals.
+    // Eventually they will be suppressed during codegen, but eliminating
+    // here enables more opportunity for GlobalDCE as it may make
+    // globals referenced by available external functions dead
+    // and saves running remaining passes on the eliminated functions.
+    MPM.add(createEliminateAvailableExternallyPass());
+  }
+
+  if (EnableNonLTOGlobalsModRef)
+    // We add a fresh GlobalsModRef run at this point. This is particularly
+    // useful as the above will have inlined, DCE'ed, and function-attr
+    // propagated everything. We should at this point have a reasonably minimal
+    // and richly annotated call graph. By computing aliasing and mod/ref
+    // information for all local globals here, the late loop passes and notably
+    // the vectorizer will be able to use them to help recognize vectorizable
+    // memory operations.
+    //
+    // Note that this relies on a bug in the pass manager which preserves
+    // a module analysis into a function pass pipeline (and throughout it) so
+    // long as the first function pass doesn't invalidate the module analysis.
+    // Thus both Float2Int and LoopRotate have to preserve AliasAnalysis for
+    // this to work. Fortunately, it is trivial to preserve AliasAnalysis
+    // (doing nothing preserves it as it is required to be conservatively
+    // correct in the face of IR changes).
+    MPM.add(createGlobalsAAWrapperPass());
+
   if (RunFloat2Int)
     MPM.add(createFloat2IntPass());
 
+  addExtensionsToPM(EP_VectorizerStart, MPM);
+
   // Re-rotate loops in all our loop nests. These may have fallout out of
   // rotated form due to GVN or other transformations, and the vectorizer relies
-  // on the rotated form.
-  MPM.add(createLoopRotatePass());
+  // on the rotated form. Disable header duplication at -Oz.
+  MPM.add(createLoopRotatePass(SizeLevel == 2 ? 0 : -1));
 
   // Distribute loops to allow partial vectorization.  I.e. isolate dependences
   // into separate loop that would otherwise inhibit vectorization.
@@ -469,7 +519,7 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
 
   // Run a few AA driven optimizations here and now, to cleanup the code.
   PM.add(createFunctionAttrsPass()); // Add nocapture.
-  PM.add(createGlobalsModRefPass()); // IP alias analysis.
+  PM.add(createGlobalsAAWrapperPass()); // IP alias analysis.
 
   PM.add(createLICMPass());                 // Hoist loop invariants.
   if (EnableMLSM)
@@ -511,6 +561,9 @@ void PassManagerBuilder::addLateLTOOptimizationPasses(
     legacy::PassManagerBase &PM) {
   // Delete basic blocks, which optimization passes may have killed.
   PM.add(createCFGSimplificationPass());
+
+  // Drop bodies of available externally objects to improve GlobalDCE.
+  PM.add(createEliminateAvailableExternallyPass());
 
   // Now that we have optimized the program, discard unreachable functions.
   PM.add(createGlobalDCEPass());

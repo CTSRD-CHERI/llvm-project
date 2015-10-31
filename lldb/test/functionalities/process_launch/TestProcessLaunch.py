@@ -2,8 +2,11 @@
 Test lldb process launch flags.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -18,22 +21,10 @@ class ProcessLaunchTestCase(TestBase):
         self.runCmd("settings set auto-confirm true")
         self.addTearDownHook(lambda: self.runCmd("settings clear auto-confirm"))
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_io_with_dsym (self):
-        """Test that process launch I/O redirection flags work properly."""
-        self.buildDsym ()
-        self.process_io_test ()
-
-    @dwarf_test
-    def test_io_with_dwarf (self):
-        """Test that process launch I/O redirection flags work properly."""
-        self.buildDwarf ()
-        self.process_io_test ()
-
     @not_remote_testsuite_ready
-    def process_io_test (self):
+    def test_io (self):
         """Test that process launch I/O redirection flags work properly."""
+        self.build ()
         exe = os.path.join (os.getcwd(), "a.out")
         self.expect("file " + exe,
                     patterns = [ "Current executable set to .*a.out" ])
@@ -115,32 +106,15 @@ class ProcessLaunchTestCase(TestBase):
         if not success:
             self.fail (err_msg)
 
-    d = {'CXX_SOURCES' : 'print_cwd.cpp'}
-
-    @skipUnlessDarwin
-    @dsym_test
-    @expectedFailureDarwin("llvm.org/pr20265")
-    def test_set_working_dir_with_dsym (self):
-        """Test that '-w dir' sets the working dir when running the inferior."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(self.d)
-        self.my_working_dir_test()
-
-    @skipIfFreeBSD # llvm.org/pr16684
-    @expectedFailureDarwin("llvm.org/pr20265")
-    @expectedFailureLinux("llvm.org/pr20265")
-    @dwarf_test
-    def test_set_working_dir_with_dwarf (self):
-        """Test that '-w dir' sets the working dir when running the inferior."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(self.d)
-        self.my_working_dir_test()
-
     # rdar://problem/9056462
     # The process launch flag '-w' for setting the current working directory not working?
     @not_remote_testsuite_ready
-    def my_working_dir_test (self):
+    @expectedFailureLinux("llvm.org/pr20265")
+    def test_set_working_dir (self):
         """Test that '-w dir' sets the working dir when running the inferior."""
+        d = {'CXX_SOURCES' : 'print_cwd.cpp'}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(d)
         exe = os.path.join (os.getcwd(), "a.out")
         self.runCmd("file " + exe)
 
@@ -188,7 +162,7 @@ class ProcessLaunchTestCase(TestBase):
             # Check to see if the 'stdout' file contains the right output
             line = out_f.readline();
             if self.TraceOn():
-                print "line:", line
+                print("line:", line)
             if not re.search(mywd, line):
                 success = False
                 err_msg = err_msg + "The current working directory was not set correctly.\n"
@@ -204,11 +178,3 @@ class ProcessLaunchTestCase(TestBase):
 
         if not success:
             self.fail(err_msg)
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
 
 ; void foo(long n, long m, long o, double A[n][m][o]) {
@@ -13,13 +13,13 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 ;
 ; CHECK: Assumed Context:
 ; CHECK:   {  :  }
-; CHECK: p0: %n
+; CHECK: p0: %o
 ; CHECK: p1: %m
-; CHECK: p2: %o
+; CHECK: p2: %n
 ; CHECK-NOT: p3
 ;
-; CHECK:   [n, m, o] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[3 + i0, 10 + i1, 7 + i2] };
-; CHECK:   [n, m, o] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[13 + i0, i1, 17 + i2] };
+; CHECK:   [o, m, n] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[3 + i0, 10 + i1, 7 + i2] };
+; CHECK:   [o, m, n] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[13 + i0, i1, 17 + i2] };
 
 define void @foo(i64 %n, i64 %m, i64 %o, double* %A) {
 entry:

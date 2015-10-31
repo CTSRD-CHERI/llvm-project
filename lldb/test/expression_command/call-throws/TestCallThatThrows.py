@@ -2,7 +2,10 @@
 Test calling a function that throws an ObjC exception, make sure that it doesn't propagate the exception.
 """
 
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import lldbutil
 from lldbtest import *
@@ -18,19 +21,10 @@ class ExprCommandWithThrowTestCase(TestBase):
         self.main_source = "call-throws.m"
         self.main_source_spec = lldb.SBFileSpec (self.main_source)
 
-
     @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
+    def test(self):
         """Test calling a function that throws and ObjC exception."""
-        self.buildDsym()
-        self.call_function()
-
-    @skipUnlessDarwin
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test calling a function that throws and ObjC exception."""
-        self.buildDwarf()
+        self.build()
         self.call_function()
 
     def check_after_call (self):
@@ -116,9 +110,3 @@ class ExprCommandWithThrowTestCase(TestBase):
 
         self.assertTrue (value.IsValid() and value.GetError().Success() == False)
         self.check_after_call()
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

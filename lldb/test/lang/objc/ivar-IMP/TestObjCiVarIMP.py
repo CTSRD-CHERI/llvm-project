@@ -2,19 +2,22 @@
 Test that dynamically discovered ivars of type IMP do not crash LLDB
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 import commands
 
 def execute_command (command):
-    # print '%% %s' % (command)
+    # print('%% %s' % (command))
     (exit_status, output) = commands.getstatusoutput (command)
     # if output:
-    #     print output
-    # print 'status = %u' % (exit_status)
+    #     print(output)
+    # print('status = %u' % (exit_status))
     return exit_status
 
 class ObjCiVarIMPTestCase(TestBase):
@@ -22,23 +25,14 @@ class ObjCiVarIMPTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @skipUnlessDarwin
+    @no_debug_info_test
     def test_imp_ivar_type(self):
         """Test that dynamically discovered ivars of type IMP do not crash LLDB"""
         if self.getArchitecture() == 'i386':
             # rdar://problem/9946499
             self.skipTest("Dynamic types for ObjC V1 runtime not implemented")
-        self.buildReproCase()
-        self.runTheTest()
-
-    def setUp(self):
-        # Call super's setUp().                                                                                                           
-        TestBase.setUp(self)
-
-    def buildReproCase (self):
+        
         execute_command("make repro")
-
-    def runTheTest(self):
-        """MakeTest that dynamically discovered ivars of type IMP do not crash LLDB"""
         def cleanup():
             execute_command("make cleanup")
         self.addTearDownHook(cleanup)
@@ -46,7 +40,6 @@ class ObjCiVarIMPTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target from the debugger.
-
         target = self.dbg.CreateTarget (exe)
         self.assertTrue(target, VALID_TARGET)
 
@@ -67,9 +60,3 @@ class ObjCiVarIMPTestCase(TestBase):
         self.expect('disassemble --start-address `((MyClass*)object)->myImp`', substrs=[
             '-[MyClass init]'
         ])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

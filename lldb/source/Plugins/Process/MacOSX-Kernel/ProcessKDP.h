@@ -29,7 +29,6 @@
 #include "lldb/Target/Thread.h"
 
 #include "CommunicationKDP.h"
-#include "Utility/StringExtractor.h"
 
 class ThreadKDP;
 
@@ -40,7 +39,7 @@ public:
     // Constructors and Destructors
     //------------------------------------------------------------------
     static lldb::ProcessSP
-    CreateInstance (lldb_private::Target& target, 
+    CreateInstance (lldb::TargetSP target_sp,
                     lldb_private::Listener &listener,
                     const lldb_private::FileSpec *crash_file_path);
     
@@ -62,7 +61,7 @@ public:
     //------------------------------------------------------------------
     // Constructors and Destructors
     //------------------------------------------------------------------
-    ProcessKDP(lldb_private::Target& target, lldb_private::Listener &listener);
+    ProcessKDP(lldb::TargetSP target_sp, lldb_private::Listener &listener);
     
     virtual
     ~ProcessKDP();
@@ -71,7 +70,7 @@ public:
     // Check if a given Process
     //------------------------------------------------------------------
     virtual bool
-    CanDebug (lldb_private::Target &target,
+    CanDebug (lldb::TargetSP target_sp,
               bool plugin_specified_by_name);
     
     virtual lldb_private::CommandObject *

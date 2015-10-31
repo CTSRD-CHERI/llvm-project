@@ -1,20 +1,23 @@
 """
 Test some lldb command abbreviations.
 """
+from __future__ import print_function
+
+import lldb_shared
+
 import commands
 import lldb
 import os
 import time
-import unittest2
 from lldbtest import *
 import lldbutil
 
 def execute_command (command):
-    # print '%% %s' % (command)
+    # print('%% %s' % (command))
     (exit_status, output) = commands.getstatusoutput (command)
     # if output:
-    #     print output
-    # print 'status = %u' % (exit_status)
+    #     print(output)
+    # print('status = %u' % (exit_status))
     return exit_status
 
 class FatArchiveTestCase(TestBase):
@@ -22,8 +25,7 @@ class FatArchiveTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @skipUnlessDarwin
-    @dwarf_test
-    def test_with_dwarf (self):
+    def test (self):
         if self.getArchitecture() == 'x86_64':
             execute_command ("make CC='%s'" % (os.environ["CC"]))
             self.main ()
@@ -54,10 +56,3 @@ class FatArchiveTestCase(TestBase):
             self.assertTrue(function.IsValid(), "Verify breakpoint in fat BSD archive has valid function debug info")
             self.assertTrue(line_entry.GetFileSpec(), "Verify breakpoint in fat BSD archive has source file information")
             self.assertTrue(line_entry.GetLine() != 0, "Verify breakpoint in fat BSD archive has source line information")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

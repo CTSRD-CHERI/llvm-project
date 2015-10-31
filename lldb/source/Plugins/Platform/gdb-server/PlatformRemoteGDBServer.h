@@ -18,6 +18,7 @@
 // Project includes
 #include "lldb/Target/Platform.h"
 #include "../../Process/gdb-remote/GDBRemoteCommunicationClient.h"
+#include "Plugins/Process/Utility/GDBRemoteSignals.h"
 
 namespace lldb_private {
 namespace platform_gdb_server {
@@ -213,22 +214,40 @@ public:
     void
     CalculateTrapHandlerSymbolNames () override;
 
+    const lldb::UnixSignalsSP &
+    GetRemoteUnixSignals() override;
+
 protected:
     process_gdb_remote::GDBRemoteCommunicationClient m_gdb_client;
     std::string m_platform_description; // After we connect we can get a more complete description of what we are connected to
     std::string m_platform_scheme;
     std::string m_platform_hostname;
 
-    // Launch the lldb-gdbserver on the remote host and return the port it is listening on or 0 on
-    // failure. Subclasses should override this method if they want to do extra actions before or
-    // after launching the lldb-gdbserver.
-    virtual uint16_t
-    LaunchGDBserverAndGetPort (lldb::pid_t &pid);
+    lldb::UnixSignalsSP m_remote_signals_sp;
+
+    // Launch the debug server on the remote host - caller connects to launched
+    // debug server using connect_url.
+    // Subclasses should override this method if they want to do extra actions before or
+    // after launching the debug server.
+    virtual bool
+    LaunchGDBServer (lldb::pid_t &pid, std::string &connect_url);
 
     virtual bool
     KillSpawnedProcess (lldb::pid_t pid);
 
+    virtual std::string
+    MakeUrl(const char* scheme,
+            const char* hostname,
+            uint16_t port,
+            const char* path);
+
 private:
+    std::string
+    MakeGdbServerUrl(const std::string &platform_scheme,
+                     const std::string &platform_hostname,
+                     uint16_t port,
+                     const char* socket_name);
+
     DISALLOW_COPY_AND_ASSIGN (PlatformRemoteGDBServer);
 
 };

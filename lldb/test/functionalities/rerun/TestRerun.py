@@ -1,11 +1,13 @@
 """
 Test that argdumper is a viable launching strategy.
 """
-import commands
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import os
 import time
-import unittest2
 from lldbtest import *
 import lldbutil
 
@@ -13,20 +15,8 @@ class TestRerun(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-        
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym (self):
-        self.buildDsym()
-        self.do_test ()
-
-
-    @dwarf_test
-    def test_with_dwarf (self):
-        self.buildDwarf()
-        self.do_test ()
-
-    def do_test (self):
+    def test (self):
+        self.build()
         exe = os.path.join (os.getcwd(), "a.out")
         
         self.runCmd("target create %s" % exe)
@@ -84,11 +74,3 @@ class TestRerun(TestBase):
         self.expect("frame variable argv[1]", substrs=['1'])
         self.expect("frame variable argv[2]", substrs=['2'])
         self.expect("frame variable argv[3]", substrs=['3'])
-        
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

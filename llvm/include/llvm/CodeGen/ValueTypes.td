@@ -83,6 +83,7 @@ def FlagVT : ValueType<0  , 56>;   // Pre-RA sched glue
 def isVoid : ValueType<0  , 57>;   // Produces no value
 def untyped: ValueType<8  , 58>;   // Produces an untyped value
 def iFATPTR: ValueType<256, 59>;   // 256-bit fat pointer.
+def token  : ValueType<0  , 249>;  // TokenTy
 def MetadataVT: ValueType<0, 250>; // Metadata
 
 // Pseudo valuetype mapped to the current pointer size to any address space.

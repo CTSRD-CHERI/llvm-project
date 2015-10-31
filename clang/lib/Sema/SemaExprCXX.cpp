@@ -1031,6 +1031,11 @@ Sema::BuildCXXTypeConstructExpr(TypeSourceInfo *TInfo,
     return BuildCXXFunctionalCastExpr(TInfo, LParenLoc, Arg, RParenLoc);
   }
 
+  // C++14 [expr.type.conv]p2: The expression T(), where T is a
+  //   simple-type-specifier or typename-specifier for a non-array complete
+  //   object type or the (possibly cv-qualified) void type, creates a prvalue
+  //   of the specified type, whose value is that produced by value-initializing
+  //   an object of type T.
   QualType ElemTy = Ty;
   if (Ty->isArrayType()) {
     if (!ListInitialization)
@@ -1038,6 +1043,10 @@ Sema::BuildCXXTypeConstructExpr(TypeSourceInfo *TInfo,
                             diag::err_value_init_for_array_type) << FullRange);
     ElemTy = Context.getBaseElementType(Ty);
   }
+
+  if (!ListInitialization && Ty->isFunctionType())
+    return ExprError(Diag(TyBeginLoc, diag::err_value_init_for_function_type)
+                     << FullRange);
 
   if (!Ty->isVoidType() &&
       RequireCompleteType(TyBeginLoc, ElemTy,
@@ -2256,6 +2265,9 @@ FunctionDecl *Sema::FindUsualDeallocationFunction(SourceLocation StartLoc,
            "found an unexpected usual deallocation function");
   }
 
+  if (getLangOpts().CUDA && getLangOpts().CUDATargetOverloads)
+    EraseUnwantedCUDAMatches(dyn_cast<FunctionDecl>(CurContext), Matches);
+
   assert(Matches.size() == 1 &&
          "unexpectedly have multiple usual deallocation functions");
   return Matches.front();
@@ -2286,6 +2298,9 @@ bool Sema::FindDeallocationFunction(SourceLocation StartLoc, CXXRecordDecl *RD,
     if (cast<CXXMethodDecl>(ND)->isUsualDeallocationFunction())
       Matches.push_back(F.getPair());
   }
+
+  if (getLangOpts().CUDA && getLangOpts().CUDATargetOverloads)
+    EraseUnwantedCUDAMatches(dyn_cast<FunctionDecl>(CurContext), Matches);
 
   // There's exactly one suitable operator;  pick it.
   if (Matches.size() == 1) {
@@ -3430,6 +3445,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
   case ICK_Function_To_Pointer:
   case ICK_Qualification:
   case ICK_Num_Conversion_Kinds:
+  case ICK_C_Only_Conversion:
     llvm_unreachable("Improper second standard conversion");
   }
 
@@ -3696,15 +3712,15 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
   case UTT_IsVolatile:
     return T.isVolatileQualified();
   case UTT_IsTrivial:
-    return T.isTrivialType(Self.Context);
+    return T.isTrivialType(C);
   case UTT_IsTriviallyCopyable:
-    return T.isTriviallyCopyableType(Self.Context);
+    return T.isTriviallyCopyableType(C);
   case UTT_IsStandardLayout:
     return T->isStandardLayoutType();
   case UTT_IsPOD:
-    return T.isPODType(Self.Context);
+    return T.isPODType(C);
   case UTT_IsLiteral:
-    return T->isLiteralType(Self.Context);
+    return T->isLiteralType(C);
   case UTT_IsEmpty:
     if (const CXXRecordDecl *RD = T->getAsCXXRecordDecl())
       return !RD->isUnion() && RD->isEmpty();
@@ -3755,7 +3771,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     //   If __is_pod (type) is true then the trait is true, else if type is
     //   a cv class or union type (or array thereof) with a trivial default
     //   constructor ([class.ctor]) then the trait is true, else it is false.
-    if (T.isPODType(Self.Context))
+    if (T.isPODType(C))
       return true;
     if (CXXRecordDecl *RD = C.getBaseElementType(T)->getAsCXXRecordDecl())
       return RD->hasTrivialDefaultConstructor() &&
@@ -3765,7 +3781,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     //  This trait is implemented by MSVC 2012 and needed to parse the
     //  standard library headers. Specifically this is used as the logic
     //  behind std::is_trivially_move_constructible (20.9.4.3).
-    if (T.isPODType(Self.Context))
+    if (T.isPODType(C))
       return true;
     if (CXXRecordDecl *RD = C.getBaseElementType(T)->getAsCXXRecordDecl())
       return RD->hasTrivialMoveConstructor() && !RD->hasNonTrivialMoveConstructor();
@@ -3776,7 +3792,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     //   the trait is true, else if type is a cv class or union type
     //   with a trivial copy constructor ([class.copy]) then the trait
     //   is true, else it is false.
-    if (T.isPODType(Self.Context) || T->isReferenceType())
+    if (T.isPODType(C) || T->isReferenceType())
       return true;
     if (CXXRecordDecl *RD = T->getAsCXXRecordDecl())
       return RD->hasTrivialCopyConstructor() &&
@@ -3786,7 +3802,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     //  This trait is implemented by MSVC 2012 and needed to parse the
     //  standard library headers. Specifically it is used as the logic
     //  behind std::is_trivially_move_assignable (20.9.4.3)
-    if (T.isPODType(Self.Context))
+    if (T.isPODType(C))
       return true;
     if (CXXRecordDecl *RD = C.getBaseElementType(T)->getAsCXXRecordDecl())
       return RD->hasTrivialMoveAssignment() && !RD->hasNonTrivialMoveAssignment();
@@ -3806,7 +3822,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
 
     if (T.isConstQualified())
       return false;
-    if (T.isPODType(Self.Context))
+    if (T.isPODType(C))
       return true;
     if (CXXRecordDecl *RD = T->getAsCXXRecordDecl())
       return RD->hasTrivialCopyAssignment() &&
@@ -3814,8 +3830,47 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     return false;
   case UTT_IsDestructible:
   case UTT_IsNothrowDestructible:
-    // FIXME: Implement UTT_IsDestructible and UTT_IsNothrowDestructible.
-    // For now, let's fall through.
+    // C++14 [meta.unary.prop]:
+    //   For reference types, is_destructible<T>::value is true.
+    if (T->isReferenceType())
+      return true;
+
+    // Objective-C++ ARC: autorelease types don't require destruction.
+    if (T->isObjCLifetimeType() &&
+        T.getObjCLifetime() == Qualifiers::OCL_Autoreleasing)
+      return true;
+
+    // C++14 [meta.unary.prop]:
+    //   For incomplete types and function types, is_destructible<T>::value is
+    //   false.
+    if (T->isIncompleteType() || T->isFunctionType())
+      return false;
+
+    // C++14 [meta.unary.prop]:
+    //   For object types and given U equal to remove_all_extents_t<T>, if the
+    //   expression std::declval<U&>().~U() is well-formed when treated as an
+    //   unevaluated operand (Clause 5), then is_destructible<T>::value is true
+    if (auto *RD = C.getBaseElementType(T)->getAsCXXRecordDecl()) {
+      CXXDestructorDecl *Destructor = Self.LookupDestructor(RD);
+      if (!Destructor)
+        return false;
+      //  C++14 [dcl.fct.def.delete]p2:
+      //    A program that refers to a deleted function implicitly or
+      //    explicitly, other than to declare it, is ill-formed.
+      if (Destructor->isDeleted())
+        return false;
+      if (C.getLangOpts().AccessControl && Destructor->getAccess() != AS_public)
+        return false;
+      if (UTT == UTT_IsNothrowDestructible) {
+        const FunctionProtoType *CPT =
+            Destructor->getType()->getAs<FunctionProtoType>();
+        CPT = Self.ResolveExceptionSpec(KeyLoc, CPT);
+        if (!CPT || !CPT->isNothrow(C))
+          return false;
+      }
+    }
+    return true;
+
   case UTT_HasTrivialDestructor:
     // http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html
     //   If __is_pod (type) is true or type is a reference type
@@ -3823,7 +3878,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     //   type (or array thereof) with a trivial destructor
     //   ([class.dtor]) then the trait is true, else it is
     //   false.
-    if (T.isPODType(Self.Context) || T->isReferenceType())
+    if (T.isPODType(C) || T->isReferenceType())
       return true;
       
     // Objective-C++ ARC: autorelease types don't require destruction.
@@ -3847,7 +3902,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
       return false;
     if (T->isReferenceType())
       return false;
-    if (T.isPODType(Self.Context) || T->isObjCLifetimeType())
+    if (T.isPODType(C) || T->isObjCLifetimeType())
       return true;
 
     if (const RecordType *RT = T->getAs<RecordType>())
@@ -3860,7 +3915,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     //  This trait is implemented by MSVC 2012 and needed to parse the
     //  standard library headers. Specifically this is used as the logic
     //  behind std::is_nothrow_move_assignable (20.9.4.3).
-    if (T.isPODType(Self.Context))
+    if (T.isPODType(C))
       return true;
 
     if (const RecordType *RT = C.getBaseElementType(T)->getAs<RecordType>())
@@ -3884,15 +3939,13 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
 
       bool FoundConstructor = false;
       unsigned FoundTQs;
-      DeclContext::lookup_result R = Self.LookupConstructors(RD);
-      for (DeclContext::lookup_iterator Con = R.begin(),
-           ConEnd = R.end(); Con != ConEnd; ++Con) {
+      for (const auto *ND : Self.LookupConstructors(RD)) {
         // A template constructor is never a copy constructor.
         // FIXME: However, it may actually be selected at the actual overload
         // resolution point.
-        if (isa<FunctionTemplateDecl>(*Con))
+        if (isa<FunctionTemplateDecl>(ND))
           continue;
-        CXXConstructorDecl *Constructor = cast<CXXConstructorDecl>(*Con);
+        const CXXConstructorDecl *Constructor = cast<CXXConstructorDecl>(ND);
         if (Constructor->isCopyConstructor(FoundTQs)) {
           FoundConstructor = true;
           const FunctionProtoType *CPT
@@ -3902,7 +3955,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
             return false;
           // TODO: check whether evaluating default arguments can throw.
           // For now, we'll be conservative and assume that they can throw.
-          if (!CPT->isNothrow(Self.Context) || CPT->getNumParams() > 1)
+          if (!CPT->isNothrow(C) || CPT->getNumParams() > 1)
             return false;
         }
       }
@@ -3924,13 +3977,11 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
         return true;
 
       bool FoundConstructor = false;
-      DeclContext::lookup_result R = Self.LookupConstructors(RD);
-      for (DeclContext::lookup_iterator Con = R.begin(),
-           ConEnd = R.end(); Con != ConEnd; ++Con) {
+      for (const auto *ND : Self.LookupConstructors(RD)) {
         // FIXME: In C++0x, a constructor template can be a default constructor.
-        if (isa<FunctionTemplateDecl>(*Con))
+        if (isa<FunctionTemplateDecl>(ND))
           continue;
-        CXXConstructorDecl *Constructor = cast<CXXConstructorDecl>(*Con);
+        const CXXConstructorDecl *Constructor = cast<CXXConstructorDecl>(ND);
         if (Constructor->isDefaultConstructor()) {
           FoundConstructor = true;
           const FunctionProtoType *CPT
@@ -3940,7 +3991,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
             return false;
           // FIXME: check whether evaluating default arguments can throw.
           // For now, we'll be conservative and assume that they can throw.
-          if (!CPT->isNothrow(Self.Context) || CPT->getNumParams() > 0)
+          if (!CPT->isNothrow(C) || CPT->getNumParams() > 0)
             return false;
         }
       }
@@ -4021,8 +4072,8 @@ static bool evaluateTypeTrait(Sema &S, TypeTrait Kind, SourceLocation KWLoc,
     // Precondition: T and all types in the parameter pack Args shall be
     // complete types, (possibly cv-qualified) void, or arrays of
     // unknown bound.
-    for (unsigned I = 0, N = Args.size(); I != N; ++I) {
-      QualType ArgTy = Args[I]->getType();
+    for (const auto *TSI : Args) {
+      QualType ArgTy = TSI->getType();
       if (ArgTy->isVoidType() || ArgTy->isIncompleteArrayType())
         continue;
 
@@ -4950,7 +5001,9 @@ QualType Sema::CXXCheckConditionalOperands(ExprResult &Cond, ExprResult &LHS,
 
   // Extension: conditional operator involving vector types.
   if (LTy->isVectorType() || RTy->isVectorType())
-    return CheckVectorOperands(LHS, RHS, QuestionLoc, /*isCompAssign*/false);
+    return CheckVectorOperands(LHS, RHS, QuestionLoc, /*isCompAssign*/false,
+                               /*AllowBothBool*/true,
+                               /*AllowBoolConversions*/false);
 
   //   -- The second and third operands have arithmetic or enumeration type;
   //      the usual arithmetic conversions are performed to bring them to a
@@ -6360,7 +6413,7 @@ static ExprResult attemptRecovery(Sema &SemaRef,
       if (MightBeImplicitMember)
         return SemaRef.BuildPossibleImplicitMemberExpr(
             NewSS, /*TemplateKWLoc*/ SourceLocation(), R,
-            /*TemplateArgs*/ nullptr);
+            /*TemplateArgs*/ nullptr, /*S*/ nullptr);
     } else if (auto *Ivar = dyn_cast<ObjCIvarDecl>(ND)) {
       return SemaRef.LookupInObjCMethod(R, Consumer.getScope(),
                                         Ivar->getIdentifier());

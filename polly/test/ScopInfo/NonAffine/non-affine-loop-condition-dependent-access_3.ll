@@ -1,6 +1,12 @@
-; RUN: opt %loadPolly -basicaa -polly-scops -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=false -analyze < %s | FileCheck %s --check-prefix=INNERMOST
-; RUN: opt %loadPolly -basicaa -polly-scops -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true -analyze < %s | FileCheck %s --check-prefix=INNERMOST
-; RUN: opt %loadPolly -basicaa -polly-scops -polly-allow-nonaffine -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true -analyze < %s | FileCheck %s --check-prefix=ALL
+; RUN: opt %loadPolly -basicaa -polly-scops -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=false \
+; RUN:     -analyze < %s | FileCheck %s --check-prefix=INNERMOST
+; RUN: opt %loadPolly -basicaa -polly-scops -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=true \
+; RUN:      -analyze < %s | FileCheck %s --check-prefix=INNERMOST
+; RUN: opt %loadPolly -basicaa -polly-scops -polly-allow-nonaffine \
+; RUN:     -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true \
+; RUN:     -analyze < %s | FileCheck %s --check-prefix=ALL
 ;
 ; Here we have a non-affine loop (in the context of the loop nest)
 ; and also a non-affine access (A[k]). While we can always model the
@@ -9,10 +15,22 @@
 ; access.
 ;
 ; INNERMOST:    Function: f
-; INNERMOST:    Region: %bb15---%bb26
+; INNERMOST:    Region: %bb15---%bb13
 ; INNERMOST:    Max Loop Depth:  1
 ; INNERMOST:    Context:
-; INNERMOST:      [p_0, p_1, p_2] -> {  : p_0 >= 0 and p_0 <= 2147483647 and p_1 >= 0 and p_1 <= 4096 and p_2 >= 0 and p_2 <= 4096 }
+; INNERMOST:      [p_0, p_1, p_2] -> {  :
+; INNERMOST-DAG:    p_0 >= 0
+; INNERMOST-DAG:      and
+; INNERMOST-DAG:    p_0 <= 2147483647
+; INNERMOST-DAG:      and
+; INNERMOST-DAG:    p_1 >= 0
+; INNERMOST-DAG:      and
+; INNERMOST-DAG:     p_1 <= 4096
+; INNERMOST-DAG:      and
+; INNERMOST-DAG:    p_2 >= 0
+; INNERMOST-DAG:      and
+; INNERMOST-DAG:     p_2 <= 4096
+; INNERMOST:                         }
 ; INNERMOST:    Assumed Context:
 ; INNERMOST:      [p_0, p_1, p_2] -> {  :  }
 ; INNERMOST:    p0: {0,+,{0,+,1}<nuw><nsw><%bb11>}<nuw><nsw><%bb13>
@@ -23,9 +41,13 @@
 ; INNERMOST:    Statements {
 ; INNERMOST:      Stmt_bb16
 ; INNERMOST:            Domain :=
-; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb16[i0] : i0 >= 0 and i0 <= -1 + p_0 };
+; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb16[i0] :
+; INNERMOST-DAG:               i0 >= 0
+; INNERMOST-DAG:             and
+; INNERMOST-DAG:               i0 <= -1 + p_0
+; INNERMOST-DAG:             };
 ; INNERMOST:            Schedule :=
-; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb16[i0] -> [i0] };
+; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb16[i0] -> [0, i0] };
 ; INNERMOST:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
 ; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb16[i0] -> MemRef_A[o0] : 4o0 = p_1 };
 ; INNERMOST:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
@@ -34,6 +56,15 @@
 ; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb16[i0] -> MemRef_A[i0] };
 ; INNERMOST:            MustWriteAccess :=  [Reduction Type: +] [Scalar: 0]
 ; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb16[i0] -> MemRef_A[i0] };
+; INNERMOST:      Stmt_bb26
+; INNERMOST:            Domain :=
+; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb26[] :  p_0 >= 0 };
+; INNERMOST:            Schedule :=
+; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb26[] -> [1, 0] };
+; INNERMOST:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
+; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb26[] -> MemRef_indvars_iv_next6[] };
+; INNERMOST:            MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
+; INNERMOST:                [p_0, p_1, p_2] -> { Stmt_bb26[] -> MemRef_indvars_iv_next4[] };
 ; INNERMOST:    }
 ;
 ; ALL:    Function: f
@@ -46,19 +77,27 @@
 ; ALL:    Alias Groups (0):
 ; ALL:        n/a
 ; ALL:    Statements {
-; ALL:      Stmt_(bb15 => bb25)
+; ALL:      Stmt_bb15__TO__bb25
 ; ALL:            Domain :=
-; ALL:                { Stmt_(bb15 => bb25)[i0, i1] : i0 >= 0 and i0 <= 1023 and i1 >= 0 and i1 <= 1023 };
+; ALL:                { Stmt_bb15__TO__bb25[i0, i1] :
+; ALL-DAG:               i0 >= 0
+; ALL-DAG:             and
+; ALL-DAG:               i0 <= 1023
+; ALL-DAG:             and
+; ALL-DAG:               i1 >= 0
+; ALL-DAG:             and
+; ALL-DAG:               i1 <= 1023
+; ALL:                }
 ; ALL:            Schedule :=
-; ALL:                { Stmt_(bb15 => bb25)[i0, i1] -> [i0, i1] };
+; ALL:                { Stmt_bb15__TO__bb25[i0, i1] -> [i0, i1] };
 ; ALL:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; ALL:                { Stmt_(bb15 => bb25)[i0, i1] -> MemRef_A[i0] };
+; ALL:                { Stmt_bb15__TO__bb25[i0, i1] -> MemRef_A[i0] };
 ; ALL:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; ALL:                { Stmt_(bb15 => bb25)[i0, i1] -> MemRef_A[i1] };
+; ALL:                { Stmt_bb15__TO__bb25[i0, i1] -> MemRef_A[i1] };
 ; ALL:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; ALL:                { Stmt_(bb15 => bb25)[i0, i1] -> MemRef_A[o0] : o0 <= 4294967293 and o0 >= 0 };
+; ALL:                { Stmt_bb15__TO__bb25[i0, i1] -> MemRef_A[o0] : o0 <= 4294967293 and o0 >= 0 };
 ; ALL:            MayWriteAccess := [Reduction Type: NONE] [Scalar: 0]
-; ALL:                { Stmt_(bb15 => bb25)[i0, i1] -> MemRef_A[o0] : o0 <= 4294967293 and o0 >= 0 };
+; ALL:                { Stmt_bb15__TO__bb25[i0, i1] -> MemRef_A[o0] : o0 <= 4294967293 and o0 >= 0 };
 ; ALL:    }
 ;
 ;    void f(int *A) {

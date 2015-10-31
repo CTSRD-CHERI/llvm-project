@@ -1,7 +1,10 @@
 """Test custom import command to import files by path."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -9,7 +12,8 @@ class ImportTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @python_api_test
+    @add_test_categories(['pyapi'])
+    @no_debug_info_test
     def test_import_command(self):
         """Import some Python scripts by path and test them"""
         self.run_test()
@@ -67,10 +71,3 @@ class ImportTestCase(TestBase):
                 substrs = ['barutil says', 'bar told me', 'hello'])
         self.expect("foobarcmd hello",
                 substrs = ['foobar says', 'hello'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

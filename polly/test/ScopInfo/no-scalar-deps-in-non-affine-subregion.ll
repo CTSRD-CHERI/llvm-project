@@ -1,10 +1,11 @@
-; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops \
+; RUN:                -analyze < %s | FileCheck %s
 ;
 ; Check that we do not generate any scalar dependences regarding x. It is
 ; defined and used on the non-affine subregion only, thus we do not need
 ; to represent the definition and uses in the model.
 ;
-; CHECK:          Stmt_(bb2 => bb11)
+; CHECK:          Stmt_bb2__TO__bb11
 ; CHECK-NOT:        [Scalar: 1]
 ; CHECK-NOT:        MemRef_x
 ;

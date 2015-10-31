@@ -1,4 +1,4 @@
-//===-- MIUtilStreamStdin.cpp -----------------------------------*- C++ -*-===//
+//===-- MICmnStreamStdin.cpp ------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -28,7 +28,7 @@
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnStreamStdin::CMICmnStreamStdin(void)
+CMICmnStreamStdin::CMICmnStreamStdin()
     : m_strPromptCurrent("(gdb)")
     , m_bShowPrompt(true)
     , m_pCmdBuffer(nullptr)
@@ -42,7 +42,7 @@ CMICmnStreamStdin::CMICmnStreamStdin(void)
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnStreamStdin::~CMICmnStreamStdin(void)
+CMICmnStreamStdin::~CMICmnStreamStdin()
 {
     Shutdown();
 }
@@ -56,7 +56,7 @@ CMICmnStreamStdin::~CMICmnStreamStdin(void)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStdin::Initialize(void)
+CMICmnStreamStdin::Initialize()
 {
     m_clientUsageRefCnt++;
 
@@ -72,7 +72,7 @@ CMICmnStreamStdin::Initialize(void)
 
     if (bOk)
     {
-        m_pCmdBuffer = new MIchar[m_constBufferSize];
+        m_pCmdBuffer = new char[m_constBufferSize];
     }
     else
     {
@@ -95,7 +95,7 @@ CMICmnStreamStdin::Initialize(void)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStdin::Shutdown(void)
+CMICmnStreamStdin::Shutdown()
 {
     if (--m_clientUsageRefCnt > 0)
         return MIstatus::success;
@@ -158,7 +158,7 @@ CMICmnStreamStdin::SetPrompt(const CMIUtilString &vNewPrompt)
 // Throws:  None.
 //--
 const CMIUtilString &
-CMICmnStreamStdin::GetPrompt(void) const
+CMICmnStreamStdin::GetPrompt() const
 {
     return m_strPromptCurrent;
 }
@@ -189,7 +189,7 @@ CMICmnStreamStdin::SetEnablePrompt(const bool vbYes)
 // Throws:  None.
 //--
 bool
-CMICmnStreamStdin::GetEnablePrompt(void) const
+CMICmnStreamStdin::GetEnablePrompt() const
 {
     return m_bShowPrompt;
 }
@@ -198,16 +198,16 @@ CMICmnStreamStdin::GetEnablePrompt(void) const
 // Details: Wait on new line of data from stdin stream (completed by '\n' or '\r').
 // Type:    Method.
 // Args:    vwErrMsg    - (W) Empty string ok or error description.
-// Return:  MIchar * - text buffer pointer or NULL on failure.
+// Return:  char * - text buffer pointer or NULL on failure.
 // Throws:  None.
 //--
-const MIchar *
+const char *
 CMICmnStreamStdin::ReadLine(CMIUtilString &vwErrMsg)
 {
     vwErrMsg.clear();
 
     // Read user input
-    const MIchar *pText = ::fgets(&m_pCmdBuffer[0], m_constBufferSize, stdin);
+    const char *pText = ::fgets(&m_pCmdBuffer[0], m_constBufferSize, stdin);
     if (pText == nullptr)
     {
 #ifdef _MSC_VER
@@ -228,7 +228,7 @@ CMICmnStreamStdin::ReadLine(CMIUtilString &vwErrMsg)
     }
 
     // Strip off new line characters
-    for (MIchar *pI = m_pCmdBuffer; *pI != '\0'; pI++)
+    for (char *pI = m_pCmdBuffer; *pI != '\0'; pI++)
     {
         if ((*pI == '\n') || (*pI == '\r'))
         {

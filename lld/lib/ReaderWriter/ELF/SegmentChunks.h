@@ -135,9 +135,12 @@ public:
 
   // Write the Segment
   void write(ELFWriter *writer, TargetLayout<ELFT> &layout,
-             llvm::FileOutputBuffer &buffer);
+             llvm::FileOutputBuffer &buffer) override;
 
   int64_t flags() const;
+
+  // Set segment flags directly.
+  void setSegmentFlags(uint64_t flags);
 
   /// Prepend a generic chunk to the segment.
   void prepend(Chunk<ELFT> *c) {
@@ -146,7 +149,7 @@ public:
 
   /// Finalize the segment, before we want to write the segment header
   /// information
-  void finalize();
+  void finalize() override;
 
   // For LLVM RTTI
   static bool classof(const Chunk<ELFT> *c) {
@@ -165,7 +168,7 @@ public:
   /// If the content corresponds to Code, this will return Segment::Code
   /// If the content corresponds to Data, this will return Segment::Data
   /// If the content corresponds to TLS, this will return Segment::TLS
-  virtual int getContentType() const;
+  int getContentType() const override;
 
   int pageSize() const { return this->_ctx.getPageSize(); }
   int rawflags() const { return _atomflags; }
@@ -188,6 +191,7 @@ protected:
   typename TargetLayout<ELFT>::SegmentType _segmentType;
   uint64_t _flags;
   int64_t _atomflags;
+  bool _segmentFlags;
   llvm::BumpPtrAllocator _segmentAllocate;
 };
 
@@ -233,10 +237,10 @@ public:
 
   /// Finalize the segment, before we want to write the segment header
   /// information
-  void finalize();
+  void finalize() override;
 };
 
 } // end namespace elf
 } // end namespace lld
 
-#endif
+#endif // LLD_READER_WRITER_ELF_SEGMENT_CHUNKS_H

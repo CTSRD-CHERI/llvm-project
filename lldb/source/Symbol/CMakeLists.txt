@@ -1,19 +1,20 @@
-set(LLVM_NO_RTTI 1)
-
 add_lldb_library(lldbSymbol
+  ArmUnwindInfo.cpp
   Block.cpp
   ClangASTContext.cpp
   ClangASTImporter.cpp
-  ClangASTType.cpp
   ClangExternalASTSourceCallbacks.cpp
   ClangExternalASTSourceCommon.cpp
-  ClangNamespaceDecl.cpp
+  CompilerDecl.cpp
+  CompilerDeclContext.cpp
+  CompilerType.cpp
   CompileUnit.cpp
   CompactUnwindInfo.cpp
   Declaration.cpp
   DWARFCallFrameInfo.cpp
   Function.cpp
   FuncUnwinders.cpp
+  GoASTContext.cpp
   LineEntry.cpp
   LineTable.cpp
   ObjectFile.cpp
@@ -24,6 +25,8 @@ add_lldb_library(lldbSymbol
   Symtab.cpp
   Type.cpp
   TypeList.cpp
+  TypeMap.cpp 
+  TypeSystem.cpp
   UnwindPlan.cpp
   UnwindTable.cpp
   Variable.cpp

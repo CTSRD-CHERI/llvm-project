@@ -28,29 +28,26 @@
 //          list ==>  "[]" | "[" value ( "," value )* "]" | "[" result ( "," result )* "]"
 //          More information see:
 //          http://ftp.gnu.org/old-gnu/Manuals/gdb-5.1.1/html_chapter/gdb_22.html
-// Gotchas: None.
-// Authors: Illya Rudkin 24/02/2014.
-// Changes: None.
 //--
 class CMICmnMIValueResult : public CMICmnMIValue
 {
     // Methods:
   public:
-    /* ctor */ CMICmnMIValueResult(void);
+    /* ctor */ CMICmnMIValueResult();
     /* ctor */ CMICmnMIValueResult(const CMIUtilString &vVariable, const CMICmnMIValue &vValue);
     /* ctor */ CMICmnMIValueResult(const CMIUtilString &vVariable, const CMICmnMIValue &vValue, const bool vbUseSpacing);
     //
-    bool Add(const CMIUtilString &vVariable, const CMICmnMIValue &vValue);
+    void Add(const CMIUtilString &vVariable, const CMICmnMIValue &vValue);
 
     // Overridden:
   public:
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmnMIValueResult(void);
+    /* dtor */ ~CMICmnMIValueResult() override;
 
     // Methods:
   private:
-    bool BuildResult(void);
-    bool BuildResult(const CMIUtilString &vVariable, const CMICmnMIValue &vValue);
+    void BuildResult();
+    void BuildResult(const CMIUtilString &vVariable, const CMICmnMIValue &vValue);
 
     // Attributes:
   private:
@@ -59,5 +56,5 @@ class CMICmnMIValueResult : public CMICmnMIValue
     CMIUtilString m_strPartVariable;
     CMICmnMIValue m_partMIValue;
     bool m_bEmptyConstruction; // True = *this object used constructor with no parameters, false = constructor with parameters
-    bool m_bUseSpacing;        // True = put space seperators into the string, false = no spaces used
+    bool m_bUseSpacing;        // True = put space separators into the string, false = no spaces used
 };

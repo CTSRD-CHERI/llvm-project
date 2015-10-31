@@ -83,14 +83,25 @@ LLVMMetadataRef LLVMDIBuilderCreateFunction(
                                 IsOptimized, unwrap<Function>(Func)));
 }
 
-LLVMMetadataRef LLVMDIBuilderCreateLocalVariable(
-    LLVMDIBuilderRef Dref, unsigned Tag, LLVMMetadataRef Scope,
-    const char *Name, LLVMMetadataRef File, unsigned Line, LLVMMetadataRef Ty,
-    int AlwaysPreserve, unsigned Flags, unsigned ArgNo) {
+LLVMMetadataRef
+LLVMDIBuilderCreateAutoVariable(LLVMDIBuilderRef Dref, LLVMMetadataRef Scope,
+                                const char *Name, LLVMMetadataRef File,
+                                unsigned Line, LLVMMetadataRef Ty,
+                                int AlwaysPreserve, unsigned Flags) {
   DIBuilder *D = unwrap(Dref);
-  return wrap(D->createLocalVariable(
-      Tag, unwrap<DIScope>(Scope), Name, unwrap<DIFile>(File), Line,
-      unwrap<DIType>(Ty), AlwaysPreserve, Flags, ArgNo));
+  return wrap(D->createAutoVariable(unwrap<DIScope>(Scope), Name,
+                                    unwrap<DIFile>(File), Line,
+                                    unwrap<DIType>(Ty), AlwaysPreserve, Flags));
+}
+
+LLVMMetadataRef LLVMDIBuilderCreateParameterVariable(
+    LLVMDIBuilderRef Dref, LLVMMetadataRef Scope, const char *Name,
+    unsigned ArgNo, LLVMMetadataRef File, unsigned Line, LLVMMetadataRef Ty,
+    int AlwaysPreserve, unsigned Flags) {
+  DIBuilder *D = unwrap(Dref);
+  return wrap(D->createParameterVariable(
+      unwrap<DIScope>(Scope), Name, ArgNo, unwrap<DIFile>(File), Line,
+      unwrap<DIType>(Ty), AlwaysPreserve, Flags));
 }
 
 LLVMMetadataRef LLVMDIBuilderCreateBasicType(LLVMDIBuilderRef Dref,
@@ -117,8 +128,7 @@ LLVMDIBuilderCreateSubroutineType(LLVMDIBuilderRef Dref, LLVMMetadataRef File,
                                   LLVMMetadataRef ParameterTypes) {
   DIBuilder *D = unwrap(Dref);
   return wrap(
-      D->createSubroutineType(File ? unwrap<DIFile>(File) : nullptr,
-                              DITypeRefArray(unwrap<MDTuple>(ParameterTypes))));
+      D->createSubroutineType(DITypeRefArray(unwrap<MDTuple>(ParameterTypes))));
 }
 
 LLVMMetadataRef LLVMDIBuilderCreateStructType(

@@ -27,7 +27,6 @@ typedef uint32_t uintptr_t;
 
 #endif /* defined(__FreeBSD__) && defined(__i386__) */
 
-#define PROFILE_HEADER_SIZE 7
 
 typedef struct __llvm_profile_data {
   const uint32_t NameSize;
@@ -36,6 +35,17 @@ typedef struct __llvm_profile_data {
   const char *const Name;
   uint64_t *const Counters;
 } __llvm_profile_data;
+
+typedef struct __llvm_profile_header {
+  uint64_t Magic;
+  uint64_t Version;
+  uint64_t DataSize;
+  uint64_t CountersSize;
+  uint64_t NamesSize;
+  uint64_t CountersDelta;
+  uint64_t NamesDelta;
+} __llvm_profile_header;
+
 
 /*!
  * \brief Get required size for profile buffer.
@@ -64,7 +74,7 @@ uint64_t *__llvm_profile_end_counters(void);
  * or if it hasn't been called, the \c LLVM_PROFILE_FILE environment variable,
  * or if that's not set, the last name given to
  * \a __llvm_profile_override_default_filename(), or if that's not set,
- * \c "default.profdata".
+ * \c "default.profraw".
  */
 int __llvm_profile_write_file(void);
 

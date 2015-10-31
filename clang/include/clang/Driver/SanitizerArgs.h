@@ -10,6 +10,7 @@
 #define LLVM_CLANG_DRIVER_SANITIZERARGS_H
 
 #include "clang/Basic/Sanitizers.h"
+#include "clang/Driver/Types.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include <string>
@@ -26,12 +27,14 @@ class SanitizerArgs {
   SanitizerSet TrapSanitizers;
 
   std::vector<std::string> BlacklistFiles;
+  std::vector<std::string> ExtraDeps;
   int CoverageFeatures;
   int MsanTrackOrigins;
+  bool MsanUseAfterDtor;
   int AsanFieldPadding;
-  bool AsanZeroBaseShadow;
   bool AsanSharedRuntime;
   bool LinkCXXRuntimes;
+  bool NeedPIE;
 
  public:
   /// Parses the sanitizer arguments from an argument list.
@@ -54,8 +57,8 @@ class SanitizerArgs {
   bool requiresPIE() const;
   bool needsUnwindTables() const;
   bool linkCXXRuntimes() const { return LinkCXXRuntimes; }
-  void addArgs(const llvm::opt::ArgList &Args,
-               llvm::opt::ArgStringList &CmdArgs) const;
+  void addArgs(const ToolChain &TC, const llvm::opt::ArgList &Args,
+               llvm::opt::ArgStringList &CmdArgs, types::ID InputType) const;
 
  private:
   void clear();

@@ -1,15 +1,22 @@
-; RUN: opt %loadPolly -basicaa -polly-detect -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=false -analyze < %s | FileCheck %s --check-prefix=REJECTNONAFFINELOOPS
-; RUN: opt %loadPolly -basicaa -polly-detect -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true -analyze < %s | FileCheck %s --check-prefix=ALLOWNONAFFINELOOPS
-; RUN: opt %loadPolly -basicaa -polly-detect -polly-allow-nonaffine -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true -analyze < %s | FileCheck %s --check-prefix=ALLOWNONAFFINELOOPSANDACCESSES
+; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=false \
+; RUN:     -analyze < %s | FileCheck %s --check-prefix=REJECTNONAFFINELOOPS
+; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=true \
+; RUN:     -analyze < %s | FileCheck %s --check-prefix=ALLOWNONAFFINELOOPS
+; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine \
+; RUN:     -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true \
+; RUN:     -analyze < %s \
+; RUN:     | FileCheck %s --check-prefix=ALLOWNONAFFINELOOPSANDACCESSES
 ;
 ; Here we have a non-affine loop (in the context of the loop nest)
 ; and also a non-affine access (A[k]). While we can always detect the
 ; innermost loop as a SCoP of depth 1, we have to reject the loop nest if not
 ; both, non-affine loops as well as non-affine accesses are allowed.
 ;
-; REJECTNONAFFINELOOPS:           Valid Region for Scop: bb15 => bb26
+; REJECTNONAFFINELOOPS:           Valid Region for Scop: bb15 => bb13
 ; REJECTNONAFFINELOOPS-NOT:       Valid
-; ALLOWNONAFFINELOOPS:            Valid Region for Scop: bb15 => bb26
+; ALLOWNONAFFINELOOPS:            Valid Region for Scop: bb15 => bb13
 ; ALLOWNONAFFINELOOPS-NOT:        Valid
 ; ALLOWNONAFFINELOOPSANDACCESSES: Valid Region for Scop: bb11 => bb29
 ;

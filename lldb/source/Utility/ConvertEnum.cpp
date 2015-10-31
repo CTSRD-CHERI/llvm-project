@@ -63,6 +63,8 @@ lldb_private::GetSectionTypeAsCString(lldb::SectionType sect_type)
             return "objc-cfstrings";
         case eSectionTypeDWARFDebugAbbrev:
             return "dwarf-abbrev";
+        case eSectionTypeDWARFDebugAddr:
+            return "dwarf-addr";
         case eSectionTypeDWARFDebugAranges:
             return "dwarf-aranges";
         case eSectionTypeDWARFDebugFrame:
@@ -83,6 +85,8 @@ lldb_private::GetSectionTypeAsCString(lldb::SectionType sect_type)
             return "dwarf-ranges";
         case eSectionTypeDWARFDebugStr:
             return "dwarf-str";
+        case eSectionTypeDWARFDebugStrOffsets:
+            return "dwarf-str-offsets";
         case eSectionTypeELFSymbolTable:
             return "elf-symbol-table";
         case eSectionTypeELFDynamicSymbols:
@@ -101,8 +105,14 @@ lldb_private::GetSectionTypeAsCString(lldb::SectionType sect_type)
             return "apple-objc";
         case eSectionTypeEHFrame:
             return "eh-frame";
+        case eSectionTypeARMexidx:
+            return "ARM.exidx";
+        case eSectionTypeARMextab:
+            return "ARM.extab";
         case eSectionTypeCompactUnwind:
             return "compact-unwind";
+        case eSectionTypeGoSymtab:
+            return "go-symtab";
         case eSectionTypeOther:
             return "regular";
     }

@@ -24,8 +24,8 @@
 #include "lldb/Core/State.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/Value.h"
-#include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/TypeList.h"
+#include "lldb/Symbol/TypeSystem.h"
 #include "lldb/Target/ABI.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Thread.h"
@@ -135,12 +135,9 @@ ThreadPlanAssemblyTracer::GetIntPointerType()
         TargetSP target_sp (m_thread.CalculateTarget());
         if (target_sp)
         {
-            Module *exe_module = target_sp->GetExecutableModulePointer();
-        
-            if (exe_module)
-            {
-                m_intptr_type = TypeFromUser(exe_module->GetClangASTContext().GetBuiltinTypeForEncodingAndBitSize(eEncodingUint, target_sp->GetArchitecture().GetAddressByteSize() * 8));
-            }
+            TypeSystem *type_system = target_sp->GetScratchTypeSystemForLanguage(nullptr, eLanguageTypeC);
+            if (type_system)
+                m_intptr_type = TypeFromUser(type_system->GetBuiltinTypeForEncodingAndBitSize(eEncodingUint, target_sp->GetArchitecture().GetAddressByteSize() * 8));
         }        
     }
     return m_intptr_type;
@@ -240,7 +237,7 @@ ThreadPlanAssemblyTracer::Log ()
             Value value;
             value.SetValueType (Value::eValueTypeScalar);
 //            value.SetContext (Value::eContextTypeClangType, intptr_type.GetOpaqueQualType());
-            value.SetClangType (intptr_type);
+            value.SetCompilerType (intptr_type);
             value_list.PushValue (value);
         }
         

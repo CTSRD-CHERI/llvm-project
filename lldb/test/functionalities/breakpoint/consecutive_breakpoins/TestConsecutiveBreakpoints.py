@@ -2,6 +2,10 @@
 Test continue from a breakpoint when there is a breakpoint on the next instruction also.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
 import lldb, lldbutil
 from lldbtest import *
@@ -10,17 +14,9 @@ class ConsecutiveBreakpoitsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
     @unittest2.expectedFailure("llvm.org/pr23478")
-    def test_with_dsym (self):
-        self.buildDsym ()
-        self.consecutive_breakpoints_tests()
-
-    @dwarf_test
-    @unittest2.expectedFailure("llvm.org/pr23478")
-    def test_with_dwarf (self):
-        self.buildDwarf ()
+    def test (self):
+        self.build ()
         self.consecutive_breakpoints_tests()
 
     def consecutive_breakpoints_tests(self):
@@ -69,10 +65,3 @@ class ConsecutiveBreakpoitsTestCase(TestBase):
 
         # Run the process until termination
         process.Continue()
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

@@ -19,6 +19,11 @@ set( LLDB_USED_LIBS
   lldbPluginDynamicLoaderStatic
   lldbPluginDynamicLoaderPosixDYLD
   lldbPluginDynamicLoaderHexagonDYLD
+  lldbPluginDynamicLoaderWindowsDYLD
+  
+  lldbPluginCPlusPlusLanguage
+  lldbPluginObjCLanguage
+  lldbPluginObjCPlusPlusLanguage
 
   lldbPluginObjectFileELF
   lldbPluginObjectFileJIT
@@ -42,6 +47,7 @@ set( LLDB_USED_LIBS
   lldbPluginUnwindAssemblyX86
   lldbPluginAppleObjCRuntime
   lldbPluginRenderScriptRuntime
+  lldbPluginLanguageRuntimeGo
   lldbPluginCXXItaniumABI
   lldbPluginABIMacOSX_arm
   lldbPluginABIMacOSX_arm64
@@ -60,20 +66,21 @@ set( LLDB_USED_LIBS
   lldbPluginInstructionMIPS
   lldbPluginInstructionMIPS64
   lldbPluginObjectFilePECOFF
+  lldbPluginOSGo
   lldbPluginOSPython
   lldbPluginMemoryHistoryASan
   lldbPluginInstrumentationRuntimeAddressSanitizer
   lldbPluginSystemRuntimeMacOSX
   lldbPluginProcessElfCore
   lldbPluginJITLoaderGDB
+  lldbPluginExpressionParserClang
   )
 
 # Windows-only libraries
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
   list(APPEND LLDB_USED_LIBS
     lldbPluginProcessWindows
-    lldbPluginProcessElfCore
-    lldbPluginJITLoaderGDB
+    lldbPluginProcessWinMiniDump
     Ws2_32
     Rpcrt4
     )
@@ -84,8 +91,6 @@ if ( CMAKE_SYSTEM_NAME MATCHES "Linux" )
   list(APPEND LLDB_USED_LIBS
     lldbPluginProcessLinux
     lldbPluginProcessPOSIX
-    lldbPluginProcessElfCore
-    lldbPluginJITLoaderGDB
    )
 endif ()
 
@@ -94,20 +99,11 @@ if ( CMAKE_SYSTEM_NAME MATCHES "FreeBSD" )
   list(APPEND LLDB_USED_LIBS
     lldbPluginProcessFreeBSD
     lldbPluginProcessPOSIX
-    lldbPluginProcessElfCore
-    lldbPluginJITLoaderGDB
     )
 endif ()
 
 # Darwin-only libraries
 if ( CMAKE_SYSTEM_NAME MATCHES "Darwin" )
-  set(LLDB_VERS_GENERATED_FILE ${LLDB_BINARY_DIR}/source/LLDB_vers.c)
-  add_custom_command(OUTPUT ${LLDB_VERS_GENERATED_FILE}
-    COMMAND ${LLDB_SOURCE_DIR}/scripts/generate-vers.pl
-            ${LLDB_SOURCE_DIR}/lldb.xcodeproj/project.pbxproj liblldb_core
-            > ${LLDB_VERS_GENERATED_FILE})
-
-  set_source_files_properties(${LLDB_VERS_GENERATED_FILE} PROPERTIES GENERATED 1)
   list(APPEND LLDB_USED_LIBS
     lldbPluginDynamicLoaderDarwinKernel
     lldbPluginObjectFileMachO
@@ -140,10 +136,13 @@ if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows" AND NOT __ANDROID_NDK__)
   endif()
   if (NOT LLDB_DISABLE_CURSES)
     list(APPEND LLDB_SYSTEM_LIBS panel ncurses)
+    if(LLVM_ENABLE_TERMINFO AND HAVE_TERMINFO)
+      list(APPEND LLDB_SYSTEM_LIBS ${TERMINFO_LIBS})
+    endif()
   endif()
 endif()
-# On FreeBSD backtrace() is provided by libexecinfo, not libc.
-if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+# On FreeBSD/NetBSD backtrace() is provided by libexecinfo, not libc.
+if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR CMAKE_SYSTEM_NAME MATCHES "NetBSD")
   list(APPEND LLDB_SYSTEM_LIBS execinfo)
 endif()
 
@@ -154,7 +153,12 @@ endif()
 list(APPEND LLDB_SYSTEM_LIBS ${system_libs})
 
 if (LLVM_BUILD_STATIC)
-  list(APPEND LLDB_SYSTEM_LIBS python2.7 z util termcap gpm ssl crypto bsd)
+  if (NOT LLDB_DISABLE_PYTHON)
+    list(APPEND LLDB_SYSTEM_LIBS python2.7 util)
+  endif()
+  if (NOT LLDB_DISABLE_CURSES)
+    list(APPEND LLDB_SYSTEM_LIBS gpm)
+  endif()
 endif()
 
 set( LLVM_LINK_COMPONENTS
@@ -187,6 +191,6 @@ if ( NOT LLDB_DISABLE_PYTHON )
   if (LLVM_COMPILER_IS_GCC_COMPATIBLE AND
       NOT "${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
     set_property(SOURCE ${LLDB_WRAP_PYTHON}
-                 APPEND_STRING PROPERTY COMPILE_FLAGS " -Wno-sequence-point")
+                 APPEND_STRING PROPERTY COMPILE_FLAGS " -Wno-sequence-point -Wno-cast-qual")
   endif ()
 endif()

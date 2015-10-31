@@ -167,7 +167,7 @@ static bool HasARCRuntime(CompilerInvocation &origCI) {
 
 static CompilerInvocation *
 createInvocationForMigration(CompilerInvocation &origCI,
-                             const PCHContainerOperations &PCHContainerOps) {
+                             const PCHContainerReader &PCHContainerRdr) {
   std::unique_ptr<CompilerInvocation> CInvok;
   CInvok.reset(new CompilerInvocation(origCI));
   PreprocessorOptions &PPOpts = CInvok->getPreprocessorOpts();
@@ -180,7 +180,7 @@ createInvocationForMigration(CompilerInvocation &origCI,
         new DiagnosticsEngine(DiagID, &origCI.getDiagnosticOpts(),
                               new IgnoringDiagConsumer()));
     std::string OriginalFile = ASTReader::getOriginalSourceFile(
-        PPOpts.ImplicitPCHInclude, FileMgr, PCHContainerOps, *Diags);
+        PPOpts.ImplicitPCHInclude, FileMgr, PCHContainerRdr, *Diags);
     if (!OriginalFile.empty())
       PPOpts.Includes.insert(PPOpts.Includes.begin(), OriginalFile);
     PPOpts.ImplicitPCHInclude.clear();
@@ -206,7 +206,8 @@ createInvocationForMigration(CompilerInvocation &origCI,
   WarnOpts.push_back("error=arc-unsafe-retained-assign");
   CInvok->getDiagnosticOpts().Warnings = std::move(WarnOpts);
 
-  CInvok->getLangOpts()->ObjCARCWeak = HasARCRuntime(origCI);
+  CInvok->getLangOpts()->ObjCWeakRuntime = HasARCRuntime(origCI);
+  CInvok->getLangOpts()->ObjCWeak = CInvok->getLangOpts()->ObjCWeakRuntime;
 
   return CInvok.release();
 }
@@ -247,7 +248,8 @@ bool arcmt::checkForManualIssues(
   assert(!transforms.empty());
 
   std::unique_ptr<CompilerInvocation> CInvok;
-  CInvok.reset(createInvocationForMigration(origCI, *PCHContainerOps));
+  CInvok.reset(
+      createInvocationForMigration(origCI, PCHContainerOps->getRawReader()));
   CInvok->getFrontendOpts().Inputs.clear();
   CInvok->getFrontendOpts().Inputs.push_back(Input);
 
@@ -517,7 +519,8 @@ MigrationProcess::MigrationProcess(
 bool MigrationProcess::applyTransform(TransformFn trans,
                                       RewriteListener *listener) {
   std::unique_ptr<CompilerInvocation> CInvok;
-  CInvok.reset(createInvocationForMigration(OrigCI, *PCHContainerOps));
+  CInvok.reset(
+      createInvocationForMigration(OrigCI, PCHContainerOps->getRawReader()));
   CInvok->getDiagnosticOpts().IgnoreWarnings = true;
 
   Remapper.applyMappings(CInvok->getPreprocessorOpts());
@@ -598,7 +601,6 @@ bool MigrationProcess::applyTransform(TransformFn trans,
     SmallString<512> newText;
     llvm::raw_svector_ostream vecOS(newText);
     buf.write(vecOS);
-    vecOS.flush();
     std::unique_ptr<llvm::MemoryBuffer> memBuf(
         llvm::MemoryBuffer::getMemBufferCopy(
             StringRef(newText.data(), newText.size()), newFname));

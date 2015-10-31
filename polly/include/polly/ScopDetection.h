@@ -48,7 +48,9 @@
 #define POLLY_SCOP_DETECTION_H
 
 #include "polly/ScopDetectionDiagnostic.h"
+#include "polly/Support/ScopHelper.h"
 #include "llvm/ADT/SetVector.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AliasSetTracker.h"
 #include "llvm/Pass.h"
 #include <map>
@@ -68,7 +70,6 @@ class SCEVAddRecExpr;
 class SCEVUnknown;
 class CallInst;
 class Instruction;
-class AliasAnalysis;
 class Value;
 }
 
@@ -108,6 +109,7 @@ typedef std::map<const SCEVUnknown *, const SCEV *> BaseToElSize;
 extern bool PollyTrackFailures;
 extern bool PollyDelinearize;
 extern bool PollyUseRuntimeAliasChecks;
+extern bool PollyProcessUnprofitable;
 
 /// @brief A function attribute which will cause Polly to skip the function
 extern llvm::StringRef PollySkipFnAttr;
@@ -119,31 +121,14 @@ class ScopDetection : public FunctionPass {
 public:
   typedef SetVector<const Region *> RegionSet;
 
+  // Remember the valid regions
+  RegionSet ValidRegions;
+
   /// @brief Set of loops (used to remember loops in non-affine subregions).
   using BoxedLoopsSetTy = SetVector<const Loop *>;
 
-private:
-  //===--------------------------------------------------------------------===//
-  ScopDetection(const ScopDetection &) = delete;
-  const ScopDetection &operator=(const ScopDetection &) = delete;
-
-  /// @brief Analysis passes used.
-  //@{
-  ScalarEvolution *SE;
-  LoopInfo *LI;
-  RegionInfo *RI;
-  AliasAnalysis *AA;
-  //@}
-
   /// @brief Set to remember non-affine branches in regions.
   using NonAffineSubRegionSetTy = RegionSet;
-  using NonAffineSubRegionMapTy =
-      DenseMap<const Region *, NonAffineSubRegionSetTy>;
-  NonAffineSubRegionMapTy NonAffineSubRegionMap;
-
-  /// @brief Map to remeber loops in non-affine regions.
-  using BoxedLoopsMapTy = DenseMap<const Region *, BoxedLoopsSetTy>;
-  BoxedLoopsMapTy BoxedLoopsMap;
 
   /// @brief Context variables for SCoP detection.
   struct DetectionContext {
@@ -171,28 +156,63 @@ private:
     /// @brief The region has at least one store instruction.
     bool hasStores;
 
-    /// @brief The region has at least one loop that is not overapproximated.
-    bool hasAffineLoops;
-
     /// @brief The set of non-affine subregions in the region we analyze.
-    NonAffineSubRegionSetTy &NonAffineSubRegionSet;
+    NonAffineSubRegionSetTy NonAffineSubRegionSet;
 
     /// @brief The set of loops contained in non-affine regions.
-    BoxedLoopsSetTy &BoxedLoopsSet;
+    BoxedLoopsSetTy BoxedLoopsSet;
 
-    DetectionContext(Region &R, AliasAnalysis &AA,
-                     NonAffineSubRegionSetTy &NASRS, BoxedLoopsSetTy &BLS,
-                     bool Verify)
+    /// @brief Loads that need to be invariant during execution.
+    InvariantLoadsSetTy RequiredILS;
+
+    /// @brief Initialize a DetectionContext from scratch.
+    DetectionContext(Region &R, AliasAnalysis &AA, bool Verify)
         : CurRegion(R), AST(AA), Verifying(Verify), Log(&R), hasLoads(false),
-          hasStores(false), hasAffineLoops(false), NonAffineSubRegionSet(NASRS),
-          BoxedLoopsSet(BLS) {}
+          hasStores(false) {}
+
+    /// @brief Initialize a DetectionContext with the data from @p DC.
+    DetectionContext(const DetectionContext &&DC)
+        : CurRegion(DC.CurRegion), AST(DC.AST.getAliasAnalysis()),
+          Verifying(DC.Verifying), Log(std::move(DC.Log)),
+          Accesses(std::move(DC.Accesses)),
+          NonAffineAccesses(std::move(DC.NonAffineAccesses)),
+          ElementSize(std::move(DC.ElementSize)), hasLoads(DC.hasLoads),
+          hasStores(DC.hasStores),
+          NonAffineSubRegionSet(std::move(DC.NonAffineSubRegionSet)),
+          BoxedLoopsSet(std::move(DC.BoxedLoopsSet)),
+          RequiredILS(std::move(DC.RequiredILS)) {
+      AST.add(DC.AST);
+    }
   };
 
-  // Remember the valid regions
-  RegionSet ValidRegions;
+private:
+  //===--------------------------------------------------------------------===//
+  ScopDetection(const ScopDetection &) = delete;
+  const ScopDetection &operator=(const ScopDetection &) = delete;
+
+  /// @brief Analysis passes used.
+  //@{
+  const DominatorTree *DT;
+  ScalarEvolution *SE;
+  LoopInfo *LI;
+  RegionInfo *RI;
+  AliasAnalysis *AA;
+  //@}
+
+  /// @brief Map to remember detection contexts for valid regions.
+  using DetectionContextMapTy = DenseMap<const Region *, DetectionContext>;
+  mutable DetectionContextMapTy DetectionContextMap;
 
   // Remember a list of errors for every region.
   mutable RejectLogsContainer RejectLogs;
+
+  /// @brief Remove cached results for @p R.
+  void removeCachedResults(const Region &R);
+
+  /// @brief Remove cached results for the children of @p R recursively.
+  ///
+  /// @returns The number of regions erased regions.
+  unsigned removeCachedResultsRecursively(const Region &R);
 
   /// @brief Add the region @p AR as over approximated sub-region in @p Context.
   ///
@@ -223,13 +243,6 @@ private:
   /// @return True if all blocks in R are valid, false otherwise.
   bool allBlocksValid(DetectionContext &Context) const;
 
-  /// @brief Check the exit block of a region is valid.
-  ///
-  /// @param Context The context of scop detection.
-  ///
-  /// @return True if the exit of R is valid, false otherwise.
-  bool isValidExit(DetectionContext &Context) const;
-
   /// @brief Check if a region is a Scop.
   ///
   /// @param Context The context of scop detection.
@@ -242,6 +255,18 @@ private:
   /// @param CI The call instruction to check.
   /// @return True if the call instruction is valid, false otherwise.
   static bool isValidCallInst(CallInst &CI);
+
+  /// @brief Check if the given loads could be invariant and can be hoisted.
+  ///
+  /// If true is returned the loads are added to the required invariant loads
+  /// contained in the @p Context.
+  ///
+  /// @param RequiredILS The loads to check.
+  /// @param Context     The current detection context.
+  ///
+  /// @return True if all loads can be assumed invariant.
+  bool onlyValidRequiredInvariantLoads(InvariantLoadsSetTy &RequiredILS,
+                                       DetectionContext &Context) const;
 
   /// @brief Check if a value is invariant in the region Reg.
   ///
@@ -278,13 +303,51 @@ private:
   /// @return True if the instruction is valid, false otherwise.
   bool isValidInstruction(Instruction &Inst, DetectionContext &Context) const;
 
+  /// @brief Check if the switch @p SI with condition @p Condition is valid.
+  ///
+  /// @param BB           The block to check.
+  /// @param SI           The switch to check.
+  /// @param Condition    The switch condition.
+  /// @param IsLoopBranch Flag to indicate the branch is a loop exit/latch.
+  /// @param Context      The context of scop detection.
+  ///
+  /// @return True if the branch @p BI is valid.
+  bool isValidSwitch(BasicBlock &BB, SwitchInst *SI, Value *Condition,
+                     bool IsLoopBranch, DetectionContext &Context) const;
+
+  /// @brief Check if the branch @p BI with condition @p Condition is valid.
+  ///
+  /// @param BB           The block to check.
+  /// @param BI           The branch to check.
+  /// @param Condition    The branch condition.
+  /// @param IsLoopBranch Flag to indicate the branch is a loop exit/latch.
+  /// @param Context      The context of scop detection.
+  ///
+  /// @return True if the branch @p BI is valid.
+  bool isValidBranch(BasicBlock &BB, BranchInst *BI, Value *Condition,
+                     bool IsLoopBranch, DetectionContext &Context) const;
+
+  /// @brief Check if the SCEV @p S is affine in the current @p Context.
+  ///
+  /// This will also use a heuristic to decide if we want to require loads to be
+  /// invariant to make the expression affine or if we want to treat is as
+  /// non-affine.
+  ///
+  /// @param S           The expression to be checked.
+  /// @param Context     The context of scop detection.
+  /// @param BaseAddress The base address of the expression @p S (if any).
+  bool isAffine(const SCEV *S, DetectionContext &Context,
+                Value *BaseAddress = nullptr) const;
+
   /// @brief Check if the control flow in a basic block is valid.
   ///
-  /// @param BB The BB to check the control flow.
-  /// @param Context The context of scop detection.
+  /// @param BB           The BB to check the control flow.
+  /// @param IsLoopBranch Flag to indicate the branch is a loop exit/latch.
+  /// @param Context      The context of scop detection.
   ///
   /// @return True if the BB contains only valid control flow.
-  bool isValidCFG(BasicBlock &BB, DetectionContext &Context) const;
+  bool isValidCFG(BasicBlock &BB, bool IsLoopBranch,
+                  DetectionContext &Context) const;
 
   /// @brief Is a loop valid with respect to a given region.
   ///
@@ -294,10 +357,23 @@ private:
   /// @return True if the loop is valid in the region.
   bool isValidLoop(Loop *L, DetectionContext &Context) const;
 
+  /// @brief Count the number of beneficial loops in @p R.
+  ///
+  /// @param R The region to check
+  int countBeneficialLoops(Region *R) const;
+
   /// @brief Check if the function @p F is marked as invalid.
   ///
   /// @note An OpenMP subfunction will be marked as invalid.
   bool isValidFunction(llvm::Function &F);
+
+  /// @brief Can ISL compute the trip count of a loop.
+  ///
+  /// @param L The loop to check.
+  /// @param Context The context of scop detection.
+  ///
+  /// @return True if ISL can compute the trip count of the loop.
+  bool canUseISLTripCount(Loop *L, DetectionContext &Context) const;
 
   /// @brief Print the locations of all detected scops.
   void printLocations(llvm::Function &F);
@@ -329,8 +405,14 @@ public:
   /// @return Return true if R is the maximum Region in a Scop, false otherwise.
   bool isMaxRegionInScop(const Region &R, bool Verify = true) const;
 
+  /// @brief Return the detection context for @p R, nullptr if @p R was invalid.
+  const DetectionContext *getDetectionContext(const Region *R) const;
+
   /// @brief Return the set of loops in non-affine subregions for @p R.
   const BoxedLoopsSetTy *getBoxedLoops(const Region *R) const;
+
+  /// @brief Return the set of required invariant loads for @p R.
+  const InvariantLoadsSetTy *getRequiredInvariantLoads(const Region *R) const;
 
   /// @brief Return true if @p SubR is a non-affine subregion in @p ScopR.
   bool isNonAffineSubRegion(const Region *SubR, const Region *ScopR) const;
@@ -386,9 +468,7 @@ public:
   /// detected Scops.
   ///
   /// @param F The function to emit remarks for.
-  /// @param ValidRegions The set of valid regions to emit remarks for.
-  void emitMissedRemarksForValidRegions(const Function &F,
-                                        const RegionSet &ValidRegions);
+  void emitMissedRemarksForValidRegions(const Function &F);
 
   /// @brief Mark the function as invalid so we will not extract any scop from
   ///        the function.

@@ -2,16 +2,19 @@
 Test that the lldb-mi driver understands MI command syntax.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import lldbmi_testcase
 from lldbtest import *
-import unittest2
 
 class MiSyntaxTestCase(lldbmi_testcase.MiTestCaseBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_tokens(self):
         """Test that 'lldb-mi --interpreter' prints command tokens."""
@@ -35,7 +38,7 @@ class MiSyntaxTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"exited-normally\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_specialchars(self):
         """Test that 'lldb-mi --interpreter' handles complicated strings."""
@@ -59,7 +62,7 @@ class MiSyntaxTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\*stopped,reason=\"breakpoint-hit\"")
 
     @lldbmi_test
-    @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
+    @skipIfWindows #llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD # llvm.org/pr22411: Failure presumably due to known thread races
     @expectedFailureLinux  # Failing in ~6/600 dosep runs (build 3120-3122)
     def test_lldbmi_process_output(self):
@@ -78,6 +81,3 @@ class MiSyntaxTestCase(lldbmi_testcase.MiTestCaseBase):
         # Test that a process output is wrapped correctly
         self.expect("\@\"'\\\\r\\\\n\"")
         self.expect("\@\"` - it's \\\\\\\\n\\\\x12\\\\\"\\\\\\\\\\\\\"")
-
-if __name__ == '__main__':
-    unittest2.main()

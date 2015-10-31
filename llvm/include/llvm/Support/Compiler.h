@@ -69,7 +69,7 @@
 #if !defined(_MSC_VER) || defined(__clang__) || LLVM_MSC_PREREQ(1900)
 #define LLVM_NOEXCEPT noexcept
 #else
-#define LLVM_NOEXCEPT
+#define LLVM_NOEXCEPT throw()
 #endif
 
 /// \brief Does the compiler support ref-qualifiers for *this?
@@ -174,19 +174,6 @@
 #define LLVM_UNLIKELY(EXPR) (EXPR)
 #endif
 
-// C++ doesn't support 'extern template' of template specializations.  GCC does,
-// but requires __extension__ before it.  In the header, use this:
-//   EXTERN_TEMPLATE_INSTANTIATION(class foo<bar>);
-// in the .cpp file, use this:
-//   TEMPLATE_INSTANTIATION(class foo<bar>);
-#ifdef __GNUC__
-#define EXTERN_TEMPLATE_INSTANTIATION(X) __extension__ extern template X
-#define TEMPLATE_INSTANTIATION(X) template X
-#else
-#define EXTERN_TEMPLATE_INSTANTIATION(X)
-#define TEMPLATE_INSTANTIATION(X)
-#endif
-
 /// LLVM_ATTRIBUTE_NOINLINE - On compilers where we have a directive to do so,
 /// mark a method "not for inlining".
 #if __has_attribute(noinline) || LLVM_GNUC_PREREQ(3, 4, 0)
@@ -202,7 +189,7 @@
 /// 3.4 supported this but is buggy in various cases and produces unimplemented
 /// errors, just use it in GCC 4.0 and later.
 #if __has_attribute(always_inline) || LLVM_GNUC_PREREQ(4, 0, 0)
-#define LLVM_ATTRIBUTE_ALWAYS_INLINE inline __attribute__((always_inline))
+#define LLVM_ATTRIBUTE_ALWAYS_INLINE __attribute__((always_inline))
 #elif defined(_MSC_VER)
 #define LLVM_ATTRIBUTE_ALWAYS_INLINE __forceinline
 #else
@@ -348,6 +335,45 @@
 # define LLVM_ADDRESS_SANITIZER_BUILD 1
 #else
 # define LLVM_ADDRESS_SANITIZER_BUILD 0
+#endif
+
+/// \macro LLVM_THREAD_SANITIZER_BUILD
+/// \brief Whether LLVM itself is built with ThreadSanitizer instrumentation.
+#if __has_feature(thread_sanitizer) || defined(__SANITIZE_THREAD__)
+# define LLVM_THREAD_SANITIZER_BUILD 1
+#else
+# define LLVM_THREAD_SANITIZER_BUILD 0
+#endif
+
+#if LLVM_THREAD_SANITIZER_BUILD
+// Thread Sanitizer is a tool that finds races in code.
+// See http://code.google.com/p/data-race-test/wiki/DynamicAnnotations .
+// tsan detects these exact functions by name.
+extern "C" {
+void AnnotateHappensAfter(const char *file, int line, const volatile void *cv);
+void AnnotateHappensBefore(const char *file, int line, const volatile void *cv);
+void AnnotateIgnoreWritesBegin(const char *file, int line);
+void AnnotateIgnoreWritesEnd(const char *file, int line);
+}
+
+// This marker is used to define a happens-before arc. The race detector will
+// infer an arc from the begin to the end when they share the same pointer
+// argument.
+# define TsanHappensBefore(cv) AnnotateHappensBefore(__FILE__, __LINE__, cv)
+
+// This marker defines the destination of a happens-before arc.
+# define TsanHappensAfter(cv) AnnotateHappensAfter(__FILE__, __LINE__, cv)
+
+// Ignore any races on writes between here and the next TsanIgnoreWritesEnd.
+# define TsanIgnoreWritesBegin() AnnotateIgnoreWritesBegin(__FILE__, __LINE__)
+
+// Resume checking for racy writes.
+# define TsanIgnoreWritesEnd() AnnotateIgnoreWritesEnd(__FILE__, __LINE__)
+#else
+# define TsanHappensBefore(cv)
+# define TsanHappensAfter(cv)
+# define TsanIgnoreWritesBegin()
+# define TsanIgnoreWritesEnd()
 #endif
 
 /// \brief Mark debug helper function definitions like dump() that should not be

@@ -33,29 +33,26 @@
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "stack-info-depth".
-// Gotchas: None.
-// Authors: Illya Rudkin 21/03/2014.
-// Changes: None.
 //--
 class CMICmdCmdStackInfoDepth : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdStackInfoDepth(void);
+    /* ctor */ CMICmdCmdStackInfoDepth();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdStackInfoDepth(void);
+    /* dtor */ ~CMICmdCmdStackInfoDepth() override;
 
     // Attributes:
   private:
@@ -73,20 +70,20 @@ class CMICmdCmdStackInfoFrame : public CMICmdBase
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdStackInfoFrame(void);
+    /* ctor */ CMICmdCmdStackInfoFrame();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdStackInfoFrame(void);
+    /* dtor */ ~CMICmdCmdStackInfoFrame() override;
 
     // Attributes:
   private:
@@ -96,29 +93,26 @@ class CMICmdCmdStackInfoFrame : public CMICmdBase
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "stack-list-frames".
-// Gotchas: None.
-// Authors: Illya Rudkin 21/03/2014.
-// Changes: None.
 //--
 class CMICmdCmdStackListFrames : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdStackListFrames(void);
+    /* ctor */ CMICmdCmdStackListFrames();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdStackListFrames(void);
+    /* dtor */ ~CMICmdCmdStackListFrames() override;
 
     // Typedefs:
   private:
@@ -136,29 +130,26 @@ class CMICmdCmdStackListFrames : public CMICmdBase
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "stack-list-arguments".
-// Gotchas: None.
-// Authors: Illya Rudkin 24/03/2014.
-// Changes: None.
 //--
 class CMICmdCmdStackListArguments : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdStackListArguments(void);
+    /* ctor */ CMICmdCmdStackListArguments();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdStackListArguments(void);
+    /* dtor */ ~CMICmdCmdStackListArguments() override;
 
     // Attributes:
   private:
@@ -173,29 +164,26 @@ class CMICmdCmdStackListArguments : public CMICmdBase
 //++ ============================================================================
 // Details: MI command class. MI commands derived from the command base class.
 //          *this class implements MI command "stack-list-locals".
-// Gotchas: None.
-// Authors: Illya Rudkin 24/03/2014.
-// Changes: None.
 //--
 class CMICmdCmdStackListLocals : public CMICmdBase
 {
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdStackListLocals(void);
+    /* ctor */ CMICmdCmdStackListLocals();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdStackListLocals(void);
+    /* dtor */ ~CMICmdCmdStackListLocals() override;
 
     // Attributes:
   private:
@@ -215,20 +203,20 @@ class CMICmdCmdStackListVariables : public CMICmdBase
     // Statics:
 public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
     
     // Methods:
 public:
-    /* ctor */ CMICmdCmdStackListVariables(void);
+    /* ctor */ CMICmdCmdStackListVariables();
     
     // Overridden:
 public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdStackListVariables(void);
+    /* dtor */ ~CMICmdCmdStackListVariables() override;
     
     // Attributes
 private:
@@ -248,20 +236,20 @@ class CMICmdCmdStackSelectFrame : public CMICmdBase
     // Statics:
   public:
     // Required by the CMICmdFactory when registering *this command
-    static CMICmdBase *CreateSelf(void);
+    static CMICmdBase *CreateSelf();
 
     // Methods:
   public:
-    /* ctor */ CMICmdCmdStackSelectFrame(void);
+    /* ctor */ CMICmdCmdStackSelectFrame();
 
     // Overridden:
   public:
     // From CMICmdInvoker::ICmd
-    virtual bool Execute(void);
-    virtual bool Acknowledge(void);
-    virtual bool ParseArgs(void);
+    bool Execute() override;
+    bool Acknowledge() override;
+    bool ParseArgs() override;
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmdCmdStackSelectFrame(void);
+    /* dtor */ ~CMICmdCmdStackSelectFrame() override;
 
     // Attributes:
   private:

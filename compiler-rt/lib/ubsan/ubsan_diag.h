@@ -113,11 +113,11 @@ public:
   const char *getText() const { return Text; }
 };
 
-/// \brief A mangled C++ name. Really just a strong typedef for 'const char*'.
-class MangledName {
+/// \brief A C++ type name. Really just a strong typedef for 'const char*'.
+class TypeName {
   const char *Name;
 public:
-  MangledName(const char *Name) : Name(Name) {}
+  TypeName(const char *Name) : Name(Name) {}
   const char *getName() const { return Name; }
 };
 
@@ -141,7 +141,7 @@ public:
   /// Kinds of arguments, corresponding to members of \c Arg's union.
   enum ArgKind {
     AK_String, ///< A string argument, displayed as-is.
-    AK_Mangled,///< A C++ mangled name, demangled before display.
+    AK_TypeName,///< A C++ type name, possibly demangled before display.
     AK_UInt,   ///< An unsigned integer argument.
     AK_SInt,   ///< A signed integer argument.
     AK_Float,  ///< A floating-point argument.
@@ -150,9 +150,9 @@ public:
 
   /// An individual diagnostic message argument.
   struct Arg {
-    Arg() {}
+    Arg() = default;
     Arg(const char *String) : Kind(AK_String), String(String) {}
-    Arg(MangledName MN) : Kind(AK_Mangled), String(MN.getName()) {}
+    Arg(TypeName TN) : Kind(AK_TypeName), String(TN.getName()) {}
     Arg(UIntMax UInt) : Kind(AK_UInt), UInt(UInt) {}
     Arg(SIntMax SInt) : Kind(AK_SInt), SInt(SInt) {}
     Arg(FloatMax Float) : Kind(AK_Float), Float(Float) {}
@@ -202,7 +202,7 @@ public:
   ~Diag();
 
   Diag &operator<<(const char *Str) { return AddArg(Str); }
-  Diag &operator<<(MangledName MN) { return AddArg(MN); }
+  Diag &operator<<(TypeName TN) { return AddArg(TN); }
   Diag &operator<<(unsigned long long V) { return AddArg(UIntMax(V)); }
   Diag &operator<<(const void *V) { return AddArg(V); }
   Diag &operator<<(const TypeDescriptor &V);
@@ -219,6 +219,12 @@ struct ReportOptions {
   uptr bp;
 };
 
+enum class ErrorType {
+#define UBSAN_CHECK(Name, SummaryKind, FlagName) Name,
+#include "ubsan_checks.inc"
+#undef UBSAN_CHECK
+};
+
 #define GET_REPORT_OPTIONS(die_after_report) \
     GET_CALLER_PC_BP; \
     ReportOptions Opts = {die_after_report, pc, bp}
@@ -229,9 +235,12 @@ struct ReportOptions {
 class ScopedReport {
   ReportOptions Opts;
   Location SummaryLoc;
+  ErrorType Type;
 
 public:
-  ScopedReport(ReportOptions Opts, Location SummaryLoc);
+  ScopedReport(ReportOptions Opts, Location SummaryLoc,
+               ErrorType Type = ErrorType::GenericUB);
+  void setErrorType(ErrorType T) { Type = T; }
   ~ScopedReport();
 };
 

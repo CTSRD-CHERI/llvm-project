@@ -17,7 +17,7 @@
 #include "clang/AST/ASTImporter.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/FileSystemOptions.h"
-#include "lldb/Symbol/ClangNamespaceDecl.h"
+#include "lldb/Symbol/CompilerDeclContext.h"
 
 namespace lldb_private {
     
@@ -96,20 +96,20 @@ public:
               clang::ASTContext *src_ctx,
               clang::QualType type);
     
-    lldb::clang_type_t
+    lldb::opaque_compiler_type_t
     CopyType (clang::ASTContext *dst_ctx,
               clang::ASTContext *src_ctx,
-              lldb::clang_type_t type);
+              lldb::opaque_compiler_type_t type);
     
     clang::Decl *
     CopyDecl (clang::ASTContext *dst_ctx,
               clang::ASTContext *src_ctx,
               clang::Decl *decl);
     
-    lldb::clang_type_t
+    lldb::opaque_compiler_type_t
     DeportType (clang::ASTContext *dst_ctx,
                 clang::ASTContext *src_ctx,
-                lldb::clang_type_t type);
+                lldb::opaque_compiler_type_t type);
     
     clang::Decl *
     DeportDecl (clang::ASTContext *dst_ctx,
@@ -155,7 +155,7 @@ public:
     // Namespace maps
     //
     
-    typedef std::vector < std::pair<lldb::ModuleSP, ClangNamespaceDecl> > NamespaceMap;
+    typedef std::vector < std::pair<lldb::ModuleSP, CompilerDeclContext> > NamespaceMap;
     typedef std::shared_ptr<NamespaceMap> NamespaceMapSP;
     
     void RegisterNamespaceMap (const clang::NamespaceDecl *decl, 
@@ -276,9 +276,9 @@ private:
         
         void ImportDefinitionTo (clang::Decl *to, clang::Decl *from);
         
-        clang::Decl *Imported (clang::Decl *from, clang::Decl *to);
+        clang::Decl *Imported(clang::Decl *from, clang::Decl *to) override;
         
-        clang::Decl *GetOriginalDecl (clang::Decl *To);
+        clang::Decl *GetOriginalDecl(clang::Decl *To) override;
         
         std::set<clang::NamedDecl *>   *m_decls_to_deport;
         std::set<clang::NamedDecl *>   *m_decls_already_deported;
@@ -368,6 +368,6 @@ private:
     clang::FileManager      m_file_manager;
 };
     
-}
+} // namespace lldb_private
 
-#endif
+#endif // liblldb_ClangASTImporter_h_

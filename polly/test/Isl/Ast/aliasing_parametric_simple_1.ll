@@ -1,11 +1,11 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-code-generator=isl -polly-ast -analyze %s | FileCheck %s
+; RUN: opt %loadPolly -polly-code-generator=isl -polly-ast -analyze %s | FileCheck %s
 ;
 ;    void jd(int *A, int *B, int c) {
 ;      for (int i = 0; i < 1024; i++)
 ;        A[i] = B[c];
 ;    }
 ;
-; CHECK: if (1 && (&MemRef_A[1024] <= &MemRef_B[c] || &MemRef_B[c + 1] <= &MemRef_A[0]))
+; CHECK: if (1 && (&MemRef_B[c + 1] <= &MemRef_A[0] || &MemRef_A[1024] <= &MemRef_B[c]))
 ; CHECK:     for (int c0 = 0; c0 <= 1023; c0 += 1)
 ; CHECK:       Stmt_for_body(c0);
 ; CHECK: else

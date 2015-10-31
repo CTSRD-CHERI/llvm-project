@@ -69,8 +69,6 @@ def err_drv_no_module_support : Error<
   "'%0': unable to use module files with this tool">;
 def err_drv_clang_unsupported : Error<
   "the clang compiler does not support '%0'">;
-def err_drv_clang_unsupported_per_platform : Error<
-  "the clang compiler does not support '%0' on this platform">;
 def err_drv_clang_unsupported_opt_cxx_darwin_i386 : Error<
   "the clang compiler does not support '%0' for C++ on Darwin/i386">;
 def err_drv_command_failed : Error<
@@ -83,6 +81,8 @@ def err_drv_invalid_mfloat_abi : Error<
   "invalid float ABI '%0'">;
 def err_drv_invalid_libcxx_deployment : Error<
   "invalid deployment target for -stdlib=libc++ (requires %0 or later)">;
+def err_drv_invalid_argument_to_fdebug_prefix_map : Error<
+  "invalid argument '%0' to -fdebug-prefix-map">;
 def err_drv_malformed_sanitizer_blacklist : Error<
   "malformed sanitizer blacklist: '%0'">;
 
@@ -108,6 +108,10 @@ def err_arc_unsupported_on_runtime : Error<
   "-fobjc-arc is not supported on platforms using the legacy runtime">;
 def err_arc_unsupported_on_toolchain : Error< // feel free to generalize this
   "-fobjc-arc is not supported on versions of OS X prior to 10.6">;
+def err_objc_weak_with_gc : Error<
+  "-fobjc-weak is not supported in Objective-C garbage collection">;
+def err_objc_weak_unsupported : Error<
+  "-fobjc-weak is not supported on the current deployment target">;
 def err_drv_mg_requires_m_or_mm : Error<
   "option '-MG' requires '-M' or '-MM'">;
 def err_drv_unknown_objc_runtime : Error<
@@ -119,6 +123,8 @@ def err_drv_optimization_remark_pattern : Error<
 def err_drv_no_neon_modifier : Error<"[no]neon is not accepted as modifier, please use [no]simd instead">;
 
 def warn_O4_is_O3 : Warning<"-O4 is equivalent to -O3">, InGroup<Deprecated>;
+def warn_drv_lto_libpath : Warning<"libLTO.dylib relative to clang installed dir not found; using 'ld' default search path instead">,
+  InGroup<LibLTO>;
 def warn_drv_optimization_value : Warning<"optimization level '%0' is not supported; using '%1%2' instead">,
   InGroup<InvalidCommandLineArgument>;
 def warn_ignored_gcc_optimization : Warning<"optimization flag '%0' is not supported">,
@@ -194,4 +200,18 @@ def warn_target_unsupported_nan2008 : Warning<
 def warn_target_unsupported_nanlegacy : Warning<
   "ignoring '-mnan=legacy' option because the '%0' architecture does not support it">,
   InGroup<UnsupportedNan>;
+
+def warn_drv_unable_to_find_directory_expected : Warning<
+  "unable to find %0 directory, expected to be in '%1'">,
+  InGroup<InvalidOrNonExistentDirectory>, DefaultIgnore;
+
+def warn_drv_ps4_force_pic : Warning<
+  "option '%0' was ignored by the PS4 toolchain, using '-fPIC'">,
+  InGroup<OptionIgnored>;
+
+def warn_drv_ps4_sdk_dir : Warning<
+  "environment variable SCE_PS4_SDK_DIR is set, but points to invalid or nonexistent directory '%0'">,
+  InGroup<InvalidOrNonExistentDirectory>;
+
+def err_drv_unsupported_linker : Error<"unsupported value '%0' for -linker option">;
 }

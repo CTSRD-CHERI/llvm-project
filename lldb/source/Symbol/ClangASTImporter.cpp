@@ -16,7 +16,7 @@
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/ClangASTImporter.h"
 #include "lldb/Symbol/ClangExternalASTSourceCommon.h"
-#include "lldb/Symbol/ClangNamespaceDecl.h"
+#include "lldb/Utility/LLDBAssert.h"
 
 using namespace lldb_private;
 using namespace clang;
@@ -59,10 +59,10 @@ ClangASTImporter::CopyType (clang::ASTContext *dst_ast,
     return QualType();
 }
 
-lldb::clang_type_t
+lldb::opaque_compiler_type_t
 ClangASTImporter::CopyType (clang::ASTContext *dst_ast,
                             clang::ASTContext *src_ast,
-                            lldb::clang_type_t type)
+                            lldb::opaque_compiler_type_t type)
 {
     return CopyType (dst_ast, src_ast, QualType::getFromOpaquePtr(type)).getAsOpaquePtr();
 }
@@ -109,11 +109,147 @@ ClangASTImporter::CopyDecl (clang::ASTContext *dst_ast,
     return nullptr;
 }
 
-lldb::clang_type_t
+class DeclContextOverride
+{
+private:
+    struct Backup
+    {
+        clang::DeclContext *decl_context;
+        clang::DeclContext *lexical_decl_context;
+    };
+    
+    std::map<clang::Decl *, Backup> m_backups;
+    
+    void OverrideOne(clang::Decl *decl)
+    {
+        if (m_backups.find(decl) != m_backups.end())
+        {
+            return;
+        }
+            
+        m_backups[decl] = { decl->getDeclContext(), decl->getLexicalDeclContext() };
+        
+        decl->setDeclContext(decl->getASTContext().getTranslationUnitDecl());
+        decl->setLexicalDeclContext(decl->getASTContext().getTranslationUnitDecl());
+    }
+    
+    bool ChainPassesThrough(clang::Decl *decl,
+                            clang::DeclContext *base,
+                            clang::DeclContext *(clang::Decl::*contextFromDecl)(),
+                            clang::DeclContext *(clang::DeclContext::*contextFromContext)())
+    {
+        for (DeclContext *decl_ctx = (decl->*contextFromDecl)();
+             decl_ctx;
+             decl_ctx = (decl_ctx->*contextFromContext)())
+        {
+            if (decl_ctx == base)
+            {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    clang::Decl *GetEscapedChild(clang::Decl *decl, clang::DeclContext *base = nullptr)
+    {
+        if (base)
+        {
+            // decl's DeclContext chains must pass through base.
+            
+            if (!ChainPassesThrough(decl, base, &clang::Decl::getDeclContext, &clang::DeclContext::getParent) ||
+                !ChainPassesThrough(decl, base, &clang::Decl::getLexicalDeclContext, &clang::DeclContext::getLexicalParent))
+            {
+                return decl;
+            }
+        }
+        else
+        {
+            base = clang::dyn_cast<clang::DeclContext>(decl);
+            
+            if (!base)
+            {
+                return nullptr;
+            }
+        }
+        
+        if (clang::DeclContext *context = clang::dyn_cast<clang::DeclContext>(decl))
+        {
+            for (clang::Decl *decl : context->decls())
+            {
+                if (clang::Decl *escaped_child = GetEscapedChild(decl))
+                {
+                    return escaped_child;
+                }
+            }
+        }
+        
+        return nullptr;
+    }
+    
+    void Override(clang::Decl *decl)
+    {
+        if (clang::Decl *escaped_child = GetEscapedChild(decl))
+        {
+            Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_EXPRESSIONS));
+            
+            if (log)
+                log->Printf("    [ClangASTImporter] DeclContextOverride couldn't override (%sDecl*)%p - its child (%sDecl*)%p escapes",
+                            decl->getDeclKindName(), static_cast<void*>(decl),
+                            escaped_child->getDeclKindName(), static_cast<void*>(escaped_child));
+            lldbassert(0 && "Couldn't override!");
+        }
+        
+        OverrideOne(decl);
+    }
+    
+public:
+    DeclContextOverride()
+    {
+    }
+    
+    void OverrideAllDeclsFromContainingFunction(clang::Decl *decl)
+    {
+        for (DeclContext *decl_context = decl->getLexicalDeclContext();
+             decl_context;
+             decl_context = decl_context->getLexicalParent())
+        {
+            DeclContext *redecl_context = decl_context->getRedeclContext();
+            
+            if (llvm::isa<FunctionDecl>(redecl_context) &&
+                llvm::isa<TranslationUnitDecl>(redecl_context->getLexicalParent()))
+            {
+                for (clang::Decl *child_decl : decl_context->decls())
+                {
+                    Override(child_decl);
+                }
+            }
+        }
+    }
+    
+    ~DeclContextOverride()
+    {
+        for (const std::pair<clang::Decl *, Backup> &backup : m_backups)
+        {
+            backup.first->setDeclContext(backup.second.decl_context);
+            backup.first->setLexicalDeclContext(backup.second.lexical_decl_context);
+        }
+    }
+};
+
+lldb::opaque_compiler_type_t
 ClangASTImporter::DeportType (clang::ASTContext *dst_ctx,
                               clang::ASTContext *src_ctx,
-                              lldb::clang_type_t type)
-{    
+                              lldb::opaque_compiler_type_t type)
+{
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_EXPRESSIONS));
+  
+    if (log)
+        log->Printf("    [ClangASTImporter] DeportType called on (%sType*)0x%llx from (ASTContext*)%p to (ASTContext*)%p",
+                    QualType::getFromOpaquePtr(type)->getTypeClassName(), (unsigned long long)type,
+                    static_cast<void*>(src_ctx),
+                    static_cast<void*>(dst_ctx));
+
     MinionSP minion_sp (GetMinion (dst_ctx, src_ctx));
     
     if (!minion_sp)
@@ -122,10 +258,17 @@ ClangASTImporter::DeportType (clang::ASTContext *dst_ctx,
     std::set<NamedDecl *> decls_to_deport;
     std::set<NamedDecl *> decls_already_deported;
     
+    DeclContextOverride decl_context_override;
+    
+    if (const clang::TagType *tag_type = clang::QualType::getFromOpaquePtr(type)->getAs<TagType>())
+    {
+        decl_context_override.OverrideAllDeclsFromContainingFunction(tag_type->getDecl());
+    }
+    
     minion_sp->InitDeportWorkQueues(&decls_to_deport,
                                     &decls_already_deported);
     
-    lldb::clang_type_t result = CopyType(dst_ctx, src_ctx, type);
+    lldb::opaque_compiler_type_t result = CopyType(dst_ctx, src_ctx, type);
     
     minion_sp->ExecuteDeportWorkQueues();
     
@@ -144,7 +287,7 @@ ClangASTImporter::DeportDecl (clang::ASTContext *dst_ctx,
     Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_EXPRESSIONS));
 
     if (log)
-        log->Printf("    [ClangASTImporter] DeportDecl called on (%sDecl*)%p from (ASTContext*)%p to (ASTContex*)%p",
+        log->Printf("    [ClangASTImporter] DeportDecl called on (%sDecl*)%p from (ASTContext*)%p to (ASTContext*)%p",
                     decl->getDeclKindName(), static_cast<void*>(decl),
                     static_cast<void*>(src_ctx),
                     static_cast<void*>(dst_ctx));
@@ -156,6 +299,10 @@ ClangASTImporter::DeportDecl (clang::ASTContext *dst_ctx,
 
     std::set<NamedDecl *> decls_to_deport;
     std::set<NamedDecl *> decls_already_deported;
+    
+    DeclContextOverride decl_context_override;
+    
+    decl_context_override.OverrideAllDeclsFromContainingFunction(decl);
 
     minion_sp->InitDeportWorkQueues(&decls_to_deport,
                                     &decls_already_deported);
@@ -460,7 +607,7 @@ void
 ClangASTImporter::Minion::InitDeportWorkQueues (std::set<clang::NamedDecl *> *decls_to_deport,
                                                 std::set<clang::NamedDecl *> *decls_already_deported)
 {
-    assert(!m_decls_to_deport); // TODO make debug only
+    assert(!m_decls_to_deport);
     assert(!m_decls_already_deported);
     
     m_decls_to_deport = decls_to_deport;
@@ -470,7 +617,7 @@ ClangASTImporter::Minion::InitDeportWorkQueues (std::set<clang::NamedDecl *> *de
 void
 ClangASTImporter::Minion::ExecuteDeportWorkQueues ()
 {
-    assert(m_decls_to_deport); // TODO make debug only
+    assert(m_decls_to_deport);
     assert(m_decls_already_deported);
     
     ASTContextMetadataSP to_context_md = m_master.GetContextMetadata(&getToContext());
@@ -483,6 +630,7 @@ ClangASTImporter::Minion::ExecuteDeportWorkQueues ()
         m_decls_to_deport->erase(decl);
         
         DeclOrigin &origin = to_context_md->m_origins[decl];
+        UNUSED_IF_ASSERT_DISABLED(origin);
         
         assert (origin.ctx == m_source_ctx);    // otherwise we should never have added this
                                                 // because it doesn't need to be deported
@@ -568,7 +716,8 @@ ClangASTImporter::Minion::ImportDefinitionTo (clang::Decl *to, clang::Decl *from
             if (!to_objc_interface->hasDefinition())
                 to_objc_interface->startDefinition();
             
-            to_objc_interface->setSuperClass(imported_from_superclass);
+            to_objc_interface->setSuperClass(
+                    m_source_ctx->getTrivialTypeSourceInfo(m_source_ctx->getObjCInterfaceType(imported_from_superclass)));
         }
         while (0);
     }
@@ -622,7 +771,8 @@ ClangASTImporter::Minion::Imported (clang::Decl *from, clang::Decl *to)
             if (to_context_md->m_origins.find(to) == to_context_md->m_origins.end() ||
                 user_id != LLDB_INVALID_UID)
             {
-                to_context_md->m_origins[to] = origin_iter->second;
+                if (origin_iter->second.ctx != &to->getASTContext())
+                    to_context_md->m_origins[to] = origin_iter->second;
             }
                 
             MinionSP direct_completer = m_master.GetMinion(&to->getASTContext(), origin_iter->second.ctx);

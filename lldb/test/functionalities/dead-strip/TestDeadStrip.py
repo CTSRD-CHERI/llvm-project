@@ -2,8 +2,11 @@
 Test that breakpoint works correctly in the presence of dead-code stripping.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,22 +15,12 @@ class DeadStripTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test breakpoint works correctly with dead-code stripping."""
-        self.buildDsym()
-        self.dead_strip()
-
+    @expectedFailureWindows("llvm.org/pr24778")
+    @expectedFailureDwo("llvm.org/pr25087")
     @skipIfFreeBSD # The -dead_strip linker option isn't supported on FreeBSD versions of ld.
-    @dwarf_test
-    def test_with_dwarf(self):
+    def test(self):
         """Test breakpoint works correctly with dead-code stripping."""
-        self.buildDwarf()
-        self.dead_strip()
-
-    def dead_strip(self):
-        """Test breakpoint works correctly with dead-code stripping."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -40,7 +33,7 @@ class DeadStripTestCase(TestBase):
         # Break by function name f3 (live code).
         lldbutil.run_break_set_by_symbol (self, "f3", num_expected_locations=1, module_name="a.out")
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint (breakpoint #1).
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -63,10 +56,3 @@ class DeadStripTestCase(TestBase):
         # The breakpoint should have a hit count of 1.
         self.expect("breakpoint list -f 3", BREAKPOINT_HIT_ONCE,
             substrs = [' resolved, hit count = 1'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

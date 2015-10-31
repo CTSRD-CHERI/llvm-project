@@ -32,9 +32,6 @@ class CMICmnStreamStdout;
 //          work depending on the one selected to work. A driver can if not able
 //          to handle an instruction or 'command' can pass that command onto
 //          another driver object registered with the Driver Manager.
-// Gotchas: None.
-// Authors: Illya Rudkin 29/01/2014.
-// Changes: None.
 //--
 class CMIDriver : public CMICmnBase,
                   public CMIDriverMgr::IDriver,
@@ -46,7 +43,7 @@ class CMIDriver : public CMICmnBase,
     // Enumerations:
   public:
     //++ ----------------------------------------------------------------------
-    // Details: The MI Driver has a running state which is used to help determin
+    // Details: The MI Driver has a running state which is used to help determine
     //          which specific action(s) it should take or not allow.
     //          The driver when operational and not shutting down alternates
     //          between eDriverState_RunningNotDebugging and
@@ -68,52 +65,52 @@ class CMIDriver : public CMICmnBase,
     // Methods:
   public:
     // MI system
-    bool Initialize(void);
-    bool Shutdown(void);
+    bool Initialize() override;
+    bool Shutdown() override;
 
     // MI state
-    bool GetExitApplicationFlag(void) const;
-    DriverState_e GetCurrentDriverState(void) const;
-    bool SetDriverStateRunningNotDebugging(void);
-    bool SetDriverStateRunningDebugging(void);
-    void SetDriverDebuggingArgExecutable(void);
-    bool IsDriverDebuggingArgExecutable(void) const;
+    bool GetExitApplicationFlag() const;
+    DriverState_e GetCurrentDriverState() const;
+    bool SetDriverStateRunningNotDebugging();
+    bool SetDriverStateRunningDebugging();
+    void SetDriverDebuggingArgExecutable();
+    bool IsDriverDebuggingArgExecutable() const;
 
     // MI information about itself
-    const CMIUtilString &GetAppNameShort(void) const;
-    const CMIUtilString &GetAppNameLong(void) const;
-    const CMIUtilString &GetVersionDescription(void) const;
+    const CMIUtilString &GetAppNameShort() const;
+    const CMIUtilString &GetAppNameLong() const;
+    const CMIUtilString &GetVersionDescription() const;
 
     // MI do work
     bool WriteMessageToLog(const CMIUtilString &vMessage);
     bool SetEnableFallThru(const bool vbYes);
-    bool GetEnableFallThru(void) const;
-    bool HaveExecutableFileNamePathOnCmdLine(void) const;
-    const CMIUtilString &GetExecutableFileNamePathOnCmdLine(void) const;
+    bool GetEnableFallThru() const;
+    bool HaveExecutableFileNamePathOnCmdLine() const;
+    const CMIUtilString &GetExecutableFileNamePathOnCmdLine() const;
 
     // Overridden:
   public:
     // From CMIDriverMgr::IDriver
-    virtual bool DoInitialize(void);
-    virtual bool DoShutdown(void);
-    virtual bool DoMainLoop(void);
-    virtual lldb::SBError DoParseArgs(const int argc, const char *argv[], FILE *vpStdOut, bool &vwbExiting);
-    virtual CMIUtilString GetError(void) const;
-    virtual const CMIUtilString &GetName(void) const;
-    virtual lldb::SBDebugger &GetTheDebugger(void);
-    virtual bool GetDriverIsGDBMICompatibleDriver(void) const;
-    virtual bool SetId(const CMIUtilString &vId);
-    virtual const CMIUtilString &GetId(void) const;
+    bool DoInitialize() override;
+    bool DoShutdown() override;
+    bool DoMainLoop() override;
+    lldb::SBError DoParseArgs(const int argc, const char *argv[], FILE *vpStdOut, bool &vwbExiting) override;
+    CMIUtilString GetError() const override;
+    const CMIUtilString &GetName() const override;
+    lldb::SBDebugger &GetTheDebugger() override;
+    bool GetDriverIsGDBMICompatibleDriver() const override;
+    bool SetId(const CMIUtilString &vId) override;
+    const CMIUtilString &GetId() const override;
     // From CMIDriverBase
-    virtual void SetExitApplicationFlag(const bool vbForceExit);
-    virtual bool DoFallThruToAnotherDriver(const CMIUtilString &vCmd, CMIUtilString &vwErrMsg);
-    virtual bool SetDriverToFallThruTo(const CMIDriverBase &vrOtherDriver);
-    virtual FILE *GetStdin(void) const;
-    virtual FILE *GetStdout(void) const;
-    virtual FILE *GetStderr(void) const;
-    virtual const CMIUtilString &GetDriverName(void) const;
-    virtual const CMIUtilString &GetDriverId(void) const;
-    virtual void DeliverSignal(int signal);
+    void SetExitApplicationFlag(const bool vbForceExit) override;
+    bool DoFallThruToAnotherDriver(const CMIUtilString &vCmd, CMIUtilString &vwErrMsg) override;
+    bool SetDriverToFallThruTo(const CMIDriverBase &vrOtherDriver) override;
+    FILE *GetStdin() const override;
+    FILE *GetStdout() const override;
+    FILE *GetStderr() const override;
+    const CMIUtilString &GetDriverName() const override;
+    const CMIUtilString &GetDriverId() const override;
+    void DeliverSignal(int signal) override;
 
     // Typedefs:
   private:
@@ -121,28 +118,28 @@ class CMIDriver : public CMICmnBase,
 
     // Methods:
   private:
-    /* ctor */ CMIDriver(void);
+    /* ctor */ CMIDriver();
     /* ctor */ CMIDriver(const CMIDriver &);
     void operator=(const CMIDriver &);
 
     lldb::SBError ParseArgs(const int argc, const char *argv[], FILE *vpStdOut, bool &vwbExiting);
-    bool DoAppQuit(void);
+    bool DoAppQuit();
     bool InterpretCommand(const CMIUtilString &vTextLine);
     bool InterpretCommandThisDriver(const CMIUtilString &vTextLine, bool &vwbCmdYesValid);
     CMIUtilString WrapCLICommandIntoMICommand(const CMIUtilString &vTextLine) const;
     bool InterpretCommandFallThruDriver(const CMIUtilString &vTextLine, bool &vwbCmdYesValid);
     bool ExecuteCommand(const SMICmdData &vCmdData);
-    bool StartWorkerThreads(void);
-    bool StopWorkerThreads(void);
-    bool InitClientIDEToMIDriver(void) const;
-    bool InitClientIDEEclipse(void) const;
-    bool LocalDebugSessionStartupExecuteCommands(void);
+    bool StartWorkerThreads();
+    bool StopWorkerThreads();
+    bool InitClientIDEToMIDriver() const;
+    bool InitClientIDEEclipse() const;
+    bool LocalDebugSessionStartupExecuteCommands();
     bool ExecuteCommandFile(const bool vbAsyncMode);
 
     // Overridden:
   private:
     // From CMICmnBase
-    /* dtor */ virtual ~CMIDriver(void);
+    /* dtor */ ~CMIDriver() override;
 
     // Attributes:
   private:

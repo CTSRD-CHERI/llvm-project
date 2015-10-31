@@ -14,6 +14,7 @@
 #include "clang/Frontend/CodeGenOptions.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/Utils.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
@@ -166,14 +167,6 @@ static void addObjCARCOptPass(const PassManagerBuilder &Builder, PassManagerBase
     PM.add(createObjCARCOptPass());
 }
 
-static void addSampleProfileLoaderPass(const PassManagerBuilder &Builder,
-                                       legacy::PassManagerBase &PM) {
-  const PassManagerBuilderWrapper &BuilderWrapper =
-      static_cast<const PassManagerBuilderWrapper &>(Builder);
-  const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
-  PM.add(createSampleProfileLoaderPass(CGOpts.SampleProfileFile));
-}
-
 static void addAddDiscriminatorsPass(const PassManagerBuilder &Builder,
                                      legacy::PassManagerBase &PM) {
   PM.add(createAddDiscriminatorsPass());
@@ -272,6 +265,9 @@ static void addSymbolRewriterPass(const CodeGenOptions &Opts,
 }
 
 void EmitAssemblyHelper::CreatePasses() {
+  if (CodeGenOpts.DisableLLVMPasses)
+    return;
+
   unsigned OptLevel = CodeGenOpts.OptimizationLevel;
   CodeGenOptions::InliningMethod Inlining = CodeGenOpts.getInlining();
 
@@ -292,14 +288,11 @@ void EmitAssemblyHelper::CreatePasses() {
   PMBuilder.DisableUnitAtATime = !CodeGenOpts.UnitAtATime;
   PMBuilder.DisableUnrollLoops = !CodeGenOpts.UnrollLoops;
   PMBuilder.MergeFunctions = CodeGenOpts.MergeFunctions;
+  PMBuilder.PrepareForLTO = CodeGenOpts.PrepareForLTO;
   PMBuilder.RerollLoops = CodeGenOpts.RerollLoops;
 
   PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
                          addAddDiscriminatorsPass);
-
-  if (!CodeGenOpts.SampleProfileFile.empty())
-    PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
-                           addSampleProfileLoaderPass);
 
   // In ObjC ARC mode, add the main ARC optimization passes.
   if (LangOpts.ObjCAutoRefCount) {
@@ -419,6 +412,9 @@ void EmitAssemblyHelper::CreatePasses() {
     MPM->add(createInstrProfilingPass(Options));
   }
 
+  if (!CodeGenOpts.SampleProfileFile.empty())
+    MPM->add(createSampleProfileLoaderPass(CodeGenOpts.SampleProfileFile));
+
   PMBuilder.populateModulePassManager(*MPM);
 }
 
@@ -454,22 +450,16 @@ TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
     BackendArgs.push_back("-limit-float-precision");
     BackendArgs.push_back(CodeGenOpts.LimitFloatPrecision.c_str());
   }
-  if (llvm::TimePassesIsEnabled)
-    BackendArgs.push_back("-time-passes");
-  for (unsigned i = 0, e = CodeGenOpts.BackendOptions.size(); i != e; ++i)
-    BackendArgs.push_back(CodeGenOpts.BackendOptions[i].c_str());
+  for (const std::string &BackendOption : CodeGenOpts.BackendOptions)
+    BackendArgs.push_back(BackendOption.c_str());
   BackendArgs.push_back(nullptr);
   llvm::cl::ParseCommandLineOptions(BackendArgs.size() - 1,
                                     BackendArgs.data());
 
-  std::string FeaturesStr;
-  if (!TargetOpts.Features.empty()) {
-    SubtargetFeatures Features;
-    for (const std::string &Feature : TargetOpts.Features)
-      Features.AddFeature(Feature);
-    FeaturesStr = Features.getString();
-  }
+  std::string FeaturesStr =
+      llvm::join(TargetOpts.Features.begin(), TargetOpts.Features.end(), ",");
 
+  // Keep this synced with the equivalent code in tools/driver/cc1as_main.cpp.
   llvm::Reloc::Model RM = llvm::Reloc::Default;
   if (CodeGenOpts.RelocationModel == "static") {
     RM = llvm::Reloc::Static;
@@ -498,24 +488,16 @@ TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
       .Case("posix", llvm::ThreadModel::POSIX)
       .Case("single", llvm::ThreadModel::Single);
 
-  if (CodeGenOpts.DisableIntegratedAS)
-    Options.DisableIntegratedAS = true;
-
-  if (CodeGenOpts.CompressDebugSections)
-    Options.CompressDebugSections = true;
-
-  if (CodeGenOpts.UseInitArray)
-    Options.UseInitArray = true;
-
   // Set float ABI type.
-  if (CodeGenOpts.FloatABI == "soft" || CodeGenOpts.FloatABI == "softfp")
-    Options.FloatABIType = llvm::FloatABI::Soft;
-  else if (CodeGenOpts.FloatABI == "hard")
-    Options.FloatABIType = llvm::FloatABI::Hard;
-  else {
-    assert(CodeGenOpts.FloatABI.empty() && "Invalid float abi!");
-    Options.FloatABIType = llvm::FloatABI::Default;
-  }
+  assert((CodeGenOpts.FloatABI == "soft" || CodeGenOpts.FloatABI == "softfp" ||
+          CodeGenOpts.FloatABI == "hard" || CodeGenOpts.FloatABI.empty()) &&
+         "Invalid Floating Point ABI!");
+  Options.FloatABIType =
+      llvm::StringSwitch<llvm::FloatABI::ABIType>(CodeGenOpts.FloatABI)
+          .Case("soft", llvm::FloatABI::Soft)
+          .Case("softfp", llvm::FloatABI::Soft)
+          .Case("hard", llvm::FloatABI::Hard)
+          .Default(llvm::FloatABI::Default);
 
   // Set FP fusion mode.
   switch (CodeGenOpts.getFPContractMode()) {
@@ -530,17 +512,20 @@ TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
     break;
   }
 
+  Options.UseInitArray = CodeGenOpts.UseInitArray;
+  Options.DisableIntegratedAS = CodeGenOpts.DisableIntegratedAS;
+  Options.CompressDebugSections = CodeGenOpts.CompressDebugSections;
   Options.LessPreciseFPMADOption = CodeGenOpts.LessPreciseFPMAD;
   Options.NoInfsFPMath = CodeGenOpts.NoInfsFPMath;
   Options.NoNaNsFPMath = CodeGenOpts.NoNaNsFPMath;
   Options.NoZerosInBSS = CodeGenOpts.NoZeroInitializedInBSS;
   Options.UnsafeFPMath = CodeGenOpts.UnsafeFPMath;
   Options.StackAlignmentOverride = CodeGenOpts.StackAlignment;
-  Options.TrapFuncName = CodeGenOpts.TrapFuncName;
   Options.PositionIndependentExecutable = LangOpts.PIELevel != 0;
   Options.FunctionSections = CodeGenOpts.FunctionSections;
   Options.DataSections = CodeGenOpts.DataSections;
   Options.UniqueSectionNames = CodeGenOpts.UniqueSectionNames;
+  Options.EmulatedTLS = CodeGenOpts.EmulatedTLS;
 
   Options.MCOptions.MCRelaxAll = CodeGenOpts.RelaxAll;
   Options.MCOptions.MCSaveTempLabels = CodeGenOpts.SaveTempLabels;
@@ -607,7 +592,7 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action,
   if (UsesCodeGen && !TM)
     return;
   if (TM)
-    TheModule->setDataLayout(*TM->getDataLayout());
+    TheModule->setDataLayout(TM->createDataLayout());
   CreatePasses();
 
   switch (Action) {
@@ -615,8 +600,8 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action,
     break;
 
   case Backend_EmitBC:
-    getPerModulePasses()->add(
-        createBitcodeWriterPass(*OS, CodeGenOpts.EmitLLVMUseLists));
+    getPerModulePasses()->add(createBitcodeWriterPass(
+        *OS, CodeGenOpts.EmitLLVMUseLists, CodeGenOpts.EmitFunctionSummary));
     break;
 
   case Backend_EmitLL:
@@ -669,8 +654,7 @@ void clang::EmitBackendOutput(DiagnosticsEngine &Diags,
   // If an optional clang TargetInfo description string was passed in, use it to
   // verify the LLVM TargetMachine's DataLayout.
   if (AsmHelper.TM && !TDesc.empty()) {
-    std::string DLDesc =
-        AsmHelper.TM->getDataLayout()->getStringRepresentation();
+    std::string DLDesc = M->getDataLayout().getStringRepresentation();
     if (DLDesc != TDesc) {
       unsigned DiagID = Diags.getCustomDiagID(
           DiagnosticsEngine::Error, "backend data layout '%0' does not match "

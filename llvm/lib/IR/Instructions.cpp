@@ -62,7 +62,10 @@ UnaryInstruction::~UnaryInstruction() {
 const char *SelectInst::areInvalidOperands(Value *Op0, Value *Op1, Value *Op2) {
   if (Op1->getType() != Op2->getType())
     return "both values to select must have same type";
-  
+
+  if (Op1->getType()->isTokenTy())
+    return "select values cannot have token type";
+
   if (VectorType *VT = dyn_cast<VectorType>(Op0->getType())) {
     // Vector select.
     if (VT->getElementType() != Type::getInt1Ty(Op0->getContext()))
@@ -223,9 +226,10 @@ CallInst::~CallInst() {
 }
 
 void CallInst::init(FunctionType *FTy, Value *Func, ArrayRef<Value *> Args,
-                    const Twine &NameStr) {
+                    ArrayRef<OperandBundleDef> Bundles, const Twine &NameStr) {
   this->FTy = FTy;
-  assert(getNumOperands() == Args.size() + 1 && "NumOperands not set up?");
+  assert(getNumOperands() == Args.size() + CountBundleInputs(Bundles) + 1 &&
+         "NumOperands not set up?");
   Op<-1>() = Func;
 
 #ifndef NDEBUG
@@ -240,6 +244,11 @@ void CallInst::init(FunctionType *FTy, Value *Func, ArrayRef<Value *> Args,
 #endif
 
   std::copy(Args.begin(), Args.end(), op_begin());
+
+  auto It = populateBundleOperandInfos(Bundles, Args.size());
+  (void)It;
+  assert(It + 1 == op_end() && "Should add up!");
+
   setName(NameStr);
 }
 
@@ -281,14 +290,22 @@ CallInst::CallInst(const CallInst &CI)
       AttributeList(CI.AttributeList), FTy(CI.FTy) {
   setTailCallKind(CI.getTailCallKind());
   setCallingConv(CI.getCallingConv());
-    
+
   std::copy(CI.op_begin(), CI.op_end(), op_begin());
+  std::copy(CI.bundle_op_info_begin(), CI.bundle_op_info_end(),
+            bundle_op_info_begin());
   SubclassOptionalData = CI.SubclassOptionalData;
 }
 
 void CallInst::addAttribute(unsigned i, Attribute::AttrKind attr) {
   AttributeSet PAL = getAttributes();
   PAL = PAL.addAttribute(getContext(), i, attr);
+  setAttributes(PAL);
+}
+
+void CallInst::addAttribute(unsigned i, StringRef Kind, StringRef Value) {
+  AttributeSet PAL = getAttributes();
+  PAL = PAL.addAttribute(getContext(), i, Kind, Value);
   setAttributes(PAL);
 }
 
@@ -311,14 +328,6 @@ void CallInst::addDereferenceableOrNullAttr(unsigned i, uint64_t Bytes) {
   AttributeSet PAL = getAttributes();
   PAL = PAL.addDereferenceableOrNullAttr(getContext(), i, Bytes);
   setAttributes(PAL);
-}
-
-bool CallInst::hasFnAttrImpl(Attribute::AttrKind A) const {
-  if (AttributeList.hasAttribute(AttributeSet::FunctionIndex, A))
-    return true;
-  if (const Function *F = getCalledFunction())
-    return F->getAttributes().hasAttribute(AttributeSet::FunctionIndex, A);
-  return false;
 }
 
 bool CallInst::paramHasAttr(unsigned i, Attribute::AttrKind A) const {
@@ -498,10 +507,12 @@ Instruction* CallInst::CreateFree(Value* Source, BasicBlock *InsertAtEnd) {
 
 void InvokeInst::init(FunctionType *FTy, Value *Fn, BasicBlock *IfNormal,
                       BasicBlock *IfException, ArrayRef<Value *> Args,
+                      ArrayRef<OperandBundleDef> Bundles,
                       const Twine &NameStr) {
   this->FTy = FTy;
 
-  assert(getNumOperands() == 3 + Args.size() && "NumOperands not set up?");
+  assert(getNumOperands() == 3 + Args.size() + CountBundleInputs(Bundles) &&
+         "NumOperands not set up?");
   Op<-3>() = Fn;
   Op<-2>() = IfNormal;
   Op<-1>() = IfException;
@@ -518,6 +529,11 @@ void InvokeInst::init(FunctionType *FTy, Value *Fn, BasicBlock *IfNormal,
 #endif
 
   std::copy(Args.begin(), Args.end(), op_begin());
+
+  auto It = populateBundleOperandInfos(Bundles, Args.size());
+  (void)It;
+  assert(It + 3 == op_end() && "Should add up!");
+
   setName(NameStr);
 }
 
@@ -529,6 +545,8 @@ InvokeInst::InvokeInst(const InvokeInst &II)
       AttributeList(II.AttributeList), FTy(II.FTy) {
   setCallingConv(II.getCallingConv());
   std::copy(II.op_begin(), II.op_end(), op_begin());
+  std::copy(II.bundle_op_info_begin(), II.bundle_op_info_end(),
+            bundle_op_info_begin());
   SubclassOptionalData = II.SubclassOptionalData;
 }
 
@@ -545,6 +563,12 @@ void InvokeInst::setSuccessorV(unsigned idx, BasicBlock *B) {
 bool InvokeInst::hasFnAttrImpl(Attribute::AttrKind A) const {
   if (AttributeList.hasAttribute(AttributeSet::FunctionIndex, A))
     return true;
+
+  // Operand bundles override attributes on the called function, but don't
+  // override attributes directly present on the invoke instruction.
+  if (isFnAttrDisallowedByOpBundle(A))
+    return false;
+
   if (const Function *F = getCalledFunction())
     return F->getAttributes().hasAttribute(AttributeSet::FunctionIndex, A);
   return false;
@@ -670,6 +694,342 @@ void ResumeInst::setSuccessorV(unsigned idx, BasicBlock *NewSucc) {
 
 BasicBlock *ResumeInst::getSuccessorV(unsigned idx) const {
   llvm_unreachable("ResumeInst has no successors!");
+}
+
+//===----------------------------------------------------------------------===//
+//                        CleanupEndPadInst Implementation
+//===----------------------------------------------------------------------===//
+
+CleanupEndPadInst::CleanupEndPadInst(const CleanupEndPadInst &CEPI)
+    : TerminatorInst(CEPI.getType(), Instruction::CleanupEndPad,
+                     OperandTraits<CleanupEndPadInst>::op_end(this) -
+                         CEPI.getNumOperands(),
+                     CEPI.getNumOperands()) {
+  setInstructionSubclassData(CEPI.getSubclassDataFromInstruction());
+  setCleanupPad(CEPI.getCleanupPad());
+  if (BasicBlock *UnwindDest = CEPI.getUnwindDest())
+    setUnwindDest(UnwindDest);
+}
+
+void CleanupEndPadInst::init(CleanupPadInst *CleanupPad, BasicBlock *UnwindBB) {
+  setCleanupPad(CleanupPad);
+  if (UnwindBB) {
+    setInstructionSubclassData(getSubclassDataFromInstruction() | 1);
+    setUnwindDest(UnwindBB);
+  }
+}
+
+CleanupEndPadInst::CleanupEndPadInst(CleanupPadInst *CleanupPad,
+                                     BasicBlock *UnwindBB, unsigned Values,
+                                     Instruction *InsertBefore)
+    : TerminatorInst(Type::getVoidTy(CleanupPad->getContext()),
+                     Instruction::CleanupEndPad,
+                     OperandTraits<CleanupEndPadInst>::op_end(this) - Values,
+                     Values, InsertBefore) {
+  init(CleanupPad, UnwindBB);
+}
+
+CleanupEndPadInst::CleanupEndPadInst(CleanupPadInst *CleanupPad,
+                                     BasicBlock *UnwindBB, unsigned Values,
+                                     BasicBlock *InsertAtEnd)
+    : TerminatorInst(Type::getVoidTy(CleanupPad->getContext()),
+                     Instruction::CleanupEndPad,
+                     OperandTraits<CleanupEndPadInst>::op_end(this) - Values,
+                     Values, InsertAtEnd) {
+  init(CleanupPad, UnwindBB);
+}
+
+BasicBlock *CleanupEndPadInst::getSuccessorV(unsigned Idx) const {
+  assert(Idx == 0);
+  return getUnwindDest();
+}
+unsigned CleanupEndPadInst::getNumSuccessorsV() const {
+  return getNumSuccessors();
+}
+void CleanupEndPadInst::setSuccessorV(unsigned Idx, BasicBlock *B) {
+  assert(Idx == 0);
+  setUnwindDest(B);
+}
+
+//===----------------------------------------------------------------------===//
+//                        CleanupReturnInst Implementation
+//===----------------------------------------------------------------------===//
+
+CleanupReturnInst::CleanupReturnInst(const CleanupReturnInst &CRI)
+    : TerminatorInst(CRI.getType(), Instruction::CleanupRet,
+                     OperandTraits<CleanupReturnInst>::op_end(this) -
+                         CRI.getNumOperands(),
+                     CRI.getNumOperands()) {
+  setInstructionSubclassData(CRI.getSubclassDataFromInstruction());
+  Op<-1>() = CRI.Op<-1>();
+  if (CRI.hasUnwindDest())
+    Op<-2>() = CRI.Op<-2>();
+}
+
+void CleanupReturnInst::init(CleanupPadInst *CleanupPad, BasicBlock *UnwindBB) {
+  if (UnwindBB)
+    setInstructionSubclassData(getSubclassDataFromInstruction() | 1);
+
+  Op<-1>() = CleanupPad;
+  if (UnwindBB)
+    Op<-2>() = UnwindBB;
+}
+
+CleanupReturnInst::CleanupReturnInst(CleanupPadInst *CleanupPad,
+                                     BasicBlock *UnwindBB, unsigned Values,
+                                     Instruction *InsertBefore)
+    : TerminatorInst(Type::getVoidTy(CleanupPad->getContext()),
+                     Instruction::CleanupRet,
+                     OperandTraits<CleanupReturnInst>::op_end(this) - Values,
+                     Values, InsertBefore) {
+  init(CleanupPad, UnwindBB);
+}
+
+CleanupReturnInst::CleanupReturnInst(CleanupPadInst *CleanupPad,
+                                     BasicBlock *UnwindBB, unsigned Values,
+                                     BasicBlock *InsertAtEnd)
+    : TerminatorInst(Type::getVoidTy(CleanupPad->getContext()),
+                     Instruction::CleanupRet,
+                     OperandTraits<CleanupReturnInst>::op_end(this) - Values,
+                     Values, InsertAtEnd) {
+  init(CleanupPad, UnwindBB);
+}
+
+BasicBlock *CleanupReturnInst::getSuccessorV(unsigned Idx) const {
+  assert(Idx == 0);
+  return getUnwindDest();
+}
+unsigned CleanupReturnInst::getNumSuccessorsV() const {
+  return getNumSuccessors();
+}
+void CleanupReturnInst::setSuccessorV(unsigned Idx, BasicBlock *B) {
+  assert(Idx == 0);
+  setUnwindDest(B);
+}
+
+//===----------------------------------------------------------------------===//
+//                        CatchEndPadInst Implementation
+//===----------------------------------------------------------------------===//
+
+CatchEndPadInst::CatchEndPadInst(const CatchEndPadInst &CRI)
+    : TerminatorInst(CRI.getType(), Instruction::CatchEndPad,
+                     OperandTraits<CatchEndPadInst>::op_end(this) -
+                         CRI.getNumOperands(),
+                     CRI.getNumOperands()) {
+  setInstructionSubclassData(CRI.getSubclassDataFromInstruction());
+  if (BasicBlock *UnwindDest = CRI.getUnwindDest())
+    setUnwindDest(UnwindDest);
+}
+
+void CatchEndPadInst::init(BasicBlock *UnwindBB) {
+  if (UnwindBB) {
+    setInstructionSubclassData(getSubclassDataFromInstruction() | 1);
+    setUnwindDest(UnwindBB);
+  }
+}
+
+CatchEndPadInst::CatchEndPadInst(LLVMContext &C, BasicBlock *UnwindBB,
+                                 unsigned Values, Instruction *InsertBefore)
+    : TerminatorInst(Type::getVoidTy(C), Instruction::CatchEndPad,
+                     OperandTraits<CatchEndPadInst>::op_end(this) - Values,
+                     Values, InsertBefore) {
+  init(UnwindBB);
+}
+
+CatchEndPadInst::CatchEndPadInst(LLVMContext &C, BasicBlock *UnwindBB,
+                                 unsigned Values, BasicBlock *InsertAtEnd)
+    : TerminatorInst(Type::getVoidTy(C), Instruction::CatchEndPad,
+                     OperandTraits<CatchEndPadInst>::op_end(this) - Values,
+                     Values, InsertAtEnd) {
+  init(UnwindBB);
+}
+
+BasicBlock *CatchEndPadInst::getSuccessorV(unsigned Idx) const {
+  assert(Idx == 0);
+  return getUnwindDest();
+}
+unsigned CatchEndPadInst::getNumSuccessorsV() const {
+  return getNumSuccessors();
+}
+void CatchEndPadInst::setSuccessorV(unsigned Idx, BasicBlock *B) {
+  assert(Idx == 0);
+  setUnwindDest(B);
+}
+
+//===----------------------------------------------------------------------===//
+//                        CatchReturnInst Implementation
+//===----------------------------------------------------------------------===//
+void CatchReturnInst::init(CatchPadInst *CatchPad, BasicBlock *BB) {
+  Op<0>() = CatchPad;
+  Op<1>() = BB;
+}
+
+CatchReturnInst::CatchReturnInst(const CatchReturnInst &CRI)
+    : TerminatorInst(Type::getVoidTy(CRI.getContext()), Instruction::CatchRet,
+                     OperandTraits<CatchReturnInst>::op_begin(this), 2) {
+  Op<0>() = CRI.Op<0>();
+  Op<1>() = CRI.Op<1>();
+}
+
+CatchReturnInst::CatchReturnInst(CatchPadInst *CatchPad, BasicBlock *BB,
+                                 Instruction *InsertBefore)
+    : TerminatorInst(Type::getVoidTy(BB->getContext()), Instruction::CatchRet,
+                     OperandTraits<CatchReturnInst>::op_begin(this), 2,
+                     InsertBefore) {
+  init(CatchPad, BB);
+}
+
+CatchReturnInst::CatchReturnInst(CatchPadInst *CatchPad, BasicBlock *BB,
+                                 BasicBlock *InsertAtEnd)
+    : TerminatorInst(Type::getVoidTy(BB->getContext()), Instruction::CatchRet,
+                     OperandTraits<CatchReturnInst>::op_begin(this), 2,
+                     InsertAtEnd) {
+  init(CatchPad, BB);
+}
+
+BasicBlock *CatchReturnInst::getSuccessorV(unsigned Idx) const {
+  assert(Idx < getNumSuccessors() && "Successor # out of range for catchret!");
+  return getSuccessor();
+}
+unsigned CatchReturnInst::getNumSuccessorsV() const {
+  return getNumSuccessors();
+}
+void CatchReturnInst::setSuccessorV(unsigned Idx, BasicBlock *B) {
+  assert(Idx < getNumSuccessors() && "Successor # out of range for catchret!");
+  setSuccessor(B);
+}
+
+//===----------------------------------------------------------------------===//
+//                        CatchPadInst Implementation
+//===----------------------------------------------------------------------===//
+void CatchPadInst::init(BasicBlock *IfNormal, BasicBlock *IfException,
+                        ArrayRef<Value *> Args, const Twine &NameStr) {
+  assert(getNumOperands() == 2 + Args.size() && "NumOperands not set up?");
+  Op<-2>() = IfNormal;
+  Op<-1>() = IfException;
+  std::copy(Args.begin(), Args.end(), op_begin());
+  setName(NameStr);
+}
+
+CatchPadInst::CatchPadInst(const CatchPadInst &CPI)
+    : TerminatorInst(CPI.getType(), Instruction::CatchPad,
+                     OperandTraits<CatchPadInst>::op_end(this) -
+                         CPI.getNumOperands(),
+                     CPI.getNumOperands()) {
+  std::copy(CPI.op_begin(), CPI.op_end(), op_begin());
+}
+
+CatchPadInst::CatchPadInst(BasicBlock *IfNormal, BasicBlock *IfException,
+                           ArrayRef<Value *> Args, unsigned Values,
+                           const Twine &NameStr, Instruction *InsertBefore)
+    : TerminatorInst(Type::getTokenTy(IfNormal->getContext()),
+                     Instruction::CatchPad,
+                     OperandTraits<CatchPadInst>::op_end(this) - Values, Values,
+                     InsertBefore) {
+  init(IfNormal, IfException, Args, NameStr);
+}
+
+CatchPadInst::CatchPadInst(BasicBlock *IfNormal, BasicBlock *IfException,
+                           ArrayRef<Value *> Args, unsigned Values,
+                           const Twine &NameStr, BasicBlock *InsertAtEnd)
+    : TerminatorInst(Type::getTokenTy(IfNormal->getContext()),
+                     Instruction::CatchPad,
+                     OperandTraits<CatchPadInst>::op_end(this) - Values, Values,
+                     InsertAtEnd) {
+  init(IfNormal, IfException, Args, NameStr);
+}
+
+BasicBlock *CatchPadInst::getSuccessorV(unsigned Idx) const {
+  return getSuccessor(Idx);
+}
+unsigned CatchPadInst::getNumSuccessorsV() const {
+  return getNumSuccessors();
+}
+void CatchPadInst::setSuccessorV(unsigned Idx, BasicBlock *B) {
+  return setSuccessor(Idx, B);
+}
+
+//===----------------------------------------------------------------------===//
+//                        TerminatePadInst Implementation
+//===----------------------------------------------------------------------===//
+void TerminatePadInst::init(BasicBlock *BB, ArrayRef<Value *> Args) {
+  if (BB)
+    setInstructionSubclassData(getSubclassDataFromInstruction() | 1);
+  if (BB)
+    Op<-1>() = BB;
+  std::copy(Args.begin(), Args.end(), op_begin());
+}
+
+TerminatePadInst::TerminatePadInst(const TerminatePadInst &TPI)
+    : TerminatorInst(TPI.getType(), Instruction::TerminatePad,
+                     OperandTraits<TerminatePadInst>::op_end(this) -
+                         TPI.getNumOperands(),
+                     TPI.getNumOperands()) {
+  setInstructionSubclassData(TPI.getSubclassDataFromInstruction());
+  std::copy(TPI.op_begin(), TPI.op_end(), op_begin());
+}
+
+TerminatePadInst::TerminatePadInst(LLVMContext &C, BasicBlock *BB,
+                                   ArrayRef<Value *> Args, unsigned Values,
+                                   Instruction *InsertBefore)
+    : TerminatorInst(Type::getVoidTy(C), Instruction::TerminatePad,
+                     OperandTraits<TerminatePadInst>::op_end(this) - Values,
+                     Values, InsertBefore) {
+  init(BB, Args);
+}
+
+TerminatePadInst::TerminatePadInst(LLVMContext &C, BasicBlock *BB,
+                                   ArrayRef<Value *> Args, unsigned Values,
+                                   BasicBlock *InsertAtEnd)
+    : TerminatorInst(Type::getVoidTy(C), Instruction::TerminatePad,
+                     OperandTraits<TerminatePadInst>::op_end(this) - Values,
+                     Values, InsertAtEnd) {
+  init(BB, Args);
+}
+
+BasicBlock *TerminatePadInst::getSuccessorV(unsigned Idx) const {
+  assert(Idx == 0);
+  return getUnwindDest();
+}
+unsigned TerminatePadInst::getNumSuccessorsV() const {
+  return getNumSuccessors();
+}
+void TerminatePadInst::setSuccessorV(unsigned Idx, BasicBlock *B) {
+  assert(Idx == 0);
+  return setUnwindDest(B);
+}
+
+//===----------------------------------------------------------------------===//
+//                        CleanupPadInst Implementation
+//===----------------------------------------------------------------------===//
+void CleanupPadInst::init(ArrayRef<Value *> Args, const Twine &NameStr) {
+  assert(getNumOperands() == Args.size() && "NumOperands not set up?");
+  std::copy(Args.begin(), Args.end(), op_begin());
+  setName(NameStr);
+}
+
+CleanupPadInst::CleanupPadInst(const CleanupPadInst &CPI)
+    : Instruction(CPI.getType(), Instruction::CleanupPad,
+                  OperandTraits<CleanupPadInst>::op_end(this) -
+                      CPI.getNumOperands(),
+                  CPI.getNumOperands()) {
+  std::copy(CPI.op_begin(), CPI.op_end(), op_begin());
+}
+
+CleanupPadInst::CleanupPadInst(LLVMContext &C, ArrayRef<Value *> Args,
+                               const Twine &NameStr, Instruction *InsertBefore)
+    : Instruction(Type::getTokenTy(C), Instruction::CleanupPad,
+                  OperandTraits<CleanupPadInst>::op_end(this) - Args.size(),
+                  Args.size(), InsertBefore) {
+  init(Args, NameStr);
+}
+
+CleanupPadInst::CleanupPadInst(LLVMContext &C, ArrayRef<Value *> Args,
+                               const Twine &NameStr, BasicBlock *InsertAtEnd)
+    : Instruction(Type::getTokenTy(C), Instruction::CleanupPad,
+                  OperandTraits<CleanupPadInst>::op_end(this) - Args.size(),
+                  Args.size(), InsertAtEnd) {
+  init(Args, NameStr);
 }
 
 //===----------------------------------------------------------------------===//
@@ -3218,6 +3578,23 @@ CmpInst::Predicate CmpInst::getSwappedPredicate(Predicate pred) {
   }
 }
 
+CmpInst::Predicate CmpInst::getSignedPredicate(Predicate pred) {
+  assert(CmpInst::isUnsigned(pred) && "Call only with signed predicates!");
+
+  switch (pred) {
+  default:
+    llvm_unreachable("Unknown predicate!");
+  case CmpInst::ICMP_ULT:
+    return CmpInst::ICMP_SLT;
+  case CmpInst::ICMP_ULE:
+    return CmpInst::ICMP_SLE;
+  case CmpInst::ICMP_UGT:
+    return CmpInst::ICMP_SGT;
+  case CmpInst::ICMP_UGE:
+    return CmpInst::ICMP_SGE;
+  }
+}
+
 bool CmpInst::isUnsigned(unsigned short predicate) {
   switch (predicate) {
     default: return false;
@@ -3641,6 +4018,34 @@ InvokeInst *InvokeInst::cloneImpl() const {
 }
 
 ResumeInst *ResumeInst::cloneImpl() const { return new (1) ResumeInst(*this); }
+
+CleanupEndPadInst *CleanupEndPadInst::cloneImpl() const {
+  return new (getNumOperands()) CleanupEndPadInst(*this);
+}
+
+CleanupReturnInst *CleanupReturnInst::cloneImpl() const {
+  return new (getNumOperands()) CleanupReturnInst(*this);
+}
+
+CatchEndPadInst *CatchEndPadInst::cloneImpl() const {
+  return new (getNumOperands()) CatchEndPadInst(*this);
+}
+
+CatchReturnInst *CatchReturnInst::cloneImpl() const {
+  return new (getNumOperands()) CatchReturnInst(*this);
+}
+
+CatchPadInst *CatchPadInst::cloneImpl() const {
+  return new (getNumOperands()) CatchPadInst(*this);
+}
+
+TerminatePadInst *TerminatePadInst::cloneImpl() const {
+  return new (getNumOperands()) TerminatePadInst(*this);
+}
+
+CleanupPadInst *CleanupPadInst::cloneImpl() const {
+  return new (getNumOperands()) CleanupPadInst(*this);
+}
 
 UnreachableInst *UnreachableInst::cloneImpl() const {
   LLVMContext &Context = getContext();

@@ -131,7 +131,7 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
   MachineBasicBlock::iterator I = MBB.begin();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
   const TargetInstrInfo &TII = *Subtarget->getInstrInfo();
-  DebugLoc DL = I != MBB.end() ? I->getDebugLoc() : DebugLoc();
+  DebugLoc DL;
   unsigned V0, V1, GlobalBaseReg = MipsFI->getGlobalBaseReg();
   const TargetRegisterClass *RC;
   const MipsABIInfo &ABI = static_cast<const MipsTargetMachine &>(TM).getABI();
@@ -849,7 +849,7 @@ std::pair<bool, SDNode*> MipsSEDAGToDAGISel::selectNode(SDNode *Node) {
   }
 
   case MipsISD::ThreadPointer: {
-    EVT PtrVT = getTargetLowering()->getPointerTy();
+    EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
     unsigned RdhwrOpc, DestReg;
 
     if (PtrVT == MVT::i32) {

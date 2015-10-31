@@ -16,6 +16,7 @@
 
 #include "MacOSX/Genealogy.h"
 #include "MacOSX/ThreadInfo.h"
+#include "JSONGenerator.h"
 #include "DNBDefs.h"
 #include <mach/thread_info.h>
 #include <string>
@@ -50,6 +51,7 @@ nub_process_t   DNBProcessLaunch        (const char *path,
                                          char *err_str, 
                                          size_t err_len);
 
+nub_process_t   DNBProcessGetPIDByName  (const char *name);
 nub_process_t   DNBProcessAttach        (nub_process_t pid, struct timespec *timeout, char *err_str, size_t err_len);
 nub_process_t   DNBProcessAttachByName  (const char *name, struct timespec *timeout, char *err_str, size_t err_len);
 nub_process_t   DNBProcessAttachWait    (const char *wait_name, nub_launch_flavor_t launch_flavor, bool ignore_existing, struct timespec *timeout, useconds_t interval, char *err_str, size_t err_len, DNBShouldCancelCallback should_cancel = NULL, void *callback_data = NULL);
@@ -141,6 +143,7 @@ ThreadInfo::QoS DNBGetRequestedQoSForThread     (nub_process_t pid, nub_thread_t
 nub_addr_t      DNBGetPThreadT                  (nub_process_t pid, nub_thread_t tid);
 nub_addr_t      DNBGetDispatchQueueT            (nub_process_t pid, nub_thread_t tid);
 nub_addr_t      DNBGetTSDAddressForThread       (nub_process_t pid, nub_thread_t tid, uint64_t plo_pthread_tsd_base_address_offset, uint64_t plo_pthread_tsd_base_offset, uint64_t plo_pthread_tsd_entry_size);
+JSONGenerator::ObjectSP DNBGetLoadedDynamicLibrariesInfos (nub_process_t pid, nub_addr_t image_list_address, nub_addr_t image_count);
 //
 //----------------------------------------------------------------------
 // Breakpoint functions
@@ -165,5 +168,6 @@ nub_bool_t      DNBGetRegisterInfoByName        (const char *reg_name, DNBRegist
 //----------------------------------------------------------------------
 const char *    DNBStateAsString (nub_state_t state);
 nub_bool_t      DNBResolveExecutablePath (const char *path, char *resolved_path, size_t resolved_path_size);
+bool            DNBGetOSVersionNumbers (uint64_t *major, uint64_t *minor, uint64_t *patch);
 
 #endif

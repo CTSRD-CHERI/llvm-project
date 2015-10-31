@@ -1,7 +1,10 @@
 """Test that the 'add-dsym', aka 'target symbols add', succeeds in the middle of debug session."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 import sys
 from lldbtest import *
@@ -16,6 +19,7 @@ class AddDsymMidExecutionCommandCase(TestBase):
         TestBase.setUp(self)
         self.source = 'main.c'
 
+    @no_debug_info_test # Prevent the genaration of the dwarf version of this test
     def test_add_dsym_mid_execution(self):
         """Test that add-dsym mid-execution loads the symbols at the right place for a slid binary."""
         self.buildDsym(clean=True)
@@ -39,9 +43,3 @@ class AddDsymMidExecutionCommandCase(TestBase):
 
         self.expect("frame select",
                     substrs = ['a.out`main at main.c'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

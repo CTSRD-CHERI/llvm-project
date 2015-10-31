@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
 
 ; Derived from the following code:
@@ -10,17 +10,25 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 ; }
 
 ; CHECK: Assumed Context:
-; CHECK:   [n, m] -> {  :  }
-; CHECK: p0: %n
-; CHECK: p1: %m
+; CHECK:   [m, n] -> {  :  }
+; CHECK: p0: %m
+; CHECK: p1: %n
 ; CHECK-NOT: p3
 
 ; CHECK: Domain
-; CHECK:   [n, m] -> { Stmt_for_j[i0, i1] : i0 >= 0 and i0 <= -1 + n and i1 >= 0 and i1 <= -1 + m };
+; CHECK:   [m, n] -> { Stmt_for_j[i0, i1] :
+; CHECK-DAG:             i0 >= 0
+; CHECK-DAG:          and
+; CHECK-DAG:             i0 <= -1 + n
+; CHECK-DAG:          and
+; CHECK-DAG:             i1 >= 0
+; CHECK-DAG:          and
+; CHECK-DAG:             i1 <= -1 + m
+; CHECK:              }
 ; CHECK: Schedule
-; CHECK:   [n, m] -> { Stmt_for_j[i0, i1] -> [i0, i1] };
+; CHECK:   [m, n] -> { Stmt_for_j[i0, i1] -> [i0, i1] };
 ; CHECK: MustWriteAccess
-; CHECK:   [n, m] -> { Stmt_for_j[i0, i1] -> MemRef_A[i0, i1] };
+; CHECK:   [m, n] -> { Stmt_for_j[i0, i1] -> MemRef_A[i0, i1] };
 
 define void @foo(i64 %n, i64 %m, double* %A) {
 entry:

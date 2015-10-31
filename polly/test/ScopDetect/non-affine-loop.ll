@@ -1,7 +1,22 @@
-; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=false -analyze < %s | FileCheck %s --check-prefix=REJECTNONAFFINELOOPS
-; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true -analyze < %s | FileCheck %s --check-prefix=ALLOWNONAFFINELOOPS
-; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true -polly-allow-nonaffine -analyze < %s | FileCheck %s --check-prefix=ALLOWNONAFFINELOOPSANDACCESSES
-; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true -polly-allow-nonaffine -polly-detect-scops-in-regions-without-loops -analyze < %s | FileCheck %s --check-prefix=ALLOWNONAFFINELOOPSANDACCESSESANDNOLOOPS
+; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=false \
+; RUN:     -analyze < %s | FileCheck %s --check-prefix=REJECTNONAFFINELOOPS
+; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=true \
+; RUN:     -analyze < %s | FileCheck %s --check-prefix=ALLOWNONAFFINELOOPS
+; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=false -polly-allow-nonaffine \
+; RUN:     -analyze < %s | FileCheck %s \
+; RUN:     --check-prefix=ALLOWNONAFFINEREGIONSANDACCESSES
+; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=true -polly-allow-nonaffine \
+; RUN:     -analyze < %s | FileCheck %s \
+; RUN:     --check-prefix=ALLOWNONAFFINELOOPSANDACCESSES
+; RUN: opt %loadPolly -polly-process-unprofitable=false \
+; RUN:     -polly-detect -polly-allow-nonaffine-branches \
+; RUN:     -polly-allow-nonaffine-loops=true -polly-allow-nonaffine \
+; RUN:     -analyze < %s | FileCheck %s \
+; RUN:     --check-prefix=PROFIT
 ;
 ; This function/region does contain a loop, however it is non-affine, hence the access
 ; A[i] is also. Furthermore, it is the only loop, thus when we over approximate
@@ -13,10 +28,11 @@
 ;        A[-1]++;
 ;    }
 ;
-; REJECTNONAFFINELOOPS-NOT:                 Valid
-; ALLOWNONAFFINELOOPS-NOT:                  Valid
-; ALLOWNONAFFINELOOPSANDACCESSES-NOT:       Valid
-; ALLOWNONAFFINELOOPSANDACCESSESANDNOLOOPS: Valid Region for Scop: bb1 => bb10
+; REJECTNONAFFINELOOPS-NOT:              Valid
+; ALLOWNONAFFINELOOPS-NOT:               Valid
+; ALLOWNONAFFINEREGIONSANDACCESSES-NOT:  Valid
+; ALLOWNONAFFINELOOPSANDACCESSES:        Valid
+; PROFIT-NOT:                            Valid
 ;
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

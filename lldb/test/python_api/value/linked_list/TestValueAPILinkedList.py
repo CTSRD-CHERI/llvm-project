@@ -3,34 +3,18 @@ Test SBValue API linked_list_iter which treats the SBValue as a linked list and
 supports iteration till the end of list is reached.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
 class ValueAsLinkedListTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym(self):
-        """Exercise SBValue API linked_list_iter."""
-        d = {'EXE': self.exe_name}
-        self.buildDsym(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.linked_list_api(self.exe_name)
-
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Exercise SBValue API linked_list_iter."""
-        d = {'EXE': self.exe_name}
-        self.buildDwarf(dictionary=d)
-        self.setTearDownCleanup(dictionary=d)
-        self.linked_list_api(self.exe_name)
 
     def setUp(self):
         # Call super's setUp().
@@ -40,9 +24,13 @@ class ValueAsLinkedListTestCase(TestBase):
         # Find the line number to break at.
         self.line = line_number('main.cpp', '// Break at this line')
 
-    def linked_list_api(self, exe_name):
-        """Exercise SBValue API linked_list-iter."""
-        exe = os.path.join(os.getcwd(), exe_name)
+    @add_test_categories(['pyapi'])
+    def test(self):
+        """Exercise SBValue API linked_list_iter."""
+        d = {'EXE': self.exe_name}
+        self.build(dictionary=d)
+        self.setTearDownCleanup(dictionary=d)
+        exe = os.path.join(os.getcwd(), self.exe_name)
 
         # Create a target by the debugger.
         target = self.dbg.CreateTarget(exe)
@@ -77,12 +65,12 @@ class ValueAsLinkedListTestCase(TestBase):
             # Make sure that 'next' corresponds to an SBValue with pointer type.
             self.assertTrue(t.TypeIsPointerType())
             if self.TraceOn():
-                print cvf.format(t)
+                print(cvf.format(t))
             list.append(int(t.GetChildMemberWithName("id").GetValue()))
 
         # Sanity checks that the we visited all the items (no more, no less).
         if self.TraceOn():
-            print "visited IDs:", list
+            print("visited IDs:", list)
         self.assertTrue(visitedIDs == list)
 
         # Let's exercise the linked_list_iter() API again, this time supplying
@@ -107,12 +95,12 @@ class ValueAsLinkedListTestCase(TestBase):
             # Make sure that 'next' corresponds to an SBValue with pointer type.
             self.assertTrue(t.TypeIsPointerType())
             if self.TraceOn():
-                print cvf.format(t)
+                print(cvf.format(t))
             list.append(int(t.GetChildMemberWithName("id").GetValue()))
 
         # Sanity checks that the we visited all the items (no more, no less).
         if self.TraceOn():
-            print "visited IDs:", list
+            print("visited IDs:", list)
         self.assertTrue(visitedIDs == list)
         
         # Get variable 'empty_task_head'.
@@ -124,7 +112,7 @@ class ValueAsLinkedListTestCase(TestBase):
         # There is no iterable item from empty_task_head.linked_list_iter().
         for t in empty_task_head.linked_list_iter('next', eol):
             if self.TraceOn():
-                print cvf.format(t)
+                print(cvf.format(t))
             list.append(int(t.GetChildMemberWithName("id").GetValue()))
 
         self.assertTrue(len(list) == 0)
@@ -138,13 +126,7 @@ class ValueAsLinkedListTestCase(TestBase):
         # There 3 iterable items from task_evil.linked_list_iter(). :-)
         for t in task_evil.linked_list_iter('next'):
             if self.TraceOn():
-                print cvf.format(t)
+                print(cvf.format(t))
             list.append(int(t.GetChildMemberWithName("id").GetValue()))
 
         self.assertTrue(len(list) == 3)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

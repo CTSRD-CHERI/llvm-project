@@ -18,20 +18,29 @@ PARALLEL_DIRS := ABI/MacOSX-arm ABI/MacOSX-arm64 ABI/MacOSX-i386 ABI/SysV-i386 A
 	ObjectContainer/BSD-Archive ObjectFile/ELF ObjectFile/PECOFF \
 	ObjectContainer/Universal-Mach-O ObjectFile/Mach-O \
 	ObjectFile/JIT SymbolFile/DWARF SymbolFile/Symtab Process/Utility \
-	DynamicLoader/Static Platform Process/gdb-remote \
+	DynamicLoader/Static Platform Process/elf-core Process/gdb-remote \
 	Instruction/ARM Instruction/ARM64 Instruction/MIPS Instruction/MIPS64 \
 	UnwindAssembly/InstEmulation UnwindAssembly/x86 \
 	LanguageRuntime/CPlusPlus/ItaniumABI \
 	LanguageRuntime/ObjC/AppleObjCRuntime \
+	LanguageRuntime/Go/ \
 	LanguageRuntime/RenderScript/RenderScriptRuntime \
+	Language/CPlusPlus \
+	Language/ObjC \
+	Language/ObjCPlusPlus \
 	DynamicLoader/POSIX-DYLD \
 	DynamicLoader/Hexagon-DYLD \
 	DynamicLoader/MacOSX-DYLD \
+	DynamicLoader/Windows-DYLD \
+	JITLoader/GDB \
+	ExpressionParser/Clang \
+	OperatingSystem/Go \
 	OperatingSystem/Python \
 	SystemRuntime/MacOSX \
 	SymbolVendor/ELF \
 	MemoryHistory/asan \
-	InstrumentationRuntime/AddressSanitizer
+	InstrumentationRuntime/AddressSanitizer \
+	ScriptInterpreter/Python ScriptInterpreter/None
 
 ifeq ($(HOST_OS),Darwin)
 PARALLEL_DIRS += Process/MacOSX-Kernel
@@ -39,25 +48,18 @@ PARALLEL_DIRS += DynamicLoader/Darwin-Kernel
 PARALLEL_DIRS += SymbolVendor/MacOSX
 #PARALLEL_DIRS += Process/MacOSX-User
 PARALLEL_DIRS += Process/mach-core
-PARALLEL_DIRS += Process/elf-core
-PARALLEL_DIRS += JITLoader/GDB
 endif
 
 ifeq ($(HOST_OS),Linux)
 PARALLEL_DIRS += Process/Linux Process/POSIX
-PARALLEL_DIRS += Process/elf-core
-PARALLEL_DIRS += JITLoader/GDB
-endif
-
-ifeq ($(HOST_OS),MingW)
-PARALLEL_DIRS += Process/elf-core
-PARALLEL_DIRS += JITLoader/GDB
 endif
 
 ifneq (,$(filter $(HOST_OS), FreeBSD GNU/kFreeBSD))
 PARALLEL_DIRS += Process/FreeBSD Process/POSIX
-PARALLEL_DIRS += Process/elf-core
-PARALLEL_DIRS += JITLoader/GDB
+endif
+
+ifeq ($(HOST_OS),NetBSD)
+PARALLEL_DIRS += Process/POSIX
 endif
 
 include $(LLDB_LEVEL)/Makefile

@@ -132,6 +132,7 @@ clang_findIncludesInFileWithBlock
 clang_findReferencesInFile
 clang_findReferencesInFileWithBlock
 clang_formatDiagnostic
+clang_free
 clang_getArgType
 clang_getArrayElementType
 clang_getArraySize
@@ -296,6 +297,9 @@ clang_CompileCommands_dispose
 clang_CompileCommands_getSize
 clang_CompileCommands_getCommand
 clang_CompileCommand_getDirectory
+clang_CompileCommand_getFilename
+clang_CompileCommand_getMappedSourceContent
+clang_CompileCommand_getMappedSourcePath
 clang_CompileCommand_getNumArgs
 clang_CompileCommand_getArg
 clang_visitChildren

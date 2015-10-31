@@ -160,15 +160,15 @@ SymbolContext::DumpStopContext (
             s->Printf("<");
             dumped_something = true;
         }
-        else if (show_function_arguments == false && function->GetMangled().GetName(Mangled::ePreferDemangledWithoutArguments))
+        else
         {
-            dumped_something = true;
-            function->GetMangled().GetName(Mangled::ePreferDemangledWithoutArguments).Dump(s);
-        }
-        else if (function->GetMangled().GetName())
-        {
-            dumped_something = true;
-            function->GetMangled().GetName().Dump(s);
+            ConstString name;
+            if (show_function_arguments == false)
+                name = function->GetNameNoArguments();
+            if (!name)
+                name = function->GetName();
+            if (name)
+                name.Dump(s);
         }
         
         if (addr.IsValid())
@@ -192,7 +192,7 @@ SymbolContext::DumpStopContext (
             dumped_something = true;
             Block *inlined_block = block->GetContainingInlinedBlock();
             const InlineFunctionInfo* inlined_block_info = inlined_block->GetInlinedFunctionInfo();
-            s->Printf (" [inlined] %s", inlined_block_info->GetName().GetCString());
+            s->Printf (" [inlined] %s", inlined_block_info->GetName(function->GetLanguage()).GetCString());
             
             lldb_private::AddressRange block_range;
             if (inlined_block->GetRangeContainingAddress(addr, block_range))
@@ -235,12 +235,12 @@ SymbolContext::DumpStopContext (
             s->Printf("<");
             dumped_something = true;
         }
-        else if (symbol->GetMangled().GetName())
+        else if (symbol->GetName())
         {
             dumped_something = true;
             if (symbol->GetType() == eSymbolTypeTrampoline)
                 s->PutCString("symbol stub for: ");
-            symbol->GetMangled().GetName().Dump(s);
+            symbol->GetName().Dump(s);
         }
 
         if (addr.IsValid() && symbol->ValueIsAddress())
@@ -391,24 +391,24 @@ SymbolContext::GetResolvedMask () const
 void
 SymbolContext::Dump(Stream *s, Target *target) const
 {
-    *s << (void *)this << ": ";
+    *s << this << ": ";
     s->Indent();
     s->PutCString("SymbolContext");
     s->IndentMore();
     s->EOL();
     s->IndentMore();
     s->Indent();
-    *s << "Module       = " << (void *)module_sp.get() << ' ';
+    *s << "Module       = " << module_sp.get() << ' ';
     if (module_sp)
         module_sp->GetFileSpec().Dump(s);
     s->EOL();
     s->Indent();
-    *s << "CompileUnit  = " << (void *)comp_unit;
+    *s << "CompileUnit  = " << comp_unit;
     if (comp_unit != nullptr)
         *s << " {0x" << comp_unit->GetID() << "} " << *(static_cast<FileSpec*> (comp_unit));
     s->EOL();
     s->Indent();
-    *s << "Function     = " << (void *)function;
+    *s << "Function     = " << function;
     if (function != nullptr)
     {
         *s << " {0x" << function->GetID() << "} " << function->GetType()->GetName() << ", address-range = ";
@@ -424,7 +424,7 @@ SymbolContext::Dump(Stream *s, Target *target) const
     }
     s->EOL();
     s->Indent();
-    *s << "Block        = " << (void *)block;
+    *s << "Block        = " << block;
     if (block != nullptr)
         *s << " {0x" << block->GetID() << '}';
     // Dump the block and pass it a negative depth to we print all the parent blocks
@@ -436,11 +436,11 @@ SymbolContext::Dump(Stream *s, Target *target) const
     line_entry.Dump (s, target, true, Address::DumpStyleLoadAddress, Address::DumpStyleModuleWithFileAddress, true);
     s->EOL();
     s->Indent();
-    *s << "Symbol       = " << (void *)symbol;
+    *s << "Symbol       = " << symbol;
     if (symbol != nullptr && symbol->GetMangled())
-        *s << ' ' << symbol->GetMangled().GetName().AsCString();
+        *s << ' ' << symbol->GetName().AsCString();
     s->EOL();
-    *s << "Variable     = " << (void *)variable;
+    *s << "Variable     = " << variable;
     if (variable != nullptr)
     {
         *s << " {0x" << variable->GetID() << "} " << variable->GetType()->GetName();
@@ -649,23 +649,182 @@ SymbolContext::GetFunctionMethodInfo (lldb::LanguageType &language,
 
 
 {
-    Block *function_block = GetFunctionBlock ();
+    Block *function_block = GetFunctionBlock();
     if (function_block)
     {
-        clang::DeclContext *decl_context = function_block->GetClangDeclContext();
-        
-        if (decl_context)
-        {
-            return ClangASTContext::GetClassMethodInfoForDeclContext (decl_context,
-                                                                      language,
-                                                                      is_instance_method,
-                                                                      language_object_name);
-        }
+        CompilerDeclContext decl_ctx = function_block->GetDeclContext();
+        if (decl_ctx)
+            return decl_ctx.IsClassMethod(&language, &is_instance_method, &language_object_name);
     }
-    language = eLanguageTypeUnknown;
-    is_instance_method = false;
-    language_object_name.Clear();
     return false;
+}
+
+class TypeMoveMatchingBlock
+{
+public:
+    TypeMoveMatchingBlock(Block * block, TypeMap &typem, TypeList &typel) :
+        curr_block(block),type_map(typem),type_list(typel)
+    {
+    }
+
+    bool
+    operator() (const lldb::TypeSP& type)
+    {
+        if (type && type->GetSymbolContextScope() != nullptr && curr_block == type->GetSymbolContextScope()->CalculateSymbolContextBlock())
+        {
+            type_list.Insert(type);
+            type_map.RemoveTypeWithUID(type->GetID());
+            return false;
+        }
+        return true;
+    }
+
+private:
+    const Block * const curr_block;
+    TypeMap &type_map;
+    TypeList &type_list;
+};
+
+class TypeMoveMatchingFunction
+{
+public:
+    TypeMoveMatchingFunction(Function * block, TypeMap &typem, TypeList &typel) :
+        func(block),type_map(typem),type_list(typel)
+    {
+    }
+
+    bool
+    operator() (const lldb::TypeSP& type)
+    {
+        if (type && type->GetSymbolContextScope() != nullptr && func == type->GetSymbolContextScope()->CalculateSymbolContextFunction())
+        {
+            type_list.Insert(type);
+            type_map.RemoveTypeWithUID(type->GetID());
+            return false;
+        }
+        return true;
+    }
+
+private:
+    const Function * const func;
+    TypeMap &type_map;
+    TypeList &type_list;
+};
+
+class TypeMoveMatchingCompileUnit
+{
+public:
+    TypeMoveMatchingCompileUnit(CompileUnit * cunit, TypeMap &typem, TypeList &typel) :
+        comp_unit(cunit),type_map(typem),type_list(typel)
+    {
+    }
+
+    bool
+    operator() (const lldb::TypeSP& type)
+    {
+        if (type && type->GetSymbolContextScope() != nullptr && comp_unit == type->GetSymbolContextScope()->CalculateSymbolContextCompileUnit())
+        {
+            type_list.Insert(type);
+            type_map.RemoveTypeWithUID(type->GetID());
+            return false;
+        }
+        return true;
+    }
+
+private:
+    const CompileUnit * const comp_unit;
+    TypeMap &type_map;
+    TypeList &type_list;
+};
+
+class TypeMoveMatchingModule
+{
+public:
+    TypeMoveMatchingModule(lldb::ModuleSP modsp, TypeMap &typem, TypeList &typel) :
+        modulesp(modsp),type_map(typem),type_list(typel)
+    {
+    }
+
+    bool
+    operator() (const lldb::TypeSP& type)
+    {
+        if (type && type->GetSymbolContextScope() != nullptr && modulesp.get() == type->GetSymbolContextScope()->CalculateSymbolContextModule().get())
+        {
+            type_list.Insert(type);
+            type_map.RemoveTypeWithUID(type->GetID());
+            return false;
+        }
+        return true;
+    }
+
+private:
+    lldb::ModuleSP modulesp;
+    TypeMap &type_map;
+    TypeList &type_list;
+};
+
+class TypeMaptoList
+{
+public:
+    TypeMaptoList(TypeMap &typem, TypeList &typel) :
+        type_map(typem),type_list(typel)
+    {
+    }
+
+    bool
+    operator() (const lldb::TypeSP& type)
+    {
+        if(type)
+        {
+            type_list.Insert(type);
+            type_map.RemoveTypeWithUID(type->GetID());
+            if (type_map.Empty())
+                return false;
+        }
+        return true;
+    }
+
+private:
+    TypeMap &type_map;
+    TypeList &type_list;
+};
+
+void
+SymbolContext::SortTypeList(TypeMap &type_map, TypeList &type_list ) const
+{
+    Block * curr_block = block;
+    bool isInlinedblock = false;
+    if (curr_block != nullptr && curr_block->GetContainingInlinedBlock() != nullptr)
+        isInlinedblock = true;
+
+    while (curr_block != nullptr && !isInlinedblock)
+    {
+        TypeMoveMatchingBlock callbackBlock (curr_block, type_map, type_list);
+        type_map.ForEach(callbackBlock);
+        curr_block = curr_block->GetParent();
+    }
+    if(function != nullptr && type_map.GetSize() > 0)
+    {
+        TypeMoveMatchingFunction callbackFunction (function, type_map, type_list);
+        type_map.ForEach(callbackFunction);
+    }
+    if(comp_unit != nullptr && type_map.GetSize() > 0)
+    {
+        TypeMoveMatchingCompileUnit callbackCompileUnit (comp_unit, type_map, type_list);
+        type_map.ForEach(callbackCompileUnit);
+    }
+    if(module_sp && type_map.GetSize() > 0)
+    {
+        TypeMoveMatchingModule callbackModule (module_sp, type_map, type_list);
+        type_map.ForEach(callbackModule);
+    }
+    if(type_map.GetSize() > 0)
+    {
+        TypeMaptoList callbackM2L (type_map, type_list);
+        type_map.ForEach(callbackM2L);
+
+    }
+	return ;
 }
 
 ConstString
@@ -681,14 +840,14 @@ SymbolContext::GetFunctionName (Mangled::NamePreference preference) const
             {
                 const InlineFunctionInfo *inline_info = inlined_block->GetInlinedFunctionInfo();
                 if (inline_info)
-                    return inline_info->GetName();
+                    return inline_info->GetName(function->GetLanguage());
             }
         }
-        return function->GetMangled().GetName(preference);
+        return function->GetMangled().GetName(function->GetLanguage(), preference);
     }
     else if (symbol && symbol->ValueIsAddress())
     {
-        return symbol->GetMangled().GetName(preference);
+        return symbol->GetMangled().GetName(symbol->GetLanguage(), preference);
     }
     else
     {
@@ -916,7 +1075,7 @@ SymbolContextSpecifier::SymbolContextMatches(SymbolContext &sc)
             {
                 was_inlined = true;
                 const Mangled &name = inline_info->GetMangled();
-                if (!name.NameMatches (func_name))
+                if (!name.NameMatches (func_name, sc.function->GetLanguage()))
                     return false;
             }
         }
@@ -925,12 +1084,12 @@ SymbolContextSpecifier::SymbolContextMatches(SymbolContext &sc)
         {
             if (sc.function != nullptr)
             {
-                if (!sc.function->GetMangled().NameMatches(func_name))
+                if (!sc.function->GetMangled().NameMatches(func_name, sc.function->GetLanguage()))
                     return false;
             }
             else if (sc.symbol != nullptr)
             {
-                if (!sc.symbol->GetMangled().NameMatches(func_name))
+                if (!sc.symbol->GetMangled().NameMatches(func_name, sc.function->GetLanguage()))
                     return false;
             }
         }
@@ -1178,7 +1337,7 @@ void
 SymbolContextList::Dump(Stream *s, Target *target) const
 {
 
-    *s << (void *)this << ": ";
+    *s << this << ": ";
     s->Indent();
     s->PutCString("SymbolContextList");
     s->EOL();

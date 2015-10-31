@@ -18,7 +18,9 @@ using namespace lld::elf;
 
 std::unique_ptr<ELFLinkingContext>
 elf::createMipsLinkingContext(llvm::Triple triple) {
-  if (triple.getArch() == llvm::Triple::mipsel ||
+  if (triple.getArch() == llvm::Triple::mips ||
+      triple.getArch() == llvm::Triple::mipsel ||
+      triple.getArch() == llvm::Triple::mips64 ||
       triple.getArch() == llvm::Triple::mips64el)
     return llvm::make_unique<MipsLinkingContext>(triple);
   return nullptr;
@@ -27,8 +29,12 @@ elf::createMipsLinkingContext(llvm::Triple triple) {
 static std::unique_ptr<TargetHandler> createTarget(llvm::Triple triple,
                                                    MipsLinkingContext &ctx) {
   switch (triple.getArch()) {
+  case llvm::Triple::mips:
+    return llvm::make_unique<MipsTargetHandler<ELF32BE>>(ctx);
   case llvm::Triple::mipsel:
     return llvm::make_unique<MipsTargetHandler<ELF32LE>>(ctx);
+  case llvm::Triple::mips64:
+    return llvm::make_unique<MipsTargetHandler<ELF64BE>>(ctx);
   case llvm::Triple::mips64el:
     return llvm::make_unique<MipsTargetHandler<ELF64LE>>(ctx);
   default:
@@ -40,9 +46,17 @@ MipsLinkingContext::MipsLinkingContext(llvm::Triple triple)
     : ELFLinkingContext(triple, createTarget(triple, *this)) {}
 
 uint64_t MipsLinkingContext::getBaseAddress() const {
-  if (_baseAddress == 0 && getOutputELFType() == llvm::ELF::ET_EXEC)
-    return getTriple().isArch64Bit() ? 0x120000000 : 0x400000;
-  return _baseAddress;
+  if (_baseAddress != 0 || getOutputELFType() != llvm::ELF::ET_EXEC)
+    return _baseAddress;
+  switch (getAbi()) {
+  case MipsAbi::O32:
+    return 0x0400000;
+  case MipsAbi::N32:
+    return 0x10000000;
+  case MipsAbi::N64:
+    return 0x120000000;
+  }
+  llvm_unreachable("unknown MIPS ABI flag");
 }
 
 StringRef MipsLinkingContext::entrySymbolName() const {
@@ -52,7 +66,15 @@ StringRef MipsLinkingContext::entrySymbolName() const {
 }
 
 StringRef MipsLinkingContext::getDefaultInterpreter() const {
-  return getTriple().isArch64Bit() ? "/lib64/ld.so.1" : "/lib/ld.so.1";
+  switch (getAbi()) {
+  case MipsAbi::O32:
+    return "/lib/ld.so.1";
+  case MipsAbi::N32:
+    return "/lib32/ld.so.1";
+  case MipsAbi::N64:
+    return "/lib64/ld.so.1";
+  }
+  llvm_unreachable("unknown MIPS ABI flag");
 }
 
 void MipsLinkingContext::addPasses(PassManager &pm) {
@@ -116,6 +138,11 @@ bool MipsLinkingContext::isRelativeReloc(const Reference &r) const {
   default:
     return false;
   }
+}
+
+MipsAbi MipsLinkingContext::getAbi() const {
+  auto &handler = static_cast<MipsBaseTargetHandler &>(getTargetHandler());
+  return handler.getAbi();
 }
 
 const Registry::KindStrings kindStrings[] = {

@@ -1,7 +1,10 @@
 """Test that the 'add-dsym', aka 'target symbols add', command informs the user about success or failure."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 
@@ -16,6 +19,7 @@ class AddDsymCommandCase(TestBase):
         self.source = 'main.cpp'
         self.teardown_hook_added = False
 
+    @no_debug_info_test
     def test_add_dsym_command_with_error(self):
         """Test that the 'add-dsym' command informs the user about failures."""
 
@@ -32,6 +36,7 @@ class AddDsymCommandCase(TestBase):
         self.exe_name = 'a.out'
         self.do_add_dsym_with_error(self.exe_name)
 
+    @no_debug_info_test
     def test_add_dsym_command_with_success(self):
         """Test that the 'add-dsym' command informs the user about success."""
 
@@ -42,6 +47,7 @@ class AddDsymCommandCase(TestBase):
         self.exe_name = 'a.out'
         self.do_add_dsym_with_success(self.exe_name)
 
+    @no_debug_info_test
     def test_add_dsym_with_dSYM_bundle(self):
         """Test that the 'add-dsym' command informs the user about success."""
 
@@ -99,10 +105,3 @@ class AddDsymCommandCase(TestBase):
         right_path = "%s.dSYM" % exe_name
         self.expect("add-dsym " + right_path,
             substrs = ['symbol file', 'has been added to'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

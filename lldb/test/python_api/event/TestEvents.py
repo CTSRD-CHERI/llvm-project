@@ -2,9 +2,12 @@
 Test lldb Python event APIs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,63 +15,18 @@ class EventAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_listen_for_and_print_event_with_dsym(self):
-        """Exercise SBEvent API."""
-        self.buildDsym()
-        self.do_listen_for_and_print_event()
-
-    @python_api_test
-    @dwarf_test
-    @expectedFailureLinux("llvm.org/pr23730") # Flaky, fails ~1/10 cases
-    @skipIfLinux # skip to avoid crashes
-    def test_listen_for_and_print_event_with_dwarf(self):
-        """Exercise SBEvent API."""
-        self.buildDwarf()
-        self.do_listen_for_and_print_event()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_wait_for_event_with_dsym(self):
-        """Exercise SBListener.WaitForEvent() API."""
-        self.buildDsym()
-        self.do_wait_for_event()
-
-    @python_api_test
-    @dwarf_test
-    def test_wait_for_event_with_dwarf(self):
-        """Exercise SBListener.WaitForEvent() API."""
-        self.buildDwarf()
-        self.do_wait_for_event()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_add_listener_to_broadcaster_with_dsym(self):
-        """Exercise some SBBroadcaster APIs."""
-        self.buildDsym()
-        self.do_add_listener_to_broadcaster()
-
-    @skipIfFreeBSD # llvm.org/pr21325
-    @python_api_test
-    @dwarf_test
-    @expectedFailureLinux("llvm.org/pr23617") # Flaky, fails ~1/10 cases
-    def test_add_listener_to_broadcaster_with_dwarf(self):
-        """Exercise some SBBroadcaster APIs."""
-        self.buildDwarf()
-        self.do_add_listener_to_broadcaster()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to of function 'c'.
         self.line = line_number('main.c', '// Find the line number of function "c" here.')
 
-    def do_listen_for_and_print_event(self):
-        """Create a listener and use SBEvent API to print the events received."""
+    @add_test_categories(['pyapi'])
+    @expectedFailureLinux("llvm.org/pr23730") # Flaky, fails ~1/10 cases
+    @skipIfLinux # skip to avoid crashes
+    def test_listen_for_and_print_event(self):
+        """Exercise SBEvent API."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         self.dbg.SetAsync(True)
@@ -113,17 +71,17 @@ class EventAPITestCase(TestBase):
                 # After that, the thread exits.
                 while not count > 3:
                     if traceOn:
-                        print "Try wait for event..."
+                        print("Try wait for event...")
                     if listener.WaitForEvent(5, event):
                         if traceOn:
                             desc = lldbutil.get_description(event)
-                            print "Event description:", desc
-                            print "Event data flavor:", event.GetDataFlavor()
-                            print "Process state:", lldbutil.state_type_to_str(process.GetState())
-                            print
+                            print("Event description:", desc)
+                            print("Event data flavor:", event.GetDataFlavor())
+                            print("Process state:", lldbutil.state_type_to_str(process.GetState()))
+                            print()
                     else:
                         if traceOn:
-                            print "timeout occurred waiting for event..."
+                            print("timeout occurred waiting for event...")
                     count = count + 1
                 return
 
@@ -142,8 +100,10 @@ class EventAPITestCase(TestBase):
         # Wait until the 'MyListeningThread' terminates.
         my_thread.join()
 
-    def do_wait_for_event(self):
-        """Get the listener associated with the debugger and exercise WaitForEvent API."""
+    @add_test_categories(['pyapi'])
+    def test_wait_for_event(self):
+        """Exercise SBListener.WaitForEvent() API."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         self.dbg.SetAsync(True)
@@ -154,7 +114,7 @@ class EventAPITestCase(TestBase):
 
         # Now create a breakpoint on main.c by name 'c'.
         breakpoint = target.BreakpointCreateByName('c', 'a.out')
-        #print "breakpoint:", breakpoint
+        #print("breakpoint:", breakpoint)
         self.assertTrue(breakpoint and
                         breakpoint.GetNumLocations() == 1,
                         VALID_BREAKPOINT)
@@ -188,12 +148,12 @@ class EventAPITestCase(TestBase):
                 # Let's only try at most 3 times to retrieve any kind of event.
                 while not count > 3:
                     if listener.WaitForEvent(5, event):
-                        #print "Got a valid event:", event
-                        #print "Event data flavor:", event.GetDataFlavor()
-                        #print "Event type:", lldbutil.state_type_to_str(event.GetType())
+                        #print("Got a valid event:", event)
+                        #print("Event data flavor:", event.GetDataFlavor())
+                        #print("Event type:", lldbutil.state_type_to_str(event.GetType()))
                         return
                     count = count + 1
-                    print "Timeout: listener.WaitForEvent"
+                    print("Timeout: listener.WaitForEvent")
 
                 return
 
@@ -211,8 +171,13 @@ class EventAPITestCase(TestBase):
         self.assertTrue(event,
                         "My listening thread successfully received an event")
 
-    def do_add_listener_to_broadcaster(self):
-        """Get the broadcaster associated with the process and wait for broadcaster events."""
+    @skipIfFreeBSD # llvm.org/pr21325
+    @add_test_categories(['pyapi'])
+    @expectedFlakeyLinux("llvm.org/pr23617")  # Flaky, fails ~1/10 cases
+    @expectedFailureWindows("llvm.org/pr24778")
+    def test_add_listener_to_broadcaster(self):
+        """Exercise some SBBroadcaster APIs."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         self.dbg.SetAsync(True)
@@ -223,7 +188,7 @@ class EventAPITestCase(TestBase):
 
         # Now create a breakpoint on main.c by name 'c'.
         breakpoint = target.BreakpointCreateByName('c', 'a.out')
-        #print "breakpoint:", breakpoint
+        #print("breakpoint:", breakpoint)
         self.assertTrue(breakpoint and
                         breakpoint.GetNumLocations() == 1,
                         VALID_BREAKPOINT)
@@ -249,7 +214,7 @@ class EventAPITestCase(TestBase):
 
 
         # The finite state machine for our custom listening thread, with an
-        # initail state of None, which means no event has been received.
+        # initial state of None, which means no event has been received.
         # It changes to 'connected' after 'connected' event is received (for remote platforms)
         # It changes to 'running' after 'running' event is received (should happen only if the
         # currentstate is either 'None' or 'connected')
@@ -262,7 +227,7 @@ class EventAPITestCase(TestBase):
         import threading
         class MyListeningThread(threading.Thread):
             def run(self):
-                #print "Running MyListeningThread:", self
+                #print("Running MyListeningThread:", self)
 
                 # Regular expression pattern for the event description.
                 pattern = re.compile("data = {.*, state = (.*)}$")
@@ -272,7 +237,7 @@ class EventAPITestCase(TestBase):
                 while True:
                     if listener.WaitForEvent(5, event):
                         desc = lldbutil.get_description(event)
-                        #print "Event description:", desc
+                        #print("Event description:", desc)
                         match = pattern.search(desc)
                         if not match:
                             break;
@@ -293,7 +258,7 @@ class EventAPITestCase(TestBase):
                             break
                         else:
                             break
-                    print "Timeout: listener.WaitForEvent"
+                    print("Timeout: listener.WaitForEvent")
                     count = count + 1
                     if count > 6:
                         break
@@ -318,10 +283,3 @@ class EventAPITestCase(TestBase):
         # The final judgement. :-)
         self.assertTrue(self.state == 'stopped',
                         "Both expected state changed events received")
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

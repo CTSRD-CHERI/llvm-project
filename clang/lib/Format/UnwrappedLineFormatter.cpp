@@ -199,12 +199,12 @@ private:
       return MergeShortFunctions ? tryMergeSimpleBlock(I, E, Limit) : 0;
     }
     if (TheLine->Last->is(tok::l_brace)) {
-      return Style.BreakBeforeBraces == FormatStyle::BS_Attach
+      return !Style.BraceWrapping.AfterFunction
                  ? tryMergeSimpleBlock(I, E, Limit)
                  : 0;
     }
     if (I[1]->First->is(TT_FunctionLBrace) &&
-        Style.BreakBeforeBraces != FormatStyle::BS_Attach) {
+        Style.BraceWrapping.AfterFunction) {
       if (I[1]->Last->is(TT_LineComment))
         return 0;
 
@@ -263,8 +263,7 @@ private:
       SmallVectorImpl<AnnotatedLine *>::const_iterator E, unsigned Limit) {
     if (Limit == 0)
       return 0;
-    if ((Style.BreakBeforeBraces == FormatStyle::BS_Allman ||
-         Style.BreakBeforeBraces == FormatStyle::BS_GNU) &&
+    if (Style.BraceWrapping.AfterControlStatement &&
         (I[1]->First->is(tok::l_brace) && !Style.AllowShortBlocksOnASingleLine))
       return 0;
     if (I[1]->InPPDirective != (*I)->InPPDirective ||
@@ -305,7 +304,8 @@ private:
       if (Line->First->isOneOf(tok::kw_case, tok::kw_default, tok::r_brace))
         break;
       if (Line->First->isOneOf(tok::kw_if, tok::kw_for, tok::kw_switch,
-                               tok::kw_while, tok::comment))
+                               tok::kw_while, tok::comment) ||
+          Line->Last->is(tok::comment))
         return 0;
       Length += I[1 + NumStmts]->Last->TotalLength + 1; // 1 for the space.
     }
@@ -606,7 +606,7 @@ public:
 
   /// \brief Puts all tokens into a single line.
   unsigned formatLine(const AnnotatedLine &Line, unsigned FirstIndent,
-                      bool DryRun) {
+                      bool DryRun) override {
     unsigned Penalty = 0;
     LineState State = Indenter->getInitialState(FirstIndent, &Line, DryRun);
     while (State.NextToken) {
@@ -629,7 +629,7 @@ public:
   /// \brief Formats the line by finding the best line breaks with line lengths
   /// below the column limit.
   unsigned formatLine(const AnnotatedLine &Line, unsigned FirstIndent,
-                      bool DryRun) {
+                      bool DryRun) override {
     LineState State = Indenter->getInitialState(FirstIndent, &Line, DryRun);
 
     // If the ObjC method declaration does not fit on a line, we should format
@@ -791,7 +791,7 @@ private:
   llvm::SpecificBumpPtrAllocator<StateNode> Allocator;
 };
 
-} // namespace
+} // anonymous namespace
 
 unsigned
 UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,

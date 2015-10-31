@@ -48,7 +48,59 @@ namespace process_linux {
         Error
         WriteAllRegisterValues (const lldb::DataBufferSP &data_sp) override;
 
+        //------------------------------------------------------------------
+        // Hardware breakpoints/watchpoint mangement functions
+        //------------------------------------------------------------------
+
+        uint32_t
+        SetHardwareBreakpoint (lldb::addr_t addr, size_t size) override;
+
+        bool
+        ClearHardwareBreakpoint (uint32_t hw_idx) override;
+
+        uint32_t
+        NumSupportedHardwareWatchpoints () override;
+
+        uint32_t
+        SetHardwareWatchpoint (lldb::addr_t addr, size_t size, uint32_t watch_flags) override;
+
+        bool
+        ClearHardwareWatchpoint (uint32_t hw_index) override;
+
+        Error
+        ClearAllHardwareWatchpoints () override;
+
+        Error
+        GetWatchpointHitIndex(uint32_t &wp_index, lldb::addr_t trap_addr) override;
+
+        lldb::addr_t
+        GetWatchpointAddress (uint32_t wp_index) override;
+
+        uint32_t
+        GetWatchpointSize(uint32_t wp_index);
+
+        bool
+        WatchpointIsEnabled(uint32_t wp_index);
+
+        // Debug register type select
+        enum DREGType
+        {
+            eDREGTypeWATCH = 0,
+            eDREGTypeBREAK
+        };
+
     protected:
+        Error
+        DoWriteRegisterValue(uint32_t offset,
+                             const char* reg_name,
+                             const RegisterValue &value) override;
+
+        Error
+        DoReadFPR(void *buf, size_t buf_size) override;
+
+        Error
+        DoWriteFPR(void *buf, size_t buf_size) override;
+
         void*
         GetGPRBuffer() override { return &m_gpr_arm; }
 
@@ -94,11 +146,35 @@ namespace process_linux {
         RegInfo  m_reg_info;
         FPU m_fpr; 
 
+        // Debug register info for hardware breakpoints and watchpoints management.
+        struct DREG
+        {
+            lldb::addr_t address;  // Breakpoint/watchpoint address value.
+            uint32_t control;  // Breakpoint/watchpoint control value.
+            uint32_t refcount;  // Serves as enable/disable and refernce counter.
+        };
+
+        struct DREG m_hbr_regs[16];  // Arm native linux hardware breakpoints
+        struct DREG m_hwp_regs[16];  // Arm native linux hardware watchpoints
+
+        uint32_t m_max_hwp_supported;
+        uint32_t m_max_hbp_supported;
+        bool m_refresh_hwdebug_info;
+
         bool
         IsGPR(unsigned reg) const;
 
         bool
         IsFPR(unsigned reg) const;
+
+        Error
+        ReadHardwareDebugInfo();
+
+        Error
+        WriteHardwareDebugRegs(int hwbType, int hwb_index);
+
+        uint32_t
+        CalculateFprOffset(const RegisterInfo* reg_info) const;
     };
 
 } // namespace process_linux

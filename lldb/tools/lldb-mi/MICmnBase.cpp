@@ -22,7 +22,7 @@
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnBase::CMICmnBase(void)
+CMICmnBase::CMICmnBase()
     : m_strMILastErrorDescription(CMIUtilString())
     , m_bInitialized(false)
     , m_pLog(&CMICmnLog::Instance())
@@ -37,7 +37,7 @@ CMICmnBase::CMICmnBase(void)
 // Return:  None.
 // Throws:  None.
 //--
-CMICmnBase::~CMICmnBase(void)
+CMICmnBase::~CMICmnBase()
 {
     m_pLog = NULL;
 }
@@ -46,11 +46,11 @@ CMICmnBase::~CMICmnBase(void)
 // Details: Retrieve whether *this object has an error description set.
 // Type:    Method.
 // Args:    None.
-// Return:  bool    - True = Yes already defined, false = empty discription.
+// Return:  bool    - True = Yes already defined, false = empty description.
 // Throws:  None.
 //--
 bool
-CMICmnBase::HaveErrorDescription(void) const
+CMICmnBase::HaveErrorDescription() const
 {
     return m_strMILastErrorDescription.empty();
 }
@@ -63,7 +63,7 @@ CMICmnBase::HaveErrorDescription(void) const
 // Throws:  None.
 //--
 const CMIUtilString &
-CMICmnBase::GetErrorDescription(void) const
+CMICmnBase::GetErrorDescription() const
 {
     return m_strMILastErrorDescription;
 }
@@ -111,7 +111,7 @@ CMICmnBase::SetErrorDescriptionNoLog(const CMIUtilString &vrTxt) const
 // Throws:  None.
 //--
 void
-CMICmnBase::ClrErrorDescription(void) const
+CMICmnBase::ClrErrorDescription() const
 {
     m_strMILastErrorDescription.clear();
 }

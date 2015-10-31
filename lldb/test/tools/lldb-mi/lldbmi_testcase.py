@@ -2,8 +2,11 @@
 Base class for lldb-mi test cases.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 from lldbtest import *
-import unittest2
 
 class MiTestCaseBase(Base):
 
@@ -23,9 +26,9 @@ class MiTestCaseBase(Base):
 
     def tearDown(self):
         if self.TraceOn():
-            print "\n\nContents of %s:" % self.mylog
+            print("\n\nContents of %s:" % self.mylog)
             try:
-                print open(self.mylog, "r").read()
+                print(open(self.mylog, "r").read())
             except IOError:
                 pass
         Base.tearDown(self)

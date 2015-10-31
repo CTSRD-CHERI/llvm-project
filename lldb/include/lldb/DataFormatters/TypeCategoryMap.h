@@ -101,22 +101,18 @@ namespace lldb_private {
         }
 
         lldb::TypeFormatImplSP
-        GetFormat (ValueObject& valobj,
-                   lldb::DynamicValueType use_dynamic);
+        GetFormat (FormattersMatchData& match_data);
         
         lldb::TypeSummaryImplSP
-        GetSummaryFormat (ValueObject& valobj,
-                          lldb::DynamicValueType use_dynamic);
+        GetSummaryFormat (FormattersMatchData& match_data);
         
 #ifndef LLDB_DISABLE_PYTHON
         lldb::SyntheticChildrenSP
-        GetSyntheticChildren (ValueObject& valobj,
-                              lldb::DynamicValueType use_dynamic);
+        GetSyntheticChildren (FormattersMatchData& match_data);
 #endif
         
     lldb::TypeValidatorImplSP
-    GetValidator (ValueObject& valobj,
-                  lldb::DynamicValueType use_dynamic);
+    GetValidator (FormattersMatchData& match_data);
         
     private:
         

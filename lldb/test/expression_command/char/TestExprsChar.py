@@ -1,4 +1,7 @@
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import lldbutil
 from lldbtest import *
@@ -17,7 +20,7 @@ class ExprCharTestCase(TestBase):
 
     def do_test(self, dictionary=None):
         """These basic expression commands should work as expected."""
-        self.buildDefault(dictionary = dictionary)
+        self.build(dictionary = dictionary)
 
         target = self.dbg.CreateTarget(self.exe)
         self.assertTrue(target)
@@ -49,21 +52,18 @@ class ExprCharTestCase(TestBase):
         self.assertTrue(value.GetError().Success())
         self.assertEqual(value.GetValueAsSigned(0), 3)
 
+    @expectedFailureWindows("llvm.org/pr21765")
     def test_default_char(self):
         self.do_test()
 
     @expectedFailureArch("arm", "llvm.org/pr23069")
     @expectedFailureArch("aarch64", "llvm.org/pr23069")
+    @expectedFailureWindows("llvm.org/pr21765")
     def test_signed_char(self):
         self.do_test(dictionary={'CFLAGS_EXTRAS': '-fsigned-char'})
 
     @expectedFailurei386("llvm.org/pr23069")
     @expectedFailurex86_64("llvm.org/pr23069")
+    @expectedFailureWindows("llvm.org/pr21765")
     def test_unsigned_char(self):
         self.do_test(dictionary={'CFLAGS_EXTRAS': '-funsigned-char'})
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

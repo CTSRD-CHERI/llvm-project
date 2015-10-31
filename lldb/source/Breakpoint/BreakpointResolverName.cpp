@@ -17,12 +17,11 @@
 #include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/StreamString.h"
-#include "lldb/Symbol/ClangNamespaceDecl.h"
 #include "lldb/Symbol/Block.h"
 #include "lldb/Symbol/Function.h"
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Symbol/SymbolContext.h"
-#include "lldb/Target/ObjCLanguageRuntime.h"
+#include "Plugins/Language/ObjC/ObjCLanguage.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -30,12 +29,14 @@ using namespace lldb_private;
 BreakpointResolverName::BreakpointResolverName (Breakpoint *bkpt,
                                                 const char *name_cstr,
                                                 uint32_t name_type_mask,
+                                                LanguageType language,
                                                 Breakpoint::MatchType type,
                                                 bool skip_prologue) :
     BreakpointResolver (bkpt, BreakpointResolver::NameResolver),
     m_class_name (),
     m_regex (),
     m_match_type (type),
+    m_language (language),
     m_skip_prologue (skip_prologue)
 {
     
@@ -59,9 +60,11 @@ BreakpointResolverName::BreakpointResolverName (Breakpoint *bkpt,
                                                 const char *names[],
                                                 size_t num_names,
                                                 uint32_t name_type_mask,
+                                                LanguageType language,
                                                 bool skip_prologue) :
     BreakpointResolver (bkpt, BreakpointResolver::NameResolver),
     m_match_type (Breakpoint::Exact),
+    m_language (language),
     m_skip_prologue (skip_prologue)
 {
     for (size_t i = 0; i < num_names; i++)
@@ -73,9 +76,11 @@ BreakpointResolverName::BreakpointResolverName (Breakpoint *bkpt,
 BreakpointResolverName::BreakpointResolverName (Breakpoint *bkpt,
                                                 std::vector<std::string> names,
                                                 uint32_t name_type_mask,
+                                                LanguageType language,
                                                 bool skip_prologue) :
     BreakpointResolver (bkpt, BreakpointResolver::NameResolver),
     m_match_type (Breakpoint::Exact),
+    m_language (language),
     m_skip_prologue (skip_prologue)
 {
     for (const std::string& name : names)
@@ -91,6 +96,7 @@ BreakpointResolverName::BreakpointResolverName (Breakpoint *bkpt,
     m_class_name (NULL),
     m_regex (func_regex),
     m_match_type (Breakpoint::Regexp),
+    m_language (eLanguageTypeUnknown),
     m_skip_prologue (skip_prologue)
 {
 }
@@ -107,6 +113,7 @@ BreakpointResolverName::BreakpointResolverName
     m_class_name (class_name),
     m_regex (),
     m_match_type (type),
+    m_language (eLanguageTypeUnknown),
     m_skip_prologue (skip_prologue)
 {
     LookupInfo lookup;
@@ -127,6 +134,7 @@ BreakpointResolverName::BreakpointResolverName(const BreakpointResolverName &rhs
     m_class_name(rhs.m_class_name),
     m_regex(rhs.m_regex),
     m_match_type (rhs.m_match_type),
+    m_language (rhs.m_language),
     m_skip_prologue (rhs.m_skip_prologue)
 {
 
@@ -135,7 +143,7 @@ BreakpointResolverName::BreakpointResolverName(const BreakpointResolverName &rhs
 void
 BreakpointResolverName::AddNameLookup (const ConstString &name, uint32_t name_type_mask)
 {
-    ObjCLanguageRuntime::MethodName objc_method(name.GetCString(), false);
+    ObjCLanguage::MethodName objc_method(name.GetCString(), false);
     if (objc_method.IsValid(false))
     {
         std::vector<ConstString> objc_names;
@@ -154,7 +162,7 @@ BreakpointResolverName::AddNameLookup (const ConstString &name, uint32_t name_ty
     {
         LookupInfo lookup;
         lookup.name = name;
-        Module::PrepareForFunctionNameLookup(lookup.name, name_type_mask, lookup.lookup_name, lookup.name_type_mask, lookup.match_name_after_lookup);
+        Module::PrepareForFunctionNameLookup(lookup.name, name_type_mask, m_language, lookup.lookup_name, lookup.name_type_mask, lookup.match_name_after_lookup);
         m_lookups.push_back (lookup);
     }
 }

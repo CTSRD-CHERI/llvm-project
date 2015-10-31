@@ -99,6 +99,18 @@ void DisableReexec() {
   reexec_disabled = true;
 }
 
+extern "C" double dyldVersionNumber;
+static const double kMinDyldVersionWithAutoInterposition = 360.0;
+
+bool DyldNeedsEnvVariable() {
+  // If running on OS X 10.11+ or iOS 9.0+, dyld will interpose even if
+  // DYLD_INSERT_LIBRARIES is not set. However, checking OS version via
+  // GetMacosVersion() doesn't work for the simulator. Let's instead check
+  // `dyldVersionNumber`, which is exported by dyld, against a known version
+  // number from the first OS release where this appeared.
+  return dyldVersionNumber < kMinDyldVersionWithAutoInterposition;
+}
+
 void MaybeReexec() {
   if (reexec_disabled) return;
 
@@ -114,8 +126,10 @@ void MaybeReexec() {
   uptr fname_len = internal_strlen(info.dli_fname);
   const char *dylib_name = StripModuleName(info.dli_fname);
   uptr dylib_name_len = internal_strlen(dylib_name);
-  if (!dyld_insert_libraries ||
-      !REAL(strstr)(dyld_insert_libraries, dylib_name)) {
+
+  bool lib_is_in_env =
+      dyld_insert_libraries && REAL(strstr)(dyld_insert_libraries, dylib_name);
+  if (DyldNeedsEnvVariable() && !lib_is_in_env) {
     // DYLD_INSERT_LIBRARIES is not set or does not contain the runtime
     // library.
     char program_name[1024];
@@ -151,6 +165,9 @@ void MaybeReexec() {
            "executable with:\n%s=%s\n", kDyldInsertLibraries, new_env);
     CHECK("execv failed" && 0);
   }
+
+  if (!lib_is_in_env)
+    return;
 
   // DYLD_INSERT_LIBRARIES is set and contains the runtime library. Let's remove
   // the dylib from the environment variable, because interceptors are installed
@@ -221,9 +238,6 @@ void AsanCheckDynamicRTPrereqs() {}
 
 // No-op. Mac does not support static linkage anyway.
 void AsanCheckIncompatibleRT() {}
-
-void AsanPlatformThreadInit() {
-}
 
 void ReadContextStack(void *context, uptr *stack, uptr *ssize) {
   UNIMPLEMENTED();

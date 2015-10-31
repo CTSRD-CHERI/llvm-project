@@ -2,7 +2,10 @@
 Test some target commands: create, list, select, variable.
 """
 
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import sys
 from lldbtest import *
@@ -19,41 +22,38 @@ class targetCommandTestCase(TestBase):
         self.line_b = line_number('b.c', '// Set break point at this line.')
         self.line_c = line_number('c.c', '// Set break point at this line.')
 
-    @dwarf_test
-    def test_target_command_with_dwarf(self):
+    def test_target_command(self):
         """Test some target commands: create, list, select."""
         da = {'C_SOURCES': 'a.c', 'EXE': 'a.out'}
-        self.buildDwarf(dictionary=da)
+        self.build(dictionary=da)
         self.addTearDownCleanup(dictionary=da)
 
         db = {'C_SOURCES': 'b.c', 'EXE': 'b.out'}
-        self.buildDwarf(dictionary=db)
+        self.build(dictionary=db)
         self.addTearDownCleanup(dictionary=db)
 
         dc = {'C_SOURCES': 'c.c', 'EXE': 'c.out'}
-        self.buildDwarf(dictionary=dc)
+        self.build(dictionary=dc)
         self.addTearDownCleanup(dictionary=dc)
 
         self.do_target_command()
 
     # rdar://problem/9763907
     # 'target variable' command fails if the target program has been run
-    @skipUnlessDarwin
-    @dsym_test
-    def test_target_variable_command_with_dsym(self):
+    @expectedFailureAndroid(archs=['aarch64'])
+    def test_target_variable_command(self):
         """Test 'target variable' command before and after starting the inferior."""
         d = {'C_SOURCES': 'globals.c', 'EXE': 'globals'}
-        self.buildDsym(dictionary=d)
+        self.build(dictionary=d)
         self.addTearDownCleanup(dictionary=d)
 
         self.do_target_variable_command('globals')
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_target_variable_command_with_dsym_no_fail(self):
+    @expectedFailureAndroid(archs=['aarch64'])
+    def test_target_variable_command_no_fail(self):
         """Test 'target variable' command before and after starting the inferior."""
         d = {'C_SOURCES': 'globals.c', 'EXE': 'globals'}
-        self.buildDsym(dictionary=d)
+        self.build(dictionary=d)
         self.addTearDownCleanup(dictionary=d)
 
         self.do_target_variable_command_no_fail('globals')
@@ -78,19 +78,19 @@ class targetCommandTestCase(TestBase):
                 if match:
                     # We will start from (index + 1) ....
                     base = int(match.group(1), 10) + 1
-                    #print "base is:", base
+                    #print("base is:", base)
                     break;
 
         self.runCmd("target create " + exe_a, CURRENT_EXECUTABLE_SET)
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         self.runCmd("target create " + exe_b, CURRENT_EXECUTABLE_SET)
         lldbutil.run_break_set_by_file_and_line (self, 'b.c', self.line_b, num_expected_locations=1, loc_exact=True)
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         self.runCmd("target create " + exe_c, CURRENT_EXECUTABLE_SET)
         lldbutil.run_break_set_by_file_and_line (self, 'c.c', self.line_c, num_expected_locations=1, loc_exact=True)
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         self.runCmd("target list")
 
@@ -199,9 +199,3 @@ class targetCommandTestCase(TestBase):
                     substrs = ['a'])
         self.expect("target variable my_global_char", VARIABLES_DISPLAYED_CORRECTLY,
                     substrs = ["my_global_char", "'X'"])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

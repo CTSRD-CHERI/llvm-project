@@ -1,20 +1,20 @@
-// RUN: %clangxx_cfi -o %t %s
-// RUN: not --crash %t 2>&1 | FileCheck --check-prefix=CFI %s
+// RUN: %clangxx_cfi -o %t1 %s
+// RUN: %expect_crash %t1 2>&1 | FileCheck --check-prefix=CFI %s
 
-// RUN: %clangxx_cfi -DB32 -o %t %s
-// RUN: not --crash %t 2>&1 | FileCheck --check-prefix=CFI %s
+// RUN: %clangxx_cfi -DB32 -o %t2 %s
+// RUN: %expect_crash %t2 2>&1 | FileCheck --check-prefix=CFI %s
 
-// RUN: %clangxx_cfi -DB64 -o %t %s
-// RUN: not --crash %t 2>&1 | FileCheck --check-prefix=CFI %s
+// RUN: %clangxx_cfi -DB64 -o %t3 %s
+// RUN: %expect_crash %t3 2>&1 | FileCheck --check-prefix=CFI %s
 
-// RUN: %clangxx_cfi -DBM -o %t %s
-// RUN: not --crash %t 2>&1 | FileCheck --check-prefix=CFI %s
+// RUN: %clangxx_cfi -DBM -o %t4 %s
+// RUN: %expect_crash %t4 2>&1 | FileCheck --check-prefix=CFI %s
 
-// RUN: %clangxx -o %t %s
-// RUN: %t 2>&1 | FileCheck --check-prefix=NCFI %s
+// RUN: %clangxx -o %t5 %s
+// RUN: %t5 2>&1 | FileCheck --check-prefix=NCFI %s
 
-// RUN: %clangxx_cfi_diag -o %t %s
-// RUN: %t 2>&1 | FileCheck --check-prefix=CFI-DIAG %s
+// RUN: %clangxx_cfi_diag -o %t6 %s
+// RUN: %t6 2>&1 | FileCheck --check-prefix=CFI-DIAG %s
 
 // Tests that the CFI enforcement also applies to virtual destructor calls made
 // via 'delete'.
@@ -37,20 +37,7 @@ struct B {
 B::~B() {}
 
 int main() {
-#ifdef B32
-  break_optimization(new Deriver<B, 0>);
-#endif
-
-#ifdef B64
-  break_optimization(new Deriver<B, 0>);
-  break_optimization(new Deriver<B, 1>);
-#endif
-
-#ifdef BM
-  break_optimization(new Deriver<B, 0>);
-  break_optimization(new Deriver<B, 1>);
-  break_optimization(new Deriver<B, 2>);
-#endif
+  create_derivers<B>();
 
   A *a = new A;
   break_optimization(a);
@@ -60,10 +47,10 @@ int main() {
   fprintf(stderr, "1\n");
 
   // CFI-DIAG: runtime error: control flow integrity check for type 'B' failed during virtual call
-  // CFI-DIAG-NEXT: note: vtable is of type 'A'
+  // CFI-DIAG-NEXT: note: vtable is of type '{{(struct )?}}A'
   delete (B *)a; // UB here
 
-  // CFI-NOT: 2
-  // NCFI: 2
+  // CFI-NOT: {{^2$}}
+  // NCFI: {{^2$}}
   fprintf(stderr, "2\n");
 }

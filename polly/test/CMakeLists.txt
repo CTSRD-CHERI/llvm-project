@@ -46,6 +46,7 @@ if (NOT DEFINED LLVM_MAIN_SRC_DIR)
                     ${CMAKE_CURRENT_BINARY_DIR}/${testdir}
                     DEPENDS ${POLLY_TEST_DEPS}
                     COMMENT "Running Polly regression tests in ${testdir}")
+      set_target_properties(polly-test-${testdir} PROPERTIES FOLDER "Polly")
     endforeach()
 
     add_custom_target(check-polly
@@ -56,6 +57,7 @@ if (NOT DEFINED LLVM_MAIN_SRC_DIR)
                   ${CMAKE_CURRENT_BINARY_DIR}
                   DEPENDS ${POLLY_TEST_DEPS}
                   COMMENT "Running Polly regression tests")
+    set_target_properties(check-polly PROPERTIES FOLDER "Polly")
   endif()
 
 else (NOT DEFINED LLVM_MAIN_SRC_DIR)
@@ -74,7 +76,18 @@ else (NOT DEFINED LLVM_MAIN_SRC_DIR)
     DEPENDS ${POLLY_TEST_DEPS}
     )
 
-  set_target_properties(check-polly PROPERTIES FOLDER "polly tests")
+  set_target_properties(check-polly PROPERTIES FOLDER "Polly")
+
+  # Run polly-check-format as part of polly-check only if we are compiling with
+  # clang, so clang-format is availbale.
+  # if (TARGET clang-format) would be preferable, but this target is only added
+  # after Polly, i.e. there is no such target yet at this point. The CMake cache
+  # entry LLVM_TOOL_CLANG_BUILD will only be defined after clang has been
+  # configured at least once, i.e. format will be checked only after a rerun of
+  # CMake's configure.
+  if (LLVM_TOOL_CLANG_BUILD)
+    add_dependencies(check-polly polly-check-format)
+  endif ()
 
 endif (NOT DEFINED LLVM_MAIN_SRC_DIR)
 
@@ -84,4 +97,5 @@ configure_file(
 
 # Add a legacy target spelling: polly-test
 add_custom_target(polly-test)
+set_target_properties(polly-test PROPERTIES FOLDER "Polly")
 add_dependencies(polly-test check-polly)

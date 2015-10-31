@@ -17,7 +17,7 @@
 #include "lldb/Core/UserID.h"
 #include "lldb/Symbol/LineEntry.h"
 #include "lldb/Symbol/SymbolContext.h"
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 
 namespace lldb_private {
 
@@ -76,7 +76,7 @@ public:
     //------------------------------------------------------------------
     /// Destructor.
     //------------------------------------------------------------------
-    virtual ~Block ();
+    ~Block() override;
 
     //------------------------------------------------------------------
     /// Add a child to this object.
@@ -110,20 +110,20 @@ public:
     ///
     /// @see SymbolContextScope
     //------------------------------------------------------------------
-    virtual void
-    CalculateSymbolContext(SymbolContext* sc);
+    void
+    CalculateSymbolContext(SymbolContext* sc) override;
 
-    virtual lldb::ModuleSP
-    CalculateSymbolContextModule ();
+    lldb::ModuleSP
+    CalculateSymbolContextModule() override;
 
-    virtual CompileUnit *
-    CalculateSymbolContextCompileUnit ();
+    CompileUnit *
+    CalculateSymbolContextCompileUnit() override;
 
-    virtual Function *
-    CalculateSymbolContextFunction ();
+    Function *
+    CalculateSymbolContextFunction() override;
 
-    virtual Block *
-    CalculateSymbolContextBlock ();
+    Block *
+    CalculateSymbolContextBlock() override;
 
     //------------------------------------------------------------------
     /// Check if an offset is in one of the block offset ranges.
@@ -192,8 +192,8 @@ public:
     ///
     /// @see SymbolContextScope
     //------------------------------------------------------------------
-    virtual void
-    DumpSymbolContext(Stream *s);
+    void
+    DumpSymbolContext(Stream *s) override;
 
     void
     DumpAddressRanges (Stream *s,
@@ -214,7 +214,6 @@ public:
     //------------------------------------------------------------------
     Block *
     GetParent () const;
-    
     
     //------------------------------------------------------------------
     /// Get the inlined block that contains this block.
@@ -278,7 +277,6 @@ public:
     lldb::VariableListSP
     GetBlockVariableList (bool can_create);
 
-
     //------------------------------------------------------------------
     /// Get the variable list for this block and optionally all child
     /// blocks if \a get_child_variables is \b true.
@@ -330,7 +328,7 @@ public:
     ///     added to the variable list until there are no parent blocks
     ///     or the parent block has inlined function info.
     ///
-    /// @param[in/out] variable_list
+    /// @param[in,out] variable_list
     ///     All variables in this block, and optionally all parent
     ///     blocks will be added to this list.
     ///
@@ -357,8 +355,8 @@ public:
         return m_inlineInfoSP.get();
     }
     
-    clang::DeclContext *
-    GetClangDeclContext();
+    CompilerDeclContext
+    GetDeclContext();
 
     //------------------------------------------------------------------
     /// Get the memory cost of this object.
@@ -399,7 +397,6 @@ public:
                             const Declaration *decl_ptr,
                             const Declaration *call_decl_ptr);
 
-
     void
     SetParentScope (SymbolContextScope *parent_scope)
     {
@@ -421,8 +418,6 @@ public:
     {
         m_variable_list_sp = variable_list_sp;
     }
-
-
 
     bool
     BlockInfoHasBeenParsed() const
@@ -491,7 +486,6 @@ private:
     DISALLOW_COPY_AND_ASSIGN (Block);
 };
 
-
 } // namespace lldb_private
 
-#endif  // liblldb_Block_h_
+#endif // liblldb_Block_h_

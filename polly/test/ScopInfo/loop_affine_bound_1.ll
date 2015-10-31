@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-detect-unprofitable -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
@@ -16,19 +16,19 @@ entry:
   %2 = or i64 %0, 3                               ; <i64> [#uses=1]
   %3 = add nsw i64 %2, %1                         ; <i64> [#uses=1]
   %4 = icmp sgt i64 %3, 0                         ; <i1> [#uses=1]
-  br i1 %4, label %bb.nph8, label %return
+  br i1 true, label %bb.nph8, label %return
 
 bb1:                                              ; preds = %bb2.preheader, %bb1
   %indvar = phi i64 [ 0, %bb2.preheader ], [ %indvar.next, %bb1 ] ; <i64> [#uses=2]
   %scevgep = getelementptr [128 x i64], [128 x i64]* %a, i64 %indvar, i64 %tmp10 ; <i64*> [#uses=1]
   store i64 0, i64* %scevgep, align 8
   %indvar.next = add i64 %indvar, 1               ; <i64> [#uses=2]
-  %exitcond = icmp eq i64 %indvar.next, %tmp9     ; <i1> [#uses=1]
+  %exitcond = icmp sge i64 %indvar.next, %tmp9     ; <i1> [#uses=1]
   br i1 %exitcond, label %bb3, label %bb1
 
 bb3:                                              ; preds = %bb2.preheader, %bb1
   %5 = add i64 %8, 1                              ; <i64> [#uses=2]
-  %exitcond14 = icmp eq i64 %5, %tmp13            ; <i1> [#uses=1]
+  %exitcond14 = icmp sge i64 %5, %tmp13            ; <i1> [#uses=1]
   br i1 %exitcond14, label %return, label %bb2.preheader
 
 bb.nph8:                                          ; preds = %entry
@@ -54,9 +54,21 @@ return:                                           ; preds = %bb3, %entry
 ; CHECK: Statements {
 ; CHECK:   Stmt_bb1
 ; CHECK:         Domain :=
-; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] : i0 >= 0 and i0 <= 2 + 4N + 7M and i1 >= 0 and i1 <= 1 + 5N - i0 and i0 <= 1 + 5N };
-; CHECK:         Schedule :=
-; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] -> [i0, i1] };
+; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] :
+; CHECK-DAG:             i0 >= 0
+; CHECK-DAG:          and
+; CHECK-DAG:             i0 <= 2 + 4N + 7M
+; CHECK-DAG:          and
+; CHECK-DAG:             i1 >= 0
+; CHECK-DAG:          and
+; CHECK-DAG:             i1 <= 1 + 5N - i0
+; CHECK-DAG:                     Stmt_bb1[0, i1] :
+; CHECK-DAG:             7M <= -3 - 4N
+; CHECK-DAG:          and
+; CHECK-DAG:             i1 >= 0
+; CHECK-DAG:          and
+; CHECK-DAG:             i1 <= 1 + 5N
+; CHECK:               }
 ; CHECK:         MustWriteAccess := [Reduction Type: NONE]
-; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] -> MemRef_a[129i0 + 128i1] };
+; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] -> MemRef_a[i1, 129i0] };
 ; CHECK: }

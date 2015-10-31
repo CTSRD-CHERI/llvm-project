@@ -80,8 +80,7 @@ computeTargetABI(const Triple &TT, StringRef CPU,
   // FIXME: This is duplicated code from the front end and should be unified.
   if (TT.isOSBinFormatMachO()) {
     if (TT.getEnvironment() == llvm::Triple::EABI ||
-        (TT.getOS() == llvm::Triple::UnknownOS &&
-         TT.getObjectFormat() == llvm::Triple::MachO) ||
+        (TT.getOS() == llvm::Triple::UnknownOS && TT.isOSBinFormatMachO()) ||
         CPU.startswith("cortex-m")) {
       TargetABI = ARMBaseTargetMachine::ARM_ABI_AAPCS;
     } else {
@@ -104,10 +103,10 @@ computeTargetABI(const Triple &TT, StringRef CPU,
       TargetABI = ARMBaseTargetMachine::ARM_ABI_APCS;
       break;
     default:
-      if (TT.getOS() == llvm::Triple::NetBSD)
-	TargetABI = ARMBaseTargetMachine::ARM_ABI_APCS;
+      if (TT.isOSNetBSD())
+        TargetABI = ARMBaseTargetMachine::ARM_ABI_APCS;
       else
-	TargetABI = ARMBaseTargetMachine::ARM_ABI_AAPCS;
+        TargetABI = ARMBaseTargetMachine::ARM_ABI_AAPCS;
       break;
     }
   }
@@ -226,12 +225,12 @@ ARMBaseTargetMachine::getSubtargetImpl(const Function &F) const {
 }
 
 TargetIRAnalysis ARMBaseTargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis(
-      [this](Function &F) { return TargetTransformInfo(ARMTTIImpl(this, F)); });
+  return TargetIRAnalysis([this](const Function &F) {
+    return TargetTransformInfo(ARMTTIImpl(this, F));
+  });
 }
 
-
-void ARMTargetMachine::anchor() { }
+void ARMTargetMachine::anchor() {}
 
 ARMTargetMachine::ARMTargetMachine(const Target &T, const Triple &TT,
                                    StringRef CPU, StringRef FS,
@@ -245,7 +244,7 @@ ARMTargetMachine::ARMTargetMachine(const Target &T, const Triple &TT,
                        "support ARM mode execution!");
 }
 
-void ARMLETargetMachine::anchor() { }
+void ARMLETargetMachine::anchor() {}
 
 ARMLETargetMachine::ARMLETargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
@@ -254,7 +253,7 @@ ARMLETargetMachine::ARMLETargetMachine(const Target &T, const Triple &TT,
                                        CodeGenOpt::Level OL)
     : ARMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, true) {}
 
-void ARMBETargetMachine::anchor() { }
+void ARMBETargetMachine::anchor() {}
 
 ARMBETargetMachine::ARMBETargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
@@ -263,7 +262,7 @@ ARMBETargetMachine::ARMBETargetMachine(const Target &T, const Triple &TT,
                                        CodeGenOpt::Level OL)
     : ARMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, false) {}
 
-void ThumbTargetMachine::anchor() { }
+void ThumbTargetMachine::anchor() {}
 
 ThumbTargetMachine::ThumbTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
@@ -274,7 +273,7 @@ ThumbTargetMachine::ThumbTargetMachine(const Target &T, const Triple &TT,
   initAsmInfo();
 }
 
-void ThumbLETargetMachine::anchor() { }
+void ThumbLETargetMachine::anchor() {}
 
 ThumbLETargetMachine::ThumbLETargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
@@ -283,7 +282,7 @@ ThumbLETargetMachine::ThumbLETargetMachine(const Target &T, const Triple &TT,
                                            CodeGenOpt::Level OL)
     : ThumbTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, true) {}
 
-void ThumbBETargetMachine::anchor() { }
+void ThumbBETargetMachine::anchor() {}
 
 ThumbBETargetMachine::ThumbBETargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
@@ -349,7 +348,13 @@ bool ARMPassConfig::addPreISel() {
     // tricky when doing code gen per function.
     bool OnlyOptimizeForSize = (TM->getOptLevel() < CodeGenOpt::Aggressive) &&
                                (EnableGlobalMerge == cl::BOU_UNSET);
-    addPass(createGlobalMergePass(TM, 127, OnlyOptimizeForSize));
+    // Merging of extern globals is enabled by default on non-Mach-O as we
+    // expect it to be generally either beneficial or harmless. On Mach-O it
+    // is disabled as we emit the .subsections_via_symbols directive which
+    // means that merging extern globals is not safe.
+    bool MergeExternalByDefault = !TM->getTargetTriple().isOSBinFormatMachO();
+    addPass(createGlobalMergePass(TM, 127, OnlyOptimizeForSize,
+                                  MergeExternalByDefault));
   }
 
   return false;

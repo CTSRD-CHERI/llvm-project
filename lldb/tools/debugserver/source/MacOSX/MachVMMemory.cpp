@@ -19,6 +19,8 @@
 #include <sys/sysctl.h>
 #include <dlfcn.h>
 
+static const vm_size_t kInvalidPageSize = ~0;
+
 MachVMMemory::MachVMMemory() :
     m_page_size    (kInvalidPageSize),
     m_err        (0)
@@ -474,7 +476,7 @@ MachVMMemory::Read(task_t task, nub_addr_t address, void *data, nub_size_t data_
     {
         mach_vm_size_t curr_size = MaxBytesLeftInPage(task, curr_addr, data_count - total_bytes_read);
         mach_msg_type_number_t curr_bytes_read = 0;
-        vm_offset_t vm_memory = NULL;
+        vm_offset_t vm_memory = 0;
         m_err = ::mach_vm_read (task, curr_addr, curr_size, &vm_memory, &curr_bytes_read);
         
         if (DNBLogCheckLogBit(LOG_MEMORY))

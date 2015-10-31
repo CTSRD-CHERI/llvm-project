@@ -535,6 +535,14 @@ PlatformPOSIX::CalculateMD5 (const FileSpec& file_spec,
     return false;
 }
 
+const lldb::UnixSignalsSP &
+PlatformPOSIX::GetRemoteUnixSignals() {
+    if (IsRemote() && m_remote_platform_sp)
+        return m_remote_platform_sp->GetRemoteUnixSignals();
+    return Platform::GetRemoteUnixSignals();
+}
+
+
 FileSpec
 PlatformPOSIX::GetRemoteWorkingDirectory()
 {
@@ -665,9 +673,12 @@ PlatformPOSIX::ConnectRemote (Args& args)
         if (m_options.get())
         {
             OptionGroupOptions* options = m_options.get();
-            const OptionGroupPlatformRSync* m_rsync_options = (OptionGroupPlatformRSync*)options->GetGroupWithOption('r');
-            const OptionGroupPlatformSSH* m_ssh_options = (OptionGroupPlatformSSH*)options->GetGroupWithOption('s');
-            const OptionGroupPlatformCaching* m_cache_options = (OptionGroupPlatformCaching*)options->GetGroupWithOption('c');
+            const OptionGroupPlatformRSync *m_rsync_options =
+                static_cast<const OptionGroupPlatformRSync *>(options->GetGroupWithOption('r'));
+            const OptionGroupPlatformSSH *m_ssh_options =
+                static_cast<const OptionGroupPlatformSSH *>(options->GetGroupWithOption('s'));
+            const OptionGroupPlatformCaching *m_cache_options =
+                static_cast<const OptionGroupPlatformCaching *>(options->GetGroupWithOption('c'));
 
             if (m_rsync_options->m_rsync)
             {
@@ -785,9 +796,6 @@ PlatformPOSIX::Attach (ProcessAttachInfo &attach_info,
 
             if (process_sp)
             {
-                // Set UnixSignals appropriately.
-                process_sp->SetUnixSignals (Host::GetUnixSignals ());
-
                 auto listener_sp = attach_info.GetHijackListener();
                 if (listener_sp == nullptr)
                 {

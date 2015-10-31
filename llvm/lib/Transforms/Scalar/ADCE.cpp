@@ -1,4 +1,4 @@
-//===- DCE.cpp - Code to perform dead code elimination --------------------===//
+//===- ADCE.cpp - Code to perform dead code elimination -------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -19,6 +19,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/InstIterator.h"
@@ -42,6 +43,7 @@ struct ADCE : public FunctionPass {
 
   void getAnalysisUsage(AnalysisUsage& AU) const override {
     AU.setPreservesCFG();
+    AU.addPreserved<GlobalsAAWrapperPass>();
   }
 };
 }
@@ -57,9 +59,9 @@ bool ADCE::runOnFunction(Function& F) {
   SmallVector<Instruction*, 128> Worklist;
 
   // Collect the set of "root" instructions that are known live.
-  for (Instruction &I : inst_range(F)) {
-    if (isa<TerminatorInst>(I) || isa<DbgInfoIntrinsic>(I) ||
-        isa<LandingPadInst>(I) || I.mayHaveSideEffects()) {
+  for (Instruction &I : instructions(F)) {
+    if (isa<TerminatorInst>(I) || isa<DbgInfoIntrinsic>(I) || I.isEHPad() ||
+        I.mayHaveSideEffects()) {
       Alive.insert(&I);
       Worklist.push_back(&I);
     }
@@ -79,7 +81,7 @@ bool ADCE::runOnFunction(Function& F) {
   // which have no side effects and do not influence the control flow or return
   // value of the function, and may therefore be deleted safely.
   // NOTE: We reuse the Worklist vector here for memory efficiency.
-  for (Instruction &I : inst_range(F)) {
+  for (Instruction &I : instructions(F)) {
     if (!Alive.count(&I)) {
       Worklist.push_back(&I);
       I.dropAllReferences();

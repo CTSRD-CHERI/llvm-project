@@ -26,6 +26,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/Function.h"
@@ -53,10 +54,13 @@ private:
   // Information we know about a particular call site
   struct CallContext {
     CallContext()
-        : Call(nullptr), SPCopy(nullptr), ExpectedDist(0),
-          MovVector(4, nullptr), NoStackParams(false), UsePush(false){};
+        : FrameSetup(nullptr), Call(nullptr), SPCopy(nullptr), ExpectedDist(0),
+          MovVector(4, nullptr), NoStackParams(false), UsePush(false){}
 
-    // Actuall call instruction
+    // Iterator referring to the frame setup instruction
+    MachineBasicBlock::iterator FrameSetup;
+
+    // Actual call instruction
     MachineInstr *Call;
 
     // A copy of the stack pointer
@@ -75,17 +79,16 @@ private:
     bool UsePush;
   };
 
-  typedef DenseMap<MachineInstr *, CallContext> ContextMap;
+  typedef SmallVector<CallContext, 8> ContextVector;
 
   bool isLegal(MachineFunction &MF);
 
-  bool isProfitable(MachineFunction &MF, ContextMap &CallSeqMap);
+  bool isProfitable(MachineFunction &MF, ContextVector &CallSeqMap);
 
   void collectCallInfo(MachineFunction &MF, MachineBasicBlock &MBB,
                        MachineBasicBlock::iterator I, CallContext &Context);
 
-  bool adjustCallSequence(MachineFunction &MF, MachineBasicBlock::iterator I,
-                          const CallContext &Context);
+  bool adjustCallSequence(MachineFunction &MF, const CallContext &Context);
 
   MachineInstr *canFoldIntoRegPush(MachineBasicBlock::iterator FrameSetup,
                                    unsigned Reg);
@@ -128,6 +131,11 @@ bool X86CallFrameOptimization::isLegal(MachineFunction &MF) {
   if (STI.is64Bit())
     return false;
 
+  // We can't encode multiple DW_CFA_GNU_args_size in the compact
+  // unwind encoding that Darwin uses.
+  if (STI.isTargetDarwin() && !MF.getMMI().getLandingPads().empty())
+    return false;
+
   // You would expect straight-line code between call-frame setup and
   // call-frame destroy. You would be wrong. There are circumstances (e.g.
   // CMOV_GR8 expansion of a select that feeds a function call!) where we can
@@ -161,7 +169,7 @@ bool X86CallFrameOptimization::isLegal(MachineFunction &MF) {
 // Check whether this trasnformation is profitable for a particular
 // function - in terms of code size.
 bool X86CallFrameOptimization::isProfitable(MachineFunction &MF, 
-  ContextMap &CallSeqMap) {
+  ContextVector &CallSeqVector) {
   // This transformation is always a win when we do not expect to have
   // a reserved call frame. Under other circumstances, it may be either
   // a win or a loss, and requires a heuristic.
@@ -170,24 +178,20 @@ bool X86CallFrameOptimization::isProfitable(MachineFunction &MF,
     return true;
 
   // Don't do this when not optimizing for size.
-  bool OptForSize =
-      MF.getFunction()->hasFnAttribute(Attribute::OptimizeForSize) ||
-      MF.getFunction()->hasFnAttribute(Attribute::MinSize);
-
-  if (!OptForSize)
+  if (!MF.getFunction()->optForSize())
     return false;
 
   unsigned StackAlign = TFL->getStackAlignment();
 
   int64_t Advantage = 0;
-  for (auto CC : CallSeqMap) {
+  for (auto CC : CallSeqVector) {
     // Call sites where no parameters are passed on the stack
     // do not affect the cost, since there needs to be no
     // stack adjustment.
-    if (CC.second.NoStackParams)
+    if (CC.NoStackParams)
       continue;
 
-    if (!CC.second.UsePush) {
+    if (!CC.UsePush) {
       // If we don't use pushes for a particular call site,
       // we pay for not having a reserved call frame with an
       // additional sub/add esp pair. The cost is ~3 bytes per instruction,
@@ -200,11 +204,11 @@ bool X86CallFrameOptimization::isProfitable(MachineFunction &MF,
       // We'll need a add after the call.
       Advantage -= 3;
       // If we have to realign the stack, we'll also need and sub before
-      if (CC.second.ExpectedDist % StackAlign)
+      if (CC.ExpectedDist % StackAlign)
         Advantage -= 3;
       // Now, for each push, we save ~3 bytes. For small constants, we actually,
       // save more (up to 5 bytes), but 3 should be a good approximation.
-      Advantage += (CC.second.ExpectedDist / 4) * 3;
+      Advantage += (CC.ExpectedDist / 4) * 3;
     }
   }
 
@@ -223,21 +227,22 @@ bool X86CallFrameOptimization::runOnMachineFunction(MachineFunction &MF) {
 
   bool Changed = false;
 
-  ContextMap CallSeqMap;
+  ContextVector CallSeqVector;
 
   for (MachineFunction::iterator BB = MF.begin(), E = MF.end(); BB != E; ++BB)
     for (MachineBasicBlock::iterator I = BB->begin(); I != BB->end(); ++I)
       if (I->getOpcode() == FrameSetupOpcode) {
-        CallContext &Context = CallSeqMap[I];
+        CallContext Context;
         collectCallInfo(MF, *BB, I, Context);
+        CallSeqVector.push_back(Context);
       }
 
-  if (!isProfitable(MF, CallSeqMap))
+  if (!isProfitable(MF, CallSeqVector))
     return false;
 
-  for (auto CC : CallSeqMap)
-    if (CC.second.UsePush)
-      Changed |= adjustCallSequence(MF, CC.first, CC.second);
+  for (auto CC : CallSeqVector)
+    if (CC.UsePush)
+      Changed |= adjustCallSequence(MF, CC);
 
   return Changed;
 }
@@ -308,12 +313,12 @@ void X86CallFrameOptimization::collectCallInfo(MachineFunction &MF,
   // transformation.
   const X86RegisterInfo &RegInfo = *static_cast<const X86RegisterInfo *>(
                                        MF.getSubtarget().getRegisterInfo());
-  unsigned StackPtr = RegInfo.getStackRegister();
   unsigned FrameDestroyOpcode = TII->getCallFrameDestroyOpcode();
 
   // We expect to enter this at the beginning of a call sequence
   assert(I->getOpcode() == TII->getCallFrameSetupOpcode());
   MachineBasicBlock::iterator FrameSetup = I++;
+  Context.FrameSetup = FrameSetup;
 
   // How much do we adjust the stack? This puts an upper bound on
   // the number of parameters actually passed on it.
@@ -338,7 +343,8 @@ void X86CallFrameOptimization::collectCallInfo(MachineFunction &MF,
   if (!I->isCopy() || !I->getOperand(0).isReg())
     return;
   Context.SPCopy = I++;
-  StackPtr = Context.SPCopy->getOperand(0).getReg();
+
+  unsigned StackPtr = Context.SPCopy->getOperand(0).getReg();
 
   // Scan the call setup sequence for the pattern we're looking for.
   // We only handle a simple case - a sequence of MOV32mi or MOV32mr
@@ -434,16 +440,15 @@ void X86CallFrameOptimization::collectCallInfo(MachineFunction &MF,
 }
 
 bool X86CallFrameOptimization::adjustCallSequence(MachineFunction &MF,
-                                                  MachineBasicBlock::iterator I,
                                                   const CallContext &Context) {
   // Ok, we can in fact do the transformation for this call.
   // Do not remove the FrameSetup instruction, but adjust the parameters.
   // PEI will end up finalizing the handling of this.
-  MachineBasicBlock::iterator FrameSetup = I;
-  MachineBasicBlock &MBB = *(I->getParent());
+  MachineBasicBlock::iterator FrameSetup = Context.FrameSetup;
+  MachineBasicBlock &MBB = *(FrameSetup->getParent());
   FrameSetup->getOperand(1).setImm(Context.ExpectedDist);
 
-  DebugLoc DL = I->getDebugLoc();
+  DebugLoc DL = FrameSetup->getDebugLoc();
   // Now, iterate through the vector in reverse order, and replace the movs
   // with pushes. MOVmi/MOVmr doesn't have any defs, so no need to
   // replace uses.
@@ -532,13 +537,10 @@ MachineInstr *X86CallFrameOptimization::canFoldIntoRegPush(
       DefMI->getParent() != FrameSetup->getParent())
     return nullptr;
 
-  // Now, make sure everything else up until the ADJCALLSTACK is a sequence
-  // of MOVs. To be less conservative would require duplicating a lot of the
-  // logic from PeepholeOptimizer.
-  // FIXME: A possibly better approach would be to teach the PeepholeOptimizer
-  // to be smarter about folding into pushes.
+  // Make sure we don't have any instructions between DefMI and the
+  // push that make folding the load illegal.
   for (auto I = DefMI; I != FrameSetup; ++I)
-    if (I->getOpcode() != X86::MOV32rm)
+    if (I->isLoadFoldBarrier())
       return nullptr;
 
   return DefMI;

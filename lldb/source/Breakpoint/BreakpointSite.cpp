@@ -205,6 +205,7 @@ BreakpointSite::ValidForThisThread (Thread *thread)
 void
 BreakpointSite::BumpHitCounts()
 {
+    Mutex::Locker locker(m_owners_mutex);
     for (BreakpointLocationSP loc_sp : m_owners.BreakpointLocations())
     {
         loc_sp->BumpHitCount();
@@ -252,4 +253,15 @@ BreakpointSite::IntersectsRange(lldb::addr_t addr, size_t size, lldb::addr_t *in
         }
     }
     return false;
+}
+
+size_t
+BreakpointSite::CopyOwnersList (BreakpointLocationCollection &out_collection)
+{
+    Mutex::Locker locker(m_owners_mutex);
+    for (BreakpointLocationSP loc_sp : m_owners.BreakpointLocations())
+    {
+        out_collection.Add(loc_sp);
+    }
+    return out_collection.GetSize();
 }

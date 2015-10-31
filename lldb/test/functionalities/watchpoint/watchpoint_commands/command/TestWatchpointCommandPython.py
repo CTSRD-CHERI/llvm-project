@@ -1,9 +1,12 @@
-"""
+﻿"""
 Test 'watchpoint command'.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -25,24 +28,14 @@ class WatchpointPythonCommandTestCase(TestBase):
         self.exe_name = self.testMethodName
         self.d = {'CXX_SOURCES': self.source, 'EXE': self.exe_name}
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_watchpoint_command_with_dsym(self):
-        """Test 'watchpoint command'."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.watchpoint_command()
-
-    @dwarf_test
     @skipIfFreeBSD # timing out on buildbot
-    def test_watchpoint_command_with_dwarf(self):
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    def test_watchpoint_command(self):
         """Test 'watchpoint command'."""
-        self.buildDwarf(dictionary=self.d)
+        self.build(dictionary=self.d)
         self.setTearDownCleanup(dictionary=self.d)
-        self.watchpoint_command()
 
-    def watchpoint_command(self):
-        """Do 'watchpoint command add'."""
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -53,7 +46,7 @@ class WatchpointPythonCommandTestCase(TestBase):
 #                       (self.source, self.line))#
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -92,10 +85,3 @@ class WatchpointPythonCommandTestCase(TestBase):
         # The watchpoint command "forced" our global variable 'cookie' to become 777.
         self.expect("frame variable --show-globals cookie",
             substrs = ['(int32_t)', 'cookie = 777'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

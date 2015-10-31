@@ -1,4 +1,9 @@
-; RUN: opt %loadPolly -polly-detect -polly-allow-nonaffine-loops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly \
+; RUN:   -polly-detect -polly-allow-nonaffine-loops -analyze \
+; RUN:   < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-process-unprofitable=false \
+; RUN:   -polly-detect -polly-allow-nonaffine-loops -analyze \
+; RUN:   < %s | FileCheck %s --check-prefix=PROFIT
 ;
 ;    void f(int *A) {
 ;      for (int i = 0; i < 1024; i++) {
@@ -6,6 +11,8 @@
 ;          A[i]--;
 ;      }
 ;    }
+;
+; PROFIT-NOT: Valid
 ;
 ; CHECK: Valid Region for Scop: bb1 => bb12
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"

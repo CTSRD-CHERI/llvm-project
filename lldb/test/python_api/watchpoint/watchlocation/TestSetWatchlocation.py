@@ -2,9 +2,12 @@
 Use lldb Python SBValue.WatchPointee() API to create a watchpoint for write of '*g_char_ptr'.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -22,23 +25,12 @@ class SetWatchlocationAPITestCase(TestBase):
         # This is for verifying that watch location works.
         self.violating_func = "do_bad_thing_with_location";
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_watch_location_with_dsym(self):
+    @add_test_categories(['pyapi'])
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_watch_location(self):
         """Exercise SBValue.WatchPointee() API to set a watchpoint."""
-        self.buildDsym()
-        self.do_set_watchlocation()
-
-    @python_api_test
-    @dwarf_test
-    def test_watch_location_with_dwarf(self):
-        """Exercise SBValue.WatchPointee() API to set a watchpoint."""
-        self.buildDwarf()
-        self.do_set_watchlocation()
-
-    def do_set_watchlocation(self):
-        """Use SBValue.WatchPointee() to set a watchpoint and verify that the program stops later due to the watchpoint."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -78,7 +70,7 @@ class SetWatchlocationAPITestCase(TestBase):
         if not self.TraceOn():
             self.HideStdout()
 
-        print watchpoint
+        print(watchpoint)
 
         # Continue.  Expect the program to stop due to the variable being written to.
         process.Continue()
@@ -95,10 +87,3 @@ class SetWatchlocationAPITestCase(TestBase):
             substrs = [self.violating_func])
 
         # This finishes our test.
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

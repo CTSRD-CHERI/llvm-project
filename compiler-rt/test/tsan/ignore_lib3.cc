@@ -5,6 +5,9 @@
 // Tests that unloading of a library matched against called_from_lib suppression
 // causes program crash (this is not supported).
 
+// Some aarch64 kernels do not support non executable write pages
+// REQUIRES: stable-runtime
+
 #ifndef LIB
 
 #include <dlfcn.h>

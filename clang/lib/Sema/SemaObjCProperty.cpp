@@ -181,7 +181,7 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
   }
 
   // Validate the attributes on the @property.
-  CheckObjCPropertyAttributes(Res, AtLoc, Attributes, 
+  CheckObjCPropertyAttributes(Res, AtLoc, Attributes,
                               (isa<ObjCInterfaceDecl>(ClassDecl) ||
                                isa<ObjCProtocolDecl>(ClassDecl)));
 
@@ -663,8 +663,10 @@ static void checkARCPropertyImpl(Sema &S, SourceLocation propertyImplLoc,
   // We're fine if they match.
   if (propertyLifetime == ivarLifetime) return;
 
-  // These aren't valid lifetimes for object ivars;  don't diagnose twice.
-  if (ivarLifetime == Qualifiers::OCL_None ||
+  // None isn't a valid lifetime for an object ivar in ARC, and
+  // __autoreleasing is never valid; don't diagnose twice.
+  if ((ivarLifetime == Qualifiers::OCL_None &&
+       S.getLangOpts().ObjCAutoRefCount) ||
       ivarLifetime == Qualifiers::OCL_Autoreleasing)
     return;
 
@@ -953,18 +955,46 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
     ObjCPropertyDecl::PropertyAttributeKind kind 
       = property->getPropertyAttributes();
 
-    // Add GC __weak to the ivar type if the property is weak.
-    if ((kind & ObjCPropertyDecl::OBJC_PR_weak) && 
-        getLangOpts().getGC() != LangOptions::NonGC) {
-      assert(!getLangOpts().ObjCAutoRefCount);
-      if (PropertyIvarType.isObjCGCStrong()) {
-        Diag(PropertyDiagLoc, diag::err_gc_weak_property_strong_type);
-        Diag(property->getLocation(), diag::note_property_declare);
+    bool isARCWeak = false;
+    if (kind & ObjCPropertyDecl::OBJC_PR_weak) {
+      // Add GC __weak to the ivar type if the property is weak.
+      if (getLangOpts().getGC() != LangOptions::NonGC) {
+        assert(!getLangOpts().ObjCAutoRefCount);
+        if (PropertyIvarType.isObjCGCStrong()) {
+          Diag(PropertyDiagLoc, diag::err_gc_weak_property_strong_type);
+          Diag(property->getLocation(), diag::note_property_declare);
+        } else {
+          PropertyIvarType =
+            Context.getObjCGCQualType(PropertyIvarType, Qualifiers::Weak);
+        }
+
+      // Otherwise, check whether ARC __weak is enabled and works with
+      // the property type.
       } else {
-        PropertyIvarType =
-          Context.getObjCGCQualType(PropertyIvarType, Qualifiers::Weak);
+        if (!getLangOpts().ObjCWeak) {
+          if (getLangOpts().ObjCWeakRuntime) {
+            Diag(PropertyDiagLoc, diag::err_arc_weak_disabled);
+          } else {
+            Diag(PropertyDiagLoc, diag::err_arc_weak_no_runtime);
+          }
+          Diag(property->getLocation(), diag::note_property_declare);
+        } else {
+          isARCWeak = true;
+          if (const ObjCObjectPointerType *ObjT =
+                PropertyIvarType->getAs<ObjCObjectPointerType>()) {
+            const ObjCInterfaceDecl *ObjI = ObjT->getInterfaceDecl();
+            if (ObjI && ObjI->isArcWeakrefUnavailable()) {
+              Diag(property->getLocation(),
+                   diag::err_arc_weak_unavailable_property)
+                << PropertyIvarType;
+              Diag(ClassImpDecl->getLocation(), diag::note_implemented_by_class)
+                << ClassImpDecl->getName();
+            }
+          }
+        }
       }
     }
+
     if (AtLoc.isInvalid()) {
       // Check when default synthesizing a property that there is 
       // an ivar matching property name and issue warning; since this
@@ -987,7 +1017,7 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
     if (!Ivar) {
       // In ARC, give the ivar a lifetime qualifier based on the
       // property attributes.
-      if (getLangOpts().ObjCAutoRefCount &&
+      if ((getLangOpts().ObjCAutoRefCount || isARCWeak) &&
           !PropertyIvarType.getObjCLifetime() &&
           PropertyIvarType->isObjCRetainableType()) {
 
@@ -1002,36 +1032,11 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
           Qualifiers::ObjCLifetime lifetime =
             getImpliedARCOwnership(kind, PropertyIvarType);
           assert(lifetime && "no lifetime for property?");
-          if (lifetime == Qualifiers::OCL_Weak) {
-            bool err = false;
-            if (const ObjCObjectPointerType *ObjT =
-                PropertyIvarType->getAs<ObjCObjectPointerType>()) {
-              const ObjCInterfaceDecl *ObjI = ObjT->getInterfaceDecl();
-              if (ObjI && ObjI->isArcWeakrefUnavailable()) {
-                Diag(property->getLocation(),
-                     diag::err_arc_weak_unavailable_property) << PropertyIvarType;
-                Diag(ClassImpDecl->getLocation(), diag::note_implemented_by_class)
-                  << ClassImpDecl->getName();
-                err = true;
-              }
-            }
-            if (!err && !getLangOpts().ObjCARCWeak) {
-              Diag(PropertyDiagLoc, diag::err_arc_weak_no_runtime);
-              Diag(property->getLocation(), diag::note_property_declare);
-            }
-          }
           
           Qualifiers qs;
           qs.addObjCLifetime(lifetime);
           PropertyIvarType = Context.getQualifiedType(PropertyIvarType, qs);   
         }
-      }
-
-      if (kind & ObjCPropertyDecl::OBJC_PR_weak &&
-          !getLangOpts().ObjCAutoRefCount &&
-          getLangOpts().getGC() == LangOptions::NonGC) {
-        Diag(PropertyDiagLoc, diag::error_synthesize_weak_non_arc_or_gc);
-        Diag(property->getLocation(), diag::note_property_declare);
       }
 
       Ivar = ObjCIvarDecl::Create(Context, ClassImpDecl,
@@ -1121,7 +1126,8 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
         // Fall thru - see previous comment
       }
     }
-    if (getLangOpts().ObjCAutoRefCount)
+    if (getLangOpts().ObjCAutoRefCount || isARCWeak ||
+        Ivar->getType().getObjCLifetime())
       checkARCPropertyImpl(*this, PropertyLoc, property, Ivar);
   } else if (PropertyIvar)
     // @dynamic
@@ -1157,7 +1163,9 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
                                  CK_LValueToRValue, SelfExpr, nullptr,
                                  VK_RValue);
       Expr *IvarRefExpr =
-        new (Context) ObjCIvarRefExpr(Ivar, Ivar->getType(), PropertyDiagLoc,
+        new (Context) ObjCIvarRefExpr(Ivar,
+                                      Ivar->getUsageType(SelfDecl->getType()),
+                                      PropertyDiagLoc,
                                       Ivar->getLocation(),
                                       LoadSelfExpr, true, true);
       ExprResult Res = PerformCopyInitialization(
@@ -1207,7 +1215,9 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
                                  CK_LValueToRValue, SelfExpr, nullptr,
                                  VK_RValue);
       Expr *lhs =
-        new (Context) ObjCIvarRefExpr(Ivar, Ivar->getType(), PropertyDiagLoc,
+        new (Context) ObjCIvarRefExpr(Ivar,
+                                      Ivar->getUsageType(SelfDecl->getType()),
+                                      PropertyDiagLoc,
                                       Ivar->getLocation(),
                                       LoadSelfExpr, true, true);
       ObjCMethodDecl::param_iterator P = setterMethod->param_begin();
@@ -1559,7 +1569,7 @@ void Sema::DefaultSynthesizeProperties(Scope *S, ObjCImplDecl* IMPDecl,
         IMPDecl->FindPropertyImplIvarDecl(Prop->getIdentifier())) {
       Diag(Prop->getLocation(), diag::warn_no_autosynthesis_shared_ivar_property)
         << Prop->getIdentifier();
-      if (!PID->getLocation().isInvalid())
+      if (PID->getLocation().isValid())
         Diag(PID->getLocation(), diag::note_property_synthesize);
       continue;
     }
@@ -1946,10 +1956,16 @@ void Sema::DiagnoseMissingDesignatedInitOverrides(
          I = DesignatedInits.begin(), E = DesignatedInits.end(); I != E; ++I) {
     const ObjCMethodDecl *MD = *I;
     if (!InitSelSet.count(MD->getSelector())) {
-      Diag(ImplD->getLocation(),
-           diag::warn_objc_implementation_missing_designated_init_override)
-        << MD->getSelector();
-      Diag(MD->getLocation(), diag::note_objc_designated_init_marked_here);
+      bool Ignore = false;
+      if (auto *IMD = IFD->getInstanceMethod(MD->getSelector())) {
+        Ignore = IMD->isUnavailable();
+      }
+      if (!Ignore) {
+        Diag(ImplD->getLocation(),
+             diag::warn_objc_implementation_missing_designated_init_override)
+          << MD->getSelector();
+        Diag(MD->getLocation(), diag::note_objc_designated_init_marked_here);
+      }
     }
   }
 }
@@ -2291,13 +2307,6 @@ void Sema::CheckObjCPropertyAttributes(Decl *PDecl,
       if (*nullability == NullabilityKind::NonNull)
         Diag(Loc, diag::err_objc_property_attr_mutually_exclusive)
           << "nonnull" << "weak";
-    } else {
-        PropertyTy =
-          Context.getAttributedType(
-            AttributedType::getNullabilityAttrKind(NullabilityKind::Nullable),
-            PropertyTy, PropertyTy);
-        TypeSourceInfo *TSInfo = PropertyDecl->getTypeSourceInfo();
-        PropertyDecl->setType(PropertyTy, TSInfo);
     }
   }
 

@@ -2,9 +2,12 @@
 Test breakpoint conditions with 'breakpoint modify -c <expr> id'.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,48 +15,23 @@ class BreakpointConditionsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_breakpoint_condition_with_dsym_and_run_command(self):
+    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
+    def test_breakpoint_condition_and_run_command(self):
         """Exercise breakpoint condition with 'breakpoint modify -c <expr> id'."""
-        self.buildDsym()
+        self.build()
         self.breakpoint_conditions()
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_breakpoint_condition_inline_with_dsym_and_run_command(self):
+    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
+    def test_breakpoint_condition_inline_and_run_command(self):
         """Exercise breakpoint condition inline with 'breakpoint set'."""
-        self.buildDsym()
+        self.build()
         self.breakpoint_conditions(inline=True)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_breakpoint_condition_with_dsym_and_python_api(self):
+    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
+    @add_test_categories(['pyapi'])
+    def test_breakpoint_condition_and_python_api(self):
         """Use Python APIs to set breakpoint conditions."""
-        self.buildDsym()
-        self.breakpoint_conditions_python()
-
-    @dwarf_test
-    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
-    def test_breakpoint_condition_with_dwarf_and_run_command(self):
-        """Exercise breakpoint condition with 'breakpoint modify -c <expr> id'."""
-        self.buildDwarf()
-        self.breakpoint_conditions()
-
-    @dwarf_test
-    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
-    def test_breakpoint_condition_inline_with_dwarf_and_run_command(self):
-        """Exercise breakpoint condition inline with 'breakpoint set'."""
-        self.buildDwarf()
-        self.breakpoint_conditions(inline=True)
-
-    @python_api_test
-    @dwarf_test
-    @skipIfWindows # Requires EE to support COFF on Windows (http://llvm.org/pr22232)
-    def test_breakpoint_condition_with_dwarf_and_python_api(self):
-        """Use Python APIs to set breakpoint conditions."""
-        self.buildDwarf()
+        self.build()
         self.breakpoint_conditions_python()
 
     def setUp(self):
@@ -79,7 +57,7 @@ class BreakpointConditionsTestCase(TestBase):
             self.runCmd("breakpoint modify -c 'val == 3' 1")
 
         # Now run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The process should be stopped at this point.
         self.expect("process status", PROCESS_STOPPED,
@@ -110,7 +88,7 @@ class BreakpointConditionsTestCase(TestBase):
             substrs = ["Condition:"])
 
         # Now run the program again.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The process should be stopped at this point.
         self.expect("process status", PROCESS_STOPPED,
@@ -150,7 +128,7 @@ class BreakpointConditionsTestCase(TestBase):
 
         # Now create a breakpoint on main.c by name 'c'.
         breakpoint = target.BreakpointCreateByName('c', 'a.out')
-        #print "breakpoint:", breakpoint
+        #print("breakpoint:", breakpoint)
         self.assertTrue(breakpoint and
                         breakpoint.GetNumLocations() == 1,
                         VALID_BREAKPOINT)
@@ -197,10 +175,3 @@ class BreakpointConditionsTestCase(TestBase):
         self.assertTrue(breakpoint.GetHitCount() == 1)
 
         process.Continue()
-
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

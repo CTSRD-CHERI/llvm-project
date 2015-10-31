@@ -1149,7 +1149,7 @@ ExprResult Parser::ParseLambdaExpressionAfterIntroducer(
                                            /*VolatileQualifierLoc=*/NoLoc,
                                            /*RestrictQualifierLoc=*/NoLoc,
                                            MutableLoc,
-                                           ESpecType, ESpecRange.getBegin(),
+                                           ESpecType, ESpecRange,
                                            DynamicExceptions.data(),
                                            DynamicExceptionRanges.data(),
                                            DynamicExceptions.size(),
@@ -1217,7 +1217,7 @@ ExprResult Parser::ParseLambdaExpressionAfterIntroducer(
                                                /*RestrictQualifierLoc=*/NoLoc,
                                                MutableLoc,
                                                EST_None,
-                                               /*ESpecLoc=*/NoLoc,
+                                               /*ESpecRange=*/SourceRange(),
                                                /*Exceptions=*/nullptr,
                                                /*ExceptionRanges=*/nullptr,
                                                /*NumExceptions=*/0,
@@ -1558,6 +1558,20 @@ ExprResult Parser::ParseThrowExpression() {
   }
 }
 
+/// \brief Parse the C++ Coroutines co_yield expression.
+///
+///       co_yield-expression:
+///         'co_yield' assignment-expression[opt]
+ExprResult Parser::ParseCoyieldExpression() {
+  assert(Tok.is(tok::kw_co_yield) && "Not co_yield!");
+
+  SourceLocation Loc = ConsumeToken();
+  ExprResult Expr = ParseAssignmentExpression();
+  if (!Expr.isInvalid())
+    Expr = Actions.ActOnCoyieldExpr(Loc, Expr.get());
+  return Expr;
+}
+
 /// ParseCXXThis - This handles the C++ 'this' pointer.
 ///
 /// C++ 9.3.2: In the body of a non-static member function, the keyword this is
@@ -1804,13 +1818,6 @@ void Parser::ParseCXXSimpleTypeSpecifier(DeclSpec &DS) {
     
     DS.SetRangeEnd(Tok.getAnnotationEndLoc());
     ConsumeToken();
-    
-    // Objective-C supports syntax of the form 'id<proto1,proto2>' where 'id'
-    // is a specific typedef and 'itf<proto1,proto2>' where 'itf' is an
-    // Objective-C interface.  If we don't have Objective-C or a '<', this is
-    // just a normal reference to a typedef name.
-    if (Tok.is(tok::less) && getLangOpts().ObjC1)
-      ParseObjCProtocolQualifiers(DS);
     
     DS.Finish(Diags, PP, Policy);
     return;
@@ -2296,7 +2303,7 @@ bool Parser::ParseUnqualifiedIdOperator(CXXScopeSpec &SS, bool EnteringContext,
       // This isn't a valid literal-operator-id, but we think we know
       // what the user meant. Tell them what they should have written.
       SmallString<32> Str;
-      Str += "\"\" ";
+      Str += "\"\"";
       Str += II->getName();
       Diag(DiagLoc, DiagId) << FixItHint::CreateReplacement(
           SourceRange(TokLocs.front(), TokLocs.back()), Str);

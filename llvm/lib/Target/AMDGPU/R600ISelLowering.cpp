@@ -190,6 +190,10 @@ R600TargetLowering::R600TargetLowering(TargetMachine &TM,
   setSchedulingPreference(Sched::Source);
 }
 
+static inline bool isEOP(MachineBasicBlock::iterator I) {
+  return std::next(I)->getOpcode() == AMDGPU::RETURN;
+}
+
 MachineBasicBlock * R600TargetLowering::EmitInstrWithCustomInserter(
     MachineInstr * MI, MachineBasicBlock * BB) const {
   MachineFunction * MF = BB->getParent();
@@ -276,12 +280,18 @@ MachineBasicBlock * R600TargetLowering::EmitInstrWithCustomInserter(
   case AMDGPU::RAT_WRITE_CACHELESS_32_eg:
   case AMDGPU::RAT_WRITE_CACHELESS_64_eg:
   case AMDGPU::RAT_WRITE_CACHELESS_128_eg: {
-    unsigned EOP = (std::next(I)->getOpcode() == AMDGPU::RETURN) ? 1 : 0;
-
     BuildMI(*BB, I, BB->findDebugLoc(I), TII->get(MI->getOpcode()))
             .addOperand(MI->getOperand(0))
             .addOperand(MI->getOperand(1))
-            .addImm(EOP); // Set End of program bit
+            .addImm(isEOP(I)); // Set End of program bit
+    break;
+  }
+  case AMDGPU::RAT_STORE_TYPED_eg: {
+    BuildMI(*BB, I, BB->findDebugLoc(I), TII->get(MI->getOpcode()))
+            .addOperand(MI->getOperand(0))
+            .addOperand(MI->getOperand(1))
+            .addOperand(MI->getOperand(2))
+            .addImm(isEOP(I)); // Set End of program bit
     break;
   }
 
@@ -539,7 +549,7 @@ MachineBasicBlock * R600TargetLowering::EmitInstrWithCustomInserter(
         }
       }
     }
-    bool EOP = (std::next(I)->getOpcode() == AMDGPU::RETURN) ? 1 : 0;
+    bool EOP = isEOP(I);
     if (!EOP && !isLastInstructionOfItsType)
       return BB;
     unsigned CfInst = (MI->getOpcode() == AMDGPU::EG_ExportSwz)? 84 : 40;
@@ -815,8 +825,10 @@ SDValue R600TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     case Intrinsic::r600_read_local_size_z:
       return LowerImplicitParameter(DAG, VT, DL, 8);
 
-    case Intrinsic::AMDGPU_read_workdim:
-      return LowerImplicitParameter(DAG, VT, DL, MFI->ABIArgOffset / 4);
+    case Intrinsic::AMDGPU_read_workdim: {
+      uint32_t ByteOffset = getImplicitParameterOffset(MFI, GRID_DIM);
+      return LowerImplicitParameter(DAG, VT, DL, ByteOffset / 4);
+    }
 
     case Intrinsic::r600_read_tgid_x:
       return CreateLiveInRegister(DAG, &AMDGPU::R600_TReg32RegClass,
@@ -897,8 +909,9 @@ SDValue R600TargetLowering::vectorToVerticalVector(SelectionDAG &DAG,
 
   for (unsigned i = 0, e = VecVT.getVectorNumElements();
                                                            i != e; ++i) {
-    Args.push_back(DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, EltVT, Vector,
-                               DAG.getConstant(i, DL, getVectorIdxTy())));
+    Args.push_back(DAG.getNode(
+        ISD::EXTRACT_VECTOR_ELT, DL, EltVT, Vector,
+        DAG.getConstant(i, DL, getVectorIdxTy(DAG.getDataLayout()))));
   }
 
   return DAG.getNode(AMDGPUISD::BUILD_VERTICAL_VECTOR, DL, VecVT, Args);
@@ -943,6 +956,8 @@ SDValue R600TargetLowering::LowerTrig(SDValue Op, SelectionDAG &DAG) const {
   EVT VT = Op.getValueType();
   SDValue Arg = Op.getOperand(0);
   SDLoc DL(Op);
+
+  // TODO: Should this propagate fast-math-flags?
   SDValue FractPart = DAG.getNode(AMDGPUISD::FRACT, DL, VT,
       DAG.getNode(ISD::FADD, DL, VT,
         DAG.getNode(ISD::FMUL, DL, VT, Arg,
@@ -1459,22 +1474,17 @@ SDValue R600TargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
   SDValue Ptr = Op.getOperand(1);
   SDValue LoweredLoad;
 
-  SDValue Ret = AMDGPUTargetLowering::LowerLOAD(Op, DAG);
-  if (Ret.getNode()) {
-    SDValue Ops[2] = {
-      Ret,
-      Chain
-    };
-    return DAG.getMergeValues(Ops, DL);
-  }
+  if (SDValue Ret = AMDGPUTargetLowering::LowerLOAD(Op, DAG))
+    return Ret;
 
   // Lower loads constant address space global variable loads
   if (LoadNode->getAddressSpace() == AMDGPUAS::CONSTANT_ADDRESS &&
       isa<GlobalVariable>(GetUnderlyingObject(
-          LoadNode->getMemOperand()->getValue(), *getDataLayout()))) {
+          LoadNode->getMemOperand()->getValue(), DAG.getDataLayout()))) {
 
-    SDValue Ptr = DAG.getZExtOrTrunc(LoadNode->getBasePtr(), DL,
-        getPointerTy(AMDGPUAS::PRIVATE_ADDRESS));
+    SDValue Ptr = DAG.getZExtOrTrunc(
+        LoadNode->getBasePtr(), DL,
+        getPointerTy(DAG.getDataLayout(), AMDGPUAS::PRIVATE_ADDRESS));
     Ptr = DAG.getNode(ISD::SRL, DL, MVT::i32, Ptr,
         DAG.getConstant(2, DL, MVT::i32));
     return DAG.getNode(AMDGPUISD::REGISTER_LOAD, DL, Op->getVTList(),
@@ -1702,7 +1712,8 @@ SDValue R600TargetLowering::LowerFormalArguments(
   return Chain;
 }
 
-EVT R600TargetLowering::getSetCCResultType(LLVMContext &, EVT VT) const {
+EVT R600TargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &,
+                                           EVT VT) const {
    if (!VT.isVector())
      return MVT::i32;
    return VT.changeVectorElementTypeToInteger();
@@ -1937,6 +1948,7 @@ SDValue R600TargetLowering::PerformDAGCombine(SDNode *N,
             Arg->getOperand(0).getOperand(Element));
       }
     }
+    break;
   }
 
   case ISD::SELECT_CC: {

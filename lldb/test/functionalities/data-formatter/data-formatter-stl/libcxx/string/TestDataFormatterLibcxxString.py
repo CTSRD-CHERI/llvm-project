@@ -3,8 +3,11 @@
 Test lldb data formatter subsystem.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -13,34 +16,24 @@ class LibcxxStringDataFormatterTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym_and_run_command(self):
-        """Test data formatter commands."""
-        self.buildDsym()
-        self.data_formatter_commands()
-
-    @skipIfGcc
-    @skipIfWindows # libc++ not ported to Windows yet
-    @dwarf_test
-    def test_with_dwarf_and_run_command(self):
-        """Test data formatter commands."""
-        self.buildDwarf()
-        self.data_formatter_commands()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break at.
         self.line = line_number('main.cpp', '// Set break point at this line.')
 
-    def data_formatter_commands(self):
+    @skipIfGcc
+    @skipIfWindows # libc++ not ported to Windows yet
+    def test_with_run_command(self):
         """Test that that file and class static variables display correctly."""
+        self.build()
         self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
 
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=-1)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
+
+        lldbutil.skip_if_library_missing(self, self.target(), lldbutil.PrintableRegex("libc\+\+"))
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -64,7 +57,9 @@ class LibcxxStringDataFormatterTestCase(TestBase):
                     '(std::__1::wstring) S = L"!!!!"',
                     '(const wchar_t *) mazeltov = 0x','L"מזל טוב"',
                     '(std::__1::string) q = "hello world"',
-                    '(std::__1::string) Q = "quite a long std::strin with lots of info inside it"'])
+                    '(std::__1::string) Q = "quite a long std::strin with lots of info inside it"',
+                    '(std::__1::string) IHaveEmbeddedZeros = "a\\0b\\0c\\0d"',
+                    '(std::__1::wstring) IHaveEmbeddedZerosToo = L"hello world!\\0てざ ル゜䋨ミ㠧槊 きゅへ狦穤襩 じゃ馩リョ 䤦監"'])
 
         self.runCmd("n")
 
@@ -86,10 +81,6 @@ class LibcxxStringDataFormatterTestCase(TestBase):
                     '(std::__1::wstring) S = L"!!!!!"',
                     '(const wchar_t *) mazeltov = 0x','L"מזל טוב"',
                     '(std::__1::string) q = "hello world"',
-                    '(std::__1::string) Q = "quite a long std::strin with lots of info inside it"'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+                    '(std::__1::string) Q = "quite a long std::strin with lots of info inside it"',
+                    '(std::__1::string) IHaveEmbeddedZeros = "a\\0b\\0c\\0d"',
+                    '(std::__1::wstring) IHaveEmbeddedZerosToo = L"hello world!\\0てざ ル゜䋨ミ㠧槊 きゅへ狦穤襩 じゃ馩リョ 䤦監"'])

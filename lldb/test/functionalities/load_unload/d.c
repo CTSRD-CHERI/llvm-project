@@ -9,9 +9,5 @@
 int
 d_function ()
 { // Find this line number within d_dunction().
-#ifdef HIDDEN
-    return 12345;
-#else
     return 700;
-#endif
 }

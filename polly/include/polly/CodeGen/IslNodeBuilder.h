@@ -16,7 +16,7 @@
 #include "polly/CodeGen/BlockGenerators.h"
 #include "polly/CodeGen/IslExprBuilder.h"
 #include "polly/CodeGen/LoopGenerators.h"
-#include "llvm/Analysis/ScalarEvolutionExpander.h"
+#include "polly/ScopInfo.h"
 #include "isl/ctx.h"
 #include "isl/union_map.h"
 
@@ -24,37 +24,44 @@ using namespace polly;
 using namespace llvm;
 
 struct isl_ast_node;
+struct isl_ast_build;
+struct isl_union_map;
 
 class IslNodeBuilder {
 public:
   IslNodeBuilder(PollyIRBuilder &Builder, ScopAnnotator &Annotator, Pass *P,
                  const DataLayout &DL, LoopInfo &LI, ScalarEvolution &SE,
                  DominatorTree &DT, Scop &S)
-      : S(S), Builder(Builder), Annotator(Annotator), Rewriter(SE, DL, "polly"),
-        ExprBuilder(Builder, IDToValue, Rewriter, DT, LI),
-        BlockGen(Builder, LI, SE, DT, ScalarMap, PHIOpMap, EscapeMap,
+      : S(S), Builder(Builder), Annotator(Annotator),
+        ExprBuilder(S, Builder, IDToValue, ValueMap, DL, SE, DT, LI),
+        BlockGen(Builder, LI, SE, DT, ScalarMap, PHIOpMap, EscapeMap, ValueMap,
                  &ExprBuilder),
         RegionGen(BlockGen), P(P), DL(DL), LI(LI), SE(SE), DT(DT) {}
 
-  ~IslNodeBuilder() {}
+  virtual ~IslNodeBuilder() {}
 
   void addParameters(__isl_take isl_set *Context);
   void create(__isl_take isl_ast_node *Node);
 
+  /// @brief Preload all memory loads that are invariant.
+  void preloadInvariantLoads();
+
   /// @brief Finalize code generation for the SCoP @p S.
   ///
   /// @see BlockGenerator::finalizeSCoP(Scop &S)
-  void finalizeSCoP(Scop &S) { BlockGen.finalizeSCoP(S, ValueMap); }
+  void finalizeSCoP(Scop &S) { BlockGen.finalizeSCoP(S); }
 
   IslExprBuilder &getExprBuilder() { return ExprBuilder; }
 
-private:
+  /// @brief Get the associated block generator.
+  ///
+  /// @return A referecne to the associated block generator.
+  BlockGenerator &getBlockGenerator() { return BlockGen; }
+
+protected:
   Scop &S;
   PollyIRBuilder &Builder;
   ScopAnnotator &Annotator;
-
-  /// @brief A SCEVExpander to create llvm values from SCEVs.
-  SCEVExpander Rewriter;
 
   IslExprBuilder ExprBuilder;
 
@@ -109,7 +116,16 @@ private:
   ///
   /// When generating new code for a ScopStmt this map is used to map certain
   /// llvm::Values to new llvm::Values.
-  polly::ValueMapT ValueMap;
+  ValueMapT ValueMap;
+
+  /// @brief Materialize code for @p Id if it was not done before.
+  void materializeValue(__isl_take isl_id *Id);
+
+  /// @brief Materialize parameters of @p Set.
+  ///
+  /// @param All If not set only parameters referred to by the constraints in
+  ///            @p Set will be materialized, otherwise all.
+  void materializeParameters(__isl_take isl_set *Set, bool All);
 
   // Extract the upper bound of this loop
   //
@@ -133,7 +149,16 @@ private:
   __isl_give isl_ast_expr *getUpperBound(__isl_keep isl_ast_node *For,
                                          CmpInst::Predicate &Predicate);
 
-  unsigned getNumberOfIterations(__isl_keep isl_ast_node *For);
+  /// Return non-negative number of iterations in case of the following form
+  /// of a loop and -1 otherwise.
+  ///
+  /// for (i = 0; i <= NumIter; i++) {
+  ///   loop body;
+  /// }
+  ///
+  /// NumIter is a non-negative integer value. Condition can have
+  /// isl_ast_op_lt type.
+  int getNumberOfIterations(__isl_keep isl_ast_node *For);
 
   /// Compute the values and loops referenced in this subtree.
   ///
@@ -167,9 +192,44 @@ private:
   /// pass down certain values.
   ///
   /// @param NewValues A map that maps certain llvm::Values to new llvm::Values.
-  void updateValues(ParallelLoopGenerator::ValueToValueMapTy &NewValues);
+  void updateValues(ValueMapT &NewValues);
 
-  void createFor(__isl_take isl_ast_node *For);
+  /// @brief Generate code for a marker now.
+  ///
+  /// For mark nodes with an unknown name, we just forward the code generation
+  /// to its child. This is currently the only behavior implemented, as there is
+  /// currently not special handling for marker nodes implemented.
+  ///
+  /// @param Mark The node we generate code for.
+  virtual void createMark(__isl_take isl_ast_node *Marker);
+  virtual void createFor(__isl_take isl_ast_node *For);
+
+  /// @brief Preload the memory access at @p AccessRange with @p Build.
+  ///
+  /// @returns The preloaded value casted to type @p Ty
+  Value *preloadUnconditionally(__isl_take isl_set *AccessRange,
+                                isl_ast_build *Build, Type *Ty);
+
+  /// @brief Preload the memory load access @p MA.
+  ///
+  /// If @p MA is not always executed it will be conditionally loaded and
+  /// merged with undef from the same type. Hence, if @p MA is executed only
+  /// under condition C then the preload code will look like this:
+  ///
+  /// MA_preload = undef;
+  /// if (C)
+  ///   MA_preload = load MA;
+  /// use MA_preload
+  Value *preloadInvariantLoad(const MemoryAccess &MA,
+                              __isl_take isl_set *Domain);
+
+  /// @brief Preload the invariant access equivalence class @p IAClass
+  ///
+  /// This function will preload the representing load from @p IAClass and
+  /// map all members of @p IAClass to that preloaded value, potentially casted
+  /// to the required type.
+  void preloadInvariantEquivClass(const InvariantEquivClassTy &IAClass);
+
   void createForVector(__isl_take isl_ast_node *For, int VectorWidth);
   void createForSequential(__isl_take isl_ast_node *For);
 
@@ -177,6 +237,23 @@ private:
   ///
   /// @param For The FOR isl_ast_node for which code is generated.
   void createForParallel(__isl_take isl_ast_node *For);
+
+  /// @brief Create new access functions for modified memory accesses.
+  ///
+  /// In case the access function of one of the memory references in the Stmt
+  /// has been modified, we generate a new isl_ast_expr that reflects the
+  /// newly modified access function and return a map that maps from the
+  /// individual memory references in the statement (identified by their id)
+  /// to these newly generated ast expressions.
+  ///
+  /// @param Stmt  The statement for which to (possibly) generate new access
+  ///              functions.
+  /// @param Node  The ast node corresponding to the statement for us to extract
+  ///              the local schedule from.
+  /// @return A new hash table that contains remappings from memory ids to new
+  ///         access expressions.
+  __isl_give isl_id_to_ast_expr *
+  createNewAccesses(ScopStmt *Stmt, __isl_keep isl_ast_node *Node);
 
   /// Generate LLVM-IR that computes the values of the original induction
   /// variables in function of the newly generated loop induction variables.
@@ -204,12 +281,6 @@ private:
   ///
   /// @param Expr The call expression that represents the statement.
   /// @param Stmt The statement that is called.
-  /// @param VMap The value map into which the mapping from the old induction
-  ///             variable to the new one is inserted. This mapping is used
-  ///             for the classical code generation (not scev-based) and
-  ///             gives an explicit mapping from an original, materialized
-  ///             induction variable. It consequently can only be expressed
-  ///             if there was an explicit induction variable.
   /// @param LTS  The loop to SCEV map in which the mapping from the original
   ///             loop to a SCEV representing the new loop iv is added. This
   ///             mapping does not require an explicit induction variable.
@@ -218,19 +289,31 @@ private:
   ///             original loop this count, expressed in function of the new
   ///             induction variables, is added to the LTS map.
   void createSubstitutions(__isl_take isl_ast_expr *Expr, ScopStmt *Stmt,
-                           ValueMapT &VMap, LoopToScevMapT &LTS);
+                           LoopToScevMapT &LTS);
   void createSubstitutionsVector(__isl_take isl_ast_expr *Expr, ScopStmt *Stmt,
-                                 VectorValueMapT &VMap,
                                  std::vector<LoopToScevMapT> &VLTS,
                                  std::vector<Value *> &IVS,
                                  __isl_take isl_id *IteratorID);
-  void createIf(__isl_take isl_ast_node *If);
+  virtual void createIf(__isl_take isl_ast_node *If);
   void createUserVector(__isl_take isl_ast_node *User,
                         std::vector<Value *> &IVS,
                         __isl_take isl_id *IteratorID,
                         __isl_take isl_union_map *Schedule);
-  void createUser(__isl_take isl_ast_node *User);
-  void createBlock(__isl_take isl_ast_node *Block);
+  virtual void createUser(__isl_take isl_ast_node *User);
+  virtual void createBlock(__isl_take isl_ast_node *Block);
+
+  /// @brief Get the schedule for a given AST node.
+  ///
+  /// This information is used to reason about parallelism of loops or the
+  /// locality of memory accesses under a given schedule.
+  ///
+  /// @param Node The node we want to obtain the schedule for.
+  /// @return Return an isl_union_map that maps from the statements executed
+  ///         below this ast node to the scheduling vectors used to enumerate
+  ///         them.
+  ///
+  virtual __isl_give isl_union_map *
+  getScheduleForAstNode(__isl_take isl_ast_node *Node);
 };
 
 #endif

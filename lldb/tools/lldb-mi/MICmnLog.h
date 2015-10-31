@@ -20,15 +20,12 @@
 //++ ============================================================================
 // Details: MI common code implementation class. Handle application trace
 //          activity logging. Medium objects derived from the Medium abstract
-///          class are registered with this loggor. The function Write is called
+///          class are registered with this logger. The function Write is called
 //          by a client callee to log information. That information is given to
 //          registered relevant mediums. The medium file is registered during
 //          *this logs initialization so it will always have a file log for the
 //          application.
 //          Singleton class.
-// Gotchas: None.
-// Authors: Illya Rudkin 01/02/2012.
-// Changes: None.
 //--
 class CMICmnLog : public MI::ISingleton<CMICmnLog>
 {
@@ -37,14 +34,14 @@ class CMICmnLog : public MI::ISingleton<CMICmnLog>
     // Enumeration:
   public:
     //++
-    // Description: Data given to the Logger can be of serveral types. The Logger can be
+    // Description: Data given to the Logger can be of several types. The Logger can be
     //              set at levels of verbosity. Can determine how data is sent to one or
     //              mediums.
     //--
     enum ELogVerbosity
     {                                         // Descriptions of what 'may' occur, depends ultimately on the medium itself. See the medium.
         eLogVerbosity_FnTrace = 0x00000004,   // Debug function stack call tracing
-        eLogVerbosity_DbgOp = 0x00000008,     // Send a string to the debugguer for display (not implemented)
+        eLogVerbosity_DbgOp = 0x00000008,     // Send a string to the debugger for display (not implemented)
         eLogVerbosity_ClientMsg = 0x00000010, // A client using MI can insert messages into the log (not implemented)
         eLogVerbosity_Log = 0x00000020        // Send to only the Log file.
     };
@@ -59,17 +56,17 @@ class CMICmnLog : public MI::ISingleton<CMICmnLog>
     class IMedium
     {
       public:
-        virtual bool Initialize(void) = 0;
-        virtual const CMIUtilString &GetName(void) const = 0;
+        virtual bool Initialize() = 0;
+        virtual const CMIUtilString &GetName() const = 0;
         virtual bool Write(const CMIUtilString &vData, const ELogVerbosity veType) = 0;
-        virtual const CMIUtilString &GetError(void) const = 0;
-        virtual bool Shutdown(void) = 0;
+        virtual const CMIUtilString &GetError() const = 0;
+        virtual bool Shutdown() = 0;
 
         // Not part of the interface, ignore
         // AD:  This virtual destructor seems to hit a bug in the stdlib
         //      where vector delete is incorrectly called.  Workaround is
         //      to comment this out while I investigate.
-        /* dtor */ virtual ~IMedium(void) {}
+        /* dtor */ virtual ~IMedium() {}
     };
 
     // Statics:
@@ -82,30 +79,30 @@ class CMICmnLog : public MI::ISingleton<CMICmnLog>
     bool UnregisterMedium(const IMedium &vrMedium);
     bool Write(const CMIUtilString &vData, const ELogVerbosity veType);
     bool SetEnabled(const bool vbYes);
-    bool GetEnabled(void) const;
+    bool GetEnabled() const;
 
     // MI common object handling - duplicate of CMICmnBase functions, necessary for LINUX build
     // Done to stop locking on object construction init circular dependency.
-    const CMIUtilString &GetErrorDescription(void) const;
+    const CMIUtilString &GetErrorDescription() const;
     void SetErrorDescription(const CMIUtilString &vrTxt) const;
-    void ClrErrorDescription(void) const;
+    void ClrErrorDescription() const;
 
     // Overridden:
   public:
     // From MI::ISingleton
-    virtual bool Initialize(void);
-    virtual bool Shutdown(void);
+    bool Initialize() override;
+    bool Shutdown() override;
 
     // Methods:
   private:
-    /* ctor */ CMICmnLog(void);
+    /* ctor */ CMICmnLog();
     /* ctor */ CMICmnLog(const CMICmnLog &);
     void operator=(const CMICmnLog &);
 
     // Overridden:
   private:
     // From CMICmnBase
-    /* dtor */ virtual ~CMICmnLog(void);
+    /* dtor */ ~CMICmnLog() override;
 
     // Typedef:
   private:
@@ -115,7 +112,7 @@ class CMICmnLog : public MI::ISingleton<CMICmnLog>
     // Methods:
   private:
     bool HaveMediumAlready(const IMedium &vrMedium) const;
-    bool UnregisterMediumAll(void);
+    bool UnregisterMediumAll();
 
     // Attributes:
   private:

@@ -2,9 +2,12 @@
 Test the 'memory read' command.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -13,35 +16,23 @@ class MemoryReadTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_memory_read_with_dsym(self):
-        """Test the 'memory read' command with plain and vector formats."""
-        self.buildDsym()
-        self.memory_read_command()
-
-    @dwarf_test
-    @expectedFailureAll("llvm.org/pr23139", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
-    def test_memory_read_with_dwarf(self):
-        """Test the 'memory read' command with plain and vector formats."""
-        self.buildDwarf()
-        self.memory_read_command()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to break inside main().
         self.line = line_number('main.cpp', '// Set break point at this line.')
 
-    def memory_read_command(self):
+    @expectedFailureAll("llvm.org/pr23139", oslist=["linux"], compiler="gcc", compiler_version=[">=","4.9"], archs=["i386"])
+    def test_memory_read(self):
         """Test the 'memory read' command with plain and vector formats."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         # Break in main() aftre the variables are assigned values.
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -98,10 +89,3 @@ class MemoryReadTestCase(TestBase):
         # 0x7fff5fbff598: error: unsupported byte size (20) for float format
         self.expect("memory read --format 'float' --count 1 --size 20 `&my_double`",
             substrs = ['unsupported byte size (20) for float format'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

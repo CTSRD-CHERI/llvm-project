@@ -2,7 +2,10 @@
 Test that the po command acts correctly.
 """
 
-import unittest2
+from __future__ import print_function
+
+import lldb_shared
+
 import lldb
 import lldbutil
 from lldbtest import *
@@ -19,20 +22,9 @@ class PoVerbosityTestCase(TestBase):
                                 '// Stop here')
 
     @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
+    def test(self):
         """Test that the po command acts correctly."""
-        self.buildDsym()
-        self.do_my_test()
-
-    @skipUnlessDarwin
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test that the po command acts correctly."""
-        self.buildDwarf()
-        self.do_my_test()
-
-    def do_my_test(self):
+        self.build()
         
         # This is the function to remove the custom formats in order to have a
         # clean slate for the next test case.
@@ -48,7 +40,7 @@ class PoVerbosityTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.m", self.line, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         
         self.expect("expr -O -v -- foo",
             substrs = ['(id) $',' = 0x', '1 = 2','2 = 3;'])
@@ -67,10 +59,3 @@ class PoVerbosityTestCase(TestBase):
 
         self.expect("expr -O -v -- 22",
             substrs = ['(int) $', ' = 22'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

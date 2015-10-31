@@ -1,7 +1,10 @@
 """Test lldb's expression evaluations and collect statistics."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys
-import unittest2
 import lldb
 from lldbbench import *
 
@@ -21,12 +24,12 @@ class ExpressionEvaluationCase(BenchBase):
     @expectedFailureWindows("llvm.org/pr22274: need a pexpect replacement for windows")
     def test_expr_cmd(self):
         """Test lldb's expression commands and collect statistics."""
-        self.buildDefault()
+        self.build()
         self.exe_name = 'a.out'
 
-        print
+        print()
         self.run_lldb_repeated_exprs(self.exe_name, self.count)
-        print "lldb expr cmd benchmark:", self.stopwatch
+        print("lldb expr cmd benchmark:", self.stopwatch)
 
     def run_lldb_repeated_exprs(self, exe_name, count):
         import pexpect
@@ -68,10 +71,3 @@ class ExpressionEvaluationCase(BenchBase):
                 pass
 
         self.child = None
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

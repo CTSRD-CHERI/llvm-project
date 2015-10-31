@@ -1,14 +1,18 @@
-"""
+﻿"""
 Test that breakpoint by symbol name works correctly with dynamic libs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
 
+@skipIfWindows # Windows doesn't have dlopen and friends, dynamic libraries work differently
 class LoadUnloadTestCase(TestBase):
 
     def getCategories (self):
@@ -69,11 +73,12 @@ class LoadUnloadTestCase(TestBase):
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
     @not_remote_testsuite_ready
+    @skipIfWindows # Windows doesn't have dlopen and friends, dynamic libraries work differently
     def test_modules_search_paths(self):
         """Test target modules list after loading a different copy of the library libd.dylib, and verifies that it works with 'target modules search-paths add'."""
 
         # Invoke the default build rule.
-        self.buildDefault()
+        self.build()
 
         if self.platformIsDarwin():
             dylibName = 'libloadunload_d.dylib'
@@ -107,7 +112,7 @@ class LoadUnloadTestCase(TestBase):
         # Inform (DY)LD_LIBRARY_PATH of the new path, too.
         env_cmd_string = "settings set target.env-vars " + self.dylibPath + "=" + new_dir
         if self.TraceOn():
-            print "Set environment to: ", env_cmd_string
+            print("Set environment to: ", env_cmd_string)
         self.runCmd(env_cmd_string)
         self.runCmd("settings show target.env-vars")
 
@@ -121,11 +126,13 @@ class LoadUnloadTestCase(TestBase):
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
     @skipUnlessListedRemote(['android'])
+    @expectedFailureAndroid # wrong source file shows up for hidden library
+    @skipIfWindows # Windows doesn't have dlopen and friends, dynamic libraries work differently
     def test_dyld_library_path(self):
         """Test (DY)LD_LIBRARY_PATH after moving libd.dylib, which defines d_function, somewhere else."""
 
         # Invoke the default build rule.
-        self.buildDefault()
+        self.build()
         self.copy_shlibs_to_remote(hidden_dir=True)
 
         exe = os.path.join(os.getcwd(), "a.out")
@@ -175,12 +182,13 @@ class LoadUnloadTestCase(TestBase):
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
     @skipUnlessListedRemote(['android'])
-    @unittest2.expectedFailure("rdar://15367406")
+    @expectedFailureAndroid # dlopen and dlclose prefixed with "__dl_" on android causing JIT compilation issues
+    @skipIfWindows # Windows doesn't have dlopen and friends, dynamic libraries work differently
     def test_lldb_process_load_and_unload_commands(self):
         """Test that lldb process load/unload command work correctly."""
 
         # Invoke the default build rule.
-        self.buildDefault()
+        self.build()
         self.copy_shlibs_to_remote()
 
         exe = os.path.join(os.getcwd(), "a.out")
@@ -191,7 +199,7 @@ class LoadUnloadTestCase(TestBase):
 
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         if lldb.remote_platform:
             shlib_dir = lldb.remote_platform.GetWorkingDirectory()
@@ -218,7 +226,7 @@ class LoadUnloadTestCase(TestBase):
         output = self.res.GetOutput()
         pattern = re.compile("Image ([0-9]+) loaded")
         for l in output.split(os.linesep):
-            #print "l:", l
+            #print("l:", l)
             match = pattern.search(l)
             if match:
                 break
@@ -240,7 +248,7 @@ class LoadUnloadTestCase(TestBase):
         """Test breakpoint by name works correctly with dlopen'ing."""
 
         # Invoke the default build rule.
-        self.buildDefault()
+        self.build()
         self.copy_shlibs_to_remote()
 
         exe = os.path.join(os.getcwd(), "a.out")
@@ -249,7 +257,7 @@ class LoadUnloadTestCase(TestBase):
         # Break by function name a_function (not yet loaded).
         lldbutil.run_break_set_by_symbol (self, "a_function", num_expected_locations=0)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint and at a_function.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -278,11 +286,12 @@ class LoadUnloadTestCase(TestBase):
 
     @skipIfFreeBSD # llvm.org/pr14424 - missing FreeBSD Makefiles/testcase support
     @skipUnlessListedRemote(['android'])
+    @skipIfWindows # Windows doesn't have dlopen and friends, dynamic libraries work differently
     def test_step_over_load (self):
         """Test stepping over code that loads a shared library works correctly."""
 
         # Invoke the default build rule.
-        self.buildDefault()
+        self.build()
         self.copy_shlibs_to_remote()
 
         exe = os.path.join(os.getcwd(), "a.out")
@@ -291,7 +300,7 @@ class LoadUnloadTestCase(TestBase):
         # Break by function name a_function (not yet loaded).
         lldbutil.run_break_set_by_file_and_line (self, "main.c", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint and at a_function.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -304,9 +313,3 @@ class LoadUnloadTestCase(TestBase):
         self.expect("thread list", "step over succeeded.", 
             substrs = ['stopped',
                       'stop reason = step over'])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

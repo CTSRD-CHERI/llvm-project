@@ -2,9 +2,12 @@
 Testlldb Python SBFrame APIs IsInlined() and GetFunctionName().
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,23 +15,7 @@ class InlinedFrameAPITestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_stop_at_outer_inline_with_dsym(self):
-        """Exercise SBFrame.IsInlined() and SBFrame.GetFunctionName()."""
-        self.buildDsym()
-        self.do_stop_at_outer_inline()
-
-    @python_api_test
-    @dwarf_test
-    def test_stop_at_outer_inline_with_dwarf(self):
-        """Exercise SBFrame.IsInlined() and SBFrame.GetFunctionName()."""
-        self.buildDwarf()
-        self.do_stop_at_outer_inline()
-
     def setUp(self):
-        
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line number to of function 'c'.
@@ -36,8 +23,10 @@ class InlinedFrameAPITestCase(TestBase):
         self.first_stop = line_number(self.source, '// This should correspond to the first break stop.')
         self.second_stop = line_number(self.source, '// This should correspond to the second break stop.')
 
-    def do_stop_at_outer_inline(self):
+    @add_test_categories(['pyapi'])
+    def test_stop_at_outer_inline(self):
         """Exercise SBFrame.IsInlined() and SBFrame.GetFunctionName()."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -46,7 +35,7 @@ class InlinedFrameAPITestCase(TestBase):
 
         # Now create a breakpoint on main.c by the name of 'inner_inline'.
         breakpoint = target.BreakpointCreateByName('inner_inline', 'a.out')
-        #print "breakpoint:", breakpoint
+        #print("breakpoint:", breakpoint)
         self.assertTrue(breakpoint and
                         breakpoint.GetNumLocations() > 1,
                         VALID_BREAKPOINT)
@@ -61,8 +50,8 @@ class InlinedFrameAPITestCase(TestBase):
         import lldbutil
         stack_traces1 = lldbutil.print_stacktraces(process, string_buffer=True)
         if self.TraceOn():
-            print "Full stack traces when first stopped on the breakpoint 'inner_inline':"
-            print stack_traces1
+            print("Full stack traces when first stopped on the breakpoint 'inner_inline':")
+            print(stack_traces1)
 
         # The first breakpoint should correspond to an inlined call frame.
         # If it's an inlined call frame, expect to find, in the stack trace,
@@ -83,13 +72,7 @@ class InlinedFrameAPITestCase(TestBase):
                             PROCESS_STOPPED)
             stack_traces2 = lldbutil.print_stacktraces(process, string_buffer=True)
             if self.TraceOn():
-                print "Full stack traces when stopped on the breakpoint 'inner_inline' for the second time:"
-                print stack_traces2
+                print("Full stack traces when stopped on the breakpoint 'inner_inline' for the second time:")
+                print(stack_traces2)
                 self.expect(stack_traces2, "Second stop at %s:%d" % (self.source, self.second_stop), exe=False,
                             substrs = ['%s:%d' % (self.source, self.second_stop)])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

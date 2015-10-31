@@ -57,6 +57,10 @@ static cl::opt<bool> VSXSelfCopyCrash("crash-on-ppc-vsx-self-copy",
 cl::desc("Causes the backend to crash instead of generating a nop VSX copy"),
 cl::Hidden);
 
+static cl::opt<bool>
+UseOldLatencyCalc("ppc-old-latency-calc", cl::Hidden,
+  cl::desc("Use the old (incorrect) instruction latency calculation"));
+
 // Pin the vtable to this file.
 void PPCInstrInfo::anchor() {}
 
@@ -103,6 +107,35 @@ PPCInstrInfo::CreateTargetPostRAHazardRecognizer(const InstrItineraryData *II,
   return new ScoreboardHazardRecognizer(II, DAG);
 }
 
+unsigned PPCInstrInfo::getInstrLatency(const InstrItineraryData *ItinData,
+                                       const MachineInstr *MI,
+                                       unsigned *PredCost) const {
+  if (!ItinData || UseOldLatencyCalc)
+    return PPCGenInstrInfo::getInstrLatency(ItinData, MI, PredCost);
+
+  // The default implementation of getInstrLatency calls getStageLatency, but
+  // getStageLatency does not do the right thing for us. While we have
+  // itinerary, most cores are fully pipelined, and so the itineraries only
+  // express the first part of the pipeline, not every stage. Instead, we need
+  // to use the listed output operand cycle number (using operand 0 here, which
+  // is an output).
+
+  unsigned Latency = 1;
+  unsigned DefClass = MI->getDesc().getSchedClass();
+  for (unsigned i = 0, e = MI->getNumOperands(); i != e; ++i) {
+    const MachineOperand &MO = MI->getOperand(i);
+    if (!MO.isReg() || !MO.isDef() || MO.isImplicit())
+      continue;
+
+    int Cycle = ItinData->getOperandCycle(DefClass, i);
+    if (Cycle < 0)
+      continue;
+
+    Latency = std::max(Latency, (unsigned) Cycle);
+  }
+
+  return Latency;
+}
 
 int PPCInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
                                     const MachineInstr *DefMI, unsigned DefIdx,
@@ -110,6 +143,9 @@ int PPCInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
                                     unsigned UseIdx) const {
   int Latency = PPCGenInstrInfo::getOperandLatency(ItinData, DefMI, DefIdx,
                                                    UseMI, UseIdx);
+
+  if (!DefMI->getParent())
+    return Latency;
 
   const MachineOperand &DefMO = DefMI->getOperand(DefIdx);
   unsigned Reg = DefMO.getReg();
@@ -151,6 +187,60 @@ int PPCInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
   }
 
   return Latency;
+}
+
+// This function does not list all associative and commutative operations, but
+// only those worth feeding through the machine combiner in an attempt to
+// reduce the critical path. Mostly, this means floating-point operations,
+// because they have high latencies (compared to other operations, such and
+// and/or, which are also associative and commutative, but have low latencies).
+bool PPCInstrInfo::isAssociativeAndCommutative(const MachineInstr &Inst) const {
+  switch (Inst.getOpcode()) {
+  // FP Add:
+  case PPC::FADD:
+  case PPC::FADDS:
+  // FP Multiply:
+  case PPC::FMUL:
+  case PPC::FMULS:
+  // Altivec Add:
+  case PPC::VADDFP:
+  // VSX Add:
+  case PPC::XSADDDP:
+  case PPC::XVADDDP:
+  case PPC::XVADDSP:
+  case PPC::XSADDSP:
+  // VSX Multiply:
+  case PPC::XSMULDP:
+  case PPC::XVMULDP:
+  case PPC::XVMULSP:
+  case PPC::XSMULSP:
+  // QPX Add:
+  case PPC::QVFADD:
+  case PPC::QVFADDS:
+  case PPC::QVFADDSs:
+  // QPX Multiply:
+  case PPC::QVFMUL:
+  case PPC::QVFMULS:
+  case PPC::QVFMULSs:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool PPCInstrInfo::getMachineCombinerPatterns(
+    MachineInstr &Root,
+    SmallVectorImpl<MachineCombinerPattern::MC_PATTERN> &Patterns) const {
+  // Using the machine combiner in this way is potentially expensive, so
+  // restrict to when aggressive optimizations are desired.
+  if (Subtarget.getTargetMachine().getOptLevel() != CodeGenOpt::Aggressive)
+    return false;
+
+  // FP reassociation is only legal when we don't need strict IEEE semantics.
+  if (!Root.getParent()->getParent()->getTarget().Options.UnsafeFPMath)
+    return false;
+
+  return TargetInstrInfo::getMachineCombinerPatterns(Root, Patterns);
 }
 
 // Detect 32 -> 64-bit extensions where we may reuse the low sub-register.
@@ -226,16 +316,16 @@ unsigned PPCInstrInfo::isStoreToStackSlot(const MachineInstr *MI,
   return 0;
 }
 
-// commuteInstruction - We can commute rlwimi instructions, but only if the
-// rotate amt is zero.  We also have to munge the immediates a bit.
-MachineInstr *
-PPCInstrInfo::commuteInstruction(MachineInstr *MI, bool NewMI) const {
+MachineInstr *PPCInstrInfo::commuteInstructionImpl(MachineInstr *MI,
+                                                   bool NewMI,
+                                                   unsigned OpIdx1,
+                                                   unsigned OpIdx2) const {
   MachineFunction &MF = *MI->getParent()->getParent();
 
   // Normal instructions can be commuted the obvious way.
   if (MI->getOpcode() != PPC::RLWIMI &&
       MI->getOpcode() != PPC::RLWIMIo)
-    return TargetInstrInfo::commuteInstruction(MI, NewMI);
+    return TargetInstrInfo::commuteInstructionImpl(MI, NewMI, OpIdx1, OpIdx2);
   // Note that RLWIMI can be commuted as a 32-bit instruction, but not as a
   // 64-bit instruction (so we don't handle PPC::RLWIMI8 here), because
   // changing the relative order of the mask operands might change what happens
@@ -253,6 +343,8 @@ PPCInstrInfo::commuteInstruction(MachineInstr *MI, bool NewMI) const {
   //   Op0 = (Op2 & ~M) | (Op1 & M)
 
   // Swap op1/op2
+  assert(((OpIdx1 == 1 && OpIdx2 == 2) || (OpIdx1 == 2 && OpIdx2 == 1)) &&
+         "Only the operands 1 and 2 can be swapped in RLSIMI/RLWIMIo.");
   unsigned Reg0 = MI->getOperand(0).getReg();
   unsigned Reg1 = MI->getOperand(1).getReg();
   unsigned Reg2 = MI->getOperand(2).getReg();
@@ -275,6 +367,11 @@ PPCInstrInfo::commuteInstruction(MachineInstr *MI, bool NewMI) const {
   // Masks.
   unsigned MB = MI->getOperand(4).getImm();
   unsigned ME = MI->getOperand(5).getImm();
+
+  // We can't commute a trivial mask (there is no way to represent an all-zero
+  // mask).
+  if (MB == 0 && ME == 31)
+    return nullptr;
 
   if (NewMI) {
     // Create a new instruction.
@@ -315,9 +412,9 @@ bool PPCInstrInfo::findCommutedOpIndices(MachineInstr *MI, unsigned &SrcOpIdx1,
   if (AltOpc == -1)
     return TargetInstrInfo::findCommutedOpIndices(MI, SrcOpIdx1, SrcOpIdx2);
 
-  SrcOpIdx1 = 2;
-  SrcOpIdx2 = 3;
-  return true;
+  // The commutable operand indices are 2 and 3. Return them in SrcOpIdx1
+  // and SrcOpIdx2.
+  return fixCommutedOpIndices(SrcOpIdx1, SrcOpIdx2, 2, 3);
 }
 
 void PPCInstrInfo::insertNoop(MachineBasicBlock &MBB,
@@ -958,11 +1055,10 @@ PPCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     MBB.insert(MI, NewMIs[i]);
 
   const MachineFrameInfo &MFI = *MF.getFrameInfo();
-  MachineMemOperand *MMO =
-    MF.getMachineMemOperand(MachinePointerInfo::getFixedStack(FrameIdx),
-                            MachineMemOperand::MOStore,
-                            MFI.getObjectSize(FrameIdx),
-                            MFI.getObjectAlignment(FrameIdx));
+  MachineMemOperand *MMO = MF.getMachineMemOperand(
+      MachinePointerInfo::getFixedStack(MF, FrameIdx),
+      MachineMemOperand::MOStore, MFI.getObjectSize(FrameIdx),
+      MFI.getObjectAlignment(FrameIdx));
   NewMIs.back()->addMemOperand(MF, MMO);
 }
 
@@ -1071,11 +1167,10 @@ PPCInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     MBB.insert(MI, NewMIs[i]);
 
   const MachineFrameInfo &MFI = *MF.getFrameInfo();
-  MachineMemOperand *MMO =
-    MF.getMachineMemOperand(MachinePointerInfo::getFixedStack(FrameIdx),
-                            MachineMemOperand::MOLoad,
-                            MFI.getObjectSize(FrameIdx),
-                            MFI.getObjectAlignment(FrameIdx));
+  MachineMemOperand *MMO = MF.getMachineMemOperand(
+      MachinePointerInfo::getFixedStack(MF, FrameIdx),
+      MachineMemOperand::MOLoad, MFI.getObjectSize(FrameIdx),
+      MFI.getObjectAlignment(FrameIdx));
   NewMIs.back()->addMemOperand(MF, MMO);
 }
 
@@ -1176,7 +1271,7 @@ bool PPCInstrInfo::isProfitableToIfCvt(MachineBasicBlock &TMBB,
                      unsigned NumT, unsigned ExtraT,
                      MachineBasicBlock &FMBB,
                      unsigned NumF, unsigned ExtraF,
-                     const BranchProbability &Probability) const {
+                     BranchProbability Probability) const {
   return !(MBBDefinesCTR(TMBB) && MBBDefinesCTR(FMBB));
 }
 
@@ -1697,5 +1792,37 @@ unsigned PPCInstrInfo::GetInstSizeInBytes(const MachineInstr *MI) const {
     const MCInstrDesc &Desc = get(Opcode);
     return Desc.getSize();
   }
+}
+
+std::pair<unsigned, unsigned>
+PPCInstrInfo::decomposeMachineOperandsTargetFlags(unsigned TF) const {
+  const unsigned Mask = PPCII::MO_ACCESS_MASK;
+  return std::make_pair(TF & Mask, TF & ~Mask);
+}
+
+ArrayRef<std::pair<unsigned, const char *>>
+PPCInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
+  using namespace PPCII;
+  static const std::pair<unsigned, const char *> TargetFlags[] = {
+      {MO_LO, "ppc-lo"},
+      {MO_HA, "ppc-ha"},
+      {MO_TPREL_LO, "ppc-tprel-lo"},
+      {MO_TPREL_HA, "ppc-tprel-ha"},
+      {MO_DTPREL_LO, "ppc-dtprel-lo"},
+      {MO_TLSLD_LO, "ppc-tlsld-lo"},
+      {MO_TOC_LO, "ppc-toc-lo"},
+      {MO_TLS, "ppc-tls"}};
+  return makeArrayRef(TargetFlags);
+}
+
+ArrayRef<std::pair<unsigned, const char *>>
+PPCInstrInfo::getSerializableBitmaskMachineOperandTargetFlags() const {
+  using namespace PPCII;
+  static const std::pair<unsigned, const char *> TargetFlags[] = {
+      {MO_PLT_OR_STUB, "ppc-plt-or-stub"},
+      {MO_PIC_FLAG, "ppc-pic"},
+      {MO_NLP_FLAG, "ppc-nlp"},
+      {MO_NLP_HIDDEN_FLAG, "ppc-nlp-hidden"}};
+  return makeArrayRef(TargetFlags);
 }
 

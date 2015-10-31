@@ -1,7 +1,10 @@
 """Test that SBFrame::FindValue finds things but does not duplicate the entire variables list"""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, sys, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -10,29 +13,12 @@ class SBFrameFindValueTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_formatters_api(self):
+    @add_test_categories(['pyapi'])
+    def test_formatters_api(self):
         """Test that SBFrame::FindValue finds things but does not duplicate the entire variables list"""
-        self.buildDsym()
+        self.build()
         self.setTearDownCleanup()
-        self.commands()
 
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_formatters_api(self):
-        """Test that SBFrame::FindValue finds things but does not duplicate the entire variables list"""
-        self.buildDwarf()
-        self.setTearDownCleanup()
-        self.commands()
-
-    def setUp(self):
-        # Call super's setUp().
-        TestBase.setUp(self)
-
-    def commands(self):
-        """Test that SBFrame::FindValue finds things but does not duplicate the entire variables list"""
         exe_name = "a.out"
         exe = os.path.join(os.getcwd(), exe_name)
 
@@ -62,9 +48,3 @@ class SBFrameFindValueTestCase(TestBase):
         self.assertTrue(self.frame.GetVariables(True,True,False,True).GetSize() == 2, "variable count is off after failed FindValue()")
         self.assertTrue(self.frame.FindValue("a",lldb.eValueTypeVariableArgument,lldb.eDynamicCanRunTarget).IsValid(), "FindValue() didn't find an argument")
         self.assertTrue(self.frame.GetVariables(True,True,False,True).GetSize() == 2, "variable count is off after successful FindValue()")
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

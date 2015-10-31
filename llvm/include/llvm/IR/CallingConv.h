@@ -69,6 +69,9 @@ namespace CallingConv {
     // (almost) all registers.
     PreserveAll = 15,
 
+    // Swift - Calling convention for Swift.
+    Swift = 16,
+
     // Target - This is the start of the target-specific calling conventions,
     // e.g. fastcall and thiscall on X86.
     FirstTargetCC = 64,
@@ -146,13 +149,22 @@ namespace CallingConv {
     /// in SSE registers.
     X86_VectorCall = 80,
 
+    /// \brief Calling convention used by HipHop Virtual Machine (HHVM) to
+    /// perform calls to and from translation cache, and for calling PHP
+    /// functions.
+    /// HHVM calling convention supports tail/sibling call elimination.
+    HHVM = 81,
+
+    /// \brief HHVM calling convention for invoking C/C++ helpers.
+    HHVM_C = 82,
+
     /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
-    CHERI_CCall = 81,
+    CHERI_CCall = 83,
     /// CHERI_CCallee - Calling convention used for the callee of CHERI_CCall.
     /// Ignores the first two capability arguments and the first integer
     /// argument, zeroes all unused return registers on return.
-    CHERI_CCallee = 82
+    CHERI_CCallee = 84
   };
 } // End CallingConv namespace
 

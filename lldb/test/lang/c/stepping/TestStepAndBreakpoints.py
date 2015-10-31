@@ -1,7 +1,10 @@
 """Test stepping over vrs. hitting breakpoints & subsequent stepping in various forms."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -13,31 +16,19 @@ class TestCStepping(TestBase):
     def getCategories(self):
         return ['basic_process']
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Test stepping over vrs. hitting breakpoints & subsequent stepping in various forms."""
-        self.buildDsym()
-        self.step_over_stepping()
-
-    @expectedFailureFreeBSD('llvm.org/pr17932')
-    @expectedFailureLinux # llvm.org/pr14437
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_python_api(self):
-        """Test stepping over vrs. hitting breakpoints & subsequent stepping in various forms."""
-        self.buildDwarf()
-        self.step_over_stepping()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
         # Find the line numbers that we will step to in main:
         self.main_source = "main.c"
 
-    def step_over_stepping(self):
-        """Use Python APIs to test stepping over and hitting breakpoints."""
+    @expectedFailureFreeBSD('llvm.org/pr17932')
+    @expectedFailureLinux # llvm.org/pr14437
+    @expectedFailureWindows("llvm.org/pr24777")
+    @add_test_categories(['pyapi'])
+    def test_and_python_api(self):
+        """Test stepping over vrs. hitting breakpoints & subsequent stepping in various forms."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -185,17 +176,17 @@ class TestCStepping(TestBase):
         self.assertTrue (thread.GetFrameAtIndex(0).GetLineEntry().GetLine() == current_line)
         self.assertTrue (thread.GetFrameAtIndex(0).GetLineEntry().GetFileSpec() == current_file)
 
-        # Now we are going to test step in targetting a function:
+        # Now we are going to test step in targeting a function:
 
         break_in_b.SetEnabled (False)
 
-        break_before_complex_1 = target.BreakpointCreateBySourceRegex ('// Stop here to try step in targetting b.', self.main_source_spec)
+        break_before_complex_1 = target.BreakpointCreateBySourceRegex ('// Stop here to try step in targeting b.', self.main_source_spec)
         self.assertTrue(break_before_complex_1, VALID_BREAKPOINT)
 
-        break_before_complex_2 = target.BreakpointCreateBySourceRegex ('// Stop here to try step in targetting complex.', self.main_source_spec)
+        break_before_complex_2 = target.BreakpointCreateBySourceRegex ('// Stop here to try step in targeting complex.', self.main_source_spec)
         self.assertTrue(break_before_complex_2, VALID_BREAKPOINT)
 
-        break_before_complex_3 = target.BreakpointCreateBySourceRegex ('// Stop here to step targetting b and hitting breakpoint.', self.main_source_spec)
+        break_before_complex_3 = target.BreakpointCreateBySourceRegex ('// Stop here to step targeting b and hitting breakpoint.', self.main_source_spec)
         self.assertTrue(break_before_complex_3, VALID_BREAKPOINT)
 
         break_before_complex_4 = target.BreakpointCreateBySourceRegex ('// Stop here to make sure bogus target steps over.', self.main_source_spec)
@@ -218,7 +209,7 @@ class TestCStepping(TestBase):
         thread.StepInto ("complex")
         self.assertTrue (thread.GetFrameAtIndex(0).GetFunctionName() == "complex")
         
-        # Now continue out and stop at the next call to complex.  This time enable breakpoints in a and c and then step targetting b:
+        # Now continue out and stop at the next call to complex.  This time enable breakpoints in a and c and then step targeting b:
         threads = lldbutil.continue_to_breakpoint (process, break_before_complex_3)
         self.assertTrue (len(threads) == 1)
         thread = threads[0]
@@ -241,7 +232,7 @@ class TestCStepping(TestBase):
         process.Continue()
         self.assertTrue (thread.GetFrameAtIndex(0).GetFunctionName() == "b")
         
-        # Now continue out and stop at the next call to complex.  This time enable breakpoints in a and c and then step targetting b:
+        # Now continue out and stop at the next call to complex.  This time enable breakpoints in a and c and then step targeting b:
         threads = lldbutil.continue_to_breakpoint (process, break_before_complex_4)
         self.assertTrue (len(threads) == 1)
         thread = threads[0]
@@ -249,9 +240,3 @@ class TestCStepping(TestBase):
 
         thread.StepInto("NoSuchFunction")
         self.assertTrue (thread.GetFrameAtIndex(0).GetFunctionName() == "main")
-        
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

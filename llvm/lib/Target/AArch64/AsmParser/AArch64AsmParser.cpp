@@ -117,7 +117,7 @@ public:
   };
   AArch64AsmParser(MCSubtargetInfo &STI, MCAsmParser &Parser,
                    const MCInstrInfo &MII, const MCTargetOptions &Options)
-      : MCTargetAsmParser(), STI(STI) {
+      : MCTargetAsmParser(Options), STI(STI) {
     MCAsmParserExtension::Initialize(Parser);
     MCStreamer &S = getParser().getStreamer();
     if (S.getTargetStreamer() == nullptr)
@@ -497,6 +497,15 @@ public:
     return (Val % Scale) == 0 && Val >= 0 && (Val / Scale) < 0x1000;
   }
 
+  bool isImm0_1() const {
+    if (!isImm())
+      return false;
+    const MCConstantExpr *MCE = dyn_cast<MCConstantExpr>(getImm());
+    if (!MCE)
+      return false;
+    int64_t Val = MCE->getValue();
+    return (Val >= 0 && Val < 2);
+  }
   bool isImm0_7() const {
     if (!isImm())
       return false;
@@ -699,6 +708,25 @@ public:
     const MCConstantExpr *CE = cast<MCConstantExpr>(Expr);
     return CE->getValue() >= 0 && CE->getValue() <= 0xfff;
   }
+  bool isAddSubImmNeg() const {
+    if (!isShiftedImm() && !isImm())
+      return false;
+
+    const MCExpr *Expr;
+
+    // An ADD/SUB shifter is either 'lsl #0' or 'lsl #12'.
+    if (isShiftedImm()) {
+      unsigned Shift = ShiftedImm.ShiftAmount;
+      Expr = ShiftedImm.Val;
+      if (Shift != 0 && Shift != 12)
+        return false;
+    } else
+      Expr = getImm();
+
+    // Otherwise it should be a real negative immediate in range:
+    const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr);
+    return CE != nullptr && CE->getValue() < 0 && -CE->getValue() <= 0xfff;
+  }
   bool isCondCode() const { return Kind == k_CondCode; }
   bool isSIMDImmType10() const {
     if (!isImm())
@@ -857,12 +885,14 @@ public:
   }
   bool isMSRSystemRegister() const {
     if (!isSysReg()) return false;
-
     return SysReg.MSRReg != -1U;
   }
-  bool isSystemPStateField() const {
+  bool isSystemPStateFieldWithImm0_1() const {
     if (!isSysReg()) return false;
-
+    return SysReg.PStateField == AArch64PState::PAN;
+  }
+  bool isSystemPStateFieldWithImm0_15() const {
+    if (!isSysReg() || isSystemPStateFieldWithImm0_1()) return false;
     return SysReg.PStateField != -1U;
   }
   bool isReg() const override { return Kind == k_Register && !Reg.isVector; }
@@ -1156,8 +1186,10 @@ public:
   template <unsigned NumRegs>
   void addVectorList64Operands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
-    static unsigned FirstRegs[] = { AArch64::D0,       AArch64::D0_D1,
-                                    AArch64::D0_D1_D2, AArch64::D0_D1_D2_D3 };
+    static const unsigned FirstRegs[] = { AArch64::D0,
+                                          AArch64::D0_D1,
+                                          AArch64::D0_D1_D2,
+                                          AArch64::D0_D1_D2_D3 };
     unsigned FirstReg = FirstRegs[NumRegs - 1];
 
     Inst.addOperand(
@@ -1167,8 +1199,10 @@ public:
   template <unsigned NumRegs>
   void addVectorList128Operands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
-    static unsigned FirstRegs[] = { AArch64::Q0,       AArch64::Q0_Q1,
-                                    AArch64::Q0_Q1_Q2, AArch64::Q0_Q1_Q2_Q3 };
+    static const unsigned FirstRegs[] = { AArch64::Q0,
+                                          AArch64::Q0_Q1,
+                                          AArch64::Q0_Q1_Q2,
+                                          AArch64::Q0_Q1_Q2_Q3 };
     unsigned FirstReg = FirstRegs[NumRegs - 1];
 
     Inst.addOperand(
@@ -1217,6 +1251,18 @@ public:
       addExpr(Inst, getImm());
       Inst.addOperand(MCOperand::createImm(0));
     }
+  }
+
+  void addAddSubImmNegOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 2 && "Invalid number of operands!");
+
+    const MCExpr *MCE = isShiftedImm() ? getShiftedImmVal() : getImm();
+    const MCConstantExpr *CE = cast<MCConstantExpr>(MCE);
+    int64_t Val = -CE->getValue();
+    unsigned ShiftAmt = isShiftedImm() ? ShiftedImm.ShiftAmount : 0;
+
+    Inst.addOperand(MCOperand::createImm(Val));
+    Inst.addOperand(MCOperand::createImm(ShiftAmt));
   }
 
   void addCondCodeOperands(MCInst &Inst, unsigned N) const {
@@ -1271,6 +1317,12 @@ public:
     assert(N == 1 && "Invalid number of operands!");
     const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
     Inst.addOperand(MCOperand::createImm(MCE->getValue() / 16));
+  }
+
+  void addImm0_1Operands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
+    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
   }
 
   void addImm0_7Operands(MCInst &Inst, unsigned N) const {
@@ -1460,7 +1512,13 @@ public:
     Inst.addOperand(MCOperand::createImm(SysReg.MSRReg));
   }
 
-  void addSystemPStateFieldOperands(MCInst &Inst, unsigned N) const {
+  void addSystemPStateFieldWithImm0_1Operands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+
+    Inst.addOperand(MCOperand::createImm(SysReg.PStateField));
+  }
+
+  void addSystemPStateFieldWithImm0_15Operands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
 
     Inst.addOperand(MCOperand::createImm(SysReg.PStateField));
@@ -3570,6 +3628,8 @@ bool AArch64AsmParser::showMatchError(SMLoc Loc, unsigned ErrCode) {
     return Error(Loc, "index must be a multiple of 8 in range [0, 32760].");
   case Match_InvalidMemoryIndexed16:
     return Error(Loc, "index must be a multiple of 16 in range [0, 65520].");
+  case Match_InvalidImm0_1:
+    return Error(Loc, "immediate must be an integer in range [0, 1].");
   case Match_InvalidImm0_7:
     return Error(Loc, "immediate must be an integer in range [0, 7].");
   case Match_InvalidImm0_15:
@@ -3898,9 +3958,26 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 
   // If that fails, try against the alternate table containing long-form NEON:
   // "fadd v0.2s, v1.2s, v2.2s"
-  if (MatchResult != Match_Success)
+  if (MatchResult != Match_Success) {
+    // But first, save the short-form match result: we can use it in case the
+    // long-form match also fails.
+    auto ShortFormNEONErrorInfo = ErrorInfo;
+    auto ShortFormNEONMatchResult = MatchResult;
+
     MatchResult =
         MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm, 0);
+
+    // Now, both matches failed, and the long-form match failed on the mnemonic
+    // suffix token operand.  The short-form match failure is probably more
+    // relevant: use it instead.
+    if (MatchResult == Match_InvalidOperand && ErrorInfo == 1 &&
+        Operands.size() > 1 && ((AArch64Operand &)*Operands[1]).isToken() &&
+        ((AArch64Operand &)*Operands[1]).isTokenSuffix()) {
+      MatchResult = ShortFormNEONMatchResult;
+      ErrorInfo = ShortFormNEONErrorInfo;
+    }
+  }
+
 
   switch (MatchResult) {
   case Match_Success: {
@@ -3935,6 +4012,7 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     return showMatchError(IDLoc, MatchResult);
   case Match_InvalidOperand: {
     SMLoc ErrorLoc = IDLoc;
+
     if (ErrorInfo != ~0ULL) {
       if (ErrorInfo >= Operands.size())
         return Error(IDLoc, "too few operands for instruction");
@@ -3980,6 +4058,7 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_InvalidMemoryIndexed8SImm7:
   case Match_InvalidMemoryIndexed16SImm7:
   case Match_InvalidMemoryIndexedSImm9:
+  case Match_InvalidImm0_1:
   case Match_InvalidImm0_7:
   case Match_InvalidImm0_15:
   case Match_InvalidImm0_31:

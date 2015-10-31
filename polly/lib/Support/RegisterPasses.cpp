@@ -27,7 +27,6 @@
 #include "polly/Options.h"
 #include "polly/ScopDetection.h"
 #include "polly/ScopInfo.h"
-#include "polly/TempScopInfo.h"
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
@@ -49,7 +48,25 @@ static cl::opt<bool> PollyDetectOnly(
     cl::desc("Only run scop detection, but no other optimizations"),
     cl::init(false), cl::ZeroOrMore, cl::cat(PollyCategory));
 
+enum PassPositionChoice {
+  POSITION_EARLY,
+  POSITION_AFTER_LOOPOPT,
+  POSITION_BEFORE_VECTORIZER
+};
+
 enum OptimizerChoice { OPTIMIZER_NONE, OPTIMIZER_ISL };
+
+static cl::opt<PassPositionChoice> PassPosition(
+    "polly-position", cl::desc("Where to run polly in the pass pipeline"),
+    cl::values(
+        clEnumValN(POSITION_EARLY, "early", "Before everything"),
+        clEnumValN(POSITION_AFTER_LOOPOPT, "after-loopopt",
+                   "After the loop optimizer (but within the inline cycle)"),
+        clEnumValN(POSITION_BEFORE_VECTORIZER, "before-vectorizer",
+                   "Right before the vectorizer"),
+        clEnumValEnd),
+    cl::Hidden, cl::init(POSITION_EARLY), cl::ZeroOrMore,
+    cl::cat(PollyCategory));
 
 static cl::opt<OptimizerChoice> Optimizer(
     "polly-optimizer", cl::desc("Select the scheduling optimizer"),
@@ -129,7 +146,6 @@ void initializePollyPasses(PassRegistry &Registry) {
   initializeCodePreparationPass(Registry);
   initializeDeadCodeElimPass(Registry);
   initializeDependenceInfoPass(Registry);
-  initializeIndependentBlocksPass(Registry);
   initializeJSONExporterPass(Registry);
   initializeJSONImporterPass(Registry);
   initializeIslAstInfoPass(Registry);
@@ -137,7 +153,6 @@ void initializePollyPasses(PassRegistry &Registry) {
   initializePollyCanonicalizePass(Registry);
   initializeScopDetectionPass(Registry);
   initializeScopInfoPass(Registry);
-  initializeTempScopInfoPass(Registry);
 }
 
 /// @brief Register Polly passes such that they form a polyhedral optimizer.
@@ -167,14 +182,10 @@ void initializePollyPasses(PassRegistry &Registry) {
 ///
 /// Polly supports the isl internal code generator.
 void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
-  registerCanonicalicationPasses(PM);
-
   PM.add(polly::createScopDetectionPass());
 
   if (PollyDetectOnly)
     return;
-
-  PM.add(polly::createScopInfoPass());
 
   if (PollyViewer)
     PM.add(polly::createDOTViewerPass());
@@ -184,6 +195,8 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
     PM.add(polly::createDOTPrinterPass());
   if (PollyOnlyPrinter)
     PM.add(polly::createDOTOnlyPrinterPass());
+
+  PM.add(polly::createScopInfoPass());
 
   if (ImportJScop)
     PM.add(polly::createJSONImporterPass());
@@ -232,13 +245,50 @@ registerPollyEarlyAsPossiblePasses(const llvm::PassManagerBuilder &Builder,
   if (!polly::shouldEnablePolly())
     return;
 
+  if (PassPosition != POSITION_EARLY)
+    return;
+
+  registerCanonicalicationPasses(PM);
   polly::registerPollyPasses(PM);
+}
+
+static void
+registerPollyLoopOptimizerEndPasses(const llvm::PassManagerBuilder &Builder,
+                                    llvm::legacy::PassManagerBase &PM) {
+  if (!polly::shouldEnablePolly())
+    return;
+
+  if (PassPosition != POSITION_AFTER_LOOPOPT)
+    return;
+
+  PM.add(polly::createCodePreparationPass());
+  polly::registerPollyPasses(PM);
+  // TODO: Add some cleanup passes
+}
+
+static void
+registerPollyScalarOptimizerLatePasses(const llvm::PassManagerBuilder &Builder,
+                                       llvm::legacy::PassManagerBase &PM) {
+  if (!polly::shouldEnablePolly())
+    return;
+
+  if (PassPosition != POSITION_BEFORE_VECTORIZER)
+    return;
+
+  PM.add(polly::createCodePreparationPass());
+  polly::registerPollyPasses(PM);
+  // TODO: Add some cleanup passes
 }
 
 /// @brief Register Polly to be available as an optimizer
 ///
-/// We currently register Polly such that it runs as early as possible. This has
-/// several implications:
+///
+/// We can currently run Polly at three different points int the pass manager.
+/// a) very early, b) after the canonicalizing loop transformations and c) right
+/// before the vectorizer.
+///
+/// The default is currently a), to register Polly such that it runs as early as
+/// possible. This has several implications:
 ///
 ///   1) We need to schedule more canonicalization passes
 ///
@@ -262,7 +312,20 @@ registerPollyEarlyAsPossiblePasses(const llvm::PassManagerBuilder &Builder,
 ///   Polly before all other passes, we have the full sequence of -O3
 ///   optimizations behind us, such that inefficiencies on the low level can
 ///   be optimized away.
+///
+/// We are currently evaluating the benefit or running Polly at position b) or
+/// c). b) is likely to early as it interacts with the inliner. c) is nice
+/// as everything is fully inlined and canonicalized, but we need to be able
+/// to handle LICMed code to make it useful.
+static llvm::RegisterStandardPasses RegisterPollyOptimizerEarly(
+    llvm::PassManagerBuilder::EP_ModuleOptimizerEarly,
+    registerPollyEarlyAsPossiblePasses);
+
 static llvm::RegisterStandardPasses
-    RegisterPollyOptimizer(llvm::PassManagerBuilder::EP_EarlyAsPossible,
-                           registerPollyEarlyAsPossiblePasses);
+    RegisterPollyOptimizerLoopEnd(llvm::PassManagerBuilder::EP_LoopOptimizerEnd,
+                                  registerPollyLoopOptimizerEndPasses);
+
+static llvm::RegisterStandardPasses RegisterPollyOptimizerScalarLate(
+    llvm::PassManagerBuilder::EP_VectorizerStart,
+    registerPollyScalarOptimizerLatePasses);
 }

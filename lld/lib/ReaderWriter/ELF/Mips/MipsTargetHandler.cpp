@@ -53,7 +53,13 @@ std::unique_ptr<Writer> MipsTargetHandler<ELFT>::getWriter() {
   }
 }
 
+template <class ELFT> MipsAbi MipsTargetHandler<ELFT>::getAbi() const {
+  return _abiInfoHandler.getAbi();
+}
+
+template class MipsTargetHandler<ELF32BE>;
 template class MipsTargetHandler<ELF32LE>;
+template class MipsTargetHandler<ELF64BE>;
 template class MipsTargetHandler<ELF64LE>;
 
 template <class ELFT>
@@ -95,7 +101,9 @@ template <class ELFT> void MipsSymbolTable<ELFT>::finalize(bool sort) {
   }
 }
 
+template class MipsSymbolTable<ELF32BE>;
 template class MipsSymbolTable<ELF32LE>;
+template class MipsSymbolTable<ELF64BE>;
 template class MipsSymbolTable<ELF64LE>;
 
 template <class ELFT>
@@ -149,7 +157,9 @@ template <class ELFT> void MipsDynamicSymbolTable<ELFT>::finalize() {
   }
 }
 
+template class MipsDynamicSymbolTable<ELF32BE>;
 template class MipsDynamicSymbolTable<ELF32LE>;
+template class MipsDynamicSymbolTable<ELF64BE>;
 template class MipsDynamicSymbolTable<ELF64LE>;
 
 }

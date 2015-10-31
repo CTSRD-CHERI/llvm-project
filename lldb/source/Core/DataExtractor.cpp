@@ -142,8 +142,8 @@ DataExtractor::DataExtractor () :
 // The data must stay around as long as this object is valid.
 //----------------------------------------------------------------------
 DataExtractor::DataExtractor (const void* data, offset_t length, ByteOrder endian, uint32_t addr_size, uint32_t target_byte_size/*=1*/) :
-    m_start     ((uint8_t*)data),
-    m_end       ((uint8_t*)data + length),
+    m_start     (const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(data))),
+    m_end       (const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(data)) + length),
     m_byte_order(endian),
     m_addr_size (addr_size),
     m_data_sp   (),
@@ -287,7 +287,7 @@ DataExtractor::SetData (const void *bytes, offset_t length, ByteOrder endian)
     }
     else
     {
-        m_start = (uint8_t *)bytes;
+        m_start = const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(bytes));
         m_end = m_start + length;
     }
     return GetByteSize();
@@ -653,7 +653,7 @@ DataExtractor::GetMaxU32 (offset_t *offset_ptr, size_t byte_size) const
     case 2: return GetU16(offset_ptr); break;
     case 4: return GetU32(offset_ptr); break;
     default:
-        assert("GetMaxU32 unhandled case!" == NULL);
+        assert(false && "GetMaxU32 unhandled case!");
         break;
     }
     return 0;
@@ -679,7 +679,7 @@ DataExtractor::GetMaxU64 (offset_t *offset_ptr, size_t size) const
     case 4: return GetU32(offset_ptr); break;
     case 8: return GetU64(offset_ptr); break;
     default:
-        assert("GetMax64 unhandled case!" == NULL);
+        assert(false && "GetMax64 unhandled case!");
         break;
     }
     return 0;
@@ -695,7 +695,7 @@ DataExtractor::GetMaxU64_unchecked (offset_t *offset_ptr, size_t size) const
         case 4: return GetU32_unchecked (offset_ptr); break;
         case 8: return GetU64_unchecked (offset_ptr); break;
         default:
-            assert("GetMax64 unhandled case!" == NULL);
+            assert(false && "GetMax64 unhandled case!");
             break;
     }
     return 0;
@@ -711,7 +711,7 @@ DataExtractor::GetMaxS64 (offset_t *offset_ptr, size_t size) const
     case 4: return (int32_t)GetU32(offset_ptr); break;
     case 8: return (int64_t)GetU64(offset_ptr); break;
     default:
-        assert("GetMax64 unhandled case!" == NULL);
+        assert(false && "GetMax64 unhandled case!");
         break;
     }
     return 0;
@@ -1830,26 +1830,14 @@ DataExtractor::Dump (Stream *s,
                             }
                             else if (item_bit_size == ast->getTypeSize(ast->LongDoubleTy))
                             {
+                                const auto &semantics = ast->getFloatTypeSemantics(ast->LongDoubleTy);
+                                const auto byte_size = (llvm::APFloat::getSizeInBits(semantics) + 7) / 8;
+
                                 llvm::APInt apint;
-                                switch (target_sp->GetArchitecture().GetMachine())
+                                if (GetAPInt(*this, &offset, byte_size, apint))
                                 {
-                                    case llvm::Triple::x86:
-                                    case llvm::Triple::x86_64:
-                                        // clang will assert when constructing the apfloat if we use a 16 byte integer value
-                                        if (GetAPInt (*this, &offset, 10, apint))
-                                        {
-                                            llvm::APFloat apfloat (ast->getFloatTypeSemantics(ast->LongDoubleTy), apint);
-                                            apfloat.toString(sv, format_precision, format_max_padding);
-                                        }
-                                        break;
-                                        
-                                    default:
-                                        if (GetAPInt (*this, &offset, item_byte_size, apint))
-                                        {
-                                            llvm::APFloat apfloat (ast->getFloatTypeSemantics(ast->LongDoubleTy), apint);
-                                            apfloat.toString(sv, format_precision, format_max_padding);
-                                        }
-                                        break;
+                                    llvm::APFloat apfloat(semantics, apint);
+                                    apfloat.toString(sv, format_precision, format_max_padding);
                                 }
                             }
                             else if (item_bit_size == ast->getTypeSize(ast->HalfTy))
@@ -2021,6 +2009,12 @@ DataExtractor::Dump (Stream *s,
         case eFormatVectorOfUInt64:
             s->PutChar('{');
             offset = Dump (s, offset, eFormatHex,     sizeof(uint64_t), item_byte_size / sizeof(uint64_t), item_byte_size / sizeof(uint64_t), LLDB_INVALID_ADDRESS, 0, 0);
+            s->PutChar('}');
+            break;
+
+        case eFormatVectorOfFloat16:
+            s->PutChar('{');
+            offset = Dump (s, offset, eFormatFloat,       2, item_byte_size / 2, item_byte_size / 2, LLDB_INVALID_ADDRESS, 0, 0);
             s->PutChar('}');
             break;
 

@@ -18,15 +18,13 @@ function(add_lldb_unittest test_name)
     ${ARGN}
     )
 
-  if (MSVC)
-    target_link_libraries(${test_name} ${PYTHON_LIBRARY})
-  endif()
-
   lldb_link_common_libs(${test_name} EXE)
   target_link_libraries(${test_name} ${CLANG_USED_LIBS} ${LLDB_SYSTEM_LIBS})
   llvm_config(${test_name} ${LLVM_LINK_COMPONENTS})
 endfunction()
 
+add_subdirectory(Editline)
 add_subdirectory(Host)
 add_subdirectory(Interpreter)
+add_subdirectory(ScriptInterpreter)
 add_subdirectory(Utility)

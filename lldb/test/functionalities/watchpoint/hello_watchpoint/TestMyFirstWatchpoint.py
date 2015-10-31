@@ -2,8 +2,11 @@
 Test my first lldb watchpoint.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -15,20 +18,6 @@ class HelloWatchpointTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @dsym_test
-    def test_hello_watchpoint_with_dsym_using_watchpoint_set(self):
-        """Test a simple sequence of watchpoint creation and watchpoint hit."""
-        self.buildDsym(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_watchpoint()
-
-    @dwarf_test
-    def test_hello_watchpoint_with_dwarf_using_watchpoint_set(self):
-        """Test a simple sequence of watchpoint creation and watchpoint hit."""
-        self.buildDwarf(dictionary=self.d)
-        self.setTearDownCleanup(dictionary=self.d)
-        self.hello_watchpoint()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -38,12 +27,16 @@ class HelloWatchpointTestCase(TestBase):
         self.line = line_number(self.source, '// Set break point at this line.')
         # And the watchpoint variable declaration line number.
         self.decl = line_number(self.source, '// Watchpoint variable declaration.')
-        # Build dictionary to have unique executable names for each test method.
-        self.exe_name = self.testMethodName
+        self.exe_name = 'a.out'
         self.d = {'C_SOURCES': self.source, 'EXE': self.exe_name}
 
-    def hello_watchpoint(self):
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446")
+    def test_hello_watchpoint_using_watchpoint_set(self):
         """Test a simple sequence of watchpoint creation and watchpoint hit."""
+        self.build(dictionary=self.d)
+        self.setTearDownCleanup(dictionary=self.d)
+
         exe = os.path.join(os.getcwd(), self.exe_name)
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
@@ -51,7 +44,7 @@ class HelloWatchpointTestCase(TestBase):
         lldbutil.run_break_set_by_file_and_line (self, None, self.line, num_expected_locations=1)
 
         # Run the program.
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # We should be stopped again due to the breakpoint.
         # The stop reason of the thread should be breakpoint.
@@ -89,10 +82,3 @@ class HelloWatchpointTestCase(TestBase):
         # The hit count should now be 1.
         self.expect("watchpoint list -v",
             substrs = ['hit_count = 1'])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

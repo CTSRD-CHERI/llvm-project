@@ -12,11 +12,12 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Host/Host.h"
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/LineTable.h"
 #include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Symbol/SymbolVendor.h"
+#include "lldb/Target/Language.h"
 #include "llvm/Support/Casting.h"
 
 using namespace lldb;
@@ -77,7 +78,7 @@ FunctionInfo::GetDeclaration() const
     return m_declaration;
 }
 
-const ConstString&
+ConstString
 FunctionInfo::GetName() const
 {
     return m_name;
@@ -140,25 +141,32 @@ InlineFunctionInfo::Dump(Stream *s, bool show_fullpaths) const
 }
 
 void
-InlineFunctionInfo::DumpStopContext (Stream *s) const
+InlineFunctionInfo::DumpStopContext (Stream *s, LanguageType language) const
 {
 //    s->Indent("[inlined] ");
     s->Indent();
     if (m_mangled)
-        s->PutCString (m_mangled.GetName().AsCString());
+        s->PutCString (m_mangled.GetName(language).AsCString());
     else
         s->PutCString (m_name.AsCString());
 }
 
 
-const ConstString &
-InlineFunctionInfo::GetName () const
+ConstString
+InlineFunctionInfo::GetName (LanguageType language) const
 {
     if (m_mangled)
-        return m_mangled.GetName();
+        return m_mangled.GetName(language);
     return m_name;
 }
 
+ConstString
+InlineFunctionInfo::GetDisplayName (LanguageType language) const
+{
+    if (m_mangled)
+        return m_mangled.GetDisplayDemangledName(language);
+    return m_name;
+}
 
 Declaration &
 InlineFunctionInfo::GetCallSite ()
@@ -210,7 +218,7 @@ Function::Function
     m_mangled (mangled),
     m_block (func_uid),
     m_range (range),
-    m_frame_base (),
+    m_frame_base (nullptr),
     m_flags (),
     m_prologue_byte_size (0)
 {
@@ -234,7 +242,7 @@ Function::Function
     m_mangled (ConstString(mangled), true),
     m_block (func_uid),
     m_range (range),
-    m_frame_base (),
+    m_frame_base (nullptr),
     m_flags (),
     m_prologue_byte_size (0)
 {
@@ -459,27 +467,58 @@ Function::MemorySize () const
     return mem_size;
 }
 
-clang::DeclContext *
-Function::GetClangDeclContext()
+bool
+Function::GetIsOptimized ()
 {
-    SymbolContext sc;
+    bool result = false;
+
+    // Currently optimization is only indicted by the
+    // vendor extension DW_AT_APPLE_optimized which
+    // is set on a compile unit level.
+    if (m_comp_unit)
+    {
+        result = m_comp_unit->GetIsOptimized();
+    }
+    return result;
+}
+
+bool
+Function::IsTopLevelFunction ()
+{
+    bool result = false;
     
-    CalculateSymbolContext (&sc);
+    if (Language* language = Language::FindPlugin(GetLanguage()))
+        result = language->IsTopLevelFunction(*this);
     
-    if (!sc.module_sp)
-        return nullptr;
-    
-    SymbolVendor *sym_vendor = sc.module_sp->GetSymbolVendor();
-    
-    if (!sym_vendor)
-        return nullptr;
-    
-    SymbolFile *sym_file = sym_vendor->GetSymbolFile();
-    
-    if (!sym_file)
-        return nullptr;
-    
-    return sym_file->GetClangDeclContextForTypeUID (sc, m_uid);
+    return result;
+}
+
+ConstString
+Function::GetDisplayName () const
+{
+    if (!m_mangled)
+        return ConstString();
+    return m_mangled.GetDisplayDemangledName(GetLanguage());
+}
+
+CompilerDeclContext
+Function::GetDeclContext()
+{
+    ModuleSP module_sp = CalculateSymbolContextModule ();
+
+    if (module_sp)
+    {
+        SymbolVendor *sym_vendor = module_sp->GetSymbolVendor();
+
+        if (sym_vendor)
+        {
+            SymbolFile *sym_file = sym_vendor->GetSymbolFile();
+
+            if (sym_file)
+                return sym_file->GetDeclContextForUID (GetID());
+        }
+    }
+    return CompilerDeclContext();
 }
 
 Type*
@@ -515,13 +554,13 @@ Function::GetType() const
     return m_type;
 }
 
-ClangASTType
-Function::GetClangType()
+CompilerType
+Function::GetCompilerType()
 {
     Type *function_type = GetType();
     if (function_type)
-        return function_type->GetClangFullType();
-    return ClangASTType();
+        return function_type->GetFullCompilerType ();
+    return CompilerType();
 }
 
 uint32_t
@@ -600,6 +639,33 @@ Function::GetPrologueByteSize ()
         }
     }
     return m_prologue_byte_size;
+}
+
+lldb::LanguageType
+Function::GetLanguage() const
+{
+    if (m_comp_unit)
+        return m_comp_unit->GetLanguage();
+    else
+        return lldb::eLanguageTypeUnknown;
+}
+
+ConstString
+Function::GetName() const
+{
+    LanguageType language = lldb::eLanguageTypeUnknown;
+    if (m_comp_unit)
+        language = m_comp_unit->GetLanguage();
+    return m_mangled.GetName(language);
+}
+
+ConstString
+Function::GetNameNoArguments() const
+{
+    LanguageType language = lldb::eLanguageTypeUnknown;
+    if (m_comp_unit)
+        language = m_comp_unit->GetLanguage();
+    return m_mangled.GetName(language, Mangled::ePreferDemangledWithoutArguments);
 }
 
 

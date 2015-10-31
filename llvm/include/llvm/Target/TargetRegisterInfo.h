@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Support/CommandLine.h"
 #include <cassert>
 #include <functional>
 
@@ -32,6 +33,27 @@ class RegScavenger;
 template<class T> class SmallVectorImpl;
 class VirtRegMap;
 class raw_ostream;
+class LiveRegMatrix;
+
+/// A bitmask representing the parts of a register are alive.
+///
+/// Lane masks for sub-register indices are similar to register units for
+/// physical registers. The individual bits in a lane mask can't be assigned
+/// any specific meaning. They can be used to check if two sub-register
+/// indices overlap.
+///
+/// If the target has a register such that:
+///
+///   getSubReg(Reg, A) overlaps getSubReg(Reg, B)
+///
+/// then:
+///
+///   (getSubRegIndexLaneMask(A) & getSubRegIndexLaneMask(B)) != 0
+///
+/// The converse is not necessarily true. If two lane masks have a common
+/// bit, the corresponding sub-registers may not overlap, but it can be
+/// assumed that they usually will.
+typedef unsigned LaneBitmask;
 
 class TargetRegisterClass {
 public:
@@ -45,7 +67,7 @@ public:
   const vt_iterator VTs;
   const uint32_t *SubClassMask;
   const uint16_t *SuperRegIndices;
-  const unsigned LaneMask;
+  const LaneBitmask LaneMask;
   /// Classes with a higher priority value are assigned first by register
   /// allocators using a greedy heuristic. The value is in the range [0,63].
   const uint8_t AllocationPriority;
@@ -200,7 +222,7 @@ public:
   /// Returns the combination of all lane masks of register in this class.
   /// The lane masks of the registers are the combination of all lane masks
   /// of their subregisters.
-  unsigned getLaneMask() const {
+  LaneBitmask getLaneMask() const {
     return LaneMask;
   }
 };
@@ -232,7 +254,7 @@ private:
   const TargetRegisterInfoDesc *InfoDesc;     // Extra desc array for codegen
   const char *const *SubRegIndexNames;        // Names of subreg indexes.
   // Pointer to array of lane masks, one per sub-reg index.
-  const unsigned *SubRegIndexLaneMasks;
+  const LaneBitmask *SubRegIndexLaneMasks;
 
   regclass_iterator RegClassBegin, RegClassEnd;   // List of regclasses
   unsigned CoveringLanes;
@@ -242,7 +264,7 @@ protected:
                      regclass_iterator RegClassBegin,
                      regclass_iterator RegClassEnd,
                      const char *const *SRINames,
-                     const unsigned *SRILaneMasks,
+                     const LaneBitmask *SRILaneMasks,
                      unsigned CoveringLanes);
   virtual ~TargetRegisterInfo();
 public:
@@ -348,27 +370,11 @@ public:
     return SubRegIndexNames[SubIdx-1];
   }
 
-  /// getSubRegIndexLaneMask - Return a bitmask representing the parts of a
-  /// register that are covered by SubIdx.
+  /// Return a bitmask representing the parts of a register that are covered by
+  /// SubIdx \see LaneBitmask.
   ///
-  /// Lane masks for sub-register indices are similar to register units for
-  /// physical registers. The individual bits in a lane mask can't be assigned
-  /// any specific meaning. They can be used to check if two sub-register
-  /// indices overlap.
-  ///
-  /// If the target has a register such that:
-  ///
-  ///   getSubReg(Reg, A) overlaps getSubReg(Reg, B)
-  ///
-  /// then:
-  ///
-  ///   (getSubRegIndexLaneMask(A) & getSubRegIndexLaneMask(B)) != 0
-  ///
-  /// The converse is not necessarily true. If two lane masks have a common
-  /// bit, the corresponding sub-registers may not overlap, but it can be
-  /// assumed that they usually will.
   /// SubIdx == 0 is allowed, it has the lane mask ~0u.
-  unsigned getSubRegIndexLaneMask(unsigned SubIdx) const {
+  LaneBitmask getSubRegIndexLaneMask(unsigned SubIdx) const {
     assert(SubIdx < getNumSubRegIndices() && "This is not a subregister index");
     return SubRegIndexLaneMasks[SubIdx];
   }
@@ -382,7 +388,7 @@ public:
   /// but we still have
   ///    (getSubRegIndexLaneMask(A) & getSubRegIndexLaneMask(B)) != 0.
   /// This function returns true in those cases.
-  static bool isImpreciseLaneMask(unsigned LaneMask) {
+  static bool isImpreciseLaneMask(LaneBitmask LaneMask) {
     return LaneMask & 0x80000000u;
   }
 
@@ -409,7 +415,7 @@ public:
   ///
   /// If (MaskA & ~(MaskB & Covering)) == 0, then SubA is completely covered by
   /// SubB.
-  unsigned getCoveringLanes() const { return CoveringLanes; }
+  LaneBitmask getCoveringLanes() const { return CoveringLanes; }
 
   /// regsOverlap - Returns true if the two registers are equal or alias each
   /// other. The registers may be virtual register.
@@ -500,6 +506,15 @@ public:
   getMatchingSuperRegClass(const TargetRegisterClass *A,
                            const TargetRegisterClass *B, unsigned Idx) const;
 
+  // For a copy-like instruction that defines a register of class DefRC with
+  // subreg index DefSubReg, reading from another source with class SrcRC and
+  // subregister SrcSubReg return true if this is a preferrable copy
+  // instruction or an earlier use should be used.
+  virtual bool shouldRewriteCopySrc(const TargetRegisterClass *DefRC,
+                                    unsigned DefSubReg,
+                                    const TargetRegisterClass *SrcRC,
+                                    unsigned SrcSubReg) const;
+
   /// getSubClassWithSubReg - Returns the largest legal sub-class of RC that
   /// supports the sub-register index Idx.
   /// If no such sub-class exists, return NULL.
@@ -541,10 +556,11 @@ public:
   /// Transforms a LaneMask computed for one subregister to the lanemask that
   /// would have been computed when composing the subsubregisters with IdxA
   /// first. @sa composeSubRegIndices()
-  unsigned composeSubRegIndexLaneMask(unsigned IdxA, unsigned LaneMask) const {
+  LaneBitmask composeSubRegIndexLaneMask(unsigned IdxA,
+                                         LaneBitmask Mask) const {
     if (!IdxA)
-      return LaneMask;
-    return composeSubRegIndexLaneMaskImpl(IdxA, LaneMask);
+      return Mask;
+    return composeSubRegIndexLaneMaskImpl(IdxA, Mask);
   }
 
   /// Debugging helper: dump register in human readable form to dbgs() stream.
@@ -558,8 +574,8 @@ protected:
   }
 
   /// Overridden by TableGen in targets that have sub-registers.
-  virtual unsigned
-  composeSubRegIndexLaneMaskImpl(unsigned, unsigned) const {
+  virtual LaneBitmask
+  composeSubRegIndexLaneMaskImpl(unsigned, LaneBitmask) const {
     llvm_unreachable("Target has no sub-registers");
   }
 
@@ -634,7 +650,7 @@ public:
   /// getCrossCopyRegClass - Returns a legal register class to copy a register
   /// in the specified class to or from. If it is possible to copy the register
   /// directly without using a cross register class copy, return the specified
-  /// RC. Returns NULL if it is not possible to copy between a two registers of
+  /// RC. Returns NULL if it is not possible to copy between two registers of
   /// the specified class.
   virtual const TargetRegisterClass *
   getCrossCopyRegClass(const TargetRegisterClass *RC) const {
@@ -709,7 +725,9 @@ public:
                                      ArrayRef<MCPhysReg> Order,
                                      SmallVectorImpl<MCPhysReg> &Hints,
                                      const MachineFunction &MF,
-                                     const VirtRegMap *VRM = nullptr) const;
+                                     const VirtRegMap *VRM = nullptr,
+                                     const LiveRegMatrix *Matrix = nullptr)
+    const;
 
   /// updateRegAllocHint - A callback to allow target a chance to update
   /// register allocation hints when a register is "changed" (e.g. coalesced)
@@ -769,7 +787,7 @@ public:
   /// x86, if the frame register is required, the first fixed stack object is
   /// reserved as its spill slot. This tells PEI not to create a new stack frame
   /// object for the given register. It should be called only after
-  /// processFunctionBeforeCalleeSavedScan().
+  /// determineCalleeSaves().
   virtual bool hasReservedSpillSlot(const MachineFunction &MF, unsigned Reg,
                                     int &FrameIdx) const {
     return false;
@@ -781,12 +799,14 @@ public:
     return false;
   }
 
+  /// canRealignStack - true if the stack can be realigned for the target.
+  virtual bool canRealignStack(const MachineFunction &MF) const;
+
   /// needsStackRealignment - true if storage within the function requires the
   /// stack pointer to be aligned more than the normal calling convention calls
-  /// for.
-  virtual bool needsStackRealignment(const MachineFunction &MF) const {
-    return false;
-  }
+  /// for. This cannot be overriden by the target, but canRealignStack can be
+  /// overriden.
+  bool needsStackRealignment(const MachineFunction &MF) const;
 
   /// getFrameIndexInstrOffset - Get the offset from the referenced frame
   /// index in the instruction, if there is one.
@@ -999,6 +1019,24 @@ public:
 static inline raw_ostream &operator<<(raw_ostream &OS,
                                       const PrintVRegOrUnit &PR) {
   PR.print(OS);
+  return OS;
+}
+
+/// Helper class for printing lane masks.
+///
+/// They are currently printed out as hexadecimal numbers.
+/// Usage: OS << PrintLaneMask(Mask);
+class PrintLaneMask {
+protected:
+  LaneBitmask LaneMask;
+public:
+  PrintLaneMask(LaneBitmask LaneMask)
+    : LaneMask(LaneMask) {}
+  void print(raw_ostream&) const;
+};
+
+static inline raw_ostream &operator<<(raw_ostream &OS, const PrintLaneMask &P) {
+  P.print(OS);
   return OS;
 }
 

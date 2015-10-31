@@ -21,6 +21,7 @@
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
+#include "clang/AST/ExprOpenMP.h"
 #include "clang/AST/StmtCXX.h"
 #include "clang/AST/StmtObjC.h"
 #include "clang/Analysis/Analyses/FormatString.h"
@@ -440,6 +441,9 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__sync_swap_8:
   case Builtin::BI__sync_swap_16:
     return SemaBuiltinAtomicOverloaded(TheCallResult);
+  case Builtin::BI__builtin_nontemporal_load:
+  case Builtin::BI__builtin_nontemporal_store:
+    return SemaBuiltinNontemporalOverloaded(TheCallResult);
 #define BUILTIN(ID, TYPE, ATTRS)
 #define ATOMIC_BUILTIN(ID, TYPE, ATTRS) \
   case Builtin::BI##ID: \
@@ -525,7 +529,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
 
   // Since the target specific builtins for each arch overlap, only check those
   // of the arch we are compiling for.
-  if (BuiltinID >= Builtin::FirstTSBuiltin) {
+  if (Context.BuiltinInfo.isTSBuiltin(BuiltinID)) {
     switch (Context.getTargetInfo().getTriple().getArch()) {
       case llvm::Triple::arm:
       case llvm::Triple::armeb:
@@ -1033,6 +1037,8 @@ bool Sema::CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   default: return false;
   case X86::BI__builtin_cpu_supports:
     return SemaBuiltinCpuSupports(TheCall);
+  case X86::BI__builtin_ms_va_start:
+    return SemaBuiltinMSVAStart(TheCall);
   case X86::BI_mm_prefetch: i = 1; l = 0; u = 3; break;
   case X86::BI__builtin_ia32_sha1rnds4: i = 2, l = 0; u = 3; break;
   case X86::BI__builtin_ia32_vpermil2pd:
@@ -1145,7 +1151,8 @@ static void CheckNonNullArgument(Sema &S,
                                  const Expr *ArgExpr,
                                  SourceLocation CallSiteLoc) {
   if (CheckNonNullExpr(S, ArgExpr))
-    S.Diag(CallSiteLoc, diag::warn_null_arg) << ArgExpr->getSourceRange();
+    S.DiagRuntimeBehavior(CallSiteLoc, ArgExpr,
+           S.PDiag(diag::warn_null_arg) << ArgExpr->getSourceRange());
 }
 
 bool Sema::GetFormatNSStringIdx(const FormatAttr *Format, unsigned &Idx) {
@@ -1638,6 +1645,12 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
       return ExprError();
     }
     ValType = AtomTy->getAs<AtomicType>()->getValueType();
+  } else if (Form != Load && Op != AtomicExpr::AO__atomic_load) {
+    if (ValType.isConstQualified()) {
+      Diag(DRE->getLocStart(), diag::err_atomic_op_needs_non_const_pointer)
+        << Ptr->getType() << Ptr->getSourceRange();
+      return ExprError();
+    }
   }
 
   // For an arithmetic operation, the implied arithmetic must be well-formed.
@@ -1675,9 +1688,6 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
     return ExprError();
   }
 
-  // FIXME: For any builtin other than a load, the ValType must not be
-  // const-qualified.
-
   switch (ValType.getObjCLifetime()) {
   case Qualifiers::OCL_None:
   case Qualifiers::OCL_ExplicitNone:
@@ -1709,6 +1719,10 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
   QualType ByValType = ValType; // 'CP'
   if (!IsC11 && !IsN)
     ByValType = Ptr->getType();
+
+  // FIXME: __atomic_load allows the first argument to be a a pointer to const
+  // but not the second argument. We need to manually remove possible const
+  // qualifiers.
 
   // The first argument --- the pointer --- has a fixed type; we
   // deduce the types of the rest of the arguments accordingly.  Walk
@@ -2142,7 +2156,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   // Get the decl for the concrete builtin from this, we can tell what the
   // concrete integer type we should convert to is.
   unsigned NewBuiltinID = BuiltinIndices[BuiltinIndex][SizeIndex];
-  const char *NewBuiltinName = Context.BuiltinInfo.GetName(NewBuiltinID);
+  const char *NewBuiltinName = Context.BuiltinInfo.getName(NewBuiltinID);
   FunctionDecl *NewBuiltinDecl;
   if (NewBuiltinID == BuiltinID)
     NewBuiltinDecl = FDecl;
@@ -2209,6 +2223,78 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   return TheCallResult;
 }
 
+/// SemaBuiltinNontemporalOverloaded - We have a call to
+/// __builtin_nontemporal_store or __builtin_nontemporal_load, which is an
+/// overloaded function based on the pointer type of its last argument.
+///
+/// This function goes through and does final semantic checking for these
+/// builtins.
+ExprResult Sema::SemaBuiltinNontemporalOverloaded(ExprResult TheCallResult) {
+  CallExpr *TheCall = (CallExpr *)TheCallResult.get();
+  DeclRefExpr *DRE =
+      cast<DeclRefExpr>(TheCall->getCallee()->IgnoreParenCasts());
+  FunctionDecl *FDecl = cast<FunctionDecl>(DRE->getDecl());
+  unsigned BuiltinID = FDecl->getBuiltinID();
+  assert((BuiltinID == Builtin::BI__builtin_nontemporal_store ||
+          BuiltinID == Builtin::BI__builtin_nontemporal_load) &&
+         "Unexpected nontemporal load/store builtin!");
+  bool isStore = BuiltinID == Builtin::BI__builtin_nontemporal_store;
+  unsigned numArgs = isStore ? 2 : 1;
+
+  // Ensure that we have the proper number of arguments.
+  if (checkArgCount(*this, TheCall, numArgs))
+    return ExprError();
+
+  // Inspect the last argument of the nontemporal builtin.  This should always
+  // be a pointer type, from which we imply the type of the memory access.
+  // Because it is a pointer type, we don't have to worry about any implicit
+  // casts here.
+  Expr *PointerArg = TheCall->getArg(numArgs - 1);
+  ExprResult PointerArgResult =
+      DefaultFunctionArrayLvalueConversion(PointerArg);
+
+  if (PointerArgResult.isInvalid())
+    return ExprError();
+  PointerArg = PointerArgResult.get();
+  TheCall->setArg(numArgs - 1, PointerArg);
+
+  const PointerType *pointerType = PointerArg->getType()->getAs<PointerType>();
+  if (!pointerType) {
+    Diag(DRE->getLocStart(), diag::err_nontemporal_builtin_must_be_pointer)
+        << PointerArg->getType() << PointerArg->getSourceRange();
+    return ExprError();
+  }
+
+  QualType ValType = pointerType->getPointeeType();
+
+  // Strip any qualifiers off ValType.
+  ValType = ValType.getUnqualifiedType();
+  if (!ValType->isIntegerType() && !ValType->isAnyPointerType() &&
+      !ValType->isBlockPointerType() && !ValType->isFloatingType() &&
+      !ValType->isVectorType()) {
+    Diag(DRE->getLocStart(),
+         diag::err_nontemporal_builtin_must_be_pointer_intfltptr_or_vector)
+        << PointerArg->getType() << PointerArg->getSourceRange();
+    return ExprError();
+  }
+
+  if (!isStore) {
+    TheCall->setType(ValType);
+    return TheCallResult;
+  }
+
+  ExprResult ValArg = TheCall->getArg(0);
+  InitializedEntity Entity = InitializedEntity::InitializeParameter(
+      Context, ValType, /*consume*/ false);
+  ValArg = PerformCopyInitialization(Entity, SourceLocation(), ValArg);
+  if (ValArg.isInvalid())
+    return ExprError();
+
+  TheCall->setArg(0, ValArg.get());
+  TheCall->setType(Context.VoidTy);
+  return TheCallResult;
+}
+
 /// CheckObjCString - Checks that the argument to the builtin
 /// CFString constructor is correct
 /// Note: It might also make sense to do the UTF-16 conversion here (would
@@ -2241,9 +2327,10 @@ bool Sema::CheckObjCString(Expr *Arg) {
   return false;
 }
 
-/// SemaBuiltinVAStart - Check the arguments to __builtin_va_start for validity.
-/// Emit an error and return true on failure, return false on success.
-bool Sema::SemaBuiltinVAStart(CallExpr *TheCall) {
+/// Check the arguments to '__builtin_va_start' or '__builtin_ms_va_start'
+/// for validity.  Emit an error and return true on failure; return false
+/// on success.
+bool Sema::SemaBuiltinVAStartImpl(CallExpr *TheCall) {
   Expr *Fn = TheCall->getCallee();
   if (TheCall->getNumArgs() > 2) {
     Diag(TheCall->getArg(2)->getLocStart(),
@@ -2319,6 +2406,48 @@ bool Sema::SemaBuiltinVAStart(CallExpr *TheCall) {
 
   TheCall->setType(Context.VoidTy);
   return false;
+}
+
+/// Check the arguments to '__builtin_va_start' for validity, and that
+/// it was called from a function of the native ABI.
+/// Emit an error and return true on failure; return false on success.
+bool Sema::SemaBuiltinVAStart(CallExpr *TheCall) {
+  // On x86-64 Unix, don't allow this in Win64 ABI functions.
+  // On x64 Windows, don't allow this in System V ABI functions.
+  // (Yes, that means there's no corresponding way to support variadic
+  // System V ABI functions on Windows.)
+  if (Context.getTargetInfo().getTriple().getArch() == llvm::Triple::x86_64) {
+    unsigned OS = Context.getTargetInfo().getTriple().getOS();
+    clang::CallingConv CC = CC_C;
+    if (const FunctionDecl *FD = getCurFunctionDecl())
+      CC = FD->getType()->getAs<FunctionType>()->getCallConv();
+    if ((OS == llvm::Triple::Win32 && CC == CC_X86_64SysV) ||
+        (OS != llvm::Triple::Win32 && CC == CC_X86_64Win64))
+      return Diag(TheCall->getCallee()->getLocStart(),
+                  diag::err_va_start_used_in_wrong_abi_function)
+             << (OS != llvm::Triple::Win32);
+  }
+  return SemaBuiltinVAStartImpl(TheCall);
+}
+
+/// Check the arguments to '__builtin_ms_va_start' for validity, and that
+/// it was called from a Win64 ABI function.
+/// Emit an error and return true on failure; return false on success.
+bool Sema::SemaBuiltinMSVAStart(CallExpr *TheCall) {
+  // This only makes sense for x86-64.
+  const llvm::Triple &TT = Context.getTargetInfo().getTriple();
+  Expr *Callee = TheCall->getCallee();
+  if (TT.getArch() != llvm::Triple::x86_64)
+    return Diag(Callee->getLocStart(), diag::err_x86_builtin_32_bit_tgt);
+  // Don't allow this in System V ABI functions.
+  clang::CallingConv CC = CC_C;
+  if (const FunctionDecl *FD = getCurFunctionDecl())
+    CC = FD->getType()->getAs<FunctionType>()->getCallConv();
+  if (CC == CC_X86_64SysV ||
+      (TT.getOS() != llvm::Triple::Win32 && CC != CC_X86_64Win64))
+    return Diag(Callee->getLocStart(),
+                diag::err_ms_va_start_used_in_sysv_function);
+  return SemaBuiltinVAStartImpl(TheCall);
 }
 
 bool Sema::SemaBuiltinVAStartARM(CallExpr *Call) {
@@ -3572,8 +3701,18 @@ public:
                          const char *startSpecifier, unsigned specifierLen);
   bool checkForCStrMembers(const analyze_printf::ArgType &AT,
                            const Expr *E);
+                           
+  void HandleEmptyObjCModifierFlag(const char *startFlag,
+                                   unsigned flagLen) override;
 
-};  
+  void HandleInvalidObjCModifierFlag(const char *startFlag,
+                                            unsigned flagLen) override;
+
+  void HandleObjCFlagsWithNonObjCConversion(const char *flagsStart,
+                                           const char *flagsEnd,
+                                           const char *conversionPosition) 
+                                             override;
+};
 }
 
 bool CheckPrintfHandler::HandleInvalidPrintfConversionSpecifier(
@@ -3691,6 +3830,41 @@ void CheckPrintfHandler::HandleIgnoredFlag(
                        getSpecifierRange(startSpecifier, specifierLen),
                        FixItHint::CreateRemoval(
                          getSpecifierRange(ignoredFlag.getPosition(), 1)));
+}
+
+//  void EmitFormatDiagnostic(PartialDiagnostic PDiag, SourceLocation StringLoc,
+//                            bool IsStringLocation, Range StringRange,
+//                            ArrayRef<FixItHint> Fixit = None);
+                            
+void CheckPrintfHandler::HandleEmptyObjCModifierFlag(const char *startFlag,
+                                                     unsigned flagLen) {
+  // Warn about an empty flag.
+  EmitFormatDiagnostic(S.PDiag(diag::warn_printf_empty_objc_flag),
+                       getLocationOfByte(startFlag),
+                       /*IsStringLocation*/true,
+                       getSpecifierRange(startFlag, flagLen));
+}
+
+void CheckPrintfHandler::HandleInvalidObjCModifierFlag(const char *startFlag,
+                                                       unsigned flagLen) {
+  // Warn about an invalid flag.
+  auto Range = getSpecifierRange(startFlag, flagLen);
+  StringRef flag(startFlag, flagLen);
+  EmitFormatDiagnostic(S.PDiag(diag::warn_printf_invalid_objc_flag) << flag,
+                      getLocationOfByte(startFlag),
+                      /*IsStringLocation*/true,
+                      Range, FixItHint::CreateRemoval(Range));
+}
+
+void CheckPrintfHandler::HandleObjCFlagsWithNonObjCConversion(
+    const char *flagsStart, const char *flagsEnd, const char *conversionPosition) {
+    // Warn about using '[...]' without a '@' conversion.
+    auto Range = getSpecifierRange(flagsStart, flagsEnd - flagsStart + 1);
+    auto diag = diag::warn_printf_ObjCflags_without_ObjCConversion;
+    EmitFormatDiagnostic(S.PDiag(diag) << StringRef(conversionPosition, 1),
+                         getLocationOfByte(conversionPosition),
+                         /*IsStringLocation*/true,
+                         Range, FixItHint::CreateRemoval(Range));
 }
 
 // Determines if the specified is a C++ class or struct containing
@@ -4788,7 +4962,7 @@ static void emitReplacement(Sema &S, SourceLocation Loc, SourceRange Range,
       }
     }
   } else {
-    FunctionName = S.Context.BuiltinInfo.GetName(AbsKind);
+    FunctionName = S.Context.BuiltinInfo.getName(AbsKind);
     HeaderName = S.Context.BuiltinInfo.getHeaderName(AbsKind);
 
     if (HeaderName) {
@@ -4864,7 +5038,7 @@ void Sema::CheckAbsoluteValueFunction(const CallExpr *Call,
   // function call.
   if (ArgType->isUnsignedIntegerType()) {
     const char *FunctionName =
-        IsStdAbs ? "std::abs" : Context.BuiltinInfo.GetName(AbsKind);
+        IsStdAbs ? "std::abs" : Context.BuiltinInfo.getName(AbsKind);
     Diag(Call->getExprLoc(), diag::warn_unsigned_abs) << ArgType << ParamType;
     Diag(Call->getExprLoc(), diag::note_remove_abs)
         << FunctionName
@@ -5703,6 +5877,11 @@ do {
     // retrieve the DeclRefExpr* for the array variable if it indeed
     // has local storage.
     return EvalAddr(cast<ArraySubscriptExpr>(E)->getBase(), refVars,ParentDecl);
+  }
+
+  case Stmt::OMPArraySectionExprClass: {
+    return EvalAddr(cast<OMPArraySectionExpr>(E)->getBase(), refVars,
+                    ParentDecl);
   }
 
   case Stmt::ConditionalOperatorClass: {
@@ -6839,6 +7018,101 @@ static void DiagnoseNullConversion(Sema &S, Expr *E, QualType T,
                                       S.getFixItZeroLiteralForType(T, Loc));
 }
 
+static void checkObjCArrayLiteral(Sema &S, QualType TargetType,
+                                  ObjCArrayLiteral *ArrayLiteral);
+static void checkObjCDictionaryLiteral(Sema &S, QualType TargetType,
+                                       ObjCDictionaryLiteral *DictionaryLiteral);
+
+/// Check a single element within a collection literal against the
+/// target element type.
+static void checkObjCCollectionLiteralElement(Sema &S,
+                                              QualType TargetElementType,
+                                              Expr *Element,
+                                              unsigned ElementKind) {
+  // Skip a bitcast to 'id' or qualified 'id'.
+  if (auto ICE = dyn_cast<ImplicitCastExpr>(Element)) {
+    if (ICE->getCastKind() == CK_BitCast &&
+        ICE->getSubExpr()->getType()->getAs<ObjCObjectPointerType>())
+      Element = ICE->getSubExpr();
+  }
+
+  QualType ElementType = Element->getType();
+  ExprResult ElementResult(Element);
+  if (ElementType->getAs<ObjCObjectPointerType>() &&
+      S.CheckSingleAssignmentConstraints(TargetElementType,
+                                         ElementResult,
+                                         false, false)
+        != Sema::Compatible) {
+    S.Diag(Element->getLocStart(),
+           diag::warn_objc_collection_literal_element)
+      << ElementType << ElementKind << TargetElementType
+      << Element->getSourceRange();
+  }
+
+  if (auto ArrayLiteral = dyn_cast<ObjCArrayLiteral>(Element))
+    checkObjCArrayLiteral(S, TargetElementType, ArrayLiteral);
+  else if (auto DictionaryLiteral = dyn_cast<ObjCDictionaryLiteral>(Element))
+    checkObjCDictionaryLiteral(S, TargetElementType, DictionaryLiteral);
+}
+
+/// Check an Objective-C array literal being converted to the given
+/// target type.
+static void checkObjCArrayLiteral(Sema &S, QualType TargetType,
+                                  ObjCArrayLiteral *ArrayLiteral) {
+  if (!S.NSArrayDecl)
+    return;
+
+  const auto *TargetObjCPtr = TargetType->getAs<ObjCObjectPointerType>();
+  if (!TargetObjCPtr)
+    return;
+
+  if (TargetObjCPtr->isUnspecialized() ||
+      TargetObjCPtr->getInterfaceDecl()->getCanonicalDecl()
+        != S.NSArrayDecl->getCanonicalDecl())
+    return;
+
+  auto TypeArgs = TargetObjCPtr->getTypeArgs();
+  if (TypeArgs.size() != 1)
+    return;
+
+  QualType TargetElementType = TypeArgs[0];
+  for (unsigned I = 0, N = ArrayLiteral->getNumElements(); I != N; ++I) {
+    checkObjCCollectionLiteralElement(S, TargetElementType,
+                                      ArrayLiteral->getElement(I),
+                                      0);
+  }
+}
+
+/// Check an Objective-C dictionary literal being converted to the given
+/// target type.
+static void checkObjCDictionaryLiteral(
+              Sema &S, QualType TargetType,
+              ObjCDictionaryLiteral *DictionaryLiteral) {
+  if (!S.NSDictionaryDecl)
+    return;
+
+  const auto *TargetObjCPtr = TargetType->getAs<ObjCObjectPointerType>();
+  if (!TargetObjCPtr)
+    return;
+
+  if (TargetObjCPtr->isUnspecialized() ||
+      TargetObjCPtr->getInterfaceDecl()->getCanonicalDecl()
+        != S.NSDictionaryDecl->getCanonicalDecl())
+    return;
+
+  auto TypeArgs = TargetObjCPtr->getTypeArgs();
+  if (TypeArgs.size() != 2)
+    return;
+
+  QualType TargetKeyType = TypeArgs[0];
+  QualType TargetObjectType = TypeArgs[1];
+  for (unsigned I = 0, N = DictionaryLiteral->getNumElements(); I != N; ++I) {
+    auto Element = DictionaryLiteral->getKeyValueElement(I);
+    checkObjCCollectionLiteralElement(S, TargetKeyType, Element.Key, 1);
+    checkObjCCollectionLiteralElement(S, TargetObjectType, Element.Value, 2);
+  }
+}
+
 void CheckImplicitConversion(Sema &S, Expr *E, QualType T,
                              SourceLocation CC, bool *ICContext = nullptr) {
   if (E->isTypeDependent() || E->isValueDependent()) return;
@@ -6877,6 +7151,13 @@ void CheckImplicitConversion(Sema &S, Expr *E, QualType T,
                                      SourceRange(CC));
     }
   }
+
+  // Check implicit casts from Objective-C collection literals to specialized
+  // collection types, e.g., NSArray<NSString *> *.
+  if (auto *ArrayLiteral = dyn_cast<ObjCArrayLiteral>(E))
+    checkObjCArrayLiteral(S, QualType(Target, 0), ArrayLiteral);
+  else if (auto *DictionaryLiteral = dyn_cast<ObjCDictionaryLiteral>(E))
+    checkObjCDictionaryLiteral(S, QualType(Target, 0), DictionaryLiteral);
 
   // Strip vector types.
   if (isa<VectorType>(Source)) {
@@ -7195,8 +7476,8 @@ void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC) {
   CC = E->getExprLoc();
   BinaryOperator *BO = dyn_cast<BinaryOperator>(E);
   bool IsLogicalAndOperator = BO && BO->getOpcode() == BO_LAnd;
-  for (Stmt::child_range I = E->children(); I; ++I) {
-    Expr *ChildExpr = dyn_cast_or_null<Expr>(*I);
+  for (Stmt *SubStmt : E->children()) {
+    Expr *ChildExpr = dyn_cast_or_null<Expr>(SubStmt);
     if (!ChildExpr)
       continue;
 
@@ -8315,6 +8596,13 @@ void Sema::CheckArrayAccess(const Expr *expr) {
                          AllowOnePastEnd > 0);
         return;
       }
+      case Stmt::OMPArraySectionExprClass: {
+        const OMPArraySectionExpr *ASE = cast<OMPArraySectionExpr>(expr);
+        if (ASE->getLowerBound())
+          CheckArrayAccess(ASE->getBase(), ASE->getLowerBound(),
+                           /*ASE=*/nullptr, AllowOnePastEnd > 0);
+        return;
+      }
       case Stmt::UnaryOperatorClass: {
         // Only unwrap the * and & unary operators
         const UnaryOperator *UO = cast<UnaryOperator>(expr);
@@ -8580,23 +8868,10 @@ static bool isSetterLikeSelector(Selector sel) {
 
 static Optional<int> GetNSMutableArrayArgumentIndex(Sema &S,
                                                     ObjCMessageExpr *Message) {
-  if (S.NSMutableArrayPointer.isNull()) {
-    IdentifierInfo *NSMutableArrayId =
-      S.NSAPIObj->getNSClassId(NSAPI::ClassId_NSMutableArray);
-    NamedDecl *IF = S.LookupSingleName(S.TUScope, NSMutableArrayId,
-                                       Message->getLocStart(),
-                                       Sema::LookupOrdinaryName);
-    ObjCInterfaceDecl *InterfaceDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-    if (!InterfaceDecl) {
-      return None;
-    }
-    QualType NSMutableArrayObject =
-      S.Context.getObjCInterfaceType(InterfaceDecl);
-    S.NSMutableArrayPointer =
-      S.Context.getObjCObjectPointerType(NSMutableArrayObject);
-  }
-
-  if (S.NSMutableArrayPointer != Message->getReceiverType()) {
+  bool IsMutableArray = S.NSAPIObj->isSubclassOfNSClass(
+                                                Message->getReceiverInterface(),
+                                                NSAPI::ClassId_NSMutableArray);
+  if (!IsMutableArray) {
     return None;
   }
 
@@ -8628,24 +8903,10 @@ static Optional<int> GetNSMutableArrayArgumentIndex(Sema &S,
 static
 Optional<int> GetNSMutableDictionaryArgumentIndex(Sema &S,
                                                   ObjCMessageExpr *Message) {
-
-  if (S.NSMutableDictionaryPointer.isNull()) {
-    IdentifierInfo *NSMutableDictionaryId =
-      S.NSAPIObj->getNSClassId(NSAPI::ClassId_NSMutableDictionary);
-    NamedDecl *IF = S.LookupSingleName(S.TUScope, NSMutableDictionaryId,
-                                       Message->getLocStart(),
-                                       Sema::LookupOrdinaryName);
-    ObjCInterfaceDecl *InterfaceDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-    if (!InterfaceDecl) {
-      return None;
-    }
-    QualType NSMutableDictionaryObject =
-      S.Context.getObjCInterfaceType(InterfaceDecl);
-    S.NSMutableDictionaryPointer =
-      S.Context.getObjCObjectPointerType(NSMutableDictionaryObject);
-  }
-
-  if (S.NSMutableDictionaryPointer != Message->getReceiverType()) {
+  bool IsMutableDictionary = S.NSAPIObj->isSubclassOfNSClass(
+                                            Message->getReceiverInterface(),
+                                            NSAPI::ClassId_NSMutableDictionary);
+  if (!IsMutableDictionary) {
     return None;
   }
 
@@ -8673,63 +8934,14 @@ Optional<int> GetNSMutableDictionaryArgumentIndex(Sema &S,
 }
 
 static Optional<int> GetNSSetArgumentIndex(Sema &S, ObjCMessageExpr *Message) {
+  bool IsMutableSet = S.NSAPIObj->isSubclassOfNSClass(
+                                                Message->getReceiverInterface(),
+                                                NSAPI::ClassId_NSMutableSet);
 
-  ObjCInterfaceDecl *InterfaceDecl;
-  if (S.NSMutableSetPointer.isNull()) {
-    IdentifierInfo *NSMutableSetId =
-      S.NSAPIObj->getNSClassId(NSAPI::ClassId_NSMutableSet);
-    NamedDecl *IF = S.LookupSingleName(S.TUScope, NSMutableSetId,
-                                       Message->getLocStart(),
-                                       Sema::LookupOrdinaryName);
-    InterfaceDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-    if (InterfaceDecl) {
-      QualType NSMutableSetObject =
-        S.Context.getObjCInterfaceType(InterfaceDecl);
-      S.NSMutableSetPointer =
-        S.Context.getObjCObjectPointerType(NSMutableSetObject);
-    }
-  }
-
-  if (S.NSCountedSetPointer.isNull()) {
-    IdentifierInfo *NSCountedSetId =
-      S.NSAPIObj->getNSClassId(NSAPI::ClassId_NSCountedSet);
-    NamedDecl *IF = S.LookupSingleName(S.TUScope, NSCountedSetId,
-                                       Message->getLocStart(),
-                                       Sema::LookupOrdinaryName);
-    InterfaceDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-    if (InterfaceDecl) {
-      QualType NSCountedSetObject =
-        S.Context.getObjCInterfaceType(InterfaceDecl);
-      S.NSCountedSetPointer =
-        S.Context.getObjCObjectPointerType(NSCountedSetObject);
-    }
-  }
-
-  if (S.NSMutableOrderedSetPointer.isNull()) {
-    IdentifierInfo *NSOrderedSetId =
-      S.NSAPIObj->getNSClassId(NSAPI::ClassId_NSMutableOrderedSet);
-    NamedDecl *IF = S.LookupSingleName(S.TUScope, NSOrderedSetId,
-                                       Message->getLocStart(),
-                                       Sema::LookupOrdinaryName);
-    InterfaceDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-    if (InterfaceDecl) {
-      QualType NSOrderedSetObject =
-        S.Context.getObjCInterfaceType(InterfaceDecl);
-      S.NSMutableOrderedSetPointer =
-        S.Context.getObjCObjectPointerType(NSOrderedSetObject);
-    }
-  }
-
-  QualType ReceiverType = Message->getReceiverType();
-
-  bool IsMutableSet = !S.NSMutableSetPointer.isNull() &&
-    ReceiverType == S.NSMutableSetPointer;
-  bool IsMutableOrderedSet = !S.NSMutableOrderedSetPointer.isNull() &&
-    ReceiverType == S.NSMutableOrderedSetPointer;
-  bool IsCountedSet = !S.NSCountedSetPointer.isNull() &&
-    ReceiverType == S.NSCountedSetPointer;
-
-  if (!IsMutableSet && !IsMutableOrderedSet && !IsCountedSet) {
+  bool IsMutableOrderedSet = S.NSAPIObj->isSubclassOfNSClass(
+                                            Message->getReceiverInterface(),
+                                            NSAPI::ClassId_NSMutableOrderedSet);
+  if (!IsMutableSet && !IsMutableOrderedSet) {
     return None;
   }
 
@@ -8770,38 +8982,51 @@ void Sema::CheckObjCCircularContainer(ObjCMessageExpr *Message) {
 
   int ArgIndex = *ArgOpt;
 
-  Expr *Receiver = Message->getInstanceReceiver()->IgnoreImpCasts();
-  if (OpaqueValueExpr *OE = dyn_cast<OpaqueValueExpr>(Receiver)) {
-    Receiver = OE->getSourceExpr()->IgnoreImpCasts();
-  }
-
   Expr *Arg = Message->getArg(ArgIndex)->IgnoreImpCasts();
   if (OpaqueValueExpr *OE = dyn_cast<OpaqueValueExpr>(Arg)) {
     Arg = OE->getSourceExpr()->IgnoreImpCasts();
   }
 
-  if (DeclRefExpr *ReceiverRE = dyn_cast<DeclRefExpr>(Receiver)) {
+  if (Message->getReceiverKind() == ObjCMessageExpr::SuperInstance) {
     if (DeclRefExpr *ArgRE = dyn_cast<DeclRefExpr>(Arg)) {
-      if (ReceiverRE->getDecl() == ArgRE->getDecl()) {
-        ValueDecl *Decl = ReceiverRE->getDecl();
+      if (ArgRE->isObjCSelfExpr()) {
         Diag(Message->getSourceRange().getBegin(),
              diag::warn_objc_circular_container)
-          << Decl->getName();
-        Diag(Decl->getLocation(),
-             diag::note_objc_circular_container_declared_here)
-          << Decl->getName();
+          << ArgRE->getDecl()->getName() << StringRef("super");
       }
     }
-  } else if (ObjCIvarRefExpr *IvarRE = dyn_cast<ObjCIvarRefExpr>(Receiver)) {
-    if (ObjCIvarRefExpr *IvarArgRE = dyn_cast<ObjCIvarRefExpr>(Arg)) {
-      if (IvarRE->getDecl() == IvarArgRE->getDecl()) {
-        ObjCIvarDecl *Decl = IvarRE->getDecl();
-        Diag(Message->getSourceRange().getBegin(),
-             diag::warn_objc_circular_container)
-          << Decl->getName();
-        Diag(Decl->getLocation(),
-             diag::note_objc_circular_container_declared_here)
-          << Decl->getName();
+  } else {
+    Expr *Receiver = Message->getInstanceReceiver()->IgnoreImpCasts();
+
+    if (OpaqueValueExpr *OE = dyn_cast<OpaqueValueExpr>(Receiver)) {
+      Receiver = OE->getSourceExpr()->IgnoreImpCasts();
+    }
+
+    if (DeclRefExpr *ReceiverRE = dyn_cast<DeclRefExpr>(Receiver)) {
+      if (DeclRefExpr *ArgRE = dyn_cast<DeclRefExpr>(Arg)) {
+        if (ReceiverRE->getDecl() == ArgRE->getDecl()) {
+          ValueDecl *Decl = ReceiverRE->getDecl();
+          Diag(Message->getSourceRange().getBegin(),
+               diag::warn_objc_circular_container)
+            << Decl->getName() << Decl->getName();
+          if (!ArgRE->isObjCSelfExpr()) {
+            Diag(Decl->getLocation(),
+                 diag::note_objc_circular_container_declared_here)
+              << Decl->getName();
+          }
+        }
+      }
+    } else if (ObjCIvarRefExpr *IvarRE = dyn_cast<ObjCIvarRefExpr>(Receiver)) {
+      if (ObjCIvarRefExpr *IvarArgRE = dyn_cast<ObjCIvarRefExpr>(Arg)) {
+        if (IvarRE->getDecl() == IvarArgRE->getDecl()) {
+          ObjCIvarDecl *Decl = IvarRE->getDecl();
+          Diag(Message->getSourceRange().getBegin(),
+               diag::warn_objc_circular_container)
+            << Decl->getName() << Decl->getName();
+          Diag(Decl->getLocation(),
+               diag::note_objc_circular_container_declared_here)
+            << Decl->getName();
+        }
       }
     }
   }

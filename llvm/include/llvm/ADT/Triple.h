@@ -50,6 +50,7 @@ public:
     armeb,      // ARM (big endian): armeb
     aarch64,    // AArch64 (little endian): aarch64
     aarch64_be, // AArch64 (big endian): aarch64_be
+    avr,        // AVR: Atmel AVR microcontroller
     bpfel,      // eBPF or extended BPF or 64-bit BPF (little endian)
     bpfeb,      // eBPF or extended BPF or 64-bit BPF (big endian)
     hexagon,    // Hexagon: hexagon
@@ -75,8 +76,8 @@ public:
     xcore,      // XCore: xcore
     nvptx,      // NVPTX: 32-bit
     nvptx64,    // NVPTX: 64-bit
-    le32,       // le32: generic little-endian 32-bit CPU (PNaCl / Emscripten)
-    le64,       // le64: generic little-endian 64-bit CPU (PNaCl / Emscripten)
+    le32,       // le32: generic little-endian 32-bit CPU (PNaCl)
+    le64,       // le64: generic little-endian 64-bit CPU (PNaCl)
     amdil,      // AMDIL
     amdil64,    // AMDIL with 64-bit pointers
     hsail,      // AMD HSAIL
@@ -125,7 +126,8 @@ public:
     MipsTechnologies,
     NVIDIA,
     CSR,
-    LastVendorType = CSR
+    Myriad,
+    LastVendorType = Myriad
   };
   enum OSType {
     UnknownOS,
@@ -171,7 +173,10 @@ public:
     MSVC,
     Itanium,
     Cygnus,
-    LastEnvironmentType = Cygnus
+    AMDOpenCL,
+    CoreCLR,
+    ELFIAMCU,
+    LastEnvironmentType = ELFIAMCU
   };
   enum ObjectFormatType {
     UnknownObjectFormat,
@@ -428,6 +433,10 @@ public:
     return getOS() == Triple::Bitrig;
   }
 
+  bool isEnvironmentIAMCU() const {
+    return getEnvironment() == Triple::ELFIAMCU;
+  }
+
   bool isWindowsMSVCEnvironment() const {
     return getOS() == Triple::Win32 &&
            (getEnvironment() == Triple::UnknownEnvironment ||
@@ -436,6 +445,10 @@ public:
 
   bool isKnownWindowsMSVCEnvironment() const {
     return getOS() == Triple::Win32 && getEnvironment() == Triple::MSVC;
+  }
+
+  bool isWindowsCoreCLREnvironment() const {
+    return getOS() == Triple::Win32 && getEnvironment() == Triple::CoreCLR;
   }
 
   bool isWindowsItaniumEnvironment() const {
@@ -504,6 +517,9 @@ public:
            getOS() == Triple::PS4;
   }
 
+  /// \brief Tests whether the target is Android
+  bool isAndroid() const { return getEnvironment() == Triple::Android; }
+
   /// @}
   /// @name Mutators
   /// @{
@@ -570,11 +586,27 @@ public:
   ///          architecture if no such variant can be found.
   llvm::Triple get64BitArchVariant() const;
 
+  /// Form a triple with a big endian variant of the current architecture.
+  ///
+  /// This can be used to move across "families" of architectures where useful.
+  ///
+  /// \returns A new triple with a big endian architecture or an unknown
+  ///          architecture if no such variant can be found.
+  llvm::Triple getBigEndianArchVariant() const;
+
+  /// Form a triple with a little endian variant of the current architecture.
+  ///
+  /// This can be used to move across "families" of architectures where useful.
+  ///
+  /// \returns A new triple with a little endian architecture or an unknown
+  ///          architecture if no such variant can be found.
+  llvm::Triple getLittleEndianArchVariant() const;
+
   /// Get the (LLVM) name of the minimum ARM CPU for the arch we are targeting.
   ///
   /// \param Arch the architecture name (e.g., "armv7s"). If it is an empty
   /// string then the triple's arch name is used.
-  const char* getARMCPUForArch(StringRef Arch = StringRef()) const;
+  StringRef getARMCPUForArch(StringRef Arch = StringRef()) const;
 
   /// @}
   /// @name Static helpers for IDs.

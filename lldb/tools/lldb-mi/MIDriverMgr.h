@@ -32,16 +32,13 @@
 //          those objects (modules/components) to support it's own functionality).
 //          The Driver manager is the first object instantiated as part of the
 //          MI code base. It is also the first thing to interpret the command
-//          line arguments passed to the executeable. Bases on options it
+//          line arguments passed to the executable. Bases on options it
 //          understands the manage will set up the appropriate driver or give
 //          help information. Other options are passed on to the driver chosen
 //          to do work.
 //          Each driver instance (the CMIDriver, LLDB::Driver) has its own
 //          LLDB::SBDebugger.
 //          Singleton class.
-// Gotchas: None.
-// Authors: Illya Rudkin 28/02/2014.
-// Changes: None.
 //--
 class CMIDriverMgr : public CMICmnBase, public MI::ISingleton<CMIDriverMgr>
 {
@@ -56,43 +53,43 @@ class CMIDriverMgr : public CMICmnBase, public MI::ISingleton<CMIDriverMgr>
     class IDriver
     {
       public:
-        virtual bool DoInitialize(void) = 0;
-        virtual bool DoShutdown(void) = 0;
-        virtual bool DoMainLoop(void) = 0;
+        virtual bool DoInitialize() = 0;
+        virtual bool DoShutdown() = 0;
+        virtual bool DoMainLoop() = 0;
         virtual lldb::SBError DoParseArgs(const int argc, const char *argv[], FILE *vpStdOut, bool &vwbExiting) = 0;
-        virtual CMIUtilString GetError(void) const = 0;
-        virtual const CMIUtilString &GetName(void) const = 0;
-        virtual lldb::SBDebugger &GetTheDebugger(void) = 0;
-        virtual bool GetDriverIsGDBMICompatibleDriver(void) const = 0;
+        virtual CMIUtilString GetError() const = 0;
+        virtual const CMIUtilString &GetName() const = 0;
+        virtual lldb::SBDebugger &GetTheDebugger() = 0;
+        virtual bool GetDriverIsGDBMICompatibleDriver() const = 0;
         virtual bool SetId(const CMIUtilString &vId) = 0;
-        virtual const CMIUtilString &GetId(void) const = 0;
+        virtual const CMIUtilString &GetId() const = 0;
         virtual void DeliverSignal(int signal) = 0;
 
         // Not part of the interface, ignore
-        /* dtor */ virtual ~IDriver(void) {}
+        /* dtor */ virtual ~IDriver() {}
     };
 
     // Methods:
   public:
     // MI system
-    bool Initialize(void);
-    bool Shutdown(void);
+    bool Initialize() override;
+    bool Shutdown() override;
     //
-    CMIUtilString GetAppVersion(void) const;
+    CMIUtilString GetAppVersion() const;
     bool RegisterDriver(const IDriver &vrADriver, const CMIUtilString &vrDriverID);
     bool UnregisterDriver(const IDriver &vrADriver);
     bool
     SetUseThisDriverToDoWork(const IDriver &vrADriver); // Specify working main driver
-    IDriver *GetUseThisDriverToDoWork(void) const;
+    IDriver *GetUseThisDriverToDoWork() const;
     bool ParseArgs(const int argc, const char *argv[], bool &vwbExiting);
     IDriver *GetDriver(const CMIUtilString &vrDriverId) const;
     //
     // MI Proxy fn to current specified working driver
-    bool DriverMainLoop(void);
+    bool DriverMainLoop();
     bool DriverParseArgs(const int argc, const char *argv[], FILE *vpStdOut, bool &vwbExiting);
-    CMIUtilString DriverGetError(void) const;
-    CMIUtilString DriverGetName(void) const;
-    lldb::SBDebugger *DriverGetTheDebugger(void);
+    CMIUtilString DriverGetError() const;
+    CMIUtilString DriverGetName() const;
+    lldb::SBDebugger *DriverGetTheDebugger();
     void DeliverSignal(int signal);
 
     // Typedef:
@@ -102,20 +99,20 @@ class CMIDriverMgr : public CMICmnBase, public MI::ISingleton<CMIDriverMgr>
 
     // Methods:
   private:
-    /* ctor */ CMIDriverMgr(void);
+    /* ctor */ CMIDriverMgr();
     /* ctor */ CMIDriverMgr(const CMIDriverMgr &);
     void operator=(const CMIDriverMgr &);
     //
     bool HaveDriverAlready(const IDriver &vrMedium) const;
-    bool UnregisterDriverAll(void);
-    IDriver *GetFirstMIDriver(void) const;
-    IDriver *GetFirstNonMIDriver(void) const;
-    CMIUtilString GetHelpOnCmdLineArgOptions(void) const;
+    bool UnregisterDriverAll();
+    IDriver *GetFirstMIDriver() const;
+    IDriver *GetFirstNonMIDriver() const;
+    CMIUtilString GetHelpOnCmdLineArgOptions() const;
 
     // Overridden:
   private:
     // From CMICmnBase
-    /* dtor */ virtual ~CMIDriverMgr(void);
+    /* dtor */ ~CMIDriverMgr() override;
 
     // Attributes:
   private:

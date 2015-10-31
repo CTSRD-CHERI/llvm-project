@@ -49,6 +49,11 @@ DumpCriticalPathLength("misched-dcpl", cl::Hidden,
 static cl::opt<bool> ViewMISchedDAGs("view-misched-dags", cl::Hidden,
   cl::desc("Pop up a window to show MISched dags after they are processed"));
 
+/// In some situations a few uninteresting nodes depend on nearly all other
+/// nodes in the graph, provide a cutoff to hide them.
+static cl::opt<unsigned> ViewMISchedCutoff("view-misched-cutoff", cl::Hidden,
+  cl::desc("Hide nodes with more predecessor/successor than cutoff"));
+
 static cl::opt<unsigned> MISchedCutoff("misched-cutoff", cl::Hidden,
   cl::desc("Stop scheduling after N instructions"), cl::init(~0U));
 
@@ -146,7 +151,7 @@ char &llvm::MachineSchedulerID = MachineScheduler::ID;
 
 INITIALIZE_PASS_BEGIN(MachineScheduler, "machine-scheduler",
                       "Machine Instruction Scheduler", false, false)
-INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
+INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(SlotIndexes)
 INITIALIZE_PASS_DEPENDENCY(LiveIntervals)
 INITIALIZE_PASS_END(MachineScheduler, "machine-scheduler",
@@ -161,7 +166,7 @@ void MachineScheduler::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
   AU.addRequiredID(MachineDominatorsID);
   AU.addRequired<MachineLoopInfo>();
-  AU.addRequired<AliasAnalysis>();
+  AU.addRequired<AAResultsWrapperPass>();
   AU.addRequired<TargetPassConfig>();
   AU.addRequired<SlotIndexes>();
   AU.addPreserved<SlotIndexes>();
@@ -322,7 +327,7 @@ bool MachineScheduler::runOnMachineFunction(MachineFunction &mf) {
   MLI = &getAnalysis<MachineLoopInfo>();
   MDT = &getAnalysis<MachineDominatorTree>();
   PassConfig = &getAnalysis<TargetPassConfig>();
-  AA = &getAnalysis<AliasAnalysis>();
+  AA = &getAnalysis<AAResultsWrapperPass>().getAAResults();
 
   LIS = &getAnalysis<LiveIntervals>();
 
@@ -400,7 +405,7 @@ void MachineSchedulerBase::scheduleRegions(ScheduleDAGInstrs &Scheduler) {
   for (MachineFunction::iterator MBB = MF->begin(), MBBEnd = MF->end();
        MBB != MBBEnd; ++MBB) {
 
-    Scheduler.startBlock(MBB);
+    Scheduler.startBlock(&*MBB);
 
 #ifndef NDEBUG
     if (SchedOnlyFunc.getNumOccurrences() && SchedOnlyFunc != MF->getName())
@@ -429,7 +434,7 @@ void MachineSchedulerBase::scheduleRegions(ScheduleDAGInstrs &Scheduler) {
 
       // Avoid decrementing RegionEnd for blocks with no terminator.
       if (RegionEnd != MBB->end() ||
-          isSchedBoundary(std::prev(RegionEnd), MBB, MF, TII, IsPostRA)) {
+          isSchedBoundary(&*std::prev(RegionEnd), &*MBB, MF, TII, IsPostRA)) {
         --RegionEnd;
         // Count the boundary instruction.
         --RemainingInstrs;
@@ -440,14 +445,14 @@ void MachineSchedulerBase::scheduleRegions(ScheduleDAGInstrs &Scheduler) {
       unsigned NumRegionInstrs = 0;
       MachineBasicBlock::iterator I = RegionEnd;
       for(;I != MBB->begin(); --I, --RemainingInstrs) {
-        if (isSchedBoundary(std::prev(I), MBB, MF, TII, IsPostRA))
+        if (isSchedBoundary(&*std::prev(I), &*MBB, MF, TII, IsPostRA))
           break;
         if (!I->isDebugValue())
           ++NumRegionInstrs;
       }
       // Notify the scheduler of the region, even if we may skip scheduling
       // it. Perhaps it still needs to be bundled.
-      Scheduler.enterRegion(MBB, I, RegionEnd, NumRegionInstrs);
+      Scheduler.enterRegion(&*MBB, I, RegionEnd, NumRegionInstrs);
 
       // Skip empty scheduling regions (0 or 1 schedulable instructions).
       if (I == RegionEnd || I == std::prev(RegionEnd)) {
@@ -487,7 +492,7 @@ void MachineSchedulerBase::scheduleRegions(ScheduleDAGInstrs &Scheduler) {
     if (Scheduler.isPostRA()) {
       // FIXME: Ideally, no further passes should rely on kill flags. However,
       // thumb2 size reduction is currently an exception.
-      Scheduler.fixupKills(MBB);
+      Scheduler.fixupKills(&*MBB);
     }
   }
   Scheduler.finalizeSchedule();
@@ -499,7 +504,7 @@ void MachineSchedulerBase::print(raw_ostream &O, const Module* m) const {
 
 LLVM_DUMP_METHOD
 void ReadyQueue::dump() {
-  dbgs() << Name << ": ";
+  dbgs() << "Queue " << Name << ": ";
   for (unsigned i = 0, e = Queue.size(); i < e; ++i)
     dbgs() << Queue[i]->NodeNum << " ";
   dbgs() << "\n";
@@ -660,6 +665,9 @@ bool ScheduleDAGMI::checkSchedLimit() {
 /// does not consider liveness or register pressure. It is useful for PostRA
 /// scheduling and potentially other custom schedulers.
 void ScheduleDAGMI::schedule() {
+  DEBUG(dbgs() << "ScheduleDAGMI::schedule starting\n");
+  DEBUG(SchedImpl->dumpPolicy());
+
   // Build the DAG.
   buildSchedGraph(AA);
 
@@ -682,7 +690,11 @@ void ScheduleDAGMI::schedule() {
   initQueues(TopRoots, BotRoots);
 
   bool IsTopNode = false;
-  while (SUnit *SU = SchedImpl->pickNode(IsTopNode)) {
+  while (true) {
+    DEBUG(dbgs() << "** ScheduleDAGMI::schedule picking next node\n");
+    SUnit *SU = SchedImpl->pickNode(IsTopNode);
+    if (!SU) break;
+
     assert(!SU->isScheduled && "Node already scheduled");
     if (!checkSchedLimit())
       break;
@@ -998,12 +1010,14 @@ void ScheduleDAGMILive::updatePressureDiffs(ArrayRef<unsigned> LiveUses) {
 /// only includes instructions that have DAG nodes, not scheduling boundaries.
 ///
 /// This is a skeletal driver, with all the functionality pushed into helpers,
-/// so that it can be easilly extended by experimental schedulers. Generally,
+/// so that it can be easily extended by experimental schedulers. Generally,
 /// implementing MachineSchedStrategy should be sufficient to implement a new
 /// scheduling algorithm. However, if a scheduler further subclasses
 /// ScheduleDAGMILive then it will want to override this virtual method in order
 /// to update any specialized state.
 void ScheduleDAGMILive::schedule() {
+  DEBUG(dbgs() << "ScheduleDAGMILive::schedule starting\n");
+  DEBUG(SchedImpl->dumpPolicy());
   buildDAGWithRegPressure();
 
   Topo.InitDAGTopologicalSorting();
@@ -1030,7 +1044,11 @@ void ScheduleDAGMILive::schedule() {
   }
 
   bool IsTopNode = false;
-  while (SUnit *SU = SchedImpl->pickNode(IsTopNode)) {
+  while (true) {
+    DEBUG(dbgs() << "** ScheduleDAGMILive::schedule picking next node\n");
+    SUnit *SU = SchedImpl->pickNode(IsTopNode);
+    if (!SU) break;
+
     assert(!SU->isScheduled && "Node already scheduled");
     if (!checkSchedLimit())
       break;
@@ -1349,25 +1367,49 @@ namespace {
 /// \brief Post-process the DAG to create cluster edges between instructions
 /// that may be fused by the processor into a single operation.
 class MacroFusion : public ScheduleDAGMutation {
-  const TargetInstrInfo *TII;
+  const TargetInstrInfo &TII;
+  const TargetRegisterInfo &TRI;
 public:
-  MacroFusion(const TargetInstrInfo *tii): TII(tii) {}
+  MacroFusion(const TargetInstrInfo &TII, const TargetRegisterInfo &TRI)
+    : TII(TII), TRI(TRI) {}
 
   void apply(ScheduleDAGMI *DAG) override;
 };
 } // anonymous
 
+/// Returns true if \p MI reads a register written by \p Other.
+static bool HasDataDep(const TargetRegisterInfo &TRI, const MachineInstr &MI,
+                       const MachineInstr &Other) {
+  for (const MachineOperand &MO : MI.uses()) {
+    if (!MO.isReg() || !MO.readsReg())
+      continue;
+
+    unsigned Reg = MO.getReg();
+    if (Other.modifiesRegister(Reg, &TRI))
+      return true;
+  }
+  return false;
+}
+
 /// \brief Callback from DAG postProcessing to create cluster edges to encourage
 /// fused operations.
 void MacroFusion::apply(ScheduleDAGMI *DAG) {
   // For now, assume targets can only fuse with the branch.
-  MachineInstr *Branch = DAG->ExitSU.getInstr();
+  SUnit &ExitSU = DAG->ExitSU;
+  MachineInstr *Branch = ExitSU.getInstr();
   if (!Branch)
     return;
 
-  for (unsigned Idx = DAG->SUnits.size(); Idx > 0;) {
-    SUnit *SU = &DAG->SUnits[--Idx];
-    if (!TII->shouldScheduleAdjacent(SU->getInstr(), Branch))
+  for (SUnit &SU : DAG->SUnits) {
+    // SUnits with successors can't be schedule in front of the ExitSU.
+    if (!SU.Succs.empty())
+      continue;
+    // We only care if the node writes to a register that the branch reads.
+    MachineInstr *Pred = SU.getInstr();
+    if (!HasDataDep(TRI, *Branch, *Pred))
+      continue;
+
+    if (!TII.shouldScheduleAdjacent(Pred, Branch))
       continue;
 
     // Create a single weak edge from SU to ExitSU. The only effect is to cause
@@ -1376,11 +1418,11 @@ void MacroFusion::apply(ScheduleDAGMI *DAG) {
     // scheduling cannot prioritize ExitSU anyway. To defer top-down scheduling
     // of SU, we could create an artificial edge from the deepest root, but it
     // hasn't been needed yet.
-    bool Success = DAG->addEdge(&DAG->ExitSU, SDep(SU, SDep::Cluster));
+    bool Success = DAG->addEdge(&ExitSU, SDep(&SU, SDep::Cluster));
     (void)Success;
     assert(Success && "No DAG nodes should be reachable from ExitSU");
 
-    DEBUG(dbgs() << "Macro Fuse SU(" << SU->NodeNum << ")\n");
+    DEBUG(dbgs() << "Macro Fuse SU(" << SU.NodeNum << ")\n");
     break;
   }
 }
@@ -2277,7 +2319,7 @@ void GenericSchedulerBase::traceCandidate(const SchedCandidate &Cand) {
     Latency = Cand.SU->getDepth();
     break;
   }
-  dbgs() << "  SU(" << Cand.SU->NodeNum << ") " << getReasonStr(Cand.Reason);
+  dbgs() << "  Cand SU(" << Cand.SU->NodeNum << ") " << getReasonStr(Cand.Reason);
   if (P.isValid())
     dbgs() << " " << TRI->getRegPressureSetName(P.getPSet())
            << ":" << P.getUnitInc() << " ";
@@ -2436,6 +2478,14 @@ void GenericScheduler::initPolicy(MachineBasicBlock::iterator Begin,
     if (RegionPolicy.OnlyTopDown)
       RegionPolicy.OnlyBottomUp = false;
   }
+}
+
+void GenericScheduler::dumpPolicy() {
+  dbgs() << "GenericScheduler RegionPolicy: "
+         << " ShouldTrackPressure=" << RegionPolicy.ShouldTrackPressure
+         << " OnlyTopDown=" << RegionPolicy.OnlyTopDown
+         << " OnlyBottomUp=" << RegionPolicy.OnlyBottomUp
+         << "\n";
 }
 
 /// Set IsAcyclicLatencyLimited if the acyclic path is longer than the cyclic
@@ -2597,7 +2647,7 @@ void GenericScheduler::tryCandidate(SchedCandidate &Cand,
     }
   }
   DEBUG(if (TryCand.RPDelta.Excess.isValid())
-          dbgs() << "  SU(" << TryCand.SU->NodeNum << ") "
+          dbgs() << "  Try  SU(" << TryCand.SU->NodeNum << ") "
                  << TRI->getRegPressureSetName(TryCand.RPDelta.Excess.getPSet())
                  << ":" << TryCand.RPDelta.Excess.getUnitInc() << "\n");
 
@@ -2672,8 +2722,8 @@ void GenericScheduler::tryCandidate(SchedCandidate &Cand,
 
   // Avoid serializing long latency dependence chains.
   // For acyclic path limited loops, latency was already checked above.
-  if (Cand.Policy.ReduceLatency && !Rem.IsAcyclicLatencyLimited
-      && tryLatency(TryCand, Cand, Zone)) {
+  if (!RegionPolicy.DisableLatencyHeuristic && Cand.Policy.ReduceLatency &&
+      !Rem.IsAcyclicLatencyLimited && tryLatency(TryCand, Cand, Zone)) {
     return;
   }
 
@@ -2887,7 +2937,7 @@ static ScheduleDAGInstrs *createGenericSchedLive(MachineSchedContext *C) {
   if (EnableLoadCluster && DAG->TII->enableClusterLoads())
     DAG->addMutation(make_unique<LoadClusterMutation>(DAG->TII, DAG->TRI));
   if (EnableMacroFusion)
-    DAG->addMutation(make_unique<MacroFusion>(DAG->TII));
+    DAG->addMutation(make_unique<MacroFusion>(*DAG->TII, *DAG->TRI));
   return DAG;
 }
 
@@ -3254,7 +3304,10 @@ struct DOTGraphTraits<ScheduleDAGMI*> : public DefaultDOTGraphTraits {
   }
 
   static bool isNodeHidden(const SUnit *Node) {
-    return (Node->Preds.size() > 10 || Node->Succs.size() > 10);
+    if (ViewMISchedCutoff == 0)
+      return false;
+    return (Node->Preds.size() > ViewMISchedCutoff
+         || Node->Succs.size() > ViewMISchedCutoff);
   }
 
   static bool hasNodeAddressLabel(const SUnit *Node,

@@ -2,9 +2,12 @@
 Use lldb Python API to make sure the dynamic checkers are doing their jobs.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -12,36 +15,21 @@ class ObjCCheckerTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_objc_checker_with_dsym(self):
-        """Test that checkers catch unrecognized selectors"""
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires Objective-C 2.0 runtime")
-        self.buildDsym()
-        self.do_test_checkers()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dwarf_test
-    def test_objc_checker_with_dwarf(self):
-        """Test that checkers catch unrecognized selectors"""
-        if self.getArchitecture() == 'i386':
-            self.skipTest("requires Objective-C 2.0 runtime")
-        self.buildDwarf()
-        self.do_test_checkers()
-
     def setUp(self):
         # Call super's setUp().                                                                                                           
         TestBase.setUp(self)
 
         # Find the line number to break for main.c.                                                                                       
-
         self.source_name = 'main.m'
 
-    def do_test_checkers (self):
-        """Make sure the dynamic checkers catch messages to unrecognized selectors"""
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
+    def test_objc_checker(self):
+        """Test that checkers catch unrecognized selectors"""
+        if self.getArchitecture() == 'i386':
+            self.skipTest("requires Objective-C 2.0 runtime")
+
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target from the debugger.
@@ -84,9 +72,3 @@ class ObjCCheckerTestCase(TestBase):
         # Make sure the error is helpful:
         err_string = expr_error.GetCString()
         self.assertTrue ("selector" in err_string)
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

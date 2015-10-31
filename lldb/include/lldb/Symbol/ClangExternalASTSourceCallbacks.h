@@ -22,7 +22,7 @@
 // Project includes
 #include "lldb/lldb-enumerations.h"
 #include "lldb/Core/ClangForward.h"
-#include "lldb/Symbol/ClangASTType.h"
+#include "lldb/Symbol/CompilerType.h"
 #include "lldb/Symbol/ClangExternalASTSourceCommon.h"
 
 namespace lldb_private {
@@ -98,15 +98,6 @@ public:
     MaterializeVisibleDecls (const clang::DeclContext *decl_ctx)
     {
         return;
-    }
-
-    clang::ExternalLoadResult
-    FindExternalLexicalDecls(const clang::DeclContext *decl_ctx, bool (*isKindWeWant)(clang::Decl::Kind),
-                             llvm::SmallVectorImpl<clang::Decl *> &decls) override
-    {
-        // This is used to support iterating through an entire lexical context,
-        // which isn't something the debugger should ever need to do.
-        return clang::ELR_Failure;
     }
 
     bool FindExternalVisibleDeclsByName(const clang::DeclContext *decl_ctx, clang::DeclarationName decl_name) override;

@@ -2,8 +2,12 @@
 Test some expressions involving STL data types.
 """
 
-import os, time
+from __future__ import print_function
+
+import lldb_shared
+
 import unittest2
+import os, time
 import lldb
 import lldbutil
 from lldbtest import *
@@ -12,39 +16,6 @@ class STLTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    # rdar://problem/10400981
-    @unittest2.expectedFailure
-    @skipUnlessDarwin
-    @dsym_test
-    def test_with_dsym(self):
-        """Test some expressions involving STL data types."""
-        self.buildDsym()
-        self.step_stl_exprs()
-
-    # rdar://problem/10400981
-    @unittest2.expectedFailure
-    @dwarf_test
-    def test_with_dwarf(self):
-        """Test some expressions involving STL data types."""
-        self.buildDwarf()
-        self.step_stl_exprs()
-
-    @python_api_test
-    @dsym_test
-    @skipUnlessDarwin
-    def test_SBType_template_aspects_with_dsym(self):
-        """Test APIs for getting template arguments from an SBType."""
-        self.buildDsym()
-        self.sbtype_template_apis()
-
-    @expectedFailureIcc # icc 13.1 and 14-beta do not emit DW_TAG_template_type_parameter
-    @python_api_test
-    @dwarf_test
-    def test_SBType_template_aspects_with_dwarf(self):
-        """Test APIs for getting template arguments from an SBType."""
-        self.buildDwarf()
-        self.sbtype_template_apis()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -52,8 +23,11 @@ class STLTestCase(TestBase):
         self.source = 'main.cpp'
         self.line = line_number(self.source, '// Set break point at this line.')
 
-    def step_stl_exprs(self):
+    # rdar://problem/10400981
+    @unittest2.expectedFailure
+    def test(self):
         """Test some expressions involving STL data types."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # The following two lines, if uncommented, will enable loggings.
@@ -67,7 +41,7 @@ class STLTestCase(TestBase):
         # is this a problem with clang generated debug info?
         lldbutil.run_break_set_by_file_and_line (self, "main.cpp", self.line, num_expected_locations=1, loc_exact=True)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # Stop at 'std::string hello_world ("Hello World!");'.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -93,8 +67,11 @@ class STLTestCase(TestBase):
         self.expect('expr associative_array["hello"]',
             substrs = [' = 2'])
 
-    def sbtype_template_apis(self):
+    @expectedFailureIcc # icc 13.1 and 14-beta do not emit DW_TAG_template_type_parameter
+    @add_test_categories(['pyapi'])
+    def test_SBType_template_aspects(self):
         """Test APIs for getting template arguments from an SBType."""
+        self.build()
         exe = os.path.join(os.getcwd(), 'a.out')
 
         # Create a target by the debugger.
@@ -139,10 +116,3 @@ class STLTestCase(TestBase):
 
         # Check that both entries of the dictionary have 'True' as the value.
         self.assertTrue(all(expected_types.values()))
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

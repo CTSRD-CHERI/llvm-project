@@ -984,13 +984,17 @@ public:
         __equal_range_multi(const _Key& __k) const;
 
     void swap(__hash_table& __u)
+#if _LIBCPP_STD_VER <= 11
         _NOEXCEPT_(
-            (!allocator_traits<__pointer_allocator>::propagate_on_container_swap::value ||
-             __is_nothrow_swappable<__pointer_allocator>::value) &&
-            (!__node_traits::propagate_on_container_swap::value ||
-             __is_nothrow_swappable<__node_allocator>::value) &&
-            __is_nothrow_swappable<hasher>::value &&
-            __is_nothrow_swappable<key_equal>::value);
+            __is_nothrow_swappable<hasher>::value && __is_nothrow_swappable<key_equal>::value
+            && (!allocator_traits<__pointer_allocator>::propagate_on_container_swap::value
+                  || __is_nothrow_swappable<__pointer_allocator>::value)
+            && (!__node_traits::propagate_on_container_swap::value
+                  || __is_nothrow_swappable<__node_allocator>::value)
+            );
+#else
+     _NOEXCEPT_(__is_nothrow_swappable<hasher>::value && __is_nothrow_swappable<key_equal>::value);
+#endif
 
     _LIBCPP_INLINE_VISIBILITY
     size_type max_bucket_count() const _NOEXCEPT
@@ -1117,38 +1121,6 @@ private:
     }
     _LIBCPP_INLINE_VISIBILITY
         void __move_assign_alloc(__hash_table&, false_type) _NOEXCEPT {}
-
-    template <class _Ap>
-    _LIBCPP_INLINE_VISIBILITY
-    static
-    void
-    __swap_alloc(_Ap& __x, _Ap& __y)
-        _NOEXCEPT_(
-            !allocator_traits<_Ap>::propagate_on_container_swap::value ||
-            __is_nothrow_swappable<_Ap>::value)
-    {
-        __swap_alloc(__x, __y,
-                     integral_constant<bool,
-                        allocator_traits<_Ap>::propagate_on_container_swap::value
-                                      >());
-    }
-
-    template <class _Ap>
-    _LIBCPP_INLINE_VISIBILITY
-    static
-    void
-    __swap_alloc(_Ap& __x, _Ap& __y, true_type)
-        _NOEXCEPT_(__is_nothrow_swappable<_Ap>::value)
-    {
-        using _VSTD::swap;
-        swap(__x, __y);
-    }
-
-    template <class _Ap>
-    _LIBCPP_INLINE_VISIBILITY
-    static
-    void
-    __swap_alloc(_Ap&, _Ap&, false_type) _NOEXCEPT {}
 
     void __deallocate(__node_pointer __np) _NOEXCEPT;
     __node_pointer __detach() _NOEXCEPT;
@@ -2136,7 +2108,7 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__construct_node(const value_type& __v
     __h.get_deleter().__value_constructed = true;
     __h->__hash_ = hash_function()(__h->__value_);
     __h->__next_ = nullptr;
-    return _VSTD::move(__h);  // explicitly moved for C++03
+    return _LIBCPP_EXPLICIT_MOVE(__h);  // explicitly moved for C++03
 }
 
 #endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
@@ -2152,7 +2124,7 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__construct_node(const value_type& __v
     __h.get_deleter().__value_constructed = true;
     __h->__hash_ = __hash;
     __h->__next_ = nullptr;
-    return _VSTD::move(__h);  // explicitly moved for C++03
+    return _LIBCPP_EXPLICIT_MOVE(__h);  // explicitly moved for C++03
 }
 
 template <class _Tp, class _Hash, class _Equal, class _Alloc>
@@ -2381,13 +2353,17 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_multi(
 template <class _Tp, class _Hash, class _Equal, class _Alloc>
 void
 __hash_table<_Tp, _Hash, _Equal, _Alloc>::swap(__hash_table& __u)
+#if _LIBCPP_STD_VER <= 11
     _NOEXCEPT_(
-        (!allocator_traits<__pointer_allocator>::propagate_on_container_swap::value ||
-         __is_nothrow_swappable<__pointer_allocator>::value) &&
-        (!__node_traits::propagate_on_container_swap::value ||
-         __is_nothrow_swappable<__node_allocator>::value) &&
-        __is_nothrow_swappable<hasher>::value &&
-        __is_nothrow_swappable<key_equal>::value)
+        __is_nothrow_swappable<hasher>::value && __is_nothrow_swappable<key_equal>::value
+        && (!allocator_traits<__pointer_allocator>::propagate_on_container_swap::value
+              || __is_nothrow_swappable<__pointer_allocator>::value)
+        && (!__node_traits::propagate_on_container_swap::value
+              || __is_nothrow_swappable<__node_allocator>::value)
+            )
+#else
+  _NOEXCEPT_(__is_nothrow_swappable<hasher>::value && __is_nothrow_swappable<key_equal>::value)
+#endif
 {
     {
     __node_pointer_pointer __npp = __bucket_list_.release();
@@ -2395,9 +2371,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::swap(__hash_table& __u)
     __u.__bucket_list_.reset(__npp);
     }
     _VSTD::swap(__bucket_list_.get_deleter().size(), __u.__bucket_list_.get_deleter().size());
-    __swap_alloc(__bucket_list_.get_deleter().__alloc(),
+    __swap_allocator(__bucket_list_.get_deleter().__alloc(),
              __u.__bucket_list_.get_deleter().__alloc());
-    __swap_alloc(__node_alloc(), __u.__node_alloc());
+    __swap_allocator(__node_alloc(), __u.__node_alloc());
     _VSTD::swap(__p1_.first().__next_, __u.__p1_.first().__next_);
     __p2_.swap(__u.__p2_);
     __p3_.swap(__u.__p3_);

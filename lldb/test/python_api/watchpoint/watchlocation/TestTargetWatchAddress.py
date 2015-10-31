@@ -2,9 +2,12 @@
 Use lldb Python SBtarget.WatchAddress() API to create a watchpoint for write of '*g_char_ptr'.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -22,38 +25,12 @@ class TargetWatchAddressAPITestCase(TestBase):
         # This is for verifying that watch location works.
         self.violating_func = "do_bad_thing_with_location";
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_watch_address_with_dsym(self):
+    @add_test_categories(['pyapi'])
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446")
+    def test_watch_address(self):
         """Exercise SBTarget.WatchAddress() API to set a watchpoint."""
-        self.buildDsym()
-        self.do_set_watchaddress()
-
-    @python_api_test
-    @dwarf_test
-    def test_watch_address_with_dwarf(self):
-        """Exercise SBTarget.WatchAddress() API to set a watchpoint."""
-        self.buildDwarf()
-        self.do_set_watchaddress()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_watch_address_with_invalid_watch_size_with_dsym(self):
-        """Exercise SBTarget.WatchAddress() API but pass an invalid watch_size."""
-        self.buildDsym()
-        self.do_set_watchaddress_with_invalid_watch_size()
-
-    @python_api_test
-    @dwarf_test
-    def test_watch_address_with_invalid_watch_size_with_dwarf(self):
-        """Exercise SBTarget.WatchAddress() API but pass an invalid watch_size."""
-        self.buildDwarf()
-        self.do_set_watchaddress_with_invalid_watch_size()
-
-    def do_set_watchaddress(self):
-        """Use SBTarget.WatchAddress() to set a watchpoint and verify that the program stops later due to the watchpoint."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -93,7 +70,7 @@ class TargetWatchAddressAPITestCase(TestBase):
         if not self.TraceOn():
             self.HideStdout()
 
-        print watchpoint
+        print(watchpoint)
 
         # Continue.  Expect the program to stop due to the variable being written to.
         process.Continue()
@@ -111,8 +88,12 @@ class TargetWatchAddressAPITestCase(TestBase):
 
         # This finishes our test.
 
-    def do_set_watchaddress_with_invalid_watch_size(self):
-        """Use SBTarget.WatchAddress() to set a watchpoint with invalid watch_size and verify we get a meaningful error message."""
+    @add_test_categories(['pyapi'])
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @skipIf(archs=['mips', 'mipsel', 'mips64', 'mips64el']) # No size constraint on MIPS for watches
+    def test_watch_address_with_invalid_watch_size(self):
+        """Exercise SBTarget.WatchAddress() API but pass an invalid watch_size."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -146,10 +127,3 @@ class TargetWatchAddressAPITestCase(TestBase):
         self.assertFalse(watchpoint)
         self.expect(error.GetCString(), exe=False,
             substrs = ['watch size of %d is not supported' % 365])
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

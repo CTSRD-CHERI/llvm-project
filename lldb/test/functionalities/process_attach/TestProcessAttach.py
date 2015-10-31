@@ -2,8 +2,11 @@
 Test process attach.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -14,52 +17,9 @@ class ProcessAttachTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @dsym_test
-    def test_attach_to_process_by_id_with_dsym(self):
+    def test_attach_to_process_by_id(self):
         """Test attach by process id"""
-        self.buildDsym()
-        self.process_attach_by_id()
-
-    @dwarf_test
-    #Make sure this test appears when grepping for XFAIL. It is also skipped because it tends to time out.
-    @expectedFailureLinux # llvm.org/pr23360
-    @skipIfLinux 
-    def test_attach_to_process_by_id_with_dwarf(self):
-        """Test attach by process id"""
-        self.buildDwarf()
-        self.process_attach_by_id()
-
-    @skipUnlessDarwin
-    @dsym_test
-    def test_attach_to_process_by_name_with_dsym(self):
-        """Test attach by process name"""
-        self.buildDsym()
-        self.process_attach_by_name()
-
-    @dwarf_test
-    #Make sure this test appears when grepping for XFAIL. It is also skipped because it tends to time out.
-    @expectedFailureLinux # llvm.org/pr23360
-    @skipIfLinux 
-    def test_attach_to_process_by_name_with_dwarf(self):
-        """Test attach by process name"""
-        self.buildDwarf()
-        self.process_attach_by_name()
-
-    def setUp(self):
-        # Call super's setUp().
-        TestBase.setUp(self)
-
-    def tearDown(self):
-        # Destroy process before TestBase.tearDown()
-        self.dbg.GetSelectedTarget().GetProcess().Destroy()
-
-        # Call super's tearDown().
-        TestBase.tearDown(self)
-
-    def process_attach_by_id(self):
-        """Test attach by process id"""
-
+        self.build()
         exe = os.path.join(os.getcwd(), exe_name)
 
         # Spawn a new process
@@ -73,10 +33,9 @@ class ProcessAttachTestCase(TestBase):
         process = target.GetProcess()
         self.assertTrue(process, PROCESS_IS_VALID)
 
-
-    def process_attach_by_name(self):
+    def test_attach_to_process_by_name(self):
         """Test attach by process name"""
-
+        self.build()
         exe = os.path.join(os.getcwd(), exe_name)
 
         # Spawn a new process
@@ -90,9 +49,9 @@ class ProcessAttachTestCase(TestBase):
         process = target.GetProcess()
         self.assertTrue(process, PROCESS_IS_VALID)
 
+    def tearDown(self):
+        # Destroy process before TestBase.tearDown()
+        self.dbg.GetSelectedTarget().GetProcess().Destroy()
 
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+        # Call super's tearDown().
+        TestBase.tearDown(self)

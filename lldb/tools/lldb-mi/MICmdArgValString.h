@@ -22,15 +22,12 @@ class CMICmdArgContext;
 //          interpret the options (context) string to find and validate a matching
 //          argument and so extract a value from it .
 //          Based on the Interpreter pattern.
-// Gotchas: None.
-// Authors: Illya Rudkin 15/04/2014.
-// Changes: None.
 //--
 class CMICmdArgValString : public CMICmdArgValBaseTemplate<CMIUtilString>
 {
     // Methods:
   public:
-    /* ctor */ CMICmdArgValString(void);
+    /* ctor */ CMICmdArgValString();
     /* ctor */ CMICmdArgValString(const bool vbAnything);
     /* ctor */ CMICmdArgValString(const bool vbHandleQuotes, const bool vbAcceptNumbers, const bool vbHandleDirPaths);
     /* ctor */ CMICmdArgValString(const CMIUtilString &vrArgName, const bool vbMandatory, const bool vbHandleByCmd,
@@ -41,9 +38,9 @@ class CMICmdArgValString : public CMICmdArgValBaseTemplate<CMIUtilString>
     // Overridden:
   public:
     // From CMICmdArgValBase
-    /* dtor */ virtual ~CMICmdArgValString(void);
+    /* dtor */ ~CMICmdArgValString() override;
     // From CMICmdArgSet::IArg
-    virtual bool Validate(CMICmdArgContext &vrwArgContext);
+    bool Validate(CMICmdArgContext &vrwArgContext) override;
 
     // Methods:
   private:
@@ -58,7 +55,7 @@ class CMICmdArgValString : public CMICmdArgValBaseTemplate<CMIUtilString>
 
     // Attribute:
   private:
-    bool m_bHandleQuotedString; // True = Parse a string surrounded by quotes spaces are not delimitors, false = only text up to next
+    bool m_bHandleQuotedString; // True = Parse a string surrounded by quotes spaces are not delimiters, false = only text up to next
                                 // delimiting space character
     bool m_bAcceptNumbers;      // True = Parse a string and accept as a number if number, false = numbers not recognised as string types
     bool m_bHandleDirPaths;     // True = Parse a string and accept directory file style string if present, false = directory file path not

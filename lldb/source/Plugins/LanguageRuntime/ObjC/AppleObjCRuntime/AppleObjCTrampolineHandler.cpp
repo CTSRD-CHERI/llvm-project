@@ -22,9 +22,9 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/Value.h"
-#include "lldb/Expression/ClangExpression.h"
-#include "lldb/Expression/ClangFunction.h"
-#include "lldb/Expression/ClangUtilityFunction.h"
+#include "lldb/Expression/UserExpression.h"
+#include "lldb/Expression/FunctionCaller.h"
+#include "lldb/Expression/UtilityFunction.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/Symbol.h"
@@ -294,13 +294,15 @@ AppleObjCTrampolineHandler::AppleObjCVTables::VTableRegion::SetUpRegion()
     // First read in the header:
     
     char memory_buffer[16];
-    Process *process = m_owner->GetProcess();
+    ProcessSP process_sp = m_owner->GetProcessSP();
+    if (!process_sp)
+        return;
     DataExtractor data(memory_buffer, sizeof(memory_buffer), 
-                       process->GetByteOrder(), 
-                       process->GetAddressByteSize());
-    size_t actual_size = 8 + process->GetAddressByteSize();
+                       process_sp->GetByteOrder(),
+                       process_sp->GetAddressByteSize());
+    size_t actual_size = 8 + process_sp->GetAddressByteSize();
     Error error;
-    size_t bytes_read = process->ReadMemory (m_header_addr, memory_buffer, actual_size, error);
+    size_t bytes_read = process_sp->ReadMemory (m_header_addr, memory_buffer, actual_size, error);
     if (bytes_read != actual_size)
     {
         m_valid = false;
@@ -340,9 +342,9 @@ AppleObjCTrampolineHandler::AppleObjCVTables::VTableRegion::SetUpRegion()
     uint8_t* dst = (uint8_t*)data_sp->GetBytes();
 
     DataExtractor desc_extractor (dst, desc_array_size,
-                                  process->GetByteOrder(), 
-                                  process->GetAddressByteSize());
-    bytes_read = process->ReadMemory(desc_ptr, dst, desc_array_size, error);
+                                  process_sp->GetByteOrder(),
+                                  process_sp->GetAddressByteSize());
+    bytes_read = process_sp->ReadMemory(desc_ptr, dst, desc_array_size, error);
     if (bytes_read != desc_array_size)
     {
         m_valid = false;
@@ -428,79 +430,88 @@ AppleObjCTrampolineHandler::AppleObjCVTables::VTableRegion::Dump (Stream &s)
         
 AppleObjCTrampolineHandler::AppleObjCVTables::AppleObjCVTables (const ProcessSP &process_sp, 
                                                                 const ModuleSP &objc_module_sp) :
-    m_process_sp (process_sp),
+    m_process_wp (),
     m_trampoline_header (LLDB_INVALID_ADDRESS),
     m_trampolines_changed_bp_id (LLDB_INVALID_BREAK_ID),
     m_objc_module_sp (objc_module_sp)
 {
-    
+    if (process_sp)
+        m_process_wp = process_sp;
 }
 
 AppleObjCTrampolineHandler::AppleObjCVTables::~AppleObjCVTables()
 {
-    if (m_trampolines_changed_bp_id != LLDB_INVALID_BREAK_ID)
-        m_process_sp->GetTarget().RemoveBreakpointByID (m_trampolines_changed_bp_id);
+    ProcessSP process_sp = GetProcessSP ();
+    if (process_sp)
+    {
+        if (m_trampolines_changed_bp_id != LLDB_INVALID_BREAK_ID)
+            process_sp->GetTarget().RemoveBreakpointByID (m_trampolines_changed_bp_id);
+    }
 }
-    
+
 bool
 AppleObjCTrampolineHandler::AppleObjCVTables::InitializeVTableSymbols ()
 {
     if (m_trampoline_header != LLDB_INVALID_ADDRESS)
         return true;
-    Target &target = m_process_sp->GetTarget();
-    
-    const ModuleList &target_modules = target.GetImages();
-    Mutex::Locker modules_locker(target_modules.GetMutex());
-    size_t num_modules = target_modules.GetSize();
-    if (!m_objc_module_sp)
+
+    ProcessSP process_sp = GetProcessSP ();
+    if (process_sp)
     {
-        for (size_t i = 0; i < num_modules; i++)
+        Target &target = process_sp->GetTarget();
+        
+        const ModuleList &target_modules = target.GetImages();
+        Mutex::Locker modules_locker(target_modules.GetMutex());
+        size_t num_modules = target_modules.GetSize();
+        if (!m_objc_module_sp)
         {
-            if (m_process_sp->GetObjCLanguageRuntime()->IsModuleObjCLibrary (target_modules.GetModuleAtIndexUnlocked(i)))
+            for (size_t i = 0; i < num_modules; i++)
             {
-                m_objc_module_sp = target_modules.GetModuleAtIndexUnlocked(i);
-                break;
+                if (process_sp->GetObjCLanguageRuntime()->IsModuleObjCLibrary (target_modules.GetModuleAtIndexUnlocked(i)))
+                {
+                    m_objc_module_sp = target_modules.GetModuleAtIndexUnlocked(i);
+                    break;
+                }
             }
         }
-    }
-    
-    if (m_objc_module_sp)
-    {
-        ConstString trampoline_name ("gdb_objc_trampolines");
-        const Symbol *trampoline_symbol = m_objc_module_sp->FindFirstSymbolWithNameAndType (trampoline_name, 
-                                                                                            eSymbolTypeData);
-        if (trampoline_symbol != NULL)
+        
+        if (m_objc_module_sp)
         {
-            m_trampoline_header = trampoline_symbol->GetLoadAddress(&target);
-            if (m_trampoline_header == LLDB_INVALID_ADDRESS)
-                return false;
-            
-            // Next look up the "changed" symbol and set a breakpoint on that...
-            ConstString changed_name ("gdb_objc_trampolines_changed");
-            const Symbol *changed_symbol = m_objc_module_sp->FindFirstSymbolWithNameAndType (changed_name, 
-                                                                                             eSymbolTypeCode);
-            if (changed_symbol != NULL)
+            ConstString trampoline_name ("gdb_objc_trampolines");
+            const Symbol *trampoline_symbol = m_objc_module_sp->FindFirstSymbolWithNameAndType (trampoline_name, 
+                                                                                                eSymbolTypeData);
+            if (trampoline_symbol != NULL)
             {
-                const Address changed_symbol_addr = changed_symbol->GetAddress();
-                if (!changed_symbol_addr.IsValid())
+                m_trampoline_header = trampoline_symbol->GetLoadAddress(&target);
+                if (m_trampoline_header == LLDB_INVALID_ADDRESS)
                     return false;
-                    
-                lldb::addr_t changed_addr = changed_symbol_addr.GetOpcodeLoadAddress (&target);
-                if (changed_addr != LLDB_INVALID_ADDRESS)
+                
+                // Next look up the "changed" symbol and set a breakpoint on that...
+                ConstString changed_name ("gdb_objc_trampolines_changed");
+                const Symbol *changed_symbol = m_objc_module_sp->FindFirstSymbolWithNameAndType (changed_name, 
+                                                                                                 eSymbolTypeCode);
+                if (changed_symbol != NULL)
                 {
-                    BreakpointSP trampolines_changed_bp_sp = target.CreateBreakpoint (changed_addr, true, false);
-                    if (trampolines_changed_bp_sp)
+                    const Address changed_symbol_addr = changed_symbol->GetAddress();
+                    if (!changed_symbol_addr.IsValid())
+                        return false;
+                        
+                    lldb::addr_t changed_addr = changed_symbol_addr.GetOpcodeLoadAddress (&target);
+                    if (changed_addr != LLDB_INVALID_ADDRESS)
                     {
-                        m_trampolines_changed_bp_id = trampolines_changed_bp_sp->GetID();
-                        trampolines_changed_bp_sp->SetCallback (RefreshTrampolines, this, true);
-                        trampolines_changed_bp_sp->SetBreakpointKind ("objc-trampolines-changed");
-                        return true;
+                        BreakpointSP trampolines_changed_bp_sp = target.CreateBreakpoint (changed_addr, true, false);
+                        if (trampolines_changed_bp_sp)
+                        {
+                            m_trampolines_changed_bp_id = trampolines_changed_bp_sp->GetID();
+                            trampolines_changed_bp_sp->SetCallback (RefreshTrampolines, this, true);
+                            trampolines_changed_bp_sp->SetBreakpointKind ("objc-trampolines-changed");
+                            return true;
+                        }
                     }
                 }
             }
         }
     }
-    
     return false;
 }
     
@@ -522,11 +533,11 @@ AppleObjCTrampolineHandler::AppleObjCVTables::RefreshTrampolines (void *baton,
         ClangASTContext *clang_ast_context = process->GetTarget().GetScratchClangASTContext();
         ValueList argument_values;
         Value input_value;
-        ClangASTType clang_void_ptr_type = clang_ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
+        CompilerType clang_void_ptr_type = clang_ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
 
         input_value.SetValueType (Value::eValueTypeScalar);
         //input_value.SetContext (Value::eContextTypeClangType, clang_void_ptr_type);
-        input_value.SetClangType (clang_void_ptr_type);
+        input_value.SetCompilerType (clang_void_ptr_type);
         argument_values.PushValue(input_value);
         
         bool success = abi->GetArgumentValues (exe_ctx.GetThreadRef(), argument_values);
@@ -559,16 +570,21 @@ AppleObjCTrampolineHandler::AppleObjCVTables::ReadRegions ()
     if (!InitializeVTableSymbols())
         return false;
     Error error;
-    lldb::addr_t region_addr = m_process_sp->ReadPointerFromMemory (m_trampoline_header, error);
-    if (error.Success())    
-        return ReadRegions (region_addr);
+    ProcessSP process_sp = GetProcessSP ();
+    if (process_sp)
+    {
+        lldb::addr_t region_addr = process_sp->ReadPointerFromMemory (m_trampoline_header, error);
+        if (error.Success())
+            return ReadRegions (region_addr);
+    }
     return false;
 }
 
 bool
 AppleObjCTrampolineHandler::AppleObjCVTables::ReadRegions (lldb::addr_t region_addr)
 {
-    if (!m_process_sp)
+    ProcessSP process_sp = GetProcessSP ();
+    if (!process_sp)
         return false;
         
     Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_STEP));
@@ -639,12 +655,14 @@ AppleObjCTrampolineHandler::g_dispatch_functions[] =
 
 AppleObjCTrampolineHandler::AppleObjCTrampolineHandler (const ProcessSP &process_sp, 
                                                         const ModuleSP &objc_module_sp) :
-    m_process_sp (process_sp),
+    m_process_wp (),
     m_objc_module_sp (objc_module_sp),
     m_impl_fn_addr (LLDB_INVALID_ADDRESS),
     m_impl_stret_fn_addr (LLDB_INVALID_ADDRESS),
     m_msg_forward_addr (LLDB_INVALID_ADDRESS)
 {
+    if (process_sp)
+        m_process_wp = process_sp;
     // Look up the known resolution functions:
     
     ConstString get_impl_name("class_getMethodImplementation");
@@ -652,7 +670,7 @@ AppleObjCTrampolineHandler::AppleObjCTrampolineHandler (const ProcessSP &process
     ConstString msg_forward_name("_objc_msgForward");
     ConstString msg_forward_stret_name("_objc_msgForward_stret");
     
-    Target *target = m_process_sp ? &m_process_sp->GetTarget() : NULL;
+    Target *target = process_sp ? &process_sp->GetTarget() : NULL;
     const Symbol *class_getMethodImplementation = m_objc_module_sp->FindFirstSymbolWithNameAndType (get_impl_name, eSymbolTypeCode);
     const Symbol *class_getMethodImplementation_stret = m_objc_module_sp->FindFirstSymbolWithNameAndType (get_impl_stret_name, eSymbolTypeCode);
     const Symbol *msg_forward = m_objc_module_sp->FindFirstSymbolWithNameAndType (msg_forward_name, eSymbolTypeCode);
@@ -723,10 +741,10 @@ lldb::addr_t
 AppleObjCTrampolineHandler::SetupDispatchFunction (Thread &thread, ValueList &dispatch_values)
 {
     ExecutionContext exe_ctx (thread.shared_from_this());
-    Address impl_code_address;
     StreamString errors;
     Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_STEP));
     lldb::addr_t args_addr = LLDB_INVALID_ADDRESS;
+    FunctionCaller *impl_function_caller = nullptr;
 
     // Scope for mutex locker:
     {
@@ -734,38 +752,23 @@ AppleObjCTrampolineHandler::SetupDispatchFunction (Thread &thread, ValueList &di
         
         // First stage is to make the ClangUtility to hold our injected function:
 
-    #define USE_BUILTIN_FUNCTION 0  // Define this to 1 and we will use the get_implementation function found in the target.
-                        // This is useful for debugging additions to the get_impl function 'cause you don't have
-                        // to bother with string-ifying the code into g_lookup_implementation_function_code.
-        
-        if (USE_BUILTIN_FUNCTION)
-        {
-            ConstString our_utility_function_name("__lldb_objc_find_implementation_for_selector");
-            SymbolContextList sc_list;
-            
-            exe_ctx.GetTargetRef().GetImages().FindSymbolsWithNameAndType (our_utility_function_name, eSymbolTypeCode, sc_list);
-            if (sc_list.GetSize() == 1)
-            {
-                SymbolContext sc;
-                sc_list.GetContextAtIndex(0, sc);
-                if (sc.symbol != NULL)
-                    impl_code_address = sc.symbol->GetAddress();
-                    
-                //lldb::addr_t addr = impl_code_address.GetOpcodeLoadAddress (exe_ctx.GetTargetPtr());
-                //printf ("Getting address for our_utility_function: 0x%" PRIx64 ".\n", addr);
-            }
-            else
-            {
-                //printf ("Could not find implementation function address.\n");
-                return args_addr;
-            }
-        }
-        else if (!m_impl_code.get())
+        if (!m_impl_code.get())
         {
             if (g_lookup_implementation_function_code != NULL)
             {
-                m_impl_code.reset (new ClangUtilityFunction (g_lookup_implementation_function_code,
-                                                             g_lookup_implementation_function_name));
+                Error error;
+                m_impl_code.reset (exe_ctx.GetTargetRef().GetUtilityFunctionForLanguage (g_lookup_implementation_function_code,
+                                                                                         eLanguageTypeObjC,
+                                                                                         g_lookup_implementation_function_name,
+                                                                                         error));
+                if (error.Fail())
+                {
+                    if (log)
+                        log->Printf ("Failed to get Utility Function for implementation lookup: %s.", error.AsCString());
+                    m_impl_code.reset();
+                    return args_addr;
+                }
+                
                 if (!m_impl_code->Install(errors, exe_ctx))
                 {
                     if (log)
@@ -782,42 +785,25 @@ AppleObjCTrampolineHandler::SetupDispatchFunction (Thread &thread, ValueList &di
                 return LLDB_INVALID_ADDRESS;
             }
             
-            impl_code_address.Clear();
-            impl_code_address.SetOffset(m_impl_code->StartAddress());
+
+            // Next make the runner function for our implementation utility function.
+            ClangASTContext *clang_ast_context = thread.GetProcess()->GetTarget().GetScratchClangASTContext();
+            CompilerType clang_void_ptr_type = clang_ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
+            Error error;
+            
+            impl_function_caller = m_impl_code->MakeFunctionCaller(clang_void_ptr_type,
+                                                                   dispatch_values,
+                                                                   error);
+            if (error.Fail())
+            {
+                if (log)
+                    log->Printf ("Error getting function caller for dispatch lookup: \"%s\".", error.AsCString());
+                return args_addr;
+            }
         }
         else
         {
-            impl_code_address.Clear();
-            impl_code_address.SetOffset(m_impl_code->StartAddress());
-        }
-
-        // Next make the runner function for our implementation utility function.
-        if (!m_impl_function.get())
-        {
-            ClangASTContext *clang_ast_context = thread.GetProcess()->GetTarget().GetScratchClangASTContext();
-            ClangASTType clang_void_ptr_type = clang_ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
-            m_impl_function.reset(new ClangFunction (thread,
-                                                     clang_void_ptr_type,
-                                                     impl_code_address,
-                                                     dispatch_values,
-                                                     "objc-dispatch-lookup"));
-            
-            errors.Clear();        
-            unsigned num_errors = m_impl_function->CompileFunction(errors);
-            if (num_errors)
-            {
-                if (log)
-                    log->Printf ("Error compiling function: \"%s\".", errors.GetData());
-                return args_addr;
-            }
-            
-            errors.Clear();
-            if (!m_impl_function->WriteFunctionWrapper(exe_ctx, errors))
-            {
-                if (log)
-                    log->Printf ("Error Inserting function: \"%s\".", errors.GetData());
-                return args_addr;
-            }
+            impl_function_caller = m_impl_code->GetFunctionCaller();
         }
     }
     
@@ -827,7 +813,7 @@ AppleObjCTrampolineHandler::SetupDispatchFunction (Thread &thread, ValueList &di
     // if other threads were calling into here, but actually it isn't because we allocate a new args structure for
     // this call by passing args_addr = LLDB_INVALID_ADDRESS...
 
-    if (!m_impl_function->WriteFunctionArguments (exe_ctx, args_addr, impl_code_address, dispatch_values, errors))
+    if (impl_function_caller->WriteFunctionArguments (exe_ctx, args_addr, dispatch_values, errors))
     {
         if (log)
             log->Printf ("Error writing function arguments: \"%s\".", errors.GetData());
@@ -898,10 +884,10 @@ AppleObjCTrampolineHandler::GetStepThroughDispatchPlan (Thread &thread, bool sto
         ClangASTContext *clang_ast_context = target_sp->GetScratchClangASTContext();
         ValueList argument_values;
         Value void_ptr_value;
-        ClangASTType clang_void_ptr_type = clang_ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
+        CompilerType clang_void_ptr_type = clang_ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
         void_ptr_value.SetValueType (Value::eValueTypeScalar);
         //void_ptr_value.SetContext (Value::eContextTypeClangType, clang_void_ptr_type);
-        void_ptr_value.SetClangType (clang_void_ptr_type);
+        void_ptr_value.SetCompilerType (clang_void_ptr_type);
         
         int obj_index;
         int sel_index;
@@ -1041,7 +1027,7 @@ AppleObjCTrampolineHandler::GetStepThroughDispatchPlan (Thread &thread, bool sto
                 log->Printf("Resolving call for class - 0x%" PRIx64 " and selector - 0x%" PRIx64,
                             isa_addr, sel_addr);
             }
-            ObjCLanguageRuntime *objc_runtime = m_process_sp->GetObjCLanguageRuntime ();
+            ObjCLanguageRuntime *objc_runtime = thread.GetProcess()->GetObjCLanguageRuntime ();
             assert(objc_runtime != NULL);
             
             impl_addr = objc_runtime->LookupInMethodCache (isa_addr, sel_addr);
@@ -1080,10 +1066,10 @@ AppleObjCTrampolineHandler::GetStepThroughDispatchPlan (Thread &thread, bool sto
             dispatch_values.PushValue (*(argument_values.GetValueAtIndex(sel_index)));
             
             Value flag_value;
-            ClangASTType clang_int_type = clang_ast_context->GetBuiltinTypeForEncodingAndBitSize(lldb::eEncodingSint, 32);
+            CompilerType clang_int_type = clang_ast_context->GetBuiltinTypeForEncodingAndBitSize(lldb::eEncodingSint, 32);
             flag_value.SetValueType (Value::eValueTypeScalar);
             //flag_value.SetContext (Value::eContextTypeClangType, clang_int_type);
-            flag_value.SetClangType (clang_int_type);
+            flag_value.SetCompilerType (clang_int_type);
             
             if (this_dispatch.stret_return)
                 flag_value.GetScalar() = 1;
@@ -1151,8 +1137,8 @@ AppleObjCTrampolineHandler::GetStepThroughDispatchPlan (Thread &thread, bool sto
     return ret_plan_sp;
 }
 
-ClangFunction *
-AppleObjCTrampolineHandler::GetLookupImplementationWrapperFunction ()
+FunctionCaller *
+AppleObjCTrampolineHandler::GetLookupImplementationFunctionCaller ()
 {
-    return m_impl_function.get();
+    return m_impl_code->GetFunctionCaller();
 }

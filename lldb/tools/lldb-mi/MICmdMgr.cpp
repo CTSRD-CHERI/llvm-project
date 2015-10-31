@@ -25,7 +25,7 @@
 // Return:  None.
 // Throws:  None.
 //--
-CMICmdMgr::CMICmdMgr(void)
+CMICmdMgr::CMICmdMgr()
     : m_interpretor(CMICmdInterpreter::Instance())
     , m_factory(CMICmdFactory::Instance())
     , m_invoker(CMICmdInvoker::Instance())
@@ -39,7 +39,7 @@ CMICmdMgr::CMICmdMgr(void)
 // Return:  None.
 // Throws:  None.
 //--
-CMICmdMgr::~CMICmdMgr(void)
+CMICmdMgr::~CMICmdMgr()
 {
     Shutdown();
 }
@@ -53,7 +53,7 @@ CMICmdMgr::~CMICmdMgr(void)
 // Throws:  None.
 //--
 bool
-CMICmdMgr::Initialize(void)
+CMICmdMgr::Initialize()
 {
     m_clientUsageRefCnt++;
 
@@ -102,7 +102,7 @@ CMICmdMgr::Initialize(void)
 // Throws:  None.
 //--
 bool
-CMICmdMgr::Shutdown(void)
+CMICmdMgr::Shutdown()
 {
     if (--m_clientUsageRefCnt > 0)
         return MIstatus::success;
@@ -170,7 +170,7 @@ CMICmdMgr::CmdInterpret(const CMIUtilString &vTextLine, bool &vwbYesValid, bool 
 //++ ------------------------------------------------------------------------------------
 // Details: Having previously had the potential command validated and found valid now
 //          get the command executed.
-//          If the Functionalityity returns MIstatus::failure call GetErrorDescription().
+//          If the Functionality returns MIstatus::failure call GetErrorDescription().
 //          This function is used by the application's main thread.
 // Type:    Method.
 // Args:    vCmdData    - (RW) Command meta data.

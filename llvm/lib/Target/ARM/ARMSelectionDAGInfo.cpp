@@ -18,12 +18,6 @@ using namespace llvm;
 
 #define DEBUG_TYPE "arm-selectiondag-info"
 
-ARMSelectionDAGInfo::ARMSelectionDAGInfo(const DataLayout &DL)
-    : TargetSelectionDAGInfo(&DL) {}
-
-ARMSelectionDAGInfo::~ARMSelectionDAGInfo() {
-}
-
 // Emit, if possible, a specialized version of the given Libcall. Typically this
 // means selecting the appropriately aligned version, but we also convert memset
 // of 0 into memclr.
@@ -83,7 +77,7 @@ EmitSpecializedLibcall(SelectionDAG &DAG, SDLoc dl,
 
   TargetLowering::ArgListTy Args;
   TargetLowering::ArgListEntry Entry;
-  Entry.Ty = TLI->getDataLayout()->getIntPtrType(*DAG.getContext());
+  Entry.Ty = DAG.getDataLayout().getIntPtrType(*DAG.getContext());
   Entry.Node = Dst;
   Args.push_back(Entry);
   if (AEABILibcall == AEABI_MEMCLR) {
@@ -121,12 +115,14 @@ EmitSpecializedLibcall(SelectionDAG &DAG, SDLoc dl,
     { "__aeabi_memclr",  "__aeabi_memclr4",  "__aeabi_memclr8"  }
   };
   TargetLowering::CallLoweringInfo CLI(DAG);
-  CLI.setDebugLoc(dl).setChain(Chain)
-    .setCallee(TLI->getLibcallCallingConv(LC),
-               Type::getVoidTy(*DAG.getContext()),
-               DAG.getExternalSymbol(FunctionNames[AEABILibcall][AlignVariant],
-                                     TLI->getPointerTy()), std::move(Args), 0)
-    .setDiscardResult();
+  CLI.setDebugLoc(dl)
+      .setChain(Chain)
+      .setCallee(
+           TLI->getLibcallCallingConv(LC), Type::getVoidTy(*DAG.getContext()),
+           DAG.getExternalSymbol(FunctionNames[AEABILibcall][AlignVariant],
+                                 TLI->getPointerTy(DAG.getDataLayout())),
+           std::move(Args), 0)
+      .setDiscardResult();
   std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
   
   return CallResult.second;
@@ -164,41 +160,39 @@ ARMSelectionDAGInfo::EmitTargetCodeForMemcpy(SelectionDAG &DAG, SDLoc dl,
   unsigned VTSize = 4;
   unsigned i = 0;
   // Emit a maximum of 4 loads in Thumb1 since we have fewer registers
-  const unsigned MAX_LOADS_IN_LDM = Subtarget.isThumb1Only() ? 4 : 6;
+  const unsigned MaxLoadsInLDM = Subtarget.isThumb1Only() ? 4 : 6;
   SDValue TFOps[6];
   SDValue Loads[6];
   uint64_t SrcOff = 0, DstOff = 0;
 
-  // Emit up to MAX_LOADS_IN_LDM loads, then a TokenFactor barrier, then the
-  // same number of stores.  The loads and stores will get combined into
-  // ldm/stm later on.
-  while (EmittedNumMemOps < NumMemOps) {
-    for (i = 0;
-         i < MAX_LOADS_IN_LDM && EmittedNumMemOps + i < NumMemOps; ++i) {
-      Loads[i] = DAG.getLoad(VT, dl, Chain,
-                             DAG.getNode(ISD::ADD, dl, MVT::i32, Src,
-                                         DAG.getConstant(SrcOff, dl, MVT::i32)),
-                             SrcPtrInfo.getWithOffset(SrcOff), isVolatile,
-                             false, false, 0);
-      TFOps[i] = Loads[i].getValue(1);
-      SrcOff += VTSize;
-    }
-    Chain = DAG.getNode(ISD::TokenFactor, dl, MVT::Other,
-                        makeArrayRef(TFOps, i));
+  // FIXME: We should invent a VMEMCPY pseudo-instruction that lowers to
+  // VLDM/VSTM and make this code emit it when appropriate. This would reduce
+  // pressure on the general purpose registers. However this seems harder to map
+  // onto the register allocator's view of the world.
 
-    for (i = 0;
-         i < MAX_LOADS_IN_LDM && EmittedNumMemOps + i < NumMemOps; ++i) {
-      TFOps[i] = DAG.getStore(Chain, dl, Loads[i],
-                              DAG.getNode(ISD::ADD, dl, MVT::i32, Dst,
-                                          DAG.getConstant(DstOff, dl, MVT::i32)),
-                              DstPtrInfo.getWithOffset(DstOff),
-                              isVolatile, false, 0);
-      DstOff += VTSize;
-    }
-    Chain = DAG.getNode(ISD::TokenFactor, dl, MVT::Other,
-                        makeArrayRef(TFOps, i));
+  // The number of MEMCPY pseudo-instructions to emit. We use up to
+  // MaxLoadsInLDM registers per mcopy, which will get lowered into ldm/stm
+  // later on. This is a lower bound on the number of MEMCPY operations we must
+  // emit.
+  unsigned NumMEMCPYs = (NumMemOps + MaxLoadsInLDM - 1) / MaxLoadsInLDM;
 
-    EmittedNumMemOps += i;
+  SDVTList VTs = DAG.getVTList(MVT::i32, MVT::i32, MVT::Other, MVT::Glue);
+
+  for (unsigned I = 0; I != NumMEMCPYs; ++I) {
+    // Evenly distribute registers among MEMCPY operations to reduce register
+    // pressure.
+    unsigned NextEmittedNumMemOps = NumMemOps * (I + 1) / NumMEMCPYs;
+    unsigned NumRegs = NextEmittedNumMemOps - EmittedNumMemOps;
+
+    Dst = DAG.getNode(ARMISD::MEMCPY, dl, VTs, Chain, Dst, Src,
+                      DAG.getConstant(NumRegs, dl, MVT::i32));
+    Src = Dst.getValue(1);
+    Chain = Dst.getValue(2);
+
+    DstPtrInfo = DstPtrInfo.getWithOffset(NumRegs * VTSize);
+    SrcPtrInfo = SrcPtrInfo.getWithOffset(NumRegs * VTSize);
+
+    EmittedNumMemOps = NextEmittedNumMemOps;
   }
 
   if (BytesLeft == 0)

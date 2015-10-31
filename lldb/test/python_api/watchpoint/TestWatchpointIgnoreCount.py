@@ -2,9 +2,12 @@
 Use lldb Python SBWatchpoint API to set the ignore count.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
 import re
-import unittest2
 import lldb, lldbutil
 from lldbtest import *
 
@@ -20,23 +23,12 @@ class WatchpointIgnoreCountTestCase(TestBase):
         # Find the line number to break inside main().
         self.line = line_number(self.source, '// Set break point at this line.')
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_set_watch_ignore_count_with_dsym(self):
+    @add_test_categories(['pyapi'])
+    @expectedFailureAndroid(archs=['arm', 'aarch64']) # Watchpoints not supported
+    @expectedFailureWindows("llvm.org/pr24446") # WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows
+    def test_set_watch_ignore_count(self):
         """Test SBWatchpoint.SetIgnoreCount() API."""
-        self.buildDsym()
-        self.do_watchpoint_ignore_count()
-
-    @python_api_test
-    @dwarf_test
-    def test_set_watch_ignore_count_with_dwarf(self):
-        """Test SBWatchpoint.SetIgnoreCount() API."""
-        self.buildDwarf()
-        self.do_watchpoint_ignore_count()
-
-    def do_watchpoint_ignore_count(self):
-        """Test SBWatchpoint.SetIgnoreCount() API."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         # Create a target by the debugger.
@@ -78,12 +70,12 @@ class WatchpointIgnoreCountTestCase(TestBase):
         self.assertTrue(watchpoint.GetIgnoreCount() == 0)
         watch_id = watchpoint.GetID()
         self.assertTrue(watch_id != 0)
-        print watchpoint
+        print(watchpoint)
 
         # Now immediately set the ignore count to 2.  When we continue, expect the
         # inferior to run to its completion without stopping due to watchpoint.
         watchpoint.SetIgnoreCount(2)
-        print watchpoint
+        print(watchpoint)
         process.Continue()
 
         # At this point, the inferior process should have exited.
@@ -93,11 +85,4 @@ class WatchpointIgnoreCountTestCase(TestBase):
         self.assertTrue(watchpoint)
         self.assertTrue(watchpoint.GetWatchSize() == 4)
         self.assertTrue(watchpoint.GetHitCount() == 2)
-        print watchpoint
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
+        print(watchpoint)

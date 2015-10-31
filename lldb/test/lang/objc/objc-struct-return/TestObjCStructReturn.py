@@ -1,7 +1,10 @@
 """Test calling functions in class methods."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -10,22 +13,6 @@ class TestObjCClassMethod(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @python_api_test
-    @dsym_test
-    def test_with_dsym_and_python_api(self):
-        """Test calling functions in class methods."""
-        self.buildDsym()
-        self.objc_class_method()
-
-    @skipUnlessDarwin
-    @python_api_test
-    @dwarf_test
-    def test_with_dwarf_and_python_api(self):
-        """Test calling functions in class methods."""
-        self.buildDwarf()
-        self.objc_class_method()
-
     def setUp(self):
         # Call super's setUp().
         TestBase.setUp(self)
@@ -33,8 +20,11 @@ class TestObjCClassMethod(TestBase):
         self.main_source = "test.m"
         self.break_line = line_number(self.main_source, '// Set breakpoint here.')
 
-    def objc_class_method(self):
-        """Test calling class methods."""
+    @skipUnlessDarwin
+    @add_test_categories(['pyapi'])
+    def test_with_python_api(self):
+        """Test calling functions in class methods."""
+        self.build()
         exe = os.path.join(os.getcwd(), "a.out")
 
         target = self.dbg.CreateTarget(exe)
@@ -61,9 +51,3 @@ class TestObjCClassMethod(TestBase):
         # Now make sure we can call a method that returns a struct without crashing.
         cmd_value = frame.EvaluateExpression ("[provider getRange]")
         self.assertTrue (cmd_value.IsValid())
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

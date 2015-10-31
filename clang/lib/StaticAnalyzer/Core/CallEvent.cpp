@@ -17,6 +17,7 @@
 #include "clang/AST/ParentMap.h"
 #include "clang/Analysis/ProgramPoint.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/DynamicTypeMap.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
@@ -96,7 +97,7 @@ bool CallEvent::hasNonZeroCallbackArg() const {
     if (isCallbackArg(getArgSVal(Idx), *I))
       return true;
   }
-  
+
   return false;
 }
 
@@ -147,7 +148,7 @@ ProgramStateRef CallEvent::invalidateRegions(unsigned BlockCount,
   SmallVector<SVal, 8> ValuesToInvalidate;
   RegionAndSymbolInvalidationTraits ETraits;
 
-  getExtraInvalidatedValues(ValuesToInvalidate);
+  getExtraInvalidatedValues(ValuesToInvalidate, &ETraits);
 
   // Indexes of arguments whose values will be preserved by the call.
   llvm::SmallSet<unsigned, 4> PreserveArgs;
@@ -159,7 +160,7 @@ ProgramStateRef CallEvent::invalidateRegions(unsigned BlockCount,
     // below for efficiency.
     if (PreserveArgs.count(Idx))
       if (const MemRegion *MR = getArgSVal(Idx).getAsRegion())
-        ETraits.setTrait(MR->StripCasts(), 
+        ETraits.setTrait(MR->StripCasts(),
                         RegionAndSymbolInvalidationTraits::TK_PreserveContents);
         // TODO: Factor this out + handle the lower level const pointers.
 
@@ -184,7 +185,7 @@ ProgramPoint CallEvent::getProgramPoint(bool IsPreVisit,
   }
 
   const Decl *D = getDecl();
-  assert(D && "Cannot get a program point without a statement or decl");  
+  assert(D && "Cannot get a program point without a statement or decl");
 
   SourceLocation Loc = getSourceRange().getBegin();
   if (IsPreVisit)
@@ -265,7 +266,7 @@ QualType CallEvent::getDeclaredResultType(const Decl *D) {
 
     return QualType();
   }
-  
+
   llvm_unreachable("unknown callable kind");
 }
 
@@ -336,7 +337,7 @@ bool AnyFunctionCall::argumentsMayEscape() const {
   if (!II)
     return false;
 
-  // This set of "escaping" APIs is 
+  // This set of "escaping" APIs is
 
   // - 'int pthread_setspecific(ptheread_key k, const void *)' stores a
   //   value into thread local storage. The value can later be retrieved with
@@ -402,8 +403,28 @@ const FunctionDecl *CXXInstanceCall::getDecl() const {
   return getSVal(CE->getCallee()).getAsFunctionDecl();
 }
 
-void CXXInstanceCall::getExtraInvalidatedValues(ValueList &Values) const {
-  Values.push_back(getCXXThisVal());
+void CXXInstanceCall::getExtraInvalidatedValues(ValueList &Values,
+                        RegionAndSymbolInvalidationTraits *ETraits) const {
+  SVal ThisVal = getCXXThisVal();
+  Values.push_back(ThisVal);
+
+  // Don't invalidate if the method is const and there are no mutable fields.
+  if (const CXXMethodDecl *D = cast_or_null<CXXMethodDecl>(getDecl())) {
+    if (!D->isConst())
+      return;
+    // Get the record decl for the class of 'This'. D->getParent() may return a
+    // base class decl, rather than the class of the instance which needs to be
+    // checked for mutable fields.
+    const Expr *Ex = getCXXThisExpr()->ignoreParenBaseCasts();
+    const CXXRecordDecl *ParentRecord = Ex->getType()->getAsCXXRecordDecl();
+    if (!ParentRecord || ParentRecord->hasMutableFields())
+      return;
+    // Preserve CXXThis.
+    const MemRegion *ThisRegion = ThisVal.getAsRegion();
+    assert(ThisRegion && "ThisValue was not a memory region");
+    ETraits->setTrait(ThisRegion->getBaseRegion(),
+      RegionAndSymbolInvalidationTraits::TK_PreserveContents);
+  }
 }
 
 SVal CXXInstanceCall::getCXXThisVal() const {
@@ -435,7 +456,7 @@ RuntimeDefinition CXXInstanceCall::getRuntimeDefinition() const {
     return RuntimeDefinition();
 
   // Do we know anything about the type of 'this'?
-  DynamicTypeInfo DynType = getState()->getDynamicTypeInfo(R);
+  DynamicTypeInfo DynType = getDynamicTypeInfo(getState(), R);
   if (!DynType.isValid())
     return RuntimeDefinition();
 
@@ -455,7 +476,7 @@ RuntimeDefinition CXXInstanceCall::getRuntimeDefinition() const {
     // However, we should at least be able to search up and down our own class
     // hierarchy, and some real bugs have been caught by checking this.
     assert(!RD->isDerivedFrom(MD->getParent()) && "Couldn't find known method");
-    
+
     // FIXME: This is checking that our DynamicTypeInfo is at least as good as
     // the static type. However, because we currently don't update
     // DynamicTypeInfo when an object is cast, we can't actually be sure the
@@ -525,7 +546,7 @@ RuntimeDefinition CXXMemberCall::getRuntimeDefinition() const {
   if (const MemberExpr *ME = dyn_cast<MemberExpr>(getOriginExpr()->getCallee()))
     if (ME->hasQualifier())
       return AnyFunctionCall::getRuntimeDefinition();
-  
+
   return CXXInstanceCall::getRuntimeDefinition();
 }
 
@@ -549,7 +570,8 @@ ArrayRef<ParmVarDecl*> BlockCall::parameters() const {
   return D->parameters();
 }
 
-void BlockCall::getExtraInvalidatedValues(ValueList &Values) const {
+void BlockCall::getExtraInvalidatedValues(ValueList &Values,
+                  RegionAndSymbolInvalidationTraits *ETraits) const {
   // FIXME: This also needs to invalidate captured globals.
   if (const MemRegion *R = getBlockRegion())
     Values.push_back(loc::MemRegionVal(R));
@@ -570,7 +592,8 @@ SVal CXXConstructorCall::getCXXThisVal() const {
   return UnknownVal();
 }
 
-void CXXConstructorCall::getExtraInvalidatedValues(ValueList &Values) const {
+void CXXConstructorCall::getExtraInvalidatedValues(ValueList &Values,
+                           RegionAndSymbolInvalidationTraits *ETraits) const {
   if (Data)
     Values.push_back(loc::MemRegionVal(static_cast<const MemRegion *>(Data)));
 }
@@ -612,7 +635,8 @@ ArrayRef<ParmVarDecl*> ObjCMethodCall::parameters() const {
 }
 
 void
-ObjCMethodCall::getExtraInvalidatedValues(ValueList &Values) const {
+ObjCMethodCall::getExtraInvalidatedValues(ValueList &Values,
+                  RegionAndSymbolInvalidationTraits *ETraits) const {
   Values.push_back(getReceiverSVal());
 }
 
@@ -628,7 +652,7 @@ SVal ObjCMethodCall::getReceiverSVal() const {
   // FIXME: Is this the best way to handle class receivers?
   if (!isInstanceMessage())
     return UnknownVal();
-    
+
   if (const Expr *RecE = getOriginExpr()->getInstanceReceiver())
     return getSVal(RecE);
 
@@ -709,7 +733,7 @@ ObjCMessageKind ObjCMethodCall::getMessageKind() const {
         return K;
       }
     }
-    
+
     const_cast<ObjCMethodCall *>(this)->Data
       = ObjCMessageDataTy(nullptr, 1).getOpaqueValue();
     assert(getMessageKind() == OCM_Message);
@@ -730,7 +754,7 @@ bool ObjCMethodCall::canBeOverridenInSubclass(ObjCInterfaceDecl *IDecl,
     getState()->getStateManager().getContext().getSourceManager();
 
   // If the class interface is declared inside the main file, assume it is not
-  // subcassed. 
+  // subcassed.
   // TODO: It could actually be subclassed if the subclass is private as well.
   // This is probably very rare.
   SourceLocation InterfLoc = IDecl->getEndOfDefinitionLoc();
@@ -800,7 +824,7 @@ RuntimeDefinition ObjCMethodCall::getRuntimeDefinition() const {
       if (!Receiver)
         return RuntimeDefinition();
 
-      DynamicTypeInfo DTI = getState()->getDynamicTypeInfo(Receiver);
+      DynamicTypeInfo DTI = getDynamicTypeInfo(getState(), Receiver);
       QualType DynType = DTI.getType();
       CanBeSubClassed = DTI.canBeASubClass();
       ReceiverT = dyn_cast<ObjCObjectPointerType>(DynType);

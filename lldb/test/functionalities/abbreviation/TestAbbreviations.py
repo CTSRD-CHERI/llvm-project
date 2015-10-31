@@ -2,8 +2,11 @@
 Test some lldb command abbreviations and aliases for proper resolution.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb
 from lldbtest import *
 import lldbutil
@@ -12,7 +15,8 @@ class AbbreviationsTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @expectedFailureFreeBSD("llvm.org/pr22611 thread race condition breaks prompt setting")
+    @expectedFlakeyFreeBSD("llvm.org/pr22611 thread race condition breaks prompt setting")
+    @no_debug_info_test
     def test_command_abbreviations_and_aliases (self):
         command_interpreter = self.dbg.GetCommandInterpreter()
         self.assertTrue(command_interpreter, VALID_COMMAND_INTERPRETER)
@@ -77,9 +81,9 @@ class AbbreviationsTestCase(TestBase):
         self.assertFalse(result.Succeeded())
 
         # Check a command that wants the raw input.
-        command_interpreter.ResolveCommand(r'''sc print "\n\n\tHello!\n"''', result)
+        command_interpreter.ResolveCommand(r'''sc print("\n\n\tHello!\n")''', result)
         self.assertTrue(result.Succeeded())
-        self.assertEqual(r'''script print "\n\n\tHello!\n"''', result.GetOutput())
+        self.assertEqual(r'''script print("\n\n\tHello!\n")''', result.GetOutput())
 
         # Prompt changing stuff should be tested, but this doesn't seem like the
         # right test to do it in.  It has nothing to do with aliases or abbreviations.
@@ -95,11 +99,3 @@ class AbbreviationsTestCase(TestBase):
         #self.runCmd("se cl prompt")
         #self.expect("set sh prompt",
         #            startstr = 'prompt (string) = "(lldb) "')
-
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()
-

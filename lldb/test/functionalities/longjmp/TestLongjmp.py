@@ -2,8 +2,11 @@
 Test the use of setjmp/longjmp for non-local goto operations in a single-threaded inferior.
 """
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os
-import unittest2
 import lldb
 import lldbutil
 from lldbtest import *
@@ -18,25 +21,28 @@ class LongjmpTestCase(TestBase):
     @skipIfDarwin # llvm.org/pr16769: LLDB on Mac OS X dies in function ReadRegisterBytes in GDBRemoteRegisterContext.cpp
     @skipIfFreeBSD # llvm.org/pr17214
     @expectedFailureLinux("llvm.org/pr20231")
+    @expectedFailureWindows("llvm.org/pr24778")
     def test_step_out(self):
         """Test stepping when the inferior calls setjmp/longjmp, in particular, thread step-out."""
-        self.buildDefault()
+        self.build()
         self.step_out()
 
     @skipIfDarwin # llvm.org/pr16769: LLDB on Mac OS X dies in function ReadRegisterBytes in GDBRemoteRegisterContext.cpp
     @skipIfFreeBSD # llvm.org/pr17214
     @expectedFailureLinux("llvm.org/pr20231")
+    @expectedFailureWindows("llvm.org/pr24778")
     def test_step_over(self):
         """Test stepping when the inferior calls setjmp/longjmp, in particular, thread step-over a longjmp."""
-        self.buildDefault()
+        self.build()
         self.step_over()
 
     @skipIfDarwin # llvm.org/pr16769: LLDB on Mac OS X dies in function ReadRegisterBytes in GDBRemoteRegisterContext.cpp
     @skipIfFreeBSD # llvm.org/pr17214
     @expectedFailureLinux("llvm.org/pr20231")
+    @expectedFailureWindows("llvm.org/pr24778")
     def test_step_back_out(self):
         """Test stepping when the inferior calls setjmp/longjmp, in particular, thread step-out after thread step-in."""
-        self.buildDefault()
+        self.build()
         self.step_back_out()
 
     def start_test(self, symbol):
@@ -47,7 +53,7 @@ class LongjmpTestCase(TestBase):
         # Break in main().
         lldbutil.run_break_set_by_symbol (self, symbol, num_expected_locations=-1)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
 
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
@@ -61,25 +67,19 @@ class LongjmpTestCase(TestBase):
 
     def step_out(self):
         self.start_test("do_jump")
-        self.runCmd("thread step-out", RUN_FAILED)
+        self.runCmd("thread step-out", RUN_SUCCEEDED)
         self.check_status()
 
     def step_over(self):
         self.start_test("do_jump")
-        self.runCmd("thread step-over", RUN_FAILED)
-        self.runCmd("thread step-over", RUN_FAILED)
+        self.runCmd("thread step-over", RUN_SUCCEEDED)
+        self.runCmd("thread step-over", RUN_SUCCEEDED)
         self.check_status()
 
     def step_back_out(self):
         self.start_test("main")
         
-        self.runCmd("thread step-over", RUN_FAILED)
-        self.runCmd("thread step-in", RUN_FAILED)
-        self.runCmd("thread step-out", RUN_FAILED)
+        self.runCmd("thread step-over", RUN_SUCCEEDED)
+        self.runCmd("thread step-in", RUN_SUCCEEDED)
+        self.runCmd("thread step-out", RUN_SUCCEEDED)
         self.check_status()
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

@@ -1,7 +1,10 @@
 """Test that lldb functions correctly after the inferior has asserted."""
 
+from __future__ import print_function
+
+import lldb_shared
+
 import os, time
-import unittest2
 import lldb, lldbutil, lldbplatformutil
 from lldbtest import *
 
@@ -9,83 +12,57 @@ class AssertingInferiorTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipUnlessDarwin
-    @unittest2.expectedFailure("rdar://15367233")
-    def test_inferior_asserting_dsym(self):
-        """Test that lldb reliably catches the inferior asserting (command)."""
-        self.buildDsym()
-        self.inferior_asserting()
-
     @expectedFailurei386("llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly")
-    @expectedFailureDarwin("rdar://15367233")
     @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
-    def test_inferior_asserting_dwarf(self):
+    def test_inferior_asserting(self):
         """Test that lldb reliably catches the inferior asserting (command)."""
-        self.buildDwarf()
+        self.build()
         self.inferior_asserting()
 
-    @skipUnlessDarwin
-    def test_inferior_asserting_registers_dsym(self):
-        """Test that lldb reliably reads registers from the inferior after asserting (command)."""
-        self.buildDsym()
-        self.inferior_asserting_registers()
-
     @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
-    def test_inferior_asserting_register_dwarf(self):
+    @expectedFailureAndroid(api_levels=range(16 + 1)) # b.android.com/179836
+    def test_inferior_asserting_register(self):
         """Test that lldb reliably reads registers from the inferior after asserting (command)."""
-        self.buildDwarf()
+        self.build()
         self.inferior_asserting_registers()
 
     @expectedFailurei386("llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly")
-    @expectedFailureFreeBSD('llvm.org/pr18533 - PC in __assert frame is outside of function')
     @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
     def test_inferior_asserting_disassemble(self):
         """Test that lldb reliably disassembles frames after asserting (command)."""
-        self.buildDefault()
+        self.build()
         self.inferior_asserting_disassemble()
 
-    @python_api_test
+    @add_test_categories(['pyapi'])
     @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
     def test_inferior_asserting_python(self):
         """Test that lldb reliably catches the inferior asserting (Python API)."""
-        self.buildDefault()
+        self.build()
         self.inferior_asserting_python()
 
-    @skipUnlessDarwin
-    @unittest2.expectedFailure("rdar://15367233")
-    def test_inferior_asserting_expr_dsym(self):
-        """Test that the lldb expression interpreter can read from the inferior after asserting (command)."""
-        self.buildDsym()
-        self.inferior_asserting_expr()
-
     @expectedFailurei386('llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly')
-    @unittest2.expectedFailure("rdar://15367233")
     @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
-    def test_inferior_asserting_expr_dwarf(self):
+    def test_inferior_asserting_expr(self):
         """Test that the lldb expression interpreter can read from the inferior after asserting (command)."""
-        self.buildDwarf()
+        self.build()
         self.inferior_asserting_expr()
-
-    @skipUnlessDarwin
-    @unittest2.expectedFailure("rdar://15367233")
-    def test_inferior_asserting_step_dsym(self):
-        """Test that lldb functions correctly after stepping through a call to assert()."""
-        self.buildDsym()
-        self.inferior_asserting_step()
 
     @expectedFailurei386("llvm.org/pr17384: lldb needs to be aware of linux-vdso.so to unwind stacks properly")
-    @expectedFailureDarwin("rdar://15367233")
     @expectedFailureWindows("llvm.org/pr21793: need to implement support for detecting assertion / abort on Windows")
-    def test_inferior_asserting_step_dwarf(self):
+    def test_inferior_asserting_step(self):
         """Test that lldb functions correctly after stepping through a call to assert()."""
-        self.buildDwarf()
+        self.build()
         self.inferior_asserting_step()
 
     def set_breakpoint(self, line):
         lldbutil.run_break_set_by_file_and_line (self, "main.c", line, num_expected_locations=1, loc_exact=True)
 
     def check_stop_reason(self):
-        stop_reason = 'stop reason = signal SIGABRT'
+        if matchAndroid(api_levels=range(1, 16+1))(self):
+            # On android until API-16 the abort() call ended in a sigsegv instead of in a sigabrt
+            stop_reason = 'stop reason = signal SIGSEGV'
+        else:
+            stop_reason = 'stop reason = signal SIGABRT'
 
         # The stop reason of the thread should be an abort signal or exception.
         self.expect("thread list", STOPPED_DUE_TO_ASSERT,
@@ -105,7 +82,7 @@ class AssertingInferiorTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         stop_reason = self.check_stop_reason()
 
         # And it should report a backtrace that includes the assert site.
@@ -145,7 +122,7 @@ class AssertingInferiorTestCase(TestBase):
         exe = os.path.join(os.getcwd(), "a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
-        self.runCmd("run", RUN_FAILED)
+        self.runCmd("run", RUN_SUCCEEDED)
         self.check_stop_reason()
 
         # lldb should be able to read from registers from the inferior after asserting.
@@ -173,7 +150,7 @@ class AssertingInferiorTestCase(TestBase):
         for frame in thread:
             self.assertTrue(frame.IsValid(), "current frame is valid")
 
-            self.runCmd("frame select " + str(frame.GetFrameID()), RUN_FAILED)
+            self.runCmd("frame select " + str(frame.GetFrameID()), RUN_SUCCEEDED)
 
             # Don't expect the function name to be in the disassembly as the assert
             # function might be a no-return function where the PC is past the end
@@ -192,11 +169,11 @@ class AssertingInferiorTestCase(TestBase):
             frame = thread.GetFrameAtIndex(i)
             self.assertTrue(frame.IsValid(), "current frame is valid")
             if self.TraceOn():
-                print "Checking if function %s is main" % frame.GetFunctionName()
+                print("Checking if function %s is main" % frame.GetFunctionName())
 
             if 'main' == frame.GetFunctionName():
                 frame_id = frame.GetFrameID()
-                self.runCmd("frame select " + str(frame_id), RUN_FAILED)
+                self.runCmd("frame select " + str(frame_id), RUN_SUCCEEDED)
                 self.expect("p argc", substrs = ['(int)', ' = 1'])
                 self.expect("p hello_world", substrs = ['Hello'])
                 self.expect("p argv[0]", substrs = ['a.out'])
@@ -263,9 +240,3 @@ class AssertingInferiorTestCase(TestBase):
         self.expect("thread backtrace all",
             substrs = [stop_reason,
                        'main.c:%d' % self.line])
-
-if __name__ == '__main__':
-    import atexit
-    lldb.SBDebugger.Initialize()
-    atexit.register(lambda: lldb.SBDebugger.Terminate())
-    unittest2.main()

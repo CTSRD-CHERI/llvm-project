@@ -2,40 +2,6 @@
 # library is enabled by setting LLVM_BUILD_LLVM_DYLIB=yes on the CMake
 # commandline. By default the shared library only exports the LLVM C API.
 
-
-# You can configure which libraries from LLVM you want to include in the shared
-# library by setting LLVM_DYLIB_COMPONENTS to a semi-colon delimited list of
-# LLVM components. All compoenent names handled by llvm-config are valid.
-
-if(NOT DEFINED LLVM_DYLIB_COMPONENTS)
-  set(LLVM_DYLIB_COMPONENTS
-    ${LLVM_TARGETS_TO_BUILD}
-    Analysis
-    BitReader
-    BitWriter
-    CodeGen
-    Core
-    ExecutionEngine
-    IPA
-    IPO
-    IRReader
-    InstCombine
-    Instrumentation
-    Interpreter
-    Linker
-    MCDisassembler
-    MCJIT
-    ObjCARCOpts
-    Object
-    ScalarOpts
-    Support
-    Target
-    TransformUtils
-    Vectorize
-    native
-    )
-endif()
-
 add_definitions( -DLLVM_VERSION_INFO=\"${PACKAGE_VERSION}\" )
 
 set(SOURCES
@@ -44,18 +10,40 @@ set(SOURCES
 
 llvm_map_components_to_libnames(LIB_NAMES ${LLVM_DYLIB_COMPONENTS})
 
-if(NOT DEFINED LLVM_DYLIB_EXPORTED_SYMBOL_FILE)
-
-  if( WIN32 AND NOT CYGWIN )
-    message(FATAL_ERROR "Auto-generation not implemented for Win32 without GNU utils. Please specify LLVM_EXPORTED_SYMBOL_FILE.")
+if(LLVM_LINK_LLVM_DYLIB)
+  if(NOT LLVM_DYLIB_EXPORT_ALL)
+    message(FATAL_ERROR "LLVM_DYLIB_EXPORT_ALL must be ON when LLVM_LINK_LLVM_DYLIB is ON")
   endif()
 
+  # libLLVM.so should not have any dependencies on any other LLVM
+  # shared libraries. When using the "all" pseudo-component,
+  # LLVM_AVAILABLE_LIBS is added to the dependencies, which may
+  # contain shared libraries (e.g. libLTO).
+  #
+  # Also exclude libLLVMTableGen for the following reasons:
+  #  - it is only used by internal *-tblgen utilities;
+  #  - it pollutes the global options space.
+  foreach(lib ${LIB_NAMES})
+    get_target_property(t ${lib} TYPE)
+    if("${lib}" STREQUAL "LLVMTableGen")
+    elseif("x${t}" STREQUAL "xSTATIC_LIBRARY")
+      list(APPEND FILTERED_LIB_NAMES ${lib})
+    endif()
+  endforeach()
+  set(LIB_NAMES ${FILTERED_LIB_NAMES})
+endif()
+
+if(NOT DEFINED LLVM_DYLIB_EXPORTED_SYMBOL_FILE)
   # To get the export list for a single llvm library:
   # nm ${LIB_PATH} | awk "/T _LLVM/ { print $3 }" | sort -u | sed -e "s/^_//g" > ${LIB_PATH}.exports
 
-  set(LLVM_EXPORTED_SYMBOL_FILE ${CMAKE_BINARY_DIR}/libllvm.exports)
-
   if (NOT LLVM_DYLIB_EXPORT_ALL)
+    if( WIN32 AND NOT CYGWIN )
+      message(FATAL_ERROR "Auto-generation not implemented for Win32 without GNU utils. Please specify LLVM_EXPORTED_SYMBOL_FILE.")
+    endif()
+
+    set(LLVM_EXPORTED_SYMBOL_FILE ${CMAKE_BINARY_DIR}/libllvm.exports)
+
     foreach (lib ${LIB_NAMES})
       set(LIB_DIR ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/lib${LLVM_LIBDIR_SUFFIX})
       set(LIB_NAME ${LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${lib})
@@ -71,29 +59,20 @@ if(NOT DEFINED LLVM_DYLIB_EXPORTED_SYMBOL_FILE)
         COMMENT "Generating Export list for ${lib}..."
         VERBATIM )
     endforeach ()
-  endif()
 
-  if (LLVM_DYLIB_EXPORT_ALL)
-    add_custom_command(OUTPUT ${LLVM_EXPORTED_SYMBOL_FILE}
-      COMMAND echo \"LLVM*\" > ${LLVM_EXPORTED_SYMBOL_FILE} && echo \"_Z*llvm*\" >> ${LLVM_EXPORTED_SYMBOL_FILE}
-      WORKING_DIRECTORY ${LIB_DIR}
-      DEPENDS ${LLVM_DYLIB_REQUIRED_EXPORTS}
-      COMMENT "Generating combined export list...")
-  else()
     add_custom_command(OUTPUT ${LLVM_EXPORTED_SYMBOL_FILE}
       COMMAND cat ${LLVM_DYLIB_REQUIRED_EXPORTS} > ${LLVM_EXPORTED_SYMBOL_FILE}
       WORKING_DIRECTORY ${LIB_DIR}
       DEPENDS ${LLVM_DYLIB_REQUIRED_EXPORTS}
       COMMENT "Generating combined export list...")
+    add_custom_target(libLLVMExports DEPENDS ${LLVM_EXPORTED_SYMBOL_FILE})
   endif()
-
-  add_custom_target(libLLVMExports DEPENDS ${LLVM_EXPORTED_SYMBOL_FILE})
 else()
   set(LLVM_EXPORTED_SYMBOL_FILE ${LLVM_DYLIB_EXPORTED_SYMBOL_FILE})
   add_custom_target(libLLVMExports DEPENDS ${LLVM_EXPORTED_SYMBOL_FILE})
 endif()
 
-add_llvm_library(LLVM SHARED ${SOURCES})
+add_llvm_library(LLVM SHARED DISABLE_LLVM_LINK_LLVM_DYLIB ${SOURCES})
 
 list(REMOVE_DUPLICATES LIB_NAMES)
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux") # FIXME: It should be "GNU ld for elf"
@@ -105,11 +84,13 @@ endif()
 
 target_link_libraries(LLVM PRIVATE ${LIB_NAMES})
 
-add_dependencies(LLVM libLLVMExports)
+if(TARGET libLLVMExports)
+  add_dependencies(LLVM libLLVMExports)
+endif()
 
 if (APPLE)
   set_property(TARGET LLVM APPEND_STRING PROPERTY
               LINK_FLAGS
-              " -compatibility_version ${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR} -current_version ${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}")
+              " -compatibility_version 1 -current_version ${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}.${LLVM_VERSION_PATCH}")
 endif()
 
