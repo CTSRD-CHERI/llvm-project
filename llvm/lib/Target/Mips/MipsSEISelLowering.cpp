@@ -1249,7 +1249,6 @@ SDValue MipsSETargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   // Replace a double precision load with two i32 loads and a buildpair64.
   SDLoc DL(Op);
   SDValue Ptr = Nd.getBasePtr(), Chain = Nd.getChain();
-  EVT PtrVT = Ptr.getValueType();
 
   // i32 load from lower address.
   SDValue Lo = DAG.getLoad(MVT::i32, DL, Chain, Ptr,
@@ -1258,7 +1257,7 @@ SDValue MipsSETargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
                            Nd.getAlignment());
 
   // i32 load from higher address.
-  Ptr = DAG.getNode(ISD::ADD, DL, PtrVT, Ptr, DAG.getConstant(4, DL, PtrVT));
+  Ptr = DAG.getPointerAdd(DL, Ptr, 4);
   SDValue Hi = DAG.getLoad(MVT::i32, DL, Lo.getValue(1), Ptr,
                            MachinePointerInfo(), Nd.isVolatile(),
                            Nd.isNonTemporal(), Nd.isInvariant(),
@@ -1281,7 +1280,6 @@ SDValue MipsSETargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
   // Replace a double precision store with two extractelement64s and i32 stores.
   SDLoc DL(Op);
   SDValue Val = Nd.getValue(), Ptr = Nd.getBasePtr(), Chain = Nd.getChain();
-  EVT PtrVT = Ptr.getValueType();
   SDValue Lo = DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32,
                            Val, DAG.getConstant(0, DL, MVT::i32));
   SDValue Hi = DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32,
@@ -1296,7 +1294,7 @@ SDValue MipsSETargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
                        Nd.getAAInfo());
 
   // i32 store to higher address.
-  Ptr = DAG.getNode(ISD::ADD, DL, PtrVT, Ptr, DAG.getConstant(4, DL, PtrVT));
+  Ptr = DAG.getPointerAdd(DL, Ptr, 4);
   return DAG.getStore(Chain, DL, Hi, Ptr, MachinePointerInfo(),
                       Nd.isVolatile(), Nd.isNonTemporal(),
                       std::min(Nd.getAlignment(), 4U), Nd.getAAInfo());

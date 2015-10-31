@@ -4132,8 +4132,7 @@ void MipsTargetLowering::copyByValRegs(
     unsigned ArgReg = ByValArgRegs[FirstReg + I];
     unsigned VReg = addLiveIn(MF, ArgReg, RC);
     unsigned Offset = I * GPRSizeInBytes;
-    SDValue StorePtr = DAG.getNode(ISD::ADD, DL, PtrTy, FIN,
-                                   DAG.getConstant(Offset, DL, PtrTy));
+    SDValue StorePtr = DAG.getPointerAdd(DL, FIN, Offset);
     SDValue Store = DAG.getStore(Chain, DL, DAG.getRegister(VReg, RegTy),
                                  StorePtr, MachinePointerInfo(FuncArg, Offset),
                                  false, false, 0);
@@ -4164,8 +4163,7 @@ void MipsTargetLowering::passByValArg(
 
     // Copy words to registers.
     for (; I < NumRegs - LeftoverBytes; ++I, OffsetInBytes += RegSizeInBytes) {
-      SDValue LoadPtr = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
-                                    DAG.getConstant(OffsetInBytes, DL, PtrTy));
+      SDValue LoadPtr = DAG.getPointerAdd(DL, Arg, OffsetInBytes);
       SDValue LoadVal = DAG.getLoad(RegTy, DL, Chain, LoadPtr,
                                     MachinePointerInfo(), false, false, false,
                                     Alignment);
@@ -4228,10 +4226,8 @@ void MipsTargetLowering::passByValArg(
 
   // Copy remainder of byval arg to it with memcpy.
   unsigned MemCpySize = ByValSizeInBytes - OffsetInBytes;
-  SDValue Src = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
-                            DAG.getConstant(OffsetInBytes, DL, PtrTy));
-  SDValue Dst = DAG.getNode(ISD::ADD, DL, PtrTy, StackPtr,
-                            DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
+  SDValue Src = DAG.getPointerAdd(DL, Arg, OffsetInBytes);
+  SDValue Dst = DAG.getPointerAdd(DL, StackPtr, VA.getLocMemOffset());
   Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
                         DAG.getConstant(MemCpySize, DL, PtrTy),
                         Alignment, /*isVolatile=*/false, /*AlwaysInline=*/false,
