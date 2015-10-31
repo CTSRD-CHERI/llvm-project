@@ -485,6 +485,8 @@ bool FastISel::selectGetElementPtr(const User *I) {
   unsigned N = getRegForValue(I->getOperand(0));
   if (!N) // Unhandled operand. Halt "fast" selection and bail.
     return false;
+  if (I->getOperand(0)->getType()->getPointerAddressSpace() != 0)
+    return false;
   bool NIsKill = hasTrivialKill(I->getOperand(0));
 
   // Keep a running tab of the total offset to coalesce multiple N = N + Offset
