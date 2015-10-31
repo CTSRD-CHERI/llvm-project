@@ -6187,9 +6187,10 @@ Address MipsABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   auto TyInfo = getContext().getTypeInfoInChars(Ty);
 
   // The alignment of things in the argument area is never larger than
-  // StackAlignInBytes.
-  TyInfo.second =
-    std::min(TyInfo.second, CharUnits::fromQuantity(StackAlignInBytes));
+  // StackAlignInBytes for O32.
+  if (IsO32)
+    TyInfo.second =
+      std::min(TyInfo.second, CharUnits::fromQuantity(StackAlignInBytes));
 
   // MinABIStackAlignInBytes is the size of argument slots on the stack.
   CharUnits ArgSlotSize = CharUnits::fromQuantity(MinABIStackAlignInBytes);
