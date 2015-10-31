@@ -280,7 +280,7 @@ static llvm::Value *EmitOverflowIntrinsic(CodeGenFunction &CGF,
 }
 
 Value *CodeGenFunction::EmitVAStartEnd(Value *ArgValue, bool IsStart) {
-  llvm::Type *DestType = Int8PtrTy;
+  llvm::Type *DestType = llvm::PointerType::get(Int8Ty, 0);
   if (ArgValue->getType() != DestType)
     ArgValue = Builder.CreatePointerBitCastOrAddrSpaceCast(ArgValue, DestType,
                                          ArgValue->getName().data());
