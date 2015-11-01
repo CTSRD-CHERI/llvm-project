@@ -14,6 +14,7 @@ int main(int argc, char *argv[]) {
   }
   auto OF = ObjectFile::createObjectFile(argv[1]);
   std::unordered_map<uint64_t, std::pair<uint64_t,bool>> SymbolSizes;
+  std::vector<std::tuple<uint64_t, uint64_t, bool>> Sections;
   // ObjectFile doesn't allow in-place modification, so we open the file again
   // and write it out.
   FILE *F = fopen(argv[1], "r+");
@@ -31,12 +32,12 @@ int main(int argc, char *argv[]) {
   StringRef Data;
   for (const SectionRef &Sec : OF->getBinary()->sections()) {
     StringRef Name;
-    if (Sec.getName(Name))
-      continue;
-    if (Name == "__cap_relocs") {
-      Sec.getContents(Data);
-      break;
-    }
+    if (!Sec.getName(Name))
+      if (Name == "__cap_relocs") {
+        Sec.getContents(Data);
+        continue;
+      }
+    Sections.push_back({Sec.getAddress(), Sec.getSize(), Sec.isText()});
   }
   const size_t entry_size = 40;
   MemoryBufferRef MB = OF->getBinary()->getMemoryBufferRef();
@@ -49,15 +50,28 @@ int main(int argc, char *argv[]) {
       return EXIT_FAILURE;
     }
     auto SizeAndType = SymbolSizes.find(base);
+    uint64_t Size = 0;
+    bool isFunction;
     if (SizeAndType == SymbolSizes.end()) {
       fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n",
               (unsigned long long)base,
               static_cast<unsigned long long>(
                   support::endian::read<uint64_t, support::big, 1>(entry)));
-      continue;
+      for (auto &Sec : Sections) {
+        if (std::get<0>(Sec) < base &&
+            (std::get<0>(Sec) + std::get<1>(Sec)) > base) {
+          Size = std::get<1>(Sec);
+          isFunction = std::get<2>(Sec);
+          fprintf(stderr, "Using section size (%llu bytes) instead\n",
+              static_cast<unsigned long long>(Size));
+        }
+      }
+      if (Size == 0)
+        continue;
+    } else {
+      Size = SizeAndType->second.first;
+      isFunction = SizeAndType->second.second;
     }
-    uint64_t Size = SizeAndType->second.first;
-    bool isFunction = SizeAndType->second.second;
     uint64_t Perms = 0;
     if (isFunction)
         Perms |= (1ULL<<63);
