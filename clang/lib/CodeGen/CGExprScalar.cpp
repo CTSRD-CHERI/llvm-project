@@ -2037,7 +2037,14 @@ Value *ScalarExprEmitter::VisitUnaryMinus(const UnaryOperator *E) {
 Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
   TestAndClearIgnoreResultAssign();
   Value *Op = Visit(E->getSubExpr());
-  return Builder.CreateNot(Op, "neg");
+  Value *Base = Op;
+  bool IsIntCap = E->getType().isCapabilityType(CGF.getContext());
+  if (IsIntCap)
+    Op = CGF.getPointerOffset(Op);
+  Op = Builder.CreateNot(Op, "neg");
+  if (IsIntCap)
+    Op = CGF.setPointerOffset(Base, Op);
+  return Op;
 }
 
 Value *ScalarExprEmitter::VisitUnaryLNot(const UnaryOperator *E) {
