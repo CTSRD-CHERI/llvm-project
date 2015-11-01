@@ -2693,18 +2693,20 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
   // Create a reference to the named value.  This ensures that it is emitted
   // if a deferred decl.
   llvm::Constant *Aliasee;
+  unsigned AS = 0;
   if (isa<llvm::FunctionType>(DeclTy))
     Aliasee = GetOrCreateLLVMFunction(AA->getAliasee(), DeclTy, GD,
                                       /*ForVTable=*/false);
-  else
+  else {
+    AS = getContext().getDefaultAS();
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
-                                    llvm::PointerType::get(DeclTy,
-                                      getContext().getDefaultAS()),
+                                    llvm::PointerType::get(DeclTy, AS),
                                     /*D=*/nullptr);
+  }
 
   // Create the new alias itself, but don't set a name yet.
   auto *GA = llvm::GlobalAlias::create(
-      DeclTy, 0, llvm::Function::ExternalLinkage, "", Aliasee, &getModule());
+      DeclTy, AS, llvm::Function::ExternalLinkage, "", Aliasee, &getModule());
 
   if (Entry) {
     if (GA->getAliasee() == Entry) {
