@@ -8806,9 +8806,15 @@ bool Expr::EvaluateAsInt(APSInt &Result, const ASTContext &Ctx,
     return false;
 
   EvalResult ExprResult;
-  if (!EvaluateAsRValue(ExprResult, Ctx) || !ExprResult.Val.isInt() ||
-      (!AllowSideEffects && ExprResult.HasSideEffects))
+  bool DidEvaluate = EvaluateAsRValue(ExprResult, Ctx);
+  if (!DidEvaluate || !ExprResult.Val.isInt() ||
+      (!AllowSideEffects && ExprResult.HasSideEffects)) {
+    // For intcap_t, pass through the result even if it isn't actually an
+    // int.
+    if (getType().isCapabilityType(const_cast<ASTContext&>(Ctx)))
+      return DidEvaluate;
     return false;
+  }
 
   Result = ExprResult.Val.getInt();
   return true;
