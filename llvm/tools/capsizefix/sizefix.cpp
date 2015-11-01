@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
   auto OF = ObjectFile::createObjectFile(argv[1]);
-  std::unordered_map<uint64_t, std::pair<uint64_t,bool>> SectionSizes;
+  std::unordered_map<uint64_t, std::pair<uint64_t,bool>> SymbolSizes;
   // ObjectFile doesn't allow in-place modification, so we open the file again
   // and write it out.
   FILE *F = fopen(argv[1], "r+");
@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
     if (!Start)
       continue;
     SymbolRef::Type type = sym.getType();
-    SectionSizes.insert({Start.get(), {Size, (type == SymbolRef::ST_Function)}});
+    SymbolSizes.insert({Start.get(), {Size, (type == SymbolRef::ST_Function)}});
   }
   StringRef Data;
   for (const SectionRef &Sec : OF->getBinary()->sections()) {
@@ -48,8 +48,8 @@ int main(int argc, char *argv[]) {
               "Unexpected location for capability relocations section!\n");
       return EXIT_FAILURE;
     }
-    auto SizeAndType = SectionSizes.find(base);
-    if (SizeAndType == SectionSizes.end()) {
+    auto SizeAndType = SymbolSizes.find(base);
+    if (SizeAndType == SymbolSizes.end()) {
       fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n",
               (unsigned long long)base,
               static_cast<unsigned long long>(
