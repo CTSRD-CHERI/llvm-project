@@ -8811,8 +8811,16 @@ bool Expr::EvaluateAsInt(APSInt &Result, const ASTContext &Ctx,
       (!AllowSideEffects && ExprResult.HasSideEffects)) {
     // For intcap_t, pass through the result even if it isn't actually an
     // int.
-    if (getType().isCapabilityType(const_cast<ASTContext&>(Ctx)))
-      return DidEvaluate;
+    if (DidEvaluate &&
+        getType().isCapabilityType(const_cast<ASTContext&>(Ctx)))
+      if (ExprResult.Val.isLValue() &&
+          ExprResult.Val.getLValueBase().isNull()) {
+        // FIXME: Ugly hack!
+        APSInt Val(64);
+        Val = ExprResult.Val.getLValueOffset().getQuantity();
+        Result = Val;
+        return true;
+      }
     return false;
   }
 
