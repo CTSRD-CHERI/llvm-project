@@ -2033,11 +2033,15 @@ Value *ScalarExprEmitter::VisitUnaryMinus(const UnaryOperator *E) {
     BinOp.LHS = llvm::ConstantFP::getZeroValueForNegation(BinOp.RHS->getType());
   else
     BinOp.LHS = llvm::Constant::getNullValue(BinOp.RHS->getType());
+  Value *base = BinOp.LHS;
   BinOp.Ty = E->getType();
   BinOp.Opcode = BO_Sub;
   BinOp.FPContractable = false;
   BinOp.E = E;
-  return EmitSub(BinOp);
+  BinOp.LHS = GetBinOpVal(BinOp, BinOp.LHS);
+  BinOp.RHS = GetBinOpVal(BinOp, BinOp.RHS);
+  Value *result = EmitSub(BinOp);
+  return GetBinOpResult(BinOp, base, result);
 }
 
 Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
