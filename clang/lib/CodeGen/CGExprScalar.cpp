@@ -475,19 +475,25 @@ public:
   // Check for undefined division and modulus behaviors.
   void EmitUndefinedBehaviorIntegerDivAndRemCheck(const BinOpInfo &Ops,
                                                   llvm::Value *Zero,bool isDiv);
-  Value *GetBinOpVal(const BinOpInfo &Op, Value *V) {
+  Value *GetBinOpVal(const BinOpInfo &Op, Value *V, QualType T) {
     // If this isn't a capability type, do nothing.  If it's not a pointer
     // type, also do nothing - add operations are handled differently so need
     // the second case.
-    if (!Op.E->getType().isCapabilityType(CGF.getContext()) ||
+    if (!T.isCapabilityType(CGF.getContext()) ||
         !V->getType()->isPointerTy())
       return V;
     return CGF.getPointerOffset(V);
   }
-  Value *GetBinOpResult(BinOpInfo &Op, Value *LHS, Value *V) {
-    if (!Op.E->getType().isCapabilityType(CGF.getContext()))
+  Value *GetBinOpVal(const BinOpInfo &Op, Value *V) {
+    return GetBinOpVal(Op, V, Op.E->getType());
+  }
+  Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V, QualType T) {
+    if (!T.isCapabilityType(CGF.getContext()))
       return V;
     return CGF.setPointerOffset(LHS, V);
+  }
+  Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V) {
+    return GetBinOpResult(Op, LHS, V, Op.E->getType());
   }
   // Common helper for getting how wide LHS of shift is.
   static Value *GetWidthMinusOneValue(Value* LHS,Value* RHS);
@@ -2355,10 +2361,10 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
     Result = (this->*Func)(OpInfo);
   else {
     Value *Base = OpInfo.LHS;
-    OpInfo.LHS = GetBinOpVal(OpInfo, OpInfo.LHS);
-    OpInfo.RHS = GetBinOpVal(OpInfo, OpInfo.RHS);
+    OpInfo.LHS = GetBinOpVal(OpInfo, OpInfo.LHS, E->getComputationLHSType());
+    OpInfo.RHS = GetBinOpVal(OpInfo, OpInfo.RHS, E->getComputationLHSType());
     Result = (this->*Func)(OpInfo);
-    Result = GetBinOpResult(OpInfo, Base, Result);
+    Result = GetBinOpResult(OpInfo, Base, Result, E->getComputationResultType());
   }
 
   // Convert the result back to the LHS type.
@@ -2609,10 +2615,13 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
   Expr *indexOperand = expr->getRHS();
 
   // In a subtraction, the LHS is always the pointer.
-  if (!isSubtraction && !pointer->getType()->isPointerTy()) {
+  if (!isSubtraction && !pointerOperand->getType()->isAnyPointerType()) {
     std::swap(pointer, index);
     std::swap(pointerOperand, indexOperand);
   }
+
+  if (index->getType()->isPointerTy())
+    index = CGF.getPointerOffset(index);
 
   unsigned width = cast<llvm::IntegerType>(index->getType())->getBitWidth();
   if (width != CGF.PointerWidthInBits) {
@@ -2759,8 +2768,9 @@ static Value* tryEmitFMulAdd(const BinOpInfo &op,
 }
 
 Value *ScalarExprEmitter::EmitAdd(const BinOpInfo &op) {
-  if (op.LHS->getType()->isPointerTy() ||
-      op.RHS->getType()->isPointerTy())
+  const BinaryOperator *expr = cast<BinaryOperator>(op.E);
+  if (expr->getLHS()->getType()->isAnyPointerType() ||
+      expr->getRHS()->getType()->isAnyPointerType())
     return emitPointerArithmetic(CGF, op, /*subtraction*/ false);
 
   if (op.Ty->isSignedIntegerOrEnumerationType()) {
