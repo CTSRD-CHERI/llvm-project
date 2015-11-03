@@ -2700,6 +2700,9 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
 
   // All the other cases basically behave like simple offsetting.
 
+  if (Idx->getType()->isPointerTy())
+    Idx = getPointerOffset(Idx);
+
   // Extend or truncate the index type to 32 or 64-bits.
   if (Idx->getType() != IntPtrTy)
     Idx = Builder.CreateIntCast(Idx, IntPtrTy, IdxSigned, "idxprom");
