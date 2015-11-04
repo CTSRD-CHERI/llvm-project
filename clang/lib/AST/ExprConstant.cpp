@@ -836,6 +836,15 @@ namespace {
   };
   typedef ScopeRAII<false> BlockScopeRAII;
   typedef ScopeRAII<true> FullExpressionRAII;
+  void GetIntCapLValue(APValue &Value, QualType QT, ASTContext &Ctx){
+    if (Value.isInt() && QT.isCapabilityType(Ctx)) {
+      APValue::LValueBase Base;
+      APSInt Val = Value.getInt();
+      CharUnits Size = CharUnits::fromQuantity(Val.isNegative() ?
+          Val.getSExtValue() : Val.getZExtValue());
+      Value = APValue(Base, Size, APValue::NoLValuePath(), 0);
+    }
+  }
 }
 
 bool SubobjectDesignator::checkSubobject(EvalInfo &Info, const Expr *E,
@@ -8644,11 +8653,10 @@ static bool Evaluate(APValue &Result, EvalInfo &Info, const Expr *E) {
   } else if (T->isVectorType()) {
     if (!EvaluateVector(E, Result, Info))
       return false;
-  } else if (T->isIntegralOrEnumerationType() &&
-     !T.isCapabilityType(Info.Ctx)) {
+  } else if (T->isIntegralOrEnumerationType()) {
     if (!IntExprEvaluator(Info, Result).Visit(E))
       return false;
-  } else if (T->hasPointerRepresentation() || T.isCapabilityType(Info.Ctx)) {
+  } else if (T->hasPointerRepresentation()) {
     LValue LV;
     if (!EvaluatePointer(E, LV, Info))
       return false;
@@ -8790,7 +8798,12 @@ bool Expr::EvaluateAsRValue(EvalResult &Result, const ASTContext &Ctx) const {
     return IsConst;
   
   EvalInfo Info(Ctx, Result, EvalInfo::EM_IgnoreSideEffects);
-  return ::EvaluateAsRValue(Info, this, Result.Val);
+  bool Return = ::EvaluateAsRValue(Info, this, Result.Val);
+
+  if (Return)
+    GetIntCapLValue(Result.Val, getType(), const_cast<ASTContext&>(Ctx));
+
+  return Return;
 }
 
 bool Expr::EvaluateAsBooleanCondition(bool &Result,
@@ -8876,8 +8889,11 @@ bool Expr::EvaluateAsInitializer(APValue &Value, const ASTContext &Ctx,
       EStatus.HasSideEffects)
     return false;
 
-  return CheckConstantExpression(InitInfo, VD->getLocation(), VD->getType(),
-                                 Value);
+  bool Result = CheckConstantExpression(InitInfo, VD->getLocation(),
+      VD->getType(), Value);
+  if (Result)
+    GetIntCapLValue(Value, VD->getType(), const_cast<ASTContext&>(Ctx));
+  return Result;
 }
 
 /// isEvaluatable - Call EvaluateAsRValue to see if this expression can be
