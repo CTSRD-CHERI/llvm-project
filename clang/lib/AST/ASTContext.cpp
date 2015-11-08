@@ -1746,6 +1746,8 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   }
   case Type::Pointer: {
     unsigned AS = getTargetAddressSpace(cast<PointerType>(T)->getPointeeType());
+    if (AS == 0)
+      AS = DefaultAS;
     Width = Target->getPointerWidth(AS);
     Align = Target->getPointerAlign(AS);
     break;
