@@ -6393,7 +6393,14 @@ static IntRange GetExprRange(ASTContext &C, Expr *E, unsigned MaxWidth) {
 }
 
 static IntRange GetExprRange(ASTContext &C, Expr *E) {
-  return GetExprRange(C, E, C.getIntWidth(GetExprType(E)));
+  QualType Ty = GetExprType(E);
+  if (auto BT = dyn_cast<BuiltinType>(Ty)) {
+    if (BT->getKind() == BuiltinType::IntCap)
+      Ty = C.LongTy;
+    else if (BT->getKind() == BuiltinType::UIntCap)
+      Ty = C.UnsignedLongTy;
+  }
+  return GetExprRange(C, E, C.getIntWidth(Ty));
 }
 
 /// Checks whether the given value, which currently has the given
