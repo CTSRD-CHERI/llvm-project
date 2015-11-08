@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -fsyntax-only %s -target-abi sandbox
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fsyntax-only %s
 
 typedef void(*ptr)(void);
 
