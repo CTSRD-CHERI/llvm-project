@@ -422,6 +422,8 @@ ArgType PrintfSpecifier::getArgType(ASTContext &Ctx,
         return ArgType(Ctx.LongLongTy, "__int64");
       case LengthModifier::AsIntMax:
         return ArgType(Ctx.getIntMaxType(), "intmax_t");
+      case LengthModifier::AsIntPtr:
+        return ArgType(Ctx.getIntPtrType(), "intptr_t");
       case LengthModifier::AsSizeT:
         // FIXME: How to get the corresponding signed version of size_t?
         return ArgType();
@@ -456,6 +458,8 @@ ArgType PrintfSpecifier::getArgType(ASTContext &Ctx,
         return ArgType(Ctx.UnsignedLongLongTy, "unsigned __int64");
       case LengthModifier::AsIntMax:
         return ArgType(Ctx.getUIntMaxType(), "uintmax_t");
+      case LengthModifier::AsIntPtr:
+        return ArgType(Ctx.getUIntPtrType(), "uintptr_t");
       case LengthModifier::AsSizeT:
         return ArgType(Ctx.getSizeType(), "size_t");
       case LengthModifier::AsInt3264:
@@ -493,6 +497,8 @@ ArgType PrintfSpecifier::getArgType(ASTContext &Ctx,
         return ArgType::PtrTo(Ctx.LongLongTy);
       case LengthModifier::AsIntMax:
         return ArgType::PtrTo(ArgType(Ctx.getIntMaxType(), "intmax_t"));
+      case LengthModifier::AsIntPtr:
+        return ArgType::PtrTo(ArgType(Ctx.getIntPtrType(), "intptr_t"));
       case LengthModifier::AsSizeT:
         return ArgType(); // FIXME: ssize_t
       case LengthModifier::AsPtrDiff:

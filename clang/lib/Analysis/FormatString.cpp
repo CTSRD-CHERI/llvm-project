@@ -199,6 +199,7 @@ clang::analyze_format_string::ParseLengthModifier(FormatSpecifier &FS,
                                      : LengthModifier::AsLong;
       break;
     case 'j': lmKind = LengthModifier::AsIntMax;     ++I; break;
+    case 'P': lmKind = LengthModifier::AsIntPtr;     ++I; break;
     case 'z': lmKind = LengthModifier::AsSizeT;      ++I; break;
     case 't': lmKind = LengthModifier::AsPtrDiff;    ++I; break;
     case 'L': lmKind = LengthModifier::AsLongDouble; ++I; break;
@@ -505,6 +506,8 @@ analyze_format_string::LengthModifier::toString() const {
     return "q";
   case AsIntMax:
     return "j";
+  case AsIntPtr:
+    return "P";
   case AsSizeT:
     return "z";
   case AsPtrDiff:
@@ -654,6 +657,7 @@ bool FormatSpecifier::hasValidLengthModifier(const TargetInfo &Target) const {
     case LengthModifier::AsLongLong:
     case LengthModifier::AsQuad:
     case LengthModifier::AsIntMax:
+    case LengthModifier::AsIntPtr:
     case LengthModifier::AsSizeT:
     case LengthModifier::AsPtrDiff:
       switch (CS.getKind()) {
@@ -790,6 +794,7 @@ bool FormatSpecifier::hasStandardLengthModifier() const {
     case LengthModifier::AsLong:
     case LengthModifier::AsLongLong:
     case LengthModifier::AsIntMax:
+    case LengthModifier::AsIntPtr:
     case LengthModifier::AsSizeT:
     case LengthModifier::AsPtrDiff:
     case LengthModifier::AsLongDouble:
@@ -898,6 +903,12 @@ bool FormatSpecifier::namedTypeToLengthModifier(QualType QT,
       return true;
     } else if (Identifier->getName() == "uintmax_t") {
       LM.setKind(LengthModifier::AsIntMax);
+      return true;
+    } else if (Identifier->getName() == "intptr_t") {
+      LM.setKind(LengthModifier::AsIntPtr);
+      return true;
+    } else if (Identifier->getName() == "uintptr_t") {
+      LM.setKind(LengthModifier::AsIntPtr);
       return true;
     } else if (Identifier->getName() == "ptrdiff_t") {
       LM.setKind(LengthModifier::AsPtrDiff);
