@@ -164,7 +164,7 @@ const char *TargetInfo::getTypeFormatModifier(IntType T) {
   case SignedLongLong:
   case UnsignedLongLong: return "ll";
   case SignedIntCap:
-  case UnsignedIntCap:   return "lll";
+  case UnsignedIntCap:   return "P";
   }
 }
 
