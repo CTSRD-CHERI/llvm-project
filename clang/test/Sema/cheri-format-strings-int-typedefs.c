@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi sandbox -fsyntax-only -verify %s
+// XFAIL:
 
 int printf(char const *, ...);
 int scanf(char const *, ...);
