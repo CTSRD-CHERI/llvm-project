@@ -6743,6 +6743,8 @@ public:
     PtrDiffType = SignedLong;
     Int64Type = SignedLong;
     IntMaxType = Int64Type;
+    if (SandboxABI)
+      IntPtrType = TargetInfo::SignedIntCap;
   }
 
   void setN32ABITypes() {

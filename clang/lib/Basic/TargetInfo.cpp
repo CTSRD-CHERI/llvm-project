@@ -117,6 +117,8 @@ const char *TargetInfo::getTypeName(IntType T) {
   case UnsignedLong:     return "long unsigned int";
   case SignedLongLong:   return "long long int";
   case UnsignedLongLong: return "long long unsigned int";
+  case UnsignedIntCap:   return "__uintcap_t";
+  case SignedIntCap:           return "__intcap_t";
   }
 }
 
@@ -139,6 +141,9 @@ const char *TargetInfo::getTypeConstantSuffix(IntType T) const {
   case UnsignedInt:      return "U";
   case UnsignedLong:     return "UL";
   case UnsignedLongLong: return "ULL";
+  // FIXME: We probably should have a suffix for intcap_t literals!
+  case UnsignedIntCap:
+  case SignedIntCap:     return "";
   }
 }
 
@@ -158,6 +163,8 @@ const char *TargetInfo::getTypeFormatModifier(IntType T) {
   case UnsignedLong:     return "l";
   case SignedLongLong:
   case UnsignedLongLong: return "ll";
+  case SignedIntCap:
+  case UnsignedIntCap:   return "lll";
   }
 }
 
@@ -176,6 +183,8 @@ unsigned TargetInfo::getTypeWidth(IntType T) const {
   case UnsignedLong:     return getLongWidth();
   case SignedLongLong:
   case UnsignedLongLong: return getLongLongWidth();
+  case SignedIntCap:
+  case UnsignedIntCap: return getIntCapWidth();
   };
 }
 
@@ -245,6 +254,8 @@ unsigned TargetInfo::getTypeAlign(IntType T) const {
   case UnsignedLong:     return getLongAlign();
   case SignedLongLong:
   case UnsignedLongLong: return getLongLongAlign();
+  case SignedIntCap:
+  case UnsignedIntCap: return getIntCapAlign();
   };
 }
 
@@ -258,12 +269,14 @@ bool TargetInfo::isTypeSigned(IntType T) {
   case SignedInt:
   case SignedLong:
   case SignedLongLong:
+  case SignedIntCap:
     return true;
   case UnsignedChar:
   case UnsignedShort:
   case UnsignedInt:
   case UnsignedLong:
   case UnsignedLongLong:
+  case UnsignedIntCap:
     return false;
   };
 }

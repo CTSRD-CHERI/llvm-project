@@ -125,7 +125,9 @@ public:
     SignedLong,
     UnsignedLong,
     SignedLongLong,
-    UnsignedLongLong
+    UnsignedLongLong,
+    SignedIntCap,
+    UnsignedIntCap,
   };
 
   enum RealType {
@@ -246,6 +248,8 @@ public:
       return UnsignedLong;
     case SignedLongLong:
       return UnsignedLongLong;
+    case SignedIntCap:
+      return UnsignedIntCap;
     default:
       llvm_unreachable("Unexpected signed integer type");
     }

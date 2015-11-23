@@ -6677,6 +6677,8 @@ CanQualType ASTContext::getFromTargetType(unsigned Type) const {
   case TargetInfo::UnsignedLong: return UnsignedLongTy;
   case TargetInfo::SignedLongLong: return LongLongTy;
   case TargetInfo::UnsignedLongLong: return UnsignedLongLongTy;
+  case TargetInfo::SignedIntCap: return IntCapTy;
+  case TargetInfo::UnsignedIntCap: return UnsignedIntCapTy;
   }
 
   llvm_unreachable("Unhandled TargetInfo::IntType value");
@@ -7996,6 +7998,8 @@ QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
     return UnsignedLongLongTy;
   case BuiltinType::Int128:
     return UnsignedInt128Ty;
+  case BuiltinType::IntCap:
+    return UnsignedIntCapTy;
   default:
     llvm_unreachable("Unexpected signed integer type");
   }
