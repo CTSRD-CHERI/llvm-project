@@ -61,6 +61,21 @@ class CheriSandboxABI : public ModulePass,
       bool Modified = false;
       for (Function &F : Mod)
         Modified |= runOnFunction(F);
+      // Now we're going to fix up all va_start calls so that they have the
+      // address space cast of the alloca directly in front of them.  This
+      // makes the cast visible to SelectionDAG and allows it to look through
+      // and find the original.
+      if (Function * Fn = M->getFunction("llvm.va_start"))
+        for (Value *V : Fn->users()) {
+          CallInst *Call = cast<CallInst>(V->stripPointerCasts());
+          Instruction *Cast = cast<Instruction>(Call->getOperand(0));
+          if (Cast->getParent() != Call->getParent()) {
+            AddrSpaceCastInst *NewCast = new
+              llvm::AddrSpaceCastInst(Cast->getOperand(0), Cast->getType(),
+                  "va_cast", Call);
+            Call->setOperand(0, NewCast);
+          }
+        }
       return Modified;
     }
     int RoundUpToPowerOfTwo(int v) {
