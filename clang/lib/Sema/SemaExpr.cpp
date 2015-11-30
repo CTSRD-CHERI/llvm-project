@@ -10035,7 +10035,10 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
   // If the operand has type "type", the result has type "pointer to type".
   if (op->getType()->isObjCObjectType())
     return Context.getObjCObjectPointerType(op->getType());
-  return Context.getPointerType(op->getType());
+  QualType Ty = op->getType();
+  if (Ty->isFunctionType())
+    Ty = Context.getAddrSpaceQualType(Ty, Context.getDefaultAS());
+  return Context.getPointerType(Ty);
 }
 
 static void RecordModifiableNonNullParam(Sema &S, const Expr *Exp) {

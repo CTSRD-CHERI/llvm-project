@@ -360,7 +360,19 @@ public:
     if (isa<MemberPointerType>(E->getType())) // never sugared
       return CGF.CGM.getMemberPointerConstant(E);
 
-    return EmitLValue(E->getSubExpr()).getPointer();
+    llvm::Value *Addr = EmitLValue(E->getSubExpr()).getPointer();
+    llvm::Type *AddrTy = Addr->getType();
+    // FIXME: Do this in a less-ugly way.
+    if ((CGF.getContext().getDefaultAS() == 200) && AddrTy->getPointerAddressSpace() != 200) {
+      llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
+          ->getElementType()->getPointerTo(200);
+      Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+      llvm::Value *PCC = Builder.CreateCall(
+              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+      Addr = CGF.setPointerOffset(PCC, Addr);
+      Addr = Builder.CreateBitCast(Addr, CapTy);
+    }
+    return Addr;
   }
   Value *VisitUnaryDeref(const UnaryOperator *E) {
     if (E->getType()->isVoidType())
