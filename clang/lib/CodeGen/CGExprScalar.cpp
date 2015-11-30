@@ -1540,6 +1540,25 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Type *DestType = ConvertType(DestTy);
     if (Src->getType() == DestType)
       return Src;
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (TI.SupportsCapabilities()) {
+      QualType SrcTy = E->getType();
+      QualType SrcPointeeTy = SrcTy->getPointeeType();
+      QualType DstPointeeTy = DestTy->getPointeeType();
+      if (SrcPointeeTy->isFunctionType() && DstPointeeTy->isFunctionType()) {
+        // FIXME: Should we handle casts in the other direction by doing a
+        // pcc-relative cfromptr?
+        if (SrcPointeeTy.getAddressSpace() == 0 &&
+              DstPointeeTy.getAddressSpace() ==
+              (unsigned)TI.AddressSpaceForCapabilities()) {
+          // FIXME: THis is quite ugly:
+          Src = Builder.CreatePtrToInt(Src, CGF.Int64Ty);
+          Value *PCC = Builder.CreateCall(
+              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+          Src = CGF.setPointerOffset(PCC, Src);
+        }
+      }
+    }
     return Builder.CreatePointerBitCastOrAddrSpaceCast(Src, DestType);
   }
   case CK_AtomicToNonAtomic:

@@ -4990,7 +4990,10 @@ static void HandleAddressSpaceTypeAttribute(QualType &Type,
 
   // ISO/IEC TR 18037 S5.3 (amending C99 6.7.3): "A function type shall not be
   // qualified by an address-space qualifier."
-  if (Type->isFunctionType()) {
+  if (Type->isFunctionType() && !S.Context.getTargetInfo().SupportsCapabilities()) {
+    // FIXME: We should only allow function pointers to be qualified with an AS
+    // if it's the capability AS, but for now allow them to be any AS when the
+    // target supports capabilities.
     S.Diag(Attr.getLoc(), diag::err_attribute_address_function_type);
     Attr.setInvalid();
     return;
