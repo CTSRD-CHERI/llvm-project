@@ -58,10 +58,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     std::set<MachineInstr*> IncOffsets;
     std::set<MachineInstr*> Adds;
     bool modified = false;
-    for (MachineFunction::iterator BI=MF.begin(), BE=MF.end() ; BI!=BE ; ++BI)
-      for (MachineBasicBlock::iterator I=BI->begin(), E=BI->end() ; I!=E ;
-          ++I) {
-        int Op = I->getOpcode();
+    for (auto &MBB : MF)
+      for (MachineInstr &I : MBB) {
+        int Op = I.getOpcode();
         // Only look at cap-relative loads and stores
         if (!(Op == Mips::CAPLOAD8 || Op == Mips::CAPLOADU8 ||
               Op == Mips::CAPLOAD16 || Op == Mips::CAPLOADU16 ||
@@ -73,18 +72,18 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
               Op == Mips::LOADCAP || Op == Mips::STORECAP ||
               Op == Mips::CAPSTORE32 || Op == Mips::CAPSTORE64))
           continue;
-        int64_t offset = I->getOperand(2).getImm();
+        int64_t offset = I.getOperand(2).getImm();
         // If the load is not currently at register-zero offset, we can't fix
         // it up to use relative addressing, but we may be able to modify it so
         // that it is...
-        if (I->getOperand(1).getReg() != Mips::ZERO_64) {
+        if (I.getOperand(1).getReg() != Mips::ZERO_64) {
           MachineInstr *AddInst;
           // If the register offset is a simple constant, then try to move it
           // into the memory operation
-          if (tryToFoldAdd(I->getOperand(1).getReg(), RI, AddInst, offset)) {
+          if (tryToFoldAdd(I.getOperand(1).getReg(), RI, AddInst, offset)) {
             Adds.insert(AddInst);
-            I->getOperand(2).setImm(offset);
-            I->getOperand(1).setReg(Mips::ZERO_64);
+            I.getOperand(2).setImm(offset);
+            I.getOperand(1).setReg(Mips::ZERO_64);
           } else 
             continue;
         }
@@ -94,7 +93,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // pull that calculation into the memory operation.
 
         // Ignore ones that are not based on a CIncOffset op
-        MachineInstr *IncOffset = RI.getUniqueVRegDef(I->getOperand(3).getReg());
+        MachineInstr *IncOffset = RI.getUniqueVRegDef(I.getOperand(3).getReg());
         if (!IncOffset ||
             ((IncOffset->getOpcode() != Mips::CIncOffset) &&
              (IncOffset->getOpcode() != Mips::CIncBase)))
@@ -112,29 +111,27 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           // If we managed to pull the offset calculation entirely away, then
           // just use the computed immediate
           Adds.insert(AddInst);
-          I->getOperand(1).setReg(Mips::ZERO_64);
-          I->getOperand(2).setImm(offset);
+          I.getOperand(1).setReg(Mips::ZERO_64);
+          I.getOperand(2).setImm(offset);
         } else
           // If we didn't, then use the CIncOffset's register value as our
           // offset
-          I->getOperand(1).setReg(Offset.getReg());
-        I->getOperand(3).setReg(Cap.getReg());
+          I.getOperand(1).setReg(Offset.getReg());
+        I.getOperand(3).setReg(Cap.getReg());
         IncOffsets.insert(IncOffset);
         modified = true;
       }
-    for (std::set<MachineInstr*>::iterator I=IncOffsets.begin(),E=IncOffsets.end();
-         I!=E ; ++I) {
-      if (!RI.use_empty((*I)->getOperand(0).getReg())) {
+    for (MachineInstr *I : IncOffsets) {
+      if (!RI.use_empty(I->getOperand(0).getReg())) {
         continue;
       }
-      (*I)->eraseFromBundle();
+      I->eraseFromBundle();
     }
-    for (std::set<MachineInstr*>::iterator I=Adds.begin(),E=Adds.end();
-         I!=E ; ++I) {
-      if (!RI.use_empty((*I)->getOperand(0).getReg())) {
+    for (MachineInstr *I : Adds) {
+      if (!RI.use_empty(I->getOperand(0).getReg())) {
         continue;
       }
-      (*I)->eraseFromBundle();
+      I->eraseFromBundle();
     }
     return modified;
   }
