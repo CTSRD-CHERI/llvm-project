@@ -1,10 +1,12 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "Mips.h"
 #include "MipsInstrInfo.h"
+#include "MipsTargetMachine.h"
 
 using namespace llvm;
 
@@ -17,7 +19,11 @@ static cl::opt<bool> DisableAddressingModeFolder(
 namespace {
 struct CheriAddressingModeFolder : public MachineFunctionPass {
   static char ID;
-  CheriAddressingModeFolder() : MachineFunctionPass(ID) {}
+  const MipsInstrInfo *InstrInfo;
+
+  CheriAddressingModeFolder(MipsTargetMachine &TM) : MachineFunctionPass(ID) {
+    InstrInfo = TM.getSubtargetImpl()->getInstrInfo();
+  }
   bool tryToFoldAdd(unsigned vreg, MachineRegisterInfo &RI, MachineInstr *&AddInst, int64_t &offset) {
     AddInst = RI.getUniqueVRegDef(vreg);
     // If we can't uniquely identify the definition, give up.
@@ -57,10 +63,23 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     MachineRegisterInfo &RI = MF.getRegInfo();
     std::set<MachineInstr*> IncOffsets;
     std::set<MachineInstr*> Adds;
+    std::set<std::pair<MachineBasicBlock*, MachineInstr*>> SetPCCOffsets;
+    std::set<MachineInstr*> GetPCCs;
     bool modified = false;
     for (auto &MBB : MF)
       for (MachineInstr &I : MBB) {
         int Op = I.getOpcode();
+        if (Op == Mips::CGetPCC) {
+          GetPCCs.insert(&I);
+          continue;
+        }
+        // Look for CSetOffset instructions that are using the result of CGetPCC
+        if (Op == Mips::CSetOffset) {
+          MachineInstr *Base = RI.getUniqueVRegDef(I.getOperand(1).getReg());
+          if (Base && (Base->getOpcode() == Mips::CGetPCC))
+            SetPCCOffsets.insert(std::make_pair(&MBB, &I));
+          continue;
+        }
         // Only look at cap-relative loads and stores
         if (!(Op == Mips::CAPLOAD8 || Op == Mips::CAPLOADU8 ||
               Op == Mips::CAPLOAD16 || Op == Mips::CAPLOADU16 ||
@@ -121,6 +140,16 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         IncOffsets.insert(IncOffset);
         modified = true;
       }
+    for (auto &I : SetPCCOffsets) {
+      unsigned PCC = MF.getRegInfo().createVirtualRegister(&Mips::CheriRegsRegClass);
+      BuildMI(*I.first, I.second, I.second->getDebugLoc(), InstrInfo->get(Mips::CGetPCC), PCC);
+      I.second->getOperand(1).setReg(PCC);
+      I.first->dump();
+    }
+    for (auto *I : GetPCCs)
+      if (RI.use_empty(I->getOperand(0).getReg()))
+        I->eraseFromBundle();
+
     for (MachineInstr *I : IncOffsets) {
       if (!RI.use_empty(I->getOperand(0).getReg())) {
         continue;
@@ -145,6 +174,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
 }
 char CheriAddressingModeFolder::ID;
 
-MachineFunctionPass *llvm::createCheriAddressingModeFolder(void) {
-  return new CheriAddressingModeFolder();
+MachineFunctionPass *llvm::createCheriAddressingModeFolder(MipsTargetMachine &TM) {
+  return new CheriAddressingModeFolder(TM);
 }
