@@ -2394,7 +2394,7 @@ bool CastInst::isNoopCast(const DataLayout &DL) const {
   else if (getOpcode() == Instruction::IntToPtr)
     PtrOpTy = getType();
   if (PtrOpTy && (DL.getPointerSize(PtrOpTy->getPointerAddressSpace()) !=
-       DL.getPointerBaseSizeInBits(PtrOpTy)))
+       DL.getPointerBaseSize(PtrOpTy->getPointerAddressSpace())))
     return false;
 
   Type *IntPtrTy =
