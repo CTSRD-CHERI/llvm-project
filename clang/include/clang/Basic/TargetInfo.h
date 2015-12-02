@@ -68,7 +68,7 @@ protected:
   unsigned char LongWidth, LongAlign;
   unsigned char LongLongWidth, LongLongAlign;
   unsigned char SuitableAlign;
-  unsigned char DefaultAlignForAttributeAligned;
+  unsigned short DefaultAlignForAttributeAligned;
   unsigned char MinGlobalAlign;
   unsigned char MaxAtomicPromoteWidth, MaxAtomicInlineWidth;
   unsigned short MaxVectorAlign;

@@ -6883,8 +6883,11 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
     }
   }
   void setDataLayoutString() override {
-    if (SandboxABI)
+    if (SandboxABI) {
       Desc += "-A200";
+      // Superclass defaults to 128, so we don't need to set this for CHERI128.
+      DefaultAlignForAttributeAligned = CapSize;
+    }
     DataLayoutString = Desc.c_str();
   }
   unsigned getIntCapWidth() const override { return Cheri128 ? 128 : 256; }
