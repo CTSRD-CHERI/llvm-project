@@ -144,7 +144,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       unsigned PCC = MF.getRegInfo().createVirtualRegister(&Mips::CheriRegsRegClass);
       BuildMI(*I.first, I.second, I.second->getDebugLoc(), InstrInfo->get(Mips::CGetPCC), PCC);
       I.second->getOperand(1).setReg(PCC);
-      I.first->dump();
     }
     for (auto *I : GetPCCs)
       if (RI.use_empty(I->getOperand(0).getReg()))
