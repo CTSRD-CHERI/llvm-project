@@ -112,12 +112,14 @@ void MCStreamer::EmitValue(const MCExpr *Value, unsigned Size, SMLoc Loc) {
   // This is a massive hack, but it needs rewriting once we have proper linker
   // support.
   if (Size > 8) {
-    // FIXME: CHERI128
     if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
+      assert(Size == 32 || Size == 16);
       EmitIntValue(0, 8);
       EmitIntValue(CE->getValue(), 8);
-      EmitIntValue(0, 8);
-      EmitIntValue(0, 8);
+      if (Size == 32) {
+          EmitIntValue(0, 8);
+          EmitIntValue(0, 8);
+      }
       return;
     }
     MCSymbol *Here = Context.createTempSymbol();
