@@ -6180,8 +6180,14 @@ static IntRange GetExprRange(ASTContext &C, Expr *E, unsigned MaxWidth) {
 
   // Try a full evaluation first.
   Expr::EvalResult result;
-  if (E->EvaluateAsRValue(result, C))
+  if (E->EvaluateAsRValue(result, C)) {
+    // [u]intcap_t values produce LValues that can be used as pointers
+    if (result.Val.isLValue() && result.Val.getLValueBase().isNull()) {
+      result.Val =
+        APValue(llvm::APSInt(result.Val.getLValueOffset().getQuantity()));
+    }
     return GetValueRange(C, result.Val, GetExprType(E), MaxWidth);
+  }
 
   // I think we only want to look through implicit casts here; if the
   // user has an explicit widening cast, we should treat the value as
@@ -6394,7 +6400,7 @@ static IntRange GetExprRange(ASTContext &C, Expr *E, unsigned MaxWidth) {
 
 static IntRange GetExprRange(ASTContext &C, Expr *E) {
   QualType Ty = GetExprType(E);
-  if (auto BT = dyn_cast<BuiltinType>(Ty)) {
+  if (auto BT = dyn_cast<BuiltinType>(Ty.getCanonicalType())) {
     if (BT->getKind() == BuiltinType::IntCap)
       Ty = C.LongTy;
     else if (BT->getKind() == BuiltinType::UIntCap)
