@@ -42,6 +42,7 @@
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/TargetParser.h"
+#include "llvm/Config/config.h"
 
 #ifdef LLVM_ON_UNIX
 #include <unistd.h> // For getuid().
@@ -7705,7 +7706,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("brandelf"));
     ArgStringList BrandElfArgs;
     BrandElfArgs.push_back("-c");
+#ifdef CHERI_IS_128
+    BrandElfArgs.push_back("128");
+#else
     BrandElfArgs.push_back("256");
+#endif
     BrandElfArgs.push_back(Output.getFilename());
     InputInfoList In = {InputInfo(types::TY_Object, Output.getFilename())};
     C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, BrandElfArgs, In));
