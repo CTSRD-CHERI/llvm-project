@@ -796,7 +796,10 @@ bool PrintfSpecifier::hasValidAlternativeForm() const {
   case ConversionSpecifier::GArg:
   case ConversionSpecifier::FreeBSDrArg:
   case ConversionSpecifier::FreeBSDyArg:
+  // Allow alternate form for %p for CHERI
+  case ConversionSpecifier::pArg:
     return true;
+
 
   default:
     return false;
