@@ -37,7 +37,8 @@ int main(int argc, char *argv[]) {
         Sec.getContents(Data);
         continue;
       }
-    Sections.push_back({Sec.getAddress(), Sec.getSize(), Sec.isText()});
+    Sections.push_back(std::make_tuple(Sec.getAddress(), Sec.getSize(),
+                Sec.isText()));
   }
   const size_t entry_size = 40;
   MemoryBufferRef MB = OF->getBinary()->getMemoryBufferRef();
