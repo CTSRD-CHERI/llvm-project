@@ -265,7 +265,7 @@ def CFromPtr32 : CheriFmtRegs<4, 7, (outs CheriOpnd: $r0),
   (ins CheriOpnd: $r2, GPR32Opnd: $r1),
   "cfromptr $r0, $r1, $r2", []>;
 def CToPtr32 : CheriFmtRegs<0xc, 0, (outs GPR32Opnd: $r0),
-  (ins CheriOpnd: $r1, CheriOpnd: $r2),
+  (ins CheriOpnd: $r2, CheriOpnd: $r1),
   "ctoptr $r0, $r1, $r2", []>;
 }
 
