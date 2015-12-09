@@ -1685,6 +1685,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_IntegralToPointer: {
     Value *Src = Visit(const_cast<Expr*>(E));
     llvm::Type *ResultType = ConvertType(DestTy);
+    auto &C = CGF.getContext();
+    auto &TI = C.getTargetInfo();
+    bool IsPureCap = C.getDefaultAS() ==
+      (unsigned)TI.AddressSpaceForCapabilities();
 
     // For __[u]intcap_t, the underlying LLVM type is actually a pointer.
     if (E->getType().isCapabilityType(CGF.getContext()) ) {
@@ -1693,7 +1697,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         return Builder.CreateBitCast(Src, ResultType);
       // Otherwise, it's some kind of non-capability pointer, so we need to
       // create an integer value first
-      Src = Builder.CreatePtrToInt(Src, CGF.IntPtrTy);
+      if (IsPureCap)
+        Src = CGF.getPointerOffset(Src);
+      else 
+        Src = Builder.CreatePtrToInt(Src, CGF.IntPtrTy);
     }
     // First, convert to the correct width so that we control the kind of
     // extension.
@@ -1702,21 +1709,32 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Value* IntResult =
       Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
 
+    if (IsPureCap && DestTy.isCapabilityType(CGF.getContext()))
+      return CGF.setPointerOffset(llvm::ConstantPointerNull::get(
+            cast<llvm::PointerType>(ResultType)), IntResult);
+
     return Builder.CreateIntToPtr(IntResult, ResultType);
   }
   case CK_PointerToIntegral: {
     llvm::Value *Src = Visit(E);
     llvm::Type *ResultType = ConvertType(DestTy);
     assert(!DestTy->isBooleanType() && "bool should use PointerToBool");
+    auto &C = CGF.getContext();
+    auto &TI = C.getTargetInfo();
+    bool IsPureCap = C.getDefaultAS() ==
+      (unsigned)TI.AddressSpaceForCapabilities();
     // For casts from pointers to intcap_t, we need to turn the pointer into a
     // capability.
-    if (DestTy.isCapabilityType(CGF.getContext())) {
-      if (E->getType().isCapabilityType(CGF.getContext()))
+    if (DestTy.isCapabilityType(C)) {
+      if (E->getType().isCapabilityType(C))
         return Builder.CreateBitCast(Src, ResultType);
       Src = Builder.CreatePtrToInt(Src,
-            llvm::IntegerType::get(Src->getContext(),
-                CGF.getContext().getTargetInfo().getPointerWidth(0)));
+            llvm::IntegerType::get(Src->getContext(), TI.getPointerWidth(0)));
       return Builder.CreateIntToPtr(Src, ResultType);
+    }
+    if (IsPureCap) {
+      Src = CGF.getPointerOffset(Src);
+      return Builder.CreateTruncOrBitCast(Src, ResultType);
     }
     return Builder.CreatePtrToInt(Src, ResultType);
   }
