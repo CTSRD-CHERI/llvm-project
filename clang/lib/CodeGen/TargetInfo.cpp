@@ -5836,6 +5836,12 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
   unsigned SizeOfUnwindException;
   mutable llvm::Function *GetOffset = nullptr;
   mutable llvm::Function *SetOffset = nullptr;
+  mutable llvm::PointerType *I8Cap = nullptr;
+  llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
+    if (!I8Cap)
+      I8Cap = llvm::PointerType::get(CGF.Int8Ty, 200);
+    return I8Cap;
+  }
 public:
   MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32)
     : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32)),
@@ -5850,6 +5856,7 @@ public:
                                         llvm::Value *V) const override {
     if (!GetOffset)
       GetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
     return CGF.Builder.CreateCall(GetOffset, V);
   }
 
@@ -5857,7 +5864,10 @@ public:
           llvm::Value *Ptr, llvm::Value *Offset) const override {
     if (!SetOffset)
       SetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_set);
-    return CGF.Builder.CreateCall(SetOffset, {Ptr, Offset});
+    llvm::Type *DstTy = Ptr->getType();
+    auto &B = CGF.Builder;
+    Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    return B.CreateBitCast(B.CreateCall(SetOffset, {Ptr, Offset}), DstTy);
   }
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
