@@ -316,31 +316,6 @@ multiclass LoadViaCap<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC,
                            [(set RC:$rd, (loadType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immSExt8:$offset))))))]>;
 }
 
-let DecoderNamespace="CHERI" in {
-def CLLD : CheriFmtCLX<3, 1,
-                             (outs GPR64Opnd:$rd),
-                             (ins GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
-                             "clld\t$rd, ${rt}, ${offset}(${cb})",
-                           []> {
-  let mayLoad=1;
-}
-def CSCD : CheriFmtCSX<3, 1,
-                             (outs GPR64Opnd:$dst),
-                             (ins GPR64Opnd:$rs, GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
-                             "cscd\t$rs, ${rt}, ${offset}(${cb})",
-                           []> {
-  let Constraints = "$rt = $dst";
-  let mayStore=1;
-}
-}
-def : InstAlias<"clldi $rd, ${offset}(${cb})",
-                (CLLD GPR64Opnd: $rd, ZERO_64, simm8: $offset, CheriOpnd: $cb), 1>;
-def : InstAlias<"clldr $rd, ${rt}(${cb})",
-                (CLLD GPR64Opnd: $rd, GPR64Opnd: $rt, 0, CheriOpnd: $cb), 1>;
-def : InstAlias<"cscdi $rd, ${offset}(${cb})",
-                (CSCD GPR64Opnd: $rd, ZERO_64, simm8: $offset, CheriOpnd: $cb), 1>;
-def : InstAlias<"cscdr $rd, ${rt}(${cb})",
-                (CSCD GPR64Opnd: $rd, GPR64Opnd: $rt, 0, CheriOpnd: $cb), 1>;
 multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
   def : Pat<(loadType CheriOpnd:$cb),
             (Op ZERO_64, (i64 0), CheriOpnd:$cb)>;
@@ -582,7 +557,7 @@ def CapRetPseudo : PseudoSE<(outs), (ins), [(CapRet)]>;
 let DecoderNamespace="CHERI" in {
 def CLLC  : CheriFmtCLL<1, 3, (outs CheriOpnd:$rd), (ins CheriOpnd:$cb),
                         "cllc\t$rd, $cb">;
-def CLLD2 : CheriFmtCLL<0, 3, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLD  : CheriFmtCLL<0, 3, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "clld\t$rd, $cb">;
 def CLLW  : CheriFmtCLL<1, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                         "cllw\t$rd, $cb">;
@@ -599,7 +574,7 @@ def CLLBU : CheriFmtCLL<0, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
 
 def CSCC  : CheriFmtCSC<7, (outs GPR64Opnd:$rd), (ins CheriOpnd: $rs, CheriOpnd:$cb),
                         "cscc\t$rd, $rs, $cb">;
-def CSCD2 : CheriFmtCSC<3, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:$cb),
+def CSCD  : CheriFmtCSC<3, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:$cb),
                         "cscd\t$rd, $rs, $cb">;
 def CSCW  : CheriFmtCSC<2, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:$cb),
                         "cscw\t$rd, $rs, $cb">;
