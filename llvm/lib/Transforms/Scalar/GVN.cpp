@@ -1201,7 +1201,7 @@ static Value *GetLoadValueForLoad(LoadInst *SrcVal, unsigned Offset,
     // able to widen it.
     // FIXME: Don't hard-code 200
     if (PtrVal->getType()->getPointerAddressSpace() == 200)
-      return nullptr;
+      return GetStoreValueForLoad(SrcVal, Offset, LoadTy, InsertPt, DL);
 
     // Insert the new load after the old load.  This ensures that subsequent
     // memdep queries will find the new load.  We can't easily remove the old
