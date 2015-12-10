@@ -1197,6 +1197,12 @@ static Value *GetLoadValueForLoad(LoadInst *SrcVal, unsigned Offset,
 
     Value *PtrVal = SrcVal->getPointerOperand();
 
+    // If we're doing a capability-relative load, don't assume that we might be
+    // able to widen it.
+    // FIXME: Don't hard-code 200
+    if (PtrVal->getType()->getPointerAddressSpace() == 200)
+      return nullptr;
+
     // Insert the new load after the old load.  This ensures that subsequent
     // memdep queries will find the new load.  We can't easily remove the old
     // load completely because it is already in the value numbering table.
