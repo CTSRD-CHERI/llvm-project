@@ -51,7 +51,6 @@ add_llvm_target(MipsCodeGen
   CheriBranchFolder.cpp
   CheriMemOpLowering.cpp
   CheriStackInvalidatePass.cpp
-  CheriStackUglyHack.cpp
   CheriRangeChecker.cpp
   CheriSandboxABI.cpp
   )

@@ -924,7 +924,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // 8-bit immediates for c[ls]x instructions for other spills.  The latter
   // only matters if we're using the capability-stack ABI.
   if (STI.isCheri()) {
-    if (STI.usesCheriStackCapabilityABI()) {
+    if (STI.isABI_CheriSandbox()) {
       if (isInt<8>(MaxSPOffset))
         return;
     } else if (isInt<11>(MaxSPOffset))

@@ -54,16 +54,6 @@ static cl::opt<bool>
                           cl::init(true));
 
 static cl::opt<bool>
-CheriStackCapabilityABI(
-  "cheri-stack-cap", cl::NotHidden,
-  cl::desc("CHERI: Stack pointer is capability-relative."),
-  cl::init(false));
-
-bool MipsSubtarget::usesCheriStackCapabilityABI() const {
-  return CheriStackCapabilityABI || isABI_CheriSandbox();
-}
-
-static cl::opt<bool>
     GPOpt("mgpopt", cl::Hidden,
           cl::desc("Enable gp-relative addressing of mips small data items"));
 

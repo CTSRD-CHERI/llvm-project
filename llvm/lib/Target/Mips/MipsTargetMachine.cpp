@@ -266,11 +266,7 @@ void MipsPassConfig::addIRPasses() {
   if (getMipsSubtarget().isCheri()) {
     addPass(createCheriRangeChecker());
     addPass(createCheriMemOpLowering());
-    if (getMipsSubtarget().usesCheriStackCapabilityABI() &&
-        !getMipsSubtarget().isABI_CheriSandbox())
-      addPass(createCheriStackHack());
-    else
-      addPass(createCheriSandboxABI());
+    addPass(createCheriSandboxABI());
   }
 }
 // Install an instruction selector pass using

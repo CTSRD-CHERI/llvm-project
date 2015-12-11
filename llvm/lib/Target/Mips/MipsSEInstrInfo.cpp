@@ -190,7 +190,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   // The ACC64/128 registers are handled by STORE_ACC64/128 pseudos, which call this function again with more ordinary
   // registers when they are lowered: so no special treatment for CHERI is required.
-  if (Subtarget.usesCheriStackCapabilityABI() &&
+  if (Subtarget.isABI_CheriSandbox() &&
       !Mips::ACC64RegClass.hasSubClassEq(RC) &&
       !Mips::ACC128RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
@@ -305,7 +305,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   // The ACC64/128 registers are handled by LOAD_ACC64/128 pseudos, which call this function again with more ordinary
   // registers when they are lowered: so no special treatment for CHERI is required.
-  if (Subtarget.usesCheriStackCapabilityABI() &&
+  if (Subtarget.isABI_CheriSandbox() &&
       !Mips::ACC64RegClass.hasSubClassEq(RC) &&
       !Mips::ACC128RegClass.hasSubClassEq(RC)) {
     if (Mips::GPR32RegClass.hasSubClassEq(RC))
