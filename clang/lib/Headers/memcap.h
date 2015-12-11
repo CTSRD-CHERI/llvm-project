@@ -66,8 +66,8 @@ typedef __INTPTR_TYPE__ uintcap_t;
   __MEMCAP_GET(__name, __type, __get, __default)                              \
   __MEMCAP_SET(__name, __type, __set)                                         \
 
-__MEMCAP_ACCESSOR(length, __SIZE_TYPE__, _set, _get, __SIZE_MAX__)
-__MEMCAP_ACCESSOR(base, __SIZE_TYPE__, _increment, _get, __SIZE_MAX__)
+__MEMCAP_GET(length, __SIZE_TYPE__, _get, __SIZE_MAX__)
+__MEMCAP_GET(base, __SIZE_TYPE__, _get, __SIZE_MAX__)
 __MEMCAP_ACCESSOR(offset, __SIZE_TYPE__, _set, _get, __SIZE_MAX__)
 __MEMCAP_GET(type, memcap_type_t, _get, 0)
 __MEMCAP_ACCESSOR(perms, memcap_perms_t, _and, _get, 0)
@@ -79,12 +79,6 @@ capability void *memcap_offset_increment(const capability void *__cap,
                                          __PTRDIFF_TYPE__ __offset) {
   return __IF_CAPS(__builtin_memcap_offset_increment(__cap, __offset),
                    ((char*)__cap) + __offset);
-}
-static inline
-capability void *memcap_base_only_increment(const capability void *__cap,
-                                         __PTRDIFF_TYPE__ __offset) {
-  return __IF_CAPS(__builtin_memcap_base_only_increment(__cap, __offset),
-                   (void*)__cap);
 }
 
 static inline

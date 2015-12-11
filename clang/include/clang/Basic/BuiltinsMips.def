@@ -897,9 +897,7 @@ BUILTIN(__builtin_msa_xor_v, "V16cV16cV16c", "nc")
 
 BUILTIN(__builtin_msa_xori_b, "V16cV16cIUi", "nc")
 
-BUILTIN(__builtin_cheri_set_cap_length, "v*200vC*200z", "nc")
 BUILTIN(__builtin_cheri_get_cap_length, "zvC*200", "nc")
-BUILTIN(__builtin_cheri_inc_cap_base, "v*200vC*200z", "nc")
 BUILTIN(__builtin_cheri_get_cap_base, "zvC*200", "nc")
 BUILTIN(__builtin_cheri_and_cap_perms, "v*200vC*200z", "nc")
 BUILTIN(__builtin_cheri_get_cap_perms, "zvC*200", "nc")
@@ -927,7 +925,6 @@ BUILTIN(__builtin_cheri_get_exception_program_counter_cap, "v*200", "nc")
 BUILTIN(__builtin_cheri_cap_offset_increment, "v*200vC*200z", "nc")
 BUILTIN(__builtin_cheri_cap_offset_set, "v*200vC*200z", "nc")
 BUILTIN(__builtin_cheri_cap_offset_get, "zvC*200", "nc")
-BUILTIN(__builtin_cheri_cap_base_inc_only, "v*200vC*200z", "nc")
 
 BUILTIN(__builtin_memcap_length_set, "v*200vC*200z", "nc")
 BUILTIN(__builtin_memcap_bounds_set, "v*200vC*200z", "nc")
