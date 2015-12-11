@@ -9,14 +9,12 @@ entry:
   %call = tail call i8* @malloc(i64 %s) nounwind
   %0 = ptrtoint i8* %call to i64
   %1 = inttoptr i64 %0 to i8 addrspace(200)*
-  ; CHECK: csetlen
-  %2 = tail call i8 addrspace(200)* @llvm.mips.cap.length.set(i8 addrspace(200)* %1, i64 %s)
+  ; CHECK: csetbounds
+  %2 = tail call i8 addrspace(200)* @llvm.mips.cap.bounds.set(i8 addrspace(200)* %1, i64 %s)
   ret i8 addrspace(200)* %2
 }
 
 declare noalias i8* @malloc(i64) nounwind
-
-declare i8 addrspace(200)* @llvm.mips.cap.length.set(i8 addrspace(200)*, i64) nounwind readnone
 
 ; CHECK-LABEL: addBase
 define i8 addrspace(200)* @addBase(i8 addrspace(200)* %p) nounwind readnone {

@@ -40,9 +40,6 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   %r21 = and i64 %r20, %r19
   store i64 %r21, i64* %rx, align 8
   %r22 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
-  ; CHECK: csetlen
-  %r23 = call i8 addrspace(200)* @llvm.mips.cap.length.set(i8 addrspace(200)* %r22, i64 42)
-  store i8 addrspace(200)* %r23, i8 addrspace(200)** getelementptr inbounds ([12 x i8 addrspace(200)*], [12 x i8 addrspace(200)*]* @results, i32 0, i64 0), align 32
   %r24 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
   ; CHECK: candperm
   %r25 = call i8 addrspace(200)* @llvm.mips.cap.perms.and(i8 addrspace(200)* %r24, i64 12)

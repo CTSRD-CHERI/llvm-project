@@ -1769,24 +1769,11 @@ def int_mips_xor_v : GCCBuiltin<"__builtin_msa_xor_v">,
 def int_mips_xori_b : GCCBuiltin<"__builtin_msa_xori_b">,
   Intrinsic<[llvm_v16i8_ty], [llvm_v16i8_ty, llvm_i32_ty], [IntrNoMem]>;
 
-// Set the length of a capability
-def int_mips_cap_length_set :
-  GCCBuiltinAlias<"__builtin_cheri_set_cap_length">,
-  GCCBuiltin<"__builtin_memcap_length_set">,
-  Intrinsic<[llvm_fatptr_ty],
-            [llvm_fatptr_ty, llvm_i64_ty],
-            [IntrNoMem]>;
 def int_mips_cap_length_get :
   GCCBuiltinAlias<"__builtin_cheri_get_cap_length">,
   GCCBuiltin<"__builtin_memcap_length_get">,
   Intrinsic<[llvm_i64_ty],
             [llvm_fatptr_ty],
-            [IntrNoMem]>;
-def int_mips_cap_base_increment :
-  GCCBuiltinAlias<"__builtin_cheri_inc_cap_base">,
-  GCCBuiltin<"__builtin_memcap_base_increment">,
-  Intrinsic<[llvm_fatptr_ty],
-            [llvm_fatptr_ty, llvm_i64_ty],
             [IntrNoMem]>;
 def int_mips_cap_base_get :
   GCCBuiltinAlias<"__builtin_cheri_get_cap_base">,
@@ -1905,8 +1892,6 @@ def int_mips_epcc_get :
 
 def int_mips_stack_to_cap :
   Intrinsic<[llvm_fatptr_ty], [llvm_ptr_ty], [IntrNoMem]>;
-def int_mips_stack_to_cap_incbase :
-  Intrinsic<[llvm_fatptr_ty], [llvm_ptr_ty], [IntrNoMem]>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Offset-related intrinsics
@@ -1924,9 +1909,5 @@ def int_mips_cap_offset_get:
   GCCBuiltinAlias<"__builtin_cheri_cap_offset_get">,
   GCCBuiltin<"__builtin_memcap_offset_get">,
   Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
-def int_mips_cap_base_only_increment :
-  GCCBuiltinAlias<"__builtin_cheri_cap_base_inc_only">,
-  GCCBuiltin<"__builtin_memcap_base_only_increment">,
-  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
 }
 

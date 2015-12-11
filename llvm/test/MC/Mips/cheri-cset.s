@@ -16,12 +16,6 @@
 # CHECK: csetbounds	$c1, $c2, $12
 # CHECK: encoding: [0x48,0x21,0x13,0x00]
 	csetbounds	$c1, $c2, $t0
-# CHECK: cincbase	$c1, $c2, $12
-# CHECK: encoding: [0x48,0x81,0x13,0x02]
-	cincbase	$c1, $c2, $t0
-# CHECK: csetlen	$c1, $c2, $12
-# CHECK: encoding: [0x48,0x81,0x13,0x03]
-	csetlen		$c1, $c2, $t0
 # CHECK: ccleartag	$c1
 # CHECK: encoding: [0x48,0x81,0x08,0x05]
 	ccleartag	$c1, $c1

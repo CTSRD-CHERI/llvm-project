@@ -141,8 +141,6 @@ def CAP_SELECT : CheriPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,
 ////////////////////////////////////////////////////////////////////////////////
 // Capability manipulation
 ////////////////////////////////////////////////////////////////////////////////
-def CIncBase : CheriFmtSet<2, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
-                           "cincbase\t$cd, $cb, $rt", []>;
 def CGetBase : CheriFmtGet<2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgetbase $rd, $cb",
                            [(set GPR64Opnd:$rd, (int_mips_cap_base_get CheriOpnd:$cb))]>;
@@ -155,10 +153,6 @@ def CGetBase32 : CheriFmtGet<2, (outs GPR32:$rd), (ins CheriOpnd:$cb),
 def CGetTag : CheriFmtGet<5, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                           "cgettag $rd, $cb",
                           [(set GPR64Opnd:$rd, (int_mips_cap_tag_get CheriOpnd:$cb))]>;
-
-def CSetLength : CheriFmtSet<3, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
-                             "csetlen\t$cd, $cb, $rt",
-                             [(set CheriOpnd:$cd, (int_mips_cap_length_set CheriOpnd:$cb, GPR64Opnd:$rt))]>;
 
 
 def CGetLength : CheriFmtGet<3, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
@@ -242,10 +236,6 @@ def CGetOffset : CheriFmtRegs<0x0d, 2, (outs GPR64Opnd:$r0),
   (ins CheriOpnd:$r1),
   "cgetoffset\t$r0, $r1",
   [(set GPR64Opnd: $r0, (int_mips_cap_offset_get CheriOpnd: $r1))]> { let r2 = 0; }
-def CIncBase2  : CheriFmtRegs<0x0d, 3, (outs CheriOpnd: $r0),
-  (ins CheriOpnd: $r1, GPR64Opnd: $r2),
-  "cincbase2\t$r0, $r1, $r2",
-  [(set CheriOpnd: $r0, (int_mips_cap_base_only_increment CheriOpnd: $r1, GPR64Opnd: $r2))]>;
 
 def CMove : CheriPseudo<(outs CheriOpnd: $cd),
   (ins CheriOpnd:$cs),
@@ -420,9 +410,7 @@ def : Pat<(int_mips_kdc_get), (CIncOffset C30, ZERO_64)>;
 def : Pat<(int_mips_epcc_get), (CIncOffset C31, ZERO_64)>;
 def : Pat<(int_mips_stack_cap_get), (CIncOffset C11, ZERO_64)>;
 
-def : Pat<(int_mips_cap_base_increment CheriOpnd:$cb, GPR64Opnd:$rd), (CIncBase $cb, $rd)>;
 def : Pat<(int_mips_stack_to_cap GPR64Opnd:$addr), (CSetOffset C11, $addr)>;
-def : Pat<(int_mips_stack_to_cap_incbase GPR64Opnd:$addr), (CIncBase C11, $addr)>;
 def : Pat<(MipsSTC i64:$addr), (CIncOffset C11, $addr)>;
 
 defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR64Opnd, truncstorei8>;
