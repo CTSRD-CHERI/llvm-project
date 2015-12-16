@@ -1197,12 +1197,6 @@ static Value *GetLoadValueForLoad(LoadInst *SrcVal, unsigned Offset,
 
     Value *PtrVal = SrcVal->getPointerOperand();
 
-    // If we're doing a capability-relative load, don't assume that we might be
-    // able to widen it.
-    // FIXME: Don't hard-code 200
-    if (PtrVal->getType()->getPointerAddressSpace() == 200)
-      return GetStoreValueForLoad(SrcVal, Offset, LoadTy, InsertPt, DL);
-
     // Insert the new load after the old load.  This ensures that subsequent
     // memdep queries will find the new load.  We can't easily remove the old
     // load completely because it is already in the value numbering table.
@@ -1931,6 +1925,11 @@ bool GVN::processLoad(LoadInst *L) {
       // If this is a clobber and L is the first instruction in its block, then
       // we have the first instruction in the entry block.
       if (DepLI == L)
+        return false;
+
+      // Don't try widening capability-relative loads.
+      // FIXME: Don't hard-code 200
+      if (L->getPointerOperand()->getType()->getPointerAddressSpace() == 200)
         return false;
 
       int Offset = AnalyzeLoadFromClobberingLoad(
