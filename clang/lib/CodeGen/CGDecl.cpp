@@ -1236,9 +1236,13 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
   if (Loc.getType() != BP)
     Loc = Builder.CreateBitCast(Loc, BP);
 
+  bool ContainsCapabilities = Target.SupportsCapabilities() &&
+      getTargetHooks().containsCapabilities(type);
+
   // If the initializer is all or mostly zeros, codegen with memset then do
   // a few stores afterward.
-  if (shouldUseMemSetPlusStoresToInitialize(constant,
+  if (!ContainsCapabilities && 
+      shouldUseMemSetPlusStoresToInitialize(constant,
                 CGM.getDataLayout().getTypeAllocSize(constant->getType()))) {
     Builder.CreateMemSet(Loc, llvm::ConstantInt::get(Int8Ty, 0), SizeVal,
                          isVolatile);
