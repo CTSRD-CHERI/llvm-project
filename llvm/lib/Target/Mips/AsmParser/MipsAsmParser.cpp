@@ -4548,10 +4548,10 @@ bool MipsAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
     if (StringSwitch<bool>(Name).Case("clb", true).Case("clh", true)
           .Case("clbu", true).Case("clhu", true).Case("clwu", true)
           .Case("clw", true).Case("cld", true).Case("clc", true)
-          .Case("clld", true) .Case("csb", true).Case("csh", true)
+          .Case("csb", true).Case("csh", true)
           .Case("csw", true).Case("csd", true).Case("csc", true)
           .Case("cldc1", true).Case("clwc1", true).Case("csdc1", true)
-          .Case("cswc1", true).Case("cscd", true).Default(false)) {
+          .Case("cswc1", true).Default(false)) {
       if (getLexer().isNot(AsmToken::Comma)) {
         SMLoc Loc = getLexer().getLoc();
         Parser.eatToEndOfStatement();

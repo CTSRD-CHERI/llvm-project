@@ -1155,8 +1155,8 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr *MI, MachineBasicBlock *BB,
       RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
     switch (Size) {
       case 8:
-        LL = Mips::CLLD2;
-        SC = Mips::CSCD2;
+        LL = Mips::CLLD;
+        SC = Mips::CSCD;
         break;
       case 4:
         LL = Mips::CLLW;
@@ -1449,8 +1449,8 @@ MachineBasicBlock * MipsTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
       RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
     switch (Size) {
       case 8:
-        LL = Mips::CLLD2;
-        SC = Mips::CSCD2;
+        LL = Mips::CLLD;
+        SC = Mips::CSCD;
         break;
       case 4:
         LL = Mips::CLLW;

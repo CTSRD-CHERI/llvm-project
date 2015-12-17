@@ -42,9 +42,9 @@
 # CHECK: csd	$12, $13, 3($c1)
 # CHECK: encoding: [0xe9,0x81,0x68,0x1b]
 	csd		$t0, $t1, 3($c1)
-# CHECK: clld	$12, $13, 3($c1)
-# CHECK: encoding: [0xc9,0x81,0x68,0x1f]
-	clld		$t0, $t1, 3($c1)
-# CHECK: cscd	$12, $13, 3($c1)
-# CHECK: encoding: [0xe9,0x81,0x68,0x1f]
-	cscd		$t0, $t1, 3($c1)
+# CHECK: clld	$12, $c1
+# CHECK: encoding: [0x4a,0x0c,0x08,0x0b]
+	clld		$t0, $c1
+# CHECK: cscd	$12, $23, $c1
+# CHECK: encoding: [0x4a,0x17,0x0b,0x03]
+	cscd		$t0, $s7, $c1
