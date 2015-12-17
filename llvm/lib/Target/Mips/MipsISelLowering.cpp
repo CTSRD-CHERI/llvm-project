@@ -3433,6 +3433,8 @@ MipsTargetLowering::LowerFormalArguments(SDValue Chain,
 
       // Create load nodes to retrieve arguments from the stack
       SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      if (ABI.IsCheriSandbox())
+        FIN = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, FIN);
       SDValue ArgValue = DAG.getLoad(
           LocVT, DL, Chain, FIN,
           MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI),
