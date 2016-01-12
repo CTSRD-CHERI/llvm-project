@@ -1142,13 +1142,19 @@ void llvm::PrintCapRelocations(const ObjectFile *Obj) {
         support::endian::read<uint64_t, support::big, 1>(entry + 16);
     uint64_t Length =
         support::endian::read<uint64_t, support::big, 1>(entry + 24);
+    uint64_t Perms =
+        support::endian::read<uint64_t, support::big, 1>(entry + 32);
+    bool isFunction = Perms & (1ULL << 63);
+    //Perms &= 0xffffffff;
     StringRef Symbol = "<Unnamed symbol>";
     if (SymbolNames.find(Base) != SymbolNames.end())
       Symbol = SymbolNames[Base];
     outs() << format("0x%016" PRIx64, Target) << "\tBase: " << Symbol << " ("
            << format("0x%016" PRIx64, Base)
            << ")\tOffset: " << format("%016" PRIu64, Offset)
-           << "\tLength: " << format("%016" PRIu64, Length) << "\n";
+           << "\tLength: " << format("%016" PRIu64, Length)
+           << "\tPermissions: " << format("%08" PRIu64, Length)
+           << (isFunction ? " (Function)\n" : "\n");
   }
   outs() << "\n";
 }
