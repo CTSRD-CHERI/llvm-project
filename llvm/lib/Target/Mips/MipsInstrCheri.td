@@ -334,7 +334,7 @@ defm CAPLOADU16    : LoadViaCap<1, 0, "clhu", GPR64Opnd, extloadi16>;
 defm CAPLOADU32    : LoadViaCap<2, 0, "clwu", GPR64Opnd, zextloadi32>;
 
 let isCodeGenOnly=1 in {
-defm CAPLOAD3264   : LoadViaCap<2, 0, "clw", GPR64Opnd, extloadi32>;
+defm CAPLOAD3264   : LoadViaCap<2, 1, "clw", GPR64Opnd, extloadi32>;
 }
 defm : LoadViaCap0<CAPLOAD3264, extloadi32>;
 
