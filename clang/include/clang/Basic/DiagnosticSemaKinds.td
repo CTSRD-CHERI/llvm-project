@@ -5194,6 +5194,10 @@ def note_typecheck_assign_const : Note<
   "%select{non-|}1static data member %2 declared const here|"
   "member function %q1 is declared const here}0">;
 
+def warn_mixed_capability_binop : Warning<
+  "binary expression on capability and non-capability types: %0 and %1.  "
+  "Provenance will be inherited from left-hand side">,
+  InGroup<DiagGroup<"capabilities">>;
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;

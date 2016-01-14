@@ -9110,6 +9110,14 @@ inline QualType Sema::CheckBitwiseOperands(
   ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, bool IsCompAssign) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
 
+  bool isLHSCap = LHS.get()->getType().isCapabilityType(Context);
+  bool isRHSCap = RHS.get()->getType().isCapabilityType(Context);
+  if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap))
+    Diag(Loc, diag::warn_mixed_capability_binop)
+    << LHS.get()->getType() << RHS.get()->getType()
+    << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
     if (LHS.get()->getType()->hasIntegerRepresentation() &&
