@@ -295,6 +295,11 @@ static Address emitMergePHI(CodeGenFunction &CGF,
 
 TargetCodeGenInfo::~TargetCodeGenInfo() { delete Info; }
 
+llvm::Value *TargetCodeGenInfo::getPointerIntegerValue(CodeGen::CodeGenFunction
+        &CGF, llvm::Value *V) const {
+  return CGF.Builder.CreatePtrToInt(V, CGF.IntPtrTy);
+}
+
 // If someone can figure out a general rule for this, that would be great.
 // It's probably just doomed to be platform-dependent, though.
 unsigned TargetCodeGenInfo::getSizeOfUnwindException() const {
@@ -5835,6 +5840,7 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
                               CheriCapClassifier {
   unsigned SizeOfUnwindException;
   mutable llvm::Function *GetOffset = nullptr;
+  mutable llvm::Function *GetBase = nullptr;
   mutable llvm::Function *SetOffset = nullptr;
   mutable llvm::PointerType *I8Cap = nullptr;
   llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
@@ -5852,6 +5858,16 @@ public:
     return 29;
   }
 
+  llvm::Value *getPointerIntegerValue(CodeGen::CodeGenFunction &CGF,
+                                        llvm::Value *V) const override {
+    CGBuilderTy &B = CGF.Builder;
+    if (!GetOffset)
+      GetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_offset_get);
+    if (!GetBase)
+      GetBase = CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_base_get);
+    V = B.CreateBitCast(V, getI8CapTy(CGF));
+    return B.CreateAdd(B.CreateCall(GetBase, V), B.CreateCall(GetOffset, V));
+  }
   llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &CGF,
                                         llvm::Value *V) const override {
     if (!GetOffset)
