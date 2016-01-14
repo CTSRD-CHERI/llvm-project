@@ -191,10 +191,6 @@ public:
         return Result;
       }
     }
-    // If this is an intcap_t, then we want to convert it to a real integer
-    // type first.
-    if (V->getType()->isPointerTy())
-      V = CGF.getPointerIntegerValue(V);
 
     return Builder.CreateIsNotNull(V, "tobool");
   }

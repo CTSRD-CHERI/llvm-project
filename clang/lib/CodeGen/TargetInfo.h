@@ -223,8 +223,6 @@ public:
   /// capability or an aggregate type that contains one or more capabilities.
   virtual bool containsCapabilities(QualType Ty) const { return false; }
 
-  virtual llvm::Value *getPointerIntegerValue(CodeGen::CodeGenFunction &CGF,
-                                              llvm::Value *V) const;
   virtual llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &,
                                         llvm::Value *V) const {
       assert(0 && "Target does not support capabilities!\n");

@@ -3147,9 +3147,6 @@ public:
                     llvm::iterator_range<CallExpr::const_arg_iterator> ArgRange,
                     const FunctionDecl *CalleeDecl = nullptr,
                     unsigned ParamsToSkip = 0);
-  llvm::Value *getPointerIntegerValue(llvm::Value *V) {
-    return getTargetHooks().getPointerIntegerValue(*this, V);
-  }
   llvm::Value *getPointerOffset(llvm::Value *V) {
     return getTargetHooks().getPointerOffset(*this, V);
   }

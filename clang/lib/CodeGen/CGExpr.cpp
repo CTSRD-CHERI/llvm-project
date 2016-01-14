@@ -114,12 +114,8 @@ llvm::Value *CodeGenFunction::EvaluateExprAsBool(const Expr *E) {
 
   QualType BoolTy = getContext().BoolTy;
   SourceLocation Loc = E->getExprLoc();
-  if (!E->getType()->isAnyComplexType()) {
-    llvm::Value *V = EmitScalarExpr(E);
-    if (V->getType()->isPointerTy())
-      V = getPointerIntegerValue(V);
-    return EmitScalarConversion(V, E->getType(), BoolTy, Loc);
-  }
+  if (!E->getType()->isAnyComplexType())
+    return EmitScalarConversion(EmitScalarExpr(E), E->getType(), BoolTy, Loc);
 
   return EmitComplexToScalarConversion(EmitComplexExpr(E), E->getType(), BoolTy,
                                        Loc);
