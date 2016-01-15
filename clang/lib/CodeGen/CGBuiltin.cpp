@@ -628,6 +628,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin___clear_cache: {
     Value *Begin = EmitScalarExpr(E->getArg(0));
     Value *End = EmitScalarExpr(E->getArg(1));
+    llvm::Type *ArgType = Builder.getInt8PtrTy(0);
+    Begin = Builder.CreatePointerBitCastOrAddrSpaceCast(Begin, ArgType);
+    End = Builder.CreatePointerBitCastOrAddrSpaceCast(End, ArgType);
     Value *F = CGM.getIntrinsic(Intrinsic::clear_cache);
     return RValue::get(Builder.CreateCall(F, {Begin, End}));
   }
