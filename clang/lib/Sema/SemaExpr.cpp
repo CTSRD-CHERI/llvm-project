@@ -5350,8 +5350,7 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
 
   QualType SrcTy = Src.get()->getType();
   if (Context.hasSameUnqualifiedType(SrcTy, DestTy))
-    return (SrcTy.getAddressSpace() == DestTy.getAddressSpace()) ? CK_NoOp :
-        CK_AddressSpaceConversion;
+    return CK_NoOp;
 
   switch (Type::ScalarTypeKind SrcKind = SrcTy->getScalarTypeKind()) {
   case Type::STK_MemberPointer:
