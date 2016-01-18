@@ -3100,6 +3100,8 @@ GenerateStringLiteral(llvm::Constant *C, llvm::GlobalValue::LinkageTypes LT,
   unsigned AddrSpace = 0;
   if (CGM.getLangOpts().OpenCL)
     AddrSpace = CGM.getContext().getTargetAddressSpace(LangAS::opencl_constant);
+  else
+    AddrSpace = CGM.getContext().getDefaultAS();
 
   llvm::Module &M = CGM.getModule();
   // Create a global variable for this string

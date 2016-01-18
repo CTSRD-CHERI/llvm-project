@@ -8,7 +8,6 @@ char takes_string_ptr(const char *a) {
 
 // CHECK-LABEL: main
 int main(void) {
-	// Ensure an address space cast is generated inside the call.
-	// CHECK: (i8 addrspace(200)* addrspacecast
+	// CHECK: call signext i8 %2(i8 addrspace(200)*
     return takes_string_ptr("hi");
 }
