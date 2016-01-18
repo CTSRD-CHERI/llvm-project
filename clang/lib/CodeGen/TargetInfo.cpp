@@ -5990,19 +5990,39 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     const BuiltinType *BT = Ty->getAs<BuiltinType>();
     uint64_t Offset = Layout.getFieldOffset(idx);
 
-    if (!Ty->isConstantArrayType() && Ty.isCapabilityType(getContext())) {
-      // Add ((Offset - LastOffset) / 64) args of type i64.
-      for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
-        ArgList.push_back(I64);
-      LastOffset = Layout.getFieldOffset(idx) + CapSize;
-      ArgList.push_back(CGT.ConvertType(Ty));
-      continue;
-    }
     if (const RecordType *FRT = Ty->getAs<RecordType>()) {
       if (containsCapabilities(getContext(), FRT->getDecl())) {
         uint64_t FieldSize = getContext().getTypeSize(Ty);
         LastOffset = Layout.getFieldOffset(idx) + FieldSize;
         ArgList.push_back(HandleAggregates(Ty, FieldSize));
+        continue;
+      }
+    }
+    if (!Ty->isConstantArrayType() && Ty.isCapabilityType(getContext())) {
+      // Add ((Offset - LastOffset) / 64) args of type i64.
+      for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
+        ArgList.push_back(I64);
+      LastOffset = Layout.getFieldOffset(idx) + CapSize;
+      assert(CapSize == getContext().getTypeSize(Ty));
+      ArgList.push_back(CGT.ConvertType(Ty));
+      continue;
+    }
+    if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(Ty)) {
+      auto ElementType = CAT->getElementType();
+      unsigned Elements = CAT->getSize().getLimitedValue();
+      if (ElementType.isCapabilityType(getContext())) {
+        llvm::Type *ElTy = CGT.ConvertType(ElementType);
+        for (unsigned i=0 ; i<Elements ; ++i)
+          ArgList.push_back(ElTy);
+        LastOffset = Layout.getFieldOffset(idx) + Elements * CapSize;
+        continue;
+      } else if (containsCapabilities(ElementType)) {
+        uint64_t FieldSize = getContext().getTypeSize(ElementType);
+        LastOffset = Layout.getFieldOffset(idx) + FieldSize * Elements;
+        auto ElTy = HandleAggregates(ElementType, FieldSize);
+        ElTy->dump();
+        for (unsigned i=0 ; i<Elements ; ++i)
+          ArgList.push_back(ElTy);
         continue;
       }
     }

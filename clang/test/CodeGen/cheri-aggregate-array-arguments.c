@@ -1,0 +1,28 @@
+// RUN: %clang %s -mabi=sandbox -cheri-linker -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
+struct foo
+{
+        void *refs[4];
+};
+struct bar
+{
+	struct x {
+		void *a;
+		void *b;
+	} y[4];
+};
+
+// CHECK: declare void @insert(i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg)
+// CHECK: declare void @insertb({ i8 addrspace(200)*, i8 addrspace(200)* } inreg, { i8 addrspace(200)*, i8 addrspace(200)* } inreg, { i8 addrspace(200)*, i8 addrspace(200)* } inreg, { i8 addrspace(200)*, i8 addrspace(200)* } inreg)
+
+void insert(struct foo b);
+void insertb(struct bar b);
+
+int main(int argc, char **argv)
+{
+	struct foo b;
+	b.refs[0]=argv;
+	insert(b);
+	struct bar c;
+	c.y[0].b=argv;
+	insertb(c);
+}
