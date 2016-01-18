@@ -96,7 +96,8 @@ LValue CGObjCRuntime::EmitValueForIvarAtOffset(CodeGen::CodeGenFunction &CGF,
   V = CGF.Builder.CreateInBoundsGEP(V, Offset, "add.ptr");
 
   if (!Ivar->isBitField()) {
-    V = CGF.Builder.CreateBitCast(V, llvm::PointerType::getUnqual(LTy));
+    V = CGF.Builder.CreateBitCast(V, llvm::PointerType::get(LTy,
+                CGF.getContext().getDefaultAS()));
     LValue LV = CGF.MakeNaturalAlignAddrLValue(V, IvarTy);
     LV.getQuals().addCVRQualifiers(CVRQualifiers);
     return LV;
