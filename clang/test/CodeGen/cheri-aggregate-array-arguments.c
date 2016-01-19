@@ -1,7 +1,10 @@
 // RUN: %clang %s -mabi=sandbox -cheri-linker -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
 struct foo
 {
-        void *refs[4];
+	void *a;
+	void *refs[4];
+	void *b;
+	void *c;
 };
 struct bar
 {
@@ -11,7 +14,7 @@ struct bar
 	} y[4];
 };
 
-// CHECK: declare void @insert(i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg)
+// CHECK: declare void @insert(i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg, i8 addrspace(200)* inreg)
 // CHECK: declare void @insertb({ i8 addrspace(200)*, i8 addrspace(200)* } inreg, { i8 addrspace(200)*, i8 addrspace(200)* } inreg, { i8 addrspace(200)*, i8 addrspace(200)* } inreg, { i8 addrspace(200)*, i8 addrspace(200)* } inreg)
 
 void insert(struct foo b);

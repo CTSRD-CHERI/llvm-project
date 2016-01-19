@@ -6014,11 +6014,11 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
         llvm::Type *ElTy = CGT.ConvertType(ElementType);
         for (unsigned i=0 ; i<Elements ; ++i)
           ArgList.push_back(ElTy);
-        LastOffset = Layout.getFieldOffset(idx) + Elements * CapSize;
+        LastOffset += Elements * CapSize;
         continue;
       } else if (containsCapabilities(ElementType)) {
         uint64_t FieldSize = getContext().getTypeSize(ElementType);
-        LastOffset = Layout.getFieldOffset(idx) + FieldSize * Elements;
+        LastOffset += FieldSize * Elements;
         auto ElTy = HandleAggregates(ElementType, FieldSize);
         ElTy->dump();
         for (unsigned i=0 ; i<Elements ; ++i)
