@@ -949,8 +949,9 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
   Int32Ty = llvm::Type::getInt32Ty(VMContext);
   Int64Ty = llvm::Type::getInt64Ty(VMContext);
 
-  IntPtrTy =
-      CGM.getDataLayout().getPointerSizeInBits() == 32 ? Int32Ty : Int64Ty;
+  IntPtrTy = llvm::IntegerType::get(VMContext,
+      CGM.getDataLayout().getPointerSizeInBits());
+
 
   // Object type
   QualType UnqualIdTy = CGM.getContext().getObjCIdType();
@@ -1651,8 +1652,8 @@ llvm::Constant *CGObjCGNU::GenerateClassStructure(
       LongTy,                 // abi_version
       IvarOffsets->getType(), // ivar_offsets
       Properties->getType(),  // properties
-      IntPtrTy,               // strong_pointers
-      IntPtrTy,               // weak_pointers
+      PtrTy,               // strong_pointers
+      PtrTy,               // weak_pointers
       nullptr);
   llvm::Constant *Zero = llvm::ConstantInt::get(LongTy, 0);
   // Fill in the structure
@@ -1680,8 +1681,8 @@ llvm::Constant *CGObjCGNU::GenerateClassStructure(
   Elements.push_back(llvm::ConstantInt::get(LongTy, 1));
   Elements.push_back(IvarOffsets);
   Elements.push_back(Properties);
-  Elements.push_back(StrongIvarBitmap);
-  Elements.push_back(WeakIvarBitmap);
+  Elements.push_back(llvm::ConstantExpr::getBitCast(StrongIvarBitmap, PtrTy));
+  Elements.push_back(llvm::ConstantExpr::getBitCast(WeakIvarBitmap, PtrTy));
   // Create an instance of the structure
   // This is now an externally visible symbol, so that we can speed up class
   // messages in the next ABI.  We may already have some weak references to
@@ -2036,7 +2037,7 @@ llvm::Constant *CGObjCGNU::MakeBitField(ArrayRef<bool> bits) {
     for (int i=0 ; i<bitCount ; ++i) {
       if (bits[i]) val |= 1ULL<<(i+1);
     }
-    return llvm::ConstantInt::get(IntPtrTy, val);
+    return llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(IntPtrTy, val), PtrTy);
   }
   SmallVector<llvm::Constant *, 8> values;
   int v=0;
@@ -2379,7 +2380,7 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
       }
       ++ivarIndex;
   }
-  llvm::Constant *ZeroPtr = llvm::ConstantInt::get(IntPtrTy, 0);
+  llvm::Constant *ZeroPtr = llvm::ConstantPointerNull::get(PtrTy);
   //Generate metaclass for class methods
   llvm::Constant *MetaClassStruct = GenerateClassStructure(NULLPtr,
       NULLPtr, 0x12L, ClassName.c_str(), nullptr, Zeros[0], GenerateIvarList(
