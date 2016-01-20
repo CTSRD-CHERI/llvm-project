@@ -1139,7 +1139,8 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
   ObjCSuperType = QualType();
 
   // void * type
-  VoidPtrTy = getPointerType(VoidTy);
+  VoidPtrTy = getPointerType(getAddrSpaceQualType(VoidTy,
+              DefaultAS))->getCanonicalTypeUnqualified();
 
   // nullptr type (C++0x 2.14.7)
   InitBuiltinType(NullPtrTy,           BuiltinType::NullPtr);
@@ -2467,6 +2468,8 @@ QualType ASTContext::getBlockPointerType(QualType T) const {
       BlockPointerTypes.FindNodeOrInsertPos(ID, InsertPos);
     assert(!NewIP && "Shouldn't be in the map!"); (void)NewIP;
   }
+  if (DefaultAS != 0)
+    T = getAddrSpaceQualType(T, DefaultAS);
   BlockPointerType *New
     = new (*this, TypeAlignment) BlockPointerType(T, Canonical);
   Types.push_back(New);
