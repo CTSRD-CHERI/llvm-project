@@ -1939,14 +1939,21 @@ bool Type::isIncompleteType(NamedDecl **Def) const {
 
 bool QualType::isCapabilityType(ASTContext &Context) const {
   const QualType CanonicalType = getCanonicalType();
-  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
-    return BT->getKind() == BuiltinType::IntCap ||
-           BT->getKind() == BuiltinType::UIntCap;
-  const Type *T = CanonicalType.getTypePtr();
   unsigned CapAS = Context.getTargetInfo().AddressSpaceForCapabilities();
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType)) {
+    auto Kind = BT->getKind();
+    if (Kind == BuiltinType::IntCap ||
+        Kind == BuiltinType::UIntCap)
+      return true;
+    if (Kind == BuiltinType::ObjCId)
+      return Context.getDefaultAS() == CapAS;
+  }
+  const Type *T = CanonicalType.getTypePtr();
   if (const PointerType *PT = dyn_cast<PointerType>(T)) {
     unsigned AS = PT->getPointeeType().getAddressSpace();
     return AS == CapAS;
+  } else if (isa<ObjCObjectPointerType>(T)) {
+    return Context.getDefaultAS() == CapAS;
   } else if (T->isArrayType() && !T->isConstantArrayType())
     return CanonicalType.getAddressSpace() == CapAS;
   return false;
