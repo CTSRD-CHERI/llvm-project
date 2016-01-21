@@ -301,6 +301,7 @@ static void initializeForBlockHeader(CodeGenModule &CGM, CGBlockInfo &info,
 
   info.BlockAlign = CGM.getPointerAlign();
   info.BlockSize = 3 * CGM.getPointerSize() + 2 * CGM.getIntSize();
+  info.BlockSize = info.BlockSize.RoundUpToAlignment(CGM.getPointerAlign());
 
   assert(elementTypes.empty());
   elementTypes.push_back(CGM.VoidPtrTy);
@@ -2096,6 +2097,8 @@ const BlockByrefInfo &CodeGenFunction::getBlockByrefInfo(const VarDecl *D) {
   // int32_t __size;
   types.push_back(Int32Ty);
   size += CharUnits::fromQuantity(4);
+  // If the pointer size is over 64 bits, there is padding after these.
+  size = size.RoundUpToAlignment(getPointerAlign());
 
   // Note that this must match *exactly* the logic in buildByrefHelpers.
   bool hasCopyAndDispose = getContext().BlockRequiresCopying(Ty, D);
