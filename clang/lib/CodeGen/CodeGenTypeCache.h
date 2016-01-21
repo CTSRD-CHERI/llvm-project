@@ -80,6 +80,8 @@ struct CodeGenTypeCache {
   union {
     unsigned char PointerAlignInBytes;
     unsigned char PointerSizeInBytes;
+  };
+  union {
     unsigned char SizeSizeInBytes; // sizeof(size_t)
     unsigned char SizeAlignInBytes;
   };

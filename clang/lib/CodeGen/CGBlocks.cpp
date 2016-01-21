@@ -298,7 +298,6 @@ static void initializeForBlockHeader(CodeGenModule &CGM, CGBlockInfo &info,
   // Assert that that struct is packed.
   assert(CGM.getIntSize() <= CGM.getPointerSize());
   assert(CGM.getIntAlign() <= CGM.getPointerAlign());
-  assert((2 * CGM.getIntSize()).isMultipleOf(CGM.getPointerAlign()));
 
   info.BlockAlign = CGM.getPointerAlign();
   info.BlockSize = 3 * CGM.getPointerSize() + 2 * CGM.getIntSize();

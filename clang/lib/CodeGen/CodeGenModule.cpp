@@ -107,6 +107,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   DoubleTy = llvm::Type::getDoubleTy(LLVMContext);
   PointerWidthInBits = C.getTargetInfo().getPointerWidth(0);
   PointerAlignInBytes =
+    C.toCharUnitsFromBits(C.getTargetInfo().getPointerAlign(C.getDefaultAS())).getQuantity();
+  SizeAlignInBytes =
     C.toCharUnitsFromBits(C.getTargetInfo().getPointerAlign(0)).getQuantity();
   IntAlignInBytes =
     C.toCharUnitsFromBits(C.getTargetInfo().getIntAlign()).getQuantity();
