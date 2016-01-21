@@ -684,16 +684,28 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const BlockExpr *blockExpr) {
 llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
   // Using the computed layout, generate the actual block function.
   bool isLambdaConv = blockInfo.getBlockDecl()->isConversionFromLambda();
-  llvm::Constant *blockFn
+  llvm::Constant *blockFnConstant
     = CodeGenFunction(CGM, true).GenerateBlockFunction(CurGD, blockInfo,
                                                        LocalDeclMap,
                                                        isLambdaConv);
-  blockFn = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(blockFn,
-          VoidPtrTy);
+  auto globalBlockFn =
+    llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(blockFnConstant,
+        VoidPtrTy);
 
   // If there is nothing to capture, we can emit this as a global block.
   if (blockInfo.CanBeGlobal)
-    return buildGlobalBlock(CGM, blockInfo, blockFn);
+    return buildGlobalBlock(CGM, blockInfo, globalBlockFn);
+
+  llvm::Value *blockFn;
+  // FIXME: Hide this logic in the target somewhere
+  if ((getContext().getDefaultAS() == 200)) {
+    llvm::Value *PCC = Builder.CreateCall(
+      CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+    blockFn = Builder.CreatePtrToInt(blockFnConstant, Int64Ty);
+    blockFn = setPointerOffset(PCC, blockFn);
+    blockFn = Builder.CreateBitCast(blockFn, VoidPtrTy);
+  } else
+    blockFn = globalBlockFn;
 
   // Otherwise, we have to emit this as a local block.
 
