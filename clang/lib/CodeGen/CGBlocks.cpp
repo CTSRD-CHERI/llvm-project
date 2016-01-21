@@ -324,7 +324,7 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
 
   if (!block->hasCaptures()) {
     info.StructureType =
-      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, true);
+      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, false);
     info.CanBeGlobal = true;
     return;
   }
@@ -435,7 +435,7 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
   // If that was everything, we're done here.
   if (layout.empty()) {
     info.StructureType =
-      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, true);
+      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, false);
     info.CanBeGlobal = true;
     return;
   }
@@ -543,7 +543,7 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
   }
 
   info.StructureType =
-    llvm::StructType::get(CGM.getLLVMContext(), elementTypes, true);
+    llvm::StructType::get(CGM.getLLVMContext(), elementTypes, false);
 }
 
 /// Enter the scope of a block.  This should be run at the entrance to
