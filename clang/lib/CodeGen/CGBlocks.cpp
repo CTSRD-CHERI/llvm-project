@@ -323,9 +323,11 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
   SmallVector<llvm::Type*, 8> elementTypes;
   initializeForBlockHeader(CGM, info, elementTypes);
 
+  bool pack = CGM.getPointerAlign().getQuantity() <= 8;
+
   if (!block->hasCaptures()) {
     info.StructureType =
-      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, false);
+      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, pack);
     info.CanBeGlobal = true;
     return;
   }
@@ -436,7 +438,7 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
   // If that was everything, we're done here.
   if (layout.empty()) {
     info.StructureType =
-      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, false);
+      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, pack);
     info.CanBeGlobal = true;
     return;
   }
@@ -544,7 +546,7 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
   }
 
   info.StructureType =
-    llvm::StructType::get(CGM.getLLVMContext(), elementTypes, false);
+    llvm::StructType::get(CGM.getLLVMContext(), elementTypes, pack);
 }
 
 /// Enter the scope of a block.  This should be run at the entrance to
