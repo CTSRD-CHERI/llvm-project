@@ -6511,7 +6511,7 @@ public:
     return TargetInfo::convertConstraint(Constraint);
   }
 
-  virtual CallingConvCheckResult checkCallingConvention(CallingConv CC) const {
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
     return (((CC == CC_CheriCCallee) || (CC == CC_CheriCCall)) && IsCheri) ?
         CCCR_OK : CCCR_Warning;
   }
@@ -6895,27 +6895,27 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
   unsigned getIntCapWidth() const override { return Cheri128 ? 128 : 256; }
   unsigned getIntCapAlign() const override { return Cheri128 ? 128 : 256; }
 
-  virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
+  uint64_t getPointerWidthV(unsigned AddrSpace) const override {
     return (AddrSpace == 200) ? CapSize : PointerWidth;
   }
-  virtual uint64_t getPointerAlignV(unsigned AddrSpace) const {
+  uint64_t getPointerAlignV(unsigned AddrSpace) const override {
     return (AddrSpace == 200) ? CapSize : PointerAlign;
   }
-  uint64_t getPointerRangeV(unsigned) const {
+  uint64_t getPointerRangeV(unsigned) const override {
     return 64;
   }
 
-  virtual bool SupportsCapabilities() const { return true; }
+  bool SupportsCapabilities() const override { return true; }
 
-  virtual int AddressSpaceForCapabilities() const { return 200; }
+  int AddressSpaceForCapabilities() const override { return 200; }
 
 
-  virtual int AddressSpaceForObjC() const { return 200; }
+  int AddressSpaceForObjC() const override { return 200; }
 
-  virtual bool setABI(const std::string &Name) {
+  bool setABI(const std::string &Name) override {
     return Mips64EBTargetInfo::setABI(Name);
   }
-  virtual int AddressSpaceForStack() const { return SandboxABI ? 200 : 0; }
+  int AddressSpaceForStack() const override { return SandboxABI ? 200 : 0; }
 };
 
 class Mips64ELTargetInfo : public Mips64TargetInfoBase {
