@@ -3889,6 +3889,21 @@ llvm::MDTuple *CodeGenModule::CreateVTableBitSetEntry(
           llvm::ConstantInt::get(Int64Ty, Offset.getQuantity()))};
   return llvm::MDTuple::get(getLLVMContext(), BitsetOps);
 }
+
+static llvm::GlobalVariable *
+GenerateAS0StringLiteral(CodeGenModule &CGM, StringRef Str) {
+  StringRef StrWithNull(Str.str().c_str(), Str.str().size() + 1);
+
+  llvm::Constant *C = llvm::ConstantDataArray::getString(CGM.getLLVMContext(),
+          StrWithNull, false);
+
+  auto *GV = new llvm::GlobalVariable( CGM.getModule(), C->getType(), true,
+          llvm::GlobalValue::PrivateLinkage, C);
+  GV->setUnnamedAddr(true);
+
+  return GV;
+}
+
 llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
     StringRef Fn) {
   // We're going to emit a structure of the following form:
@@ -3922,24 +3937,26 @@ llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
         /*isConstant*/false, llvm::GlobalValue::LinkOnceODRLinkage,
         Zero64, GlobalName);
     MethodNumVar->setSection(".CHERI_CALLER");
+    addUsedGlobal(MethodNumVar);
   }
 
   auto GlobalStructName = (StringRef(".sandbox_required_method.") + Cls + "." +
       Fn).str();
   if (!getModule().getNamedGlobal(GlobalStructName)) {
-    auto ClsName = GetAddrOfConstantCString(Cls);
-    auto MethodName = GetAddrOfConstantCString(Fn);
+    auto *ClsName = GenerateAS0StringLiteral(*this, Cls);
+    auto *MethodName = GenerateAS0StringLiteral(*this, Fn);
     auto StructTy = llvm::StructType::get(Int64Ty,
-        ClsName.getPointer()->getType(), MethodName.getPointer()->getType(),
+        ClsName->getType(), MethodName->getType(),
         MethodNumVar->getType(), Int64Ty, nullptr);
 
     auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
-        ClsName.getPointer(), MethodName.getPointer(), MethodNumVar, Zero64});
+        ClsName, MethodName, MethodNumVar, Zero64});
     auto *MetadataGV = new llvm::GlobalVariable(getModule(), StructTy,
         /*isConstant*/false, llvm::GlobalValue::ExternalLinkage, StructInit,
         GlobalStructName);
     MetadataGV->setSection("__cheri_sandbox_required_methods");
     MetadataGV->setComdat(getModule().getOrInsertComdat(GlobalStructName));
+    addUsedGlobal(MetadataGV);
   }
 
   return MethodNumVar;
@@ -3968,25 +3985,27 @@ void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
         /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
         Fn, GlobalName);
     MethodPtrVar->setSection(".CHERI_CALLEE");
+    addUsedGlobal(MethodPtrVar);
   }
 
   auto GlobalStructName = (StringRef(".sandbox_provided_method.") + Cls + "." +
       Method).str();
   if (!getModule().getNamedGlobal(GlobalStructName)) {
-    auto ClsName = GetAddrOfConstantCString(Cls);
-    auto MethodName = GetAddrOfConstantCString(Method);
+    auto *ClsName = GenerateAS0StringLiteral(*this, Cls);
+    auto *MethodName = GenerateAS0StringLiteral(*this, Method);
     auto *StructTy = llvm::StructType::get(Int64Ty,
-        ClsName.getPointer()->getType(), MethodName.getPointer()->getType(),
+        ClsName->getType(), MethodName->getType(),
         MethodPtrVar->getType(), nullptr);
     auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
 
     auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
-        ClsName.getPointer(), MethodName.getPointer(), MethodPtrVar});
+        ClsName, MethodName, MethodPtrVar});
     auto *MetadataGV = new llvm::GlobalVariable(getModule(), StructTy,
         /*isConstant*/false, llvm::GlobalValue::ExternalLinkage, StructInit,
         GlobalStructName);
     MetadataGV->setSection("__cheri_sandbox_provided_methods");
     MetadataGV->setComdat(getModule().getOrInsertComdat(StringRef(GlobalStructName)));
+    addUsedGlobal(MetadataGV);
   }
 
 }
