@@ -92,7 +92,7 @@ public:
 
 /// MipsCheriTargetMachine - MIPS with CHERI capability extensions.
 class MipsCheriTargetMachine : public MipsebTargetMachine {
-  virtual void anchor();
+  void anchor() override;
 public:
   MipsCheriTargetMachine(const Target &T, const Triple &TT,
                         StringRef CPU, StringRef FS,
