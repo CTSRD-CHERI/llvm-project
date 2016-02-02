@@ -1811,12 +1811,15 @@ SDValue MipsTargetLowering::lowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 
   return createCMovFP(DAG, Cond, True, False, DL);
 }
-static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length) {
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length) {
   SDLoc DL(Val);
   Intrinsic::ID SetBounds = Intrinsic::mips_cap_bounds_set;
   return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
         DAG.getConstant(SetBounds, DL, MVT::i64), Val,
-        DAG.getIntPtrConstant(Length, DL));
+        Length);
+}
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length) {
+   return setBounds(DAG, Val, DAG.getIntPtrConstant(Length, SDLoc(Val)));
 }
 
 SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
@@ -1856,10 +1859,34 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()));
   if (GV->getType()->getAddressSpace() == 200) {
     Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
-    if (!isa<Function>(GV)) {
+    StringRef Name = GV->getName();
+    if (!isa<Function>(GV) &&
+        !GV->hasWeakLinkage() &&
+        !GV->hasWeakAnyLinkage() &&
+        !GV->hasExternalWeakLinkage() &&
+        !GV->hasSection() &&
+        !Name.startswith("__start_") &&
+        !Name.startswith("__stop_")) {
+      uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
       if (GV->hasInternalLinkage() || GV->hasLocalLinkage())
-        Global = setBounds(DAG, Global,
-            DAG.getDataLayout().getTypeAllocSize(GV->getType()));
+        Global = setBounds(DAG, Global, SizeBytes);
+      else {
+        const Module &M = *GV->getParent();
+        std::string Name = (Twine(".size.")+GV->getName()).str();
+        GlobalVariable *SizeGV = M.getGlobalVariable(Name);
+        Type *I64 = Type::getInt64Ty(M.getContext());
+        if (!SizeGV) {
+          SizeGV = new GlobalVariable(const_cast<Module&>(M),
+              I64, /*isConstant*/true,
+              GlobalValue::LinkOnceAnyLinkage, ConstantInt::get(I64, 0),
+              Twine(".size.")+GV->getName());
+          SizeGV->setSection(".global_sizes");
+        }
+        SDValue Size = DAG.getGlobalAddress(SizeGV, SDLoc(Global), MVT::i64);
+        Size = DAG.getLoad(MVT::i64, SDLoc(Global), DAG.getEntryNode(), Size,
+            MachinePointerInfo(SizeGV), false, false, false, 0);
+        Global = setBounds(DAG, Global, Size);
+      }
     }
   }
   return Global;

@@ -7,6 +7,8 @@
 using namespace llvm;
 using namespace llvm::object;
 
+static const std::string SizePrefix = ".size.";
+
 int main(int argc, char *argv[]) {
   if (argc != 2) {
     fprintf(stderr, "Usage: %s {statically linked object}\n", argv[0]);
@@ -18,27 +20,43 @@ int main(int argc, char *argv[]) {
   // ObjectFile doesn't allow in-place modification, so we open the file again
   // and write it out.
   FILE *F = fopen(argv[1], "r+");
+  StringMap<uint64_t> SizeForName;
+  std::vector<SymbolRef> SizeSymbols;
+  SectionRef SizesSection;
+
+  StringRef Data;
+  for (const SectionRef &Sec : OF->getBinary()->sections()) {
+    StringRef Name;
+    if (!Sec.getName(Name)) {
+      if (Name == "__cap_relocs") {
+        Sec.getContents(Data);
+        continue;
+      } else if (Name == ".global_sizes") {
+        SizesSection = Sec;
+        continue;
+      }
+    Sections.push_back(std::make_tuple(Sec.getAddress(), Sec.getSize(),
+                Sec.isText()));
+    }
+  }
 
   for (const SymbolRef &sym : OF->getBinary()->symbols()) {
     uint64_t Size = ELFSymbolRef(sym).getSize();
     if (Size == 0)
       continue;
+    ErrorOr<StringRef> Name = sym.getName();
+    if (Name) {
+      if (Name->startswith(SizePrefix) && SizesSection.containsSymbol(sym)) {
+        SizeSymbols.push_back(sym);
+        continue;
+      } else
+        SizeForName[*Name] = Size;
+    }
     ErrorOr<uint64_t> Start = sym.getAddress();
     if (!Start)
       continue;
     SymbolRef::Type type = sym.getType();
     SymbolSizes.insert({Start.get(), {Size, (type == SymbolRef::ST_Function)}});
-  }
-  StringRef Data;
-  for (const SectionRef &Sec : OF->getBinary()->sections()) {
-    StringRef Name;
-    if (!Sec.getName(Name))
-      if (Name == "__cap_relocs") {
-        Sec.getContents(Data);
-        continue;
-      }
-    Sections.push_back(std::make_tuple(Sec.getAddress(), Sec.getSize(),
-                Sec.isText()));
   }
   const size_t entry_size = 40;
   MemoryBufferRef MB = OF->getBinary()->getMemoryBufferRef();
@@ -84,6 +102,28 @@ int main(int argc, char *argv[]) {
     fseek(F, entry - MB.getBufferStart() + 24, SEEK_SET);
     fwrite(&BigSize, sizeof(BigSize), 1, F);
     fwrite(&BigPerms, sizeof(BigPerms), 1, F);
+  }
+  SizesSection.getContents(Data);
+  uint64_t SectionOffset = Data.data() - MB.getBufferStart();
+  for (SymbolRef &sym : SizeSymbols) {
+    ErrorOr<uint64_t> Start = sym.getAddress();
+    if (!Start)
+      continue;
+    uint64_t offset = *Start - SizesSection.getAddress();
+    std::string Name = sym.getName()->str();
+    Name = Name.substr(SizePrefix.size(), Name.length() - SizePrefix.size());
+    auto SizeIt = SizeForName.find(Name);
+    uint64_t Size;
+    if (SizeIt == SizeForName.end()) {
+      fprintf(stderr, "Unable to find size for symbol %s\n", Name.c_str());
+      Size = 0;
+    } else
+      Size = SizeIt->second;
+    fprintf(stderr, "Writing data to offset %" PRIx64 " for symbol %s\n", SectionOffset + offset, Name.c_str());
+    fseek(F, SectionOffset + offset, SEEK_SET);
+    uint64_t BigSize =
+        support::endian::byte_swap<uint64_t, support::big>(Size);
+    fwrite(&BigSize, sizeof(BigSize), 1, F);
   }
   fclose(F);
 }
