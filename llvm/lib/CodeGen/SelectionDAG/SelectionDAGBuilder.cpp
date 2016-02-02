@@ -2194,11 +2194,12 @@ void SelectionDAGBuilder::visitLandingPad(const LandingPadInst &LP) {
   // copied into virtual registers.
   SDValue Ops[2];
   if (FuncInfo.ExceptionPointerVirtReg) {
-    Ops[0] = DAG.getZExtOrTrunc(
-        DAG.getCopyFromReg(DAG.getEntryNode(), dl,
+    SDValue EPtr = DAG.getCopyFromReg(DAG.getEntryNode(), dl,
                            FuncInfo.ExceptionPointerVirtReg,
-                           TLI.getPointerTy(DAG.getDataLayout())),
-        dl, ValueVTs[0]);
+                           TLI.getPointerTy(DAG.getDataLayout(),
+                               TLI.getExceptionPointerAS()));
+    Ops[0] = (EPtr.getValueType() == MVT::iFATPTR) ? EPtr :
+        DAG.getZExtOrTrunc(EPtr, dl, ValueVTs[0]);
   } else {
     Ops[0] = DAG.getConstant(0, dl, TLI.getPointerTy(DAG.getDataLayout()));
   }

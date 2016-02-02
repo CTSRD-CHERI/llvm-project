@@ -34,6 +34,7 @@ namespace llvm {
     bool allowsMisalignedMemoryAccesses(EVT VT, unsigned AS = 0,
                                         unsigned Align = 1,
                                         bool *Fast = nullptr) const override;
+    uint32_t getExceptionPointerAS() const override;
 
     SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 

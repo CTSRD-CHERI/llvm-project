@@ -940,6 +940,9 @@ bool SelectionDAGISel::PrepareEHLandingPad() {
   MachineBasicBlock *MBB = FuncInfo->MBB;
   const BasicBlock *LLVMBB = MBB->getBasicBlock();
   const TargetRegisterClass *PtrRC =
+      TLI->getRegClassFor(TLI->getPointerTy(CurDAG->getDataLayout(),
+                  TLI->getExceptionPointerAS()));
+  const TargetRegisterClass *SelRC =
       TLI->getRegClassFor(TLI->getPointerTy(CurDAG->getDataLayout()));
 
   // Catchpads have one live-in register, which typically holds the exception
@@ -979,7 +982,7 @@ bool SelectionDAGISel::PrepareEHLandingPad() {
 
   // Mark exception selector register as live in.
   if (unsigned Reg = TLI->getExceptionSelectorRegister())
-    FuncInfo->ExceptionSelectorVirtReg = MBB->addLiveIn(Reg, PtrRC);
+    FuncInfo->ExceptionSelectorVirtReg = MBB->addLiveIn(Reg, SelRC);
 
   return true;
 }

@@ -164,6 +164,8 @@ public:
 
   virtual bool useSoftFloat() const { return false; }
 
+  virtual uint32_t getExceptionPointerAS() const { return 0; }
+
   /// Return the pointer type for the given address space, defaults to
   /// the pointer type from the data layout.
   /// FIXME: The default needs to be removed once all the code is updated.
