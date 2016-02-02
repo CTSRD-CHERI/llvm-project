@@ -1811,6 +1811,13 @@ SDValue MipsTargetLowering::lowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 
   return createCMovFP(DAG, Cond, True, False, DL);
 }
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length) {
+  SDLoc DL(Val);
+  Intrinsic::ID SetBounds = Intrinsic::mips_cap_bounds_set;
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+        DAG.getConstant(SetBounds, DL, MVT::i64), Val,
+        DAG.getIntPtrConstant(Length, DL));
+}
 
 SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
                                                SelectionDAG &DAG) const {
@@ -1847,8 +1854,14 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         N, SDLoc(N), Ty, DAG,
         (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP : MipsII::MO_GOT16,
         DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()));
-  if (GV->getType()->getAddressSpace() == 200)
-    return DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
+  if (GV->getType()->getAddressSpace() == 200) {
+    Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
+    if (!isa<Function>(GV)) {
+      if (GV->hasInternalLinkage() || GV->hasLocalLinkage())
+        Global = setBounds(DAG, Global,
+            DAG.getDataLayout().getTypeAllocSize(GV->getType()));
+    }
+  }
   return Global;
 }
 
