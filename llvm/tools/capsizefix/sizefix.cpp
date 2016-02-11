@@ -119,7 +119,9 @@ int main(int argc, char *argv[]) {
       Size = 0;
     } else
       Size = SizeIt->second;
-    fprintf(stderr, "Writing data to offset %" PRIx64 " for symbol %s\n", SectionOffset + offset, Name.c_str());
+#ifndef NDEBUG
+    fprintf(stderr, "Writing size %llu for symbol %s\n", (unsigned long long)Size, SectionOffset + offset, Name.c_str());
+#endif
     fseek(F, SectionOffset + offset, SEEK_SET);
     uint64_t BigSize =
         support::endian::byte_swap<uint64_t, support::big>(Size);
