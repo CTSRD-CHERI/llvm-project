@@ -72,21 +72,27 @@ int main(int argc, char *argv[]) {
     uint64_t Size = 0;
     bool isFunction;
     if (SizeAndType == SymbolSizes.end()) {
-      fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n",
-              (unsigned long long)base,
-              static_cast<unsigned long long>(
-                  support::endian::read<uint64_t, support::big, 1>(entry)));
       for (auto &Sec : Sections) {
         if (std::get<0>(Sec) < base &&
             (std::get<0>(Sec) + std::get<1>(Sec)) > base) {
           Size = std::get<1>(Sec);
           isFunction = std::get<2>(Sec);
-          fprintf(stderr, "Using section size (%llu bytes) instead\n",
-              static_cast<unsigned long long>(Size));
+          if (!isFunction)
+            fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n"
+                    "Using section size (%llu bytes) instead\n",
+                    (unsigned long long)base,
+                    static_cast<unsigned long long>(
+                        support::endian::read<uint64_t, support::big, 1>(entry)),
+                    static_cast<unsigned long long>(Size));
         }
       }
-      if (Size == 0)
+      if (Size == 0) {
+        fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n",
+                (unsigned long long)base,
+                static_cast<unsigned long long>(
+                    support::endian::read<uint64_t, support::big, 1>(entry)));
         continue;
+      }
     } else {
       Size = SizeAndType->second.first;
       isFunction = SizeAndType->second.second;
