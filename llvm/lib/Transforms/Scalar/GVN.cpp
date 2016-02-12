@@ -620,6 +620,7 @@ namespace {
     typedef SmallVector<BasicBlock*, 64> UnavailBlkVect;
 
   public:
+    const TargetLibraryInfo *getTargetLibraryInfo() { return TLI; }
     static char ID; // Pass identification, replacement for typeid
     explicit GVN(bool noloads = false)
         : FunctionPass(ID), NoLoads(noloads), MD(nullptr) {
@@ -1344,6 +1345,15 @@ Value *AvailableValueInBlock::MaterializeAdjustedValue(LoadInst *LI,
     }
   } else if (isCoercedLoadValue()) {
     LoadInst *Load = getCoercedLoadValue();
+    Value *Object = Load->getOperand(0)->stripPointerCasts();
+    // FIXME: don't hard-code address space.
+    if (Object->getType()->getPointerAddressSpace() == 200) {
+      uint64_t Size;
+      bool KnownSize = getObjectSize(Object, Size, DL,
+              gvn.getTargetLibraryInfo());
+      if (!KnownSize || (NextPowerOf2(Offset) > Size))
+        return LI;
+    }
     if (Load->getType() == LoadTy && Offset == 0) {
       Res = Load;
     } else {
@@ -1925,11 +1935,6 @@ bool GVN::processLoad(LoadInst *L) {
       // If this is a clobber and L is the first instruction in its block, then
       // we have the first instruction in the entry block.
       if (DepLI == L)
-        return false;
-
-      // Don't try widening capability-relative loads.
-      // FIXME: Don't hard-code 200
-      if (L->getPointerOperand()->getType()->getPointerAddressSpace() == 200)
         return false;
 
       int Offset = AnalyzeLoadFromClobberingLoad(
