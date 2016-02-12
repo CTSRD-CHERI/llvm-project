@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
     } else
       Size = SizeIt->second;
 #ifndef NDEBUG
-    fprintf(stderr, "Writing size %llu for symbol %s\n", (unsigned long long)Size, SectionOffset + offset, Name.c_str());
+    fprintf(stderr, "Writing size %llu for symbol %s\n", (unsigned long long)Size, Name.c_str());
 #endif
     fseek(F, SectionOffset + offset, SEEK_SET);
     uint64_t BigSize =
