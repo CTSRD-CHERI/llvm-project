@@ -1776,6 +1776,8 @@ bool GVN::processNonLocalLoad(LoadInst *LI) {
 
     // Perform PHI construction.
     Value *V = ConstructSSAForLoadSet(LI, ValuesPerBlock, *this);
+    if (V == LI)
+      return false;
     LI->replaceAllUsesWith(V);
 
     if (isa<PHINode>(V))
