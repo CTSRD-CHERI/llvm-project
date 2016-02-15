@@ -47,8 +47,6 @@ public:
       return;
     if (SetOffset->getIntrinsicID() != llvm::Intrinsic::mips_cap_offset_set)
       return;
-    SetOffset->dump();
-    SetOffset->getOperand(1)->dump();
     auto *PtrToInt = dyn_cast<PtrToIntOperator>(SetOffset->getOperand(1));
     if (!PtrToInt)
       return;
