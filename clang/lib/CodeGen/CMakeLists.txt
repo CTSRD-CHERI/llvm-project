@@ -9,6 +9,7 @@ set(LLVM_LINK_COMPONENTS
   Instrumentation
   Linker
   MC
+  MemCapOpts
   ObjCARCOpts
   Object
   ProfileData

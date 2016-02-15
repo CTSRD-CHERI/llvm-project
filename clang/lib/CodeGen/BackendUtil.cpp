@@ -38,6 +38,7 @@
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Instrumentation.h"
+#include "llvm/Transforms/MemCap.h"
 #include "llvm/Transforms/ObjCARC.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
@@ -150,6 +151,12 @@ private:
   const LangOptions &LangOpts;
 };
 
+}
+
+static void addMemCapDirectCallsPass(const PassManagerBuilder &Builder,
+        PassManagerBase &PM) {
+  if (Builder.OptLevel > 0)
+    PM.add(createMemCapDirectCallsPass());
 }
 
 static void addObjCARCAPElimPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
@@ -303,6 +310,8 @@ void EmitAssemblyHelper::CreatePasses() {
     PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
                            addObjCARCOptPass);
   }
+  PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
+                         addMemCapDirectCallsPass);
 
   if (LangOpts.Sanitize.has(SanitizerKind::LocalBounds)) {
     PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
