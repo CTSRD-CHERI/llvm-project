@@ -195,6 +195,7 @@ void initializeMachineSchedulerPass(PassRegistry&);
 void initializeMachineSinkingPass(PassRegistry&);
 void initializeMachineTraceMetricsPass(PassRegistry&);
 void initializeMachineVerifierPassPass(PassRegistry&);
+void initializeMemCapDirectCallsPass(PassRegistry&);
 void initializeMemCpyOptPass(PassRegistry&);
 void initializeMemDepPrinterPass(PassRegistry&);
 void initializeMemDerefPrinterPass(PassRegistry&);

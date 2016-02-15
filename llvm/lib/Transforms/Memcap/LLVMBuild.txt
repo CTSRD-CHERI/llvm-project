@@ -1,4 +1,4 @@
-;===- ./lib/Transforms/LLVMBuild.txt ---------------------------*- Conf -*--===;
+;===- ./lib/Transforms/Memcap/LLVMBuild.txt --------------------*- Conf -*--===;
 ;
 ;                     The LLVM Compiler Infrastructure
 ;
@@ -15,10 +15,9 @@
 ;
 ;===------------------------------------------------------------------------===;
 
-[common]
-subdirectories = IPO InstCombine Instrumentation Scalar Utils Vectorize ObjCARC Memcap
-
 [component_0]
-type = Group
-name = Transforms
-parent = Libraries
+type = Library
+name = Memcap
+parent = Transforms
+library_name = MemcapOpts
+required_libraries = Analysis Core Support TransformUtils
