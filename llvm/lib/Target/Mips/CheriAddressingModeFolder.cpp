@@ -11,10 +11,8 @@
 using namespace llvm;
 
 static cl::opt<bool> DisableAddressingModeFolder(
-  "disable-cheri-addressing-mode-folder",
-  cl::init(false),
-  cl::desc("Allow redundant capability manipulations"),
-  cl::Hidden);
+    "disable-cheri-addressing-mode-folder", cl::init(false),
+    cl::desc("Allow redundant capability manipulations"), cl::Hidden);
 
 namespace {
 struct CheriAddressingModeFolder : public MachineFunctionPass {
@@ -24,7 +22,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
   CheriAddressingModeFolder(MipsTargetMachine &TM) : MachineFunctionPass(ID) {
     InstrInfo = TM.getSubtargetImpl()->getInstrInfo();
   }
-  bool tryToFoldAdd(unsigned vreg, MachineRegisterInfo &RI, MachineInstr *&AddInst, int64_t &offset) {
+  bool tryToFoldAdd(unsigned vreg, MachineRegisterInfo &RI,
+                    MachineInstr *&AddInst, int64_t &offset) {
     AddInst = RI.getUniqueVRegDef(vreg);
     // If we can't uniquely identify the definition, give up.
     if (AddInst == 0)
@@ -33,16 +32,16 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     int64_t off;
     // If this is an add-immediate then we can possibly fold it
     switch (AddInst->getOpcode()) {
-      case Mips::DADDi:
-      case Mips::DADDiu:
-        // Don't try to fold in things that have relocations yet
-        if (!AddInst->getOperand(2).isImm())
-          return false;
-        reg = AddInst->getOperand(1).getReg();
-        off = AddInst->getOperand(2).getImm();
-        break;
-      default:
+    case Mips::DADDi:
+    case Mips::DADDiu:
+      // Don't try to fold in things that have relocations yet
+      if (!AddInst->getOperand(2).isImm())
         return false;
+      reg = AddInst->getOperand(1).getReg();
+      off = AddInst->getOperand(2).getImm();
+      break;
+    default:
+      return false;
     }
     // We potentially could fold non-zero adds, but we'll leave them for now.
     if (reg != Mips::ZERO_64)
@@ -50,21 +49,21 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     off += offset;
     // If the result is too big to fit in the offset field, give up
     // FIXME: Offset for clc / csc is bigger...
-    if (off < -127 || off > 127)
-    {
+    if (off < -127 || off > 127) {
       return false;
     }
     offset = off;
     return true;
   }
   bool foldMachineFunction(MachineFunction &MF) {
-    if (DisableAddressingModeFolder) return false;
+    if (DisableAddressingModeFolder)
+      return false;
 
     MachineRegisterInfo &RI = MF.getRegInfo();
-    std::set<MachineInstr*> IncOffsets;
-    std::set<MachineInstr*> Adds;
-    std::set<std::pair<MachineBasicBlock*, MachineInstr*>> SetPCCOffsets;
-    std::set<MachineInstr*> GetPCCs;
+    std::set<MachineInstr *> IncOffsets;
+    std::set<MachineInstr *> Adds;
+    std::set<std::pair<MachineBasicBlock *, MachineInstr *>> SetPCCOffsets;
+    std::set<MachineInstr *> GetPCCs;
     bool modified = false;
     for (auto &MBB : MF)
       for (MachineInstr &I : MBB) {
@@ -83,7 +82,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // Only look at cap-relative loads and stores
         if (!(Op == Mips::CAPLOAD8 || Op == Mips::CAPLOADU8 ||
               Op == Mips::CAPLOAD16 || Op == Mips::CAPLOADU16 ||
-              Op == Mips::CAPLOAD32 || Op == Mips::CAPLOADU32 || 
+              Op == Mips::CAPLOAD32 || Op == Mips::CAPLOADU32 ||
               Op == Mips::CAPLOAD832 || Op == Mips::CAPLOADU832 ||
               Op == Mips::CAPLOAD1632 || Op == Mips::CAPLOADU1632 ||
               Op == Mips::CAPLOAD3264 || Op == Mips::CAPLOAD64 ||
@@ -103,7 +102,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             Adds.insert(AddInst);
             I.getOperand(2).setImm(offset);
             I.getOperand(1).setReg(Mips::ZERO_64);
-          } else 
+          } else
             continue;
         }
         // If we get to here, then the memory operation has a capability and
@@ -113,9 +112,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
 
         // Ignore ones that are not based on a CIncOffset op
         MachineInstr *IncOffset = RI.getUniqueVRegDef(I.getOperand(3).getReg());
-        if (!IncOffset ||
-            (IncOffset->getOpcode() != Mips::CIncOffset))
-                 continue;
+        if (!IncOffset || (IncOffset->getOpcode() != Mips::CIncOffset))
+          continue;
         assert(IncOffset);
 
         MachineOperand Cap = IncOffset->getOperand(1);
@@ -140,8 +138,10 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         modified = true;
       }
     for (auto &I : SetPCCOffsets) {
-      unsigned PCC = MF.getRegInfo().createVirtualRegister(&Mips::CheriRegsRegClass);
-      BuildMI(*I.first, I.second, I.second->getDebugLoc(), InstrInfo->get(Mips::CGetPCC), PCC);
+      unsigned PCC =
+          MF.getRegInfo().createVirtualRegister(&Mips::CheriRegsRegClass);
+      BuildMI(*I.first, I.second, I.second->getDebugLoc(),
+              InstrInfo->get(Mips::CGetPCC), PCC);
       I.second->getOperand(1).setReg(PCC);
     }
     for (auto *I : GetPCCs)
@@ -172,6 +172,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
 }
 char CheriAddressingModeFolder::ID;
 
-MachineFunctionPass *llvm::createCheriAddressingModeFolder(MipsTargetMachine &TM) {
+MachineFunctionPass *
+llvm::createCheriAddressingModeFolder(MipsTargetMachine &TM) {
   return new CheriAddressingModeFolder(TM);
 }

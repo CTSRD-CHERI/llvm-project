@@ -8,14 +8,13 @@
 
 using namespace llvm;
 
-static cl::opt<bool> DisableBranchFolder(
-  "disable-cheri-branch-folder",
-  cl::init(false),
-  cl::desc("Allow inefficient capability tag checks"),
-  cl::Hidden);
+static cl::opt<bool>
+    DisableBranchFolder("disable-cheri-branch-folder", cl::init(false),
+                        cl::desc("Allow inefficient capability tag checks"),
+                        cl::Hidden);
 
 namespace llvm {
-  extern const MCInstrDesc MipsInsts[];
+extern const MCInstrDesc MipsInsts[];
 }
 
 namespace {
@@ -26,15 +25,18 @@ struct CheriBranchFolder : public MachineFunctionPass {
   typedef std::pair<MachineBasicBlock::iterator, unsigned> Replacement;
   CheriBranchFolder() : MachineFunctionPass(ID) {}
   virtual bool runOnMachineFunction(MachineFunction &MF) {
-    if (DisableBranchFolder) return false;
+    if (DisableBranchFolder)
+      return false;
 
     MachineRegisterInfo &RI = MF.getRegInfo();
-    std::set<MachineInstr*> GetTags;
+    std::set<MachineInstr *> GetTags;
     SmallVector<Replacement, 16> Branches;
     bool modified = false;
-    for (MachineFunction::iterator BI=MF.begin(), BE=MF.end() ; BI!=BE ; ++BI)
-      for (MachineBasicBlock::iterator I=BI->getFirstTerminator(), E=BI->end() ;
-          I!=E ; ++I) {
+    for (MachineFunction::iterator BI = MF.begin(), BE = MF.end(); BI != BE;
+         ++BI)
+      for (MachineBasicBlock::iterator I = BI->getFirstTerminator(),
+                                       E = BI->end();
+           I != E; ++I) {
         int Op = I->getOpcode();
         // Only look at basic blocks that end with a branch.
         if (!(Op == Mips::BEQ64 || Op == Mips::BNE64))
@@ -73,9 +75,9 @@ struct CheriBranchFolder : public MachineFunctionPass {
         Op = Mips::CBTS;
       }
       BuildMI(*MBB, Branch, Branch->getDebugLoc(), MipsInsts[Op])
-        .addReg(Reg)
-        .addOperand(Branch->getOperand(2))
-        .addOperand(Branch->getOperand(3));
+          .addReg(Reg)
+          .addOperand(Branch->getOperand(2))
+          .addOperand(Branch->getOperand(3));
       Branch->eraseFromBundle();
     }
     for (auto I : GetTags) {
