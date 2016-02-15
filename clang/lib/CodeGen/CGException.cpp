@@ -557,9 +557,13 @@ void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
           C->getCaughtType().getNonReferenceType(), CaughtTypeQuals);
 
       CatchTypeInfo TypeInfo{nullptr, 0};
-      if (CaughtType->isObjCObjectPointerType())
+      if (CaughtType->isObjCObjectPointerType()) {
         TypeInfo.RTTI = CGM.getObjCRuntime().GetEHType(CaughtType);
-      else
+        TypeInfo.RTTI = 
+            llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(TypeInfo.RTTI,
+                    cast<llvm::PointerType>(TypeInfo.RTTI->getType())
+                      ->getElementType()->getPointerTo(0));
+      } else
         TypeInfo = CGM.getCXXABI().getAddrOfCXXCatchHandlerType(
             CaughtType, C->getCaughtType());
       CatchScope->setHandler(I, TypeInfo, Handler);
@@ -954,7 +958,7 @@ static llvm::BasicBlock *emitCatchDispatchBlock(CodeGenFunction &CGF,
     assert(handler.Type.Flags == 0 &&
            "landingpads do not support catch handler flags");
     assert(typeValue && "fell into catch-all case!");
-    typeValue = CGF.Builder.CreateBitCast(typeValue, CGF.Int8PtrTy);
+    typeValue = CGF.Builder.CreateBitCast(typeValue, CGF.Int8Ty->getPointerTo(0));
 
     // Figure out the next block.
     bool nextIsEnd;
