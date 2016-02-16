@@ -25,6 +25,11 @@ class Pass;
 // inlining.
 //
 Pass *createMemCapDirectCallsPass();
+//===----------------------------------------------------------------------===//
+//
+// createMemCapFoldCapIntrinsics - Fold redundant capability operations.
+//
+Pass *createMemCapFoldIntrinsicsPass();
 
 } // End llvm namespace
 

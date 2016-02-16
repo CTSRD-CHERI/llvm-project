@@ -1,4 +1,5 @@
 add_llvm_library(LLVMMemCapOpts
+  FoldCapIntrinsics.cpp
   PureCapABICalls.cpp
 
   ADDITIONAL_HEADER_DIRS
