@@ -76,6 +76,9 @@ class MemCapFoldIntrinsics : public ModulePass {
         CI->replaceAllUsesWith(Offset);
         Offset->dump();
         Modified = true;
+      } else if (isa<ConstantPointerNull>(BaseCap)) {
+        CI->replaceAllUsesWith(llvm::Constant::getNullValue(CI->getType()));
+        Modified = true;
       }
     }
   }
