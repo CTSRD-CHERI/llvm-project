@@ -3,8 +3,8 @@
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 
-declare void @llvm.lifetime.start(i64, i8*)
-declare void @llvm.lifetime.end(i64, i8*)
+declare void @llvm.lifetime.start.p0i8(i64, i8*)
+declare void @llvm.lifetime.end.p0i8(i64, i8*)
 
 %t1 = type {i32, i32, i32}
 
@@ -16,7 +16,7 @@ define void @test1() {
   %A3 = getelementptr %t1, %t1* %A, i32 0, i32 2
   %B = bitcast i32* %A1 to i8*
   store i32 0, i32* %A1
-  call void @llvm.lifetime.start(i64 -1, i8* %B)
+  call void @llvm.lifetime.start.p0i8(i64 -1, i8* %B)
   ret void
 ; CHECK-NEXT: ret void
 }
@@ -29,7 +29,7 @@ define void @test2() {
   %A3 = getelementptr %t1, %t1* %A, i32 0, i32 2
   %B = bitcast i32* %A2 to i8*
   store i32 0, i32* %A2
-  call void @llvm.lifetime.start(i64 -1, i8* %B)
+  call void @llvm.lifetime.start.p0i8(i64 -1, i8* %B)
   %C = load i32, i32* %A2
   ret void
 ; CHECK: ret void
@@ -43,7 +43,7 @@ define void @test3() {
   %A3 = getelementptr %t1, %t1* %A, i32 0, i32 2
   %B = bitcast i32* %A2 to i8*
   store i32 0, i32* %A2
-  call void @llvm.lifetime.start(i64 6, i8* %B)
+  call void @llvm.lifetime.start.p0i8(i64 6, i8* %B)
   %C = load i32, i32* %A2
   ret void
 ; CHECK-NEXT: ret void
@@ -57,7 +57,7 @@ define void @test4() {
   %A3 = getelementptr %t1, %t1* %A, i32 0, i32 2
   %B = bitcast i32* %A2 to i8*
   store i32 0, i32* %A2
-  call void @llvm.lifetime.start(i64 1, i8* %B)
+  call void @llvm.lifetime.start.p0i8(i64 1, i8* %B)
   %C = load i32, i32* %A2
   ret void
 ; CHECK-NEXT: ret void
@@ -86,7 +86,7 @@ define void @test5() {
   %A2 = getelementptr %t2, %t2* %A, i32 0, i32 1, i32 1
   %A3 = getelementptr %t2, %t2* %A, i32 0, i32 2
   store i8 0, i8* %A2
-  call void @llvm.lifetime.start(i64 5, i8* %A2)
+  call void @llvm.lifetime.start.p0i8(i64 5, i8* %A2)
 ; CHECK: llvm.lifetime{{.*}}i64 1
 ; CHECK: llvm.lifetime{{.*}}i64 1
 ; CHECK: llvm.lifetime{{.*}}i64 1
@@ -130,7 +130,7 @@ define void @test6() {
 ; CHECK-NOT: store i8 24
 
   %B = bitcast i16* %A13 to i8*
-  call void @llvm.lifetime.start(i64 7, i8* %B)
+  call void @llvm.lifetime.start.p0i8(i64 7, i8* %B)
 ; CHECK: lifetime.start{{.*}}i64 1
 ; CHECK: lifetime.start{{.*}}i64 1
 ; CHECK: lifetime.start{{.*}}i64 1

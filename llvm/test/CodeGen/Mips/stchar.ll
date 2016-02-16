@@ -63,8 +63,8 @@ entry:
   %s.i = alloca i16, align 4
   %c.i = alloca i8, align 4
   %0 = bitcast i16* %s.i to i8*
-  call void @llvm.lifetime.start(i64 -1, i8* %0) nounwind
-  call void @llvm.lifetime.start(i64 -1, i8* %c.i) nounwind
+  call void @llvm.lifetime.start.p0i8(i64 -1, i8* %0) nounwind
+  call void @llvm.lifetime.start.p0i8(i64 -1, i8* %c.i) nounwind
   store i16 16, i16* %s.i, align 4
   store i8 99, i8* %c.i, align 4
   store i16* %s.i, i16** @sp, align 4
@@ -79,12 +79,12 @@ entry:
   %conv.i.i = sext i16 %3 to i32
   %conv1.i.i = sext i8 %4 to i32
   %call.i.i = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str, i32 0, i32 0), i32 %conv.i.i, i32 %conv1.i.i) nounwind
-  call void @llvm.lifetime.end(i64 -1, i8* %0) nounwind
-  call void @llvm.lifetime.end(i64 -1, i8* %c.i) nounwind
+  call void @llvm.lifetime.end.p0i8(i64 -1, i8* %0) nounwind
+  call void @llvm.lifetime.end.p0i8(i64 -1, i8* %c.i) nounwind
   ret i32 0
 }
 
-declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
 
-declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) nounwind
 

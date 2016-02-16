@@ -90,7 +90,7 @@ entry:
   %2 = inttoptr i64 %1 to i64*, !dbg !30
   store i64 -1, i64* %2, align 8, !dbg !30
   %p.i.0..sroa_cast = bitcast i32** %p.i to i8*, !dbg !30
-  call void @llvm.lifetime.start(i64 8, i8* %p.i.0..sroa_cast), !dbg !30
+  call void @llvm.lifetime.start.p0i8(i64 8, i8* %p.i.0..sroa_cast), !dbg !30
   store i64 0, i64* getelementptr inbounds ([1000 x i64], [1000 x i64]* @__msan_param_tls, i64 0, i64 0), align 8, !dbg !30
   store i64 0, i64* getelementptr inbounds ([8 x i64], [8 x i64]* @__msan_retval_tls, i64 0, i64 0), align 8, !dbg !30
   %call.i = call i8* @_Znwm(i64 4) #4, !dbg !30
@@ -140,7 +140,7 @@ if.then.i:                                        ; preds = %16
   br label %_Z1fv.exit, !dbg !34
 
 _Z1fv.exit:                                       ; preds = %16, %if.then.i
-  call void @llvm.lifetime.end(i64 8, i8* %p.i.0..sroa_cast), !dbg !35
+  call void @llvm.lifetime.end.p0i8(i64 8, i8* %p.i.0..sroa_cast), !dbg !35
   store i32 0, i32* bitcast ([8 x i64]* @__msan_retval_tls to i32*), align 8, !dbg !36
   ret i32 0, !dbg !36
 }
@@ -154,10 +154,10 @@ declare void @llvm.dbg.value(metadata, i64, metadata, metadata) #2
 declare i32 @puts(i8* nocapture readonly) #3
 
 ; Function Attrs: nounwind
-declare void @llvm.lifetime.start(i64, i8* nocapture) #3
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #3
 
 ; Function Attrs: nounwind
-declare void @llvm.lifetime.end(i64, i8* nocapture) #3
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #3
 
 declare void @__msan_warning_noreturn()
 

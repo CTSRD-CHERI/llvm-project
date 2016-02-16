@@ -28,18 +28,18 @@ define void @f() #0 {
 entry:
   %buf = alloca [100 x i32], align 16
   %0 = bitcast [100 x i32]* %buf to i8*, !dbg !16
-  call void @llvm.lifetime.start(i64 400, i8* %0) #4, !dbg !16
+  call void @llvm.lifetime.start.p0i8(i64 400, i8* %0) #4, !dbg !16
   tail call void @llvm.dbg.declare(metadata [100 x i32]* %buf, metadata !8, metadata !17), !dbg !18
 
 
   %arraydecay = getelementptr inbounds [100 x i32], [100 x i32]* %buf, i64 0, i64 0, !dbg !19
   call void @Capture(i32* %arraydecay), !dbg !20
-  call void @llvm.lifetime.end(i64 400, i8* %0) #4, !dbg !21
+  call void @llvm.lifetime.end.p0i8(i64 400, i8* %0) #4, !dbg !21
   ret void, !dbg !21
 }
 
 ; Function Attrs: nounwind argmemonly
-declare void @llvm.lifetime.start(i64, i8* nocapture) #1
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #1
 
 ; Function Attrs: nounwind readnone
 declare void @llvm.dbg.declare(metadata, metadata, metadata) #2
@@ -47,7 +47,7 @@ declare void @llvm.dbg.declare(metadata, metadata, metadata) #2
 declare void @Capture(i32*) #3
 
 ; Function Attrs: nounwind argmemonly
-declare void @llvm.lifetime.end(i64, i8* nocapture) #1
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 
 attributes #0 = { safestack uwtable "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+sse,+sse2" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind argmemonly }

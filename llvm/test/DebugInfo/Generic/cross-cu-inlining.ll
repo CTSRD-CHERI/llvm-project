@@ -73,13 +73,13 @@ entry:
   store i32 0, i32* %retval
   %0 = load i32, i32* @i, align 4, !dbg !19
   %1 = bitcast i32* %x.addr.i to i8*
-  call void @llvm.lifetime.start(i64 4, i8* %1)
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* %1)
   store i32 %0, i32* %x.addr.i, align 4
   call void @llvm.dbg.declare(metadata i32* %x.addr.i, metadata !120, metadata !DIExpression()), !dbg !21
   %2 = load i32, i32* %x.addr.i, align 4, !dbg !22
   %mul.i = mul nsw i32 %2, 2, !dbg !22
   %3 = bitcast i32* %x.addr.i to i8*, !dbg !22
-  call void @llvm.lifetime.end(i64 4, i8* %3), !dbg !22
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* %3), !dbg !22
   ret i32 %mul.i, !dbg !19
 }
 
@@ -98,10 +98,10 @@ entry:
 declare void @llvm.dbg.declare(metadata, metadata, metadata) #2
 
 ; Function Attrs: nounwind
-declare void @llvm.lifetime.start(i64, i8* nocapture) #3
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #3
 
 ; Function Attrs: nounwind
-declare void @llvm.lifetime.end(i64, i8* nocapture) #3
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #3
 
 attributes #0 = { uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { alwaysinline nounwind uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
