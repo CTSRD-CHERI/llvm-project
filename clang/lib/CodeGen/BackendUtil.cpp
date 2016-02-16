@@ -159,6 +159,12 @@ static void addMemCapDirectCallsPass(const PassManagerBuilder &Builder,
     PM.add(createMemCapDirectCallsPass());
 }
 
+static void addMemCapFoldIntrinsicsPass(const PassManagerBuilder &Builder,
+        PassManagerBase &PM) {
+  if (Builder.OptLevel > 0)
+    PM.add(createMemCapFoldIntrinsicsPass());
+}
+
 static void addObjCARCAPElimPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
   if (Builder.OptLevel > 0)
     PM.add(createObjCARCAPElimPass());
@@ -312,6 +318,10 @@ void EmitAssemblyHelper::CreatePasses() {
   }
   PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
                          addMemCapDirectCallsPass);
+  PMBuilder.addExtension(PassManagerBuilder::EP_ModuleOptimizerEarly,
+                         addMemCapFoldIntrinsicsPass);
+  PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
+                         addMemCapFoldIntrinsicsPass);
 
   if (LangOpts.Sanitize.has(SanitizerKind::LocalBounds)) {
     PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
