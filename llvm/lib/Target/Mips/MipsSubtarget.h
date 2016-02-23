@@ -293,7 +293,7 @@ public:
   static bool useConstantIslands();
 
   unsigned stackAlignment() const {
-    return isCheri() ? 32  : (isGP64bit() ? 16 : 8);
+    return isCheri() ? (isCheri128() ? 16 : 32)  : (isGP64bit() ? 16 : 8);
   }
 
   // Grab relocation model
