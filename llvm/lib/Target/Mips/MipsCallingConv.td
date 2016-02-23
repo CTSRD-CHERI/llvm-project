@@ -20,6 +20,12 @@ class CCIfSubtarget<string F, CCAction A, string Invert = "">
 // The inverse of CCIfSubtarget
 class CCIfSubtargetNot<string F, CCAction A> : CCIfSubtarget<F, A, "!">;
 
+def CC_MipsCheriCapOnStack : CallingConv<[
+  CCIfSubtarget<"isCheri128()", CCAssignToStack<16, 16>>,
+  CCIfSubtargetNot<"isCheri128()", CCAssignToStack<32, 32>>
+]>;
+
+
 /// Match if the original argument (before lowering) was a float.
 /// For example, this is true for i32's that were lowered from soft-float.
 class CCIfOrigArgWasNotFloat<CCAction A>
@@ -158,7 +164,7 @@ def CC_MipsN : CallingConv<[
   CCIfType<[f32], CCAssignToStack<4, 8>>,
   CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
   CCIfType<[iFATPTR], CCAssignToReg<[C3, C4, C5, C6, C7, C8, C9, C10]>>,
-  CCIfType<[iFATPTR], CCAssignToStack<32, 32>>
+  CCIfType<[iFATPTR], CCDelegateTo<CC_MipsCheriCapOnStack>>
 ]>;
 
 def CC_CHERI_CCall : CallingConv<[
@@ -194,7 +200,7 @@ def CC_MipsCheriSandbox_VarArg : CallingConv<[
   // All stack parameter slots become 64-bit doublewords and are 8-byte aligned.
   CCIfType<[f32], CCAssignToStack<4, 8>>,
   CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
-  CCIfType<[iFATPTR], CCAssignToStack<32, 32>>
+  CCIfType<[iFATPTR], CCDelegateTo<CC_MipsCheriCapOnStack>>
 ]>;
 
 def RetCC_MipsN : CallingConv<[
@@ -315,7 +321,7 @@ def CC_MipsN_FastCC : CallingConv<[
 
   CCIfType<[iFATPTR], CCAssignToReg<[C1, C2, C3, C4, C5, C6, C7, C8, C9, C10,
                                      C11, C12, C13, C14, C15, C16]>>,
-  CCIfType<[iFATPTR], CCAssignToStack<32, 32>>
+  CCIfType<[iFATPTR], CCDelegateTo<CC_MipsCheriCapOnStack>>
 ]>;
 
 def CC_Mips_FastCC : CallingConv<[
