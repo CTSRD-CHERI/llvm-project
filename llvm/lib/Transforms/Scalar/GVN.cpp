@@ -1322,7 +1322,9 @@ static Value *ConstructSSAForLoadSet(LoadInst *LI,
     if (SSAUpdate.HasValueForBlock(BB))
       continue;
 
-    SSAUpdate.AddAvailableValue(BB, AV.MaterializeAdjustedValue(LI, gvn));
+    Value *Materialized = AV.MaterializeAdjustedValue(LI, gvn);
+    if (Materialized != LI)
+      SSAUpdate.AddAvailableValue(BB, Materialized);
   }
 
   // Perform PHI construction.
@@ -1345,18 +1347,18 @@ Value *AvailableValueInBlock::MaterializeAdjustedValue(LoadInst *LI,
     }
   } else if (isCoercedLoadValue()) {
     LoadInst *Load = getCoercedLoadValue();
-    Value *Object = Load->getOperand(0)->stripPointerCasts();
-    // FIXME: don't hard-code address space.
-    if (Object->getType()->getPointerAddressSpace() == 200) {
-      uint64_t Size;
-      bool KnownSize = getObjectSize(Object, Size, DL,
-              gvn.getTargetLibraryInfo());
-      if (!KnownSize || (NextPowerOf2(Offset) > Size))
-        return LI;
-    }
     if (Load->getType() == LoadTy && Offset == 0) {
       Res = Load;
     } else {
+      Value *Object = Load->getOperand(0)->stripPointerCasts();
+      // FIXME: don't hard-code address space.
+      if (Object->getType()->getPointerAddressSpace() == 200) {
+        uint64_t Size;
+        bool KnownSize = getObjectSize(Object, Size, DL,
+                gvn.getTargetLibraryInfo());
+        if (!KnownSize || (NextPowerOf2(Offset) > Size))
+          return LI;
+      }
       Res = GetLoadValueForLoad(Load, Offset, LoadTy, BB->getTerminator(),
                                 gvn);
   
