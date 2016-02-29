@@ -1461,7 +1461,7 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
   unsigned ToAddrSpace = toTy->getAddressSpace();
   llvm::Value *result = EmitPointerCast(From, toTy);
   if (Target.getTriple().getArch() == llvm::Triple::cheri) {
-    if (ToAddrSpace != Target.SupportsCapabilities()) return result;
+    if (ToAddrSpace != Target.AddressSpaceForCapabilities()) return result;
     unsigned flags = 0xffff;
     // Clear the store and store-capability flags
     if (ToTy->getPointeeType().getQualifiers().hasInput() &&
