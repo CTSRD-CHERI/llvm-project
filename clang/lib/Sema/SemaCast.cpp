@@ -1727,8 +1727,7 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
   unsigned AS = DestType->getPointeeType().getAddressSpace();
   ASTContext &Ctx = Self.getASTContext();
 
-  // FIXME: Don't hard-code 200 here.
-  if ((Ctx.getDefaultAS() == 200) &&
+  if (Ctx.getTargetInfo().areAllPointersCapabilities() &&
       DestType.isCapabilityType(Ctx) &&
       !SrcType.isCapabilityType(Ctx) &&
       !SrcExpr->isIntegerConstantExpr(Ctx)) {

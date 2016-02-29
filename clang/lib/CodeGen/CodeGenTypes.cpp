@@ -363,9 +363,9 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // arithmetic.
     case BuiltinType::IntCap:
     case BuiltinType::UIntCap:
-      // FIXME: Don't hard-code the capability address space.
       ResultType =
-          llvm::PointerType::get(llvm::Type::getInt8Ty(getLLVMContext()), 200);
+          llvm::PointerType::get(llvm::Type::getInt8Ty(getLLVMContext()),
+              Context.getTargetInfo().areAllPointersCapabilities());
       break;
 
     case BuiltinType::Half:

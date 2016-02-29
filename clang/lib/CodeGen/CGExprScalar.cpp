@@ -362,15 +362,18 @@ public:
 
     llvm::Value *Addr = EmitLValue(E->getSubExpr()).getPointer();
     llvm::Type *AddrTy = Addr->getType();
-    // FIXME: Do this in a less-ugly way.
-    if ((CGF.getContext().getDefaultAS() == 200) && AddrTy->getPointerAddressSpace() != 200) {
-      llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
-          ->getElementType()->getPointerTo(200);
-      Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
-      llvm::Value *PCC = Builder.CreateCall(
-              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
-      Addr = CGF.setPointerOffset(PCC, Addr);
-      Addr = Builder.CreateBitCast(Addr, CapTy);
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (TI.areAllPointersCapabilities()) {
+      unsigned CapAS = TI.AddressSpaceForCapabilities();
+      if (AddrTy->getPointerAddressSpace() != CapAS) {
+        llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
+            ->getElementType()->getPointerTo(CapAS);
+        Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+        llvm::Value *PCC = Builder.CreateCall(
+                CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+        Addr = CGF.setPointerOffset(PCC, Addr);
+        Addr = Builder.CreateBitCast(Addr, CapTy);
+      }
     }
     return Addr;
   }
@@ -1458,7 +1461,7 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
   unsigned ToAddrSpace = toTy->getAddressSpace();
   llvm::Value *result = EmitPointerCast(From, toTy);
   if (Target.getTriple().getArch() == llvm::Triple::cheri) {
-    if (ToAddrSpace != 200) return result;
+    if (ToAddrSpace != Target.SupportsCapabilities()) return result;
     unsigned flags = 0xffff;
     // Clear the store and store-capability flags
     if (ToTy->getPointeeType().getQualifiers().hasInput() &&
@@ -1610,15 +1613,18 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_FunctionToPointerDecay: {
     llvm::Value *Addr = EmitLValue(E).getPointer();
     llvm::Type *AddrTy = Addr->getType();
-    // FIXME: Do this in a less-ugly way.
-    if ((CGF.getContext().getDefaultAS() == 200) && AddrTy->getPointerAddressSpace() != 200) {
-      llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
-          ->getElementType()->getPointerTo(200);
-      Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
-      llvm::Value *PCC = Builder.CreateCall(
-              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
-      Addr = CGF.setPointerOffset(PCC, Addr);
-      Addr = Builder.CreateBitCast(Addr, CapTy);
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (TI.areAllPointersCapabilities()) {
+      unsigned CapAS = TI.AddressSpaceForCapabilities();
+      if (AddrTy->getPointerAddressSpace() != CapAS) {
+        llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
+            ->getElementType()->getPointerTo(CapAS);
+        Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+        llvm::Value *PCC = Builder.CreateCall(
+                CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+        Addr = CGF.setPointerOffset(PCC, Addr);
+        Addr = Builder.CreateBitCast(Addr, CapTy);
+      }
     }
     return Addr;
   }

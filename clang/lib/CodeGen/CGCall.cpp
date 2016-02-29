@@ -3564,11 +3564,12 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                   CharUnits Alignment = getContext().getDeclAlign(Key);
                   Address Addr(V, Alignment);
                   KeyV = Builder.CreateLoad(Addr);
-                  // FIXME: Don't hard-code address space 200!
+                  unsigned CapAS = CGM.getContext().getTargetInfo()
+                    .AddressSpaceForCapabilities();
                   // If this is CHERI, enforce this in hardware
-                  if (RetTy->getPointeeType().getAddressSpace() == 200) {
+                  if (RetTy->getPointeeType().getAddressSpace() == CapAS) {
                     llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::mips_cap_unseal);
-                    llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, 200);
+                    llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
                     V = Builder.CreateCall(F,
                           {Builder.CreateBitCast(V, CapPtrTy),
                            Builder.CreateBitCast(KeyV, CapPtrTy)});

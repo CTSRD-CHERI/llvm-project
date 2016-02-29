@@ -700,7 +700,7 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
 
   llvm::Value *blockFn;
   // FIXME: Hide this logic in the target somewhere
-  if ((getContext().getDefaultAS() == 200)) {
+  if (getContext().getTargetInfo().areAllPointersCapabilities()) {
     llvm::Value *PCC = Builder.CreateCall(
       CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
     blockFn = Builder.CreatePtrToInt(blockFnConstant, Int64Ty);

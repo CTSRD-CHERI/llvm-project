@@ -7792,6 +7792,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 
   if (NewFD->hasAttr<PointerInterpretationCapsAttr>()) {
     // FIXME: This will assert on failure - it should print a nice error.
+    unsigned CapAS = Context.getTargetInfo() .AddressSpaceForCapabilities();
     const FunctionProtoType *FPT =
       NewFD->getType()->getAs<FunctionProtoType>();
     ArrayRef<QualType> OldParams = FPT->getParamTypes();
@@ -7799,14 +7800,14 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     for (QualType T : OldParams) {
       if (const PointerType *PT = T->getAs<PointerType>())
         NewParams.push_back(Context.getPointerType(
-              Context.getAddrSpaceQualType(PT->getPointeeType(), 200)));
+              Context.getAddrSpaceQualType(PT->getPointeeType(), CapAS)));
       else
         NewParams.push_back(T);
     }
     QualType RetTy = FPT->getReturnType();
     if (const PointerType *PT = RetTy->getAs<PointerType>())
       RetTy = Context.getPointerType(Context.getAddrSpaceQualType(
-            PT->getPointeeType(), 200));
+            PT->getPointeeType(), CapAS));
     NewFD->setType(Context.getFunctionType(RetTy, NewParams,
           FPT->getExtProtoInfo()));
   }

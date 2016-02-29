@@ -946,7 +946,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_return_address: {
     Value *Depth =
         CGM.EmitConstantExpr(E->getArg(0), getContext().UnsignedIntTy, this);
-    Value *F = CGM.getContext().getDefaultAS() == 200
+    Value *F = CGM.getContext().getTargetInfo().areAllPointersCapabilities()
         ? CGM.getIntrinsic(Intrinsic::returncapability)
         : CGM.getIntrinsic(Intrinsic::returnaddress);
     return RValue::get(Builder.CreateCall(F, Depth));

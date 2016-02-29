@@ -979,11 +979,12 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
           CharUnits Alignment = getContext().getDeclAlign(Key);
           Address Addr(KeyV, Alignment);
           KeyV = Builder.CreateLoad(Addr);
-          // FIXME: Don't hard-code address space 200!
+          unsigned CapAS = CGM.getContext().getTargetInfo()
+            .AddressSpaceForCapabilities();
           // If this is CHERI, enforce this in hardware
-          if (Ty->getPointeeType().getAddressSpace() == 200) {
+          if (Ty->getPointeeType().getAddressSpace() == CapAS) {
             llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::mips_cap_seal);
-            llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, 200);
+            llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
             RetV = Builder.CreateCall(F,
                {Builder.CreateBitCast(RetV, CapPtrTy),
                 Builder.CreateBitCast(KeyV, CapPtrTy)});
