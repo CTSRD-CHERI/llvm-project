@@ -365,7 +365,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     case BuiltinType::UIntCap:
       ResultType =
           llvm::PointerType::get(llvm::Type::getInt8Ty(getLLVMContext()),
-              Context.getTargetInfo().areAllPointersCapabilities());
+              Context.getTargetInfo().AddressSpaceForCapabilities());
       break;
 
     case BuiltinType::Half:
