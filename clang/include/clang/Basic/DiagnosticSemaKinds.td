@@ -5197,7 +5197,13 @@ def note_typecheck_assign_const : Note<
 def warn_mixed_capability_binop : Warning<
   "binary expression on capability and non-capability types: %0 and %1.  "
   "Provenance will be inherited from left-hand side">,
-  InGroup<DiagGroup<"capabilities">>;
+  InGroup<CHERICaps>;
+def warn_capability_no_provenance : Warning<
+  "cast from provenance-free integer type to pointer type will give pointer"
+  " that can not be dereferenced.  ">,
+  InGroup<CHERICaps>;
+def note_insert_intptr_fixit : Note<
+  "insert cast to intptr_t to silence this warning">;
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;

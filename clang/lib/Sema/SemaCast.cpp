@@ -1725,6 +1725,16 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
                                   Sema &Self) {
   QualType SrcType = SrcExpr->getType();
   unsigned AS = DestType->getPointeeType().getAddressSpace();
+  ASTContext &Ctx = Self.getASTContext();
+
+  // FIXME: Don't hard-code 200 here.
+  if ((Ctx.getDefaultAS() == 200) &&
+      DestType.isCapabilityType(Ctx) &&
+      !SrcType.isCapabilityType(Ctx) &&
+      !SrcExpr->isIntegerConstantExpr(Ctx)) {
+    Self.Diag(Loc, diag::warn_capability_no_provenance) << DestType;
+    Self.Diag(Loc, diag::note_insert_intptr_fixit);
+  }
 
   // Not warning on reinterpret_cast, boolean, constant expressions, etc
   // are not explicit design choices, but consistent with GCC's behavior.
