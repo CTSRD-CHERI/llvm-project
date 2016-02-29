@@ -3148,14 +3148,14 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       const GlobalValue *Val = G->getGlobal();
       InternalLinkage = Val->hasInternalLinkage();
 
-      if (InternalLinkage)
-        Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64());
-      else if (LargeGOT) {
+      if (LargeGOT) {
         Callee = getAddrGlobalLargeGOT(G, DL, Ty, DAG, MipsII::MO_CALL_HI16,
                                        MipsII::MO_CALL_LO16, Chain,
                                        FuncInfo->callPtrInfo(Val));
         IsCallReloc = true;
-      } else {
+      } else if (InternalLinkage)
+        Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64());
+      else {
         Callee = getAddrGlobal(G, DL, Ty, DAG, MipsII::MO_GOT_CALL, Chain,
                                FuncInfo->callPtrInfo(Val));
         IsCallReloc = true;
