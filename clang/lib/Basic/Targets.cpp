@@ -6250,7 +6250,6 @@ protected:
   bool HasFP64;
   std::string ABI;
   bool IsCheri;
-  bool SandboxABI;
 
 public:
   MipsTargetInfoBase(const llvm::Triple &Triple, const std::string &ABIStr,
@@ -6258,7 +6257,7 @@ public:
       : TargetInfo(Triple), CPU(CPUStr), IsMips16(false), IsMicromips(false),
         IsNan2008(false), IsSingleFloat(false), FloatABI(HardFloat),
         DspRev(NoDSP), HasMSA(false), HasFP64(false), ABI(ABIStr),
-        IsCheri(false), SandboxABI(false) {
+        IsCheri(false) {
     TheCXXABI.set(TargetCXXABI::GenericMIPS);
   }
 
@@ -6368,7 +6367,7 @@ public:
 
     if (IsCheri) {
       Builder.defineMacro("__CHERI__", Twine(1));
-      if (SandboxABI) {
+      if (CapabilityABI) {
         Builder.defineMacro("__CHERI_SANDBOX__", Twine(3));
         Builder.defineMacro("__CHERI_PURE_CAPABILITY__", Twine(1));
       }
@@ -6575,7 +6574,7 @@ public:
       else if (Feature == "+cheri") {
         IsCheri = true;
       } else if (Feature == "+sandbox") {
-        SandboxABI = true;
+        CapabilityABI = true;
       }
       else if (Feature == "-nan2008")
         IsNan2008 = false;
@@ -6745,7 +6744,7 @@ public:
     PtrDiffType = SignedLong;
     Int64Type = SignedLong;
     IntMaxType = Int64Type;
-    if (SandboxABI)
+    if (CapabilityABI)
       IntPtrType = TargetInfo::SignedIntCap;
   }
 
@@ -6766,7 +6765,7 @@ public:
     }
     if (Name == "n64" || Name == "sandbox") {
       if (Name == "sandbox")
-        SandboxABI = true;
+        CapabilityABI = true;
       setN64ABITypes();
       ABI = Name;
       return true;
@@ -6885,7 +6884,7 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
     }
   }
   void setDataLayoutString() override {
-    if (SandboxABI) {
+    if (CapabilityABI) {
       Desc += "-A200";
       // Superclass defaults to 128, so we don't need to set this for CHERI128.
       DefaultAlignForAttributeAligned = CapSize;
@@ -6915,7 +6914,7 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
   bool setABI(const std::string &Name) override {
     return Mips64EBTargetInfo::setABI(Name);
   }
-  int AddressSpaceForStack() const override { return SandboxABI ? 200 : 0; }
+  int AddressSpaceForStack() const override { return CapabilityABI ? 200 : 0; }
 };
 
 class Mips64ELTargetInfo : public Mips64TargetInfoBase {

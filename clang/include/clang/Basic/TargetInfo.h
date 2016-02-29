@@ -57,6 +57,7 @@ protected:
   bool BigEndian;
   bool TLSSupported;
   bool NoAsmVariants;  // True if {|} are normal characters.
+  bool CapabilityABI = false;
   unsigned char PointerWidth, PointerAlign;
   unsigned char BoolWidth, BoolAlign;
   unsigned char IntWidth, IntAlign;
@@ -892,6 +893,8 @@ public:
   VersionTuple getPlatformMinVersion() const { return PlatformMinVersion; }
 
   bool isBigEndian() const { return BigEndian; }
+
+  bool areAllPointersCapabilities() const { return CapabilityABI; }
 
   enum CallingConvMethodType {
     CCMT_Unknown,
