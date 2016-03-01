@@ -3712,11 +3712,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     AddAArch64TargetArgs(Args, CmdArgs);
     break;
 
+  case llvm::Triple::cheri:
+    Args.ClaimAllArgs(options::OPT_cheri_linker);
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-  case llvm::Triple::cheri:
     AddMIPSTargetArgs(Args, CmdArgs);
     break;
 
