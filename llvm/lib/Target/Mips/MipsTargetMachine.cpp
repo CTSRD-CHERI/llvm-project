@@ -76,7 +76,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
      abort();
    }
 #endif
-    Ret += "-p200:128:128";
+    Ret += "-pf200:128:128";
   } else if (Triple(TT).getArch() == Triple::cheri) {
 #ifdef CHERI_IS_128
      for (int i=0 ; i<10 ; i++) {
@@ -84,7 +84,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
      }
     abort();
 #endif
-    Ret += "-p200:256:256";
+    Ret += "-pf200:256:256";
   }
 
   // Pointers are 32 bit on some ABIs.

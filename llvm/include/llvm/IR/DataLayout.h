@@ -88,10 +88,12 @@ struct PointerAlignElem {
   unsigned PrefAlign;
   uint32_t TypeByteWidth;
   uint32_t AddressSpace;
+  bool     isFat;
 
   /// Initializer
   static PointerAlignElem get(uint32_t AddressSpace, unsigned ABIAlign,
-                              unsigned PrefAlign, uint32_t TypeByteWidth);
+                              unsigned PrefAlign, uint32_t TypeByteWidth,
+                              bool isFat);
   bool operator==(const PointerAlignElem &rhs) const;
 };
 
@@ -153,7 +155,8 @@ private:
   unsigned getAlignmentInfo(AlignTypeEnum align_type, uint32_t bit_width,
                             bool ABIAlign, Type *Ty) const;
   void setPointerAlignment(uint32_t AddrSpace, unsigned ABIAlign,
-                           unsigned PrefAlign, uint32_t TypeByteWidth);
+                           unsigned PrefAlign, uint32_t TypeByteWidth,
+                           bool isFat);
 
   /// Internal helper method that returns requested alignment for type.
   unsigned getAlignment(Type *Ty, bool abi_or_pref) const;
@@ -325,13 +328,8 @@ public:
   /// size of the pointer.  For fat pointers, it returns the size of the base
   /// component of the pointer, ignoring the length, permissions and so on
   /// components.
-  unsigned getPointerBaseSize(unsigned AS) const {
-    // FIXME: This is a really ugly hack.  We should allow targets to specify
-    // that a specific pointer address space is used for fat pointers.
-    if (AS == 200)
-      return 8;
-    return getPointerSize(AS);
-  }
+  unsigned getPointerBaseSize(unsigned AS) const;
+
   unsigned getPointerBaseSizeInBits(unsigned AS) const {
     return getPointerBaseSize(AS) * 8;
   }

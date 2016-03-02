@@ -1,6 +1,6 @@
 ; RUN: llc  -mtriple cheri-unknown-freebsd %s -o - -O0 | FileCheck %s
 ; ModuleID = 'brazdil.c'
-target datalayout = "E-m:m-p200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
+target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
 
 ; Check that the store of the global pointer is not moved after the branch and

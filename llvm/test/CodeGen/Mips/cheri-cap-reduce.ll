@@ -1,6 +1,6 @@
 ; RUN: llc %s -mcpu=cheri -o - | FileCheck %s
 ; ModuleID = 'capfail.c'
-target datalayout = "E-p200:256:256:256-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-i64:64:64-f32:32:32-f64:64:64-f128:128:128-v64:64:64-n32"
+target datalayout = "E-pf200:256:256:256-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-i64:64:64-f32:32:32-f64:64:64-f128:128:128-v64:64:64-n32"
 target triple = "cheri-unknown-freebsd"
 
 ; Check that this doesn't crash SelectionDAG trying to fold the trunc into the

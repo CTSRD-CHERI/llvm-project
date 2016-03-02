@@ -122,13 +122,14 @@ DataLayout::InvalidAlignmentElem = { INVALID_ALIGN, 0, 0, 0 };
 
 PointerAlignElem
 PointerAlignElem::get(uint32_t AddressSpace, unsigned ABIAlign,
-                      unsigned PrefAlign, uint32_t TypeByteWidth) {
+                      unsigned PrefAlign, uint32_t TypeByteWidth, bool isFat) {
   assert(ABIAlign <= PrefAlign && "Preferred alignment worse than ABI!");
   PointerAlignElem retval;
   retval.AddressSpace = AddressSpace;
   retval.ABIAlign = ABIAlign;
   retval.PrefAlign = PrefAlign;
   retval.TypeByteWidth = TypeByteWidth;
+  retval.isFat = isFat;
   return retval;
 }
 
@@ -141,7 +142,7 @@ PointerAlignElem::operator==(const PointerAlignElem &rhs) const {
 }
 
 const PointerAlignElem
-DataLayout::InvalidPointerElem = { 0U, 0U, 0U, ~0U };
+DataLayout::InvalidPointerElem = { 0U, 0U, 0U, ~0U, false };
 
 //===----------------------------------------------------------------------===//
 //                       DataLayout Class Implementation
@@ -184,7 +185,7 @@ void DataLayout::reset(StringRef Desc) {
     setAlignment((AlignTypeEnum)E.AlignType, E.ABIAlign, E.PrefAlign,
                  E.TypeBitWidth);
   }
-  setPointerAlignment(0, 8, 8, 8);
+  setPointerAlignment(0, 8, 8, 8, false);
 
   parseSpecifier(Desc);
 }
@@ -248,10 +249,16 @@ void DataLayout::parseSpecifier(StringRef Desc) {
       AllocaAS = getInt(Tok);
       break;
     case 'p': {
+      bool isFat = false;
+      if (!Tok.empty() && (Tok[0] == 'f')) {
+          isFat = true;
+          Tok = Tok.drop_front(1);
+      }
       // Address space.
       unsigned AddrSpace = Tok.empty() ? 0 : getInt(Tok);
       if (!isUInt<24>(AddrSpace))
         report_fatal_error("Invalid address space, must be a 24bit integer");
+      assert(isFat == (AddrSpace == 200));
 
       // Size.
       if (Rest.empty())
@@ -283,7 +290,7 @@ void DataLayout::parseSpecifier(StringRef Desc) {
       }
 
       setPointerAlignment(AddrSpace, PointerABIAlign, PointerPrefAlign,
-                          PointerMemSize);
+                          PointerMemSize, isFat);
       break;
     }
     case 'i':
@@ -436,7 +443,8 @@ DataLayout::findPointerLowerBound(uint32_t AddressSpace) {
 
 void DataLayout::setPointerAlignment(uint32_t AddrSpace, unsigned ABIAlign,
                                      unsigned PrefAlign,
-                                     uint32_t TypeByteWidth) {
+                                     uint32_t TypeByteWidth,
+                                     bool isFat) {
   if (PrefAlign < ABIAlign)
     report_fatal_error(
         "Preferred alignment cannot be less than the ABI alignment");
@@ -444,11 +452,12 @@ void DataLayout::setPointerAlignment(uint32_t AddrSpace, unsigned ABIAlign,
   PointersTy::iterator I = findPointerLowerBound(AddrSpace);
   if (I == Pointers.end() || I->AddressSpace != AddrSpace) {
     Pointers.insert(I, PointerAlignElem::get(AddrSpace, ABIAlign, PrefAlign,
-                                             TypeByteWidth));
+                                             TypeByteWidth, isFat));
   } else {
     I->ABIAlign = ABIAlign;
     I->PrefAlign = PrefAlign;
     I->TypeByteWidth = TypeByteWidth;
+    I->isFat = isFat;
   }
 }
 
@@ -592,6 +601,14 @@ unsigned DataLayout::getPointerPrefAlignment(unsigned AS) const {
     assert(I->AddressSpace == 0);
   }
   return I->PrefAlign;
+}
+unsigned DataLayout::getPointerBaseSize(unsigned AS) const {
+  PointersTy::const_iterator I = findPointerLowerBound(AS);
+  if (I == Pointers.end() || I->AddressSpace != AS) {
+    I = findPointerLowerBound(0);
+    assert(I->AddressSpace == 0);
+  }
+  return I->isFat ? getPointerSize(0) : I->TypeByteWidth;
 }
 
 unsigned DataLayout::getPointerSize(unsigned AS) const {
