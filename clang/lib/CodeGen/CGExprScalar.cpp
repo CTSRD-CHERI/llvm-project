@@ -1739,7 +1739,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       return Builder.CreateIntToPtr(Src, ResultType);
     }
     if (IsPureCap) {
-      Src = CGF.getPointerOffset(Src);
+      llvm::Value *Offset = CGF.getPointerOffset(Src);
+      llvm::Value *Base = CGF.getPointerBase(Src);
+      Src = CGF.Builder.CreateAdd(Base, Offset);
       return Builder.CreateTruncOrBitCast(Src, ResultType);
     }
     return Builder.CreatePtrToInt(Src, ResultType);

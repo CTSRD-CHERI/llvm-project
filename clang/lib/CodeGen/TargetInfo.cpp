@@ -5836,6 +5836,7 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
   unsigned SizeOfUnwindException;
   mutable llvm::Function *GetOffset = nullptr;
   mutable llvm::Function *SetOffset = nullptr;
+  mutable llvm::Function *GetBase = nullptr;
   mutable llvm::PointerType *I8Cap = nullptr;
   llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
     if (!I8Cap)
@@ -5868,6 +5869,14 @@ public:
     auto &B = CGF.Builder;
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
     return B.CreateBitCast(B.CreateCall(SetOffset, {Ptr, Offset}), DstTy);
+  }
+
+  llvm::Value *getPointerBase(CodeGen::CodeGenFunction &CGF,
+                              llvm::Value *V) const override {
+    if (!GetBase)
+      GetBase = CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_base_get);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetBase, V);
   }
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
