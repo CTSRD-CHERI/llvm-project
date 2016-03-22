@@ -330,6 +330,14 @@ public:
   /// components.
   unsigned getPointerBaseSize(unsigned AS) const;
 
+  bool isFatPointer(unsigned AS) const {
+    return getPointerBaseSize(AS) != getPointerSize(AS);
+  }
+
+  unsigned isFatPointer(Type *Ty) const {
+    return isFatPointer(Ty->getPointerAddressSpace());
+  }
+
   unsigned getPointerBaseSizeInBits(unsigned AS) const {
     return getPointerBaseSize(AS) * 8;
   }

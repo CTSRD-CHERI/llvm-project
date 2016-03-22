@@ -170,7 +170,7 @@ public:
   /// the pointer type from the data layout.
   /// FIXME: The default needs to be removed once all the code is updated.
   MVT getPointerTy(const DataLayout &DL, uint32_t AS = 0) const {
-    if (DL.getPointerSizeInBits(AS) > DL.getPointerBaseSizeInBits(AS))
+    if (DL.isFatPointer(AS))
       return MVT(MVT::iFATPTR);
     return MVT::getIntegerVT(DL.getPointerSizeInBits(AS));
   }

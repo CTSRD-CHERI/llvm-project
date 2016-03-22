@@ -2397,8 +2397,7 @@ TargetLowering::ParseConstraints(const DataLayout &DL,
         }
       } else if (PointerType *PT = dyn_cast<PointerType>(OpTy)) {
         unsigned AS = PT->getAddressSpace();
-        // FIXME: Ugly hack!
-        if (AS == 200)
+        if (DL.isFatPointer(AS))
           OpInfo.ConstraintVT = MVT::iFATPTR;
         else {
           unsigned PtrSize = DL.getPointerSizeInBits(AS);
