@@ -2411,52 +2411,6 @@ static SDValue createLoadLR(unsigned Opc, SelectionDAG &DAG, LoadSDNode *LD,
   return DAG.getMemIntrinsicNode(Opc, DL, VTList, Ops, MemVT,
                                  LD->getMemOperand());
 }
-namespace {
-inline SDValue loadFirstPart(SelectionDAG &DAG, LoadSDNode *LD, EVT VT) {
-  unsigned Align = LD->getAlignment();
-  ISD::LoadExtType ExtType = LD->getExtensionType();
-  // If this is a non-extending load (i.e. the register and memory types are
-  // the same) then it doesn't matter how we extend the first part, because
-  // we'll be discarding those bits anyway.
-  if (ExtType == ISD::NON_EXTLOAD)
-    ExtType = ISD::ZEXTLOAD;
-  MVT PartVT;
-  switch (Align)
-  {
-    case 1: PartVT = MVT::i8; break;
-    case 2: PartVT = MVT::i16; break;
-    case 4: PartVT = MVT::i32; break;
-    default: llvm_unreachable("Invalid alignment for partial load");
-  }
-  return DAG.getExtLoad(ExtType, SDLoc(LD), VT, LD->getChain(),
-      LD->getBasePtr(), LD->getPointerInfo(), PartVT, LD->isVolatile(),
-      LD->isNonTemporal(), LD->isInvariant(), Align, LD->getAAInfo());
-}
-SDValue loadNextPart(SelectionDAG &DAG, LoadSDNode *LD, SDValue &Hi, EVT &VT,
-                     SDValue &OutChain, unsigned Align, unsigned Offset) {
-  SDValue BasePtr = LD->getBasePtr();
-  SDLoc DL(LD);
-  SDValue Chain = LD->getChain();
-  MVT PartVT;
-  switch (Align)
-  {
-    case 1: PartVT = MVT::i8; break;
-    case 2: PartVT = MVT::i16; break;
-    case 4: PartVT = MVT::i32; break;
-    default: llvm_unreachable("Invalid alignment for partial load");
-  }
-  SDValue Ptr = DAG.getPointerAdd(DL, BasePtr, Offset);
-  SDValue Lo = DAG.getExtLoad(ISD::ZEXTLOAD, DL, VT, Chain, Ptr,
-                      LD->getPointerInfo().getWithOffset(Offset), PartVT,
-                      LD->isVolatile(), LD->isNonTemporal(), LD->isInvariant(),
-                      Align, LD->getAAInfo());
-  SDValue ShiftAmount = DAG.getConstant(8 * Align, DL, MVT::i64);
-  SDValue Shift = DAG.getNode(ISD::SHL, DL, VT, Hi, ShiftAmount);
-  OutChain = cast<LoadSDNode>(Lo)->getChain();
-  return DAG.getNode(ISD::OR, DL, VT, Shift, Lo);
-}
-}
-
 // Expand an unaligned 32 or 64-bit integer load node.
 SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   LoadSDNode *LD = cast<LoadSDNode>(Op);
@@ -2465,39 +2419,6 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   if (Subtarget.systemSupportsUnalignedAccess())
     return Op;
 
-  if (Subtarget.isCheri()) {
-    SDLoc DL(Op);
-    SDValue BasePtr = LD->getBasePtr();
-    SDValue Chain = LD->getChain();
-    EVT VT = Op.getValueType();
-    // Ignore 32-bit loads.  
-    if ((ISD::NON_EXTLOAD != LD->getExtensionType()) &&
-      MemVT == MVT::i32 &&
-      BasePtr->getValueType(0) == MVT::iFATPTR) {
-      return Op;
-    } else if ((MemVT == MVT::i16) && (LD->getAlignment() < 2)) {
-      // We have to manually expand unaligned i16 loads on CHERI, because
-      // SelectionDAG doesn't give us a way of only doing custom expansion on
-      // certain types of pointer.
-      SDValue Hi = loadFirstPart(DAG, LD, VT);
-      SDValue Result = loadNextPart(DAG, LD, Hi, VT, Chain, 1, 1);
-      SDValue Ops[2] = {Result, Chain};
-      return DAG.getMergeValues(Ops, DL);
-    } else if ((LD->getAlignment() < (MemVT.getSizeInBits() / 8)) &&
-               ((MemVT == MVT::i64) || (MemVT == MVT::i32)) &&
-               (BasePtr->getValueType(0) == MVT::iFATPTR)) {
-      // CHERI doesn't have capability versions of LDL / LDR, so we have to
-      // expand them the more prosaic way.  We've already expanded i16, so now
-      // we just need to expand i32 and i64
-      SDValue Result = loadFirstPart(DAG, LD, VT);
-      unsigned Align = LD->getAlignment();
-      unsigned Size = (MemVT.getSizeInBits() / 8);
-      for (unsigned Offset=Align ; Offset<=(Size - Align) ; Offset+=Align)
-        Result = loadNextPart(DAG, LD, Result, VT, Chain, Align, Offset);
-      SDValue Ops[2] = {Result, Chain};
-      return DAG.getMergeValues(Ops, DL);
-    }
-  }
   // Return if load is aligned or if MemVT is neither i32 nor i64.
   if ((LD->getAlignment() >= MemVT.getSizeInBits() / 8) ||
       ((MemVT != MVT::i32) && (MemVT != MVT::i64)))
