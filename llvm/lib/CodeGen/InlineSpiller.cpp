@@ -747,6 +747,14 @@ bool InlineSpiller::hoistSpill(LiveInterval &SpillLI, MachineInstr *CopyMI) {
                           MRI.getRegClass(SVI.SpillReg), &TRI);
   --MII; // Point to store instruction.
   LIS.InsertMachineInstrInMaps(MII);
+  // CHERI, with hardware floating point, lacks instructions for storing
+  // floating point via a capability.  As such, the storeRegToStackSlot call
+  // will insert two instructions and we must update the maps for both of them.
+  if (MII != MBB->begin()) {
+    --MII; // Point to the instruction before the store instruction.
+    if (LIS.isNotInMIMap(MII))
+      LIS.InsertMachineInstrInMaps(MII);
+  }
   DEBUG(dbgs() << "\thoisted: " << SVI.SpillVNI->def << '\t' << *MII);
 
   ++NumSpills;
