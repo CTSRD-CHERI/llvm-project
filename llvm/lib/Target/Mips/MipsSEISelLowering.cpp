@@ -3461,54 +3461,37 @@ MipsSETargetLowering::emitFEXP2_D_1(MachineInstr *MI,
   MI->eraseFromParent(); // The pseudo instruction is gone now.
   return BB;
 }
-MachineBasicBlock *
-MipsSETargetLowering::emitCapFloat32Load(MachineInstr *MI,
-                                    MachineBasicBlock *BB) const {
+template<unsigned MTC1, unsigned CAPLOAD>
+static MachineBasicBlock *
+emitCapFloatLoad(const MipsSubtarget &Subtarget,
+                  const llvm::TargetRegisterClass &RC,
+                  MachineInstr *MI,
+                  MachineBasicBlock *BB) {
   DebugLoc DL = MI->getDebugLoc();
   MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
-  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR32RegClass);
+  unsigned IntReg = RegInfo.createVirtualRegister(&RC);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  BuildMI(*BB, MI, DL, TII->get(Mips::CAPLOAD32), IntReg)
-      .addReg(MI->getOperand(1).getReg())
-      .addImm(MI->getOperand(2).getImm())
-      .addReg(MI->getOperand(3).getReg());
-  BuildMI(*BB, MI, DL, TII->get(Mips::MTC1), MI->getOperand(0).getReg())
+  BuildMI(*BB, MI, DL, TII->get(CAPLOAD), IntReg)
+      .addOperand(MI->getOperand(1))
+      .addOperand(MI->getOperand(2))
+      .addOperand(MI->getOperand(3));
+  BuildMI(*BB, MI, DL, TII->get(MTC1))
+      .addOperand(MI->getOperand(0))
       .addReg(IntReg);
   MI->eraseFromParent();
   return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapFloat32Load(MachineInstr *MI,
+                                    MachineBasicBlock *BB) const {
+  return emitCapFloatLoad<Mips::MTC1, Mips::CAPLOAD32>(Subtarget,
+          Mips::GPR32RegClass, MI, BB);
 }
 MachineBasicBlock *
 MipsSETargetLowering::emitCapFloat64Load(MachineInstr *MI,
                                     MachineBasicBlock *BB) const {
-  DebugLoc DL = MI->getDebugLoc();
-  MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
-  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  BuildMI(*BB, MI, DL, TII->get(Mips::CAPLOAD64), IntReg)
-      .addReg(MI->getOperand(1).getReg())
-      .addImm(MI->getOperand(2).getImm())
-      .addReg(MI->getOperand(3).getReg());
-  BuildMI(*BB, MI, DL, TII->get(Mips::DMTC1), MI->getOperand(0).getReg())
-      .addReg(IntReg);
-  MI->eraseFromParent();
-  return BB;
-}
-MachineBasicBlock *
-MipsSETargetLowering::emitCapFloat32Store(MachineInstr *MI,
-                                    MachineBasicBlock *BB) const {
-  DebugLoc DL = MI->getDebugLoc();
-  MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
-  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  BuildMI(*BB, MI, DL, TII->get(Mips::MFC1), IntReg)
-      .addReg(MI->getOperand(0).getReg());
-  BuildMI(*BB, MI, DL, TII->get(Mips::CAPSTORE32))
-      .addReg(IntReg, RegState::Kill)
-      .addReg(MI->getOperand(1).getReg())
-      .addImm(MI->getOperand(2).getImm())
-      .addReg(MI->getOperand(3).getReg());
-  MI->eraseFromParent();
-  return BB;
+  return emitCapFloatLoad<Mips::DMTC1, Mips::CAPLOAD64>(Subtarget,
+          Mips::GPR64RegClass, MI, BB);
 }
 MachineBasicBlock *
 MipsSETargetLowering::emitCapMove(MachineInstr *MI,
@@ -3564,20 +3547,32 @@ MipsSETargetLowering::emitCapSelect(MachineInstr *MI,
   MI->eraseFromParent();
   return sinkMBB;
 }
-MachineBasicBlock *
-MipsSETargetLowering::emitCapFloat64Store(MachineInstr *MI,
-                                    MachineBasicBlock *BB) const {
+template<unsigned MFC1, unsigned CAPSTORE>
+static MachineBasicBlock *
+emitCapFloatStore(const MipsSubtarget &Subtarget,
+                  MachineInstr *MI,
+                  MachineBasicBlock *BB) {
   DebugLoc DL = MI->getDebugLoc();
   MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
   unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  BuildMI(*BB, MI, DL, TII->get(Mips::DMFC1), IntReg)
-      .addReg(MI->getOperand(0).getReg());
-  BuildMI(*BB, MI, DL, TII->get(Mips::CAPSTORE64))
+  BuildMI(*BB, MI, DL, TII->get(MFC1), IntReg)
+      .addOperand(MI->getOperand(0));
+  BuildMI(*BB, MI, DL, TII->get(CAPSTORE))
       .addReg(IntReg, RegState::Kill)
-      .addReg(MI->getOperand(1).getReg())
-      .addImm(MI->getOperand(2).getImm())
-      .addReg(MI->getOperand(3).getReg());
+      .addOperand(MI->getOperand(1))
+      .addOperand(MI->getOperand(2))
+      .addOperand(MI->getOperand(3));
   MI->eraseFromParent();
   return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapFloat64Store(MachineInstr *MI,
+                                    MachineBasicBlock *BB) const {
+  return emitCapFloatStore<Mips::DMFC1, Mips::CAPSTORE64>(Subtarget, MI, BB);
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapFloat32Store(MachineInstr *MI,
+                                    MachineBasicBlock *BB) const {
+  return emitCapFloatStore<Mips::MFC1, Mips::CAPSTORE32>(Subtarget, MI, BB);
 }
