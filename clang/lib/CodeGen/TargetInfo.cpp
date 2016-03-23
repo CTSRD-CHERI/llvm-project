@@ -6029,7 +6029,6 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
         uint64_t FieldSize = getContext().getTypeSize(ElementType);
         LastOffset += FieldSize * Elements;
         auto ElTy = HandleAggregates(ElementType, FieldSize);
-        ElTy->dump();
         for (unsigned i=0 ; i<Elements ; ++i)
           ArgList.push_back(ElTy);
         continue;
