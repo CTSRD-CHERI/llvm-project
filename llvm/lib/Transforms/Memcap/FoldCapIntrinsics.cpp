@@ -74,7 +74,6 @@ class MemCapFoldIntrinsics : public ModulePass {
       if (match(BaseCap, m_Intrinsic<Intrinsic::mips_cap_offset_set>(
                              m_Value(), m_Value(Offset)))) {
         CI->replaceAllUsesWith(Offset);
-        Offset->dump();
         Modified = true;
       } else if (isa<ConstantPointerNull>(BaseCap)) {
         CI->replaceAllUsesWith(llvm::Constant::getNullValue(CI->getType()));
