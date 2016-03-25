@@ -170,7 +170,10 @@ class CheriFmtCLS<bits<6> op, dag outs, dag ins, string asmstr,
 }
 class CheriFmtCSCR<dag outs, dag ins, string asmstr,
                    list<dag> pattern> :
-  CheriFmtCLS<0x3e, outs, ins, asmstr, pattern>;
+  CheriFmtCLS<0x3e, outs, ins, asmstr, pattern> {
+  bits<15> unscaled_offset;
+  let offset  = unscaled_offset{14-4};
+}
 class CheriFmtCLCR<dag outs, dag ins, string asmstr,
                    list<dag> pattern> :
   CheriFmtCLS<0x36, outs, ins, asmstr, pattern>;

@@ -30,7 +30,7 @@ def CheriJmpLink : SDNode<"MipsISD::CheriJmpLink",SDT_CheriJmpLink,
 
 // 11-bit immediate offset used by C[SL]CR
 def simm11_64: Operand<i64>;
-def immSExt11  : PatLeaf<(imm), [{ return isInt<11>(N->getSExtValue()); }]>;
+def immSExt11  : PatLeaf<(imm), [{ return isInt<15>(N->getSExtValue()) && ((N->getSExtValue() & 15) == 0); }]>;
 // 8-bit immediate offset used by C[SL]C
 def simm8: Operand<i64>;
 
@@ -275,9 +275,9 @@ def : Pat<(ptrtoint CheriOpnd:$rt),
 
 
 let DecoderNamespace="CHERI" in
-def STORECAP : CheriFmtCSCR<(outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11_64:$offset, CheriOpnd:$cb),
-                         "csc\t$cs, ${rt}, ${offset}(${cb})",
-                         [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$offset)))]>;
+def STORECAP : CheriFmtCSCR<(outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11_64:$unscaled_offset, CheriOpnd:$cb),
+                         "csc\t$cs, ${rt}, ${unscaled_offset}(${cb})",
+                         [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$unscaled_offset)))]>;
 
 def CLEARTAG : CheriFmtClearTag<(outs CheriOpnd:$cd), (ins CheriOpnd:$cb), "ccleartag\t$cd, $cb",
                                 [(set CheriOpnd:$cd, (int_mips_cap_tag_clear CheriOpnd:$cb))]>;
@@ -289,9 +289,9 @@ def : Pat<(store CheriOpnd:$cs, GPR64Opnd:$rt),
 
 // Load a capability
 let Predicates = [IsCHERI] in {
-def LOADCAP : CheriFmtCLCR<(outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11_64:$offset, CheriOpnd:$cb),
-                        "clc\t$cs, ${rt}, ${offset}(${cb})",
-                        [(set CheriOpnd:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$offset))))]> {
+def LOADCAP : CheriFmtCLCR<(outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11_64:$unscaled_offset, CheriOpnd:$cb),
+                        "clc\t$cs, ${rt}, ${unscaled_offset}(${cb})",
+                        [(set CheriOpnd:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$unscaled_offset))))]> {
   let DecoderNamespace="CHERI";
 }
 
