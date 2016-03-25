@@ -228,7 +228,6 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::CBTU:              return "MipsISD::CBTU";
   case MipsISD::STACKTOCAP:        return "MipsISD::STACKTOCAP";
   case MipsISD::CheriJmpLink:      return "MipsISD::CheriJmpLink";
-  case MipsISD::CODETOCAP:         return "MipsISD::CODETOCAP";
   case MipsISD::CapJmpLink:        return "MipsISD::CapJmpLink";
   case MipsISD::CapRet:            return "MipsISD::CapRet";
   }
@@ -3108,8 +3107,13 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
   // If we're in the sandbox ABI, then we need to turn the address into a
   // PCC-derived capability.
-  if (ABI.IsCheriSandbox() && (Callee.getValueType() != MVT::iFATPTR))
-    Callee = DAG.getNode(MipsISD::CODETOCAP, DL, MVT::iFATPTR, Callee);
+  if (ABI.IsCheriSandbox() && (Callee.getValueType() != MVT::iFATPTR)) {
+    auto GetPCC = DAG.getConstant(Intrinsic::mips_pcc_get, DL, MVT::i64);
+    auto SetOffset = DAG.getConstant(Intrinsic::mips_cap_offset_set, DL, MVT::i64);
+    auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR, GetPCC);
+    Callee = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+        SetOffset, PCC, Callee);
+  }
 
 
   SmallVector<SDValue, 8> Ops(1, Chain);

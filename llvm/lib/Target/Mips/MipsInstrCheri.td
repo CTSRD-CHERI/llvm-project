@@ -193,6 +193,10 @@ def CGetPCC : CheriFmtGet<7, (outs CheriOpnd:$cb), (ins),
   let rd = 0;
 }
 
+def CSetPCCOffset : CheriFmtGet<7, (outs CheriOpnd:$cb), (ins GPR64Opnd:$rd),
+                                "csetpccoffset\t${cb}, $rd",
+                                [(set CheriOpnd:$cb, (int_mips_cap_offset_set (int_mips_pcc_get), GPR64Opnd: $rd))]>;
+
 def CGetCause : CheriFmtGetCause<0, (outs GPR64Opnd:$rd), (ins),
                           "cgetcause\t${rd}",
                           [(set GPR64Opnd:$rd, (int_mips_cap_cause_get))]>;
@@ -517,9 +521,6 @@ def  CCallPseudo : PseudoSE<(outs), (ins GPR64Opnd:$rs, uimm32: $mask),
   let Defs = [RA];
 }
 
-def MipsCodeToCap : SDNode<"MipsISD::CODETOCAP", SDT_MipsPtrToCap, []>;
-def CapFromPC : PseudoSE<(outs CheriRegs:$cap), (ins GPR64Opnd:$ptr),
-           [(set CheriRegs:$cap, (MipsCodeToCap GPR64Opnd:$ptr))]>;
 
 def SDT_MipsCapJmpLink      : SDTypeProfile<0, 1, [SDTCisVT<0, iFATPTR>]>;
 def CapJmpLink : SDNode<"MipsISD::CapJmpLink",SDT_MipsCapJmpLink,
