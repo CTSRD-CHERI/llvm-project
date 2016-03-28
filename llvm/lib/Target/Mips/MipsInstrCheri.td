@@ -35,36 +35,27 @@ class SImmScaled<int Width, int Scale> : AsmOperandClass {
   let PredicateMethod = "isScaledImmediate<" # Width # ", " # Scale # ">";
 }
 
-// 11-bit immediate offset used by C[SL]CR
-def SImm11s4Operand: SImmScaled<11,4>;
-def simm11s4 : Operand<i64> {
-  let ParserMatchClass = SImm11s4Operand;
-  let PrintMethod = "printImmScale<4>";
+
+multiclass ShiftImmPattern<int Width, int Shift> {
+  def NAME # Transform : SDNodeXForm<imm,
+            "return CurDAG->getTargetConstant(N->getSExtValue() >> " # Shift # ", SDLoc(N), MVT::i64);">;
+  def NAME # Pattern : PatLeaf<(imm),
+    "return isInt<" # Width # ">(N->getSExtValue()) && ((N->getSExtValue() & ((1 << " # Shift # ") - 1)) == 0);",
+    !cast<SDNodeXForm>(NAME # "Transform")
+    >;
+  def NAME : Operand<i64> {
+    let ParserMatchClass = SImmScaled<Width, Shift>;
+    let PrintMethod = "printImmScale<" # Shift # ">";
+  }
 }
-def immSExt11  : PatLeaf<(imm), [{ return isInt<15>(N->getSExtValue()) && ((N->getSExtValue() & 15) == 0); }]>;
-// 8-bit immediate offset used by C[SL]C
+// 11-bit immediate offset used by C[SL]CR
+defm simm11s4  : ShiftImmPattern<11, 4>;
+// 8-bit immediate offset used by C[SL][DWHB]
+defm simm8s3  : ShiftImmPattern<8, 3>;
+defm simm8s2  : ShiftImmPattern<8, 2>;
+defm simm8s1  : ShiftImmPattern<8, 1>;
 def simm8: Operand<i64>;
 
-def SImm8s3Operand : SImmScaled<8, 3>;
-def simm8s3 : Operand<i64> {
-  let ParserMatchClass = SImm8s3Operand;
-  let PrintMethod = "printImmScale<3>";
-}
-def immSExt8s3  : PatLeaf<(imm), [{ return isInt<8>(N->getSExtValue()) && ((N->getSExtValue() & 7) == 0); }]>;
-
-def SImm8s2Operand : SImmScaled<8, 2>;
-def simm8s2 : Operand<i64> {
-  let ParserMatchClass = SImm8s2Operand;
-  let PrintMethod = "printImmScale<2>";
-}
-def immSExt8s2  : PatLeaf<(imm), [{ return isInt<8>(N->getSExtValue()) && ((N->getSExtValue() & 3) == 0); }]>;
-
-def SImm8s1Operand : SImmScaled<8, 1>;
-def simm8s1 : Operand<i64> {
-  let ParserMatchClass = SImm8s1Operand;
-  let PrintMethod = "printImmScale<1>";
-}
-def immSExt8s1  : PatLeaf<(imm), [{ return isInt<8>(N->getSExtValue()) && ((N->getSExtValue() & 1) == 0); }]>;
 
 // ClearRegs values
 // TODO: Add some nice parsing so that we can get handle register lists for
@@ -309,7 +300,7 @@ def : Pat<(ptrtoint CheriOpnd:$rt),
 let DecoderNamespace="CHERI" in
 def STORECAP : CheriFmtCLS<0x3e, (outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11s4:$offset, CheriOpnd:$cb),
                          "csc\t$cs, ${rt}, ${offset}(${cb})",
-                         [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$offset)))]>;
+                         [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 simm11s4Pattern:$offset)))]>;
 
 def CLEARTAG : CheriFmtClearTag<(outs CheriOpnd:$cd), (ins CheriOpnd:$cb), "ccleartag\t$cd, $cb",
                                 [(set CheriOpnd:$cd, (int_mips_cap_tag_clear CheriOpnd:$cb))]>;
@@ -323,7 +314,7 @@ def : Pat<(store CheriOpnd:$cs, GPR64Opnd:$rt),
 let Predicates = [IsCHERI] in {
 def LOADCAP : CheriFmtCLS<0x36, (outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11s4:$offset, CheriOpnd:$cb),
                         "clc\t$cs, ${rt}, ${offset}(${cb})",
-                        [(set CheriOpnd:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$offset))))]> {
+                        [(set CheriOpnd:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 simm11s4Pattern:$offset))))]> {
   let DecoderNamespace="CHERI";
 }
 
@@ -371,8 +362,8 @@ multiclass StoreViaCap0<Instruction Op, RegisterOperand RC, PatFrag storeType> {
 let isCodeGenOnly = 1 in {
 defm CAPLOAD832    : LoadViaCap<0, 1, "clb", GPR32Opnd, sextloadi8>;
 defm CAPLOADU832   : LoadViaCap<0, 0, "clbu", GPR32Opnd, extloadi8>;
-defm CAPLOAD1632   : LoadViaCapScaled<1, 1, "clh", GPR32Opnd, sextloadi16, simm8s1, immSExt8s1>;
-defm CAPLOADU1632  : LoadViaCapScaled<1, 0, "clhu", GPR32Opnd, extloadi16, simm8s1, immSExt8s1>;
+defm CAPLOAD1632   : LoadViaCapScaled<1, 1, "clh", GPR32Opnd, sextloadi16, simm8s1, simm8s1Pattern>;
+defm CAPLOADU1632  : LoadViaCapScaled<1, 0, "clhu", GPR32Opnd, extloadi16, simm8s1, simm8s1Pattern>;
 }
 defm : LoadViaCap0<CAPLOAD832, sextloadi8>;
 defm : LoadViaCap0<CAPLOAD832, extloadi8>;
@@ -382,16 +373,16 @@ defm : LoadViaCap0<CAPLOAD1632, sextloadi16>;
 defm : LoadViaCap0<CAPLOADU1632, zextloadi16>;
 
 defm CAPLOAD8      : LoadViaCap<0, 1, "clb", GPR64Opnd, sextloadi8>;
-defm CAPLOAD16     : LoadViaCapScaled<1, 1, "clh", GPR64Opnd, sextloadi16, simm8s1, immSExt8s1>;
-defm CAPLOAD32     : LoadViaCapScaled<2, 1, "clw", GPR32Opnd, load, simm8s2, immSExt8s2>;
-defm CAPLOAD64     : LoadViaCapScaled<3, 0, "cld", GPR64Opnd, load, simm8s3, immSExt8s3>;
+defm CAPLOAD16     : LoadViaCapScaled<1, 1, "clh", GPR64Opnd, sextloadi16, simm8s1, simm8s1Pattern>;
+defm CAPLOAD32     : LoadViaCapScaled<2, 1, "clw", GPR32Opnd, load, simm8s2, simm8s2Pattern>;
+defm CAPLOAD64     : LoadViaCapScaled<3, 0, "cld", GPR64Opnd, load, simm8s3, simm8s3Pattern>;
 
 defm CAPLOADU8     : LoadViaCap<0, 0, "clbu", GPR64Opnd, extloadi8>;
-defm CAPLOADU16    : LoadViaCapScaled<1, 0, "clhu", GPR64Opnd, extloadi16, simm8s1, immSExt8s1>;
-defm CAPLOADU32    : LoadViaCapScaled<2, 0, "clwu", GPR64Opnd, zextloadi32, simm8s2, immSExt8s2>;
+defm CAPLOADU16    : LoadViaCapScaled<1, 0, "clhu", GPR64Opnd, extloadi16, simm8s1, simm8s1Pattern>;
+defm CAPLOADU32    : LoadViaCapScaled<2, 0, "clwu", GPR64Opnd, zextloadi32, simm8s2, simm8s2Pattern>;
 
 let isCodeGenOnly=1 in {
-defm CAPLOAD3264   : LoadViaCapScaled<2, 1, "clw", GPR64Opnd, extloadi32, simm8s2, immSExt8s2>;
+defm CAPLOAD3264   : LoadViaCapScaled<2, 1, "clw", GPR64Opnd, extloadi32, simm8s2, simm8s2Pattern>;
 }
 defm : LoadViaCap0<CAPLOAD3264, extloadi32>;
 
@@ -410,12 +401,12 @@ defm CAP0LOAD32    : LoadViaCap0<CAPLOAD32, load>;
 defm CAP0LOAD64    : LoadViaCap0<CAPLOAD64, load>;
 
 defm CAPSTORE8      : StoreViaCap<0, 0, "csb", GPR64Opnd, truncstorei8>;
-defm CAPSTORE16     : StoreViaCapScaled<1, 0, "csh", GPR64Opnd, truncstorei16, simm8s1, immSExt8s1>;
-defm CAPSTORE32     : StoreViaCapScaled<2, 0, "csw", GPR32Opnd, store, simm8s2, immSExt8s2>;
+defm CAPSTORE16     : StoreViaCapScaled<1, 0, "csh", GPR64Opnd, truncstorei16, simm8s1, simm8s1Pattern>;
+defm CAPSTORE32     : StoreViaCapScaled<2, 0, "csw", GPR32Opnd, store, simm8s2, simm8s2Pattern>;
 let isCodeGenOnly=1 in {
-  defm CAPSTORE3264     : StoreViaCapScaled<2, 0, "csw", GPR64Opnd, truncstorei32, simm8s2, immSExt8s2>;
+  defm CAPSTORE3264     : StoreViaCapScaled<2, 0, "csw", GPR64Opnd, truncstorei32, simm8s2, simm8s2Pattern>;
 }
-defm CAPSTORE64     : StoreViaCapScaled<3, 0, "csd", GPR64Opnd, store, simm8s3, immSExt8s3>;
+defm CAPSTORE64     : StoreViaCapScaled<3, 0, "csd", GPR64Opnd, store, simm8s3, simm8s3Pattern>;
           
 def : Pat<(int_mips_c0_get), (CIncOffset C0, ZERO_64)>;
 def : Pat<(int_mips_idc_get), (CIncOffset C26, ZERO_64)>;
@@ -438,23 +429,23 @@ defm CAP0STORE64    : StoreViaCap0<CAPSTORE64, GPR64Opnd, store>;
 def CLDC1 : CheriPseudo<(outs FGR64Opnd: $rd),
   (ins GPR64Opnd:$rt, simm8s3:$offset, CheriOpnd:$cb),
   "cldc1\t$rd,  ${rt}, ${offset}(${cb})",
-  [(set FGR64Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8s3:$offset))))]>;
+  [(set FGR64Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 simm8s3Pattern:$offset))))]>;
 
 
 def CLWC1 : CheriPseudo<(outs FGR32Opnd: $rd),
   (ins GPR64Opnd:$rt, simm8s2:$offset, CheriOpnd:$cb),
   "clwc1\t$rd,  ${rt}, ${offset}(${cb})",
-  [(set FGR32Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8s2:$offset))))]>;
+  [(set FGR32Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 simm8s2Pattern:$offset))))]>;
 
 def CSDC1 : CheriPseudo<(outs),
   (ins FGR64Opnd:$rs, GPR64Opnd:$rt, simm8s3:$offset, CheriOpnd:$cb),
   "csdc1\t$rs,  ${rt}, ${offset}(${cb})",
-  [(store (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8s3:$offset)), FGR64Opnd: $rs)]>;
+  [(store (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 simm8s3Pattern:$offset)), FGR64Opnd: $rs)]>;
 
 def CSWC1 : CheriPseudo<(outs),
   (ins FGR32Opnd:$rs, GPR64Opnd:$rt, simm8s2:$offset, CheriOpnd:$cb),
   "cswc1\t$rs,  ${rt}, ${offset}(${cb})",
-  [(store (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8s2:$offset)), FGR32Opnd: $rs)]>;
+  [(store (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 simm8s2Pattern:$offset)), FGR32Opnd: $rs)]>;
 
 defm : LoadViaCap0<CLWC1, load>;
 defm : LoadViaCap0<CLDC1, load>;
