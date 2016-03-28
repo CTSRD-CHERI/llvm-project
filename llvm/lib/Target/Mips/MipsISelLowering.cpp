@@ -60,6 +60,11 @@ UseClearRegs("cheri-use-clearregs",
   cl::desc("Zero registers using the ClearRegs instructions"),
   cl::init(false));
 
+cl::opt<bool>
+SkipGlobalBounds("cheri-no-global-bounds",
+  cl::desc("Skip bounds checks on globals"),
+  cl::init(false));
+
 static const MCPhysReg Mips64DPRegs[8] = {
   Mips::D12_64, Mips::D13_64, Mips::D14_64, Mips::D15_64,
   Mips::D16_64, Mips::D17_64, Mips::D18_64, Mips::D19_64
@@ -1859,7 +1864,8 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   if (GV->getType()->getAddressSpace() == 200) {
     Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
     StringRef Name = GV->getName();
-    if (!isa<Function>(GV) &&
+    if (!SkipGlobalBounds &&
+        !isa<Function>(GV) &&
         !GV->hasWeakLinkage() &&
         !GV->hasWeakAnyLinkage() &&
         !GV->hasExternalWeakLinkage() &&
