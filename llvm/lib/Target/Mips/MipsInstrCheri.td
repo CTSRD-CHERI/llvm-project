@@ -422,9 +422,9 @@ defm CAP0STORE3264  : StoreViaCap0<CAPSTORE3264, GPR64Opnd, truncstorei32>;
 defm CAP0STORE64    : StoreViaCap0<CAPSTORE64, GPR64Opnd, store>;
 
 def CLDC1 : CheriPseudo<(outs FGR64Opnd: $rd),
-  (ins GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
+  (ins GPR64Opnd:$rt, simm8s3:$offset, CheriOpnd:$cb),
   "cldc1\t$rd,  ${rt}, ${offset}(${cb})",
-  [(set FGR64Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset))))]>;
+  [(set FGR64Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8s3:$offset))))]>;
 
 
 def CLWC1 : CheriPseudo<(outs FGR32Opnd: $rd),
@@ -433,9 +433,9 @@ def CLWC1 : CheriPseudo<(outs FGR32Opnd: $rd),
   [(set FGR32Opnd:$rd, (load (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset))))]>;
 
 def CSDC1 : CheriPseudo<(outs),
-  (ins FGR64Opnd:$rs, GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
+  (ins FGR64Opnd:$rs, GPR64Opnd:$rt, simm8s3:$offset, CheriOpnd:$cb),
   "csdc1\t$rs,  ${rt}, ${offset}(${cb})",
-  [(store (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8:$offset)), FGR64Opnd: $rs)]>;
+  [(store (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt), (i64 immSExt8s3:$offset)), FGR64Opnd: $rs)]>;
 
 def CSWC1 : CheriPseudo<(outs),
   (ins FGR32Opnd:$rs, GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
