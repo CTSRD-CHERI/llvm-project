@@ -12,33 +12,33 @@
 # CHECK: clb	$12, $13, 3($c1)
 # CHECK: encoding: [0xc9,0x81,0x68,0x1c]
 	clb		$t0, $t1, 3($c1)
-# CHECK: clh	$12, $13, 3($c1)
+# CHECK: clh	$12, $13, 6($c1)
 # CHECK: encoding: [0xc9,0x81,0x68,0x1d]
-	clh		$t0, $t1, 3($c1)
-# CHECK: clw	$12, $13, 3($c1)
+	clh		$t0, $t1, 6($c1)
+# CHECK: clw	$12, $13, 12($c1)
 # CHECK: encoding: [0xc9,0x81,0x68,0x1e]
-	clw		$t0, $t1, 3($c1)
+	clw		$t0, $t1, 12($c1)
 # CHECK: clbu	$12, $13, 3($c1)
 # CHECK: encoding: [0xc9,0x81,0x68,0x18]
 	clbu		$t0, $t1, 3($c1)
-# CHECK: clhu	$12, $13, 3($c1)
+# CHECK: clhu	$12, $13, 6($c1)
 # CHECK: encoding: [0xc9,0x81,0x68,0x19]
-	clhu		$t0, $t1, 3($c1)
-# CHECK: clwu	$12, $13, 3($c1)
+	clhu		$t0, $t1, 6($c1)
+# CHECK: clwu	$12, $13, 12($c1)
 # CHECK: encoding: [0xc9,0x81,0x68,0x1a]
-	clwu		$t0, $t1, 3($c1)
+	clwu		$t0, $t1, 12($c1)
 # CHECK: cld	$12, $13, 24($c1)
 # CHECK: encoding: [0xc9,0x81,0x68,0x1b]
 	cld		$t0, $t1, 24($c1)
 # CHECK: csb	$12, $13, 3($c1)
 # CHECK: encoding: [0xe9,0x81,0x68,0x18]
 	csb		$t0, $t1, 3($c1)
-# CHECK: csh	$12, $13, 3($c1)
+# CHECK: csh	$12, $13, 6($c1)
 # CHECK: encoding: [0xe9,0x81,0x68,0x19]
-	csh		$t0, $t1, 3($c1)
-# CHECK: csw	$12, $13, 3($c1)
+	csh		$t0, $t1, 6($c1)
+# CHECK: csw	$12, $13, 12($c1)
 # CHECK: encoding: [0xe9,0x81,0x68,0x1a]
-	csw		$t0, $t1, 3($c1)
+	csw		$t0, $t1, 12($c1)
 # CHECK: csd	$12, $13, 24($c1)
 # CHECK: encoding: [0xe9,0x81,0x68,0x1b]
 	csd		$t0, $t1, 24($c1)
