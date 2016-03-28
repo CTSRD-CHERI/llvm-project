@@ -922,6 +922,14 @@ public:
     addExpr(Inst, Expr);
   }
 
+  template<int shift>
+  void addScaledImmOperands(MCInst &Inst, unsigned N) const {
+    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
+    unsigned Val = MCE->getValue();
+    assert(((Val >> shift) << shift) == Val);
+    Inst.addOperand(MCOperand::createImm(Val >> shift));
+  }
+
   void addMemOperands(MCInst &Inst, unsigned N) const {
     assert(N == 2 && "Invalid number of operands!");
 
@@ -972,6 +980,14 @@ public:
   }
   bool isRegIdx() const { return Kind == k_RegisterIndex; }
   bool isImm() const override { return Kind == k_Immediate; }
+  template<int width, int shift>
+  bool isScaledImmediate() const {
+    if (Kind != k_Immediate)
+      return false;
+    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
+    unsigned Val = MCE->getValue();
+    return isInt<width>(Val >> shift) && (((Val >> shift) << shift) == Val);
+  }
   bool isConstantImm() const {
     return isImm() && dyn_cast<MCConstantExpr>(getImm());
   }

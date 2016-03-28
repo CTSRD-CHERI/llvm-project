@@ -168,12 +168,7 @@ class CheriFmtCLS<bits<6> op, dag outs, dag ins, string asmstr,
   let Inst{15-11} = rt;
   let Inst{10-0}  = offset;
 }
-class CheriFmtCapLoadStore<bits<6> op, dag outs, dag ins, string asmstr,
-                   list<dag> pattern> :
-  CheriFmtCLS<op, outs, ins, asmstr, pattern> {
-  bits<15> unscaled_offset;
-  let offset  = unscaled_offset{14-4};
-}
+
 class CheriFmtCLX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>

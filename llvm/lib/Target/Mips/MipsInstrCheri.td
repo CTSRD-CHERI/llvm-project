@@ -27,12 +27,30 @@ def CheriJmpLink : SDNode<"MipsISD::CheriJmpLink",SDT_CheriJmpLink,
                          [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                           SDNPVariadic]>;
 
+// Scaled immediate offsets
+
+class SImmScaled<int Width, int Scale> : AsmOperandClass {
+  let Name = "SImm" # Width # "s" # Scale;
+  let RenderMethod = "addScaledImmOperands<" # Scale # ">";
+  let PredicateMethod = "isScaledImmediate<" # Width # ", " # Scale # ">";
+}
 
 // 11-bit immediate offset used by C[SL]CR
-def simm11_64: Operand<i64>;
+def SImm11s4Operand: SImmScaled<11,4>;
+def simm11s4 : Operand<i64> {
+  let ParserMatchClass = SImm11s4Operand;
+  let PrintMethod = "printImmScale<4>";
+}
 def immSExt11  : PatLeaf<(imm), [{ return isInt<15>(N->getSExtValue()) && ((N->getSExtValue() & 15) == 0); }]>;
 // 8-bit immediate offset used by C[SL]C
 def simm8: Operand<i64>;
+
+def SImm8s3Operand : SImmScaled<8, 3>;
+def simm8s3 : Operand<i64> {
+  let ParserMatchClass = SImm8s3Operand;
+  let PrintMethod = "printImmScale<3>";
+}
+def immSExt8s3  : PatLeaf<(imm), [{ return isInt<8>(N->getSExtValue()) && ((N->getSExtValue() & 7) == 0); }]>;
 
 // ClearRegs values
 // TODO: Add some nice parsing so that we can get handle register lists for
@@ -275,9 +293,9 @@ def : Pat<(ptrtoint CheriOpnd:$rt),
 
 
 let DecoderNamespace="CHERI" in
-def STORECAP : CheriFmtCapLoadStore<0x3e, (outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11_64:$unscaled_offset, CheriOpnd:$cb),
-                         "csc\t$cs, ${rt}, ${unscaled_offset}(${cb})",
-                         [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$unscaled_offset)))]>;
+def STORECAP : CheriFmtCLS<0x3e, (outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11s4:$offset, CheriOpnd:$cb),
+                         "csc\t$cs, ${rt}, ${offset}(${cb})",
+                         [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$offset)))]>;
 
 def CLEARTAG : CheriFmtClearTag<(outs CheriOpnd:$cd), (ins CheriOpnd:$cb), "ccleartag\t$cd, $cb",
                                 [(set CheriOpnd:$cd, (int_mips_cap_tag_clear CheriOpnd:$cb))]>;
@@ -289,9 +307,9 @@ def : Pat<(store CheriOpnd:$cs, GPR64Opnd:$rt),
 
 // Load a capability
 let Predicates = [IsCHERI] in {
-def LOADCAP : CheriFmtCapLoadStore<0x36, (outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11_64:$unscaled_offset, CheriOpnd:$cb),
-                        "clc\t$cs, ${rt}, ${unscaled_offset}(${cb})",
-                        [(set CheriOpnd:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$unscaled_offset))))]> {
+def LOADCAP : CheriFmtCLS<0x36, (outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11s4:$offset, CheriOpnd:$cb),
+                        "clc\t$cs, ${rt}, ${offset}(${cb})",
+                        [(set CheriOpnd:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$offset))))]> {
   let DecoderNamespace="CHERI";
 }
 
@@ -352,7 +370,7 @@ defm : LoadViaCap0<CAPLOADU1632, zextloadi16>;
 defm CAPLOAD8      : LoadViaCap<0, 1, "clb", GPR64Opnd, sextloadi8>;
 defm CAPLOAD16     : LoadViaCap<1, 1, "clh", GPR64Opnd, sextloadi16>;
 defm CAPLOAD32     : LoadViaCap<2, 1, "clw", GPR32Opnd, load>;
-defm CAPLOAD64     : LoadViaCap<3, 0, "cld", GPR64Opnd, load>;
+defm CAPLOAD64     : LoadViaCapScaled<3, 0, "cld", GPR64Opnd, load, simm8s3, immSExt8s3>;
 
 defm CAPLOADU8     : LoadViaCap<0, 0, "clbu", GPR64Opnd, extloadi8>;
 defm CAPLOADU16    : LoadViaCap<1, 0, "clhu", GPR64Opnd, extloadi16>;
@@ -383,7 +401,7 @@ defm CAPSTORE32     : StoreViaCap<2, 0, "csw", GPR32Opnd, store>;
 let isCodeGenOnly=1 in {
   defm CAPSTORE3264     : StoreViaCap<2, 0, "csw", GPR64Opnd, truncstorei32>;
 }
-defm CAPSTORE64     : StoreViaCap<3, 0, "csd", GPR64Opnd, store>;
+defm CAPSTORE64     : StoreViaCapScaled<3, 0, "csd", GPR64Opnd, store, simm8s3, immSExt8s3>;
           
 def : Pat<(int_mips_c0_get), (CIncOffset C0, ZERO_64)>;
 def : Pat<(int_mips_idc_get), (CIncOffset C26, ZERO_64)>;
