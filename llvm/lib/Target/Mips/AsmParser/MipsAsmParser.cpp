@@ -925,7 +925,7 @@ public:
   template<int shift>
   void addScaledImmOperands(MCInst &Inst, unsigned N) const {
     const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    unsigned Val = MCE->getValue();
+    int Val = MCE->getValue();
     assert(((Val >> shift) << shift) == Val);
     Inst.addOperand(MCOperand::createImm(Val >> shift));
   }
@@ -985,7 +985,7 @@ public:
     if (Kind != k_Immediate)
       return false;
     const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    unsigned Val = MCE->getValue();
+    int Val = MCE->getValue();
     return isInt<width>(Val >> shift) && (((Val >> shift) << shift) == Val);
   }
   bool isConstantImm() const {
