@@ -110,9 +110,6 @@ private:
   bool printAlias(const MCInst &MI, raw_ostream &OS);
   void printSaveRestore(const MCInst *MI, raw_ostream &O);
   void printRegisterList(const MCInst *MI, int opNum, raw_ostream &O);
-  template <int Scale>
-  void printImmScale(const MCInst *MI, unsigned OpNum,
-                     raw_ostream &O);
 
 };
 } // end namespace llvm

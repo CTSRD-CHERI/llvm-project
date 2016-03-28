@@ -31,30 +31,28 @@ def CheriJmpLink : SDNode<"MipsISD::CheriJmpLink",SDT_CheriJmpLink,
 
 class SImmScaled<int Width, int Scale> : AsmOperandClass {
   let Name = "SImm" # Width # "s" # Scale;
-  let RenderMethod = "addScaledImmOperands<" # Scale # ">";
+  let RenderMethod = "addImmOperands";
   let PredicateMethod = "isScaledImmediate<" # Width # ", " # Scale # ">";
 }
 
-
 multiclass ShiftImmPattern<int Width, int Shift> {
-  def NAME # Transform : SDNodeXForm<imm,
-            "return CurDAG->getTargetConstant(N->getSExtValue() >> " # Shift # ", SDLoc(N), MVT::i64);">;
-  def NAME # Pattern : PatLeaf<(imm),
-    "return isInt<" # Width # ">(N->getSExtValue()) && ((N->getSExtValue() & ((1 << " # Shift # ") - 1)) == 0);",
-    !cast<SDNodeXForm>(NAME # "Transform")
+  def NAME # Pattern : ImmLeaf<i64,
+    "return isInt<" # Width # ">(Imm) && ((Imm & ((1 << " # Shift # ") - 1)) == 0);"
     >;
   def NAME : Operand<i64> {
     let ParserMatchClass = SImmScaled<Width, Shift>;
-    let PrintMethod = "printImmScale<" # Shift # ">";
+    let EncoderMethod = "getShiftedImmediate<" # Width # ", " # Shift # ">";
+    let DecoderMethod = "DecodeShiftedImmediate<" # Width # ", " # Shift # ">";
   }
 }
+
 // 11-bit immediate offset used by C[SL]CR
 defm simm11s4  : ShiftImmPattern<11, 4>;
 // 8-bit immediate offset used by C[SL][DWHB]
 defm simm8s3  : ShiftImmPattern<8, 3>;
 defm simm8s2  : ShiftImmPattern<8, 2>;
 defm simm8s1  : ShiftImmPattern<8, 1>;
-def simm8: Operand<i64>;
+defm simm8    : ShiftImmPattern<8, 0>;
 
 
 // ClearRegs values

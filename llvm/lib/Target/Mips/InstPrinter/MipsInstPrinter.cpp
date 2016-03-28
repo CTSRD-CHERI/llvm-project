@@ -360,9 +360,3 @@ printRegisterList(const MCInst *MI, int opNum, raw_ostream &O) {
   }
 }
 
-template<int Shift>
-void MipsInstPrinter::printImmScale(const MCInst *MI, unsigned OpNum,
-                                    raw_ostream &O) {
-  O << (MI->getOperand(OpNum).getImm() << Shift);
-}
-

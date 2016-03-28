@@ -922,14 +922,6 @@ public:
     addExpr(Inst, Expr);
   }
 
-  template<int shift>
-  void addScaledImmOperands(MCInst &Inst, unsigned N) const {
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    int Val = MCE->getValue();
-    assert(((Val >> shift) << shift) == Val);
-    Inst.addOperand(MCOperand::createImm(Val >> shift));
-  }
-
   void addMemOperands(MCInst &Inst, unsigned N) const {
     assert(N == 2 && "Invalid number of operands!");
 
