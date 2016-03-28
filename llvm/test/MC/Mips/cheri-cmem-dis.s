@@ -3,9 +3,9 @@
 # Check that the disassembler is able to handle capability memory instructions.
 #
 
-# CHECK: csc	$c0, $13, 3($c1)
+# CHECK: csc	$c0, $13, 48($c1)
 0xf8,0x01,0x68,0x03
-# CHECK: clc	$c0, $13, 3($c1)
+# CHECK: clc	$c0, $13, 48($c1)
 0xd8,0x01,0x68,0x03
 # CHECK: clb	$12, $13, 3($c1)
 0xc9,0x81,0x68,0x1c

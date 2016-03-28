@@ -275,7 +275,7 @@ def : Pat<(ptrtoint CheriOpnd:$rt),
 
 
 let DecoderNamespace="CHERI" in
-def STORECAP : CheriFmtCSCR<(outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11_64:$unscaled_offset, CheriOpnd:$cb),
+def STORECAP : CheriFmtCapLoadStore<0x3e, (outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11_64:$unscaled_offset, CheriOpnd:$cb),
                          "csc\t$cs, ${rt}, ${unscaled_offset}(${cb})",
                          [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$unscaled_offset)))]>;
 
@@ -289,7 +289,7 @@ def : Pat<(store CheriOpnd:$cs, GPR64Opnd:$rt),
 
 // Load a capability
 let Predicates = [IsCHERI] in {
-def LOADCAP : CheriFmtCLCR<(outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11_64:$unscaled_offset, CheriOpnd:$cb),
+def LOADCAP : CheriFmtCapLoadStore<0x36, (outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11_64:$unscaled_offset, CheriOpnd:$cb),
                         "clc\t$cs, ${rt}, ${unscaled_offset}(${cb})",
                         [(set CheriOpnd:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 immSExt11:$unscaled_offset))))]> {
   let DecoderNamespace="CHERI";
