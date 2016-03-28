@@ -302,17 +302,38 @@ def : Pat<(load CheriOpnd:$cb),
 
 // Load via a capability register
 let canFoldAsLoad = 1, DecoderNamespace="CHERI" in
-multiclass LoadViaCap<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC, PatFrag loadType> {
+multiclass LoadViaCapScaled<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC, PatFrag loadType, Operand simm, PatFrag immfrag> {
   def #NAME# : CheriFmtCLX<t, sExt,
                              (outs RC:$rd),
-                             (ins GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
+                             (ins GPR64Opnd:$rt, simm:$offset, CheriOpnd:$cb),
                              !strconcat(instr_asm, "\t$rd, ${rt}, ${offset}(${cb})"),
-                           [(set RC:$rd, (loadType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immSExt8:$offset))))))]>;
+                           [(set RC:$rd, (loadType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset))))))]>;
 }
+multiclass LoadViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> :
+  LoadViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
 
 multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
   def : Pat<(loadType CheriOpnd:$cb),
             (Op ZERO_64, (i64 0), CheriOpnd:$cb)>;
+}
+
+// Store via a capability register
+let DecoderNamespace="CHERI" in
+multiclass StoreViaCapScaled<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType, Operand simm, PatFrag immfrag> {
+  def #NAME# : CheriFmtCSX<t, e,
+                             (outs),
+                             (ins RC:$rs, GPR64Opnd:$rt, simm:$offset, CheriOpnd:$cb),
+                             !strconcat(instr_asm, "\t$rs, ${rt}, ${offset}(${cb})"),
+                           [(storeType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset)))), RC:$rs)]>;
+}
+multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> :
+  StoreViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
+ 
+multiclass StoreViaCap0<Instruction Op, RegisterOperand RC, PatFrag storeType> {
+  def : Pat<(storeType RC:$rd, CheriOpnd:$cb),
+            (Op RC:$rd, ZERO_64, (i64 0), CheriOpnd:$cb)>;
+  def : Pat<(storeType RC:$rd, (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt)),
+            (Op RC:$rd, GPR64Opnd:$rt, (i64 0), CheriOpnd:$cb)>;
 }
 
 let isCodeGenOnly = 1 in {
@@ -356,21 +377,6 @@ defm CAP0LOAD3264  : LoadViaCap0<CAPLOAD3264, sextloadi32>;
 defm CAP0LOAD32    : LoadViaCap0<CAPLOAD32, load>;
 defm CAP0LOAD64    : LoadViaCap0<CAPLOAD64, load>;
 
-// Store via a capability register
-let DecoderNamespace="CHERI" in
-multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> {
-  def #NAME# : CheriFmtCSX<t, e,
-                             (outs),
-                             (ins RC:$rs, GPR64Opnd:$rt, simm8:$offset, CheriOpnd:$cb),
-                             !strconcat(instr_asm, "\t$rs, ${rt}, ${offset}(${cb})"),
-                           [(storeType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immSExt8:$offset)))), RC:$rs)]>;
-}
-multiclass StoreViaCap0<Instruction Op, RegisterOperand RC, PatFrag storeType> {
-  def : Pat<(storeType RC:$rd, CheriOpnd:$cb),
-            (Op RC:$rd, ZERO_64, (i64 0), CheriOpnd:$cb)>;
-  def : Pat<(storeType RC:$rd, (add (ptrtoint CheriOpnd:$cb), GPR64Opnd:$rt)),
-            (Op RC:$rd, GPR64Opnd:$rt, (i64 0), CheriOpnd:$cb)>;
-}
 defm CAPSTORE8      : StoreViaCap<0, 0, "csb", GPR64Opnd, truncstorei8>;
 defm CAPSTORE16     : StoreViaCap<1, 0, "csh", GPR64Opnd, truncstorei16>;
 defm CAPSTORE32     : StoreViaCap<2, 0, "csw", GPR32Opnd, store>;
@@ -378,7 +384,6 @@ let isCodeGenOnly=1 in {
   defm CAPSTORE3264     : StoreViaCap<2, 0, "csw", GPR64Opnd, truncstorei32>;
 }
 defm CAPSTORE64     : StoreViaCap<3, 0, "csd", GPR64Opnd, store>;
-//def : Pat<(truncstorei8 (add (add (ptrtoint CheriOpnd:$cb), GPR64Opnd: $rt), (i64 immSExt8:$offset)),
           
 def : Pat<(int_mips_c0_get), (CIncOffset C0, ZERO_64)>;
 def : Pat<(int_mips_idc_get), (CIncOffset C26, ZERO_64)>;
