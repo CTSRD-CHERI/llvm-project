@@ -924,11 +924,12 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // csc / cld, but only 8-bit immediates (plus a 3-bit shift) for c[ls]x
   // instructions for other spills.  The latter only matters if we're using the
   // capability-stack ABI.
+  // The immediates are signed, so we lose one bit for the sign bit.
   if (STI.isCheri()) {
     if (STI.isABI_CheriSandbox()) {
-      if (isInt<11>(MaxSPOffset))
+      if (isInt<10>(MaxSPOffset))
         return;
-    } else if (isInt<15>(MaxSPOffset))
+    } else if (isInt<14>(MaxSPOffset))
       return;
   } else if (isInt<16>(MaxSPOffset))
     return;
