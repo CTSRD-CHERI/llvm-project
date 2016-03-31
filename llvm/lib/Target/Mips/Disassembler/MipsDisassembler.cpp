@@ -2136,6 +2136,6 @@ static DecodeStatus DecodeSimm23Lsl2(MCInst &Inst, unsigned Insn,
 template<int Width, int Shift>
 static DecodeStatus DecodeShiftedImmediate(MCInst &Inst, unsigned Insn,
                                            uint64_t Address, const void *Decoder) {
-  Inst.addOperand(MCOperand::createImm(SignExtend64<Width>(Insn << Shift)));
+  Inst.addOperand(MCOperand::createImm(SignExtend64<Width+Shift>(Insn << Shift)));
   return MCDisassembler::Success;
 }
