@@ -74,17 +74,17 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode) {
   case Mips::CAPLOAD1632:
   case Mips::CAPLOADU1632:
   case Mips::CAPLOADU16:
-    return 7 + 1 /* scale factor */;
+    return 8 + 1 /* scale factor */;
   case Mips::CAPSTORE32:
   case Mips::CAPLOAD32:
   case Mips::CAPLOADU32:
-    return 7 + 2 /* scale factor */;
+    return 8 + 2 /* scale factor */;
   case Mips::CAPSTORE64:
   case Mips::CAPLOAD64:
-    return 7 + 3 /* scale factor */;
+    return 8 + 3 /* scale factor */;
   case Mips::LOADCAP:
   case Mips::STORECAP:
-    return 10 + 4 /* scale factor */;
+    return 11 + 4 /* scale factor */;
   case Mips::LD_B:
   case Mips::ST_B:
     return 10;
