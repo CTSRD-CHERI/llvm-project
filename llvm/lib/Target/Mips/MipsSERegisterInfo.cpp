@@ -145,8 +145,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   MachineFrameInfo *MFI = MF.getFrameInfo();
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
-  MipsABIInfo ABI =
-      static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI();
+  auto &TM = static_cast<const MipsTargetMachine &>(MF.getTarget());
+  MipsABIInfo ABI = TM.getABI();
   const MipsRegisterInfo *RegInfo =
     static_cast<const MipsRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
 
@@ -206,10 +206,26 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     unsigned OffsetBitSize = getLoadStoreOffsetSizeInBits(MI.getOpcode());
     unsigned OffsetAlign = getLoadStoreOffsetAlign(MI.getOpcode());
 
-    const TargetMachine &TM = MF.getTarget();
-      const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
-          TM.getSubtargetImpl(*MF.getFunction())->getInstrInfo());
-    if (OffsetBitSize < 16 && isInt<16>(Offset) &&
+    auto *STI = TM.getSubtargetImpl(*MF.getFunction());
+    const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
+          STI->getInstrInfo());
+    if (STI->isCheri() && RS && RS->isScavengingFrameIndex(FrameIndex)) {
+      assert(isInt<16>(Offset) &&
+          "Emergency spill slot must be within 32K of the frame pointer!");
+      MachineBasicBlock &MBB = *MI.getParent();
+      DebugLoc DL = II->getDebugLoc();
+      bool isN64 = static_cast<const MipsTargetMachine&>(
+          MF.getTarget()).getABI().IsN64();
+      unsigned ADDiu = isN64 ? Mips::DADDiu : Mips::ADDiu;
+      // Add the offset to the frame register
+      BuildMI(MBB, II, DL, TII.get(ADDiu), FrameReg)
+        .addReg(FrameReg).addImm(Offset);
+      // Subtract again after the load to reset it
+      if (MI.getOperand(0).getReg() != FrameReg)
+        BuildMI(MBB, (++II), DL, TII.get(ADDiu), FrameReg)
+          .addReg(FrameReg).addImm(-Offset);
+      Offset = 0;
+    } else if (OffsetBitSize < 16 && isInt<16>(Offset) &&
         (!isIntN(OffsetBitSize, Offset) ||
          OffsetToAlignment(Offset, OffsetAlign) != 0)) {
       // If we have an offset that needs to fit into a signed n-bit immediate
