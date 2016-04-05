@@ -957,7 +957,8 @@ static Value *CoerceAvailableValueToLoadType(Value *StoredVal, Type *LoadedTy,
 static int AnalyzeLoadFromClobberingWrite(Type *LoadTy, Value *LoadPtr,
                                           Value *WritePtr,
                                           uint64_t WriteSizeInBits,
-                                          const DataLayout &DL) {
+                                          const DataLayout &DL,
+                                          GVN &gvn) {
   // If the loaded or stored value is a first class array or struct, don't try
   // to transform them.  We need to be able to bitcast to integer.
   if (LoadTy->isStructTy() || LoadTy->isArrayTy())
@@ -1022,6 +1023,21 @@ static int AnalyzeLoadFromClobberingWrite(Type *LoadTy, Value *LoadPtr,
       StoreOffset+StoreSize < LoadOffset+LoadSize)
     return -1;
 
+  // If we're dealing with a bounds-checked pointer, then we have stricter
+  // overlap requirements.
+  if (DL.isFatPointer(LoadPtr->getType()->getPointerAddressSpace())) {
+    uint64_t Size = 0;
+    bool KnownSize = getObjectSize(StoreBase, Size, DL,
+        gvn.getTargetLibraryInfo());
+    // If we don't know the size of the underlying object then we can't
+    // assume that we can look through this pointer.
+    unsigned SrcValSize = DL.getTypeStoreSize(LoadTy);
+    if (!KnownSize)
+      return -1;
+    if ((SrcValSize+LoadSize > SrcValSize) && (NextPowerOf2(SrcValSize)+LoadOffset > Size))
+      return -1;
+  }
+
   // Okay, we can do this transformation.  Return the number of bytes into the
   // store that the load is.
   return LoadOffset-StoreOffset;
@@ -1030,7 +1046,8 @@ static int AnalyzeLoadFromClobberingWrite(Type *LoadTy, Value *LoadPtr,
 /// This function is called when we have a
 /// memdep query of a load that ends up being a clobbering store.
 static int AnalyzeLoadFromClobberingStore(Type *LoadTy, Value *LoadPtr,
-                                          StoreInst *DepSI) {
+                                          StoreInst *DepSI,
+                                          GVN &gvn) {
   // Cannot handle reading from store of first-class aggregate yet.
   if (DepSI->getValueOperand()->getType()->isStructTy() ||
       DepSI->getValueOperand()->getType()->isArrayTy())
@@ -1045,21 +1062,22 @@ static int AnalyzeLoadFromClobberingStore(Type *LoadTy, Value *LoadPtr,
   Value *StorePtr = DepSI->getPointerOperand();
   uint64_t StoreSize =DL.getTypeSizeInBits(DepSI->getValueOperand()->getType());
   return AnalyzeLoadFromClobberingWrite(LoadTy, LoadPtr,
-                                        StorePtr, StoreSize, DL);
+                                        StorePtr, StoreSize, DL, gvn);
 }
 
 /// This function is called when we have a
 /// memdep query of a load that ends up being clobbered by another load.  See if
 /// the other load can feed into the second load.
 static int AnalyzeLoadFromClobberingLoad(Type *LoadTy, Value *LoadPtr,
-                                         LoadInst *DepLI, const DataLayout &DL){
+                                         LoadInst *DepLI, const DataLayout &DL,
+                                         GVN &gvn){
   // Cannot handle reading from store of first-class aggregate yet.
   if (DepLI->getType()->isStructTy() || DepLI->getType()->isArrayTy())
     return -1;
 
   Value *DepPtr = DepLI->getPointerOperand();
   uint64_t DepSize = DL.getTypeSizeInBits(DepLI->getType());
-  int R = AnalyzeLoadFromClobberingWrite(LoadTy, LoadPtr, DepPtr, DepSize, DL);
+  int R = AnalyzeLoadFromClobberingWrite(LoadTy, LoadPtr, DepPtr, DepSize, DL, gvn);
   if (R != -1) return R;
 
   // If we have a load/load clobber an DepLI can be widened to cover this load,
@@ -1073,14 +1091,15 @@ static int AnalyzeLoadFromClobberingLoad(Type *LoadTy, Value *LoadPtr,
       LoadBase, LoadOffs, LoadSize, DepLI);
   if (Size == 0) return -1;
 
-  return AnalyzeLoadFromClobberingWrite(LoadTy, LoadPtr, DepPtr, Size*8, DL);
+  return AnalyzeLoadFromClobberingWrite(LoadTy, LoadPtr, DepPtr, Size*8, DL, gvn);
 }
 
 
 
 static int AnalyzeLoadFromClobberingMemInst(Type *LoadTy, Value *LoadPtr,
                                             MemIntrinsic *MI,
-                                            const DataLayout &DL) {
+                                            const DataLayout &DL,
+                                            GVN &gvn) {
   // If the mem operation is a non-constant size, we can't handle it.
   ConstantInt *SizeCst = dyn_cast<ConstantInt>(MI->getLength());
   if (!SizeCst) return -1;
@@ -1095,7 +1114,7 @@ static int AnalyzeLoadFromClobberingMemInst(Type *LoadTy, Value *LoadPtr,
   // of the memset..
   if (MI->getIntrinsicID() == Intrinsic::memset)
     return AnalyzeLoadFromClobberingWrite(LoadTy, LoadPtr, MI->getDest(),
-                                          MemSizeInBits, DL);
+                                          MemSizeInBits, DL, gvn);
 
   // If we have a memcpy/memmove, the only case we can handle is if this is a
   // copy from constant memory.  In that case, we can read directly from the
@@ -1110,7 +1129,7 @@ static int AnalyzeLoadFromClobberingMemInst(Type *LoadTy, Value *LoadPtr,
 
   // See if the access is within the bounds of the transfer.
   int Offset = AnalyzeLoadFromClobberingWrite(LoadTy, LoadPtr,
-                                              MI->getDest(), MemSizeInBits, DL);
+                                              MI->getDest(), MemSizeInBits, DL, gvn);
   if (Offset == -1)
     return Offset;
 
@@ -1350,13 +1369,22 @@ Value *AvailableValueInBlock::MaterializeAdjustedValue(LoadInst *LI,
     if (Load->getType() == LoadTy && Offset == 0) {
       Res = Load;
     } else {
-      Value *Object = Load->getOperand(0)->stripPointerCasts();
-      // FIXME: don't hard-code address space.
-      if (Object->getType()->getPointerAddressSpace() == 200) {
+      Value *LoadPtr = Load->getOperand(0);
+      if (DL.isFatPointer(LoadPtr->getType()->getPointerAddressSpace())) {
+        int64_t LoadOffset;
+        Value *Object = GetPointerBaseWithConstantOffset(LoadPtr, LoadOffset,
+            DL);
         uint64_t Size;
         bool KnownSize = getObjectSize(Object, Size, DL,
-                gvn.getTargetLibraryInfo());
-        if (!KnownSize || (NextPowerOf2(Offset) > Size))
+            gvn.getTargetLibraryInfo());
+        // If we don't know the size of the underlying object then we can't
+        // assume that we can look through this pointer.
+        if (!KnownSize)
+          Size = DL.getTypeStoreSize(cast<PointerType>(Object->getType())
+              ->getElementType());
+        unsigned LoadSize = DL.getTypeStoreSize(LoadTy);
+        unsigned SrcValSize = DL.getTypeStoreSize(Load->getType());
+        if ((Offset+LoadSize > SrcValSize) && (NextPowerOf2(Offset)+LoadOffset > Size))
           return LI;
       }
       Res = GetLoadValueForLoad(Load, Offset, LoadTy, BB->getTerminator(),
@@ -1424,7 +1452,7 @@ void GVN::AnalyzeLoadAvailability(LoadInst *LI, LoadDepVect &Deps,
       if (StoreInst *DepSI = dyn_cast<StoreInst>(DepInfo.getInst())) {
         if (Address) {
           int Offset =
-              AnalyzeLoadFromClobberingStore(LI->getType(), Address, DepSI);
+              AnalyzeLoadFromClobberingStore(LI->getType(), Address, DepSI, *this);
           if (Offset != -1) {
             ValuesPerBlock.push_back(AvailableValueInBlock::get(DepBB,
                                                        DepSI->getValueOperand(),
@@ -1443,7 +1471,8 @@ void GVN::AnalyzeLoadAvailability(LoadInst *LI, LoadDepVect &Deps,
         // we have the first instruction in the entry block.
         if (DepLI != LI && Address) {
           int Offset =
-              AnalyzeLoadFromClobberingLoad(LI->getType(), Address, DepLI, DL);
+              AnalyzeLoadFromClobberingLoad(LI->getType(), Address, DepLI, DL,
+                  *this);
 
           if (Offset != -1) {
             ValuesPerBlock.push_back(AvailableValueInBlock::getLoad(DepBB,DepLI,
@@ -1458,7 +1487,7 @@ void GVN::AnalyzeLoadAvailability(LoadInst *LI, LoadDepVect &Deps,
       if (MemIntrinsic *DepMI = dyn_cast<MemIntrinsic>(DepInfo.getInst())) {
         if (Address) {
           int Offset = AnalyzeLoadFromClobberingMemInst(LI->getType(), Address,
-                                                        DepMI, DL);
+                                                        DepMI, DL, *this);
           if (Offset != -1) {
             ValuesPerBlock.push_back(AvailableValueInBlock::getMI(DepBB, DepMI,
                                                                   Offset));
@@ -1711,6 +1740,8 @@ bool GVN::PerformLoadPRE(LoadInst *LI, AvailValInBlkVect &ValuesPerBlock,
 
   // Perform PHI construction.
   Value *V = ConstructSSAForLoadSet(LI, ValuesPerBlock, *this);
+  if (V == LI)
+    return true;
   LI->replaceAllUsesWith(V);
   if (isa<PHINode>(V))
     V->takeName(LI);
@@ -1925,7 +1956,7 @@ bool GVN::processLoad(LoadInst *L) {
     Value *AvailVal = nullptr;
     if (StoreInst *DepSI = dyn_cast<StoreInst>(Dep.getInst())) {
       int Offset = AnalyzeLoadFromClobberingStore(
-          L->getType(), L->getPointerOperand(), DepSI);
+          L->getType(), L->getPointerOperand(), DepSI, *this);
       if (Offset != -1)
         AvailVal = GetStoreValueForLoad(DepSI->getValueOperand(), Offset,
                                         L->getType(), L, DL);
@@ -1942,7 +1973,7 @@ bool GVN::processLoad(LoadInst *L) {
         return false;
 
       int Offset = AnalyzeLoadFromClobberingLoad(
-          L->getType(), L->getPointerOperand(), DepLI, DL);
+          L->getType(), L->getPointerOperand(), DepLI, DL, *this);
       if (Offset != -1)
         AvailVal = GetLoadValueForLoad(DepLI, Offset, L->getType(), L, *this);
     }
@@ -1951,7 +1982,7 @@ bool GVN::processLoad(LoadInst *L) {
     // a value on from it.
     if (MemIntrinsic *DepMI = dyn_cast<MemIntrinsic>(Dep.getInst())) {
       int Offset = AnalyzeLoadFromClobberingMemInst(
-          L->getType(), L->getPointerOperand(), DepMI, DL);
+          L->getType(), L->getPointerOperand(), DepMI, DL, *this);
       if (Offset != -1)
         AvailVal = GetMemInstValueForLoad(DepMI, Offset, L->getType(), L, DL);
     }
