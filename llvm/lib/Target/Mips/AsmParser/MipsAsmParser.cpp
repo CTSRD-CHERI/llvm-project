@@ -3590,7 +3590,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
   int CC = StringSwitch<unsigned>(Name)
            .Case("idc", 26)
            .Case("kr1c", 27)
-           .Case("kr1c", 28)
+           .Case("kr2c", 28)
            .Case("kcc", 29)
            .Case("kdc", 30)
            .Case("epcc", 31)
