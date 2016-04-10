@@ -13,10 +13,6 @@
 
 
 def SDT_MipsCBT      : SDTypeProfile<0, 2, [SDTCisVT<0, iFATPTR>]>;
-def MipsCBTS : SDNode<"MipsISD::CBTS", SDT_MipsCBT,
-                          [SDNPHasChain, SDNPOptInGlue]>;
-def MipsCBTU : SDNode<"MipsISD::CBTU", SDT_MipsCBT,
-                          [SDNPHasChain, SDNPOptInGlue]>;
 def SDT_MipsPtrToCap     : SDTypeProfile<1, 1, [SDTCisVT<0, iFATPTR>,
                                             SDTCisVT<1, i64>]>;
 def MipsSTC : SDNode<"MipsISD::STACKTOCAP", SDT_MipsPtrToCap,
@@ -72,11 +68,12 @@ let hasDelaySlot=1, isTerminator=1 in {
 let isBranch=1 in {
 def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbts\t$cb, $offset",
-                        [(MipsCBTS CheriOpnd:$cb, bb:$offset)]>;
+                        [(brcond (i32 (setne (int_mips_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
 def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbtu\t$cb, $offset",
-                        [(MipsCBTU CheriOpnd:$cb, bb:$offset)]>;
+                        [(brcond (i32 (seteq (int_mips_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
 }
+
 def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriOpnd:$cb),
                               "cjr\t${cb}",
                               []>
@@ -87,6 +84,13 @@ def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriOpnd:$cb),
 	let r2 = 0;
 }
 }
+
+// SelectionDAG doesn't know that int_mips_cap_tag_get returns 0 or 1.
+def : Pat<(brcond (i32 (seteq (int_mips_cap_tag_get CheriOpnd:$cb), 1)), bb:$offset),
+          (CBTS CheriOpnd: $cb, bb:$offset)>;
+def : Pat<(brcond (i32 (setne (int_mips_cap_tag_get CheriOpnd:$cb), 1)), bb:$offset),
+          (CBTU CheriOpnd: $cb, bb:$offset)>;
+
 let isCall=1, hasDelaySlot=1 in {
 def CJALR : CheriFmt3Caps<0x07, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb),
                               "cjalr\t${cd}, ${cb}",

@@ -5,8 +5,7 @@ target triple = "cheri-unknown-freebsd"
 
 ; Check that the store of the global pointer is not moved after the branch and
 ; that the branch is replaced by a branch-on-tag-set.
-; CHECK: sd	$1, 16($fp)
-; CHECK: cbts	$c3, $BB0_3
+; CHECK: cbts	$c3, $BB0_2
 
 @.str = private unnamed_addr constant [20 x i8] c"Storing in slot %p\0A\00", align 1
 

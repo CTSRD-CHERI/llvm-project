@@ -257,10 +257,8 @@ void MipsPassConfig::addPreRegAlloc() {
     addPass(createMipsOptimizePICCallPass(getMipsTargetMachine()));
 
   MipsTargetMachine &TM = getMipsTargetMachine();
-  if (TM.getSubtargetImpl()->isCheri()) {
+  if (TM.getSubtargetImpl()->isCheri())
     addPass(createCheriAddressingModeFolder(TM));
-    addPass(createCheriBranchFolder());
-  }
 }
 
 void MipsPassConfig::addIRPasses() {
