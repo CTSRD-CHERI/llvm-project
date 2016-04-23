@@ -3844,8 +3844,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
   if (FnType->getCallConv() == CC_CheriCCall &&
       TargetDecl->hasAttr<CheriMethodClassAttr>()) {
     assert(TargetDecl);
-    StringRef Suffix =
-      TargetDecl->getAttr<CheriMethodSuffixAttr>()->getSuffix();
+    StringRef Suffix = TargetDecl->hasAttr<CheriMethodSuffixAttr>() ?
+      TargetDecl->getAttr<CheriMethodSuffixAttr>()->getSuffix() : "";
     CallCHERIInvoke = true;
     CallArgList ModifiedArgs;
     SmallVector<QualType, 16> NewParams;
