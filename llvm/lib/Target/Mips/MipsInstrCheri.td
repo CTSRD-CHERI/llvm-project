@@ -64,7 +64,7 @@ def uimm32_pat:  PatLeaf<(imm), [{ return isInt<32>(N->getZExtValue()); }]>;
 ////////////////////////////////////////////////////////////////////////////////
 // Flow control
 ////////////////////////////////////////////////////////////////////////////////
-let hasDelaySlot=1, isTerminator=1 in {
+let DecoderNamespace="CHERI", hasDelaySlot=1, isTerminator=1 in {
 let isBranch=1 in {
 def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbts\t$cb, $offset",
