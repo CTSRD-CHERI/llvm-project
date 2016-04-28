@@ -18,6 +18,7 @@
 #include "llvm/IR/LegacyPassManagers.h"
 #include "llvm/IR/LegacyPassNameParser.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -1500,6 +1501,7 @@ bool FPPassManager::runOnFunction(Function &F) {
   if (F.isDeclaration())
     return false;
 
+  //assert(!verifyModule(*F.getParent(), &dbgs()));
   bool Changed = false;
 
   // Collect inherited analysis from Module level pass manager.
@@ -1519,6 +1521,7 @@ bool FPPassManager::runOnFunction(Function &F) {
       TimeRegion PassTimer(getPassTimer(FP));
 
       LocalChanged |= FP->runOnFunction(F);
+      //assert(!LocalChanged || !verifyModule(*F.getParent(), &dbgs()));
     }
 
     Changed |= LocalChanged;

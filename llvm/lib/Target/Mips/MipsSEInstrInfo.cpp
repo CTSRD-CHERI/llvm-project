@@ -477,14 +477,6 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
   case Mips::MIPSeh_return64:
     expandEhReturn(MBB, MI);
     break;
-  case Mips::CapFromPC:
-    BuildMI(MBB, &*MI, MI->getDebugLoc(), get(Mips::CGetPCC),
-      MI->getOperand(0).getReg());
-    BuildMI(MBB, &*MI, MI->getDebugLoc(), get(Mips::CSetOffset),
-      MI->getOperand(0).getReg())
-      .addReg(MI->getOperand(0).getReg())
-      .addReg(MI->getOperand(1).getReg());
-  break;
   case Mips::CapRetPseudo:
     BuildMI(MBB, &*MI, MI->getDebugLoc(), get(Mips::PseudoReturnCap))
       .addReg(Mips::C17);

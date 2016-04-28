@@ -76,6 +76,7 @@ def IsNotSoftFloat   : Predicate<"!Subtarget->useSoftFloat()">,
 class FGR_32 { list<Predicate> FGRPredicates = [NotFP64bit]; }
 class FGR_64 { list<Predicate> FGRPredicates = [IsFP64bit]; }
 class HARDFLOAT { list<Predicate> HardFloatPredicate = [IsNotSoftFloat]; }
+class HARDFLOATNOTCHERI { list<Predicate> HardFloatPredicate = [IsNotSoftFloat,NotCHERI]; }
 
 //===----------------------------------------------------------------------===//
 
@@ -182,14 +183,14 @@ class MADDS_FT<string opstr, RegisterOperand RC, InstrItinClass Itin,
   InstSE<(outs RC:$fd), (ins RC:$fr, RC:$fs, RC:$ft),
          !strconcat(opstr, "\t$fd, $fr, $fs, $ft"),
          [(set RC:$fd, (OpNode (fmul RC:$fs, RC:$ft), RC:$fr))], Itin,
-         FrmFR, opstr>, HARDFLOAT;
+         FrmFR, opstr>, HARDFLOATNOTCHERI;
 
 class NMADDS_FT<string opstr, RegisterOperand RC, InstrItinClass Itin,
                 SDPatternOperator OpNode = null_frag> :
   InstSE<(outs RC:$fd), (ins RC:$fr, RC:$fs, RC:$ft),
          !strconcat(opstr, "\t$fd, $fr, $fs, $ft"),
          [(set RC:$fd, (fsub fpimm0, (OpNode (fmul RC:$fs, RC:$ft), RC:$fr)))],
-         Itin, FrmFR, opstr>, HARDFLOAT;
+         Itin, FrmFR, opstr>, HARDFLOATNOTCHERI;
 
 class LWXC1_FT<string opstr, RegisterOperand DRC,
                InstrItinClass Itin, SDPatternOperator OpNode = null_frag> :

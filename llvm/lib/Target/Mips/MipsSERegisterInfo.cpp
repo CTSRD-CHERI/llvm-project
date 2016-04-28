@@ -69,24 +69,22 @@ MipsSERegisterInfo::intRegClass(unsigned Size) const {
 /// instruction immediate.
 static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode) {
   switch (Opcode) {
-  case Mips::CAPLOAD832:
-  case Mips::CAPLOADU832:
+  case Mips::CAPSTORE16:
+  case Mips::CAPLOAD16:
   case Mips::CAPLOAD1632:
   case Mips::CAPLOADU1632:
-  case Mips::CAPSTORE8:
-  case Mips::CAPSTORE16:
-  case Mips::CAPSTORE32:
-  case Mips::CAPSTORE64:
-  case Mips::CAPLOAD8:
-  case Mips::CAPLOAD16:
-  case Mips::CAPLOAD32:
-  case Mips::CAPLOAD64:
-  case Mips::CAPLOADU8:
   case Mips::CAPLOADU16:
+    return 8 + 1 /* scale factor */;
+  case Mips::CAPSTORE32:
+  case Mips::CAPLOAD32:
   case Mips::CAPLOADU32:
-    return 8;
+    return 8 + 2 /* scale factor */;
+  case Mips::CAPSTORE64:
+  case Mips::CAPLOAD64:
+    return 8 + 3 /* scale factor */;
   case Mips::LOADCAP:
   case Mips::STORECAP:
+    return 11 + 4 /* scale factor */;
   case Mips::LD_B:
   case Mips::ST_B:
     return 10;
@@ -107,6 +105,22 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode) {
 /// Get the scale factor applied to the immediate in the given load/store.
 static inline unsigned getLoadStoreOffsetAlign(const unsigned Opcode) {
   switch (Opcode) {
+  case Mips::CAPSTORE16:
+  case Mips::CAPLOAD16:
+  case Mips::CAPLOAD1632:
+  case Mips::CAPLOADU1632:
+  case Mips::CAPLOADU16:
+    return 2;
+  case Mips::CAPSTORE32:
+  case Mips::CAPLOAD32:
+  case Mips::CAPLOADU32:
+    return 4;
+  case Mips::CAPSTORE64:
+  case Mips::CAPLOAD64:
+    return 8;
+  case Mips::LOADCAP:
+  case Mips::STORECAP:
+    return 16;
   case Mips::LD_H:
   case Mips::ST_H:
     return 2;
@@ -131,8 +145,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   MachineFrameInfo *MFI = MF.getFrameInfo();
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
-  MipsABIInfo ABI =
-      static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI();
+  auto &TM = static_cast<const MipsTargetMachine &>(MF.getTarget());
+  MipsABIInfo ABI = TM.getABI();
   const MipsRegisterInfo *RegInfo =
     static_cast<const MipsRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
 
@@ -192,10 +206,10 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     unsigned OffsetBitSize = getLoadStoreOffsetSizeInBits(MI.getOpcode());
     unsigned OffsetAlign = getLoadStoreOffsetAlign(MI.getOpcode());
 
-    const TargetMachine &TM = MF.getTarget();
-      const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
-          TM.getSubtargetImpl(*MF.getFunction())->getInstrInfo());
-    if (RS && RS->isScavengingFrameIndex(FrameIndex)) {
+    auto *STI = TM.getSubtargetImpl(*MF.getFunction());
+    const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
+          STI->getInstrInfo());
+    if (STI->isCheri() && RS && RS->isScavengingFrameIndex(FrameIndex)) {
       assert(isInt<16>(Offset) &&
           "Emergency spill slot must be within 32K of the frame pointer!");
       MachineBasicBlock &MBB = *MI.getParent();

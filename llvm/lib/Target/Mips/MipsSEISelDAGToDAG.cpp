@@ -111,6 +111,10 @@ bool MipsSEDAGToDAGISel::replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
     MachineInstr *MI = MO.getParent();
     ++U;
 
+    // CSetPCCOffset is not allowed to have a zero register operand
+    if (MI->getOpcode() == Mips::CSetPCCOffset)
+      continue;
+
     // Do not replace if it is a phi's operand or is tied to def operand.
     if (MI->isPHI() || MI->isRegTiedToDefOperand(OpNo) || MI->isPseudo())
       continue;

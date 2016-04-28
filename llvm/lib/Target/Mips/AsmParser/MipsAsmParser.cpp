@@ -972,6 +972,14 @@ public:
   }
   bool isRegIdx() const { return Kind == k_RegisterIndex; }
   bool isImm() const override { return Kind == k_Immediate; }
+  template<int width, int shift>
+  bool isScaledImmediate() const {
+    if (Kind != k_Immediate)
+      return false;
+    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
+    int Val = MCE->getValue();
+    return isInt<width>(Val >> shift) && (((Val >> shift) << shift) == Val);
+  }
   bool isConstantImm() const {
     return isImm() && dyn_cast<MCConstantExpr>(getImm());
   }

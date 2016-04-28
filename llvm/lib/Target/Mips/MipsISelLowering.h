@@ -157,8 +157,6 @@ namespace llvm {
       STACKTOCAP,
       // Jump and link pseudo that ties the clear regs.
       CheriJmpLink,
-      /// Convert a function pointer (PCC-relative address) into a capability
-      CODETOCAP,
       /// Jump and link with a capability (rather than an integer address)
       CapJmpLink,
       /// Return from a call with a capability (rather than an integer address)

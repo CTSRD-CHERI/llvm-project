@@ -168,12 +168,6 @@ class CheriFmtCLS<bits<6> op, dag outs, dag ins, string asmstr,
   let Inst{15-11} = rt;
   let Inst{10-0}  = offset;
 }
-class CheriFmtCSCR<dag outs, dag ins, string asmstr,
-                   list<dag> pattern> :
-  CheriFmtCLS<0x3e, outs, ins, asmstr, pattern>;
-class CheriFmtCLCR<dag outs, dag ins, string asmstr,
-                   list<dag> pattern> :
-  CheriFmtCLS<0x36, outs, ins, asmstr, pattern>;
 
 class CheriFmtCLX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
@@ -260,3 +254,47 @@ class CheriFmtCSC<bits<3> type, dag outs, dag ins, string asmstr> :
   let Inst{2-0}   = type;
 }
 
+class CheriFmt3Op<bits<6> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
+                  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5> r1;
+  bits<5> r2;
+  bits<5> r3;
+
+  let Opcode = 0x12;
+
+  let Inst{25-21} = 0x0;
+  let Inst{20-16} = r1;
+  let Inst{15-11} = r2;
+  let Inst{10-6} = r3;
+  let Inst{5-0}   = type;
+}
+
+class CheriFmt2Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
+                  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5> r1;
+  bits<5> r2;
+
+  let Opcode = 0x12;
+
+  let Inst{25-21} = 0x0;
+  let Inst{20-16} = r1;
+  let Inst{15-11} = r2;
+  let Inst{10-6} = type;
+  let Inst{5-0}   = 0x3f;
+}
+
+class CheriFmt1Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
+                  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+{
+  bits<5> r1;
+
+  let Opcode = 0x12;
+
+  let Inst{25-21} = 0x0;
+  let Inst{20-16} = r1;
+  let Inst{15-11} = type;
+  let Inst{10-6} = 0x1f;
+  let Inst{5-0}   = 0x3f;
+}

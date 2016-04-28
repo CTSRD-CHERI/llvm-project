@@ -60,6 +60,11 @@ UseClearRegs("cheri-use-clearregs",
   cl::desc("Zero registers using the ClearRegs instructions"),
   cl::init(false));
 
+cl::opt<bool>
+SkipGlobalBounds("cheri-no-global-bounds",
+  cl::desc("Skip bounds checks on globals"),
+  cl::init(false));
+
 static const MCPhysReg Mips64DPRegs[8] = {
   Mips::D12_64, Mips::D13_64, Mips::D14_64, Mips::D15_64,
   Mips::D16_64, Mips::D17_64, Mips::D18_64, Mips::D19_64
@@ -228,7 +233,6 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::CBTU:              return "MipsISD::CBTU";
   case MipsISD::STACKTOCAP:        return "MipsISD::STACKTOCAP";
   case MipsISD::CheriJmpLink:      return "MipsISD::CheriJmpLink";
-  case MipsISD::CODETOCAP:         return "MipsISD::CODETOCAP";
   case MipsISD::CapJmpLink:        return "MipsISD::CapJmpLink";
   case MipsISD::CapRet:            return "MipsISD::CapRet";
   }
@@ -1860,7 +1864,8 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   if (GV->getType()->getAddressSpace() == 200) {
     Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
     StringRef Name = GV->getName();
-    if (!isa<Function>(GV) &&
+    if (!SkipGlobalBounds &&
+        !isa<Function>(GV) &&
         !GV->hasWeakLinkage() &&
         !GV->hasWeakAnyLinkage() &&
         !GV->hasExternalWeakLinkage() &&
@@ -3108,8 +3113,13 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
   // If we're in the sandbox ABI, then we need to turn the address into a
   // PCC-derived capability.
-  if (ABI.IsCheriSandbox() && (Callee.getValueType() != MVT::iFATPTR))
-    Callee = DAG.getNode(MipsISD::CODETOCAP, DL, MVT::iFATPTR, Callee);
+  if (ABI.IsCheriSandbox() && (Callee.getValueType() != MVT::iFATPTR)) {
+    auto GetPCC = DAG.getConstant(Intrinsic::mips_pcc_get, DL, MVT::i64);
+    auto SetOffset = DAG.getConstant(Intrinsic::mips_cap_offset_set, DL, MVT::i64);
+    auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR, GetPCC);
+    Callee = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+        SetOffset, PCC, Callee);
+  }
 
 
   SmallVector<SDValue, 8> Ops(1, Chain);
