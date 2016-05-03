@@ -271,30 +271,13 @@ class CheriFmt3Op<bits<6> type, dag outs, dag ins, string asmstr, list<dag> patt
 }
 
 class CheriFmt2Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
-                  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+                  CheriFmt3Op<0x3f, outs, ins, asmstr, pattern>
 {
-  bits<5> r1;
-  bits<5> r2;
-
-  let Opcode = 0x12;
-
-  let Inst{25-21} = 0x0;
-  let Inst{20-16} = r1;
-  let Inst{15-11} = r2;
-  let Inst{10-6} = type;
-  let Inst{5-0}   = 0x3f;
+  let r3 = type;
 }
 
 class CheriFmt1Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
-                  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+                  CheriFmt2Op<0x1f, outs, ins, asmstr, pattern>
 {
-  bits<5> r1;
-
-  let Opcode = 0x12;
-
-  let Inst{25-21} = 0x0;
-  let Inst{20-16} = r1;
-  let Inst{15-11} = type;
-  let Inst{10-6} = 0x1f;
-  let Inst{5-0}   = 0x3f;
+  let r2 = type;
 }
