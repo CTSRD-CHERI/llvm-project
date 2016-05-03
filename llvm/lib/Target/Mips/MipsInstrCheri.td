@@ -217,12 +217,10 @@ def CUnseal   : CheriFmt3Caps<0x03, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs, Ch
 def CGetUnsealed : CheriFmtGet<6, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                           "cgetsealed\t$rd, $cb",
                           [(set GPR64Opnd:$rd, (int_mips_cap_sealed_get CheriOpnd:$cb))]>;
-def CGetPCC : CheriFmtGet<7, (outs CheriOpnd:$cb), (ins),
-                          "cgetpcc\t${cb}",
-                          [(set CheriOpnd:$cb, (int_mips_pcc_get))]>
-{
-  let rd = 0;
-}
+
+def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),
+                          "cgetpcc\t${r1}",
+                          [(set CheriOpnd:$r1, (int_mips_pcc_get))]>;
 
 def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$cb), (ins GPR64Opnd:$rd),
                                 "cgetpccsetoffset\t${cb}, $rd",
