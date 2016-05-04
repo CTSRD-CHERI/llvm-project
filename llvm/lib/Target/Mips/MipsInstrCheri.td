@@ -72,12 +72,6 @@ def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
 def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbtu\t$cb, $offset",
                         [(brcond (i32 (seteq (int_mips_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
-def CBEZ : CheriFmtCBT<0x11, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
-                        "cbez\t$cb, $offset",
-                        [(brcond (i32 (seteq CheriOpnd:$cb, (inttoptr (i64 0)))), bb:$offset)]>;
-def CBNZ : CheriFmtCBT<0x12, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
-                        "cbnz\t$cb, $offset",
-                        [(brcond (i32 (setne CheriOpnd:$cb, (inttoptr (i64 0)))), bb:$offset)]>;
 }
 
 def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriOpnd:$cb),
