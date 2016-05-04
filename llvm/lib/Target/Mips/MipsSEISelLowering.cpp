@@ -1208,8 +1208,6 @@ MipsSETargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
     return emitCapFloat64Store(MI, BB);
   case Mips::CAP_SELECT:
     return emitCapSelect(MI, BB);
-  case Mips::CMove:
-    return emitCapMove(MI, BB);
   }
 }
 
@@ -3492,18 +3490,6 @@ MipsSETargetLowering::emitCapFloat64Load(MachineInstr *MI,
                                     MachineBasicBlock *BB) const {
   return emitCapFloatLoad<Mips::DMTC1, Mips::CAPLOAD64>(Subtarget,
           Mips::GPR64RegClass, MI, BB);
-}
-MachineBasicBlock *
-MipsSETargetLowering::emitCapMove(MachineInstr *MI,
-                                  MachineBasicBlock *BB) const {
-  auto MoveInst = Mips::CIncOffset;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  BuildMI(*BB, MI, MI->getDebugLoc(), TII->get(MoveInst))
-      .addReg(MI->getOperand(0).getReg())
-      .addImm(MI->getOperand(1).getImm())
-      .addReg(Mips::ZERO_64);
-  MI->eraseFromParent();
-  return BB;
 }
 MachineBasicBlock *
 MipsSETargetLowering::emitCapSelect(MachineInstr *MI,

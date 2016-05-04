@@ -105,19 +105,6 @@ class CheriFmt3Caps<bits<5> op, dag outs, dag ins, string asmstr,
   let r2 = ct;
 }
 
-class CheriFmtPtrCmp<bits<3> cmp, RegisterOperand RC, string instr_asm,
-                     list<dag> pattern>:
-  CheriFmtRegs<0x0e, cmp, (outs RC: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
-           !strconcat(instr_asm, "\t$rd, $cb, $ct"),
-           pattern> {
-  bits<5>  rd;
-  bits<5>  cb;
-  bits<5>  ct;
-  let r0 = rd;
-  let r1 = cb;
-  let r2 = ct;
-}
-
 class CheriFmt3CCall<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   CheriFmtRegs<op, 0, outs, ins, asmstr, pattern> {
@@ -281,3 +268,20 @@ class CheriFmt1Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> patt
 {
   let r2 = type;
 }
+
+class CheriFmtCGet<bits<5> type, string op, string intr=op> :
+                  CheriFmt2Op<type, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2), 
+                              !strconcat("cget", op, "\t$r1, $r2"),
+                              [(set GPR64Opnd:$r1, (!cast<dag>(!strconcat("int_mips_cap_", intr, "_get")) CheriOpnd:$r2))]>;
+
+class CheriFmtCSet<bits<6> type, string op, string intr=op, string verb="set", string intr_verb=verb> :
+                  CheriFmt3Op<type, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3), 
+                              !strconcat("c", verb, op, "\t$r1, $r2, $r3"),
+                              [(set CheriOpnd:$r1, (!cast<dag>(!strconcat("int_mips_cap_", intr, "_", intr_verb)) CheriOpnd:$r2, GPR64Opnd:$r3))]>;
+
+class CheriFmtPtrCmp<bits<6> cmp, RegisterOperand RC, string instr_asm,
+                     list<dag> pattern>:
+  CheriFmt3Op<cmp, (outs RC: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
+           !strconcat(instr_asm, "\t$rd, $cb, $ct"),
+           pattern>;
+

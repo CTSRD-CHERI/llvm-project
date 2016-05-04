@@ -1985,7 +1985,6 @@ bool MipsAsmParser::needsExpansion(MCInst &Inst) {
   case Mips::CLDC1: 
   case Mips::CSWC1:
   case Mips::CSDC1:
-  case Mips::CMove:
   case Mips::BneImm:
   case Mips::BeqImm:
   case Mips::BLT:

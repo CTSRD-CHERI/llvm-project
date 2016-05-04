@@ -1799,6 +1799,15 @@ def int_mips_cap_bounds_set :
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_i64_ty],
             [IntrNoMem]>;
+def int_mips_cap_bounds_exact_set :
+  GCCBuiltin<"__builtin_memcap_bounds_exact_set">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_i64_ty],
+            [IntrNoMem]>;
+def int_mips_cap_pointer_subtract :
+  Intrinsic<[llvm_i64_ty],
+            [llvm_fatptr_ty, llvm_fatptr_ty],
+            [IntrNoMem]>;
 def int_mips_cap_type_get :
   GCCBuiltinAlias<"__builtin_cheri_get_cap_type">,
   GCCBuiltin<"__builtin_memcap_type_get">,

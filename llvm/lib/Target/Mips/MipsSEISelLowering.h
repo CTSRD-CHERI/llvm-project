@@ -127,9 +127,6 @@ namespace llvm {
     /// \brief Expand a capability-select into a compare and branch
     MachineBasicBlock *emitCapSelect(MachineInstr *MI,
                                      MachineBasicBlock *BB) const;
-    /// \brief Expand a capability move
-    MachineBasicBlock *emitCapMove(MachineInstr *MI,
-                                   MachineBasicBlock *BB) const;
   };
 }
 
