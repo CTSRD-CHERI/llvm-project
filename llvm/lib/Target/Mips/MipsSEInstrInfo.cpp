@@ -512,6 +512,8 @@ unsigned MipsSEInstrInfo::getOppositeBranchOpc(unsigned Opc) const {
   case Mips::BC1F:   return Mips::BC1T;
   case Mips::BEQZC_MM: return Mips::BNEZC_MM;
   case Mips::BNEZC_MM: return Mips::BEQZC_MM;
+  case Mips::CBTS:   return Mips::CBTU;
+  case Mips::CBEZ:   return Mips::CBNZ;
   }
 }
 
@@ -585,6 +587,8 @@ unsigned MipsSEInstrInfo::getAnalyzableBrOpc(unsigned Opc) const {
           Opc == Mips::BEQ64  || Opc == Mips::BNE64  || Opc == Mips::BGTZ64 ||
           Opc == Mips::BGEZ64 || Opc == Mips::BLTZ64 || Opc == Mips::BLEZ64 ||
           Opc == Mips::BC1T   || Opc == Mips::BC1F   || Opc == Mips::B      ||
+          Opc == Mips::CBTS   || Opc == Mips::CBTU   || Opc == Mips::CBEZ   ||
+          Opc == Mips::CBNZ   ||
           Opc == Mips::J || Opc == Mips::BEQZC_MM || Opc == Mips::BNEZC_MM) ?
          Opc : 0;
 }
