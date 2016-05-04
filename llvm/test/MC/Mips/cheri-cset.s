@@ -22,6 +22,12 @@
 # CHECK: cmove	$c1, $c2
 # CHECK: encoding: [0x48,0x01,0x12,0xbf]
 cmove	$c1, $c2
+# CHECK: ccmovz	$c1, $c3, $2
+# CHECK: encoding: [0x48,0x01,0x18,0x9b]
+ccmovz	$c1, $c3, $2
+# CHECK: ccmovn	$c1, $c3, $2
+# CHECK: encoding: [0x48,0x01,0x18,0x9c]
+ccmovn	$c1, $c3, $2
 
 # Check for correct encoding of explicit set / get default and deprecated
 # direct access to C0

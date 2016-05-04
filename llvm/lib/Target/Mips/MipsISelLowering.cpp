@@ -317,7 +317,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
     setOperationAction(ISD::GlobalTLSAddress,   MVT::i64,   Custom);
     setOperationAction(ISD::JumpTable,          MVT::i64,   Custom);
     setOperationAction(ISD::ConstantPool,       MVT::i64,   Custom);
-    setOperationAction(ISD::SELECT,             MVT::i64,   Custom);
+    //setOperationAction(ISD::SELECT,             MVT::i64,   Custom);
     setOperationAction(ISD::LOAD,               MVT::i64,   Custom);
     setOperationAction(ISD::STORE,              MVT::i64,   Custom);
     setOperationAction(ISD::FP_TO_SINT,         MVT::i64,   Custom);
