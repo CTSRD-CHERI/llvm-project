@@ -7497,6 +7497,13 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
   ArgStringList CmdArgs;
 
+  bool IsSandboxABI = false;
+  if (ToolChain.getArch() == llvm::Triple::cheri)
+    if (Args.hasArg(options::OPT_mabi_EQ)) {
+      auto A = Args.getLastArg(options::OPT_mabi_EQ);
+      IsSandboxABI = (StringRef(A->getValue()).lower() == "sandbox");
+    }
+
   // Silence warning for "clang -g foo.o -o foo"
   Args.ClaimAllArgs(options::OPT_g_Group);
   // and "clang -emit-llvm foo.o -o foo"
@@ -7521,7 +7528,10 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Bshareable");
     } else {
       CmdArgs.push_back("-dynamic-linker");
-      CmdArgs.push_back("/libexec/ld-elf.so.1");
+      if (IsSandboxABI)
+        CmdArgs.push_back("/libexec/ld-cheri-elf.so.1");
+      else
+        CmdArgs.push_back("/libexec/ld-elf.so.1");
     }
     if (ToolChain.getTriple().getOSMajorVersion() >= 9) {
       if (Arch == llvm::Triple::arm || Arch == llvm::Triple::sparc ||
@@ -7556,12 +7566,6 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  bool IsSandboxABI = false;
-  if (ToolChain.getArch() == llvm::Triple::cheri)
-    if (Args.hasArg(options::OPT_mabi_EQ)) {
-      auto A = Args.getLastArg(options::OPT_mabi_EQ);
-      IsSandboxABI = (StringRef(A->getValue()).lower() == "sandbox");
-    }
   // The FreeBSD/MIPS version of GNU ld is horribly buggy and errors out
   // complaining about linking 32-bit and 64-bit code when linking CHERI code.
   if (IsSandboxABI)

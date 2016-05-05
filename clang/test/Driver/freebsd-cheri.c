@@ -12,6 +12,7 @@
 // RUN:   | FileCheck --check-prefix=CHECK-CHERI-SANDBOX %s
 // CHECK-CHERI-SANDBOX: "-cc1" "-triple" "cheri-pc-freebsd11"
 // CHECK-CHERI-SANDBOX: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
+// CHECK-CHERI-SANDBOX: "-dynamic-linker" "{{.*}}/libexec/ld-cheri-elf.so.1"
 // CHECK-CHERI-SANDBOX: "-L[[SYSROOT]]/usr/libcheri"
 // CHECK-CHERI-SANDBOX-NOT: "-L[[SYSROOT]]/usr/lib"
 // CHECK-CHERI-SANDBOX-NOT: "{{.*}}crti.o"
