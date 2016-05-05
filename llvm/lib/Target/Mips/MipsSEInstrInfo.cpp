@@ -513,7 +513,9 @@ unsigned MipsSEInstrInfo::getOppositeBranchOpc(unsigned Opc) const {
   case Mips::BEQZC_MM: return Mips::BNEZC_MM;
   case Mips::BNEZC_MM: return Mips::BEQZC_MM;
   case Mips::CBTS:   return Mips::CBTU;
+  case Mips::CBTU:   return Mips::CBTS;
   case Mips::CBEZ:   return Mips::CBNZ;
+  case Mips::CBNZ:   return Mips::CBEZ;
   }
 }
 
