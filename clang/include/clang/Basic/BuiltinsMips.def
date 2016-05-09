@@ -947,6 +947,7 @@ BUILTIN(__builtin_memcap_offset_increment, "v*200vC*200z", "nc")
 BUILTIN(__builtin_memcap_offset_set, "v*200vC*200z", "nc")
 BUILTIN(__builtin_memcap_offset_get, "zvC*200", "nc")
 BUILTIN(__builtin_memcap_base_only_increment, "v*200vC*200z", "nc")
+BUILTIN(__builtin_memcap_callback_create, "v.", "nct")
 
 BUILTIN(__builtin_memcap_stack_get, "v*200", "nc")
 BUILTIN(__builtin_cheri_cause_get, "z", "nc")

@@ -6511,7 +6511,8 @@ public:
   }
 
   CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
-    return (((CC == CC_CheriCCallee) || (CC == CC_CheriCCall)) && IsCheri) ?
+    return (((CC == CC_CheriCCallee) || (CC == CC_CheriCCallback) ||
+             (CC == CC_CheriCCall)) && IsCheri) ?
         CCCR_OK : CCCR_Warning;
   }
 

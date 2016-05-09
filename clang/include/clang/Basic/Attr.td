@@ -1216,6 +1216,12 @@ def CheriCCall : InheritableAttr {
 
 def CheriCCallee : InheritableAttr {
   let Spellings = [GNU<"cheri_ccallee">];
+  let Subjects = SubjectList<[Function], ErrorDiag>;
+  let Documentation = [Undocumented];
+}
+
+def CheriCCallback : InheritableAttr {
+  let Spellings = [GNU<"cheri_ccallback">];
   let Documentation = [Undocumented];
 }
 

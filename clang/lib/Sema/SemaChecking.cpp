@@ -96,6 +96,41 @@ static bool SemaBuiltinAnnotation(Sema &S, CallExpr *TheCall) {
   return false;
 }
 
+static bool SemaBuiltinMemcapCreate(Sema &S, CallExpr *TheCall) {
+  if (checkArgCount(S, TheCall, 3))
+    return true;
+
+  QualType FnType = TheCall->getArg(2)->getType();
+  auto FnAttrType = FnType->getAs<AttributedType>();
+
+  // FIXME: Proper error
+  if (FnAttrType->getAttrKind() != AttributedType::attr_cheri_ccallee) {
+    fprintf(stderr, "Argument must be a cheri_ccallee thingy\n");
+    return true;
+  }
+  // FIXME: Typecheck args 0 and 1
+  ASTContext &C = S.Context;
+  // FIXME: Error on null
+  auto BaseFnTy = cast<FunctionProtoType>(FnAttrType->getModifiedType());
+  auto ReturnFnTy = C.adjustFunctionType(BaseFnTy,
+      BaseFnTy->getExtInfo().withCallingConv(CC_CheriCCallback));
+  auto ReturnTy = C.getAddrSpaceQualType(QualType(ReturnFnTy, 0), C.getDefaultAS());
+  ReturnTy = C.getPointerType(ReturnTy);
+  ReturnTy = C.getAddrSpaceQualType(ReturnTy, C.getDefaultAS());
+
+  QualType ArgTys[] = { TheCall->getArg(0)->getType(),
+    TheCall->getArg(1)->getType(), FnType };
+  QualType BuiltinTy = C.getFunctionType(
+      ReturnTy, ArgTys, FunctionProtoType::ExtProtoInfo());
+  BuiltinTy = C.getAddrSpaceQualType(BuiltinTy, C.getDefaultAS());
+  QualType BuiltinPtrTy = C.getPointerType(BuiltinTy);
+  BuiltinPtrTy = C.getAddrSpaceQualType(BuiltinPtrTy, C.getDefaultAS());
+
+  TheCall->setType(ReturnTy);
+  return false;
+}
+
+
 /// Check that the argument to __builtin_addressof is a glvalue, and set the
 /// result type to the corresponding pointer type.
 static bool SemaBuiltinAddressof(Sema &S, CallExpr *TheCall) {
@@ -474,6 +509,11 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     // CodeGen assumes it can find the global new and delete to call,
     // so ensure that they are declared.
     DeclareGlobalNewDelete();
+    break;
+
+  case Mips::BI__builtin_memcap_callback_create:
+    if (SemaBuiltinMemcapCreate(*this, TheCall))
+      return ExprError();
     break;
 
   // check secure string manipulation functions where overflows

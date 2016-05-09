@@ -3838,16 +3838,39 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
                E->getDirectCallee(), /*ParamsToSkip*/ 0);
 
   bool CallCHERIInvoke = false;
-
+  // For CHERI callbacks, the function 'pointer' is actually a struct
+  // containing all of the information required for a cross domain call.
   // Note: It doesn't actually matter what the order of the number and class
-  // are, as they will be in a different category of register.
-  if (FnType->getCallConv() == CC_CheriCCall &&
-      TargetDecl->hasAttr<CheriMethodClassAttr>()) {
+  // are, as they will be in a different category of register.  This is *not*
+  // necessarily the case for implementations that have a merged register file!
+  if (FnType->getCallConv() == CC_CheriCCallback) {
+    CallCHERIInvoke = true;
+    SmallVector<QualType, 16> NewParams;
+    // Add the method number
+    auto *MethodNum = Builder.CreateExtractValue(Callee, {1});
+    auto NumTy = getContext().UnsignedLongLongTy;
+    CallArg MethodNumArg(RValue::get(MethodNum), NumTy, false);
+    NewParams.push_back(NumTy);
+    Args.insert(Args.begin(), MethodNumArg);
+    // Add the CHERI object
+    auto *Obj = Builder.CreateExtractValue(Callee, {0});
+    auto ObjTy = getContext().getCHERIClassType();
+    CallArg ObjArg(RValue::get(Obj), ObjTy, false);
+    NewParams.push_back(ObjTy);
+    Args.insert(Args.begin(), ObjArg);
+
+    auto *FnPType = cast<FunctionProtoType>(FnType);
+    auto Params = FnPType->getParamTypes();
+    FunctionProtoType::ExtProtoInfo EPI = FnPType->getExtProtoInfo();
+    NewParams.insert(NewParams.end(), Params.begin(), Params.end());
+    FnType = getContext().getFunctionType(FnPType->getReturnType(),
+        NewParams, EPI)->getAs<FunctionType>();
+  } else if (FnType->getCallConv() == CC_CheriCCall &&
+             TargetDecl->hasAttr<CheriMethodClassAttr>()) {
     assert(TargetDecl);
     StringRef Suffix = TargetDecl->hasAttr<CheriMethodSuffixAttr>() ?
       TargetDecl->getAttr<CheriMethodSuffixAttr>()->getSuffix() : "";
     CallCHERIInvoke = true;
-    CallArgList ModifiedArgs;
     SmallVector<QualType, 16> NewParams;
     auto NumTy = getContext().UnsignedLongLongTy;
     auto *ClsAttr = TargetDecl->getAttr<CheriMethodClassAttr>();
@@ -3886,9 +3909,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
       Args.insert(Args.begin(), MethodNumArg);
       Args.insert(Args.begin(), Arg);
       NewParams.push_back(ClsTy);
-    }
-    else
-    {
+    } else {
       Args.insert(Args.begin()+1, MethodNumArg);
     }
     auto *FnPType = cast<FunctionProtoType>(FnType);

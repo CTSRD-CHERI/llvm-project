@@ -3623,6 +3623,7 @@ public:
     attr_cdecl,
     attr_cheri_ccall,
     attr_cheri_ccallee,
+    attr_cheri_ccallback,
     attr_fastcall,
     attr_stdcall,
     attr_thiscall,

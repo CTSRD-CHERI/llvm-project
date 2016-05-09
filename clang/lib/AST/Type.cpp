@@ -2650,6 +2650,7 @@ StringRef FunctionType::getNameForCallConv(CallingConv CC) {
   case CC_C: return "cdecl";
   case CC_CheriCCall: return "cheri_ccall";
   case CC_CheriCCallee: return "cheri_ccallee";
+  case CC_CheriCCallback: return "attr_cheri_ccallback";
   case CC_X86StdCall: return "stdcall";
   case CC_X86FastCall: return "fastcall";
   case CC_X86ThisCall: return "thiscall";
@@ -2998,6 +2999,7 @@ bool AttributedType::isQualifier() const {
   case AttributedType::attr_cdecl:
   case AttributedType::attr_cheri_ccall:
   case AttributedType::attr_cheri_ccallee:
+  case AttributedType::attr_cheri_ccallback:
   case AttributedType::attr_fastcall:
   case AttributedType::attr_stdcall:
   case AttributedType::attr_thiscall:
@@ -3030,6 +3032,7 @@ bool AttributedType::isMSTypeSpec() const {
 
 bool AttributedType::isCallingConv() const {
   switch (getAttrKind()) {
+  case attr_cheri_ccallback:
   case attr_ptr32:
   case attr_ptr64:
   case attr_sptr:

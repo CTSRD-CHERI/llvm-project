@@ -3539,6 +3539,11 @@ static void handleCallConvAttr(Sema &S, Decl *D, const AttributeList &Attr) {
                CheriCCalleeAttr(Attr.getRange(), S.Context,
                              Attr.getAttributeSpellingListIndex()));
     return;
+  case AttributeList::AT_CheriCCallback:
+    D->addAttr(::new (S.Context)
+               CheriCCallbackAttr(Attr.getRange(), S.Context,
+                             Attr.getAttributeSpellingListIndex()));
+    return;
   case AttributeList::AT_IntelOclBicc:
     D->addAttr(::new (S.Context)
                IntelOclBiccAttr(Attr.getRange(), S.Context,
@@ -3597,6 +3602,7 @@ bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC,
   }
   case AttributeList::AT_CheriCCall: CC = CC_CheriCCall; break;
   case AttributeList::AT_CheriCCallee: CC = CC_CheriCCallee; break;
+  case AttributeList::AT_CheriCCallback: CC = CC_CheriCCallback; break;
   case AttributeList::AT_IntelOclBicc: CC = CC_IntelOclBicc; break;
   default: llvm_unreachable("unexpected attribute kind");
   }
@@ -5064,6 +5070,7 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_CDecl:
   case AttributeList::AT_CheriCCall:
   case AttributeList::AT_CheriCCallee:
+  case AttributeList::AT_CheriCCallback:
   case AttributeList::AT_FastCall:
   case AttributeList::AT_ThisCall:
   case AttributeList::AT_Pascal:

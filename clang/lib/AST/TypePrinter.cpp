@@ -698,6 +698,9 @@ void TypePrinter::printFunctionProtoAfter(const FunctionProtoType *T,
     case CC_X86_64SysV:
       OS << " __attribute__((sysv_abi))";
       break;
+    case CC_CheriCCallback:
+      OS << " __attribute__((cheri_ccallback))";
+      break;
     case CC_CheriCCall:
       OS << " __attribute__((cheri_ccall))";
       break;
@@ -1290,6 +1293,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
 
   case AttributedType::attr_cdecl: OS << "cdecl"; break;
   case AttributedType::attr_cheri_ccall: OS << "cheri_ccall"; break;
+  case AttributedType::attr_cheri_ccallback: OS << "cheri_ccallback"; break;
   case AttributedType::attr_cheri_ccallee: OS << "cheri_ccallee"; break;
   case AttributedType::attr_fastcall: OS << "fastcall"; break;
   case AttributedType::attr_stdcall: OS << "stdcall"; break;
