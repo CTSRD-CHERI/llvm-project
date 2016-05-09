@@ -1854,13 +1854,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar,
           CharUnits::fromQuantity(8)));
 
-    unsigned CapAS = getContext().getTargetInfo().AddressSpaceForCapabilities();
     auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
     auto ClsTy = ConvertType(CGM.getContext().getCHERIClassType());
     auto ResultType = llvm::StructType::get( ClsTy, MethNoTy, nullptr);
     LValue Obj = EmitAggExprToLValue(E->getArg(1));
     auto ClsVal = Builder.CreateBitCast(Obj.getAddress(),
-        ClsTy->getPointerTo(CapAS));
+        ClsTy->getPointerTo(getContext().getDefaultAS()));
     llvm::Value *Struct = llvm::Constant::getNullValue(ResultType);
     llvm::Value *ObjVal = Builder.CreateLoad(ClsVal);
     ObjVal = Builder.CreateBitCast(ObjVal, ClsTy);
