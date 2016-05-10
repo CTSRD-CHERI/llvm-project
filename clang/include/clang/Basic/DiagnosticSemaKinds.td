@@ -785,6 +785,8 @@ def err_cheri_method_class_must_exist: Error<
   "attributes '%0' requires a valid declaration">;
 def err_cheri_method_class_must_have_correct_type: Error<
   "the argument to attribute '%0' must be a CHERI class">;
+def err_cheri_invalid_callback_cast: Error<
+  "CHERI callback function pointers may only be cast to other CHERI callback types">;
 def err_objc_var_decl_inclass : 
     Error<"cannot declare variable inside @interface or @protocol">;
 def error_missing_method_context : Error<

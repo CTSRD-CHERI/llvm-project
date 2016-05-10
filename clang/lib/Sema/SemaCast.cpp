@@ -1703,6 +1703,22 @@ void Sema::CheckCompatibleReinterpretCast(QualType SrcType, QualType DestType,
   Diag(Range.getBegin(), DiagID) << SrcType << DestType << Range;
 }
 
+static void DiagnoseCHERICallback(Sema &Self, SourceLocation Loc,
+                                  QualType SrcType, QualType DestType) {
+  bool SrcIsCallback = false;
+  bool DestIsCallback = false;
+  if (auto SrcPointer = dyn_cast<PointerType>(SrcType))
+    if (auto SrcFnPTy = SrcPointer->getPointeeType()->getAs<FunctionType>())
+      if (SrcFnPTy->getCallConv() == CC_CheriCCallback)
+        SrcIsCallback = true;
+  if (auto DestPointer = dyn_cast<PointerType>(DestType))
+    if (auto DestFnPTy = DestPointer->getPointeeType()->getAs<FunctionType>())
+      if (DestFnPTy->getCallConv() == CC_CheriCCallback)
+        DestIsCallback = true;
+  if (SrcIsCallback != DestIsCallback)
+    Self.Diag(Loc, diag::err_cheri_invalid_callback_cast);
+}
+
 static void DiagnoseCastOfObjCSEL(Sema &Self, const ExprResult &SrcExpr,
                                   QualType DestType) {
   QualType SrcType = SrcExpr.get()->getType();
@@ -2430,6 +2446,7 @@ void CastOperation::CheckCStyleCast() {
     }
   }
   
+  DiagnoseCHERICallback(Self, SrcExpr.get()->getLocStart(), SrcType, DestType);
   DiagnoseCastOfObjCSEL(Self, SrcExpr, DestType);
   DiagnoseBadFunctionCast(Self, SrcExpr, DestType);
   Kind = Self.PrepareScalarCast(SrcExpr, DestType);
