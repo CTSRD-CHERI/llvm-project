@@ -1746,7 +1746,18 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     break;
   }
   case Type::Pointer: {
-    unsigned AS = getTargetAddressSpace(cast<PointerType>(T)->getPointeeType());
+    auto PointeeTy = cast<PointerType>(T)->getPointeeType();
+    if (PointeeTy->isFunctionProtoType()) {
+      auto FPT = PointeeTy->getAs<FunctionProtoType>();
+      if (FPT->getCallConv() == CC_CheriCCallback) {
+        unsigned AS = Target->AddressSpaceForCapabilities();
+        Width = Target->getPointerWidth(AS) * 3;
+        Align = Target->getPointerAlign(AS);
+        break;
+      }
+    }
+
+    unsigned AS = getTargetAddressSpace(PointeeTy);
     Width = Target->getPointerWidth(AS);
     Align = Target->getPointerAlign(AS);
     break;
