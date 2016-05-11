@@ -1555,9 +1555,16 @@ void Qualifiers::print(raw_ostream &OS, const PrintingPolicy& Policy,
         OS << "__generic";
         break;
       default:
-        OS << "__attribute__((address_space(";
-        OS << addrspace;
-        OS << ")))";
+        // FIXME: This shouldn't be 200.  We probably should reserve the
+        // capability AS in LangAS, as the clang address space doesn't have to
+        // be the same as the LLVM address space.
+        if (addrspace == 200) 
+          OS << "__capability";
+        else {
+          OS << "__attribute__((address_space(";
+          OS << addrspace;
+          OS << ")))";
+        }
     }
   }
   if (Qualifiers::GC gc = getObjCGCAttr()) {
