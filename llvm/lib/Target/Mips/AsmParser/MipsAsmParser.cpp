@@ -1721,23 +1721,6 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
   }
 
   if (MCID.mayLoad() || MCID.mayStore()) {
-    if (MCID.getNumOperands() == 4) {
-      MCOperand &CapOp = Inst.getOperand(3);
-      if (CapOp.isReg() && Mips::CheriRegsRegClass.contains(CapOp.getReg())) {
-        int Min = -128;
-        int Max = 127;
-        if (Inst.getOpcode() == Mips::STORECAP ||
-            Inst.getOpcode() == Mips::LOADCAP) {
-          Min = -1024;
-          Max = 1023;
-        }
-        int Imm = Inst.getOperand(2).getImm();
-        if (Imm < Min || Imm > Max) {
-          Error(IDLoc, "immediate operand out of range");
-          return true;
-        }
-      }
-    }
     // Check the offset of memory operand, if it is a symbol
     // reference or immediate we may have to expand instructions.
     for (unsigned i = 0; i < MCID.getNumOperands(); i++) {
