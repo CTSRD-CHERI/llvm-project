@@ -33,7 +33,7 @@ class SImmScaled<int Width, int Scale> : AsmOperandClass {
 
 multiclass ShiftImmPattern<int Width, int Shift> {
   def NAME # Pattern : ImmLeaf<i64,
-    "return isInt<" # Width # ">(Imm) && ((Imm & ((1 << " # Shift # ") - 1)) == 0);"
+    "return isShiftedInt<" # Width # ", " # Shift # ">(Imm);"
     >;
   def NAME : Operand<i64> {
     let ParserMatchClass = SImmScaled<Width, Shift>;
