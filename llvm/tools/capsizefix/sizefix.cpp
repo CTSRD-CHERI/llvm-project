@@ -20,6 +20,10 @@ int main(int argc, char *argv[]) {
   // ObjectFile doesn't allow in-place modification, so we open the file again
   // and write it out.
   FILE *F = fopen(argv[1], "r+");
+  if (!F) {
+    fprintf(stderr, "Cannot open %s\n", argv[1]);
+    return EXIT_FAILURE;
+  }
   StringMap<uint64_t> SizeForName;
   std::vector<SymbolRef> SizeSymbols;
   SectionRef SizesSection;
