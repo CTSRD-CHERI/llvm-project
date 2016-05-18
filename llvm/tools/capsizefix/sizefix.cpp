@@ -84,6 +84,7 @@ int main(int argc, char *argv[]) {
                     static_cast<unsigned long long>(
                         support::endian::read<uint64_t, support::big, 1>(entry)),
                     static_cast<unsigned long long>(Size));
+          break; // First match wins
         }
       }
       if (Size == 0) {
