@@ -3045,6 +3045,8 @@ Value *ScalarExprEmitter::EmitShr(const BinOpInfo &Ops) {
   // LLVM requires the LHS and RHS to be the same type: promote or truncate the
   // RHS to the same size as the LHS.
   Value *RHS = Ops.RHS;
+  if (RHS->getType()->isPointerTy())
+    RHS = CGF.getPointerOffset(RHS);
   if (Ops.LHS->getType() != RHS->getType())
     RHS = Builder.CreateIntCast(RHS, Ops.LHS->getType(), false, "sh_prom");
 
