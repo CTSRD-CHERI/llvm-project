@@ -2894,7 +2894,7 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
 
   // If the RHS is not a pointer, then we have normal pointer
   // arithmetic.
-  if (!op.RHS->getType()->isPointerTy())
+  if (!cast<BinaryOperator>(op.E)->getRHS()->getType()->isPointerType())
     return emitPointerArithmetic(CGF, op, /*subtraction*/ true);
 
   // Otherwise, this is a pointer subtraction.
