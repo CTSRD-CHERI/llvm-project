@@ -57,6 +57,15 @@ static bool MustVisitNullValue(const Expr *E) {
   return E->getType()->isNullPtrType();
 }
 
+llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
+    *Addr) {
+  Addr = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+  llvm::Value *PCC = CGF.Builder.CreateCall(
+          CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+  return CGF.setPointerOffset(PCC, Addr);
+}
+
+
 class ScalarExprEmitter
   : public StmtVisitor<ScalarExprEmitter, Value*> {
   CodeGenFunction &CGF;
@@ -368,10 +377,8 @@ public:
       if (AddrTy->getPointerAddressSpace() != CapAS) {
         llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
             ->getElementType()->getPointerTo(CapAS);
-        Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
-        llvm::Value *PCC = Builder.CreateCall(
-                CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
-        Addr = CGF.setPointerOffset(PCC, Addr);
+
+        Addr = FunctionAddressToCapability(CGF, Addr);
         Addr = Builder.CreateBitCast(Addr, CapTy);
       }
     }
@@ -1553,13 +1560,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         // pcc-relative cfromptr?
         if (SrcPointeeTy.getAddressSpace() == 0 &&
               DstPointeeTy.getAddressSpace() ==
-              (unsigned)TI.AddressSpaceForCapabilities()) {
-          // FIXME: THis is quite ugly:
-          Src = Builder.CreatePtrToInt(Src, CGF.Int64Ty);
-          Value *PCC = Builder.CreateCall(
-              CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
-          Src = CGF.setPointerOffset(PCC, Src);
-        }
+              (unsigned)TI.AddressSpaceForCapabilities())
+          Src = FunctionAddressToCapability(CGF, Src);
       }
     }
     return Builder.CreatePointerBitCastOrAddrSpaceCast(Src, DestType);
