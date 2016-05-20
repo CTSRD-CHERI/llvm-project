@@ -510,12 +510,6 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     // so ensure that they are declared.
     DeclareGlobalNewDelete();
     break;
-
-  case Mips::BI__builtin_memcap_callback_create:
-    if (SemaBuiltinMemcapCreate(*this, TheCall))
-      return ExprError();
-    break;
-
   // check secure string manipulation functions where overflows
   // are detectable at compile time
   case Builtin::BI__builtin___memcpy_chk:
@@ -971,6 +965,10 @@ bool Sema::CheckMipsBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   case Mips::BI__builtin_mips_precr_sra_ph_w: i = 2; l = 0; u = 31; break;
   case Mips::BI__builtin_mips_precr_sra_r_ph_w: i = 2; l = 0; u = 31; break;
   case Mips::BI__builtin_mips_prepend: i = 2; l = 0; u = 31; break;
+  case Mips::BI__builtin_memcap_callback_create:
+    if (SemaBuiltinMemcapCreate(*this, TheCall))
+      return false;
+    break;
   }
 
   return SemaBuiltinConstantArgRange(TheCall, i, l, u);
