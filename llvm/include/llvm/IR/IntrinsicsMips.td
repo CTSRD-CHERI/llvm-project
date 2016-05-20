@@ -1909,5 +1909,15 @@ def int_mips_cap_offset_get:
   GCCBuiltinAlias<"__builtin_cheri_cap_offset_get">,
   GCCBuiltin<"__builtin_memcap_offset_get">,
   Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
-}
 
+////////////////////////////////////////////////////////////////////////////////
+// Pointer / capability interoperation intrinsics
+////////////////////////////////////////////////////////////////////////////////
+
+def int_mips_cap_to_pointer:
+  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
+def int_mips_cap_from_pointer:
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+
+
+}
