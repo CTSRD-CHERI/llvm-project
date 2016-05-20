@@ -1621,10 +1621,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       if (AddrTy->getPointerAddressSpace() != CapAS) {
         llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
             ->getElementType()->getPointerTo(CapAS);
-        Addr = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
-        llvm::Value *PCC = Builder.CreateCall(
-                CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
-        Addr = CGF.setPointerOffset(PCC, Addr);
+        Addr = FunctionAddressToCapability(CGF, Addr);
         Addr = Builder.CreateBitCast(Addr, CapTy);
       }
     }
