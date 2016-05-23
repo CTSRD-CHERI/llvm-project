@@ -967,9 +967,7 @@ bool Sema::CheckMipsBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   case Mips::BI__builtin_mips_precr_sra_r_ph_w: i = 2; l = 0; u = 31; break;
   case Mips::BI__builtin_mips_prepend: i = 2; l = 0; u = 31; break;
   case Mips::BI__builtin_memcap_callback_create:
-    if (SemaBuiltinMemcapCreate(*this, TheCall))
-      return false;
-    break;
+    return !SemaBuiltinMemcapCreate(*this, TheCall);
   }
 
   return SemaBuiltinConstantArgRange(TheCall, i, l, u);
