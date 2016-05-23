@@ -581,6 +581,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
         if (CheckAArch64BuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;
+      case llvm::Triple::cheri:
       case llvm::Triple::mips:
       case llvm::Triple::mipsel:
       case llvm::Triple::mips64:
