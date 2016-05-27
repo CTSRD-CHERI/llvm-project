@@ -400,19 +400,6 @@ extern bool LargeCapTable;
       return ABI.IsN64() ? Mips::A1_64 : Mips::A1;
     }
 
-    /// Returns true if a cast between SrcAS and DestAS is a noop.
-    bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override {
-      // Mips doesn't have any special address spaces so we just reserve
-      // the first 256 for software use (e.g. OpenCL) and treat casts
-      // between them as noops.
-      // TODO: can we get the datalayout somehow?
-      const bool SrcIsCheri = isCheriPointer(SrcAS, nullptr);
-      const bool DestIsCheri = isCheriPointer(DestAS, nullptr);
-      if ((SrcIsCheri || DestIsCheri) && (SrcIsCheri != DestIsCheri))
-        return false;
-      return SrcAS < 256 && DestAS < 256;
-    }
-
     bool isJumpTableRelative() const override {
       return getTargetMachine().isPositionIndependent();
     }
