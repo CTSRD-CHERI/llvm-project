@@ -118,14 +118,17 @@ class CheriFmtPtrCmp<bits<3> cmp, RegisterOperand RC, string instr_asm,
   let r2 = ct;
 }
 
-class CheriFmt3CCall<bits<5> op, dag outs, dag ins, string asmstr,
-                list<dag> pattern> :
-  CheriFmtRegs<op, 0, outs, ins, asmstr, pattern> {
-  bits<5>  cs;
-  bits<5>  cb;
-  let r0 = cs;
-  let r1 = cb;
-  let r2 = 0;
+class CheriFmt3CCall<dag outs, dag ins, string asmstr, list<dag> pattern> :
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther> {
+  bits<5> cs;
+  bits<5> cb;
+  bits<11> imm;
+
+  let Inst{31-26} = 0x12;
+  let Inst{25-21} = 0x5;
+  let Inst{20-16} = cs;
+  let Inst{15-11} = cb;
+  let Inst{10-0}  = imm;
 }
 class CheriFmt2CJMP<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :

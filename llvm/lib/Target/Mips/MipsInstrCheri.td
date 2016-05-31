@@ -60,6 +60,9 @@ def reglist_pat : PatLeaf<(imm), [{ return isInt<16>(N->getZExtValue()); }]>;
 def uimm32: Operand<i32>;
 def uimm32_pat:  PatLeaf<(imm), [{ return isInt<32>(N->getZExtValue()); }]>;
 
+def uimm11: Operand<i32>;
+def uimm11_pat:  PatLeaf<(imm), [{ return isUInt<11>(N->getZExtValue()); }]>;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Flow control
@@ -102,10 +105,12 @@ def CJALR : CheriFmt3Caps<0x07, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb),
 	let r1 = cb;
 	let r2 = 0;
 }
-def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb),
-                              "ccall\t${cs}, ${cb}",
+def CCall : CheriFmt3CCall<(outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11: $imm),
+                              "ccall\t${cs}, ${cb}, ${imm}",
                               []>;
 }
+def : InstAlias<"ccall $cs, $cb",
+                (CCall CheriOpnd: $cs, CheriOpnd:$cb, 0)>;
 def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
                               "creturn",
                               []> {

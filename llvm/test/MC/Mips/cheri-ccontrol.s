@@ -19,6 +19,9 @@
 # CHECK: ccall	$c2, $c3
 # CHECK: encoding: [0x48,0xa2,0x18,0x00]
 	ccall	$c2, $c3
+# CHECK: ccall	$c2, $c3, 42
+# CHECK: encoding: [0x48,0xa2,0x18,0x2a]
+	ccall	$c2, $c3, 42
 # CHECK: creturn
 # CHECK: encoding: [0x48,0xc0,0x00,0x00]
 	creturn
