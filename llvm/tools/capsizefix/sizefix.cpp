@@ -110,29 +110,31 @@ int main(int argc, char *argv[]) {
     fwrite(&BigSize, sizeof(BigSize), 1, F);
     fwrite(&BigPerms, sizeof(BigPerms), 1, F);
   }
-  SizesSection.getContents(Data);
-  uint64_t SectionOffset = Data.data() - MB.getBufferStart();
-  for (SymbolRef &sym : SizeSymbols) {
-    ErrorOr<uint64_t> Start = sym.getAddress();
-    if (!Start)
-      continue;
-    uint64_t offset = *Start - SizesSection.getAddress();
-    std::string Name = sym.getName()->str();
-    Name = Name.substr(SizePrefix.size(), Name.length() - SizePrefix.size());
-    auto SizeIt = SizeForName.find(Name);
-    uint64_t Size;
-    if (SizeIt == SizeForName.end()) {
-      fprintf(stderr, "Unable to find size for symbol %s\n", Name.c_str());
-      Size = 0;
-    } else
-      Size = SizeIt->second;
+  if (SizesSection != SectionRef()) {
+    SizesSection.getContents(Data);
+    uint64_t SectionOffset = Data.data() - MB.getBufferStart();
+    for (SymbolRef &sym : SizeSymbols) {
+      ErrorOr<uint64_t> Start = sym.getAddress();
+      if (!Start)
+        continue;
+      uint64_t offset = *Start - SizesSection.getAddress();
+      std::string Name = sym.getName()->str();
+      Name = Name.substr(SizePrefix.size(), Name.length() - SizePrefix.size());
+      auto SizeIt = SizeForName.find(Name);
+      uint64_t Size;
+      if (SizeIt == SizeForName.end()) {
+        fprintf(stderr, "Unable to find size for symbol %s\n", Name.c_str());
+        Size = 0;
+      } else
+        Size = SizeIt->second;
 #ifndef NDEBUG
-    fprintf(stderr, "Writing size %llu for symbol %s\n", (unsigned long long)Size, Name.c_str());
+      fprintf(stderr, "Writing size %llu for symbol %s\n", (unsigned long long)Size, Name.c_str());
 #endif
-    fseek(F, SectionOffset + offset, SEEK_SET);
-    uint64_t BigSize =
-        support::endian::byte_swap<uint64_t, support::big>(Size);
-    fwrite(&BigSize, sizeof(BigSize), 1, F);
+      fseek(F, SectionOffset + offset, SEEK_SET);
+      uint64_t BigSize =
+          support::endian::byte_swap<uint64_t, support::big>(Size);
+      fwrite(&BigSize, sizeof(BigSize), 1, F);
+    }
   }
   fclose(F);
 }
