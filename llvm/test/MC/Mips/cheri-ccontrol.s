@@ -13,9 +13,9 @@
 # CHECK: cjr	$c1
 # CHECK: encoding: [0x49,0x00,0x08,0x00]
 	cjr	$c1
-# CHECK: cjalr	$c4, $c1
+# CHECK: cjalr	$c1, $c4
 # CHECK: encoding: [0x48,0xe4,0x08,0x00]
-	cjalr	$c4,$c1
+	cjalr	$c1,$c4
 # CHECK: ccall	$c2, $c3
 # CHECK: encoding: [0x48,0xa2,0x18,0x00]
 	ccall	$c2, $c3

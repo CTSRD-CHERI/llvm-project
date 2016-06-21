@@ -96,7 +96,7 @@ def : Pat<(brcond (i32 (setne (int_mips_cap_tag_get CheriOpnd:$cb), 1)), bb:$off
 
 let isCall=1, hasDelaySlot=1 in {
 def CJALR : CheriFmt3Caps<0x07, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb),
-                              "cjalr\t${cd}, ${cb}",
+                              "cjalr\t${cb}, ${cd}",
                               []>
 {
 	bits<5> cb;
