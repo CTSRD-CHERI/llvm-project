@@ -77,6 +77,12 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       case Mips::CAPSTORE64: return Mips::SD;
     }
   }
+  template <typename T>
+  void Remove(T &Instrs, MachineRegisterInfo &RI) {
+    for (auto *I : Instrs)
+      if (RI.use_empty(I->getOperand(0).getReg()))
+        I->eraseFromBundle();
+  }
 
   bool foldMachineFunction(MachineFunction &MF) {
     if (DisableAddressingModeFolder)
@@ -208,22 +214,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
               InstrInfo->get(Mips::CGetPCC), PCC);
       I.second->getOperand(1).setReg(PCC);
     }
-    for (auto *I : GetPCCs)
-      if (RI.use_empty(I->getOperand(0).getReg()))
-        I->eraseFromBundle();
-
-    for (MachineInstr *I : IncOffsets) {
-      if (!RI.use_empty(I->getOperand(0).getReg())) {
-        continue;
-      }
-      I->eraseFromBundle();
-    }
-    for (MachineInstr *I : Adds) {
-      if (!RI.use_empty(I->getOperand(0).getReg())) {
-        continue;
-      }
-      I->eraseFromBundle();
-    }
+    Remove(GetPCCs, RI);
+    Remove(IncOffsets, RI);
+    Remove(Adds, RI);
     return modified;
   }
   virtual bool runOnMachineFunction(MachineFunction &MF) {
