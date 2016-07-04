@@ -204,7 +204,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         .addReg(BaseReg).addOperand(Offset);
       I.first->eraseFromBundle();
       if (AddInst)
-        IncOffsets.insert(AddInst);
+        Adds.insert(AddInst);
       modified = true;
     }
     for (auto &I : SetPCCOffsets) {
