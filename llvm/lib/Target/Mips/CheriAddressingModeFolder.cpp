@@ -1,7 +1,9 @@
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "Mips.h"
@@ -17,11 +19,21 @@ static cl::opt<bool> DisableAddressingModeFolder(
 namespace {
 struct CheriAddressingModeFolder : public MachineFunctionPass {
   static char ID;
-  const MipsInstrInfo *InstrInfo;
+  const MipsInstrInfo *InstrInfo = nullptr;
 
+  CheriAddressingModeFolder() : MachineFunctionPass(ID) {
+  }
   CheriAddressingModeFolder(MipsTargetMachine &TM) : MachineFunctionPass(ID) {
     InstrInfo = TM.getSubtargetImpl()->getInstrInfo();
   }
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesCFG();
+    AU.addRequired<MachineLoopInfo>();
+    AU.addRequired<MachineDominatorTree>();
+    AU.addPreserved<MachineLoopInfo>();
+    MachineFunctionPass::getAnalysisUsage(AU);
+  }
+
   bool tryToFoldAdd(unsigned vreg, MachineRegisterInfo &RI,
                     MachineInstr *&AddInst, int64_t &offset) {
     AddInst = RI.getUniqueVRegDef(vreg);
@@ -84,7 +96,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         I->eraseFromBundle();
   }
 
-  bool foldMachineFunction(MachineFunction &MF) {
+  bool foldMachineFunction(MachineFunction &MF, MachineLoopInfo &MLI,
+      MachineDominatorTree &MDT) {
     if (DisableAddressingModeFolder)
       return false;
 
@@ -190,9 +203,28 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         }
       } else
         AddInst = nullptr;
-      BuildMI(*I.first->getParent(), I.first, I.first->getDebugLoc(),
-          InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())),
-          I.first->getOperand(0).getReg())
+      auto InsertPoint = I.first;
+      MachineBasicBlock *InsertBlock = I.first->getParent();
+      // If this is a load of a GOT offset and it's in a loop then we want to
+      // try to hoist it out of the loop.
+      bool LoopHoisting = false;
+      if (Offset.isGlobal()) {
+        auto Loop = MLI.getLoopFor(InsertBlock);
+        if (Loop) {
+          auto *Preheader = Loop->getLoopPreheader();
+          // If all paths to this block go through the preheader then hoist.
+          // Note: It might be worth doing this recursively and pushing out of
+          // nested loops.
+          if (MDT.dominates(Preheader, InsertBlock)) {
+            InsertBlock = Preheader;
+            InsertPoint = InsertBlock->getFirstTerminator();
+            LoopHoisting = true;
+          }
+        }
+      }
+      unsigned DefReg = I.first->getOperand(0).getReg();
+      BuildMI(*InsertBlock, InsertPoint, I.first->getDebugLoc(),
+          InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())), DefReg)
         .addReg(BaseReg).addOperand(Offset);
       I.first->eraseFromBundle();
       if (AddInst)
@@ -204,15 +236,30 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     Remove(Adds, RI);
     return modified;
   }
-  virtual bool runOnMachineFunction(MachineFunction &MF) {
+  bool runOnMachineFunction(MachineFunction &MF) override {
     bool modified = false;
-    while (foldMachineFunction(MF))
+    MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
+    MachineDominatorTree &MDT = getAnalysis<MachineDominatorTree>();
+    while (foldMachineFunction(MF, MLI, MDT))
       modified = true;
     return modified;
   }
 };
 }
+namespace llvm {
+  void initializeCheriAddressingModeFolderPass(PassRegistry&);
+}
+
+
 char CheriAddressingModeFolder::ID;
+INITIALIZE_PASS_BEGIN(CheriAddressingModeFolder, "cheriaddrmodefolder",
+                    "CHERI addressing mode folder", false, false)
+INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
+INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
+INITIALIZE_PASS_END(CheriAddressingModeFolder, "cheriaddrmodefolder",
+                    "CHERI addressing mode folder", false, false)
+
+
 
 MachineFunctionPass *
 llvm::createCheriAddressingModeFolder(MipsTargetMachine &TM) {
