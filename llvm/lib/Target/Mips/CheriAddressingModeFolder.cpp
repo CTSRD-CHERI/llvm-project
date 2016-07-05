@@ -91,7 +91,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     MachineRegisterInfo &RI = MF.getRegInfo();
     std::set<MachineInstr *> IncOffsets;
     std::set<MachineInstr *> Adds;
-    std::set<std::pair<MachineBasicBlock *, MachineInstr *>> SetPCCOffsets;
     llvm::SmallVector<std::pair<MachineInstr *, MachineInstr *>, 8> C0Ops;
     std::set<MachineInstr *> GetPCCs;
     bool modified = false;
@@ -100,13 +99,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         int Op = I.getOpcode();
         if (Op == Mips::CGetPCC) {
           GetPCCs.insert(&I);
-          continue;
-        }
-        // Look for CSetOffset instructions that are using the result of CGetPCC
-        if (Op == Mips::CSetOffset) {
-          MachineInstr *Base = RI.getUniqueVRegDef(I.getOperand(1).getReg());
-          if (Base && (Base->getOpcode() == Mips::CGetPCC))
-            SetPCCOffsets.insert(std::make_pair(&MBB, &I));
           continue;
         }
         // Only look at cap-relative loads and stores
@@ -206,13 +198,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       if (AddInst)
         Adds.insert(AddInst);
       modified = true;
-    }
-    for (auto &I : SetPCCOffsets) {
-      unsigned PCC =
-          MF.getRegInfo().createVirtualRegister(&Mips::CheriRegsRegClass);
-      BuildMI(*I.first, I.second, I.second->getDebugLoc(),
-              InstrInfo->get(Mips::CGetPCC), PCC);
-      I.second->getOperand(1).setReg(PCC);
     }
     Remove(GetPCCs, RI);
     Remove(IncOffsets, RI);
