@@ -34,8 +34,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
-  bool tryToFoldAdd(unsigned vreg, MachineRegisterInfo &RI,
-                    MachineInstr *&AddInst, int64_t &offset) {
+  bool tryToFoldAdd(unsigned Op, unsigned vreg, MachineRegisterInfo &RI,
+      MachineInstr *&AddInst, int64_t &offset) {
     AddInst = RI.getUniqueVRegDef(vreg);
     // If we can't uniquely identify the definition, give up.
     if (AddInst == 0)
@@ -60,12 +60,40 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       return false;
     off += offset;
     // If the result is too big to fit in the offset field, give up
-    // FIXME: Offset for clc / csc is bigger...
-    if (off < -127 || off > 127) {
+    if (!IsValidOffset(Op, off))
       return false;
-    }
     offset = off;
     return true;
+  }
+  bool IsValidOffset(unsigned Op, int immediate) {
+    switch (Op) {
+      default:
+        llvm_unreachable("No MIPS equivalent");
+      case Mips::CAPLOAD8:
+      case Mips::CAPSTORE8:
+      case Mips::CAPLOADU8:
+      case Mips::CAPLOADU832:
+      case Mips::CAPLOAD832:
+        return isShiftedInt<8,0>(immediate);
+      case Mips::CAPLOAD16:
+      case Mips::CAPLOADU16:
+      case Mips::CAPSTORE16:
+      case Mips::CAPLOAD1632:
+      case Mips::CAPLOADU1632:
+        return isShiftedInt<8,1>(immediate);
+      case Mips::CAPLOAD32:
+      case Mips::CAPLOADU32:
+      case Mips::CAPSTORE32:
+      case Mips::CAPLOAD3264:
+        fprintf(stderr, "Is valid plib? %d %d\n", isShiftedInt<8,2>(immediate), immediate);
+        return isShiftedInt<8,2>(immediate);
+      case Mips::CAPLOAD64:
+      case Mips::CAPSTORE64:
+        return isShiftedInt<8,3>(immediate);
+      case Mips::LOADCAP:
+      case Mips::STORECAP:
+        return isShiftedInt<11,4>(immediate);
+    }
   }
   unsigned MipsOpForCHERIOp(unsigned Op) {
     switch (Op) {
@@ -89,6 +117,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       case Mips::CAPSTORE64: return Mips::SD;
     }
   }
+
   template <typename T>
   void Remove(T &Instrs, MachineRegisterInfo &RI) {
     for (auto *I : Instrs)
@@ -133,9 +162,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           MachineInstr *AddInst;
           // If the register offset is a simple constant, then try to move it
           // into the memory operation
-          if (tryToFoldAdd(I.getOperand(1).getReg(), RI, AddInst, offset)) {
+          if (tryToFoldAdd(Op, I.getOperand(1).getReg(), RI, AddInst, offset)) {
             Adds.insert(AddInst);
-            I.getOperand(2).setImm(offset);
+            I.getOperand(1).setImm(offset);
             I.getOperand(1).setReg(Mips::ZERO_64);
           } else
             continue;
@@ -169,7 +198,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // If the CIncOffset is of a daddi[u] then we can potentially replace
         // both by just folding the register and immediate offsets into the
         // load / store.
-        if (tryToFoldAdd(Offset.getReg(), RI, AddInst, offset)) {
+        if (tryToFoldAdd(Op, Offset.getReg(), RI, AddInst, offset)) {
           // If we managed to pull the offset calculation entirely away, then
           // just use the computed immediate
           Adds.insert(AddInst);
