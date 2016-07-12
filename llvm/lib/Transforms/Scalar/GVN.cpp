@@ -915,6 +915,8 @@ static Value *CoerceAvailableValueToLoadType(Value *StoredVal, Type *LoadedTy,
 
   // Convert source pointers to integers, which can be manipulated.
   if (StoredValTy->getScalarType()->isPointerTy()) {
+    if (DL.isFatPointer(StoredValTy->getScalarType()->getPointerAddressSpace()))
+      return nullptr;
     StoredValTy = DL.getIntPtrType(StoredValTy);
     StoredVal = IRB.CreatePtrToInt(StoredVal, StoredValTy);
   }
