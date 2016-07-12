@@ -9,9 +9,7 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: nounwind
 define void @foo(i32 signext %y) #0 {
 entry:
-  ; CHECK: 	daddiu	$1, $1, %got_disp(x)
-  ; CHECK: 	cfromptr $c1, $c0, $1
-  ; CHECK: 	cld	$1, $zero, 0($c1)
+  ; CHECK: 	ld	$1, %got_disp(x)($1)
   store i32 %y, i32 addrspace(200)* @x, align 4
   ret void
 }

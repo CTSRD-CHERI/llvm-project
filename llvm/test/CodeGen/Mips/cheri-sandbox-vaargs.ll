@@ -15,9 +15,7 @@ entry:
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
   ; Load the address of va_cpy
-  ; CHECK: daddiu	$1, $1, %got_disp(va_cpy)
-  ; CHECK: cfromptr $c1, $c0, $1
-  ; CHECK: cld	$1, $zero, 0($c1)
+  ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
   ; CHECK: cfromptr $c1, $c0, $1
   ; Store the va_list (passed in $c13) in the global
   ; CHECK: csc	$c13, $zero, 0($c1)
@@ -51,9 +49,7 @@ entry:
   ; Check that va_copy can copy from a global to a register
   %v = alloca i8 addrspace(200)*, align 32
   ; Load the address of the global
-  ; CHECK: daddiu	$1, $1, %got_disp(va_cpy)
-  ; CHECK: cfromptr $c1, $c0, $1
-  ; CHECK: cld	$1, $zero, 0($c1)
+  ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
   ; CHECK: cfromptr $c1, $c0, $1
   ; Load the va_list into the return capability
   ; CHECK: clc	$c3, $zero, 0($c1)
@@ -101,9 +97,9 @@ define void @k(i32 addrspace(200)* %x, i32 addrspace(200)* %y) #0 {
 entry:
 ; CHECK: daddiu	$1, $zero, 32
 ; CHECK: cincoffset	$c3, $c11, $sp
-; CHECK: csetbounds	$c3, $c3, $1
+; CHECK: csetbounds	$c2, $c3, $1
 ; CHECK: ori	$1, $zero, 65495
-; CHECK: candperm	$c13, $c3, $1
+; CHECK: candperm	$c13, $c2, $1
   %x.addr = alloca i32 addrspace(200)*, align 32
   %y.addr = alloca i32 addrspace(200)*, align 32
   store i32 addrspace(200)* %x, i32 addrspace(200)* addrspace(200)* %x.addr, align 32, !tbaa !1
