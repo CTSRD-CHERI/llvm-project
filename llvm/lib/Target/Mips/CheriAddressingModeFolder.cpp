@@ -85,7 +85,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       case Mips::CAPLOADU32:
       case Mips::CAPSTORE32:
       case Mips::CAPLOAD3264:
-        fprintf(stderr, "Is valid plib? %d %d\n", isShiftedInt<8,2>(immediate), immediate);
         return isShiftedInt<8,2>(immediate);
       case Mips::CAPLOAD64:
       case Mips::CAPSTORE64:
