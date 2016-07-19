@@ -269,6 +269,7 @@ void MipsPassConfig::addIRPasses() {
   if (getMipsSubtarget().inMips16HardFloat())
     addPass(createMips16HardFloatPass(getMipsTargetMachine()));
   if (getMipsSubtarget().isCheri()) {
+    addPass(createCheriLoopPointerDecanonicalize());
     addPass(createCheriRangeChecker());
     addPass(createCheriMemOpLowering());
     addPass(createCheriSandboxABI());
