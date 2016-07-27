@@ -42,11 +42,16 @@
 #include <cctype>
 #include <deque>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 using namespace llvm;
 
 MCAsmParserSemaCallback::~MCAsmParserSemaCallback() {}
+
+static cl::opt<unsigned> AsmMacroMaxNestingDepth(
+     "asm-macro-max-nesting-depth", cl::init(20), cl::Hidden,
+     cl::desc("The maximum nesting depth allowed for assembly macros."));
 
 namespace {
 /// \brief Helper types for tracking macro definitions.
@@ -2230,10 +2235,17 @@ void AsmParser::defineMacro(StringRef Name, MCAsmMacro Macro) {
 void AsmParser::undefineMacro(StringRef Name) { MacroMap.erase(Name); }
 
 bool AsmParser::handleMacroEntry(const MCAsmMacro *M, SMLoc NameLoc) {
-  // Arbitrarily limit macro nesting depth, to match 'as'. We can eliminate
-  // this, although we should protect against infinite loops.
-  if (ActiveMacros.size() == 20)
-    return TokError("macros cannot be nested more than 20 levels deep");
+  // Arbitrarily limit macro nesting depth (default matches 'as'). We can
+  // eliminate this, although we should protect against infinite loops.
+  unsigned MaxNestingDepth = AsmMacroMaxNestingDepth;
+  if (ActiveMacros.size() == MaxNestingDepth) {
+    std::ostringstream MaxNestingDepthError;
+    MaxNestingDepthError << "macros cannot be nested more than "
+                         << MaxNestingDepth << " levels deep."
+                         << " Use -asm-macro-max-nesting-depth to increase "
+                            "this limit.";
+    return TokError(MaxNestingDepthError.str());
+  }
 
   MCAsmMacroArguments A;
   if (parseMacroArguments(M, A))
