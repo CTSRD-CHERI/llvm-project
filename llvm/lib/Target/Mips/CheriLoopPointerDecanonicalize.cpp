@@ -8,7 +8,7 @@
 
 using namespace llvm;
 
-static cl::opt<bool> DisableAddressingModeFolder(
+static cl::opt<bool> DisableLoopDecanonicalize(
   "disable-cheri-loop-decanonicalization", cl::init(false),
   cl::desc("Don't attempt to optimize pointer operations in loops"), cl::Hidden);
 
@@ -24,7 +24,7 @@ class CheriLoopPointerDecanonicalize : public FunctionPass {
   }
 
   bool runOnFunction(Function &F) override {
-    if (DisableAddressingModeFolder)
+    if (DisableLoopDecanonicalize)
       return false;
     bool Modified = false;
     LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
