@@ -126,8 +126,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
 
   bool foldMachineFunction(MachineFunction &MF, MachineLoopInfo &MLI,
       MachineDominatorTree &MDT) {
-    if (DisableAddressingModeFolder)
-      return false;
 
     MachineRegisterInfo &RI = MF.getRegInfo();
     std::set<MachineInstr *> IncOffsets;
@@ -265,6 +263,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     return modified;
   }
   bool runOnMachineFunction(MachineFunction &MF) override {
+    if (DisableAddressingModeFolder)
+      return false;
     bool modified = false;
     MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
     MachineDominatorTree &MDT = getAnalysis<MachineDominatorTree>();
