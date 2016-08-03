@@ -3,6 +3,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Utils/Local.h"
+#include "llvm/IR/Verifier.h"
 #include "Mips.h"
 
 
@@ -19,6 +20,7 @@ class CheriLoopPointerDecanonicalize : public FunctionPass {
     AU.setPreservesCFG();
     AU.addRequired<ScalarEvolutionWrapperPass>();
     AU.addRequired<LoopInfoWrapperPass>();
+    AU.addRequired<DominatorTreeWrapperPass>();
     AU.addPreserved<LoopInfoWrapperPass>();
     FunctionPass::getAnalysisUsage(AU);
   }
@@ -28,6 +30,7 @@ class CheriLoopPointerDecanonicalize : public FunctionPass {
       return false;
     bool Modified = false;
     LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+    auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     ScalarEvolution &SE = getAnalysis<ScalarEvolutionWrapperPass>().getSE();
     DenseMap<const SCEV*,Value*> SCEVs;
     SmallVector<std::tuple<GetElementPtrInst&, BasicBlock*, BasicBlock*,
@@ -67,12 +70,19 @@ class CheriLoopPointerDecanonicalize : public FunctionPass {
         // with the original.
         if (GEP.getType() != GEP.getOperand(0)->getType())
           continue;
+        // If the GEP base does not dominate the end of the preheader then we
+        // can't hoist the start out.
+        if (auto *I = dyn_cast<Instruction>(GEP.getOperand(0)))
+          if (!DT.dominates(I, Preheader->getTerminator()))
+            continue;
         // Skip more complex GEPs for now - we mostly care about simple array
         // iteration anyway.
         if (GEP.getNumOperands() > 2)
           continue;
         // Skip non-capability pointers
         if (GEP.getPointerAddressSpace() != 200)
+          continue;
+        if (!DT.dominates(&GEP, BackBB))
           continue;
         auto *Idx = GEP.getOperand(1);
         auto *S = SE.getSCEV(Idx);
@@ -85,6 +95,9 @@ class CheriLoopPointerDecanonicalize : public FunctionPass {
           auto *StartValue = SCEVs[Start];
           if (!StartValue)
             continue;
+          if (auto *I = dyn_cast<Instruction>(StartValue))
+            if (!DT.dominates(I, Preheader->getTerminator()))
+              continue;
           auto Rec = SA->getStepRecurrence(SE);
           if (auto *Step = dyn_cast<SCEVUnknown>(Rec))
             Replacements.emplace_back(GEP, Header, Preheader, BackBB, Step->getValue(), StartValue);
@@ -130,6 +143,7 @@ INITIALIZE_PASS_BEGIN(CheriLoopPointerDecanonicalize, "cheriloopdecanonicalize",
                       "CHERI loop decanonicalize", false, false)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_END(CheriLoopPointerDecanonicalize, "cheriloopdecanonicalize",
                     "CHERI loop decanonicalize", false, false)
 
