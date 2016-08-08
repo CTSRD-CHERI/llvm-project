@@ -221,9 +221,9 @@ def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),
                           "cgetpcc\t${r1}",
                           [(set CheriOpnd:$r1, (int_mips_pcc_get))]>;
 
-def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$cb), (ins GPR64Opnd:$rd),
-                                "cgetpccsetoffset\t${cb}, $rd",
-                                [(set CheriOpnd:$cb, (int_mips_cap_offset_set (int_mips_pcc_get), GPR64Opnd: $rd))]>;
+def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
+                                "cgetpccsetoffset\t${r1}, $r2",
+                                [(set CheriOpnd:$r1, (int_mips_cap_offset_set (int_mips_pcc_get), GPR64Opnd: $r2))]>;
 
 def CGetCause : CheriFmtGetCause<0, (outs GPR64Opnd:$rd), (ins),
                           "cgetcause\t${rd}",
