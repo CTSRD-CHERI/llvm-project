@@ -1429,6 +1429,13 @@ def Packed : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+// CHERI-related attributes
+
+def MemoryCapability : TypeAttr {
+  let Spellings = [GNU<"memory_capability">];
+  let Documentation = [Undocumented];
+}
+
 def PointerInterpretationCaps : InheritableAttr {
   let Spellings = [GNU<"pointer_interpretation_capabilities">];
   let Documentation = [Undocumented];

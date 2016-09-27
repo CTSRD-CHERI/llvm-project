@@ -3864,6 +3864,7 @@ public:
     attr_null_unspecified,
     attr_objc_kindof,
     attr_objc_inert_unsafe_unretained,
+    attr_memory_capability,
   };
 
 private:

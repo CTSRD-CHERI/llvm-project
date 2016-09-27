@@ -7806,7 +7806,7 @@ public:
 
 
       Builder.defineMacro("__capability",
-        Twine("__attribute__((address_space(200)))"));
+        Twine("__attribute__((memory_capability))"));
     }
 
     Builder.defineMacro("_MIPS_SZPTR", Twine(getPointerWidth(0)));
