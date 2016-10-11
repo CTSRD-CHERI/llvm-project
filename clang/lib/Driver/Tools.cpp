@@ -5096,7 +5096,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(A->getValue()));
   }
 
-  CmdArgs.push_back("-cheri-linker");
+  if (Args.hasFlag(options::OPT_cheri_linker,
+                   options::OPT_no_cheri_linker,
+                   true))
+    CmdArgs.push_back("-cheri-linker");
 
   if (Args.hasArg(options::OPT_fretain_comments_from_system_headers))
     CmdArgs.push_back("-fretain-comments-from-system-headers");
@@ -7699,7 +7702,9 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
-  if (Args.hasArg(options::OPT_cheri_linker)) {
+  if (Args.hasFlag(options::OPT_cheri_linker,
+                   options::OPT_no_cheri_linker,
+                   ToolChain.getArch() == llvm::Triple::cheri)) {
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
     ArgStringList SizeFixArgs;
     SizeFixArgs.push_back(Output.getFilename());
