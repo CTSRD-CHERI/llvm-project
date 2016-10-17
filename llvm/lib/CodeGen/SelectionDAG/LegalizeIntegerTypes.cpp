@@ -1054,7 +1054,7 @@ SDValue DAGTypeLegalizer::PromoteIntOp_CONVERT_RNDSAT(SDNode *N) {
 
 SDValue DAGTypeLegalizer::PromoteIntOp_INTTOPTR(SDNode *N) {
   SDValue InOp = GetPromotedInteger(N->getOperand(0));
-  return DAG.getNode(ISD::INTTOPTR, SDLoc(N), N->getValueType(0), { InOp });
+  return DAG.getNode(ISD::INTTOPTR, SDLoc(N), N->getValueType(0), InOp);
 }
 SDValue DAGTypeLegalizer::PromoteIntOp_INSERT_VECTOR_ELT(SDNode *N,
                                                          unsigned OpNo) {
