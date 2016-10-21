@@ -74,8 +74,10 @@ int main(int argc, char *argv[]) {
     }
     auto SizeAndType = SymbolSizes.find(base);
     uint64_t Size = 0;
-    bool isFunction;
-    if (SizeAndType == SymbolSizes.end()) {
+    bool isFunction = false;
+    if (base == 0)
+      Size = -1;
+    else if (SizeAndType == SymbolSizes.end()) {
       for (auto &Sec : Sections) {
         if (std::get<0>(Sec) < base &&
             (std::get<0>(Sec) + std::get<1>(Sec)) > base) {
