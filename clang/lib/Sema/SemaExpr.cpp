@@ -7622,10 +7622,14 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   // Conversions to normal pointers.
   if (const PointerType *LHSPointer = dyn_cast<PointerType>(LHSType)) {
     // U* -> T*
-    if (isa<PointerType>(RHSType)) {
+    if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
       unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
-      unsigned AddrSpaceR = RHSType->getPointeeType().getAddressSpace();
-      Kind = AddrSpaceL != AddrSpaceR ? CK_AddressSpaceConversion : CK_BitCast;
+      unsigned AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
+      if (AddrSpaceL != AddrSpaceR ||
+          LHSPointer->isMemoryCapability() != RHSPointer->isMemoryCapability())
+        Kind = CK_AddressSpaceConversion;
+      else
+        Kind = CK_BitCast;
       return checkPointerTypesForAssignment(*this, LHSType, RHSType);
     }
 
