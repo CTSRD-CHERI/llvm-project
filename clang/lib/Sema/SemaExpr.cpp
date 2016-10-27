@@ -7632,7 +7632,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
         if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType())
           Kind = CK_AddressSpaceConversion;
         else
-          Kind = CK_Invalid;
+          return Incompatible;
       } else
         Kind = CK_BitCast;
       return checkPointerTypesForAssignment(*this, LHSType, RHSType);
