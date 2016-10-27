@@ -7625,10 +7625,15 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
       unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
       unsigned AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
-      if (AddrSpaceL != AddrSpaceR ||
-          LHSPointer->isMemoryCapability() != RHSPointer->isMemoryCapability())
+      if (AddrSpaceL != AddrSpaceR)
         Kind = CK_AddressSpaceConversion;
-      else
+      else if (LHSPointer->isMemoryCapability() != RHSPointer->isMemoryCapability()) {
+        // only allow implicit casts to and from function pointer capabilities
+        if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType())
+          Kind = CK_AddressSpaceConversion;
+        else
+          Kind = CK_Invalid;
+      } else
         Kind = CK_BitCast;
       return checkPointerTypesForAssignment(*this, LHSType, RHSType);
     }
