@@ -131,14 +131,7 @@ __uintcap_t xor(__uintcap_t f)
 int capdiff(__capability int *a, __capability int *b)
 {
   // CHECK: @capdiff(i32 addrspace(200)* %a, i32 addrspace(200)* %b) #0 {
-  // CHECK: call i64 @llvm.mips.cap.base.get(i8 addrspace(200)*
-  // CHECK: call i64 @llvm.mips.cap.base.get(i8 addrspace(200)*
-  // CHECK: call i64 @llvm.mips.cap.offset.get(i8 addrspace(200)*
-  // CHECK: call i64 @llvm.mips.cap.offset.get(i8 addrspace(200)*
-  // CHECK: %sub.ptr.lhs.cast = add i64 %4, %6
-  // CHECK: %sub.ptr.rhs.cast = add i64 %5, %7
-  // CHECK: %sub.ptr.sub = sub i64 %sub.ptr.lhs.cast, %sub.ptr.rhs.cast
-  // CHECK: %sub.ptr.div = sdiv exact i64 %sub.ptr.sub, 4
+  // CHECK: call i64 @llvm.mips.cap.diff(i8 addrspace(200)*
   // CHECK: %conv = trunc i64 %sub.ptr.div to i32
   return a-b;
 }

@@ -2907,25 +2907,19 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
   // Do the raw subtraction part.
   llvm::Value *LHS = op.LHS;
   llvm::Value *RHS = op.RHS;
+  Value *diffInChars;
   if (expr->getLHS()->getType().isCapabilityType(CGF.getContext())) {
-    // FIXME: This is non-atomic and therefore not GC-safe!  We should be safe
-    // in the presence of GC as long as LHS and RHS point to the same object.
-    llvm::Function *GetBase =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_base_get);
-    llvm::Type *CapTy = GetBase->getFunctionType()->getParamType(0);
+    llvm::Function *CapPtrDiff =
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_diff);
+    llvm::Type *CapTy = CapPtrDiff->getFunctionType()->getParamType(0);
     LHS = Builder.CreateBitCast(LHS, CapTy);
     RHS = Builder.CreateBitCast(RHS, CapTy);
-    Value *LHSBase = Builder.CreateCall(GetBase, LHS);
-    Value *RHSBase = Builder.CreateCall(GetBase, RHS);
-    Value *LHSOffset = CGF.getPointerOffset(LHS);
-    Value *RHSOffset = CGF.getPointerOffset(RHS);
-    LHS = Builder.CreateAdd(LHSBase, LHSOffset, "sub.ptr.lhs.cast");
-    RHS = Builder.CreateAdd(RHSBase, RHSOffset, "sub.ptr.rhs.cast");
+    diffInChars = Builder.CreateCall(CapPtrDiff, { LHS, RHS});
   } else {
     LHS = Builder.CreatePtrToInt(op.LHS, CGF.PtrDiffTy, "sub.ptr.lhs.cast");
     RHS  = Builder.CreatePtrToInt(op.RHS, CGF.PtrDiffTy, "sub.ptr.rhs.cast");
+    diffInChars = Builder.CreateSub(LHS, RHS, "sub.ptr.sub");
   }
-  Value *diffInChars = Builder.CreateSub(LHS, RHS, "sub.ptr.sub");
 
   // Okay, figure out the element size.
   QualType elementType = expr->getLHS()->getType()->getPointeeType();
