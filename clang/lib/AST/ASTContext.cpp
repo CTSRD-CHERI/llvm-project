@@ -5058,7 +5058,8 @@ QualType ASTContext::getArrayDecayedType(QualType Ty) const {
   const ArrayType *PrettyArrayType = getAsArrayType(Ty);
   assert(PrettyArrayType && "Not an array type!");
 
-  QualType PtrTy = getPointerType(PrettyArrayType->getElementType());
+  QualType PtrTy = getPointerType(PrettyArrayType->getElementType(),
+                                  getTargetInfo().areAllPointersCapabilities());
 
   // int x[restrict 4] ->  int *restrict
   QualType Result = getQualifiedType(PtrTy,

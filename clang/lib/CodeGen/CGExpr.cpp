@@ -2914,13 +2914,24 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
 
   QualType EltType = E->getType()->castAsArrayTypeUnsafe()->getElementType();
   Addr = Builder.CreateElementBitCast(Addr, ConvertTypeForMem(EltType));
+
+  // FIXME-cheri-qual: should getTargetAddressSpace return 200? 
   unsigned AS =
     getContext().getTargetAddressSpace(E->getType().getAddressSpace());
   llvm::PointerType *PtrTy = cast<llvm::PointerType>(Addr.getPointer()->getType());
-  if (PtrTy->getPointerAddressSpace() != AS)
-    Addr = Address(Builder.CreateAddrSpaceCast(Addr.getPointer(),
-          llvm::PointerType::get(PtrTy->getElementType(), AS)),
-        Addr.getAlignment());
+  if (PtrTy->getPointerAddressSpace() != AS) {
+    if (getContext().getTargetInfo().areAllPointersCapabilities()) {
+      assert(PtrTy->getPointerAddressSpace() == 
+                        CGM.getTargetCodeGenInfo().getMemoryCapabilityAS() &&
+             "Expected memory capability address space in pure capability ABI");
+      assert(E->getType().getAddressSpace() == 0 &&
+             "non-zero address space in pure capability ABI");
+      return Addr;
+    } else
+      Addr = Address(Builder.CreateAddrSpaceCast(Addr.getPointer(),
+            llvm::PointerType::get(PtrTy->getElementType(), AS)),
+          Addr.getAlignment());
+  }
   return Addr;
 }
 
