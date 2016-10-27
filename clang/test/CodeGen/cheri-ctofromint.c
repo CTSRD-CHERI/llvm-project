@@ -4,9 +4,9 @@
 
 __capability void* foo(__capability void *x){
   // CHECK-HYBRID: ptrtoint
-  // CHECK-PURECAP: llvm.mips.cap.offset.get
+  // CHECK-PURECAP: llvm.memcap.cap.offset.get
   int pi = (int)x; // pi contains the result of CToPtr x, which is probably null
   // CHECK-HYBRID: inttoptr
-  // CHECK-PURECAP: llvm.mips.cap.offset.set
+  // CHECK-PURECAP: llvm.memcap.cap.offset.set
   return (__capability void*)pi;
 }

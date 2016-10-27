@@ -4,17 +4,17 @@ __capability void *results[12];
 long long testDeprecated(__capability void* foo)
 {
 	long long x;
-	// CHECK: call i64 @llvm.mips.cap.length.get
-	// CHECK: call i64 @llvm.mips.cap.perms.get
-	// CHECK: call i64 @llvm.mips.cap.type.get
-	// CHECK: call i64 @llvm.mips.cap.tag.get
-	// CHECK: call i64 @llvm.mips.cap.sealed.get
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.perms.and
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.seal
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.unseal
+	// CHECK: call i64 @llvm.memcap.cap.length.get
+	// CHECK: call i64 @llvm.memcap.cap.perms.get
+	// CHECK: call i64 @llvm.memcap.cap.type.get
+	// CHECK: call i64 @llvm.memcap.cap.tag.get
+	// CHECK: call i64 @llvm.memcap.cap.sealed.get
+	// CHECK: call i8 addrspace(200)* @llvm.memcap.cap.perms.and
+	// CHECK: call i8 addrspace(200)* @llvm.memcap.cap.seal
+	// CHECK: call i8 addrspace(200)* @llvm.memcap.cap.unseal
 	// CHECK: call void @llvm.mips.cap.cause.set(i64 42)
-	// CHECK: call void @llvm.mips.cap.perms.check
-	// CHECK: call void @llvm.mips.cap.type.check
+	// CHECK: call void @llvm.memcap.cap.perms.check
+	// CHECK: call void @llvm.memcap.cap.type.check
 	// CHECK: call i64 @llvm.mips.cap.cause.get()
 	x &= __builtin_cheri_get_cap_length(foo);
 	x &= __builtin_cheri_get_cap_perms(foo);
@@ -32,18 +32,18 @@ long long testDeprecated(__capability void* foo)
 long long test(__capability void* foo)
 {
 	long long x;
-	// CHECK: call i64 @llvm.mips.cap.length.get
-	// CHECK: call i64 @llvm.mips.cap.perms.get
-	// CHECK: call i64 @llvm.mips.cap.type.get
-	// CHECK: call i64 @llvm.mips.cap.tag.get
-	// CHECK: call i64 @llvm.mips.cap.sealed.get
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.perms.and
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.seal
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.unseal
-	// CHECK: call i8 addrspace(200)* @llvm.mips.cap.bounds.set
+	// CHECK: call i64 @llvm.memcap.cap.length.get
+	// CHECK: call i64 @llvm.memcap.cap.perms.get
+	// CHECK: call i64 @llvm.memcap.cap.type.get
+	// CHECK: call i64 @llvm.memcap.cap.tag.get
+	// CHECK: call i64 @llvm.memcap.cap.sealed.get
+	// CHECK: call i8 addrspace(200)* @llvm.memcap.cap.perms.and
+	// CHECK: call i8 addrspace(200)* @llvm.memcap.cap.seal
+	// CHECK: call i8 addrspace(200)* @llvm.memcap.cap.unseal
+	// CHECK: call i8 addrspace(200)* @llvm.memcap.cap.bounds.set
 	// CHECK: call void @llvm.mips.cap.cause.set(i64 42)
-	// CHECK: call void @llvm.mips.cap.perms.check
-	// CHECK: call void @llvm.mips.cap.type.check
+	// CHECK: call void @llvm.memcap.cap.perms.check
+	// CHECK: call void @llvm.memcap.cap.type.check
 	// CHECK: call i64 @llvm.mips.cap.cause.get()
 	x &= __builtin_memcap_length_get(foo);
 	x &= __builtin_memcap_perms_get(foo);

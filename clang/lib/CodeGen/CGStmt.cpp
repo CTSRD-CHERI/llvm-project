@@ -983,7 +983,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
             .AddressSpaceForCapabilities();
           // If this is CHERI, enforce this in hardware
           if (Ty->getPointeeType().getAddressSpace() == CapAS) {
-            llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::mips_cap_seal);
+            llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_seal);
             llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
             RetV = Builder.CreateCall(F,
                {Builder.CreateBitCast(RetV, CapPtrTy),

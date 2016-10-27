@@ -702,7 +702,7 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
   // FIXME: Hide this logic in the target somewhere
   if (getContext().getTargetInfo().areAllPointersCapabilities()) {
     llvm::Value *PCC = Builder.CreateCall(
-      CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+      CGM.getIntrinsic(llvm::Intrinsic::memcap_pcc_get), {});
     blockFn = Builder.CreatePtrToInt(blockFnConstant, Int64Ty);
     blockFn = setPointerOffset(PCC, blockFn);
     blockFn = Builder.CreateBitCast(blockFn, VoidPtrTy);

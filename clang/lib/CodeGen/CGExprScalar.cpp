@@ -61,11 +61,11 @@ llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
     *Addr) {
   llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
   llvm::Value *PCC = CGF.Builder.CreateCall(
-          CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_pcc_get), {});
+          CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_pcc_get), {});
   if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts()))
     if (F->hasWeakLinkage() || F->hasExternalWeakLinkage())
       return CGF.Builder.CreateCall(
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_from_pointer),
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_from_pointer),
         {PCC, V});
   return CGF.setPointerOffset(PCC, V);
 }
@@ -1485,7 +1485,7 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
       flags &= 0xFFEB;
 
     if (flags != 0xffff) {
-      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::mips_cap_perms_and);
+      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_perms_and);
       if (F->getFunctionType()->getParamType(0) != result->getType())
         result = Builder.CreateBitCast(result, F->getFunctionType()->getParamType(0));
       result = Builder.CreateCall(F, {result,
@@ -2910,7 +2910,7 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
   Value *diffInChars;
   if (expr->getLHS()->getType().isCapabilityType(CGF.getContext())) {
     llvm::Function *CapPtrDiff =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::mips_cap_diff);
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_diff);
     llvm::Type *CapTy = CapPtrDiff->getFunctionType()->getParamType(0);
     LHS = Builder.CreateBitCast(LHS, CapTy);
     RHS = Builder.CreateBitCast(RHS, CapTy);
