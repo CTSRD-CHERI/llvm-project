@@ -89,7 +89,7 @@ public:
     if (Allocas.empty())
       return false;
 
-    Intrinsic::ID SetLength = Intrinsic::mips_cap_bounds_set;
+    Intrinsic::ID SetLength = Intrinsic::memcap_cap_bounds_set;
     Function *CastFn =
         Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
     Function *SetLenFun = Intrinsic::getDeclaration(M, SetLength);

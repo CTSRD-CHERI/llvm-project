@@ -182,7 +182,7 @@ public:
     visit(F);
 
     if (!(Casts.empty() && ConstantCasts.empty())) {
-      Intrinsic::ID SetLength = Intrinsic::mips_cap_bounds_set;
+      Intrinsic::ID SetLength = Intrinsic::memcap_cap_bounds_set;
       SetLengthFn = Intrinsic::getDeclaration(M, SetLength);
       Value *BitCast = 0;
 

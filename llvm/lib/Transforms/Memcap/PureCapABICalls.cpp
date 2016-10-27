@@ -45,7 +45,7 @@ public:
     auto *SetOffset = dyn_cast<IntrinsicInst>(Callee);
     if (!SetOffset)
       return;
-    if (SetOffset->getIntrinsicID() != llvm::Intrinsic::mips_cap_offset_set)
+    if (SetOffset->getIntrinsicID() != llvm::Intrinsic::memcap_cap_offset_set)
       return;
     auto *PtrToInt = dyn_cast<PtrToIntOperator>(SetOffset->getOperand(1));
     if (!PtrToInt)

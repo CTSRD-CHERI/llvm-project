@@ -1817,7 +1817,7 @@ SDValue MipsTargetLowering::lowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 }
 static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length) {
   SDLoc DL(Val);
-  Intrinsic::ID SetBounds = Intrinsic::mips_cap_bounds_set;
+  Intrinsic::ID SetBounds = Intrinsic::memcap_cap_bounds_set;
   return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
         DAG.getConstant(SetBounds, DL, MVT::i64), Val,
         Length);
@@ -3023,14 +3023,14 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                          Chain, Arg, DL, IsTailCall, DAG));
   }
   if ((FirstOffset != -1) && ABI.IsCheriSandbox()) {
-    Intrinsic::ID SetBounds = Intrinsic::mips_cap_bounds_set;
+    Intrinsic::ID SetBounds = Intrinsic::memcap_cap_bounds_set;
     SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
     PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
     PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
         DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
         DAG.getIntPtrConstant(LastOffset, DL));
     PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
-        DAG.getConstant(Intrinsic::mips_cap_perms_and, DL, MVT::i64), PtrOff,
+        DAG.getConstant(Intrinsic::memcap_cap_perms_and, DL, MVT::i64), PtrOff,
         DAG.getIntPtrConstant(0xFFD7, DL));
     RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
   }
@@ -3114,8 +3114,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // If we're in the sandbox ABI, then we need to turn the address into a
   // PCC-derived capability.
   if (ABI.IsCheriSandbox() && (Callee.getValueType() != MVT::iFATPTR)) {
-    auto GetPCC = DAG.getConstant(Intrinsic::mips_pcc_get, DL, MVT::i64);
-    auto SetOffset = DAG.getConstant(Intrinsic::mips_cap_offset_set, DL, MVT::i64);
+    auto GetPCC = DAG.getConstant(Intrinsic::memcap_pcc_get, DL, MVT::i64);
+    auto SetOffset = DAG.getConstant(Intrinsic::memcap_cap_offset_set, DL, MVT::i64);
     auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR, GetPCC);
     Callee = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
         SetOffset, PCC, Callee);

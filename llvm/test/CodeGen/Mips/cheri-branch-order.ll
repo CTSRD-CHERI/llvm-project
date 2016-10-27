@@ -18,7 +18,7 @@ entry:
   store i8 addrspace(200)* addrspace(200)* %y, i8 addrspace(200)* addrspace(200)** %y.addr, align 32
   %0 = load i8 addrspace(200)* addrspace(200)*, i8 addrspace(200)* addrspace(200)** %y.addr, align 32
   %1 = bitcast i8 addrspace(200)* addrspace(200)* %0 to i8 addrspace(200)*
-  %2 = call i64 @llvm.mips.cap.tag.get(i8 addrspace(200)* %1)
+  %2 = call i64 @llvm.memcap.cap.tag.get(i8 addrspace(200)* %1)
   %tobool = icmp ne i64 %2, 0
   br i1 %tobool, label %if.end, label %if.then
 
@@ -43,7 +43,7 @@ return:                                           ; preds = %if.end, %if.then
 }
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.mips.cap.tag.get(i8 addrspace(200)*) #1
+declare i64 @llvm.memcap.cap.tag.get(i8 addrspace(200)*) #1
 
 declare i32 @printf(i8*, ...) #2
 

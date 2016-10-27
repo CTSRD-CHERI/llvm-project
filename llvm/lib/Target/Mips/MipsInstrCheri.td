@@ -71,10 +71,10 @@ let DecoderNamespace="CHERI", hasDelaySlot=1, isTerminator=1 in {
 let isBranch=1 in {
 def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbts\t$cb, $offset",
-                        [(brcond (i32 (setne (int_mips_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
+                        [(brcond (i32 (setne (int_memcap_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
 def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbtu\t$cb, $offset",
-                        [(brcond (i32 (seteq (int_mips_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
+                        [(brcond (i32 (seteq (int_memcap_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
 }
 
 def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriOpnd:$cb),
@@ -88,10 +88,10 @@ def CJR : CheriFmt3Caps<0x08, (outs), (ins CheriOpnd:$cb),
 }
 }
 
-// SelectionDAG doesn't know that int_mips_cap_tag_get returns 0 or 1.
-def : Pat<(brcond (i32 (seteq (int_mips_cap_tag_get CheriOpnd:$cb), 1)), bb:$offset),
+// SelectionDAG doesn't know that int_memcap_cap_tag_get returns 0 or 1.
+def : Pat<(brcond (i32 (seteq (int_memcap_cap_tag_get CheriOpnd:$cb), 1)), bb:$offset),
           (CBTS CheriOpnd: $cb, bb:$offset)>;
-def : Pat<(brcond (i32 (setne (int_mips_cap_tag_get CheriOpnd:$cb), 1)), bb:$offset),
+def : Pat<(brcond (i32 (setne (int_memcap_cap_tag_get CheriOpnd:$cb), 1)), bb:$offset),
           (CBTU CheriOpnd: $cb, bb:$offset)>;
 
 let isCall=1, hasDelaySlot=1 in {
@@ -173,7 +173,7 @@ def CAP_SELECT : CheriPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,
 ////////////////////////////////////////////////////////////////////////////////
 def CGetBase : CheriFmtGet<2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgetbase $rd, $cb",
-                           [(set GPR64Opnd:$rd, (int_mips_cap_base_get CheriOpnd:$cb))]>;
+                           [(set GPR64Opnd:$rd, (int_memcap_cap_base_get CheriOpnd:$cb))]>;
 let isCodeGenOnly=1 in {
 def CGetBase32 : CheriFmtGet<2, (outs GPR32:$rd), (ins CheriOpnd:$cb),
                            "cgetbase $rd, $cb", []>;
@@ -182,48 +182,48 @@ def CGetBase32 : CheriFmtGet<2, (outs GPR32:$rd), (ins CheriOpnd:$cb),
 
 def CGetTag : CheriFmtGet<5, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                           "cgettag $rd, $cb",
-                          [(set GPR64Opnd:$rd, (int_mips_cap_tag_get CheriOpnd:$cb))]>;
+                          [(set GPR64Opnd:$rd, (int_memcap_cap_tag_get CheriOpnd:$cb))]>;
 
 
 def CGetLength : CheriFmtGet<3, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                              "cgetlen $rd, $cb",
-                             [(set GPR64Opnd:$rd, (int_mips_cap_length_get CheriOpnd:$cb))]>;
+                             [(set GPR64Opnd:$rd, (int_memcap_cap_length_get CheriOpnd:$cb))]>;
 
 def CAndPerm : CheriFmtSet<0, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb, GPR64Opnd:$rt),
                            "candperm\t$cd, $cb, $rt",
-                           [(set CheriOpnd:$cd, (int_mips_cap_perms_and CheriOpnd:$cb, GPR64Opnd:$rt))]>;
+                           [(set CheriOpnd:$cd, (int_memcap_cap_perms_and CheriOpnd:$cb, GPR64Opnd:$rt))]>;
 
 def CGetPerm : CheriFmtGet<0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgetperm $rd, $cb",
-                           [(set GPR64Opnd:$rd, (int_mips_cap_perms_get CheriOpnd:$cb))]>;
+                           [(set GPR64Opnd:$rd, (int_memcap_cap_perms_get CheriOpnd:$cb))]>;
 
 def CSetBounds : CheriFmtRegs<1, 0, (outs CheriOpnd:$r0), (ins CheriOpnd:$r1, GPR64Opnd:$r2),
                            "csetbounds\t$r0, $r1, $r2",
-                           [(set CheriOpnd:$r0, (int_mips_cap_bounds_set CheriOpnd:$r1, GPR64Opnd:$r2))]>;
+                           [(set CheriOpnd:$r0, (int_memcap_cap_bounds_set CheriOpnd:$r1, GPR64Opnd:$r2))]>;
 
 def CGetType : CheriFmtGet<1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                            "cgettype $rd, $cb",
-                           [(set GPR64Opnd:$rd, (int_mips_cap_type_get CheriOpnd:$cb))]>;
+                           [(set GPR64Opnd:$rd, (int_memcap_cap_type_get CheriOpnd:$cb))]>;
 
 def CSeal : CheriFmt3Caps<0x02, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs, CheriOpnd:$ct),
                               "cseal\t$cd, $cs, $ct",
-                              [(set CheriOpnd: $cd, (int_mips_cap_seal CheriOpnd:$cs, CheriOpnd:$ct))]>;
+                              [(set CheriOpnd: $cd, (int_memcap_cap_seal CheriOpnd:$cs, CheriOpnd:$ct))]>;
 
 def CUnseal   : CheriFmt3Caps<0x03, (outs CheriOpnd:$cd), (ins CheriOpnd:$cs, CheriOpnd:$ct),
                               "cunseal\t$cd, $cs, $ct",
-                              [(set CheriOpnd: $cd, (int_mips_cap_unseal CheriOpnd:$cs, CheriOpnd:$ct))]>;
+                              [(set CheriOpnd: $cd, (int_memcap_cap_unseal CheriOpnd:$cs, CheriOpnd:$ct))]>;
 
 def CGetUnsealed : CheriFmtGet<6, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
                           "cgetsealed\t$rd, $cb",
-                          [(set GPR64Opnd:$rd, (int_mips_cap_sealed_get CheriOpnd:$cb))]>;
+                          [(set GPR64Opnd:$rd, (int_memcap_cap_sealed_get CheriOpnd:$cb))]>;
 
 def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),
                           "cgetpcc\t${r1}",
-                          [(set CheriOpnd:$r1, (int_mips_pcc_get))]>;
+                          [(set CheriOpnd:$r1, (int_memcap_pcc_get))]>;
 
 def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 "cgetpccsetoffset\t${r1}, $r2",
-                                [(set CheriOpnd:$r1, (int_mips_cap_offset_set (int_mips_pcc_get), GPR64Opnd: $r2))]>;
+                                [(set CheriOpnd:$r1, (int_memcap_cap_offset_set (int_memcap_pcc_get), GPR64Opnd: $r2))]>;
 
 def CGetCause : CheriFmtGetCause<0, (outs GPR64Opnd:$rd), (ins),
                           "cgetcause\t${rd}",
@@ -235,7 +235,7 @@ def CSetCause : CheriFmtSetCause<4, (outs), (ins GPR64Opnd: $rs),
 
 def CCheckPerm : CheriFmtRegs<0x0b, 0, (outs), (ins CheriOpnd:$cs, GPR64Opnd: $rs),
                               "ccheckperm\t${cs}, ${rs}",
-                              [(int_mips_cap_perms_check CheriOpnd:$cs,  GPR64Opnd: $rs)]>
+                              [(int_memcap_cap_perms_check CheriOpnd:$cs,  GPR64Opnd: $rs)]>
 {
   bits<5>  cs;
   bits<5>  rs;
@@ -245,7 +245,7 @@ def CCheckPerm : CheriFmtRegs<0x0b, 0, (outs), (ins CheriOpnd:$cs, GPR64Opnd: $r
 }
 def CCheckType : CheriFmtRegs<0x0b, 1, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb),
                               "cchecktype\t${cs}, ${cb}",
-                              [(int_mips_cap_type_check CheriOpnd:$cs,  CheriOpnd:$cb)]>
+                              [(int_memcap_cap_type_check CheriOpnd:$cs,  CheriOpnd:$cb)]>
 {
   bits<5>  cs;
   bits<5>  cb;
@@ -259,15 +259,15 @@ def CIncOffset : CheriFmtRegs<0x0d, 0, (outs CheriOpnd: $r0),
   (ins CheriOpnd: $r1, GPR64Opnd: $r2),
   "cincoffset\t$r0, $r1, $r2",
   [(set CheriOpnd:$r0, (ptradd CheriOpnd:$r1, GPR64Opnd:$r2))]>;
-def : Pat<(int_mips_cap_offset_increment CheriOpnd: $r1, GPR64Opnd: $r2), (CIncOffset $r1, $r2)>;
+def : Pat<(int_memcap_cap_offset_increment CheriOpnd: $r1, GPR64Opnd: $r2), (CIncOffset $r1, $r2)>;
 def CSetOffset : CheriFmtRegs<0x0d, 1, (outs CheriOpnd: $r0),
   (ins CheriOpnd: $r1, GPR64Opnd: $r2),
   "csetoffset\t$r0, $r1, $r2",
-  [(set CheriOpnd: $r0, (int_mips_cap_offset_set CheriOpnd: $r1, GPR64Opnd: $r2))]>;
+  [(set CheriOpnd: $r0, (int_memcap_cap_offset_set CheriOpnd: $r1, GPR64Opnd: $r2))]>;
 def CGetOffset : CheriFmtRegs<0x0d, 2, (outs GPR64Opnd:$r0),
   (ins CheriOpnd:$r1),
   "cgetoffset\t$r0, $r1",
-  [(set GPR64Opnd: $r0, (int_mips_cap_offset_get CheriOpnd: $r1))]> { let r2 = 0; }
+  [(set GPR64Opnd: $r0, (int_memcap_cap_offset_get CheriOpnd: $r1))]> { let r2 = 0; }
 
 def CMove : CheriPseudo<(outs CheriOpnd: $cd),
   (ins CheriOpnd:$cs),
@@ -277,16 +277,16 @@ def CMove : CheriPseudo<(outs CheriOpnd: $cd),
 def CSub : CheriFmt3Op<0xa, (outs GPR64Opnd: $r1),
   (ins CheriOpnd: $r2, CheriOpnd: $r3),
   "csub\t$r1, $r2, $r3",
-  [(set GPR64Opnd: $r1, (int_mips_cap_diff CheriOpnd: $r2, CheriOpnd: $r3))]>;
+  [(set GPR64Opnd: $r1, (int_memcap_cap_diff CheriOpnd: $r2, CheriOpnd: $r3))]>;
 
 // Casting:
 
 def CFromPtr : CheriFmtRegs<4, 7, (outs CheriOpnd: $r0),
   (ins CheriOpnd: $r1, GPR64Opnd: $r2),
-  "cfromptr\t$r0, $r1, $r2", [(set CheriOpnd: $r0, (int_mips_cap_from_pointer CheriOpnd: $r1, GPR64Opnd: $r2))]>;
+  "cfromptr\t$r0, $r1, $r2", [(set CheriOpnd: $r0, (int_memcap_cap_from_pointer CheriOpnd: $r1, GPR64Opnd: $r2))]>;
 def CToPtr : CheriFmtRegs<0xc, 0, (outs GPR64Opnd: $r0),
   (ins CheriOpnd: $r2, CheriOpnd: $r1),
-  "ctoptr $r0, $r1, $r2", [(set GPR64Opnd: $r0, (int_mips_cap_to_pointer CheriOpnd: $r2, CheriOpnd: $r1))]>;
+  "ctoptr $r0, $r1, $r2", [(set GPR64Opnd: $r0, (int_memcap_cap_to_pointer CheriOpnd: $r2, CheriOpnd: $r1))]>;
 let isCodeGenOnly = 1 in {
 def CFromPtr32 : CheriFmtRegs<4, 7, (outs CheriOpnd: $r0),
   (ins CheriOpnd: $r2, GPR32Opnd: $r1),
@@ -313,7 +313,7 @@ def STORECAP : CheriFmtCLS<0x3e, (outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm
                          [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 simm11s4Pattern:$offset)))]>;
 
 def CLEARTAG : CheriFmtClearTag<(outs CheriOpnd:$cd), (ins CheriOpnd:$cb), "ccleartag\t$cd, $cb",
-                                [(set CheriOpnd:$cd, (int_mips_cap_tag_clear CheriOpnd:$cb))]>;
+                                [(set CheriOpnd:$cd, (int_memcap_cap_tag_clear CheriOpnd:$cb))]>;
 
 def : Pat<(store CheriOpnd:$cs, CheriOpnd:$cb),
           (STORECAP CheriOpnd:$cs, ZERO_64, (i64 0), $cb)>;
@@ -418,14 +418,14 @@ let isCodeGenOnly=1 in {
 }
 defm CAPSTORE64     : StoreViaCapScaled<3, 0, "csd", GPR64Opnd, store, simm8s3, simm8s3Pattern>;
           
-def : Pat<(int_mips_c0_get), (CIncOffset C0, ZERO_64)>;
+def : Pat<(int_memcap_ddc_get), (CIncOffset C0, ZERO_64)>;
 def : Pat<(int_mips_idc_get), (CIncOffset C26, ZERO_64)>;
 def : Pat<(int_mips_kr1c_get), (CIncOffset C27, ZERO_64)>;
 def : Pat<(int_mips_kr2c_get), (CIncOffset C28, ZERO_64)>;
 def : Pat<(int_mips_kcc_get), (CIncOffset C29, ZERO_64)>;
 def : Pat<(int_mips_kdc_get), (CIncOffset C30, ZERO_64)>;
 def : Pat<(int_mips_epcc_get), (CIncOffset C31, ZERO_64)>;
-def : Pat<(int_mips_stack_cap_get), (CIncOffset C11, ZERO_64)>;
+def : Pat<(int_memcap_stack_cap_get), (CIncOffset C11, ZERO_64)>;
 
 def : Pat<(int_mips_stack_to_cap GPR64Opnd:$addr), (CSetOffset C11, $addr)>;
 def : Pat<(MipsSTC i64:$addr), (CIncOffset C11, $addr)>;

@@ -48,10 +48,10 @@ class MemCapFoldIntrinsics : public ModulePass {
       if (match(CI->getOperand(1), m_Add(m_Value(LHS), m_Value(RHS)))) {
         Value *BaseCap = CI->getOperand(0);
         Value *Add = nullptr;
-        if (match(LHS, m_Intrinsic<Intrinsic::mips_cap_offset_get>(
+        if (match(LHS, m_Intrinsic<Intrinsic::memcap_cap_offset_get>(
                            m_Specific(BaseCap))))
           Add = RHS;
-        else if (match(RHS, m_Intrinsic<Intrinsic::mips_cap_offset_get>(
+        else if (match(RHS, m_Intrinsic<Intrinsic::memcap_cap_offset_get>(
                                 m_Specific(BaseCap))))
           Add = LHS;
         if (Add) {
@@ -71,7 +71,7 @@ class MemCapFoldIntrinsics : public ModulePass {
     for (CallInst *CI : GetOffsets) {
       Value *Offset;
       Value *BaseCap = CI->getOperand(0);
-      if (match(BaseCap, m_Intrinsic<Intrinsic::mips_cap_offset_set>(
+      if (match(BaseCap, m_Intrinsic<Intrinsic::memcap_cap_offset_set>(
                              m_Value(), m_Value(Offset)))) {
         CI->replaceAllUsesWith(Offset);
         Modified = true;
@@ -88,9 +88,9 @@ public:
   bool runOnModule(Module &M) override {
     Modified = false;
     IncOffset =
-        Intrinsic::getDeclaration(&M, Intrinsic::mips_cap_offset_increment);
-    SetOffset = Intrinsic::getDeclaration(&M, Intrinsic::mips_cap_offset_set);
-    GetOffset = Intrinsic::getDeclaration(&M, Intrinsic::mips_cap_offset_get);
+        Intrinsic::getDeclaration(&M, Intrinsic::memcap_cap_offset_increment);
+    SetOffset = Intrinsic::getDeclaration(&M, Intrinsic::memcap_cap_offset_set);
+    GetOffset = Intrinsic::getDeclaration(&M, Intrinsic::memcap_cap_offset_get);
     foldGetAddSetToInc();
     forwardGetFromSet();
     return Modified;
