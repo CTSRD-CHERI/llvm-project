@@ -1574,8 +1574,10 @@ bool CastExpr::CastConsistency() const {
     assert(getType()->isPointerType() || getType()->isBlockPointerType());
     assert(getSubExpr()->getType()->isPointerType() ||
            getSubExpr()->getType()->isBlockPointerType());
-    assert(getType()->getPointeeType().getAddressSpace() !=
-           getSubExpr()->getType()->getPointeeType().getAddressSpace());
+    assert((getType()->getPointeeType().getAddressSpace() !=
+           getSubExpr()->getType()->getPointeeType().getAddressSpace())
+           || (getType()->getAs<PointerType>()->isMemoryCapability()
+              != getSubExpr()->getType()->getAs<PointerType>()->isMemoryCapability()));
   // These should not have an inheritance path.
   case CK_Dynamic:
   case CK_ToUnion:

@@ -5747,7 +5747,10 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
       unsigned DestAS = DestTy->getPointeeType().getAddressSpace();
       if (SrcAS != DestAS)
         return CK_AddressSpaceConversion;
-      return CK_BitCast;
+      else if (SrcTy->isMemoryCapabilityType(Context) != DestTy->isMemoryCapabilityType(Context))
+        return CK_AddressSpaceConversion;
+      else
+        return CK_BitCast;
     }
     case Type::STK_BlockPointer:
       return (SrcKind == Type::STK_BlockPointer
