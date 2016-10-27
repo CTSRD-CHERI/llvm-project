@@ -39,3 +39,8 @@
 # CHECK: csetkcc	 $
 # CHECK:  encoding: [0x49,0xbd,0x20,0x00]
 	CSetKCC $c4
+
+# CHECK: csub	 $1, $c2, $c3
+# CHECK:  encoding: [0x48,0x01,0x10,0xca]
+	csub	$1, $c2, $c3
+

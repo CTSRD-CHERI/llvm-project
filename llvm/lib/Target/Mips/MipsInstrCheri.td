@@ -274,6 +274,11 @@ def CMove : CheriPseudo<(outs CheriOpnd: $cd),
   "cmove\t$cd,  $cs",
   []>;
 
+def CSub : CheriFmt3Op<0xa, (outs GPR64Opnd: $r1),
+  (ins CheriOpnd: $r2, CheriOpnd: $r3),
+  "csub\t$r1, $r2, $r3",
+  [(set GPR64Opnd: $r1, (int_mips_cap_diff CheriOpnd: $r2, CheriOpnd: $r3))]>;
+
 // Casting:
 
 def CFromPtr : CheriFmtRegs<4, 7, (outs CheriOpnd: $r0),
