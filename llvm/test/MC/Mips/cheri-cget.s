@@ -27,16 +27,16 @@
 # CHECK: cgetcause	$12
 # CHECK: encoding: [0x48,0x0c,0x00,0x04]
 	cgetcause	$t0
-# CHECK: cgetepcc	 $
+# CHECK: cgetepcc	 $c4
 # CHECK:  encoding: [0x49,0xa4,0xf8,0x00]
 	CGetEPCC $c4
-# CHECK: csetepcc	 $
+# CHECK: csetepcc	 $c4
 # CHECK:  encoding: [0x49,0xbf,0x20,0x00]
 	CSetEPCC $c4
-# CHECK: cgetkcc	 $
+# CHECK: cgetkcc	 $c4
 # CHECK:  encoding: [0x49,0xa4,0xe8,0x00]
 	CGetKCC $c4
-# CHECK: csetkcc	 $
+# CHECK: csetkcc	 $c4
 # CHECK:  encoding: [0x49,0xbd,0x20,0x00]
 	CSetKCC $c4
 
