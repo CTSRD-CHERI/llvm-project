@@ -2405,8 +2405,11 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
   if (!Ty)
     Ty = getTypes().ConvertTypeForMem(ASTTy);
 
-  llvm::PointerType *PTy =
-    llvm::PointerType::get(Ty, getContext().getTargetAddressSpace(ASTTy));
+  ASTContext &C = getContext();
+  unsigned AS = C.getTargetInfo().areAllPointersCapabilities() 
+                ? getTargetCodeGenInfo().getMemoryCapabilityAS()
+                : C.getTargetAddressSpace(ASTTy);
+  llvm::PointerType *PTy = llvm::PointerType::get(Ty, AS);
 
   StringRef MangledName = getMangledName(D);
   return GetOrCreateLLVMGlobal(MangledName, PTy, D, IsForDefinition);
