@@ -7798,7 +7798,7 @@ public:
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR1C__", Twine(1<<13));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR2C__", Twine(1<<14));
 
-      Builder.defineMacro("_MIPS_SZCAP", Twine(getPointerWidth(200)));
+      Builder.defineMacro("_MIPS_SZCAP", Twine(getMemoryCapabilityWidth()));
       if (Cheri128)
           Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xfffffffffffffff0");
       else
