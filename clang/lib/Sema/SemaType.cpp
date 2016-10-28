@@ -6826,27 +6826,26 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
         CurType = S.Context.getTypedefType(TT->getDecl(), QualType(), true);
         return;
       }
-    } else {
-      isDeprecatedUse = true;
-      for (unsigned i = state.getCurrentChunkIndex(); i != 0; --i) {
-        DeclaratorChunk &chunk = declarator.getTypeObject(i-1);
-        switch (chunk.Kind) {
-          case DeclaratorChunk::Pointer: {
-            AttributeList *attrCopy = declarator.getAttributePool()
-                   .create(attr.getName(), attr.getRange(),
-                           attr.getScopeName(), attr.getScopeLoc(),
-                           nullptr, 0, AttributeList::AS_GNU);
-            spliceAttrIntoList(*attrCopy, chunk.getAttrListRef());
-            return;
-          }
-          case DeclaratorChunk::BlockPointer:
-          case DeclaratorChunk::Paren:
-          case DeclaratorChunk::Array:
-          case DeclaratorChunk::Function:
-          case DeclaratorChunk::Reference:
-          case DeclaratorChunk::MemberPointer:
-            continue;
+    }
+    isDeprecatedUse = true;
+    for (unsigned i = state.getCurrentChunkIndex(); i != 0; --i) {
+      DeclaratorChunk &chunk = declarator.getTypeObject(i-1);
+      switch (chunk.Kind) {
+        case DeclaratorChunk::Pointer: {
+          AttributeList *attrCopy = declarator.getAttributePool()
+                 .create(attr.getName(), attr.getRange(),
+                         attr.getScopeName(), attr.getScopeLoc(),
+                         nullptr, 0, AttributeList::AS_GNU);
+          spliceAttrIntoList(*attrCopy, chunk.getAttrListRef());
+          return;
         }
+        case DeclaratorChunk::BlockPointer:
+        case DeclaratorChunk::Paren:
+        case DeclaratorChunk::Array:
+        case DeclaratorChunk::Function:
+        case DeclaratorChunk::Reference:
+        case DeclaratorChunk::MemberPointer:
+          continue;
       }
     }
   } else {
