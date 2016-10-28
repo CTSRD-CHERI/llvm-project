@@ -251,7 +251,9 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   }
 
   // Make sure the result is of the correct type.
-  unsigned ExpectedAddrSpace = getContext().getTargetAddressSpace(Ty);
+  unsigned ExpectedAddrSpace = getTarget().areAllPointersCapabilities()
+                               ? getTargetCodeGenInfo().getMemoryCapabilityAS()
+                               : getContext().getTargetAddressSpace(Ty);
   llvm::Constant *Addr = GV;
   if (AddrSpace != ExpectedAddrSpace) {
     llvm::PointerType *PTy = llvm::PointerType::get(LTy, ExpectedAddrSpace);
