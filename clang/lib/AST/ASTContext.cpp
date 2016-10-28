@@ -3520,14 +3520,38 @@ QualType ASTContext::getTypeDeclTypeSlow(const TypeDecl *Decl) const {
 /// specified typedef name decl.
 QualType
 ASTContext::getTypedefType(const TypedefNameDecl *Decl,
-                           QualType Canonical) const {
-  if (Decl->TypeForDecl) return QualType(Decl->TypeForDecl, 0);
+                           QualType Canonical,
+                           bool IsMemCap) const {
+  if (IsMemCap && Decl->MemCapTypeForDecl) return QualType(Decl->MemCapTypeForDecl, 0);
+  if (!IsMemCap && Decl->TypeForDecl) return QualType(Decl->TypeForDecl, 0);
 
   if (Canonical.isNull())
     Canonical = getCanonicalType(Decl->getUnderlyingType());
+  if (IsMemCap) {
+    if (const PointerType *PT = Canonical->getAs<PointerType>()) {
+      // Create a copy of the typedef whose name is prefixed by "__memcap_" and
+      // whose underlying type is the memory_capability qualified version of
+      // the pointer type
+      Canonical = getPointerType(PT->getPointeeType(), true);
+      TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getLocStart());
+      std::string typedefName = "__memcap_" + Decl->getNameAsString();
+      TypedefDecl *NewDecl = TypedefDecl::Create(
+          const_cast<ASTContext &>(*this),
+          const_cast<DeclContext *>(Decl->getDeclContext()),
+          Decl->getLocStart(),
+          Decl->getLocation(),
+          &Idents.get(typedefName), 
+          TInfo);
+      TUDecl->addDecl(const_cast<TypedefDecl *>(NewDecl));
+      Decl = NewDecl;
+    }
+  }
   TypedefType *newType = new(*this, TypeAlignment)
     TypedefType(Type::Typedef, Decl, Canonical);
-  Decl->TypeForDecl = newType;
+  if (IsMemCap)
+    Decl->MemCapTypeForDecl = newType;
+  else
+    Decl->TypeForDecl = newType;
   Types.push_back(newType);
   return QualType(newType, 0);
 }

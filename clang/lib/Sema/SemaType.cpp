@@ -6819,9 +6819,13 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
   if (TAL == TAL_DeclSpec) {
     // possible deprecated use; move to the outermost pointer declarator
     // unless this is a typedef'd pointer type
-    if (isa<TypedefType>(CurType) && CurType->isPointerType()) {
-      // FIXME-cheri-qual: Create a new instance of this Typedef but whereby
-      // the underlying pointer type is now a memory capability
+    if (const TypedefType *TT = CurType->getAs<TypedefType>()) {
+      // If the underlying type is a pointer, Create a new instance of this
+      // Typedef with a memory capability as the underlying type
+      if (TT->isPointerType()) {
+        CurType = S.Context.getTypedefType(TT->getDecl(), QualType(), true);
+        return;
+      }
     } else {
       isDeprecatedUse = true;
       for (unsigned i = state.getCurrentChunkIndex(); i != 0; --i) {
