@@ -2586,7 +2586,7 @@ QualType ASTContext::getDecayedType(QualType T) const {
   //   shall be adjusted to "pointer to function returning type", as
   //   in 6.3.2.1.
   if (T->isFunctionType())
-    Decayed = getPointerType(T);
+    Decayed = getPointerType(T, getTargetInfo().areAllPointersCapabilities());
 
   llvm::FoldingSetNodeID ID;
   AdjustedType::Profile(ID, T, Decayed);
