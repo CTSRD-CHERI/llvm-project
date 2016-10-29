@@ -6419,6 +6419,8 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   }
 
   // The pointer types are compatible.
+  bool MergedIsMemCap = LHSTy->isMemoryCapabilityType(S.Context) ||
+                        RHSTy->isMemoryCapabilityType(S.Context);
   QualType ResultTy = CompositeTy.withCVRQualifiers(MergedCVRQual);
   auto LHSCastKind = CK_BitCast, RHSCastKind = CK_BitCast;
   if (IsBlockPointer)
@@ -6432,7 +6434,7 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     RHSCastKind = rhQual.getAddressSpace() == ResultAddrSpace
                       ? CK_BitCast /* 1a */
                       : CK_AddressSpaceConversion /* 1b */;
-    ResultTy = S.Context.getPointerType(ResultTy);
+    ResultTy = S.Context.getPointerType(ResultTy, MergedIsMemCap);
   }
 
   // For case 1a of OpenCL, S.ImpCastExprToType will not insert bitcast
