@@ -1,4 +1,4 @@
-;===- ./lib/Transforms/Memcap/LLVMBuild.txt --------------------*- Conf -*--===;
+;===- ./lib/Transforms/MemCap/LLVMBuild.txt --------------------*- Conf -*--===;
 ;
 ;                     The LLVM Compiler Infrastructure
 ;
@@ -17,7 +17,7 @@
 
 [component_0]
 type = Library
-name = Memcap
+name = MemCap
 parent = Transforms
-library_name = MemcapOpts
+library_name = MemCapOpts
 required_libraries = Analysis Core Support TransformUtils
