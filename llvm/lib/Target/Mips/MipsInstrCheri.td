@@ -128,6 +128,7 @@ def CLT : CheriFmtPtrCmp<2, GPR64Opnd, "clt", []>;
 def CLE : CheriFmtPtrCmp<3, GPR64Opnd, "cle", []>;
 def CLTU : CheriFmtPtrCmp<4, GPR64Opnd, "cltu", []>;
 def CLEU : CheriFmtPtrCmp<5, GPR64Opnd, "cleu", []>;
+def CEXEQ : CheriFmtPtrCmp<6, GPR64Opnd, "cexeq", []>;
 def : InstAlias<"cgt $rd, $cb, $ct",
                 (CLT GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : InstAlias<"cge $rd, $cb, $ct",
