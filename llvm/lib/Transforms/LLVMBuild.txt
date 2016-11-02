@@ -16,7 +16,7 @@
 ;===------------------------------------------------------------------------===;
 
 [common]
-subdirectories = IPO InstCombine Instrumentation Scalar Utils Vectorize ObjCARC Memcap
+subdirectories = IPO InstCombine Instrumentation Scalar Utils Vectorize ObjCARC MemCap
 
 [component_0]
 type = Group
