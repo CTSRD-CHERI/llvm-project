@@ -248,9 +248,11 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           }
         }
       }
-      unsigned DefReg = I.first->getOperand(0).getReg();
+      auto FirstOperand = I.first->getOperand(0);
+      unsigned FirstReg = FirstOperand.getReg();
       BuildMI(*InsertBlock, InsertPoint, I.first->getDebugLoc(),
-          InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())), DefReg)
+          InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())))
+        .addReg(FirstReg, getDefRegState(FirstOperand.isDef()))
         .addReg(BaseReg).addOperand(Offset);
       I.first->eraseFromBundle();
       if (AddInst)
