@@ -1381,9 +1381,12 @@ Value *AvailableValueInBlock::MaterializeAdjustedValue(LoadInst *LI,
             gvn.getTargetLibraryInfo());
         // If we don't know the size of the underlying object then we can't
         // assume that we can look through this pointer.
-        if (!KnownSize)
-          Size = DL.getTypeStoreSize(cast<PointerType>(Object->getType())
-              ->getElementType());
+        if (!KnownSize) {
+          Type *ElemTy = cast<PointerType>(Object->getType())->getElementType();
+          if (!ElemTy->isSized())
+            return LI;
+          Size = DL.getTypeStoreSize(ElemTy);
+        }
         unsigned LoadSize = DL.getTypeStoreSize(LoadTy);
         unsigned SrcValSize = DL.getTypeStoreSize(Load->getType());
         if ((Offset+LoadSize > SrcValSize) && (NextPowerOf2(Offset)+LoadOffset > Size))
