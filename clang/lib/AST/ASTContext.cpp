@@ -7982,6 +7982,18 @@ unsigned ASTContext::getIntWidth(QualType T) const {
   // For builtin types, just use the standard type sizing method
   return (unsigned)getTypeSize(T);
 }
+unsigned ASTContext::getIntRange(QualType T) const {
+  if (Target->SupportsCapabilities()) {
+    if (T->isPointerType() && T.getAddressSpace() == (unsigned)Target->AddressSpaceForCapabilities())
+      return Target->getPointerWidth(0);
+    if (T->isBuiltinType()) {
+      int K = T->getAs<BuiltinType>()->getKind();
+      if ((K == BuiltinType::IntCap || K == BuiltinType::UIntCap))
+        return Target->getPointerWidth(0);
+    }
+  }
+  return getIntWidth(T);
+}
 
 QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
   assert(T->hasSignedIntegerRepresentation() && "Unexpected type");

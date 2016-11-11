@@ -2278,6 +2278,10 @@ public:
   // of bits in an integer type excluding any padding bits.
   unsigned getIntWidth(QualType T) const;
 
+  // The range of an integer type.  This is the same as IntWidth for all types
+  // other than fat pointers.
+  unsigned getIntRange(QualType T) const;
+
   // Per C99 6.2.5p6, for every signed integer type, there is a corresponding
   // unsigned integer type.  This method takes a signed type, and returns the
   // corresponding unsigned integer type.

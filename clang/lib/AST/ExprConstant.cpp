@@ -1585,7 +1585,7 @@ static bool HandleFloatToFloatCast(EvalInfo &Info, const Expr *E,
 static APSInt HandleIntToIntCast(EvalInfo &Info, const Expr *E,
                                  QualType DestType, QualType SrcType,
                                  APSInt &Value) {
-  unsigned DestWidth = Info.Ctx.getIntWidth(DestType);
+  unsigned DestWidth = Info.Ctx.getIntRange(DestType);
   APSInt Result = Value;
   // Figure out if this is a truncate, extend or noop cast.
   // If the input is signed, do a sign extend, noop, or truncate.
@@ -4987,11 +4987,7 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
       break;
 
     if (Value.isInt()) {
-      unsigned Size = Info.Ctx.getTypeSize(E->getType());
-      // FIXME: We should have a way of asking what the integer range of a
-      // pointer type is.
-      if (Size > 64)
-        Size = 64;
+      unsigned Size = Info.Ctx.getIntRange(E->getType());
       uint64_t N = Value.getInt().extOrTrunc(Size).getZExtValue();
       Result.Base = (Expr*)nullptr;
       Result.InvalidBase = false;
@@ -5989,7 +5985,7 @@ public:
            "Invalid evaluation result.");
     assert(SI.isSigned() == E->getType()->isSignedIntegerOrEnumerationType() &&
            "Invalid evaluation result.");
-    assert(SI.getBitWidth() == Info.Ctx.getIntWidth(E->getType()) &&
+    assert(SI.getBitWidth() == Info.Ctx.getIntRange(E->getType()) &&
            "Invalid evaluation result.");
     Result = APValue(SI);
     return true;
@@ -8799,9 +8795,6 @@ bool Expr::EvaluateAsRValue(EvalResult &Result, const ASTContext &Ctx) const {
   
   EvalInfo Info(Ctx, Result, EvalInfo::EM_IgnoreSideEffects);
   bool Return = ::EvaluateAsRValue(Info, this, Result.Val);
-
-  if (Return)
-    GetIntCapLValue(Result.Val, getType(), const_cast<ASTContext&>(Ctx));
 
   return Return;
 }
