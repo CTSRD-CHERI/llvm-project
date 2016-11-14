@@ -6883,6 +6883,7 @@ struct MipsCheriTargetInfo : public Mips64EBTargetInfo {
       CapSize = 256;
       setCPU("cheri");
     }
+    SuitableAlign = CapSize;
   }
   void setDataLayoutString() override {
     if (CapabilityABI) {
