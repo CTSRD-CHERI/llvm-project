@@ -332,12 +332,19 @@ void TypePrinter::printComplexAfter(const ComplexType *T, raw_ostream &OS) {
 void TypePrinter::printPointerBefore(const PointerType *T, raw_ostream &OS) {
   IncludeStrongLifetimeRAII Strong(Policy);
   SaveAndRestore<bool> NonEmptyPH(HasEmptyPlaceHolder, false);
-  printBefore(T->getPointeeType(), OS);
+  QualType PointeeTy = T->getPointeeType();
+  printBefore(PointeeTy, OS);
   // Handle things like 'int (*A)[4];' correctly.
   // FIXME: this should include vectors, but vectors use attributes I guess.
-  if (isa<ArrayType>(T->getPointeeType()))
+  if (isa<ArrayType>(PointeeTy))
     OS << '(';
+  if (const PointerType *PointeePtr = PointeeTy->getAs<PointerType>()) {
+    if (PointeePtr->isMemoryCapability())
+      OS << " ";
+  }
   OS << '*';
+  if (T->isMemoryCapability())
+    OS << " __capability";
 }
 void TypePrinter::printPointerAfter(const PointerType *T, raw_ostream &OS) {
   IncludeStrongLifetimeRAII Strong(Policy);

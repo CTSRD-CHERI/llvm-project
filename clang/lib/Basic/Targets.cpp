@@ -8052,23 +8052,13 @@ public:
   unsigned getIntCapWidth() const override { return Cheri128 ? 128 : 256; }
   unsigned getIntCapAlign() const override { return Cheri128 ? 128 : 256; }
 
-  uint64_t getPointerWidthV(unsigned AddrSpace) const override {
-    return (AddrSpace == 200) ? CapSize : PointerWidth;
-  }
-  uint64_t getPointerAlignV(unsigned AddrSpace) const override {
-    return (AddrSpace == 200) ? CapSize : PointerAlign;
-  }
-  uint64_t getPointerRangeV(unsigned) const override {
-    return 64;
-  }
+  uint64_t getMemoryCapabilityWidth() const override { return CapSize; }
 
-  bool SupportsCapabilities() const override { return IsCheri; }
+  uint64_t getMemoryCapabilityAlign() const override { return CapSize; }
 
-  int AddressSpaceForCapabilities() const override { return IsCheri ? 200 : -1; }
+  uint64_t getPointerRangeForMemoryCapability() const override { return 64; }
 
-  int AddressSpaceForObjC() const override { return IsCheri ? 200 : 0; }
-
-  int AddressSpaceForStack() const override { return SandboxABI ? 200 : 0; }
+  bool SupportsCapabilities() const override { return true; }
 
   bool validateTarget(DiagnosticsEngine &Diags) const override {
     // FIXME: It's valid to use O32 on a 64-bit CPU but the backend can't handle

@@ -284,8 +284,9 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
   Address Addr = Address::invalid();
   if (AllowHigherAlign && DirectAlign > SlotSize) {
     llvm::Value *PtrAsInt = Ptr;
-    if (Ptr->getType()->getPointerAddressSpace() ==
-        (unsigned)CGF.getTarget().AddressSpaceForCapabilities()) {
+    if (CGF.getTarget().SupportsCapabilities() &&
+        Ptr->getType()->getPointerAddressSpace() ==
+        (unsigned)CGF.CGM.getTargetCodeGenInfo().getMemoryCapabilityAS()) {
       PtrAsInt = CGF.getPointerOffset(PtrAsInt);
       PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
             llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
@@ -6541,6 +6542,7 @@ public:
 
 class MipsABIInfo : public ABIInfo, CheriCapClassifier {
   bool IsO32;
+  CodeGenModule &CGM;
   unsigned MinABIStackAlignInBytes, StackAlignInBytes;
   void CoerceToIntArgs(uint64_t TySize,
                        SmallVectorImpl<llvm::Type *> &ArgList) const;
@@ -6548,9 +6550,9 @@ class MipsABIInfo : public ABIInfo, CheriCapClassifier {
   llvm::Type* returnAggregateInRegs(QualType RetTy, uint64_t Size) const;
   llvm::Type* getPaddingType(uint64_t Align, uint64_t Offset) const;
 public:
-  MipsABIInfo(CodeGenTypes &CGT, bool _IsO32) :
+  MipsABIInfo(CodeGenTypes &CGT, bool _IsO32, CodeGenModule &_CGM) :
     ABIInfo(CGT), CheriCapClassifier(CGT.getContext()),
-    IsO32(_IsO32), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
+    IsO32(_IsO32), CGM(_CGM), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
     StackAlignInBytes(IsO32 ? 8 : 16) {}
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
@@ -6570,12 +6572,12 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
   mutable llvm::PointerType *I8Cap = nullptr;
   llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
     if (!I8Cap)
-      I8Cap = llvm::PointerType::get(CGF.Int8Ty, 200);
+      I8Cap = llvm::PointerType::get(CGF.Int8Ty, getMemoryCapabilityAS());
     return I8Cap;
   }
 public:
-  MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32)
-    : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32)),
+  MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32, CodeGenModule &CGM)
+    : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32, CGM)),
       CheriCapClassifier(CGT.getContext()),
       SizeOfUnwindException(IsO32 ? 24 : 32) {}
 
@@ -6651,6 +6653,13 @@ public:
   bool containsCapabilities(QualType Ty) const override {
     return CheriCapClassifier::containsCapabilities(Ty);
   }
+  unsigned getDefaultAS() const override {
+    const TargetInfo &Target = getABIInfo().getContext().getTargetInfo();
+    return Target.areAllPointersCapabilities() ? getMemoryCapabilityAS() : 0;
+  }
+  unsigned getMemoryCapabilityAS() const override {
+    return 200;
+  }
 };
 }
 
@@ -6674,7 +6683,7 @@ bool CheriCapClassifier::containsCapabilities(ASTContext &C,
                                               const RecordDecl *RD) const {
   for (auto i = RD->field_begin(), e = RD->field_end(); i != e; ++i) {
     const QualType Ty = i->getType();
-    if (Ty.isCapabilityType(C))
+    if (Ty->isMemoryCapabilityType(C))
       return true;
     if (const RecordType *RT = Ty->getAs<RecordType>())
       if (containsCapabilities(C, RT->getDecl()))
@@ -6691,7 +6700,7 @@ bool CheriCapClassifier::containsCapabilities(QualType Ty) const {
   if (Cached != ContainsCapabilities.end())
     return Cached->second;
   // Don't bother caching the trivial cases.
-  if (Ty.isCapabilityType(C))
+  if (Ty->isMemoryCapabilityType(C))
       return true;
   if (Ty->isArrayType()) {
     QualType ElTy = QualType(Ty->getBaseElementTypeUnsafe(), 0);
@@ -6723,8 +6732,10 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   // On CHERI, we must pass unions containing capabilities in capability
   // registers.  Otherwise, pass them as integers.
   if (RT &&
-      (RT->isUnionType() && containsCapabilities(getContext(), RT->getDecl())))
-    return llvm::Type::getInt8Ty(getVMContext())->getPointerTo(200);
+      (RT->isUnionType() && containsCapabilities(getContext(), RT->getDecl()))
+      && getTarget().SupportsCapabilities())
+    return llvm::Type::getInt8Ty(getVMContext())->getPointerTo(
+                            CGM.getTargetCodeGenInfo().getMemoryCapabilityAS());
 
   // Unions/vectors are passed in integer registers.
   if (!RT || !RT->isStructureOrClassType()) {
@@ -6739,7 +6750,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   uint64_t LastOffset = 0;
   unsigned idx = 0;
   llvm::IntegerType *I64 = llvm::IntegerType::get(getVMContext(), 64);
-  unsigned CapSize = getTarget().getPointerWidth(200);
+  unsigned CapSize = getTarget().getMemoryCapabilityWidth();
 
   // Iterate over fields in the struct/class and check if there are any aligned
   // double fields.
@@ -6757,7 +6768,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
         continue;
       }
     }
-    if (!Ty->isConstantArrayType() && Ty.isCapabilityType(getContext())) {
+    if (!Ty->isConstantArrayType() && Ty->isMemoryCapabilityType(getContext())) {
       // Add ((Offset - LastOffset) / 64) args of type i64.
       for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
         ArgList.push_back(I64);
@@ -6769,7 +6780,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(Ty)) {
       auto ElementType = CAT->getElementType();
       unsigned Elements = CAT->getSize().getLimitedValue();
-      if (ElementType.isCapabilityType(getContext())) {
+      if (ElementType->isMemoryCapabilityType(getContext())) {
         llvm::Type *ElTy = CGT.ConvertType(ElementType);
         for (unsigned i=0 ; i<Elements ; ++i)
           ArgList.push_back(ElTy);
@@ -6853,10 +6864,10 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
 
   // All integral types are promoted to the GPR width.
   if (Ty->isIntegralOrEnumerationType() &&
-      !Ty.isCapabilityType(getContext()))
+      !Ty->isMemoryCapabilityType(getContext()))
     return ABIArgInfo::getExtend();
 
-  if (Ty.isCapabilityType(getContext()))
+  if (Ty->isMemoryCapabilityType(getContext()))
     return ABIArgInfo::getDirect(CGT.ConvertType(Ty));
 
   return ABIArgInfo::getDirect(
@@ -8567,12 +8578,12 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::mipsel:
     if (Triple.getOS() == llvm::Triple::NaCl)
       return SetCGInfo(new PNaClTargetCodeGenInfo(Types));
-    return SetCGInfo(new MIPSTargetCodeGenInfo(Types, true));
+    return SetCGInfo(new MIPSTargetCodeGenInfo(Types, true, *this));
 
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
   case llvm::Triple::cheri:
-    return SetCGInfo(new MIPSTargetCodeGenInfo(Types, false));
+    return SetCGInfo(new MIPSTargetCodeGenInfo(Types, false, *this));
 
   case llvm::Triple::avr:
     return SetCGInfo(new AVRTargetCodeGenInfo(Types));

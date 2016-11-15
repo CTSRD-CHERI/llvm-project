@@ -446,7 +446,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     case BuiltinType::UIntCap:
       ResultType =
           llvm::PointerType::get(llvm::Type::getInt8Ty(getLLVMContext()),
-              Context.getTargetInfo().AddressSpaceForCapabilities());
+              CGM.getTargetCodeGenInfo().getMemoryCapabilityAS());
       break;
 
     case BuiltinType::Half:
@@ -529,7 +529,9 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     if (PointeeType->isVoidTy())
       PointeeType = llvm::Type::getInt8Ty(getLLVMContext());
-    unsigned AS = Context.getTargetAddressSpace(ETy);
+    unsigned AS = PTy->isMemoryCapability() ? 
+                  CGM.getTargetCodeGenInfo().getMemoryCapabilityAS() :
+                  Context.getTargetAddressSpace(ETy);
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
@@ -603,7 +605,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // recursive conversion.
     llvm::Type *T =
       ConvertTypeForMem(cast<ObjCObjectPointerType>(Ty)->getPointeeType());
-    ResultType = T->getPointerTo(Target.AddressSpaceForObjC());
+    ResultType = T->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS());
     break;
   }
 

@@ -1,7 +1,7 @@
 // RUN: %clang %s -target cheri-unknown-freebsd  -S -o - -O0 -emit-llvm | FileCheck %s
-__capability void *results[12];
+void * __capability results[12];
 
-long long testDeprecated(__capability void* foo)
+long long testDeprecated(void * __capability foo)
 {
 	long long x;
 	// CHECK: call i64 @llvm.memcap.cap.length.get

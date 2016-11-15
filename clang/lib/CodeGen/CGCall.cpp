@@ -1231,7 +1231,7 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
   // simple.
   Address Tmp = CreateTempAllocaForCoercion(CGF, Ty, Src.getAlignment());
   llvm::Type *I8PtrTy =
-    CGF.Builder.getInt8PtrTy(CGF.CGM.getContext().getDefaultAS());
+    CGF.Builder.getInt8PtrTy(CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
   Address Casted = CGF.Builder.CreateBitCast(Tmp, I8PtrTy);
   Address SrcCasted = CGF.Builder.CreateBitCast(Src, I8PtrTy);
   CGF.Builder.CreateMemCpy(Casted, SrcCasted,
@@ -1316,7 +1316,7 @@ static void CreateCoercedStore(llvm::Value *Src,
     Address Tmp = CreateTempAllocaForCoercion(CGF, SrcTy, Dst.getAlignment());
     CGF.Builder.CreateStore(Src, Tmp);
     llvm::Type *I8PtrTy =
-      CGF.Builder.getInt8PtrTy(CGF.CGM.getContext().getDefaultAS());
+      CGF.Builder.getInt8PtrTy(CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
     Address Casted = CGF.Builder.CreateBitCast(Tmp, I8PtrTy);
     Address DstCasted = CGF.Builder.CreateBitCast(Dst, I8PtrTy);
     CGF.Builder.CreateMemCpy(DstCasted, Casted,
@@ -1546,7 +1546,7 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
       llvm::Type *ty = ConvertType(ret);
       unsigned addressSpace = Context.getTargetAddressSpace(ret);
       if (addressSpace == 0)
-        addressSpace = Context.getDefaultAS();
+        addressSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
       resultType = llvm::PointerType::get(ty, addressSpace);
     } else {
       resultType = llvm::Type::getVoidTy(getLLVMContext());
@@ -1572,7 +1572,7 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
     llvm::Type *Ty = ConvertType(Ret);
     unsigned AddressSpace = Context.getTargetAddressSpace(Ret);
     if (AddressSpace == 0)
-      AddressSpace = Context.getDefaultAS();
+      AddressSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
     ArgTypes[IRFunctionArgs.getSRetArgNo()] =
         llvm::PointerType::get(Ty, AddressSpace);
   }
@@ -4278,10 +4278,9 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                   CharUnits Alignment = getContext().getDeclAlign(Key);
                   Address Addr(V, Alignment);
                   KeyV = Builder.CreateLoad(Addr);
-                  unsigned CapAS = CGM.getContext().getTargetInfo()
-                    .AddressSpaceForCapabilities();
                   // If this is CHERI, enforce this in hardware
-                  if (RetTy->getPointeeType().getAddressSpace() == CapAS) {
+                  if (RetTy->isMemoryCapabilityType(CGM.getContext())) {
+                    unsigned CapAS = CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
                     llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_unseal);
                     llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
                     V = Builder.CreateCall(F,

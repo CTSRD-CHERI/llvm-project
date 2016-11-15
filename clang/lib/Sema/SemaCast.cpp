@@ -1848,8 +1848,8 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
   ASTContext &Ctx = Self.getASTContext();
 
   if (Ctx.getTargetInfo().areAllPointersCapabilities() &&
-      DestType.isCapabilityType(Ctx) &&
-      !SrcType.isCapabilityType(Ctx) &&
+      DestType->isMemoryCapabilityType(Ctx) &&
+      !SrcType->isMemoryCapabilityType(Ctx) &&
       !SrcExpr->isIntegerConstantExpr(Ctx)) {
     Self.Diag(Loc, diag::warn_capability_no_provenance) << DestType;
     Self.Diag(Loc, diag::note_insert_intptr_fixit);

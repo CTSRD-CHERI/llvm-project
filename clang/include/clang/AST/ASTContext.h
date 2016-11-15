@@ -511,7 +511,6 @@ private:
   const TargetInfo *Target;
   const TargetInfo *AuxTarget;
   clang::PrintingPolicy PrintingPolicy;
-  unsigned DefaultAS;
   
 public:
   IdentifierTable &Idents;
@@ -1068,6 +1067,13 @@ private:
   QualType getPipeType(QualType T, bool ReadOnly) const;
 
 public:
+  /// \brief Return the uniqued reference to the type for a memory capability 
+  /// qualified type.
+  ///
+  /// The resulting type has a union of the qualifiers from T and the memory 
+  /// capability qualifier. 
+  QualType getMemoryCapabilityQualType(QualType T) const;
+
   /// \brief Return the uniqued reference to the type for an address space
   /// qualified type with the specified type and address space.
   ///
@@ -1147,9 +1153,9 @@ public:
 
   /// \brief Return the uniqued reference to the type for a pointer to
   /// the specified type.
-  QualType getPointerType(QualType T) const;
-  CanQualType getPointerType(CanQualType T) const {
-    return CanQualType::CreateUnsafe(getPointerType((QualType) T));
+  QualType getPointerType(QualType T, bool isMemCap = false) const;
+  CanQualType getPointerType(CanQualType T, bool isMemCap = false) const {
+    return CanQualType::CreateUnsafe(getPointerType((QualType) T, isMemCap));
   }
 
   /// \brief Return the uniqued reference to a type adjusted from the original
@@ -2327,10 +2333,6 @@ public:
 
   unsigned getTargetAddressSpace(Qualifiers Q) const {
     return getTargetAddressSpace(Q.getAddressSpace());
-  }
-
-  unsigned getDefaultAS() const {
-    return DefaultAS;
   }
 
   unsigned getTargetAddressSpace(unsigned AS) const {

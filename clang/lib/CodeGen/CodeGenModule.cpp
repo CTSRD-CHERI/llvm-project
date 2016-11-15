@@ -99,20 +99,22 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   Int64Ty = llvm::Type::getInt64Ty(LLVMContext);
   FloatTy = llvm::Type::getFloatTy(LLVMContext);
   DoubleTy = llvm::Type::getDoubleTy(LLVMContext);
-  PointerWidthInBits = C.getTargetInfo().getPointerWidth(0);
+  const TargetInfo &Target = C.getTargetInfo();
+  PointerWidthInBits = Target.getPointerWidth(0);
   PointerAlignInBytes =
-    C.toCharUnitsFromBits(C.getTargetInfo().getPointerAlign(C.getDefaultAS())).getQuantity();
+    C.toCharUnitsFromBits(Target.areAllPointersCapabilities()
+                          ? Target.getMemoryCapabilityAlign()
+                          : Target.getPointerAlign(0)).getQuantity();
   SizeAlignInBytes =
-    C.toCharUnitsFromBits(C.getTargetInfo().getPointerAlign(0)).getQuantity();
+    C.toCharUnitsFromBits(Target.getPointerAlign(0)).getQuantity();
   SizeSizeInBytes =
-    C.toCharUnitsFromBits(C.getTargetInfo().getMaxPointerWidth()).getQuantity();
+    C.toCharUnitsFromBits(Target.getMaxPointerWidth()).getQuantity();
   IntAlignInBytes =
-    C.toCharUnitsFromBits(C.getTargetInfo().getIntAlign()).getQuantity();
-  IntTy = llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getIntWidth());
-  IntPtrTy = llvm::IntegerType::get(LLVMContext,
-    C.getTargetInfo().getMaxPointerWidth());
-  Int8PtrTy = Int8Ty->getPointerTo(C.getDefaultAS());
-  Int8PtrPtrTy = Int8PtrTy->getPointerTo(C.getDefaultAS());
+    C.toCharUnitsFromBits(Target.getIntAlign()).getQuantity();
+  IntTy = llvm::IntegerType::get(LLVMContext, Target.getIntWidth());
+  IntPtrTy = llvm::IntegerType::get(LLVMContext, PointerWidthInBits);
+  Int8PtrTy = Int8Ty->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
+  Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
 
   RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();
   BuiltinCC = getTargetCodeGenInfo().getABIInfo().getBuiltinCC();
@@ -1389,7 +1391,7 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
   llvm::Constant *s = llvm::ConstantDataArray::getString(getLLVMContext(), Str);
   auto *gv = new llvm::GlobalVariable(getModule(), s->getType(),
     true, llvm::GlobalValue::PrivateLinkage, s, ".str", nullptr,
-    llvm::GlobalVariable::NotThreadLocal, getContext().getDefaultAS());
+    llvm::GlobalVariable::NotThreadLocal, getTargetCodeGenInfo().getDefaultAS());
   gv->setSection(AnnotationSection);
   gv->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   AStr = gv;
@@ -2456,9 +2458,19 @@ unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D,
     else
       AddrSpace = getContext().getTargetAddressSpace(LangAS::cuda_device);
   }
-  unsigned CapAS = Context.getTargetInfo() .AddressSpaceForCapabilities();
-  if (D && (D->getTLSKind() != VarDecl::TLS_None) && (AddrSpace == CapAS))
-    return 0;
+  // FIXME-cheri-qual: May need to handle GetGlobalVarAddressSpace carefully
+  const TargetInfo &Target = getContext().getTargetInfo();
+  if (Target.SupportsCapabilities()) {
+    // In the hybrid ABI, AddrSpace == 200 means that D is a
+    // capability-qualified pointer. 
+    // FIXME-cheri-qual: We currently can't handle thread-local storage
+    unsigned CapAS = getTargetCodeGenInfo().getMemoryCapabilityAS();
+    if (Target.areAllPointersCapabilities()) { // Pure ABI
+      return (D && (D->getTLSKind() != VarDecl::TLS_None)) ? 0 : CapAS;
+    } else if (AddrSpace == CapAS) { // Hybrid ABI
+      return 0;
+    }
+  }
 
   return AddrSpace;
 }
@@ -3108,7 +3120,7 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
     Aliasee = GetOrCreateLLVMFunction(AA->getAliasee(), DeclTy, GD,
                                       /*ForVTable=*/false);
   else {
-    AS = getContext().getDefaultAS();
+    AS = getTargetCodeGenInfo().getDefaultAS();
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
                                     llvm::PointerType::get(DeclTy, AS),
                                     /*D=*/nullptr);
@@ -3333,7 +3345,7 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
     new llvm::GlobalVariable(getModule(), C->getType(), /*isConstant=*/true,
                              llvm::GlobalValue::PrivateLinkage, C, ".str", nullptr,
                              llvm::GlobalVariable::NotThreadLocal,
-                             getContext().getDefaultAS());
+                             getTargetCodeGenInfo().getDefaultAS());
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
@@ -3469,7 +3481,7 @@ GenerateStringLiteral(llvm::Constant *C, llvm::GlobalValue::LinkageTypes LT,
   if (CGM.getLangOpts().OpenCL)
     AddrSpace = CGM.getContext().getTargetAddressSpace(LangAS::opencl_constant);
   else
-    AddrSpace = CGM.getContext().getDefaultAS();
+    AddrSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   llvm::Module &M = CGM.getModule();
   // Create a global variable for this string

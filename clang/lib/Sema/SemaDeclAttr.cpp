@@ -2053,7 +2053,7 @@ static void handleCheriMethodClass(Sema &S, Decl *D, const AttributeList &Attr) 
       unsigned Caps = 0;
       for (const auto &F : RD->fields()) {
         isValid = false;
-        if (F->getType().isCapabilityType(S.Context)) {
+        if (F->getType()->isMemoryCapabilityType(S.Context)) {
           Caps++;
           // The struct is correct, as long as no further fields are found.
           if (Caps == 2)

@@ -1056,7 +1056,7 @@ namespace {
   typedef ScopeRAII<false> BlockScopeRAII;
   typedef ScopeRAII<true> FullExpressionRAII;
   void GetIntCapLValue(APValue &Value, QualType QT, ASTContext &Ctx){
-    if (Value.isInt() && QT.isCapabilityType(Ctx)) {
+    if (Value.isInt() && QT->isMemoryCapabilityType(Ctx)) {
       APValue::LValueBase Base;
       APSInt Val = Value.getInt();
       CharUnits Size = CharUnits::fromQuantity(Val.isNegative() ?
@@ -5531,7 +5531,7 @@ public:
 static bool EvaluatePointer(const Expr* E, LValue& Result, EvalInfo &Info,
                             bool InvalidBaseOK) {
   assert(E->isRValue() && (E->getType()->hasPointerRepresentation() ||
-        E->getType().isCapabilityType(Info.Ctx)));
+        E->getType()->isMemoryCapabilityType(Info.Ctx)));
   return PointerExprEvaluator(Info, Result, InvalidBaseOK).Visit(E);
 }
 
@@ -5618,7 +5618,7 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
     return ZeroInitialization(E);
 
   case CK_IntegralCast:
-    if (!E->getType().isCapabilityType(Info.Ctx))
+    if (!E->getType()->isMemoryCapabilityType(Info.Ctx))
       return false;
   // Fall through
   case CK_IntegralToPointer: {
@@ -9997,7 +9997,7 @@ bool Expr::EvaluateAsInt(APSInt &Result, const ASTContext &Ctx,
     // For intcap_t, pass through the result even if it isn't actually an
     // int.
     if (DidEvaluate &&
-        getType().isCapabilityType(const_cast<ASTContext&>(Ctx)))
+        getType()->isMemoryCapabilityType(const_cast<ASTContext&>(Ctx)))
       if (ExprResult.Val.isLValue() &&
           ExprResult.Val.getLValueBase().isNull()) {
         // FIXME: Ugly hack!

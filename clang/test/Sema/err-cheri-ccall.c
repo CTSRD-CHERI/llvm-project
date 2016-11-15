@@ -2,11 +2,11 @@
 
 struct cheri_object_wrong
 {
-	__capability void *a, *b, *c;
+	void * __capability a, * __capability b, * __capability c;
 };
 struct cheri_object_wrong2
 {
-	__capability void *a, *b;
+	void * __capability a, * __capability b;
 	int c;
 };
 

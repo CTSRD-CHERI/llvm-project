@@ -753,7 +753,6 @@ ASTContext::ASTContext(LangOptions &LOpts, SourceManager &SM,
       SanitizerBL(new SanitizerBlacklist(LangOpts.SanitizerBlacklistFiles, SM)),
       AddrSpaceMap(nullptr), Target(nullptr), AuxTarget(nullptr),
       PrintingPolicy(LOpts),
-      DefaultAS(0),
       Idents(idents), Selectors(sels),
       BuiltinInfo(builtins), DeclarationNames(*this), ExternalSource(nullptr),
       Listener(nullptr), Comments(SM), CommentsLoaded(false),
@@ -1085,8 +1084,7 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
   assert(VoidTy.isNull() && "Context reinitialized?");
 
   this->Target = &Target;
-  DefaultAS = Target.AddressSpaceForStack();
-  
+
   this->AuxTarget = AuxTarget;
 
   ABI.reset(createCXXABI(Target));
@@ -1217,8 +1215,7 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
   ObjCSuperType = QualType();
 
   // void * type
-  VoidPtrTy = getPointerType(getAddrSpaceQualType(VoidTy,
-              DefaultAS))->getCanonicalTypeUnqualified();
+  VoidPtrTy = getPointerType(VoidTy, Target.areAllPointersCapabilities());
 
   // nullptr type (C++0x 2.14.7)
   InitBuiltinType(NullPtrTy,           BuiltinType::NullPtr);
@@ -1836,16 +1833,25 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     }
     break;
   case Type::ObjCObjectPointer: {
-    unsigned AS = Target->AddressSpaceForObjC();
-    Width = Target->getPointerWidth(AS);
-    Align = Target->getPointerAlign(AS);
+    if (Target->areAllPointersCapabilities()) {
+      Width = Target->getMemoryCapabilityWidth();
+      Align = Target->getMemoryCapabilityAlign();
+    } else {
+      Width = Target->getPointerWidth(0);
+      Align = Target->getPointerAlign(0);
+    }
     break;
    }
   case Type::BlockPointer: {
-    unsigned AS = getTargetAddressSpace(
-        cast<BlockPointerType>(T)->getPointeeType());
-    Width = Target->getPointerWidth(AS);
-    Align = Target->getPointerAlign(AS);
+    if (Target->areAllPointersCapabilities()) {
+      Width = Target->getMemoryCapabilityWidth();
+      Align = Target->getMemoryCapabilityAlign();
+    } else {
+      unsigned AS = getTargetAddressSpace(
+          cast<BlockPointerType>(T)->getPointeeType());
+      Width = Target->getPointerWidth(AS);
+      Align = Target->getPointerAlign(AS);
+    }
     break;
   }
   case Type::LValueReference:
@@ -1863,16 +1869,20 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     if (PointeeTy->isFunctionProtoType()) {
       auto FPT = PointeeTy->getAs<FunctionProtoType>();
       if (FPT->getCallConv() == CC_CheriCCallback) {
-        unsigned AS = Target->AddressSpaceForCapabilities();
-        Width = Target->getPointerWidth(AS) * 3;
-        Align = Target->getPointerAlign(AS);
+        Width = Target->getMemoryCapabilityWidth() * 3;
+        Align = Target->getMemoryCapabilityAlign();
         break;
       }
     }
 
-    unsigned AS = getTargetAddressSpace(PointeeTy);
-    Width = Target->getPointerWidth(AS);
-    Align = Target->getPointerAlign(AS);
+    if (T->isMemoryCapabilityType(*this)) {
+      Width = Target->getMemoryCapabilityWidth();
+      Align = Target->getMemoryCapabilityAlign();
+    } else {
+      unsigned AS = getTargetAddressSpace(PointeeTy);
+      Width = Target->getPointerWidth(AS);
+      Align = Target->getPointerAlign(AS);
+    }
     break;
   }
   case Type::MemberPointer: {
@@ -2511,11 +2521,11 @@ QualType ASTContext::getComplexType(QualType T) const {
 
 /// getPointerType - Return the uniqued reference to the type for a pointer to
 /// the specified type.
-QualType ASTContext::getPointerType(QualType T) const {
+QualType ASTContext::getPointerType(QualType T, bool isMemCap) const {
   // Unique pointers, to guarantee there is only one pointer of a particular
   // structure.
   llvm::FoldingSetNodeID ID;
-  PointerType::Profile(ID, T);
+  PointerType::Profile(ID, T, isMemCap);
 
   void *InsertPos = nullptr;
   if (PointerType *PT = PointerTypes.FindNodeOrInsertPos(ID, InsertPos))
@@ -2525,13 +2535,13 @@ QualType ASTContext::getPointerType(QualType T) const {
   // so fill in the canonical type field.
   QualType Canonical;
   if (!T.isCanonical()) {
-    Canonical = getPointerType(getCanonicalType(T));
+    Canonical = getPointerType(getCanonicalType(T), isMemCap);
 
     // Get the new insert position for the node we care about.
     PointerType *NewIP = PointerTypes.FindNodeOrInsertPos(ID, InsertPos);
     assert(!NewIP && "Shouldn't be in the map!"); (void)NewIP;
   }
-  PointerType *New = new (*this, TypeAlignment) PointerType(T, Canonical);
+  PointerType *New = new (*this, TypeAlignment) PointerType(T, Canonical, isMemCap);
   Types.push_back(New);
   PointerTypes.InsertNode(New, InsertPos);
   return QualType(New, 0);
@@ -2622,8 +2632,6 @@ QualType ASTContext::getBlockPointerType(QualType T) const {
       BlockPointerTypes.FindNodeOrInsertPos(ID, InsertPos);
     assert(!NewIP && "Shouldn't be in the map!"); (void)NewIP;
   }
-  if (DefaultAS != 0)
-    T = getAddrSpaceQualType(T, DefaultAS);
   BlockPointerType *New
     = new (*this, TypeAlignment) BlockPointerType(T, Canonical);
   Types.push_back(New);
@@ -5012,16 +5020,9 @@ const ArrayType *ASTContext::getAsArrayType(QualType T) const {
 }
 
 QualType ASTContext::getAdjustedParameterType(QualType T) const {
-  if (T->isFunctionType())
+  if (T->isFunctionType() || T->isArrayType())
     return getDecayedType(T);
-  if (T->isArrayType()) {
-    if (T.getAddressSpace() == 0)
-      T = getAddrSpaceQualType(T, DefaultAS);
-    T = getDecayedType(T);
-  }
-  if (T->isVoidType() || T.getAddressSpace())
-    return T;
-  return getAddrSpaceQualType(T, DefaultAS);
+  return T;
 }
 
 QualType ASTContext::getSignatureParameterType(QualType T) const {
@@ -6619,8 +6620,8 @@ TypedefDecl *ASTContext::getObjCIdDecl() const {
 
 TypedefDecl *ASTContext::getObjCSelDecl() const {
   if (!ObjCSelDecl) {
-    QualType T = getPointerType(getAddrSpaceQualType(ObjCBuiltinSelTy,
-                DefaultAS));
+    QualType T = getPointerType(ObjCBuiltinSelTy,
+                                getTargetInfo().areAllPointersCapabilities());
     ObjCSelDecl = buildImplicitTypedef(T, "SEL");
   }
   return ObjCSelDecl;
@@ -6684,8 +6685,8 @@ ObjCInterfaceDecl *ASTContext::getObjCProtocolDecl() const {
 static TypedefDecl *CreateCharPtrNamedVaListDecl(const ASTContext *Context,
                                                  StringRef Name) {
   // typedef char* __builtin[_ms]_va_list;
-  QualType T = Context->getAddrSpaceQualType(Context->CharTy, Context->getDefaultAS());
-  T = Context->getPointerType(T);
+  QualType T = Context->getPointerType(Context->CharTy,
+                      Context->getTargetInfo().areAllPointersCapabilities());
   return Context->buildImplicitTypedef(T, Name);
 }
 
@@ -6699,8 +6700,8 @@ static TypedefDecl *CreateCharPtrBuiltinVaListDecl(const ASTContext *Context) {
 
 static TypedefDecl *CreateVoidPtrBuiltinVaListDecl(const ASTContext *Context) {
   // typedef void* __builtin_va_list;
-  QualType T = Context->getAddrSpaceQualType(Context->VoidTy, Context->getDefaultAS());
-  T = Context->getPointerType(T);
+  QualType T = Context->getPointerType(Context->VoidTy,
+                              Context->getTargetInfo().areAllPointersCapabilities());
   return Context->buildImplicitTypedef(T, "__builtin_va_list");
 }
 
@@ -8550,8 +8551,7 @@ unsigned ASTContext::getIntWidth(QualType T) const {
 unsigned ASTContext::getIntRange(QualType T) const {
   if (Target->SupportsCapabilities()) {
     if (T->isPointerType())
-     if (T->getAs<PointerType>()->getPointeeType().getAddressSpace() ==
-         (unsigned)Target->AddressSpaceForCapabilities())
+     if (T->getAs<PointerType>()->isMemoryCapability())
       return Target->getPointerWidth(0);
     if (T->isBuiltinType()) {
       int K = T->getAs<BuiltinType>()->getKind();
@@ -8757,7 +8757,6 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
     if (Type->isArrayType())
       Type = Context.getArrayDecayedType(Type);
     else {
-      Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
       Type = Context.getLValueReferenceType(Type);
     }
     break;
@@ -8806,7 +8805,6 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       Error = ASTContext::GE_Missing_stdio;
       return QualType();
     }
-    Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
     break;
   case 'J':
     if (Signed)
@@ -8818,7 +8816,6 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       Error = ASTContext::GE_Missing_setjmp;
       return QualType();
     }
-    Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
     break;
   case 'K':
     assert(HowLong == 0 && !Signed && !Unsigned && "Bad modifiers for 'K'!");
@@ -8828,7 +8825,6 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       Error = ASTContext::GE_Missing_ucontext;
       return QualType();
     }
-    Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
     break;
   case 'p':
     Type = Context.getProcessIDType();
@@ -8849,11 +8845,15 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       if (End != Str && AddrSpace != 0) {
         Type = Context.getAddrSpaceQualType(Type, AddrSpace);
         Str = End;
-      } else {
-        Type = Context.getAddrSpaceQualType(Type, Context.getDefaultAS());
       }
-      if (c == '*')
-        Type = Context.getPointerType(Type);
+      if (c == '*') {
+        bool IsMemCap = false;
+        if (*Str == 'm') {
+          IsMemCap = true;
+          Str++;
+        }
+        Type = Context.getPointerType(Type, IsMemCap);
+      }
       else
         Type = Context.getLValueReferenceType(Type);
       break;

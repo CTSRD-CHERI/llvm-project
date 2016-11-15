@@ -1079,10 +1079,9 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
           CharUnits Alignment = getContext().getDeclAlign(Key);
           Address Addr(KeyV, Alignment);
           KeyV = Builder.CreateLoad(Addr);
-          unsigned CapAS = CGM.getContext().getTargetInfo()
-            .AddressSpaceForCapabilities();
           // If this is CHERI, enforce this in hardware
-          if (Ty->getPointeeType().getAddressSpace() == CapAS) {
+          if (Ty->isMemoryCapabilityType(getContext())) {
+            unsigned CapAS = CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
             llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_seal);
             llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
             RetV = Builder.CreateCall(F,
@@ -1628,7 +1627,7 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
     EmitAutoVarDecl(*S.getConditionVariable());
   llvm::Value *CondV = EmitScalarExpr(S.getCond());
   // If we're an intcap_t, then we actually want to switch on the offset.
-  if (S.getCond()->getType().isCapabilityType(getContext()))
+  if (S.getCond()->getType()->isMemoryCapabilityType(getContext()))
     CondV = getPointerOffset(CondV);
 
   // Create basic block to hold stuff that comes after switch

@@ -3957,7 +3957,7 @@ static CGCallee EmitDirectCallee(CodeGenFunction &CGF, const FunctionDecl *FD) {
   llvm::Type *calleePtrTy = calleePtr->getType();
   auto &TI = CGF.getContext().getTargetInfo();
   if (TI.areAllPointersCapabilities()) {
-    unsigned CapAS = TI.AddressSpaceForCapabilities();
+    unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
     if (calleePtrTy->getPointerAddressSpace() != CapAS) {
       llvm::Type *CapTy = cast<llvm::PointerType>(calleePtrTy)
         ->getElementType()->getPointerTo(CapAS);

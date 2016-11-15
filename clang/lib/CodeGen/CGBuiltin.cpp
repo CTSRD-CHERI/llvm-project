@@ -1325,7 +1325,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     Value *F = CGM.getIntrinsic(Intrinsic::eh_dwarf_cfa);
     F = Builder.CreateCall(F, llvm::ConstantInt::get(Int32Ty, Offset));
-    unsigned AS = getContext().getDefaultAS();
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     if (AS != 0)
       F = Builder.CreateAddrSpaceCast(F, Int8Ty->getPointerTo(AS));
     return RValue::get(F);
@@ -2341,7 +2341,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     auto ResultType = llvm::StructType::get( ClsTy, MethNoTy, nullptr);
     LValue Obj = EmitAggExprToLValue(E->getArg(1));
     auto ClsVal = Builder.CreateBitCast(Obj.getAddress(),
-        ClsTy->getPointerTo(getContext().getDefaultAS()));
+        ClsTy->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()));
     llvm::Value *Struct = llvm::Constant::getNullValue(ResultType);
     llvm::Value *ObjVal = Builder.CreateLoad(ClsVal);
     ObjVal = Builder.CreateBitCast(ObjVal, ClsTy);
@@ -8039,6 +8039,31 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 
 Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
                                             const CallExpr *E) {
+  if (BuiltinID == Builtin::BI__builtin_memcap_callback_create) {
+    StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
+    auto Fn = cast<DeclRefExpr>(E->getArg(2));
+    StringRef FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();
+    auto *MethodNumVar =
+      CGM.EmitSandboxRequiredMethod(ClassName, FunctionName);
+    // Load the global and use it in the call
+    // FIXME: EmitSandboxRequiredMethod should return an Address so that we
+    // don't have to know the alignment here.
+    auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar,
+          CharUnits::fromQuantity(8)));
+
+    auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
+    auto ClsTy = ConvertType(CGM.getContext().getCHERIClassType());
+    auto ResultType = llvm::StructType::get( ClsTy, MethNoTy, nullptr);
+    LValue Obj = EmitAggExprToLValue(E->getArg(1));
+    auto ClsVal = Builder.CreateBitCast(Obj.getAddress(),
+        ClsTy->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()));
+    llvm::Value *Struct = llvm::Constant::getNullValue(ResultType);
+    llvm::Value *ObjVal = Builder.CreateLoad(ClsVal);
+    ObjVal = Builder.CreateBitCast(ObjVal, ClsTy);
+    Struct = Builder.CreateInsertValue(Struct, ObjVal, {0});
+    Struct = Builder.CreateInsertValue(Struct, MethodNum, {1});
+    return Struct;
+  }
   return 0;
 }
 

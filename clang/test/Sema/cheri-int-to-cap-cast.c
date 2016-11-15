@@ -1,8 +1,8 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -fsyntax-only -verify
-__capability void *b;
-__capability void *c;
+void * __capability b;
+void * __capability c;
 void a(int x, long long y)
 {
-	b = (__capability void *)x; // expected-warning {{cast to '__capability void *' from smaller integer type 'int'}}
-	c = (__capability void *)y; // Should be no warning here - long long is 64 bits.
+	b = (void * __capability)x; // expected-warning {{cast to 'void * __capability' from smaller integer type 'int'}}
+	c = (void * __capability)y; // Should be no warning here - long long is 64 bits.
 }

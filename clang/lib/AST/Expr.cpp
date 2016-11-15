@@ -3230,8 +3230,7 @@ Expr::isNullPointerConstant(ASTContext &Ctx,
             Q.removeAddressSpace();
           else
             IsASValid = false;
-        } else if ((int)Q.getAddressSpace() == Ctx.getTargetInfo().AddressSpaceForCapabilities())
-          Q.removeAddressSpace();
+        }
 
         if (IsASValid && !Q.hasQualifiers() &&
             Pointee->isVoidType() &&                      // to void*

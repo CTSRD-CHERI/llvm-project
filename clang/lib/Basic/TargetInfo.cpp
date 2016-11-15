@@ -494,7 +494,7 @@ bool TargetInfo::validateOutputConstraint(ConstraintInfo &Info) const {
       Info.setAllowsRegister();
       break;
     case 'm': // memory operand.
-      if (SupportsCapabilities() && (AddressSpaceForStack() != 0))
+      if (areAllPointersCapabilities())
         break;
     case 'o': // offsetable memory operand.
     case 'V': // non-offsetable memory operand.

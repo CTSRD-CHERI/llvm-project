@@ -179,7 +179,7 @@ protected:
     auto *ConstStr = TheModule.getGlobalVariable(Name);
     if (!ConstStr) {
       llvm::Constant *value = llvm::ConstantDataArray::getString(VMContext,Str);
-      unsigned AS = CGM.getContext().getDefaultAS();
+      unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
       ConstStr = new llvm::GlobalVariable(TheModule, value->getType(), true,
               llvm::GlobalValue::LinkOnceODRLinkage, value, Name,
               nullptr, llvm::GlobalVariable::NotThreadLocal, AS);
@@ -196,7 +196,7 @@ protected:
                                    StringRef Name="",
                                    llvm::GlobalValue::LinkageTypes linkage
                                          =llvm::GlobalValue::InternalLinkage) {
-    unsigned AS = CGM.getContext().getDefaultAS();
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     auto GV = new llvm::GlobalVariable(TheModule, C->getType(), false,
                                        linkage, C, Name, nullptr,
                                        llvm::GlobalVariable::NotThreadLocal,
@@ -705,7 +705,7 @@ class CGObjCGNUstep : public CGObjCGNU {
   public:
     CGObjCGNUstep(CodeGenModule &Mod) : CGObjCGNU(Mod, 9, 3) {
       const ObjCRuntime &R = CGM.getLangOpts().ObjCRuntime;
-      unsigned AS = CGM.getContext().getDefaultAS();
+      unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
       llvm::StructType *SlotStructTy = llvm::StructType::get(PtrTy,
           PtrTy, PtrTy, IntTy, IMPTy, nullptr);
@@ -876,7 +876,7 @@ void CGObjCGNU::EmitClassRef(const std::string &className) {
     return;
   std::string symbolName = "__objc_class_name_" + className;
   llvm::GlobalVariable *ClassSymbol = TheModule.getGlobalVariable(symbolName);
-  unsigned AS = CGM.getContext().getDefaultAS();
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (!ClassSymbol) {
     ClassSymbol = new llvm::GlobalVariable(TheModule, LongTy, false,
                                            llvm::GlobalValue::ExternalLinkage,
@@ -907,7 +907,7 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
     ProtocolVersion(protocolClassVersion) {
 
   msgSendMDKind = VMContext.getMDKindID("GNUObjCMessageSend");
-  unsigned AS = CGM.getContext().getDefaultAS();
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   CodeGenTypes &Types = CGM.getTypes();
   IntTy = cast<llvm::IntegerType>(
@@ -1103,7 +1103,7 @@ llvm::Value *CGObjCGNU::GetSelector(CodeGenFunction &CGF, Selector Sel,
   }
   if (!SelValue) {
     SelValue = llvm::GlobalAlias::create(
-        SelectorTy->getElementType(), CGF.getContext().getDefaultAS(),
+        SelectorTy->getElementType(), CGF.CGM.getTargetCodeGenInfo().getDefaultAS(),
         llvm::GlobalValue::PrivateLinkage, ".objc_selector_" +
         Sel.getAsString(), &TheModule);
     Types.emplace_back(TypeEncoding, SelValue);
@@ -1197,7 +1197,7 @@ llvm::Constant *CGObjCGNUstep::GetEHType(QualType T) {
   const char *vtableName = "_ZTVN7gnustep7libobjc22__objc_class_type_infoE";
   auto *Vtable = TheModule.getGlobalVariable(vtableName);
   if (!Vtable) {
-    unsigned AS = CGM.getContext().getDefaultAS();
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     Vtable = new llvm::GlobalVariable(TheModule, PtrToInt8Ty, true,
                                       llvm::GlobalValue::ExternalLinkage,
                                       nullptr, vtableName, nullptr,
@@ -1245,7 +1245,7 @@ ConstantAddress CGObjCGNU::GenerateConstantString(const StringLiteral *SL) {
   llvm::Constant *isa = TheModule.getNamedGlobal(Sym);
 
   if (!isa) {
-    unsigned AS = CGM.getContext().getDefaultAS();
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     isa = new llvm::GlobalVariable(TheModule, IdTy, /* isConstant */false,
             llvm::GlobalValue::ExternalWeakLinkage, nullptr, Sym, nullptr,
             llvm::GlobalVariable::NotThreadLocal, AS);
@@ -1298,7 +1298,7 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
   ActualArgs.addFrom(CallArgs);
 
   MessageSendInfo MSI = getMessageSendInfo(Method, ResultType, ActualArgs);
-  unsigned AS = CGM.getContext().getDefaultAS();
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   llvm::Value *ReceiverClass = nullptr;
   if (isCategoryImpl) {
@@ -1457,7 +1457,7 @@ CGObjCGNU::GenerateMessageSend(CodeGenFunction &CGF,
 
   // Get the IMP to call
   llvm::Value *imp;
-  unsigned AS = CGM.getContext().getDefaultAS();
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   // If we have non-legacy dispatch specified, we try using the objc_msgSend()
   // functions.  These are not supported on all platforms (or all runtimes on a
@@ -1779,7 +1779,7 @@ llvm::Value *CGObjCGNU::GenerateProtocolRef(CodeGenFunction &CGF,
   llvm::Value *protocol = ExistingProtocols[PD->getNameAsString()];
   llvm::Type *T =
     CGM.getTypes().ConvertType(CGM.getContext().getObjCProtoType());
-  unsigned AS = CGF.getContext().getDefaultAS();
+  unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
   return CGF.Builder.CreateBitCast(protocol, llvm::PointerType::get(T, AS));
 }
 
@@ -2188,7 +2188,7 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
     SuperClassName = SuperClassDecl->getNameAsString();
     EmitClassRef(SuperClassName);
   }
-  unsigned AS = CGM.getContext().getDefaultAS();
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   // Get the class name
   ObjCInterfaceDecl *ClassDecl =
@@ -2426,7 +2426,7 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
 
   // Add all referenced protocols to a category.
   GenerateProtocolHolderCategory();
-  unsigned AS = CGM.getContext().getDefaultAS();
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   llvm::StructType *selStructTy =
     dyn_cast<llvm::StructType>(SelectorTy->getElementType());
@@ -2854,7 +2854,7 @@ llvm::GlobalVariable *CGObjCGNU::ObjCIvarOffsetVariable(
     // to replace it with the real version for a library.  In non-PIC code you
     // must compile with the fragile ABI if you want to use ivars from a
     // GCC-compiled class.
-    unsigned AS = CGM.getContext().getDefaultAS();
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     if (CGM.getLangOpts().PICLevel) {
       llvm::GlobalVariable *IvarOffsetGV = new llvm::GlobalVariable(TheModule,
             Int32Ty, false,
@@ -2923,7 +2923,7 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
       Interface->getNameAsString() +"." + Ivar->getNameAsString();
     CharUnits Align = CGM.getIntAlign();
     llvm::Value *Offset = TheModule.getGlobalVariable(name);
-    unsigned AS = CGM.getContext().getDefaultAS();
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     if (!Offset) {
       auto GV = new llvm::GlobalVariable(TheModule, IntTy,
           false, llvm::GlobalValue::LinkOnceAnyLinkage,

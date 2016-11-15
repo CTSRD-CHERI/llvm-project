@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 %s -fsyntax-only -verify -triple cheri-unknown-freebsd
 // expected-no-diagnostics
 #define NULL (void*)0
-int func(__capability char *ptr)
+int func(char * __capability ptr)
 {
         if (ptr == NULL)
                 return (0);

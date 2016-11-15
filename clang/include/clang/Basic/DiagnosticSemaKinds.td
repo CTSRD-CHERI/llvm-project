@@ -952,6 +952,10 @@ def err_cheri_method_class_must_have_correct_type: Error<
   "the argument to attribute '%0' must be a CHERI class">;
 def err_cheri_invalid_callback_cast: Error<
   "CHERI callback function pointers may only be cast to other CHERI callback types">;
+def err_memory_capability_attribute_ambiguous : Error<
+  "use of __capability is ambiguous">;
+def err_memory_capability_attribute_pointers_only : Error<
+  "__capability only applies to pointers; type here is %0">;
 def err_objc_var_decl_inclass : 
     Error<"cannot declare variable inside @interface or @protocol">;
 def err_missing_method_context : Error<

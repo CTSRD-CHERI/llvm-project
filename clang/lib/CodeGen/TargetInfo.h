@@ -218,6 +218,13 @@ public:
                                        llvm::StringRef Value,
                                        llvm::SmallString<32> &Opt) const {}
 
+  virtual unsigned getDefaultAS() const { return 0; }
+  
+  virtual unsigned getMemoryCapabilityAS() const { 
+    assert(0 && "Target does not support capabilities!\n");
+    return 0;
+  }
+
   /// Returns true if the type is a scalar type that is represented as a
   /// capability or an aggregate type that contains one or more capabilities.
   virtual bool containsCapabilities(QualType Ty) const { return false; }

@@ -318,6 +318,12 @@ public:
     return 0;
   }
 
+  virtual uint64_t getMemoryCapabilityWidth() const { return -1; }
+
+  virtual uint64_t getMemoryCapabilityAlign() const { return -1; }
+
+  virtual uint64_t getPointerRangeForMemoryCapability() const { return -1; }
+
   /// \brief Return the size of '_Bool' and C++ 'bool' for this target, in bits.
   unsigned getBoolWidth() const { return BoolWidth; }
 
@@ -1018,20 +1024,6 @@ public:
 
   /// SupportsCapabilities - Returns true if the target supports capabilities.
   virtual bool SupportsCapabilities() const { return false; }
-
-  /// AddressSpaceForCapabilities - If this target supports capabilities,
-  /// returns the address space used to represent them.  The result is
-  /// undefined otherwise.
-  virtual int AddressSpaceForCapabilities() const { return -1; }
-
-  /// AddressSpaceForStack - Returns the address space to use for stack
-  /// allocations
-  virtual int AddressSpaceForStack() const { return 0; }
-
-  /// AddressSpaceForObjC - Returns the address space to use for 
-  /// Objective-C objects.
-  virtual int AddressSpaceForObjC() const { return 0; }
-
 
   /// Controls if __builtin_longjmp / __builtin_setjmp can be lowered to
   /// llvm.eh.sjlj.longjmp / llvm.eh.sjlj.setjmp.

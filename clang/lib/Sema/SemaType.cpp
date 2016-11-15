@@ -1902,25 +1902,26 @@ QualType Sema::BuildPointerType(QualType T,
   if (getLangOpts().ObjCAutoRefCount)
     T = inferARCLifetimeForPointee(*this, T, Loc, /*reference*/ false);
 
-  if (T.getAddressSpace() == 0) {
-    int AS;
+  bool IsMemCap = false;
+  //if (T.getAddressSpace() == 0) {
+  //  int AS;
     switch (PointerInterpretation) {
       case PIK_Capability:
-        AS =Context.getTargetInfo().AddressSpaceForCapabilities();
+        IsMemCap = true;
         break;
       case PIK_Integer:
-        AS = 0;
+        IsMemCap = false;
         break;
       case PIK_Default:
-        AS = Context.getDefaultAS();
+        IsMemCap = Context.getTargetInfo().areAllPointersCapabilities();
         break;
       case PIK_Invalid:
         llvm_unreachable("Invalid pointer interpretation!");
     }
-    T = Context.getAddrSpaceQualType(T, AS);
-  }
+    //T = Context.getAddrSpaceQualType(T, AS);
+  //}
   // Build the pointer type.
-  return Context.getPointerType(T);
+  return Context.getPointerType(T, IsMemCap);
 }
 
 /// \brief Build a reference type.
@@ -4108,10 +4109,6 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         D.setInvalidType(true);
         // Build the type anyway.
       }
-      // Make sure that array elements are in the correct AS so that array to
-      // pointer decay works correctly.
-      if ((T.getAddressSpace() == 0) && (Context.getDefaultAS() != 0))
-        T = Context.getAddrSpaceQualType(T, Context.getDefaultAS());
       DeclaratorChunk::ArrayTypeInfo &ATI = DeclType.Arr;
       Expr *ArraySize = static_cast<Expr*>(ATI.NumElts);
       ArrayType::ArraySizeModifier ASM;
@@ -6813,17 +6810,15 @@ static void HandleOpenCLAccessAttr(QualType &CurType, const AttributeList &Attr,
 /// HandleMemoryCapabilityAttr - Process the memory_capability attribute. It is only
 /// applicable to pointer types and specifies that this pointer should be treated as
 /// a capability.
-static void HandleMemoryCapabilityAttr(QualType& CurType, const AttributeList &Attr,
-                                 Sema &S) {
-  // CurType should be a pointer type
-  /*if (!CurType->isPointerType()) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_pointers_only) << CurType;
-    Attr.setInvalid();
+static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &state,
+                                       TypeAttrLocation TAL, AttributeList& attr) {
+  static bool isDeprecatedUse = false;
+  Declarator &declarator = state.getDeclarator();
+  Sema& S = state.getSema();
+  if (const PointerType *PT = CurType->getAs<PointerType>()) {
+    CurType = S.Context.getPointerType(PT->getPointeeType(), true);
     return;
-  }*/
-
-  // We currently translate this attribute to address_space(200)
-  CurType = S.Context.getAddrSpaceQualType(CurType, 200);
+  }
 }
 
 static void processTypeAttrs(TypeProcessingState &state, QualType &type,
@@ -7001,8 +6996,8 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       break;
 
     case AttributeList::AT_MemoryCapability:
-      HandleMemoryCapabilityAttr(type, attr, state.getSema());
       attr.setUsedAsTypeAttr();
+      HandleMemoryCapabilityAttr(type, state, TAL, attr);
       break;
     }
   }
