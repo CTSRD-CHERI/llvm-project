@@ -57,11 +57,13 @@
 //  I   -> Required to constant fold to an integer constant expression.
 //
 // Types may be postfixed with the following modifiers:
-// * -> pointer (optionally followed by an address space number, if no address
-//               space is specified than any address space will be accepted)
+// * -> pointer (optionally followed by an address space number, or 'm' for 
+//      memory capabilities. If no address space is specified than
+//      any address space will be accepted)
 // & -> reference (optionally followed by an address space number)
 // C -> const
 // D -> volatile
+// m -> memory capability
 
 // The third value provided to the macro specifies information about attributes
 // of the function.  These must be kept in sync with the predicates in the
@@ -1345,30 +1347,30 @@ BUILTIN(__builtin_operator_delete, "vv*", "n")
 BUILTIN(__builtin_char_memchr, "c*cC*iz", "n")
 
 // Memory capability builtins
-BUILTIN(__builtin_memcap_length_set, "v*200vC*200z", "nc")
-BUILTIN(__builtin_memcap_bounds_set, "v*200vC*200z", "nc")
-BUILTIN(__builtin_memcap_length_get, "zvC*200", "nc")
-BUILTIN(__builtin_memcap_base_increment, "v*200vC*200z", "nc")
-BUILTIN(__builtin_memcap_base_get, "zvC*200", "nc")
-BUILTIN(__builtin_memcap_perms_and, "v*200vC*200z", "nc")
-BUILTIN(__builtin_memcap_perms_get, "zvC*200", "nc")
-BUILTIN(__builtin_memcap_type_get, "zvC*200", "nc")
-BUILTIN(__builtin_memcap_tag_get, "zvC*200", "nc")
-BUILTIN(__builtin_memcap_sealed_get, "zvC*200", "nc")
-BUILTIN(__builtin_memcap_tag_clear, "v*200vC*200", "nc")
-BUILTIN(__builtin_memcap_seal, "v*200vC*200vC*200", "nc")
-BUILTIN(__builtin_memcap_unseal, "v*200vC*200vC*200", "nc")
-BUILTIN(__builtin_memcap_type_check, "vvC*200vC*200", "nc")
-BUILTIN(__builtin_memcap_perms_check, "vvC*200Cz", "nc")
-BUILTIN(__builtin_memcap_global_data_get, "v*200", "nc")
-BUILTIN(__builtin_memcap_program_counter_get, "v*200", "nc")
-BUILTIN(__builtin_memcap_offset_increment, "v*200vC*200z", "nc")
-BUILTIN(__builtin_memcap_offset_set, "v*200vC*200z", "nc")
-BUILTIN(__builtin_memcap_offset_get, "zvC*200", "nc")
-BUILTIN(__builtin_memcap_base_only_increment, "v*200vC*200z", "nc")
+BUILTIN(__builtin_memcap_length_set, "v*mvC*mz", "nc")
+BUILTIN(__builtin_memcap_bounds_set, "v*mvC*mz", "nc")
+BUILTIN(__builtin_memcap_length_get, "zvC*m", "nc")
+BUILTIN(__builtin_memcap_base_increment, "v*mvC*mz", "nc")
+BUILTIN(__builtin_memcap_base_get, "zvC*m", "nc")
+BUILTIN(__builtin_memcap_perms_and, "v*mvC*mz", "nc")
+BUILTIN(__builtin_memcap_perms_get, "zvC*m", "nc")
+BUILTIN(__builtin_memcap_type_get, "zvC*m", "nc")
+BUILTIN(__builtin_memcap_tag_get, "zvC*m", "nc")
+BUILTIN(__builtin_memcap_sealed_get, "zvC*m", "nc")
+BUILTIN(__builtin_memcap_tag_clear, "v*mvC*m", "nc")
+BUILTIN(__builtin_memcap_seal, "v*mvC*mvC*m", "nc")
+BUILTIN(__builtin_memcap_unseal, "v*mvC*mvC*m", "nc")
+BUILTIN(__builtin_memcap_type_check, "vvC*mvC*m", "nc")
+BUILTIN(__builtin_memcap_perms_check, "vvC*mCz", "nc")
+BUILTIN(__builtin_memcap_global_data_get, "v*m", "nc")
+BUILTIN(__builtin_memcap_program_counter_get, "v*m", "nc")
+BUILTIN(__builtin_memcap_offset_increment, "v*mvC*mz", "nc")
+BUILTIN(__builtin_memcap_offset_set, "v*mvC*mz", "nc")
+BUILTIN(__builtin_memcap_offset_get, "zvC*m", "nc")
+BUILTIN(__builtin_memcap_base_only_increment, "v*mvC*mz", "nc")
 BUILTIN(__builtin_memcap_callback_create, "v.", "nct")
 
-BUILTIN(__builtin_memcap_stack_get, "v*200", "nc")
+BUILTIN(__builtin_memcap_stack_get, "v*m", "nc")
 
 // Safestack builtins
 BUILTIN(__builtin___get_unsafe_stack_start, "v*", "Fn")
