@@ -6815,10 +6815,91 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
   static bool isDeprecatedUse = false;
   Declarator &declarator = state.getDeclarator();
   Sema& S = state.getSema();
-  if (const PointerType *PT = CurType->getAs<PointerType>()) {
-    CurType = S.Context.getPointerType(PT->getPointeeType(), true);
-    return;
+
+  if (TAL == TAL_DeclSpec) {
+    // possible deprecated use; move to the outermost pointer declarator
+    // unless this is a typedef'd pointer type
+    if (isa<TypedefType>(CurType) && CurType->isPointerType()) {
+      // FIXME-cheri-qual: Create a new instance of this Typedef but whereby
+      // the underlying pointer type is now a memory capability
+    } else {
+      isDeprecatedUse = true;
+      for (unsigned i = state.getCurrentChunkIndex(); i != 0; --i) {
+        DeclaratorChunk &chunk = declarator.getTypeObject(i-1);
+        switch (chunk.Kind) {
+          case DeclaratorChunk::Pointer: {
+            AttributeList *attrCopy = declarator.getAttributePool()
+                   .create(attr.getName(), attr.getRange(),
+                           attr.getScopeName(), attr.getScopeLoc(),
+                           nullptr, 0, AttributeList::AS_GNU);
+            spliceAttrIntoList(*attrCopy, chunk.getAttrListRef());
+            return;
+          }
+          case DeclaratorChunk::BlockPointer:
+          case DeclaratorChunk::Paren:
+          case DeclaratorChunk::Array:
+          case DeclaratorChunk::Function:
+          case DeclaratorChunk::Reference:
+          case DeclaratorChunk::MemberPointer:
+            continue;
+        }
+      }
+    }
+  } else {
+    unsigned currChunkIdx = state.getCurrentChunkIndex();
+    DeclaratorChunk &chunk = declarator.getTypeObject(state.getCurrentChunkIndex());
+    if (chunk.Kind == DeclaratorChunk::Pointer) {
+      if (isDeprecatedUse) {
+        // Check for an ambiguous use where this is more than one pointer
+        // level, like __capability T **. We do this by checking that the next
+        // chunk isn't a pointer without the attribute.
+        if (currChunkIdx > 0) {
+          DeclaratorChunk &nextChunk = declarator.getTypeObject(currChunkIdx-1);
+          if (nextChunk.Kind == DeclaratorChunk::Pointer) {
+            const AttributeList *Attr = nextChunk.getAttrs();
+            while (Attr && Attr->getKind() != AttributeList::AT_MemoryCapability)
+              Attr = Attr->getNext();
+            if (!Attr) {
+              isDeprecatedUse = false;
+              S.Diag(nextChunk.Loc, diag::err_memory_capability_attribute_ambiguous);
+              return;
+            }
+          }
+        }
+
+        // Output a deprecated usage warning with a FixItHint
+        SourceRange AttrRange;
+        SourceLocation AttrLoc = attr.getLoc();
+        if (AttrLoc.isValid()) {
+          // The memory_capability attribute should always be inserted via
+          // the predefined __capability macro, but we also cater for when it
+          // isn't in the else branch
+          if (AttrLoc.isMacroID()) {
+            std::pair<SourceLocation, SourceLocation> expansionRange 
+                        = S.SourceMgr.getImmediateExpansionRange(AttrLoc);
+            AttrRange.setBegin(expansionRange.first);
+            AttrRange.setEnd(expansionRange.second);
+          } else {
+            // Calculate extended range to include the preceding
+            // __attribute(( and following ))
+            AttrRange.setBegin(AttrLoc.getLocWithOffset(-15));
+            AttrRange.setEnd(AttrLoc.getLocWithOffset(18));
+          }
+        }
+        S.Diag(chunk.Loc, diag::warn_memory_capability_attribute_location)
+            << FixItHint::CreateRemoval(AttrRange)
+            << FixItHint::CreateInsertion(chunk.Loc.getLocWithOffset(1),
+                                          " __capability ");
+        isDeprecatedUse = false;
+      }
+      if (const PointerType *PT = CurType->getAs<PointerType>()) {
+        CurType = S.Context.getPointerType(PT->getPointeeType(), true);
+        return;
+      }
+    }
   }
+  
+  S.Diag(attr.getLoc(), diag::err_memory_capability_attribute_pointers_only) << CurType;
 }
 
 static void processTypeAttrs(TypeProcessingState &state, QualType &type,
