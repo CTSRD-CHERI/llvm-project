@@ -7984,7 +7984,9 @@ unsigned ASTContext::getIntWidth(QualType T) const {
 }
 unsigned ASTContext::getIntRange(QualType T) const {
   if (Target->SupportsCapabilities()) {
-    if (T->isPointerType() && T.getAddressSpace() == (unsigned)Target->AddressSpaceForCapabilities())
+    if (T->isPointerType())
+     if (T->getAs<PointerType>()->getPointeeType().getAddressSpace() ==
+         (unsigned)Target->AddressSpaceForCapabilities())
       return Target->getPointerWidth(0);
     if (T->isBuiltinType()) {
       int K = T->getAs<BuiltinType>()->getKind();
