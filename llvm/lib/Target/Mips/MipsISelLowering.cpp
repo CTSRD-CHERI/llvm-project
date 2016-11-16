@@ -1872,10 +1872,10 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         !GV->hasSection() &&
         !Name.startswith("__start_") &&
         !Name.startswith("__stop_")) {
-      uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
-      if (GV->hasInternalLinkage() || GV->hasLocalLinkage())
+      if (GV->hasInternalLinkage() || GV->hasLocalLinkage()) {
+        uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
         Global = setBounds(DAG, Global, SizeBytes);
-      else {
+      } else {
         const Module &M = *GV->getParent();
         std::string Name = (Twine(".size.")+GV->getName()).str();
         GlobalVariable *SizeGV = M.getGlobalVariable(Name);

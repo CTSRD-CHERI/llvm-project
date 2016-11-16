@@ -62,10 +62,21 @@ public:
     if (Function *Fn = M->getFunction("llvm.va_start"))
       for (Value *V : Fn->users()) {
         CallInst *Call = cast<CallInst>(V->stripPointerCasts());
-        Instruction *Cast = cast<Instruction>(Call->getOperand(0));
-        if (Cast->getParent() != Call->getParent()) {
+        Value *Cast = Call->getOperand(0);
+        Value *CastArg;
+        bool Replace;
+        if (isa<ConstantExpr>(Cast)) {
+            ConstantExpr *CastExpr = cast<ConstantExpr>(Cast);
+            CastArg = Cast;
+            Replace = (CastExpr->getOpcode() != Instruction::AddrSpaceCast);
+        } else {
+            Instruction *CastInst = cast<Instruction>(Cast);
+            CastArg = CastInst->getOperand(0);
+            Replace = (CastInst->getParent() != Call->getParent());
+        }
+        if (Replace) {
           AddrSpaceCastInst *NewCast = new llvm::AddrSpaceCastInst(
-              Cast->getOperand(0), Cast->getType(), "va_cast", Call);
+              CastArg, Cast->getType(), "va_cast", Call);
           Call->setOperand(0, NewCast);
         }
       }
