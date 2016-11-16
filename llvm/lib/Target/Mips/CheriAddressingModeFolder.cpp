@@ -233,7 +233,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       MachineBasicBlock *InsertBlock = I.first->getParent();
       // If this is a load of a GOT offset and it's in a loop then we want to
       // try to hoist it out of the loop.
-      bool LoopHoisting = false;
       if (Offset.isGlobal()) {
         auto Loop = MLI.getLoopFor(InsertBlock);
         if (Loop) {
@@ -241,11 +240,11 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           // If all paths to this block go through the preheader then hoist.
           // Note: It might be worth doing this recursively and pushing out of
           // nested loops.
-          if (MDT.dominates(Preheader, InsertBlock)) {
-            InsertBlock = Preheader;
-            InsertPoint = InsertBlock->getFirstTerminator();
-            LoopHoisting = true;
-          }
+          if (MDT.dominates(Preheader, InsertBlock))
+            if (MDT.dominates(Preheader->getFirstTerminator(), I.first)) {
+              InsertBlock = Preheader;
+              InsertPoint = InsertBlock->getFirstTerminator();
+            }
         }
       }
       auto FirstOperand = I.first->getOperand(0);
@@ -255,8 +254,12 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         .addReg(FirstReg, getDefRegState(FirstOperand.isDef()))
         .addReg(BaseReg).addOperand(Offset);
       I.first->eraseFromBundle();
-      if (AddInst)
+      if (AddInst) {
+        // If we've folded the base of the add into the load's immediate, then
+        // we the add is no longer able to kill the register.
+        AddInst->getOperand(1).setIsKill(false);
         Adds.insert(AddInst);
+      }
       modified = true;
     }
     Remove(GetPCCs, RI);
