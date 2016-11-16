@@ -1636,8 +1636,15 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Type *DestType = ConvertType(DestTy);
     if (Src->getType() == DestType)
       return Src;
-    auto &Ctx = CGF.getContext(); 
-    auto &TI = Ctx.getTargetInfo();
+    return Builder.CreatePointerBitCastOrAddrSpaceCast(Src, DestType);
+  }
+  case CK_MemoryCapabilityToPointer:
+  case CK_PointerToMemoryCapability: {
+    Value *Src = Visit(const_cast<Expr*>(E));
+    llvm::Type *DestType = ConvertType(DestTy);
+    if (Src->getType() == DestType)
+      return Src;
+    auto &TI = CGF.getContext().getTargetInfo();
     if (TI.SupportsCapabilities()) {
       QualType SrcTy = E->getType();
       QualType SrcPointeeTy = SrcTy->getPointeeType();
@@ -1645,8 +1652,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       if (SrcPointeeTy->isFunctionType() && DstPointeeTy->isFunctionType()) {
         // FIXME: Should we handle casts in the other direction by doing a
         // pcc-relative cfromptr?
-        if (!SrcTy->isMemoryCapabilityType(Ctx) &&
-              DestTy->isMemoryCapabilityType(Ctx))
+        if (Kind == CK_PointerToMemoryCapability)
           Src = FunctionAddressToCapability(CGF, Src);
       }
     }

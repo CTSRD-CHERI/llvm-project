@@ -1574,10 +1574,24 @@ bool CastExpr::CastConsistency() const {
     assert(getType()->isPointerType() || getType()->isBlockPointerType());
     assert(getSubExpr()->getType()->isPointerType() ||
            getSubExpr()->getType()->isBlockPointerType());
-    assert((getType()->getPointeeType().getAddressSpace() !=
-           getSubExpr()->getType()->getPointeeType().getAddressSpace())
-           || (getType()->getAs<PointerType>()->isMemoryCapability()
-              != getSubExpr()->getType()->getAs<PointerType>()->isMemoryCapability()));
+    assert(getType()->getPointeeType().getAddressSpace() !=
+           getSubExpr()->getType()->getPointeeType().getAddressSpace());
+    goto CheckNoBasePath;
+
+  case CK_MemoryCapabilityToPointer:
+    assert(getType()->isPointerType());
+    assert(!getType()->getAs<PointerType>()->isMemoryCapability());
+    assert(getSubExpr()->getType()->isPointerType());
+    assert(getSubExpr()->getType()->getAs<PointerType>()->isMemoryCapability());
+    goto CheckNoBasePath;
+
+  case CK_PointerToMemoryCapability:
+    assert(getType()->isPointerType());
+    assert(getType()->getAs<PointerType>()->isMemoryCapability());
+    assert(getSubExpr()->getType()->isPointerType());
+    assert(!getSubExpr()->getType()->getAs<PointerType>()->isMemoryCapability());
+    goto CheckNoBasePath;
+
   // These should not have an inheritance path.
   case CK_Dynamic:
   case CK_ToUnion:

@@ -486,6 +486,8 @@ ComplexPairTy ComplexExprEmitter::EmitCast(CastKind CK, Expr *Op,
   case CK_ZeroToOCLEvent:
   case CK_ZeroToOCLQueue:
   case CK_AddressSpaceConversion:
+  case CK_MemoryCapabilityToPointer:
+  case CK_PointerToMemoryCapability:
   case CK_IntToOCLSampler:
     llvm_unreachable("invalid cast kind for complex value");
 

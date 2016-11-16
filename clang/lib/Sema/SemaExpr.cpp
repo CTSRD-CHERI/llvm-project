@@ -5747,8 +5747,10 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
       unsigned DestAS = DestTy->getPointeeType().getAddressSpace();
       if (SrcAS != DestAS)
         return CK_AddressSpaceConversion;
-      else if (SrcTy->isMemoryCapabilityType(Context) != DestTy->isMemoryCapabilityType(Context))
-        return CK_AddressSpaceConversion;
+      else if (!SrcTy->isMemoryCapabilityType(Context) && DestTy->isMemoryCapabilityType(Context))
+        return CK_PointerToMemoryCapability;
+      else if (SrcTy->isMemoryCapabilityType(Context) && !DestTy->isMemoryCapabilityType(Context))
+        return CK_MemoryCapabilityToPointer;
       else
         return CK_BitCast;
     }
@@ -7631,19 +7633,27 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
       unsigned AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
       if (AddrSpaceL != AddrSpaceR)
         Kind = CK_AddressSpaceConversion;
-      else if (LHSPointer->isMemoryCapability() != RHSPointer->isMemoryCapability()) {
+      else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
         // only allow implicit casts to and from function pointer capabilities
-        if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType())
-          Kind = CK_AddressSpaceConversion;
+        if (!LHSPointer->isMemoryCapability() && RHSPointer->isMemoryCapability())
+          Kind = CK_MemoryCapabilityToPointer;
+        else if (LHSPointer->isMemoryCapability() && !RHSPointer->isMemoryCapability())
+          Kind = CK_PointerToMemoryCapability;
         else
-          return Incompatible;
-      } else
-        Kind = CK_BitCast;
+          Kind = CK_BitCast;
+      } else if (LHSPointer->isMemoryCapability() != RHSPointer->isMemoryCapability())
+				// all other implicit casts to and from capabilities are not allowed
+        return Incompatible;
+		  else
+				Kind = CK_BitCast;
       return checkPointerTypesForAssignment(*this, LHSType, RHSType);
     }
 
     // int -> T*
     if (RHSType->isIntegerType()) {
+      // Implicit casts from int -> memory capabilities are not allowed
+      if (LHSPointer->isMemoryCapability()) 
+        return Incompatible;
       Kind = CK_IntegralToPointer; // FIXME: null?
       return IntToPointer;
     }
@@ -7774,7 +7784,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   }
 
   // Conversions from pointers that are not covered by the above.
-  if (isa<PointerType>(RHSType)) {
+  if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
     // T* -> _Bool
     if (LHSType == Context.BoolTy) {
       Kind = CK_PointerToBoolean;
@@ -7783,6 +7793,9 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // T* -> int
     if (LHSType->isIntegerType()) {
+      // Implicit casts from memory capabilities -> int are not allowed
+      if (RHSPointer->isMemoryCapability())
+        return Incompatible;
       Kind = CK_PointerToIntegral;
       return PointerToInt;
     }

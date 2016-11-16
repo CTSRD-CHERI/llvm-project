@@ -327,6 +327,12 @@ CAST_OPERATION(ZeroToOCLQueue)
 // Convert a pointer to a different address space.
 CAST_OPERATION(AddressSpaceConversion)
 
+// Convert a memory capability to a pointer.
+CAST_OPERATION(MemoryCapabilityToPointer)
+
+// Convert a pointer to a memory capability.
+CAST_OPERATION(PointerToMemoryCapability)
+
 // Convert an integer initializer to an OpenCL sampler.
 CAST_OPERATION(IntToOCLSampler)
 
