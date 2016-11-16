@@ -4247,7 +4247,7 @@
 
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefix CHERI256 %s
 
-// MIPS64EL: #define MIPSEB 1
+// CHERI256: #define MIPSEB 1
 // CHERI256: #define _ABI64 3
 // CHERI256: #define _LP64 1
 // CHERI256: #define _MIPSEB 1
@@ -4456,7 +4456,7 @@
 // CHERI256: #define __SIZE_MAX__ 18446744073709551615UL
 // CHERI256: #define __SIZE_TYPE__ long unsigned int
 // CHERI256: #define __SIZE_WIDTH__ 64
-// CHERI256: #define __STDC_HOSTED__ 1
+// CHERI256: #define __STDC_HOSTED__ 0
 // CHERI256: #define __STDC_UTF_16__ 1
 // CHERI256: #define __STDC_UTF_32__ 1
 // CHERI256: #define __STDC_VERSION__ 201112L
@@ -4782,7 +4782,7 @@
 // CHERI128: #define __SIZE_MAX__ 18446744073709551615UL
 // CHERI128: #define __SIZE_TYPE__ long unsigned int
 // CHERI128: #define __SIZE_WIDTH__ 64
-// CHERI128: #define __STDC_HOSTED__ 1
+// CHERI128: #define __STDC_HOSTED__ 0
 // CHERI128: #define __STDC_UTF_16__ 1
 // CHERI128: #define __STDC_UTF_32__ 1
 // CHERI128: #define __STDC_VERSION__ 201112L
@@ -4924,7 +4924,7 @@
 // CHERI128-SANDBOX-SOFT: #define __mips_soft_float 1
 
 
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX %s
 // CHERI256-SANDBOX: #define _MIPS_FPSET 16
 // CHERI256-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 1
 // CHERI256-SANDBOX: #define __CHERI_SANDBOX__ 3
