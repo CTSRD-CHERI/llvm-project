@@ -4244,6 +4244,711 @@
 // MIPS64EL:#define _mips 1
 // MIPS64EL:#define mips 1
 //
+
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefix CHERI256 %s
+
+// MIPS64EL: #define MIPSEB 1
+// CHERI256: #define _ABI64 3
+// CHERI256: #define _LP64 1
+// CHERI256: #define _MIPSEB 1
+// CHERI256: #define _MIPS_ARCH "cheri"
+// CHERI256: #define _MIPS_ARCH_CHERI 1
+// CHERI256: #define _MIPS_CAP_ALIGN_MASK 0xffffffffffffffe0
+// CHERI256: #define _MIPS_FPSET 32
+// CHERI256: #define _MIPS_ISA _MIPS_ISA_MIPS64
+// CHERI256: #define _MIPS_SIM _ABI64
+// CHERI256: #define _MIPS_SZCAP 256
+// CHERI256: #define _MIPS_SZINT 32
+// CHERI256: #define _MIPS_SZLONG 64
+// CHERI256: #define _MIPS_SZPTR 64
+// CHERI256: #define __ATOMIC_ACQUIRE 2
+// CHERI256: #define __ATOMIC_ACQ_REL 4
+// CHERI256: #define __ATOMIC_CONSUME 1
+// CHERI256: #define __ATOMIC_RELAXED 0
+// CHERI256: #define __ATOMIC_RELEASE 3
+// CHERI256: #define __ATOMIC_SEQ_CST 5
+// CHERI256: #define __BIGGEST_ALIGNMENT__ 32
+// CHERI256: #define __BIG_ENDIAN__ 1
+// CHERI256: #define __BYTE_ORDER__ __ORDER_BIG_ENDIAN__
+// CHERI256: #define __CHAR16_TYPE__ unsigned short
+// CHERI256: #define __CHAR32_TYPE__ unsigned int
+// CHERI256: #define __CHAR_BIT__ 8
+// CHERI256: #define __CHERI_CAP_PERMISSION_ACCESS_EPCC__ 1024
+// CHERI256: #define __CHERI_CAP_PERMISSION_ACCESS_KCC__ 4096
+// CHERI256: #define __CHERI_CAP_PERMISSION_ACCESS_KDC__ 2048
+// CHERI256: #define __CHERI_CAP_PERMISSION_ACCESS_KR1C__ 8192
+// CHERI256: #define __CHERI_CAP_PERMISSION_ACCESS_KR2C__ 16384
+// CHERI256: #define __CHERI_CAP_PERMISSION_GLOBAL__ 1
+// CHERI256: #define __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__ 2
+// CHERI256: #define __CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__ 16
+// CHERI256: #define __CHERI_CAP_PERMISSION_PERMIT_LOAD__ 4
+// CHERI256: #define __CHERI_CAP_PERMISSION_PERMIT_SEAL__ 128
+// CHERI256: #define __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ 32
+// CHERI256: #define __CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__ 64
+// CHERI256: #define __CHERI_CAP_PERMISSION_PERMIT_STORE__ 8
+// CHERI256: #define __CHERI__ 1
+// CHERI256: #define __CONSTANT_CFSTRINGS__ 1
+// CHERI256: #define __DBL_DECIMAL_DIG__ 17
+// CHERI256: #define __DBL_DENORM_MIN__ 4.9406564584124654e-324
+// CHERI256: #define __DBL_DIG__ 15
+// CHERI256: #define __DBL_EPSILON__ 2.2204460492503131e-16
+// CHERI256: #define __DBL_HAS_DENORM__ 1
+// CHERI256: #define __DBL_HAS_INFINITY__ 1
+// CHERI256: #define __DBL_HAS_QUIET_NAN__ 1
+// CHERI256: #define __DBL_MANT_DIG__ 53
+// CHERI256: #define __DBL_MAX_10_EXP__ 308
+// CHERI256: #define __DBL_MAX_EXP__ 1024
+// CHERI256: #define __DBL_MAX__ 1.7976931348623157e+308
+// CHERI256: #define __DBL_MIN_10_EXP__ (-307)
+// CHERI256: #define __DBL_MIN_EXP__ (-1021)
+// CHERI256: #define __DBL_MIN__ 2.2250738585072014e-308
+// CHERI256: #define __DECIMAL_DIG__ __LDBL_DECIMAL_DIG__
+// CHERI256: #define __FINITE_MATH_ONLY__ 0
+// CHERI256: #define __FLT_DECIMAL_DIG__ 9
+// CHERI256: #define __FLT_DENORM_MIN__ 1.40129846e-45F
+// CHERI256: #define __FLT_DIG__ 6
+// CHERI256: #define __FLT_EPSILON__ 1.19209290e-7F
+// CHERI256: #define __FLT_EVAL_METHOD__ 0
+// CHERI256: #define __FLT_HAS_DENORM__ 1
+// CHERI256: #define __FLT_HAS_INFINITY__ 1
+// CHERI256: #define __FLT_HAS_QUIET_NAN__ 1
+// CHERI256: #define __FLT_MANT_DIG__ 24
+// CHERI256: #define __FLT_MAX_10_EXP__ 38
+// CHERI256: #define __FLT_MAX_EXP__ 128
+// CHERI256: #define __FLT_MAX__ 3.40282347e+38F
+// CHERI256: #define __FLT_MIN_10_EXP__ (-37)
+// CHERI256: #define __FLT_MIN_EXP__ (-125)
+// CHERI256: #define __FLT_MIN__ 1.17549435e-38F
+// CHERI256: #define __FLT_RADIX__ 2
+// CHERI256: #define __GCC_ATOMIC_BOOL_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_CHAR16_T_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_CHAR32_T_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_CHAR_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_INT_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_LLONG_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_LONG_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_POINTER_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_SHORT_LOCK_FREE 2
+// CHERI256: #define __GCC_ATOMIC_TEST_AND_SET_TRUEVAL 1
+// CHERI256: #define __GCC_ATOMIC_WCHAR_T_LOCK_FREE 2
+// CHERI256: #define __GNUC_MINOR__ 2
+// CHERI256: #define __GNUC_PATCHLEVEL__ 1
+// CHERI256: #define __GNUC_STDC_INLINE__ 1
+// CHERI256: #define __GNUC__ 4
+// CHERI256: #define __GXX_ABI_VERSION 1002
+// CHERI256: #define __GXX_RTTI 1
+// CHERI256: #define __INT16_C_SUFFIX__ 
+// CHERI256: #define __INT16_FMTd__ "hd"
+// CHERI256: #define __INT16_FMTi__ "hi"
+// CHERI256: #define __INT16_MAX__ 32767
+// CHERI256: #define __INT16_TYPE__ short
+// CHERI256: #define __INT32_C_SUFFIX__ 
+// CHERI256: #define __INT32_FMTd__ "d"
+// CHERI256: #define __INT32_FMTi__ "i"
+// CHERI256: #define __INT32_MAX__ 2147483647
+// CHERI256: #define __INT32_TYPE__ int
+// CHERI256: #define __INT64_C_SUFFIX__ L
+// CHERI256: #define __INT64_FMTd__ "ld"
+// CHERI256: #define __INT64_FMTi__ "li"
+// CHERI256: #define __INT64_MAX__ 9223372036854775807L
+// CHERI256: #define __INT64_TYPE__ long int
+// CHERI256: #define __INT8_C_SUFFIX__ 
+// CHERI256: #define __INT8_FMTd__ "hhd"
+// CHERI256: #define __INT8_FMTi__ "hhi"
+// CHERI256: #define __INT8_MAX__ 127
+// CHERI256: #define __INT8_TYPE__ signed char
+// CHERI256: #define __INTMAX_C_SUFFIX__ L
+// CHERI256: #define __INTMAX_FMTd__ "ld"
+// CHERI256: #define __INTMAX_FMTi__ "li"
+// CHERI256: #define __INTMAX_MAX__ 9223372036854775807L
+// CHERI256: #define __INTMAX_TYPE__ long int
+// CHERI256: #define __INTMAX_WIDTH__ 64
+// CHERI256: #define __INTPTR_FMTd__ "ld"
+// CHERI256: #define __INTPTR_FMTi__ "li"
+// CHERI256: #define __INTPTR_MAX__ 9223372036854775807L
+// CHERI256: #define __INTPTR_TYPE__ long int
+// CHERI256: #define __INTPTR_WIDTH__ 64
+// CHERI256: #define __INT_FAST16_FMTd__ "hd"
+// CHERI256: #define __INT_FAST16_FMTi__ "hi"
+// CHERI256: #define __INT_FAST16_MAX__ 32767
+// CHERI256: #define __INT_FAST16_TYPE__ short
+// CHERI256: #define __INT_FAST32_FMTd__ "d"
+// CHERI256: #define __INT_FAST32_FMTi__ "i"
+// CHERI256: #define __INT_FAST32_MAX__ 2147483647
+// CHERI256: #define __INT_FAST32_TYPE__ int
+// CHERI256: #define __INT_FAST64_FMTd__ "ld"
+// CHERI256: #define __INT_FAST64_FMTi__ "li"
+// CHERI256: #define __INT_FAST64_MAX__ 9223372036854775807L
+// CHERI256: #define __INT_FAST64_TYPE__ long int
+// CHERI256: #define __INT_FAST8_FMTd__ "hhd"
+// CHERI256: #define __INT_FAST8_FMTi__ "hhi"
+// CHERI256: #define __INT_FAST8_MAX__ 127
+// CHERI256: #define __INT_FAST8_TYPE__ signed char
+// CHERI256: #define __INT_LEAST16_FMTd__ "hd"
+// CHERI256: #define __INT_LEAST16_FMTi__ "hi"
+// CHERI256: #define __INT_LEAST16_MAX__ 32767
+// CHERI256: #define __INT_LEAST16_TYPE__ short
+// CHERI256: #define __INT_LEAST32_FMTd__ "d"
+// CHERI256: #define __INT_LEAST32_FMTi__ "i"
+// CHERI256: #define __INT_LEAST32_MAX__ 2147483647
+// CHERI256: #define __INT_LEAST32_TYPE__ int
+// CHERI256: #define __INT_LEAST64_FMTd__ "ld"
+// CHERI256: #define __INT_LEAST64_FMTi__ "li"
+// CHERI256: #define __INT_LEAST64_MAX__ 9223372036854775807L
+// CHERI256: #define __INT_LEAST64_TYPE__ long int
+// CHERI256: #define __INT_LEAST8_FMTd__ "hhd"
+// CHERI256: #define __INT_LEAST8_FMTi__ "hhi"
+// CHERI256: #define __INT_LEAST8_MAX__ 127
+// CHERI256: #define __INT_LEAST8_TYPE__ signed char
+// CHERI256: #define __INT_MAX__ 2147483647
+// CHERI256: #define __LDBL_DECIMAL_DIG__ 36
+// CHERI256: #define __LDBL_DENORM_MIN__ 6.47517511943802511092443895822764655e-4966L
+// CHERI256: #define __LDBL_DIG__ 33
+// CHERI256: #define __LDBL_EPSILON__ 1.92592994438723585305597794258492732e-34L
+// CHERI256: #define __LDBL_HAS_DENORM__ 1
+// CHERI256: #define __LDBL_HAS_INFINITY__ 1
+// CHERI256: #define __LDBL_HAS_QUIET_NAN__ 1
+// CHERI256: #define __LDBL_MANT_DIG__ 113
+// CHERI256: #define __LDBL_MAX_10_EXP__ 4932
+// CHERI256: #define __LDBL_MAX_EXP__ 16384
+// CHERI256: #define __LDBL_MAX__ 1.18973149535723176508575932662800702e+4932L
+// CHERI256: #define __LDBL_MIN_10_EXP__ (-4931)
+// CHERI256: #define __LDBL_MIN_EXP__ (-16381)
+// CHERI256: #define __LDBL_MIN__ 3.36210314311209350626267781732175260e-4932L
+// CHERI256: #define __LONG_LONG_MAX__ 9223372036854775807LL
+// CHERI256: #define __LONG_MAX__ 9223372036854775807L
+// CHERI256: #define __LP64__ 1
+// CHERI256: #define __MIPSEB 1
+// CHERI256: #define __MIPSEB__ 1
+// CHERI256: #define __NO_INLINE__ 1
+// CHERI256: #define __ORDER_BIG_ENDIAN__ 4321
+// CHERI256: #define __ORDER_LITTLE_ENDIAN__ 1234
+// CHERI256: #define __ORDER_PDP_ENDIAN__ 3412
+// CHERI256: #define __POINTER_WIDTH__ 64
+// CHERI256: #define __PRAGMA_REDEFINE_EXTNAME 1
+// CHERI256: #define __PTRDIFF_FMTd__ "ld"
+// CHERI256: #define __PTRDIFF_FMTi__ "li"
+// CHERI256: #define __PTRDIFF_MAX__ 9223372036854775807L
+// CHERI256: #define __PTRDIFF_TYPE__ long int
+// CHERI256: #define __PTRDIFF_WIDTH__ 64
+// CHERI256: #define __REGISTER_PREFIX__ 
+// CHERI256: #define __SCHAR_MAX__ 127
+// CHERI256: #define __SHRT_MAX__ 32767
+// CHERI256: #define __SIG_ATOMIC_MAX__ 2147483647
+// CHERI256: #define __SIG_ATOMIC_WIDTH__ 32
+// CHERI256: #define __SIZEOF_DOUBLE__ 8
+// CHERI256: #define __SIZEOF_FLOAT__ 4
+// CHERI256: #define __SIZEOF_INT128__ 16
+// CHERI256: #define __SIZEOF_INT__ 4
+// CHERI256: #define __SIZEOF_LONG_DOUBLE__ 16
+// CHERI256: #define __SIZEOF_LONG_LONG__ 8
+// CHERI256: #define __SIZEOF_LONG__ 8
+// CHERI256: #define __SIZEOF_POINTER__ 8
+// CHERI256: #define __SIZEOF_PTRDIFF_T__ 8
+// CHERI256: #define __SIZEOF_SHORT__ 2
+// CHERI256: #define __SIZEOF_SIZE_T__ 8
+// CHERI256: #define __SIZEOF_WCHAR_T__ 4
+// CHERI256: #define __SIZEOF_WINT_T__ 4
+// CHERI256: #define __SIZE_FMTX__ "lX"
+// CHERI256: #define __SIZE_FMTo__ "lo"
+// CHERI256: #define __SIZE_FMTu__ "lu"
+// CHERI256: #define __SIZE_FMTx__ "lx"
+// CHERI256: #define __SIZE_MAX__ 18446744073709551615UL
+// CHERI256: #define __SIZE_TYPE__ long unsigned int
+// CHERI256: #define __SIZE_WIDTH__ 64
+// CHERI256: #define __STDC_HOSTED__ 1
+// CHERI256: #define __STDC_UTF_16__ 1
+// CHERI256: #define __STDC_UTF_32__ 1
+// CHERI256: #define __STDC_VERSION__ 201112L
+// CHERI256: #define __STDC__ 1
+// CHERI256: #define __UINT16_C_SUFFIX__ 
+// CHERI256: #define __UINT16_FMTX__ "hX"
+// CHERI256: #define __UINT16_FMTo__ "ho"
+// CHERI256: #define __UINT16_FMTu__ "hu"
+// CHERI256: #define __UINT16_FMTx__ "hx"
+// CHERI256: #define __UINT16_MAX__ 65535
+// CHERI256: #define __UINT16_TYPE__ unsigned short
+// CHERI256: #define __UINT32_C_SUFFIX__ U
+// CHERI256: #define __UINT32_FMTX__ "X"
+// CHERI256: #define __UINT32_FMTo__ "o"
+// CHERI256: #define __UINT32_FMTu__ "u"
+// CHERI256: #define __UINT32_FMTx__ "x"
+// CHERI256: #define __UINT32_MAX__ 4294967295U
+// CHERI256: #define __UINT32_TYPE__ unsigned int
+// CHERI256: #define __UINT64_C_SUFFIX__ UL
+// CHERI256: #define __UINT64_FMTX__ "lX"
+// CHERI256: #define __UINT64_FMTo__ "lo"
+// CHERI256: #define __UINT64_FMTu__ "lu"
+// CHERI256: #define __UINT64_FMTx__ "lx"
+// CHERI256: #define __UINT64_MAX__ 18446744073709551615UL
+// CHERI256: #define __UINT64_TYPE__ long unsigned int
+// CHERI256: #define __UINT8_C_SUFFIX__ 
+// CHERI256: #define __UINT8_FMTX__ "hhX"
+// CHERI256: #define __UINT8_FMTo__ "hho"
+// CHERI256: #define __UINT8_FMTu__ "hhu"
+// CHERI256: #define __UINT8_FMTx__ "hhx"
+// CHERI256: #define __UINT8_MAX__ 255
+// CHERI256: #define __UINT8_TYPE__ unsigned char
+// CHERI256: #define __UINTMAX_C_SUFFIX__ UL
+// CHERI256: #define __UINTMAX_FMTX__ "lX"
+// CHERI256: #define __UINTMAX_FMTo__ "lo"
+// CHERI256: #define __UINTMAX_FMTu__ "lu"
+// CHERI256: #define __UINTMAX_FMTx__ "lx"
+// CHERI256: #define __UINTMAX_MAX__ 18446744073709551615UL
+// CHERI256: #define __UINTMAX_TYPE__ long unsigned int
+// CHERI256: #define __UINTMAX_WIDTH__ 64
+// CHERI256: #define __UINTPTR_FMTX__ "lX"
+// CHERI256: #define __UINTPTR_FMTo__ "lo"
+// CHERI256: #define __UINTPTR_FMTu__ "lu"
+// CHERI256: #define __UINTPTR_FMTx__ "lx"
+// CHERI256: #define __UINTPTR_MAX__ 18446744073709551615UL
+// CHERI256: #define __UINTPTR_TYPE__ long unsigned int
+// CHERI256: #define __UINTPTR_WIDTH__ 64
+// CHERI256: #define __UINT_FAST16_FMTX__ "hX"
+// CHERI256: #define __UINT_FAST16_FMTo__ "ho"
+// CHERI256: #define __UINT_FAST16_FMTu__ "hu"
+// CHERI256: #define __UINT_FAST16_FMTx__ "hx"
+// CHERI256: #define __UINT_FAST16_MAX__ 65535
+// CHERI256: #define __UINT_FAST16_TYPE__ unsigned short
+// CHERI256: #define __UINT_FAST32_FMTX__ "X"
+// CHERI256: #define __UINT_FAST32_FMTo__ "o"
+// CHERI256: #define __UINT_FAST32_FMTu__ "u"
+// CHERI256: #define __UINT_FAST32_FMTx__ "x"
+// CHERI256: #define __UINT_FAST32_MAX__ 4294967295U
+// CHERI256: #define __UINT_FAST32_TYPE__ unsigned int
+// CHERI256: #define __UINT_FAST64_FMTX__ "lX"
+// CHERI256: #define __UINT_FAST64_FMTo__ "lo"
+// CHERI256: #define __UINT_FAST64_FMTu__ "lu"
+// CHERI256: #define __UINT_FAST64_FMTx__ "lx"
+// CHERI256: #define __UINT_FAST64_MAX__ 18446744073709551615UL
+// CHERI256: #define __UINT_FAST64_TYPE__ long unsigned int
+// CHERI256: #define __UINT_FAST8_FMTX__ "hhX"
+// CHERI256: #define __UINT_FAST8_FMTo__ "hho"
+// CHERI256: #define __UINT_FAST8_FMTu__ "hhu"
+// CHERI256: #define __UINT_FAST8_FMTx__ "hhx"
+// CHERI256: #define __UINT_FAST8_MAX__ 255
+// CHERI256: #define __UINT_FAST8_TYPE__ unsigned char
+// CHERI256: #define __UINT_LEAST16_FMTX__ "hX"
+// CHERI256: #define __UINT_LEAST16_FMTo__ "ho"
+// CHERI256: #define __UINT_LEAST16_FMTu__ "hu"
+// CHERI256: #define __UINT_LEAST16_FMTx__ "hx"
+// CHERI256: #define __UINT_LEAST16_MAX__ 65535
+// CHERI256: #define __UINT_LEAST16_TYPE__ unsigned short
+// CHERI256: #define __UINT_LEAST32_FMTX__ "X"
+// CHERI256: #define __UINT_LEAST32_FMTo__ "o"
+// CHERI256: #define __UINT_LEAST32_FMTu__ "u"
+// CHERI256: #define __UINT_LEAST32_FMTx__ "x"
+// CHERI256: #define __UINT_LEAST32_MAX__ 4294967295U
+// CHERI256: #define __UINT_LEAST32_TYPE__ unsigned int
+// CHERI256: #define __UINT_LEAST64_FMTX__ "lX"
+// CHERI256: #define __UINT_LEAST64_FMTo__ "lo"
+// CHERI256: #define __UINT_LEAST64_FMTu__ "lu"
+// CHERI256: #define __UINT_LEAST64_FMTx__ "lx"
+// CHERI256: #define __UINT_LEAST64_MAX__ 18446744073709551615UL
+// CHERI256: #define __UINT_LEAST64_TYPE__ long unsigned int
+// CHERI256: #define __UINT_LEAST8_FMTX__ "hhX"
+// CHERI256: #define __UINT_LEAST8_FMTo__ "hho"
+// CHERI256: #define __UINT_LEAST8_FMTu__ "hhu"
+// CHERI256: #define __UINT_LEAST8_FMTx__ "hhx"
+// CHERI256: #define __UINT_LEAST8_MAX__ 255
+// CHERI256: #define __UINT_LEAST8_TYPE__ unsigned char
+// CHERI256: #define __USER_LABEL_PREFIX__ _
+// CHERI256: #define __WCHAR_MAX__ 2147483647
+// CHERI256: #define __WCHAR_TYPE__ int
+// CHERI256: #define __WCHAR_WIDTH__ 32
+// CHERI256: #define __WINT_TYPE__ int
+// CHERI256: #define __WINT_WIDTH__ 32
+// CHERI256: #define __capability __attribute__((address_space(200)))
+// CHERI256: #define __clang__ 1
+// CHERI256: #define __llvm__ 1
+// CHERI256: #define __mips 64
+// CHERI256: #define __mips64 1
+// CHERI256: #define __mips64__ 1
+// CHERI256: #define __mips__ 1
+// CHERI256: #define __mips_fpr 64
+// CHERI256: #define __mips_hard_float 1
+// CHERI256: #define __mips_n64 1
+// CHERI256: #define _mips 1
+// CHERI256: #define mips 1
+
+
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 < /dev/null | FileCheck -check-prefix CHERI128 %s
+// CHERI128: #define MIPSEB 1
+// CHERI128: #define _ABI64 3
+// CHERI128: #define _LP64 1
+// CHERI128: #define _MIPSEB 1
+// CHERI128: #define _MIPS_ARCH "cheri128"
+// CHERI128: #define _MIPS_ARCH_CHERI128 1
+// CHERI128: #define _MIPS_CAP_ALIGN_MASK 0xfffffffffffffff0
+// CHERI128: #define _MIPS_FPSET 32
+// CHERI128: #define _MIPS_ISA _MIPS_ISA_MIPS64
+// CHERI128: #define _MIPS_SIM _ABI64
+// CHERI128: #define _MIPS_SZCAP 128
+// CHERI128: #define _MIPS_SZINT 32
+// CHERI128: #define _MIPS_SZLONG 64
+// CHERI128: #define _MIPS_SZPTR 64
+// CHERI128: #define __ATOMIC_ACQUIRE 2
+// CHERI128: #define __ATOMIC_ACQ_REL 4
+// CHERI128: #define __ATOMIC_CONSUME 1
+// CHERI128: #define __ATOMIC_RELAXED 0
+// CHERI128: #define __ATOMIC_RELEASE 3
+// CHERI128: #define __ATOMIC_SEQ_CST 5
+// CHERI128: #define __BIGGEST_ALIGNMENT__ 16
+// CHERI128: #define __BIG_ENDIAN__ 1
+// CHERI128: #define __BYTE_ORDER__ __ORDER_BIG_ENDIAN__
+// CHERI128: #define __CHAR16_TYPE__ unsigned short
+// CHERI128: #define __CHAR32_TYPE__ unsigned int
+// CHERI128: #define __CHAR_BIT__ 8
+// CHERI128: #define __CHERI_CAP_PERMISSION_ACCESS_EPCC__ 1024
+// CHERI128: #define __CHERI_CAP_PERMISSION_ACCESS_KCC__ 4096
+// CHERI128: #define __CHERI_CAP_PERMISSION_ACCESS_KDC__ 2048
+// CHERI128: #define __CHERI_CAP_PERMISSION_ACCESS_KR1C__ 8192
+// CHERI128: #define __CHERI_CAP_PERMISSION_ACCESS_KR2C__ 16384
+// CHERI128: #define __CHERI_CAP_PERMISSION_GLOBAL__ 1
+// CHERI128: #define __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__ 2
+// CHERI128: #define __CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__ 16
+// CHERI128: #define __CHERI_CAP_PERMISSION_PERMIT_LOAD__ 4
+// CHERI128: #define __CHERI_CAP_PERMISSION_PERMIT_SEAL__ 128
+// CHERI128: #define __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ 32
+// CHERI128: #define __CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__ 64
+// CHERI128: #define __CHERI_CAP_PERMISSION_PERMIT_STORE__ 8
+// CHERI128: #define __CHERI__ 1
+// CHERI128: #define __CONSTANT_CFSTRINGS__ 1
+// CHERI128: #define __DBL_DECIMAL_DIG__ 17
+// CHERI128: #define __DBL_DENORM_MIN__ 4.9406564584124654e-324
+// CHERI128: #define __DBL_DIG__ 15
+// CHERI128: #define __DBL_EPSILON__ 2.2204460492503131e-16
+// CHERI128: #define __DBL_HAS_DENORM__ 1
+// CHERI128: #define __DBL_HAS_INFINITY__ 1
+// CHERI128: #define __DBL_HAS_QUIET_NAN__ 1
+// CHERI128: #define __DBL_MANT_DIG__ 53
+// CHERI128: #define __DBL_MAX_10_EXP__ 308
+// CHERI128: #define __DBL_MAX_EXP__ 1024
+// CHERI128: #define __DBL_MAX__ 1.7976931348623157e+308
+// CHERI128: #define __DBL_MIN_10_EXP__ (-307)
+// CHERI128: #define __DBL_MIN_EXP__ (-1021)
+// CHERI128: #define __DBL_MIN__ 2.2250738585072014e-308
+// CHERI128: #define __DECIMAL_DIG__ __LDBL_DECIMAL_DIG__
+// CHERI128: #define __FINITE_MATH_ONLY__ 0
+// CHERI128: #define __FLT_DECIMAL_DIG__ 9
+// CHERI128: #define __FLT_DENORM_MIN__ 1.40129846e-45F
+// CHERI128: #define __FLT_DIG__ 6
+// CHERI128: #define __FLT_EPSILON__ 1.19209290e-7F
+// CHERI128: #define __FLT_EVAL_METHOD__ 0
+// CHERI128: #define __FLT_HAS_DENORM__ 1
+// CHERI128: #define __FLT_HAS_INFINITY__ 1
+// CHERI128: #define __FLT_HAS_QUIET_NAN__ 1
+// CHERI128: #define __FLT_MANT_DIG__ 24
+// CHERI128: #define __FLT_MAX_10_EXP__ 38
+// CHERI128: #define __FLT_MAX_EXP__ 128
+// CHERI128: #define __FLT_MAX__ 3.40282347e+38F
+// CHERI128: #define __FLT_MIN_10_EXP__ (-37)
+// CHERI128: #define __FLT_MIN_EXP__ (-125)
+// CHERI128: #define __FLT_MIN__ 1.17549435e-38F
+// CHERI128: #define __FLT_RADIX__ 2
+// CHERI128: #define __GCC_ATOMIC_BOOL_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_CHAR16_T_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_CHAR32_T_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_CHAR_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_INT_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_LLONG_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_LONG_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_POINTER_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_SHORT_LOCK_FREE 2
+// CHERI128: #define __GCC_ATOMIC_TEST_AND_SET_TRUEVAL 1
+// CHERI128: #define __GCC_ATOMIC_WCHAR_T_LOCK_FREE 2
+// CHERI128: #define __GNUC_MINOR__ 2
+// CHERI128: #define __GNUC_PATCHLEVEL__ 1
+// CHERI128: #define __GNUC_STDC_INLINE__ 1
+// CHERI128: #define __GNUC__ 4
+// CHERI128: #define __GXX_ABI_VERSION 1002
+// CHERI128: #define __GXX_RTTI 1
+// CHERI128: #define __INT16_C_SUFFIX__ 
+// CHERI128: #define __INT16_FMTd__ "hd"
+// CHERI128: #define __INT16_FMTi__ "hi"
+// CHERI128: #define __INT16_MAX__ 32767
+// CHERI128: #define __INT16_TYPE__ short
+// CHERI128: #define __INT32_C_SUFFIX__ 
+// CHERI128: #define __INT32_FMTd__ "d"
+// CHERI128: #define __INT32_FMTi__ "i"
+// CHERI128: #define __INT32_MAX__ 2147483647
+// CHERI128: #define __INT32_TYPE__ int
+// CHERI128: #define __INT64_C_SUFFIX__ L
+// CHERI128: #define __INT64_FMTd__ "ld"
+// CHERI128: #define __INT64_FMTi__ "li"
+// CHERI128: #define __INT64_MAX__ 9223372036854775807L
+// CHERI128: #define __INT64_TYPE__ long int
+// CHERI128: #define __INT8_C_SUFFIX__ 
+// CHERI128: #define __INT8_FMTd__ "hhd"
+// CHERI128: #define __INT8_FMTi__ "hhi"
+// CHERI128: #define __INT8_MAX__ 127
+// CHERI128: #define __INT8_TYPE__ signed char
+// CHERI128: #define __INTMAX_C_SUFFIX__ L
+// CHERI128: #define __INTMAX_FMTd__ "ld"
+// CHERI128: #define __INTMAX_FMTi__ "li"
+// CHERI128: #define __INTMAX_MAX__ 9223372036854775807L
+// CHERI128: #define __INTMAX_TYPE__ long int
+// CHERI128: #define __INTMAX_WIDTH__ 64
+// CHERI128: #define __INTPTR_FMTd__ "ld"
+// CHERI128: #define __INTPTR_FMTi__ "li"
+// CHERI128: #define __INTPTR_MAX__ 9223372036854775807L
+// CHERI128: #define __INTPTR_TYPE__ long int
+// CHERI128: #define __INTPTR_WIDTH__ 64
+// CHERI128: #define __INT_FAST16_FMTd__ "hd"
+// CHERI128: #define __INT_FAST16_FMTi__ "hi"
+// CHERI128: #define __INT_FAST16_MAX__ 32767
+// CHERI128: #define __INT_FAST16_TYPE__ short
+// CHERI128: #define __INT_FAST32_FMTd__ "d"
+// CHERI128: #define __INT_FAST32_FMTi__ "i"
+// CHERI128: #define __INT_FAST32_MAX__ 2147483647
+// CHERI128: #define __INT_FAST32_TYPE__ int
+// CHERI128: #define __INT_FAST64_FMTd__ "ld"
+// CHERI128: #define __INT_FAST64_FMTi__ "li"
+// CHERI128: #define __INT_FAST64_MAX__ 9223372036854775807L
+// CHERI128: #define __INT_FAST64_TYPE__ long int
+// CHERI128: #define __INT_FAST8_FMTd__ "hhd"
+// CHERI128: #define __INT_FAST8_FMTi__ "hhi"
+// CHERI128: #define __INT_FAST8_MAX__ 127
+// CHERI128: #define __INT_FAST8_TYPE__ signed char
+// CHERI128: #define __INT_LEAST16_FMTd__ "hd"
+// CHERI128: #define __INT_LEAST16_FMTi__ "hi"
+// CHERI128: #define __INT_LEAST16_MAX__ 32767
+// CHERI128: #define __INT_LEAST16_TYPE__ short
+// CHERI128: #define __INT_LEAST32_FMTd__ "d"
+// CHERI128: #define __INT_LEAST32_FMTi__ "i"
+// CHERI128: #define __INT_LEAST32_MAX__ 2147483647
+// CHERI128: #define __INT_LEAST32_TYPE__ int
+// CHERI128: #define __INT_LEAST64_FMTd__ "ld"
+// CHERI128: #define __INT_LEAST64_FMTi__ "li"
+// CHERI128: #define __INT_LEAST64_MAX__ 9223372036854775807L
+// CHERI128: #define __INT_LEAST64_TYPE__ long int
+// CHERI128: #define __INT_LEAST8_FMTd__ "hhd"
+// CHERI128: #define __INT_LEAST8_FMTi__ "hhi"
+// CHERI128: #define __INT_LEAST8_MAX__ 127
+// CHERI128: #define __INT_LEAST8_TYPE__ signed char
+// CHERI128: #define __INT_MAX__ 2147483647
+// CHERI128: #define __LDBL_DECIMAL_DIG__ 36
+// CHERI128: #define __LDBL_DENORM_MIN__ 6.47517511943802511092443895822764655e-4966L
+// CHERI128: #define __LDBL_DIG__ 33
+// CHERI128: #define __LDBL_EPSILON__ 1.92592994438723585305597794258492732e-34L
+// CHERI128: #define __LDBL_HAS_DENORM__ 1
+// CHERI128: #define __LDBL_HAS_INFINITY__ 1
+// CHERI128: #define __LDBL_HAS_QUIET_NAN__ 1
+// CHERI128: #define __LDBL_MANT_DIG__ 113
+// CHERI128: #define __LDBL_MAX_10_EXP__ 4932
+// CHERI128: #define __LDBL_MAX_EXP__ 16384
+// CHERI128: #define __LDBL_MAX__ 1.18973149535723176508575932662800702e+4932L
+// CHERI128: #define __LDBL_MIN_10_EXP__ (-4931)
+// CHERI128: #define __LDBL_MIN_EXP__ (-16381)
+// CHERI128: #define __LDBL_MIN__ 3.36210314311209350626267781732175260e-4932L
+// CHERI128: #define __LONG_LONG_MAX__ 9223372036854775807LL
+// CHERI128: #define __LONG_MAX__ 9223372036854775807L
+// CHERI128: #define __LP64__ 1
+// CHERI128: #define __MIPSEB 1
+// CHERI128: #define __MIPSEB__ 1
+// CHERI128: #define __NO_INLINE__ 1
+// CHERI128: #define __ORDER_BIG_ENDIAN__ 4321
+// CHERI128: #define __ORDER_LITTLE_ENDIAN__ 1234
+// CHERI128: #define __ORDER_PDP_ENDIAN__ 3412
+// CHERI128: #define __POINTER_WIDTH__ 64
+// CHERI128: #define __PRAGMA_REDEFINE_EXTNAME 1
+// CHERI128: #define __PTRDIFF_FMTd__ "ld"
+// CHERI128: #define __PTRDIFF_FMTi__ "li"
+// CHERI128: #define __PTRDIFF_MAX__ 9223372036854775807L
+// CHERI128: #define __PTRDIFF_TYPE__ long int
+// CHERI128: #define __PTRDIFF_WIDTH__ 64
+// CHERI128: #define __REGISTER_PREFIX__ 
+// CHERI128: #define __SCHAR_MAX__ 127
+// CHERI128: #define __SHRT_MAX__ 32767
+// CHERI128: #define __SIG_ATOMIC_MAX__ 2147483647
+// CHERI128: #define __SIG_ATOMIC_WIDTH__ 32
+// CHERI128: #define __SIZEOF_DOUBLE__ 8
+// CHERI128: #define __SIZEOF_FLOAT__ 4
+// CHERI128: #define __SIZEOF_INT128__ 16
+// CHERI128: #define __SIZEOF_INT__ 4
+// CHERI128: #define __SIZEOF_LONG_DOUBLE__ 16
+// CHERI128: #define __SIZEOF_LONG_LONG__ 8
+// CHERI128: #define __SIZEOF_LONG__ 8
+// CHERI128: #define __SIZEOF_POINTER__ 8
+// CHERI128: #define __SIZEOF_PTRDIFF_T__ 8
+// CHERI128: #define __SIZEOF_SHORT__ 2
+// CHERI128: #define __SIZEOF_SIZE_T__ 8
+// CHERI128: #define __SIZEOF_WCHAR_T__ 4
+// CHERI128: #define __SIZEOF_WINT_T__ 4
+// CHERI128: #define __SIZE_FMTX__ "lX"
+// CHERI128: #define __SIZE_FMTo__ "lo"
+// CHERI128: #define __SIZE_FMTu__ "lu"
+// CHERI128: #define __SIZE_FMTx__ "lx"
+// CHERI128: #define __SIZE_MAX__ 18446744073709551615UL
+// CHERI128: #define __SIZE_TYPE__ long unsigned int
+// CHERI128: #define __SIZE_WIDTH__ 64
+// CHERI128: #define __STDC_HOSTED__ 1
+// CHERI128: #define __STDC_UTF_16__ 1
+// CHERI128: #define __STDC_UTF_32__ 1
+// CHERI128: #define __STDC_VERSION__ 201112L
+// CHERI128: #define __STDC__ 1
+// CHERI128: #define __UINT16_C_SUFFIX__ 
+// CHERI128: #define __UINT16_FMTX__ "hX"
+// CHERI128: #define __UINT16_FMTo__ "ho"
+// CHERI128: #define __UINT16_FMTu__ "hu"
+// CHERI128: #define __UINT16_FMTx__ "hx"
+// CHERI128: #define __UINT16_MAX__ 65535
+// CHERI128: #define __UINT16_TYPE__ unsigned short
+// CHERI128: #define __UINT32_C_SUFFIX__ U
+// CHERI128: #define __UINT32_FMTX__ "X"
+// CHERI128: #define __UINT32_FMTo__ "o"
+// CHERI128: #define __UINT32_FMTu__ "u"
+// CHERI128: #define __UINT32_FMTx__ "x"
+// CHERI128: #define __UINT32_MAX__ 4294967295U
+// CHERI128: #define __UINT32_TYPE__ unsigned int
+// CHERI128: #define __UINT64_C_SUFFIX__ UL
+// CHERI128: #define __UINT64_FMTX__ "lX"
+// CHERI128: #define __UINT64_FMTo__ "lo"
+// CHERI128: #define __UINT64_FMTu__ "lu"
+// CHERI128: #define __UINT64_FMTx__ "lx"
+// CHERI128: #define __UINT64_MAX__ 18446744073709551615UL
+// CHERI128: #define __UINT64_TYPE__ long unsigned int
+// CHERI128: #define __UINT8_C_SUFFIX__ 
+// CHERI128: #define __UINT8_FMTX__ "hhX"
+// CHERI128: #define __UINT8_FMTo__ "hho"
+// CHERI128: #define __UINT8_FMTu__ "hhu"
+// CHERI128: #define __UINT8_FMTx__ "hhx"
+// CHERI128: #define __UINT8_MAX__ 255
+// CHERI128: #define __UINT8_TYPE__ unsigned char
+// CHERI128: #define __UINTMAX_C_SUFFIX__ UL
+// CHERI128: #define __UINTMAX_FMTX__ "lX"
+// CHERI128: #define __UINTMAX_FMTo__ "lo"
+// CHERI128: #define __UINTMAX_FMTu__ "lu"
+// CHERI128: #define __UINTMAX_FMTx__ "lx"
+// CHERI128: #define __UINTMAX_MAX__ 18446744073709551615UL
+// CHERI128: #define __UINTMAX_TYPE__ long unsigned int
+// CHERI128: #define __UINTMAX_WIDTH__ 64
+// CHERI128: #define __UINTPTR_FMTX__ "lX"
+// CHERI128: #define __UINTPTR_FMTo__ "lo"
+// CHERI128: #define __UINTPTR_FMTu__ "lu"
+// CHERI128: #define __UINTPTR_FMTx__ "lx"
+// CHERI128: #define __UINTPTR_MAX__ 18446744073709551615UL
+// CHERI128: #define __UINTPTR_TYPE__ long unsigned int
+// CHERI128: #define __UINTPTR_WIDTH__ 64
+// CHERI128: #define __UINT_FAST16_FMTX__ "hX"
+// CHERI128: #define __UINT_FAST16_FMTo__ "ho"
+// CHERI128: #define __UINT_FAST16_FMTu__ "hu"
+// CHERI128: #define __UINT_FAST16_FMTx__ "hx"
+// CHERI128: #define __UINT_FAST16_MAX__ 65535
+// CHERI128: #define __UINT_FAST16_TYPE__ unsigned short
+// CHERI128: #define __UINT_FAST32_FMTX__ "X"
+// CHERI128: #define __UINT_FAST32_FMTo__ "o"
+// CHERI128: #define __UINT_FAST32_FMTu__ "u"
+// CHERI128: #define __UINT_FAST32_FMTx__ "x"
+// CHERI128: #define __UINT_FAST32_MAX__ 4294967295U
+// CHERI128: #define __UINT_FAST32_TYPE__ unsigned int
+// CHERI128: #define __UINT_FAST64_FMTX__ "lX"
+// CHERI128: #define __UINT_FAST64_FMTo__ "lo"
+// CHERI128: #define __UINT_FAST64_FMTu__ "lu"
+// CHERI128: #define __UINT_FAST64_FMTx__ "lx"
+// CHERI128: #define __UINT_FAST64_MAX__ 18446744073709551615UL
+// CHERI128: #define __UINT_FAST64_TYPE__ long unsigned int
+// CHERI128: #define __UINT_FAST8_FMTX__ "hhX"
+// CHERI128: #define __UINT_FAST8_FMTo__ "hho"
+// CHERI128: #define __UINT_FAST8_FMTu__ "hhu"
+// CHERI128: #define __UINT_FAST8_FMTx__ "hhx"
+// CHERI128: #define __UINT_FAST8_MAX__ 255
+// CHERI128: #define __UINT_FAST8_TYPE__ unsigned char
+// CHERI128: #define __UINT_LEAST16_FMTX__ "hX"
+// CHERI128: #define __UINT_LEAST16_FMTo__ "ho"
+// CHERI128: #define __UINT_LEAST16_FMTu__ "hu"
+// CHERI128: #define __UINT_LEAST16_FMTx__ "hx"
+// CHERI128: #define __UINT_LEAST16_MAX__ 65535
+// CHERI128: #define __UINT_LEAST16_TYPE__ unsigned short
+// CHERI128: #define __UINT_LEAST32_FMTX__ "X"
+// CHERI128: #define __UINT_LEAST32_FMTo__ "o"
+// CHERI128: #define __UINT_LEAST32_FMTu__ "u"
+// CHERI128: #define __UINT_LEAST32_FMTx__ "x"
+// CHERI128: #define __UINT_LEAST32_MAX__ 4294967295U
+// CHERI128: #define __UINT_LEAST32_TYPE__ unsigned int
+// CHERI128: #define __UINT_LEAST64_FMTX__ "lX"
+// CHERI128: #define __UINT_LEAST64_FMTo__ "lo"
+// CHERI128: #define __UINT_LEAST64_FMTu__ "lu"
+// CHERI128: #define __UINT_LEAST64_FMTx__ "lx"
+// CHERI128: #define __UINT_LEAST64_MAX__ 18446744073709551615UL
+// CHERI128: #define __UINT_LEAST64_TYPE__ long unsigned int
+// CHERI128: #define __UINT_LEAST8_FMTX__ "hhX"
+// CHERI128: #define __UINT_LEAST8_FMTo__ "hho"
+// CHERI128: #define __UINT_LEAST8_FMTu__ "hhu"
+// CHERI128: #define __UINT_LEAST8_FMTx__ "hhx"
+// CHERI128: #define __UINT_LEAST8_MAX__ 255
+// CHERI128: #define __UINT_LEAST8_TYPE__ unsigned char
+// CHERI128: #define __USER_LABEL_PREFIX__ _
+// CHERI128: #define __WCHAR_MAX__ 2147483647
+// CHERI128: #define __WCHAR_TYPE__ int
+// CHERI128: #define __WCHAR_WIDTH__ 32
+// CHERI128: #define __WINT_TYPE__ int
+// CHERI128: #define __WINT_WIDTH__ 32
+// CHERI128: #define __capability __attribute__((address_space(200)))
+// CHERI128: #define __clang__ 1
+// CHERI128: #define __llvm__ 1
+// CHERI128: #define __mips 64
+// CHERI128: #define __mips64 1
+// CHERI128: #define __mips64__ 1
+// CHERI128: #define __mips__ 1
+// CHERI128: #define __mips_fpr 64
+// CHERI128: #define __mips_hard_float 1
+// CHERI128: #define __mips_n64 1
+// CHERI128: #define _mips 1
+// CHERI128: #define mips 1
+
+// FIXME Should _MIPS_FPSET and __mips_fpr really be different for sandbox ABI?
+
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX %s
+// CHERI128-SANDBOX: #define _MIPS_FPSET 16
+// CHERI128-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 1
+// CHERI128-SANDBOX: #define __CHERI_SANDBOX__ 3
+// CHERI128-SANDBOX: #define __INTPTR_FMTd__ "Pd"
+// CHERI128-SANDBOX: #define __INTPTR_FMTi__ "Pi"
+// CHERI128-SANDBOX: #define __INTPTR_MAX__ 170141183460469231731687303715884105727
+// CHERI128-SANDBOX: #define __INTPTR_TYPE__ __intcap_t
+// CHERI128-SANDBOX: #define __INTPTR_WIDTH__ 128
+// CHERI128-SANDBOX: #define __UINTPTR_FMTX__ "PX"
+// CHERI128-SANDBOX: #define __UINTPTR_FMTo__ "Po"
+// CHERI128-SANDBOX: #define __UINTPTR_FMTu__ "Pu"
+// CHERI128-SANDBOX: #define __UINTPTR_FMTx__ "Px"
+// CHERI128-SANDBOX: #define __UINTPTR_MAX__ 340282366920938463463374607431768211455
+// CHERI128-SANDBOX: #define __UINTPTR_TYPE__ __uintcap_t
+// CHERI128-SANDBOX: #define __UINTPTR_WIDTH__ 128
+// CHERI128-SANDBOX: #define __mips_fpr 32
+
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX-SOFT %s
+// CHERI128-SANDBOX-SOFT: #define _MIPS_FPSET 16
+// CHERI128-SANDBOX-SOFT: #define __mips_fpr 32
+// CHERI128-SANDBOX-SOFT-NOT: #define __mips_hard_float 1
+// CHERI128-SANDBOX-SOFT: #define __mips_soft_float 1
+
+
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX %s
+// CHERI256-SANDBOX: #define _MIPS_FPSET 16
+// CHERI256-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 1
+// CHERI256-SANDBOX: #define __CHERI_SANDBOX__ 3
+// CHERI256-SANDBOX: #define __INTPTR_FMTd__ "Pd"
+// CHERI256-SANDBOX: #define __INTPTR_FMTi__ "Pi"
+// CHERI256-SANDBOX: #define __INTPTR_MAX__ 57896044618658097711785492504343953926634992332820282019728792003956564819967
+// CHERI256-SANDBOX: #define __INTPTR_TYPE__ __intcap_t
+// CHERI256-SANDBOX: #define __INTPTR_WIDTH__ 256
+// CHERI256-SANDBOX: #define __UINTPTR_FMTX__ "PX"
+// CHERI256-SANDBOX: #define __UINTPTR_FMTo__ "Po"
+// CHERI256-SANDBOX: #define __UINTPTR_FMTu__ "Pu"
+// CHERI256-SANDBOX: #define __UINTPTR_FMTx__ "Px"
+// CHERI256-SANDBOX: #define __UINTPTR_MAX__ 115792089237316195423570985008687907853269984665640564039457584007913129639935
+// CHERI256-SANDBOX: #define __UINTPTR_TYPE__ __uintcap_t
+// CHERI256-SANDBOX: #define __UINTPTR_WIDTH__ 256
+// CHERI256-SANDBOX: #define __mips_fpr 32
+
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX-SOFT %s
+// CHERI256-SANDBOX-SOFT: #define _MIPS_FPSET 16
+// CHERI256-SANDBOX-SOFT: #define __mips_fpr 32
+// CHERI256-SANDBOX-SOFT-NOT: #define __mips_hard_float 1
+// CHERI256-SANDBOX-SOFT: #define __mips_soft_float 1
+
+
 // Check MIPS arch and isa macros
 //
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=mips-none-none \
