@@ -136,3 +136,16 @@ int capdiff(__capability int *a, __capability int *b)
   return a-b;
 }
 
+// CHECK: negativeint
+void negativeint()
+{
+  // CHECK: @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 -5)
+  __intcap_t minus = -5;
+}
+
+// CHECK: largeint
+void largeint()
+{
+  // CHECK: @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 4294967295)
+  __uintcap_t large = 4294967295; // 2^32 - 1
+}

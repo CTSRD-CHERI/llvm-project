@@ -880,7 +880,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (DstType.isCapabilityType(CGF.getContext())) {
       Value *Null =
         Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstTy);
-      Src = Builder.CreateZExtOrTrunc(Src, CGF.Int64Ty);
+      Src = Builder.CreateSExtOrTrunc(Src, CGF.Int64Ty);
       return CGF.setPointerOffset(Null, Src);
     }
     // First, convert to the correct width so that we control the kind of
