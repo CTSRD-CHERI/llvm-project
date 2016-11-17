@@ -118,14 +118,6 @@ static bool SemaBuiltinMemcapCreate(Sema &S, CallExpr *TheCall) {
   ReturnTy = C.getPointerType(ReturnTy);
   ReturnTy = C.getAddrSpaceQualType(ReturnTy, C.getDefaultAS());
 
-  QualType ArgTys[] = { TheCall->getArg(0)->getType(),
-    TheCall->getArg(1)->getType(), FnType };
-  QualType BuiltinTy = C.getFunctionType(
-      ReturnTy, ArgTys, FunctionProtoType::ExtProtoInfo());
-  BuiltinTy = C.getAddrSpaceQualType(BuiltinTy, C.getDefaultAS());
-  QualType BuiltinPtrTy = C.getPointerType(BuiltinTy);
-  BuiltinPtrTy = C.getAddrSpaceQualType(BuiltinPtrTy, C.getDefaultAS());
-
   TheCall->setType(ReturnTy);
   return false;
 }
