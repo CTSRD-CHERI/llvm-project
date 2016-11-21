@@ -1729,11 +1729,16 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
     const ArrayType* ATy = Context.getAsArrayType(D->getType());
     FieldAlign = Context.getTypeAlignInChars(ATy->getElementType());
   } else if (const ReferenceType *RT = D->getType()->getAs<ReferenceType>()) {
+    const TargetInfo &TI = Context.getTargetInfo();
     unsigned AS = RT->getPointeeType().getAddressSpace();
     FieldSize = 
-      Context.toCharUnitsFromBits(Context.getTargetInfo().getPointerWidth(AS));
+      Context.toCharUnitsFromBits(TI.areAllPointersCapabilities()
+                                  ? TI.getMemoryCapabilityWidth()
+                                  : TI.getPointerWidth(AS));
     FieldAlign = 
-      Context.toCharUnitsFromBits(Context.getTargetInfo().getPointerAlign(AS));
+      Context.toCharUnitsFromBits(TI.areAllPointersCapabilities()
+                                  ? TI.getMemoryCapabilityAlign()
+                                  : TI.getPointerAlign(AS));
   } else {
     std::pair<CharUnits, CharUnits> FieldInfo = 
       Context.getTypeInfoInChars(D->getType());
