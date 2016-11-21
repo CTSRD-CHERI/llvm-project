@@ -2025,7 +2025,8 @@ static llvm::Value *EmitTypeidFromVTable(CodeGenFunction &CGF, const Expr *E,
 
 llvm::Value *CodeGenFunction::EmitCXXTypeidExpr(const CXXTypeidExpr *E) {
   llvm::Type *StdTypeInfoPtrTy = 
-    ConvertType(E->getType())->getPointerTo();
+    ConvertType(E->getType())->getPointerTo(
+      CGM.getTargetCodeGenInfo().getDefaultAS());
   
   if (E->isTypeOperand()) {
     llvm::Constant *TypeInfo =
