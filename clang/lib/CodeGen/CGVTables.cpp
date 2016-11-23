@@ -628,7 +628,8 @@ void CodeGenVTables::addVTableComponent(
       fnPtr = CGM.GetAddrOfFunction(GD, fnTy, /*ForVTable=*/true);
     }
 
-    fnPtr = llvm::ConstantExpr::getBitCast(fnPtr, CGM.Int8PtrTy);
+    fnPtr = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(fnPtr,
+                                                                 CGM.Int8PtrTy);
     builder.add(fnPtr);
     return;
   }

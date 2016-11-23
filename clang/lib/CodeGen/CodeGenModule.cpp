@@ -2369,7 +2369,9 @@ CodeGenModule::CreateOrReplaceCXXRuntimeVariable(StringRef Name,
   
   // Create a new variable.
   GV = new llvm::GlobalVariable(getModule(), Ty, /*isConstant=*/true,
-                                Linkage, nullptr, Name);
+                                Linkage, nullptr, Name, nullptr,
+                                llvm::GlobalVariable::NotThreadLocal,
+                                getTargetCodeGenInfo().getDefaultAS());
 
   if (OldGV) {
     // Replace occurrences of the old variable if needed.
