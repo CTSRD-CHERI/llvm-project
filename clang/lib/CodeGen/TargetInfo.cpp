@@ -6660,6 +6660,9 @@ public:
   unsigned getMemoryCapabilityAS() const override {
     return 200;
   }
+  unsigned getStackAS() const override {
+    return getMemoryCapabilityAS();
+  }
 };
 }
 

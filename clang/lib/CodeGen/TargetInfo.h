@@ -219,6 +219,8 @@ public:
                                        llvm::SmallString<32> &Opt) const {}
 
   virtual unsigned getDefaultAS() const { return 0; }
+
+  virtual unsigned getStackAS() const { return 0; }
   
   virtual unsigned getMemoryCapabilityAS() const { 
     assert(0 && "Target does not support capabilities!\n");
