@@ -104,7 +104,8 @@ static void EmitDeclDestroy(CodeGenFunction &CGF, const VarDecl &D,
 
     function = CGM.getAddrOfCXXStructor(dtor, StructorType::Complete);
     argument = llvm::ConstantExpr::getBitCast(
-        addr.getPointer(), CGF.getTypes().ConvertType(type)->getPointerTo());
+        addr.getPointer(), CGF.getTypes().ConvertType(type)->getPointerTo(
+                                 CGM.getTargetCodeGenInfo().getDefaultAS()));
 
   // Otherwise, the standard logic requires a helper function.
   } else {

@@ -920,7 +920,8 @@ public:
                                           llvm::AttributeSet());
   /// Create a new runtime global variable with the specified type and name.
   llvm::Constant *CreateRuntimeVariable(llvm::Type *Ty,
-                                        StringRef Name);
+                                        StringRef Name,
+                                        unsigned AddressSpace = 0);
 
   ///@name Custom Blocks Runtime Interfaces
   ///@{

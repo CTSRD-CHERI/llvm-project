@@ -2421,8 +2421,10 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
 /// specified type and name.
 llvm::Constant *
 CodeGenModule::CreateRuntimeVariable(llvm::Type *Ty,
-                                     StringRef Name) {
-  return GetOrCreateLLVMGlobal(Name, llvm::PointerType::getUnqual(Ty), nullptr);
+                                     StringRef Name,
+                                     unsigned AddressSpace) {
+  return GetOrCreateLLVMGlobal(Name, llvm::PointerType::get(Ty, AddressSpace),
+                               nullptr);
 }
 
 void CodeGenModule::EmitTentativeDefinition(const VarDecl *D) {
