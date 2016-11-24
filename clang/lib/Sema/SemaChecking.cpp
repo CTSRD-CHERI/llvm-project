@@ -3145,6 +3145,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case 4: SizeIndex = 2; break;
   case 8: SizeIndex = 3; break;
   case 16: SizeIndex = 4; break;
+  case 32: SizeIndex = 4; break; // FIXME-cheri-c++: add 32 byte versions of builtins?
   default:
     Diag(DRE->getLocStart(), diag::err_atomic_builtin_pointer_size)
       << FirstArg->getType() << FirstArg->getSourceRange();
