@@ -2925,7 +2925,8 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
             AS = PtrTy->getPointeeType().getAddressSpace();
           }
           Ty = Context.getPointerType(
-              Context.getAddrSpaceQualType(ValType.getUnqualifiedType(), AS));
+              Context.getAddrSpaceQualType(ValType.getUnqualifiedType(), AS),
+              Context.getTargetInfo().areAllPointersCapabilities());
         }
         break;
       case 2:
