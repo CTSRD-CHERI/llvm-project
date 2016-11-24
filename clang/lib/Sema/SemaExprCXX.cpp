@@ -1758,8 +1758,8 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
                                     AllocType->getObjCARCImplicitLifetime());
   }
 
-  QualType ResultType = Context.getPointerType(AllocType);
-
+  QualType ResultType = Context.getPointerType(AllocType,
+      Context.getTargetInfo().areAllPointersCapabilities());
   if (ArraySize && ArraySize->getType()->isNonOverloadPlaceholderType()) {
     ExprResult result = CheckPlaceholderExpr(ArraySize);
     if (result.isInvalid()) return ExprError();
