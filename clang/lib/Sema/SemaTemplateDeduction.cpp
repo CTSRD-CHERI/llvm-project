@@ -3311,7 +3311,8 @@ static bool AdjustFunctionParmAndArgTypesForDeduction(
     //     function-to-pointer standard conversion (4.3) is used in place
     //     of A for type deduction; otherwise,
     else if (ArgType->isFunctionType())
-      ArgType = S.Context.getPointerType(ArgType);
+      ArgType = S.Context.getPointerType(ArgType,
+                      S.Context.getTargetInfo().areAllPointersCapabilities());
     else {
       // - If A is a cv-qualified type, the top level cv-qualifiers of A's
       //   type are ignored for type deduction.
