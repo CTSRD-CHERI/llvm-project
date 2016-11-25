@@ -43,6 +43,17 @@ template <class ELFT> static bool isCompatible(InputFile *F) {
       return true;
   }
 
+
+  //XXXAR: hack, EM_MIPS_CHERI output should accept EM_MIPS object files
+  //TODO: fix clang to output EM_MIPS_CHERI object files
+  if (Config->EMachine == EM_MIPS_CHERI) {
+    if (F->EKind == Config->EKind && F->EMachine == EM_MIPS) {
+      warn("Accepting " + toString(F) + " which is EM_MIPS and not EM_MIPS_CHERI");
+      return true;
+    }
+  }
+
+
   if (!Config->Emulation.empty())
     error(toString(F) + " is incompatible with " + Config->Emulation);
   else
