@@ -165,4 +165,8 @@ extern Configuration *Config;
 } // namespace elf
 } // namespace lld
 
+// XXXAR: this should be defined in llvm/Support/Elf.h instead but it's in
+// a separate repository
+constexpr uint16_t EM_MIPS_CHERI = 0xC256;
+
 #endif

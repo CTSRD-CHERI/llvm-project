@@ -277,6 +277,8 @@ TargetInfo *createTarget() {
     default:
       fatal("unsupported MIPS target");
     }
+  case EM_MIPS_CHERI:
+      return new MipsTargetInfo<ELF64BE>(); // XXXAR: add new target info?
   case EM_PPC:
     return make<PPCTargetInfo>();
   case EM_PPC64:

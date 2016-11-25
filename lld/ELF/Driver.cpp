@@ -89,10 +89,6 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
     OSABI = ELFOSABI_FREEBSD;
   }
 
-  // XXXAR: this should be defined in llvm/Support/Elf.h instead but it's in
-  // a separate repository
-  constexpr uint16_t EM_MIPS_CHERI = 0xC256;
-
   std::pair<ELFKind, uint16_t> Ret =
       StringSwitch<std::pair<ELFKind, uint16_t>>(S)
           .Cases("aarch64elf", "aarch64linux", {ELF64LEKind, EM_AARCH64})
