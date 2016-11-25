@@ -79,7 +79,7 @@ static bool isPreemptible(const SymbolBody &Body, uint32_t Type) {
   // relocation types occupy eight bit. In case of N64 ABI we extract first
   // relocation from 3-in-1 packet because only the first relocation can
   // be against a real symbol.
-  if (Config->EMachine == EM_MIPS && (Type & 0xff) == R_MIPS_GPREL16)
+  if (Config->isMIPS() && (Type & 0xff) == R_MIPS_GPREL16)
     return false;
   return Body.isPreemptible();
 }
@@ -146,7 +146,7 @@ static unsigned handleTlsRelocation(uint32_t Type, SymbolBody &Body,
   if (Config->EMachine == EM_ARM)
     return handleNoRelaxTlsRelocation<ELFT>(In<ELFT>::Got, Type, Body, C,
                                             Offset, Addend, Expr);
-  if (Config->EMachine == EM_MIPS)
+  if (Config->isMIPS())
     return handleNoRelaxTlsRelocation<ELFT>(In<ELFT>::MipsGot, Type, Body, C,
                                             Offset, Addend, Expr);
 
@@ -537,7 +537,7 @@ static typename ELFT::uint computeAddend(const elf::ObjectFile<ELFT> &File,
   const uint8_t *BufLoc = SectionData + RI.r_offset;
   if (!RelTy::IsRela)
     Addend += Target->getImplicitAddend(BufLoc, Type);
-  if (Config->EMachine == EM_MIPS) {
+  if (Config->isMIPS()) {
     Addend += findMipsPairedAddend<ELFT>(SectionData, BufLoc, Body, &RI, End);
     if (Type == R_MIPS_LO16 && Expr == R_PC)
       // R_MIPS_LO16 expression has R_PC type iif the target is _gp_disp
@@ -727,7 +727,7 @@ static void scanRelocs(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
       // to the GOT entry and reads the GOT entry when it needs to perform
       // a dynamic relocation.
       // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf p.4-19
-      if (Config->EMachine == EM_MIPS)
+      if (Config->isMIPS())
         In<ELFT>::MipsGot->addEntry(Body, Addend, Expr);
       continue;
     }
@@ -757,7 +757,7 @@ static void scanRelocs(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
     }
 
     if (refersToGotEntry(Expr)) {
-      if (Config->EMachine == EM_MIPS) {
+      if (Config->isMIPS()) {
         // MIPS ABI has special rules to process GOT entries and doesn't
         // require relocation entries for them. A special case is TLS
         // relocations. In that case dynamic loader applies dynamic

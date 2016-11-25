@@ -37,7 +37,7 @@ template <class ELFT> static bool isCompatible(InputFile *F) {
     return true;
 
   if (F->EKind == Config->EKind && F->EMachine == Config->EMachine) {
-    if (Config->EMachine != EM_MIPS)
+    if (!Config->isMIPS())
       return true;
     if (isMipsN32Abi(F) == Config->MipsN32Abi)
       return true;

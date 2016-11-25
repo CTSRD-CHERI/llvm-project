@@ -799,7 +799,7 @@ DynamicSection<ELFT>::DynamicSection()
   // .dynamic section is not writable on MIPS.
   // See "Special Section" in Chapter 4 in the following document:
   // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
-  if (Config->EMachine == EM_MIPS)
+  if (Config->isMIPS())
     this->Flags = SHF_ALLOC;
 
   addEntries();
@@ -862,7 +862,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalize() {
     // MIPS dynamic loader does not support RELCOUNT tag.
     // The problem is in the tight relation between dynamic
     // relocations and GOT. So do not emit this tag on MIPS.
-    if (Config->EMachine != EM_MIPS) {
+    if (!Config->isMIPS()) {
       size_t NumRelativeRels = In<ELFT>::RelaDyn->getRelativeRelocCount();
       if (Config->ZCombreloc && NumRelativeRels)
         add({IsRela ? DT_RELACOUNT : DT_RELCOUNT, NumRelativeRels});
@@ -871,7 +871,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalize() {
   if (In<ELFT>::RelaPlt->OutSec->Size > 0) {
     add({DT_JMPREL, In<ELFT>::RelaPlt});
     add({DT_PLTRELSZ, In<ELFT>::RelaPlt->OutSec->Size});
-    add({Config->EMachine == EM_MIPS ? DT_MIPS_PLTGOT : DT_PLTGOT,
+    add({Config->isMIPS() ? DT_MIPS_PLTGOT : DT_PLTGOT,
          In<ELFT>::GotPlt});
     add({DT_PLTREL, uint64_t(Config->Rela ? DT_RELA : DT_REL)});
   }
@@ -915,7 +915,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalize() {
     add({DT_VERNEEDNUM, In<ELFT>::VerNeed->getNeedNum()});
   }
 
-  if (Config->EMachine == EM_MIPS) {
+  if (Config->isMIPS()) {
     add({DT_MIPS_RLD_VERSION, 1});
     add({DT_MIPS_FLAGS, RHF_NOTPOT});
     add({DT_MIPS_BASE_ADDRESS, Config->ImageBase});
@@ -1017,7 +1017,7 @@ template <class ELFT> void RelocationSection<ELFT>::writeTo(uint8_t *Buf) {
     if (Config->Rela)
       P->r_addend = Rel.getAddend();
     P->r_offset = Rel.getOffset();
-    if (Config->EMachine == EM_MIPS && Rel.getInputSec() == In<ELFT>::MipsGot)
+    if (Config->isMIPS() && Rel.getInputSec() == In<ELFT>::MipsGot)
       // Dynamic relocation against MIPS GOT section make deal TLS entries
       // allocated in the end of the GOT. We need to adjust the offset to take
       // in account 'local' and 'global' GOT entries.
@@ -1098,7 +1098,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::finalize() {
   if (In<ELFT>::GnuHashTab)
     // NB: It also sorts Symbols to meet the GNU hash table requirements.
     In<ELFT>::GnuHashTab->addSymbols(Symbols);
-  else if (Config->EMachine == EM_MIPS)
+  else if (Config->isMIPS())
     std::stable_sort(Symbols.begin(), Symbols.end(),
                      [](const SymbolTableEntry &L, const SymbolTableEntry &R) {
                        return sortMipsSymbols(L.Symbol, R.Symbol);
@@ -1190,7 +1190,7 @@ void SymbolTableSection<ELFT>::writeGlobalSymbols(uint8_t *Buf) {
       ESym->st_value = cast<DefinedCommon>(Body)->Alignment;
     }
 
-    if (Config->EMachine == EM_MIPS) {
+    if (Config->isMIPS()) {
       // On MIPS we need to mark symbol which has a PLT entry and requires
       // pointer equality by STO_MIPS_PLT flag. That is necessary to help
       // dynamic linker distinguish such symbols and MIPS lazy-binding stubs.

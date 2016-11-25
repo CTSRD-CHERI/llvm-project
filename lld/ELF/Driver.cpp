@@ -221,7 +221,7 @@ static void initLLVM(opt::InputArgList &Args) {
 static void checkOptions(opt::InputArgList &Args) {
   // The MIPS ABI as of 2016 does not support the GNU-style symbol lookup
   // table which is a relatively new feature.
-  if (Config->EMachine == EM_MIPS && Config->GnuHash)
+  if (Config->isMIPS() && Config->GnuHash)
     error("the .gnu.hash section is not compatible with the MIPS target.");
 
   if (Config->Pie && Config->Shared)
@@ -733,7 +733,7 @@ void LinkerDriver::inferMachineType() {
     Config->EKind = F->EKind;
     Config->EMachine = F->EMachine;
     Config->OSABI = F->OSABI;
-    Config->MipsN32Abi = Config->EMachine == EM_MIPS && isMipsN32Abi(F);
+    Config->MipsN32Abi = Config->isMIPS() && isMipsN32Abi(F);
     return;
   }
   error("target emulation unknown: -m or at least one .o file required");
@@ -779,8 +779,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
 
   Config->Rela =
       ELFT::Is64Bits || Config->EMachine == EM_X86_64 || Config->MipsN32Abi;
-  Config->Mips64EL =
-      (Config->EMachine == EM_MIPS && Config->EKind == ELF64LEKind);
+  Config->Mips64EL = (Config->isMIPS() && Config->EKind == ELF64LEKind);
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);
 
@@ -794,7 +793,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Config->WarnMissingEntry =
       (!Config->Entry.empty() || (!Config->Shared && !Config->Relocatable));
   if (Config->Entry.empty() && !Config->Relocatable)
-    Config->Entry = (Config->EMachine == EM_MIPS) ? "__start" : "_start";
+    Config->Entry = Config->isMIPS() ? "__start" : "_start";
 
   // Handle --trace-symbol.
   for (auto *Arg : Args.filtered(OPT_trace_symbol))
