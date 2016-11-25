@@ -804,6 +804,16 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   for (InputFile *F : Files)
     Symtab.addFile(F);
 
+  if (Config->EMachine == EM_MIPS_CHERI) {
+    if (Config->DynamicLinker.empty())
+      Config->DynamicLinker = "/libexec/ld-cheri-elf.so.1";
+    if (Config->SearchPaths.empty()) {
+      Config->SearchPaths = {
+        "=/libcheri", "=/usr/libcheri", "=/usr/local/libcheri"
+      };
+    }
+  }
+
   // If an entry symbol is in a static archive, pull out that file now
   // to complete the symbol table. After this, no new names except a
   // few linker-synthesized ones will be added to the symbol table.
