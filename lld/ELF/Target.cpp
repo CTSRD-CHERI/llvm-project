@@ -45,7 +45,8 @@ using namespace llvm::support::endian;
 using namespace llvm::ELF;
 
 std::string lld::toString(uint32_t Type) {
-  StringRef S = getELFRelocationTypeName(elf::Config->EMachine, Type);
+  auto Machine = elf::Config->EMachine == EM_MIPS_CHERI ? EM_MIPS : elf::Config->EMachine;
+  StringRef S = getELFRelocationTypeName(Machine, Type);
   if (S == "Unknown")
     return ("Unknown (" + Twine(Type) + ")").str();
   return S;
