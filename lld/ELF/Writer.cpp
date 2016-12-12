@@ -851,6 +851,7 @@ template <class ELFT> void Writer<ELFT>::createSections() {
     addInputSec(IS);
 
   sortBySymbolsOrder<ELFT>(OutputSections);
+  // sortInitFini<ELFT>(findSection(".preinit_array")); // XXXAR: should we also do this?
   sortInitFini<ELFT>(findSection(".init_array"));
   sortInitFini<ELFT>(findSection(".fini_array"));
   sortCtorsDtors<ELFT>(findSection(".ctors"));
