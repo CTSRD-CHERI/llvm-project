@@ -458,6 +458,11 @@ static RelExpr adjustExpr(const elf::ObjectFile<ELFT> &File, SymbolBody &Body,
                           bool IsWrite, RelExpr Expr, uint32_t Type,
                           const uint8_t *Data, InputSectionBase<ELFT> &S,
                           typename ELFT::uint RelOff) {
+  if (S.Name == "__cap_relocs") {
+    // XXXAR: I think this is the correct behaviour, just don't change anything
+    return Expr;
+  }
+
   bool Preemptible = isPreemptible(Body, Type);
   if (Body.isGnuIFunc()) {
     Expr = toPlt(Expr);
