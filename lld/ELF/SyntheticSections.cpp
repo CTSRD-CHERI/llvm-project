@@ -152,6 +152,12 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
             Twine(S->version));
       return nullptr;
     }
+    if (Size > sizeof(Elf_Mips_ABIFlags)) {
+      warn(Filename + ": .MIPS.abiflags section has multiple entries: got " +
+          Twine(Size) + " instead of " + Twine(sizeof(Elf_Mips_ABIFlags)) +
+          " bytes");
+      return nullptr;
+    }
 
     // LLD checks ISA compatibility in getMipsEFlags(). Here we just
     // select the highest number of ISA/Rev/Ext.
