@@ -533,6 +533,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->Trace = Args.hasArg(OPT_trace);
   Config->Verbose = Args.hasArg(OPT_verbose);
   Config->WarnCommon = Args.hasArg(OPT_warn_common);
+  Config->AllowAbsoluteRelocsInPic = Args.hasArg(OPT_allow_absolute_relocations_in_pic);
 
   Config->DynamicLinker = getString(Args, OPT_dynamic_linker);
   Config->Entry = getString(Args, OPT_entry);

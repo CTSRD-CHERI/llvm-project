@@ -269,6 +269,10 @@ def wrap: S<"wrap">, MetaVarName<"<symbol>">,
 def z: JoinedOrSeparate<["-"], "z">, MetaVarName<"<option>">,
   HelpText<"Linker option extensions">;
 
+// Workaround for CHERI "PIC hack" assembly
+def allow_absolute_relocations_in_pic: F<"allow-absolute-relocations-in-pic">,
+  HelpText<"Allow absolute relocations in position independent code">;
+
 // Aliases
 def alias_auxiliary: Separate<["-"], "f">, Alias<auxiliary>;
 def alias_Bdynamic_call_shared: F<"call_shared">, Alias<Bdynamic>;
