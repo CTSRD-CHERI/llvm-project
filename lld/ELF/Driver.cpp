@@ -291,6 +291,7 @@ void LinkerDriver::main(ArrayRef<const char *> ArgsArr, bool CanExitEarly) {
 
   // Interpret this flag early because error() depends on them.
   Config->ErrorLimit = getInteger(Args, OPT_error_limit, 20);
+  Config->WarningLimit = getInteger(Args, OPT_warning_limit, 20);
 
   // Handle -help
   if (Args.hasArg(OPT_help)) {

@@ -157,6 +157,7 @@ struct Configuration {
   uint16_t DefaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;
   uint16_t EMachine = llvm::ELF::EM_NONE;
   uint64_t ErrorLimit = 20;
+  uint64_t WarningLimit = 20;
   uint64_t ImageBase;
   uint64_t MaxPageSize;
   uint64_t ZStackSize;

@@ -82,6 +82,9 @@ def entry: S<"entry">, MetaVarName<"<entry>">,
 def error_limit: S<"error-limit">,
   HelpText<"Maximum number of errors to emit before stopping (0 = no limit)">;
 
+def warning_limit: S<"warning-limit">,
+  HelpText<"Maximum number of warnings to emit before stopping (0 = no limit)">;
+
 def error_undef: F<"error-unresolved-symbols">,
   HelpText<"Report unresolved symbols as errors">;
 
