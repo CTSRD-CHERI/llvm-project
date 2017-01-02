@@ -51,6 +51,7 @@
 #include "Thunks.h"
 
 #include "llvm/Support/Endian.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -325,6 +326,12 @@ static bool isStaticLinkTimeConstant(RelExpr E, uint32_t Type,
                      R_THUNK_PC, R_THUNK_PLT_PC>(E))
     return true;
 
+    if (S.Name == "__cap_relocs") {
+      // cap relocs are always link time constants (even in PIC code)
+      // errs() << toString(E) << format("(%d)+(0x%llx) against ", Type, (unsigned long long)RelOff) << toString(Body) << ": absval=" << AbsVal << ", isRelExpr(E)=" << RelE << "\n";
+      return true;
+  }
+
   // These never do, except if the entire file is position dependent or if
   // only the low bits are used.
   if (E == R_GOT || E == R_PLT || E == R_TLSDESC)
@@ -458,11 +465,6 @@ static RelExpr adjustExpr(const elf::ObjectFile<ELFT> &File, SymbolBody &Body,
                           bool IsWrite, RelExpr Expr, uint32_t Type,
                           const uint8_t *Data, InputSectionBase<ELFT> &S,
                           typename ELFT::uint RelOff) {
-  if (S.Name == "__cap_relocs") {
-    // XXXAR: I think this is the correct behaviour, just don't change anything
-    return Expr;
-  }
-
   bool Preemptible = isPreemptible(Body, Type);
   if (Body.isGnuIFunc()) {
     Expr = toPlt(Expr);
