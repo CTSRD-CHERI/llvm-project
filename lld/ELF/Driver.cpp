@@ -498,6 +498,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
     StringRef S = Arg->getValue();
     std::tie(Config->EKind, Config->EMachine, Config->OSABI) =
         parseEmulation(S);
+    Config->MipsCheriAbi = (S == "elf64btsmip_cheri_fbsd");
     Config->MipsN32Abi = (S == "elf32btsmipn32" || S == "elf32ltsmipn32");
     Config->Emulation = S;
   }

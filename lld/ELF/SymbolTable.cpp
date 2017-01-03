@@ -46,8 +46,9 @@ template <class ELFT> static bool isCompatible(InputFile *F) {
 
   //XXXAR: hack, EM_MIPS_CHERI output should accept EM_MIPS object files
   //TODO: fix clang to output EM_MIPS_CHERI object files
-  if (Config->EMachine == EM_MIPS_CHERI) {
-    if (F->EKind == Config->EKind && F->EMachine == EM_MIPS) {
+  if (Config->MipsCheriAbi) {
+    if (F->EKind == Config->EKind && (F->EMachine == EM_MIPS || F->EMachine == EM_MIPS_CHERI)) {
+      // XXXAR: figure out if we need EM_MIPS_CHERI
       // XXXAR: This currently generates tons of warnings, reenable when clang is fixed
       // warn(toString(F) + " has machine type EM_MIPS and not EM_MIPS_CHERI");
       return true;
