@@ -492,8 +492,8 @@ static RelExpr adjustExpr(const elf::ObjectFile<ELFT> &File, SymbolBody &Body,
           " defined in " + toString(Body.File));
     } else {
       error(S.getLocation(RelOff) + ": can't create dynamic relocation " +
-            toString(Type) + " against " + (Preemptible ? "preemptible " : "") +
-            (Body.getName().empty() ? "local symbol " + toString(Body) + " in readonly segment"
+            toString(Type) + " against " +
+            (Body.getName().empty() ? "local symbol in readonly segment"
                                     : "symbol '" + toString(Body) + "'") +
             " defined in " + toString(Body.File));
     }
