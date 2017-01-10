@@ -483,20 +483,11 @@ static RelExpr adjustExpr(const elf::ObjectFile<ELFT> &File, SymbolBody &Body,
   // only memory. We can hack around it if we are producing an executable and
   // the refered symbol can be preemepted to refer to the executable.
   if (Config->Shared || (Config->Pic && !isRelExpr(Expr))) {
-    if (Config->AllowAbsoluteRelocsInPic) {
-      // TODO: use a patter matcher (StringMatcher) to say which symbols are okay
-      warn(S.getLocation(RelOff) + ": PIC HACK: allowing " + toString(Type) +
-          " against " + (isPreemptible(Body, Type) ? "preemptible " : "") +
+    error(S.getLocation(RelOff) + ": can't create dynamic relocation " +
+          toString(Type) + " against " +
           (Body.getName().empty() ? "local symbol in readonly segment"
                                   : "symbol '" + toString(Body) + "'") +
           " defined in " + toString(Body.File));
-    } else {
-      error(S.getLocation(RelOff) + ": can't create dynamic relocation " +
-            toString(Type) + " against " +
-            (Body.getName().empty() ? "local symbol in readonly segment"
-                                    : "symbol '" + toString(Body) + "'") +
-            " defined in " + toString(Body.File));
-    }
     return Expr;
   }
   if (Body.getVisibility() != STV_DEFAULT) {
