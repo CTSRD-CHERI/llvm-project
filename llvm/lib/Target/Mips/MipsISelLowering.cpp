@@ -1877,6 +1877,18 @@ SDValue MipsTargetLowering::lowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   return createCMovFP(DAG, Cond, True, False, DL);
 }
 
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length) {
+  SDLoc DL(Val);
+  Intrinsic::ID SetBounds = Intrinsic::memcap_cap_bounds_set;
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+        DAG.getConstant(SetBounds, DL, MVT::i64), Val,
+        Length);
+}
+
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length) {
+   return setBounds(DAG, Val, DAG.getIntPtrConstant(Length, SDLoc(Val)));
+}
+
 SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
                                                SelectionDAG &DAG) const {
   EVT Ty = Op.getValueType();
@@ -1954,7 +1966,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         }
         SDValue Size = DAG.getGlobalAddress(SizeGV, SDLoc(Global), MVT::i64);
         Size = DAG.getLoad(MVT::i64, SDLoc(Global), DAG.getEntryNode(), Size,
-            MachinePointerInfo(SizeGV), false, false, false, 0);
+            MachinePointerInfo(SizeGV));
         Global = setBounds(DAG, Global, Size);
       }
     }
@@ -2122,8 +2134,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
       CapAddr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR,
           CapAddr);
     FI = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, MVT::iFATPTR);
-    return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV), false,
-        false, 0);
+    return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV));
   }
 
   // vastart just stores the address of the VarArgsFrameIndex slot into the
@@ -2146,10 +2157,8 @@ SDValue MipsTargetLowering::lowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
     Src = Src->getOperand(0);
   SDLoc DL(Op);
   // The source is a pointer to the existing va_list
-  Src = DAG.getLoad(MVT::iFATPTR, DL, Chain, Src, MachinePointerInfo(), false,
-          false, false, 0);
-  return DAG.getStore(Chain, DL, Src, Dest, MachinePointerInfo(), false,
-          false, 0);
+  Src = DAG.getLoad(MVT::iFATPTR, DL, Chain, Src, MachinePointerInfo());
+  return DAG.getStore(Chain, DL, Src, Dest, MachinePointerInfo());
 }
 
 SDValue MipsTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const {
@@ -2579,8 +2588,8 @@ static SDValue lowerUnalignedIntStore(StoreSDNode *SD, SelectionDAG &DAG,
       // Address to store this byte
       SDValue Ptr = DAG.getPointerAdd(DL, BasePtr, Offset);
       // Store the next byte
-      Store = DAG.getTruncStore(Chain, DL, Value, Ptr, SD->getPointerInfo(),
-          MVT::i8, SD->isVolatile(), SD->isNonTemporal(), SD->getAlignment());
+      Store = DAG.getTruncStore(Chain, DL, Value, Ptr,
+          MVT::i8, SD->getMemOperand());
       Ops.push_back(Store);
       Chain = Store;
       // Shift the value
@@ -2640,8 +2649,8 @@ SDValue MipsTargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
     SDValue BasePtr = SD->getBasePtr();
     SDLoc DL(Op);
     const SDValue ExtNode = DAG.getAnyExtOrTrunc(Val, DL, MVT::i64);
-    return DAG.getTruncStore(Chain, DL, ExtNode, BasePtr, SD->getPointerInfo(), MemVT,
-        SD->isVolatile(), SD->isNonTemporal(), SD->getAlignment());
+    return DAG.getTruncStore(Chain, DL, ExtNode, BasePtr, MemVT,
+        SD->getMemOperand());
   }
 
   // Lower unaligned integer stores.
@@ -4280,7 +4289,7 @@ void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
   int VaArgOffset;
 
   if (ABI.IsCheriSandbox()) {
-    int FI = MFI->CreateFixedObject(RegSizeInBytes, 0, true);
+    int FI = MFI.CreateFixedObject(RegSizeInBytes, 0, true);
     MipsFI->setVarArgsFrameIndex(FI);
     return;
   }

@@ -584,7 +584,7 @@ extern "C" void LLVMInitializeMipsDisassembler() {
                                          createMipsDisassembler);
   TargetRegistry::RegisterMCDisassembler(getTheMips64elTarget(),
                                          createMipselDisassembler);
-  TargetRegistry::RegisterMCDisassembler(TheMipsCheriTarget,
+  TargetRegistry::RegisterMCDisassembler(getTheMipsCheriTarget(),
                                          createCheriDisassembler);
 }
 

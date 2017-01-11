@@ -82,7 +82,6 @@ public:
   virtual void emitDirectiveSetHardFloat();
 
   // PIC support
-  virtual void emitDirectiveCpreturn() {}
   virtual void emitDirectiveCpLoad(unsigned RegNo);
   virtual bool emitDirectiveCpRestore(int Offset,
                                       function_ref<unsigned()> GetATReg,
@@ -247,7 +246,6 @@ public:
   void emitDirectiveSetHardFloat() override;
 
   // PIC support
-  void emitDirectiveCpreturn() override;
   void emitDirectiveCpLoad(unsigned RegNo) override;
 
   /// Emit a .cprestore directive.  If the offset is out of range then it will
@@ -279,8 +277,6 @@ class MipsTargetELFStreamer : public MipsTargetStreamer {
   bool MicroMipsEnabled;
   const MCSubtargetInfo &STI;
   bool Pic;
-  int GPSaveLocation;
-  bool GPSaveIsReg;
 
 public:
   bool isMicroMipsEnabled() const { return MicroMipsEnabled; }
@@ -314,7 +310,6 @@ public:
   void emitFMask(unsigned FPUBitmask, int FPUTopSavedRegOff) override;
 
   // PIC support
-  void emitDirectiveCpreturn() override;
   void emitDirectiveCpLoad(unsigned RegNo) override;
   bool emitDirectiveCpRestore(int Offset, function_ref<unsigned()> GetATReg,
                               SMLoc IDLoc, const MCSubtargetInfo *STI) override;

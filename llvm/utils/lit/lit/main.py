@@ -277,6 +277,9 @@ def main_with_tmp(builtinParameters):
                       help="Run tests in parallel with threads (not processes)",
                       action="store_false", default=True)
     execution_group.add_argument("--junit-xml-output", dest="xmlFile",
+                      help=("Write XUnit-compatible XML test reports to the"
+                                                       " specified file"),
+                      action="store", default=None)
 
     opts = parser.parse_args()
     args = opts.test_paths

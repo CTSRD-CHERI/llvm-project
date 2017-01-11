@@ -131,7 +131,7 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                                      Optional<Reloc::Model> RM,
                                      CodeModel::Model CM, CodeGenOpt::Level OL,
                                      bool isLittle)
-    : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, isLittle), TT,
+    : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, FS, isLittle), TT,
                         CPU, FS, Options, getEffectiveRelocModel(CM, RM), CM,
                         OL),
       isLittle(isLittle), TLOF(make_unique<MipsTargetObjectFile>()),
@@ -172,7 +172,7 @@ void MipsCheriTargetMachine::anchor() { }
 MipsCheriTargetMachine::
 MipsCheriTargetMachine(const Target &T, const Triple &TT,
                       StringRef CPU, StringRef FS, const TargetOptions &Options,
-                      Reloc::Model RM, CodeModel::Model CM,
+                      Optional<Reloc::Model> RM, CodeModel::Model CM,
                       CodeGenOpt::Level OL)
   : MipsebTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL) {}
 

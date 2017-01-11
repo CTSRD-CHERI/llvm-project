@@ -241,9 +241,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           // Note: It might be worth doing this recursively and pushing out of
           // nested loops.
           if (MDT.dominates(Preheader, InsertBlock))
-            if (MDT.dominates(Preheader->getFirstTerminator(), I.first)) {
+            if (MDT.dominates(&*Preheader->getFirstTerminator(), I.first)) {
               InsertBlock = Preheader;
-              InsertPoint = InsertBlock->getFirstTerminator();
+              InsertPoint = &*InsertBlock->getFirstTerminator();
             }
         }
       }

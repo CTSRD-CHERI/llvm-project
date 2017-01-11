@@ -34,11 +34,11 @@ public:
     for (MachineBasicBlock::iterator I = MBB.instr_begin();
          I != MBB.instr_end(); ++I) {
       int FI;
-      MachineInstr *Inst = I;
-      if (InstrInfo->isStoreToStackSlot(I, FI)) {
-        StackStores.push_back(Inst);
+      MachineInstr &Inst = *I;
+      if (InstrInfo->isStoreToStackSlot(Inst, FI)) {
+        StackStores.push_back(&Inst);
       } else if (I->isReturn()) {
-        Returns.push_back(I);
+        Returns.push_back(&Inst);
       }
     }
   }

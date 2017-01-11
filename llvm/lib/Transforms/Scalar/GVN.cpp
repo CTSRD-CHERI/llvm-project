@@ -899,7 +899,7 @@ static int AnalyzeLoadFromClobberingStore(Type *LoadTy, Value *LoadPtr,
   // If this is a pointer type that's larger than the largest integer that we
   // support, then ignore it.
   if (LoadTy->isPointerTy() &&
-      DL.getTypeSizeInBits(LoadTy) > DL.getLargestLegalIntTypeSize())
+      DL.getTypeSizeInBits(LoadTy) > DL.getLargestLegalIntTypeSizeInBits())
     return -1;
 
   Value *StorePtr = DepSI->getPointerOperand();
@@ -954,7 +954,7 @@ static int AnalyzeLoadFromClobberingMemInst(Type *LoadTy, Value *LoadPtr,
   // If this is a pointer type that's larger than the largest integer that we
   // support, then ignore it.
   if (LoadTy->isPointerTy() &&
-      DL.getTypeSizeInBits(LoadTy) > DL.getLargestLegalIntTypeSize())
+      DL.getTypeSizeInBits(LoadTy) > DL.getLargestLegalIntTypeSizeInBits())
     return -1;
   uint64_t MemSizeInBits = SizeCst->getZExtValue()*8;
 
@@ -1261,7 +1261,7 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
       // Can't forward from non-atomic to atomic without violating memory model.
       if (Address && LI->isAtomic() <= DepSI->isAtomic()) {
         int Offset =
-          AnalyzeLoadFromClobberingStore(LI->getType(), Address, DepSI);
+          AnalyzeLoadFromClobberingStore(LI->getType(), Address, DepSI, *this);
         if (Offset != -1) {
           Res = AvailableValue::get(DepSI->getValueOperand(), Offset);
           return true;
@@ -1279,7 +1279,7 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
       // Can't forward from non-atomic to atomic without violating memory model.
       if (DepLI != LI && Address && LI->isAtomic() <= DepLI->isAtomic()) {
         int Offset =
-          AnalyzeLoadFromClobberingLoad(LI->getType(), Address, DepLI, DL);
+          AnalyzeLoadFromClobberingLoad(LI->getType(), Address, DepLI, DL, *this);
 
         if (Offset != -1) {
           Res = AvailableValue::getLoad(DepLI, Offset);
@@ -1293,7 +1293,7 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
     if (MemIntrinsic *DepMI = dyn_cast<MemIntrinsic>(DepInfo.getInst())) {
       if (Address && !LI->isAtomic()) {
         int Offset = AnalyzeLoadFromClobberingMemInst(LI->getType(), Address,
-                                                      DepMI, DL);
+                                                      DepMI, DL, *this);
         if (Offset != -1) {
           Res = AvailableValue::getMI(DepMI, Offset);
           return true;

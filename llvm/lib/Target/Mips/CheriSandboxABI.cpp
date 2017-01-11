@@ -29,7 +29,7 @@ class CheriSandboxABI : public ModulePass, public InstVisitor<CheriSandboxABI> {
   llvm::SmallVector<AllocaInst *, 16> Allocas;
   bool IsCheri128;
 
-  virtual const char *getPassName() const { return "CHERI sandbox ABI setup"; }
+  virtual StringRef getPassName() const { return "CHERI sandbox ABI setup"; }
 
 public:
   static char ID;
@@ -109,7 +109,7 @@ public:
 
     for (AllocaInst *AI : Allocas) {
       assert(AI->getType()->getPointerAddressSpace() == 200);
-      B.SetInsertPoint(AI->getParent(), AI);
+      B.SetInsertPoint(AI);
       unsigned ForcedAlignment = 0;
 
       PointerType *AllocaTy = AI->getType();

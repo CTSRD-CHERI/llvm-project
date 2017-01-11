@@ -31,7 +31,7 @@ class CheriMemOpLowering : public FunctionPass,
   Type *VoidTy;
   bool Modified;
 
-  virtual const char *getPassName() const {
+  virtual StringRef getPassName() const {
     return "CHERI memory operation lowering";
   }
   Constant *getMemCpy_c() {

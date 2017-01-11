@@ -4670,8 +4670,8 @@ bool CodeGenPrepare::optimizeSelectInst(SelectInst *SI) {
 
   // FIXME: Target-specific test for selects on pointers in specific address
   // spaces
-  if ((AS == 200) || TLI->isSelectSupported(SelectKind) &&
-      !isFormingBranchFromSelectProfitable(TTI, TLI, SI))
+  if ((AS == 200) || (TLI->isSelectSupported(SelectKind) &&
+      !isFormingBranchFromSelectProfitable(TTI, TLI, SI)))
     return false;
 
   ModifiedDT = true;

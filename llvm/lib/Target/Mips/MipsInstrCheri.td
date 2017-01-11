@@ -160,6 +160,7 @@ class CheriPseudo<dag outs, dag ins, string asmstr,
 {
   let isPseudo = 1;
   let usesCustomInserter = 1;
+  let hasNoSchedulingInfo = 1;
 }
 
 // Pseudo instruction for capability cmov, expands to a branch sequence
@@ -558,6 +559,7 @@ def  CCallPseudo : PseudoSE<(outs), (ins GPR64Opnd:$rs, uimm32: $mask),
 {
   let isCall=1;
   let Defs = [RA];
+  let hasNoSchedulingInfo = 1;
 }
 
 
@@ -565,7 +567,7 @@ def SDT_MipsCapJmpLink      : SDTypeProfile<0, 1, [SDTCisVT<0, iFATPTR>]>;
 def CapJmpLink : SDNode<"MipsISD::CapJmpLink",SDT_MipsCapJmpLink,
                          [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                           SDNPVariadic]>;
-let isCall=1, hasDelaySlot=1, Defs = [C17] in {
+let isCall=1, hasDelaySlot=1, Defs = [C17], hasNoSchedulingInfo = 1 in {
 def CapJumpLinkPseudo :
   PseudoSE<(outs), (ins CheriOpnd: $rs), [(CapJmpLink CheriOpnd: $rs)], NoItinerary>,
   PseudoInstExpansion<(CJALR C17, CheriOpnd:$rs)>;

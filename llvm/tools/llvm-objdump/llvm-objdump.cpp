@@ -1571,10 +1571,10 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
 void llvm::PrintCapRelocations(const ObjectFile *Obj) {
   std::unordered_map<uint64_t, std::string> SymbolNames;
   for (const SymbolRef &Sym : Obj->symbols()) {
-    ErrorOr<uint64_t> Start = Sym.getAddress();
+    Expected<uint64_t> Start = Sym.getAddress();
     if (!Start)
       continue;
-    ErrorOr<StringRef> Name = Sym.getName();
+    Expected<StringRef> Name = Sym.getName();
     SymbolNames.insert({Start.get(), Name.get().str()});
   }
   StringRef Data;

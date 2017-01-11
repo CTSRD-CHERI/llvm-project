@@ -3314,7 +3314,7 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
 
       unsigned PtrSize = DAG.getDataLayout().getPointerBaseSizeInBits(AS);
       MVT PtrTy = MVT::getIntegerVT(PtrSize);
-      APInt ElementSize(PtrSize, DL->getTypeAllocSize(Ty));
+      APInt ElementSize(PtrSize, DL->getTypeAllocSize(GTI.getIndexedType()));
 
       // If this is a scalar constant or a splat vector of constants,
       // handle it quickly.

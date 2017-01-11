@@ -768,22 +768,8 @@ void SelectionDAGLegalize::LegalizeLoadOps(SDNode *Node) {
 
       // Load the remaining ExtraWidth bits.
       IncrementSize = RoundWidth / 8;
-<<<<<<< HEAD
       Ptr = DAG.getPointerAdd(dl, Ptr, IncrementSize);
-      Lo = DAG.getExtLoad(ISD::ZEXTLOAD,
-                          dl, Node->getValueType(0), Chain, Ptr,
-||||||| merged common ancestors
-      Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                         DAG.getConstant(IncrementSize, dl,
-                                         Ptr.getValueType()));
-      Lo = DAG.getExtLoad(ISD::ZEXTLOAD,
-                          dl, Node->getValueType(0), Chain, Ptr,
-=======
-      Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                         DAG.getConstant(IncrementSize, dl,
-                                         Ptr.getValueType()));
       Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, Node->getValueType(0), Chain, Ptr,
->>>>>>> b2d6ad7cfd1299fb10bfc9d8b8e27bad13df4b6c
                           LD->getPointerInfo().getWithOffset(IncrementSize),
                           ExtraVT, MinAlign(Alignment, IncrementSize), MMOFlags,
                           AAInfo);

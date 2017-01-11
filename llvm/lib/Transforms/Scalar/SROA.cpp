@@ -1895,7 +1895,7 @@ static bool isIntegerWideningViableForSlice(const Slice &S,
                                             const DataLayout &DL,
                                             bool &WholeAllocaOp) {
   uint64_t Size = DL.getTypeStoreSize(AllocaTy);
-  if (Size*8 > DL.getLargestLegalIntTypeSize())
+  if (Size*8 > DL.getLargestLegalIntTypeSizeInBits())
     return false;
 
   uint64_t RelBegin = S.beginOffset() - AllocBeginOffset;
@@ -1978,7 +1978,7 @@ static bool isIntegerWideningViable(Partition &P, Type *AllocaTy,
   if (SizeInBits > IntegerType::MAX_INT_BITS)
     return false;
   if (AllocaTy->isPointerTy() &&
-      SizeInBits*8 > DL.getLargestLegalIntTypeSize())
+      SizeInBits*8 > DL.getLargestLegalIntTypeSizeInBits())
     return false;
 
 

@@ -362,7 +362,6 @@ enum Kind {
   APFloat, // APFloatVal
   APSInt   // APSInt
 };
->>>>>>> aa838c716c94eec93203aa0f00efff6c5718a988
 } // end namespace lltok
 } // end namespace llvm
 

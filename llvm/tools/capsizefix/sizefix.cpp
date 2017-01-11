@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     uint64_t Size = ELFSymbolRef(sym).getSize();
     if (Size == 0)
       continue;
-    ErrorOr<StringRef> Name = sym.getName();
+    Expected<StringRef> Name = sym.getName();
     if (Name) {
       if (Name->startswith(SizePrefix) && SizesSection.containsSymbol(sym)) {
         SizeSymbols.push_back(sym);
@@ -56,10 +56,10 @@ int main(int argc, char *argv[]) {
       } else
         SizeForName[*Name] = Size;
     }
-    ErrorOr<uint64_t> Start = sym.getAddress();
+    Expected<uint64_t> Start = sym.getAddress();
     if (!Start)
       continue;
-    SymbolRef::Type type = sym.getType();
+    SymbolRef::Type type = sym.getType().get();
     SymbolSizes.insert({Start.get(), {Size, (type == SymbolRef::ST_Function)}});
   }
   const size_t entry_size = 40;
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
     SizesSection.getContents(Data);
     uint64_t SectionOffset = Data.data() - MB.getBufferStart();
     for (SymbolRef &sym : SizeSymbols) {
-      ErrorOr<uint64_t> Start = sym.getAddress();
+      Expected<uint64_t> Start = sym.getAddress();
       if (!Start)
         continue;
       uint64_t offset = *Start - SizesSection.getAddress();

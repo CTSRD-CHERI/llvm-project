@@ -569,7 +569,6 @@ def int_umul_with_overflow : Intrinsic<[llvm_anyint_ty, llvm_i1_ty],
 //
 def int_lifetime_start  : Intrinsic<[],
                                     [llvm_i64_ty, llvm_anyptr_ty],
-                                    [IntrReadWriteArgMem, NoCapture<1>]>;
                                     [IntrArgMemOnly, NoCapture<1>]>;
 def int_lifetime_end    : Intrinsic<[],
                                     [llvm_i64_ty, llvm_anyptr_ty],

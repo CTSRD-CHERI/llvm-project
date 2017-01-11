@@ -185,15 +185,8 @@ extern "C" void LLVMInitializeMipsTargetMC() {
         *T, createMipsObjectTargetStreamer);
   }
 
-<<<<<<< HEAD
-  for (Target *T : {&TheMipsTarget, &TheMips64Target, &TheMipsCheriTarget})
-||||||| merged common ancestors
   // Register the MC Code Emitter
-  for (Target *T : {&TheMipsTarget, &TheMips64Target})
-=======
-  // Register the MC Code Emitter
-  for (Target *T : {&getTheMipsTarget(), &getTheMips64Target()})
->>>>>>> ae5f5d3d3cdcd8a061cb67e9a30303242891b2a2
+  for (Target *T : {&getTheMipsTarget(), &getTheMips64Target(), &getTheMipsCheriTarget()})
     TargetRegistry::RegisterMCCodeEmitter(*T, createMipsMCCodeEmitterEB);
 
   for (Target *T : {&getTheMipselTarget(), &getTheMips64elTarget()})
@@ -208,12 +201,6 @@ extern "C" void LLVMInitializeMipsTargetMC() {
                                        createMipsAsmBackendEB64);
   TargetRegistry::RegisterMCAsmBackend(getTheMips64elTarget(),
                                        createMipsAsmBackendEL64);
-<<<<<<< HEAD
-  TargetRegistry::RegisterMCAsmBackend(TheMipsCheriTarget,
+  TargetRegistry::RegisterMCAsmBackend(getTheMipsCheriTarget(),
                                        createMipsAsmBackendEB64);
-
-||||||| merged common ancestors
-
-=======
->>>>>>> ae5f5d3d3cdcd8a061cb67e9a30303242891b2a2
 }

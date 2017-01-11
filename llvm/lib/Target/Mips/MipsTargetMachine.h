@@ -98,13 +98,13 @@ public:
   MipsCheriTargetMachine(const Target &T, const Triple &TT,
                         StringRef CPU, StringRef FS,
                         const TargetOptions &Options,
-                        Reloc::Model RM, CodeModel::Model CM,
+                        Optional<Reloc::Model> RM, CodeModel::Model CM,
                         CodeGenOpt::Level OL);
   bool isCompatibleDataLayout(const DataLayout &Candidate) const override {
     if (TargetMachine::isCompatibleDataLayout(Candidate))
       return true;
     DataLayout MutableCandidate(Candidate);
-    MutableCandidate.setAllocaAS(getDataLayout().getAllocaAS());
+    MutableCandidate.setAllocaAS(createDataLayout().getAllocaAS());
     return TargetMachine::isCompatibleDataLayout(MutableCandidate);
   }
 };

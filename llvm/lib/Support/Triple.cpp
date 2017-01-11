@@ -622,6 +622,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::mips64:
   case Triple::mips64el:
   case Triple::mipsel:
+  case Triple::cheri:
   case Triple::msp430:
   case Triple::nvptx:
   case Triple::nvptx64:
