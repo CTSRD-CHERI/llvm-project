@@ -3519,9 +3519,6 @@ public:
                     unsigned ParamsToSkip = 0,
                     EvaluationOrder Order = EvaluationOrder::Default);
 
-  llvm::Value *getPointerIntegerValue(llvm::Value *V) {
-    return getTargetHooks().getPointerIntegerValue(*this, V);
-  }
   llvm::Value *getPointerOffset(llvm::Value *V) {
     return getTargetHooks().getPointerOffset(*this, V);
   }

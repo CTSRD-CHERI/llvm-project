@@ -277,8 +277,6 @@ public:
     Mask |= mask;
   }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
   bool hasOutput() const { return Mask & OMask; }
   void addOutput() { Mask |= OMask; }
   void removeOutput() { Mask &= ~OMask; }
@@ -293,26 +291,6 @@ public:
   void removeUnaligned() { Mask &= ~UMask; }
   void addUnaligned() { Mask |= UMask; }
 
-||||||| merged common ancestors
-  bool hasUnaligned() const { return Mask & UMask; }
-  void setUnaligned(bool flag) {
-    Mask = (Mask & ~UMask) | (flag ? UMask : 0);
-  }
-  void removeUnaligned() { Mask &= ~UMask; }
-  void addUnaligned() { Mask |= UMask; }
-
-=======
->>>>>>> 75762ded3bb25b2b3ffcdd94efca1fd25c39582d
-||||||| merged common ancestors
-=======
-  bool hasUnaligned() const { return Mask & UMask; }
-  void setUnaligned(bool flag) {
-    Mask = (Mask & ~UMask) | (flag ? UMask : 0);
-  }
-  void removeUnaligned() { Mask &= ~UMask; }
-  void addUnaligned() { Mask |= UMask; }
-
->>>>>>> 8ecbed3b1a3fe7702c59b4e703beacabbd08e898
   bool hasObjCGCAttr() const { return Mask & GCAttrMask; }
   GC getObjCGCAttr() const { return GC((Mask & GCAttrMask) >> GCAttrShift); }
   void setObjCGCAttr(GC type) {

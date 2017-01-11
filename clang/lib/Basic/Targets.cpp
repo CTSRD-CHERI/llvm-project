@@ -7509,14 +7509,13 @@ public:
   initFeatureMap(llvm::StringMap<bool> &Features, DiagnosticsEngine &Diags,
                  StringRef OverrideCPU,
                  const std::vector<std::string> &FeaturesVec) const override {
-    if (CPU.empty())
-      CPU = getCPU();
-    if (CPU == "octeon")
+    std::string cpu = CPU.empty() ? getCPU() : CPU;
+    if (cpu == "octeon")
       Features["mips64r2"] = Features["cnmips"] = true;
     else if (!OverrideCPU.empty())
       Features[OverrideCPU] = true;
     else
-      Features[CPU] = true;
+      Features[cpu] = true;
     return TargetInfo::initFeatureMap(Features, Diags, OverrideCPU, FeaturesVec);
   }
 

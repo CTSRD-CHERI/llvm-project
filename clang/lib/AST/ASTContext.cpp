@@ -737,22 +737,11 @@ ASTContext::ASTContext(LangOptions &LOpts, SourceManager &SM,
       DependentTemplateSpecializationTypes(this_()),
       SubstTemplateTemplateParmPacks(this_()),
       GlobalNestedNameSpecifier(nullptr), Int128Decl(nullptr),
-<<<<<<< HEAD
-      UInt128Decl(nullptr), Float128StubDecl(nullptr),
+      UInt128Decl(nullptr),
       IntCapDecl(nullptr), UIntCapDecl(nullptr),
       BuiltinVaListDecl(nullptr), BuiltinMSVaListDecl(nullptr),
       ObjCIdDecl(nullptr), ObjCSelDecl(nullptr), ObjCClassDecl(nullptr),
       ObjCProtocolClassDecl(nullptr), BOOLDecl(nullptr),
-||||||| merged common ancestors
-      UInt128Decl(nullptr), Float128StubDecl(nullptr),
-      BuiltinVaListDecl(nullptr), BuiltinMSVaListDecl(nullptr),
-      ObjCIdDecl(nullptr), ObjCSelDecl(nullptr), ObjCClassDecl(nullptr),
-      ObjCProtocolClassDecl(nullptr), BOOLDecl(nullptr),
-=======
-      UInt128Decl(nullptr), BuiltinVaListDecl(nullptr),
-      BuiltinMSVaListDecl(nullptr), ObjCIdDecl(nullptr), ObjCSelDecl(nullptr),
-      ObjCClassDecl(nullptr), ObjCProtocolClassDecl(nullptr), BOOLDecl(nullptr),
->>>>>>> fa54202263d4a62bd3153cb9037d8801ebbdc15a
       CFConstantStringTagDecl(nullptr), CFConstantStringTypeDecl(nullptr),
       ObjCInstanceTypeDecl(nullptr), CHERIClassDecl(nullptr),
       FILEDecl(nullptr), jmp_bufDecl(nullptr),

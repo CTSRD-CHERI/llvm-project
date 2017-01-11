@@ -4218,13 +4218,13 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     CallCHERIInvoke = true;
     SmallVector<QualType, 16> NewParams;
     // Add the method number
-    auto *MethodNum = Builder.CreateExtractValue(Callee, {1});
+    auto *MethodNum = Builder.CreateExtractValue(Callee.getFunctionPointer(), {1});
     auto NumTy = getContext().UnsignedLongLongTy;
     CallArg MethodNumArg(RValue::get(MethodNum), NumTy, false);
     NewParams.push_back(NumTy);
     Args.insert(Args.begin(), MethodNumArg);
     // Add the CHERI object
-    auto *Obj = Builder.CreateExtractValue(Callee, {0});
+    auto *Obj = Builder.CreateExtractValue(Callee.getFunctionPointer(), {0});
     auto ObjTy = getContext().getCHERIClassType();
     CallArg ObjArg(RValue::get(Obj), ObjTy, false);
     NewParams.push_back(ObjTy);
@@ -4294,8 +4294,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
       Args, FnType, /*isChainCall=*/Chain);
 
   if (CallCHERIInvoke)
-    Callee = CGM.getModule().getOrInsertFunction("cheri_invoke",
-        getTypes().GetFunctionType(FnInfo));
+    Callee.setFunctionPointer(CGM.getModule().getOrInsertFunction("cheri_invoke",
+        getTypes().GetFunctionType(FnInfo)));
 
   // C99 6.5.2.2p6:
   //   If the expression that denotes the called function has a type
@@ -4319,10 +4319,10 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   // to the function type.
   if (isa<FunctionNoProtoType>(FnType) || Chain) {
     llvm::Type *CalleeTy = getTypes().GetFunctionType(FnInfo);
-    CalleeTy =
-        CalleeTy->getPointerTo(Callee->getType()->getPointerAddressSpace());
 
     llvm::Value *CalleePtr = Callee.getFunctionPointer();
+    CalleeTy =
+        CalleeTy->getPointerTo(CalleePtr->getType()->getPointerAddressSpace());
     CalleePtr = Builder.CreateBitCast(CalleePtr, CalleeTy, "callee.knr.cast");
     Callee.setFunctionPointer(CalleePtr);
   }

@@ -4395,7 +4395,7 @@ GenerateAS0StringLiteral(CodeGenModule &CGM, StringRef Str) {
 
   auto *GV = new llvm::GlobalVariable( CGM.getModule(), C->getType(), true,
           llvm::GlobalValue::PrivateLinkage, C);
-  GV->setUnnamedAddr(true);
+  GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
 
   return GV;
 }

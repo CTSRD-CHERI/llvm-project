@@ -217,22 +217,12 @@ class ASTContext : public RefCountedBase<ASTContext> {
   /// \brief The typedef for the __uint128_t type.
   mutable TypedefDecl *UInt128Decl;
 
-<<<<<<< HEAD
-  /// \brief The typedef for the __float128 stub type.
-  mutable TypeDecl *Float128StubDecl;
-
   /// \brief The typedef for the __intcap_t type.
   mutable TypedefDecl *IntCapDecl;
 
   /// \brief The typedef for the __uintcap_t type.
   mutable TypedefDecl *UIntCapDecl;
   
-||||||| merged common ancestors
-  /// \brief The typedef for the __float128 stub type.
-  mutable TypeDecl *Float128StubDecl;
-  
-=======
->>>>>>> fa54202263d4a62bd3153cb9037d8801ebbdc15a
   /// \brief The typedef for the target specific predefined
   /// __builtin_va_list type.
   mutable TypedefDecl *BuiltinVaListDecl;

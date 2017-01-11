@@ -1533,7 +1533,6 @@ bool Sema::CheckMipsBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   case Mips::BI__builtin_mips_prepend: i = 2; l = 0; u = 31; break;
   case Mips::BI__builtin_memcap_callback_create:
     return SemaBuiltinMemcapCreate(*this, TheCall);
-  }
   // MSA instrinsics. Instructions (which the intrinsics maps to) which use the
   // df/m field.
   // These intrinsics take an unsigned 3 bit immediate.
@@ -2798,7 +2797,6 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
 
   // For a __c11 builtin, this should be a pointer to an _Atomic type.
   QualType AtomTy = pointerType->getPointeeType(); // 'A'
-  unsigned PointerAS = AtomTy.getAddressSpace();
   QualType ValType = AtomTy; // 'C'
   if (IsC11) {
     if (!AtomTy->isAtomicType()) {

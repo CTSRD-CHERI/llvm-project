@@ -9360,7 +9360,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
     ArgStringList SizeFixArgs;
     SizeFixArgs.push_back(Output.getFilename());
-    InputInfoList In = {InputInfo(types::TY_Object, Output.getFilename())};
+    InputInfoList In= {InputInfo(types::TY_Object, Output.getFilename(), Output.getBaseInput())};
     C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, SizeFixArgs, In));
   }
   if (IsSandboxABI) {
@@ -9373,7 +9373,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     BrandElfArgs.push_back("256");
 #endif
     BrandElfArgs.push_back(Output.getFilename());
-    InputInfoList In = {InputInfo(types::TY_Object, Output.getFilename())};
+    InputInfoList In = {InputInfo(types::TY_Object, Output.getFilename(), Output.getBaseInput())};
     C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, BrandElfArgs, In));
   }
 }

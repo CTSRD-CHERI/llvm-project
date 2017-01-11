@@ -200,7 +200,7 @@ protected:
                                    llvm::GlobalValue::LinkageTypes linkage
                                          =llvm::GlobalValue::InternalLinkage) {
     unsigned AS = CGM.getContext().getDefaultAS();
-    auto GV = new llvm::GlobalVariable(TheModule, Ty, false,
+    auto GV = new llvm::GlobalVariable(TheModule, C->getType(), false,
                                        linkage, C, Name, nullptr,
                                        llvm::GlobalVariable::NotThreadLocal,
                                        AS);
@@ -1572,7 +1572,7 @@ GenerateMethodList(StringRef ClassName,
                                                 isClassMethodList));
     assert(Method && "Can't generate metadata for method that doesn't exist");
     llvm::Constant *C = MakeConstantString(MethodSels[i].getAsString());
-    Methods.push_back(
+    Methods.add(C);
     Method = llvm::ConstantExpr::getPointerCast(Method, IMPTy);
     Methods.add(
         llvm::ConstantStruct::get(ObjCMethodTy, {C, MethodTypes[i], Method}));
@@ -2870,7 +2870,6 @@ llvm::GlobalVariable *CGObjCGNU::ObjCIvarOffsetVariable(
     // must compile with the fragile ABI if you want to use ivars from a
     // GCC-compiled class.
     unsigned AS = CGM.getContext().getDefaultAS();
-    if (CGM.getLangOpts().PICLevel || CGM.getLangOpts().PIELevel) {
     if (CGM.getLangOpts().PICLevel) {
       llvm::GlobalVariable *IvarOffsetGV = new llvm::GlobalVariable(TheModule,
             Int32Ty, false,
