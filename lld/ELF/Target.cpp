@@ -2064,7 +2064,18 @@ RelExpr MipsTargetInfo<ELFT>::getRelExpr(uint32_t Type,
   if (ELFT::Is64Bits || Config->MipsN32Abi)
     Type &= 0xff;
   switch (Type) {
-  default:
+  case R_MIPS_32:
+  case R_MIPS_64:
+  case R_MIPS_SUB:
+  // FIXME: are all these really R_ABS and not R_TLS*?
+  case R_MIPS_TLS_DTPREL64:
+  case R_MIPS_TLS_DTPREL32:
+  case R_MIPS_TLS_DTPREL_HI16:
+  case R_MIPS_TLS_DTPREL_LO16:
+  case R_MIPS_TLS_TPREL64:
+  case R_MIPS_TLS_TPREL32:
+  case R_MIPS_TLS_TPREL_HI16:
+  case R_MIPS_TLS_TPREL_LO16:
     return R_ABS;
   case R_MIPS_JALR:
     return R_HINT;
@@ -2073,6 +2084,8 @@ RelExpr MipsTargetInfo<ELFT>::getRelExpr(uint32_t Type,
     return R_MIPS_GOTREL;
   case R_MIPS_26:
     return R_PLT;
+  case R_MIPS_HIGHEST:
+  case R_MIPS_HIGHER:
   case R_MIPS_HI16:
   case R_MIPS_LO16:
   case R_MIPS_GOT_OFST:
@@ -2110,6 +2123,10 @@ RelExpr MipsTargetInfo<ELFT>::getRelExpr(uint32_t Type,
     return R_MIPS_TLSGD;
   case R_MIPS_TLS_LDM:
     return R_MIPS_TLSLD;
+  default:
+    error("do not know how to handle relocation '" + toString(Type) + "' (" +
+          Twine(Type) + ")");
+    return R_HINT;
   }
 }
 
@@ -2391,7 +2408,7 @@ void MipsTargetInfo<ELFT>::relocateOne(uint8_t *Loc, uint32_t Type,
     applyMipsPcReloc<E, 32, 0>(Loc, Type, Val);
     break;
   default:
-    error(getErrorLocation(Loc) + "unrecognized reloc " + Twine(Type));
+    llvm_unreachable("unexpected relocation");
   }
 }
 
