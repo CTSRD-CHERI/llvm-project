@@ -2050,7 +2050,8 @@ template <class ELFT> MipsTargetInfo<ELFT>::MipsTargetInfo() {
     TlsModuleIndexRel = R_MIPS_TLS_DTPMOD32;
     TlsOffsetRel = R_MIPS_TLS_DTPREL32;
   }
-  if (Config->OSABI == ELFOSABI_FREEBSD) {
+  // Make the CheriABI start address more similar to the BFD output
+  if (Config->OSABI == ELFOSABI_FREEBSD && Config->MipsCheriAbi) {
     // All the FreeBSD MIPS linker scripts use 0x120000000 (18*256M)
     // XXXAR: TODO: actually it is 0x120000000 + SIZEOF_HEADERS (0x120000ae0)
     DefaultImageBase = 0x0000000120000000;
