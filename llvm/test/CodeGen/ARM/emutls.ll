@@ -212,7 +212,7 @@ entry:
 ; ARM32-LABEL: __emutls_v.i1:
 ; ARM32-NEXT: .long 4
 ; ARM32-NEXT: .long 4
-; ARM32-NEXT: .long 0
+; ARM32-NEXT: .zero 4
 ; ARM32-NEXT: .long __emutls_t.i1
 
 ; ARM32:      .section .rodata,
@@ -226,7 +226,7 @@ entry:
 ; ARM32-LABEL: __emutls_v.i3:
 ; ARM32-NEXT: .long 4
 ; ARM32-NEXT: .long 4
-; ARM32-NEXT: .long 0
+; ARM32-NEXT: .zero 4
 ; ARM32-NEXT: .long __emutls_t.i3
 
 ; ARM32:      .section .rodata,
@@ -238,7 +238,7 @@ entry:
 ; ARM32-LABEL: __emutls_v.i4:
 ; ARM32-NEXT: .long 4
 ; ARM32-NEXT: .long 4
-; ARM32-NEXT: .long 0
+; ARM32-NEXT: .zero 4
 ; ARM32-NEXT: .long __emutls_t.i4
 
 ; ARM32:      .section .rodata,
@@ -254,7 +254,7 @@ entry:
 ; ARM32-LABEL: __emutls_v.s1:
 ; ARM32-NEXT: .long 2
 ; ARM32-NEXT: .long 2
-; ARM32-NEXT: .long 0
+; ARM32-NEXT: .zero 4
 ; ARM32-NEXT: .long __emutls_t.s1
 
 ; ARM32 .section .rodata,
@@ -266,7 +266,7 @@ entry:
 ; ARM32-LABEL: __emutls_v.b1:
 ; ARM32-NEXT: .long 1
 ; ARM32-NEXT: .long 1
-; ARM32-NEXT: .long 0
-; ARM32-NEXT: .long 0
+; ARM32-NEXT: .zero 4
+; ARM32-NEXT: .zero 4
 
 ; ARM32-NOT:   __emutls_t.b1

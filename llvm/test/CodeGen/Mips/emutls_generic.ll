@@ -41,7 +41,7 @@ entry:
 ; MIPS_32-LABEL: __emutls_v.internal_y:
 ; MIPS_32-NEXT:  .4byte 8
 ; MIPS_32-NEXT:  .4byte 16
-; MIPS_32-NEXT:  .4byte 0
+; MIPS_32-NEXT:  .space 4
 ; MIPS_32-NEXT:  .4byte __emutls_t.internal_y
 ; MIPS_32-LABEL: __emutls_t.internal_y:
 ; MIPS_32-NEXT:  .8byte 9
@@ -63,7 +63,7 @@ entry:
 ; MIPS_64-LABEL: __emutls_v.internal_y:
 ; MIPS_64-NEXT:  .8byte 8
 ; MIPS_64-NEXT:  .8byte 16
-; MIPS_64-NEXT:  .8byte 0
+; MIPS_64-NEXT:  .space 8
 ; MIPS_64-NEXT:  .8byte __emutls_t.internal_y
 ; MIPS_64:       .section .rodata,
 ; MIPS_64-LABEL: __emutls_t.internal_y:

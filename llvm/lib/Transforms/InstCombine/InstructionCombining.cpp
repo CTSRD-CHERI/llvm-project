@@ -1853,8 +1853,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
       // If this GEP instruction doesn't move the pointer, just replace the GEP
       // with a bitcast of the real input to the dest type.
       if (!Offset) {
-        if (Operand->getType()->getPointerAddressSpace() != GEP.getAddressSpace())
-          return nullptr;
         // If the bitcast is of an allocation, and the allocation will be
         // converted to match the type of the cast, don't touch this.
         if (isa<AllocaInst>(Operand) || isAllocationFn(Operand, &TLI)) {
@@ -1868,6 +1866,8 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
             return &GEP;
           }
         }
+        if (Operand->getType()->getPointerAddressSpace() != GEP.getAddressSpace())
+          return new AddrSpaceCastInst(Operand, GEP.getType());
         return new BitCastInst(Operand, GEP.getType());
       }
 

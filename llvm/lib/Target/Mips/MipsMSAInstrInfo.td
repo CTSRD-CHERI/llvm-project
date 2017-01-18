@@ -3735,7 +3735,7 @@ def SZ_V_PSEUDO : MSA_CBRANCH_PSEUDO_DESC_BASE<MipsVAnyZero, v16i8,
 
 let Predicates = [HasMSA] in {
  def ST_F16 : MipsPseudo<(outs), (ins MSA128F16:$ws, mem_simm10:$addr),
-                          [(store (f16 MSA128F16:$ws), (i64 addrimm10:$addr))]> {
+                          [(store (f16 MSA128F16:$ws), (iPTR addrimm10:$addr))]> {
    let usesCustomInserter = 1;
  }
 

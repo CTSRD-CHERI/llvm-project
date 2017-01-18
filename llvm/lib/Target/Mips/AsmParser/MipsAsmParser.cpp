@@ -2703,16 +2703,34 @@ bool MipsAsmParser::loadAndAddSymbolAddress(const MCExpr *SymExpr,
 
   // This is the 64-bit symbol address expansion.
   if (ABI.ArePtrs64bit() && isGP64bit()) {
-    // We always need AT for the 64-bit expansion.
-    // If it is not available we exit.
-    unsigned ATReg = getATReg(IDLoc);
-    if (!ATReg)
-      return true;
 
     const MipsMCExpr *HighestExpr =
         MipsMCExpr::create(MipsMCExpr::MEK_HIGHEST, SymExpr, getContext());
     const MipsMCExpr *HigherExpr =
         MipsMCExpr::create(MipsMCExpr::MEK_HIGHER, SymExpr, getContext());
+
+    unsigned ATReg = AssemblerOptions.back()->getATRegIndex();
+    if (!ATReg) {
+      assert(!UseSrcReg && "Uses src register not yet implemented");
+      // If we can't use $at
+      // (d)la $rd, sym => lui    $rd, %highest(sym)
+      //                   daddiu $rd, $rd, %higher(sym)
+      //                   dsll   $rd, $rd, 16
+      //                   daddiu $rd, $rd, %hi(sym)
+      //                   dsll   $rd, $rd, 16
+      //                   daddiu $rd, $rd, %lo(sym)
+      TOut.emitRX(Mips::LUi, DstReg, MCOperand::createExpr(HighestExpr), IDLoc,
+                  STI);
+      TOut.emitRRX(Mips::DADDiu, DstReg, DstReg,
+                   MCOperand::createExpr(HigherExpr), IDLoc, STI);
+      TOut.emitRRI(Mips::DSLL, DstReg, DstReg, 16, IDLoc, STI);
+      TOut.emitRRX(Mips::DADDiu, DstReg, DstReg, MCOperand::createExpr(HiExpr),
+                   IDLoc, STI);
+      TOut.emitRRI(Mips::DSLL, DstReg, DstReg, 16, IDLoc, STI);
+      TOut.emitRRX(Mips::DADDiu, DstReg, DstReg, MCOperand::createExpr(LoExpr),
+                   IDLoc, STI);
+      return false;
+    }
 
     if (UseSrcReg &&
         getContext().getRegisterInfo()->isSuperOrSubRegisterEq(DstReg,

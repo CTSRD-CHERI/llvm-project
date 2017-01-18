@@ -134,7 +134,7 @@ entry:
 ; EMU-LABEL: __emutls_v.internal_gd:
 ; EMU-NEXT:  .long 4
 ; EMU-NEXT:  .long 4
-; EMU-NEXT:  .long 0
+; EMU-NEXT:  .zero 4
 ; EMU-NEXT:  .long __emutls_t.internal_gd
 ; EMU-LABEL: __emutls_t.internal_gd:
 ; EMU-NEXT:  .long 42
@@ -148,7 +148,7 @@ entry:
 ; EMU-LABEL: __emutls_v.internal_le:
 ; EMU-NEXT:  .long 4
 ; EMU-NEXT:  .long 4
-; EMU-NEXT:  .long 0
+; EMU-NEXT:  .zero 4
 ; EMU-NEXT:  .long __emutls_t.internal_le
 ; EMU-LABEL: __emutls_t.internal_le:
 ; EMU-NEXT:  .long 42

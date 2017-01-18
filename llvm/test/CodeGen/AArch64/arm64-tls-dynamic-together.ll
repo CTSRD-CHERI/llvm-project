@@ -44,7 +44,7 @@ define i32 @test_emulated_init() {
 ; EMU-LABEL: __emutls_v.emulated_init_var:
 ; EMU-NEXT: .xword 4
 ; EMU-NEXT: .xword 8
-; EMU-NEXT: .xword 0
+; EMU-NEXT: .zero  8
 ; EMU-NEXT: .xword __emutls_t.emulated_init_var
 
 ; EMU-LABEL: __emutls_t.emulated_init_var:

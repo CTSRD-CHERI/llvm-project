@@ -45,7 +45,7 @@ entry:
 ; ARM_32-LABEL:  __emutls_v.external_y:
 ; ARM_32-NEXT:   .long 1
 ; ARM_32-NEXT:   .long 2
-; ARM_32-NEXT:   .long 0
+; ARM_32-NEXT:   .zero 4
 ; ARM_32-NEXT:   .long __emutls_t.external_y
 ; ARM_32:        .section .rodata,
 ; ARM_32-LABEL:  __emutls_t.external_y:
@@ -56,7 +56,7 @@ entry:
 ; ARM_32-LABEL:  __emutls_v.internal_y:
 ; ARM_32-NEXT:   .long 8
 ; ARM_32-NEXT:   .long 16
-; ARM_32-NEXT:   .long 0
+; ARM_32-NEXT:   .zero 4
 ; ARM_32-NEXT:   .long __emutls_t.internal_y
 ; ARM_32-LABEL:  __emutls_t.internal_y:
 ; ARM_32-NEXT:   .long 9

@@ -27,8 +27,8 @@ entry:
 ; EMU-LABEL: __emutls_v.teste:
 ; EMU-NEXT:  .long 8
 ; EMU-NEXT:  .long 4
-; EMU-NEXT:  .long 0
-; EMU-NEXT:  .long 0
+; EMU-NEXT:  .zero 4
+; EMU-NEXT:  .zero 4
 
 ; CHECK-NOT: teste:
 ; CHECK-NOT: __emutls_t.teste

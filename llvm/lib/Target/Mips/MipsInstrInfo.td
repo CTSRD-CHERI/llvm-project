@@ -1856,7 +1856,7 @@ def SWR : StoreLeftRight<"swr", MipsSWR, GPR32Opnd, II_SWR>, LW_FM<0x2e>,
 }
 
 // COP2 Memory Instructions
-let AdditionalPredicates=[NotCHERI] in {
+let AdditionalPredicates=[NotCHERI,NotInMicroMips] in {
 def LWC2 : StdMMR6Rel, LW_FT2<"lwc2", COP2Opnd, II_LWC2, load>, LW_FM<0x32>,
            ISA_MIPS1_NOT_32R6_64R6;
 def SWC2 : StdMMR6Rel, SW_FT2<"swc2", COP2Opnd, II_SWC2, store>,

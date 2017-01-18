@@ -43,7 +43,7 @@ entry:
 ; ARM_64-LABEL:  __emutls_v.external_y:
 ; ARM_64-NEXT:   .xword 1
 ; ARM_64-NEXT:   .xword 2
-; ARM_64-NEXT:   .xword 0
+; ARM_64-NEXT:   .zero 8
 ; ARM_64-NEXT:   .xword __emutls_t.external_y
 ; ARM_64-NOT:    __emutls_v.external_x:
 ; ARM_64:        .section .rodata,
@@ -55,7 +55,7 @@ entry:
 ; ARM_64-LABEL:  __emutls_v.internal_y:
 ; ARM_64-NEXT:   .xword 8
 ; ARM_64-NEXT:   .xword 16
-; ARM_64-NEXT:   .xword 0
+; ARM_64-NEXT:   .zero 8
 ; ARM_64-NEXT:   .xword __emutls_t.internal_y
 ; ARM_64:        .section .rodata,
 ; ARM_64-LABEL:  __emutls_t.internal_y:

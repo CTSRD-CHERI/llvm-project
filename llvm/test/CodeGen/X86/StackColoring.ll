@@ -446,38 +446,38 @@ entry:
   %b4 = alloca [128 x i32], align 16
   %b5 = alloca [128 x i32], align 16
   %tmp = bitcast [128 x i32]* %b1 to i8*
-  call void @llvm.lifetime.start(i64 512, i8* %tmp)
+  call void @llvm.lifetime.start.p0i8(i64 512, i8* %tmp)
   %tmp1 = bitcast [128 x i32]* %b2 to i8*
-  call void @llvm.lifetime.start(i64 512, i8* %tmp1)
+  call void @llvm.lifetime.start.p0i8(i64 512, i8* %tmp1)
   %and = and i32 %x, 1
   %tobool = icmp eq i32 %and, 0
   br i1 %tobool, label %if.else, label %if.then
 
 if.then:                                          ; preds = %entry
   %tmp2 = bitcast [128 x i32]* %b3 to i8*
-  call void @llvm.lifetime.start(i64 512, i8* %tmp2)
+  call void @llvm.lifetime.start.p0i8(i64 512, i8* %tmp2)
   %a1 = getelementptr inbounds [128 x i32], [128 x i32]* %b1, i64 0, i64 0
   %a2 = getelementptr inbounds [128 x i32], [128 x i32]* %b3, i64 0, i64 0
   call void @initb(i32* %a1, i32* %a2, i32* null)
-  call void @llvm.lifetime.end(i64 512, i8* %tmp2)
+  call void @llvm.lifetime.end.p0i8(i64 512, i8* %tmp2)
   br label %if.end
 
 if.else:                                          ; preds = %entry
   %tmp3 = bitcast [128 x i32]* %b4 to i8*
-  call void @llvm.lifetime.start(i64 512, i8* %tmp3)
+  call void @llvm.lifetime.start.p0i8(i64 512, i8* %tmp3)
   %tmp4 = bitcast [128 x i32]* %b5 to i8*
-  call void @llvm.lifetime.start(i64 512, i8* %tmp4)
+  call void @llvm.lifetime.start.p0i8(i64 512, i8* %tmp4)
   %a3 = getelementptr inbounds [128 x i32], [128 x i32]* %b2, i64 0, i64 0
   %a4 = getelementptr inbounds [128 x i32], [128 x i32]* %b4, i64 0, i64 0
   %a5 = getelementptr inbounds [128 x i32], [128 x i32]* %b5, i64 0, i64 0
   call void @initb(i32* %a3, i32* %a4, i32* %a5) #3
-  call void @llvm.lifetime.end(i64 512, i8* %tmp4)
-  call void @llvm.lifetime.end(i64 512, i8* %tmp3)
+  call void @llvm.lifetime.end.p0i8(i64 512, i8* %tmp4)
+  call void @llvm.lifetime.end.p0i8(i64 512, i8* %tmp3)
   br label %if.end
 
 if.end:                                           ; preds = %if.else, %if.then
-  call void @llvm.lifetime.end(i64 512, i8* %tmp1)
-  call void @llvm.lifetime.end(i64 512, i8* %tmp)
+  call void @llvm.lifetime.end.p0i8(i64 512, i8* %tmp1)
+  call void @llvm.lifetime.end.p0i8(i64 512, i8* %tmp)
   ret i32 0
 
 }
@@ -499,9 +499,9 @@ entry:
   %b2 = alloca [128 x i32], align 16
   %b3 = alloca [128 x i32], align 16
   %tmp = bitcast [128 x i32]* %b1 to i8*
-  call void @llvm.lifetime.start(i64 512, i8* %tmp) #3
+  call void @llvm.lifetime.start.p0i8(i64 512, i8* %tmp) #3
   %tmp1 = bitcast [128 x i32]* %b2 to i8*
-  call void @llvm.lifetime.start(i64 512, i8* %tmp1) #3
+  call void @llvm.lifetime.start.p0i8(i64 512, i8* %tmp1) #3
   %and = and i32 %x, 1
   %tobool = icmp eq i32 %and, 0
   br i1 %tobool, label %if.else, label %if.then
@@ -526,9 +526,9 @@ while.body.lr.ph:                                 ; preds = %if.else
 while.body:                                       ; preds = %while.body.lr.ph, %while.body
   %x.addr.06 = phi i32 [ %x, %while.body.lr.ph ], [ %dec, %while.body ]
   %dec = add nsw i32 %x.addr.06, -1
-  call void @llvm.lifetime.start(i64 512, i8* %tmp2) #3
+  call void @llvm.lifetime.start.p0i8(i64 512, i8* %tmp2) #3
   call void @inita(i32* %arraydecay3) #3
-  call void @llvm.lifetime.end(i64 512, i8* %tmp2) #3
+  call void @llvm.lifetime.end.p0i8(i64 512, i8* %tmp2) #3
   %tobool2 = icmp eq i32 %dec, 0
   br i1 %tobool2, label %if.end.loopexit, label %while.body
 
@@ -536,8 +536,8 @@ if.end.loopexit:                                  ; preds = %while.body
   br label %if.end
 
 if.end:                                           ; preds = %if.end.loopexit, %if.else, %if.then
-  call void @llvm.lifetime.end(i64 512, i8* %tmp1) #3
-  call void @llvm.lifetime.end(i64 512, i8* %tmp) #3
+  call void @llvm.lifetime.end.p0i8(i64 512, i8* %tmp1) #3
+  call void @llvm.lifetime.end.p0i8(i64 512, i8* %tmp) #3
   ret i32 0
 }
 
@@ -556,25 +556,25 @@ entry:
   %buffer.i = alloca [12 x i32], align 16
   %abc = alloca [12 x i32], align 16
   %tmp = bitcast [12 x i32]* %buffer.i to i8*
-  call void @llvm.lifetime.start(i64 48, i8* %tmp)
+  call void @llvm.lifetime.start.p0i8(i64 48, i8* %tmp)
   %idxprom.i = sext i32 %y to i64
   %arrayidx.i = getelementptr inbounds [12 x i32], [12 x i32]* %buffer.i, i64 0, i64 %idxprom.i
   call void @inita(i32* %arrayidx.i)
   %add.i = add nsw i32 %x, %y
-  call void @llvm.lifetime.end(i64 48, i8* %tmp)
+  call void @llvm.lifetime.end.p0i8(i64 48, i8* %tmp)
   %tobool = icmp eq i32 %y, 0
   br i1 %tobool, label %if.end, label %if.then
 
 if.then:                                          ; preds = %entry
   %tmp1 = bitcast [12 x i32]* %abc to i8*
-  call void @llvm.lifetime.start(i64 48, i8* %tmp1)
+  call void @llvm.lifetime.start.p0i8(i64 48, i8* %tmp1)
   %arrayidx = getelementptr inbounds [12 x i32], [12 x i32]* %abc, i64 0, i64 %idxprom.i
   call void @inita(i32* %arrayidx)
-  call void @llvm.lifetime.start(i64 48, i8* %tmp)
+  call void @llvm.lifetime.start.p0i8(i64 48, i8* %tmp)
   call void @inita(i32* %arrayidx.i)
   %add.i9 = add nsw i32 %add.i, %y
-  call void @llvm.lifetime.end(i64 48, i8* %tmp)
-  call void @llvm.lifetime.end(i64 48, i8* %tmp1)
+  call void @llvm.lifetime.end.p0i8(i64 48, i8* %tmp)
+  call void @llvm.lifetime.end.p0i8(i64 48, i8* %tmp1)
   br label %if.end
 
 if.end:                                           ; preds = %if.then, %entry

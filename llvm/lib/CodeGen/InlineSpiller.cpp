@@ -389,6 +389,7 @@ bool InlineSpiller::hoistSpillInsideBB(LiveInterval &SpillLI,
                           MRI.getRegClass(SrcReg), &TRI);
   --MII; // Point to store instruction.
   LIS.InsertMachineInstrInMaps(*MII);
+#if 0
   // CHERI, with hardware floating point, lacks instructions for storing
   // floating point via a capability.  As such, the storeRegToStackSlot call
   // will insert two instructions and we must update the maps for both of them.
@@ -397,6 +398,7 @@ bool InlineSpiller::hoistSpillInsideBB(LiveInterval &SpillLI,
     if (LIS.isNotInMIMap(*MII))
       LIS.InsertMachineInstrInMaps(*MII);
   }
+#endif
   DEBUG(dbgs() << "\thoisted: " << SrcVNI->def << '\t' << *MII);
 
   HSpiller.addToMergeableSpills(*MII, StackSlot, Original);

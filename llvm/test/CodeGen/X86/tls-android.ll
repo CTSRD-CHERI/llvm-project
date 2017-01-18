@@ -41,7 +41,7 @@ entry:
 ; CHECK-LABEL: __emutls_v.external_y:
 ; CHECK-NEXT:  .long 4
 ; CHECK-NEXT:  .long 4
-; CHECK-NEXT:  .long 0
+; CHECK-NEXT:  .zero 4
 ; CHECK-NEXT:  .long __emutls_t.external_y
 ; CHECK-LABEL: __emutls_t.external_y:
 ; CHECK-NEXT:  .long 7
@@ -50,7 +50,7 @@ entry:
 ; CHECK-LABEL: __emutls_v.internal_y:
 ; CHECK-NEXT:  .long 4
 ; CHECK-NEXT:  .long 4
-; CHECK-NEXT:  .long 0
+; CHECK-NEXT:  .zero 4
 ; CHECK-NEXT:  .long __emutls_t.internal_y
 ; CHECK-LABEL: __emutls_t.internal_y:
 ; CHECK-NEXT:  .long 9
@@ -74,7 +74,7 @@ entry:
 ; X64-LABEL: __emutls_v.external_y:
 ; X64-NEXT:  .quad 4
 ; X64-NEXT:  .quad 4
-; X64-NEXT:  .quad 0
+; X64-NEXT:  .zero 8
 ; X64-NEXT:  .quad __emutls_t.external_y
 ; X64-LABEL: __emutls_t.external_y:
 ; X64-NEXT:  .long 7
@@ -83,7 +83,7 @@ entry:
 ; X64-LABEL: __emutls_v.internal_y:
 ; X64-NEXT:  .quad 4
 ; X64-NEXT:  .quad 4
-; X64-NEXT:  .quad 0
+; X64-NEXT:  .zero 8
 ; X64-NEXT:  .quad __emutls_t.internal_y
 ; X64-LABEL: __emutls_t.internal_y:
 ; X64-NEXT:  .long 9

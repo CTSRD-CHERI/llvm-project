@@ -34,12 +34,12 @@ void fn1() {
   // CHECK: cfromptr	$c4, $c0, $zero
   // Check if qualifiers is NULL
   // CHECK: ceq	$1, $c1, $c4
-  // CHECK: bnez	$1, $BB0_2
+  // CHECK: bnez	$1, .LBB0_2
   if (b->qualifiers)
     // Store above NULL capability in qualifiers
     // CHECK: csc	$c4, $zero, 0($c3)
     b->qualifiers = 0;
-  // CHECK-LABEL: $BB0_2:
+  // CHECK-LABEL: .LBB0_2:
   // Call sk_push
   // CHECK: ld	$1, %call16(sk_push)($gp)
   // CHECK: cgetpccsetoffset	$c12, $1

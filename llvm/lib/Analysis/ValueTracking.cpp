@@ -2905,7 +2905,7 @@ Value *llvm::GetPointerBaseWithConstantOffset(Value *Ptr, int64_t &Offset,
       // means when we construct GEPOffset, we need to use the size
       // of GEP's pointer type rather than the size of the original
       // pointer type.
-      APInt GEPOffset(DL.getPointerTypeSizeInBits(Ptr->getType()), 0);
+      APInt GEPOffset(DL.getPointerBaseSizeInBits(Ptr->getType()), 0);
       if (!GEP->accumulateConstantOffset(DL, GEPOffset))
         break;
 

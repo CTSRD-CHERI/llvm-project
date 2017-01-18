@@ -7,15 +7,15 @@ target triple = "cheri-unknown-freebsd"
 @b = addrspace(200) global [3 x i32 addrspace(200)*] [i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast ([5 x i32] addrspace(200)* @a to i8 addrspace(200)*), i64 8) to i32 addrspace(200)*), i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast ([5 x i32] addrspace(200)* @a to i8 addrspace(200)*), i64 4) to i32 addrspace(200)*), i32 addrspace(200)* getelementptr inbounds ([5 x i32], [5 x i32] addrspace(200)* @a, i32 0, i32 0)], align 32
 
 ; CHECK:	.section	__cap_relocs,"a",@progbits
-; CHECK:	.8byte	($tmp0)
+; CHECK:	.8byte	.Ltmp0
 ; CHECK:	.8byte	a
 ; CHECK:	.8byte	8
 ; CHECK:	.space	16
-; CHECK:	.8byte	($tmp1)
+; CHECK:	.8byte	.Ltmp1
 ; CHECK:	.8byte	a
 ; CHECK:	.8byte	4
 ; CHECK:	.space	16
-; CHECK:	.8byte	($tmp2)
+; CHECK:	.8byte	.Ltmp2
 ; CHECK:	.8byte	a
 ; CHECK:	.space	8
 ; CHECK:	.space	16

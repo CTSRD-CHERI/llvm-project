@@ -17,8 +17,8 @@
 ;   return x;
 ; }
 
-declare void @llvm.lifetime.start(i64, i8* nocapture)
-declare void @llvm.lifetime.end(i64, i8* nocapture)
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture)
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture)
 
 declare void @foo(i32*)
 
@@ -41,7 +41,7 @@ entry:
   tail call void @llvm.dbg.value(metadata i32 %d, i64 0, metadata !12, metadata !DIExpression()), !dbg !30
   tail call void @llvm.dbg.value(metadata i32 %e, i64 0, metadata !13, metadata !DIExpression()), !dbg !31
   %0 = bitcast i32* %x to i8*, !dbg !32
-  call void @llvm.lifetime.start(i64 4, i8* %0) #4, !dbg !32
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* %0) #4, !dbg !32
   %add = add nsw i32 %b, %a, !dbg !33
   %add1 = add nsw i32 %add, %c, !dbg !34
   %add2 = add nsw i32 %add1, %d, !dbg !35
@@ -52,7 +52,7 @@ entry:
   call void @foo(i32* nonnull %x) #4, !dbg !42
   call void @llvm.dbg.value(metadata i32* %x, i64 0, metadata !14, metadata !26), !dbg !37
   %1 = load i32, i32* %x, align 4, !dbg !43, !tbaa !38
-  call void @llvm.lifetime.end(i64 4, i8* %0) #4, !dbg !44
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* %0) #4, !dbg !44
   ret i32 %1, !dbg !45
 }
 
@@ -77,7 +77,7 @@ entry:
   tail call void @llvm.dbg.value(metadata i32 %d, i64 0, metadata !20, metadata !DIExpression()), !dbg !49
   tail call void @llvm.dbg.value(metadata i32 %e, i64 0, metadata !21, metadata !DIExpression()), !dbg !50
   %0 = bitcast i32* %x to i8*, !dbg !51
-  call void @llvm.lifetime.start(i64 4, i8* %0) #4, !dbg !51
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* %0) #4, !dbg !51
   %add = add nsw i32 %b, %a, !dbg !52
   %add1 = add nsw i32 %add, %c, !dbg !53
   %add2 = add nsw i32 %add1, %d, !dbg !54
@@ -88,7 +88,7 @@ entry:
   call void @foo(i32* nonnull %x) #4, !dbg !57
   call void @llvm.dbg.value(metadata i32* %x, i64 0, metadata !22, metadata !26), !dbg !56
   %1 = load i32, i32* %x, align 16, !dbg !58, !tbaa !38
-  call void @llvm.lifetime.end(i64 4, i8* %0) #4, !dbg !59
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* %0) #4, !dbg !59
   ret i32 %1, !dbg !60
 }
 

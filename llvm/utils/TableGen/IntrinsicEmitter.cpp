@@ -721,6 +721,7 @@ void IntrinsicEmitter::EmitIntrinsicToBuiltinMap(
                                      Ints[i].EnumName)).second)
         PrintFatalError("Intrinsic '" + Ints[i].TheDef->getName() +
               "': duplicate GCC builtin name!");
+      Table.GetOrAddStringOffset(Ints[i].GCCBuiltinAliasName);
     }
   }
 

@@ -703,6 +703,14 @@ static bool CanCoerceMustAliasedValueToLoad(Value *StoredVal,
         DL.getTypeSizeInBits(LoadTy))
     return false;
 
+  // We can't coerce a store of a fat pointer to a load of anything that isn't
+  // a fat pointer
+  if (auto *PT = dyn_cast<PointerType>(StoredVal->getType()))
+    if (DL.isFatPointer(PT->getPointerAddressSpace())) {
+      auto *LPTy = dyn_cast<PointerType>(LoadTy);
+      return LPTy ? (DL.isFatPointer(LPTy->getPointerAddressSpace())) : false;
+    }
+
   return true;
 }
 
@@ -1019,9 +1027,10 @@ static Value *GetStoreValueForLoad(Value *SrcVal, unsigned Offset,
 
   // Compute which bits of the stored value are being used by the load.  Convert
   // to an integer type to start with.
-  if (SrcVal->getType()->getScalarType()->isPointerTy())
+  if (SrcVal->getType()->getScalarType()->isPointerTy()) {
     SrcVal = Builder.CreatePtrToInt(SrcVal,
         DL.getIntPtrType(SrcVal->getType()));
+  }
   if (!SrcVal->getType()->isIntegerTy())
     SrcVal = Builder.CreateBitCast(SrcVal, IntegerType::get(Ctx, StoreSize*8));
 

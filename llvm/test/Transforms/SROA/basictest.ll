@@ -1652,7 +1652,7 @@ define void @PR25873(%struct.STest* %outData) {
 entry:
   %tmpData = alloca %struct.STest, align 8
   %0 = bitcast %struct.STest* %tmpData to i8*
-  call void @llvm.lifetime.start(i64 16, i8* %0)
+  call void @llvm.lifetime.start.p0i8(i64 16, i8* %0)
   %x = getelementptr inbounds %struct.STest, %struct.STest* %tmpData, i64 0, i32 0, i32 0
   store float 1.230000e+02, float* %x, align 8
   %y = getelementptr inbounds %struct.STest, %struct.STest* %tmpData, i64 0, i32 0, i32 1
@@ -1664,7 +1664,7 @@ entry:
   store i64 %3, i64* %2, align 8
   %4 = bitcast %struct.STest* %outData to i8*
   call void @llvm.memcpy.p0i8.p0i8.i64(i8* %4, i8* %0, i64 16, i32 4, i1 false)
-  call void @llvm.lifetime.end(i64 16, i8* %0)
+  call void @llvm.lifetime.end.p0i8(i64 16, i8* %0)
   ret void
 }
 
@@ -1673,14 +1673,14 @@ declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i32, 
 define void @PR27999() unnamed_addr {
 ; CHECK-LABEL: @PR27999(
 ; CHECK: alloca [2 x i64], align 8
-; CHECK: call void @llvm.lifetime.start(i64 16,
-; CHECK: call void @llvm.lifetime.end(i64 8,
+; CHECK: call void @llvm.lifetime.start.p0i8(i64 16,
+; CHECK: call void @llvm.lifetime.end.p0i8(i64 8,
 entry-block:
   %0 = alloca [2 x i64], align 8
   %1 = bitcast [2 x i64]* %0 to i8*
-  call void @llvm.lifetime.start(i64 16, i8* %1)
+  call void @llvm.lifetime.start.p0i8(i64 16, i8* %1)
   %2 = getelementptr inbounds [2 x i64], [2 x i64]* %0, i32 0, i32 1
   %3 = bitcast i64* %2 to i8*
-  call void @llvm.lifetime.end(i64 8, i8* %3)
+  call void @llvm.lifetime.end.p0i8(i64 8, i8* %3)
   ret void
 }

@@ -104,7 +104,7 @@ entry:
 ; X32-LABEL: __emutls_v.i:
 ; X32-NEXT: .long 4
 ; X32-NEXT: .long 4
-; X32-NEXT: .long 0
+; X32-NEXT: .zero 4
 ; X32-NEXT: .long __emutls_t.i
 
 ; X32:      .section .rodata,
@@ -120,7 +120,7 @@ entry:
 ; X64-LABEL: __emutls_v.i:
 ; X64-NEXT: .quad 4
 ; X64-NEXT: .quad 4
-; X64-NEXT: .quad 0
+; X64-NEXT: .zero 8
 ; X64-NEXT: .quad __emutls_t.i
 
 ; X64:      .section .rodata,

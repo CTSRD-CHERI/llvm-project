@@ -61,7 +61,7 @@ entry:
 ; X86_32-LABEL:  __emutls_v.external_y:
 ; X86_32-NEXT:   .long 1
 ; X86_32-NEXT:   .long 2
-; X86_32-NEXT:   .long 0
+; X86_32-NEXT:   .zero 4
 ; X86_32-NEXT:   .long __emutls_t.external_y
 ; X86_32:        .section .rodata,
 ; X86_32-LABEL:  __emutls_t.external_y:
@@ -72,7 +72,7 @@ entry:
 ; X86_32-LABEL:  __emutls_v.internal_y:
 ; X86_32-NEXT:   .long 8
 ; X86_32-NEXT:   .long 16
-; X86_32-NEXT:   .long 0
+; X86_32-NEXT:   .zero 4
 ; X86_32-NEXT:   .long __emutls_t.internal_y
 ; X86_32-LABEL:  __emutls_t.internal_y:
 ; X86_32-NEXT:   .quad 9
@@ -92,7 +92,7 @@ entry:
 ; X86_64-LABEL:  __emutls_v.external_y:
 ; X86_64-NEXT:   .quad 1
 ; X86_64-NEXT:   .quad 2
-; X86_64-NEXT:   .quad 0
+; X86_64-NEXT:   .zero 8
 ; X86_64-NEXT:   .quad __emutls_t.external_y
 ; X86_64-NOT:    __emutls_v.external_x:
 ; X86_64:        .section .rodata,
@@ -104,7 +104,7 @@ entry:
 ; X86_64-LABEL:  __emutls_v.internal_y:
 ; X86_64-NEXT:   .quad 8
 ; X86_64-NEXT:   .quad 16
-; X86_64-NEXT:   .quad 0
+; X86_64-NEXT:   .zero 8
 ; X86_64-NEXT:   .quad __emutls_t.internal_y
 ; X86_64:        .section .rodata,
 ; X86_64-LABEL:  __emutls_t.internal_y:

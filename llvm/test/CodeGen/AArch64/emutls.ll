@@ -128,7 +128,7 @@ entry:
 ; ARM64-LABEL: __emutls_v.i1:
 ; ARM64-NEXT: .xword 4
 ; ARM64-NEXT: .xword 4
-; ARM64-NEXT: .xword 0
+; ARM64-NEXT: .zero  8
 ; ARM64-NEXT: .xword __emutls_t.i1
 
 ; ARM64:      .section .rodata,
@@ -142,7 +142,7 @@ entry:
 ; ARM64-LABEL: __emutls_v.i3:
 ; ARM64-NEXT: .xword 4
 ; ARM64-NEXT: .xword 4
-; ARM64-NEXT: .xword 0
+; ARM64-NEXT: .zero  8
 ; ARM64-NEXT: .xword __emutls_t.i3
 
 ; ARM64:      .section .rodata,
@@ -155,7 +155,7 @@ entry:
 ; ARM64-LABEL: __emutls_v.i4:
 ; ARM64-NEXT: .xword 4
 ; ARM64-NEXT: .xword 4
-; ARM64-NEXT: .xword 0
+; ARM64-NEXT: .zero  8
 ; ARM64-NEXT: .xword __emutls_t.i4
 
 ; ARM64:      .section .rodata,
@@ -171,7 +171,7 @@ entry:
 ; ARM64-LABEL: __emutls_v.s1:
 ; ARM64-NEXT: .xword 2
 ; ARM64-NEXT: .xword 2
-; ARM64-NEXT: .xword 0
+; ARM64-NEXT: .zero  8
 ; ARM64-NEXT: .xword __emutls_t.s1
 
 ; ARM64:      .section .rodata,
@@ -182,8 +182,8 @@ entry:
 ; ARM64-LABEL: __emutls_v.b1:
 ; ARM64-NEXT: .xword 1
 ; ARM64-NEXT: .xword 1
-; ARM64-NEXT: .xword 0
-; ARM64-NEXT: .xword 0
+; ARM64-NEXT: .zero  8
+; ARM64-NEXT: .zero  8
 
 ; ARM64-NOT:   __emutls_t.b1
 
@@ -193,8 +193,8 @@ entry:
 ; ARM64-LABEL: __emutls_v._ZN1AIiE1xE:
 ; ARM64-NEXT: .xword 4
 ; ARM64-NEXT: .xword 4
-; ARM64-NEXT: .xword 0
-; ARM64-NEXT: .xword 0
+; ARM64-NEXT: .zero  8
+; ARM64-NEXT: .zero  8
 
 ; ARM64:      .section .data.__emutls_v._ZN1AIfE1xE,{{.*}},__emutls_v._ZN1AIfE1xE,comdat
 ; ARM64:      .weak __emutls_v._ZN1AIfE1xE
@@ -202,7 +202,7 @@ entry:
 ; ARM64-LABEL: __emutls_v._ZN1AIfE1xE:
 ; ARM64-NEXT: .xword 4
 ; ARM64-NEXT: .xword 4
-; ARM64-NEXT: .xword 0
+; ARM64-NEXT: .zero  8
 ; ARM64-NEXT: .xword __emutls_t._ZN1AIfE1xE
 
 ; ARM64:      .section .rodata.__emutls_t._ZN1AIfE1xE,{{.*}},__emutls_t._ZN1AIfE1xE,comdat

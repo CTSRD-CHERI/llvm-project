@@ -408,7 +408,7 @@ bool BasicAAResult::DecomposeGEPExpression(const Value *V,
     unsigned AS = GEPOp->getPointerAddressSpace();
     // Walk the indices of the GEP, accumulating them into BaseOff/VarIndices.
     gep_type_iterator GTI = gep_type_begin(GEPOp);
-    unsigned PointerSize = DL.getPointerSizeInBits(AS);
+    unsigned PointerSize = DL.getPointerBaseSizeInBits(AS);
     // Assume all GEP operands are constants until proven otherwise.
     bool GepHasConstantOffset = true;
     for (User::const_op_iterator I = GEPOp->op_begin() + 1, E = GEPOp->op_end();
