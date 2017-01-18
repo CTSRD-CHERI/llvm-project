@@ -1061,6 +1061,9 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
 
     TheCall->setType(Context.VoidPtrTy);
     break;
+  // Memory capability functions
+  case Builtin::BI__builtin_memcap_callback_create:
+    return SemaBuiltinMemcapCreate(*this, TheCall);
   // OpenCL v2.0, s6.13.16 - Pipe functions
   case Builtin::BIread_pipe:
   case Builtin::BIwrite_pipe:
@@ -1531,8 +1534,6 @@ bool Sema::CheckMipsBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   case Mips::BI__builtin_mips_precr_sra_ph_w: i = 2; l = 0; u = 31; break;
   case Mips::BI__builtin_mips_precr_sra_r_ph_w: i = 2; l = 0; u = 31; break;
   case Mips::BI__builtin_mips_prepend: i = 2; l = 0; u = 31; break;
-  case Mips::BI__builtin_memcap_callback_create:
-    return SemaBuiltinMemcapCreate(*this, TheCall);
   // MSA instrinsics. Instructions (which the intrinsics maps to) which use the
   // df/m field.
   // These intrinsics take an unsigned 3 bit immediate.

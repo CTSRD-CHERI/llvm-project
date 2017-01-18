@@ -7331,18 +7331,18 @@ class MipsTargetInfo : public TargetInfo {
     else if (ABI == "n64") {
       if (IsCheri) {
         if (Cheri128)
-           Layout = "m:e-p200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+           Layout = "m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128";
          else
-           Layout = "m:e-p200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+           Layout = "m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128";
       } else
         Layout = "m:e-i8:8:32-i16:16:32-i64:64-n32:64-S128";
     } else
       llvm_unreachable("Invalid ABI");
 
     if (BigEndian)
-      resetDataLayout(("E-" + Layout).str());
+      resetDataLayout(("E-" + Layout + (SandboxABI ? "-A200" : "")).str());
     else
-      resetDataLayout(("e-" + Layout).str());
+      resetDataLayout(("e-" + Layout + (SandboxABI ? "-A200" : "")).str());
   }
 
 
@@ -7433,6 +7433,12 @@ public:
       ABI = Name;
       return true;
     }
+    if (Name == "sandbox") {
+      setSandboxABITypes();
+      SandboxABI = true;
+      ABI = "n64";
+      return true;
+    }
     return false;
   }
 
@@ -7468,6 +7474,11 @@ public:
     PointerWidth = PointerAlign = 64;
     PtrDiffType = SignedLong;
     SizeType = UnsignedLong;
+  }
+
+  void setSandboxABITypes() {
+    setN64ABITypes();
+    PointerWidth = PointerAlign = CapSize;
   }
 
   void setN32ABITypes() {

@@ -12,13 +12,13 @@
 // PTRS: ret i32 -1
 // PTRS: define i32 @memcap_offset_get(i8* nocapture readnone %__cap)
 // PTRS: ret i32 -1
-// PTRS: define i8* @memcap_offset_set(i8* readnone %__cap, i32  %__val)
+// PTRS: define i8* @memcap_offset_set(i8* readnone returned %__cap, i32  %__val)
 // PTRS: ret i8* %__cap
 // PTRS: define i32 @memcap_type_get(i8* nocapture readnone %__cap)
 // PTRS: ret i32 0
 // PTRS: define  zeroext i16 @memcap_perms_get(i8* nocapture readnone %__cap)
 // PTRS: ret i16 0
-// PTRS: define i8* @memcap_perms_and(i8* readnone %__cap, i16 zeroext  %__val)
+// PTRS: define i8* @memcap_perms_and(i8* readnone returned %__cap, i16 zeroext  %__val)
 // PTRS: ret i8* %__cap
 // PTRS: define zeroext i1 @memcap_tag_get(i8* nocapture readnone %__cap)
 // PTRS: ret i1 false
@@ -27,11 +27,11 @@
 // PTRS: define i8* @memcap_offset_increment(i8* readnone %__cap, i32 %__offset)
 // PTRS: %add.ptr = getelementptr inbounds i8, i8* %__cap, i32 %__offset
 // PTRS: ret i8* %add.ptr
-// PTRS: define i8* @memcap_tag_clear(i8* readnone %__cap)
+// PTRS: define i8* @memcap_tag_clear(i8* readnone returned %__cap)
 // PTRS: ret i8* %__cap
-// PTRS: define i8* @memcap_seal(i8* readnone %__cap, i8* nocapture readnone %__type)
+// PTRS: define i8* @memcap_seal(i8* readnone returned %__cap, i8* nocapture readnone %__type)
 // PTRS: ret i8* %__cap
-// PTRS: define i8* @memcap_unseal(i8* readnone %__cap, i8* nocapture readnone %__type)
+// PTRS: define i8* @memcap_unseal(i8* readnone returned %__cap, i8* nocapture readnone %__type)
 // PTRS: ret i8* %__cap
 // PTRS: define void @memcap_perms_check(i8* nocapture %__cap, i16 zeroext %__perms)
 // PTRS: ret void

@@ -60,7 +60,7 @@ protected:
   bool NoAsmVariants;  // True if {|} are normal characters.
   bool CapabilityABI = false;
   bool HasFloat128;
-  unsigned char PointerWidth, PointerAlign;
+  unsigned short PointerWidth, PointerAlign;
   unsigned char BoolWidth, BoolAlign;
   unsigned char IntWidth, IntAlign;
   unsigned char HalfWidth, HalfAlign;
