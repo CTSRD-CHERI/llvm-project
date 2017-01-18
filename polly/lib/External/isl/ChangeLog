@@ -1,3 +1,34 @@
+version: 0.17.1
+date: Fri May  6 12:02:48 CEST 2016
+changes:
+	- fix bug in coalescing treatment
+---
+version: 0.17
+date: Tue May  3 14:26:43 CEST 2016
+changes:
+	- optionally combine SCCs incrementally in scheduler
+	- optionally maximize coincidence in scheduler
+	- optionally avoid loop coalescing in scheduler
+	- fix handling of nested integer divisions
+	- optionally detect min/max expressions during AST generation
+	- minor AST generator improvements
+	- simplify stride constraints
+	- improve support for expansions in schedule trees
+---
+version: 0.16.1
+date: Thu Jan 14 18:08:06 CET 2016
+changes:
+	- fix bug in simplification
+---
+version: 0.16
+date: Tue Jan 12 09:56:16 CET 2016
+changes:
+	- add 32 bit integer optimization for IMath
+	- minor AST generator improvements
+	- add isl_union_flow_get_full_{may,must}_dependence
+	- minor improvements to Python bindings
+	- minor improvements to set and map printing
+---
 version: 0.15
 date: Thu Jun 11 12:45:33 CEST 2015
 changes:

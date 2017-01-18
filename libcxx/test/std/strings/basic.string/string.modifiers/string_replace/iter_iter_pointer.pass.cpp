@@ -29,7 +29,7 @@ test(S s, typename S::size_type pos1, typename S::size_type n1, const typename S
     typename S::const_iterator last = s.begin() + pos1 + n1;
     typename S::size_type xlen = last - first;
     s.replace(first, last, str);
-    assert(s.__invariants());
+    LIBCPP_ASSERT(s.__invariants());
     assert(s == expected);
     typename S::size_type rlen = S::traits_type::length(str);
     assert(s.size() == old_size - xlen + rlen);
@@ -274,7 +274,7 @@ int main()
     test1<S>();
     test2<S>();
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test0<S>();
@@ -282,4 +282,20 @@ int main()
     test2<S>();
     }
 #endif
+
+	{ // test replacing into self
+    typedef std::string S;
+	S s_short = "123/";
+	S s_long  = "Lorem ipsum dolor sit amet, consectetur/";
+	
+	s_short.replace(s_short.begin(), s_short.begin(), s_short.c_str());
+	assert(s_short == "123/123/");
+	s_short.replace(s_short.begin(), s_short.begin(), s_short.c_str());
+	assert(s_short == "123/123/123/123/");
+	s_short.replace(s_short.begin(), s_short.begin(), s_short.c_str());
+	assert(s_short == "123/123/123/123/123/123/123/123/");
+	
+	s_long.replace(s_long.begin(), s_long.begin(), s_long.c_str());
+	assert(s_long == "Lorem ipsum dolor sit amet, consectetur/Lorem ipsum dolor sit amet, consectetur/");
+	}
 }

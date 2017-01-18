@@ -142,6 +142,7 @@ static IMAKind ClassifyImplicitMemberAccess(Sema &SemaRef,
     AbstractInstanceResult = IMA_Abstract;
     break;
 
+  case Sema::DiscardedStatement:
   case Sema::ConstantEvaluated:
   case Sema::PotentiallyEvaluated:
   case Sema::PotentiallyEvaluatedIfUsed:
@@ -268,6 +269,20 @@ Sema::BuildPossibleImplicitMemberExpr(const CXXScopeSpec &SS,
   llvm_unreachable("unexpected instance member access kind");
 }
 
+/// Determine whether input char is from rgba component set.
+static bool
+IsRGBA(char c) {
+  switch (c) {
+  case 'r':
+  case 'g':
+  case 'b':
+  case 'a':
+    return true;
+  default:
+    return false;
+  }
+}
+
 /// Check an ext-vector component access expression.
 ///
 /// VK should be set in advance to the value kind of the base
@@ -307,11 +322,25 @@ CheckExtVectorComponent(Sema &S, QualType baseType, ExprValueKind &VK,
     HalvingSwizzle = true;
   } else if (!HexSwizzle &&
              (Idx = vecType->getPointAccessorIdx(*compStr)) != -1) {
+    bool HasRGBA = IsRGBA(*compStr);
     do {
+      // Ensure that xyzw and rgba components don't intermingle.
+      if (HasRGBA != IsRGBA(*compStr))
+        break;
       if (HasIndex[Idx]) HasRepeated = true;
       HasIndex[Idx] = true;
       compStr++;
     } while (*compStr && (Idx = vecType->getPointAccessorIdx(*compStr)) != -1);
+
+    // Emit a warning if an rgba selector is used earlier than OpenCL 2.2
+    if (HasRGBA || (*compStr && IsRGBA(*compStr))) {
+      if (S.getLangOpts().OpenCL && S.getLangOpts().OpenCLVersion < 220) {
+        const char *DiagBegin = HasRGBA ? CompName->getNameStart() : compStr;
+        S.Diag(OpLoc, diag::ext_opencl_ext_vector_type_rgba_selector)
+          << StringRef(DiagBegin, 1)
+          << S.getLangOpts().OpenCLVersion << SourceRange(CompLoc);
+      }
+    }
   } else {
     if (HexSwizzle) compStr++;
     while ((Idx = vecType->getNumericAccessorIdx(*compStr)) != -1) {
@@ -338,7 +367,7 @@ CheckExtVectorComponent(Sema &S, QualType baseType, ExprValueKind &VK,
       compStr++;
 
     while (*compStr) {
-      if (!vecType->isAccessorWithinNumElements(*compStr++)) {
+      if (!vecType->isAccessorWithinNumElements(*compStr++, HexSwizzle)) {
         S.Diag(OpLoc, diag::err_ext_vector_component_exceeds_length)
           << baseType << SourceRange(CompLoc);
         return QualType();
@@ -380,7 +409,8 @@ static Decl *FindGetterSetterNameDeclFromProtocolList(const ObjCProtocolDecl*PDe
                                                 const Selector &Sel,
                                                 ASTContext &Context) {
   if (Member)
-    if (ObjCPropertyDecl *PD = PDecl->FindPropertyDeclaration(Member))
+    if (ObjCPropertyDecl *PD = PDecl->FindPropertyDeclaration(
+            Member, ObjCPropertyQueryKind::OBJC_PR_query_instance))
       return PD;
   if (ObjCMethodDecl *OMD = PDecl->getInstanceMethod(Sel))
     return OMD;
@@ -401,7 +431,8 @@ static Decl *FindGetterSetterNameDecl(const ObjCObjectPointerType *QIdTy,
   Decl *GDecl = nullptr;
   for (const auto *I : QIdTy->quals()) {
     if (Member)
-      if (ObjCPropertyDecl *PD = I->FindPropertyDeclaration(Member)) {
+      if (ObjCPropertyDecl *PD = I->FindPropertyDeclaration(
+              Member, ObjCPropertyQueryKind::OBJC_PR_query_instance)) {
         GDecl = PD;
         break;
       }
@@ -740,12 +771,6 @@ Sema::BuildMemberReferenceExpr(Expr *Base, QualType BaseType,
                                   false, ExtraArgs);
 }
 
-static ExprResult
-BuildFieldReferenceExpr(Sema &S, Expr *BaseExpr, bool IsArrow,
-                        SourceLocation OpLoc, const CXXScopeSpec &SS,
-                        FieldDecl *Field, DeclAccessPair FoundDecl,
-                        const DeclarationNameInfo &MemberNameInfo);
-
 ExprResult
 Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
                                                SourceLocation loc,
@@ -831,7 +856,7 @@ Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
     // Make a nameInfo that properly uses the anonymous name.
     DeclarationNameInfo memberNameInfo(field->getDeclName(), loc);
 
-    result = BuildFieldReferenceExpr(*this, result, baseObjectIsPointer,
+    result = BuildFieldReferenceExpr(result, baseObjectIsPointer,
                                      SourceLocation(), EmptySS, field,
                                      foundDecl, memberNameInfo).get();
     if (!result)
@@ -852,9 +877,10 @@ Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
         DeclAccessPair::make(field, field->getAccess());
 
     result =
-        BuildFieldReferenceExpr(*this, result, /*isarrow*/ false,
-                                SourceLocation(), (FI == FEnd ? SS : EmptySS),
-                                field, fakeFoundDecl, memberNameInfo).get();
+        BuildFieldReferenceExpr(result, /*isarrow*/ false, SourceLocation(),
+                                (FI == FEnd ? SS : EmptySS), field,
+                                fakeFoundDecl, memberNameInfo)
+            .get();
   }
   
   return result;
@@ -898,6 +924,32 @@ static bool IsInFnTryBlockHandler(const Scope *S) {
       return (S->getFlags() & Scope::TryScope) != Scope::TryScope;
   }
   return false;
+}
+
+static VarDecl *
+getVarTemplateSpecialization(Sema &S, VarTemplateDecl *VarTempl,
+                      const TemplateArgumentListInfo *TemplateArgs,
+                      const DeclarationNameInfo &MemberNameInfo,
+                      SourceLocation TemplateKWLoc) {
+
+  if (!TemplateArgs) {
+    S.Diag(MemberNameInfo.getBeginLoc(), diag::err_template_decl_ref)
+        << /*Variable template*/ 1 << MemberNameInfo.getName()
+        << MemberNameInfo.getSourceRange();
+
+    S.Diag(VarTempl->getLocation(), diag::note_template_decl_here);
+
+    return nullptr;
+  }
+  DeclResult VDecl = S.CheckVarTemplateId(
+      VarTempl, TemplateKWLoc, MemberNameInfo.getLoc(), *TemplateArgs);
+  if (VDecl.isInvalid())
+    return nullptr;
+  VarDecl *Var = cast<VarDecl>(VDecl.get());
+  if (!Var->getTemplateSpecializationKind())
+    Var->setTemplateSpecializationKind(TSK_ImplicitInstantiation,
+                                       MemberNameInfo.getLoc());
+  return Var;
 }
 
 ExprResult
@@ -1067,9 +1119,23 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
   // Handle the implicit-member-access case.
   if (!BaseExpr) {
     // If this is not an instance member, convert to a non-member access.
-    if (!MemberDecl->isCXXInstanceMember())
-      return BuildDeclarationNameExpr(SS, R.getLookupNameInfo(), MemberDecl);
-
+    if (!MemberDecl->isCXXInstanceMember()) {
+      // If this is a variable template, get the instantiated variable
+      // declaration corresponding to the supplied template arguments
+      // (while emitting diagnostics as necessary) that will be referenced
+      // by this expression.
+      assert((!TemplateArgs || isa<VarTemplateDecl>(MemberDecl)) &&
+             "How did we get template arguments here sans a variable template");
+      if (isa<VarTemplateDecl>(MemberDecl)) {
+        MemberDecl = getVarTemplateSpecialization(
+            *this, cast<VarTemplateDecl>(MemberDecl), TemplateArgs,
+            R.getLookupNameInfo(), TemplateKWLoc);
+        if (!MemberDecl)
+          return ExprError();
+      }
+      return BuildDeclarationNameExpr(SS, R.getLookupNameInfo(), MemberDecl,
+                                      FoundDecl, TemplateArgs);
+    }
     SourceLocation Loc = R.getNameLoc();
     if (SS.getRange().isValid())
       Loc = SS.getRange().getBegin();
@@ -1082,8 +1148,8 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
     return ExprError();
 
   if (FieldDecl *FD = dyn_cast<FieldDecl>(MemberDecl))
-    return BuildFieldReferenceExpr(*this, BaseExpr, IsArrow, OpLoc, SS, FD,
-                                   FoundDecl, MemberNameInfo);
+    return BuildFieldReferenceExpr(BaseExpr, IsArrow, OpLoc, SS, FD, FoundDecl,
+                                   MemberNameInfo);
 
   if (MSPropertyDecl *PD = dyn_cast<MSPropertyDecl>(MemberDecl))
     return BuildMSPropertyRefExpr(*this, BaseExpr, IsArrow, SS, PD,
@@ -1124,6 +1190,15 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
     return BuildMemberExpr(*this, Context, BaseExpr, IsArrow, OpLoc, SS,
                            TemplateKWLoc, Enum, FoundDecl, MemberNameInfo,
                            Enum->getType(), VK_RValue, OK_Ordinary);
+  }
+  if (VarTemplateDecl *VarTempl = dyn_cast<VarTemplateDecl>(MemberDecl)) {
+    if (VarDecl *Var = getVarTemplateSpecialization(
+            *this, VarTempl, TemplateArgs, MemberNameInfo, TemplateKWLoc))
+      return BuildMemberExpr(*this, Context, BaseExpr, IsArrow, OpLoc, SS,
+                             TemplateKWLoc, Var, FoundDecl, MemberNameInfo,
+                             Var->getType().getNonReferenceType(), VK_LValue,
+                             OK_Ordinary);
+    return ExprError();
   }
 
   // We found something that we didn't expect. Complain.
@@ -1319,12 +1394,21 @@ static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
 
         // Figure out the class that declares the ivar.
         assert(!ClassDeclared);
+
         Decl *D = cast<Decl>(IV->getDeclContext());
-        if (ObjCCategoryDecl *CAT = dyn_cast<ObjCCategoryDecl>(D))
-          D = CAT->getClassInterface();
-        ClassDeclared = cast<ObjCInterfaceDecl>(D);
+        if (auto *Category = dyn_cast<ObjCCategoryDecl>(D))
+          D = Category->getClassInterface();
+
+        if (auto *Implementation = dyn_cast<ObjCImplementationDecl>(D))
+          ClassDeclared = Implementation->getClassInterface();
+        else if (auto *Interface = dyn_cast<ObjCInterfaceDecl>(D))
+          ClassDeclared = Interface;
+
+        assert(ClassDeclared && "cannot query interface");
       } else {
-        if (IsArrow && IDecl->FindPropertyDeclaration(Member)) {
+        if (IsArrow &&
+            IDecl->FindPropertyDeclaration(
+                Member, ObjCPropertyQueryKind::OBJC_PR_query_instance)) {
           S.Diag(MemberLoc, diag::err_property_found_suggest)
               << Member << BaseExpr.get()->getType()
               << FixItHint::CreateReplacement(OpLoc, ".");
@@ -1675,11 +1759,11 @@ ExprResult Sema::ActOnMemberAccessExpr(Scope *S, Expr *Base,
                                   NameInfo, TemplateArgs, S, &ExtraArgs);
 }
 
-static ExprResult
-BuildFieldReferenceExpr(Sema &S, Expr *BaseExpr, bool IsArrow,
-                        SourceLocation OpLoc, const CXXScopeSpec &SS,
-                        FieldDecl *Field, DeclAccessPair FoundDecl,
-                        const DeclarationNameInfo &MemberNameInfo) {
+ExprResult
+Sema::BuildFieldReferenceExpr(Expr *BaseExpr, bool IsArrow,
+                              SourceLocation OpLoc, const CXXScopeSpec &SS,
+                              FieldDecl *Field, DeclAccessPair FoundDecl,
+                              const DeclarationNameInfo &MemberNameInfo) {
   // x.a is an l-value if 'a' has a reference type. Otherwise:
   // x.a is an l-value/x-value/pr-value if the base is (and note
   //   that *x is always an l-value), except that if the base isn't
@@ -1713,28 +1797,37 @@ BuildFieldReferenceExpr(Sema &S, Expr *BaseExpr, bool IsArrow,
     // except that 'mutable' members don't pick up 'const'.
     if (Field->isMutable()) BaseQuals.removeConst();
 
-    Qualifiers MemberQuals
-    = S.Context.getCanonicalType(MemberType).getQualifiers();
+    Qualifiers MemberQuals =
+        Context.getCanonicalType(MemberType).getQualifiers();
 
     assert(!MemberQuals.hasAddressSpace() ||
            (MemberQuals.getAddressSpace() == S.Context.getDefaultAS()));
 
-
     Qualifiers Combined = BaseQuals + MemberQuals;
     if (Combined != MemberQuals)
-      MemberType = S.Context.getQualifiedType(MemberType, Combined);
+      MemberType = Context.getQualifiedType(MemberType, Combined);
   }
 
-  S.UnusedPrivateFields.remove(Field);
+  UnusedPrivateFields.remove(Field);
 
-  ExprResult Base =
-  S.PerformObjectMemberConversion(BaseExpr, SS.getScopeRep(),
-                                  FoundDecl, Field);
+  ExprResult Base = PerformObjectMemberConversion(BaseExpr, SS.getScopeRep(),
+                                                  FoundDecl, Field);
   if (Base.isInvalid())
     return ExprError();
-  return BuildMemberExpr(S, S.Context, Base.get(), IsArrow, OpLoc, SS,
-                         /*TemplateKWLoc=*/SourceLocation(), Field, FoundDecl,
-                         MemberNameInfo, MemberType, VK, OK);
+  MemberExpr *ME =
+      BuildMemberExpr(*this, Context, Base.get(), IsArrow, OpLoc, SS,
+                      /*TemplateKWLoc=*/SourceLocation(), Field, FoundDecl,
+                      MemberNameInfo, MemberType, VK, OK);
+
+  // Build a reference to a private copy for non-static data members in
+  // non-static member functions, privatized by OpenMP constructs.
+  if (getLangOpts().OpenMP && IsArrow &&
+      !CurContext->isDependentContext() &&
+      isa<CXXThisExpr>(Base.get()->IgnoreParenImpCasts())) {
+    if (auto *PrivateCopy = IsOpenMPCapturedDecl(Field))
+      return getOpenMPCapturedExpr(PrivateCopy, VK, OK, OpLoc);
+  }
+  return ME;
 }
 
 /// Builds an implicit member access expression.  The current context

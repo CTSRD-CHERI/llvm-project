@@ -18,6 +18,7 @@
 #include <unordered_set>
 #include <cassert>
 
+#include "test_macros.h"
 #include "../../../NotConstructible.h"
 #include "../../../test_compare.h"
 #include "../../../test_hash.h"
@@ -36,7 +37,7 @@ int main()
             test_hash<std::hash<NotConstructible> >(8),
             test_compare<std::equal_to<NotConstructible> >(9)
            );
-        assert(c.bucket_count() == 7);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         assert(c.hash_function() == test_hash<std::hash<NotConstructible> >(8));
         assert(c.key_eq() == test_compare<std::equal_to<NotConstructible> >(9));
         assert(c.get_allocator() == (test_allocator<NotConstructible>()));
@@ -46,7 +47,7 @@ int main()
         assert(c.load_factor() == 0);
         assert(c.max_load_factor() == 1);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multiset<NotConstructible,
                                    test_hash<std::hash<NotConstructible> >,
@@ -57,7 +58,7 @@ int main()
             test_hash<std::hash<NotConstructible> >(8),
             test_compare<std::equal_to<NotConstructible> >(9)
            );
-        assert(c.bucket_count() == 7);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         assert(c.hash_function() == test_hash<std::hash<NotConstructible> >(8));
         assert(c.key_eq() == test_compare<std::equal_to<NotConstructible> >(9));
         assert(c.get_allocator() == (min_allocator<NotConstructible>()));

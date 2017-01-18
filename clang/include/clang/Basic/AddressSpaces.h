@@ -25,7 +25,7 @@ namespace LangAS {
 /// This uses a high starting offset so as not to conflict with any address
 /// space used by a target.
 enum ID {
-  Offset = 0x3FFF00,
+  Offset = 0x1FFF00,
 
   opencl_global = Offset,
   opencl_local,

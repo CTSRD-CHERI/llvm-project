@@ -138,6 +138,7 @@ BasicBlockScopeOnly("aarch64-collect-loh-bb-only", cl::Hidden,
 
 STATISTIC(NumADRPSimpleCandidate,
           "Number of simplifiable ADRP dominate by another");
+#ifndef NDEBUG
 STATISTIC(NumADRPComplexCandidate2,
           "Number of simplifiable ADRP reachable by 2 defs");
 STATISTIC(NumADRPComplexCandidate3,
@@ -156,17 +157,16 @@ STATISTIC(NumLDRToLDRWithImm,
           "Number of simplifiable LDR with imm reachable by LDR");
 STATISTIC(NumADDToLDR, "Number of simplifiable LDR reachable by ADD");
 STATISTIC(NumLDRToLDR, "Number of simplifiable LDR reachable by LDR");
+#endif // NDEBUG
 STATISTIC(NumADRPToLDR, "Number of simplifiable LDR reachable by ADRP");
+#ifndef NDEBUG
 STATISTIC(NumCplxLvl1, "Number of complex case of level 1");
 STATISTIC(NumTooCplxLvl1, "Number of too complex case of level 1");
 STATISTIC(NumCplxLvl2, "Number of complex case of level 2");
 STATISTIC(NumTooCplxLvl2, "Number of too complex case of level 2");
+#endif // NDEBUG
 STATISTIC(NumADRSimpleCandidate, "Number of simplifiable ADRP + ADD");
 STATISTIC(NumADRComplexCandidate, "Number of too complex ADRP + ADD");
-
-namespace llvm {
-void initializeAArch64CollectLOHPass(PassRegistry &);
-}
 
 #define AARCH64_COLLECT_LOH_NAME "AArch64 Collect Linker Optimization Hint (LOH)"
 
@@ -179,9 +179,12 @@ struct AArch64CollectLOH : public MachineFunctionPass {
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
-  const char *getPassName() const override {
-    return AARCH64_COLLECT_LOH_NAME;
+  MachineFunctionProperties getRequiredProperties() const override {
+    return MachineFunctionProperties().set(
+        MachineFunctionProperties::Property::NoVRegs);
   }
+
+  StringRef getPassName() const override { return AARCH64_COLLECT_LOH_NAME; }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesAll();
@@ -623,13 +626,10 @@ static void computeADRP(const InstrToInstrs &UseToDefs,
         continue;
       }
       DEBUG(dbgs() << "Record AdrpAdrp:\n" << *L2 << '\n' << *L1 << '\n');
-      SmallVector<const MachineInstr *, 2> Args;
-      Args.push_back(L2);
-      Args.push_back(L1);
-      AArch64FI.addLOHDirective(MCLOH_AdrpAdrp, Args);
+      AArch64FI.addLOHDirective(MCLOH_AdrpAdrp, {L2, L1});
       ++NumADRPSimpleCandidate;
     }
-#ifdef DEBUG
+#ifndef NDEBUG
     else if (Size == 2)
       ++NumADRPComplexCandidate2;
     else if (Size == 3)
@@ -760,13 +760,9 @@ static bool registerADRCandidate(const MachineInstr &Use,
          "ADD already involved in LOH.");
   DEBUG(dbgs() << "Record AdrpAdd\n" << Def << '\n' << Use << '\n');
 
-  SmallVector<const MachineInstr *, 2> Args;
-  Args.push_back(&Def);
-  Args.push_back(&Use);
-
-  AArch64FI.addLOHDirective(Use.getOpcode() == AArch64::ADDXri ? MCLOH_AdrpAdd
-                                                           : MCLOH_AdrpLdrGot,
-                          Args);
+  AArch64FI.addLOHDirective(
+      Use.getOpcode() == AArch64::ADDXri ? MCLOH_AdrpAdd : MCLOH_AdrpLdrGot,
+      {&Def, &Use});
   return true;
 }
 
@@ -777,10 +773,10 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
                           AArch64FunctionInfo &AArch64FI, const MapRegToId &RegToId,
                           const MachineDominatorTree *MDT) {
   SetOfMachineInstr *InvolvedInLOHs = nullptr;
-#ifdef DEBUG
+#ifndef NDEBUG
   SetOfMachineInstr InvolvedInLOHsStorage;
   InvolvedInLOHs = &InvolvedInLOHsStorage;
-#endif // DEBUG
+#endif // NDEBUG
   DEBUG(dbgs() << "*** Compute LOH for Others\n");
   // ADRP -> ADD/LDR -> LDR/STR pattern.
   // Fall back to ADRP -> ADD pattern if we fail to catch the bigger pattern.
@@ -821,7 +817,7 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
   // PotentialCandidates are result of a chain ADRP -> ADD/LDR ->
   // A potential candidate becomes a candidate, if its current immediate
   // operand is zero and all nodes of the chain have respectively only one user
-#ifdef DEBUG
+#ifndef NDEBUG
   SetOfMachineInstr DefsOfPotentialCandidates;
 #endif
   for (const MachineInstr *Candidate : PotentialCandidates) {
@@ -837,7 +833,7 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
           getUses(DefsPerColorToUses,
                   RegToId.find(Def->getOperand(0).getReg())->second, *Def);
       if (Users->size() > 1) {
-#ifdef DEBUG
+#ifndef NDEBUG
         // if all the uses of this def are in potential candidate, this is
         // a complex candidate of level 2.
         bool IsLevel2 = true;
@@ -850,7 +846,7 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
         }
         if (IsLevel2)
           ++NumCplxLvl2;
-#endif // DEBUG
+#endif // NDEBUG
         PotentialADROpportunities.insert(Def);
         continue;
       }
@@ -865,7 +861,7 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
         getUses(DefsPerColorToUses,
                 RegToId.find(Def->getOperand(0).getReg())->second, *Def);
     if (Users->size() > 1) {
-#ifdef DEBUG
+#ifndef NDEBUG
       // if all the uses of this def are in the defs of the potential candidate,
       // this is a complex candidate of level 1
       if (DefsOfPotentialCandidates.empty()) {
@@ -887,7 +883,7 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
       }
       if (!Found)
         ++NumCplxLvl1;
-#endif // DEBUG
+#endif // NDEBUG
       continue;
     }
 
@@ -934,7 +930,7 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
                "L2 already involved in LOH.");
         assert((!InvolvedInLOHs || InvolvedInLOHs->insert(Candidate)) &&
                "Candidate already involved in LOH.");
-#ifdef DEBUG
+#ifndef NDEBUG
         // get the immediate of the load
         if (Candidate->getOperand(2).getImm() == 0)
           if (ImmediateDefOpc == AArch64::ADDXri)
@@ -945,7 +941,7 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
           ++NumADDToLDRWithImm;
         else
           ++NumLDRToLDRWithImm;
-#endif // DEBUG
+#endif // NDEBUG
       }
     } else {
       if (ImmediateDefOpc == AArch64::ADRP)
@@ -968,7 +964,7 @@ static void computeOthers(const InstrToInstrs &UseToDefs,
                "L2 already involved in LOH.");
         assert((!InvolvedInLOHs || InvolvedInLOHs->insert(Candidate)) &&
                "Candidate already involved in LOH.");
-#ifdef DEBUG
+#ifndef NDEBUG
         // get the immediate of the store
         if (Candidate->getOperand(2).getImm() == 0)
           if (ImmediateDefOpc == AArch64::ADDXri)
@@ -1036,6 +1032,9 @@ static void collectInvolvedReg(const MachineFunction &MF, MapRegToId &RegToId,
 }
 
 bool AArch64CollectLOH::runOnMachineFunction(MachineFunction &MF) {
+  if (skipFunction(*MF.getFunction()))
+    return false;
+
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   const MachineDominatorTree *MDT = &getAnalysis<MachineDominatorTree>();
 

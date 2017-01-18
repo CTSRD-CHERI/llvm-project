@@ -16,7 +16,7 @@ target triple = "hexagon-unknown--elf"
 ; CHECK: }
 
 ; Function Attrs: nounwind
-define i32 @foo(i32 %x, i32 %y) #0 {
+define i32 @foo(i32 %x, i32 %y) #0 !dbg !4 {
 entry:
   tail call void @llvm.dbg.value(metadata i32 %x, i64 0, metadata !9, metadata !14), !dbg !15
   tail call void @llvm.dbg.value(metadata i32 %y, i64 0, metadata !10, metadata !14), !dbg !16
@@ -41,11 +41,10 @@ attributes #3 = { nounwind }
 !llvm.module.flags = !{!11, !12}
 !llvm.ident = !{!13}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang version 3.8.0 (http://llvm.org/git/clang.git 15506a21305e212c406f980ed9b6b1bac785df56)", isOptimized: true, runtimeVersion: 0, emissionKind: 1, enums: !2, subprograms: !3)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang version 3.8.0 (http://llvm.org/git/clang.git 15506a21305e212c406f980ed9b6b1bac785df56)", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2)
 !1 = !DIFile(filename: "cfi-late.c", directory: "/test")
 !2 = !{}
-!3 = !{!4}
-!4 = distinct !DISubprogram(name: "foo", scope: !1, file: !1, line: 3, type: !5, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: true, function: i32 (i32, i32)* @foo, variables: !8)
+!4 = distinct !DISubprogram(name: "foo", scope: !1, file: !1, line: 3, type: !5, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: true, unit: !0, variables: !8)
 !5 = !DISubroutineType(types: !6)
 !6 = !{!7, !7, !7}
 !7 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)

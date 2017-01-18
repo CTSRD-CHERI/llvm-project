@@ -14,7 +14,7 @@
 #include <deque>
 #include <cassert>
 
-#include "../../../stack_allocator.h"
+#include "test_allocator.h"
 #include "test_iterators.h"
 #include "min_allocator.h"
 
@@ -55,8 +55,8 @@ int main()
     test(forward_iterator<const int*>(ab), forward_iterator<const int*>(an));
     test(bidirectional_iterator<const int*>(ab), bidirectional_iterator<const int*>(an));
     test(random_access_iterator<const int*>(ab), random_access_iterator<const int*>(an));
-    test<stack_allocator<int, 4096> >(ab, an);
-#if __cplusplus >= 201103L
+    test<limited_allocator<int, 4096> >(ab, an);
+#if TEST_STD_VER >= 11
     test<min_allocator<int> >(ab, an);
 #endif
 }

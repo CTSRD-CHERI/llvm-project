@@ -10,6 +10,8 @@
 #ifndef MOVEONLY_H
 #define MOVEONLY_H
 
+#include "test_macros.h"
+
 #ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
 
 #include <cstddef>
@@ -17,6 +19,7 @@
 
 class MoveOnly
 {
+    friend class MoveOnly2;
     MoveOnly(const MoveOnly&);
     MoveOnly& operator=(const MoveOnly&);
 

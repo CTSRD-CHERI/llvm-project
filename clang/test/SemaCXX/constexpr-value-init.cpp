@@ -14,7 +14,7 @@ void f() {
   constexpr A a; // expected-error {{constant expression}} expected-note {{in call to 'A()'}}
 }
 
-constexpr B b1; // expected-error {{without a user-provided default constructor}}
+constexpr B b1; // ok
 constexpr B b2 = B(); // ok
 static_assert(b2.a.a == 1, "");
 static_assert(b2.a.b == 2, "");
@@ -35,3 +35,12 @@ template<typename T> struct Z : T {
   constexpr Z() : V() {}
 };
 constexpr int n = Z<V>().c; // expected-error {{constant expression}} expected-note {{virtual base class}}
+
+struct E {
+  A a[2];
+};
+constexpr E e; // ok
+static_assert(e.a[0].a == 1, "");
+static_assert(e.a[0].b == 2, "");
+static_assert(e.a[1].a == 1, "");
+static_assert(e.a[1].b == 2, "");

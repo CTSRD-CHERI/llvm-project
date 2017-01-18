@@ -1302,3 +1302,95 @@ l6:
 ; CHECK: entry
 ; CHECK-NEXT: switch
 }
+
+; Speculation depth must be limited to avoid a zero-cost instruction cycle.
+
+; CHECK-LABEL: @PR26308(
+; CHECK:       while.body:
+; CHECK-NEXT:  br label %while.body
+
+define i32 @PR26308(i1 %B, i64 %load) {
+entry:
+  br label %while.body
+
+while.body:
+  br label %cleanup
+
+cleanup:
+  %cleanup.dest.slot.0 = phi i1 [ false, %while.body ]
+  br i1 %cleanup.dest.slot.0, label %for.cond, label %cleanup4
+
+for.cond:
+  %e.0 = phi i64* [ undef, %cleanup ], [ %incdec.ptr, %for.cond2 ]
+  %pi = ptrtoint i64* %e.0 to i64
+  %incdec.ptr = getelementptr inbounds i64, i64* %e.0, i64 1
+  br label %for.cond2
+
+for.cond2:
+  %storemerge = phi i64 [ %pi, %for.cond ], [ %load, %for.cond2 ]
+  br i1 %B, label %for.cond2, label %for.cond
+
+cleanup4:
+  br label %while.body
+}
+
+declare void @throw(i1)
+
+define void @wineh_test(i64 %val) personality i32 (...)* @__CxxFrameHandler3 {
+entry:
+  invoke void @throw(i1 false)
+          to label %unreachable unwind label %cleanup1
+
+unreachable:
+  unreachable
+
+cleanup1:
+  %cleanuppad1 = cleanuppad within none []
+  switch i64 %val, label %cleanupdone2 [
+    i64 0, label %cleanupdone1
+    i64 1, label %cleanupdone1
+    i64 6, label %cleanupdone1
+  ]
+
+cleanupdone1:
+  cleanupret from %cleanuppad1 unwind label %cleanup2
+
+cleanupdone2:
+  cleanupret from %cleanuppad1 unwind label %cleanup2
+
+cleanup2:
+  %phi = phi i1 [ true, %cleanupdone1 ], [ false, %cleanupdone2 ]
+  %cleanuppad2 = cleanuppad within none []
+  call void @throw(i1 %phi) [ "funclet"(token %cleanuppad2) ]
+  unreachable
+}
+
+; CHECK-LABEL: @wineh_test(
+; CHECK: entry:
+; CHECK:   invoke void @throw(i1 false)
+; CHECK:           to label %[[unreachable:.*]] unwind label %[[cleanup1:.*]]
+
+; CHECK: [[unreachable]]:
+; CHECK:   unreachable
+
+; CHECK: [[cleanup1]]:
+; CHECK:   %[[cleanuppad1:.*]] = cleanuppad within none []
+; CHECK:   switch i64 %val, label %[[cleanupdone2:.*]] [
+; CHECK:     i64 0, label %[[cleanupdone1:.*]]
+; CHECK:     i64 1, label %[[cleanupdone1]]
+; CHECK:     i64 6, label %[[cleanupdone1]]
+; CHECK:   ]
+
+; CHECK: [[cleanupdone1]]:
+; CHECK:   cleanupret from %[[cleanuppad1]] unwind label %[[cleanup2:.*]]
+
+; CHECK: [[cleanupdone2]]:
+; CHECK:   cleanupret from %[[cleanuppad1]] unwind label %[[cleanup2]]
+
+; CHECK: [[cleanup2]]:
+; CHECK:   %[[phi:.*]] = phi i1 [ true, %[[cleanupdone1]] ], [ false, %[[cleanupdone2]] ]
+; CHECK:   %[[cleanuppad2:.*]] = cleanuppad within none []
+; CHECK:   call void @throw(i1 %[[phi]]) [ "funclet"(token %[[cleanuppad2]]) ]
+; CHECK:   unreachable
+
+declare i32 @__CxxFrameHandler3(...)

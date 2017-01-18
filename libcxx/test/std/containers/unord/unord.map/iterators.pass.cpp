@@ -24,6 +24,7 @@
 #include <string>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 int main()
@@ -66,7 +67,7 @@ int main()
         assert(std::distance(c.cbegin(), c.cend()) == c.size());
         C::const_iterator i;
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_map<int, std::string, std::hash<int>, std::equal_to<int>,
                             min_allocator<std::pair<const int, std::string>>> C;
@@ -108,7 +109,7 @@ int main()
         C::const_iterator i;
     }
 #endif
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     { // N3644 testing
         typedef std::unordered_map<int,double> C;
         C::iterator ii1{}, ii2{};
@@ -116,7 +117,7 @@ int main()
         C::const_iterator cii{};
         assert ( ii1 == ii2 );
         assert ( ii1 == ii4 );
-        
+
         assert (!(ii1 != ii2 ));
 
         assert ( (ii1 == cii ));

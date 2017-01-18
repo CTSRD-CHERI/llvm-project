@@ -19,15 +19,12 @@
 #include "Symbols.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/Object/Archive.h"
-#include "llvm/Object/ArchiveWriter.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/Option.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileUtilities.h"
-#include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
@@ -46,22 +43,23 @@ namespace {
 class Executor {
 public:
   explicit Executor(StringRef S) : Saver(Alloc), Prog(Saver.save(S)) {}
-  void add(StringRef S)    { Args.push_back(Saver.save(S)); }
-  void add(std::string &S) { Args.push_back(Saver.save(S)); }
-  void add(Twine S)        { Args.push_back(Saver.save(S)); }
-  void add(const char *S)  { Args.push_back(Saver.save(S)); }
+  void add(StringRef S) { Args.push_back(Saver.save(S).data()); }
+  void add(std::string &S) { Args.push_back(Saver.save(S).data()); }
+  void add(Twine S) { Args.push_back(Saver.save(S).data()); }
+  void add(const char *S) { Args.push_back(Saver.save(S).data()); }
 
   void run() {
     ErrorOr<std::string> ExeOrErr = llvm::sys::findProgramByName(Prog);
-    error(ExeOrErr, Twine("unable to find ") + Prog + " in PATH: ");
-    const char *Exe = Saver.save(*ExeOrErr);
+    if (auto EC = ExeOrErr.getError())
+      fatal(EC, "unable to find " + Prog + " in PATH: ");
+    const char *Exe = Saver.save(*ExeOrErr).data();
     Args.insert(Args.begin(), Exe);
     Args.push_back(nullptr);
     if (llvm::sys::ExecuteAndWait(Args[0], Args.data()) != 0) {
       for (const char *S : Args)
         if (S)
           llvm::errs() << S << " ";
-      error("failed");
+      fatal("ExecuteAndWait failed");
     }
   }
 
@@ -77,15 +75,13 @@ private:
 // Returns /machine's value.
 MachineTypes getMachineType(StringRef S) {
   MachineTypes MT = StringSwitch<MachineTypes>(S.lower())
-                        .Case("x64", AMD64)
-                        .Case("amd64", AMD64)
-                        .Case("x86", I386)
-                        .Case("i386", I386)
+                        .Cases("x64", "amd64", AMD64)
+                        .Cases("x86", "i386", I386)
                         .Case("arm", ARMNT)
                         .Default(IMAGE_FILE_MACHINE_UNKNOWN);
   if (MT != IMAGE_FILE_MACHINE_UNKNOWN)
     return MT;
-  error(Twine("unknown /machine argument: ") + S);
+  fatal("unknown /machine argument: " + S);
 }
 
 StringRef machineToStr(MachineTypes MT) {
@@ -106,9 +102,9 @@ void parseNumbers(StringRef Arg, uint64_t *Addr, uint64_t *Size) {
   StringRef S1, S2;
   std::tie(S1, S2) = Arg.split(',');
   if (S1.getAsInteger(0, *Addr))
-    error(Twine("invalid number: ") + S1);
+    fatal("invalid number: " + S1);
   if (Size && !S2.empty() && S2.getAsInteger(0, *Size))
-    error(Twine("invalid number: ") + S2);
+    fatal("invalid number: " + S2);
 }
 
 // Parses a string in the form of "<integer>[.<integer>]".
@@ -117,10 +113,10 @@ void parseVersion(StringRef Arg, uint32_t *Major, uint32_t *Minor) {
   StringRef S1, S2;
   std::tie(S1, S2) = Arg.split('.');
   if (S1.getAsInteger(0, *Major))
-    error(Twine("invalid number: ") + S1);
+    fatal("invalid number: " + S1);
   *Minor = 0;
   if (!S2.empty() && S2.getAsInteger(0, *Minor))
-    error(Twine("invalid number: ") + S2);
+    fatal("invalid number: " + S2);
 }
 
 // Parses a string in the form of "<subsystem>[,<integer>[.<integer>]]".
@@ -140,7 +136,7 @@ void parseSubsystem(StringRef Arg, WindowsSubsystem *Sys, uint32_t *Major,
     .Case("windows", IMAGE_SUBSYSTEM_WINDOWS_GUI)
     .Default(IMAGE_SUBSYSTEM_UNKNOWN);
   if (*Sys == IMAGE_SUBSYSTEM_UNKNOWN)
-    error(Twine("unknown subsystem: ") + SysStr);
+    fatal("unknown subsystem: " + SysStr);
   if (!Ver.empty())
     parseVersion(Ver, Major, Minor);
 }
@@ -151,10 +147,10 @@ void parseAlternateName(StringRef S) {
   StringRef From, To;
   std::tie(From, To) = S.split('=');
   if (From.empty() || To.empty())
-    error(Twine("/alternatename: invalid argument: ") + S);
+    fatal("/alternatename: invalid argument: " + S);
   auto It = Config->AlternateNames.find(From);
   if (It != Config->AlternateNames.end() && It->second != To)
-    error(Twine("/alternatename: conflicts: ") + S);
+    fatal("/alternatename: conflicts: " + S);
   Config->AlternateNames.insert(It, std::make_pair(From, To));
 }
 
@@ -164,7 +160,7 @@ void parseMerge(StringRef S) {
   StringRef From, To;
   std::tie(From, To) = S.split('=');
   if (From.empty() || To.empty())
-    error(Twine("/merge: invalid argument: ") + S);
+    fatal("/merge: invalid argument: " + S);
   auto Pair = Config->Merge.insert(std::make_pair(From, To));
   bool Inserted = Pair.second;
   if (!Inserted) {
@@ -175,6 +171,47 @@ void parseMerge(StringRef S) {
   }
 }
 
+static uint32_t parseSectionAttributes(StringRef S) {
+  uint32_t Ret = 0;
+  for (char C : S.lower()) {
+    switch (C) {
+    case 'd':
+      Ret |= IMAGE_SCN_MEM_DISCARDABLE;
+      break;
+    case 'e':
+      Ret |= IMAGE_SCN_MEM_EXECUTE;
+      break;
+    case 'k':
+      Ret |= IMAGE_SCN_MEM_NOT_CACHED;
+      break;
+    case 'p':
+      Ret |= IMAGE_SCN_MEM_NOT_PAGED;
+      break;
+    case 'r':
+      Ret |= IMAGE_SCN_MEM_READ;
+      break;
+    case 's':
+      Ret |= IMAGE_SCN_MEM_SHARED;
+      break;
+    case 'w':
+      Ret |= IMAGE_SCN_MEM_WRITE;
+      break;
+    default:
+      fatal("/section: invalid argument: " + S);
+    }
+  }
+  return Ret;
+}
+
+// Parses /section option argument.
+void parseSection(StringRef S) {
+  StringRef Name, Attrs;
+  std::tie(Name, Attrs) = S.split(',');
+  if (Name.empty() || Attrs.empty())
+    fatal("/section: invalid argument: " + S);
+  Config->Section[Name] = parseSectionAttributes(Attrs);
+}
+
 // Parses a string in the form of "EMBED[,=<integer>]|NO".
 // Results are directly written to Config.
 void parseManifest(StringRef Arg) {
@@ -183,16 +220,16 @@ void parseManifest(StringRef Arg) {
     return;
   }
   if (!Arg.startswith_lower("embed"))
-    error(Twine("Invalid option ") + Arg);
+    fatal("invalid option " + Arg);
   Config->Manifest = Configuration::Embed;
   Arg = Arg.substr(strlen("embed"));
   if (Arg.empty())
     return;
   if (!Arg.startswith_lower(",id="))
-    error(Twine("Invalid option ") + Arg);
+    fatal("invalid option " + Arg);
   Arg = Arg.substr(strlen(",id="));
   if (Arg.getAsInteger(0, Config->ManifestID))
-    error(Twine("Invalid option ") + Arg);
+    fatal("invalid option " + Arg);
 }
 
 // Parses a string in the form of "level=<string>|uiAccess=<string>|NO".
@@ -216,7 +253,7 @@ void parseManifestUAC(StringRef Arg) {
       std::tie(Config->ManifestUIAccess, Arg) = Arg.split(" ");
       continue;
     }
-    error(Twine("Invalid option ") + Arg);
+    fatal("invalid option " + Arg);
   }
 }
 
@@ -240,10 +277,55 @@ static void quoteAndPrint(raw_ostream &Out, StringRef S) {
   }
 }
 
-// Create a manifest file contents.
-static std::string createManifestXml() {
-  std::string S;
-  llvm::raw_string_ostream OS(S);
+// An RAII temporary file class that automatically removes a temporary file.
+namespace {
+class TemporaryFile {
+public:
+  TemporaryFile(StringRef Prefix, StringRef Extn) {
+    SmallString<128> S;
+    if (auto EC = sys::fs::createTemporaryFile("lld-" + Prefix, Extn, S))
+      fatal(EC, "cannot create a temporary file");
+    Path = S.str();
+  }
+
+  TemporaryFile(TemporaryFile &&Obj) {
+    std::swap(Path, Obj.Path);
+  }
+
+  ~TemporaryFile() {
+    if (Path.empty())
+      return;
+    if (sys::fs::remove(Path))
+      fatal("failed to remove " + Path);
+  }
+
+  // Returns a memory buffer of this temporary file.
+  // Note that this function does not leave the file open,
+  // so it is safe to remove the file immediately after this function
+  // is called (you cannot remove an opened file on Windows.)
+  std::unique_ptr<MemoryBuffer> getMemoryBuffer() {
+    // IsVolatileSize=true forces MemoryBuffer to not use mmap().
+    return check(MemoryBuffer::getFile(Path, /*FileSize=*/-1,
+                                       /*RequiresNullTerminator=*/false,
+                                       /*IsVolatileSize=*/true),
+                 "could not open " + Path);
+  }
+
+  std::string Path;
+};
+}
+
+// Create the default manifest file as a temporary file.
+TemporaryFile createDefaultXml() {
+  // Create a temporary file.
+  TemporaryFile File("defaultxml", "manifest");
+
+  // Open the temporary file for writing.
+  std::error_code EC;
+  llvm::raw_fd_ostream OS(File.Path, EC, sys::fs::F_Text);
+  if (EC)
+    fatal(EC, "failed to open " + File.Path);
+
   // Emit the XML. Note that we do *not* verify that the XML attributes are
   // syntactically correct. This is intentional for link.exe compatibility.
   OS << "<?xml version=\"1.0\" standalone=\"yes\"?>\n"
@@ -267,21 +349,49 @@ static std::string createManifestXml() {
     }
   }
   OS << "</assembly>\n";
-  OS.flush();
-  return S;
+  OS.close();
+  return File;
+}
+
+static std::string readFile(StringRef Path) {
+  std::unique_ptr<MemoryBuffer> MB =
+      check(MemoryBuffer::getFile(Path), "could not open " + Path);
+  return MB->getBuffer();
+}
+
+static std::string createManifestXml() {
+  // Create the default manifest file.
+  TemporaryFile File1 = createDefaultXml();
+  if (Config->ManifestInput.empty())
+    return readFile(File1.Path);
+
+  // If manifest files are supplied by the user using /MANIFESTINPUT
+  // option, we need to merge them with the default manifest.
+  TemporaryFile File2("user", "manifest");
+
+  Executor E("mt.exe");
+  E.add("/manifest");
+  E.add(File1.Path);
+  for (StringRef Filename : Config->ManifestInput) {
+    E.add("/manifest");
+    E.add(Filename);
+  }
+  E.add("/nologo");
+  E.add("/out:" + StringRef(File2.Path));
+  E.run();
+  return readFile(File2.Path);
 }
 
 // Create a resource file containing a manifest XML.
 std::unique_ptr<MemoryBuffer> createManifestRes() {
   // Create a temporary file for the resource script file.
-  SmallString<128> RCPath;
-  std::error_code EC = sys::fs::createTemporaryFile("tmp", "rc", RCPath);
-  error(EC, "cannot create a temporary file");
-  FileRemover RCRemover(RCPath);
+  TemporaryFile RCFile("manifest", "rc");
 
   // Open the temporary file for writing.
-  llvm::raw_fd_ostream Out(RCPath, EC, sys::fs::F_Text);
-  error(EC, Twine("failed to open ") + RCPath);
+  std::error_code EC;
+  llvm::raw_fd_ostream Out(RCFile.Path, EC, sys::fs::F_Text);
+  if (EC)
+    fatal(EC, "failed to open " + RCFile.Path);
 
   // Write resource script to the RC file.
   Out << "#define LANG_ENGLISH 9\n"
@@ -295,33 +405,31 @@ std::unique_ptr<MemoryBuffer> createManifestRes() {
   Out.close();
 
   // Create output resource file.
-  SmallString<128> ResPath;
-  EC = sys::fs::createTemporaryFile("tmp", "res", ResPath);
-  error(EC, "cannot create a temporary file");
+  TemporaryFile ResFile("output-resource", "res");
 
   Executor E("rc.exe");
   E.add("/fo");
-  E.add(ResPath.str());
+  E.add(ResFile.Path);
   E.add("/nologo");
-  E.add(RCPath.str());
+  E.add(RCFile.Path);
   E.run();
-  ErrorOr<std::unique_ptr<MemoryBuffer>> Ret = MemoryBuffer::getFile(ResPath);
-  error(Ret, Twine("Could not open ") + ResPath);
-  return std::move(*Ret);
+  return ResFile.getMemoryBuffer();
 }
 
 void createSideBySideManifest() {
   std::string Path = Config->ManifestFile;
   if (Path == "")
-    Path = (Twine(Config->OutputFile) + ".manifest").str();
+    Path = Config->OutputFile + ".manifest";
   std::error_code EC;
   llvm::raw_fd_ostream Out(Path, EC, llvm::sys::fs::F_Text);
-  error(EC, "failed to create manifest");
+  if (EC)
+    fatal(EC, "failed to create manifest");
   Out << createManifestXml();
 }
 
 // Parse a string in the form of
-// "<name>[=<internalname>][,@ordinal[,NONAME]][,DATA][,PRIVATE]".
+// "<name>[=<internalname>][,@ordinal[,NONAME]][,DATA][,PRIVATE]"
+// or "<name>=<dllname>.<name>".
 // Used for parsing /export arguments.
 Export parseExport(StringRef Arg) {
   Export E;
@@ -329,12 +437,25 @@ Export parseExport(StringRef Arg) {
   std::tie(E.Name, Rest) = Arg.split(",");
   if (E.Name.empty())
     goto err;
+
   if (E.Name.find('=') != StringRef::npos) {
-    std::tie(E.ExtName, E.Name) = E.Name.split("=");
+    StringRef X, Y;
+    std::tie(X, Y) = E.Name.split("=");
+
+    // If "<name>=<dllname>.<name>".
+    if (Y.find(".") != StringRef::npos) {
+      E.Name = X;
+      E.ForwardTo = Y;
+      return E;
+    }
+
+    E.ExtName = X;
+    E.Name = Y;
     if (E.Name.empty())
       goto err;
   }
 
+  // If "<name>=<internalname>[,@ordinal[,NONAME]][,DATA][,PRIVATE]"
   while (!Rest.empty()) {
     StringRef Tok;
     std::tie(Tok, Rest) = Rest.split(",");
@@ -366,7 +487,7 @@ Export parseExport(StringRef Arg) {
   return E;
 
 err:
-  error(Twine("invalid /export: ") + Arg);
+  fatal("invalid /export: " + Arg);
 }
 
 static StringRef undecorate(StringRef Sym) {
@@ -384,19 +505,26 @@ void fixupExports() {
     if (E.Ordinal == 0)
       continue;
     if (!Ords.insert(E.Ordinal).second)
-      error("duplicate export ordinal: " + E.Name);
+      fatal("duplicate export ordinal: " + E.Name);
   }
 
   for (Export &E : Config->Exports) {
-    if (Undefined *U = cast_or_null<Undefined>(E.Sym->WeakAlias)) {
+    if (!E.ForwardTo.empty()) {
+      E.SymbolName = E.Name;
+    } else if (Undefined *U = cast_or_null<Undefined>(E.Sym->WeakAlias)) {
       E.SymbolName = U->getName();
     } else {
       E.SymbolName = E.Sym->getName();
     }
   }
 
-  for (Export &E : Config->Exports)
-    E.ExportName = undecorate(E.ExtName.empty() ? E.Name : E.ExtName);
+  for (Export &E : Config->Exports) {
+    if (!E.ForwardTo.empty()) {
+      E.ExportName = undecorate(E.Name);
+    } else {
+      E.ExportName = undecorate(E.ExtName.empty() ? E.Name : E.ExtName);
+    }
+  }
 
   // Uniquefy by name.
   std::map<StringRef, Export *> Map;
@@ -438,11 +566,11 @@ void checkFailIfMismatch(StringRef Arg) {
   StringRef K, V;
   std::tie(K, V) = Arg.split('=');
   if (K.empty() || V.empty())
-    error(Twine("/failifmismatch: invalid argument: ") + Arg);
+    fatal("/failifmismatch: invalid argument: " + Arg);
   StringRef Existing = Config->MustMatch[K];
   if (!Existing.empty() && V != Existing)
-    error(Twine("/failifmismatch: mismatch detected: ") + Existing + " and " +
-          V + " for key " + K);
+    fatal("/failifmismatch: mismatch detected: " + Existing + " and " + V +
+          " for key " + K);
   Config->MustMatch[K] = V;
 }
 
@@ -451,179 +579,39 @@ void checkFailIfMismatch(StringRef Arg) {
 std::unique_ptr<MemoryBuffer>
 convertResToCOFF(const std::vector<MemoryBufferRef> &MBs) {
   // Create an output file path.
-  SmallString<128> Path;
-  if (llvm::sys::fs::createTemporaryFile("resource", "obj", Path))
-    error("Could not create temporary file");
+  TemporaryFile File("resource-file", "obj");
 
   // Execute cvtres.exe.
   Executor E("cvtres.exe");
   E.add("/machine:" + machineToStr(Config->Machine));
   E.add("/readonly");
   E.add("/nologo");
-  E.add("/out:" + Path);
-  for (MemoryBufferRef MB : MBs)
-    E.add(MB.getBufferIdentifier());
+  E.add("/out:" + Twine(File.Path));
+
+  // We must create new files because the memory buffers we have may have no
+  // underlying file still existing on the disk.
+  // It happens if it was created from a TemporaryFile, which usually delete
+  // the file just after creating the MemoryBuffer.
+  std::vector<TemporaryFile> ResFiles;
+  ResFiles.reserve(MBs.size());
+  for (MemoryBufferRef MB : MBs) {
+    // We store the temporary file in a vector to avoid deletion
+    // before running cvtres
+    ResFiles.emplace_back("resource-file", "res");
+    TemporaryFile& ResFile = ResFiles.back();
+    // Write the content of the resource in a temporary file
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(ResFile.Path, EC, sys::fs::F_None);
+    if (EC)
+      fatal(EC, "failed to open " + ResFile.Path);
+    OS << MB.getBuffer();
+    OS.close();
+
+    E.add(ResFile.Path);
+  }
+
   E.run();
-  ErrorOr<std::unique_ptr<MemoryBuffer>> Ret = MemoryBuffer::getFile(Path);
-  error(Ret, Twine("Could not open ") + Path);
-  return std::move(*Ret);
-}
-
-static std::string writeToTempFile(StringRef Contents) {
-  SmallString<128> Path;
-  int FD;
-  if (llvm::sys::fs::createTemporaryFile("tmp", "def", FD, Path)) {
-    llvm::errs() << "failed to create a temporary file\n";
-    return "";
-  }
-  llvm::raw_fd_ostream OS(FD, /*shouldClose*/ true);
-  OS << Contents;
-  return Path.str();
-}
-
-void touchFile(StringRef Path) {
-  int FD;
-  std::error_code EC = sys::fs::openFileForWrite(Path, FD, sys::fs::F_Append);
-  error(EC, "failed to create a file");
-  sys::Process::SafelyCloseFileDescriptor(FD);
-}
-
-static std::string getImplibPath() {
-  if (!Config->Implib.empty())
-    return Config->Implib;
-  SmallString<128> Out = StringRef(Config->OutputFile);
-  sys::path::replace_extension(Out, ".lib");
-  return Out.str();
-}
-
-static std::unique_ptr<MemoryBuffer> createEmptyImportLibrary() {
-  std::string S = (Twine("LIBRARY \"") +
-                   llvm::sys::path::filename(Config->OutputFile) + "\"\n")
-                      .str();
-  std::string Path1 = writeToTempFile(S);
-  std::string Path2 = getImplibPath();
-  llvm::FileRemover Remover1(Path1);
-  llvm::FileRemover Remover2(Path2);
-
-  Executor E("lib.exe");
-  E.add("/nologo");
-  E.add("/machine:" + machineToStr(Config->Machine));
-  E.add(Twine("/def:") + Path1);
-  E.add(Twine("/out:") + Path2);
-  E.run();
-
-  ErrorOr<std::unique_ptr<MemoryBuffer>> BufOrErr =
-      MemoryBuffer::getFile(Path2, -1, false);
-  error(BufOrErr, Twine("Failed to open ") + Path2);
-  return MemoryBuffer::getMemBufferCopy((*BufOrErr)->getBuffer());
-}
-
-static std::vector<NewArchiveIterator>
-readMembers(const object::Archive &Archive) {
-  std::vector<NewArchiveIterator> V;
-  for (const object::Archive::Child &C : Archive.children()) {
-    ErrorOr<StringRef> NameOrErr = C.getName();
-    error(NameOrErr, "Archive::Child::getName failed");
-    V.emplace_back(C, *NameOrErr);
-  }
-  return V;
-}
-
-// This class creates short import files which is described in
-// PE/COFF spec 7. Import Library Format.
-class ShortImportCreator {
-public:
-  ShortImportCreator(object::Archive *A, StringRef S) : Parent(A), DLLName(S) {}
-
-  NewArchiveIterator create(StringRef Sym, uint16_t Ordinal,
-                            ImportNameType NameType, bool isData) {
-    size_t ImpSize = DLLName.size() + Sym.size() + 2; // +2 for NULs
-    size_t Size = sizeof(object::ArchiveMemberHeader) +
-                  sizeof(coff_import_header) + ImpSize;
-    char *Buf = Alloc.Allocate<char>(Size);
-    memset(Buf, 0, Size);
-    char *P = Buf;
-
-    // Write archive member header
-    auto *Hdr = reinterpret_cast<object::ArchiveMemberHeader *>(P);
-    P += sizeof(*Hdr);
-    sprintf(Hdr->Name, "%-12s", "dummy");
-    sprintf(Hdr->LastModified, "%-12d", 0);
-    sprintf(Hdr->UID, "%-6d", 0);
-    sprintf(Hdr->GID, "%-6d", 0);
-    sprintf(Hdr->AccessMode, "%-8d", 0644);
-    sprintf(Hdr->Size, "%-10d", int(sizeof(coff_import_header) + ImpSize));
-
-    // Write short import library.
-    auto *Imp = reinterpret_cast<coff_import_header *>(P);
-    P += sizeof(*Imp);
-    Imp->Sig2 = 0xFFFF;
-    Imp->Machine = Config->Machine;
-    Imp->SizeOfData = ImpSize;
-    if (Ordinal > 0)
-      Imp->OrdinalHint = Ordinal;
-    Imp->TypeInfo = (isData ? IMPORT_DATA : IMPORT_CODE);
-    Imp->TypeInfo |= NameType << 2;
-
-    // Write symbol name and DLL name.
-    memcpy(P, Sym.data(), Sym.size());
-    P += Sym.size() + 1;
-    memcpy(P, DLLName.data(), DLLName.size());
-
-    object::Archive::Child C(Parent, Buf);
-    return NewArchiveIterator(C, DLLName);
-  }
-
-private:
-  BumpPtrAllocator Alloc;
-  object::Archive *Parent;
-  StringRef DLLName;
-};
-
-static ImportNameType getNameType(StringRef Sym, StringRef ExtName) {
-  if (Sym != ExtName)
-    return IMPORT_NAME_UNDECORATE;
-  if (Config->Machine == I386 && Sym.startswith("_"))
-    return IMPORT_NAME_NOPREFIX;
-  return IMPORT_NAME;
-}
-
-static std::string replace(StringRef S, StringRef From, StringRef To) {
-  size_t Pos = S.find(From);
-  assert(Pos != StringRef::npos);
-  return (Twine(S.substr(0, Pos)) + To + S.substr(Pos + From.size())).str();
-}
-
-// Creates an import library for a DLL. In this function, we first
-// create an empty import library using lib.exe and then adds short
-// import files to that file.
-void writeImportLibrary() {
-  std::unique_ptr<MemoryBuffer> Buf = createEmptyImportLibrary();
-  std::error_code EC;
-  object::Archive Archive(Buf->getMemBufferRef(), EC);
-  error(EC, "Error reading an empty import file");
-  std::vector<NewArchiveIterator> Members = readMembers(Archive);
-
-  std::string DLLName = llvm::sys::path::filename(Config->OutputFile);
-  ShortImportCreator ShortImport(&Archive, DLLName);
-  for (Export &E : Config->Exports) {
-    if (E.Private)
-      continue;
-    if (E.ExtName.empty()) {
-      Members.push_back(ShortImport.create(
-          E.SymbolName, E.Ordinal, getNameType(E.SymbolName, E.Name), E.Data));
-    } else {
-      Members.push_back(ShortImport.create(
-          replace(E.SymbolName, E.Name, E.ExtName), E.Ordinal,
-          getNameType(E.SymbolName, E.Name), E.Data));
-    }
-  }
-
-  std::string Path = getImplibPath();
-  std::pair<StringRef, std::error_code> Result =
-      writeArchive(Path, Members, /*WriteSymtab*/ true, object::Archive::K_GNU,
-                   /*Deterministic*/ true, /*Thin*/ false);
-  error(Result.second, Twine("Failed to write ") + Path);
+  return File.getMemoryBuffer();
 }
 
 // Create OptTable
@@ -670,7 +658,7 @@ llvm::opt::InputArgList ArgParser::parse(ArrayRef<const char *> ArgsArr) {
   }
 
   if (MissingCount)
-    error(Twine("missing arg value for \"") + Args.getArgString(MissingIndex) +
+    fatal("missing arg value for \"" + Twine(Args.getArgString(MissingIndex)) +
           "\", expected " + Twine(MissingCount) +
           (MissingCount == 1 ? " argument." : " arguments."));
   for (auto *Arg : Args.filtered(OPT_UNKNOWN))

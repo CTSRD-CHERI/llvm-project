@@ -17,7 +17,6 @@
 #include "CXTranslationUnit.h"
 #include "clang-c/Index.h"
 #include "clang/Frontend/ASTUnit.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace clang;
@@ -112,6 +111,15 @@ CXString createCXString(CXStringBuf *buf) {
   return Str;
 }
 
+CXStringSet *createSet(const std::vector<std::string> &Strings) {
+  CXStringSet *Set = new CXStringSet;
+  Set->Count = Strings.size();
+  Set->Strings = new CXString[Set->Count];
+  for (unsigned SI = 0, SE = Set->Count; SI < SE; ++SI)
+    Set->Strings[SI] = createDup(Strings[SI]);
+  return Set;
+}
+
 
 //===----------------------------------------------------------------------===//
 // String pools.
@@ -175,5 +183,13 @@ void clang_disposeString(CXString string) {
       break;
   }
 }
+
+void clang_disposeStringSet(CXStringSet *set) {
+  for (unsigned SI = 0, SE = set->Count; SI < SE; ++SI)
+    clang_disposeString(set->Strings[SI]);
+  delete[] set->Strings;
+  delete set;
+}
+
 } // end: extern "C"
 

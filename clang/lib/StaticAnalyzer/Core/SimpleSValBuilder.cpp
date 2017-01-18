@@ -141,9 +141,9 @@ SVal SimpleSValBuilder::evalCastFromLoc(Loc val, QualType castTy) {
   // unless this is a weak function or a symbolic region.
   if (castTy->isBooleanType()) {
     switch (val.getSubKind()) {
-      case loc::MemRegionKind: {
+      case loc::MemRegionValKind: {
         const MemRegion *R = val.castAs<loc::MemRegionVal>().getRegion();
-        if (const FunctionTextRegion *FTR = dyn_cast<FunctionTextRegion>(R))
+        if (const FunctionCodeRegion *FTR = dyn_cast<FunctionCodeRegion>(R))
           if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(FTR->getDecl()))
             if (FD->isWeak())
               // FIXME: Currently we are using an extent symbol here,
@@ -689,7 +689,7 @@ SVal SimpleSValBuilder::evalBinOpLL(ProgramStateRef state,
     // completely unknowable.
     return UnknownVal();
   }
-  case loc::MemRegionKind: {
+  case loc::MemRegionValKind: {
     if (Optional<loc::ConcreteInt> rInt = rhs.getAs<loc::ConcreteInt>()) {
       // If one of the operands is a symbol and the other is a constant,
       // build an expression for use by the constraint manager.
@@ -718,7 +718,7 @@ SVal SimpleSValBuilder::evalBinOpLL(ProgramStateRef state,
 
     // Get both values as regions, if possible.
     const MemRegion *LeftMR = lhs.getAsRegion();
-    assert(LeftMR && "MemRegionKind SVal doesn't have a region!");
+    assert(LeftMR && "MemRegionValKind SVal doesn't have a region!");
 
     const MemRegion *RightMR = rhs.getAsRegion();
     if (!RightMR)
@@ -753,6 +753,12 @@ SVal SimpleSValBuilder::evalBinOpLL(ProgramStateRef state,
     // Note, heap base symbolic regions are assumed to not alias with
     // each other; for example, we assume that malloc returns different address
     // on each invocation.
+    // FIXME: ObjC object pointers always reside on the heap, but currently
+    // we treat their memory space as unknown, because symbolic pointers
+    // to ObjC objects may alias. There should be a way to construct
+    // possibly-aliasing heap-based regions. For instance, MacOSXApiChecker
+    // guesses memory space for ObjC object pointers manually instead of
+    // relying on us.
     if (LeftBase != RightBase &&
         ((!isa<SymbolicRegion>(LeftBase) && !isa<SymbolicRegion>(RightBase)) ||
          (isa<HeapSpaceRegion>(LeftMS) || isa<HeapSpaceRegion>(RightMS))) ){

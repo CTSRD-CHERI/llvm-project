@@ -6,8 +6,13 @@
 ;
 ; rdar://problem/16015314
 ;
-; CHECK:  DW_AT_location [DW_FORM_block1]       (<0x03> 54 93 04 )
-; CHECK:  DW_AT_name [DW_FORM_strp]{{.*}} "a"
+; CHECK:  .debug_info contents:
+; CHECK:  DW_TAG_variable
+; CHECK-NEXT:  DW_AT_location [DW_FORM_data4]	(0x00000000)
+; CHECK-NEXT:  DW_AT_name [DW_FORM_strp]{{.*}} "a"
+; CHECK: .debug_loc contents:
+;                                    rsi, piece 0x00000004
+; CHECK:       Location description: 54 93 04 
 ;
 ; struct bar {
 ;   int a;
@@ -38,7 +43,7 @@ target triple = "x86_64-apple-macosx10.9.0"
 @main.myBar = private unnamed_addr constant %struct.bar { i32 3, i32 4 }, align 4
 
 ; Function Attrs: noinline nounwind ssp uwtable
-define void @doSomething(%struct.bar* nocapture readonly %b) #0 {
+define void @doSomething(%struct.bar* nocapture readonly %b) #0 !dbg !4 {
 entry:
   tail call void @llvm.dbg.value(metadata %struct.bar* %b, i64 0, metadata !15, metadata !DIExpression()), !dbg !25
   %a1 = getelementptr inbounds %struct.bar, %struct.bar* %b, i64 0, i32 0, !dbg !26
@@ -55,7 +60,7 @@ declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 declare i32 @printf(i8* nocapture readonly, ...) #2
 
 ; Function Attrs: nounwind ssp uwtable
-define i32 @main() #3 {
+define i32 @main() #3 !dbg !17 {
 entry:
   %myBar = alloca i64, align 8, !dbg !34
   %tmpcast = bitcast i64* %myBar to %struct.bar*, !dbg !34
@@ -78,11 +83,10 @@ attributes #4 = { nounwind }
 !llvm.module.flags = !{!22, !23}
 !llvm.ident = !{!24}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: true, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: true, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "subregisters.c", directory: "")
 !2 = !{}
-!3 = !{!4, !17}
-!4 = distinct !DISubprogram(name: "doSomething", line: 10, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 11, file: !1, scope: !5, type: !6, function: void (%struct.bar*)* @doSomething, variables: !14)
+!4 = distinct !DISubprogram(name: "doSomething", line: 10, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !0, scopeLine: 11, file: !1, scope: !5, type: !6, variables: !14)
 !5 = !DIFile(filename: "subregisters.c", directory: "")
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8}
@@ -95,7 +99,7 @@ attributes #4 = { nounwind }
 !14 = !{!15, !16}
 !15 = !DILocalVariable(name: "b", line: 10, arg: 1, scope: !4, file: !5, type: !8)
 !16 = !DILocalVariable(name: "a", line: 12, scope: !4, file: !5, type: !12)
-!17 = distinct !DISubprogram(name: "main", line: 16, isLocal: false, isDefinition: true, virtualIndex: 6, isOptimized: true, scopeLine: 17, file: !1, scope: !5, type: !18, function: i32 ()* @main, variables: !20)
+!17 = distinct !DISubprogram(name: "main", line: 16, isLocal: false, isDefinition: true, virtualIndex: 6, isOptimized: true, unit: !0, scopeLine: 17, file: !1, scope: !5, type: !18, variables: !20)
 !18 = !DISubroutineType(types: !19)
 !19 = !{!12}
 !20 = !{!21}

@@ -42,13 +42,17 @@ namespace {
     HexagonGenMux() : MachineFunctionPass(ID), HII(0), HRI(0) {
       initializeHexagonGenMuxPass(*PassRegistry::getPassRegistry());
     }
-    const char *getPassName() const override {
+    StringRef getPassName() const override {
       return "Hexagon generate mux instructions";
     }
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       MachineFunctionPass::getAnalysisUsage(AU);
     }
     bool runOnMachineFunction(MachineFunction &MF) override;
+    MachineFunctionProperties getRequiredProperties() const override {
+      return MachineFunctionProperties().set(
+          MachineFunctionProperties::Property::NoVRegs);
+    }
 
   private:
     const HexagonInstrInfo *HII;
@@ -70,10 +74,10 @@ namespace {
       MachineOperand *SrcT, *SrcF;
       MachineInstr *Def1, *Def2;
       MuxInfo(MachineBasicBlock::iterator It, unsigned DR, unsigned PR,
-            MachineOperand *TOp, MachineOperand *FOp,
-            MachineInstr *D1, MachineInstr *D2)
-        : At(It), DefR(DR), PredR(PR), SrcT(TOp), SrcF(FOp), Def1(D1),
-          Def2(D2) {}
+              MachineOperand *TOp, MachineOperand *FOp, MachineInstr &D1,
+              MachineInstr &D2)
+          : At(It), DefR(DR), PredR(PR), SrcT(TOp), SrcF(FOp), Def1(&D1),
+            Def2(&D2) {}
     };
     typedef DenseMap<MachineInstr*,unsigned> InstrIndexMap;
     typedef DenseMap<unsigned,DefUseInfo> DefUseInfoMap;
@@ -120,19 +124,19 @@ void HexagonGenMux::getDefsUses(const MachineInstr *MI, BitVector &Defs,
   // First, get the implicit defs and uses for this instruction.
   unsigned Opc = MI->getOpcode();
   const MCInstrDesc &D = HII->get(Opc);
-  if (const uint16_t *R = D.ImplicitDefs)
+  if (const MCPhysReg *R = D.ImplicitDefs)
     while (*R)
       expandReg(*R++, Defs);
-  if (const uint16_t *R = D.ImplicitUses)
+  if (const MCPhysReg *R = D.ImplicitUses)
     while (*R)
       expandReg(*R++, Uses);
 
   // Look over all operands, and collect explicit defs and uses.
-  for (ConstMIOperands Mo(MI); Mo.isValid(); ++Mo) {
-    if (!Mo->isReg() || Mo->isImplicit())
+  for (const MachineOperand &MO : MI->operands()) {
+    if (!MO.isReg() || MO.isImplicit())
       continue;
-    unsigned R = Mo->getReg();
-    BitVector &Set = Mo->isDef() ? Defs : Uses;
+    unsigned R = MO.getReg();
+    BitVector &Set = MO.isDef() ? Defs : Uses;
     expandReg(R, Set);
   }
 }
@@ -258,8 +262,8 @@ bool HexagonGenMux::genMuxInBlock(MachineBasicBlock &B) {
     MachineBasicBlock::iterator It1 = B.begin(), It2 = B.begin();
     std::advance(It1, MinX);
     std::advance(It2, MaxX);
-    MachineInstr *Def1 = It1, *Def2 = It2;
-    MachineOperand *Src1 = &Def1->getOperand(2), *Src2 = &Def2->getOperand(2);
+    MachineInstr &Def1 = *It1, &Def2 = *It2;
+    MachineOperand *Src1 = &Def1.getOperand(2), *Src2 = &Def2.getOperand(2);
     unsigned SR1 = Src1->isReg() ? Src1->getReg() : 0;
     unsigned SR2 = Src2->isReg() ? Src2->getReg() : 0;
     bool Failure = false, CanUp = true, CanDown = true;
@@ -305,6 +309,8 @@ bool HexagonGenMux::genMuxInBlock(MachineBasicBlock &B) {
 }
 
 bool HexagonGenMux::runOnMachineFunction(MachineFunction &MF) {
+  if (skipFunction(*MF.getFunction()))
+    return false;
   HII = MF.getSubtarget<HexagonSubtarget>().getInstrInfo();
   HRI = MF.getSubtarget<HexagonSubtarget>().getRegisterInfo();
   bool Changed = false;
@@ -316,4 +322,3 @@ bool HexagonGenMux::runOnMachineFunction(MachineFunction &MF) {
 FunctionPass *llvm::createHexagonGenMux() {
   return new HexagonGenMux();
 }
-

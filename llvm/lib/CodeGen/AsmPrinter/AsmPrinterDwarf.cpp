@@ -138,8 +138,7 @@ void AsmPrinter::EmitTTypeReference(const GlobalValue *GV,
     const TargetLoweringObjectFile &TLOF = getObjFileLowering();
 
     const MCExpr *Exp =
-        TLOF.getTTypeGlobalReference(GV, Encoding, *Mang, TM, MMI,
-                                     *OutStreamer);
+        TLOF.getTTypeGlobalReference(GV, Encoding, TM, MMI, *OutStreamer);
     OutStreamer->EmitValue(Exp, GetSizeOfEncodedValue(Encoding));
   } else
     OutStreamer->EmitIntValue(0, GetSizeOfEncodedValue(Encoding));
@@ -178,8 +177,7 @@ void AsmPrinter::emitDwarfStringOffset(DwarfStringPoolEntryRef S) const {
 /// EmitDwarfRegOp - Emit dwarf register operation.
 void AsmPrinter::EmitDwarfRegOp(ByteStreamer &Streamer,
                                 const MachineLocation &MLoc) const {
-  DebugLocDwarfExpression Expr(*MF->getSubtarget().getRegisterInfo(),
-                               getDwarfDebug()->getDwarfVersion(), Streamer);
+  DebugLocDwarfExpression Expr(getDwarfDebug()->getDwarfVersion(), Streamer);
   const MCRegisterInfo *MRI = MMI->getContext().getRegisterInfo();
   int Reg = MRI->getDwarfRegNum(MLoc.getReg(), false);
   if (Reg < 0) {
@@ -193,7 +191,8 @@ void AsmPrinter::EmitDwarfRegOp(ByteStreamer &Streamer,
                          "nop (could not find a dwarf register number)");
 
     // Attempt to find a valid super- or sub-register.
-    if (!Expr.AddMachineRegPiece(MLoc.getReg()))
+    if (!Expr.AddMachineRegPiece(*MF->getSubtarget().getRegisterInfo(),
+                                 MLoc.getReg()))
       Expr.EmitOp(dwarf::DW_OP_nop,
                   "nop (could not find a dwarf register number)");
     return;
@@ -215,6 +214,9 @@ void AsmPrinter::emitCFIInstruction(const MCCFIInstruction &Inst) const {
     llvm_unreachable("Unexpected instruction");
   case MCCFIInstruction::OpDefCfaOffset:
     OutStreamer->EmitCFIDefCfaOffset(Inst.getOffset());
+    break;
+  case MCCFIInstruction::OpAdjustCfaOffset:
+    OutStreamer->EmitCFIAdjustCfaOffset(Inst.getOffset());
     break;
   case MCCFIInstruction::OpDefCfa:
     OutStreamer->EmitCFIDefCfa(Inst.getRegister(), Inst.getOffset());
@@ -278,17 +280,10 @@ void AsmPrinter::emitDwarfDIE(const DIE &Die) const {
   }
 }
 
-void
-AsmPrinter::emitDwarfAbbrevs(const std::vector<DIEAbbrev *>& Abbrevs) const {
-  // For each abbreviation.
-  for (const DIEAbbrev *Abbrev : Abbrevs) {
-    // Emit the abbreviations code (base 1 index.)
-    EmitULEB128(Abbrev->getNumber(), "Abbreviation Code");
+void AsmPrinter::emitDwarfAbbrev(const DIEAbbrev &Abbrev) const {
+  // Emit the abbreviations code (base 1 index.)
+  EmitULEB128(Abbrev.getNumber(), "Abbreviation Code");
 
-    // Emit the abbreviations data.
-    Abbrev->Emit(this);
-  }
-
-  // Mark end of abbreviations.
-  EmitULEB128(0, "EOM(3)");
+  // Emit the abbreviations data.
+  Abbrev.Emit(this);
 }

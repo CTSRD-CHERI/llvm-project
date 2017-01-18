@@ -11,17 +11,17 @@
 
 %struct.foo = type {}
 
-@f = common global %struct.foo zeroinitializer, align 1
+@f = common global %struct.foo zeroinitializer, align 1, !dbg !4
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!7, !8}
 !llvm.ident = !{!9}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: false, emissionKind: 0, file: !1, enums: !2, retainedTypes: !2, subprograms: !2, globals: !3, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: false, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !3, imports: !2)
 !1 = !DIFile(filename: "simple.c", directory: "/tmp/dbginfo")
 !2 = !{}
 !3 = !{!4}
-!4 = !DIGlobalVariable(name: "f", line: 2, isLocal: false, isDefinition: true, scope: null, file: !5, type: !6, variable: %struct.foo* @f)
+!4 = !DIGlobalVariable(name: "f", line: 2, isLocal: false, isDefinition: true, scope: null, file: !5, type: !6)
 !5 = !DIFile(filename: "simple.c", directory: "/tmp/dbginfo")
 !6 = !DICompositeType(tag: DW_TAG_structure_type, name: "foo", line: 1, align: 8, file: !1, elements: !2)
 !7 = !{i32 2, !"Dwarf Version", i32 4}

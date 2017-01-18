@@ -1,4 +1,6 @@
-add_subdirectory(ChildTarget)
+if ( LLVM_INCLUDE_UTILS )
+  add_subdirectory(ChildTarget)
+endif()
 
 set(LLVM_LINK_COMPONENTS
   CodeGen
@@ -38,8 +40,8 @@ endif( LLVM_USE_INTEL_JITEVENTS )
 add_llvm_tool(lli
   lli.cpp
   OrcLazyJIT.cpp
-  RemoteMemoryManager.cpp
-  RemoteTarget.cpp
-  RemoteTargetExternal.cpp
+
+  DEPENDS
+  intrinsics_gen
   )
 export_executable_symbols(lli)

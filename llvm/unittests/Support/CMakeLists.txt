@@ -1,5 +1,4 @@
 set(LLVM_LINK_COMPONENTS
-  ${LLVM_TARGETS_TO_BUILD}
   Support
   )
 
@@ -10,6 +9,7 @@ add_llvm_unittest(SupportTests
   BlockFrequencyTest.cpp
   BranchProbabilityTest.cpp
   Casting.cpp
+  Chrono.cpp
   CommandLineTest.cpp
   CompressionTest.cpp
   ConvertUTFTest.cpp
@@ -17,9 +17,11 @@ add_llvm_unittest(SupportTests
   DwarfTest.cpp
   EndianStreamTest.cpp
   EndianTest.cpp
+  ErrorTest.cpp
   ErrorOrTest.cpp
   FileOutputBufferTest.cpp
-  IteratorTest.cpp
+  FormatVariadicTest.cpp
+  Host.cpp
   LEB128Test.cpp
   LineIteratorTest.cpp
   LockFileManagerTest.cpp
@@ -28,6 +30,7 @@ add_llvm_unittest(SupportTests
   MathExtrasTest.cpp
   MemoryBufferTest.cpp
   MemoryTest.cpp
+  NativeFormatTests.cpp
   Path.cpp
   ProcessTest.cpp
   ProgramTest.cpp
@@ -36,12 +39,14 @@ add_llvm_unittest(SupportTests
   ScaledNumberTest.cpp
   SourceMgrTest.cpp
   SpecialCaseListTest.cpp
-  StreamingMemoryObject.cpp
   StringPool.cpp
   SwapByteOrderTest.cpp
-  TargetRegistry.cpp
+  TargetParserTest.cpp
+  Threading.cpp
   ThreadLocalTest.cpp
-  TimeValueTest.cpp
+  ThreadPool.cpp
+  TimerTest.cpp
+  TypeNameTest.cpp
   TrailingObjectsTest.cpp
   UnicodeTest.cpp
   YAMLIOTest.cpp
@@ -49,9 +54,9 @@ add_llvm_unittest(SupportTests
   formatted_raw_ostream_test.cpp
   raw_ostream_test.cpp
   raw_pwrite_stream_test.cpp
+  raw_sha1_ostream_test.cpp
+  xxhashTest.cpp
   )
 
 # ManagedStatic.cpp uses <pthread>.
-if(LLVM_ENABLE_THREADS AND HAVE_LIBPTHREAD)
-  target_link_libraries(SupportTests pthread)
-endif()
+target_link_libraries(SupportTests ${PTHREAD_LIB})

@@ -24,12 +24,12 @@ entry:
   br label %for.cond
 
 ; CHECK-LABEL: polly.merge_new_and_old:
-; CHECK:         %x.addr.0.merge = phi i32 [ %x.addr.0.final_reload, %polly.merge21 ], [ %x.addr.0, %for.cond ]
+; CHECK:         %x.addr.0.merge = phi i32 [ %x.addr.0.final_reload, %polly.exiting ], [ %x.addr.0, %for.cond ]
 ; CHECK:         ret i32 %x.addr.0.merge
 
 ; CHECK-LABEL: polly.start:
-; CHECK-NEXT:    sext
 ; CHECK-NEXT:    store i32 %x, i32* %x.addr.0.phiops
+; CHECK-NEXT:    sext
 
 ; CHECK-LABEL: polly.merge21:
 ; CHECK:         %x.addr.0.final_reload = load i32, i32* %x.addr.0.s2a

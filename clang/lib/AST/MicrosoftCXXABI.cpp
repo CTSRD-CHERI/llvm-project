@@ -143,8 +143,9 @@ public:
         const_cast<TagDecl *>(TD->getCanonicalDecl()));
   }
 
-  MangleNumberingContext *createMangleNumberingContext() const override {
-    return new MicrosoftNumberingContext();
+  std::unique_ptr<MangleNumberingContext>
+  createMangleNumberingContext() const override {
+    return llvm::make_unique<MicrosoftNumberingContext>();
   }
 };
 }
@@ -262,7 +263,7 @@ std::pair<uint64_t, unsigned> MicrosoftCXXABI::getMemberPointerWidthAndAlign(
     Align = Target.getIntAlign();
 
   if (Target.getTriple().isArch64Bit())
-    Width = llvm::RoundUpToAlignment(Width, Align);
+    Width = llvm::alignTo(Width, Align);
   return std::make_pair(Width, Align);
 }
 

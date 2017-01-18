@@ -19,7 +19,6 @@
 #include "clang/Lex/MacroInfo.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
-#include "clang/Sema/ExternalSemaSource.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Overload.h"
 #include "clang/Sema/Scope.h"
@@ -482,18 +481,44 @@ getRequiredQualification(ASTContext &Context,
 
 /// Determine whether \p Id is a name reserved for the implementation (C99
 /// 7.1.3, C++ [lib.global.names]).
-static bool isReservedName(const IdentifierInfo *Id) {
+static bool isReservedName(const IdentifierInfo *Id,
+                           bool doubleUnderscoreOnly = false) {
   if (Id->getLength() < 2)
     return false;
   const char *Name = Id->getNameStart();
   return Name[0] == '_' &&
-         (Name[1] == '_' || (Name[1] >= 'A' && Name[1] <= 'Z'));
+         (Name[1] == '_' || (Name[1] >= 'A' && Name[1] <= 'Z' &&
+                             !doubleUnderscoreOnly));
+}
+
+// Some declarations have reserved names that we don't want to ever show.
+// Filter out names reserved for the implementation if they come from a
+// system header.
+static bool shouldIgnoreDueToReservedName(const NamedDecl *ND, Sema &SemaRef) {
+  const IdentifierInfo *Id = ND->getIdentifier();
+  if (!Id)
+    return false;
+
+  // Ignore reserved names for compiler provided decls.
+  if (isReservedName(Id) && ND->getLocation().isInvalid())
+    return true;
+
+  // For system headers ignore only double-underscore names.
+  // This allows for system headers providing private symbols with a single
+  // underscore.
+  if (isReservedName(Id, /*doubleUnderscoreOnly=*/true) &&
+       SemaRef.SourceMgr.isInSystemHeader(
+           SemaRef.SourceMgr.getSpellingLoc(ND->getLocation())))
+      return true;
+
+  return false;
 }
 
 bool ResultBuilder::isInterestingDecl(const NamedDecl *ND,
                                       bool &AsNestedNameSpecifier) const {
   AsNestedNameSpecifier = false;
 
+  auto *Named = ND;
   ND = ND->getUnderlyingDecl();
 
   // Skip unnamed entities.
@@ -513,27 +538,19 @@ bool ResultBuilder::isInterestingDecl(const NamedDecl *ND,
   // Using declarations themselves are never added as results.
   if (isa<UsingDecl>(ND))
     return false;
-  
-  // Some declarations have reserved names that we don't want to ever show.
-  // Filter out names reserved for the implementation if they come from a
-  // system header.
-  // TODO: Add a predicate for this.
-  if (const IdentifierInfo *Id = ND->getIdentifier())
-    if (isReservedName(Id) &&
-        (ND->getLocation().isInvalid() ||
-         SemaRef.SourceMgr.isInSystemHeader(
-             SemaRef.SourceMgr.getSpellingLoc(ND->getLocation()))))
-        return false;
+
+  if (shouldIgnoreDueToReservedName(ND, SemaRef))
+    return false;
 
   if (Filter == &ResultBuilder::IsNestedNameSpecifier ||
-      ((isa<NamespaceDecl>(ND) || isa<NamespaceAliasDecl>(ND)) &&
+      (isa<NamespaceDecl>(ND) &&
        Filter != &ResultBuilder::IsNamespace &&
        Filter != &ResultBuilder::IsNamespaceOrAlias &&
        Filter != nullptr))
     AsNestedNameSpecifier = true;
 
   // Filter out any unwanted results.
-  if (Filter && !(this->*Filter)(ND)) {
+  if (Filter && !(this->*Filter)(Named)) {
     // Check whether it is interesting as a nested-name-specifier.
     if (AllowNestedNameSpecifiers && SemaRef.getLangOpts().CPlusPlus && 
         IsNestedNameSpecifier(ND) &&
@@ -1142,14 +1159,12 @@ bool ResultBuilder::IsNamespace(const NamedDecl *ND) const {
 /// \brief Determines whether the given declaration is a namespace or 
 /// namespace alias.
 bool ResultBuilder::IsNamespaceOrAlias(const NamedDecl *ND) const {
-  return isa<NamespaceDecl>(ND) || isa<NamespaceAliasDecl>(ND);
+  return isa<NamespaceDecl>(ND->getUnderlyingDecl());
 }
 
 /// \brief Determines whether the given declaration is a type.
 bool ResultBuilder::IsType(const NamedDecl *ND) const {
-  if (const UsingShadowDecl *Using = dyn_cast<UsingShadowDecl>(ND))
-    ND = Using->getTargetDecl();
-  
+  ND = ND->getUnderlyingDecl();
   return isa<TypeDecl>(ND) || isa<ObjCInterfaceDecl>(ND);
 }
 
@@ -1157,11 +1172,9 @@ bool ResultBuilder::IsType(const NamedDecl *ND) const {
 /// "." or "->".  Only value declarations, nested name specifiers, and
 /// using declarations thereof should show up.
 bool ResultBuilder::IsMember(const NamedDecl *ND) const {
-  if (const UsingShadowDecl *Using = dyn_cast<UsingShadowDecl>(ND))
-    ND = Using->getTargetDecl();
-
+  ND = ND->getUnderlyingDecl();
   return isa<ValueDecl>(ND) || isa<FunctionTemplateDecl>(ND) ||
-    isa<ObjCPropertyDecl>(ND);
+         isa<ObjCPropertyDecl>(ND);
 }
 
 static bool isObjCReceiverType(ASTContext &C, QualType T) {
@@ -1521,7 +1534,6 @@ static void AddOrdinaryNameResults(Sema::ParserCompletionContext CCC,
                                    ResultBuilder &Results) {
   CodeCompletionAllocator &Allocator = Results.getAllocator();
   CodeCompletionBuilder Builder(Allocator, Results.getCodeCompletionTUInfo());
-  PrintingPolicy Policy = getCompletionPrintingPolicy(SemaRef);
   
   typedef CodeCompletionResult Result;
   switch (CCC) {
@@ -2150,6 +2162,60 @@ static std::string formatObjCParamQualifiers(unsigned ObjCQuals,
   return Result;
 }
 
+/// \brief Tries to find the most appropriate type location for an Objective-C
+/// block placeholder.
+///
+/// This function ignores things like typedefs and qualifiers in order to
+/// present the most relevant and accurate block placeholders in code completion
+/// results.
+static void findTypeLocationForBlockDecl(const TypeSourceInfo *TSInfo,
+                                         FunctionTypeLoc &Block,
+                                         FunctionProtoTypeLoc &BlockProto,
+                                         bool SuppressBlock = false) {
+  if (!TSInfo)
+    return;
+  TypeLoc TL = TSInfo->getTypeLoc().getUnqualifiedLoc();
+  while (true) {
+    // Look through typedefs.
+    if (!SuppressBlock) {
+      if (TypedefTypeLoc TypedefTL = TL.getAs<TypedefTypeLoc>()) {
+        if (TypeSourceInfo *InnerTSInfo =
+                TypedefTL.getTypedefNameDecl()->getTypeSourceInfo()) {
+          TL = InnerTSInfo->getTypeLoc().getUnqualifiedLoc();
+          continue;
+        }
+      }
+
+      // Look through qualified types
+      if (QualifiedTypeLoc QualifiedTL = TL.getAs<QualifiedTypeLoc>()) {
+        TL = QualifiedTL.getUnqualifiedLoc();
+        continue;
+      }
+
+      if (AttributedTypeLoc AttrTL = TL.getAs<AttributedTypeLoc>()) {
+        TL = AttrTL.getModifiedLoc();
+        continue;
+      }
+    }
+
+    // Try to get the function prototype behind the block pointer type,
+    // then we're done.
+    if (BlockPointerTypeLoc BlockPtr = TL.getAs<BlockPointerTypeLoc>()) {
+      TL = BlockPtr.getPointeeLoc().IgnoreParens();
+      Block = TL.getAs<FunctionTypeLoc>();
+      BlockProto = TL.getAs<FunctionProtoTypeLoc>();
+    }
+    break;
+  }
+}
+
+static std::string
+formatBlockPlaceholder(const PrintingPolicy &Policy, const NamedDecl *BlockDecl,
+                       FunctionTypeLoc &Block, FunctionProtoTypeLoc &BlockProto,
+                       bool SuppressBlockName = false,
+                       bool SuppressBlock = false,
+                       Optional<ArrayRef<QualType>> ObjCSubsts = None);
+
 static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
                                            const ParmVarDecl *Param,
                                            bool SuppressName = false,
@@ -2180,47 +2246,13 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
     }
     return Result;
   }
-  
+
   // The argument for a block pointer parameter is a block literal with
   // the appropriate type.
   FunctionTypeLoc Block;
   FunctionProtoTypeLoc BlockProto;
-  TypeLoc TL;
-  if (TypeSourceInfo *TSInfo = Param->getTypeSourceInfo()) {
-    TL = TSInfo->getTypeLoc().getUnqualifiedLoc();
-    while (true) {
-      // Look through typedefs.
-      if (!SuppressBlock) {
-        if (TypedefTypeLoc TypedefTL = TL.getAs<TypedefTypeLoc>()) {
-          if (TypeSourceInfo *InnerTSInfo =
-                  TypedefTL.getTypedefNameDecl()->getTypeSourceInfo()) {
-            TL = InnerTSInfo->getTypeLoc().getUnqualifiedLoc();
-            continue;
-          }
-        }
-        
-        // Look through qualified types
-        if (QualifiedTypeLoc QualifiedTL = TL.getAs<QualifiedTypeLoc>()) {
-          TL = QualifiedTL.getUnqualifiedLoc();
-          continue;
-        }
-
-        if (AttributedTypeLoc AttrTL = TL.getAs<AttributedTypeLoc>()) {
-          TL = AttrTL.getModifiedLoc();
-          continue;
-        }
-      }
-      
-      // Try to get the function prototype behind the block pointer type,
-      // then we're done.
-      if (BlockPointerTypeLoc BlockPtr = TL.getAs<BlockPointerTypeLoc>()) {
-        TL = BlockPtr.getPointeeLoc().IgnoreParens();
-        Block = TL.getAs<FunctionTypeLoc>();
-        BlockProto = TL.getAs<FunctionProtoTypeLoc>();
-      }
-      break;
-    }
-  }
+  findTypeLocationForBlockDecl(Param->getTypeSourceInfo(), Block, BlockProto,
+                               SuppressBlock);
 
   if (!Block) {
     // We were unable to find a FunctionProtoTypeLoc with parameter names
@@ -2246,12 +2278,31 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
     
   // We have the function prototype behind the block pointer type, as it was
   // written in the source.
+  return formatBlockPlaceholder(Policy, Param, Block, BlockProto,
+                                /*SuppressBlockName=*/false, SuppressBlock,
+                                ObjCSubsts);
+}
+
+/// \brief Returns a placeholder string that corresponds to an Objective-C block
+/// declaration.
+///
+/// \param BlockDecl A declaration with an Objective-C block type.
+///
+/// \param Block The most relevant type location for that block type.
+///
+/// \param SuppressBlockName Determines wether or not the name of the block
+/// declaration is included in the resulting string.
+static std::string
+formatBlockPlaceholder(const PrintingPolicy &Policy, const NamedDecl *BlockDecl,
+                       FunctionTypeLoc &Block, FunctionProtoTypeLoc &BlockProto,
+                       bool SuppressBlockName, bool SuppressBlock,
+                       Optional<ArrayRef<QualType>> ObjCSubsts) {
   std::string Result;
   QualType ResultType = Block.getTypePtr()->getReturnType();
   if (ObjCSubsts)
-    ResultType = ResultType.substObjCTypeArgs(Param->getASTContext(),
-                                              *ObjCSubsts,
-                                              ObjCSubstitutionContext::Result);
+    ResultType =
+        ResultType.substObjCTypeArgs(BlockDecl->getASTContext(), *ObjCSubsts,
+                                     ObjCSubstitutionContext::Result);
   if (!ResultType->isVoidType() || SuppressBlock)
     ResultType.getAsStringInternal(Result, Policy);
 
@@ -2269,31 +2320,30 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
         Params += ", ";
       Params += FormatFunctionParameter(Policy, Block.getParam(I),
                                         /*SuppressName=*/false,
-                                        /*SuppressBlock=*/true,
-                                        ObjCSubsts);
+                                        /*SuppressBlock=*/true, ObjCSubsts);
 
       if (I == N - 1 && BlockProto.getTypePtr()->isVariadic())
         Params += ", ...";
     }
     Params += ")";
   }
-  
+
   if (SuppressBlock) {
     // Format as a parameter.
     Result = Result + " (^";
-    if (Param->getIdentifier())
-      Result += Param->getIdentifier()->getName();
+    if (!SuppressBlockName && BlockDecl->getIdentifier())
+      Result += BlockDecl->getIdentifier()->getName();
     Result += ")";
     Result += Params;
   } else {
     // Format as a block literal argument.
     Result = '^' + Result;
     Result += Params;
-    
-    if (Param->getIdentifier())
-      Result += Param->getIdentifier()->getName();
+
+    if (!SuppressBlockName && BlockDecl->getIdentifier())
+      Result += BlockDecl->getIdentifier()->getName();
   }
-  
+
   return Result;
 }
 
@@ -3036,6 +3086,7 @@ CXCursorKind clang::getCursorKindForDecl(const Decl *D) {
     case Decl::ParmVar:            return CXCursor_ParmDecl;
     case Decl::Typedef:            return CXCursor_TypedefDecl;
     case Decl::TypeAlias:          return CXCursor_TypeAliasDecl;
+    case Decl::TypeAliasTemplate:  return CXCursor_TypeAliasTemplateDecl;
     case Decl::Var:                return CXCursor_VarDecl;
     case Decl::Namespace:          return CXCursor_Namespace;
     case Decl::NamespaceAlias:     return CXCursor_NamespaceAlias;
@@ -3048,6 +3099,8 @@ CXCursorKind clang::getCursorKindForDecl(const Decl *D) {
     case Decl::ClassTemplatePartialSpecialization:
       return CXCursor_ClassTemplatePartialSpecialization;
     case Decl::UsingDirective:     return CXCursor_UsingDirective;
+    case Decl::StaticAssert:       return CXCursor_StaticAssert;
+    case Decl::Friend:             return CXCursor_FriendDecl;
     case Decl::TranslationUnit:    return CXCursor_TranslationUnit;
       
     case Decl::Using:
@@ -3211,7 +3264,7 @@ static void MaybeAddOverrideCalls(Sema &S, DeclContext *InContext,
   
   // We need to have names for all of the parameters, if we're going to 
   // generate a forwarding call.
-  for (auto P : Method->params())
+  for (auto P : Method->parameters())
     if (!P->getDeclName())
       return;
 
@@ -3243,7 +3296,7 @@ static void MaybeAddOverrideCalls(Sema &S, DeclContext *InContext,
                                          Overridden->getNameAsString()));
     Builder.AddChunk(CodeCompletionString::CK_LeftParen);
     bool FirstParam = true;
-    for (auto P : Method->params()) {
+    for (auto P : Method->parameters()) {
       if (FirstParam)
         FirstParam = false;
       else
@@ -3376,7 +3429,7 @@ void Sema::CodeCompleteOrdinaryName(Scope *S,
   case PCC_Statement:
   case PCC_RecoveryInFunction:
     if (S->getFnParent())
-      AddPrettyFunctionResults(PP.getLangOpts(), Results);        
+      AddPrettyFunctionResults(getLangOpts(), Results);
     break;
     
   case PCC_Namespace:
@@ -3520,7 +3573,7 @@ void Sema::CodeCompleteExpression(Scope *S,
   if (S->getFnParent() && 
       !Data.ObjCCollection && 
       !Data.IntegralConstantExpression)
-    AddPrettyFunctionResults(PP.getLangOpts(), Results);        
+    AddPrettyFunctionResults(getLangOpts(), Results);
 
   if (CodeCompleter->includeMacros())
     AddMacroResults(PP, Results, false, PreferredTypeIsPointer);
@@ -3559,23 +3612,118 @@ static ObjCContainerDecl *getContainerDef(ObjCContainerDecl *Container) {
   return Container;
 }
 
+/// \brief Adds a block invocation code completion result for the given block
+/// declaration \p BD.
+static void AddObjCBlockCall(ASTContext &Context, const PrintingPolicy &Policy,
+                             CodeCompletionBuilder &Builder,
+                             const NamedDecl *BD,
+                             const FunctionTypeLoc &BlockLoc,
+                             const FunctionProtoTypeLoc &BlockProtoLoc) {
+  Builder.AddResultTypeChunk(
+      GetCompletionTypeString(BlockLoc.getReturnLoc().getType(), Context,
+                              Policy, Builder.getAllocator()));
+
+  AddTypedNameChunk(Context, Policy, BD, Builder);
+  Builder.AddChunk(CodeCompletionString::CK_LeftParen);
+
+  if (BlockProtoLoc && BlockProtoLoc.getTypePtr()->isVariadic()) {
+    Builder.AddPlaceholderChunk("...");
+  } else {
+    for (unsigned I = 0, N = BlockLoc.getNumParams(); I != N; ++I) {
+      if (I)
+        Builder.AddChunk(CodeCompletionString::CK_Comma);
+
+      // Format the placeholder string.
+      std::string PlaceholderStr =
+          FormatFunctionParameter(Policy, BlockLoc.getParam(I));
+
+      if (I == N - 1 && BlockProtoLoc &&
+          BlockProtoLoc.getTypePtr()->isVariadic())
+        PlaceholderStr += ", ...";
+
+      // Add the placeholder string.
+      Builder.AddPlaceholderChunk(
+          Builder.getAllocator().CopyString(PlaceholderStr));
+    }
+  }
+
+  Builder.AddChunk(CodeCompletionString::CK_RightParen);
+}
+
 static void AddObjCProperties(const CodeCompletionContext &CCContext,
                               ObjCContainerDecl *Container,
-                              bool AllowCategories,
-                              bool AllowNullaryMethods,
+                              bool AllowCategories, bool AllowNullaryMethods,
                               DeclContext *CurContext,
                               AddedPropertiesSet &AddedProperties,
-                              ResultBuilder &Results) {
+                              ResultBuilder &Results,
+                              bool IsBaseExprStatement = false) {
   typedef CodeCompletionResult Result;
 
   // Retrieve the definition.
   Container = getContainerDef(Container);
   
   // Add properties in this container.
-  for (const auto *P : Container->properties())
-    if (AddedProperties.insert(P->getIdentifier()).second)
+  for (const auto *P : Container->instance_properties()) {
+    if (!AddedProperties.insert(P->getIdentifier()).second)
+      continue;
+
+    // FIXME: Provide block invocation completion for non-statement
+    // expressions.
+    if (!P->getType().getTypePtr()->isBlockPointerType() ||
+        !IsBaseExprStatement) {
       Results.MaybeAddResult(Result(P, Results.getBasePriority(P), nullptr),
                              CurContext);
+      continue;
+    }
+
+    // Block setter and invocation completion is provided only when we are able
+    // to find the FunctionProtoTypeLoc with parameter names for the block.
+    FunctionTypeLoc BlockLoc;
+    FunctionProtoTypeLoc BlockProtoLoc;
+    findTypeLocationForBlockDecl(P->getTypeSourceInfo(), BlockLoc,
+                                 BlockProtoLoc);
+    if (!BlockLoc) {
+      Results.MaybeAddResult(Result(P, Results.getBasePriority(P), nullptr),
+                             CurContext);
+      continue;
+    }
+
+    // The default completion result for block properties should be the block
+    // invocation completion when the base expression is a statement.
+    CodeCompletionBuilder Builder(Results.getAllocator(),
+                                  Results.getCodeCompletionTUInfo());
+    AddObjCBlockCall(Container->getASTContext(),
+                     getCompletionPrintingPolicy(Results.getSema()), Builder, P,
+                     BlockLoc, BlockProtoLoc);
+    Results.MaybeAddResult(
+        Result(Builder.TakeString(), P, Results.getBasePriority(P)),
+        CurContext);
+
+    // Provide additional block setter completion iff the base expression is a
+    // statement and the block property is mutable.
+    if (!P->isReadOnly()) {
+      CodeCompletionBuilder Builder(Results.getAllocator(),
+                                    Results.getCodeCompletionTUInfo());
+      AddResultTypeChunk(Container->getASTContext(),
+                         getCompletionPrintingPolicy(Results.getSema()), P,
+                         CCContext.getBaseType(), Builder);
+      Builder.AddTypedTextChunk(
+          Results.getAllocator().CopyString(P->getName()));
+      Builder.AddChunk(CodeCompletionString::CK_Equal);
+
+      std::string PlaceholderStr = formatBlockPlaceholder(
+          getCompletionPrintingPolicy(Results.getSema()), P, BlockLoc,
+          BlockProtoLoc, /*SuppressBlockName=*/true);
+      // Add the placeholder string.
+      Builder.AddPlaceholderChunk(
+          Builder.getAllocator().CopyString(PlaceholderStr));
+
+      Results.MaybeAddResult(
+          Result(Builder.TakeString(), P,
+                 Results.getBasePriority(P) + CCD_BlockPropertySetter),
+          CurContext);
+    }
+  }
 
   // Add nullary methods
   if (AllowNullaryMethods) {
@@ -3604,37 +3752,41 @@ static void AddObjCProperties(const CodeCompletionContext &CCContext,
   if (ObjCProtocolDecl *Protocol = dyn_cast<ObjCProtocolDecl>(Container)) {
     for (auto *P : Protocol->protocols())
       AddObjCProperties(CCContext, P, AllowCategories, AllowNullaryMethods,
-                        CurContext, AddedProperties, Results);
+                        CurContext, AddedProperties, Results,
+                        IsBaseExprStatement);
   } else if (ObjCInterfaceDecl *IFace = dyn_cast<ObjCInterfaceDecl>(Container)){
     if (AllowCategories) {
       // Look through categories.
       for (auto *Cat : IFace->known_categories())
         AddObjCProperties(CCContext, Cat, AllowCategories, AllowNullaryMethods,
-                          CurContext, AddedProperties, Results);
+                          CurContext, AddedProperties, Results,
+                          IsBaseExprStatement);
     }
 
     // Look through protocols.
     for (auto *I : IFace->all_referenced_protocols())
       AddObjCProperties(CCContext, I, AllowCategories, AllowNullaryMethods,
-                        CurContext, AddedProperties, Results);
-    
+                        CurContext, AddedProperties, Results,
+                        IsBaseExprStatement);
+
     // Look in the superclass.
     if (IFace->getSuperClass())
       AddObjCProperties(CCContext, IFace->getSuperClass(), AllowCategories,
-                        AllowNullaryMethods, CurContext, 
-                        AddedProperties, Results);
+                        AllowNullaryMethods, CurContext, AddedProperties,
+                        Results, IsBaseExprStatement);
   } else if (const ObjCCategoryDecl *Category
                                     = dyn_cast<ObjCCategoryDecl>(Container)) {
     // Look through protocols.
     for (auto *P : Category->protocols())
       AddObjCProperties(CCContext, P, AllowCategories, AllowNullaryMethods,
-                        CurContext, AddedProperties, Results);
+                        CurContext, AddedProperties, Results,
+                        IsBaseExprStatement);
   }
 }
 
 void Sema::CodeCompleteMemberReferenceExpr(Scope *S, Expr *Base,
-                                           SourceLocation OpLoc,
-                                           bool IsArrow) {
+                                           SourceLocation OpLoc, bool IsArrow,
+                                           bool IsBaseExprStatement) {
   if (!Base || !CodeCompleter)
     return;
   
@@ -3706,22 +3858,24 @@ void Sema::CodeCompleteMemberReferenceExpr(Scope *S, Expr *Base,
           Results.AddResult(Result("template"));
       }
     }
-  } else if (!IsArrow && BaseType->getAsObjCInterfacePointerType()) {
+  } else if (!IsArrow && BaseType->isObjCObjectPointerType()) {
     // Objective-C property reference.
     AddedPropertiesSet AddedProperties;
-    
-    // Add property results based on our interface.
-    const ObjCObjectPointerType *ObjCPtr
-      = BaseType->getAsObjCInterfacePointerType();
-    assert(ObjCPtr && "Non-NULL pointer guaranteed above!");
-    AddObjCProperties(CCContext, ObjCPtr->getInterfaceDecl(), true,
-                      /*AllowNullaryMethods=*/true, CurContext, 
-                      AddedProperties, Results);
-    
+
+    if (const ObjCObjectPointerType *ObjCPtr =
+            BaseType->getAsObjCInterfacePointerType()) {
+      // Add property results based on our interface.
+      assert(ObjCPtr && "Non-NULL pointer guaranteed above!");
+      AddObjCProperties(CCContext, ObjCPtr->getInterfaceDecl(), true,
+                        /*AllowNullaryMethods=*/true, CurContext,
+                        AddedProperties, Results, IsBaseExprStatement);
+    }
+
     // Add properties from the protocols in a qualified interface.
-    for (auto *I : ObjCPtr->quals())
+    for (auto *I : BaseType->getAs<ObjCObjectPointerType>()->quals())
       AddObjCProperties(CCContext, I, true, /*AllowNullaryMethods=*/true,
-                        CurContext, AddedProperties, Results);
+                        CurContext, AddedProperties, Results,
+                        IsBaseExprStatement);
   } else if ((IsArrow && BaseType->isObjCObjectPointerType()) ||
              (!IsArrow && BaseType->isObjCObjectType())) {
     // Objective-C instance variable access.
@@ -3814,10 +3968,17 @@ void Sema::CodeCompleteTypeQualifiers(DeclSpec &DS) {
   if (getLangOpts().C11 &&
       !(DS.getTypeQualifiers() & DeclSpec::TQ_atomic))
     Results.AddResult("_Atomic");
+  if (getLangOpts().MSVCCompat &&
+      !(DS.getTypeQualifiers() & DeclSpec::TQ_unaligned))
+    Results.AddResult("__unaligned");
   Results.ExitScope();
   HandleCodeCompleteResults(this, CodeCompleter, 
                             Results.getCompletionContext(),
                             Results.data(), Results.size());
+}
+
+void Sema::CodeCompleteBracketDeclarator(Scope *S) {
+  CodeCompleteExpression(S, QualType(getASTContext().getSizeType()));
 }
 
 void Sema::CodeCompleteCase(Scope *S) {
@@ -4051,7 +4212,7 @@ void Sema::CodeCompleteCall(Scope *S, Expr *Fn, ArrayRef<Expr *> Args) {
       // If expression's type is CXXRecordDecl, it may overload the function
       // call operator, so we check if it does and add them as candidates.
       // A complete type is needed to lookup for member function call operators.
-      if (!RequireCompleteType(Loc, NakedFn->getType(), 0)) {
+      if (isCompleteType(Loc, NakedFn->getType())) {
         DeclarationName OpName = Context.DeclarationNames
                                  .getCXXOperatorName(OO_Call);
         LookupResult R(*this, OpName, Loc, LookupOrdinaryName);
@@ -4093,7 +4254,7 @@ void Sema::CodeCompleteConstructor(Scope *S, QualType Type, SourceLocation Loc,
     return;
 
   // A complete type is needed to lookup for constructors.
-  if (RequireCompleteType(Loc, Type, 0))
+  if (!isCompleteType(Loc, Type))
     return;
 
   CXXRecordDecl *RD = Type->getAsCXXRecordDecl();
@@ -4205,7 +4366,7 @@ void Sema::CodeCompleteAfterIf(Scope *S) {
   Results.ExitScope();
   
   if (S->getFnParent())
-    AddPrettyFunctionResults(PP.getLangOpts(), Results);        
+    AddPrettyFunctionResults(getLangOpts(), Results);
   
   if (CodeCompleter->includeMacros())
     AddMacroResults(PP, Results, false);
@@ -5925,21 +6086,21 @@ static void AddProtocolResults(DeclContext *Ctx, DeclContext *CurContext,
   }
 }
 
-void Sema::CodeCompleteObjCProtocolReferences(IdentifierLocPair *Protocols,
-                                              unsigned NumProtocols) {
+void Sema::CodeCompleteObjCProtocolReferences(
+                                        ArrayRef<IdentifierLocPair> Protocols) {
   ResultBuilder Results(*this, CodeCompleter->getAllocator(),
                         CodeCompleter->getCodeCompletionTUInfo(),
                         CodeCompletionContext::CCC_ObjCProtocolName);
   
-  if (CodeCompleter && CodeCompleter->includeGlobals()) {
+  if (CodeCompleter->includeGlobals()) {
     Results.EnterNewScope();
     
     // Tell the result set to ignore all of the protocols we have
     // already seen.
     // FIXME: This doesn't work when caching code-completion results.
-    for (unsigned I = 0; I != NumProtocols; ++I)
-      if (ObjCProtocolDecl *Protocol = LookupProtocol(Protocols[I].first,
-                                                      Protocols[I].second))
+    for (const IdentifierLocPair &Pair : Protocols)
+      if (ObjCProtocolDecl *Protocol = LookupProtocol(Pair.first,
+                                                      Pair.second))
         Results.Ignore(Protocol);
 
     // Add all protocols.
@@ -5959,7 +6120,7 @@ void Sema::CodeCompleteObjCProtocolDecl(Scope *) {
                         CodeCompleter->getCodeCompletionTUInfo(),
                         CodeCompletionContext::CCC_ObjCProtocolName);
   
-  if (CodeCompleter && CodeCompleter->includeGlobals()) {
+  if (CodeCompleter->includeGlobals()) {
     Results.EnterNewScope();
     
     // Add all protocols.
@@ -6191,7 +6352,7 @@ void Sema::CodeCompleteObjCPropertySynthesizeIvar(Scope *S,
   // Figure out which interface we're looking into.
   ObjCInterfaceDecl *Class = nullptr;
   if (ObjCImplementationDecl *ClassImpl
-                                 = dyn_cast<ObjCImplementationDecl>(Container))  
+                                 = dyn_cast<ObjCImplementationDecl>(Container))
     Class = ClassImpl->getClassInterface();
   else
     Class = cast<ObjCCategoryImplDecl>(Container)->getCategoryDecl()
@@ -6200,8 +6361,8 @@ void Sema::CodeCompleteObjCPropertySynthesizeIvar(Scope *S,
   // Determine the type of the property we're synthesizing.
   QualType PropertyType = Context.getObjCIdType();
   if (Class) {
-    if (ObjCPropertyDecl *Property
-                              = Class->FindPropertyDeclaration(PropertyName)) {
+    if (ObjCPropertyDecl *Property = Class->FindPropertyDeclaration(
+            PropertyName, ObjCPropertyQueryKind::OBJC_PR_query_instance)) {
       PropertyType 
         = Property->getType().getNonReferenceType().getUnqualifiedType();
       
@@ -7180,7 +7341,7 @@ void Sema::CodeCompleteObjCMethodDecl(Scope *S,
         Containers.push_back(Cat);
     
     for (unsigned I = 0, N = Containers.size(); I != N; ++I)
-      for (auto *P : Containers[I]->properties())
+      for (auto *P : Containers[I]->instance_properties())
         AddObjCKeyValueCompletions(P, IsInstanceMethod, ReturnType, Context, 
                                    KnownSelectors, Results);
   }

@@ -19,6 +19,7 @@ using namespace clang::ast_matchers;
 
 namespace clang {
 namespace tidy {
+namespace misc {
 
 namespace {
 
@@ -41,8 +42,9 @@ parmVarDeclRefExprOccurences(const ParmVarDecl &MovableParam,
 MoveConstructorInitCheck::MoveConstructorInitCheck(StringRef Name,
                                                    ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
-      IncludeStyle(IncludeSorter::parseIncludeStyle(
-          Options.get("IncludeStyle", "llvm"))) {}
+      IncludeStyle(utils::IncludeSorter::parseIncludeStyle(
+          Options.get("IncludeStyle", "llvm"))),
+      UseCERTSemantics(Options.get("UseCERTSemantics", 0) != 0) {}
 
 void MoveConstructorInitCheck::registerMatchers(MatchFinder *Finder) {
   // Only register the matchers for C++11; the functionality currently does not
@@ -67,21 +69,27 @@ void MoveConstructorInitCheck::registerMatchers(MatchFinder *Finder) {
                      hasDeclaration(cxxRecordDecl(hasMethod(cxxConstructorDecl(
                          isMoveConstructor(), unless(isDeleted()))))),
                      matchers::isExpensiveToCopy()));
-  Finder->addMatcher(
-      cxxConstructorDecl(
-          allOf(
-              unless(isMoveConstructor()),
-              hasAnyConstructorInitializer(withInitializer(cxxConstructExpr(
-                  hasDeclaration(cxxConstructorDecl(isCopyConstructor())),
-                  hasArgument(
-                      0, declRefExpr(
-                             to(parmVarDecl(
-                                    hasType(
-                                        NonConstValueMovableAndExpensiveToCopy))
-                                    .bind("movable-param")))
-                             .bind("init-arg")))))))
-          .bind("ctor-decl"),
-      this);
+
+  // This checker is also used to implement cert-oop11-cpp, but when using that
+  // form of the checker, we do not want to diagnose movable parameters.
+  if (!UseCERTSemantics) {
+    Finder->addMatcher(
+        cxxConstructorDecl(
+            allOf(
+                unless(isMoveConstructor()),
+                hasAnyConstructorInitializer(withInitializer(cxxConstructExpr(
+                    hasDeclaration(cxxConstructorDecl(isCopyConstructor())),
+                    hasArgument(
+                        0,
+                        declRefExpr(
+                            to(parmVarDecl(
+                                   hasType(
+                                       NonConstValueMovableAndExpensiveToCopy))
+                                   .bind("movable-param")))
+                            .bind("init-arg")))))))
+            .bind("ctor-decl"),
+        this);
+  }
 }
 
 void MoveConstructorInitCheck::check(const MatchFinder::MatchResult &Result) {
@@ -102,8 +110,9 @@ void MoveConstructorInitCheck::handleParamNotMoved(
   if (parmVarDeclRefExprOccurences(*MovableParam, *ConstructorDecl,
                                    *Result.Context) > 1)
     return;
-  auto DiagOut =
-      diag(InitArg->getLocStart(), "value argument can be moved to avoid copy");
+  auto DiagOut = diag(InitArg->getLocStart(),
+                      "value argument %0 can be moved to avoid copy")
+                 << MovableParam;
   DiagOut << FixItHint::CreateReplacement(
       InitArg->getSourceRange(),
       (Twine("std::move(") + MovableParam->getName() + ")").str());
@@ -117,14 +126,15 @@ void MoveConstructorInitCheck::handleParamNotMoved(
 void MoveConstructorInitCheck::handleMoveConstructor(
     const MatchFinder::MatchResult &Result) {
   const auto *CopyCtor = Result.Nodes.getNodeAs<CXXConstructorDecl>("ctor");
-  const auto *Initializer = Result.Nodes.getNodeAs<CXXCtorInitializer>("move-init");
+  const auto *Initializer =
+      Result.Nodes.getNodeAs<CXXCtorInitializer>("move-init");
 
   // Do not diagnose if the expression used to perform the initialization is a
   // trivially-copyable type.
   QualType QT = Initializer->getInit()->getType();
   if (QT.isTriviallyCopyableType(*Result.Context))
     return;
-  
+
   const auto *RD = QT->getAsCXXRecordDecl();
   if (RD && RD->isTriviallyCopyable())
     return;
@@ -160,14 +170,17 @@ void MoveConstructorInitCheck::handleMoveConstructor(
 }
 
 void MoveConstructorInitCheck::registerPPCallbacks(CompilerInstance &Compiler) {
-  Inserter.reset(new IncludeInserter(Compiler.getSourceManager(),
-                                     Compiler.getLangOpts(), IncludeStyle));
+  Inserter.reset(new utils::IncludeInserter(
+      Compiler.getSourceManager(), Compiler.getLangOpts(), IncludeStyle));
   Compiler.getPreprocessor().addPPCallbacks(Inserter->CreatePPCallbacks());
 }
 
 void MoveConstructorInitCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
-  Options.store(Opts, "IncludeStyle", IncludeSorter::toString(IncludeStyle));
+  Options.store(Opts, "IncludeStyle",
+                utils::IncludeSorter::toString(IncludeStyle));
+  Options.store(Opts, "UseCERTSemantics", UseCERTSemantics ? 1 : 0);
 }
 
+} // namespace misc
 } // namespace tidy
 } // namespace clang

@@ -29,7 +29,8 @@ void ExplicitConstructorCheck::registerMatchers(MatchFinder *Finder) {
 
 // Looks for the token matching the predicate and returns the range of the found
 // token including trailing whitespace.
-static SourceRange FindToken(const SourceManager &Sources, LangOptions LangOpts,
+static SourceRange FindToken(const SourceManager &Sources,
+                             const LangOptions &LangOpts,
                              SourceLocation StartLoc, SourceLocation EndLoc,
                              bool (*Pred)(const Token &)) {
   if (StartLoc.isMacroID() || EndLoc.isMacroID())
@@ -91,7 +92,7 @@ void ExplicitConstructorCheck::check(const MatchFinder::MatchResult &Result) {
              Tok.getRawIdentifier() == "explicit";
     };
     SourceRange ExplicitTokenRange =
-        FindToken(*Result.SourceManager, Result.Context->getLangOpts(),
+        FindToken(*Result.SourceManager, getLangOpts(),
                   Ctor->getOuterLocStart(), Ctor->getLocEnd(), isKWExplicit);
     StringRef ConstructorDescription;
     if (Ctor->isMoveConstructor())
@@ -119,9 +120,11 @@ void ExplicitConstructorCheck::check(const MatchFinder::MatchResult &Result) {
   bool SingleArgument =
       Ctor->getNumParams() == 1 && !Ctor->getParamDecl(0)->isParameterPack();
   SourceLocation Loc = Ctor->getLocation();
-  diag(Loc, SingleArgument ? "single-argument constructors must be explicit"
-                           : "constructors that are callable with a single "
-                             "argument must be marked explicit")
+  diag(Loc,
+       "%0 must be marked explicit to avoid unintentional implicit conversions")
+      << (SingleArgument
+              ? "single-argument constructors"
+              : "constructors that are callable with a single argument")
       << FixItHint::CreateInsertion(Loc, "explicit ");
 }
 

@@ -1,7 +1,8 @@
 ; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-function-scops -analyze < %s | FileCheck %s
 ;
-; CHECK:    Boundary Context:
-; CHECK:        [N] -> {  : N <= 128 }
+; CHECK:    Invalid Context:
+; CHECK:        [N] -> {  : N >= 129 }
 ;
 ;    #include <stdlib.h>
 ;    #include <stdio.h>

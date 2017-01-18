@@ -21,7 +21,7 @@
 using namespace llvm;
 using namespace polly;
 
-/// @brief Get a self referencing id metadata node.
+/// Get a self referencing id metadata node.
 ///
 /// The MDNode looks like this (if arg0/arg1 are not null):
 ///
@@ -61,7 +61,8 @@ void ScopAnnotator::buildAliasScopes(Scop &S) {
   SetVector<Value *> BasePtrs;
   for (ScopStmt &Stmt : S)
     for (MemoryAccess *MA : Stmt)
-      BasePtrs.insert(MA->getBaseAddr());
+      if (!Stmt.isCopyStmt())
+        BasePtrs.insert(MA->getBaseAddr());
 
   std::string AliasScopeStr = "polly.alias.scope.";
   for (Value *BasePtr : BasePtrs)
@@ -131,10 +132,15 @@ void ScopAnnotator::annotate(Instruction *Inst) {
   if (!AliasScopeDomain)
     return;
 
-  if (!(isa<StoreInst>(Inst) || isa<LoadInst>(Inst)))
+  auto MemInst = MemAccInst::dyn_cast(Inst);
+  if (!MemInst)
     return;
 
-  auto *PtrSCEV = SE->getSCEV(getPointerOperand(*Inst));
+  auto *Ptr = MemInst.getPointerOperand();
+  if (!Ptr)
+    return;
+
+  auto *PtrSCEV = SE->getSCEV(Ptr);
   auto *BaseSCEV = SE->getPointerBase(PtrSCEV);
   auto *SU = dyn_cast<SCEVUnknown>(BaseSCEV);
 

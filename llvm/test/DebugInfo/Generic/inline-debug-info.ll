@@ -41,7 +41,7 @@ target triple = "x86_64-apple-darwin12.0.0"
 @_ZTIi = external constant i8*
 @global_var = external global i32
 
-define i32 @_Z4testi(i32 %k)  {
+define i32 @_Z4testi(i32 %k)  !dbg !4 {
 entry:
   %retval = alloca i32, align 4
   %k.addr = alloca i32, align 4
@@ -75,7 +75,7 @@ declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
 declare i32 @_Z8test_exti(i32)
 
-define i32 @_Z5test2v() personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define i32 @_Z5test2v() personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) !dbg !10 {
 entry:
   %exn.slot = alloca i8*
   %ehselector.slot = alloca i32
@@ -140,17 +140,16 @@ attributes #2 = { nounwind }
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!31}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.3 ", isOptimized: false, emissionKind: 0, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.3 ", isOptimized: false, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "<unknown>", directory: "")
 !2 = !{}
-!3 = !{!4, !10}
-!4 = distinct !DISubprogram(name: "test", linkageName: "_Z4testi", line: 4, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 4, file: !5, scope: !6, type: !7, function: i32 (i32)* @_Z4testi, variables: !2)
+!4 = distinct !DISubprogram(name: "test", linkageName: "_Z4testi", line: 4, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 4, file: !5, scope: !6, type: !7, variables: !2)
 !5 = !DIFile(filename: "test.cpp", directory: "")
 !6 = !DIFile(filename: "test.cpp", directory: "")
 !7 = !DISubroutineType(types: !8)
 !8 = !{!9, !9}
 !9 = !DIBasicType(tag: DW_TAG_base_type, name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
-!10 = distinct !DISubprogram(name: "test2", linkageName: "_Z5test2v", line: 11, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 11, file: !5, scope: !6, type: !11, function: i32 ()* @_Z5test2v, variables: !2)
+!10 = distinct !DISubprogram(name: "test2", linkageName: "_Z5test2v", line: 11, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 11, file: !5, scope: !6, type: !11, variables: !2)
 !11 = !DISubroutineType(types: !12)
 !12 = !{!9}
 !13 = !DILocalVariable(name: "k", line: 4, arg: 1, scope: !4, file: !6, type: !9)

@@ -15,6 +15,8 @@
 #include <string>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     assert(std::stoi("0") == 0);
@@ -31,6 +33,7 @@ int main()
     idx = 0;
     assert(std::stoi(L"10g", &idx, 16) == 16);
     assert(idx == 2);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     if (std::numeric_limits<long>::max() > std::numeric_limits<int>::max())
     {
         try
@@ -105,4 +108,5 @@ int main()
     {
         assert(idx == 0);
     }
+#endif
 }

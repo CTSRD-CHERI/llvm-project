@@ -26,7 +26,7 @@ SymbolicFile::SymbolicFile(unsigned int Type, MemoryBufferRef Source)
 
 SymbolicFile::~SymbolicFile() {}
 
-ErrorOr<std::unique_ptr<SymbolicFile>> SymbolicFile::createSymbolicFile(
+Expected<std::unique_ptr<SymbolicFile>> SymbolicFile::createSymbolicFile(
     MemoryBufferRef Object, sys::fs::file_magic Type, LLVMContext *Context) {
   StringRef Data = Object.getBuffer();
   if (Type == sys::fs::file_magic::unknown)
@@ -36,12 +36,13 @@ ErrorOr<std::unique_ptr<SymbolicFile>> SymbolicFile::createSymbolicFile(
   case sys::fs::file_magic::bitcode:
     if (Context)
       return IRObjectFile::create(Object, *Context);
-  // Fallthrough
+    LLVM_FALLTHROUGH;
   case sys::fs::file_magic::unknown:
   case sys::fs::file_magic::archive:
+  case sys::fs::file_magic::coff_cl_gl_object:
   case sys::fs::file_magic::macho_universal_binary:
   case sys::fs::file_magic::windows_resource:
-    return object_error::invalid_file_type;
+    return errorCodeToError(object_error::invalid_file_type);
   case sys::fs::file_magic::elf:
   case sys::fs::file_magic::elf_executable:
   case sys::fs::file_magic::elf_shared_object:
@@ -63,7 +64,7 @@ ErrorOr<std::unique_ptr<SymbolicFile>> SymbolicFile::createSymbolicFile(
   case sys::fs::file_magic::elf_relocatable:
   case sys::fs::file_magic::macho_object:
   case sys::fs::file_magic::coff_object: {
-    ErrorOr<std::unique_ptr<ObjectFile>> Obj =
+    Expected<std::unique_ptr<ObjectFile>> Obj =
         ObjectFile::createObjectFile(Object, Type);
     if (!Obj || !Context)
       return std::move(Obj);

@@ -20,9 +20,11 @@
 #include <system_error>
 
 namespace llvm {
+class formatv_object_base;
 class format_object_base;
 class FormattedString;
 class FormattedNumber;
+class FormattedBytes;
 template <typename T> class SmallVectorImpl;
 
 namespace sys {
@@ -222,6 +224,12 @@ public:
   // Formatted output, see the formatHex() function in Support/Format.h.
   raw_ostream &operator<<(const FormattedNumber &);
 
+  // Formatted output, see the formatv() function in Support/FormatVariadic.h.
+  raw_ostream &operator<<(const formatv_object_base &);
+
+  // Formatted output, see the format_bytes() function in Support/Format.h.
+  raw_ostream &operator<<(const FormattedBytes &);
+
   /// indent - Insert 'NumSpaces' spaces.
   raw_ostream &indent(unsigned NumSpaces);
 
@@ -349,10 +357,6 @@ class raw_fd_ostream : public raw_pwrite_stream {
   ///
   bool Error;
 
-  /// Controls whether the stream should attempt to use atomic writes, when
-  /// possible.
-  bool UseAtomicWrites;
-
   uint64_t pos;
 
   bool SupportsSeeking;
@@ -401,16 +405,6 @@ public:
   /// Flushes the stream and repositions the underlying file descriptor position
   /// to the offset specified from the beginning of the file.
   uint64_t seek(uint64_t off);
-
-  /// Set the stream to attempt to use atomic writes for individual output
-  /// routines where possible.
-  ///
-  /// Note that because raw_ostream's are typically buffered, this flag is only
-  /// sensible when used on unbuffered streams which will flush their output
-  /// immediately.
-  void SetUseAtomicWrites(bool Value) {
-    UseAtomicWrites = Value;
-  }
 
   raw_ostream &changeColor(enum Colors colors, bool bold=false,
                            bool bg=false) override;

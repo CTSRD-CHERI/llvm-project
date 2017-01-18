@@ -61,7 +61,7 @@ SourceLocation findEndLocation(SourceLocation LastTokenLoc,
   bool SkipEndWhitespaceAndComments = true;
   tok::TokenKind TokKind = getTokenKind(Loc, SM, Context);
   if (TokKind == tok::NUM_TOKENS || TokKind == tok::semi ||
-      TokKind == tok::r_brace) {
+      TokKind == tok::r_brace || isStringLiteral(TokKind)) {
     // If we are at ";" or "}", we found the last token. We could use as well
     // `if (isa<NullStmt>(S))`, but it wouldn't work for nested statements.
     SkipEndWhitespaceAndComments = false;
@@ -117,8 +117,8 @@ BracesAroundStatementsCheck::BracesAroundStatementsCheck(
       // Always add braces by default.
       ShortStatementLines(Options.get("ShortStatementLines", 0U)) {}
 
-void
-BracesAroundStatementsCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
+void BracesAroundStatementsCheck::storeOptions(
+    ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "ShortStatementLines", ShortStatementLines);
 }
 
@@ -130,8 +130,8 @@ void BracesAroundStatementsCheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(cxxForRangeStmt().bind("for-range"), this);
 }
 
-void
-BracesAroundStatementsCheck::check(const MatchFinder::MatchResult &Result) {
+void BracesAroundStatementsCheck::check(
+    const MatchFinder::MatchResult &Result) {
   const SourceManager &SM = *Result.SourceManager;
   const ASTContext *Context = Result.Context;
 
@@ -176,30 +176,25 @@ BracesAroundStatementsCheck::findRParenLoc(const IfOrWhileStmt *S,
   if (S->getLocStart().isMacroID())
     return SourceLocation();
 
-  static const char *const ErrorMessage =
-      "cannot find location of closing parenthesis ')'";
   SourceLocation CondEndLoc = S->getCond()->getLocEnd();
   if (const DeclStmt *CondVar = S->getConditionVariableDeclStmt())
     CondEndLoc = CondVar->getLocEnd();
 
-  assert(CondEndLoc.isValid());
+  if (!CondEndLoc.isValid()) {
+    return SourceLocation();
+  }
+
   SourceLocation PastCondEndLoc =
       Lexer::getLocForEndOfToken(CondEndLoc, 0, SM, Context->getLangOpts());
-  if (PastCondEndLoc.isInvalid()) {
-    diag(CondEndLoc, ErrorMessage);
+  if (PastCondEndLoc.isInvalid())
     return SourceLocation();
-  }
   SourceLocation RParenLoc =
       forwardSkipWhitespaceAndComments(PastCondEndLoc, SM, Context);
-  if (RParenLoc.isInvalid()) {
-    diag(PastCondEndLoc, ErrorMessage);
+  if (RParenLoc.isInvalid())
     return SourceLocation();
-  }
   tok::TokenKind TokKind = getTokenKind(RParenLoc, SM, Context);
-  if (TokKind != tok::r_paren) {
-    diag(RParenLoc, ErrorMessage);
+  if (TokKind != tok::r_paren)
     return SourceLocation();
-  }
   return RParenLoc;
 }
 
@@ -220,6 +215,8 @@ bool BracesAroundStatementsCheck::checkStmt(
     return false;
   }
 
+  if (!InitialLoc.isValid())
+    return false;
   const SourceManager &SM = *Result.SourceManager;
   const ASTContext *Context = Result.Context;
 
@@ -230,8 +227,6 @@ bool BracesAroundStatementsCheck::checkStmt(
   if (FileRange.isInvalid())
     return false;
 
-  // InitialLoc points at the last token before opening brace to be inserted.
-  assert(InitialLoc.isValid());
   // Convert InitialLoc to file location, if it's on the same macro expansion
   // level as the start of the statement. We also need file locations for
   // Lexer::getLocForEndOfToken working properly.

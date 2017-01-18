@@ -19,25 +19,25 @@
 
 ; If we reject non-affine loops the non-affine loop bound will be reported:
 ;
-; REJECTNONAFFINELOOPS: remark: ReportLoopBound-01.c:2:8: The following errors keep this region from being a Scop.
+; REJECTNONAFFINELOOPS: remark: ReportLoopBound-01.c:1:12: The following errors keep this region from being a Scop.
 ; REJECTNONAFFINELOOPS: remark: ReportLoopBound-01.c:2:8: Failed to derive an affine function from the loop bounds.
 ; REJECTNONAFFINELOOPS: remark: ReportLoopBound-01.c:3:5: Invalid Scop candidate ends here.
 
 ; If we allow non-affine loops the non-affine access will be reported:
 ;
-; ALLOWNONAFFINELOOPS: remark: ReportLoopBound-01.c:2:8: The following errors keep this region from being a Scop.
+; ALLOWNONAFFINELOOPS: remark: ReportLoopBound-01.c:1:12: The following errors keep this region from being a Scop.
 ; ALLOWNONAFFINELOOPS: remark: ReportLoopBound-01.c:3:5: The array subscript of "A" is not affine
 ; ALLOWNONAFFINELOOPS: remark: ReportLoopBound-01.c:3:5: Invalid Scop candidate ends here.
 
 ; If we allow non-affine loops and non-affine accesses the region will be reported as not profitable:
 ;
-; ALLOWNONAFFINEALL: remark: ReportLoopBound-01.c:2:8: The following errors keep this region from being a Scop.
-; ALLOWNONAFFINEALL: remark: ReportLoopBound-01.c:3:5: No profitable polyhedral optimization found
+; ALLOWNONAFFINEALL: remark: ReportLoopBound-01.c:1:12: The following errors keep this region from being a Scop.
+; ALLOWNONAFFINEALL: remark: ReportLoopBound-01.c:1:12: No profitable polyhedral optimization found
 ; ALLOWNONAFFINEALL: remark: ReportLoopBound-01.c:3:5: Invalid Scop candidate ends here.
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
-define void @f(i32* %A, i32 %n) {
+define void @f(i32* %A, i32 %n) !dbg !4 {
 entry:
   br label %entry.split
 
@@ -86,11 +86,10 @@ attributes #1 = { nounwind readnone }
 !llvm.module.flags = !{!10, !11}
 !llvm.ident = !{!12}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.6.0 ", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.6.0 ", isOptimized: false, emissionKind: 1, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "ReportLoopBound-01.c", directory: "test/ScopDetectionDiagnostic/")
 !2 = !{}
-!3 = !{!4}
-!4 = distinct !DISubprogram(name: "f", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 1, file: !1, scope: !5, type: !6, function: void (i32*, i32)* @f, variables: !2)
+!4 = distinct !DISubprogram(name: "f", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 1, file: !1, scope: !5, type: !6, variables: !2)
 !5 = !DIFile(filename: "ReportLoopBound-01.c", directory: "test/ScopDetectionDiagnostic/")
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8, !9}

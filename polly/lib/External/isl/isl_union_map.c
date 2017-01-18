@@ -2,6 +2,7 @@
  * Copyright 2010-2011 INRIA Saclay
  * Copyright 2013-2014 Ecole Normale Superieure
  * Copyright 2014      INRIA Rocquencourt
+ * Copyright 2016      Sven Verdoolaege
  *
  * Use of this software is governed by the MIT license
  *
@@ -23,6 +24,10 @@
 #include <isl_space_private.h>
 #include <isl/union_set.h>
 #include <isl/deprecated/union_map_int.h>
+
+#include <bset_from_bmap.c>
+#include <set_to_map.c>
+#include <set_from_map.c>
 
 /* Return the number of parameters of "umap", where "type"
  * is required to be set to isl_dim_param.
@@ -380,7 +385,7 @@ error:
 __isl_give isl_union_set *isl_union_set_add_set(__isl_take isl_union_set *uset,
 	__isl_take isl_set *set)
 {
-	return isl_union_map_add_map(uset, (isl_map *)set);
+	return isl_union_map_add_map(uset, set_to_map(set));
 }
 
 __isl_give isl_union_map *isl_union_map_from_map(__isl_take isl_map *map)
@@ -401,7 +406,7 @@ __isl_give isl_union_map *isl_union_map_from_map(__isl_take isl_map *map)
 
 __isl_give isl_union_set *isl_union_set_from_set(__isl_take isl_set *set)
 {
-	return isl_union_map_from_map((isl_map *)set);
+	return isl_union_map_from_map(set_to_map(set));
 }
 
 __isl_give isl_union_map *isl_union_map_from_basic_map(
@@ -521,7 +526,7 @@ error:
 __isl_give isl_set *isl_union_set_extract_set(__isl_keep isl_union_set *uset,
 	__isl_take isl_space *dim)
 {
-	return (isl_set *)isl_union_map_extract_map(uset, dim);
+	return set_from_map(isl_union_map_extract_map(uset, dim));
 }
 
 /* Check if umap contains a map in the given space.
@@ -895,13 +900,13 @@ __isl_give isl_union_set *isl_union_set_gist(__isl_take isl_union_set *uset,
 static __isl_give isl_map *lex_le_set(__isl_take isl_map *set1,
 	__isl_take isl_map *set2)
 {
-	return isl_set_lex_le_set((isl_set *)set1, (isl_set *)set2);
+	return isl_set_lex_le_set(set_from_map(set1), set_from_map(set2));
 }
 
 static __isl_give isl_map *lex_lt_set(__isl_take isl_map *set1,
 	__isl_take isl_map *set2)
 {
-	return isl_set_lex_lt_set((isl_set *)set1, (isl_set *)set2);
+	return isl_set_lex_lt_set(set_from_map(set1), set_from_map(set2));
 }
 
 __isl_give isl_union_map *isl_union_set_lex_lt_union_set(
@@ -2087,6 +2092,31 @@ __isl_give isl_union_map *isl_union_map_domain_factor_range(
 	return cond_un_op(umap, &domain_factor_range_entry);
 }
 
+/* If "map" is of the form A -> [B -> C], then add A -> B to "res".
+ */
+static isl_stat range_factor_domain_entry(void **entry, void *user)
+{
+	isl_map *map = *entry;
+	isl_union_map **res = user;
+
+	if (!isl_map_range_is_wrapping(map))
+		return isl_stat_ok;
+
+	*res = isl_union_map_add_map(*res,
+				isl_map_range_factor_domain(isl_map_copy(map)));
+
+	return *res ? isl_stat_ok : isl_stat_error;
+}
+
+/* For each map in "umap" of the form A -> [B -> C],
+ * construct the map A -> B and collect the results.
+ */
+__isl_give isl_union_map *isl_union_map_range_factor_domain(
+	__isl_take isl_union_map *umap)
+{
+	return cond_un_op(umap, &range_factor_domain_entry);
+}
+
 /* If "map" is of the form A -> [B -> C], then add A -> C to "res".
  */
 static isl_stat range_factor_range_entry(void **entry, void *user)
@@ -2416,7 +2446,15 @@ error:
 
 __isl_give isl_basic_set *isl_union_set_sample(__isl_take isl_union_set *uset)
 {
-	return (isl_basic_set *)isl_union_map_sample(uset);
+	return bset_from_bmap(isl_union_map_sample(uset));
+}
+
+/* Return an element in "uset" in the form of an isl_point.
+ * Return a void isl_point if "uset" is empty.
+ */
+__isl_give isl_point *isl_union_set_sample_point(__isl_take isl_union_set *uset)
+{
+	return isl_basic_set_sample_point(isl_union_set_sample(uset));
 }
 
 struct isl_forall_data {
@@ -2630,6 +2668,101 @@ isl_bool isl_union_map_is_injective(__isl_keep isl_union_map *umap)
 	isl_union_map_free(umap);
 
 	return in;
+}
+
+/* Is "map" obviously not an identity relation because
+ * it maps elements from one space to another space?
+ * Update *non_identity accordingly.
+ *
+ * In particular, if the domain and range spaces are the same,
+ * then the map is not considered to obviously not be an identity relation.
+ * Otherwise, the map is considered to obviously not be an identity relation
+ * if it is is non-empty.
+ *
+ * If "map" is determined to obviously not be an identity relation,
+ * then the search is aborted.
+ */
+static isl_stat map_plain_is_not_identity(__isl_take isl_map *map, void *user)
+{
+	isl_bool *non_identity = user;
+	isl_bool equal;
+	isl_space *space;
+
+	space = isl_map_get_space(map);
+	equal = isl_space_tuple_is_equal(space, isl_dim_in, space, isl_dim_out);
+	if (equal >= 0 && !equal)
+		*non_identity = isl_bool_not(isl_map_is_empty(map));
+	else
+		*non_identity = isl_bool_not(equal);
+	isl_space_free(space);
+	isl_map_free(map);
+
+	if (*non_identity < 0 || *non_identity)
+		return isl_stat_error;
+
+	return isl_stat_ok;
+}
+
+/* Is "umap" obviously not an identity relation because
+ * it maps elements from one space to another space?
+ *
+ * As soon as a map has been found that maps elements to a different space,
+ * non_identity is changed and the search is aborted.
+ */
+static isl_bool isl_union_map_plain_is_not_identity(
+	__isl_keep isl_union_map *umap)
+{
+	isl_bool non_identity;
+
+	non_identity = isl_bool_false;
+	if (isl_union_map_foreach_map(umap, &map_plain_is_not_identity,
+					&non_identity) < 0 &&
+	    non_identity == isl_bool_false)
+		return isl_bool_error;
+
+	return non_identity;
+}
+
+/* Does "map" only map elements to themselves?
+ * Update *identity accordingly.
+ *
+ * If "map" is determined not to be an identity relation,
+ * then the search is aborted.
+ */
+static isl_stat map_is_identity(__isl_take isl_map *map, void *user)
+{
+	isl_bool *identity = user;
+
+	*identity = isl_map_is_identity(map);
+	isl_map_free(map);
+
+	if (*identity < 0 || !*identity)
+		return isl_stat_error;
+
+	return isl_stat_ok;
+}
+
+/* Does "umap" only map elements to themselves?
+ *
+ * First check if there are any maps that map elements to different spaces.
+ * If not, then check that all the maps (between identical spaces)
+ * are identity relations.
+ */
+isl_bool isl_union_map_is_identity(__isl_keep isl_union_map *umap)
+{
+	isl_bool non_identity;
+	isl_bool identity;
+
+	non_identity = isl_union_map_plain_is_not_identity(umap);
+	if (non_identity < 0 || non_identity)
+		return isl_bool_not(non_identity);
+
+	identity = isl_bool_true;
+	if (isl_union_map_foreach_map(umap, &map_is_identity, &identity) < 0 &&
+	    identity == isl_bool_true)
+		return isl_bool_error;
+
+	return identity;
 }
 
 /* Represents a map that has a fixed value (v) for one of its
@@ -2928,6 +3061,32 @@ static isl_stat curry_entry(void **entry, void *user)
 __isl_give isl_union_map *isl_union_map_curry(__isl_take isl_union_map *umap)
 {
 	return cond_un_op(umap, &curry_entry);
+}
+
+/* If *entry is of the form A -> ((B -> C) -> D), then apply
+ * isl_map_range_curry to it and add the result to *res.
+ */
+static isl_stat range_curry_entry(void **entry, void *user)
+{
+	isl_map *map = *entry;
+	isl_union_map **res = user;
+
+	if (!isl_map_can_range_curry(map))
+		return isl_stat_ok;
+
+	map = isl_map_range_curry(isl_map_copy(map));
+	*res = isl_union_map_add_map(*res, map);
+
+	return isl_stat_ok;
+}
+
+/* Given a union map, take the maps of the form A -> ((B -> C) -> D) and
+ * return the union of the corresponding maps A -> (B -> (C -> D)).
+ */
+__isl_give isl_union_map *isl_union_map_range_curry(
+	__isl_take isl_union_map *umap)
+{
+	return cond_un_op(umap, &range_curry_entry);
 }
 
 static isl_stat lift_entry(void **entry, void *user)
@@ -3760,4 +3919,41 @@ __isl_give isl_union_set *isl_union_set_list_union(
 
 	isl_union_set_list_free(list);
 	return res;
+}
+
+/* Update *hash with the hash value of "map".
+ */
+static isl_stat add_hash(__isl_take isl_map *map, void *user)
+{
+	uint32_t *hash = user;
+	uint32_t map_hash;
+
+	map_hash = isl_map_get_hash(map);
+	isl_hash_hash(*hash, map_hash);
+
+	isl_map_free(map);
+	return isl_stat_ok;
+}
+
+/* Return a hash value that digests "umap".
+ */
+uint32_t isl_union_map_get_hash(__isl_keep isl_union_map *umap)
+{
+	uint32_t hash;
+
+	if (!umap)
+		return 0;
+
+	hash = isl_hash_init();
+	if (isl_union_map_foreach_map(umap, &add_hash, &hash) < 0)
+		return 0;
+
+	return hash;
+}
+
+/* Return a hash value that digests "uset".
+ */
+uint32_t isl_union_set_get_hash(__isl_keep isl_union_set *uset)
+{
+	return isl_union_map_get_hash(uset);
 }

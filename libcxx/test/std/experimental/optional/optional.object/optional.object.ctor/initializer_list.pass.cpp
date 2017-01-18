@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03, c++11
 // <optional>
 
 // template <class U, class... Args>
@@ -18,7 +19,7 @@
 #include <vector>
 #include <cassert>
 
-#if _LIBCPP_STD_VER > 11
+#include "test_macros.h"
 
 using std::experimental::optional;
 using std::experimental::in_place_t;
@@ -59,19 +60,15 @@ class Z
 public:
     constexpr Z() : i_(0) {}
     constexpr Z(int i) : i_(i) {}
-    constexpr Z(std::initializer_list<int> il) : i_(il.begin()[0]), j_(il.begin()[1])
-        {throw 6;}
+    Z(std::initializer_list<int> il) : i_(il.begin()[0]), j_(il.begin()[1])
+        {TEST_THROW(6);}
 
     friend constexpr bool operator==(const Z& x, const Z& y)
         {return x.i_ == y.i_ && x.j_ == y.j_;}
 };
 
-
-#endif  // _LIBCPP_STD_VER > 11
-
 int main()
 {
-#if _LIBCPP_STD_VER > 11
     {
         static_assert(!std::is_constructible<X, std::initializer_list<int>&>::value, "");
         static_assert(!std::is_constructible<optional<X>, std::initializer_list<int>&>::value, "");
@@ -97,11 +94,14 @@ int main()
         struct test_constexpr_ctor
             : public optional<Y>
         {
-            constexpr test_constexpr_ctor(in_place_t, std::initializer_list<int> i) 
+            constexpr test_constexpr_ctor(in_place_t, std::initializer_list<int> i)
                 : optional<Y>(in_place, i) {}
         };
 
+        constexpr test_constexpr_ctor dopt(in_place, {42, 101, -1});
+        static_assert(*dopt == Y{42, 101, -1}, "");
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     {
         static_assert(std::is_constructible<optional<Z>, std::initializer_list<int>&>::value, "");
         try
@@ -113,14 +113,6 @@ int main()
         {
             assert(i == 6);
         }
-
-        struct test_constexpr_ctor
-            : public optional<Z>
-        {
-            constexpr test_constexpr_ctor(in_place_t, std::initializer_list<int> i) 
-                : optional<Z>(in_place, i) {}
-        };
-
     }
-#endif  // _LIBCPP_STD_VER > 11
+#endif
 }

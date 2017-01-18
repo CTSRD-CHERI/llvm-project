@@ -35,6 +35,12 @@ typedef int __v8si __attribute__ ((__vector_size__ (32)));
 typedef short __v16hi __attribute__ ((__vector_size__ (32)));
 typedef char __v32qi __attribute__ ((__vector_size__ (32)));
 
+/* Unsigned types */
+typedef unsigned long long __v4du __attribute__ ((__vector_size__ (32)));
+typedef unsigned int __v8su __attribute__ ((__vector_size__ (32)));
+typedef unsigned short __v16hu __attribute__ ((__vector_size__ (32)));
+typedef unsigned char __v32qu __attribute__ ((__vector_size__ (32)));
+
 /* We need an explicitly signed variant for char. Note that this shouldn't
  * appear in the interface though. */
 typedef signed char __v32qs __attribute__((__vector_size__(32)));
@@ -47,195 +53,703 @@ typedef long long __m256i __attribute__((__vector_size__(32)));
 #define __DEFAULT_FN_ATTRS __attribute__((__always_inline__, __nodebug__, __target__("avx")))
 
 /* Arithmetic */
+/// \brief Adds two 256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VADDPD / ADDPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+/// \returns A 256-bit vector of [4 x double] containing the sums of both
+///    operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_add_pd(__m256d __a, __m256d __b)
 {
-  return __a+__b;
+  return (__m256d)((__v4df)__a+(__v4df)__b);
 }
 
+/// \brief Adds two 256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VADDPS / ADDPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+/// \returns A 256-bit vector of [8 x float] containing the sums of both
+///    operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_add_ps(__m256 __a, __m256 __b)
 {
-  return __a+__b;
+  return (__m256)((__v8sf)__a+(__v8sf)__b);
 }
 
+/// \brief Subtracts two 256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VSUBPD / SUBPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing the minuend.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing the subtrahend.
+/// \returns A 256-bit vector of [4 x double] containing the differences between
+///    both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_sub_pd(__m256d __a, __m256d __b)
 {
-  return __a-__b;
+  return (__m256d)((__v4df)__a-(__v4df)__b);
 }
 
+/// \brief Subtracts two 256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VSUBPS / SUBPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the minuend.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing the subtrahend.
+/// \returns A 256-bit vector of [8 x float] containing the differences between
+///    both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_sub_ps(__m256 __a, __m256 __b)
 {
-  return __a-__b;
+  return (__m256)((__v8sf)__a-(__v8sf)__b);
 }
 
+/// \brief Adds the even-indexed values and subtracts the odd-indexed values of
+///    two 256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VADDSUBPD / ADDSUBPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing the left source operand.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing the right source operand.
+/// \returns A 256-bit vector of [4 x double] containing the alternating sums
+///    and differences between both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_addsub_pd(__m256d __a, __m256d __b)
 {
   return (__m256d)__builtin_ia32_addsubpd256((__v4df)__a, (__v4df)__b);
 }
 
+/// \brief Adds the even-indexed values and subtracts the odd-indexed values of
+///    two 256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VADDSUBPS / ADDSUBPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the left source operand.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing the right source operand.
+/// \returns A 256-bit vector of [8 x float] containing the alternating sums and
+///    differences between both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_addsub_ps(__m256 __a, __m256 __b)
 {
   return (__m256)__builtin_ia32_addsubps256((__v8sf)__a, (__v8sf)__b);
 }
 
+/// \brief Divides two 256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VDIVPD / DIVPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing the dividend.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing the divisor.
+/// \returns A 256-bit vector of [4 x double] containing the quotients of both
+///    operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_div_pd(__m256d __a, __m256d __b)
 {
-  return __a / __b;
+  return (__m256d)((__v4df)__a/(__v4df)__b);
 }
 
+/// \brief Divides two 256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VDIVPS / DIVPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the dividend.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing the divisor.
+/// \returns A 256-bit vector of [8 x float] containing the quotients of both
+///    operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_div_ps(__m256 __a, __m256 __b)
 {
-  return __a / __b;
+  return (__m256)((__v8sf)__a/(__v8sf)__b);
 }
 
+/// \brief Compares two 256-bit vectors of [4 x double] and returns the greater
+///    of each pair of values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMAXPD / MAXPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the operands.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the operands.
+/// \returns A 256-bit vector of [4 x double] containing the maximum values
+///    between both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_max_pd(__m256d __a, __m256d __b)
 {
   return (__m256d)__builtin_ia32_maxpd256((__v4df)__a, (__v4df)__b);
 }
 
+/// \brief Compares two 256-bit vectors of [8 x float] and returns the greater
+///    of each pair of values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMAXPS / MAXPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the operands.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the operands.
+/// \returns A 256-bit vector of [8 x float] containing the maximum values
+///    between both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_max_ps(__m256 __a, __m256 __b)
 {
   return (__m256)__builtin_ia32_maxps256((__v8sf)__a, (__v8sf)__b);
 }
 
+/// \brief Compares two 256-bit vectors of [4 x double] and returns the lesser
+///    of each pair of values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMINPD / MINPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the operands.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the operands.
+/// \returns A 256-bit vector of [4 x double] containing the minimum values
+///    between both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_min_pd(__m256d __a, __m256d __b)
 {
   return (__m256d)__builtin_ia32_minpd256((__v4df)__a, (__v4df)__b);
 }
 
+/// \brief Compares two 256-bit vectors of [8 x float] and returns the lesser
+///    of each pair of values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMINPS / MINPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the operands.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the operands.
+/// \returns A 256-bit vector of [8 x float] containing the minimum values
+///    between both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_min_ps(__m256 __a, __m256 __b)
 {
   return (__m256)__builtin_ia32_minps256((__v8sf)__a, (__v8sf)__b);
 }
 
+/// \brief Multiplies two 256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMULPD / MULPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the operands.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the operands.
+/// \returns A 256-bit vector of [4 x double] containing the products of both
+///    operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_mul_pd(__m256d __a, __m256d __b)
 {
-  return __a * __b;
+  return (__m256d)((__v4df)__a * (__v4df)__b);
 }
 
+/// \brief Multiplies two 256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMULPS / MULPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the operands.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the operands.
+/// \returns A 256-bit vector of [8 x float] containing the products of both
+///    operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_mul_ps(__m256 __a, __m256 __b)
 {
-  return __a * __b;
+  return (__m256)((__v8sf)__a * (__v8sf)__b);
 }
 
+/// \brief Calculates the square roots of the values in a 256-bit vector of
+///    [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VSQRTPD / SQRTPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \returns A 256-bit vector of [4 x double] containing the square roots of the
+///    values in the operand.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_sqrt_pd(__m256d __a)
 {
   return (__m256d)__builtin_ia32_sqrtpd256((__v4df)__a);
 }
 
+/// \brief Calculates the square roots of the values in a 256-bit vector of
+///    [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VSQRTPS / SQRTPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the square roots of the
+///    values in the operand.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_sqrt_ps(__m256 __a)
 {
   return (__m256)__builtin_ia32_sqrtps256((__v8sf)__a);
 }
 
+/// \brief Calculates the reciprocal square roots of the values in a 256-bit
+///    vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VRSQRTPS / RSQRTPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the reciprocal square
+///    roots of the values in the operand.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_rsqrt_ps(__m256 __a)
 {
   return (__m256)__builtin_ia32_rsqrtps256((__v8sf)__a);
 }
 
+/// \brief Calculates the reciprocals of the values in a 256-bit vector of
+///    [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VRCPPS / RCPPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the reciprocals of the
+///    values in the operand.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_rcp_ps(__m256 __a)
 {
   return (__m256)__builtin_ia32_rcpps256((__v8sf)__a);
 }
 
+/// \brief Rounds the values in a 256-bit vector of [4 x double] as specified
+///    by the byte operand. The source values are rounded to integer values and
+///    returned as 64-bit double-precision floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_round_pd(__m256d V, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VROUNDPD / ROUNDPD instruction.
+///
+/// \param V
+///    A 256-bit vector of [4 x double].
+/// \param M
+///    An integer value that specifies the rounding operation.
+///    Bits [7:4] are reserved.
+///    Bit [3] is a precision exception value:
+///    0: A normal PE exception is used.
+///    1: The PE field is not updated.
+///    Bit [2] is the rounding control source:
+///    0: Use bits [1:0] of M.
+///    1: Use the current MXCSR setting.
+///    Bits [1:0] contain the rounding control definition:
+///    00: Nearest.
+///    01: Downward (toward negative infinity).
+///    10: Upward (toward positive infinity).
+///    11: Truncated.
+/// \returns A 256-bit vector of [4 x double] containing the rounded values.
 #define _mm256_round_pd(V, M) __extension__ ({ \
-    __m256d __V = (V); \
-    (__m256d)__builtin_ia32_roundpd256((__v4df)__V, (M)); })
+    (__m256d)__builtin_ia32_roundpd256((__v4df)(__m256d)(V), (M)); })
 
+/// \brief Rounds the values stored in a 256-bit vector of [8 x float] as
+///    specified by the byte operand. The source values are rounded to integer
+///    values and returned as floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_round_ps(__m256 V, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VROUNDPS / ROUNDPS instruction.
+///
+/// \param V
+///    A 256-bit vector of [8 x float].
+/// \param M
+///    An integer value that specifies the rounding operation.
+///    Bits [7:4] are reserved.
+///    Bit [3] is a precision exception value:
+///    0: A normal PE exception is used.
+///    1: The PE field is not updated.
+///    Bit [2] is the rounding control source:
+///    0: Use bits [1:0] of M.
+///    1: Use the current MXCSR setting.
+///    Bits [1:0] contain the rounding control definition:
+///    00: Nearest.
+///    01: Downward (toward negative infinity).
+///    10: Upward (toward positive infinity).
+///    11: Truncated.
+/// \returns A 256-bit vector of [8 x float] containing the rounded values.
 #define _mm256_round_ps(V, M) __extension__ ({ \
-  __m256 __V = (V); \
-  (__m256)__builtin_ia32_roundps256((__v8sf)__V, (M)); })
+  (__m256)__builtin_ia32_roundps256((__v8sf)(__m256)(V), (M)); })
 
+/// \brief Rounds up the values stored in a 256-bit vector of [4 x double]. The
+///    source values are rounded up to integer values and returned as 64-bit
+///    double-precision floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_ceil_pd(__m256d V);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VROUNDPD / ROUNDPD instruction.
+///
+/// \param V
+///    A 256-bit vector of [4 x double].
+/// \returns A 256-bit vector of [4 x double] containing the rounded up values.
 #define _mm256_ceil_pd(V)  _mm256_round_pd((V), _MM_FROUND_CEIL)
+
+/// \brief Rounds down the values stored in a 256-bit vector of [4 x double].
+///    The source values are rounded down to integer values and returned as
+///    64-bit double-precision floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_floor_pd(__m256d V);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VROUNDPD / ROUNDPD instruction.
+///
+/// \param V
+///    A 256-bit vector of [4 x double].
+/// \returns A 256-bit vector of [4 x double] containing the rounded down
+///    values.
 #define _mm256_floor_pd(V) _mm256_round_pd((V), _MM_FROUND_FLOOR)
+
+/// \brief Rounds up the values stored in a 256-bit vector of [8 x float]. The
+///    source values are rounded up to integer values and returned as
+///    floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_ceil_ps(__m256 V);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VROUNDPS / ROUNDPS instruction.
+///
+/// \param V
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the rounded up values.
 #define _mm256_ceil_ps(V)  _mm256_round_ps((V), _MM_FROUND_CEIL)
+
+/// \brief Rounds down the values stored in a 256-bit vector of [8 x float]. The
+///    source values are rounded down to integer values and returned as
+///    floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_floor_ps(__m256 V);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VROUNDPS / ROUNDPS instruction.
+///
+/// \param V
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the rounded down values.
 #define _mm256_floor_ps(V) _mm256_round_ps((V), _MM_FROUND_FLOOR)
 
 /* Logical */
+/// \brief Performs a bitwise AND of two 256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VANDPD / ANDPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+/// \returns A 256-bit vector of [4 x double] containing the bitwise AND of the
+///    values between both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_and_pd(__m256d __a, __m256d __b)
 {
-  return (__m256d)((__v4di)__a & (__v4di)__b);
+  return (__m256d)((__v4du)__a & (__v4du)__b);
 }
 
+/// \brief Performs a bitwise AND of two 256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VANDPS / ANDPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+/// \returns A 256-bit vector of [8 x float] containing the bitwise AND of the
+///    values between both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_and_ps(__m256 __a, __m256 __b)
 {
-  return (__m256)((__v8si)__a & (__v8si)__b);
+  return (__m256)((__v8su)__a & (__v8su)__b);
 }
 
+/// \brief Performs a bitwise AND of two 256-bit vectors of [4 x double], using
+///    the one's complement of the values contained in the first source operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VANDNPD / ANDNPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing the left source operand. The
+///    one's complement of this value is used in the bitwise AND.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing the right source operand.
+/// \returns A 256-bit vector of [4 x double] containing the bitwise AND of the
+///    values of the second operand and the one's complement of the first
+///    operand.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_andnot_pd(__m256d __a, __m256d __b)
 {
-  return (__m256d)(~(__v4di)__a & (__v4di)__b);
+  return (__m256d)(~(__v4du)__a & (__v4du)__b);
 }
 
+/// \brief Performs a bitwise AND of two 256-bit vectors of [8 x float], using
+///    the one's complement of the values contained in the first source operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VANDNPS / ANDNPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the left source operand. The
+///    one's complement of this value is used in the bitwise AND.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing the right source operand.
+/// \returns A 256-bit vector of [8 x float] containing the bitwise AND of the
+///    values of the second operand and the one's complement of the first
+///    operand.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_andnot_ps(__m256 __a, __m256 __b)
 {
-  return (__m256)(~(__v8si)__a & (__v8si)__b);
+  return (__m256)(~(__v8su)__a & (__v8su)__b);
 }
 
+/// \brief Performs a bitwise OR of two 256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VORPD / ORPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+/// \returns A 256-bit vector of [4 x double] containing the bitwise OR of the
+///    values between both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_or_pd(__m256d __a, __m256d __b)
 {
-  return (__m256d)((__v4di)__a | (__v4di)__b);
+  return (__m256d)((__v4du)__a | (__v4du)__b);
 }
 
+/// \brief Performs a bitwise OR of two 256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VORPS / ORPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+/// \returns A 256-bit vector of [8 x float] containing the bitwise OR of the
+///    values between both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_or_ps(__m256 __a, __m256 __b)
 {
-  return (__m256)((__v8si)__a | (__v8si)__b);
+  return (__m256)((__v8su)__a | (__v8su)__b);
 }
 
+/// \brief Performs a bitwise XOR of two 256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VXORPD / XORPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+/// \returns A 256-bit vector of [4 x double] containing the bitwise XOR of the
+///    values between both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_xor_pd(__m256d __a, __m256d __b)
 {
-  return (__m256d)((__v4di)__a ^ (__v4di)__b);
+  return (__m256d)((__v4du)__a ^ (__v4du)__b);
 }
 
+/// \brief Performs a bitwise XOR of two 256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VXORPS / XORPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+/// \returns A 256-bit vector of [8 x float] containing the bitwise XOR of the
+///    values between both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_xor_ps(__m256 __a, __m256 __b)
 {
-  return (__m256)((__v8si)__a ^ (__v8si)__b);
+  return (__m256)((__v8su)__a ^ (__v8su)__b);
 }
 
 /* Horizontal arithmetic */
+/// \brief Horizontally adds the adjacent pairs of values contained in two
+///    256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VHADDPD / HADDPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+///    The horizontal sums of the values are returned in the even-indexed
+///    elements of a vector of [4 x double].
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+///    The horizontal sums of the values are returned in the odd-indexed
+///    elements of a vector of [4 x double].
+/// \returns A 256-bit vector of [4 x double] containing the horizontal sums of
+///    both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_hadd_pd(__m256d __a, __m256d __b)
 {
   return (__m256d)__builtin_ia32_haddpd256((__v4df)__a, (__v4df)__b);
 }
 
+/// \brief Horizontally adds the adjacent pairs of values contained in two
+///    256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VHADDPS / HADDPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+///    The horizontal sums of the values are returned in the elements with
+///    index 0, 1, 4, 5 of a vector of [8 x float].
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+///    The horizontal sums of the values are returned in the elements with
+///    index 2, 3, 6, 7 of a vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the horizontal sums of
+///    both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_hadd_ps(__m256 __a, __m256 __b)
 {
   return (__m256)__builtin_ia32_haddps256((__v8sf)__a, (__v8sf)__b);
 }
 
+/// \brief Horizontally subtracts the adjacent pairs of values contained in two
+///    256-bit vectors of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VHSUBPD / HSUBPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+///    The horizontal differences between the values are returned in the
+///    even-indexed elements of a vector of [4 x double].
+/// \param __b
+///    A 256-bit vector of [4 x double] containing one of the source operands.
+///    The horizontal differences between the values are returned in the
+///    odd-indexed elements of a vector of [4 x double].
+/// \returns A 256-bit vector of [4 x double] containing the horizontal
+///    differences of both operands.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_hsub_pd(__m256d __a, __m256d __b)
 {
   return (__m256d)__builtin_ia32_hsubpd256((__v4df)__a, (__v4df)__b);
 }
 
+/// \brief Horizontally subtracts the adjacent pairs of values contained in two
+///    256-bit vectors of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VHSUBPS / HSUBPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+///    The horizontal differences between the values are returned in the
+///    elements with index 0, 1, 4, 5 of a vector of [8 x float].
+/// \param __b
+///    A 256-bit vector of [8 x float] containing one of the source operands.
+///    The horizontal differences between the values are returned in the
+///    elements with index 2, 3, 6, 7 of a vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the horizontal
+///    differences of both operands.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_hsub_ps(__m256 __a, __m256 __b)
 {
@@ -243,87 +757,635 @@ _mm256_hsub_ps(__m256 __a, __m256 __b)
 }
 
 /* Vector permutations */
+/// \brief Copies the values in a 128-bit vector of [2 x double] as specified
+///    by the 128-bit integer vector operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPERMILPD / PERMILPD instruction.
+///
+/// \param __a
+///    A 128-bit vector of [2 x double].
+/// \param __c
+///    A 128-bit integer vector operand specifying how the values are to be
+///    copied.
+///    Bit [1]:
+///    0: Bits [63:0] of the source are copied to bits [63:0] of the
+///    returned vector.
+///    1: Bits [127:64] of the source are copied to bits [63:0] of the
+///    returned vector.
+///    Bit [65]:
+///    0: Bits [63:0] of the source are copied to bits [127:64] of the
+///    returned vector.
+///    1: Bits [127:64] of the source are copied to bits [127:64] of the
+///    returned vector.
+/// \returns A 128-bit vector of [2 x double] containing the copied values.
 static __inline __m128d __DEFAULT_FN_ATTRS
 _mm_permutevar_pd(__m128d __a, __m128i __c)
 {
   return (__m128d)__builtin_ia32_vpermilvarpd((__v2df)__a, (__v2di)__c);
 }
 
+/// \brief Copies the values in a 256-bit vector of [4 x double] as
+///    specified by the 256-bit integer vector operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPERMILPD / PERMILPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \param __c
+///    A 256-bit integer vector operand specifying how the values are to be
+///    copied.
+///    Bit [1]:
+///    0: Bits [63:0] of the source are copied to bits [63:0] of the
+///    returned vector.
+///    1: Bits [127:64] of the source are copied to bits [63:0] of the
+///    returned vector.
+///    Bit [65]:
+///    0: Bits [63:0] of the source are copied to bits [127:64] of the
+///    returned vector.
+///    1: Bits [127:64] of the source are copied to bits [127:64] of the
+///    returned vector.
+///    Bit [129]:
+///    0: Bits [191:128] of the source are copied to bits [191:128] of the
+///    returned vector.
+///    1: Bits [255:192] of the source are copied to bits [191:128] of the
+///    returned vector.
+///    Bit [193]:
+///    0: Bits [191:128] of the source are copied to bits [255:192] of the
+///    returned vector.
+///    1: Bits [255:192] of the source are copied to bits [255:192] of the
+///    returned vector.
+/// \returns A 256-bit vector of [4 x double] containing the copied values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_permutevar_pd(__m256d __a, __m256i __c)
 {
   return (__m256d)__builtin_ia32_vpermilvarpd256((__v4df)__a, (__v4di)__c);
 }
 
+/// \brief Copies the values stored in a 128-bit vector of [4 x float] as
+///    specified by the 128-bit integer vector operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPERMILPS / PERMILPS instruction.
+///
+/// \param __a
+///    A 128-bit vector of [4 x float].
+/// \param __c
+///    A 128-bit integer vector operand specifying how the values are to be
+///    copied.
+///    Bits [1:0]:
+///    00: Bits [31:0] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    Bits [33:32]:
+///    00: Bits [31:0] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    Bits [65:64]:
+///    00: Bits [31:0] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    Bits [97:96]:
+///    00: Bits [31:0] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [127:96] of the
+///    returned vector.
+/// \returns A 128-bit vector of [4 x float] containing the copied values.
 static __inline __m128 __DEFAULT_FN_ATTRS
 _mm_permutevar_ps(__m128 __a, __m128i __c)
 {
   return (__m128)__builtin_ia32_vpermilvarps((__v4sf)__a, (__v4si)__c);
 }
 
+/// \brief Copies the values stored in a 256-bit vector of [8 x float] as
+///    specified by the 256-bit integer vector operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPERMILPS / PERMILPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \param __c
+///    A 256-bit integer vector operand specifying how the values are to be
+///    copied.
+///    Bits [1:0]:
+///    00: Bits [31:0] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    Bits [33:32]:
+///    00: Bits [31:0] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    Bits [65:64]:
+///    00: Bits [31:0] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    Bits [97:96]:
+///    00: Bits [31:0] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    Bits [129:128]:
+///    00: Bits [159:128] of the source are copied to bits [159:128] of the
+///    returned vector.
+///    01: Bits [191:160] of the source are copied to bits [159:128] of the
+///    returned vector.
+///    10: Bits [223:192] of the source are copied to bits [159:128] of the
+///    returned vector.
+///    11: Bits [255:224] of the source are copied to bits [159:128] of the
+///    returned vector.
+///    Bits [161:160]:
+///    00: Bits [159:128] of the source are copied to bits [191:160] of the
+///    returned vector.
+///    01: Bits [191:160] of the source are copied to bits [191:160] of the
+///    returned vector.
+///    10: Bits [223:192] of the source are copied to bits [191:160] of the
+///    returned vector.
+///    11: Bits [255:224] of the source are copied to bits [191:160] of the
+///    returned vector.
+///    Bits [193:192]:
+///    00: Bits [159:128] of the source are copied to bits [223:192] of the
+///    returned vector.
+///    01: Bits [191:160] of the source are copied to bits [223:192] of the
+///    returned vector.
+///    10: Bits [223:192] of the source are copied to bits [223:192] of the
+///    returned vector.
+///    11: Bits [255:224] of the source are copied to bits [223:192] of the
+///    returned vector.
+///    Bits [225:224]:
+///    00: Bits [159:128] of the source are copied to bits [255:224] of the
+///    returned vector.
+///    01: Bits [191:160] of the source are copied to bits [255:224] of the
+///    returned vector.
+///    10: Bits [223:192] of the source are copied to bits [255:224] of the
+///    returned vector.
+///    11: Bits [255:224] of the source are copied to bits [255:224] of the
+///    returned vector.
+/// \returns A 256-bit vector of [8 x float] containing the copied values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_permutevar_ps(__m256 __a, __m256i __c)
 {
   return (__m256)__builtin_ia32_vpermilvarps256((__v8sf)__a, (__v8si)__c);
 }
 
+/// \brief Copies the values in a 128-bit vector of [2 x double] as
+///    specified by the immediate integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128d _mm_permute_pd(__m128d A, const int C);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VPERMILPD / PERMILPD instruction.
+///
+/// \param A
+///    A 128-bit vector of [2 x double].
+/// \param C
+///    An immediate integer operand specifying how the values are to be copied.
+///    Bit [0]:
+///    0: Bits [63:0] of the source are copied to bits [63:0] of the
+///    returned vector.
+///    1: Bits [127:64] of the source are copied to bits [63:0] of the
+///    returned vector.
+///    Bit [1]:
+///    0: Bits [63:0] of the source are copied to bits [127:64] of the
+///    returned vector.
+///    1: Bits [127:64] of the source are copied to bits [127:64] of the
+///    returned vector.
+/// \returns A 128-bit vector of [2 x double] containing the copied values.
 #define _mm_permute_pd(A, C) __extension__ ({ \
-  __m128d __A = (A); \
-  (__m128d)__builtin_shufflevector((__v2df)__A, (__v2df) _mm_setzero_pd(), \
-                                   (C) & 0x1, ((C) & 0x2) >> 1); })
+  (__m128d)__builtin_shufflevector((__v2df)(__m128d)(A), \
+                                   (__v2df)_mm_undefined_pd(), \
+                                   ((C) >> 0) & 0x1, ((C) >> 1) & 0x1); })
 
+/// \brief Copies the values in a 256-bit vector of [4 x double] as
+///    specified by the immediate integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_permute_pd(__m256d A, const int C);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VPERMILPD / PERMILPD instruction.
+///
+/// \param A
+///    A 256-bit vector of [4 x double].
+/// \param C
+///    An immediate integer operand specifying how the values are to be copied.
+///    Bit [0]:
+///    0: Bits [63:0] of the source are copied to bits [63:0] of the
+///    returned vector.
+///    1: Bits [127:64] of the source are copied to bits [63:0] of the
+///    returned vector.
+///    Bit [1]:
+///    0: Bits [63:0] of the source are copied to bits [127:64] of the
+///    returned vector.
+///    1: Bits [127:64] of the source are copied to bits [127:64] of the
+///    returned vector.
+///    Bit [2]:
+///    0: Bits [191:128] of the source are copied to bits [191:128] of the
+///    returned vector.
+///    1: Bits [255:192] of the source are copied to bits [191:128] of the
+///    returned vector.
+///    Bit [3]:
+///    0: Bits [191:128] of the source are copied to bits [255:192] of the
+///    returned vector.
+///    1: Bits [255:192] of the source are copied to bits [255:192] of the
+///    returned vector.
+/// \returns A 256-bit vector of [4 x double] containing the copied values.
 #define _mm256_permute_pd(A, C) __extension__ ({ \
-  __m256d __A = (A); \
-  (__m256d)__builtin_shufflevector((__v4df)__A, (__v4df) _mm256_setzero_pd(), \
-                                   (C) & 0x1, ((C) & 0x2) >> 1, \
-                                   2 + (((C) & 0x4) >> 2), \
-                                   2 + (((C) & 0x8) >> 3)); })
+  (__m256d)__builtin_shufflevector((__v4df)(__m256d)(A), \
+                                   (__v4df)_mm256_undefined_pd(), \
+                                   0 + (((C) >> 0) & 0x1), \
+                                   0 + (((C) >> 1) & 0x1), \
+                                   2 + (((C) >> 2) & 0x1), \
+                                   2 + (((C) >> 3) & 0x1)); })
 
+/// \brief Copies the values in a 128-bit vector of [4 x float] as
+///    specified by the immediate integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128 _mm_permute_ps(__m128 A, const int C);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VPERMILPS / PERMILPS instruction.
+///
+/// \param A
+///    A 128-bit vector of [4 x float].
+/// \param C
+///    An immediate integer operand specifying how the values are to be copied.
+///    Bits [1:0]:
+///    00: Bits [31:0] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    Bits [3:2]:
+///    00: Bits [31:0] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    Bits [5:4]:
+///    00: Bits [31:0] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    Bits [7:6]:
+///    00: Bits [31:0] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [127:96] of the
+///    returned vector.
+/// \returns A 128-bit vector of [4 x float] containing the copied values.
 #define _mm_permute_ps(A, C) __extension__ ({ \
-  __m128 __A = (A); \
-  (__m128)__builtin_shufflevector((__v4sf)__A, (__v4sf) _mm_setzero_ps(), \
-                                   (C) & 0x3, ((C) & 0xc) >> 2, \
-                                   ((C) & 0x30) >> 4, ((C) & 0xc0) >> 6); })
+  (__m128)__builtin_shufflevector((__v4sf)(__m128)(A), \
+                                  (__v4sf)_mm_undefined_ps(), \
+                                  ((C) >> 0) & 0x3, ((C) >> 2) & 0x3, \
+                                  ((C) >> 4) & 0x3, ((C) >> 6) & 0x3); })
 
+/// \brief Copies the values in a 256-bit vector of [8 x float] as
+///    specified by the immediate integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_permute_ps(__m256 A, const int C);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VPERMILPS / PERMILPS instruction.
+///
+/// \param A
+///    A 256-bit vector of [8 x float].
+/// \param C
+///    An immediate integer operand specifying how the values are to be copied.
+///    Bits [1:0]:
+///    00: Bits [31:0] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [31:0] of the
+///    returned vector.
+///    Bits [3:2]:
+///    00: Bits [31:0] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [63:32] of the
+///    returned vector.
+///    Bits [5:4]:
+///    00: Bits [31:0] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [95:64] of the
+///    returned vector.
+///    Bits [7:6]:
+///    00: Bits [31:0] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    01: Bits [63:32] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    10: Bits [95:64] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    11: Bits [127:96] of the source are copied to bits [127:96] of the
+///    returned vector.
+///    Bits [1:0]:
+///    00: Bits [159:128] of the source are copied to bits [159:128] of the
+///    returned vector.
+///    01: Bits [191:160] of the source are copied to bits [159:128] of the
+///    returned vector.
+///    10: Bits [223:192] of the source are copied to bits [159:128] of the
+///    returned vector.
+///    11: Bits [255:224] of the source are copied to bits [159:128] of the
+///    returned vector.
+///    Bits [3:2]:
+///    00: Bits [159:128] of the source are copied to bits [191:160] of the
+///    returned vector.
+///    01: Bits [191:160] of the source are copied to bits [191:160] of the
+///    returned vector.
+///    10: Bits [223:192] of the source are copied to bits [191:160] of the
+///    returned vector.
+///    11: Bits [255:224] of the source are copied to bits [191:160] of the
+///    returned vector.
+///    Bits [5:4]:
+///    00: Bits [159:128] of the source are copied to bits [223:192] of the
+///    returned vector.
+///    01: Bits [191:160] of the source are copied to bits [223:192] of the
+///    returned vector.
+///    10: Bits [223:192] of the source are copied to bits [223:192] of the
+///    returned vector.
+///    11: Bits [255:224] of the source are copied to bits [223:192] of the
+///    returned vector.
+///    Bits [7:6]:
+///    00: Bits [159:128] of the source are copied to bits [255:224] of the
+///    returned vector.
+///    01: Bits [191:160] of the source are copied to bits [255:224] of the
+///    returned vector.
+///    10: Bits [223:192] of the source are copied to bits [255:224] of the
+///    returned vector.
+///    11: Bits [255:224] of the source are copied to bits [255:224] of the
+///    returned vector.
+/// \returns A 256-bit vector of [8 x float] containing the copied values.
 #define _mm256_permute_ps(A, C) __extension__ ({ \
-  __m256 __A = (A); \
-  (__m256)__builtin_shufflevector((__v8sf)__A, (__v8sf) _mm256_setzero_ps(), \
-                                  (C) & 0x3, ((C) & 0xc) >> 2, \
-                                  ((C) & 0x30) >> 4, ((C) & 0xc0) >> 6, \
-                                  4 + (((C) & 0x03) >> 0), \
-                                  4 + (((C) & 0x0c) >> 2), \
-                                  4 + (((C) & 0x30) >> 4), \
-                                  4 + (((C) & 0xc0) >> 6)); })
+  (__m256)__builtin_shufflevector((__v8sf)(__m256)(A), \
+                                  (__v8sf)_mm256_undefined_ps(), \
+                                  0 + (((C) >> 0) & 0x3), \
+                                  0 + (((C) >> 2) & 0x3), \
+                                  0 + (((C) >> 4) & 0x3), \
+                                  0 + (((C) >> 6) & 0x3), \
+                                  4 + (((C) >> 0) & 0x3), \
+                                  4 + (((C) >> 2) & 0x3), \
+                                  4 + (((C) >> 4) & 0x3), \
+                                  4 + (((C) >> 6) & 0x3)); })
 
+/// \brief Permutes 128-bit data values stored in two 256-bit vectors of
+///    [4 x double], as specified by the immediate integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_permute2f128_pd(__m256d V1, __m256d V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VPERM2F128 / PERM2F128 instruction.
+///
+/// \param V1
+///    A 256-bit vector of [4 x double].
+/// \param V2
+///    A 256-bit vector of [4 x double.
+/// \param M
+///    An immediate integer operand specifying how the values are to be
+///    permuted.
+///    Bits [1:0]:
+///    00: Bits [127:0] of operand V1 are copied to bits [127:0] of the
+///    destination.
+///    01: Bits [255:128] of operand V1 are copied to bits [127:0] of the
+///    destination.
+///    10: Bits [127:0] of operand V2 are copied to bits [127:0] of the
+///    destination.
+///    11: Bits [255:128] of operand V2 are copied to bits [127:0] of the
+///    destination.
+///    Bits [5:4]:
+///    00: Bits [127:0] of operand V1 are copied to bits [255:128] of the
+///    destination.
+///    01: Bits [255:128] of operand V1 are copied to bits [255:128] of the
+///    destination.
+///    10: Bits [127:0] of operand V2 are copied to bits [255:128] of the
+///    destination.
+///    11: Bits [255:128] of operand V2 are copied to bits [255:128] of the
+///    destination.
+/// \returns A 256-bit vector of [4 x double] containing the copied values.
 #define _mm256_permute2f128_pd(V1, V2, M) __extension__ ({ \
-  __m256d __V1 = (V1); \
-  __m256d __V2 = (V2); \
-  (__m256d)__builtin_ia32_vperm2f128_pd256((__v4df)__V1, (__v4df)__V2, (M)); })
+  (__m256d)__builtin_ia32_vperm2f128_pd256((__v4df)(__m256d)(V1), \
+                                           (__v4df)(__m256d)(V2), (M)); })
 
+/// \brief Permutes 128-bit data values stored in two 256-bit vectors of
+///    [8 x float], as specified by the immediate integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_permute2f128_ps(__m256 V1, __m256 V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VPERM2F128 / PERM2F128 instruction.
+///
+/// \param V1
+///    A 256-bit vector of [8 x float].
+/// \param V2
+///    A 256-bit vector of [8 x float].
+/// \param M
+///    An immediate integer operand specifying how the values are to be
+///    permuted.
+///    Bits [1:0]:
+///    00: Bits [127:0] of operand V1 are copied to bits [127:0] of the
+///    destination.
+///    01: Bits [255:128] of operand V1 are copied to bits [127:0] of the
+///    destination.
+///    10: Bits [127:0] of operand V2 are copied to bits [127:0] of the
+///    destination.
+///    11: Bits [255:128] of operand V2 are copied to bits [127:0] of the
+///    destination.
+///    Bits [5:4]:
+///    00: Bits [127:0] of operand V1 are copied to bits [255:128] of the
+///    destination.
+///    01: Bits [255:128] of operand V1 are copied to bits [255:128] of the
+///    destination.
+///    10: Bits [127:0] of operand V2 are copied to bits [255:128] of the
+///    destination.
+///    11: Bits [255:128] of operand V2 are copied to bits [255:128] of the
+///    destination.
+/// \returns A 256-bit vector of [8 x float] containing the copied values.
 #define _mm256_permute2f128_ps(V1, V2, M) __extension__ ({ \
-  __m256 __V1 = (V1); \
-  __m256 __V2 = (V2); \
-  (__m256)__builtin_ia32_vperm2f128_ps256((__v8sf)__V1, (__v8sf)__V2, (M)); })
+  (__m256)__builtin_ia32_vperm2f128_ps256((__v8sf)(__m256)(V1), \
+                                          (__v8sf)(__m256)(V2), (M)); })
 
+/// \brief Permutes 128-bit data values stored in two 256-bit integer vectors,
+///    as specified by the immediate integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256i _mm256_permute2f128_si256(__m256i V1, __m256i V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VPERM2F128 / PERM2F128 instruction.
+///
+/// \param V1
+///    A 256-bit integer vector.
+/// \param V2
+///    A 256-bit integer vector.
+/// \param M
+///    An immediate integer operand specifying how the values are to be copied.
+///    Bits [1:0]:
+///    00: Bits [127:0] of operand V1 are copied to bits [127:0] of the
+///    destination.
+///    01: Bits [255:128] of operand V1 are copied to bits [127:0] of the
+///    destination.
+///    10: Bits [127:0] of operand V2 are copied to bits [127:0] of the
+///    destination.
+///    11: Bits [255:128] of operand V2 are copied to bits [127:0] of the
+///    destination.
+///    Bits [5:4]:
+///    00: Bits [127:0] of operand V1 are copied to bits [255:128] of the
+///    destination.
+///    01: Bits [255:128] of operand V1 are copied to bits [255:128] of the
+///    destination.
+///    10: Bits [127:0] of operand V2 are copied to bits [255:128] of the
+///    destination.
+///    11: Bits [255:128] of operand V2 are copied to bits [255:128] of the
+///    destination.
+/// \returns A 256-bit integer vector containing the copied values.
 #define _mm256_permute2f128_si256(V1, V2, M) __extension__ ({ \
-  __m256i __V1 = (V1); \
-  __m256i __V2 = (V2); \
-  (__m256i)__builtin_ia32_vperm2f128_si256((__v8si)__V1, (__v8si)__V2, (M)); })
+  (__m256i)__builtin_ia32_vperm2f128_si256((__v8si)(__m256i)(V1), \
+                                           (__v8si)(__m256i)(V2), (M)); })
 
 /* Vector Blend */
+/// \brief Merges 64-bit double-precision data values stored in either of the
+///    two 256-bit vectors of [4 x double], as specified by the immediate
+///    integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_blend_pd(__m256d V1, __m256d V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VBLENDPD / BLENDPD instruction.
+///
+/// \param V1
+///    A 256-bit vector of [4 x double].
+/// \param V2
+///    A 256-bit vector of [4 x double].
+/// \param M
+///    An immediate integer operand, with mask bits [3:0] specifying how the
+///    values are to be copied. The position of the mask bit corresponds to the
+///    index of a copied value. When a mask bit is 0, the corresponding 64-bit
+///    element in operand V1 is copied to the same position in the destination.
+///    When a mask bit is 1, the corresponding 64-bit element in operand V2 is
+///    copied to the same position in the destination.
+/// \returns A 256-bit vector of [4 x double] containing the copied values.
 #define _mm256_blend_pd(V1, V2, M) __extension__ ({ \
-  __m256d __V1 = (V1); \
-  __m256d __V2 = (V2); \
-  (__m256d)__builtin_shufflevector((__v4df)__V1, (__v4df)__V2, \
+  (__m256d)__builtin_shufflevector((__v4df)(__m256d)(V1), \
+                                   (__v4df)(__m256d)(V2), \
                                    (((M) & 0x01) ? 4 : 0), \
                                    (((M) & 0x02) ? 5 : 1), \
                                    (((M) & 0x04) ? 6 : 2), \
                                    (((M) & 0x08) ? 7 : 3)); })
 
+/// \brief Merges 32-bit single-precision data values stored in either of the
+///    two 256-bit vectors of [8 x float], as specified by the immediate
+///    integer operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_blend_ps(__m256 V1, __m256 V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VBLENDPS / BLENDPS instruction.
+///
+/// \param V1
+///    A 256-bit vector of [8 x float].
+/// \param V2
+///    A 256-bit vector of [8 x float].
+/// \param M
+///    An immediate integer operand, with mask bits [7:0] specifying how the
+///    values are to be copied. The position of the mask bit corresponds to the
+///    index of a copied value. When a mask bit is 0, the corresponding 32-bit
+///    element in operand V1 is copied to the same position in the destination.
+///    When a mask bit is 1, the corresponding 32-bit element in operand V2 is
+///    copied to the same position in the destination.
+/// \returns A 256-bit vector of [8 x float] containing the copied values.
 #define _mm256_blend_ps(V1, V2, M) __extension__ ({ \
-  __m256 __V1 = (V1); \
-  __m256 __V2 = (V2); \
-  (__m256)__builtin_shufflevector((__v8sf)__V1, (__v8sf)__V2, \
+  (__m256)__builtin_shufflevector((__v8sf)(__m256)(V1), \
+                                  (__v8sf)(__m256)(V2), \
                                   (((M) & 0x01) ?  8 : 0), \
                                   (((M) & 0x02) ?  9 : 1), \
                                   (((M) & 0x04) ? 10 : 2), \
@@ -333,6 +1395,27 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
                                   (((M) & 0x40) ? 14 : 6), \
                                   (((M) & 0x80) ? 15 : 7)); })
 
+/// \brief Merges 64-bit double-precision data values stored in either of the
+///    two 256-bit vectors of [4 x double], as specified by the 256-bit vector
+///    operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VBLENDVPD / BLENDVPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \param __b
+///    A 256-bit vector of [4 x double].
+/// \param __c
+///    A 256-bit vector operand, with mask bits 255, 191, 127, and 63 specifying
+///    how the values are to be copied. The position of the mask bit corresponds
+///    to the most significant bit of a copied value. When a mask bit is 0, the
+///    corresponding 64-bit element in operand __a is copied to the same
+///    position in the destination. When a mask bit is 1, the corresponding
+///    64-bit element in operand __b is copied to the same position in the
+///    destination.
+/// \returns A 256-bit vector of [4 x double] containing the copied values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_blendv_pd(__m256d __a, __m256d __b, __m256d __c)
 {
@@ -340,6 +1423,27 @@ _mm256_blendv_pd(__m256d __a, __m256d __b, __m256d __c)
     (__v4df)__a, (__v4df)__b, (__v4df)__c);
 }
 
+/// \brief Merges 32-bit single-precision data values stored in either of the
+///    two 256-bit vectors of [8 x float], as specified by the 256-bit vector
+///    operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VBLENDVPS / BLENDVPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \param __b
+///    A 256-bit vector of [8 x float].
+/// \param __c
+///    A 256-bit vector operand, with mask bits 255, 223, 191, 159, 127, 95, 63,
+///    and 31 specifying how the values are to be copied. The position of the
+///    mask bit corresponds to the most significant bit of a copied value. When
+///    a mask bit is 0, the corresponding 32-bit element in operand __a is
+///    copied to the same position in the destination. When a mask bit is 1, the
+///    corresponding 32-bit element in operand __b is copied to the same
+///    position in the destination.
+/// \returns A 256-bit vector of [8 x float] containing the copied values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c)
 {
@@ -348,29 +1452,154 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c)
 }
 
 /* Vector Dot Product */
+/// \brief Computes two dot products in parallel, using the lower and upper
+///    halves of two [8 x float] vectors as input to the two computations, and
+///    returning the two dot products in the lower and upper halves of the
+///    [8 x float] result. The immediate integer operand controls which
+///    input elements will contribute to the dot product, and where the final
+///    results are returned. In general, for each dot product, the four
+///    corresponding elements of the input vectors are multiplied; the first
+///    two and second two products are summed, then the two sums are added to
+///    form the final result.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_dp_ps(__m256 V1, __m256 V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VDPPS / DPPS instruction.
+///
+/// \param V1
+///    A vector of [8 x float] values, treated as two [4 x float] vectors.
+/// \param V2
+///    A vector of [8 x float] values, treated as two [4 x float] vectors.
+/// \param M
+///    An immediate integer argument. Bits [7:4] determine which elements of
+///    the input vectors are used, with bit [4] corresponding to the lowest
+///    element and bit [7] corresponding to the highest element of each [4 x
+///    float] subvector. If a bit is set, the corresponding elements from the
+///    two input vectors are used as an input for dot product; otherwise that
+///    input is treated as zero. Bits [3:0] determine which elements of the
+///    result will receive a copy of the final dot product, with bit [0]
+///    corresponding to the lowest element and bit [3] corresponding to the
+///    highest element of each [4 x float] subvector. If a bit is set, the dot
+///    product is returned in the corresponding element; otherwise that element
+///    is set to zero. The bitmask is applied in the same way to each of the
+///    two parallel dot product computations.
+/// \returns A 256-bit vector of [8 x float] containing the two dot products.
 #define _mm256_dp_ps(V1, V2, M) __extension__ ({ \
-  __m256 __V1 = (V1); \
-  __m256 __V2 = (V2); \
-  (__m256)__builtin_ia32_dpps256((__v8sf)__V1, (__v8sf)__V2, (M)); })
+  (__m256)__builtin_ia32_dpps256((__v8sf)(__m256)(V1), \
+                                 (__v8sf)(__m256)(V2), (M)); })
 
 /* Vector shuffle */
+/// \brief Selects 8 float values from the 256-bit operands of [8 x float], as
+///    specified by the immediate value operand. The four selected elements in
+///    each operand are copied to the destination according to the bits
+///    specified in the immediate operand. The selected elements from the first
+///    256-bit operand are copied to bits [63:0] and bits [191:128] of the
+///    destination, and the selected elements from the second 256-bit operand
+///    are copied to bits [127:64] and bits [255:192] of the destination. For
+///    example, if bits [7:0] of the immediate operand contain a value of 0xFF,
+///    the 256-bit destination vector would contain the following values: b[7],
+///    b[7], a[7], a[7], b[3], b[3], a[3], a[3].
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_shuffle_ps(__m256 a, __m256 b, const int mask);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VSHUFPS / SHUFPS instruction.
+///
+/// \param a
+///    A 256-bit vector of [8 x float]. The four selected elements in this
+///    operand are copied to bits [63:0] and bits [191:128] in the destination,
+///    according to the bits specified in the immediate operand.
+/// \param b
+///    A 256-bit vector of [8 x float]. The four selected elements in this
+///    operand are copied to bits [127:64] and bits [255:192] in the
+///    destination, according to the bits specified in the immediate operand.
+/// \param mask
+///    An immediate value containing an 8-bit value specifying which elements to
+///    copy from a and b. Bits [3:0] specify the values copied from operand a.
+///    Bits [7:4] specify the values copied from operand b.
+///    The destinations within the 256-bit destination are assigned values as
+///    follows, according to the bit value assignments described below:
+///    Bits [1:0] are used to assign values to bits [31:0] and [159:128] in the
+///    destination.
+///    Bits [3:2] are used to assign values to bits [63:32] and [191:160] in the
+///    destination.
+///    Bits [5:4] are used to assign values to bits [95:64] and [223:192] in the
+///    destination.
+///    Bits [7:6] are used to assign values to bits [127:96] and [255:224] in
+///    the destination.
+///    Bit value assignments:
+///    00: Bits [31:0] and [159:128] are copied from the selected operand.
+///    01: Bits [63:32] and [191:160] are copied from the selected operand.
+///    10: Bits [95:64] and [223:192] are copied from the selected operand.
+///    11: Bits [127:96] and [255:224] are copied from the selected operand.
+/// \returns A 256-bit vector of [8 x float] containing the shuffled values.
 #define _mm256_shuffle_ps(a, b, mask) __extension__ ({ \
-        __m256 __a = (a); \
-        __m256 __b = (b); \
-        (__m256)__builtin_shufflevector((__v8sf)__a, (__v8sf)__b, \
-        (mask) & 0x3,                ((mask) & 0xc) >> 2, \
-        (((mask) & 0x30) >> 4) + 8,  (((mask) & 0xc0) >> 6) + 8, \
-        ((mask) & 0x3) + 4,          (((mask) & 0xc) >> 2) + 4, \
-        (((mask) & 0x30) >> 4) + 12, (((mask) & 0xc0) >> 6) + 12); })
+  (__m256)__builtin_shufflevector((__v8sf)(__m256)(a), \
+                                  (__v8sf)(__m256)(b), \
+                                  0  + (((mask) >> 0) & 0x3), \
+                                  0  + (((mask) >> 2) & 0x3), \
+                                  8  + (((mask) >> 4) & 0x3), \
+                                  8  + (((mask) >> 6) & 0x3), \
+                                  4  + (((mask) >> 0) & 0x3), \
+                                  4  + (((mask) >> 2) & 0x3), \
+                                  12 + (((mask) >> 4) & 0x3), \
+                                  12 + (((mask) >> 6) & 0x3)); })
 
+/// \brief Selects four double-precision values from the 256-bit operands of
+///    [4 x double], as specified by the immediate value operand. The selected
+///    elements from the first 256-bit operand are copied to bits [63:0] and
+///    bits [191:128] in the destination, and the selected elements from the
+///    second 256-bit operand are copied to bits [127:64] and bits [255:192] in
+///    the destination. For example, if bits [3:0] of the immediate operand
+///    contain a value of 0xF, the 256-bit destination vector would contain the
+///    following values: b[3], a[3], b[1], a[1].
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_shuffle_pd(__m256d a, __m256d b, const int mask);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VSHUFPD / SHUFPD instruction.
+///
+/// \param a
+///    A 256-bit vector of [4 x double].
+/// \param b
+///    A 256-bit vector of [4 x double].
+/// \param mask
+///    An immediate value containing 8-bit values specifying which elements to
+///    copy from a and b:
+///    Bit [0]=0: Bits [63:0] are copied from a to bits [63:0] of the
+///    destination.
+///    Bit [0]=1: Bits [127:64] are copied from a to bits [63:0] of the
+///    destination.
+///    Bit [1]=0: Bits [63:0] are copied from b to bits [127:64] of the
+///    destination.
+///    Bit [1]=1: Bits [127:64] are copied from b to bits [127:64] of the
+///    destination.
+///    Bit [2]=0: Bits [191:128] are copied from a to bits [191:128] of the
+///    destination.
+///    Bit [2]=1: Bits [255:192] are copied from a to bits [191:128] of the
+///    destination.
+///    Bit [3]=0: Bits [191:128] are copied from b to bits [255:192] of the
+///    destination.
+///    Bit [3]=1: Bits [255:192] are copied from b to bits [255:192] of the
+///    destination.
+/// \returns A 256-bit vector of [4 x double] containing the shuffled values.
 #define _mm256_shuffle_pd(a, b, mask) __extension__ ({ \
-        __m256d __a = (a); \
-        __m256d __b = (b); \
-        (__m256d)__builtin_shufflevector((__v4df)__a, (__v4df)__b, \
-        (mask) & 0x1, \
-        (((mask) & 0x2) >> 1) + 4, \
-        (((mask) & 0x4) >> 2) + 2, \
-        (((mask) & 0x8) >> 3) + 6); })
+  (__m256d)__builtin_shufflevector((__v4df)(__m256d)(a), \
+                                   (__v4df)(__m256d)(b), \
+                                   0 + (((mask) >> 0) & 0x1), \
+                                   4 + (((mask) >> 1) & 0x1), \
+                                   2 + (((mask) >> 2) & 0x1), \
+                                   6 + (((mask) >> 3) & 0x1)); })
 
 /* Compare */
 #define _CMP_EQ_OQ    0x00 /* Equal (ordered, non-signaling)  */
@@ -406,36 +1635,235 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c)
 #define _CMP_GT_OQ    0x1e /* Greater-than (ordered, non-signaling)  */
 #define _CMP_TRUE_US  0x1f /* True (unordered, signaling)  */
 
+/// \brief Compares each of the corresponding double-precision values of two
+///    128-bit vectors of [2 x double], using the operation specified by the
+///    immediate integer operand. Returns a [2 x double] vector consisting of
+///    two doubles corresponding to the two comparison results: zero if the
+///    comparison is false, and all 1's if the comparison is true.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128d _mm_cmp_pd(__m128d a, __m128d b, const int c);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VCMPPD / CMPPD instruction.
+///
+/// \param a
+///    A 128-bit vector of [2 x double].
+/// \param b
+///    A 128-bit vector of [2 x double].
+/// \param c
+///    An immediate integer operand, with bits [4:0] specifying which comparison
+///    operation to use:
+///    00h, 08h, 10h, 18h: Equal
+///    01h, 09h, 11h, 19h: Less than
+///    02h, 0Ah, 12h, 1Ah: Less than or equal / Greater than or equal (swapped
+///                        operands)
+///    03h, 0Bh, 13h, 1Bh: Unordered
+///    04h, 0Ch, 14h, 1Ch: Not equal
+///    05h, 0Dh, 15h, 1Dh: Not less than / Not greater than (swapped operands)
+///    06h, 0Eh, 16h, 1Eh: Not less than or equal / Not greater than or equal
+///                        (swapped operands)
+///    07h, 0Fh, 17h, 1Fh: Ordered
+/// \returns A 128-bit vector of [2 x double] containing the comparison results.
 #define _mm_cmp_pd(a, b, c) __extension__ ({ \
-  __m128d __a = (a); \
-  __m128d __b = (b); \
-  (__m128d)__builtin_ia32_cmppd((__v2df)__a, (__v2df)__b, (c)); })
+  (__m128d)__builtin_ia32_cmppd((__v2df)(__m128d)(a), \
+                                (__v2df)(__m128d)(b), (c)); })
 
+/// \brief Compares each of the corresponding values of two 128-bit vectors of
+///    [4 x float], using the operation specified by the immediate integer
+///    operand. Returns a [4 x float] vector consisting of four floats
+///    corresponding to the four comparison results: zero if the comparison is
+///    false, and all 1's if the comparison is true.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128 _mm_cmp_ps(__m128 a, __m128 b, const int c);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VCMPPS / CMPPS instruction.
+///
+/// \param a
+///    A 128-bit vector of [4 x float].
+/// \param b
+///    A 128-bit vector of [4 x float].
+/// \param c
+///    An immediate integer operand, with bits [4:0] specifying which comparison
+///    operation to use:
+///    00h, 08h, 10h, 18h: Equal
+///    01h, 09h, 11h, 19h: Less than
+///    02h, 0Ah, 12h, 1Ah: Less than or equal / Greater than or equal (swapped
+///                        operands)
+///    03h, 0Bh, 13h, 1Bh: Unordered
+///    04h, 0Ch, 14h, 1Ch: Not equal
+///    05h, 0Dh, 15h, 1Dh: Not less than / Not greater than (swapped operands)
+///    06h, 0Eh, 16h, 1Eh: Not less than or equal / Not greater than or equal
+///                       (swapped operands)
+///    07h, 0Fh, 17h, 1Fh: Ordered
+/// \returns A 128-bit vector of [4 x float] containing the comparison results.
 #define _mm_cmp_ps(a, b, c) __extension__ ({ \
-  __m128 __a = (a); \
-  __m128 __b = (b); \
-  (__m128)__builtin_ia32_cmpps((__v4sf)__a, (__v4sf)__b, (c)); })
+  (__m128)__builtin_ia32_cmpps((__v4sf)(__m128)(a), \
+                               (__v4sf)(__m128)(b), (c)); })
 
+/// \brief Compares each of the corresponding double-precision values of two
+///    256-bit vectors of [4 x double], using the operation specified by the
+///    immediate integer operand. Returns a [4 x double] vector consisting of
+///    four doubles corresponding to the four comparison results: zero if the
+///    comparison is false, and all 1's if the comparison is true.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_cmp_pd(__m256d a, __m256d b, const int c);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VCMPPD / CMPPD instruction.
+///
+/// \param a
+///    A 256-bit vector of [4 x double].
+/// \param b
+///    A 256-bit vector of [4 x double].
+/// \param c
+///    An immediate integer operand, with bits [4:0] specifying which comparison
+///    operation to use:
+///    00h, 08h, 10h, 18h: Equal
+///    01h, 09h, 11h, 19h: Less than
+///    02h, 0Ah, 12h, 1Ah: Less than or equal / Greater than or equal (swapped
+///                        operands)
+///    03h, 0Bh, 13h, 1Bh: Unordered
+///    04h, 0Ch, 14h, 1Ch: Not equal
+///    05h, 0Dh, 15h, 1Dh: Not less than / Not greater than (swapped operands)
+///    06h, 0Eh, 16h, 1Eh: Not less than or equal / Not greater than or equal
+///                        (swapped operands)
+///    07h, 0Fh, 17h, 1Fh: Ordered
+/// \returns A 256-bit vector of [4 x double] containing the comparison results.
 #define _mm256_cmp_pd(a, b, c) __extension__ ({ \
-  __m256d __a = (a); \
-  __m256d __b = (b); \
-  (__m256d)__builtin_ia32_cmppd256((__v4df)__a, (__v4df)__b, (c)); })
+  (__m256d)__builtin_ia32_cmppd256((__v4df)(__m256d)(a), \
+                                   (__v4df)(__m256d)(b), (c)); })
 
+/// \brief Compares each of the corresponding values of two 256-bit vectors of
+///    [8 x float], using the operation specified by the immediate integer
+///    operand. Returns a [8 x float] vector consisting of eight floats
+///    corresponding to the eight comparison results: zero if the comparison is
+///    false, and all 1's if the comparison is true.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_cmp_ps(__m256 a, __m256 b, const int c);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VCMPPS / CMPPS instruction.
+///
+/// \param a
+///    A 256-bit vector of [8 x float].
+/// \param b
+///    A 256-bit vector of [8 x float].
+/// \param c
+///    An immediate integer operand, with bits [4:0] specifying which comparison
+///    operation to use:
+///    00h, 08h, 10h, 18h: Equal
+///    01h, 09h, 11h, 19h: Less than
+///    02h, 0Ah, 12h, 1Ah: Less than or equal / Greater than or equal (swapped
+///                        operands)
+///    03h, 0Bh, 13h, 1Bh: Unordered
+///    04h, 0Ch, 14h, 1Ch: Not equal
+///    05h, 0Dh, 15h, 1Dh: Not less than / Not greater than (swapped operands)
+///    06h, 0Eh, 16h, 1Eh: Not less than or equal / Not greater than or equal
+///                       (swapped operands)
+///    07h, 0Fh, 17h, 1Fh: Ordered
+/// \returns A 256-bit vector of [8 x float] containing the comparison results.
 #define _mm256_cmp_ps(a, b, c) __extension__ ({ \
-  __m256 __a = (a); \
-  __m256 __b = (b); \
-  (__m256)__builtin_ia32_cmpps256((__v8sf)__a, (__v8sf)__b, (c)); })
+  (__m256)__builtin_ia32_cmpps256((__v8sf)(__m256)(a), \
+                                  (__v8sf)(__m256)(b), (c)); })
 
+/// \brief Compares each of the corresponding scalar double-precision values of
+///    two 128-bit vectors of [2 x double], using the operation specified by the
+///    immediate integer operand. If the result is true, all 64 bits of the
+///    destination vector are set; otherwise they are cleared.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128d _mm_cmp_sd(__m128d a, __m128d b, const int c);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VCMPSD / CMPSD instruction.
+///
+/// \param a
+///    A 128-bit vector of [2 x double].
+/// \param b
+///    A 128-bit vector of [2 x double].
+/// \param c
+///    An immediate integer operand, with bits [4:0] specifying which comparison
+///    operation to use:
+///    00h, 08h, 10h, 18h: Equal
+///    01h, 09h, 11h, 19h: Less than
+///    02h, 0Ah, 12h, 1Ah: Less than or equal / Greater than or equal (swapped
+///                        operands)
+///    03h, 0Bh, 13h, 1Bh: Unordered
+///    04h, 0Ch, 14h, 1Ch: Not equal
+///    05h, 0Dh, 15h, 1Dh: Not less than / Not greater than (swapped operands)
+///    06h, 0Eh, 16h, 1Eh: Not less than or equal / Not greater than or equal
+///                       (swapped operands)
+///    07h, 0Fh, 17h, 1Fh: Ordered
+/// \returns A 128-bit vector of [2 x double] containing the comparison results.
 #define _mm_cmp_sd(a, b, c) __extension__ ({ \
-  __m128d __a = (a); \
-  __m128d __b = (b); \
-  (__m128d)__builtin_ia32_cmpsd((__v2df)__a, (__v2df)__b, (c)); })
+  (__m128d)__builtin_ia32_cmpsd((__v2df)(__m128d)(a), \
+                                (__v2df)(__m128d)(b), (c)); })
 
+/// \brief Compares each of the corresponding scalar values of two 128-bit
+///    vectors of [4 x float], using the operation specified by the immediate
+///    integer operand. If the result is true, all 32 bits of the destination
+///    vector are set; otherwise they are cleared.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128 _mm_cmp_ss(__m128 a, __m128 b, const int c);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VCMPSS / CMPSS instruction.
+///
+/// \param a
+///    A 128-bit vector of [4 x float].
+/// \param b
+///    A 128-bit vector of [4 x float].
+/// \param c
+///    An immediate integer operand, with bits [4:0] specifying which comparison
+///    operation to use:
+///    00h, 08h, 10h, 18h: Equal
+///    01h, 09h, 11h, 19h: Less than
+///    02h, 0Ah, 12h, 1Ah: Less than or equal / Greater than or equal (swapped
+///                        operands)
+///    03h, 0Bh, 13h, 1Bh: Unordered
+///    04h, 0Ch, 14h, 1Ch: Not equal
+///    05h, 0Dh, 15h, 1Dh: Not less than / Not greater than (swapped operands)
+///    06h, 0Eh, 16h, 1Eh: Not less than or equal / Not greater than or equal
+///                       (swapped operands)
+///    07h, 0Fh, 17h, 1Fh: Ordered
+/// \returns A 128-bit vector of [4 x float] containing the comparison results.
 #define _mm_cmp_ss(a, b, c) __extension__ ({ \
-  __m128 __a = (a); \
-  __m128 __b = (b); \
-  (__m128)__builtin_ia32_cmpss((__v4sf)__a, (__v4sf)__b, (c)); })
+  (__m128)__builtin_ia32_cmpss((__v4sf)(__m128)(a), \
+                               (__v4sf)(__m128)(b), (c)); })
 
+/// \brief Takes a [8 x i32] vector and returns the vector element value
+///    indexed by the immediate constant operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128+COMPOSITE /
+///   EXTRACTF128+COMPOSITE instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x i32].
+/// \param __imm
+///    An immediate integer operand with bits [2:0] determining which vector
+///    element is extracted and returned.
+/// \returns A 32-bit integer containing the extracted 32 bits of extended
+///    packed data.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_extract_epi32(__m256i __a, const int __imm)
 {
@@ -443,21 +1871,66 @@ _mm256_extract_epi32(__m256i __a, const int __imm)
   return __b[__imm & 7];
 }
 
+/// \brief Takes a [16 x i16] vector and returns the vector element value
+///    indexed by the immediate constant operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128+COMPOSITE /
+///    EXTRACTF128+COMPOSITE instruction.
+///
+/// \param __a
+///    A 256-bit integer vector of [16 x i16].
+/// \param __imm
+///    An immediate integer operand with bits [3:0] determining which vector
+///    element is extracted and returned.
+/// \returns A 32-bit integer containing the extracted 16 bits of zero extended
+///    packed data.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_extract_epi16(__m256i __a, const int __imm)
 {
   __v16hi __b = (__v16hi)__a;
-  return __b[__imm & 15];
+  return (unsigned short)__b[__imm & 15];
 }
 
+/// \brief Takes a [32 x i8] vector and returns the vector element value
+///    indexed by the immediate constant operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128+COMPOSITE /
+///    EXTRACTF128+COMPOSITE instruction.
+///
+/// \param __a
+///    A 256-bit integer vector of [32 x i8].
+/// \param __imm
+///    An immediate integer operand with bits [4:0] determining which vector
+///    element is extracted and returned.
+/// \returns A 32-bit integer containing the extracted 8 bits of zero extended
+///    packed data.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_extract_epi8(__m256i __a, const int __imm)
 {
   __v32qi __b = (__v32qi)__a;
-  return __b[__imm & 31];
+  return (unsigned char)__b[__imm & 31];
 }
 
 #ifdef __x86_64__
+/// \brief Takes a [4 x i64] vector and returns the vector element value
+///    indexed by the immediate constant operand.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128+COMPOSITE /
+///    EXTRACTF128+COMPOSITE instruction.
+///
+/// \param __a
+///    A 256-bit integer vector of [4 x i64].
+/// \param __imm
+///    An immediate integer operand with bits [1:0] determining which vector
+///    element is extracted and returned.
+/// \returns A 64-bit integer containing the extracted 64 bits of extended
+///    packed data.
 static __inline long long  __DEFAULT_FN_ATTRS
 _mm256_extract_epi64(__m256i __a, const int __imm)
 {
@@ -466,6 +1939,24 @@ _mm256_extract_epi64(__m256i __a, const int __imm)
 }
 #endif
 
+/// \brief Takes a [8 x i32] vector and replaces the vector element value
+///    indexed by the immediate constant operand by a new value. Returns the
+///    modified vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128+COMPOSITE /
+///    INSERTF128+COMPOSITE instruction.
+///
+/// \param __a
+///    A vector of [8 x i32] to be used by the insert operation.
+/// \param __b
+///    An integer value. The replacement value for the insert operation.
+/// \param __imm
+///    An immediate integer specifying the index of the vector element to be
+///    replaced.
+/// \returns A copy of vector __a, after replacing its element indexed by __imm
+///     with __b.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_insert_epi32(__m256i __a, int __b, int const __imm)
 {
@@ -474,6 +1965,25 @@ _mm256_insert_epi32(__m256i __a, int __b, int const __imm)
   return (__m256i)__c;
 }
 
+
+/// \brief Takes a [16 x i16] vector and replaces the vector element value
+///    indexed by the immediate constant operand with a new value. Returns the
+///    modified vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128+COMPOSITE /
+///    INSERTF128+COMPOSITE instruction.
+///
+/// \param __a
+///    A vector of [16 x i16] to be used by the insert operation.
+/// \param __b
+///    An i16 integer value. The replacement value for the insert operation.
+/// \param __imm
+///    An immediate integer specifying the index of the vector element to be
+///    replaced.
+/// \returns A copy of vector __a, after replacing its element indexed by __imm
+///     with __b.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_insert_epi16(__m256i __a, int __b, int const __imm)
 {
@@ -482,6 +1992,24 @@ _mm256_insert_epi16(__m256i __a, int __b, int const __imm)
   return (__m256i)__c;
 }
 
+/// \brief Takes a [32 x i8] vector and replaces the vector element value
+///    indexed by the immediate constant operand with a new value. Returns the
+///    modified vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128+COMPOSITE /
+///    INSERTF128+COMPOSITE instruction.
+///
+/// \param __a
+///    A vector of [32 x i8] to be used by the insert operation.
+/// \param __b
+///    An i8 integer value. The replacement value for the insert operation.
+/// \param __imm
+///    An immediate integer specifying the index of the vector element to be
+///    replaced.
+/// \returns A copy of vector __a, after replacing its element indexed by __imm
+///    with __b.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_insert_epi8(__m256i __a, int __b, int const __imm)
 {
@@ -491,6 +2019,24 @@ _mm256_insert_epi8(__m256i __a, int __b, int const __imm)
 }
 
 #ifdef __x86_64__
+/// \brief Takes a [4 x i64] vector and replaces the vector element value
+///    indexed by the immediate constant operand with a new value. Returns the
+///    modified vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128+COMPOSITE /
+///    INSERTF128+COMPOSITE instruction.
+///
+/// \param __a
+///    A vector of [4 x i64] to be used by the insert operation.
+/// \param __b
+///    A 64-bit integer value. The replacement value for the insert operation.
+/// \param __imm
+///    An immediate integer specifying the index of the vector element to be
+///    replaced.
+/// \returns A copy of vector __a, after replacing its element indexed by __imm
+///     with __b.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_insert_epi64(__m256i __a, long long __b, int const __imm)
 {
@@ -501,183 +2047,720 @@ _mm256_insert_epi64(__m256i __a, long long __b, int const __imm)
 #endif
 
 /* Conversion */
+/// \brief Converts a vector of [4 x i32] into a vector of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VCVTDQ2PD / CVTDQ2PD instruction.
+///
+/// \param __a
+///    A 128-bit integer vector of [4 x i32].
+/// \returns A 256-bit vector of [4 x double] containing the converted values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_cvtepi32_pd(__m128i __a)
 {
-  return (__m256d)__builtin_ia32_cvtdq2pd256((__v4si) __a);
+  return (__m256d)__builtin_convertvector((__v4si)__a, __v4df);
 }
 
+/// \brief Converts a vector of [8 x i32] into a vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VCVTDQ2PS / CVTDQ2PS instruction.
+///
+/// \param __a
+///    A 256-bit integer vector.
+/// \returns A 256-bit vector of [8 x float] containing the converted values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_cvtepi32_ps(__m256i __a)
 {
   return (__m256)__builtin_ia32_cvtdq2ps256((__v8si) __a);
 }
 
+/// \brief Converts a 256-bit vector of [4 x double] into a 128-bit vector of
+///    [4 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VCVTPD2PS / CVTPD2PS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \returns A 128-bit vector of [4 x float] containing the converted values.
 static __inline __m128 __DEFAULT_FN_ATTRS
 _mm256_cvtpd_ps(__m256d __a)
 {
   return (__m128)__builtin_ia32_cvtpd2ps256((__v4df) __a);
 }
 
+/// \brief Converts a vector of [8 x float] into a vector of [8 x i32].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VCVTPS2DQ / CVTPS2DQ instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit integer vector containing the converted values.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_cvtps_epi32(__m256 __a)
 {
   return (__m256i)__builtin_ia32_cvtps2dq256((__v8sf) __a);
 }
 
+/// \brief Converts a 128-bit vector of [4 x float] into a 256-bit vector of [4
+///    x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VCVTPS2PD instruction.
+///
+/// \param __a
+///    A 128-bit vector of [4 x float].
+/// \returns A 256-bit vector of [4 x double] containing the converted values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_cvtps_pd(__m128 __a)
 {
-  return (__m256d)__builtin_ia32_cvtps2pd256((__v4sf) __a);
+  return (__m256d)__builtin_convertvector((__v4sf)__a, __v4df);
 }
 
+/// \brief Converts a 256-bit vector of [4 x double] into a 128-bit vector of [4
+///    x i32], truncating the result by rounding towards zero when it is
+///    inexact.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VCVTTPD2DQ instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \returns A 128-bit integer vector containing the converted values.
 static __inline __m128i __DEFAULT_FN_ATTRS
 _mm256_cvttpd_epi32(__m256d __a)
 {
   return (__m128i)__builtin_ia32_cvttpd2dq256((__v4df) __a);
 }
 
+/// \brief Converts a 256-bit vector of [4 x double] into a 128-bit vector of [4
+///    x i32]. When a conversion is inexact, the value returned is rounded
+///    according to the rounding control bits in the MXCSR register.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VCVTPD2DQ instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \returns A 128-bit integer vector containing the converted values.
 static __inline __m128i __DEFAULT_FN_ATTRS
 _mm256_cvtpd_epi32(__m256d __a)
 {
   return (__m128i)__builtin_ia32_cvtpd2dq256((__v4df) __a);
 }
 
+/// \brief Converts a vector of [8 x float] into a vector of [8 x i32],
+///    truncating the result by rounding towards zero when it is inexact.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VCVTTPS2DQ instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit integer vector containing the converted values.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_cvttps_epi32(__m256 __a)
 {
   return (__m256i)__builtin_ia32_cvttps2dq256((__v8sf) __a);
 }
 
+static __inline double __DEFAULT_FN_ATTRS
+_mm256_cvtsd_f64(__m256d __a)
+{
+ return __a[0];
+}
+
+static __inline int __DEFAULT_FN_ATTRS
+_mm256_cvtsi256_si32(__m256i __a)
+{
+ __v8si __b = (__v8si)__a;
+ return __b[0];
+}
+
+static __inline float __DEFAULT_FN_ATTRS
+_mm256_cvtss_f32(__m256 __a)
+{
+ return __a[0];
+}
+
 /* Vector replicate */
+/// \brief Moves and duplicates high-order (odd-indexed) values from a 256-bit
+///    vector of [8 x float] to float values in a 256-bit vector of [8 x float].
+///    Bits [255:224] of __a are written to bits [255:224] and [223:192]
+///    of the return value.
+///    Bits [191:160] of __a are written to bits [191:160] and [159:128]
+///    of the return value.
+///    Bits [127:96] of __a are written to bits [127:96] and [95:64] of
+///    the return value.
+///    Bits [63:32] of __a are written to bits [63:32] and [31:0] of the
+///    return value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVSHDUP instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the moved and duplicated
+///    values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_movehdup_ps(__m256 __a)
 {
-  return __builtin_shufflevector(__a, __a, 1, 1, 3, 3, 5, 5, 7, 7);
+  return __builtin_shufflevector((__v8sf)__a, (__v8sf)__a, 1, 1, 3, 3, 5, 5, 7, 7);
 }
 
+/// \brief Moves and duplicates low-order (even-indexed) values from a 256-bit
+///    vector of [8 x float] to float values in a 256-bit vector of [8 x float].
+///    Bits [223:192] of __a are written to bits [255:224] and [223:192]
+///    of the return value.
+///    Bits [159:128] of __a are written to bits [191:160] and [159:128]
+///    of the return value.
+///    Bits [95:64] of __a are written to bits [127:96] and [95:64] of
+///    the return value.
+///    Bits [31:0] of __a are written to bits [63:32] and [31:0] of the
+///    return value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVSLDUP instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \returns A 256-bit vector of [8 x float] containing the moved and duplicated
+///    values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_moveldup_ps(__m256 __a)
 {
-  return __builtin_shufflevector(__a, __a, 0, 0, 2, 2, 4, 4, 6, 6);
+  return __builtin_shufflevector((__v8sf)__a, (__v8sf)__a, 0, 0, 2, 2, 4, 4, 6, 6);
 }
 
+/// \brief Moves and duplicates double-precision floating point values from a
+///    256-bit vector of [4 x double] to double-precision values in a 256-bit
+///    vector of [4 x double].
+///    Bits [63:0] of __a are written to bits [127:64] and [63:0] of the
+///    return value.
+///    Bits [191:128] of __a are written to bits [255:192] and [191:128]
+///    of the return value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVDDUP instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \returns A 256-bit vector of [4 x double] containing the moved and
+///    duplicated values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_movedup_pd(__m256d __a)
 {
-  return __builtin_shufflevector(__a, __a, 0, 0, 2, 2);
+  return __builtin_shufflevector((__v4df)__a, (__v4df)__a, 0, 0, 2, 2);
 }
 
 /* Unpack and Interleave */
+/// \brief Unpacks the odd-indexed vector elements from two 256-bit vectors of
+///    [4 x double] and interleaves them into a 256-bit vector of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VUNPCKHPD instruction.
+///
+/// \param __a
+///    A 256-bit floating-point vector of [4 x double].
+///    Bits [127:64] are written to bits [63:0] of the return value.
+///    Bits [255:192] are written to bits [191:128] of the return value.
+/// \param __b
+///    A 256-bit floating-point vector of [4 x double].
+///    Bits [127:64] are written to bits [127:64] of the return value.
+///    Bits [255:192] are written to bits [255:192] of the return value.
+/// \returns A 256-bit vector of [4 x double] containing the interleaved values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_unpackhi_pd(__m256d __a, __m256d __b)
 {
-  return __builtin_shufflevector(__a, __b, 1, 5, 1+2, 5+2);
+  return __builtin_shufflevector((__v4df)__a, (__v4df)__b, 1, 5, 1+2, 5+2);
 }
 
+/// \brief Unpacks the even-indexed vector elements from two 256-bit vectors of
+///    [4 x double] and interleaves them into a 256-bit vector of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VUNPCKLPD instruction.
+///
+/// \param __a
+///    A 256-bit floating-point vector of [4 x double].
+///    Bits [63:0] are written to bits [63:0] of the return value.
+///    Bits [191:128] are written to bits [191:128] of the return value.
+/// \param __b
+///    A 256-bit floating-point vector of [4 x double].
+///    Bits [63:0] are written to bits [127:64] of the return value.
+///    Bits [191:128] are written to bits [255:192] of the return value.
+/// \returns A 256-bit vector of [4 x double] containing the interleaved values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_unpacklo_pd(__m256d __a, __m256d __b)
 {
-  return __builtin_shufflevector(__a, __b, 0, 4, 0+2, 4+2);
+  return __builtin_shufflevector((__v4df)__a, (__v4df)__b, 0, 4, 0+2, 4+2);
 }
 
+/// \brief Unpacks the 32-bit vector elements 2, 3, 6 and 7 from each of the
+///    two 256-bit vectors of [8 x float] and interleaves them into a 256-bit
+///    vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VUNPCKHPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+///    Bits [95:64] are written to bits [31:0] of the return value.
+///    Bits [127:96] are written to bits [95:64] of the return value.
+///    Bits [223:192] are written to bits [159:128] of the return value.
+///    Bits [255:224] are written to bits [223:192] of the return value.
+/// \param __b
+///    A 256-bit vector of [8 x float].
+///    Bits [95:64] are written to bits [63:32] of the return value.
+///    Bits [127:96] are written to bits [127:96] of the return value.
+///    Bits [223:192] are written to bits [191:160] of the return value.
+///    Bits [255:224] are written to bits [255:224] of the return value.
+/// \returns A 256-bit vector of [8 x float] containing the interleaved values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_unpackhi_ps(__m256 __a, __m256 __b)
 {
-  return __builtin_shufflevector(__a, __b, 2, 10, 2+1, 10+1, 6, 14, 6+1, 14+1);
+  return __builtin_shufflevector((__v8sf)__a, (__v8sf)__b, 2, 10, 2+1, 10+1, 6, 14, 6+1, 14+1);
 }
 
+/// \brief Unpacks the 32-bit vector elements 0, 1, 4 and 5 from each of the
+///    two 256-bit vectors of [8 x float] and interleaves them into a 256-bit
+///    vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VUNPCKLPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+///    Bits [31:0] are written to bits [31:0] of the return value.
+///    Bits [63:32] are written to bits [95:64] of the return value.
+///    Bits [159:128] are written to bits [159:128] of the return value.
+///    Bits [191:160] are written to bits [223:192] of the return value.
+/// \param __b
+///    A 256-bit vector of [8 x float].
+///    Bits [31:0] are written to bits [63:32] of the return value.
+///    Bits [63:32] are written to bits [127:96] of the return value.
+///    Bits [159:128] are written to bits [191:160] of the return value.
+///    Bits [191:160] are written to bits [255:224] of the return value.
+/// \returns A 256-bit vector of [8 x float] containing the interleaved values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_unpacklo_ps(__m256 __a, __m256 __b)
 {
-  return __builtin_shufflevector(__a, __b, 0, 8, 0+1, 8+1, 4, 12, 4+1, 12+1);
+  return __builtin_shufflevector((__v8sf)__a, (__v8sf)__b, 0, 8, 0+1, 8+1, 4, 12, 4+1, 12+1);
 }
 
 /* Bit Test */
+/// \brief Given two 128-bit floating-point vectors of [2 x double], perform an
+///    element-by-element comparison of the double-precision element in the
+///    first source vector and the corresponding element in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of double-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of double-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the ZF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPD instruction.
+///
+/// \param __a
+///    A 128-bit vector of [2 x double].
+/// \param __b
+///    A 128-bit vector of [2 x double].
+/// \returns the ZF flag in the EFLAGS register.
 static __inline int __DEFAULT_FN_ATTRS
 _mm_testz_pd(__m128d __a, __m128d __b)
 {
   return __builtin_ia32_vtestzpd((__v2df)__a, (__v2df)__b);
 }
 
+/// \brief Given two 128-bit floating-point vectors of [2 x double], perform an
+///    element-by-element comparison of the double-precision element in the
+///    first source vector and the corresponding element in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of double-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of double-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the CF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPD instruction.
+///
+/// \param __a
+///    A 128-bit vector of [2 x double].
+/// \param __b
+///    A 128-bit vector of [2 x double].
+/// \returns the CF flag in the EFLAGS register.
 static __inline int __DEFAULT_FN_ATTRS
 _mm_testc_pd(__m128d __a, __m128d __b)
 {
   return __builtin_ia32_vtestcpd((__v2df)__a, (__v2df)__b);
 }
 
+/// \brief Given two 128-bit floating-point vectors of [2 x double], perform an
+///    element-by-element comparison of the double-precision element in the
+///    first source vector and the corresponding element in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of double-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of double-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns 1 if both the ZF and CF flags are set to 0,
+///    otherwise it returns 0.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPD instruction.
+///
+/// \param __a
+///    A 128-bit vector of [2 x double].
+/// \param __b
+///    A 128-bit vector of [2 x double].
+/// \returns 1 if both the ZF and CF flags are set to 0, otherwise returns 0.
 static __inline int __DEFAULT_FN_ATTRS
 _mm_testnzc_pd(__m128d __a, __m128d __b)
 {
   return __builtin_ia32_vtestnzcpd((__v2df)__a, (__v2df)__b);
 }
 
+/// \brief Given two 128-bit floating-point vectors of [4 x float], perform an
+///    element-by-element comparison of the single-precision element in the
+///    first source vector and the corresponding element in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of single-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of single-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the ZF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPS instruction.
+///
+/// \param __a
+///    A 128-bit vector of [4 x float].
+/// \param __b
+///    A 128-bit vector of [4 x float].
+/// \returns the ZF flag.
 static __inline int __DEFAULT_FN_ATTRS
 _mm_testz_ps(__m128 __a, __m128 __b)
 {
   return __builtin_ia32_vtestzps((__v4sf)__a, (__v4sf)__b);
 }
 
+/// \brief Given two 128-bit floating-point vectors of [4 x float], perform an
+///    element-by-element comparison of the single-precision element in the
+///    first source vector and the corresponding element in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of single-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of single-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the CF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPS instruction.
+///
+/// \param __a
+///    A 128-bit vector of [4 x float].
+/// \param __b
+///    A 128-bit vector of [4 x float].
+/// \returns the CF flag.
 static __inline int __DEFAULT_FN_ATTRS
 _mm_testc_ps(__m128 __a, __m128 __b)
 {
   return __builtin_ia32_vtestcps((__v4sf)__a, (__v4sf)__b);
 }
 
+/// \brief Given two 128-bit floating-point vectors of [4 x float], perform an
+///    element-by-element comparison of the single-precision element in the
+///    first source vector and the corresponding element in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of single-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of single-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns 1 if both the ZF and CF flags are set to 0,
+///    otherwise it returns 0.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPS instruction.
+///
+/// \param __a
+///    A 128-bit vector of [4 x float].
+/// \param __b
+///    A 128-bit vector of [4 x float].
+/// \returns 1 if both the ZF and CF flags are set to 0, otherwise returns 0.
 static __inline int __DEFAULT_FN_ATTRS
 _mm_testnzc_ps(__m128 __a, __m128 __b)
 {
   return __builtin_ia32_vtestnzcps((__v4sf)__a, (__v4sf)__b);
 }
 
+/// \brief Given two 256-bit floating-point vectors of [4 x double], perform an
+///    element-by-element comparison of the double-precision elements in the
+///    first source vector and the corresponding elements in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of double-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of double-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the ZF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \param __b
+///    A 256-bit vector of [4 x double].
+/// \returns the ZF flag.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testz_pd(__m256d __a, __m256d __b)
 {
   return __builtin_ia32_vtestzpd256((__v4df)__a, (__v4df)__b);
 }
 
+/// \brief Given two 256-bit floating-point vectors of [4 x double], perform an
+///    element-by-element comparison of the double-precision elements in the
+///    first source vector and the corresponding elements in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of double-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of double-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the CF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \param __b
+///    A 256-bit vector of [4 x double].
+/// \returns the CF flag.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testc_pd(__m256d __a, __m256d __b)
 {
   return __builtin_ia32_vtestcpd256((__v4df)__a, (__v4df)__b);
 }
 
+/// \brief Given two 256-bit floating-point vectors of [4 x double], perform an
+///    element-by-element comparison of the double-precision elements in the
+///    first source vector and the corresponding elements in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of double-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of double-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns 1 if both the ZF and CF flags are set to 0,
+///    otherwise it returns 0.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double].
+/// \param __b
+///    A 256-bit vector of [4 x double].
+/// \returns 1 if both the ZF and CF flags are set to 0, otherwise returns 0.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testnzc_pd(__m256d __a, __m256d __b)
 {
   return __builtin_ia32_vtestnzcpd256((__v4df)__a, (__v4df)__b);
 }
 
+/// \brief Given two 256-bit floating-point vectors of [8 x float], perform an
+///    element-by-element comparison of the single-precision element in the
+///    first source vector and the corresponding element in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of single-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of single-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the ZF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \param __b
+///    A 256-bit vector of [8 x float].
+/// \returns the ZF flag.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testz_ps(__m256 __a, __m256 __b)
 {
   return __builtin_ia32_vtestzps256((__v8sf)__a, (__v8sf)__b);
 }
 
+/// \brief Given two 256-bit floating-point vectors of [8 x float], perform an
+///    element-by-element comparison of the single-precision element in the
+///    first source vector and the corresponding element in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of single-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of single-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the CF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \param __b
+///    A 256-bit vector of [8 x float].
+/// \returns the CF flag.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testc_ps(__m256 __a, __m256 __b)
 {
   return __builtin_ia32_vtestcps256((__v8sf)__a, (__v8sf)__b);
 }
 
+/// \brief Given two 256-bit floating-point vectors of [8 x float], perform an
+///    element-by-element comparison of the single-precision elements in the
+///    first source vector and the corresponding elements in the second source
+///    vector. The EFLAGS register is updated as follows:
+///    If there is at least one pair of single-precision elements where the
+///    sign-bits of both elements are 1, the ZF flag is set to 0. Otherwise the
+///    ZF flag is set to 1.
+///    If there is at least one pair of single-precision elements where the
+///    sign-bit of the first element is 0 and the sign-bit of the second element
+///    is 1, the CF flag is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns 1 if both the ZF and CF flags are set to 0,
+///    otherwise it returns 0.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VTESTPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float].
+/// \param __b
+///    A 256-bit vector of [8 x float].
+/// \returns 1 if both the ZF and CF flags are set to 0, otherwise returns 0.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testnzc_ps(__m256 __a, __m256 __b)
 {
   return __builtin_ia32_vtestnzcps256((__v8sf)__a, (__v8sf)__b);
 }
 
+/// \brief Given two 256-bit integer vectors, perform a bit-by-bit comparison
+///    of the two source vectors and update the EFLAGS register as follows:
+///    If there is at least one pair of bits where both bits are 1, the ZF flag
+///    is set to 0. Otherwise the ZF flag is set to 1.
+///    If there is at least one pair of bits where the bit from the first source
+///    vector is 0 and the bit from the second source vector is 1, the CF flag
+///    is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the ZF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPTEST instruction.
+///
+/// \param __a
+///    A 256-bit integer vector.
+/// \param __b
+///    A 256-bit integer vector.
+/// \returns the ZF flag.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testz_si256(__m256i __a, __m256i __b)
 {
   return __builtin_ia32_ptestz256((__v4di)__a, (__v4di)__b);
 }
 
+/// \brief Given two 256-bit integer vectors, perform a bit-by-bit comparison
+///    of the two source vectors and update the EFLAGS register as follows:
+///    If there is at least one pair of bits where both bits are 1, the ZF flag
+///    is set to 0. Otherwise the ZF flag is set to 1.
+///    If there is at least one pair of bits where the bit from the first source
+///    vector is 0 and the bit from the second source vector is 1, the CF flag
+///    is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns the value of the CF flag.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPTEST instruction.
+///
+/// \param __a
+///    A 256-bit integer vector.
+/// \param __b
+///    A 256-bit integer vector.
+/// \returns the CF flag.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testc_si256(__m256i __a, __m256i __b)
 {
   return __builtin_ia32_ptestc256((__v4di)__a, (__v4di)__b);
 }
 
+/// \brief Given two 256-bit integer vectors, perform a bit-by-bit comparison
+///    of the two source vectors and update the EFLAGS register as follows:
+///    If there is at least one pair of bits where both bits are 1, the ZF flag
+///    is set to 0. Otherwise the ZF flag is set to 1.
+///    If there is at least one pair of bits where the bit from the first source
+///    vector is 0 and the bit from the second source vector is 1, the CF flag
+///    is set to 0. Otherwise the CF flag is set to 1.
+///    This intrinsic returns 1 if both the ZF and CF flags are set to 0,
+///    otherwise it returns 0.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPTEST instruction.
+///
+/// \param __a
+///    A 256-bit integer vector.
+/// \param __b
+///    A 256-bit integer vector.
+/// \returns 1 if both the ZF and CF flags are set to 0, otherwise returns 0.
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_testnzc_si256(__m256i __a, __m256i __b)
 {
@@ -685,12 +2768,36 @@ _mm256_testnzc_si256(__m256i __a, __m256i __b)
 }
 
 /* Vector extract sign mask */
+/// \brief Extracts the sign bits of double-precision floating point elements
+///    in a 256-bit vector of [4 x double] and writes them to the lower order
+///    bits of the return value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVMSKPD instruction.
+///
+/// \param __a
+///    A 256-bit vector of [4 x double] containing the double-precision
+///    floating point values with sign bits to be extracted.
+/// \returns The sign bits from the operand, written to bits [3:0].
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_movemask_pd(__m256d __a)
 {
   return __builtin_ia32_movmskpd256((__v4df)__a);
 }
 
+/// \brief Extracts the sign bits of double-precision floating point elements
+///    in a 256-bit vector of [8 x float] and writes them to the lower order
+///    bits of the return value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVMSKPS instruction.
+///
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the double-precision floating
+///    point values with sign bits to be extracted.
+/// \returns The sign bits from the operand, written to bits [7:0].
 static __inline int __DEFAULT_FN_ATTRS
 _mm256_movemask_ps(__m256 __a)
 {
@@ -698,12 +2805,22 @@ _mm256_movemask_ps(__m256 __a)
 }
 
 /* Vector __zero */
+/// \brief Zeroes the contents of all XMM or YMM registers.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VZEROALL instruction.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_zeroall(void)
 {
   __builtin_ia32_vzeroall();
 }
 
+/// \brief Zeroes the upper 128 bits (bits 255:128) of all YMM registers.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VZEROUPPER instruction.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_zeroupper(void)
 {
@@ -711,6 +2828,18 @@ _mm256_zeroupper(void)
 }
 
 /* Vector load with broadcast */
+/// \brief Loads a scalar single-precision floating point value from the
+///    specified address pointed to by __a and broadcasts it to the elements of
+///    a [4 x float] vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VBROADCASTSS instruction.
+///
+/// \param __a
+///    The single-precision floating point value to be broadcast.
+/// \returns A 128-bit vector of [4 x float] whose 32-bit elements are set
+///    equal to the broadcast value.
 static __inline __m128 __DEFAULT_FN_ATTRS
 _mm_broadcast_ss(float const *__a)
 {
@@ -718,6 +2847,18 @@ _mm_broadcast_ss(float const *__a)
   return (__m128)(__v4sf){ __f, __f, __f, __f };
 }
 
+/// \brief Loads a scalar double-precision floating point value from the
+///    specified address pointed to by __a and broadcasts it to the elements of
+///    a [4 x double] vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VBROADCASTSD instruction.
+///
+/// \param __a
+///    The double-precision floating point value to be broadcast.
+/// \returns A 256-bit vector of [4 x double] whose 64-bit elements are set
+///    equal to the broadcast value.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_broadcast_sd(double const *__a)
 {
@@ -725,6 +2866,18 @@ _mm256_broadcast_sd(double const *__a)
   return (__m256d)(__v4df){ __d, __d, __d, __d };
 }
 
+/// \brief Loads a scalar single-precision floating point value from the
+///    specified address pointed to by __a and broadcasts it to the elements of
+///    a [8 x float] vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VBROADCASTSS instruction.
+///
+/// \param __a
+///    The single-precision floating point value to be broadcast.
+/// \returns A 256-bit vector of [8 x float] whose 32-bit elements are set
+///    equal to the broadcast value.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_broadcast_ss(float const *__a)
 {
@@ -732,31 +2885,87 @@ _mm256_broadcast_ss(float const *__a)
   return (__m256)(__v8sf){ __f, __f, __f, __f, __f, __f, __f, __f };
 }
 
+/// \brief Loads the data from a 128-bit vector of [2 x double] from the
+///    specified address pointed to by __a and broadcasts it to 128-bit
+///    elements in a 256-bit vector of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VBROADCASTF128 instruction.
+///
+/// \param __a
+///    The 128-bit vector of [2 x double] to be broadcast.
+/// \returns A 256-bit vector of [4 x double] whose 128-bit elements are set
+///    equal to the broadcast value.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_broadcast_pd(__m128d const *__a)
 {
-  return (__m256d)__builtin_ia32_vbroadcastf128_pd256(__a);
+  return (__m256d)__builtin_ia32_vbroadcastf128_pd256((__v2df const *)__a);
 }
 
+/// \brief Loads the data from a 128-bit vector of [4 x float] from the
+///    specified address pointed to by __a and broadcasts it to 128-bit
+///    elements in a 256-bit vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VBROADCASTF128 instruction.
+///
+/// \param __a
+///    The 128-bit vector of [4 x float] to be broadcast.
+/// \returns A 256-bit vector of [8 x float] whose 128-bit elements are set
+///    equal to the broadcast value.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_broadcast_ps(__m128 const *__a)
 {
-  return (__m256)__builtin_ia32_vbroadcastf128_ps256(__a);
+  return (__m256)__builtin_ia32_vbroadcastf128_ps256((__v4sf const *)__a);
 }
 
 /* SIMD load ops */
+/// \brief Loads 4 double-precision floating point values from a 32-byte aligned
+///    memory location pointed to by __p into a vector of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVAPD instruction.
+///
+/// \param __p
+///    A 32-byte aligned pointer to a memory location containing
+///    double-precision floating point values.
+/// \returns A 256-bit vector of [4 x double] containing the moved values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_load_pd(double const *__p)
 {
   return *(__m256d *)__p;
 }
 
+/// \brief Loads 8 single-precision floating point values from a 32-byte aligned
+///    memory location pointed to by __p into a vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVAPS instruction.
+///
+/// \param __p
+///    A 32-byte aligned pointer to a memory location containing float values.
+/// \returns A 256-bit vector of [8 x float] containing the moved values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_load_ps(float const *__p)
 {
   return *(__m256 *)__p;
 }
 
+/// \brief Loads 4 double-precision floating point values from an unaligned
+///    memory location pointed to by __p into a vector of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVUPD instruction.
+///
+/// \param __p
+///    A pointer to a memory location containing double-precision floating
+///    point values.
+/// \returns A 256-bit vector of [4 x double] containing the moved values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_loadu_pd(double const *__p)
 {
@@ -766,6 +2975,17 @@ _mm256_loadu_pd(double const *__p)
   return ((struct __loadu_pd*)__p)->__v;
 }
 
+/// \brief Loads 8 single-precision floating point values from an unaligned
+///    memory location pointed to by __p into a vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVUPS instruction.
+///
+/// \param __p
+///    A pointer to a memory location containing single-precision floating
+///    point values.
+/// \returns A 256-bit vector of [8 x float] containing the moved values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_loadu_ps(float const *__p)
 {
@@ -775,12 +2995,33 @@ _mm256_loadu_ps(float const *__p)
   return ((struct __loadu_ps*)__p)->__v;
 }
 
+/// \brief Loads 256 bits of integer data from a 32-byte aligned memory
+///    location pointed to by __p into elements of a 256-bit integer vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVDQA instruction.
+///
+/// \param __p
+///    A 32-byte aligned pointer to a 256-bit integer vector containing integer
+///    values.
+/// \returns A 256-bit integer vector containing the moved values.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_load_si256(__m256i const *__p)
 {
   return *__p;
 }
 
+/// \brief Loads 256 bits of integer data from an unaligned memory location
+///    pointed to by __p into a 256-bit integer vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVDQU instruction.
+///
+/// \param __p
+///    A pointer to a 256-bit integer vector containing integer values.
+/// \returns A 256-bit integer vector containing the moved values.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_loadu_si256(__m256i const *__p)
 {
@@ -790,6 +3031,18 @@ _mm256_loadu_si256(__m256i const *__p)
   return ((struct __loadu_si256*)__p)->__v;
 }
 
+/// \brief Loads 256 bits of integer data from an unaligned memory location
+///    pointed to by __p into a 256-bit integer vector. This intrinsic may
+///    perform better than _mm256_loadu_si256 when the data crosses a cache
+///    line boundary.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VLDDQU instruction.
+///
+/// \param __p
+///    A pointer to a 256-bit integer vector containing integer values.
+/// \returns A 256-bit integer vector containing the moved values.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_lddqu_si256(__m256i const *__p)
 {
@@ -797,49 +3050,164 @@ _mm256_lddqu_si256(__m256i const *__p)
 }
 
 /* SIMD store ops */
+/// \brief Stores double-precision floating point values from a 256-bit vector
+///    of [4 x double] to a 32-byte aligned memory location pointed to by __p.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVAPD instruction.
+///
+/// \param __p
+///    A 32-byte aligned pointer to a memory location that will receive the
+///    double-precision floaing point values.
+/// \param __a
+///    A 256-bit vector of [4 x double] containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_store_pd(double *__p, __m256d __a)
 {
   *(__m256d *)__p = __a;
 }
 
+/// \brief Stores single-precision floating point values from a 256-bit vector
+///     of [8 x float] to a 32-byte aligned memory location pointed to by __p.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVAPS instruction.
+///
+/// \param __p
+///    A 32-byte aligned pointer to a memory location that will receive the
+///    float values.
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_store_ps(float *__p, __m256 __a)
 {
   *(__m256 *)__p = __a;
 }
 
+/// \brief Stores double-precision floating point values from a 256-bit vector
+///    of [4 x double] to an unaligned memory location pointed to by __p.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVUPD instruction.
+///
+/// \param __p
+///    A pointer to a memory location that will receive the double-precision
+///    floating point values.
+/// \param __a
+///    A 256-bit vector of [4 x double] containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_storeu_pd(double *__p, __m256d __a)
 {
-  __builtin_ia32_storeupd256(__p, (__v4df)__a);
+  struct __storeu_pd {
+    __m256d __v;
+  } __attribute__((__packed__, __may_alias__));
+  ((struct __storeu_pd*)__p)->__v = __a;
 }
 
+/// \brief Stores single-precision floating point values from a 256-bit vector
+///    of [8 x float] to an unaligned memory location pointed to by __p.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVUPS instruction.
+///
+/// \param __p
+///    A pointer to a memory location that will receive the float values.
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_storeu_ps(float *__p, __m256 __a)
 {
-  __builtin_ia32_storeups256(__p, (__v8sf)__a);
+  struct __storeu_ps {
+    __m256 __v;
+  } __attribute__((__packed__, __may_alias__));
+  ((struct __storeu_ps*)__p)->__v = __a;
 }
 
+/// \brief Stores integer values from a 256-bit integer vector to a 32-byte
+///    aligned memory location pointed to by __p.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVDQA instruction.
+///
+/// \param __p
+///    A 32-byte aligned pointer to a memory location that will receive the
+///    integer values.
+/// \param __a
+///    A 256-bit integer vector containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_store_si256(__m256i *__p, __m256i __a)
 {
   *__p = __a;
 }
 
+/// \brief Stores integer values from a 256-bit integer vector to an unaligned
+///    memory location pointed to by __p.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVDQU instruction.
+///
+/// \param __p
+///    A pointer to a memory location that will receive the integer values.
+/// \param __a
+///    A 256-bit integer vector containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_storeu_si256(__m256i *__p, __m256i __a)
 {
-  __builtin_ia32_storedqu256((char *)__p, (__v32qi)__a);
+  struct __storeu_si256 {
+    __m256i __v;
+  } __attribute__((__packed__, __may_alias__));
+  ((struct __storeu_si256*)__p)->__v = __a;
 }
 
 /* Conditional load ops */
+/// \brief Conditionally loads double-precision floating point elements
+///    from a memory location pointed to by __p into a 128-bit vector of
+///    [2 x double], depending on the mask bits associated with each data
+///    element.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMASKMOVPD instruction.
+///
+/// \param __p
+///    A pointer to a memory location that contains the double-precision
+///    floating point values.
+/// \param __m
+///    A 128-bit integer vector containing the mask. The most significant bit of
+///    each data element represents the mask bits. If a mask bit is zero, the
+///    corresponding value in the memory location is not loaded and the
+///    corresponding field in the return value is set to zero.
+/// \returns A 128-bit vector of [2 x double] containing the loaded values.
 static __inline __m128d __DEFAULT_FN_ATTRS
 _mm_maskload_pd(double const *__p, __m128i __m)
 {
   return (__m128d)__builtin_ia32_maskloadpd((const __v2df *)__p, (__v2di)__m);
 }
 
+/// \brief Conditionally loads double-precision floating point elements
+///    from a memory location pointed to by __p into a 256-bit vector of
+///    [4 x double], depending on the mask bits associated with each data
+///    element.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMASKMOVPD instruction.
+///
+/// \param __p
+///    A pointer to a memory location that contains the double-precision
+///    floating point values.
+/// \param __m
+///    A 256-bit integer vector of [4 x quadword] containing the mask. The most
+///    significant bit of each quadword element represents the mask bits. If a
+///    mask bit is zero, the corresponding value in the memory location is not
+///    loaded and the corresponding field in the return value is set to zero.
+/// \returns A 256-bit vector of [4 x double] containing the loaded values.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_maskload_pd(double const *__p, __m256i __m)
 {
@@ -847,12 +3215,47 @@ _mm256_maskload_pd(double const *__p, __m256i __m)
                                                (__v4di)__m);
 }
 
+/// \brief Conditionally loads single-precision floating point elements
+///    from a memory location pointed to by __p into a 128-bit vector of
+///    [4 x float], depending on the mask bits associated with each data
+///    element.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMASKMOVPS instruction.
+///
+/// \param __p
+///    A pointer to a memory location that contains the single-precision
+///    floating point values.
+/// \param __m
+///    A 128-bit integer vector containing the mask. The most significant bit of
+///    each data element represents the mask bits. If a mask bit is zero, the
+///    corresponding value in the memory location is not loaded and the
+///    corresponding field in the return value is set to zero.
+/// \returns A 128-bit vector of [4 x float] containing the loaded values.
 static __inline __m128 __DEFAULT_FN_ATTRS
 _mm_maskload_ps(float const *__p, __m128i __m)
 {
   return (__m128)__builtin_ia32_maskloadps((const __v4sf *)__p, (__v4si)__m);
 }
 
+/// \brief Conditionally loads single-precision floating point elements from a
+///    memory location pointed to by __p into a 256-bit vector of [8 x float],
+///    depending on the mask bits associated with each data element.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMASKMOVPS instruction.
+///
+/// \param __p
+///    A pointer to a memory location that contains the single-precision
+///    floating point values.
+/// \param __m
+///    A 256-bit integer vector of [8 x dword] containing the mask. The most
+///    significant bit of each dword element represents the mask bits. If a mask
+///    bit is zero, the corresponding value in the memory location is not loaded
+///    and the corresponding field in the return value is set to zero.
+/// \returns A 256-bit vector of [8 x float] containing the loaded values.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_maskload_ps(float const *__p, __m256i __m)
 {
@@ -860,24 +3263,94 @@ _mm256_maskload_ps(float const *__p, __m256i __m)
 }
 
 /* Conditional store ops */
+/// \brief Moves single-precision floating point values from a 256-bit vector
+///    of [8 x float] to a memory location pointed to by __p, according to the
+///    specified mask.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMASKMOVPS instruction.
+///
+/// \param __p
+///    A pointer to a memory location that will receive the float values.
+/// \param __m
+///    A 256-bit integer vector of [8 x dword] containing the mask. The most
+///    significant bit of each dword element in the mask vector represents the
+///    mask bits. If a mask bit is zero, the corresponding value from vector __a
+///    is not stored and the corresponding field in the memory location pointed
+///    to by __p is not changed.
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the values to be stored.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_maskstore_ps(float *__p, __m256i __m, __m256 __a)
 {
   __builtin_ia32_maskstoreps256((__v8sf *)__p, (__v8si)__m, (__v8sf)__a);
 }
 
+/// \brief Moves double-precision values from a 128-bit vector of [2 x double]
+///    to a memory location pointed to by __p, according to the specified mask.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMASKMOVPD instruction.
+///
+/// \param __p
+///    A pointer to a memory location that will receive the float values.
+/// \param __m
+///    A 128-bit integer vector containing the mask. The most significant bit of
+///    each field in the mask vector represents the mask bits. If a mask bit is
+///    zero, the corresponding value from vector __a is not stored and the
+///    corresponding field in the memory location pointed to by __p is not
+///    changed.
+/// \param __a
+///    A 128-bit vector of [2 x double] containing the values to be stored.
 static __inline void __DEFAULT_FN_ATTRS
 _mm_maskstore_pd(double *__p, __m128i __m, __m128d __a)
 {
   __builtin_ia32_maskstorepd((__v2df *)__p, (__v2di)__m, (__v2df)__a);
 }
 
+/// \brief Moves double-precision values from a 256-bit vector of [4 x double]
+///    to a memory location pointed to by __p, according to the specified mask.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMASKMOVPD instruction.
+///
+/// \param __p
+///    A pointer to a memory location that will receive the float values.
+/// \param __m
+///    A 256-bit integer vector of [4 x quadword] containing the mask. The most
+///    significant bit of each quadword element in the mask vector represents
+///    the mask bits. If a mask bit is zero, the corresponding value from vector
+///    __a is not stored and the corresponding field in the memory location
+///    pointed to by __p is not changed.
+/// \param __a
+///    A 256-bit vector of [4 x double] containing the values to be stored.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_maskstore_pd(double *__p, __m256i __m, __m256d __a)
 {
   __builtin_ia32_maskstorepd256((__v4df *)__p, (__v4di)__m, (__v4df)__a);
 }
 
+/// \brief Moves single-precision floating point values from a 128-bit vector
+///    of [4 x float] to a memory location pointed to by __p, according to the
+///    specified mask.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMASKMOVPS instruction.
+///
+/// \param __p
+///    A pointer to a memory location that will receive the float values.
+/// \param __m
+///    A 128-bit integer vector containing the mask. The most significant bit of
+///    each field in the mask vector represents the mask bits. If a mask bit is
+///    zero, the corresponding value from vector __a is not stored and the
+///    corresponding field in the memory location pointed to by __p is not
+///    changed.
+/// \param __a
+///    A 128-bit vector of [4 x float] containing the values to be stored.
 static __inline void __DEFAULT_FN_ATTRS
 _mm_maskstore_ps(float *__p, __m128i __m, __m128 __a)
 {
@@ -885,49 +3358,163 @@ _mm_maskstore_ps(float *__p, __m128i __m, __m128 __a)
 }
 
 /* Cacheability support ops */
+/// \brief Moves integer data from a 256-bit integer vector to a 32-byte
+///    aligned memory location. To minimize caching, the data is flagged as
+///    non-temporal (unlikely to be used again soon).
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVNTDQ instruction.
+///
+/// \param __a
+///    A pointer to a 32-byte aligned memory location that will receive the
+///    integer values.
+/// \param __b
+///    A 256-bit integer vector containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_stream_si256(__m256i *__a, __m256i __b)
 {
-  __builtin_ia32_movntdq256((__v4di *)__a, (__v4di)__b);
+  __builtin_nontemporal_store((__v4di)__b, (__v4di*)__a);
 }
 
+/// \brief Moves double-precision values from a 256-bit vector of [4 x double]
+///    to a 32-byte aligned memory location. To minimize caching, the data is
+///    flagged as non-temporal (unlikely to be used again soon).
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVNTPD instruction.
+///
+/// \param __a
+///    A pointer to a 32-byte aligned memory location that will receive the
+///    integer values.
+/// \param __b
+///    A 256-bit vector of [4 x double] containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_stream_pd(double *__a, __m256d __b)
 {
-  __builtin_ia32_movntpd256(__a, (__v4df)__b);
+  __builtin_nontemporal_store((__v4df)__b, (__v4df*)__a);
 }
 
+/// \brief Moves single-precision floating point values from a 256-bit vector
+///    of [8 x float] to a 32-byte aligned memory location. To minimize
+///    caching, the data is flagged as non-temporal (unlikely to be used again
+///    soon).
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVNTPS instruction.
+///
+/// \param __p
+///    A pointer to a 32-byte aligned memory location that will receive the
+///    single-precision floating point values.
+/// \param __a
+///    A 256-bit vector of [8 x float] containing the values to be moved.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_stream_ps(float *__p, __m256 __a)
 {
-  __builtin_ia32_movntps256(__p, (__v8sf)__a);
+  __builtin_nontemporal_store((__v8sf)__a, (__v8sf*)__p);
 }
 
 /* Create vectors */
+/// \brief Create a 256-bit vector of [4 x double] with undefined values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \returns A 256-bit vector of [4 x double] containing undefined values.
 static __inline__ __m256d __DEFAULT_FN_ATTRS
-_mm256_undefined_pd()
+_mm256_undefined_pd(void)
 {
   return (__m256d)__builtin_ia32_undef256();
 }
 
+/// \brief Create a 256-bit vector of [8 x float] with undefined values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \returns A 256-bit vector of [8 x float] containing undefined values.
 static __inline__ __m256 __DEFAULT_FN_ATTRS
-_mm256_undefined_ps()
+_mm256_undefined_ps(void)
 {
   return (__m256)__builtin_ia32_undef256();
 }
 
+/// \brief Create a 256-bit integer vector with undefined values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \returns A 256-bit integer vector containing undefined values.
 static __inline__ __m256i __DEFAULT_FN_ATTRS
-_mm256_undefined_si256()
+_mm256_undefined_si256(void)
 {
   return (__m256i)__builtin_ia32_undef256();
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [4 x double]
+///    initialized with the specified double-precision floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VUNPCKLPD+VINSERTF128 instruction.
+///
+/// \param __a
+///    A double-precision floating-point value used to initialize bits [255:192]
+///    of the result.
+/// \param __b
+///    A double-precision floating-point value used to initialize bits [191:128]
+///    of the result.
+/// \param __c
+///    A double-precision floating-point value used to initialize bits [127:64]
+///    of the result.
+/// \param __d
+///    A double-precision floating-point value used to initialize bits [63:0]
+///    of the result.
+/// \returns An initialized 256-bit floating-point vector of [4 x double].
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_set_pd(double __a, double __b, double __c, double __d)
 {
   return (__m256d){ __d, __c, __b, __a };
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [8 x float] initialized
+///    with the specified single-precision floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic is a utility function and does not correspond to a specific
+///    instruction.
+///
+/// \param __a
+///    A single-precision floating-point value used to initialize bits [255:224]
+///    of the result.
+/// \param __b
+///    A single-precision floating-point value used to initialize bits [223:192]
+///    of the result.
+/// \param __c
+///    A single-precision floating-point value used to initialize bits [191:160]
+///    of the result.
+/// \param __d
+///    A single-precision floating-point value used to initialize bits [159:128]
+///    of the result.
+/// \param __e
+///    A single-precision floating-point value used to initialize bits [127:96]
+///    of the result.
+/// \param __f
+///    A single-precision floating-point value used to initialize bits [95:64]
+///    of the result.
+/// \param __g
+///    A single-precision floating-point value used to initialize bits [63:32]
+///    of the result.
+/// \param __h
+///    A single-precision floating-point value used to initialize bits [31:0]
+///    of the result.
+/// \returns An initialized 256-bit floating-point vector of [8 x float].
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_set_ps(float __a, float __b, float __c, float __d,
               float __e, float __f, float __g, float __h)
@@ -935,6 +3522,31 @@ _mm256_set_ps(float __a, float __b, float __c, float __d,
   return (__m256){ __h, __g, __f, __e, __d, __c, __b, __a };
 }
 
+/// \brief Constructs a 256-bit integer vector initialized with the specified
+///    32-bit integral values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic is a utility function and does not correspond to a specific
+///    instruction.
+///
+/// \param __i0
+///    A 32-bit integral value used to initialize bits [255:224] of the result.
+/// \param __i1
+///    A 32-bit integral value used to initialize bits [223:192] of the result.
+/// \param __i2
+///    A 32-bit integral value used to initialize bits [191:160] of the result.
+/// \param __i3
+///    A 32-bit integral value used to initialize bits [159:128] of the result.
+/// \param __i4
+///    A 32-bit integral value used to initialize bits [127:96] of the result.
+/// \param __i5
+///    A 32-bit integral value used to initialize bits [95:64] of the result.
+/// \param __i6
+///    A 32-bit integral value used to initialize bits [63:32] of the result.
+/// \param __i7
+///    A 32-bit integral value used to initialize bits [31:0] of the result.
+/// \returns An initialized 256-bit integer vector.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_set_epi32(int __i0, int __i1, int __i2, int __i3,
                  int __i4, int __i5, int __i6, int __i7)
@@ -942,6 +3554,47 @@ _mm256_set_epi32(int __i0, int __i1, int __i2, int __i3,
   return (__m256i)(__v8si){ __i7, __i6, __i5, __i4, __i3, __i2, __i1, __i0 };
 }
 
+/// \brief Constructs a 256-bit integer vector initialized with the specified
+///    16-bit integral values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic is a utility function and does not correspond to a specific
+///    instruction.
+///
+/// \param __w15
+///    A 16-bit integral value used to initialize bits [255:240] of the result.
+/// \param __w14
+///    A 16-bit integral value used to initialize bits [239:224] of the result.
+/// \param __w13
+///    A 16-bit integral value used to initialize bits [223:208] of the result.
+/// \param __w12
+///    A 16-bit integral value used to initialize bits [207:192] of the result.
+/// \param __w11
+///    A 16-bit integral value used to initialize bits [191:176] of the result.
+/// \param __w10
+///    A 16-bit integral value used to initialize bits [175:160] of the result.
+/// \param __w09
+///    A 16-bit integral value used to initialize bits [159:144] of the result.
+/// \param __w08
+///    A 16-bit integral value used to initialize bits [143:128] of the result.
+/// \param __w07
+///    A 16-bit integral value used to initialize bits [127:112] of the result.
+/// \param __w06
+///    A 16-bit integral value used to initialize bits [111:96] of the result.
+/// \param __w05
+///    A 16-bit integral value used to initialize bits [95:80] of the result.
+/// \param __w04
+///    A 16-bit integral value used to initialize bits [79:64] of the result.
+/// \param __w03
+///    A 16-bit integral value used to initialize bits [63:48] of the result.
+/// \param __w02
+///    A 16-bit integral value used to initialize bits [47:32] of the result.
+/// \param __w01
+///    A 16-bit integral value used to initialize bits [31:16] of the result.
+/// \param __w00
+///    A 16-bit integral value used to initialize bits [15:0] of the result.
+/// \returns An initialized 256-bit integer vector.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_set_epi16(short __w15, short __w14, short __w13, short __w12,
                  short __w11, short __w10, short __w09, short __w08,
@@ -952,6 +3605,79 @@ _mm256_set_epi16(short __w15, short __w14, short __w13, short __w12,
     __w07, __w08, __w09, __w10, __w11, __w12, __w13, __w14, __w15 };
 }
 
+/// \brief Constructs a 256-bit integer vector initialized with the specified
+///    8-bit integral values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic is a utility function and does not correspond to a specific
+///    instruction.
+///
+/// \param __b31
+///    An 8-bit integral value used to initialize bits [255:248] of the result.
+/// \param __b30
+///    An 8-bit integral value used to initialize bits [247:240] of the result.
+/// \param __b29
+///    An 8-bit integral value used to initialize bits [239:232] of the result.
+/// \param __b28
+///    An 8-bit integral value used to initialize bits [231:224] of the result.
+/// \param __b27
+///    An 8-bit integral value used to initialize bits [223:216] of the result.
+/// \param __b26
+///    An 8-bit integral value used to initialize bits [215:208] of the result.
+/// \param __b25
+///    An 8-bit integral value used to initialize bits [207:200] of the result.
+/// \param __b24
+///    An 8-bit integral value used to initialize bits [199:192] of the result.
+/// \param __b23
+///    An 8-bit integral value used to initialize bits [191:184] of the result.
+/// \param __b22
+///    An 8-bit integral value used to initialize bits [183:176] of the result.
+/// \param __b21
+///    An 8-bit integral value used to initialize bits [175:168] of the result.
+/// \param __b20
+///    An 8-bit integral value used to initialize bits [167:160] of the result.
+/// \param __b19
+///    An 8-bit integral value used to initialize bits [159:152] of the result.
+/// \param __b18
+///    An 8-bit integral value used to initialize bits [151:144] of the result.
+/// \param __b17
+///    An 8-bit integral value used to initialize bits [143:136] of the result.
+/// \param __b16
+///    An 8-bit integral value used to initialize bits [135:128] of the result.
+/// \param __b15
+///    An 8-bit integral value used to initialize bits [127:120] of the result.
+/// \param __b14
+///    An 8-bit integral value used to initialize bits [119:112] of the result.
+/// \param __b13
+///    An 8-bit integral value used to initialize bits [111:104] of the result.
+/// \param __b12
+///    An 8-bit integral value used to initialize bits [103:96] of the result.
+/// \param __b11
+///    An 8-bit integral value used to initialize bits [95:88] of the result.
+/// \param __b10
+///    An 8-bit integral value used to initialize bits [87:80] of the result.
+/// \param __b09
+///    An 8-bit integral value used to initialize bits [79:72] of the result.
+/// \param __b08
+///    An 8-bit integral value used to initialize bits [71:64] of the result.
+/// \param __b07
+///    An 8-bit integral value used to initialize bits [63:56] of the result.
+/// \param __b06
+///    An 8-bit integral value used to initialize bits [55:48] of the result.
+/// \param __b05
+///    An 8-bit integral value used to initialize bits [47:40] of the result.
+/// \param __b04
+///    An 8-bit integral value used to initialize bits [39:32] of the result.
+/// \param __b03
+///    An 8-bit integral value used to initialize bits [31:24] of the result.
+/// \param __b02
+///    An 8-bit integral value used to initialize bits [23:16] of the result.
+/// \param __b01
+///    An 8-bit integral value used to initialize bits [15:8] of the result.
+/// \param __b00
+///    An 8-bit integral value used to initialize bits [7:0] of the result.
+/// \returns An initialized 256-bit integer vector.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_set_epi8(char __b31, char __b30, char __b29, char __b28,
                 char __b27, char __b26, char __b25, char __b24,
@@ -970,6 +3696,22 @@ _mm256_set_epi8(char __b31, char __b30, char __b29, char __b28,
   };
 }
 
+/// \brief Constructs a 256-bit integer vector initialized with the specified
+///    64-bit integral values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPUNPCKLQDQ+VINSERTF128 instruction.
+///
+/// \param __a
+///    A 64-bit integral value used to initialize bits [255:192] of the result.
+/// \param __b
+///    A 64-bit integral value used to initialize bits [191:128] of the result.
+/// \param __c
+///    A 64-bit integral value used to initialize bits [127:64] of the result.
+/// \param __d
+///    A 64-bit integral value used to initialize bits [63:0] of the result.
+/// \returns An initialized 256-bit integer vector.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_set_epi64x(long long __a, long long __b, long long __c, long long __d)
 {
@@ -977,12 +3719,67 @@ _mm256_set_epi64x(long long __a, long long __b, long long __c, long long __d)
 }
 
 /* Create vectors with elements in reverse order */
+/// \brief Constructs a 256-bit floating-point vector of [4 x double],
+///    initialized in reverse order with the specified double-precision
+///    floating-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VUNPCKLPD+VINSERTF128 instruction.
+///
+/// \param __a
+///    A double-precision floating-point value used to initialize bits [63:0]
+///    of the result.
+/// \param __b
+///    A double-precision floating-point value used to initialize bits [127:64]
+///    of the result.
+/// \param __c
+///    A double-precision floating-point value used to initialize bits [191:128]
+///    of the result.
+/// \param __d
+///    A double-precision floating-point value used to initialize bits [255:192]
+///    of the result.
+/// \returns An initialized 256-bit floating-point vector of [4 x double].
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_setr_pd(double __a, double __b, double __c, double __d)
 {
   return (__m256d){ __a, __b, __c, __d };
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [8 x float],
+///    initialized in reverse order with the specified single-precision
+///    float-point values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic is a utility function and does not correspond to a specific
+///    instruction.
+///
+/// \param __a
+///    A single-precision floating-point value used to initialize bits [31:0]
+///    of the result.
+/// \param __b
+///    A single-precision floating-point value used to initialize bits [63:32]
+///    of the result.
+/// \param __c
+///    A single-precision floating-point value used to initialize bits [95:64]
+///    of the result.
+/// \param __d
+///    A single-precision floating-point value used to initialize bits [127:96]
+///    of the result.
+/// \param __e
+///    A single-precision floating-point value used to initialize bits [159:128]
+///    of the result.
+/// \param __f
+///    A single-precision floating-point value used to initialize bits [191:160]
+///    of the result.
+/// \param __g
+///    A single-precision floating-point value used to initialize bits [223:192]
+///    of the result.
+/// \param __h
+///    A single-precision floating-point value used to initialize bits [255:224]
+///    of the result.
+/// \returns An initialized 256-bit floating-point vector of [8 x float].
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_setr_ps(float __a, float __b, float __c, float __d,
                float __e, float __f, float __g, float __h)
@@ -990,6 +3787,31 @@ _mm256_setr_ps(float __a, float __b, float __c, float __d,
   return (__m256){ __a, __b, __c, __d, __e, __f, __g, __h };
 }
 
+/// \brief Constructs a 256-bit integer vector, initialized in reverse order
+///    with the specified 32-bit integral values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic is a utility function and does not correspond to a specific
+///    instruction.
+///
+/// \param __i0
+///    A 32-bit integral value used to initialize bits [31:0] of the result.
+/// \param __i1
+///    A 32-bit integral value used to initialize bits [63:32] of the result.
+/// \param __i2
+///    A 32-bit integral value used to initialize bits [95:64] of the result.
+/// \param __i3
+///    A 32-bit integral value used to initialize bits [127:96] of the result.
+/// \param __i4
+///    A 32-bit integral value used to initialize bits [159:128] of the result.
+/// \param __i5
+///    A 32-bit integral value used to initialize bits [191:160] of the result.
+/// \param __i6
+///    A 32-bit integral value used to initialize bits [223:192] of the result.
+/// \param __i7
+///    A 32-bit integral value used to initialize bits [255:224] of the result.
+/// \returns An initialized 256-bit integer vector.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_setr_epi32(int __i0, int __i1, int __i2, int __i3,
                   int __i4, int __i5, int __i6, int __i7)
@@ -997,6 +3819,47 @@ _mm256_setr_epi32(int __i0, int __i1, int __i2, int __i3,
   return (__m256i)(__v8si){ __i0, __i1, __i2, __i3, __i4, __i5, __i6, __i7 };
 }
 
+/// \brief Constructs a 256-bit integer vector, initialized in reverse order
+///    with the specified 16-bit integral values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic is a utility function and does not correspond to a specific
+///    instruction.
+///
+/// \param __w15
+///    A 16-bit integral value used to initialize bits [15:0] of the result.
+/// \param __w14
+///    A 16-bit integral value used to initialize bits [31:16] of the result.
+/// \param __w13
+///    A 16-bit integral value used to initialize bits [47:32] of the result.
+/// \param __w12
+///    A 16-bit integral value used to initialize bits [63:48] of the result.
+/// \param __w11
+///    A 16-bit integral value used to initialize bits [79:64] of the result.
+/// \param __w10
+///    A 16-bit integral value used to initialize bits [95:80] of the result.
+/// \param __w09
+///    A 16-bit integral value used to initialize bits [111:96] of the result.
+/// \param __w08
+///    A 16-bit integral value used to initialize bits [127:112] of the result.
+/// \param __w07
+///    A 16-bit integral value used to initialize bits [143:128] of the result.
+/// \param __w06
+///    A 16-bit integral value used to initialize bits [159:144] of the result.
+/// \param __w05
+///    A 16-bit integral value used to initialize bits [175:160] of the result.
+/// \param __w04
+///    A 16-bit integral value used to initialize bits [191:176] of the result.
+/// \param __w03
+///    A 16-bit integral value used to initialize bits [207:192] of the result.
+/// \param __w02
+///    A 16-bit integral value used to initialize bits [223:208] of the result.
+/// \param __w01
+///    A 16-bit integral value used to initialize bits [239:224] of the result.
+/// \param __w00
+///    A 16-bit integral value used to initialize bits [255:240] of the result.
+/// \returns An initialized 256-bit integer vector.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_setr_epi16(short __w15, short __w14, short __w13, short __w12,
        short __w11, short __w10, short __w09, short __w08,
@@ -1007,6 +3870,79 @@ _mm256_setr_epi16(short __w15, short __w14, short __w13, short __w12,
     __w08, __w07, __w06, __w05, __w04, __w03, __w02, __w01, __w00 };
 }
 
+/// \brief Constructs a 256-bit integer vector, initialized in reverse order
+///    with the specified 8-bit integral values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic is a utility function and does not correspond to a specific
+///    instruction.
+///
+/// \param __b31
+///    An 8-bit integral value used to initialize bits [7:0] of the result.
+/// \param __b30
+///    An 8-bit integral value used to initialize bits [15:8] of the result.
+/// \param __b29
+///    An 8-bit integral value used to initialize bits [23:16] of the result.
+/// \param __b28
+///    An 8-bit integral value used to initialize bits [31:24] of the result.
+/// \param __b27
+///    An 8-bit integral value used to initialize bits [39:32] of the result.
+/// \param __b26
+///    An 8-bit integral value used to initialize bits [47:40] of the result.
+/// \param __b25
+///    An 8-bit integral value used to initialize bits [55:48] of the result.
+/// \param __b24
+///    An 8-bit integral value used to initialize bits [63:56] of the result.
+/// \param __b23
+///    An 8-bit integral value used to initialize bits [71:64] of the result.
+/// \param __b22
+///    An 8-bit integral value used to initialize bits [79:72] of the result.
+/// \param __b21
+///    An 8-bit integral value used to initialize bits [87:80] of the result.
+/// \param __b20
+///    An 8-bit integral value used to initialize bits [95:88] of the result.
+/// \param __b19
+///    An 8-bit integral value used to initialize bits [103:96] of the result.
+/// \param __b18
+///    An 8-bit integral value used to initialize bits [111:104] of the result.
+/// \param __b17
+///    An 8-bit integral value used to initialize bits [119:112] of the result.
+/// \param __b16
+///    An 8-bit integral value used to initialize bits [127:120] of the result.
+/// \param __b15
+///    An 8-bit integral value used to initialize bits [135:128] of the result.
+/// \param __b14
+///    An 8-bit integral value used to initialize bits [143:136] of the result.
+/// \param __b13
+///    An 8-bit integral value used to initialize bits [151:144] of the result.
+/// \param __b12
+///    An 8-bit integral value used to initialize bits [159:152] of the result.
+/// \param __b11
+///    An 8-bit integral value used to initialize bits [167:160] of the result.
+/// \param __b10
+///    An 8-bit integral value used to initialize bits [175:168] of the result.
+/// \param __b09
+///    An 8-bit integral value used to initialize bits [183:176] of the result.
+/// \param __b08
+///    An 8-bit integral value used to initialize bits [191:184] of the result.
+/// \param __b07
+///    An 8-bit integral value used to initialize bits [199:192] of the result.
+/// \param __b06
+///    An 8-bit integral value used to initialize bits [207:200] of the result.
+/// \param __b05
+///    An 8-bit integral value used to initialize bits [215:208] of the result.
+/// \param __b04
+///    An 8-bit integral value used to initialize bits [223:216] of the result.
+/// \param __b03
+///    An 8-bit integral value used to initialize bits [231:224] of the result.
+/// \param __b02
+///    An 8-bit integral value used to initialize bits [239:232] of the result.
+/// \param __b01
+///    An 8-bit integral value used to initialize bits [247:240] of the result.
+/// \param __b00
+///    An 8-bit integral value used to initialize bits [255:248] of the result.
+/// \returns An initialized 256-bit integer vector.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_setr_epi8(char __b31, char __b30, char __b29, char __b28,
                  char __b27, char __b26, char __b25, char __b24,
@@ -1024,6 +3960,22 @@ _mm256_setr_epi8(char __b31, char __b30, char __b29, char __b28,
     __b07, __b06, __b05, __b04, __b03, __b02, __b01, __b00 };
 }
 
+/// \brief Constructs a 256-bit integer vector, initialized in reverse order
+///    with the specified 64-bit integral values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPUNPCKLQDQ+VINSERTF128 instruction.
+///
+/// \param __a
+///    A 64-bit integral value used to initialize bits [63:0] of the result.
+/// \param __b
+///    A 64-bit integral value used to initialize bits [127:64] of the result.
+/// \param __c
+///    A 64-bit integral value used to initialize bits [191:128] of the result.
+/// \param __d
+///    A 64-bit integral value used to initialize bits [255:192] of the result.
+/// \returns An initialized 256-bit integer vector.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_setr_epi64x(long long __a, long long __b, long long __c, long long __d)
 {
@@ -1031,24 +3983,72 @@ _mm256_setr_epi64x(long long __a, long long __b, long long __c, long long __d)
 }
 
 /* Create vectors with repeated elements */
+/// \brief Constructs a 256-bit floating-point vector of [4 x double], with each
+///    of the four double-precision floating-point vector elements set to the
+///    specified double-precision floating-point value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVDDUP+VINSERTF128 instruction.
+///
+/// \param __w
+///    A double-precision floating-point value used to initialize each vector
+///    element of the result.
+/// \returns An initialized 256-bit floating-point vector of [4 x double].
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_set1_pd(double __w)
 {
   return (__m256d){ __w, __w, __w, __w };
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [8 x float], with each
+///    of the eight single-precision floating-point vector elements set to the
+///    specified single-precision floating-point value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPERMILPS+VINSERTF128 instruction.
+///
+/// \param __w
+///    A single-precision floating-point value used to initialize each vector
+///    element of the result.
+/// \returns An initialized 256-bit floating-point vector of [8 x float].
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_set1_ps(float __w)
 {
   return (__m256){ __w, __w, __w, __w, __w, __w, __w, __w };
 }
 
+/// \brief Constructs a 256-bit integer vector of [8 x i32], with each of the
+///    32-bit integral vector elements set to the specified 32-bit integral
+///    value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPERMILPS+VINSERTF128 instruction.
+///
+/// \param __i
+///    A 32-bit integral value used to initialize each vector element of the
+///    result.
+/// \returns An initialized 256-bit integer vector of [8 x i32].
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_set1_epi32(int __i)
 {
   return (__m256i)(__v8si){ __i, __i, __i, __i, __i, __i, __i, __i };
 }
 
+/// \brief Constructs a 256-bit integer vector of [16 x i16], with each of the
+///    16-bit integral vector elements set to the specified 16-bit integral
+///    value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPSHUFB+VINSERTF128 instruction.
+///
+/// \param __w
+///    A 16-bit integral value used to initialize each vector element of the
+///    result.
+/// \returns An initialized 256-bit integer vector of [16 x i16].
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_set1_epi16(short __w)
 {
@@ -1056,6 +4056,17 @@ _mm256_set1_epi16(short __w)
     __w, __w, __w, __w, __w, __w };
 }
 
+/// \brief Constructs a 256-bit integer vector of [32 x i8], with each of the
+///    8-bit integral vector elements set to the specified 8-bit integral value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VPSHUFB+VINSERTF128 instruction.
+///
+/// \param __b
+///    An 8-bit integral value used to initialize each vector element of the
+///    result.
+/// \returns An initialized 256-bit integer vector of [32 x i8].
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_set1_epi8(char __b)
 {
@@ -1064,6 +4075,18 @@ _mm256_set1_epi8(char __b)
     __b, __b, __b, __b, __b, __b, __b };
 }
 
+/// \brief Constructs a 256-bit integer vector of [4 x i64], with each of the
+///    64-bit integral vector elements set to the specified 64-bit integral
+///    value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VMOVDDUP+VINSERTF128 instruction.
+///
+/// \param __q
+///    A 64-bit integral value used to initialize each vector element of the
+///    result.
+/// \returns An initialized 256-bit integer vector of [4 x i64].
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_set1_epi64x(long long __q)
 {
@@ -1071,18 +4094,41 @@ _mm256_set1_epi64x(long long __q)
 }
 
 /* Create __zeroed vectors */
+/// \brief Constructs a 256-bit floating-point vector of [4 x double] with all
+///    vector elements initialized to zero.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VXORPS instruction.
+///
+/// \returns A 256-bit vector of [4 x double] with all elements set to zero.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_setzero_pd(void)
 {
   return (__m256d){ 0, 0, 0, 0 };
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [8 x float] with all
+///    vector elements initialized to zero.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VXORPS instruction.
+///
+/// \returns A 256-bit vector of [8 x float] with all elements set to zero.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_setzero_ps(void)
 {
   return (__m256){ 0, 0, 0, 0, 0, 0, 0, 0 };
 }
 
+/// \brief Constructs a 256-bit integer vector initialized to zero.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VXORPS instruction.
+///
+/// \returns A 256-bit integer vector initialized to zero.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_setzero_si256(void)
 {
@@ -1090,76 +4136,214 @@ _mm256_setzero_si256(void)
 }
 
 /* Cast between vector types */
+/// \brief Casts a 256-bit floating-point vector of [4 x double] into a 256-bit
+///    floating-point vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit floating-point vector of [4 x double].
+/// \returns A 256-bit floating-point vector of [8 x float] containing the same
+///    bitwise pattern as the parameter.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_castpd_ps(__m256d __a)
 {
   return (__m256)__a;
 }
 
+/// \brief Casts a 256-bit floating-point vector of [4 x double] into a 256-bit
+///    integer vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit floating-point vector of [4 x double].
+/// \returns A 256-bit integer vector containing the same bitwise pattern as the
+///    parameter.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_castpd_si256(__m256d __a)
 {
   return (__m256i)__a;
 }
 
+/// \brief Casts a 256-bit floating-point vector of [8 x float] into a 256-bit
+///    floating-point vector of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit floating-point vector of [8 x float].
+/// \returns A 256-bit floating-point vector of [4 x double] containing the same
+///    bitwise pattern as the parameter.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_castps_pd(__m256 __a)
 {
   return (__m256d)__a;
 }
 
+/// \brief Casts a 256-bit floating-point vector of [8 x float] into a 256-bit
+///    integer vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit floating-point vector of [8 x float].
+/// \returns A 256-bit integer vector containing the same bitwise pattern as the
+///    parameter.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_castps_si256(__m256 __a)
 {
   return (__m256i)__a;
 }
 
+/// \brief Casts a 256-bit integer vector into a 256-bit floating-point vector
+///    of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit integer vector.
+/// \returns A 256-bit floating-point vector of [8 x float] containing the same
+///    bitwise pattern as the parameter.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_castsi256_ps(__m256i __a)
 {
   return (__m256)__a;
 }
 
+/// \brief Casts a 256-bit integer vector into a 256-bit floating-point vector
+///    of [4 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit integer vector.
+/// \returns A 256-bit floating-point vector of [4 x double] containing the same
+///    bitwise pattern as the parameter.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_castsi256_pd(__m256i __a)
 {
   return (__m256d)__a;
 }
 
+/// \brief Returns the lower 128 bits of a 256-bit floating-point vector of
+///    [4 x double] as a 128-bit floating-point vector of [2 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit floating-point vector of [4 x double].
+/// \returns A 128-bit floating-point vector of [2 x double] containing the
+///    lower 128 bits of the parameter.
 static __inline __m128d __DEFAULT_FN_ATTRS
 _mm256_castpd256_pd128(__m256d __a)
 {
-  return __builtin_shufflevector(__a, __a, 0, 1);
+  return __builtin_shufflevector((__v4df)__a, (__v4df)__a, 0, 1);
 }
 
+/// \brief Returns the lower 128 bits of a 256-bit floating-point vector of
+///    [8 x float] as a 128-bit floating-point vector of [4 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit floating-point vector of [8 x float].
+/// \returns A 128-bit floating-point vector of [4 x float] containing the
+///    lower 128 bits of the parameter.
 static __inline __m128 __DEFAULT_FN_ATTRS
 _mm256_castps256_ps128(__m256 __a)
 {
-  return __builtin_shufflevector(__a, __a, 0, 1, 2, 3);
+  return __builtin_shufflevector((__v8sf)__a, (__v8sf)__a, 0, 1, 2, 3);
 }
 
+/// \brief Truncates a 256-bit integer vector into a 128-bit integer vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 256-bit integer vector.
+/// \returns A 128-bit integer vector containing the lower 128 bits of the
+///    parameter.
 static __inline __m128i __DEFAULT_FN_ATTRS
 _mm256_castsi256_si128(__m256i __a)
 {
-  return __builtin_shufflevector(__a, __a, 0, 1);
+  return __builtin_shufflevector((__v4di)__a, (__v4di)__a, 0, 1);
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [4 x double] from a
+///    128-bit floating-point vector of [2 x double]. The lower 128 bits
+///    contain the value of the source vector. The contents of the upper 128
+///    bits are undefined.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 128-bit vector of [2 x double].
+/// \returns A 256-bit floating-point vector of [4 x double]. The lower 128 bits
+///    contain the value of the parameter. The contents of the upper 128 bits
+///    are undefined.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_castpd128_pd256(__m128d __a)
 {
-  return __builtin_shufflevector(__a, __a, 0, 1, -1, -1);
+  return __builtin_shufflevector((__v2df)__a, (__v2df)__a, 0, 1, -1, -1);
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [8 x float] from a
+///    128-bit floating-point vector of [4 x float]. The lower 128 bits contain
+///    the value of the source vector. The contents of the upper 128 bits are
+///    undefined.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 128-bit vector of [4 x float].
+/// \returns A 256-bit floating-point vector of [8 x float]. The lower 128 bits
+///    contain the value of the parameter. The contents of the upper 128 bits
+///    are undefined.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_castps128_ps256(__m128 __a)
 {
-  return __builtin_shufflevector(__a, __a, 0, 1, 2, 3, -1, -1, -1, -1);
+  return __builtin_shufflevector((__v4sf)__a, (__v4sf)__a, 0, 1, 2, 3, -1, -1, -1, -1);
 }
 
+/// \brief Constructs a 256-bit integer vector from a 128-bit integer vector.
+///    The lower 128 bits contain the value of the source vector. The contents
+///    of the upper 128 bits are undefined.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic has no corresponding instruction.
+///
+/// \param __a
+///    A 128-bit integer vector.
+/// \returns A 256-bit integer vector. The lower 128 bits contain the value of
+///    the parameter. The contents of the upper 128 bits are undefined.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_castsi128_si256(__m128i __a)
 {
-  return __builtin_shufflevector(__a, __a, 0, 1, -1, -1);
+  return __builtin_shufflevector((__v2di)__a, (__v2di)__a, 0, 1, -1, -1);
 }
 
 /*
@@ -1167,9 +4351,39 @@ _mm256_castsi128_si256(__m128i __a)
    We use macros rather than inlines because we only want to accept
    invocations where the immediate M is a constant expression.
 */
+/// \brief Constructs a new 256-bit vector of [8 x float] by first duplicating
+///    a 256-bit vector of [8 x float] given in the first parameter, and then
+///    replacing either the upper or the lower 128 bits with the contents of a
+///    128-bit vector of [4 x float] in the second parameter. The immediate
+///    integer parameter determines between the upper or the lower 128 bits.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256 _mm256_insertf128_ps(__m256 V1, __m128 V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param V1
+///    A 256-bit vector of [8 x float]. This vector is copied to the result
+///    first, and then either the upper or the lower 128 bits of the result will
+///    be replaced by the contents of V2.
+/// \param V2
+///    A 128-bit vector of [4 x float]. The contents of this parameter are
+///    written to either the upper or the lower 128 bits of the result depending
+///    on the value of parameter M.
+/// \param M
+///    An immediate integer. The least significant bit determines how the values
+///    from the two parameters are interleaved:
+///    If bit [0] of M is 0, V2 are copied to bits [127:0] of the result, and
+///    bits [255:128] of V1 are copied to bits [255:128] of the result.
+///    If bit [0] of M is 1, V2 are copied to bits [255:128] of the result, and
+///    bits [127:0] of V1 are copied to bits [127:0] of the result.
+/// \returns A 256-bit vector of [8 x float] containing the interleaved values.
 #define _mm256_insertf128_ps(V1, V2, M) __extension__ ({ \
   (__m256)__builtin_shufflevector( \
-    (__v8sf)(V1), \
+    (__v8sf)(__m256)(V1), \
     (__v8sf)_mm256_castps128_ps256((__m128)(V2)), \
     (((M) & 1) ?  0 :  8), \
     (((M) & 1) ?  1 :  9), \
@@ -1180,18 +4394,78 @@ _mm256_castsi128_si256(__m128i __a)
     (((M) & 1) ? 10 :  6), \
     (((M) & 1) ? 11 :  7) );})
 
+/// \brief Constructs a new 256-bit vector of [4 x double] by first duplicating
+///    a 256-bit vector of [4 x double] given in the first parameter, and then
+///    replacing either the upper or the lower 128 bits with the contents of a
+///    128-bit vector of [2 x double] in the second parameter. The immediate
+///    integer parameter determines between the upper or the lower 128 bits.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256d _mm256_insertf128_pd(__m256d V1, __m128d V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param V1
+///    A 256-bit vector of [4 x double]. This vector is copied to the result
+///    first, and then either the upper or the lower 128 bits of the result will
+///    be replaced by the contents of V2.
+/// \param V2
+///    A 128-bit vector of [2 x double]. The contents of this parameter are
+///    written to either the upper or the lower 128 bits of the result depending
+///    on the value of parameter M.
+/// \param M
+///    An immediate integer. The least significant bit determines how the values
+///    from the two parameters are interleaved:
+///    If bit [0] of M is 0, V2 are copied to bits [127:0] of the result, and
+///    bits [255:128] of V1 are copied to bits [255:128] of the result.
+///    If bit [0] of M is 1, V2 are copied to bits [255:128] of the result, and
+///    bits [127:0] of V1 are copied to bits [127:0] of the result.
+/// \returns A 256-bit vector of [4 x double] containing the interleaved values.
 #define _mm256_insertf128_pd(V1, V2, M) __extension__ ({ \
   (__m256d)__builtin_shufflevector( \
-    (__v4df)(V1), \
+    (__v4df)(__m256d)(V1), \
     (__v4df)_mm256_castpd128_pd256((__m128d)(V2)), \
     (((M) & 1) ? 0 : 4), \
     (((M) & 1) ? 1 : 5), \
     (((M) & 1) ? 4 : 2), \
     (((M) & 1) ? 5 : 3) );})
 
+/// \brief Constructs a new 256-bit integer vector by first duplicating a
+///    256-bit integer vector given in the first parameter, and then replacing
+///    either the upper or the lower 128 bits with the contents of a 128-bit
+///    integer vector in the second parameter. The immediate integer parameter
+///    determines between the upper or the lower 128 bits.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m256i _mm256_insertf128_si256(__m256i V1, __m128i V2, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param V1
+///    A 256-bit integer vector. This vector is copied to the result first, and
+///    then either the upper or the lower 128 bits of the result will be
+///    replaced by the contents of V2.
+/// \param V2
+///    A 128-bit integer vector. The contents of this parameter are written to
+///    either the upper or the lower 128 bits of the result depending on the
+///     value of parameter M.
+/// \param M
+///    An immediate integer. The least significant bit determines how the values
+///    from the two parameters are interleaved:
+///    If bit [0] of M is 0, V2 are copied to bits [127:0] of the result, and
+///    bits [255:128] of V1 are copied to bits [255:128] of the result.
+///    If bit [0] of M is 1, V2 are copied to bits [255:128] of the result, and
+///    bits [127:0] of V1 are copied to bits [127:0] of the result.
+/// \returns A 256-bit integer vector containing the interleaved values.
 #define _mm256_insertf128_si256(V1, V2, M) __extension__ ({ \
   (__m256i)__builtin_shufflevector( \
-    (__v4di)(V1), \
+    (__v4di)(__m256i)(V1), \
     (__v4di)_mm256_castsi128_si256((__m128i)(V2)), \
     (((M) & 1) ? 0 : 4), \
     (((M) & 1) ? 1 : 5), \
@@ -1203,125 +4477,385 @@ _mm256_castsi128_si256(__m128i __a)
    We use macros rather than inlines because we only want to accept
    invocations where the immediate M is a constant expression.
 */
+/// \brief Extracts either the upper or the lower 128 bits from a 256-bit vector
+///    of [8 x float], as determined by the immediate integer parameter, and
+///    returns the extracted bits as a 128-bit vector of [4 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128 _mm256_extractf128_ps(__m256 V, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128 instruction.
+///
+/// \param V
+///    A 256-bit vector of [8 x float].
+/// \param M
+///    An immediate integer. The least significant bit determines which bits are
+///    extracted from the first parameter:
+///    If bit [0] of M is 0, bits [127:0] of V are copied to the result.
+///    If bit [0] of M is 1, bits [255:128] of V are copied to the result.
+/// \returns A 128-bit vector of [4 x float] containing the extracted bits.
 #define _mm256_extractf128_ps(V, M) __extension__ ({ \
   (__m128)__builtin_shufflevector( \
-    (__v8sf)(V), \
-    (__v8sf)(_mm256_setzero_ps()), \
+    (__v8sf)(__m256)(V), \
+    (__v8sf)(_mm256_undefined_ps()), \
     (((M) & 1) ? 4 : 0), \
     (((M) & 1) ? 5 : 1), \
     (((M) & 1) ? 6 : 2), \
     (((M) & 1) ? 7 : 3) );})
 
+/// \brief Extracts either the upper or the lower 128 bits from a 256-bit vector
+///    of [4 x double], as determined by the immediate integer parameter, and
+///    returns the extracted bits as a 128-bit vector of [2 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128d _mm256_extractf128_pd(__m256d V, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128 instruction.
+///
+/// \param V
+///    A 256-bit vector of [4 x double].
+/// \param M
+///    An immediate integer. The least significant bit determines which bits are
+///    extracted from the first parameter:
+///    If bit [0] of M is 0, bits [127:0] of V are copied to the result.
+///    If bit [0] of M is 1, bits [255:128] of V are copied to the result.
+/// \returns A 128-bit vector of [2 x double] containing the extracted bits.
 #define _mm256_extractf128_pd(V, M) __extension__ ({ \
   (__m128d)__builtin_shufflevector( \
-    (__v4df)(V), \
-    (__v4df)(_mm256_setzero_pd()), \
+    (__v4df)(__m256d)(V), \
+    (__v4df)(_mm256_undefined_pd()), \
     (((M) & 1) ? 2 : 0), \
     (((M) & 1) ? 3 : 1) );})
 
+/// \brief Extracts either the upper or the lower 128 bits from a 256-bit
+///    integer vector, as determined by the immediate integer parameter, and
+///    returns the extracted bits as a 128-bit integer vector.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128i _mm256_extractf128_si256(__m256i V, const int M);
+/// \endcode
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128 instruction.
+///
+/// \param V
+///    A 256-bit integer vector.
+/// \param M
+///    An immediate integer. The least significant bit determines which bits are
+///    extracted from the first parameter:
+///    If bit [0] of M is 0, bits [127:0] of V are copied to the result.
+///    If bit [0] of M is 1, bits [255:128] of V are copied to the result.
+/// \returns A 128-bit integer vector containing the extracted bits.
 #define _mm256_extractf128_si256(V, M) __extension__ ({ \
   (__m128i)__builtin_shufflevector( \
-    (__v4di)(V), \
-    (__v4di)(_mm256_setzero_si256()), \
+    (__v4di)(__m256i)(V), \
+    (__v4di)(_mm256_undefined_si256()), \
     (((M) & 1) ? 2 : 0), \
     (((M) & 1) ? 3 : 1) );})
 
 /* SIMD load ops (unaligned) */
+/// \brief Loads two 128-bit floating-point vectors of [4 x float] from
+///    unaligned memory locations and constructs a 256-bit floating-point vector
+///    of [8 x float] by concatenating the two 128-bit vectors.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to load instructions followed by the
+///    \c VINSERTF128 instruction.
+///
+/// \param __addr_hi
+///    A pointer to a 128-bit memory location containing 4 consecutive
+///    single-precision floating-point values. These values are to be copied
+///    to bits[255:128] of the result. The address of the memory location does
+///    not have to be aligned.
+/// \param __addr_lo
+///    A pointer to a 128-bit memory location containing 4 consecutive
+///    single-precision floating-point values. These values are to be copied
+///    to bits[127:0] of the result. The address of the memory location does not
+///    have to be aligned.
+/// \returns A 256-bit floating-point vector of [8 x float] containing the
+///    concatenated result.
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_loadu2_m128(float const *__addr_hi, float const *__addr_lo)
 {
-  struct __loadu_ps {
-    __m128 __v;
-  } __attribute__((__packed__, __may_alias__));
-
-  __m256 __v256 = _mm256_castps128_ps256(((struct __loadu_ps*)__addr_lo)->__v);
-  return _mm256_insertf128_ps(__v256, ((struct __loadu_ps*)__addr_hi)->__v, 1);
+  __m256 __v256 = _mm256_castps128_ps256(_mm_loadu_ps(__addr_lo));
+  return _mm256_insertf128_ps(__v256, _mm_loadu_ps(__addr_hi), 1);
 }
 
+/// \brief Loads two 128-bit floating-point vectors of [2 x double] from
+///    unaligned memory locations and constructs a 256-bit floating-point vector
+///    of [4 x double] by concatenating the two 128-bit vectors.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to load instructions followed by the
+///    \c VINSERTF128 instruction.
+///
+/// \param __addr_hi
+///    A pointer to a 128-bit memory location containing two consecutive
+///    double-precision floating-point values. These values are to be copied
+///    to bits[255:128] of the result. The address of the memory location does
+///    not have to be aligned.
+/// \param __addr_lo
+///    A pointer to a 128-bit memory location containing two consecutive
+///    double-precision floating-point values. These values are to be copied
+///    to bits[127:0] of the result. The address of the memory location does not
+///    have to be aligned.
+/// \returns A 256-bit floating-point vector of [4 x double] containing the
+///    concatenated result.
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_loadu2_m128d(double const *__addr_hi, double const *__addr_lo)
 {
-  struct __loadu_pd {
-    __m128d __v;
-  } __attribute__((__packed__, __may_alias__));
-
-  __m256d __v256 = _mm256_castpd128_pd256(((struct __loadu_pd*)__addr_lo)->__v);
-  return _mm256_insertf128_pd(__v256, ((struct __loadu_pd*)__addr_hi)->__v, 1);
+  __m256d __v256 = _mm256_castpd128_pd256(_mm_loadu_pd(__addr_lo));
+  return _mm256_insertf128_pd(__v256, _mm_loadu_pd(__addr_hi), 1);
 }
 
+/// \brief Loads two 128-bit integer vectors from unaligned memory locations and
+///    constructs a 256-bit integer vector by concatenating the two 128-bit
+///    vectors.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to load instructions followed by the
+///    \c VINSERTF128 instruction.
+///
+/// \param __addr_hi
+///    A pointer to a 128-bit memory location containing a 128-bit integer
+///    vector. This vector is to be copied to bits[255:128] of the result. The
+///    address of the memory location does not have to be aligned.
+/// \param __addr_lo
+///    A pointer to a 128-bit memory location containing a 128-bit integer
+///    vector. This vector is to be copied to bits[127:0] of the result. The
+///    address of the memory location does not have to be aligned.
+/// \returns A 256-bit integer vector containing the concatenated result.
 static __inline __m256i __DEFAULT_FN_ATTRS
 _mm256_loadu2_m128i(__m128i const *__addr_hi, __m128i const *__addr_lo)
 {
-  struct __loadu_si128 {
-    __m128i __v;
-  } __attribute__((__packed__, __may_alias__));
-  __m256i __v256 = _mm256_castsi128_si256(
-    ((struct __loadu_si128*)__addr_lo)->__v);
-  return _mm256_insertf128_si256(__v256,
-                                 ((struct __loadu_si128*)__addr_hi)->__v, 1);
+  __m256i __v256 = _mm256_castsi128_si256(_mm_loadu_si128(__addr_lo));
+  return _mm256_insertf128_si256(__v256, _mm_loadu_si128(__addr_hi), 1);
 }
 
 /* SIMD store ops (unaligned) */
+/// \brief Stores the upper and lower 128 bits of a 256-bit floating-point
+///    vector of [8 x float] into two different unaligned memory locations.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128 instruction and the store
+///    instructions.
+///
+/// \param __addr_hi
+///    A pointer to a 128-bit memory location. Bits[255:128] of __a are to be
+///    copied to this memory location. The address of this memory location does
+///    not have to be aligned.
+/// \param __addr_lo
+///    A pointer to a 128-bit memory location. Bits[127:0] of __a are to be
+///    copied to this memory location. The address of this memory location does
+///    not have to be aligned.
+/// \param __a
+///    A 256-bit floating-point vector of [8 x float].
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_storeu2_m128(float *__addr_hi, float *__addr_lo, __m256 __a)
 {
   __m128 __v128;
 
   __v128 = _mm256_castps256_ps128(__a);
-  __builtin_ia32_storeups(__addr_lo, __v128);
+  _mm_storeu_ps(__addr_lo, __v128);
   __v128 = _mm256_extractf128_ps(__a, 1);
-  __builtin_ia32_storeups(__addr_hi, __v128);
+  _mm_storeu_ps(__addr_hi, __v128);
 }
 
+/// \brief Stores the upper and lower 128 bits of a 256-bit floating-point
+///    vector of [4 x double] into two different unaligned memory locations.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128 instruction and the store
+///    instructions.
+///
+/// \param __addr_hi
+///    A pointer to a 128-bit memory location. Bits[255:128] of __a are to be
+///    copied to this memory location. The address of this memory location does
+///    not have to be aligned.
+/// \param __addr_lo
+///    A pointer to a 128-bit memory location. Bits[127:0] of __a are to be
+///    copied to this memory location. The address of this memory location does
+///    not have to be aligned.
+/// \param __a
+///    A 256-bit floating-point vector of [4 x double].
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_storeu2_m128d(double *__addr_hi, double *__addr_lo, __m256d __a)
 {
   __m128d __v128;
 
   __v128 = _mm256_castpd256_pd128(__a);
-  __builtin_ia32_storeupd(__addr_lo, __v128);
+  _mm_storeu_pd(__addr_lo, __v128);
   __v128 = _mm256_extractf128_pd(__a, 1);
-  __builtin_ia32_storeupd(__addr_hi, __v128);
+  _mm_storeu_pd(__addr_hi, __v128);
 }
 
+/// \brief Stores the upper and lower 128 bits of a 256-bit integer vector into
+///    two different unaligned memory locations.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VEXTRACTF128 instruction and the store
+///    instructions.
+///
+/// \param __addr_hi
+///    A pointer to a 128-bit memory location. Bits[255:128] of __a are to be
+///    copied to this memory location. The address of this memory location does
+///    not have to be aligned.
+/// \param __addr_lo
+///    A pointer to a 128-bit memory location. Bits[127:0] of __a are to be
+///    copied to this memory location. The address of this memory location does
+///    not have to be aligned.
+/// \param __a
+///    A 256-bit integer vector.
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_storeu2_m128i(__m128i *__addr_hi, __m128i *__addr_lo, __m256i __a)
 {
   __m128i __v128;
 
   __v128 = _mm256_castsi256_si128(__a);
-  __builtin_ia32_storedqu((char *)__addr_lo, (__v16qi)__v128);
+  _mm_storeu_si128(__addr_lo, __v128);
   __v128 = _mm256_extractf128_si256(__a, 1);
-  __builtin_ia32_storedqu((char *)__addr_hi, (__v16qi)__v128);
+  _mm_storeu_si128(__addr_hi, __v128);
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [8 x float] by
+///    concatenating two 128-bit floating-point vectors of [4 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param __hi
+///    A 128-bit floating-point vector of [4 x float] to be copied to the upper
+///    128 bits of the result.
+/// \param __lo
+///    A 128-bit floating-point vector of [4 x float] to be copied to the lower
+///    128 bits of the result.
+/// \returns A 256-bit floating-point vector of [8 x float] containing the
+///    concatenated result.
 static __inline __m256 __DEFAULT_FN_ATTRS
-_mm256_set_m128 (__m128 __hi, __m128 __lo) {
-  return (__m256) __builtin_shufflevector(__lo, __hi, 0, 1, 2, 3, 4, 5, 6, 7);
+_mm256_set_m128 (__m128 __hi, __m128 __lo)
+{
+  return (__m256) __builtin_shufflevector((__v4sf)__lo, (__v4sf)__hi, 0, 1, 2, 3, 4, 5, 6, 7);
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [4 x double] by
+///    concatenating two 128-bit floating-point vectors of [2 x double].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param __hi
+///    A 128-bit floating-point vector of [2 x double] to be copied to the upper
+///    128 bits of the result.
+/// \param __lo
+///    A 128-bit floating-point vector of [2 x double] to be copied to the lower
+///    128 bits of the result.
+/// \returns A 256-bit floating-point vector of [4 x double] containing the
+///    concatenated result.
 static __inline __m256d __DEFAULT_FN_ATTRS
-_mm256_set_m128d (__m128d __hi, __m128d __lo) {
+_mm256_set_m128d (__m128d __hi, __m128d __lo)
+{
   return (__m256d)_mm256_set_m128((__m128)__hi, (__m128)__lo);
 }
 
+/// \brief Constructs a 256-bit integer vector by concatenating two 128-bit
+///    integer vectors.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param __hi
+///    A 128-bit integer vector to be copied to the upper 128 bits of the
+///    result.
+/// \param __lo
+///    A 128-bit integer vector to be copied to the lower 128 bits of the
+///    result.
+/// \returns A 256-bit integer vector containing the concatenated result.
 static __inline __m256i __DEFAULT_FN_ATTRS
-_mm256_set_m128i (__m128i __hi, __m128i __lo) {
+_mm256_set_m128i (__m128i __hi, __m128i __lo)
+{
   return (__m256i)_mm256_set_m128((__m128)__hi, (__m128)__lo);
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [8 x float] by
+///    concatenating two 128-bit floating-point vectors of [4 x float]. This is
+///    similar to _mm256_set_m128, but the order of the input parameters is
+///    swapped.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param __lo
+///    A 128-bit floating-point vector of [4 x float] to be copied to the lower
+///    128 bits of the result.
+/// \param __hi
+///    A 128-bit floating-point vector of [4 x float] to be copied to the upper
+///    128 bits of the result.
+/// \returns A 256-bit floating-point vector of [8 x float] containing the
+///    concatenated result.
 static __inline __m256 __DEFAULT_FN_ATTRS
-_mm256_setr_m128 (__m128 __lo, __m128 __hi) {
+_mm256_setr_m128 (__m128 __lo, __m128 __hi)
+{
   return _mm256_set_m128(__hi, __lo);
 }
 
+/// \brief Constructs a 256-bit floating-point vector of [4 x double] by
+///    concatenating two 128-bit floating-point vectors of [2 x double]. This is
+///    similar to _mm256_set_m128d, but the order of the input parameters is
+///    swapped.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param __lo
+///    A 128-bit floating-point vector of [2 x double] to be copied to the lower
+///    128 bits of the result.
+/// \param __hi
+///    A 128-bit floating-point vector of [2 x double] to be copied to the upper
+///    128 bits of the result.
+/// \returns A 256-bit floating-point vector of [4 x double] containing the
+///    concatenated result.
 static __inline __m256d __DEFAULT_FN_ATTRS
-_mm256_setr_m128d (__m128d __lo, __m128d __hi) {
+_mm256_setr_m128d (__m128d __lo, __m128d __hi)
+{
   return (__m256d)_mm256_set_m128((__m128)__hi, (__m128)__lo);
 }
 
+/// \brief Constructs a 256-bit integer vector by concatenating two 128-bit
+///    integer vectors. This is similar to _mm256_set_m128i, but the order of
+///    the input parameters is swapped.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the \c VINSERTF128 instruction.
+///
+/// \param __lo
+///    A 128-bit integer vector to be copied to the lower 128 bits of the
+///    result.
+/// \param __hi
+///    A 128-bit integer vector to be copied to the upper 128 bits of the
+///    result.
+/// \returns A 256-bit integer vector containing the concatenated result.
 static __inline __m256i __DEFAULT_FN_ATTRS
-_mm256_setr_m128i (__m128i __lo, __m128i __hi) {
+_mm256_setr_m128i (__m128i __lo, __m128i __hi)
+{
   return (__m256i)_mm256_set_m128((__m128)__hi, (__m128)__lo);
 }
 

@@ -125,6 +125,9 @@ class AnalyzerOptions : public RefCountedBase<AnalyzerOptions> {
 public:
   typedef llvm::StringMap<std::string> ConfigTable;
 
+  static std::vector<StringRef>
+  getRegisteredCheckers(bool IncludeExperimental = false);
+
   /// \brief Pair of checker name and enable/disable.
   std::vector<std::pair<std::string, bool> > CheckersControlList;
   
@@ -149,6 +152,7 @@ public:
   unsigned DisableAllChecks : 1;
 
   unsigned ShowCheckerHelp : 1;
+  unsigned ShowEnabledCheckerList : 1;
   unsigned AnalyzeAll : 1;
   unsigned AnalyzerDisplayProgress : 1;
   unsigned AnalyzeNestedBlocks : 1;
@@ -261,6 +265,12 @@ private:
 
   /// \sa shouldInlineLambdas
   Optional<bool> InlineLambdas;
+
+  /// \sa shouldWidenLoops
+  Optional<bool> WidenLoops;
+
+  /// \sa shouldDisplayNotesAsEvents
+  Optional<bool> DisplayNotesAsEvents;
 
   /// A helper function that retrieves option for a given full-qualified
   /// checker name.
@@ -526,6 +536,18 @@ public:
   /// generated each time a LambdaExpr is visited.
   bool shouldInlineLambdas();
 
+  /// Returns true if the analysis should try to widen loops.
+  /// This is controlled by the 'widen-loops' config option.
+  bool shouldWidenLoops();
+
+  /// Returns true if the bug reporter should transparently treat extra note
+  /// diagnostic pieces as event diagnostic pieces. Useful when the diagnostic
+  /// consumer doesn't support the extra note pieces.
+  ///
+  /// This is controlled by the 'extra-notes-as-events' option, which defaults
+  /// to false when unset.
+  bool shouldDisplayNotesAsEvents();
+
 public:
   AnalyzerOptions() :
     AnalysisStoreOpt(RegionStoreModel),
@@ -534,6 +556,7 @@ public:
     AnalysisPurgeOpt(PurgeStmt),
     DisableAllChecks(0),
     ShowCheckerHelp(0),
+    ShowEnabledCheckerList(0),
     AnalyzeAll(0),
     AnalyzerDisplayProgress(0),
     AnalyzeNestedBlocks(0),

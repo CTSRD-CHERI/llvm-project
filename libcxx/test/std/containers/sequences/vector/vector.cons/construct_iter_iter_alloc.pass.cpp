@@ -15,8 +15,9 @@
 #include <vector>
 #include <cassert>
 
+#include "test_macros.h"
 #include "test_iterators.h"
-#include "../../../stack_allocator.h"
+#include "test_allocator.h"
 #include "min_allocator.h"
 #include "asan_testing.h"
 
@@ -25,20 +26,23 @@ void
 test(Iterator first, Iterator last, const A& a)
 {
     C c(first, last, a);
-    assert(c.__invariants());
+    LIBCPP_ASSERT(c.__invariants());
     assert(c.size() == std::distance(first, last));
-    assert(is_contiguous_container_asan_correct(c)); 
+    LIBCPP_ASSERT(is_contiguous_container_asan_correct(c));
     for (typename C::const_iterator i = c.cbegin(), e = c.cend(); i != e; ++i, ++first)
         assert(*i == *first);
 }
 
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
 
 template <class T>
 struct implicit_conv_allocator : min_allocator<T>
 {
-    implicit_conv_allocator(void* p) {}
+    implicit_conv_allocator(void*) {}
     implicit_conv_allocator(const implicit_conv_allocator&) = default;
+
+    template <class U>
+    implicit_conv_allocator(implicit_conv_allocator<U>) {}
 };
 
 #endif
@@ -55,7 +59,7 @@ int main()
     test<std::vector<int> >(random_access_iterator<const int*>(a), random_access_iterator<const int*>(an), alloc);
     test<std::vector<int> >(a, an, alloc);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     int a[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 3, 1, 0};
     int* an = a + sizeof(a)/sizeof(a[0]);

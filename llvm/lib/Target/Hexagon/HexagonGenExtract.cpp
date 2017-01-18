@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/CodeGen/MachineFunctionAnalysis.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
@@ -53,14 +52,13 @@ namespace {
     HexagonGenExtract() : FunctionPass(ID), ExtractCount(0) {
       initializeHexagonGenExtractPass(*PassRegistry::getPassRegistry());
     }
-    virtual const char *getPassName() const override {
+    virtual StringRef getPassName() const override {
       return "Hexagon generate \"extract\" instructions";
     }
     virtual bool runOnFunction(Function &F) override;
     virtual void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<DominatorTreeWrapperPass>();
       AU.addPreserved<DominatorTreeWrapperPass>();
-      AU.addPreserved<MachineFunctionAnalysis>();
       FunctionPass::getAnalysisUsage(AU);
     }
   private:
@@ -242,6 +240,9 @@ bool HexagonGenExtract::visitBlock(BasicBlock *B) {
 
 
 bool HexagonGenExtract::runOnFunction(Function &F) {
+  if (skipFunction(F))
+    return false;
+
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   bool Changed;
 

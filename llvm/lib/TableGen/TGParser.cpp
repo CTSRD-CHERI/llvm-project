@@ -12,13 +12,19 @@
 //===----------------------------------------------------------------------===//
 
 #include "TGParser.h"
+#include "llvm/ADT/None.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/TableGen/Record.h"
 #include <algorithm>
-#include <sstream>
+#include <cassert>
+#include <cstdint>
+
 using namespace llvm;
 
 //===----------------------------------------------------------------------===//
@@ -26,10 +32,12 @@ using namespace llvm;
 //===----------------------------------------------------------------------===//
 
 namespace llvm {
+
 struct SubClassReference {
   SMRange RefRange;
   Record *Rec;
   std::vector<Init*> TemplateArgs;
+
   SubClassReference() : Rec(nullptr) {}
 
   bool isInvalid() const { return Rec == nullptr; }
@@ -39,13 +47,14 @@ struct SubMultiClassReference {
   SMRange RefRange;
   MultiClass *MC;
   std::vector<Init*> TemplateArgs;
+
   SubMultiClassReference() : MC(nullptr) {}
 
   bool isInvalid() const { return MC == nullptr; }
   void dump() const;
 };
 
-void SubMultiClassReference::dump() const {
+LLVM_DUMP_METHOD void SubMultiClassReference::dump() const {
   errs() << "Multiclass:\n";
 
   MC->dump();
@@ -77,7 +86,8 @@ bool TGParser::AddValue(Record *CurRec, SMLoc Loc, const RecordVal &RV) {
 /// SetValue -
 /// Return true on error, false on success.
 bool TGParser::SetValue(Record *CurRec, SMLoc Loc, Init *ValName,
-                        const std::vector<unsigned> &BitList, Init *V) {
+                        ArrayRef<unsigned> BitList, Init *V,
+                        bool AllowSelfAssignment) {
   if (!V) return false;
 
   if (!CurRec) CurRec = &CurMultiClass->Rec;
@@ -91,8 +101,8 @@ bool TGParser::SetValue(Record *CurRec, SMLoc Loc, Init *ValName,
   // in the resolution machinery.
   if (BitList.empty())
     if (VarInit *VI = dyn_cast<VarInit>(V))
-      if (VI->getNameInit() == ValName)
-        return false;
+      if (VI->getNameInit() == ValName && !AllowSelfAssignment)
+        return true;
 
   // If we are assigning to a subset of the bits in the value... then we must be
   // assigning to a field of BitsRecTy, which must have a BitsInit
@@ -131,7 +141,7 @@ bool TGParser::SetValue(Record *CurRec, SMLoc Loc, Init *ValName,
   }
 
   if (RV->setValue(V)) {
-    std::string InitType = "";
+    std::string InitType;
     if (BitsInit *BI = dyn_cast<BitsInit>(V))
       InitType = (Twine("' of type bit initializer with length ") +
                   Twine(BI->getNumBits())).str();
@@ -165,7 +175,7 @@ bool TGParser::AddSubClass(Record *CurRec, SubClassReference &SubClass) {
     if (i < SubClass.TemplateArgs.size()) {
       // If a value is specified for this template arg, set it now.
       if (SetValue(CurRec, SubClass.RefRange.Start, TArgs[i],
-                   std::vector<unsigned>(), SubClass.TemplateArgs[i]))
+                   None, SubClass.TemplateArgs[i]))
         return true;
 
       // Resolve it next.
@@ -184,13 +194,12 @@ bool TGParser::AddSubClass(Record *CurRec, SubClassReference &SubClass) {
 
   // Since everything went well, we can now set the "superclass" list for the
   // current record.
-  ArrayRef<Record *> SCs = SC->getSuperClasses();
-  ArrayRef<SMRange> SCRanges = SC->getSuperClassRanges();
-  for (unsigned i = 0, e = SCs.size(); i != e; ++i) {
-    if (CurRec->isSubClassOf(SCs[i]))
+  ArrayRef<std::pair<Record *, SMRange>> SCs = SC->getSuperClasses();
+  for (const auto &SCPair : SCs) {
+    if (CurRec->isSubClassOf(SCPair.first))
       return Error(SubClass.RefRange.Start,
-                   "Already subclass of '" + SCs[i]->getName() + "'!\n");
-    CurRec->addSuperClass(SCs[i], SCRanges[i]);
+                   "Already subclass of '" + SCPair.first->getName() + "'!\n");
+    CurRec->addSuperClass(SCPair.first, SCPair.second);
   }
 
   if (CurRec->isSubClassOf(SC))
@@ -243,8 +252,7 @@ bool TGParser::AddSubMultiClass(MultiClass *CurMC,
       // If a value is specified for this template arg, set it in the
       // superclass now.
       if (SetValue(CurRec, SubMultiClass.RefRange.Start, SMCTArgs[i],
-                   std::vector<unsigned>(),
-                   SubMultiClass.TemplateArgs[i]))
+                   None, SubMultiClass.TemplateArgs[i]))
         return true;
 
       // Resolve it next.
@@ -258,8 +266,7 @@ bool TGParser::AddSubMultiClass(MultiClass *CurMC,
       for (const auto &Def :
              makeArrayRef(CurMC->DefPrototypes).slice(newDefStart)) {
         if (SetValue(Def.get(), SubMultiClass.RefRange.Start, SMCTArgs[i],
-                     std::vector<unsigned>(),
-                     SubMultiClass.TemplateArgs[i]))
+                     None, SubMultiClass.TemplateArgs[i]))
           return true;
 
         // Resolve it next.
@@ -332,8 +339,7 @@ bool TGParser::ProcessForeachDefs(Record *CurRec, SMLoc Loc, IterSet &IterVals){
 
     IterRec->addValue(RecordVal(IterVar->getName(), IVal->getType(), false));
 
-    if (SetValue(IterRec.get(), Loc, IterVar->getName(),
-                 std::vector<unsigned>(), IVal))
+    if (SetValue(IterRec.get(), Loc, IterVar->getName(), None, IVal))
       return Error(Loc, "when instantiating this def");
 
     // Resolve it next.
@@ -649,7 +655,6 @@ bool TGParser::ParseOptionalBitList(std::vector<unsigned> &Ranges) {
   return false;
 }
 
-
 /// ParseType - Parse and return a tblgen type.  This returns null on error.
 ///
 ///   Type ::= STRING                       // string type
@@ -665,7 +670,7 @@ RecTy *TGParser::ParseType() {
   switch (Lex.getCode()) {
   default: TokError("Unknown token when expecting a type"); return nullptr;
   case tgtok::String: Lex.Lex(); return StringRecTy::get();
-  case tgtok::Code:   Lex.Lex(); return StringRecTy::get();
+  case tgtok::Code:   Lex.Lex(); return CodeRecTy::get();
   case tgtok::Bit:    Lex.Lex(); return BitRecTy::get();
   case tgtok::Int:    Lex.Lex(); return IntRecTy::get();
   case tgtok::Dag:    Lex.Lex(); return DagRecTy::get();
@@ -876,6 +881,7 @@ Init *TGParser::ParseOperation(Record *CurRec, RecTy *ItemType) {
   case tgtok::XConcat:
   case tgtok::XADD:
   case tgtok::XAND:
+  case tgtok::XOR:
   case tgtok::XSRA:
   case tgtok::XSRL:
   case tgtok::XSHL:
@@ -894,6 +900,7 @@ Init *TGParser::ParseOperation(Record *CurRec, RecTy *ItemType) {
     case tgtok::XConcat: Code = BinOpInit::CONCAT;Type = DagRecTy::get(); break;
     case tgtok::XADD:    Code = BinOpInit::ADD;   Type = IntRecTy::get(); break;
     case tgtok::XAND:    Code = BinOpInit::AND;   Type = IntRecTy::get(); break;
+    case tgtok::XOR:     Code = BinOpInit::OR;    Type = IntRecTy::get(); break;
     case tgtok::XSRA:    Code = BinOpInit::SRA;   Type = IntRecTy::get(); break;
     case tgtok::XSRL:    Code = BinOpInit::SRL;   Type = IntRecTy::get(); break;
     case tgtok::XSHL:    Code = BinOpInit::SHL;   Type = IntRecTy::get(); break;
@@ -1115,7 +1122,6 @@ RecTy *TGParser::ParseOperatorType() {
   return Type;
 }
 
-
 /// ParseSimpleValue - Parse a tblgen value.  This returns null on error.
 ///
 ///   SimpleValue ::= IDValue
@@ -1169,7 +1175,7 @@ Init *TGParser::ParseSimpleValue(Record *CurRec, RecTy *ItemType,
     break;
   }
   case tgtok::CodeFragment:
-    R = StringInit::get(Lex.getCurStrVal());
+    R = CodeInit::get(Lex.getCurStrVal());
     Lex.Lex();
     break;
   case tgtok::question:
@@ -1442,6 +1448,7 @@ Init *TGParser::ParseSimpleValue(Record *CurRec, RecTy *ItemType,
   case tgtok::XConcat:
   case tgtok::XADD:
   case tgtok::XAND:
+  case tgtok::XOR:
   case tgtok::XSRA:
   case tgtok::XSRL:
   case tgtok::XSHL:
@@ -1470,7 +1477,7 @@ Init *TGParser::ParseValue(Record *CurRec, RecTy *ItemType, IDParseMode Mode) {
   if (!Result) return nullptr;
 
   // Parse the suffixes now if present.
-  while (1) {
+  while (true) {
     switch (Lex.getCode()) {
     default: return Result;
     case tgtok::l_brace: {
@@ -1596,7 +1603,7 @@ std::vector<std::pair<llvm::Init*, std::string> >
 TGParser::ParseDagArgList(Record *CurRec) {
   std::vector<std::pair<llvm::Init*, std::string> > Result;
 
-  while (1) {
+  while (true) {
     // DagArg ::= VARNAME
     if (Lex.getCode() == tgtok::VarName) {
       // A missing value is treated like '?'.
@@ -1627,7 +1634,6 @@ TGParser::ParseDagArgList(Record *CurRec) {
 
   return Result;
 }
-
 
 /// ParseValueList - Parse a comma separated list of values, returning them as a
 /// vector.  Note that this always expects to be able to parse at least one
@@ -1679,7 +1685,6 @@ std::vector<Init*> TGParser::ParseValueList(Record *CurRec, Record *ArgsRec,
   return Result;
 }
 
-
 /// ParseDeclaration - Read a declaration, returning the name of field ID, or an
 /// empty string on error.  This can happen in a number of different context's,
 /// including within a def or in the template args for a def (which which case
@@ -1728,7 +1733,7 @@ Init *TGParser::ParseDeclaration(Record *CurRec,
     SMLoc ValLoc = Lex.getLoc();
     Init *Val = ParseValue(CurRec, Type);
     if (!Val ||
-        SetValue(CurRec, ValLoc, DeclName, std::vector<unsigned>(), Val))
+        SetValue(CurRec, ValLoc, DeclName, None, Val))
       // Return the name, even if an error is thrown.  This is so that we can
       // continue to make some progress, even without the value having been
       // initialized.
@@ -1853,7 +1858,6 @@ bool TGParser::ParseTemplateArgList(Record *CurRec) {
   return false;
 }
 
-
 /// ParseBodyItem - Parse a single item at within the body of a def or class.
 ///
 ///   BodyItem ::= Declaration ';'
@@ -1956,7 +1960,7 @@ bool TGParser::ParseObjectBody(Record *CurRec) {
 
     // Read all of the subclasses.
     SubClassReference SubClass = ParseSubClassReference(CurRec, false);
-    while (1) {
+    while (true) {
       // Check for error.
       if (!SubClass.Rec) return true;
 
@@ -2147,7 +2151,7 @@ bool TGParser::ParseClass() {
 std::vector<LetRecord> TGParser::ParseLetList() {
   std::vector<LetRecord> Result;
 
-  while (1) {
+  while (true) {
     if (Lex.getCode() != tgtok::Id) {
       TokError("expected identifier in let definition");
       return std::vector<LetRecord>();
@@ -2269,7 +2273,7 @@ bool TGParser::ParseMultiClass() {
     // Read all of the submulticlasses.
     SubMultiClassReference SubMultiClass =
       ParseSubMultiClassReference(CurMultiClass);
-    while (1) {
+    while (true) {
       // Check for error.
       if (!SubMultiClass.MC) return true;
 
@@ -2358,8 +2362,8 @@ Record *TGParser::InstantiateMulticlassDef(MultiClass &MC, Record *DefProto,
   // Set the value for NAME. We don't resolve references to it 'til later,
   // though, so that uses in nested multiclass names don't get
   // confused.
-  if (SetValue(CurRec.get(), Ref.RefRange.Start, "NAME",
-               std::vector<unsigned>(), DefmPrefix)) {
+  if (SetValue(CurRec.get(), Ref.RefRange.Start, "NAME", None, DefmPrefix,
+               /*AllowSelfAssignment*/true)) {
     Error(DefmPrefixRange.Start, "Could not resolve " +
           CurRec->getNameInitAsString() + ":NAME to '" +
           DefmPrefix->getAsUnquotedString() + "'");
@@ -2446,8 +2450,7 @@ bool TGParser::ResolveMulticlassDefArgs(MultiClass &MC, Record *CurRec,
     // Check if a value is specified for this temp-arg.
     if (i < TemplateVals.size()) {
       // Set it now.
-      if (SetValue(CurRec, DefmPrefixLoc, TArgs[i], std::vector<unsigned>(),
-                   TemplateVals[i]))
+      if (SetValue(CurRec, DefmPrefixLoc, TArgs[i], None, TemplateVals[i]))
         return true;
 
       // Resolve it next.
@@ -2525,7 +2528,7 @@ bool TGParser::ParseDefm(MultiClass *CurMultiClass) {
   SMLoc SubClassLoc = Lex.getLoc();
   SubClassReference Ref = ParseSubClassReference(nullptr, true);
 
-  while (1) {
+  while (true) {
     if (!Ref.Rec) return true;
 
     // To instantiate a multiclass, we need to first get the multiclass, then
@@ -2546,7 +2549,7 @@ bool TGParser::ParseDefm(MultiClass *CurMultiClass) {
       // The record name construction goes as follow:
       //  - If the def name is a string, prepend the prefix.
       //  - If the def name is a more complex pattern, use that pattern.
-      // As a result, the record is instanciated before resolving
+      // As a result, the record is instantiated before resolving
       // arguments, as it would make its name a string.
       Record *CurRec = InstantiateMulticlassDef(*MC, DefProto.get(), DefmPrefix,
                                                 SMRange(DefmLoc,
@@ -2555,7 +2558,7 @@ bool TGParser::ParseDefm(MultiClass *CurMultiClass) {
       if (!CurRec)
         return true;
 
-      // Now that the record is instanciated, we can resolve arguments.
+      // Now that the record is instantiated, we can resolve arguments.
       if (ResolveMulticlassDefArgs(*MC, CurRec, DefmLoc, SubClassLoc,
                                    TArgs, TemplateVals, true/*Delete args*/))
         return Error(SubClassLoc, "could not instantiate def");
@@ -2595,7 +2598,7 @@ bool TGParser::ParseDefm(MultiClass *CurMultiClass) {
     // Process all the classes to inherit as if they were part of a
     // regular 'def' and inherit all record values.
     SubClassReference SubClass = ParseSubClassReference(nullptr, false);
-    while (1) {
+    while (true) {
       // Check for error.
       if (!SubClass.Rec) return true;
 
@@ -2670,4 +2673,3 @@ bool TGParser::ParseFile() {
 
   return TokError("Unexpected input at top level");
 }
-

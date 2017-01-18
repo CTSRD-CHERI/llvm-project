@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03, c++11
 // <optional>
 
 // template <class U> optional<T>& operator=(U&& v);
@@ -16,19 +17,22 @@
 #include <cassert>
 #include <memory>
 
-#if _LIBCPP_STD_VER > 11
-
 using std::experimental::optional;
+
+struct AllowConstAssign {
+  AllowConstAssign() {}
+  AllowConstAssign(AllowConstAssign const&) {}
+  AllowConstAssign const& operator=(AllowConstAssign const&) const {
+      return *this;
+  }
+};
 
 struct X
 {
 };
 
-#endif  // _LIBCPP_STD_VER > 11
-
 int main()
 {
-#if _LIBCPP_STD_VER > 11
     static_assert(std::is_assignable<optional<int>, int>::value, "");
     static_assert(std::is_assignable<optional<int>, int&>::value, "");
     static_assert(std::is_assignable<optional<int>&, int>::value, "");
@@ -57,6 +61,11 @@ int main()
         assert(*opt == i);
     }
     {
+        optional<const AllowConstAssign> opt;
+        const AllowConstAssign other;
+        opt = other;
+    }
+    {
         optional<std::unique_ptr<int>> opt;
         opt = std::unique_ptr<int>(new int(3));
         assert(static_cast<bool>(opt) == true);
@@ -68,5 +77,4 @@ int main()
         assert(static_cast<bool>(opt) == true);
         assert(**opt == 3);
     }
-#endif  // _LIBCPP_STD_VER > 11
 }

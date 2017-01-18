@@ -16,18 +16,9 @@ using namespace clang::ast_matchers;
 
 namespace clang {
 namespace tidy {
+namespace readability {
 
 namespace {
-
-const internal::VariadicDynCastAllOfMatcher<Stmt, ParenExpr> parenExpr;
-
-AST_MATCHER_P(CastExpr, hasCastKind, CastKind, Kind) {
-  return Node.getCastKind() == Kind;
-}
-
-AST_MATCHER(QualType, isBool) {
-  return !Node.isNull() && Node->isBooleanType();
-}
 
 AST_MATCHER(Stmt, isMacroExpansion) {
   SourceManager &SM = Finder->getASTContext().getSourceManager();
@@ -62,7 +53,7 @@ StatementMatcher createImplicitCastFromBoolMatcher() {
             allOf(anyOf(hasCastKind(CK_NullToPointer),
                         hasCastKind(CK_NullToMemberPointer)),
                   hasSourceExpression(cxxBoolLiteral()))),
-      hasSourceExpression(expr(hasType(qualType(isBool())))));
+      hasSourceExpression(expr(hasType(qualType(booleanType())))));
 }
 
 StringRef
@@ -308,6 +299,21 @@ bool isAllowedConditionalCast(const ImplicitCastExpr *CastExpression,
 
 } // anonymous namespace
 
+ImplicitBoolCastCheck::ImplicitBoolCastCheck(StringRef Name,
+                                             ClangTidyContext *Context)
+    : ClangTidyCheck(Name, Context),
+      AllowConditionalIntegerCasts(
+          Options.get("AllowConditionalIntegerCasts", false)),
+      AllowConditionalPointerCasts(
+          Options.get("AllowConditionalPointerCasts", false)) {}
+
+void ImplicitBoolCastCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
+  Options.store(Opts, "AllowConditionalIntegerCasts",
+                AllowConditionalIntegerCasts);
+  Options.store(Opts, "AllowConditionalPointerCasts",
+                AllowConditionalPointerCasts);
+}
+
 void ImplicitBoolCastCheck::registerMatchers(MatchFinder *Finder) {
   // This check doesn't make much sense if we run it on language without
   // built-in bool support.
@@ -421,5 +427,6 @@ void ImplicitBoolCastCheck::handleCastFromBool(
   }
 }
 
+} // namespace readability
 } // namespace tidy
 } // namespace clang

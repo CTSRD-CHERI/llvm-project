@@ -21,6 +21,7 @@ struct Base {
   virtual void d2();
   virtual void e() = 0;
   virtual void f() = 0;
+  virtual void f2() const = 0;
   virtual void g() = 0;
 
   virtual void j() const;
@@ -37,6 +38,9 @@ struct Base {
 
   virtual void cv() const volatile;
   virtual void cv2() const volatile;
+
+  virtual void ne() noexcept(false);
+  virtual void t() throw();
 };
 
 struct SimpleCases : public Base {
@@ -71,7 +75,11 @@ public:
 
   virtual void f()=0;
   // CHECK-MESSAGES: :[[@LINE-1]]:16: warning: prefer using
-  // CHECK-FIXES: {{^}}  void f()override =0;
+  // CHECK-FIXES: {{^}}  void f() override =0;
+
+  virtual void f2() const=0;
+  // CHECK-MESSAGES: :[[@LINE-1]]:16: warning: prefer using
+  // CHECK-FIXES: {{^}}  void f2() const override =0;
 
   virtual void g() ABSTRACT;
   // CHECK-MESSAGES: :[[@LINE-1]]:16: warning: prefer using
@@ -104,6 +112,14 @@ public:
   virtual void o() __attribute__((unused));
   // CHECK-MESSAGES: :[[@LINE-1]]:16: warning: prefer using
   // CHECK-FIXES: {{^}}  void o() override __attribute__((unused));
+
+  virtual void ne() noexcept(false);
+  // CHECK-MESSAGES: :[[@LINE-1]]:16: warning: prefer using
+  // CHECK-FIXES: {{^}}  void ne() noexcept(false) override;
+
+  virtual void t() throw();
+  // CHECK-MESSAGES: :[[@LINE-1]]:16: warning: prefer using
+  // CHECK-FIXES: {{^}}  void t() throw() override;
 };
 
 // CHECK-MESSAGES-NOT: warning:

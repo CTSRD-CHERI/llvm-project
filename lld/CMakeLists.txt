@@ -1,4 +1,5 @@
 set(LLD_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(LLD_INCLUDE_DIR ${LLD_SOURCE_DIR}/include )
 set(LLD_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
 # Compute the LLD version from the LLVM version.
@@ -86,8 +87,14 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
     )
 endif()
 
+macro(add_lld_library name)
+  add_llvm_library(${name} ${ARGN})
+  set_target_properties(${name} PROPERTIES FOLDER "lld libraries")
+endmacro(add_lld_library)
+
+
 add_subdirectory(lib)
-add_subdirectory(tools)
+add_subdirectory(tools/lld)
 
 if (LLVM_INCLUDE_TESTS)
   add_subdirectory(test)

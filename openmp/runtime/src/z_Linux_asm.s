@@ -109,6 +109,32 @@ KMP_PREFIX_UNDERSCORE(\proc):
 # endif // KMP_OS_DARWIN
 #endif // KMP_ARCH_X86 || KMP_ARCH_x86_64
 
+#if KMP_OS_LINUX && KMP_ARCH_AARCH64
+
+#  define KMP_PREFIX_UNDERSCORE(x) x  // no extra underscore for Linux* OS symbols
+// Format labels so that they don't override function names in gdb's backtraces
+#  define KMP_LABEL(x) .L_##x         // local label hidden from backtraces
+
+.macro ALIGN size
+	.align 1<<(\size)
+.endm
+
+.macro DEBUG_INFO proc
+	.cfi_endproc
+// Not sure why we need .type and .size for the functions
+	ALIGN 2
+	.type  \proc,@function
+	.size  \proc,.-\proc
+.endm
+
+.macro PROC proc
+	ALIGN 2
+	.globl KMP_PREFIX_UNDERSCORE(\proc)
+KMP_PREFIX_UNDERSCORE(\proc):
+	.cfi_startproc
+.endm
+
+#endif // KMP_OS_LINUX && KMP_ARCH_AARCH64
 
 // -----------------------------------------------------------------------
 // data
@@ -1410,9 +1436,345 @@ KMP_LABEL(kmp_1_exit):
 
         DEBUG_INFO __kmp_bsr32
 
-	
+
 // -----------------------------------------------------------------------
 #endif /* KMP_ARCH_X86_64 */
+
+// '
+#if KMP_OS_LINUX && KMP_ARCH_AARCH64
+
+//------------------------------------------------------------------------
+//
+// typedef void	(*microtask_t)( int *gtid, int *tid, ... );
+//
+// int
+// __kmp_invoke_microtask( void (*pkfn) (int gtid, int tid, ...),
+//		           int gtid, int tid,
+//                         int argc, void *p_argv[] ) {
+//    (*pkfn)( & gtid, & tid, argv[0], ... );
+//    return 1;
+// }
+//
+// parameters:
+//	x0:	pkfn
+//	w1:	gtid
+//	w2:	tid
+//	w3:	argc
+//	x4:	p_argv
+//	x5:	&exit_frame
+//
+// locals:
+//	__gtid:	gtid parm pushed on stack so can pass &gtid to pkfn
+//	__tid:	tid parm pushed on stack so can pass &tid to pkfn
+//
+// reg temps:
+//	 x8:	used to hold pkfn address
+//	 w9:	used as temporary for number of pkfn parms
+//	x10:	used to traverse p_argv array
+//	x11:	used as temporary for stack placement calculation
+//	x12:	used as temporary for stack parameters
+//	x19:	used to preserve exit_frame_ptr, callee-save
+//
+// return:	w0	(always 1/TRUE)
+//
+
+__gtid = 4
+__tid = 8
+
+// -- Begin __kmp_invoke_microtask
+// mark_begin;
+	.text
+	PROC __kmp_invoke_microtask
+
+	stp	x29, x30, [sp, #-16]!
+# if OMPT_SUPPORT
+	stp	x19, x20, [sp, #-16]!
+# endif
+	mov	x29, sp
+
+	orr	w9, wzr, #1
+	add	w9, w9, w3, lsr #1
+	sub	sp, sp, w9, lsl #4
+	mov	x11, sp
+
+	mov	x8, x0
+	str	w1, [x29, #-__gtid]
+	str	w2, [x29, #-__tid]
+	mov	w9, w3
+	mov	x10, x4
+# if OMPT_SUPPORT
+	mov	x19, x5
+	str	x29, [x19]
+# endif
+
+	sub	x0, x29, #__gtid
+	sub	x1, x29, #__tid
+
+	cbz	w9, KMP_LABEL(kmp_1)
+	ldr	x2, [x10]
+
+	sub	w9, w9, #1
+	cbz	w9, KMP_LABEL(kmp_1)
+	ldr	x3, [x10, #8]!
+
+	sub	w9, w9, #1
+	cbz	w9, KMP_LABEL(kmp_1)
+	ldr	x4, [x10, #8]!
+
+	sub	w9, w9, #1
+	cbz	w9, KMP_LABEL(kmp_1)
+	ldr	x5, [x10, #8]!
+
+	sub	w9, w9, #1
+	cbz	w9, KMP_LABEL(kmp_1)
+	ldr	x6, [x10, #8]!
+
+	sub	w9, w9, #1
+	cbz	w9, KMP_LABEL(kmp_1)
+	ldr	x7, [x10, #8]!
+
+KMP_LABEL(kmp_0):
+	sub	w9, w9, #1
+	cbz	w9, KMP_LABEL(kmp_1)
+	ldr	x12, [x10, #8]!
+	str	x12, [x11], #8
+	b	KMP_LABEL(kmp_0)
+KMP_LABEL(kmp_1):
+	blr	x8
+	orr	w0, wzr, #1
+	mov	sp, x29
+# if OMPT_SUPPORT
+	str	xzr, [x19]
+	ldp	x19, x20, [sp], #16
+# endif
+	ldp	x29, x30, [sp], #16
+	ret
+
+	DEBUG_INFO __kmp_invoke_microtask
+// -- End  __kmp_invoke_microtask
+
+#endif /* KMP_OS_LINUX && KMP_ARCH_AARCH64 */
+
+#if KMP_ARCH_PPC64
+
+//------------------------------------------------------------------------
+//
+// typedef void	(*microtask_t)( int *gtid, int *tid, ... );
+//
+// int
+// __kmp_invoke_microtask( void (*pkfn) (int gtid, int tid, ...),
+//		           int gtid, int tid,
+//                         int argc, void *p_argv[] ) {
+//    (*pkfn)( & gtid, & tid, argv[0], ... );
+//    return 1;
+// }
+//
+// parameters:
+//	r3:	pkfn
+//	r4:	gtid
+//	r5:	tid
+//	r6:	argc
+//	r7:	p_argv
+//	r8:	&exit_frame
+//
+// return:	r3	(always 1/TRUE)
+//
+	.text
+# if KMP_ARCH_PPC64_LE
+	.abiversion 2
+# endif
+	.globl	__kmp_invoke_microtask
+
+# if KMP_ARCH_PPC64_LE
+	.p2align	4
+# else
+	.p2align	2
+# endif
+
+	.type	__kmp_invoke_microtask,@function
+
+# if KMP_ARCH_PPC64_LE
+__kmp_invoke_microtask:
+.Lfunc_begin0:
+.Lfunc_gep0:
+	addis 2, 12, .TOC.-.Lfunc_gep0@ha
+	addi 2, 2, .TOC.-.Lfunc_gep0@l
+.Lfunc_lep0:
+	.localentry	__kmp_invoke_microtask, .Lfunc_lep0-.Lfunc_gep0
+# else
+	.section	.opd,"aw",@progbits
+__kmp_invoke_microtask:
+	.p2align	3
+	.quad	.Lfunc_begin0
+	.quad	.TOC.@tocbase
+	.quad	0
+	.text
+.Lfunc_begin0:
+# endif
+
+// -- Begin __kmp_invoke_microtask
+// mark_begin;
+
+// We need to allocate a stack frame large enough to hold all of the parameters
+// on the stack for the microtask plus what this function needs. That's 48
+// bytes under the ELFv1 ABI (32 bytes under ELFv2), plus 8*(2 + argc) for the
+// parameters to the microtask, plus 8 bytes to store the values of r4 and r5,
+// and 8 bytes to store r31. With OMP-T support, we need an additional 8 bytes
+// to save r30 to hold a copy of r8.
+
+	.cfi_startproc
+	mflr 0
+	std 31, -8(1)
+	std 0, 16(1)
+
+// This is unusual because normally we'd set r31 equal to r1 after the stack
+// frame is established. In this case, however, we need to dynamically compute
+// the stack frame size, and so we keep a direct copy of r1 to access our
+// register save areas and restore the r1 value before returning.
+	mr 31, 1
+	.cfi_def_cfa_register r31
+	.cfi_offset r31, -8
+	.cfi_offset lr, 16
+
+// Compute the size necessary for the local stack frame.
+# if KMP_ARCH_PPC64_LE
+	li 12, 72
+# else
+	li 12, 88
+# endif
+	sldi 0, 6, 3
+	add 12, 0, 12
+	neg 12, 12
+
+// We need to make sure that the stack frame stays aligned (to 16 bytes, except
+// under the BG/Q CNK, where it must be to 32 bytes).
+# if KMP_OS_CNK
+	li 0, -32
+# else
+	li 0, -16
+# endif
+	and 12, 0, 12
+
+// Establish the local stack frame.
+	stdux 1, 1, 12
+
+# if OMPT_SUPPORT
+	.cfi_offset r30, -16
+	std 30, -16(31)
+	std 1, 0(8)
+	mr 30, 8
+# endif
+
+// Store gtid and tid to the stack because they're passed by reference to the microtask.
+	stw 4, -20(31)
+	stw 5, -24(31)
+
+	mr 12, 6
+	mr 4, 7
+
+	cmpwi 0, 12, 1
+	blt	 0, .Lcall
+
+	ld 5, 0(4)
+
+	cmpwi 0, 12, 2
+	blt	 0, .Lcall
+
+	ld 6, 8(4)
+
+	cmpwi 0, 12, 3
+	blt	 0, .Lcall
+
+	ld 7, 16(4)
+
+	cmpwi 0, 12, 4
+	blt	 0, .Lcall
+
+	ld 8, 24(4)
+
+	cmpwi 0, 12, 5
+	blt	 0, .Lcall
+
+	ld 9, 32(4)
+
+	cmpwi 0, 12, 6
+	blt	 0, .Lcall
+
+	ld 10, 40(4)
+
+	cmpwi 0, 12, 7
+	blt	 0, .Lcall
+
+// There are more than 6 microtask parameters, so we need to store the
+// remainder to the stack.
+	addi 12, 12, -6
+	mtctr 12
+
+// These are set to 8 bytes before the first desired store address (we're using
+// pre-increment loads and stores in the loop below). The parameter save area
+// for the microtask begins 48 + 8*8 == 112 bytes above r1 for ELFv1 and
+// 32 + 8*8 == 96 bytes above r1 for ELFv2.
+	addi 4, 4, 40
+# if KMP_ARCH_PPC64_LE
+	addi 12, 1, 88
+# else
+	addi 12, 1, 104
+# endif
+
+.Lnext:
+	ldu 0, 8(4)
+	stdu 0, 8(12)
+	bdnz .Lnext
+
+.Lcall:
+# if KMP_ARCH_PPC64_LE
+	std 2, 24(1)
+	mr 12, 3
+#else
+	std 2, 40(1)
+// For ELFv1, we need to load the actual function address from the function descriptor.
+	ld 12, 0(3)
+	ld 2, 8(3)
+	ld 11, 16(3)
+#endif
+
+	addi 3, 31, -20
+	addi 4, 31, -24
+
+	mtctr 12
+	bctrl
+# if KMP_ARCH_PPC64_LE
+	ld 2, 24(1)
+# else
+	ld 2, 40(1)
+# endif
+
+# if OMPT_SUPPORT
+	li 3, 0
+	std 3, 0(30)
+# endif
+
+	li 3, 1
+
+# if OMPT_SUPPORT
+	ld 30, -16(31)
+# endif
+
+	mr 1, 31
+	ld 0, 16(1)
+	ld 31, -8(1)
+	mtlr 0
+	blr
+
+	.long	0
+	.quad	0
+.Lfunc_end0:
+	.size	__kmp_invoke_microtask, .Lfunc_end0-.Lfunc_begin0
+	.cfi_endproc
+
+// -- End  __kmp_invoke_microtask
+
+#endif /* KMP_ARCH_PPC64 */
 
 #if KMP_ARCH_ARM
     .data

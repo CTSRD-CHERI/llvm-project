@@ -17,12 +17,14 @@ add_llvm_target(SystemZCodeGen
   SystemZConstantPoolValue.cpp
   SystemZElimCompare.cpp
   SystemZFrameLowering.cpp
+  SystemZHazardRecognizer.cpp
   SystemZISelDAGToDAG.cpp
   SystemZISelLowering.cpp
   SystemZInstrInfo.cpp
   SystemZLDCleanup.cpp
   SystemZLongBranch.cpp
   SystemZMachineFunctionInfo.cpp
+  SystemZMachineScheduler.cpp
   SystemZMCInstLower.cpp
   SystemZRegisterInfo.cpp
   SystemZSelectionDAGInfo.cpp
@@ -30,6 +32,7 @@ add_llvm_target(SystemZCodeGen
   SystemZSubtarget.cpp
   SystemZTargetMachine.cpp
   SystemZTargetTransformInfo.cpp
+  SystemZTDC.cpp
   )
 
 add_subdirectory(AsmParser)

@@ -18,9 +18,11 @@
 #include <type_traits>
 #include <cassert>
 
+#include "test_macros.h"
+
 template <class Tuple>
 void
-test0(const Tuple& t)
+test0(const Tuple&)
 {
     static_assert(std::tuple_size<Tuple>::value == 0, "");
 }
@@ -54,10 +56,10 @@ test2a(const Tuple& t)
     assert(std::get<1>(t) == 'a');
 }
 
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
 template <class Tuple>
-constexpr int 
-test3(const Tuple& t)
+constexpr int
+test3(const Tuple&)
 {
     return std::tuple_size<Tuple>::value;
 }
@@ -79,7 +81,7 @@ int main()
         double i = 2.5;
         char c = 'a';
         test2a(std::forward_as_tuple(i, c));
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
         static_assert ( test3 (std::forward_as_tuple(i, c)) == 2, "" );
 #endif
     }

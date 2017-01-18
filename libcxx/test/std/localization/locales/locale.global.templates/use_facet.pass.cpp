@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// XFAIL: libcpp-no-exceptions
 // <locale>
 
 // template <class Facet> const Facet& use_facet(const locale& loc);
@@ -34,6 +35,7 @@ int main()
     try
     {
         const my_facet& f = std::use_facet<my_facet>(std::locale());
+        ((void)f); // Prevent unused warning
         assert(false);
     }
     catch (std::bad_cast&)

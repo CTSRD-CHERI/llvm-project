@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/Support/SCEVAffinator.h"
+#include "polly/Options.h"
 #include "polly/ScopInfo.h"
 #include "polly/Support/GICHelper.h"
 #include "polly/Support/SCEVValidator.h"
@@ -24,17 +25,112 @@
 using namespace llvm;
 using namespace polly;
 
-SCEVAffinator::SCEVAffinator(Scop *S)
-    : S(S), Ctx(S->getIslCtx()), R(S->getRegion()), SE(*S->getSE()),
-      TD(R.getEntry()->getParent()->getParent()->getDataLayout()) {}
+static cl::opt<bool> IgnoreIntegerWrapping(
+    "polly-ignore-integer-wrapping",
+    cl::desc("Do not build run-time checks to proof absence of integer "
+             "wrapping"),
+    cl::Hidden, cl::ZeroOrMore, cl::init(false), cl::cat(PollyCategory));
 
-SCEVAffinator::~SCEVAffinator() {
-  for (const auto &CachedPair : CachedExpressions)
-    isl_pw_aff_free(CachedPair.second);
+// The maximal number of basic sets we allow during the construction of a
+// piecewise affine function. More complex ones will result in very high
+// compile time.
+static int const MaxDisjunctionsInPwAff = 100;
+
+// The maximal number of bits for which a general expression is modeled
+// precisely.
+static unsigned const MaxSmallBitWidth = 7;
+
+/// Add the number of basic sets in @p Domain to @p User
+static isl_stat addNumBasicSets(__isl_take isl_set *Domain,
+                                __isl_take isl_aff *Aff, void *User) {
+  auto *NumBasicSets = static_cast<unsigned *>(User);
+  *NumBasicSets += isl_set_n_basic_set(Domain);
+  isl_set_free(Domain);
+  isl_aff_free(Aff);
+  return isl_stat_ok;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::getPwAff(const SCEV *Expr,
-                                               BasicBlock *BB) {
+/// Helper to free a PWACtx object.
+static void freePWACtx(__isl_take PWACtx &PWAC) {
+  isl_pw_aff_free(PWAC.first);
+  isl_set_free(PWAC.second);
+}
+
+/// Helper to copy a PWACtx object.
+static __isl_give PWACtx copyPWACtx(const __isl_keep PWACtx &PWAC) {
+  return std::make_pair(isl_pw_aff_copy(PWAC.first), isl_set_copy(PWAC.second));
+}
+
+/// Determine if @p PWAC is too complex to continue.
+///
+/// Note that @p PWAC will be "free" (deallocated) if this function returns
+/// true, but not if this function returns false.
+static bool isTooComplex(PWACtx &PWAC) {
+  unsigned NumBasicSets = 0;
+  isl_pw_aff_foreach_piece(PWAC.first, addNumBasicSets, &NumBasicSets);
+  if (NumBasicSets <= MaxDisjunctionsInPwAff)
+    return false;
+  freePWACtx(PWAC);
+  return true;
+}
+
+/// Return the flag describing the possible wrapping of @p Expr.
+static SCEV::NoWrapFlags getNoWrapFlags(const SCEV *Expr) {
+  if (auto *NAry = dyn_cast<SCEVNAryExpr>(Expr))
+    return NAry->getNoWrapFlags();
+  return SCEV::NoWrapMask;
+}
+
+static void combine(__isl_keep PWACtx &PWAC0, const __isl_take PWACtx &PWAC1,
+                    isl_pw_aff *(Fn)(isl_pw_aff *, isl_pw_aff *)) {
+  PWAC0.first = Fn(PWAC0.first, PWAC1.first);
+  PWAC0.second = isl_set_union(PWAC0.second, PWAC1.second);
+}
+
+static __isl_give isl_pw_aff *getWidthExpValOnDomain(unsigned Width,
+                                                     __isl_take isl_set *Dom) {
+  auto *Ctx = isl_set_get_ctx(Dom);
+  auto *WidthVal = isl_val_int_from_ui(Ctx, Width);
+  auto *ExpVal = isl_val_2exp(WidthVal);
+  return isl_pw_aff_val_on_domain(Dom, ExpVal);
+}
+
+SCEVAffinator::SCEVAffinator(Scop *S, LoopInfo &LI)
+    : S(S), Ctx(S->getIslCtx()), SE(*S->getSE()), LI(LI),
+      TD(S->getFunction().getParent()->getDataLayout()) {}
+
+SCEVAffinator::~SCEVAffinator() {
+  for (auto &CachedPair : CachedExpressions)
+    freePWACtx(CachedPair.second);
+}
+
+Loop *SCEVAffinator::getScope() { return BB ? LI.getLoopFor(BB) : nullptr; }
+
+void SCEVAffinator::interpretAsUnsigned(__isl_keep PWACtx &PWAC,
+                                        unsigned Width) {
+  auto *PWA = PWAC.first;
+  auto *NonNegDom = isl_pw_aff_nonneg_set(isl_pw_aff_copy(PWA));
+  auto *NonNegPWA = isl_pw_aff_intersect_domain(isl_pw_aff_copy(PWA),
+                                                isl_set_copy(NonNegDom));
+  auto *ExpPWA = getWidthExpValOnDomain(Width, isl_set_complement(NonNegDom));
+  PWAC.first = isl_pw_aff_union_add(NonNegPWA, isl_pw_aff_add(PWA, ExpPWA));
+}
+
+void SCEVAffinator::takeNonNegativeAssumption(PWACtx &PWAC) {
+  auto *NegPWA = isl_pw_aff_neg(isl_pw_aff_copy(PWAC.first));
+  auto *NegDom = isl_pw_aff_pos_set(NegPWA);
+  PWAC.second = isl_set_union(PWAC.second, isl_set_copy(NegDom));
+  auto *Restriction = BB ? NegDom : isl_set_params(NegDom);
+  auto DL = BB ? BB->getTerminator()->getDebugLoc() : DebugLoc();
+  S->recordAssumption(UNSIGNED, Restriction, DL, AS_RESTRICTION, BB);
+}
+
+__isl_give PWACtx SCEVAffinator::getPWACtxFromPWA(__isl_take isl_pw_aff *PWA) {
+  return std::make_pair(
+      PWA, isl_set_empty(isl_space_set_alloc(Ctx, 0, NumIterators)));
+}
+
+__isl_give PWACtx SCEVAffinator::getPwAff(const SCEV *Expr, BasicBlock *BB) {
   this->BB = BB;
 
   if (BB) {
@@ -44,15 +140,11 @@ __isl_give isl_pw_aff *SCEVAffinator::getPwAff(const SCEV *Expr,
   } else
     NumIterators = 0;
 
-  S->addParams(getParamsInAffineExpr(&R, Expr, SE));
-
   return visit(Expr);
 }
 
-__isl_give isl_set *
-SCEVAffinator::getWrappingContext(SCEV::NoWrapFlags Flags, Type *ExprType,
-                                  __isl_keep isl_pw_aff *PWA,
-                                  __isl_take isl_set *ExprDomain) const {
+__isl_give PWACtx SCEVAffinator::checkForWrapping(const SCEV *Expr,
+                                                  PWACtx PWAC) const {
   // If the SCEV flags do contain NSW (no signed wrap) then PWA already
   // represents Expr in modulo semantic (it is not allowed to overflow), thus we
   // are done. Otherwise, we will compute:
@@ -60,75 +152,38 @@ SCEVAffinator::getWrappingContext(SCEV::NoWrapFlags Flags, Type *ExprType,
   // whereas n is the number of bits of the Expr, hence:
   //   n = bitwidth(ExprType)
 
-  if (Flags & SCEV::FlagNSW)
-    return nullptr;
+  if (IgnoreIntegerWrapping || (getNoWrapFlags(Expr) & SCEV::FlagNSW))
+    return PWAC;
 
-  isl_pw_aff *PWAMod = addModuloSemantic(isl_pw_aff_copy(PWA), ExprType);
-  if (isl_pw_aff_is_equal(PWA, PWAMod)) {
-    isl_pw_aff_free(PWAMod);
-    return nullptr;
-  }
+  auto *PWA = PWAC.first;
+  auto *PWAMod = addModuloSemantic(isl_pw_aff_copy(PWA), Expr->getType());
+  auto *NotEqualSet = isl_pw_aff_ne_set(isl_pw_aff_copy(PWA), PWAMod);
+  PWAC.second = isl_set_union(PWAC.second, isl_set_copy(NotEqualSet));
+  PWAC.second = isl_set_coalesce(PWAC.second);
 
-  PWA = isl_pw_aff_copy(PWA);
+  const DebugLoc &Loc = BB ? BB->getTerminator()->getDebugLoc() : DebugLoc();
+  NotEqualSet = BB ? NotEqualSet : isl_set_params(NotEqualSet);
+  NotEqualSet = isl_set_coalesce(NotEqualSet);
 
-  auto *NotEqualSet = isl_pw_aff_ne_set(PWA, PWAMod);
-  NotEqualSet = isl_set_intersect(NotEqualSet, isl_set_copy(ExprDomain));
-  NotEqualSet = isl_set_gist_params(NotEqualSet, S->getContext());
-  NotEqualSet = isl_set_params(NotEqualSet);
-  return NotEqualSet;
-}
+  if (isl_set_is_empty(NotEqualSet))
+    isl_set_free(NotEqualSet);
+  else
+    S->recordAssumption(WRAPPING, NotEqualSet, Loc, AS_RESTRICTION, BB);
 
-__isl_give isl_set *SCEVAffinator::getWrappingContext() const {
-
-  isl_set *WrappingCtx = isl_set_empty(S->getParamSpace());
-
-  for (const auto &CachedPair : CachedExpressions) {
-    const SCEV *Expr = CachedPair.first.first;
-    SCEV::NoWrapFlags Flags;
-
-    switch (Expr->getSCEVType()) {
-    case scAddExpr:
-      Flags = cast<SCEVAddExpr>(Expr)->getNoWrapFlags();
-      break;
-    case scMulExpr:
-      Flags = cast<SCEVMulExpr>(Expr)->getNoWrapFlags();
-      break;
-    case scAddRecExpr:
-      Flags = cast<SCEVAddRecExpr>(Expr)->getNoWrapFlags();
-      break;
-    default:
-      continue;
-    }
-
-    isl_pw_aff *PWA = CachedPair.second;
-    BasicBlock *BB = CachedPair.first.second;
-    isl_set *ExprDomain = BB ? S->getDomainConditions(BB) : nullptr;
-
-    isl_set *WPWACtx =
-        getWrappingContext(Flags, Expr->getType(), PWA, ExprDomain);
-    isl_set_free(ExprDomain);
-
-    WrappingCtx = WPWACtx ? isl_set_union(WrappingCtx, WPWACtx) : WrappingCtx;
-  }
-
-  return WrappingCtx;
+  return PWAC;
 }
 
 __isl_give isl_pw_aff *
 SCEVAffinator::addModuloSemantic(__isl_take isl_pw_aff *PWA,
                                  Type *ExprType) const {
-  unsigned Width = TD.getTypeStoreSizeInBits(ExprType);
+  unsigned Width = TD.getTypeSizeInBits(ExprType);
   isl_ctx *Ctx = isl_pw_aff_get_ctx(PWA);
 
   isl_val *ModVal = isl_val_int_from_ui(Ctx, Width);
   ModVal = isl_val_2exp(ModVal);
 
-  isl_val *AddVal = isl_val_int_from_ui(Ctx, Width - 1);
-  AddVal = isl_val_2exp(AddVal);
-
   isl_set *Domain = isl_pw_aff_domain(isl_pw_aff_copy(PWA));
-
-  isl_pw_aff *AddPW = isl_pw_aff_val_on_domain(Domain, AddVal);
+  isl_pw_aff *AddPW = getWidthExpValOnDomain(Width - 1, Domain);
 
   PWA = isl_pw_aff_add(PWA, isl_pw_aff_copy(AddPW));
   PWA = isl_pw_aff_mod_val(PWA, ModVal);
@@ -151,12 +206,28 @@ bool SCEVAffinator::hasNSWAddRecForLoop(Loop *L) const {
   return false;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visit(const SCEV *Expr) {
+bool SCEVAffinator::computeModuloForExpr(const SCEV *Expr) {
+  unsigned Width = TD.getTypeSizeInBits(Expr->getType());
+  // We assume nsw expressions never overflow.
+  if (auto *NAry = dyn_cast<SCEVNAryExpr>(Expr))
+    if (NAry->getNoWrapFlags() & SCEV::FlagNSW)
+      return false;
+  return Width <= MaxSmallBitWidth;
+}
+
+__isl_give PWACtx SCEVAffinator::visit(const SCEV *Expr) {
 
   auto Key = std::make_pair(Expr, BB);
-  isl_pw_aff *PWA = CachedExpressions[Key];
-  if (PWA)
-    return isl_pw_aff_copy(PWA);
+  PWACtx PWAC = CachedExpressions[Key];
+  if (PWAC.first)
+    return copyPWACtx(PWAC);
+
+  auto ConstantAndLeftOverPair = extractConstantFactor(Expr, SE);
+  auto *Factor = ConstantAndLeftOverPair.first;
+  Expr = ConstantAndLeftOverPair.second;
+
+  auto *Scope = getScope();
+  S->addParams(getParamsInAffineExpr(&S->getRegion(), Scope, Expr, SE));
 
   // In case the scev is a valid parameter, we do not further analyze this
   // expression, but create a new parameter in the isl_pw_aff. This allows us
@@ -170,22 +241,32 @@ __isl_give isl_pw_aff *SCEVAffinator::visit(const SCEV *Expr) {
     isl_aff *Affine = isl_aff_zero_on_domain(isl_local_space_from_space(Space));
     Affine = isl_aff_add_coefficient_si(Affine, isl_dim_param, 0, 1);
 
-    PWA = isl_pw_aff_alloc(Domain, Affine);
-    CachedExpressions[Key] = PWA;
-    return isl_pw_aff_copy(PWA);
+    PWAC = getPWACtxFromPWA(isl_pw_aff_alloc(Domain, Affine));
+  } else {
+    PWAC = SCEVVisitor<SCEVAffinator, PWACtx>::visit(Expr);
+    if (computeModuloForExpr(Expr))
+      PWAC.first = addModuloSemantic(PWAC.first, Expr->getType());
+    else
+      PWAC = checkForWrapping(Expr, PWAC);
   }
 
-  PWA = SCEVVisitor<SCEVAffinator, isl_pw_aff *>::visit(Expr);
+  if (!Factor->getType()->isIntegerTy(1)) {
+    combine(PWAC, visitConstant(Factor), isl_pw_aff_mul);
+    if (computeModuloForExpr(Key.first))
+      PWAC.first = addModuloSemantic(PWAC.first, Expr->getType());
+  }
 
-  // For compile time reasons we need to simplify the PWA before we cache and
+  // For compile time reasons we need to simplify the PWAC before we cache and
   // return it.
-  PWA = isl_pw_aff_coalesce(PWA);
+  PWAC.first = isl_pw_aff_coalesce(PWAC.first);
+  if (!computeModuloForExpr(Key.first))
+    PWAC = checkForWrapping(Key.first, PWAC);
 
-  CachedExpressions[Key] = PWA;
-  return isl_pw_aff_copy(PWA);
+  CachedExpressions[Key] = copyPWACtx(PWAC);
+  return PWAC;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitConstant(const SCEVConstant *Expr) {
+__isl_give PWACtx SCEVAffinator::visitConstant(const SCEVConstant *Expr) {
   ConstantInt *Value = Expr->getValue();
   isl_val *v;
 
@@ -203,65 +284,146 @@ __isl_give isl_pw_aff *SCEVAffinator::visitConstant(const SCEVConstant *Expr) {
 
   isl_space *Space = isl_space_set_alloc(Ctx, 0, NumIterators);
   isl_local_space *ls = isl_local_space_from_space(Space);
-  return isl_pw_aff_from_aff(isl_aff_val_on_domain(ls, v));
+  return getPWACtxFromPWA(isl_pw_aff_from_aff(isl_aff_val_on_domain(ls, v)));
 }
 
-__isl_give isl_pw_aff *
+__isl_give PWACtx
 SCEVAffinator::visitTruncateExpr(const SCEVTruncateExpr *Expr) {
-  llvm_unreachable("SCEVTruncateExpr not yet supported");
+  // Truncate operations are basically modulo operations, thus we can
+  // model them that way. However, for large types we assume the operand
+  // to fit in the new type size instead of introducing a modulo with a very
+  // large constant.
+
+  auto *Op = Expr->getOperand();
+  auto OpPWAC = visit(Op);
+
+  unsigned Width = TD.getTypeSizeInBits(Expr->getType());
+
+  if (computeModuloForExpr(Expr))
+    return OpPWAC;
+
+  auto *Dom = isl_pw_aff_domain(isl_pw_aff_copy(OpPWAC.first));
+  auto *ExpPWA = getWidthExpValOnDomain(Width - 1, Dom);
+  auto *GreaterDom =
+      isl_pw_aff_ge_set(isl_pw_aff_copy(OpPWAC.first), isl_pw_aff_copy(ExpPWA));
+  auto *SmallerDom =
+      isl_pw_aff_lt_set(isl_pw_aff_copy(OpPWAC.first), isl_pw_aff_neg(ExpPWA));
+  auto *OutOfBoundsDom = isl_set_union(SmallerDom, GreaterDom);
+  OpPWAC.second = isl_set_union(OpPWAC.second, isl_set_copy(OutOfBoundsDom));
+
+  if (!BB) {
+    assert(isl_set_dim(OutOfBoundsDom, isl_dim_set) == 0 &&
+           "Expected a zero dimensional set for non-basic-block domains");
+    OutOfBoundsDom = isl_set_params(OutOfBoundsDom);
+  }
+
+  S->recordAssumption(UNSIGNED, OutOfBoundsDom, DebugLoc(), AS_RESTRICTION, BB);
+
+  return OpPWAC;
 }
 
-__isl_give isl_pw_aff *
+__isl_give PWACtx
 SCEVAffinator::visitZeroExtendExpr(const SCEVZeroExtendExpr *Expr) {
-  llvm_unreachable("SCEVZeroExtendExpr not yet supported");
+  // A zero-extended value can be interpreted as a piecewise defined signed
+  // value. If the value was non-negative it stays the same, otherwise it
+  // is the sum of the original value and 2^n where n is the bit-width of
+  // the original (or operand) type. Examples:
+  //   zext i8 127 to i32 -> { [127] }
+  //   zext i8  -1 to i32 -> { [256 + (-1)] } = { [255] }
+  //   zext i8  %v to i32 -> [v] -> { [v] | v >= 0; [256 + v] | v < 0 }
+  //
+  // However, LLVM/Scalar Evolution uses zero-extend (potentially lead by a
+  // truncate) to represent some forms of modulo computation. The left-hand side
+  // of the condition in the code below would result in the SCEV
+  // "zext i1 <false, +, true>for.body" which is just another description
+  // of the C expression "i & 1 != 0" or, equivalently, "i % 2 != 0".
+  //
+  //   for (i = 0; i < N; i++)
+  //     if (i & 1 != 0 /* == i % 2 */)
+  //       /* do something */
+  //
+  // If we do not make the modulo explicit but only use the mechanism described
+  // above we will get the very restrictive assumption "N < 3", because for all
+  // values of N >= 3 the SCEVAddRecExpr operand of the zero-extend would wrap.
+  // Alternatively, we can make the modulo in the operand explicit in the
+  // resulting piecewise function and thereby avoid the assumption on N. For the
+  // example this would result in the following piecewise affine function:
+  // { [i0] -> [(1)] : 2*floor((-1 + i0)/2) = -1 + i0;
+  //   [i0] -> [(0)] : 2*floor((i0)/2) = i0 }
+  // To this end we can first determine if the (immediate) operand of the
+  // zero-extend can wrap and, in case it might, we will use explicit modulo
+  // semantic to compute the result instead of emitting non-wrapping
+  // assumptions.
+  //
+  // Note that operands with large bit-widths are less likely to be negative
+  // because it would result in a very large access offset or loop bound after
+  // the zero-extend. To this end one can optimistically assume the operand to
+  // be positive and avoid the piecewise definition if the bit-width is bigger
+  // than some threshold (here MaxZextSmallBitWidth).
+  //
+  // We choose to go with a hybrid solution of all modeling techniques described
+  // above. For small bit-widths (up to MaxZextSmallBitWidth) we will model the
+  // wrapping explicitly and use a piecewise defined function. However, if the
+  // bit-width is bigger than MaxZextSmallBitWidth we will employ overflow
+  // assumptions and assume the "former negative" piece will not exist.
+
+  auto *Op = Expr->getOperand();
+  auto OpPWAC = visit(Op);
+
+  // If the width is to big we assume the negative part does not occur.
+  if (!computeModuloForExpr(Op)) {
+    takeNonNegativeAssumption(OpPWAC);
+    return OpPWAC;
+  }
+
+  // If the width is small build the piece for the non-negative part and
+  // the one for the negative part and unify them.
+  unsigned Width = TD.getTypeSizeInBits(Op->getType());
+  interpretAsUnsigned(OpPWAC, Width);
+  return OpPWAC;
 }
 
-__isl_give isl_pw_aff *
+__isl_give PWACtx
 SCEVAffinator::visitSignExtendExpr(const SCEVSignExtendExpr *Expr) {
-  // Assuming the value is signed, a sign extension is basically a noop.
-  // TODO: Reconsider this as soon as we support unsigned values.
+  // As all values are represented as signed, a sign extension is a noop.
   return visit(Expr->getOperand());
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitAddExpr(const SCEVAddExpr *Expr) {
-  isl_pw_aff *Sum = visit(Expr->getOperand(0));
+__isl_give PWACtx SCEVAffinator::visitAddExpr(const SCEVAddExpr *Expr) {
+  PWACtx Sum = visit(Expr->getOperand(0));
 
   for (int i = 1, e = Expr->getNumOperands(); i < e; ++i) {
-    isl_pw_aff *NextSummand = visit(Expr->getOperand(i));
-    Sum = isl_pw_aff_add(Sum, NextSummand);
+    combine(Sum, visit(Expr->getOperand(i)), isl_pw_aff_add);
+    if (isTooComplex(Sum))
+      return std::make_pair(nullptr, nullptr);
   }
 
   return Sum;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitMulExpr(const SCEVMulExpr *Expr) {
-  // Divide Expr into a constant part and the rest. Then visit both and multiply
-  // the result to obtain the representation for Expr. While the second part of
-  // ConstantAndLeftOverPair might still be a SCEVMulExpr we will not get to
-  // this point again. The reason is that if it is a multiplication it consists
-  // only of parameters and we will stop in the visit(const SCEV *) function and
-  // return the isl_pw_aff for that parameter.
-  auto ConstantAndLeftOverPair = extractConstantFactor(Expr, *S->getSE());
-  return isl_pw_aff_mul(visit(ConstantAndLeftOverPair.first),
-                        visit(ConstantAndLeftOverPair.second));
+__isl_give PWACtx SCEVAffinator::visitMulExpr(const SCEVMulExpr *Expr) {
+  PWACtx Prod = visit(Expr->getOperand(0));
+
+  for (int i = 1, e = Expr->getNumOperands(); i < e; ++i) {
+    combine(Prod, visit(Expr->getOperand(i)), isl_pw_aff_mul);
+    if (isTooComplex(Prod))
+      return std::make_pair(nullptr, nullptr);
+  }
+
+  return Prod;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitUDivExpr(const SCEVUDivExpr *Expr) {
-  llvm_unreachable("SCEVUDivExpr not yet supported");
-}
-
-__isl_give isl_pw_aff *
-SCEVAffinator::visitAddRecExpr(const SCEVAddRecExpr *Expr) {
+__isl_give PWACtx SCEVAffinator::visitAddRecExpr(const SCEVAddRecExpr *Expr) {
   assert(Expr->isAffine() && "Only affine AddRecurrences allowed");
 
   auto Flags = Expr->getNoWrapFlags();
 
   // Directly generate isl_pw_aff for Expr if 'start' is zero.
   if (Expr->getStart()->isZero()) {
-    assert(S->getRegion().contains(Expr->getLoop()) &&
+    assert(S->contains(Expr->getLoop()) &&
            "Scop does not contain the loop referenced in this AddRec");
 
-    isl_pw_aff *Step = visit(Expr->getOperand(1));
+    PWACtx Step = visit(Expr->getOperand(1));
     isl_space *Space = isl_space_set_alloc(Ctx, 0, NumIterators);
     isl_local_space *LocalSpace = isl_local_space_from_space(Space);
 
@@ -271,7 +433,8 @@ SCEVAffinator::visitAddRecExpr(const SCEVAddRecExpr *Expr) {
         isl_aff_zero_on_domain(LocalSpace), isl_dim_in, loopDimension, 1);
     isl_pw_aff *LPwAff = isl_pw_aff_from_aff(LAff);
 
-    return isl_pw_aff_mul(Step, LPwAff);
+    Step.first = isl_pw_aff_mul(Step.first, LPwAff);
+    return Step;
   }
 
   // Translate AddRecExpr from '{start, +, inc}' into 'start + {0, +, inc}'
@@ -279,67 +442,111 @@ SCEVAffinator::visitAddRecExpr(const SCEVAddRecExpr *Expr) {
   // TODO: Using the original SCEV no-wrap flags is not always safe, however
   //       as our code generation is reordering the expression anyway it doesn't
   //       really matter.
-  ScalarEvolution &SE = *S->getSE();
   const SCEV *ZeroStartExpr =
       SE.getAddRecExpr(SE.getConstant(Expr->getStart()->getType(), 0),
                        Expr->getStepRecurrence(SE), Expr->getLoop(), Flags);
 
-  isl_pw_aff *ZeroStartResult = visit(ZeroStartExpr);
-  isl_pw_aff *Start = visit(Expr->getStart());
-
-  return isl_pw_aff_add(ZeroStartResult, Start);
+  PWACtx Result = visit(ZeroStartExpr);
+  PWACtx Start = visit(Expr->getStart());
+  combine(Result, Start, isl_pw_aff_add);
+  return Result;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitSMaxExpr(const SCEVSMaxExpr *Expr) {
-  isl_pw_aff *Max = visit(Expr->getOperand(0));
+__isl_give PWACtx SCEVAffinator::visitSMaxExpr(const SCEVSMaxExpr *Expr) {
+  PWACtx Max = visit(Expr->getOperand(0));
 
   for (int i = 1, e = Expr->getNumOperands(); i < e; ++i) {
-    isl_pw_aff *NextOperand = visit(Expr->getOperand(i));
-    Max = isl_pw_aff_max(Max, NextOperand);
+    combine(Max, visit(Expr->getOperand(i)), isl_pw_aff_max);
+    if (isTooComplex(Max))
+      return std::make_pair(nullptr, nullptr);
   }
 
   return Max;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitUMaxExpr(const SCEVUMaxExpr *Expr) {
+__isl_give PWACtx SCEVAffinator::visitUMaxExpr(const SCEVUMaxExpr *Expr) {
   llvm_unreachable("SCEVUMaxExpr not yet supported");
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitSDivInstruction(Instruction *SDiv) {
-  assert(SDiv->getOpcode() == Instruction::SDiv && "Assumed SDiv instruction!");
-  auto *SE = S->getSE();
+__isl_give PWACtx SCEVAffinator::visitUDivExpr(const SCEVUDivExpr *Expr) {
+  // The handling of unsigned division is basically the same as for signed
+  // division, except the interpretation of the operands. As the divisor
+  // has to be constant in both cases we can simply interpret it as an
+  // unsigned value without additional complexity in the representation.
+  // For the dividend we could choose from the different representation
+  // schemes introduced for zero-extend operations but for now we will
+  // simply use an assumption.
+  auto *Dividend = Expr->getLHS();
+  auto *Divisor = Expr->getRHS();
+  assert(isa<SCEVConstant>(Divisor) &&
+         "UDiv is no parameter but has a non-constant RHS.");
 
+  auto DividendPWAC = visit(Dividend);
+  auto DivisorPWAC = visit(Divisor);
+
+  if (SE.isKnownNegative(Divisor)) {
+    // Interpret negative divisors unsigned. This is a special case of the
+    // piece-wise defined value described for zero-extends as we already know
+    // the actual value of the constant divisor.
+    unsigned Width = TD.getTypeSizeInBits(Expr->getType());
+    auto *DivisorDom = isl_pw_aff_domain(isl_pw_aff_copy(DivisorPWAC.first));
+    auto *WidthExpPWA = getWidthExpValOnDomain(Width, DivisorDom);
+    DivisorPWAC.first = isl_pw_aff_add(DivisorPWAC.first, WidthExpPWA);
+  }
+
+  // TODO: One can represent the dividend as piece-wise function to be more
+  //       precise but therefor a heuristic is needed.
+
+  // Assume a non-negative dividend.
+  takeNonNegativeAssumption(DividendPWAC);
+
+  combine(DividendPWAC, DivisorPWAC, isl_pw_aff_div);
+  DividendPWAC.first = isl_pw_aff_floor(DividendPWAC.first);
+
+  return DividendPWAC;
+}
+
+__isl_give PWACtx SCEVAffinator::visitSDivInstruction(Instruction *SDiv) {
+  assert(SDiv->getOpcode() == Instruction::SDiv && "Assumed SDiv instruction!");
+
+  auto *Scope = getScope();
   auto *Divisor = SDiv->getOperand(1);
-  auto *DivisorSCEV = SE->getSCEV(Divisor);
-  auto *DivisorPWA = visit(DivisorSCEV);
-  assert(isa<ConstantInt>(Divisor) &&
+  auto *DivisorSCEV = SE.getSCEVAtScope(Divisor, Scope);
+  auto DivisorPWAC = visit(DivisorSCEV);
+  assert(isa<SCEVConstant>(DivisorSCEV) &&
          "SDiv is no parameter but has a non-constant RHS.");
 
   auto *Dividend = SDiv->getOperand(0);
-  auto *DividendSCEV = SE->getSCEV(Dividend);
-  auto *DividendPWA = visit(DividendSCEV);
-  return isl_pw_aff_tdiv_q(DividendPWA, DivisorPWA);
+  auto *DividendSCEV = SE.getSCEVAtScope(Dividend, Scope);
+  auto DividendPWAC = visit(DividendSCEV);
+  combine(DividendPWAC, DivisorPWAC, isl_pw_aff_tdiv_q);
+  return DividendPWAC;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitSRemInstruction(Instruction *SRem) {
+__isl_give PWACtx SCEVAffinator::visitSRemInstruction(Instruction *SRem) {
   assert(SRem->getOpcode() == Instruction::SRem && "Assumed SRem instruction!");
-  auto *SE = S->getSE();
 
-  auto *Divisor = dyn_cast<ConstantInt>(SRem->getOperand(1));
-  assert(Divisor && "SRem is no parameter but has a non-constant RHS.");
-  auto *DivisorVal = isl_valFromAPInt(Ctx, Divisor->getValue(),
-                                      /* isSigned */ true);
+  auto *Scope = getScope();
+  auto *Divisor = SRem->getOperand(1);
+  auto *DivisorSCEV = SE.getSCEVAtScope(Divisor, Scope);
+  auto DivisorPWAC = visit(DivisorSCEV);
+  assert(isa<ConstantInt>(Divisor) &&
+         "SRem is no parameter but has a non-constant RHS.");
 
   auto *Dividend = SRem->getOperand(0);
-  auto *DividendSCEV = SE->getSCEV(Dividend);
-  auto *DividendPWA = visit(DividendSCEV);
-
-  return isl_pw_aff_mod_val(DividendPWA, isl_val_abs(DivisorVal));
+  auto *DividendSCEV = SE.getSCEVAtScope(Dividend, Scope);
+  auto DividendPWAC = visit(DividendSCEV);
+  combine(DividendPWAC, DivisorPWAC, isl_pw_aff_tdiv_r);
+  return DividendPWAC;
 }
 
-__isl_give isl_pw_aff *SCEVAffinator::visitUnknown(const SCEVUnknown *Expr) {
+__isl_give PWACtx SCEVAffinator::visitUnknown(const SCEVUnknown *Expr) {
   if (Instruction *I = dyn_cast<Instruction>(Expr->getValue())) {
     switch (I->getOpcode()) {
+    case Instruction::IntToPtr:
+      return visit(SE.getSCEVAtScope(I->getOperand(0), getScope()));
+    case Instruction::PtrToInt:
+      return visit(SE.getSCEVAtScope(I->getOperand(0), getScope()));
     case Instruction::SDiv:
       return visitSDivInstruction(I);
     case Instruction::SRem:

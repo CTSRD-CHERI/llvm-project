@@ -11,7 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Sema/SemaInternal.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/TypeLoc.h"
@@ -21,8 +20,8 @@
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Scope.h"
 #include "clang/Sema/ScopeInfo.h"
+#include "clang/Sema/SemaInternal.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/BitVector.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 using namespace clang;
 using namespace sema;
@@ -589,10 +588,8 @@ ExprResult Sema::LookupInlineAsmIdentifier(CXXScopeSpec &SS,
 
   QualType T = Result.get()->getType();
 
-  // For now, reject dependent types.
   if (T->isDependentType()) {
-    Diag(Id.getLocStart(), diag::err_asm_incomplete_type) << T;
-    return ExprError();
+    return Result;
   }
 
   // Any sort of function type is fine.
@@ -617,56 +614,78 @@ ExprResult Sema::LookupInlineAsmIdentifier(CXXScopeSpec &SS,
 bool Sema::LookupInlineAsmField(StringRef Base, StringRef Member,
                                 unsigned &Offset, SourceLocation AsmLoc) {
   Offset = 0;
+  SmallVector<StringRef, 2> Members;
+  Member.split(Members, ".");
+
   LookupResult BaseResult(*this, &Context.Idents.get(Base), SourceLocation(),
                           LookupOrdinaryName);
 
   if (!LookupName(BaseResult, getCurScope()))
     return true;
-
-  if (!BaseResult.isSingleResult())
+  
+  if(!BaseResult.isSingleResult())
     return true;
-
-  const RecordType *RT = nullptr;
   NamedDecl *FoundDecl = BaseResult.getFoundDecl();
-  if (VarDecl *VD = dyn_cast<VarDecl>(FoundDecl))
-    RT = VD->getType()->getAs<RecordType>();
-  else if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(FoundDecl)) {
-    MarkAnyDeclReferenced(TD->getLocation(), TD, /*OdrUse=*/false);
-    RT = TD->getUnderlyingType()->getAs<RecordType>();
-  } else if (TypeDecl *TD = dyn_cast<TypeDecl>(FoundDecl))
-    RT = TD->getTypeForDecl()->getAs<RecordType>();
-  if (!RT)
-    return true;
+  for (StringRef NextMember : Members) {
+    const RecordType *RT = nullptr;
+    if (VarDecl *VD = dyn_cast<VarDecl>(FoundDecl))
+      RT = VD->getType()->getAs<RecordType>();
+    else if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(FoundDecl)) {
+      MarkAnyDeclReferenced(TD->getLocation(), TD, /*OdrUse=*/false);
+      RT = TD->getUnderlyingType()->getAs<RecordType>();
+    } else if (TypeDecl *TD = dyn_cast<TypeDecl>(FoundDecl))
+      RT = TD->getTypeForDecl()->getAs<RecordType>();
+    else if (FieldDecl *TD = dyn_cast<FieldDecl>(FoundDecl))
+      RT = TD->getType()->getAs<RecordType>();
+    if (!RT)
+      return true;
 
-  if (RequireCompleteType(AsmLoc, QualType(RT, 0), 0))
-    return true;
+    if (RequireCompleteType(AsmLoc, QualType(RT, 0),
+                            diag::err_asm_incomplete_type))
+      return true;
 
-  LookupResult FieldResult(*this, &Context.Idents.get(Member), SourceLocation(),
-                           LookupMemberName);
+    LookupResult FieldResult(*this, &Context.Idents.get(NextMember),
+                             SourceLocation(), LookupMemberName);
 
-  if (!LookupQualifiedName(FieldResult, RT->getDecl()))
-    return true;
+    if (!LookupQualifiedName(FieldResult, RT->getDecl()))
+      return true;
 
-  // FIXME: Handle IndirectFieldDecl?
-  FieldDecl *FD = dyn_cast<FieldDecl>(FieldResult.getFoundDecl());
-  if (!FD)
-    return true;
+    if (!FieldResult.isSingleResult())
+      return true;
+    FoundDecl = FieldResult.getFoundDecl();
 
-  const ASTRecordLayout &RL = Context.getASTRecordLayout(RT->getDecl());
-  unsigned i = FD->getFieldIndex();
-  CharUnits Result = Context.toCharUnitsFromBits(RL.getFieldOffset(i));
-  Offset = (unsigned)Result.getQuantity();
+    // FIXME: Handle IndirectFieldDecl?
+    FieldDecl *FD = dyn_cast<FieldDecl>(FoundDecl);
+    if (!FD)
+      return true;
+
+    const ASTRecordLayout &RL = Context.getASTRecordLayout(RT->getDecl());
+    unsigned i = FD->getFieldIndex();
+    CharUnits Result = Context.toCharUnitsFromBits(RL.getFieldOffset(i));
+    Offset += (unsigned)Result.getQuantity();
+  }
 
   return false;
 }
 
 ExprResult
-Sema::LookupInlineAsmVarDeclField(Expr *E, StringRef Member, unsigned &Offset,
+Sema::LookupInlineAsmVarDeclField(Expr *E, StringRef Member,
                                   llvm::InlineAsmIdentifierInfo &Info,
                                   SourceLocation AsmLoc) {
   Info.clear();
 
-  const RecordType *RT = E->getType()->getAs<RecordType>();
+  QualType T = E->getType();
+  if (T->isDependentType()) {
+    DeclarationNameInfo NameInfo;
+    NameInfo.setLoc(AsmLoc);
+    NameInfo.setName(&Context.Idents.get(Member));
+    return CXXDependentScopeMemberExpr::Create(
+        Context, E, T, /*IsArrow=*/false, AsmLoc, NestedNameSpecifierLoc(),
+        SourceLocation(),
+        /*FirstQualifierInScope=*/nullptr, NameInfo, /*TemplateArgs=*/nullptr);
+  }
+
+  const RecordType *RT = T->getAs<RecordType>();
   // FIXME: Diagnose this as field access into a scalar type.
   if (!RT)
     return ExprResult();
@@ -683,9 +702,6 @@ Sema::LookupInlineAsmVarDeclField(Expr *E, StringRef Member, unsigned &Offset,
     FD = dyn_cast<IndirectFieldDecl>(FieldResult.getFoundDecl());
   if (!FD)
     return ExprResult();
-
-  Offset = (unsigned)Context.toCharUnitsFromBits(Context.getFieldOffset(FD))
-               .getQuantity();
 
   // Make an Expr to thread through OpDecl.
   ExprResult Result = BuildMemberReferenceExpr(
@@ -737,7 +753,15 @@ LabelDecl *Sema::GetOrCreateMSAsmLabel(StringRef ExternalLabelName,
     // Create an internal name for the label.  The name should not be a valid mangled
     // name, and should be unique.  We use a dot to make the name an invalid mangled
     // name.
-    OS << "__MSASMLABEL_." << MSAsmLabelNameCounter++ << "__" << ExternalLabelName;
+    OS << "__MSASMLABEL_." << MSAsmLabelNameCounter++ << "__";
+    for (auto it = ExternalLabelName.begin(); it != ExternalLabelName.end();
+         ++it) {
+      OS << *it;
+      if (*it == '$') {
+        // We escape '$' in asm strings by replacing it with "$$"
+        OS << '$';
+      }
+    }
     Label->setMSAsmLabel(OS.str());
   }
   if (AlwaysCreate) {

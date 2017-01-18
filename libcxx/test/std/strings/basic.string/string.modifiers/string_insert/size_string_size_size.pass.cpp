@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
@@ -25,40 +26,58 @@ void
 test(S s, typename S::size_type pos1, S str, typename S::size_type pos2,
      typename S::size_type n, S expected)
 {
-    typename S::size_type old_size = s.size();
+    const typename S::size_type old_size = s.size();
     S s0 = s;
-    try
+    if (pos1 <= old_size && pos2 <= str.size())
     {
         s.insert(pos1, str, pos2, n);
-        assert(s.__invariants());
-        assert(pos1 <= old_size && pos2 <= str.size());
+        LIBCPP_ASSERT(s.__invariants());
         assert(s == expected);
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos1 > old_size || pos2 > str.size());
-        assert(s == s0);
+        try
+        {
+            s.insert(pos1, str, pos2, n);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos1 > old_size || pos2 > str.size());
+            assert(s == s0);
+        }
     }
+#endif
 }
 
 template <class S>
 void
 test_npos(S s, typename S::size_type pos1, S str, typename S::size_type pos2, S expected)
 {
-    typename S::size_type old_size = s.size();
+    const typename S::size_type old_size = s.size();
     S s0 = s;
-    try
+    if (pos1 <= old_size && pos2 <= str.size())
     {
         s.insert(pos1, str, pos2);
-        assert(s.__invariants());
-        assert(pos1 <= old_size && pos2 <= str.size());
+        LIBCPP_ASSERT(s.__invariants());
         assert(s == expected);
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos1 > old_size || pos2 > str.size());
-        assert(s == s0);
+        try
+        {
+            s.insert(pos1, str, pos2);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos1 > old_size || pos2 > str.size());
+            assert(s == s0);
+        }
     }
+#endif
 }
 
 
@@ -1745,7 +1764,7 @@ int main()
     test29<S>();
     test30<S>();
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test0<S>();

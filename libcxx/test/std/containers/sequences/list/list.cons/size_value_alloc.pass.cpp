@@ -14,7 +14,7 @@
 #include <list>
 #include <cassert>
 #include "DefaultOnly.h"
-#include "../../../stack_allocator.h"
+#include "test_allocator.h"
 #include "min_allocator.h"
 
 int main()
@@ -42,7 +42,8 @@ int main()
         assert(*i == 2);
     }
     {
-        std::list<int, stack_allocator<int, 3> > l(3, 2);
+        // Add 2 for implementations that dynamically allocate a sentinel node and container proxy.
+        std::list<int, limited_allocator<int, 3 + 2> > l(3, 2);
         assert(l.size() == 3);
         assert(std::distance(l.begin(), l.end()) == 3);
         std::list<int>::const_iterator i = l.begin();
@@ -52,7 +53,7 @@ int main()
         ++i;
         assert(*i == 2);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         std::list<int, min_allocator<int>> l(3, 2);
         assert(l.size() == 3);

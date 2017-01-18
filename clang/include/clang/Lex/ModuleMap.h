@@ -18,6 +18,7 @@
 
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/Module.h"
+#include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
@@ -27,7 +28,7 @@
 #include <string>
 
 namespace clang {
-  
+
 class DirectoryEntry;
 class FileEntry;
 class FileManager;
@@ -50,6 +51,18 @@ public:
   /// \param IsSystem Whether this is a module map from a system include path.
   virtual void moduleMapFileRead(SourceLocation FileStart,
                                  const FileEntry &File, bool IsSystem) {}
+
+  /// \brief Called when a header is added during module map parsing.
+  ///
+  /// \param Filename The header file itself.
+  virtual void moduleMapAddHeader(StringRef Filename) {}
+
+  /// \brief Called when an umbrella header is added during module map parsing.
+  ///
+  /// \param FileMgr FileManager instance
+  /// \param Header The umbrella header to collect.
+  virtual void moduleMapAddUmbrellaHeader(FileManager *FileMgr,
+                                          const FileEntry *Header) {}
 };
   
 class ModuleMap {
@@ -70,15 +83,10 @@ class ModuleMap {
   /// These are always simple C language options.
   LangOptions MMapLangOpts;
 
-  // The module that we are building; related to \c LangOptions::CurrentModule.
-  Module *CompilingModule;
-
-public:
-  // The module that the .cc source file is associated with.
+  // The module that the main source file is associated with (the module
+  // named LangOpts::CurrentModule, if we've loaded it).
   Module *SourceModule;
-  std::string SourceModuleName;
 
-private:
   /// \brief The top-level modules that are known.
   llvm::StringMap<Module *> Modules;
 
@@ -130,6 +138,12 @@ public:
       return getModule()->isAvailable();
     }
 
+    /// \brief Whether this header is accessible from the specified module.
+    bool isAccessibleFrom(Module *M) const {
+      return !(getRole() & PrivateHeader) ||
+             (M && M->getTopLevelModule() == getModule()->getTopLevelModule());
+    }
+
     // \brief Whether this known header is valid (i.e., it has an
     // associated module).
     explicit operator bool() const {
@@ -157,7 +171,8 @@ private:
 
   /// \brief The set of attributes that can be attached to a module.
   struct Attributes {
-    Attributes() : IsSystem(), IsExternC(), IsExhaustive() {}
+    Attributes()
+        : IsSystem(), IsExternC(), IsExhaustive(), NoUndeclaredIncludes() {}
 
     /// \brief Whether this is a system module.
     unsigned IsSystem : 1;
@@ -167,6 +182,10 @@ private:
 
     /// \brief Whether this is an exhaustive set of configuration macros.
     unsigned IsExhaustive : 1;
+
+    /// \brief Whether files in this module can only include non-modular headers
+    /// and headers from used modules.
+    unsigned NoUndeclaredIncludes : 1;
   };
 
   /// \brief A directory for which framework modules can be inferred.
@@ -301,10 +320,15 @@ public:
   ///
   /// \param File The header file that is likely to be included.
   ///
+  /// \param AllowTextual If \c true and \p File is a textual header, return
+  /// its owning module. Otherwise, no KnownHeader will be returned if the
+  /// file is only known as a textual header.
+  ///
   /// \returns The module KnownHeader, which provides the module that owns the
   /// given header file.  The KnownHeader is default constructed to indicate
   /// that no module owns this header file.
-  KnownHeader findModuleForHeader(const FileEntry *File);
+  KnownHeader findModuleForHeader(const FileEntry *File,
+                                  bool AllowTextual = false);
 
   /// \brief Retrieve all the modules that contain the given header file. This
   /// may not include umbrella modules, nor information from external sources,
@@ -318,12 +342,18 @@ public:
   ///
   /// \param RequestingModule The module including a file.
   ///
+  /// \param RequestingModuleIsModuleInterface \c true if the inclusion is in
+  ///        the interface of RequestingModule, \c false if it's in the
+  ///        implementation of RequestingModule. Value is ignored and
+  ///        meaningless if RequestingModule is nullptr.
+  ///
   /// \param FilenameLoc The location of the inclusion's filename.
   ///
   /// \param Filename The included filename as written.
   ///
   /// \param File The included file.
   void diagnoseHeaderInclusion(Module *RequestingModule,
+                               bool RequestingModuleIsModuleInterface,
                                SourceLocation FilenameLoc, StringRef Filename,
                                const FileEntry *File);
 
@@ -382,6 +412,15 @@ public:
   std::pair<Module *, bool> findOrCreateModule(StringRef Name, Module *Parent,
                                                bool IsFramework,
                                                bool IsExplicit);
+
+  /// \brief Create a new module for a C++ Modules TS module interface unit.
+  /// The module must not already exist, and will be configured for the current
+  /// compilation.
+  ///
+  /// Note that this also sets the current module to the newly-created module.
+  ///
+  /// \returns The newly-created module.
+  Module *createModuleForInterfaceUnit(SourceLocation Loc, StringRef Name);
 
   /// \brief Infer the contents of a framework module map from the given
   /// framework directory.

@@ -27,36 +27,85 @@ struct isl_ast_node;
 struct isl_ast_build;
 struct isl_union_map;
 
+struct SubtreeReferences {
+  LoopInfo &LI;
+  ScalarEvolution &SE;
+  Scop &S;
+  ValueMapT &GlobalMap;
+  SetVector<Value *> &Values;
+  SetVector<const SCEV *> &SCEVs;
+  BlockGenerator &BlockGen;
+};
+
+/// Extract the out-of-scop values and SCEVs referenced from a ScopStmt.
+///
+/// This includes the SCEVUnknowns referenced by the SCEVs used in the
+/// statement and the base pointers of the memory accesses. For scalar
+/// statements we force the generation of alloca memory locations and list
+/// these locations in the set of out-of-scop values as well.
+///
+/// @param Stmt             The statement for which to extract the information.
+/// @param UserPtr          A void pointer that can be casted to a
+///                         SubtreeReferences structure.
+/// @param CreateScalarRefs Should the result include allocas of scalar
+///                         references?
+isl_stat addReferencesFromStmt(const ScopStmt *Stmt, void *UserPtr,
+                               bool CreateScalarRefs = true);
+
 class IslNodeBuilder {
 public:
   IslNodeBuilder(PollyIRBuilder &Builder, ScopAnnotator &Annotator, Pass *P,
                  const DataLayout &DL, LoopInfo &LI, ScalarEvolution &SE,
-                 DominatorTree &DT, Scop &S)
+                 DominatorTree &DT, Scop &S, BasicBlock *StartBlock)
       : S(S), Builder(Builder), Annotator(Annotator),
-        ExprBuilder(S, Builder, IDToValue, ValueMap, DL, SE, DT, LI),
+        ExprBuilder(S, Builder, IDToValue, ValueMap, DL, SE, DT, LI,
+                    StartBlock),
         BlockGen(Builder, LI, SE, DT, ScalarMap, PHIOpMap, EscapeMap, ValueMap,
-                 &ExprBuilder),
-        RegionGen(BlockGen), P(P), DL(DL), LI(LI), SE(SE), DT(DT) {}
+                 &ExprBuilder, StartBlock),
+        RegionGen(BlockGen), P(P), DL(DL), LI(LI), SE(SE), DT(DT),
+        StartBlock(StartBlock) {}
 
   virtual ~IslNodeBuilder() {}
 
   void addParameters(__isl_take isl_set *Context);
+
+  /// Generate code that evaluates @p Condition at run-time.
+  ///
+  /// This function is typically called to generate the LLVM-IR for the
+  /// run-time condition of the scop, that verifies that all the optimistic
+  /// assumptions we have taken during scop modeling and transformation
+  /// hold at run-time.
+  ///
+  /// @param Condition The condition to evaluate
+  ///
+  /// @result An llvm::Value that is true if the condition holds and false
+  ///         otherwise.
+  Value *createRTC(isl_ast_expr *Condition);
+
   void create(__isl_take isl_ast_node *Node);
 
-  /// @brief Preload all memory loads that are invariant.
-  void preloadInvariantLoads();
+  /// Allocate memory for all new arrays created by Polly.
+  void allocateNewArrays();
 
-  /// @brief Finalize code generation for the SCoP @p S.
+  /// Preload all memory loads that are invariant.
+  bool preloadInvariantLoads();
+
+  /// Finalize code generation.
   ///
   /// @see BlockGenerator::finalizeSCoP(Scop &S)
-  void finalizeSCoP(Scop &S) { BlockGen.finalizeSCoP(S); }
+  virtual void finalize() { BlockGen.finalizeSCoP(S); }
 
   IslExprBuilder &getExprBuilder() { return ExprBuilder; }
 
-  /// @brief Get the associated block generator.
+  /// Get the associated block generator.
   ///
   /// @return A referecne to the associated block generator.
   BlockGenerator &getBlockGenerator() { return BlockGen; }
+
+  /// Return the parallel subfunctions that have been created.
+  const ArrayRef<Function *> getParallelSubfunctions() const {
+    return ParallelSubfunctions;
+  }
 
 protected:
   Scop &S;
@@ -65,25 +114,25 @@ protected:
 
   IslExprBuilder ExprBuilder;
 
-  /// @brief Maps used by the block and region generator to demote scalars.
+  /// Maps used by the block and region generator to demote scalars.
   ///
   ///@{
 
-  /// @brief See BlockGenerator::ScalarMap.
+  /// See BlockGenerator::ScalarMap.
   BlockGenerator::ScalarAllocaMapTy ScalarMap;
 
-  /// @brief See BlockGenerator::PhiOpMap.
+  /// See BlockGenerator::PhiOpMap.
   BlockGenerator::ScalarAllocaMapTy PHIOpMap;
 
-  /// @brief See BlockGenerator::EscapeMap.
+  /// See BlockGenerator::EscapeMap.
   BlockGenerator::EscapeUsersAllocaMapTy EscapeMap;
 
   ///@}
 
-  /// @brief The generator used to copy a basic block.
+  /// The generator used to copy a basic block.
   BlockGenerator BlockGen;
 
-  /// @brief The generator used to copy a non-affine region.
+  /// The generator used to copy a non-affine region.
   RegionGenerator RegionGen;
 
   Pass *const P;
@@ -91,8 +140,9 @@ protected:
   LoopInfo &LI;
   ScalarEvolution &SE;
   DominatorTree &DT;
+  BasicBlock *StartBlock;
 
-  /// @brief The current iteration of out-of-scop loops
+  /// The current iteration of out-of-scop loops
   ///
   /// This map provides for a given loop a llvm::Value that contains the current
   /// loop iteration.
@@ -103,10 +153,13 @@ protected:
   // ivs.
   IslExprBuilder::IDToValueTy IDToValue;
 
+  /// A collection of all parallel subfunctions that have been created.
+  SmallVector<Function *, 8> ParallelSubfunctions;
+
   /// Generate code for a given SCEV*
   ///
   /// This function generates code for a given SCEV expression. It generated
-  /// code is emmitted at the end of the basic block our Builder currently
+  /// code is emitted at the end of the basic block our Builder currently
   /// points to and the resulting value is returned.
   ///
   /// @param Expr The expression to code generate.
@@ -118,14 +171,18 @@ protected:
   /// llvm::Values to new llvm::Values.
   ValueMapT ValueMap;
 
-  /// @brief Materialize code for @p Id if it was not done before.
-  void materializeValue(__isl_take isl_id *Id);
+  /// Materialize code for @p Id if it was not done before.
+  ///
+  /// @returns False, iff a problem occured and the value was not materialized.
+  bool materializeValue(__isl_take isl_id *Id);
 
-  /// @brief Materialize parameters of @p Set.
+  /// Materialize parameters of @p Set.
   ///
   /// @param All If not set only parameters referred to by the constraints in
   ///            @p Set will be materialized, otherwise all.
-  void materializeParameters(__isl_take isl_set *Set, bool All);
+  ///
+  /// @returns False, iff a problem occurred and the value was not materialized.
+  bool materializeParameters(__isl_take isl_set *Set, bool All);
 
   // Extract the upper bound of this loop
   //
@@ -142,7 +199,7 @@ protected:
   //    It must not be calculated at each loop iteration and can often even be
   //    hoisted out further by the loop invariant code motion.
   //
-  // 2. OpenMP needs a loop invarient upper bound to calculate the number
+  // 2. OpenMP needs a loop invariant upper bound to calculate the number
   //    of loop iterations.
   //
   // 3. With the existing code, upper bounds have been easier to implement.
@@ -194,7 +251,7 @@ protected:
   /// @param NewValues A map that maps certain llvm::Values to new llvm::Values.
   void updateValues(ValueMapT &NewValues);
 
-  /// @brief Generate code for a marker now.
+  /// Generate code for a marker now.
   ///
   /// For mark nodes with an unknown name, we just forward the code generation
   /// to its child. This is currently the only behavior implemented, as there is
@@ -204,13 +261,18 @@ protected:
   virtual void createMark(__isl_take isl_ast_node *Marker);
   virtual void createFor(__isl_take isl_ast_node *For);
 
-  /// @brief Preload the memory access at @p AccessRange with @p Build.
+  /// Set to remember materialized invariant loads.
+  ///
+  /// An invariant load is identified by its pointer (the SCEV) and its type.
+  SmallSet<std::pair<const SCEV *, Type *>, 16> PreloadedPtrs;
+
+  /// Preload the memory access at @p AccessRange with @p Build.
   ///
   /// @returns The preloaded value casted to type @p Ty
   Value *preloadUnconditionally(__isl_take isl_set *AccessRange,
-                                isl_ast_build *Build, Type *Ty);
+                                isl_ast_build *Build, Instruction *AccInst);
 
-  /// @brief Preload the memory load access @p MA.
+  /// Preload the memory load access @p MA.
   ///
   /// If @p MA is not always executed it will be conditionally loaded and
   /// merged with undef from the same type. Hence, if @p MA is executed only
@@ -223,22 +285,24 @@ protected:
   Value *preloadInvariantLoad(const MemoryAccess &MA,
                               __isl_take isl_set *Domain);
 
-  /// @brief Preload the invariant access equivalence class @p IAClass
+  /// Preload the invariant access equivalence class @p IAClass
   ///
   /// This function will preload the representing load from @p IAClass and
   /// map all members of @p IAClass to that preloaded value, potentially casted
   /// to the required type.
-  void preloadInvariantEquivClass(const InvariantEquivClassTy &IAClass);
+  ///
+  /// @returns False, iff a problem occurred and the load was not preloaded.
+  bool preloadInvariantEquivClass(InvariantEquivClassTy &IAClass);
 
   void createForVector(__isl_take isl_ast_node *For, int VectorWidth);
-  void createForSequential(__isl_take isl_ast_node *For);
+  void createForSequential(__isl_take isl_ast_node *For, bool KnownParallel);
 
   /// Create LLVM-IR that executes a for node thread parallel.
   ///
   /// @param For The FOR isl_ast_node for which code is generated.
   void createForParallel(__isl_take isl_ast_node *For);
 
-  /// @brief Create new access functions for modified memory accesses.
+  /// Create new access functions for modified memory accesses.
   ///
   /// In case the access function of one of the memory references in the Stmt
   /// has been modified, we generate a new isl_ast_expr that reflects the
@@ -302,7 +366,7 @@ protected:
   virtual void createUser(__isl_take isl_ast_node *User);
   virtual void createBlock(__isl_take isl_ast_node *Block);
 
-  /// @brief Get the schedule for a given AST node.
+  /// Get the schedule for a given AST node.
   ///
   /// This information is used to reason about parallelism of loops or the
   /// locality of memory accesses under a given schedule.
@@ -314,6 +378,21 @@ protected:
   ///
   virtual __isl_give isl_union_map *
   getScheduleForAstNode(__isl_take isl_ast_node *Node);
+
+private:
+  /// Create code for a copy statement.
+  ///
+  /// A copy statement is expected to have one read memory access and one write
+  /// memory access (in this very order). Data is loaded from the location
+  /// described by the read memory access and written to the location described
+  /// by the write memory access. @p NewAccesses contains for each access
+  /// the isl ast expression that describes the location accessed.
+  ///
+  /// @param Stmt The copy statement that contains the accesses.
+  /// @param NewAccesses The hash table that contains remappings from memory
+  ///                    ids to new access expressions.
+  void generateCopyStmt(ScopStmt *Stmt,
+                        __isl_keep isl_id_to_ast_expr *NewAccesses);
 };
 
 #endif

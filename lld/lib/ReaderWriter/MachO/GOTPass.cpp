@@ -1,4 +1,4 @@
-//===- lib/ReaderWriter/MachO/GOTPass.cpp ---------------------------------===//
+//===- lib/ReaderWriter/MachO/GOTPass.cpp -----------------------*- C++ -*-===//
 //
 //                             The LLVM Linker
 //
@@ -46,7 +46,6 @@
 namespace lld {
 namespace mach_o {
 
-
 //
 //  GOT Entry Atom created by the GOT pass.
 //
@@ -54,6 +53,8 @@ class GOTEntryAtom : public SimpleDefinedAtom {
 public:
   GOTEntryAtom(const File &file, bool is64, StringRef name)
     : SimpleDefinedAtom(file), _is64(is64), _name(name) { }
+
+  ~GOTEntryAtom() override = default;
 
   ContentType contentType() const override {
     return DefinedAtom::typeGOT;
@@ -86,17 +87,18 @@ private:
   StringRef _name;
 };
 
-
 /// Pass for instantiating and optimizing GOT slots.
 ///
 class GOTPass : public Pass {
 public:
   GOTPass(const MachOLinkingContext &context)
       : _ctx(context), _archHandler(_ctx.archHandler()),
-        _file("<mach-o GOT Pass>") {}
+        _file(*_ctx.make_file<MachOFile>("<mach-o GOT Pass>")) {
+    _file.setOrdinal(_ctx.getNextOrdinalAndIncrement());
+  }
 
 private:
-  std::error_code perform(SimpleFile &mergedFile) override {
+  llvm::Error perform(SimpleFile &mergedFile) override {
     // Scan all references in all atoms.
     for (const DefinedAtom *atom : mergedFile.defined()) {
       for (const Reference *ref : *atom) {
@@ -132,7 +134,7 @@ private:
     for (const GOTEntryAtom *slot : entries)
       mergedFile.addAtom(*slot);
 
-    return std::error_code();
+    return llvm::Error::success();
   }
 
   bool shouldReplaceTargetWithGOTAtom(const Atom *target, bool canBypassGOT) {
@@ -155,7 +157,7 @@ private:
   const DefinedAtom *makeGOTEntry(const Atom *target) {
     auto pos = _targetToGOT.find(target);
     if (pos == _targetToGOT.end()) {
-      GOTEntryAtom *gotEntry = new (_file.allocator())
+      auto *gotEntry = new (_file.allocator())
           GOTEntryAtom(_file, _ctx.is64Bit(), target->name());
       _targetToGOT[target] = gotEntry;
       const ArchHandler::ReferenceInfo &nlInfo = _archHandler.stubInfo().
@@ -169,17 +171,14 @@ private:
 
   const MachOLinkingContext &_ctx;
   mach_o::ArchHandler                             &_archHandler;
-  MachOFile                                        _file;
+  MachOFile                                       &_file;
   llvm::DenseMap<const Atom*, const GOTEntryAtom*> _targetToGOT;
 };
-
-
 
 void addGOTPass(PassManager &pm, const MachOLinkingContext &ctx) {
   assert(ctx.needsGOTPass());
   pm.add(llvm::make_unique<GOTPass>(ctx));
 }
-
 
 } // end namesapce mach_o
 } // end namesapce lld

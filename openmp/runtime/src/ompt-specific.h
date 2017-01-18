@@ -3,7 +3,17 @@
 
 #include "kmp.h"
 
+/*****************************************************************************
+ * types
+ ****************************************************************************/
+
 typedef kmp_info_t ompt_thread_t;
+
+
+
+/*****************************************************************************
+ * forward declarations
+ ****************************************************************************/
 
 void __ompt_team_assign_id(kmp_team_t *team, ompt_parallel_id_t ompt_pid);
 void __ompt_thread_assign_wait_id(void *variable);
@@ -35,6 +45,16 @@ ompt_frame_t *__ompt_get_task_frame_internal(int depth);
 
 
 
+/*****************************************************************************
+ * macros
+ ****************************************************************************/
+
+#define OMPT_HAVE_WEAK_ATTRIBUTE KMP_HAVE_WEAK_ATTRIBUTE
+#define OMPT_HAVE_PSAPI KMP_HAVE_PSAPI
+#define OMPT_STR_MATCH(haystack, needle) __kmp_str_match(haystack, 0, needle)
+
+
+
 //******************************************************************************
 // inline functions
 //******************************************************************************
@@ -49,15 +69,15 @@ ompt_get_thread_gtid(int gtid)
 inline ompt_thread_t *
 ompt_get_thread()
 {
-    int gtid = __kmp_gtid_get_specific();
+    int gtid = __kmp_get_gtid();
     return ompt_get_thread_gtid(gtid);
 }
 
 
-inline void 
+inline void
 ompt_set_thread_state(ompt_thread_t *thread, ompt_state_t state)
 {
-    thread->th.ompt_thread_info.state = state; 
+    thread->th.ompt_thread_info.state = state;
 }
 
 

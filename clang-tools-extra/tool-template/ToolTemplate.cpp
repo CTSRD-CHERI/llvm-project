@@ -34,8 +34,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Lex/Lexer.h"
@@ -53,18 +53,20 @@ using namespace llvm;
 
 namespace {
 class ToolTemplateCallback : public MatchFinder::MatchCallback {
- public:
-  ToolTemplateCallback(Replacements *Replace) : Replace(Replace) {}
+public:
+  ToolTemplateCallback(std::map<std::string, Replacements> *Replace)
+      : Replace(Replace) {}
 
   void run(const MatchFinder::MatchResult &Result) override {
-    // TODO: This routine will get called for each thing that the matchers find.
+    // TODO: This routine will get called for each thing that the matchers
+    // find.
     // At this point, you can examine the match, and do whatever you want,
     // including replacing the matched text with other text
     (void)Replace; // This to prevent an "unused member variable" warning;
   }
 
- private:
-  Replacements *Replace;
+private:
+  std::map<std::string, Replacements> *Replace;
 };
 } // end anonymous namespace
 
@@ -73,7 +75,7 @@ static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static cl::OptionCategory ToolTemplateCategory("tool-template options");
 
 int main(int argc, const char **argv) {
-  llvm::sys::PrintStackTraceOnErrorSignal();
+  llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
   CommonOptionsParser OptionsParser(argc, argv, ToolTemplateCategory);
   RefactoringTool Tool(OptionsParser.getCompilations(),
                        OptionsParser.getSourcePathList());

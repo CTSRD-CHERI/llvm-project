@@ -18,6 +18,8 @@
 #include <cmath>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     assert(std::stold("0") == 0);
@@ -34,25 +36,32 @@ int main()
     idx = 0;
     assert(std::stold(L"10g", &idx) == 10);
     assert(idx == 2);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::stold("1.e60", &idx) == 1.e60L);
         assert(idx == 5);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
     try
+#endif
     {
         assert(std::stold(L"1.e60", &idx) == 1.e60L);
         assert(idx == 5);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
     {
         assert(std::stold("1.e6000", &idx) == INFINITY);
@@ -72,40 +81,54 @@ int main()
         assert(idx == 0);
     }
     try
+#endif
     {
         assert(std::stold("INF", &idx) == INFINITY);
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::stold(L"INF", &idx) == INFINITY);
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::isnan(std::stold("NAN", &idx)));
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::isnan(std::stold(L"NAN", &idx)));
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
@@ -165,4 +188,5 @@ int main()
     {
         assert(idx == 0);
     }
+#endif
 }

@@ -29,10 +29,14 @@ static cl::opt<std::string>
                cl::desc("Only view functions that match this pattern"),
                cl::Hidden, cl::init(""), cl::ZeroOrMore);
 
+static cl::opt<bool> ViewAll("polly-view-all",
+                             cl::desc("Also show functions without any scops"),
+                             cl::Hidden, cl::init(false), cl::ZeroOrMore);
+
 namespace llvm {
 template <>
 struct GraphTraits<ScopDetection *> : public GraphTraits<RegionInfo *> {
-  static NodeType *getEntryNode(ScopDetection *SD) {
+  static NodeRef getEntryNode(ScopDetection *SD) {
     return GraphTraits<RegionInfo *>::getEntryNode(SD->getRI());
   }
   static nodes_iterator nodes_begin(ScopDetection *SD) {
@@ -178,14 +182,15 @@ struct DOTGraphTraits<ScopDetection *> : public DOTGraphTraits<RegionNode *> {
 struct ScopViewer : public DOTGraphTraitsViewer<ScopDetection, false> {
   static char ID;
   ScopViewer() : DOTGraphTraitsViewer<ScopDetection, false>("scops", ID) {}
-  bool processFunction(Function &F) override {
-    if (ViewFilter == "")
+  bool processFunction(Function &F, ScopDetection &SD) override {
+    if (ViewFilter != "" && !F.getName().count(ViewFilter))
+      return false;
+
+    if (ViewAll)
       return true;
 
-    if (F.getName().count(ViewFilter))
-      return true;
-
-    return false;
+    // Check that at least one scop was detected.
+    return std::distance(SD.begin(), SD.end()) > 0;
   }
 };
 char ScopViewer::ID = 0;

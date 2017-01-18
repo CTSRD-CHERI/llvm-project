@@ -14,6 +14,7 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporterVisitor.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprObjC.h"
+#include "clang/Analysis/CFGStmtMap.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
@@ -323,6 +324,9 @@ public:
     }
 
     PathDiagnosticLocation L(Ret, BRC.getSourceManager(), StackFrame);
+    if (!L.isValid() || !L.asLocation().isValid())
+      return nullptr;
+
     return new PathDiagnosticEventPiece(L, Out.str());
   }
 
@@ -828,8 +832,53 @@ SuppressInlineDefensiveChecksVisitor::VisitNode(const ExplodedNode *Succ,
     // Check if this is inlined defensive checks.
     const LocationContext *CurLC =Succ->getLocationContext();
     const LocationContext *ReportLC = BR.getErrorNode()->getLocationContext();
-    if (CurLC != ReportLC && !CurLC->isParentOf(ReportLC))
+    if (CurLC != ReportLC && !CurLC->isParentOf(ReportLC)) {
       BR.markInvalid("Suppress IDC", CurLC);
+      return nullptr;
+    }
+
+    // Treat defensive checks in function-like macros as if they were an inlined
+    // defensive check. If the bug location is not in a macro and the
+    // terminator for the current location is in a macro then suppress the
+    // warning.
+    auto BugPoint = BR.getErrorNode()->getLocation().getAs<StmtPoint>();
+
+    if (!BugPoint)
+      return nullptr;
+
+    SourceLocation BugLoc = BugPoint->getStmt()->getLocStart();
+    if (BugLoc.isMacroID())
+      return nullptr;
+
+    ProgramPoint CurPoint = Succ->getLocation();
+    const Stmt *CurTerminatorStmt = nullptr;
+    if (auto BE = CurPoint.getAs<BlockEdge>()) {
+      CurTerminatorStmt = BE->getSrc()->getTerminator().getStmt();
+    } else if (auto SP = CurPoint.getAs<StmtPoint>()) {
+      const Stmt *CurStmt = SP->getStmt();
+      if (!CurStmt->getLocStart().isMacroID())
+        return nullptr;
+
+      CFGStmtMap *Map = CurLC->getAnalysisDeclContext()->getCFGStmtMap();
+      CurTerminatorStmt = Map->getBlock(CurStmt)->getTerminator();
+    } else {
+      return nullptr;
+    }
+
+    if (!CurTerminatorStmt)
+      return nullptr;
+
+    SourceLocation TerminatorLoc = CurTerminatorStmt->getLocStart();
+    if (TerminatorLoc.isMacroID()) {
+      const SourceManager &SMgr = BRC.getSourceManager();
+      std::pair<FileID, unsigned> TLInfo = SMgr.getDecomposedLoc(TerminatorLoc);
+      SrcMgr::SLocEntry SE = SMgr.getSLocEntry(TLInfo.first);
+      const SrcMgr::ExpansionInfo &EInfo = SE.getExpansion();
+      if (EInfo.isFunctionMacroExpansion()) {
+        BR.markInvalid("Suppress Macro IDC", CurLC);
+        return nullptr;
+      }
+    }
   }
   return nullptr;
 }
@@ -862,6 +911,15 @@ static const Expr *peelOffOuterExpr(const Expr *Ex,
     return peelOffOuterExpr(EWC->getSubExpr(), N);
   if (const OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(Ex))
     return peelOffOuterExpr(OVE->getSourceExpr(), N);
+  if (auto *POE = dyn_cast<PseudoObjectExpr>(Ex)) {
+    auto *PropRef = dyn_cast<ObjCPropertyRefExpr>(POE->getSyntacticForm());
+    if (PropRef && PropRef->isMessagingGetter()) {
+      const Expr *GetterMessageSend =
+          POE->getSemanticExpr(POE->getNumSemanticExprs() - 1);
+      assert(isa<ObjCMessageExpr>(GetterMessageSend->IgnoreParenCasts()));
+      return peelOffOuterExpr(GetterMessageSend, N);
+    }
+  }
 
   // Peel off the ternary operator.
   if (const ConditionalOperator *CO = dyn_cast<ConditionalOperator>(Ex)) {
@@ -1213,7 +1271,22 @@ ConditionBRVisitor::VisitTerminator(const Stmt *Term,
                                     BugReporterContext &BRC) {
   const Expr *Cond = nullptr;
 
+  // In the code below, Term is a CFG terminator and Cond is a branch condition
+  // expression upon which the decision is made on this terminator.
+  //
+  // For example, in "if (x == 0)", the "if (x == 0)" statement is a terminator,
+  // and "x == 0" is the respective condition.
+  //
+  // Another example: in "if (x && y)", we've got two terminators and two
+  // conditions due to short-circuit nature of operator "&&":
+  // 1. The "if (x && y)" statement is a terminator,
+  //    and "y" is the respective condition.
+  // 2. Also "x && ..." is another terminator,
+  //    and "x" is its condition.
+
   switch (Term->getStmtClass()) {
+  // FIXME: Stmt::SwitchStmtClass is worth handling, however it is a bit
+  // more tricky because there are more than two branches to account for.
   default:
     return nullptr;
   case Stmt::IfStmtClass:
@@ -1222,6 +1295,24 @@ ConditionBRVisitor::VisitTerminator(const Stmt *Term,
   case Stmt::ConditionalOperatorClass:
     Cond = cast<ConditionalOperator>(Term)->getCond();
     break;
+  case Stmt::BinaryOperatorClass:
+    // When we encounter a logical operator (&& or ||) as a CFG terminator,
+    // then the condition is actually its LHS; otheriwse, we'd encounter
+    // the parent, such as if-statement, as a terminator.
+    const auto *BO = cast<BinaryOperator>(Term);
+    assert(BO->isLogicalOp() &&
+           "CFG terminator is not a short-circuit operator!");
+    Cond = BO->getLHS();
+    break;
+  }
+
+  // However, when we encounter a logical operator as a branch condition,
+  // then the condition is actually its RHS, because LHS would be
+  // the condition for the logical operator terminator.
+  while (const auto *InnerBO = dyn_cast<BinaryOperator>(Cond)) {
+    if (!InnerBO->isLogicalOp())
+      break;
+    Cond = InnerBO->getRHS()->IgnoreParens();
   }
 
   assert(Cond);
@@ -1236,31 +1327,49 @@ ConditionBRVisitor::VisitTrueTest(const Expr *Cond,
                                   BugReporterContext &BRC,
                                   BugReport &R,
                                   const ExplodedNode *N) {
-
-  const Expr *Ex = Cond;
+  // These will be modified in code below, but we need to preserve the original
+  //  values in case we want to throw the generic message.
+  const Expr *CondTmp = Cond;
+  bool tookTrueTmp = tookTrue;
 
   while (true) {
-    Ex = Ex->IgnoreParenCasts();
-    switch (Ex->getStmtClass()) {
+    CondTmp = CondTmp->IgnoreParenCasts();
+    switch (CondTmp->getStmtClass()) {
       default:
-        return nullptr;
+        break;
       case Stmt::BinaryOperatorClass:
-        return VisitTrueTest(Cond, cast<BinaryOperator>(Ex), tookTrue, BRC,
-                             R, N);
+        if (PathDiagnosticPiece *P = VisitTrueTest(
+                Cond, cast<BinaryOperator>(CondTmp), tookTrueTmp, BRC, R, N))
+          return P;
+        break;
       case Stmt::DeclRefExprClass:
-        return VisitTrueTest(Cond, cast<DeclRefExpr>(Ex), tookTrue, BRC,
-                             R, N);
+        if (PathDiagnosticPiece *P = VisitTrueTest(
+                Cond, cast<DeclRefExpr>(CondTmp), tookTrueTmp, BRC, R, N))
+          return P;
+        break;
       case Stmt::UnaryOperatorClass: {
-        const UnaryOperator *UO = cast<UnaryOperator>(Ex);
+        const UnaryOperator *UO = cast<UnaryOperator>(CondTmp);
         if (UO->getOpcode() == UO_LNot) {
-          tookTrue = !tookTrue;
-          Ex = UO->getSubExpr();
+          tookTrueTmp = !tookTrueTmp;
+          CondTmp = UO->getSubExpr();
           continue;
         }
-        return nullptr;
+        break;
       }
     }
+    break;
   }
+
+  // Condition too complex to explain? Just say something so that the user
+  // knew we've made some path decision at this point.
+  const LocationContext *LCtx = N->getLocationContext();
+  PathDiagnosticLocation Loc(Cond, BRC.getSourceManager(), LCtx);
+  if (!Loc.isValid() || !Loc.asLocation().isValid())
+    return nullptr;
+
+  PathDiagnosticEventPiece *Event = new PathDiagnosticEventPiece(
+      Loc, tookTrue ? GenericTrueMessage : GenericFalseMessage);
+  return Event;
 }
 
 bool ConditionBRVisitor::patternMatch(const Expr *Ex, raw_ostream &Out,
@@ -1494,18 +1603,15 @@ ConditionBRVisitor::VisitTrueTest(const Expr *Cond,
   return event;
 }
 
+const char *const ConditionBRVisitor::GenericTrueMessage =
+    "Assuming the condition is true";
+const char *const ConditionBRVisitor::GenericFalseMessage =
+    "Assuming the condition is false";
 
-// FIXME: Copied from ExprEngineCallAndReturn.cpp.
-static bool isInStdNamespace(const Decl *D) {
-  const DeclContext *DC = D->getDeclContext()->getEnclosingNamespaceContext();
-  const NamespaceDecl *ND = dyn_cast<NamespaceDecl>(DC);
-  if (!ND)
-    return false;
-
-  while (const NamespaceDecl *Parent = dyn_cast<NamespaceDecl>(ND->getParent()))
-    ND = Parent;
-
-  return ND->isStdNamespace();
+bool ConditionBRVisitor::isPieceMessageGeneric(
+    const PathDiagnosticPiece *Piece) {
+  return Piece->getString() == GenericTrueMessage ||
+         Piece->getString() == GenericFalseMessage;
 }
 
 std::unique_ptr<PathDiagnosticPiece>
@@ -1518,7 +1624,7 @@ LikelyFalsePositiveSuppressionBRVisitor::getEndPath(BugReporterContext &BRC,
   AnalyzerOptions &Options = Eng.getAnalysisManager().options;
   const Decl *D = N->getLocationContext()->getDecl();
 
-  if (isInStdNamespace(D)) {
+  if (AnalysisDeclContext::isInStdNamespace(D)) {
     // Skip reports within the 'std' namespace. Although these can sometimes be
     // the user's fault, we currently don't report them very well, and
     // Note that this will not help for any other data structure libraries, like
@@ -1542,12 +1648,16 @@ LikelyFalsePositiveSuppressionBRVisitor::getEndPath(BugReporterContext &BRC,
         }
       }
 
-      // The analyzer issues a false positive on
-      //   std::basic_string<uint8_t> v; v.push_back(1);
-      // and
-      //   std::u16string s; s += u'a';
-      // because we cannot reason about the internal invariants of the
-      // datastructure.
+      // The analyzer issues a false positive when the constructor of
+      // std::__independent_bits_engine from algorithms is used.
+      if (const CXXConstructorDecl *MD = dyn_cast<CXXConstructorDecl>(D)) {
+        const CXXRecordDecl *CD = MD->getParent();
+        if (CD->getName() == "__independent_bits_engine") {
+          BR.markInvalid(getTag(), nullptr);
+          return nullptr;
+        }
+      }
+
       for (const LocationContext *LCtx = N->getLocationContext(); LCtx;
            LCtx = LCtx->getParent()) {
         const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(LCtx->getDecl());
@@ -1555,7 +1665,21 @@ LikelyFalsePositiveSuppressionBRVisitor::getEndPath(BugReporterContext &BRC,
           continue;
 
         const CXXRecordDecl *CD = MD->getParent();
+        // The analyzer issues a false positive on
+        //   std::basic_string<uint8_t> v; v.push_back(1);
+        // and
+        //   std::u16string s; s += u'a';
+        // because we cannot reason about the internal invariants of the
+        // datastructure.
         if (CD->getName() == "basic_string") {
+          BR.markInvalid(getTag(), nullptr);
+          return nullptr;
+        }
+
+        // The analyzer issues a false positive on
+        //    std::shared_ptr<int> p(new int(1)); p = nullptr;
+        // because it does not reason properly about temporary destructors.
+        if (CD->getName() == "shared_ptr") {
           BR.markInvalid(getTag(), nullptr);
           return nullptr;
         }
@@ -1630,4 +1754,57 @@ UndefOrNullArgVisitor::VisitNode(const ExplodedNode *N,
     }
   }
   return nullptr;
+}
+
+PathDiagnosticPiece *
+CXXSelfAssignmentBRVisitor::VisitNode(const ExplodedNode *Succ,
+                                      const ExplodedNode *Pred,
+                                      BugReporterContext &BRC, BugReport &BR) {
+  if (Satisfied)
+    return nullptr;
+
+  auto Edge = Succ->getLocation().getAs<BlockEdge>();
+  if (!Edge.hasValue())
+    return nullptr;
+
+  auto Tag = Edge->getTag();
+  if (!Tag)
+    return nullptr;
+
+  if (Tag->getTagDescription() != "cplusplus.SelfAssignment")
+    return nullptr;
+
+  Satisfied = true;
+
+  const auto *Met =
+      dyn_cast<CXXMethodDecl>(Succ->getCodeDecl().getAsFunction());
+  assert(Met && "Not a C++ method.");
+  assert((Met->isCopyAssignmentOperator() || Met->isMoveAssignmentOperator()) &&
+         "Not a copy/move assignment operator.");
+
+  const auto *LCtx = Edge->getLocationContext();
+
+  const auto &State = Succ->getState();
+  auto &SVB = State->getStateManager().getSValBuilder();
+
+  const auto Param =
+      State->getSVal(State->getRegion(Met->getParamDecl(0), LCtx));
+  const auto This =
+      State->getSVal(SVB.getCXXThis(Met, LCtx->getCurrentStackFrame()));
+
+  auto L = PathDiagnosticLocation::create(Met, BRC.getSourceManager());
+
+  if (!L.isValid() || !L.asLocation().isValid())
+    return nullptr;
+
+  SmallString<256> Buf;
+  llvm::raw_svector_ostream Out(Buf);
+
+  Out << "Assuming " << Met->getParamDecl(0)->getName() <<
+    ((Param == This) ? " == " : " != ") << "*this";
+
+  auto *Piece = new PathDiagnosticEventPiece(L, Out.str());
+  Piece->addRange(Met->getSourceRange());
+
+  return Piece;
 }

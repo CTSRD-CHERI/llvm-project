@@ -12,13 +12,12 @@
 // basic_string<charT,traits,Allocator>&
 //   replace(size_type pos, size_type n1, const charT* s, size_type n2);
 
-#include <stdio.h>
-
 #include <string>
 #include <stdexcept>
 #include <algorithm>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
@@ -27,23 +26,32 @@ test(S s, typename S::size_type pos, typename S::size_type n1,
      const typename S::value_type* str, typename S::size_type n2,
      S expected)
 {
-    typename S::size_type old_size = s.size();
+    const typename S::size_type old_size = s.size();
     S s0 = s;
-    try
+    if (pos <= old_size)
     {
         s.replace(pos, n1, str, n2);
-        assert(s.__invariants());
-        assert(pos <= old_size);
+        LIBCPP_ASSERT(s.__invariants());
         assert(s == expected);
         typename S::size_type xlen = std::min(n1, old_size - pos);
         typename S::size_type rlen = n2;
         assert(s.size() == old_size - xlen + rlen);
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos > old_size);
-        assert(s == s0);
+        try
+        {
+            s.replace(pos, n1, str, n2);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos > old_size);
+            assert(s == s0);
+        }
     }
+#endif
 }
 
 template <class S>
@@ -1307,7 +1315,7 @@ int main()
     test10<S>();
     test11<S>();
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test0<S>();

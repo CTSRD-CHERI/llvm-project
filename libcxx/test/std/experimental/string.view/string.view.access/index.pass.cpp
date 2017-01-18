@@ -15,6 +15,8 @@
 #include <experimental/string_view>
 #include <cassert>
 
+#include "test_macros.h"
+
 template <typename CharT>
 void test ( const CharT *s, size_t len ) {
     std::experimental::basic_string_view<CharT> sv ( s, len );
@@ -24,7 +26,7 @@ void test ( const CharT *s, size_t len ) {
         assert ( &sv[i] == s + i );
         }
     }
-    
+
 int main () {
     test ( "ABCDE", 5 );
     test ( "a", 1 );
@@ -32,7 +34,7 @@ int main () {
     test ( L"ABCDE", 5 );
     test ( L"a", 1 );
 
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     test ( u"ABCDE", 5 );
     test ( u"a", 1 );
 
@@ -40,7 +42,7 @@ int main () {
     test ( U"a", 1 );
 #endif
 
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
     constexpr std::experimental::basic_string_view<char> sv ( "ABC", 2 );
     static_assert ( sv.length() ==  2,  "" );

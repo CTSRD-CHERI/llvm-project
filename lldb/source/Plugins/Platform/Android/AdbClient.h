@@ -14,7 +14,9 @@
 
 // C++ Includes
 
+#include <functional>
 #include <list>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -22,7 +24,6 @@
 // Project includes
 
 #include "lldb/Core/Error.h"
-#include "lldb/Host/ConnectionFileDescriptor.h"
 
 namespace lldb_private {
 
@@ -30,95 +31,116 @@ class FileSpec;
 
 namespace platform_android {
 
-class AdbClient
-{
+class AdbClient {
 public:
-    using DeviceIDList = std::list<std::string>;
+  enum UnixSocketNamespace {
+    UnixSocketNamespaceAbstract,
+    UnixSocketNamespaceFileSystem,
+  };
 
-    static Error
-    CreateByDeviceID(const std::string &device_id, AdbClient &adb);
+  using DeviceIDList = std::list<std::string>;
 
-    AdbClient () = default;
-    explicit AdbClient (const std::string &device_id);
+  class SyncService {
+    friend class AdbClient;
 
-    const std::string&
-    GetDeviceID() const;
+  public:
+    ~SyncService();
 
-    Error
-    GetDevices (DeviceIDList &device_list);
+    Error PullFile(const FileSpec &remote_file, const FileSpec &local_file);
 
-    Error
-    SetPortForwarding (const uint16_t local_port, const uint16_t remote_port);
+    Error PushFile(const FileSpec &local_file, const FileSpec &remote_file);
 
-    Error
-    SetPortForwarding (const uint16_t local_port, const char* remote_socket_name);
+    Error Stat(const FileSpec &remote_file, uint32_t &mode, uint32_t &size,
+               uint32_t &mtime);
 
-    Error
-    DeletePortForwarding (const uint16_t local_port);
+    bool IsConnected() const;
 
-    Error
-    PullFile (const FileSpec &remote_file, const FileSpec &local_file);
+  private:
+    explicit SyncService(std::unique_ptr<Connection> &&conn);
 
-    Error
-    PushFile (const FileSpec &local_file, const FileSpec &remote_file);
+    Error SendSyncRequest(const char *request_id, const uint32_t data_len,
+                          const void *data);
 
-    Error
-    Stat (const FileSpec &remote_file, uint32_t &mode, uint32_t &size, uint32_t &mtime);
+    Error ReadSyncHeader(std::string &response_id, uint32_t &data_len);
 
-    Error
-    Shell (const char* command, uint32_t timeout_ms, std::string* output);
+    Error PullFileChunk(std::vector<char> &buffer, bool &eof);
+
+    Error ReadAllBytes(void *buffer, size_t size);
+
+    Error internalPullFile(const FileSpec &remote_file,
+                           const FileSpec &local_file);
+
+    Error internalPushFile(const FileSpec &local_file,
+                           const FileSpec &remote_file);
+
+    Error internalStat(const FileSpec &remote_file, uint32_t &mode,
+                       uint32_t &size, uint32_t &mtime);
+
+    Error executeCommand(const std::function<Error()> &cmd);
+
+    std::unique_ptr<Connection> m_conn;
+  };
+
+  static Error CreateByDeviceID(const std::string &device_id, AdbClient &adb);
+
+  AdbClient();
+  explicit AdbClient(const std::string &device_id);
+
+  ~AdbClient();
+
+  const std::string &GetDeviceID() const;
+
+  Error GetDevices(DeviceIDList &device_list);
+
+  Error SetPortForwarding(const uint16_t local_port,
+                          const uint16_t remote_port);
+
+  Error SetPortForwarding(const uint16_t local_port,
+                          llvm::StringRef remote_socket_name,
+                          const UnixSocketNamespace socket_namespace);
+
+  Error DeletePortForwarding(const uint16_t local_port);
+
+  Error Shell(const char *command, uint32_t timeout_ms, std::string *output);
+
+  Error ShellToFile(const char *command, uint32_t timeout_ms,
+                    const FileSpec &output_file_spec);
+
+  std::unique_ptr<SyncService> GetSyncService(Error &error);
+
+  Error SwitchDeviceTransport();
 
 private:
-    Error
-    Connect ();
+  Error Connect();
 
-    void
-    SetDeviceID (const std::string &device_id);
+  void SetDeviceID(const std::string &device_id);
 
-    Error
-    SendMessage (const std::string &packet, const bool reconnect = true);
+  Error SendMessage(const std::string &packet, const bool reconnect = true);
 
-    Error
-    SendDeviceMessage (const std::string &packet);
+  Error SendDeviceMessage(const std::string &packet);
 
-    Error
-    SendSyncRequest (const char *request_id, const uint32_t data_len, const void *data);
+  Error ReadMessage(std::vector<char> &message);
 
-    Error
-    ReadSyncHeader (std::string &response_id, uint32_t &data_len);
+  Error ReadMessageStream(std::vector<char> &message, uint32_t timeout_ms);
 
-    Error
-    ReadMessage (std::vector<char> &message);
+  Error GetResponseError(const char *response_id);
 
-    Error
-    ReadMessageStream (std::vector<char> &message, uint32_t timeout_ms);
+  Error ReadResponseStatus();
 
-    Error
-    GetResponseError (const char *response_id);
+  Error Sync();
 
-    Error
-    ReadResponseStatus ();
+  Error StartSync();
 
-    Error
-    SwitchDeviceTransport ();
+  Error internalShell(const char *command, uint32_t timeout_ms,
+                      std::vector<char> &output_buf);
 
-    Error
-    Sync ();
+  Error ReadAllBytes(void *buffer, size_t size);
 
-    Error
-    StartSync ();
-
-    Error
-    PullFileChunk (std::vector<char> &buffer, bool &eof);
-
-    Error
-    ReadAllBytes (void *buffer, size_t size);
-
-    std::string m_device_id;
-    ConnectionFileDescriptor m_conn;
+  std::string m_device_id;
+  std::unique_ptr<Connection> m_conn;
 };
 
 } // namespace platform_android
 } // namespace lldb_private
 
-#endif  // liblldb_AdbClient_h_
+#endif // liblldb_AdbClient_h_

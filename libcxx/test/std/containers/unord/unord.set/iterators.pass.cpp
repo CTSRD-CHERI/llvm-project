@@ -23,6 +23,7 @@
 #include <unordered_set>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 int main()
@@ -65,7 +66,7 @@ int main()
         assert(std::distance(c.cbegin(), c.cend()) == c.size());
         C::const_iterator i;
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_set<int, std::hash<int>,
                                       std::equal_to<int>, min_allocator<int>> C;
@@ -107,7 +108,7 @@ int main()
         C::const_iterator i;
     }
 #endif
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     { // N3644 testing
         typedef std::unordered_set<int> C;
         C::iterator ii1{}, ii2{};

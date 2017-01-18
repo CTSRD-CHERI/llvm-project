@@ -48,6 +48,10 @@
         #define KMP_COMPILER "Intel C++ Compiler 15.0"
     #elif __INTEL_COMPILER == 1600
         #define KMP_COMPILER "Intel C++ Compiler 16.0"
+    #elif __INTEL_COMPILER == 1700
+        #define KMP_COMPILER "Intel C++ Compiler 17.0"
+    #elif __INTEL_COMPILER == 9998
+        #define KMP_COMPILER "Intel C++ Compiler mainline"
     #elif __INTEL_COMPILER == 9999
         #define KMP_COMPILER "Intel C++ Compiler mainline"
     #endif
@@ -85,7 +89,9 @@ int const __kmp_version_major = KMP_VERSION_MAJOR;
 int const __kmp_version_minor = KMP_VERSION_MINOR;
 int const __kmp_version_build = KMP_VERSION_BUILD;
 int const __kmp_openmp_version =
-    #if OMP_40_ENABLED
+    #if OMP_45_ENABLED
+        201511;
+    #elif OMP_40_ENABLED
         201307;
     #else
         201107;
@@ -105,7 +111,7 @@ char const __kmp_version_copyright[]      = KMP_VERSION_PREFIX KMP_COPYRIGHT;
 char const __kmp_version_lib_ver[]        = KMP_VERSION_PREFIX "version: " stringer( KMP_VERSION_MAJOR ) "." stringer( KMP_VERSION_MINOR ) "." stringer( KMP_VERSION_BUILD );
 char const __kmp_version_lib_type[]       = KMP_VERSION_PREFIX "library type: " KMP_LIB_TYPE;
 char const __kmp_version_link_type[]      = KMP_VERSION_PREFIX "link type: " KMP_LINK_TYPE;
-char const __kmp_version_build_time[]     = KMP_VERSION_PREFIX "build time: " __DATE__ " " __TIME__;
+char const __kmp_version_build_time[]     = KMP_VERSION_PREFIX "build time: " "no_timestamp";
 #if KMP_MIC2
     char const __kmp_version_target_env[] = KMP_VERSION_PREFIX "target environment: MIC2";
 #endif
@@ -203,9 +209,6 @@ __kmp_print_version_2( void ) {
         return;
     }; // if
     __kmp_version_2_printed = TRUE;
-
-    #ifndef KMP_STUB
-    #endif // KMP_STUB
 } // __kmp_print_version_2
 
 // end of file //

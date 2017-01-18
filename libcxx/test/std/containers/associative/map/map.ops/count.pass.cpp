@@ -16,6 +16,7 @@
 #include <map>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 #include "private_constructor.hpp"
 #include "is_transparent.h"
@@ -59,7 +60,7 @@ int main()
         assert(r == 0);
     }
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::pair<const int, double> V;
     typedef std::map<int, double, std::less<int>, min_allocator<V>> M;
@@ -98,7 +99,7 @@ int main()
     }
     }
 #endif
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
     typedef std::pair<const int, double> V;
     typedef std::map<int, double, std::less <>> M;

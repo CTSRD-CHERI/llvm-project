@@ -27,8 +27,8 @@ class HexagonMachineFunctionInfo : public MachineFunctionInfo {
   // returning the value of the returned struct in a register. This field
   // holds the virtual register into which the sret argument is passed.
   unsigned SRetReturnReg;
-  unsigned StackAlignBaseReg;
-  std::vector<MachineInstr*> AllocaAdjustInsts;
+  unsigned StackAlignBaseVReg;    // Aligned-stack base register (virtual)
+  unsigned StackAlignBasePhysReg; //                             (physical)
   int VarArgsFrameIndex;
   bool HasClobberLR;
   bool HasEHReturn;
@@ -36,23 +36,15 @@ class HexagonMachineFunctionInfo : public MachineFunctionInfo {
   virtual void anchor();
 
 public:
-  HexagonMachineFunctionInfo() : SRetReturnReg(0), StackAlignBaseReg(0),
-    HasClobberLR(0), HasEHReturn(false) {}
+  HexagonMachineFunctionInfo() : SRetReturnReg(0), StackAlignBaseVReg(0),
+      StackAlignBasePhysReg(0), HasClobberLR(0), HasEHReturn(false) {}
 
   HexagonMachineFunctionInfo(MachineFunction &MF) : SRetReturnReg(0),
-                                                    StackAlignBaseReg(0),
-                                                    HasClobberLR(0),
-                                                    HasEHReturn(false) {}
+      StackAlignBaseVReg(0), StackAlignBasePhysReg(0), HasClobberLR(0),
+      HasEHReturn(false) {}
 
   unsigned getSRetReturnReg() const { return SRetReturnReg; }
   void setSRetReturnReg(unsigned Reg) { SRetReturnReg = Reg; }
-
-  void addAllocaAdjustInst(MachineInstr* MI) {
-    AllocaAdjustInsts.push_back(MI);
-  }
-  const std::vector<MachineInstr*>& getAllocaAdjustInsts() {
-    return AllocaAdjustInsts;
-  }
 
   void setVarArgsFrameIndex(int v) { VarArgsFrameIndex = v; }
   int getVarArgsFrameIndex() { return VarArgsFrameIndex; }
@@ -77,8 +69,11 @@ public:
   bool hasEHReturn() const { return HasEHReturn; };
   void setHasEHReturn(bool H = true) { HasEHReturn = H; };
 
-  void setStackAlignBaseVReg(unsigned R) { StackAlignBaseReg = R; }
-  unsigned getStackAlignBaseVReg() const { return StackAlignBaseReg; }
+  void setStackAlignBaseVReg(unsigned R) { StackAlignBaseVReg = R; }
+  unsigned getStackAlignBaseVReg() const { return StackAlignBaseVReg; }
+
+  void setStackAlignBasePhysReg(unsigned R) { StackAlignBasePhysReg = R; }
+  unsigned getStackAlignBasePhysReg() const { return StackAlignBasePhysReg; }
 };
 } // End llvm namespace
 

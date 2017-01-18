@@ -85,6 +85,9 @@
 /* Define if Driver constructor takes IsProduction argument */
 #undef HAVE_ISPRODUCTION
 
+/* Define if clang/Lex/PreprocessorOptions.h exists */
+#undef HAVE_LEX_PREPROCESSOROPTIONS_H
+
 /* Define to 1 if you have the `gmp' library (-lgmp). */
 #undef HAVE_LIBGMP
 
@@ -124,8 +127,7 @@
 /* Return type of HandleTopLevelDeclReturn */
 #undef HandleTopLevelDeclReturn
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
 #undef LT_OBJDIR
 
 /* Name of package */
@@ -148,6 +150,9 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
+
+/* Define if CompilerInvocation::setLangDefaults takes 5 arguments */
+#undef SETLANGDEFAULTS_TAKES_5_ARGUMENTS
 
 /* The size of `char', as computed by sizeof. */
 #undef SIZEOF_CHAR
@@ -196,5 +201,8 @@
 
 /* Define to getResultType for older versions of clang */
 #undef getReturnType
+
+/* Define to InitializeBuiltins for older versions of clang */
+#undef initializeBuiltins
 
 #include <isl_config_post.h>

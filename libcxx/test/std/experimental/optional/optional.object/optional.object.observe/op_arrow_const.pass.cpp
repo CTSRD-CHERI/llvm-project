@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03, c++11
 // <optional>
 
 // constexpr const T* optional<T>::operator->() const;
@@ -18,8 +19,6 @@
 #include <experimental/optional>
 #include <type_traits>
 #include <cassert>
-
-#if _LIBCPP_STD_VER > 11
 
 using std::experimental::optional;
 
@@ -39,11 +38,8 @@ struct Z
     constexpr int test() const {return 1;}
 };
 
-#endif  // _LIBCPP_STD_VER > 11
-
 int main()
 {
-#if _LIBCPP_STD_VER > 11
     {
         constexpr optional<X> opt(X{});
         static_assert(opt->test() == 3, "");
@@ -55,6 +51,9 @@ int main()
     {
         constexpr optional<Z> opt(Z{});
         assert(opt->test() == 1);
+#ifndef _LIBCPP_HAS_NO_BUILTIN_ADDRESSOF
+        static_assert(opt->test() == 1, "");
+#endif
     }
 #ifdef _LIBCPP_DEBUG
     {
@@ -63,5 +62,4 @@ int main()
         assert(false);
     }
 #endif  // _LIBCPP_DEBUG
-#endif  // _LIBCPP_STD_VER > 11
 }

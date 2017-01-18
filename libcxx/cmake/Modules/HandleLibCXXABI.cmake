@@ -21,9 +21,11 @@ macro(setup_abi_lib abidefines abilib abifiles abidirs)
     CACHE PATH
     "Paths to C++ ABI header directories separated by ';'." FORCE
     )
-
+  set(LIBCXX_CXX_ABI_LIBRARY_PATH "${LIBCXX_CXX_ABI_LIBRARY_PATH}"
+    CACHE PATH
+    "Paths to C++ ABI library directory"
+    )
   set(LIBCXX_CXX_ABI_LIBRARY ${abilib})
-
   set(LIBCXX_ABILIB_FILES ${abifiles})
 
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include")
@@ -56,9 +58,7 @@ macro(setup_abi_lib abidefines abilib abifiles abidirs)
     endif()
   endforeach()
 
-  add_custom_target(LIBCXX_CXX_ABI_DEPS DEPENDS ${abilib_headers})
   include_directories("${CMAKE_BINARY_DIR}/include")
-
 endmacro()
 
 

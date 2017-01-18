@@ -5160,6 +5160,21 @@ void test3() {
 }  // end namespace  GlobalAcquiredBeforeAfterTest
 
 
+namespace LifetimeExtensionText {
+
+struct Holder {
+  virtual ~Holder() throw() {}
+  int i = 0;
+};
+
+void test() {
+  // Should not crash.
+  const auto &value = Holder().i;
+}
+
+} // end namespace LifetimeExtensionTest
+
+
 namespace LockableUnions {
 
 union LOCKABLE MutexUnion {
@@ -5182,3 +5197,10 @@ void test() {
 
 }  // end namespace LockableUnions
 
+// This used to crash.
+class acquired_before_empty_str {
+  void WaitUntilSpaceAvailable() {
+    lock_.ReaderLock(); // expected-note {{acquired here}}
+  } // expected-warning {{mutex 'lock_' is still held at the end of function}}
+  Mutex lock_ ACQUIRED_BEFORE("");
+};

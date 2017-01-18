@@ -17,6 +17,8 @@
 #include <cassert>
 #include <limits>
 
+#include "test_macros.h"
+
 int new_handler_called = 0;
 
 void new_handler()
@@ -35,6 +37,7 @@ struct A
 
 int main()
 {
+#ifndef TEST_HAS_NO_EXCEPTIONS
     std::set_new_handler(new_handler);
     try
     {
@@ -50,6 +53,7 @@ int main()
     {
         assert(false);
     }
+#endif
     A* ap = new A;
     assert(ap);
     assert(A_constructed);

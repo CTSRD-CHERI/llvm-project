@@ -12,39 +12,52 @@
 
 #include "SymbolTable.h"
 #include "lld/Core/LLVM.h"
+#include "lld/Core/Reproduce.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Option/ArgList.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace lld {
-namespace elf2 {
+namespace elf {
 
 extern class LinkerDriver *Driver;
 
-// Entry point of the ELF linker.
-void link(ArrayRef<const char *> Args);
-
 class LinkerDriver {
 public:
-  void main(ArrayRef<const char *> Args);
-  void createFiles(llvm::opt::InputArgList &Args);
-  template <class ELFT> void link(llvm::opt::InputArgList &Args);
-
+  void main(ArrayRef<const char *> Args, bool CanExitEarly);
   void addFile(StringRef Path);
+  void addLibrary(StringRef Name);
+  std::unique_ptr<CpioFile> Cpio; // for reproduce
 
 private:
-  template <template <class> class T>
-  std::unique_ptr<InputFile> createELFInputFile(MemoryBufferRef MB);
+  std::vector<MemoryBufferRef> getArchiveMembers(MemoryBufferRef MB);
+  llvm::Optional<MemoryBufferRef> readFile(StringRef Path);
+  void readConfigs(llvm::opt::InputArgList &Args);
+  void createFiles(llvm::opt::InputArgList &Args);
+  void inferMachineType();
+  template <class ELFT> void link(llvm::opt::InputArgList &Args);
 
-  llvm::BumpPtrAllocator Alloc;
-  bool WholeArchive = false;
-  std::vector<std::unique_ptr<InputFile>> Files;
-  std::vector<std::unique_ptr<ArchiveFile>> OwningArchives;
+  // True if we are in --whole-archive and --no-whole-archive.
+  bool InWholeArchive = false;
+
+  // True if we are in --start-lib and --end-lib.
+  bool InLib = false;
+
+  // True if we are in -format=binary and -format=elf.
+  bool InBinary = false;
+
+  std::vector<InputFile *> Files;
   std::vector<std::unique_ptr<MemoryBuffer>> OwningMBs;
 };
 
 // Parses command line options.
-llvm::opt::InputArgList parseArgs(llvm::BumpPtrAllocator *A,
-                                  ArrayRef<const char *> Args);
+class ELFOptTable : public llvm::opt::OptTable {
+public:
+  ELFOptTable();
+  llvm::opt::InputArgList parse(ArrayRef<const char *> Argv);
+};
 
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
@@ -54,14 +67,16 @@ enum {
 #undef OPTION
 };
 
-// Parses a linker script. Calling this function updates the Symtab and Config.
-void readLinkerScript(llvm::BumpPtrAllocator *A, MemoryBufferRef MB);
+void printHelp(const char *Argv0);
+std::vector<uint8_t> parseHexstring(StringRef S);
+void parseDynamicList(MemoryBufferRef MB);
 
-std::string findFromSearchPaths(StringRef Path);
-std::string searchLibrary(StringRef Path);
-std::string buildSysrootedPath(llvm::StringRef Dir, llvm::StringRef File);
+std::string createResponseFile(const llvm::opt::InputArgList &Args);
 
-} // namespace elf2
+llvm::Optional<std::string> findFromSearchPaths(StringRef Path);
+llvm::Optional<std::string> searchLibrary(StringRef Path);
+
+} // namespace elf
 } // namespace lld
 
 #endif

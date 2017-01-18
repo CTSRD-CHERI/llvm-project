@@ -10,6 +10,7 @@
 #include "UnwrappedLineFormatter.h"
 #include "WhitespaceManager.h"
 #include "llvm/Support/Debug.h"
+#include <queue>
 
 #define DEBUG_TYPE "format-formatter"
 
@@ -90,8 +91,8 @@ private:
       return 0;
     if (RootToken.isAccessSpecifier(false) ||
         RootToken.isObjCAccessSpecifier() ||
-        (RootToken.is(Keywords.kw_signals) && RootToken.Next &&
-         RootToken.Next->is(tok::colon)))
+        (RootToken.isOneOf(Keywords.kw_signals, Keywords.kw_qsignals) &&
+         RootToken.Next && RootToken.Next->is(tok::colon)))
       return Style.AccessModifierOffset;
     return 0;
   }
@@ -150,7 +151,7 @@ public:
           MergedLines = 0;
     if (!DryRun)
       for (unsigned i = 0; i < MergedLines; ++i)
-        join(*Next[i], *Next[i + 1]);
+        join(*Next[0], *Next[i + 1]);
     Next = Next + MergedLines + 1;
     return Current;
   }
@@ -709,7 +710,7 @@ private:
 
       // Cut off the analysis of certain solutions if the analysis gets too
       // complex. See description of IgnoreStackForComparison.
-      if (Count > 10000)
+      if (Count > 50000)
         Node->State.IgnoreStackForComparison = true;
 
       if (!Seen.insert(&Node->State).second)
@@ -812,13 +813,26 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
                                    AdditionalIndent);
   const AnnotatedLine *PreviousLine = nullptr;
   const AnnotatedLine *NextLine = nullptr;
+
+  // The minimum level of consecutive lines that have been formatted.
+  unsigned RangeMinLevel = UINT_MAX;
+
   for (const AnnotatedLine *Line =
            Joiner.getNextMergedLine(DryRun, IndentTracker);
        Line; Line = NextLine) {
     const AnnotatedLine &TheLine = *Line;
     unsigned Indent = IndentTracker.getIndent();
-    bool FixIndentation =
-        FixBadIndentation && (Indent != TheLine.First->OriginalColumn);
+
+    // We continue formatting unchanged lines to adjust their indent, e.g. if a
+    // scope was added. However, we need to carefully stop doing this when we
+    // exit the scope of affected lines to prevent indenting a the entire
+    // remaining file if it currently missing a closing brace.
+    bool ContinueFormatting =
+        TheLine.Level > RangeMinLevel ||
+        (TheLine.Level == RangeMinLevel && !TheLine.startsWith(tok::r_brace));
+
+    bool FixIndentation = (FixBadIndentation || ContinueFormatting) &&
+                          Indent != TheLine.First->OriginalColumn;
     bool ShouldFormat = TheLine.Affected || FixIndentation;
     // We cannot format this line; if the reason is that the line had a
     // parsing error, remember that.
@@ -834,7 +848,9 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
       unsigned ColumnLimit = getColumnLimit(TheLine.InPPDirective, NextLine);
       bool FitsIntoOneLine =
           TheLine.Last->TotalLength + Indent <= ColumnLimit ||
-          TheLine.Type == LT_ImportStatement;
+          (TheLine.Type == LT_ImportStatement &&
+           (Style.Language != FormatStyle::LK_JavaScript ||
+            !Style.JavaScriptWrapImports));
 
       if (Style.ColumnLimit == 0)
         NoColumnLimitLineFormatter(Indenter, Whitespaces, Style, this)
@@ -845,11 +861,14 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
       else
         Penalty += OptimizingLineFormatter(Indenter, Whitespaces, Style, this)
                        .formatLine(TheLine, Indent, DryRun);
+      RangeMinLevel = std::min(RangeMinLevel, TheLine.Level);
     } else {
       // If no token in the current line is affected, we still need to format
       // affected children.
       if (TheLine.ChildrenAffected)
-        format(TheLine.Children, DryRun);
+        for (const FormatToken *Tok = TheLine.First; Tok; Tok = Tok->Next)
+          if (!Tok->Children.empty())
+            format(Tok->Children, DryRun);
 
       // Adapt following lines on the current indent level to the same level
       // unless the current \c AnnotatedLine is not at the beginning of a line.
@@ -875,6 +894,7 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
           Whitespaces->addUntouchableToken(*Tok, TheLine.InPPDirective);
       }
       NextLine = Joiner.getNextMergedLine(DryRun, IndentTracker);
+      RangeMinLevel = UINT_MAX;
     }
     if (!DryRun)
       markFinalized(TheLine.First);

@@ -18,14 +18,16 @@ namespace tidy {
 namespace readability {
 
 namespace {
-internal::Matcher<Expr> callToGet(internal::Matcher<Decl> OnClass) {
+internal::Matcher<Expr> callToGet(const internal::Matcher<Decl> &OnClass) {
   return cxxMemberCallExpr(
              on(expr(anyOf(hasType(OnClass),
                            hasType(qualType(
                                pointsTo(decl(OnClass).bind("ptr_to_ptr"))))))
                     .bind("smart_pointer")),
              unless(callee(memberExpr(hasObjectExpression(cxxThisExpr())))),
-             callee(cxxMethodDecl(hasName("get"))))
+             callee(cxxMethodDecl(
+                 hasName("get"),
+                 returns(qualType(pointsTo(type().bind("getType")))))))
       .bind("redundant_get");
 }
 
@@ -35,10 +37,8 @@ void registerMatchersForGetArrowStart(MatchFinder *Finder,
       recordDecl().bind("duck_typing"),
       has(cxxMethodDecl(hasName("operator->"),
                         returns(qualType(pointsTo(type().bind("op->Type")))))),
-      has(cxxMethodDecl(hasName("operator*"),
-                        returns(qualType(references(type().bind("op*Type")))))),
-      has(cxxMethodDecl(hasName("get"),
-                        returns(qualType(pointsTo(type().bind("getType")))))));
+      has(cxxMethodDecl(hasName("operator*"), returns(qualType(references(
+                                                  type().bind("op*Type")))))));
 
   // Catch 'ptr.get()->Foo()'
   Finder->addMatcher(memberExpr(expr().bind("memberExpr"), isArrow(),
@@ -60,21 +60,27 @@ void registerMatchersForGetEquals(MatchFinder *Finder,
   // might be on global namespace or found by ADL, might be a template, etc.
   // For now, lets keep a list of known standard types.
 
-  const auto IsAKnownSmartptr = recordDecl(
-      anyOf(hasName("::std::unique_ptr"), hasName("::std::shared_ptr")));
+  const auto IsAKnownSmartptr =
+      recordDecl(hasAnyName("::std::unique_ptr", "::std::shared_ptr"));
 
   // Matches against nullptr.
   Finder->addMatcher(
-      binaryOperator(
-          anyOf(hasOperatorName("=="), hasOperatorName("!=")),
-          hasEitherOperand(ignoringImpCasts(cxxNullPtrLiteralExpr())),
-          hasEitherOperand(callToGet(IsAKnownSmartptr))),
+      binaryOperator(anyOf(hasOperatorName("=="), hasOperatorName("!=")),
+                     hasEitherOperand(ignoringImpCasts(
+                         anyOf(cxxNullPtrLiteralExpr(), gnuNullExpr(),
+                               integerLiteral(equals(0))))),
+                     hasEitherOperand(callToGet(IsAKnownSmartptr))),
       Callback);
-  // TODO: Catch ptr.get() == other_ptr.get()
+
+  // Matches against if(ptr.get())
+  Finder->addMatcher(
+      ifStmt(hasCondition(ignoringImpCasts(callToGet(IsAKnownSmartptr)))),
+      Callback);
+
+  // FIXME: Match and fix if (l.get() == r.get()).
 }
 
-
-}  // namespace
+} // namespace
 
 void RedundantSmartptrGetCheck::registerMatchers(MatchFinder *Finder) {
   // Only register the matchers for C++; the functionality currently does not
@@ -102,10 +108,11 @@ bool allReturnTypesMatch(const MatchFinder::MatchResult &Result) {
       Result.Nodes.getNodeAs<Type>("getType")->getUnqualifiedDesugaredType();
   return OpArrowType == OpStarType && OpArrowType == GetType;
 }
-}  // namespace
+} // namespace
 
 void RedundantSmartptrGetCheck::check(const MatchFinder::MatchResult &Result) {
-  if (!allReturnTypesMatch(Result)) return;
+  if (!allReturnTypesMatch(Result))
+    return;
 
   bool IsPtrToPtr = Result.Nodes.getNodeAs<Decl>("ptr_to_ptr") != nullptr;
   bool IsMemberExpr = Result.Nodes.getNodeAs<Expr>("memberExpr") != nullptr;
@@ -119,10 +126,10 @@ void RedundantSmartptrGetCheck::check(const MatchFinder::MatchResult &Result) {
 
   StringRef SmartptrText = Lexer::getSourceText(
       CharSourceRange::getTokenRange(Smartptr->getSourceRange()),
-      *Result.SourceManager, Result.Context->getLangOpts());
+      *Result.SourceManager, getLangOpts());
   // Replace foo->get() with *foo, and foo.get() with foo.
   std::string Replacement = Twine(IsPtrToPtr ? "*" : "", SmartptrText).str();
-  diag(GetCall->getLocStart(), "Redundant get() call on smart pointer.")
+  diag(GetCall->getLocStart(), "redundant get() call on smart pointer")
       << FixItHint::CreateReplacement(GetCall->getSourceRange(), Replacement);
 }
 

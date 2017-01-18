@@ -82,10 +82,13 @@ else() # (Unix based systems, Intel(R) MIC Architecture, and Mac)
     libomp_append(libomp_test_touch_cflags -m32 LIBOMP_HAVE_M32_FLAG)
   endif()
   libomp_append(libomp_test_touch_libs ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE})
+  libomp_append(libomp_test_touch_libs "${LIBOMP_HWLOC_LIBRARY}" LIBOMP_USE_HWLOC)
   if(APPLE)
     set(libomp_test_touch_env "DYLD_LIBRARY_PATH=.:${LIBOMP_OUTPUT_DIRECTORY}:$ENV{DYLD_LIBRARY_PATH}")
+    libomp_append(libomp_test_touch_ldflags "-Wl,-rpath,${LIBOMP_HWLOC_LIBRARY_DIR}" LIBOMP_USE_HWLOC)
   else()
     set(libomp_test_touch_env "LD_LIBRARY_PATH=.:${LIBOMP_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
+    libomp_append(libomp_test_touch_ldflags "-Wl,-rpath=${LIBOMP_HWLOC_LIBRARY_DIR}" LIBOMP_USE_HWLOC)
   endif()
 endif()
 macro(libomp_test_touch_recipe test_touch_dir)
@@ -147,8 +150,8 @@ add_custom_target(libomp-test-execstack DEPENDS test-execstack/.success)
 add_custom_command(
   OUTPUT  test-execstack/.success
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/test-execstack
-  COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/check-execstack.pl --os=${LIBOMP_PERL_SCRIPT_OS}
-    --arch=${LIBOMP_ARCH} ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
+  COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/check-execstack.pl
+    --arch=${LIBOMP_PERL_SCRIPT_ARCH} ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
   COMMAND ${CMAKE_COMMAND} -E touch test-execstack/.success
   DEPENDS omp
 )
@@ -159,7 +162,7 @@ add_custom_command(
   OUTPUT  test-instr/.success
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/test-instr
   COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/check-instruction-set.pl --os=${LIBOMP_PERL_SCRIPT_OS}
-    --arch=${LIBOMP_ARCH} --show --mic-arch=${LIBOMP_MIC_ARCH} ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
+    --arch=${LIBOMP_PERL_SCRIPT_ARCH} --show --mic-arch=${LIBOMP_MIC_ARCH} ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
   COMMAND ${CMAKE_COMMAND} -E touch test-instr/.success
   DEPENDS omp ${LIBOMP_TOOLS_DIR}/check-instruction-set.pl
 )
@@ -169,12 +172,15 @@ add_custom_target(libomp-test-deps DEPENDS test-deps/.success)
 set(libomp_expected_library_deps)
 if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
   set(libomp_expected_library_deps libc.so.7 libthr.so.3)
+  libomp_append(libomp_expected_library_deps libhwloc.so.5 LIBOMP_USE_HWLOC)
 elseif(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
   set(libomp_expected_library_deps libc.so.12 libpthread.so.1 libm.so.0)
+  libomp_append(libomp_expected_library_deps libhwloc.so.5 LIBOMP_USE_HWLOC)
 elseif(APPLE)
   set(libomp_expected_library_deps /usr/lib/libSystem.B.dylib)
 elseif(WIN32)
   set(libomp_expected_library_deps kernel32.dll)
+  libomp_append(libomp_expected_library_deps psapi.dll LIBOMP_OMPT_SUPPORT)
 else()
   if(${MIC})
     set(libomp_expected_library_deps libc.so.6 libpthread.so.0 libdl.so.2)
@@ -202,8 +208,10 @@ else()
       libomp_append(libomp_expected_library_deps ld64.so.1)
     endif()
     libomp_append(libomp_expected_library_deps libpthread.so.0 IF_FALSE STUBS_LIBRARY)
+    libomp_append(libomp_expected_library_deps libhwloc.so.5 LIBOMP_USE_HWLOC)
   endif()
   libomp_append(libomp_expected_library_deps libstdc++.so.6 LIBOMP_USE_STDCPPLIB)
+  libomp_append(libomp_expected_library_deps libm.so.6 LIBOMP_STATS)
 endif()
 # Perl script expects comma separated list
 string(REPLACE ";" "," libomp_expected_library_deps "${libomp_expected_library_deps}")
@@ -211,7 +219,7 @@ add_custom_command(
   OUTPUT  test-deps/.success
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/test-deps
   COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/check-depends.pl --os=${LIBOMP_PERL_SCRIPT_OS}
-    --arch=${LIBOMP_ARCH} --expected="${libomp_expected_library_deps}" ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
+    --arch=${LIBOMP_PERL_SCRIPT_ARCH} --expected="${libomp_expected_library_deps}" ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
   COMMAND ${CMAKE_COMMAND} -E touch test-deps/.success
   DEPENDS omp ${LIBOMP_TOOLS_DIR}/check-depends.pl
 )

@@ -16,7 +16,6 @@
 #ifndef LLVM_CLANG_BASIC_TARGETCXXABI_H
 #define LLVM_CLANG_BASIC_TARGETCXXABI_H
 
-#include "llvm/ADT/Triple.h"
 #include "llvm/Support/ErrorHandling.h"
 
 namespace clang {
@@ -70,6 +69,11 @@ public:
     ///    http://infocenter.arm.com
     ///                  /help/topic/com.arm.doc.ihi0059a/IHI0059A_cppabi64.pdf
     iOS64,
+
+    /// WatchOS is a modernisation of the iOS ABI, which roughly means it's
+    /// the iOS64 ABI ported to 32-bits. The primary difference from iOS64 is
+    /// that RTTI objects must still be unique at the moment.
+    WatchOS,
 
     /// The generic AArch64 ABI is also a modified version of the Itanium ABI,
     /// but it has fewer divergences than the 32-bit ARM ABI.
@@ -135,6 +139,7 @@ public:
     case GenericARM:
     case iOS:
     case iOS64:
+    case WatchOS:
     case GenericMIPS:
     case WebAssembly:
       return true;
@@ -153,6 +158,7 @@ public:
     case GenericARM:
     case iOS:
     case iOS64:
+    case WatchOS:
     case GenericMIPS:
     case WebAssembly:
       return false;
@@ -186,6 +192,7 @@ public:
     case GenericItanium:
     case iOS:
     case iOS64:
+    case WatchOS:
     case Microsoft:
       return true;
     }
@@ -231,7 +238,7 @@ public:
   /// \brief Can an out-of-line inline function serve as a key function?
   ///
   /// This flag is only useful in ABIs where type data (for example,
-  /// v-tables and type_info objects) are emitted only after processing
+  /// vtables and type_info objects) are emitted only after processing
   /// the definition of a special "key" virtual function.  (This is safe
   /// because the ODR requires that every virtual function be defined
   /// somewhere in a program.)  This usually permits such data to be
@@ -261,6 +268,7 @@ public:
     case GenericARM:
     case iOS64:
     case WebAssembly:
+    case WatchOS:
       return false;
 
     case GenericAArch64:
@@ -320,6 +328,7 @@ public:
     // the Itanium exception about classes with over-large bitfields.
     case iOS64:
     case WebAssembly:
+    case WatchOS:
       return UseTailPaddingUnlessPOD11;
 
     // MSVC always allocates fields in the tail-padding of a base class

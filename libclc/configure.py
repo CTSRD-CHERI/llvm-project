@@ -69,8 +69,8 @@ llvm_version = string.split(string.replace(llvm_config(['--version']), 'svn', ''
 llvm_int_version = int(llvm_version[0]) * 100 + int(llvm_version[1]) * 10
 llvm_string_version = 'LLVM' + llvm_version[0] + '.' + llvm_version[1]
 
-if llvm_int_version < 370:
-    print "libclc requires LLVM >= 3.7"
+if llvm_int_version < 400:
+    print "libclc requires LLVM >= 4.0"
     sys.exit(1)
 
 llvm_system_libs = llvm_config(['--system-libs'])
@@ -92,18 +92,22 @@ if not cxx_compiler:
 available_targets = {
   'r600--' : { 'devices' :
                [{'gpu' : 'cedar',   'aliases' : ['palm', 'sumo', 'sumo2', 'redwood', 'juniper']},
-                {'gpu' : 'cypress', 'aliases' : ['hemlock']},
-                {'gpu' : 'barts',   'aliases' : ['turks', 'caicos']},
-                {'gpu' : 'cayman',  'aliases' : ['aruba']}]},
+                {'gpu' : 'cypress', 'aliases' : ['hemlock'] },
+                {'gpu' : 'barts',   'aliases' : ['turks', 'caicos'] },
+                {'gpu' : 'cayman',  'aliases' : ['aruba']} ]},
   'amdgcn--': { 'devices' :
-                [{'gpu' : 'tahiti',  'aliases' : ['pitcairn', 'verde', 'oland', 'hainan', 'bonaire', 'kabini', 'kaveri', 'hawaii','mullins']}]},
-  'nvptx--'   : { 'devices' : [{'gpu' : '', 'aliases' : []}]},
-  'nvptx64--'   : { 'devices' : [{'gpu' : '', 'aliases' : []}] },
-  'nvptx--nvidiacl'   : { 'devices' : [{'gpu' : '', 'aliases' : []}] },
-  'nvptx64--nvidiacl' : { 'devices' : [{'gpu' : '', 'aliases' : []}] }
+                [{'gpu' : 'tahiti', 'aliases' : ['pitcairn', 'verde', 'oland', 'hainan', 'bonaire', 'kabini', 'kaveri', 'hawaii','mullins','tonga','carrizo','iceland','fiji','stoney','polaris10','polaris11']} ]},
+  'amdgcn--amdhsa': { 'devices' :
+                      [{'gpu' : '', 'aliases' : ['bonaire', 'hawaii', 'kabini', 'kaveri', 'mullins', 'carrizo', 'stoney', 'fiji', 'iceland', 'tonga','polaris10','polaris11']} ]},
+  'nvptx--'   : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
+  'nvptx64--' : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
+  'nvptx--nvidiacl'   : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
+  'nvptx64--nvidiacl' : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
 }
 
-default_targets = ['nvptx--nvidiacl', 'nvptx64--nvidiacl', 'r600--', 'amdgcn--']
+available_targets['amdgcn-mesa-mesa3d'] = available_targets['amdgcn--']
+
+default_targets = ['nvptx--nvidiacl', 'nvptx64--nvidiacl', 'r600--', 'amdgcn--', 'amdgcn--amdhsa', 'amdgcn-mesa-mesa3d']
 
 targets = args
 if not targets:
@@ -165,9 +169,11 @@ for target in targets:
   for arch in archs:
     subdirs.append("%s-%s-%s" % (arch, t_vendor, t_os))
     subdirs.append("%s-%s" % (arch, t_os))
+    if t_os == 'mesa3d':
+        subdirs.append('amdgcn-amdhsa')
     subdirs.append(arch)
-    if arch == 'amdgcn':
-        subdirs.append('r600')
+    if arch == 'amdgcn' or arch == 'r600':
+        subdirs.append('amdgpu')
 
   incdirs = filter(os.path.isdir,
                [os.path.join(srcdir, subdir, 'include') for subdir in subdirs])
@@ -180,9 +186,6 @@ for target in targets:
     # The rule for building a .bc file for the specified architecture using clang.
     clang_bc_flags = "-target %s -I`dirname $in` %s " \
                      "-fno-builtin " \
-                     "-Dcl_clang_storage_class_specifiers " \
-                     "-Dcl_khr_fp64 " \
-                     "-Dcles_khr_int64 " \
                      "-D__CLC_INTERNAL " \
                      "-emit-llvm" % (target, clang_cl_includes)
     if device['gpu'] != '':

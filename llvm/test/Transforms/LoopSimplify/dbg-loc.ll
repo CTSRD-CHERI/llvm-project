@@ -16,7 +16,7 @@ declare void @f3()
 ; CHECK:       for.end.loopexit:
 ; CHECK-NEXT:    br label %for.end, !dbg [[LOOPEXIT_LOC:![0-9]+]]
 
-define linkonce_odr hidden void @foo(%"Length"* %begin, %"Length"* %end) nounwind ssp uwtable align 2 {
+define linkonce_odr hidden void @foo(%"Length"* %begin, %"Length"* %end) nounwind ssp uwtable align 2 !dbg !6 {
 entry:
   %cmp.4 = icmp eq %"Length"* %begin, %end, !dbg !7
   br i1 %cmp.4, label %for.end, label %for.body, !dbg !8
@@ -73,6 +73,7 @@ eh.resume:                                        ; preds = %catch
 ; CHECK-DAG: [[LPAD_PREHEADER_LOC]] = !DILocation(line: 85, column: 1, scope: !{{[0-9]+}})
 
 !llvm.module.flags = !{!0, !1, !2}
+!llvm.dbg.cu = !{!14}
 !0 = !{i32 2, !"Dwarf Version", i32 4}
 !1 = !{i32 2, !"Debug Info Version", i32 3}
 !2 = !{i32 1, !"PIC Level", i32 2}
@@ -80,7 +81,7 @@ eh.resume:                                        ; preds = %catch
 !3 = !{}
 !4 = !DISubroutineType(types: !3)
 !5 = !DIFile(filename: "Vector.h", directory: "/tmp")
-!6 = distinct !DISubprogram(name: "destruct", scope: !5, file: !5, line: 71, type: !4, isLocal: false, isDefinition: true, scopeLine: 72, flags: DIFlagPrototyped, isOptimized: false, function: void (%"Length"*, %"Length"*)* @foo, variables: !3)
+!6 = distinct !DISubprogram(name: "destruct", scope: !5, file: !5, line: 71, type: !4, isLocal: false, isDefinition: true, scopeLine: 72, flags: DIFlagPrototyped, isOptimized: false, unit: !14, variables: !3)
 !7 = !DILocation(line: 73, column: 38, scope: !6)
 !8 = !DILocation(line: 73, column: 13, scope: !6)
 !9 = !DILocation(line: 73, column: 27, scope: !6)
@@ -88,3 +89,7 @@ eh.resume:                                        ; preds = %catch
 !11 = !DILocation(line: 73, column: 46, scope: !6)
 !12 = !DILocation(line: 75, column: 9, scope: !6)
 !13 = !DILocation(line: 85, column: 1, scope: !6)
+!14 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang",
+                             file: !5,
+                             isOptimized: true, flags: "-O2",
+                             splitDebugFilename: "abc.debug", emissionKind: 2)

@@ -29,6 +29,7 @@
 #include <map>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 int main()
@@ -121,7 +122,7 @@ int main()
                 assert(i->second == d);
             }
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::pair<const int, double> V;
         V ar[] =
@@ -211,7 +212,7 @@ int main()
             }
     }
 #endif
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     { // N3644 testing
         typedef std::multimap<int, double> C;
         C::iterator ii1{}, ii2{};

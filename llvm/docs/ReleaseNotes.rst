@@ -1,13 +1,13 @@
-======================
-LLVM 3.8 Release Notes
-======================
+========================
+LLVM 4.0.0 Release Notes
+========================
 
 .. contents::
     :local:
 
 .. warning::
-   These are in-progress notes for the upcoming LLVM 3.8 release.  You may
-   prefer the `LLVM 3.7 Release Notes <http://llvm.org/releases/3.7.0/docs
+   These are in-progress notes for the upcoming LLVM 4.0.0 release.  You may
+   prefer the `LLVM 3.9 Release Notes <http://llvm.org/releases/3.9.0/docs
    /ReleaseNotes.html>`_.
 
 
@@ -15,7 +15,7 @@ Introduction
 ============
 
 This document contains the release notes for the LLVM Compiler Infrastructure,
-release 3.8.  Here we describe the status of LLVM, including major improvements
+release 4.0.0.  Here we describe the status of LLVM, including major improvements
 from the previous release, improvements in various subprojects of LLVM, and
 some of the current users of the code.  All LLVM releases may be downloaded
 from the `LLVM releases web site <http://llvm.org/releases/>`_.
@@ -33,9 +33,12 @@ page <http://llvm.org/releases/>`_.
 
 Non-comprehensive list of changes in this release
 =================================================
-* With this release, the minimum Windows version required for running LLVM is
-  Windows 7. Earlier versions, including Windows Vista and XP are no longer
-  supported.
+* The C API functions LLVMAddFunctionAttr, LLVMGetFunctionAttr,
+  LLVMRemoveFunctionAttr, LLVMAddAttribute, LLVMRemoveAttribute,
+  LLVMGetAttribute, LLVMAddInstrAttribute and
+  LLVMRemoveInstrAttribute have been removed.
+
+* The C API enum LLVMAttribute has been deleted.
 
 .. NOTE
    For small 1-3 sentence descriptions, just add an entry at the end of
@@ -43,6 +46,16 @@ Non-comprehensive list of changes in this release
    point (e.g. maybe you would like to give an example of the
    functionality, or simply have a lot to talk about), see the `NOTE` below
    for adding a new subsection.
+
+* The definition and uses of LLVM_ATRIBUTE_UNUSED_RESULT in the LLVM source
+  were replaced with LLVM_NODISCARD, which matches the C++17 [[nodiscard]]
+  semantics rather than gcc's __attribute__((warn_unused_result)).
+
+* Minimum compiler version to build has been raised to GCC 4.8 and VS 2015.
+
+* The Timer related APIs now expect a Name and Description. When upgrading code
+  the previously used names should become descriptions and a short name in the
+  style of a programming language identifier should be added.
 
 * ... next change ...
 
@@ -55,6 +68,9 @@ Non-comprehensive list of changes in this release
    -------------------
 
    Makes programs 10x faster by doing Special New Thing.
+
+Changes to the LLVM IR
+----------------------
 
 Changes to the ARM Backend
 --------------------------
@@ -73,21 +89,34 @@ Changes to the PowerPC Target
 
  During this release ...
 
+Changes to the X86 Target
+-------------------------
 
-Changes to the OCaml bindings
+ During this release ...
+
+Changes to the AMDGPU Target
 -----------------------------
 
  During this release ...
 
+Changes to the AVR Target
+-----------------------------
 
-External Open Source Projects Using LLVM 3.8
-============================================
+* The entire backend has been merged in-tree with all tests passing. All of
+  the instruction selection code and the machine code backend has landed
+  recently and is fully usable.
 
-An exciting aspect of LLVM is that it is used as an enabling technology for
-a lot of other language and tools projects. This section lists some of the
-projects that have already been updated to work with LLVM 3.8.
+Changes to the OCaml bindings
+-----------------------------
 
-* A project
+* The attribute API was completely overhauled, following the changes
+  to the C API.
+
+
+External Open Source Projects Using LLVM 4.0.0
+==============================================
+
+* A project...
 
 
 Additional Information
@@ -102,4 +131,3 @@ going into the ``llvm/docs/`` directory in the LLVM tree.
 
 If you have any questions or comments about LLVM, please feel free to contact
 us via the `mailing lists <http://llvm.org/docs/#maillist>`_.
-

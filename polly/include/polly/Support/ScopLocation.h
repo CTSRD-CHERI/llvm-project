@@ -18,11 +18,11 @@
 
 namespace llvm {
 class Region;
-}
+} // namespace llvm
 
 namespace polly {
 
-/// @brief Get the location of a region from the debug info.
+/// Get the location of a region from the debug info.
 ///
 /// @param R The region to get debug info for.
 /// @param LineBegin The first line in the region.
@@ -30,6 +30,6 @@ namespace polly {
 /// @param FileName The filename where the region was defined.
 void getDebugLocation(const llvm::Region *R, unsigned &LineBegin,
                       unsigned &LineEnd, std::string &FileName);
-}
+} // namespace polly
 
 #endif // POLLY_SCOP_LOCATION_H

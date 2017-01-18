@@ -79,7 +79,7 @@ public:
   };
 
 private:
-  friend class BinaryOperator;
+  friend class Instruction;
   friend class ConstantExpr;
   void setHasNoUnsignedWrap(bool B) {
     SubclassOptionalData =
@@ -130,7 +130,7 @@ public:
   };
 
 private:
-  friend class BinaryOperator;
+  friend class Instruction;
   friend class ConstantExpr;
   void setIsExact(bool B) {
     SubclassOptionalData = (SubclassOptionalData & ~IsExact) | (B * IsExact);
@@ -299,9 +299,9 @@ public:
     return FastMathFlags(SubclassOptionalData);
   }
 
-  /// \brief Get the maximum error permitted by this operation in ULPs.  An
-  /// accuracy of 0.0 means that the operation should be performed with the
-  /// default precision.
+  /// Get the maximum error permitted by this operation in ULPs. An accuracy of
+  /// 0.0 means that the operation should be performed with the default
+  /// precision.
   float getFPAccuracy() const;
 
   static inline bool classof(const Instruction *I) {
@@ -364,7 +364,8 @@ class ZExtOperator : public ConcreteOperator<Operator, Instruction::ZExt> {};
 class GEPOperator
   : public ConcreteOperator<Operator, Instruction::GetElementPtr> {
   enum {
-    IsInBounds = (1 << 0)
+    IsInBounds = (1 << 0),
+    // InRangeIndex: bits 1-6
   };
 
   friend class GetElementPtrInst;
@@ -378,6 +379,12 @@ public:
   /// Test whether this is an inbounds GEP, as defined by LangRef.html.
   bool isInBounds() const {
     return SubclassOptionalData & IsInBounds;
+  }
+  /// Returns the offset of the index with an inrange attachment, or None if
+  /// none.
+  Optional<unsigned> getInRangeIndex() const {
+    if (SubclassOptionalData >> 1 == 0) return None;
+    return (SubclassOptionalData >> 1) - 1;
   }
 
   inline op_iterator       idx_begin()       { return op_begin()+1; }
@@ -401,6 +408,7 @@ public:
   }
 
   Type *getSourceElementType() const;
+  Type *getResultElementType() const;
 
   /// Method to return the address space of the pointer operand.
   unsigned getPointerAddressSpace() const {

@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03, c++11
 // <optional>
 
 // T& optional<T>::value();
@@ -15,7 +16,7 @@
 #include <type_traits>
 #include <cassert>
 
-#if _LIBCPP_STD_VER > 11
+#include "test_macros.h"
 
 using std::experimental::optional;
 using std::experimental::bad_optional_access;
@@ -28,16 +29,14 @@ struct X
     int test() {return 4;}
 };
 
-#endif  // _LIBCPP_STD_VER > 11
-
 int main()
 {
-#if _LIBCPP_STD_VER > 11
     {
         optional<X> opt;
         opt.emplace();
         assert(opt.value().test() == 4);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     {
         optional<X> opt;
         try
@@ -49,5 +48,5 @@ int main()
         {
         }
     }
-#endif  // _LIBCPP_STD_VER > 11
+#endif
 }

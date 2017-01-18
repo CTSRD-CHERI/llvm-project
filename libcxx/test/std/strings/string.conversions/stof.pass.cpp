@@ -19,6 +19,8 @@
 #include <cmath>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     assert(std::stof("0") == 0);
@@ -35,6 +37,7 @@ int main()
     idx = 0;
     assert(std::stof(L"10g", &idx) == 10);
     assert(idx == 2);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     idx = 0;
     try
     {
@@ -74,40 +77,54 @@ int main()
         assert(idx == 0);
     }
     try
+#endif
     {
         assert(std::stof("INF", &idx) == INFINITY);
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::stof(L"INF", &idx) == INFINITY);
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::isnan(std::stof("NAN", &idx)));
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::isnan(std::stof(L"NAN", &idx)));
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
@@ -167,4 +184,5 @@ int main()
     {
         assert(idx == 0);
     }
+#endif
 }

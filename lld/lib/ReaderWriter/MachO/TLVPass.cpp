@@ -1,4 +1,4 @@
-//===- lib/ReaderWriter/MachO/TLVPass.cpp ---------------------------------===//
+//===- lib/ReaderWriter/MachO/TLVPass.cpp -----------------------*- C++ -*-===//
 //
 //                             The LLVM Linker
 //
@@ -29,6 +29,8 @@ class TLVPEntryAtom : public SimpleDefinedAtom {
 public:
   TLVPEntryAtom(const File &file, bool is64, StringRef name)
       : SimpleDefinedAtom(file), _is64(is64), _name(name) {}
+
+  ~TLVPEntryAtom() override = default;
 
   ContentType contentType() const override {
     return DefinedAtom::typeTLVInitializerPtr;
@@ -65,12 +67,12 @@ class TLVPass : public Pass {
 public:
   TLVPass(const MachOLinkingContext &context)
       : _ctx(context), _archHandler(_ctx.archHandler()),
-        _file("<mach-o TLV Pass>") {}
+        _file(*_ctx.make_file<MachOFile>("<mach-o TLV pass>")) {
+    _file.setOrdinal(_ctx.getNextOrdinalAndIncrement());
+  }
 
 private:
-
-  std::error_code perform(SimpleFile &mergedFile) override {
-
+  llvm::Error perform(SimpleFile &mergedFile) override {
     bool allowTLV = _ctx.minOS("10.7", "1.0");
 
     for (const DefinedAtom *atom : mergedFile.defined()) {
@@ -79,7 +81,7 @@ private:
           continue;
 
         if (!allowTLV)
-          return make_dynamic_error_code(
+          return llvm::make_error<GenericError>(
             "targeted OS version does not support use of thread local "
             "variables in " + atom->name() + " for architecture " +
             _ctx.archName());
@@ -105,7 +107,7 @@ private:
     for (const TLVPEntryAtom *slot : entries)
       mergedFile.addAtom(*slot);
 
-    return std::error_code();
+    return llvm::Error::success();
   }
 
   const DefinedAtom *makeTLVPEntry(const Atom *target) {
@@ -114,7 +116,7 @@ private:
     if (pos != _targetToTLVP.end())
       return pos->second;
 
-    TLVPEntryAtom *tlvpEntry = new (_file.allocator())
+    auto *tlvpEntry = new (_file.allocator())
       TLVPEntryAtom(_file, _ctx.is64Bit(), target->name());
     _targetToTLVP[target] = tlvpEntry;
     const ArchHandler::ReferenceInfo &nlInfo =
@@ -126,7 +128,7 @@ private:
 
   const MachOLinkingContext &_ctx;
   mach_o::ArchHandler &_archHandler;
-  MachOFile _file;
+  MachOFile           &_file;
   llvm::DenseMap<const Atom*, const TLVPEntryAtom*> _targetToTLVP;
 };
 
@@ -134,7 +136,6 @@ void addTLVPass(PassManager &pm, const MachOLinkingContext &ctx) {
   assert(ctx.needsTLVPass());
   pm.add(llvm::make_unique<TLVPass>(ctx));
 }
-
 
 } // end namesapce mach_o
 } // end namesapce lld

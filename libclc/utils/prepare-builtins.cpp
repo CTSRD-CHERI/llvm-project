@@ -1,4 +1,5 @@
-#include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/LLVMContext.h"
@@ -24,7 +25,7 @@ OutputFilename("o", cl::desc("Output filename"),
                cl::value_desc("filename"));
 
 int main(int argc, char **argv) {
-  LLVMContext &Context = getGlobalContext();
+  LLVMContext Context;
   llvm_shutdown_obj Y;  // Call llvm_shutdown() on exit.
 
   cl::ParseCommandLineOptions(argc, argv, "libclc builtin preparation tool\n");
@@ -40,7 +41,8 @@ int main(int argc, char **argv) {
       ErrorMessage = ec.message();
     else {
       ErrorOr<std::unique_ptr<Module>> ModuleOrErr =
-          parseBitcodeFile(BufferPtr.get()->getMemBufferRef(), Context);
+          expectedToErrorOrAndEmitErrors(Context,
+          parseBitcodeFile(BufferPtr.get()->getMemBufferRef(), Context));
       if (std::error_code ec = ModuleOrErr.getError())
         ErrorMessage = ec.message();
 
@@ -56,6 +58,13 @@ int main(int argc, char **argv) {
       errs() << "bitcode didn't read correctly.\n";
     return 1;
   }
+
+  // Strip the OpenCL version metadata. There are a lot of linked
+  // modules in the library build, each spamming the same
+  // version. This may also report a different version than the user
+  // program is using. This should probably be uniqued when linking.
+  if (NamedMDNode *OCLVersion = M->getNamedMetadata("opencl.ocl.version"))
+      M->eraseNamedMetadata(OCLVersion);
 
   // Set linkage of every external definition to linkonce_odr.
   for (Module::iterator i = M->begin(), e = M->end(); i != e; ++i) {

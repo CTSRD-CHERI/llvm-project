@@ -18,6 +18,7 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Object/COFF.h"
 #include <atomic>
+#include <utility>
 #include <vector>
 
 namespace lld {
@@ -138,6 +139,7 @@ public:
   SectionChunk(ObjectFile *File, const coff_section *Header);
   static bool classof(const Chunk *C) { return C->kind() == SectionKind; }
   size_t getSize() const override { return Header->SizeOfRawData; }
+  ArrayRef<uint8_t> getContents() const;
   void writeTo(uint8_t *Buf) const override;
   bool hasData() const override;
   uint32_t getPermissions() const override;
@@ -185,13 +187,12 @@ public:
   // Auxiliary Format 5: Section Definitions. Used for ICF.
   uint32_t Checksum = 0;
 
-private:
-  ArrayRef<uint8_t> getContents() const;
+  const coff_section *Header;
 
+private:
   // A file this chunk was created from.
   ObjectFile *File;
 
-  const coff_section *Header;
   StringRef SectionName;
   std::vector<SectionChunk *> AssocChildren;
   llvm::iterator_range<const coff_relocation *> Relocs;
@@ -204,8 +205,7 @@ private:
   void replace(SectionChunk *Other);
   std::atomic<uint64_t> GroupID = { 0 };
 
-  // Chunks are basically unnamed chunks of bytes.
-  // Symbols are associated for debugging and logging purposs only.
+  // Sym points to a section symbol if this is a COMDAT chunk.
   DefinedRegular *Sym = nullptr;
 };
 
@@ -296,7 +296,7 @@ private:
 // functions. x86-only.
 class SEHTableChunk : public Chunk {
 public:
-  explicit SEHTableChunk(std::set<Defined *> S) : Syms(S) {}
+  explicit SEHTableChunk(std::set<Defined *> S) : Syms(std::move(S)) {}
   size_t getSize() const override { return Syms.size() * 4; }
   void writeTo(uint8_t *Buf) const override;
 

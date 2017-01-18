@@ -1,5 +1,5 @@
+; RUN: llc < %s -march=amdgcn -verify-machineinstrs | FileCheck -check-prefix=SI -check-prefix=FUNC %s
 ; RUN: llc < %s -march=r600 -mcpu=redwood | FileCheck --check-prefix=R600 --check-prefix=FUNC %s
-; RUN: llc < %s -march=amdgcn -mcpu=SI -verify-machineinstrs | FileCheck -check-prefix=SI -check-prefix=FUNC %s
 
 declare i32 @llvm.r600.read.tidig.x() nounwind readnone
 
@@ -225,7 +225,7 @@ entry:
 
 ; FUNC-LABEL: {{^}}i32_eq:
 ; R600: SETE_INT
-; SI: v_cmp_eq_i32
+; SI: v_cmp_eq_u32
 define void @i32_eq(i32 addrspace(1)* %out, i32 %a, i32 %b) {
 entry:
   %0 = icmp eq i32 %a, %b
@@ -236,7 +236,7 @@ entry:
 
 ; FUNC-LABEL: {{^}}i32_ne:
 ; R600: SETNE_INT
-; SI: v_cmp_ne_i32
+; SI: v_cmp_ne_u32
 define void @i32_ne(i32 addrspace(1)* %out, i32 %a, i32 %b) {
 entry:
   %0 = icmp ne i32 %a, %b
@@ -335,11 +335,11 @@ entry:
 
 ; FIXME: This does 4 compares
 ; FUNC-LABEL: {{^}}v3i32_eq:
-; SI-DAG: v_cmp_eq_i32
+; SI-DAG: v_cmp_eq_u32
 ; SI-DAG: v_cndmask_b32_e64 {{v[0-9]+}}, 0, -1,
-; SI-DAG: v_cmp_eq_i32
+; SI-DAG: v_cmp_eq_u32
 ; SI-DAG: v_cndmask_b32_e64 {{v[0-9]+}}, 0, -1,
-; SI-DAG: v_cmp_eq_i32
+; SI-DAG: v_cmp_eq_u32
 ; SI-DAG: v_cndmask_b32_e64 {{v[0-9]+}}, 0, -1,
 ; SI: s_endpgm
 define void @v3i32_eq(<3 x i32> addrspace(1)* %out, <3 x i32> addrspace(1)* %ptra, <3 x i32> addrspace(1)* %ptrb) {
@@ -356,11 +356,11 @@ define void @v3i32_eq(<3 x i32> addrspace(1)* %out, <3 x i32> addrspace(1)* %ptr
 }
 
 ; FUNC-LABEL: {{^}}v3i8_eq:
-; SI-DAG: v_cmp_eq_i32
+; SI-DAG: v_cmp_eq_u32
 ; SI-DAG: v_cndmask_b32_e64 {{v[0-9]+}}, 0, -1,
-; SI-DAG: v_cmp_eq_i32
+; SI-DAG: v_cmp_eq_u32
 ; SI-DAG: v_cndmask_b32_e64 {{v[0-9]+}}, 0, -1,
-; SI-DAG: v_cmp_eq_i32
+; SI-DAG: v_cmp_eq_u32
 ; SI-DAG: v_cndmask_b32_e64 {{v[0-9]+}}, 0, -1,
 ; SI: s_endpgm
 define void @v3i8_eq(<3 x i8> addrspace(1)* %out, <3 x i8> addrspace(1)* %ptra, <3 x i8> addrspace(1)* %ptrb) {
@@ -373,5 +373,39 @@ define void @v3i8_eq(<3 x i8> addrspace(1)* %out, <3 x i8> addrspace(1)* %ptra, 
   %cmp = icmp eq <3 x i8> %a, %b
   %ext = sext <3 x i1> %cmp to <3 x i8>
   store <3 x i8> %ext, <3 x i8> addrspace(1)* %gep.out
+  ret void
+}
+
+; Make sure we don't try to emit i1 setcc ops
+; FUNC-LABEL: setcc-i1
+; SI: s_and_b32 [[AND:s[0-9]+]], s{{[0-9]+}}, 1
+; SI: s_cmp_eq_u32 [[AND]], 0
+define void @setcc-i1(i32 %in) {
+  %and = and i32 %in, 1
+  %cmp = icmp eq i32 %and, 0
+  br i1 %cmp, label %endif, label %if
+if:
+  unreachable
+endif:
+  ret void
+}
+
+; FUNC-LABEL: setcc-i1-and-xor
+; SI-DAG: v_cmp_ge_f32_e64 [[A:s\[[0-9]+:[0-9]+\]]], s{{[0-9]+}}, 0{{$}}
+; SI-DAG: v_cmp_le_f32_e64 [[B:s\[[0-9]+:[0-9]+\]]], s{{[0-9]+}}, 1.0
+; SI: s_and_b64 s[2:3], [[A]], [[B]]
+define void @setcc-i1-and-xor(i32 addrspace(1)* %out, float %cond) #0 {
+bb0:
+  %tmp5 = fcmp oge float %cond, 0.000000e+00
+  %tmp7 = fcmp ole float %cond, 1.000000e+00
+  %tmp9 = and i1 %tmp5, %tmp7
+  %tmp11 = xor i1 %tmp9, 1
+  br i1 %tmp11, label %bb2, label %bb1
+
+bb1:
+  store i32 0, i32 addrspace(1)* %out
+  br label %bb2
+
+bb2:
   ret void
 }

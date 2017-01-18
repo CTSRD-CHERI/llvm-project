@@ -1,9 +1,8 @@
 ; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 ;
-; Error blocks are skipped during SCoP detection. Hence, we have to skip
-; them during SCoP too as they might contain accesses or branches we cannot
-; handle. Additionally, some blocks might be only reachable via error blocks.
-; Such blocks should not be considered to be valid and therefor ignored.
+; Error blocks are skipped during SCoP detection. We skip them during
+; SCoP formation too as they might contain instructions we can not handle.
+; However statements / basic blocks that follow error blocks are modeled.
 ;
 ;    void timer_start(void);
 ;    void timer_stop(void);
@@ -31,19 +30,18 @@
 ;        timer_stop();
 ;    }
 ;
-;  The assumed context is empty because all statements are executed only
-;  if timeit != 0. This is due to the fact that they are not "reached"
-;  by the error blocks that are executed for timeit == 0.
+;  The assumed context should not be empty even though all statements are
+;  executed only if timeit != 0.
 ;
 ; CHECK:    Region: %entry.split---%if.end.20
 ; CHECK:    Assumed Context:
 ; CHECK-NEXT:    [timeit, N] -> { : }
+; CHECK:    Invalid Context:
+; CHECK-NEXT:    [timeit, N] -> { : timeit < 0 or timeit > 0 }
 ; CHECK:    Statements {
-; CHECK-NOT:  Stmt_if_then_split
+; CHECK-NOT:      Stmt_if_then_split
 ; CHECK:      Stmt_for_body
-; CHECK-NOT:  Stmt_if_then_split
 ; CHECK:      Stmt_for_body_9
-; CHECK-NOT:  Stmt_if_then_split
 ; CHECK:    }
 ;
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"

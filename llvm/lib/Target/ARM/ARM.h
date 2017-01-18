@@ -16,6 +16,7 @@
 #define LLVM_LIB_TARGET_ARM_ARM_H
 
 #include "llvm/Support/CodeGen.h"
+#include "ARMBasicBlockInfo.h"
 #include <functional>
 
 namespace llvm {
@@ -27,6 +28,7 @@ class FunctionPass;
 class ImmutablePass;
 class MachineInstr;
 class MCInst;
+class PassRegistry;
 class TargetLowering;
 class TargetMachine;
 
@@ -35,7 +37,6 @@ FunctionPass *createARMISelDag(ARMBaseTargetMachine &TM,
 FunctionPass *createA15SDOptimizerPass();
 FunctionPass *createARMLoadStoreOptimizationPass(bool PreAlloc = false);
 FunctionPass *createARMExpandPseudoPass();
-FunctionPass *createARMGlobalBaseRegPass();
 FunctionPass *createARMConstantIslandPass();
 FunctionPass *createMLxExpansionPass();
 FunctionPass *createThumb2ITBlockPass();
@@ -45,6 +46,13 @@ FunctionPass *createThumb2SizeReductionPass(
 
 void LowerARMMachineInstrToMCInst(const MachineInstr *MI, MCInst &OutMI,
                                   ARMAsmPrinter &AP);
+
+void computeBlockSize(MachineFunction *MF, MachineBasicBlock *MBB,
+                      BasicBlockInfo &BBI);
+std::vector<BasicBlockInfo> computeAllBlockSizes(MachineFunction *MF);
+
+void initializeARMLoadStoreOptPass(PassRegistry &);
+void initializeARMPreAllocLoadStoreOptPass(PassRegistry &);
 
 } // end namespace llvm;
 

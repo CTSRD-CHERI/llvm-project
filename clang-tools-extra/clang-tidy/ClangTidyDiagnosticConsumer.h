@@ -57,14 +57,26 @@ struct ClangTidyError {
     Error = DiagnosticsEngine::Error
   };
 
-  ClangTidyError(StringRef CheckName, Level DiagLevel);
+  ClangTidyError(StringRef CheckName, Level DiagLevel, bool IsWarningAsError,
+                 StringRef BuildDirectory);
 
   std::string CheckName;
   ClangTidyMessage Message;
-  tooling::Replacements Fix;
+  // Fixes grouped by file path.
+  llvm::StringMap<tooling::Replacements> Fix;
   SmallVector<ClangTidyMessage, 1> Notes;
 
+  // A build directory of the diagnostic source file.
+  //
+  // It's an absolute path which is `directory` field of the source file in
+  // compilation database. If users don't specify the compilation database
+  // directory, it is the current directory where clang-tidy runs.
+  //
+  // Note: it is empty in unittest.
+  std::string BuildDirectory;
+
   Level DiagLevel;
+  bool IsWarningAsError;
 };
 
 /// \brief Read-only set of strings represented as a list of positive and
@@ -149,21 +161,33 @@ public:
   /// \brief Sets ASTContext for the current translation unit.
   void setASTContext(ASTContext *Context);
 
-  /// \brief Gets the language options from the AST context
-  LangOptions getLangOpts() const { return LangOpts; }
+  /// \brief Gets the language options from the AST context.
+  const LangOptions &getLangOpts() const { return LangOpts; }
 
   /// \brief Returns the name of the clang-tidy check which produced this
   /// diagnostic ID.
   StringRef getCheckName(unsigned DiagnosticID) const;
 
   /// \brief Returns check filter for the \c CurrentFile.
+  ///
+  /// The \c CurrentFile can be changed using \c setCurrentFile.
   GlobList &getChecksFilter();
+
+  /// \brief Returns check filter for the \c CurrentFile which
+  /// selects checks for upgrade to error.
+  GlobList &getWarningAsErrorFilter();
 
   /// \brief Returns global options.
   const ClangTidyGlobalOptions &getGlobalOptions() const;
 
   /// \brief Returns options for \c CurrentFile.
+  ///
+  /// The \c CurrentFile can be changed using \c setCurrentFile.
   const ClangTidyOptions &getOptions() const;
+
+  /// \brief Returns options for \c File. Does not change or depend on
+  /// \c CurrentFile.
+  ClangTidyOptions getOptionsForFile(StringRef File) const;
 
   /// \brief Returns \c ClangTidyStats containing issued and ignored diagnostic
   /// counters.
@@ -182,9 +206,20 @@ public:
   void setCheckProfileData(ProfileData *Profile);
   ProfileData *getCheckProfileData() const { return Profile; }
 
+  /// \brief Should be called when starting to process new translation unit.
+  void setCurrentBuildDirectory(StringRef BuildDirectory) {
+    CurrentBuildDirectory = BuildDirectory;
+  }
+
+  /// \brief Returns build directory of the current translation unit.
+  const std::string &getCurrentBuildDirectory() {
+    return CurrentBuildDirectory;
+  }
+
 private:
   // Calls setDiagnosticsEngine() and storeError().
   friend class ClangTidyDiagnosticConsumer;
+  friend class ClangTidyPluginAction;
 
   /// \brief Sets the \c DiagnosticsEngine so that Diagnostics can be generated
   /// correctly.
@@ -200,10 +235,13 @@ private:
   std::string CurrentFile;
   ClangTidyOptions CurrentOptions;
   std::unique_ptr<GlobList> CheckFilter;
+  std::unique_ptr<GlobList> WarningAsErrorFilter;
 
   LangOptions LangOpts;
 
   ClangTidyStats Stats;
+
+  std::string CurrentBuildDirectory;
 
   llvm::DenseMap<unsigned, std::string> CheckNamesByDiagnosticID;
 
@@ -248,6 +286,7 @@ private:
   std::unique_ptr<llvm::Regex> HeaderFilter;
   bool LastErrorRelatesToUserCode;
   bool LastErrorPassesLineFilter;
+  bool LastErrorWasIgnored;
 };
 
 } // end namespace tidy

@@ -148,6 +148,9 @@ namespace EEVT {
     /// be a vector with same num elements as VT.
     bool EnforceVectorSameNumElts(EEVT::TypeSet &VT, TreePattern &TP);
 
+    /// EnforceSameSize - 'this' is now constrained to be the same size as VT.
+    bool EnforceSameSize(EEVT::TypeSet &VT, TreePattern &TP);
+
     bool operator!=(const TypeSet &RHS) const { return TypeVec != RHS.TypeVec; }
     bool operator==(const TypeSet &RHS) const { return TypeVec == RHS.TypeVec; }
 
@@ -173,7 +176,7 @@ struct SDTypeConstraint {
   enum {
     SDTCisVT, SDTCisPtrTy, SDTCisInt, SDTCisFP, SDTCisVec, SDTCisSameAs,
     SDTCisVTSmallerThanOp, SDTCisOpSmallerThanOp, SDTCisEltOfVec,
-    SDTCisSubVecOfVec, SDTCVecEltisVT, SDTCisSameNumEltsAs
+    SDTCisSubVecOfVec, SDTCVecEltisVT, SDTCisSameNumEltsAs, SDTCisSameSizeAs
   } ConstraintType;
 
   union {   // The discriminated union.
@@ -201,6 +204,9 @@ struct SDTypeConstraint {
     struct {
       unsigned OtherOperandNum;
     } SDTCisSameNumEltsAs_Info;
+    struct {
+      unsigned OtherOperandNum;
+    } SDTCisSameSizeAs_Info;
   } x;
 
   /// ApplyTypeConstraint - Given a node in a pattern, apply this type
@@ -406,8 +412,7 @@ public:
   }
   void addPredicateFn(const TreePredicateFn &Fn) {
     assert(!Fn.isAlwaysTrue() && "Empty predicate string!");
-    if (std::find(PredicateFns.begin(), PredicateFns.end(), Fn) ==
-          PredicateFns.end())
+    if (!is_contained(PredicateFns, Fn))
       PredicateFns.push_back(Fn);
   }
 
@@ -710,8 +715,8 @@ public:
 class CodeGenDAGPatterns {
   RecordKeeper &Records;
   CodeGenTarget Target;
-  std::vector<CodeGenIntrinsic> Intrinsics;
-  std::vector<CodeGenIntrinsic> TgtIntrinsics;
+  CodeGenIntrinsicTable Intrinsics;
+  CodeGenIntrinsicTable TgtIntrinsics;
 
   std::map<Record*, SDNodeInfo, LessRecordByID> SDNodes;
   std::map<Record*, std::pair<Record*, std::string>, LessRecordByID> SDNodeXForms;

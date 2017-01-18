@@ -16,11 +16,11 @@
 target datalayout = "e-m:o-i64:64-i128:128-n32:64-S128"
 target triple = "arm64-apple-ios"
 
-@a = common global i32 0, align 4
-@b = common global i32 0, align 4
+@a = common global i32 0, align 4, !dbg !16
+@b = common global i32 0, align 4, !dbg !17
 
 ; Function Attrs: nounwind
-define void @f3() #0 {
+define void @f3() #0 !dbg !12 {
 entry:
   ; Verify that the call still has a debug location after GVN.
   ; CHECK: %call = tail call i32 @f2(i32 1) #{{[0-9]}}, !dbg
@@ -67,23 +67,22 @@ attributes #3 = { nounwind }
 !llvm.module.flags = !{!18, !19}
 !llvm.ident = !{!20}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang version 3.8.0 (trunk 245562) (llvm/trunk 245569)", isOptimized: true, runtimeVersion: 0, emissionKind: 1, enums: !2, subprograms: !3, globals: !15)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang version 3.8.0 (trunk 245562) (llvm/trunk 245569)", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, globals: !15)
 !1 = !DIFile(filename: "test.c", directory: "/")
 !2 = !{}
-!3 = !{!4, !12}
-!4 = distinct !DISubprogram(name: "f1", scope: !1, file: !1, line: 2, type: !6, isLocal: false, isDefinition: true, scopeLine: 2, flags: DIFlagPrototyped, isOptimized: true, variables: !10)
+!4 = distinct !DISubprogram(name: "f1", scope: !1, file: !1, line: 2, type: !6, isLocal: false, isDefinition: true, scopeLine: 2, flags: DIFlagPrototyped, isOptimized: true, unit: !0, variables: !10)
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8}
 !8 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !9, size: 64, align: 64)
 !9 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
 !10 = !{!11}
 !11 = !DILocalVariable(name: "p1", arg: 1, scope: !4, file: !1, line: 2, type: !8)
-!12 = distinct !DISubprogram(name: "f3", scope: !1, file: !1, line: 9, type: !13, isLocal: false, isDefinition: true, scopeLine: 9, flags: DIFlagPrototyped, isOptimized: true, function: void ()* @f3, variables: !2)
+!12 = distinct !DISubprogram(name: "f3", scope: !1, file: !1, line: 9, type: !13, isLocal: false, isDefinition: true, scopeLine: 9, flags: DIFlagPrototyped, isOptimized: true, unit: !0, variables: !2)
 !13 = !DISubroutineType(types: !14)
 !14 = !{null}
 !15 = !{!16, !17}
-!16 = !DIGlobalVariable(name: "a", scope: !0, file: !1, line: 1, type: !9, isLocal: false, isDefinition: true, variable: i32* @a)
-!17 = !DIGlobalVariable(name: "b", scope: !0, file: !1, line: 1, type: !9, isLocal: false, isDefinition: true, variable: i32* @b)
+!16 = !DIGlobalVariable(name: "a", scope: !0, file: !1, line: 1, type: !9, isLocal: false, isDefinition: true)
+!17 = !DIGlobalVariable(name: "b", scope: !0, file: !1, line: 1, type: !9, isLocal: false, isDefinition: true)
 !18 = !{i32 2, !"Dwarf Version", i32 2}
 !19 = !{i32 2, !"Debug Info Version", i32 3}
 !20 = !{!"clang version 3.8.0 (trunk 245562) (llvm/trunk 245569)"}

@@ -29,12 +29,16 @@ public:
   static char ID;
   SystemZShortenInst(const SystemZTargetMachine &tm);
 
-  const char *getPassName() const override {
+  StringRef getPassName() const override {
     return "SystemZ Instruction Shortening";
   }
 
   bool processBlock(MachineBasicBlock &MBB);
   bool runOnMachineFunction(MachineFunction &F) override;
+  MachineFunctionProperties getRequiredProperties() const override {
+    return MachineFunctionProperties().set(
+        MachineFunctionProperties::Property::NoVRegs);
+  }
 
 private:
   bool shortenIIF(MachineInstr &MI, unsigned LLIxL, unsigned LLIxH);
@@ -59,20 +63,29 @@ FunctionPass *llvm::createSystemZShortenInstPass(SystemZTargetMachine &TM) {
 SystemZShortenInst::SystemZShortenInst(const SystemZTargetMachine &tm)
   : MachineFunctionPass(ID), TII(nullptr) {}
 
+// Tie operands if MI has become a two-address instruction.
+static void tieOpsIfNeeded(MachineInstr &MI) {
+  if (MI.getDesc().getOperandConstraint(0, MCOI::TIED_TO) &&
+      !MI.getOperand(0).isTied())
+    MI.tieOperands(0, 1);
+}
+
 // MI loads one word of a GPR using an IIxF instruction and LLIxL and LLIxH
 // are the halfword immediate loads for the same word.  Try to use one of them
-// instead of IIxF. 
-bool SystemZShortenInst::shortenIIF(MachineInstr &MI,
-                                    unsigned LLIxL, unsigned LLIxH) {
+// instead of IIxF.
+bool SystemZShortenInst::shortenIIF(MachineInstr &MI, unsigned LLIxL,
+                                    unsigned LLIxH) {
   unsigned Reg = MI.getOperand(0).getReg();
   // The new opcode will clear the other half of the GR64 reg, so
   // cancel if that is live.
-  unsigned thisSubRegIdx = (SystemZ::GRH32BitRegClass.contains(Reg) ?
-			    SystemZ::subreg_h32 : SystemZ::subreg_l32);
-  unsigned otherSubRegIdx = (thisSubRegIdx == SystemZ::subreg_l32 ?
-			     SystemZ::subreg_h32 : SystemZ::subreg_l32);
-  unsigned GR64BitReg = TRI->getMatchingSuperReg(Reg, thisSubRegIdx,
-						 &SystemZ::GR64BitRegClass);
+  unsigned thisSubRegIdx =
+      (SystemZ::GRH32BitRegClass.contains(Reg) ? SystemZ::subreg_h32
+                                               : SystemZ::subreg_l32);
+  unsigned otherSubRegIdx =
+      (thisSubRegIdx == SystemZ::subreg_l32 ? SystemZ::subreg_h32
+                                            : SystemZ::subreg_l32);
+  unsigned GR64BitReg =
+      TRI->getMatchingSuperReg(Reg, thisSubRegIdx, &SystemZ::GR64BitRegClass);
   unsigned OtherReg = TRI->getSubReg(GR64BitReg, otherSubRegIdx);
   if (LiveRegs.contains(OtherReg))
     return false;
@@ -113,12 +126,14 @@ bool SystemZShortenInst::shortenOn01(MachineInstr &MI, unsigned Opcode) {
 }
 
 // Change MI's opcode to Opcode if register operands 0, 1 and 2 have a
-// 4-bit encoding and if operands 0 and 1 are tied.
+// 4-bit encoding and if operands 0 and 1 are tied. Also ties op 0
+// with op 1, if MI becomes 2-address.
 bool SystemZShortenInst::shortenOn001(MachineInstr &MI, unsigned Opcode) {
   if (SystemZMC::getFirstReg(MI.getOperand(0).getReg()) < 16 &&
       MI.getOperand(1).getReg() == MI.getOperand(0).getReg() &&
       SystemZMC::getFirstReg(MI.getOperand(2).getReg()) < 16) {
     MI.setDesc(TII->get(Opcode));
+    tieOpsIfNeeded(MI);
     return true;
   }
   return false;
@@ -126,11 +141,10 @@ bool SystemZShortenInst::shortenOn001(MachineInstr &MI, unsigned Opcode) {
 
 // Calls shortenOn001 if CCLive is false. CC def operand is added in
 // case of success.
-bool SystemZShortenInst::shortenOn001AddCC(MachineInstr &MI,
-					   unsigned Opcode) {
+bool SystemZShortenInst::shortenOn001AddCC(MachineInstr &MI, unsigned Opcode) {
   if (!LiveRegs.contains(SystemZ::CC) && shortenOn001(MI, Opcode)) {
     MachineInstrBuilder(*MI.getParent()->getParent(), &MI)
-      .addReg(SystemZ::CC, RegState::ImplicitDefine);
+      .addReg(SystemZ::CC, RegState::ImplicitDefine | RegState::Dead);
     return true;
   }
   return false;
@@ -168,7 +182,7 @@ bool SystemZShortenInst::processBlock(MachineBasicBlock &MBB) {
 
   // Set up the set of live registers at the end of MBB (live out)
   LiveRegs.clear();
-  LiveRegs.addLiveOuts(&MBB);
+  LiveRegs.addLiveOuts(MBB);
 
   // Iterate backwards through the block looking for instructions to change.
   for (auto MBBI = MBB.rbegin(), MBBE = MBB.rend(); MBBI != MBBE; ++MBBI) {
@@ -255,6 +269,9 @@ bool SystemZShortenInst::processBlock(MachineBasicBlock &MBB) {
 }
 
 bool SystemZShortenInst::runOnMachineFunction(MachineFunction &F) {
+  if (skipFunction(*F.getFunction()))
+    return false;
+
   const SystemZSubtarget &ST = F.getSubtarget<SystemZSubtarget>();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();

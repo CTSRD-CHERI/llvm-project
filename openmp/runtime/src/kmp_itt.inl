@@ -89,10 +89,10 @@ static kmp_bootstrap_lock_t  metadata_lock = KMP_BOOTSTRAP_LOCK_INITIALIZER( met
 // -------------------------------------------------------------------------------------------------
 
 LINKAGE void
-__kmp_itt_region_forking( int gtid, int team_size, int barriers, int serialized ) {
+__kmp_itt_region_forking( int gtid, int team_size, int barriers ) {
 #if USE_ITT_NOTIFY
     kmp_team_t *      team = __kmp_team_from_gtid( gtid );
-    if (team->t.t_active_level + serialized > 1)
+    if (team->t.t_active_level > 1)
     {
         // The frame notifications are only supported for the outermost teams.
         return;
@@ -176,8 +176,8 @@ __kmp_itt_region_forking( int gtid, int team_size, int barriers, int serialized 
             }
         }
         KMP_ITT_DEBUG_LOCK();
-        KMP_ITT_DEBUG_PRINT( "[frm beg] gtid=%d, idx=%x, serialized:%d, loc:%p\n",
-                         gtid, loc->reserved_2, serialized, loc );
+        KMP_ITT_DEBUG_PRINT( "[frm beg] gtid=%d, idx=%x, loc:%p\n",
+                         gtid, loc->reserved_2, loc );
     }
 #endif
 } // __kmp_itt_region_forking
@@ -315,12 +315,13 @@ __kmp_itt_metadata_imbalance( int gtid, kmp_uint64 begin, kmp_uint64 end, kmp_ui
         if( metadata_domain == NULL) {
             __itt_suppress_push(__itt_suppress_memory_errors);
             metadata_domain = __itt_domain_create( "OMP Metadata" );
+            string_handle_imbl = __itt_string_handle_create( "omp_metadata_imbalance");
+            string_handle_loop = __itt_string_handle_create( "omp_metadata_loop");
+            string_handle_sngl = __itt_string_handle_create( "omp_metadata_single");
             __itt_suppress_pop();
         }
         __kmp_release_bootstrap_lock( & metadata_lock );
     }
-
-    __itt_string_handle * string_handle = __itt_string_handle_create( "omp_metadata_imbalance");
 
     kmp_uint64 imbalance_data[ 4 ];
     imbalance_data[ 0 ] = begin;
@@ -328,7 +329,7 @@ __kmp_itt_metadata_imbalance( int gtid, kmp_uint64 begin, kmp_uint64 end, kmp_ui
     imbalance_data[ 2 ] = imbalance;
     imbalance_data[ 3 ] = reduction;
 
-    __itt_metadata_add(metadata_domain, __itt_null, string_handle, __itt_metadata_u64, 4, imbalance_data);
+    __itt_metadata_add(metadata_domain, __itt_null, string_handle_imbl, __itt_metadata_u64, 4, imbalance_data);
 #endif
 } // __kmp_itt_metadata_imbalance
 
@@ -342,24 +343,39 @@ __kmp_itt_metadata_loop( ident_t * loc, kmp_uint64 sched_type, kmp_uint64 iterat
         if( metadata_domain == NULL) {
             __itt_suppress_push(__itt_suppress_memory_errors);
             metadata_domain = __itt_domain_create( "OMP Metadata" );
+            string_handle_imbl = __itt_string_handle_create( "omp_metadata_imbalance");
+            string_handle_loop = __itt_string_handle_create( "omp_metadata_loop");
+            string_handle_sngl = __itt_string_handle_create( "omp_metadata_single");
             __itt_suppress_pop();
         }
         __kmp_release_bootstrap_lock( & metadata_lock );
     }
 
-    __itt_string_handle * string_handle = __itt_string_handle_create( "omp_metadata_loop");
-    kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
+    // Parse line and column from psource string: ";file;func;line;col;;"
+    char * s_line;
+    char * s_col;
+    KMP_DEBUG_ASSERT(loc->psource);
+#ifdef __cplusplus
+    s_line = strchr((char*)loc->psource, ';');
+#else
+    s_line = strchr(loc->psource, ';');
+#endif
+    KMP_DEBUG_ASSERT(s_line);
+    s_line = strchr(s_line + 1, ';');   // 2-nd semicolon
+    KMP_DEBUG_ASSERT(s_line);
+    s_line = strchr(s_line + 1, ';');   // 3-rd semicolon
+    KMP_DEBUG_ASSERT(s_line);
+    s_col = strchr(s_line + 1, ';');    // 4-th semicolon
+    KMP_DEBUG_ASSERT(s_col);
 
     kmp_uint64 loop_data[ 5 ];
-    loop_data[ 0 ] = str_loc.line;
-    loop_data[ 1 ] = str_loc.col;
+    loop_data[ 0 ] = atoi(s_line + 1); // read line
+    loop_data[ 1 ] = atoi(s_col + 1);  // read column
     loop_data[ 2 ] = sched_type;
     loop_data[ 3 ] = iterations;
     loop_data[ 4 ] = chunk;
 
-    __kmp_str_loc_free( &str_loc );
-
-    __itt_metadata_add(metadata_domain, __itt_null, string_handle, __itt_metadata_u64, 5, loop_data);
+    __itt_metadata_add(metadata_domain, __itt_null, string_handle_loop, __itt_metadata_u64, 5, loop_data);
 #endif
 } // __kmp_itt_metadata_loop
 
@@ -373,12 +389,14 @@ __kmp_itt_metadata_single( ident_t * loc ) {
         if( metadata_domain == NULL) {
             __itt_suppress_push(__itt_suppress_memory_errors);
             metadata_domain = __itt_domain_create( "OMP Metadata" );
+            string_handle_imbl = __itt_string_handle_create( "omp_metadata_imbalance");
+            string_handle_loop = __itt_string_handle_create( "omp_metadata_loop");
+            string_handle_sngl = __itt_string_handle_create( "omp_metadata_single");
             __itt_suppress_pop();
         }
         __kmp_release_bootstrap_lock( & metadata_lock );
     }
 
-    __itt_string_handle * string_handle = __itt_string_handle_create( "omp_metadata_single");
     kmp_str_loc_t str_loc = __kmp_str_loc_init( loc->psource, 1 );
     kmp_uint64 single_data[ 2 ];
     single_data[ 0 ] = str_loc.line;
@@ -386,7 +404,7 @@ __kmp_itt_metadata_single( ident_t * loc ) {
 
     __kmp_str_loc_free( &str_loc );
 
-    __itt_metadata_add(metadata_domain, __itt_null, string_handle, __itt_metadata_u64, 2, single_data);
+    __itt_metadata_add(metadata_domain, __itt_null, string_handle_sngl, __itt_metadata_u64, 2, single_data);
 #endif
 } // __kmp_itt_metadata_single
 
@@ -409,10 +427,10 @@ __kmp_itt_region_finished( int gtid ) {
 // -------------------------------------------------------------------------------------------------
 
 LINKAGE void
-__kmp_itt_region_joined( int gtid, int serialized ) {
+__kmp_itt_region_joined( int gtid ) {
 #if USE_ITT_NOTIFY
     kmp_team_t *      team = __kmp_team_from_gtid( gtid );
-    if (team->t.t_active_level + serialized > 1)
+    if (team->t.t_active_level > 1)
     {
         // The frame notifications are only supported for the outermost teams.
         return;
@@ -424,8 +442,8 @@ __kmp_itt_region_joined( int gtid, int serialized ) {
         if(frm < KMP_MAX_FRAME_DOMAINS) {
             KMP_ITT_DEBUG_LOCK();
             __itt_frame_end_v3(__kmp_itt_region_domains[frm], NULL);
-            KMP_ITT_DEBUG_PRINT( "[frm end] gtid=%d, idx=%x, serialized:%d, loc:%p\n",
-                         gtid, loc->reserved_2, serialized, loc );
+            KMP_ITT_DEBUG_PRINT( "[frm end] gtid=%d, idx=%x, loc:%p\n",
+                         gtid, loc->reserved_2, loc );
         }
     }
 #endif
@@ -798,8 +816,8 @@ __kmp_itt_lock_acquiring( kmp_user_lock_p lock ) {
 #if KMP_USE_DYNAMIC_LOCK && USE_ITT_NOTIFY
     // postpone lock object access
     if ( __itt_sync_prepare_ptr ) {
-        if ( DYNA_EXTRACT_D_TAG(lock) == 0 ) {
-            kmp_indirect_lock_t *ilk = DYNA_LOOKUP_I_LOCK(lock);
+        if ( KMP_EXTRACT_D_TAG(lock) == 0 ) {
+            kmp_indirect_lock_t *ilk = KMP_LOOKUP_I_LOCK(lock);
             __itt_sync_prepare( ilk->lock );
         } else {
             __itt_sync_prepare( lock );
@@ -815,8 +833,8 @@ __kmp_itt_lock_acquired( kmp_user_lock_p lock ) {
 #if KMP_USE_DYNAMIC_LOCK && USE_ITT_NOTIFY
     // postpone lock object access
     if ( __itt_sync_acquired_ptr ) {
-        if ( DYNA_EXTRACT_D_TAG(lock) == 0 ) {
-            kmp_indirect_lock_t *ilk = DYNA_LOOKUP_I_LOCK(lock);
+        if ( KMP_EXTRACT_D_TAG(lock) == 0 ) {
+            kmp_indirect_lock_t *ilk = KMP_LOOKUP_I_LOCK(lock);
             __itt_sync_acquired( ilk->lock );
         } else {
             __itt_sync_acquired( lock );
@@ -831,8 +849,8 @@ void
 __kmp_itt_lock_releasing( kmp_user_lock_p lock ) {
 #if KMP_USE_DYNAMIC_LOCK && USE_ITT_NOTIFY
     if ( __itt_sync_releasing_ptr ) {
-        if ( DYNA_EXTRACT_D_TAG(lock) == 0 ) {
-            kmp_indirect_lock_t *ilk = DYNA_LOOKUP_I_LOCK(lock);
+        if ( KMP_EXTRACT_D_TAG(lock) == 0 ) {
+            kmp_indirect_lock_t *ilk = KMP_LOOKUP_I_LOCK(lock);
             __itt_sync_releasing( ilk->lock );
         } else {
             __itt_sync_releasing( lock );
@@ -847,8 +865,8 @@ void
 __kmp_itt_lock_cancelled( kmp_user_lock_p lock ) {
 #if KMP_USE_DYNAMIC_LOCK && USE_ITT_NOTIFY
     if ( __itt_sync_cancel_ptr ) {
-        if ( DYNA_EXTRACT_D_TAG(lock) == 0 ) {
-            kmp_indirect_lock_t *ilk = DYNA_LOOKUP_I_LOCK(lock);
+        if ( KMP_EXTRACT_D_TAG(lock) == 0 ) {
+            kmp_indirect_lock_t *ilk = KMP_LOOKUP_I_LOCK(lock);
             __itt_sync_cancel( ilk->lock );
         } else {
             __itt_sync_cancel( lock );

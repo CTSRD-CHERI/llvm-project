@@ -11,16 +11,16 @@ target triple = "x86_64-apple-macosx"
 
 %struct.s = type opaque
 
-@i = common global %struct.s* null, align 8
+@i = common global %struct.s* null, align 8, !dbg !4
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!7, !8}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang", isOptimized: false, runtimeVersion: 0, emissionKind: 1, enums: !2, globals: !3, imports: !11)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, globals: !3, imports: !11)
 !1 = !DIFile(filename: "test.c", directory: "/")
 !2 = !{}
 !3 = !{!4}
-!4 = !DIGlobalVariable(name: "s", scope: !0, file: !1, line: 2, type: !5, isLocal: false, isDefinition: true, variable: %struct.s** @i)
+!4 = !DIGlobalVariable(name: "s", scope: !0, file: !1, line: 2, type: !5, isLocal: false, isDefinition: true)
 !5 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !6, size: 64, align: 64)
 !6 = !DICompositeType(tag: DW_TAG_structure_type, name: "s", scope: !9, file: !1, line: 1, flags: DIFlagFwdDecl)
 !7 = !{i32 2, !"Dwarf Version", i32 2}

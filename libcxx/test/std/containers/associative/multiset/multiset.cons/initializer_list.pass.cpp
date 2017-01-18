@@ -16,6 +16,7 @@
 #include <set>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 int main()
@@ -36,7 +37,7 @@ int main()
     assert(*++i == V(6));
     }
 #endif  // _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::multiset<int, std::less<int>, min_allocator<int>> C;
     typedef C::value_type V;
@@ -51,7 +52,7 @@ int main()
     assert(*++i == V(5));
     assert(*++i == V(6));
     }
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
     typedef std::multiset<int, std::less<int>, min_allocator<int>> C;
     typedef C::value_type V;

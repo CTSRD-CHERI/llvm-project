@@ -12,6 +12,7 @@
 // is_assignable
 
 #include <type_traits>
+#include "test_macros.h"
 
 struct A
 {
@@ -26,17 +27,23 @@ template <class T, class U>
 void test_is_assignable()
 {
     static_assert(( std::is_assignable<T, U>::value), "");
+#if TEST_STD_VER > 14
+    static_assert(  std::is_assignable_v<T, U>, "");
+#endif
 }
 
 template <class T, class U>
 void test_is_not_assignable()
 {
     static_assert((!std::is_assignable<T, U>::value), "");
+#if TEST_STD_VER > 14
+    static_assert( !std::is_assignable_v<T, U>, "");
+#endif
 }
 
 struct D;
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#if TEST_STD_VER >= 11
 struct C
 {
     template <class U>
@@ -52,6 +59,8 @@ struct E
 template <typename T>
 struct X { T t; };
 
+struct Incomplete;
+
 int main()
 {
     test_is_assignable<int&, int&> ();
@@ -60,7 +69,7 @@ int main()
     test_is_assignable<B, A> ();
     test_is_assignable<void*&, void*> ();
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#if TEST_STD_VER >= 11
     test_is_assignable<E, int> ();
 
     test_is_not_assignable<int, int&> ();
@@ -70,7 +79,8 @@ int main()
     test_is_not_assignable<void, const void> ();
     test_is_not_assignable<const void, const void> ();
     test_is_not_assignable<int(), int> ();
-    
+
 //  pointer to incomplete template type
 	test_is_assignable<X<D>*&, X<D>*> ();
+    test_is_not_assignable<Incomplete&, Incomplete const&>();
 }

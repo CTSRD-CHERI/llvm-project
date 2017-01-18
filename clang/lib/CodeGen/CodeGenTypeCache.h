@@ -81,10 +81,13 @@ struct CodeGenTypeCache {
     unsigned char PointerAlignInBytes;
     unsigned char PointerSizeInBytes;
   };
+
+  /// The size and alignment of size_t.
   union {
     unsigned char SizeSizeInBytes; // sizeof(size_t)
     unsigned char SizeAlignInBytes;
   };
+
   CharUnits getSizeSize() const {
     return CharUnits::fromQuantity(SizeSizeInBytes);
   }

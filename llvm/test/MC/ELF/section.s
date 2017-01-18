@@ -6,11 +6,15 @@
 .section	.note.GNU-stack2,"",%progbits
 .section	.note.GNU-,"",@progbits
 .section	-.note.GNU,"","progbits"
+.section	src/stack.c,"",@progbits
+.section	~!@$%^&*()_-+={[}]|\\:<>,"",@progbits
 
 // CHECK: Name: .note.GNU-stack
 // CHECK: Name: .note.GNU-stack2
 // CHECK: Name: .note.GNU-
 // CHECK: Name: -.note.GNU
+// CHECK: Name: src/stack.c
+// CHECK: Name: ~!@$%^&*()_-+={[}]|\\:<>
 
 // Test that the defaults are used
 
@@ -123,7 +127,7 @@ bar:
 .section .excluded,"e",@progbits
 
 // CHECK:      Section {
-// CHECK:        Name: .excluded (92)
+// CHECK:        Name: .excluded
 // CHECK-NEXT:   Type: SHT_PROGBITS (0x1)
 // CHECK-NEXT:   Flags [ (0x80000000)
 // CHECK-NEXT:     SHF_EXCLUDE (0x80000000)

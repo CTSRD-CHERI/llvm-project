@@ -26,12 +26,19 @@ cl::opt<MCTargetOptions::AsmInstrumentation> AsmInstrumentation(
     cl::values(clEnumValN(MCTargetOptions::AsmInstrumentationNone, "none",
                           "no instrumentation at all"),
                clEnumValN(MCTargetOptions::AsmInstrumentationAddress, "address",
-                          "instrument instructions with memory arguments"),
-               clEnumValEnd));
+                          "instrument instructions with memory arguments")));
 
 cl::opt<bool> RelaxAll("mc-relax-all",
                        cl::desc("When used with filetype=obj, "
                                 "relax all fixups in the emitted object file"));
+
+cl::opt<bool> IncrementalLinkerCompatible(
+    "incremental-linker-compatible",
+    cl::desc(
+        "When used with filetype=obj, "
+        "emit an object file which can be used with an incremental linker"));
+
+cl::opt<bool> PIECopyRelocations("pie-copy-relocations", cl::desc("PIE Copy Relocations"));
 
 cl::opt<int> DwarfVersion("dwarf-version", cl::desc("Dwarf version"),
                           cl::init(0));
@@ -56,6 +63,8 @@ static inline MCTargetOptions InitMCTargetOptionsFromFlags() {
   Options.SanitizeAddress =
       (AsmInstrumentation == MCTargetOptions::AsmInstrumentationAddress);
   Options.MCRelaxAll = RelaxAll;
+  Options.MCIncrementalLinkerCompatible = IncrementalLinkerCompatible;
+  Options.MCPIECopyRelocations = PIECopyRelocations;
   Options.DwarfVersion = DwarfVersion;
   Options.ShowMCInst = ShowMCInst;
   Options.ABIName = ABIName;

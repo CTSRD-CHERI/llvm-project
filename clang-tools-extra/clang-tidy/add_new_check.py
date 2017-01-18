@@ -50,8 +50,8 @@ def write_header(module_path, module, check_name, check_name_camel):
   filename = os.path.join(module_path, check_name_camel) + '.h'
   print('Creating %s...' % filename)
   with open(filename, 'wb') as f:
-    header_guard = ('LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_' + module.upper() +
-                    '_' + check_name.upper().replace('-', '_') + '_H')
+    header_guard = ('LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_' + module.upper() + '_'
+                    + check_name.upper().replace('-', '_') + '_H')
     f.write('//===--- ')
     f.write(os.path.basename(filename))
     f.write(' - clang-tidy')
@@ -73,6 +73,7 @@ def write_header(module_path, module, check_name, check_name_camel):
 
 namespace clang {
 namespace tidy {
+namespace %(module)s {
 
 /// FIXME: Write a short description.
 ///
@@ -86,18 +87,19 @@ public:
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
 };
 
+} // namespace %(module)s
 } // namespace tidy
 } // namespace clang
 
 #endif // %(header_guard)s
-
 """ % {'header_guard': header_guard,
        'check_name': check_name_camel,
-       'check_name_dashes': check_name_dashes})
+       'check_name_dashes': check_name_dashes,
+       'module': module})
 
 
 # Adds the implementation of the new check.
-def write_implementation(module_path, check_name_camel):
+def write_implementation(module_path, module, check_name_camel):
   filename = os.path.join(module_path, check_name_camel) + '.cpp'
   print('Creating %s...' % filename)
   with open(filename, 'wb') as f:
@@ -123,6 +125,7 @@ using namespace clang::ast_matchers;
 
 namespace clang {
 namespace tidy {
+namespace %(module)s {
 
 void %(check_name)s::registerMatchers(MatchFinder *Finder) {
   // FIXME: Add matchers.
@@ -134,20 +137,22 @@ void %(check_name)s::check(const MatchFinder::MatchResult &Result) {
   const auto *MatchedDecl = Result.Nodes.getNodeAs<FunctionDecl>("x");
   if (MatchedDecl->getName().startswith("awesome_"))
     return;
-  diag(MatchedDecl->getLocation(), "function '%%0' is insufficiently awesome")
-      << MatchedDecl->getName()
+  diag(MatchedDecl->getLocation(), "function %%0 is insufficiently awesome")
+      << MatchedDecl
       << FixItHint::CreateInsertion(MatchedDecl->getLocation(), "awesome_");
 }
 
+} // namespace %(module)s
 } // namespace tidy
 } // namespace clang
-
-""" % {'check_name': check_name_camel})
+""" % {'check_name': check_name_camel,
+       'module': module})
 
 
 # Modifies the module to include the new check.
 def adapt_module(module_path, module, check_name, check_name_camel):
-  modulecpp = filter(lambda p: p.lower() == module.lower() + "tidymodule.cpp", os.listdir(module_path))[0]
+  modulecpp = filter(lambda p: p.lower() == module.lower() + 'tidymodule.cpp',
+                     os.listdir(module_path))[0]
   filename = os.path.join(module_path, modulecpp)
   with open(filename, 'r') as f:
     lines = f.readlines()
@@ -187,13 +192,11 @@ def adapt_module(module_path, module, check_name, check_name_camel):
 # Adds a test for the check.
 def write_test(module_path, module, check_name):
   check_name_dashes = module + '-' + check_name
-  filename = os.path.normpath(
-      os.path.join(module_path, '../../test/clang-tidy',
-                   check_name_dashes + '.cpp'))
+  filename = os.path.normpath(os.path.join(module_path, '../../test/clang-tidy',
+                                           check_name_dashes + '.cpp'))
   print('Creating %s...' % filename)
   with open(filename, 'wb') as f:
-    f.write(
-"""// RUN: %%python %%S/check_clang_tidy.py %%s %(check_name_dashes)s %%t
+    f.write("""// RUN: %%check_clang_tidy %%s %(check_name_dashes)s %%t
 
 // FIXME: Add something that triggers the check here.
 void f();
@@ -207,19 +210,32 @@ void f();
 
 // FIXME: Add something that doesn't trigger the check here.
 void awesome_f2();
-""" % {"check_name_dashes" : check_name_dashes})
+""" % {'check_name_dashes': check_name_dashes})
+
 
 # Recreates the list of checks in the docs/clang-tidy/checks directory.
-def update_checks_list(module_path):
-  filename = os.path.normpath(
-      os.path.join(module_path, '../../docs/clang-tidy/checks/list.rst'))
+def update_checks_list(clang_tidy_path):
+  docs_dir = os.path.join(clang_tidy_path, '../docs/clang-tidy/checks')
+  filename = os.path.normpath(os.path.join(docs_dir, 'list.rst'))
   with open(filename, 'r') as f:
     lines = f.readlines()
+  doc_files = filter(lambda s: s.endswith('.rst') and s != 'list.rst',
+                     os.listdir(docs_dir))
+  doc_files.sort()
 
-  checks = map(lambda s: '   ' + s.replace('.rst', '\n'),
-               filter(lambda s: s.endswith('.rst') and s != 'list.rst',
-                      os.listdir(os.path.join(module_path, '../../docs/clang-tidy/checks'))))
-  checks.sort()
+  def format_link(doc_file):
+    check_name = doc_file.replace('.rst', '')
+    with open(os.path.join(docs_dir, doc_file), 'r') as doc:
+      match = re.search('.*:http-equiv=refresh: \d+;URL=(.*).html.*',
+                        doc.read())
+      if match:
+        return '   %(check)s (redirects to %(target)s) <%(check)s>\n' % {
+            'check': check_name,
+            'target': match.group(1)
+        }
+      return '   %s\n' % check_name
+
+  checks = map(format_link, doc_files)
 
   print('Updating %s...' % filename)
   with open(filename, 'wb') as f:
@@ -229,30 +245,46 @@ def update_checks_list(module_path):
         f.writelines(checks)
         break
 
+
 # Adds a documentation for the check.
 def write_docs(module_path, module, check_name):
   check_name_dashes = module + '-' + check_name
-  filename = os.path.normpath(
-      os.path.join(module_path, '../../docs/clang-tidy/checks/',
-                   check_name_dashes + '.rst'))
+  filename = os.path.normpath(os.path.join(
+      module_path, '../../docs/clang-tidy/checks/', check_name_dashes + '.rst'))
   print('Creating %s...' % filename)
   with open(filename, 'wb') as f:
-    f.write(
-"""%(check_name_dashes)s
+    f.write(""".. title:: clang-tidy - %(check_name_dashes)s
+
+%(check_name_dashes)s
 %(underline)s
 
 FIXME: Describe what patterns does the check detect and why. Give examples.
-""" % {"check_name_dashes" : check_name_dashes,
-       "underline" : "=" * len(check_name_dashes)})
+""" % {'check_name_dashes': check_name_dashes,
+       'underline': '=' * len(check_name_dashes)})
+
 
 def main():
+  if len(sys.argv) == 2 and sys.argv[1] == '--update-docs':
+    update_checks_list(os.path.dirname(sys.argv[0]))
+    return
+
   if len(sys.argv) != 3:
-    print 'Usage: add_new_check.py <module> <check>, e.g.\n'
-    print 'add_new_check.py misc awesome-functions\n'
+    print """\
+Usage: add_new_check.py <module> <check>, e.g.
+  add_new_check.py misc awesome-functions
+
+Alternatively, run 'add_new_check.py --update-docs' to just update the list of
+documentation files."""
+
     return
 
   module = sys.argv[1]
   check_name = sys.argv[2]
+
+  if check_name.startswith(module):
+    print 'Check name "%s" must not start with the module "%s". Exiting.' % (
+        check_name, module)
+    return
   check_name_camel = ''.join(map(lambda elem: elem.capitalize(),
                                  check_name.split('-'))) + 'Check'
   clang_tidy_path = os.path.dirname(sys.argv[0])
@@ -261,12 +293,13 @@ def main():
   if not adapt_cmake(module_path, check_name_camel):
     return
   write_header(module_path, module, check_name, check_name_camel)
-  write_implementation(module_path, check_name_camel)
+  write_implementation(module_path, module, check_name_camel)
   adapt_module(module_path, module, check_name, check_name_camel)
   write_test(module_path, module, check_name)
   write_docs(module_path, module, check_name)
-  update_checks_list(module_path)
+  update_checks_list(clang_tidy_path)
   print('Done. Now it\'s your turn!')
+
 
 if __name__ == '__main__':
   main()

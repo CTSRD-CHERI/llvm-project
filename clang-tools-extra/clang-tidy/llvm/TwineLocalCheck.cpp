@@ -33,7 +33,8 @@ void TwineLocalCheck::check(const MatchFinder::MatchResult &Result) {
   if (VD->hasInit()) {
     // Peel away implicit constructors and casts so we can see the actual type
     // of the initializer.
-    const Expr *C = VD->getInit();
+    const Expr *C = VD->getInit()->IgnoreImplicit();
+
     while (isa<CXXConstructExpr>(C))
       C = cast<CXXConstructExpr>(C)->getArg(0)->IgnoreParenImpCasts();
 
@@ -44,8 +45,7 @@ void TwineLocalCheck::check(const MatchFinder::MatchResult &Result) {
     if (VD->getType()->getCanonicalTypeUnqualified() ==
         C->getType()->getCanonicalTypeUnqualified()) {
       SourceLocation EndLoc = Lexer::getLocForEndOfToken(
-          VD->getInit()->getLocEnd(), 0, *Result.SourceManager,
-          Result.Context->getLangOpts());
+          VD->getInit()->getLocEnd(), 0, *Result.SourceManager, getLangOpts());
       Diag << FixItHint::CreateReplacement(TypeRange, "std::string")
            << FixItHint::CreateInsertion(VD->getInit()->getLocStart(), "(")
            << FixItHint::CreateInsertion(EndLoc, ").str()");

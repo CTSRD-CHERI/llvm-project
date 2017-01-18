@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===////
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===////
+
 #ifndef ATOMIC_SUPPORT_H
 #define ATOMIC_SUPPORT_H
 
@@ -36,7 +45,7 @@ namespace {
 enum __libcpp_atomic_order {
     _AO_Relaxed = __ATOMIC_RELAXED,
     _AO_Consume = __ATOMIC_CONSUME,
-    _AO_Aquire  = __ATOMIC_ACQUIRE,
+    _AO_Acquire = __ATOMIC_ACQUIRE,
     _AO_Release = __ATOMIC_RELEASE,
     _AO_Acq_Rel = __ATOMIC_ACQ_REL,
     _AO_Seq     = __ATOMIC_SEQ_CST

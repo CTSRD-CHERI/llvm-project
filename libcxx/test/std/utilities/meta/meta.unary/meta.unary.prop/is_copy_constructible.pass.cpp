@@ -12,17 +12,24 @@
 // is_copy_constructible
 
 #include <type_traits>
+#include "test_macros.h"
 
 template <class T>
 void test_is_copy_constructible()
 {
     static_assert( std::is_copy_constructible<T>::value, "");
+#if TEST_STD_VER > 14
+    static_assert( std::is_copy_constructible_v<T>, "");
+#endif
 }
 
 template <class T>
 void test_is_not_copy_constructible()
 {
     static_assert(!std::is_copy_constructible<T>::value, "");
+#if TEST_STD_VER > 14
+    static_assert(!std::is_copy_constructible_v<T>, "");
+#endif
 }
 
 class Empty
@@ -82,7 +89,7 @@ int main()
     test_is_not_copy_constructible<void>();
     test_is_not_copy_constructible<Abstract>();
     test_is_not_copy_constructible<C>();
-#if __has_feature(cxx_access_control_sfinae) 
+#if TEST_STD_VER >= 11
     test_is_not_copy_constructible<B>();
 #endif
 }

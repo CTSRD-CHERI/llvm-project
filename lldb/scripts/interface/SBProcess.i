@@ -44,7 +44,8 @@ public:
         eBroadcastBitInterrupt      = (1 << 1),
         eBroadcastBitSTDOUT         = (1 << 2),
         eBroadcastBitSTDERR         = (1 << 3),
-        eBroadcastBitProfileData    = (1 << 4)
+        eBroadcastBitProfileData    = (1 << 4),
+        eBroadcastBitStructuredData = (1 << 5)
     };
 
     SBProcess ();
@@ -296,7 +297,7 @@ public:
     ") ReadCStringFromMemory;
 
     size_t
-    ReadCStringFromMemory (addr_t addr, void *buf, size_t size, lldb::SBError &error);
+    ReadCStringFromMemory (addr_t addr, void *char_buf, size_t size, lldb::SBError &error);
 
     %feature("autodoc", "
     Reads an unsigned integer from memory given a byte size and an address. 
@@ -351,8 +352,14 @@ public:
     static bool
     GetInterruptedFromEvent (const lldb::SBEvent &event);
 
+    static lldb::SBStructuredData
+    GetStructuredDataFromEvent (const lldb::SBEvent &event);
+
     static bool
     EventIsProcessEvent (const lldb::SBEvent &event);
+
+    static bool
+    EventIsStructuredDataEvent (const lldb::SBEvent &event);
 
     lldb::SBBroadcaster
     GetBroadcaster () const;
@@ -398,6 +405,15 @@ public:
     bool
     IsInstrumentationRuntimePresent(lldb::InstrumentationRuntimeType type);
 
+    lldb::SBError
+    SaveCore(const char *file_name);
+
+    lldb::SBError
+    GetMemoryRegionInfo(lldb::addr_t load_addr, lldb::SBMemoryRegionInfo &region_info);
+
+    lldb::SBMemoryRegionInfoList
+    GetMemoryRegions();
+
     %pythoncode %{
         def __get_is_alive__(self):
             '''Returns "True" if the process is currently alive, "False" otherwise'''
@@ -419,7 +435,7 @@ public:
                 return True
             return False
 
-        def __get_is_running__(self):
+        def __get_is_stopped__(self):
             '''Returns "True" if the process is currently stopped, "False" otherwise'''
             state = self.GetState()
             if state == eStateStopped or state == eStateCrashed or state == eStateSuspended:
@@ -465,8 +481,8 @@ public:
         __swig_getmethods__["is_running"] = __get_is_running__
         if _newclass: is_running = property(__get_is_running__, None, doc='''A read only property that returns a boolean value that indicates if this process is currently running.''')
 
-        __swig_getmethods__["is_stopped"] = __get_is_running__
-        if _newclass: is_stopped = property(__get_is_running__, None, doc='''A read only property that returns a boolean value that indicates if this process is currently stopped.''')
+        __swig_getmethods__["is_stopped"] = __get_is_stopped__
+        if _newclass: is_stopped = property(__get_is_stopped__, None, doc='''A read only property that returns a boolean value that indicates if this process is currently stopped.''')
 
         __swig_getmethods__["id"] = GetProcessID
         if _newclass: id = property(GetProcessID, None, doc='''A read only property that returns the process ID as an integer.''')

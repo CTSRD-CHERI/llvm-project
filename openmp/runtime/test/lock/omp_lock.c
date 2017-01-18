@@ -1,4 +1,6 @@
 // RUN: %libomp-compile-and-run
+// RUN: env KMP_LOCK_KIND=tas KMP_SPIN_BACKOFF_PARAMS=2048,200 %libomp-run
+// RUN: env KMP_LOCK_KIND=futex %libomp-run
 #include <stdio.h>
 #include "omp_testsuite.h"
 
@@ -19,7 +21,7 @@ int test_omp_lock()
       omp_set_lock(&lck);
       #pragma omp flush
       nr_threads_in_single++;
-      #pragma omp flush       
+      #pragma omp flush
       nr_iterations++;
       nr_threads_in_single--;
       result = result + nr_threads_in_single;

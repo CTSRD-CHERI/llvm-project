@@ -11,10 +11,13 @@
 #define LLVM_MC_MCPARSER_MCASMLEXER_H
 
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/SMLoc.h"
+#include <utility>
 
 namespace llvm {
 
@@ -36,12 +39,15 @@ public:
     // Real values.
     Real,
 
+    // Comments
+    Comment,
+    HashDirective,
     // No-value.
     EndOfStatement,
     Colon,
     Space,
     Plus, Minus, Tilde,
-    Slash,    // '/'
+    Slash,     // '/'
     BackSlash, // '\'
     LParen, RParen, LBrac, RBrac, LCurly, RCurly,
     Star, Dot, Comma, Dollar, Equal, EqualEqual,
@@ -49,7 +55,15 @@ public:
     Pipe, PipePipe, Caret,
     Amp, AmpAmp, Exclaim, ExclaimEqual, Percent, Hash,
     Less, LessEqual, LessLess, LessGreater,
-    Greater, GreaterEqual, GreaterGreater, At
+    Greater, GreaterEqual, GreaterGreater, At,
+
+    // MIPS unary expression operators such as %neg.
+    PercentCall16, PercentCall_Hi, PercentCall_Lo, PercentDtprel_Hi,
+    PercentDtprel_Lo, PercentGot, PercentGot_Disp, PercentGot_Hi, PercentGot_Lo,
+    PercentGot_Ofst, PercentGot_Page, PercentGottprel, PercentGp_Rel, PercentHi,
+    PercentHigher, PercentHighest, PercentLo, PercentNeg, PercentPcrel_Hi,
+    PercentPcrel_Lo, PercentTlsgd, PercentTlsldm, PercentTprel_Hi,
+    PercentTprel_Lo
   };
 
 private:
@@ -64,7 +78,7 @@ private:
 public:
   AsmToken() {}
   AsmToken(TokenKind Kind, StringRef Str, APInt IntVal)
-      : Kind(Kind), Str(Str), IntVal(IntVal) {}
+      : Kind(Kind), Str(Str), IntVal(std::move(IntVal)) {}
   AsmToken(TokenKind Kind, StringRef Str, int64_t IntVal = 0)
       : Kind(Kind), Str(Str), IntVal(64, IntVal, true) {}
 
@@ -118,7 +132,7 @@ public:
 /// lexers.
 class MCAsmLexer {
   /// The current token, stored in the base class for faster access.
-  AsmToken CurTok;
+  SmallVector<AsmToken, 1> CurTok;
 
   /// The location and description of the current error
   SMLoc ErrLoc;
@@ -130,6 +144,7 @@ protected: // Can only create subclasses.
   const char *TokStart;
   bool SkipSpace;
   bool AllowAtInIdentifier;
+  bool IsAtStartOfStatement;
 
   MCAsmLexer();
 
@@ -148,8 +163,25 @@ public:
   /// The lexer will continuosly return the end-of-file token once the end of
   /// the main input file has been reached.
   const AsmToken &Lex() {
-    return CurTok = LexToken();
+    assert(!CurTok.empty());
+    // Mark if we parsing out a EndOfStatement.
+    IsAtStartOfStatement = CurTok.front().getKind() == AsmToken::EndOfStatement;
+    CurTok.erase(CurTok.begin());
+    // LexToken may generate multiple tokens via UnLex but will always return
+    // the first one. Place returned value at head of CurTok vector.
+    if (CurTok.empty()) {
+      AsmToken T = LexToken();
+      CurTok.insert(CurTok.begin(), T);
+    }
+    return CurTok.front();
   }
+
+  void UnLex(AsmToken const &Token) {
+    IsAtStartOfStatement = false;
+    CurTok.insert(CurTok.begin(), Token);
+  }
+
+  bool isAtStartOfStatement() { return IsAtStartOfStatement; }
 
   virtual StringRef LexUntilEndOfStatement() = 0;
 
@@ -158,7 +190,7 @@ public:
 
   /// Get the current (last) lexed token.
   const AsmToken &getTok() const {
-    return CurTok;
+    return CurTok[0];
   }
 
   /// Look ahead at the next token to be lexed.

@@ -9,9 +9,9 @@
 
 %"union.PR15637::Value" = type { i32 }
 
-@_ZN7PR156371fE = global %"union.PR15637::Value" zeroinitializer, align 4
+@_ZN7PR156371fE = global %"union.PR15637::Value" zeroinitializer, align 4, !dbg !10
 
-define void @_ZN7PR156371gEf(float %value) #0 {
+define void @_ZN7PR156371gEf(float %value) #0 !dbg !4 {
 entry:
   %value.addr = alloca float, align 4
   %tempValue = alloca %"union.PR15637::Value", align 4
@@ -29,17 +29,16 @@ attributes #1 = { nounwind readnone }
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!28}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.3 (trunk 178499) (llvm/trunk 178472)", isOptimized: false, emissionKind: 0, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !9, imports:  !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.3 (trunk 178499) (llvm/trunk 178472)", isOptimized: false, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !9, imports:  !2)
 !1 = !DIFile(filename: "foo.cc", directory: "/usr/local/google/home/echristo/tmp")
 !2 = !{}
-!3 = !{!4}
-!4 = distinct !DISubprogram(name: "g", linkageName: "_ZN7PR156371gEf", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 3, file: !1, scope: !5, type: !6, function: void (float)* @_ZN7PR156371gEf, variables: !2)
+!4 = distinct !DISubprogram(name: "g", linkageName: "_ZN7PR156371gEf", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 3, file: !1, scope: !5, type: !6, variables: !2)
 !5 = !DINamespace(name: "PR15637", line: 1, file: !1, scope: null)
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8}
 !8 = !DIBasicType(tag: DW_TAG_base_type, name: "float", size: 32, align: 32, encoding: DW_ATE_float)
 !9 = !{!10}
-!10 = !DIGlobalVariable(name: "f", linkageName: "_ZN7PR156371fE", line: 6, isLocal: false, isDefinition: true, scope: !5, file: !11, type: !12, variable: %"union.PR15637::Value"* @_ZN7PR156371fE)
+!10 = !DIGlobalVariable(name: "f", linkageName: "_ZN7PR156371fE", line: 6, isLocal: false, isDefinition: true, scope: !5, file: !11, type: !12)
 !11 = !DIFile(filename: "foo.cc", directory: "/usr/local/google/home/echristo/tmp")
 !12 = !DICompositeType(tag: DW_TAG_union_type, name: "Value<float>", line: 2, size: 32, align: 32, file: !1, scope: !5, elements: !13, templateParams: !21)
 !13 = !{!14, !16}

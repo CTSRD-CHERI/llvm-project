@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcpp-no-exceptions
 // UNSUPPORTED: libcpp-has-no-threads
 
 // <condition_variable>

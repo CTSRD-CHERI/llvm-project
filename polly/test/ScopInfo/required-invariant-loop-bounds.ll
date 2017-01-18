@@ -1,4 +1,5 @@
-; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze \
+; RUN: -polly-invariant-load-hoisting=true < %s | FileCheck %s
 ;
 ; CHECK:      Invariant Accesses: {
 ; CHECK-NEXT:       ReadAccess := [Reduction Type: NONE] [Scalar: 0]
@@ -6,7 +7,7 @@
 ; CHECK-NEXT: Execution Context: [bounds0, bounds1] -> {  :  }
 ; CHECK-NEXT:       ReadAccess := [Reduction Type: NONE] [Scalar: 0]
 ; CHECK-NEXT:         MemRef_bounds[1]
-; CHECK-NEXT: Execution Context: [bounds0, bounds1] -> {  : bounds0 >= 0 }
+; CHECK-NEXT: Execution Context: [bounds0, bounds1] -> {  :  }
 ; CHECK:      }
 
 ;    double A[1000][1000];

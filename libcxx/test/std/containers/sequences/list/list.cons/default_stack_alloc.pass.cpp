@@ -13,7 +13,7 @@
 
 #include <list>
 #include <cassert>
-#include "../../../stack_allocator.h"
+#include "test_allocator.h"
 #include "min_allocator.h"
 
 int main()
@@ -29,11 +29,11 @@ int main()
         assert(std::distance(l.begin(), l.end()) == 0);
     }
     {
-        std::list<int, stack_allocator<int, 4> > l;
+        std::list<int, limited_allocator<int, 4> > l;
         assert(l.size() == 0);
         assert(std::distance(l.begin(), l.end()) == 0);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         std::list<int, min_allocator<int>> l;
         assert(l.size() == 0);

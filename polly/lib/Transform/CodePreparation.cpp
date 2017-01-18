@@ -30,7 +30,7 @@ using namespace polly;
 
 namespace {
 
-/// @brief Prepare the IR for the scop detection.
+/// Prepare the IR for the scop detection.
 ///
 class CodePreparation : public FunctionPass {
   CodePreparation(const CodePreparation &) = delete;
@@ -57,7 +57,7 @@ public:
   virtual void print(raw_ostream &OS, const Module *) const;
   //@}
 };
-}
+} // namespace
 
 void CodePreparation::clear() {}
 
@@ -70,7 +70,7 @@ void CodePreparation::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<LoopInfoWrapperPass>();
   AU.addPreserved<RegionInfoPass>();
   AU.addPreserved<DominatorTreeWrapperPass>();
-  AU.addPreserved<DominanceFrontier>();
+  AU.addPreserved<DominanceFrontierWrapperPass>();
 }
 
 bool CodePreparation::runOnFunction(Function &F) {

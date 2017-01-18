@@ -9,11 +9,8 @@
 
 #define DEBUG_TYPE "hexinsert"
 
-#include "llvm/Pass.h"
-#include "llvm/PassRegistry.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -21,10 +18,12 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/Pass.h"
+#include "llvm/PassRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Timer.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 
@@ -33,7 +32,6 @@
 #include "HexagonTargetMachine.h"
 #include "HexagonBitTracker.h"
 
-#include <map>
 #include <vector>
 
 using namespace llvm;
@@ -469,7 +467,7 @@ namespace {
     HexagonGenInsert() : MachineFunctionPass(ID), HII(0), HRI(0) {
       initializeHexagonGenInsertPass(*PassRegistry::getPassRegistry());
     }
-    virtual const char *getPassName() const {
+    virtual StringRef getPassName() const {
       return "Hexagon generate \"insert\" instructions";
     }
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
@@ -759,7 +757,7 @@ unsigned HexagonGenInsert::distance(MachineBasicBlock::const_iterator FromI,
 bool HexagonGenInsert::findRecordInsertForms(unsigned VR,
       OrderedRegisterList &AVs) {
   if (isDebug()) {
-    dbgs() << LLVM_FUNCTION_NAME << ": " << PrintReg(VR, HRI)
+    dbgs() << __func__ << ": " << PrintReg(VR, HRI)
            << "  AVs: " << PrintORL(AVs, HRI) << "\n";
   }
   if (AVs.size() == 0)
@@ -1040,7 +1038,7 @@ void HexagonGenInsert::pruneCoveredSets(unsigned VR) {
   // If there exists a candidate with a non-empty set, the ones with empty
   // sets will not be used and can be removed.
   MachineInstr *DefVR = MRI->getVRegDef(VR);
-  bool DefEx = HII->isConstExtended(DefVR);
+  bool DefEx = HII->isConstExtended(*DefVR);
   bool HasNE = false;
   for (unsigned i = 0, n = LL.size(); i < n; ++i) {
     if (LL[i].second.empty())
@@ -1054,7 +1052,7 @@ void HexagonGenInsert::pruneCoveredSets(unsigned VR) {
     auto IsEmpty = [] (const IFRecordWithRegSet &IR) -> bool {
       return IR.second.empty();
     };
-    auto End = std::remove_if(LL.begin(), LL.end(), IsEmpty);
+    auto End = remove_if(LL, IsEmpty);
     if (End != LL.end())
       LL.erase(End, LL.end());
   } else {
@@ -1146,7 +1144,7 @@ void HexagonGenInsert::pruneRegCopies(unsigned VR) {
   auto IsCopy = [] (const IFRecordWithRegSet &IR) -> bool {
     return IR.first.Wdh == 32 && (IR.first.Off == 0 || IR.first.Off == 32);
   };
-  auto End = std::remove_if(LL.begin(), LL.end(), IsCopy);
+  auto End = remove_if(LL, IsCopy);
   if (End != LL.end())
     LL.erase(End, LL.end());
 }
@@ -1389,9 +1387,9 @@ bool HexagonGenInsert::generateInserts() {
     unsigned Wdh = IF.Wdh, Off = IF.Off;
     unsigned InsS = 0;
     if (R32 && MRI->getRegClass(IF.InsR) == &Hexagon::DoubleRegsRegClass) {
-      InsS = Hexagon::subreg_loreg;
+      InsS = Hexagon::isub_lo;
       if (Off >= 32) {
-        InsS = Hexagon::subreg_hireg;
+        InsS = Hexagon::isub_hi;
         Off -= 32;
       }
     }
@@ -1446,10 +1444,10 @@ bool HexagonGenInsert::removeDeadCode(MachineDomTreeNode *N) {
 
     bool AllDead = true;
     SmallVector<unsigned,2> Regs;
-    for (ConstMIOperands Op(MI); Op.isValid(); ++Op) {
-      if (!Op->isReg() || !Op->isDef())
+    for (const MachineOperand &MO : MI->operands()) {
+      if (!MO.isReg() || !MO.isDef())
         continue;
-      unsigned R = Op->getReg();
+      unsigned R = MO.getReg();
       if (!TargetRegisterInfo::isVirtualRegister(R) ||
           !MRI->use_nodbg_empty(R)) {
         AllDead = false;
@@ -1471,10 +1469,11 @@ bool HexagonGenInsert::removeDeadCode(MachineDomTreeNode *N) {
 
 
 bool HexagonGenInsert::runOnMachineFunction(MachineFunction &MF) {
+  if (skipFunction(*MF.getFunction()))
+    return false;
+
   bool Timing = OptTiming, TimingDetail = Timing && OptTimingDetail;
   bool Changed = false;
-  TimerGroup __G("hexinsert");
-  NamedRegionTimer __T("hexinsert", Timing && !TimingDetail);
 
   // Sanity check: one, but not both.
   assert(!OptSelectAll0 || !OptSelectHas0);
@@ -1495,7 +1494,7 @@ bool HexagonGenInsert::runOnMachineFunction(MachineFunction &MF) {
   // version of DCE that preserves lifetime markers. Without it, merging
   // of stack objects can fail to recognize and merge disjoint objects
   // leading to unnecessary stack growth.
-  Changed |= removeDeadCode(MDT->getRootNode());
+  Changed = removeDeadCode(MDT->getRootNode());
 
   const HexagonEvaluator HE(*HRI, *MRI, *HII, MF);
   BitTracker BTLoc(HE, MF);
@@ -1520,8 +1519,12 @@ bool HexagonGenInsert::runOnMachineFunction(MachineFunction &MF) {
   MachineBasicBlock *RootB = MDT->getRoot();
   OrderedRegisterList AvailR(CellOrd);
 
+  const char *const TGName = "hexinsert";
+  const char *const TGDesc = "Generate Insert Instructions";
+
   {
-    NamedRegionTimer _T("collection", "hexinsert", TimingDetail);
+    NamedRegionTimer _T("collection", "collection", TGName, TGDesc,
+                        TimingDetail);
     collectInBlock(RootB, AvailR);
     // Complete the information gathered in IFMap.
     computeRemovableRegisters();
@@ -1533,10 +1536,10 @@ bool HexagonGenInsert::runOnMachineFunction(MachineFunction &MF) {
   }
 
   if (IFMap.empty())
-    return false;
+    return Changed;
 
   {
-    NamedRegionTimer _T("pruning", "hexinsert", TimingDetail);
+    NamedRegionTimer _T("pruning", "pruning", TGName, TGDesc, TimingDetail);
     pruneCandidates();
   }
 
@@ -1546,10 +1549,10 @@ bool HexagonGenInsert::runOnMachineFunction(MachineFunction &MF) {
   }
 
   if (IFMap.empty())
-    return false;
+    return Changed;
 
   {
-    NamedRegionTimer _T("selection", "hexinsert", TimingDetail);
+    NamedRegionTimer _T("selection", "selection", TGName, TGDesc, TimingDetail);
     selectCandidates();
   }
 
@@ -1571,13 +1574,16 @@ bool HexagonGenInsert::runOnMachineFunction(MachineFunction &MF) {
     for (unsigned i = 0, n = Out.size(); i < n; ++i)
       IFMap.erase(Out[i]);
   }
+  if (IFMap.empty())
+    return Changed;
 
   {
-    NamedRegionTimer _T("generation", "hexinsert", TimingDetail);
-    Changed = generateInserts();
+    NamedRegionTimer _T("generation", "generation", TGName, TGDesc,
+                        TimingDetail);
+    generateInserts();
   }
 
-  return Changed;
+  return true;
 }
 
 

@@ -11,19 +11,21 @@
 
 // ~unordered_map() // implied noexcept;
 
+// UNSUPPORTED: c++98, c++03
+
 #include <unordered_map>
 #include <cassert>
 
+#include "test_macros.h"
 #include "MoveOnly.h"
 #include "test_allocator.h"
-
-#if __has_feature(cxx_noexcept)
 
 template <class T>
 struct some_comp
 {
     typedef T value_type;
     ~some_comp() noexcept(false);
+    bool operator()(const T&, const T&) const { return false; }
 };
 
 template <class T>
@@ -35,11 +37,8 @@ struct some_hash
     ~some_hash() noexcept(false);
 };
 
-#endif
-
 int main()
 {
-#if __has_feature(cxx_noexcept)
     {
         typedef std::unordered_map<MoveOnly, MoveOnly> C;
         static_assert(std::is_nothrow_destructible<C>::value, "");
@@ -56,12 +55,11 @@ int main()
     }
     {
         typedef std::unordered_map<MoveOnly, MoveOnly, some_hash<MoveOnly>> C;
-        static_assert(!std::is_nothrow_destructible<C>::value, "");
+        LIBCPP_STATIC_ASSERT(!std::is_nothrow_destructible<C>::value, "");
     }
     {
         typedef std::unordered_map<MoveOnly, MoveOnly, std::hash<MoveOnly>,
                                                          some_comp<MoveOnly>> C;
-        static_assert(!std::is_nothrow_destructible<C>::value, "");
+        LIBCPP_STATIC_ASSERT(!std::is_nothrow_destructible<C>::value, "");
     }
-#endif
 }

@@ -1,14 +1,25 @@
 ; RUN: opt -S %loadPolly -polly-dependences \
 ; RUN:                   -analyze < %s | FileCheck %s
+; RUN: opt -S %loadPolly -polly-function-dependences \
+; RUN:                   -analyze < %s | FileCheck %s -check-prefix=FUNC
 
 ; CHECK: RAW dependences:
 ; CHECK:   { Stmt_bb9[0] -> Stmt_bb10[0] }
 ; CHECK: WAR dependences:
-; CHECK:   { Stmt_bb3[0] -> Stmt_bb10[0] }
-; CHECK: WAW dependences:
 ; CHECK:   {  }
+; CHECK: WAW dependences:
+; CHECK:   { Stmt_bb3[0] -> Stmt_bb10[0] }
 ; CHECK: Reduction dependences:
 ; CHECK:   {  }
+
+; FUNC: RAW dependences:
+; FUNC-NEXT:   { Stmt_bb9[0] -> Stmt_bb10[0]; [Stmt_bb9[0] -> Stmt_bb9_Write0_MemRef_tmp11[]] -> [Stmt_bb10[0] -> Stmt_bb10_Read0_MemRef_tmp11[]] }
+; FUNC-NEXT: WAR dependences:
+; FUNC-NEXT:   {  }
+; FUNC-NEXT: WAW dependences:
+; FUNC-NEXT:   { Stmt_bb3[0] -> Stmt_bb10[0]; [Stmt_bb3[0] -> Stmt_bb3_Write1_MemRef_arg1[]] -> [Stmt_bb10[0] -> Stmt_bb10_Write1_MemRef_arg1[]] }
+; FUNC-NEXT: Reduction dependences:
+; FUNC-NEXT:   {  }
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
@@ -25,6 +36,7 @@ bb3:                                              ; preds = %bb10, %bb2
   %tmp5 = getelementptr inbounds [1024 x double], [1024 x double]* %arg1, i64 0, i64 0
   %tmp6 = load double, double* %tmp5, align 8
   %tmp7 = fadd double undef, %tmp6
+  store double %tmp7, double* %tmp5, align 8
   br i1 false, label %bb8, label %bb9
 
 bb8:                                              ; preds = %bb3

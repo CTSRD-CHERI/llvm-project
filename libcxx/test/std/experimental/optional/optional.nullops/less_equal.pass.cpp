@@ -15,9 +15,11 @@
 
 #include <experimental/optional>
 
+#include "test_macros.h"
+
 int main()
 {
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     using std::experimental::optional;
     using std::experimental::nullopt_t;
     using std::experimental::nullopt;
@@ -25,7 +27,7 @@ int main()
     {
     typedef int T;
     typedef optional<T> O;
-    
+
     constexpr O o1;     // disengaged
     constexpr O o2{1};  // engaged
 

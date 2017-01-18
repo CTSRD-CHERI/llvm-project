@@ -15,9 +15,12 @@
 
 // This tests a conforming extension
 
+// UNSUPPORTED: c++98, c++03
+
 #include <unordered_set>
 #include <cassert>
 
+#include "test_macros.h"
 #include "MoveOnly.h"
 #include "test_allocator.h"
 
@@ -26,6 +29,7 @@ struct some_comp
 {
     typedef T value_type;
     some_comp(const some_comp&);
+    bool operator()(const T&, const T&) const { return false; }
 };
 
 template <class T>
@@ -38,20 +42,19 @@ struct some_hash
 
 int main()
 {
-#if __has_feature(cxx_noexcept)
     {
         typedef std::unordered_set<MoveOnly> C;
-        static_assert(std::is_nothrow_move_constructible<C>::value, "");
+        LIBCPP_STATIC_ASSERT(std::is_nothrow_move_constructible<C>::value, "");
     }
     {
         typedef std::unordered_set<MoveOnly, std::hash<MoveOnly>,
                            std::equal_to<MoveOnly>, test_allocator<MoveOnly>> C;
-        static_assert(std::is_nothrow_move_constructible<C>::value, "");
+        LIBCPP_STATIC_ASSERT(std::is_nothrow_move_constructible<C>::value, "");
     }
     {
         typedef std::unordered_set<MoveOnly, std::hash<MoveOnly>,
                           std::equal_to<MoveOnly>, other_allocator<MoveOnly>> C;
-        static_assert(std::is_nothrow_move_constructible<C>::value, "");
+        LIBCPP_STATIC_ASSERT(std::is_nothrow_move_constructible<C>::value, "");
     }
     {
         typedef std::unordered_set<MoveOnly, some_hash<MoveOnly>> C;
@@ -62,5 +65,4 @@ int main()
                                                          some_comp<MoveOnly>> C;
         static_assert(!std::is_nothrow_move_constructible<C>::value, "");
     }
-#endif
 }

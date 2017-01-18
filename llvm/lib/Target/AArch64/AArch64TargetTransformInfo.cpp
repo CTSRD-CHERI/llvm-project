@@ -186,29 +186,30 @@ int AArch64TTIImpl::getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src) {
   if (!SrcTy.isSimple() || !DstTy.isSimple())
     return BaseT::getCastInstrCost(Opcode, Dst, Src);
 
-  static const TypeConversionCostTblEntry<MVT::SimpleValueType>
+  static const TypeConversionCostTblEntry
   ConversionTbl[] = {
-    { ISD::SIGN_EXTEND, MVT::v4i32, MVT::v4i16, 0 },
-    { ISD::ZERO_EXTEND, MVT::v4i32, MVT::v4i16, 0 },
-    { ISD::SIGN_EXTEND, MVT::v2i64, MVT::v2i32, 1 },
-    { ISD::ZERO_EXTEND, MVT::v2i64, MVT::v2i32, 1 },
-    { ISD::TRUNCATE,    MVT::v4i32, MVT::v4i64, 0 },
-    { ISD::TRUNCATE,    MVT::v4i16, MVT::v4i32, 1 },
+    { ISD::TRUNCATE, MVT::v4i16, MVT::v4i32,  1 },
+    { ISD::TRUNCATE, MVT::v4i32, MVT::v4i64,  0 },
+    { ISD::TRUNCATE, MVT::v8i8,  MVT::v8i32,  3 },
+    { ISD::TRUNCATE, MVT::v16i8, MVT::v16i32, 6 },
 
     // The number of shll instructions for the extension.
-    { ISD::SIGN_EXTEND, MVT::v4i64, MVT::v4i16, 3 },
-    { ISD::ZERO_EXTEND, MVT::v4i64, MVT::v4i16, 3 },
-    { ISD::SIGN_EXTEND, MVT::v8i32, MVT::v8i8, 3 },
-    { ISD::ZERO_EXTEND, MVT::v8i32, MVT::v8i8, 3 },
-    { ISD::SIGN_EXTEND, MVT::v8i64, MVT::v8i8, 7 },
-    { ISD::ZERO_EXTEND, MVT::v8i64, MVT::v8i8, 7 },
-    { ISD::SIGN_EXTEND, MVT::v8i64, MVT::v8i16, 6 },
-    { ISD::ZERO_EXTEND, MVT::v8i64, MVT::v8i16, 6 },
+    { ISD::SIGN_EXTEND, MVT::v4i64,  MVT::v4i16, 3 },
+    { ISD::ZERO_EXTEND, MVT::v4i64,  MVT::v4i16, 3 },
+    { ISD::SIGN_EXTEND, MVT::v4i64,  MVT::v4i32, 2 },
+    { ISD::ZERO_EXTEND, MVT::v4i64,  MVT::v4i32, 2 },
+    { ISD::SIGN_EXTEND, MVT::v8i32,  MVT::v8i8,  3 },
+    { ISD::ZERO_EXTEND, MVT::v8i32,  MVT::v8i8,  3 },
+    { ISD::SIGN_EXTEND, MVT::v8i32,  MVT::v8i16, 2 },
+    { ISD::ZERO_EXTEND, MVT::v8i32,  MVT::v8i16, 2 },
+    { ISD::SIGN_EXTEND, MVT::v8i64,  MVT::v8i8,  7 },
+    { ISD::ZERO_EXTEND, MVT::v8i64,  MVT::v8i8,  7 },
+    { ISD::SIGN_EXTEND, MVT::v8i64,  MVT::v8i16, 6 },
+    { ISD::ZERO_EXTEND, MVT::v8i64,  MVT::v8i16, 6 },
+    { ISD::SIGN_EXTEND, MVT::v16i16, MVT::v16i8, 2 },
+    { ISD::ZERO_EXTEND, MVT::v16i16, MVT::v16i8, 2 },
     { ISD::SIGN_EXTEND, MVT::v16i32, MVT::v16i8, 6 },
     { ISD::ZERO_EXTEND, MVT::v16i32, MVT::v16i8, 6 },
-
-    { ISD::TRUNCATE,    MVT::v16i8, MVT::v16i32, 6 },
-    { ISD::TRUNCATE,    MVT::v8i8, MVT::v8i32, 3 },
 
     // LowerVectorINT_TO_FP:
     { ISD::SINT_TO_FP, MVT::v2f32, MVT::v2i32, 1 },
@@ -282,12 +283,67 @@ int AArch64TTIImpl::getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src) {
     { ISD::FP_TO_UINT, MVT::v2i8,  MVT::v2f64, 2 },
   };
 
-  int Idx = ConvertCostTableLookup(ConversionTbl, ISD, DstTy.getSimpleVT(),
-                                   SrcTy.getSimpleVT());
-  if (Idx != -1)
-    return ConversionTbl[Idx].Cost;
+  if (const auto *Entry = ConvertCostTableLookup(ConversionTbl, ISD,
+                                                 DstTy.getSimpleVT(),
+                                                 SrcTy.getSimpleVT()))
+    return Entry->Cost;
 
   return BaseT::getCastInstrCost(Opcode, Dst, Src);
+}
+
+int AArch64TTIImpl::getExtractWithExtendCost(unsigned Opcode, Type *Dst,
+                                             VectorType *VecTy,
+                                             unsigned Index) {
+
+  // Make sure we were given a valid extend opcode.
+  assert((Opcode == Instruction::SExt || Opcode == Instruction::ZExt) &&
+         "Invalid opcode");
+
+  // We are extending an element we extract from a vector, so the source type
+  // of the extend is the element type of the vector.
+  auto *Src = VecTy->getElementType();
+
+  // Sign- and zero-extends are for integer types only.
+  assert(isa<IntegerType>(Dst) && isa<IntegerType>(Src) && "Invalid type");
+
+  // Get the cost for the extract. We compute the cost (if any) for the extend
+  // below.
+  auto Cost = getVectorInstrCost(Instruction::ExtractElement, VecTy, Index);
+
+  // Legalize the types.
+  auto VecLT = TLI->getTypeLegalizationCost(DL, VecTy);
+  auto DstVT = TLI->getValueType(DL, Dst);
+  auto SrcVT = TLI->getValueType(DL, Src);
+
+  // If the resulting type is still a vector and the destination type is legal,
+  // we may get the extension for free. If not, get the default cost for the
+  // extend.
+  if (!VecLT.second.isVector() || !TLI->isTypeLegal(DstVT))
+    return Cost + getCastInstrCost(Opcode, Dst, Src);
+
+  // The destination type should be larger than the element type. If not, get
+  // the default cost for the extend.
+  if (DstVT.getSizeInBits() < SrcVT.getSizeInBits())
+    return Cost + getCastInstrCost(Opcode, Dst, Src);
+
+  switch (Opcode) {
+  default:
+    llvm_unreachable("Opcode should be either SExt or ZExt");
+
+  // For sign-extends, we only need a smov, which performs the extension
+  // automatically.
+  case Instruction::SExt:
+    return Cost;
+
+  // For zero-extends, the extend is performed automatically by a umov unless
+  // the destination type is i64 and the element type is i8 or i16.
+  case Instruction::ZExt:
+    if (DstVT.getSizeInBits() != 64u || SrcVT.getSizeInBits() == 32u)
+      return Cost;
+  }
+
+  // If we are unable to perform the extend for free, get the default cost.
+  return Cost + getCastInstrCost(Opcode, Dst, Src);
 }
 
 int AArch64TTIImpl::getVectorInstrCost(unsigned Opcode, Type *Val,
@@ -312,7 +368,7 @@ int AArch64TTIImpl::getVectorInstrCost(unsigned Opcode, Type *Val,
   }
 
   // All other insert/extracts cost this much.
-  return 3;
+  return ST->getVectorInsertExtractBaseCost();
 }
 
 int AArch64TTIImpl::getArithmeticInstrCost(
@@ -385,7 +441,7 @@ int AArch64TTIImpl::getCmpSelInstrCost(unsigned Opcode, Type *ValTy,
   if (ValTy->isVectorTy() && ISD == ISD::SELECT) {
     // We would need this many instructions to hide the scalarization happening.
     const int AmortizationCost = 20;
-    static const TypeConversionCostTblEntry<MVT::SimpleValueType>
+    static const TypeConversionCostTblEntry
     VectorSelectTbl[] = {
       { ISD::SELECT, MVT::v16i1, MVT::v16i16, 16 },
       { ISD::SELECT, MVT::v8i1, MVT::v8i32, 8 },
@@ -398,11 +454,10 @@ int AArch64TTIImpl::getCmpSelInstrCost(unsigned Opcode, Type *ValTy,
     EVT SelCondTy = TLI->getValueType(DL, CondTy);
     EVT SelValTy = TLI->getValueType(DL, ValTy);
     if (SelCondTy.isSimple() && SelValTy.isSimple()) {
-      int Idx =
-          ConvertCostTableLookup(VectorSelectTbl, ISD, SelCondTy.getSimpleVT(),
-                                 SelValTy.getSimpleVT());
-      if (Idx != -1)
-        return VectorSelectTbl[Idx].Cost;
+      if (const auto *Entry = ConvertCostTableLookup(VectorSelectTbl, ISD,
+                                                     SelCondTy.getSimpleVT(),
+                                                     SelValTy.getSimpleVT()))
+        return Entry->Cost;
     }
   }
   return BaseT::getCmpSelInstrCost(Opcode, ValTy, CondTy);
@@ -448,7 +503,7 @@ int AArch64TTIImpl::getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
   if (Factor <= TLI->getMaxSupportedInterleaveFactor()) {
     unsigned NumElts = VecTy->getVectorNumElements();
     Type *SubVecTy = VectorType::get(VecTy->getScalarType(), NumElts / Factor);
-    unsigned SubVecSize = DL.getTypeAllocSizeInBits(SubVecTy);
+    unsigned SubVecSize = DL.getTypeSizeInBits(SubVecTy);
 
     // ldN/stN only support legal vector types of size 64 or 128 in bits.
     if (NumElts % Factor == 0 && (SubVecSize == 64 || SubVecSize == 128))
@@ -472,9 +527,7 @@ int AArch64TTIImpl::getCostOfKeepingLiveOverCall(ArrayRef<Type *> Tys) {
 }
 
 unsigned AArch64TTIImpl::getMaxInterleaveFactor(unsigned VF) {
-  if (ST->isCortexA57())
-    return 4;
-  return 2;
+  return ST->getMaxInterleaveFactor();
 }
 
 void AArch64TTIImpl::getUnrollingPreferences(Loop *L,
@@ -538,7 +591,7 @@ bool AArch64TTIImpl::getTgtMemIntrinsic(IntrinsicInst *Inst,
   case Intrinsic::aarch64_neon_ld4:
     Info.ReadMem = true;
     Info.WriteMem = false;
-    Info.Vol = false;
+    Info.IsSimple = true;
     Info.NumMemRefs = 1;
     Info.PtrVal = Inst->getArgOperand(0);
     break;
@@ -547,7 +600,7 @@ bool AArch64TTIImpl::getTgtMemIntrinsic(IntrinsicInst *Inst,
   case Intrinsic::aarch64_neon_st4:
     Info.ReadMem = false;
     Info.WriteMem = true;
-    Info.Vol = false;
+    Info.IsSimple = true;
     Info.NumMemRefs = 1;
     Info.PtrVal = Inst->getArgOperand(Inst->getNumArgOperands() - 1);
     break;
@@ -570,4 +623,20 @@ bool AArch64TTIImpl::getTgtMemIntrinsic(IntrinsicInst *Inst,
     break;
   }
   return true;
+}
+
+unsigned AArch64TTIImpl::getCacheLineSize() {
+  return ST->getCacheLineSize();
+}
+
+unsigned AArch64TTIImpl::getPrefetchDistance() {
+  return ST->getPrefetchDistance();
+}
+
+unsigned AArch64TTIImpl::getMinPrefetchStride() {
+  return ST->getMinPrefetchStride();
+}
+
+unsigned AArch64TTIImpl::getMaxPrefetchIterationsAhead() {
+  return ST->getMaxPrefetchIterationsAhead();
 }

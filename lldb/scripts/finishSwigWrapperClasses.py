@@ -34,25 +34,27 @@ import utilsOsType      # Determine the OS type this script is running on
 import utilsDebug       # Debug Python scripts
 
 # Instantiations:
-gbDbgVerbose = False;           # True = Turn on script function tracing, False = off.
-gbDbgFlag = False;              # Global debug mode flag, set by input parameter
-                                # --dbgFlag. True = operate in debug mode.
-gbMakeFileFlag = False;         # True = yes called from makefile system, False = not.
+# True = Turn on script function tracing, False = off.
+gbDbgVerbose = False
+gbDbgFlag = False              # Global debug mode flag, set by input parameter
+# --dbgFlag. True = operate in debug mode.
+# True = yes called from makefile system, False = not.
+gbMakeFileFlag = False
 
 # User facing text:
-strMsgErrorNoMain = "Program called by another Python script not allowed";
-strExitMsgSuccess = "Program successful";
-strExitMsgError = "Program error: ";
-strParameter = "Parameter: ";
+strMsgErrorNoMain = "Program called by another Python script not allowed"
+strExitMsgSuccess = "Program successful"
+strExitMsgError = "Program error: "
+strParameter = "Parameter: "
 strMsgErrorOsTypeUnknown = "Unable to determine OS type"
-strScriptDirNotFound = "Unable to locate the script directory \'/script\'";
-strScriptLangsFound = "Found the following script languages:";
-strPostProcessError = "Executing \'%s\' post process script failed: ";
-strScriptNotFound = "Unable to locate the post process script file \'%s\' in \'%s\'";
-strScriptLangFound = "Found \'%s\' build script.";
-strScriptLangsFound = "Found the following script languages:";
-strExecuteMsg = "Executing \'%s\' build script...";
-strExecuteError = "Executing \'%s\' build script failed: ";
+strScriptDirNotFound = "Unable to locate the script directory \'/script\'"
+strScriptLangsFound = "Found the following script languages:"
+strPostProcessError = "Executing \'%s\' post process script failed: "
+strScriptNotFound = "Unable to locate the post process script file \'%s\' in \'%s\'"
+strScriptLangFound = "Found \'%s\' build script."
+strScriptLangsFound = "Found the following script languages:"
+strExecuteMsg = "Executing \'%s\' build script..."
+strExecuteError = "Executing \'%s\' build script failed: "
 strHelpInfo = "\
 Python script(s) to finish off the SWIG Python C++ Script \n\
 Bridge wrapper code on the Windows/LINUX/OSX platform.  The Python \n\
@@ -72,6 +74,8 @@ Args:   -h              (optional) Print help information on this program.\n\
                     be installed. Where non-Darwin systems want to put\n\
                     the .py and .so files so that Python can find them\n\
                     automatically. Python install directory.\n\
+    --lldbLibDir    (optional) The name of the directory containing liblldb.so.\n\
+                    \"lib\" by default.\n\
     --cmakeBuildConfiguration=  (optional) Is the build configuration(Debug, Release, RelWithDebugInfo)\n\
                     used to determine where the bin and lib directories are \n\
                     created for a Windows build.\n\
@@ -80,9 +84,9 @@ Args:   -h              (optional) Print help information on this program.\n\
 \n\
 Usage:\n\
     finishSwigWrapperClasses.py --srcRoot=ADirPath --targetDir=ADirPath\n\
-    --cfgBldDir=ADirPath --prefix=ADirPath -m -d\n\
+    --cfgBldDir=ADirPath --prefix=ADirPath --lldbLibDir=ADirPath -m -d\n\
 \n\
-"; #TAG_PROGRAM_HELP_INFO
+"  # TAG_PROGRAM_HELP_INFO
 
 #++---------------------------------------------------------------------------
 # Details:  Exit the program on success. Called on program successfully done
@@ -92,14 +96,16 @@ Usage:\n\
 # Returns:  None.
 # Throws:   None.
 #--
-def program_exit_success( vnResult, vMsg ):
-    strMsg = "";
+
+
+def program_exit_success(vnResult, vMsg):
+    strMsg = ""
 
     if vMsg.__len__() != 0:
-        strMsg = "%s: %s (%d)" % (strExitMsgSuccess, vMsg, vnResult);
-        print(strMsg);
+        strMsg = "%s: %s (%d)" % (strExitMsgSuccess, vMsg, vnResult)
+        print(strMsg)
 
-    sys.exit( vnResult );
+    sys.exit(vnResult)
 
 #++---------------------------------------------------------------------------
 # Details:  Exit the program with error. Called on exit program failed its
@@ -109,9 +115,11 @@ def program_exit_success( vnResult, vMsg ):
 # Returns:  None.
 # Throws:   None.
 #--
-def program_exit_on_failure( vnResult, vMsg ):
-    print(("%s%s (%d)" % (strExitMsgError, vMsg, vnResult)));
-    sys.exit( vnResult );
+
+
+def program_exit_on_failure(vnResult, vMsg):
+    print(("%s%s (%d)" % (strExitMsgError, vMsg, vnResult)))
+    sys.exit(vnResult)
 
 #++---------------------------------------------------------------------------
 # Details:  Exit the program return a exit result number and print a message.
@@ -122,11 +130,13 @@ def program_exit_on_failure( vnResult, vMsg ):
 # Returns:  None.
 # Throws:   None.
 #--
-def program_exit( vnResult, vMsg ):
+
+
+def program_exit(vnResult, vMsg):
     if vnResult >= 0:
-        program_exit_success( vnResult, vMsg );
+        program_exit_success(vnResult, vMsg)
     else:
-        program_exit_on_failure( vnResult, vMsg );
+        program_exit_on_failure(vnResult, vMsg)
 
 #++---------------------------------------------------------------------------
 # Details:  Dump input parameters.
@@ -134,14 +144,16 @@ def program_exit( vnResult, vMsg ):
 # Returns:  None.
 # Throws:   None.
 #--
-def print_out_input_parameters( vDictArgs ):
+
+
+def print_out_input_parameters(vDictArgs):
     for arg, val in list(vDictArgs.items()):
-        strEqs = "";
-        strQ = "";
+        strEqs = ""
+        strQ = ""
         if val.__len__() != 0:
-            strEqs = " =";
-            strQ = "\"";
-        print(("%s%s%s %s%s%s\n" % (strParameter, arg, strEqs, strQ, val, strQ)));
+            strEqs = " ="
+            strQ = "\""
+        print(("%s%s%s %s%s%s\n" % (strParameter, arg, strEqs, strQ, val, strQ)))
 
 #++---------------------------------------------------------------------------
 # Details:  Validate the arguments passed to the program. This function exits
@@ -151,37 +163,46 @@ def print_out_input_parameters( vDictArgs ):
 #           Dict    - Map of arguments names to argument values
 # Throws:   None.
 #--
-def validate_arguments( vArgv ):
-    dbg = utilsDebug.CDebugFnVerbose( "validate_arguments()" );
-    strMsg = "";
-    dictArgs = {};
-    nResult = 0;
-    strListArgs = "hdm"; # Format "hiox:" = -h -i -o -x <arg>
-    listLongArgs = ["srcRoot=", "targetDir=", "cfgBldDir=", "prefix=", "cmakeBuildConfiguration=",
-                    "argsFile"];
-    dictArgReq = {  "-h": "o",          # o = optional, m = mandatory
-                    "-d": "o",
-                    "-m": "o",
-                    "--srcRoot": "m",
-                    "--targetDir": "m",
-                    "--cfgBldDir": "o",
-                    "--prefix": "o",
-                    "--cmakeBuildConfiguration": "o",
-                    "--argsFile": "o" };
+
+
+def validate_arguments(vArgv):
+    dbg = utilsDebug.CDebugFnVerbose("validate_arguments()")
+    strMsg = ""
+    dictArgs = {}
+    nResult = 0
+    strListArgs = "hdm"  # Format "hiox:" = -h -i -o -x <arg>
+    listLongArgs = [
+        "srcRoot=",
+        "targetDir=",
+        "cfgBldDir=",
+        "prefix=",
+        "cmakeBuildConfiguration=",
+        "lldbLibDir=",
+        "argsFile"]
+    dictArgReq = {"-h": "o",          # o = optional, m = mandatory
+                  "-d": "o",
+                  "-m": "o",
+                  "--srcRoot": "m",
+                  "--targetDir": "m",
+                  "--cfgBldDir": "o",
+                  "--prefix": "o",
+                  "--cmakeBuildConfiguration": "o",
+                  "--lldbLibDir": "o",
+                  "--argsFile": "o"}
 
     # Check for mandatory parameters
-    nResult, dictArgs, strMsg = utilsArgsParse.parse( vArgv, strListArgs,
-                                                      listLongArgs,
-                                                      dictArgReq,
-                                                      strHelpInfo );
+    nResult, dictArgs, strMsg = utilsArgsParse.parse(vArgv, strListArgs,
+                                                     listLongArgs,
+                                                     dictArgReq,
+                                                     strHelpInfo)
     if nResult < 0:
-        program_exit_on_failure( nResult, strMsg );
+        program_exit_on_failure(nResult, strMsg)
 
     # User input -h for help
     if nResult == 1:
-        program_exit_success( 0, strMsg );
+        program_exit_success(0, strMsg)
 
-    return (nResult, dictArgs);
+    return (nResult, dictArgs)
 
 #++---------------------------------------------------------------------------
 # Details:  Locate post process script language directory and the script within
@@ -193,40 +214,46 @@ def validate_arguments( vArgv ):
 #           Str     - Error message.
 # Throws:   None.
 #--
-def run_post_process( vStrScriptLang, vstrFinishFileName, vDictArgs ):
-    dbg = utilsDebug.CDebugFnVerbose( "run_post_process()" );
-    nResult = 0;
-    strStatusMsg = "";
-    strScriptFile = vstrFinishFileName % vStrScriptLang;
-    strScriptFileDir = os.path.normpath(os.path.join(vDictArgs["--srcRoot"], "scripts", vStrScriptLang));
-    strScriptFilePath = os.path.join(strScriptFileDir, strScriptFile);
+
+
+def run_post_process(vStrScriptLang, vstrFinishFileName, vDictArgs):
+    dbg = utilsDebug.CDebugFnVerbose("run_post_process()")
+    nResult = 0
+    strStatusMsg = ""
+    strScriptFile = vstrFinishFileName % vStrScriptLang
+    strScriptFileDir = os.path.normpath(
+        os.path.join(
+            vDictArgs["--srcRoot"],
+            "scripts",
+            vStrScriptLang))
+    strScriptFilePath = os.path.join(strScriptFileDir, strScriptFile)
 
     # Check for the existence of the script file
-    strPath = os.path.normcase( strScriptFilePath );
-    bOk = os.path.exists( strPath );
-    if bOk == False:
-        strDir = os.path.normcase( strScriptFileDir );
-        strStatusMsg = strScriptNotFound % (strScriptFile, strDir);
-        return (-9, strStatusMsg);
+    strPath = os.path.normcase(strScriptFilePath)
+    bOk = os.path.exists(strPath)
+    if not bOk:
+        strDir = os.path.normcase(strScriptFileDir)
+        strStatusMsg = strScriptNotFound % (strScriptFile, strDir)
+        return (-9, strStatusMsg)
 
     if gbDbgFlag:
-        print((strScriptLangFound % vStrScriptLang));
-        print((strExecuteMsg % vStrScriptLang));
+        print((strScriptLangFound % vStrScriptLang))
+        print((strExecuteMsg % vStrScriptLang))
 
     # Change where Python looks for our modules
-    strDir = os.path.normcase( strScriptFileDir );
-    sys.path.append( strDir );
+    strDir = os.path.normcase(strScriptFileDir)
+    sys.path.append(strDir)
 
     # Execute the specific language script
-    dictArgs = vDictArgs; # Remove any args not required before passing on
-    strModuleName = strScriptFile[ : strScriptFile.__len__() - 3 ];
-    module = __import__( strModuleName );
-    nResult, strStatusMsg = module.main( dictArgs );
+    dictArgs = vDictArgs  # Remove any args not required before passing on
+    strModuleName = strScriptFile[: strScriptFile.__len__() - 3]
+    module = __import__(strModuleName)
+    nResult, strStatusMsg = module.main(dictArgs)
 
     # Revert sys path
-    sys.path.remove( strDir );
+    sys.path.remove(strDir)
 
-    return (nResult, strStatusMsg);
+    return (nResult, strStatusMsg)
 
 #++---------------------------------------------------------------------------
 # Details:  Step through each script language sub directory supported
@@ -239,55 +266,44 @@ def run_post_process( vStrScriptLang, vstrFinishFileName, vDictArgs ):
 #           Str     - Error message.
 # Throws:   None.
 #--
-def run_post_process_for_each_script_supported( vDictArgs ):
-    dbg = utilsDebug.CDebugFnVerbose( "run_post_process_for_each_script_supported()" );
-    nResult = 0;
-    strStatusMsg = "";
-    strScriptDir = os.path.normpath(os.path.join(vDictArgs["--srcRoot"], "scripts"));
-    strFinishFileName = "finishSwig%sLLDB.py";
+
+
+def run_post_process_for_each_script_supported(vDictArgs):
+    dbg = utilsDebug.CDebugFnVerbose(
+        "run_post_process_for_each_script_supported()")
+    nResult = 0
+    strStatusMsg = ""
+    strScriptDir = os.path.normpath(
+        os.path.join(
+            vDictArgs["--srcRoot"],
+            "scripts"))
+    strFinishFileName = "finishSwig%sLLDB.py"
 
     # Check for the existence of the scripts folder
-    strScriptsDir = os.path.normcase( strScriptDir );
-    bOk = os.path.exists( strScriptsDir );
-    if bOk == False:
-        return (-8, strScriptDirNotFound);
+    strScriptsDir = os.path.normcase(strScriptDir)
+    bOk = os.path.exists(strScriptsDir)
+    if not bOk:
+        return (-8, strScriptDirNotFound)
 
     # Look for any script language directories to build for
-    listDirs = [];
-    nDepth = 1;
-    for strPath, listDirs, listFiles in os.walk( strScriptDir ):
-        nDepth = nDepth - 1;
-        if nDepth == 0:
-            break;
-
-    # Skip the directory that contains the interface files.
-    listDirs.remove('interface')
-    # and the svn directory.
-    if '.svn' in listDirs:
-        listDirs.remove('.svn')
-
-    if gbDbgFlag:
-        sys.stdout.write(strScriptLangsFound)
-        for dir in listDirs:
-            sys.stdout.write(dir)
-        print("\n")
+    listDirs = ["Python"]
 
     # Iterate script directory find any script language directories
     for scriptLang in listDirs:
         # __pycache__ is a magic directory in Python 3 that holds .pyc files
-        if scriptLang != "__pycache__":
-            dbg.dump_text( "Executing language script for \'%s\'" % scriptLang );
-            nResult, strStatusMsg = run_post_process( scriptLang, strFinishFileName,
-                                                      vDictArgs );
+        if scriptLang != "__pycache__" and scriptLang != "swig_bot_lib":
+            dbg.dump_text("Executing language script for \'%s\'" % scriptLang)
+            nResult, strStatusMsg = run_post_process(
+                scriptLang, strFinishFileName, vDictArgs)
         if nResult < 0:
-            break;
+            break
 
     if nResult < 0:
-        strTmp = strPostProcessError % scriptLang;
-        strTmp += strStatusMsg;
-        strStatusMsg = strTmp;
+        strTmp = strPostProcessError % scriptLang
+        strTmp += strStatusMsg
+        strStatusMsg = strTmp
 
-    return (nResult, strStatusMsg);
+    return (nResult, strStatusMsg)
 
 #++---------------------------------------------------------------------------
 # Details:  Program's main() with arguments passed in from the command line.
@@ -297,41 +313,43 @@ def run_post_process_for_each_script_supported( vDictArgs ):
 # Returns:  None
 # Throws:   None.
 #--
-def main( vArgv ):
-    dbg = utilsDebug.CDebugFnVerbose( "main()" );
-    bOk = False;
-    dictArgs = {};
-    nResult = 0;
-    strMsg = "";
+
+
+def main(vArgv):
+    dbg = utilsDebug.CDebugFnVerbose("main()")
+    bOk = False
+    dictArgs = {}
+    nResult = 0
+    strMsg = ""
 
     # The validate arguments fn will exit the program if tests fail
-    nResult, dictArgs = validate_arguments( vArgv );
+    nResult, dictArgs = validate_arguments(vArgv)
 
-    eOSType = utilsOsType.determine_os_type();
+    eOSType = utilsOsType.determine_os_type()
     if eOSType == utilsOsType.EnumOsType.Unknown:
-        program_exit( -4, strMsgErrorOsTypeUnknown );
+        program_exit(-4, strMsgErrorOsTypeUnknown)
 
-    global gbDbgFlag;
-    gbDbgFlag = "-d" in dictArgs;
+    global gbDbgFlag
+    gbDbgFlag = "-d" in dictArgs
     if gbDbgFlag:
-        print_out_input_parameters( dictArgs );
+        print_out_input_parameters(dictArgs)
 
     # Check to see if we were called from the Makefile system. If we were, check
     # if the caller wants SWIG to generate a dependency file.
     # Not used in this program, but passed through to the language script file
     # called by this program
-    global gbMakeFileFlag;
-    gbMakeFileFlag = "-m" in dictArgs;
+    global gbMakeFileFlag
+    gbMakeFileFlag = "-m" in dictArgs
 
-    nResult, strMsg = run_post_process_for_each_script_supported( dictArgs );
+    nResult, strMsg = run_post_process_for_each_script_supported(dictArgs)
 
-    program_exit( nResult, strMsg );
+    program_exit(nResult, strMsg)
 
 #-----------------------------------------------------------------------------
 #-----------------------------------------------------------------------------
 #-----------------------------------------------------------------------------
 
-#TAG_PROGRAM_HELP_INFO
+# TAG_PROGRAM_HELP_INFO
 """ Details: Program main entry point.
 
     --------------------------------------------------------------------------
@@ -354,11 +372,13 @@ def main( vArgv ):
             --cmakeBuildConfiguration=  (optional) Is the build configuration(Debug, Release, RelWithDebugInfo)\n\
                             used to determine where the bin and lib directories are \n\
                             created for a Windows build.\n\
+            --lldbLibDir=   The name of the directory containing liblldb.so.
+            (optional)      "lib" by default.
             --argsFile=     The args are read from a file instead of the
                             command line. Other command line args are ignored.
     Usage:
             finishSwigWrapperClasses.py --srcRoot=ADirPath --targetDir=ADirPath
-            --cfgBldDir=ADirPath --prefix=ADirPath -m -d
+            --cfgBldDir=ADirPath --prefix=ADirPath --lldbLibDir=ADirPath -m -d
 
     Results:    0 Success
                 -1 Error - invalid parameters passed.
@@ -378,9 +398,8 @@ def main( vArgv ):
 
 # Called using "__main__" when not imported i.e. from the command line
 if __name__ == "__main__":
-    utilsDebug.CDebugFnVerbose.bVerboseOn = gbDbgVerbose;
-    dbg = utilsDebug.CDebugFnVerbose( "__main__" );
-    main( sys.argv[ 1: ] );
+    utilsDebug.CDebugFnVerbose.bVerboseOn = gbDbgVerbose
+    dbg = utilsDebug.CDebugFnVerbose("__main__")
+    main(sys.argv[1:])
 else:
-    program_exit( -5, strMsgErrorNoMain );
-
+    program_exit(-5, strMsgErrorNoMain)

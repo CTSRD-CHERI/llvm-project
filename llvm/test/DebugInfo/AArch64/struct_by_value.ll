@@ -31,7 +31,7 @@ target triple = "arm64-apple-ios3.0.0"
 %struct.five = type { i32, i32, i32, i32, i32 }
 
 ; Function Attrs: nounwind ssp
-define i32 @return_five_int(%struct.five* %f) #0 {
+define i32 @return_five_int(%struct.five* %f) #0 !dbg !4 {
 entry:
   call void @llvm.dbg.declare(metadata %struct.five* %f, metadata !17, metadata !DIExpression(DW_OP_deref)), !dbg !18
   %a = getelementptr inbounds %struct.five, %struct.five* %f, i32 0, i32 0, !dbg !19
@@ -48,11 +48,10 @@ attributes #1 = { nounwind readnone }
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!16, !20}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "LLVM version 3.4 ", isOptimized: false, emissionKind: 0, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "LLVM version 3.4 ", isOptimized: false, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "struct_by_value.c", directory: "")
 !2 = !{}
-!3 = !{!4}
-!4 = distinct !DISubprogram(name: "return_five_int", line: 13, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 14, file: !1, scope: !5, type: !6, function: i32 (%struct.five*)* @return_five_int, variables: !2)
+!4 = distinct !DISubprogram(name: "return_five_int", line: 13, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 14, file: !1, scope: !5, type: !6, variables: !2)
 !5 = !DIFile(filename: "struct_by_value.c", directory: "")
 !6 = !DISubroutineType(types: !7)
 !7 = !{!8, !9}

@@ -100,6 +100,10 @@ protected:
                         llvm::Constant *beginCatchFn,
                         llvm::Constant *endCatchFn,
                         llvm::Constant *exceptionRethrowFn);
+
+  void EmitInitOfCatchParam(CodeGenFunction &CGF, llvm::Value *exn,
+                            const VarDecl *paramDecl);
+
   /// Emits an \@synchronize() statement, using the \p syncEnterFn and
   /// \p syncExitFn arguments as the functions called to lock and unlock
   /// the object.  This function can be called by subclasses that use
@@ -271,9 +275,12 @@ public:
                                   const CodeGen::CGBlockInfo &blockInfo) = 0;
   virtual llvm::Constant *BuildRCBlockLayout(CodeGen::CodeGenModule &CGM,
                                   const CodeGen::CGBlockInfo &blockInfo) = 0;
+
+  /// Returns an i8* which points to the byref layout information.
   virtual llvm::Constant *BuildByrefLayout(CodeGen::CodeGenModule &CGM,
                                            QualType T) = 0;
-  virtual llvm::GlobalVariable *GetClassGlobal(const std::string &Name,
+
+  virtual llvm::GlobalVariable *GetClassGlobal(StringRef Name,
                                                bool Weak = false) = 0;
 
   struct MessageSendInfo {

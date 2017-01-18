@@ -7,7 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcxxabi-no-exceptions
+
 #include <cassert>
+
+// Clang emits  warnings about exceptions of type 'Child' being caught by
+// an earlier handler of type 'Base'. Congrats clang, you've just
+// diagnosed the behavior under test.
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wexceptions"
+#endif
 
 #if __cplusplus < 201103L
 #define DISABLE_NULLPTR_TESTS

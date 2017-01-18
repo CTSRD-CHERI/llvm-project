@@ -10,10 +10,11 @@
 #ifndef TEST_ALLOCATOR_H
 #define TEST_ALLOCATOR_H
 
-#include <cstddef>
 #include <type_traits>
-#include <cstdlib>
 #include <new>
+#include <memory>
+#include <cstddef>
+#include <cstdlib>
 #include <climits>
 #include <cassert>
 
@@ -66,7 +67,7 @@ public:
         {
             assert(data_ >= 0);
             if (time_to_throw >= throw_after) {
-#ifndef _LIBCPP_NO_EXCEPTIONS
+#ifndef TEST_HAS_NO_EXCEPTIONS
                 throw std::bad_alloc();
 #else
                 std::terminate();
@@ -76,18 +77,19 @@ public:
             ++alloc_count;
             return (pointer)::operator new(n * sizeof(T));
         }
-    void deallocate(pointer p, size_type n)
+    void deallocate(pointer p, size_type)
         {assert(data_ >= 0); --alloc_count; ::operator delete((void*)p);}
     size_type max_size() const throw()
         {return UINT_MAX / sizeof(T);}
+#if TEST_STD_VER < 11
     void construct(pointer p, const T& val)
-        {::new(p) T(val);}
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-    void construct(pointer p, T&& val)
-        {::new(p) T(std::move(val));}
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
-    void destroy(pointer p) {p->~T();}
-
+        {::new(static_cast<void*>(p)) T(val);}
+#else
+    template <class U> void construct(pointer p, U&& val)
+        {::new(static_cast<void*>(p)) T(std::forward<U>(val));}
+#endif
+    void destroy(pointer p)
+        {p->~T();}
     friend bool operator==(const test_allocator& x, const test_allocator& y)
         {return x.data_ == y.data_;}
     friend bool operator!=(const test_allocator& x, const test_allocator& y)
@@ -126,7 +128,7 @@ public:
         {
             assert(data_ >= 0);
             if (time_to_throw >= throw_after) {
-#ifndef _LIBCPP_NO_EXCEPTIONS
+#ifndef TEST_HAS_NO_EXCEPTIONS
                 throw std::bad_alloc();
 #else
                 std::terminate();
@@ -136,16 +138,17 @@ public:
             ++alloc_count;
             return (pointer)::operator new (n * sizeof(T));
         }
-    void deallocate(pointer p, size_type n)
+    void deallocate(pointer p, size_type)
         {assert(data_ >= 0); --alloc_count; ::operator delete((void*)p); }
     size_type max_size() const throw()
         {return UINT_MAX / sizeof(T);}
+#if TEST_STD_VER < 11
     void construct(pointer p, const T& val)
-        {::new(p) T(val);}
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-    void construct(pointer p, T&& val)
-        {::new(p) T(std::move(val));}
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+        {::new(static_cast<void*>(p)) T(val);}
+#else
+    template <class U> void construct(pointer p, U&& val)
+        {::new(static_cast<void*>(p)) T(std::forward<U>(val));}
+#endif
     void destroy(pointer p) {p->~T();}
 
     friend bool operator==(const non_default_test_allocator& x, const non_default_test_allocator& y)
@@ -201,7 +204,7 @@ public:
         : data_(a.data_) {}
     T* allocate(std::size_t n)
         {return (T*)::operator new(n * sizeof(T));}
-    void deallocate(T* p, std::size_t n)
+    void deallocate(T* p, std::size_t)
         {::operator delete((void*)p);}
 
     other_allocator select_on_container_copy_construction() const
@@ -216,11 +219,163 @@ public:
     typedef std::true_type propagate_on_container_move_assignment;
     typedef std::true_type propagate_on_container_swap;
 
-#ifdef _LIBCPP_HAS_NO_ADVANCED_SFINAE
+#if TEST_STD_VER < 11
     std::size_t max_size() const
         {return UINT_MAX / sizeof(T);}
-#endif  // _LIBCPP_HAS_NO_ADVANCED_SFINAE
+#endif
 
 };
+
+#if TEST_STD_VER >= 11
+
+struct Ctor_Tag {};
+
+template <typename T> class TaggingAllocator;
+
+struct Tag_X {
+  // All constructors must be passed the Tag type.
+
+  // DefaultInsertable into vector<X, TaggingAllocator<X>>,
+  Tag_X(Ctor_Tag) {}
+  // CopyInsertable into vector<X, TaggingAllocator<X>>,
+  Tag_X(Ctor_Tag, const Tag_X&) {}
+  // MoveInsertable into vector<X, TaggingAllocator<X>>, and
+  Tag_X(Ctor_Tag, Tag_X&&) {}
+
+  // EmplaceConstructible into vector<X, TaggingAllocator<X>> from args.
+  template<typename... Args>
+  Tag_X(Ctor_Tag, Args&&...) { }
+
+  // not DefaultConstructible, CopyConstructible or MoveConstructible.
+  Tag_X() = delete;
+  Tag_X(const Tag_X&) = delete;
+  Tag_X(Tag_X&&) = delete;
+
+  // CopyAssignable.
+  Tag_X& operator=(const Tag_X&) { return *this; }
+
+  // MoveAssignable.
+  Tag_X& operator=(Tag_X&&) { return *this; }
+
+private:
+  // Not Destructible.
+  ~Tag_X() { }
+
+  // Erasable from vector<X, TaggingAllocator<X>>.
+  friend class TaggingAllocator<Tag_X>;
+};
+
+
+template<typename T>
+class TaggingAllocator {
+public:
+    using value_type = T;
+    TaggingAllocator() = default;
+
+    template<typename U>
+      TaggingAllocator(const TaggingAllocator<U>&) { }
+
+    T* allocate(std::size_t n) { return std::allocator<T>{}.allocate(n); }
+
+    void deallocate(T* p, std::size_t n) { std::allocator<T>{}.deallocate(p, n); }
+
+    template<typename... Args>
+    void construct(Tag_X* p, Args&&... args)
+    { ::new((void*)p) Tag_X(Ctor_Tag{}, std::forward<Args>(args)...); }
+
+    template<typename U, typename... Args>
+    void construct(U* p, Args&&... args)
+    { ::new((void*)p) U(std::forward<Args>(args)...); }
+
+    template<typename U, typename... Args>
+    void destroy(U* p)
+    { p->~U(); }
+};
+
+template<typename T, typename U>
+bool
+operator==(const TaggingAllocator<T>&, const TaggingAllocator<U>&)
+{ return true; }
+
+template<typename T, typename U>
+bool
+operator!=(const TaggingAllocator<T>&, const TaggingAllocator<U>&)
+{ return false; }
+#endif
+
+template <std::size_t MaxAllocs>
+struct limited_alloc_handle {
+  std::size_t outstanding_;
+  void* last_alloc_;
+
+  limited_alloc_handle() : outstanding_(0), last_alloc_(nullptr) {}
+
+  template <class T>
+  T *allocate(std::size_t N) {
+    if (N + outstanding_ > MaxAllocs)
+      TEST_THROW(std::bad_alloc());
+    last_alloc_ = ::operator new(N*sizeof(T));
+    outstanding_ += N;
+    return static_cast<T*>(last_alloc_);
+  }
+
+  void deallocate(void* ptr, std::size_t N) {
+    if (ptr == last_alloc_) {
+      last_alloc_ = nullptr;
+      assert(outstanding_ >= N);
+      outstanding_ -= N;
+    }
+    ::operator delete(ptr);
+  }
+};
+
+template <class T, std::size_t N>
+class limited_allocator
+{
+    template <class U, std::size_t UN> friend class limited_allocator;
+    typedef limited_alloc_handle<N> BuffT;
+    std::shared_ptr<BuffT> handle_;
+public:
+    typedef T                 value_type;
+    typedef value_type*       pointer;
+    typedef const value_type* const_pointer;
+    typedef value_type&       reference;
+    typedef const value_type& const_reference;
+    typedef std::size_t       size_type;
+    typedef std::ptrdiff_t    difference_type;
+
+    template <class U> struct rebind { typedef limited_allocator<U, N> other; };
+
+    limited_allocator() : handle_(new BuffT) {}
+
+    limited_allocator(limited_allocator const& other) : handle_(other.handle_) {}
+
+    template <class U>
+    explicit limited_allocator(limited_allocator<U, N> const& other)
+        : handle_(other.handle_) {}
+
+private:
+    limited_allocator& operator=(const limited_allocator&);// = delete;
+
+public:
+    pointer allocate(size_type n) { return handle_->template allocate<T>(n); }
+    void deallocate(pointer p, size_type n) { handle_->deallocate(p, n); }
+    size_type max_size() const {return N;}
+
+    BuffT* getHandle() const { return handle_.get(); }
+};
+
+template <class T, class U, std::size_t N>
+inline bool operator==(limited_allocator<T, N> const& LHS,
+                       limited_allocator<U, N> const& RHS) {
+  return LHS.getHandle() == RHS.getHandle();
+}
+
+template <class T, class U, std::size_t N>
+inline bool operator!=(limited_allocator<T, N> const& LHS,
+                       limited_allocator<U, N> const& RHS) {
+  return !(LHS == RHS);
+}
+
 
 #endif  // TEST_ALLOCATOR_H

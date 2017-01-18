@@ -17,6 +17,7 @@
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/Refactoring.h"
 #include "clang/Tooling/Tooling.h"
+#include "llvm/ADT/Optional.h"
 #include <map>
 #include <memory>
 
@@ -117,11 +118,27 @@ runCheckOnCode(StringRef Code, std::vector<ClangTidyError> *Errors = nullptr,
 
   DiagConsumer.finish();
   tooling::Replacements Fixes;
-  for (const ClangTidyError &Error : Context.getErrors())
-    Fixes.insert(Error.Fix.begin(), Error.Fix.end());
+  for (const ClangTidyError &Error : Context.getErrors()) {
+    for (const auto &FileAndFixes : Error.Fix) {
+      for (const auto &Fix : FileAndFixes.second) {
+        auto Err = Fixes.add(Fix);
+        // FIXME: better error handling. Keep the behavior for now.
+        if (Err) {
+          llvm::errs() << llvm::toString(std::move(Err)) << "\n";
+          return "";
+        }
+      }
+    }
+  }
   if (Errors)
     *Errors = Context.getErrors();
-  return tooling::applyAllReplacements(Code, Fixes);
+  auto Result = tooling::applyAllReplacements(Code, Fixes);
+  if (!Result) {
+    // FIXME: propogate the error.
+    llvm::consumeError(Result.takeError());
+    return "";
+  }
+  return *Result;
 }
 
 #define EXPECT_NO_CHANGES(Check, Code)                                         \

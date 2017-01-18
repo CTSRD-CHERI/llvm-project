@@ -4,6 +4,7 @@ add_tablegen(llvm-tblgen LLVM
   AsmMatcherEmitter.cpp
   AsmWriterEmitter.cpp
   AsmWriterInst.cpp
+  Attributes.cpp
   CallingConvEmitter.cpp
   CodeEmitterGen.cpp
   CodeGenDAGPatterns.cpp
@@ -26,8 +27,11 @@ add_tablegen(llvm-tblgen LLVM
   OptParserEmitter.cpp
   PseudoLoweringEmitter.cpp
   RegisterInfoEmitter.cpp
+  SearchableTableEmitter.cpp
   SubtargetEmitter.cpp
+  SubtargetFeatureInfo.cpp
   TableGen.cpp
+  Types.cpp
   X86DisassemblerTables.cpp
   X86ModRMFilters.cpp
   X86RecognizableInstr.cpp

@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-struct isl_point;
+struct __isl_subclass(isl_basic_set) isl_point;
 typedef struct isl_point isl_point;
 
 isl_ctx *isl_point_get_ctx(__isl_keep isl_point *pnt);
@@ -34,6 +34,7 @@ isl_bool isl_point_is_void(__isl_keep isl_point *pnt);
 
 __isl_give isl_printer *isl_printer_print_point(
 	__isl_take isl_printer *printer, __isl_keep isl_point *pnt);
+__isl_give char *isl_point_to_str(__isl_keep isl_point *pnt);
 void isl_point_dump(__isl_keep isl_point *pnt);
 
 #if defined(__cplusplus)

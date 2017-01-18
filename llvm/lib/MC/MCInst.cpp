@@ -23,6 +23,8 @@ void MCOperand::print(raw_ostream &OS) const {
     OS << "Reg:" << getReg();
   else if (isImm())
     OS << "Imm:" << getImm();
+  else if (isFPImm())
+    OS << "FPImm:" << getFPImm();
   else if (isExpr()) {
     OS << "Expr:(" << *getExpr() << ")";
   } else if (isInst()) {
@@ -32,12 +34,10 @@ void MCOperand::print(raw_ostream &OS) const {
   OS << ">";
 }
 
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-void MCOperand::dump() const {
+LLVM_DUMP_METHOD void MCOperand::dump() const {
   print(dbgs());
   dbgs() << "\n";
 }
-#endif
 
 void MCInst::print(raw_ostream &OS) const {
   OS << "<MCInst " << getOpcode();
@@ -63,9 +63,7 @@ void MCInst::dump_pretty(raw_ostream &OS, const MCInstPrinter *Printer,
   OS << ">";
 }
 
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-void MCInst::dump() const {
+LLVM_DUMP_METHOD void MCInst::dump() const {
   print(dbgs());
   dbgs() << "\n";
 }
-#endif

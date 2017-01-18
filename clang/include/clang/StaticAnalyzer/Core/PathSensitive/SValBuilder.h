@@ -21,6 +21,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/BasicValueFactory.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/MemRegion.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/SymbolManager.h"
 
 namespace clang {
 
@@ -65,7 +66,7 @@ public:
       SymMgr(context, BasicVals, alloc),
       MemMgr(context, alloc),
       StateMgr(stateMgr),
-      ArrayIndexTy(context.IntTy),
+      ArrayIndexTy(context.LongLongTy),
       ArrayIndexWidth(context.getTypeSize(ArrayIndexTy)) {}
 
   virtual ~SValBuilder() {}
@@ -83,7 +84,11 @@ public:
   }
 
   SVal evalCast(SVal val, QualType castTy, QualType originalType);
-  
+
+  // Handles casts of type CK_IntegralCast.
+  SVal evalIntegralCast(ProgramStateRef state, SVal val, QualType castTy,
+                        QualType originalType);
+
   virtual SVal evalMinus(NonLoc val) = 0;
 
   virtual SVal evalComplement(NonLoc val) = 0;
@@ -193,9 +198,11 @@ public:
   DefinedOrUnknownSVal getDerivedRegionValueSymbolVal(
       SymbolRef parentSymbol, const TypedValueRegion *region);
 
-  DefinedSVal getMetadataSymbolVal(
-      const void *symbolTag, const MemRegion *region,
-      const Expr *expr, QualType type, unsigned count);
+  DefinedSVal getMetadataSymbolVal(const void *symbolTag,
+                                   const MemRegion *region,
+                                   const Expr *expr, QualType type,
+                                   const LocationContext *LCtx,
+                                   unsigned count);
 
   DefinedSVal getFunctionPointer(const FunctionDecl *func);
   

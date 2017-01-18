@@ -356,7 +356,8 @@ static std::string findInputFile(const CommandLineArguments &CLArgs) {
 // if no other "-x" option is present.
 static ArgumentsAdjuster
 getModularizeArgumentsAdjuster(DependencyMap &Dependencies) {
-  return [&Dependencies](const CommandLineArguments &Args) {
+  return [&Dependencies](const CommandLineArguments &Args,
+                         StringRef /*unused*/) {
     std::string InputFile = findInputFile(Args);
     DependentsVector &FileDependents = Dependencies[InputFile];
     CommandLineArguments NewArgs(Args);
@@ -570,7 +571,10 @@ public:
     return true;
   }
   bool TraverseConstructorInitializer(CXXCtorInitializer *Init) { return true; }
-  bool TraverseLambdaCapture(LambdaCapture C) { return true; }
+  bool TraverseLambdaCapture(LambdaExpr *LE, const LambdaCapture *C,
+                             Expr *Init) {
+    return true;
+  }
 
   // Check 'extern "*" {}' block for #include directives.
   bool VisitLinkageSpecDecl(LinkageSpecDecl *D) {
@@ -755,7 +759,10 @@ public:
     return true;
   }
   bool TraverseConstructorInitializer(CXXCtorInitializer *Init) { return true; }
-  bool TraverseLambdaCapture(LambdaCapture C) { return true; }
+  bool TraverseLambdaCapture(LambdaExpr *LE, const LambdaCapture *C,
+                             Expr *Init) {
+    return true;
+  }
 
   // Check 'extern "*" {}' block for #include directives.
   bool VisitLinkageSpecDecl(LinkageSpecDecl *D) {

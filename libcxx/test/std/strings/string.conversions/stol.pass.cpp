@@ -18,6 +18,8 @@
 #include <string>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     assert(std::stol("0") == 0);
@@ -34,6 +36,7 @@ int main()
     idx = 0;
     assert(std::stol(L"10g", &idx, 16) == 16);
     assert(idx == 2);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     idx = 0;
     try
     {
@@ -108,4 +111,5 @@ int main()
     {
         assert(idx == 0);
     }
+#endif
 }

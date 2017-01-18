@@ -32,10 +32,6 @@ namespace llvm {
 /// reason for doing so is efficiency; StringSet is much faster at matching
 /// literal strings than Regex.
 struct SpecialCaseList::Entry {
-  Entry() {}
-  Entry(Entry &&Other)
-      : Strings(std::move(Other.Strings)), RegEx(std::move(Other.RegEx)) {}
-
   StringSet<> Strings;
   std::unique_ptr<Regex> RegEx;
 
@@ -50,7 +46,7 @@ std::unique_ptr<SpecialCaseList>
 SpecialCaseList::create(const std::vector<std::string> &Paths,
                         std::string &Error) {
   std::unique_ptr<SpecialCaseList> SCL(new SpecialCaseList());
-  for (auto Path : Paths) {
+  for (const auto &Path : Paths) {
     ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
         MemoryBuffer::getFile(Path);
     if (std::error_code EC = FileOrErr.getError()) {

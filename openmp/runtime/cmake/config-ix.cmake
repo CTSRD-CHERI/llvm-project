@@ -12,7 +12,9 @@
 include(CheckCCompilerFlag)
 include(CheckCSourceCompiles)
 include(CheckCXXCompilerFlag)
+include(CheckIncludeFile)
 include(CheckLibraryExists)
+include(CheckIncludeFiles)
 include(LibompCheckLinkerFlag)
 include(LibompCheckFortranFlag)
 
@@ -47,6 +49,7 @@ endfunction()
 # Checking C, CXX, Linker Flags
 check_cxx_compiler_flag(-std=c++11 LIBOMP_HAVE_STD_CPP11_FLAG)
 check_cxx_compiler_flag(-fno-exceptions LIBOMP_HAVE_FNO_EXCEPTIONS_FLAG)
+check_cxx_compiler_flag(-fno-rtti LIBOMP_HAVE_FNO_RTTI_FLAG)
 check_c_compiler_flag("-x c++" LIBOMP_HAVE_X_CPP_FLAG)
 check_c_compiler_flag(-Werror LIBOMP_HAVE_WERROR_FLAG)
 check_c_compiler_flag(-Wunused-function LIBOMP_HAVE_WNO_UNUSED_FUNCTION_FLAG)
@@ -142,8 +145,8 @@ endif()
 # Find perl executable
 # Perl is used to create omp.h (and other headers) along with kmp_i18n_id.inc and kmp_i18n_default.inc
 find_package(Perl REQUIRED)
-# The perl scripts take the --os= flag which expects a certain format for operating systems.  Until the
-# perl scripts are removed, the most portable way to handle this is to have all operating systems that
+# The perl scripts take the --os=/--arch= flags which expect a certain format for operating systems and arch's.
+# Until the perl scripts are removed, the most portable way to handle this is to have all operating systems that
 # are neither Windows nor Mac (Most Unix flavors) be considered lin to the perl scripts.  This is rooted
 # in that all the Perl scripts check the operating system and will fail if it isn't "valid".  This
 # temporary solution lets us avoid trying to enumerate all the possible OS values inside the Perl modules.
@@ -153,6 +156,15 @@ elseif(APPLE)
   set(LIBOMP_PERL_SCRIPT_OS mac)
 else()
   set(LIBOMP_PERL_SCRIPT_OS lin)
+endif()
+if(IA32)
+  set(LIBOMP_PERL_SCRIPT_ARCH 32)
+elseif(MIC)
+  set(LIBOMP_PERL_SCRIPT_ARCH mic)
+elseif(INTEL64)
+  set(LIBOMP_PERL_SCRIPT_ARCH 32e)
+else()
+  set(LIBOMP_PERL_SCRIPT_ARCH ${LIBOMP_ARCH})
 endif()
 
 # Checking features
@@ -180,15 +192,83 @@ else()
 endif()
 
 # Check if stats-gathering is available
-if(NOT (WIN32 OR APPLE) AND (${IA32} OR ${INTEL64} OR ${MIC}))
-  set(LIBOMP_HAVE_STATS TRUE)
-else()
-  set(LIBOMP_HAVE_STATS FALSE)
+if(${LIBOMP_STATS})
+  check_c_source_compiles(
+     "__thread int x;
+     int main(int argc, char** argv)
+     { x = argc; return x; }"
+     LIBOMP_HAVE___THREAD)
+  check_c_source_compiles(
+     "int main(int argc, char** argv)
+     { unsigned long long t = __builtin_readcyclecounter(); return 0; }"
+     LIBOMP_HAVE___BUILTIN_READCYCLECOUNTER)
+  if(NOT LIBOMP_HAVE___BUILTIN_READCYCLECOUNTER)
+    if(${IA32} OR ${INTEL64} OR ${MIC})
+      check_include_file(x86intrin.h LIBOMP_HAVE_X86INTRIN_H)
+      libomp_append(CMAKE_REQUIRED_DEFINITIONS -DLIBOMP_HAVE_X86INTRIN_H LIBOMP_HAVE_X86INTRIN_H)
+      check_c_source_compiles(
+        "#ifdef LIBOMP_HAVE_X86INTRIN_H
+         # include <x86intrin.h>
+         #endif
+         int main(int argc, char** argv) { unsigned long long t = __rdtsc(); return 0; }" LIBOMP_HAVE___RDTSC)
+      set(CMAKE_REQUIRED_DEFINITIONS)
+    endif()
+  endif()
+  if(LIBOMP_HAVE___THREAD AND (LIBOMP_HAVE___RDTSC OR LIBOMP_HAVE___BUILTIN_READCYCLECOUNTER))
+    set(LIBOMP_HAVE_STATS TRUE)
+  else()
+    set(LIBOMP_HAVE_STATS FALSE)
+  endif()
 endif()
 
 # Check if OMPT support is available
-if(NOT WIN32)
-  set(LIBOMP_HAVE_OMPT_SUPPORT TRUE)
-else()
+# Currently, __builtin_frame_address() is required for OMPT
+# Weak attribute is required for Unices, LIBPSAPI is used for Windows
+check_c_source_compiles("int main(int argc, char** argv) {
+  void* p = __builtin_frame_address(0);
+  return 0;}" LIBOMP_HAVE___BUILTIN_FRAME_ADDRESS)
+check_c_source_compiles("__attribute__ ((weak)) int foo(int a) { return a*a; }
+  int main(int argc, char** argv) {
+  return foo(argc);}" LIBOMP_HAVE_WEAK_ATTRIBUTE)
+check_include_files("windows.h;psapi.h" LIBOMP_HAVE_PSAPI_H)
+check_library_exists(psapi EnumProcessModules "" LIBOMP_HAVE_LIBPSAPI)
+if(LIBOMP_HAVE_PSAPI_H AND LIBOMP_HAVE_LIBPSAPI)
+  set(LIBOMP_HAVE_PSAPI TRUE)
+endif()
+if(NOT LIBOMP_HAVE___BUILTIN_FRAME_ADDRESS)
   set(LIBOMP_HAVE_OMPT_SUPPORT FALSE)
+else()
+  if(LIBOMP_HAVE_WEAK_ATTRIBUTE OR LIBOMP_HAVE_PSAPI)
+    set(LIBOMP_HAVE_OMPT_SUPPORT TRUE)
+  else()
+    set(LIBOMP_HAVE_OMPT_SUPPORT FALSE)
+  endif()
+endif()
+
+# Check if HWLOC support is available
+if(${LIBOMP_USE_HWLOC})
+  set(CMAKE_REQUIRED_INCLUDES ${LIBOMP_HWLOC_INSTALL_DIR}/include)
+  check_include_file(hwloc.h LIBOMP_HAVE_HWLOC_H)
+  set(CMAKE_REQUIRED_INCLUDES)
+  find_library(LIBOMP_HWLOC_LIBRARY
+    NAMES hwloc libhwloc
+    HINTS ${LIBOMP_HWLOC_INSTALL_DIR}/lib)
+  if(LIBOMP_HWLOC_LIBRARY)
+    check_library_exists(${LIBOMP_HWLOC_LIBRARY} hwloc_topology_init
+      ${LIBOMP_HWLOC_INSTALL_DIR}/lib LIBOMP_HAVE_LIBHWLOC)
+    get_filename_component(LIBOMP_HWLOC_LIBRARY_DIR ${LIBOMP_HWLOC_LIBRARY} PATH)
+  endif()
+  if(LIBOMP_HAVE_HWLOC_H AND LIBOMP_HAVE_LIBHWLOC AND LIBOMP_HWLOC_LIBRARY)
+    set(LIBOMP_HAVE_HWLOC TRUE)
+  else()
+    set(LIBOMP_HAVE_HWLOC FALSE)
+    libomp_say("Could not find hwloc")
+  endif()
+endif()
+
+# Check if ThreadSanitizer support is available
+if("${CMAKE_SYSTEM_NAME}" MATCHES "Linux" AND ${INTEL64})
+  set(LIBOMP_HAVE_TSAN_SUPPORT TRUE)
+else()
+  set(LIBOMP_HAVE_TSAN_SUPPORT FALSE)
 endif()

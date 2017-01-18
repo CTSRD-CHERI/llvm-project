@@ -1,10 +1,10 @@
-AC_INIT([isl], [0.15], [isl-development@googlegroups.com])
+AC_INIT([isl], [0.17.1], [isl-development@googlegroups.com])
 AC_CONFIG_AUX_DIR([.])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign])
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 AC_SUBST(versioninfo)
-versioninfo=15:0:0
+versioninfo=17:1:2
 
 if test "x$prefix" != "xNONE"; then
 	prefix_wd=`cd $prefix && pwd`
@@ -102,6 +102,7 @@ AX_SUBMODULE(clang,system|no,no)
 case "$with_clang" in
 system)
 	AC_PROG_GREP
+	AC_PROG_SED
 	llvm_config="llvm-config"
 	AC_CHECK_PROG([llvm_config_found], ["$llvm_config"], [yes])
 	if test "x$with_clang_prefix" != "x"; then
@@ -113,7 +114,8 @@ system)
 	if test "$llvm_config_found" != yes; then
 		AC_MSG_ERROR([llvm-config not found])
 	fi
-	CLANG_CXXFLAGS=`$llvm_config --cxxflags`
+	CLANG_CXXFLAGS=`$llvm_config --cxxflags | \
+		$SED -e 's/-Wcovered-switch-default//'`
 	CLANG_LDFLAGS=`$llvm_config --ldflags`
 	targets=`$llvm_config --targets-built`
 	components="$targets asmparser bitreader support mc"
@@ -175,6 +177,10 @@ system)
 	AC_CHECK_HEADER([clang/Basic/DiagnosticOptions.h],
 		[AC_DEFINE([HAVE_BASIC_DIAGNOSTICOPTIONS_H], [],
 			   [Define if clang/Basic/DiagnosticOptions.h exists])])
+	AC_CHECK_HEADER([clang/Lex/PreprocessorOptions.h],
+		[AC_DEFINE([HAVE_LEX_PREPROCESSOROPTIONS_H], [],
+			   [Define if clang/Lex/PreprocessorOptions.h exists])],
+		[], [#include <clang/Basic/LLVM.h>])
 	AC_TRY_COMPILE([#include <clang/Basic/TargetInfo.h>], [
 		using namespace clang;
 		std::shared_ptr<TargetOptions> TO;
@@ -225,6 +231,24 @@ system)
 	AC_CHECK_HEADER([llvm/ADT/OwningPtr.h],
 		[AC_DEFINE([HAVE_ADT_OWNINGPTR_H], [],
 			   [Define if llvm/ADT/OwningPtr.h exists])])
+	AC_EGREP_HEADER([initializeBuiltins],
+		[clang/Basic/Builtins.h], [],
+		[AC_DEFINE([initializeBuiltins], [InitializeBuiltins],
+		[Define to InitializeBuiltins for older versions of clang])])
+	AC_TRY_COMPILE([
+		#include <clang/Basic/TargetOptions.h>
+		#include <clang/Lex/PreprocessorOptions.h>
+		#include <clang/Frontend/CompilerInstance.h>
+	], [
+		using namespace clang;
+		CompilerInstance *Clang;
+		TargetOptions TO;
+		llvm::Triple T(TO.Triple);
+		PreprocessorOptions PO;
+		CompilerInvocation::setLangDefaults(Clang->getLangOpts(), IK_C,
+				T, PO, LangStandard::lang_unspecified);
+	], [AC_DEFINE([SETLANGDEFAULTS_TAKES_5_ARGUMENTS], [],
+	    [Define if CompilerInvocation::setLangDefaults takes 5 arguments])])
 	AC_LANG_POP
 	CPPFLAGS="$SAVE_CPPFLAGS"
 

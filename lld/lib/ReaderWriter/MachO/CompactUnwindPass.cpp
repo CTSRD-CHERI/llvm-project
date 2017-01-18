@@ -1,4 +1,4 @@
-//===- lib/ReaderWriter/MachO/CompactUnwindPass.cpp -----------------------===//
+//===- lib/ReaderWriter/MachO/CompactUnwindPass.cpp -------------*- C++ -*-===//
 //
 //                             The LLVM Linker
 //
@@ -59,7 +59,7 @@ struct CompactUnwindEntry {
 };
 
 struct UnwindInfoPage {
-  std::vector<CompactUnwindEntry> entries;
+  ArrayRef<CompactUnwindEntry> entries;
 };
 }
 
@@ -87,6 +87,8 @@ public:
     addLSDAIndexes(pages, numLSDAs);
     addSecondLevelPages(pages);
   }
+
+  ~UnwindInfoAtom() override = default;
 
   ContentType contentType() const override {
     return DefinedAtom::typeProcessedUnwindInfo;
@@ -179,7 +181,7 @@ public:
     }
 
     // Finally, write out the final sentinel index
-    CompactUnwindEntry &finalEntry = pages[pages.size() - 1].entries.back();
+    auto &finalEntry = pages[pages.size() - 1].entries.back();
     addImageReference(_topLevelIndexOffset +
                           3 * pages.size() * sizeof(uint32_t),
                       finalEntry.rangeStart, finalEntry.rangeLength);
@@ -273,11 +275,13 @@ class CompactUnwindPass : public Pass {
 public:
   CompactUnwindPass(const MachOLinkingContext &context)
       : _ctx(context), _archHandler(_ctx.archHandler()),
-        _file("<mach-o Compact Unwind Pass>"),
-        _isBig(MachOLinkingContext::isBigEndian(_ctx.arch())) {}
+        _file(*_ctx.make_file<MachOFile>("<mach-o Compact Unwind Pass>")),
+        _isBig(MachOLinkingContext::isBigEndian(_ctx.arch())) {
+    _file.setOrdinal(_ctx.getNextOrdinalAndIncrement());
+  }
 
 private:
-  std::error_code perform(SimpleFile &mergedFile) override {
+  llvm::Error perform(SimpleFile &mergedFile) override {
     DEBUG(llvm::dbgs() << "MachO Compact Unwind pass\n");
 
     std::map<const Atom *, CompactUnwindEntry> unwindLocs;
@@ -294,7 +298,7 @@ private:
 
     // Skip rest of pass if no unwind info.
     if (unwindLocs.empty() && dwarfFrames.empty())
-      return std::error_code();
+      return llvm::Error::success();
 
     // FIXME: if there are more than 4 personality functions then we need to
     // defer to DWARF info for the ones we don't put in the list. They should
@@ -321,28 +325,25 @@ private:
     // boundaries. That might be worth doing, or perhaps we could perform some
     // minor balancing for expected number of lookups.
     std::vector<UnwindInfoPage> pages;
-    unsigned pageStart = 0;
+    auto remainingInfos = llvm::makeArrayRef(unwindInfos);
     do {
       pages.push_back(UnwindInfoPage());
 
       // FIXME: we only create regular pages at the moment. These can hold up to
       // 1021 entries according to the documentation.
-      unsigned entriesInPage =
-          std::min(1021U, (unsigned)unwindInfos.size() - pageStart);
+      unsigned entriesInPage = std::min(1021U, (unsigned)remainingInfos.size());
 
-      std::copy(unwindInfos.begin() + pageStart,
-                unwindInfos.begin() + pageStart + entriesInPage,
-                std::back_inserter(pages.back().entries));
-      pageStart += entriesInPage;
+      pages.back().entries = remainingInfos.slice(0, entriesInPage);
+      remainingInfos = remainingInfos.slice(entriesInPage);
 
       DEBUG(llvm::dbgs()
             << "    Page from " << pages.back().entries[0].rangeStart->name()
             << " to " << pages.back().entries.back().rangeStart->name() << " + "
             << llvm::format("0x%x", pages.back().entries.back().rangeLength)
             << " has " << entriesInPage << " entries\n");
-    } while (pageStart < unwindInfos.size());
+    } while (!remainingInfos.empty());
 
-    UnwindInfoAtom *unwind = new (_file.allocator())
+    auto *unwind = new (_file.allocator())
         UnwindInfoAtom(_archHandler, _file, _isBig, personalities,
                        commonEncodings, pages, numLSDAs);
     mergedFile.addAtom(*unwind);
@@ -352,7 +353,7 @@ private:
       return atom->contentType() == DefinedAtom::typeCompactUnwindInfo;
     });
 
-    return std::error_code();
+    return llvm::Error::success();
   }
 
   void collectCompactUnwindEntries(
@@ -520,7 +521,6 @@ private:
     });
   }
 
-
   CompactUnwindEntry finalizeUnwindInfoEntryForAtom(
       const DefinedAtom *function,
       const std::map<const Atom *, CompactUnwindEntry> &unwindLocs,
@@ -549,7 +549,6 @@ private:
       }
     }
 
-
     auto personality = std::find(personalities.begin(), personalities.end(),
                                  entry.personalityFunction);
     uint32_t personalityIdx = personality == personalities.end()
@@ -570,7 +569,7 @@ private:
 
   const MachOLinkingContext &_ctx;
   mach_o::ArchHandler &_archHandler;
-  MachOFile _file;
+  MachOFile &_file;
   bool _isBig;
 };
 

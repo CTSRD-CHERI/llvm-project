@@ -13,11 +13,13 @@
 
 #include <type_traits>
 
+#include "test_macros.h"
+
 template <class T>
 void test_lvalue_ref()
 {
     static_assert(!std::is_void<T>::value, "");
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     static_assert(!std::is_null_pointer<T>::value, "");
 #endif
     static_assert(!std::is_integral<T>::value, "");
@@ -34,8 +36,13 @@ void test_lvalue_ref()
     static_assert(!std::is_function<T>::value, "");
 }
 
+struct incomplete_type;
+
 int main()
 {
     test_lvalue_ref<int&>();
     test_lvalue_ref<const int&>();
+
+//  LWG#2582
+    static_assert(!std::is_lvalue_reference<incomplete_type>::value, "");
 }

@@ -17,8 +17,6 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/Type.h"
-#include "clang/Basic/Diagnostic.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace clang;
@@ -255,7 +253,7 @@ void APValue::swap(APValue &RHS) {
   memcpy(RHS.Data.buffer, TmpData, DataSize);
 }
 
-void APValue::dump() const {
+LLVM_DUMP_METHOD void APValue::dump() const {
   dump(llvm::errs());
   llvm::errs() << '\n';
 }

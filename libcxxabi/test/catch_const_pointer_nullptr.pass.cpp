@@ -7,7 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcxxabi-no-exceptions
+
 #include <cassert>
+
+// Clang emits  warnings about exceptions of type 'Child' being caught by
+// an earlier handler of type 'Base'. Congrats clang, you've just
+// diagnosed the behavior under test.
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wexceptions"
+#endif
 
 #if __has_feature(cxx_nullptr)
 
@@ -20,8 +29,9 @@ void test1()
         throw nullptr;
         assert(false);
     }
-    catch (A*)
+    catch (A* p)
     {
+        assert(!p);
     }
     catch (const A*)
     {
@@ -37,8 +47,9 @@ void test2()
         throw nullptr;
         assert(false);
     }
-    catch (const A*)
+    catch (const A* p)
     {
+        assert(!p);
     }
     catch (A*)
     {
@@ -53,8 +64,9 @@ void test3()
         throw nullptr;
         assert(false);
     }
-    catch (const A* const)
+    catch (const A* const p)
     {
+        assert(!p);
     }
     catch (A*)
     {
@@ -69,8 +81,9 @@ void test4()
         throw nullptr;
         assert(false);
     }
-    catch (A*)
+    catch (A* p)
     {
+        assert(!p);
     }
     catch (const A* const)
     {
@@ -85,8 +98,9 @@ void test5()
         throw nullptr;
         assert(false);
     }
-    catch (A const*)
+    catch (A const* p)
     {
+        assert(!p);
     }
     catch (A*)
     {
@@ -101,8 +115,9 @@ void test6()
         throw nullptr;
         assert(false);
     }
-    catch (A*)
+    catch (A* p)
     {
+        assert(!p);
     }
     catch (A const*)
     {
