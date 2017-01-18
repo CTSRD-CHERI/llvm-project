@@ -11,6 +11,8 @@
 #ifndef SUPPORT_TEST_MACROS_HPP
 #define SUPPORT_TEST_MACROS_HPP
 
+#include <ciso646> // Get STL specific macros like _LIBCPP_VERSION
+
 #define TEST_CONCAT1(X, Y) X##Y
 #define TEST_CONCAT(X, Y) TEST_CONCAT1(X, Y)
 
@@ -20,13 +22,41 @@
 #define TEST_HAS_FEATURE(X) 0
 #endif
 
+#ifdef __has_include
+#define TEST_HAS_INCLUDE(X) __has_include(X)
+#else
+#define TEST_HAS_INCLUDE(X) 0
+#endif
+
 #ifdef __has_extension
 #define TEST_HAS_EXTENSION(X) __has_extension(X)
 #else
 #define TEST_HAS_EXTENSION(X) 0
 #endif
 
+#ifdef __has_builtin
+#define TEST_HAS_BUILTIN(X) __has_builtin(X)
+#else
+#define TEST_HAS_BUILTIN(X) 0
+#endif
+#ifdef __is_identifier
+// '__is_identifier' returns '0' if '__x' is a reserved identifier provided by
+// the compiler and '1' otherwise.
+#define TEST_HAS_BUILTIN_IDENTIFIER(X) !__is_identifier(X)
+#else
+#define TEST_HAS_BUILTIN_IDENTIFIER(X) 0
+#endif
+
+#if defined(__apple_build_version__)
+#define TEST_APPLE_CLANG_VER (__clang_major__ * 100) + __clang_minor__
+#elif defined(__clang_major__)
+#define TEST_CLANG_VER (__clang_major__ * 100) + __clang_minor__
+#elif defined(__GNUC__)
+#define TEST_GCC_VER (__GNUC__ * 100 + __GNUC_MINOR__)
+#endif
+
 /* Make a nice name for the standard version */
+#ifndef TEST_STD_VER
 #if  __cplusplus <= 199711L
 # define TEST_STD_VER 3
 #elif __cplusplus <= 201103L
@@ -34,15 +64,15 @@
 #elif __cplusplus <= 201402L
 # define TEST_STD_VER 14
 #else
-# define TEST_STD_VER 99    // greater than current standard
+# define TEST_STD_VER 16    // current year; greater than current standard
+#endif
 #endif
 
-/* Features that were introduced in C++11 */
-#if TEST_STD_VER >= 11
-#define TEST_HAS_RVALUE_REFERENCES
-#define TEST_HAS_VARIADIC_TEMPLATES
-#define TEST_HAS_INITIALIZER_LISTS
-#define TEST_HAS_BASIC_CONSTEXPR
+// Attempt to deduce GCC version
+#if defined(_LIBCPP_VERSION) && TEST_HAS_INCLUDE(<features.h>)
+#include <features.h>
+#define TEST_HAS_GLIBC
+#define TEST_GLIBC_PREREQ(major, minor) __GLIBC_PREREQ(major, minor)
 #endif
 
 /* Features that were introduced in C++14 */
@@ -55,50 +85,86 @@
 #if TEST_STD_VER > 14
 #endif
 
-#if TEST_HAS_EXTENSION(cxx_decltype) || TEST_STD_VER >= 11
-#define TEST_DECLTYPE(T) decltype(T)
-#else
-#define TEST_DECLTYPE(T) __typeof__(T)
-#endif
-
 #if TEST_STD_VER >= 11
 #define TEST_CONSTEXPR constexpr
 #define TEST_NOEXCEPT noexcept
+#define TEST_NOEXCEPT_COND(...) noexcept(__VA_ARGS__)
+# if TEST_STD_VER >= 14
+#   define TEST_CONSTEXPR_CXX14 constexpr
+# else
+#   define TEST_CONSTEXPR_CXX14
+# endif
+#define TEST_ALIGNOF(...) alignof(__VA_ARGS__)
+#define TEST_ALIGNAS(...) alignas(__VA_ARGS__)
 #else
 #define TEST_CONSTEXPR
-#define TEST_NOEXCEPT
+#define TEST_CONSTEXPR_CXX14
+#define TEST_NOEXCEPT throw()
+#define TEST_NOEXCEPT_COND(...)
+#define TEST_ALIGNOF(...) __alignof(__VA_ARGS__)
+#define TEST_ALIGNAS(...) __attribute__((__aligned__(__VA_ARGS__)))
 #endif
 
-#if TEST_HAS_EXTENSION(cxx_static_assert) || TEST_STD_VER >= 11
-#  define TEST_STATIC_ASSERT(Expr, Msg) static_assert(Expr, Msg)
-#else
-#  define TEST_STATIC_ASSERT(Expr, Msg)                          \
-      typedef ::test_detail::static_assert_check<sizeof(         \
-          ::test_detail::static_assert_incomplete_test<(Expr)>)> \
-    TEST_CONCAT(test_assert, __LINE__)
-#
-#endif
+#define TEST_ALIGNAS_TYPE(...) TEST_ALIGNAS(TEST_ALIGNOF(__VA_ARGS__))
 
-namespace test_detail {
-
-template <bool> struct static_assert_incomplete_test;
-template <> struct static_assert_incomplete_test<true> {};
-template <unsigned> struct static_assert_check {};
-
-} // end namespace test_detail
-
-
-#if !TEST_HAS_FEATURE(cxx_rtti) && !defined(__cxx_rtti)
+#if !TEST_HAS_FEATURE(cxx_rtti) && !defined(__cpp_rtti) \
+    && !defined(__GXX_RTTI)
 #define TEST_HAS_NO_RTTI
 #endif
 
-#if !TEST_HAS_FEATURE(cxx_exceptions) && !defined(__cxx_exceptions)
+#if !TEST_HAS_FEATURE(cxx_exceptions) && !defined(__cpp_exceptions) \
+     && !defined(__EXCEPTIONS)
 #define TEST_HAS_NO_EXCEPTIONS
 #endif
 
 #if TEST_HAS_FEATURE(address_sanitizer) || TEST_HAS_FEATURE(memory_sanitizer) || \
     TEST_HAS_FEATURE(thread_sanitizer)
 #define TEST_HAS_SANITIZERS
+#endif
+
+#if defined(_LIBCPP_NORETURN)
+#define TEST_NORETURN _LIBCPP_NORETURN
+#else
+#define TEST_NORETURN [[noreturn]]
+#endif
+
+/* Macros for testing libc++ specific behavior and extensions */
+#if defined(_LIBCPP_VERSION)
+#define LIBCPP_ASSERT(...) assert(__VA_ARGS__)
+#define LIBCPP_STATIC_ASSERT(...) static_assert(__VA_ARGS__)
+#define LIBCPP_ONLY(...) __VA_ARGS__
+#else
+#define LIBCPP_ASSERT(...) ((void)0)
+#define LIBCPP_STATIC_ASSERT(...) ((void)0)
+#define LIBCPP_ONLY(...) ((void)0)
+#endif
+
+#define ASSERT_NOEXCEPT(...) \
+    static_assert(noexcept(__VA_ARGS__), "Operation must be noexcept")
+
+#define ASSERT_NOT_NOEXCEPT(...) \
+    static_assert(!noexcept(__VA_ARGS__), "Operation must NOT be noexcept")
+
+namespace test_macros_detail {
+template <class T, class U>
+struct is_same { enum { value = 0};} ;
+template <class T>
+struct is_same<T, T> { enum {value = 1}; };
+} // namespace test_macros_detail
+
+#define ASSERT_SAME_TYPE(...) \
+    static_assert(test_macros_detail::is_same<__VA_ARGS__>::value, \
+                 "Types differ uexpectedly")
+
+#ifndef TEST_HAS_NO_EXCEPTIONS
+#define TEST_THROW(...) throw __VA_ARGS__
+#else
+#if defined(__GNUC__)
+#define TEST_THROW(...) __builtin_abort()
+#else
+#include <stdlib.h>
+#define TEST_THROW(...) ::abort()
+#endif
 #endif
 
 #endif // SUPPORT_TEST_MACROS_HPP

@@ -24,6 +24,7 @@
 
 extern "C" void LLVMFuzzerTestOneInput(const char *data)
 {
+#ifndef TEST_HAS_NO_EXCEPTIONS
     size_t size = strlen(data);
     if (size > 0)
     {
@@ -33,9 +34,10 @@ extern "C" void LLVMFuzzerTestOneInput(const char *data)
             std::string s((const char *)data, size);
             std::regex re(s, flag);
             std::regex_match(s, re);
-        } 
-        catch (std::regex_error &ex) {} 
-    } 
+        }
+        catch (std::regex_error &) {}
+    }
+#endif
 }
 
 

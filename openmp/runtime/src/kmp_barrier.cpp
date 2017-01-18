@@ -25,6 +25,8 @@
 #define USE_NGO_STORES 1
 #endif // KMP_MIC
 
+#include "tsan_annotations.h"
+
 #if KMP_MIC && USE_NGO_STORES
 // ICV copying
 #define ngo_load(src)            __m512d Vt = _mm512_load_pd((void *)(src))
@@ -48,7 +50,7 @@ __kmp_linear_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid
                             void (*reduce)(void *, void *)
                             USE_ITT_BUILD_ARG(void * itt_sync_obj) )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_linear_gather);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_linear_gather);
     register kmp_team_t *team = this_thr->th.th_team;
     register kmp_bstate_t *thr_bar = & this_thr->th.th_bar[bt].bb;
     register kmp_info_t **other_threads = team->t.t_threads;
@@ -107,8 +109,11 @@ __kmp_linear_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid
             if (reduce) {
                 KA_TRACE(100, ("__kmp_linear_barrier_gather: T#%d(%d:%d) += T#%d(%d:%d)\n", gtid,
                                team->t.t_id, tid, __kmp_gtid_from_tid(i, team), team->t.t_id, i));
+                ANNOTATE_REDUCE_AFTER(reduce);
                 (*reduce)(this_thr->th.th_local.reduce_data,
                           other_threads[i]->th.th_local.reduce_data);
+                ANNOTATE_REDUCE_BEFORE(reduce);
+                ANNOTATE_REDUCE_BEFORE(&team->t.t_bar);
             }
         }
         // Don't have to worry about sleep bit here or atomic since team setting
@@ -125,7 +130,7 @@ __kmp_linear_barrier_release(enum barrier_type bt, kmp_info_t *this_thr, int gti
                              int propagate_icvs
                              USE_ITT_BUILD_ARG(void *itt_sync_obj) )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_linear_release);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_linear_release);
     register kmp_bstate_t *thr_bar = &this_thr->th.th_bar[bt].bb;
     register kmp_team_t *team;
 
@@ -144,7 +149,7 @@ __kmp_linear_barrier_release(enum barrier_type bt, kmp_info_t *this_thr, int gti
         if (nproc > 1) {
 #if KMP_BARRIER_ICV_PUSH
             {
-                KMP_TIME_DEVELOPER_BLOCK(USER_icv_copy);
+                KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(USER_icv_copy);
                 if (propagate_icvs) {
                     ngo_load(&team->t.t_implicit_task_taskdata[0].td_icvs);
                     for (i=1; i<nproc; ++i) {
@@ -220,7 +225,7 @@ __kmp_tree_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid, 
                           void (*reduce)(void *, void *)
                           USE_ITT_BUILD_ARG(void *itt_sync_obj) )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_tree_gather);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_tree_gather);
     register kmp_team_t *team = this_thr->th.th_team;
     register kmp_bstate_t *thr_bar = &this_thr->th.th_bar[bt].bb;
     register kmp_info_t **other_threads = team->t.t_threads;
@@ -274,7 +279,10 @@ __kmp_tree_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid, 
                 KA_TRACE(100, ("__kmp_tree_barrier_gather: T#%d(%d:%d) += T#%d(%d:%u)\n",
                                gtid, team->t.t_id, tid, __kmp_gtid_from_tid(child_tid, team),
                                team->t.t_id, child_tid));
+                ANNOTATE_REDUCE_AFTER(reduce);
                 (*reduce)(this_thr->th.th_local.reduce_data, child_thr->th.th_local.reduce_data);
+                ANNOTATE_REDUCE_BEFORE(reduce);
+                ANNOTATE_REDUCE_BEFORE(&team->t.t_bar);
             }
             child++;
             child_tid++;
@@ -315,7 +323,7 @@ __kmp_tree_barrier_release(enum barrier_type bt, kmp_info_t *this_thr, int gtid,
                            int propagate_icvs
                            USE_ITT_BUILD_ARG(void *itt_sync_obj) )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_tree_release);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_tree_release);
     register kmp_team_t *team;
     register kmp_bstate_t *thr_bar = &this_thr->th.th_bar[bt].bb;
     register kmp_uint32 nproc;
@@ -385,7 +393,7 @@ __kmp_tree_barrier_release(enum barrier_type bt, kmp_info_t *this_thr, int gtid,
 
 #if KMP_BARRIER_ICV_PUSH
             {
-                KMP_TIME_DEVELOPER_BLOCK(USER_icv_copy);
+                KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(USER_icv_copy);
                 if (propagate_icvs) {
                     __kmp_init_implicit_task(team->t.t_ident, team->t.t_threads[child_tid],
                                              team, child_tid, FALSE);
@@ -418,7 +426,7 @@ __kmp_hyper_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid,
                            void (*reduce)(void *, void *)
                            USE_ITT_BUILD_ARG(void *itt_sync_obj) )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_hyper_gather);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_hyper_gather);
     register kmp_team_t *team = this_thr->th.th_team;
     register kmp_bstate_t *thr_bar = &this_thr->th.th_bar[bt].bb;
     register kmp_info_t **other_threads = team->t.t_threads;
@@ -498,7 +506,10 @@ __kmp_hyper_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid,
                 KA_TRACE(100, ("__kmp_hyper_barrier_gather: T#%d(%d:%d) += T#%d(%d:%u)\n",
                                gtid, team->t.t_id, tid, __kmp_gtid_from_tid(child_tid, team),
                                team->t.t_id, child_tid));
+                ANNOTATE_REDUCE_AFTER(reduce);
                 (*reduce)(this_thr->th.th_local.reduce_data, child_thr->th.th_local.reduce_data);
+                ANNOTATE_REDUCE_BEFORE(reduce);
+                ANNOTATE_REDUCE_BEFORE(&team->t.t_bar);
             }
         }
     }
@@ -524,7 +535,7 @@ __kmp_hyper_barrier_release(enum barrier_type bt, kmp_info_t *this_thr, int gtid
                             int propagate_icvs
                             USE_ITT_BUILD_ARG(void *itt_sync_obj) )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_hyper_release);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_hyper_release);
     register kmp_team_t    *team;
     register kmp_bstate_t  *thr_bar       = & this_thr -> th.th_bar[ bt ].bb;
     register kmp_info_t   **other_threads;
@@ -706,6 +717,8 @@ __kmp_init_hierarchical_barrier_thread(enum barrier_type bt, kmp_bstate_t *thr_b
         thr_bar->offset = 7-(tid-thr_bar->parent_tid-1);
         thr_bar->old_tid = tid;
         thr_bar->wait_flag = KMP_BARRIER_NOT_WAITING;
+        thr_bar->team = team;
+        thr_bar->parent_bar = &team->t.t_threads[thr_bar->parent_tid]->th.th_bar[bt].bb;
     }
     if (uninitialized || team_changed || tid_changed) {
         thr_bar->team = team;
@@ -729,7 +742,7 @@ __kmp_hierarchical_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr,
                                   int gtid, int tid, void (*reduce) (void *, void *)
                                   USE_ITT_BUILD_ARG(void * itt_sync_obj) )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_hier_gather);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_hier_gather);
     register kmp_team_t *team = this_thr->th.th_team;
     register kmp_bstate_t *thr_bar = & this_thr->th.th_bar[bt].bb;
     register kmp_uint32 nproc = this_thr->th.th_team_nproc;
@@ -764,16 +777,21 @@ __kmp_hierarchical_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr,
         if (__kmp_dflt_blocktime == KMP_MAX_BLOCKTIME && thr_bar->use_oncore_barrier) {
             if (thr_bar->leaf_kids) { // First, wait for leaf children to check-in on my b_arrived flag
                 kmp_uint64 leaf_state = KMP_MASTER_TID(tid) ? thr_bar->b_arrived | thr_bar->leaf_state : team->t.t_bar[bt].b_arrived | thr_bar->leaf_state;
+                KA_TRACE(20, ("__kmp_hierarchical_barrier_gather: T#%d(%d:%d) waiting for leaf kids\n",
+                              gtid, team->t.t_id, tid));
                 kmp_flag_64 flag(&thr_bar->b_arrived, leaf_state);
                 flag.wait(this_thr, FALSE
                           USE_ITT_BUILD_ARG(itt_sync_obj) );
                 if (reduce) {
+                    ANNOTATE_REDUCE_AFTER(reduce);
                     for (child_tid=tid+1; child_tid<=tid+thr_bar->leaf_kids; ++child_tid) {
                         KA_TRACE(100, ("__kmp_hierarchical_barrier_gather: T#%d(%d:%d) += T#%d(%d:%d)\n",
                                        gtid, team->t.t_id, tid, __kmp_gtid_from_tid(child_tid, team),
                                        team->t.t_id, child_tid));
                         (*reduce)(this_thr->th.th_local.reduce_data, other_threads[child_tid]->th.th_local.reduce_data);
                     }
+                    ANNOTATE_REDUCE_BEFORE(reduce);
+                    ANNOTATE_REDUCE_BEFORE(&team->t.t_bar);
                 }
                 (void) KMP_TEST_THEN_AND64((volatile kmp_int64 *)&thr_bar->b_arrived, ~(thr_bar->leaf_state)); // clear leaf_state bits
             }
@@ -795,7 +813,10 @@ __kmp_hierarchical_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr,
                         KA_TRACE(100, ("__kmp_hierarchical_barrier_gather: T#%d(%d:%d) += T#%d(%d:%d)\n",
                                        gtid, team->t.t_id, tid, __kmp_gtid_from_tid(child_tid, team),
                                        team->t.t_id, child_tid));
+                        ANNOTATE_REDUCE_AFTER(reduce);
                         (*reduce)(this_thr->th.th_local.reduce_data, child_thr->th.th_local.reduce_data);
+                        ANNOTATE_REDUCE_BEFORE(reduce);
+                        ANNOTATE_REDUCE_BEFORE(&team->t.t_bar);
                     }
                 }
             }
@@ -818,7 +839,10 @@ __kmp_hierarchical_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr,
                         KA_TRACE(100, ("__kmp_hierarchical_barrier_gather: T#%d(%d:%d) += T#%d(%d:%d)\n",
                                        gtid, team->t.t_id, tid, __kmp_gtid_from_tid(child_tid, team),
                                        team->t.t_id, child_tid));
+                        ANNOTATE_REDUCE_AFTER(reduce);
                         (*reduce)(this_thr->th.th_local.reduce_data, child_thr->th.th_local.reduce_data);
+                        ANNOTATE_REDUCE_BEFORE(reduce);
+                        ANNOTATE_REDUCE_BEFORE(&team->t.t_bar);
                     }
                 }
             }
@@ -859,7 +883,7 @@ __kmp_hierarchical_barrier_release(enum barrier_type bt, kmp_info_t *this_thr, i
                                    int propagate_icvs
                                    USE_ITT_BUILD_ARG(void * itt_sync_obj) )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_hier_release);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_hier_release);
     register kmp_team_t *team;
     register kmp_bstate_t *thr_bar = &this_thr->th.th_bar[bt].bb;
     register kmp_uint32 nproc;
@@ -1043,7 +1067,8 @@ int
 __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
               void *reduce_data, void (*reduce)(void *, void *))
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_barrier);
+    KMP_TIME_PARTITIONED_BLOCK(OMP_plain_barrier);
+    KMP_SET_THREAD_STATE_BLOCK(PLAIN_BARRIER);
     register int tid = __kmp_tid_from_gtid(gtid);
     register kmp_info_t *this_thr = __kmp_threads[gtid];
     register kmp_team_t *team = this_thr->th.th_team;
@@ -1057,6 +1082,7 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
     KA_TRACE(15, ("__kmp_barrier: T#%d(%d:%d) has arrived\n",
                   gtid, __kmp_team_from_gtid(gtid)->t.t_id, __kmp_tid_from_gtid(gtid)));
 
+    ANNOTATE_NEW_BARRIER_BEGIN(&team->t.t_bar);
 #if OMPT_SUPPORT
     if (ompt_enabled) {
 #if OMPT_BLAME
@@ -1102,7 +1128,9 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
            the team struct is not guaranteed to exist. */
         // See note about the corresponding code in __kmp_join_barrier() being performance-critical.
         if (__kmp_dflt_blocktime != KMP_MAX_BLOCKTIME) {
+#if KMP_USE_MONITOR
             this_thr->th.th_team_bt_intervals = team->t.t_implicit_task_taskdata[tid].td_icvs.bt_intervals;
+#endif
             this_thr->th.th_team_bt_set = team->t.t_implicit_task_taskdata[tid].td_icvs.bt_set;
         }
 
@@ -1122,6 +1150,10 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
             //KMP_DEBUG_ASSERT( is_split == TRUE );  // #C69956
             this_thr->th.th_local.reduce_data = reduce_data;
         }
+
+        if (KMP_MASTER_TID(tid) && __kmp_tasking_mode != tskm_immediate_exec)
+            __kmp_task_team_setup(this_thr, team, 0); // use 0 to only setup the current team if nthreads > 1
+
         switch (__kmp_barrier_gather_pattern[bt]) {
         case bp_hyper_bar: {
             KMP_ASSERT(__kmp_barrier_gather_branch_bits[bt]); // don't set branch bits to 0; use linear
@@ -1153,7 +1185,6 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
             if (__kmp_tasking_mode != tskm_immediate_exec) {
                 __kmp_task_team_wait(this_thr, team
                                      USE_ITT_BUILD_ARG(itt_sync_obj) );
-                __kmp_task_team_setup(this_thr, team, 0, 0); // use 0,0 to only setup the current team if nthreads > 1
             }
 #if USE_DEBUGGER
             // Let the debugger know: All threads are arrived and starting leaving the barrier.
@@ -1191,8 +1222,11 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
                     if( __itt_metadata_add_ptr ) {
                         // Initialize with master's wait time
                         kmp_uint64 delta = cur_time - this_thr->th.th_bar_arrive_time;
+                        // Set arrive time to zero to be able to check it in __kmp_invoke_task(); the same is done inside the loop below
+                        this_thr->th.th_bar_arrive_time = 0;
                         for (i=1; i<nproc; ++i) {
                             delta += ( cur_time - other_threads[i]->th.th_bar_arrive_time );
+                            other_threads[i]->th.th_bar_arrive_time = 0;
                         }
                         __kmp_itt_metadata_imbalance(gtid, this_thr->th.th_frame_time, cur_time, delta, (kmp_uint64)( reduce != NULL));
                     }
@@ -1248,7 +1282,7 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
     } else { // Team is serialized.
         status = 0;
         if (__kmp_tasking_mode != tskm_immediate_exec) {
-#if OMP_41_ENABLED
+#if OMP_45_ENABLED
             if ( this_thr->th.th_task_team != NULL ) {
                 void *itt_sync_obj = NULL;
 #if USE_ITT_NOTIFY
@@ -1261,7 +1295,7 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
                 KMP_DEBUG_ASSERT(this_thr->th.th_task_team->tt.tt_found_proxy_tasks == TRUE);
                 __kmp_task_team_wait(this_thr, team
                                                USE_ITT_BUILD_ARG(itt_sync_obj));
-                __kmp_task_team_setup(this_thr, team, 0, 0);
+                __kmp_task_team_setup(this_thr, team, 0);
 
 #if USE_ITT_BUILD
                 if (__itt_sync_create_ptr || KMP_ITT_DEBUG)
@@ -1289,6 +1323,7 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
         this_thr->th.ompt_thread_info.state = ompt_state_work_parallel;
     }
 #endif
+    ANNOTATE_NEW_BARRIER_END(&team->t.t_bar);
 
     return status;
 }
@@ -1297,11 +1332,13 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
 void
 __kmp_end_split_barrier(enum barrier_type bt, int gtid)
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_end_split_barrier);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_end_split_barrier);
+    KMP_SET_THREAD_STATE_BLOCK(PLAIN_BARRIER);
     int tid = __kmp_tid_from_gtid(gtid);
     kmp_info_t *this_thr = __kmp_threads[gtid];
     kmp_team_t *team = this_thr->th.th_team;
 
+    ANNOTATE_NEW_BARRIER_BEGIN(&team->t.t_bar);
     if (!team->t.t_serialized) {
         if (KMP_MASTER_GTID(gtid)) {
             switch (__kmp_barrier_release_pattern[bt]) {
@@ -1332,13 +1369,15 @@ __kmp_end_split_barrier(enum barrier_type bt, int gtid)
             } // if
         }
     }
+    ANNOTATE_NEW_BARRIER_END(&team->t.t_bar);
 }
 
 
 void
 __kmp_join_barrier(int gtid)
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_join_barrier);
+    KMP_TIME_PARTITIONED_BLOCK(OMP_join_barrier);
+    KMP_SET_THREAD_STATE_BLOCK(FORK_JOIN_BARRIER);
     register kmp_info_t *this_thr = __kmp_threads[gtid];
     register kmp_team_t *team;
     register kmp_uint nproc;
@@ -1381,7 +1420,8 @@ __kmp_join_barrier(int gtid)
     KMP_DEBUG_ASSERT(this_thr == team->t.t_threads[tid]);
     KA_TRACE(10, ("__kmp_join_barrier: T#%d(%d:%d) arrived at join barrier\n", gtid, team_id, tid));
 
-#if OMPT_SUPPORT 
+    ANNOTATE_NEW_BARRIER_BEGIN(&team->t.t_bar);
+#if OMPT_SUPPORT
 #if OMPT_TRACE
     if (ompt_enabled &&
         ompt_callbacks.ompt_callback(ompt_event_barrier_begin)) {
@@ -1411,7 +1451,9 @@ __kmp_join_barrier(int gtid)
        down EPCC parallel by 2x. As a workaround, we do not perform the copy if blocktime=infinite,
        since the values are not used by __kmp_wait_template() in that case. */
     if (__kmp_dflt_blocktime != KMP_MAX_BLOCKTIME) {
+#if KMP_USE_MONITOR
         this_thr->th.th_team_bt_intervals = team->t.t_implicit_task_taskdata[tid].td_icvs.bt_intervals;
+#endif
         this_thr->th.th_team_bt_set = team->t.t_implicit_task_taskdata[tid].td_icvs.bt_set;
     }
 
@@ -1450,11 +1492,21 @@ __kmp_join_barrier(int gtid)
        the kmp_task_team_t structs.  */
     if (KMP_MASTER_TID(tid)) {
         if (__kmp_tasking_mode != tskm_immediate_exec) {
-            // Master shouldn't call decrease_load().         // TODO: enable master threads.
-            // Master should have th_may_decrease_load == 0.  // TODO: enable master threads.
             __kmp_task_team_wait(this_thr, team
                                  USE_ITT_BUILD_ARG(itt_sync_obj) );
         }
+#if KMP_STATS_ENABLED
+        // Have master thread flag the workers to indicate they are now waiting for
+        // next parallel region, Also wake them up so they switch their timers to idle.
+        for (int i=0; i<team->t.t_nproc; ++i) {
+            kmp_info_t* team_thread = team->t.t_threads[i];
+            if (team_thread == this_thr)
+                continue;
+            team_thread->th.th_stats->setIdleFlag();
+            if (__kmp_dflt_blocktime != KMP_MAX_BLOCKTIME && team_thread->th.th_sleep_loc != NULL)
+                __kmp_null_resume_wrapper(__kmp_gtid_from_thread(team_thread), team_thread->th.th_sleep_loc);
+        }
+#endif
 #if USE_ITT_BUILD
         if (__itt_sync_create_ptr || KMP_ITT_DEBUG)
             __kmp_itt_barrier_middle(gtid, itt_sync_obj);
@@ -1484,8 +1536,11 @@ __kmp_join_barrier(int gtid)
                 if( __itt_metadata_add_ptr ) {
                     // Initialize with master's wait time
                     kmp_uint64 delta = cur_time - this_thr->th.th_bar_arrive_time;
+                    // Set arrive time to zero to be able to check it in __kmp_invoke_task(); the same is done inside the loop below
+                    this_thr->th.th_bar_arrive_time = 0;
                     for (i=1; i<nproc; ++i) {
                         delta += ( cur_time - other_threads[i]->th.th_bar_arrive_time );
+                        other_threads[i]->th.th_bar_arrive_time = 0;
                     }
                     __kmp_itt_metadata_imbalance(gtid, this_thr->th.th_frame_time, cur_time, delta, 0);
                 }
@@ -1528,6 +1583,7 @@ __kmp_join_barrier(int gtid)
         this_thr->th.ompt_thread_info.state = ompt_state_overhead;
     }
 #endif
+    ANNOTATE_NEW_BARRIER_END(&team->t.t_bar);
 }
 
 
@@ -1535,12 +1591,15 @@ __kmp_join_barrier(int gtid)
 void
 __kmp_fork_barrier(int gtid, int tid)
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_fork_barrier);
+    KMP_TIME_PARTITIONED_BLOCK(OMP_fork_barrier);
+    KMP_SET_THREAD_STATE_BLOCK(FORK_JOIN_BARRIER);
     kmp_info_t *this_thr = __kmp_threads[gtid];
     kmp_team_t *team = (tid == 0) ? this_thr->th.th_team : NULL;
 #if USE_ITT_BUILD
     void * itt_sync_obj = NULL;
 #endif /* USE_ITT_BUILD */
+    if (team)
+      ANNOTATE_NEW_BARRIER_END(&team->t.t_bar);
 
     KA_TRACE(10, ("__kmp_fork_barrier: T#%d(%d:%d) has arrived\n",
                   gtid, (team != NULL) ? team->t.t_id : -1, tid));
@@ -1575,7 +1634,7 @@ __kmp_fork_barrier(int gtid, int tid)
 #endif
 
         if (__kmp_tasking_mode != tskm_immediate_exec) {
-            __kmp_task_team_setup(this_thr, team, 1, 0);  // 1,0 indicates setup both task teams if nthreads > 1
+            __kmp_task_team_setup(this_thr, team, 0);  // 0 indicates setup current task team if nthreads > 1
         }
 
         /* The master thread may have changed its blocktime between the join barrier and the
@@ -1583,7 +1642,9 @@ __kmp_fork_barrier(int gtid, int tid)
            access it when the team struct is not guaranteed to exist. */
         // See note about the corresponding code in __kmp_join_barrier() being performance-critical
         if (__kmp_dflt_blocktime != KMP_MAX_BLOCKTIME) {
+#if KMP_USE_MONITOR
             this_thr->th.th_team_bt_intervals = team->t.t_implicit_task_taskdata[tid].td_icvs.bt_intervals;
+#endif
             this_thr->th.th_team_bt_set = team->t.t_implicit_task_taskdata[tid].td_icvs.bt_set;
         }
     } // master
@@ -1614,14 +1675,7 @@ __kmp_fork_barrier(int gtid, int tid)
 
     // Early exit for reaping threads releasing forkjoin barrier
     if (TCR_4(__kmp_global.g.g_done)) {
-        if (this_thr->th.th_task_team != NULL) {
-            if (KMP_MASTER_TID(tid)) {
-                TCW_PTR(this_thr->th.th_task_team, NULL);
-            }
-            else {
-                __kmp_unref_task_team(this_thr->th.th_task_team, this_thr);
-            }
-        }
+        this_thr->th.th_task_team = NULL;
 
 #if USE_ITT_BUILD && USE_ITT_NOTIFY
         if (__itt_sync_create_ptr || KMP_ITT_DEBUG) {
@@ -1651,7 +1705,7 @@ __kmp_fork_barrier(int gtid, int tid)
        the fixed ICVs in the master's thread struct, because it is not always the case that the
        threads arrays have been allocated when __kmp_fork_call() is executed. */
     {
-        KMP_TIME_DEVELOPER_BLOCK(USER_icv_copy);
+        KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(USER_icv_copy);
         if (!KMP_MASTER_TID(tid)) {  // master thread already has ICVs
             // Copy the initial ICVs from the master's thread struct to the implicit task for this tid.
             KA_TRACE(10, ("__kmp_fork_barrier: T#%d(%d) is PULLing ICVs\n", gtid, tid));
@@ -1698,6 +1752,7 @@ __kmp_fork_barrier(int gtid, int tid)
         } // (prepare called inside barrier_release)
     }
 #endif /* USE_ITT_BUILD && USE_ITT_NOTIFY */
+    ANNOTATE_NEW_BARRIER_END(&team->t.t_bar);
     KA_TRACE(10, ("__kmp_fork_barrier: T#%d(%d:%d) is leaving\n", gtid, team->t.t_id, tid));
 }
 
@@ -1705,7 +1760,7 @@ __kmp_fork_barrier(int gtid, int tid)
 void
 __kmp_setup_icv_copy(kmp_team_t *team, int new_nproc, kmp_internal_control_t *new_icvs, ident_t *loc )
 {
-    KMP_TIME_DEVELOPER_BLOCK(KMP_setup_icv_copy);
+    KMP_TIME_DEVELOPER_PARTITIONED_BLOCK(KMP_setup_icv_copy);
 
     KMP_DEBUG_ASSERT(team && new_nproc && new_icvs);
     KMP_DEBUG_ASSERT((!TCR_4(__kmp_init_parallel)) || new_icvs->nproc);

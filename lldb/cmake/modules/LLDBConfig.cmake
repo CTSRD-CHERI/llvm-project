@@ -1,3 +1,5 @@
+include(CheckCXXSymbolExists)
+
 set(LLDB_PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(LLDB_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/source")
 set(LLDB_INCLUDE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -71,8 +73,8 @@ function(find_python_libs_windows)
   if(EXISTS "${PYTHON_INCLUDE_DIRS}/patchlevel.h")
     file(STRINGS "${PYTHON_INCLUDE_DIRS}/patchlevel.h" python_version_str
          REGEX "^#define[ \t]+PY_VERSION[ \t]+\"[^\"]+\"")
-    string(REGEX REPLACE "^#define[ \t]+PY_VERSION[ \t]+\"([^\"]+)\".*" "\\1"
-                         PYTHONLIBS_VERSION_STRING "${python_version_str}")
+    string(REGEX REPLACE "^#define[ \t]+PY_VERSION[ \t]+\"([^\"+]+)[+]?\".*" "\\1"
+         PYTHONLIBS_VERSION_STRING "${python_version_str}")
     message("-- Found Python version ${PYTHONLIBS_VERSION_STRING}")
     string(REGEX REPLACE "([0-9]+)[.]([0-9]+)[.][0-9]+" "python\\1\\2" PYTHONLIBS_BASE_NAME "${PYTHONLIBS_VERSION_STRING}")
     unset(python_version_str)
@@ -165,12 +167,6 @@ function(find_python_libs_windows)
 endfunction(find_python_libs_windows)
 
 if (NOT LLDB_DISABLE_PYTHON)
-  if(UNIX)
-    # This is necessary for crosscompile on Ubuntu 14.04 64bit. Need a proper fix.
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-      set(CMAKE_LIBRARY_ARCHITECTURE "x86_64-linux-gnu")
-    endif()
-  endif()
 
   if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
     find_python_libs_windows()
@@ -194,7 +190,11 @@ if (LLDB_DISABLE_PYTHON)
   add_definitions( -DLLDB_DISABLE_PYTHON )
 endif()
 
-include_directories(../clang/include)
+if (LLVM_EXTERNAL_CLANG_SOURCE_DIR)
+  include_directories(${LLVM_EXTERNAL_CLANG_SOURCE_DIR}/include)
+else ()
+  include_directories(${CMAKE_SOURCE_DIR}/tools/clang/include)
+endif ()
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/../clang/include")
 
 # Disable GCC warnings
@@ -241,6 +241,11 @@ if( MSVC )
   )
 endif()
 
+# Use the Unicode (UTF-16) APIs by default on Win32
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+	add_definitions( /D _UNICODE /D UNICODE )
+endif()
+
 set(LLDB_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(LLDB_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
@@ -262,16 +267,6 @@ endif()
 string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" LLDB_VERSION
   ${PACKAGE_VERSION})
 message(STATUS "LLDB version: ${LLDB_VERSION}")
-
-if (CMAKE_VERSION VERSION_LESS 2.8.12)
-  set(cmake_2_8_12_INTERFACE)
-  set(cmake_2_8_12_PRIVATE)
-  set(cmake_2_8_12_PUBLIC)
-else ()
-  set(cmake_2_8_12_INTERFACE INTERFACE)
-  set(cmake_2_8_12_PRIVATE PRIVATE)
-  set(cmake_2_8_12_PUBLIC PUBLIC)
-endif ()
 
 include_directories(BEFORE
   ${CMAKE_CURRENT_BINARY_DIR}/include
@@ -304,8 +299,13 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
   find_library(SECURITY_LIBRARY Security)
   find_library(DEBUG_SYMBOLS_LIBRARY DebugSymbols PATHS "/System/Library/PrivateFrameworks")
 
+  set(LLDB_FRAMEWORK_INSTALL_DIR Library/Frameworks CACHE STRING "Output directory for LLDB.framework")
+  set(LLDB_FRAMEWORK_VERSION A CACHE STRING "LLDB.framework version (default is A)")
+  set(LLDB_FRAMEWORK_RESOURCE_DIR
+    LLDB.framework/Versions/${LLDB_FRAMEWORK_VERSION}/Resources)
+
   add_definitions( -DLIBXML2_DEFINED )
-  list(APPEND system_libs xml2 ncurses panel)
+  list(APPEND system_libs xml2 ${CURSES_LIBRARIES})
   list(APPEND system_libs ${CARBON_LIBRARY} ${FOUNDATION_LIBRARY}
   ${CORE_FOUNDATION_LIBRARY} ${CORE_SERVICES_LIBRARY} ${SECURITY_LIBRARY}
   ${DEBUG_SYMBOLS_LIBRARY})
@@ -326,28 +326,6 @@ endif(HAVE_LIBPTHREAD)
 if (HAVE_LIBDL)
   list(APPEND system_libs ${CMAKE_DL_LIBS})
 endif()
-
-if(LLDB_REQUIRES_EH)
-  set(LLDB_REQUIRES_RTTI ON)
-else()
-  if(LLVM_COMPILER_IS_GCC_COMPATIBLE)
-    set(LLDB_COMPILE_FLAGS "${LLDB_COMPILE_FLAGS} -fno-exceptions")
-  elseif(MSVC)
-    add_definitions( -D_HAS_EXCEPTIONS=0 )
-    set(LLDB_COMPILE_FLAGS "${LLDB_COMPILE_FLAGS} /EHs-c-")
-  endif()
-endif()
-
-# Disable RTTI by default
-if(NOT LLDB_REQUIRES_RTTI)
-  if (LLVM_COMPILER_IS_GCC_COMPATIBLE)
-    set(LLDB_COMPILE_FLAGS "${LLDB_COMPILE_FLAGS} -fno-rtti")
-  elseif(MSVC)
-    set(LLDB_COMPILE_FLAGS "${LLDB_COMPILE_FLAGS} /GR-")
-  endif()
-endif()
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLDB_COMPILE_FLAGS}")
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     # Check for syscall used by lldb-server on linux.
@@ -377,7 +355,8 @@ endif()
 # ensure we build lldb-server when an lldb target is being built.
 if ((CMAKE_SYSTEM_NAME MATCHES "Darwin") OR
     (CMAKE_SYSTEM_NAME MATCHES "FreeBSD") OR
-    (CMAKE_SYSTEM_NAME MATCHES "Linux"))
+    (CMAKE_SYSTEM_NAME MATCHES "Linux") OR
+    (CMAKE_SYSTEM_NAME MATCHES "NetBSD"))
     set(LLDB_CAN_USE_LLDB_SERVER 1)
 else()
     set(LLDB_CAN_USE_LLDB_SERVER 0)
@@ -389,4 +368,50 @@ if ( CMAKE_SYSTEM_NAME MATCHES "Darwin" )
     set(LLDB_CAN_USE_DEBUGSERVER 1)
 else()
     set(LLDB_CAN_USE_DEBUGSERVER 0)
+endif()
+
+if (NOT LLDB_DISABLE_CURSES)
+    find_package(Curses REQUIRED)
+
+    find_library(CURSES_PANEL_LIBRARY NAMES panel DOC "The curses panel library")
+    if (NOT CURSES_PANEL_LIBRARY)
+        message(FATAL_ERROR "A required curses' panel library not found.")
+    endif ()
+
+    # Add panels to the library path
+    set (CURSES_LIBRARIES ${CURSES_LIBRARIES} ${CURSES_PANEL_LIBRARY})
+
+    list(APPEND system_libs ${CURSES_LIBRARIES})
+    include_directories(${CURSES_INCLUDE_DIR})
+endif ()
+
+check_cxx_symbol_exists("__GLIBCXX__" "string" LLDB_USING_LIBSTDCXX)
+if(LLDB_USING_LIBSTDCXX)
+    # There doesn't seem to be an easy way to check the library version. Instead, we rely on the
+    # fact that std::set did not have the allocator constructor available until version 4.9
+    check_cxx_source_compiles("
+            #include <set>
+            std::set<int> s = std::set<int>(std::allocator<int>());
+            int main() { return 0; }"
+            LLDB_USING_LIBSTDCXX_4_9)
+    if (NOT LLDB_USING_LIBSTDCXX_4_9 AND NOT LLVM_ENABLE_EH)
+        message(WARNING
+            "You appear to be linking to libstdc++ version lesser than 4.9 without exceptions "
+            "enabled. These versions of the library have an issue, which causes occasional "
+            "lldb crashes. See <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=59656> for "
+            "details. Possible courses of action are:\n"
+            "- use libstdc++ version 4.9 or newer\n"
+            "- use libc++ (via LLVM_ENABLE_LIBCXX)\n"
+            "- enable exceptions (via LLVM_ENABLE_EH)\n"
+            "- ignore this warning and accept occasional instability")
+    endif()
+endif()
+
+if(MSVC)
+    set(LLDB_USE_BUILTIN_DEMANGLER ON)
+else()
+    option(LLDB_USE_BUILTIN_DEMANGLER "Use lldb's builtin demangler instead of the system one" ON)
+endif()
+if(LLDB_USE_BUILTIN_DEMANGLER)
+    add_definitions(-DLLDB_USE_BUILTIN_DEMANGLER)
 endif()

@@ -39,6 +39,9 @@
 
 #include "../assembly.h"
 .syntax unified
+#if __ARM_ARCH_ISA_THUMB == 2
+.thumb
+#endif
 
 .p2align 2
 DEFINE_COMPILERRT_FUNCTION(__eqsf2)
@@ -146,3 +149,6 @@ DEFINE_COMPILERRT_FUNCTION(__unordsf2)
 END_COMPILERRT_FUNCTION(__unordsf2)
 
 DEFINE_AEABI_FUNCTION_ALIAS(__aeabi_fcmpun, __unordsf2)
+
+NO_EXEC_STACK_DIRECTIVE
+

@@ -10,6 +10,7 @@
 #include "ElseAfterReturnCheck.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/Tooling/FixIt.h"
 
 using namespace clang::ast_matchers;
 
@@ -18,30 +19,36 @@ namespace tidy {
 namespace readability {
 
 void ElseAfterReturnCheck::registerMatchers(MatchFinder *Finder) {
-  // FIXME: Support continue, break and throw.
+  const auto ControlFlowInterruptorMatcher =
+      stmt(anyOf(returnStmt().bind("return"), continueStmt().bind("continue"),
+                 breakStmt().bind("break"), cxxThrowExpr().bind("throw")));
   Finder->addMatcher(
-      compoundStmt(
-          forEach(ifStmt(hasThen(stmt(anyOf(returnStmt(),
-                                            compoundStmt(has(returnStmt()))))),
-                         hasElse(stmt().bind("else")))
-                      .bind("if"))),
+      compoundStmt(forEach(
+          ifStmt(hasThen(stmt(
+                     anyOf(ControlFlowInterruptorMatcher,
+                           compoundStmt(has(ControlFlowInterruptorMatcher))))),
+                 hasElse(stmt().bind("else")))
+              .bind("if"))),
       this);
-}
-
-static FixItHint removeToken(SourceLocation Loc) {
-  return FixItHint::CreateRemoval(CharSourceRange::getTokenRange(Loc, Loc));
 }
 
 void ElseAfterReturnCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *If = Result.Nodes.getNodeAs<IfStmt>("if");
   SourceLocation ElseLoc = If->getElseLoc();
-  DiagnosticBuilder Diag = diag(ElseLoc, "don't use else after return");
-  Diag << removeToken(ElseLoc);
+  std::string ControlFlowInterruptor;
+  for (const auto *BindingName : {"return", "continue", "break", "throw"})
+    if (Result.Nodes.getNodeAs<Stmt>(BindingName))
+      ControlFlowInterruptor = BindingName;
+
+  DiagnosticBuilder Diag = diag(ElseLoc, "do not use 'else' after '%0'")
+                           << ControlFlowInterruptor;
+  Diag << tooling::fixit::createRemoval(ElseLoc);
 
   // FIXME: Removing the braces isn't always safe. Do a more careful analysis.
   // FIXME: Change clang-format to correctly un-indent the code.
   if (const auto *CS = Result.Nodes.getNodeAs<CompoundStmt>("else"))
-    Diag << removeToken(CS->getLBracLoc()) << removeToken(CS->getRBracLoc());
+    Diag << tooling::fixit::createRemoval(CS->getLBracLoc())
+         << tooling::fixit::createRemoval(CS->getRBracLoc());
 }
 
 } // namespace readability

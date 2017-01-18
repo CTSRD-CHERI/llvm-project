@@ -17,40 +17,59 @@
 #include <stdexcept>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
 void
 test(S s, S str, typename S::size_type pos, typename S::size_type n, S expected)
 {
-    try
+    if (pos <= str.size())
     {
         s.append(str, pos, n);
-        assert(s.__invariants());
-        assert(pos <= str.size());
+        LIBCPP_ASSERT(s.__invariants());
         assert(s == expected);
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos > str.size());
+        try
+        {
+            s.append(str, pos, n);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos > str.size());
+        }
     }
+#endif
 }
 
 template <class S>
 void
 test_npos(S s, S str, typename S::size_type pos, S expected)
 {
-    try
+    if (pos <= str.size())
     {
         s.append(str, pos);
-        assert(s.__invariants());
-        assert(pos <= str.size());
+        LIBCPP_ASSERT(s.__invariants());
         assert(s == expected);
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos > str.size());
+        try
+        {
+            s.append(str, pos);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos > str.size());
+        }
     }
+#endif
 }
 
 int main()
@@ -79,7 +98,7 @@ int main()
     test(S("12345678901234567890"), S("12345678901234567890"), 5, 10,
          S("123456789012345678906789012345"));
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test(S(), S(), 0, 0, S());

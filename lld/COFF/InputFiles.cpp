@@ -8,30 +8,43 @@
 //===----------------------------------------------------------------------===//
 
 #include "Chunks.h"
+#include "Config.h"
+#include "Driver.h"
 #include "Error.h"
 #include "InputFiles.h"
 #include "Symbols.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/LTO/LTOModule.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/LTO/legacy/LTOModule.h"
+#include "llvm/Object/Binary.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/COFF.h"
-#include "llvm/Support/Debug.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Endian.h"
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Error.h"
+#include "llvm/Support/ErrorOr.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Target/TargetOptions.h"
+#include "llvm-c/lto.h"
+#include <cstring>
+#include <system_error>
+#include <utility>
 
+using namespace llvm;
 using namespace llvm::COFF;
 using namespace llvm::object;
 using namespace llvm::support::endian;
-using llvm::RoundUpToAlignment;
+
 using llvm::Triple;
 using llvm::support::ulittle32_t;
-using llvm::sys::fs::file_magic;
-using llvm::sys::fs::identify_magic;
 
 namespace lld {
 namespace coff {
 
 int InputFile::NextIndex = 0;
+llvm::LLVMContext BitcodeFile::Context;
 
 // Returns the last element of a path, which is supposed to be a filename.
 static StringRef getBasename(StringRef Path) {
@@ -50,11 +63,11 @@ std::string InputFile::getShortName() {
   return StringRef(Res).lower();
 }
 
+ArchiveFile::ArchiveFile(MemoryBufferRef M) : InputFile(ArchiveKind, M) {}
+
 void ArchiveFile::parse() {
   // Parse a MemoryBufferRef as an archive file.
-  auto ArchiveOrErr = Archive::create(MB);
-  error(ArchiveOrErr, "Failed to parse static library");
-  File = std::move(*ArchiveOrErr);
+  File = check(Archive::create(MB), getShortName());
 
   // Allocate a buffer for Lazy objects.
   size_t NumSyms = File->getNumberOfSymbols();
@@ -67,38 +80,47 @@ void ArchiveFile::parse() {
   // Seen is a map from member files to boolean values. Initially
   // all members are mapped to false, which indicates all these files
   // are not read yet.
-  for (const Archive::Child &Child : File->children())
+  Error Err = Error::success();
+  for (auto &Child : File->children(Err))
     Seen[Child.getChildOffset()].clear();
+  if (Err)
+    fatal(Err, getShortName());
 }
 
 // Returns a buffer pointing to a member file containing a given symbol.
 // This function is thread-safe.
 MemoryBufferRef ArchiveFile::getMember(const Archive::Symbol *Sym) {
-  auto ItOrErr = Sym->getMember();
-  error(ItOrErr,
-        Twine("Could not get the member for symbol ") + Sym->getName());
-  Archive::child_iterator It = *ItOrErr;
+  const Archive::Child &C =
+      check(Sym->getMember(),
+            "could not get the member for symbol " + Sym->getName());
 
   // Return an empty buffer if we have already returned the same buffer.
-  if (Seen[It->getChildOffset()].test_and_set())
+  if (Seen[C.getChildOffset()].test_and_set())
     return MemoryBufferRef();
-  ErrorOr<MemoryBufferRef> Ret = It->getMemoryBufferRef();
-  error(Ret, Twine("Could not get the buffer for the member defining symbol ") +
-                 Sym->getName());
-  return *Ret;
+
+  MemoryBufferRef MB =
+      check(C.getMemoryBufferRef(),
+            "could not get the buffer for the member defining symbol " +
+                Sym->getName());
+  if (C.getParent()->isThin() && Driver->Cpio)
+    Driver->Cpio->append(relativeToRoot(check(C.getFullName())),
+                         MB.getBuffer());
+
+  return MB;
 }
+
+MutableArrayRef<Lazy> ArchiveFile::getLazySymbols() { return LazySymbols; }
 
 void ObjectFile::parse() {
   // Parse a memory buffer as a COFF file.
-  auto BinOrErr = createBinary(MB);
-  error(BinOrErr, "Failed to parse object file");
-  std::unique_ptr<Binary> Bin = std::move(*BinOrErr);
+  std::unique_ptr<Binary> Bin =
+      check(createBinary(MB), getShortName());
 
   if (auto *Obj = dyn_cast<COFFObjectFile>(Bin.get())) {
     Bin.release();
     COFFObj.reset(Obj);
   } else {
-    error(Twine(getName()) + " is not a COFF file.");
+    fatal(getShortName() + " is not a COFF file");
   }
 
   // Read section and symbol tables.
@@ -114,10 +136,10 @@ void ObjectFile::initializeChunks() {
   for (uint32_t I = 1; I < NumSections + 1; ++I) {
     const coff_section *Sec;
     StringRef Name;
-    std::error_code EC = COFFObj->getSection(I, Sec);
-    error(EC, Twine("getSection failed: #") + Twine(I));
-    EC = COFFObj->getSectionName(Sec, Name);
-    error(EC, Twine("getSectionName failed: #") + Twine(I));
+    if (auto EC = COFFObj->getSection(I, Sec))
+      fatal(EC, "getSection failed: #" + Twine(I));
+    if (auto EC = COFFObj->getSectionName(Sec, Name))
+      fatal(EC, "getSectionName failed: #" + Twine(I));
     if (Name == ".sxdata") {
       SXData = Sec;
       continue;
@@ -147,14 +169,12 @@ void ObjectFile::initializeSymbols() {
   uint32_t NumSymbols = COFFObj->getNumberOfSymbols();
   SymbolBodies.reserve(NumSymbols);
   SparseSymbolBodies.resize(NumSymbols);
-  llvm::SmallVector<Undefined *, 8> WeakAliases;
+  llvm::SmallVector<std::pair<Undefined *, uint32_t>, 8> WeakAliases;
   int32_t LastSectionNumber = 0;
   for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
-    auto SymOrErr = COFFObj->getSymbol(I);
-    error(SymOrErr, Twine("broken object file: ") + getName());
-
-    COFFSymbolRef Sym = *SymOrErr;
+    COFFSymbolRef Sym =
+        check(COFFObj->getSymbol(I), "broken object file: " + getShortName());
 
     const void *AuxP = nullptr;
     if (Sym.getNumberOfAuxSymbols())
@@ -165,8 +185,10 @@ void ObjectFile::initializeSymbols() {
     if (Sym.isUndefined()) {
       Body = createUndefined(Sym);
     } else if (Sym.isWeakExternal()) {
-      Body = createWeakExternal(Sym, AuxP);
-      WeakAliases.push_back((Undefined *)Body);
+      Body = createUndefined(Sym);
+      uint32_t TagIndex =
+          static_cast<const coff_aux_weak_external *>(AuxP)->TagIndex;
+      WeakAliases.emplace_back((Undefined *)Body, TagIndex);
     } else {
       Body = createDefined(Sym, AuxP, IsFirst);
     }
@@ -177,23 +199,14 @@ void ObjectFile::initializeSymbols() {
     I += Sym.getNumberOfAuxSymbols();
     LastSectionNumber = Sym.getSectionNumber();
   }
-  for (Undefined *U : WeakAliases)
-    U->WeakAlias = SparseSymbolBodies[(uintptr_t)U->WeakAlias];
+  for (auto WeakAlias : WeakAliases)
+    WeakAlias.first->WeakAlias = SparseSymbolBodies[WeakAlias.second];
 }
 
 Undefined *ObjectFile::createUndefined(COFFSymbolRef Sym) {
   StringRef Name;
   COFFObj->getSymbolName(Sym, Name);
   return new (Alloc) Undefined(Name);
-}
-
-Undefined *ObjectFile::createWeakExternal(COFFSymbolRef Sym, const void *AuxP) {
-  StringRef Name;
-  COFFObj->getSymbolName(Sym, Name);
-  auto *U = new (Alloc) Undefined(Name);
-  auto *Aux = (const coff_aux_weak_external *)AuxP;
-  U->WeakAlias = (Undefined *)(uintptr_t)Aux->TagIndex;
-  return U;
 }
 
 Defined *ObjectFile::createDefined(COFFSymbolRef Sym, const void *AuxP,
@@ -217,11 +230,21 @@ Defined *ObjectFile::createDefined(COFFSymbolRef Sym, const void *AuxP,
     }
     return new (Alloc) DefinedAbsolute(Name, Sym);
   }
-  if (Sym.getSectionNumber() == llvm::COFF::IMAGE_SYM_DEBUG)
+  int32_t SectionNumber = Sym.getSectionNumber();
+  if (SectionNumber == llvm::COFF::IMAGE_SYM_DEBUG)
     return nullptr;
 
+  // Reserved sections numbers don't have contents.
+  if (llvm::COFF::isReservedSectionNumber(SectionNumber))
+    fatal("broken object file: " + getShortName());
+
+  // This symbol references a section which is not present in the section
+  // header.
+  if ((uint32_t)SectionNumber >= SparseChunks.size())
+    fatal("broken object file: " + getShortName());
+
   // Nothing else to do without a section chunk.
-  auto *SC = cast_or_null<SectionChunk>(SparseChunks[Sym.getSectionNumber()]);
+  auto *SC = cast_or_null<SectionChunk>(SparseChunks[SectionNumber]);
   if (!SC)
     return nullptr;
 
@@ -248,7 +271,7 @@ void ObjectFile::initializeSEH() {
   ArrayRef<uint8_t> A;
   COFFObj->getSectionContents(SXData, A);
   if (A.size() % 4 != 0)
-    error(".sxdata must be an array of symbol table indices");
+    fatal(".sxdata must be an array of symbol table indices");
   auto *I = reinterpret_cast<const ulittle32_t *>(A.data());
   auto *E = reinterpret_cast<const ulittle32_t *>(A.data() + A.size());
   for (; I != E; ++I)
@@ -274,11 +297,11 @@ void ImportFile::parse() {
 
   // Check if the total size is valid.
   if ((size_t)(End - Buf) != (sizeof(*Hdr) + Hdr->SizeOfData))
-    error("broken import library");
+    fatal("broken import library");
 
   // Read names and create an __imp_ symbol.
   StringRef Name = StringAlloc.save(StringRef(Buf + sizeof(*Hdr)));
-  StringRef ImpName = StringAlloc.save(Twine("__imp_") + Name);
+  StringRef ImpName = StringAlloc.save("__imp_" + Name);
   const char *NameStart = Buf + sizeof(coff_import_header) + Name.size() + 1;
   DLLName = StringRef(NameStart);
   StringRef ExtName;
@@ -313,12 +336,10 @@ void BitcodeFile::parse() {
   // Usually parse() is thread-safe, but bitcode file is an exception.
   std::lock_guard<std::mutex> Lock(Mu);
 
-  std::string Err;
-  M.reset(LTOModule::createFromBuffer(MB.getBufferStart(),
-                                      MB.getBufferSize(),
-                                      llvm::TargetOptions(), Err));
-  if (!Err.empty())
-    error(Err);
+  Context.enableDebugTypeODRUniquing();
+  ErrorOr<std::unique_ptr<LTOModule>> ModOrErr = LTOModule::createFromBuffer(
+      Context, MB.getBufferStart(), MB.getBufferSize(), llvm::TargetOptions());
+  M = check(std::move(ModOrErr), "could not create LTO module");
 
   llvm::StringSaver Saver(Alloc);
   for (unsigned I = 0, E = M->getSymbolCount(); I != E; ++I) {

@@ -313,7 +313,7 @@ void CallAndMessageChecker::checkPreStmt(const CallExpr *CE,
   if (L.isUndef()) {
     if (!BT_call_undef)
       BT_call_undef.reset(new BuiltinBug(
-          this, "Called function pointer is an uninitalized pointer value"));
+          this, "Called function pointer is an uninitialized pointer value"));
     emitBadCall(BT_call_undef.get(), C, Callee);
     return;
   }
@@ -356,7 +356,6 @@ void CallAndMessageChecker::checkPreStmt(const CXXDeleteExpr *DE,
   }
 }
 
-
 void CallAndMessageChecker::checkPreCall(const CallEvent &Call,
                                          CheckerContext &C) const {
   ProgramStateRef State = C.getState();
@@ -389,11 +388,10 @@ void CallAndMessageChecker::checkPreCall(const CallEvent &Call,
   }
 
   const Decl *D = Call.getDecl();
-  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D);
-  if (FD) {
-    // If we have a declaration, we can make sure we pass enough parameters to
-    // the function.
-    unsigned Params = FD->getNumParams();
+  if (D && (isa<FunctionDecl>(D) || isa<BlockDecl>(D))) {
+    // If we have a function or block declaration, we can make sure we pass
+    // enough parameters.
+    unsigned Params = Call.parameters().size();
     if (Call.getNumArgs() < Params) {
       ExplodedNode *N = C.generateErrorNode();
       if (!N)
@@ -403,8 +401,14 @@ void CallAndMessageChecker::checkPreCall(const CallEvent &Call,
 
       SmallString<512> Str;
       llvm::raw_svector_ostream os(Str);
-      os << "Function taking " << Params << " argument"
-         << (Params == 1 ? "" : "s") << " is called with less ("
+      if (isa<FunctionDecl>(D)) {
+        os << "Function ";
+      } else {
+        assert(isa<BlockDecl>(D));
+        os << "Block ";
+      }
+      os << "taking " << Params << " argument"
+         << (Params == 1 ? "" : "s") << " is called with fewer ("
          << Call.getNumArgs() << ")";
 
       C.emitReport(
@@ -425,6 +429,7 @@ void CallAndMessageChecker::checkPreCall(const CallEvent &Call,
   else
     BT = &BT_call_arg;
 
+  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D);
   for (unsigned i = 0, e = Call.getNumArgs(); i != e; ++i) {
     const ParmVarDecl *ParamDecl = nullptr;
     if(FD && i < FD->getNumParams())
@@ -522,7 +527,8 @@ void CallAndMessageChecker::emitNilReceiverBug(CheckerContext &C,
 
 static bool supportsNilWithFloatRet(const llvm::Triple &triple) {
   return (triple.getVendor() == llvm::Triple::Apple &&
-          (triple.isiOS() || !triple.isMacOSXVersionLT(10,5)));
+          (triple.isiOS() || triple.isWatchOS() ||
+           !triple.isMacOSXVersionLT(10,5)));
 }
 
 void CallAndMessageChecker::HandleNilReceiver(CheckerContext &C,

@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcxxabi-no-exceptions
+
 #include <cassert>
 
 #if __has_feature(cxx_nullptr)
@@ -27,8 +29,9 @@ void test1()
         throw nullptr;
         assert(false);
     }
-    catch (md2)
+    catch (md2 p)
     {
+        assert(!p);
     }
     catch (md1)
     {
@@ -43,8 +46,9 @@ void test2()
         throw nullptr;
         assert(false);
     }
-    catch (md1)
+    catch (md1 p)
     {
+        assert(!p);
     }
     catch (md2)
     {

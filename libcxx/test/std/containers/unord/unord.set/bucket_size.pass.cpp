@@ -22,6 +22,7 @@
 #include <unordered_set>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 int main()
@@ -40,13 +41,13 @@ int main()
         };
         const C c(std::begin(a), std::end(a));
         assert(c.bucket_count() >= 5);
-        assert(c.bucket_size(0) == 0);
-        assert(c.bucket_size(1) == 1);
-        assert(c.bucket_size(2) == 1);
-        assert(c.bucket_size(3) == 1);
-        assert(c.bucket_size(4) == 1);
+        LIBCPP_ASSERT(c.bucket_size(0) == 0);
+        LIBCPP_ASSERT(c.bucket_size(1) == 1);
+        LIBCPP_ASSERT(c.bucket_size(2) == 1);
+        LIBCPP_ASSERT(c.bucket_size(3) == 1);
+        LIBCPP_ASSERT(c.bucket_size(4) == 1);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_set<int, std::hash<int>, std::equal_to<int>, min_allocator<int>> C;
         typedef int P;
@@ -61,11 +62,11 @@ int main()
         };
         const C c(std::begin(a), std::end(a));
         assert(c.bucket_count() >= 5);
-        assert(c.bucket_size(0) == 0);
-        assert(c.bucket_size(1) == 1);
-        assert(c.bucket_size(2) == 1);
-        assert(c.bucket_size(3) == 1);
-        assert(c.bucket_size(4) == 1);
+        LIBCPP_ASSERT(c.bucket_size(0) == 0);
+        LIBCPP_ASSERT(c.bucket_size(1) == 1);
+        LIBCPP_ASSERT(c.bucket_size(2) == 1);
+        LIBCPP_ASSERT(c.bucket_size(3) == 1);
+        LIBCPP_ASSERT(c.bucket_size(4) == 1);
     }
 #endif
 #if _LIBCPP_DEBUG_LEVEL >= 1

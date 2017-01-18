@@ -30,8 +30,9 @@ namespace llvm {
   FunctionPass *createMipsModuleISelDagPass(MipsTargetMachine &TM);
   FunctionPass *createMipsOptimizePICCallPass(MipsTargetMachine &TM);
   FunctionPass *createMipsDelaySlotFillerPass(MipsTargetMachine &TM);
+  FunctionPass *createMipsHazardSchedule();
   FunctionPass *createMipsLongBranchPass(MipsTargetMachine &TM);
-  FunctionPass *createMipsConstantIslandPass(MipsTargetMachine &tm);
+  FunctionPass *createMipsConstantIslandPass();
 
   FunctionPass *createCheriInvalidatePass(MipsTargetMachine &TM);
   FunctionPass *createCheriRangeChecker();

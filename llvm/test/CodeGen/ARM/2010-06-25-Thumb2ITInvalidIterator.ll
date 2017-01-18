@@ -3,7 +3,7 @@
 target datalayout = "e-p:32:32:32-i1:8:32-i8:8:32-i16:16:32-i32:32:32-i64:32:32-f32:32:32-f64:32:32-v64:64:64-v128:128:128-a0:0:32-n32"
 target triple = "thumbv7-apple-darwin3.0.0-iphoneos"
 
-@length = common global i32 0, align 4            ; <i32*> [#uses=1]
+@length = common global i32 0, align 4, !dbg !14            ; <i32*> [#uses=1]
 
 define void @x0(i8* nocapture %buf, i32 %nbytes) nounwind optsize {
 entry:
@@ -44,13 +44,12 @@ declare i32 @x1() optsize
 
 declare void @llvm.dbg.value(metadata, i64, metadata, metadata) nounwind readnone
 
-!llvm.dbg.lv.fn = !{!0, !8, !10, !12}
-!llvm.dbg.gv = !{!14}
+!llvm.dbg.cu = !{!3}
 
 !0 = !DILocalVariable(name: "buf", line: 4, arg: 1, scope: !1, file: !2, type: !6)
-!1 = distinct !DISubprogram(name: "x0", linkageName: "x0", line: 5, isLocal: false, isDefinition: true, virtualIndex: 6, isOptimized: false, file: !26, scope: null, type: !4)
+!1 = distinct !DISubprogram(name: "x0", linkageName: "x0", line: 5, isLocal: false, isDefinition: true, virtualIndex: 6, isOptimized: false, unit: !3, file: !26, scope: null, type: !4)
 !2 = !DIFile(filename: "t.c", directory: "/private/tmp")
-!3 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang 2.0", isOptimized: true, file: !26)
+!3 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang 2.0", isOptimized: true, file: !26, globals: !{!14})
 !4 = !DISubroutineType(types: !5)
 !5 = !{null}
 !6 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 32, align: 32, file: !26, scope: !2, baseType: !7)
@@ -61,7 +60,7 @@ declare void @llvm.dbg.value(metadata, i64, metadata, metadata) nounwind readnon
 !11 = distinct !DILexicalBlock(line: 5, column: 1, file: !26, scope: !1)
 !12 = !DILocalVariable(name: "c", line: 7, scope: !11, file: !2, type: !13)
 !13 = !DIBasicType(tag: DW_TAG_base_type, name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
-!14 = !DIGlobalVariable(name: "length", linkageName: "length", line: 1, isLocal: false, isDefinition: true, scope: !2, file: !2, type: !13, variable: i32* @length)
+!14 = !DIGlobalVariable(name: "length", linkageName: "length", line: 1, isLocal: false, isDefinition: true, scope: !2, file: !2, type: !13)
 !15 = !DILocation(line: 4, column: 24, scope: !1)
 !16 = !DILocation(line: 4, column: 43, scope: !1)
 !17 = !DILocation(line: 9, column: 2, scope: !11)

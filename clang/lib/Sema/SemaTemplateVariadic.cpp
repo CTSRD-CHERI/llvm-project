@@ -604,7 +604,7 @@ bool Sema::CheckParameterPacksForExpansion(
     //   Template argument deduction can extend the sequence of template 
     //   arguments corresponding to a template parameter pack, even when the
     //   sequence contains explicitly specified template arguments.
-    if (!IsFunctionParameterPack) {
+    if (!IsFunctionParameterPack && CurrentInstantiationScope) {
       if (NamedDecl *PartialPack 
                     = CurrentInstantiationScope->getPartiallySubstitutedPack()){
         unsigned PartialDepth, PartialIndex;
@@ -639,7 +639,7 @@ bool Sema::CheckParameterPacksForExpansion(
       return true;
     }
   }
-  
+
   return false;
 }
 
@@ -727,6 +727,7 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
   case TST_half:
   case TST_float:
   case TST_double:
+  case TST_float128:
   case TST_bool:
   case TST_decimal32:
   case TST_decimal64:
@@ -737,7 +738,10 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
   case TST_interface:
   case TST_class:
   case TST_auto:
+  case TST_auto_type:
   case TST_decltype_auto:
+#define GENERIC_IMAGE_TYPE(ImgType, Id) case TST_##ImgType##_t:
+#include "clang/Basic/OpenCLImageTypes.def"
   case TST_unknown_anytype:
   case TST_error:
     break;
@@ -749,6 +753,7 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
     case DeclaratorChunk::Pointer:
     case DeclaratorChunk::Reference:
     case DeclaratorChunk::Paren:
+    case DeclaratorChunk::Pipe:
     case DeclaratorChunk::BlockPointer:
       // These declarator chunks cannot contain any parameter packs.
       break;
@@ -931,12 +936,71 @@ Sema::getTemplateArgumentPackExpansionPattern(
   llvm_unreachable("Invalid TemplateArgument Kind!");
 }
 
+Optional<unsigned> Sema::getFullyPackExpandedSize(TemplateArgument Arg) {
+  assert(Arg.containsUnexpandedParameterPack());
+
+  // If this is a substituted pack, grab that pack. If not, we don't know
+  // the size yet.
+  // FIXME: We could find a size in more cases by looking for a substituted
+  // pack anywhere within this argument, but that's not necessary in the common
+  // case for 'sizeof...(A)' handling.
+  TemplateArgument Pack;
+  switch (Arg.getKind()) {
+  case TemplateArgument::Type:
+    if (auto *Subst = Arg.getAsType()->getAs<SubstTemplateTypeParmPackType>())
+      Pack = Subst->getArgumentPack();
+    else
+      return None;
+    break;
+
+  case TemplateArgument::Expression:
+    if (auto *Subst =
+            dyn_cast<SubstNonTypeTemplateParmPackExpr>(Arg.getAsExpr()))
+      Pack = Subst->getArgumentPack();
+    else if (auto *Subst = dyn_cast<FunctionParmPackExpr>(Arg.getAsExpr()))  {
+      for (ParmVarDecl *PD : *Subst)
+        if (PD->isParameterPack())
+          return None;
+      return Subst->getNumExpansions();
+    } else
+      return None;
+    break;
+
+  case TemplateArgument::Template:
+    if (SubstTemplateTemplateParmPackStorage *Subst =
+            Arg.getAsTemplate().getAsSubstTemplateTemplateParmPack())
+      Pack = Subst->getArgumentPack();
+    else
+      return None;
+    break;
+
+  case TemplateArgument::Declaration:
+  case TemplateArgument::NullPtr:
+  case TemplateArgument::TemplateExpansion:
+  case TemplateArgument::Integral:
+  case TemplateArgument::Pack:
+  case TemplateArgument::Null:
+    return None;
+  }
+
+  // Check that no argument in the pack is itself a pack expansion.
+  for (TemplateArgument Elem : Pack.pack_elements()) {
+    // There's no point recursing in this case; we would have already
+    // expanded this pack expansion into the enclosing pack if we could.
+    if (Elem.isPackExpansion())
+      return None;
+  }
+  return Pack.pack_size();
+}
+
 static void CheckFoldOperand(Sema &S, Expr *E) {
   if (!E)
     return;
 
   E = E->IgnoreImpCasts();
-  if (isa<BinaryOperator>(E) || isa<AbstractConditionalOperator>(E)) {
+  auto *OCE = dyn_cast<CXXOperatorCallExpr>(E);
+  if ((OCE && OCE->isInfixBinaryOp()) || isa<BinaryOperator>(E) ||
+      isa<AbstractConditionalOperator>(E)) {
     S.Diag(E->getExprLoc(), diag::err_fold_expression_bad_operand)
         << E->getSourceRange()
         << FixItHint::CreateInsertion(E->getLocStart(), "(")
@@ -994,10 +1058,6 @@ ExprResult Sema::BuildEmptyCXXFoldExpr(SourceLocation EllipsisLoc,
                                        BinaryOperatorKind Operator) {
   // [temp.variadic]p9:
   //   If N is zero for a unary fold-expression, the value of the expression is
-  //       *   ->  1
-  //       +   ->  int()
-  //       &   ->  -1
-  //       |   ->  int()
   //       &&  ->  true
   //       ||  ->  false
   //       ,   ->  void()
@@ -1007,17 +1067,6 @@ ExprResult Sema::BuildEmptyCXXFoldExpr(SourceLocation EllipsisLoc,
   // prevent the result from being a null pointer constant.
   QualType ScalarType;
   switch (Operator) {
-  case BO_Add:
-    ScalarType = Context.IntTy;
-    break;
-  case BO_Mul:
-    return ActOnIntegerConstant(EllipsisLoc, 1);
-  case BO_Or:
-    ScalarType = Context.IntTy;
-    break;
-  case BO_And:
-    return CreateBuiltinUnaryOp(EllipsisLoc, UO_Minus,
-                                ActOnIntegerConstant(EllipsisLoc, 1).get());
   case BO_LOr:
     return ActOnCXXBoolLiteral(EllipsisLoc, tok::kw_false);
   case BO_LAnd:

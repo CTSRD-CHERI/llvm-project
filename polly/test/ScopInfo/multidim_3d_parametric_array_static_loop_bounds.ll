@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
 
 ; void foo(long n, long m, long o, double A[n][m][o]) {
@@ -9,34 +9,23 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 ;         A[i][j][k] = 1.0;
 ; }
 
-; CHECK:   Assumed Context:
-; CHECK:   [m, o] -> {  :
-; CHECK-DAG:               m >= 150
-; CHECK-DAG:               and
-; CHECK-DAG:               o >= 200
-; CHECK:             }
-; CHECK:   p0: %m
-; CHECK:   p1: %o
-; CHECK:   Statements {
-; CHECK:     Stmt_for_k
-; CHECK:           Domain :=
-; CHECK:               [m, o] -> { Stmt_for_k[i0, i1, i2] :
-; CHECK-DAG:             i0 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i0 <= 99
-; CHECK-DAG:          and
-; CHECK-DAG:             i1 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i1 <= 149
-; CHECK-DAG:          and
-; CHECK-DAG:             i2 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i2 <= 199
-; CHECK:              }
-; CHECK:           Schedule :=
-; CHECK:               [m, o] -> { Stmt_for_k[i0, i1, i2] -> [i0, i1, i2] };
-; CHECK:           MustWriteAccess := [Reduction Type: NONE]
-; CHECK:               [m, o] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[i0, i1, i2] };
+; CHECK:      Assumed Context:
+; CHECK-NEXT: [m, o] -> {  : m >= 150 and o >= 200 }
+; CHECK:      Invalid Context:
+; CHECK-NEXT: [m, o] -> {  : 1 = 0 }
+;
+; CHECK:      p0: %m
+; CHECK-NEXT: p1: %o
+;
+; CHECK:      Statements {
+; CHECK-NEXT:     Stmt_for_k
+; CHECK-NEXT:         Domain :=
+; CHECK-NEXT:             [m, o] -> { Stmt_for_k[i0, i1, i2] : 0 <= i0 <= 99 and 0 <= i1 <= 149 and 0 <= i2 <= 199 };
+; CHECK-NEXT:         Schedule :=
+; CHECK-NEXT:             [m, o] -> { Stmt_for_k[i0, i1, i2] -> [i0, i1, i2] };
+; CHECK-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; CHECK-NEXT:             [m, o] -> { Stmt_for_k[i0, i1, i2] -> MemRef_A[i0, i1, i2] };
+; CHECK-NEXT: }
 
 define void @foo(i64 %n, i64 %m, i64 %o, double* %A) {
 entry:

@@ -16,9 +16,12 @@
 
 // This tests a conforming extension
 
+// UNSUPPORTED: c++98, c++03
+
 #include <forward_list>
 #include <cassert>
 
+#include "test_macros.h"
 #include "MoveOnly.h"
 #include "test_allocator.h"
 
@@ -31,7 +34,6 @@ struct some_alloc
 
 int main()
 {
-#if __has_feature(cxx_noexcept)
     {
         typedef std::forward_list<MoveOnly> C;
         static_assert(std::is_nothrow_move_assignable<C>::value, "");
@@ -42,11 +44,10 @@ int main()
     }
     {
         typedef std::forward_list<MoveOnly, other_allocator<MoveOnly>> C;
-        static_assert(std::is_nothrow_move_assignable<C>::value, "");
+        LIBCPP_STATIC_ASSERT(std::is_nothrow_move_assignable<C>::value, "");
     }
     {
         typedef std::forward_list<MoveOnly, some_alloc<MoveOnly>> C;
-        static_assert(!std::is_nothrow_move_assignable<C>::value, "");
+        LIBCPP_STATIC_ASSERT(!std::is_nothrow_move_assignable<C>::value, "");
     }
-#endif
 }

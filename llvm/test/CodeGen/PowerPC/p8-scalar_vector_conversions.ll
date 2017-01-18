@@ -5,6 +5,8 @@
 ; direct moves. This corresponds to the "insertelement" instruction. Subsequent
 ; to this, there will be a splat corresponding to the shufflevector.
 
+@d = common global double 0.000000e+00, align 8
+
 ; Function Attrs: nounwind
 define <16 x i8> @buildc(i8 zeroext %a) {
 entry:
@@ -59,9 +61,9 @@ entry:
   %splat.splatinsert = insertelement <2 x i64> undef, i64 %0, i32 0
   %splat.splat = shufflevector <2 x i64> %splat.splatinsert, <2 x i64> undef, <2 x i32> zeroinitializer
   ret <2 x i64> %splat.splat
-; FIXME-CHECK: mtvsrd {{[0-9]+}}, 3
-; FIXME-CHECK-LE: mtvsrd [[REG1:[0-9]+]], 3
-; FIXME-CHECK-LE: xxswapd {{[0-9]+}}, [[REG1]]
+; CHECK: mtvsrd {{[0-9]+}}, 3
+; CHECK-LE: mtvsrd [[REG1:[0-9]+]], 3
+; CHECK-LE: xxspltd 34, [[REG1]], 0
 }
 
 ; Function Attrs: nounwind
@@ -73,9 +75,25 @@ entry:
   %splat.splatinsert = insertelement <4 x float> undef, float %0, i32 0
   %splat.splat = shufflevector <4 x float> %splat.splatinsert, <4 x float> undef, <4 x i32> zeroinitializer
   ret <4 x float> %splat.splat
-; CHECK: xscvdpspn {{[0-9]+}}, 1
+; CHECK: xscvdpspn [[REG1:[0-9]+]], 1
+; CHECK: xxspltw 34, [[REG1]]
 ; CHECK-LE: xscvdpspn [[REG1:[0-9]+]], 1
-; CHECK-LE: xxsldwi {{[0-9]+}}, [[REG1]], [[REG1]], 1
+; CHECK-LE: xxspltw 34, [[REG1]]
+}
+
+; The optimization to remove stack operations from PPCDAGToDAGISel::Select
+; should still trigger for v2f64, producing an lxvdsx.
+; Function Attrs: nounwind
+define <2 x double> @buildd() #0 {
+entry:
+  %0 = load double, double* @d, align 8
+  %splat.splatinsert = insertelement <2 x double> undef, double %0, i32 0
+  %splat.splat = shufflevector <2 x double> %splat.splatinsert, <2 x double> undef, <2 x i32> zeroinitializer
+  ret <2 x double> %splat.splat
+; CHECK: ld [[REG1:[0-9]+]], .LC0@toc@l
+; CHECK: lxvdsx 34, 0, [[REG1]]
+; CHECK-LE: ld [[REG1:[0-9]+]], .LC0@toc@l
+; CHECK-LE: lxvdsx 34, 0, [[REG1]]
 }
 
 ; Function Attrs: nounwind
@@ -1019,7 +1037,7 @@ entry:
 ; CHECK-DAG: mfvsrd [[MOV:[0-9]+]],
 ; CHECK-DAG: li [[IMM3:[0-9]+]], 3
 ; CHECK-DAG: andc [[ANDC:[0-9]+]], [[IMM3]]
-; CHECK-DAG: rldicr [[SHL:[0-9]+]], [[ANDC]], 4, 60
+; CHECK-DAG: sldi [[SHL:[0-9]+]], [[ANDC]], 4
 ; CHECK-DAG: srd 3, [[MOV]], [[SHL]]
 ; CHECK-DAG: extsh 3, 3
 ; CHECK-LE-LABEL: @getvelss
@@ -1055,7 +1073,7 @@ entry:
 ; CHECK-DAG: mfvsrd [[MOV:[0-9]+]],
 ; CHECK-DAG: li [[IMM3:[0-9]+]], 3
 ; CHECK-DAG: andc [[ANDC:[0-9]+]], [[IMM3]]
-; CHECK-DAG: rldicr [[SHL:[0-9]+]], [[ANDC]], 4, 60
+; CHECK-DAG: sldi [[SHL:[0-9]+]], [[ANDC]], 4
 ; CHECK-DAG: srd 3, [[MOV]], [[SHL]]
 ; CHECK-DAG: clrldi   3, 3, 48
 ; CHECK-LE-LABEL: @getvelus
@@ -1085,7 +1103,7 @@ entry:
 ; CHECK: mfvsrwz 3, [[SHL]]
 ; CHECK: extsw 3, 3
 ; CHECK-LE-LABEL: @getsi0
-; CHECK-LE: xxsldwi [[SHL:[0-9]+]], 34, 34, 2
+; CHECK-LE: xxswapd [[SHL:[0-9]+]], 34
 ; CHECK-LE: mfvsrwz 3, [[SHL]]
 ; CHECK-LE: extsw 3, 3
 }
@@ -1133,7 +1151,7 @@ entry:
   %vecext = extractelement <4 x i32> %0, i32 3
   ret i32 %vecext
 ; CHECK-LABEL: @getsi3
-; CHECK: xxsldwi [[SHL:[0-9]+]], 34, 34, 2
+; CHECK: xxswapd [[SHL:[0-9]+]], 34
 ; CHECK: mfvsrwz 3, [[SHL]]
 ; CHECK: extsw 3, 3
 ; CHECK-LE-LABEL: @getsi3
@@ -1155,7 +1173,7 @@ entry:
 ; CHECK: mfvsrwz 3, [[SHL]]
 ; CHECK: clrldi   3, 3, 32
 ; CHECK-LE-LABEL: @getui0
-; CHECK-LE: xxsldwi [[SHL:[0-9]+]], 34, 34, 2
+; CHECK-LE: xxswapd [[SHL:[0-9]+]], 34
 ; CHECK-LE: mfvsrwz 3, [[SHL]]
 ; CHECK-LE: clrldi   3, 3, 32
 }
@@ -1203,7 +1221,7 @@ entry:
   %vecext = extractelement <4 x i32> %0, i32 3
   ret i32 %vecext
 ; CHECK-LABEL: @getui3
-; CHECK: xxsldwi [[SHL:[0-9]+]], 34, 34, 2
+; CHECK: xxswapd [[SHL:[0-9]+]], 34
 ; CHECK: mfvsrwz 3, [[SHL]]
 ; CHECK: clrldi   3, 3, 32
 ; CHECK-LE-LABEL: @getui3
@@ -1363,7 +1381,7 @@ entry:
 ; CHECK: xxsldwi [[SHL:[0-9]+]], 34, 34, 1
 ; CHECK: xscvspdpn 1, [[SHL]]
 ; CHECK-LE-LABEL: @getf1
-; CHECK-LE: xxsldwi [[SHL:[0-9]+]], 34, 34, 2
+; CHECK-LE: xxswapd [[SHL:[0-9]+]], 34
 ; CHECK-LE: xscvspdpn 1, [[SHL]]
 }
 
@@ -1376,7 +1394,7 @@ entry:
   %vecext = extractelement <4 x float> %0, i32 2
   ret float %vecext
 ; CHECK-LABEL: @getf2
-; CHECK: xxsldwi [[SHL:[0-9]+]], 34, 34, 2
+; CHECK: xxswapd [[SHL:[0-9]+]], 34
 ; CHECK: xscvspdpn 1, [[SHL]]
 ; CHECK-LE-LABEL: @getf2
 ; CHECK-LE: xxsldwi [[SHL:[0-9]+]], 34, 34, 1

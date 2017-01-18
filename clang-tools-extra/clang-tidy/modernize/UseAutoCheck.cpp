@@ -9,8 +9,8 @@
 
 #include "UseAutoCheck.h"
 #include "clang/AST/ASTContext.h"
-#include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
 
 using namespace clang;
 using namespace clang::ast_matchers;
@@ -23,6 +23,7 @@ namespace {
 
 const char IteratorDeclStmtId[] = "iterator_decl";
 const char DeclWithNewId[] = "decl_new";
+const char DeclWithCastId[] = "decl_cast";
 
 /// \brief Matches variable declarations that have explicit initializers that
 /// are not initializer lists.
@@ -41,6 +42,8 @@ AST_MATCHER(VarDecl, hasWrittenNonListInitializer) {
   const Expr *Init = Node.getAnyInitializer();
   if (!Init)
     return false;
+
+  Init = Init->IgnoreImplicit();
 
   // The following test is based on DeclPrinter::VisitVarDecl() to find if an
   // initializer is implicit or not.
@@ -111,20 +114,19 @@ AST_MATCHER(NamedDecl, hasStdIteratorName) {
 /// recordDecl(hasStdContainerName()) matches \c vector and \c forward_list
 /// but not \c my_vec.
 AST_MATCHER(NamedDecl, hasStdContainerName) {
-  static const char *const ContainerNames[] = {"array",         "deque",
-                                               "forward_list",  "list",
-                                               "vector",
+  static const char *const ContainerNames[] = {
+      "array",         "deque",
+      "forward_list",  "list",
+      "vector",
 
-                                               "map",           "multimap",
-                                               "set",           "multiset",
+      "map",           "multimap",
+      "set",           "multiset",
 
-                                               "unordered_map",
-                                               "unordered_multimap",
-                                               "unordered_set",
-                                               "unordered_multiset",
+      "unordered_map", "unordered_multimap",
+      "unordered_set", "unordered_multiset",
 
-                                               "queue",         "priority_queue",
-                                               "stack"};
+      "queue",         "priority_queue",
+      "stack"};
 
   for (const char *Name : ContainerNames) {
     if (hasName(Name).matches(Node, Finder, Builder))
@@ -206,27 +208,18 @@ TypeMatcher iteratorFromUsingDeclaration() {
 /// \brief This matcher returns declaration statements that contain variable
 /// declarations with written non-list initializer for standard iterators.
 StatementMatcher makeIteratorDeclMatcher() {
-  return declStmt(
-             // At least one varDecl should be a child of the declStmt to ensure
-             // it's a declaration list and avoid matching other declarations,
-             // e.g. using directives.
-             has(varDecl()),
-             unless(has(varDecl(anyOf(
-                 unless(hasWrittenNonListInitializer()), hasType(autoType()),
-                 unless(hasType(
-                     isSugarFor(anyOf(typedefIterator(), nestedIterator(),
-                                      iteratorFromUsingDeclaration())))))))))
+  return declStmt(unless(has(
+                      varDecl(anyOf(unless(hasWrittenNonListInitializer()),
+                                    unless(hasType(isSugarFor(anyOf(
+                                        typedefIterator(), nestedIterator(),
+                                        iteratorFromUsingDeclaration())))))))))
       .bind(IteratorDeclStmtId);
 }
 
 StatementMatcher makeDeclWithNewMatcher() {
   return declStmt(
-             has(varDecl()),
              unless(has(varDecl(anyOf(
                  unless(hasInitializer(ignoringParenImpCasts(cxxNewExpr()))),
-                 // Skip declarations that are already using auto.
-                 anyOf(hasType(autoType()),
-                       hasType(pointerType(pointee(autoType())))),
                  // FIXME: TypeLoc information is not reliable where CV
                  // qualifiers are concerned so these types can't be
                  // handled for now.
@@ -241,14 +234,41 @@ StatementMatcher makeDeclWithNewMatcher() {
       .bind(DeclWithNewId);
 }
 
+StatementMatcher makeDeclWithCastMatcher() {
+  return declStmt(
+             unless(has(varDecl(unless(hasInitializer(explicitCastExpr()))))))
+      .bind(DeclWithCastId);
+}
+
+StatementMatcher makeCombinedMatcher() {
+  return declStmt(
+      // At least one varDecl should be a child of the declStmt to ensure
+      // it's a declaration list and avoid matching other declarations,
+      // e.g. using directives.
+      has(varDecl()),
+      // Skip declarations that are already using auto.
+      unless(has(varDecl(anyOf(hasType(autoType()),
+                               hasType(pointerType(pointee(autoType()))),
+                               hasType(referenceType(pointee(autoType()))))))),
+      anyOf(makeIteratorDeclMatcher(), makeDeclWithNewMatcher(),
+            makeDeclWithCastMatcher()));
+}
+
 } // namespace
+
+UseAutoCheck::UseAutoCheck(StringRef Name, ClangTidyContext *Context)
+    : ClangTidyCheck(Name, Context),
+      RemoveStars(Options.get("RemoveStars", 0)) {}
+
+void UseAutoCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
+  Options.store(Opts, "RemoveStars", RemoveStars ? 1 : 0);
+}
 
 void UseAutoCheck::registerMatchers(MatchFinder *Finder) {
   // Only register the matchers for C++; the functionality currently does not
   // provide any benefit to other languages, despite being benign.
   if (getLangOpts().CPlusPlus) {
-    Finder->addMatcher(makeIteratorDeclMatcher(), this);
-    Finder->addMatcher(makeDeclWithNewMatcher(), this);
+    Finder->addMatcher(makeCombinedMatcher(), this);
   }
 }
 
@@ -303,7 +323,9 @@ void UseAutoCheck::replaceIterators(const DeclStmt *D, ASTContext *Context) {
       << FixItHint::CreateReplacement(Range, "auto");
 }
 
-void UseAutoCheck::replaceNew(const DeclStmt *D, ASTContext *Context) {
+void UseAutoCheck::replaceExpr(const DeclStmt *D, ASTContext *Context,
+                               std::function<QualType(const Expr *)> GetType,
+                               StringRef Message) {
   const auto *FirstDecl = dyn_cast<VarDecl>(*D->decl_begin());
   // Ensure that there is at least one VarDecl within the DeclStmt.
   if (!FirstDecl)
@@ -311,35 +333,39 @@ void UseAutoCheck::replaceNew(const DeclStmt *D, ASTContext *Context) {
 
   const QualType FirstDeclType = FirstDecl->getType().getCanonicalType();
 
-  std::vector<SourceLocation> StarLocations;
+  std::vector<FixItHint> StarRemovals;
   for (const auto *Dec : D->decls()) {
     const auto *V = cast<VarDecl>(Dec);
     // Ensure that every DeclStmt child is a VarDecl.
     if (!V)
       return;
 
-    const auto *NewExpr = cast<CXXNewExpr>(V->getInit()->IgnoreParenImpCasts());
-    // Ensure that every VarDecl has a CXXNewExpr initializer.
-    if (!NewExpr)
+    const auto *Expr = V->getInit()->IgnoreParenImpCasts();
+    // Ensure that every VarDecl has an initializer.
+    if (!Expr)
       return;
 
     // If VarDecl and Initializer have mismatching unqualified types.
-    if (!Context->hasSameUnqualifiedType(V->getType(), NewExpr->getType()))
+    if (!Context->hasSameUnqualifiedType(V->getType(), GetType(Expr)))
       return;
 
-    // Remove explicitly written '*' from declarations where there's more than
-    // one declaration in the declaration list.
-    if (Dec == *D->decl_begin())
-      continue;
-
-    // All subsequent declarations should match the same non-decorated type.
+    // All subsequent variables in this declaration should have the same
+    // canonical type.  For example, we don't want to use `auto` in
+    // `T *p = new T, **pp = new T*;`.
     if (FirstDeclType != V->getType().getCanonicalType())
       return;
 
-    auto Q = V->getTypeSourceInfo()->getTypeLoc().getAs<PointerTypeLoc>();
-    while (!Q.isNull()) {
-      StarLocations.push_back(Q.getStarLoc());
-      Q = Q.getNextTypeLoc().getAs<PointerTypeLoc>();
+    if (RemoveStars) {
+      // Remove explicitly written '*' from declarations where there's more than
+      // one declaration in the declaration list.
+      if (Dec == *D->decl_begin())
+        continue;
+
+      auto Q = V->getTypeSourceInfo()->getTypeLoc().getAs<PointerTypeLoc>();
+      while (!Q.isNull()) {
+        StarRemovals.push_back(FixItHint::CreateRemoval(Q.getStarLoc()));
+        Q = Q.getNextTypeLoc().getAs<PointerTypeLoc>();
+      }
     }
   }
 
@@ -347,19 +373,24 @@ void UseAutoCheck::replaceNew(const DeclStmt *D, ASTContext *Context) {
   // is the same as the initializer, just more CV-qualified. However, TypeLoc
   // information is not reliable where CV qualifiers are concerned so we can't
   // do anything about this case for now.
-  SourceRange Range(
-      FirstDecl->getTypeSourceInfo()->getTypeLoc().getSourceRange());
-  auto Diag = diag(Range.getBegin(), "use auto when initializing with new"
-                                     " to avoid duplicating the type name");
+  TypeLoc Loc = FirstDecl->getTypeSourceInfo()->getTypeLoc();
+  if (!RemoveStars) {
+    while (Loc.getTypeLocClass() == TypeLoc::Pointer ||
+           Loc.getTypeLocClass() == TypeLoc::Qualified)
+      Loc = Loc.getNextTypeLoc();
+  }
+  while (Loc.getTypeLocClass() == TypeLoc::LValueReference ||
+         Loc.getTypeLocClass() == TypeLoc::RValueReference ||
+         Loc.getTypeLocClass() == TypeLoc::Qualified) {
+    Loc = Loc.getNextTypeLoc();
+  }
+  SourceRange Range(Loc.getSourceRange());
+  auto Diag = diag(Range.getBegin(), Message);
 
   // Space after 'auto' to handle cases where the '*' in the pointer type is
   // next to the identifier. This avoids changing 'int *p' into 'autop'.
-  Diag << FixItHint::CreateReplacement(Range, "auto ");
-
-  // Remove '*' from declarations using the saved star locations.
-  for (const auto &Loc : StarLocations) {
-    Diag << FixItHint::CreateReplacement(Loc, "");
-  }
+  Diag << FixItHint::CreateReplacement(Range, RemoveStars ? "auto " : "auto")
+       << StarRemovals;
 }
 
 void UseAutoCheck::check(const MatchFinder::MatchResult &Result) {
@@ -367,7 +398,19 @@ void UseAutoCheck::check(const MatchFinder::MatchResult &Result) {
     replaceIterators(Decl, Result.Context);
   } else if (const auto *Decl =
                  Result.Nodes.getNodeAs<DeclStmt>(DeclWithNewId)) {
-    replaceNew(Decl, Result.Context);
+    replaceExpr(Decl, Result.Context,
+                [](const Expr *Expr) { return Expr->getType(); },
+                "use auto when initializing with new to avoid "
+                "duplicating the type name");
+  } else if (const auto *Decl =
+                 Result.Nodes.getNodeAs<DeclStmt>(DeclWithCastId)) {
+    replaceExpr(
+        Decl, Result.Context,
+        [](const Expr *Expr) {
+          return cast<ExplicitCastExpr>(Expr)->getTypeAsWritten();
+        },
+        "use auto when initializing with a cast to avoid duplicating the type "
+        "name");
   } else {
     llvm_unreachable("Bad Callback. No node provided.");
   }

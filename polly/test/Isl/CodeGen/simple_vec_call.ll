@@ -1,4 +1,5 @@
-; RUN: opt %loadPolly -basicaa -polly-codegen -polly-vectorizer=polly -S < %s | FileCheck %s
+; RUN: opt %loadPolly -basicaa -polly-codegen -polly-vectorizer=polly -S \
+; RUN: -polly-invariant-load-hoisting=true < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 
 @A = common global [1024 x float] zeroinitializer, align 16
@@ -28,9 +29,9 @@ return:
 ; CHECK: [[RES2:%[a-zA-Z0-9_]+]] = tail call float @foo(float %.load) [[NUW]]
 ; CHECK: [[RES3:%[a-zA-Z0-9_]+]] = tail call float @foo(float %.load) [[NUW]]
 ; CHECK: [[RES4:%[a-zA-Z0-9_]+]] = tail call float @foo(float %.load) [[NUW]]
-; CHECK: %4 = insertelement <4 x float> undef, float [[RES1]], i32 0
-; CHECK: %5 = insertelement <4 x float> %4, float [[RES2]], i32 1
-; CHECK: %6 = insertelement <4 x float> %5, float [[RES3]], i32 2
-; CHECK: %7 = insertelement <4 x float> %6, float [[RES4]], i32 3
-; CHECK:  store <4 x float> %7
+; CHECK: [[RES5:%[a-zA-Z0-9_]+]] = insertelement <4 x float> undef, float [[RES1]], i32 0
+; CHECK: [[RES6:%[a-zA-Z0-9_]+]] = insertelement <4 x float> [[RES5]], float [[RES2]], i32 1
+; CHECK: [[RES7:%[a-zA-Z0-9_]+]] = insertelement <4 x float> [[RES6]], float [[RES3]], i32 2
+; CHECK: [[RES8:%[a-zA-Z0-9_]+]] = insertelement <4 x float> [[RES7]], float [[RES4]], i32 3
+; CHECK:  store <4 x float> [[RES8]]
 ; CHECK: attributes [[NUW]] = { nounwind }

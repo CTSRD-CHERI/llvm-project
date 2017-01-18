@@ -47,6 +47,7 @@ static struct AsanDeactivatedFlags {
     FlagParser parser;
     RegisterActivationFlags(&parser, &f, &cf);
 
+    cf.SetDefaults();
     // Copy the current activation flags.
     allocator_options.CopyTo(&f, &cf);
     cf.malloc_context_size = malloc_context_size;
@@ -61,12 +62,7 @@ static struct AsanDeactivatedFlags {
       parser.ParseString(env);
     }
 
-    // Override from getprop asan.options.
-    char buf[100];
-    GetExtraActivationFlags(buf, sizeof(buf));
-    parser.ParseString(buf);
-
-    SetVerbosity(cf.verbosity);
+    InitializeCommonFlags(&cf);
 
     if (Verbosity()) ReportUnrecognizedFlags();
 

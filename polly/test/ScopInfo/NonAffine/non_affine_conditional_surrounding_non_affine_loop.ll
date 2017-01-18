@@ -1,11 +1,13 @@
 ; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine-branches \
+; RUN:     -polly-invariant-load-hoisting=true \
 ; RUN:     -polly-allow-nonaffine-loops=true \
 ; RUN:     -analyze < %s | FileCheck %s --check-prefix=INNERMOST
 ; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine \
-; RUN:     \
+; RUN:     -polly-invariant-load-hoisting=true \
 ; RUN:     -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true \
 ; RUN:     -analyze < %s | FileCheck %s --check-prefix=ALL
 ; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine \
+; RUN:     -polly-invariant-load-hoisting=true \
 ; RUN:     -polly-process-unprofitable=false \
 ; RUN:     -polly-allow-nonaffine-branches -polly-allow-nonaffine-loops=true \
 ; RUN:     -analyze < %s | FileCheck %s --check-prefix=PROFIT
@@ -13,8 +15,7 @@
 ; Negative test for INNERMOST.
 ; At the moment we will optimistically assume A[i] in the conditional before the inner
 ; loop might be invariant and expand the SCoP from the loop to include the conditional. However,
-; during SCoP generation we will realize that A[i] is in fact not invariant (in this region = the body
-; of the outer loop) and bail.
+; during SCoP generation we will realize that A[i] is only sometimes invariant.
 ;
 ; Possible solutions could be:
 ;   - Do not optimistically assume it to be invariant (as before this commit), however we would loose
@@ -22,34 +23,84 @@
 ;   - Reduce the size of the SCoP if an assumed invariant access is in fact not invariant instead of
 ;     rejecting the whole region.
 ;
-; INNERMOST-NOT:    Function: f
+; INNERMOST:         Function: f
+; INNERMOST-NEXT:    Region: %bb4---%bb3
+; INNERMOST-NEXT:    Max Loop Depth:  1
+; INNERMOST-NEXT:    Invariant Accesses: {
+; INNERMOST-NEXT:            ReadAccess :=	[Reduction Type: NONE] [Scalar: 0]
+; INNERMOST-NEXT:                [tmp6, p_1, p_2] -> { Stmt_bb4[] -> MemRef_A[p_2] };
+; INNERMOST-NEXT:            Execution Context: [tmp6, p_1, p_2] -> { : (tmp6 > 0 and p_2 >= p_1) or (tmp6 < 0 and p_2 >= p_1) or tmp6 = 0 }
+; INNERMOST-NEXT:    }
+; INNERMOST-NEXT:    Context:
+; INNERMOST-NEXT:    [tmp6, p_1, p_2] -> {  : -2147483648 <= tmp6 <= 2147483647 and -2199023255552 <= p_1 <= 2199023254528 and 0 <= p_2 <= 1024 }
+; INNERMOST-NEXT:    Assumed Context:
+; INNERMOST-NEXT:    [tmp6, p_1, p_2] -> {  :  }
+; INNERMOST-NEXT:    Invalid Context:
+; INNERMOST-NEXT:    [tmp6, p_1, p_2] -> {  : p_2 < p_1 and (tmp6 < 0 or tmp6 > 0) }
+; INNERMOST-NEXT:    p0: %tmp6
+; INNERMOST-NEXT:    p1: {0,+,(sext i32 %N to i64)}<%bb3>
+; INNERMOST-NEXT:    p2: {0,+,1}<nuw><nsw><%bb3>
+; INNERMOST-NEXT:    Arrays {
+; INNERMOST-NEXT:        i32 MemRef_A[*]; // Element size 4
+; INNERMOST-NEXT:        i64 MemRef_indvars_iv_next2; // Element size 8
+; INNERMOST-NEXT:    }
+; INNERMOST-NEXT:    Arrays (Bounds as pw_affs) {
+; INNERMOST-NEXT:        i32 MemRef_A[*]; // Element size 4
+; INNERMOST-NEXT:        i64 MemRef_indvars_iv_next2; // Element size 8
+; INNERMOST-NEXT:    }
+; INNERMOST-NEXT:    Alias Groups (0):
+; INNERMOST-NEXT:        n/a
+; INNERMOST-NEXT:    Statements {
+; INNERMOST-NEXT:    	Stmt_bb12
+; INNERMOST-NEXT:            Domain :=
+; INNERMOST-NEXT:                [tmp6, p_1, p_2] -> { Stmt_bb12[i0] : 0 <= i0 < p_1 and (tmp6 < 0 or tmp6 > 0) };
+; INNERMOST-NEXT:            Schedule :=
+; INNERMOST-NEXT:                [tmp6, p_1, p_2] -> { Stmt_bb12[i0] -> [0, i0] : tmp6 < 0 or tmp6 > 0 };
+; INNERMOST-NEXT:            ReadAccess :=	[Reduction Type: +] [Scalar: 0]
+; INNERMOST-NEXT:                [tmp6, p_1, p_2] -> { Stmt_bb12[i0] -> MemRef_A[i0] };
+; INNERMOST-NEXT:            MustWriteAccess :=	[Reduction Type: +] [Scalar: 0]
+; INNERMOST-NEXT:                [tmp6, p_1, p_2] -> { Stmt_bb12[i0] -> MemRef_A[i0] };
+; INNERMOST-NEXT:    	Stmt_bb19
+; INNERMOST-NEXT:            Domain :=
+; INNERMOST-NEXT:                [tmp6, p_1, p_2] -> { Stmt_bb19[] };
+; INNERMOST-NEXT:            Schedule :=
+; INNERMOST-NEXT:                [tmp6, p_1, p_2] -> { Stmt_bb19[] -> [1, 0] };
+; INNERMOST-NEXT:            MustWriteAccess :=	[Reduction Type: NONE] [Scalar: 1]
+; INNERMOST-NEXT:                [tmp6, p_1, p_2] -> { Stmt_bb19[] -> MemRef_indvars_iv_next2[] };
+; INNERMOST-NEXT:    }
 ;
-; ALL:    Function: f
-; ALL:    Region: %bb3---%bb20
-; ALL:    Max Loop Depth:  1
-; ALL:    Context:
-; ALL:    {  :  }
-; ALL:    Assumed Context:
-; ALL:    {  :  }
-; ALL:    Alias Groups (0):
-; ALL:        n/a
-; ALL:    Statements {
-; ALL:      Stmt_bb4__TO__bb18
-; ALL:            Domain :=
-; ALL:                { Stmt_bb4__TO__bb18[i0] :
-; ALL-DAG:               i0 >= 0
-; ALL-DAG:             and
-; ALL-DAG:               i0 <= 1023
-; ALL:                }
-; ALL:            Schedule :=
-; ALL:                { Stmt_bb4__TO__bb18[i0] -> [i0] };
-; ALL:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; ALL:                { Stmt_bb4__TO__bb18[i0] -> MemRef_A[i0] };
-; ALL:            ReadAccess := [Reduction Type: NONE] [Scalar: 0]
-; ALL:                { Stmt_bb4__TO__bb18[i0] -> MemRef_A[o0] : o0 <= 2199023254526 and o0 >= 0 };
-; ALL:            MayWriteAccess := [Reduction Type: NONE] [Scalar: 0]
-; ALL:                { Stmt_bb4__TO__bb18[i0] -> MemRef_A[o0] : o0 <= 2199023254526 and o0 >= 0 };
-; ALL:    }
+; ALL:      Function: f
+; ALL-NEXT: Region: %bb3---%bb20
+; ALL-NEXT: Max Loop Depth:  1
+; ALL-NEXT: Invariant Accesses: {
+; ALL-NEXT: }
+; ALL-NEXT: Context:
+; ALL-NEXT: {  :  }
+; ALL-NEXT: Assumed Context:
+; ALL-NEXT: {  :  }
+; ALL-NEXT: Invalid Context:
+; ALL-NEXT: {  : 1 = 0 }
+; ALL-NEXT: Arrays {
+; ALL-NEXT:     i32 MemRef_A[*]; // Element size 4
+; ALL-NEXT: }
+; ALL-NEXT: Arrays (Bounds as pw_affs) {
+; ALL-NEXT:     i32 MemRef_A[*]; // Element size 4
+; ALL-NEXT: }
+; ALL-NEXT: Alias Groups (0):
+; ALL-NEXT:     n/a
+; ALL-NEXT: Statements {
+; ALL-NEXT:     Stmt_bb4__TO__bb18
+; ALL-NEXT:         Domain :=
+; ALL-NEXT:             { Stmt_bb4__TO__bb18[i0] : 0 <= i0 <= 1023 };
+; ALL-NEXT:         Schedule :=
+; ALL-NEXT:             { Stmt_bb4__TO__bb18[i0] -> [i0] };
+; ALL-NEXT:         ReadAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; ALL-NEXT:             { Stmt_bb4__TO__bb18[i0] -> MemRef_A[i0] };
+; ALL-NEXT:         ReadAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; ALL-NEXT:             { Stmt_bb4__TO__bb18[i0] -> MemRef_A[o0] : 0 <= o0 <= 2199023254528 };
+; ALL-NEXT:         MayWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; ALL-NEXT:             { Stmt_bb4__TO__bb18[i0] -> MemRef_A[o0] : 0 <= o0 <= 2199023254528 };
+; ALL-NEXT: }
 ;
 ; PROFIT-NOT: Statements
 ;

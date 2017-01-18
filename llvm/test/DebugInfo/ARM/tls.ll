@@ -1,12 +1,12 @@
 ; RUN: llc -O0 -filetype=asm -mtriple=armv7-linux-gnuehabi < %s \
-; RUN:     | FileCheck %s --check-prefix=CHECK
+; RUN:     | FileCheck %s
 ; RUN: llc -O0 -filetype=asm -mtriple=armv7-linux-gnuehabi -emulated-tls < %s \
 ; RUN:     | FileCheck %s --check-prefix=EMU
 
 ; Generated with clang with source
 ; __thread int x;
 
-@x = thread_local global i32 0, align 4
+@x = thread_local global i32 0, align 4, !dbg !4
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!7, !8}
@@ -22,11 +22,11 @@
 ; TODO: Add expected output for -emulated-tls tests.
 ; EMU-NOT: .long x(tlsldo)
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: false, emissionKind: 0, file: !1, enums: !2, retainedTypes: !2, subprograms: !2, globals: !3, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: false, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !3, imports: !2)
 !1 = !DIFile(filename: "tls.c", directory: "/tmp")
 !2 = !{}
 !3 = !{!4}
-!4 = !DIGlobalVariable(name: "x", line: 1, isLocal: false, isDefinition: true, scope: null, file: !5, type: !6, variable: i32* @x)
+!4 = !DIGlobalVariable(name: "x", line: 1, isLocal: false, isDefinition: true, scope: null, file: !5, type: !6)
 !5 = !DIFile(filename: "tls.c", directory: "/tmp")
 !6 = !DIBasicType(tag: DW_TAG_base_type, name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
 !7 = !{i32 2, !"Dwarf Version", i32 4}

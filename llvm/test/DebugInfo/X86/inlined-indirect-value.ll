@@ -19,10 +19,10 @@
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 
-@x = common global i32 0, align 4
-@y = common global i32 0, align 4
+@x = common global i32 0, align 4, !dbg !10
+@y = common global i32 0, align 4, !dbg !12
 
-define i32 @main() {
+define i32 @main() !dbg !4 {
 ; CHECK: .loc 1 {{[89]}}
 ; CHECK-NOT: .loc
 ; CHECK: movl $1
@@ -49,19 +49,18 @@ select.end:                                       ; preds = %entry, %select.mid
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!13, !14}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "", isOptimized: true, runtimeVersion: 0, emissionKind: 1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !9, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, retainedTypes: !2, globals: !9, imports: !2)
 !1 = !DIFile(filename: "inline-break.c", directory: "/build/dir")
 !2 = !{}
-!3 = !{!4, !8}
-!4 = distinct !DISubprogram(name: "main", scope: !1, file: !1, line: 7, type: !5, isLocal: false, isDefinition: true, scopeLine: 7, isOptimized: true, function: i32 ()* @main, variables: !2)
+!4 = distinct !DISubprogram(name: "main", scope: !1, file: !1, line: 7, type: !5, isLocal: false, isDefinition: true, scopeLine: 7, isOptimized: true, unit: !0, variables: !2)
 !5 = !DISubroutineType(types: !6)
 !6 = !{!7}
 !7 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
-!8 = distinct !DISubprogram(name: "f1", scope: !1, file: !1, line: 3, type: !5, isLocal: true, isDefinition: true, scopeLine: 3, isOptimized: true, variables: !2)
+!8 = distinct !DISubprogram(name: "f1", scope: !1, file: !1, line: 3, type: !5, isLocal: true, isDefinition: true, scopeLine: 3, isOptimized: true, unit: !0, variables: !2)
 !9 = !{!10, !12}
-!10 = !DIGlobalVariable(name: "x", scope: !0, file: !1, line: 1, type: !11, isLocal: false, isDefinition: true, variable: i32* @x)
+!10 = !DIGlobalVariable(name: "x", scope: !0, file: !1, line: 1, type: !11, isLocal: false, isDefinition: true)
 !11 = !DIDerivedType(tag: DW_TAG_volatile_type, baseType: !7)
-!12 = !DIGlobalVariable(name: "y", scope: !0, file: !1, line: 2, type: !7, isLocal: false, isDefinition: true, variable: i32* @y)
+!12 = !DIGlobalVariable(name: "y", scope: !0, file: !1, line: 2, type: !7, isLocal: false, isDefinition: true)
 !13 = !{i32 2, !"Dwarf Version", i32 4}
 !14 = !{i32 2, !"Debug Info Version", i32 3}
 !16 = !DILocation(line: 4, column: 9, scope: !17, inlinedAt: !18)

@@ -15,13 +15,14 @@
 #include <forward_list>
 #include <cassert>
 
+#include "test_macros.h"
 #include "DefaultOnly.h"
 #include "min_allocator.h"
 
 template <class T, class Allocator>
 void check_allocator(unsigned n, Allocator const &alloc = Allocator())
 {
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     typedef std::forward_list<T, Allocator> C;
     C d(n, alloc);
     assert(d.get_allocator() == alloc);
@@ -45,7 +46,7 @@ int main()
 #endif
         assert(n == N);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef DefaultOnly T;
         typedef std::forward_list<T, min_allocator<T>> C;

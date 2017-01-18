@@ -18,7 +18,14 @@
 #include <unordered_set>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
+
+template <class C>
+void rehash_postcondition(const C& c, size_t n)
+{
+	assert(c.bucket_count() >= c.size() / c.max_load_factor() && c.bucket_count() >= n);
+}
 
 template <class C>
 void test(const C& c)
@@ -48,17 +55,20 @@ int main()
         test(c);
         assert(c.bucket_count() >= 7);
         c.rehash(3);
-        assert(c.bucket_count() == 7);
+        rehash_postcondition(c, 3);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         test(c);
         c.max_load_factor(2);
         c.rehash(3);
-        assert(c.bucket_count() == 3);
+        rehash_postcondition(c, 3);
+        LIBCPP_ASSERT(c.bucket_count() == 3);
         test(c);
         c.rehash(31);
-        assert(c.bucket_count() == 31);
+        rehash_postcondition(c, 31);
+        LIBCPP_ASSERT(c.bucket_count() == 31);
         test(c);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multiset<int, std::hash<int>,
                                       std::equal_to<int>, min_allocator<int>> C;
@@ -76,14 +86,17 @@ int main()
         test(c);
         assert(c.bucket_count() >= 7);
         c.rehash(3);
-        assert(c.bucket_count() == 7);
+        rehash_postcondition(c, 3);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         test(c);
         c.max_load_factor(2);
         c.rehash(3);
-        assert(c.bucket_count() == 3);
+        rehash_postcondition(c, 3);
+        LIBCPP_ASSERT(c.bucket_count() == 3);
         test(c);
         c.rehash(31);
-        assert(c.bucket_count() == 31);
+        rehash_postcondition(c, 31);
+        LIBCPP_ASSERT(c.bucket_count() == 31);
         test(c);
     }
 #endif

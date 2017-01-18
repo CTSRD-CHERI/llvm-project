@@ -1,8 +1,10 @@
+.. title:: clang-tidy - modernize-use-default
+
 modernize-use-default
 =====================
 
 This check replaces default bodies of special member functions with ``=
-default;``.  The explicitly defaulted function declarations enable more
+default;``. The explicitly defaulted function declarations enable more
 opportunities in optimization, because the compiler might treat explicitly
 defaulted functions as trivial.
 
@@ -23,5 +25,4 @@ defaulted functions as trivial.
   A::~A() = default;
 
 .. note::
-  Copy-constructor, copy-assignment operator, move-constructor and
-  move-assignment operator are not supported yet.
+  Move-constructor and move-assignment operator are not supported yet.

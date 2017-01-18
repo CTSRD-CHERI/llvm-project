@@ -59,14 +59,14 @@ public:
   static char ID;
   explicit DeadCodeElim() : ScopPass(ID) {}
 
-  /// @brief Remove dead iterations from the schedule of @p S.
+  /// Remove dead iterations from the schedule of @p S.
   bool runOnScop(Scop &S) override;
 
-  /// @brief Register all analyses and transformation required.
+  /// Register all analyses and transformation required.
   void getAnalysisUsage(AnalysisUsage &AU) const override;
 
 private:
-  /// @brief Return the set of live iterations.
+  /// Return the set of live iterations.
   ///
   /// The set of live iterations are all iterations that write to memory and for
   /// which we can not prove that there will be a later write that _must_
@@ -76,7 +76,7 @@ private:
   isl_union_set *getLiveOut(Scop &S);
   bool eliminateDeadCode(Scop &S, int PreciseSteps);
 };
-}
+} // namespace
 
 char DeadCodeElim::ID = 0;
 
@@ -90,8 +90,10 @@ char DeadCodeElim::ID = 0;
 // bounded write accesses can not overwrite all of the data-locations. As
 // this means may-writes are in the current situation always live, there is
 // no point in trying to remove them from the live-out set.
-isl_union_set *DeadCodeElim::getLiveOut(Scop &S) {
+__isl_give isl_union_set *DeadCodeElim::getLiveOut(Scop &S) {
   isl_union_map *Schedule = S.getSchedule();
+  assert(Schedule &&
+         "Schedules that contain extension nodes require special handling.");
   isl_union_map *WriteIterations = isl_union_map_reverse(S.getMustWrites());
   isl_union_map *WriteTimes =
       isl_union_map_apply_range(WriteIterations, isl_union_map_copy(Schedule));
@@ -115,7 +117,7 @@ isl_union_set *DeadCodeElim::getLiveOut(Scop &S) {
 /// simplifies the life set with an affine hull.
 bool DeadCodeElim::eliminateDeadCode(Scop &S, int PreciseSteps) {
   DependenceInfo &DI = getAnalysis<DependenceInfo>();
-  const Dependences &D = DI.getDependences();
+  const Dependences &D = DI.getDependences(Dependences::AL_Statement);
 
   if (!D.hasValidDependences())
     return false;
@@ -159,7 +161,7 @@ bool DeadCodeElim::eliminateDeadCode(Scop &S, int PreciseSteps) {
   // FIXME: We can probably avoid the recomputation of all dependences by
   // updating them explicitly.
   if (Changed)
-    DI.recomputeDependences();
+    DI.recomputeDependences(Dependences::AL_Statement);
   return Changed;
 }
 
@@ -177,6 +179,6 @@ Pass *polly::createDeadCodeElimPass() { return new DeadCodeElim(); }
 INITIALIZE_PASS_BEGIN(DeadCodeElim, "polly-dce",
                       "Polly - Remove dead iterations", false, false)
 INITIALIZE_PASS_DEPENDENCY(DependenceInfo)
-INITIALIZE_PASS_DEPENDENCY(ScopInfo)
+INITIALIZE_PASS_DEPENDENCY(ScopInfoRegionPass)
 INITIALIZE_PASS_END(DeadCodeElim, "polly-dce", "Polly - Remove dead iterations",
                     false, false)

@@ -1,7 +1,8 @@
-; RUN: llc -march=mipsel -disable-mips-delay-filler < %s | \
+; RUN: llc -march=mipsel -disable-mips-delay-filler -relocation-model=pic < %s | \
 ; RUN:  FileCheck %s -check-prefix=O32
 ; RUN: llc -march=mipsel -mips-load-target-from-got=false \
 ; RUN:  -disable-mips-delay-filler < %s | FileCheck %s -check-prefix=O32-LOADTGT
+; RUN:  -disable-mips-delay-filler -relocation-model=pic < %s | FileCheck %s -check-prefix=O32-LOADTGT
 ; XFAIL
 
 @gd1 = common global double 0.000000e+00, align 8
@@ -90,3 +91,17 @@ entry:
 }
 
 declare double @ceil(double)
+
+; Make sure that the MipsOptimizePICCall pass is run even for optnone functions,
+; as we have to make sure that jalr uses $t9 for PIC code in order to adhere to
+; the MIPS o32 ABI.
+define hidden double @foo(double %dbl) #0 {
+entry:
+  ; O32:      jalr $25
+  %res = call double @sqrt(double %dbl)
+  ret double %res
+}
+
+declare double @sqrt(double)
+
+attributes #0 = { noinline optnone }

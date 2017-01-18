@@ -13,6 +13,7 @@
 #include "Config.h"
 #include "SymbolTable.h"
 #include "lld/Core/LLVM.h"
+#include "lld/Core/Reproduce.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Object/COFF.h"
@@ -33,9 +34,6 @@ using llvm::COFF::MachineTypes;
 using llvm::COFF::WindowsSubsystem;
 using llvm::Optional;
 class InputFile;
-
-// Entry point of the COFF linker.
-void link(llvm::ArrayRef<const char *> Args);
 
 // Implemented in MarkLive.cpp.
 void markLive(const std::vector<Chunk *> &Chunks);
@@ -71,6 +69,8 @@ public:
 
   // Used by the resolver to parse .drectve section contents.
   void parseDirectives(StringRef S);
+
+  std::unique_ptr<CpioFile> Cpio; // for /linkrepro
 
 private:
   llvm::BumpPtrAllocator AllocAux;
@@ -136,6 +136,7 @@ void parseSubsystem(StringRef Arg, WindowsSubsystem *Sys, uint32_t *Major,
 
 void parseAlternateName(StringRef);
 void parseMerge(StringRef);
+void parseSection(StringRef);
 
 // Parses a string in the form of "EMBED[,=<integer>]|NO".
 void parseManifest(StringRef Arg);
@@ -162,8 +163,6 @@ void checkFailIfMismatch(StringRef Arg);
 // using cvtres.exe.
 std::unique_ptr<MemoryBuffer>
 convertResToCOFF(const std::vector<MemoryBufferRef> &MBs);
-
-void touchFile(StringRef Path);
 
 // Create enum with OPT_xxx values for each option in Options.td
 enum {

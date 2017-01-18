@@ -27,6 +27,8 @@ class PredicateControl {
   list<Predicate> EncodingPredicates = [];
   // Predicates for the GPR size such as IsGP64bit
   list<Predicate> GPRPredicates = [];
+  // Predicates for the PTR size such as IsPTR64bit
+  list<Predicate> PTRPredicates = [];
   // Predicates for the FGR size and layout such as IsFP64bit
   list<Predicate> FGRPredicates = [];
   // Predicates for the instruction group membership such as ISA's and ASE's
@@ -37,6 +39,7 @@ class PredicateControl {
   list<Predicate> AdditionalPredicates = [];
   list<Predicate> Predicates = !listconcat(EncodingPredicates,
                                            GPRPredicates,
+                                           PTRPredicates,
                                            FGRPredicates,
                                            InsnPredicates,
                                            HardFloatPredicate,
@@ -57,6 +60,10 @@ include "MipsSchedule.td"
 include "MipsInstrInfo.td"
 include "MipsCallingConv.td"
 
+// Avoid forward declaration issues.
+include "MipsScheduleP5600.td"
+include "MipsScheduleGeneric.td"
+
 def MipsInstrInfo : InstrInfo;
 
 //===----------------------------------------------------------------------===//
@@ -65,6 +72,8 @@ def MipsInstrInfo : InstrInfo;
 
 def FeatureNoABICalls  : SubtargetFeature<"noabicalls", "NoABICalls", "true",
                                 "Disable SVR4-style position-independent code">;
+def FeaturePTR64Bit    : SubtargetFeature<"ptr64", "IsPTR64bit", "true",
+                                "Pointers are 64-bit wide">;
 def FeatureGP64Bit     : SubtargetFeature<"gp64", "IsGP64bit", "true",
                                 "General Purpose Registers are 64-bit wide">;
 def FeatureFP64Bit     : SubtargetFeature<"fp64", "IsFP64bit", "true",
@@ -193,7 +202,7 @@ def ImplP5600 : SubtargetFeature<"p5600", "ProcImpl",
                                  "The P5600 Processor", [FeatureMips32r5]>;
 
 class Proc<string Name, list<SubtargetFeature> Features>
- : Processor<Name, MipsGenericItineraries, Features>;
+ : ProcessorModel<Name, MipsGenericModel, Features>;
 
 def : ProcessorModel<"beri", BeriModel,
                      [FeatureMips4]>;
@@ -222,7 +231,6 @@ def : ProcessorModel<"p5600", MipsP5600Model, [ImplP5600]>;
 
 def MipsAsmParser : AsmParser {
   let ShouldEmitMatchRegisterName = 0;
-  let MnemonicContainsDot = 1;
 }
 
 def MipsAsmParserVariant : AsmParserVariant {

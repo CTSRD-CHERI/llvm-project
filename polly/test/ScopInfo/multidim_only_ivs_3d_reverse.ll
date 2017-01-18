@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-scops -analyze -polly-delinearize < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
 
 ; This test case checks for array access functions where the order in which the
@@ -14,31 +14,23 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 ;         A[i][j][k] = 1.0;
 ; }
 
-; CHECK: Assumed Context:
-; CHECK:   {  :  }
-; CHECK: p0: %m
-; CHECK: p1: %o
-; CHECK: p2: %n
-; CHECK-NOT: p3
+; CHECK:      Assumed Context:
+; CHECK-NEXT: [m, o, n] -> {  :  }
 ;
-; CHECK: Domain
-; CHECK:  [m, o, n] -> { Stmt_for_j[i0, i1, i2] :
-; CHECK-DAG:             i0 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i0 <= -1 + n
-; CHECK-DAG:          and
-; CHECK-DAG:             i1 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i1 <= -1 + o
-; CHECK-DAG:          and
-; CHECK-DAG:             i2 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i2 <= -1 + m
-; CHECK:              }
-; CHECK: Schedule
-; CHECK:   [m, o, n] -> { Stmt_for_j[i0, i1, i2] -> [i0, i1, i2] };
-; CHECK: WriteAccess
-; CHECK:   [m, o, n] -> { Stmt_for_j[i0, i1, i2] -> MemRef_A[i0, i2, i1] };
+; CHECK:      p0: %m
+; CHECK-NEXT: p1: %o
+; CHECK-NEXT: p2: %n
+; CHECK-NOT:  p3
+;
+; CHECK:      Statements {
+; CHECK-NEXT:     Stmt_for_j
+; CHECK-NEXT:         Domain :=
+; CHECK-NEXT:             [m, o, n] -> { Stmt_for_j[i0, i1, i2] : 0 <= i0 < n and 0 <= i1 < o and 0 <= i2 < m };
+; CHECK-NEXT:         Schedule :=
+; CHECK-NEXT:             [m, o, n] -> { Stmt_for_j[i0, i1, i2] -> [i0, i1, i2] };
+; CHECK-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; CHECK-NEXT:             [m, o, n] -> { Stmt_for_j[i0, i1, i2] -> MemRef_A[i0, i2, i1] };
+; CHECK-NEXT: }
 
 define void @foo(i64 %n, i64 %m, i64 %o, double* %A) {
 entry:

@@ -15,7 +15,7 @@
 #include <list>
 #include <cassert>
 #include "test_iterators.h"
-#include "../../../stack_allocator.h"
+#include "test_allocator.h"
 #include "min_allocator.h"
 
 int main()
@@ -43,7 +43,8 @@ int main()
     }
     {
         int a[] = {0, 1, 2, 3};
-        std::list<int, stack_allocator<int, sizeof(a)/sizeof(a[0])> > l(input_iterator<const int*>(a),
+        // Add 2 for implementations that dynamically allocate a sentinel node and container proxy.
+        std::list<int, limited_allocator<int, sizeof(a)/sizeof(a[0]) + 2> > l(input_iterator<const int*>(a),
                          input_iterator<const int*>(a + sizeof(a)/sizeof(a[0])));
         assert(l.size() == sizeof(a)/sizeof(a[0]));
         assert(std::distance(l.begin(), l.end()) == sizeof(a)/sizeof(a[0]));
@@ -51,7 +52,7 @@ int main()
         for (std::list<int>::const_iterator i = l.begin(), e = l.end(); i != e; ++i, ++j)
             assert(*i == j);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         int a[] = {0, 1, 2, 3};
         std::list<int, min_allocator<int>> l(input_iterator<const int*>(a),

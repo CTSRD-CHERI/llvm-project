@@ -18,7 +18,6 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/ImmutableSet.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
@@ -171,7 +170,7 @@ private:
       case APSIntType::RTR_Below:
         // The entire range is outside the symbol's set of possible values.
         // If this is a conventionally-ordered range, the state is infeasible.
-        if (Lower < Upper)
+        if (Lower <= Upper)
           return false;
 
         // However, if the range wraps around, it spans all possible values.
@@ -222,7 +221,7 @@ private:
       case APSIntType::RTR_Above:
         // The entire range is outside the symbol's set of possible values.
         // If this is a conventionally-ordered range, the state is infeasible.
-        if (Lower < Upper)
+        if (Lower <= Upper)
           return false;
 
         // However, if the range wraps around, it spans all possible values.
@@ -399,17 +398,19 @@ ConditionTruthVal RangeConstraintManager::checkNull(ProgramStateRef State,
 ProgramStateRef
 RangeConstraintManager::removeDeadBindings(ProgramStateRef state,
                                            SymbolReaper& SymReaper) {
-
+  bool Changed = false;
   ConstraintRangeTy CR = state->get<ConstraintRange>();
-  ConstraintRangeTy::Factory& CRFactory = state->get_context<ConstraintRange>();
+  ConstraintRangeTy::Factory &CRFactory = state->get_context<ConstraintRange>();
 
   for (ConstraintRangeTy::iterator I = CR.begin(), E = CR.end(); I != E; ++I) {
     SymbolRef sym = I.getKey();
-    if (SymReaper.maybeDead(sym))
+    if (SymReaper.maybeDead(sym)) {
+      Changed = true;
       CR = CRFactory.remove(CR, sym);
+    }
   }
 
-  return state->set<ConstraintRange>(CR);
+  return Changed ? state->set<ConstraintRange>(CR) : state;
 }
 
 RangeSet

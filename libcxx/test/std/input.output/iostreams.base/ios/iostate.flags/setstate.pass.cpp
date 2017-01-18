@@ -17,6 +17,8 @@
 #include <streambuf>
 #include <cassert>
 
+#include "test_macros.h"
+
 struct testbuf : public std::streambuf {};
 
 int main()
@@ -25,9 +27,11 @@ int main()
         std::ios ios(0);
         ios.setstate(std::ios::goodbit);
         assert(ios.rdstate() == std::ios::badbit);
+#ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
             ios.exceptions(std::ios::badbit);
+            assert(false);
         }
         catch (...)
         {
@@ -50,6 +54,7 @@ int main()
         {
             assert(ios.rdstate() == (std::ios::eofbit | std::ios::badbit));
         }
+#endif
     }
     {
         testbuf sb;

@@ -10,6 +10,8 @@
 #ifndef LLVM_ADT_STRINGREF_H
 #define LLVM_ADT_STRINGREF_H
 
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/Compiler.h"
 #include <algorithm>
 #include <cassert>
@@ -31,6 +33,10 @@ namespace llvm {
 
   bool getAsSignedInteger(StringRef Str, unsigned Radix, long long &Result);
 
+  bool consumeUnsignedInteger(StringRef &Str, unsigned Radix,
+                              unsigned long long &Result);
+  bool consumeSignedInteger(StringRef &Str, unsigned Radix, long long &Result);
+
   /// StringRef - Represent a constant reference to a string, i.e. a character
   /// array and a length, which need not be null terminated.
   ///
@@ -38,7 +44,7 @@ namespace llvm {
   /// situations where the character data resides in some other buffer, whose
   /// lifetime extends past that of the StringRef. For this reason, it is not in
   /// general safe to store a StringRef.
-  class StringRef {
+  class LLVM_NODISCARD StringRef {
   public:
     typedef const char *iterator;
     typedef const char *const_iterator;
@@ -67,12 +73,14 @@ namespace llvm {
     /// Construct an empty string ref.
     /*implicit*/ StringRef() : Data(nullptr), Length(0) {}
 
+    /// Disable conversion from nullptr.  This prevents things like
+    /// if (S == nullptr)
+    StringRef(std::nullptr_t) = delete;
+
     /// Construct a string ref from a cstring.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
     /*implicit*/ StringRef(const char *Str)
-      : Data(Str) {
-        assert(Str && "StringRef cannot be built from a NULL argument");
-        Length = ::strlen(Str); // invoking strlen(NULL) is undefined behavior
-      }
+        : Data(Str), Length(Str ? ::strlen(Str) : 0) {}
 
     /// Construct a string ref from a pointer and length.
     LLVM_ATTRIBUTE_ALWAYS_INLINE
@@ -87,6 +95,10 @@ namespace llvm {
     /*implicit*/ StringRef(const std::string &Str)
       : Data(Str.data()), Length(Str.length()) {}
 
+    static StringRef withNullAsEmpty(const char *data) {
+      return StringRef(data ? data : "");
+    }
+
     /// @}
     /// @name Iterators
     /// @{
@@ -100,6 +112,9 @@ namespace llvm {
     }
     const unsigned char *bytes_end() const {
       return reinterpret_cast<const unsigned char *>(end());
+    }
+    iterator_range<const unsigned char *> bytes() const {
+      return make_range(bytes_begin(), bytes_end());
     }
 
     /// @}
@@ -133,6 +148,9 @@ namespace llvm {
 
     // copy - Allocate copy in Allocator and return StringRef to it.
     template <typename Allocator> StringRef copy(Allocator &A) const {
+      // Don't request a length 0 copy from the allocator.
+      if (empty())
+        return StringRef();
       char *S = A.template Allocate<char>(Length);
       std::copy(begin(), end(), S);
       return StringRef(S, Length);
@@ -208,6 +226,15 @@ namespace llvm {
       return Data[Index];
     }
 
+    /// Disallow accidental assignment from a temporary std::string.
+    ///
+    /// The declaration here is extra complicated so that `stringRef = {}`
+    /// and `stringRef = "abc"` continue to select the move assignment operator.
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value,
+                            StringRef>::type &
+    operator=(T &&Str) = delete;
+
     /// @}
     /// @name Type Conversions
     /// @{
@@ -259,11 +286,49 @@ namespace llvm {
       return npos;
     }
 
+    /// Search for the first character \p C in the string, ignoring case.
+    ///
+    /// \returns The index of the first occurrence of \p C, or npos if not
+    /// found.
+    size_t find_lower(char C, size_t From = 0) const;
+
+    /// Search for the first character satisfying the predicate \p F
+    ///
+    /// \returns The index of the first character satisfying \p F starting from
+    /// \p From, or npos if not found.
+    LLVM_NODISCARD
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    size_t find_if(function_ref<bool(char)> F, size_t From = 0) const {
+      StringRef S = drop_front(From);
+      while (!S.empty()) {
+        if (F(S.front()))
+          return size() - S.size();
+        S = S.drop_front();
+      }
+      return npos;
+    }
+
+    /// Search for the first character not satisfying the predicate \p F
+    ///
+    /// \returns The index of the first character not satisfying \p F starting
+    /// from \p From, or npos if not found.
+    LLVM_NODISCARD
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    size_t find_if_not(function_ref<bool(char)> F, size_t From = 0) const {
+      return find_if([F](char c) { return !F(c); }, From);
+    }
+
     /// Search for the first string \p Str in the string.
     ///
     /// \returns The index of the first occurrence of \p Str, or npos if not
     /// found.
     size_t find(StringRef Str, size_t From = 0) const;
+
+    /// Search for the first string \p Str in the string, ignoring case.
+    ///
+    /// \returns The index of the first occurrence of \p Str, or npos if not
+    /// found.
+    size_t find_lower(StringRef Str, size_t From = 0) const;
 
     /// Search for the last character \p C in the string.
     ///
@@ -280,11 +345,23 @@ namespace llvm {
       return npos;
     }
 
+    /// Search for the last character \p C in the string, ignoring case.
+    ///
+    /// \returns The index of the last occurrence of \p C, or npos if not
+    /// found.
+    size_t rfind_lower(char C, size_t From = npos) const;
+
     /// Search for the last string \p Str in the string.
     ///
     /// \returns The index of the last occurrence of \p Str, or npos if not
     /// found.
     size_t rfind(StringRef Str) const;
+
+    /// Search for the last string \p Str in the string, ignoring case.
+    ///
+    /// \returns The index of the last occurrence of \p Str, or npos if not
+    /// found.
+    size_t rfind_lower(StringRef Str) const;
 
     /// Find the first character in the string that is \p C, or npos if not
     /// found. Same as find.
@@ -329,6 +406,28 @@ namespace llvm {
     ///
     /// Complexity: O(size() + Chars.size())
     size_t find_last_not_of(StringRef Chars, size_t From = npos) const;
+
+    /// Return true if the given string is a substring of *this, and false
+    /// otherwise.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    bool contains(StringRef Other) const { return find(Other) != npos; }
+
+    /// Return true if the given character is contained in *this, and false
+    /// otherwise.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    bool contains(char C) const { return find_first_of(C) != npos; }
+
+    /// Return true if the given string is a substring of *this, and false
+    /// otherwise.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    bool contains_lower(StringRef Other) const {
+      return find_lower(Other) != npos;
+    }
+
+    /// Return true if the given character is contained in *this, and false
+    /// otherwise.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    bool contains_lower(char C) const { return find_lower(C) != npos; }
 
     /// @}
     /// @name Helpful Algorithms
@@ -379,6 +478,37 @@ namespace llvm {
       return false;
     }
 
+    /// Parse the current string as an integer of the specified radix.  If
+    /// \p Radix is specified as zero, this does radix autosensing using
+    /// extended C rules: 0 is octal, 0x is hex, 0b is binary.
+    ///
+    /// If the string does not begin with a number of the specified radix,
+    /// this returns true to signify the error. The string is considered
+    /// erroneous if empty or if it overflows T.
+    /// The portion of the string representing the discovered numeric value
+    /// is removed from the beginning of the string.
+    template <typename T>
+    typename std::enable_if<std::numeric_limits<T>::is_signed, bool>::type
+    consumeInteger(unsigned Radix, T &Result) {
+      long long LLVal;
+      if (consumeSignedInteger(*this, Radix, LLVal) ||
+          static_cast<long long>(static_cast<T>(LLVal)) != LLVal)
+        return true;
+      Result = LLVal;
+      return false;
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::numeric_limits<T>::is_signed, bool>::type
+    consumeInteger(unsigned Radix, T &Result) {
+      unsigned long long ULLVal;
+      if (consumeUnsignedInteger(*this, Radix, ULLVal) ||
+          static_cast<unsigned long long>(static_cast<T>(ULLVal)) != ULLVal)
+        return true;
+      Result = ULLVal;
+      return false;
+    }
+
     /// Parse the current string as an integer of the specified \p Radix, or of
     /// an autosensed radix if the \p Radix given is 0.  The current value in
     /// \p Result is discarded, and the storage is changed to be wide enough to
@@ -420,6 +550,40 @@ namespace llvm {
       return StringRef(Data + Start, std::min(N, Length - Start));
     }
 
+    /// Return a StringRef equal to 'this' but with only the first \p N
+    /// elements remaining.  If \p N is greater than the length of the
+    /// string, the entire string is returned.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    StringRef take_front(size_t N = 1) const {
+      if (N >= size())
+        return *this;
+      return drop_back(size() - N);
+    }
+
+    /// Return a StringRef equal to 'this' but with only the first \p N
+    /// elements remaining.  If \p N is greater than the length of the
+    /// string, the entire string is returned.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    StringRef take_back(size_t N = 1) const {
+      if (N >= size())
+        return *this;
+      return drop_front(size() - N);
+    }
+
+    /// Return the longest prefix of 'this' such that every character
+    /// in the prefix satisfies the given predicate.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    StringRef take_while(function_ref<bool(char)> F) const {
+      return substr(0, find_if_not(F));
+    }
+
+    /// Return the longest prefix of 'this' such that no character in
+    /// the prefix satisfies the given predicate.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    StringRef take_until(function_ref<bool(char)> F) const {
+      return substr(0, find_if(F));
+    }
+
     /// Return a StringRef equal to 'this' but with the first \p N elements
     /// dropped.
     LLVM_ATTRIBUTE_ALWAYS_INLINE
@@ -436,6 +600,44 @@ namespace llvm {
       return substr(0, size()-N);
     }
 
+    /// Return a StringRef equal to 'this', but with all characters satisfying
+    /// the given predicate dropped from the beginning of the string.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    StringRef drop_while(function_ref<bool(char)> F) const {
+      return substr(find_if_not(F));
+    }
+
+    /// Return a StringRef equal to 'this', but with all characters not
+    /// satisfying the given predicate dropped from the beginning of the string.
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    StringRef drop_until(function_ref<bool(char)> F) const {
+      return substr(find_if(F));
+    }
+
+    /// Returns true if this StringRef has the given prefix and removes that
+    /// prefix.
+    LLVM_NODISCARD
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    bool consume_front(StringRef Prefix) {
+      if (!startswith(Prefix))
+        return false;
+
+      *this = drop_front(Prefix.size());
+      return true;
+    }
+
+    /// Returns true if this StringRef has the given suffix and removes that
+    /// suffix.
+    LLVM_NODISCARD
+    LLVM_ATTRIBUTE_ALWAYS_INLINE
+    bool consume_back(StringRef Suffix) {
+      if (!endswith(Suffix))
+        return false;
+
+      *this = drop_back(Suffix.size());
+      return true;
+    }
+
     /// Return a reference to the substring from [Start, End).
     ///
     /// \param Start The index of the starting character in the substring; if
@@ -443,9 +645,10 @@ namespace llvm {
     /// empty substring will be returned.
     ///
     /// \param End The index following the last character to include in the
-    /// substring. If this is npos, or less than \p Start, or exceeds the
-    /// number of characters remaining in the string, the string suffix
-    /// (starting with \p Start) will be returned.
+    /// substring. If this is npos or exceeds the number of characters
+    /// remaining in the string, the string suffix (starting with \p Start)
+    /// will be returned. If this is less than \p Start, an empty string will
+    /// be returned.
     LLVM_ATTRIBUTE_ALWAYS_INLINE
     StringRef slice(size_t Start, size_t End) const {
       Start = std::min(Start, Length);
@@ -539,16 +742,34 @@ namespace llvm {
       return std::make_pair(slice(0, Idx), slice(Idx+1, npos));
     }
 
+    /// Return string with consecutive \p Char characters starting from the
+    /// the left removed.
+    StringRef ltrim(char Char) const {
+      return drop_front(std::min(Length, find_first_not_of(Char)));
+    }
+
     /// Return string with consecutive characters in \p Chars starting from
     /// the left removed.
     StringRef ltrim(StringRef Chars = " \t\n\v\f\r") const {
       return drop_front(std::min(Length, find_first_not_of(Chars)));
     }
 
+    /// Return string with consecutive \p Char characters starting from the
+    /// right removed.
+    StringRef rtrim(char Char) const {
+      return drop_back(Length - std::min(Length, find_last_not_of(Char) + 1));
+    }
+
     /// Return string with consecutive characters in \p Chars starting from
     /// the right removed.
     StringRef rtrim(StringRef Chars = " \t\n\v\f\r") const {
       return drop_back(Length - std::min(Length, find_last_not_of(Chars) + 1));
+    }
+
+    /// Return string with consecutive \p Char characters starting from the
+    /// left and right removed.
+    StringRef trim(char Char) const {
+      return ltrim(Char).rtrim(Char);
     }
 
     /// Return string with consecutive characters in \p Chars starting from

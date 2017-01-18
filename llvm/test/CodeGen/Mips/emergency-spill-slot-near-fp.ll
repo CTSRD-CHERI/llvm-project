@@ -1,5 +1,6 @@
 ; Check that register scavenging spill slot is close to $fp.
-; RUN: llc -march=mipsel -O0 -fast-isel=false < %s | FileCheck %s
+; RUN: llc -march=mipsel -O0 -relocation-model=pic < %s | FileCheck %s
+; XFAIL:
 ; CHERI-LLVM handles spill slots differently because of the small immediates in
 ; capability loads and stores, causing this test to fail.
 
@@ -33,4 +34,4 @@ entry:
   ret i32 0
 }
 
-attributes #0 = { noinline optnone "no-frame-pointer-elim"="true" }
+attributes #0 = { noinline "no-frame-pointer-elim"="true" }

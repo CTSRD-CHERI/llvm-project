@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "ContainerSizeEmptyCheck.h"
+#include "../utils/Matchers.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Lex/Lexer.h"
@@ -14,38 +15,7 @@
 
 using namespace clang::ast_matchers;
 
-static bool isContainer(llvm::StringRef ClassName) {
-  static const char *const ContainerNames[] = {
-    "std::array",
-    "std::deque",
-    "std::forward_list",
-    "std::list",
-    "std::map",
-    "std::multimap",
-    "std::multiset",
-    "std::priority_queue",
-    "std::queue",
-    "std::set",
-    "std::stack",
-    "std::unordered_map",
-    "std::unordered_multimap",
-    "std::unordered_multiset",
-    "std::unordered_set",
-    "std::vector"
-  };
-  return std::binary_search(std::begin(ContainerNames),
-                            std::end(ContainerNames), ClassName);
-}
-
 namespace clang {
-namespace {
-AST_MATCHER(QualType, isBoolType) { return Node->isBooleanType(); }
-
-AST_MATCHER(NamedDecl, stlContainer) {
-  return isContainer(Node.getQualifiedNameAsString());
-}
-} // namespace
-
 namespace tidy {
 namespace readability {
 
@@ -59,28 +29,36 @@ void ContainerSizeEmptyCheck::registerMatchers(MatchFinder *Finder) {
   if (!getLangOpts().CPlusPlus)
     return;
 
+  const auto ValidContainer = cxxRecordDecl(isSameOrDerivedFrom(
+      namedDecl(
+          has(cxxMethodDecl(
+                  isConst(), parameterCountIs(0), isPublic(), hasName("size"),
+                  returns(qualType(isInteger(), unless(booleanType()))))
+                  .bind("size")),
+          has(cxxMethodDecl(isConst(), parameterCountIs(0), isPublic(),
+                            hasName("empty"), returns(booleanType()))
+                  .bind("empty")))
+          .bind("container")));
+
   const auto WrongUse = anyOf(
-      hasParent(
-          binaryOperator(
-              anyOf(has(integerLiteral(equals(0))),
-                    allOf(anyOf(hasOperatorName("<"), hasOperatorName(">="),
-                                hasOperatorName(">"), hasOperatorName("<=")),
-                          hasEitherOperand(integerLiteral(equals(1))))))
-              .bind("SizeBinaryOp")),
+      hasParent(binaryOperator(
+                    matchers::isComparisonOperator(),
+                    hasEitherOperand(ignoringImpCasts(anyOf(
+                        integerLiteral(equals(1)), integerLiteral(equals(0))))))
+                    .bind("SizeBinaryOp")),
       hasParent(implicitCastExpr(
-          hasImplicitDestinationType(isBoolType()),
+          hasImplicitDestinationType(booleanType()),
           anyOf(
               hasParent(unaryOperator(hasOperatorName("!")).bind("NegOnSize")),
               anything()))),
-      hasParent(explicitCastExpr(hasDestinationType(isBoolType()))));
+      hasParent(explicitCastExpr(hasDestinationType(booleanType()))));
 
   Finder->addMatcher(
-      cxxMemberCallExpr(
-          on(expr(anyOf(hasType(namedDecl(stlContainer())),
-                        hasType(pointsTo(namedDecl(stlContainer()))),
-                        hasType(references(namedDecl(stlContainer())))))
-                 .bind("STLObject")),
-          callee(cxxMethodDecl(hasName("size"))), WrongUse)
+      cxxMemberCallExpr(on(expr(anyOf(hasType(ValidContainer),
+                                      hasType(pointsTo(ValidContainer)),
+                                      hasType(references(ValidContainer))))
+                               .bind("STLObject")),
+                        callee(cxxMethodDecl(hasName("size"))), WrongUse)
           .bind("SizeCallExpr"),
       this);
 }
@@ -91,9 +69,9 @@ void ContainerSizeEmptyCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *BinaryOp = Result.Nodes.getNodeAs<BinaryOperator>("SizeBinaryOp");
   const auto *E = Result.Nodes.getNodeAs<Expr>("STLObject");
   FixItHint Hint;
-  std::string ReplacementText = Lexer::getSourceText(
-      CharSourceRange::getTokenRange(E->getSourceRange()),
-      *Result.SourceManager, Result.Context->getLangOpts());
+  std::string ReplacementText =
+      Lexer::getSourceText(CharSourceRange::getTokenRange(E->getSourceRange()),
+                           *Result.SourceManager, getLangOpts());
   if (E->getType()->isPointerType())
     ReplacementText += "->empty()";
   else
@@ -101,29 +79,45 @@ void ContainerSizeEmptyCheck::check(const MatchFinder::MatchResult &Result) {
 
   if (BinaryOp) { // Determine the correct transformation.
     bool Negation = false;
-    const bool ContainerIsLHS = !llvm::isa<IntegerLiteral>(BinaryOp->getLHS());
+    const bool ContainerIsLHS =
+        !llvm::isa<IntegerLiteral>(BinaryOp->getLHS()->IgnoreImpCasts());
     const auto OpCode = BinaryOp->getOpcode();
     uint64_t Value = 0;
     if (ContainerIsLHS) {
-      if (const auto *Literal =
-              llvm::dyn_cast<IntegerLiteral>(BinaryOp->getRHS()))
+      if (const auto *Literal = llvm::dyn_cast<IntegerLiteral>(
+              BinaryOp->getRHS()->IgnoreImpCasts()))
         Value = Literal->getValue().getLimitedValue();
       else
         return;
     } else {
-      Value = llvm::dyn_cast<IntegerLiteral>(BinaryOp->getLHS())
-                  ->getValue()
-                  .getLimitedValue();
+      Value =
+          llvm::dyn_cast<IntegerLiteral>(BinaryOp->getLHS()->IgnoreImpCasts())
+              ->getValue()
+              .getLimitedValue();
     }
 
     // Constant that is not handled.
     if (Value > 1)
       return;
 
+    if (Value == 1 && (OpCode == BinaryOperatorKind::BO_EQ ||
+                       OpCode == BinaryOperatorKind::BO_NE))
+      return;
+
     // Always true, no warnings for that.
     if ((OpCode == BinaryOperatorKind::BO_GE && Value == 0 && ContainerIsLHS) ||
         (OpCode == BinaryOperatorKind::BO_LE && Value == 0 && !ContainerIsLHS))
       return;
+
+    // Do not warn for size > 1, 1 < size, size <= 1, 1 >= size.
+    if (Value == 1) {
+      if ((OpCode == BinaryOperatorKind::BO_GT && ContainerIsLHS) ||
+          (OpCode == BinaryOperatorKind::BO_LT && !ContainerIsLHS))
+        return;
+      if ((OpCode == BinaryOperatorKind::BO_LE && ContainerIsLHS) ||
+          (OpCode == BinaryOperatorKind::BO_GE && !ContainerIsLHS))
+        return;
+    }
 
     if (OpCode == BinaryOperatorKind::BO_NE && Value == 0)
       Negation = true;
@@ -152,10 +146,17 @@ void ContainerSizeEmptyCheck::check(const MatchFinder::MatchResult &Result) {
       Hint = FixItHint::CreateReplacement(MemberCall->getSourceRange(),
                                           "!" + ReplacementText);
   }
-  diag(MemberCall->getLocStart(),
-       "The 'empty' method should be used to check for emptiness instead "
-       "of 'size'.")
+
+  diag(MemberCall->getLocStart(), "the 'empty' method should be used to check "
+                                  "for emptiness instead of 'size'")
       << Hint;
+
+  const auto *Container = Result.Nodes.getNodeAs<NamedDecl>("container");
+  const auto *Empty = Result.Nodes.getNodeAs<FunctionDecl>("empty");
+
+  diag(Empty->getLocation(), "method %0::empty() defined here",
+       DiagnosticIDs::Note)
+      << Container;
 }
 
 } // namespace readability

@@ -21,7 +21,7 @@ set(libomp_suffix)
 libomp_append(libomp_suffix .deb DEBUG_BUILD)
 libomp_append(libomp_suffix .dia RELWITHDEBINFO_BUILD)
 libomp_append(libomp_suffix .min MINSIZEREL_BUILD)
-if(NOT "${LIBOMP_OMP_VERSION}" STREQUAL "41")
+if(NOT "${LIBOMP_OMP_VERSION}" STREQUAL "45")
   libomp_append(libomp_suffix .${LIBOMP_OMP_VERSION})
 endif()
 libomp_append(libomp_suffix .s1 LIBOMP_STATS)
@@ -64,9 +64,11 @@ endif()
 if(${LIBOMP_FORTRAN_MODULES})
   add_custom_command(TARGET libomp-mod POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${LIBOMP_EXPORTS_MOD_DIR}
-    COMMAND ${CMAKE_COMMAND} -E copy omp_lib.h ${LIBOMP_EXPORTS_CMN_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy omp_lib.mod ${LIBOMP_EXPORTS_MOD_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy omp_lib_kinds.mod ${LIBOMP_EXPORTS_MOD_DIR}
+  )
+  add_custom_command(TARGET omp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy omp_lib.h ${LIBOMP_EXPORTS_CMN_DIR}
   )
 endif()
 

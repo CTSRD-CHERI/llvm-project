@@ -191,6 +191,24 @@ read packet: OK
 This packet must be sent  _prior_ to sending a "A" packet.
 
 //----------------------------------------------------------------------
+// QListThreadsInStopReply
+//
+// BRIEF
+//  Enable the threads: and thread-pcs: data in the question-mark packet
+//  ("T packet") responses when the stub reports that a program has 
+//  stopped executing.
+//
+// PRIORITY TO IMPLEMENT
+//  Performance.  This is a performance benefit to lldb if the thread id's
+//  and thread pc values are provided to lldb in the T stop packet -- if
+//  they are not provided to lldb, lldb will likely need to send one to
+//  two packets per thread to fetch the data at every private stop.
+//----------------------------------------------------------------------
+
+send packet: QListThreadsInStopReply
+read packet: OK
+
+//----------------------------------------------------------------------
 // "qRegisterInfo<hex-reg-id>"
 //
 // BRIEF
@@ -201,6 +219,12 @@ This packet must be sent  _prior_ to sending a "A" packet.
 //  This means if new registers are ever added to a remote target, they
 //  will get picked up automatically, and allows registers to change
 //  depending on the actual CPU type that is used.
+//
+//  NB: As of summer 2015, lldb can get register information from the 
+//  "qXfer:features:read:target.xml" FSF gdb standard register packet
+//  where the stub provides register definitions in an XML file.
+//  If qXfer:features:read:target.xml is supported, qRegisterInfo does
+//  not need to be implemented.
 //----------------------------------------------------------------------
 
 With LLDB, for register information, remote GDB servers can add
@@ -864,6 +888,12 @@ tuples to return are:
     
     permissions:<permissions>;  // <permissions> is a string that contains one
                                 // or more of the characters from "rwx"
+
+    name:<name>; // <name> is a hex encoded string that contains the name of
+                 // the memory region mapped at the given address. In case of
+                 // regions backed by a file it have to be the absolute path of
+                 // the file while for anonymous regions it have to be the name
+                 // associated to the region if that is available.
                                 
     error:<ascii-byte-error-string>; // where <ascii-byte-error-string> is
                                      // a hex encoded string value that 
@@ -1024,6 +1054,28 @@ for this region.
 //----------------------------------------------------------------------
 
 //----------------------------------------------------------------------
+// jModulesInfo:[{"file":"...",triple:"..."}, ...]
+//
+// BRIEF
+//  Get information for a list of modules by given module path and
+//  architecture.
+//
+// RESPONSE
+//  A JSON array of dictionaries containing the following keys: uuid,
+//  triple, file_path, file_offset, file_size. The meaning of the fields
+//  is the same as in the qModuleInfo packet. The server signals the
+//  failure to retrieve the module info for a file by ommiting the
+//  corresponding array entry from the response. The server may also
+//  include entries the client did not ask for, if it has reason to
+//  the modules will be interesting to the client.
+//
+// PRIORITY TO IMPLEMENT
+//  Optional. If not implemented, qModuleInfo packet will be used, which
+//  may be slower if the target contains a large number of modules and
+//  the communication link has a non-negligible latency.
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
 // Stop reply packet extensions
 //
 // BRIEF
@@ -1116,6 +1168,32 @@ for this region.
 //                          reason that the thread stopped. This is only needed
 //                          if none of the key/value pairs are enough to
 //                          describe why something stopped.
+//
+//  "threads"     comma-sep-base16  A list of thread ids for all threads (including
+//                                  the thread that we're reporting as stopped) that
+//                                  are live in the process right now.  lldb may
+//                                  request that this be included in the T packet via
+//                                  the QListThreadsInStopReply packet earlier in
+//                                  the debug session.
+//                                  
+//                                  Example:
+//                                  threads:63387,633b2,63424,63462,63486;
+//
+//  "thread-pcs"  comma-sep-base16  A list of pc values for all threads that currently
+//                                  exist in the process, including the thread that
+//                                  this T packet is reporting as stopped.
+//                                  This key-value pair will only be emitted when the
+//                                  "threads" key is already included in the T packet.
+//                                  The pc values correspond to the threads reported
+//                                  in the "threads" list.  The number of pcs in the
+//                                  "thread-pcs" list will be the same as the number of 
+//                                  threads in the "threads" list.
+//                                  lldb may request that this be included in the T 
+//                                  packet via the QListThreadsInStopReply packet 
+//                                  earlier in the debug session.
+//                                  
+//                                  Example:
+//                                  thread-pcs:dec14,2cf872b0,2cf8681c,2d02d68c,2cf716a8;
 //
 // BEST PRACTICES:
 //  Since register values can be supplied with this packet, it is often useful
@@ -1458,6 +1536,28 @@ for this region.
 //  This packet asks the remote debug stub to send the details about libraries
 //  being added/removed from the process as a performance optimization.
 //
+//  There are three ways this packet can be used.  All three return a dictionary of
+//  binary images formatted the same way.
+//
+//  On MacOS X 10.11, iOS 9, tvOS 9, watchOS 2 and earlier, the packet is used like
+//       jGetLoadedDynamicLibrariesInfos:{"image_count":1,"image_list_address":140734800075128}
+//  where the image_list_address is an array of {void* load_addr, void* mod_date, void* pathname}
+//  in the inferior process memory (and image_count is the number of elements in this array).
+//  lldb is using information from the dyld_all_image_infos structure to make these requests to
+//  debugserver.  This use is not supported on macOS 10.12, iOS 10, tvOS 10, watchOS 3 or newer.
+//
+//  On macOS 10.12, iOS 10, tvOS 10, watchOS 3 and newer, there are two calls.  One requests information
+//  on all shared libraries:
+//       jGetLoadedDynamicLibrariesInfos:{"fetch_all_solibs":true}
+//  And the second requests information about a list of shared libraries, given their load addresses:
+//       jGetLoadedDynamicLibrariesInfos:{"solib_addresses":[8382824135,3258302053,830202858503]}
+//
+//  The second call is both a performance optimization (instead of having lldb read the mach-o header/load commands
+//  out of memory with generic read packets) but also adds additional information in the form of the 
+//  filename of the shared libraries (which is not available in the mach-o header/load commands.)
+//  
+//  An example using the Mac OS X 10.11 style call:
+//
 //  LLDB SENDS: jGetLoadedDynamicLibrariesInfos:{"image_count":1,"image_list_address":140734800075128}
 //  STUB REPLIES: ${"images":[{"load_address":4294967296,"mod_date":0,"pathname":"/tmp/a.out","uuid":"02CF262C-ED6F-3965-9E14-63538B465CFF","mach_header":{"magic":4277009103,"cputype":16777223,"cpusubtype":18446744071562067971,"filetype":2},"segments":{"name":"__PAGEZERO","vmaddr":0,"vmsize":4294967296,"fileoff":0,"filesize":0,"maxprot":0},{"name":"__TEXT","vmaddr":4294967296,"vmsize":4096,"fileoff":0,"filesize":4096,"maxprot":7},{"name":"__LINKEDIT","vmaddr":4294971392,"vmsize":4096,"fileoff":4096,"filesize":152,"maxprot":7}}]}#00
 //
@@ -1512,26 +1612,12 @@ for this region.
 // quite a bit to provide all the information that the DynamicLoaderMacOSX
 // would need to work correctly on this platform.
 //
-// On Mac OS X / iOS, when libraries are added or removed, a stub
-// function is called which lldb puts a breakpoint on.  The arguments
-// to the stub function include the number of libraries being added
-// or removed and the address where the list of libraries can be
-// found.  The information at this address is the load address of the
-// library, the filename, and the mod date of the library if available.
-// DynamicLoaderMacOSX then parses the load commands in the Mach-O header
-// at the load address before it can decide what action to take.
-//
-// The purpose of this packet is to eliminate all of the memory reads needed
-// to read the Mach-O header and load commands for these libraries.
-// On a typical GUI app, there can be a couple hundred shared libraries 
-// which results in megabytes of read packets.  That same information can
-// be returned in a couple hundred kilobytes in JSON format from the remote
-// debugserver.
-//
-//
 // PRIORITY TO IMPLEMENT
-//  Low.  If this packet is absent, lldb will read the Mach-O headers/load
-//  commands out of memory.
+//  On Mac OS X 10.11, iOS 9, tvOS 9, watchOS 2 and older: Low.  If this packet is absent, 
+//  lldb will read the Mach-O headers/load commands out of memory.
+//  On macOS 10.12, iOS 10, tvOS 10, watchOS 3 and newer: High.  If this packet is absent,
+//  lldb will not know anything about shared libraries in the inferior, or where the main
+//  executable loaded.
 //----------------------------------------------------------------------
 
 //----------------------------------------------------------------------
@@ -1597,3 +1683,49 @@ On MacOSX with debugserver, we expedite the frame pointer backchain for a thread
 (up to 256 entries) by reading 2 pointers worth of bytes at the frame pointer (for
 the previous FP and PC), and follow the backchain. Most backtraces on MacOSX and
 iOS now don't require us to read any memory!
+
+//----------------------------------------------------------------------
+// "jGetSharedCacheInfo"
+//
+// BRIEF
+//  This packet asks the remote debug stub to send the details about the inferior's
+//  shared cache. The shared cache is a collection of common libraries/frameworks that
+//  are mapped into every process at the same address on Darwin systems, and can be
+//  identified by a load address and UUID.
+//
+//
+//  LLDB SENDS: jGetSharedCacheInfo:{}
+//  STUB REPLIES: ${"shared_cache_base_address":140735683125248,"shared_cache_uuid":"DDB8D70C-C9A2-3561-B2C8-BE48A4F33F96","no_shared_cache":false,"shared_cache_private_cache":false]}#00
+//
+// PRIORITY TO IMPLEMENT
+//  Low.  When both lldb and the inferior process are running on the same computer, and lldb
+//  and the inferior process have the same shared cache, lldb may (as an optimization) read
+//  the shared cache out of its own memory instead of using gdb-remote read packets to read
+//  them from the inferior process.
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+// "qQueryGDBServer"
+//
+// BRIEF
+//  Ask the platform for the list of gdbservers we have to connect
+//
+// PRIORITY TO IMPLEMENT
+//  Low. The packet is required to support connecting to gdbserver started
+//  by the platform instance automatically.
+//----------------------------------------------------------------------
+
+If the remote platform automatically started one or more gdbserver instance (without
+lldb asking it) then it have to return the list of port number or socket name for
+each of them what can be used by lldb to connect to those instances.
+
+The data in this packet is a JSON array of JSON objects with the following keys:
+"port":        <the port number to connect>        (optional)
+"socket_name": <the name of the socket to connect> (optional)
+
+Example packet:
+[
+    { "port": 1234 },
+    { "port": 5432 },
+    { "socket_name": "foo" }
+]

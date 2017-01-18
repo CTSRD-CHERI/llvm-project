@@ -3,11 +3,11 @@
 target datalayout = "e-p:32:32:32-i1:8:32-i8:8:32-i16:16:32-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:32:64-v128:32:128-a0:0:32-n32"
 target triple = "thumbv7-apple-darwin10"
 
-@x1 = internal global i8 1, align 1
-@x2 = internal global i8 1, align 1
-@x3 = internal global i8 1, align 1
-@x4 = internal global i8 1, align 1
-@x5 = global i8 1, align 1
+@x1 = internal global i8 1, align 1, !dbg !13
+@x2 = internal global i8 1, align 1, !dbg !14
+@x3 = internal global i8 1, align 1, !dbg !15
+@x4 = internal global i8 1, align 1, !dbg !16
+@x5 = global i8 1, align 1, !dbg !17
 
 ; Check debug info output for merged global.
 ; DW_AT_location
@@ -21,14 +21,14 @@ target triple = "thumbv7-apple-darwin10"
 ; CHECK-NOT: DW_TAG
 ; CHECK:    DW_AT_name {{.*}} "x1"
 ; CHECK-NOT: {{DW_TAG|NULL}}
-; CHECK:    DW_AT_location [DW_FORM_exprloc]        (<0x8> 03 [[ADDR:.. .. .. ..]] 10 00 22  )
+; CHECK:    DW_AT_location [DW_FORM_exprloc]        (<0x5> 03 [[ADDR:.. .. .. ..]]   )
 ; CHECK: DW_TAG_variable
 ; CHECK-NOT: DW_TAG
 ; CHECK:    DW_AT_name {{.*}} "x2"
 ; CHECK-NOT: {{DW_TAG|NULL}}
-; CHECK:    DW_AT_location [DW_FORM_exprloc]        (<0x8> 03 [[ADDR]] 10 01 22  )
+; CHECK:    DW_AT_location [DW_FORM_exprloc]        (<0x7> 03 [[ADDR]] 23 01  )
 
-define zeroext i8 @get1(i8 zeroext %a) nounwind optsize {
+define zeroext i8 @get1(i8 zeroext %a) nounwind optsize !dbg !0 {
 entry:
   tail call void @llvm.dbg.value(metadata i8 %a, i64 0, metadata !10, metadata !DIExpression()), !dbg !30
   %0 = load i8, i8* @x1, align 4, !dbg !30
@@ -39,7 +39,7 @@ entry:
 
 declare void @llvm.dbg.value(metadata, i64, metadata, metadata) nounwind readnone
 
-define zeroext i8 @get2(i8 zeroext %a) nounwind optsize {
+define zeroext i8 @get2(i8 zeroext %a) nounwind optsize !dbg !6 {
 entry:
   tail call void @llvm.dbg.value(metadata i8 %a, i64 0, metadata !18, metadata !DIExpression()), !dbg !32
   %0 = load i8, i8* @x2, align 4, !dbg !32
@@ -48,7 +48,7 @@ entry:
   ret i8 %0, !dbg !33
 }
 
-define zeroext i8 @get3(i8 zeroext %a) nounwind optsize {
+define zeroext i8 @get3(i8 zeroext %a) nounwind optsize !dbg !7 {
 entry:
   tail call void @llvm.dbg.value(metadata i8 %a, i64 0, metadata !21, metadata !DIExpression()), !dbg !34
   %0 = load i8, i8* @x3, align 4, !dbg !34
@@ -57,7 +57,7 @@ entry:
   ret i8 %0, !dbg !35
 }
 
-define zeroext i8 @get4(i8 zeroext %a) nounwind optsize {
+define zeroext i8 @get4(i8 zeroext %a) nounwind optsize !dbg !8 {
 entry:
   tail call void @llvm.dbg.value(metadata i8 %a, i64 0, metadata !24, metadata !DIExpression()), !dbg !36
   %0 = load i8, i8* @x4, align 4, !dbg !36
@@ -66,7 +66,7 @@ entry:
   ret i8 %0, !dbg !37
 }
 
-define zeroext i8 @get5(i8 zeroext %a) nounwind optsize {
+define zeroext i8 @get5(i8 zeroext %a) nounwind optsize !dbg !9 {
 entry:
   tail call void @llvm.dbg.value(metadata i8 %a, i64 0, metadata !27, metadata !DIExpression()), !dbg !38
   %0 = load i8, i8* @x5, align 4, !dbg !38
@@ -78,24 +78,24 @@ entry:
 !llvm.dbg.cu = !{!2}
 !llvm.module.flags = !{!49}
 
-!0 = distinct !DISubprogram(name: "get1", linkageName: "get1", line: 4, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 4, file: !47, scope: !1, type: !3, function: i8 (i8)* @get1, variables: !42)
+!0 = distinct !DISubprogram(name: "get1", linkageName: "get1", line: 4, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !2, scopeLine: 4, file: !47, scope: !1, type: !3, variables: !42)
 !1 = !DIFile(filename: "foo.c", directory: "/tmp/")
-!2 = distinct !DICompileUnit(language: DW_LANG_C89, producer: "4.2.1 (Based on Apple Inc. build 5658) (LLVM build 2369.8)", isOptimized: true, emissionKind: 0, file: !47, enums: !48, retainedTypes: !48, subprograms: !40, globals: !41, imports:  !48)
+!2 = distinct !DICompileUnit(language: DW_LANG_C89, producer: "4.2.1 (Based on Apple Inc. build 5658) (LLVM build 2369.8)", isOptimized: true, emissionKind: FullDebug, file: !47, enums: !48, retainedTypes: !48, globals: !41, imports:  !48)
 !3 = !DISubroutineType(types: !4)
 !4 = !{!5, !5}
 !5 = !DIBasicType(tag: DW_TAG_base_type, name: "_Bool", size: 8, align: 8, encoding: DW_ATE_boolean)
-!6 = distinct !DISubprogram(name: "get2", linkageName: "get2", line: 7, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 7, file: !47, scope: !1, type: !3, function: i8 (i8)* @get2, variables: !43)
-!7 = distinct !DISubprogram(name: "get3", linkageName: "get3", line: 10, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 10, file: !47, scope: !1, type: !3, function: i8 (i8)* @get3, variables: !44)
-!8 = distinct !DISubprogram(name: "get4", linkageName: "get4", line: 13, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 13, file: !47, scope: !1, type: !3, function: i8 (i8)* @get4, variables: !45)
-!9 = distinct !DISubprogram(name: "get5", linkageName: "get5", line: 16, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 16, file: !47, scope: !1, type: !3, function: i8 (i8)* @get5, variables: !46)
+!6 = distinct !DISubprogram(name: "get2", linkageName: "get2", line: 7, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !2, scopeLine: 7, file: !47, scope: !1, type: !3, variables: !43)
+!7 = distinct !DISubprogram(name: "get3", linkageName: "get3", line: 10, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !2, scopeLine: 10, file: !47, scope: !1, type: !3, variables: !44)
+!8 = distinct !DISubprogram(name: "get4", linkageName: "get4", line: 13, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !2, scopeLine: 13, file: !47, scope: !1, type: !3, variables: !45)
+!9 = distinct !DISubprogram(name: "get5", linkageName: "get5", line: 16, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !2, scopeLine: 16, file: !47, scope: !1, type: !3, variables: !46)
 !10 = !DILocalVariable(name: "a", line: 4, arg: 1, scope: !0, file: !1, type: !5)
 !11 = !DILocalVariable(name: "b", line: 4, scope: !12, file: !1, type: !5)
 !12 = distinct !DILexicalBlock(line: 4, column: 0, file: !47, scope: !0)
-!13 = !DIGlobalVariable(name: "x1", line: 3, isLocal: true, isDefinition: true, scope: !1, file: !1, type: !5, variable: i8* @x1)
-!14 = !DIGlobalVariable(name: "x2", line: 6, isLocal: true, isDefinition: true, scope: !1, file: !1, type: !5, variable: i8* @x2)
-!15 = !DIGlobalVariable(name: "x3", line: 9, isLocal: true, isDefinition: true, scope: !1, file: !1, type: !5, variable: i8* @x3)
-!16 = !DIGlobalVariable(name: "x4", line: 12, isLocal: true, isDefinition: true, scope: !1, file: !1, type: !5, variable: i8* @x4)
-!17 = !DIGlobalVariable(name: "x5", line: 15, isLocal: false, isDefinition: true, scope: !1, file: !1, type: !5, variable: i8* @x5)
+!13 = !DIGlobalVariable(name: "x1", line: 3, isLocal: true, isDefinition: true, scope: !1, file: !1, type: !5)
+!14 = !DIGlobalVariable(name: "x2", line: 6, isLocal: true, isDefinition: true, scope: !1, file: !1, type: !5)
+!15 = !DIGlobalVariable(name: "x3", line: 9, isLocal: true, isDefinition: true, scope: !1, file: !1, type: !5)
+!16 = !DIGlobalVariable(name: "x4", line: 12, isLocal: true, isDefinition: true, scope: !1, file: !1, type: !5)
+!17 = !DIGlobalVariable(name: "x5", line: 15, isLocal: false, isDefinition: true, scope: !1, file: !1, type: !5)
 !18 = !DILocalVariable(name: "a", line: 7, arg: 1, scope: !6, file: !1, type: !5)
 !19 = !DILocalVariable(name: "b", line: 7, scope: !20, file: !1, type: !5)
 !20 = distinct !DILexicalBlock(line: 7, column: 0, file: !47, scope: !6)
@@ -118,7 +118,6 @@ entry:
 !37 = !DILocation(line: 13, scope: !26)
 !38 = !DILocation(line: 16, scope: !9)
 !39 = !DILocation(line: 16, scope: !29)
-!40 = !{!0, !6, !7, !8, !9}
 !41 = !{!13, !14, !15, !16, !17}
 !42 = !{!10, !11}
 !43 = !{!18, !19}

@@ -43,7 +43,8 @@ VerifyDiagnosticConsumer::~VerifyDiagnosticConsumer() {
   assert(!CurrentPreprocessor && "CurrentPreprocessor should be invalid!");
   SrcManager = nullptr;
   CheckDiagnostics();
-  Diags.takeClient().release();
+  assert(!Diags.ownsClient() &&
+         "The VerifyDiagnosticConsumer takes over ownership of the client!");
 }
 
 #ifndef NDEBUG
@@ -186,9 +187,7 @@ public:
       Regex(RegexStr) { }
 
   bool isValid(std::string &Error) override {
-    if (Regex.isValid(Error))
-      return true;
-    return false;
+    return Regex.isValid(Error);
   }
 
   bool match(StringRef S) override {

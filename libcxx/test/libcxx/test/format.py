@@ -1,3 +1,12 @@
+#===----------------------------------------------------------------------===##
+#
+#                     The LLVM Compiler Infrastructure
+#
+# This file is dual licensed under the MIT and the University of Illinois Open
+# Source Licenses. See LICENSE.TXT for details.
+#
+#===----------------------------------------------------------------------===##
+
 import errno
 import os
 import time
@@ -28,6 +37,11 @@ class LibcxxTestFormat(object):
         self.execute_external = execute_external
         self.executor = executor
         self.exec_env = dict(exec_env)
+        self.compile_env = dict(os.environ)
+        # 'CCACHE_CPP2' prevents ccache from stripping comments while
+        # preprocessing. This is required to prevent stripping of '-verify'
+        # comments.
+        self.compile_env['CCACHE_CPP2'] = '1'
 
     # TODO: Move this into lit's FileBasedTest
     def getTestsInDirectory(self, testSuite, path_in_suite,
@@ -56,27 +70,33 @@ class LibcxxTestFormat(object):
 
     def _execute(self, test, lit_config):
         name = test.path_in_suite[-1]
-        is_sh_test = name.endswith('.sh.cpp')
+        name_root, name_ext = os.path.splitext(name)
+        is_sh_test = name_root.endswith('.sh')
         is_pass_test = name.endswith('.pass.cpp')
         is_fail_test = name.endswith('.fail.cpp')
+        assert is_sh_test or name_ext == '.cpp', 'non-cpp file must be sh test'
 
         if test.config.unsupported:
             return (lit.Test.UNSUPPORTED,
                     "A lit.local.cfg marked this unsupported")
 
-        res = lit.TestRunner.parseIntegratedTestScript(
+        script = lit.TestRunner.parseIntegratedTestScript(
             test, require_script=is_sh_test)
         # Check if a result for the test was returned. If so return that
         # result.
-        if isinstance(res, lit.Test.Result):
-            return res
+        if isinstance(script, lit.Test.Result):
+            return script
         if lit_config.noExecute:
             return lit.Test.Result(lit.Test.PASS)
-        # res is not an instance of lit.test.Result. Expand res into its parts.
-        script, tmpBase, execDir = res
+
         # Check that we don't have run lines on tests that don't support them.
         if not is_sh_test and len(script) != 0:
             lit_config.fatal('Unsupported RUN line found in test %s' % name)
+
+        tmpDir, tmpBase = lit.TestRunner.getTempPaths(test)
+        substitutions = lit.TestRunner.getDefaultSubstitutions(test, tmpDir,
+                                                               tmpBase)
+        script = lit.TestRunner.applySubstitutions(script, substitutions)
 
         # Dispatch the test based on its suffix.
         if is_sh_test:
@@ -86,11 +106,11 @@ class LibcxxTestFormat(object):
                 return lit.Test.UNSUPPORTED, 'ShTest format not yet supported'
             return lit.TestRunner._runShTest(test, lit_config,
                                              self.execute_external, script,
-                                             tmpBase, execDir)
+                                             tmpBase)
         elif is_fail_test:
             return self._evaluate_fail_test(test)
         elif is_pass_test:
-            return self._evaluate_pass_test(test, tmpBase, execDir, lit_config)
+            return self._evaluate_pass_test(test, tmpBase, lit_config)
         else:
             # No other test type is supported
             assert False
@@ -98,8 +118,12 @@ class LibcxxTestFormat(object):
     def _clean(self, exec_path):  # pylint: disable=no-self-use
         libcxx.util.cleanFile(exec_path)
 
-    def _evaluate_pass_test(self, test, tmpBase, execDir, lit_config):
+    def _evaluate_pass_test(self, test, tmpBase, lit_config):
+        execDir = os.path.dirname(test.getExecPath())
         source_path = test.getSourcePath()
+        with open(source_path, 'r') as f:
+            contents = f.read()
+        is_flaky = 'FLAKY_TEST' in contents
         exec_path = tmpBase + '.exe'
         object_path = tmpBase + '.o'
         # Create the output directory if it does not already exist.
@@ -108,7 +132,7 @@ class LibcxxTestFormat(object):
             # Compile the test
             cmd, out, err, rc = self.cxx.compileLinkTwoSteps(
                 source_path, out=exec_path, object_file=object_path,
-                cwd=execDir)
+                cwd=execDir, env=self.compile_env)
             compile_cmd = cmd
             if rc != 0:
                 report = libcxx.util.makeReport(cmd, out, err, rc)
@@ -125,14 +149,21 @@ class LibcxxTestFormat(object):
             # should add a `// FILE-DEP: foo.dat` to each test to track this.
             data_files = [os.path.join(local_cwd, f)
                           for f in os.listdir(local_cwd) if f.endswith('.dat')]
-            cmd, out, err, rc = self.executor.run(exec_path, [exec_path],
-                                                  local_cwd, data_files, env)
-            if rc != 0:
-                report = libcxx.util.makeReport(cmd, out, err, rc)
-                report = "Compiled With: %s\n%s" % (compile_cmd, report)
-                report += "Compiled test failed unexpectedly!"
-                return lit.Test.FAIL, report
-            return lit.Test.PASS, ''
+            max_retry = 3 if is_flaky else 1
+            for retry_count in range(max_retry):
+                cmd, out, err, rc = self.executor.run(exec_path, [exec_path],
+                                                      local_cwd, data_files,
+                                                      env)
+                if rc == 0:
+                    res = lit.Test.PASS if retry_count == 0 else lit.Test.FLAKYPASS
+                    return res, ''
+                elif rc != 0 and retry_count + 1 == max_retry:
+                    report = libcxx.util.makeReport(cmd, out, err, rc)
+                    report = "Compiled With: %s\n%s" % (compile_cmd, report)
+                    report += "Compiled test failed unexpectedly!"
+                    return lit.Test.FAIL, report
+
+            assert False # Unreachable
         finally:
             # Note that cleanup of exec_file happens in `_clean()`. If you
             # override this, cleanup is your reponsibility.
@@ -147,12 +178,22 @@ class LibcxxTestFormat(object):
                        'expected-error', 'expected-no-diagnostics']
         use_verify = self.use_verify_for_fail and \
                      any([tag in contents for tag in verify_tags])
+        # FIXME(EricWF): GCC 5 does not evaluate static assertions that
+        # are dependant on a template parameter when '-fsyntax-only' is passed.
+        # This is fixed in GCC 6. However for now we only pass "-fsyntax-only"
+        # when using Clang.
         extra_flags = []
+        if self.cxx.type != 'gcc':
+            extra_flags += ['-fsyntax-only']
         if use_verify:
             extra_flags += ['-Xclang', '-verify',
-                            '-Xclang', '-verify-ignore-unexpected=note']
+                            '-Xclang', '-verify-ignore-unexpected=note',
+                            '-ferror-limit=1024']
         cmd, out, err, rc = self.cxx.compile(source_path, out=os.devnull,
-                                             flags=extra_flags)
+                                             flags=extra_flags,
+                                             disable_ccache=True,
+                                             enable_warnings=False,
+                                             env=self.compile_env)
         expected_rc = 0 if use_verify else 1
         if rc == expected_rc:
             return lit.Test.PASS, ''

@@ -33,9 +33,11 @@ void operator delete(void* p, const std::nothrow_t&) throw()
     std::free(p);
 }
 
+int* volatile x;
+
 int main()
 {
-    int *x = new int(42);
+    x = new int(42);
     assert(0 == delete_called);
     assert(0 == delete_nothrow_called);
 

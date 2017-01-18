@@ -24,13 +24,13 @@ int main()
     std::list<int, test_allocator<int>> d({3, 4, 5, 6}, test_allocator<int>(3));
     assert(d.get_allocator() == test_allocator<int>(3));
     assert(d.size() == 4);
-    std::list<int>::iterator i = d.begin();
+    std::list<int, test_allocator<int>>::iterator i = d.begin();
     assert(*i++ == 3);
     assert(*i++ == 4);
     assert(*i++ == 5);
     assert(*i++ == 6);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     std::list<int, min_allocator<int>> d({3, 4, 5, 6}, min_allocator<int>());
     assert(d.get_allocator() == min_allocator<int>());

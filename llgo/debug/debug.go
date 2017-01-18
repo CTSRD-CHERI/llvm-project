@@ -136,8 +136,8 @@ func (d *DIBuilder) PushFunction(fnptr llvm.Value, sig *types.Signature, pos tok
 		Line:         line,
 		Type:         d.DIType(sig),
 		IsDefinition: true,
-		Function:     fnptr,
 	})
+	fnptr.SetSubprogram(d.fn)
 }
 
 // PopFunction pops the previously pushed function off the scope stack.
@@ -183,7 +183,7 @@ func (d *DIBuilder) Finalize() {
 		llvm.GlobalContext().MDNode([]llvm.Metadata{
 			llvm.ConstInt(llvm.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
 			llvm.GlobalContext().MDString("Debug Info Version"),
-			llvm.ConstInt(llvm.Int32Type(), 2, false).ConstantAsMetadata(),
+			llvm.ConstInt(llvm.Int32Type(), 3, false).ConstantAsMetadata(),
 		}),
 	)
 	d.builder.Finalize()

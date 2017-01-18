@@ -20,17 +20,22 @@ endif()
 add_custom_command(
   OUTPUT  kmp_i18n_id.inc
   COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/message-converter.pl --os=${LIBOMP_PERL_SCRIPT_OS}
-    --arch=${LIBOMP_ARCH} --prefix=kmp_i18n --enum=kmp_i18n_id.inc ${LIBOMP_SRC_DIR}/i18n/en_US.txt
+    --prefix=kmp_i18n --enum=kmp_i18n_id.inc ${LIBOMP_SRC_DIR}/i18n/en_US.txt
   DEPENDS ${LIBOMP_SRC_DIR}/i18n/en_US.txt ${LIBOMP_TOOLS_DIR}/message-converter.pl
 )
 add_custom_command(
   OUTPUT  kmp_i18n_default.inc
   COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/message-converter.pl --os=${LIBOMP_PERL_SCRIPT_OS}
-    --arch=${LIBOMP_ARCH} --prefix=kmp_i18n --default=kmp_i18n_default.inc ${LIBOMP_SRC_DIR}/i18n/en_US.txt
+    --prefix=kmp_i18n --default=kmp_i18n_default.inc ${LIBOMP_SRC_DIR}/i18n/en_US.txt
   DEPENDS ${LIBOMP_SRC_DIR}/i18n/en_US.txt ${LIBOMP_TOOLS_DIR}/message-converter.pl
 )
 
 # Set the -D definitions for all sources
+# UNICODE and _UNICODE are set in LLVM's CMake system.  They affect the
+# ittnotify code and should only be set when compiling ittnotify_static.c
+# on Windows (done below).
+# TODO: Fix the UNICODE usage in ittnotify code for Windows.
+remove_definitions(-DUNICODE -D_UNICODE)
 libomp_get_definitions_flags(LIBOMP_CONFIGURED_DEFINITIONS_FLAGS)
 add_definitions(${LIBOMP_CONFIGURED_DEFINITIONS_FLAGS})
 
@@ -42,6 +47,9 @@ include_directories(
   ${LIBOMP_INC_DIR}
   ${LIBOMP_SRC_DIR}/thirdparty/ittnotify
 )
+if(${LIBOMP_USE_HWLOC})
+  include_directories(${LIBOMP_HWLOC_INSTALL_DIR}/include)
+endif()
 
 # Getting correct source files to build library
 set(LIBOMP_CFILES)
@@ -105,6 +113,8 @@ libomp_append(LIBOMP_CFILES kmp_ftn_extra.c)
 libomp_append(LIBOMP_CFILES kmp_version.c)
 libomp_append(LIBOMP_CFILES ompt-general.c IF_TRUE LIBOMP_OMPT_SUPPORT)
 
+libomp_append(LIBOMP_CFILES tsan_annotations.c IF_TRUE LIBOMP_TSAN_SUPPORT)
+
 set(LIBOMP_SOURCE_FILES ${LIBOMP_CFILES} ${LIBOMP_CXXFILES} ${LIBOMP_ASMFILES})
 # For Windows, there is a resource file (.rc -> .res) that is also compiled
 libomp_append(LIBOMP_SOURCE_FILES libomp.rc WIN32)
@@ -133,7 +143,9 @@ endif()
 
 # Add the OpenMP library
 libomp_get_ldflags(LIBOMP_CONFIGURED_LDFLAGS)
-add_library(omp SHARED ${LIBOMP_SOURCE_FILES})
+
+add_library(omp ${LIBOMP_LIBRARY_KIND} ${LIBOMP_SOURCE_FILES})
+
 set_target_properties(omp PROPERTIES
   PREFIX "" SUFFIX "" OUTPUT_NAME "${LIBOMP_LIB_FILE}"
   LINK_FLAGS "${LIBOMP_CONFIGURED_LDFLAGS}"
@@ -141,7 +153,11 @@ set_target_properties(omp PROPERTIES
 )
 
 # Get the library's location within the build tree for the unit tester
-get_target_property(LIBOMP_LIBRARY_DIR omp LIBRARY_OUTPUT_DIRECTORY)
+if(NOT WIN32)
+  get_target_property(LIBOMP_LIBRARY_DIR omp LIBRARY_OUTPUT_DIRECTORY)
+else()
+  get_target_property(LIBOMP_LIBRARY_DIR omp RUNTIME_OUTPUT_DIRECTORY)
+endif()
 if(NOT LIBOMP_LIBRARY_DIR)
   set(LIBOMP_LIBRARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
   set(LIBOMP_LIBRARY_DIR ${CMAKE_CURRENT_BINARY_DIR} PARENT_SCOPE)
@@ -153,9 +169,9 @@ endif()
 if(NOT WIN32)
   add_custom_command(TARGET omp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E create_symlink ${LIBOMP_LIB_FILE}
-      libgomp${CMAKE_SHARED_LIBRARY_SUFFIX}
+      libgomp${LIBOMP_LIBRARY_SUFFIX}
     COMMAND ${CMAKE_COMMAND} -E create_symlink ${LIBOMP_LIB_FILE}
-      libiomp5${CMAKE_SHARED_LIBRARY_SUFFIX}
+      libiomp5${LIBOMP_LIBRARY_SUFFIX}
     WORKING_DIRECTORY ${LIBOMP_LIBRARY_DIR}
   )
 endif()
@@ -178,10 +194,11 @@ if(WIN32)
   add_dependencies(omp libomp-needed-windows-files)
   # z_Windows_NT-586_asm.asm requires definitions to be sent via command line
   # It only needs the architecutre macro and OMPT_SUPPORT=0|1
-  libomp_append(LIBOMP_MASM_DEFINITIONS "_M_IA32" IF_TRUE IA32)
-  libomp_append(LIBOMP_MASM_DEFINITIONS "_M_AMD64" IF_TRUE INTEL64)
-  libomp_append(LIBOMP_MASM_DEFINITIONS "OMPT_SUPPORT" IF_TRUE_1_0 LIBOMP_OMPT_SUPPORT)
-  set_source_files_properties(z_Windows_NT-586_asm.asm PROPERTIES COMPILE_DEFINITIONS "${LIBOMP_MASM_DEFINITIONS}")
+  libomp_append(LIBOMP_MASM_DEFINITIONS "-D_M_IA32" IF_TRUE IA32)
+  libomp_append(LIBOMP_MASM_DEFINITIONS "-D_M_AMD64" IF_TRUE INTEL64)
+  libomp_append(LIBOMP_MASM_DEFINITIONS "-DOMPT_SUPPORT" IF_TRUE_1_0 LIBOMP_OMPT_SUPPORT)
+  libomp_list_to_string("${LIBOMP_MASM_DEFINITIONS}" LIBOMP_MASM_DEFINITIONS)
+  set_property(SOURCE z_Windows_NT-586_asm.asm APPEND_STRING PROPERTY COMPILE_FLAGS " ${LIBOMP_MASM_DEFINITIONS}")
   set_source_files_properties(thirdparty/ittnotify/ittnotify_static.c PROPERTIES COMPILE_DEFINITIONS "UNICODE")
 
   # Create Windows import library
@@ -282,19 +299,23 @@ if(WIN32)
   set(LIBOMP_ALIASES "libiomp5md")
   foreach(alias IN LISTS LIBOMP_ALIASES)
     install(CODE "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E copy \"${LIBOMP_LIB_FILE}\"
-      \"${alias}${CMAKE_SHARED_LIBRARY_SUFFIX}\" WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/bin)")
+      \"${alias}${LIBOMP_LIBRARY_SUFFIX}\" WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/bin)")
     install(CODE "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E copy \"${LIBOMP_IMP_LIB_FILE}\"
-      \"${alias}${CMAKE_STATIC_LIBRARY_SUFFIX}\" WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/lib${LIBOMP_LIBDIR_SUFFIX})")
+      \"${alias}${LIBOMP_LIBRARY_SUFFIX}\" WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/lib${LIBOMP_LIBDIR_SUFFIX})")
   endforeach()
 else()
-  install(TARGETS omp LIBRARY DESTINATION lib${LIBOMP_LIBDIR_SUFFIX})
-  # Create aliases (symlinks) of the library for backwards compatibility
-  set(LIBOMP_ALIASES "libgomp;libiomp5")
-  foreach(alias IN LISTS LIBOMP_ALIASES)
-    install(CODE "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E create_symlink \"${LIBOMP_LIB_FILE}\"
-      \"${alias}${CMAKE_SHARED_LIBRARY_SUFFIX}\" WORKING_DIRECTORY
-      \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/lib${LIBOMP_LIBDIR_SUFFIX})")
-  endforeach()
+
+  install(TARGETS omp ${LIBOMP_INSTALL_KIND} DESTINATION lib${LIBOMP_LIBDIR_SUFFIX})
+
+  if(${LIBOMP_INSTALL_ALIASES})
+    # Create aliases (symlinks) of the library for backwards compatibility
+    set(LIBOMP_ALIASES "libgomp;libiomp5")
+    foreach(alias IN LISTS LIBOMP_ALIASES)
+      install(CODE "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E create_symlink \"${LIBOMP_LIB_FILE}\"
+        \"${alias}${LIBOMP_LIBRARY_SUFFIX}\" WORKING_DIRECTORY
+        \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/lib${LIBOMP_LIBDIR_SUFFIX})")
+    endforeach()
+  endif()
 endif()
 install(
   FILES

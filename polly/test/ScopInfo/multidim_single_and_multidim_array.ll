@@ -1,7 +1,11 @@
 ; RUN: opt %loadPolly -polly-scops -polly-delinearize=false -analyze < %s | FileCheck %s
 ; RUN: opt %loadPolly -polly-scops -polly-delinearize=false -polly-allow-nonaffine -analyze < %s | FileCheck %s --check-prefix=NONAFFINE
-; RUN: opt %loadPolly -polly-scops -polly-delinearize -analyze < %s | FileCheck %s --check-prefix=DELIN
-; RUN: opt %loadPolly -polly-scops -polly-delinearize -polly-allow-nonaffine -analyze < %s | FileCheck %s --check-prefix=DELIN
+; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s --check-prefix=DELIN
+; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine -analyze < %s | FileCheck %s --check-prefix=DELIN
+; RUN: opt %loadPolly -polly-function-scops -polly-delinearize=false -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-function-scops -polly-delinearize=false -polly-allow-nonaffine -analyze < %s | FileCheck %s --check-prefix=NONAFFINE
+; RUN: opt %loadPolly -polly-function-scops -analyze < %s | FileCheck %s --check-prefix=DELIN
+; RUN: opt %loadPolly -polly-function-scops -polly-allow-nonaffine -analyze < %s | FileCheck %s --check-prefix=DELIN
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
@@ -19,22 +23,42 @@ target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
 ; CHECK-NOT: Stmt_for_i_1
 
-; NONAFFINE: p0: %n
-; NONAFFINE: p1: ((-1 + %n) * %n)
-; NONAFFINE: Statements {
-; NONAFFINE:   Stmt_for_i_1
-; NONAFFINE:         MayWriteAccess :=   [Reduction Type: NONE]
-; NONAFFINE:             [n, p_1] -> { Stmt_for_i_1[i0] -> MemRef_X[o0] : o0 >= -2305843009213693952 and o0 <= 2305843009213693949 };
-; NONAFFINE:   Stmt_for_i_2
-; NONAFFINE:         MustWriteAccess :=  [Reduction Type: NONE]
-; NONAFFINE:             [n, p_1] -> { Stmt_for_i_2[i0] -> MemRef_X[p_1 + i0] };
+; NONAFFINE:      p0: %n
+; NONAFFINE-NEXT: p1: ((-1 + %n) * %n)
+;
+; NONAFFINE:      Statements {
+; NONAFFINE-NEXT:     Stmt_for_i_1
+; NONAFFINE-NEXT:         Domain :=
+; NONAFFINE-NEXT:             [n, p_1] -> { Stmt_for_i_1[i0] : 0 <= i0 < n };
+; NONAFFINE-NEXT:         Schedule :=
+; NONAFFINE-NEXT:             [n, p_1] -> { Stmt_for_i_1[i0] -> [0, i0] };
+; NONAFFINE-NEXT:         MayWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; NONAFFINE-NEXT:             [n, p_1] -> { Stmt_for_i_1[i0] -> MemRef_X[o0] : -2305843009213693952 <= o0 <= 2305843009213693951 };
+; NONAFFINE-NEXT:     Stmt_for_i_2
+; NONAFFINE-NEXT:         Domain :=
+; NONAFFINE-NEXT:             [n, p_1] -> { Stmt_for_i_2[i0] : 0 <= i0 < n };
+; NONAFFINE-NEXT:         Schedule :=
+; NONAFFINE-NEXT:             [n, p_1] -> { Stmt_for_i_2[i0] -> [1, i0] };
+; NONAFFINE-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; NONAFFINE-NEXT:             [n, p_1] -> { Stmt_for_i_2[i0] -> MemRef_X[p_1 + i0] };
+; NONAFFINE-NEXT: }
 
-; DELIN: Stmt_for_i_1
-; DELIN:   MustWriteAccess :=
-; DELIN:      [n] -> { Stmt_for_i_1[i0] -> MemRef_X[i0, 0] };
-; DELIN: Stmt_for_i_2
-; DELIN:   MustWriteAccess :=
-; DELIN:      [n] -> { Stmt_for_i_2[i0] -> MemRef_X[-1 + n, i0] };
+; DELIN:      Statements {
+; DELIN-NEXT:     Stmt_for_i_1
+; DELIN-NEXT:         Domain :=
+; DELIN-NEXT:             [n] -> { Stmt_for_i_1[i0] : 0 <= i0 < n };
+; DELIN-NEXT:         Schedule :=
+; DELIN-NEXT:             [n] -> { Stmt_for_i_1[i0] -> [0, i0] };
+; DELIN-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; DELIN-NEXT:             [n] -> { Stmt_for_i_1[i0] -> MemRef_X[i0, 0] };
+; DELIN-NEXT:     Stmt_for_i_2
+; DELIN-NEXT:         Domain :=
+; DELIN-NEXT:             [n] -> { Stmt_for_i_2[i0] : 0 <= i0 < n };
+; DELIN-NEXT:         Schedule :=
+; DELIN-NEXT:             [n] -> { Stmt_for_i_2[i0] -> [1, i0] };
+; DELIN-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; DELIN-NEXT:             [n] -> { Stmt_for_i_2[i0] -> MemRef_X[-1 + n, i0] };
+; DELIN-NEXT: }
 
 define void @single-and-multi-dimensional-array(i64 %n, float* %X) {
 entry:

@@ -26,6 +26,8 @@
 #include <vector>
 #include <limits>
 
+using namespace __sanitizer;
+
 // ATTENTION!
 // Please don't call intercepted functions (including malloc() and friends)
 // in this test. The static runtime library is linked explicitly (without
@@ -34,7 +36,6 @@
 // Make sure __asan_init is called before any test case is run.
 struct AsanInitCaller {
   AsanInitCaller() {
-    __asan::DisableReexec();
     __asan_init();
   }
 };

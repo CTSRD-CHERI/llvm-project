@@ -1,15 +1,18 @@
 macro(find_llvm_parts)
 # Rely on llvm-config.
   set(CONFIG_OUTPUT)
-  find_program(LLVM_CONFIG "llvm-config")
+  if(NOT LLVM_CONFIG_PATH)
+    find_program(LLVM_CONFIG_PATH "llvm-config")
+  endif()
   if(DEFINED LLVM_PATH)
     set(LLVM_INCLUDE_DIR ${LLVM_INCLUDE_DIR} CACHE PATH "Path to llvm/include")
     set(LLVM_PATH ${LLVM_PATH} CACHE PATH "Path to LLVM source tree")
     set(LLVM_MAIN_SRC_DIR ${LLVM_PATH})
     set(LLVM_CMAKE_PATH "${LLVM_PATH}/cmake/modules")
-  elseif(LLVM_CONFIG)
-    message(STATUS "Found LLVM_CONFIG as ${LLVM_CONFIG}")
-    set(CONFIG_COMMAND ${LLVM_CONFIG}
+  elseif(LLVM_CONFIG_PATH)
+    message(STATUS "Found LLVM_CONFIG_PATH as ${LLVM_CONFIG_PATH}")
+    set(LIBCXX_USING_INSTALLED_LLVM 1)
+    set(CONFIG_COMMAND ${LLVM_CONFIG_PATH}
       "--includedir"
       "--prefix"
       "--src-root")
@@ -35,36 +38,46 @@ macro(find_llvm_parts)
     set(LLVM_INCLUDE_DIR ${INCLUDE_DIR} CACHE PATH "Path to llvm/include")
     set(LLVM_BINARY_DIR ${LLVM_OBJ_ROOT} CACHE PATH "Path to LLVM build tree")
     set(LLVM_MAIN_SRC_DIR ${MAIN_SRC_DIR} CACHE PATH "Path to LLVM source tree")
-    set(LLVM_CMAKE_PATH "${LLVM_BINARY_DIR}/share/llvm/cmake")
+    set(LLVM_CMAKE_PATH "${LLVM_BINARY_DIR}/lib${LLVM_LIBDIR_SUFFIX}/cmake/llvm")
   else()
     set(LLVM_FOUND OFF)
     return()
   endif()
 
-  if (NOT EXISTS ${LLVM_MAIN_SRC_DIR})
+  if (EXISTS "${LLVM_CMAKE_PATH}")
+    list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_PATH}")
+  elseif (EXISTS "${LLVM_MAIN_SRC_DIR}/cmake/modules")
+    list(APPEND CMAKE_MODULE_PATH "${LLVM_MAIN_SRC_DIR}/cmake/modules")
+  else()
     set(LLVM_FOUND OFF)
-    message(WARNING "Not found: ${LLVM_MAIN_SRC_DIR}")
+    message(WARNING "Neither ${LLVM_CMAKE_PATH} nor ${LLVM_MAIN_SRC_DIR}/cmake/modules found")
     return()
   endif()
-
-  if(NOT EXISTS ${LLVM_CMAKE_PATH})
-    set(LLVM_FOUND OFF)
-    message(WARNING "Not found: ${LLVM_CMAKE_PATH}")
-    return()
-  endif()
-
-  list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_PATH}")
-  list(APPEND CMAKE_MODULE_PATH "${LLVM_MAIN_SRC_DIR}/cmake/modules")
 
   set(LLVM_FOUND ON)
 endmacro(find_llvm_parts)
 
-
-if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  set(LIBCXX_BUILT_STANDALONE 1)
+macro(configure_out_of_tree_llvm)
   message(STATUS "Configuring for standalone build.")
+  set(LIBCXX_STANDALONE_BUILD 1)
 
   find_llvm_parts()
+
+  # Add LLVM Functions --------------------------------------------------------
+  if (LLVM_FOUND AND LIBCXX_USING_INSTALLED_LLVM)
+    include(LLVMConfig) # For TARGET_TRIPLE
+  else()
+    if (WIN32)
+      set(LLVM_ON_UNIX 0)
+      set(LLVM_ON_WIN32 1)
+    else()
+      set(LLVM_ON_UNIX 1)
+      set(LLVM_ON_WIN32 0)
+    endif()
+  endif()
+  if (LLVM_FOUND)
+    include(AddLLVM OPTIONAL)
+  endif()
 
   # LLVM Options --------------------------------------------------------------
   include(FindPythonInterp)
@@ -93,46 +106,16 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   endif()
   set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
 
-  # Make sure we can use the console pool for recent cmake and ninja > 1.5
-  # Needed for add_lit_testsuite
-  if(CMAKE_VERSION VERSION_LESS 3.1.20141117)
-    set(cmake_3_2_USES_TERMINAL)
-  else()
-    set(cmake_3_2_USES_TERMINAL USES_TERMINAL)
-  endif()
-
   # Required doc configuration
   if (LLVM_ENABLE_SPHINX)
-    message(STATUS "Sphinx enabled.")
     find_package(Sphinx REQUIRED)
-  else()
-    message(STATUS "Sphinx disabled.")
   endif()
 
-  # FIXME - This is cribbed from HandleLLVMOptions.cmake.
-  if(WIN32)
+  if (LLVM_ON_UNIX AND NOT APPLE)
+    set(LLVM_HAVE_LINK_VERSION_SCRIPT 1)
+  else()
     set(LLVM_HAVE_LINK_VERSION_SCRIPT 0)
-    if(CYGWIN)
-      set(LLVM_ON_WIN32 0)
-      set(LLVM_ON_UNIX 1)
-    else(CYGWIN)
-      set(LLVM_ON_WIN32 1)
-      set(LLVM_ON_UNIX 0)
-    endif(CYGWIN)
-  else(WIN32)
-    if(UNIX)
-      set(LLVM_ON_WIN32 0)
-      set(LLVM_ON_UNIX 1)
-      if(APPLE)
-        set(LLVM_HAVE_LINK_VERSION_SCRIPT 0)
-      else(APPLE)
-        set(LLVM_HAVE_LINK_VERSION_SCRIPT 1)
-      endif(APPLE)
-    else(UNIX)
-      MESSAGE(SEND_ERROR "Unable to determine platform")
-    endif(UNIX)
-  endif(WIN32)
+  endif()
+endmacro(configure_out_of_tree_llvm)
 
-  # Add LLVM Functions --------------------------------------------------------
-  include(AddLLVM OPTIONAL)
-endif()
+configure_out_of_tree_llvm()

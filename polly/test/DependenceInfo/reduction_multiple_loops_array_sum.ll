@@ -1,9 +1,11 @@
 ; RUN: opt -basicaa %loadPolly -polly-dependences -analyze < %s | FileCheck %s
+; RUN: opt -basicaa %loadPolly -polly-dependences -polly-dependences-analysis-level=reference-wise -analyze < %s | FileCheck %s
+; RUN: opt -basicaa %loadPolly -polly-dependences -polly-dependences-analysis-level=access-wise -analyze < %s | FileCheck %s
 ;
 ; Verify that only the inner reduction like accesses cause reduction dependences
 ;
-; CHECK: Reduction dependences:
-; CHECK:   { Stmt_for_body3[i0, i1] -> Stmt_for_body3[i0, 1 + i1] : i0 <= 99 and i0 >= 0 and i1 <= 98 and i1 >= 0 }
+; CHECK:      Reduction dependences:
+; CHECK-NEXT:     { Stmt_for_body3[i0, i1] -> Stmt_for_body3[i0, 1 + i1] : 0 <= i0 <= 99 and 0 <= i1 <= 98 }
 ;
 ; void f(int * restrict A, int * restrict sum) {
 ;   int i, j, k;

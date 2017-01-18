@@ -174,6 +174,8 @@ __attribute__((objc_root_class))
 @implementation PC1<T : id> (Cat2) // expected-error{{@implementation cannot have type parameters}}
 @end
 
+typedef T undeclaredT; // expected-error{{unknown type name 'T'}}
+
 // --------------------------------------------------------------------------
 // Interfaces involving type parameters
 // --------------------------------------------------------------------------
@@ -238,6 +240,10 @@ typedef PC4<NSObject, NSObject, ObjCStringref> typeArgs5; // expected-error{{unk
 
 // Type/protocol conflict.
 typedef PC4<NSCopying, ObjCStringRef> typeArgsProtocolQualsConflict1; // expected-error{{angle brackets contain both a type ('ObjCStringRef') and a protocol ('NSCopying')}}
+typedef PC4<NSCopying, NSString *> typeArgsProtocolQualsConflict2; // expected-error{{angle brackets contain both a type ('NSString') and a protocol ('NSCopying')}}
+typedef PC4<NSCopying, UnknownType, NSString *> typeArgsProtocolQualsConflict3; // expected-error{{angle brackets contain both a type ('NSString') and a protocol ('NSCopying')}} expected-error{{unknown type name 'UnknownType'}}
+typedef PC4<UnknownType, NSString *> typeArgsProtocolQualsConflict4; // expected-error{{unknown type name 'UnknownType'}}
+typedef PC4<NSString, NSCopying, NSString *> typeArgsProtocolQualsConflict5; // expected-error{{angle brackets contain both a type ('NSString') and a protocol ('NSCopying')}}
 
 // Handling the '>>' in type argument lists.
 typedef PC4<id<NSCopying>, NSObject *, id<NSObject>> typeArgs6;

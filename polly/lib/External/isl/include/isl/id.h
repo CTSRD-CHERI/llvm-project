@@ -3,7 +3,7 @@
 
 #include <isl/ctx.h>
 #include <isl/list.h>
-#include <isl/printer.h>
+#include <isl/printer_type.h>
 #include <isl/stdint.h>
 
 #if defined(__cplusplus)
@@ -27,8 +27,9 @@ void *isl_id_get_user(__isl_keep isl_id *id);
 __isl_keep const char *isl_id_get_name(__isl_keep isl_id *id);
 
 __isl_give isl_id *isl_id_set_free_user(__isl_take isl_id *id,
-	__isl_give void (*free_user)(void *user));
+	void (*free_user)(void *user));
 
+__isl_give char *isl_id_to_str(__isl_keep isl_id *id);
 __isl_give isl_printer *isl_printer_print_id(__isl_take isl_printer *p,
 	__isl_keep isl_id *id);
 void isl_id_dump(__isl_keep isl_id *id);

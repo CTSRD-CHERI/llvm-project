@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03, c++11
 // <optional>
 
 // optional<T>& operator=(optional<T>&& rhs)
@@ -17,9 +18,16 @@
 #include <type_traits>
 #include <cassert>
 
-#if _LIBCPP_STD_VER > 11
+#include "test_macros.h"
 
 using std::experimental::optional;
+
+struct AllowConstAssign {
+  AllowConstAssign(AllowConstAssign const&) {}
+  AllowConstAssign const& operator=(AllowConstAssign const&) const {
+      return *this;
+  }
+};
 
 struct X
 {
@@ -29,7 +37,7 @@ struct X
     X(X&&)
     {
         if (throw_now)
-            throw 6;
+            TEST_THROW(6);
     }
     X& operator=(X&&) noexcept
     {
@@ -37,15 +45,12 @@ struct X
     }
 };
 
-struct Y {};
-
 bool X::throw_now = false;
 
-#endif  // _LIBCPP_STD_VER > 11
+struct Y {};
 
 int main()
 {
-#if _LIBCPP_STD_VER > 11
     {
         static_assert(std::is_nothrow_move_assignable<optional<int>>::value, "");
         optional<int> opt;
@@ -80,6 +85,12 @@ int main()
         assert(*opt == *opt2);
     }
     {
+        optional<const AllowConstAssign> opt;
+        optional<const AllowConstAssign> opt2;
+        opt = std::move(opt2);
+    }
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    {
         static_assert(!std::is_nothrow_move_assignable<optional<X>>::value, "");
         optional<X> opt;
         optional<X> opt2(X{});
@@ -96,8 +107,8 @@ int main()
             assert(static_cast<bool>(opt) == false);
         }
     }
+#endif
     {
         static_assert(std::is_nothrow_move_assignable<optional<Y>>::value, "");
     }
-#endif  // _LIBCPP_STD_VER > 11
 }

@@ -23,6 +23,11 @@ struct NonTriviallyCopyable {
   int X;
 };
 
+struct TriviallyCopyableButBig {
+  int X;
+  char Array[16];
+};
+
 struct S {
   typedef MutableVal *iterator;
   typedef const MutableVal *const_iterator;
@@ -93,6 +98,7 @@ class dependent {
   ElemType & operator[](unsigned);
   const ElemType & operator[](unsigned) const;
   ElemType & at(unsigned);
+  ElemType & at(unsigned, unsigned);
   const ElemType & at(unsigned) const;
 
   // Intentionally evil.

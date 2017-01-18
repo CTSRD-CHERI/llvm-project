@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03, c++11
 // <optional>
 
 // constexpr const T& optional<T>::value() const;
@@ -15,7 +16,7 @@
 #include <type_traits>
 #include <cassert>
 
-#if _LIBCPP_STD_VER > 11
+#include "test_macros.h"
 
 using std::experimental::optional;
 using std::experimental::in_place_t;
@@ -30,11 +31,8 @@ struct X
     int test() {return 4;}
 };
 
-#endif  // _LIBCPP_STD_VER > 11
-
 int main()
 {
-#if _LIBCPP_STD_VER > 11
     {
         constexpr optional<X> opt(in_place);
         static_assert(opt.value().test() == 3, "");
@@ -43,6 +41,7 @@ int main()
         const optional<X> opt(in_place);
         assert(opt.value().test() == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     {
         const optional<X> opt;
         try
@@ -54,5 +53,5 @@ int main()
         {
         }
     }
-#endif  // _LIBCPP_STD_VER > 11
+#endif
 }

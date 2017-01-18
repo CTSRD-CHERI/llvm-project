@@ -13,18 +13,19 @@
 
 //       iterator find(const key_type& k);
 // const_iterator find(const key_type& k) const;
-// 
-//   The member function templates find, count, lower_bound, upper_bound, and 
-// equal_range shall not participate in overload resolution unless the 
+//
+//   The member function templates find, count, lower_bound, upper_bound, and
+// equal_range shall not participate in overload resolution unless the
 // qualified-id Compare::is_transparent is valid and denotes a type
 
 
 #include <map>
 #include <cassert>
 
+#include "test_macros.h"
 #include "is_transparent.h"
 
-#if _LIBCPP_STD_VER <= 11
+#if TEST_STD_VER <= 11
 #error "This test requires is C++14 (or later)"
 #else
 

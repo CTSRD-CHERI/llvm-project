@@ -1,7 +1,7 @@
 include_directories(..)
 
 set(LSAN_CFLAGS ${SANITIZER_COMMON_CFLAGS})
-append_no_rtti_flag(LSAN_CFLAGS)
+append_rtti_flag(OFF LSAN_CFLAGS)
 
 set(LSAN_COMMON_SOURCES
   lsan_common.cc
@@ -16,8 +16,6 @@ set(LSAN_SOURCES
 
 set(LSAN_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_custom_target(lsan)
-
 add_compiler_rt_object_libraries(RTLSanCommon
     OS ${SANITIZER_COMMON_SUPPORTED_OS}
     ARCHS ${LSAN_COMMON_SUPPORTED_ARCH}
@@ -26,6 +24,8 @@ add_compiler_rt_object_libraries(RTLSanCommon
 
 if(COMPILER_RT_HAS_LSAN)
   foreach(arch ${LSAN_SUPPORTED_ARCH})
+    add_compiler_rt_component(lsan)
+    
     add_compiler_rt_runtime(clang_rt.lsan
       STATIC
       ARCHS ${arch}
@@ -38,5 +38,3 @@ if(COMPILER_RT_HAS_LSAN)
       PARENT_TARGET lsan)
   endforeach()
 endif()
-
-add_dependencies(compiler-rt lsan)

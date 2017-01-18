@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-codegen  -polly-process-unprofitable -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-codegen -polly-invariant-load-hoisting=true  -polly-process-unprofitable -S < %s | FileCheck %s
 ;
 ;    void fence(void);
 ;
@@ -18,8 +18,8 @@
 ;      } while (i++ < x / 2);
 ;    }
 ;
-; CHECK:      polly.start:
-; CHECK-NEXT:   sext i32 %tmp.merge to i64
+; CHECK: polly.stmt.stmt.P:
+; CHECK:   sext i32 %tmp.merge to i64
 ;
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

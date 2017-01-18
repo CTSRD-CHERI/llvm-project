@@ -18,6 +18,7 @@
 #include <list>
 
 namespace llvm {
+namespace pdb {
 
 class LinePrinter {
   friend class WithColor;
@@ -84,10 +85,10 @@ public:
   raw_ostream &get() { return OS; }
 
 private:
-  void translateColor(PDB_ColorItem C, raw_ostream::Colors &Color,
-                      bool &Bold) const;
+  void applyColor(PDB_ColorItem C);
   raw_ostream &OS;
 };
+}
 }
 
 #endif

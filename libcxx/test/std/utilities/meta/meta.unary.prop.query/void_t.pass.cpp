@@ -11,11 +11,11 @@
 
 // void_t
 
-#include <type_traits>
+// UNSUPPORTED: c++98, c++03, c++11, c++14
 
-#if _LIBCPP_STD_VER <= 14
-int main () {}
-#else
+// XFAIL: gcc-5.1 gcc-5.2
+
+#include <type_traits>
 
 template <class T>
 void test1()
@@ -57,7 +57,7 @@ int main()
     test1<Class>();
     test1<Class[]>();
     test1<Class[5]>();
-    
+
     test2<void, int>();
     test2<double, int>();
     test2<int&, int>();
@@ -66,4 +66,3 @@ int main()
 
     static_assert( std::is_same<void, std::void_t<int, double const &, Class, volatile int[], void>>::value, "");
 }
-#endif

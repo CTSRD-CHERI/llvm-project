@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcpp-no-exceptions
 // <exception>
 
 // class nested_exception;
@@ -16,6 +17,8 @@
 #include <exception>
 #include <cstdlib>
 #include <cassert>
+
+#include "test_macros.h"
 
 class A
 {
@@ -36,7 +39,7 @@ public:
     friend bool operator==(const B& x, const B& y) {return x.data_ == y.data_;}
 };
 
-#if __cplusplus > 201103L
+#if TEST_STD_VER > 11
 struct Final final {};
 #endif
 
@@ -104,14 +107,14 @@ int main()
             assert(i == 7);
         }
     }
-#if __cplusplus > 201103L
+#if TEST_STD_VER > 11
     {
         try
         {
             std::throw_with_nested(Final());
             assert(false);
         }
-        catch (const Final &f)
+        catch (const Final &)
         {
         }
     }

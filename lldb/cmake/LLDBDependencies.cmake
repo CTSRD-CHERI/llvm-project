@@ -15,15 +15,19 @@ set( LLDB_USED_LIBS
   # Plugins
   lldbPluginDisassemblerLLVM
   lldbPluginSymbolFileDWARF
+  lldbPluginSymbolFilePDB
   lldbPluginSymbolFileSymtab
   lldbPluginDynamicLoaderStatic
   lldbPluginDynamicLoaderPosixDYLD
   lldbPluginDynamicLoaderHexagonDYLD
   lldbPluginDynamicLoaderWindowsDYLD
-  
+
   lldbPluginCPlusPlusLanguage
+  lldbPluginGoLanguage
+  lldbPluginJavaLanguage
   lldbPluginObjCLanguage
   lldbPluginObjCPlusPlusLanguage
+  lldbPluginOCamlLanguage
 
   lldbPluginObjectFileELF
   lldbPluginObjectFileJIT
@@ -37,17 +41,20 @@ set( LLDB_USED_LIBS
   lldbPluginPlatformFreeBSD
   lldbPluginPlatformKalimba
   lldbPluginPlatformLinux
+  lldbPluginPlatformNetBSD
   lldbPluginPlatformPOSIX
   lldbPluginPlatformWindows
   lldbPluginObjectContainerMachOArchive
   lldbPluginObjectContainerBSDArchive
   lldbPluginPlatformMacOSX
+  lldbPluginStructuredDataDarwinLog
   lldbPluginDynamicLoaderMacOSXDYLD
   lldbPluginUnwindAssemblyInstEmulation
   lldbPluginUnwindAssemblyX86
   lldbPluginAppleObjCRuntime
   lldbPluginRenderScriptRuntime
   lldbPluginLanguageRuntimeGo
+  lldbPluginLanguageRuntimeJava
   lldbPluginCXXItaniumABI
   lldbPluginABIMacOSX_arm
   lldbPluginABIMacOSX_arm64
@@ -61,6 +68,7 @@ set( LLDB_USED_LIBS
   lldbPluginABISysV_ppc64
   lldbPluginABISysV_mips
   lldbPluginABISysV_mips64
+  lldbPluginABISysV_s390x
   lldbPluginInstructionARM
   lldbPluginInstructionARM64
   lldbPluginInstructionMIPS
@@ -70,17 +78,20 @@ set( LLDB_USED_LIBS
   lldbPluginOSPython
   lldbPluginMemoryHistoryASan
   lldbPluginInstrumentationRuntimeAddressSanitizer
+  lldbPluginInstrumentationRuntimeThreadSanitizer
   lldbPluginSystemRuntimeMacOSX
   lldbPluginProcessElfCore
+  lldbPluginProcessMinidump
   lldbPluginJITLoaderGDB
   lldbPluginExpressionParserClang
+  lldbPluginExpressionParserGo
   )
 
 # Windows-only libraries
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
   list(APPEND LLDB_USED_LIBS
     lldbPluginProcessWindows
-    lldbPluginProcessWinMiniDump
+    lldbPluginProcessWindowsCommon
     Ws2_32
     Rpcrt4
     )
@@ -98,6 +109,13 @@ endif ()
 if ( CMAKE_SYSTEM_NAME MATCHES "FreeBSD" )
   list(APPEND LLDB_USED_LIBS
     lldbPluginProcessFreeBSD
+    lldbPluginProcessPOSIX
+    )
+endif ()
+
+# NetBSD-only libraries
+if ( CMAKE_SYSTEM_NAME MATCHES "NetBSD" )
+  list(APPEND LLDB_USED_LIBS
     lldbPluginProcessPOSIX
     )
 endif ()
@@ -135,12 +153,17 @@ if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows" AND NOT __ANDROID_NDK__)
     list(APPEND LLDB_SYSTEM_LIBS edit)
   endif()
   if (NOT LLDB_DISABLE_CURSES)
-    list(APPEND LLDB_SYSTEM_LIBS panel ncurses)
+    list(APPEND LLDB_SYSTEM_LIBS ${CURSES_LIBRARIES})
     if(LLVM_ENABLE_TERMINFO AND HAVE_TERMINFO)
       list(APPEND LLDB_SYSTEM_LIBS ${TERMINFO_LIBS})
     endif()
   endif()
 endif()
+
+if (NOT HAVE_CXX_ATOMICS64_WITHOUT_LIB )
+    list(APPEND LLDB_SYSTEM_LIBS atomic)
+endif()
+
 # On FreeBSD/NetBSD backtrace() is provided by libexecinfo, not libc.
 if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR CMAKE_SYSTEM_NAME MATCHES "NetBSD")
   list(APPEND LLDB_SYSTEM_LIBS execinfo)
@@ -161,13 +184,14 @@ if (LLVM_BUILD_STATIC)
   endif()
 endif()
 
-set( LLVM_LINK_COMPONENTS
+set(LLVM_LINK_COMPONENTS
   ${LLVM_TARGETS_TO_BUILD}
   interpreter
   asmparser
   bitreader
   bitwriter
   codegen
+  demangle
   ipo
   selectiondag
   bitreader
@@ -179,11 +203,11 @@ set( LLVM_LINK_COMPONENTS
   runtimedyld
   option
   support
+  coverage
+  target
   )
 
 if ( NOT LLDB_DISABLE_PYTHON )
-  set(LLDB_WRAP_PYTHON ${LLDB_BINARY_DIR}/scripts/LLDBWrapPython.cpp)
-
   set_source_files_properties(${LLDB_WRAP_PYTHON} PROPERTIES GENERATED 1)
   if (CLANG_CL)
     set_source_files_properties(${LLDB_WRAP_PYTHON} PROPERTIES COMPILE_FLAGS -Wno-unused-function)

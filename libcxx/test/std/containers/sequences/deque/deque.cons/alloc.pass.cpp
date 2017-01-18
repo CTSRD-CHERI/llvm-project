@@ -31,8 +31,10 @@ int main()
 {
     test<int>(std::allocator<int>());
     test<NotConstructible>(test_allocator<NotConstructible>(3));
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     test<int>(min_allocator<int>());
     test<NotConstructible>(min_allocator<NotConstructible>{});
+    test<int>(explicit_allocator<int>());
+    test<NotConstructible>(explicit_allocator<NotConstructible>{});
 #endif
 }

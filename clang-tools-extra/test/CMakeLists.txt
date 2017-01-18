@@ -34,12 +34,22 @@ set(CLANG_TOOLS_TEST_DEPS
   # Base line deps.
   FileCheck count not
 
+  # clang-tidy tests require it.
+  clang-headers
+
+  # For the clang-tidy libclang integration test.
+  c-index-test
+
   # Individual tools we test.
   clang-apply-replacements
-  clang-modernize
-  clang-rename
+  clang-change-namespace
+  clang-include-fixer
+  clang-move
   clang-query
+  clang-rename
+  clang-reorder-fields
   clang-tidy
+  find-all-symbols
   modularize
   pp-trace
 

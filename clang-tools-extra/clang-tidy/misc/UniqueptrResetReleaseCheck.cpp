@@ -30,13 +30,13 @@ void UniqueptrResetReleaseCheck::registerMatchers(MatchFinder *Finder) {
               cxxMethodDecl(hasName("reset"),
                             ofClass(cxxRecordDecl(hasName("::std::unique_ptr"),
                                                   decl().bind("left_class"))))),
-          has(cxxMemberCallExpr(
+          has(ignoringParenImpCasts(cxxMemberCallExpr(
               on(expr().bind("right")),
               callee(memberExpr().bind("release_member")),
               callee(cxxMethodDecl(
                   hasName("release"),
                   ofClass(cxxRecordDecl(hasName("::std::unique_ptr"),
-                                        decl().bind("right_class"))))))))
+                                        decl().bind("right_class")))))))))
           .bind("reset_call"),
       this);
 }
@@ -91,7 +91,7 @@ bool areDeletersCompatible(const MatchFinder::MatchResult &Result) {
   return false;
 }
 
-}  // namespace
+} // namespace
 
 void UniqueptrResetReleaseCheck::check(const MatchFinder::MatchResult &Result) {
   if (!areDeletersCompatible(Result))
@@ -107,10 +107,10 @@ void UniqueptrResetReleaseCheck::check(const MatchFinder::MatchResult &Result) {
 
   std::string LeftText = clang::Lexer::getSourceText(
       CharSourceRange::getTokenRange(Left->getSourceRange()),
-      *Result.SourceManager, Result.Context->getLangOpts());
+      *Result.SourceManager, getLangOpts());
   std::string RightText = clang::Lexer::getSourceText(
       CharSourceRange::getTokenRange(Right->getSourceRange()),
-      *Result.SourceManager, Result.Context->getLangOpts());
+      *Result.SourceManager, getLangOpts());
 
   if (ResetMember->isArrow())
     LeftText = "*" + LeftText;
@@ -127,9 +127,8 @@ void UniqueptrResetReleaseCheck::check(const MatchFinder::MatchResult &Result) {
   }
   std::string NewText = LeftText + " = " + RightText;
 
-  diag(ResetMember->getExprLoc(), DiagText)
-      << FixItHint::CreateReplacement(
-          CharSourceRange::getTokenRange(ResetCall->getSourceRange()), NewText);
+  diag(ResetMember->getExprLoc(), DiagText) << FixItHint::CreateReplacement(
+      CharSourceRange::getTokenRange(ResetCall->getSourceRange()), NewText);
 }
 
 } // namespace misc

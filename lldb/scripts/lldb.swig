@@ -41,11 +41,14 @@ o SBLineEntry: Specifies an association with a contiguous range of instructions
 import uuid
 import re
 import os
+
+import six
 %}
 %include "./Python/python-typemaps.swig"
 
 /* C++ headers to be included. */
 %{
+#include <algorithm>
 #include <string>
 %}
 
@@ -80,6 +83,8 @@ import os
 #include "lldb/API/SBLaunchInfo.h"
 #include "lldb/API/SBLineEntry.h"
 #include "lldb/API/SBListener.h"
+#include "lldb/API/SBMemoryRegionInfo.h"
+#include "lldb/API/SBMemoryRegionInfoList.h"
 #include "lldb/API/SBModule.h"
 #include "lldb/API/SBModuleSpec.h"
 #include "lldb/API/SBPlatform.h"
@@ -90,6 +95,7 @@ import os
 #include "lldb/API/SBSourceManager.h"
 #include "lldb/API/SBStream.h"
 #include "lldb/API/SBStringList.h"
+#include "lldb/API/SBStructuredData.h"
 #include "lldb/API/SBSymbol.h"
 #include "lldb/API/SBSymbolContext.h"
 #include "lldb/API/SBSymbolContextList.h"
@@ -160,6 +166,8 @@ import os
 %include "./interface/SBLaunchInfo.i"
 %include "./interface/SBLineEntry.i"
 %include "./interface/SBListener.i"
+%include "./interface/SBMemoryRegionInfo.i"
+%include "./interface/SBMemoryRegionInfoList.i"
 %include "./interface/SBModule.i"
 %include "./interface/SBModuleSpec.i"
 %include "./interface/SBPlatform.i"
@@ -170,6 +178,7 @@ import os
 %include "./interface/SBSourceManager.i"
 %include "./interface/SBStream.i"
 %include "./interface/SBStringList.i"
+%include "./interface/SBStructuredData.i"
 %include "./interface/SBSymbol.i"
 %include "./interface/SBSymbolContext.i"
 %include "./interface/SBSymbolContextList.i"

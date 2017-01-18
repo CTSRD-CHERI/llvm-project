@@ -10,6 +10,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/CodeGen/IslExprBuilder.h"
+#include "polly/Options.h"
 #include "polly/ScopInfo.h"
 #include "polly/Support/GICHelper.h"
 #include "polly/Support/ScopHelper.h"
@@ -18,6 +19,123 @@
 
 using namespace llvm;
 using namespace polly;
+
+/// Different overflow tracking modes.
+enum OverflowTrackingChoice {
+  OT_NEVER,   ///< Never tack potential overflows.
+  OT_REQUEST, ///< Track potential overflows if requested.
+  OT_ALWAYS   ///< Always track potential overflows.
+};
+
+static cl::opt<OverflowTrackingChoice> OTMode(
+    "polly-overflow-tracking",
+    cl::desc("Define where potential integer overflows in generated "
+             "expressions should be tracked."),
+    cl::values(clEnumValN(OT_NEVER, "never", "Never track the overflow bit."),
+               clEnumValN(OT_REQUEST, "request",
+                          "Track the overflow bit if requested."),
+               clEnumValN(OT_ALWAYS, "always",
+                          "Always track the overflow bit.")),
+    cl::Hidden, cl::init(OT_REQUEST), cl::ZeroOrMore, cl::cat(PollyCategory));
+
+IslExprBuilder::IslExprBuilder(Scop &S, PollyIRBuilder &Builder,
+                               IDToValueTy &IDToValue, ValueMapT &GlobalMap,
+                               const DataLayout &DL, ScalarEvolution &SE,
+                               DominatorTree &DT, LoopInfo &LI,
+                               BasicBlock *StartBlock)
+    : S(S), Builder(Builder), IDToValue(IDToValue), GlobalMap(GlobalMap),
+      DL(DL), SE(SE), DT(DT), LI(LI), StartBlock(StartBlock) {
+  OverflowState = (OTMode == OT_ALWAYS) ? Builder.getFalse() : nullptr;
+}
+
+void IslExprBuilder::setTrackOverflow(bool Enable) {
+  // If potential overflows are tracked always or never we ignore requests
+  // to change the behaviour.
+  if (OTMode != OT_REQUEST)
+    return;
+
+  if (Enable) {
+    // If tracking should be enabled initialize the OverflowState.
+    OverflowState = Builder.getFalse();
+  } else {
+    // If tracking should be disabled just unset the OverflowState.
+    OverflowState = nullptr;
+  }
+}
+
+Value *IslExprBuilder::getOverflowState() const {
+  // If the overflow tracking was requested but it is disabled we avoid the
+  // additional nullptr checks at the call sides but instead provide a
+  // meaningful result.
+  if (OTMode == OT_NEVER)
+    return Builder.getFalse();
+  return OverflowState;
+}
+
+Value *IslExprBuilder::createBinOp(BinaryOperator::BinaryOps Opc, Value *LHS,
+                                   Value *RHS, const Twine &Name) {
+  // Handle the plain operation (without overflow tracking) first.
+  if (!OverflowState) {
+    switch (Opc) {
+    case Instruction::Add:
+      return Builder.CreateNSWAdd(LHS, RHS, Name);
+    case Instruction::Sub:
+      return Builder.CreateNSWSub(LHS, RHS, Name);
+    case Instruction::Mul:
+      return Builder.CreateNSWMul(LHS, RHS, Name);
+    default:
+      llvm_unreachable("Unknown binary operator!");
+    }
+  }
+
+  Function *F = nullptr;
+  Module *M = Builder.GetInsertBlock()->getModule();
+  switch (Opc) {
+  case Instruction::Add:
+    F = Intrinsic::getDeclaration(M, Intrinsic::sadd_with_overflow,
+                                  {LHS->getType()});
+    break;
+  case Instruction::Sub:
+    F = Intrinsic::getDeclaration(M, Intrinsic::ssub_with_overflow,
+                                  {LHS->getType()});
+    break;
+  case Instruction::Mul:
+    F = Intrinsic::getDeclaration(M, Intrinsic::smul_with_overflow,
+                                  {LHS->getType()});
+    break;
+  default:
+    llvm_unreachable("No overflow intrinsic for binary operator found!");
+  }
+
+  auto *ResultStruct = Builder.CreateCall(F, {LHS, RHS}, Name);
+  assert(ResultStruct->getType()->isStructTy());
+
+  auto *OverflowFlag =
+      Builder.CreateExtractValue(ResultStruct, 1, Name + ".obit");
+
+  // If all overflows are tracked we do not combine the results as this could
+  // cause dominance problems. Instead we will always keep the last overflow
+  // flag as current state.
+  if (OTMode == OT_ALWAYS)
+    OverflowState = OverflowFlag;
+  else
+    OverflowState =
+        Builder.CreateOr(OverflowState, OverflowFlag, "polly.overflow.state");
+
+  return Builder.CreateExtractValue(ResultStruct, 0, Name + ".res");
+}
+
+Value *IslExprBuilder::createAdd(Value *LHS, Value *RHS, const Twine &Name) {
+  return createBinOp(Instruction::Add, LHS, RHS, Name);
+}
+
+Value *IslExprBuilder::createSub(Value *LHS, Value *RHS, const Twine &Name) {
+  return createBinOp(Instruction::Sub, LHS, RHS, Name);
+}
+
+Value *IslExprBuilder::createMul(Value *LHS, Value *RHS, const Twine &Name) {
+  return createBinOp(Instruction::Mul, LHS, RHS, Name);
+}
 
 Type *IslExprBuilder::getWidestType(Type *T1, Type *T2) {
   assert(isa<IntegerType>(T1) && isa<IntegerType>(T2));
@@ -44,7 +162,7 @@ Value *IslExprBuilder::createOpUnary(__isl_take isl_ast_expr *Expr) {
     V = Builder.CreateSExt(V, MaxType);
 
   isl_ast_expr_free(Expr);
-  return Builder.CreateNSWNeg(V);
+  return createSub(ConstantInt::getNullValue(MaxType), V);
 }
 
 Value *IslExprBuilder::createOpNAry(__isl_take isl_ast_expr *Expr) {
@@ -53,14 +171,22 @@ Value *IslExprBuilder::createOpNAry(__isl_take isl_ast_expr *Expr) {
   assert(isl_ast_expr_get_op_n_arg(Expr) >= 2 &&
          "We need at least two operands in an n-ary operation");
 
-  Value *V;
+  CmpInst::Predicate Pred;
+  switch (isl_ast_expr_get_op_type(Expr)) {
+  default:
+    llvm_unreachable("This is not a an n-ary isl ast expression");
+  case isl_ast_op_max:
+    Pred = CmpInst::ICMP_SGT;
+    break;
+  case isl_ast_op_min:
+    Pred = CmpInst::ICMP_SLT;
+    break;
+  }
 
-  V = create(isl_ast_expr_get_op_arg(Expr, 0));
+  Value *V = create(isl_ast_expr_get_op_arg(Expr, 0));
 
-  for (int i = 0; i < isl_ast_expr_get_op_n_arg(Expr); ++i) {
-    Value *OpV;
-    OpV = create(isl_ast_expr_get_op_arg(Expr, i));
-
+  for (int i = 1; i < isl_ast_expr_get_op_n_arg(Expr); ++i) {
+    Value *OpV = create(isl_ast_expr_get_op_arg(Expr, i));
     Type *Ty = getWidestType(V->getType(), OpV->getType());
 
     if (Ty != OpV->getType())
@@ -69,21 +195,8 @@ Value *IslExprBuilder::createOpNAry(__isl_take isl_ast_expr *Expr) {
     if (Ty != V->getType())
       V = Builder.CreateSExt(V, Ty);
 
-    switch (isl_ast_expr_get_op_type(Expr)) {
-    default:
-      llvm_unreachable("This is no n-ary isl ast expression");
-
-    case isl_ast_op_max: {
-      Value *Cmp = Builder.CreateICmpSGT(V, OpV);
-      V = Builder.CreateSelect(Cmp, V, OpV);
-      continue;
-    }
-    case isl_ast_op_min: {
-      Value *Cmp = Builder.CreateICmpSLT(V, OpV);
-      V = Builder.CreateSelect(Cmp, V, OpV);
-      continue;
-    }
-    }
+    Value *Cmp = Builder.CreateICmp(Pred, V, OpV);
+    V = Builder.CreateSelect(Cmp, V, OpV);
   }
 
   // TODO: We can truncate the result, if it fits into a smaller type. This can
@@ -99,7 +212,7 @@ Value *IslExprBuilder::createAccessAddress(isl_ast_expr *Expr) {
          "isl ast expression not of type isl_ast_op");
   assert(isl_ast_expr_get_op_type(Expr) == isl_ast_op_access &&
          "not an access isl ast expression");
-  assert(isl_ast_expr_get_op_n_arg(Expr) >= 2 &&
+  assert(isl_ast_expr_get_op_n_arg(Expr) >= 1 &&
          "We need at least two operands to create a member access.");
 
   Value *Base, *IndexOp, *Access;
@@ -110,7 +223,18 @@ Value *IslExprBuilder::createAccessAddress(isl_ast_expr *Expr) {
   BaseId = isl_ast_expr_get_id(BaseExpr);
   isl_ast_expr_free(BaseExpr);
 
-  const ScopArrayInfo *SAI = ScopArrayInfo::getFromId(BaseId);
+  const ScopArrayInfo *SAI = nullptr;
+
+  if (IDToSAI)
+    SAI = (*IDToSAI)[BaseId];
+
+  if (!SAI)
+    SAI = ScopArrayInfo::getFromId(BaseId);
+  else
+    isl_id_free(BaseId);
+
+  assert(SAI && "No ScopArrayInfo found for this isl_id.");
+
   Base = SAI->getBasePtr();
 
   if (auto NewBase = GlobalMap.lookup(Base))
@@ -124,6 +248,11 @@ Value *IslExprBuilder::createAccessAddress(isl_ast_expr *Expr) {
   if (Base->getType() != PointerTy) {
     Base =
         Builder.CreateBitCast(Base, PointerTy, "polly.access.cast." + BaseName);
+  }
+
+  if (isl_ast_expr_get_op_n_arg(Expr) == 1) {
+    isl_ast_expr_free(Expr);
+    return Base;
   }
 
   IndexOp = nullptr;
@@ -142,8 +271,7 @@ Value *IslExprBuilder::createAccessAddress(isl_ast_expr *Expr) {
       if (Ty != IndexOp->getType())
         IndexOp = Builder.CreateIntCast(IndexOp, Ty, true);
 
-      IndexOp =
-          Builder.CreateAdd(IndexOp, NextIndex, "polly.access.add." + BaseName);
+      IndexOp = createAdd(IndexOp, NextIndex, "polly.access.add." + BaseName);
     }
 
     // For every but the last dimension multiply the size, for the last
@@ -151,13 +279,14 @@ Value *IslExprBuilder::createAccessAddress(isl_ast_expr *Expr) {
     if (u + 1 >= e)
       break;
 
-    const SCEV *DimSCEV = SAI->getDimensionSize(u - 1);
+    const SCEV *DimSCEV = SAI->getDimensionSize(u);
 
     llvm::ValueToValueMap Map(GlobalMap.begin(), GlobalMap.end());
     DimSCEV = SCEVParameterRewriter::rewrite(DimSCEV, SE, Map);
     Value *DimSize =
         expandCodeFor(S, SE, DL, "polly", DimSCEV, DimSCEV->getType(),
-                      Builder.GetInsertPoint());
+                      &*Builder.GetInsertPoint(), nullptr,
+                      StartBlock->getSinglePredecessor());
 
     Type *Ty = getWidestType(DimSize->getType(), IndexOp->getType());
 
@@ -167,8 +296,7 @@ Value *IslExprBuilder::createAccessAddress(isl_ast_expr *Expr) {
     if (Ty != DimSize->getType())
       DimSize = Builder.CreateSExtOrTrunc(DimSize, Ty,
                                           "polly.access.sext." + BaseName);
-    IndexOp =
-        Builder.CreateMul(IndexOp, DimSize, "polly.access.mul." + BaseName);
+    IndexOp = createMul(IndexOp, DimSize, "polly.access.mul." + BaseName);
   }
 
   Access = Builder.CreateGEP(Base, IndexOp, "polly.access." + BaseName);
@@ -186,7 +314,6 @@ Value *IslExprBuilder::createOpAccess(isl_ast_expr *Expr) {
 Value *IslExprBuilder::createOpBin(__isl_take isl_ast_expr *Expr) {
   Value *LHS, *RHS, *Res;
   Type *MaxType;
-  isl_ast_expr *LOp, *ROp;
   isl_ast_op_type OpType;
 
   assert(isl_ast_expr_get_type(Expr) == isl_ast_expr_op &&
@@ -196,67 +323,11 @@ Value *IslExprBuilder::createOpBin(__isl_take isl_ast_expr *Expr) {
 
   OpType = isl_ast_expr_get_op_type(Expr);
 
-  LOp = isl_ast_expr_get_op_arg(Expr, 0);
-  ROp = isl_ast_expr_get_op_arg(Expr, 1);
-
-  // Catch the special case ((-<pointer>) + <pointer>) which is for
-  // isl the same as (<pointer> - <pointer>). We have to treat it here because
-  // there is no valid semantics for the (-<pointer>) expression, hence in
-  // createOpUnary such an expression will trigger a crash.
-  // FIXME: The same problem can now be triggered by a subexpression of the LHS,
-  //        however it is much less likely.
-  if (OpType == isl_ast_op_add &&
-      isl_ast_expr_get_type(LOp) == isl_ast_expr_op &&
-      isl_ast_expr_get_op_type(LOp) == isl_ast_op_minus) {
-    // Change the binary addition to a substraction.
-    OpType = isl_ast_op_sub;
-
-    // Extract the unary operand of the LHS.
-    auto *LOpOp = isl_ast_expr_get_op_arg(LOp, 0);
-    isl_ast_expr_free(LOp);
-
-    // Swap the unary operand of the LHS and the RHS.
-    LOp = ROp;
-    ROp = LOpOp;
-  }
-
-  LHS = create(LOp);
-  RHS = create(ROp);
+  LHS = create(isl_ast_expr_get_op_arg(Expr, 0));
+  RHS = create(isl_ast_expr_get_op_arg(Expr, 1));
 
   Type *LHSType = LHS->getType();
   Type *RHSType = RHS->getType();
-
-  // Handle <pointer> - <pointer>
-  if (LHSType->isPointerTy() && RHSType->isPointerTy()) {
-    isl_ast_expr_free(Expr);
-    assert(OpType == isl_ast_op_sub && "Substraction is the only valid binary "
-                                       "pointer <-> pointer operation.");
-
-    return Builder.CreatePtrDiff(LHS, RHS);
-  }
-
-  // Handle <pointer> +/- <integer> and <integer> +/- <pointer>
-  if (LHSType->isPointerTy() || RHSType->isPointerTy()) {
-    isl_ast_expr_free(Expr);
-
-    assert((LHSType->isIntegerTy() || RHSType->isIntegerTy()) &&
-           "Arithmetic operations might only performed on one but not two "
-           "pointer types.");
-
-    if (LHSType->isIntegerTy())
-      std::swap(LHS, RHS);
-
-    switch (OpType) {
-    default:
-      llvm_unreachable(
-          "Only additive binary operations are allowed on pointer types.");
-    case isl_ast_op_sub:
-      RHS = Builder.CreateNeg(RHS);
-    // Fall through
-    case isl_ast_op_add:
-      return Builder.CreateGEP(LHS, RHS);
-    }
-  }
 
   MaxType = getWidestType(LHSType, RHSType);
 
@@ -294,13 +365,13 @@ Value *IslExprBuilder::createOpBin(__isl_take isl_ast_expr *Expr) {
   default:
     llvm_unreachable("This is no binary isl ast expression");
   case isl_ast_op_add:
-    Res = Builder.CreateNSWAdd(LHS, RHS);
+    Res = createAdd(LHS, RHS);
     break;
   case isl_ast_op_sub:
-    Res = Builder.CreateNSWSub(LHS, RHS);
+    Res = createSub(LHS, RHS);
     break;
   case isl_ast_op_mul:
-    Res = Builder.CreateNSWMul(LHS, RHS);
+    Res = createMul(LHS, RHS);
     break;
   case isl_ast_op_div:
     Res = Builder.CreateSDiv(LHS, RHS, "pexp.div", true);
@@ -322,8 +393,8 @@ Value *IslExprBuilder::createOpBin(__isl_take isl_ast_expr *Expr) {
     // floord(n,d) ((n < 0) ? (n - d + 1) : n) / d
     Value *One = ConstantInt::get(MaxType, 1);
     Value *Zero = ConstantInt::get(MaxType, 0);
-    Value *Sum1 = Builder.CreateSub(LHS, RHS, "pexp.fdiv_q.0");
-    Value *Sum2 = Builder.CreateAdd(Sum1, One, "pexp.fdiv_q.1");
+    Value *Sum1 = createSub(LHS, RHS, "pexp.fdiv_q.0");
+    Value *Sum2 = createAdd(Sum1, One, "pexp.fdiv_q.1");
     Value *isNegative = Builder.CreateICmpSLT(LHS, Zero, "pexp.fdiv_q.2");
     Value *Dividend =
         Builder.CreateSelect(isNegative, Sum2, LHS, "pexp.fdiv_q.3");
@@ -335,7 +406,7 @@ Value *IslExprBuilder::createOpBin(__isl_take isl_ast_expr *Expr) {
     break;
 
   case isl_ast_op_zdiv_r: // Result only compared against zero
-    Res = Builder.CreateURem(LHS, RHS, "pexp.zdiv_r");
+    Res = Builder.CreateSRem(LHS, RHS, "pexp.zdiv_r");
     break;
   }
 
@@ -380,33 +451,37 @@ Value *IslExprBuilder::createOpICmp(__isl_take isl_ast_expr *Expr) {
 
   Value *LHS, *RHS, *Res;
 
-  LHS = create(isl_ast_expr_get_op_arg(Expr, 0));
-  RHS = create(isl_ast_expr_get_op_arg(Expr, 1));
+  auto *Op0 = isl_ast_expr_get_op_arg(Expr, 0);
+  auto *Op1 = isl_ast_expr_get_op_arg(Expr, 1);
+  bool HasNonAddressOfOperand =
+      isl_ast_expr_get_type(Op0) != isl_ast_expr_op ||
+      isl_ast_expr_get_type(Op1) != isl_ast_expr_op ||
+      isl_ast_expr_get_op_type(Op0) != isl_ast_op_address_of ||
+      isl_ast_expr_get_op_type(Op1) != isl_ast_op_address_of;
 
-  bool IsPtrType =
-      LHS->getType()->isPointerTy() || RHS->getType()->isPointerTy();
+  LHS = create(Op0);
+  RHS = create(Op1);
+
+  auto *LHSTy = LHS->getType();
+  auto *RHSTy = RHS->getType();
+  bool IsPtrType = LHSTy->isPointerTy() || RHSTy->isPointerTy();
+  bool UseUnsignedCmp = IsPtrType && !HasNonAddressOfOperand;
+
+  auto *PtrAsIntTy = Builder.getIntNTy(DL.getPointerSizeInBits());
+  if (LHSTy->isPointerTy())
+    LHS = Builder.CreatePtrToInt(LHS, PtrAsIntTy);
+  if (RHSTy->isPointerTy())
+    RHS = Builder.CreatePtrToInt(RHS, PtrAsIntTy);
 
   if (LHS->getType() != RHS->getType()) {
-    if (IsPtrType) {
-      Type *I8PtrTy = Builder.getInt8PtrTy();
-      if (!LHS->getType()->isPointerTy())
-        LHS = Builder.CreateIntToPtr(LHS, I8PtrTy);
-      if (!RHS->getType()->isPointerTy())
-        RHS = Builder.CreateIntToPtr(RHS, I8PtrTy);
-      if (LHS->getType() != I8PtrTy)
-        LHS = Builder.CreateBitCast(LHS, I8PtrTy);
-      if (RHS->getType() != I8PtrTy)
-        RHS = Builder.CreateBitCast(RHS, I8PtrTy);
-    } else {
-      Type *MaxType = LHS->getType();
-      MaxType = getWidestType(MaxType, RHS->getType());
+    Type *MaxType = LHS->getType();
+    MaxType = getWidestType(MaxType, RHS->getType());
 
-      if (MaxType != RHS->getType())
-        RHS = Builder.CreateSExt(RHS, MaxType);
+    if (MaxType != RHS->getType())
+      RHS = Builder.CreateSExt(RHS, MaxType);
 
-      if (MaxType != LHS->getType())
-        LHS = Builder.CreateSExt(LHS, MaxType);
-    }
+    if (MaxType != LHS->getType())
+      LHS = Builder.CreateSExt(LHS, MaxType);
   }
 
   isl_ast_op_type OpType = isl_ast_expr_get_op_type(Expr);
@@ -423,8 +498,8 @@ Value *IslExprBuilder::createOpICmp(__isl_take isl_ast_expr *Expr) {
       {CmpInst::ICMP_SGT, CmpInst::ICMP_UGT},
   };
 
-  Res = Builder.CreateICmp(Predicates[OpType - isl_ast_op_eq][IsPtrType], LHS,
-                           RHS);
+  Res = Builder.CreateICmp(Predicates[OpType - isl_ast_op_eq][UseUnsignedCmp],
+                           LHS, RHS);
 
   isl_ast_expr_free(Expr);
   return Res;
@@ -495,7 +570,7 @@ IslExprBuilder::createOpBooleanConditional(__isl_take isl_ast_expr *Expr) {
 
   auto InsertBB = Builder.GetInsertBlock();
   auto InsertPoint = Builder.GetInsertPoint();
-  auto NextBB = SplitBlock(InsertBB, InsertPoint, &DT, &LI);
+  auto NextBB = SplitBlock(InsertBB, &*InsertPoint, &DT, &LI);
   BasicBlock *CondBB = BasicBlock::Create(Context, "polly.cond", F);
   LI.changeLoopFor(CondBB, LI.getLoopFor(InsertBB));
   DT.addNewBlock(CondBB, InsertBB);
@@ -612,6 +687,11 @@ Value *IslExprBuilder::createId(__isl_take isl_ast_expr *Expr) {
   assert(IDToValue.count(Id) && "Identifier not found");
 
   V = IDToValue[Id];
+  if (!V)
+    V = UndefValue::get(getType(Expr));
+
+  if (V->getType()->isPointerTy())
+    V = Builder.CreatePtrToInt(V, Builder.getIntNTy(DL.getPointerSizeInBits()));
 
   assert(V && "Unknown parameter id found");
 
@@ -639,7 +719,13 @@ Value *IslExprBuilder::createInt(__isl_take isl_ast_expr *Expr) {
 
   Val = isl_ast_expr_get_val(Expr);
   APValue = APIntFromVal(Val);
-  T = getType(Expr);
+
+  auto BitWidth = APValue.getBitWidth();
+  if (BitWidth <= 64)
+    T = getType(Expr);
+  else
+    T = Builder.getIntNTy(BitWidth);
+
   APValue = APValue.sextOrSelf(T->getBitWidth());
   V = ConstantInt::get(T, APValue);
 

@@ -20,29 +20,25 @@
 
 namespace llvm {
 
-class NewArchiveIterator {
-  bool IsNewMember;
-  StringRef Name;
+struct NewArchiveMember {
+  std::unique_ptr<MemoryBuffer> Buf;
+  sys::TimePoint<std::chrono::seconds> ModTime;
+  unsigned UID = 0, GID = 0, Perms = 0644;
 
-  object::Archive::child_iterator OldI;
+  NewArchiveMember() = default;
+  NewArchiveMember(MemoryBufferRef BufRef);
 
-public:
-  NewArchiveIterator(object::Archive::child_iterator I, StringRef Name);
-  NewArchiveIterator(StringRef FileName);
-  bool isNewMember() const;
-  StringRef getName() const;
+  static Expected<NewArchiveMember>
+  getOldMember(const object::Archive::Child &OldMember, bool Deterministic);
 
-  object::Archive::child_iterator getOld() const;
-
-  StringRef getNew() const;
-  llvm::ErrorOr<int> getFD(sys::fs::file_status &NewStatus) const;
-  const sys::fs::file_status &getStatus() const;
+  static Expected<NewArchiveMember> getFile(StringRef FileName,
+                                            bool Deterministic);
 };
 
 std::pair<StringRef, std::error_code>
-writeArchive(StringRef ArcName, std::vector<NewArchiveIterator> &NewMembers,
+writeArchive(StringRef ArcName, std::vector<NewArchiveMember> &NewMembers,
              bool WriteSymtab, object::Archive::Kind Kind, bool Deterministic,
-             bool Thin);
+             bool Thin, std::unique_ptr<MemoryBuffer> OldArchiveBuf = nullptr);
 }
 
 #endif

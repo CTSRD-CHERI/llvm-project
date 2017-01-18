@@ -11,15 +11,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm-readobj.h"
 #include "Error.h"
 #include "ObjDumper.h"
 #include "StackMapPrinter.h"
-#include "StreamWriter.h"
+#include "llvm-readobj.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Object/MachO.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/ScopedPrinter.h"
 
 using namespace llvm;
 using namespace object;
@@ -28,9 +28,8 @@ namespace {
 
 class MachODumper : public ObjDumper {
 public:
-  MachODumper(const MachOObjectFile *Obj, StreamWriter& Writer)
-    : ObjDumper(Writer)
-    , Obj(Obj) { }
+  MachODumper(const MachOObjectFile *Obj, ScopedPrinter &Writer)
+      : ObjDumper(Writer), Obj(Obj) {}
 
   void printFileHeaders() override;
   void printSections() override;
@@ -69,7 +68,7 @@ private:
 namespace llvm {
 
 std::error_code createMachODumper(const object::ObjectFile *Obj,
-                                  StreamWriter &Writer,
+                                  ScopedPrinter &Writer,
                                   std::unique_ptr<ObjDumper> &Result) {
   const MachOObjectFile *MachOObj = dyn_cast<MachOObjectFile>(Obj);
   if (!MachOObj)
@@ -239,7 +238,8 @@ static const EnumEntry<unsigned> MachOSymbolFlags[] = {
   { "ReferencedDynamically", 0x10 },
   { "NoDeadStrip",           0x20 },
   { "WeakRef",               0x40 },
-  { "WeakDef",               0x80 }
+  { "WeakDef",               0x80 },
+  { "AltEntry",             0x200 },
 };
 
 static const EnumEntry<unsigned> MachOSymbolTypes[] = {
@@ -540,8 +540,9 @@ void MachODumper::printRelocation(const MachOObjectFile *Obj,
   if (IsExtern) {
     symbol_iterator Symbol = Reloc.getSymbol();
     if (Symbol != Obj->symbol_end()) {
-      ErrorOr<StringRef> TargetNameOrErr = Symbol->getName();
-      error(TargetNameOrErr.getError());
+      Expected<StringRef> TargetNameOrErr = Symbol->getName();
+      if (!TargetNameOrErr)
+        error(errorToErrorCode(TargetNameOrErr.takeError()));
       TargetName = *TargetNameOrErr;
     }
   } else if (!IsScattered) {
@@ -604,15 +605,19 @@ void MachODumper::printDynamicSymbols() {
 
 void MachODumper::printSymbol(const SymbolRef &Symbol) {
   StringRef SymbolName;
-  if (ErrorOr<StringRef> SymbolNameOrErr = Symbol.getName())
+  Expected<StringRef> SymbolNameOrErr = Symbol.getName();
+  if (!SymbolNameOrErr) {
+    // TODO: Actually report errors helpfully.
+    consumeError(SymbolNameOrErr.takeError());
+  } else
     SymbolName = *SymbolNameOrErr;
 
   MachOSymbol MOSymbol;
   getSymbol(Obj, Symbol.getRawDataRefImpl(), MOSymbol);
 
   StringRef SectionName = "";
-  ErrorOr<section_iterator> SecIOrErr = Symbol.getSection();
-  error(SecIOrErr.getError());
+  Expected<section_iterator> SecIOrErr = Symbol.getSection();
+  error(errorToErrorCode(SecIOrErr.takeError()));
   section_iterator SecI = *SecIOrErr;
   if (SecI != Obj->section_end())
     error(SecI->getName(SectionName));
@@ -664,10 +669,10 @@ void MachODumper::printStackMap() const {
   if (Obj->isLittleEndian())
      prettyPrintStackMap(
                       llvm::outs(),
-                      StackMapV1Parser<support::little>(StackMapContentsArray));
+                      StackMapV2Parser<support::little>(StackMapContentsArray));
   else
      prettyPrintStackMap(llvm::outs(),
-                         StackMapV1Parser<support::big>(StackMapContentsArray));
+                         StackMapV2Parser<support::big>(StackMapContentsArray));
 }
 
 void MachODumper::printMachODataInCode() {
@@ -694,38 +699,46 @@ void MachODumper::printMachODataInCode() {
 
 void MachODumper::printMachOVersionMin() {
   for (const auto &Load : Obj->load_commands()) {
-    if (Load.C.cmd == MachO::LC_VERSION_MIN_MACOSX ||
-        Load.C.cmd == MachO::LC_VERSION_MIN_IPHONEOS) {
-      MachO::version_min_command VMC = Obj->getVersionMinLoadCommand(Load);
-      DictScope Group(W, "MinVersion");
-      StringRef Cmd;
-      if (Load.C.cmd == MachO::LC_VERSION_MIN_MACOSX)
-        Cmd = "LC_VERSION_MIN_MACOSX";
-      else
-        Cmd = "LC_VERSION_MIN_IPHONEOS";
-      W.printString("Cmd", Cmd);
-      W.printNumber("Size", VMC.cmdsize);
-      SmallString<32> Version;
-      Version = utostr(MachOObjectFile::getVersionMinMajor(VMC, false)) + "." +
-        utostr(MachOObjectFile::getVersionMinMinor(VMC, false));
-      uint32_t Update = MachOObjectFile::getVersionMinUpdate(VMC, false);
-      if (Update != 0)
-        Version += "." + utostr(MachOObjectFile::getVersionMinUpdate(VMC,
-                                                                     false));
-      W.printString("Version", Version);
-      SmallString<32> SDK;
-      if (VMC.sdk == 0)
-        SDK = "n/a";
-      else {
-        SDK = utostr(MachOObjectFile::getVersionMinMajor(VMC, true)) + "." +
-          utostr(MachOObjectFile::getVersionMinMinor(VMC, true));
-        uint32_t Update = MachOObjectFile::getVersionMinUpdate(VMC, true);
-        if (Update != 0)
-          SDK += "." + utostr(MachOObjectFile::getVersionMinUpdate(VMC,
-                                                                   true));
-      }
-      W.printString("SDK", SDK);
+    StringRef Cmd;
+    switch (Load.C.cmd) {
+    case MachO::LC_VERSION_MIN_MACOSX:
+      Cmd = "LC_VERSION_MIN_MACOSX";
+      break;
+    case MachO::LC_VERSION_MIN_IPHONEOS:
+      Cmd = "LC_VERSION_MIN_IPHONEOS";
+      break;
+    case MachO::LC_VERSION_MIN_TVOS:
+      Cmd = "LC_VERSION_MIN_TVOS";
+      break;
+    case MachO::LC_VERSION_MIN_WATCHOS:
+      Cmd = "LC_VERSION_MIN_WATCHOS";
+      break;
+    default:
+      continue;
     }
+
+    MachO::version_min_command VMC = Obj->getVersionMinLoadCommand(Load);
+    DictScope Group(W, "MinVersion");
+    W.printString("Cmd", Cmd);
+    W.printNumber("Size", VMC.cmdsize);
+    SmallString<32> Version;
+    Version = utostr(MachOObjectFile::getVersionMinMajor(VMC, false)) + "." +
+              utostr(MachOObjectFile::getVersionMinMinor(VMC, false));
+    uint32_t Update = MachOObjectFile::getVersionMinUpdate(VMC, false);
+    if (Update != 0)
+      Version += "." + utostr(MachOObjectFile::getVersionMinUpdate(VMC, false));
+    W.printString("Version", Version);
+    SmallString<32> SDK;
+    if (VMC.sdk == 0)
+      SDK = "n/a";
+    else {
+      SDK = utostr(MachOObjectFile::getVersionMinMajor(VMC, true)) + "." +
+            utostr(MachOObjectFile::getVersionMinMinor(VMC, true));
+      uint32_t Update = MachOObjectFile::getVersionMinUpdate(VMC, true);
+      if (Update != 0)
+        SDK += "." + utostr(MachOObjectFile::getVersionMinUpdate(VMC, true));
+    }
+    W.printString("SDK", SDK);
   }
 }
 

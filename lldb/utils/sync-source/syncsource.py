@@ -33,6 +33,7 @@ DOTRC_BASE_FILENAME = ".syncsourcerc"
 
 class Configuration(object):
     """Provides chaining configuration lookup."""
+
     def __init__(self, rcdata_configs):
         self.__rcdata_configs = rcdata_configs
 
@@ -234,7 +235,7 @@ def sync_configured_sources(options, configuration, default_excludes):
     if len(transfer_specs) > 0:
         transfer_agent.transfer(transfer_specs, options.dry_run)
     else:
-        raise "nothing to transfer, bad configuration?"
+        raise Exception("nothing to transfer, bad configuration?")
 
 
 def main():

@@ -20,7 +20,9 @@
 #include <string>
 #include <cassert>
 #include <cfloat>
+#include <cmath>
 
+#include "test_macros.h"
 #include "test_iterators.h"
 #include "../../../NotConstructible.h"
 #include "../../../test_compare.h"
@@ -49,7 +51,7 @@ int main()
         C c(input_iterator<P*>(a), input_iterator<P*>(a + sizeof(a)/sizeof(a[0])),
             10
            );
-        assert(c.bucket_count() == 11);
+        LIBCPP_ASSERT(c.bucket_count() == 11);
         assert(c.size() == 6);
         typedef std::pair<C::const_iterator, C::const_iterator> Eq;
         Eq eq = c.equal_range(1);
@@ -81,13 +83,13 @@ int main()
         assert(i->second == "four");
         assert(std::distance(c.begin(), c.end()) == c.size());
         assert(std::distance(c.cbegin(), c.cend()) == c.size());
-        assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
+        assert(std::fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
         assert(c.hash_function() == test_hash<std::hash<int> >());
         assert(c.key_eq() == test_compare<std::equal_to<int> >());
         assert((c.get_allocator() == test_allocator<std::pair<const int, std::string> >()));
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multimap<int, std::string,
                                    test_hash<std::hash<int> >,
@@ -107,7 +109,7 @@ int main()
         C c(input_iterator<P*>(a), input_iterator<P*>(a + sizeof(a)/sizeof(a[0])),
             10
            );
-        assert(c.bucket_count() == 11);
+        LIBCPP_ASSERT(c.bucket_count() == 11);
         assert(c.size() == 6);
         typedef std::pair<C::const_iterator, C::const_iterator> Eq;
         Eq eq = c.equal_range(1);
@@ -139,7 +141,7 @@ int main()
         assert(i->second == "four");
         assert(std::distance(c.begin(), c.end()) == c.size());
         assert(std::distance(c.cbegin(), c.cend()) == c.size());
-        assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
+        assert(std::fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
         assert(c.hash_function() == test_hash<std::hash<int> >());
         assert(c.key_eq() == test_compare<std::equal_to<int> >());

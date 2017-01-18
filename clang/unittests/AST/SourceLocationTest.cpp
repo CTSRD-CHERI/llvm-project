@@ -148,6 +148,96 @@ TEST(VarDecl, VMTypeFixedVarDeclRange) {
                              varDecl(), Lang_C89));
 }
 
+TEST(TypeLoc, IntRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 1);
+  EXPECT_TRUE(Verifier.match("int a;", typeLoc()));
+}
+
+TEST(TypeLoc, LongRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 1);
+  EXPECT_TRUE(Verifier.match("long a;", typeLoc()));
+}
+
+TEST(TypeLoc, LongDoubleRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 6);
+  EXPECT_TRUE(Verifier.match("long double a;", typeLoc()));
+}
+
+TEST(TypeLoc, DoubleLongRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 8);
+  EXPECT_TRUE(Verifier.match("double long a;", typeLoc()));
+}
+
+TEST(TypeLoc, LongIntRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 6);
+  EXPECT_TRUE(Verifier.match("long int a;", typeLoc()));
+}
+
+TEST(TypeLoc, IntLongRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 5);
+  EXPECT_TRUE(Verifier.match("int long a;", typeLoc()));
+}
+
+TEST(TypeLoc, UnsignedIntRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 10);
+  EXPECT_TRUE(Verifier.match("unsigned int a;", typeLoc()));
+}
+
+TEST(TypeLoc, IntUnsignedRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 5);
+  EXPECT_TRUE(Verifier.match("int unsigned a;", typeLoc()));
+}
+
+TEST(TypeLoc, LongLongRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 6);
+  EXPECT_TRUE(Verifier.match("long long a;", typeLoc()));
+}
+
+TEST(TypeLoc, UnsignedLongLongRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 15);
+  EXPECT_TRUE(Verifier.match("unsigned long long a;", typeLoc()));
+}
+
+TEST(TypeLoc, LongUnsignedLongRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 15);
+  EXPECT_TRUE(Verifier.match("long unsigned long a;", typeLoc()));
+}
+
+TEST(TypeLoc, LongLongUnsignedRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 11);
+  EXPECT_TRUE(Verifier.match("long long unsigned a;", typeLoc()));
+}
+
+TEST(TypeLoc, ConstLongLongRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 7, 1, 12);
+  EXPECT_TRUE(Verifier.match("const long long a = 0;", typeLoc()));
+}
+
+TEST(TypeLoc, LongConstLongRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 12);
+  EXPECT_TRUE(Verifier.match("long const long a = 0;", typeLoc()));
+}
+
+TEST(TypeLoc, LongLongConstRange) {
+  RangeVerifier<TypeLoc> Verifier;
+  Verifier.expectRange(1, 1, 1, 6);
+  EXPECT_TRUE(Verifier.match("long long const a = 0;", typeLoc()));
+}
+
 TEST(CXXConstructorDecl, NoRetFunTypeLocRange) {
   RangeVerifier<CXXConstructorDecl> Verifier;
   Verifier.expectRange(1, 11, 1, 13);
@@ -540,6 +630,44 @@ TEST(ObjCMessageExpr, CXXConstructExprRange) {
       "@end\n"
       "void f2() { A a; [B f1: (a)]; }\n",
       cxxConstructExpr(), Lang_OBJCXX));
+}
+
+TEST(FunctionDecl, FunctionDeclWithThrowSpecification) {
+  RangeVerifier<FunctionDecl> Verifier;
+  Verifier.expectRange(1, 1, 1, 16);
+  EXPECT_TRUE(Verifier.match(
+      "void f() throw();\n",
+      functionDecl()));
+}
+
+TEST(FunctionDecl, FunctionDeclWithNoExceptSpecification) {
+  RangeVerifier<FunctionDecl> Verifier;
+  Verifier.expectRange(1, 1, 1, 24);
+  EXPECT_TRUE(Verifier.match(
+      "void f() noexcept(false);\n",
+      functionDecl(),
+      Language::Lang_CXX11));
+}
+
+TEST(CXXMethodDecl, CXXMethodDeclWithThrowSpecification) {
+  RangeVerifier<FunctionDecl> Verifier;
+  Verifier.expectRange(2, 1, 2, 16);
+  EXPECT_TRUE(Verifier.match(
+      "class A {\n"
+      "void f() throw();\n"
+      "};\n",
+      functionDecl()));
+}
+
+TEST(CXXMethodDecl, CXXMethodDeclWithNoExceptSpecification) {
+  RangeVerifier<FunctionDecl> Verifier;
+  Verifier.expectRange(2, 1, 2, 24);
+  EXPECT_TRUE(Verifier.match(
+      "class A {\n"
+      "void f() noexcept(false);\n"
+      "};\n",
+      functionDecl(),
+      Language::Lang_CXX11));
 }
 
 } // end namespace ast_matchers

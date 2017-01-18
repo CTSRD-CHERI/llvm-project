@@ -55,10 +55,10 @@ public:
 
     void push(const value_type& x);
     void push(value_type&& x);
-    template <class... Args> void emplace(Args&&... args);
+    template <class... Args> reference emplace(Args&&... args);
     void pop();
 
-    void swap(stack& c) noexcept(noexcept(swap(c, q.c)));
+    void swap(stack& c) noexcept(is_nothrow_swappable_v<Container>)
 };
 
 template <class T, class Container>
@@ -112,7 +112,8 @@ public:
     typedef typename container_type::reference       reference;
     typedef typename container_type::const_reference const_reference;
     typedef typename container_type::size_type       size_type;
-
+    static_assert((is_same<_Tp, value_type>::value), "" );
+    
 protected:
     container_type c;
 
@@ -198,8 +199,8 @@ public:
 #ifndef _LIBCPP_HAS_NO_VARIADICS
     template <class... _Args>
         _LIBCPP_INLINE_VISIBILITY
-        void emplace(_Args&&... __args)
-        {c.emplace_back(_VSTD::forward<_Args>(__args)...);}
+        reference emplace(_Args&&... __args)
+        { return c.emplace_back(_VSTD::forward<_Args>(__args)...);}
 #endif  // _LIBCPP_HAS_NO_VARIADICS
 #endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
     _LIBCPP_INLINE_VISIBILITY
@@ -274,7 +275,10 @@ operator<=(const stack<_Tp, _Container>& __x, const stack<_Tp, _Container>& __y)
 
 template <class _Tp, class _Container>
 inline _LIBCPP_INLINE_VISIBILITY
-void
+typename enable_if<
+    __is_swappable<_Container>::value,
+    void
+>::type
 swap(stack<_Tp, _Container>& __x, stack<_Tp, _Container>& __y)
     _NOEXCEPT_(_NOEXCEPT_(__x.swap(__y)))
 {

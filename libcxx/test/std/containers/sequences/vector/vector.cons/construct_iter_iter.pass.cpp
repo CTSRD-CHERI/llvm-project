@@ -14,8 +14,9 @@
 #include <vector>
 #include <cassert>
 
+#include "test_macros.h"
 #include "test_iterators.h"
-#include "../../../stack_allocator.h"
+#include "test_allocator.h"
 #include "min_allocator.h"
 #include "asan_testing.h"
 
@@ -24,9 +25,9 @@ void
 test(Iterator first, Iterator last)
 {
     C c(first, last);
-    assert(c.__invariants());
+    LIBCPP_ASSERT(c.__invariants());
     assert(c.size() == std::distance(first, last));
-    assert(is_contiguous_container_asan_correct(c)); 
+    LIBCPP_ASSERT(is_contiguous_container_asan_correct(c));
     for (typename C::const_iterator i = c.cbegin(), e = c.cend(); i != e; ++i, ++first)
         assert(*i == *first);
 }
@@ -41,12 +42,13 @@ int main()
     test<std::vector<int> >(random_access_iterator<const int*>(a), random_access_iterator<const int*>(an));
     test<std::vector<int> >(a, an);
 
-    test<std::vector<int, stack_allocator<int, 63> > >(input_iterator<const int*>(a), input_iterator<const int*>(an));
-    test<std::vector<int, stack_allocator<int, 18> > >(forward_iterator<const int*>(a), forward_iterator<const int*>(an));
-    test<std::vector<int, stack_allocator<int, 18> > >(bidirectional_iterator<const int*>(a), bidirectional_iterator<const int*>(an));
-    test<std::vector<int, stack_allocator<int, 18> > >(random_access_iterator<const int*>(a), random_access_iterator<const int*>(an));
-    test<std::vector<int, stack_allocator<int, 18> > >(a, an);
-#if __cplusplus >= 201103L
+    test<std::vector<int, limited_allocator<int, 63> > >(input_iterator<const int*>(a), input_iterator<const int*>(an));
+    // Add 1 for implementations that dynamically allocate a container proxy.
+    test<std::vector<int, limited_allocator<int, 18 + 1> > >(forward_iterator<const int*>(a), forward_iterator<const int*>(an));
+    test<std::vector<int, limited_allocator<int, 18 + 1> > >(bidirectional_iterator<const int*>(a), bidirectional_iterator<const int*>(an));
+    test<std::vector<int, limited_allocator<int, 18 + 1> > >(random_access_iterator<const int*>(a), random_access_iterator<const int*>(an));
+    test<std::vector<int, limited_allocator<int, 18 + 1> > >(a, an);
+#if TEST_STD_VER >= 11
     test<std::vector<int, min_allocator<int>> >(input_iterator<const int*>(a), input_iterator<const int*>(an));
     test<std::vector<int, min_allocator<int>> >(forward_iterator<const int*>(a), forward_iterator<const int*>(an));
     test<std::vector<int, min_allocator<int>> >(bidirectional_iterator<const int*>(a), bidirectional_iterator<const int*>(an));

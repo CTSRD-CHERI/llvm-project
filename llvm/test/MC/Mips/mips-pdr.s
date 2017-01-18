@@ -18,9 +18,9 @@
 # OBJOUT: Section {
 # OBJOUT:     Name: .pdr
 # OBJOUT:     Type: SHT_PROGBITS (0x1)
-# OBJOUT:     Flags [ (0xB)
-# OBJOUT:       SHF_ALLOC (0x2)
-# OBJOUT:       SHF_WRITE (0x1)
+# OBJOUT:     Flags [ (0x0)
+# OBJOUT-NOT:   SHF_ALLOC (0x2)
+# OBJOUT-NOT:   SHF_WRITE (0x1)
 # OBJOUT:     ]
 # OBJOUT:     Size: 64
 # OBJOUT:     SectionData (
@@ -33,7 +33,7 @@
 
 # We should also check if relocation information was correctly generated.
 # OBJOUT:      Relocations [
-# OBJOUT-NEXT:   Section (6) .rel.pdr {
+# OBJOUT-NEXT:   Section ({{.*}}) .rel.pdr {
 # OBJOUT-NEXT:     0x0 R_MIPS_32 .text 0x0
 # OBJOUT-NEXT:     0x20 R_MIPS_32 _global_foo 0x0
 # OBJOUT-NEXT:   }

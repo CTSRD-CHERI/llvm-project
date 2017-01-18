@@ -1,3 +1,5 @@
+.. title:: clang-tidy - modernize-pass-by-value
+
 modernize-pass-by-value
 =======================
 
@@ -33,7 +35,7 @@ Pass-by-value in constructors
 Replaces the uses of const-references constructor parameters that are copied
 into class fields. The parameter is then moved with `std::move()`.
 
-Since `std::move()` is a library function declared in `<utility>` it may be
+Since ``std::move()`` is a library function declared in `<utility>` it may be
 necessary to add this include. The check will add the include directive when
 necessary.
 
@@ -149,3 +151,11 @@ Example:
   For more information about the pass-by-value idiom, read: `Want Speed? Pass by Value`_.
 
   .. _Want Speed? Pass by Value: http://cpp-next.com/archive/2009/08/want-speed-pass-by-value/
+
+Options
+-------
+
+.. option:: IncludeStyle
+
+   A string specifying which include-style is used, `llvm` or `google`. Default
+   is `llvm`.

@@ -15,7 +15,6 @@
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
-#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
@@ -526,6 +525,47 @@ bool llvm::isInTailCallPosition(ImmutableCallSite CS, const TargetMachine &TM) {
       F, I, Ret, *TM.getSubtargetImpl(*F)->getTargetLowering());
 }
 
+bool llvm::attributesPermitTailCall(const Function *F, const Instruction *I,
+                                    const ReturnInst *Ret,
+                                    const TargetLoweringBase &TLI,
+                                    bool *AllowDifferingSizes) {
+  // ADS may be null, so don't write to it directly.
+  bool DummyADS;
+  bool &ADS = AllowDifferingSizes ? *AllowDifferingSizes : DummyADS;
+  ADS = true;
+
+  AttrBuilder CallerAttrs(F->getAttributes(),
+                          AttributeSet::ReturnIndex);
+  AttrBuilder CalleeAttrs(cast<CallInst>(I)->getAttributes(),
+                          AttributeSet::ReturnIndex);
+
+  // Noalias is completely benign as far as calling convention goes, it
+  // shouldn't affect whether the call is a tail call.
+  CallerAttrs.removeAttribute(Attribute::NoAlias);
+  CalleeAttrs.removeAttribute(Attribute::NoAlias);
+
+  if (CallerAttrs.contains(Attribute::ZExt)) {
+    if (!CalleeAttrs.contains(Attribute::ZExt))
+      return false;
+
+    ADS = false;
+    CallerAttrs.removeAttribute(Attribute::ZExt);
+    CalleeAttrs.removeAttribute(Attribute::ZExt);
+  } else if (CallerAttrs.contains(Attribute::SExt)) {
+    if (!CalleeAttrs.contains(Attribute::SExt))
+      return false;
+
+    ADS = false;
+    CallerAttrs.removeAttribute(Attribute::SExt);
+    CalleeAttrs.removeAttribute(Attribute::SExt);
+  }
+
+  // If they're still different, there's some facet we don't understand
+  // (currently only "inreg", but in future who knows). It may be OK but the
+  // only safe option is to reject the tail call.
+  return CallerAttrs == CalleeAttrs;
+}
+
 bool llvm::returnTypeIsEligibleForTailCall(const Function *F,
                                            const Instruction *I,
                                            const ReturnInst *Ret,
@@ -539,37 +579,8 @@ bool llvm::returnTypeIsEligibleForTailCall(const Function *F,
   if (isa<UndefValue>(Ret->getOperand(0))) return true;
 
   // Make sure the attributes attached to each return are compatible.
-  AttrBuilder CallerAttrs(F->getAttributes(),
-                          AttributeSet::ReturnIndex);
-  AttrBuilder CalleeAttrs(cast<CallInst>(I)->getAttributes(),
-                          AttributeSet::ReturnIndex);
-
-  // Noalias is completely benign as far as calling convention goes, it
-  // shouldn't affect whether the call is a tail call.
-  CallerAttrs = CallerAttrs.removeAttribute(Attribute::NoAlias);
-  CalleeAttrs = CalleeAttrs.removeAttribute(Attribute::NoAlias);
-
-  bool AllowDifferingSizes = true;
-  if (CallerAttrs.contains(Attribute::ZExt)) {
-    if (!CalleeAttrs.contains(Attribute::ZExt))
-      return false;
-
-    AllowDifferingSizes = false;
-    CallerAttrs.removeAttribute(Attribute::ZExt);
-    CalleeAttrs.removeAttribute(Attribute::ZExt);
-  } else if (CallerAttrs.contains(Attribute::SExt)) {
-    if (!CalleeAttrs.contains(Attribute::SExt))
-      return false;
-
-    AllowDifferingSizes = false;
-    CallerAttrs.removeAttribute(Attribute::SExt);
-    CalleeAttrs.removeAttribute(Attribute::SExt);
-  }
-
-  // If they're still different, there's some facet we don't understand
-  // (currently only "inreg", but in future who knows). It may be OK but the
-  // only safe option is to reject the tail call.
-  if (CallerAttrs != CalleeAttrs)
+  bool AllowDifferingSizes;
+  if (!attributesPermitTailCall(F, I, Ret, TLI, &AllowDifferingSizes))
     return false;
 
   const Value *RetVal = Ret->getOperand(0), *CallVal = I;
@@ -624,7 +635,9 @@ bool llvm::canBeOmittedFromSymbolTable(const GlobalValue *GV) {
   if (!GV->hasLinkOnceODRLinkage())
     return false;
 
-  if (GV->hasUnnamedAddr())
+  // We assume that anyone who sets global unnamed_addr on a non-constant knows
+  // what they're doing.
+  if (GV->hasGlobalUnnamedAddr())
     return true;
 
   // If it is a non constant variable, it needs to be uniqued across shared
@@ -634,50 +647,36 @@ bool llvm::canBeOmittedFromSymbolTable(const GlobalValue *GV) {
       return false;
   }
 
-  // An alias can point to a variable. We could try to resolve the alias to
-  // decide, but for now just don't hide them.
-  if (isa<GlobalAlias>(GV))
-    return false;
-
-  GlobalStatus GS;
-  if (GlobalStatus::analyzeGlobal(GV, GS))
-    return false;
-
-  return !GS.IsCompared;
+  return GV->hasAtLeastLocalUnnamedAddr();
 }
 
 static void collectFuncletMembers(
     DenseMap<const MachineBasicBlock *, int> &FuncletMembership, int Funclet,
     const MachineBasicBlock *MBB) {
-  // Don't revisit blocks.
-  if (FuncletMembership.count(MBB) > 0) {
-    if (FuncletMembership[MBB] != Funclet) {
-      assert(false && "MBB is part of two funclets!");
-      report_fatal_error("MBB is part of two funclets!");
+  SmallVector<const MachineBasicBlock *, 16> Worklist = {MBB};
+  while (!Worklist.empty()) {
+    const MachineBasicBlock *Visiting = Worklist.pop_back_val();
+    // Don't follow blocks which start new funclets.
+    if (Visiting->isEHPad() && Visiting != MBB)
+      continue;
+
+    // Add this MBB to our funclet.
+    auto P = FuncletMembership.insert(std::make_pair(Visiting, Funclet));
+
+    // Don't revisit blocks.
+    if (!P.second) {
+      assert(P.first->second == Funclet && "MBB is part of two funclets!");
+      continue;
     }
-    return;
+
+    // Returns are boundaries where funclet transfer can occur, don't follow
+    // successors.
+    if (Visiting->isReturnBlock())
+      continue;
+
+    for (const MachineBasicBlock *Succ : Visiting->successors())
+      Worklist.push_back(Succ);
   }
-
-  // Add this MBB to our funclet.
-  FuncletMembership[MBB] = Funclet;
-
-  bool IsReturn = false;
-  int NumTerminators = 0;
-  for (const MachineInstr &MI : MBB->terminators()) {
-    IsReturn |= MI.isReturn();
-    ++NumTerminators;
-  }
-  assert((!IsReturn || NumTerminators == 1) &&
-         "Expected only one terminator when a return is present!");
-
-  // Returns are boundaries where funclet transfer can occur, don't follow
-  // successors.
-  if (IsReturn)
-    return;
-
-  for (const MachineBasicBlock *SMBB : MBB->successors())
-    if (!SMBB->isEHPad())
-      collectFuncletMembers(FuncletMembership, Funclet, SMBB);
 }
 
 DenseMap<const MachineBasicBlock *, int>
@@ -707,9 +706,10 @@ llvm::getFuncletMembership(const MachineFunction &MF) {
     }
 
     MachineBasicBlock::const_iterator MBBI = MBB.getFirstTerminator();
+
     // CatchPads are not funclets for SEH so do not consider CatchRet to
     // transfer control to another funclet.
-    if (MBBI->getOpcode() != TII->getCatchReturnOpcode())
+    if (MBBI == MBB.end() || MBBI->getOpcode() != TII->getCatchReturnOpcode())
       continue;
 
     // FIXME: SEH CatchPads are not necessarily in the parent function:

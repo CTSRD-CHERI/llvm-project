@@ -35,6 +35,13 @@
 #if defined( __cplusplus ) && ( KMP_OS_WINDOWS )
     // create shortcuts for c99 complex types
 
+    // Visual Studio cannot have function parameters that have the
+    // align __declspec attribute, so we must remove it. (Compiler Error C2719)
+    #if KMP_COMPILER_MSVC
+    # undef KMP_DO_ALIGN
+    # define KMP_DO_ALIGN(alignment) /* Nothing */
+    #endif
+
     #if (_MSC_VER < 1600) && defined(_DEBUG)
         // Workaround for the problem of _DebugHeapTag unresolved external.
         // This problem prevented to use our static debug library for C tests
@@ -211,7 +218,7 @@
 
 // Compiler 12.0 changed alignment of 16 and 32-byte arguments (like _Quad
 // and kmp_cmplx128) on IA-32 architecture. The following aligned structures
-// are implemented to support the old alignment in 10.1, 11.0, 11.1 and 
+// are implemented to support the old alignment in 10.1, 11.0, 11.1 and
 // introduce the new alignment in 12.0. See CQ88405.
 #if KMP_ARCH_X86 && KMP_HAVE_QUAD
 
@@ -219,7 +226,7 @@
 
     #pragma pack( push, 4 )
 
-    
+
     struct KMP_DO_ALIGN( 4 ) Quad_a4_t {
         _Quad q;
 
@@ -371,7 +378,7 @@ static inline void
 __kmp_acquire_atomic_lock( kmp_atomic_lock_t *lck, kmp_int32 gtid )
 {
 #if OMPT_SUPPORT && OMPT_TRACE
-    if (ompt_enabled && 
+    if (ompt_enabled &&
         ompt_callbacks.ompt_callback(ompt_event_wait_atomic)) {
         ompt_callbacks.ompt_callback(ompt_event_wait_atomic)(
             (ompt_wait_id_t) lck);
@@ -381,7 +388,7 @@ __kmp_acquire_atomic_lock( kmp_atomic_lock_t *lck, kmp_int32 gtid )
     __kmp_acquire_queuing_lock( lck, gtid );
 
 #if OMPT_SUPPORT && OMPT_TRACE
-    if (ompt_enabled && 
+    if (ompt_enabled &&
         ompt_callbacks.ompt_callback(ompt_event_acquired_atomic)) {
         ompt_callbacks.ompt_callback(ompt_event_acquired_atomic)(
             (ompt_wait_id_t) lck);
@@ -670,26 +677,38 @@ void __kmpc_atomic_float4_div_float8( ident_t *id_ref, int gtid, kmp_real32 * lh
 // RHS=float16 (deprecated, to be removed when we are sure the compiler does not use them)
 #if KMP_HAVE_QUAD
 void __kmpc_atomic_fixed1_add_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs );
+void __kmpc_atomic_fixed1u_add_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs );
 void __kmpc_atomic_fixed1_sub_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs );
+void __kmpc_atomic_fixed1u_sub_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs );
 void __kmpc_atomic_fixed1_mul_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs );
+void __kmpc_atomic_fixed1u_mul_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs );
 void __kmpc_atomic_fixed1_div_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs );
 void __kmpc_atomic_fixed1u_div_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs );
 
 void __kmpc_atomic_fixed2_add_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs );
+void __kmpc_atomic_fixed2u_add_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs );
 void __kmpc_atomic_fixed2_sub_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs );
+void __kmpc_atomic_fixed2u_sub_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs );
 void __kmpc_atomic_fixed2_mul_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs );
+void __kmpc_atomic_fixed2u_mul_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs );
 void __kmpc_atomic_fixed2_div_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs );
 void __kmpc_atomic_fixed2u_div_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs );
 
 void __kmpc_atomic_fixed4_add_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed4u_add_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs );
 void __kmpc_atomic_fixed4_sub_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed4u_sub_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs );
 void __kmpc_atomic_fixed4_mul_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed4u_mul_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs );
 void __kmpc_atomic_fixed4_div_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs );
 void __kmpc_atomic_fixed4u_div_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs );
 
 void __kmpc_atomic_fixed8_add_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed8u_add_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs );
 void __kmpc_atomic_fixed8_sub_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed8u_sub_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs );
 void __kmpc_atomic_fixed8_mul_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed8u_mul_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs );
 void __kmpc_atomic_fixed8_div_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs );
 void __kmpc_atomic_fixed8u_div_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs );
 
@@ -707,6 +726,27 @@ void __kmpc_atomic_float10_add_fp( ident_t *id_ref, int gtid, long double * lhs,
 void __kmpc_atomic_float10_sub_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs );
 void __kmpc_atomic_float10_mul_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs );
 void __kmpc_atomic_float10_div_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs );
+
+// Reverse operations
+void __kmpc_atomic_fixed1_sub_rev_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs );
+void __kmpc_atomic_fixed1_div_rev_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs );
+void __kmpc_atomic_fixed1u_div_rev_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs );
+void __kmpc_atomic_fixed2_sub_rev_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs );
+void __kmpc_atomic_fixed2_div_rev_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs );
+void __kmpc_atomic_fixed2u_div_rev_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs );
+void __kmpc_atomic_fixed4_sub_rev_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed4_div_rev_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed4u_div_rev_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed8_sub_rev_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed8_div_rev_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs );
+void __kmpc_atomic_fixed8u_div_rev_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs );
+void __kmpc_atomic_float4_sub_rev_fp(  ident_t *id_ref, int gtid, float * lhs, _Quad rhs );
+void __kmpc_atomic_float4_div_rev_fp(  ident_t *id_ref, int gtid, float * lhs, _Quad rhs );
+void __kmpc_atomic_float8_sub_rev_fp(  ident_t *id_ref, int gtid, double * lhs, _Quad rhs );
+void __kmpc_atomic_float8_div_rev_fp(  ident_t *id_ref, int gtid, double * lhs, _Quad rhs );
+void __kmpc_atomic_float10_sub_rev_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs );
+void __kmpc_atomic_float10_div_rev_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs );
+
 #endif // KMP_HAVE_QUAD
 
 // RHS=cmplx8
@@ -1016,9 +1056,88 @@ kmp_cmplx80	__kmpc_atomic_cmplx10_swp( ident_t *id_ref, int gtid, kmp_cmplx80 * 
 CPLX128_LEG 	__kmpc_atomic_cmplx16_swp( ident_t *id_ref, int gtid, CPLX128_LEG * lhs, CPLX128_LEG rhs );
 #if ( KMP_ARCH_X86 )
     Quad_a16_t		__kmpc_atomic_float16_a16_swp( ident_t *id_ref, int gtid, Quad_a16_t * lhs, Quad_a16_t rhs );
-    kmp_cmplx128_a16_t 	__kmpc_atomic_cmplx16_a16_swp( ident_t *id_ref, int gtid, kmp_cmplx128_a16_t * lhs, kmp_cmplx128_a16_t rhs );
+    kmp_cmplx128_a16_t  __kmpc_atomic_cmplx16_a16_swp( ident_t *id_ref, int gtid, kmp_cmplx128_a16_t * lhs, kmp_cmplx128_a16_t rhs );
 #endif
 #endif
+
+// Capture routines for mixed types (RHS=float16)
+#if KMP_HAVE_QUAD
+
+char __kmpc_atomic_fixed1_add_cpt_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs, int flag );
+char __kmpc_atomic_fixed1_sub_cpt_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs, int flag );
+char __kmpc_atomic_fixed1_mul_cpt_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs, int flag );
+char __kmpc_atomic_fixed1_div_cpt_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs, int flag );
+unsigned char  __kmpc_atomic_fixed1u_add_cpt_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs, int flag );
+unsigned char __kmpc_atomic_fixed1u_sub_cpt_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs, int flag );
+unsigned char __kmpc_atomic_fixed1u_mul_cpt_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs, int flag );
+unsigned char __kmpc_atomic_fixed1u_div_cpt_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs, int flag );
+
+short __kmpc_atomic_fixed2_add_cpt_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs, int flag );
+short __kmpc_atomic_fixed2_sub_cpt_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs, int flag );
+short __kmpc_atomic_fixed2_mul_cpt_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs, int flag );
+short __kmpc_atomic_fixed2_div_cpt_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs, int flag );
+unsigned short __kmpc_atomic_fixed2u_add_cpt_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs, int flag );
+unsigned short __kmpc_atomic_fixed2u_sub_cpt_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs, int flag );
+unsigned short __kmpc_atomic_fixed2u_mul_cpt_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs, int flag );
+unsigned short __kmpc_atomic_fixed2u_div_cpt_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs, int flag );
+
+kmp_int32 __kmpc_atomic_fixed4_add_cpt_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs, int flag );
+kmp_int32 __kmpc_atomic_fixed4_sub_cpt_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs, int flag );
+kmp_int32 __kmpc_atomic_fixed4_mul_cpt_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs, int flag );
+kmp_int32 __kmpc_atomic_fixed4_div_cpt_fp(  ident_t *id_ref, int gtid, kmp_int32 * lhs, _Quad rhs, int flag );
+kmp_uint32 __kmpc_atomic_fixed4u_add_cpt_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs, int flag );
+kmp_uint32 __kmpc_atomic_fixed4u_sub_cpt_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs, int flag );
+kmp_uint32 __kmpc_atomic_fixed4u_mul_cpt_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs, int flag );
+kmp_uint32 __kmpc_atomic_fixed4u_div_cpt_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs, int flag );
+
+kmp_int64 __kmpc_atomic_fixed8_add_cpt_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs, int flag );
+kmp_int64 __kmpc_atomic_fixed8_sub_cpt_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs, int flag );
+kmp_int64 __kmpc_atomic_fixed8_mul_cpt_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs, int flag );
+kmp_int64 __kmpc_atomic_fixed8_div_cpt_fp(  ident_t *id_ref, int gtid, kmp_int64 * lhs, _Quad rhs, int flag );
+kmp_uint64 __kmpc_atomic_fixed8u_add_cpt_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs, int flag );
+kmp_uint64 __kmpc_atomic_fixed8u_sub_cpt_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs, int flag );
+kmp_uint64 __kmpc_atomic_fixed8u_mul_cpt_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs, int flag );
+kmp_uint64 __kmpc_atomic_fixed8u_div_cpt_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs, int flag );
+
+float __kmpc_atomic_float4_add_cpt_fp(  ident_t *id_ref, int gtid, kmp_real32 * lhs, _Quad rhs, int flag );
+float __kmpc_atomic_float4_sub_cpt_fp(  ident_t *id_ref, int gtid, kmp_real32 * lhs, _Quad rhs, int flag );
+float __kmpc_atomic_float4_mul_cpt_fp(  ident_t *id_ref, int gtid, kmp_real32 * lhs, _Quad rhs, int flag );
+float __kmpc_atomic_float4_div_cpt_fp(  ident_t *id_ref, int gtid, kmp_real32 * lhs, _Quad rhs, int flag );
+
+double __kmpc_atomic_float8_add_cpt_fp(  ident_t *id_ref, int gtid, kmp_real64 * lhs, _Quad rhs, int flag );
+double __kmpc_atomic_float8_sub_cpt_fp(  ident_t *id_ref, int gtid, kmp_real64 * lhs, _Quad rhs, int flag );
+double __kmpc_atomic_float8_mul_cpt_fp(  ident_t *id_ref, int gtid, kmp_real64 * lhs, _Quad rhs, int flag );
+double __kmpc_atomic_float8_div_cpt_fp(  ident_t *id_ref, int gtid, kmp_real64 * lhs, _Quad rhs, int flag );
+
+long double __kmpc_atomic_float10_add_cpt_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs, int flag );
+long double __kmpc_atomic_float10_sub_cpt_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs, int flag );
+long double __kmpc_atomic_float10_mul_cpt_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs, int flag );
+long double __kmpc_atomic_float10_div_cpt_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs, int flag );
+
+char            __kmpc_atomic_fixed1_sub_cpt_rev_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs, int flag );
+unsigned char   __kmpc_atomic_fixed1u_sub_cpt_rev_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs, int flag );
+char            __kmpc_atomic_fixed1_div_cpt_rev_fp(  ident_t *id_ref, int gtid, char * lhs, _Quad rhs, int flag );
+unsigned char   __kmpc_atomic_fixed1u_div_cpt_rev_fp( ident_t *id_ref, int gtid, unsigned char * lhs, _Quad rhs, int flag );
+short           __kmpc_atomic_fixed2_sub_cpt_rev_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs, int flag );
+unsigned short  __kmpc_atomic_fixed2u_sub_cpt_rev_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs, int flag );
+short           __kmpc_atomic_fixed2_div_cpt_rev_fp(  ident_t *id_ref, int gtid, short * lhs, _Quad rhs, int flag );
+unsigned short  __kmpc_atomic_fixed2u_div_cpt_rev_fp( ident_t *id_ref, int gtid, unsigned short * lhs, _Quad rhs, int flag );
+kmp_int32       __kmpc_atomic_fixed4_sub_cpt_rev_fp(  ident_t *id_ref, int gtid, kmp_int32  * lhs, _Quad  rhs, int flag );
+kmp_uint32      __kmpc_atomic_fixed4u_sub_cpt_rev_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs, int flag );
+kmp_int32       __kmpc_atomic_fixed4_div_cpt_rev_fp(  ident_t *id_ref, int gtid, kmp_int32  * lhs, _Quad  rhs, int flag );
+kmp_uint32      __kmpc_atomic_fixed4u_div_cpt_rev_fp( ident_t *id_ref, int gtid, kmp_uint32 * lhs, _Quad rhs, int flag );
+kmp_int64       __kmpc_atomic_fixed8_sub_cpt_rev_fp(  ident_t *id_ref, int gtid, kmp_int64  * lhs, _Quad  rhs, int flag );
+kmp_uint64      __kmpc_atomic_fixed8u_sub_cpt_rev_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs, int flag );
+kmp_int64       __kmpc_atomic_fixed8_div_cpt_rev_fp(  ident_t *id_ref, int gtid, kmp_int64  * lhs, _Quad  rhs, int flag );
+kmp_uint64      __kmpc_atomic_fixed8u_div_cpt_rev_fp( ident_t *id_ref, int gtid, kmp_uint64 * lhs, _Quad rhs, int flag );
+float           __kmpc_atomic_float4_sub_cpt_rev_fp(  ident_t *id_ref, int gtid, float * lhs, _Quad rhs, int flag );
+float           __kmpc_atomic_float4_div_cpt_rev_fp(  ident_t *id_ref, int gtid, float * lhs, _Quad rhs, int flag );
+double          __kmpc_atomic_float8_sub_cpt_rev_fp(  ident_t *id_ref, int gtid, double * lhs, _Quad rhs, int flag );
+double          __kmpc_atomic_float8_div_cpt_rev_fp(  ident_t *id_ref, int gtid, double * lhs, _Quad rhs, int flag );
+long double     __kmpc_atomic_float10_sub_cpt_rev_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs, int flag );
+long double     __kmpc_atomic_float10_div_cpt_rev_fp( ident_t *id_ref, int gtid, long double * lhs, _Quad rhs, int flag );
+
+#endif // KMP_HAVE_QUAD
 
 // End of OpenMP 4.0 capture
 

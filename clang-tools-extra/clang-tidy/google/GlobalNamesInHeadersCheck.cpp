@@ -20,12 +20,29 @@ namespace tidy {
 namespace google {
 namespace readability {
 
-void
-GlobalNamesInHeadersCheck::registerMatchers(ast_matchers::MatchFinder *Finder) {
-  Finder->addMatcher(
-      decl(anyOf(usingDecl(), usingDirectiveDecl()),
-           hasDeclContext(translationUnitDecl())).bind("using_decl"),
-      this);
+GlobalNamesInHeadersCheck::GlobalNamesInHeadersCheck(StringRef Name,
+                                                     ClangTidyContext *Context)
+    : ClangTidyCheck(Name, Context),
+      RawStringHeaderFileExtensions(
+          Options.getLocalOrGlobal("HeaderFileExtensions", "h")) {
+  if (!utils::parseHeaderFileExtensions(RawStringHeaderFileExtensions,
+                                        HeaderFileExtensions, ',')) {
+    llvm::errs() << "Invalid header file extension: "
+                 << RawStringHeaderFileExtensions << "\n";
+  }
+}
+
+void GlobalNamesInHeadersCheck::storeOptions(
+    ClangTidyOptions::OptionMap &Opts) {
+  Options.store(Opts, "HeaderFileExtensions", RawStringHeaderFileExtensions);
+}
+
+void GlobalNamesInHeadersCheck::registerMatchers(
+    ast_matchers::MatchFinder *Finder) {
+  Finder->addMatcher(decl(anyOf(usingDecl(), usingDirectiveDecl()),
+                          hasDeclContext(translationUnitDecl()))
+                         .bind("using_decl"),
+                     this);
 }
 
 void GlobalNamesInHeadersCheck::check(const MatchFinder::MatchResult &Result) {
@@ -38,14 +55,12 @@ void GlobalNamesInHeadersCheck::check(const MatchFinder::MatchResult &Result) {
   if (Result.SourceManager->isInMainFile(
           Result.SourceManager->getExpansionLoc(D->getLocStart()))) {
     // unless that file is a header.
-    StringRef Filename = Result.SourceManager->getFilename(
-        Result.SourceManager->getSpellingLoc(D->getLocStart()));
-
-    if (!Filename.endswith(".h"))
+    if (!utils::isSpellingLocInHeaderFile(
+            D->getLocStart(), *Result.SourceManager, HeaderFileExtensions))
       return;
   }
 
-  if (const auto* UsingDirective = dyn_cast<UsingDirectiveDecl>(D)) {
+  if (const auto *UsingDirective = dyn_cast<UsingDirectiveDecl>(D)) {
     if (UsingDirective->getNominatedNamespace()->isAnonymousNamespace()) {
       // Anynoumous namespaces inject a using directive into the AST to import
       // the names into the containing namespace.

@@ -1,11 +1,30 @@
 # CMakeLists.txt file for unit testing OpenMP Library
 include(FindPythonInterp)
 include(CheckTypeSize)
+include(CheckLibraryExists)
+
 if(NOT PYTHONINTERP_FOUND)
   libomp_warning_say("Could not find Python.")
   libomp_warning_say("The check-libomp target will not be available!")
   return()
 endif()
+
+# Some tests use math functions
+check_library_exists(m sqrt "" LIBOMP_HAVE_LIBM)
+
+macro(pythonize_bool var)
+  if (${var})
+    set(${var} True)
+  else()
+    set(${var} False)
+  endif()
+endmacro()
+
+pythonize_bool(LIBOMP_USE_HWLOC)
+pythonize_bool(LIBOMP_OMPT_SUPPORT)
+pythonize_bool(LIBOMP_OMPT_BLAME)
+pythonize_bool(LIBOMP_OMPT_TRACE)
+pythonize_bool(LIBOMP_HAVE_LIBM)
 
 set(LIBOMP_TEST_CFLAGS "" CACHE STRING
   "Extra compiler flags to send to the test compiler")
@@ -21,20 +40,27 @@ if(${LIBOMP_STANDALONE_BUILD})
     "Compiler to use for testing OpenMP library")
   set(LIBOMP_TEST_OPENMP_FLAG -fopenmp CACHE STRING
     "OpenMP compiler flag to use for testing OpenMP library")
-  set(LIBOMP_LLVM_LIT_EXECUTABLE "" CACHE STRING
-    "Path to llvm-lit")
-  find_program(LIT_EXECUTABLE NAMES llvm-lit ${LIBOMP_LLVM_LIT_EXECUTABLE})
-  if(NOT LIT_EXECUTABLE)
+  find_program(LIBOMP_LLVM_LIT_EXECUTABLE
+    NAMES llvm-lit lit.py lit
+    PATHS ${OPENMP_LLVM_TOOLS_DIR})
+  if(NOT LIBOMP_LLVM_LIT_EXECUTABLE)
     libomp_say("Cannot find llvm-lit.")
-    libomp_say("Please put llvm-lit in your PATH or set LIBOMP_LLVM_LIT_EXECUTABLE to its full path")
+    libomp_say("Please put llvm-lit in your PATH, set LIBOMP_LLVM_LIT_EXECUTABLE to its full path or point OPENMP_LLVM_TOOLS_DIR to its directory")
     libomp_warning_say("The check-libomp target will not be available!")
     return()
+  endif()
+  find_program(FILECHECK_EXECUTABLE
+    NAMES FileCheck
+    PATHS ${OPENMP_LLVM_TOOLS_DIR})
+  if (NOT FILECHECK_EXECUTABLE)
+    # set to empty string so that lit can disable dependent tests
+    set(FILECHECK_EXECUTABLE "")
   endif()
   # Set lit arguments
   # The -j 1 lets the actual tests run with the entire machine.
   # We have one test thread that spawns the tests serially.  This allows
   # Each test to use the entire machine.
-  set(LIBOMP_LIT_ARGS_DEFAULT "-sv --show-unsupported --show-xfail -j 1")
+  set(LIBOMP_LIT_ARGS_DEFAULT "-sv --show-unsupported --show-xfail")
   if(MSVC OR XCODE)
     set(LIBOMP_LIT_ARGS_DEFAULT "${LIBOMP_LIT_ARGS_DEFAULT} --no-progress-bar")
   endif()
@@ -42,7 +68,7 @@ if(${LIBOMP_STANDALONE_BUILD})
     "Default options for lit")
   separate_arguments(LIBOMP_LIT_ARGS)
   add_custom_target(check-libomp
-    COMMAND ${PYTHON_EXECUTABLE} ${LIT_EXECUTABLE} ${LIBOMP_LIT_ARGS} ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${PYTHON_EXECUTABLE} ${LIBOMP_LLVM_LIT_EXECUTABLE} ${LIBOMP_LIT_ARGS} ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS omp
     COMMENT "Running libomp tests"
     ${cmake_3_2_USES_TERMINAL}
@@ -55,12 +81,12 @@ else()
     set(LIBOMP_TEST_COMPILER ${LLVM_RUNTIME_OUTPUT_INTDIR}/clang.exe)
   endif()
   set(LIBOMP_TEST_OPENMP_FLAG -fopenmp=libomp)
+  set(FILECHECK_EXECUTABLE ${LLVM_RUNTIME_OUTPUT_INTDIR}/FileCheck)
   # Use add_lit_testsuite() from LLVM CMake.
-  add_lit_testsuite(check-libomp 
+  add_lit_testsuite(check-libomp
     "Running libomp tests"
     ${CMAKE_CURRENT_BINARY_DIR}
-    ARGS "-j 1"
-    DEPENDS omp
+    DEPENDS clang clang-headers FileCheck omp
   )
 endif()
 

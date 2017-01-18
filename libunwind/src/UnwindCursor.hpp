@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //
-// C++ interface to lower levels of libuwind
+// C++ interface to lower levels of libunwind
 //===----------------------------------------------------------------------===//
 
 #ifndef __UNWINDCURSOR_HPP__
@@ -16,7 +16,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
+#ifndef _LIBUNWIND_HAS_NO_THREADS
+  #include <pthread.h>
+#endif
 #include <unwind.h>
 
 #ifdef __APPLE__
@@ -60,7 +62,9 @@ private:
 
   // These fields are all static to avoid needing an initializer.
   // There is only one instance of this class per process.
+#ifndef _LIBUNWIND_HAS_NO_THREADS
   static pthread_rwlock_t _lock;
+#endif
 #ifdef __APPLE__
   static void dyldUnloadHook(const struct mach_header *mh, intptr_t slide);
   static bool _registeredForDyldUnloads;
@@ -87,8 +91,10 @@ DwarfFDECache<A>::_bufferEnd = &_initialBuffer[64];
 template <typename A>
 typename DwarfFDECache<A>::entry DwarfFDECache<A>::_initialBuffer[64];
 
+#ifndef _LIBUNWIND_HAS_NO_THREADS
 template <typename A>
 pthread_rwlock_t DwarfFDECache<A>::_lock = PTHREAD_RWLOCK_INITIALIZER;
+#endif
 
 #ifdef __APPLE__
 template <typename A>
@@ -114,6 +120,7 @@ typename A::pint_t DwarfFDECache<A>::findFDE(pint_t mh, pint_t pc) {
 template <typename A>
 void DwarfFDECache<A>::add(pint_t mh, pint_t ip_start, pint_t ip_end,
                            pint_t fde) {
+#if !defined(_LIBUNWIND_NO_HEAP)
   _LIBUNWIND_LOG_NON_ZERO(::pthread_rwlock_wrlock(&_lock));
   if (_bufferUsed >= _bufferEnd) {
     size_t oldSize = (size_t)(_bufferEnd - _buffer);
@@ -139,6 +146,7 @@ void DwarfFDECache<A>::add(pint_t mh, pint_t ip_start, pint_t ip_end,
   }
 #endif
   _LIBUNWIND_LOG_NON_ZERO(::pthread_rwlock_unlock(&_lock));
+#endif
 }
 
 template <typename A>
@@ -479,30 +487,39 @@ private:
     return stepWithCompactEncoding(dummy);
   }
 
+#if defined(_LIBUNWIND_TARGET_X86_64)
   int stepWithCompactEncoding(Registers_x86_64 &) {
     return CompactUnwinder_x86_64<A>::stepWithCompactEncoding(
         _info.format, _info.start_ip, _addressSpace, _registers);
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_I386)
   int stepWithCompactEncoding(Registers_x86 &) {
     return CompactUnwinder_x86<A>::stepWithCompactEncoding(
         _info.format, (uint32_t)_info.start_ip, _addressSpace, _registers);
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_PPC)
   int stepWithCompactEncoding(Registers_ppc &) {
     return UNW_EINVAL;
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_AARCH64)
   int stepWithCompactEncoding(Registers_arm64 &) {
     return CompactUnwinder_arm64<A>::stepWithCompactEncoding(
         _info.format, _info.start_ip, _addressSpace, _registers);
   }
+#endif
 
   bool compactSaysUseDwarf(uint32_t *offset=NULL) const {
     R dummy;
     return compactSaysUseDwarf(dummy, offset);
   }
 
+#if defined(_LIBUNWIND_TARGET_X86_64)
   bool compactSaysUseDwarf(Registers_x86_64 &, uint32_t *offset) const {
     if ((_info.format & UNWIND_X86_64_MODE_MASK) == UNWIND_X86_64_MODE_DWARF) {
       if (offset)
@@ -511,7 +528,9 @@ private:
     }
     return false;
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_I386)
   bool compactSaysUseDwarf(Registers_x86 &, uint32_t *offset) const {
     if ((_info.format & UNWIND_X86_MODE_MASK) == UNWIND_X86_MODE_DWARF) {
       if (offset)
@@ -520,11 +539,15 @@ private:
     }
     return false;
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_PPC)
   bool compactSaysUseDwarf(Registers_ppc &, uint32_t *) const {
     return true;
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_AARCH64)
   bool compactSaysUseDwarf(Registers_arm64 &, uint32_t *offset) const {
     if ((_info.format & UNWIND_ARM64_MODE_MASK) == UNWIND_ARM64_MODE_DWARF) {
       if (offset)
@@ -533,6 +556,7 @@ private:
     }
     return false;
   }
+#endif
 #endif // _LIBUNWIND_SUPPORT_COMPACT_UNWIND
 
 #if _LIBUNWIND_SUPPORT_DWARF_UNWIND
@@ -541,25 +565,35 @@ private:
     return dwarfEncoding(dummy);
   }
 
+#if defined(_LIBUNWIND_TARGET_X86_64)
   compact_unwind_encoding_t dwarfEncoding(Registers_x86_64 &) const {
     return UNWIND_X86_64_MODE_DWARF;
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_I386)
   compact_unwind_encoding_t dwarfEncoding(Registers_x86 &) const {
     return UNWIND_X86_MODE_DWARF;
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_PPC)
   compact_unwind_encoding_t dwarfEncoding(Registers_ppc &) const {
     return 0;
   }
+#endif
 
+#if defined(_LIBUNWIND_TARGET_AARCH64)
   compact_unwind_encoding_t dwarfEncoding(Registers_arm64 &) const {
     return UNWIND_ARM64_MODE_DWARF;
   }
+#endif
 
+#if defined (_LIBUNWIND_TARGET_OR1K)
   compact_unwind_encoding_t dwarfEncoding(Registers_or1k &) const {
     return 0;
   }
+#endif
 #endif // _LIBUNWIND_SUPPORT_DWARF_UNWIND
 
 
@@ -575,7 +609,7 @@ template <typename A, typename R>
 UnwindCursor<A, R>::UnwindCursor(unw_context_t *context, A &as)
     : _addressSpace(as), _registers(context), _unwindInfoMissing(false),
       _isSignalFrame(false) {
-  static_assert(sizeof(UnwindCursor<A, R>) < sizeof(unw_cursor_t),
+  static_assert((check_fit<UnwindCursor<A, R>, unw_cursor_t>::does_fit),
                 "UnwindCursor<> does not fit in unw_cursor_t");
   memset(&_info, 0, sizeof(_info));
 }
@@ -901,7 +935,7 @@ bool UnwindCursor<A, R>::getInfoFromDwarfSection(pint_t pc,
       return true;
     }
   }
-  //_LIBUNWIND_DEBUG_LOG("can't find/use FDE for pc=0x%llX\n", (uint64_t)pc);
+  //_LIBUNWIND_DEBUG_LOG("can't find/use FDE for pc=0x%llX", (uint64_t)pc);
   return false;
 }
 #endif // _LIBUNWIND_SUPPORT_DWARF_UNWIND
@@ -1058,13 +1092,13 @@ bool UnwindCursor<A, R>::getInfoFromCompactEncodingSection(pint_t pc,
       funcEnd = firstLevelNextPageFunctionOffset + sects.dso_base;
     if (pc < funcStart) {
       _LIBUNWIND_DEBUG_LOG("malformed __unwind_info, pc=0x%llX not in second  "
-                           "level compressed unwind table. funcStart=0x%llX\n",
+                           "level compressed unwind table. funcStart=0x%llX",
                             (uint64_t) pc, (uint64_t) funcStart);
       return false;
     }
     if (pc > funcEnd) {
       _LIBUNWIND_DEBUG_LOG("malformed __unwind_info, pc=0x%llX not in second  "
-                          "level compressed unwind table. funcEnd=0x%llX\n",
+                          "level compressed unwind table. funcEnd=0x%llX",
                            (uint64_t) pc, (uint64_t) funcEnd);
       return false;
     }
@@ -1085,7 +1119,7 @@ bool UnwindCursor<A, R>::getInfoFromCompactEncodingSection(pint_t pc,
     }
   } else {
     _LIBUNWIND_DEBUG_LOG("malformed __unwind_info at 0x%0llX bad second "
-                         "level page\n",
+                         "level page",
                           (uint64_t) sects.compact_unwind_section);
     return false;
   }
@@ -1115,7 +1149,7 @@ bool UnwindCursor<A, R>::getInfoFromCompactEncodingSection(pint_t pc,
     }
     if (lsda == 0) {
       _LIBUNWIND_DEBUG_LOG("found encoding 0x%08X with HAS_LSDA bit set for "
-                    "pc=0x%0llX, but lsda table has no entry\n",
+                    "pc=0x%0llX, but lsda table has no entry",
                     encoding, (uint64_t) pc);
       return false;
     }
@@ -1128,7 +1162,7 @@ bool UnwindCursor<A, R>::getInfoFromCompactEncodingSection(pint_t pc,
     --personalityIndex; // change 1-based to zero-based index
     if (personalityIndex > sectionHeader.personalityArrayCount()) {
       _LIBUNWIND_DEBUG_LOG("found encoding 0x%08X with personality index %d,  "
-                            "but personality table has only %d entires\n",
+                            "but personality table has only %d entires",
                             encoding, personalityIndex,
                             sectionHeader.personalityArrayCount());
       return false;

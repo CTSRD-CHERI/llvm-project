@@ -18,7 +18,7 @@
 @_ZN1AC1ERKS_ = alias void (%class.A*, %class.A*), void (%class.A*, %class.A*)* @_ZN1AC2ERKS_
 
 ; Function Attrs: nounwind uwtable
-define void @_ZN1AC2Ei(%class.A* %this, i32 %i) unnamed_addr #0 align 2 {
+define void @_ZN1AC2Ei(%class.A* %this, i32 %i) unnamed_addr #0 align 2 !dbg !49 {
 entry:
   %this.addr = alloca %class.A*, align 8
   %i.addr = alloca i32, align 4
@@ -39,7 +39,7 @@ entry:
 declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
 ; Function Attrs: nounwind uwtable
-define void @_ZN1AC2ERKS_(%class.A* %this, %class.A* %rhs) unnamed_addr #0 align 2 {
+define void @_ZN1AC2ERKS_(%class.A* %this, %class.A* %rhs) unnamed_addr #0 align 2 !dbg !50 {
 entry:
   %this.addr = alloca %class.A*, align 8
   %rhs.addr = alloca %class.A*, align 8
@@ -59,7 +59,7 @@ entry:
 }
 
 ; Function Attrs: nounwind uwtable
-define %class.A* @_ZN1AaSERKS_(%class.A* %this, %class.A* %rhs) #0 align 2 {
+define %class.A* @_ZN1AaSERKS_(%class.A* %this, %class.A* %rhs) #0 align 2 !dbg !51 {
 entry:
   %this.addr = alloca %class.A*, align 8
   %rhs.addr = alloca %class.A*, align 8
@@ -77,7 +77,7 @@ entry:
 }
 
 ; Function Attrs: nounwind uwtable
-define i32 @_ZN1A7get_intEv(%class.A* %this) #0 align 2 {
+define i32 @_ZN1A7get_intEv(%class.A* %this) #0 align 2 !dbg !52 {
 entry:
   %this.addr = alloca %class.A*, align 8
   store %class.A* %this, %class.A** %this.addr, align 8
@@ -89,7 +89,7 @@ entry:
 }
 
 ; Function Attrs: uwtable
-define void @_ZN1B9AInstanceEv(%class.A* noalias sret %agg.result, %class.B* %this) #2 align 2 {
+define void @_ZN1B9AInstanceEv(%class.A* noalias sret %agg.result, %class.B* %this) #2 align 2 !dbg !53 {
 entry:
   %this.addr = alloca %class.B*, align 8
   %nrvo = alloca i1
@@ -114,7 +114,7 @@ nrvo.skipdtor:                                    ; preds = %nrvo.unused, %entry
 }
 
 ; Function Attrs: nounwind uwtable
-define linkonce_odr void @_ZN1AD2Ev(%class.A* %this) unnamed_addr #0 align 2 {
+define linkonce_odr void @_ZN1AD2Ev(%class.A* %this) unnamed_addr #0 align 2 !dbg !63 {
 entry:
   %this.addr = alloca %class.A*, align 8
   store %class.A* %this, %class.A** %this.addr, align 8
@@ -124,7 +124,7 @@ entry:
 }
 
 ; Function Attrs: uwtable
-define i32 @main(i32 %argc, i8** %argv) #2 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define i32 @main(i32 %argc, i8** %argv) #2 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) !dbg !54 {
 entry:
   %retval = alloca i32, align 4
   %argc.addr = alloca i32, align 4
@@ -189,7 +189,7 @@ terminate.lpad:                                   ; preds = %lpad
 }
 
 ; Function Attrs: nounwind uwtable
-define linkonce_odr void @_ZN1BC2Ev(%class.B* %this) unnamed_addr #0 align 2 {
+define linkonce_odr void @_ZN1BC2Ev(%class.B* %this) unnamed_addr #0 align 2 !dbg !62 {
 entry:
   %this.addr = alloca %class.B*, align 8
   store %class.B* %this, %class.B** %this.addr, align 8
@@ -212,7 +212,7 @@ declare i8* @__cxa_begin_catch(i8*)
 declare void @_ZSt9terminatev()
 
 ; Function Attrs: uwtable
-define linkonce_odr void @_ZN1AD0Ev(%class.A* %this) unnamed_addr #2 align 2 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define linkonce_odr void @_ZN1AD0Ev(%class.A* %this) unnamed_addr #2 align 2 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) !dbg !61 {
 entry:
   %this.addr = alloca %class.A*, align 8
   %exn.slot = alloca i8*
@@ -263,11 +263,11 @@ attributes #7 = { builtin nounwind }
 !llvm.module.flags = !{!64, !65}
 !llvm.ident = !{!66}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.5.0 (trunk 203283) (llvm/trunk 203307)", isOptimized: false, splitDebugFilename: "sret.dwo", emissionKind: 1, file: !1, enums: !2, retainedTypes: !3, subprograms: !48, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.5.0 (trunk 203283) (llvm/trunk 203307)", isOptimized: false, splitDebugFilename: "sret.dwo", emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !3, globals: !2, imports: !2)
 !1 = !DIFile(filename: "sret.cpp", directory: "/usr/local/google/home/echristo/tmp")
 !2 = !{}
 !3 = !{!4, !37}
-!4 = !DICompositeType(tag: DW_TAG_class_type, name: "A", line: 1, size: 128, align: 64, file: !1, elements: !5, vtableHolder: !"_ZTS1A", identifier: "_ZTS1A")
+!4 = !DICompositeType(tag: DW_TAG_class_type, name: "A", line: 1, size: 128, align: 64, file: !1, elements: !5, vtableHolder: !4, identifier: "_ZTS1A")
 !5 = !{!6, !13, !14, !19, !25, !29, !33}
 !6 = !DIDerivedType(tag: DW_TAG_member, name: "_vptr$A", size: 64, flags: DIFlagArtificial, file: !1, scope: !7, baseType: !8)
 !7 = !DIFile(filename: "sret.cpp", directory: "/usr/local/google/home/echristo/tmp")
@@ -276,55 +276,54 @@ attributes #7 = { builtin nounwind }
 !10 = !DISubroutineType(types: !11)
 !11 = !{!12}
 !12 = !DIBasicType(tag: DW_TAG_base_type, name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
-!13 = !DIDerivedType(tag: DW_TAG_member, name: "m_int", line: 13, size: 32, align: 32, offset: 64, flags: DIFlagProtected, file: !1, scope: !"_ZTS1A", baseType: !12)
-!14 = !DISubprogram(name: "A", line: 4, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 4, file: !1, scope: !"_ZTS1A", type: !15)
+!13 = !DIDerivedType(tag: DW_TAG_member, name: "m_int", line: 13, size: 32, align: 32, offset: 64, flags: DIFlagProtected, file: !1, scope: !4, baseType: !12)
+!14 = !DISubprogram(name: "A", line: 4, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 4, file: !1, scope: !4, type: !15)
 !15 = !DISubroutineType(types: !16)
 !16 = !{null, !17, !12}
-!17 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, flags: DIFlagArtificial | DIFlagObjectPointer, baseType: !"_ZTS1A")
-!19 = !DISubprogram(name: "A", line: 5, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 5, file: !1, scope: !"_ZTS1A", type: !20)
+!17 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, flags: DIFlagArtificial | DIFlagObjectPointer, baseType: !4)
+!19 = !DISubprogram(name: "A", line: 5, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 5, file: !1, scope: !4, type: !20)
 !20 = !DISubroutineType(types: !21)
 !21 = !{null, !17, !22}
-!22 = !DIDerivedType(tag: DW_TAG_reference_type, baseType: !23)
-!23 = !DIDerivedType(tag: DW_TAG_const_type, baseType: !"_ZTS1A")
-!25 = !DISubprogram(name: "operator=", linkageName: "_ZN1AaSERKS_", line: 7, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 7, file: !1, scope: !"_ZTS1A", type: !26)
+!22 = !DIDerivedType(tag: DW_TAG_reference_type, size: 64, align: 64, baseType: !23)
+!23 = !DIDerivedType(tag: DW_TAG_const_type, baseType: !4)
+!25 = !DISubprogram(name: "operator=", linkageName: "_ZN1AaSERKS_", line: 7, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 7, file: !1, scope: !4, type: !26)
 !26 = !DISubroutineType(types: !27)
 !27 = !{!22, !17, !22}
-!29 = !DISubprogram(name: "~A", line: 8, isLocal: false, isDefinition: false, virtuality: DW_VIRTUALITY_virtual, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 8, file: !1, scope: !"_ZTS1A", type: !30, containingType: !"_ZTS1A")
+!29 = !DISubprogram(name: "~A", line: 8, isLocal: false, isDefinition: false, virtuality: DW_VIRTUALITY_virtual, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 8, file: !1, scope: !4, type: !30, containingType: !4)
 !30 = !DISubroutineType(types: !31)
 !31 = !{null, !17}
-!33 = !DISubprogram(name: "get_int", linkageName: "_ZN1A7get_intEv", line: 10, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 10, file: !1, scope: !"_ZTS1A", type: !34)
+!33 = !DISubprogram(name: "get_int", linkageName: "_ZN1A7get_intEv", line: 10, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 10, file: !1, scope: !4, type: !34)
 !34 = !DISubroutineType(types: !35)
 !35 = !{!12, !17}
 !37 = !DICompositeType(tag: DW_TAG_class_type, name: "B", line: 38, size: 8, align: 8, file: !1, elements: !38, identifier: "_ZTS1B")
 !38 = !{!39, !44}
-!39 = !DISubprogram(name: "B", line: 41, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 41, file: !1, scope: !"_ZTS1B", type: !40)
+!39 = !DISubprogram(name: "B", line: 41, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 41, file: !1, scope: !37, type: !40)
 !40 = !DISubroutineType(types: !41)
 !41 = !{null, !42}
-!42 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, flags: DIFlagArtificial | DIFlagObjectPointer, baseType: !"_ZTS1B")
-!44 = !DISubprogram(name: "AInstance", linkageName: "_ZN1B9AInstanceEv", line: 43, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 43, file: !1, scope: !"_ZTS1B", type: !45)
+!42 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, flags: DIFlagArtificial | DIFlagObjectPointer, baseType: !37)
+!44 = !DISubprogram(name: "AInstance", linkageName: "_ZN1B9AInstanceEv", line: 43, isLocal: false, isDefinition: false, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 43, file: !1, scope: !37, type: !45)
 !45 = !DISubroutineType(types: !46)
 !46 = !{!4, !42}
-!48 = !{!49, !50, !51, !52, !53, !54, !61, !62, !63}
-!49 = distinct !DISubprogram(name: "A", linkageName: "_ZN1AC2Ei", line: 16, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 18, file: !1, scope: !"_ZTS1A", type: !15, function: void (%class.A*, i32)* @_ZN1AC2Ei, declaration: !14, variables: !2)
-!50 = distinct !DISubprogram(name: "A", linkageName: "_ZN1AC2ERKS_", line: 21, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 23, file: !1, scope: !"_ZTS1A", type: !20, function: void (%class.A*, %class.A*)* @_ZN1AC2ERKS_, declaration: !19, variables: !2)
-!51 = distinct !DISubprogram(name: "operator=", linkageName: "_ZN1AaSERKS_", line: 27, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 28, file: !1, scope: !"_ZTS1A", type: !26, function: %class.A* (%class.A*, %class.A*)* @_ZN1AaSERKS_, declaration: !25, variables: !2)
-!52 = distinct !DISubprogram(name: "get_int", linkageName: "_ZN1A7get_intEv", line: 33, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 34, file: !1, scope: !"_ZTS1A", type: !34, function: i32 (%class.A*)* @_ZN1A7get_intEv, declaration: !33, variables: !2)
-!53 = distinct !DISubprogram(name: "AInstance", linkageName: "_ZN1B9AInstanceEv", line: 47, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 48, file: !1, scope: !"_ZTS1B", type: !45, function: void (%class.A*, %class.B*)* @_ZN1B9AInstanceEv, declaration: !44, variables: !2)
-!54 = distinct !DISubprogram(name: "main", line: 53, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 54, file: !1, scope: !7, type: !55, function: i32 (i32, i8**)* @main, variables: !2)
+!49 = distinct !DISubprogram(name: "A", linkageName: "_ZN1AC2Ei", line: 16, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 18, file: !1, scope: !4, type: !15, declaration: !14, variables: !2)
+!50 = distinct !DISubprogram(name: "A", linkageName: "_ZN1AC2ERKS_", line: 21, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 23, file: !1, scope: !4, type: !20, declaration: !19, variables: !2)
+!51 = distinct !DISubprogram(name: "operator=", linkageName: "_ZN1AaSERKS_", line: 27, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 28, file: !1, scope: !4, type: !26, declaration: !25, variables: !2)
+!52 = distinct !DISubprogram(name: "get_int", linkageName: "_ZN1A7get_intEv", line: 33, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 34, file: !1, scope: !4, type: !34, declaration: !33, variables: !2)
+!53 = distinct !DISubprogram(name: "AInstance", linkageName: "_ZN1B9AInstanceEv", line: 47, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 48, file: !1, scope: !37, type: !45, declaration: !44, variables: !2)
+!54 = distinct !DISubprogram(name: "main", line: 53, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 54, file: !1, scope: !7, type: !55, variables: !2)
 !55 = !DISubroutineType(types: !56)
 !56 = !{!12, !12, !57}
 !57 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !58)
 !58 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !59)
 !59 = !DIDerivedType(tag: DW_TAG_const_type, baseType: !60)
 !60 = !DIBasicType(tag: DW_TAG_base_type, name: "char", size: 8, align: 8, encoding: DW_ATE_signed_char)
-!61 = distinct !DISubprogram(name: "~A", linkageName: "_ZN1AD0Ev", line: 8, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 8, file: !1, scope: !"_ZTS1A", type: !30, function: void (%class.A*)* @_ZN1AD0Ev, declaration: !29, variables: !2)
-!62 = distinct !DISubprogram(name: "B", linkageName: "_ZN1BC2Ev", line: 41, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 41, file: !1, scope: !"_ZTS1B", type: !40, function: void (%class.B*)* @_ZN1BC2Ev, declaration: !39, variables: !2)
-!63 = distinct !DISubprogram(name: "~A", linkageName: "_ZN1AD2Ev", line: 8, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 8, file: !1, scope: !"_ZTS1A", type: !30, function: void (%class.A*)* @_ZN1AD2Ev, declaration: !29, variables: !2)
+!61 = distinct !DISubprogram(name: "~A", linkageName: "_ZN1AD0Ev", line: 8, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 8, file: !1, scope: !4, type: !30, declaration: !29, variables: !2)
+!62 = distinct !DISubprogram(name: "B", linkageName: "_ZN1BC2Ev", line: 41, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 41, file: !1, scope: !37, type: !40, declaration: !39, variables: !2)
+!63 = distinct !DISubprogram(name: "~A", linkageName: "_ZN1AD2Ev", line: 8, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 8, file: !1, scope: !4, type: !30, declaration: !29, variables: !2)
 !64 = !{i32 2, !"Dwarf Version", i32 4}
 !65 = !{i32 1, !"Debug Info Version", i32 3}
 !66 = !{!"clang version 3.5.0 (trunk 203283) (llvm/trunk 203307)"}
 !67 = !DILocalVariable(name: "this", arg: 1, flags: DIFlagArtificial | DIFlagObjectPointer, scope: !49, type: !68)
-!68 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !"_ZTS1A")
+!68 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !4)
 !69 = !DILocation(line: 0, scope: !49)
 !70 = !DILocalVariable(name: "i", line: 16, arg: 2, scope: !49, file: !7, type: !12)
 !71 = !DILocation(line: 16, scope: !49)
@@ -346,7 +345,7 @@ attributes #7 = { builtin nounwind }
 !87 = !DILocation(line: 0, scope: !52)
 !88 = !DILocation(line: 35, scope: !52)
 !89 = !DILocalVariable(name: "this", arg: 1, flags: DIFlagArtificial | DIFlagObjectPointer, scope: !53, type: !90)
-!90 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !"_ZTS1B")
+!90 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !37)
 !91 = !DILocation(line: 0, scope: !53)
 !92 = !DILocation(line: 49, scope: !53)
 !93 = !DILocalVariable(name: "a", line: 49, scope: !53, file: !7, type: !4)

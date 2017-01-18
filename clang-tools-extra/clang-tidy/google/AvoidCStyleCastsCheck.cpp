@@ -20,8 +20,8 @@ namespace tidy {
 namespace google {
 namespace readability {
 
-void
-AvoidCStyleCastsCheck::registerMatchers(ast_matchers::MatchFinder *Finder) {
+void AvoidCStyleCastsCheck::registerMatchers(
+    ast_matchers::MatchFinder *Finder) {
   Finder->addMatcher(
       cStyleCastExpr(
           // Filter out (EnumType)IntegerLiteral construct, which is generated
@@ -29,7 +29,8 @@ AvoidCStyleCastsCheck::registerMatchers(ast_matchers::MatchFinder *Finder) {
           // FIXME: Remove this once this is fixed in the AST.
           unless(hasParent(substNonTypeTemplateParmExpr())),
           // Avoid matches in template instantiations.
-          unless(isInTemplateInstantiation())).bind("cast"),
+          unless(isInTemplateInstantiation()))
+          .bind("cast"),
       this);
 }
 
@@ -85,9 +86,8 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
     return;
   }
 
-
   // The rest of this check is only relevant to C++.
-  if (!Result.Context->getLangOpts().CPlusPlus)
+  if (!getLangOpts().CPlusPlus)
     return;
   // Ignore code inside extern "C" {} blocks.
   if (!match(expr(hasAncestor(linkageSpecDecl())), *CastExpr, *Result.Context)
@@ -109,13 +109,13 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
       Lexer::getSourceText(CharSourceRange::getTokenRange(
                                CastExpr->getLParenLoc().getLocWithOffset(1),
                                CastExpr->getRParenLoc().getLocWithOffset(-1)),
-                           SM, Result.Context->getLangOpts());
+                           SM, getLangOpts());
 
   auto diag_builder =
-      diag(CastExpr->getLocStart(), "C-style casts are discouraged. %0");
+      diag(CastExpr->getLocStart(), "C-style casts are discouraged; use %0");
 
   auto ReplaceWithCast = [&](StringRef CastType) {
-    diag_builder << ("Use " + CastType).str();
+    diag_builder << CastType;
 
     const Expr *SubExpr = CastExpr->getSubExprAsWritten()->IgnoreImpCasts();
     std::string CastText = (CastType + "<" + DestTypeString + ">").str();
@@ -123,7 +123,7 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
       CastText.push_back('(');
       diag_builder << FixItHint::CreateInsertion(
           Lexer::getLocForEndOfToken(SubExpr->getLocEnd(), 0, SM,
-                                     Result.Context->getLangOpts()),
+                                     getLangOpts()),
           ")");
     }
     diag_builder << FixItHint::CreateReplacement(ParenRange, CastText);
@@ -144,7 +144,7 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
       ReplaceWithCast("const_cast");
       return;
     }
-    // FALLTHROUGH
+  // FALLTHROUGH
   case clang::CK_IntegralCast:
     // Convert integral and no-op casts between builtin types and enums to
     // static_cast. A cast from enum to integer may be unnecessary, but it's
@@ -166,7 +166,7 @@ void AvoidCStyleCastsCheck::check(const MatchFinder::MatchResult &Result) {
     break;
   }
 
-  diag_builder << "Use static_cast/const_cast/reinterpret_cast";
+  diag_builder << "static_cast/const_cast/reinterpret_cast";
 }
 
 } // namespace readability

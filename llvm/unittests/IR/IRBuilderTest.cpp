@@ -131,7 +131,7 @@ TEST_F(IRBuilderTest, GetIntTy) {
 TEST_F(IRBuilderTest, FastMathFlags) {
   IRBuilder<> Builder(BB);
   Value *F, *FC;
-  Instruction *FDiv, *FAdd, *FCmp;
+  Instruction *FDiv, *FAdd, *FCmp, *FCall;
 
   F = Builder.CreateLoad(GV);
   F = Builder.CreateFAdd(F, F);
@@ -142,13 +142,13 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   EXPECT_FALSE(FAdd->hasNoNaNs());
 
   FastMathFlags FMF;
-  Builder.SetFastMathFlags(FMF);
+  Builder.setFastMathFlags(FMF);
 
   F = Builder.CreateFAdd(F, F);
   EXPECT_FALSE(Builder.getFastMathFlags().any());
 
   FMF.setUnsafeAlgebra();
-  Builder.SetFastMathFlags(FMF);
+  Builder.setFastMathFlags(FMF);
 
   F = Builder.CreateFAdd(F, F);
   EXPECT_TRUE(Builder.getFastMathFlags().any());
@@ -179,7 +179,7 @@ TEST_F(IRBuilderTest, FastMathFlags) {
 
   FMF.clear();
   FMF.setAllowReciprocal();
-  Builder.SetFastMathFlags(FMF);
+  Builder.setFastMathFlags(FMF);
 
   F = Builder.CreateFDiv(F, F);
   EXPECT_TRUE(Builder.getFastMathFlags().any());
@@ -197,7 +197,7 @@ TEST_F(IRBuilderTest, FastMathFlags) {
 
   FMF.clear();
   FMF.setAllowReciprocal();
-  Builder.SetFastMathFlags(FMF);
+  Builder.setFastMathFlags(FMF);
 
   FC = Builder.CreateFCmpOEQ(F, F);
   EXPECT_TRUE(Builder.getFastMathFlags().any());
@@ -205,6 +205,36 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   ASSERT_TRUE(isa<Instruction>(FC));
   FCmp = cast<Instruction>(FC);
   EXPECT_TRUE(FCmp->hasAllowReciprocal());
+
+  Builder.clearFastMathFlags();
+ 
+  // Test a call with FMF.
+  auto CalleeTy = FunctionType::get(Type::getFloatTy(Ctx),
+                                    /*isVarArg=*/false);
+  auto Callee =
+      Function::Create(CalleeTy, Function::ExternalLinkage, "", M.get());
+
+  FCall = Builder.CreateCall(Callee, None);
+  EXPECT_FALSE(FCall->hasNoNaNs());
+
+  Value *V = 
+      Function::Create(CalleeTy, Function::ExternalLinkage, "", M.get());
+  FCall = Builder.CreateCall(V, None);
+  EXPECT_FALSE(FCall->hasNoNaNs());
+
+  FMF.clear();
+  FMF.setNoNaNs();
+  Builder.setFastMathFlags(FMF);
+
+  FCall = Builder.CreateCall(Callee, None);
+  EXPECT_TRUE(Builder.getFastMathFlags().any());
+  EXPECT_TRUE(Builder.getFastMathFlags().NoNaNs);
+  EXPECT_TRUE(FCall->hasNoNaNs());
+
+  FCall = Builder.CreateCall(V, None);
+  EXPECT_TRUE(Builder.getFastMathFlags().any());
+  EXPECT_TRUE(Builder.getFastMathFlags().NoNaNs);
+  EXPECT_TRUE(FCall->hasNoNaNs());
 
   Builder.clearFastMathFlags();
 
@@ -222,7 +252,7 @@ TEST_F(IRBuilderTest, FastMathFlags) {
 }
 
 TEST_F(IRBuilderTest, WrapFlags) {
-  IRBuilder<true, NoFolder> Builder(BB);
+  IRBuilder<NoFolder> Builder(BB);
 
   // Test instructions.
   GlobalVariable *G = new GlobalVariable(*M, Builder.getInt32Ty(), true,
@@ -279,14 +309,14 @@ TEST_F(IRBuilderTest, RAIIHelpersTest) {
   MDNode *FPMathA = MDB.createFPMath(0.01f);
   MDNode *FPMathB = MDB.createFPMath(0.1f);
 
-  Builder.SetDefaultFPMathTag(FPMathA);
+  Builder.setDefaultFPMathTag(FPMathA);
 
   {
     IRBuilder<>::FastMathFlagGuard Guard(Builder);
     FastMathFlags FMF;
     FMF.setAllowReciprocal();
-    Builder.SetFastMathFlags(FMF);
-    Builder.SetDefaultFPMathTag(FPMathB);
+    Builder.setFastMathFlags(FMF);
+    Builder.setDefaultFPMathTag(FPMathB);
     EXPECT_TRUE(Builder.getFastMathFlags().allowReciprocal());
     EXPECT_EQ(FPMathB, Builder.getDefaultFPMathTag());
   }
@@ -313,10 +343,12 @@ TEST_F(IRBuilderTest, DIBuilder) {
   auto CU = DIB.createCompileUnit(dwarf::DW_LANG_Cobol74, "F.CBL", "/",
                                   "llvm-cobol74", true, "", 0);
   auto Type = DIB.createSubroutineType(DIB.getOrCreateTypeArray(None));
-  DIB.createFunction(CU, "foo", "", File, 1, Type, false, true, 1, 0, true, F);
+  auto SP = DIB.createFunction(CU, "foo", "", File, 1, Type, false, true, 1,
+                               DINode::FlagZero, true);
+  F->setSubprogram(SP);
   AllocaInst *I = Builder.CreateAlloca(Builder.getInt8Ty());
   auto BarSP = DIB.createFunction(CU, "bar", "", File, 1, Type, false, true, 1,
-                                  0, true, nullptr);
+                                  DINode::FlagZero, true);
   auto BadScope = DIB.createLexicalBlockFile(BarSP, File, 0);
   I->setDebugLoc(DebugLoc::get(2, 0, BadScope));
   DIB.finalize();
@@ -385,5 +417,19 @@ TEST_F(IRBuilderTest, DebugLoc) {
   EXPECT_EQ(DL2, Call2->getDebugLoc());
 
   DIB.finalize();
+}
+
+TEST_F(IRBuilderTest, DIImportedEntity) {
+  IRBuilder<> Builder(BB);
+  DIBuilder DIB(*M);
+  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_Cobol74, "F.CBL", "/",
+    "llvm-cobol74", true, "", 0);
+  DIB.createImportedDeclaration(CU, nullptr, 1);
+  DIB.createImportedDeclaration(CU, nullptr, 1);
+  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, 2);
+  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, 2);
+  DIB.finalize();
+  EXPECT_TRUE(verifyModule(*M));
+  EXPECT_TRUE(CU->getImportedEntities().size() == 2);
 }
 }

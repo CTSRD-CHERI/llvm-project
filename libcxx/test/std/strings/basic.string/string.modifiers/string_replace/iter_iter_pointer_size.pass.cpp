@@ -12,12 +12,11 @@
 // basic_string<charT,traits,Allocator>&
 //   replace(const_iterator i1, const_iterator i2, const charT* s, size_type n);
 
-#include <stdio.h>
-
 #include <string>
 #include <algorithm>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
@@ -30,7 +29,7 @@ test(S s, typename S::size_type pos1, typename S::size_type n1, const typename S
     typename S::const_iterator last = s.begin() + pos1 + n1;
     typename S::size_type xlen = last - first;
     s.replace(first, last, str, n2);
-    assert(s.__invariants());
+    LIBCPP_ASSERT(s.__invariants());
     assert(s == expected);
     typename S::size_type rlen = n2;
     assert(s.size() == old_size - xlen + rlen);
@@ -959,7 +958,7 @@ int main()
     test7<S>();
     test8<S>();
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test0<S>();
@@ -973,4 +972,20 @@ int main()
     test8<S>();
     }
 #endif
+
+	{ // test replacing into self
+    typedef std::string S;
+	S s_short = "123/";
+	S s_long  = "Lorem ipsum dolor sit amet, consectetur/";
+	
+	s_short.replace(s_short.begin(), s_short.begin(), s_short.data(), s_short.size());
+	assert(s_short == "123/123/");
+	s_short.replace(s_short.begin(), s_short.begin(), s_short.data(), s_short.size());
+	assert(s_short == "123/123/123/123/");
+	s_short.replace(s_short.begin(), s_short.begin(), s_short.data(), s_short.size());
+	assert(s_short == "123/123/123/123/123/123/123/123/");
+	
+	s_long.replace(s_long.begin(), s_long.begin(), s_long.data(), s_long.size());
+	assert(s_long == "Lorem ipsum dolor sit amet, consectetur/Lorem ipsum dolor sit amet, consectetur/");
+	}
 }

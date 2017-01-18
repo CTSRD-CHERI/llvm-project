@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //
-// Compatible with libuwind API documented at:
+// Compatible with libunwind API documented at:
 //   http://www.nongnu.org/libunwind/man/libunwind(3).html
 //
 //===----------------------------------------------------------------------===//
@@ -20,12 +20,26 @@
 #include <stddef.h>
 
 #ifdef __APPLE__
-  #include <Availability.h>
-    #ifdef __arm__
-       #define LIBUNWIND_AVAIL __attribute__((unavailable))
-    #else
-      #define LIBUNWIND_AVAIL __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_5_0)
+  #if __clang__
+    #if __has_include(<Availability.h>)
+      #include <Availability.h>
     #endif
+  #elif __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
+    #include <Availability.h>
+  #endif
+
+  #ifdef __arm__
+     #define LIBUNWIND_AVAIL __attribute__((unavailable))
+  #elif defined(__OSX_AVAILABLE_STARTING)
+    #define LIBUNWIND_AVAIL __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_5_0)
+  #else
+    #include <AvailabilityMacros.h>
+    #ifdef AVAILABLE_MAC_OS_X_VERSION_10_6_AND_LATER
+      #define LIBUNWIND_AVAIL AVAILABLE_MAC_OS_X_VERSION_10_6_AND_LATER
+    #else
+      #define LIBUNWIND_AVAIL __attribute__((unavailable))
+    #endif
+  #endif
 #else
   #define LIBUNWIND_AVAIL
 #endif
@@ -46,12 +60,12 @@ enum {
 };
 
 struct unw_context_t {
-  uint64_t data[128];
+  uint64_t data[_LIBUNWIND_CONTEXT_SIZE];
 };
 typedef struct unw_context_t unw_context_t;
 
 struct unw_cursor_t {
-  uint64_t data[140];
+  uint64_t data[_LIBUNWIND_CURSOR_SIZE];
 };
 typedef struct unw_cursor_t unw_cursor_t;
 
@@ -75,8 +89,8 @@ struct unw_proc_info_t {
   unw_word_t  gp;               /* not used */
   unw_word_t  flags;            /* not used */
   uint32_t    format;           /* compact unwind encoding, or zero if none */
-  uint32_t    unwind_info_size; /* size of dwarf unwind info, or zero if none */
-  unw_word_t  unwind_info;      /* address of dwarf unwind info, or zero */
+  uint32_t    unwind_info_size; /* size of DWARF unwind info, or zero if none */
+  unw_word_t  unwind_info;      /* address of DWARF unwind info, or zero */
   unw_word_t  extra;            /* mach_header of mach-o image containing func */
 };
 typedef struct unw_proc_info_t unw_proc_info_t;
@@ -120,7 +134,7 @@ extern int unw_init_remote_thread(unw_cursor_t *, unw_addr_space_t, thread_t *);
 #endif /* UNW_REMOTE */
 
 /*
- * traditional libuwind "remote" API
+ * traditional libunwind "remote" API
  *   NOT IMPLEMENTED on Mac OS X
  *
  * extern int               unw_init_remote(unw_cursor_t*, unw_addr_space_t,
@@ -151,8 +165,13 @@ enum {
   UNW_X86_ECX = 1,
   UNW_X86_EDX = 2,
   UNW_X86_EBX = 3,
+#if defined(__CloudABI__) || defined(__FreeBSD__)
+  UNW_X86_ESP = 4,
+  UNW_X86_EBP = 5,
+#else
   UNW_X86_EBP = 4,
   UNW_X86_ESP = 5,
+#endif
   UNW_X86_ESI = 6,
   UNW_X86_EDI = 7
 };

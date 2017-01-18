@@ -1,4 +1,4 @@
-//===- lib/ReaderWriter/MachO/StubsPass.cpp -------------------------------===//
+//===- lib/ReaderWriter/MachO/StubsPass.cpp ---------------------*- C++ -*-===//
 //
 //                             The LLVM Linker
 //
@@ -26,10 +26,8 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 
-
 namespace lld {
 namespace mach_o {
-
 
 //
 //  Lazy Pointer Atom created by the stubs pass.
@@ -38,6 +36,8 @@ class LazyPointerAtom : public SimpleDefinedAtom {
 public:
   LazyPointerAtom(const File &file, bool is64)
     : SimpleDefinedAtom(file), _is64(is64) { }
+
+  ~LazyPointerAtom() override = default;
 
   ContentType contentType() const override {
     return DefinedAtom::typeLazyPointer;
@@ -65,17 +65,18 @@ private:
   const bool _is64;
 };
 
-
 //
 //  NonLazyPointer (GOT) Atom created by the stubs pass.
 //
 class NonLazyPointerAtom : public SimpleDefinedAtom {
 public:
-  NonLazyPointerAtom(const File &file, bool is64)
-    : SimpleDefinedAtom(file), _is64(is64) { }
+  NonLazyPointerAtom(const File &file, bool is64, ContentType contentType)
+    : SimpleDefinedAtom(file), _is64(is64), _contentType(contentType) { }
+
+  ~NonLazyPointerAtom() override = default;
 
   ContentType contentType() const override {
-    return DefinedAtom::typeGOT;
+    return _contentType;
   }
 
   Alignment alignment() const override {
@@ -98,9 +99,8 @@ public:
 
 private:
   const bool _is64;
+  const ContentType _contentType;
 };
-
-
 
 //
 // Stub Atom created by the stubs pass.
@@ -109,6 +109,8 @@ class StubAtom : public SimpleDefinedAtom {
 public:
   StubAtom(const File &file, const ArchHandler::StubInfo &stubInfo)
       : SimpleDefinedAtom(file), _stubInfo(stubInfo){ }
+
+  ~StubAtom() override = default;
 
   ContentType contentType() const override {
     return DefinedAtom::typeStub;
@@ -134,7 +136,6 @@ private:
   const ArchHandler::StubInfo   &_stubInfo;
 };
 
-
 //
 // Stub Helper Atom created by the stubs pass.
 //
@@ -142,6 +143,8 @@ class StubHelperAtom : public SimpleDefinedAtom {
 public:
   StubHelperAtom(const File &file, const ArchHandler::StubInfo &stubInfo)
       : SimpleDefinedAtom(file), _stubInfo(stubInfo) { }
+
+  ~StubHelperAtom() override = default;
 
   ContentType contentType() const override {
     return DefinedAtom::typeStubHelper;
@@ -168,7 +171,6 @@ private:
   const ArchHandler::StubInfo   &_stubInfo;
 };
 
-
 //
 // Stub Helper Common Atom created by the stubs pass.
 //
@@ -177,12 +179,14 @@ public:
   StubHelperCommonAtom(const File &file, const ArchHandler::StubInfo &stubInfo)
       : SimpleDefinedAtom(file), _stubInfo(stubInfo) { }
 
+  ~StubHelperCommonAtom() override = default;
+
   ContentType contentType() const override {
     return DefinedAtom::typeStubHelper;
   }
 
   Alignment alignment() const override {
-    return 1 << _stubInfo.codeAlignment;
+    return 1 << _stubInfo.stubHelperCommonAlignment;
   }
 
   uint64_t size() const override {
@@ -202,17 +206,19 @@ private:
   const ArchHandler::StubInfo   &_stubInfo;
 };
 
-
 class StubsPass : public Pass {
 public:
   StubsPass(const MachOLinkingContext &context)
       : _ctx(context), _archHandler(_ctx.archHandler()),
-        _stubInfo(_archHandler.stubInfo()), _file("<mach-o Stubs pass>") {}
+        _stubInfo(_archHandler.stubInfo()),
+        _file(*_ctx.make_file<MachOFile>("<mach-o Stubs pass>")) {
+    _file.setOrdinal(_ctx.getNextOrdinalAndIncrement());
+  }
 
-  std::error_code perform(SimpleFile &mergedFile) override {
+  llvm::Error perform(SimpleFile &mergedFile) override {
     // Skip this pass if output format uses text relocations instead of stubs.
     if (!this->noTextRelocs())
-      return std::error_code();
+      return llvm::Error::success();
 
     // Scan all references in all atoms.
     for (const DefinedAtom *atom : mergedFile.defined()) {
@@ -239,15 +245,17 @@ public:
 
     // Exit early if no stubs needed.
     if (_targetToUses.empty())
-      return std::error_code();
+      return llvm::Error::success();
 
     // First add help-common and GOT slots used by lazy binding.
     SimpleDefinedAtom *helperCommonAtom =
         new (_file.allocator()) StubHelperCommonAtom(_file, _stubInfo);
     SimpleDefinedAtom *helperCacheNLPAtom =
-        new (_file.allocator()) NonLazyPointerAtom(_file, _ctx.is64Bit());
+        new (_file.allocator()) NonLazyPointerAtom(_file, _ctx.is64Bit(),
+                                    _stubInfo.stubHelperImageCacheContentType);
     SimpleDefinedAtom *helperBinderNLPAtom =
-        new (_file.allocator()) NonLazyPointerAtom(_file, _ctx.is64Bit());
+        new (_file.allocator()) NonLazyPointerAtom(_file, _ctx.is64Bit(),
+                                    _stubInfo.stubHelperImageCacheContentType);
     addReference(helperCommonAtom, _stubInfo.stubHelperCommonReferenceToCache,
                  helperCacheNLPAtom);
     addOptReference(
@@ -284,11 +292,10 @@ public:
     // Make and append stubs, lazy pointers, and helpers in alphabetical order.
     unsigned lazyOffset = 0;
     for (const Atom *target : targetsNeedingStubs) {
-      StubAtom *stub = new (_file.allocator()) StubAtom(_file, _stubInfo);
-      LazyPointerAtom *lp =
+      auto *stub = new (_file.allocator()) StubAtom(_file, _stubInfo);
+      auto *lp =
           new (_file.allocator()) LazyPointerAtom(_file, _ctx.is64Bit());
-      StubHelperAtom *helper =
-          new (_file.allocator()) StubHelperAtom(_file, _stubInfo);
+      auto *helper = new (_file.allocator()) StubHelperAtom(_file, _stubInfo);
 
       addReference(stub, _stubInfo.stubReferenceToLP, lp);
       addOptReference(stub, _stubInfo.stubReferenceToLP,
@@ -316,11 +323,10 @@ public:
       lazyOffset += target->name().size() + 12;
     }
 
-    return std::error_code();
+    return llvm::Error::success();
   }
 
 private:
-
   bool noTextRelocs() {
     return true;
   }
@@ -361,11 +367,9 @@ private:
   const MachOLinkingContext &_ctx;
   mach_o::ArchHandler                            &_archHandler;
   const ArchHandler::StubInfo                    &_stubInfo;
-  MachOFile                                       _file;
+  MachOFile                                      &_file;
   TargetToUses                                    _targetToUses;
 };
-
-
 
 void addStubsPass(PassManager &pm, const MachOLinkingContext &ctx) {
   pm.add(std::unique_ptr<Pass>(new StubsPass(ctx)));

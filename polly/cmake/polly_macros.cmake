@@ -2,7 +2,7 @@
 include(CMakeParseArguments)
 
 macro(add_polly_library name)
-  cmake_parse_arguments(ARG "FORCE_STATIC" "" "" ${ARGN})
+  cmake_parse_arguments(ARG "" "" "" ${ARGN})
   set(srcs ${ARG_UNPARSED_ARGUMENTS})
   if(MSVC_IDE OR XCODE)
     file( GLOB_RECURSE headers *.h *.td *.def)
@@ -15,8 +15,6 @@ macro(add_polly_library name)
   endif(MSVC_IDE OR XCODE)
   if (MODULE)
     set(libkind MODULE)
-  elseif (ARG_FORCE_STATIC)
-    set(libkind STATIC)
   elseif (SHARED_LIBRARY)
     set(libkind SHARED)
   else()
@@ -43,10 +41,12 @@ macro(add_polly_library name)
   if( LLVM_LINK_COMPONENTS )
     llvm_config(${name} ${LLVM_LINK_COMPONENTS})
   endif( LLVM_LINK_COMPONENTS )
-  install(TARGETS ${name}
-    EXPORT LLVMExports
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX})
+  if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY OR ${name} STREQUAL "LLVMPolly")
+    install(TARGETS ${name}
+      EXPORT LLVMExports
+      LIBRARY DESTINATION lib${LLVM_LIBDIR_SUFFIX}
+      ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX})
+  endif()
   set_property(GLOBAL APPEND PROPERTY LLVM_EXPORTS ${name})
 endmacro(add_polly_library)
 

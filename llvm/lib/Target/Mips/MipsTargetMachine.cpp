@@ -27,6 +27,7 @@
 #include "MipsTargetObjectFile.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -45,11 +46,11 @@ llvm::cl::init(false));
 
 extern "C" void LLVMInitializeMipsTarget() {
   // Register the target.
-  RegisterTargetMachine<MipsebTargetMachine> X(TheMipsTarget);
-  RegisterTargetMachine<MipselTargetMachine> Y(TheMipselTarget);
-  RegisterTargetMachine<MipsebTargetMachine> A(TheMips64Target);
-  RegisterTargetMachine<MipselTargetMachine> B(TheMips64elTarget);
-  RegisterTargetMachine<MipsCheriTargetMachine> C(TheMipsCheriTarget);
+  RegisterTargetMachine<MipsebTargetMachine> X(getTheMipsTarget());
+  RegisterTargetMachine<MipselTargetMachine> Y(getTheMipselTarget());
+  RegisterTargetMachine<MipsebTargetMachine> A(getTheMips64Target());
+  RegisterTargetMachine<MipselTargetMachine> B(getTheMips64elTarget());
+  RegisterTargetMachine<MipsCheriTargetMachine> C(getTheMipsCheriTarget());
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef CPU,
@@ -65,7 +66,10 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   else
     Ret += "E";
 
-  Ret += "-m:m";
+  if (ABI.IsO32())
+    Ret += "-m:m";
+  else
+    Ret += "-m:e";
 
   if (FS.find("+cheri128") != StringRef::npos) {
 #ifndef CHERI_IS_128
@@ -109,6 +113,13 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   return Ret;
 }
 
+static Reloc::Model getEffectiveRelocModel(CodeModel::Model CM,
+                                           Optional<Reloc::Model> RM) {
+  if (!RM.hasValue() || CM == CodeModel::JITDefault)
+    return Reloc::Static;
+  return *RM;
+}
+
 // On function prologue, the stack is created by decrementing
 // its pointer. Once decremented, all references are done with positive
 // offset from the stack/frame pointer, using StackGrowsUp enables
@@ -117,10 +128,12 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
 MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                                      StringRef CPU, StringRef FS,
                                      const TargetOptions &Options,
-                                     Reloc::Model RM, CodeModel::Model CM,
-                                     CodeGenOpt::Level OL, bool isLittle)
-    : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, FS, isLittle),
-            TT, CPU, FS, Options, RM, CM, OL),
+                                     Optional<Reloc::Model> RM,
+                                     CodeModel::Model CM, CodeGenOpt::Level OL,
+                                     bool isLittle)
+    : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, isLittle), TT,
+                        CPU, FS, Options, getEffectiveRelocModel(CM, RM), CM,
+                        OL),
       isLittle(isLittle), TLOF(make_unique<MipsTargetObjectFile>()),
       ABI(MipsABIInfo::computeTargetABI(TT, CPU, Options.MCOptions)),
       Subtarget(nullptr), DefaultSubtarget(TT, CPU, FS, isLittle, *this),
@@ -139,7 +152,8 @@ void MipsebTargetMachine::anchor() { }
 MipsebTargetMachine::MipsebTargetMachine(const Target &T, const Triple &TT,
                                          StringRef CPU, StringRef FS,
                                          const TargetOptions &Options,
-                                         Reloc::Model RM, CodeModel::Model CM,
+                                         Optional<Reloc::Model> RM,
+                                         CodeModel::Model CM,
                                          CodeGenOpt::Level OL)
     : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, false) {}
 
@@ -148,7 +162,8 @@ void MipselTargetMachine::anchor() { }
 MipselTargetMachine::MipselTargetMachine(const Target &T, const Triple &TT,
                                          StringRef CPU, StringRef FS,
                                          const TargetOptions &Options,
-                                         Reloc::Model RM, CodeModel::Model CM,
+                                         Optional<Reloc::Model> RM,
+                                         CodeModel::Model CM,
                                          CodeGenOpt::Level OL)
     : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, true) {}
 
@@ -240,7 +255,6 @@ public:
 
   void addIRPasses() override;
   bool addInstSelector() override;
-  void addMachineSSAOptimization() override;
   void addPreEmitPass() override;
 
   void addPreRegAlloc() override;
@@ -253,8 +267,7 @@ TargetPassConfig *MipsTargetMachine::createPassConfig(PassManagerBase &PM) {
 }
 
 void MipsPassConfig::addPreRegAlloc() {
-  if (getOptLevel() == CodeGenOpt::None)
-    addPass(createMipsOptimizePICCallPass(getMipsTargetMachine()));
+  addPass(createMipsOptimizePICCallPass(getMipsTargetMachine()));
 
   MipsTargetMachine &TM = getMipsTargetMachine();
   if (TM.getSubtargetImpl()->isCheri())
@@ -280,14 +293,9 @@ void MipsPassConfig::addIRPasses() {
 // the ISelDag to gen Mips code.
 bool MipsPassConfig::addInstSelector() {
   addPass(createMipsModuleISelDagPass(getMipsTargetMachine()));
-  addPass(createMips16ISelDag(getMipsTargetMachine()));
-  addPass(createMipsSEISelDag(getMipsTargetMachine()));
+  addPass(createMips16ISelDag(getMipsTargetMachine(), getOptLevel()));
+  addPass(createMipsSEISelDag(getMipsTargetMachine(), getOptLevel()));
   return false;
-}
-
-void MipsPassConfig::addMachineSSAOptimization() {
-  addPass(createMipsOptimizePICCallPass(getMipsTargetMachine()));
-  TargetPassConfig::addMachineSSAOptimization();
 }
 
 TargetIRAnalysis MipsTargetMachine::getTargetIRAnalysis() {
@@ -308,7 +316,13 @@ TargetIRAnalysis MipsTargetMachine::getTargetIRAnalysis() {
 // print out the code after the passes.
 void MipsPassConfig::addPreEmitPass() {
   MipsTargetMachine &TM = getMipsTargetMachine();
+
+  // The delay slot filler pass can potientially create forbidden slot (FS)
+  // hazards for MIPSR6 which the hazard schedule pass (HSP) will fix. Any
+  // (new) pass that creates compact branches after the HSP must handle FS
+  // hazards itself or be pipelined before the HSP.
   addPass(createMipsDelaySlotFillerPass(TM));
+  addPass(createMipsHazardSchedule());
   addPass(createMipsLongBranchPass(TM));
-  addPass(createMipsConstantIslandPass(TM));
+  addPass(createMipsConstantIslandPass());
 }

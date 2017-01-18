@@ -13,7 +13,9 @@ set(ISL_CODEGEN_FILES
     CodeGen/CodeGeneration.cpp)
 
 if (GPU_CODEGEN)
-  set (GPGPU_CODEGEN_FILES)
+  set (GPGPU_CODEGEN_FILES
+       CodeGen/PPCGCodeGeneration.cpp
+       )
 endif (GPU_CODEGEN)
 
 # Compile ISL into a separate library.
@@ -26,9 +28,11 @@ endif ()
 
 add_polly_library(Polly
   Analysis/DependenceInfo.cpp
+  Analysis/PolyhedralInfo.cpp
   Analysis/ScopDetection.cpp
   Analysis/ScopDetectionDiagnostic.cpp
   Analysis/ScopInfo.cpp
+  Analysis/ScopBuilder.cpp
   Analysis/ScopGraphPrinter.cpp
   Analysis/ScopPass.cpp
   CodeGen/BlockGenerators.cpp
@@ -37,6 +41,7 @@ add_polly_library(Polly
   CodeGen/IRBuilder.cpp
   CodeGen/Utils.cpp
   CodeGen/RuntimeDebugBuilder.cpp
+  CodeGen/CodegenCleanup.cpp
   ${GPGPU_CODEGEN_FILES}
   Exchange/JSONExporter.cpp
   Support/GICHelper.cpp
@@ -50,8 +55,14 @@ add_polly_library(Polly
   Transform/CodePreparation.cpp
   Transform/DeadCodeElimination.cpp
   Transform/ScheduleOptimizer.cpp
+  Transform/FlattenSchedule.cpp
+  Transform/FlattenAlgo.cpp
   ${POLLY_HEADER_FILES}
   )
+
+if (GPU_CODEGEN)
+  target_link_libraries(Polly PollyPPCG)
+endif (GPU_CODEGEN)
 
 target_link_libraries(Polly PollyISL)
 
@@ -65,6 +76,20 @@ if (BUILD_SHARED_LIBS)
     LLVMAnalysis
     LLVMipo
     LLVMMC
+# The libraries below are required for darwin: http://PR26392
+    LLVMBitReader
+    LLVMMCParser
+    LLVMObject
+    LLVMProfileData
+    LLVMTarget
+    LLVMVectorize
+  )
+  link_directories(
+    ${LLVM_LIBRARY_DIR}
+  )
+elseif (LLVM_LINK_LLVM_DYLIB)
+  target_link_libraries(Polly
+    LLVM
   )
   link_directories(
     ${LLVM_LIBRARY_DIR}

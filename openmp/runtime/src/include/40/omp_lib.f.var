@@ -31,7 +31,6 @@
         integer, parameter :: kmp_size_t_kind        = int_ptr_kind()
         integer, parameter :: kmp_affinity_mask_kind = int_ptr_kind()
         integer, parameter :: kmp_cancel_kind        = omp_integer_kind
-        integer, parameter :: kmp_lock_hint_kind     = omp_integer_kind
 
       end module omp_lib_kinds
 
@@ -61,32 +60,25 @@
         integer (kind=kmp_cancel_kind), parameter :: kmp_cancel_sections = 3
         integer (kind=kmp_cancel_kind), parameter :: kmp_cancel_taskgroup = 4
 
-        integer (kind=kmp_lock_hint_kind), parameter :: kmp_lock_hint_none           = 0
-        integer (kind=kmp_lock_hint_kind), parameter :: kmp_lock_hint_uncontended    = 1
-        integer (kind=kmp_lock_hint_kind), parameter :: kmp_lock_hint_contended      = 2
-        integer (kind=kmp_lock_hint_kind), parameter :: kmp_lock_hint_nonspeculative = 3
-        integer (kind=kmp_lock_hint_kind), parameter :: kmp_lock_hint_speculative    = 4
-        integer (kind=kmp_lock_hint_kind), parameter :: kmp_lock_hint_adaptive       = 5
-
         interface
 
 !         ***
 !         *** omp_* entry points
 !         ***
 
-          subroutine omp_set_num_threads(nthreads)
+          subroutine omp_set_num_threads(num_threads)
             use omp_lib_kinds
-            integer (kind=omp_integer_kind) nthreads
+            integer (kind=omp_integer_kind) num_threads
           end subroutine omp_set_num_threads
 
-          subroutine omp_set_dynamic(enable)
+          subroutine omp_set_dynamic(dynamic_threads)
             use omp_lib_kinds
-            logical (kind=omp_logical_kind) enable
+            logical (kind=omp_logical_kind) dynamic_threads
           end subroutine omp_set_dynamic
 
-          subroutine omp_set_nested(enable)
+          subroutine omp_set_nested(nested)
             use omp_lib_kinds
-            logical (kind=omp_logical_kind) enable
+            logical (kind=omp_logical_kind) nested
           end subroutine omp_set_nested
 
           function omp_get_num_threads()
@@ -113,6 +105,11 @@
             use omp_lib_kinds
             logical (kind=omp_logical_kind) omp_in_parallel
           end function omp_in_parallel
+
+          function omp_in_final()
+            use omp_lib_kinds
+            logical (kind=omp_logical_kind) omp_in_final
+          end function omp_in_final
 
           function omp_get_dynamic()
             use omp_lib_kinds
@@ -161,16 +158,16 @@
             integer (kind=omp_integer_kind) omp_get_team_size
           end function omp_get_team_size
 
-          subroutine omp_set_schedule(kind, modifier)
+          subroutine omp_set_schedule(kind, chunk_size)
             use omp_lib_kinds
             integer (kind=omp_sched_kind) kind
-            integer (kind=omp_integer_kind) modifier
+            integer (kind=omp_integer_kind) chunk_size
           end subroutine omp_set_schedule
 
-          subroutine omp_get_schedule(kind, modifier)
+          subroutine omp_get_schedule(kind, chunk_size)
             use omp_lib_kinds
             integer (kind=omp_sched_kind) kind
-            integer (kind=omp_integer_kind) modifier
+            integer (kind=omp_integer_kind) chunk_size
           end subroutine omp_get_schedule
 
           function omp_get_proc_bind()
@@ -191,9 +188,9 @@
             integer (kind=omp_integer_kind) omp_get_default_device
           end function omp_get_default_device
 
-          subroutine omp_set_default_device(dflt_device)
+          subroutine omp_set_default_device(device_num)
             use omp_lib_kinds
-            integer (kind=omp_integer_kind) dflt_device
+            integer (kind=omp_integer_kind) device_num
           end subroutine omp_set_default_device
 
           function omp_get_num_devices()
@@ -221,86 +218,86 @@
             logical (kind=omp_logical_kind) omp_is_initial_device
           end function omp_is_initial_device
 
-          subroutine omp_init_lock(lockvar)
+          subroutine omp_init_lock(svar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_init_lock
 !DIR$ ENDIF
             use omp_lib_kinds
-            integer (kind=omp_lock_kind) lockvar
+            integer (kind=omp_lock_kind) svar
           end subroutine omp_init_lock
 
-          subroutine omp_destroy_lock(lockvar)
+          subroutine omp_destroy_lock(svar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_destroy_lock
 !DIR$ ENDIF
             use omp_lib_kinds
-            integer (kind=omp_lock_kind) lockvar
+            integer (kind=omp_lock_kind) svar
           end subroutine omp_destroy_lock
 
-          subroutine omp_set_lock(lockvar)
+          subroutine omp_set_lock(svar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_set_lock
 !DIR$ ENDIF
             use omp_lib_kinds
-            integer (kind=omp_lock_kind) lockvar
+            integer (kind=omp_lock_kind) svar
           end subroutine omp_set_lock
 
-          subroutine omp_unset_lock(lockvar)
+          subroutine omp_unset_lock(svar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_unset_lock
 !DIR$ ENDIF
             use omp_lib_kinds
-            integer (kind=omp_lock_kind) lockvar
+            integer (kind=omp_lock_kind) svar
           end subroutine omp_unset_lock
 
-          function omp_test_lock(lockvar)
+          function omp_test_lock(svar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_test_lock
 !DIR$ ENDIF
             use omp_lib_kinds
             logical (kind=omp_logical_kind) omp_test_lock
-            integer (kind=omp_lock_kind) lockvar
+            integer (kind=omp_lock_kind) svar
           end function omp_test_lock
 
-          subroutine omp_init_nest_lock(lockvar)
+          subroutine omp_init_nest_lock(nvar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_init_nest_lock
 !DIR$ ENDIF
             use omp_lib_kinds
-            integer (kind=omp_nest_lock_kind) lockvar
+            integer (kind=omp_nest_lock_kind) nvar
           end subroutine omp_init_nest_lock
 
-          subroutine omp_destroy_nest_lock(lockvar)
+          subroutine omp_destroy_nest_lock(nvar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_destroy_nest_lock
 !DIR$ ENDIF
             use omp_lib_kinds
-            integer (kind=omp_nest_lock_kind) lockvar
+            integer (kind=omp_nest_lock_kind) nvar
           end subroutine omp_destroy_nest_lock
 
-          subroutine omp_set_nest_lock(lockvar)
+          subroutine omp_set_nest_lock(nvar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_set_nest_lock
 !DIR$ ENDIF
             use omp_lib_kinds
-            integer (kind=omp_nest_lock_kind) lockvar
+            integer (kind=omp_nest_lock_kind) nvar
           end subroutine omp_set_nest_lock
 
-          subroutine omp_unset_nest_lock(lockvar)
+          subroutine omp_unset_nest_lock(nvar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_unset_nest_lock
 !DIR$ ENDIF
             use omp_lib_kinds
-            integer (kind=omp_nest_lock_kind) lockvar
+            integer (kind=omp_nest_lock_kind) nvar
           end subroutine omp_unset_nest_lock
 
-          function omp_test_nest_lock(lockvar)
+          function omp_test_nest_lock(nvar)
 !DIR$ IF(__INTEL_COMPILER.GE.1400)
 !DIR$ attributes known_intrinsic :: omp_test_nest_lock
 !DIR$ ENDIF
             use omp_lib_kinds
             integer (kind=omp_integer_kind) omp_test_nest_lock
-            integer (kind=omp_nest_lock_kind) lockvar
+            integer (kind=omp_nest_lock_kind) nvar
           end function omp_test_nest_lock
 
 !         ***
@@ -414,6 +411,13 @@
             integer (kind=kmp_size_t_kind) size
           end function kmp_malloc
 
+          function kmp_aligned_malloc(size, alignment)
+            use omp_lib_kinds
+            integer (kind=kmp_pointer_kind) kmp_aligned_malloc
+            integer (kind=kmp_size_t_kind) size
+            integer (kind=kmp_size_t_kind) alignment
+          end function kmp_aligned_malloc
+
           function kmp_calloc(nelem, elsize)
             use omp_lib_kinds
             integer (kind=kmp_pointer_kind) kmp_calloc
@@ -444,18 +448,6 @@
             integer (kind=kmp_cancel_kind) cancelkind
             logical (kind=omp_logical_kind) kmp_get_cancellation_status
           end function kmp_get_cancellation_status
-
-          subroutine kmp_init_lock_hinted(lockvar, lockhint)
-            use omp_lib_kinds
-            integer (kind=omp_lock_kind) lockvar
-            integer (kind=kmp_lock_hint_kind) lockhint
-          end subroutine kmp_init_lock_hinted
-
-          subroutine kmp_init_nest_lock_hinted(lockvar, lockhint)
-            use omp_lib_kinds
-            integer (kind=omp_nest_lock_kind) lockvar
-            integer (kind=kmp_lock_hint_kind) lockhint
-          end subroutine kmp_init_nest_lock_hinted
 
         end interface
 
@@ -533,6 +525,7 @@
 !dec$ attributes alias:'KMP_UNSET_AFFINITY_MASK_PROC'::kmp_unset_affinity_mask_proc
 !dec$ attributes alias:'KMP_GET_AFFINITY_MASK_PROC'::kmp_get_affinity_mask_proc
 !dec$ attributes alias:'KMP_MALLOC'::kmp_malloc
+!dec$ attributes alias:'KMP_ALIGNED_MALLOC'::kmp_aligned_malloc
 !dec$ attributes alias:'KMP_CALLOC'::kmp_calloc
 !dec$ attributes alias:'KMP_REALLOC'::kmp_realloc
 !dec$ attributes alias:'KMP_FREE'::kmp_free
@@ -541,9 +534,6 @@
 !dec$ attributes alias:'KMP_SET_WARNINGS_OFF'::kmp_set_warnings_off
 
 !dec$ attributes alias:'KMP_GET_CANCELLATION_STATUS' :: kmp_get_cancellation_status
-
-!dec$ attributes alias:'KMP_INIT_LOCK_HINTED'::kmp_init_lock_hinted
-!dec$ attributes alias:'KMP_INIT_NEST_LOCK_HINTED'::kmp_init_nest_lock_hinted
 
 !dec$   else
 
@@ -612,6 +602,7 @@
 !dec$ attributes alias:'_KMP_UNSET_AFFINITY_MASK_PROC'::kmp_unset_affinity_mask_proc
 !dec$ attributes alias:'_KMP_GET_AFFINITY_MASK_PROC'::kmp_get_affinity_mask_proc
 !dec$ attributes alias:'_KMP_MALLOC'::kmp_malloc
+!dec$ attributes alias:'_KMP_ALIGNED_MALLOC'::kmp_aligned_malloc
 !dec$ attributes alias:'_KMP_CALLOC'::kmp_calloc
 !dec$ attributes alias:'_KMP_REALLOC'::kmp_realloc
 !dec$ attributes alias:'_KMP_FREE'::kmp_free
@@ -620,9 +611,6 @@
 !dec$ attributes alias:'_KMP_SET_WARNINGS_OFF'::kmp_set_warnings_off
 
 !dec$ attributes alias:'_KMP_GET_CANCELLATION_STATUS' :: kmp_get_cancellation_status
-
-!dec$ attributes alias:'_KMP_INIT_LOCK_HINTED'::kmp_init_lock_hinted
-!dec$ attributes alias:'_KMP_INIT_NEST_LOCK_HINTED'::kmp_init_nest_lock_hinted
 
 !dec$   endif
 !dec$ endif
@@ -694,6 +682,7 @@
 !dec$ attributes alias:'kmp_unset_affinity_mask_proc_'::kmp_unset_affinity_mask_proc
 !dec$ attributes alias:'kmp_get_affinity_mask_proc_'::kmp_get_affinity_mask_proc
 !dec$ attributes alias:'kmp_malloc_'::kmp_malloc
+!dec$ attributes alias:'kmp_aligned_malloc_'::kmp_aligned_malloc
 !dec$ attributes alias:'kmp_calloc_'::kmp_calloc
 !dec$ attributes alias:'kmp_realloc_'::kmp_realloc
 !dec$ attributes alias:'kmp_free_'::kmp_free
@@ -701,9 +690,6 @@
 !dec$ attributes alias:'kmp_set_warnings_on_'::kmp_set_warnings_on
 !dec$ attributes alias:'kmp_set_warnings_off_'::kmp_set_warnings_off
 !dec$ attributes alias:'kmp_get_cancellation_status_'::kmp_get_cancellation_status
-
-!dec$ attributes alias:'kmp_init_lock_hinted_'::kmp_init_lock_hinted
-!dec$ attributes alias:'kmp_init_nest_lock_hinted_'::kmp_init_nest_lock_hinted
 
 !dec$ endif
 
@@ -772,6 +758,7 @@
 !dec$ attributes alias:'_kmp_unset_affinity_mask_proc_'::kmp_unset_affinity_mask_proc
 !dec$ attributes alias:'_kmp_get_affinity_mask_proc_'::kmp_get_affinity_mask_proc
 !dec$ attributes alias:'_kmp_malloc_'::kmp_malloc
+!dec$ attributes alias:'_kmp_aligned_malloc_'::kmp_aligned_malloc
 !dec$ attributes alias:'_kmp_calloc_'::kmp_calloc
 !dec$ attributes alias:'_kmp_realloc_'::kmp_realloc
 !dec$ attributes alias:'_kmp_free_'::kmp_free
@@ -780,9 +767,6 @@
 !dec$ attributes alias:'_kmp_set_warnings_off_'::kmp_set_warnings_off
 
 !dec$ attributes alias:'_kmp_get_cancellation_status_'::kmp_get_cancellation_status
-
-!dec$ attributes alias:'_kmp_init_lock_hinted_'::kmp_init_lock_hinted
-!dec$ attributes alias:'_kmp_init_nest_lock_hinted_'::kmp_init_nest_lock_hinted
 
 !dec$ endif
 

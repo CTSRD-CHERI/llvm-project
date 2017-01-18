@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #if SANITIZER_FREEBSD
@@ -42,6 +43,8 @@
 #undef  MAP_NORESERVE
 #define MAP_NORESERVE 0
 #endif
+
+typedef void (*sa_sigaction_t)(int, siginfo_t *, void *);
 
 namespace __sanitizer {
 
@@ -53,7 +56,7 @@ uptr GetThreadSelf() {
   return (uptr)pthread_self();
 }
 
-void FlushUnneededShadowMemory(uptr addr, uptr size) {
+void ReleaseMemoryToOS(uptr addr, uptr size) {
   madvise((void*)addr, size, MADV_DONTNEED);
 }
 
@@ -97,6 +100,10 @@ bool StackSizeIsUnlimited() {
   return (stack_size == RLIM_INFINITY);
 }
 
+uptr GetStackSizeLimitInBytes() {
+  return (uptr)getlim(RLIMIT_STACK);
+}
+
 void SetStackSizeLimitInBytes(uptr limit) {
   setlim(RLIMIT_STACK, (rlim_t)limit);
   CHECK(!StackSizeIsUnlimited());
@@ -121,11 +128,21 @@ void SleepForMillis(int millis) {
 }
 
 void Abort() {
+#if !SANITIZER_GO
+  // If we are handling SIGABRT, unhandle it first.
+  if (IsHandledDeadlySignal(SIGABRT)) {
+    struct sigaction sigact;
+    internal_memset(&sigact, 0, sizeof(sigact));
+    sigact.sa_sigaction = (sa_sigaction_t)SIG_DFL;
+    internal_sigaction(SIGABRT, &sigact, nullptr);
+  }
+#endif
+
   abort();
 }
 
 int Atexit(void (*function)(void)) {
-#ifndef SANITIZER_GO
+#if !SANITIZER_GO
   return atexit(function);
 #else
   return 0;
@@ -136,7 +153,7 @@ bool SupportsColoredOutput(fd_t fd) {
   return isatty(fd) != 0;
 }
 
-#ifndef SANITIZER_GO
+#if !SANITIZER_GO
 // TODO(glider): different tools may require different altstack size.
 static const uptr kAltStackSize = SIGSTKSZ * 4;  // SIGSTKSZ is not enough.
 
@@ -165,10 +182,9 @@ void UnsetAlternateSignalStack() {
   UnmapOrDie(oldstack.ss_sp, oldstack.ss_size);
 }
 
-typedef void (*sa_sigaction_t)(int, siginfo_t *, void *);
 static void MaybeInstallSigaction(int signum,
                                   SignalHandlerType handler) {
-  if (!IsDeadlySignal(signum))
+  if (!IsHandledDeadlySignal(signum))
     return;
   struct sigaction sigact;
   internal_memset(&sigact, 0, sizeof(sigact));
@@ -190,6 +206,7 @@ void InstallDeadlySignalHandlers(SignalHandlerType handler) {
   MaybeInstallSigaction(SIGBUS, handler);
   MaybeInstallSigaction(SIGABRT, handler);
   MaybeInstallSigaction(SIGFPE, handler);
+  MaybeInstallSigaction(SIGILL, handler);
 }
 #endif  // SANITIZER_GO
 
@@ -228,7 +245,7 @@ void PrepareForSandboxing(__sanitizer_sandbox_arguments *args) {
 #endif
 }
 
-#if SANITIZER_ANDROID
+#if SANITIZER_ANDROID || SANITIZER_GO
 int GetNamedMappingFd(const char *name, uptr size) {
   return -1;
 }
@@ -268,7 +285,7 @@ void *MmapFixedNoReserve(uptr fixed_addr, uptr size, const char *name) {
   return (void *)p;
 }
 
-void *MmapNoAccess(uptr fixed_addr, uptr size, const char *name) {
+void *MmapFixedNoAccess(uptr fixed_addr, uptr size, const char *name) {
   int fd = name ? GetNamedMappingFd(name, size) : -1;
   unsigned flags = MAP_PRIVATE | MAP_FIXED | MAP_NORESERVE;
   if (fd == -1) flags |= MAP_ANON;
@@ -276,6 +293,127 @@ void *MmapNoAccess(uptr fixed_addr, uptr size, const char *name) {
   return (void *)internal_mmap((void *)fixed_addr, size, PROT_NONE, flags, fd,
                                0);
 }
+
+void *MmapNoAccess(uptr size) {
+  unsigned flags = MAP_PRIVATE | MAP_ANON | MAP_NORESERVE;
+  return (void *)internal_mmap(nullptr, size, PROT_NONE, flags, -1, 0);
+}
+
+// This function is defined elsewhere if we intercepted pthread_attr_getstack.
+extern "C" {
+SANITIZER_WEAK_ATTRIBUTE int
+real_pthread_attr_getstack(void *attr, void **addr, size_t *size);
+} // extern "C"
+
+int my_pthread_attr_getstack(void *attr, void **addr, uptr *size) {
+#if !SANITIZER_GO && !SANITIZER_MAC
+  if (&real_pthread_attr_getstack)
+    return real_pthread_attr_getstack((pthread_attr_t *)attr, addr,
+                                      (size_t *)size);
+#endif
+  return pthread_attr_getstack((pthread_attr_t *)attr, addr, (size_t *)size);
+}
+
+#if !SANITIZER_GO
+void AdjustStackSize(void *attr_) {
+  pthread_attr_t *attr = (pthread_attr_t *)attr_;
+  uptr stackaddr = 0;
+  uptr stacksize = 0;
+  my_pthread_attr_getstack(attr, (void**)&stackaddr, &stacksize);
+  // GLibC will return (0 - stacksize) as the stack address in the case when
+  // stacksize is set, but stackaddr is not.
+  bool stack_set = (stackaddr != 0) && (stackaddr + stacksize != 0);
+  // We place a lot of tool data into TLS, account for that.
+  const uptr minstacksize = GetTlsSize() + 128*1024;
+  if (stacksize < minstacksize) {
+    if (!stack_set) {
+      if (stacksize != 0) {
+        VPrintf(1, "Sanitizer: increasing stacksize %zu->%zu\n", stacksize,
+                minstacksize);
+        pthread_attr_setstacksize(attr, minstacksize);
+      }
+    } else {
+      Printf("Sanitizer: pre-allocated stack size is insufficient: "
+             "%zu < %zu\n", stacksize, minstacksize);
+      Printf("Sanitizer: pthread_create is likely to fail.\n");
+    }
+  }
+}
+#endif // !SANITIZER_GO
+
+pid_t StartSubprocess(const char *program, const char *const argv[],
+                      fd_t stdin_fd, fd_t stdout_fd, fd_t stderr_fd) {
+  auto file_closer = at_scope_exit([&] {
+    if (stdin_fd != kInvalidFd) {
+      internal_close(stdin_fd);
+    }
+    if (stdout_fd != kInvalidFd) {
+      internal_close(stdout_fd);
+    }
+    if (stderr_fd != kInvalidFd) {
+      internal_close(stderr_fd);
+    }
+  });
+
+  int pid = internal_fork();
+
+  if (pid < 0) {
+    int rverrno;
+    if (internal_iserror(pid, &rverrno)) {
+      Report("WARNING: failed to fork (errno %d)\n", rverrno);
+    }
+    return pid;
+  }
+
+  if (pid == 0) {
+    // Child subprocess
+    if (stdin_fd != kInvalidFd) {
+      internal_close(STDIN_FILENO);
+      internal_dup2(stdin_fd, STDIN_FILENO);
+      internal_close(stdin_fd);
+    }
+    if (stdout_fd != kInvalidFd) {
+      internal_close(STDOUT_FILENO);
+      internal_dup2(stdout_fd, STDOUT_FILENO);
+      internal_close(stdout_fd);
+    }
+    if (stderr_fd != kInvalidFd) {
+      internal_close(STDERR_FILENO);
+      internal_dup2(stderr_fd, STDERR_FILENO);
+      internal_close(stderr_fd);
+    }
+
+    for (int fd = sysconf(_SC_OPEN_MAX); fd > 2; fd--) internal_close(fd);
+
+    execv(program, const_cast<char **>(&argv[0]));
+    internal__exit(1);
+  }
+
+  return pid;
+}
+
+bool IsProcessRunning(pid_t pid) {
+  int process_status;
+  uptr waitpid_status = internal_waitpid(pid, &process_status, WNOHANG);
+  int local_errno;
+  if (internal_iserror(waitpid_status, &local_errno)) {
+    VReport(1, "Waiting on the process failed (errno %d).\n", local_errno);
+    return false;
+  }
+  return waitpid_status == 0;
+}
+
+int WaitForProcess(pid_t pid) {
+  int process_status;
+  uptr waitpid_status = internal_waitpid(pid, &process_status, 0);
+  int local_errno;
+  if (internal_iserror(waitpid_status, &local_errno)) {
+    VReport(1, "Waiting on the process failed (errno %d).\n", local_errno);
+    return -1;
+  }
+  return process_status;
+}
+
 } // namespace __sanitizer
 
 #endif // SANITIZER_POSIX

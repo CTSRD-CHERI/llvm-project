@@ -12,15 +12,6 @@
 using namespace clang::ast_matchers;
 
 namespace clang {
-namespace {
-
-AST_MATCHER(CastExpr, isPointerToBoolean) {
-  return Node.getCastKind() == CK_PointerToBoolean;
-}
-AST_MATCHER(QualType, isBoolean) { return Node->isBooleanType(); }
-
-} // namespace
-
 namespace tidy {
 namespace misc {
 
@@ -31,10 +22,11 @@ void BoolPointerImplicitConversionCheck::registerMatchers(MatchFinder *Finder) {
       ifStmt(hasCondition(findAll(implicitCastExpr(
                  allOf(unless(hasParent(unaryOperator(hasOperatorName("!")))),
                        hasSourceExpression(expr(
-                           hasType(pointerType(pointee(isBoolean()))),
+                           hasType(pointerType(pointee(booleanType()))),
                            ignoringParenImpCasts(declRefExpr().bind("expr")))),
-                       isPointerToBoolean())))),
-             unless(isInTemplateInstantiation())).bind("if"),
+                       hasCastKind(CK_PointerToBoolean))))),
+             unless(isInTemplateInstantiation()))
+          .bind("if"),
       this);
 }
 
@@ -56,14 +48,18 @@ void BoolPointerImplicitConversionCheck::check(
   auto DeclRef = ignoringParenImpCasts(declRefExpr(to(equalsNode(D))));
   if (!match(findAll(
                  unaryOperator(hasOperatorName("*"), hasUnaryOperand(DeclRef))),
-             *If, *Result.Context).empty() ||
+             *If, *Result.Context)
+           .empty() ||
       !match(findAll(arraySubscriptExpr(hasBase(DeclRef))), *If,
-             *Result.Context).empty() ||
+             *Result.Context)
+           .empty() ||
       // FIXME: We should still warn if the paremater is implicitly converted to
       // bool.
-      !match(findAll(callExpr(hasAnyArgument(DeclRef))), *If, *Result.Context)
+      !match(findAll(callExpr(hasAnyArgument(ignoringParenImpCasts(DeclRef)))),
+             *If, *Result.Context)
            .empty() ||
-      !match(findAll(cxxDeleteExpr(has(expr(DeclRef)))), *If, *Result.Context)
+      !match(findAll(cxxDeleteExpr(has(ignoringParenImpCasts(expr(DeclRef))))),
+             *If, *Result.Context)
            .empty())
     return;
 

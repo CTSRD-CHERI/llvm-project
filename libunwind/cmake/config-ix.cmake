@@ -38,8 +38,13 @@ check_cxx_compiler_flag(/EHsc                 LIBUNWIND_HAS_EHSC_FLAG)
 check_cxx_compiler_flag(/EHs-                 LIBUNWIND_HAS_NO_EHS_FLAG)
 check_cxx_compiler_flag(/EHa-                 LIBUNWIND_HAS_NO_EHA_FLAG)
 check_cxx_compiler_flag(/GR-                  LIBUNWIND_HAS_NO_GR_FLAG)
+check_cxx_compiler_flag(-std=c++11            LIBUNWIND_HAS_STD_CXX11)
 
-check_library_exists(c printf "" LIBUNWIND_HAS_C_LIB)
+if(LIBUNWIND_HAS_STD_CXX11)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+endif()
+
+check_library_exists(c fopen "" LIBUNWIND_HAS_C_LIB)
 check_library_exists(dl dladdr "" LIBUNWIND_HAS_DL_LIB)
 check_library_exists(pthread pthread_once "" LIBUNWIND_HAS_PTHREAD_LIB)
 

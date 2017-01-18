@@ -15,9 +15,11 @@
 #ifndef LLVM_CLANG_SERIALIZATION_MODULE_H
 #define LLVM_CLANG_SERIALIZATION_MODULE_H
 
+#include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Serialization/ASTBitCodes.h"
 #include "clang/Serialization/ContinuousRangeMap.h"
+#include "clang/Serialization/ModuleFileExtension.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Bitcode/BitstreamReader.h"
 #include "llvm/Support/Endian.h"
@@ -31,7 +33,6 @@ template <typename Info> class OnDiskIterableChainedHashTable;
 
 namespace clang {
 
-class FileEntry;
 class DeclContext;
 class Module;
 
@@ -47,7 +48,8 @@ enum ModuleKind {
   MK_ExplicitModule, ///< File is an explicitly-loaded module.
   MK_PCH,            ///< File is a PCH file treated as such.
   MK_Preamble,       ///< File is a PCH file treated as the preamble.
-  MK_MainFile        ///< File is a PCH file treated as the actual main file.
+  MK_MainFile,       ///< File is a PCH file treated as the actual main file.
+  MK_PrebuiltModule  ///< File is from a prebuilt module path.
 };
 
 /// \brief The input file that has been loaded from this AST file, along with
@@ -171,8 +173,8 @@ public:
   /// \brief The global bit offset (or base) of this module
   uint64_t GlobalBitOffset;
 
-  /// \brief The bitstream reader from which we'll read the AST file.
-  llvm::BitstreamReader StreamFile;
+  /// \brief The serialized bitstream data for this file.
+  StringRef Data;
 
   /// \brief The main bitstream cursor for the main block.
   llvm::BitstreamCursor Stream;
@@ -193,6 +195,10 @@ public:
 
   /// \brief The first source location in this module.
   SourceLocation FirstLoc;
+
+  /// The list of extension readers that are attached to this module
+  /// file.
+  std::vector<std::unique_ptr<ModuleFileExtensionReader>> ExtensionReaders;
 
   // === Input Files ===
   /// \brief The cursor to the start of the input-files block.
@@ -394,20 +400,6 @@ public:
   /// as a local ID (for this module file).
   llvm::DenseMap<ModuleFile *, serialization::DeclID> GlobalToLocalDeclIDs;
 
-  /// \brief The number of C++ base specifier sets in this AST file.
-  unsigned LocalNumCXXBaseSpecifiers;
-
-  /// \brief Offset of each C++ base specifier set within the bitstream,
-  /// indexed by the C++ base specifier set ID (-1).
-  const uint32_t *CXXBaseSpecifiersOffsets;
-
-  /// \brief The number of C++ ctor initializer lists in this AST file.
-  unsigned LocalNumCXXCtorInitializers;
-
-  /// \brief Offset of each C++ ctor initializer list within the bitstream,
-  /// indexed by the C++ ctor initializer list ID minus 1.
-  const uint32_t *CXXCtorInitializersOffsets;
-
   /// \brief Array of file-level DeclIDs sorted by file.
   const serialization::DeclID *FileSortedDecls;
   unsigned NumFileSortedDecls;
@@ -456,7 +448,8 @@ public:
 
   /// \brief Is this a module file for a module (rather than a PCH or similar).
   bool isModule() const {
-    return Kind == MK_ImplicitModule || Kind == MK_ExplicitModule;
+    return Kind == MK_ImplicitModule || Kind == MK_ExplicitModule ||
+           Kind == MK_PrebuiltModule;
   }
 
   /// \brief Dump debugging output for this module.

@@ -20,6 +20,7 @@
 #include <cassert>
 #include <cfloat>
 
+#include "test_macros.h"
 #include "test_iterators.h"
 #include "../../../test_compare.h"
 #include "../../../test_hash.h"
@@ -60,7 +61,7 @@ int main()
         assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_set<int,
                                    test_hash<std::hash<int> >,
@@ -93,7 +94,7 @@ int main()
         assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
     }
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
         typedef int T;
         typedef test_hash<std::hash<T>> HF;

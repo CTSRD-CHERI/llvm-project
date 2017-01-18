@@ -20,6 +20,7 @@
 #include <cassert>
 #include <cfloat>
 
+#include "test_macros.h"
 #include "../../../test_compare.h"
 #include "../../../test_hash.h"
 #include "test_allocator.h"
@@ -57,7 +58,7 @@ int main()
             A(4)
            );
         c = c0;
-        assert(c.bucket_count() == 7);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         assert(c.size() == 6);
         C::const_iterator i = c.cbegin();
         assert(i->first == 1);
@@ -163,7 +164,7 @@ int main()
         assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef min_allocator<std::pair<const int, std::string> > A;
         typedef std::unordered_multimap<int, std::string,
@@ -194,7 +195,7 @@ int main()
             A()
            );
         c = c0;
-        assert(c.bucket_count() == 7);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         assert(c.size() == 6);
         C::const_iterator i = c.cbegin();
         assert(i->first == 1);

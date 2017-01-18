@@ -1,8 +1,10 @@
+.. title:: clang-tidy - modernize-use-auto
+
 modernize-use-auto
 ==================
 
 This check is responsible for using the ``auto`` type specifier for variable
-declarations to *improve code readability and maintainability*.  For example:
+declarations to *improve code readability and maintainability*. For example:
 
 .. code-block:: c++
 
@@ -106,13 +108,13 @@ conditions are satisfied:
 
 * The initializer for the variable being declared is not a braced initializer
   list. Otherwise, use of ``auto`` would cause the type of the variable to be
-  deduced as``std::initializer_list``.
+  deduced as ``std::initializer_list``.
 
 New expressions
 ---------------
 
 Frequently, when a pointer is declared and initialized with ``new``, the
-pointee type has to be written twice: in the declaration type and in the
+pointee type is written twice: in the declaration type and in the
 ``new`` expression. In this cases, the declaration type can be replaced with
 ``auto`` improving readability and maintainability.
 
@@ -122,7 +124,7 @@ pointee type has to be written twice: in the declaration type and in the
 
   // becomes
 
-  auto my_pointer = new TypeName(my_param);
+  auto *my_pointer = new TypeName(my_param);
 
 The check will also replace the declaration type in multiple declarations, if
 the following conditions are satisfied:
@@ -139,12 +141,55 @@ the following conditions are satisfied:
 
   // becomes
 
-  auto my_first_pointer = new TypeName, my_second_pointer = new TypeName;
+  auto *my_first_pointer = new TypeName, *my_second_pointer = new TypeName;
+
+Cast expressions
+----------------
+
+Frequently, when a variable is declared and initialized with a cast, the
+variable type is written twice: in the declaration type and in the
+cast expression. In this cases, the declaration type can be replaced with
+``auto`` improving readability and maintainability.
+
+.. code-block:: c++
+
+  TypeName *my_pointer = static_cast<TypeName>(my_param);
+
+  // becomes
+
+  auto *my_pointer = static_cast<TypeName>(my_param);
+
+The check handles ``static_cast``, ``dynamic_cast``, ``const_cast``,
+``reinterpret_cast``, functional casts and C-style casts.
 
 Known Limitations
 -----------------
+
 * If the initializer is an explicit conversion constructor, the check will not
   replace the type specifier even though it would be safe to do so.
 
 * User-defined iterators are not handled at this time.
 
+* Function templates that behave as casts, such as ``llvm::dyn_cast``,
+  ``boost::lexical_cast`` or ``gsl::narrow_cast`` are not handled.
+
+Options
+-------
+
+.. option:: RemoveStars
+
+   If the option is set to non-zero (default is `0`), the check will remove
+   stars from the non-typedef pointer types when replacing type names with
+   ``auto``. Otherwise, the check will leave stars. For example:
+
+.. code-block:: c++
+
+  TypeName *my_first_pointer = new TypeName, *my_second_pointer = new TypeName;
+
+  // RemoveStars = 0
+
+  auto *my_first_pointer = new TypeName, *my_second_pointer = new TypeName;
+
+  // RemoveStars = 1
+
+  auto my_first_pointer = new TypeName, my_second_pointer = new TypeName;

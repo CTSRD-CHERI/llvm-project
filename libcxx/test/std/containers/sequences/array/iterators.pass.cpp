@@ -15,6 +15,8 @@
 #include <iterator>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     {
@@ -36,7 +38,7 @@ int main()
     assert(i == j);
     }
 
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     { // N3644 testing
         {
         typedef std::array<int, 5> C;
@@ -59,7 +61,7 @@ int main()
         assert ( c.cend()    == std::cend(c));
         assert ( c.rend()    == std::rend(c));
         assert ( c.crend()   == std::crend(c));
-        
+
         assert ( std::begin(c)   != std::end(c));
         assert ( std::rbegin(c)  != std::rend(c));
         assert ( std::cbegin(c)  != std::cend(c));

@@ -6,23 +6,20 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-// This file implements a simple interprocedural pass which walks the
-// call-graph, looking for functions which do not access or only read
-// non-local memory, and marking them readnone/readonly.  It does the
-// same with function arguments independently, marking them readonly/
-// readnone/nocapture.  Finally, well-known library call declarations
-// are marked with all attributes that are consistent with the
-// function's standard definition. This pass is implemented as a
-// bottom-up traversal of the call-graph.
-//
+///
+/// \file
+/// This file implements interprocedural passes which walk the
+/// call-graph deducing and/or propagating function attributes.
+///
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Transforms/IPO/FunctionAttrs.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/ADT/SCCIterator.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
@@ -45,49 +42,16 @@ using namespace llvm;
 STATISTIC(NumReadNone, "Number of functions marked readnone");
 STATISTIC(NumReadOnly, "Number of functions marked readonly");
 STATISTIC(NumNoCapture, "Number of arguments marked nocapture");
+STATISTIC(NumReturned, "Number of arguments marked returned");
 STATISTIC(NumReadNoneArg, "Number of arguments marked readnone");
 STATISTIC(NumReadOnlyArg, "Number of arguments marked readonly");
 STATISTIC(NumNoAlias, "Number of function returns marked noalias");
 STATISTIC(NumNonNullReturn, "Number of function returns marked nonnull");
-STATISTIC(NumAnnotated, "Number of attributes added to library functions");
+STATISTIC(NumNoRecurse, "Number of functions marked as norecurse");
 
 namespace {
-struct FunctionAttrs : public CallGraphSCCPass {
-  static char ID; // Pass identification, replacement for typeid
-  FunctionAttrs() : CallGraphSCCPass(ID) {
-    initializeFunctionAttrsPass(*PassRegistry::getPassRegistry());
-  }
-
-  bool runOnSCC(CallGraphSCC &SCC) override;
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesCFG();
-    AU.addRequired<AssumptionCacheTracker>();
-    AU.addRequired<TargetLibraryInfoWrapperPass>();
-    CallGraphSCCPass::getAnalysisUsage(AU);
-  }
-
-private:
-  TargetLibraryInfo *TLI;
-
-  bool AddReadAttrs(const CallGraphSCC &SCC);
-  bool AddArgumentAttrs(const CallGraphSCC &SCC);
-  bool AddNoAliasAttrs(const CallGraphSCC &SCC);
-  bool AddNonNullAttrs(const CallGraphSCC &SCC);
-  bool annotateLibraryCalls(const CallGraphSCC &SCC);
-};
+typedef SmallSetVector<Function *, 8> SCCNodeSet;
 }
-
-char FunctionAttrs::ID = 0;
-INITIALIZE_PASS_BEGIN(FunctionAttrs, "functionattrs",
-                      "Deduce function attributes", false, false)
-INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
-INITIALIZE_PASS_DEPENDENCY(CallGraphWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
-INITIALIZE_PASS_END(FunctionAttrs, "functionattrs",
-                    "Deduce function attributes", false, false)
-
-Pass *llvm::createFunctionAttrsPass() { return new FunctionAttrs(); }
 
 namespace {
 /// The three kinds of memory access relevant to 'readonly' and
@@ -99,17 +63,17 @@ enum MemoryAccessKind {
 };
 }
 
-static MemoryAccessKind
-checkFunctionMemoryAccess(Function &F, AAResults &AAR,
-                          const SmallPtrSetImpl<Function *> &SCCNodes) {
+static MemoryAccessKind checkFunctionMemoryAccess(Function &F, AAResults &AAR,
+                                                  const SCCNodeSet &SCCNodes) {
   FunctionModRefBehavior MRB = AAR.getModRefBehavior(&F);
   if (MRB == FMRB_DoesNotAccessMemory)
     // Already perfect!
     return MAK_ReadNone;
 
-  // Definitions with weak linkage may be overridden at linktime with
-  // something that writes memory, so treat them like declarations.
-  if (F.isDeclaration() || F.mayBeOverridden()) {
+  // Non-exact function definitions may not be selected at link time, and an
+  // alternative version that writes to memory may be selected.  See the comment
+  // on GlobalValue::isDefinitionExact for more details.
+  if (!F.hasExactDefinition()) {
     if (AliasAnalysis::onlyReadsMemory(MRB))
       return MAK_ReadOnly;
 
@@ -126,43 +90,53 @@ checkFunctionMemoryAccess(Function &F, AAResults &AAR,
     // Detect these now, skipping to the next instruction if one is found.
     CallSite CS(cast<Value>(I));
     if (CS) {
-      // Ignore calls to functions in the same SCC.
-      if (CS.getCalledFunction() && SCCNodes.count(CS.getCalledFunction()))
+      // Ignore calls to functions in the same SCC, as long as the call sites
+      // don't have operand bundles.  Calls with operand bundles are allowed to
+      // have memory effects not described by the memory effects of the call
+      // target.
+      if (!CS.hasOperandBundles() && CS.getCalledFunction() &&
+          SCCNodes.count(CS.getCalledFunction()))
         continue;
       FunctionModRefBehavior MRB = AAR.getModRefBehavior(CS);
-      // If the call doesn't access arbitrary memory, we may be able to
-      // figure out something.
-      if (AliasAnalysis::onlyAccessesArgPointees(MRB)) {
-        // If the call does access argument pointees, check each argument.
-        if (AliasAnalysis::doesAccessArgPointees(MRB))
-          // Check whether all pointer arguments point to local memory, and
-          // ignore calls that only access local memory.
-          for (CallSite::arg_iterator CI = CS.arg_begin(), CE = CS.arg_end();
-               CI != CE; ++CI) {
-            Value *Arg = *CI;
-            if (Arg->getType()->isPointerTy()) {
-              AAMDNodes AAInfo;
-              I->getAAMetadata(AAInfo);
 
-              MemoryLocation Loc(Arg, MemoryLocation::UnknownSize, AAInfo);
-              if (!AAR.pointsToConstantMemory(Loc, /*OrLocal=*/true)) {
-                if (MRB & MRI_Mod)
-                  // Writes non-local memory.  Give up.
-                  return MAK_MayWrite;
-                if (MRB & MRI_Ref)
-                  // Ok, it reads non-local memory.
-                  ReadsMemory = true;
-              }
-            }
-          }
+      // If the call doesn't access memory, we're done.
+      if (!(MRB & MRI_ModRef))
+        continue;
+
+      if (!AliasAnalysis::onlyAccessesArgPointees(MRB)) {
+        // The call could access any memory. If that includes writes, give up.
+        if (MRB & MRI_Mod)
+          return MAK_MayWrite;
+        // If it reads, note it.
+        if (MRB & MRI_Ref)
+          ReadsMemory = true;
         continue;
       }
-      // The call could access any memory. If that includes writes, give up.
-      if (MRB & MRI_Mod)
-        return MAK_MayWrite;
-      // If it reads, note it.
-      if (MRB & MRI_Ref)
-        ReadsMemory = true;
+
+      // Check whether all pointer arguments point to local memory, and
+      // ignore calls that only access local memory.
+      for (CallSite::arg_iterator CI = CS.arg_begin(), CE = CS.arg_end();
+           CI != CE; ++CI) {
+        Value *Arg = *CI;
+        if (!Arg->getType()->isPtrOrPtrVectorTy())
+          continue;
+
+        AAMDNodes AAInfo;
+        I->getAAMetadata(AAInfo);
+        MemoryLocation Loc(Arg, MemoryLocation::UnknownSize, AAInfo);
+
+        // Skip accesses to local or constant memory as they don't impact the
+        // externally visible mod/ref behavior.
+        if (AAR.pointsToConstantMemory(Loc, /*OrLocal=*/true))
+          continue;
+
+        if (MRB & MRI_Mod)
+          // Writes non-local memory.  Give up.
+          return MAK_MayWrite;
+        if (MRB & MRI_Ref)
+          // Ok, it reads non-local memory.
+          ReadsMemory = true;
+      }
       continue;
     } else if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
       // Ignore non-volatile loads from local memory. (Atomic is okay here.)
@@ -199,32 +173,14 @@ checkFunctionMemoryAccess(Function &F, AAResults &AAR,
 }
 
 /// Deduce readonly/readnone attributes for the SCC.
-bool FunctionAttrs::AddReadAttrs(const CallGraphSCC &SCC) {
-  SmallPtrSet<Function *, 8> SCCNodes;
-
-  // Fill SCCNodes with the elements of the SCC.  Used for quickly
-  // looking up whether a given CallGraphNode is in this SCC.
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I)
-    SCCNodes.insert((*I)->getFunction());
-
+template <typename AARGetterT>
+static bool addReadAttrs(const SCCNodeSet &SCCNodes, AARGetterT AARGetter) {
   // Check if any of the functions in the SCC read or write memory.  If they
   // write memory then they can't be marked readnone or readonly.
   bool ReadsMemory = false;
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-    Function *F = (*I)->getFunction();
-
-    if (!F || F->hasFnAttribute(Attribute::OptimizeNone))
-      // External node or node we don't want to optimize - assume it may write
-      // memory and give up.
-      return false;
-
-    // We need to manually construct BasicAA directly in order to disable its
-    // use of other function analyses.
-    BasicAAResult BAR(createLegacyPMBasicAAResult(*this, *F));
-
-    // Construct our own AA results for this function. We do this manually to
-    // work around the limitations of the legacy pass manager.
-    AAResults AAR(createLegacyPMAAResults(*this, *F, BAR));
+  for (Function *F : SCCNodes) {
+    // Call the callable parameter to look up AA results for this function.
+    AAResults &AAR = AARGetter(*F);
 
     switch (checkFunctionMemoryAccess(*F, AAR, SCCNodes)) {
     case MAK_MayWrite:
@@ -241,9 +197,7 @@ bool FunctionAttrs::AddReadAttrs(const CallGraphSCC &SCC) {
   // Success!  Functions in this SCC do not access memory, or only read memory.
   // Give them the appropriate attribute.
   bool MadeChange = false;
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-    Function *F = (*I)->getFunction();
-
+  for (Function *F : SCCNodes) {
     if (F->doesNotAccessMemory())
       // Already perfect!
       continue;
@@ -319,7 +273,7 @@ public:
 /// consider that a capture, instead adding it to the "Uses" list and
 /// continuing with the analysis.
 struct ArgumentUsesTracker : public CaptureTracker {
-  ArgumentUsesTracker(const SmallPtrSet<Function *, 8> &SCCNodes)
+  ArgumentUsesTracker(const SCCNodeSet &SCCNodes)
       : Captured(false), SCCNodes(SCCNodes) {}
 
   void tooManyUses() override { Captured = true; }
@@ -332,56 +286,62 @@ struct ArgumentUsesTracker : public CaptureTracker {
     }
 
     Function *F = CS.getCalledFunction();
-    if (!F || !SCCNodes.count(F)) {
+    if (!F || !F->hasExactDefinition() || !SCCNodes.count(F)) {
       Captured = true;
       return true;
     }
 
-    bool Found = false;
-    Function::arg_iterator AI = F->arg_begin(), AE = F->arg_end();
-    for (CallSite::arg_iterator PI = CS.arg_begin(), PE = CS.arg_end();
-         PI != PE; ++PI, ++AI) {
-      if (AI == AE) {
-        assert(F->isVarArg() && "More params than args in non-varargs call");
-        Captured = true;
-        return true;
-      }
-      if (PI == U) {
-        Uses.push_back(&*AI);
-        Found = true;
-        break;
-      }
+    // Note: the callee and the two successor blocks *follow* the argument
+    // operands.  This means there is no need to adjust UseIndex to account for
+    // these.
+
+    unsigned UseIndex =
+        std::distance(const_cast<const Use *>(CS.arg_begin()), U);
+
+    assert(UseIndex < CS.data_operands_size() &&
+           "Indirect function calls should have been filtered above!");
+
+    if (UseIndex >= CS.getNumArgOperands()) {
+      // Data operand, but not a argument operand -- must be a bundle operand
+      assert(CS.hasOperandBundles() && "Must be!");
+
+      // CaptureTracking told us that we're being captured by an operand bundle
+      // use.  In this case it does not matter if the callee is within our SCC
+      // or not -- we've been captured in some unknown way, and we have to be
+      // conservative.
+      Captured = true;
+      return true;
     }
-    assert(Found && "Capturing call-site captured nothing?");
-    (void)Found;
+
+    if (UseIndex >= F->arg_size()) {
+      assert(F->isVarArg() && "More params than args in non-varargs call");
+      Captured = true;
+      return true;
+    }
+
+    Uses.push_back(&*std::next(F->arg_begin(), UseIndex));
     return false;
   }
 
   bool Captured; // True only if certainly captured (used outside our SCC).
   SmallVector<Argument *, 4> Uses; // Uses within our SCC.
 
-  const SmallPtrSet<Function *, 8> &SCCNodes;
+  const SCCNodeSet &SCCNodes;
 };
 }
 
 namespace llvm {
 template <> struct GraphTraits<ArgumentGraphNode *> {
-  typedef ArgumentGraphNode NodeType;
+  typedef ArgumentGraphNode *NodeRef;
   typedef SmallVectorImpl<ArgumentGraphNode *>::iterator ChildIteratorType;
 
-  static inline NodeType *getEntryNode(NodeType *A) { return A; }
-  static inline ChildIteratorType child_begin(NodeType *N) {
-    return N->Uses.begin();
-  }
-  static inline ChildIteratorType child_end(NodeType *N) {
-    return N->Uses.end();
-  }
+  static NodeRef getEntryNode(NodeRef A) { return A; }
+  static ChildIteratorType child_begin(NodeRef N) { return N->Uses.begin(); }
+  static ChildIteratorType child_end(NodeRef N) { return N->Uses.end(); }
 };
 template <>
 struct GraphTraits<ArgumentGraph *> : public GraphTraits<ArgumentGraphNode *> {
-  static NodeType *getEntryNode(ArgumentGraph *AG) {
-    return AG->getEntryNode();
-  }
+  static NodeRef getEntryNode(ArgumentGraph *AG) { return AG->getEntryNode(); }
   static ChildIteratorType nodes_begin(ArgumentGraph *AG) {
     return AG->begin();
   }
@@ -412,7 +372,6 @@ determinePointerReadAttrs(Argument *A,
   while (!Worklist.empty()) {
     Use *U = Worklist.pop_back_val();
     Instruction *I = cast<Instruction>(U->getUser());
-    Value *V = U->get();
 
     switch (I->getOpcode()) {
     case Instruction::BitCast:
@@ -456,29 +415,54 @@ determinePointerReadAttrs(Argument *A,
         return Attribute::None;
       }
 
-      Function::arg_iterator AI = F->arg_begin(), AE = F->arg_end();
-      CallSite::arg_iterator B = CS.arg_begin(), E = CS.arg_end();
-      for (CallSite::arg_iterator A = B; A != E; ++A, ++AI) {
-        if (A->get() == V) {
-          if (AI == AE) {
-            assert(F->isVarArg() &&
-                   "More params than args in non-varargs call.");
-            return Attribute::None;
-          }
-          Captures &= !CS.doesNotCapture(A - B);
-          if (SCCNodes.count(&*AI))
-            continue;
-          if (!CS.onlyReadsMemory() && !CS.onlyReadsMemory(A - B))
-            return Attribute::None;
-          if (!CS.doesNotAccessMemory(A - B))
-            IsRead = true;
-        }
+      // Note: the callee and the two successor blocks *follow* the argument
+      // operands.  This means there is no need to adjust UseIndex to account
+      // for these.
+
+      unsigned UseIndex = std::distance(CS.arg_begin(), U);
+
+      // U cannot be the callee operand use: since we're exploring the
+      // transitive uses of an Argument, having such a use be a callee would
+      // imply the CallSite is an indirect call or invoke; and we'd take the
+      // early exit above.
+      assert(UseIndex < CS.data_operands_size() &&
+             "Data operand use expected!");
+
+      bool IsOperandBundleUse = UseIndex >= CS.getNumArgOperands();
+
+      if (UseIndex >= F->arg_size() && !IsOperandBundleUse) {
+        assert(F->isVarArg() && "More params than args in non-varargs call");
+        return Attribute::None;
       }
+
+      Captures &= !CS.doesNotCapture(UseIndex);
+
+      // Since the optimizer (by design) cannot see the data flow corresponding
+      // to a operand bundle use, these cannot participate in the optimistic SCC
+      // analysis.  Instead, we model the operand bundle uses as arguments in
+      // call to a function external to the SCC.
+      if (IsOperandBundleUse ||
+          !SCCNodes.count(&*std::next(F->arg_begin(), UseIndex))) {
+
+        // The accessors used on CallSite here do the right thing for calls and
+        // invokes with operand bundles.
+
+        if (!CS.onlyReadsMemory() && !CS.onlyReadsMemory(UseIndex))
+          return Attribute::None;
+        if (!CS.doesNotAccessMemory(UseIndex))
+          IsRead = true;
+      }
+
       AddUsersToWorklistIfCapturing();
       break;
     }
 
     case Instruction::Load:
+      // A volatile load has side effects beyond what readonly can be relied
+      // upon.
+      if (cast<LoadInst>(I)->isVolatile())
+        return Attribute::None;
+
       IsRead = true;
       break;
 
@@ -494,20 +478,62 @@ determinePointerReadAttrs(Argument *A,
   return IsRead ? Attribute::ReadOnly : Attribute::ReadNone;
 }
 
-/// Deduce nocapture attributes for the SCC.
-bool FunctionAttrs::AddArgumentAttrs(const CallGraphSCC &SCC) {
+/// Deduce returned attributes for the SCC.
+static bool addArgumentReturnedAttrs(const SCCNodeSet &SCCNodes) {
   bool Changed = false;
 
-  SmallPtrSet<Function *, 8> SCCNodes;
+  AttrBuilder B;
+  B.addAttribute(Attribute::Returned);
 
-  // Fill SCCNodes with the elements of the SCC.  Used for quickly
-  // looking up whether a given CallGraphNode is in this SCC.
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-    Function *F = (*I)->getFunction();
-    if (F && !F->isDeclaration() && !F->mayBeOverridden() &&
-        !F->hasFnAttribute(Attribute::OptimizeNone))
-      SCCNodes.insert(F);
+  // Check each function in turn, determining if an argument is always returned.
+  for (Function *F : SCCNodes) {
+    // We can infer and propagate function attributes only when we know that the
+    // definition we'll get at link time is *exactly* the definition we see now.
+    // For more details, see GlobalValue::mayBeDerefined.
+    if (!F->hasExactDefinition())
+      continue;
+
+    if (F->getReturnType()->isVoidTy())
+      continue;
+
+    // There is nothing to do if an argument is already marked as 'returned'.
+    if (any_of(F->args(),
+               [](const Argument &Arg) { return Arg.hasReturnedAttr(); }))
+      continue;
+
+    auto FindRetArg = [&]() -> Value * {
+      Value *RetArg = nullptr;
+      for (BasicBlock &BB : *F)
+        if (auto *Ret = dyn_cast<ReturnInst>(BB.getTerminator())) {
+          // Note that stripPointerCasts should look through functions with
+          // returned arguments.
+          Value *RetVal = Ret->getReturnValue()->stripPointerCasts();
+          if (!isa<Argument>(RetVal) || RetVal->getType() != F->getReturnType())
+            return nullptr;
+
+          if (!RetArg)
+            RetArg = RetVal;
+          else if (RetArg != RetVal)
+            return nullptr;
+        }
+
+      return RetArg;
+    };
+
+    if (Value *RetArg = FindRetArg()) {
+      auto *A = cast<Argument>(RetArg);
+      A->addAttr(AttributeSet::get(F->getContext(), A->getArgNo() + 1, B));
+      ++NumReturned;
+      Changed = true;
+    }
   }
+
+  return Changed;
+}
+
+/// Deduce nocapture attributes for the SCC.
+static bool addArgumentAttrs(const SCCNodeSet &SCCNodes) {
+  bool Changed = false;
 
   ArgumentGraph AG;
 
@@ -516,17 +542,11 @@ bool FunctionAttrs::AddArgumentAttrs(const CallGraphSCC &SCC) {
 
   // Check each function in turn, determining which pointer arguments are not
   // captured.
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-    Function *F = (*I)->getFunction();
-
-    if (!F || F->hasFnAttribute(Attribute::OptimizeNone))
-      // External node or function we're trying not to optimize - only a problem
-      // for arguments that we pass to it.
-      continue;
-
-    // Definitions with weak linkage may be overridden at linktime with
-    // something that captures pointers, so treat them like declarations.
-    if (F->isDeclaration() || F->mayBeOverridden())
+  for (Function *F : SCCNodes) {
+    // We can infer and propagate function attributes only when we know that the
+    // definition we'll get at link time is *exactly* the definition we see now.
+    // For more details, see GlobalValue::mayBeDerefined.
+    if (!F->hasExactDefinition())
       continue;
 
     // Functions that are readonly (or readnone) and nounwind and don't return
@@ -564,12 +584,9 @@ bool FunctionAttrs::AddArgumentAttrs(const CallGraphSCC &SCC) {
             // then it must be calling into another function in our SCC. Save
             // its particulars for Argument-SCC analysis later.
             ArgumentGraphNode *Node = AG[&*A];
-            for (SmallVectorImpl<Argument *>::iterator
-                     UI = Tracker.Uses.begin(),
-                     UE = Tracker.Uses.end();
-                 UI != UE; ++UI) {
-              Node->Uses.push_back(AG[*UI]);
-              if (*UI != A)
+            for (Argument *Use : Tracker.Uses) {
+              Node->Uses.push_back(AG[Use]);
+              if (Use != &*A)
                 HasNonLocalUses = true;
             }
           }
@@ -634,17 +651,15 @@ bool FunctionAttrs::AddArgumentAttrs(const CallGraphSCC &SCC) {
     SmallPtrSet<Argument *, 8> ArgumentSCCNodes;
     // Fill ArgumentSCCNodes with the elements of the ArgumentSCC.  Used for
     // quickly looking up whether a given Argument is in this ArgumentSCC.
-    for (auto I = ArgumentSCC.begin(), E = ArgumentSCC.end(); I != E; ++I) {
-      ArgumentSCCNodes.insert((*I)->Definition);
+    for (ArgumentGraphNode *I : ArgumentSCC) {
+      ArgumentSCCNodes.insert(I->Definition);
     }
 
     for (auto I = ArgumentSCC.begin(), E = ArgumentSCC.end();
          I != E && !SCCCaptured; ++I) {
       ArgumentGraphNode *N = *I;
-      for (SmallVectorImpl<ArgumentGraphNode *>::iterator UI = N->Uses.begin(),
-                                                          UE = N->Uses.end();
-           UI != UE; ++UI) {
-        Argument *A = (*UI)->Definition;
+      for (ArgumentGraphNode *Use : N->Uses) {
+        Argument *A = Use->Definition;
         if (A->hasNoCaptureAttr() || ArgumentSCCNodes.count(A))
           continue;
         SCCCaptured = true;
@@ -708,11 +723,10 @@ bool FunctionAttrs::AddArgumentAttrs(const CallGraphSCC &SCC) {
 ///
 /// A function is "malloc-like" if it returns either null or a pointer that
 /// doesn't alias any other pointer visible to the caller.
-static bool isFunctionMallocLike(Function *F,
-                                 SmallPtrSet<Function *, 8> &SCCNodes) {
+static bool isFunctionMallocLike(Function *F, const SCCNodeSet &SCCNodes) {
   SmallSetVector<Value *, 8> FlowsToReturn;
-  for (Function::iterator I = F->begin(), E = F->end(); I != E; ++I)
-    if (ReturnInst *Ret = dyn_cast<ReturnInst>(I->getTerminator()))
+  for (BasicBlock &BB : *F)
+    if (ReturnInst *Ret = dyn_cast<ReturnInst>(BB.getTerminator()))
       FlowsToReturn.insert(Ret->getReturnValue());
 
   for (unsigned i = 0; i != FlowsToReturn.size(); ++i) {
@@ -759,7 +773,8 @@ static bool isFunctionMallocLike(Function *F,
           break;
         if (CS.getCalledFunction() && SCCNodes.count(CS.getCalledFunction()))
           break;
-      } // fall-through
+        LLVM_FALLTHROUGH;
+      }
       default:
         return false; // Did not come from an allocation.
       }
@@ -772,30 +787,18 @@ static bool isFunctionMallocLike(Function *F,
 }
 
 /// Deduce noalias attributes for the SCC.
-bool FunctionAttrs::AddNoAliasAttrs(const CallGraphSCC &SCC) {
-  SmallPtrSet<Function *, 8> SCCNodes;
-
-  // Fill SCCNodes with the elements of the SCC.  Used for quickly
-  // looking up whether a given CallGraphNode is in this SCC.
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I)
-    SCCNodes.insert((*I)->getFunction());
-
+static bool addNoAliasAttrs(const SCCNodeSet &SCCNodes) {
   // Check each function in turn, determining which functions return noalias
   // pointers.
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-    Function *F = (*I)->getFunction();
-
-    if (!F || F->hasFnAttribute(Attribute::OptimizeNone))
-      // External node or node we don't want to optimize - skip it;
-      return false;
-
+  for (Function *F : SCCNodes) {
     // Already noalias.
     if (F->doesNotAlias(0))
       continue;
 
-    // Definitions with weak linkage may be overridden at linktime, so
-    // treat them like declarations.
-    if (F->isDeclaration() || F->mayBeOverridden())
+    // We can infer and propagate function attributes only when we know that the
+    // definition we'll get at link time is *exactly* the definition we see now.
+    // For more details, see GlobalValue::mayBeDerefined.
+    if (!F->hasExactDefinition())
       return false;
 
     // We annotate noalias return values, which are only applicable to
@@ -808,8 +811,7 @@ bool FunctionAttrs::AddNoAliasAttrs(const CallGraphSCC &SCC) {
   }
 
   bool MadeChange = false;
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-    Function *F = (*I)->getFunction();
+  for (Function *F : SCCNodes) {
     if (F->doesNotAlias(0) || !F->getReturnType()->isPointerTy())
       continue;
 
@@ -828,8 +830,8 @@ bool FunctionAttrs::AddNoAliasAttrs(const CallGraphSCC &SCC) {
 /// Returns true if it believes the function will not return a null, and sets
 /// \p Speculative based on whether the returned conclusion is a speculative
 /// conclusion due to SCC calls.
-static bool isReturnNonNull(Function *F, SmallPtrSet<Function *, 8> &SCCNodes,
-                            const TargetLibraryInfo &TLI, bool &Speculative) {
+static bool isReturnNonNull(Function *F, const SCCNodeSet &SCCNodes,
+                            bool &Speculative) {
   assert(F->getReturnType()->isPointerTy() &&
          "nonnull only meaningful on pointer types");
   Speculative = false;
@@ -843,7 +845,7 @@ static bool isReturnNonNull(Function *F, SmallPtrSet<Function *, 8> &SCCNodes,
     Value *RetVal = FlowsToReturn[i];
 
     // If this value is locally known to be non-null, we're good
-    if (isKnownNonNull(RetVal, &TLI))
+    if (isKnownNonNull(RetVal))
       continue;
 
     // Otherwise, we need to look upwards since we can't make any local
@@ -892,14 +894,7 @@ static bool isReturnNonNull(Function *F, SmallPtrSet<Function *, 8> &SCCNodes,
 }
 
 /// Deduce nonnull attributes for the SCC.
-bool FunctionAttrs::AddNonNullAttrs(const CallGraphSCC &SCC) {
-  SmallPtrSet<Function *, 8> SCCNodes;
-
-  // Fill SCCNodes with the elements of the SCC.  Used for quickly
-  // looking up whether a given CallGraphNode is in this SCC.
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I)
-    SCCNodes.insert((*I)->getFunction());
-
+static bool addNonNullAttrs(const SCCNodeSet &SCCNodes) {
   // Speculative that all functions in the SCC return only nonnull
   // pointers.  We may refute this as we analyze functions.
   bool SCCReturnsNonNull = true;
@@ -908,21 +903,16 @@ bool FunctionAttrs::AddNonNullAttrs(const CallGraphSCC &SCC) {
 
   // Check each function in turn, determining which functions return nonnull
   // pointers.
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-    Function *F = (*I)->getFunction();
-
-    if (!F || F->hasFnAttribute(Attribute::OptimizeNone))
-      // External node or node we don't want to optimize - skip it;
-      return false;
-
+  for (Function *F : SCCNodes) {
     // Already nonnull.
     if (F->getAttributes().hasAttribute(AttributeSet::ReturnIndex,
                                         Attribute::NonNull))
       continue;
 
-    // Definitions with weak linkage may be overridden at linktime, so
-    // treat them like declarations.
-    if (F->isDeclaration() || F->mayBeOverridden())
+    // We can infer and propagate function attributes only when we know that the
+    // definition we'll get at link time is *exactly* the definition we see now.
+    // For more details, see GlobalValue::mayBeDerefined.
+    if (!F->hasExactDefinition())
       return false;
 
     // We annotate nonnull return values, which are only applicable to
@@ -931,7 +921,7 @@ bool FunctionAttrs::AddNonNullAttrs(const CallGraphSCC &SCC) {
       continue;
 
     bool Speculative = false;
-    if (isReturnNonNull(F, SCCNodes, *TLI, Speculative)) {
+    if (isReturnNonNull(F, SCCNodes, Speculative)) {
       if (!Speculative) {
         // Mark the function eagerly since we may discover a function
         // which prevents us from speculating about the entire SCC
@@ -948,8 +938,7 @@ bool FunctionAttrs::AddNonNullAttrs(const CallGraphSCC &SCC) {
   }
 
   if (SCCReturnsNonNull) {
-    for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-      Function *F = (*I)->getFunction();
+    for (Function *F : SCCNodes) {
       if (F->getAttributes().hasAttribute(AttributeSet::ReturnIndex,
                                           Attribute::NonNull) ||
           !F->getReturnType()->isPointerTy())
@@ -965,874 +954,338 @@ bool FunctionAttrs::AddNonNullAttrs(const CallGraphSCC &SCC) {
   return MadeChange;
 }
 
-static void setDoesNotAccessMemory(Function &F) {
-  if (!F.doesNotAccessMemory()) {
-    F.setDoesNotAccessMemory();
-    ++NumAnnotated;
-  }
-}
+/// Remove the convergent attribute from all functions in the SCC if every
+/// callsite within the SCC is not convergent (except for calls to functions
+/// within the SCC).  Returns true if changes were made.
+static bool removeConvergentAttrs(const SCCNodeSet &SCCNodes) {
+  // For every function in SCC, ensure that either
+  //  * it is not convergent, or
+  //  * we can remove its convergent attribute.
+  bool HasConvergentFn = false;
+  for (Function *F : SCCNodes) {
+    if (!F->isConvergent()) continue;
+    HasConvergentFn = true;
 
-static void setOnlyReadsMemory(Function &F) {
-  if (!F.onlyReadsMemory()) {
-    F.setOnlyReadsMemory();
-    ++NumAnnotated;
-  }
-}
+    // Can't remove convergent from function declarations.
+    if (F->isDeclaration()) return false;
 
-static void setDoesNotThrow(Function &F) {
-  if (!F.doesNotThrow()) {
-    F.setDoesNotThrow();
-    ++NumAnnotated;
-  }
-}
-
-static void setDoesNotCapture(Function &F, unsigned n) {
-  if (!F.doesNotCapture(n)) {
-    F.setDoesNotCapture(n);
-    ++NumAnnotated;
-  }
-}
-
-static void setOnlyReadsMemory(Function &F, unsigned n) {
-  if (!F.onlyReadsMemory(n)) {
-    F.setOnlyReadsMemory(n);
-    ++NumAnnotated;
-  }
-}
-
-static void setDoesNotAlias(Function &F, unsigned n) {
-  if (!F.doesNotAlias(n)) {
-    F.setDoesNotAlias(n);
-    ++NumAnnotated;
-  }
-}
-
-/// Analyze the name and prototype of the given function and set any applicable
-/// attributes.
-///
-/// Returns true if any attributes were set and false otherwise.
-static bool inferPrototypeAttributes(Function &F, const TargetLibraryInfo &TLI) {
-  if (F.hasFnAttribute(Attribute::OptimizeNone))
-    return false;
-
-  FunctionType *FTy = F.getFunctionType();
-  LibFunc::Func TheLibFunc;
-  if (!(TLI.getLibFunc(F.getName(), TheLibFunc) && TLI.has(TheLibFunc)))
-    return false;
-
-  switch (TheLibFunc) {
-  case LibFunc::strlen:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setOnlyReadsMemory(F);
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::strchr:
-  case LibFunc::strrchr:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isIntegerTy())
-      return false;
-    setOnlyReadsMemory(F);
-    setDoesNotThrow(F);
-    break;
-  case LibFunc::strtol:
-  case LibFunc::strtod:
-  case LibFunc::strtof:
-  case LibFunc::strtoul:
-  case LibFunc::strtoll:
-  case LibFunc::strtold:
-  case LibFunc::strtoull:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::strcpy:
-  case LibFunc::stpcpy:
-  case LibFunc::strcat:
-  case LibFunc::strncat:
-  case LibFunc::strncpy:
-  case LibFunc::stpncpy:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::strxfrm:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::strcmp: // 0,1
-  case LibFunc::strspn:  // 0,1
-  case LibFunc::strncmp: // 0,1
-  case LibFunc::strcspn: // 0,1
-  case LibFunc::strcoll: // 0,1
-  case LibFunc::strcasecmp:  // 0,1
-  case LibFunc::strncasecmp: //
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setOnlyReadsMemory(F);
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::strstr:
-  case LibFunc::strpbrk:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setOnlyReadsMemory(F);
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::strtok:
-  case LibFunc::strtok_r:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::scanf:
-    if (FTy->getNumParams() < 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::setbuf:
-  case LibFunc::setvbuf:
-    if (FTy->getNumParams() < 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::strdup:
-  case LibFunc::strndup:
-    if (FTy->getNumParams() < 1 || !FTy->getReturnType()->isPointerTy() ||
-        !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::stat:
-  case LibFunc::statvfs:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::sscanf:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::sprintf:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::snprintf:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(2)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 3);
-    setOnlyReadsMemory(F, 3);
-    break;
-  case LibFunc::setitimer:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(1)->isPointerTy() ||
-        !FTy->getParamType(2)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    setDoesNotCapture(F, 3);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::system:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    // May throw; "system" is a valid pthread cancellation point.
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::malloc:
-    if (FTy->getNumParams() != 1 || !FTy->getReturnType()->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    break;
-  case LibFunc::memcmp:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setOnlyReadsMemory(F);
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::memchr:
-  case LibFunc::memrchr:
-    if (FTy->getNumParams() != 3)
-      return false;
-    setOnlyReadsMemory(F);
-    setDoesNotThrow(F);
-    break;
-  case LibFunc::modf:
-  case LibFunc::modff:
-  case LibFunc::modfl:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::memcpy:
-  case LibFunc::memccpy:
-  case LibFunc::memmove:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::memalign:
-    if (!FTy->getReturnType()->isPointerTy())
-      return false;
-    setDoesNotAlias(F, 0);
-    break;
-  case LibFunc::mkdir:
-    if (FTy->getNumParams() == 0 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::mktime:
-    if (FTy->getNumParams() == 0 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::realloc:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getReturnType()->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::read:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    // May throw; "read" is a valid pthread cancellation point.
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::rewind:
-    if (FTy->getNumParams() < 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::rmdir:
-  case LibFunc::remove:
-  case LibFunc::realpath:
-    if (FTy->getNumParams() < 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::rename:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::readlink:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::write:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    // May throw; "write" is a valid pthread cancellation point.
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::bcopy:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::bcmp:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setOnlyReadsMemory(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::bzero:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::calloc:
-    if (FTy->getNumParams() != 2 || !FTy->getReturnType()->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    break;
-  case LibFunc::chmod:
-  case LibFunc::chown:
-    if (FTy->getNumParams() == 0 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::ctermid:
-  case LibFunc::clearerr:
-  case LibFunc::closedir:
-    if (FTy->getNumParams() == 0 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::atoi:
-  case LibFunc::atol:
-  case LibFunc::atof:
-  case LibFunc::atoll:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setOnlyReadsMemory(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::access:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::fopen:
-    if (FTy->getNumParams() != 2 || !FTy->getReturnType()->isPointerTy() ||
-        !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::fdopen:
-    if (FTy->getNumParams() != 2 || !FTy->getReturnType()->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::feof:
-  case LibFunc::free:
-  case LibFunc::fseek:
-  case LibFunc::ftell:
-  case LibFunc::fgetc:
-  case LibFunc::fseeko:
-  case LibFunc::ftello:
-  case LibFunc::fileno:
-  case LibFunc::fflush:
-  case LibFunc::fclose:
-  case LibFunc::fsetpos:
-  case LibFunc::flockfile:
-  case LibFunc::funlockfile:
-  case LibFunc::ftrylockfile:
-    if (FTy->getNumParams() == 0 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::ferror:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F);
-    break;
-  case LibFunc::fputc:
-  case LibFunc::fstat:
-  case LibFunc::frexp:
-  case LibFunc::frexpf:
-  case LibFunc::frexpl:
-  case LibFunc::fstatvfs:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::fgets:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(2)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 3);
-    break;
-  case LibFunc::fread:
-    if (FTy->getNumParams() != 4 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(3)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 4);
-    break;
-  case LibFunc::fwrite:
-    if (FTy->getNumParams() != 4 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(3)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 4);
-    break;
-  case LibFunc::fputs:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::fscanf:
-  case LibFunc::fprintf:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::fgetpos:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::getc:
-  case LibFunc::getlogin_r:
-  case LibFunc::getc_unlocked:
-    if (FTy->getNumParams() == 0 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::getenv:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setOnlyReadsMemory(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::gets:
-  case LibFunc::getchar:
-    setDoesNotThrow(F);
-    break;
-  case LibFunc::getitimer:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::getpwnam:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::ungetc:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::uname:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::unlink:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::unsetenv:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::utime:
-  case LibFunc::utimes:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::putc:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::puts:
-  case LibFunc::printf:
-  case LibFunc::perror:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::pread:
-    if (FTy->getNumParams() != 4 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    // May throw; "pread" is a valid pthread cancellation point.
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::pwrite:
-    if (FTy->getNumParams() != 4 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    // May throw; "pwrite" is a valid pthread cancellation point.
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::putchar:
-    setDoesNotThrow(F);
-    break;
-  case LibFunc::popen:
-    if (FTy->getNumParams() != 2 || !FTy->getReturnType()->isPointerTy() ||
-        !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::pclose:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::vscanf:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::vsscanf:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(1)->isPointerTy() ||
-        !FTy->getParamType(2)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::vfscanf:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(1)->isPointerTy() ||
-        !FTy->getParamType(2)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::valloc:
-    if (!FTy->getReturnType()->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    break;
-  case LibFunc::vprintf:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::vfprintf:
-  case LibFunc::vsprintf:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::vsnprintf:
-    if (FTy->getNumParams() != 4 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(2)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 3);
-    setOnlyReadsMemory(F, 3);
-    break;
-  case LibFunc::open:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    // May throw; "open" is a valid pthread cancellation point.
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::opendir:
-    if (FTy->getNumParams() != 1 || !FTy->getReturnType()->isPointerTy() ||
-        !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::tmpfile:
-    if (!FTy->getReturnType()->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    break;
-  case LibFunc::times:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::htonl:
-  case LibFunc::htons:
-  case LibFunc::ntohl:
-  case LibFunc::ntohs:
-    setDoesNotThrow(F);
-    setDoesNotAccessMemory(F);
-    break;
-  case LibFunc::lstat:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::lchown:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::qsort:
-    if (FTy->getNumParams() != 4 || !FTy->getParamType(3)->isPointerTy())
-      return false;
-    // May throw; places call through function pointer.
-    setDoesNotCapture(F, 4);
-    break;
-  case LibFunc::dunder_strdup:
-  case LibFunc::dunder_strndup:
-    if (FTy->getNumParams() < 1 || !FTy->getReturnType()->isPointerTy() ||
-        !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::dunder_strtok_r:
-    if (FTy->getNumParams() != 3 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::under_IO_getc:
-    if (FTy->getNumParams() != 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::under_IO_putc:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::dunder_isoc99_scanf:
-    if (FTy->getNumParams() < 1 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::stat64:
-  case LibFunc::lstat64:
-  case LibFunc::statvfs64:
-    if (FTy->getNumParams() < 1 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::dunder_isoc99_sscanf:
-    if (FTy->getNumParams() < 1 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::fopen64:
-    if (FTy->getNumParams() != 2 || !FTy->getReturnType()->isPointerTy() ||
-        !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    setOnlyReadsMemory(F, 1);
-    setOnlyReadsMemory(F, 2);
-    break;
-  case LibFunc::fseeko64:
-  case LibFunc::ftello64:
-    if (FTy->getNumParams() == 0 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    break;
-  case LibFunc::tmpfile64:
-    if (!FTy->getReturnType()->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotAlias(F, 0);
-    break;
-  case LibFunc::fstat64:
-  case LibFunc::fstatvfs64:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(1)->isPointerTy())
-      return false;
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 2);
-    break;
-  case LibFunc::open64:
-    if (FTy->getNumParams() < 2 || !FTy->getParamType(0)->isPointerTy())
-      return false;
-    // May throw; "open" is a valid pthread cancellation point.
-    setDoesNotCapture(F, 1);
-    setOnlyReadsMemory(F, 1);
-    break;
-  case LibFunc::gettimeofday:
-    if (FTy->getNumParams() != 2 || !FTy->getParamType(0)->isPointerTy() ||
-        !FTy->getParamType(1)->isPointerTy())
-      return false;
-    // Currently some platforms have the restrict keyword on the arguments to
-    // gettimeofday. To be conservative, do not add noalias to gettimeofday's
-    // arguments.
-    setDoesNotThrow(F);
-    setDoesNotCapture(F, 1);
-    setDoesNotCapture(F, 2);
-    break;
-  default:
-    // Didn't mark any attributes.
-    return false;
+    // Can't remove convergent if any of our functions has a convergent call to a
+    // function not in the SCC.
+    for (Instruction &I : instructions(*F)) {
+      CallSite CS(&I);
+      // Bail if CS is a convergent call to a function not in the SCC.
+      if (CS && CS.isConvergent() &&
+          SCCNodes.count(CS.getCalledFunction()) == 0)
+        return false;
+    }
   }
 
+  // If the SCC doesn't have any convergent functions, we have nothing to do.
+  if (!HasConvergentFn) return false;
+
+  // If we got here, all of the calls the SCC makes to functions not in the SCC
+  // are non-convergent.  Therefore all of the SCC's functions can also be made
+  // non-convergent.  We'll remove the attr from the callsites in
+  // InstCombineCalls.
+  for (Function *F : SCCNodes) {
+    if (!F->isConvergent()) continue;
+
+    DEBUG(dbgs() << "Removing convergent attr from fn " << F->getName()
+                 << "\n");
+    F->setNotConvergent();
+  }
   return true;
 }
 
-/// Adds attributes to well-known standard library call declarations.
-bool FunctionAttrs::annotateLibraryCalls(const CallGraphSCC &SCC) {
-  bool MadeChange = false;
-
-  // Check each function in turn annotating well-known library function
-  // declarations with attributes.
-  for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
-    Function *F = (*I)->getFunction();
-
-    if (F && F->isDeclaration())
-      MadeChange |= inferPrototypeAttributes(*F, *TLI);
-  }
-
-  return MadeChange;
+static bool setDoesNotRecurse(Function &F) {
+  if (F.doesNotRecurse())
+    return false;
+  F.setDoesNotRecurse();
+  ++NumNoRecurse;
+  return true;
 }
 
-bool FunctionAttrs::runOnSCC(CallGraphSCC &SCC) {
-  TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+static bool addNoRecurseAttrs(const SCCNodeSet &SCCNodes) {
+  // Try and identify functions that do not recurse.
 
-  bool Changed = annotateLibraryCalls(SCC);
-  Changed |= AddReadAttrs(SCC);
-  Changed |= AddArgumentAttrs(SCC);
-  Changed |= AddNoAliasAttrs(SCC);
-  Changed |= AddNonNullAttrs(SCC);
+  // If the SCC contains multiple nodes we know for sure there is recursion.
+  if (SCCNodes.size() != 1)
+    return false;
+
+  Function *F = *SCCNodes.begin();
+  if (!F || F->isDeclaration() || F->doesNotRecurse())
+    return false;
+
+  // If all of the calls in F are identifiable and are to norecurse functions, F
+  // is norecurse. This check also detects self-recursion as F is not currently
+  // marked norecurse, so any called from F to F will not be marked norecurse.
+  for (Instruction &I : instructions(*F))
+    if (auto CS = CallSite(&I)) {
+      Function *Callee = CS.getCalledFunction();
+      if (!Callee || Callee == F || !Callee->doesNotRecurse())
+        // Function calls a potentially recursive function.
+        return false;
+    }
+
+  // Every call was to a non-recursive function other than this function, and
+  // we have no indirect recursion as the SCC size is one. This function cannot
+  // recurse.
+  return setDoesNotRecurse(*F);
+}
+
+PreservedAnalyses PostOrderFunctionAttrsPass::run(LazyCallGraph::SCC &C,
+                                                  CGSCCAnalysisManager &AM,
+                                                  LazyCallGraph &CG,
+                                                  CGSCCUpdateResult &) {
+  FunctionAnalysisManager &FAM =
+      AM.getResult<FunctionAnalysisManagerCGSCCProxy>(C, CG).getManager();
+
+  // We pass a lambda into functions to wire them up to the analysis manager
+  // for getting function analyses.
+  auto AARGetter = [&](Function &F) -> AAResults & {
+    return FAM.getResult<AAManager>(F);
+  };
+
+  // Fill SCCNodes with the elements of the SCC. Also track whether there are
+  // any external or opt-none nodes that will prevent us from optimizing any
+  // part of the SCC.
+  SCCNodeSet SCCNodes;
+  bool HasUnknownCall = false;
+  for (LazyCallGraph::Node &N : C) {
+    Function &F = N.getFunction();
+    if (F.hasFnAttribute(Attribute::OptimizeNone)) {
+      // Treat any function we're trying not to optimize as if it were an
+      // indirect call and omit it from the node set used below.
+      HasUnknownCall = true;
+      continue;
+    }
+    // Track whether any functions in this SCC have an unknown call edge.
+    // Note: if this is ever a performance hit, we can common it with
+    // subsequent routines which also do scans over the instructions of the
+    // function.
+    if (!HasUnknownCall)
+      for (Instruction &I : instructions(F))
+        if (auto CS = CallSite(&I))
+          if (!CS.getCalledFunction()) {
+            HasUnknownCall = true;
+            break;
+          }
+
+    SCCNodes.insert(&F);
+  }
+
+  bool Changed = false;
+  Changed |= addArgumentReturnedAttrs(SCCNodes);
+  Changed |= addReadAttrs(SCCNodes, AARGetter);
+  Changed |= addArgumentAttrs(SCCNodes);
+
+  // If we have no external nodes participating in the SCC, we can deduce some
+  // more precise attributes as well.
+  if (!HasUnknownCall) {
+    Changed |= addNoAliasAttrs(SCCNodes);
+    Changed |= addNonNullAttrs(SCCNodes);
+    Changed |= removeConvergentAttrs(SCCNodes);
+    Changed |= addNoRecurseAttrs(SCCNodes);
+  }
+
+  return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
+}
+
+namespace {
+struct PostOrderFunctionAttrsLegacyPass : public CallGraphSCCPass {
+  static char ID; // Pass identification, replacement for typeid
+  PostOrderFunctionAttrsLegacyPass() : CallGraphSCCPass(ID) {
+    initializePostOrderFunctionAttrsLegacyPassPass(
+        *PassRegistry::getPassRegistry());
+  }
+
+  bool runOnSCC(CallGraphSCC &SCC) override;
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesCFG();
+    AU.addRequired<AssumptionCacheTracker>();
+    getAAResultsAnalysisUsage(AU);
+    CallGraphSCCPass::getAnalysisUsage(AU);
+  }
+};
+}
+
+char PostOrderFunctionAttrsLegacyPass::ID = 0;
+INITIALIZE_PASS_BEGIN(PostOrderFunctionAttrsLegacyPass, "functionattrs",
+                      "Deduce function attributes", false, false)
+INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
+INITIALIZE_PASS_DEPENDENCY(CallGraphWrapperPass)
+INITIALIZE_PASS_END(PostOrderFunctionAttrsLegacyPass, "functionattrs",
+                    "Deduce function attributes", false, false)
+
+Pass *llvm::createPostOrderFunctionAttrsLegacyPass() {
+  return new PostOrderFunctionAttrsLegacyPass();
+}
+
+template <typename AARGetterT>
+static bool runImpl(CallGraphSCC &SCC, AARGetterT AARGetter) {
+  bool Changed = false;
+
+  // Fill SCCNodes with the elements of the SCC. Used for quickly looking up
+  // whether a given CallGraphNode is in this SCC. Also track whether there are
+  // any external or opt-none nodes that will prevent us from optimizing any
+  // part of the SCC.
+  SCCNodeSet SCCNodes;
+  bool ExternalNode = false;
+  for (CallGraphNode *I : SCC) {
+    Function *F = I->getFunction();
+    if (!F || F->hasFnAttribute(Attribute::OptimizeNone)) {
+      // External node or function we're trying not to optimize - we both avoid
+      // transform them and avoid leveraging information they provide.
+      ExternalNode = true;
+      continue;
+    }
+
+    SCCNodes.insert(F);
+  }
+
+  Changed |= addArgumentReturnedAttrs(SCCNodes);
+  Changed |= addReadAttrs(SCCNodes, AARGetter);
+  Changed |= addArgumentAttrs(SCCNodes);
+
+  // If we have no external nodes participating in the SCC, we can deduce some
+  // more precise attributes as well.
+  if (!ExternalNode) {
+    Changed |= addNoAliasAttrs(SCCNodes);
+    Changed |= addNonNullAttrs(SCCNodes);
+    Changed |= removeConvergentAttrs(SCCNodes);
+    Changed |= addNoRecurseAttrs(SCCNodes);
+  }
+
   return Changed;
+}
+
+bool PostOrderFunctionAttrsLegacyPass::runOnSCC(CallGraphSCC &SCC) {
+  if (skipSCC(SCC))
+    return false;
+
+  // We compute dedicated AA results for each function in the SCC as needed. We
+  // use a lambda referencing external objects so that they live long enough to
+  // be queried, but we re-use them each time.
+  Optional<BasicAAResult> BAR;
+  Optional<AAResults> AAR;
+  auto AARGetter = [&](Function &F) -> AAResults & {
+    BAR.emplace(createLegacyPMBasicAAResult(*this, F));
+    AAR.emplace(createLegacyPMAAResults(*this, F, *BAR));
+    return *AAR;
+  };
+
+  return runImpl(SCC, AARGetter);
+}
+
+namespace {
+struct ReversePostOrderFunctionAttrsLegacyPass : public ModulePass {
+  static char ID; // Pass identification, replacement for typeid
+  ReversePostOrderFunctionAttrsLegacyPass() : ModulePass(ID) {
+    initializeReversePostOrderFunctionAttrsLegacyPassPass(
+        *PassRegistry::getPassRegistry());
+  }
+
+  bool runOnModule(Module &M) override;
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesCFG();
+    AU.addRequired<CallGraphWrapperPass>();
+    AU.addPreserved<CallGraphWrapperPass>();
+  }
+};
+}
+
+char ReversePostOrderFunctionAttrsLegacyPass::ID = 0;
+INITIALIZE_PASS_BEGIN(ReversePostOrderFunctionAttrsLegacyPass, "rpo-functionattrs",
+                      "Deduce function attributes in RPO", false, false)
+INITIALIZE_PASS_DEPENDENCY(CallGraphWrapperPass)
+INITIALIZE_PASS_END(ReversePostOrderFunctionAttrsLegacyPass, "rpo-functionattrs",
+                    "Deduce function attributes in RPO", false, false)
+
+Pass *llvm::createReversePostOrderFunctionAttrsPass() {
+  return new ReversePostOrderFunctionAttrsLegacyPass();
+}
+
+static bool addNoRecurseAttrsTopDown(Function &F) {
+  // We check the preconditions for the function prior to calling this to avoid
+  // the cost of building up a reversible post-order list. We assert them here
+  // to make sure none of the invariants this relies on were violated.
+  assert(!F.isDeclaration() && "Cannot deduce norecurse without a definition!");
+  assert(!F.doesNotRecurse() &&
+         "This function has already been deduced as norecurs!");
+  assert(F.hasInternalLinkage() &&
+         "Can only do top-down deduction for internal linkage functions!");
+
+  // If F is internal and all of its uses are calls from a non-recursive
+  // functions, then none of its calls could in fact recurse without going
+  // through a function marked norecurse, and so we can mark this function too
+  // as norecurse. Note that the uses must actually be calls -- otherwise
+  // a pointer to this function could be returned from a norecurse function but
+  // this function could be recursively (indirectly) called. Note that this
+  // also detects if F is directly recursive as F is not yet marked as
+  // a norecurse function.
+  for (auto *U : F.users()) {
+    auto *I = dyn_cast<Instruction>(U);
+    if (!I)
+      return false;
+    CallSite CS(I);
+    if (!CS || !CS.getParent()->getParent()->doesNotRecurse())
+      return false;
+  }
+  return setDoesNotRecurse(F);
+}
+
+static bool deduceFunctionAttributeInRPO(Module &M, CallGraph &CG) {
+  // We only have a post-order SCC traversal (because SCCs are inherently
+  // discovered in post-order), so we accumulate them in a vector and then walk
+  // it in reverse. This is simpler than using the RPO iterator infrastructure
+  // because we need to combine SCC detection and the PO walk of the call
+  // graph. We can also cheat egregiously because we're primarily interested in
+  // synthesizing norecurse and so we can only save the singular SCCs as SCCs
+  // with multiple functions in them will clearly be recursive.
+  SmallVector<Function *, 16> Worklist;
+  for (scc_iterator<CallGraph *> I = scc_begin(&CG); !I.isAtEnd(); ++I) {
+    if (I->size() != 1)
+      continue;
+
+    Function *F = I->front()->getFunction();
+    if (F && !F->isDeclaration() && !F->doesNotRecurse() &&
+        F->hasInternalLinkage())
+      Worklist.push_back(F);
+  }
+
+  bool Changed = false;
+  for (auto *F : reverse(Worklist))
+    Changed |= addNoRecurseAttrsTopDown(*F);
+
+  return Changed;
+}
+
+bool ReversePostOrderFunctionAttrsLegacyPass::runOnModule(Module &M) {
+  if (skipModule(M))
+    return false;
+
+  auto &CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
+
+  return deduceFunctionAttributeInRPO(M, CG);
+}
+
+PreservedAnalyses
+ReversePostOrderFunctionAttrsPass::run(Module &M, ModuleAnalysisManager &AM) {
+  auto &CG = AM.getResult<CallGraphAnalysis>(M);
+
+  bool Changed = deduceFunctionAttributeInRPO(M, CG);
+
+  // CallGraphAnalysis holds AssertingVH and must be invalidated eagerly so
+  // that other passes don't delete stuff from under it.
+  // FIXME: We need to invalidate this to avoid PR28400. Is there a better
+  // solution?
+  AM.invalidate<CallGraphAnalysis>(M);
+
+  if (!Changed)
+    return PreservedAnalyses::all();
+  PreservedAnalyses PA;
+  PA.preserve<CallGraphAnalysis>();
+  return PA;
 }

@@ -103,7 +103,7 @@ if( X86 )
 elseif( ANDROID_ABI STREQUAL "armeabi" )
  # 64 bit atomic operations used in c++ libraries require armv7-a instructions
  # armv5te and armv6 were tried but do not work.
- set( ANDROID_CXX_FLAGS "${ANDROID_CXX_FLAGS} -march=armv7-a" )
+ set( ANDROID_CXX_FLAGS "${ANDROID_CXX_FLAGS} -march=armv7-a -mthumb" )
  if( LLVM_BUILD_STATIC )
   # Temporary workaround for static linking with the latest API.
   set( ANDROID_CXX_FLAGS "${ANDROID_CXX_FLAGS} -DANDROID_ARM_BUILD_STATIC" )
@@ -115,6 +115,17 @@ elseif( ANDROID_ABI STREQUAL "mips" )
   list( APPEND LLDB_SYSTEM_LIBS atomic )
   set( LLDB_SYSTEM_LIBS ${LLDB_SYSTEM_LIBS} CACHE INTERNAL "" FORCE )
  endif()
+ if( LLVM_BUILD_STATIC )
+  # Temporary workaround for static linking with the latest API.
+  set( ANDROID_CXX_FLAGS "${ANDROID_CXX_FLAGS} -DANDROID_MIPS_BUILD_STATIC" )
+ endif()
+endif()
+
+# Use gold linker and enable safe ICF in case of x86, x86_64 and arm
+if ( ANDROID_ABI STREQUAL "x86"    OR
+     ANDROID_ABI STREQUAL "x86_64" OR
+     ANDROID_ABI STREQUAL "armeabi")
+ set( ANDROID_LINKER_FLAGS "${ANDROID_LINKER_FLAGS} -fuse-ld=gold -Wl,--icf=safe" )
 endif()
 
 if( NOT LLVM_BUILD_STATIC )
@@ -154,6 +165,15 @@ set( CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY )
 set( CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY )
 
 ################# BEGIN EVIL HACK ##################
+# In the android-arm NDK unwind.h and link.h contains 2 conflicting
+# typedef for _Unwind_Ptr. Force HAVE_UNWIND_BACKTRACE to 0 to prevent
+# LLVM from finding unwind.h what would break the build.
+if ( ANDROID_ABI STREQUAL "armeabi" )
+ set( HAVE_UNWIND_BACKTRACE 0 CACHE INTERNAL "Hack to disable the finding of unwind.h on Android arm" )
+endif()
+################# END EVIL HACK ####################
+
+################# BEGIN EVIL HACK ##################
 # lldb-server links against libdl even though it's not being used and
 # libdl.a is currently missing from the toolchain (b.android.com/178517).
 # Therefore, in order to statically link lldb-server, we need a temporary
@@ -167,7 +187,8 @@ if( LLVM_BUILD_STATIC )
 void *       dlopen  (const char *filename, int flag)   { return 0; }
 const char * dlerror (void)                             { return 0; }
 void *       dlsym   (void *handle, const char *symbol) { return 0; }
-int          dlclose (void *handle)                     { return 0; }")
+int          dlclose (void *handle)                     { return 0; }
+int          dladdr  (const void *addr, Dl_info *info)  { return 0; }")
  set( flags "${CMAKE_C_FLAGS}" )
  separate_arguments( flags )
  execute_process( COMMAND ${CMAKE_C_COMPILER} ${flags} -c ${libdl}/libdl.c -o ${libdl}/libdl.o )

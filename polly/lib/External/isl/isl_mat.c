@@ -24,6 +24,29 @@ isl_ctx *isl_mat_get_ctx(__isl_keep isl_mat *mat)
 	return mat ? mat->ctx : NULL;
 }
 
+/* Return a hash value that digests "mat".
+ */
+uint32_t isl_mat_get_hash(__isl_keep isl_mat *mat)
+{
+	int i;
+	uint32_t hash;
+
+	if (!mat)
+		return 0;
+
+	hash = isl_hash_init();
+	isl_hash_byte(hash, mat->n_row & 0xFF);
+	isl_hash_byte(hash, mat->n_col & 0xFF);
+	for (i = 0; i < mat->n_row; ++i) {
+		uint32_t row_hash;
+
+		row_hash = isl_seq_get_hash(mat->row[i], mat->n_col);
+		isl_hash_hash(hash, row_hash);
+	}
+
+	return hash;
+}
+
 struct isl_mat *isl_mat_alloc(struct isl_ctx *ctx,
 	unsigned n_row, unsigned n_col)
 {
@@ -1123,7 +1146,7 @@ static int preimage(struct isl_ctx *ctx, isl_int **q, unsigned n,
  * M the matrix mat.
  *
  * If there are fewer variables x' then there are x, then we perform
- * the transformation in place, which that, in principle,
+ * the transformation in place, which means that, in principle,
  * this frees up some extra variables as the number
  * of columns remains constant, but we would have to extend
  * the div array too as the number of rows in this array is assumed
@@ -1191,7 +1214,7 @@ struct isl_set *isl_set_preimage(struct isl_set *set, struct isl_mat *mat)
 
 	set = isl_set_cow(set);
 	if (!set)
-		return NULL;
+		goto error;
 
 	for (i = 0; i < set->n; ++i) {
 		set->p[i] = isl_basic_set_preimage(set->p[i],
@@ -1235,6 +1258,53 @@ static int transform(isl_ctx *ctx, isl_int **q, unsigned n,
 	return 0;
 }
 
+/* Replace the variables x of type "type" starting at "first" in "bmap"
+ * by x' with x = M x' with M the matrix trans.
+ * That is, replace the corresponding coefficients c by c M.
+ *
+ * The transformation matrix should be a square matrix.
+ */
+__isl_give isl_basic_map *isl_basic_map_transform_dims(
+	__isl_take isl_basic_map *bmap, enum isl_dim_type type, unsigned first,
+	__isl_take isl_mat *trans)
+{
+	isl_ctx *ctx;
+	unsigned pos;
+
+	bmap = isl_basic_map_cow(bmap);
+	if (!bmap || !trans)
+		goto error;
+
+	ctx = isl_basic_map_get_ctx(bmap);
+	if (trans->n_row != trans->n_col)
+		isl_die(trans->ctx, isl_error_invalid,
+			"expecting square transformation matrix", goto error);
+	if (first + trans->n_row > isl_basic_map_dim(bmap, type))
+		isl_die(trans->ctx, isl_error_invalid,
+			"oversized transformation matrix", goto error);
+
+	pos = isl_basic_map_offset(bmap, type) + first;
+
+	if (transform(ctx, bmap->eq, bmap->n_eq, pos, isl_mat_copy(trans)) < 0)
+		goto error;
+	if (transform(ctx, bmap->ineq, bmap->n_ineq, pos,
+		      isl_mat_copy(trans)) < 0)
+		goto error;
+	if (transform(ctx, bmap->div, bmap->n_div, 1 + pos,
+		      isl_mat_copy(trans)) < 0)
+		goto error;
+
+	ISL_F_CLR(bmap, ISL_BASIC_MAP_NORMALIZED);
+	ISL_F_CLR(bmap, ISL_BASIC_MAP_NORMALIZED_DIVS);
+
+	isl_mat_free(trans);
+	return bmap;
+error:
+	isl_mat_free(trans);
+	isl_basic_map_free(bmap);
+	return NULL;
+}
+
 /* Replace the variables x of type "type" starting at "first" in "bset"
  * by x' with x = M x' with M the matrix trans.
  * That is, replace the corresponding coefficients c by c M.
@@ -1245,41 +1315,7 @@ __isl_give isl_basic_set *isl_basic_set_transform_dims(
 	__isl_take isl_basic_set *bset, enum isl_dim_type type, unsigned first,
 	__isl_take isl_mat *trans)
 {
-	isl_ctx *ctx;
-	unsigned pos;
-
-	bset = isl_basic_set_cow(bset);
-	if (!bset || !trans)
-		goto error;
-
-	ctx = isl_basic_set_get_ctx(bset);
-	if (trans->n_row != trans->n_col)
-		isl_die(trans->ctx, isl_error_invalid,
-			"expecting square transformation matrix", goto error);
-	if (first + trans->n_row > isl_basic_set_dim(bset, type))
-		isl_die(trans->ctx, isl_error_invalid,
-			"oversized transformation matrix", goto error);
-
-	pos = isl_basic_set_offset(bset, type) + first;
-
-	if (transform(ctx, bset->eq, bset->n_eq, pos, isl_mat_copy(trans)) < 0)
-		goto error;
-	if (transform(ctx, bset->ineq, bset->n_ineq, pos,
-		      isl_mat_copy(trans)) < 0)
-		goto error;
-	if (transform(ctx, bset->div, bset->n_div, 1 + pos,
-		      isl_mat_copy(trans)) < 0)
-		goto error;
-
-	ISL_F_CLR(bset, ISL_BASIC_SET_NORMALIZED);
-	ISL_F_CLR(bset, ISL_BASIC_SET_NORMALIZED_DIVS);
-
-	isl_mat_free(trans);
-	return bset;
-error:
-	isl_mat_free(trans);
-	isl_basic_set_free(bset);
-	return NULL;
+	return isl_basic_map_transform_dims(bset, type, first, trans);
 }
 
 void isl_mat_print_internal(__isl_keep isl_mat *mat, FILE *out, int indent)
@@ -1656,6 +1692,22 @@ error:
 	return NULL;
 }
 
+/* Return the gcd of the elements in row "row" of "mat" in *gcd.
+ * Return isl_stat_ok on success and isl_stat_error on failure.
+ */
+isl_stat isl_mat_row_gcd(__isl_keep isl_mat *mat, int row, isl_int *gcd)
+{
+	if (!mat)
+		return isl_stat_error;
+
+	if (row < 0 || row >= mat->n_row)
+		isl_die(isl_mat_get_ctx(mat), isl_error_invalid,
+			"row out of range", return isl_stat_error);
+	isl_seq_gcd(mat->row[row], mat->n_col, gcd);
+
+	return isl_stat_ok;
+}
+
 void isl_mat_gcd(__isl_keep isl_mat *mat, isl_int *gcd)
 {
 	int i;
@@ -1671,6 +1723,25 @@ void isl_mat_gcd(__isl_keep isl_mat *mat, isl_int *gcd)
 		isl_int_gcd(*gcd, *gcd, g);
 	}
 	isl_int_clear(g);
+}
+
+/* Return the result of scaling "mat" by a factor of "m".
+ */
+__isl_give isl_mat *isl_mat_scale(__isl_take isl_mat *mat, isl_int m)
+{
+	int i;
+
+	if (isl_int_is_one(m))
+		return mat;
+
+	mat = isl_mat_cow(mat);
+	if (!mat)
+		return NULL;
+
+	for (i = 0; i < mat->n_row; ++i)
+		isl_seq_scale(mat->row[i], mat->row[i], m, mat->n_col);
+
+	return mat;
 }
 
 __isl_give isl_mat *isl_mat_scale_down(__isl_take isl_mat *mat, isl_int m)

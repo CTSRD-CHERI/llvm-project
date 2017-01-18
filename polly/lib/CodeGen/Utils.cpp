@@ -78,7 +78,7 @@ static BasicBlock *splitEdge(BasicBlock *Prev, BasicBlock *Succ,
 
 BasicBlock *polly::executeScopConditionally(Scop &S, Pass *P, Value *RTC) {
   Region &R = S.getRegion();
-  PollyIRBuilder Builder(R.getEntry());
+  PollyIRBuilder Builder(S.getEntry());
   DominatorTree &DT = P->getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   RegionInfo &RI = P->getAnalysis<RegionInfoPass>().getRegionInfo();
   LoopInfo &LI = P->getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
@@ -96,8 +96,8 @@ BasicBlock *polly::executeScopConditionally(Scop &S, Pass *P, Value *RTC) {
   //      /    \     //
 
   // Create a fork block.
-  BasicBlock *EnteringBB = R.getEnteringBlock();
-  BasicBlock *EntryBB = R.getEntry();
+  BasicBlock *EnteringBB = S.getEnteringBlock();
+  BasicBlock *EntryBB = S.getEntry();
   assert(EnteringBB && "Must be a simple region");
   BasicBlock *SplitBlock =
       splitEdge(EnteringBB, EntryBB, ".split_new_and_old", &DT, &LI, &RI);
@@ -116,8 +116,8 @@ BasicBlock *polly::executeScopConditionally(Scop &S, Pass *P, Value *RTC) {
   RI.setRegionFor(SplitBlock, PrevRegion);
 
   // Create a join block
-  BasicBlock *ExitingBB = R.getExitingBlock();
-  BasicBlock *ExitBB = R.getExit();
+  BasicBlock *ExitingBB = S.getExitingBlock();
+  BasicBlock *ExitBB = S.getExit();
   assert(ExitingBB && "Must be a simple region");
   BasicBlock *MergeBlock =
       splitEdge(ExitingBB, ExitBB, ".merge_new_and_old", &DT, &LI, &RI);
@@ -141,17 +141,23 @@ BasicBlock *polly::executeScopConditionally(Scop &S, Pass *P, Value *RTC) {
   //      ExitBB     //
   //      /    \     //
 
-  // Create the start block.
+  // Create the start and exiting block.
   Function *F = SplitBlock->getParent();
   BasicBlock *StartBlock =
       BasicBlock::Create(F->getContext(), "polly.start", F);
+  BasicBlock *ExitingBlock =
+      BasicBlock::Create(F->getContext(), "polly.exiting", F);
   SplitBlock->getTerminator()->eraseFromParent();
   Builder.SetInsertPoint(SplitBlock);
-  Builder.CreateCondBr(RTC, StartBlock, R.getEntry());
-  if (Loop *L = LI.getLoopFor(SplitBlock))
+  Builder.CreateCondBr(RTC, StartBlock, S.getEntry());
+  if (Loop *L = LI.getLoopFor(SplitBlock)) {
     L->addBasicBlockToLoop(StartBlock, LI);
+    L->addBasicBlockToLoop(ExitingBlock, LI);
+  }
   DT.addNewBlock(StartBlock, SplitBlock);
+  DT.addNewBlock(ExitingBlock, StartBlock);
   RI.setRegionFor(StartBlock, RI.getRegionFor(SplitBlock));
+  RI.setRegionFor(ExitingBlock, RI.getRegionFor(SplitBlock));
 
   //      \   /                    //
   //    EnteringBB                 //
@@ -159,16 +165,21 @@ BasicBlock *polly::executeScopConditionally(Scop &S, Pass *P, Value *RTC) {
   //    SplitBlock---------\       //
   //   _____|_____         |       //
   //  /  EntryBB  \    StartBlock  //
-  //  |  (region) |                //
-  //  \_ExitingBB_/                //
+  //  |  (region) |        |       //
+  //  \_ExitingBB_/   ExitingBlock //
   //        |                      //
   //    MergeBlock                 //
   //        |                      //
   //      ExitBB                   //
   //      /    \                   //
 
-  // Connect start block to the join block.
+  // Connect start block to exiting block.
   Builder.SetInsertPoint(StartBlock);
+  Builder.CreateBr(ExitingBlock);
+  DT.changeImmediateDominator(ExitingBlock, StartBlock);
+
+  // Connect exiting block to join block.
+  Builder.SetInsertPoint(ExitingBlock);
   Builder.CreateBr(MergeBlock);
   DT.changeImmediateDominator(MergeBlock, SplitBlock);
 
@@ -179,7 +190,27 @@ BasicBlock *polly::executeScopConditionally(Scop &S, Pass *P, Value *RTC) {
   //   _____|_____         |       //
   //  /  EntryBB  \    StartBlock  //
   //  |  (region) |        |       //
-  //  \_ExitingBB_/        |       //
+  //  \_ExitingBB_/   ExitingBlock //
+  //        |              |       //
+  //    MergeBlock---------/       //
+  //        |                      //
+  //      ExitBB                   //
+  //      /    \                   //
+  //
+
+  // Split the edge between SplitBlock and EntryBB, to avoid a critical edge.
+  splitEdge(SplitBlock, EntryBB, ".pre_entry_bb", &DT, &LI, &RI);
+
+  //      \   /                    //
+  //    EnteringBB                 //
+  //        |                      //
+  //    SplitBlock---------\       //
+  //        |              |       //
+  //    PreEntryBB         |       //
+  //   _____|_____         |       //
+  //  /  EntryBB  \    StartBlock  //
+  //  |  (region) |        |       //
+  //  \_ExitingBB_/   ExitingBlock //
   //        |              |       //
   //    MergeBlock---------/       //
   //        |                      //

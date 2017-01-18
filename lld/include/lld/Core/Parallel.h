@@ -12,7 +12,6 @@
 
 #include "lld/Core/Instrumentation.h"
 #include "lld/Core/LLVM.h"
-#include "lld/Core/range.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/thread.h"
 
@@ -61,41 +60,6 @@ public:
       return _count == 0;
     });
   }
-};
-
-/// \brief An implementation of future. std::future and std::promise in
-/// old libstdc++ have a threading bug; there is a small chance that a
-/// call of future::get throws an exception in the normal use case.
-/// We want to use our own future implementation until we drop support
-/// of old versions of libstdc++.
-/// https://gcc.gnu.org/ml/gcc-patches/2014-05/msg01389.html
-template<typename T> class Future {
-public:
-  Future() : _hasValue(false) {}
-
-  void set(T &&val) {
-    assert(!_hasValue);
-    {
-      std::unique_lock<std::mutex> lock(_mutex);
-      _val = val;
-      _hasValue = true;
-    }
-    _cond.notify_all();
-  }
-
-  T &get() {
-    std::unique_lock<std::mutex> lock(_mutex);
-    if (_hasValue)
-      return _val;
-    _cond.wait(lock, [&] { return _hasValue; });
-    return _val;
-  }
-
-private:
-  T _val;
-  bool _hasValue;
-  std::mutex _mutex;
-  std::condition_variable _cond;
 };
 
 // Classes in this namespace are implementation details of this header.
@@ -157,7 +121,7 @@ public:
     // Spawn all but one of the threads in another thread as spawning threads
     // can take a while.
     std::thread([&, threadCount] {
-      for (std::size_t i = 1; i < threadCount; ++i) {
+      for (size_t i = 1; i < threadCount; ++i) {
         std::thread([=] {
           work();
         }).detach();
@@ -319,8 +283,15 @@ void parallel_for_each(Iterator begin, Iterator end, Func func) {
 #else
 template <class Iterator, class Func>
 void parallel_for_each(Iterator begin, Iterator end, Func func) {
+  // TaskGroup has a relatively high overhead, so we want to reduce
+  // the number of spawn() calls. We'll create up to 1024 tasks here.
+  // (Note that 1024 is an arbitrary number. This code probably needs
+  // improving to take the number of available cores into account.)
+  ptrdiff_t taskSize = std::distance(begin, end) / 1024;
+  if (taskSize == 0)
+    taskSize = 1;
+
   TaskGroup tg;
-  ptrdiff_t taskSize = 1024;
   while (taskSize <= std::distance(begin, end)) {
     tg.spawn([=, &func] { std::for_each(begin, begin + taskSize, func); });
     begin += taskSize;

@@ -12,19 +12,51 @@ endif ()
 
 include(${LLDB_PROJECT_ROOT}/cmake/LLDBDependencies.cmake)
 
+if (LLDB_BUILT_STANDALONE)
+  # Build the gtest library needed for unittests, if we have LLVM sources
+  # handy.
+  if (EXISTS ${LLVM_MAIN_SRC_DIR}/utils/unittest)
+    add_subdirectory(${LLVM_MAIN_SRC_DIR}/utils/unittest utils/unittest)
+  endif()
+endif()
+
 function(add_lldb_unittest test_name)
   add_unittest(LLDBUnitTests
     ${test_name}
     ${ARGN}
     )
 
+  add_custom_command(
+    TARGET ${test_name}
+    POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Inputs)
+
   lldb_link_common_libs(${test_name} EXE)
   target_link_libraries(${test_name} ${CLANG_USED_LIBS} ${LLDB_SYSTEM_LIBS})
   llvm_config(${test_name} ${LLVM_LINK_COMPONENTS})
 endfunction()
 
+function(add_unittest_inputs test_name inputs)
+  foreach (INPUT ${inputs})
+    add_custom_command(
+      TARGET ${test_name}
+      POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy ${CMAKE_CURRENT_SOURCE_DIR}/Inputs/${INPUT} ${CMAKE_CURRENT_BINARY_DIR}/Inputs
+      COMMENT "Copying ${INPUT} to binary directory.")
+  endforeach()
+endfunction()
+
+add_subdirectory(Breakpoint)
+add_subdirectory(Core)
 add_subdirectory(Editline)
+add_subdirectory(Expression)
 add_subdirectory(Host)
 add_subdirectory(Interpreter)
+add_subdirectory(Language)
+add_subdirectory(Platform)
+add_subdirectory(Process)
 add_subdirectory(ScriptInterpreter)
+add_subdirectory(Symbol)
+add_subdirectory(SymbolFile)
+add_subdirectory(UnwindAssembly)
 add_subdirectory(Utility)

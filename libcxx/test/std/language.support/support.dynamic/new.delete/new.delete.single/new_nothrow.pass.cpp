@@ -17,6 +17,8 @@
 #include <cassert>
 #include <limits>
 
+#include "test_macros.h"
+
 int new_handler_called = 0;
 
 void new_handler()
@@ -36,16 +38,20 @@ struct A
 int main()
 {
     std::set_new_handler(new_handler);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         void* vp = operator new (std::numeric_limits<std::size_t>::max(), std::nothrow);
         assert(new_handler_called == 1);
         assert(vp == 0);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (...)
     {
         assert(false);
     }
+#endif
     A* ap = new(std::nothrow) A;
     assert(ap);
     assert(A_constructed);

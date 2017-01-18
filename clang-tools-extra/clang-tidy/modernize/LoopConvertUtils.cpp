@@ -156,7 +156,7 @@ bool DeclFinderASTVisitor::VisitTypeLoc(TypeLoc TL) {
 const Expr *digThroughConstructors(const Expr *E) {
   if (!E)
     return nullptr;
-  E = E->IgnoreParenImpCasts();
+  E = E->IgnoreImplicit();
   if (const auto *ConstructExpr = dyn_cast<CXXConstructExpr>(E)) {
     // The initial constructor must take exactly one parameter, but base class
     // and deferred constructors can take more.
@@ -342,21 +342,27 @@ static bool isAliasDecl(ASTContext *Context, const Decl *TheDecl,
   if (!VDecl->hasInit())
     return false;
 
-  const Expr *Init =
-      digThroughConstructors(VDecl->getInit()->IgnoreParenImpCasts());
+  bool OnlyCasts = true;
+  const Expr *Init = VDecl->getInit()->IgnoreParenImpCasts();
+  if (Init && isa<CXXConstructExpr>(Init)) {
+    Init = digThroughConstructors(Init);
+    OnlyCasts = false;
+  }
   if (!Init)
     return false;
 
   // Check that the declared type is the same as (or a reference to) the
   // container type.
-  QualType InitType = Init->getType();
-  QualType DeclarationType = VDecl->getType();
-  if (!DeclarationType.isNull() && DeclarationType->isReferenceType())
-    DeclarationType = DeclarationType.getNonReferenceType();
+  if (!OnlyCasts) {
+    QualType InitType = Init->getType();
+    QualType DeclarationType = VDecl->getType();
+    if (!DeclarationType.isNull() && DeclarationType->isReferenceType())
+      DeclarationType = DeclarationType.getNonReferenceType();
 
-  if (InitType.isNull() || DeclarationType.isNull() ||
-      !Context->hasSameUnqualifiedType(DeclarationType, InitType))
-    return false;
+    if (InitType.isNull() || DeclarationType.isNull() ||
+        !Context->hasSameUnqualifiedType(DeclarationType, InitType))
+      return false;
+  }
 
   switch (Init->getStmtClass()) {
   case Stmt::ArraySubscriptExprClass: {
@@ -384,9 +390,9 @@ static bool isAliasDecl(ASTContext *Context, const Decl *TheDecl,
     const auto *MemCall = cast<CXXMemberCallExpr>(Init);
     // This check is needed because getMethodDecl can return nullptr if the
     // callee is a member function pointer.
-    if (MemCall->getMethodDecl() &&
-        MemCall->getMethodDecl()->getName() == "at") {
-      assert(MemCall->getNumArgs() == 1);
+    const auto *MDecl = MemCall->getMethodDecl();
+    if (MDecl && !isa<CXXConversionDecl>(MDecl) &&
+        MDecl->getNameAsString() == "at" && MemCall->getNumArgs() == 1) {
       return isIndexInSubscriptExpr(MemCall->getArg(0), IndexVar);
     }
     return false;
@@ -551,7 +557,9 @@ bool ForLoopIndexUseVisitor::TraverseMemberExpr(MemberExpr *Member) {
     if (ExprType.isNull())
       ExprType = Obj->getType();
 
-    assert(ExprType->isPointerType() && "Operator-> returned non-pointer type");
+    if (!ExprType->isPointerType())
+      return false;
+
     // FIXME: This works around not having the location of the arrow operator.
     // Consider adding OperatorLoc to MemberExpr?
     SourceLocation ArrowLoc = Lexer::getLocForEndOfToken(
@@ -755,7 +763,8 @@ bool ForLoopIndexUseVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
 ///   }
 /// \endcode
 bool ForLoopIndexUseVisitor::TraverseLambdaCapture(LambdaExpr *LE,
-                                                   const LambdaCapture *C) {
+                                                   const LambdaCapture *C,
+                                                   Expr *Init) {
   if (C->capturesVariable()) {
     const VarDecl *VDecl = C->getCapturedVar();
     if (areSameVariable(IndexVar, cast<ValueDecl>(VDecl))) {
@@ -768,7 +777,7 @@ bool ForLoopIndexUseVisitor::TraverseLambdaCapture(LambdaExpr *LE,
                      C->getLocation()));
     }
   }
-  return VisitorBase::TraverseLambdaCapture(LE, C);
+  return VisitorBase::TraverseLambdaCapture(LE, C, Init);
 }
 
 /// \brief If we find that another variable is created just to refer to the loop
@@ -797,6 +806,18 @@ bool ForLoopIndexUseVisitor::VisitDeclStmt(DeclStmt *S) {
 }
 
 bool ForLoopIndexUseVisitor::TraverseStmt(Stmt *S) {
+  // If this is an initialization expression for a lambda capture, prune the
+  // traversal so that we don't end up diagnosing the contained DeclRefExpr as
+  // inconsistent usage. No need to record the usage here -- this is done in
+  // TraverseLambdaCapture().
+  if (const auto *LE = dyn_cast_or_null<LambdaExpr>(NextStmtParent)) {
+    // Any child of a LambdaExpr that isn't the body is an initialization
+    // expression.
+    if (S != LE->getBody()) {
+      return true;
+    }
+  }
+
   // All this pointer swapping is a mechanism for tracking immediate parentage
   // of Stmts.
   const Stmt *OldNextParent = NextStmtParent;
@@ -820,64 +841,18 @@ std::string VariableNamer::createIndexName() {
   if (Len > 1 && ContainerName.endswith(Style == NS_UpperCase ? "S" : "s")) {
     IteratorName = ContainerName.substr(0, Len - 1);
     // E.g.: (auto thing : things)
-    if (!declarationExists(IteratorName))
+    if (!declarationExists(IteratorName) || IteratorName == OldIndex->getName())
       return IteratorName;
   }
 
   if (Len > 2 && ContainerName.endswith(Style == NS_UpperCase ? "S_" : "s_")) {
     IteratorName = ContainerName.substr(0, Len - 2);
     // E.g.: (auto thing : things_)
-    if (!declarationExists(IteratorName))
+    if (!declarationExists(IteratorName) || IteratorName == OldIndex->getName())
       return IteratorName;
   }
 
-  std::string Elem;
-  switch (Style) {
-  case NS_CamelBack:
-  case NS_LowerCase:
-    Elem = "elem";
-    break;
-  case NS_CamelCase:
-    Elem = "Elem";
-    break;
-  case NS_UpperCase:
-    Elem = "ELEM";
-  }
-  // E.g.: (auto elem : container)
-  if (!declarationExists(Elem))
-    return Elem;
-
-  IteratorName = AppendWithStyle(ContainerName, OldIndex->getName());
-  // E.g.: (auto container_i : container)
-  if (!declarationExists(IteratorName))
-    return IteratorName;
-
-  IteratorName = AppendWithStyle(ContainerName, Elem);
-  // E.g.: (auto container_elem : container)
-  if (!declarationExists(IteratorName))
-    return IteratorName;
-
-  // Someone defeated my naming scheme...
-  std::string GiveMeName;
-  switch (Style) {
-  case NS_CamelBack:
-    GiveMeName = "giveMeName";
-    break;
-  case NS_CamelCase:
-    GiveMeName = "GiveMeName";
-    break;
-  case NS_LowerCase:
-    GiveMeName = "give_me_name_";
-    break;
-  case NS_UpperCase:
-    GiveMeName = "GIVE_ME_NAME_";
-  }
-  int Attempt = 0;
-  do {
-    IteratorName = GiveMeName + std::to_string(Attempt++);
-  } while (declarationExists(IteratorName));
-
-  return IteratorName;
+  return OldIndex->getName();
 }
 
 /// \brief Determines whether or not the the name \a Symbol conflicts with
@@ -914,20 +889,6 @@ bool VariableNamer::declarationExists(StringRef Symbol) {
   // Finally, determine if the symbol was used in the loop or a child context.
   DeclFinderASTVisitor DeclFinder(Symbol, GeneratedDecls);
   return DeclFinder.findUsages(SourceStmt);
-}
-
-std::string VariableNamer::AppendWithStyle(StringRef Str,
-                                           StringRef Suffix) const {
-  std::string Name = Str;
-  if (!Suffix.empty()) {
-    if (Style == NS_LowerCase || Style == NS_UpperCase)
-      Name += "_";
-    int SuffixStart = Name.size();
-    Name += Suffix;
-    if (Style == NS_CamelBack)
-      Name[SuffixStart] = toupper(Name[SuffixStart]);
-  }
-  return Name;
 }
 
 } // namespace modernize

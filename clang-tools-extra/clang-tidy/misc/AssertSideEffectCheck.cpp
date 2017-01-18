@@ -21,6 +21,9 @@
 using namespace clang::ast_matchers;
 
 namespace clang {
+namespace tidy {
+namespace misc {
+
 namespace {
 
 AST_MATCHER_P(Expr, hasSideEffect, bool, CheckFunctionCalls) {
@@ -33,11 +36,7 @@ AST_MATCHER_P(Expr, hasSideEffect, bool, CheckFunctionCalls) {
   }
 
   if (const auto *Op = dyn_cast<BinaryOperator>(E)) {
-    BinaryOperator::Opcode OC = Op->getOpcode();
-    return OC == BO_Assign || OC == BO_MulAssign || OC == BO_DivAssign ||
-           OC == BO_RemAssign || OC == BO_AddAssign || OC == BO_SubAssign ||
-           OC == BO_ShlAssign || OC == BO_ShrAssign || OC == BO_AndAssign ||
-           OC == BO_XorAssign || OC == BO_OrAssign;
+    return Op->isAssignmentOp();
   }
 
   if (const auto *OpCallExpr = dyn_cast<CXXOperatorCallExpr>(E)) {
@@ -70,8 +69,6 @@ AST_MATCHER_P(Expr, hasSideEffect, bool, CheckFunctionCalls) {
 
 } // namespace
 
-namespace tidy {
-
 AssertSideEffectCheck::AssertSideEffectCheck(StringRef Name,
                                              ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
@@ -87,17 +84,24 @@ void AssertSideEffectCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
 }
 
 void AssertSideEffectCheck::registerMatchers(MatchFinder *Finder) {
-  auto ConditionWithSideEffect =
-      hasCondition(hasDescendant(expr(hasSideEffect(CheckFunctionCalls))));
+  auto DescendantWithSideEffect =
+      hasDescendant(expr(hasSideEffect(CheckFunctionCalls)));
+  auto ConditionWithSideEffect = hasCondition(DescendantWithSideEffect);
   Finder->addMatcher(
-      stmt(anyOf(conditionalOperator(ConditionWithSideEffect),
-                 ifStmt(ConditionWithSideEffect))).bind("condStmt"),
+      stmt(
+          anyOf(conditionalOperator(ConditionWithSideEffect),
+                ifStmt(ConditionWithSideEffect),
+                unaryOperator(hasOperatorName("!"),
+                              hasUnaryOperand(unaryOperator(
+                                  hasOperatorName("!"),
+                                  hasUnaryOperand(DescendantWithSideEffect))))))
+          .bind("condStmt"),
       this);
 }
 
 void AssertSideEffectCheck::check(const MatchFinder::MatchResult &Result) {
   const SourceManager &SM = *Result.SourceManager;
-  const LangOptions LangOpts = Result.Context->getLangOpts();
+  const LangOptions LangOpts = getLangOpts();
   SourceLocation Loc = Result.Nodes.getNodeAs<Stmt>("condStmt")->getLocStart();
 
   StringRef AssertMacroName;
@@ -115,8 +119,9 @@ void AssertSideEffectCheck::check(const MatchFinder::MatchResult &Result) {
   if (AssertMacroName.empty())
     return;
 
-  diag(Loc, "found " + AssertMacroName.str() + "() with side effect");
+  diag(Loc, "found %0() with side effect") << AssertMacroName;
 }
 
+} // namespace misc
 } // namespace tidy
 } // namespace clang

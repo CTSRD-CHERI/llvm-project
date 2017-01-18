@@ -25,6 +25,8 @@
 #include "MachONormalizedFileBinaryUtils.h"
 #include "lld/Core/Error.h"
 #include "lld/Core/LLVM.h"
+#include "llvm/ADT/ilist.h"
+#include "llvm/ADT/ilist_node.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -35,7 +37,6 @@
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Host.h"
-#include "llvm/Support/LEB128.h"
 #include "llvm/Support/MachO.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
@@ -49,6 +50,59 @@ using namespace llvm::MachO;
 namespace lld {
 namespace mach_o {
 namespace normalized {
+
+struct TrieNode; // Forward declaration.
+
+struct TrieEdge : public llvm::ilist_node<TrieEdge> {
+  TrieEdge(StringRef s, TrieNode *node) : _subString(s), _child(node) {}
+
+  StringRef          _subString;
+  struct TrieNode   *_child;
+};
+
+} // namespace normalized
+} // namespace mach_o
+} // namespace lld
+
+
+namespace llvm {
+using lld::mach_o::normalized::TrieEdge;
+template <>
+struct ilist_alloc_traits<TrieEdge> : ilist_noalloc_traits<TrieEdge> {};
+} // namespace llvm
+
+
+namespace lld {
+namespace mach_o {
+namespace normalized {
+
+struct TrieNode {
+  typedef llvm::ilist<TrieEdge> TrieEdgeList;
+
+  TrieNode(StringRef s)
+      : _cummulativeString(s), _address(0), _flags(0), _other(0),
+        _trieOffset(0), _hasExportInfo(false) {}
+  ~TrieNode() = default;
+
+  void addSymbol(const Export &entry, BumpPtrAllocator &allocator,
+                 std::vector<TrieNode *> &allNodes);
+
+  void addOrderedNodes(const Export &entry,
+                       std::vector<TrieNode *> &allNodes);
+  bool updateOffset(uint32_t &offset);
+  void appendToByteBuffer(ByteBuffer &out);
+
+private:
+  StringRef                 _cummulativeString;
+  TrieEdgeList              _children;
+  uint64_t                  _address;
+  uint64_t                  _flags;
+  uint64_t                  _other;
+  StringRef                 _importedName;
+  uint32_t                  _trieOffset;
+  bool                      _hasExportInfo;
+  bool                      _ordered = false;
+};
 
 /// Utility class for writing a mach-o binary file given an in-memory
 /// normalized file.
@@ -66,13 +120,13 @@ public:
   /// Writes the normalized file as a binary mach-o file to the specified
   /// path.  This does not have a stream interface because the generated
   /// file may need the 'x' bit set.
-  std::error_code writeBinary(StringRef path);
+  llvm::Error writeBinary(StringRef path);
 
 private:
   uint32_t    loadCommandsSize(uint32_t &count);
   void        buildFileOffsets();
   void        writeMachHeader();
-  std::error_code writeLoadCommands();
+  llvm::Error writeLoadCommands();
   void        writeSectionContent();
   void        writeRelocations();
   void        writeSymbolTable();
@@ -80,6 +134,7 @@ private:
   void        writeBindingInfo();
   void        writeLazyBindingInfo();
   void        writeExportInfo();
+  void        writeFunctionStartsInfo();
   void        writeDataInCodeInfo();
   void        writeLinkEditContent();
   void        buildLinkEditInfo();
@@ -87,6 +142,7 @@ private:
   void        buildBindInfo();
   void        buildLazyBindInfo();
   void        buildExportTrie();
+  void        computeFunctionStartsSize();
   void        computeDataInCodeSize();
   void        computeSymbolTableSizes();
   void        buildSectionRelocations();
@@ -110,81 +166,11 @@ private:
   };
 
   template <typename T>
-  std::error_code writeSingleSegmentLoadCommand(uint8_t *&lc);
-  template <typename T> std::error_code writeSegmentLoadCommands(uint8_t *&lc);
+  llvm::Error writeSingleSegmentLoadCommand(uint8_t *&lc);
+  template <typename T> llvm::Error writeSegmentLoadCommands(uint8_t *&lc);
 
   uint32_t pointerAlign(uint32_t value);
   static StringRef dyldPath();
-
-  class ByteBuffer {
-  public:
-    ByteBuffer() : _ostream(_bytes) { }
-
-    void append_byte(uint8_t b) {
-      _ostream << b;
-    }
-    void append_uleb128(uint64_t value) {
-      llvm::encodeULEB128(value, _ostream);
-    }
-    void append_uleb128Fixed(uint64_t value, unsigned byteCount) {
-      unsigned min = llvm::getULEB128Size(value);
-      assert(min <= byteCount);
-      unsigned pad = byteCount - min;
-      llvm::encodeULEB128(value, _ostream, pad);
-    }
-    void append_sleb128(int64_t value) {
-      llvm::encodeSLEB128(value, _ostream);
-    }
-    void append_string(StringRef str) {
-      _ostream << str;
-      append_byte(0);
-    }
-    void align(unsigned alignment) {
-      while ( (_ostream.tell() % alignment) != 0 )
-        append_byte(0);
-    }
-    size_t size() {
-      return _ostream.tell();
-    }
-    const uint8_t *bytes() {
-      return reinterpret_cast<const uint8_t*>(_ostream.str().data());
-    }
-  private:
-    SmallVector<char, 128>        _bytes;
-    // Stream ivar must be after SmallVector ivar to construct properly.
-    llvm::raw_svector_ostream     _ostream;
-  };
-
-  struct TrieNode; // Forward declaration.
-
-  struct TrieEdge {
-    TrieEdge(StringRef s, TrieNode *node) : _subString(s), _child(node) {}
-
-    StringRef          _subString;
-    struct TrieNode   *_child;
-  };
-
-  struct TrieNode {
-    TrieNode(StringRef s)
-        : _cummulativeString(s), _address(0), _flags(0), _other(0),
-          _trieOffset(0), _hasExportInfo(false) {}
-    ~TrieNode() {}
-
-    void addSymbol(const Export &entry, BumpPtrAllocator &allocator,
-                   std::vector<TrieNode *> &allNodes);
-    bool updateOffset(uint32_t &offset);
-    void appendToByteBuffer(ByteBuffer &out);
-
-private:
-    StringRef                 _cummulativeString;
-    std::list<TrieEdge>       _children;
-    uint64_t                  _address;
-    uint64_t                  _flags;
-    uint64_t                  _other;
-    StringRef                 _importedName;
-    uint32_t                  _trieOffset;
-    bool                      _hasExportInfo;
-  };
 
   struct SegExtraInfo {
     uint32_t                    fileOffset;
@@ -208,6 +194,7 @@ private:
   uint32_t              _countOfLoadCommands;
   uint32_t              _endOfLoadCommands;
   uint32_t              _startOfRelocations;
+  uint32_t              _startOfFunctionStarts;
   uint32_t              _startOfDataInCode;
   uint32_t              _startOfSymbols;
   uint32_t              _startOfIndirectSymbols;
@@ -218,6 +205,7 @@ private:
   uint32_t              _symbolTableUndefinesStartIndex;
   uint32_t              _symbolStringPoolSize;
   uint32_t              _symbolTableSize;
+  uint32_t              _functionStartsSize;
   uint32_t              _dataInCodeSize;
   uint32_t              _indirectSymbolTableCount;
   // Used in object file creation only
@@ -254,14 +242,13 @@ StringRef MachOFileLayout::dyldPath() {
 }
 
 uint32_t MachOFileLayout::pointerAlign(uint32_t value) {
-  return llvm::RoundUpToAlignment(value, _is64 ? 8 : 4);
+  return llvm::alignTo(value, _is64 ? 8 : 4);
 }
 
 
 size_t MachOFileLayout::headerAndLoadCommandsSize() const {
   return _endOfLoadCommands;
 }
-
 
 MachOFileLayout::MachOFileLayout(const NormalizedFile &file)
     : _file(file),
@@ -280,7 +267,15 @@ MachOFileLayout::MachOFileLayout(const NormalizedFile &file)
                                + file.sections.size() * sectsSize
                                + sizeof(symtab_command);
     _countOfLoadCommands = 2;
-    if (!_file.dataInCode.empty()) {
+    if (file.hasMinVersionLoadCommand) {
+      _endOfLoadCommands += sizeof(version_min_command);
+      _countOfLoadCommands++;
+    }
+    if (!_file.functionStarts.empty()) {
+      _endOfLoadCommands += sizeof(linkedit_data_command);
+      _countOfLoadCommands++;
+    }
+    if (_file.generateDataInCodeLoadCommand) {
       _endOfLoadCommands += sizeof(linkedit_data_command);
       _countOfLoadCommands++;
     }
@@ -289,23 +284,25 @@ MachOFileLayout::MachOFileLayout(const NormalizedFile &file)
     unsigned relocCount = 0;
     uint64_t offset = _startOfSectionsContent;
     for (const Section &sect : file.sections) {
-      if (sect.type != llvm::MachO::S_ZEROFILL) {
-        offset = llvm::RoundUpToAlignment(offset, sect.alignment);
+      if (isZeroFillSection(sect.type))
+        _sectInfo[&sect].fileOffset = 0;
+      else {
+        offset = llvm::alignTo(offset, sect.alignment);
         _sectInfo[&sect].fileOffset = offset;
         offset += sect.content.size();
-      } else {
-        _sectInfo[&sect].fileOffset = 0;
       }
       relocCount += sect.relocations.size();
     }
     _endOfSectionsContent = offset;
 
     computeSymbolTableSizes();
+    computeFunctionStartsSize();
     computeDataInCodeSize();
 
     // Align start of relocations.
     _startOfRelocations = pointerAlign(_endOfSectionsContent);
-    _startOfDataInCode = _startOfRelocations + relocCount * 8;
+    _startOfFunctionStarts = _startOfRelocations + relocCount * 8;
+    _startOfDataInCode = _startOfFunctionStarts + _functionStartsSize;
     _startOfSymbols = _startOfDataInCode + _dataInCodeSize;
     // Add Indirect symbol table.
     _startOfIndirectSymbols = _startOfSymbols + _symbolTableSize;
@@ -346,7 +343,8 @@ MachOFileLayout::MachOFileLayout(const NormalizedFile &file)
     _endOfLazyBindingInfo = _startOfLazyBindingInfo + _lazyBindingInfo.size();
     _startOfExportTrie = _endOfLazyBindingInfo;
     _endOfExportTrie = _startOfExportTrie + _exportTrie.size();
-    _startOfDataInCode = _endOfExportTrie;
+    _startOfFunctionStarts = _endOfExportTrie;
+    _startOfDataInCode = _startOfFunctionStarts + _functionStartsSize;
     _startOfSymbols = _startOfDataInCode + _dataInCodeSize;
     _startOfIndirectSymbols = _startOfSymbols + _symbolTableSize;
     _startOfSymbolStrings = _startOfIndirectSymbols
@@ -368,6 +366,7 @@ MachOFileLayout::MachOFileLayout(const NormalizedFile &file)
       << "  endOfLazyBindingInfo=" << _endOfLazyBindingInfo << "\n"
       << "  startOfExportTrie=" << _startOfExportTrie << "\n"
       << "  endOfExportTrie=" << _endOfExportTrie << "\n"
+      << "  startOfFunctionStarts=" << _startOfFunctionStarts << "\n"
       << "  startOfDataInCode=" << _startOfDataInCode << "\n"
       << "  startOfSymbols=" << _startOfSymbols << "\n"
       << "  startOfSymbolStrings=" << _startOfSymbolStrings << "\n"
@@ -389,9 +388,6 @@ uint32_t MachOFileLayout::loadCommandsSize(uint32_t &count) {
   count += _file.segments.size();
   // Add section record for each section.
   size += _file.sections.size() * sectionSize;
-  // Add one LC_SEGMENT for implicit  __LINKEDIT segment
-  size += segCommandSize;
-  ++count;
 
   // If creating a dylib, add LC_ID_DYLIB.
   if (_file.fileType == llvm::MachO::MH_DYLIB) {
@@ -413,10 +409,25 @@ uint32_t MachOFileLayout::loadCommandsSize(uint32_t &count) {
     ++count;
   }
 
-  // If main executable add LC_LOAD_DYLINKER and LC_MAIN
+  // If main executable add LC_LOAD_DYLINKER
   if (_file.fileType == llvm::MachO::MH_EXECUTE) {
     size += pointerAlign(sizeof(dylinker_command) + dyldPath().size()+1);
     ++count;
+  }
+
+  // Add LC_VERSION_MIN_MACOSX, LC_VERSION_MIN_IPHONEOS, LC_VERSION_MIN_WATCHOS,
+  // LC_VERSION_MIN_TVOS
+  if (_file.hasMinVersionLoadCommand) {
+    size += sizeof(version_min_command);
+    ++count;
+  }
+
+  // Add LC_SOURCE_VERSION
+  size += sizeof(source_version_command);
+  ++count;
+
+  // If main executable add LC_MAIN
+  if (_file.fileType == llvm::MachO::MH_EXECUTE) {
     size += sizeof(entry_point_command);
     ++count;
   }
@@ -429,12 +440,19 @@ uint32_t MachOFileLayout::loadCommandsSize(uint32_t &count) {
 
   // Add LC_RPATH
   for (const StringRef &path : _file.rpaths) {
-    size += sizeof(rpath_command) + pointerAlign(path.size()+1);
+    size += pointerAlign(sizeof(rpath_command) + path.size() + 1);
     ++count;
   }
 
-  // Add LC_DATA_IN_CODE if needed
-  if (!_file.dataInCode.empty()) {
+  // Add LC_FUNCTION_STARTS if needed
+  if (!_file.functionStarts.empty()) {
+    size += sizeof(linkedit_data_command);
+    ++count;
+  }
+
+  // Add LC_DATA_IN_CODE if requested.  Note, we do encode zero length entries.
+  // FIXME: Zero length entries is only to match ld64.  Should we change this?
+  if (_file.generateDataInCodeLoadCommand) {
     size += sizeof(linkedit_data_command);
     ++count;
   }
@@ -517,7 +535,7 @@ void MachOFileLayout::buildFileOffsets() {
                   llvm::dbgs() << "buildFileOffsets()\n");
   for (const Segment &sg : _file.segments) {
     _segInfo[&sg].fileOffset = fileOffset;
-    if ((_seg1addr == INT64_MAX) && sg.access)
+    if ((_seg1addr == INT64_MAX) && sg.init_access)
       _seg1addr = sg.address;
     DEBUG_WITH_TYPE("MachOFileLayout",
                   llvm::dbgs() << "  segment=" << sg.name
@@ -525,12 +543,12 @@ void MachOFileLayout::buildFileOffsets() {
 
     uint32_t segFileSize = 0;
     // A segment that is not zero-fill must use a least one page of disk space.
-    if (sg.access)
+    if (sg.init_access)
       segFileSize = _file.pageSize;
     for (const Section *s : _segInfo[&sg].sections) {
       uint32_t sectOffset = s->address - sg.address;
       uint32_t sectFileSize =
-          s->type == llvm::MachO::S_ZEROFILL ? 0 : s->content.size();
+        isZeroFillSection(s->type) ? 0 : s->content.size();
       segFileSize = std::max(segFileSize, sectOffset + sectFileSize);
 
       _sectInfo[s].fileOffset = _segInfo[&sg].fileOffset + sectOffset;
@@ -539,25 +557,38 @@ void MachOFileLayout::buildFileOffsets() {
                   << ", fileOffset=" << fileOffset << "\n");
     }
 
-    _segInfo[&sg].fileSize = llvm::RoundUpToAlignment(segFileSize,
-                                                      _file.pageSize);
-    fileOffset = llvm::RoundUpToAlignment(fileOffset + segFileSize,
-                                          _file.pageSize);
+    // round up all segments to page aligned, except __LINKEDIT
+    if (!sg.name.equals("__LINKEDIT")) {
+      _segInfo[&sg].fileSize = llvm::alignTo(segFileSize, _file.pageSize);
+      fileOffset = llvm::alignTo(fileOffset + segFileSize, _file.pageSize);
+    }
     _addressOfLinkEdit = sg.address + sg.size;
   }
   _startOfLinkEdit = fileOffset;
 }
-
 
 size_t MachOFileLayout::size() const {
   return _endOfSymbolStrings;
 }
 
 void MachOFileLayout::writeMachHeader() {
+  auto cpusubtype = MachOLinkingContext::cpuSubtypeFromArch(_file.arch);
+  // dynamic x86 executables on newer OS version should also set the
+  // CPU_SUBTYPE_LIB64 mask in the CPU subtype.
+  // FIXME: Check that this is a dynamic executable, not a static one.
+  if (_file.fileType == llvm::MachO::MH_EXECUTE &&
+      cpusubtype == CPU_SUBTYPE_X86_64_ALL &&
+      _file.os == MachOLinkingContext::OS::macOSX) {
+    uint32_t version;
+    bool failed = MachOLinkingContext::parsePackedVersion("10.5", version);
+    if (!failed && _file.minOSverson >= version)
+      cpusubtype |= CPU_SUBTYPE_LIB64;
+  }
+
   mach_header *mh = reinterpret_cast<mach_header*>(_buffer);
   mh->magic = _is64 ? llvm::MachO::MH_MAGIC_64 : llvm::MachO::MH_MAGIC;
   mh->cputype =  MachOLinkingContext::cpuTypeFromArch(_file.arch);
-  mh->cpusubtype = MachOLinkingContext::cpuSubtypeFromArch(_file.arch);
+  mh->cpusubtype = cpusubtype;
   mh->filetype = _file.fileType;
   mh->ncmds = _countOfLoadCommands;
   mh->sizeofcmds = _endOfLoadCommands - _startOfLoadCommands;
@@ -584,7 +615,7 @@ uint32_t MachOFileLayout::indirectSymbolElementSize(const Section &sect) {
 }
 
 template <typename T>
-std::error_code MachOFileLayout::writeSingleSegmentLoadCommand(uint8_t *&lc) {
+llvm::Error MachOFileLayout::writeSingleSegmentLoadCommand(uint8_t *&lc) {
   typename T::command* seg = reinterpret_cast<typename T::command*>(lc);
   seg->cmd = T::LC;
   seg->cmdsize = sizeof(typename T::command)
@@ -595,7 +626,9 @@ std::error_code MachOFileLayout::writeSingleSegmentLoadCommand(uint8_t *&lc) {
   seg->vmsize = _file.sections.back().address
               + _file.sections.back().content.size();
   seg->fileoff = _endOfLoadCommands;
-  seg->filesize = seg->vmsize;
+  seg->filesize = _sectInfo[&_file.sections.back()].fileOffset +
+                  _file.sections.back().content.size() -
+                  _sectInfo[&_file.sections.front()].fileOffset;
   seg->maxprot = VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE;
   seg->initprot = VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE;
   seg->nsects = _file.sections.size();
@@ -624,15 +657,37 @@ std::error_code MachOFileLayout::writeSingleSegmentLoadCommand(uint8_t *&lc) {
     ++sout;
   }
   lc = next;
-  return std::error_code();
+  return llvm::Error::success();
 }
 
 template <typename T>
-std::error_code MachOFileLayout::writeSegmentLoadCommands(uint8_t *&lc) {
+llvm::Error MachOFileLayout::writeSegmentLoadCommands(uint8_t *&lc) {
   uint32_t indirectSymRunningIndex = 0;
   for (const Segment &seg : _file.segments) {
-    // Write segment command with trailing sections.
+    // Link edit has no sections and a custom range of address, so handle it
+    // specially.
     SegExtraInfo &segInfo = _segInfo[&seg];
+    if (seg.name.equals("__LINKEDIT")) {
+      size_t linkeditSize = _endOfLinkEdit - _startOfLinkEdit;
+      typename T::command* cmd = reinterpret_cast<typename T::command*>(lc);
+      cmd->cmd = T::LC;
+      cmd->cmdsize = sizeof(typename T::command);
+      uint8_t *next = lc + cmd->cmdsize;
+      setString16("__LINKEDIT", cmd->segname);
+      cmd->vmaddr   = _addressOfLinkEdit;
+      cmd->vmsize   = llvm::alignTo(linkeditSize, _file.pageSize);
+      cmd->fileoff  = _startOfLinkEdit;
+      cmd->filesize = linkeditSize;
+      cmd->initprot = seg.init_access;
+      cmd->maxprot  = seg.max_access;
+      cmd->nsects   = 0;
+      cmd->flags    = 0;
+      if (_swap)
+        swapStruct(*cmd);
+      lc = next;
+      continue;
+    }
+    // Write segment command with trailing sections.
     typename T::command* cmd = reinterpret_cast<typename T::command*>(lc);
     cmd->cmd = T::LC;
     cmd->cmdsize = sizeof(typename T::command)
@@ -643,8 +698,8 @@ std::error_code MachOFileLayout::writeSegmentLoadCommands(uint8_t *&lc) {
     cmd->vmsize   = seg.size;
     cmd->fileoff  = segInfo.fileOffset;
     cmd->filesize = segInfo.fileSize;
-    cmd->maxprot  = seg.access;
-    cmd->initprot = seg.access;
+    cmd->initprot = seg.init_access;
+    cmd->maxprot  = seg.max_access;
     cmd->nsects   = segInfo.sections.size();
     cmd->flags    = 0;
     if (_swap)
@@ -656,7 +711,7 @@ std::error_code MachOFileLayout::writeSegmentLoadCommands(uint8_t *&lc) {
       setString16(section->segmentName, sect->segname);
       sect->addr      = section->address;
       sect->size      = section->content.size();
-      if (section->type == llvm::MachO::S_ZEROFILL)
+      if (isZeroFillSection(section->type))
         sect->offset  = 0;
       else
         sect->offset  = section->address - seg.address + segInfo.fileOffset;
@@ -672,50 +727,83 @@ std::error_code MachOFileLayout::writeSegmentLoadCommands(uint8_t *&lc) {
     }
     lc = reinterpret_cast<uint8_t*>(next);
   }
-  // Add implicit __LINKEDIT segment
-  size_t linkeditSize = _endOfLinkEdit - _startOfLinkEdit;
-  typename T::command* cmd = reinterpret_cast<typename T::command*>(lc);
-  cmd->cmd = T::LC;
-  cmd->cmdsize = sizeof(typename T::command);
-  uint8_t *next = lc + cmd->cmdsize;
-  setString16("__LINKEDIT", cmd->segname);
-  cmd->vmaddr   = _addressOfLinkEdit;
-  cmd->vmsize   = llvm::RoundUpToAlignment(linkeditSize, _file.pageSize);
-  cmd->fileoff  = _startOfLinkEdit;
-  cmd->filesize = linkeditSize;
-  cmd->maxprot  = VM_PROT_READ;
-  cmd->initprot = VM_PROT_READ;
-  cmd->nsects   = 0;
-  cmd->flags    = 0;
-  if (_swap)
-    swapStruct(*cmd);
-  lc = next;
-  return std::error_code();
+  return llvm::Error::success();
 }
 
-std::error_code MachOFileLayout::writeLoadCommands() {
-  std::error_code ec;
+static void writeVersionMinLoadCommand(const NormalizedFile &_file,
+                                       bool _swap,
+                                       uint8_t *&lc) {
+  if (!_file.hasMinVersionLoadCommand)
+    return;
+  version_min_command *vm = reinterpret_cast<version_min_command*>(lc);
+  switch (_file.os) {
+    case MachOLinkingContext::OS::unknown:
+      vm->cmd     = _file.minOSVersionKind;
+      vm->cmdsize = sizeof(version_min_command);
+      vm->version = _file.minOSverson;
+      vm->sdk     = 0;
+      break;
+    case MachOLinkingContext::OS::macOSX:
+      vm->cmd     = LC_VERSION_MIN_MACOSX;
+      vm->cmdsize = sizeof(version_min_command);
+      vm->version = _file.minOSverson;
+      vm->sdk     = _file.sdkVersion;
+      break;
+    case MachOLinkingContext::OS::iOS:
+    case MachOLinkingContext::OS::iOS_simulator:
+      vm->cmd     = LC_VERSION_MIN_IPHONEOS;
+      vm->cmdsize = sizeof(version_min_command);
+      vm->version = _file.minOSverson;
+      vm->sdk     = _file.sdkVersion;
+      break;
+  }
+  if (_swap)
+    swapStruct(*vm);
+  lc += sizeof(version_min_command);
+}
+
+llvm::Error MachOFileLayout::writeLoadCommands() {
   uint8_t *lc = &_buffer[_startOfLoadCommands];
   if (_file.fileType == llvm::MachO::MH_OBJECT) {
     // Object files have one unnamed segment which holds all sections.
-    if (_is64)
-      ec = writeSingleSegmentLoadCommand<MachO64Trait>(lc);
-    else
-      ec = writeSingleSegmentLoadCommand<MachO32Trait>(lc);
+    if (_is64) {
+     if (auto ec = writeSingleSegmentLoadCommand<MachO64Trait>(lc))
+       return ec;
+    } else {
+      if (auto ec = writeSingleSegmentLoadCommand<MachO32Trait>(lc))
+        return ec;
+    }
     // Add LC_SYMTAB with symbol table info
     symtab_command* st = reinterpret_cast<symtab_command*>(lc);
     st->cmd     = LC_SYMTAB;
     st->cmdsize = sizeof(symtab_command);
     st->symoff  = _startOfSymbols;
-    st->nsyms   = _file.localSymbols.size() + _file.globalSymbols.size()
-                                            + _file.undefinedSymbols.size();
+    st->nsyms   = _file.stabsSymbols.size() + _file.localSymbols.size() +
+                  _file.globalSymbols.size() + _file.undefinedSymbols.size();
     st->stroff  = _startOfSymbolStrings;
     st->strsize = _endOfSymbolStrings - _startOfSymbolStrings;
     if (_swap)
       swapStruct(*st);
     lc += sizeof(symtab_command);
-    // Add LC_DATA_IN_CODE if needed.
-    if (_dataInCodeSize != 0) {
+
+    // Add LC_VERSION_MIN_MACOSX, LC_VERSION_MIN_IPHONEOS,
+    // LC_VERSION_MIN_WATCHOS, LC_VERSION_MIN_TVOS
+    writeVersionMinLoadCommand(_file, _swap, lc);
+
+    // Add LC_FUNCTION_STARTS if needed.
+    if (_functionStartsSize != 0) {
+      linkedit_data_command* dl = reinterpret_cast<linkedit_data_command*>(lc);
+      dl->cmd      = LC_FUNCTION_STARTS;
+      dl->cmdsize  = sizeof(linkedit_data_command);
+      dl->dataoff  = _startOfFunctionStarts;
+      dl->datasize = _functionStartsSize;
+      if (_swap)
+        swapStruct(*dl);
+      lc += sizeof(linkedit_data_command);
+    }
+
+    // Add LC_DATA_IN_CODE if requested.
+    if (_file.generateDataInCodeLoadCommand) {
       linkedit_data_command* dl = reinterpret_cast<linkedit_data_command*>(lc);
       dl->cmd      = LC_DATA_IN_CODE;
       dl->cmdsize  = sizeof(linkedit_data_command);
@@ -727,10 +815,13 @@ std::error_code MachOFileLayout::writeLoadCommands() {
     }
   } else {
     // Final linked images have sections under segments.
-    if (_is64)
-      ec = writeSegmentLoadCommands<MachO64Trait>(lc);
-    else
-      ec = writeSegmentLoadCommands<MachO32Trait>(lc);
+    if (_is64) {
+      if (auto ec = writeSegmentLoadCommands<MachO64Trait>(lc))
+        return ec;
+    } else {
+      if (auto ec = writeSegmentLoadCommands<MachO32Trait>(lc))
+        return ec;
+    }
 
     // Add LC_ID_DYLIB command for dynamic libraries.
     if (_file.fileType == llvm::MachO::MH_DYLIB) {
@@ -774,8 +865,8 @@ std::error_code MachOFileLayout::writeLoadCommands() {
     st->cmd     = LC_SYMTAB;
     st->cmdsize = sizeof(symtab_command);
     st->symoff  = _startOfSymbols;
-    st->nsyms   = _file.localSymbols.size() + _file.globalSymbols.size()
-                                            + _file.undefinedSymbols.size();
+    st->nsyms   = _file.stabsSymbols.size() + _file.localSymbols.size() +
+                  _file.globalSymbols.size() + _file.undefinedSymbols.size();
     st->stroff  = _startOfSymbolStrings;
     st->strsize = _endOfSymbolStrings - _startOfSymbolStrings;
     if (_swap)
@@ -788,7 +879,8 @@ std::error_code MachOFileLayout::writeLoadCommands() {
       dst->cmd            = LC_DYSYMTAB;
       dst->cmdsize        = sizeof(dysymtab_command);
       dst->ilocalsym      = _symbolTableLocalsStartIndex;
-      dst->nlocalsym      = _file.localSymbols.size();
+      dst->nlocalsym      = _file.stabsSymbols.size() +
+                            _file.localSymbols.size();
       dst->iextdefsym     = _symbolTableGlobalsStartIndex;
       dst->nextdefsym     = _file.globalSymbols.size();
       dst->iundefsym      = _symbolTableUndefinesStartIndex;
@@ -810,7 +902,7 @@ std::error_code MachOFileLayout::writeLoadCommands() {
       lc += sizeof(dysymtab_command);
     }
 
-    // If main executable, add LC_LOAD_DYLINKER and LC_MAIN.
+    // If main executable, add LC_LOAD_DYLINKER
     if (_file.fileType == llvm::MachO::MH_EXECUTE) {
       // Build LC_LOAD_DYLINKER load command.
       uint32_t size=pointerAlign(sizeof(dylinker_command)+dyldPath().size()+1);
@@ -823,14 +915,39 @@ std::error_code MachOFileLayout::writeLoadCommands() {
       memcpy(lc+sizeof(dylinker_command), dyldPath().data(), dyldPath().size());
       lc[sizeof(dylinker_command)+dyldPath().size()] = '\0';
       lc += size;
-      // Build LC_MAIN load command.
-      entry_point_command* ep = reinterpret_cast<entry_point_command*>(lc);
-      ep->cmd       = LC_MAIN;
-      ep->cmdsize   = sizeof(entry_point_command);
-      ep->entryoff  = _file.entryAddress - _seg1addr;
-      ep->stacksize = _file.stackSize;
+    }
+
+    // Add LC_VERSION_MIN_MACOSX, LC_VERSION_MIN_IPHONEOS, LC_VERSION_MIN_WATCHOS,
+    // LC_VERSION_MIN_TVOS
+    writeVersionMinLoadCommand(_file, _swap, lc);
+
+    // Add LC_SOURCE_VERSION
+    {
+      // Note, using a temporary here to appease UB as we may not be aligned
+      // enough for a struct containing a uint64_t when emitting a 32-bit binary
+      source_version_command sv;
+      sv.cmd       = LC_SOURCE_VERSION;
+      sv.cmdsize   = sizeof(source_version_command);
+      sv.version   = _file.sourceVersion;
       if (_swap)
-        swapStruct(*ep);
+        swapStruct(sv);
+      memcpy(lc, &sv, sizeof(source_version_command));
+      lc += sizeof(source_version_command);
+    }
+
+    // If main executable, add LC_MAIN.
+    if (_file.fileType == llvm::MachO::MH_EXECUTE) {
+      // Build LC_MAIN load command.
+      // Note, using a temporary here to appease UB as we may not be aligned
+      // enough for a struct containing a uint64_t when emitting a 32-bit binary
+      entry_point_command ep;
+      ep.cmd       = LC_MAIN;
+      ep.cmdsize   = sizeof(entry_point_command);
+      ep.entryoff  = _file.entryAddress - _seg1addr;
+      ep.stacksize = _file.stackSize;
+      if (_swap)
+        swapStruct(ep);
+      memcpy(lc, &ep, sizeof(entry_point_command));
       lc += sizeof(entry_point_command);
     }
 
@@ -855,7 +972,7 @@ std::error_code MachOFileLayout::writeLoadCommands() {
     // Add LC_RPATH
     for (const StringRef &path : _file.rpaths) {
       rpath_command *rpc = reinterpret_cast<rpath_command *>(lc);
-      uint32_t size = sizeof(rpath_command) + pointerAlign(path.size()+1);
+      uint32_t size = pointerAlign(sizeof(rpath_command) + path.size() + 1);
       rpc->cmd                         = LC_RPATH;
       rpc->cmdsize                     = size;
       rpc->path                        = sizeof(rpath_command); // offset
@@ -866,8 +983,20 @@ std::error_code MachOFileLayout::writeLoadCommands() {
       lc += size;
     }
 
-    // Add LC_DATA_IN_CODE if needed.
-    if (_dataInCodeSize != 0) {
+    // Add LC_FUNCTION_STARTS if needed.
+    if (_functionStartsSize != 0) {
+      linkedit_data_command* dl = reinterpret_cast<linkedit_data_command*>(lc);
+      dl->cmd      = LC_FUNCTION_STARTS;
+      dl->cmdsize  = sizeof(linkedit_data_command);
+      dl->dataoff  = _startOfFunctionStarts;
+      dl->datasize = _functionStartsSize;
+      if (_swap)
+        swapStruct(*dl);
+      lc += sizeof(linkedit_data_command);
+    }
+
+    // Add LC_DATA_IN_CODE if requested.
+    if (_file.generateDataInCodeLoadCommand) {
       linkedit_data_command* dl = reinterpret_cast<linkedit_data_command*>(lc);
       dl->cmd      = LC_DATA_IN_CODE;
       dl->cmdsize  = sizeof(linkedit_data_command);
@@ -878,14 +1007,13 @@ std::error_code MachOFileLayout::writeLoadCommands() {
       lc += sizeof(linkedit_data_command);
     }
   }
-  return ec;
+  return llvm::Error::success();
 }
-
 
 void MachOFileLayout::writeSectionContent() {
   for (const Section &s : _file.sections) {
     // Copy all section content to output buffer.
-    if (s.type == llvm::MachO::S_ZEROFILL)
+    if (isZeroFillSection(s.type))
       continue;
     if (s.content.empty())
       continue;
@@ -907,7 +1035,6 @@ void MachOFileLayout::writeRelocations() {
     }
   }
 }
-
 
 void MachOFileLayout::appendSymbols(const std::vector<Symbol> &symbols,
                                    uint32_t &symOffset, uint32_t &strOffset) {
@@ -939,6 +1066,13 @@ void MachOFileLayout::appendSymbols(const std::vector<Symbol> &symbols,
   }
 }
 
+void MachOFileLayout::writeFunctionStartsInfo() {
+  if (!_functionStartsSize)
+    return;
+  memcpy(&_buffer[_startOfFunctionStarts], _file.functionStarts.data(),
+         _functionStartsSize);
+}
+
 void MachOFileLayout::writeDataInCodeInfo() {
   uint32_t offset = _startOfDataInCode;
   for (const DataInCode &entry : _file.dataInCode) {
@@ -957,7 +1091,10 @@ void MachOFileLayout::writeSymbolTable() {
   // Write symbol table and symbol strings in parallel.
   uint32_t symOffset = _startOfSymbols;
   uint32_t strOffset = _startOfSymbolStrings;
-  _buffer[strOffset++] = '\0'; // Reserve n_strx offset of zero to mean no name.
+  // Reserve n_strx offset of zero to mean no name.
+  _buffer[strOffset++] = ' ';
+  _buffer[strOffset++] = '\0';
+  appendSymbols(_file.stabsSymbols, symOffset, strOffset);
   appendSymbols(_file.localSymbols, symOffset, strOffset);
   appendSymbols(_file.globalSymbols, symOffset, strOffset);
   appendSymbols(_file.undefinedSymbols, symOffset, strOffset);
@@ -1014,6 +1151,7 @@ void MachOFileLayout::buildLinkEditInfo() {
   buildLazyBindInfo();
   buildExportTrie();
   computeSymbolTableSizes();
+  computeFunctionStartsSize();
   computeDataInCodeSize();
 }
 
@@ -1037,19 +1175,44 @@ void MachOFileLayout::buildRebaseInfo() {
 void MachOFileLayout::buildBindInfo() {
   // TODO: compress bind info.
   uint64_t lastAddend = 0;
+  int lastOrdinal = 0x80000000;
+  StringRef lastSymbolName;
+  BindType lastType = (BindType)0;
+  Hex32 lastSegOffset = ~0U;
+  uint8_t lastSegIndex = (uint8_t)~0U;
   for (const BindLocation& entry : _file.bindingInfo) {
-    _bindingInfo.append_byte(BIND_OPCODE_SET_TYPE_IMM | entry.kind);
-    _bindingInfo.append_byte(BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
-                            | entry.segIndex);
-    _bindingInfo.append_uleb128(entry.segOffset);
-    if (entry.ordinal > 0)
-      _bindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM |
-                               (entry.ordinal & 0xF));
-    else
-      _bindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
-                               (entry.ordinal & 0xF));
-    _bindingInfo.append_byte(BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM);
-    _bindingInfo.append_string(entry.symbolName);
+    if (entry.ordinal != lastOrdinal) {
+      if (entry.ordinal <= 0)
+        _bindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
+                                 (entry.ordinal & BIND_IMMEDIATE_MASK));
+      else if (entry.ordinal <= BIND_IMMEDIATE_MASK)
+        _bindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM |
+                                 entry.ordinal);
+      else {
+        _bindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB);
+        _bindingInfo.append_uleb128(entry.ordinal);
+      }
+      lastOrdinal = entry.ordinal;
+    }
+
+    if (lastSymbolName != entry.symbolName) {
+      _bindingInfo.append_byte(BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM);
+      _bindingInfo.append_string(entry.symbolName);
+      lastSymbolName = entry.symbolName;
+    }
+
+    if (lastType != entry.kind) {
+      _bindingInfo.append_byte(BIND_OPCODE_SET_TYPE_IMM | entry.kind);
+      lastType = entry.kind;
+    }
+
+    if (lastSegIndex != entry.segIndex || lastSegOffset != entry.segOffset) {
+      _bindingInfo.append_byte(BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
+                               | entry.segIndex);
+      _bindingInfo.append_uleb128(entry.segOffset);
+      lastSegIndex = entry.segIndex;
+      lastSegOffset = entry.segOffset;
+    }
     if (entry.addend != lastAddend) {
       _bindingInfo.append_byte(BIND_OPCODE_SET_ADDEND_SLEB);
       _bindingInfo.append_sleb128(entry.addend);
@@ -1063,28 +1226,31 @@ void MachOFileLayout::buildBindInfo() {
 
 void MachOFileLayout::buildLazyBindInfo() {
   for (const BindLocation& entry : _file.lazyBindingInfo) {
-    _lazyBindingInfo.append_byte(BIND_OPCODE_SET_TYPE_IMM | entry.kind);
     _lazyBindingInfo.append_byte(BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
                             | entry.segIndex);
-    _lazyBindingInfo.append_uleb128Fixed(entry.segOffset, 5);
-    if (entry.ordinal > 0)
-      _lazyBindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM |
-                                   (entry.ordinal & 0xF));
-    else
+    _lazyBindingInfo.append_uleb128(entry.segOffset);
+    if (entry.ordinal <= 0)
       _lazyBindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
-                                   (entry.ordinal & 0xF));
+                                   (entry.ordinal & BIND_IMMEDIATE_MASK));
+    else if (entry.ordinal <= BIND_IMMEDIATE_MASK)
+      _lazyBindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_IMM |
+                                   entry.ordinal);
+    else {
+      _lazyBindingInfo.append_byte(BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB);
+      _lazyBindingInfo.append_uleb128(entry.ordinal);
+    }
+    // FIXME: We need to | the opcode here with flags.
     _lazyBindingInfo.append_byte(BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM);
     _lazyBindingInfo.append_string(entry.symbolName);
     _lazyBindingInfo.append_byte(BIND_OPCODE_DO_BIND);
     _lazyBindingInfo.append_byte(BIND_OPCODE_DONE);
   }
-  _lazyBindingInfo.append_byte(BIND_OPCODE_DONE);
   _lazyBindingInfo.align(_is64 ? 8 : 4);
 }
 
-void MachOFileLayout::TrieNode::addSymbol(const Export& entry,
-                                          BumpPtrAllocator &allocator,
-                                          std::vector<TrieNode*> &allNodes) {
+void TrieNode::addSymbol(const Export& entry,
+                         BumpPtrAllocator &allocator,
+                         std::vector<TrieNode*> &allNodes) {
   StringRef partialStr = entry.name.drop_front(_cummulativeString.size());
   for (TrieEdge &edge : _children) {
     StringRef edgeStr = edge._subString;
@@ -1099,7 +1265,7 @@ void MachOFileLayout::TrieNode::addSymbol(const Export& entry,
         // Splice in new node:  was A -> C,  now A -> B -> C
         StringRef bNodeStr = edge._child->_cummulativeString;
         bNodeStr = bNodeStr.drop_back(edgeStr.size()-n).copy(allocator);
-        TrieNode* bNode = new (allocator) TrieNode(bNodeStr);
+        auto *bNode = new (allocator) TrieNode(bNodeStr);
         allNodes.push_back(bNode);
         TrieNode* cNode = edge._child;
         StringRef abEdgeStr = edgeStr.substr(0,n).copy(allocator);
@@ -1112,8 +1278,8 @@ void MachOFileLayout::TrieNode::addSymbol(const Export& entry,
         TrieEdge& abEdge = edge;
         abEdge._subString = abEdgeStr;
         abEdge._child = bNode;
-        TrieEdge *bcEdge = new (allocator) TrieEdge(bcEdgeStr, cNode);
-        bNode->_children.push_back(std::move(*bcEdge));
+        auto *bcEdge = new (allocator) TrieEdge(bcEdgeStr, cNode);
+        bNode->_children.insert(bNode->_children.end(), bcEdge);
         bNode->addSymbol(entry, allocator, allNodes);
         return;
       }
@@ -1126,9 +1292,9 @@ void MachOFileLayout::TrieNode::addSymbol(const Export& entry,
     assert(entry.otherOffset != 0);
   }
   // No commonality with any existing child, make a new edge.
-  TrieNode* newNode = new (allocator) TrieNode(entry.name.copy(allocator));
-  TrieEdge *newEdge = new (allocator) TrieEdge(partialStr, newNode);
-  _children.push_back(std::move(*newEdge));
+  auto *newNode = new (allocator) TrieNode(entry.name.copy(allocator));
+  auto *newEdge = new (allocator) TrieEdge(partialStr, newNode);
+  _children.insert(_children.end(), newEdge);
   DEBUG_WITH_TYPE("trie-builder", llvm::dbgs()
                    << "new TrieNode('" << entry.name << "') with edge '"
                    << partialStr << "' from node='"
@@ -1142,7 +1308,25 @@ void MachOFileLayout::TrieNode::addSymbol(const Export& entry,
   allNodes.push_back(newNode);
 }
 
-bool MachOFileLayout::TrieNode::updateOffset(uint32_t& offset) {
+void TrieNode::addOrderedNodes(const Export& entry,
+                               std::vector<TrieNode*> &orderedNodes) {
+  if (!_ordered) {
+    orderedNodes.push_back(this);
+    _ordered = true;
+  }
+
+  StringRef partialStr = entry.name.drop_front(_cummulativeString.size());
+  for (TrieEdge &edge : _children) {
+    StringRef edgeStr = edge._subString;
+    if (partialStr.startswith(edgeStr)) {
+      // Already have matching edge, go down that path.
+      edge._child->addOrderedNodes(entry, orderedNodes);
+      return;
+    }
+  }
+}
+
+bool TrieNode::updateOffset(uint32_t& offset) {
   uint32_t nodeSize = 1; // Length when no export info
   if (_hasExportInfo) {
     if (_flags & EXPORT_SYMBOL_FLAGS_REEXPORT) {
@@ -1174,7 +1358,7 @@ bool MachOFileLayout::TrieNode::updateOffset(uint32_t& offset) {
   return result;
 }
 
-void MachOFileLayout::TrieNode::appendToByteBuffer(ByteBuffer &out) {
+void TrieNode::appendToByteBuffer(ByteBuffer &out) {
   if (_hasExportInfo) {
     if (_flags & EXPORT_SYMBOL_FLAGS_REEXPORT) {
       if (!_importedName.empty()) {
@@ -1239,7 +1423,7 @@ void MachOFileLayout::buildExportTrie() {
   BumpPtrAllocator allocator;
 
   // Build trie of all exported symbols.
-  TrieNode* rootNode = new (allocator) TrieNode(StringRef());
+  auto *rootNode = new (allocator) TrieNode(StringRef());
   std::vector<TrieNode*> allNodes;
   allNodes.reserve(_file.exportInfo.size()*2);
   allNodes.push_back(rootNode);
@@ -1247,33 +1431,43 @@ void MachOFileLayout::buildExportTrie() {
     rootNode->addSymbol(entry, allocator, allNodes);
   }
 
+  std::vector<TrieNode*> orderedNodes;
+  orderedNodes.reserve(allNodes.size());
+
+  for (const Export& entry : _file.exportInfo)
+    rootNode->addOrderedNodes(entry, orderedNodes);
+
   // Assign each node in the vector an offset in the trie stream, iterating
   // until all uleb128 sizes have stabilized.
   bool more;
   do {
     uint32_t offset = 0;
     more = false;
-    for (TrieNode* node : allNodes) {
+    for (TrieNode* node : orderedNodes) {
       if (node->updateOffset(offset))
         more = true;
     }
   } while (more);
 
   // Serialize trie to ByteBuffer.
-  for (TrieNode* node : allNodes) {
+  for (TrieNode* node : orderedNodes) {
     node->appendToByteBuffer(_exportTrie);
   }
   _exportTrie.align(_is64 ? 8 : 4);
 }
 
-
 void MachOFileLayout::computeSymbolTableSizes() {
   // MachO symbol tables have three ranges: locals, globals, and undefines
   const size_t nlistSize = (_is64 ? sizeof(nlist_64) : sizeof(nlist));
-  _symbolTableSize = nlistSize * (_file.localSymbols.size()
+  _symbolTableSize = nlistSize * (_file.stabsSymbols.size()
+                                + _file.localSymbols.size()
                                 + _file.globalSymbols.size()
                                 + _file.undefinedSymbols.size());
-  _symbolStringPoolSize = 0;
+  // Always reserve 1-byte for the empty string and 1-byte for its terminator.
+  _symbolStringPoolSize = 2;
+  for (const Symbol &sym : _file.stabsSymbols) {
+    _symbolStringPoolSize += (sym.name.size()+1);
+  }
   for (const Symbol &sym : _file.localSymbols) {
     _symbolStringPoolSize += (sym.name.size()+1);
   }
@@ -1284,7 +1478,8 @@ void MachOFileLayout::computeSymbolTableSizes() {
     _symbolStringPoolSize += (sym.name.size()+1);
   }
   _symbolTableLocalsStartIndex = 0;
-  _symbolTableGlobalsStartIndex = _file.localSymbols.size();
+  _symbolTableGlobalsStartIndex = _file.stabsSymbols.size() +
+                                  _file.localSymbols.size();
   _symbolTableUndefinesStartIndex = _symbolTableGlobalsStartIndex
                                     + _file.globalSymbols.size();
 
@@ -1294,6 +1489,10 @@ void MachOFileLayout::computeSymbolTableSizes() {
   }
 }
 
+void MachOFileLayout::computeFunctionStartsSize() {
+  _functionStartsSize = _file.functionStarts.size();
+}
+
 void MachOFileLayout::computeDataInCodeSize() {
   _dataInCodeSize = _file.dataInCode.size() * sizeof(data_in_code_entry);
 }
@@ -1301,6 +1500,7 @@ void MachOFileLayout::computeDataInCodeSize() {
 void MachOFileLayout::writeLinkEditContent() {
   if (_file.fileType == llvm::MachO::MH_OBJECT) {
     writeRelocations();
+    writeFunctionStartsInfo();
     writeDataInCodeInfo();
     writeSymbolTable();
   } else {
@@ -1309,15 +1509,16 @@ void MachOFileLayout::writeLinkEditContent() {
     writeLazyBindingInfo();
     // TODO: add weak binding info
     writeExportInfo();
+    writeFunctionStartsInfo();
     writeDataInCodeInfo();
     writeSymbolTable();
   }
 }
 
-std::error_code MachOFileLayout::writeBinary(StringRef path) {
+llvm::Error MachOFileLayout::writeBinary(StringRef path) {
   // Check for pending error from constructor.
   if (_ec)
-    return _ec;
+    return llvm::errorCodeToError(_ec);
   // Create FileOutputBuffer with calculated size.
   unsigned flags = 0;
   if (_file.fileType != llvm::MachO::MH_OBJECT)
@@ -1325,28 +1526,25 @@ std::error_code MachOFileLayout::writeBinary(StringRef path) {
   ErrorOr<std::unique_ptr<llvm::FileOutputBuffer>> fobOrErr =
       llvm::FileOutputBuffer::create(path, size(), flags);
   if (std::error_code ec = fobOrErr.getError())
-    return ec;
+    return llvm::errorCodeToError(ec);
   std::unique_ptr<llvm::FileOutputBuffer> &fob = *fobOrErr;
   // Write content.
   _buffer = fob->getBufferStart();
   writeMachHeader();
-  std::error_code ec = writeLoadCommands();
-  if (ec)
+  if (auto ec = writeLoadCommands())
     return ec;
   writeSectionContent();
   writeLinkEditContent();
   fob->commit();
 
-  return std::error_code();
+  return llvm::Error::success();
 }
 
-
 /// Takes in-memory normalized view and writes a mach-o object file.
-std::error_code writeBinary(const NormalizedFile &file, StringRef path) {
+llvm::Error writeBinary(const NormalizedFile &file, StringRef path) {
   MachOFileLayout layout(file);
   return layout.writeBinary(path);
 }
-
 
 } // namespace normalized
 } // namespace mach_o

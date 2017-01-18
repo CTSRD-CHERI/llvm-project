@@ -91,7 +91,7 @@
 #define ompt_event_initial_task_begin_implemented       ompt_event_UNIMPLEMENTED
 #define ompt_event_initial_task_end_implemented         ompt_event_UNIMPLEMENTED
 
-#define ompt_event_task_switch_implemented              ompt_event_UNIMPLEMENTED
+#define ompt_event_task_switch_implemented              ompt_event_MAY_ALWAYS_TRACE
 
 #define ompt_event_loop_begin_implemented               ompt_event_MAY_ALWAYS_TRACE
 #define ompt_event_loop_end_implemented                 ompt_event_MAY_ALWAYS_TRACE
@@ -113,8 +113,8 @@
 #define ompt_event_barrier_begin_implemented            ompt_event_MAY_ALWAYS_TRACE
 #define ompt_event_barrier_end_implemented              ompt_event_MAY_ALWAYS_TRACE
 
-#define ompt_event_taskwait_begin_implemented           ompt_event_UNIMPLEMENTED
-#define ompt_event_taskwait_end_implemented             ompt_event_UNIMPLEMENTED
+#define ompt_event_taskwait_begin_implemented           ompt_event_MAY_ALWAYS_TRACE
+#define ompt_event_taskwait_end_implemented             ompt_event_MAY_ALWAYS_TRACE
 
 #define ompt_event_taskgroup_begin_implemented          ompt_event_UNIMPLEMENTED
 #define ompt_event_taskgroup_end_implemented            ompt_event_UNIMPLEMENTED
@@ -140,5 +140,13 @@
 #define ompt_event_destroy_nest_lock_implemented        ompt_event_MAY_ALWAYS_TRACE
 
 #define ompt_event_flush_implemented                    ompt_event_UNIMPLEMENTED
+
+#if OMP_40_ENABLED
+# define ompt_event_task_dependences_implemented         ompt_event_MAY_ALWAYS_TRACE
+# define ompt_event_task_dependence_pair_implemented     ompt_event_MAY_ALWAYS_TRACE
+#else
+# define ompt_event_task_dependences_implemented         ompt_event_UNIMPLEMENTED
+# define ompt_event_task_dependence_pair_implemented     ompt_event_UNIMPLEMENTED
+#endif /* OMP_40_ENABLED */
 
 #endif

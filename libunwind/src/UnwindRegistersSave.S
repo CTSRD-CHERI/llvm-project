@@ -263,11 +263,11 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   stp    x22,x23, [x0, #0x0B0]
   stp    x24,x25, [x0, #0x0C0]
   stp    x26,x27, [x0, #0x0D0]
-  stp    x28,fp,  [x0, #0x0E0]
-  str    lr,      [x0, #0x0F0]
+  stp    x28,x29, [x0, #0x0E0]
+  str    x30,     [x0, #0x0F0]
   mov    x1,sp
   str    x1,      [x0, #0x0F8]
-  str    lr,      [x0, #0x100]    // store return address as pc
+  str    x30,     [x0, #0x100]    // store return address as pc
   // skip cpsr
   stp    d0, d1,  [x0, #0x110]
   stp    d2, d3,  [x0, #0x120]
@@ -309,13 +309,24 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
 @
   .p2align 2
 DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
-#if !defined(__ARM_ARCH_ISA_ARM)
-  stm r0, {r0-r7}
+#if !defined(__ARM_ARCH_ISA_ARM) && __ARM_ARCH_ISA_THUMB == 1
+  stm r0!, {r0-r7}
+  mov r1, r8
+  mov r2, r9
+  mov r3, r10
+  stm r0!, {r1-r3}
+  mov r1, r11
   mov r2, sp
   mov r3, lr
-  str r2, [r0, #52]
-  str r3, [r0, #56]
-  str r3, [r0, #60]  @ store return address as pc
+  str r1, [r0, #0]   @ r11
+  @ r12 does not need storing, it it the intra-procedure-call scratch register
+  str r2, [r0, #8]   @ sp
+  str r3, [r0, #12]  @ lr
+  str r3, [r0, #16]  @ store return address as pc
+  @ T1 does not have a non-cpsr-clobbering register-zeroing instruction.
+  @ It is safe to use here though because we are about to return, and cpsr is
+  @ not expected to be preserved.
+  movs r0, #0        @ return UNW_ESUCCESS
 #else
   @ 32bit thumb-2 restrictions for stm:
   @ . the sp (r13) cannot be in the list
@@ -324,13 +335,6 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   str sp, [r0, #52]
   str lr, [r0, #56]
   str lr, [r0, #60]  @ store return address as pc
-#endif
-#if __ARM_ARCH_ISA_THUMB == 1
-  @ T1 does not have a non-cpsr-clobbering register-zeroing instruction.
-  @ It is safe to use here though because we are about to return, and cpsr is
-  @ not expected to be preserved.
-  movs r0, #0        @ return UNW_ESUCCESS
-#else
   mov r0, #0         @ return UNW_ESUCCESS
 #endif
   JMP(lr)
@@ -378,6 +382,8 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm9saveVFPv3EPy)
   vstmia r0, {d16-d31}
   JMP(lr)
 
+#if defined(_LIBUNWIND_ARM_WMMX)
+
 @
 @ static void libunwind::Registers_arm::saveiWMMX(unw_fpreg_t* values)
 @
@@ -385,8 +391,8 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm9saveVFPv3EPy)
 @  values pointer is in r0
 @
   .p2align 2
+  .arch armv5te
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm9saveiWMMXEPy)
-#if (!defined(__ARM_ARCH_6M__) && !defined(__ARM_ARCH_6SM__)) || defined(__ARM_WMMX)
   stcl p1, cr0, [r0], #8  @ wstrd wR0, [r0], #8
   stcl p1, cr1, [r0], #8  @ wstrd wR1, [r0], #8
   stcl p1, cr2, [r0], #8  @ wstrd wR2, [r0], #8
@@ -403,7 +409,6 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm9saveiWMMXEPy)
   stcl p1, cr13, [r0], #8  @ wstrd wR13, [r0], #8
   stcl p1, cr14, [r0], #8  @ wstrd wR14, [r0], #8
   stcl p1, cr15, [r0], #8  @ wstrd wR15, [r0], #8
-#endif
   JMP(lr)
 
 @
@@ -413,14 +418,15 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm9saveiWMMXEPy)
 @  values pointer is in r0
 @
   .p2align 2
+  .arch armv5te
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm16saveiWMMXControlEPj)
-#if (!defined(__ARM_ARCH_6M__) && !defined(__ARM_ARCH_6SM__)) || defined(__ARM_WMMX)
   stc2 p1, cr8, [r0], #4  @ wstrw wCGR0, [r0], #4
   stc2 p1, cr9, [r0], #4  @ wstrw wCGR1, [r0], #4
   stc2 p1, cr10, [r0], #4  @ wstrw wCGR2, [r0], #4
   stc2 p1, cr11, [r0], #4  @ wstrw wCGR3, [r0], #4
-#endif
   JMP(lr)
+
+#endif
 
 #elif defined(__or1k__)
 
@@ -464,3 +470,6 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   l.sw     120(r3), r30
   l.sw     124(r3), r31
 #endif
+
+NO_EXEC_STACK_DIRECTIVE
+

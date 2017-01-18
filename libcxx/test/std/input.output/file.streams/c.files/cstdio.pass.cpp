@@ -12,6 +12,8 @@
 #include <cstdio>
 #include <type_traits>
 
+#include "test_macros.h"
+
 #ifndef BUFSIZ
 #error BUFSIZ not defined
 #endif
@@ -78,17 +80,24 @@
 
 #include <cstdarg>
 
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-zero-length"
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 int main()
 {
     std::FILE* fp = 0;
-    std::fpos_t fpos = {0};
+    std::fpos_t fpos = {};
     std::size_t s = 0;
     char* cp = 0;
     std::va_list va;
+    ((void)fp); // Prevent unused warning
+    ((void)fpos); // Prevent unused warning
+    ((void)s); // Prevent unused warning
+    ((void)cp); // Prevent unused warning
+    ((void)va); // Prevent unused warning
     static_assert((std::is_same<decltype(std::fclose(fp)), int>::value), "");
     static_assert((std::is_same<decltype(std::fflush(fp)), int>::value), "");
     static_assert((std::is_same<decltype(std::setbuf(fp,cp)), void>::value), "");
@@ -133,7 +142,7 @@ int main()
 
 #ifndef _LIBCPP_HAS_NO_STDIN
     static_assert((std::is_same<decltype(std::getchar()), int>::value), "");
-#if _LIBCPP_STD_VER <= 11
+#if TEST_STD_VER <= 11
     static_assert((std::is_same<decltype(std::gets(cp)), char*>::value), "");
 #endif
     static_assert((std::is_same<decltype(std::scanf(" ")), int>::value), "");

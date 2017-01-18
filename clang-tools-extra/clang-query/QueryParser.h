@@ -13,7 +13,7 @@
 #include "Query.h"
 #include "QuerySession.h"
 #include "llvm/LineEditor/LineEditor.h"
-#include <stddef.h>
+#include <cstddef>
 
 namespace clang {
 namespace query {
@@ -37,8 +37,7 @@ public:
 
 private:
   QueryParser(StringRef Line, const QuerySession &QS)
-      : Begin(Line.begin()), End(Line.end()),
-        CompletionPos(nullptr), QS(QS) {}
+      : Begin(Line.begin()), End(Line.end()), CompletionPos(nullptr), QS(QS) {}
 
   StringRef lexWord();
 
@@ -69,4 +68,4 @@ private:
 } // namespace query
 } // namespace clang
 
-#endif
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_QUERY_QUERY_PARSER_H

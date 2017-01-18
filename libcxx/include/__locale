@@ -37,6 +37,8 @@
 #elif (defined(__GLIBC__) || defined(__APPLE__)      || defined(__FreeBSD__) \
     || defined(__EMSCRIPTEN__) || defined(__IBMCPP__))
 # include <xlocale.h>
+#elif defined(_LIBCPP_HAS_MUSL_LIBC)
+# include <support/musl/xlocale.h>
 #endif // __GLIBC__ || __APPLE__ || __FreeBSD__ || __sun__ || __EMSCRIPTEN__ || __IBMCPP__
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
@@ -163,10 +165,9 @@ template <class _Facet>
 locale
 locale::combine(const locale& __other) const
 {
-#ifndef _LIBCPP_NO_EXCEPTIONS
     if (!_VSTD::has_facet<_Facet>(__other))
-        throw runtime_error("locale::combine: locale missing facet");
-#endif  // _LIBCPP_NO_EXCEPTIONS
+        __throw_runtime_error("locale::combine: locale missing facet");
+
     return locale(*this, &const_cast<_Facet&>(_VSTD::use_facet<_Facet>(__other)));
 }
 
@@ -268,8 +269,8 @@ collate<_CharT>::do_hash(const char_type* __lo, const char_type* __hi) const
     return static_cast<long>(__h);
 }
 
-_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_TYPE_VIS collate<char>)
-_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_TYPE_VIS collate<wchar_t>)
+_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS collate<char>)
+_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS collate<wchar_t>)
 
 // template <class CharT> class collate_byname;
 
@@ -329,7 +330,7 @@ locale::operator()(const basic_string<_CharT, _Traits, _Allocator>& __x,
 class _LIBCPP_TYPE_VIS ctype_base
 {
 public:
-#ifdef __GLIBC__
+#if defined(__GLIBC__)
     typedef unsigned short mask;
     static const mask space  = _ISspace;
     static const mask print  = _ISprint;
@@ -359,7 +360,7 @@ public:
     typedef __uint32_t mask;
 # elif defined(__FreeBSD__)
     typedef unsigned long mask;
-# elif defined(__EMSCRIPTEN__) ||  defined(__NetBSD__)
+# elif defined(__EMSCRIPTEN__) || defined(__NetBSD__)
     typedef unsigned short mask;
 # endif
     static const mask space  = _CTYPE_S;
@@ -1177,12 +1178,12 @@ codecvt_byname<_InternT, _ExternT, _StateT>::~codecvt_byname()
 {
 }
 
-_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_TYPE_VIS codecvt_byname<char, char, mbstate_t>)
-_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_TYPE_VIS codecvt_byname<wchar_t, char, mbstate_t>)
-_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_TYPE_VIS codecvt_byname<char16_t, char, mbstate_t>)
-_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_TYPE_VIS codecvt_byname<char32_t, char, mbstate_t>)
+_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS codecvt_byname<char, char, mbstate_t>)
+_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS codecvt_byname<wchar_t, char, mbstate_t>)
+_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS codecvt_byname<char16_t, char, mbstate_t>)
+_LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS codecvt_byname<char32_t, char, mbstate_t>)
 
-_LIBCPP_FUNC_VIS void __throw_runtime_error(const char*);
+_LIBCPP_NORETURN _LIBCPP_FUNC_VIS void __throw_runtime_error(const char*);
 
 template <size_t _Np>
 struct __narrow_to_utf8

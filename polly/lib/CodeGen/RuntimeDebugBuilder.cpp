@@ -63,9 +63,9 @@ RuntimeDebugBuilder::getGPUThreadIdentifiers(PollyIRBuilder &Builder) {
   auto M = Builder.GetInsertBlock()->getParent()->getParent();
 
   std::vector<Function *> BlockIDs = {
-      Intrinsic::getDeclaration(M, Intrinsic::ptx_read_ctaid_x),
-      Intrinsic::getDeclaration(M, Intrinsic::ptx_read_ctaid_y),
-      Intrinsic::getDeclaration(M, Intrinsic::ptx_read_ctaid_z),
+      Intrinsic::getDeclaration(M, Intrinsic::nvvm_read_ptx_sreg_ctaid_x),
+      Intrinsic::getDeclaration(M, Intrinsic::nvvm_read_ptx_sreg_ctaid_y),
+      Intrinsic::getDeclaration(M, Intrinsic::nvvm_read_ptx_sreg_ctaid_z),
   };
 
   Identifiers.push_back(Builder.CreateGlobalStringPtr("> block-id: ", "", 4));
@@ -79,9 +79,9 @@ RuntimeDebugBuilder::getGPUThreadIdentifiers(PollyIRBuilder &Builder) {
   Identifiers.push_back(Builder.CreateGlobalStringPtr("| ", "", 4));
 
   std::vector<Function *> ThreadIDs = {
-      Intrinsic::getDeclaration(M, Intrinsic::ptx_read_tid_x),
-      Intrinsic::getDeclaration(M, Intrinsic::ptx_read_tid_y),
-      Intrinsic::getDeclaration(M, Intrinsic::ptx_read_tid_z),
+      Intrinsic::getDeclaration(M, Intrinsic::nvvm_read_ptx_sreg_tid_x),
+      Intrinsic::getDeclaration(M, Intrinsic::nvvm_read_ptx_sreg_tid_y),
+      Intrinsic::getDeclaration(M, Intrinsic::nvvm_read_ptx_sreg_tid_z),
   };
 
   Identifiers.push_back(Builder.CreateGlobalStringPtr("thread-id: ", "", 4));
@@ -163,19 +163,19 @@ void RuntimeDebugBuilder::createGPUPrinterT(PollyIRBuilder &Builder,
                                             ArrayRef<Value *> Values) {
   std::string str;
 
-  // Allocate print buffer (assuming 2*32 bit per element)
-  auto T = ArrayType::get(Builder.getInt32Ty(), Values.size() * 2);
-  Value *Data = new AllocaInst(
-      T, "polly.vprint.buffer",
-      Builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
-
   auto *Zero = Builder.getInt64(0);
-  auto *DataPtr = Builder.CreateGEP(Data, {Zero, Zero});
 
   auto ToPrint = getGPUThreadIdentifiers(Builder);
 
   ToPrint.push_back(Builder.CreateGlobalStringPtr("\n  ", "", 4));
   ToPrint.insert(ToPrint.end(), Values.begin(), Values.end());
+
+  // Allocate print buffer (assuming 2*32 bit per element)
+  auto T = ArrayType::get(Builder.getInt32Ty(), ToPrint.size() * 2);
+  Value *Data = new AllocaInst(
+      T, "polly.vprint.buffer",
+      &Builder.GetInsertBlock()->getParent()->getEntryBlock().front());
+  auto *DataPtr = Builder.CreateGEP(Data, {Zero, Zero});
 
   int Offset = 0;
   for (auto Val : ToPrint) {

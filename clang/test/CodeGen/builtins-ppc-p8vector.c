@@ -6,6 +6,7 @@
 // generate the correct errors for functions that are only overloaded with VSX
 // (vec_cmpge, vec_cmple). Without this option, there is only one overload so
 // it is selected.
+#include <altivec.h>
 
 void dummy() { }
 signed int si;
@@ -73,10 +74,10 @@ void test1() {
 // CHECK-PPC: error: call to 'vec_abs' is ambiguous
 
   res_vd = vec_abs(vda);
-// CHECK: store <2 x i64> <i64 9223372036854775807, i64 9223372036854775807>, <2 x i64>*
-// CHECK: and <2 x i64>
-// CHECK-LE: store <2 x i64> <i64 9223372036854775807, i64 9223372036854775807>, <2 x i64>*
-// CHECK-LE: and <2 x i64>
+// CHECK: call <2 x double> @llvm.fabs.v2f64(<2 x double> %{{.*}})
+// CHECK: store <2 x double> %{{.*}}, <2 x double>* @res_vd
+// CHECK-LE: call <2 x double> @llvm.fabs.v2f64(<2 x double> %{{.*}})
+// CHECK-LE: store <2 x double> %{{.*}}, <2 x double>* @res_vd
 // CHECK-PPC: error: call to 'vec_abs' is ambiguous
 
   /* vec_add */
@@ -135,6 +136,26 @@ void test1() {
 // CHECK-LE: @llvm.ppc.altivec.vperm
 // CHECK-PPC: warning: implicit declaration of function 'vec_mergee'
 
+  res_vbll = vec_mergee(vbll, vbll);
+// CHECK: @llvm.ppc.altivec.vperm
+// CHECK-LE: @llvm.ppc.altivec.vperm
+
+  res_vsll = vec_mergee(vsll, vsll);
+// CHECK: @llvm.ppc.altivec.vperm
+// CHECK-LE: @llvm.ppc.altivec.vperm
+
+  res_vull = vec_mergee(vull, vull);
+// CHECK: @llvm.ppc.altivec.vperm
+// CHECK-LE: @llvm.ppc.altivec.vperm
+
+  res_vf = vec_mergee(vfa, vfa);
+// CHECK: @llvm.ppc.altivec.vperm
+// CHECK-LE: @llvm.ppc.altivec.vperm
+
+  res_vd = vec_mergee(vda, vda);
+// CHECK: @llvm.ppc.altivec.vperm
+// CHECK-LE: @llvm.ppc.altivec.vperm
+
   /* vec_mergeo */
   res_vbi = vec_mergeo(vbi, vbi);
 // CHECK: @llvm.ppc.altivec.vperm
@@ -150,6 +171,11 @@ void test1() {
 // CHECK-PPC: warning: implicit declaration of function 'vec_mergeo'
   
   /* vec_cmpeq */
+  res_vbll = vec_cmpeq(vbll, vbll);
+// CHECK: @llvm.ppc.altivec.vcmpequd
+// CHECK-LE: @llvm.ppc.altivec.vcmpequd
+// CHECK-PPC: error: call to 'vec_cmpeq' is ambiguous
+
   res_vbll = vec_cmpeq(vsll, vsll);
 // CHECK: @llvm.ppc.altivec.vcmpequd
 // CHECK-LE: @llvm.ppc.altivec.vcmpequd
@@ -203,15 +229,6 @@ void test1() {
 // CHECK: call <2 x i64> @llvm.ppc.altivec.vcmpgtud(<2 x i64> %{{[0-9]*}}, <2 x i64> %{{[0-9]*}})
 // CHECK-LE: call <2 x i64> @llvm.ppc.altivec.vcmpgtud(<2 x i64> %{{[0-9]*}}, <2 x i64> %{{[0-9]*}})
 // CHECK-PPC: error: call to 'vec_cmplt' is ambiguous
-
-  /* vec_double */
-  res_vd = vec_double(vsll);
-// CHECK: sitofp i64 {{.+}} to double
-// CHECK-BE: sitofp i64 {{.+}} to double
-
-  res_vd = vec_double(vull);
-// CHECK: uitofp i64 {{.+}} to double
-// CHECK-BE: uitofp i64 {{.+}} to double
 
   /* vec_eqv */
   res_vsc =  vec_eqv(vsc, vsc);
@@ -1265,6 +1282,12 @@ void test1() {
 // CHECK-LE: [[T1:%.+]] = and <4 x i32>
 // CHECK-LE: xor <4 x i32> [[T1]], <i32 -1, i32 -1, i32 -1, i32 -1>
 
+  res_vf = vec_nand(vfa, vfa);
+// CHECK: [[T1:%.+]] = and <4 x i32>
+// CHECK: xor <4 x i32> [[T1]], <i32 -1, i32 -1, i32 -1, i32 -1>
+// CHECK-LE: [[T1:%.+]] = and <4 x i32>
+// CHECK-LE: xor <4 x i32> [[T1]], <i32 -1, i32 -1, i32 -1, i32 -1>
+
   res_vsll = vec_nand(vsll, vsll);
 // CHECK: [[T1:%.+]] = and <2 x i64>
 // CHECK: xor <2 x i64> [[T1]], <i64 -1, i64 -1>
@@ -1278,6 +1301,12 @@ void test1() {
 // CHECK-LE: xor <2 x i64> [[T1]], <i64 -1, i64 -1>
 
   res_vull = vec_nand(vull, vull);
+// CHECK: [[T1:%.+]] = and <2 x i64>
+// CHECK: xor <2 x i64> [[T1]], <i64 -1, i64 -1>
+// CHECK-LE: [[T1:%.+]] = and <2 x i64>
+// CHECK-LE: xor <2 x i64> [[T1]], <i64 -1, i64 -1>
+
+  res_vd = vec_nand(vda, vda);
 // CHECK: [[T1:%.+]] = and <2 x i64>
 // CHECK: xor <2 x i64> [[T1]], <i64 -1, i64 -1>
 // CHECK-LE: [[T1:%.+]] = and <2 x i64>
@@ -1411,6 +1440,18 @@ void test1() {
 // CHECK-LE: [[T1:%.+]] = xor <4 x i32> {{%.+}}, <i32 -1, i32 -1, i32 -1, i32 -1>
 // CHECK-LE: or <4 x i32> {{%.+}}, [[T1]]
 
+  res_vf = vec_orc(vbi, vfa);
+// CHECK: [[T1:%.+]] = xor <4 x i32> {{%.+}}, <i32 -1, i32 -1, i32 -1, i32 -1>
+// CHECK: or <4 x i32> {{%.+}}, [[T1]]
+// CHECK-LE: [[T1:%.+]] = xor <4 x i32> {{%.+}}, <i32 -1, i32 -1, i32 -1, i32 -1>
+// CHECK-LE: or <4 x i32> {{%.+}}, [[T1]]
+
+  res_vf = vec_orc(vfa, vbi);
+// CHECK: [[T1:%.+]] = xor <4 x i32> {{%.+}}, <i32 -1, i32 -1, i32 -1, i32 -1>
+// CHECK: or <4 x i32> {{%.+}}, [[T1]]
+// CHECK-LE: [[T1:%.+]] = xor <4 x i32> {{%.+}}, <i32 -1, i32 -1, i32 -1, i32 -1>
+// CHECK-LE: or <4 x i32> {{%.+}}, [[T1]]
+
   res_vsll = vec_orc(vsll, vsll);
 // CHECK: [[T1:%.+]] = xor <2 x i64> {{%.+}}, <i64 -1, i64 -1>
 // CHECK: or <2 x i64> {{%.+}}, [[T1]]
@@ -1448,6 +1489,18 @@ void test1() {
 // CHECK-LE: or <2 x i64> {{%.+}}, [[T1]]
 
   res_vbll = vec_orc(vbll, vbll);
+// CHECK: [[T1:%.+]] = xor <2 x i64> {{%.+}}, <i64 -1, i64 -1>
+// CHECK: or <2 x i64> {{%.+}}, [[T1]]
+// CHECK-LE: [[T1:%.+]] = xor <2 x i64> {{%.+}}, <i64 -1, i64 -1>
+// CHECK-LE: or <2 x i64> {{%.+}}, [[T1]]
+
+  res_vd = vec_orc(vbll, vda);
+// CHECK: [[T1:%.+]] = xor <2 x i64> {{%.+}}, <i64 -1, i64 -1>
+// CHECK: or <2 x i64> {{%.+}}, [[T1]]
+// CHECK-LE: [[T1:%.+]] = xor <2 x i64> {{%.+}}, <i64 -1, i64 -1>
+// CHECK-LE: or <2 x i64> {{%.+}}, [[T1]]
+
+  res_vd = vec_orc(vda, vbll);
 // CHECK: [[T1:%.+]] = xor <2 x i64> {{%.+}}, <i64 -1, i64 -1>
 // CHECK: or <2 x i64> {{%.+}}, [[T1]]
 // CHECK-LE: [[T1:%.+]] = xor <2 x i64> {{%.+}}, <i64 -1, i64 -1>

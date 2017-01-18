@@ -8,7 +8,8 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Provides an action to rename every symbol at a point.
+/// \brief Provides an action to find USR for the symbol at <offset>, as well as
+/// all additional USRs.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -17,6 +18,8 @@
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
@@ -25,9 +28,9 @@
 #include "clang/Tooling/CommonOptionsParser.h"
 #include "clang/Tooling/Refactoring.h"
 #include "clang/Tooling/Tooling.h"
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
+
+#include <algorithm>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -36,82 +39,188 @@ using namespace llvm;
 namespace clang {
 namespace rename {
 
-// Get the USRs for the constructors of the class.
-static std::vector<std::string> getAllConstructorUSRs(
-    const CXXRecordDecl *Decl) {
-  std::vector<std::string> USRs;
+namespace {
+// \brief NamedDeclFindingConsumer should delegate finding USRs of given Decl to
+// AdditionalUSRFinder. AdditionalUSRFinder adds USRs of ctor and dtor if given
+// Decl refers to class and adds USRs of all overridden methods if Decl refers
+// to virtual method.
+class AdditionalUSRFinder : public RecursiveASTVisitor<AdditionalUSRFinder> {
+public:
+  AdditionalUSRFinder(const Decl *FoundDecl, ASTContext &Context)
+      : FoundDecl(FoundDecl), Context(Context) {}
 
-  // We need to get the definition of the record (as opposed to any forward
-  // declarations) in order to find the constructor and destructor.
-  const auto *RecordDecl = Decl->getDefinition();
+  std::vector<std::string> Find() {
+    // Fill OverriddenMethods and PartialSpecs storages.
+    TraverseDecl(Context.getTranslationUnitDecl());
+    if (const auto *MethodDecl = dyn_cast<CXXMethodDecl>(FoundDecl)) {
+      addUSRsOfOverridenFunctions(MethodDecl);
+      for (const auto &OverriddenMethod : OverriddenMethods) {
+        if (checkIfOverriddenFunctionAscends(OverriddenMethod))
+          USRSet.insert(getUSRForDecl(OverriddenMethod));
+      }
+    } else if (const auto *RecordDecl = dyn_cast<CXXRecordDecl>(FoundDecl)) {
+      handleCXXRecordDecl(RecordDecl);
+    } else if (const auto *TemplateDecl =
+                   dyn_cast<ClassTemplateDecl>(FoundDecl)) {
+      handleClassTemplateDecl(TemplateDecl);
+    } else {
+      USRSet.insert(getUSRForDecl(FoundDecl));
+    }
+    return std::vector<std::string>(USRSet.begin(), USRSet.end());
+  }
 
-  // Iterate over all the constructors and add their USRs.
-  for (const auto *CtorDecl : RecordDecl->ctors())
-    USRs.push_back(getUSRForDecl(CtorDecl));
+  bool VisitCXXMethodDecl(const CXXMethodDecl *MethodDecl) {
+    if (MethodDecl->isVirtual())
+      OverriddenMethods.push_back(MethodDecl);
+    return true;
+  }
 
-  // Ignore destructors. GetLocationsOfUSR will find the declaration of and
-  // explicit calls to a destructor through TagTypeLoc (and it is better for the
-  // purpose of renaming).
-  //
-  // For example, in the following code segment,
-  //  1  class C {
-  //  2    ~C();
-  //  3  };
-  // At line 3, there is a NamedDecl starting from '~' and a TagTypeLoc starting
-  // from 'C'.
+  bool VisitClassTemplatePartialSpecializationDecl(
+      const ClassTemplatePartialSpecializationDecl *PartialSpec) {
+    PartialSpecs.push_back(PartialSpec);
+    return true;
+  }
 
-  return USRs;
-}
+private:
+  void handleCXXRecordDecl(const CXXRecordDecl *RecordDecl) {
+    RecordDecl = RecordDecl->getDefinition();
+    if (const auto *ClassTemplateSpecDecl =
+            dyn_cast<ClassTemplateSpecializationDecl>(RecordDecl))
+      handleClassTemplateDecl(ClassTemplateSpecDecl->getSpecializedTemplate());
+    addUSRsOfCtorDtors(RecordDecl);
+  }
 
-struct NamedDeclFindingConsumer : public ASTConsumer {
-  void HandleTranslationUnit(ASTContext &Context) override {
-    const auto &SourceMgr = Context.getSourceManager();
-    // The file we look for the USR in will always be the main source file.
-    const auto Point = SourceMgr.getLocForStartOfFile(
-        SourceMgr.getMainFileID()).getLocWithOffset(SymbolOffset);
-    if (!Point.isValid())
-      return;
-    const NamedDecl *FoundDecl = getNamedDeclAt(Context, Point);
-    if (FoundDecl == nullptr) {
-      FullSourceLoc FullLoc(Point, SourceMgr);
-      errs() << "clang-rename: could not find symbol at "
-             << SourceMgr.getFilename(Point) << ":"
-             << FullLoc.getSpellingLineNumber() << ":"
-             << FullLoc.getSpellingColumnNumber() << " (offset " << SymbolOffset
-             << ").\n";
-      return;
+  void handleClassTemplateDecl(const ClassTemplateDecl *TemplateDecl) {
+    for (const auto *Specialization : TemplateDecl->specializations())
+      addUSRsOfCtorDtors(Specialization);
+
+    for (const auto *PartialSpec : PartialSpecs) {
+      if (PartialSpec->getSpecializedTemplate() == TemplateDecl)
+        addUSRsOfCtorDtors(PartialSpec);
+    }
+    addUSRsOfCtorDtors(TemplateDecl->getTemplatedDecl());
+  }
+
+  void addUSRsOfCtorDtors(const CXXRecordDecl *RecordDecl) {
+    RecordDecl = RecordDecl->getDefinition();
+
+    for (const auto *CtorDecl : RecordDecl->ctors())
+      USRSet.insert(getUSRForDecl(CtorDecl));
+
+    USRSet.insert(getUSRForDecl(RecordDecl->getDestructor()));
+    USRSet.insert(getUSRForDecl(RecordDecl));
+  }
+
+  void addUSRsOfOverridenFunctions(const CXXMethodDecl *MethodDecl) {
+    USRSet.insert(getUSRForDecl(MethodDecl));
+    // Recursively visit each OverridenMethod.
+    for (const auto &OverriddenMethod : MethodDecl->overridden_methods())
+      addUSRsOfOverridenFunctions(OverriddenMethod);
+  }
+
+  bool checkIfOverriddenFunctionAscends(const CXXMethodDecl *MethodDecl) {
+    for (const auto &OverriddenMethod : MethodDecl->overridden_methods()) {
+      if (USRSet.find(getUSRForDecl(OverriddenMethod)) != USRSet.end())
+        return true;
+      return checkIfOverriddenFunctionAscends(OverriddenMethod);
+    }
+    return false;
+  }
+
+  const Decl *FoundDecl;
+  ASTContext &Context;
+  std::set<std::string> USRSet;
+  std::vector<const CXXMethodDecl *> OverriddenMethods;
+  std::vector<const ClassTemplatePartialSpecializationDecl *> PartialSpecs;
+};
+} // namespace
+
+class NamedDeclFindingConsumer : public ASTConsumer {
+public:
+  NamedDeclFindingConsumer(ArrayRef<unsigned> SymbolOffsets,
+                           ArrayRef<std::string> QualifiedNames,
+                           std::vector<std::string> &SpellingNames,
+                           std::vector<std::vector<std::string>> &USRList,
+                           bool &ErrorOccurred)
+      : SymbolOffsets(SymbolOffsets), QualifiedNames(QualifiedNames),
+        SpellingNames(SpellingNames), USRList(USRList),
+        ErrorOccurred(ErrorOccurred) {}
+
+private:
+  bool FindSymbol(ASTContext &Context, const SourceManager &SourceMgr,
+                  unsigned SymbolOffset, const std::string &QualifiedName) {
+    DiagnosticsEngine &Engine = Context.getDiagnostics();
+
+    const SourceLocation Point =
+        SourceMgr.getLocForStartOfFile(SourceMgr.getMainFileID())
+            .getLocWithOffset(SymbolOffset);
+
+    if (!Point.isValid()) {
+      ErrorOccurred = true;
+      unsigned InvalidOffset = Engine.getCustomDiagID(
+          DiagnosticsEngine::Error,
+          "SourceLocation in file %0 at offset %1 is invalid");
+      Engine.Report(Point, InvalidOffset) << SourceMgr.getFilename(Point)
+                                          << SymbolOffset;
+      return false;
     }
 
-    // If the decl is a constructor or destructor, we want to instead take the
-    // decl of the parent record.
+    const NamedDecl *FoundDecl = QualifiedName.empty()
+                                     ? getNamedDeclAt(Context, Point)
+                                     : getNamedDeclFor(Context, QualifiedName);
+
+    if (FoundDecl == nullptr) {
+      if (QualifiedName.empty()) {
+        FullSourceLoc FullLoc(Point, SourceMgr);
+        unsigned CouldNotFindSymbolAt = Engine.getCustomDiagID(
+            DiagnosticsEngine::Error,
+            "clang-rename could not find symbol (offset %0)");
+        Engine.Report(Point, CouldNotFindSymbolAt) << SymbolOffset;
+        ErrorOccurred = true;
+        return false;
+      }
+      unsigned CouldNotFindSymbolNamed = Engine.getCustomDiagID(
+          DiagnosticsEngine::Error, "clang-rename could not find symbol %0");
+      Engine.Report(CouldNotFindSymbolNamed) << QualifiedName;
+      ErrorOccurred = true;
+      return false;
+    }
+
+    // If FoundDecl is a constructor or destructor, we want to instead take
+    // the Decl of the corresponding class.
     if (const auto *CtorDecl = dyn_cast<CXXConstructorDecl>(FoundDecl))
       FoundDecl = CtorDecl->getParent();
     else if (const auto *DtorDecl = dyn_cast<CXXDestructorDecl>(FoundDecl))
       FoundDecl = DtorDecl->getParent();
 
-    // If the decl is in any way relatedpp to a class, we want to make sure we
-    // search for the constructor and destructor as well as everything else.
-    if (const auto *Record = dyn_cast<CXXRecordDecl>(FoundDecl))
-      *USRs = getAllConstructorUSRs(Record);
-
-    USRs->push_back(getUSRForDecl(FoundDecl));
-    *SpellingName = FoundDecl->getNameAsString();
+    SpellingNames.push_back(FoundDecl->getNameAsString());
+    AdditionalUSRFinder Finder(FoundDecl, Context);
+    USRList.push_back(Finder.Find());
+    return true;
   }
 
-  unsigned SymbolOffset;
-  std::string *SpellingName;
-  std::vector<std::string> *USRs;
+  void HandleTranslationUnit(ASTContext &Context) override {
+    const SourceManager &SourceMgr = Context.getSourceManager();
+    for (unsigned Offset : SymbolOffsets) {
+      if (!FindSymbol(Context, SourceMgr, Offset, ""))
+        return;
+    }
+    for (const std::string &QualifiedName : QualifiedNames) {
+      if (!FindSymbol(Context, SourceMgr, 0, QualifiedName))
+        return;
+    }
+  }
+
+  ArrayRef<unsigned> SymbolOffsets;
+  ArrayRef<std::string> QualifiedNames;
+  std::vector<std::string> &SpellingNames;
+  std::vector<std::vector<std::string>> &USRList;
+  bool &ErrorOccurred;
 };
 
-std::unique_ptr<ASTConsumer>
-USRFindingAction::newASTConsumer() {
-  std::unique_ptr<NamedDeclFindingConsumer> Consumer(
-      new NamedDeclFindingConsumer);
-  SpellingName = "";
-  Consumer->SymbolOffset = SymbolOffset;
-  Consumer->USRs = &USRs;
-  Consumer->SpellingName = &SpellingName;
-  return std::move(Consumer);
+std::unique_ptr<ASTConsumer> USRFindingAction::newASTConsumer() {
+  return llvm::make_unique<NamedDeclFindingConsumer>(
+      SymbolOffsets, QualifiedNames, SpellingNames, USRList, ErrorOccurred);
 }
 
 } // namespace rename

@@ -10,7 +10,6 @@ entry-block:
   call void @llvm.lifetime.start.p0i8(i64 64, i8* %a.cast)
   call void @llvm.memset.p0i8.i64(i8* %a.cast, i8 0, i64 64, i32 8, i1 false)
   %sret.cast = bitcast [8 x i64]* %sret to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %sret.cast, i8* %a.cast, i64 64, i32 8, i1 false)
   call void @llvm.lifetime.end.p0i8(i64 64, i8* %a.cast)
   ret void
 

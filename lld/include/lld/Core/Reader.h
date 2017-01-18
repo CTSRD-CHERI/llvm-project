@@ -12,9 +12,10 @@
 
 #include "lld/Core/LLVM.h"
 #include "lld/Core/Reference.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/YAMLTraits.h"
-#include <functional>
+#include "llvm/Support/MemoryBuffer.h"
 #include <memory>
 #include <vector>
 
@@ -23,24 +24,22 @@ using llvm::sys::fs::file_magic;
 namespace llvm {
 namespace yaml {
 class IO;
-}
-}
+} // end namespace yaml
+} // end namespace llvm
 
 namespace lld {
-class ELFLinkingContext;
+
 class File;
 class LinkingContext;
-class PECOFFLinkingContext;
 class MachOLinkingContext;
 
 /// \brief An abstract class for reading object files, library files, and
 /// executable files.
 ///
-/// Each file format (e.g. ELF, mach-o, PECOFF, etc) have a concrete
-/// subclass of Reader.
+/// Each file format (e.g. mach-o, etc) has a concrete subclass of Reader.
 class Reader {
 public:
-  virtual ~Reader() {}
+  virtual ~Reader() = default;
 
   /// Sniffs the file to determine if this Reader can parse it.
   /// The method is called with:
@@ -54,7 +53,6 @@ public:
   virtual ErrorOr<std::unique_ptr<File>>
   loadFile(std::unique_ptr<MemoryBuffer> mb, const class Registry &) const = 0;
 };
-
 
 /// \brief An abstract class for handling alternate yaml representations
 /// of object files.
@@ -76,7 +74,6 @@ public:
   /// YAML I/O, then convert the result into an lld::File* and return it.
   virtual bool handledDocTag(llvm::yaml::IO &io, const lld::File *&f) const = 0;
 };
-
 
 /// A registry to hold the list of currently registered Readers and
 /// tables which map Reference kind values to strings.
@@ -114,11 +111,7 @@ public:
   // as parameters to the addSupport*() method.
   void addSupportArchives(bool logLoading);
   void addSupportYamlFiles();
-  void addSupportCOFFObjects(PECOFFLinkingContext &);
-  void addSupportCOFFImportLibraries(PECOFFLinkingContext &);
   void addSupportMachOObjects(MachOLinkingContext &);
-  void addSupportELFObjects(ELFLinkingContext &);
-  void addSupportELFDynamicSharedObjects(ELFLinkingContext &);
 
   /// To convert between kind values and names, the registry walks the list
   /// of registered kind tables. Each table is a zero terminated array of
@@ -133,7 +126,6 @@ public:
   /// array then contains the value/name pairs.
   void addKindTable(Reference::KindNamespace ns, Reference::KindArch arch,
                     const KindStrings array[]);
-
 
 private:
   struct KindEntry {
@@ -161,4 +153,4 @@ private:
 
 } // end namespace lld
 
-#endif
+#endif // LLD_CORE_READER_H

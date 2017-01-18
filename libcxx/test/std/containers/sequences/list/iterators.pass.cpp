@@ -20,6 +20,7 @@
 #include <cassert>
 #include <iterator>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 struct A
@@ -77,7 +78,7 @@ int main()
         C::iterator i;
         C::const_iterator j;
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef int T;
         typedef std::list<T, min_allocator<T>> C;
@@ -135,7 +136,7 @@ int main()
         assert(j->first == 3);
     }
 #endif
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
         std::list<int> c;
         std::list<int>::iterator ii1{}, ii2{};

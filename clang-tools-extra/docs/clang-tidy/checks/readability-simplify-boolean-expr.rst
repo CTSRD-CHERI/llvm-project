@@ -1,6 +1,7 @@
+.. title:: clang-tidy - readability-simplify-boolean-expr
+
 readability-simplify-boolean-expr
 =================================
-
 
 Looks for boolean expressions involving boolean constants and simplifies
 them to use the appropriate boolean expression directly.
@@ -33,11 +34,14 @@ The resulting expression ``e`` is modified as follows:
   2. Negated applications of ``!`` are eliminated.
   3. Negated applications of comparison operators are changed to use the
      opposite condition.
-  4. Implicit conversions of pointer to ``bool`` are replaced with explicit
-     comparisons to ``nullptr``.
+  4. Implicit conversions of pointers, including pointers to members, to
+     ``bool`` are replaced with explicit comparisons to ``nullptr`` in C++11
+     or ``NULL`` in C++98/03.
   5. Implicit casts to ``bool`` are replaced with explicit casts to ``bool``.
   6. Object expressions with ``explicit operator bool`` conversion operators
      are replaced with explicit casts to ``bool``.
+  7. Implicit conversions of integral types to ``bool`` are replaced with
+     explicit comparisons to ``0``.
 
 Examples:
   1. The ternary assignment ``bool b = (i < 0) ? true : false;`` has redundant
@@ -58,19 +62,25 @@ Examples:
 
      The ternary assignment ``bool b = (i & 1) ? true : false;`` has an
      implicit conversion of ``i & 1`` to ``bool`` and becomes
-     ``bool b = static_cast<bool>(i & 1);``.
+     ``bool b = (i & 1) != 0;``.
 
   5. The conditional return ``if (i & 1) return true; else return false;`` has
      an implicit conversion of an integer quantity ``i & 1`` to ``bool`` and
-     becomes ``return static_cast<bool>(i & 1);``
+     becomes ``return (i & 1) != 0;``
 
   6. Given ``struct X { explicit operator bool(); };``, and an instance ``x`` of
      ``struct X``, the conditional return ``if (x) return true; return false;``
      becomes ``return static_cast<bool>(x);``
 
-When a conditional boolean return or assignment appears at the end of a
-chain of ``if``, ``else if`` statements, the conditional statement is left
-unchanged unless the option ``ChainedConditionalReturn`` or
-``ChainedConditionalAssignment``, respectively, is specified as non-zero.
-The default value for both options is zero.
+Options
+-------
 
+.. option:: ChainedConditionalReturn
+
+   If non-zero, conditional boolean return statements at the end of an
+   ``if/else if`` chain will be transformed. Default is `0`.
+
+.. option:: ChainedConditionalAssignment
+
+   If non-zero, conditional boolean assignments at the end of an ``if/else
+   if`` chain will be transformed. Default is `0`.

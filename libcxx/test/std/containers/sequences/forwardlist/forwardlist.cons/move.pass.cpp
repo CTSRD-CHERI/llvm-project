@@ -24,7 +24,7 @@ int main()
 #ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
     {
         typedef MoveOnly T;
-        typedef test_allocator<int> A;
+        typedef test_allocator<T> A;
         typedef std::forward_list<T, A> C;
         T t[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         typedef std::move_iterator<T*> I;
@@ -39,7 +39,7 @@ int main()
     }
     {
         typedef MoveOnly T;
-        typedef other_allocator<int> A;
+        typedef other_allocator<T> A;
         typedef std::forward_list<T, A> C;
         T t[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         typedef std::move_iterator<T*> I;
@@ -52,10 +52,10 @@ int main()
         assert(c0.empty());
         assert(c.get_allocator() == A(10));
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef MoveOnly T;
-        typedef min_allocator<int> A;
+        typedef min_allocator<T> A;
         typedef std::forward_list<T, A> C;
         T t[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         typedef std::move_iterator<T*> I;

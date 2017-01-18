@@ -7,13 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Writer.h"
 #include "Config.h"
 #include "DLL.h"
 #include "Error.h"
 #include "InputFiles.h"
+#include "PDB.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
-#include "Writer.h"
 #include "lld/Core/Parallel.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
@@ -21,6 +22,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/FileOutputBuffer.h"
+#include "llvm/Support/RandomNumberGenerator.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cstdio>
@@ -42,6 +44,61 @@ static const int DOSStubSize = 64;
 static const int NumberfOfDataDirectory = 16;
 
 namespace {
+
+class DebugDirectoryChunk : public Chunk {
+public:
+  DebugDirectoryChunk(const std::vector<std::unique_ptr<Chunk>> &R)
+      : Records(R) {}
+
+  size_t getSize() const override {
+    return Records.size() * sizeof(debug_directory);
+  }
+
+  void writeTo(uint8_t *B) const override {
+    auto *D = reinterpret_cast<debug_directory *>(B + OutputSectionOff);
+
+    for (const std::unique_ptr<Chunk> &Record : Records) {
+      D->Characteristics = 0;
+      D->TimeDateStamp = 0;
+      D->MajorVersion = 0;
+      D->MinorVersion = 0;
+      D->Type = COFF::IMAGE_DEBUG_TYPE_CODEVIEW;
+      D->SizeOfData = Record->getSize();
+      D->AddressOfRawData = Record->getRVA();
+      // TODO(compnerd) get the file offset
+      D->PointerToRawData = 0;
+
+      ++D;
+    }
+  }
+
+private:
+  const std::vector<std::unique_ptr<Chunk>> &Records;
+};
+
+class CVDebugRecordChunk : public Chunk {
+  size_t getSize() const override {
+    return sizeof(codeview::DebugInfo) + Config->PDBPath.size() + 1;
+  }
+
+  void writeTo(uint8_t *B) const override {
+    // Save off the DebugInfo entry to backfill the file signature (build id)
+    // in Writer::writeBuildId
+    DI = reinterpret_cast<codeview::DebugInfo *>(B + OutputSectionOff);
+
+    DI->Signature.CVSignature = OMF::Signature::PDB70;
+
+    // variable sized field (PDB Path)
+    auto *P = reinterpret_cast<char *>(B + OutputSectionOff + sizeof(*DI));
+    if (!Config->PDBPath.empty())
+      memcpy(P, Config->PDBPath.data(), Config->PDBPath.size());
+    P[Config->PDBPath.size()] = '\0';
+  }
+
+public:
+  mutable codeview::DebugInfo *DI = nullptr;
+};
+
 // The writer writes a SymbolTable result to a file.
 class Writer {
 public:
@@ -59,8 +116,10 @@ private:
   void openFile(StringRef OutputPath);
   template <typename PEHeaderTy> void writeHeader();
   void fixSafeSEHSymbols();
+  void setSectionPermissions();
   void writeSections();
   void sortExceptionTable();
+  void writeBuildId();
   void applyRelocations();
 
   llvm::Optional<coff_symbol16> createSymbol(Defined *D);
@@ -85,6 +144,11 @@ private:
   DelayLoadContents DelayIdata;
   EdataContents Edata;
   std::unique_ptr<SEHTableChunk> SEHTable;
+
+  std::unique_ptr<Chunk> DebugDirectory;
+  std::vector<std::unique_ptr<Chunk>> DebugRecords;
+  CVDebugRecordChunk *BuildId = nullptr;
+  ArrayRef<uint8_t> SectionTable;
 
   uint64_t FileSize;
   uint32_t PointerToSymbolTable = 0;
@@ -114,6 +178,7 @@ public:
   StringRef getName() { return Name; }
   std::vector<Chunk *> &getChunks() { return Chunks; }
   void addPermissions(uint32_t C);
+  void setPermissions(uint32_t C);
   uint32_t getPermissions() { return Header.Characteristics & PermMask; }
   uint32_t getCharacteristics() { return Header.Characteristics; }
   uint64_t getRVA() { return Header.VirtualAddress; }
@@ -163,17 +228,21 @@ void OutputSection::addChunk(Chunk *C) {
   Chunks.push_back(C);
   C->setOutputSection(this);
   uint64_t Off = Header.VirtualSize;
-  Off = RoundUpToAlignment(Off, C->getAlign());
+  Off = alignTo(Off, C->getAlign());
   C->setRVA(Off);
   C->setOutputSectionOff(Off);
   Off += C->getSize();
   Header.VirtualSize = Off;
   if (C->hasData())
-    Header.SizeOfRawData = RoundUpToAlignment(Off, SectorSize);
+    Header.SizeOfRawData = alignTo(Off, SectorSize);
 }
 
 void OutputSection::addPermissions(uint32_t C) {
   Header.Characteristics |= C & PermMask;
+}
+
+void OutputSection::setPermissions(uint32_t C) {
+  Header.Characteristics = C & PermMask;
 }
 
 // Write the section header to a given buffer.
@@ -193,13 +262,13 @@ void OutputSection::writeHeaderTo(uint8_t *Buf) {
 uint64_t Defined::getSecrel() {
   if (auto *D = dyn_cast<DefinedRegular>(this))
     return getRVA() - D->getChunk()->getOutputSection()->getRVA();
-  error("SECREL relocation points to a non-regular symbol");
+  fatal("SECREL relocation points to a non-regular symbol");
 }
 
 uint64_t Defined::getSectionIndex() {
   if (auto *D = dyn_cast<DefinedRegular>(this))
     return D->getChunk()->getOutputSection()->SectionIndex;
-  error("SECTION relocation points to a non-regular symbol");
+  fatal("SECTION relocation points to a non-regular symbol");
 }
 
 bool Defined::isExecutable() {
@@ -222,6 +291,7 @@ void Writer::run() {
     createSection(".reloc");
   assignAddresses();
   removeEmptySections();
+  setSectionPermissions();
   createSymbolAndStringTable();
   openFile(Config->OutputFile);
   if (Config->is64()) {
@@ -232,7 +302,13 @@ void Writer::run() {
   fixSafeSEHSymbols();
   writeSections();
   sortExceptionTable();
-  error(Buffer->commit(), "Failed to write the output file");
+  writeBuildId();
+
+  if (!Config->PDBPath.empty())
+    createPDB(Config->PDBPath, Symtab, SectionTable);
+
+  if (auto EC = Buffer->commit())
+    fatal(EC, "failed to write the output file");
 }
 
 static StringRef getOutputSection(StringRef Name) {
@@ -278,25 +354,46 @@ void Writer::createSections() {
 }
 
 void Writer::createMiscChunks() {
+  OutputSection *RData = createSection(".rdata");
+
   // Create thunks for locally-dllimported symbols.
   if (!Symtab->LocalImportChunks.empty()) {
-    OutputSection *Sec = createSection(".rdata");
     for (Chunk *C : Symtab->LocalImportChunks)
-      Sec->addChunk(C);
+      RData->addChunk(C);
+  }
+
+  // Create Debug Information Chunks
+  if (Config->Debug) {
+    DebugDirectory = llvm::make_unique<DebugDirectoryChunk>(DebugRecords);
+
+    // TODO(compnerd) create a coffgrp entry if DebugType::CV is not enabled
+    if (Config->DebugTypes & static_cast<unsigned>(coff::DebugType::CV)) {
+      auto Chunk = llvm::make_unique<CVDebugRecordChunk>();
+
+      BuildId = Chunk.get();
+      DebugRecords.push_back(std::move(Chunk));
+    }
+
+    RData->addChunk(DebugDirectory.get());
+    for (const std::unique_ptr<Chunk> &C : DebugRecords)
+      RData->addChunk(C.get());
   }
 
   // Create SEH table. x86-only.
   if (Config->Machine != I386)
     return;
+
   std::set<Defined *> Handlers;
+
   for (lld::coff::ObjectFile *File : Symtab->ObjectFiles) {
     if (!File->SEHCompat)
       return;
     for (SymbolBody *B : File->SEHandlers)
       Handlers.insert(cast<Defined>(B->repl()));
   }
+
   SEHTable.reset(new SEHTableChunk(Handlers));
-  createSection(".rdata")->addChunk(SEHTable.get());
+  RData->addChunk(SEHTable.get());
 }
 
 // Create .idata section for the DLL-imported symbol table.
@@ -447,16 +544,15 @@ void Writer::createSymbolAndStringTable() {
 
   OutputSection *LastSection = OutputSections.back();
   // We position the symbol table to be adjacent to the end of the last section.
-  uint64_t FileOff =
-      LastSection->getFileOff() +
-      RoundUpToAlignment(LastSection->getRawSize(), SectorSize);
+  uint64_t FileOff = LastSection->getFileOff() +
+                     alignTo(LastSection->getRawSize(), SectorSize);
   if (!OutputSymtab.empty()) {
     PointerToSymbolTable = FileOff;
     FileOff += OutputSymtab.size() * sizeof(coff_symbol16);
   }
   if (!Strtab.empty())
     FileOff += Strtab.size() + 4;
-  FileSize = RoundUpToAlignment(FileOff, SectorSize);
+  FileSize = alignTo(FileOff, SectorSize);
 }
 
 // Visits all sections to assign incremental, non-overlapping RVAs and
@@ -467,7 +563,7 @@ void Writer::assignAddresses() {
                   sizeof(coff_section) * OutputSections.size();
   SizeOfHeaders +=
       Config->is64() ? sizeof(pe32plus_header) : sizeof(pe32_header);
-  SizeOfHeaders = RoundUpToAlignment(SizeOfHeaders, SectorSize);
+  SizeOfHeaders = alignTo(SizeOfHeaders, SectorSize);
   uint64_t RVA = 0x1000; // The first page is kept unmapped.
   FileSize = SizeOfHeaders;
   // Move DISCARDABLE (or non-memory-mapped) sections to the end of file because
@@ -481,10 +577,10 @@ void Writer::assignAddresses() {
       addBaserels(Sec);
     Sec->setRVA(RVA);
     Sec->setFileOffset(FileSize);
-    RVA += RoundUpToAlignment(Sec->getVirtualSize(), PageSize);
-    FileSize += RoundUpToAlignment(Sec->getRawSize(), SectorSize);
+    RVA += alignTo(Sec->getVirtualSize(), PageSize);
+    FileSize += alignTo(Sec->getRawSize(), SectorSize);
   }
-  SizeOfImage = SizeOfHeaders + RoundUpToAlignment(RVA - 0x1000, PageSize);
+  SizeOfImage = SizeOfHeaders + alignTo(RVA - 0x1000, PageSize);
 }
 
 template <typename PEHeaderTy> void Writer::writeHeader() {
@@ -577,34 +673,51 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     Dir[IAT].RelativeVirtualAddress = Idata.getIATRVA();
     Dir[IAT].Size = Idata.getIATSize();
   }
-  if (!DelayIdata.empty()) {
-    Dir[DELAY_IMPORT_DESCRIPTOR].RelativeVirtualAddress =
-        DelayIdata.getDirRVA();
-    Dir[DELAY_IMPORT_DESCRIPTOR].Size = DelayIdata.getDirSize();
-  }
   if (OutputSection *Sec = findSection(".rsrc")) {
     Dir[RESOURCE_TABLE].RelativeVirtualAddress = Sec->getRVA();
     Dir[RESOURCE_TABLE].Size = Sec->getVirtualSize();
-  }
-  if (OutputSection *Sec = findSection(".reloc")) {
-    Dir[BASE_RELOCATION_TABLE].RelativeVirtualAddress = Sec->getRVA();
-    Dir[BASE_RELOCATION_TABLE].Size = Sec->getVirtualSize();
   }
   if (OutputSection *Sec = findSection(".pdata")) {
     Dir[EXCEPTION_TABLE].RelativeVirtualAddress = Sec->getRVA();
     Dir[EXCEPTION_TABLE].Size = Sec->getVirtualSize();
   }
+  if (OutputSection *Sec = findSection(".reloc")) {
+    Dir[BASE_RELOCATION_TABLE].RelativeVirtualAddress = Sec->getRVA();
+    Dir[BASE_RELOCATION_TABLE].Size = Sec->getVirtualSize();
+  }
   if (Symbol *Sym = Symtab->findUnderscore("_tls_used")) {
     if (Defined *B = dyn_cast<Defined>(Sym->Body)) {
       Dir[TLS_TABLE].RelativeVirtualAddress = B->getRVA();
-      Dir[TLS_TABLE].Size = 40;
+      Dir[TLS_TABLE].Size = Config->is64()
+                                ? sizeof(object::coff_tls_directory64)
+                                : sizeof(object::coff_tls_directory32);
     }
   }
+  if (Config->Debug) {
+    Dir[DEBUG_DIRECTORY].RelativeVirtualAddress = DebugDirectory->getRVA();
+    Dir[DEBUG_DIRECTORY].Size = DebugDirectory->getSize();
+  }
   if (Symbol *Sym = Symtab->findUnderscore("_load_config_used")) {
-    if (Defined *B = dyn_cast<Defined>(Sym->Body)) {
+    if (auto *B = dyn_cast<DefinedRegular>(Sym->Body)) {
+      SectionChunk *SC = B->getChunk();
+      assert(B->getRVA() >= SC->getRVA());
+      uint64_t OffsetInChunk = B->getRVA() - SC->getRVA();
+      if (!SC->hasData() || OffsetInChunk + 4 > SC->getSize())
+        fatal("_load_config_used is malformed");
+
+      ArrayRef<uint8_t> SecContents = SC->getContents();
+      uint32_t LoadConfigSize =
+          *reinterpret_cast<const ulittle32_t *>(&SecContents[OffsetInChunk]);
+      if (OffsetInChunk + LoadConfigSize > SC->getSize())
+        fatal("_load_config_used is too large");
       Dir[LOAD_CONFIG_TABLE].RelativeVirtualAddress = B->getRVA();
-      Dir[LOAD_CONFIG_TABLE].Size = Config->is64() ? 112 : 64;
+      Dir[LOAD_CONFIG_TABLE].Size = LoadConfigSize;
     }
+  }
+  if (!DelayIdata.empty()) {
+    Dir[DELAY_IMPORT_DESCRIPTOR].RelativeVirtualAddress =
+        DelayIdata.getDirRVA();
+    Dir[DELAY_IMPORT_DESCRIPTOR].Size = DelayIdata.getDirSize();
   }
 
   // Write section table
@@ -612,6 +725,8 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     Sec->writeHeaderTo(Buf);
     Buf += sizeof(coff_section);
   }
+  SectionTable = ArrayRef<uint8_t>(
+      Buf - OutputSections.size() * sizeof(coff_section), Buf);
 
   if (OutputSymtab.empty())
     return;
@@ -627,14 +742,14 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
   // The first 4 bytes is length including itself.
   Buf = reinterpret_cast<uint8_t *>(&SymbolTable[NumberOfSymbols]);
   write32le(Buf, Strtab.size() + 4);
-  memcpy(Buf + 4, Strtab.data(), Strtab.size());
+  if (!Strtab.empty())
+    memcpy(Buf + 4, Strtab.data(), Strtab.size());
 }
 
 void Writer::openFile(StringRef Path) {
-  ErrorOr<std::unique_ptr<FileOutputBuffer>> BufferOrErr =
-      FileOutputBuffer::create(Path, FileSize, FileOutputBuffer::F_executable);
-  error(BufferOrErr, Twine("failed to open ") + Path);
-  Buffer = std::move(*BufferOrErr);
+  Buffer = check(
+      FileOutputBuffer::create(Path, FileSize, FileOutputBuffer::F_executable),
+      "failed to open " + Path);
 }
 
 void Writer::fixSafeSEHSymbols() {
@@ -642,6 +757,17 @@ void Writer::fixSafeSEHSymbols() {
     return;
   Config->SEHTable->setRVA(SEHTable->getRVA());
   Config->SEHCount->setVA(SEHTable->getSize() / 4);
+}
+
+// Handles /section options to allow users to overwrite
+// section attributes.
+void Writer::setSectionPermissions() {
+  for (auto &P : Config->Section) {
+    StringRef Name = P.first;
+    uint32_t Perm = P.second;
+    if (auto *Sec = findSection(Name))
+      Sec->setPermissions(Perm);
+  }
 }
 
 // Write section contents to a mmap'ed file.
@@ -684,6 +810,27 @@ void Writer::sortExceptionTable() {
   errs() << "warning: don't know how to handle .pdata.\n";
 }
 
+// Backfill the CVSignature in a PDB70 Debug Record.  This backfilling allows us
+// to get reproducible builds.
+void Writer::writeBuildId() {
+  // There is nothing to backfill if BuildId was not setup.
+  if (BuildId == nullptr)
+    return;
+
+  MD5 Hash;
+  MD5::MD5Result Res;
+
+  Hash.update(ArrayRef<uint8_t>{Buffer->getBufferStart(),
+                                Buffer->getBufferEnd()});
+  Hash.final(Res);
+
+  assert(BuildId->DI->Signature.CVSignature == OMF::Signature::PDB70 &&
+         "only PDB 7.0 is supported");
+  memcpy(BuildId->DI->PDB70.Signature, Res, 16);
+  // TODO(compnerd) track the Age
+  BuildId->DI->PDB70.Age = 1;
+}
+
 OutputSection *Writer::findSection(StringRef Name) {
   for (OutputSection *Sec : OutputSections)
     if (Sec->getName() == Name)
@@ -713,10 +860,7 @@ OutputSection *Writer::createSection(StringRef Name) {
   uint32_t Perms = StringSwitch<uint32_t>(Name)
                        .Case(".bss", BSS | R | W)
                        .Case(".data", DATA | R | W)
-                       .Case(".didat", DATA | R)
-                       .Case(".edata", DATA | R)
-                       .Case(".idata", DATA | R)
-                       .Case(".rdata", DATA | R)
+                       .Cases(".didat", ".edata", ".idata", ".rdata", DATA | R)
                        .Case(".reloc", DATA | DISCARDABLE | R)
                        .Case(".text", CODE | R | X)
                        .Default(0);

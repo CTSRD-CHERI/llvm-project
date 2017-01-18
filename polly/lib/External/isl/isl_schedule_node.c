@@ -1,6 +1,7 @@
 /*
  * Copyright 2013-2014 Ecole Normale Superieure
  * Copyright 2014      INRIA Rocquencourt
+ * Copyright 2016      Sven Verdoolaege
  *
  * Use of this software is governed by the MIT license
  *
@@ -101,9 +102,6 @@ isl_ctx *isl_schedule_node_get_ctx(__isl_keep isl_schedule_node *node)
 }
 
 /* Return a pointer to the leaf of the schedule into which "node" points.
- *
- * Even though these leaves are not reference counted, we still
- * indicate that this function does not return a copy.
  */
 __isl_keep isl_schedule_tree *isl_schedule_node_peek_leaf(
 	__isl_keep isl_schedule_node *node)
@@ -111,11 +109,7 @@ __isl_keep isl_schedule_tree *isl_schedule_node_peek_leaf(
 	return node ? isl_schedule_peek_leaf(node->schedule) : NULL;
 }
 
-/* Return a pointer to the leaf of the schedule into which "node" points.
- *
- * Even though these leaves are not reference counted, we still
- * return a "copy" of the leaf here such that it can still be "freed"
- * by the user.
+/* Return a copy of the leaf of the schedule into which "node" points.
  */
 __isl_give isl_schedule_tree *isl_schedule_node_get_leaf(
 	__isl_keep isl_schedule_node *node)
@@ -222,10 +216,6 @@ __isl_give isl_schedule_node *isl_schedule_node_copy(
 }
 
 /* Free "node" and return NULL.
- *
- * Since the node may point to a leaf of its schedule, which
- * point to a field inside the schedule, we need to make sure
- * we free the tree before freeing the schedule.
  */
 __isl_null isl_schedule_node *isl_schedule_node_free(
 	__isl_take isl_schedule_node *node)
@@ -772,7 +762,7 @@ __isl_give isl_union_map *isl_schedule_node_get_prefix_schedule_union_map(
  * there is also a filter ancestor that filters out all the extended
  * domain elements.
  *
- * Essentially, this functions intersected the domain of the output
+ * Essentially, this function intersects the domain of the output
  * of isl_schedule_node_get_prefix_schedule_union_map with the output
  * of isl_schedule_node_get_domain, except that it only traverses
  * the ancestors of "node" once.
@@ -1680,6 +1670,20 @@ error:
 	return NULL;
 }
 
+/* Return the "isolate" option associated to band node "node".
+ */
+__isl_give isl_set *isl_schedule_node_band_get_ast_isolate_option(
+	__isl_keep isl_schedule_node *node)
+{
+	int depth;
+
+	if (!node)
+		return NULL;
+
+	depth = isl_schedule_node_get_schedule_depth(node);
+	return isl_schedule_tree_band_get_ast_isolate_option(node->tree, depth);
+}
+
 /* Make sure that that spaces of "node" and "mv" are the same.
  * Return -1 on error, reporting the error to the user.
  */
@@ -1908,7 +1912,10 @@ error:
  * If the node only has a leaf child, then nothing needs to be done.
  * Otherwise, the child of the node is removed and the result is
  * appended to all the leaves in the subtree rooted at the original child.
- * The original node is then replaced by the result of this operation.
+ * Since the node is moved to the leaves, it needs to be expanded
+ * according to the expansion, if any, defined by that subtree.
+ * In the end, the original node is replaced by the result of
+ * attaching copies of the expanded node to the leaves.
  *
  * If any of the nodes in the subtree rooted at "node" depend on
  * the set of outer band nodes then we refuse to sink the band node.
@@ -1918,6 +1925,7 @@ __isl_give isl_schedule_node *isl_schedule_node_band_sink(
 {
 	enum isl_schedule_node_type type;
 	isl_schedule_tree *tree, *child;
+	isl_union_pw_multi_aff *contraction;
 	int anchored;
 
 	if (!node)
@@ -1937,9 +1945,12 @@ __isl_give isl_schedule_node *isl_schedule_node_band_sink(
 	if (isl_schedule_tree_n_children(node->tree) == 0)
 		return node;
 
+	contraction = isl_schedule_node_get_subtree_contraction(node);
+
 	tree = isl_schedule_node_get_tree(node);
 	child = isl_schedule_tree_get_child(tree, 0);
 	tree = isl_schedule_tree_reset_children(tree);
+	tree = isl_schedule_tree_pullback_union_pw_multi_aff(tree, contraction);
 	tree = isl_schedule_tree_append_to_leaves(child, tree);
 
 	return isl_schedule_node_graft_tree(node, tree);
@@ -1948,14 +1959,18 @@ __isl_give isl_schedule_node *isl_schedule_node_band_sink(
 /* Split "node" into two nested band nodes, one with the first "pos"
  * dimensions and one with the remaining dimensions.
  * The schedules of the two band nodes live in anonymous spaces.
+ * The loop AST generation type options and the isolate option
+ * are split over the the two band nodes.
  */
 __isl_give isl_schedule_node *isl_schedule_node_band_split(
 	__isl_take isl_schedule_node *node, int pos)
 {
+	int depth;
 	isl_schedule_tree *tree;
 
+	depth = isl_schedule_node_get_schedule_depth(node);
 	tree = isl_schedule_node_get_tree(node);
-	tree = isl_schedule_tree_band_split(tree, pos);
+	tree = isl_schedule_tree_band_split(tree, pos, depth);
 	return isl_schedule_node_graft_tree(node, tree);
 }
 
@@ -2088,6 +2103,39 @@ error:
 	return NULL;
 }
 
+/* Intersect the filter of filter node "node" with "filter".
+ *
+ * If the filter of the node is already a subset of "filter",
+ * then leave the node unchanged.
+ */
+__isl_give isl_schedule_node *isl_schedule_node_filter_intersect_filter(
+	__isl_take isl_schedule_node *node, __isl_take isl_union_set *filter)
+{
+	isl_union_set *node_filter = NULL;
+	isl_bool subset;
+
+	if (!node || !filter)
+		goto error;
+
+	node_filter = isl_schedule_node_filter_get_filter(node);
+	subset = isl_union_set_is_subset(node_filter, filter);
+	if (subset < 0)
+		goto error;
+	if (subset) {
+		isl_union_set_free(node_filter);
+		isl_union_set_free(filter);
+		return node;
+	}
+	node_filter = isl_union_set_intersect(node_filter, filter);
+	node = isl_schedule_node_filter_set_filter(node, node_filter);
+	return node;
+error:
+	isl_schedule_node_free(node);
+	isl_union_set_free(node_filter);
+	isl_union_set_free(filter);
+	return NULL;
+}
+
 /* Return the guard of the guard node "node".
  */
 __isl_give isl_set *isl_schedule_node_guard_get_guard(
@@ -2136,6 +2184,50 @@ error:
 	isl_schedule_node_free(node);
 	isl_schedule_tree_free(tree);
 	return NULL;
+}
+
+/* Given a sequence node "node", with a child at position "pos" that
+ * is also a sequence node, attach the children of that node directly
+ * as children of "node" at that position, replacing the original child.
+ *
+ * The filters of these children are intersected with the filter
+ * of the child at position "pos".
+ */
+__isl_give isl_schedule_node *isl_schedule_node_sequence_splice_child(
+	__isl_take isl_schedule_node *node, int pos)
+{
+	int i, n;
+	isl_union_set *filter;
+	isl_schedule_node *child;
+	isl_schedule_tree *tree;
+
+	if (!node)
+		return NULL;
+	if (isl_schedule_node_get_type(node) != isl_schedule_node_sequence)
+		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
+			"not a sequence node", isl_schedule_node_free(node));
+	node = isl_schedule_node_child(node, pos);
+	node = isl_schedule_node_child(node, 0);
+	if (isl_schedule_node_get_type(node) != isl_schedule_node_sequence)
+		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
+			"not a sequence node", isl_schedule_node_free(node));
+	child = isl_schedule_node_copy(node);
+	node = isl_schedule_node_parent(node);
+	filter = isl_schedule_node_filter_get_filter(node);
+	n = isl_schedule_node_n_children(child);
+	for (i = 0; i < n; ++i) {
+		child = isl_schedule_node_child(child, i);
+		child = isl_schedule_node_filter_intersect_filter(child,
+						isl_union_set_copy(filter));
+		child = isl_schedule_node_parent(child);
+	}
+	isl_union_set_free(filter);
+	tree = isl_schedule_node_get_tree(child);
+	isl_schedule_node_free(child);
+	node = isl_schedule_node_parent(node);
+	node = isl_schedule_node_sequence_splice(node, pos, tree);
+
+	return node;
 }
 
 /* Update the ancestors of "node" to point to the tree that "node"
@@ -2418,6 +2510,8 @@ __isl_give isl_schedule_node *isl_schedule_node_insert_mark(
  * with filters described by "filters", attach this sequence
  * of filter tree nodes as children to a new tree of type "type" and
  * replace the original subtree of "node" by this new tree.
+ * Each copy of the original subtree is simplified with respect
+ * to the corresponding filter.
  */
 static __isl_give isl_schedule_node *isl_schedule_node_insert_children(
 	__isl_take isl_schedule_node *node,
@@ -2439,11 +2533,16 @@ static __isl_give isl_schedule_node *isl_schedule_node_insert_children(
 	n = isl_union_set_list_n_union_set(filters);
 	list = isl_schedule_tree_list_alloc(ctx, n);
 	for (i = 0; i < n; ++i) {
+		isl_schedule_node *node_i;
 		isl_schedule_tree *tree;
 		isl_union_set *filter;
 
-		tree = isl_schedule_node_get_tree(node);
 		filter = isl_union_set_list_get_union_set(filters, i);
+		node_i = isl_schedule_node_copy(node);
+		node_i = isl_schedule_node_gist(node_i,
+						isl_union_set_copy(filter));
+		tree = isl_schedule_node_get_tree(node_i);
+		isl_schedule_node_free(node_i);
 		tree = isl_schedule_tree_insert_filter(tree, filter);
 		list = isl_schedule_tree_list_add(list, tree);
 	}
@@ -3110,6 +3209,39 @@ static __isl_give isl_schedule_node *gist_enter_expansion(
 	return node;
 }
 
+/* Leave the expansion node "node" during a isl_schedule_node_gist traversal.
+ *
+ * In particular, remove the element in data->filters that was added by
+ * gist_enter_expansion and decrement the number of outer expansions.
+ *
+ * The expansion has already been simplified in gist_enter_expansion.
+ * If this simplification results in an identity expansion, then
+ * it is removed here.
+ */
+static __isl_give isl_schedule_node *gist_leave_expansion(
+	__isl_take isl_schedule_node *node, struct isl_node_gist_data *data)
+{
+	int n;
+	isl_bool identity;
+	isl_union_map *expansion;
+
+	expansion = isl_schedule_node_expansion_get_expansion(node);
+	identity = isl_union_map_is_identity(expansion);
+	isl_union_map_free(expansion);
+
+	if (identity < 0)
+		node = isl_schedule_node_free(node);
+	else if (identity)
+		node = isl_schedule_node_delete(node);
+
+	n = isl_union_set_list_n_union_set(data->filters);
+	data->filters = isl_union_set_list_drop(data->filters, n - 1, 1);
+
+	data->n_expansion--;
+
+	return node;
+}
+
 /* Enter the extension node "node" during a isl_schedule_node_gist traversal.
  *
  * In particular, add an extra element to data->filters containing
@@ -3257,9 +3389,7 @@ static __isl_give isl_schedule_node *gist_enter(
  * the node.  There is no need to compute any gist here, since we
  * already did that when we entered the node.
  *
- * If the current node is an expansion, then we decrement
- * the number of outer expansions and remove the element
- * in data->filters that was added by gist_enter_expansion.
+ * Expansion nodes are handled by gist_leave_expansion.
  *
  * If the current node is an extension, then remove the element
  * in data->filters that was added by gist_enter_extension.
@@ -3290,7 +3420,8 @@ static __isl_give isl_schedule_node *gist_leave(
 	case isl_schedule_node_error:
 		return isl_schedule_node_free(node);
 	case isl_schedule_node_expansion:
-		data->n_expansion--;
+		node = gist_leave_expansion(node, data);
+		break;
 	case isl_schedule_node_extension:
 	case isl_schedule_node_filter:
 		n = isl_union_set_list_n_union_set(data->filters);
@@ -4206,7 +4337,8 @@ __isl_give isl_schedule_node *isl_schedule_node_graft_after(
 
 /* Split the domain elements that reach "node" into those that satisfy
  * "filter" and those that do not.  Arrange for the first subset to be
- * executed after the second subset.
+ * executed before or after the second subset, depending on the value
+ * of "before".
  * Return a pointer to the tree corresponding to the second subset,
  * except when this subset is empty in which case the original pointer
  * is returned.
@@ -4217,12 +4349,13 @@ __isl_give isl_schedule_node *isl_schedule_node_graft_after(
  * The children in the sequence are copies of the original subtree,
  * simplified with respect to their filters.
  */
-__isl_give isl_schedule_node *isl_schedule_node_order_after(
-	__isl_take isl_schedule_node *node, __isl_take isl_union_set *filter)
+static __isl_give isl_schedule_node *isl_schedule_node_order_before_or_after(
+	__isl_take isl_schedule_node *node, __isl_take isl_union_set *filter,
+	int before)
 {
 	enum isl_schedule_node_type ancestors[] =
 		{ isl_schedule_node_filter, isl_schedule_node_sequence };
-	isl_union_set *node_domain, *node_filter = NULL;
+	isl_union_set *node_domain, *node_filter = NULL, *parent_filter;
 	isl_schedule_node *node2;
 	isl_schedule_tree *tree1, *tree2;
 	int empty1, empty2;
@@ -4236,8 +4369,6 @@ __isl_give isl_schedule_node *isl_schedule_node_order_after(
 	in_seq = has_ancestors(node, 2, ancestors);
 	if (in_seq < 0)
 		goto error;
-	if (in_seq)
-		node = isl_schedule_node_parent(node);
 	node_domain = isl_schedule_node_get_domain(node);
 	filter = isl_union_set_gist(filter, isl_union_set_copy(node_domain));
 	node_filter = isl_union_set_copy(node_domain);
@@ -4254,17 +4385,30 @@ __isl_give isl_schedule_node *isl_schedule_node_order_after(
 		return node;
 	}
 
+	if (in_seq) {
+		node = isl_schedule_node_parent(node);
+		parent_filter = isl_schedule_node_filter_get_filter(node);
+		node_filter = isl_union_set_intersect(node_filter,
+					    isl_union_set_copy(parent_filter));
+		filter = isl_union_set_intersect(filter, parent_filter);
+	}
+
 	node2 = isl_schedule_node_copy(node);
 	node = isl_schedule_node_gist(node, isl_union_set_copy(node_filter));
 	node2 = isl_schedule_node_gist(node2, isl_union_set_copy(filter));
 	tree1 = isl_schedule_node_get_tree(node);
 	tree2 = isl_schedule_node_get_tree(node2);
-	isl_schedule_node_free(node2);
 	tree1 = isl_schedule_tree_insert_filter(tree1, node_filter);
 	tree2 = isl_schedule_tree_insert_filter(tree2, filter);
-	tree1 = isl_schedule_tree_sequence_pair(tree1, tree2);
+	isl_schedule_node_free(node2);
 
-	node = graft_or_splice(node, tree1, 0);
+	if (before) {
+		tree1 = isl_schedule_tree_sequence_pair(tree2, tree1);
+		node = graft_or_splice(node, tree1, 1);
+	} else {
+		tree1 = isl_schedule_tree_sequence_pair(tree1, tree2);
+		node = graft_or_splice(node, tree1, 0);
+	}
 
 	return node;
 error:
@@ -4272,6 +4416,32 @@ error:
 	isl_union_set_free(filter);
 	isl_union_set_free(node_filter);
 	return NULL;
+}
+
+/* Split the domain elements that reach "node" into those that satisfy
+ * "filter" and those that do not.  Arrange for the first subset to be
+ * executed before the second subset.
+ * Return a pointer to the tree corresponding to the second subset,
+ * except when this subset is empty in which case the original pointer
+ * is returned.
+ */
+__isl_give isl_schedule_node *isl_schedule_node_order_before(
+	__isl_take isl_schedule_node *node, __isl_take isl_union_set *filter)
+{
+	return isl_schedule_node_order_before_or_after(node, filter, 1);
+}
+
+/* Split the domain elements that reach "node" into those that satisfy
+ * "filter" and those that do not.  Arrange for the first subset to be
+ * executed after the second subset.
+ * Return a pointer to the tree corresponding to the second subset,
+ * except when this subset is empty in which case the original pointer
+ * is returned.
+ */
+__isl_give isl_schedule_node *isl_schedule_node_order_after(
+	__isl_take isl_schedule_node *node, __isl_take isl_union_set *filter)
+{
+	return isl_schedule_node_order_before_or_after(node, filter, 0);
 }
 
 /* Reset the user pointer on all identifiers of parameters and tuples
@@ -4324,6 +4494,98 @@ __isl_give isl_schedule_node *isl_schedule_node_pullback_union_pw_multi_aff(
 	tree = isl_schedule_tree_pullback_union_pw_multi_aff(tree, upma);
 	node = isl_schedule_node_graft_tree(node, tree);
 
+	return node;
+}
+
+/* Internal data structure for isl_schedule_node_expand.
+ * "tree" is the tree that needs to be plugged in in all the leaves.
+ * "domain" is the set of domain elements in the original leaves
+ * to which the tree applies.
+ */
+struct isl_schedule_expand_data {
+	isl_schedule_tree *tree;
+	isl_union_set *domain;
+};
+
+/* If "node" is a leaf, then plug in data->tree, simplifying it
+ * within its new context.
+ *
+ * If there are any domain elements at the leaf where the tree
+ * should not be plugged in (i.e., there are elements not in data->domain)
+ * then first extend the tree to only apply to the elements in data->domain
+ * by constructing a set node that selects data->tree for elements
+ * in data->domain and a leaf for the other elements.
+ */
+static __isl_give isl_schedule_node *expand(__isl_take isl_schedule_node *node,
+	void *user)
+{
+	struct isl_schedule_expand_data *data = user;
+	isl_schedule_tree *tree, *leaf;
+	isl_union_set *domain, *left;
+	isl_bool empty;
+
+	if (isl_schedule_node_get_type(node) != isl_schedule_node_leaf)
+		return node;
+
+	domain = isl_schedule_node_get_domain(node);
+	tree = isl_schedule_tree_copy(data->tree);
+
+	left = isl_union_set_copy(domain);
+	left = isl_union_set_subtract(left, isl_union_set_copy(data->domain));
+	empty = isl_union_set_is_empty(left);
+	if (empty >= 0 && !empty) {
+		leaf = isl_schedule_node_get_leaf(node);
+		leaf = isl_schedule_tree_insert_filter(leaf, left);
+		left = isl_union_set_copy(data->domain);
+		tree = isl_schedule_tree_insert_filter(tree, left);
+		tree = isl_schedule_tree_set_pair(tree, leaf);
+	} else {
+		if (empty < 0)
+			node = isl_schedule_node_free(node);
+		isl_union_set_free(left);
+	}
+
+	node = isl_schedule_node_graft_tree(node, tree);
+	node = isl_schedule_node_gist(node, domain);
+
+	return node;
+}
+
+/* Expand the tree rooted at "node" by extending all leaves
+ * with an expansion node with as child "tree".
+ * The expansion is determined by "contraction" and "domain".
+ * That is, the elements of "domain" are contracted according
+ * to "contraction".  The expansion relation is then the inverse
+ * of "contraction" with its range intersected with "domain".
+ *
+ * Insert the appropriate expansion node on top of "tree" and
+ * then plug in the result in all leaves of "node".
+ */
+__isl_give isl_schedule_node *isl_schedule_node_expand(
+	__isl_take isl_schedule_node *node,
+	__isl_take isl_union_pw_multi_aff *contraction,
+	__isl_take isl_union_set *domain,
+	__isl_take isl_schedule_tree *tree)
+{
+	struct isl_schedule_expand_data data;
+	isl_union_map *expansion;
+	isl_union_pw_multi_aff *copy;
+
+	if (!node || !contraction || !tree)
+		node = isl_schedule_node_free(node);
+
+	copy = isl_union_pw_multi_aff_copy(contraction);
+	expansion = isl_union_map_from_union_pw_multi_aff(copy);
+	expansion = isl_union_map_reverse(expansion);
+	expansion = isl_union_map_intersect_range(expansion, domain);
+	data.domain = isl_union_map_domain(isl_union_map_copy(expansion));
+
+	tree = isl_schedule_tree_insert_expansion(tree, contraction, expansion);
+	data.tree = tree;
+
+	node = isl_schedule_node_map_descendant_bottom_up(node, &expand, &data);
+	isl_union_set_free(data.domain);
+	isl_schedule_tree_free(data.tree);
 	return node;
 }
 
@@ -4427,4 +4689,25 @@ void isl_schedule_node_dump(__isl_keep isl_schedule_node *node)
 	printer = isl_printer_print_schedule_node(printer, node);
 
 	isl_printer_free(printer);
+}
+
+/* Return a string representation of "node".
+ * Print the schedule node in block format as it would otherwise
+ * look identical to the entire schedule.
+ */
+__isl_give char *isl_schedule_node_to_str(__isl_keep isl_schedule_node *node)
+{
+	isl_printer *printer;
+	char *s;
+
+	if (!node)
+		return NULL;
+
+	printer = isl_printer_to_str(isl_schedule_node_get_ctx(node));
+	printer = isl_printer_set_yaml_style(printer, ISL_YAML_STYLE_BLOCK);
+	printer = isl_printer_print_schedule_node(printer, node);
+	s = isl_printer_get_str(printer);
+	isl_printer_free(printer);
+
+	return s;
 }

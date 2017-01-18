@@ -26,6 +26,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
 
 using namespace llvm;
 
@@ -80,12 +81,11 @@ namespace {
       if (BB == BeforeHere->getParent()) {
         // 'I' dominates 'BeforeHere' => not safe to prune.
         //
-        // The value defined by an invoke/catchpad dominates an instruction only
+        // The value defined by an invoke dominates an instruction only
         // if it dominates every instruction in UseBB. A PHI is dominated only
         // if the instruction dominates every possible use in the UseBB. Since
         // UseBB == BB, avoid pruning.
-        if (isa<InvokeInst>(BeforeHere) || isa<CatchPadInst>(BeforeHere) ||
-            isa<PHINode>(I) || I == BeforeHere)
+        if (isa<InvokeInst>(BeforeHere) || isa<PHINode>(I) || I == BeforeHere)
           return false;
         if (!OrderedBB->dominates(BeforeHere, I))
           return false;
@@ -102,10 +102,7 @@ namespace {
 
         SmallVector<BasicBlock*, 32> Worklist;
         Worklist.append(succ_begin(BB), succ_end(BB));
-        if (!isPotentiallyReachableFromMany(Worklist, BB, DT))
-          return true;
-
-        return false;
+        return !isPotentiallyReachableFromMany(Worklist, BB, DT);
       }
 
       // If the value is defined in the same basic block as use and BeforeHere,
@@ -246,6 +243,13 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker) {
       if (CS.onlyReadsMemory() && CS.doesNotThrow() && I->getType()->isVoidTy())
         break;
 
+      // Volatile operations effectively capture the memory location that they
+      // load and store to.
+      if (auto *MI = dyn_cast<MemIntrinsic>(I))
+        if (MI->isVolatile())
+          if (Tracker->captured(U))
+            return;
+
       // Not captured if only passed via 'nocapture' arguments.  Note that
       // calling a function pointer does not in itself cause the pointer to
       // be captured.  This is a subtle point considering that (for example)
@@ -253,8 +257,9 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker) {
       // that loading a value from a pointer does not cause the pointer to be
       // captured, even though the loaded value might be the pointer itself
       // (think of self-referential objects).
-      CallSite::arg_iterator B = CS.arg_begin(), E = CS.arg_end();
-      for (CallSite::arg_iterator A = B; A != E; ++A)
+      CallSite::data_operand_iterator B =
+        CS.data_operands_begin(), E = CS.data_operands_end();
+      for (CallSite::data_operand_iterator A = B; A != E; ++A)
         if (A->get() == V && !CS.doesNotCapture(A - B))
           // The parameter is not marked 'nocapture' - captured.
           if (Tracker->captured(U))
@@ -262,18 +267,46 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker) {
       break;
     }
     case Instruction::Load:
-      // Loading from a pointer does not cause it to be captured.
+      // Volatile loads make the address observable.
+      if (cast<LoadInst>(I)->isVolatile())
+        if (Tracker->captured(U))
+          return;
       break;
     case Instruction::VAArg:
       // "va-arg" from a pointer does not cause it to be captured.
       break;
     case Instruction::Store:
-      if (V == I->getOperand(0))
         // Stored the pointer - conservatively assume it may be captured.
+        // Volatile stores make the address observable.
+      if (V == I->getOperand(0) || cast<StoreInst>(I)->isVolatile())
         if (Tracker->captured(U))
           return;
-      // Storing to the pointee does not cause the pointer to be captured.
       break;
+    case Instruction::AtomicRMW: {
+      // atomicrmw conceptually includes both a load and store from
+      // the same location.
+      // As with a store, the location being accessed is not captured,
+      // but the value being stored is.
+      // Volatile stores make the address observable.
+      auto *ARMWI = cast<AtomicRMWInst>(I);
+      if (ARMWI->getValOperand() == V || ARMWI->isVolatile())
+        if (Tracker->captured(U))
+          return;
+      break;
+    }
+    case Instruction::AtomicCmpXchg: {
+      // cmpxchg conceptually includes both a load and store from
+      // the same location.
+      // As with a store, the location being accessed is not captured,
+      // but the value being stored is.
+      // Volatile stores make the address observable.
+      auto *ACXI = cast<AtomicCmpXchgInst>(I);
+      if (ACXI->getCompareOperand() == V || ACXI->getNewValOperand() == V ||
+          ACXI->isVolatile())
+        if (Tracker->captured(U))
+          return;
+      break;
+    }
     case Instruction::BitCast:
     case Instruction::GetElementPtr:
     case Instruction::PHI:
@@ -292,7 +325,7 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker) {
             Worklist.push_back(&UU);
       }
       break;
-    case Instruction::ICmp:
+    case Instruction::ICmp: {
       // Don't count comparisons of a no-alias return value against null as
       // captures. This allows us to ignore comparisons of malloc results
       // with null, for example.
@@ -301,11 +334,19 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker) {
         if (CPN->getType()->getAddressSpace() == 0)
           if (isNoAliasCall(V->stripPointerCasts()))
             break;
+      // Comparison against value stored in global variable. Given the pointer
+      // does not escape, its value cannot be guessed and stored separately in a
+      // global variable.
+      unsigned OtherIndex = (I->getOperand(0) == V) ? 1 : 0;
+      auto *LI = dyn_cast<LoadInst>(I->getOperand(OtherIndex));
+      if (LI && isa<GlobalVariable>(LI->getPointerOperand()))
+        break;
       // Otherwise, be conservative. There are crazy ways to capture pointers
       // using comparisons.
       if (Tracker->captured(U))
         return;
       break;
+    }
     default:
       // Something else - be conservative and say it is captured.
       if (Tracker->captured(U))

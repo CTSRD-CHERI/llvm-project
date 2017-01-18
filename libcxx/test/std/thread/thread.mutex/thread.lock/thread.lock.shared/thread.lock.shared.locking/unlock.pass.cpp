@@ -19,6 +19,8 @@
 #include <shared_mutex>
 #include <cassert>
 
+#include "test_macros.h"
+
 bool unlock_called = false;
 
 struct mutex
@@ -35,6 +37,7 @@ int main()
     lk.unlock();
     assert(unlock_called == true);
     assert(lk.owns_lock() == false);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
     {
         lk.unlock();
@@ -44,7 +47,9 @@ int main()
     {
         assert(e.code().value() == EPERM);
     }
+#endif
     lk.release();
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
     {
         lk.unlock();
@@ -54,4 +59,5 @@ int main()
     {
         assert(e.code().value() == EPERM);
     }
+#endif
 }

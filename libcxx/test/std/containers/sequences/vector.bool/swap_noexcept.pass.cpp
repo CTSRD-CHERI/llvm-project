@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <vector>
 
 // void swap(vector& c)
@@ -20,15 +22,17 @@
 // This tests a conforming extension
 
 #include <vector>
+#include <utility>
 #include <cassert>
 
+#include "test_macros.h"
 #include "test_allocator.h"
 
 template <class T>
 struct some_alloc
 {
     typedef T value_type;
-    
+
     some_alloc() {}
     some_alloc(const some_alloc&);
     void deallocate(void*, unsigned) {}
@@ -40,7 +44,7 @@ template <class T>
 struct some_alloc2
 {
     typedef T value_type;
-    
+
     some_alloc2() {}
     some_alloc2(const some_alloc2&);
     void deallocate(void*, unsigned) {}
@@ -51,40 +55,32 @@ struct some_alloc2
 
 int main()
 {
-#if __has_feature(cxx_noexcept)
     {
         typedef std::vector<bool> C;
-        C c1, c2;
-        static_assert(noexcept(swap(c1, c2)), "");
+        LIBCPP_STATIC_ASSERT(noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
     }
     {
         typedef std::vector<bool, test_allocator<bool>> C;
-        C c1, c2;
-        static_assert(noexcept(swap(c1, c2)), "");
+        LIBCPP_STATIC_ASSERT(noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
     }
     {
         typedef std::vector<bool, other_allocator<bool>> C;
-        C c1, c2;
-        static_assert(noexcept(swap(c1, c2)), "");
+        LIBCPP_STATIC_ASSERT(noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
     }
     {
         typedef std::vector<bool, some_alloc<bool>> C;
-        C c1, c2;
 #if TEST_STD_VER >= 14
     //  In c++14, if POCS is set, swapping the allocator is required not to throw
-        static_assert( noexcept(swap(c1, c2)), "");
+        LIBCPP_STATIC_ASSERT( noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
 #else
-        static_assert(!noexcept(swap(c1, c2)), "");
+        static_assert(!noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
 #endif
     }
 #if TEST_STD_VER >= 14
     {
         typedef std::vector<bool, some_alloc2<bool>> C;
-        C c1, c2;
     //  if the allocators are always equal, then the swap can be noexcept
-        static_assert( noexcept(swap(c1, c2)), "");
+        LIBCPP_STATIC_ASSERT( noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
     }
-#endif
-
 #endif
 }

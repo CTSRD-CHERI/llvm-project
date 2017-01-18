@@ -435,6 +435,7 @@ static int empty_path_is_identity(__isl_keep isl_basic_map *path, unsigned pos)
 		goto error;
 	isl_seq_clr(test->eq[k], 1 + isl_basic_map_total_dim(test));
 	isl_int_set_si(test->eq[k][pos], 1);
+	test = isl_basic_map_gauss(test, NULL);
 	id = isl_basic_map_identity(isl_basic_map_get_space(path));
 	is_id = isl_basic_map_is_equal(test, id);
 	isl_basic_map_free(test);
@@ -1608,7 +1609,7 @@ static __isl_give isl_map *floyd_warshall_with_groups(__isl_take isl_space *dim,
 
 	floyd_warshall_iterate(grid, n, exact);
 
-	app = isl_map_empty(isl_map_get_space(map));
+	app = isl_map_empty(isl_map_get_space(grid[0][0]));
 
 	for (i = 0; i < n; ++i) {
 		for (j = 0; j < n; ++j)
@@ -2115,7 +2116,7 @@ __isl_give isl_map *isl_map_reaching_path_lengths(__isl_take isl_map *map,
 }
 
 /* Check whether equality i of bset is a pure stride constraint
- * on a single dimensions, i.e., of the form
+ * on a single dimension, i.e., of the form
  *
  *	v = k e
  *

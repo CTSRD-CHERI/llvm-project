@@ -65,9 +65,7 @@ namespace {
 
     bool runOnMachineFunction(MachineFunction &MF) override;
 
-    const char *getPassName() const override {
-      return "Hexagon Store Widening";
-    }
+    StringRef getPassName() const override { return "Hexagon Store Widening"; }
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<AAResultsWrapperPass>();
@@ -594,6 +592,9 @@ bool HexagonStoreWidening::processBasicBlock(MachineBasicBlock &MBB) {
 
 
 bool HexagonStoreWidening::runOnMachineFunction(MachineFunction &MFn) {
+  if (skipFunction(*MFn.getFunction()))
+    return false;
+
   MF = &MFn;
   auto &ST = MFn.getSubtarget<HexagonSubtarget>();
   TII = ST.getInstrInfo();

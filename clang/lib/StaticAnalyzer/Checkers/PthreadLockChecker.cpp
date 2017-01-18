@@ -18,7 +18,6 @@
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
-#include "llvm/ADT/ImmutableList.h"
 
 using namespace clang;
 using namespace ento;
@@ -32,9 +31,9 @@ private:
   LockState(Kind K) : K(K) {}
 
 public:
-  static LockState getLocked(void) { return LockState(Locked); }
-  static LockState getUnlocked(void) { return LockState(Unlocked); }
-  static LockState getDestroyed(void) { return LockState(Destroyed); }
+  static LockState getLocked() { return LockState(Locked); }
+  static LockState getUnlocked() { return LockState(Unlocked); }
+  static LockState getDestroyed() { return LockState(Destroyed); }
 
   bool operator==(const LockState &X) const {
     return K == X.K;

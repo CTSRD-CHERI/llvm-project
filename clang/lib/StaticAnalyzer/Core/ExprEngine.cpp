@@ -26,8 +26,9 @@
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
-#include "llvm/ADT/ImmutableList.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/LoopWidening.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include "llvm/Support/raw_ostream.h"
 
 #ifndef NDEBUG
@@ -261,10 +262,6 @@ ProgramStateRef ExprEngine::processAssume(ProgramStateRef state,
   return getCheckerManager().runCheckersForEvalAssume(state, cond, assumption);
 }
 
-bool ExprEngine::wantsRegionChangeUpdate(ProgramStateRef state) {
-  return getCheckerManager().wantsRegionChangeUpdate(state);
-}
-
 ProgramStateRef
 ExprEngine::processRegionChanges(ProgramStateRef state,
                                  const InvalidatedSymbols *invalidated,
@@ -475,8 +472,12 @@ void ExprEngine::ProcessInitializer(const CFGInitializer Init,
   if (BMI->isAnyMemberInitializer()) {
     // Constructors build the object directly in the field,
     // but non-objects must be copied in from the initializer.
-    const Expr *Init = BMI->getInit()->IgnoreImplicit();
-    if (!isa<CXXConstructExpr>(Init)) {
+    if (auto *CtorExpr = findDirectConstructorForCurrentCFGElement()) {
+      assert(BMI->getInit()->IgnoreImplicit() == CtorExpr);
+      (void)CtorExpr;
+      // The field was directly constructed, so there is no need to bind.
+    } else {
+      const Expr *Init = BMI->getInit()->IgnoreImplicit();
       const ValueDecl *Field;
       if (BMI->isIndirectMemberInitializer()) {
         Field = BMI->getIndirectMember();
@@ -749,11 +750,13 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     // C++ and ARC stuff we don't support yet.
     case Expr::ObjCIndirectCopyRestoreExprClass:
     case Stmt::CXXDependentScopeMemberExprClass:
+    case Stmt::CXXInheritedCtorInitExprClass:
     case Stmt::CXXTryStmtClass:
     case Stmt::CXXTypeidExprClass:
     case Stmt::CXXUuidofExprClass:
     case Stmt::CXXFoldExprClass:
     case Stmt::MSPropertyRefExprClass:
+    case Stmt::MSPropertySubscriptExprClass:
     case Stmt::CXXUnresolvedConstructExprClass:
     case Stmt::DependentScopeDeclRefExprClass:
     case Stmt::ArrayTypeTraitExprClass:
@@ -765,6 +768,10 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::PackExpansionExprClass:
     case Stmt::SubstNonTypeTemplateParmPackExprClass:
     case Stmt::FunctionParmPackExprClass:
+    case Stmt::CoroutineBodyStmtClass:
+    case Stmt::CoawaitExprClass:
+    case Stmt::CoreturnStmtClass:
+    case Stmt::CoyieldExprClass:
     case Stmt::SEHTryStmtClass:
     case Stmt::SEHExceptStmtClass:
     case Stmt::SEHLeaveStmtClass:
@@ -820,9 +827,24 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::OMPAtomicDirectiveClass:
     case Stmt::OMPTargetDirectiveClass:
     case Stmt::OMPTargetDataDirectiveClass:
+    case Stmt::OMPTargetEnterDataDirectiveClass:
+    case Stmt::OMPTargetExitDataDirectiveClass:
+    case Stmt::OMPTargetParallelDirectiveClass:
+    case Stmt::OMPTargetParallelForDirectiveClass:
+    case Stmt::OMPTargetUpdateDirectiveClass:
     case Stmt::OMPTeamsDirectiveClass:
     case Stmt::OMPCancellationPointDirectiveClass:
     case Stmt::OMPCancelDirectiveClass:
+    case Stmt::OMPTaskLoopDirectiveClass:
+    case Stmt::OMPTaskLoopSimdDirectiveClass:
+    case Stmt::OMPDistributeDirectiveClass:
+    case Stmt::OMPDistributeParallelForDirectiveClass:
+    case Stmt::OMPDistributeParallelForSimdDirectiveClass:
+    case Stmt::OMPDistributeSimdDirectiveClass:
+    case Stmt::OMPTargetParallelForSimdDirectiveClass:
+    case Stmt::OMPTargetSimdDirectiveClass:
+    case Stmt::OMPTeamsDistributeDirectiveClass:
+    case Stmt::OMPTeamsDistributeSimdDirectiveClass:
       llvm_unreachable("Stmt should not be in analyzer evaluation loop");
 
     case Stmt::ObjCSubscriptRefExprClass:
@@ -879,7 +901,6 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::CUDAKernelCallExprClass:
     case Stmt::OpaqueValueExprClass:
     case Stmt::AsTypeExprClass:
-    case Stmt::AtomicExprClass:
       // Fall through.
 
     // Cases we intentionally don't evaluate, since they don't need
@@ -893,6 +914,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::CXXScalarValueInitExprClass:
     case Stmt::CXXBoolLiteralExprClass:
     case Stmt::ObjCBoolLiteralExprClass:
+    case Stmt::ObjCAvailabilityCheckExprClass:
     case Stmt::FloatingLiteralClass:
     case Stmt::NoInitExprClass:
     case Stmt::SizeOfPackExprClass:
@@ -1187,16 +1209,8 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::ObjCBridgedCastExprClass: {
       Bldr.takeNodes(Pred);
       const CastExpr *C = cast<CastExpr>(S);
-      // Handle the previsit checks.
-      ExplodedNodeSet dstPrevisit;
-      getCheckerManager().runCheckersForPreStmt(dstPrevisit, Pred, C, *this);
-
-      // Handle the expression itself.
       ExplodedNodeSet dstExpr;
-      for (ExplodedNodeSet::iterator i = dstPrevisit.begin(),
-                                     e = dstPrevisit.end(); i != e ; ++i) {
-        VisitCast(C, C->getSubExpr(), *i, dstExpr);
-      }
+      VisitCast(C, C->getSubExpr(), Pred, dstExpr);
 
       // Handle the postvisit checks.
       getCheckerManager().runCheckersForPostStmt(Dst, dstExpr, C, *this);
@@ -1221,6 +1235,12 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::MemberExprClass:
       Bldr.takeNodes(Pred);
       VisitMemberExpr(cast<MemberExpr>(S), Pred, Dst);
+      Bldr.addNodes(Dst);
+      break;
+
+    case Stmt::AtomicExprClass:
+      Bldr.takeNodes(Pred);
+      VisitAtomicExpr(cast<AtomicExpr>(S), Pred, Dst);
       Bldr.addNodes(Dst);
       break;
 
@@ -1391,8 +1411,25 @@ void ExprEngine::processCFGBlockEntrance(const BlockEdge &L,
                                          ExplodedNode *Pred) {
   PrettyStackTraceLocationContext CrashInfo(Pred->getLocationContext());
 
+  // If this block is terminated by a loop and it has already been visited the
+  // maximum number of times, widen the loop.
+  unsigned int BlockCount = nodeBuilder.getContext().blockCount();
+  if (BlockCount == AMgr.options.maxBlockVisitOnPath - 1 &&
+      AMgr.options.shouldWidenLoops()) {
+    const Stmt *Term = nodeBuilder.getContext().getBlock()->getTerminator();
+    if (!(Term &&
+          (isa<ForStmt>(Term) || isa<WhileStmt>(Term) || isa<DoStmt>(Term))))
+      return;
+    // Widen.
+    const LocationContext *LCtx = Pred->getLocationContext();
+    ProgramStateRef WidenedState =
+        getWidenedLoopState(Pred->getState(), LCtx, BlockCount, Term);
+    nodeBuilder.generateNode(WidenedState, Pred);
+    return;
+  }
+
   // FIXME: Refactor this into a checker.
-  if (nodeBuilder.getContext().blockCount() >= AMgr.options.maxBlockVisitOnPath) {
+  if (BlockCount >= AMgr.options.maxBlockVisitOnPath) {
     static SimpleProgramPointTag tag(TagProviderName, "Block count exceeded");
     const ExplodedNode *Sink =
                    nodeBuilder.generateSink(Pred->getState(), Pred, &tag);
@@ -1548,7 +1585,6 @@ void ExprEngine::processBranch(const Stmt *Condition, const Stmt *Term,
     NullCondBldr.generateNode(Pred->getState(), true, Pred);
     return;
   }
-
 
   if (const Expr *Ex = dyn_cast<Expr>(Condition))
     Condition = Ex->IgnoreParens();
@@ -1716,10 +1752,19 @@ static bool stackFrameDoesNotContainInitializedTemporaries(ExplodedNode &Pred) {
 }
 #endif
 
+void ExprEngine::processBeginOfFunction(NodeBuilderContext &BC,
+                                        ExplodedNode *Pred,
+                                        ExplodedNodeSet &Dst,
+                                        const BlockEdge &L) {
+  SaveAndRestore<const NodeBuilderContext *> NodeContextRAII(currBldrCtx, &BC);
+  getCheckerManager().runCheckersForBeginFunction(Dst, L, Pred, *this);
+}
+
 /// ProcessEndPath - Called by CoreEngine.  Used to generate end-of-path
 ///  nodes when the control reaches the end of a function.
 void ExprEngine::processEndOfFunction(NodeBuilderContext& BC,
-                                      ExplodedNode *Pred) {
+                                      ExplodedNode *Pred,
+                                      const ReturnStmt *RS) {
   // FIXME: Assert that stackFrameDoesNotContainInitializedTemporaries(*Pred)).
   // We currently cannot enable this assert, as lifetime extended temporaries
   // are not modelled correctly.
@@ -1741,7 +1786,7 @@ void ExprEngine::processEndOfFunction(NodeBuilderContext& BC,
     getCheckerManager().runCheckersForEndFunction(BC, Dst, Pred, *this);
   }
 
-  Engine.enqueueEndOfFunction(Dst);
+  Engine.enqueueEndOfFunction(Dst, RS);
 }
 
 /// ProcessSwitch - Called by CoreEngine.  Used to generate successor
@@ -1787,7 +1832,7 @@ void ExprEngine::processSwitch(SwitchNodeBuilder& builder) {
     ProgramStateRef StateCase;
     if (Optional<NonLoc> NL = CondV.getAs<NonLoc>())
       std::tie(StateCase, DefaultSt) =
-          DefaultSt->assumeWithinInclusiveRange(*NL, V1, V2);
+          DefaultSt->assumeInclusiveRange(*NL, V1, V2);
     else // UnknownVal
       StateCase = DefaultSt;
 
@@ -1845,7 +1890,7 @@ void ExprEngine::VisitCommonDeclRefExpr(const Expr *Ex, const NamedDecl *D,
     const auto *MD = D ? dyn_cast<CXXMethodDecl>(D) : nullptr;
     const auto *DeclRefEx = dyn_cast<DeclRefExpr>(Ex);
     SVal V;
-    bool CaptureByReference = false;
+    bool IsReference;
     if (AMgr.options.shouldInlineLambdas() && DeclRefEx &&
         DeclRefEx->refersToEnclosingVariableOrCapture() && MD &&
         MD->getParent()->isLambda()) {
@@ -1855,20 +1900,27 @@ void ExprEngine::VisitCommonDeclRefExpr(const Expr *Ex, const NamedDecl *D,
       FieldDecl *LambdaThisCaptureField;
       CXXRec->getCaptureFields(LambdaCaptureFields, LambdaThisCaptureField);
       const FieldDecl *FD = LambdaCaptureFields[VD];
-      Loc CXXThis =
-          svalBuilder.getCXXThis(MD, LocCtxt->getCurrentStackFrame());
-      SVal CXXThisVal = state->getSVal(CXXThis);
-      V = state->getLValue(FD, CXXThisVal);
-      if (FD->getType()->isReferenceType() &&
-          !VD->getType()->isReferenceType())
-        CaptureByReference = true;
+      if (!FD) {
+        // When a constant is captured, sometimes no corresponding field is
+        // created in the lambda object.
+        assert(VD->getType().isConstQualified());
+        V = state->getLValue(VD, LocCtxt);
+        IsReference = false;
+      } else {
+        Loc CXXThis =
+            svalBuilder.getCXXThis(MD, LocCtxt->getCurrentStackFrame());
+        SVal CXXThisVal = state->getSVal(CXXThis);
+        V = state->getLValue(FD, CXXThisVal);
+        IsReference = FD->getType()->isReferenceType();
+      }
     } else {
       V = state->getLValue(VD, LocCtxt);
+      IsReference = VD->getType()->isReferenceType();
     }
 
     // For references, the 'lvalue' is the pointer address stored in the
     // reference region.
-    if (VD->getType()->isReferenceType() || CaptureByReference) {
+    if (IsReference) {
       if (const MemRegion *R = V.getAsRegion())
         V = state->getSVal(R);
       else
@@ -1914,25 +1966,26 @@ void ExprEngine::VisitLvalArraySubscriptExpr(const ArraySubscriptExpr *A,
   const Expr *Base = A->getBase()->IgnoreParens();
   const Expr *Idx  = A->getIdx()->IgnoreParens();
 
+  ExplodedNodeSet CheckerPreStmt;
+  getCheckerManager().runCheckersForPreStmt(CheckerPreStmt, Pred, A, *this);
 
-  ExplodedNodeSet checkerPreStmt;
-  getCheckerManager().runCheckersForPreStmt(checkerPreStmt, Pred, A, *this);
-
-  StmtNodeBuilder Bldr(checkerPreStmt, Dst, *currBldrCtx);
+  ExplodedNodeSet EvalSet;
+  StmtNodeBuilder Bldr(CheckerPreStmt, EvalSet, *currBldrCtx);
   assert(A->isGLValue() ||
           (!AMgr.getLangOpts().CPlusPlus &&
            A->getType().isCForbiddenLValueType()));
 
-  for (ExplodedNodeSet::iterator it = checkerPreStmt.begin(),
-                                 ei = checkerPreStmt.end(); it != ei; ++it) {
-    const LocationContext *LCtx = (*it)->getLocationContext();
-    ProgramStateRef state = (*it)->getState();
+  for (auto *Node : CheckerPreStmt) {
+    const LocationContext *LCtx = Node->getLocationContext();
+    ProgramStateRef state = Node->getState();
     SVal V = state->getLValue(A->getType(),
                               state->getSVal(Idx, LCtx),
                               state->getSVal(Base, LCtx));
-    Bldr.generateNode(A, *it, state->BindExpr(A, LCtx, V), nullptr,
+    Bldr.generateNode(A, Node, state->BindExpr(A, LCtx, V), nullptr,
                       ProgramPoint::PostLValueKind);
   }
+
+  getCheckerManager().runCheckersForPostStmt(Dst, EvalSet, A, *this);
 }
 
 /// VisitMemberExpr - Transfer function for member expressions.
@@ -1991,7 +2044,7 @@ void ExprEngine::VisitMemberExpr(const MemberExpr *M, ExplodedNode *Pred,
         if (!M->isGLValue()) {
           assert(M->getType()->isArrayType());
           const ImplicitCastExpr *PE =
-            dyn_cast<ImplicitCastExpr>((*I)->getParentMap().getParent(M));
+            dyn_cast<ImplicitCastExpr>((*I)->getParentMap().getParentIgnoreParens(M));
           if (!PE || PE->getCastKind() != CK_ArrayToPointerDecay) {
             llvm_unreachable("should always be wrapped in ArrayToPointerDecay");
           }
@@ -2017,9 +2070,48 @@ void ExprEngine::VisitMemberExpr(const MemberExpr *M, ExplodedNode *Pred,
   getCheckerManager().runCheckersForPostStmt(Dst, EvalSet, M, *this);
 }
 
+void ExprEngine::VisitAtomicExpr(const AtomicExpr *AE, ExplodedNode *Pred,
+                                 ExplodedNodeSet &Dst) {
+  ExplodedNodeSet AfterPreSet;
+  getCheckerManager().runCheckersForPreStmt(AfterPreSet, Pred, AE, *this);
+
+  // For now, treat all the arguments to C11 atomics as escaping.
+  // FIXME: Ideally we should model the behavior of the atomics precisely here.
+
+  ExplodedNodeSet AfterInvalidateSet;
+  StmtNodeBuilder Bldr(AfterPreSet, AfterInvalidateSet, *currBldrCtx);
+
+  for (ExplodedNodeSet::iterator I = AfterPreSet.begin(), E = AfterPreSet.end();
+       I != E; ++I) {
+    ProgramStateRef State = (*I)->getState();
+    const LocationContext *LCtx = (*I)->getLocationContext();
+
+    SmallVector<SVal, 8> ValuesToInvalidate;
+    for (unsigned SI = 0, Count = AE->getNumSubExprs(); SI != Count; SI++) {
+      const Expr *SubExpr = AE->getSubExprs()[SI];
+      SVal SubExprVal = State->getSVal(SubExpr, LCtx);
+      ValuesToInvalidate.push_back(SubExprVal);
+    }
+
+    State = State->invalidateRegions(ValuesToInvalidate, AE,
+                                    currBldrCtx->blockCount(),
+                                    LCtx,
+                                    /*CausedByPointerEscape*/true,
+                                    /*Symbols=*/nullptr);
+
+    SVal ResultVal = UnknownVal();
+    State = State->BindExpr(AE, LCtx, ResultVal);
+    Bldr.generateNode(AE, *I, State, nullptr,
+                      ProgramPoint::PostStmtKind);
+  }
+
+  getCheckerManager().runCheckersForPostStmt(Dst, AfterInvalidateSet, AE, *this);
+}
+
 namespace {
 class CollectReachableSymbolsCallback final : public SymbolVisitor {
   InvalidatedSymbols Symbols;
+
 public:
   CollectReachableSymbolsCallback(ProgramStateRef State) {}
   const InvalidatedSymbols &getSymbols() const { return Symbols; }
@@ -2142,7 +2234,6 @@ void ExprEngine::evalBind(ExplodedNodeSet &Dst, const Stmt *StoreE,
   getCheckerManager().runCheckersForBind(CheckedSet, Pred, location, Val,
                                          StoreE, *this, *PP);
 
-
   StmtNodeBuilder Bldr(CheckedSet, Dst, *currBldrCtx);
 
   // If the location is not a 'Loc', it will already be handled by
@@ -2155,7 +2246,6 @@ void ExprEngine::evalBind(ExplodedNodeSet &Dst, const Stmt *StoreE,
     Bldr.generateNode(L, state, Pred);
     return;
   }
-
 
   for (ExplodedNodeSet::iterator I = CheckedSet.begin(), E = CheckedSet.end();
        I!=E; ++I) {
@@ -2424,26 +2514,10 @@ struct DOTGraphTraits<ExplodedNode*> :
   // FIXME: Since we do not cache error nodes in ExprEngine now, this does not
   // work.
   static std::string getNodeAttributes(const ExplodedNode *N, void*) {
-
-#if 0
-      // FIXME: Replace with a general scheme to tell if the node is
-      // an error node.
-    if (GraphPrintCheckerState->isImplicitNullDeref(N) ||
-        GraphPrintCheckerState->isExplicitNullDeref(N) ||
-        GraphPrintCheckerState->isUndefDeref(N) ||
-        GraphPrintCheckerState->isUndefStore(N) ||
-        GraphPrintCheckerState->isUndefControlFlow(N) ||
-        GraphPrintCheckerState->isUndefResult(N) ||
-        GraphPrintCheckerState->isBadCall(N) ||
-        GraphPrintCheckerState->isUndefArg(N))
-      return "color=\"red\",style=\"filled\"";
-
-    if (GraphPrintCheckerState->isNoReturnCall(N))
-      return "color=\"blue\",style=\"filled\"";
-#endif
     return "";
   }
 
+  // De-duplicate some source location pretty-printing.
   static void printLocation(raw_ostream &Out, SourceLocation SLoc) {
     if (SLoc.isFileID()) {
       Out << "\\lline="
@@ -2452,6 +2526,12 @@ struct DOTGraphTraits<ExplodedNode*> :
         << GraphPrintSourceManager->getExpansionColumnNumber(SLoc)
         << "\\l";
     }
+  }
+  static void printLocation2(raw_ostream &Out, SourceLocation SLoc) {
+    if (SLoc.isFileID() && GraphPrintSourceManager->isInMainFile(SLoc))
+      Out << "line " << GraphPrintSourceManager->getExpansionLineNumber(SLoc);
+    else
+      SLoc.print(Out, *GraphPrintSourceManager);
   }
 
   static std::string getNodeLabel(const ExplodedNode *N, void*){
@@ -2466,12 +2546,6 @@ struct DOTGraphTraits<ExplodedNode*> :
       case ProgramPoint::BlockEntranceKind: {
         Out << "Block Entrance: B"
             << Loc.castAs<BlockEntrance>().getBlock()->getBlockID();
-        if (const NamedDecl *ND =
-                    dyn_cast<NamedDecl>(Loc.getLocationContext()->getDecl())) {
-          Out << " (";
-          ND->printName(Out);
-          Out << ")";
-        }
         break;
       }
 
@@ -2596,13 +2670,6 @@ struct DOTGraphTraits<ExplodedNode*> :
           Out << "\\l";
         }
 
-#if 0
-          // FIXME: Replace with a general scheme to determine
-          // the name of the check.
-        if (GraphPrintCheckerState->isUndefControlFlow(N)) {
-          Out << "\\|Control-flow based on\\lUndefined value.\\l";
-        }
-#endif
         break;
       }
 
@@ -2624,27 +2691,6 @@ struct DOTGraphTraits<ExplodedNode*> :
         else if (Loc.getAs<PostLValue>())
           Out << "\\lPostLValue\\l";
 
-#if 0
-          // FIXME: Replace with a general scheme to determine
-          // the name of the check.
-        if (GraphPrintCheckerState->isImplicitNullDeref(N))
-          Out << "\\|Implicit-Null Dereference.\\l";
-        else if (GraphPrintCheckerState->isExplicitNullDeref(N))
-          Out << "\\|Explicit-Null Dereference.\\l";
-        else if (GraphPrintCheckerState->isUndefDeref(N))
-          Out << "\\|Dereference of undefialied value.\\l";
-        else if (GraphPrintCheckerState->isUndefStore(N))
-          Out << "\\|Store to Undefined Loc.";
-        else if (GraphPrintCheckerState->isUndefResult(N))
-          Out << "\\|Result of operation is undefined.";
-        else if (GraphPrintCheckerState->isNoReturnCall(N))
-          Out << "\\|Call to function marked \"noreturn\".";
-        else if (GraphPrintCheckerState->isBadCall(N))
-          Out << "\\|Call to NULL/Undefined.";
-        else if (GraphPrintCheckerState->isUndefArg(N))
-          Out << "\\|Argument in call is undefined";
-#endif
-
         break;
       }
     }
@@ -2652,6 +2698,40 @@ struct DOTGraphTraits<ExplodedNode*> :
     ProgramStateRef state = N->getState();
     Out << "\\|StateID: " << (const void*) state.get()
         << " NodeID: " << (const void*) N << "\\|";
+
+    // Analysis stack backtrace.
+    Out << "Location context stack (from current to outer):\\l";
+    const LocationContext *LC = Loc.getLocationContext();
+    unsigned Idx = 0;
+    for (; LC; LC = LC->getParent(), ++Idx) {
+      Out << Idx << ". (" << (const void *)LC << ") ";
+      switch (LC->getKind()) {
+      case LocationContext::StackFrame:
+        if (const NamedDecl *D = dyn_cast<NamedDecl>(LC->getDecl()))
+          Out << "Calling " << D->getQualifiedNameAsString();
+        else
+          Out << "Calling anonymous code";
+        if (const Stmt *S = cast<StackFrameContext>(LC)->getCallSite()) {
+          Out << " at ";
+          printLocation2(Out, S->getLocStart());
+        }
+        break;
+      case LocationContext::Block:
+        Out << "Invoking block";
+        if (const Decl *D = cast<BlockInvocationContext>(LC)->getBlockDecl()) {
+          Out << " defined at ";
+          printLocation2(Out, D->getLocStart());
+        }
+        break;
+      case LocationContext::Scope:
+        Out << "Entering scope";
+        // FIXME: Add more info once ScopeContext is activated.
+        break;
+      }
+      Out << "\\l";
+    }
+    Out << "\\l";
+
     state->printDOT(Out);
 
     Out << "\\l";

@@ -25,6 +25,7 @@ using llvm::COFF::WindowsSubsystem;
 using llvm::StringRef;
 class DefinedAbsolute;
 class DefinedRelative;
+class StringChunk;
 class Undefined;
 
 // Short aliases.
@@ -42,6 +43,12 @@ struct Export {
   bool Data = false;
   bool Private = false;
 
+  // If an export is a form of /export:foo=dllname.bar, that means
+  // that foo should be exported as an alias to bar in the DLL.
+  // ForwardTo is set to "dllname.bar" part. Usually empty.
+  StringRef ForwardTo;
+  StringChunk *ForwardChunk = nullptr;
+
   // True if this /export option was in .drectves section.
   bool Directives = false;
   StringRef SymbolName;
@@ -52,6 +59,13 @@ struct Export {
             Ordinal == E.Ordinal && Noname == E.Noname &&
             Data == E.Data && Private == E.Private);
   }
+};
+
+enum class DebugType {
+  None  = 0x0,
+  CV    = 0x1,  /// CodeView
+  PData = 0x2,  /// Procedure Data
+  Fixup = 0x4,  /// Relocation Table
 };
 
 // Global configuration.
@@ -71,6 +85,8 @@ struct Configuration {
   bool Force = false;
   bool Debug = false;
   bool WriteSymtab = true;
+  unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
+  StringRef PDBPath;
 
   // Symbols in this set are considered as live by the garbage collector.
   std::set<Undefined *> GCRoot;
@@ -99,11 +115,15 @@ struct Configuration {
   // Used for /merge:from=to (e.g. /merge:.rdata=.text)
   std::map<StringRef, StringRef> Merge;
 
+  // Used for /section=.name,{DEKPRSW} to set section attributes.
+  std::map<StringRef, uint32_t> Section;
+
   // Options for manifest files.
   ManifestKind Manifest = SideBySide;
   int ManifestID = 1;
   StringRef ManifestDependency;
   bool ManifestUAC = true;
+  std::vector<std::string> ManifestInput;
   StringRef ManifestLevel = "'asInvoker'";
   StringRef ManifestUIAccess = "'false'";
   StringRef ManifestFile;

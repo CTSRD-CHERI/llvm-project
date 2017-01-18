@@ -201,12 +201,8 @@ unsigned MacOSKeychainAPIChecker::getTrackedFunctionIndex(StringRef Name,
 static bool isBadDeallocationArgument(const MemRegion *Arg) {
   if (!Arg)
     return false;
-  if (isa<AllocaRegion>(Arg) ||
-      isa<BlockDataRegion>(Arg) ||
-      isa<TypedRegion>(Arg)) {
-    return true;
-  }
-  return false;
+  return isa<AllocaRegion>(Arg) || isa<BlockDataRegion>(Arg) ||
+         isa<TypedRegion>(Arg);
 }
 
 /// Given the address expression, retrieve the value it's pointing to. Assume
@@ -240,11 +236,7 @@ bool MacOSKeychainAPIChecker::definitelyReturnedError(SymbolRef RetSym,
   DefinedOrUnknownSVal NoErr = Builder.evalEQ(State, NoErrVal,
                                                      nonloc::SymbolVal(RetSym));
   ProgramStateRef ErrState = State->assume(NoErr, noError);
-  if (ErrState == State) {
-    return true;
-  }
-
-  return false;
+  return ErrState == State;
 }
 
 // Report deallocator mismatch. Remove the region from tracking - reporting a
@@ -532,12 +524,7 @@ MacOSKeychainAPIChecker::generateAllocatedDataNotReleasedReport(
   // allocated, and only report a single path.
   PathDiagnosticLocation LocUsedForUniqueing;
   const ExplodedNode *AllocNode = getAllocationNode(N, AP.first, C);
-  const Stmt *AllocStmt = nullptr;
-  ProgramPoint P = AllocNode->getLocation();
-  if (Optional<CallExitEnd> Exit = P.getAs<CallExitEnd>())
-    AllocStmt = Exit->getCalleeContext()->getCallSite();
-  else if (Optional<clang::PostStmt> PS = P.getAs<clang::PostStmt>())
-    AllocStmt = PS->getStmt();
+  const Stmt *AllocStmt = PathDiagnosticLocation::getStmt(AllocNode);
 
   if (AllocStmt)
     LocUsedForUniqueing = PathDiagnosticLocation::createBegin(AllocStmt,
