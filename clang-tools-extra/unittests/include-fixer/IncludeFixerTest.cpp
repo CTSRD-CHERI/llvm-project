@@ -85,8 +85,9 @@ static std::string runIncludeFixer(
                  1, {}),
   };
   auto SymbolIndexMgr = llvm::make_unique<include_fixer::SymbolIndexManager>();
-  SymbolIndexMgr->addSymbolIndex(
-      llvm::make_unique<include_fixer::InMemorySymbolIndex>(Symbols));
+  SymbolIndexMgr->addSymbolIndex([=]() {
+    return llvm::make_unique<include_fixer::InMemorySymbolIndex>(Symbols);
+  });
 
   std::vector<IncludeFixerContext> FixerContexts;
   IncludeFixerActionFactory Factory(*SymbolIndexMgr, FixerContexts, "llvm");
@@ -111,13 +112,10 @@ TEST(IncludeFixer, Typo) {
   EXPECT_EQ("#include <string>\nstd::string foo;\n",
             runIncludeFixer("std::string foo;\n"));
 
-  // FIXME: the current version of include-fixer does not get this test case
-  // right - header should be inserted before definition.
-  EXPECT_EQ(
-      "// comment\n#include \"foo.h\"\nstd::string foo;\n"
-      "#include \"dir/bar.h\"\n#include <string>\n",
-      runIncludeFixer("// comment\n#include \"foo.h\"\nstd::string foo;\n"
-                      "#include \"dir/bar.h\"\n"));
+  EXPECT_EQ("// comment\n#include \"foo.h\"\n#include <string>\n"
+            "std::string foo;\n#include \"dir/bar.h\"\n",
+            runIncludeFixer("// comment\n#include \"foo.h\"\nstd::string foo;\n"
+                            "#include \"dir/bar.h\"\n"));
 
   EXPECT_EQ("#include \"foo.h\"\n#include <string>\nstd::string foo;\n",
             runIncludeFixer("#include \"foo.h\"\nstd::string foo;\n"));
@@ -139,6 +137,10 @@ TEST(IncludeFixer, IncompleteType) {
       "namespace std {\nclass string;\n}\nstd::string foo;\n",
       runIncludeFixer("#include \"foo.h\"\n"
                       "namespace std {\nclass string;\n}\nstring foo;\n"));
+
+  EXPECT_EQ("#include <string>\n"
+            "class string;\ntypedef string foo;\nfoo f;\n",
+            runIncludeFixer("class string;\ntypedef string foo;\nfoo f;\n"));
 }
 
 TEST(IncludeFixer, MinimizeInclude) {

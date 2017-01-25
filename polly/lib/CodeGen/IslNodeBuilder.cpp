@@ -65,6 +65,20 @@ static cl::opt<bool> PollyGenerateRTCPrint(
     cl::desc("Emit code that prints the runtime check result dynamically."),
     cl::Hidden, cl::init(false), cl::ZeroOrMore, cl::cat(PollyCategory));
 
+// If this option is set we always use the isl AST generator to regenerate
+// memory accesses. Without this option set we regenerate expressions using the
+// original SCEV expressions and only generate new expressions in case the
+// access relation has been changed and consequently must be regenerated.
+static cl::opt<bool> PollyGenerateExpressions(
+    "polly-codegen-generate-expressions",
+    cl::desc("Generate AST expressions for unmodified and modified accesses"),
+    cl::Hidden, cl::init(false), cl::ZeroOrMore, cl::cat(PollyCategory));
+
+static cl::opt<int> PollyTargetFirstLevelCacheLineSize(
+    "polly-target-first-level-cache-line-size",
+    cl::desc("The size of the first level cache line size specified in bytes."),
+    cl::Hidden, cl::init(64), cl::ZeroOrMore, cl::cat(PollyCategory));
+
 __isl_give isl_ast_expr *
 IslNodeBuilder::getUpperBound(__isl_keep isl_ast_node *For,
                               ICmpInst::Predicate &Predicate) {
@@ -194,8 +208,7 @@ static int findReferencesInBlock(struct SubtreeReferences &References,
   for (const Instruction &Inst : *BB)
     for (Value *SrcVal : Inst.operands()) {
       auto *Scope = References.LI.getLoopFor(BB);
-      if (canSynthesize(SrcVal, References.S, &References.LI, &References.SE,
-                        Scope)) {
+      if (canSynthesize(SrcVal, References.S, &References.SE, Scope)) {
         References.SCEVs.insert(References.SE.getSCEVAtScope(SrcVal, Scope));
         continue;
       } else if (Value *NewVal = References.GlobalMap.lookup(SrcVal))
@@ -445,8 +458,9 @@ void IslNodeBuilder::createForSequential(__isl_take isl_ast_node *For,
   CmpInst::Predicate Predicate;
   bool Parallel;
 
-  Parallel = KnownParallel || (IslAstInfo::isParallel(For) &&
-                               !IslAstInfo::isReductionParallel(For));
+  Parallel =
+      KnownParallel ||
+      (IslAstInfo::isParallel(For) && !IslAstInfo::isReductionParallel(For));
 
   Body = isl_ast_node_for_get_body(For);
 
@@ -728,11 +742,23 @@ IslNodeBuilder::createNewAccesses(ScopStmt *Stmt,
   Stmt->setAstBuild(Build);
 
   for (auto *MA : *Stmt) {
-    if (!MA->hasNewAccessRelation())
-      continue;
+    if (!MA->hasNewAccessRelation()) {
+      if (PollyGenerateExpressions) {
+        if (!MA->isAffine())
+          continue;
+        if (MA->getLatestScopArrayInfo()->getBasePtrOriginSAI())
+          continue;
 
-    assert(!MA->getLatestScopArrayInfo()->getBasePtrOriginSAI() &&
-           "Generating new index expressions to indirect arrays not working");
+        auto *BasePtr =
+            dyn_cast<Instruction>(MA->getLatestScopArrayInfo()->getBasePtr());
+        if (BasePtr && Stmt->getParent()->getRegion().contains(BasePtr))
+          continue;
+      } else {
+        continue;
+      }
+    }
+    assert(MA->isAffine() &&
+           "Only affine memory accesses can be code generated");
 
     auto Schedule = isl_ast_build_get_schedule(Build);
 
@@ -1247,8 +1273,8 @@ void IslNodeBuilder::allocateNewArrays() {
 
     auto InstIt =
         Builder.GetInsertBlock()->getParent()->getEntryBlock().getTerminator();
-    Value *CreatedArray =
-        new AllocaInst(NewArrayType, SAI->getName(), &*InstIt);
+    auto *CreatedArray = new AllocaInst(NewArrayType, SAI->getName(), &*InstIt);
+    CreatedArray->setAlignment(PollyTargetFirstLevelCacheLineSize);
     SAI->setBasePtr(CreatedArray);
   }
 }
@@ -1335,9 +1361,10 @@ Value *IslNodeBuilder::createRTC(isl_ast_expr *Condition) {
   if (PollyGenerateRTCPrint) {
     auto *F = Builder.GetInsertBlock()->getParent();
     RuntimeDebugBuilder::createCPUPrinter(
-        Builder, "F: " + F->getName().str() + " R: " +
-                     S.getRegion().getNameStr() + " __RTC: ",
-        RTC, " Overflow: ", OverflowHappened);
+        Builder,
+        "F: " + F->getName().str() + " R: " + S.getRegion().getNameStr() +
+            " __RTC: ",
+        RTC, " Overflow: ", OverflowHappened, "\n");
   }
 
   RTC = Builder.CreateAnd(RTC, OverflowHappened, "polly.rtc.result");

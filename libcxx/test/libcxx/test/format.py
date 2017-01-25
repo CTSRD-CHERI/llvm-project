@@ -10,10 +10,14 @@
 import errno
 import os
 import time
+import random
 
 import lit.Test        # pylint: disable=import-error
 import lit.TestRunner  # pylint: disable=import-error
+from lit.TestRunner import ParserKind, IntegratedTestKeywordParser  \
+    # pylint: disable=import-error
 import lit.util        # pylint: disable=import-error
+
 
 from libcxx.test.executor import LocalExecutor as LocalExecutor
 import libcxx.util
@@ -32,16 +36,27 @@ class LibcxxTestFormat(object):
 
     def __init__(self, cxx, use_verify_for_fail, execute_external,
                  executor, exec_env):
-        self.cxx = cxx
+        self.cxx = cxx.copy()
         self.use_verify_for_fail = use_verify_for_fail
         self.execute_external = execute_external
         self.executor = executor
         self.exec_env = dict(exec_env)
-        self.compile_env = dict(os.environ)
-        # 'CCACHE_CPP2' prevents ccache from stripping comments while
-        # preprocessing. This is required to prevent stripping of '-verify'
-        # comments.
-        self.compile_env['CCACHE_CPP2'] = '1'
+
+    @staticmethod
+    def _make_custom_parsers():
+        return [
+            IntegratedTestKeywordParser('FLAKY_TEST.', ParserKind.TAG,
+                                        initial_value=False),
+            IntegratedTestKeywordParser('MODULES_DEFINES:', ParserKind.LIST,
+                                        initial_value=[])
+        ]
+
+    @staticmethod
+    def _get_parser(key, parsers):
+        for p in parsers:
+            if p.keyword == key:
+                return p
+        assert False and "parser not found"
 
     # TODO: Move this into lit's FileBasedTest
     def getTestsInDirectory(self, testSuite, path_in_suite,
@@ -71,6 +86,7 @@ class LibcxxTestFormat(object):
     def _execute(self, test, lit_config):
         name = test.path_in_suite[-1]
         name_root, name_ext = os.path.splitext(name)
+        is_libcxx_test = test.path_in_suite[0] == 'libcxx'
         is_sh_test = name_root.endswith('.sh')
         is_pass_test = name.endswith('.pass.cpp')
         is_fail_test = name.endswith('.fail.cpp')
@@ -80,8 +96,9 @@ class LibcxxTestFormat(object):
             return (lit.Test.UNSUPPORTED,
                     "A lit.local.cfg marked this unsupported")
 
+        parsers = self._make_custom_parsers()
         script = lit.TestRunner.parseIntegratedTestScript(
-            test, require_script=is_sh_test)
+            test, additional_parsers=parsers, require_script=is_sh_test)
         # Check if a result for the test was returned. If so return that
         # result.
         if isinstance(script, lit.Test.Result):
@@ -98,19 +115,40 @@ class LibcxxTestFormat(object):
                                                                tmpBase)
         script = lit.TestRunner.applySubstitutions(script, substitutions)
 
+        test_cxx = self.cxx.copy()
+        if is_fail_test:
+            test_cxx.useCCache(False)
+            test_cxx.useWarnings(False)
+        extra_modules_defines = self._get_parser('MODULES_DEFINES:',
+                                                 parsers).getValue()
+        if '-fmodules' in test.config.available_features:
+            test_cxx.compile_flags += [('-D%s' % mdef.strip()) for
+                                       mdef in extra_modules_defines]
+            test_cxx.addWarningFlagIfSupported('-Wno-macro-redefined')
+            # FIXME: libc++ debug tests #define _LIBCPP_ASSERT to override it
+            # If we see this we need to build the test against uniquely built
+            # modules.
+            if is_libcxx_test:
+                with open(test.getSourcePath(), 'r') as f:
+                    contents = f.read()
+                if '#define _LIBCPP_ASSERT' in contents:
+                    test_cxx.useModules(False)
+
         # Dispatch the test based on its suffix.
         if is_sh_test:
             if not isinstance(self.executor, LocalExecutor):
                 # We can't run ShTest tests with a executor yet.
                 # For now, bail on trying to run them
                 return lit.Test.UNSUPPORTED, 'ShTest format not yet supported'
+            test.config.enviroment = dict(self.exec_env)
             return lit.TestRunner._runShTest(test, lit_config,
                                              self.execute_external, script,
                                              tmpBase)
         elif is_fail_test:
-            return self._evaluate_fail_test(test)
+            return self._evaluate_fail_test(test, test_cxx, parsers)
         elif is_pass_test:
-            return self._evaluate_pass_test(test, tmpBase, lit_config)
+            return self._evaluate_pass_test(test, tmpBase, lit_config,
+                                            test_cxx, parsers)
         else:
             # No other test type is supported
             assert False
@@ -118,21 +156,19 @@ class LibcxxTestFormat(object):
     def _clean(self, exec_path):  # pylint: disable=no-self-use
         libcxx.util.cleanFile(exec_path)
 
-    def _evaluate_pass_test(self, test, tmpBase, lit_config):
+    def _evaluate_pass_test(self, test, tmpBase, lit_config,
+                            test_cxx, parsers):
         execDir = os.path.dirname(test.getExecPath())
         source_path = test.getSourcePath()
-        with open(source_path, 'r') as f:
-            contents = f.read()
-        is_flaky = 'FLAKY_TEST' in contents
         exec_path = tmpBase + '.exe'
         object_path = tmpBase + '.o'
         # Create the output directory if it does not already exist.
         lit.util.mkdir_p(os.path.dirname(tmpBase))
         try:
             # Compile the test
-            cmd, out, err, rc = self.cxx.compileLinkTwoSteps(
+            cmd, out, err, rc = test_cxx.compileLinkTwoSteps(
                 source_path, out=exec_path, object_file=object_path,
-                cwd=execDir, env=self.compile_env)
+                cwd=execDir)
             compile_cmd = cmd
             if rc != 0:
                 report = libcxx.util.makeReport(cmd, out, err, rc)
@@ -149,6 +185,7 @@ class LibcxxTestFormat(object):
             # should add a `// FILE-DEP: foo.dat` to each test to track this.
             data_files = [os.path.join(local_cwd, f)
                           for f in os.listdir(local_cwd) if f.endswith('.dat')]
+            is_flaky = self._get_parser('FLAKY_TEST.', parsers).getValue()
             max_retry = 3 if is_flaky else 1
             for retry_count in range(max_retry):
                 cmd, out, err, rc = self.executor.run(exec_path, [exec_path],
@@ -170,8 +207,9 @@ class LibcxxTestFormat(object):
             libcxx.util.cleanFile(object_path)
             self._clean(exec_path)
 
-    def _evaluate_fail_test(self, test):
+    def _evaluate_fail_test(self, test, test_cxx, parsers):
         source_path = test.getSourcePath()
+        # FIXME: lift this detection into LLVM/LIT.
         with open(source_path, 'r') as f:
             contents = f.read()
         verify_tags = ['expected-note', 'expected-remark', 'expected-warning',
@@ -182,18 +220,15 @@ class LibcxxTestFormat(object):
         # are dependant on a template parameter when '-fsyntax-only' is passed.
         # This is fixed in GCC 6. However for now we only pass "-fsyntax-only"
         # when using Clang.
-        extra_flags = []
-        if self.cxx.type != 'gcc':
-            extra_flags += ['-fsyntax-only']
+        if test_cxx.type != 'gcc':
+            test_cxx.flags += ['-fsyntax-only']
         if use_verify:
-            extra_flags += ['-Xclang', '-verify',
-                            '-Xclang', '-verify-ignore-unexpected=note',
-                            '-ferror-limit=1024']
-        cmd, out, err, rc = self.cxx.compile(source_path, out=os.devnull,
-                                             flags=extra_flags,
-                                             disable_ccache=True,
-                                             enable_warnings=False,
-                                             env=self.compile_env)
+            test_cxx.useVerify()
+            test_cxx.useWarnings()
+            if '-Wuser-defined-warnings' in test_cxx.warning_flags:
+                test_cxx.warning_flags += ['-Wno-error=user-defined-warnings']
+
+        cmd, out, err, rc = test_cxx.compile(source_path, out=os.devnull)
         expected_rc = 0 if use_verify else 1
         if rc == expected_rc:
             return lit.Test.PASS, ''

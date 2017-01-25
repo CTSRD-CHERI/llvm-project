@@ -26,6 +26,7 @@
 #include "llvm/Object/Error.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Object/SymbolicFile.h"
+#include "llvm/Support/ARMAttributeParser.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ELF.h"
 #include "llvm/Support/Endian.h"
@@ -72,6 +73,12 @@ public:
   static inline bool classof(const Binary *v) { return v->isELF(); }
 
   SubtargetFeatures getFeatures() const override;
+
+  SubtargetFeatures getMIPSFeatures() const override;
+
+  SubtargetFeatures getARMFeatures() const override;
+
+  void setARMSubArch(Triple &TheTriple) const override;
 };
 
 class ELFSectionRef : public SectionRef {
@@ -336,8 +343,8 @@ public:
     return reinterpret_cast<const Elf_Shdr *>(Sec.p);
   }
 
-  basic_symbol_iterator symbol_begin_impl() const override;
-  basic_symbol_iterator symbol_end_impl() const override;
+  basic_symbol_iterator symbol_begin() const override;
+  basic_symbol_iterator symbol_end() const override;
 
   elf_symbol_iterator dynamic_symbol_begin() const;
   elf_symbol_iterator dynamic_symbol_end() const;
@@ -353,6 +360,28 @@ public:
 
   std::error_code getPlatformFlags(unsigned &Result) const override {
     Result = EF.getHeader()->e_flags;
+    return std::error_code();
+  }
+
+  std::error_code getBuildAttributes(ARMAttributeParser &Attributes) const override {
+    auto SectionsOrErr = EF.sections();
+    if (!SectionsOrErr)
+      return errorToErrorCode(SectionsOrErr.takeError());
+
+    for (const Elf_Shdr &Sec : *SectionsOrErr) {
+      if (Sec.sh_type == ELF::SHT_ARM_ATTRIBUTES) {
+        auto ErrorOrContents = EF.getSectionContents(&Sec);
+        if (!ErrorOrContents)
+          return errorToErrorCode(ErrorOrContents.takeError());
+
+        auto Contents = ErrorOrContents.get();
+        if (Contents[0] != ARMBuildAttrs::Format_Version || Contents.size() == 1)
+          return std::error_code();
+
+        Attributes.Parse(Contents, ELFT::TargetEndianness == support::little);
+        break;
+      }
+    }
     return std::error_code();
   }
 
@@ -843,16 +872,16 @@ ELFObjectFile<ELFT>::ELFObjectFile(MemoryBufferRef Object, std::error_code &EC)
 }
 
 template <class ELFT>
-basic_symbol_iterator ELFObjectFile<ELFT>::symbol_begin_impl() const {
+basic_symbol_iterator ELFObjectFile<ELFT>::symbol_begin() const {
   DataRefImpl Sym = toDRI(DotSymtabSec, 0);
   return basic_symbol_iterator(SymbolRef(Sym, this));
 }
 
 template <class ELFT>
-basic_symbol_iterator ELFObjectFile<ELFT>::symbol_end_impl() const {
+basic_symbol_iterator ELFObjectFile<ELFT>::symbol_end() const {
   const Elf_Shdr *SymTab = DotSymtabSec;
   if (!SymTab)
-    return symbol_begin_impl();
+    return symbol_begin();
   DataRefImpl Sym = toDRI(SymTab, SymTab->sh_size / sizeof(Elf_Sym));
   return basic_symbol_iterator(SymbolRef(Sym, this));
 }
@@ -972,7 +1001,7 @@ unsigned ELFObjectFile<ELFT>::getArch() const {
   case ELF::EM_X86_64:
     return Triple::x86_64;
   case ELF::EM_AARCH64:
-    return Triple::aarch64;
+    return IsLittleEndian ? Triple::aarch64 : Triple::aarch64_be;
   case ELF::EM_ARM:
     return Triple::arm;
   case ELF::EM_AVR:

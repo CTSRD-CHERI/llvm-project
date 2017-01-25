@@ -360,8 +360,6 @@ void UnwrappedLineParser::calculateBraceTypes(bool ExpectClassBody) {
           // BlockKind later if we parse a braced list (where all blocks
           // inside are by default braced lists), or when we explicitly detect
           // blocks (for example while parsing lambdas).
-          //
-          // We exclude + and - as they can be ObjC visibility modifiers.
           ProbablyBracedList =
               (Style.Language == FormatStyle::LK_JavaScript &&
                NextTok->isOneOf(Keywords.kw_of, Keywords.kw_in,
@@ -369,6 +367,8 @@ void UnwrappedLineParser::calculateBraceTypes(bool ExpectClassBody) {
               NextTok->isOneOf(tok::comma, tok::period, tok::colon,
                                tok::r_paren, tok::r_square, tok::l_brace,
                                tok::l_square, tok::l_paren, tok::ellipsis) ||
+              (NextTok->is(tok::identifier) &&
+               !PrevTok->isOneOf(tok::semi, tok::r_brace, tok::l_brace)) ||
               (NextTok->is(tok::semi) &&
                (!ExpectClassBody || LBraceStack.size() != 1)) ||
               (NextTok->isBinaryOperator() && !NextIsObjCMethod);
@@ -737,7 +737,7 @@ void UnwrappedLineParser::readTokenWithJavaScriptASI() {
       return;
   }
   if (Next->is(tok::exclaim) && PreviousMustBeValue)
-    addUnwrappedLine();
+    return addUnwrappedLine();
   bool NextMustBeValue = mustBeJSIdentOrValue(Keywords, Next);
   bool NextEndsTemplateExpr =
       Next->is(TT_TemplateString) && Next->TokenText.startswith("}");
@@ -745,9 +745,9 @@ void UnwrappedLineParser::readTokenWithJavaScriptASI() {
       (PreviousMustBeValue ||
        Previous->isOneOf(tok::r_square, tok::r_paren, tok::plusplus,
                          tok::minusminus)))
-    addUnwrappedLine();
+    return addUnwrappedLine();
   if (PreviousMustBeValue && isJSDeclOrStmt(Keywords, Next))
-    addUnwrappedLine();
+    return addUnwrappedLine();
 }
 
 void UnwrappedLineParser::parseStructuralElement() {
@@ -1255,9 +1255,12 @@ void UnwrappedLineParser::tryToParseJSFunction() {
     if (FormatTok->is(tok::l_brace))
       tryToParseBracedList();
     else
-      while (FormatTok->isNot(tok::l_brace) && !eof())
+      while (!FormatTok->isOneOf(tok::l_brace, tok::semi) && !eof())
         nextToken();
   }
+
+  if (FormatTok->is(tok::semi))
+    return;
 
   parseChildBlock();
 }
@@ -1971,7 +1974,14 @@ void UnwrappedLineParser::parseJavaScriptEs6ImportExport() {
       !FormatTok->isStringLiteral())
     return;
 
-  while (!eof() && FormatTok->isNot(tok::semi)) {
+  while (!eof()) {
+    if (FormatTok->is(tok::semi))
+      return;
+    if (Line->Tokens.size() == 0) {
+      // Common issue: Automatic Semicolon Insertion wrapped the line, so the
+      // import statement should terminate.
+      return;
+    }
     if (FormatTok->is(tok::l_brace)) {
       FormatTok->BlockKind = BK_Block;
       parseBracedList();

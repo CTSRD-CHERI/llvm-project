@@ -19,12 +19,16 @@ using namespace llvm;
 
 const unsigned RegisterBank::InvalidID = UINT_MAX;
 
-RegisterBank::RegisterBank() : ID(InvalidID), Name(nullptr), Size(0) {}
+RegisterBank::RegisterBank(
+    unsigned ID, const char *Name, unsigned Size,
+    const uint32_t *CoveredClasses, unsigned NumRegClasses)
+    : ID(ID), Name(Name), Size(Size) {
+  ContainedRegClasses.resize(NumRegClasses);
+  ContainedRegClasses.setBitsInMask(CoveredClasses);
+}
 
 bool RegisterBank::verify(const TargetRegisterInfo &TRI) const {
   assert(isValid() && "Invalid register bank");
-  assert(ContainedRegClasses.size() == TRI.getNumRegClasses() &&
-         "TRI does not match the initialization process?");
   for (unsigned RCId = 0, End = TRI.getNumRegClasses(); RCId != End; ++RCId) {
     const TargetRegisterClass &RC = *TRI.getRegClass(RCId);
 

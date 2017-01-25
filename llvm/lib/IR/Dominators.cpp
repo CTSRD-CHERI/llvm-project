@@ -29,9 +29,9 @@ using namespace llvm;
 
 // Always verify dominfo if expensive checking is enabled.
 #ifdef EXPENSIVE_CHECKS
-static bool VerifyDomInfo = true;
+bool llvm::VerifyDomInfo = true;
 #else
-static bool VerifyDomInfo = false;
+bool llvm::VerifyDomInfo = false;
 #endif
 static cl::opt<bool,true>
 VerifyDomInfoX("verify-dom-info", cl::location(VerifyDomInfo),
@@ -72,6 +72,15 @@ template void llvm::Calculate<Function, Inverse<BasicBlock *>>(
     DominatorTreeBase<typename std::remove_pointer<
         GraphTraits<Inverse<BasicBlock *>>::NodeRef>::type> &DT,
     Function &F);
+
+bool DominatorTree::invalidate(Function &F, const PreservedAnalyses &PA,
+                               FunctionAnalysisManager::Invalidator &) {
+  // Check whether the analysis, all analyses on functions, or the function's
+  // CFG have been preserved.
+  auto PAC = PA.getChecker<DominatorTreeAnalysis>();
+  return !(PAC.preserved() || PAC.preservedSet<AllAnalysesOn<Function>>() ||
+           PAC.preservedSet<CFGAnalyses>());
+}
 
 // dominates - Return true if Def dominates a use in User. This performs
 // the special checks necessary if Def and User are in the same basic block.
@@ -282,6 +291,10 @@ bool DominatorTree::isReachableFromEntry(const Use &U) const {
 }
 
 void DominatorTree::verifyDomTree() const {
+  if (getRoots().empty())
+    // If dominator tree is unavailable, skip verification.
+    return;
+
   Function &F = *getRoot()->getParent();
 
   DominatorTree OtherDT;
@@ -311,7 +324,7 @@ DominatorTree DominatorTreeAnalysis::run(Function &F,
   return DT;
 }
 
-char DominatorTreeAnalysis::PassID;
+AnalysisKey DominatorTreeAnalysis::Key;
 
 DominatorTreePrinterPass::DominatorTreePrinterPass(raw_ostream &OS) : OS(OS) {}
 

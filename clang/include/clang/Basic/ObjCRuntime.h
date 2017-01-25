@@ -318,6 +318,7 @@ public:
   bool hasARCUnsafeClaimAutoreleasedReturnValue() const {
     switch (getKind()) {
     case MacOSX:
+    case FragileMacOSX:
       return getVersion() >= VersionTuple(10, 11);
     case iOS:
       return getVersion() >= VersionTuple(9);

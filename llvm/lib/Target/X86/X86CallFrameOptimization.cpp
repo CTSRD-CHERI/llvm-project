@@ -129,7 +129,7 @@ bool X86CallFrameOptimization::isLegal(MachineFunction &MF) {
   // in the compact unwind encoding that Darwin uses. So, bail if there
   // is a danger of that being generated.
   if (STI->isTargetDarwin() &&
-      (!MF.getMMI().getLandingPads().empty() ||
+      (!MF.getLandingPads().empty() ||
        (MF.getFunction()->needsUnwindTableEntry() && !TFL->hasFP(MF))))
     return false;
 
@@ -340,10 +340,10 @@ void X86CallFrameOptimization::collectCallInfo(MachineFunction &MF,
     return;
   }
 
-  // For globals in PIC mode, we can have some LEAs here.
-  // Ignore them, they don't bother us.
+  // Skip over DEBUG_VALUE.
+  // For globals in PIC mode, we can have some LEAs here. Skip them as well.
   // TODO: Extend this to something that covers more cases.
-  while (I->getOpcode() == X86::LEA32r)
+  while (I->getOpcode() == X86::LEA32r || I->isDebugValue())
     ++I;
 
   unsigned StackPtr = RegInfo.getStackRegister();
@@ -482,8 +482,7 @@ void X86CallFrameOptimization::adjustCallSequence(MachineFunction &MF,
         if (isInt<8>(Val))
           PushOpcode = Is64Bit ? X86::PUSH64i8 : X86::PUSH32i8;
       }
-      Push = BuildMI(MBB, Context.Call, DL, TII->get(PushOpcode))
-                 .addOperand(PushOp);
+      Push = BuildMI(MBB, Context.Call, DL, TII->get(PushOpcode)).add(PushOp);
       break;
     case X86::MOV32mr:
     case X86::MOV64mr:
@@ -496,9 +495,9 @@ void X86CallFrameOptimization::adjustCallSequence(MachineFunction &MF,
         Reg = MRI->createVirtualRegister(&X86::GR64RegClass);
         BuildMI(MBB, Context.Call, DL, TII->get(X86::IMPLICIT_DEF), UndefReg);
         BuildMI(MBB, Context.Call, DL, TII->get(X86::INSERT_SUBREG), Reg)
-          .addReg(UndefReg)
-          .addOperand(PushOp)
-          .addImm(X86::sub_32bit);
+            .addReg(UndefReg)
+            .add(PushOp)
+            .addImm(X86::sub_32bit);
       }
 
       // If PUSHrmm is not slow on this target, try to fold the source of the

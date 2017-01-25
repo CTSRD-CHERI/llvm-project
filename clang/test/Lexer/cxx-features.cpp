@@ -22,6 +22,10 @@
 
 // --- C++17 features ---
 
+#if check(variadic_using, 0, 0, 0, 201611) // FIXME: provisional name
+#error "wrong value for __cpp_variadic_using"
+#endif
+
 #if check(hex_float, 0, 0, 0, 201603)
 #error "wrong value for __cpp_hex_float"
 #endif
@@ -34,8 +38,7 @@
 #error "wrong value for __cpp_aligned_new"
 #endif
 
-#if check(noexcept_function_type, 0, 0, 0, 0)
-// FIXME: value shuld be 201510 for cxx1z once implemented
+#if check(noexcept_function_type, 0, 0, 0, 201510)
 #error "wrong value for __cpp_noexcept_function_type"
 #endif
 
@@ -75,12 +78,15 @@
 #error "wrong value for __cpp_nested_namespace_definitions"
 #endif
 
+// inheriting_constructors checked below
+
 #if check(aggregate_bases, 0, 0, 0, 201603)
 #error "wrong value for __cpp_aggregate_bases"
 #endif
 
-// FIXME: structured_bindings / decomposition_decl name not yet settled, and
-// Clang implementation is incomplete.
+#if check(structured_bindings, 0, 0, 0, 201606)
+#error "wrong value for __cpp_structured_bindings"
+#endif
 
 #if check(nontype_template_args, 0, 0, 0, 201411)
 #error "wrong value for __cpp_nontype_template_args"

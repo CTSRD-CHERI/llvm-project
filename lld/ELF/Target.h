@@ -26,9 +26,11 @@ public:
   virtual bool isTlsInitialExecRel(uint32_t Type) const;
   virtual bool isTlsLocalDynamicRel(uint32_t Type) const;
   virtual bool isTlsGlobalDynamicRel(uint32_t Type) const;
+  virtual bool isPicRel(uint32_t Type) const { return true; }
   virtual uint32_t getDynRel(uint32_t Type) const { return Type; }
   virtual void writeGotPltHeader(uint8_t *Buf) const {}
   virtual void writeGotPlt(uint8_t *Buf, const SymbolBody &S) const {};
+  virtual void writeIgotPlt(uint8_t *Buf, const SymbolBody &S) const;
   virtual uint64_t getImplicitAddend(const uint8_t *Buf, uint32_t Type) const;
 
   // If lazy binding is supported, the first entry of the PLT has code
@@ -54,7 +56,7 @@ public:
   // R_THUNK_PC if thunk is required and expression is pc rel
   // R_THUNK_PLT_PC if thunk is required to PLT entry and expression is pc rel
   virtual RelExpr getThunkExpr(RelExpr Expr, uint32_t RelocType,
-                               const InputFile &File,
+                               const InputFile *File,
                                const SymbolBody &S) const;
   virtual RelExpr getRelExpr(uint32_t Type, const SymbolBody &S) const = 0;
   virtual void relocateOne(uint8_t *Loc, uint32_t Type, uint64_t Val) const = 0;
@@ -62,14 +64,12 @@ public:
 
   unsigned TlsGdRelaxSkip = 1;
   unsigned PageSize = 4096;
-  unsigned MaxPageSize = 4096;
+  unsigned DefaultMaxPageSize = 4096;
 
-  // On freebsd x86_64 the first page cannot be mmaped.
-  // On linux that is controled by vm.mmap_min_addr. At least on some x86_64
+  // On FreeBSD x86_64 the first page cannot be mmaped.
+  // On Linux that is controled by vm.mmap_min_addr. At least on some x86_64
   // installs that is 65536, so the first 15 pages cannot be used.
   // Given that, the smallest value that can be used in here is 0x10000.
-  // If using 2MB pages, the smallest page aligned address that works is
-  // 0x200000, but it looks like every OS uses 4k pages for executables.
   uint64_t DefaultImageBase = 0x10000;
 
   uint32_t CopyRel;
@@ -104,14 +104,14 @@ public:
   virtual void relaxTlsLdToLe(uint8_t *Loc, uint32_t Type, uint64_t Val) const;
 };
 
-StringRef getRelName(uint32_t Type);
 uint64_t getPPC64TocBase();
-
-const unsigned MipsGPOffset = 0x7ff0;
+uint64_t getAArch64Page(uint64_t Expr);
 
 extern TargetInfo *Target;
 TargetInfo *createTarget();
 }
+
+std::string toString(uint32_t RelType);
 }
 
 #endif

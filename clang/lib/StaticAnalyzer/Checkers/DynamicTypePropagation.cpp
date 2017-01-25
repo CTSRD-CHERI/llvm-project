@@ -83,10 +83,10 @@ class DynamicTypePropagation:
       ID.AddPointer(Sym);
     }
 
-    PathDiagnosticPiece *VisitNode(const ExplodedNode *N,
-                                   const ExplodedNode *PrevN,
-                                   BugReporterContext &BRC,
-                                   BugReport &BR) override;
+    std::shared_ptr<PathDiagnosticPiece> VisitNode(const ExplodedNode *N,
+                                                   const ExplodedNode *PrevN,
+                                                   BugReporterContext &BRC,
+                                                   BugReport &BR) override;
 
   private:
     // The tracked symbol.
@@ -727,6 +727,37 @@ void DynamicTypePropagation::checkPreObjCMessage(const ObjCMethodCall &M,
   if (!Method)
     return;
 
+  // If the method is declared on a class that has a non-invariant
+  // type parameter, don't warn about parameter mismatches after performing
+  // substitution. This prevents warning when the programmer has purposely
+  // casted the receiver to a super type or unspecialized type but the analyzer
+  // has a more precise tracked type than the programmer intends at the call
+  // site.
+  //
+  // For example, consider NSArray (which has a covariant type parameter)
+  // and NSMutableArray (a subclass of NSArray where the type parameter is
+  // invariant):
+  // NSMutableArray *a = [[NSMutableArray<NSString *> alloc] init;
+  //
+  // [a containsObject:number]; // Safe: -containsObject is defined on NSArray.
+  // NSArray<NSObject *> *other = [a arrayByAddingObject:number]  // Safe
+  //
+  // [a addObject:number] // Unsafe: -addObject: is defined on NSMutableArray
+  //
+
+  const ObjCInterfaceDecl *Interface = Method->getClassInterface();
+  if (!Interface)
+    return;
+
+  ObjCTypeParamList *TypeParams = Interface->getTypeParamList();
+  if (!TypeParams)
+    return;
+
+  for (ObjCTypeParamDecl *TypeParam : *TypeParams) {
+    if (TypeParam->getVariance() != ObjCTypeParamVariance::Invariant)
+      return;
+  }
+
   Optional<ArrayRef<QualType>> TypeArgs =
       (*TrackedType)->getObjCSubstitutions(Method->getDeclContext());
   // This case might happen when there is an unspecialized override of a
@@ -892,9 +923,11 @@ void DynamicTypePropagation::reportGenericsBug(
   C.emitReport(std::move(R));
 }
 
-PathDiagnosticPiece *DynamicTypePropagation::GenericsBugVisitor::VisitNode(
-    const ExplodedNode *N, const ExplodedNode *PrevN, BugReporterContext &BRC,
-    BugReport &BR) {
+std::shared_ptr<PathDiagnosticPiece>
+DynamicTypePropagation::GenericsBugVisitor::VisitNode(const ExplodedNode *N,
+                                                      const ExplodedNode *PrevN,
+                                                      BugReporterContext &BRC,
+                                                      BugReport &BR) {
   ProgramStateRef state = N->getState();
   ProgramStateRef statePrev = PrevN->getState();
 
@@ -944,7 +977,8 @@ PathDiagnosticPiece *DynamicTypePropagation::GenericsBugVisitor::VisitNode(
   // Generate the extra diagnostic.
   PathDiagnosticLocation Pos(S, BRC.getSourceManager(),
                              N->getLocationContext());
-  return new PathDiagnosticEventPiece(Pos, OS.str(), true, nullptr);
+  return std::make_shared<PathDiagnosticEventPiece>(Pos, OS.str(), true,
+                                                    nullptr);
 }
 
 /// Register checkers.

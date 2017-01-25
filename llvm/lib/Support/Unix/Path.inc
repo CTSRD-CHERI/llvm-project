@@ -257,6 +257,16 @@ std::error_code current_path(SmallVectorImpl<char> &result) {
   return std::error_code();
 }
 
+std::error_code set_current_path(const Twine &path) {
+  SmallString<128> path_storage;
+  StringRef p = path.toNullTerminatedStringRef(path_storage);
+
+  if (::chdir(p.begin()) == -1)
+    return std::error_code(errno, std::generic_category());
+
+  return std::error_code();
+}
+
 std::error_code create_directory(const Twine &path, bool IgnoreExisting,
                                  perms Perms) {
   SmallString<128> path_storage;
@@ -280,6 +290,19 @@ std::error_code create_link(const Twine &to, const Twine &from) {
   StringRef t = to.toNullTerminatedStringRef(to_storage);
 
   if (::symlink(t.begin(), f.begin()) == -1)
+    return std::error_code(errno, std::generic_category());
+
+  return std::error_code();
+}
+
+std::error_code create_hard_link(const Twine &to, const Twine &from) {
+  // Get arguments.
+  SmallString<128> from_storage;
+  SmallString<128> to_storage;
+  StringRef f = from.toNullTerminatedStringRef(from_storage);
+  StringRef t = to.toNullTerminatedStringRef(to_storage);
+
+  if (::link(t.begin(), f.begin()) == -1)
     return std::error_code(errno, std::generic_category());
 
   return std::error_code();
@@ -564,10 +587,19 @@ std::error_code openFileForRead(const Twine &Name, int &ResultFD,
                                 SmallVectorImpl<char> *RealPath) {
   SmallString<128> Storage;
   StringRef P = Name.toNullTerminatedStringRef(Storage);
-  while ((ResultFD = open(P.begin(), O_RDONLY)) < 0) {
+  int OpenFlags = O_RDONLY;
+#ifdef O_CLOEXEC
+  OpenFlags |= O_CLOEXEC;
+#endif
+  while ((ResultFD = open(P.begin(), OpenFlags)) < 0) {
     if (errno != EINTR)
       return std::error_code(errno, std::generic_category());
   }
+#ifndef O_CLOEXEC
+  int r = fcntl(ResultFD, F_SETFD, FD_CLOEXEC);
+  (void)r;
+  assert(r == 0 && "fcntl(F_SETFD, FD_CLOEXEC) failed");
+#endif
   // Attempt to get the real name of the file, if the user asked
   if(!RealPath)
     return std::error_code();
@@ -603,6 +635,10 @@ std::error_code openFileForWrite(const Twine &Name, int &ResultFD,
 
   int OpenFlags = O_CREAT;
 
+#ifdef O_CLOEXEC
+  OpenFlags |= O_CLOEXEC;
+#endif
+
   if (Flags & F_RW)
     OpenFlags |= O_RDWR;
   else
@@ -622,6 +658,11 @@ std::error_code openFileForWrite(const Twine &Name, int &ResultFD,
     if (errno != EINTR)
       return std::error_code(errno, std::generic_category());
   }
+#ifndef O_CLOEXEC
+  int r = fcntl(ResultFD, F_SETFD, FD_CLOEXEC);
+  (void)r;
+  assert(r == 0 && "fcntl(F_SETFD, FD_CLOEXEC) failed");
+#endif
   return std::error_code();
 }
 

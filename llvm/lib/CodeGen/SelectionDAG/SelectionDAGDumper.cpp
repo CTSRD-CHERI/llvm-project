@@ -262,21 +262,6 @@ std::string SDNode::getOperationName(const SelectionDAG *G) const {
   case ISD::FP16_TO_FP:                 return "fp16_to_fp";
   case ISD::FP_TO_FP16:                 return "fp_to_fp16";
 
-  case ISD::CONVERT_RNDSAT: {
-    switch (cast<CvtRndSatSDNode>(this)->getCvtCode()) {
-    default: llvm_unreachable("Unknown cvt code!");
-    case ISD::CVT_FF:                   return "cvt_ff";
-    case ISD::CVT_FS:                   return "cvt_fs";
-    case ISD::CVT_FU:                   return "cvt_fu";
-    case ISD::CVT_SF:                   return "cvt_sf";
-    case ISD::CVT_UF:                   return "cvt_uf";
-    case ISD::CVT_SS:                   return "cvt_ss";
-    case ISD::CVT_SU:                   return "cvt_su";
-    case ISD::CVT_US:                   return "cvt_us";
-    case ISD::CVT_UU:                   return "cvt_uu";
-    }
-  }
-
     // Control flow instructions
   case ISD::BR:                         return "br";
   case ISD::BRIND:                      return "brind";
@@ -322,7 +307,7 @@ std::string SDNode::getOperationName(const SelectionDAG *G) const {
   case ISD::CTTZ_ZERO_UNDEF:            return "cttz_zero_undef";
   case ISD::CTLZ:                       return "ctlz";
   case ISD::CTLZ_ZERO_UNDEF:            return "ctlz_zero_undef";
-    
+
   // Trampolines
   case ISD::INIT_TRAMPOLINE:            return "init_trampoline";
   case ISD::ADJUST_TRAMPOLINE:          return "adjust_trampoline";
@@ -425,9 +410,9 @@ void SDNode::print_details(raw_ostream &OS, const SelectionDAG *G) const {
   } else if (const ConstantSDNode *CSDN = dyn_cast<ConstantSDNode>(this)) {
     OS << '<' << CSDN->getAPIntValue() << '>';
   } else if (const ConstantFPSDNode *CSDN = dyn_cast<ConstantFPSDNode>(this)) {
-    if (&CSDN->getValueAPF().getSemantics()==&APFloat::IEEEsingle)
+    if (&CSDN->getValueAPF().getSemantics()==&APFloat::IEEEsingle())
       OS << '<' << CSDN->getValueAPF().convertToFloat() << '>';
-    else if (&CSDN->getValueAPF().getSemantics()==&APFloat::IEEEdouble)
+    else if (&CSDN->getValueAPF().getSemantics()==&APFloat::IEEEdouble())
       OS << '<' << CSDN->getValueAPF().convertToDouble() << '>';
     else {
       OS << "<APFloat(";

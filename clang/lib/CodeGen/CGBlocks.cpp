@@ -88,7 +88,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   else
     i8p = CGM.VoidPtrTy;
 
-  ConstantBuilder builder(CGM);
+  ConstantInitBuilder builder(CGM);
   auto elements = builder.beginStruct();
 
   // reserved
@@ -188,9 +188,6 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
     _CapturesTypes captures...;
   };
  */
-
-/// The number of fields in a block header.
-const static unsigned BlockHeaderSize = 5;
 
 namespace {
   /// A chunk of data that we actually have to capture in the block.
@@ -319,8 +316,6 @@ static void initializeForBlockHeader(CodeGenModule &CGM, CGBlockInfo &info,
   elementTypes.push_back(CGM.IntTy);
   elementTypes.push_back(CGM.VoidPtrTy);
   elementTypes.push_back(CGM.getBlockDescriptorType());
-
-  assert(elementTypes.size() == BlockHeaderSize);
 }
 
 /// Compute the layout of the given block.  Attempts to lay the block
@@ -693,6 +688,8 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const BlockExpr *blockExpr) {
   // If the block has no captures, we won't have a pre-computed
   // layout for it.
   if (!blockExpr->getBlockDecl()->hasCaptures()) {
+    if (llvm::Constant *Block = CGM.getAddrOfGlobalBlockIfEmitted(blockExpr))
+      return Block;
     CGBlockInfo blockInfo(blockExpr->getBlockDecl(), CurFn->getName());
     computeBlockInfo(CGM, this, blockInfo);
     blockInfo.BlockExpression = blockExpr;
@@ -1072,9 +1069,19 @@ Address CodeGenFunction::GetAddrOfBlockDecl(const VarDecl *variable,
   return addr;
 }
 
+void CodeGenModule::setAddrOfGlobalBlock(const BlockExpr *BE,
+                                         llvm::Constant *Addr) {
+  bool Ok = EmittedGlobalBlocks.insert(std::make_pair(BE, Addr)).second;
+  (void)Ok;
+  assert(Ok && "Trying to replace an already-existing global block!");
+}
+
 llvm::Constant *
 CodeGenModule::GetAddrOfGlobalBlock(const BlockExpr *BE,
                                     StringRef Name) {
+  if (llvm::Constant *Block = getAddrOfGlobalBlockIfEmitted(BE))
+    return Block;
+
   CGBlockInfo blockInfo(BE->getBlockDecl(), Name);
   blockInfo.BlockExpression = BE;
 
@@ -1099,9 +1106,14 @@ static llvm::Constant *buildGlobalBlock(CodeGenModule &CGM,
                                         const CGBlockInfo &blockInfo,
                                         llvm::Constant *blockFn) {
   assert(blockInfo.CanBeGlobal);
+  // Callers should detect this case on their own: calling this function
+  // generally requires computing layout information, which is a waste of time
+  // if we've already emitted this block.
+  assert(!CGM.getAddrOfGlobalBlockIfEmitted(blockInfo.BlockExpression) &&
+         "Refusing to re-emit a global block.");
 
   // Generate the constants for the block literal initializer.
-  ConstantBuilder builder(CGM);
+  ConstantInitBuilder builder(CGM);
   auto fields = builder.beginStruct();
 
   // isa
@@ -1128,9 +1140,12 @@ static llvm::Constant *buildGlobalBlock(CodeGenModule &CGM,
                                  /*constant*/ true);
 
   // Return a constant of the appropriately-casted type.
-  llvm::Type *requiredType =
+  llvm::Type *RequiredType =
     CGM.getTypes().ConvertType(blockInfo.getBlockExpr()->getType());
-  return llvm::ConstantExpr::getBitCast(literal, requiredType);
+  llvm::Constant *Result =
+      llvm::ConstantExpr::getBitCast(literal, RequiredType);
+  CGM.setAddrOfGlobalBlock(blockInfo.BlockExpression, Result);
+  return Result;
 }
 
 void CodeGenFunction::setBlockContextParameter(const ImplicitParamDecl *D,
@@ -1974,7 +1989,7 @@ static T *buildByrefHelpers(CodeGenModule &CGM, const BlockByrefInfo &byrefInfo,
   generator.CopyHelper = buildByrefCopyHelper(CGM, byrefInfo, generator);
   generator.DisposeHelper = buildByrefDisposeHelper(CGM, byrefInfo, generator);
 
-  T *copy = new (CGM.getContext()) T(std::move(generator));
+  T *copy = new (CGM.getContext()) T(std::forward<T>(generator));
   CGM.ByrefHelpersCache.InsertNode(copy, insertPos);
   return copy;
 }

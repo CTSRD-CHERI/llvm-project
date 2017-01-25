@@ -634,7 +634,7 @@ static BDVState meetBDVStateImpl(const BDVState &LHS, const BDVState &RHS) {
 
 // Values of type BDVState form a lattice, and this function implements the meet
 // operation.
-static BDVState meetBDVState(BDVState LHS, BDVState RHS) {
+static BDVState meetBDVState(const BDVState &LHS, const BDVState &RHS) {
   BDVState Result = meetBDVStateImpl(LHS, RHS);
   assert(Result == meetBDVStateImpl(RHS, LHS) &&
          "Math is wrong: meet does not commute!");
@@ -1395,7 +1395,7 @@ makeStatepointExplicitImpl(const CallSite CS, /* to replace */
         StatepointID, NumPatchBytes, CallTarget, Flags, CallArgs,
         TransitionArgs, DeoptArgs, GCArgs, "safepoint_token");
 
-    Call->setTailCall(ToReplace->isTailCall());
+    Call->setTailCallKind(ToReplace->getTailCallKind());
     Call->setCallingConv(ToReplace->getCallingConv());
 
     // Currently we will fail on parameter attributes and on certain

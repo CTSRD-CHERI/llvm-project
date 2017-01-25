@@ -78,6 +78,15 @@ check_symbol_exists(FE_INEXACT "fenv.h" HAVE_DECL_FE_INEXACT)
 
 check_include_file(mach/mach.h HAVE_MACH_MACH_H)
 check_include_file(histedit.h HAVE_HISTEDIT_H)
+check_include_file(CrashReporterClient.h HAVE_CRASHREPORTERCLIENT_H)
+if(APPLE)
+  include(CheckCSourceCompiles)
+  CHECK_C_SOURCE_COMPILES("
+     static const char *__crashreporter_info__ = 0;
+     asm(\".desc ___crashreporter_info__, 0x10\");
+     int main() { return 0; }"
+    HAVE_CRASHREPORTER_INFO)
+endif()
 
 # library checks
 if( NOT PURE_WINDOWS )
@@ -158,12 +167,18 @@ check_symbol_exists(futimens sys/stat.h HAVE_FUTIMENS)
 check_symbol_exists(futimes sys/time.h HAVE_FUTIMES)
 check_symbol_exists(posix_fallocate fcntl.h HAVE_POSIX_FALLOCATE)
 # AddressSanitizer conflicts with lib/Support/Unix/Signals.inc
-if( HAVE_SIGNAL_H AND NOT LLVM_USE_SANITIZER MATCHES ".*Address.*")
+# Avoid sigaltstack on Apple platforms, where backtrace() cannot handle it
+# (rdar://7089625) and _Unwind_Backtrace is unusable because it cannot unwind
+# past the signal handler after an assertion failure (rdar://29866587).
+if( HAVE_SIGNAL_H AND NOT LLVM_USE_SANITIZER MATCHES ".*Address.*" AND NOT APPLE )
   check_symbol_exists(sigaltstack signal.h HAVE_SIGALTSTACK)
 endif()
 if( HAVE_SYS_UIO_H )
   check_symbol_exists(writev sys/uio.h HAVE_WRITEV)
 endif()
+set(CMAKE_REQUIRED_DEFINITIONS "-D_LARGEFILE64_SOURCE")
+check_symbol_exists(lseek64 "sys/types.h;unistd.h" HAVE_LSEEK64)
+set(CMAKE_REQUIRED_DEFINITIONS "")
 check_symbol_exists(mallctl malloc_np.h HAVE_MALLCTL)
 check_symbol_exists(mallinfo malloc.h HAVE_MALLINFO)
 check_symbol_exists(malloc_zone_statistics malloc/malloc.h
@@ -301,7 +316,9 @@ else()
   endif()
 endif()
 
-check_cxx_compiler_flag("-Wno-variadic-macros" SUPPORTS_NO_VARIADIC_MACROS_FLAG)
+check_cxx_compiler_flag("-Wvariadic-macros" SUPPORTS_VARIADIC_MACROS_FLAG)
+check_cxx_compiler_flag("-Wgnu-zero-variadic-macro-arguments"
+                        SUPPORTS_GNU_ZERO_VARIADIC_MACRO_ARGUMENTS_FLAG)
 
 set(USE_NO_MAYBE_UNINITIALIZED 0)
 set(USE_NO_UNINITIALIZED 0)
@@ -438,8 +455,15 @@ if( MSVC )
   else()
     set(HAVE_DIA_SDK 0)
   endif()
+
+  option(LLVM_ENABLE_DIA_SDK "Use MSVC DIA SDK for debugging if available."
+                             ${HAVE_DIA_SDK})
+
+  if(LLVM_ENABLE_DIA_SDK AND NOT HAVE_DIA_SDK)
+    message(FATAL_ERROR "DIA SDK not found. If you have both VS 2012 and 2013 installed, you may need to uninstall the former and re-install the latter afterwards.")
+  endif()
 else()
-  set(HAVE_DIA_SDK 0)
+  set(LLVM_ENABLE_DIA_SDK 0)
 endif( MSVC )
 
 # FIXME: Signal handler return type, currently hardcoded to 'void'

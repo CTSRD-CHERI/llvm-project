@@ -45,6 +45,7 @@ extern "C" void __tsan_resume() {
 namespace __tsan {
 
 #if !SANITIZER_GO && !SANITIZER_MAC
+__attribute__((tls_model("initial-exec")))
 THREADLOCAL char cur_thread_placeholder[sizeof(ThreadState)] ALIGNED(64);
 #endif
 static char ctx_placeholder[sizeof(Context)] ALIGNED(64);
@@ -233,9 +234,7 @@ static void StopBackgroundThread() {
 #endif
 
 void DontNeedShadowFor(uptr addr, uptr size) {
-  uptr shadow_beg = MemToShadow(addr);
-  uptr shadow_end = MemToShadow(addr + size);
-  ReleaseMemoryToOS(shadow_beg, shadow_end - shadow_beg);
+  ReleaseMemoryPagesToOS(MemToShadow(addr), MemToShadow(addr + size));
 }
 
 void MapShadow(uptr addr, uptr size) {
@@ -404,6 +403,8 @@ void Initialize(ThreadState *thr) {
 
 int Finalize(ThreadState *thr) {
   bool failed = false;
+
+  if (common_flags()->print_module_map == 1) PrintModuleMap();
 
   if (flags()->atexit_sleep_ms > 0 && ThreadCount(thr) > 1)
     SleepForMillis(flags()->atexit_sleep_ms);

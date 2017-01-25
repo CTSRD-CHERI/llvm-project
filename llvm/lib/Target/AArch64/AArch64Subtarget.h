@@ -59,7 +59,9 @@ protected:
   bool HasNEON = false;
   bool HasCrypto = false;
   bool HasCRC = false;
+  bool HasLSE = false;
   bool HasRAS = false;
+  bool HasRDM = false;
   bool HasPerfMon = false;
   bool HasFullFP16 = false;
   bool HasSPE = false;
@@ -78,7 +80,7 @@ protected:
   bool CustomAsCheapAsMove = false;
   bool UsePostRAScheduler = false;
   bool Misaligned128StoreIsSlow = false;
-  bool AvoidQuadLdStPairs = false;
+  bool Paired128IsSlow = false;
   bool UseAlternateSExtLoadCVTF32Pattern = false;
   bool HasArithmeticBccFusion = false;
   bool HasArithmeticCbzFusion = false;
@@ -180,14 +182,16 @@ public:
   bool hasNEON() const { return HasNEON; }
   bool hasCrypto() const { return HasCrypto; }
   bool hasCRC() const { return HasCRC; }
+  bool hasLSE() const { return HasLSE; }
   bool hasRAS() const { return HasRAS; }
+  bool hasRDM() const { return HasRDM; }
   bool balanceFPOps() const { return BalanceFPOps; }
   bool predictableSelectIsExpensive() const {
     return PredictableSelectIsExpensive;
   }
   bool hasCustomCheapAsMoveHandling() const { return CustomAsCheapAsMove; }
   bool isMisaligned128StoreSlow() const { return Misaligned128StoreIsSlow; }
-  bool avoidQuadLdStPairs() const { return AvoidQuadLdStPairs; }
+  bool isPaired128Slow() const { return Paired128IsSlow; }
   bool useAlternateSExtLoadCVTF32Pattern() const {
     return UseAlternateSExtLoadCVTF32Pattern;
   }

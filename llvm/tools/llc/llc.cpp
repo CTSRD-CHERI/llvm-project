@@ -134,6 +134,8 @@ static cl::opt<std::string> StartAfter("start-after",
     cl::desc("Resume compilation after a specific pass"),
     cl::value_desc("pass-name"), cl::init(""));
 
+static cl::list<std::string> IncludeDirs("I", cl::desc("include search path"));
+
 namespace {
 static ManagedStatic<std::vector<std::string>> RunPassNames;
 
@@ -264,6 +266,9 @@ int main(int argc, char **argv) {
   initializeLowerIntrinsicsPass(*Registry);
   initializeCountingFunctionInserterPass(*Registry);
   initializeUnreachableBlockElimLegacyPassPass(*Registry);
+  initializeConstantHoistingLegacyPassPass(*Registry);
+  initializeScalarOpts(*Registry);
+  initializeVectorization(*Registry);
 
   // Register the target printer for --version.
   cl::AddExtraVersionPrinter(TargetRegistry::printRegisteredTargetsForVersion);
@@ -397,6 +402,7 @@ static int compileModule(char **argv, LLVMContext &Context) {
   Options.MCOptions.MCUseDwarfDirectory = EnableDwarfDirectory;
   Options.MCOptions.AsmVerbose = AsmVerbose;
   Options.MCOptions.PreserveAsmComments = PreserveComments;
+  Options.MCOptions.IASSearchPaths = IncludeDirs;
 
   std::unique_ptr<TargetMachine> Target(
       TheTarget->createTargetMachine(TheTriple.getTriple(), CPUStr, FeaturesStr,

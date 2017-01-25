@@ -43,11 +43,11 @@ public:
   BitcodeCompiler();
   ~BitcodeCompiler();
 
-  void add(BitcodeFile &F);
+  template <class ELFT> void add(BitcodeFile &F);
   std::vector<InputFile *> compile();
 
 private:
-  std::unique_ptr<llvm::lto::LTO> LtoObj;
+  std::unique_ptr<llvm::lto::LTO> LTOObj;
   std::vector<SmallString<0>> Buff;
 };
 }

@@ -10,17 +10,13 @@ set(LIBCXX_HEADER_PATTERN
   ${LIBCXX_SUPPORT_HEADER_PATTERN}
   )
 
-if (LIBCXX_STANDALONE_BUILD)
-  set(LIBCXX_BUILD_ROOT "${LIBCXX_BINARY_DIR}")
-else()
-  set(LIBCXX_BUILD_ROOT "${LLVM_BINARY_DIR}")
+if(NOT LIBCXX_USING_INSTALLED_LLVM AND LLVM_BINARY_DIR)
+  file(COPY .
+    DESTINATION "${LLVM_BINARY_DIR}/include/c++/v1"
+    FILES_MATCHING
+    ${LIBCXX_HEADER_PATTERN}
+    )
 endif()
-
-file(COPY .
-  DESTINATION "${LIBCXX_BUILD_ROOT}/include/c++/v1"
-  FILES_MATCHING
-  ${LIBCXX_HEADER_PATTERN}
-)
 
 if (LIBCXX_INSTALL_HEADERS)
   install(DIRECTORY .
@@ -32,15 +28,13 @@ if (LIBCXX_INSTALL_HEADERS)
   )
 
   if (LIBCXX_NEEDS_SITE_CONFIG)
-    set(UNIX_CAT cat)
-    if (WIN32)
-      set(UNIX_CAT type)
-    endif()
     # Generate and install a custom __config header. The new header is created
     # by  prepending __config_site to the current __config header.
     add_custom_command(OUTPUT ${LIBCXX_BINARY_DIR}/__generated_config
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBCXX_BINARY_DIR}/__config_site ${LIBCXX_BINARY_DIR}/__generated_config
-      COMMAND ${UNIX_CAT} ${LIBCXX_SOURCE_DIR}/include/__config >> ${LIBCXX_BINARY_DIR}/__generated_config
+      COMMAND ${PYTHON_EXECUTABLE} ${LIBCXX_SOURCE_DIR}/utils/cat_files.py
+        ${LIBCXX_BINARY_DIR}/__config_site
+        ${LIBCXX_SOURCE_DIR}/include/__config
+        -o ${LIBCXX_BINARY_DIR}/__generated_config
       DEPENDS ${LIBCXX_SOURCE_DIR}/include/__config
               ${LIBCXX_BINARY_DIR}/__config_site
     )

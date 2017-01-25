@@ -41,6 +41,7 @@ add_llvm_target(AMDGPUCodeGen
   AMDGPUISelDAGToDAG.cpp
   AMDGPUMCInstLower.cpp
   AMDGPUMachineFunction.cpp
+  AMDGPUUnifyMetadata.cpp
   AMDGPUOpenCLImageTypeLoweringPass.cpp
   AMDGPUSubtarget.cpp
   AMDGPUTargetMachine.cpp
@@ -67,6 +68,7 @@ add_llvm_target(AMDGPUCodeGen
   SIDebuggerInsertNops.cpp
   SIFixControlFlowLiveIntervals.cpp
   SIFixSGPRCopies.cpp
+  SIFixVGPRCopies.cpp
   SIFoldOperands.cpp
   SIFrameLowering.cpp
   SIInsertSkips.cpp

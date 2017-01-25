@@ -105,6 +105,13 @@ multiclass xop3op<bits<8> opc, string OpcodeStr, SDNode OpNode,
               (vt128 (OpNode (vt128 (bitconvert (loadv2i64 addr:$src1))),
                              (vt128 VR128:$src2))))]>,
              XOP, Sched<[WriteVarVecShift, ReadAfterLd]>;
+  // For disassembler
+  let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0 in
+  def rr_REV : IXOP<opc, MRMSrcReg, (outs VR128:$dst),
+               (ins VR128:$src1, VR128:$src2),
+               !strconcat(OpcodeStr, "\t{$src2, $src1, $dst|$dst, $src1, $src2}"),
+               []>,
+               XOP_4V, VEX_W, Sched<[WriteVarVecShift]>;
 }
 
 let ExeDomain = SSEPackedInt in {
@@ -174,6 +181,27 @@ let ExeDomain = SSEPackedInt in {
   defm VPMACSDQL  : xop4opm2<0x97, "vpmacsdql", int_x86_xop_vpmacsdql>;
   defm VPMACSDQH  : xop4opm2<0x9F, "vpmacsdqh", int_x86_xop_vpmacsdqh>;
   defm VPMACSDD   : xop4opm2<0x9E, "vpmacsdd", int_x86_xop_vpmacsdd>;
+}
+
+// IFMA patterns - for cases where we can safely ignore the overflow bits from
+// the multiply or easily match with existing intrinsics.
+let Predicates = [HasXOP] in {
+  def : Pat<(v8i16 (add (mul (v8i16 VR128:$src1), (v8i16 VR128:$src2)),
+                        (v8i16 VR128:$src3))),
+            (VPMACSWWrr VR128:$src1, VR128:$src2, VR128:$src3)>;
+  def : Pat<(v4i32 (add (mul (v4i32 VR128:$src1), (v4i32 VR128:$src2)),
+                        (v4i32 VR128:$src3))),
+            (VPMACSDDrr VR128:$src1, VR128:$src2, VR128:$src3)>;
+  def : Pat<(v2i64 (add (X86pmuldq (X86PShufd (v4i32 VR128:$src1), (i8 -11)),
+                                   (X86PShufd (v4i32 VR128:$src2), (i8 -11))),
+                        (v2i64 VR128:$src3))),
+            (VPMACSDQHrr VR128:$src1, VR128:$src2, VR128:$src3)>;
+  def : Pat<(v2i64 (add (X86pmuldq (v4i32 VR128:$src1), (v4i32 VR128:$src2)),
+                        (v2i64 VR128:$src3))),
+            (VPMACSDQLrr VR128:$src1, VR128:$src2, VR128:$src3)>;
+  def : Pat<(v4i32 (add (X86vpmaddwd (v8i16 VR128:$src1), (v8i16 VR128:$src2)),
+                        (v4i32 VR128:$src3))),
+            (VPMADCSWDrr VR128:$src1, VR128:$src2, VR128:$src3)>;
 }
 
 // Instruction where second source can be memory, third must be imm8

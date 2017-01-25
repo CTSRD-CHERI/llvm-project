@@ -7,62 +7,82 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Identical Code Folding is a feature to merge sections not by name (which
-// is regular comdat handling) but by contents. If two non-writable sections
-// have the same data, relocations, attributes, etc., then the two
-// are considered identical and merged by the linker. This optimization
-// makes outputs smaller.
+// ICF is short for Identical Code Folding. This is a size optimization to
+// identify and merge two or more read-only sections (typically functions)
+// that happened to have the same contents. It usually reduces output size
+// by a few percent.
 //
-// ICF is theoretically a problem of reducing graphs by merging as many
-// identical subgraphs as possible if we consider sections as vertices and
-// relocations as edges. It may sound simple, but it is a bit more
-// complicated than you might think. The order of processing sections
-// matters because merging two sections can make other sections, whose
-// relocations now point to the same section, mergeable. Graphs may contain
-// cycles. We need a sophisticated algorithm to do this properly and
-// efficiently.
+// In ICF, two sections are considered identical if they have the same
+// section flags, section data, and relocations. Relocations are tricky,
+// because two relocations are considered the same if they have the same
+// relocation types, values, and if they point to the same sections *in
+// terms of ICF*.
 //
-// What we do in this file is this. We split sections into groups. Sections
-// in the same group are considered identical.
-//
-// We begin by optimistically putting all sections into a single equivalence
-// class. Then we apply a series of checks that split this initial
-// equivalence class into more and more refined equivalence classes based on
-// the properties by which a section can be distinguished.
-//
-// We begin by checking that the section contents and flags are the
-// same. This only needs to be done once since these properties don't depend
-// on the current equivalence class assignment.
-//
-// Then we split the equivalence classes based on checking that their
-// relocations are the same, where relocation targets are compared by their
-// equivalence class, not the concrete section. This may need to be done
-// multiple times because as the equivalence classes are refined, two
-// sections that had a relocation target in the same equivalence class may
-// now target different equivalence classes, and hence these two sections
-// must be put in different equivalence classes (whereas in the previous
-// iteration they were not since the relocation target was the same.)
-//
-// Our algorithm is smart enough to merge the following mutually-recursive
-// functions.
+// Here is an example. If foo and bar defined below are compiled to the
+// same machine instructions, ICF can and should merge the two, although
+// their relocations point to each other.
 //
 //   void foo() { bar(); }
 //   void bar() { foo(); }
 //
-// This algorithm is so-called "optimistic" algorithm described in
-// http://research.google.com/pubs/pub36912.html. (Note that what GNU
-// gold implemented is different from the optimistic algorithm.)
+// If you merge the two, their relocations point to the same section and
+// thus you know they are mergeable, but how do you know they are
+// mergeable in the first place? This is not an easy problem to solve.
+//
+// What we are doing in LLD is to partition sections into equivalence
+// classes. Sections in the same equivalence class when the algorithm
+// terminates are considered identical. Here are details:
+//
+// 1. First, we partition sections using their hash values as keys. Hash
+//    values contain section types, section contents and numbers of
+//    relocations. During this step, relocation targets are not taken into
+//    account. We just put sections that apparently differ into different
+//    equivalence classes.
+//
+// 2. Next, for each equivalence class, we visit sections to compare
+//    relocation targets. Relocation targets are considered equivalent if
+//    their targets are in the same equivalence class. Sections with
+//    different relocation targets are put into different equivalence
+//    clases.
+//
+// 3. If we split an equivalence class in step 2, two relocations
+//    previously target the same equivalence class may now target
+//    different equivalence classes. Therefore, we repeat step 2 until a
+//    convergence is obtained.
+//
+// 4. For each equivalence class C, pick an arbitrary section in C, and
+//    merge all the other sections in C with it.
+//
+// For small programs, this algorithm needs 3-5 iterations. For large
+// programs such as Chromium, it takes more than 20 iterations.
+//
+// This algorithm was mentioned as an "optimistic algorithm" in [1],
+// though gold implements a different algorithm than this.
+//
+// We parallelize each step so that multiple threads can work on different
+// equivalence classes concurrently. That gave us a large performance
+// boost when applying ICF on large programs. For example, MSVC link.exe
+// or GNU gold takes 10-20 seconds to apply ICF on Chromium, whose output
+// size is about 1.5 GB, but LLD can finish it in less than 2 seconds on a
+// 2.8 GHz 40 core machine. Even without threading, LLD's ICF is still
+// faster than MSVC or gold though.
+//
+// [1] Safe ICF: Pointer Safe and Unwinding aware Identical Code Folding
+// in the Gold Linker
+// http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36912.pdf
 //
 //===----------------------------------------------------------------------===//
 
 #include "ICF.h"
 #include "Config.h"
 #include "SymbolTable.h"
+#include "Threads.h"
 
 #include "llvm/ADT/Hashing.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/ELF.h"
 #include <algorithm>
+#include <atomic>
 
 using namespace lld;
 using namespace lld::elf;
@@ -76,22 +96,65 @@ public:
   void run();
 
 private:
-  uint64_t NextId = 1;
+  void segregate(size_t Begin, size_t End, bool Constant);
 
-  using Comparator = std::function<bool(const InputSection<ELFT> *,
-                                        const InputSection<ELFT> *)>;
+  template <class RelTy>
+  bool constantEq(ArrayRef<RelTy> RelsA, ArrayRef<RelTy> RelsB);
 
-  void segregate(MutableArrayRef<InputSection<ELFT> *> Arr, Comparator Eq);
+  template <class RelTy>
+  bool variableEq(const InputSection<ELFT> *A, ArrayRef<RelTy> RelsA,
+                  const InputSection<ELFT> *B, ArrayRef<RelTy> RelsB);
 
-  void
-  forEachGroup(std::vector<InputSection<ELFT> *> &V,
-               std::function<void(MutableArrayRef<InputSection<ELFT> *>)> Fn);
+  bool equalsConstant(const InputSection<ELFT> *A, const InputSection<ELFT> *B);
+  bool equalsVariable(const InputSection<ELFT> *A, const InputSection<ELFT> *B);
+
+  size_t findBoundary(size_t Begin, size_t End);
+
+  void forEachClassRange(size_t Begin, size_t End,
+                         std::function<void(size_t, size_t)> Fn);
+
+  void forEachClass(std::function<void(size_t, size_t)> Fn);
+
+  std::vector<InputSection<ELFT> *> Sections;
+
+  // We repeat the main loop while `Repeat` is true.
+  std::atomic<bool> Repeat;
+
+  // The main loop counter.
+  int Cnt = 0;
+
+  // We have two locations for equivalence classes. On the first iteration
+  // of the main loop, Class[0] has a valid value, and Class[1] contains
+  // garbage. We read equivalence classes from slot 0 and write to slot 1.
+  // So, Class[0] represents the current class, and Class[1] represents
+  // the next class. On each iteration, we switch their roles and use them
+  // alternately.
+  //
+  // Why are we doing this? Recall that other threads may be working on
+  // other equivalence classes in parallel. They may read sections that we
+  // are updating. We cannot update equivalence classes in place because
+  // it breaks the invariance that all possibly-identical sections must be
+  // in the same equivalence class at any moment. In other words, the for
+  // loop to update equivalence classes is not atomic, and that is
+  // observable from other threads. By writing new classes to other
+  // places, we can keep the invariance.
+  //
+  // Below, `Current` has the index of the current class, and `Next` has
+  // the index of the next class. If threading is enabled, they are either
+  // (0, 1) or (1, 0).
+  //
+  // Note on single-thread: if that's the case, they are always (0, 0)
+  // because we can safely read the next class without worrying about race
+  // conditions. Using the same location makes this algorithm converge
+  // faster because it uses results of the same iteration earlier.
+  int Current = 0;
+  int Next = 0;
 };
 }
 
 // Returns a hash value for S. Note that the information about
 // relocation targets is not included in the hash value.
-template <class ELFT> static uint64_t getHash(InputSection<ELFT> *S) {
+template <class ELFT> static uint32_t getHash(InputSection<ELFT> *S) {
   return hash_combine(S->Flags, S->getSize(), S->NumRelocations);
 }
 
@@ -104,56 +167,47 @@ template <class ELFT> static bool isEligible(InputSection<ELFT> *S) {
          S->Name != ".init" && S->Name != ".fini";
 }
 
-template <class ELFT> static std::vector<InputSection<ELFT> *> getSections() {
-  std::vector<InputSection<ELFT> *> V;
-  for (InputSectionBase<ELFT> *Sec : Symtab<ELFT>::X->Sections)
-    if (auto *S = dyn_cast<InputSection<ELFT>>(Sec))
-      if (isEligible(S))
-        V.push_back(S);
-  return V;
-}
-
-// Before calling this function, all sections in Arr must have the
-// same group ID. This function compare sections in Arr using Eq and
-// assign new group IDs for new groups.
+// Split an equivalence class into smaller classes.
 template <class ELFT>
-void ICF<ELFT>::segregate(MutableArrayRef<InputSection<ELFT> *> Arr,
-                          Comparator Eq) {
-  // This loop rearranges Arr so that all sections that are equal in
-  // terms of Eq are contiguous. The algorithm is quadratic in the
-  // worst case, but that is not an issue in practice because the
-  // number of distinct sections in Arr is usually very small.
-  InputSection<ELFT> **I = Arr.begin();
-  for (;;) {
-    InputSection<ELFT> *Head = *I;
+void ICF<ELFT>::segregate(size_t Begin, size_t End, bool Constant) {
+  // This loop rearranges sections in [Begin, End) so that all sections
+  // that are equal in terms of equals{Constant,Variable} are contiguous
+  // in [Begin, End).
+  //
+  // The algorithm is quadratic in the worst case, but that is not an
+  // issue in practice because the number of the distinct sections in
+  // each range is usually very small.
+
+  while (Begin < End) {
+    // Divide [Begin, End) into two. Let Mid be the start index of the
+    // second group.
     auto Bound = std::stable_partition(
-        I + 1, Arr.end(), [&](InputSection<ELFT> *S) { return Eq(Head, S); });
-    if (Bound == Arr.end())
-      return;
-    uint64_t Id = NextId++;
-    for (; I != Bound; ++I)
-      (*I)->GroupId = Id;
-  }
-}
+        Sections.begin() + Begin + 1, Sections.begin() + End,
+        [&](InputSection<ELFT> *S) {
+          if (Constant)
+            return equalsConstant(Sections[Begin], S);
+          return equalsVariable(Sections[Begin], S);
+        });
+    size_t Mid = Bound - Sections.begin();
 
-// Call Fn for each section group having the same group ID.
-template <class ELFT>
-void ICF<ELFT>::forEachGroup(
-    std::vector<InputSection<ELFT> *> &V,
-    std::function<void(MutableArrayRef<InputSection<ELFT> *>)> Fn) {
-  for (InputSection<ELFT> **I = V.data(), **E = I + V.size(); I != E;) {
-    InputSection<ELFT> *Head = *I;
-    auto Bound = std::find_if(I + 1, E, [&](InputSection<ELFT> *S) {
-      return S->GroupId != Head->GroupId;
-    });
-    Fn({I, Bound});
-    I = Bound;
+    // Now we split [Begin, End) into [Begin, Mid) and [Mid, End) by
+    // updating the sections in [Begin, Mid). We use Mid as an equivalence
+    // class ID because every group ends with a unique index.
+    for (size_t I = Begin; I < Mid; ++I)
+      Sections[I]->Class[Next] = Mid;
+
+    // If we created a group, we need to iterate the main loop again.
+    if (Mid != End)
+      Repeat = true;
+
+    Begin = Mid;
   }
 }
 
 // Compare two lists of relocations.
-template <class ELFT, class RelTy>
-static bool relocationEq(ArrayRef<RelTy> RelsA, ArrayRef<RelTy> RelsB) {
+template <class ELFT>
+template <class RelTy>
+bool ICF<ELFT>::constantEq(ArrayRef<RelTy> RelsA, ArrayRef<RelTy> RelsB) {
   auto Eq = [](const RelTy &A, const RelTy &B) {
     return A.r_offset == B.r_offset &&
            A.getType(Config->Mips64EL) == B.getType(Config->Mips64EL) &&
@@ -167,39 +221,53 @@ static bool relocationEq(ArrayRef<RelTy> RelsA, ArrayRef<RelTy> RelsB) {
 // Compare "non-moving" part of two InputSections, namely everything
 // except relocation targets.
 template <class ELFT>
-static bool equalsConstant(const InputSection<ELFT> *A,
-                           const InputSection<ELFT> *B) {
+bool ICF<ELFT>::equalsConstant(const InputSection<ELFT> *A,
+                               const InputSection<ELFT> *B) {
   if (A->NumRelocations != B->NumRelocations || A->Flags != B->Flags ||
       A->getSize() != B->getSize() || A->Data != B->Data)
     return false;
 
   if (A->AreRelocsRela)
-    return relocationEq<ELFT>(A->relas(), B->relas());
-  return relocationEq<ELFT>(A->rels(), B->rels());
+    return constantEq(A->relas(), B->relas());
+  return constantEq(A->rels(), B->rels());
 }
 
 // Compare two lists of relocations. Returns true if all pairs of
 // relocations point to the same section in terms of ICF.
-template <class ELFT, class RelTy>
-static bool variableEq(const InputSection<ELFT> *A, ArrayRef<RelTy> RelsA,
-                       const InputSection<ELFT> *B, ArrayRef<RelTy> RelsB) {
+template <class ELFT>
+template <class RelTy>
+bool ICF<ELFT>::variableEq(const InputSection<ELFT> *A, ArrayRef<RelTy> RelsA,
+                           const InputSection<ELFT> *B, ArrayRef<RelTy> RelsB) {
   auto Eq = [&](const RelTy &RA, const RelTy &RB) {
+    // The two sections must be identical.
     SymbolBody &SA = A->getFile()->getRelocTargetSym(RA);
     SymbolBody &SB = B->getFile()->getRelocTargetSym(RB);
     if (&SA == &SB)
       return true;
 
-    // Or, the symbols should be pointing to the same section
-    // in terms of the group ID.
     auto *DA = dyn_cast<DefinedRegular<ELFT>>(&SA);
     auto *DB = dyn_cast<DefinedRegular<ELFT>>(&SB);
     if (!DA || !DB)
       return false;
     if (DA->Value != DB->Value)
       return false;
+
+    // Either both symbols must be absolute...
+    if (!DA->Section || !DB->Section)
+      return !DA->Section && !DB->Section;
+
+    // Or the two sections must be in the same equivalence class.
     auto *X = dyn_cast<InputSection<ELFT>>(DA->Section);
     auto *Y = dyn_cast<InputSection<ELFT>>(DB->Section);
-    return X && Y && X->GroupId && X->GroupId == Y->GroupId;
+    if (!X || !Y)
+      return false;
+
+    // Ineligible sections are in the special equivalence class 0.
+    // They can never be the same in terms of the equivalence class.
+    if (X->Class[Current] == 0)
+      return false;
+
+    return X->Class[Current] == Y->Class[Current];
   };
 
   return std::equal(RelsA.begin(), RelsA.end(), RelsB.begin(), Eq);
@@ -207,58 +275,105 @@ static bool variableEq(const InputSection<ELFT> *A, ArrayRef<RelTy> RelsA,
 
 // Compare "moving" part of two InputSections, namely relocation targets.
 template <class ELFT>
-static bool equalsVariable(const InputSection<ELFT> *A,
-                           const InputSection<ELFT> *B) {
+bool ICF<ELFT>::equalsVariable(const InputSection<ELFT> *A,
+                               const InputSection<ELFT> *B) {
   if (A->AreRelocsRela)
     return variableEq(A, A->relas(), B, B->relas());
   return variableEq(A, A->rels(), B, B->rels());
 }
 
+template <class ELFT> size_t ICF<ELFT>::findBoundary(size_t Begin, size_t End) {
+  uint32_t Class = Sections[Begin]->Class[Current];
+  for (size_t I = Begin + 1; I < End; ++I)
+    if (Class != Sections[I]->Class[Current])
+      return I;
+  return End;
+}
+
+// Sections in the same equivalence class are contiguous in Sections
+// vector. Therefore, Sections vector can be considered as contiguous
+// groups of sections, grouped by the class.
+//
+// This function calls Fn on every group that starts within [Begin, End).
+// Note that a group must start in that range but doesn't necessarily
+// have to end before End.
+template <class ELFT>
+void ICF<ELFT>::forEachClassRange(size_t Begin, size_t End,
+                                  std::function<void(size_t, size_t)> Fn) {
+  if (Begin > 0)
+    Begin = findBoundary(Begin - 1, End);
+
+  while (Begin < End) {
+    size_t Mid = findBoundary(Begin, Sections.size());
+    Fn(Begin, Mid);
+    Begin = Mid;
+  }
+}
+
+// Call Fn on each equivalence class.
+template <class ELFT>
+void ICF<ELFT>::forEachClass(std::function<void(size_t, size_t)> Fn) {
+  // If threading is disabled or the number of sections are
+  // too small to use threading, call Fn sequentially.
+  if (!Config->Threads || Sections.size() < 1024) {
+    forEachClassRange(0, Sections.size(), Fn);
+    ++Cnt;
+    return;
+  }
+
+  Current = Cnt % 2;
+  Next = (Cnt + 1) % 2;
+
+  // Split sections into 256 shards and call Fn in parallel.
+  size_t NumShards = 256;
+  size_t Step = Sections.size() / NumShards;
+  forLoop(0, NumShards,
+          [&](size_t I) { forEachClassRange(I * Step, (I + 1) * Step, Fn); });
+  forEachClassRange(Step * NumShards, Sections.size(), Fn);
+  ++Cnt;
+}
+
 // The main function of ICF.
 template <class ELFT> void ICF<ELFT>::run() {
-  // Initially, we use hash values as section group IDs. Therefore,
-  // if two sections have the same ID, they are likely (but not
-  // guaranteed) to have the same static contents in terms of ICF.
-  std::vector<InputSection<ELFT> *> Sections = getSections<ELFT>();
-  for (InputSection<ELFT> *S : Sections)
-    // Set MSB on to avoid collisions with serial group IDs
-    S->GroupId = getHash(S) | (uint64_t(1) << 63);
+  // Collect sections to merge.
+  for (InputSectionBase<ELFT> *Sec : Symtab<ELFT>::X->Sections)
+    if (auto *S = dyn_cast<InputSection<ELFT>>(Sec))
+      if (isEligible(S))
+        Sections.push_back(S);
 
-  // From now on, sections in Sections are ordered so that sections in
-  // the same group are consecutive in the vector.
+  // Initially, we use hash values to partition sections.
+  for (InputSection<ELFT> *S : Sections)
+    // Set MSB to 1 to avoid collisions with non-hash IDs.
+    S->Class[0] = getHash(S) | (1 << 31);
+
+  // From now on, sections in Sections vector are ordered so that sections
+  // in the same equivalence class are consecutive in the vector.
   std::stable_sort(Sections.begin(), Sections.end(),
                    [](InputSection<ELFT> *A, InputSection<ELFT> *B) {
-                     if (A->GroupId != B->GroupId)
-                       return A->GroupId < B->GroupId;
-                     // Within a group, put the highest alignment
-                     // requirement first, so that's the one we'll keep.
-                     return B->Alignment < A->Alignment;
+                     return A->Class[0] < B->Class[0];
                    });
 
   // Compare static contents and assign unique IDs for each static content.
-  forEachGroup(Sections, [&](MutableArrayRef<InputSection<ELFT> *> V) {
-    segregate(V, equalsConstant<ELFT>);
-  });
+  forEachClass([&](size_t Begin, size_t End) { segregate(Begin, End, true); });
 
-  // Split groups by comparing relocations until we get a convergence.
-  int Cnt = 1;
-  for (;;) {
-    ++Cnt;
-    uint64_t Id = NextId;
-    forEachGroup(Sections, [&](MutableArrayRef<InputSection<ELFT> *> V) {
-      segregate(V, equalsVariable<ELFT>);
-    });
-    if (Id == NextId)
-      break;
-  }
-  log("ICF needed " + Twine(Cnt) + " iterations.");
+  // Split groups by comparing relocations until convergence is obtained.
+  do {
+    Repeat = false;
+    forEachClass(
+        [&](size_t Begin, size_t End) { segregate(Begin, End, false); });
+  } while (Repeat);
 
-  // Merge sections in the same group.
-  forEachGroup(Sections, [](MutableArrayRef<InputSection<ELFT> *> V) {
-    log("selected " + V[0]->Name);
-    for (InputSection<ELFT> *S : V.slice(1)) {
-      log("  removed " + S->Name);
-      V[0]->replace(S);
+  log("ICF needed " + Twine(Cnt) + " iterations");
+
+  // Merge sections by the equivalence class.
+  forEachClass([&](size_t Begin, size_t End) {
+    if (End - Begin == 1)
+      return;
+
+    log("selected " + Sections[Begin]->Name);
+    for (size_t I = Begin + 1; I < End; ++I) {
+      log("  removed " + Sections[I]->Name);
+      Sections[Begin]->replace(Sections[I]);
     }
   });
 }

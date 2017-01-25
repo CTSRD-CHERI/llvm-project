@@ -1928,8 +1928,7 @@ public:
 ///   B(A& a) : A(a), f(3.14159) { }
 /// };
 /// \endcode
-class CXXCtorInitializer final
-    : private llvm::TrailingObjects<CXXCtorInitializer, VarDecl *> {
+class CXXCtorInitializer final {
   /// \brief Either the base class name/delegating constructor type (stored as
   /// a TypeSourceInfo*), an normal field (FieldDecl), or an anonymous field
   /// (IndirectFieldDecl*) being initialized.
@@ -1967,14 +1966,8 @@ class CXXCtorInitializer final
   unsigned IsWritten : 1;
 
   /// If IsWritten is true, then this number keeps track of the textual order
-  /// of this initializer in the original sources, counting from 0; otherwise,
-  /// it stores the number of array index variables stored after this object
-  /// in memory.
-  unsigned SourceOrderOrNumArrayIndices : 13;
-
-  CXXCtorInitializer(ASTContext &Context, FieldDecl *Member,
-                     SourceLocation MemberLoc, SourceLocation L, Expr *Init,
-                     SourceLocation R, VarDecl **Indices, unsigned NumIndices);
+  /// of this initializer in the original sources, counting from 0.
+  unsigned SourceOrder : 13;
 
 public:
   /// \brief Creates a new base-class initializer.
@@ -1999,13 +1992,6 @@ public:
   explicit
   CXXCtorInitializer(ASTContext &Context, TypeSourceInfo *TInfo,
                      SourceLocation L, Expr *Init, SourceLocation R);
-
-  /// \brief Creates a new member initializer that optionally contains
-  /// array indices used to describe an elementwise initialization.
-  static CXXCtorInitializer *Create(ASTContext &Context, FieldDecl *Member,
-                                    SourceLocation MemberLoc, SourceLocation L,
-                                    Expr *Init, SourceLocation R,
-                                    VarDecl **Indices, unsigned NumIndices);
 
   /// \brief Determine whether this initializer is initializing a base class.
   bool isBaseInitializer() const {
@@ -2111,7 +2097,7 @@ public:
   /// \brief Return the source position of the initializer, counting from 0.
   /// If the initializer was implicit, -1 is returned.
   int getSourceOrder() const {
-    return IsWritten ? static_cast<int>(SourceOrderOrNumArrayIndices) : -1;
+    return IsWritten ? static_cast<int>(SourceOrder) : -1;
   }
 
   /// \brief Set the source order of this initializer.
@@ -2121,49 +2107,22 @@ public:
   ///
   /// This assumes that the initializer was written in the source code, and
   /// ensures that isWritten() returns true.
-  void setSourceOrder(int pos) {
+  void setSourceOrder(int Pos) {
     assert(!IsWritten &&
+           "setSourceOrder() used on implicit initializer");
+    assert(SourceOrder == 0 &&
            "calling twice setSourceOrder() on the same initializer");
-    assert(SourceOrderOrNumArrayIndices == 0 &&
-           "setSourceOrder() used when there are implicit array indices");
-    assert(pos >= 0 &&
+    assert(Pos >= 0 &&
            "setSourceOrder() used to make an initializer implicit");
     IsWritten = true;
-    SourceOrderOrNumArrayIndices = static_cast<unsigned>(pos);
+    SourceOrder = static_cast<unsigned>(Pos);
   }
 
   SourceLocation getLParenLoc() const { return LParenLoc; }
   SourceLocation getRParenLoc() const { return RParenLoc; }
 
-  /// \brief Determine the number of implicit array indices used while
-  /// described an array member initialization.
-  unsigned getNumArrayIndices() const {
-    return IsWritten ? 0 : SourceOrderOrNumArrayIndices;
-  }
-
-  /// \brief Retrieve a particular array index variable used to
-  /// describe an array member initialization.
-  VarDecl *getArrayIndex(unsigned I) {
-    assert(I < getNumArrayIndices() && "Out of bounds member array index");
-    return getTrailingObjects<VarDecl *>()[I];
-  }
-  const VarDecl *getArrayIndex(unsigned I) const {
-    assert(I < getNumArrayIndices() && "Out of bounds member array index");
-    return getTrailingObjects<VarDecl *>()[I];
-  }
-  void setArrayIndex(unsigned I, VarDecl *Index) {
-    assert(I < getNumArrayIndices() && "Out of bounds member array index");
-    getTrailingObjects<VarDecl *>()[I] = Index;
-  }
-  ArrayRef<VarDecl *> getArrayIndices() {
-    return llvm::makeArrayRef(getTrailingObjects<VarDecl *>(),
-                              getNumArrayIndices());
-  }
-
   /// \brief Get the initializer.
   Expr *getInit() const { return static_cast<Expr*>(Init); }
-
-  friend TrailingObjects;
 };
 
 /// Description of a constructor that was inherited from a base class.
@@ -3181,6 +3140,77 @@ public:
   friend class ASTDeclWriter;
 };
 
+/// Represents a pack of using declarations that a single
+/// using-declarator pack-expanded into.
+///
+/// \code
+/// template<typename ...T> struct X : T... {
+///   using T::operator()...;
+///   using T::operator T...;
+/// };
+/// \endcode
+///
+/// In the second case above, the UsingPackDecl will have the name
+/// 'operator T' (which contains an unexpanded pack), but the individual
+/// UsingDecls and UsingShadowDecls will have more reasonable names.
+class UsingPackDecl final
+    : public NamedDecl, public Mergeable<UsingPackDecl>,
+      private llvm::TrailingObjects<UsingPackDecl, NamedDecl *> {
+  void anchor() override;
+
+  /// The UnresolvedUsingValueDecl or UnresolvedUsingTypenameDecl from
+  /// which this waas instantiated.
+  NamedDecl *InstantiatedFrom;
+
+  /// The number of using-declarations created by this pack expansion.
+  unsigned NumExpansions;
+
+  UsingPackDecl(DeclContext *DC, NamedDecl *InstantiatedFrom,
+                ArrayRef<NamedDecl *> UsingDecls)
+      : NamedDecl(UsingPack, DC,
+                  InstantiatedFrom ? InstantiatedFrom->getLocation()
+                                   : SourceLocation(),
+                  InstantiatedFrom ? InstantiatedFrom->getDeclName()
+                                   : DeclarationName()),
+        InstantiatedFrom(InstantiatedFrom), NumExpansions(UsingDecls.size()) {
+    std::uninitialized_copy(UsingDecls.begin(), UsingDecls.end(),
+                            getTrailingObjects<NamedDecl *>());
+  }
+
+public:
+  /// Get the using declaration from which this was instantiated. This will
+  /// always be an UnresolvedUsingValueDecl or an UnresolvedUsingTypenameDecl
+  /// that is a pack expansion.
+  NamedDecl *getInstantiatedFromUsingDecl() const { return InstantiatedFrom; }
+
+  /// Get the set of using declarations that this pack expanded into. Note that
+  /// some of these may still be unresolved.
+  ArrayRef<NamedDecl *> expansions() const {
+    return llvm::makeArrayRef(getTrailingObjects<NamedDecl *>(), NumExpansions);
+  }
+
+  static UsingPackDecl *Create(ASTContext &C, DeclContext *DC,
+                               NamedDecl *InstantiatedFrom,
+                               ArrayRef<NamedDecl *> UsingDecls);
+
+  static UsingPackDecl *CreateDeserialized(ASTContext &C, unsigned ID,
+                                           unsigned NumExpansions);
+
+  SourceRange getSourceRange() const override LLVM_READONLY {
+    return InstantiatedFrom->getSourceRange();
+  }
+
+  UsingPackDecl *getCanonicalDecl() override { return getFirstDecl(); }
+  const UsingPackDecl *getCanonicalDecl() const { return getFirstDecl(); }
+
+  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
+  static bool classofKind(Kind K) { return K == UsingPack; }
+
+  friend class ASTDeclReader;
+  friend class ASTDeclWriter;
+  friend TrailingObjects;
+};
+
 /// \brief Represents a dependent using declaration which was not marked with
 /// \c typename.
 ///
@@ -3199,6 +3229,9 @@ class UnresolvedUsingValueDecl : public ValueDecl,
   /// \brief The source location of the 'using' keyword
   SourceLocation UsingLocation;
 
+  /// \brief If this is a pack expansion, the location of the '...'.
+  SourceLocation EllipsisLoc;
+
   /// \brief The nested-name-specifier that precedes the name.
   NestedNameSpecifierLoc QualifierLoc;
 
@@ -3209,11 +3242,12 @@ class UnresolvedUsingValueDecl : public ValueDecl,
   UnresolvedUsingValueDecl(DeclContext *DC, QualType Ty,
                            SourceLocation UsingLoc,
                            NestedNameSpecifierLoc QualifierLoc,
-                           const DeclarationNameInfo &NameInfo)
+                           const DeclarationNameInfo &NameInfo,
+                           SourceLocation EllipsisLoc)
     : ValueDecl(UnresolvedUsingValue, DC,
                 NameInfo.getLoc(), NameInfo.getName(), Ty),
-      UsingLocation(UsingLoc), QualifierLoc(QualifierLoc),
-      DNLoc(NameInfo.getInfo())
+      UsingLocation(UsingLoc), EllipsisLoc(EllipsisLoc),
+      QualifierLoc(QualifierLoc), DNLoc(NameInfo.getInfo())
   { }
 
 public:
@@ -3239,10 +3273,20 @@ public:
     return DeclarationNameInfo(getDeclName(), getLocation(), DNLoc);
   }
 
+  /// \brief Determine whether this is a pack expansion.
+  bool isPackExpansion() const {
+    return EllipsisLoc.isValid();
+  }
+
+  /// \brief Get the location of the ellipsis if this is a pack expansion.
+  SourceLocation getEllipsisLoc() const {
+    return EllipsisLoc;
+  }
+
   static UnresolvedUsingValueDecl *
     Create(ASTContext &C, DeclContext *DC, SourceLocation UsingLoc,
            NestedNameSpecifierLoc QualifierLoc,
-           const DeclarationNameInfo &NameInfo);
+           const DeclarationNameInfo &NameInfo, SourceLocation EllipsisLoc);
 
   static UnresolvedUsingValueDecl *
   CreateDeserialized(ASTContext &C, unsigned ID);
@@ -3283,6 +3327,9 @@ class UnresolvedUsingTypenameDecl
   /// \brief The source location of the 'typename' keyword
   SourceLocation TypenameLocation;
 
+  /// \brief If this is a pack expansion, the location of the '...'.
+  SourceLocation EllipsisLoc;
+
   /// \brief The nested-name-specifier that precedes the name.
   NestedNameSpecifierLoc QualifierLoc;
 
@@ -3290,10 +3337,12 @@ class UnresolvedUsingTypenameDecl
                               SourceLocation TypenameLoc,
                               NestedNameSpecifierLoc QualifierLoc,
                               SourceLocation TargetNameLoc,
-                              IdentifierInfo *TargetName)
+                              IdentifierInfo *TargetName,
+                              SourceLocation EllipsisLoc)
     : TypeDecl(UnresolvedUsingTypename, DC, TargetNameLoc, TargetName,
                UsingLoc),
-      TypenameLocation(TypenameLoc), QualifierLoc(QualifierLoc) { }
+      TypenameLocation(TypenameLoc), EllipsisLoc(EllipsisLoc),
+      QualifierLoc(QualifierLoc) { }
 
   friend class ASTDeclReader;
 
@@ -3313,10 +3362,25 @@ public:
     return QualifierLoc.getNestedNameSpecifier();
   }
 
+  DeclarationNameInfo getNameInfo() const {
+    return DeclarationNameInfo(getDeclName(), getLocation());
+  }
+
+  /// \brief Determine whether this is a pack expansion.
+  bool isPackExpansion() const {
+    return EllipsisLoc.isValid();
+  }
+
+  /// \brief Get the location of the ellipsis if this is a pack expansion.
+  SourceLocation getEllipsisLoc() const {
+    return EllipsisLoc;
+  }
+
   static UnresolvedUsingTypenameDecl *
     Create(ASTContext &C, DeclContext *DC, SourceLocation UsingLoc,
            SourceLocation TypenameLoc, NestedNameSpecifierLoc QualifierLoc,
-           SourceLocation TargetNameLoc, DeclarationName TargetName);
+           SourceLocation TargetNameLoc, DeclarationName TargetName,
+           SourceLocation EllipsisLoc);
 
   static UnresolvedUsingTypenameDecl *
   CreateDeserialized(ASTContext &C, unsigned ID);

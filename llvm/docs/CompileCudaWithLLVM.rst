@@ -35,8 +35,8 @@ by many Linux package managers; you probably need to install nvidia's package.
 
 You will need CUDA 7.0, 7.5, or 8.0 to compile with clang.
 
-CUDA compilation is supported on Linux, and on MacOS as of XXXX-XX-XX.  Windows
-support is planned but not yet in place.
+CUDA compilation is supported on Linux, on MacOS as of 2016-11-18, and on
+Windows as of 2017-01-05.
 
 Invoking clang
 --------------
@@ -62,6 +62,10 @@ brackets as described below:
   y[1] = 4
   y[2] = 6
   y[3] = 8
+
+On MacOS, replace `-lcudart_static` with `-lcudart`; otherwise, you may get
+"CUDA driver version is insufficient for CUDA runtime version" errors when you
+run your program.
 
 * ``<CUDA install path>`` -- the directory where you installed CUDA SDK.
   Typically, ``/usr/local/cuda``.

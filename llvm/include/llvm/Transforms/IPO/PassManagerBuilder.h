@@ -124,8 +124,10 @@ public:
   /// added to the per-module passes.
   Pass *Inliner;
 
-  /// The module summary index to use for function importing.
-  const ModuleSummaryIndex *ModuleSummary;
+  /// The module summary index to use for passing information between the
+  /// regular LTO phase and the thin LTO backends, for example the CFI and
+  /// devirtualization type tests.
+  ModuleSummaryIndex *Summary = nullptr;
 
   bool DisableTailCalls;
   bool DisableUnitAtATime;
@@ -135,6 +137,7 @@ public:
   bool LoopVectorize;
   bool RerollLoops;
   bool LoadCombine;
+  bool NewGVN;
   bool DisableGVNLoadPRE;
   bool VerifyInput;
   bool VerifyOutput;
@@ -149,6 +152,8 @@ public:
   std::string PGOInstrGen;
   /// Path of the profile data file.
   std::string PGOInstrUse;
+  /// Path of the sample Profile data file.
+  std::string PGOSampleUse;
 
 private:
   /// ExtensionList - This is list of all of the extensions that are registered.

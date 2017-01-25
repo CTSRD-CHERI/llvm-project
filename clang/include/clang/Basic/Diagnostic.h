@@ -23,22 +23,33 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/iterator_range.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
 #include <list>
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace clang {
-  class DeclContext;
-  class DiagnosticBuilder;
-  class DiagnosticConsumer;
-  class DiagnosticErrorTrap;
-  class DiagnosticOptions;
-  class IdentifierInfo;
-  class LangOptions;
-  class Preprocessor;
-  class StoredDiagnostic;
-  namespace tok {
+
+class DeclContext;
+class DiagnosticBuilder;
+class DiagnosticConsumer;
+class IdentifierInfo;
+class LangOptions;
+class Preprocessor;
+class StoredDiagnostic;
+
+namespace tok {
+
   enum TokenKind : unsigned short;
-  }
+
+} // end namespace tok
 
 /// \brief Annotates a diagnostic with some code that should be
 /// inserted, removed, or replaced to fix the problem.
@@ -133,9 +144,6 @@ public:
 /// the user. DiagnosticsEngine is tied to one translation unit and one
 /// SourceManager.
 class DiagnosticsEngine : public RefCountedBase<DiagnosticsEngine> {
-  DiagnosticsEngine(const DiagnosticsEngine &) = delete;
-  void operator=(const DiagnosticsEngine &) = delete;
-
 public:
   /// \brief The level of the diagnostic, after it has been through mapping.
   enum Level {
@@ -231,19 +239,9 @@ private:
   /// modifications done through the command-line.
   struct DiagStatePoint {
     DiagState *State;
-    FullSourceLoc Loc;
-    DiagStatePoint(DiagState *State, FullSourceLoc Loc)
+    SourceLocation Loc;
+    DiagStatePoint(DiagState *State, SourceLocation Loc)
       : State(State), Loc(Loc) { } 
-    
-    bool operator<(const DiagStatePoint &RHS) const {
-      // If Loc is invalid it means it came from <command-line>, in which case
-      // we regard it as coming before any valid source location.
-      if (RHS.Loc.isInvalid())
-        return false;
-      if (Loc.isInvalid())
-        return true;
-      return Loc.isBeforeInTranslationUnitThan(RHS.Loc);
-    }
   };
 
   /// \brief A sorted vector of all DiagStatePoints representing changes in
@@ -263,16 +261,7 @@ private:
     return DiagStatePoints.back().State;
   }
 
-  void PushDiagStatePoint(DiagState *State, SourceLocation L) {
-    FullSourceLoc Loc(L, getSourceManager());
-    // Make sure that DiagStatePoints is always sorted according to Loc.
-    assert(Loc.isValid() && "Adding invalid loc point");
-    assert(!DiagStatePoints.empty() &&
-           (DiagStatePoints.back().Loc.isInvalid() ||
-            DiagStatePoints.back().Loc.isBeforeInTranslationUnitThan(Loc)) &&
-           "Previous point loc comes after or is the same as new one");
-    DiagStatePoints.push_back(DiagStatePoint(State, Loc));
-  }
+  void PushDiagStatePoint(DiagState *State, SourceLocation L);
 
   /// \brief Finds the DiagStatePoint that contains the diagnostic state of
   /// the given source location.
@@ -348,6 +337,8 @@ public:
                              DiagnosticOptions *DiagOpts,
                              DiagnosticConsumer *client = nullptr,
                              bool ShouldOwnClient = true);
+  DiagnosticsEngine(const DiagnosticsEngine &) = delete;
+  DiagnosticsEngine &operator=(const DiagnosticsEngine &) = delete;
   ~DiagnosticsEngine();
 
   const IntrusiveRefCntPtr<DiagnosticIDs> &getDiagnosticIDs() const {
@@ -380,7 +371,11 @@ public:
     assert(SourceMgr && "SourceManager not set!");
     return *SourceMgr;
   }
-  void setSourceManager(SourceManager *SrcMgr) { SourceMgr = SrcMgr; }
+  void setSourceManager(SourceManager *SrcMgr) {
+    assert(DiagStatePoints.size() == 1 && DiagStatePoints[0].Loc.isInvalid() &&
+           "Leftover diag state from a different SourceManager.");
+    SourceMgr = SrcMgr;
+  }
 
   //===--------------------------------------------------------------------===//
   //  DiagnosticsEngine characterization methods, used by a client to customize
@@ -884,7 +879,6 @@ class DiagnosticBuilder {
   /// call to ForceEmit.
   mutable bool IsForceEmit = false;
 
-  void operator=(const DiagnosticBuilder &) = delete;
   friend class DiagnosticsEngine;
 
   DiagnosticBuilder() = default;
@@ -949,16 +943,18 @@ public:
     NumArgs = D.NumArgs;
   }
 
-  /// \brief Retrieve an empty diagnostic builder.
-  static DiagnosticBuilder getEmpty() {
-    return DiagnosticBuilder();
-  }
+  DiagnosticBuilder &operator=(const DiagnosticBuilder &) = delete;
 
   /// \brief Emits the diagnostic.
   ~DiagnosticBuilder() {
     Emit();
   }
-  
+
+  /// \brief Retrieve an empty diagnostic builder.
+  static DiagnosticBuilder getEmpty() {
+    return DiagnosticBuilder();
+  }
+
   /// \brief Forces the diagnostic to be emitted.
   const DiagnosticBuilder &setForceEmit() const {
     IsForceEmit = true;
@@ -1143,6 +1139,7 @@ inline DiagnosticBuilder DiagnosticsEngine::Report(unsigned DiagID) {
 class Diagnostic {
   const DiagnosticsEngine *DiagObj;
   StringRef StoredDiagMessage;
+
 public:
   explicit Diagnostic(const DiagnosticsEngine *DO) : DiagObj(DO) {}
   Diagnostic(const DiagnosticsEngine *DO, StringRef storedDiagMessage)
@@ -1279,7 +1276,7 @@ public:
                    ArrayRef<FixItHint> Fixits);
 
   /// \brief Evaluates true when this object stores a diagnostic.
-  explicit operator bool() const { return Message.size() > 0; }
+  explicit operator bool() const { return !Message.empty(); }
 
   unsigned getID() const { return ID; }
   DiagnosticsEngine::Level getLevel() const { return Level; }
@@ -1297,7 +1294,6 @@ public:
     return llvm::makeArrayRef(Ranges);
   }
 
-
   typedef std::vector<FixItHint>::const_iterator fixit_iterator;
   fixit_iterator fixit_begin() const { return FixIts.begin(); }
   fixit_iterator fixit_end() const { return FixIts.end(); }
@@ -1312,17 +1308,17 @@ public:
 /// formats and prints fully processed diagnostics.
 class DiagnosticConsumer {
 protected:
-  unsigned NumWarnings;       ///< Number of warnings reported
-  unsigned NumErrors;         ///< Number of errors reported
+  unsigned NumWarnings = 0;       ///< Number of warnings reported
+  unsigned NumErrors = 0;         ///< Number of errors reported
   
 public:
-  DiagnosticConsumer() : NumWarnings(0), NumErrors(0) { }
+  DiagnosticConsumer() = default;
+
+  virtual ~DiagnosticConsumer();
 
   unsigned getNumErrors() const { return NumErrors; }
   unsigned getNumWarnings() const { return NumWarnings; }
   virtual void clear() { NumWarnings = NumErrors = 0; }
-
-  virtual ~DiagnosticConsumer();
 
   /// \brief Callback to inform the diagnostic client that processing
   /// of a source file is beginning.
@@ -1368,6 +1364,7 @@ public:
 /// \brief A diagnostic client that ignores all diagnostics.
 class IgnoringDiagConsumer : public DiagnosticConsumer {
   virtual void anchor();
+
   void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
                         const Diagnostic &Info) override {
     // Just ignore it.
@@ -1415,6 +1412,6 @@ void ProcessWarningOptions(DiagnosticsEngine &Diags,
                            const DiagnosticOptions &Opts,
                            bool ReportDiags = true);
 
-}  // end namespace clang
+} // end namespace clang
 
-#endif
+#endif // LLVM_CLANG_BASIC_DIAGNOSTIC_H

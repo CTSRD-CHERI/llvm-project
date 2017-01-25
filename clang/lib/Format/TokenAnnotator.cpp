@@ -317,7 +317,8 @@ private:
          Contexts.back().InTemplateArgument);
 
     bool StartsObjCMethodExpr =
-        !CppArrayTemplates && Style.Language == FormatStyle::LK_Cpp &&
+        !CppArrayTemplates && (Style.Language == FormatStyle::LK_Cpp ||
+                               Style.Language == FormatStyle::LK_ObjC) &&
         Contexts.back().CanBeExpression && Left->isNot(TT_LambdaLSquare) &&
         CurrentToken->isNot(tok::l_brace) &&
         (!Parent ||
@@ -433,7 +434,8 @@ private:
           FormatToken *Previous = CurrentToken->getPreviousNonComment();
           if (((CurrentToken->is(tok::colon) &&
                 (!Contexts.back().ColonIsDictLiteral ||
-                 Style.Language != FormatStyle::LK_Cpp)) ||
+                 (Style.Language != FormatStyle::LK_Cpp &&
+                  Style.Language != FormatStyle::LK_ObjC))) ||
                Style.Language == FormatStyle::LK_Proto) &&
               (Previous->Tok.getIdentifierInfo() ||
                Previous->is(tok::string_literal)))
@@ -442,6 +444,9 @@ private:
               Style.Language == FormatStyle::LK_JavaScript)
             Left->Type = TT_DictLiteral;
         }
+        if (CurrentToken->is(tok::comma) &&
+            Style.Language == FormatStyle::LK_JavaScript)
+          Left->Type = TT_DictLiteral;
         if (!consumeToken())
           return false;
       }
@@ -1171,6 +1176,7 @@ private:
   bool rParenEndsCast(const FormatToken &Tok) {
     // C-style casts are only used in C++ and Java.
     if (Style.Language != FormatStyle::LK_Cpp &&
+        Style.Language != FormatStyle::LK_ObjC &&
         Style.Language != FormatStyle::LK_Java)
       return false;
 
@@ -1276,9 +1282,7 @@ private:
       return TT_UnaryOperator;
 
     const FormatToken *NextToken = Tok.getNextNonComment();
-    if (!NextToken ||
-        NextToken->isOneOf(tok::arrow, Keywords.kw_final, tok::equal,
-                           Keywords.kw_override) ||
+    if (!NextToken || NextToken->isOneOf(tok::arrow, tok::equal) ||
         (NextToken->is(tok::l_brace) && !NextToken->getNextNonComment()))
       return TT_PointerOrReference;
 
@@ -1876,8 +1880,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
       return 100;
   }
 
-  if (Left.is(tok::comma) || (Right.is(tok::identifier) && Right.Next &&
-                              Right.Next->is(TT_DictLiteral)))
+  if (Right.is(tok::identifier) && Right.Next && Right.Next->is(TT_DictLiteral))
     return 1;
   if (Right.is(tok::l_square)) {
     if (Style.Language == FormatStyle::LK_Proto)
@@ -1993,20 +1996,24 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
   if (Left.is(TT_JavaAnnotation))
     return 50;
 
+  if (Left.isOneOf(tok::plus, tok::comma) && Left.Previous &&
+      Left.Previous->isLabelString() &&
+      (Left.NextOperator || Left.OperatorIndex != 0))
+    return 45;
+  if (Right.is(tok::plus) && Left.isLabelString() &&
+      (Right.NextOperator || Right.OperatorIndex != 0))
+    return 25;
+  if (Left.is(tok::comma))
+    return 1;
+  if (Right.is(tok::lessless) && Left.isLabelString() &&
+      (Right.NextOperator || Right.OperatorIndex != 1))
+    return 25;
   if (Right.is(tok::lessless)) {
-    if (Left.is(tok::string_literal) &&
-        (Right.NextOperator || Right.OperatorIndex != 1)) {
-      StringRef Content = Left.TokenText;
-      if (Content.startswith("\""))
-        Content = Content.drop_front(1);
-      if (Content.endswith("\""))
-        Content = Content.drop_back(1);
-      Content = Content.trim();
-      if (Content.size() > 1 &&
-          (Content.back() == ':' || Content.back() == '='))
-        return 25;
-    }
-    return 1; // Breaking at a << is really cheap.
+    // Breaking at a << is really cheap.
+    if (!Left.is(tok::r_paren) || Right.OperatorIndex > 0)
+      // Slightly prefer to break before the first one in log-like statements.
+      return 2;
+    return 1;
   }
   if (Left.is(TT_ConditionalExpr))
     return prec::Conditional;
@@ -2079,9 +2086,9 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
         !Line.IsMultiVariableDeclStmt)))
     return true;
   if (Left.is(TT_PointerOrReference))
-    return Right.Tok.isLiteral() ||
-           Right.isOneOf(TT_BlockComment, Keywords.kw_final,
-                         Keywords.kw_override) ||
+    return Right.Tok.isLiteral() || Right.is(TT_BlockComment) ||
+           (Right.isOneOf(Keywords.kw_override, Keywords.kw_final) &&
+            !Right.is(TT_StartOfName)) ||
            (Right.is(tok::l_brace) && Right.BlockKind == BK_Block) ||
            (!Right.isOneOf(TT_PointerOrReference, TT_ArraySubscriptLSquare,
                            tok::l_paren) &&
@@ -2625,7 +2632,8 @@ void TokenAnnotator::printDebugInfo(const AnnotatedLine &Line) {
                  << " FakeLParens=";
     for (unsigned i = 0, e = Tok->FakeLParens.size(); i != e; ++i)
       llvm::errs() << Tok->FakeLParens[i] << "/";
-    llvm::errs() << " FakeRParens=" << Tok->FakeRParens << "\n";
+    llvm::errs() << " FakeRParens=" << Tok->FakeRParens;
+    llvm::errs() << " Text='" << Tok->TokenText << "'\n";
     if (!Tok->Next)
       assert(Tok == Line.Last);
     Tok = Tok->Next;

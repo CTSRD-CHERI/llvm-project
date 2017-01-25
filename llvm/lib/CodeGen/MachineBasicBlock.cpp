@@ -148,8 +148,11 @@ MachineBasicBlock::iterator MachineBasicBlock::getFirstNonPHI() {
 
 MachineBasicBlock::iterator
 MachineBasicBlock::SkipPHIsAndLabels(MachineBasicBlock::iterator I) {
+  const TargetInstrInfo *TII = getParent()->getSubtarget().getInstrInfo();
+
   iterator E = end();
-  while (I != E && (I->isPHI() || I->isPosition()))
+  while (I != E && (I->isPHI() || I->isPosition() ||
+                    TII->isBasicBlockPrologue(*I)))
     ++I;
   // FIXME: This needs to change if we wish to bundle labels
   // inside the bundle.
@@ -160,8 +163,11 @@ MachineBasicBlock::SkipPHIsAndLabels(MachineBasicBlock::iterator I) {
 
 MachineBasicBlock::iterator
 MachineBasicBlock::SkipPHIsLabelsAndDebug(MachineBasicBlock::iterator I) {
+  const TargetInstrInfo *TII = getParent()->getSubtarget().getInstrInfo();
+
   iterator E = end();
-  while (I != E && (I->isPHI() || I->isPosition() || I->isDebugValue()))
+  while (I != E && (I->isPHI() || I->isPosition() || I->isDebugValue() ||
+                    TII->isBasicBlockPrologue(*I)))
     ++I;
   // FIXME: This needs to change if we wish to bundle labels / dbg_values
   // inside the bundle.
@@ -191,10 +197,7 @@ MachineBasicBlock::instr_iterator MachineBasicBlock::getFirstInstrTerminator() {
 
 MachineBasicBlock::iterator MachineBasicBlock::getFirstNonDebugInstr() {
   // Skip over begin-of-block dbg_value instructions.
-  iterator I = begin(), E = end();
-  while (I != E && I->isDebugValue())
-    ++I;
-  return I;
+  return skipDebugInstructionsForward(begin(), end());
 }
 
 MachineBasicBlock::iterator MachineBasicBlock::getLastNonDebugInstr() {
@@ -289,9 +292,9 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
   if (!livein_empty()) {
     if (Indexes) OS << '\t';
     OS << "    Live Ins:";
-    for (const auto &LI : make_range(livein_begin(), livein_end())) {
+    for (const auto &LI : LiveIns) {
       OS << ' ' << PrintReg(LI.PhysReg, TRI);
-      if (LI.LaneMask != ~0u)
+      if (!LI.LaneMask.all())
         OS << ':' << PrintLaneMask(LI.LaneMask);
     }
     OS << '\n';
@@ -342,14 +345,14 @@ void MachineBasicBlock::removeLiveIn(MCPhysReg Reg, LaneBitmask LaneMask) {
     return;
 
   I->LaneMask &= ~LaneMask;
-  if (I->LaneMask == 0)
+  if (I->LaneMask.none())
     LiveIns.erase(I);
 }
 
 bool MachineBasicBlock::isLiveIn(MCPhysReg Reg, LaneBitmask LaneMask) const {
   livein_iterator I = find_if(
       LiveIns, [Reg](const RegisterMaskPair &LI) { return LI.PhysReg == Reg; });
-  return I != livein_end() && (I->LaneMask & LaneMask) != 0;
+  return I != livein_end() && (I->LaneMask & LaneMask).any();
 }
 
 void MachineBasicBlock::sortUniqueLiveIns() {
@@ -1140,17 +1143,11 @@ bool MachineBasicBlock::CorrectExtraCFGEdges(MachineBasicBlock *DestA,
 /// instructions.  Return UnknownLoc if there is none.
 DebugLoc
 MachineBasicBlock::findDebugLoc(instr_iterator MBBI) {
-  DebugLoc DL;
-  instr_iterator E = instr_end();
-  if (MBBI == E)
-    return DL;
-
   // Skip debug declarations, we don't want a DebugLoc from them.
-  while (MBBI != E && MBBI->isDebugValue())
-    MBBI++;
-  if (MBBI != E)
-    DL = MBBI->getDebugLoc();
-  return DL;
+  MBBI = skipDebugInstructionsForward(MBBI, instr_end());
+  if (MBBI != instr_end())
+    return MBBI->getDebugLoc();
+  return {};
 }
 
 /// Return probability of the edge from this block to MBB.
@@ -1296,4 +1293,15 @@ MachineBasicBlock::getEndClobberMask(const TargetRegisterInfo *TRI) const {
   // which does not preserve any registers. If there are no successors, we don't
   // care what kind of return it is, putting a mask after it is a no-op.
   return isReturnBlock() && !succ_empty() ? TRI->getNoPreservedMask() : nullptr;
+}
+
+void MachineBasicBlock::clearLiveIns() {
+  LiveIns.clear();
+}
+
+MachineBasicBlock::livein_iterator MachineBasicBlock::livein_begin() const {
+  assert(getParent()->getProperties().hasProperty(
+      MachineFunctionProperties::Property::TracksLiveness) &&
+      "Liveness information is accurate");
+  return LiveIns.begin();
 }

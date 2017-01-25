@@ -973,6 +973,9 @@ bool AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
 
     // This is a symbol reference.
     StringRef SymbolName = Identifier;
+    if (SymbolName.empty())
+      return true;
+
     MCSymbolRefExpr::VariantKind Variant = MCSymbolRefExpr::VK_None;
 
     // Lookup the symbol variant if used.
@@ -1002,7 +1005,7 @@ bool AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
     }
 
     // Otherwise create a symbol ref.
-    Res = MCSymbolRefExpr::create(Sym, Variant, getContext());
+    Res = MCSymbolRefExpr::create(Sym, Variant, getContext(), FirstTokenLoc);
     return false;
   }
   case AsmToken::BigNum:
@@ -1039,7 +1042,7 @@ bool AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
     return false;
   }
   case AsmToken::Real: {
-    APFloat RealVal(APFloat::IEEEdouble, getTok().getString());
+    APFloat RealVal(APFloat::IEEEdouble(), getTok().getString());
     uint64_t IntVal = RealVal.bitcastToAPInt().getZExtValue();
     Res = MCConstantExpr::create(IntVal, getContext());
     EndLoc = Lexer.getTok().getEndLoc();
@@ -1433,6 +1436,7 @@ unsigned AsmParser::getBinOpPrecedence(AsmToken::TokenKind K,
 /// Res contains the LHS of the expression on input.
 bool AsmParser::parseBinOpRHS(unsigned Precedence, const MCExpr *&Res,
                               SMLoc &EndLoc) {
+  SMLoc StartLoc = Lexer.getLoc();
   while (true) {
     MCBinaryExpr::Opcode Kind = MCBinaryExpr::Add;
     unsigned TokPrec = getBinOpPrecedence(Lexer.getKind(), Kind);
@@ -1457,7 +1461,7 @@ bool AsmParser::parseBinOpRHS(unsigned Precedence, const MCExpr *&Res,
       return true;
 
     // Merge LHS and RHS according to operator.
-    Res = MCBinaryExpr::create(Kind, Res, RHS, getContext());
+    Res = MCBinaryExpr::create(Kind, Res, RHS, getContext(), StartLoc);
   }
 }
 
@@ -1758,10 +1762,10 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
     case DK_SINGLE:
     case DK_FLOAT:
     case DK_DC_S:
-      return parseDirectiveRealValue(IDVal, APFloat::IEEEsingle);
+      return parseDirectiveRealValue(IDVal, APFloat::IEEEsingle());
     case DK_DOUBLE:
     case DK_DC_D:
-      return parseDirectiveRealValue(IDVal, APFloat::IEEEdouble);
+      return parseDirectiveRealValue(IDVal, APFloat::IEEEdouble());
     case DK_ALIGN: {
       bool IsPow2 = !getContext().getAsmInfo()->getAlignmentIsInBytes();
       return parseDirectiveAlign(IsPow2, /*ExprSize=*/1);
@@ -1940,11 +1944,11 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
     case DK_DCB_B:
       return parseDirectiveDCB(IDVal, 1);
     case DK_DCB_D:
-      return parseDirectiveRealDCB(IDVal, APFloat::IEEEdouble);
+      return parseDirectiveRealDCB(IDVal, APFloat::IEEEdouble());
     case DK_DCB_L:
       return parseDirectiveDCB(IDVal, 4);
     case DK_DCB_S:
-      return parseDirectiveRealDCB(IDVal, APFloat::IEEEsingle);
+      return parseDirectiveRealDCB(IDVal, APFloat::IEEEsingle());
     case DK_DC_X:
     case DK_DCB_X:
       return TokError(Twine(IDVal) +
@@ -2962,6 +2966,7 @@ bool AsmParser::parseDirectiveFill() {
 ///  ::= .org expression [ , expression ]
 bool AsmParser::parseDirectiveOrg() {
   const MCExpr *Offset;
+  SMLoc OffsetLoc = Lexer.getLoc();
   if (checkForValidSection() || parseExpression(Offset))
     return true;
 
@@ -2973,7 +2978,7 @@ bool AsmParser::parseDirectiveOrg() {
   if (parseToken(AsmToken::EndOfStatement))
     return addErrorSuffix(" in '.org' directive");
 
-  getStreamer().emitValueToOffset(Offset, FillExpr);
+  getStreamer().emitValueToOffset(Offset, FillExpr, OffsetLoc);
   return false;
 }
 
@@ -5499,7 +5504,7 @@ bool parseAssignmentExpression(StringRef Name, bool allow_redef,
                           "invalid reassignment of non-absolute variable '" +
                               Name + "'");
   } else if (Name == ".") {
-    Parser.getStreamer().emitValueToOffset(Value, 0);
+    Parser.getStreamer().emitValueToOffset(Value, 0, EqualLoc);
     return false;
   } else
     Sym = Parser.getContext().getOrCreateSymbol(Name);

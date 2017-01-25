@@ -69,7 +69,7 @@ static cl::opt<enum AnalysisType> OptAnalysisType(
     cl::Hidden, cl::init(VALUE_BASED_ANALYSIS), cl::ZeroOrMore,
     cl::cat(PollyCategory));
 
-static cl::opt<Dependences::AnalyisLevel> OptAnalysisLevel(
+static cl::opt<Dependences::AnalysisLevel> OptAnalysisLevel(
     "polly-dependences-analysis-level",
     cl::desc("The level of dependence analysis"),
     cl::values(clEnumValN(Dependences::AL_Statement, "statement-wise",
@@ -99,7 +99,7 @@ static __isl_give isl_map *tag(__isl_take isl_map *Relation,
 /// Tag the @p Relation domain with either MA->getArrayId() or
 ///        MA->getId() based on @p TagLevel
 static __isl_give isl_map *tag(__isl_take isl_map *Relation, MemoryAccess *MA,
-                               Dependences::AnalyisLevel TagLevel) {
+                               Dependences::AnalysisLevel TagLevel) {
   if (TagLevel == Dependences::AL_Reference)
     return tag(Relation, MA->getArrayId());
 
@@ -115,7 +115,7 @@ static void collectInfo(Scop &S, isl_union_map **Read, isl_union_map **Write,
                         isl_union_map **MayWrite,
                         isl_union_map **AccessSchedule,
                         isl_union_map **StmtSchedule,
-                        Dependences::AnalyisLevel Level) {
+                        Dependences::AnalysisLevel Level) {
   isl_space *Space = S.getParamSpace();
   *Read = isl_union_map_empty(isl_space_copy(Space));
   *Write = isl_union_map_empty(isl_space_copy(Space));
@@ -151,8 +151,9 @@ static void collectInfo(Scop &S, isl_union_map **Read, isl_union_map **Write,
         // to match the new access domains, thus we need
         //   [Stmt[i0, i1] -> MemAcc_A[i0 + i1]] -> [0, i0, 2, i1, 0]
         isl_map *Schedule = Stmt.getSchedule();
-        assert(Schedule && "Schedules that contain extension nodes require "
-                           "special handling.");
+        assert(Schedule &&
+               "Schedules that contain extension nodes require special "
+               "handling.");
         Schedule = isl_map_apply_domain(
             Schedule,
             isl_map_reverse(isl_map_domain_map(isl_map_copy(accdom))));
@@ -163,8 +164,9 @@ static void collectInfo(Scop &S, isl_union_map **Read, isl_union_map **Write,
         accdom = tag(accdom, MA, Level);
         if (Level > Dependences::AL_Statement) {
           auto *StmtScheduleMap = Stmt.getSchedule();
-          assert(StmtScheduleMap && "Schedules that contain extension nodes "
-                                    "require special handling.");
+          assert(StmtScheduleMap &&
+                 "Schedules that contain extension nodes require special "
+                 "handling.");
           isl_map *Schedule = tag(StmtScheduleMap, MA, Level);
           *StmtSchedule = isl_union_map_add_map(*StmtSchedule, Schedule);
         }
@@ -274,8 +276,9 @@ void Dependences::addPrivatizationDependences() {
     *PrivMap = isl_union_map_apply_range(isl_union_map_copy(*Map),
                                          isl_union_map_copy(TC_RED));
     *PrivMap = isl_union_map_union(
-        *PrivMap, isl_union_map_apply_range(isl_union_map_copy(TC_RED),
-                                            isl_union_map_copy(*Map)));
+        *PrivMap,
+        isl_union_map_apply_range(isl_union_map_copy(TC_RED),
+                                  isl_union_map_copy(*Map)));
 
     *Map = isl_union_map_union(*Map, *PrivMap);
   }
@@ -773,7 +776,7 @@ void Dependences::setReductionDependences(MemoryAccess *MA, isl_map *D) {
 }
 
 const Dependences &
-DependenceInfo::getDependences(Dependences::AnalyisLevel Level) {
+DependenceInfo::getDependences(Dependences::AnalysisLevel Level) {
   if (Dependences *d = D[Level].get())
     return *d;
 
@@ -781,7 +784,7 @@ DependenceInfo::getDependences(Dependences::AnalyisLevel Level) {
 }
 
 const Dependences &
-DependenceInfo::recomputeDependences(Dependences::AnalyisLevel Level) {
+DependenceInfo::recomputeDependences(Dependences::AnalysisLevel Level) {
   D[Level].reset(new Dependences(S->getSharedIslCtx(), Level));
   D[Level]->calculateDependences(*S);
   return *D[Level];
@@ -824,7 +827,7 @@ INITIALIZE_PASS_END(DependenceInfo, "polly-dependences",
 //===----------------------------------------------------------------------===//
 const Dependences &
 DependenceInfoWrapperPass::getDependences(Scop *S,
-                                          Dependences::AnalyisLevel Level) {
+                                          Dependences::AnalysisLevel Level) {
   auto It = ScopToDepsMap.find(S);
   if (It != ScopToDepsMap.end())
     if (It->second) {
@@ -835,7 +838,7 @@ DependenceInfoWrapperPass::getDependences(Scop *S,
 }
 
 const Dependences &DependenceInfoWrapperPass::recomputeDependences(
-    Scop *S, Dependences::AnalyisLevel Level) {
+    Scop *S, Dependences::AnalysisLevel Level) {
   std::unique_ptr<Dependences> D(new Dependences(S->getSharedIslCtx(), Level));
   D->calculateDependences(*S);
   auto Inserted = ScopToDepsMap.insert(std::make_pair(S, std::move(D)));

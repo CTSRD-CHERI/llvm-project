@@ -600,14 +600,14 @@ private:
   /// Information about the number of times a particular loop exit may be
   /// reached before exiting the loop.
   struct ExitNotTakenInfo {
-    AssertingVH<BasicBlock> ExitingBlock;
+    PoisoningVH<BasicBlock> ExitingBlock;
     const SCEV *ExactNotTaken;
     std::unique_ptr<SCEVUnionPredicate> Predicate;
     bool hasAlwaysTruePredicate() const {
       return !Predicate || Predicate->isAlwaysTrue();
     }
 
-    explicit ExitNotTakenInfo(AssertingVH<BasicBlock> ExitingBlock,
+    explicit ExitNotTakenInfo(PoisoningVH<BasicBlock> ExitingBlock,
                               const SCEV *ExactNotTaken,
                               std::unique_ptr<SCEVUnionPredicate> Predicate)
         : ExitingBlock(ExitingBlock), ExactNotTaken(ExactNotTaken),
@@ -1491,6 +1491,8 @@ public:
 
   void print(raw_ostream &OS) const;
   void verify() const;
+  bool invalidate(Function &F, const PreservedAnalyses &PA,
+                  FunctionAnalysisManager::Invalidator &Inv);
 
   /// Collect parametric terms occurring in step expressions (first step of
   /// delinearization).
@@ -1626,7 +1628,7 @@ private:
 class ScalarEvolutionAnalysis
     : public AnalysisInfoMixin<ScalarEvolutionAnalysis> {
   friend AnalysisInfoMixin<ScalarEvolutionAnalysis>;
-  static char PassID;
+  static AnalysisKey Key;
 
 public:
   typedef ScalarEvolution Result;

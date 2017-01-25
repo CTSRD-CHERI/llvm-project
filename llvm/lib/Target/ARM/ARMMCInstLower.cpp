@@ -22,8 +22,6 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCSymbolELF.h"
-#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCStreamer.h"
 using namespace llvm;
@@ -90,6 +88,8 @@ bool ARMAsmPrinter::lowerOperand(const MachineOperand &MO,
     MCOp = GetSymbolRef(MO, GetJTISymbol(MO.getIndex()));
     break;
   case MachineOperand::MO_ConstantPoolIndex:
+    if (Subtarget->genExecuteOnly())
+      llvm_unreachable("execute-only should not generate constant pools");
     MCOp = GetSymbolRef(MO, GetCPISymbol(MO.getIndex()));
     break;
   case MachineOperand::MO_BlockAddress:
@@ -98,7 +98,7 @@ bool ARMAsmPrinter::lowerOperand(const MachineOperand &MO,
   case MachineOperand::MO_FPImmediate: {
     APFloat Val = MO.getFPImm()->getValueAPF();
     bool ignored;
-    Val.convert(APFloat::IEEEdouble, APFloat::rmTowardZero, &ignored);
+    Val.convert(APFloat::IEEEdouble(), APFloat::rmTowardZero, &ignored);
     MCOp = MCOperand::createFPImm(Val.convertToDouble());
     break;
   }
@@ -222,30 +222,4 @@ void ARMAsmPrinter::LowerPATCHABLE_FUNCTION_EXIT(const MachineInstr &MI)
 void ARMAsmPrinter::LowerPATCHABLE_TAIL_CALL(const MachineInstr &MI)
 {
   EmitSled(MI, SledKind::TAIL_CALL);
-}
-
-void ARMAsmPrinter::EmitXRayTable()
-{
-  if (Sleds.empty())
-    return;
-  if (Subtarget->isTargetELF()) {
-    auto *Section = OutContext.getELFSection(
-      "xray_instr_map", ELF::SHT_PROGBITS,
-      ELF::SHF_ALLOC | ELF::SHF_GROUP | ELF::SHF_MERGE, 0,
-      CurrentFnSym->getName());
-    auto PrevSection = OutStreamer->getCurrentSectionOnly();
-    OutStreamer->SwitchSection(Section);
-    for (const auto &Sled : Sleds) {
-      OutStreamer->EmitSymbolValue(Sled.Sled, 4);
-      OutStreamer->EmitSymbolValue(CurrentFnSym, 4);
-      auto Kind = static_cast<uint8_t>(Sled.Kind);
-      OutStreamer->EmitBytes(
-        StringRef(reinterpret_cast<const char *>(&Kind), 1));
-      OutStreamer->EmitBytes(
-        StringRef(reinterpret_cast<const char *>(&Sled.AlwaysInstrument), 1));
-      OutStreamer->EmitZeros(6);
-    }
-    OutStreamer->SwitchSection(PrevSection);
-  }
-  Sleds.clear();
 }

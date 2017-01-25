@@ -13,6 +13,7 @@
 #include "AvoidConstParamsInDecls.h"
 #include "BracesAroundStatementsCheck.h"
 #include "ContainerSizeEmptyCheck.h"
+#include "DeleteNullPointerCheck.h"
 #include "DeletedDefaultCheck.h"
 #include "ElseAfterReturnCheck.h"
 #include "FunctionSizeCheck.h"
@@ -24,6 +25,7 @@
 #include "NonConstParameterCheck.h"
 #include "RedundantControlFlowCheck.h"
 #include "RedundantDeclarationCheck.h"
+#include "RedundantFunctionPtrDereferenceCheck.h"
 #include "RedundantMemberInitCheck.h"
 #include "RedundantSmartptrGetCheck.h"
 #include "RedundantStringCStrCheck.h"
@@ -45,6 +47,8 @@ public:
         "readability-braces-around-statements");
     CheckFactories.registerCheck<ContainerSizeEmptyCheck>(
         "readability-container-size-empty");
+    CheckFactories.registerCheck<DeleteNullPointerCheck>(
+        "readability-delete-null-pointer");
     CheckFactories.registerCheck<DeletedDefaultCheck>(
         "readability-deleted-default");
     CheckFactories.registerCheck<ElseAfterReturnCheck>(
@@ -59,6 +63,8 @@ public:
         "readability-inconsistent-declaration-parameter-name");
     CheckFactories.registerCheck<MisplacedArrayIndexCheck>(
         "readability-misplaced-array-index");
+    CheckFactories.registerCheck<RedundantFunctionPtrDereferenceCheck>(
+        "readability-redundant-function-ptr-dereference");
     CheckFactories.registerCheck<RedundantMemberInitCheck>(
         "readability-redundant-member-init");
     CheckFactories.registerCheck<StaticDefinitionInAnonymousNamespaceCheck>(

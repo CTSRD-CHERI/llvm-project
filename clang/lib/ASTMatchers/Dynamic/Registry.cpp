@@ -232,6 +232,7 @@ RegistryMaps::RegistryMaps() {
   REGISTER_MATCHER(hasFalseExpression);
   REGISTER_MATCHER(hasGlobalStorage);
   REGISTER_MATCHER(hasImplicitDestinationType);
+  REGISTER_MATCHER(hasInClassInitializer);
   REGISTER_MATCHER(hasIncrement);
   REGISTER_MATCHER(hasIndex);
   REGISTER_MATCHER(hasInitializer);
@@ -252,6 +253,7 @@ RegistryMaps::RegistryMaps() {
   REGISTER_MATCHER(hasQualifier);
   REGISTER_MATCHER(hasRangeInit);
   REGISTER_MATCHER(hasReceiverType);
+  REGISTER_MATCHER(hasReplacementType);
   REGISTER_MATCHER(hasReturnValue);
   REGISTER_MATCHER(hasRHS);
   REGISTER_MATCHER(hasSelector);
@@ -270,6 +272,7 @@ RegistryMaps::RegistryMaps() {
   REGISTER_MATCHER(hasUnaryOperand);
   REGISTER_MATCHER(hasUnarySelector);
   REGISTER_MATCHER(hasUnderlyingDecl);
+  REGISTER_MATCHER(hasUnqualifiedDesugaredType);
   REGISTER_MATCHER(hasValueType);
   REGISTER_MATCHER(ifStmt);
   REGISTER_MATCHER(ignoringImplicit);

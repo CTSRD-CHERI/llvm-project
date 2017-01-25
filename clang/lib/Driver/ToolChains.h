@@ -43,7 +43,7 @@ private:
   mutable llvm::SmallSet<CudaArch, 4> ArchsWithVersionTooLowErrors;
 
 public:
-  CudaInstallationDetector(const Driver &D, const llvm::Triple &Triple,
+  CudaInstallationDetector(const Driver &D, const llvm::Triple &HostTriple,
                            const llvm::opt::ArgList &Args);
 
   void AddCudaIncludeArgs(const llvm::opt::ArgList &DriverArgs,
@@ -196,6 +196,11 @@ public:
                              SmallVectorImpl<StringRef> &BiarchLibDirs,
                              SmallVectorImpl<StringRef> &BiarchTripleAliases);
 
+    bool ScanGCCForMultilibs(const llvm::Triple &TargetTriple,
+                             const llvm::opt::ArgList &Args,
+                             StringRef Path,
+                             bool NeedsBiarchSuffix = false);
+
     void ScanLibDirForGCCTriple(const llvm::Triple &TargetArch,
                                 const llvm::opt::ArgList &Args,
                                 const std::string &LibDir,
@@ -207,6 +212,11 @@ public:
                                        const std::string &LibDir,
                                        StringRef CandidateTriple,
                                        bool NeedsBiarchSuffix = false);
+
+    bool ScanGentooGccConfig(const llvm::Triple &TargetTriple,
+                             const llvm::opt::ArgList &Args,
+                             StringRef CandidateTriple,
+                             bool NeedsBiarchSuffix = false);
   };
 
 protected:
@@ -699,12 +709,19 @@ public:
       const llvm::opt::ArgList &DriverArgs,
       llvm::opt::ArgStringList &CC1Args) const override;
 
+  void AddCudaIncludeArgs(const llvm::opt::ArgList &DriverArgs,
+                          llvm::opt::ArgStringList &CC1Args) const override;
+
+  void printVerboseInfo(raw_ostream &OS) const override;
+
 protected:
   Tool *getTool(Action::ActionClass AC) const override;
   Tool *buildLinker() const override;
   Tool *buildAssembler() const override;
 
 private:
+  CudaInstallationDetector CudaInstallation;
+
   std::string Base;
   std::string GccLibDir;
   std::string Ver;
@@ -882,6 +899,10 @@ public:
   CudaToolChain(const Driver &D, const llvm::Triple &Triple,
                 const ToolChain &HostTC, const llvm::opt::ArgList &Args);
 
+  virtual const llvm::Triple *getAuxTriple() const override {
+    return &HostTC.getTriple();
+  }
+
   llvm::opt::DerivedArgList *
   TranslateArgs(const llvm::opt::DerivedArgList &Args, StringRef BoundArch,
                 Action::OffloadKind DeviceOffloadKind) const override;
@@ -911,6 +932,12 @@ public:
       llvm::opt::ArgStringList &CC1Args) const override;
   void AddIAMCUIncludeArgs(const llvm::opt::ArgList &DriverArgs,
                            llvm::opt::ArgStringList &CC1Args) const override;
+
+  SanitizerMask getSupportedSanitizers() const override;
+
+  VersionTuple
+  computeMSVCVersion(const Driver *D,
+                     const llvm::opt::ArgList &Args) const override;
 
   const ToolChain &HostTC;
   CudaInstallationDetector CudaInstallation;
@@ -947,6 +974,10 @@ public:
   RuntimeLibType GetDefaultRuntimeLibType() const override {
     return GCCInstallation.isValid() ? RuntimeLibType::RLT_Libgcc
                                      : RuntimeLibType::RLT_CompilerRT;
+  }
+
+  const char *getDefaultLinker() const override {
+    return "lld";
   }
 
 private:
@@ -1078,6 +1109,10 @@ public:
   void AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
                            llvm::opt::ArgStringList &CmdArgs) const override;
 
+  const char *getDefaultLinker() const override {
+    return "lld";
+  }
+
 protected:
   Tool *buildAssembler() const override;
   Tool *buildLinker() const override;
@@ -1127,6 +1162,9 @@ public:
       const llvm::opt::ArgList &DriverArgs,
       llvm::opt::ArgStringList &CC1Args) const override;
 
+  void AddCudaIncludeArgs(const llvm::opt::ArgList &DriverArgs,
+                          llvm::opt::ArgStringList &CC1Args) const override;
+
   bool getWindowsSDKDir(std::string &path, int &major,
                         std::string &windowsSDKIncludeVersion,
                         std::string &windowsSDKLibVersion) const;
@@ -1138,11 +1176,15 @@ public:
   bool getVisualStudioInstallDir(std::string &path) const;
   bool getVisualStudioBinariesFolder(const char *clangProgramPath,
                                      std::string &path) const;
-  VersionTuple getMSVCVersionFromExe() const override;
+  VersionTuple
+  computeMSVCVersion(const Driver *D,
+                     const llvm::opt::ArgList &Args) const override;
 
   std::string ComputeEffectiveClangTriple(const llvm::opt::ArgList &Args,
                                           types::ID InputType) const override;
   SanitizerMask getSupportedSanitizers() const override;
+
+  void printVerboseInfo(raw_ostream &OS) const override;
 
 protected:
   void AddSystemIncludeWithSubfolder(const llvm::opt::ArgList &DriverArgs,
@@ -1154,6 +1196,11 @@ protected:
 
   Tool *buildLinker() const override;
   Tool *buildAssembler() const override;
+private:
+  VersionTuple getMSVCVersionFromTriple() const;
+  VersionTuple getMSVCVersionFromExe() const;
+
+  CudaInstallationDetector CudaInstallation;
 };
 
 class LLVM_LIBRARY_VISIBILITY CrossWindowsToolChain : public Generic_GCC {
@@ -1272,6 +1319,10 @@ private:
       const llvm::opt::ArgList &DriverArgs,
       llvm::opt::ArgStringList &CC1Args) const override;
 
+  const char *getDefaultLinker() const override {
+    return "lld";
+  }
+
   Tool *buildLinker() const override;
 };
 
@@ -1319,6 +1370,16 @@ public:
 
   SanitizerMask getSupportedSanitizers() const override;
 };
+
+class LLVM_LIBRARY_VISIBILITY AVRToolChain : public Generic_ELF {
+protected:
+  Tool *buildLinker() const override;
+public:
+  AVRToolChain(const Driver &D, const llvm::Triple &Triple,
+               const llvm::opt::ArgList &Args);
+  bool IsIntegratedAssemblerDefault() const override { return true; }
+};
+
 
 } // end namespace toolchains
 } // end namespace driver

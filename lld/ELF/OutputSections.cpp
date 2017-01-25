@@ -16,7 +16,7 @@
 #include "SymbolTable.h"
 #include "SyntheticSections.h"
 #include "Target.h"
-#include "lld/Core/Parallel.h"
+#include "Threads.h"
 #include "llvm/Support/Dwarf.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/MathExtras.h"
@@ -62,56 +62,6 @@ void OutputSectionBase::writeHeaderTo(typename ELFT::Shdr *Shdr) {
   Shdr->sh_name = ShName;
 }
 
-// Returns the number of version definition entries. Because the first entry
-// is for the version definition itself, it is the number of versioned symbols
-// plus one. Note that we don't support multiple versions yet.
-static unsigned getVerDefNum() { return Config->VersionDefinitions.size() + 1; }
-
-template <class ELFT>
-EhFrameHeader<ELFT>::EhFrameHeader()
-    : OutputSectionBase(".eh_frame_hdr", SHT_PROGBITS, SHF_ALLOC) {}
-
-// .eh_frame_hdr contains a binary search table of pointers to FDEs.
-// Each entry of the search table consists of two values,
-// the starting PC from where FDEs covers, and the FDE's address.
-// It is sorted by PC.
-template <class ELFT> void EhFrameHeader<ELFT>::writeTo(uint8_t *Buf) {
-  const endianness E = ELFT::TargetEndianness;
-
-  // Sort the FDE list by their PC and uniqueify. Usually there is only
-  // one FDE for a PC (i.e. function), but if ICF merges two functions
-  // into one, there can be more than one FDEs pointing to the address.
-  auto Less = [](const FdeData &A, const FdeData &B) { return A.Pc < B.Pc; };
-  std::stable_sort(Fdes.begin(), Fdes.end(), Less);
-  auto Eq = [](const FdeData &A, const FdeData &B) { return A.Pc == B.Pc; };
-  Fdes.erase(std::unique(Fdes.begin(), Fdes.end(), Eq), Fdes.end());
-
-  Buf[0] = 1;
-  Buf[1] = DW_EH_PE_pcrel | DW_EH_PE_sdata4;
-  Buf[2] = DW_EH_PE_udata4;
-  Buf[3] = DW_EH_PE_datarel | DW_EH_PE_sdata4;
-  write32<E>(Buf + 4, Out<ELFT>::EhFrame->Addr - this->Addr - 4);
-  write32<E>(Buf + 8, Fdes.size());
-  Buf += 12;
-
-  uintX_t VA = this->Addr;
-  for (FdeData &Fde : Fdes) {
-    write32<E>(Buf, Fde.Pc - VA);
-    write32<E>(Buf + 4, Fde.FdeVA - VA);
-    Buf += 8;
-  }
-}
-
-template <class ELFT> void EhFrameHeader<ELFT>::finalize() {
-  // .eh_frame_hdr has a 12 bytes header followed by an array of FDEs.
-  this->Size = 12 + Out<ELFT>::EhFrame->NumFdes * 8;
-}
-
-template <class ELFT>
-void EhFrameHeader<ELFT>::addFde(uint32_t Pc, uint32_t FdeVA) {
-  Fdes.push_back({Pc, FdeVA});
-}
-
 template <class ELFT> static uint64_t getEntsize(uint32_t Type) {
   switch (Type) {
   case SHT_RELA:
@@ -138,6 +88,10 @@ OutputSection<ELFT>::OutputSection(StringRef Name, uint32_t Type, uintX_t Flags)
 template <typename ELFT>
 static bool compareByFilePosition(InputSection<ELFT> *A,
                                   InputSection<ELFT> *B) {
+  // Synthetic doesn't have link order dependecy, stable_sort will keep it last
+  if (A->kind() == InputSectionData::Synthetic ||
+      B->kind() == InputSectionData::Synthetic)
+    return false;
   auto *LA = cast<InputSection<ELFT>>(A->getLinkOrderDep());
   auto *LB = cast<InputSection<ELFT>>(B->getLinkOrderDep());
   OutputSectionBase *AOut = LA->OutSec;
@@ -185,6 +139,13 @@ void OutputSection<ELFT>::addSection(InputSectionData *C) {
     this->Entsize = S->Entsize;
 }
 
+template <class ELFT>
+void OutputSection<ELFT>::forEachInputSection(
+    std::function<void(InputSectionData *)> F) {
+  for (InputSection<ELFT> *S : Sections)
+    F(S);
+}
+
 // This function is called after we sort input sections
 // and scan relocations to setup sections' offsets.
 template <class ELFT> void OutputSection<ELFT>::assignOffsets() {
@@ -199,7 +160,7 @@ template <class ELFT> void OutputSection<ELFT>::assignOffsets() {
 
 template <class ELFT>
 void OutputSection<ELFT>::sort(
-    std::function<unsigned(InputSection<ELFT> *S)> Order) {
+    std::function<int(InputSection<ELFT> *S)> Order) {
   typedef std::pair<unsigned, InputSection<ELFT> *> Pair;
   auto Comp = [](const Pair &A, const Pair &B) { return A.first < B.first; };
 
@@ -295,14 +256,12 @@ void fill(uint8_t *Buf, size_t Size, uint32_t Filler) {
 }
 
 template <class ELFT> void OutputSection<ELFT>::writeTo(uint8_t *Buf) {
+  Loc = Buf;
   if (uint32_t Filler = Script<ELFT>::X->getFiller(this->Name))
     fill(Buf, this->Size, Filler);
 
   auto Fn = [=](InputSection<ELFT> *IS) { IS->writeTo(Buf); };
-  if (Config->Threads)
-    parallel_for_each(Sections.begin(), Sections.end(), Fn);
-  else
-    std::for_each(Sections.begin(), Sections.end(), Fn);
+  forEach(Sections.begin(), Sections.end(), Fn);
 
   // Linker scripts may have BYTE()-family commands with which you
   // can write arbitrary bytes to the output. Process them if any.
@@ -313,17 +272,24 @@ template <class ELFT>
 EhOutputSection<ELFT>::EhOutputSection()
     : OutputSectionBase(".eh_frame", SHT_PROGBITS, SHF_ALLOC) {}
 
+template <class ELFT>
+void EhOutputSection<ELFT>::forEachInputSection(
+    std::function<void(InputSectionData *)> F) {
+  for (EhInputSection<ELFT> *S : Sections)
+    F(S);
+}
+
 // Search for an existing CIE record or create a new one.
 // CIE records from input object files are uniquified by their contents
 // and where their relocations point to.
 template <class ELFT>
 template <class RelTy>
 CieRecord *EhOutputSection<ELFT>::addCie(EhSectionPiece &Piece,
-                                         EhInputSection<ELFT> *Sec,
                                          ArrayRef<RelTy> Rels) {
+  auto *Sec = cast<EhInputSection<ELFT>>(Piece.ID);
   const endianness E = ELFT::TargetEndianness;
   if (read32<E>(Piece.data().data() + 4) != 0)
-    fatal("CIE expected at beginning of .eh_frame: " + Sec->Name);
+    fatal(toString(Sec) + ": CIE expected at beginning of .eh_frame");
 
   SymbolBody *Personality = nullptr;
   unsigned FirstRelI = Piece.FirstRelocation;
@@ -346,11 +312,11 @@ CieRecord *EhOutputSection<ELFT>::addCie(EhSectionPiece &Piece,
 template <class ELFT>
 template <class RelTy>
 bool EhOutputSection<ELFT>::isFdeLive(EhSectionPiece &Piece,
-                                      EhInputSection<ELFT> *Sec,
                                       ArrayRef<RelTy> Rels) {
+  auto *Sec = cast<EhInputSection<ELFT>>(Piece.ID);
   unsigned FirstRelI = Piece.FirstRelocation;
   if (FirstRelI == (unsigned)-1)
-    fatal("FDE doesn't reference another section");
+    fatal(toString(Sec) + ": FDE doesn't reference another section");
   const RelTy &Rel = Rels[FirstRelI];
   SymbolBody &B = Sec->getFile()->getRelocTargetSym(Rel);
   auto *D = dyn_cast<DefinedRegular<ELFT>>(&B);
@@ -379,16 +345,16 @@ void EhOutputSection<ELFT>::addSectionAux(EhInputSection<ELFT> *Sec,
     size_t Offset = Piece.InputOff;
     uint32_t ID = read32<E>(Piece.data().data() + 4);
     if (ID == 0) {
-      OffsetToCie[Offset] = addCie(Piece, Sec, Rels);
+      OffsetToCie[Offset] = addCie(Piece, Rels);
       continue;
     }
 
     uint32_t CieOffset = Offset + 4 - ID;
     CieRecord *Cie = OffsetToCie[CieOffset];
     if (!Cie)
-      fatal("invalid CIE reference");
+      fatal(toString(Sec) + ": invalid CIE reference");
 
-    if (!isFdeLive(Piece, Sec, Rels))
+    if (!isFdeLive(Piece, Rels))
       continue;
     Cie->FdePieces.push_back(&Piece);
     NumFdes++;
@@ -500,13 +466,13 @@ template <class ELFT> void EhOutputSection<ELFT>::writeTo(uint8_t *Buf) {
   // Construct .eh_frame_hdr. .eh_frame_hdr is a binary search table
   // to get a FDE from an address to which FDE is applied. So here
   // we obtain two addresses and pass them to EhFrameHdr object.
-  if (Out<ELFT>::EhFrameHdr) {
+  if (In<ELFT>::EhFrameHdr) {
     for (CieRecord *Cie : Cies) {
-      uint8_t Enc = getFdeEncoding<ELFT>(Cie->Piece->data());
+      uint8_t Enc = getFdeEncoding<ELFT>(Cie->Piece);
       for (SectionPiece *Fde : Cie->FdePieces) {
         uintX_t Pc = getFdePc(Buf, Fde->OutputOff, Enc);
         uintX_t FdeVA = this->Addr + Fde->OutputOff;
-        Out<ELFT>::EhFrameHdr->addFde(Pc, FdeVA);
+        In<ELFT>::EhFrameHdr->addFde(Pc, FdeVA);
       }
     }
   }
@@ -535,198 +501,46 @@ template <class ELFT> bool MergeOutputSection<ELFT>::shouldTailMerge() const {
   return (this->Flags & SHF_STRINGS) && Config->Optimize >= 2;
 }
 
-template <class ELFT> void MergeOutputSection<ELFT>::finalize() {
+template <class ELFT> void MergeOutputSection<ELFT>::finalizeTailMerge() {
   // Add all string pieces to the string table builder to create section
-  // contents. If we are not tail-optimizing, offsets of strings are fixed
-  // when they are added to the builder (string table builder contains a
-  // hash table from strings to offsets), so we record them if available.
-  for (MergeInputSection<ELFT> *Sec : Sections) {
-    for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I) {
-      if (!Sec->Pieces[I].Live)
-        continue;
-      uint32_t OutputOffset = Builder.add(Sec->getData(I));
+  // contents.
+  for (MergeInputSection<ELFT> *Sec : Sections)
+    for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I)
+      if (Sec->Pieces[I].Live)
+        Builder.add(Sec->getData(I));
 
-      // Save the offset in the generated string table.
-      if (!shouldTailMerge())
-        Sec->Pieces[I].OutputOff = OutputOffset;
-    }
-  }
-
-  // Fix the string table content. After this, the contents
-  // will never change.
-  if (shouldTailMerge())
-    Builder.finalize();
-  else
-    Builder.finalizeInOrder();
+  // Fix the string table content. After this, the contents will never change.
+  Builder.finalize();
   this->Size = Builder.getSize();
 
   // finalize() fixed tail-optimized strings, so we can now get
   // offsets of strings. Get an offset for each string and save it
   // to a corresponding StringPiece for easy access.
+  for (MergeInputSection<ELFT> *Sec : Sections)
+    for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I)
+      if (Sec->Pieces[I].Live)
+        Sec->Pieces[I].OutputOff = Builder.getOffset(Sec->getData(I));
+}
+
+template <class ELFT> void MergeOutputSection<ELFT>::finalizeNoTailMerge() {
+  // Add all string pieces to the string table builder to create section
+  // contents. Because we are not tail-optimizing, offsets of strings are
+  // fixed when they are added to the builder (string table builder contains
+  // a hash table from strings to offsets).
+  for (MergeInputSection<ELFT> *Sec : Sections)
+    for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I)
+      if (Sec->Pieces[I].Live)
+        Sec->Pieces[I].OutputOff = Builder.add(Sec->getData(I));
+
+  Builder.finalizeInOrder();
+  this->Size = Builder.getSize();
+}
+
+template <class ELFT> void MergeOutputSection<ELFT>::finalize() {
   if (shouldTailMerge())
-    for (MergeInputSection<ELFT> *Sec : Sections)
-      for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I)
-        if (Sec->Pieces[I].Live)
-          Sec->Pieces[I].OutputOff = Builder.getOffset(Sec->getData(I));
-}
-
-template <class ELFT>
-VersionDefinitionSection<ELFT>::VersionDefinitionSection()
-    : OutputSectionBase(".gnu.version_d", SHT_GNU_verdef, SHF_ALLOC) {
-  this->Addralign = sizeof(uint32_t);
-}
-
-static StringRef getFileDefName() {
-  if (!Config->SoName.empty())
-    return Config->SoName;
-  return Config->OutputFile;
-}
-
-template <class ELFT> void VersionDefinitionSection<ELFT>::finalize() {
-  FileDefNameOff = In<ELFT>::DynStrTab->addString(getFileDefName());
-  for (VersionDefinition &V : Config->VersionDefinitions)
-    V.NameOff = In<ELFT>::DynStrTab->addString(V.Name);
-
-  this->Size = (sizeof(Elf_Verdef) + sizeof(Elf_Verdaux)) * getVerDefNum();
-  this->Link = In<ELFT>::DynStrTab->OutSec->SectionIndex;
-
-  // sh_info should be set to the number of definitions. This fact is missed in
-  // documentation, but confirmed by binutils community:
-  // https://sourceware.org/ml/binutils/2014-11/msg00355.html
-  this->Info = getVerDefNum();
-}
-
-template <class ELFT>
-void VersionDefinitionSection<ELFT>::writeOne(uint8_t *Buf, uint32_t Index,
-                                              StringRef Name, size_t NameOff) {
-  auto *Verdef = reinterpret_cast<Elf_Verdef *>(Buf);
-  Verdef->vd_version = 1;
-  Verdef->vd_cnt = 1;
-  Verdef->vd_aux = sizeof(Elf_Verdef);
-  Verdef->vd_next = sizeof(Elf_Verdef) + sizeof(Elf_Verdaux);
-  Verdef->vd_flags = (Index == 1 ? VER_FLG_BASE : 0);
-  Verdef->vd_ndx = Index;
-  Verdef->vd_hash = hashSysV(Name);
-
-  auto *Verdaux = reinterpret_cast<Elf_Verdaux *>(Buf + sizeof(Elf_Verdef));
-  Verdaux->vda_name = NameOff;
-  Verdaux->vda_next = 0;
-}
-
-template <class ELFT>
-void VersionDefinitionSection<ELFT>::writeTo(uint8_t *Buf) {
-  writeOne(Buf, 1, getFileDefName(), FileDefNameOff);
-
-  for (VersionDefinition &V : Config->VersionDefinitions) {
-    Buf += sizeof(Elf_Verdef) + sizeof(Elf_Verdaux);
-    writeOne(Buf, V.Id, V.Name, V.NameOff);
-  }
-
-  // Need to terminate the last version definition.
-  Elf_Verdef *Verdef = reinterpret_cast<Elf_Verdef *>(Buf);
-  Verdef->vd_next = 0;
-}
-
-template <class ELFT>
-VersionTableSection<ELFT>::VersionTableSection()
-    : OutputSectionBase(".gnu.version", SHT_GNU_versym, SHF_ALLOC) {
-  this->Addralign = sizeof(uint16_t);
-}
-
-template <class ELFT> void VersionTableSection<ELFT>::finalize() {
-  this->Size =
-      sizeof(Elf_Versym) * (In<ELFT>::DynSymTab->getSymbols().size() + 1);
-  this->Entsize = sizeof(Elf_Versym);
-  // At the moment of june 2016 GNU docs does not mention that sh_link field
-  // should be set, but Sun docs do. Also readelf relies on this field.
-  this->Link = In<ELFT>::DynSymTab->OutSec->SectionIndex;
-}
-
-template <class ELFT> void VersionTableSection<ELFT>::writeTo(uint8_t *Buf) {
-  auto *OutVersym = reinterpret_cast<Elf_Versym *>(Buf) + 1;
-  for (const SymbolTableEntry &S : In<ELFT>::DynSymTab->getSymbols()) {
-    OutVersym->vs_index = S.Symbol->symbol()->VersionId;
-    ++OutVersym;
-  }
-}
-
-template <class ELFT>
-VersionNeedSection<ELFT>::VersionNeedSection()
-    : OutputSectionBase(".gnu.version_r", SHT_GNU_verneed, SHF_ALLOC) {
-  this->Addralign = sizeof(uint32_t);
-
-  // Identifiers in verneed section start at 2 because 0 and 1 are reserved
-  // for VER_NDX_LOCAL and VER_NDX_GLOBAL.
-  // First identifiers are reserved by verdef section if it exist.
-  NextIndex = getVerDefNum() + 1;
-}
-
-template <class ELFT>
-void VersionNeedSection<ELFT>::addSymbol(SharedSymbol<ELFT> *SS) {
-  if (!SS->Verdef) {
-    SS->symbol()->VersionId = VER_NDX_GLOBAL;
-    return;
-  }
-  SharedFile<ELFT> *F = SS->file();
-  // If we don't already know that we need an Elf_Verneed for this DSO, prepare
-  // to create one by adding it to our needed list and creating a dynstr entry
-  // for the soname.
-  if (F->VerdefMap.empty())
-    Needed.push_back({F, In<ELFT>::DynStrTab->addString(F->getSoName())});
-  typename SharedFile<ELFT>::NeededVer &NV = F->VerdefMap[SS->Verdef];
-  // If we don't already know that we need an Elf_Vernaux for this Elf_Verdef,
-  // prepare to create one by allocating a version identifier and creating a
-  // dynstr entry for the version name.
-  if (NV.Index == 0) {
-    NV.StrTab = In<ELFT>::DynStrTab->addString(
-        SS->file()->getStringTable().data() + SS->Verdef->getAux()->vda_name);
-    NV.Index = NextIndex++;
-  }
-  SS->symbol()->VersionId = NV.Index;
-}
-
-template <class ELFT> void VersionNeedSection<ELFT>::writeTo(uint8_t *Buf) {
-  // The Elf_Verneeds need to appear first, followed by the Elf_Vernauxs.
-  auto *Verneed = reinterpret_cast<Elf_Verneed *>(Buf);
-  auto *Vernaux = reinterpret_cast<Elf_Vernaux *>(Verneed + Needed.size());
-
-  for (std::pair<SharedFile<ELFT> *, size_t> &P : Needed) {
-    // Create an Elf_Verneed for this DSO.
-    Verneed->vn_version = 1;
-    Verneed->vn_cnt = P.first->VerdefMap.size();
-    Verneed->vn_file = P.second;
-    Verneed->vn_aux =
-        reinterpret_cast<char *>(Vernaux) - reinterpret_cast<char *>(Verneed);
-    Verneed->vn_next = sizeof(Elf_Verneed);
-    ++Verneed;
-
-    // Create the Elf_Vernauxs for this Elf_Verneed. The loop iterates over
-    // VerdefMap, which will only contain references to needed version
-    // definitions. Each Elf_Vernaux is based on the information contained in
-    // the Elf_Verdef in the source DSO. This loop iterates over a std::map of
-    // pointers, but is deterministic because the pointers refer to Elf_Verdef
-    // data structures within a single input file.
-    for (auto &NV : P.first->VerdefMap) {
-      Vernaux->vna_hash = NV.first->vd_hash;
-      Vernaux->vna_flags = 0;
-      Vernaux->vna_other = NV.second.Index;
-      Vernaux->vna_name = NV.second.StrTab;
-      Vernaux->vna_next = sizeof(Elf_Vernaux);
-      ++Vernaux;
-    }
-
-    Vernaux[-1].vna_next = 0;
-  }
-  Verneed[-1].vn_next = 0;
-}
-
-template <class ELFT> void VersionNeedSection<ELFT>::finalize() {
-  this->Link = In<ELFT>::DynStrTab->OutSec->SectionIndex;
-  this->Info = Needed.size();
-  unsigned Size = Needed.size() * sizeof(Elf_Verneed);
-  for (std::pair<SharedFile<ELFT> *, size_t> &P : Needed)
-    Size += P.first->VerdefMap.size() * sizeof(Elf_Vernaux);
-  this->Size = Size;
+    finalizeTailMerge();
+  else
+    finalizeNoTailMerge();
 }
 
 template <class ELFT>
@@ -734,41 +548,116 @@ static typename ELFT::uint getOutFlags(InputSectionBase<ELFT> *S) {
   return S->Flags & ~SHF_GROUP & ~SHF_COMPRESSED;
 }
 
-template <class ELFT>
-static SectionKey<ELFT::Is64Bits> createKey(InputSectionBase<ELFT> *C,
-                                            StringRef OutsecName) {
-  typedef typename ELFT::uint uintX_t;
-  uintX_t Flags = getOutFlags(C);
+namespace llvm {
+template <> struct DenseMapInfo<lld::elf::SectionKey> {
+  static lld::elf::SectionKey getEmptyKey();
+  static lld::elf::SectionKey getTombstoneKey();
+  static unsigned getHashValue(const lld::elf::SectionKey &Val);
+  static bool isEqual(const lld::elf::SectionKey &LHS,
+                      const lld::elf::SectionKey &RHS);
+};
+}
 
-  // For SHF_MERGE we create different output sections for each alignment.
-  // This makes each output section simple and keeps a single level mapping from
-  // input to output.
-  // In case of relocatable object generation we do not try to perform merging
-  // and treat SHF_MERGE sections as regular ones, but also create different
-  // output sections for them to allow merging at final linking stage.
+template <class ELFT>
+static SectionKey createKey(InputSectionBase<ELFT> *C, StringRef OutsecName) {
+  //  The ELF spec just says
+  // ----------------------------------------------------------------
+  // In the first phase, input sections that match in name, type and
+  // attribute flags should be concatenated into single sections.
+  // ----------------------------------------------------------------
+  //
+  // However, it is clear that at least some flags have to be ignored for
+  // section merging. At the very least SHF_GROUP and SHF_COMPRESSED have to be
+  // ignored. We should not have two output .text sections just because one was
+  // in a group and another was not for example.
+  //
+  // It also seems that that wording was a late addition and didn't get the
+  // necessary scrutiny.
+  //
+  // Merging sections with different flags is expected by some users. One
+  // reason is that if one file has
+  //
+  // int *const bar __attribute__((section(".foo"))) = (int *)0;
+  //
+  // gcc with -fPIC will produce a read only .foo section. But if another
+  // file has
+  //
+  // int zed;
+  // int *const bar __attribute__((section(".foo"))) = (int *)&zed;
+  //
+  // gcc with -fPIC will produce a read write section.
+  //
+  // Last but not least, when using linker script the merge rules are forced by
+  // the script. Unfortunately, linker scripts are name based. This means that
+  // expressions like *(.foo*) can refer to multiple input sections with
+  // different flags. We cannot put them in different output sections or we
+  // would produce wrong results for
+  //
+  // start = .; *(.foo.*) end = .; *(.bar)
+  //
+  // and a mapping of .foo1 and .bar1 to one section and .foo2 and .bar2 to
+  // another. The problem is that there is no way to layout those output
+  // sections such that the .foo sections are the only thing between the start
+  // and end symbols.
+  //
+  // Given the above issues, we instead merge sections by name and error on
+  // incompatible types and flags.
+  //
+  // The exception being SHF_MERGE, where we create different output sections
+  // for each alignment. This makes each output section simple. In case of
+  // relocatable object generation we do not try to perform merging and treat
+  // SHF_MERGE sections as regular ones, but also create different output
+  // sections for them to allow merging at final linking stage.
+  //
+  // Fortunately, creating symbols in the middle of a merge section is not
+  // supported by bfd or gold, so the SHF_MERGE exception should not cause
+  // problems with most linker scripts.
+
+  typedef typename ELFT::uint uintX_t;
+  uintX_t Flags = C->Flags & (SHF_MERGE | SHF_STRINGS);
+
   uintX_t Alignment = 0;
   if (isa<MergeInputSection<ELFT>>(C) ||
       (Config->Relocatable && (C->Flags & SHF_MERGE)))
     Alignment = std::max<uintX_t>(C->Alignment, C->Entsize);
 
-  return SectionKey<ELFT::Is64Bits>{OutsecName, C->Type, Flags, Alignment};
+  return SectionKey{OutsecName, Flags, Alignment};
 }
+
+template <class ELFT> OutputSectionFactory<ELFT>::OutputSectionFactory() {}
+
+template <class ELFT> OutputSectionFactory<ELFT>::~OutputSectionFactory() {}
 
 template <class ELFT>
 std::pair<OutputSectionBase *, bool>
 OutputSectionFactory<ELFT>::create(InputSectionBase<ELFT> *C,
                                    StringRef OutsecName) {
-  SectionKey<ELFT::Is64Bits> Key = createKey(C, OutsecName);
+  SectionKey Key = createKey(C, OutsecName);
   return create(Key, C);
+}
+
+static uint64_t getIncompatibleFlags(uint64_t Flags) {
+  return Flags & (SHF_ALLOC | SHF_TLS);
 }
 
 template <class ELFT>
 std::pair<OutputSectionBase *, bool>
-OutputSectionFactory<ELFT>::create(const SectionKey<ELFT::Is64Bits> &Key,
+OutputSectionFactory<ELFT>::create(const SectionKey &Key,
                                    InputSectionBase<ELFT> *C) {
   uintX_t Flags = getOutFlags(C);
   OutputSectionBase *&Sec = Map[Key];
   if (Sec) {
+    if (getIncompatibleFlags(Sec->Flags) != getIncompatibleFlags(C->Flags))
+      error("Section has flags incompatible with others with the same name " +
+            toString(C));
+    // Convert notbits to progbits if they are mixed. This happens is some
+    // linker scripts.
+    if (Sec->Type == SHT_NOBITS && C->Type == SHT_PROGBITS)
+      Sec->Type = SHT_PROGBITS;
+    if (Sec->Type != C->Type &&
+        !(Sec->Type == SHT_PROGBITS && C->Type == SHT_NOBITS))
+      error("Section has different type from others with the same name " +
+            toString(C));
     Sec->Flags |= Flags;
     return {Sec, false};
   }
@@ -788,36 +677,22 @@ OutputSectionFactory<ELFT>::create(const SectionKey<ELFT::Is64Bits> &Key,
   return {Sec, true};
 }
 
-template <bool Is64Bits>
-typename lld::elf::SectionKey<Is64Bits>
-DenseMapInfo<lld::elf::SectionKey<Is64Bits>>::getEmptyKey() {
-  return SectionKey<Is64Bits>{DenseMapInfo<StringRef>::getEmptyKey(), 0, 0, 0};
+SectionKey DenseMapInfo<SectionKey>::getEmptyKey() {
+  return SectionKey{DenseMapInfo<StringRef>::getEmptyKey(), 0, 0};
 }
 
-template <bool Is64Bits>
-typename lld::elf::SectionKey<Is64Bits>
-DenseMapInfo<lld::elf::SectionKey<Is64Bits>>::getTombstoneKey() {
-  return SectionKey<Is64Bits>{DenseMapInfo<StringRef>::getTombstoneKey(), 0, 0,
-                              0};
+SectionKey DenseMapInfo<SectionKey>::getTombstoneKey() {
+  return SectionKey{DenseMapInfo<StringRef>::getTombstoneKey(), 0, 0};
 }
 
-template <bool Is64Bits>
-unsigned
-DenseMapInfo<lld::elf::SectionKey<Is64Bits>>::getHashValue(const Key &Val) {
-  return hash_combine(Val.Name, Val.Type, Val.Flags, Val.Alignment);
+unsigned DenseMapInfo<SectionKey>::getHashValue(const SectionKey &Val) {
+  return hash_combine(Val.Name, Val.Flags, Val.Alignment);
 }
 
-template <bool Is64Bits>
-bool DenseMapInfo<lld::elf::SectionKey<Is64Bits>>::isEqual(const Key &LHS,
-                                                           const Key &RHS) {
+bool DenseMapInfo<SectionKey>::isEqual(const SectionKey &LHS,
+                                       const SectionKey &RHS) {
   return DenseMapInfo<StringRef>::isEqual(LHS.Name, RHS.Name) &&
-         LHS.Type == RHS.Type && LHS.Flags == RHS.Flags &&
-         LHS.Alignment == RHS.Alignment;
-}
-
-namespace llvm {
-template struct DenseMapInfo<SectionKey<true>>;
-template struct DenseMapInfo<SectionKey<false>>;
+         LHS.Flags == RHS.Flags && LHS.Alignment == RHS.Alignment;
 }
 
 namespace lld {
@@ -827,11 +702,6 @@ template void OutputSectionBase::writeHeaderTo<ELF32LE>(ELF32LE::Shdr *Shdr);
 template void OutputSectionBase::writeHeaderTo<ELF32BE>(ELF32BE::Shdr *Shdr);
 template void OutputSectionBase::writeHeaderTo<ELF64LE>(ELF64LE::Shdr *Shdr);
 template void OutputSectionBase::writeHeaderTo<ELF64BE>(ELF64BE::Shdr *Shdr);
-
-template class EhFrameHeader<ELF32LE>;
-template class EhFrameHeader<ELF32BE>;
-template class EhFrameHeader<ELF64LE>;
-template class EhFrameHeader<ELF64BE>;
 
 template class OutputSection<ELF32LE>;
 template class OutputSection<ELF32BE>;
@@ -847,21 +717,6 @@ template class MergeOutputSection<ELF32LE>;
 template class MergeOutputSection<ELF32BE>;
 template class MergeOutputSection<ELF64LE>;
 template class MergeOutputSection<ELF64BE>;
-
-template class VersionTableSection<ELF32LE>;
-template class VersionTableSection<ELF32BE>;
-template class VersionTableSection<ELF64LE>;
-template class VersionTableSection<ELF64BE>;
-
-template class VersionNeedSection<ELF32LE>;
-template class VersionNeedSection<ELF32BE>;
-template class VersionNeedSection<ELF64LE>;
-template class VersionNeedSection<ELF64BE>;
-
-template class VersionDefinitionSection<ELF32LE>;
-template class VersionDefinitionSection<ELF32BE>;
-template class VersionDefinitionSection<ELF64LE>;
-template class VersionDefinitionSection<ELF64BE>;
 
 template class OutputSectionFactory<ELF32LE>;
 template class OutputSectionFactory<ELF32BE>;

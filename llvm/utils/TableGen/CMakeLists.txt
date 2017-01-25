@@ -22,10 +22,12 @@ add_tablegen(llvm-tblgen LLVM
   DisassemblerEmitter.cpp
   FastISelEmitter.cpp
   FixedLenDecoderEmitter.cpp
+  GlobalISelEmitter.cpp
   InstrInfoEmitter.cpp
   IntrinsicEmitter.cpp
   OptParserEmitter.cpp
   PseudoLoweringEmitter.cpp
+  RegisterBankEmitter.cpp
   RegisterInfoEmitter.cpp
   SearchableTableEmitter.cpp
   SubtargetEmitter.cpp

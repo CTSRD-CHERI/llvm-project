@@ -302,6 +302,12 @@ set(arm_SOURCES
   arm/umodsi3.S
   ${GENERIC_SOURCES})
 
+set(thumb1_SOURCES
+  arm/divsi3.S
+  arm/udivsi3.S
+  arm/comparesf2.S
+  ${GENERIC_SOURCES})
+
 set(arm_EABI_SOURCES
   arm/aeabi_cdcmp.S
   arm/aeabi_cdcmpeq_check_nan.c
@@ -320,6 +326,21 @@ set(arm_EABI_SOURCES
   arm/aeabi_memset.S
   arm/aeabi_uidivmod.S
   arm/aeabi_uldivmod.S)
+
+set(thumb1_EABI_SOURCES
+  arm/aeabi_cdcmpeq_check_nan.c
+  arm/aeabi_cfcmpeq_check_nan.c
+  arm/aeabi_div0.c
+  arm/aeabi_drsub.c
+  arm/aeabi_fcmp.S
+  arm/aeabi_frsub.c
+  arm/aeabi_idivmod.S
+  arm/aeabi_memcmp.S
+  arm/aeabi_memcpy.S
+  arm/aeabi_memset.S
+  arm/aeabi_memmove.S
+  arm/aeabi_uidivmod.S)
+
 set(arm_Thumb1_JT_SOURCES
   arm/switch16.S
   arm/switch32.S
@@ -395,12 +416,16 @@ if(MINGW)
       udivmodsi4.c
       udivsi3.c
       umoddi3.c)
-else(MINGW)
+elseif(NOT WIN32)
   # TODO the EABI sources should only be added to EABI targets
   set(arm_SOURCES
     ${arm_SOURCES}
     ${arm_EABI_SOURCES}
     ${arm_Thumb1_SOURCES})
+
+  set(thumb1_SOURCES
+    ${thumb1_SOURCES}
+    ${thumb1_EABI_SOURCES})
 endif()
 
 set(aarch64_SOURCES
@@ -415,8 +440,10 @@ set(aarch64_SOURCES
   fixunstfti.c
   floatditf.c
   floatsitf.c
+  floattitf.c
   floatunditf.c
   floatunsitf.c
+  floatuntitf.c
   multc3.c
   trunctfdf2.c
   trunctfsf2.c
@@ -429,7 +456,7 @@ set(armv7k_SOURCES ${arm_SOURCES})
 set(arm64_SOURCES ${aarch64_SOURCES})
 
 # macho_embedded archs
-set(armv6m_SOURCES ${GENERIC_SOURCES})
+set(armv6m_SOURCES ${thumb1_SOURCES})
 set(armv7m_SOURCES ${arm_SOURCES})
 set(armv7em_SOURCES ${arm_SOURCES})
 
@@ -451,7 +478,7 @@ if (APPLE)
 else ()
   set(BUILTIN_CFLAGS "")
 
-  append_list_if(COMPILER_RT_HAS_STD_C99_FLAG -std=gnu99 BUILTIN_CFLAGS)
+  append_list_if(COMPILER_RT_HAS_STD_C11_FLAG -std=c11 BUILTIN_CFLAGS)
 
   # These flags would normally be added to CMAKE_C_FLAGS by the llvm
   # cmake step. Add them manually if this is a standalone build.

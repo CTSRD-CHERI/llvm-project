@@ -31,10 +31,10 @@ namespace __xray {
 // FIXME: The actual length is 11 bytes. Why was length 12 passed to mprotect()
 // ?
 static const int16_t cSledLength = 12;
-#elif defined(__arm__)
-static const int16_t cSledLength = 28;
 #elif defined(__aarch64__)
 static const int16_t cSledLength = 32;
+#elif defined(__arm__)
+static const int16_t cSledLength = 28;
 #else
 #error "Unsupported CPU Architecture"
 #endif /* CPU architecture */
@@ -148,7 +148,7 @@ XRayPatchingStatus ControlPatching(bool Enable) XRAY_NEVER_INSTRUMENT {
 
   const uint64_t PageSize = GetPageSizeCached();
   if ((PageSize == 0) || ((PageSize & (PageSize - 1)) != 0)) {
-    Report("System page size is not a power of two: %lld", PageSize);
+    Report("System page size is not a power of two: %lld\n", PageSize);
     return XRayPatchingStatus::FAILED;
   }
 
@@ -188,7 +188,7 @@ XRayPatchingStatus ControlPatching(bool Enable) XRAY_NEVER_INSTRUMENT {
       Success = patchFunctionTailExit(Enable, FuncId, Sled);
       break;
     default:
-      Report("Unsupported sled kind: %d", int(Sled.Kind));
+      Report("Unsupported sled kind: %d\n", int(Sled.Kind));
       continue;
     }
     (void)Success;

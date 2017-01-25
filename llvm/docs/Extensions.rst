@@ -61,13 +61,13 @@ types ``IMAGE_REL_I386_SECREL`` (32-bit) or ``IMAGE_REL_AMD64_SECREL`` (64-bit).
 the target.  It corresponds to the COFF relocation types
 ``IMAGE_REL_I386_SECTION`` (32-bit) or ``IMAGE_REL_AMD64_SECTION`` (64-bit).
 
-.. code-block:: gas
+.. code-block:: none
 
   .section .debug$S,"rn"
     .long 4
     .long 242
     .long 40
-    .secrel32 _function_name
+    .secrel32 _function_name + 0
     .secidx   _function_name
     ...
 

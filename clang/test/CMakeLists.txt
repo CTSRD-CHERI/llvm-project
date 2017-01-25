@@ -39,6 +39,7 @@ list(APPEND CLANG_TEST_DEPS
   c-index-test diagtool
   clang-tblgen
   clang-offload-bundler
+  clang-import-test
   )
   
 if(CLANG_ENABLE_STATIC_ANALYZER)
@@ -78,6 +79,7 @@ if( NOT CLANG_BUILT_STANDALONE )
     FileCheck count not
     llc
     llvm-bcanalyzer
+    llvm-dis
     llvm-nm
     llvm-objdump
     llvm-profdata

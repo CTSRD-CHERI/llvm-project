@@ -357,7 +357,16 @@ static const Target *getTarget(const ObjectFile *Obj = nullptr) {
   llvm::Triple TheTriple("unknown-unknown-unknown");
   if (TripleName.empty()) {
     if (Obj) {
-      TheTriple.setArch(Triple::ArchType(Obj->getArch()));
+      auto Arch = Obj->getArch();
+      TheTriple.setArch(Triple::ArchType(Arch));
+
+      // For ARM targets, try to use the build attributes to build determine
+      // the build target. Target features are also added, but later during
+      // disassembly.
+      if (Arch == Triple::arm || Arch == Triple::armeb) {
+        Obj->setARMSubArch(TheTriple);
+      }
+
       // TheTriple defaults to ELF, and COFF doesn't have an environment:
       // the best we can do here is indicate that it is mach-o.
       if (Obj->isMachO())
@@ -369,8 +378,16 @@ static const Target *getTarget(const ObjectFile *Obj = nullptr) {
           TheTriple.setTriple("thumbv7-windows");
       }
     }
-  } else
+  } else {
     TheTriple.setTriple(Triple::normalize(TripleName));
+    // Use the triple, but also try to combine with ARM build attributes.
+    if (Obj) {
+      auto Arch = Obj->getArch();
+      if (Arch == Triple::arm || Arch == Triple::armeb) {
+        Obj->setARMSubArch(TheTriple);
+      }
+    }
+  }
 
   // Get the target specific parser.
   std::string Error;
@@ -594,6 +611,26 @@ public:
 };
 AMDGCNPrettyPrinter AMDGCNPrettyPrinterInst;
 
+class BPFPrettyPrinter : public PrettyPrinter {
+public:
+  void printInst(MCInstPrinter &IP, const MCInst *MI, ArrayRef<uint8_t> Bytes,
+                 uint64_t Address, raw_ostream &OS, StringRef Annot,
+                 MCSubtargetInfo const &STI, SourcePrinter *SP) override {
+    if (SP && (PrintSource || PrintLines))
+      SP->printSourceLine(OS, Address);
+    OS << format("%8" PRId64 ":", Address / 8);
+    if (!NoShowRawInsn) {
+      OS << "\t";
+      dumpBytes(Bytes, OS);
+    }
+    if (MI)
+      IP.printInst(MI, OS, "", STI);
+    else
+      OS << " <unknown>";
+  }
+};
+BPFPrettyPrinter BPFPrettyPrinterInst;
+
 PrettyPrinter &selectPrettyPrinter(Triple const &Triple) {
   switch(Triple.getArch()) {
   default:
@@ -602,6 +639,9 @@ PrettyPrinter &selectPrettyPrinter(Triple const &Triple) {
     return HexagonPrettyPrinterInst;
   case Triple::amdgcn:
     return AMDGCNPrettyPrinterInst;
+  case Triple::bpfel:
+  case Triple::bpfeb:
+    return BPFPrettyPrinterInst;
   }
 }
 }
@@ -1910,6 +1950,8 @@ static void printPrivateFileHeaders(const ObjectFile *o, bool onlyFirst) {
     return printELFFileHeader(o);
   if (o->isCOFF())
     return printCOFFFileHeader(o);
+  if (o->isWasm())
+    return printWasmFileHeader(o);
   if (o->isMachO()) {
     printMachOFileHeader(o);
     if (!onlyFirst)

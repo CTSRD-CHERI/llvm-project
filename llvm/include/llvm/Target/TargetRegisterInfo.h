@@ -36,23 +36,6 @@ class VirtRegMap;
 class raw_ostream;
 class LiveRegMatrix;
 
-/// A bitmask representing the covering of a register with sub-registers.
-///
-/// This is typically used to track liveness at sub-register granularity.
-/// Lane masks for sub-register indices are similar to register units for
-/// physical registers. The individual bits in a lane mask can't be assigned
-/// any specific meaning. They can be used to check if two sub-register
-/// indices overlap.
-///
-/// Iff the target has a register such that:
-///
-///   getSubReg(Reg, A) overlaps getSubReg(Reg, B)
-///
-/// then:
-///
-///   (getSubRegIndexLaneMask(A) & getSubRegIndexLaneMask(B)) != 0
-typedef unsigned LaneBitmask;
-
 class TargetRegisterClass {
 public:
   typedef const MCPhysReg* iterator;
@@ -87,7 +70,7 @@ public:
 
   /// Return the number of registers in this class.
   unsigned getNumRegs() const { return MC->getNumRegs(); }
-  
+
   iterator_range<SmallVectorImpl<MCPhysReg>::const_iterator>
   getRegisters() const {
     return make_range(MC->begin(), MC->end());
@@ -269,7 +252,7 @@ private:
   const LaneBitmask *SubRegIndexLaneMasks;
 
   regclass_iterator RegClassBegin, RegClassEnd;   // List of regclasses
-  unsigned CoveringLanes;
+  LaneBitmask CoveringLanes;
 
 protected:
   TargetRegisterInfo(const TargetRegisterInfoDesc *ID,
@@ -277,7 +260,7 @@ protected:
                      regclass_iterator RegClassEnd,
                      const char *const *SRINames,
                      const LaneBitmask *SRILaneMasks,
-                     unsigned CoveringLanes);
+                     LaneBitmask CoveringLanes);
   virtual ~TargetRegisterInfo();
 public:
 
@@ -486,8 +469,14 @@ public:
 
   /// Returns a bitset indexed by physical register number indicating if a
   /// register is a special register that has particular uses and should be
-  /// considered unavailable at all times, e.g. SP, RA. This is
-  /// used by register scavenger to determine what registers are free.
+  /// considered unavailable at all times, e.g. stack pointer, return address.
+  /// A reserved register:
+  /// - is not allocatable
+  /// - is considered always live
+  /// - is ignored by liveness tracking
+  /// It is often necessary to reserve the super registers of a reserved
+  /// register as well, to avoid them getting allocated indirectly. You may use
+  /// markSuperRegs() and checkAllSuperRegsMarked() in this case.
   virtual BitVector getReservedRegs(const MachineFunction &MF) const = 0;
 
   /// Returns true if PhysReg is unallocatable and constant throughout the
@@ -813,6 +802,13 @@ public:
     return false;
   }
 
+  /// Returns true if the target requires using the RegScavenger directly for
+  /// frame elimination despite using requiresFrameIndexScavenging.
+  virtual bool requiresFrameIndexReplacementScavenging(
+      const MachineFunction &MF) const {
+    return false;
+  }
+
   /// Returns true if the target wants the LocalStackAllocation pass to be run
   /// and virtual base registers used for more efficient stack access.
   virtual bool requiresVirtualBaseRegisters(const MachineFunction &MF) const {
@@ -935,6 +931,14 @@ public:
   /// getFrameRegister - This method should return the register used as a base
   /// for values allocated in the current stack frame.
   virtual unsigned getFrameRegister(const MachineFunction &MF) const = 0;
+
+  /// Mark a register and all its aliases as reserved in the given set.
+  void markSuperRegs(BitVector &RegisterSet, unsigned Reg) const;
+
+  /// Returns true if for every register in the set all super registers are part
+  /// of the set as well.
+  bool checkAllSuperRegsMarked(const BitVector &RegisterSet,
+      ArrayRef<MCPhysReg> Exceptions = ArrayRef<MCPhysReg>()) const;
 };
 
 
@@ -1119,9 +1123,6 @@ Printable PrintRegUnit(unsigned Unit, const TargetRegisterInfo *TRI);
 /// \brief Create Printable object to print virtual registers and physical
 /// registers on a \ref raw_ostream.
 Printable PrintVRegOrUnit(unsigned VRegOrUnit, const TargetRegisterInfo *TRI);
-
-/// Create Printable object to print LaneBitmasks on a \ref raw_ostream.
-Printable PrintLaneMask(LaneBitmask LaneMask);
 
 } // End llvm namespace
 

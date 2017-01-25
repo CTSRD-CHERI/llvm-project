@@ -1137,6 +1137,12 @@ TEST_F(FormatTest, KeepsParameterWithTrailingCommentsOnTheirOwnLine) {
             format("SomeFunction(a,     // comment\n"
                    "          b,\n"
                    "      c); // comment"));
+  EXPECT_EQ("aaaaaaaaaa(aaaa(aaaa,\n"
+            "                aaaa), //\n"
+            "           aaaa, bbbbb);",
+            format("aaaaaaaaaa(aaaa(aaaa,\n"
+                   "aaaa), //\n"
+                   "aaaa, bbbbb);"));
 }
 
 TEST_F(FormatTest, RemovesTrailingWhitespaceOfComments) {
@@ -2487,42 +2493,6 @@ TEST_F(FormatTest, FormatTryCatchBraceStyles) {
                Style);
 }
 
-TEST_F(FormatTest, FormatObjCTryCatch) {
-  verifyFormat("@try {\n"
-               "  f();\n"
-               "} @catch (NSException e) {\n"
-               "  @throw;\n"
-               "} @finally {\n"
-               "  exit(42);\n"
-               "}");
-  verifyFormat("DEBUG({\n"
-               "  @try {\n"
-               "  } @finally {\n"
-               "  }\n"
-               "});\n");
-}
-
-TEST_F(FormatTest, FormatObjCAutoreleasepool) {
-  FormatStyle Style = getLLVMStyle();
-  verifyFormat("@autoreleasepool {\n"
-               "  f();\n"
-               "}\n"
-               "@autoreleasepool {\n"
-               "  f();\n"
-               "}\n",
-               Style);
-  Style.BreakBeforeBraces = FormatStyle::BS_Allman;
-  verifyFormat("@autoreleasepool\n"
-               "{\n"
-               "  f();\n"
-               "}\n"
-               "@autoreleasepool\n"
-               "{\n"
-               "  f();\n"
-               "}\n",
-               Style);
-}
-
 TEST_F(FormatTest, StaticInitializers) {
   verifyFormat("static SomeClass SC = {1, 'a'};");
 
@@ -3383,9 +3353,10 @@ TEST_F(FormatTest, PreventConfusingIndents) {
       "    aaaaaaaaaaaaaaaaaaaaaaaa<\n"
       "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa>,\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaa>;");
-  verifyFormat("int a = bbbb && ccc && fffff(\n"
+  verifyFormat("int a = bbbb && ccc &&\n"
+               "        fffff(\n"
                "#define A Just forcing a new line\n"
-               "                           ddd);");
+               "            ddd);");
 }
 
 TEST_F(FormatTest, LineBreakingInBinaryExpressions) {
@@ -3468,6 +3439,12 @@ TEST_F(FormatTest, LineBreakingInBinaryExpressions) {
       "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaaaaaaa ||\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa) {\n}",
       OnePerLine);
+
+  verifyFormat("int i = someFunction(aaaaaaa, 0)\n"
+               "                .aaa(aaaaaaaaaaaaa) *\n"
+               "            aaaaaaa +\n"
+               "        aaaaaaa;",
+               getLLVMStyleWithColumns(40));
 }
 
 TEST_F(FormatTest, ExpressionIndentation) {
@@ -4074,8 +4051,9 @@ TEST_F(FormatTest, BreaksDesireably) {
                "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa));");
 
   verifyFormat(
-      "aaaaaaaa(aaaaaaaaaaaaa, aaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
-      "                            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)),\n"
+      "aaaaaaaa(aaaaaaaaaaaaa,\n"
+      "         aaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+      "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)),\n"
       "         aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)));");
 
@@ -4091,8 +4069,9 @@ TEST_F(FormatTest, BreaksDesireably) {
       "aaaaaa(new Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaa));");
   verifyFormat(
-      "aaaaaa(aaa, new Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
-      "                aaaaaaaaaaaaaaaaaaaaaaaaaaaaa));");
+      "aaaaaa(aaa,\n"
+      "       new Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+      "           aaaaaaaaaaaaaaaaaaaaaaaaaaaaa));");
   verifyFormat("aaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n"
                "                      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
                "                  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
@@ -4571,12 +4550,13 @@ TEST_F(FormatTest, ParenthesesAndOperandAlignment) {
 
 TEST_F(FormatTest, BreaksConditionalExpressions) {
   verifyFormat(
-      "aaaa(aaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "                               ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "                               : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+      "aaaa(aaaaaaaaaaaaaaaaaaaa,\n"
+      "     aaaaaaaaaaaaaaaaaaaaaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "                                : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
   verifyFormat(
-      "aaaa(aaaaaaaaaaaaaaaaaaaa, aaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "                                   : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+      "aaaa(aaaaaaaaaaaaaaaaaaaa,\n"
+      "     aaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "             : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaa ? aaaa(aaaaaa)\n"
       "                                                    : aaaaaaaaaaaaa);");
@@ -4626,11 +4606,12 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
                "           ? aaaa\n"
                "           : bbbb;");
   verifyFormat("unsigned Indent =\n"
-               "    format(TheLine.First, IndentForLevel[TheLine.Level] >= 0\n"
-               "                              ? IndentForLevel[TheLine.Level]\n"
-               "                              : TheLine * 2,\n"
+               "    format(TheLine.First,\n"
+               "           IndentForLevel[TheLine.Level] >= 0\n"
+               "               ? IndentForLevel[TheLine.Level]\n"
+               "               : TheLine * 2,\n"
                "           TheLine.InPPDirective, PreviousEndOfLineColumn);",
-               getLLVMStyleWithColumns(70));
+               getLLVMStyleWithColumns(60));
   verifyFormat("bool aaaaaa = aaaaaaaaaaaaa //\n"
                "                  ? aaaaaaaaaaaaaaa\n"
                "                  : bbbbbbbbbbbbbbb //\n"
@@ -4648,10 +4629,9 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
       "                                            aaaaaaaaaaaaaaaaaaaaa\n"
       "                                      : aaaaaaaaaa;");
   verifyFormat(
-      "aaaaaa = aaaaaaaaaaaa\n"
-      "             ? aaaaaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "                          : aaaaaaaaaaaaaaaaaaaaaa\n"
-      "             : aaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
+      "aaaaaa = aaaaaaaaaaaa ? aaaaaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "                                   : aaaaaaaaaaaaaaaaaaaaaa\n"
+      "                      : aaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
 
   FormatStyle NoBinPacking = getLLVMStyle();
   NoBinPacking.BinPackArguments = false;
@@ -4705,13 +4685,14 @@ TEST_F(FormatTest, BreaksConditionalExpressionsAfterOperator) {
   Style.BreakBeforeTernaryOperators = false;
   Style.ColumnLimit = 70;
   verifyFormat(
-      "aaaa(aaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaaaaa ?\n"
-      "                               aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa :\n"
-      "                               aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);",
+      "aaaa(aaaaaaaaaaaaaaaaaaaa,\n"
+      "     aaaaaaaaaaaaaaaaaaaaaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa :\n"
+      "                                  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);",
       Style);
   verifyFormat(
-      "aaaa(aaaaaaaaaaaaaaaaaaaa, aaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa :\n"
-      "                                     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);",
+      "aaaa(aaaaaaaaaaaaaaaaaaaa,\n"
+      "     aaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa :\n"
+      "               aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);",
       Style);
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaa ? aaaa(aaaaaa) :\n"
@@ -4767,13 +4748,13 @@ TEST_F(FormatTest, BreaksConditionalExpressionsAfterOperator) {
                "      b :\n"
                "      c);",
                Style);
-  verifyFormat(
-      "unsigned Indent =\n"
-      "    format(TheLine.First, IndentForLevel[TheLine.Level] >= 0 ?\n"
-      "                              IndentForLevel[TheLine.Level] :\n"
-      "                              TheLine * 2,\n"
-      "           TheLine.InPPDirective, PreviousEndOfLineColumn);",
-      Style);
+  verifyFormat("unsigned Indent =\n"
+               "    format(TheLine.First,\n"
+               "           IndentForLevel[TheLine.Level] >= 0 ?\n"
+               "               IndentForLevel[TheLine.Level] :\n"
+               "               TheLine * 2,\n"
+               "           TheLine.InPPDirective, PreviousEndOfLineColumn);",
+               Style);
   verifyFormat("bool aaaaaa = aaaaaaaaaaaaa ? //\n"
                "                  aaaaaaaaaaaaaaa :\n"
                "                  bbbbbbbbbbbbbbb ? //\n"
@@ -4847,10 +4828,11 @@ TEST_F(FormatTest, AlignsStringLiterals) {
   verifyFormat("someFunction(\"Always break between multi-line\"\n"
                "             \" string literals\",\n"
                "             and, other, parameters);");
-  EXPECT_EQ("fun + \"1243\" /* comment */\n"
-            "      \"5678\";",
+  EXPECT_EQ("fun +\n"
+            "    \"1243\" /* comment */\n"
+            "    \"5678\";",
             format("fun + \"1243\" /* comment */\n"
-                   "      \"5678\";",
+                   "    \"5678\";",
                    getLLVMStyleWithColumns(28)));
   EXPECT_EQ(
       "aaaaaa = \"aaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaa \"\n"
@@ -4860,11 +4842,13 @@ TEST_F(FormatTest, AlignsStringLiterals) {
              "\"aaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaa "
              "aaaaaaaaaaaaaaaaaaaaa\" "
              "\"aaaaaaaaaaaaaaaa\";"));
-  verifyFormat("a = a + \"a\"\n"
-               "        \"a\"\n"
-               "        \"a\";");
-  verifyFormat("f(\"a\", \"b\"\n"
-               "       \"c\");");
+  verifyFormat("a = a +\n"
+               "    \"a\"\n"
+               "    \"a\"\n"
+               "    \"a\";");
+  verifyFormat("f(\"a\",\n"
+               "  \"b\"\n"
+               "  \"c\");");
 
   verifyFormat(
       "#define LL_FORMAT \"ll\"\n"
@@ -5049,8 +5033,9 @@ TEST_F(FormatTest, AlwaysBreakBeforeMultilineStrings) {
                "    \"bbbb\"\n"
                "    \"cccc\");",
                Break);
-  verifyFormat("aaaa(qqq, \"bbbb\"\n"
-               "          \"cccc\");",
+  verifyFormat("aaaa(qqq,\n"
+               "     \"bbbb\"\n"
+               "     \"cccc\");",
                NoBreak);
   verifyFormat("aaaa(qqq,\n"
                "     \"bbbb\"\n"
@@ -5060,8 +5045,9 @@ TEST_F(FormatTest, AlwaysBreakBeforeMultilineStrings) {
                "     L\"bbbb\"\n"
                "     L\"cccc\");",
                Break);
-  verifyFormat("aaaaa(aaaaaa, aaaaaaa(\"aaaa\"\n"
-               "                      \"bbbb\"));",
+  verifyFormat("aaaaa(aaaaaa,\n"
+               "      aaaaaaa(\"aaaa\"\n"
+               "              \"bbbb\"));",
                Break);
   verifyFormat("string s = someFunction(\n"
                "    \"abc\"\n"
@@ -5119,6 +5105,9 @@ TEST_F(FormatTest, AlignsPipes) {
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
       "                                 << aaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
   verifyFormat(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()\n"
+      "    << aaaaaaaaaaaaaaaaaaaaaaaaaaaa << aaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
+  verifyFormat(
       "llvm::outs() << \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n"
       "                \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"\n"
       "             << \"ccccccccccccccccccccccccccccccccccccccccccccccccc\";");
@@ -5136,29 +5125,6 @@ TEST_F(FormatTest, AlignsPipes) {
       "llvm::errs() << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
 
-  verifyFormat("return out << \"somepacket = {\\n\"\n"
-               "           << \" aaaaaa = \" << pkt.aaaaaa << \"\\n\"\n"
-               "           << \" bbbb = \" << pkt.bbbb << \"\\n\"\n"
-               "           << \" cccccc = \" << pkt.cccccc << \"\\n\"\n"
-               "           << \" ddd = [\" << pkt.ddd << \"]\\n\"\n"
-               "           << \"}\";");
-
-  verifyFormat("llvm::outs() << \"aaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaa\n"
-               "             << \"aaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaa\n"
-               "             << \"aaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaa;");
-  verifyFormat(
-      "llvm::outs() << \"aaaaaaaaaaaaaaaaa = \" << aaaaaaaaaaaaaaaaa\n"
-      "             << \"bbbbbbbbbbbbbbbbb = \" << bbbbbbbbbbbbbbbbb\n"
-      "             << \"ccccccccccccccccc = \" << ccccccccccccccccc\n"
-      "             << \"ddddddddddddddddd = \" << ddddddddddddddddd\n"
-      "             << \"eeeeeeeeeeeeeeeee = \" << eeeeeeeeeeeeeeeee;");
-  verifyFormat("llvm::outs() << aaaaaaaaaaaaaaaaaaaaaaaa << \"=\"\n"
-               "             << bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;");
-  verifyFormat(
-      "void f() {\n"
-      "  llvm::outs() << \"aaaaaaaaaaaaaaaaaaaa: \"\n"
-      "               << aaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaa);\n"
-      "}");
   verifyFormat("llvm::outs() << \"aaaaaaaaaaaaaaaa: \"\n"
                "             << aaaaaaaa.aaaaaaaaaaaa(aaa)->aaaaaaaaaaaaaa();");
   verifyFormat("llvm::errs() << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
@@ -5168,22 +5134,6 @@ TEST_F(FormatTest, AlignsPipes) {
   verifyFormat("LOG_IF(aaa == //\n"
                "       bbb)\n"
                "    << a << b;");
-
-  // Breaking before the first "<<" is generally not desirable.
-  verifyFormat(
-      "llvm::errs()\n"
-      "    << \"aaaaaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "    << \"aaaaaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "    << \"aaaaaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "    << \"aaaaaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaaaaaaaaaaaaaa;",
-      getLLVMStyleWithColumns(70));
-  verifyFormat("llvm::errs() << \"aaaaaaaaaaaaaaaaaaa: \"\n"
-               "             << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-               "             << \"aaaaaaaaaaaaaaaaaaa: \"\n"
-               "             << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-               "             << \"aaaaaaaaaaaaaaaaaaa: \"\n"
-               "             << aaaaaaaaaaaaaaaaaaaaaaaaaaaa;",
-               getLLVMStyleWithColumns(70));
 
   // But sometimes, breaking before the first "<<" is desirable.
   verifyFormat("Diag(aaaaaaaaaaaaaaaaaaaa, aaaaaaaa)\n"
@@ -5228,6 +5178,65 @@ TEST_F(FormatTest, AlignsPipes) {
   verifyFormat("llvm::errs() << aaaa << \"aaaaaaaaaaaaaaaaaa\\n\"\n"
                "             << bbbb << \"bbbbbbbbbbbbbbbbbb\\n\";");
   verifyFormat("llvm::errs() << \"\\n\" << bbbbbbbbbbbbbbbbbbbbbb << \"\\n\";");
+}
+
+TEST_F(FormatTest, KeepStringLabelValuePairsOnALine) {
+  verifyFormat("return out << \"somepacket = {\\n\"\n"
+               "           << \" aaaaaa = \" << pkt.aaaaaa << \"\\n\"\n"
+               "           << \" bbbb = \" << pkt.bbbb << \"\\n\"\n"
+               "           << \" cccccc = \" << pkt.cccccc << \"\\n\"\n"
+               "           << \" ddd = [\" << pkt.ddd << \"]\\n\"\n"
+               "           << \"}\";");
+
+  verifyFormat("llvm::outs() << \"aaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaa\n"
+               "             << \"aaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaa\n"
+               "             << \"aaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaa;");
+  verifyFormat(
+      "llvm::outs() << \"aaaaaaaaaaaaaaaaa = \" << aaaaaaaaaaaaaaaaa\n"
+      "             << \"bbbbbbbbbbbbbbbbb = \" << bbbbbbbbbbbbbbbbb\n"
+      "             << \"ccccccccccccccccc = \" << ccccccccccccccccc\n"
+      "             << \"ddddddddddddddddd = \" << ddddddddddddddddd\n"
+      "             << \"eeeeeeeeeeeeeeeee = \" << eeeeeeeeeeeeeeeee;");
+  verifyFormat("llvm::outs() << aaaaaaaaaaaaaaaaaaaaaaaa << \"=\"\n"
+               "             << bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;");
+  verifyFormat(
+      "void f() {\n"
+      "  llvm::outs() << \"aaaaaaaaaaaaaaaaaaaa: \"\n"
+      "               << aaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaa);\n"
+      "}");
+
+  // Breaking before the first "<<" is generally not desirable.
+  verifyFormat(
+      "llvm::errs()\n"
+      "    << \"aaaaaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    << \"aaaaaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    << \"aaaaaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    << \"aaaaaaaaaaaaaaaaaaa: \" << aaaaaaaaaaaaaaaaaaaaaaaaaaaa;",
+      getLLVMStyleWithColumns(70));
+  verifyFormat("llvm::errs() << \"aaaaaaaaaaaaaaaaaaa: \"\n"
+               "             << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "             << \"aaaaaaaaaaaaaaaaaaa: \"\n"
+               "             << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "             << \"aaaaaaaaaaaaaaaaaaa: \"\n"
+               "             << aaaaaaaaaaaaaaaaaaaaaaaaaaaa;",
+               getLLVMStyleWithColumns(70));
+
+  verifyFormat("string v = \"aaaaaaaaaaaaaaaa: \" + aaaaaaaaaaaaaaaa +\n"
+               "           \"aaaaaaaaaaaaaaaa: \" + aaaaaaaaaaaaaaaa +\n"
+               "           \"aaaaaaaaaaaaaaaa: \" + aaaaaaaaaaaaaaaa;");
+  verifyFormat("string v = StrCat(\"aaaaaaaaaaaaaaaa: \", aaaaaaaaaaaaaaaa,\n"
+               "                  \"aaaaaaaaaaaaaaaa: \", aaaaaaaaaaaaaaaa,\n"
+               "                  \"aaaaaaaaaaaaaaaa: \", aaaaaaaaaaaaaaaa);");
+  verifyFormat("string v = \"aaaaaaaaaaaaaaaa: \" +\n"
+               "           (aaaa + aaaa);",
+               getLLVMStyleWithColumns(40));
+  verifyFormat("string v = StrCat(\"aaaaaaaaaaaa: \" +\n"
+               "                  (aaaaaaa + aaaaa));",
+               getLLVMStyleWithColumns(40));
+  verifyFormat(
+      "string v = StrCat(\"aaaaaaaaaaaaaaaaaaaaaaaaaaa: \",\n"
+      "                  SomeFunction(aaaaaaaaaaaa, aaaaaaaa.aaaaaaa),\n"
+      "                  bbbbbbbbbbbbbbbbbbbbbbb);");
 }
 
 TEST_F(FormatTest, UnderstandsEquals) {
@@ -5454,8 +5463,9 @@ TEST_F(FormatTest, WrapsAtNestedNameSpecifiers) {
       "    aaaaaaaaaaaaaaaaaaaaaaa);");
 
   verifyFormat(
-      "aaaaaaaaaaaaaaaaaa(aaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa::\n"
-      "                                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+      "aaaaaaaaaaaaaaaaaa(aaaaaaaa,\n"
+      "                   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa::\n"
+      "                       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
       "                   aaaaaaaaaaaaaaaaaaaaa);",
       getLLVMStyleWithColumns(74));
 
@@ -5784,6 +5794,10 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyGoogleFormat("MACRO Constructor(const int& i) : a(a), b(b) {}");
   verifyFormat("void f() { f(a, c * d); }");
   verifyFormat("void f() { f(new a(), c * d); }");
+  verifyFormat("void f(const MyOverride &override);");
+  verifyFormat("void f(const MyFinal &final);");
+  verifyIndependentOfContext("bool a = f() && override.f();");
+  verifyIndependentOfContext("bool a = f() && final.f();");
 
   verifyIndependentOfContext("InvalidRegions[*R] = 0;");
 
@@ -5893,11 +5907,12 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("foo<b & 1>();");
   verifyFormat("decltype(*::std::declval<const T &>()) void F();");
   verifyFormat(
-      "template <class T, class = typename std::enable_if<\n"
-      "                       std::is_integral<T>::value &&\n"
-      "                       (sizeof(T) > 1 || sizeof(T) < 8)>::type>\n"
+      "template <class T,\n"
+      "          class = typename std::enable_if<\n"
+      "              std::is_integral<T>::value &&\n"
+      "              (sizeof(T) > 1 || sizeof(T) < 8)>::type>\n"
       "void F();",
-      getLLVMStyleWithColumns(76));
+      getLLVMStyleWithColumns(70));
   verifyFormat(
       "template <class T,\n"
       "          class = typename ::std::enable_if<\n"
@@ -6530,6 +6545,19 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
                "};");
   verifyFormat("#define A {a, a},");
 
+  // Cases where distinguising braced lists and blocks is hard.
+  verifyFormat("vector<int> v{12} GUARDED_BY(mutex);");
+  verifyFormat("void f() {\n"
+               "  return; // comment\n"
+               "}\n"
+               "SomeType t;");
+  verifyFormat("void f() {\n"
+               "  if (a) {\n"
+               "    f();\n"
+               "  }\n"
+               "}\n"
+               "SomeType t;");
+
   // In combination with BinPackArguments = false.
   FormatStyle NoBinPacking = getLLVMStyle();
   NoBinPacking.BinPackArguments = false;
@@ -6644,7 +6672,7 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
       "std::this_thread::sleep_for(\n"
       "    std::chrono::nanoseconds{ std::chrono::seconds{ 1 } } / 5);",
       ExtraSpaces);
-  verifyFormat("std::vector<MyValues> aaaaaaaaaaaaaaaaaaa{\n"
+  verifyFormat("std::vector<MyValues> aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa{\n"
                "    aaaaaaa,\n"
                "    aaaaaaaaaa,\n"
                "    aaaaa,\n"
@@ -6782,6 +6810,34 @@ TEST_F(FormatTest, FormatsBracedListsInColumnLayout) {
       "                          1, 22, 333, 4444, 55555, 666666, 7777777,\n"
       "                          1, 22, 333, 4444, 55555, 666666, 7777777,\n"
       "                          1, 22, 333, 4444, 55555, 666666, 7777777});");
+
+  // Allow "single-column" layout even if that violates the column limit. There
+  // isn't going to be a better way.
+  verifyFormat("std::vector<int> a = {\n"
+               "    aaaaaaaa,\n"
+               "    aaaaaaaa,\n"
+               "    aaaaaaaa,\n"
+               "    aaaaaaaa,\n"
+               "    aaaaaaaaaa,\n"
+               "    aaaaaaaa,\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaa};",
+               getLLVMStyleWithColumns(30));
+  verifyFormat("vector<int> aaaa = {\n"
+               "    aaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+               "    aaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+               "    aaaaaa.aaaaaaa,\n"
+               "    aaaaaa.aaaaaaa,\n"
+               "    aaaaaa.aaaaaaa,\n"
+               "    aaaaaa.aaaaaaa,\n"
+               "};");
+
+  // Don't create hanging lists.
+  verifyFormat("someFunction(Param,\n"
+               "             {List1, List2,\n"
+               "              List3});",
+               getLLVMStyleWithColumns(35));
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaa, {},\n"
+               "                               aaaaaaaaaaaaaaaaaaaaaaa);");
 }
 
 TEST_F(FormatTest, PullTrivialFunctionDefinitionsIntoSingleLine) {
@@ -7313,704 +7369,6 @@ TEST_F(FormatTest, FormatForObjectiveCMethodDecls) {
   verifyGoogleFormat("- foo:(int)foo;");
 }
 
-TEST_F(FormatTest, FormatObjCInterface) {
-  verifyFormat("@interface Foo : NSObject <NSSomeDelegate> {\n"
-               "@public\n"
-               "  int field1;\n"
-               "@protected\n"
-               "  int field2;\n"
-               "@private\n"
-               "  int field3;\n"
-               "@package\n"
-               "  int field4;\n"
-               "}\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyGoogleFormat("@interface Foo : NSObject<NSSomeDelegate> {\n"
-                     " @public\n"
-                     "  int field1;\n"
-                     " @protected\n"
-                     "  int field2;\n"
-                     " @private\n"
-                     "  int field3;\n"
-                     " @package\n"
-                     "  int field4;\n"
-                     "}\n"
-                     "+ (id)init;\n"
-                     "@end");
-
-  verifyFormat("@interface /* wait for it */ Foo\n"
-               "+ (id)init;\n"
-               "// Look, a comment!\n"
-               "- (int)answerWith:(int)i;\n"
-               "@end");
-
-  verifyFormat("@interface Foo\n"
-               "@end\n"
-               "@interface Bar\n"
-               "@end");
-
-  verifyFormat("@interface Foo : Bar\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyFormat("@interface Foo : /**/ Bar /**/ <Baz, /**/ Quux>\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyGoogleFormat("@interface Foo : Bar<Baz, Quux>\n"
-                     "+ (id)init;\n"
-                     "@end");
-
-  verifyFormat("@interface Foo (HackStuff)\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyFormat("@interface Foo ()\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyFormat("@interface Foo (HackStuff) <MyProtocol>\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyGoogleFormat("@interface Foo (HackStuff)<MyProtocol>\n"
-                     "+ (id)init;\n"
-                     "@end");
-
-  verifyFormat("@interface Foo {\n"
-               "  int _i;\n"
-               "}\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyFormat("@interface Foo : Bar {\n"
-               "  int _i;\n"
-               "}\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyFormat("@interface Foo : Bar <Baz, Quux> {\n"
-               "  int _i;\n"
-               "}\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyFormat("@interface Foo (HackStuff) {\n"
-               "  int _i;\n"
-               "}\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyFormat("@interface Foo () {\n"
-               "  int _i;\n"
-               "}\n"
-               "+ (id)init;\n"
-               "@end");
-
-  verifyFormat("@interface Foo (HackStuff) <MyProtocol> {\n"
-               "  int _i;\n"
-               "}\n"
-               "+ (id)init;\n"
-               "@end");
-
-  FormatStyle OnePerLine = getGoogleStyle();
-  OnePerLine.BinPackParameters = false;
-  verifyFormat("@interface aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ()<\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa> {\n"
-               "}",
-               OnePerLine);
-}
-
-TEST_F(FormatTest, FormatObjCImplementation) {
-  verifyFormat("@implementation Foo : NSObject {\n"
-               "@public\n"
-               "  int field1;\n"
-               "@protected\n"
-               "  int field2;\n"
-               "@private\n"
-               "  int field3;\n"
-               "@package\n"
-               "  int field4;\n"
-               "}\n"
-               "+ (id)init {\n}\n"
-               "@end");
-
-  verifyGoogleFormat("@implementation Foo : NSObject {\n"
-                     " @public\n"
-                     "  int field1;\n"
-                     " @protected\n"
-                     "  int field2;\n"
-                     " @private\n"
-                     "  int field3;\n"
-                     " @package\n"
-                     "  int field4;\n"
-                     "}\n"
-                     "+ (id)init {\n}\n"
-                     "@end");
-
-  verifyFormat("@implementation Foo\n"
-               "+ (id)init {\n"
-               "  if (true)\n"
-               "    return nil;\n"
-               "}\n"
-               "// Look, a comment!\n"
-               "- (int)answerWith:(int)i {\n"
-               "  return i;\n"
-               "}\n"
-               "+ (int)answerWith:(int)i {\n"
-               "  return i;\n"
-               "}\n"
-               "@end");
-
-  verifyFormat("@implementation Foo\n"
-               "@end\n"
-               "@implementation Bar\n"
-               "@end");
-
-  EXPECT_EQ("@implementation Foo : Bar\n"
-            "+ (id)init {\n}\n"
-            "- (void)foo {\n}\n"
-            "@end",
-            format("@implementation Foo : Bar\n"
-                   "+(id)init{}\n"
-                   "-(void)foo{}\n"
-                   "@end"));
-
-  verifyFormat("@implementation Foo {\n"
-               "  int _i;\n"
-               "}\n"
-               "+ (id)init {\n}\n"
-               "@end");
-
-  verifyFormat("@implementation Foo : Bar {\n"
-               "  int _i;\n"
-               "}\n"
-               "+ (id)init {\n}\n"
-               "@end");
-
-  verifyFormat("@implementation Foo (HackStuff)\n"
-               "+ (id)init {\n}\n"
-               "@end");
-  verifyFormat("@implementation ObjcClass\n"
-               "- (void)method;\n"
-               "{}\n"
-               "@end");
-}
-
-TEST_F(FormatTest, FormatObjCProtocol) {
-  verifyFormat("@protocol Foo\n"
-               "@property(weak) id delegate;\n"
-               "- (NSUInteger)numberOfThings;\n"
-               "@end");
-
-  verifyFormat("@protocol MyProtocol <NSObject>\n"
-               "- (NSUInteger)numberOfThings;\n"
-               "@end");
-
-  verifyGoogleFormat("@protocol MyProtocol<NSObject>\n"
-                     "- (NSUInteger)numberOfThings;\n"
-                     "@end");
-
-  verifyFormat("@protocol Foo;\n"
-               "@protocol Bar;\n");
-
-  verifyFormat("@protocol Foo\n"
-               "@end\n"
-               "@protocol Bar\n"
-               "@end");
-
-  verifyFormat("@protocol myProtocol\n"
-               "- (void)mandatoryWithInt:(int)i;\n"
-               "@optional\n"
-               "- (void)optional;\n"
-               "@required\n"
-               "- (void)required;\n"
-               "@optional\n"
-               "@property(assign) int madProp;\n"
-               "@end\n");
-
-  verifyFormat("@property(nonatomic, assign, readonly)\n"
-               "    int *looooooooooooooooooooooooooooongNumber;\n"
-               "@property(nonatomic, assign, readonly)\n"
-               "    NSString *looooooooooooooooooooooooooooongName;");
-
-  verifyFormat("@implementation PR18406\n"
-               "}\n"
-               "@end");
-}
-
-TEST_F(FormatTest, FormatObjCMethodDeclarations) {
-  verifyFormat("- (void)doSomethingWith:(GTMFoo *)theFoo\n"
-               "                   rect:(NSRect)theRect\n"
-               "               interval:(float)theInterval {\n"
-               "}");
-  verifyFormat("- (void)shortf:(GTMFoo *)theFoo\n"
-               "      longKeyword:(NSRect)theRect\n"
-               "    longerKeyword:(float)theInterval\n"
-               "            error:(NSError **)theError {\n"
-               "}");
-  verifyFormat("- (void)shortf:(GTMFoo *)theFoo\n"
-               "          longKeyword:(NSRect)theRect\n"
-               "    evenLongerKeyword:(float)theInterval\n"
-               "                error:(NSError **)theError {\n"
-               "}");
-  verifyFormat("- (instancetype)initXxxxxx:(id<x>)x\n"
-               "                         y:(id<yyyyyyyyyyyyyyyyyyyy>)y\n"
-               "    NS_DESIGNATED_INITIALIZER;",
-               getLLVMStyleWithColumns(60));
-
-  // Continuation indent width should win over aligning colons if the function
-  // name is long.
-  FormatStyle continuationStyle = getGoogleStyle();
-  continuationStyle.ColumnLimit = 40;
-  continuationStyle.IndentWrappedFunctionNames = true;
-  verifyFormat("- (void)shortf:(GTMFoo *)theFoo\n"
-               "    dontAlignNamef:(NSRect)theRect {\n"
-               "}",
-               continuationStyle);
-
-  // Make sure we don't break aligning for short parameter names.
-  verifyFormat("- (void)shortf:(GTMFoo *)theFoo\n"
-               "       aShortf:(NSRect)theRect {\n"
-               "}",
-               continuationStyle);
-
-  // Format pairs correctly.
-  verifyFormat("- (void)drawRectOn:(id)surface\n"
-               "            ofSize:(aaaaaaaa)height\n"
-               "                  :(size_t)width\n"
-               "          atOrigin:(size_t)x\n"
-               "                  :(size_t)y\n"
-               "             aaaaa:(a)yyy\n"
-               "               bbb:(d)cccc;");
-  verifyFormat("- (void)drawRectOn:(id)surface ofSize:(aaa)height:(bbb)width;");
-  verifyFormat("- (void)drawRectOn:(id)surface\n"
-               "            ofSize:(size_t)height\n"
-               "                  :(size_t)width;",
-               getLLVMStyleWithColumns(60));
-}
-
-TEST_F(FormatTest, FormatObjCMethodExpr) {
-  verifyFormat("[foo bar:baz];");
-  verifyFormat("return [foo bar:baz];");
-  verifyFormat("return (a)[foo bar:baz];");
-  verifyFormat("f([foo bar:baz]);");
-  verifyFormat("f(2, [foo bar:baz]);");
-  verifyFormat("f(2, a ? b : c);");
-  verifyFormat("[[self initWithInt:4] bar:[baz quux:arrrr]];");
-
-  // Unary operators.
-  verifyFormat("int a = +[foo bar:baz];");
-  verifyFormat("int a = -[foo bar:baz];");
-  verifyFormat("int a = ![foo bar:baz];");
-  verifyFormat("int a = ~[foo bar:baz];");
-  verifyFormat("int a = ++[foo bar:baz];");
-  verifyFormat("int a = --[foo bar:baz];");
-  verifyFormat("int a = sizeof [foo bar:baz];");
-  verifyFormat("int a = alignof [foo bar:baz];", getGoogleStyle());
-  verifyFormat("int a = &[foo bar:baz];");
-  verifyFormat("int a = *[foo bar:baz];");
-  // FIXME: Make casts work, without breaking f()[4].
-  // verifyFormat("int a = (int)[foo bar:baz];");
-  // verifyFormat("return (int)[foo bar:baz];");
-  // verifyFormat("(void)[foo bar:baz];");
-  verifyFormat("return (MyType *)[self.tableView cellForRowAtIndexPath:cell];");
-
-  // Binary operators.
-  verifyFormat("[foo bar:baz], [foo bar:baz];");
-  verifyFormat("[foo bar:baz] = [foo bar:baz];");
-  verifyFormat("[foo bar:baz] *= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] /= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] %= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] += [foo bar:baz];");
-  verifyFormat("[foo bar:baz] -= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] <<= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] >>= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] &= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] ^= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] |= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] ? [foo bar:baz] : [foo bar:baz];");
-  verifyFormat("[foo bar:baz] || [foo bar:baz];");
-  verifyFormat("[foo bar:baz] && [foo bar:baz];");
-  verifyFormat("[foo bar:baz] | [foo bar:baz];");
-  verifyFormat("[foo bar:baz] ^ [foo bar:baz];");
-  verifyFormat("[foo bar:baz] & [foo bar:baz];");
-  verifyFormat("[foo bar:baz] == [foo bar:baz];");
-  verifyFormat("[foo bar:baz] != [foo bar:baz];");
-  verifyFormat("[foo bar:baz] >= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] <= [foo bar:baz];");
-  verifyFormat("[foo bar:baz] > [foo bar:baz];");
-  verifyFormat("[foo bar:baz] < [foo bar:baz];");
-  verifyFormat("[foo bar:baz] >> [foo bar:baz];");
-  verifyFormat("[foo bar:baz] << [foo bar:baz];");
-  verifyFormat("[foo bar:baz] - [foo bar:baz];");
-  verifyFormat("[foo bar:baz] + [foo bar:baz];");
-  verifyFormat("[foo bar:baz] * [foo bar:baz];");
-  verifyFormat("[foo bar:baz] / [foo bar:baz];");
-  verifyFormat("[foo bar:baz] % [foo bar:baz];");
-  // Whew!
-
-  verifyFormat("return in[42];");
-  verifyFormat("for (auto v : in[1]) {\n}");
-  verifyFormat("for (int i = 0; i < in[a]; ++i) {\n}");
-  verifyFormat("for (int i = 0; in[a] < i; ++i) {\n}");
-  verifyFormat("for (int i = 0; i < n; ++i, ++in[a]) {\n}");
-  verifyFormat("for (int i = 0; i < n; ++i, in[a]++) {\n}");
-  verifyFormat("for (int i = 0; i < f(in[a]); ++i, in[a]++) {\n}");
-  verifyFormat("for (id foo in [self getStuffFor:bla]) {\n"
-               "}");
-  verifyFormat("[self aaaaa:MACRO(a, b:, c:)];");
-  verifyFormat("[self aaaaa:(1 + 2) bbbbb:3];");
-  verifyFormat("[self aaaaa:(Type)a bbbbb:3];");
-
-  verifyFormat("[self stuffWithInt:(4 + 2) float:4.5];");
-  verifyFormat("[self stuffWithInt:a ? b : c float:4.5];");
-  verifyFormat("[self stuffWithInt:a ? [self foo:bar] : c];");
-  verifyFormat("[self stuffWithInt:a ? (e ? f : g) : c];");
-  verifyFormat("[cond ? obj1 : obj2 methodWithParam:param]");
-  verifyFormat("[button setAction:@selector(zoomOut:)];");
-  verifyFormat("[color getRed:&r green:&g blue:&b alpha:&a];");
-
-  verifyFormat("arr[[self indexForFoo:a]];");
-  verifyFormat("throw [self errorFor:a];");
-  verifyFormat("@throw [self errorFor:a];");
-
-  verifyFormat("[(id)foo bar:(id)baz quux:(id)snorf];");
-  verifyFormat("[(id)foo bar:(id) ? baz : quux];");
-  verifyFormat("4 > 4 ? (id)a : (id)baz;");
-
-  // This tests that the formatter doesn't break after "backing" but before ":",
-  // which would be at 80 columns.
-  verifyFormat(
-      "void f() {\n"
-      "  if ((self = [super initWithContentRect:contentRect\n"
-      "                               styleMask:styleMask ?: otherMask\n"
-      "                                 backing:NSBackingStoreBuffered\n"
-      "                                   defer:YES]))");
-
-  verifyFormat(
-      "[foo checkThatBreakingAfterColonWorksOk:\n"
-      "         [bar ifItDoes:reduceOverallLineLengthLikeInThisCase]];");
-
-  verifyFormat("[myObj short:arg1 // Force line break\n"
-               "          longKeyword:arg2 != nil ? arg2 : @\"longKeyword\"\n"
-               "    evenLongerKeyword:arg3 ?: @\"evenLongerKeyword\"\n"
-               "                error:arg4];");
-  verifyFormat(
-      "void f() {\n"
-      "  popup_window_.reset([[RenderWidgetPopupWindow alloc]\n"
-      "      initWithContentRect:NSMakeRect(origin_global.x, origin_global.y,\n"
-      "                                     pos.width(), pos.height())\n"
-      "                styleMask:NSBorderlessWindowMask\n"
-      "                  backing:NSBackingStoreBuffered\n"
-      "                    defer:NO]);\n"
-      "}");
-  verifyFormat(
-      "void f() {\n"
-      "  popup_wdow_.reset([[RenderWidgetPopupWindow alloc]\n"
-      "      iniithContentRect:NSMakRet(origin_global.x, origin_global.y,\n"
-      "                                 pos.width(), pos.height())\n"
-      "                syeMask:NSBorderlessWindowMask\n"
-      "                  bking:NSBackingStoreBuffered\n"
-      "                    der:NO]);\n"
-      "}",
-      getLLVMStyleWithColumns(70));
-  verifyFormat(
-      "void f() {\n"
-      "  popup_window_.reset([[RenderWidgetPopupWindow alloc]\n"
-      "      initWithContentRect:NSMakeRect(origin_global.x, origin_global.y,\n"
-      "                                     pos.width(), pos.height())\n"
-      "                styleMask:NSBorderlessWindowMask\n"
-      "                  backing:NSBackingStoreBuffered\n"
-      "                    defer:NO]);\n"
-      "}",
-      getChromiumStyle(FormatStyle::LK_Cpp));
-  verifyFormat("[contentsContainer replaceSubview:[subviews objectAtIndex:0]\n"
-               "                             with:contentsNativeView];");
-
-  verifyFormat(
-      "[pboard addTypes:[NSArray arrayWithObject:kBookmarkButtonDragType]\n"
-      "           owner:nillllll];");
-
-  verifyFormat(
-      "[pboard setData:[NSData dataWithBytes:&button length:sizeof(button)]\n"
-      "        forType:kBookmarkButtonDragType];");
-
-  verifyFormat("[defaultCenter addObserver:self\n"
-               "                  selector:@selector(willEnterFullscreen)\n"
-               "                      name:kWillEnterFullscreenNotification\n"
-               "                    object:nil];");
-  verifyFormat("[image_rep drawInRect:drawRect\n"
-               "             fromRect:NSZeroRect\n"
-               "            operation:NSCompositeCopy\n"
-               "             fraction:1.0\n"
-               "       respectFlipped:NO\n"
-               "                hints:nil];");
-  verifyFormat("[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa];");
-  verifyFormat("[aaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaa)\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa];");
-  verifyFormat("[aaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaa[aaaaaaaaaaaaaaaaaaaaa]\n"
-               "    aaaaaaaaaaaaaaaaaaaaaa];");
-  verifyFormat("[call aaaaaaaa.aaaaaa.aaaaaaaa.aaaaaaaa.aaaaaaaa.aaaaaaaa\n"
-               "        .aaaaaaaa];", // FIXME: Indentation seems off.
-               getLLVMStyleWithColumns(60));
-
-  verifyFormat(
-      "scoped_nsobject<NSTextField> message(\n"
-      "    // The frame will be fixed up when |-setMessageText:| is called.\n"
-      "    [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 0, 0)]);");
-  verifyFormat("[self aaaaaa:bbbbbbbbbbbbb\n"
-               "    aaaaaaaaaa:bbbbbbbbbbbbbbbbb\n"
-               "         aaaaa:bbbbbbbbbbb + bbbbbbbbbbbb\n"
-               "          aaaa:bbb];");
-  verifyFormat("[self param:function( //\n"
-               "                parameter)]");
-  verifyFormat(
-      "[self aaaaaaaaaa:aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa |\n"
-      "                 aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa |\n"
-      "                 aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa];");
-
-  // FIXME: This violates the column limit.
-  verifyFormat(
-      "[aaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "    aaaaaaaaaaaaaaaaa:aaaaaaaa\n"
-      "                  aaa:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa];",
-      getLLVMStyleWithColumns(60));
-
-  // Variadic parameters.
-  verifyFormat(
-      "NSArray *myStrings = [NSArray stringarray:@\"a\", @\"b\", nil];");
-  verifyFormat(
-      "[self aaaaaaaaaaaaa:aaaaaaaaaaaaaaa, aaaaaaaaaaaaaaa, aaaaaaaaaaaaaaa,\n"
-      "                    aaaaaaaaaaaaaaa, aaaaaaaaaaaaaaa, aaaaaaaaaaaaaaa,\n"
-      "                    aaaaaaaaaaaaaaa, aaaaaaaaaaaaaaa];");
-  verifyFormat("[self // break\n"
-               "      a:a\n"
-               "    aaa:aaa];");
-  verifyFormat("bool a = ([aaaaaaaa aaaaa] == aaaaaaaaaaaaaaaaa ||\n"
-               "          [aaaaaaaa aaaaa] == aaaaaaaaaaaaaaaaaaaa);");
-
-  // Formats pair-parameters.
-  verifyFormat("[I drawRectOn:surface ofSize:aa:bbb atOrigin:cc:dd];");
-  verifyFormat("[I drawRectOn:surface //\n"
-               "        ofSize:aa:bbb\n"
-               "      atOrigin:cc:dd];");
-}
-
-TEST_F(FormatTest, ObjCAt) {
-  verifyFormat("@autoreleasepool");
-  verifyFormat("@catch");
-  verifyFormat("@class");
-  verifyFormat("@compatibility_alias");
-  verifyFormat("@defs");
-  verifyFormat("@dynamic");
-  verifyFormat("@encode");
-  verifyFormat("@end");
-  verifyFormat("@finally");
-  verifyFormat("@implementation");
-  verifyFormat("@import");
-  verifyFormat("@interface");
-  verifyFormat("@optional");
-  verifyFormat("@package");
-  verifyFormat("@private");
-  verifyFormat("@property");
-  verifyFormat("@protected");
-  verifyFormat("@protocol");
-  verifyFormat("@public");
-  verifyFormat("@required");
-  verifyFormat("@selector");
-  verifyFormat("@synchronized");
-  verifyFormat("@synthesize");
-  verifyFormat("@throw");
-  verifyFormat("@try");
-
-  EXPECT_EQ("@interface", format("@ interface"));
-
-  // The precise formatting of this doesn't matter, nobody writes code like
-  // this.
-  verifyFormat("@ /*foo*/ interface");
-}
-
-TEST_F(FormatTest, ObjCSnippets) {
-  verifyFormat("@autoreleasepool {\n"
-               "  foo();\n"
-               "}");
-  verifyFormat("@class Foo, Bar;");
-  verifyFormat("@compatibility_alias AliasName ExistingClass;");
-  verifyFormat("@dynamic textColor;");
-  verifyFormat("char *buf1 = @encode(int *);");
-  verifyFormat("char *buf1 = @encode(typeof(4 * 5));");
-  verifyFormat("char *buf1 = @encode(int **);");
-  verifyFormat("Protocol *proto = @protocol(p1);");
-  verifyFormat("SEL s = @selector(foo:);");
-  verifyFormat("@synchronized(self) {\n"
-               "  f();\n"
-               "}");
-
-  verifyFormat("@synthesize dropArrowPosition = dropArrowPosition_;");
-  verifyGoogleFormat("@synthesize dropArrowPosition = dropArrowPosition_;");
-
-  verifyFormat("@property(assign, nonatomic) CGFloat hoverAlpha;");
-  verifyFormat("@property(assign, getter=isEditable) BOOL editable;");
-  verifyGoogleFormat("@property(assign, getter=isEditable) BOOL editable;");
-  verifyFormat("@property (assign, getter=isEditable) BOOL editable;",
-               getMozillaStyle());
-  verifyFormat("@property BOOL editable;", getMozillaStyle());
-  verifyFormat("@property (assign, getter=isEditable) BOOL editable;",
-               getWebKitStyle());
-  verifyFormat("@property BOOL editable;", getWebKitStyle());
-
-  verifyFormat("@import foo.bar;\n"
-               "@import baz;");
-}
-
-TEST_F(FormatTest, ObjCForIn) {
-  verifyFormat("- (void)test {\n"
-               "  for (NSString *n in arrayOfStrings) {\n"
-               "    foo(n);\n"
-               "  }\n"
-               "}");
-  verifyFormat("- (void)test {\n"
-               "  for (NSString *n in (__bridge NSArray *)arrayOfStrings) {\n"
-               "    foo(n);\n"
-               "  }\n"
-               "}");
-}
-
-TEST_F(FormatTest, ObjCLiterals) {
-  verifyFormat("@\"String\"");
-  verifyFormat("@1");
-  verifyFormat("@+4.8");
-  verifyFormat("@-4");
-  verifyFormat("@1LL");
-  verifyFormat("@.5");
-  verifyFormat("@'c'");
-  verifyFormat("@true");
-
-  verifyFormat("NSNumber *smallestInt = @(-INT_MAX - 1);");
-  verifyFormat("NSNumber *piOverTwo = @(M_PI / 2);");
-  verifyFormat("NSNumber *favoriteColor = @(Green);");
-  verifyFormat("NSString *path = @(getenv(\"PATH\"));");
-
-  verifyFormat("[dictionary setObject:@(1) forKey:@\"number\"];");
-}
-
-TEST_F(FormatTest, ObjCDictLiterals) {
-  verifyFormat("@{");
-  verifyFormat("@{}");
-  verifyFormat("@{@\"one\" : @1}");
-  verifyFormat("return @{@\"one\" : @1;");
-  verifyFormat("@{@\"one\" : @1}");
-
-  verifyFormat("@{@\"one\" : @{@2 : @1}}");
-  verifyFormat("@{\n"
-               "  @\"one\" : @{@2 : @1},\n"
-               "}");
-
-  verifyFormat("@{1 > 2 ? @\"one\" : @\"two\" : 1 > 2 ? @1 : @2}");
-  verifyIncompleteFormat("[self setDict:@{}");
-  verifyIncompleteFormat("[self setDict:@{@1 : @2}");
-  verifyFormat("NSLog(@\"%@\", @{@1 : @2, @2 : @3}[@1]);");
-  verifyFormat(
-      "NSDictionary *masses = @{@\"H\" : @1.0078, @\"He\" : @4.0026};");
-  verifyFormat(
-      "NSDictionary *settings = @{AVEncoderKey : @(AVAudioQualityMax)};");
-
-  verifyFormat("NSDictionary *d = @{\n"
-               "  @\"nam\" : NSUserNam(),\n"
-               "  @\"dte\" : [NSDate date],\n"
-               "  @\"processInfo\" : [NSProcessInfo processInfo]\n"
-               "};");
-  verifyFormat(
-      "@{\n"
-      "  NSFontAttributeNameeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee : "
-      "regularFont,\n"
-      "};");
-  verifyGoogleFormat(
-      "@{\n"
-      "  NSFontAttributeNameeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee : "
-      "regularFont,\n"
-      "};");
-  verifyFormat(
-      "@{\n"
-      "  NSFontAttributeNameeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee :\n"
-      "      reeeeeeeeeeeeeeeeeeeeeeeegularFont,\n"
-      "};");
-
-  // We should try to be robust in case someone forgets the "@".
-  verifyFormat("NSDictionary *d = {\n"
-               "  @\"nam\" : NSUserNam(),\n"
-               "  @\"dte\" : [NSDate date],\n"
-               "  @\"processInfo\" : [NSProcessInfo processInfo]\n"
-               "};");
-  verifyFormat("NSMutableDictionary *dictionary =\n"
-               "    [NSMutableDictionary dictionaryWithDictionary:@{\n"
-               "      aaaaaaaaaaaaaaaaaaaaa : aaaaaaaaaaaaa,\n"
-               "      bbbbbbbbbbbbbbbbbb : bbbbb,\n"
-               "      cccccccccccccccc : ccccccccccccccc\n"
-               "    }];");
-
-  // Ensure that casts before the key are kept on the same line as the key.
-  verifyFormat(
-      "NSDictionary *d = @{\n"
-      "  (aaaaaaaa id)aaaaaaaaa : (aaaaaaaa id)aaaaaaaaaaaaaaaaaaaaaaaa,\n"
-      "  (aaaaaaaa id)aaaaaaaaaaaaaa : (aaaaaaaa id)aaaaaaaaaaaaaa,\n"
-      "};");
-}
-
-TEST_F(FormatTest, ObjCArrayLiterals) {
-  verifyIncompleteFormat("@[");
-  verifyFormat("@[]");
-  verifyFormat(
-      "NSArray *array = @[ @\" Hey \", NSApp, [NSNumber numberWithInt:42] ];");
-  verifyFormat("return @[ @3, @[], @[ @4, @5 ] ];");
-  verifyFormat("NSArray *array = @[ [foo description] ];");
-
-  verifyFormat(
-      "NSArray *some_variable = @[\n"
-      "  aaaa == bbbbbbbbbbb ? @\"aaaaaaaaaaaa\" : @\"aaaaaaaaaaaaaa\",\n"
-      "  @\"aaaaaaaaaaaaaaaaa\",\n"
-      "  @\"aaaaaaaaaaaaaaaaa\",\n"
-      "  @\"aaaaaaaaaaaaaaaaa\",\n"
-      "];");
-  verifyFormat(
-      "NSArray *some_variable = @[\n"
-      "  aaaa == bbbbbbbbbbb ? @\"aaaaaaaaaaaa\" : @\"aaaaaaaaaaaaaa\",\n"
-      "  @\"aaaaaaaaaaaaaaaa\", @\"aaaaaaaaaaaaaaaa\", @\"aaaaaaaaaaaaaaaa\"\n"
-      "];");
-  verifyFormat("NSArray *some_variable = @[\n"
-               "  @\"aaaaaaaaaaaaaaaaa\",\n"
-               "  @\"aaaaaaaaaaaaaaaaa\",\n"
-               "  @\"aaaaaaaaaaaaaaaaa\",\n"
-               "  @\"aaaaaaaaaaaaaaaaa\",\n"
-               "];");
-  verifyFormat("NSArray *array = @[\n"
-               "  @\"a\",\n"
-               "  @\"a\",\n" // Trailing comma -> one per line.
-               "];");
-
-  // We should try to be robust in case someone forgets the "@".
-  verifyFormat("NSArray *some_variable = [\n"
-               "  @\"aaaaaaaaaaaaaaaaa\",\n"
-               "  @\"aaaaaaaaaaaaaaaaa\",\n"
-               "  @\"aaaaaaaaaaaaaaaaa\",\n"
-               "  @\"aaaaaaaaaaaaaaaaa\",\n"
-               "];");
-  verifyFormat(
-      "- (NSAttributedString *)attributedStringForSegment:(NSUInteger)segment\n"
-      "                                             index:(NSUInteger)index\n"
-      "                                nonDigitAttributes:\n"
-      "                                    (NSDictionary *)noDigitAttributes;");
-  verifyFormat("[someFunction someLooooooooooooongParameter:@[\n"
-               "  NSBundle.mainBundle.infoDictionary[@\"a\"]\n"
-               "]];");
-}
 
 TEST_F(FormatTest, BreaksStringLiterals) {
   EXPECT_EQ("\"some text \"\n"
@@ -11608,10 +10966,6 @@ TEST_F(FormatTest, ArrayAsTemplateType) {
             format("auto a = unique_ptr < Foo < Bar>[10]> ;", Spaces));
 }
 
-// Since this test case uses UNIX-style file path. We disable it for MS
-// compiler.
-#if !defined(_MSC_VER) && !defined(__MINGW32__)
-
 TEST(FormatStyle, GetStyleOfFile) {
   vfs::InMemoryFileSystem FS;
   // Test 1: format file in the same directory.
@@ -11620,14 +10974,34 @@ TEST(FormatStyle, GetStyleOfFile) {
                  llvm::MemoryBuffer::getMemBuffer("BasedOnStyle: LLVM")));
   ASSERT_TRUE(
       FS.addFile("/a/test.cpp", 0, llvm::MemoryBuffer::getMemBuffer("int i;")));
-  auto Style1 = getStyle("file", "/a/.clang-format", "Google", &FS);
-  ASSERT_EQ(Style1, getLLVMStyle());
+  auto Style1 = getStyle("file", "/a/.clang-format", "Google", "", &FS);
+  ASSERT_TRUE((bool)Style1);
+  ASSERT_EQ(*Style1, getLLVMStyle());
 
-  // Test 2: fallback to default.
+  // Test 2.1: fallback to default.
   ASSERT_TRUE(
       FS.addFile("/b/test.cpp", 0, llvm::MemoryBuffer::getMemBuffer("int i;")));
-  auto Style2 = getStyle("file", "/b/test.cpp", "Mozilla", &FS);
-  ASSERT_EQ(Style2, getMozillaStyle());
+  auto Style2 = getStyle("file", "/b/test.cpp", "Mozilla", "", &FS);
+  ASSERT_TRUE((bool)Style2);
+  ASSERT_EQ(*Style2, getMozillaStyle());
+
+  // Test 2.2: no format on 'none' fallback style.
+  Style2 = getStyle("file", "/b/test.cpp", "none", "", &FS);
+  ASSERT_TRUE((bool)Style2);
+  ASSERT_EQ(*Style2, getNoStyle());
+
+  // Test 2.3: format if config is found with no based style while fallback is
+  // 'none'.
+  ASSERT_TRUE(FS.addFile("/b/.clang-format", 0,
+                         llvm::MemoryBuffer::getMemBuffer("IndentWidth: 2")));
+  Style2 = getStyle("file", "/b/test.cpp", "none", "", &FS);
+  ASSERT_TRUE((bool)Style2);
+  ASSERT_EQ(*Style2, getLLVMStyle());
+
+  // Test 2.4: format if yaml with no based style, while fallback is 'none'.
+  Style2 = getStyle("{}", "a.h", "none", "", &FS);
+  ASSERT_TRUE((bool)Style2);
+  ASSERT_EQ(*Style2, getLLVMStyle());
 
   // Test 3: format file in parent directory.
   ASSERT_TRUE(
@@ -11635,11 +11009,36 @@ TEST(FormatStyle, GetStyleOfFile) {
                  llvm::MemoryBuffer::getMemBuffer("BasedOnStyle: Google")));
   ASSERT_TRUE(FS.addFile("/c/sub/sub/sub/test.cpp", 0,
                          llvm::MemoryBuffer::getMemBuffer("int i;")));
-  auto Style3 = getStyle("file", "/c/sub/sub/sub/test.cpp", "LLVM", &FS);
-  ASSERT_EQ(Style3, getGoogleStyle());
-}
+  auto Style3 = getStyle("file", "/c/sub/sub/sub/test.cpp", "LLVM", "", &FS);
+  ASSERT_TRUE((bool)Style3);
+  ASSERT_EQ(*Style3, getGoogleStyle());
 
-#endif // _MSC_VER
+  // Test 4: error on invalid fallback style
+  auto Style4 = getStyle("file", "a.h", "KungFu", "", &FS);
+  ASSERT_FALSE((bool)Style4);
+  llvm::consumeError(Style4.takeError());
+
+  // Test 5: error on invalid yaml on command line
+  auto Style5 = getStyle("{invalid_key=invalid_value}", "a.h", "LLVM", "", &FS);
+  ASSERT_FALSE((bool)Style5);
+  llvm::consumeError(Style5.takeError());
+
+  // Test 6: error on invalid style
+  auto Style6 = getStyle("KungFu", "a.h", "LLVM", "", &FS);
+  ASSERT_FALSE((bool)Style6);
+  llvm::consumeError(Style6.takeError());
+
+  // Test 7: found config file, error on parsing it
+  ASSERT_TRUE(
+      FS.addFile("/d/.clang-format", 0,
+                 llvm::MemoryBuffer::getMemBuffer("BasedOnStyle: LLVM\n"
+                                                  "InvalidKey: InvalidValue")));
+  ASSERT_TRUE(
+      FS.addFile("/d/test.cpp", 0, llvm::MemoryBuffer::getMemBuffer("int i;")));
+  auto Style7 = getStyle("file", "/d/.clang-format", "LLVM", "", &FS);
+  ASSERT_FALSE((bool)Style7);
+  llvm::consumeError(Style7.takeError());
+}
 
 TEST_F(ReplacementTest, FormatCodeAfterReplacements) {
   // Column limit is 20.

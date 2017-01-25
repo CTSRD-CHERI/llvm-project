@@ -27,17 +27,16 @@
 #ifndef LLVM_SUPPORT_FILESYSTEM_H
 #define LLVM_SUPPORT_FILESYSTEM_H
 
-#include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/Chrono.h"
-#include "llvm/Support/DataTypes.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ErrorOr.h"
 #include <cassert>
 #include <cstdint>
 #include <ctime>
+#include <memory>
 #include <stack>
 #include <string>
 #include <system_error>
@@ -125,6 +124,7 @@ class UniqueID {
 public:
   UniqueID() = default;
   UniqueID(uint64_t Device, uint64_t File) : Device(Device), File(File) {}
+
   bool operator==(const UniqueID &Other) const {
     return Device == Other.Device && File == Other.File;
   }
@@ -132,6 +132,7 @@ public:
   bool operator<(const UniqueID &Other) const {
     return std::tie(Device, File) < std::tie(Other.Device, Other.File);
   }
+
   uint64_t getDevice() const { return Device; }
   uint64_t getFile() const { return File; }
 };
@@ -262,7 +263,8 @@ struct file_magic {
     coff_object,              ///< COFF object file
     coff_import_library,      ///< COFF import library
     pecoff_executable,        ///< PECOFF executable file
-    windows_resource          ///< Windows compiled resource file (.rc)
+    windows_resource,         ///< Windows compiled resource file (.rc)
+    wasm_object               ///< WebAssembly Object file
   };
 
   bool is_object() const {
@@ -340,12 +342,27 @@ std::error_code create_directory(const Twine &path, bool IgnoreExisting = true,
 /// specific error_code.
 std::error_code create_link(const Twine &to, const Twine &from);
 
+/// Create a hard link from \a from to \a to, or return an error.
+///
+/// @param to The path to hard link to.
+/// @param from The path to hard link from. This is created.
+/// @returns errc::success if the link was created, otherwise a platform
+/// specific error_code.
+std::error_code create_hard_link(const Twine &to, const Twine &from);
+
 /// @brief Get the current path.
 ///
 /// @param result Holds the current path on return.
 /// @returns errc::success if the current path has been stored in result,
 ///          otherwise a platform-specific error_code.
 std::error_code current_path(SmallVectorImpl<char> &result);
+
+/// @brief Set the current path.
+///
+/// @param path The path to set.
+/// @returns errc::success if the current path was successfully set,
+///          otherwise a platform-specific error_code.
+std::error_code set_current_path(const Twine &path);
 
 /// @brief Remove path. Equivalent to POSIX remove().
 ///
@@ -673,10 +690,6 @@ ErrorOr<space_info> disk_space(const Twine &Path);
 /// This class represents a memory mapped file. It is based on
 /// boost::iostreams::mapped_file.
 class mapped_file_region {
-  mapped_file_region() = delete;
-  mapped_file_region(mapped_file_region&) = delete;
-  mapped_file_region &operator =(mapped_file_region&) = delete;
-
 public:
   enum mapmode {
     readonly, ///< May only access map via const_data as read only.
@@ -692,6 +705,10 @@ private:
   std::error_code init(int FD, uint64_t Offset, mapmode Mode);
 
 public:
+  mapped_file_region() = delete;
+  mapped_file_region(mapped_file_region&) = delete;
+  mapped_file_region &operator =(mapped_file_region&) = delete;
+
   /// \param fd An open file descriptor to map. mapped_file_region takes
   ///   ownership if closefd is true. It must have been opended in the correct
   ///   mode.
@@ -732,7 +749,7 @@ public:
     : Path(path.str())
     , Status(st) {}
 
-  directory_entry() {}
+  directory_entry() = default;
 
   void assign(const Twine &path, file_status st = file_status()) {
     Path = path.str();
@@ -759,17 +776,13 @@ namespace detail {
   std::error_code directory_iterator_increment(DirIterState &);
   std::error_code directory_iterator_destruct(DirIterState &);
 
-  /// DirIterState - Keeps state for the directory_iterator. It is reference
-  /// counted in order to preserve InputIterator semantics on copy.
-  struct DirIterState : public RefCountedBase<DirIterState> {
-    DirIterState()
-      : IterationHandle(0) {}
-
+  /// Keeps state for the directory_iterator.
+  struct DirIterState {
     ~DirIterState() {
       directory_iterator_destruct(*this);
     }
 
-    intptr_t IterationHandle;
+    intptr_t IterationHandle = 0;
     directory_entry CurrentEntry;
   };
 } // end namespace detail
@@ -778,23 +791,23 @@ namespace detail {
 /// operator++ because we need an error_code. If it's really needed we can make
 /// it call report_fatal_error on error.
 class directory_iterator {
-  IntrusiveRefCntPtr<detail::DirIterState> State;
+  std::shared_ptr<detail::DirIterState> State;
 
 public:
   explicit directory_iterator(const Twine &path, std::error_code &ec) {
-    State = new detail::DirIterState;
+    State = std::make_shared<detail::DirIterState>();
     SmallString<128> path_storage;
     ec = detail::directory_iterator_construct(*State,
             path.toStringRef(path_storage));
   }
 
   explicit directory_iterator(const directory_entry &de, std::error_code &ec) {
-    State = new detail::DirIterState;
+    State = std::make_shared<detail::DirIterState>();
     ec = detail::directory_iterator_construct(*State, de.path());
   }
 
   /// Construct end iterator.
-  directory_iterator() : State(nullptr) {}
+  directory_iterator() = default;
 
   // No operator++ because we need error_code.
   directory_iterator &increment(std::error_code &ec) {
@@ -823,35 +836,31 @@ public:
 };
 
 namespace detail {
-  /// RecDirIterState - Keeps state for the recursive_directory_iterator. It is
-  /// reference counted in order to preserve InputIterator semantics on copy.
-  struct RecDirIterState : public RefCountedBase<RecDirIterState> {
-    RecDirIterState()
-      : Level(0)
-      , HasNoPushRequest(false) {}
-
-    std::stack<directory_iterator, std::vector<directory_iterator> > Stack;
-    uint16_t Level;
-    bool HasNoPushRequest;
+  /// Keeps state for the recursive_directory_iterator.
+  struct RecDirIterState {
+    std::stack<directory_iterator, std::vector<directory_iterator>> Stack;
+    uint16_t Level = 0;
+    bool HasNoPushRequest = false;
   };
 } // end namespace detail
 
 /// recursive_directory_iterator - Same as directory_iterator except for it
 /// recurses down into child directories.
 class recursive_directory_iterator {
-  IntrusiveRefCntPtr<detail::RecDirIterState> State;
+  std::shared_ptr<detail::RecDirIterState> State;
 
 public:
-  recursive_directory_iterator() {}
+  recursive_directory_iterator() = default;
   explicit recursive_directory_iterator(const Twine &path, std::error_code &ec)
-      : State(new detail::RecDirIterState) {
+      : State(std::make_shared<detail::RecDirIterState>()) {
     State->Stack.push(directory_iterator(path, ec));
     if (State->Stack.top() == directory_iterator())
       State.reset();
   }
+
   // No operator++ because we need error_code.
   recursive_directory_iterator &increment(std::error_code &ec) {
-    const directory_iterator end_itr;
+    const directory_iterator end_itr = {};
 
     if (State->HasNoPushRequest)
       State->HasNoPushRequest = false;
@@ -898,7 +907,7 @@ public:
     assert(State && "Cannot pop an end iterator!");
     assert(State->Level > 0 && "Cannot pop an iterator with level < 1");
 
-    const directory_iterator end_itr;
+    const directory_iterator end_itr = {};
     std::error_code ec;
     do {
       if (ec)

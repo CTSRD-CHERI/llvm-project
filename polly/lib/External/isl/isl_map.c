@@ -3,6 +3,7 @@
  * Copyright 2010      INRIA Saclay
  * Copyright 2012-2014 Ecole Normale Superieure
  * Copyright 2014      INRIA Rocquencourt
+ * Copyright 2016      INRIA Paris
  * Copyright 2016      Sven Verdoolaege
  *
  * Use of this software is governed by the MIT license
@@ -14,6 +15,8 @@
  * and Ecole Normale Superieure, 45 rue d’Ulm, 75230 Paris, France
  * and Inria Paris - Rocquencourt, Domaine de Voluceau - Rocquencourt,
  * B.P. 105 - 78153 Le Chesnay, France
+ * and Centre de Recherche Inria de Paris, 2 rue Simone Iff - Voie DQ12,
+ * CS 42112, 75589 Paris Cedex 12, France
  */
 
 #include <string.h>
@@ -1480,6 +1483,24 @@ int isl_basic_set_alloc_div(struct isl_basic_set *bset)
 	return isl_basic_map_alloc_div(bset_to_bmap(bset));
 }
 
+/* Check that there are "n" dimensions of type "type" starting at "first"
+ * in "bmap".
+ */
+static isl_stat isl_basic_map_check_range(__isl_keep isl_basic_map *bmap,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	unsigned dim;
+
+	if (!bmap)
+		return isl_stat_error;
+	dim = isl_basic_map_dim(bmap, type);
+	if (first + n > dim || first + n < first)
+		isl_die(isl_basic_map_get_ctx(bmap), isl_error_invalid,
+			"position or range out of bounds",
+			return isl_stat_error);
+	return isl_stat_ok;
+}
+
 /* Insert an extra integer division, prescribed by "div", to "bmap"
  * at (integer division) position "pos".
  *
@@ -1489,7 +1510,7 @@ int isl_basic_set_alloc_div(struct isl_basic_set *bset)
 __isl_give isl_basic_map *isl_basic_map_insert_div(
 	__isl_take isl_basic_map *bmap, int pos, __isl_keep isl_vec *div)
 {
-	int i, k, n_div;
+	int i, k;
 
 	bmap = isl_basic_map_cow(bmap);
 	if (!bmap || !div)
@@ -1498,10 +1519,8 @@ __isl_give isl_basic_map *isl_basic_map_insert_div(
 	if (div->size != 1 + 1 + isl_basic_map_dim(bmap, isl_dim_all))
 		isl_die(isl_basic_map_get_ctx(bmap), isl_error_invalid,
 			"unexpected size", return isl_basic_map_free(bmap));
-	n_div = isl_basic_map_dim(bmap, isl_dim_div);
-	if (pos < 0 || pos > n_div)
-		isl_die(isl_basic_map_get_ctx(bmap), isl_error_invalid,
-			"invalid position", return isl_basic_map_free(bmap));
+	if (isl_basic_map_check_range(bmap, isl_dim_div, pos, 0) < 0)
+		return isl_basic_map_free(bmap);
 
 	bmap = isl_basic_map_extend_space(bmap,
 					isl_basic_map_get_space(bmap), 1, 0, 2);
@@ -2029,10 +2048,8 @@ __isl_give isl_set *isl_set_remove_divs(__isl_take isl_set *set)
 struct isl_basic_map *isl_basic_map_remove_dims(struct isl_basic_map *bmap,
 	enum isl_dim_type type, unsigned first, unsigned n)
 {
-	if (!bmap)
-		return NULL;
-	isl_assert(bmap->ctx, first + n <= isl_basic_map_dim(bmap, type),
-			goto error);
+	if (isl_basic_map_check_range(bmap, type, first, n) < 0)
+		return isl_basic_map_free(bmap);
 	if (n == 0 && !isl_space_is_named_or_nested(bmap->dim, type))
 		return bmap;
 	bmap = isl_basic_map_eliminate_vars(bmap,
@@ -2043,9 +2060,6 @@ struct isl_basic_map *isl_basic_map_remove_dims(struct isl_basic_map *bmap,
 		return bmap;
 	bmap = isl_basic_map_drop(bmap, type, first, n);
 	return bmap;
-error:
-	isl_basic_map_free(bmap);
-	return NULL;
 }
 
 /* Return true if the definition of the given div (recursively) involves
@@ -2273,10 +2287,8 @@ __isl_give isl_basic_map *isl_basic_map_remove_divs_involving_dims(
 {
 	int i;
 
-	if (!bmap)
-		return NULL;
-	isl_assert(bmap->ctx, first + n <= isl_basic_map_dim(bmap, type),
-			goto error);
+	if (isl_basic_map_check_range(bmap, type, first, n) < 0)
+		return isl_basic_map_free(bmap);
 	first += isl_basic_map_offset(bmap, type);
 
 	for (i = bmap->n_div - 1; i >= 0; --i) {
@@ -2290,9 +2302,6 @@ __isl_give isl_basic_map *isl_basic_map_remove_divs_involving_dims(
 	}
 
 	return bmap;
-error:
-	isl_basic_map_free(bmap);
-	return NULL;
 }
 
 __isl_give isl_basic_set *isl_basic_set_remove_divs_involving_dims(
@@ -2346,12 +2355,8 @@ isl_bool isl_basic_map_involves_dims(__isl_keep isl_basic_map *bmap,
 {
 	int i;
 
-	if (!bmap)
+	if (isl_basic_map_check_range(bmap, type, first, n) < 0)
 		return isl_bool_error;
-
-	if (first + n > isl_basic_map_dim(bmap, type))
-		isl_die(bmap->ctx, isl_error_invalid,
-			"index out of bounds", return isl_bool_error);
 
 	first += isl_basic_map_offset(bmap, type);
 	for (i = 0; i < bmap->n_eq; ++i)
@@ -2402,6 +2407,211 @@ isl_bool isl_set_involves_dims(__isl_keep isl_set *set,
 	enum isl_dim_type type, unsigned first, unsigned n)
 {
 	return isl_map_involves_dims(set, type, first, n);
+}
+
+/* Drop all constraints in bmap that involve any of the dimensions
+ * first to first+n-1.
+ */
+static __isl_give isl_basic_map *isl_basic_map_drop_constraints_involving(
+	__isl_take isl_basic_map *bmap, unsigned first, unsigned n)
+{
+	int i;
+
+	if (n == 0)
+		return bmap;
+
+	bmap = isl_basic_map_cow(bmap);
+
+	if (!bmap)
+		return NULL;
+
+	for (i = bmap->n_eq - 1; i >= 0; --i) {
+		if (isl_seq_first_non_zero(bmap->eq[i] + 1 + first, n) == -1)
+			continue;
+		isl_basic_map_drop_equality(bmap, i);
+	}
+
+	for (i = bmap->n_ineq - 1; i >= 0; --i) {
+		if (isl_seq_first_non_zero(bmap->ineq[i] + 1 + first, n) == -1)
+			continue;
+		isl_basic_map_drop_inequality(bmap, i);
+	}
+
+	bmap = isl_basic_map_add_known_div_constraints(bmap);
+	return bmap;
+}
+
+/* Drop all constraints in bset that involve any of the dimensions
+ * first to first+n-1.
+ */
+__isl_give isl_basic_set *isl_basic_set_drop_constraints_involving(
+	__isl_take isl_basic_set *bset, unsigned first, unsigned n)
+{
+	return isl_basic_map_drop_constraints_involving(bset, first, n);
+}
+
+/* Drop all constraints in bmap that do not involve any of the dimensions
+ * first to first + n - 1 of the given type.
+ */
+__isl_give isl_basic_map *isl_basic_map_drop_constraints_not_involving_dims(
+	__isl_take isl_basic_map *bmap,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	int i;
+
+	if (n == 0) {
+		isl_space *space = isl_basic_map_get_space(bmap);
+		isl_basic_map_free(bmap);
+		return isl_basic_map_universe(space);
+	}
+	bmap = isl_basic_map_cow(bmap);
+	if (!bmap)
+		return NULL;
+
+	if (isl_basic_map_check_range(bmap, type, first, n) < 0)
+		return isl_basic_map_free(bmap);
+
+	first += isl_basic_map_offset(bmap, type) - 1;
+
+	for (i = bmap->n_eq - 1; i >= 0; --i) {
+		if (isl_seq_first_non_zero(bmap->eq[i] + 1 + first, n) != -1)
+			continue;
+		isl_basic_map_drop_equality(bmap, i);
+	}
+
+	for (i = bmap->n_ineq - 1; i >= 0; --i) {
+		if (isl_seq_first_non_zero(bmap->ineq[i] + 1 + first, n) != -1)
+			continue;
+		isl_basic_map_drop_inequality(bmap, i);
+	}
+
+	bmap = isl_basic_map_add_known_div_constraints(bmap);
+	return bmap;
+}
+
+/* Drop all constraints in bset that do not involve any of the dimensions
+ * first to first + n - 1 of the given type.
+ */
+__isl_give isl_basic_set *isl_basic_set_drop_constraints_not_involving_dims(
+	__isl_take isl_basic_set *bset,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	return isl_basic_map_drop_constraints_not_involving_dims(bset,
+							    type, first, n);
+}
+
+/* Drop all constraints in bmap that involve any of the dimensions
+ * first to first + n - 1 of the given type.
+ */
+__isl_give isl_basic_map *isl_basic_map_drop_constraints_involving_dims(
+	__isl_take isl_basic_map *bmap,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	if (!bmap)
+		return NULL;
+	if (n == 0)
+		return bmap;
+
+	if (isl_basic_map_check_range(bmap, type, first, n) < 0)
+		return isl_basic_map_free(bmap);
+
+	bmap = isl_basic_map_remove_divs_involving_dims(bmap, type, first, n);
+	first += isl_basic_map_offset(bmap, type) - 1;
+	return isl_basic_map_drop_constraints_involving(bmap, first, n);
+}
+
+/* Drop all constraints in bset that involve any of the dimensions
+ * first to first + n - 1 of the given type.
+ */
+__isl_give isl_basic_set *isl_basic_set_drop_constraints_involving_dims(
+	__isl_take isl_basic_set *bset,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	return isl_basic_map_drop_constraints_involving_dims(bset,
+							    type, first, n);
+}
+
+/* Drop constraints from "map" by applying "drop" to each basic map.
+ */
+static __isl_give isl_map *drop_constraints(__isl_take isl_map *map,
+	enum isl_dim_type type, unsigned first, unsigned n,
+	__isl_give isl_basic_map *(*drop)(__isl_take isl_basic_map *bmap,
+		enum isl_dim_type type, unsigned first, unsigned n))
+{
+	int i;
+	unsigned dim;
+
+	if (!map)
+		return NULL;
+
+	dim = isl_map_dim(map, type);
+	if (first + n > dim || first + n < first)
+		isl_die(isl_map_get_ctx(map), isl_error_invalid,
+			"index out of bounds", return isl_map_free(map));
+
+	map = isl_map_cow(map);
+	if (!map)
+		return NULL;
+
+	for (i = 0; i < map->n; ++i) {
+		map->p[i] = drop(map->p[i], type, first, n);
+		if (!map->p[i])
+			return isl_map_free(map);
+	}
+
+	if (map->n > 1)
+		ISL_F_CLR(map, ISL_MAP_DISJOINT);
+
+	return map;
+}
+
+/* Drop all constraints in map that involve any of the dimensions
+ * first to first + n - 1 of the given type.
+ */
+__isl_give isl_map *isl_map_drop_constraints_involving_dims(
+	__isl_take isl_map *map,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	if (n == 0)
+		return map;
+	return drop_constraints(map, type, first, n,
+				&isl_basic_map_drop_constraints_involving_dims);
+}
+
+/* Drop all constraints in "map" that do not involve any of the dimensions
+ * first to first + n - 1 of the given type.
+ */
+__isl_give isl_map *isl_map_drop_constraints_not_involving_dims(
+	__isl_take isl_map *map,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	if (n == 0) {
+		isl_space *space = isl_map_get_space(map);
+		isl_map_free(map);
+		return isl_map_universe(space);
+	}
+	return drop_constraints(map, type, first, n,
+			    &isl_basic_map_drop_constraints_not_involving_dims);
+}
+
+/* Drop all constraints in set that involve any of the dimensions
+ * first to first + n - 1 of the given type.
+ */
+__isl_give isl_set *isl_set_drop_constraints_involving_dims(
+	__isl_take isl_set *set,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	return isl_map_drop_constraints_involving_dims(set, type, first, n);
+}
+
+/* Drop all constraints in "set" that do not involve any of the dimensions
+ * first to first + n - 1 of the given type.
+ */
+__isl_give isl_set *isl_set_drop_constraints_not_involving_dims(
+	__isl_take isl_set *set,
+	enum isl_dim_type type, unsigned first, unsigned n)
+{
+	return isl_map_drop_constraints_not_involving_dims(set, type, first, n);
 }
 
 /* Does local variable "div" of "bmap" have a complete explicit representation?
@@ -2914,7 +3124,7 @@ struct isl_basic_map *isl_basic_map_intersect_range(
 		goto error;
 	bmap = isl_basic_map_extend_space(bmap, isl_space_copy(bmap->dim),
 			bset->n_div, bset->n_eq, bset->n_ineq);
-	bmap_range = isl_basic_map_from_basic_set(bset, isl_space_copy(bset->dim));
+	bmap_range = bset_to_bmap(bset);
 	bmap = add_constraints(bmap, bmap_range, 0, 0);
 
 	bmap = isl_basic_map_simplify(bmap);
@@ -3404,8 +3614,8 @@ __isl_give isl_basic_map *isl_basic_map_move_dims(
 	if (n == 0)
 		return bmap;
 
-	isl_assert(bmap->ctx, src_pos + n <= isl_basic_map_dim(bmap, src_type),
-		goto error);
+	if (isl_basic_map_check_range(bmap, src_type, src_pos, n) < 0)
+		return isl_basic_map_free(bmap);
 
 	if (dst_type == src_type && dst_pos == src_pos)
 		return bmap;
@@ -3698,8 +3908,8 @@ __isl_give isl_basic_map *isl_basic_map_project_out(
 	if (ISL_F_ISSET(bmap, ISL_BASIC_MAP_RATIONAL))
 		return isl_basic_map_remove_dims(bmap, type, first, n);
 
-	isl_assert(bmap->ctx, first + n <= isl_basic_map_dim(bmap, type),
-			goto error);
+	if (isl_basic_map_check_range(bmap, type, first, n) < 0)
+		return isl_basic_map_free(bmap);
 
 	bmap = move_last(bmap, type, first, n);
 	bmap = isl_basic_map_cow(bmap);
@@ -4553,7 +4763,7 @@ __isl_give isl_map *isl_map_lex_gt_map(__isl_take isl_map *map1,
 	return map;
 }
 
-__isl_give isl_basic_map *isl_basic_map_from_basic_set(
+static __isl_give isl_basic_map *basic_map_from_basic_set(
 	__isl_take isl_basic_set *bset, __isl_take isl_space *dim)
 {
 	struct isl_basic_map *bmap;
@@ -4562,7 +4772,8 @@ __isl_give isl_basic_map *isl_basic_map_from_basic_set(
 	if (!bset || !dim)
 		goto error;
 
-	isl_assert(bset->ctx, isl_space_compatible(bset->dim, dim), goto error);
+	isl_assert(bset->ctx, isl_space_compatible_internal(bset->dim, dim),
+		goto error);
 	isl_space_free(bset->dim);
 	bmap = bset_to_bmap(bset);
 	bmap->dim = dim;
@@ -4571,6 +4782,12 @@ error:
 	isl_basic_set_free(bset);
 	isl_space_free(dim);
 	return NULL;
+}
+
+__isl_give isl_basic_map *isl_basic_map_from_basic_set(
+	__isl_take isl_basic_set *bset, __isl_take isl_space *space)
+{
+	return basic_map_from_basic_set(bset, space);
 }
 
 /* For a div d = floor(f/m), add the constraint
@@ -5310,10 +5527,11 @@ __isl_give isl_map *isl_map_from_set(__isl_take isl_set *set,
 	set = isl_set_cow(set);
 	if (!set || !dim)
 		goto error;
-	isl_assert(set->ctx, isl_space_compatible(set->dim, dim), goto error);
+	isl_assert(set->ctx, isl_space_compatible_internal(set->dim, dim),
+		goto error);
 	map = set_to_map(set);
 	for (i = 0; i < set->n; ++i) {
-		map->p[i] = isl_basic_map_from_basic_set(
+		map->p[i] = basic_map_from_basic_set(
 				set->p[i], isl_space_copy(dim));
 		if (!map->p[i])
 			goto error;
@@ -5621,27 +5839,19 @@ error:
 struct isl_basic_map *isl_basic_map_fix_si(struct isl_basic_map *bmap,
 		enum isl_dim_type type, unsigned pos, int value)
 {
-	if (!bmap)
-		return NULL;
-	isl_assert(bmap->ctx, pos < isl_basic_map_dim(bmap, type), goto error);
+	if (isl_basic_map_check_range(bmap, type, pos, 1) < 0)
+		return isl_basic_map_free(bmap);
 	return isl_basic_map_fix_pos_si(bmap,
 		isl_basic_map_offset(bmap, type) + pos, value);
-error:
-	isl_basic_map_free(bmap);
-	return NULL;
 }
 
 __isl_give isl_basic_map *isl_basic_map_fix(__isl_take isl_basic_map *bmap,
 		enum isl_dim_type type, unsigned pos, isl_int value)
 {
-	if (!bmap)
-		return NULL;
-	isl_assert(bmap->ctx, pos < isl_basic_map_dim(bmap, type), goto error);
+	if (isl_basic_map_check_range(bmap, type, pos, 1) < 0)
+		return isl_basic_map_free(bmap);
 	return isl_basic_map_fix_pos(bmap,
 		isl_basic_map_offset(bmap, type) + pos, value);
-error:
-	isl_basic_map_free(bmap);
-	return NULL;
 }
 
 /* Fix the value of the variable at position "pos" of type "type" of "bmap"
@@ -5655,9 +5865,8 @@ __isl_give isl_basic_map *isl_basic_map_fix_val(__isl_take isl_basic_map *bmap,
 	if (!isl_val_is_int(v))
 		isl_die(isl_basic_map_get_ctx(bmap), isl_error_invalid,
 			"expecting integer value", goto error);
-	if (pos >= isl_basic_map_dim(bmap, type))
-		isl_die(isl_basic_map_get_ctx(bmap), isl_error_invalid,
-			"index out of bounds", goto error);
+	if (isl_basic_map_check_range(bmap, type, pos, 1) < 0)
+		goto error;
 	pos += isl_basic_map_offset(bmap, type);
 	bmap = isl_basic_map_fix_pos(bmap, pos, v->n);
 	isl_val_free(v);
@@ -5872,9 +6081,8 @@ static __isl_give isl_basic_map *basic_map_bound_si(
 {
 	int j;
 
-	if (!bmap)
-		return NULL;
-	isl_assert(bmap->ctx, pos < isl_basic_map_dim(bmap, type), goto error);
+	if (isl_basic_map_check_range(bmap, type, pos, 1) < 0)
+		return isl_basic_map_free(bmap);
 	pos += isl_basic_map_offset(bmap, type);
 	bmap = isl_basic_map_cow(bmap);
 	bmap = isl_basic_map_extend_constraints(bmap, 0, 1);
@@ -5989,11 +6197,8 @@ static __isl_give isl_basic_map *basic_map_bound(
 {
 	int j;
 
-	if (!bmap)
-		return NULL;
-	if (pos >= isl_basic_map_dim(bmap, type))
-		isl_die(bmap->ctx, isl_error_invalid,
-			"index out of bounds", goto error);
+	if (isl_basic_map_check_range(bmap, type, pos, 1) < 0)
+		return isl_basic_map_free(bmap);
 	pos += isl_basic_map_offset(bmap, type);
 	bmap = isl_basic_map_cow(bmap);
 	bmap = isl_basic_map_extend_constraints(bmap, 0, 1);
@@ -6972,11 +7177,8 @@ __isl_give isl_basic_map *isl_basic_map_mark_div_unknown(
 isl_bool isl_basic_map_div_is_marked_unknown(__isl_keep isl_basic_map *bmap,
 	int div)
 {
-	if (!bmap)
+	if (isl_basic_map_check_range(bmap, isl_dim_div, div, 1) < 0)
 		return isl_bool_error;
-	if (div < 0 || div >= isl_basic_map_dim(bmap, isl_dim_div))
-		isl_die(isl_basic_map_get_ctx(bmap), isl_error_invalid,
-			"position out of bounds", return isl_bool_error);
 	return isl_int_is_zero(bmap->div[div][0]);
 }
 
@@ -8538,7 +8740,7 @@ struct isl_set *isl_set_remove_empty_parts(struct isl_set *set)
 	return set_from_map(isl_map_remove_empty_parts(set_to_map(set)));
 }
 
-struct isl_basic_map *isl_map_copy_basic_map(struct isl_map *map)
+static __isl_give isl_basic_map *map_copy_basic_map(__isl_keep isl_map *map)
 {
 	struct isl_basic_map *bmap;
 	if (!map || map->n == 0)
@@ -8548,12 +8750,17 @@ struct isl_basic_map *isl_map_copy_basic_map(struct isl_map *map)
 	return isl_basic_map_copy(bmap);
 }
 
-struct isl_basic_set *isl_set_copy_basic_set(struct isl_set *set)
+__isl_give isl_basic_map *isl_map_copy_basic_map(__isl_keep isl_map *map)
 {
-	return bset_from_bmap(isl_map_copy_basic_map(set_to_map(set)));
+	return map_copy_basic_map(map);
 }
 
-__isl_give isl_map *isl_map_drop_basic_map(__isl_take isl_map *map,
+struct isl_basic_set *isl_set_copy_basic_set(struct isl_set *set)
+{
+	return bset_from_bmap(map_copy_basic_map(set_to_map(set)));
+}
+
+static __isl_give isl_map *map_drop_basic_map(__isl_take isl_map *map,
 						__isl_keep isl_basic_map *bmap)
 {
 	int i;
@@ -8580,10 +8787,16 @@ error:
 	return NULL;
 }
 
+__isl_give isl_map *isl_map_drop_basic_map(__isl_take isl_map *map,
+	__isl_keep isl_basic_map *bmap)
+{
+	return map_drop_basic_map(map, bmap);
+}
+
 struct isl_set *isl_set_drop_basic_set(struct isl_set *set,
 						struct isl_basic_set *bset)
 {
-	return set_from_map(isl_map_drop_basic_map(set_to_map(set),
+	return set_from_map(map_drop_basic_map(set_to_map(set),
 						bset_to_bmap(bset)));
 }
 
@@ -8595,14 +8808,13 @@ static enum isl_lp_result basic_set_maximal_difference_at(
 	__isl_keep isl_basic_set *bset1, __isl_keep isl_basic_set *bset2,
 	int pos, isl_int *opt)
 {
-	isl_space *dims;
-	struct isl_basic_map *bmap1 = NULL;
-	struct isl_basic_map *bmap2 = NULL;
+	isl_basic_map *bmap1;
+	isl_basic_map *bmap2;
 	struct isl_ctx *ctx;
 	struct isl_vec *obj;
 	unsigned total;
 	unsigned nparam;
-	unsigned dim1, dim2;
+	unsigned dim1;
 	enum isl_lp_result res;
 
 	if (!bset1 || !bset2)
@@ -8610,25 +8822,22 @@ static enum isl_lp_result basic_set_maximal_difference_at(
 
 	nparam = isl_basic_set_n_param(bset1);
 	dim1 = isl_basic_set_n_dim(bset1);
-	dim2 = isl_basic_set_n_dim(bset2);
-	dims = isl_space_alloc(bset1->ctx, nparam, pos, dim1 - pos);
-	bmap1 = isl_basic_map_from_basic_set(isl_basic_set_copy(bset1), dims);
-	dims = isl_space_alloc(bset2->ctx, nparam, pos, dim2 - pos);
-	bmap2 = isl_basic_map_from_basic_set(isl_basic_set_copy(bset2), dims);
-	if (!bmap1 || !bmap2)
-		goto error;
-	bmap1 = isl_basic_map_cow(bmap1);
-	bmap1 = isl_basic_map_extend(bmap1, nparam,
-			pos, (dim1 - pos) + (dim2 - pos),
-			bmap2->n_div, bmap2->n_eq, bmap2->n_ineq);
-	bmap1 = add_constraints(bmap1, bmap2, 0, dim1 - pos);
+
+	bmap1 = isl_basic_map_from_range(isl_basic_set_copy(bset1));
+	bmap2 = isl_basic_map_from_range(isl_basic_set_copy(bset2));
+	bmap1 = isl_basic_map_move_dims(bmap1, isl_dim_in, 0,
+					isl_dim_out, 0, pos);
+	bmap2 = isl_basic_map_move_dims(bmap2, isl_dim_in, 0,
+					isl_dim_out, 0, pos);
+	bmap1 = isl_basic_map_range_product(bmap1, bmap2);
 	if (!bmap1)
-		goto error2;
+		return isl_lp_error;
+
 	total = isl_basic_map_total_dim(bmap1);
 	ctx = bmap1->ctx;
 	obj = isl_vec_alloc(ctx, 1 + total);
 	if (!obj)
-		goto error2;
+		goto error;
 	isl_seq_clr(obj->block.data, 1 + total);
 	isl_int_set_si(obj->block.data[1+nparam+pos], 1);
 	isl_int_set_si(obj->block.data[1+nparam+pos+(dim1-pos)], -1);
@@ -8638,8 +8847,6 @@ static enum isl_lp_result basic_set_maximal_difference_at(
 	isl_vec_free(obj);
 	return res;
 error:
-	isl_basic_map_free(bmap2);
-error2:
 	isl_basic_map_free(bmap1);
 	return isl_lp_error;
 }
@@ -9445,6 +9652,41 @@ __isl_give isl_basic_set *isl_basic_set_list_intersect(
 	__isl_take isl_basic_set_list *list)
 {
 	return isl_basic_map_list_intersect(list);
+}
+
+/* Return the union of the elements of "list".
+ * The list is required to have at least one element.
+ */
+__isl_give isl_set *isl_basic_set_list_union(
+	__isl_take isl_basic_set_list *list)
+{
+	int i, n;
+	isl_space *space;
+	isl_basic_set *bset;
+	isl_set *set;
+
+	if (!list)
+		return NULL;
+	n = isl_basic_set_list_n_basic_set(list);
+	if (n < 1)
+		isl_die(isl_basic_set_list_get_ctx(list), isl_error_invalid,
+			"expecting non-empty list", goto error);
+
+	bset = isl_basic_set_list_get_basic_set(list, 0);
+	space = isl_basic_set_get_space(bset);
+	isl_basic_set_free(bset);
+
+	set = isl_set_alloc_space(space, n, 0);
+	for (i = 0; i < n; ++i) {
+		bset = isl_basic_set_list_get_basic_set(list, i);
+		set = isl_set_add_basic_set(set, bset);
+	}
+
+	isl_basic_set_list_free(list);
+	return set;
+error:
+	isl_basic_set_list_free(list);
+	return NULL;
 }
 
 /* Return the union of the elements in the non-empty list "list".
@@ -10338,11 +10580,8 @@ static isl_bool basic_map_dim_is_bounded(__isl_keep isl_basic_map *bmap,
 {
 	int i;
 
-	if (!bmap)
+	if (isl_basic_map_check_range(bmap, type, pos, 1) < 0)
 		return isl_bool_error;
-
-	isl_assert(bmap->ctx, pos < isl_basic_map_dim(bmap, type),
-		return isl_bool_error);
 
 	pos += isl_basic_map_offset(bmap, type);
 
@@ -13125,4 +13364,133 @@ __isl_give isl_set *isl_set_preimage_multi_pw_aff(__isl_take isl_set *set,
 	__isl_take isl_multi_pw_aff *mpa)
 {
 	return isl_map_preimage_multi_pw_aff(set, isl_dim_set, mpa);
+}
+
+/* Are the "n" "coefficients" starting at "first" of the integer division
+ * expressions at position "pos1" in "bmap1" and "pos2" in "bmap2" equal
+ * to each other?
+ * The "coefficient" at position 0 is the denominator.
+ * The "coefficient" at position 1 is the constant term.
+ */
+isl_bool isl_basic_map_equal_div_expr_part(__isl_keep isl_basic_map *bmap1,
+	int pos1, __isl_keep isl_basic_map *bmap2, int pos2,
+	unsigned first, unsigned n)
+{
+	if (isl_basic_map_check_range(bmap1, isl_dim_div, pos1, 1) < 0)
+		return isl_bool_error;
+	if (isl_basic_map_check_range(bmap2, isl_dim_div, pos2, 1) < 0)
+		return isl_bool_error;
+	return isl_seq_eq(bmap1->div[pos1] + first,
+			  bmap2->div[pos2] + first, n);
+}
+
+/* Are the integer division expressions at position "pos1" in "bmap1" and
+ * "pos2" in "bmap2" equal to each other, except that the constant terms
+ * are different?
+ */
+isl_bool isl_basic_map_equal_div_expr_except_constant(
+	__isl_keep isl_basic_map *bmap1, int pos1,
+	__isl_keep isl_basic_map *bmap2, int pos2)
+{
+	isl_bool equal;
+	unsigned total;
+
+	if (!bmap1 || !bmap2)
+		return isl_bool_error;
+	total = isl_basic_map_total_dim(bmap1);
+	if (total != isl_basic_map_total_dim(bmap2))
+		isl_die(isl_basic_map_get_ctx(bmap1), isl_error_invalid,
+			"incomparable div expressions", return isl_bool_error);
+	equal = isl_basic_map_equal_div_expr_part(bmap1, pos1, bmap2, pos2,
+						0, 1);
+	if (equal < 0 || !equal)
+		return equal;
+	equal = isl_basic_map_equal_div_expr_part(bmap1, pos1, bmap2, pos2,
+						1, 1);
+	if (equal < 0 || equal)
+		return isl_bool_not(equal);
+	return isl_basic_map_equal_div_expr_part(bmap1, pos1, bmap2, pos2,
+						2, total);
+}
+
+/* Replace the numerator of the constant term of the integer division
+ * expression at position "div" in "bmap" by "value".
+ * The caller guarantees that this does not change the meaning
+ * of the input.
+ */
+__isl_give isl_basic_map *isl_basic_map_set_div_expr_constant_num_si_inplace(
+	__isl_take isl_basic_map *bmap, int div, int value)
+{
+	if (isl_basic_map_check_range(bmap, isl_dim_div, div, 1) < 0)
+		return isl_basic_map_free(bmap);
+
+	isl_int_set_si(bmap->div[div][1], value);
+
+	return bmap;
+}
+
+/* Is the point "inner" internal to inequality constraint "ineq"
+ * of "bset"?
+ * The point is considered to be internal to the inequality constraint,
+ * if it strictly lies on the positive side of the inequality constraint,
+ * or if it lies on the constraint and the constraint is lexico-positive.
+ */
+static isl_bool is_internal(__isl_keep isl_vec *inner,
+	__isl_keep isl_basic_set *bset, int ineq)
+{
+	isl_ctx *ctx;
+	int pos;
+	unsigned total;
+
+	if (!inner || !bset)
+		return isl_bool_error;
+
+	ctx = isl_basic_set_get_ctx(bset);
+	isl_seq_inner_product(inner->el, bset->ineq[ineq], inner->size,
+				&ctx->normalize_gcd);
+	if (!isl_int_is_zero(ctx->normalize_gcd))
+		return isl_int_is_nonneg(ctx->normalize_gcd);
+
+	total = isl_basic_set_dim(bset, isl_dim_all);
+	pos = isl_seq_first_non_zero(bset->ineq[ineq] + 1, total);
+	return isl_int_is_pos(bset->ineq[ineq][1 + pos]);
+}
+
+/* Tighten the inequality constraints of "bset" that are outward with respect
+ * to the point "vec".
+ * That is, tighten the constraints that are not satisfied by "vec".
+ *
+ * "vec" is a point internal to some superset S of "bset" that is used
+ * to make the subsets of S disjoint, by tightening one half of the constraints
+ * that separate two subsets.  In particular, the constraints of S
+ * are all satisfied by "vec" and should not be tightened.
+ * Of the internal constraints, those that have "vec" on the outside
+ * are tightened.  The shared facet is included in the adjacent subset
+ * with the opposite constraint.
+ * For constraints that saturate "vec", this criterion cannot be used
+ * to determine which of the two sides should be tightened.
+ * Instead, the sign of the first non-zero coefficient is used
+ * to make this choice.  Note that this second criterion is never used
+ * on the constraints of S since "vec" is interior to "S".
+ */
+__isl_give isl_basic_set *isl_basic_set_tighten_outward(
+	__isl_take isl_basic_set *bset, __isl_keep isl_vec *vec)
+{
+	int j;
+
+	bset = isl_basic_set_cow(bset);
+	if (!bset)
+		return NULL;
+	for (j = 0; j < bset->n_ineq; ++j) {
+		isl_bool internal;
+
+		internal = is_internal(vec, bset, j);
+		if (internal < 0)
+			return isl_basic_set_free(bset);
+		if (internal)
+			continue;
+		isl_int_sub_ui(bset->ineq[j][0], bset->ineq[j][0], 1);
+	}
+
+	return bset;
 }

@@ -4,11 +4,11 @@
 # RUN: ld.lld %t -o %t2 --icf=all --verbose | FileCheck %s
 # RUN: llvm-objdump -t %t2 | FileCheck -check-prefix=ALIGN %s
 
-# CHECK: selected .text.f2
-# CHECK:   removed .text.f1
+# CHECK: selected .text.f1
+# CHECK:   removed .text.f2
 
-# ALIGN: 0000000000011000 .text 00000000 _start
-# ALIGN: 0000000000011100 .text 00000000 f1
+# ALIGN: 0000000000201000 .text 00000000 _start
+# ALIGN: 0000000000201100 .text 00000000 f1
 
 .globl _start, f1, f2
 _start:

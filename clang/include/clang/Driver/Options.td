@@ -33,6 +33,9 @@ def NoArgumentUnused : OptionFlag;
 // lines that use it.
 def Unsupported : OptionFlag;
 
+// Ignored - The option is unsupported, and the driver will silently ignore it.
+def Ignored : OptionFlag;
+
 // CoreOption - This is considered a "core" Clang option, available in both
 // clang and clang-cl modes.
 def CoreOption : OptionFlag;
@@ -50,72 +53,130 @@ def CC1AsOption : OptionFlag;
 // NoDriverOption - This option should not be accepted by the driver.
 def NoDriverOption : OptionFlag;
 
+// A short name to show in documentation. The name will be interpreted as rST.
+class DocName<string name> { string DocName = name; }
+
+// A brief description to show in documentation, interpreted as rST.
+class DocBrief<code descr> { code DocBrief = descr; }
+
+// Indicates that this group should be flattened into its parent when generating
+// documentation.
+class DocFlatten { bit DocFlatten = 1; }
+
 /////////
 // Groups
 
+def Action_Group : OptionGroup<"<action group>">, DocName<"Actions">,
+                   DocBrief<[{The action to perform on the input.}]>;
+
 // Meta-group for options which are only used for compilation,
 // and not linking etc.
-def CompileOnly_Group     : OptionGroup<"<CompileOnly group>">;
+def CompileOnly_Group : OptionGroup<"<CompileOnly group>">,
+                        DocName<"Compilation flags">, DocBrief<[{
+Flags controlling the behavior of Clang during compilation. These flags have
+no effect during actions that do not perform compilation.}]>;
 
-def Action_Group          : OptionGroup<"<action group>">;
+def IncludePath_Group : OptionGroup<"<I/i group>">, Group<CompileOnly_Group>,
+                        DocName<"Include path management">,
+                        DocBrief<[{
+Flags controlling how ``#include``\s are resolved to files.}]>;
 
-def I_Group               : OptionGroup<"<I group>">, Group<CompileOnly_Group>;
-def M_Group               : OptionGroup<"<M group>">, Group<CompileOnly_Group>;
-def T_Group               : OptionGroup<"<T group>">;
-def O_Group               : OptionGroup<"<O group>">, Group<CompileOnly_Group>;
-def R_Group               : OptionGroup<"<R group>">, Group<CompileOnly_Group>;
-def R_value_Group         : OptionGroup<"<R (with value) group>">, Group<R_Group>;
-def W_Group               : OptionGroup<"<W group>">, Group<CompileOnly_Group>;
-def W_value_Group         : OptionGroup<"<W (with value) group>">, Group<W_Group>;
-def d_Group               : OptionGroup<"<d group>">;
-def f_Group               : OptionGroup<"<f group>">, Group<CompileOnly_Group>;
-def f_clang_Group         : OptionGroup<"<f (clang-only) group>">, Group<CompileOnly_Group>;
-def g_Group               : OptionGroup<"<g group>">;
-def gN_Group              : OptionGroup<"<gN group>">, Group<g_Group>;
-def ggdbN_Group           : OptionGroup<"<ggdbN group>">, Group<gN_Group>;
-def gTune_Group           : OptionGroup<"<gTune group>">, Group<g_Group>;
-def g_flags_Group         : OptionGroup<"<g flags group>">;
-def i_Group               : OptionGroup<"<i group>">, Group<CompileOnly_Group>;
-def clang_i_Group         : OptionGroup<"<clang i group>">, Group<i_Group>;
-def m_Group               : OptionGroup<"<m group>">, Group<CompileOnly_Group>;
-def opencl_Group          : OptionGroup<"<opencl group>">, Group<CompileOnly_Group>;
+def I_Group : OptionGroup<"<I group>">, Group<IncludePath_Group>, DocFlatten;
+def i_Group : OptionGroup<"<i group>">, Group<IncludePath_Group>, DocFlatten;
+def clang_i_Group : OptionGroup<"<clang i group>">, Group<i_Group>, DocFlatten;
+
+def M_Group : OptionGroup<"<M group>">, Group<CompileOnly_Group>,
+              DocName<"Dependency file generation">, DocBrief<[{
+Flags controlling generation of a dependency file for ``make``-like build
+systems.}]>;
+
+def d_Group : OptionGroup<"<d group>">, Group<CompileOnly_Group>,
+              DocName<"Dumping preprocessor state">, DocBrief<[{
+Flags allowing the state of the preprocessor to be dumped in various ways.}]>;
+
+def Diag_Group : OptionGroup<"<W/R group>">, Group<CompileOnly_Group>,
+                 DocName<"Diagnostic flags">, DocBrief<[{
+Flags controlling which warnings, errors, and remarks Clang will generate.
+See the :doc:`full list of warning and remark flags <DiagnosticsReference>`.}]>;
+
+def R_Group : OptionGroup<"<R group>">, Group<Diag_Group>, DocFlatten;
+def R_value_Group : OptionGroup<"<R (with value) group>">, Group<R_Group>,
+                    DocFlatten;
+def W_Group : OptionGroup<"<W group>">, Group<Diag_Group>, DocFlatten;
+def W_value_Group : OptionGroup<"<W (with value) group>">, Group<W_Group>,
+                    DocFlatten;
+
+def f_Group : OptionGroup<"<f group>">, Group<CompileOnly_Group>,
+              DocName<"Target-independent compilation options">;
+
+def f_clang_Group : OptionGroup<"<f (clang-only) group>">,
+                    Group<CompileOnly_Group>, DocFlatten;
+def pedantic_Group : OptionGroup<"<pedantic group>">, Group<f_Group>,
+                     DocFlatten;
+def opencl_Group : OptionGroup<"<opencl group>">, Group<f_Group>,
+                   DocName<"OpenCL flags">;
+
+def m_Group : OptionGroup<"<m group>">, Group<CompileOnly_Group>,
+              DocName<"Target-dependent compilation options">;
 
 // Feature groups - these take command line options that correspond directly to
 // target specific features and can be translated directly from command line
 // options.
-def m_x86_Features_Group : OptionGroup<"<x86 features group>">,
-                           Group<m_Group>,
-                           Flags<[CoreOption]>;
-def m_hexagon_Features_Group : OptionGroup<"<hexagon features group>">,
-                               Group<m_Group>;
-def m_arm_Features_Group : OptionGroup<"<arm features group>">,
-                           Group<m_Group>;
 def m_aarch64_Features_Group : OptionGroup<"<aarch64 features group>">,
-                               Group<m_Group>;
-def m_ppc_Features_Group : OptionGroup<"<ppc features group>">,
-                           Group<m_Group>;
-def m_wasm_Features_Group : OptionGroup<"<wasm features group>">,
-                            Group<m_Group>;
+                               Group<m_Group>, DocName<"AARCH64">;
 def m_amdgpu_Features_Group : OptionGroup<"<amdgpu features group>">,
-                              Group<m_Group>;
+                              Group<m_Group>, DocName<"AMDGPU">;
+def m_arm_Features_Group : OptionGroup<"<arm features group>">,
+                           Group<m_Group>, DocName<"ARM">;
+def m_hexagon_Features_Group : OptionGroup<"<hexagon features group>">,
+                               Group<m_Group>, DocName<"Hexagon">;
+def m_ppc_Features_Group : OptionGroup<"<ppc features group>">,
+                           Group<m_Group>, DocName<"PowerPC">;
+def m_wasm_Features_Group : OptionGroup<"<wasm features group>">,
+                            Group<m_Group>, DocName<"WebAssembly">;
+def m_x86_Features_Group : OptionGroup<"<x86 features group>">,
+                           Group<m_Group>, Flags<[CoreOption]>, DocName<"X86">;
 
-def m_libc_Group          : OptionGroup<"<m libc group>">, Group<m_Group>;
-def u_Group               : OptionGroup<"<u group>">;
+def m_libc_Group : OptionGroup<"<m libc group>">, Group<m_Group>,
+                   Flags<[HelpHidden]>;
 
-def pedantic_Group        : OptionGroup<"<pedantic group>">,
-  Group<CompileOnly_Group>;
-def reserved_lib_Group   : OptionGroup<"<reserved libs group>">;
+def O_Group : OptionGroup<"<O group>">, Group<CompileOnly_Group>,
+              DocName<"Optimization level">, DocBrief<[{
+Flags controlling how much optimization should be performed.}]>;
+
+def DebugInfo_Group : OptionGroup<"<g group>">, Group<CompileOnly_Group>,
+                      DocName<"Debug information generation">, DocBrief<[{
+Flags controlling how much and what kind of debug information should be
+generated.}]>;
+
+def g_Group : OptionGroup<"<g group>">, Group<DebugInfo_Group>,
+              DocName<"Kind and level of debug information">;
+def gN_Group : OptionGroup<"<gN group>">, Group<g_Group>,
+               DocName<"Debug level">;
+def ggdbN_Group : OptionGroup<"<ggdbN group>">, Group<gN_Group>, DocFlatten;
+def gTune_Group : OptionGroup<"<gTune group>">, Group<g_Group>,
+                  DocName<"Debugger to tune debug information for">;
+def g_flags_Group : OptionGroup<"<g flags group>">, Group<DebugInfo_Group>,
+                    DocName<"Debug information flags">;
+
+def Link_Group : OptionGroup<"<T/e/s/t/u group>">, DocName<"Linker flags">,
+                 DocBrief<[{Flags that are passed on to the linker}]>;
+def T_Group : OptionGroup<"<T group>">, Group<Link_Group>, DocFlatten;
+def u_Group : OptionGroup<"<u group>">, Group<Link_Group>, DocFlatten;
+
+def reserved_lib_Group : OptionGroup<"<reserved libs group>">,
+                         Flags<[Unsupported]>;
 
 // Temporary groups for clang options which we know we don't support,
 // but don't want to verbosely warn the user about.
 def clang_ignored_f_Group : OptionGroup<"<clang ignored f group>">,
-  Group<f_Group>;
+  Group<f_Group>, Flags<[Ignored]>;
 def clang_ignored_m_Group : OptionGroup<"<clang ignored m group>">,
-  Group<m_Group>;
+  Group<m_Group>, Flags<[Ignored]>;
 
 // Group that ignores all gcc optimizations that won't be implemented
 def clang_ignored_gcc_optimization_f_Group : OptionGroup<
-  "<clang_ignored_gcc_optimization_f_Group>">, Group<f_Group>;
+  "<clang_ignored_gcc_optimization_f_Group>">, Group<f_Group>, Flags<[Ignored]>;
 
 /////////
 // Options
@@ -141,7 +202,7 @@ def clang_ignored_gcc_optimization_f_Group : OptionGroup<
 
 // Developer Driver Options
 
-def internal_Group : OptionGroup<"<clang internal options>">;
+def internal_Group : OptionGroup<"<clang internal options>">, Flags<[HelpHidden]>;
 def internal_driver_Group : OptionGroup<"<clang driver internal options>">,
   Group<internal_Group>, HelpText<"DRIVER OPTIONS">;
 def internal_debug_Group :
@@ -257,7 +318,7 @@ def H : Flag<["-"], "H">, Flags<[CC1Option]>,
 def I_ : Flag<["-"], "I-">, Group<I_Group>;
 def I : JoinedOrSeparate<["-"], "I">, Group<I_Group>, Flags<[CC1Option,CC1AsOption]>,
     HelpText<"Add directory to include search path">;
-def L : JoinedOrSeparate<["-"], "L">, Flags<[RenderJoined]>;
+def L : JoinedOrSeparate<["-"], "L">, Flags<[RenderJoined]>, Group<Link_Group>;
 def MD : Flag<["-"], "MD">, Group<M_Group>,
     HelpText<"Write a depfile containing user and system headers">;
 def MMD : Flag<["-"], "MMD">, Group<M_Group>,
@@ -271,6 +332,8 @@ def MF : JoinedOrSeparate<["-"], "MF">, Group<M_Group>,
     MetaVarName<"<file>">;
 def MG : Flag<["-"], "MG">, Group<M_Group>, Flags<[CC1Option]>,
     HelpText<"Add missing headers to depfile">;
+def MJ : JoinedOrSeparate<["-"], "MJ">, Group<M_Group>,
+    HelpText<"Write a compilation database entry per input">;
 def MP : Flag<["-"], "MP">, Group<M_Group>, Flags<[CC1Option]>,
     HelpText<"Create phony target for each dependency (other than main file)">;
 def MQ : JoinedOrSeparate<["-"], "MQ">, Group<M_Group>, Flags<[CC1Option]>,
@@ -326,7 +389,7 @@ def Wno_deprecated : Flag<["-"], "Wno-deprecated">, Group<W_Group>, Flags<[CC1Op
 def Wextra : Flag<["-"], "Wextra">, Group<W_Group>, Flags<[CC1Option]>;
 def Wl_COMMA : CommaJoined<["-"], "Wl,">, Flags<[LinkerInput, RenderAsInput]>,
   HelpText<"Pass the comma separated arguments in <arg> to the linker">,
-  MetaVarName<"<arg>">;
+  MetaVarName<"<arg>">, Group<Link_Group>;
 // FIXME: This is broken; these should not be Joined arguments.
 def Wno_nonportable_cfstrings : Joined<["-"], "Wno-nonportable-cfstrings">, Group<W_Group>,
   Flags<[CC1Option]>;
@@ -352,14 +415,16 @@ def Xcuda_fatbinary : Separate<["-"], "Xcuda-fatbinary">,
 def Xcuda_ptxas : Separate<["-"], "Xcuda-ptxas">,
   HelpText<"Pass <arg> to the ptxas assembler">, MetaVarName<"<arg>">;
 def z : Separate<["-"], "z">, Flags<[LinkerInput, RenderAsInput]>,
-  HelpText<"Pass -z <arg> to the linker">, MetaVarName<"<arg>">;
+  HelpText<"Pass -z <arg> to the linker">, MetaVarName<"<arg>">,
+  Group<Link_Group>;
 def Xlinker : Separate<["-"], "Xlinker">, Flags<[LinkerInput, RenderAsInput]>,
-  HelpText<"Pass <arg> to the linker">, MetaVarName<"<arg>">;
+  HelpText<"Pass <arg> to the linker">, MetaVarName<"<arg>">,
+  Group<Link_Group>;
 def Xpreprocessor : Separate<["-"], "Xpreprocessor">,
   HelpText<"Pass <arg> to the preprocessor">, MetaVarName<"<arg>">;
 def X_Flag : Flag<["-"], "X">;
 def X_Joined : Joined<["-"], "X">;
-def Z_Flag : Flag<["-"], "Z">;
+def Z_Flag : Flag<["-"], "Z">, Group<Link_Group>;
 def Z_Joined : Joined<["-"], "Z">;
 def all__load : Flag<["-"], "all_load">;
 def allowable__client : Separate<["-"], "allowable_client">;
@@ -417,6 +482,9 @@ def cuda_compile_host_device : Flag<["--"], "cuda-compile-host-device">,
            "effect on non-CUDA compilations.">;
 def cuda_gpu_arch_EQ : Joined<["--"], "cuda-gpu-arch=">, Flags<[DriverOption]>,
   HelpText<"CUDA GPU architecture (e.g. sm_35).  May be specified more than once.">;
+def no_cuda_gpu_arch_EQ : Joined<["--"], "no-cuda-gpu-arch=">, Flags<[DriverOption]>,
+  HelpText<"Remove GPU architecture (e.g. sm_35) from the list of GPUs to compile for. "
+           "'all' resets the list to its default value.">;
 def cuda_noopt_device_debug : Flag<["--"], "cuda-noopt-device-debug">,
   HelpText<"Enable device-side debug info generation. Disables ptxas optimizations.">;
 def no_cuda_version_check : Flag<["--"], "no-cuda-version-check">,
@@ -425,6 +493,8 @@ def no_cuda_version_check : Flag<["--"], "no-cuda-version-check">,
 def no_cuda_noopt_device_debug : Flag<["--"], "no-cuda-noopt-device-debug">;
 def cuda_path_EQ : Joined<["--"], "cuda-path=">, Group<i_Group>,
   HelpText<"CUDA installation path">;
+def ptxas_path_EQ : Joined<["--"], "ptxas-path=">, Group<i_Group>,
+  HelpText<"Path to ptxas (used for compiling CUDA code)">;
 def fcuda_flush_denormals_to_zero : Flag<["-"], "fcuda-flush-denormals-to-zero">,
   Flags<[CC1Option]>, HelpText<"Flush denormal floating point values to zero in CUDA device mode.">;
 def fno_cuda_flush_denormals_to_zero : Flag<["-"], "fno-cuda-flush-denormals-to-zero">;
@@ -460,7 +530,7 @@ def emit_ast : Flag<["-"], "emit-ast">,
 def emit_llvm : Flag<["-"], "emit-llvm">, Flags<[CC1Option]>, Group<Action_Group>,
   HelpText<"Use the LLVM representation for assembler and object files">;
 def exported__symbols__list : Separate<["-"], "exported_symbols_list">;
-def e : JoinedOrSeparate<["-"], "e">;
+def e : JoinedOrSeparate<["-"], "e">, Group<Link_Group>;
 def fPIC : Flag<["-"], "fPIC">, Group<f_Group>;
 def fno_PIC : Flag<["-"], "fno-PIC">, Group<f_Group>;
 def fPIE : Flag<["-"], "fPIE">, Group<f_Group>;
@@ -514,16 +584,22 @@ def fprofile_sample_use_EQ : Joined<["-"], "fprofile-sample-use=">,
     HelpText<"Enable sample-based profile guided optimizations">;
 def fauto_profile_EQ : Joined<["-"], "fauto-profile=">,
     Alias<fprofile_sample_use_EQ>;
+def fdebug_info_for_profiling : Flag<["-"], "fdebug-info-for-profiling">, Group<f_Group>,
+    Flags<[CC1Option]>,
+    HelpText<"Emit extra debug info to make sample profile more accurate.">;
+def fno_debug_info_for_profiling : Flag<["-"], "fno-debug-info-for-profiling">, Group<f_Group>,
+    Flags<[DriverOption]>,
+    HelpText<"Do not emit extra debug info for sample profiler.">;
 def fprofile_instr_generate : Flag<["-"], "fprofile-instr-generate">,
-    Group<f_Group>, Flags<[DriverOption]>,
-    HelpText<"Generate instrumented code to collect execution counts into default.profraw file (overriden by '=' form of option or LLVM_PROFILE_FILE env var)">;
+    Group<f_Group>, Flags<[CoreOption]>,
+    HelpText<"Generate instrumented code to collect execution counts into default.profraw file (overridden by '=' form of option or LLVM_PROFILE_FILE env var)">;
 def fprofile_instr_generate_EQ : Joined<["-"], "fprofile-instr-generate=">,
-    Group<f_Group>, Flags<[DriverOption]>, MetaVarName<"<file>">,
+    Group<f_Group>, Flags<[CoreOption]>, MetaVarName<"<file>">,
     HelpText<"Generate instrumented code to collect execution counts into <file> (overridden by LLVM_PROFILE_FILE env var)">;
 def fprofile_instr_use : Flag<["-"], "fprofile-instr-use">, Group<f_Group>,
-    Flags<[DriverOption]>;
+    Flags<[CoreOption]>;
 def fprofile_instr_use_EQ : Joined<["-"], "fprofile-instr-use=">,
-    Group<f_Group>, Flags<[DriverOption]>,
+    Group<f_Group>, Flags<[CoreOption]>,
     HelpText<"Use instrumentation data for profile-guided optimization">;
 def fcoverage_mapping : Flag<["-"], "fcoverage-mapping">,
     Group<f_Group>, Flags<[CC1Option]>,
@@ -814,13 +890,17 @@ def fno_gnu89_inline : Flag<["-"], "fno-gnu89-inline">, Group<f_Group>;
 def fgnu_runtime : Flag<["-"], "fgnu-runtime">, Group<f_Group>,
   HelpText<"Generate output compatible with the standard GNU Objective-C runtime">;
 def fheinous_gnu_extensions : Flag<["-"], "fheinous-gnu-extensions">, Flags<[CC1Option]>;
-def filelist : Separate<["-"], "filelist">, Flags<[LinkerInput]>;
+def filelist : Separate<["-"], "filelist">, Flags<[LinkerInput]>,
+               Group<Link_Group>;
 def : Flag<["-"], "findirect-virtual-calls">, Alias<fapple_kext>;
 def finline_functions : Flag<["-"], "finline-functions">, Group<f_clang_Group>, Flags<[CC1Option]>,
   HelpText<"Inline suitable functions">;
 def finline_hint_functions: Flag<["-"], "finline-hint-functions">, Group<f_clang_Group>, Flags<[CC1Option]>,
-  HelpText<"Inline functions wich are (explicitly or implicitly) marked inline">;
+  HelpText<"Inline functions which are (explicitly or implicitly) marked inline">;
 def finline : Flag<["-"], "finline">, Group<clang_ignored_f_Group>;
+def fexperimental_new_pass_manager : Flag<["-"], "fexperimental-new-pass-manager">,
+  Group<f_clang_Group>, Flags<[CC1Option]>,
+  HelpText<"Enables an experimental new pass manager in LLVM.">;
 def finput_charset_EQ : Joined<["-"], "finput-charset=">, Group<f_Group>;
 def fexec_charset_EQ : Joined<["-"], "fexec-charset=">, Group<f_Group>;
 def finstrument_functions : Flag<["-"], "finstrument-functions">, Group<f_Group>, Flags<[CC1Option]>,
@@ -877,7 +957,7 @@ def fms_compatibility_version
                "(default))">;
 def fdelayed_template_parsing : Flag<["-"], "fdelayed-template-parsing">, Group<f_Group>,
   HelpText<"Parse templated function definitions at the end of the "
-           "translation unit">,  Flags<[CC1Option]>;
+           "translation unit">,  Flags<[CC1Option, CoreOption]>;
 def fms_memptr_rep_EQ : Joined<["-"], "fms-memptr-rep=">, Group<f_Group>, Flags<[CC1Option]>;
 def fmodules_cache_path : Joined<["-"], "fmodules-cache-path=">, Group<i_Group>,
   Flags<[DriverOption, CC1Option]>, MetaVarName<"<directory>">,
@@ -998,6 +1078,9 @@ def fno_exceptions : Flag<["-"], "fno-exceptions">, Group<f_Group>;
 def fno_gnu_keywords : Flag<["-"], "fno-gnu-keywords">, Group<f_Group>, Flags<[CC1Option]>;
 def fno_inline_functions : Flag<["-"], "fno-inline-functions">, Group<f_clang_Group>, Flags<[CC1Option]>;
 def fno_inline : Flag<["-"], "fno-inline">, Group<f_clang_Group>, Flags<[CC1Option]>;
+def fno_experimental_new_pass_manager : Flag<["-"], "fno-experimental-new-pass-manager">,
+  Group<f_clang_Group>, Flags<[CC1Option]>,
+  HelpText<"Disables an experimental new pass manager in LLVM.">;
 def fveclib : Joined<["-"], "fveclib=">, Group<f_Group>, Flags<[CC1Option]>,
     HelpText<"Use the given vector functions library">;
 def fno_lax_vector_conversions : Flag<["-"], "fno-lax-vector-conversions">, Group<f_Group>,
@@ -1023,7 +1106,9 @@ def fno_ms_extensions : Flag<["-"], "fno-ms-extensions">, Group<f_Group>,
   Flags<[CoreOption]>;
 def fno_ms_compatibility : Flag<["-"], "fno-ms-compatibility">, Group<f_Group>,
   Flags<[CoreOption]>;
-def fno_delayed_template_parsing : Flag<["-"], "fno-delayed-template-parsing">, Group<f_Group>;
+def fno_delayed_template_parsing : Flag<["-"], "fno-delayed-template-parsing">, Group<f_Group>,
+  HelpText<"Disable delayed template parsing">,
+  Flags<[DriverOption, CoreOption]>;
 def fno_objc_exceptions: Flag<["-"], "fno-objc-exceptions">, Group<f_Group>;
 def fno_objc_legacy_dispatch : Flag<["-"], "fno-objc-legacy-dispatch">, Group<f_Group>;
 def fno_objc_weak : Flag<["-"], "fno-objc-weak">, Group<f_Group>, Flags<[CC1Option]>;
@@ -1080,6 +1165,11 @@ def fapplication_extension : Flag<["-"], "fapplication-extension">,
   HelpText<"Restrict code to those available for App Extensions">;
 def fno_application_extension : Flag<["-"], "fno-application-extension">,
   Group<f_Group>;
+def frelaxed_template_template_args : Flag<["-"], "frelaxed-template-template-args">,
+  Flags<[CC1Option]>, HelpText<"Enable C++17 relaxed template template argument matching">,
+  Group<f_Group>;
+def fno_relaxed_template_template_args : Flag<["-"], "fno-relaxed-template-template-args">,
+  Group<f_Group>;
 def fsized_deallocation : Flag<["-"], "fsized-deallocation">, Flags<[CC1Option]>,
   HelpText<"Enable C++14 sized global deallocation functions">, Group<f_Group>;
 def fno_sized_deallocation: Flag<["-"], "fno-sized-deallocation">, Group<f_Group>;
@@ -1095,10 +1185,6 @@ def : Flag<["-"], "faligned-new">, Alias<faligned_allocation>;
 def : Flag<["-"], "fno-aligned-new">, Alias<fno_aligned_allocation>;
 def faligned_new_EQ : Joined<["-"], "faligned-new=">;
 
-def fobjc_gc_only : Flag<["-"], "fobjc-gc-only">, Group<f_Group>, Flags<[CC1Option]>,
-  HelpText<"Use GC exclusively for Objective-C related memory management">;
-def fobjc_gc : Flag<["-"], "fobjc-gc">, Group<f_Group>, Flags<[CC1Option]>,
-  HelpText<"Enable Objective-C garbage collection">;
 def fobjc_legacy_dispatch : Flag<["-"], "fobjc-legacy-dispatch">, Group<f_Group>;
 def fobjc_new_property : Flag<["-"], "fobjc-new-property">, Group<clang_ignored_f_Group>;
 def fobjc_infer_related_result_type : Flag<["-"], "fobjc-infer-related-result-type">,
@@ -1322,6 +1408,12 @@ def funique_section_names : Flag <["-"], "funique-section-names">,
 def fno_unique_section_names : Flag <["-"], "fno-unique-section-names">,
   Group<f_Group>, Flags<[CC1Option]>;
 
+def fstrict_return : Flag<["-"], "fstrict-return">, Group<f_Group>,
+  Flags<[CC1Option]>,
+  HelpText<"Always treat control flow paths that fall off the end of a non-void"
+           "function as unreachable">;
+def fno_strict_return : Flag<["-"], "fno-strict-return">, Group<f_Group>,
+  Flags<[CC1Option]>;
 
 def fdebug_types_section: Flag <["-"], "fdebug-types-section">, Group<f_Group>,
   Flags<[CC1Option]>, HelpText<"Place debug types in their own section (ELF Only)">;
@@ -1432,7 +1524,8 @@ def ivfsoverlay : JoinedOrSeparate<["-"], "ivfsoverlay">, Group<clang_i_Group>, 
   HelpText<"Overlay the virtual filesystem described by file over the real file system">;
 def i : Joined<["-"], "i">, Group<i_Group>;
 def keep__private__externs : Flag<["-"], "keep_private_externs">;
-def l : JoinedOrSeparate<["-"], "l">, Flags<[LinkerInput, RenderJoined]>;
+def l : JoinedOrSeparate<["-"], "l">, Flags<[LinkerInput, RenderJoined]>,
+        Group<Link_Group>;
 def lazy__framework : Separate<["-"], "lazy_framework">, Flags<[LinkerInput]>;
 def lazy__library : Separate<["-"], "lazy_library">, Flags<[LinkerInput]>;
 def mlittle_endian : Flag<["-"], "mlittle-endian">, Flags<[DriverOption]>;
@@ -1459,6 +1552,12 @@ def mlong_calls : Flag<["-"], "mlong-calls">, Group<m_Group>,
   HelpText<"Generate branches with extended addressability, usually via indirect jumps.">;
 def mno_long_calls : Flag<["-"], "mno-long-calls">, Group<m_Group>,
   HelpText<"Restore the default behaviour of not generating long calls">;
+def mexecute_only : Flag<["-"], "mexecute-only">, Group<m_arm_Features_Group>,
+  HelpText<"Disallow generation of data access to code sections (ARM only)">;
+def mno_execute_only : Flag<["-"], "mno-execute-only">, Group<m_arm_Features_Group>,
+  HelpText<"Allow generation of data access to code sections (ARM only)">;
+def mpure_code : Flag<["-"], "mpure-code">, Alias<mexecute_only>; // Alias for GCC compatibility
+def mno_pure_code : Flag<["-"], "mno-pure-code">, Alias<mno_execute_only>;
 def mtvos_version_min_EQ : Joined<["-"], "mtvos-version-min=">, Group<m_Group>;
 def mappletvos_version_min_EQ : Joined<["-"], "mappletvos-version-min=">, Alias<mtvos_version_min_EQ>;
 def mtvos_simulator_version_min_EQ : Joined<["-"], "mtvos-simulator-version-min=">, Alias<mtvos_version_min_EQ>;
@@ -1858,7 +1957,8 @@ def mno_odd_spreg : Flag<["-"], "mno-odd-spreg">, Group<m_Group>,
   Flags<[HelpHidden]>;
 def mglibc : Flag<["-"], "mglibc">, Group<m_libc_Group>, Flags<[HelpHidden]>;
 def muclibc : Flag<["-"], "muclibc">, Group<m_libc_Group>, Flags<[HelpHidden]>;
-def module_file_info : Flag<["-"], "module-file-info">, Flags<[DriverOption,CC1Option]>, Group<Action_Group>;
+def module_file_info : Flag<["-"], "module-file-info">, Flags<[DriverOption,CC1Option]>, Group<Action_Group>,
+  HelpText<"Provide information about a particular module file">;
 def mthumb : Flag<["-"], "mthumb">, Group<m_Group>;
 def mtune_EQ : Joined<["-"], "mtune=">, Group<m_Group>;
 def multi__module : Flag<["-"], "multi_module">;
@@ -1935,10 +2035,11 @@ def resource_dir : Separate<["-"], "resource-dir">,
   HelpText<"The directory which holds the compiler resource files">;
 def resource_dir_EQ : Joined<["-"], "resource-dir=">, Flags<[DriverOption, CoreOption]>,
   Alias<resource_dir>;
-def rpath : Separate<["-"], "rpath">, Flags<[LinkerInput]>;
+def rpath : Separate<["-"], "rpath">, Flags<[LinkerInput]>, Group<Link_Group>;
 def rtlib_EQ : Joined<["-", "--"], "rtlib=">,
   HelpText<"Compiler runtime library to use">;
-def r : Flag<["-"], "r">, Flags<[LinkerInput,NoArgumentUnused]>;
+def r : Flag<["-"], "r">, Flags<[LinkerInput,NoArgumentUnused]>,
+        Group<Link_Group>;
 def save_temps_EQ : Joined<["-", "--"], "save-temps=">, Flags<[DriverOption]>,
   HelpText<"Save intermediate compilation results.">;
 def save_temps : Flag<["-", "--"], "save-temps">, Flags<[DriverOption]>,
@@ -1990,7 +2091,7 @@ def no_system_header_prefix : Joined<["--"], "no-system-header-prefix=">,
   HelpText<"Treat all #include paths starting with <prefix> as not including a "
            "system header.">;
 def : Separate<["--"], "no-system-header-prefix">, Alias<no_system_header_prefix>;
-def s : Flag<["-"], "s">;
+def s : Flag<["-"], "s">, Group<Link_Group>;
 def target : Joined<["--"], "target=">, Flags<[DriverOption, CoreOption]>,
   HelpText<"Generate code for the given target">;
 def gcc_toolchain : Joined<["--"], "gcc-toolchain=">, Flags<[DriverOption]>,
@@ -2004,7 +2105,7 @@ def trigraphs : Flag<["-", "--"], "trigraphs">, Alias<ftrigraphs>,
   HelpText<"Process trigraph sequences">;
 def twolevel__namespace__hints : Flag<["-"], "twolevel_namespace_hints">;
 def twolevel__namespace : Flag<["-"], "twolevel_namespace">;
-def t : Flag<["-"], "t">;
+def t : Flag<["-"], "t">, Group<Link_Group>;
 def umbrella : Separate<["-"], "umbrella">;
 def undefined : JoinedOrSeparate<["-"], "undefined">, Group<u_Group>;
 def undef : Flag<["-"], "undef">, Group<u_Group>, Flags<[CC1Option]>,
@@ -2300,7 +2401,10 @@ defm devirtualize_speculatively : BooleanFFlag<"devirtualize-speculatively">,
 
 // gfortran options that we recognize in the driver and pass along when
 // invoking GCC to compile Fortran code.
-def gfortran_Group : OptionGroup<"gfortran Group">;
+def gfortran_Group : OptionGroup<"<gfortran group>">,
+                     DocName<"Fortran compilation flags">, DocBrief<[{
+Flags that will be passed onto the ``gfortran`` compiler when Clang is given
+a Fortran input.}]>;
 
 // Generic gfortran options.
 def A_DASH : Joined<["-"], "A-">, Group<gfortran_Group>;

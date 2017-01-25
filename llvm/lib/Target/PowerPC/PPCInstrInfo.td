@@ -326,7 +326,8 @@ def immZExt16  : PatLeaf<(imm), [{
   // field.  Used by instructions like 'ori'.
   return (uint64_t)N->getZExtValue() == (unsigned short)N->getZExtValue();
 }], LO16>;
-def immSExt8 : ImmLeaf<i32, [{ return isInt<8>(Imm); }]>;
+def immAnyExt8 : ImmLeaf<i32, [{ return isInt<8>(Imm) || isUInt<8>(Imm); }]>;
+def immSExt5NonZero : ImmLeaf<i32, [{ return Imm && isInt<5>(Imm); }]>;
 
 // imm16Shifted* - These match immediates where the low 16-bits are zero.  There
 // are two forms: imm16ShiftedSExt and imm16ShiftedZExt.  These two forms are
@@ -2171,10 +2172,18 @@ let isCompare = 1, hasSideEffects = 0 in {
                         "fcmpu $crD, $fA, $fB", IIC_FPCompare>;
 }
 
+def FTDIV: XForm_17<63, 128, (outs crrc:$crD), (ins f8rc:$fA, f8rc:$fB),
+                      "ftdiv $crD, $fA, $fB", IIC_FPCompare>;
+def FTSQRT: XForm_17a<63, 160, (outs crrc:$crD), (ins f8rc:$fB),
+                      "ftsqrt $crD, $fB", IIC_FPCompare>;
+
 let Uses = [RM] in {
   let hasSideEffects = 0 in {
   defm FCTIW  : XForm_26r<63, 14, (outs f8rc:$frD), (ins f8rc:$frB),
                           "fctiw", "$frD, $frB", IIC_FPGeneral,
+                          []>;
+  defm FCTIWU  : XForm_26r<63, 142, (outs f8rc:$frD), (ins f8rc:$frB),
+                          "fctiwu", "$frD, $frB", IIC_FPGeneral,
                           []>;
   defm FCTIWZ : XForm_26r<63, 15, (outs f8rc:$frD), (ins f8rc:$frB),
                           "fctiwz", "$frD, $frB", IIC_FPGeneral,

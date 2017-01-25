@@ -46,6 +46,7 @@ static void AsanDie() {
     // Don't die twice - run a busy loop.
     while (1) { }
   }
+  if (common_flags()->print_module_map >= 1) PrintModuleMap();
   if (flags()->sleep_before_dying) {
     Report("Sleeping for %d second(s)\n", flags()->sleep_before_dying);
     SleepForSeconds(flags()->sleep_before_dying);
@@ -410,6 +411,8 @@ static void PrintAddressSpaceLayout() {
   Printf("redzone=%zu\n", (uptr)flags()->redzone);
   Printf("max_redzone=%zu\n", (uptr)flags()->max_redzone);
   Printf("quarantine_size_mb=%zuM\n", (uptr)flags()->quarantine_size_mb);
+  Printf("thread_local_quarantine_size_kb=%zuK\n",
+         (uptr)flags()->thread_local_quarantine_size_kb);
   Printf("malloc_context_size=%zu\n",
          (uptr)common_flags()->malloc_context_size);
 
@@ -421,6 +424,79 @@ static void PrintAddressSpaceLayout() {
     CHECK(kMidShadowBeg > kLowShadowEnd &&
           kMidMemBeg > kMidShadowEnd &&
           kHighShadowBeg > kMidMemEnd);
+}
+
+static void InitializeShadowMemory() {
+  // Set the shadow memory address to uninitialized.
+  __asan_shadow_memory_dynamic_address = kDefaultShadowSentinel;
+
+  uptr shadow_start = kLowShadowBeg;
+  // Detect if a dynamic shadow address must used and find a available location
+  // when necessary. When dynamic address is used, the macro |kLowShadowBeg|
+  // expands to |__asan_shadow_memory_dynamic_address| which is
+  // |kDefaultShadowSentinel|.
+  if (shadow_start == kDefaultShadowSentinel) {
+    __asan_shadow_memory_dynamic_address = 0;
+    CHECK_EQ(0, kLowShadowBeg);
+
+    uptr granularity = GetMmapGranularity();
+    uptr alignment = 8 * granularity;
+    uptr left_padding = granularity;
+    uptr space_size = kHighShadowEnd + left_padding;
+
+    shadow_start = FindAvailableMemoryRange(space_size, alignment, granularity);
+    CHECK_NE((uptr)0, shadow_start);
+    CHECK(IsAligned(shadow_start, alignment));
+  }
+  // Update the shadow memory address (potentially) used by instrumentation.
+  __asan_shadow_memory_dynamic_address = shadow_start;
+
+  if (kLowShadowBeg)
+    shadow_start -= GetMmapGranularity();
+  bool full_shadow_is_available =
+      MemoryRangeIsAvailable(shadow_start, kHighShadowEnd);
+
+#if SANITIZER_LINUX && defined(__x86_64__) && defined(_LP64) &&                \
+    !ASAN_FIXED_MAPPING
+  if (!full_shadow_is_available) {
+    kMidMemBeg = kLowMemEnd < 0x3000000000ULL ? 0x3000000000ULL : 0;
+    kMidMemEnd = kLowMemEnd < 0x3000000000ULL ? 0x4fffffffffULL : 0;
+  }
+#endif
+
+  if (Verbosity()) PrintAddressSpaceLayout();
+
+  if (full_shadow_is_available) {
+    // mmap the low shadow plus at least one page at the left.
+    if (kLowShadowBeg)
+      ReserveShadowMemoryRange(shadow_start, kLowShadowEnd, "low shadow");
+    // mmap the high shadow.
+    ReserveShadowMemoryRange(kHighShadowBeg, kHighShadowEnd, "high shadow");
+    // protect the gap.
+    ProtectGap(kShadowGapBeg, kShadowGapEnd - kShadowGapBeg + 1);
+    CHECK_EQ(kShadowGapEnd, kHighShadowBeg - 1);
+  } else if (kMidMemBeg &&
+      MemoryRangeIsAvailable(shadow_start, kMidMemBeg - 1) &&
+      MemoryRangeIsAvailable(kMidMemEnd + 1, kHighShadowEnd)) {
+    CHECK(kLowShadowBeg != kLowShadowEnd);
+    // mmap the low shadow plus at least one page at the left.
+    ReserveShadowMemoryRange(shadow_start, kLowShadowEnd, "low shadow");
+    // mmap the mid shadow.
+    ReserveShadowMemoryRange(kMidShadowBeg, kMidShadowEnd, "mid shadow");
+    // mmap the high shadow.
+    ReserveShadowMemoryRange(kHighShadowBeg, kHighShadowEnd, "high shadow");
+    // protect the gaps.
+    ProtectGap(kShadowGapBeg, kShadowGapEnd - kShadowGapBeg + 1);
+    ProtectGap(kShadowGap2Beg, kShadowGap2End - kShadowGap2Beg + 1);
+    ProtectGap(kShadowGap3Beg, kShadowGap3End - kShadowGap3Beg + 1);
+  } else {
+    Report("Shadow memory range interleaves with an existing memory mapping. "
+           "ASan cannot proceed correctly. ABORTING.\n");
+    Report("ASan shadow was supposed to be located in the [%p-%p] range.\n",
+           shadow_start, kHighShadowEnd);
+    DumpProcessMap();
+    Die();
+  }
 }
 
 static void AsanInitInternal() {
@@ -474,78 +550,9 @@ static void AsanInitInternal() {
 
   ReplaceSystemMalloc();
 
-  // Set the shadow memory address to uninitialized.
-  __asan_shadow_memory_dynamic_address = kDefaultShadowSentinel;
-
-  uptr shadow_start = kLowShadowBeg;
-  // Detect if a dynamic shadow address must used and find a available location
-  // when necessary. When dynamic address is used, the macro |kLowShadowBeg|
-  // expands to |__asan_shadow_memory_dynamic_address| which is
-  // |kDefaultShadowSentinel|.
-  if (shadow_start == kDefaultShadowSentinel) {
-    __asan_shadow_memory_dynamic_address = 0;
-    CHECK_EQ(0, kLowShadowBeg);
-
-    uptr granularity = GetMmapGranularity();
-    uptr alignment = 8 * granularity;
-    uptr left_padding = granularity;
-    uptr space_size = kHighShadowEnd + left_padding;
-
-    shadow_start = FindAvailableMemoryRange(space_size, alignment, granularity);
-    CHECK_NE((uptr)0, shadow_start);
-    CHECK(IsAligned(shadow_start, alignment));
-  }
-  // Update the shadow memory address (potentially) used by instrumentation.
-  __asan_shadow_memory_dynamic_address = shadow_start;
-
-  if (kLowShadowBeg)
-    shadow_start -= GetMmapGranularity();
-  bool full_shadow_is_available =
-      MemoryRangeIsAvailable(shadow_start, kHighShadowEnd);
-
-#if SANITIZER_LINUX && defined(__x86_64__) && defined(_LP64) &&                \
-    !ASAN_FIXED_MAPPING
-  if (!full_shadow_is_available) {
-    kMidMemBeg = kLowMemEnd < 0x3000000000ULL ? 0x3000000000ULL : 0;
-    kMidMemEnd = kLowMemEnd < 0x3000000000ULL ? 0x4fffffffffULL : 0;
-  }
-#endif
-
-  if (Verbosity()) PrintAddressSpaceLayout();
-
   DisableCoreDumperIfNecessary();
 
-  if (full_shadow_is_available) {
-    // mmap the low shadow plus at least one page at the left.
-    if (kLowShadowBeg)
-      ReserveShadowMemoryRange(shadow_start, kLowShadowEnd, "low shadow");
-    // mmap the high shadow.
-    ReserveShadowMemoryRange(kHighShadowBeg, kHighShadowEnd, "high shadow");
-    // protect the gap.
-    ProtectGap(kShadowGapBeg, kShadowGapEnd - kShadowGapBeg + 1);
-    CHECK_EQ(kShadowGapEnd, kHighShadowBeg - 1);
-  } else if (kMidMemBeg &&
-      MemoryRangeIsAvailable(shadow_start, kMidMemBeg - 1) &&
-      MemoryRangeIsAvailable(kMidMemEnd + 1, kHighShadowEnd)) {
-    CHECK(kLowShadowBeg != kLowShadowEnd);
-    // mmap the low shadow plus at least one page at the left.
-    ReserveShadowMemoryRange(shadow_start, kLowShadowEnd, "low shadow");
-    // mmap the mid shadow.
-    ReserveShadowMemoryRange(kMidShadowBeg, kMidShadowEnd, "mid shadow");
-    // mmap the high shadow.
-    ReserveShadowMemoryRange(kHighShadowBeg, kHighShadowEnd, "high shadow");
-    // protect the gaps.
-    ProtectGap(kShadowGapBeg, kShadowGapEnd - kShadowGapBeg + 1);
-    ProtectGap(kShadowGap2Beg, kShadowGap2End - kShadowGap2Beg + 1);
-    ProtectGap(kShadowGap3Beg, kShadowGap3End - kShadowGap3Beg + 1);
-  } else {
-    Report("Shadow memory range interleaves with an existing memory mapping. "
-           "ASan cannot proceed correctly. ABORTING.\n");
-    Report("ASan shadow was supposed to be located in the [%p-%p] range.\n",
-           shadow_start, kHighShadowEnd);
-    DumpProcessMap();
-    Die();
-  }
+  InitializeShadowMemory();
 
   AsanTSDInit(PlatformTSDDtor);
   InstallDeadlySignalHandlers(AsanOnDeadlySignal);

@@ -14,14 +14,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm-pdbdump.h"
-#include "CompilandDumper.h"
-#include "ExternalSymbolDumper.h"
-#include "FunctionDumper.h"
 #include "LLVMOutputStyle.h"
 #include "LinePrinter.h"
 #include "OutputStyle.h"
-#include "TypeDumper.h"
-#include "VariableDumper.h"
+#include "PrettyCompilandDumper.h"
+#include "PrettyExternalSymbolDumper.h"
+#include "PrettyFunctionDumper.h"
+#include "PrettyTypeDumper.h"
+#include "PrettyVariableDumper.h"
 #include "YAMLOutputStyle.h"
 
 #include "llvm/ADT/ArrayRef.h"
@@ -50,6 +50,7 @@
 #include "llvm/DebugInfo/PDB/Raw/RawConstants.h"
 #include "llvm/DebugInfo/PDB/Raw/RawError.h"
 #include "llvm/DebugInfo/PDB/Raw/RawSession.h"
+#include "llvm/DebugInfo/PDB/Raw/StringTableBuilder.h"
 #include "llvm/DebugInfo/PDB/Raw/TpiStream.h"
 #include "llvm/DebugInfo/PDB/Raw/TpiStreamBuilder.h"
 #include "llvm/Support/COM.h"
@@ -187,6 +188,11 @@ cl::list<uint32_t>
 
 // TYPE OPTIONS
 cl::opt<bool>
+    CompactRecords("compact-records",
+                   cl::desc("Dump type and symbol records with less detail"),
+                   cl::cat(TypeOptions), cl::sub(RawSubcommand));
+
+cl::opt<bool>
     DumpTpiRecords("tpi-records",
                    cl::desc("dump CodeView type records from TPI stream"),
                    cl::cat(TypeOptions), cl::sub(RawSubcommand));
@@ -227,6 +233,9 @@ cl::opt<bool>
                        cl::cat(SymbolOptions), cl::sub(RawSubcommand));
 
 // MISCELLANEOUS OPTIONS
+cl::opt<bool> DumpStringTable("string-table", cl::desc("dump PDB String Table"),
+                              cl::cat(MiscOptions), cl::sub(RawSubcommand));
+
 cl::opt<bool> DumpSectionContribs("section-contribs",
                                   cl::desc("dump section contributions"),
                                   cl::cat(MiscOptions), cl::sub(RawSubcommand));
@@ -274,6 +283,10 @@ cl::opt<bool> StreamDirectory(
 cl::opt<bool> PdbStream("pdb-stream",
                         cl::desc("Dump the PDB Stream (Stream 1)"),
                         cl::sub(PdbToYamlSubcommand), cl::init(false));
+
+cl::opt<bool> StringTable("string-table", cl::desc("Dump the PDB String Table"),
+                          cl::sub(PdbToYamlSubcommand), cl::init(false));
+
 cl::opt<bool> DbiStream("dbi-stream",
                         cl::desc("Dump the DBI Stream (Stream 2)"),
                         cl::sub(PdbToYamlSubcommand), cl::init(false));
@@ -340,15 +353,18 @@ static void yamlToPdb(StringRef Path) {
   for (uint32_t I = 0; I < kSpecialStreamCount; ++I)
     ExitOnErr(Builder.getMsfBuilder().addStream(0));
 
+  if (YamlObj.StringTable.hasValue()) {
+    auto &Strings = Builder.getStringTableBuilder();
+    for (auto S : *YamlObj.StringTable)
+      Strings.insert(S);
+  }
+
   if (YamlObj.PdbStream.hasValue()) {
     auto &InfoBuilder = Builder.getInfoBuilder();
     InfoBuilder.setAge(YamlObj.PdbStream->Age);
     InfoBuilder.setGuid(YamlObj.PdbStream->Guid);
     InfoBuilder.setSignature(YamlObj.PdbStream->Signature);
     InfoBuilder.setVersion(YamlObj.PdbStream->Version);
-    for (auto &NM : YamlObj.PdbStream->NamedStreams)
-      InfoBuilder.getNamedStreamsBuilder().addMapping(NM.StreamName,
-                                                      NM.StreamNumber);
   }
 
   if (YamlObj.DbiStream.hasValue()) {
@@ -556,24 +572,34 @@ int main(int argc_, const char *argv_[]) {
     }
   }
 
-  if (opts::RawSubcommand && opts::raw::RawAll) {
-    opts::raw::DumpHeaders = true;
-    opts::raw::DumpModules = true;
-    opts::raw::DumpModuleFiles = true;
-    opts::raw::DumpModuleSyms = true;
-    opts::raw::DumpGlobals = true;
-    opts::raw::DumpPublics = true;
-    opts::raw::DumpSectionHeaders = true;
-    opts::raw::DumpStreamSummary = true;
-    opts::raw::DumpPageStats = true;
-    opts::raw::DumpStreamBlocks = true;
-    opts::raw::DumpTpiRecords = true;
-    opts::raw::DumpTpiHash = true;
-    opts::raw::DumpIpiRecords = true;
-    opts::raw::DumpSectionMap = true;
-    opts::raw::DumpSectionContribs = true;
-    opts::raw::DumpLineInfo = true;
-    opts::raw::DumpFpo = true;
+  if (opts::RawSubcommand) {
+    if (opts::raw::RawAll) {
+      opts::raw::DumpHeaders = true;
+      opts::raw::DumpModules = true;
+      opts::raw::DumpModuleFiles = true;
+      opts::raw::DumpModuleSyms = true;
+      opts::raw::DumpGlobals = true;
+      opts::raw::DumpPublics = true;
+      opts::raw::DumpSectionHeaders = true;
+      opts::raw::DumpStreamSummary = true;
+      opts::raw::DumpPageStats = true;
+      opts::raw::DumpStreamBlocks = true;
+      opts::raw::DumpTpiRecords = true;
+      opts::raw::DumpTpiHash = true;
+      opts::raw::DumpIpiRecords = true;
+      opts::raw::DumpSectionMap = true;
+      opts::raw::DumpSectionContribs = true;
+      opts::raw::DumpLineInfo = true;
+      opts::raw::DumpFpo = true;
+      opts::raw::DumpStringTable = true;
+    }
+
+    if (opts::raw::CompactRecords &&
+        (opts::raw::DumpTpiRecordBytes || opts::raw::DumpIpiRecordBytes)) {
+      errs() << "-compact-records is incompatible with -tpi-record-bytes and "
+                "-ipi-record-bytes.\n";
+      exit(1);
+    }
   }
 
   llvm::sys::InitializeCOMRAII COM(llvm::sys::COMThreadingMode::MultiThreaded);

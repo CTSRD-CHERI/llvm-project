@@ -39,8 +39,11 @@ AArch64LegalizerInfo::AArch64LegalizerInfo() {
   for (auto BinOp : {G_ADD, G_SUB, G_MUL, G_AND, G_OR, G_XOR, G_SHL}) {
     // These operations naturally get the right answer when used on
     // GPR32, even if the actual type is narrower.
-    for (auto Ty : {s1, s8, s16, s32, s64, v2s32, v4s32, v2s64})
+    for (auto Ty : {s32, s64, v2s32, v4s32, v2s64})
       setAction({BinOp, Ty}, Legal);
+
+    for (auto Ty : {s1, s8, s16})
+      setAction({BinOp, Ty}, WidenScalar);
   }
 
   setAction({G_GEP, p0}, Legal);
@@ -141,11 +144,17 @@ AArch64LegalizerInfo::AArch64LegalizerInfo() {
     setAction({G_TRUNC, 1, Ty}, Legal);
 
   // Conversions
-  for (auto Ty : { s1, s8, s16, s32, s64 }) {
+  for (auto Ty : { s32, s64 }) {
     setAction({G_FPTOSI, 0, Ty}, Legal);
     setAction({G_FPTOUI, 0, Ty}, Legal);
     setAction({G_SITOFP, 1, Ty}, Legal);
     setAction({G_UITOFP, 1, Ty}, Legal);
+  }
+  for (auto Ty : { s1, s8, s16 }) {
+    setAction({G_FPTOSI, 0, Ty}, WidenScalar);
+    setAction({G_FPTOUI, 0, Ty}, WidenScalar);
+    setAction({G_SITOFP, 1, Ty}, WidenScalar);
+    setAction({G_UITOFP, 1, Ty}, WidenScalar);
   }
 
   for (auto Ty : { s32, s64 }) {
@@ -160,7 +169,7 @@ AArch64LegalizerInfo::AArch64LegalizerInfo() {
     setAction({G_BRCOND, Ty}, Legal);
 
   // Select
-  for (auto Ty : {s1, s8, s16, s32, s64})
+  for (auto Ty : {s1, s8, s16, s32, s64, p0})
     setAction({G_SELECT, Ty}, Legal);
 
   setAction({G_SELECT, 1, s1}, Legal);

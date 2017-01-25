@@ -20,9 +20,9 @@
 // simplifies the build procedure.
 #ifdef ASAN_DLL_THUNK
 #include "asan_init_version.h"
-#include "asan_globals_win.h"
 #include "interception/interception.h"
 #include "sanitizer_common/sanitizer_platform_interceptors.h"
+#include "sanitizer_common/sanitizer_win_defs.h"
 
 #ifdef _M_IX86
 #define WINAPI __stdcall
@@ -326,11 +326,15 @@ INTERFACE_FUNCTION(__sanitizer_annotate_contiguous_container)
 INTERFACE_FUNCTION(__sanitizer_contiguous_container_find_bad_address)
 INTERFACE_FUNCTION(__sanitizer_cov)
 INTERFACE_FUNCTION(__sanitizer_cov_dump)
+INTERFACE_FUNCTION(__sanitizer_dump_coverage)
+INTERFACE_FUNCTION(__sanitizer_dump_trace_pc_guard_coverage)
 INTERFACE_FUNCTION(__sanitizer_cov_indir_call16)
 INTERFACE_FUNCTION(__sanitizer_cov_init)
 INTERFACE_FUNCTION(__sanitizer_cov_module_init)
 INTERFACE_FUNCTION(__sanitizer_cov_trace_basic_block)
 INTERFACE_FUNCTION(__sanitizer_cov_trace_func_enter)
+INTERFACE_FUNCTION(__sanitizer_cov_trace_pc_guard)
+INTERFACE_FUNCTION(__sanitizer_cov_trace_pc_guard_init)
 INTERFACE_FUNCTION(__sanitizer_cov_with_check)
 INTERFACE_FUNCTION(__sanitizer_get_allocated_size)
 INTERFACE_FUNCTION(__sanitizer_get_coverage_guards)
@@ -366,6 +370,7 @@ INTERFACE_FUNCTION(__sanitizer_verify_contiguous_container)
 INTERFACE_FUNCTION(__sanitizer_install_malloc_and_free_hooks)
 INTERFACE_FUNCTION(__sanitizer_start_switch_fiber)
 INTERFACE_FUNCTION(__sanitizer_finish_switch_fiber)
+INTERFACE_FUNCTION(__sanitizer_get_module_and_offset_for_pc)
 
 // TODO(timurrrr): Add more interface functions on the as-needed basis.
 
@@ -473,6 +478,6 @@ static void WINAPI asan_thread_init(void *mod, unsigned long reason,
 __declspec(allocate(".CRT$XLAB")) void (WINAPI *__asan_tls_init)(void *,
     unsigned long, void *) = asan_thread_init;
 
-ASAN_LINK_GLOBALS_WIN()
+WIN_FORCE_LINK(__asan_dso_reg_hook)
 
 #endif // ASAN_DLL_THUNK

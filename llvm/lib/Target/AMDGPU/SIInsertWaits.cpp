@@ -21,11 +21,28 @@
 #include "SIDefines.h"
 #include "SIInstrInfo.h"
 #include "SIMachineFunctionInfo.h"
+#include "SIRegisterInfo.h"
 #include "Utils/AMDGPUBaseInfo.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/IR/DebugLoc.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetRegisterInfo.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <new>
+#include <utility>
 
 #define DEBUG_TYPE "si-insert-waits"
 
@@ -42,7 +59,6 @@ typedef union {
     unsigned LGKM;
   } Named;
   unsigned Array[3];
-
 } Counters;
 
 typedef enum {
@@ -55,11 +71,10 @@ typedef Counters RegCounters[512];
 typedef std::pair<unsigned, unsigned> RegInterval;
 
 class SIInsertWaits : public MachineFunctionPass {
-
 private:
-  const SISubtarget *ST;
-  const SIInstrInfo *TII;
-  const SIRegisterInfo *TRI;
+  const SISubtarget *ST = nullptr;
+  const SIInstrInfo *TII = nullptr;
+  const SIRegisterInfo *TRI = nullptr;
   const MachineRegisterInfo *MRI;
   IsaVersion IV;
 
@@ -86,7 +101,7 @@ private:
   RegCounters DefinedRegs;
 
   /// \brief Different export instruction types seen since last wait.
-  unsigned ExpInstrTypesSeen;
+  unsigned ExpInstrTypesSeen = 0;
 
   /// \brief Type of the last opcode.
   InstType LastOpcodeType;
@@ -100,7 +115,7 @@ private:
   bool ReturnsVoid;
 
   /// Whether the VCCZ bit is possibly corrupt
-  bool VCCZCorrupt;
+  bool VCCZCorrupt = false;
 
   /// \brief Get increment/decrement amount for this instruction.
   Counters getHwCounts(MachineInstr &MI);
@@ -141,13 +156,7 @@ private:
 public:
   static char ID;
 
-  SIInsertWaits() :
-    MachineFunctionPass(ID),
-    ST(nullptr),
-    TII(nullptr),
-    TRI(nullptr),
-    ExpInstrTypesSeen(0),
-    VCCZCorrupt(false) { }
+  SIInsertWaits() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -161,7 +170,7 @@ public:
   }
 };
 
-} // End anonymous namespace
+} // end anonymous namespace
 
 INITIALIZE_PASS_BEGIN(SIInsertWaits, DEBUG_TYPE,
                       "SI Insert Waits", false, false)
@@ -195,8 +204,7 @@ Counters SIInsertWaits::getHwCounts(MachineInstr &MI) {
   Result.Named.VM = !!(TSFlags & SIInstrFlags::VM_CNT);
 
   // Only consider stores or EXP for EXP_CNT
-  Result.Named.EXP = !!(TSFlags & SIInstrFlags::EXP_CNT &&
-      (MI.getOpcode() == AMDGPU::EXP || MI.getDesc().mayStore()));
+  Result.Named.EXP = !!(TSFlags & SIInstrFlags::EXP_CNT) && MI.mayStore();
 
   // LGKM may uses larger values
   if (TSFlags & SIInstrFlags::LGKM_CNT) {
@@ -238,9 +246,10 @@ bool SIInsertWaits::isOpRelevant(MachineOperand &Op) {
   if (Op.isDef())
     return true;
 
-  // For exports all registers are relevant
+  // For exports all registers are relevant.
+  // TODO: Skip undef/disabled registers.
   MachineInstr &MI = *Op.getParent();
-  if (MI.getOpcode() == AMDGPU::EXP)
+  if (TII->isEXP(MI))
     return true;
 
   // For stores the stored value is also relevant
@@ -252,12 +261,6 @@ bool SIInsertWaits::isOpRelevant(MachineOperand &Op) {
   // operand comes before the value operand and it may have
   // multiple data operands.
 
-  if (TII->isDS(MI) || TII->isFLAT(MI)) {
-    MachineOperand *Data = TII->getNamedOperand(MI, AMDGPU::OpName::data);
-    if (Data && Op.isIdenticalTo(*Data))
-      return true;
-  }
-
   if (TII->isDS(MI)) {
     MachineOperand *Data0 = TII->getNamedOperand(MI, AMDGPU::OpName::data0);
     if (Data0 && Op.isIdenticalTo(*Data0))
@@ -265,6 +268,12 @@ bool SIInsertWaits::isOpRelevant(MachineOperand &Op) {
 
     MachineOperand *Data1 = TII->getNamedOperand(MI, AMDGPU::OpName::data1);
     return Data1 && Op.isIdenticalTo(*Data1);
+  }
+
+  if (TII->isFLAT(MI)) {
+    MachineOperand *Data = TII->getNamedOperand(MI, AMDGPU::OpName::vdata);
+    if (Data && Op.isIdenticalTo(*Data))
+      return true;
   }
 
   // NOTE: This assumes that the value operand is before the
@@ -294,7 +303,6 @@ RegInterval SIInsertWaits::getRegInterval(const TargetRegisterClass *RC,
 void SIInsertWaits::pushInstruction(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator I,
                                     const Counters &Increment) {
-
   // Get the hardware counter increments and sum them up
   Counters Limit = ZeroCounts;
   unsigned Sum = 0;
@@ -340,7 +348,7 @@ void SIInsertWaits::pushInstruction(MachineBasicBlock &MBB,
 
   // Remember which export instructions we have seen
   if (Increment.Named.EXP) {
-    ExpInstrTypesSeen |= I->getOpcode() == AMDGPU::EXP ? 1 : 2;
+    ExpInstrTypesSeen |= TII->isEXP(*I) ? 1 : 2;
   }
 
   for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i) {
@@ -366,7 +374,6 @@ void SIInsertWaits::pushInstruction(MachineBasicBlock &MBB,
 bool SIInsertWaits::insertWait(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator I,
                                const Counters &Required) {
-
   // End of program? No need to wait on anything
   // A function not returning void needs to wait, because other bytecode will
   // be appended after it and we don't know what it will be.
@@ -393,7 +400,6 @@ bool SIInsertWaits::insertWait(MachineBasicBlock &MBB,
   bool NeedWait = false;
 
   for (unsigned i = 0; i < 3; ++i) {
-
     if (Required.Array[i] <= WaitedOn.Array[i])
       continue;
 
@@ -434,7 +440,6 @@ bool SIInsertWaits::insertWait(MachineBasicBlock &MBB,
 
 /// \brief helper function for handleOperands
 static void increaseCounters(Counters &Dst, const Counters &Src) {
-
   for (unsigned i = 0; i < 3; ++i)
     Dst.Array[i] = std::max(Dst.Array[i], Src.Array[i]);
 }
@@ -468,7 +473,6 @@ void SIInsertWaits::handleExistingWait(MachineBasicBlock::iterator I) {
 }
 
 Counters SIInsertWaits::handleOperands(MachineInstr &MI) {
-
   Counters Result = ZeroCounts;
 
   // For each register affected by this instruction increase the result
@@ -484,7 +488,6 @@ Counters SIInsertWaits::handleOperands(MachineInstr &MI) {
     const TargetRegisterClass *RC = TII->getOpRegClass(MI, i);
     RegInterval Interval = getRegInterval(RC, Op);
     for (unsigned j = Interval.first; j < Interval.second; ++j) {
-
       if (Op.isDef()) {
         increaseCounters(Result, UsedRegs[j]);
         increaseCounters(Result, DefinedRegs[j]);
@@ -504,7 +507,7 @@ void SIInsertWaits::handleSendMsg(MachineBasicBlock &MBB,
     return;
 
   // There must be "S_NOP 0" between an instruction writing M0 and S_SENDMSG.
-  if (LastInstWritesM0 && I->getOpcode() == AMDGPU::S_SENDMSG) {
+  if (LastInstWritesM0 && (I->getOpcode() == AMDGPU::S_SENDMSG || I->getOpcode() == AMDGPU::S_SENDMSGHALT)) {
     BuildMI(MBB, I, DebugLoc(), TII->get(AMDGPU::S_NOP)).addImm(0);
     LastInstWritesM0 = false;
     return;
@@ -619,7 +622,8 @@ bool SIInsertWaits::runOnMachineFunction(MachineFunction &MF) {
       // signalling other hardware blocks
       if ((I->getOpcode() == AMDGPU::S_BARRIER &&
                ST->needWaitcntBeforeBarrier()) ||
-           I->getOpcode() == AMDGPU::S_SENDMSG)
+           I->getOpcode() == AMDGPU::S_SENDMSG ||
+           I->getOpcode() == AMDGPU::S_SENDMSGHALT)
         Required = LastIssued;
       else
         Required = handleOperands(*I);

@@ -18,6 +18,7 @@ class SymbolBody;
 class InputSectionData;
 template <class ELFT> class InputSection;
 template <class ELFT> class InputSectionBase;
+class OutputSectionBase;
 
 // List of target-independent relocation types. Relocations read
 // from files are converted to these types so that the main code
@@ -73,6 +74,35 @@ enum RelExpr {
   R_TLSLD_PC,
 };
 
+// Build a bitmask with one bit set for each RelExpr.
+//
+// Constexpr function arguments can't be used in static asserts, so we
+// use template arguments to build the mask.
+// But function template partial specializations don't exist (needed
+// for base case of the recursion), so we need a dummy struct.
+template <RelExpr... Exprs> struct RelExprMaskBuilder {
+  static inline uint64_t build() { return 0; }
+};
+
+// Specialization for recursive case.
+template <RelExpr Head, RelExpr... Tail>
+struct RelExprMaskBuilder<Head, Tail...> {
+  static inline uint64_t build() {
+    static_assert(0 <= Head && Head < 64,
+                  "RelExpr is too large for 64-bit mask!");
+    return (uint64_t(1) << Head) | RelExprMaskBuilder<Tail...>::build();
+  }
+};
+
+// Return true if `Expr` is one of `Exprs`.
+// There are fewer than 64 RelExpr's, so we can represent any set of
+// RelExpr's as a constant bit mask and test for membership with a
+// couple cheap bitwise operations.
+template <RelExpr... Exprs> bool isRelExprOneOf(RelExpr Expr) {
+  assert(0 <= Expr && (int)Expr < 64 && "RelExpr is too large for 64-bit mask!");
+  return (uint64_t(1) << Expr) & RelExprMaskBuilder<Exprs...>::build();
+}
+
 // Architecture-neutral representation of relocation.
 struct Relocation {
   RelExpr Expr;
@@ -84,10 +114,8 @@ struct Relocation {
 
 template <class ELFT> void scanRelocations(InputSectionBase<ELFT> &);
 
-template <class ELFT> void createThunks(InputSectionBase<ELFT> &);
-
 template <class ELFT>
-std::string getLocation(InputSectionBase<ELFT> &S, typename ELFT::uint Offset);
+void createThunks(ArrayRef<OutputSectionBase *> OutputSections);
 
 template <class ELFT>
 static inline typename ELFT::uint getAddend(const typename ELFT::Rel &Rel) {

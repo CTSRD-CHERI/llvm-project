@@ -6,6 +6,11 @@
 
 set -e
 
+echo "---------- WARNING ----------"
+echo "buildit is no longer supported and will be removed in the next week!"
+echo "please contact the libc++ maintainers if you have any concerns"
+echo ""
+
 if [ `basename $(pwd)` != "lib" ]
 then
     echo "current directory must be lib"
@@ -41,7 +46,7 @@ then
 fi
 
 EXTRA_FLAGS="-nostdinc++ -std=${CXX_LANG} -fstrict-aliasing -Wall -Wextra -Wshadow -Wconversion \
-             -Wstrict-aliasing=2 -Wstrict-overflow=4 "
+             -Wstrict-aliasing=2 -Wstrict-overflow=4 -D_LIBCPP_BUILDING_LIBRARY "
 
 case $TRIPLE in
   *-apple-*)
@@ -177,3 +182,8 @@ if [ -z "$RC_XBS" ]
 then
     rm *.o
 fi
+
+echo "---------- WARNING ----------"
+echo "buildit is no longer supported and will be removed in the next week!"
+echo "please contact the libc++ maintainers if you have any concerns"
+echo ""

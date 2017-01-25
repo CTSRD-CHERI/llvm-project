@@ -13,14 +13,12 @@ endif()
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
   set(LLDB_DEFAULT_DISABLE_PYTHON 0)
   set(LLDB_DEFAULT_DISABLE_CURSES 1)
+elseif (CMAKE_SYSTEM_NAME MATCHES "Android" )
+  set(LLDB_DEFAULT_DISABLE_PYTHON 1)
+  set(LLDB_DEFAULT_DISABLE_CURSES 1)
 else()
-  if ( __ANDROID_NDK__ )
-    set(LLDB_DEFAULT_DISABLE_PYTHON 1)
-    set(LLDB_DEFAULT_DISABLE_CURSES 1)
-  else()
-    set(LLDB_DEFAULT_DISABLE_PYTHON 0)
-    set(LLDB_DEFAULT_DISABLE_CURSES 0)
-  endif()
+  set(LLDB_DEFAULT_DISABLE_PYTHON 0)
+  set(LLDB_DEFAULT_DISABLE_CURSES 0)
 endif()
 
 set(LLDB_DISABLE_PYTHON ${LLDB_DEFAULT_DISABLE_PYTHON} CACHE BOOL
@@ -243,7 +241,7 @@ endif()
 
 # Use the Unicode (UTF-16) APIs by default on Win32
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
-	add_definitions( /D _UNICODE /D UNICODE )
+    add_definitions( -D_UNICODE -DUNICODE )
 endif()
 
 set(LLDB_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -275,6 +273,7 @@ include_directories(BEFORE
 
 if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
   install(DIRECTORY include/
+    COMPONENT lldb_headers
     DESTINATION include
     FILES_MATCHING
     PATTERN "*.h"
@@ -353,10 +352,7 @@ endif()
 
 # Figure out if lldb could use lldb-server.  If so, then we'll
 # ensure we build lldb-server when an lldb target is being built.
-if ((CMAKE_SYSTEM_NAME MATCHES "Darwin") OR
-    (CMAKE_SYSTEM_NAME MATCHES "FreeBSD") OR
-    (CMAKE_SYSTEM_NAME MATCHES "Linux") OR
-    (CMAKE_SYSTEM_NAME MATCHES "NetBSD"))
+if (CMAKE_SYSTEM_NAME MATCHES "Android|Darwin|FreeBSD|Linux|NetBSD")
     set(LLDB_CAN_USE_LLDB_SERVER 1)
 else()
     set(LLDB_CAN_USE_LLDB_SERVER 0)
@@ -415,3 +411,5 @@ endif()
 if(LLDB_USE_BUILTIN_DEMANGLER)
     add_definitions(-DLLDB_USE_BUILTIN_DEMANGLER)
 endif()
+
+find_package(Backtrace)
